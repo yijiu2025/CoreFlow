@@ -1,0 +1,8 @@
+{
+  "name": "身份认证中心",
+  "description": "全域统一身份认证与授权网关，负责 JWT 签发、SSO 同步及用户角色权重校验。",
+  "enabled": true,
+  "requireLogin": false,
+  "allowIps": [],
+  "allowRoles": []
+}

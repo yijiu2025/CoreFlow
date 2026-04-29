@@ -1,0 +1,378 @@
+{
+  "configs": {
+    "身份认证中心": {
+      "groups": {
+        "default": {
+          "apis": {
+            "login": {
+              "id": "login",
+              "name": "用户登录 (主入口)",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/v1/auth/login",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.767Z"
+            },
+            "oss": {
+              "id": "oss",
+              "name": "OSS 异步上传凭证",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/v1/auth/oss-token",
+              "method": "GET",
+              "updatedAt": "2026-04-29T12:34:43.767Z"
+            },
+            "logout": {
+              "id": "logout",
+              "name": "安全退出登录",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/v1/auth/logout",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.767Z"
+            }
+          },
+          "id": "default",
+          "name": "default",
+          "description": "",
+          "prefix": "",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-04-29T12:34:43.767Z"
+        }
+      },
+      "id": "身份认证中心",
+      "name": "身份认证中心",
+      "description": "全域统一身份认证与授权网关，负责 JWT 签发、SSO 同步及用户角色权重校验。",
+      "prefix": "",
+      "enabled": true,
+      "requireLogin": false,
+      "allowIps": [],
+      "allowRoles": [],
+      "updatedAt": "2026-04-29T12:34:43.763Z"
+    },
+    "firewall": {
+      "groups": {
+        "apiConfigs": {
+          "apis": {
+            "getConfigs": {
+              "id": "getConfigs",
+              "name": "查询全域安全矩阵",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/apiconfigs",
+              "method": "GET",
+              "updatedAt": "2026-04-29T12:34:43.772Z"
+            },
+            "updateConfig": {
+              "id": "updateConfig",
+              "name": "热更新策略详情",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/apiconfigs/:system/:group",
+              "method": "PATCH",
+              "updatedAt": "2026-04-29T12:34:43.773Z"
+            },
+            "toggleConfig": {
+              "id": "toggleConfig",
+              "name": "策略一键开关 (模块/接口)",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/apiconfigs/toggle/:system/:group",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.773Z"
+            },
+            "toggleSystemConfig": {
+              "id": "toggleSystemConfig",
+              "name": "系统全局防御开关",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/apiconfigs/toggle-system/:system",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.773Z"
+            }
+          },
+          "id": "apiConfigs",
+          "name": "安全配置中心",
+          "description": "负责全域安全策略的实时分发与热更新，仅限受信任的管理内网访问。",
+          "prefix": "/v1/apiconfigs",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-04-29T12:34:43.772Z"
+        },
+        "challenge": {
+          "apis": {
+            "verify": {
+              "id": "verify",
+              "name": "提交验证结果",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/challenge/verify",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.775Z"
+            }
+          },
+          "id": "challenge",
+          "name": "人机验证模块",
+          "description": "负责浏览器挑战（Bot Challenge）的签发与验证，防止自动化脚本攻击。",
+          "prefix": "/v1/challenge",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-04-29T12:34:43.774Z"
+        },
+        "firewall-monitor": {
+          "apis": {
+            "summary": {
+              "id": "summary",
+              "name": "全局统计摘要",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/summary",
+              "method": "GET",
+              "updatedAt": "2026-04-29T12:34:43.777Z"
+            },
+            "records": {
+              "id": "records",
+              "name": "实时流量日志",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/records",
+              "method": "GET",
+              "updatedAt": "2026-04-29T12:34:43.777Z"
+            },
+            "clear": {
+              "id": "clear",
+              "name": "清空审计记录",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/clear",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.777Z"
+            },
+            "updateNode": {
+              "id": "updateNode",
+              "name": "手动更新节点信息",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/node/update",
+              "method": "PATCH",
+              "updatedAt": "2026-04-29T12:34:43.777Z"
+            },
+            "refreshNode": {
+              "id": "refreshNode",
+              "name": "触发自动定位",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/node/refresh",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.777Z"
+            },
+            "getSettings": {
+              "id": "getSettings",
+              "name": "获取全局安全设置",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/settings",
+              "method": "GET",
+              "updatedAt": "2026-04-29T12:34:43.777Z"
+            },
+            "updateSettings": {
+              "id": "updateSettings",
+              "name": "更新安全设置 (支持局部更新)",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/settings",
+              "method": "PATCH",
+              "updatedAt": "2026-04-29T12:34:43.778Z"
+            },
+            "addBlacklist": {
+              "id": "addBlacklist",
+              "name": "添加黑名单(IP/用户)",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/blacklist",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.778Z"
+            },
+            "removeBlacklist": {
+              "id": "removeBlacklist",
+              "name": "移除黑名单",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/blacklist",
+              "method": "DELETE",
+              "updatedAt": "2026-04-29T12:34:43.778Z"
+            },
+            "listBlocks": {
+              "id": "listBlocks",
+              "name": "获取所有活跃封禁列表",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/blocks",
+              "method": "GET",
+              "updatedAt": "2026-04-29T12:34:43.778Z"
+            },
+            "addBlock": {
+              "id": "addBlock",
+              "name": "添加封禁(IP)",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/blocks",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.778Z"
+            },
+            "removeBlock": {
+              "id": "removeBlock",
+              "name": "移除封禁",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/blocks/:ip",
+              "method": "DELETE",
+              "updatedAt": "2026-04-29T12:34:43.778Z"
+            },
+            "listWhitelist": {
+              "id": "listWhitelist",
+              "name": "获取所有活跃白名单",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/whitelist",
+              "method": "GET",
+              "updatedAt": "2026-04-29T12:34:43.778Z"
+            },
+            "addWhitelist": {
+              "id": "addWhitelist",
+              "name": "添加白名单",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/whitelist",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.778Z"
+            },
+            "removeWhitelist": {
+              "id": "removeWhitelist",
+              "name": "移除白名单",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/whitelist/:ip",
+              "method": "DELETE",
+              "updatedAt": "2026-04-29T12:34:43.778Z"
+            }
+          },
+          "id": "firewall-monitor",
+          "name": "防火墙中控面板",
+          "description": "负责分析实时流量、地理位置分布及异常请求检测。",
+          "prefix": "/v1/monitor",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-04-29T12:34:43.777Z"
+        }
+      },
+      "id": "firewall",
+      "name": "防火墙防御系统",
+      "description": "企业级核心边界安全矩阵，负责全域入站流量的实时过滤、身份校验与战术防御控制。",
+      "prefix": "/api/firewall",
+      "enabled": true,
+      "requireLogin": false,
+      "allowIps": [],
+      "allowRoles": [],
+      "updatedAt": "2026-04-29T12:34:43.770Z"
+    },
+    "SSO 用户中心": {
+      "groups": {
+        "default": {
+          "apis": {},
+          "id": "default",
+          "name": "default",
+          "description": "",
+          "prefix": "",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-04-29T12:34:43.783Z"
+        },
+        "auth": {
+          "id": "auth",
+          "name": "auth",
+          "enabled": true,
+          "apis": {
+            "_api_v1_sso_login": {
+              "id": "_api_v1_sso_login",
+              "name": "SSO 统一登录入口",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/v1/sso/login",
+              "method": "POST",
+              "updatedAt": "2026-04-29T12:34:43.783Z"
+            }
+          }
+        }
+      },
+      "id": "SSO 用户中心",
+      "name": "SSO 用户中心",
+      "description": "提供全域统一登录、注册及用户资料管理核心服务。",
+      "prefix": "",
+      "enabled": true,
+      "requireLogin": false,
+      "allowIps": [],
+      "allowRoles": [],
+      "updatedAt": "2026-04-29T12:34:43.780Z"
+    }
+  }
+}

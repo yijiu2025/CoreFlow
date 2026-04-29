@@ -1,0 +1,115 @@
+    <!-- Security Policy Overwrite Terminal (Redesigned) -->
+    <transition
+      enter-active-class="transition duration-500 ease-out"
+      enter-from-class="opacity-0 scale-95 translate-y-8"
+      enter-to-class="opacity-100 scale-100 translate-y-0"
+      leave-active-class="transition duration-300 ease-in"
+      leave-from-class="opacity-100 scale-100 translate-y-0"
+      leave-to-class="opacity-0 scale-95 translate-y-8"
+    >
+      <div v-if="isModalOpen" class="fixed inset-0 flex items-center justify-center p-6 z-[1000] overflow-hidden">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-3xl" @click="isModalOpen = false"></div>
+        
+        <!-- Terminal Window -->
+        <div class="glass w-full max-w-2xl bg-slate-900/80 rounded-[40px] border border-white/10 shadow-[0_0_150px_rgba(0,0,0,0.8)] flex flex-col relative overflow-hidden group">
+          <!-- Terminal Header -->
+          <div class="p-10 border-b border-white/5 flex items-start justify-between bg-white/[0.02]">
+            <div class="flex items-center gap-6">
+              <div class="w-16 h-16 rounded-3xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 shadow-inner">
+                <ShieldCheck class="w-8 h-8 text-cyan-400" />
+              </div>
+              <div>
+                <div class="flex items-center gap-3 mb-1">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-black bg-cyan-500 text-white uppercase tracking-widest">Policy Override</span>
+                  <span class="text-xs font-mono text-slate-500">{{ editingSystem }}{{ editingGroup ? ` > ${editingGroup}` : '' }}{{ editingApi ? ` > ${editingApi}` : '' }}</span>
+                </div>
+                <h2 class="text-3xl font-black text-white tracking-tight">{{ editingApi || editingGroup || editingSystem }}</h2>
+              </div>
+            </div>
+            <button @click="isModalOpen = false" class="p-3 rounded-2xl hover:bg-white/5 text-slate-500 hover:text-white transition-all">
+              <X class="w-6 h-6" />
+            </button>
+          </div>
+
+          <!-- Terminal Body -->
+          <div class="flex-1 overflow-y-auto custom-scrollbar p-10 space-y-10">
+            <!-- Metadata Info -->
+            <div class="p-6 rounded-3xl bg-black/40 border border-white/5 relative overflow-hidden">
+              <div class="absolute top-0 right-0 p-4 opacity-10">
+                <Info class="w-12 h-12" />
+              </div>
+              <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                <Info class="w-3 h-3" /> Node Description
+              </h3>
+              <p class="text-sm text-slate-300 leading-relaxed italic">"{{ editForm.description || 'No description available for this security node.' }}"</p>
+            </div>
+
+            <!-- Configuration Matrix -->
+            <div class="grid grid-cols-1 gap-8">
+              <!-- IP Whitelist -->
+              <div class="space-y-4">
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <MapPin class="w-3 h-3 text-cyan-500" /> Network Boundary (IP Whitelist)
+                </label>
+                <div class="relative group">
+                  <textarea 
+                    v-model="editForm.ips" 
+                    placeholder="e.g. 127.0.0.1, 192.168.1.*"
+                    rows="2"
+                    class="w-full bg-slate-950/60 border border-white/5 rounded-3xl p-6 text-sm font-mono text-cyan-100 focus:outline-none focus:border-cyan-500/30 transition-all placeholder:text-slate-800"
+                  ></textarea>
+                </div>
+                <p class="text-[10px] text-slate-600 px-4">Standard IPv4 addressing supported. Use commas for multiple entries.</p>
+              </div>
+
+              <!-- Roles & Auth -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="space-y-4">
+                  <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Users class="w-3 h-3 text-indigo-400" /> Authorized Roles
+                  </label>
+                  <input 
+                    v-model="editForm.roles" 
+                    placeholder="admin, operator..."
+                    class="w-full bg-slate-950/60 border border-white/5 rounded-2xl px-6 py-4 text-sm font-mono text-indigo-100 focus:outline-none focus:border-indigo-500/30 transition-all placeholder:text-slate-800"
+                  />
+                </div>
+
+                <div class="space-y-4">
+                  <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Lock class="w-3 h-3 text-amber-500" /> Identity Enforcement
+                  </label>
+                  <div 
+                    @click="editForm.requireLogin = !editForm.requireLogin"
+                    :class="editForm.requireLogin ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-950/60 border-white/5'"
+                    class="flex items-center justify-between px-6 py-4 rounded-2xl border cursor-pointer hover:border-amber-500/20 transition-all"
+                  >
+                    <span class="text-xs font-bold" :class="editForm.requireLogin ? 'text-amber-400' : 'text-slate-500'">Require Auth</span>
+                    <div class="w-10 h-5 rounded-full relative transition-all" :class="editForm.requireLogin ? 'bg-amber-500' : 'bg-slate-800'">
+                      <div class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-all" :class="editForm.requireLogin ? 'translate-x-5' : ''"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Terminal Footer -->
+          <div class="p-10 bg-white/[0.02] border-t border-white/5 flex items-center justify-between">
+            <div class="text-[10px] font-bold text-slate-500 flex items-center gap-2">
+              <RotateCcw class="w-3 h-3" /> Last modified: {{ editForm.updatedAt ? new Date(editForm.updatedAt).toLocaleString() : 'Never' }}
+            </div>
+            <div class="flex items-center gap-4">
+              <button @click="isModalOpen = false" class="px-8 py-4 rounded-2xl text-xs font-bold text-slate-400 hover:text-white transition-colors">Discard</button>
+              <button 
+                @click="saveConfig"
+                class="px-10 py-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-black uppercase tracking-widest shadow-xl shadow-cyan-500/20 transition-all active:scale-95"
+              >
+                Apply Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
