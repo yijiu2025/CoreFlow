@@ -30,7 +30,7 @@
         }"
       >
         <span class="opacity-50 mr-2 tracking-widest text-[9px] uppercase">{{ props.serverNode?.name || 'CORE' }}</span>
-        <span class="tracking-tight">{{ props.serverNode?.country || '中国' }} · {{ props.serverNode?.region || '未知' }}</span>
+        <span class="tracking-tight">{{ props.serverNode?.country || $t('common.unknown') }} · {{ props.serverNode?.region || $t('common.unknown') }}</span>
       </div>
     </div>
 
@@ -39,7 +39,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 import axios from 'axios'
@@ -61,6 +61,7 @@ const props = defineProps({
 const containerRef = ref(null)
 const mapRef = ref(null)
 let chart = null
+let mapReady = false // GeoJSON 注册完成后才允许 setOption
 let userHasRoamed = false // 记录用户是否手动移动过地图
 
 // 防御节点的屏幕像素坐标（由地图事件实时更新）
@@ -99,7 +100,7 @@ const getHighlightRegions = () => {
 
 // 核心：将地理坐标实时换算为屏幕像素坐标
 const updateNodePixel = () => {
-  if (!chart || !props.serverNode) return
+  if (!chart || !mapReady || !props.serverNode) return
   const coord = getCoord(props.serverNode)
   try {
     const px = chart.convertToPixel('geo', coord)
@@ -124,6 +125,7 @@ const initMap = async () => {
     worldData.features = worldData.features.filter(f => f.properties.name !== 'China')
     worldData.features.push(...chinaData.features)
     echarts.registerMap('world-china', worldData)
+    mapReady = true
   } catch (err) {
     console.error('地图数据加载失败', err)
   }
@@ -208,7 +210,7 @@ const initMap = async () => {
 
 // 监听位置变化，更新中心点和高亮
 watch(() => props.serverNode, (newNode) => {
-  if (!chart || !newNode) return
+  if (!chart || !mapReady || !newNode) return
   const coord = getCoord(newNode)
   
   const geoUpdate = {
@@ -244,13 +246,13 @@ const eventBuffer = []
 let updateTimer = null
 
 watch(() => props.events, (newEvents) => {
-  if (!chart || !newEvents.length || !props.serverNode || !props.showTrajectory) return
+  if (!chart || !mapReady || !newEvents.length || !props.serverNode || !props.showTrajectory) return
   eventBuffer.push(newEvents[newEvents.length - 1])
 }, { deep: true })
 
 const startBatchProcessor = () => {
   updateTimer = setInterval(() => {
-    if (!chart) return
+    if (!chart || !mapReady) return
     const opts = chart.getOption()
     const lines = opts.series?.[0]?.data || []
     if (!eventBuffer.length && !lines.length) return
@@ -296,7 +298,7 @@ const startBatchProcessor = () => {
 // ... (Helpers moved to top)
 
 watch(() => props.isDark, () => {
-  if (!chart) return
+  if (!chart || !mapReady) return
   const accentColor = props.isDark ? '#06b6d4' : '#4f46e5'
   chart.setOption({
     geo: {

@@ -13,7 +13,7 @@
               "allowRoles": [],
               "url": "/api/v1/auth/login",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.767Z"
+              "updatedAt": "2026-05-05T16:07:26.151Z"
             },
             "oss": {
               "id": "oss",
@@ -24,7 +24,7 @@
               "allowRoles": [],
               "url": "/api/v1/auth/oss-token",
               "method": "GET",
-              "updatedAt": "2026-04-29T12:34:43.767Z"
+              "updatedAt": "2026-05-05T16:07:26.152Z"
             },
             "logout": {
               "id": "logout",
@@ -35,7 +35,7 @@
               "allowRoles": [],
               "url": "/api/v1/auth/logout",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.767Z"
+              "updatedAt": "2026-05-05T16:07:26.152Z"
             }
           },
           "id": "default",
@@ -46,7 +46,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-04-29T12:34:43.767Z"
+          "updatedAt": "2026-05-05T16:07:26.151Z"
         }
       },
       "id": "身份认证中心",
@@ -57,7 +57,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-04-29T12:34:43.763Z"
+      "updatedAt": "2026-05-05T16:07:26.147Z"
     },
     "firewall": {
       "groups": {
@@ -72,7 +72,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs",
               "method": "GET",
-              "updatedAt": "2026-04-29T12:34:43.772Z"
+              "updatedAt": "2026-05-05T16:07:26.157Z"
             },
             "updateConfig": {
               "id": "updateConfig",
@@ -83,7 +83,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/:system/:group",
               "method": "PATCH",
-              "updatedAt": "2026-04-29T12:34:43.773Z"
+              "updatedAt": "2026-05-05T16:07:26.157Z"
             },
             "toggleConfig": {
               "id": "toggleConfig",
@@ -94,7 +94,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle/:system/:group",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.773Z"
+              "updatedAt": "2026-05-05T16:07:26.157Z"
             },
             "toggleSystemConfig": {
               "id": "toggleSystemConfig",
@@ -105,7 +105,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle-system/:system",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.773Z"
+              "updatedAt": "2026-05-05T16:07:26.157Z"
             }
           },
           "id": "apiConfigs",
@@ -116,7 +116,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-04-29T12:34:43.772Z"
+          "updatedAt": "2026-05-05T16:07:26.157Z"
         },
         "challenge": {
           "apis": {
@@ -129,7 +129,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/challenge/verify",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.775Z"
+              "updatedAt": "2026-05-05T16:07:26.159Z"
             }
           },
           "id": "challenge",
@@ -140,7 +140,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-04-29T12:34:43.774Z"
+          "updatedAt": "2026-05-05T16:07:26.159Z"
         },
         "firewall-monitor": {
           "apis": {
@@ -153,7 +153,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/summary",
               "method": "GET",
-              "updatedAt": "2026-04-29T12:34:43.777Z"
+              "updatedAt": "2026-05-05T16:07:26.162Z"
             },
             "records": {
               "id": "records",
@@ -164,7 +164,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/records",
               "method": "GET",
-              "updatedAt": "2026-04-29T12:34:43.777Z"
+              "updatedAt": "2026-05-05T16:07:26.162Z"
             },
             "clear": {
               "id": "clear",
@@ -175,7 +175,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/clear",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.777Z"
+              "updatedAt": "2026-05-05T16:07:26.162Z"
             },
             "updateNode": {
               "id": "updateNode",
@@ -186,7 +186,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/update",
               "method": "PATCH",
-              "updatedAt": "2026-04-29T12:34:43.777Z"
+              "updatedAt": "2026-05-05T16:07:26.162Z"
             },
             "refreshNode": {
               "id": "refreshNode",
@@ -197,7 +197,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/refresh",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.777Z"
+              "updatedAt": "2026-05-05T16:07:26.162Z"
             },
             "getSettings": {
               "id": "getSettings",
@@ -208,7 +208,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "GET",
-              "updatedAt": "2026-04-29T12:34:43.777Z"
+              "updatedAt": "2026-05-05T16:07:26.163Z"
             },
             "updateSettings": {
               "id": "updateSettings",
@@ -219,7 +219,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "PATCH",
-              "updatedAt": "2026-04-29T12:34:43.778Z"
+              "updatedAt": "2026-05-05T16:07:26.163Z"
             },
             "addBlacklist": {
               "id": "addBlacklist",
@@ -230,7 +230,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.778Z"
+              "updatedAt": "2026-05-05T16:07:26.163Z"
             },
             "removeBlacklist": {
               "id": "removeBlacklist",
@@ -241,7 +241,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "DELETE",
-              "updatedAt": "2026-04-29T12:34:43.778Z"
+              "updatedAt": "2026-05-05T16:07:26.163Z"
             },
             "listBlocks": {
               "id": "listBlocks",
@@ -252,7 +252,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "GET",
-              "updatedAt": "2026-04-29T12:34:43.778Z"
+              "updatedAt": "2026-05-05T16:07:26.163Z"
             },
             "addBlock": {
               "id": "addBlock",
@@ -263,7 +263,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.778Z"
+              "updatedAt": "2026-05-05T16:07:26.163Z"
             },
             "removeBlock": {
               "id": "removeBlock",
@@ -274,7 +274,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-04-29T12:34:43.778Z"
+              "updatedAt": "2026-05-05T16:07:26.163Z"
             },
             "listWhitelist": {
               "id": "listWhitelist",
@@ -285,7 +285,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "GET",
-              "updatedAt": "2026-04-29T12:34:43.778Z"
+              "updatedAt": "2026-05-05T16:07:26.163Z"
             },
             "addWhitelist": {
               "id": "addWhitelist",
@@ -296,7 +296,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.778Z"
+              "updatedAt": "2026-05-05T16:07:26.163Z"
             },
             "removeWhitelist": {
               "id": "removeWhitelist",
@@ -307,7 +307,51 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-04-29T12:34:43.778Z"
+              "updatedAt": "2026-05-05T16:07:26.164Z"
+            },
+            "addBlockFp": {
+              "id": "addBlockFp",
+              "name": "添加指纹封禁",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/blocks/fp",
+              "method": "POST",
+              "updatedAt": "2026-05-05T16:07:26.164Z"
+            },
+            "removeBlockFp": {
+              "id": "removeBlockFp",
+              "name": "移除指纹封禁",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/blocks/fp/:fingerprint",
+              "method": "DELETE",
+              "updatedAt": "2026-05-05T16:07:26.164Z"
+            },
+            "addWhitelistFp": {
+              "id": "addWhitelistFp",
+              "name": "添加指纹白名单",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/whitelist/fp",
+              "method": "POST",
+              "updatedAt": "2026-05-05T16:07:26.164Z"
+            },
+            "removeWhitelistFp": {
+              "id": "removeWhitelistFp",
+              "name": "移除指纹白名单",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/api/firewall/v1/monitor/whitelist/fp/:fingerprint",
+              "method": "DELETE",
+              "updatedAt": "2026-05-05T16:07:26.164Z"
             }
           },
           "id": "firewall-monitor",
@@ -318,7 +362,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-04-29T12:34:43.777Z"
+          "updatedAt": "2026-05-05T16:07:26.162Z"
         }
       },
       "id": "firewall",
@@ -329,7 +373,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-04-29T12:34:43.770Z"
+      "updatedAt": "2026-05-05T16:07:26.155Z"
     },
     "SSO 用户中心": {
       "groups": {
@@ -343,7 +387,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-04-29T12:34:43.783Z"
+          "updatedAt": "2026-05-05T16:07:26.169Z"
         },
         "auth": {
           "id": "auth",
@@ -359,7 +403,7 @@
               "allowRoles": [],
               "url": "/api/v1/sso/login",
               "method": "POST",
-              "updatedAt": "2026-04-29T12:34:43.783Z"
+              "updatedAt": "2026-05-05T16:07:26.169Z"
             }
           }
         }
@@ -372,7 +416,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-04-29T12:34:43.780Z"
+      "updatedAt": "2026-05-05T16:07:26.166Z"
     }
   }
 }

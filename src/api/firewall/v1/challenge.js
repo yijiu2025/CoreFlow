@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import { CHALLENGE_SECRET } from '../../../firewall/config.js';
+import { CHALLENGE_SECRET } from '../../../firewall/config/config.js';
+import { generateFingerprint } from '../../../firewall/util/fingerprint.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 
 export default async function (fastify) {
@@ -26,14 +27,19 @@ export default async function (fastify) {
     url: '/verify',
     handler: async (request, reply) => {
       const { nonce, timestamp, signature, webgl, webdriver, plugins } = request.body;
+      const fingerprint = generateFingerprint(request);
 
-      // 1. 签名验证
-      const expected = crypto
+      // 1. 签名验证（兼容旧版 IP 签名 + 新版指纹签名）
+      const expectedIp = crypto
         .createHmac('sha256', CHALLENGE_SECRET)
         .update(`${request.ip}:${nonce}:${timestamp}`)
         .digest('hex');
+      const expectedFp = crypto
+        .createHmac('sha256', CHALLENGE_SECRET)
+        .update(`${fingerprint}:${nonce}:${timestamp}`)
+        .digest('hex');
 
-      if (signature !== expected) {
+      if (signature !== expectedIp && signature !== expectedFp) {
         return reply.code(403).send({ ok: false, reason: 'Signature Mismatch' });
       }
 
@@ -47,10 +53,13 @@ export default async function (fastify) {
         return reply.code(403).send({ ok: false, reason: 'Suspicious Environment' });
       }
 
-      // 4. 签发验证令牌 (存入 Redis)
+      // 4. 签发验证令牌（同时绑定指纹和 IP，30 分钟有效）
       const token = crypto.randomBytes(32).toString('hex');
       if (fastify.redis) {
-        await fastify.redis.set(`fw:pass:${request.ip}:${token}`, '1', 'EX', 1800);
+        const pipeline = fastify.redis.pipeline();
+        pipeline.set(`fw:pass:fp:${fingerprint}:${token}`, '1', 'EX', 1800);
+        pipeline.set(`fw:pass:${request.ip}:${token}`, '1', 'EX', 1800);
+        await pipeline.exec();
       }
 
       // 5. 设置 HttpOnly Cookie

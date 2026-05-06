@@ -1,5 +1,5 @@
 import { registerGroupMetadata, registerSecureRoute, getFullUrl } from '../../guard.js';
-import { getRecentRecords, getSummary, clearAll, setBroadcastHandler } from '../../../firewall/store.js';
+import { getRecentRecords, getSummary, clearAll, setBroadcastHandler } from '../../../firewall/data/store.js';
 import {
   getServerNode,
   updateServerNodeMetadata,
@@ -12,14 +12,17 @@ import {
   addToWhitelist,
   removeFromWhitelist
 } from '../../../firewall/dao/dao.js';
+import { setBlock, removeBlock } from '../../../firewall/engine/index.js';
 import {
-  setBlock,
-  removeBlock,
   getActiveBlocks,
   getActiveWhitelist,
   setWhitelist,
-  removeWhitelist as removeWhitelistRedis
-} from '../../../firewall/detector.js';
+  removeWhitelist as removeWhitelistRedis,
+  setBlockFp,
+  removeBlockFp,
+  setWhitelistFp,
+  removeWhitelistFp
+} from '../../../firewall/dao/block-manager.js';
 import {
   summarySchema,
   updateNodeSchema,
@@ -296,6 +299,79 @@ export default async function (fastify) {
       return reply.result.success('已移除白名单');
     }
   });
+
+  // ==================== 指纹封禁管理 API ====================
+  registerSecureRoute(fastify, {
+    name: 'addBlockFp',
+    alias: '添加指纹封禁',
+    method: 'POST',
+    url: '/blocks/fp',
+    handler: async (req, reply) => {
+      const { fingerprint, duration, permanent, status } = req.body;
+      if (!fingerprint) return reply.result.badRequest('缺少指纹参数');
+
+      const isPermanent = permanent === true || (!duration && permanent !== false);
+      const blockStatus = status || 'BLOCKED';
+
+      await setBlockFp(req.server.redis, fingerprint, {
+        status: blockStatus,
+        source: 'manual',
+        permanent: isPermanent,
+        createdAt: Date.now(),
+        expiresAt: isPermanent ? null : Date.now() + (duration || 86400) * 1000,
+      });
+
+      return reply.result.success(isPermanent ? '已永久封禁该指纹' : `已封禁指纹 ${duration || 86400} 秒`);
+    }
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'removeBlockFp',
+    alias: '移除指纹封禁',
+    method: 'DELETE',
+    url: '/blocks/fp/:fingerprint',
+    handler: async (req, reply) => {
+      const { fingerprint } = req.params;
+      if (!fingerprint) return reply.result.badRequest('缺少指纹参数');
+
+      await removeBlockFp(req.server.redis, fingerprint);
+
+      return reply.result.success('已解除指纹封禁');
+    }
+  });
+
+  // ==================== 指纹白名单管理 API ====================
+  registerSecureRoute(fastify, {
+    name: 'addWhitelistFp',
+    alias: '添加指纹白名单',
+    method: 'POST',
+    url: '/whitelist/fp',
+    handler: async (req, reply) => {
+      const { fingerprint, duration } = req.body;
+      if (!fingerprint) return reply.result.badRequest('缺少指纹参数');
+
+      const dur = duration || 1200; // 默认 20 分钟
+      await setWhitelistFp(req.server.redis, fingerprint, dur);
+
+      return reply.result.success(`已添加指纹白名单 ${dur} 秒`);
+    }
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'removeWhitelistFp',
+    alias: '移除指纹白名单',
+    method: 'DELETE',
+    url: '/whitelist/fp/:fingerprint',
+    handler: async (req, reply) => {
+      const { fingerprint } = req.params;
+      if (!fingerprint) return reply.result.badRequest('缺少指纹参数');
+
+      await removeWhitelistFp(req.server.redis, fingerprint);
+
+      return reply.result.success('已移除指纹白名单');
+    }
+  });
+
   // ==================== WebSocket ====================
   // WebSocket 升级处理
   const wsUrl = getFullUrl('/ws');

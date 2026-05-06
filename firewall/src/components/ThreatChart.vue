@@ -2,7 +2,7 @@
   <div class="glass p-6 rounded-2xl h-[350px]" ref="chartRef"></div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref, watch, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 

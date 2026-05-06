@@ -55,7 +55,7 @@
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ShieldCheck, Sun, Moon, Settings } from 'lucide-vue-next'
 
 defineProps({

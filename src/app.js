@@ -33,7 +33,9 @@ export async function createApp() {
         }
       })
     },
-    ignoreTrailingSlash: true,
+    routerOptions: {
+      ignoreTrailingSlash: true
+    },
     trustProxy: true
   });
 

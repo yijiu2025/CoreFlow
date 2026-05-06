@@ -47,7 +47,7 @@
       "bruteIpLimit": 10,
       "enableConnLimit": true,
       "maxConn": 100,
-      "enableGeoFilter": false,
+      "enableGeoFilter": true,
       "geoRules": {
         "sensitivePaths": [
           "/api/admin",

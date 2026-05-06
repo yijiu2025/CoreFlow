@@ -54,7 +54,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { MapPin, Database, Info } from 'lucide-vue-next'
 import RegionList from '../RegionList.vue'
 import PathList from '../PathList.vue'

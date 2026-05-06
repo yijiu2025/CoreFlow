@@ -133,7 +133,7 @@
                     <button @click="$emit('toggle', grpKey)"
                       class="p-2.5 rounded-xl transition-all hover:bg-slate-50 dark:hover:bg-white/5"
                       :class="group.enabled ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-800'"
-                      :title="group.enabled ? '禁用该模块' : '启用该模块'">
+                      :title="group.enabled ? $t('config.disable_module') : $t('config.enable_module')">
                       <Power class="w-5 h-5" />
                     </button>
                     <button @click="$emit('edit', activeSystem, grpKey)"
@@ -212,7 +212,7 @@
 
                     <div v-if="!Object.keys(group.apis || {}).length" class="py-10 text-center">
                       <div class="text-[10px] font-bold text-slate-300 dark:text-slate-800 uppercase tracking-widest">
-                        该模块下暂无 API 节点</div>
+                        {{ $t('config.no_api_nodes') }}</div>
                     </div>
                   </div>
                 </transition>
@@ -227,15 +227,15 @@
         :class="isDark ? 'bg-slate-950/30' : 'bg-slate-50/30'">
         <div class="text-center">
           <ShieldAlert class="w-16 h-16 text-slate-100 dark:text-slate-900 mx-auto mb-4" />
-          <h3 class="text-lg font-bold text-slate-400 dark:text-slate-700">请从左侧选择一个安全域进行配置</h3>
-          <p class="text-sm text-slate-300 dark:text-slate-800 mt-2">选择系统后可管理其下的模块及具体接口策略</p>
+          <h3 class="text-lg font-bold text-slate-400 dark:text-slate-700">{{ $t('config.select_domain_title') }}</h3>
+          <p class="text-sm text-slate-300 dark:text-slate-800 mt-2">{{ $t('config.select_domain_desc') }}</p>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import {
   Shield, ShieldAlert, Activity, Info, ChevronRight,

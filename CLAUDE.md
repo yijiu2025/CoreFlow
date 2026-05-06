@@ -105,3 +105,11 @@ See `.env.example` for the full list. Key vars: `PORT`, `DB_*`, `REDIS_*`, `APP_
 - No build step — runs directly as ESM JavaScript
 - `src/validator/` is legacy Koa-era code; active routes use Fastify's AJV JSON Schema validation
 - `firewall/` root directory is a separate Vite/Vue project with its own `node_modules`
+
+## 特殊指令
+- 注释和文档全部使用中文 每个函数都写文档和注释，每次在合适的位置更新README.md文件
+- 修改现有代码时，先说明改动计划再执行
+- 遇到不确定的业务逻辑，先提问再写代码
+- 所有中文注释使用简体中文
+- 每一个函数功能使用一个单独的文件
+- 函数命名使用小驼峰命名法

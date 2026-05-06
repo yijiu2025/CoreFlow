@@ -4,7 +4,7 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { FIREWALL_FILE, DEFAULT_SERVER_NODE, DEFAULT_SECURITY_SETTINGS, DEFAULT_IP_APIS } from '../config.js';
+import { FIREWALL_FILE, DEFAULT_SERVER_NODE, DEFAULT_SECURITY_SETTINGS, DEFAULT_IP_APIS } from '../config/config.js';
 
 let serverNode = { ...DEFAULT_SERVER_NODE };
 let securitySettings = { ...DEFAULT_SECURITY_SETTINGS };
