@@ -6,6 +6,8 @@ import { createClient } from 'redis';
 import fp from 'fastify-plugin';
 import { setupRedisHealthMonitor } from './health.js';
 
+export let globalRedis = null;
+
 export default fp(async (app) => {
   if (process.env.REDIS_HOST) {
     const redis = createClient({
@@ -20,10 +22,12 @@ export default fp(async (app) => {
     try {
       await redis.connect();
       console.log('✨ [Redis] 连接成功');
+      globalRedis = redis;
       app.decorate('redis', redis);
       setupRedisHealthMonitor(app, redis);
     } catch (err) {
       console.warn('⚠️ [Redis] 无法连接，降级策略:', err.message);
+      globalRedis = null;
       app.decorate('redis', null);
     }
   } else {

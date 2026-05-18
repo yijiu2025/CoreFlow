@@ -2,22 +2,7 @@
  * OAuth 2.1 用户授权同意记录模型
  *
  * 记录用户对某个客户端的授权同意信息。
- * 当用户首次授权后，后续相同 scope 的请求可跳过授权页面。
- *
- * 示例数据：
- * {
- *   id: 1,
- *   user_id: 'user-uuid-xxx',
- *   client_id: 'spa-client-001',
- *   scopes: ['openid', 'profile', 'email']
- * }
- *
- * {
- *   id: 2,
- *   user_id: 'user-uuid-xxx',
- *   client_id: 'server-client-001',
- *   scopes: ['openid', 'profile', 'email', 'api:read', 'api:write']
- * }
+ * 遵循 OIDC 规范，将用户外部标识字段统一命名为 sub，类型保持 STRING(128)，存储主系统的 User.uid。
  */
 export default (sequelize, DataTypes) => {
   const OauthConsent = sequelize.define(
@@ -30,11 +15,11 @@ export default (sequelize, DataTypes) => {
         autoIncrement: true,
         comment: '自增主键'
       },
-      /** 用户唯一标识 */
-      user_id: {
+      /** 受权主体用户 ID (存储主系统 User.uid) */
+      sub: {
         type: DataTypes.STRING(128),
         allowNull: false,
-        comment: '用户唯一标识'
+        comment: '受权主体用户 ID (sub claim)'
       },
       /** 客户端唯一标识 */
       client_id: {
@@ -55,8 +40,8 @@ export default (sequelize, DataTypes) => {
       indexes: [
         {
           unique: true,
-          fields: ['user_id', 'client_id'],
-          name: 'uk_user_client'
+          fields: ['sub', 'client_id'],
+          name: 'uk_sub_client'
         }
       ],
       comment: 'OAuth 2.1 用户授权同意记录表'

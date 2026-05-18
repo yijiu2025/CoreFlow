@@ -7,6 +7,7 @@ import { generateCaptchaSchema, verifyCaptchaSchema } from '../../oauth21/v1/sch
 
 export default async function (fastify, opts) {
   const captchaStore = getSessionStore(fastify, 'captcha');
+  const emailCodeStore = getSessionStore(fastify, 'email_code');
 
   registerGroupMetadata({
     name: 'v1',
@@ -44,7 +45,7 @@ export default async function (fastify, opts) {
     schema: verifyCaptchaSchema,
     handler: async (request, reply) => {
       try {
-        const result = await verifyDao.verifyCaptchaAndSendEmail(request.body, captchaStore);
+        const result = await verifyDao.verifyCaptchaAndSendEmail(request.body, captchaStore, emailCodeStore);
         return reply.result.success(result.message, { emailSent: result.emailSent });
       } catch (err) {
         // 捕获业务逻辑错误并返回 400
@@ -64,7 +65,7 @@ export default async function (fastify, opts) {
     handler: async (request, reply) => {
       const { email, code } = request.body;
       try {
-        await verifyDao.checkEmailCode(email, code);
+        await verifyDao.checkEmailCode(email, code, emailCodeStore);
         return reply.result.success('验证码校验通过');
       } catch (err) {
         return reply.result.fail(err.message, null, 400);

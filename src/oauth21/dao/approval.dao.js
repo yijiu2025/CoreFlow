@@ -4,14 +4,14 @@ import sequelize from '../../db/index.js';
 class ApprovalDao {
   /**
    * 检查用户是否已授权某应用
-   * @param {string} uid 用户ID
+   * @param {string} sub 用户 UUID
    * @param {string} appId 应用ID
    * @returns {Promise<object|null>}
    */
-  async getEffectiveApproval(uid, appId) {
+  async getEffectiveApproval(sub, appId) {
     return await OauthApproval.findOne({
       where: {
-        uid,
+        sub,
         appId,
         status: 1 // 必须是正常状态
       }
@@ -22,13 +22,14 @@ class ApprovalDao {
    * 保存或更新授权记录 (幂等操作)，并自动授予默认角色
    * @param {object} params
    */
-  async saveApproval({ uid, appId, scopes }) {
+  async saveApproval({ uid, sub, appId, scopes }) {
+    const userSub = sub || uid; // 兼容并包：允许传入 uid 或 sub，一律映射为 sub
     const t = await sequelize.transaction();
     try {
       const [approval, created] = await OauthApproval.findOrCreate({
-        where: { uid, appId },
+        where: { sub: userSub, appId },
         defaults: {
-          uid,
+          sub: userSub,
           appId,
           scopes: JSON.stringify(scopes),
           status: 1
@@ -52,7 +53,7 @@ class ApprovalDao {
 
         if (defaultRole) {
           // 获取用户的内部 ID
-          const user = await sequelize.models.User.findOne({ where: { uid }, transaction: t });
+          const user = await sequelize.models.User.findOne({ where: { uid: userSub }, transaction: t });
           if (user) {
             // 确保没有重复绑定
             await sequelize.models.UserRole.findOrCreate({
@@ -79,10 +80,10 @@ class ApprovalDao {
   /**
    * 封禁/撤销授权
    */
-  async revokeApproval(uid, appId) {
+  async revokeApproval(sub, appId) {
     return await OauthApproval.update(
       { status: 0 },
-      { where: { uid, appId } }
+      { where: { sub, appId } }
     );
   }
 }

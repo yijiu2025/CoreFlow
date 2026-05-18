@@ -2,8 +2,7 @@
  * OAuth 用户授权同意数据访问层
  *
  * 提供用户授权同意记录的查增删操作。
- * 记录用户对某个客户端已授权的 scope，避免重复授权。
- * 底层通过 Sequelize 模型访问 oauth_consents 表。
+ * 已升级适配统一 IAM 规范：底层的 user_id 列已变更为 sub，以存放 User.uid。
  */
 import sequelize from '../../db/index.js';
 
@@ -13,28 +12,28 @@ const getModel = () => sequelize.models.OauthConsent;
 const ConsentDao = {
   /**
    * 查找用户对某客户端的授权同意记录
-   * @param {string} userId 用户 ID
+   * @param {string} sub 用户唯一标识 (主系统 User.uid)
    * @param {string} clientId 客户端 ID
    * @returns {Promise<object|null>} 授权同意记录或 null
    */
-  async find(userId, clientId) {
+  async find(sub, clientId) {
     const model = getModel();
     const consent = await model.findOne({
-      where: { user_id: userId, client_id: clientId }
+      where: { sub, client_id: clientId }
     });
     return consent ? consent.toJSON() : null;
   },
 
   /**
    * 保存用户授权同意记录
-   * @param {string} userId 用户 ID
+   * @param {string} sub 用户唯一标识 (主系统 User.uid)
    * @param {string} clientId 客户端 ID
    * @param {string[]} scopes 已授权的权限范围列表
    */
-  async save(userId, clientId, scopes) {
+  async save(sub, clientId, scopes) {
     const model = getModel();
     await model.upsert({
-      user_id: userId,
+      sub,
       client_id: clientId,
       scopes
     });
@@ -42,13 +41,13 @@ const ConsentDao = {
 
   /**
    * 删除用户授权同意记录
-   * @param {string} userId 用户 ID
+   * @param {string} sub 用户唯一标识 (主系统 User.uid)
    * @param {string} clientId 客户端 ID
    */
-  async remove(userId, clientId) {
+  async remove(sub, clientId) {
     const model = getModel();
     await model.destroy({
-      where: { user_id: userId, client_id: clientId }
+      where: { sub, client_id: clientId }
     });
   }
 };

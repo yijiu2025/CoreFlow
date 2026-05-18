@@ -28,7 +28,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  // 静态校验方法
+  // 静态校验方法 (解决高并发重放与竞争漏洞)
   EmailCode.check = async function (email, code, sessionId) {
     const where = {
       email,
@@ -43,14 +43,10 @@ export default (sequelize, DataTypes) => {
       where.session_id = sessionId;
     }
 
-    const record = await this.findOne({ where });
-
-    if (record) {
-      // 校验成功即标记为已使用，防止重放攻击
-      await record.update({ status: 1 });
-      return true; 
-    }
-    return false;
+    // 使用原子 Update 更新，借力数据库行锁。
+    // 如果返回的 affectedCount = 0，说明要么匹配失败，要么已被其他并发线程捷足先登修改了状态。
+    const [affectedCount] = await this.update({ status: 1 }, { where });
+    return affectedCount > 0;
   };
 
   return EmailCode;

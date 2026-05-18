@@ -1,5 +1,6 @@
 import IamDao from '../../../admin/dao/iam.dao.js';
 import { registerSecureRoute } from '../../oauth21/guard.js'; 
+import { actionMetaRegistry } from '../../../utils/PbacRegistry.js'; 
 
 export default async function (fastify) {
   
@@ -22,6 +23,23 @@ export default async function (fastify) {
       } catch (err) {
         return reply.code(500).send({ error: err.message });
       }
+    }
+  });
+
+  /**
+   * GET /admin/v1/iam/actions/dictionary
+   * 获取全量权限动作元数据 (供前端渲染复选框、权限树使用)
+   */
+  registerSecureRoute(fastify, {
+    name: 'listPermissionDictionary',
+    alias: '获取权限字典树',
+    method: 'GET',
+    url: '/admin/v1/iam/actions/dictionary',
+    handler: async (request, reply) => {
+      // actionMetaRegistry 是在各个业务模块加载时，通过 definePermissionMeta 压入内存的
+      return reply.result?.success 
+        ? reply.result.success('获取全量权限字典', actionMetaRegistry)
+        : reply.send({ success: true, data: actionMetaRegistry });
     }
   });
 

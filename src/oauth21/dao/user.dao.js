@@ -1,108 +1,74 @@
 /**
- * OAuth 用户数据访问层
+ * OAuth 2.1 用户数据访问层 (已整合至统一 IAM 平台)
  *
- * 提供用户的增删查改和密码验证操作。
- * 密码使用 bcrypt 哈希存储。
- * 底层通过 Sequelize 模型访问 oauth_users 表。
+ * 彻底消除“身份孤岛”问题，直接适配主系统的 User & UserIdentity 体系。
+ * OAuth 2.1 授权服务器中的 sub (Subject) 字段全部对应主系统的 User.uid (UUID)。
  */
 import bcrypt from 'bcryptjs';
-import { v4 as uuidv4 } from 'uuid';
 import sequelize from '../../db/index.js';
-
-/** 获取 OauthUser 模型（延迟获取，确保模型已加载） */
-const getModel = () => sequelize.models.OauthUser;
 
 const UserDao = {
   /**
-   * 根据用户 ID 查找用户
-   * @param {string} id 用户唯一标识
-   * @returns {Promise<object|null>} 用户数据或 null
+   * 根据用户 UID 查找用户 (sub 字段存储的是主系统的 User.uid)
+   * @param {string} uid 用户唯一标识 (UUID)
+   * @returns {Promise<object|null>} 适配后的用户数据或 null
    */
-  async findById(id) {
-    const model = getModel();
-    const user = await model.findByPk(id);
-    return user ? user.toJSON() : null;
+  async findById(uid) {
+    const { User } = sequelize.models;
+    if (!User) return null;
+
+    const user = await User.findOne({
+      where: { uid }
+    });
+
+    return user ? {
+      id: user.uid, // sub 字段对应 uid
+      username: user.username,
+      email: user.email,
+      name: user.username,
+      uid: user.uid
+    } : null;
   },
 
   /**
-   * 根据用户名查找用户
-   * @param {string} username 用户名
-   * @returns {Promise<object|null>} 用户数据或 null
+   * 根据用户名/邮箱/标识符查找用户以进行凭证验证
+   * @param {string} username 登录标识符
+   * @returns {Promise<object|null>} 适配后的用户数据及凭证或 null
    */
   async findByUsername(username) {
-    const model = getModel();
-    const user = await model.findOne({
-      where: { username }
-    });
-    return user ? user.toJSON() : null;
-  },
+    const { User, UserIdentity } = sequelize.models;
+    if (!User || !UserIdentity) return null;
 
-  /**
-   * 根据身份标识（用户名、邮箱或手机号）查找用户
-   * @param {string} identity 身份标识
-   * @returns {Promise<object|null>} 用户数据或 null
-   */
-  async findByIdentity(identity) {
-    const model = getModel();
-    const { Op } = sequelize;
-    const user = await model.findOne({
-      where: {
-        [Op.or]: [
-          { username: identity },
-          { email: identity },
-          { phone: identity }
-        ]
-      }
-    });
-    return user ? user.toJSON() : null;
-  },
-
-  /**
-   * 创建新用户
-   * @param {object} params 用户参数
-   * @param {string} params.username 用户名
-   * @param {string} params.password 明文密码（将被 bcrypt 哈希）
-   * @param {string} [params.email] 邮箱
-   * @param {string} [params.name] 显示名称
-   * @returns {Promise<object>} 创建的用户数据
-   */
-  async create({ username, password, email, name }) {
-    const model = getModel();
-    const id = uuidv4();
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    const user = await model.create({
-      id,
-      username,
-      password: hashedPassword,
-      email,
-      name
+    // 从统一的凭证表 UserIdentity 中查找密码记录
+    const identity = await UserIdentity.findOne({
+      where: { 
+        identifier: username, 
+        identity_type: 'password' 
+      },
+      include: [{ model: User, as: 'user' }]
     });
 
-    return user.toJSON();
+    if (!identity || !identity.user) return null;
+
+    return {
+      id: identity.user.uid, // sub 字段对应 uid
+      username: identity.user.username,
+      email: identity.user.email,
+      name: identity.user.username,
+      uid: identity.user.uid,
+      credential: identity.credential // 密码 Hash
+    };
   },
 
   /**
    * 验证用户密码
-   * @param {object} user 用户数据（含 password 字段）
+   * @param {object} user 适配后的用户数据
    * @param {string} password 待验证的明文密码
-   * @returns {Promise<boolean>} 密码是否匹配
+   * @returns {Promise<boolean>} 是否验证成功
    */
   async verifyPassword(user, password) {
-    return bcrypt.compare(password, user.password);
-  },
-
-  /**
-   * 列出所有用户（不含密码）
-   * @returns {Promise<object[]>} 用户列表
-   */
-  async list() {
-    const model = getModel();
-    const users = await model.findAll();
-    return users.map((u) => {
-      const { password, ...rest } = u.toJSON();
-      return rest;
-    });
+    if (!user || !user.credential) return false;
+    return bcrypt.compare(password, user.credential);
   }
 };
 

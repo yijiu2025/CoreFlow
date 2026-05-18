@@ -9,8 +9,12 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import userDao from '../../../user/dao/user.js';
 import verifyDao from '../../../verify/dao/verify.js';
+import { getSessionStore } from '../../../redis/session-store.js';
 import '../../../user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
+
 export default async function (fastify) {
+  const emailCodeStore = getSessionStore(fastify, 'email_code');
+
   registerGroupMetadata({
     name: 'userRegister',
     description: 'user用户注册',
@@ -31,7 +35,7 @@ export default async function (fastify) {
       // 验证邮件验证码
       try {
         const { email, code } = request.body;
-        await verifyDao.checkEmailCode(email, code);
+        await verifyDao.checkEmailCode(email, code, emailCodeStore);
       } catch (err) {
         return reply.result.fail(err.message, null, 400);
       }
@@ -40,21 +44,6 @@ export default async function (fastify) {
       return reply.result.success('注册成功', user);
     }
   });
-
-  /**
-   * GET /check-nickname — 校验昵称是否重复
-   */
-  // registerSecureRoute(fastify, {
-  //   name: 'checkNickname',
-  //   alias: '校验昵称是否重复',
-  //   method: 'GET',
-  //   url: '/check-nickname',
-  //   handler: async (request, reply) => {
-  //     const { nickname } = request.query;
-  //     const isDuplicate = await userDao.checkUsernameExist(nickname);
-  //     return reply.code(200).send({ isDuplicate });
-  //   }
-  // });
 
   /**
    * GET /check-email — 校验邮箱是否重复
@@ -71,4 +60,3 @@ export default async function (fastify) {
     }
   });
 }
-

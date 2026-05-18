@@ -2,10 +2,24 @@ export default (sequelize, DataTypes) => {
   const SessionLog = sequelize.define(
     'SessionLog',
     {
+      /** 
+       * 自增主键 
+       * 在分区表设计中，主键/唯一索引必须包含分区字段 (created_at)。
+       * 因此将 id 与 created_at 设为联合主键 (Composite Primary Key)。
+       */
       id: {
         type: DataTypes.BIGINT,
         primaryKey: true,
-        autoIncrement: true
+        autoIncrement: true,
+        comment: '自增主键'
+      },
+      created_at: {
+        type: DataTypes.DATE,
+        primaryKey: true,
+        allowNull: false,
+        defaultValue: DataTypes.NOW,
+        field: 'created_at',
+        comment: '创建时间 (物理分区依据字段)'
       },
       user_id: {
         type: DataTypes.BIGINT,
@@ -38,7 +52,9 @@ export default (sequelize, DataTypes) => {
     {
       tableName: 'sys_session_logs',
       timestamps: true,
-      updatedAt: false // 日志表不需要更新时间
+      createdAt: 'created_at', // 显式匹配字段名
+      updatedAt: false,
+      comment: '系统会话/审计日志表 (支持按月物理分区)'
     }
   );
 

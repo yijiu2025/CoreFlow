@@ -2,8 +2,7 @@ import { DataTypes } from 'sequelize';
 import sequelize from '../../db/index.js';
 
 /**
- * OAuth 应用授权记录表
- * 记录用户对特定应用的授权状态
+ * OAuth 应用授权记录表 (受权主体与 Token/ OIDC 规范的 sub 命名强绑定，存储主系统的 User.uid)
  */
 const OauthApproval = sequelize.define('OauthApproval', {
   id: {
@@ -11,10 +10,10 @@ const OauthApproval = sequelize.define('OauthApproval', {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true
   },
-  uid: {
-    type: DataTypes.UUID,
+  sub: {
+    type: DataTypes.STRING(128),
     allowNull: false,
-    comment: '用户ID'
+    comment: '受权主体用户 ID (sub claim，存储主系统 User.uid)'
   },
   appId: {
     type: DataTypes.STRING,
@@ -45,7 +44,7 @@ const OauthApproval = sequelize.define('OauthApproval', {
   indexes: [
     {
       unique: true,
-      fields: ['uid', 'app_id']
+      fields: ['sub', 'app_id']
     }
   ]
 });
