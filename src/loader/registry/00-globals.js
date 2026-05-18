@@ -20,7 +20,7 @@ export default fp(async (app) => {
         },
 
         // 失败响应
-        fail(message = '操作失败', code = 400, data = null) {
+        fail(message = '操作失败', data = null, code = 400) {
           return reply.code(code).send({
             code,
             message,

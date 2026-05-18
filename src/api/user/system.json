@@ -1,0 +1,10 @@
+{
+  "name": "User",
+  "alias": "User用户中心",
+  "prefix": "/user",
+  "description": "用户管理中心，负责用户信息管理。",
+  "enabled": true,
+  "requireLogin": false,
+  "allowIps": [],
+  "allowRoles": []
+}

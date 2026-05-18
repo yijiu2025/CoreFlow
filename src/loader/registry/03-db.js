@@ -15,6 +15,10 @@ export default async (app) => {
       transaction: (...args) => sequelize.transaction(...args)
     };
     app.decorate('db', dbObj);
+
+    // 同步所有模型
+    await sequelize.sync();
+    console.log('✨ [Loader: DB] 数据库表已同步');
   } catch (err) {
     console.error('🚨 [Loader: DB] 数据库连接失败:', err.message);
   }

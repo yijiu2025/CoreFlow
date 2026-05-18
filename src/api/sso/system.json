@@ -1,8 +1,0 @@
-{
-  "name": "SSO 用户中心",
-  "description": "提供全域统一登录、注册及用户资料管理核心服务。",
-  "enabled": true,
-  "requireLogin": false,
-  "allowIps": [],
-  "allowRoles": []
-}

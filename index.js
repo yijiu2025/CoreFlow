@@ -1,5 +1,16 @@
 // index.js (根目录)
 import 'dotenv/config';
+import { execSync } from 'child_process';
+
+// 解决 Windows 终端中文乱码问题
+if (process.platform === 'win32' && process.stdout.isTTY) {
+  try {
+    execSync('chcp 65001', { stdio: 'ignore' });
+  } catch (e) {
+    // 忽略错误
+  }
+}
+
 // import Koa from 'koa';
 // import { initGlobalModels } from './src/dal/loader.js'
 import { createApp } from './src/app.js';

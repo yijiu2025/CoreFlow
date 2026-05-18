@@ -50,20 +50,35 @@
           :title="$t('nav.settings')">
           <Settings class="w-6 h-6 group-hover:rotate-90 transition-transform duration-500" />
         </button>
+
+        <!-- User Avatar -->
+        <button @click="$emit('openLogin')"
+          class="glass p-1.5 rounded-2xl transition-all shadow-lg border-2 border-transparent hover:border-cyan-500/50 overflow-hidden"
+          :class="isDarkMode ? 'bg-slate-800/50' : 'bg-white/50'">
+          <div v-if="isLoggedIn && user?.avatar" class="w-9 h-9 rounded-xl overflow-hidden">
+            <img :src="user.avatar" alt="Avatar" class="w-full h-full object-cover" />
+          </div>
+          <div v-else class="w-9 h-9 rounded-xl flex items-center justify-center"
+            :class="isDarkMode ? 'bg-slate-700 text-cyan-400' : 'bg-slate-200 text-indigo-600'">
+            <User class="w-5 h-5" />
+          </div>
+        </button>
       </div>
     </transition>
   </header>
 </template>
 
 <script setup lang="ts">
-import { ShieldCheck, Sun, Moon, Settings } from 'lucide-vue-next'
+import { ShieldCheck, Sun, Moon, Settings, User } from 'lucide-vue-next'
 
 defineProps({
   isDarkMode: Boolean,
   isUIVisible: Boolean,
   summary: Object,
-  locale: String
+  locale: String,
+  isLoggedIn: Boolean,
+  user: Object
 })
 
-defineEmits(['toggleLang', 'toggleTheme', 'openSettings'])
+defineEmits(['toggleLang', 'toggleTheme', 'openSettings', 'openLogin'])
 </script>

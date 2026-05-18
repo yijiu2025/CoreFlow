@@ -71,6 +71,19 @@
               :title="$t('nav.settings')">
               <Settings class="w-6 h-6 group-hover:rotate-90 transition-transform duration-500" />
             </button>
+
+            <!-- User Avatar -->
+            <button @click="isLoginModalOpen = true"
+              class="glass p-1.5 rounded-2xl transition-all shadow-lg border-2 border-transparent hover:border-cyan-500/50 overflow-hidden"
+              :class="isDarkMode ? 'bg-slate-800/50' : 'bg-white/50'">
+              <div v-if="authStore.isLoggedIn && authStore.user?.avatar" class="w-9 h-9 rounded-xl overflow-hidden">
+                <img :src="authStore.user.avatar" alt="Avatar" class="w-full h-full object-cover" />
+              </div>
+              <div v-else class="w-9 h-9 rounded-xl flex items-center justify-center"
+                :class="isDarkMode ? 'bg-slate-700 text-cyan-400' : 'bg-slate-200 text-indigo-600'">
+                <User class="w-5 h-5" />
+              </div>
+            </button>
           </div>
         </transition>
       </header>
@@ -149,6 +162,13 @@
       z-index="z-[4000]"
       @close="defenseStore.isDefenseModalOpen = false"
       @saveSecurity="settingsStore.saveSecuritySettings" />
+
+    <!-- Login Modal -->
+    <LoginModal 
+      :is-open="isLoginModalOpen" 
+      @close="isLoginModalOpen = false" 
+      @login-success="handleLoginSuccess"
+    />
   </div>
 </template>
 
@@ -158,7 +178,7 @@
  * 职责：背景地图、全局 Header、HUD 切换、全局模态框
  * 页面内容由 RouterView 渲染
  */
-import { onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { useUiStore } from './stores/ui'
@@ -168,7 +188,7 @@ import { useConfigsStore } from './stores/configs'
 import { useDefenseStore } from './stores/defense'
 import { firewallApi } from './api/firewall'
 import {
-  ShieldCheck, Settings, Monitor, Layout, Sun, Moon
+  ShieldCheck, Settings, Monitor, Layout, Sun, Moon, User
 } from 'lucide-vue-next'
 
 import MapChart from './components/MapChart.vue'
@@ -176,6 +196,8 @@ import DefenseManagementModal from './components/modals/DefenseManagementModal.v
 import SecurityConsoleModal from './components/modals/SecurityConsoleModal.vue'
 import SystemSettingsModal from './components/modals/SystemSettingsModal.vue'
 import PolicyEditModal from './components/modals/PolicyEditModal.vue'
+import LoginModal from './components/modals/LoginModal.vue'
+import { useAuthStore } from './stores/auth'
 
 const { locale } = useI18n()
 
@@ -185,6 +207,9 @@ const dashboardStore = useDashboardStore()
 const settingsStore = useSettingsStore()
 const configsStore = useConfigsStore()
 const defenseStore = useDefenseStore()
+const authStore = useAuthStore()
+
+const isLoginModalOpen = ref(false)
 
 // 从 store 提取响应式状态
 const { isDarkMode, isUIVisible, loading } = storeToRefs(uiStore)
@@ -208,6 +233,10 @@ async function fetchData(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+function handleLoginSuccess(user: any) {
+  authStore.setLoggedIn(true, user)
 }
 
 async function handleRefreshNode(): Promise<void> {

@@ -1,64 +1,5 @@
 {
   "configs": {
-    "身份认证中心": {
-      "groups": {
-        "default": {
-          "apis": {
-            "login": {
-              "id": "login",
-              "name": "用户登录 (主入口)",
-              "enabled": true,
-              "requireLogin": false,
-              "allowIps": [],
-              "allowRoles": [],
-              "url": "/api/v1/auth/login",
-              "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.151Z"
-            },
-            "oss": {
-              "id": "oss",
-              "name": "OSS 异步上传凭证",
-              "enabled": true,
-              "requireLogin": true,
-              "allowIps": [],
-              "allowRoles": [],
-              "url": "/api/v1/auth/oss-token",
-              "method": "GET",
-              "updatedAt": "2026-05-05T16:07:26.152Z"
-            },
-            "logout": {
-              "id": "logout",
-              "name": "安全退出登录",
-              "enabled": true,
-              "requireLogin": false,
-              "allowIps": [],
-              "allowRoles": [],
-              "url": "/api/v1/auth/logout",
-              "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.152Z"
-            }
-          },
-          "id": "default",
-          "name": "default",
-          "description": "",
-          "prefix": "",
-          "enabled": true,
-          "requireLogin": false,
-          "allowIps": [],
-          "allowRoles": [],
-          "updatedAt": "2026-05-05T16:07:26.151Z"
-        }
-      },
-      "id": "身份认证中心",
-      "name": "身份认证中心",
-      "description": "全域统一身份认证与授权网关，负责 JWT 签发、SSO 同步及用户角色权重校验。",
-      "prefix": "",
-      "enabled": true,
-      "requireLogin": false,
-      "allowIps": [],
-      "allowRoles": [],
-      "updatedAt": "2026-05-05T16:07:26.147Z"
-    },
     "firewall": {
       "groups": {
         "apiConfigs": {
@@ -72,7 +13,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs",
               "method": "GET",
-              "updatedAt": "2026-05-05T16:07:26.157Z"
+              "updatedAt": "2026-05-16T16:36:52.172Z"
             },
             "updateConfig": {
               "id": "updateConfig",
@@ -83,7 +24,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/:system/:group",
               "method": "PATCH",
-              "updatedAt": "2026-05-05T16:07:26.157Z"
+              "updatedAt": "2026-05-16T16:36:52.173Z"
             },
             "toggleConfig": {
               "id": "toggleConfig",
@@ -94,7 +35,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle/:system/:group",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.157Z"
+              "updatedAt": "2026-05-16T16:36:52.173Z"
             },
             "toggleSystemConfig": {
               "id": "toggleSystemConfig",
@@ -105,7 +46,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle-system/:system",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.157Z"
+              "updatedAt": "2026-05-16T16:36:52.173Z"
             }
           },
           "id": "apiConfigs",
@@ -116,7 +57,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-05T16:07:26.157Z"
+          "updatedAt": "2026-05-16T16:36:52.172Z"
         },
         "challenge": {
           "apis": {
@@ -129,7 +70,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/challenge/verify",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.159Z"
+              "updatedAt": "2026-05-16T16:36:52.175Z"
             }
           },
           "id": "challenge",
@@ -140,7 +81,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-05T16:07:26.159Z"
+          "updatedAt": "2026-05-16T16:36:52.175Z"
         },
         "firewall-monitor": {
           "apis": {
@@ -153,7 +94,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/summary",
               "method": "GET",
-              "updatedAt": "2026-05-05T16:07:26.162Z"
+              "updatedAt": "2026-05-16T16:36:52.179Z"
             },
             "records": {
               "id": "records",
@@ -164,7 +105,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/records",
               "method": "GET",
-              "updatedAt": "2026-05-05T16:07:26.162Z"
+              "updatedAt": "2026-05-16T16:36:52.179Z"
             },
             "clear": {
               "id": "clear",
@@ -175,7 +116,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/clear",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.162Z"
+              "updatedAt": "2026-05-16T16:36:52.179Z"
             },
             "updateNode": {
               "id": "updateNode",
@@ -186,7 +127,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/update",
               "method": "PATCH",
-              "updatedAt": "2026-05-05T16:07:26.162Z"
+              "updatedAt": "2026-05-16T16:36:52.179Z"
             },
             "refreshNode": {
               "id": "refreshNode",
@@ -197,7 +138,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/refresh",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.162Z"
+              "updatedAt": "2026-05-16T16:36:52.179Z"
             },
             "getSettings": {
               "id": "getSettings",
@@ -208,7 +149,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "GET",
-              "updatedAt": "2026-05-05T16:07:26.163Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "updateSettings": {
               "id": "updateSettings",
@@ -219,7 +160,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "PATCH",
-              "updatedAt": "2026-05-05T16:07:26.163Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "addBlacklist": {
               "id": "addBlacklist",
@@ -230,7 +171,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.163Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "removeBlacklist": {
               "id": "removeBlacklist",
@@ -241,7 +182,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "DELETE",
-              "updatedAt": "2026-05-05T16:07:26.163Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "listBlocks": {
               "id": "listBlocks",
@@ -252,7 +193,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "GET",
-              "updatedAt": "2026-05-05T16:07:26.163Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "addBlock": {
               "id": "addBlock",
@@ -263,7 +204,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.163Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "removeBlock": {
               "id": "removeBlock",
@@ -274,7 +215,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-05-05T16:07:26.163Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "listWhitelist": {
               "id": "listWhitelist",
@@ -285,7 +226,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "GET",
-              "updatedAt": "2026-05-05T16:07:26.163Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "addWhitelist": {
               "id": "addWhitelist",
@@ -296,7 +237,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.163Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "removeWhitelist": {
               "id": "removeWhitelist",
@@ -307,7 +248,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-05-05T16:07:26.164Z"
+              "updatedAt": "2026-05-16T16:36:52.180Z"
             },
             "addBlockFp": {
               "id": "addBlockFp",
@@ -318,7 +259,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/fp",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.164Z"
+              "updatedAt": "2026-05-16T16:36:52.181Z"
             },
             "removeBlockFp": {
               "id": "removeBlockFp",
@@ -329,7 +270,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/fp/:fingerprint",
               "method": "DELETE",
-              "updatedAt": "2026-05-05T16:07:26.164Z"
+              "updatedAt": "2026-05-16T16:36:52.181Z"
             },
             "addWhitelistFp": {
               "id": "addWhitelistFp",
@@ -340,7 +281,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/fp",
               "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.164Z"
+              "updatedAt": "2026-05-16T16:36:52.181Z"
             },
             "removeWhitelistFp": {
               "id": "removeWhitelistFp",
@@ -351,7 +292,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/fp/:fingerprint",
               "method": "DELETE",
-              "updatedAt": "2026-05-05T16:07:26.164Z"
+              "updatedAt": "2026-05-16T16:36:52.181Z"
             }
           },
           "id": "firewall-monitor",
@@ -362,7 +303,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-05T16:07:26.162Z"
+          "updatedAt": "2026-05-16T16:36:52.179Z"
         }
       },
       "id": "firewall",
@@ -373,50 +314,532 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-05-05T16:07:26.155Z"
+      "updatedAt": "2026-05-16T16:36:52.167Z"
     },
-    "SSO 用户中心": {
+    "Notice": {
       "groups": {
-        "default": {
-          "apis": {},
-          "id": "default",
-          "name": "default",
-          "description": "",
+        "config": {
+          "apis": {
+            "getChannels": {
+              "id": "getChannels",
+              "name": "获取通知通道列表",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/notice/v1/channels",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.216Z"
+            },
+            "getConfig": {
+              "id": "getConfig",
+              "name": "获取通道配置",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/notice/v1/config/:type",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.216Z"
+            },
+            "saveConfig": {
+              "id": "saveConfig",
+              "name": "更新通道配置",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/notice/v1/config/:type",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.217Z"
+            },
+            "testEmail": {
+              "id": "testEmail",
+              "name": "测试邮件发送",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/notice/v1/test-email",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.217Z"
+            }
+          },
+          "id": "config",
+          "name": "config",
+          "description": "通知配置管理",
+          "prefix": "/v1",
+          "enabled": true,
+          "requireLogin": true,
+          "allowIps": [],
+          "allowRoles": [
+            "admin"
+          ],
+          "updatedAt": "2026-05-16T16:36:52.216Z"
+        }
+      },
+      "id": "Notice",
+      "name": "通知中心",
+      "description": "统一通知服务中心，负责邮件、钉钉、微信等多种通道的配置与下发。",
+      "prefix": "/notice",
+      "enabled": true,
+      "requireLogin": true,
+      "allowIps": [],
+      "allowRoles": [
+        "admin"
+      ],
+      "updatedAt": "2026-05-16T16:36:52.183Z"
+    },
+    "OAuth2.1": {
+      "groups": {
+        "admin": {
+          "apis": {
+            "syncPermissions": {
+              "id": "syncPermissions",
+              "name": "权限同步",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/admin/permissions/sync",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.224Z"
+            },
+            "createClient": {
+              "id": "createClient",
+              "name": "创建客户端",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/admin/client",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.225Z"
+            },
+            "listUsers": {
+              "id": "listUsers",
+              "name": "获取用户列表",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/admin/users",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.225Z"
+            }
+          },
+          "id": "admin",
+          "name": "admin",
+          "description": "OAuth 客户端与用户管理",
+          "prefix": "",
+          "enabled": true,
+          "requireLogin": true,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-05-16T16:36:52.224Z"
+        },
+        "auth": {
+          "apis": {
+            "authorize": {
+              "id": "authorize",
+              "name": "授权请求入口",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/authorize",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.269Z"
+            },
+            "authorizeLogin": {
+              "id": "authorizeLogin",
+              "name": "授权登录验证",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/authorize/login",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.269Z"
+            },
+            "authorizeConsent": {
+              "id": "authorizeConsent",
+              "name": "授权确认",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/authorize/consent",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.269Z"
+            },
+            "login": {
+              "id": "login",
+              "name": "标准登录",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/login",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.269Z"
+            },
+            "miniLogin": {
+              "id": "miniLogin",
+              "name": "快捷登录",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/mini-login",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.269Z"
+            },
+            "miniRegister": {
+              "id": "miniRegister",
+              "name": "快捷注册",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/mini-register",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.269Z"
+            },
+            "qrGenerate": {
+              "id": "qrGenerate",
+              "name": "生成登录二维码",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/qr/generate",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.269Z"
+            },
+            "qrScan": {
+              "id": "qrScan",
+              "name": "扫描登录二维码",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/qr/scan",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.269Z"
+            },
+            "qrConfirm": {
+              "id": "qrConfirm",
+              "name": "确认扫码登录",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/qr/confirm",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.270Z"
+            },
+            "qrStatus": {
+              "id": "qrStatus",
+              "name": "检测二维码状态",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/qr/status",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.270Z"
+            }
+          },
+          "id": "auth",
+          "name": "auth",
+          "description": "OAuth 2.1 授权流程",
           "prefix": "",
           "enabled": true,
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-05T16:07:26.169Z"
+          "updatedAt": "2026-05-16T16:36:52.269Z"
         },
-        "auth": {
-          "id": "auth",
-          "name": "auth",
-          "enabled": true,
+        "crypto": {
           "apis": {
-            "_api_v1_sso_login": {
-              "id": "_api_v1_sso_login",
-              "name": "SSO 统一登录入口",
+            "encryptionPublicKey": {
+              "id": "encryptionPublicKey",
+              "name": "加密公钥",
               "enabled": true,
               "requireLogin": false,
               "allowIps": [],
               "allowRoles": [],
-              "url": "/api/v1/sso/login",
-              "method": "POST",
-              "updatedAt": "2026-05-05T16:07:26.169Z"
+              "url": "/oauth2.1/crypto/public-key",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.272Z"
             }
-          }
+          },
+          "id": "crypto",
+          "name": "crypto",
+          "description": "加密工具端点",
+          "prefix": "",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-05-16T16:36:52.272Z"
+        },
+        "device": {
+          "apis": {
+            "deviceCode": {
+              "id": "deviceCode",
+              "name": "设备授权发起",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/v1/dev/device/code",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.274Z"
+            },
+            "deviceToken": {
+              "id": "deviceToken",
+              "name": "设备令牌轮询",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/v1/dev/device/token",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.274Z"
+            },
+            "devicePage": {
+              "id": "devicePage",
+              "name": "设备验证页面",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/v1/dev/device",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.274Z"
+            },
+            "deviceAuthorize": {
+              "id": "deviceAuthorize",
+              "name": "设备授权确认",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/v1/dev/device/authorize",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.275Z"
+            }
+          },
+          "id": "device",
+          "name": "device",
+          "description": "设备授权流程（RFC 8628）",
+          "prefix": "/v1/dev",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-05-16T16:36:52.274Z"
+        },
+        "oidc": {
+          "apis": {
+            "discovery": {
+              "id": "discovery",
+              "name": "OIDC 发现文档",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/.well-known/openid-configuration",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.276Z"
+            },
+            "jwks": {
+              "id": "jwks",
+              "name": "JWKS 公钥集",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/.well-known/jwks.json",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.277Z"
+            },
+            "userinfo": {
+              "id": "userinfo",
+              "name": "用户信息",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/userinfo",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.277Z"
+            }
+          },
+          "id": "oidc",
+          "name": "oidc",
+          "description": "OpenID Connect 发现与用户信息",
+          "prefix": "",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-05-16T16:36:52.276Z"
+        },
+        "token": {
+          "apis": {
+            "issueToken": {
+              "id": "issueToken",
+              "name": "令牌签发",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/token",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.279Z"
+            },
+            "revokeToken": {
+              "id": "revokeToken",
+              "name": "令牌撤销",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/revoke",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.279Z"
+            }
+          },
+          "id": "token",
+          "name": "token",
+          "description": "令牌签发与撤销",
+          "prefix": "",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-05-16T16:36:52.279Z"
         }
       },
-      "id": "SSO 用户中心",
-      "name": "SSO 用户中心",
-      "description": "提供全域统一登录、注册及用户资料管理核心服务。",
-      "prefix": "",
+      "id": "OAuth2.1",
+      "name": "OAuth2.1授权中心",
+      "description": "OAuth 2.1 & OIDC 授权服务器，负责客户端管理、授权码流程、令牌签发与撤销。",
+      "prefix": "/oauth2.1",
       "enabled": true,
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-05-05T16:07:26.166Z"
+      "updatedAt": "2026-05-16T16:36:52.218Z"
+    },
+    "User": {
+      "groups": {
+        "userRegister": {
+          "apis": {
+            "userRegister": {
+              "id": "userRegister",
+              "name": "注册新用户",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/user/v1/register",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.284Z"
+            },
+            "checkEmail": {
+              "id": "checkEmail",
+              "name": "校验邮箱是否重复",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/user/v1/check-email",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.284Z"
+            }
+          },
+          "id": "userRegister",
+          "name": "userRegister",
+          "description": "user用户注册",
+          "prefix": "/v1",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-05-16T16:36:52.284Z"
+        }
+      },
+      "id": "User",
+      "name": "User用户中心",
+      "description": "用户管理中心，负责用户信息管理。",
+      "prefix": "/user",
+      "enabled": true,
+      "requireLogin": false,
+      "allowIps": [],
+      "allowRoles": [],
+      "updatedAt": "2026-05-16T16:36:52.280Z"
+    },
+    "Verify": {
+      "groups": {
+        "v1": {
+          "apis": {
+            "generateCaptcha": {
+              "id": "generateCaptcha",
+              "name": "生成图形验证码",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/verify/v1/generate-captcha",
+              "method": "GET",
+              "updatedAt": "2026-05-16T16:36:52.287Z"
+            },
+            "verifyCaptcha": {
+              "id": "verifyCaptcha",
+              "name": "校验验证码并发送邮件",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/verify/v1/verify-captcha",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.287Z"
+            },
+            "checkEmailCode": {
+              "id": "checkEmailCode",
+              "name": "校验邮箱验证码",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/verify/v1/check-email-code",
+              "method": "POST",
+              "updatedAt": "2026-05-16T16:36:52.287Z"
+            }
+          },
+          "id": "v1",
+          "name": "v1",
+          "description": "基础验证接口 v1",
+          "prefix": "/v1",
+          "enabled": true,
+          "requireLogin": false,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-05-16T16:36:52.287Z"
+        }
+      },
+      "id": "Verify",
+      "name": "验证服务中心",
+      "description": "统一验证中心，负责图形验证码、邮箱验证码等安全校验。",
+      "prefix": "/verify",
+      "enabled": true,
+      "requireLogin": false,
+      "allowIps": [],
+      "allowRoles": [],
+      "updatedAt": "2026-05-16T16:36:52.285Z"
     }
   }
 }

@@ -1,0 +1,10 @@
+{
+  "name": "Verify",
+  "alias": "验证服务中心",
+  "prefix": "/verify",
+  "description": "统一验证中心，负责图形验证码、邮箱验证码等安全校验。",
+  "enabled": true,
+  "requireLogin": false,
+  "allowIps": [],
+  "allowRoles": []
+}

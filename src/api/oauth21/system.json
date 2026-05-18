@@ -1,0 +1,10 @@
+{
+  "name": "OAuth2.1",
+  "alias": "OAuth2.1授权中心",
+  "prefix": "/oauth2.1",
+  "description": "OAuth 2.1 & OIDC 授权服务器，负责客户端管理、授权码流程、令牌签发与撤销。",
+  "enabled": true,
+  "requireLogin": false,
+  "allowIps": [],
+  "allowRoles": []
+}

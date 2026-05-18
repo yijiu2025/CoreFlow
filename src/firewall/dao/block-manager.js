@@ -13,7 +13,7 @@ import {
   removeWhitelist as _removeWhitelist,
   setWhitelistFp as _setWhitelistFp,
   removeWhitelistFp as _removeWhitelistFp
-} from '../engine/block-manager.js';
+} from '../engine/dao/block-manager.js';
 
 // ============== 查询接口（前端管理面板） ==============
 

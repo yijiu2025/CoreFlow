@@ -1,5 +1,5 @@
 // src/log/index.js
-import { als } from '../auth/als.js';
+import { als } from '../oauth21/utils/als.js';
 
 /**
  * 日志系统：桥接到 Pino (Fastify 内置高性能日志引擎)

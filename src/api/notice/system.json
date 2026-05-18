@@ -1,0 +1,10 @@
+{
+  "name": "Notice",
+  "alias": "通知中心",
+  "prefix": "/notice",
+  "description": "统一通知服务中心，负责邮件、钉钉、微信等多种通道的配置与下发。",
+  "enabled": true,
+  "requireLogin": true,
+  "allowIps": [],
+  "allowRoles": ["admin"]
+}
