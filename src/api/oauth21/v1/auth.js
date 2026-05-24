@@ -17,9 +17,11 @@ import { generateToken } from '../../../oauth21/crypto/tokens.js';
 import ApprovalDao from '../../../oauth21/dao/approval.dao.js';
 import TokenDao from '../../../oauth21/dao/token.dao.js';
 import UserDao from '../../../oauth21/dao/user.dao.js';
+import ClientDao from '../../../oauth21/dao/client.dao.js';
 import captchaService from '../../../verify/captcha.js';
 import { getSessionStore } from '../../../redis/session-store.js';
 import config from '../../../oauth21/config/config.js';
+import verifyDao from '../../../verify/dao/verify.js';
 
 const authService = new AuthorizationService();
 const tokenService = new TokenService();
@@ -232,7 +234,7 @@ export default async function (fastify) {
   /**
    * ─── 统一直接令牌发放核心逻辑 ───
    */
-  async function issueDirectTokens(user, client_id, scope, oidcNonce, request) {
+  async function issueDirectTokens(user, client_id, scope, oidcNonce, request, reply) {
     const client = client_id ? (await tokenService.authenticateClient(request)) : {
       client_id: 'first-party-app',
       scope: 'openid profile email'
@@ -260,7 +262,14 @@ export default async function (fastify) {
       token_type: 'Bearer',
       expires_in: config.jwt.accessTokenTTL,
       refresh_token: refreshToken,
-      scope: scopeString
+      scope: scopeString,
+      user: {
+        id: user.id,
+        username: user.username,
+        name: user.name || user.username,
+        email: user.email,
+        avatar: user.avatar
+      }
     };
 
     if (finalScopes.includes('openid')) {
@@ -271,6 +280,21 @@ export default async function (fastify) {
         auth_time: Math.floor(Date.now() / 1000),
         email: user.email,
         name: user.name
+      });
+    }
+
+    if (reply) {
+      reply.setCookie('access_token', accessToken, {
+        httpOnly: true,
+        maxAge: config.jwt.accessTokenTTL * 1000,
+        path: '/',
+        sameSite: 'lax'
+      });
+      reply.setCookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        maxAge: config.jwt.refreshTokenTTL * 1000,
+        path: '/oauth2.1/token',
+        sameSite: 'strict'
       });
     }
 
@@ -302,7 +326,7 @@ export default async function (fastify) {
       }
     }
 
-    let username, password;
+    let username, password, type, email, code;
 
     // 2. 解密逻辑 (RSA-OAEP)
     if (encrypted) {
@@ -319,28 +343,122 @@ export default async function (fastify) {
         const payload = JSON.parse(decrypted);
         username = payload.username;
         password = payload.password;
+        type = payload.type;
+        email = payload.email;
+        code = payload.code;
       } catch {
         return reply.code(400).send({ error: 'invalid_request', error_description: '解密失败或格式错误' });
       }
     } else {
       username = plainUsername;
       password = plainPassword;
+      type = request.body.type;
+      email = request.body.email;
+      code = request.body.code;
     }
 
-    if (!username || !password) {
-      return reply.code(400).send({ error: 'invalid_request', error_description: '用户名和密码不能为空' });
+    let user;
+
+    if (type === 'email') {
+      if (!email || !code) {
+        return reply.code(400).send({ error: 'invalid_request', error_description: '邮箱和验证码不能为空' });
+      }
+
+      // 校验验证码
+      const emailCodeStore = getSessionStore(fastify, 'email_code');
+      try {
+        await verifyDao.checkEmailCode(email, code, emailCodeStore);
+      } catch (err) {
+        return reply.code(400).send({ error: 'invalid_grant', error_description: err.message || '验证码错误或已过期' });
+      }
+
+      // 查找用户
+      user = await UserDao.findByEmail(email);
+      if (!user) {
+        return reply.code(404).send({ error: 'invalid_grant', error_description: '该邮箱尚未注册账户' });
+      }
+    } else {
+      if (!username || !password) {
+        return reply.code(400).send({ error: 'invalid_request', error_description: '用户名和密码不能为空' });
+      }
+
+      // 3. 验证用户
+      user = await authService.authenticateUser(username, password);
+      if (!user) {
+        return reply.code(401).send({ error: 'invalid_grant', error_description: '账号或密码错误' });
+      }
     }
 
-    // 3. 验证用户
-    const user = await authService.authenticateUser(username, password);
-    if (!user) {
-      return reply.code(401).send({ error: 'invalid_grant', error_description: '账号或密码错误' });
+    // 4. 检查客户端与授权状态
+    const finalClientId = client_id || 'first-party-app';
+    let client;
+    if (finalClientId === 'first-party-app') {
+      client = {
+        client_id: 'first-party-app',
+        client_name: 'IAM Portal',
+        scope: 'openid profile email'
+      };
+    } else {
+      client = await ClientDao.findById(finalClientId);
+      if (!client) {
+        return reply.code(400).send({ error: 'invalid_client', error_description: '无效的客户端 ID' });
+      }
     }
 
-    // 4. 签发令牌
+    const finalScopes = (scope || client.scope || 'openid profile email').split(' ');
+    const scopeString = finalScopes.join(' ');
+
+    // 检查用户是否已授权该应用
+    if (client.client_id !== 'first-party-app') {
+      const approval = await ApprovalDao.getEffectiveApproval(user.id, client.client_id);
+      const hasConsent = approval !== null;
+
+      if (!hasConsent) {
+        // 创建临时授权 Key，有效期 5 分钟
+        const consentKey = uuidv4();
+        const consentStore = getSessionStore(fastify, 'consent_session');
+        await consentStore.set(consentKey, {
+          userId: user.id,
+          clientId: client.client_id,
+          scopes: finalScopes,
+          scopeStr: scopeString,
+          oidcNonce
+        }, 300); // 300秒 = 5分钟
+
+        return reply.send({
+          action: 'consent',
+          consentKey,
+          client_id: client.client_id,
+          client_name: client.client_name,
+          scope: scopeString,
+          user: {
+            username: user.username,
+            name: user.name || user.username,
+            email: user.email
+          }
+        });
+      }
+    }
+
+    // 5. 如果已授权，或者是一方应用，直接签发令牌
     try {
-      const result = await issueDirectTokens(user, client_id, scope, oidcNonce, request);
-      return result;
+      const result = await issueDirectTokens(
+        user,
+        client.client_id === 'first-party-app' ? null : client.client_id,
+        scopeString,
+        oidcNonce,
+        request,
+        reply
+      );
+      return {
+        data: {
+          accessToken: result.access_token,
+          accessTokenExpiredTime: String(config.jwt.accessTokenTTL * 1000),
+          refreshToken: result.refresh_token
+        },
+        ret: [`SUCCESS::登录成功`],
+        v: "1.0"
+      };
     } catch (err) {
       if (err.message === 'invalid_client') {
         return reply.code(401).send({ error: 'invalid_client', error_description: '客户端认证失败' });
@@ -369,6 +487,63 @@ export default async function (fastify) {
     method: 'POST',
     url: '/mini-login',
     handler: handleDirectLogin
+  });
+
+  /**
+   * POST /login/consent/confirm — 快捷登录确认授权
+   */
+  registerSecureRoute(fastify, {
+    name: 'confirmDirectConsent',
+    alias: '统一直接登录确认授权',
+    method: 'POST',
+    url: '/login/consent/confirm',
+    handler: async (request, reply) => {
+      const { consentKey } = request.body;
+      if (!consentKey) {
+        return reply.code(400).send({ error: 'invalid_request', error_description: 'consentKey 不能为空' });
+      }
+
+      const consentStore = getSessionStore(fastify, 'consent_session');
+      const session = await consentStore.get(consentKey);
+      if (!session) {
+        return reply.code(400).send({ error: 'invalid_session', error_description: '授权会话已过期，请重新登录' });
+      }
+
+      const user = await UserDao.findById(session.userId);
+      if (!user) {
+        return reply.code(404).send({ error: 'invalid_grant', error_description: '用户不存在' });
+      }
+
+      // 1. 保存授权记录
+      await ApprovalDao.saveApproval({
+        sub: user.id,
+        appId: session.clientId,
+        scopes: session.scopes
+      });
+
+      // 2. 销毁临时授权 Key
+      await consentStore.delete(consentKey);
+
+      // 3. 签发并返回令牌 (写入 client_id 以供 issueDirectTokens / tokenService.authenticateClient 读取)
+      try {
+        request.body.client_id = session.clientId;
+        const result = await issueDirectTokens(user, session.clientId, session.scopeStr, session.oidcNonce, request, reply);
+        return {
+          data: {
+            accessToken: result.access_token,
+            accessTokenExpiredTime: String(config.jwt.accessTokenTTL * 1000),
+            refreshToken: result.refresh_token
+          },
+          ret: [`SUCCESS::授权确认成功`],
+          v: "1.0"
+        };
+      } catch (err) {
+        if (err.message === 'invalid_client') {
+          return reply.code(401).send({ error: 'invalid_client', error_description: '客户端认证失败' });
+        }
+        throw err;
+      }
+    }
   });
 
   /**
@@ -487,13 +662,22 @@ export default async function (fastify) {
         }
 
         try {
-          const result = await issueDirectTokens(user, client_id, scope, oidcNonce, request);
+          const result = await issueDirectTokens(user, client_id, scope, oidcNonce, request, reply);
           
           // 签发成功后销毁二维码
           await qrStore.delete(qrKey);
 
           // 结合返回状态和 Token
-          return { status: 'CONFIRMED', ...result };
+          return {
+            status: 'CONFIRMED',
+            data: {
+              accessToken: result.access_token,
+              accessTokenExpiredTime: String(config.jwt.accessTokenTTL * 1000),
+              refreshToken: result.refresh_token
+            },
+            ret: [`SUCCESS::扫码登录成功`],
+            v: "1.0"
+          };
         } catch (err) {
           if (err.message === 'invalid_client') {
             return { status: 'ERROR', error: 'invalid_client' };

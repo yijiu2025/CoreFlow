@@ -1,4 +1,4 @@
-import Permission from '../../models/auth/Permission.js';
+import Permission from '../../models/iam/Permission.js';
 
 class PermissionDao {
   /**

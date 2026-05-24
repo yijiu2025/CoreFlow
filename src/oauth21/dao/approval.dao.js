@@ -1,5 +1,7 @@
-import OauthApproval from '../../models/oauth21/OauthApproval.js';
 import sequelize from '../../db/index.js';
+
+/** 获取 OauthApproval 模型 (延迟加载) */
+const getModel = () => sequelize.models.OauthApproval;
 
 class ApprovalDao {
   /**
@@ -9,10 +11,11 @@ class ApprovalDao {
    * @returns {Promise<object|null>}
    */
   async getEffectiveApproval(sub, appId) {
+    const OauthApproval = getModel();
     return await OauthApproval.findOne({
       where: {
         sub,
-        appId,
+        app_id: appId, // 使用下划线关联查询底层物理字段
         status: 1 // 必须是正常状态
       }
     });
@@ -23,15 +26,16 @@ class ApprovalDao {
    * @param {object} params
    */
   async saveApproval({ uid, sub, appId, scopes }) {
+    const OauthApproval = getModel();
     const userSub = sub || uid; // 兼容并包：允许传入 uid 或 sub，一律映射为 sub
     const t = await sequelize.transaction();
     try {
       const [approval, created] = await OauthApproval.findOrCreate({
-        where: { sub: userSub, appId },
+        where: { sub: userSub, app_id: appId },
         defaults: {
           sub: userSub,
-          appId,
-          scopes: JSON.stringify(scopes),
+          app_id: appId,
+          scopes, // Natively handles JSON array, no need for JSON.stringify()
           status: 1
         },
         transaction: t
@@ -39,9 +43,9 @@ class ApprovalDao {
 
       if (!created) {
         // 如果已存在，仅更新 scopes 和授权时间
-        approval.scopes = JSON.stringify(scopes);
+        approval.scopes = scopes; // Natively handles JSON array
         approval.status = 1;
-        approval.lastAuthAt = new Date();
+        approval.last_auth_at = new Date();
         await approval.save({ transaction: t });
       } else {
         // [新增逻辑]：首次授权，自动授予该应用的默认权限角色
@@ -81,9 +85,10 @@ class ApprovalDao {
    * 封禁/撤销授权
    */
   async revokeApproval(sub, appId) {
+    const OauthApproval = getModel();
     return await OauthApproval.update(
       { status: 0 },
-      { where: { sub, appId } }
+      { where: { sub, app_id: appId } }
     );
   }
 }

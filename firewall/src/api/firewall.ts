@@ -16,6 +16,7 @@ interface ApiError extends Error {
 const apiClient: AxiosInstance = axios.create({
   baseURL: import.meta.env.DEV ? 'http://localhost:3000' : '',
   timeout: 10000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -130,7 +131,11 @@ export const firewallApi = {
     let url = `/api/firewall/v1/apiconfigs/${systemKey}/${groupKey}`
     if (apiKey) url += `?apiKey=${apiKey}`
     return apiClient.patch(url, data)
-  }
+  },
+
+  // 获取 SSO 用户信息
+  getUserInfo: (): Promise<any> =>
+    apiClient.get('/oauth2.1/userinfo')
 }
 
 export default apiClient

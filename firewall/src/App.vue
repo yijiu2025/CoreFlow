@@ -72,18 +72,127 @@
               <Settings class="w-6 h-6 group-hover:rotate-90 transition-transform duration-500" />
             </button>
 
-            <!-- User Avatar -->
-            <button @click="isLoginModalOpen = true"
-              class="glass p-1.5 rounded-2xl transition-all shadow-lg border-2 border-transparent hover:border-cyan-500/50 overflow-hidden"
-              :class="isDarkMode ? 'bg-slate-800/50' : 'bg-white/50'">
-              <div v-if="authStore.isLoggedIn && authStore.user?.avatar" class="w-9 h-9 rounded-xl overflow-hidden">
-                <img :src="authStore.user.avatar" alt="Avatar" class="w-full h-full object-cover" />
-              </div>
-              <div v-else class="w-9 h-9 rounded-xl flex items-center justify-center"
-                :class="isDarkMode ? 'bg-slate-700 text-cyan-400' : 'bg-slate-200 text-indigo-600'">
-                <User class="w-5 h-5" />
-              </div>
-            </button>
+            <!-- User Avatar & Google-style Profile Dropdown -->
+            <div class="relative">
+              <button @click="handleAvatarClick"
+                class="user-avatar-btn glass p-1.5 rounded-2xl transition-all shadow-lg border-2 border-transparent hover:border-cyan-500/50 overflow-hidden flex items-center justify-center relative"
+                :class="isDarkMode ? 'bg-slate-800/50' : 'bg-white/50'">
+                <div v-if="authStore.isLoggedIn && authStore.user?.avatar" class="w-9 h-9 rounded-xl overflow-hidden">
+                  <img :src="authStore.user.avatar" alt="Avatar" class="w-full h-full object-cover" />
+                </div>
+                <div v-else-if="authStore.isLoggedIn && authStore.user?.username" class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm"
+                  :class="isDarkMode ? 'bg-cyan-500/20 text-cyan-400' : 'bg-indigo-100 text-indigo-700'">
+                  {{ authStore.user.username[0]?.toUpperCase() }}
+                </div>
+                <div v-else class="w-9 h-9 rounded-xl flex items-center justify-center"
+                  :class="isDarkMode ? 'bg-slate-700 text-cyan-400' : 'bg-slate-200 text-indigo-600'">
+                  <User class="w-5 h-5" />
+                </div>
+              </button>
+
+              <!-- User Profile Dropdown Card (Google Style) -->
+              <transition name="dropdown-fade">
+                <div v-if="isUserProfileOpen && authStore.isLoggedIn" 
+                  class="user-profile-dropdown absolute right-0 mt-3 w-80 rounded-[28px] shadow-2xl p-6 border transition-all z-[90] pointer-events-auto"
+                  :class="isDarkMode ? 'bg-slate-900/95 backdrop-blur-md border-white/10 text-slate-100 shadow-[0_24px_50px_rgba(0,0,0,0.5)]' : 'bg-white/95 backdrop-blur-md border-slate-200 text-slate-800 shadow-[0_24px_50px_rgba(0,0,0,0.15)]'">
+                  
+                  <!-- Close Button -->
+                  <button @click="closeUserProfile" 
+                    class="absolute top-4 right-4 p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 opacity-70 hover:opacity-100 transition-all">
+                    <X class="w-4 h-4" />
+                  </button>
+
+                  <!-- Top Email Address -->
+                  <div class="text-center text-xs font-medium tracking-wide mb-4 opacity-60">
+                    {{ authStore.user?.email || 'user@sso.com' }}
+                  </div>
+
+                  <!-- Center Avatar -->
+                  <div class="flex flex-col items-center justify-center relative mb-4">
+                    <div class="relative group">
+                      <div class="w-20 h-20 rounded-full overflow-hidden border-2 border-cyan-400 dark:border-cyan-500 shadow-md p-1 flex items-center justify-center bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-500">
+                        <div class="w-full h-full rounded-full bg-slate-850 dark:bg-slate-950 overflow-hidden flex items-center justify-center">
+                          <img v-if="authStore.user?.avatar" :src="authStore.user.avatar" alt="Avatar" class="w-full h-full object-cover" />
+                          <span v-else class="text-2xl font-bold text-white uppercase">{{ authStore.user?.username[0] || 'U' }}</span>
+                        </div>
+                      </div>
+                      <!-- Camera Overlay -->
+                      <div class="absolute bottom-0 right-0 p-1 bg-white dark:bg-slate-800 rounded-full shadow-md border border-slate-200 dark:border-slate-700 cursor-pointer hover:scale-105 transition-transform">
+                        <Camera class="w-3.5 h-3.5 text-slate-500 dark:text-cyan-400" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Greeting & Manage SSO Pill -->
+                  <div class="flex flex-col items-center gap-2.5 mb-5">
+                    <div class="text-center text-lg font-semibold tracking-tight">
+                      {{ authStore.user?.username || 'Gong' }}, 您好!
+                    </div>
+                    <a :href="ssoUrl + '/profile'" target="_blank"
+                      class="inline-block px-5 py-2 rounded-full border text-xs font-semibold transition-all text-center"
+                      :class="isDarkMode ? 'border-white/20 text-cyan-400 hover:border-cyan-500/50 hover:bg-white/5' : 'border-slate-300 text-indigo-600 hover:border-indigo-500/50 hover:bg-slate-50'">
+                      管理您的 SSO 账号
+                    </a>
+                  </div>
+
+                  <!-- Suggestion Banner -->
+                  <div class="p-4 rounded-2xl text-[11px] flex gap-3 items-start text-left mb-4"
+                    :class="isDarkMode ? 'bg-cyan-500/10 border border-cyan-500/20 text-slate-300' : 'bg-indigo-500/5 border border-indigo-500/10 text-slate-600'">
+                    <Info class="w-4 h-4 text-cyan-500 flex-shrink-0 mt-0.5" />
+                    <div class="flex-1">
+                      <div>当前安全监控面板已连接。如需调整访问控制，请前往设置中心。</div>
+                      <div class="mt-1 flex gap-3 font-bold">
+                        <button @click="closeUserProfile" class="hover:underline opacity-60">忽略</button>
+                        <button @click="defenseStore.isSettingsModalOpen = true; closeUserProfile()" class="hover:underline text-cyan-400">安全设置</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Operation buttons -->
+                  <div class="grid grid-cols-2 gap-2">
+                    <button @click="isLoginModalOpen = true; closeUserProfile()"
+                      class="flex items-center justify-center gap-2 p-3 rounded-2xl text-xs font-semibold border transition-all"
+                      :class="isDarkMode ? 'border-white/10 hover:bg-white/5 text-slate-300' : 'border-slate-200 hover:bg-slate-50 text-slate-700'">
+                      <Plus class="w-4 h-4" />
+                      添加账号
+                    </button>
+                    <button @click="handleLogout"
+                      class="flex items-center justify-center gap-2 p-3 rounded-2xl text-xs font-semibold border transition-all"
+                      :class="isDarkMode ? 'border-white/10 hover:bg-red-500/10 text-red-400' : 'border-slate-200 hover:bg-red-50 text-red-600'">
+                      <LogOut class="w-4 h-4" />
+                      退出账号
+                    </button>
+                  </div>
+
+                  <!-- Operation menu list -->
+                  <div class="mt-4 border-t pt-3 flex flex-col gap-1 text-left"
+                    :class="isDarkMode ? 'border-white/10' : 'border-slate-100'">
+                    <button @click="defenseStore.isConfigModalOpen = true; closeUserProfile()" 
+                      class="flex justify-between items-center px-3 py-2 rounded-xl text-xs transition-all hover:bg-black/5 dark:hover:bg-white/5 opacity-80 hover:opacity-100">
+                      <div class="flex items-center gap-2">
+                        <ShieldCheck class="w-4 h-4 text-cyan-500" />
+                        <span>安全策略控制台</span>
+                      </div>
+                      <span class="text-[10px] opacity-50 font-mono">PRO</span>
+                    </button>
+                    
+                    <button @click="defenseStore.isSettingsModalOpen = true; closeUserProfile()"
+                      class="flex justify-between items-center px-3 py-2 rounded-xl text-xs transition-all hover:bg-black/5 dark:hover:bg-white/5 opacity-80 hover:opacity-100">
+                      <div class="flex items-center gap-2">
+                        <History class="w-4 h-4 text-cyan-500" />
+                        <span>防火墙策略审计</span>
+                      </div>
+                      <span class="text-[10px] opacity-50 font-mono">Audited</span>
+                    </button>
+                  </div>
+
+                  <!-- Footer -->
+                  <div class="mt-4 text-center text-[10px] opacity-40">
+                    由 Antigravity SSO 2.1 提供安全支持
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
         </transition>
       </header>
@@ -188,7 +297,8 @@ import { useConfigsStore } from './stores/configs'
 import { useDefenseStore } from './stores/defense'
 import { firewallApi } from './api/firewall'
 import {
-  ShieldCheck, Settings, Monitor, Layout, Sun, Moon, User
+  ShieldCheck, Settings, Monitor, Layout, Sun, Moon, User,
+  X, Camera, Plus, LogOut, Info, History
 } from 'lucide-vue-next'
 
 import MapChart from './components/MapChart.vue'
@@ -210,6 +320,8 @@ const defenseStore = useDefenseStore()
 const authStore = useAuthStore()
 
 const isLoginModalOpen = ref(false)
+const isUserProfileOpen = ref(false)
+const ssoUrl = (import.meta as any).env?.VITE_SSO_URL || 'http://localhost:5173'
 
 // 从 store 提取响应式状态
 const { isDarkMode, isUIVisible, loading } = storeToRefs(uiStore)
@@ -237,6 +349,37 @@ async function fetchData(): Promise<void> {
 
 function handleLoginSuccess(user: any) {
   authStore.setLoggedIn(true, user)
+}
+
+function handleAvatarClick(e: Event) {
+  e.stopPropagation()
+  if (authStore.isLoggedIn) {
+    isUserProfileOpen.value = !isUserProfileOpen.value
+  } else {
+    isLoginModalOpen.value = true
+  }
+}
+
+function closeUserProfile() {
+  isUserProfileOpen.value = false
+}
+
+function handleLogout() {
+  authStore.logout()
+  closeUserProfile()
+}
+
+function clickOutsideHandler(e: MouseEvent) {
+  const dropdown = document.querySelector('.user-profile-dropdown')
+  const avatarBtn = document.querySelector('.user-avatar-btn')
+  if (
+    dropdown && 
+    !dropdown.contains(e.target as Node) && 
+    avatarBtn && 
+    !avatarBtn.contains(e.target as Node)
+  ) {
+    isUserProfileOpen.value = false
+  }
 }
 
 async function handleRefreshNode(): Promise<void> {
@@ -276,13 +419,16 @@ async function handleResetStats(): Promise<void> {
 }
 
 onMounted(() => {
+  authStore.checkSession()
   fetchData()
   dashboardStore.connectWS()
   // 同步初始主题状态
   uiStore.setTheme(isDarkMode.value)
+  window.addEventListener('click', clickOutsideHandler)
 })
 
 onUnmounted(() => {
   dashboardStore.disconnectWS()
+  window.removeEventListener('click', clickOutsideHandler)
 })
 </script>

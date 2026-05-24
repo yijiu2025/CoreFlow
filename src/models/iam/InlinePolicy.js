@@ -16,7 +16,7 @@ export default (sequelize, DataTypes) => {
         comment: '关联用户ID'
       },
       app_id: {
-        type: DataTypes.STRING(50),
+        type: DataTypes.STRING(64),
         allowNull: false,
         defaultValue: 'GLOBAL',
         comment: '应用标识'
@@ -28,19 +28,19 @@ export default (sequelize, DataTypes) => {
       }
     },
     {
-      tableName: 'user_inline_policy',
+      tableName: 'iam_inline_policy',
       timestamps: true,
       paranoid: true,
-      indexes: [
-        { fields: ['user_id', 'app_id'] }
-      ]
+      indexes: [{ fields: ['user_id', 'app_id'] }]
     }
   );
 
   InlinePolicy.associate = (models) => {
     InlinePolicy.belongsTo(models.User, {
       foreignKey: 'user_id',
-      as: 'user'
+      as: 'user',
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE'
     });
   };
 

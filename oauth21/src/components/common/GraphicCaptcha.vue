@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { authApi } from '@/api/auth'
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, nextTick } from 'vue'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -65,11 +65,20 @@ watch(userInput, (val) => {
 })
 
 
+const inputRef = ref<HTMLInputElement | null>(null)
+
 watch(() => props.isOpen, (val) => {
   if (val) {
     userInput.value = ''
     error.value = ''
     generateCaptcha()
+    nextTick(() => {
+      try {
+        if (window.self === window.top) {
+          inputRef.value?.focus()
+        }
+      } catch (e) {}
+    })
   }
 })
 
@@ -119,6 +128,7 @@ onMounted(() => {
             <div class="space-y-6">
               <div class="relative">
                 <input 
+                  ref="inputRef"
                   v-model="userInput" 
                   @keyup.enter="handleVerify"
                   @input="error = ''"
@@ -127,7 +137,6 @@ onMounted(() => {
                   placeholder="验证码" 
                   class="minimal-input-large"
                   :class="{ 'has-error': error }"
-                  autofocus
                 />
                 <Transition name="fade">
                   <p v-if="error" class="text-center text-[11px] text-rose-500 font-bold mt-3 tracking-wide uppercase">{{ error }}</p>

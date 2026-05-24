@@ -2,7 +2,7 @@
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useForm } from 'vee-validate'
-import * as zod from 'zod'
+import { z } from 'zod'
 import { toTypedSchema } from '@vee-validate/zod'
 
 const authStore = useAuthStore()
@@ -12,16 +12,16 @@ const themeStore = useThemeStore()
 const loginType = ref<'sms' | 'pwd'>('sms')
 
 // 表单校验架构 (Zod)
-const loginSchema = zod.discriminatedUnion('type', [
-  zod.object({
-    type: zod.literal('sms'),
-    phone: zod.string().regex(/^1[3-9]\d{9}$/, '请输入正确的手机号'),
-    code: zod.string().min(4, '验证码至少4位')
+const loginSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('sms'),
+    phone: z.string().regex(/^1[3-9]\d{9}$/, '请输入正确的手机号'),
+    code: z.string().min(4, '验证码至少4位')
   }),
-  zod.object({
-    type: zod.literal('pwd'),
-    username: zod.string().min(2, '账号至少2位'),
-    password: zod.string().min(6, '密码至少6位')
+  z.object({
+    type: z.literal('pwd'),
+    username: z.string().min(2, '账号至少2位'),
+    password: z.string().min(6, '密码至少6位')
   })
 ])
 
@@ -123,7 +123,7 @@ const handleLogin = handleSubmit(async (data) => {
         </div>
 
         <!-- Inputs -->
-        <div class="space-y-6">
+        <form @submit.prevent="handleLogin" class="space-y-6">
           <transition name="mobile-fade" mode="out-in">
             <div v-if="loginType === 'sms'" key="sms" class="space-y-6">
               <div class="relative">
@@ -134,6 +134,7 @@ const handleLogin = handleSubmit(async (data) => {
                     v-bind="phoneProps"
                     type="tel" 
                     placeholder="请输入手机号"
+                    autocomplete="username tel"
                     class="flex-1 bg-transparent border-none outline-none text-sm font-medium"
                   />
                 </div>
@@ -147,9 +148,11 @@ const handleLogin = handleSubmit(async (data) => {
                     v-bind="codeProps"
                     type="text" 
                     placeholder="请输入验证码"
+                    autocomplete="one-time-code"
                     class="flex-1 bg-transparent border-none outline-none text-sm font-medium"
                   />
                   <button 
+                    type="button"
                     @click="startCountdown"
                     :disabled="isCountingDown"
                     class="text-xs font-bold text-primary disabled:text-slate-400"
@@ -169,6 +172,7 @@ const handleLogin = handleSubmit(async (data) => {
                     v-bind="usernameProps"
                     type="text" 
                     placeholder="账号 / 邮箱 / 手机号"
+                    autocomplete="username"
                     class="flex-1 bg-transparent border-none outline-none text-sm font-medium"
                   />
                 </div>
@@ -182,6 +186,7 @@ const handleLogin = handleSubmit(async (data) => {
                     v-bind="passwordProps"
                     type="password" 
                     placeholder="请输入密码"
+                    autocomplete="current-password"
                     class="flex-1 bg-transparent border-none outline-none text-sm font-medium"
                   />
                 </div>
@@ -189,17 +194,17 @@ const handleLogin = handleSubmit(async (data) => {
               </div>
             </div>
           </transition>
-        </div>
 
-        <!-- Submit -->
-        <button 
-          @click="handleLogin"
-          :disabled="authStore.loading"
-          class="w-full h-14 bg-gradient-to-r from-primary to-fuchsia-600 text-white rounded-2xl font-bold shadow-xl shadow-primary/20 active:scale-[0.97] transition-all mt-10 flex items-center justify-center gap-3"
-        >
-          <span v-if="authStore.loading" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-          立即登录
-        </button>
+          <!-- Submit -->
+          <button 
+            type="submit"
+            :disabled="authStore.loading"
+            class="w-full h-14 bg-gradient-to-r from-primary to-fuchsia-600 text-white rounded-2xl font-bold shadow-xl shadow-primary/20 active:scale-[0.97] transition-all mt-10 flex items-center justify-center gap-3"
+          >
+            <span v-if="authStore.loading" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            立即登录
+          </button>
+        </form>
 
         <!-- Terms -->
         <div class="mt-8">

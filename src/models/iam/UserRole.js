@@ -1,3 +1,5 @@
+import { registerDeleteVersionHooks } from '../../utils/softDeleteHooks.js';
+
 /**
  * 企业级 用户与角色关联表 (授权心脏表)
  */
@@ -13,7 +15,7 @@ export default (sequelize, DataTypes) => {
       user_id: {
         type: DataTypes.BIGINT,
         allowNull: false,
-        comment: '被授权的用户ID (关联 user_user.id)'
+        comment: '分配的用户ID (关联 user.id)'
       },
       role_id: {
         type: DataTypes.BIGINT,
@@ -21,7 +23,7 @@ export default (sequelize, DataTypes) => {
         comment: '分配的角色ID (关联 user_role.id)'
       },
       app_id: {
-        type: DataTypes.STRING(50),
+        type: DataTypes.STRING(64),
         allowNull: false,
         defaultValue: 'GLOBAL',
         comment: '应用标识 (冗余设计，极大加速按应用维度的权限拉取)'
@@ -31,44 +33,68 @@ export default (sequelize, DataTypes) => {
         allowNull: true,
         comment: '角色过期时间 (用于 JIT 临时提权，过期自动失效)'
       },
-      // === 安全审计维度 ===
       granted_by: {
         type: DataTypes.BIGINT,
-        allowNull: true, // 系统自动分配的可以是 null
-        comment: '授权人ID (记录是谁分配了这个角色，用于安全审计)'
+        allowNull: true,
+        comment: '授权人ID (审计追踪)'
+      },
+      /**
+       * 软删除版本标志 (解决 MySQL 唯一约束与 NULL 值的冲突漏洞)
+       * 0: 表示活跃记录 (正常状态)
+       * 非0 (自增 ID): 表示已软删除的记录，保证正常状态下的唯一约束不会被 NULL 值穿透
+       */
+      delete_version: {
+        type: DataTypes.BIGINT,
+        allowNull: false,
+        defaultValue: 0,
+        comment: '软删除版本标志 (0为活跃，非0表示已删除，解决唯一索引对 NULL 的失效问题)'
       }
     },
     {
-      tableName: 'user_app_user_role', // 建议改用下划线命名法
+      tableName: 'iam_user_role',
       timestamps: true,
-      paranoid: true, // 【关键】开启软删除。记录被剥夺的角色历史
-      comment: '用户角色授权关系表',
+      paranoid: true, // 开启软删除
+      comment: '用户与角色分配关系表 (核心授权关联)',
       indexes: [
         {
-          // 唯一约束：同一个人不能被重复分配同一个角色
           unique: true,
-          fields: ['user_id', 'role_id', 'deletedAt'],
+          fields: ['user_id', 'role_id', 'app_id', 'delete_version'],
           name: 'uk_user_role'
         },
         {
-          // 【性能核心】：加速登录时的权限拉取 (WHERE user_id = ? AND app_id = ?)
-          fields: ['user_id', 'app_id'],
-          name: 'idx_user_app'
-        },
-        {
-          // 加速定时任务清理或统计过期权限 (WHERE expire_at < NOW())
-          fields: ['expire_at'],
-          name: 'idx_expire_at'
+          // 【性能核心】：加速登录时的权限拉取与过期检测 (WHERE user_id = ? AND app_id = ? AND expire_at > NOW())
+          fields: ['user_id', 'app_id', 'expire_at'],
+          name: 'idx_user_app_expire'
         }
       ]
     }
   );
 
   UserRole.associate = (models) => {
-    UserRole.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
-    UserRole.belongsTo(models.Role, { foreignKey: 'role_id', as: 'role' });
-    UserRole.belongsTo(models.User, { foreignKey: 'granted_by', as: 'grantor' }); // 关联授权人
+    UserRole.belongsTo(models.User, {
+      foreignKey: 'user_id',
+      as: 'user',
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE'
+    });
+
+    UserRole.belongsTo(models.Role, {
+      foreignKey: 'role_id',
+      as: 'role',
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE'
+    });
+
+    UserRole.belongsTo(models.User, { 
+      foreignKey: 'granted_by', 
+      as: 'grantor',
+      onDelete: 'SET NULL',
+      onUpdate: 'CASCADE'
+    });
   };
+
+  // 🔐 注册软删除防 NULL 穿透生命周期钩子
+  registerDeleteVersionHooks(UserRole);
 
   return UserRole;
 };

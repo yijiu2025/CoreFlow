@@ -13,7 +13,7 @@ export default (sequelize, DataTypes) => {
         comment: '用户内部ID'
       },
       app_id: {
-        type: DataTypes.STRING,
+        type: DataTypes.STRING(64),
         allowNull: false,
         comment: '所属应用ID'
       },
@@ -21,15 +21,21 @@ export default (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         comment: '设备唯一标识 (用于多端互踢)'
       },
+      /**
+       * 凭证唯一标识符 (jti / SHA-256 哈希值)
+       * 安全加固：不存储明文的无状态 JWT，防止数据库泄露导致免检令牌直接曝光。
+       * 存储 JWT 的唯一标识符 (jti) 或其 SHA-256 哈希值，用于吊销、黑名单比对或单端单点登录拦截。
+       */
       token: {
-        type: DataTypes.TEXT,
-        comment: '本次登录发放的身份凭证(如 JWT)'
+        type: DataTypes.STRING(64),
+        allowNull: false,
+        comment: '凭证唯一标识符 (存储 JWT 的 jti 或 SHA-256 签名值，防明文泄露)'
       },
       ip: {
         type: DataTypes.STRING(50)
       },
       location: {
-        type: DataTypes.STRING
+        type: DataTypes.STRING(255)
       },
       user_agent: {
         type: DataTypes.TEXT
@@ -40,9 +46,15 @@ export default (sequelize, DataTypes) => {
       }
     },
     {
-      tableName: 'sys_session_tokens',
+      tableName: 'session_tokens',
       timestamps: true,
-      indexes: [{ fields: ['user_id'] }, { fields: ['app_id'] }, { fields: ['device_id'] }]
+      indexes: [
+        { fields: ['user_id'] }, 
+        { fields: ['app_id'] }, 
+        { fields: ['device_id'] },
+        { fields: ['token'], name: 'idx_session_token_identifier' }, // 增加索引，以便黑名单/吊销查询时实现 O(1) 速度
+        { fields: ['user_id', 'app_id', 'device_id'], name: 'idx_user_app_device' } // 高频：多端互踢查询
+      ]
     }
   );
 
@@ -50,7 +62,9 @@ export default (sequelize, DataTypes) => {
     SessionToken.belongsTo(models.UserSession, {
       foreignKey: 'user_id',
       targetKey: 'user_id',
-      as: 'globalSession'
+      as: 'globalSession',
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE'
     });
   };
 

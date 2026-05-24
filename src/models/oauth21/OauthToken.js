@@ -77,9 +77,10 @@ export default (sequelize, DataTypes) => {
       tableName: 'oauth_tokens',
       timestamps: true,
       indexes: [
-        { fields: ['sub'], name: 'idx_token_sub' },
         { fields: ['client_id'], name: 'idx_token_client' },
-        { fields: ['expires_at'], name: 'idx_token_expires' }
+        { fields: ['expires_at'], name: 'idx_token_expires' },
+        { fields: ['sub', 'client_id', 'revoked'], name: 'idx_token_validation' }, // 刷新令牌校验
+        { fields: ['revoked', 'expires_at'], name: 'idx_token_cleanup' } // 定时清理过期/吊销令牌
       ],
       comment: 'OAuth 2.1 刷新令牌表'
     }

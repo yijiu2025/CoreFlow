@@ -22,11 +22,11 @@ export default async (app) => {
         defaults: roleDef
       });
 
-      // 如果需要每次重启强制覆盖权限，请解除下方注释
-      // if (!created) {
-      //   role.policy = roleDef.policy;
-      //   await role.save();
-      // }
+      //如果需要每次重启强制覆盖权限，请解除下方注释
+      if (!created) {
+        role.policy = roleDef.policy;
+        await role.save();
+      }
       successCount++;
     }
     Logger.info(`✅ [PBAC] 集中注册器已将内存中的 ${successCount} 个角色同步至数据库`);

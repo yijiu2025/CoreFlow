@@ -31,6 +31,28 @@ const UserDao = {
   },
 
   /**
+   * 根据邮箱查找用户
+   * @param {string} email 邮箱
+   * @returns {Promise<object|null>} 适配后的用户数据或 null
+   */
+  async findByEmail(email) {
+    const { User } = sequelize.models;
+    if (!User) return null;
+
+    const user = await User.findOne({
+      where: { email }
+    });
+
+    return user ? {
+      id: user.uid, // sub 字段对应 uid
+      username: user.username,
+      email: user.email,
+      name: user.username,
+      uid: user.uid
+    } : null;
+  },
+
+  /**
    * 根据用户名/邮箱/标识符查找用户以进行凭证验证
    * @param {string} username 登录标识符
    * @returns {Promise<object|null>} 适配后的用户数据及凭证或 null

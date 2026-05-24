@@ -74,3 +74,15 @@ body {
   opacity: 0.3;
   border-radius: 10px; 
 }
+
+/* User Profile Dropdown Animation */
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.95);
+}
+

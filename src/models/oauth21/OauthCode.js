@@ -3,20 +3,6 @@
  *
  * 存储授权码流程中颁发的一次性授权码。
  * 每个授权码关联一个客户端和用户，消费后标记为已使用。
- *
- * 示例数据：
- * {
- *   code: 'a1b2c3d4e5f6...',
- *   client_id: 'spa-client-001',
- *   sub: 'user-uuid-xxx',
- *   redirect_uri: 'http://localhost:8080/callback',
- *   scope: 'openid profile email',
- *   code_challenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
- *   code_challenge_method: 'S256',
- *   nonce: 'random-nonce-value',
- *   consumed: false,
- *   expires_at: '2026-05-07T12:10:00Z'
- * }
  */
 export default (sequelize, DataTypes) => {
   const OauthCode = sequelize.define(
@@ -34,9 +20,12 @@ export default (sequelize, DataTypes) => {
         allowNull: false,
         comment: '关联的客户端 ID'
       },
-      /** 授权码所属用户的 ID（sub claim） */
+      /**
+       * 授权码所属用户的 ID（sub claim）
+       * 物理对齐：类型修改为 UUID 以对齐 User.uid 并支持高效联表与外键级联
+       */
       sub: {
-        type: DataTypes.STRING(128),
+        type: DataTypes.UUID,
         allowNull: false,
         comment: '用户唯一标识（sub claim）'
       },
@@ -85,9 +74,27 @@ export default (sequelize, DataTypes) => {
     {
       tableName: 'oauth_codes',
       timestamps: true,
+      indexes: [
+        {
+          fields: ['client_id', 'consumed', 'expires_at'],
+          name: 'idx_code_validate_cleanup',
+          comment: '授权码校验与定期清理辅助复合索引'
+        }
+      ],
       comment: 'OAuth 2.1 授权码表'
     }
   );
+
+  OauthCode.associate = (models) => {
+    // 建立与 User 模型的关联关联关系 (基于 sub -> User.uid)
+    OauthCode.belongsTo(models.User, {
+      foreignKey: 'sub',
+      targetKey: 'uid',
+      as: 'user',
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE'
+    });
+  };
 
   return OauthCode;
 };

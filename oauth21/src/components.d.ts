@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AuthContainer: typeof import('./components/common/AuthContainer.vue')['default']
     GraphicCaptcha: typeof import('./components/common/GraphicCaptcha.vue')['default']
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

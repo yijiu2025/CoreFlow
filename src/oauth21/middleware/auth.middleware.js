@@ -70,19 +70,13 @@ export const initOAuthAuth = fp(async function (app) {
           jti: payload.jti
         };
       } catch (err) {
+        request.state.authError = err;
         if (err.name === 'TokenExpiredError') {
           reply.header('X-Auth-Status', 'expired');
-          reply.clearCookie('access_token');
-          return reply.code(401).send({
-            error: 'invalid_token',
-            error_description: 'Token expired'
-          });
+          try {
+            reply.clearCookie('access_token');
+          } catch (e) {}
         }
-
-        return reply.code(401).send({
-          error: 'invalid_token',
-          error_description: err.name === 'NotBeforeError' ? 'Token not yet valid' : 'Invalid token'
-        });
       }
 
       done();

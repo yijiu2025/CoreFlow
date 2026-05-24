@@ -107,6 +107,7 @@ export default async function (fastify) {
       if (scopes.includes('profile')) {
         info.name = userData.name;
         info.preferred_username = userData.username;
+        info.avatar = userData.avatar;
       }
       if (scopes.includes('email')) {
         info.email = userData.email;

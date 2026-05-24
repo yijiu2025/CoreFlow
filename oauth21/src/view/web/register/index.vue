@@ -5,7 +5,7 @@ import { useForm } from 'vee-validate'
 import { useRoute, useRouter } from 'vue-router'
 import { ref, computed } from 'vue'
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue'
-import * as zod from 'zod'
+import { z } from 'zod'
 import { toTypedSchema } from '@vee-validate/zod'
 import { rsaEncrypt } from '@/utils/crypto'
 
@@ -16,15 +16,15 @@ const route = useRoute()
 const isMini = computed(() => route.query.appName || route.path.includes('mini') || route.query.from === 'mini')
 
 // 校验架构
-const registerSchema = zod.object({
-  username: zod.string({ required_error: '请输入用户名' }).min(2, '用户名至少2位'),
-  email: zod.string({ required_error: '请输入邮箱' }).email('请输入有效的邮箱'),
-  code: zod.string({ required_error: '请输入验证码' }).min(4, '验证码至少4位'),
-  password: zod.string({ required_error: '请输入密码' })
+const registerSchema = z.object({
+  username: z.string({ required_error: '请输入用户名' }).min(2, '用户名至少2位'),
+  email: z.string({ required_error: '请输入邮箱' }).email('请输入有效的邮箱'),
+  code: z.string({ required_error: '请输入验证码' }).min(4, '验证码至少4位'),
+  password: z.string({ required_error: '请输入密码' })
     .min(8, '密码至少8位')
     .max(20, '密码最多20位')
     .regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, '密码必须同时包含数字和字母'),
-  confirmPassword: zod.string({ required_error: '请确认密码' }).min(1, '请再次输入密码以确认')
+  confirmPassword: z.string({ required_error: '请确认密码' }).min(1, '请再次输入密码以确认')
 }).refine((data) => data.password === data.confirmPassword, {
   message: "两次输入的密码不一致",
   path: ["confirmPassword"]

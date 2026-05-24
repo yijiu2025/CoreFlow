@@ -2,18 +2,19 @@
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { useForm } from 'vee-validate'
-import * as zod from 'zod'
+import { z } from 'zod'
 import { toTypedSchema } from '@vee-validate/zod'
+import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
 
-const registerSchema = zod.object({
-  nickname: zod.string().min(2, '昵称至少2位'),
-  email: zod.string().email('邮箱格式不正确'),
-  code: zod.string().min(4, '验证码至少4位'),
-  password: zod.string().min(6, '密码至少6位'),
-  confirmPassword: zod.string().min(6, '请确认密码')
+const registerSchema = z.object({
+  nickname: z.string().min(2, '昵称至少2位'),
+  email: z.string().email('邮箱格式不正确'),
+  code: z.string().min(4, '验证码至少4位'),
+  password: z.string().min(6, '密码至少6位'),
+  confirmPassword: z.string().min(6, '请确认密码')
 }).refine((data) => data.password === data.confirmPassword, {
   message: "两次输入密码不一致",
   path: ["confirmPassword"]
@@ -32,26 +33,27 @@ const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword')
 const agreed = ref(false)
 const isCountingDown = ref(false)
 const countdown = ref(60)
+const showCaptcha = ref(false)
 
-const sendCode = async () => {
+const sendCode = () => {
   if (!values.email || errors.value.email) {
     alert('请先输入有效的邮箱')
     return
   }
-  try {
-    await authApi.sendEmailCode(values.email)
-    isCountingDown.value = true
-    countdown.value = 60
-    const timer = setInterval(() => {
-      countdown.value--
-      if (countdown.value <= 0) {
-        clearInterval(timer)
-        isCountingDown.value = false
-      }
-    }, 1000)
-  } catch (err: any) {
-    alert(err.message)
-  }
+  showCaptcha.value = true
+}
+
+const onCaptchaSuccess = async (data: { captchaKey: string }) => {
+  showCaptcha.value = false
+  isCountingDown.value = true
+  countdown.value = 60
+  const timer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearInterval(timer)
+      isCountingDown.value = false
+    }
+  }, 1000)
 }
 
 const handleRegister = handleSubmit(async (data) => {
@@ -82,38 +84,38 @@ const handleRegister = handleSubmit(async (data) => {
     </div>
 
     <!-- Form -->
-    <div class="flex-1 px-8 space-y-6">
+    <form @submit.prevent="handleRegister" class="flex-1 px-8 space-y-6">
       <div class="space-y-1 relative">
-        <input v-model="nickname" v-bind="nicknameProps" type="text" placeholder="设置用户昵称" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
+        <input v-model="nickname" v-bind="nicknameProps" type="text" placeholder="设置用户昵称" autocomplete="nickname" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
         <span v-if="errors.nickname" class="absolute -bottom-5 left-2 text-[10px] text-destructive">{{ errors.nickname }}</span>
       </div>
 
       <div class="space-y-1 relative">
-        <input v-model="email" v-bind="emailProps" type="email" placeholder="输入邮箱地址" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
+        <input v-model="email" v-bind="emailProps" type="email" placeholder="输入邮箱地址" autocomplete="email" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
         <span v-if="errors.email" class="absolute -bottom-5 left-2 text-[10px] text-destructive">{{ errors.email }}</span>
       </div>
 
       <div class="flex gap-4 items-start relative">
         <div class="flex-1">
-          <input v-model="code" v-bind="codeProps" type="text" placeholder="邮箱验证码" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
+          <input v-model="code" v-bind="codeProps" type="text" placeholder="邮箱验证码" autocomplete="one-time-code" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
         </div>
-        <button @click="sendCode" :disabled="isCountingDown" class="h-14 px-6 bg-white dark:bg-slate-900 rounded-2xl font-bold text-sm text-primary shadow-sm active:scale-95 transition-all disabled:text-slate-400">
+        <button type="button" @click="sendCode" :disabled="isCountingDown" class="h-14 px-6 bg-white dark:bg-slate-900 rounded-2xl font-bold text-sm text-primary shadow-sm active:scale-95 transition-all disabled:text-slate-400">
           {{ isCountingDown ? `${countdown}s` : '获取' }}
         </button>
         <span v-if="errors.code" class="absolute -bottom-5 left-2 text-[10px] text-destructive">{{ errors.code }}</span>
       </div>
 
       <div class="space-y-1 relative">
-        <input v-model="password" v-bind="passwordProps" type="password" placeholder="设置登录密码 (6位以上)" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
+        <input v-model="password" v-bind="passwordProps" type="password" placeholder="设置登录密码 (6位以上)" autocomplete="new-password" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
       </div>
 
       <div class="space-y-1 relative">
-        <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" placeholder="再次确认您的密码" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
+        <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" placeholder="再次确认您的密码" autocomplete="new-password" class="w-full h-14 bg-white dark:bg-slate-900 rounded-2xl px-6 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all" />
         <span v-if="errors.confirmPassword" class="absolute -bottom-5 left-2 text-[10px] text-destructive">{{ errors.confirmPassword }}</span>
       </div>
 
       <div class="pt-4">
-        <button @click="handleRegister" class="w-full h-14 bg-gradient-to-r from-primary to-fuchsia-600 text-white rounded-2xl font-bold shadow-xl shadow-primary/20 active:scale-95 transition-all">
+        <button type="submit" class="w-full h-14 bg-gradient-to-r from-primary to-fuchsia-600 text-white rounded-2xl font-bold shadow-xl shadow-primary/20 active:scale-95 transition-all">
           立即注册
         </button>
       </div>
@@ -125,6 +127,14 @@ const handleRegister = handleSubmit(async (data) => {
         </div>
         <span class="text-[11px] text-slate-400 leading-tight">同意并接受《用户协议》、《隐私权保护声明》及相关配套条款</span>
       </label>
-    </div>
+    </form>
+
+    <GraphicCaptcha 
+      :is-open="showCaptcha" 
+      :email="values.email"
+      type="register"
+      @close="showCaptcha = false" 
+      @success="onCaptchaSuccess" 
+    />
   </div>
 </template>

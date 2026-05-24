@@ -21,8 +21,8 @@ export const authApi = {
    * 安全登录
    * @param payload 登录信息
    */
-  async login(payload: LoginPayload & { captchaKey?: string }) {
-    const { captchaKey, ...rest } = payload
+  async login(payload: LoginPayload & { captchaKey?: string; client_id?: string }) {
+    const { captchaKey, client_id, ...rest } = payload
     const payloadStr = JSON.stringify(rest)
     const encrypted = await rsaEncrypt(payloadStr)
     
@@ -31,8 +31,16 @@ export const authApi = {
       timestamp: Date.now(),
       nonce: generateNonce(),
       scope: 'openid profile email',
-      captchaKey
+      captchaKey,
+      client_id
     })
+  },
+
+  /**
+   * 快捷登录确认授权
+   */
+  async confirmConsent(consentKey: string) {
+    return request.post('/oauth2.1/login/consent/confirm', { consentKey })
   },
 
   /**
@@ -100,6 +108,10 @@ export const authApi = {
   /**
    * 获取用户信息
    */
+  async getUserInfo() {
+    return request.get('/oauth2.1/userinfo')
+  },
+
   /**
    * 刷新 Token (示例)
    */

@@ -1,3 +1,5 @@
+import { registerDeleteVersionHooks } from '../../utils/softDeleteHooks.js';
+
 /**
  * 工业级角色定义表 (PBAC 架构)
  */
@@ -11,7 +13,7 @@ export default (sequelize, DataTypes) => {
         autoIncrement: true
       },
       app_id: {
-        type: DataTypes.STRING(50),
+        type: DataTypes.STRING(64),
         allowNull: false,
         defaultValue: 'GLOBAL',
         comment: '所属应用ID，GLOBAL表示全局角色'
@@ -30,6 +32,7 @@ export default (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         defaultValue: 1,
+        validate: { min: 0, max: 99 },
         comment: '职级权重(0-99)，用于管理权限压制'
       },
       policy: {
@@ -40,16 +43,31 @@ export default (sequelize, DataTypes) => {
       description: {
         type: DataTypes.STRING(255),
         comment: '角色描述'
+      },
+      /**
+       * 软删除版本标志 (解决 MySQL 唯一约束与 NULL 值的冲突漏洞)
+       * 0: 表示活跃角色
+       * 非0 (自增 ID): 表示已被软删除的角色
+       */
+      delete_version: {
+        type: DataTypes.BIGINT,
+        allowNull: false,
+        defaultValue: 0,
+        comment: '软删除版本标志 (0为活跃，非0表示已删除，解决唯一索引对 NULL 的失效问题)'
       }
     },
     {
-      tableName: 'user_role',
+      tableName: 'iam_role',
       timestamps: true,
       paranoid: true,
       indexes: [
-        { unique: true, fields: ['code', 'app_id', 'deletedAt'] },
-        { fields: ['app_id'] }
-      ]
+        {
+          unique: true,
+          fields: ['app_id', 'code', 'delete_version'],
+          name: 'uk_role_app_code'
+        }
+      ],
+      comment: '角色定义主表'
     }
   );
 
@@ -59,9 +77,23 @@ export default (sequelize, DataTypes) => {
       through: models.UserRole,
       foreignKey: 'role_id',
       otherKey: 'user_id',
-      as: 'users'
+      as: 'users',
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE'
+    });
+
+    // 1:N 显式关联 UserRole 连接表模型 (启用 hooks 以在代码层面级联软删除 UserRole 并触发其 delete_version 钩子)
+    Role.hasMany(models.UserRole, {
+      foreignKey: 'role_id',
+      as: 'userRoles',
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE',
+      hooks: true
     });
   };
+
+  // 🔐 注册软删除防 NULL 穿透生命周期钩子
+  registerDeleteVersionHooks(Role);
 
   return Role;
 };

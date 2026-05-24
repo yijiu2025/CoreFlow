@@ -64,7 +64,8 @@ class UserDao {
         user_id: user.id,
         last_login_at: new Date(),
         last_login_ip: request.ip || request.state?.clientInfo?.ip,
-        last_login_app: appId || 'DIRECT_LOGIN'
+        last_login_app: appId || 'DIRECT_LOGIN',
+        last_active_at: new Date()
       });
     }
 

@@ -6,6 +6,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { TokenService, TokenError } from '../../../oauth21/services/token.service.js';
+import config from '../../../oauth21/config/config.js';
 
 const tokenService = new TokenService();
 
@@ -77,6 +78,23 @@ export default async function (fastify) {
 
           default:
             throw new TokenError('unsupported_grant_type', `Grant type "${grant_type}" is not supported`);
+        }
+
+        if (result && result.access_token) {
+          reply.setCookie('access_token', result.access_token, {
+            httpOnly: true,
+            maxAge: (result.expires_in || 600) * 1000,
+            path: '/',
+            sameSite: 'lax'
+          });
+        }
+        if (result && result.refresh_token) {
+          reply.setCookie('refresh_token', result.refresh_token, {
+            httpOnly: true,
+            maxAge: (config.jwt.refreshTokenTTL || 604800) * 1000,
+            path: '/oauth2.1/token',
+            sameSite: 'strict'
+          });
         }
 
         return result;

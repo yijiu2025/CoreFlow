@@ -32,7 +32,7 @@ export default (sequelize, DataTypes) => {
         comment: '事件类型: LOGIN, LOGOUT, KICK, FORBIDDEN'
       },
       app_id: {
-        type: DataTypes.STRING(50),
+        type: DataTypes.STRING(64),
         comment: '关联应用ID'
       },
       ip: {
@@ -50,10 +50,17 @@ export default (sequelize, DataTypes) => {
       }
     },
     {
-      tableName: 'sys_session_logs',
+      tableName: 'session_logs',
       timestamps: true,
       createdAt: 'created_at', // 显式匹配字段名
       updatedAt: false,
+      indexes: [
+        {
+          fields: ['user_id', 'event', 'created_at'],
+          name: 'idx_session_log_audit',
+          comment: '高频场景：根据用户、事件和时间段检索审计日志'
+        }
+      ],
       comment: '系统会话/审计日志表 (支持按月物理分区)'
     }
   );

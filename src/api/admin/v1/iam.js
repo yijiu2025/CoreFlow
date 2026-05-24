@@ -1,5 +1,5 @@
 import IamDao from '../../../admin/dao/iam.dao.js';
-import { registerSecureRoute } from '../../oauth21/guard.js'; 
+import { registerSecureRoute } from '../../guard.js'; 
 import { actionMetaRegistry } from '../../../utils/PbacRegistry.js'; 
 
 export default async function (fastify) {

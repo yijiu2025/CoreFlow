@@ -42,7 +42,8 @@ const props = defineProps({
 const emit = defineEmits(['close', 'login-success'])
 
 const loading = ref(true)
-const loginUrl = 'http://localhost:5174/mini-login?lang=zh_cn&appName=firewall&appEntrance=web&styleType=horizontal&bizParams=&notLoadSsoView=false&notKeepLogin=false&isMobile=false&qrCodeFirst=false&stie=01&rnd=' + Math.random()
+const ssoUrl = (import.meta as any).env?.VITE_SSO_URL || 'http://localhost:5173'
+const loginUrl = `${ssoUrl}/mini-login?lang=zh_cn&appName=firewall&appEntrance=web&styleType=horizontal&bizParams=&notLoadSsoView=false&notKeepLogin=false&isMobile=false&qrCodeFirst=false&stie=01&rnd=${Math.random()}`
 
 function close() {
   emit('close')

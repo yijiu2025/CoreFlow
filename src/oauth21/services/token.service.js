@@ -1,4 +1,5 @@
 // src/services/token.service.js
+import bcrypt from 'bcryptjs';
 import CodeDao from '../dao/code.dao.js';
 import TokenDao from '../dao/token.dao.js';
 import ClientDao from '../dao/client.dao.js';
@@ -52,8 +53,13 @@ export class TokenService {
       return client;
     }
 
-    // 机密客户端验证 secret
-    if (!clientSecret || clientSecret !== client.client_secret) {
+    // 机密客户端验证 secret (使用 bcrypt 安全比对)
+    if (!clientSecret || !client.client_secret) {
+      return null;
+    }
+
+    const match = await bcrypt.compare(clientSecret, client.client_secret);
+    if (!match) {
       return null;
     }
 

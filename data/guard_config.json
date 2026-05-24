@@ -1,5 +1,74 @@
 {
   "configs": {
+    "admin": {
+      "id": "admin",
+      "name": "admin",
+      "enabled": true,
+      "groups": {
+        "": {
+          "id": "",
+          "name": "",
+          "enabled": true,
+          "apis": {
+            "listAssignableRoles": {
+              "id": "listAssignableRoles",
+              "name": "获取可分配角色",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/admin/v1/iam/roles",
+              "method": "GET",
+              "updatedAt": "2026-05-20T15:40:48.077Z"
+            },
+            "listPermissionDictionary": {
+              "id": "listPermissionDictionary",
+              "name": "获取权限字典树",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/admin/v1/iam/actions/dictionary",
+              "method": "GET",
+              "updatedAt": "2026-05-20T15:40:48.079Z"
+            },
+            "listManageableUsers": {
+              "id": "listManageableUsers",
+              "name": "获取可管理用户列表",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/admin/v1/iam/users",
+              "method": "GET",
+              "updatedAt": "2026-05-20T15:40:48.080Z"
+            },
+            "assignIamRole": {
+              "id": "assignIamRole",
+              "name": "分配角色",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/admin/v1/iam/roles/assign",
+              "method": "POST",
+              "updatedAt": "2026-05-20T15:40:48.081Z"
+            },
+            "updateInlinePolicy": {
+              "id": "updateInlinePolicy",
+              "name": "下发内联策略",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/admin/v1/iam/policies",
+              "method": "POST",
+              "updatedAt": "2026-05-20T15:40:48.081Z"
+            }
+          }
+        }
+      }
+    },
     "firewall": {
       "groups": {
         "apiConfigs": {
@@ -13,7 +82,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.172Z"
+              "updatedAt": "2026-05-20T15:40:48.089Z"
             },
             "updateConfig": {
               "id": "updateConfig",
@@ -24,7 +93,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/:system/:group",
               "method": "PATCH",
-              "updatedAt": "2026-05-16T16:36:52.173Z"
+              "updatedAt": "2026-05-20T15:40:48.089Z"
             },
             "toggleConfig": {
               "id": "toggleConfig",
@@ -35,7 +104,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle/:system/:group",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.173Z"
+              "updatedAt": "2026-05-20T15:40:48.090Z"
             },
             "toggleSystemConfig": {
               "id": "toggleSystemConfig",
@@ -46,7 +115,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle-system/:system",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.173Z"
+              "updatedAt": "2026-05-20T15:40:48.090Z"
             }
           },
           "id": "apiConfigs",
@@ -57,7 +126,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.172Z"
+          "updatedAt": "2026-05-20T15:40:48.089Z"
         },
         "challenge": {
           "apis": {
@@ -70,7 +139,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/challenge/verify",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.175Z"
+              "updatedAt": "2026-05-20T15:40:48.092Z"
             }
           },
           "id": "challenge",
@@ -81,7 +150,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.175Z"
+          "updatedAt": "2026-05-20T15:40:48.092Z"
         },
         "firewall-monitor": {
           "apis": {
@@ -94,7 +163,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/summary",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.179Z"
+              "updatedAt": "2026-05-20T15:40:48.100Z"
             },
             "records": {
               "id": "records",
@@ -105,7 +174,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/records",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.179Z"
+              "updatedAt": "2026-05-20T15:40:48.100Z"
             },
             "clear": {
               "id": "clear",
@@ -116,7 +185,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/clear",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.179Z"
+              "updatedAt": "2026-05-20T15:40:48.101Z"
             },
             "updateNode": {
               "id": "updateNode",
@@ -127,7 +196,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/update",
               "method": "PATCH",
-              "updatedAt": "2026-05-16T16:36:52.179Z"
+              "updatedAt": "2026-05-20T15:40:48.101Z"
             },
             "refreshNode": {
               "id": "refreshNode",
@@ -138,7 +207,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/refresh",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.179Z"
+              "updatedAt": "2026-05-20T15:40:48.101Z"
             },
             "getSettings": {
               "id": "getSettings",
@@ -149,7 +218,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.101Z"
             },
             "updateSettings": {
               "id": "updateSettings",
@@ -160,7 +229,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "PATCH",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.102Z"
             },
             "addBlacklist": {
               "id": "addBlacklist",
@@ -171,7 +240,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.102Z"
             },
             "removeBlacklist": {
               "id": "removeBlacklist",
@@ -182,7 +251,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "DELETE",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.103Z"
             },
             "listBlocks": {
               "id": "listBlocks",
@@ -193,7 +262,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.103Z"
             },
             "addBlock": {
               "id": "addBlock",
@@ -204,7 +273,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.103Z"
             },
             "removeBlock": {
               "id": "removeBlock",
@@ -215,7 +284,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.104Z"
             },
             "listWhitelist": {
               "id": "listWhitelist",
@@ -226,7 +295,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.104Z"
             },
             "addWhitelist": {
               "id": "addWhitelist",
@@ -237,7 +306,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.105Z"
             },
             "removeWhitelist": {
               "id": "removeWhitelist",
@@ -248,7 +317,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-05-16T16:36:52.180Z"
+              "updatedAt": "2026-05-20T15:40:48.105Z"
             },
             "addBlockFp": {
               "id": "addBlockFp",
@@ -259,7 +328,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/fp",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.181Z"
+              "updatedAt": "2026-05-20T15:40:48.106Z"
             },
             "removeBlockFp": {
               "id": "removeBlockFp",
@@ -270,7 +339,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/fp/:fingerprint",
               "method": "DELETE",
-              "updatedAt": "2026-05-16T16:36:52.181Z"
+              "updatedAt": "2026-05-20T15:40:48.106Z"
             },
             "addWhitelistFp": {
               "id": "addWhitelistFp",
@@ -281,7 +350,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/fp",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.181Z"
+              "updatedAt": "2026-05-20T15:40:48.107Z"
             },
             "removeWhitelistFp": {
               "id": "removeWhitelistFp",
@@ -292,7 +361,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/fp/:fingerprint",
               "method": "DELETE",
-              "updatedAt": "2026-05-16T16:36:52.181Z"
+              "updatedAt": "2026-05-20T15:40:48.107Z"
             }
           },
           "id": "firewall-monitor",
@@ -303,7 +372,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.179Z"
+          "updatedAt": "2026-05-20T15:40:48.099Z"
         }
       },
       "id": "firewall",
@@ -314,7 +383,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-05-16T16:36:52.167Z"
+      "updatedAt": "2026-05-20T15:40:48.085Z"
     },
     "Notice": {
       "groups": {
@@ -329,7 +398,7 @@
               "allowRoles": [],
               "url": "/notice/v1/channels",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.216Z"
+              "updatedAt": "2026-05-20T15:40:48.182Z"
             },
             "getConfig": {
               "id": "getConfig",
@@ -340,7 +409,7 @@
               "allowRoles": [],
               "url": "/notice/v1/config/:type",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.216Z"
+              "updatedAt": "2026-05-20T15:40:48.183Z"
             },
             "saveConfig": {
               "id": "saveConfig",
@@ -351,7 +420,7 @@
               "allowRoles": [],
               "url": "/notice/v1/config/:type",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.217Z"
+              "updatedAt": "2026-05-20T15:40:48.183Z"
             },
             "testEmail": {
               "id": "testEmail",
@@ -362,7 +431,7 @@
               "allowRoles": [],
               "url": "/notice/v1/test-email",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.217Z"
+              "updatedAt": "2026-05-20T15:40:48.184Z"
             }
           },
           "id": "config",
@@ -375,7 +444,7 @@
           "allowRoles": [
             "admin"
           ],
-          "updatedAt": "2026-05-16T16:36:52.216Z"
+          "updatedAt": "2026-05-20T15:40:48.182Z"
         }
       },
       "id": "Notice",
@@ -388,7 +457,7 @@
       "allowRoles": [
         "admin"
       ],
-      "updatedAt": "2026-05-16T16:36:52.183Z"
+      "updatedAt": "2026-05-20T15:40:48.111Z"
     },
     "OAuth2.1": {
       "groups": {
@@ -403,7 +472,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/admin/permissions/sync",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.224Z"
+              "updatedAt": "2026-05-20T15:40:48.195Z"
             },
             "createClient": {
               "id": "createClient",
@@ -414,7 +483,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/admin/client",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.225Z"
+              "updatedAt": "2026-05-20T15:40:48.196Z"
             },
             "listUsers": {
               "id": "listUsers",
@@ -425,7 +494,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/admin/users",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.225Z"
+              "updatedAt": "2026-05-20T15:40:48.196Z"
             }
           },
           "id": "admin",
@@ -436,7 +505,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.224Z"
+          "updatedAt": "2026-05-20T15:40:48.195Z"
         },
         "auth": {
           "apis": {
@@ -449,7 +518,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/authorize",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.269Z"
+              "updatedAt": "2026-05-20T15:40:48.285Z"
             },
             "authorizeLogin": {
               "id": "authorizeLogin",
@@ -460,7 +529,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/authorize/login",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.269Z"
+              "updatedAt": "2026-05-20T15:40:48.286Z"
             },
             "authorizeConsent": {
               "id": "authorizeConsent",
@@ -471,7 +540,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/authorize/consent",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.269Z"
+              "updatedAt": "2026-05-20T15:40:48.286Z"
             },
             "login": {
               "id": "login",
@@ -482,7 +551,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/login",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.269Z"
+              "updatedAt": "2026-05-20T15:40:48.286Z"
             },
             "miniLogin": {
               "id": "miniLogin",
@@ -493,7 +562,18 @@
               "allowRoles": [],
               "url": "/oauth2.1/mini-login",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.269Z"
+              "updatedAt": "2026-05-20T15:40:48.286Z"
+            },
+            "confirmDirectConsent": {
+              "id": "confirmDirectConsent",
+              "name": "统一直接登录确认授权",
+              "enabled": true,
+              "requireLogin": false,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/oauth2.1/login/consent/confirm",
+              "method": "POST",
+              "updatedAt": "2026-05-20T15:40:48.286Z"
             },
             "miniRegister": {
               "id": "miniRegister",
@@ -504,7 +584,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/mini-register",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.269Z"
+              "updatedAt": "2026-05-20T15:40:48.287Z"
             },
             "qrGenerate": {
               "id": "qrGenerate",
@@ -515,7 +595,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/generate",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.269Z"
+              "updatedAt": "2026-05-20T15:40:48.287Z"
             },
             "qrScan": {
               "id": "qrScan",
@@ -526,7 +606,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/scan",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.269Z"
+              "updatedAt": "2026-05-20T15:40:48.287Z"
             },
             "qrConfirm": {
               "id": "qrConfirm",
@@ -537,7 +617,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/confirm",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.270Z"
+              "updatedAt": "2026-05-20T15:40:48.287Z"
             },
             "qrStatus": {
               "id": "qrStatus",
@@ -548,7 +628,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/status",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.270Z"
+              "updatedAt": "2026-05-20T15:40:48.288Z"
             }
           },
           "id": "auth",
@@ -559,7 +639,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.269Z"
+          "updatedAt": "2026-05-20T15:40:48.285Z"
         },
         "crypto": {
           "apis": {
@@ -572,7 +652,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/crypto/public-key",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.272Z"
+              "updatedAt": "2026-05-20T15:40:48.292Z"
             }
           },
           "id": "crypto",
@@ -583,7 +663,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.272Z"
+          "updatedAt": "2026-05-20T15:40:48.292Z"
         },
         "device": {
           "apis": {
@@ -596,7 +676,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device/code",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.274Z"
+              "updatedAt": "2026-05-20T15:40:48.298Z"
             },
             "deviceToken": {
               "id": "deviceToken",
@@ -607,7 +687,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device/token",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.274Z"
+              "updatedAt": "2026-05-20T15:40:48.299Z"
             },
             "devicePage": {
               "id": "devicePage",
@@ -618,7 +698,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.274Z"
+              "updatedAt": "2026-05-20T15:40:48.300Z"
             },
             "deviceAuthorize": {
               "id": "deviceAuthorize",
@@ -629,7 +709,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device/authorize",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.275Z"
+              "updatedAt": "2026-05-20T15:40:48.300Z"
             }
           },
           "id": "device",
@@ -640,7 +720,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.274Z"
+          "updatedAt": "2026-05-20T15:40:48.298Z"
         },
         "oidc": {
           "apis": {
@@ -653,7 +733,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/.well-known/openid-configuration",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.276Z"
+              "updatedAt": "2026-05-20T15:40:48.305Z"
             },
             "jwks": {
               "id": "jwks",
@@ -664,7 +744,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/.well-known/jwks.json",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.277Z"
+              "updatedAt": "2026-05-20T15:40:48.305Z"
             },
             "userinfo": {
               "id": "userinfo",
@@ -675,7 +755,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/userinfo",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.277Z"
+              "updatedAt": "2026-05-20T15:40:48.306Z"
             }
           },
           "id": "oidc",
@@ -686,7 +766,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.276Z"
+          "updatedAt": "2026-05-20T15:40:48.305Z"
         },
         "token": {
           "apis": {
@@ -699,7 +779,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/token",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.279Z"
+              "updatedAt": "2026-05-20T15:40:48.311Z"
             },
             "revokeToken": {
               "id": "revokeToken",
@@ -710,7 +790,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/revoke",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.279Z"
+              "updatedAt": "2026-05-20T15:40:48.311Z"
             }
           },
           "id": "token",
@@ -721,7 +801,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.279Z"
+          "updatedAt": "2026-05-20T15:40:48.310Z"
         }
       },
       "id": "OAuth2.1",
@@ -732,7 +812,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-05-16T16:36:52.218Z"
+      "updatedAt": "2026-05-20T15:40:48.186Z"
     },
     "User": {
       "groups": {
@@ -747,7 +827,7 @@
               "allowRoles": [],
               "url": "/user/v1/register",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.284Z"
+              "updatedAt": "2026-05-20T15:40:48.326Z"
             },
             "checkEmail": {
               "id": "checkEmail",
@@ -758,7 +838,7 @@
               "allowRoles": [],
               "url": "/user/v1/check-email",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.284Z"
+              "updatedAt": "2026-05-20T15:40:48.326Z"
             }
           },
           "id": "userRegister",
@@ -769,7 +849,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.284Z"
+          "updatedAt": "2026-05-20T15:40:48.326Z"
         }
       },
       "id": "User",
@@ -780,7 +860,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-05-16T16:36:52.280Z"
+      "updatedAt": "2026-05-20T15:40:48.312Z"
     },
     "Verify": {
       "groups": {
@@ -795,7 +875,7 @@
               "allowRoles": [],
               "url": "/verify/v1/generate-captcha",
               "method": "GET",
-              "updatedAt": "2026-05-16T16:36:52.287Z"
+              "updatedAt": "2026-05-20T15:40:48.333Z"
             },
             "verifyCaptcha": {
               "id": "verifyCaptcha",
@@ -806,7 +886,7 @@
               "allowRoles": [],
               "url": "/verify/v1/verify-captcha",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.287Z"
+              "updatedAt": "2026-05-20T15:40:48.334Z"
             },
             "checkEmailCode": {
               "id": "checkEmailCode",
@@ -817,7 +897,7 @@
               "allowRoles": [],
               "url": "/verify/v1/check-email-code",
               "method": "POST",
-              "updatedAt": "2026-05-16T16:36:52.287Z"
+              "updatedAt": "2026-05-20T15:40:48.334Z"
             }
           },
           "id": "v1",
@@ -828,7 +908,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-05-16T16:36:52.287Z"
+          "updatedAt": "2026-05-20T15:40:48.333Z"
         }
       },
       "id": "Verify",
@@ -839,7 +919,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-05-16T16:36:52.285Z"
+      "updatedAt": "2026-05-20T15:40:48.329Z"
     }
   }
 }

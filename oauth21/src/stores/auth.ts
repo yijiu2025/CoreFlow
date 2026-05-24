@@ -13,13 +13,15 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * 登录动作
    */
-  async function login(payload: LoginPayload) {
+  async function login(payload: any) {
     loading.value = true
     try {
       const data: any = await authApi.login(payload)
-      token.value = data.access_token
-      localStorage.setItem('token', data.access_token)
-      // 处理其他返回数据...
+      const accessToken = data.access_token || data.data?.accessToken
+      if (accessToken) {
+        token.value = accessToken
+        localStorage.setItem('token', accessToken)
+      }
       return data
     } finally {
       loading.value = false

@@ -65,6 +65,19 @@ async function applyGuardLogic(opts = {}, request, reply) {
   if (requireLogin || allowRoles.length > 0) {
     const user = request.state?.user;
     if (!user) {
+      const authError = request.state?.authError;
+      if (authError) {
+        if (authError.name === 'TokenExpiredError') {
+          return reply.code(401).send({
+            error: 'invalid_token',
+            error_description: 'Token expired'
+          });
+        }
+        return reply.code(401).send({
+          error: 'invalid_token',
+          error_description: authError.name === 'NotBeforeError' ? 'Token not yet valid' : 'Invalid token'
+        });
+      }
       return reply.result.unauth('身份验证失败，请先登录');
     }
     if (allowRoles.length > 0 && !allowRoles.includes(user.role)) {
