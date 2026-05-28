@@ -6,7 +6,7 @@ import { authApi, type LoginPayload } from '@/api/auth'
  * 认证状态管理
  */
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref(localStorage.getItem('token') || '')
+  const token = ref('')
   const user = ref(null)
   const loading = ref(false)
 
@@ -20,7 +20,6 @@ export const useAuthStore = defineStore('auth', () => {
       const accessToken = data.access_token || data.data?.accessToken
       if (accessToken) {
         token.value = accessToken
-        localStorage.setItem('token', accessToken)
       }
       return data
     } finally {
@@ -34,7 +33,6 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     token.value = ''
     user.value = null
-    localStorage.removeItem('token')
   }
 
   return {

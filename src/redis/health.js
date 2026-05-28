@@ -18,8 +18,8 @@ export function setupRedisHealthMonitor(app, redis) {
     for (const cb of callbacks) {
       try {
         cb(newState);
-      } catch {
-        /* 忽略回调异常 */
+      } catch (err) {
+        console.warn('[Redis] 健康状态回调异常:', err.message);
       }
     }
   }
@@ -29,7 +29,6 @@ export function setupRedisHealthMonitor(app, redis) {
     if (!healthy) return;
     healthy = false;
     app.redisHealthy = false;
-    console.warn('🚨 [Redis] 连接中断，启动恢复探测 (30s 间隔)');
     notify(false);
 
     if (!pingTimer) {
@@ -38,9 +37,10 @@ export function setupRedisHealthMonitor(app, redis) {
           await redis.ping();
           markHealthy();
         } catch {
-          /* 不可用 */
+          /* 不可用，继续等待 */
         }
-      }, 30000);
+      }, 30_000);
+      pingTimer.unref();
     }
   }
 
@@ -53,7 +53,6 @@ export function setupRedisHealthMonitor(app, redis) {
       clearInterval(pingTimer);
       pingTimer = null;
     }
-    console.log('✅ [Redis] 恢复连接');
     notify(true);
   }
 
@@ -64,6 +63,15 @@ export function setupRedisHealthMonitor(app, redis) {
 
   // 初始化全局状态
   app.redisHealthy = true;
+
+  // 应用关闭时清理定时器
+  app.addHook('onClose', () => {
+    if (pingTimer) {
+      clearInterval(pingTimer);
+      pingTimer = null;
+    }
+    callbacks.clear();
+  });
 
   /** 注册健康状态变化回调，返回取消函数 */
   app.decorate('onRedisHealthChange', (cb) => {

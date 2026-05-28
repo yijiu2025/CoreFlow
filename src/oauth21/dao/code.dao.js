@@ -1,12 +1,18 @@
 /**
  * OAuth 授权码数据访问层 (已支持 Redis / MySQL 混合模式)
  *
- * 开启 REDIS_ENABLED=true 后，授权码作为短效临时票据将直接存于 Redis 内存中，
- * 并提供自带的 TTL 过期及原子性“一次性消费” (GETDEL)，消除任何并发竞争与重放安全隐患。
+ * 授权码作为短效临时票据将直接存于 Redis 内存中，
+ * 并提供自带的 TTL 过期及原子性"一次性消费" (GETDEL)，消除任何并发竞争与重放安全隐患。
+ * Redis 不可用时自动降级到 MySQL。
  */
 import { Op } from 'sequelize';
 import sequelize from '../../db/index.js';
 import { globalRedis } from '../../redis/index.js';
+
+/** 获取当前可用的 Redis 客户端（null 表示降级到 MySQL） */
+function getRedis() {
+  return globalRedis;
+}
 
 /** 获取 OauthCode 模型（延迟获取，确保模型已加载） */
 const getModel = () => sequelize.models.OauthCode;
@@ -17,9 +23,9 @@ const CodeDao = {
    */
   async save(code, data) {
     const expiresIn = data.expiresIn || 600;
-    
-    if (globalRedis && process.env.REDIS_ENABLED === 'true') {
-      // ⚡️ Redis 模式
+    const redis = getRedis();
+
+    if (redis) {
       const key = `oauth_code:${code}`;
       const payload = {
         code,
@@ -33,9 +39,8 @@ const CodeDao = {
         consumed: false,
         expires_at: new Date(Date.now() + expiresIn * 1000).toISOString()
       };
-      await globalRedis.set(key, JSON.stringify(payload), { EX: expiresIn });
+      await redis.set(key, JSON.stringify(payload), { EX: expiresIn });
     } else {
-      // 💾 MySQL 降级方案
       const model = getModel();
       await model.create({
         code,
@@ -56,14 +61,14 @@ const CodeDao = {
    * 查找授权码（不消耗）
    */
   async find(code) {
-    if (globalRedis && process.env.REDIS_ENABLED === 'true') {
-      // ⚡️ Redis 模式
+    const redis = getRedis();
+
+    if (redis) {
       const key = `oauth_code:${code}`;
-      const raw = await globalRedis.get(key);
+      const raw = await redis.get(key);
       return raw ? JSON.parse(raw) : null;
     }
 
-    // 💾 MySQL 降级方案
     const model = getModel();
     const entry = await model.findByPk(code);
     return entry ? entry.toJSON() : null;
@@ -73,42 +78,39 @@ const CodeDao = {
    * 消费授权码（一次性使用，带重放检测）
    */
   async consume(code) {
-    if (globalRedis && process.env.REDIS_ENABLED === 'true') {
-      // ⚡️ Redis 极速模式：一次性获取并删除 (GETDEL 原子读取，从物理内存彻底抹除)
-      const key = `oauth_code:${code}`;
-      let raw = null;
+    const redis = getRedis();
 
-      if (typeof globalRedis.getDel === 'function') {
-        raw = await globalRedis.getDel(key);
+    if (redis) {
+      const key = `oauth_code:${code}`;
+      let raw;
+
+      if (typeof redis.getDel === 'function') {
+        raw = await redis.getDel(key);
       } else {
-        raw = await globalRedis.get(key);
-        if (raw) await globalRedis.del(key);
+        raw = await redis.get(key);
+        if (raw) await redis.del(key);
       }
 
-      if (!raw) return null; // 不存在或已过期（已自动物理删除）
-      
+      if (!raw) return null;
+
       const data = JSON.parse(raw);
-      return { ...data, consumed: true }; // 成功读取则证明在此瞬间前未被消费，安全放行
+      return { ...data, consumed: true };
     }
 
-    // 💾 MySQL 降级方案 (采用行锁或并发防重放逻辑)
     const model = getModel();
     const entry = await model.findByPk(code);
     if (!entry) return null;
 
     const data = entry.toJSON();
 
-    // 已被消费 → 重放攻击检测
     if (data.consumed) {
       return { ...data, replay_detected: true };
     }
 
-    // 已过期
     if (new Date() > new Date(data.expires_at)) {
       return null;
     }
 
-    // 标记为已消费
     await entry.update({ consumed: true });
     return { ...data, consumed: true };
   },
@@ -117,11 +119,10 @@ const CodeDao = {
    * 清理过期授权码
    */
   async cleanup() {
-    if (globalRedis && process.env.REDIS_ENABLED === 'true') {
-      return 0; // Redis 会依靠内部 TTL 自动清理，无需定时任务清理，减轻 CPU 负担
+    if (getRedis()) {
+      return 0; // Redis TTL 自动清理
     }
 
-    // 💾 MySQL 降级清理
     const model = getModel();
     return model.destroy({
       where: {

@@ -43,10 +43,14 @@ export async function up({ queryInterface, Sequelize }) {
   await queryInterface.addIndex('user_identities', ['uid'], {
     name: 'idx_identity_uid'
   });
-  await queryInterface.addIndex('user_identities', ['identity_type', 'identifier'], {
-    name: 'idx_identity_type_identifier',
-    unique: true
-  });
+  await queryInterface.addIndex(
+    'user_identities',
+    ['identity_type', 'identifier'],
+    {
+      name: 'idx_identity_type_identifier',
+      unique: true
+    }
+  );
 }
 
 export async function down({ queryInterface }) {

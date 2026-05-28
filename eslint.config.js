@@ -35,7 +35,7 @@ export default [
         }
       ],
       'no-undef': 'error',
-      'no-console': 'off',
+      'no-console': 'warn',
       camelcase: 'off',
       'no-unused-expressions': 'off',
 

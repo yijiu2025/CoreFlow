@@ -71,17 +71,19 @@ export default async (app) => {
     }
   });
 
-  // 4. 自动同步表结构 (增加了生产环境安全防线)
+  // 4. 自动同步表结构（仅限首次开发环境建表，后续变更请使用迁移）
   if (process.env.DB_SYNC === 'true') {
     if (process.env.NODE_ENV === 'production') {
       console.error(
-        '❌ [Loader: Models] 拒绝在生产环境(production)执行自动表同步(DB_SYNC)！这是极度危险的操作，请立刻使用 DB Migrations 方案替换。'
+        '❌ [Loader: Models] 拒绝在生产环境执行 DB_SYNC！请使用 `npm run migrate` 管理表结构变更。'
       );
+      process.exit(1);
     } else {
       try {
-        console.warn('⚠️ [Loader: Models] 检测到 DB_SYNC=true，正在执行 alter 同步 (仅建议在本地开发阶段使用)。');
+        console.warn('⚠️ [Loader: Models] DB_SYNC=true: 正在 sync 建表（仅限首次开发环境）。');
+        console.warn('⚠️ [Loader: Models] 后续表结构变更请创建迁移文件: npx umzug migration:create --name <描述>');
         await sequelize.sync({ alter: true });
-        console.log('🔄 [Loader: Models] 表结构同步成功 (alter: true)');
+        console.log('🔄 [Loader: Models] 表结构同步完成');
       } catch (err) {
         console.error('🚨 [Loader: Models] 表结构同步失败:', err.message);
       }

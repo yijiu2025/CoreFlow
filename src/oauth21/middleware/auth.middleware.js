@@ -11,8 +11,18 @@ import fp from 'fastify-plugin';
 import { als } from '../utils/als.js';
 import { xToken } from '../utils/xToken.js';
 import { verify } from '../crypto/jwt.js';
+import { verifySignature } from '../../api/oauth21/v1/signature.js';
 
 export const initOAuthAuth = fp(async function (app) {
+  // 注册全局接口签名校验拦截器
+  app.addHook('preHandler', async (request, reply) => {
+    // 排除静态文件或 favicon 等非 API 请求
+    if (request.url.startsWith('/assets') || request.url === '/favicon.ico') {
+      return;
+    }
+    await verifySignature(request, reply);
+  });
+
   // 挂载 auth 工具到 app 实例（无状态工具集，挂 app 比挂 request 更合理）
   app.decorate('auth', xToken);
   // onRequest：ALS 初始化 + 身份识别

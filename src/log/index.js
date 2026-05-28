@@ -6,15 +6,18 @@ import { als } from '../oauth21/utils/als.js';
  *
  * 优先从 ALS 上下文中取 request.log (Pino 实例)，保证结构化输出。
  * 如果在请求生命周期外调用（如脚本、启动时），则优雅地降级为 console 输出。
+ * 所有日志自动携带 requestId，便于链路追踪。
  */
-function getPinoLogger() {
+function getLoggerContext() {
   try {
     const ctx = als.getStore();
-    if (ctx?.request?.log) return ctx.request.log;
+    if (ctx?.request?.log) {
+      return { pino: ctx.request.log, requestId: ctx.request.id };
+    }
   } catch {
     // 非请求生命周期，正常降级
   }
-  return null;
+  return { pino: null, requestId: null };
 }
 
 export class Logger {
@@ -26,22 +29,24 @@ export class Logger {
   static async auth(ctx, { event, uid, appId, details = {} }) {
     const { ip, region, city } = ctx?.state?.clientInfo || {};
     const location = region ? `${region}-${city}` : 'Unknown';
+    const requestId = ctx?.request?.id;
 
     const logData = {
       type: 'AUTH',
       event,
       uid: uid || 'Guest',
       appId: appId || 'N/A',
+      requestId,
       ip,
       location,
       details
     };
 
-    const pino = getPinoLogger() ?? ctx?.request?.log;
+    const pino = getLoggerContext().pino ?? ctx?.request?.log;
     if (pino) {
       pino.info(logData, `[AuthLog] ${event}`);
     } else {
-      console.log(`🛡️  [AuthLog] ${event} | UID: ${uid || 'Guest'} | App: ${appId || 'N/A'}`);
+      console.log(JSON.stringify({ level: 'info', msg: `[AuthLog] ${event}`, ...logData }));
     }
   }
 
@@ -49,20 +54,29 @@ export class Logger {
    * 普通业务日志
    */
   static info(message, data = {}) {
-    const pino = getPinoLogger();
+    const { pino, requestId } = getLoggerContext();
     if (pino) {
-      pino.info({ ...data }, message);
+      pino.info({ ...data, requestId }, message);
     } else {
-      console.log(`💡 [INFO] ${message}`, Object.keys(data).length ? data : '');
+      console.log(JSON.stringify({ level: 'info', msg: message, requestId, ...data }));
     }
   }
 
   static error(message, err) {
-    const pino = getPinoLogger();
+    const { pino, requestId } = getLoggerContext();
     if (pino) {
-      pino.error({ err }, message);
+      pino.error({ err, requestId }, message);
     } else {
-      console.error(`🚨 [ERROR] ${message}`, err);
+      console.error(JSON.stringify({ level: 'error', msg: message, requestId, error: err?.message }));
+    }
+  }
+
+  static warn(message, data = {}) {
+    const { pino, requestId } = getLoggerContext();
+    if (pino) {
+      pino.warn({ ...data, requestId }, message);
+    } else {
+      console.warn(JSON.stringify({ level: 'warn', msg: message, requestId, ...data }));
     }
   }
 }

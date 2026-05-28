@@ -22,18 +22,25 @@ import captchaService from '../../../verify/captcha.js';
 import { getSessionStore } from '../../../redis/session-store.js';
 import config from '../../../oauth21/config/config.js';
 import verifyDao from '../../../verify/dao/verify.js';
+import { issueH5Token } from './signature.js';
+
+import { createNonceStore } from '../../../redis/nonce-store.js';
 
 const authService = new AuthorizationService();
 const tokenService = new TokenService();
 
-/** 已使用的 nonce 缓存（防重放，60 秒过期） */
-const usedNonces = new Map();
-setInterval(() => {
-  const cutoff = Date.now() - 60_000;
-  for (const [nonce, ts] of usedNonces) {
-    if (ts < cutoff) usedNonces.delete(nonce);
+// nonce 去重存储（延迟初始化，首次请求时绑定 redis 实例）
+let nonceStore = null;
+
+/**
+ * 获取 nonce 存储（首次调用时从 request.server.redis 初始化）
+ */
+function ensureNonceStore(request) {
+  if (!nonceStore) {
+    nonceStore = createNonceStore(request.server?.redis || null);
   }
-}, 60_000);
+  return nonceStore;
+}
 
 /** 辅助：发放授权码并重定向 */
 async function issueCodeAndRedirect(reply, sessionId, userId, sessionStore) {
@@ -296,6 +303,23 @@ export default async function (fastify) {
         path: '/oauth2.1/token',
         sameSite: 'strict'
       });
+      
+      // 下发非 HttpOnly 的辅助 Cookie
+      reply.setCookie('tracknick', encodeURIComponent(user.name || user.username), {
+        path: '/',
+        httpOnly: false,
+        sameSite: 'lax',
+        maxAge: config.jwt.accessTokenTTL * 1000
+      });
+      reply.setCookie('user_avatar', encodeURIComponent(user.avatar || ''), {
+        path: '/',
+        httpOnly: false,
+        sameSite: 'lax',
+        maxAge: config.jwt.accessTokenTTL * 1000
+      });
+
+      // 下发/刷新 H5 签名 Token
+      await issueH5Token(fastify, reply);
     }
 
     return result;
@@ -333,10 +357,11 @@ export default async function (fastify) {
       if (!validateTimestamp(timestamp)) {
         return reply.code(400).send({ error: 'invalid_request', error_description: '请求时间戳异常' });
       }
-      if (!nonce || usedNonces.has(nonce)) {
+      const store = ensureNonceStore(request);
+      if (!nonce || (await store.check(nonce))) {
         return reply.code(400).send({ error: 'invalid_request', error_description: '重放攻击检测：nonce 无效' });
       }
-      usedNonces.set(nonce, Date.now());
+      await store.mark(nonce);
 
       try {
         const decrypted = decrypt(encrypted);

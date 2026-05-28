@@ -21,8 +21,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  (e: 'update:showQR', value: boolean): void
-  (e: 'qr-click'): void
+  'update:showQR': [value: boolean]
+  'qr-click': []
 }>()
 
 const themeStore = useThemeStore()

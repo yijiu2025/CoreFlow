@@ -8,12 +8,12 @@ export default async (app) => {
   if (!NoticeConfig) return;
 
   const defaults = [
-    { key: 'smtp_server', value: 'smtp.163.com', description: 'SMTP服务器地址', category: 'email' },
-    { key: 'smtp_port', value: '465', description: 'SMTP端口 (SSL: 465, TLS: 587)', category: 'email' },
-    { key: 'smtp_user', value: '15393412436@163.com', description: 'SMTP用户名', category: 'email' },
-    { key: 'smtp_password', value: 'GWvNbFYmfgTFMYEs', description: 'SMTP授权码/密码', category: 'email' },
-    { key: 'smtp_from', value: '"Antigravity System" <15393412436@163.com>', description: '发件人显示名称', category: 'email' },
-    { key: 'smtp_use_ssl', value: 'true', description: '是否使用 SSL (端口465必选)', category: 'email' }
+    { key: 'smtp_server', value: process.env.SMTP_SERVER || 'smtp.163.com', description: 'SMTP服务器地址', category: 'email' },
+    { key: 'smtp_port', value: process.env.SMTP_PORT || '465', description: 'SMTP端口 (SSL: 465, TLS: 587)', category: 'email' },
+    { key: 'smtp_user', value: process.env.SMTP_USER || '', description: 'SMTP用户名', category: 'email' },
+    { key: 'smtp_password', value: process.env.SMTP_PASSWORD || '', description: 'SMTP授权码/密码', category: 'email' },
+    { key: 'smtp_from', value: process.env.SMTP_FROM || '', description: '发件人显示名称', category: 'email' },
+    { key: 'smtp_use_ssl', value: process.env.SMTP_USE_SSL || 'true', description: '是否使用 SSL (端口465必选)', category: 'email' }
   ];
 
   for (const item of defaults) {

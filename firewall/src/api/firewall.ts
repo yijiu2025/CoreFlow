@@ -135,7 +135,7 @@ export const firewallApi = {
 
   // 获取 SSO 用户信息
   getUserInfo: (): Promise<any> =>
-    apiClient.get('/oauth2.1/userinfo')
+    apiClient.get('/user/v1/userinfo')
 }
 
 export default apiClient

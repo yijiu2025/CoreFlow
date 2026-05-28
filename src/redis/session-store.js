@@ -10,66 +10,95 @@ const localSessions = new Map();
 /**
  * 定期清理内存中的过期 Key，防止内存泄漏 (10分钟执行一次)
  */
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of localSessions.entries()) {
-    if (v.expiredAt && v.expiredAt < now) {
-      localSessions.delete(k);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [k, v] of localSessions.entries()) {
+      if (v.expiredAt && v.expiredAt < now) {
+        localSessions.delete(k);
+      }
     }
-  }
-}, 10 * 60 * 1000).unref();
+  },
+  10 * 60 * 1000
+).unref();
 
 /**
- * ─── 统一会话管理适配器 ───
- * @param {object} fastify - fastify 实例，用于访问 fastify.redis
- * @param {string} prefix - Redis Key 前缀 (默认为 session)
+ * 统一会话管理适配器
+ * @param {import('fastify').FastifyInstance} fastify fastify 实例，用于访问 fastify.redis
+ * @param {string} prefix Redis Key 前缀 (默认为 session)
  * @returns {object} 包含 get, set, delete 方法的 store 对象
  */
 export const getSessionStore = (fastify, prefix = 'session') => ({
   /**
    * 获取会话
-   * @param {string} key 
+   * @param {string} key
    * @returns {Promise<any>}
    */
   async get(key) {
+    const fullKey = `${prefix}:${key}`;
+
     if (fastify.redis) {
-      const raw = await fastify.redis.get(`${prefix}:${key}`);
-      return raw ? JSON.parse(raw) : null;
+      try {
+        const raw = await fastify.redis.get(fullKey);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        // Redis 故障时降级到内存
+        const data = localSessions.get(fullKey);
+        if (data && data.expiredAt && data.expiredAt < Date.now()) {
+          localSessions.delete(fullKey);
+          return null;
+        }
+        return data ? data.value : null;
+      }
     }
-    const data = localSessions.get(`${prefix}:${key}`);
-    // 如果存在过期时间且已过期，则返回 null
+
+    const data = localSessions.get(fullKey);
     if (data && data.expiredAt && data.expiredAt < Date.now()) {
-      localSessions.delete(`${prefix}:${key}`);
+      localSessions.delete(fullKey);
       return null;
     }
-    return data;
+    return data ? data.value : null;
   },
 
   /**
    * 设置会话
-   * @param {string} key 
-   * @param {any} value 
+   * @param {string} key
+   * @param {any} value
    * @param {number} ttl - 过期时间（秒），默认 600 秒 (10分钟)
    * @returns {Promise<void>}
    */
   async set(key, value, ttl = 600) {
+    const fullKey = `${prefix}:${key}`;
+
     if (fastify.redis) {
-      await fastify.redis.set(`${prefix}:${key}`, JSON.stringify(value), { EX: ttl });
-    } else {
-      localSessions.set(`${prefix}:${key}`, { ...value, expiredAt: Date.now() + ttl * 1000 });
+      try {
+        await fastify.redis.set(fullKey, JSON.stringify(value), { EX: ttl });
+        return;
+      } catch {
+        // Redis 故障时降级到内存
+      }
     }
+
+    localSessions.set(fullKey, { value, expiredAt: Date.now() + ttl * 1000 });
   },
 
   /**
    * 删除会话
-   * @param {string} key 
+   * @param {string} key
    * @returns {Promise<void>}
    */
   async delete(key) {
+    const fullKey = `${prefix}:${key}`;
+
     if (fastify.redis) {
-      await fastify.redis.del(`${prefix}:${key}`);
-    } else {
-      localSessions.delete(`${prefix}:${key}`);
+      try {
+        await fastify.redis.del(fullKey);
+        return;
+      } catch {
+        // Redis 故障时降级到内存
+      }
     }
+
+    localSessions.delete(fullKey);
   }
 });

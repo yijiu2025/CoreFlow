@@ -15,7 +15,8 @@ export default fp(async (app) => {
             code: 200,
             message,
             data,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            requestId: reply.request?.id
           });
         },
 
@@ -25,7 +26,8 @@ export default fp(async (app) => {
             code,
             message,
             data,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            requestId: reply.request?.id
           });
         },
 
@@ -35,7 +37,8 @@ export default fp(async (app) => {
             code: 401,
             message,
             data: null,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            requestId: reply.request?.id
           });
         },
 
@@ -45,12 +48,11 @@ export default fp(async (app) => {
             code: 403,
             message,
             data: null,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            requestId: reply.request?.id
           });
         }
       };
     }
   });
-
-  console.log('✅ 全局 reply.result() 快速响应引擎注册完成');
 });

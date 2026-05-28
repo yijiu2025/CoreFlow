@@ -18,7 +18,7 @@ const { locale } = useI18n()
 const appConfig = computed(() => ({
   appName: (route.query.appName as string) || 'Enterprise SSO',
   lang: (route.query.lang as string) || 'zh_cn',
-  styleType: (route.query.styleType as string) || 'horizontal', // 默认为 horizontal
+  styleType: ((route.query.styleType as string) || 'horizontal') as 'horizontal' | 'split' | 'vertical',
   qrCodeFirst: route.query.qrCodeFirst === 'true',
   isMobile: route.query.isMobile === 'true',
   notKeepLogin: route.query.notKeepLogin === 'true'
@@ -218,7 +218,7 @@ onMounted(() => {
     <AuthContainer
       v-model:showQR="showQR"
       :appName="appConfig.appName"
-      :styleType="appConfig.styleType as any"
+      :styleType="appConfig.styleType"
       :isMobile="appConfig.isMobile"
       :showQrSwitcher="!showConsent"
     >

@@ -109,7 +109,7 @@ export const authApi = {
    * 获取用户信息
    */
   async getUserInfo() {
-    return request.get('/oauth2.1/userinfo')
+    return request.get('/user/v1/userinfo')
   },
 
   /**

@@ -226,10 +226,16 @@ export function registerSecureRoute(fastify, options) {
     requireLogin
   });
 
-  // 4. 注入级联 Guard 并注册 Fastify 路由
+  // 4. 需要登录的路由自动标记需要签名验证
+  const routeConfig = { ...config };
+  if (requireLogin) {
+    routeConfig.requireSignature = true;
+  }
+
+  // 5. 注入级联 Guard 并注册 Fastify 路由
   fastify[method.toLowerCase()](fullUrl, {
     schema,
-    config,
+    config: routeConfig,
     preHandler: createGuard(targetSystem, targetGroup, apiKey),
     handler
   });
