@@ -8,9 +8,10 @@
  * @param {import('redis').RedisClientType} redis Redis 客户端（可为 null）
  * @param {Function} fn 执行函数，接收 redis 客户端作为参数
  * @param {any} fallback 出错或 Redis 不可用时的回退值
+ * @param {object} [logger] 日志实例（Pino 或 console），默认 console
  * @returns {Promise<any>} 执行结果
  */
-export async function safeRedis(redis, fn, fallback = null) {
+export async function safeRedis(redis, fn, fallback = null, logger = console) {
   if (!redis) return fallback;
   try {
     return await fn(redis);
@@ -22,9 +23,9 @@ export async function safeRedis(redis, fn, fallback = null) {
       err.name === 'AbortError' ||
       err.name === 'ClientClosedError'
     ) {
-      console.warn('[Redis] 网络操作失败，降级:', err.message);
+      logger.warn?.({ err: { code: err.code, message: err.message } }, '[Redis] 网络操作失败，降级');
     } else {
-      console.error('[Redis] 操作异常:', err.message);
+      logger.error?.({ err: { name: err.name, message: err.message } }, '[Redis] 操作异常');
     }
     return fallback;
   }

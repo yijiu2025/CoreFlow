@@ -73,16 +73,19 @@ unsubscribe();
 
 ### 1. safeRedis — 安全操作包装
 
-防止 Redis 异常扩散到业务层，自动降级返回 fallback 值。
+防止 Redis 异常扩散到业务层，自动降级返回 fallback 值。支持传入 Pino logger 实现结构化日志。
 
 ```js
 import { safeRedis } from './redis/safe-redis.js';
 
-// Redis 不可用时返回 null（第二个参数）
+// 基础用法：Redis 不可用时返回 null
 const value = await safeRedis(app.redis, (r) => r.get('key'), null);
 
-// 区分网络错误（warn）和程序错误（error）
+// 带结构化日志：传入 Pino logger（自动区分 warn/error 级别）
+const value = await safeRedis(app.redis, (r) => r.get('key'), null, app.log);
 ```
+
+**错误分级：** 网络错误（`ECONNREFUSED`/`AbortError`/`ClientClosedError`）记为 warn，程序错误记为 error。
 
 ### 2. getSessionStore — 统一会话管理
 
@@ -135,6 +138,8 @@ else
 end
 ```
 
+**内存清理：** 分批扫描（每次最多 1000 条），避免数据量大时全量扫描的性能问题。
+
 ### 4. ResilientStore — 限流存储
 
 为 `@fastify/rate-limit` 提供的弹性存储后端。Redis 故障时自动切换到内存计数。
@@ -152,9 +157,10 @@ await app.register(rateLimit, {
 
 **特性：**
 
-- `MULTI/EXEC` 保证 INCR + PEXPIRE 原子性
+- `MULTI/EXEC` 保证 INCR + PEXPIRE 原子性，兼容 node-redis v4/v5 返回值格式
 - 内存模式：30 秒定时清理过期记录
 - `child()` 返回隔离实例，避免跨路由计数干扰
+- 日志桥接 Pino（`app.log`），健康状态变化自动输出结构化日志
 
 ## 健康监控机制
 
@@ -186,5 +192,6 @@ Redis 正常 → 零开销（仅事件监听）
 1. **推荐使用 `app.redis`** 而非导入 `globalRedis`，后者仅用于向后兼容
 2. **防重放场景**务必使用 `nonceStore.checkAndMark()` 而非分离的 `check()` + `mark()`
 3. **限流场景**使用 `createBoundStore()` 而非直接实例化 `ResilientStore`
-4. 所有内存降级的定时器均已 `.unref()`，不阻塞进程退出
-5. `onClose` hook 会自动清理连接和定时器，无需手动处理
+4. **结构化日志**：`safeRedis()` 第四个参数可传入 `app.log`（Pino）实现 JSON 结构化输出
+5. 所有内存降级的定时器均已 `.unref()`，不阻塞进程退出
+6. `onClose` hook 会自动清理连接和定时器，无需手动处理

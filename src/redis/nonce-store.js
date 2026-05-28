@@ -8,6 +8,9 @@
 const PREFIX = 'nonce:';
 const DEFAULT_TTL = 60; // 秒
 
+/** 内存清理每次最大扫描条目数 */
+const CLEANUP_BATCH_SIZE = 1000;
+
 /**
  * Lua 脚本：原子性 check + mark
  * 如果 nonce 不存在则写入并返回 0（首次使用）
@@ -29,12 +32,16 @@ end
  * @returns {{ check: (nonce: string) => Promise<boolean>, mark: (nonce: string) => Promise<void>, checkAndMark: (nonce: string) => Promise<boolean> }}
  */
 export function createNonceStore(redisClient, ttlSeconds = DEFAULT_TTL) {
-  // 内存降级：Map + 定时清理
+  // 内存降级：Map + 分批定时清理
   const memoryNonces = new Map();
   const cleanupInterval = setInterval(() => {
     const cutoff = Date.now() - ttlSeconds * 1000;
+    let cleaned = 0;
     for (const [nonce, ts] of memoryNonces) {
-      if (ts < cutoff) memoryNonces.delete(nonce);
+      if (ts < cutoff) {
+        memoryNonces.delete(nonce);
+        if (++cleaned >= CLEANUP_BATCH_SIZE) break;
+      }
     }
   }, ttlSeconds * 1000);
   cleanupInterval.unref();

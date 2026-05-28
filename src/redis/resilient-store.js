@@ -23,6 +23,7 @@ export class ResilientStore {
     this.getWindowMs = options.getWindowMs || (() => 60000);
     this.memoryFallback = new Map();
     this.healthy = !!app.redisHealthy;
+    this.log = app.log || console;
 
     // 定时清理过期内存记录
     this._cleanupTimer = setInterval(() => {
@@ -37,6 +38,11 @@ export class ResilientStore {
     if (app.onRedisHealthChange) {
       app.onRedisHealthChange((state) => {
         this.healthy = state;
+        if (state) {
+          this.log.info?.('[Redis] 限流器切回分布式模式');
+        } else {
+          this.log.warn?.('[Redis] 限流器降级至内存模式');
+        }
       });
     }
 
@@ -59,14 +65,15 @@ export class ResilientStore {
 
     if (this.healthy && this.app.redis) {
       try {
-        const [countResult] = await this.app.redis.multi().incr(key).pexpire(key, windowMs).exec();
+        const results = await this.app.redis.multi().incr(key).pexpire(key, windowMs).exec();
 
-        const count = countResult;
+        // 兼容 node-redis v4（直接值）和 v5（{ value } 包装）
+        const count = typeof results[0] === 'object' ? results[0].value : results[0];
         const ttl = await this.app.redis.pttl(key);
         return cb(null, { current: count, ttl: ttl > 0 ? ttl : windowMs });
       } catch (err) {
         this.healthy = false;
-        console.warn('[Redis] 限流写入失败，降级到内存:', err.message);
+        this.log.warn?.({ err: { message: err.message } }, '[Redis] 限流写入失败，降级到内存');
       }
     }
 

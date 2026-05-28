@@ -1,48 +1,51 @@
 import { DataTypes } from 'sequelize';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { sequelize } from '../../db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default async (app) => {
-  // 1. 获取 Fastify 实例上的 db 对象
   const db = app.db;
-
-  // 2. 扫描 src/models 文件夹加载模型
   const modelsPath = path.resolve(__dirname, '../../models');
+  const loadedModels = []; // 收集所有加载的模型，避免二次遍历
 
+  /**
+   * 递归扫描模型目录，按子目录自动创建命名空间
+   * 每个 .js 文件导出工厂函数 (sequelize, DataTypes) => Model
+   */
   async function scanModels(dir, namespace = '') {
     if (!fs.existsSync(dir)) return;
 
-    const files = fs.readdirSync(dir, { withFileTypes: true });
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
 
-    for (const file of files) {
-      const fullPath = path.join(dir, file.name);
-      if (file.isDirectory()) {
-        const ns = namespace ? `${namespace}.${file.name}` : file.name;
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        const ns = namespace ? `${namespace}.${entry.name}` : entry.name;
         if (!db[ns]) db[ns] = {};
         await scanModels(fullPath, ns);
-      } else if (file.name.endsWith('.js')) {
+      } else if (entry.name.endsWith('.js')) {
         try {
-          const { default: modelDefine } = await import(`file://${fullPath}`);
+          const fileUrl = pathToFileURL(fullPath).href;
+          const { default: modelDefine } = await import(fileUrl);
           const result = modelDefine(sequelize, DataTypes);
 
-          // 支持单个模型或模型对象/数组
           const models = result.name || typeof result !== 'object' ? [result] : Object.values(result);
 
           for (const model of models) {
             if (!model || !model.name) continue;
-            // 挂载逻辑
             if (namespace) {
               db[namespace][model.name] = model;
             } else {
               db[model.name] = model;
             }
+            loadedModels.push(model);
           }
         } catch (error) {
-          console.error(`❌ [Loader: Models] 模型 [${file.name}] 加载失败:`, error.message);
+          console.error(`[Loader: Models] 模型 [${entry.name}] 加载失败:`, error.message);
         }
       }
     }
@@ -50,45 +53,29 @@ export default async (app) => {
 
   await scanModels(modelsPath);
 
-  // 3. 执行模型关联 (associate)
-  const flattenModels = (obj) => {
-    let models = [];
-    for (const key in obj) {
-      // 检查是否为 Sequelize 模型或具有 associate 方法
-      if (obj[key]?.associate || (obj[key]?.prototype && obj[key].prototype.constructor.name === 'Model')) {
-        models.push(obj[key]);
-      } else if (typeof obj[key] === 'object' && key !== 'sequelize' && key !== 'Sequelize') {
-        models = models.concat(flattenModels(obj[key]));
-      }
-    }
-    return models;
-  };
-
-  const allModels = flattenModels(db);
-  allModels.forEach((model) => {
+  // 执行模型关联 (associate)
+  loadedModels.forEach((model) => {
     if (model.associate) {
       model.associate(sequelize.models);
     }
   });
 
-  // 4. 自动同步表结构（仅限首次开发环境建表，后续变更请使用迁移）
+  // 自动同步表结构（仅限首次开发环境建表，后续变更请使用迁移）
   if (process.env.DB_SYNC === 'true') {
     if (process.env.NODE_ENV === 'production') {
-      console.error(
-        '❌ [Loader: Models] 拒绝在生产环境执行 DB_SYNC！请使用 `npm run migrate` 管理表结构变更。'
-      );
+      console.error('[Loader: Models] 拒绝在生产环境执行 DB_SYNC！请使用 npm run migrate 管理表结构变更。');
       process.exit(1);
     } else {
       try {
-        console.warn('⚠️ [Loader: Models] DB_SYNC=true: 正在 sync 建表（仅限首次开发环境）。');
-        console.warn('⚠️ [Loader: Models] 后续表结构变更请创建迁移文件: npx umzug migration:create --name <描述>');
+        console.warn('[Loader: Models] DB_SYNC=true: 正在 sync 建表（仅限首次开发环境）。');
+        console.warn('[Loader: Models] 后续表结构变更请创建迁移文件: npx umzug migration:create --name <描述>');
         await sequelize.sync({ alter: true });
-        console.log('🔄 [Loader: Models] 表结构同步完成');
+        console.log('[Loader: Models] 表结构同步完成');
       } catch (err) {
-        console.error('🚨 [Loader: Models] 表结构同步失败:', err.message);
+        console.error('[Loader: Models] 表结构同步失败:', err.message);
       }
     }
   }
 
-  console.log('📦 [Loader: Models] 所有模型加载完毕');
+  console.log('[Loader: Models] 所有模型加载完毕');
 };
