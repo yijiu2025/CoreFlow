@@ -1,5 +1,7 @@
 import { sequelize } from '../../db/index.js';
 
+const C = { reset: '\x1b[0m', cyan: '\x1b[36m' };
+
 /**
  * 自动配置/同步 OAuth 2.1 客户端 (如 firewall)
  */
@@ -29,7 +31,7 @@ export default async (app) => {
     const exist = await OauthClient.findByPk(item.client_id);
     if (!exist) {
       await OauthClient.create(item);
-      console.log(`🌱 [Seed:OAuth] 初始化客户端: ${item.client_id}`);
+      console.log(`🌱 [Seed] ${C.cyan}OAuth 初始化客户端: ${item.client_id}${C.reset}`);
     } else {
       await exist.update({
         client_name: item.client_name,
@@ -40,7 +42,7 @@ export default async (app) => {
         token_endpoint_auth_method: item.token_endpoint_auth_method,
         application_type: item.application_type
       });
-      console.log(`🌱 [Seed:OAuth] 同步更新客户端: ${item.client_id}`);
+      console.log(`🌱 [Seed] ${C.cyan}OAuth 同步更新客户端: ${item.client_id}${C.reset}`);
     }
   }
 };

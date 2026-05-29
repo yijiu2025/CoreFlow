@@ -1,5 +1,7 @@
 import { sequelize } from '../../db/index.js';
 
+const C = { reset: '\x1b[0m', cyan: '\x1b[36m' };
+
 /**
  * 初始化系统基础设置 (Seed Data)
  */
@@ -20,7 +22,7 @@ export default async (app) => {
     const exist = await NoticeConfig.findByPk(item.key);
     if (!exist) {
       await NoticeConfig.create(item);
-      console.log(`🌱 [Seed:Settings] 初始化设置: ${item.key}`);
+      console.log(`🌱 [Seed] ${C.cyan}初始化设置: ${item.key}${C.reset}`);
     } else {
       // 如果已存在但需要强制更新为用户提供的新配置，可以在此处 update
       await exist.update({ value: item.value });

@@ -7,7 +7,7 @@ class PermissionDao {
    * @param {Array} permissionList 权限定义列表
    */
   async syncAppPermissions(appId, permissionList) {
-    console.log(`📡 正在同步应用 [${appId}] 的权限, 共 ${permissionList.length} 项`);
+    console.log(`[PBAC] 正在同步应用 [${appId}] 的权限, 共 ${permissionList.length} 项`);
     
     for (const item of permissionList) {
       const { module, action, name } = item;

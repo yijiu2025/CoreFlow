@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // src/db/migrate.js
 // 数据库迁移脚本运行器 (基于 Umzug + Sequelize)
 // 运行方式：

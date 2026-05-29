@@ -65,7 +65,7 @@ import '../../../user/permission/roles.js'; // 导入即触发自动注册
 在后端的任意 Controller、Service 或 Middleware 中，你都可以**无需传递 req 对象**，直接静态调用：
 
 ```javascript
-import StpUtil from '../../utils/StpUtil.js';
+import StpUtil from '../../auth/StpUtil.js';
 
 // 获取：当前账号所拥有的权限集合 (包含 allows 和 denies)
 const permissions = StpUtil.getPermissionList();

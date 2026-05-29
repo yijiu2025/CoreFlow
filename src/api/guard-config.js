@@ -6,6 +6,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const GUARD_FILE = path.resolve(__dirname, '../../data/guard_config.json');
 
+const C = { reset: '\x1b[0m', green: '\x1b[32m', red: '\x1b[31m', dim: '\x1b[2m' };
+
 /**
  * 核心配置存储 - 仅存放与 API 加载、权限策略相关的配置
  */
@@ -25,10 +27,10 @@ try {
     } else {
       persistedConfigs = raw;
     }
-    console.log('💾 [Guard Config] 已加载持久化策略数据 (待与代码同步)');
+    console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据 (待与代码同步)${C.reset}`);
   }
 } catch (err) {
-  console.error('🚨 [Guard Config] 加载持久化文件失败:', err.message);
+  console.error(`❌ [Guard Config] ${C.red}加载持久化文件失败: ${err.message}${C.reset}`);
 }
 
 /**
@@ -44,7 +46,7 @@ function triggerSave() {
       };
       fs.writeFileSync(GUARD_FILE, JSON.stringify(dataToSave, null, 2), 'utf-8');
     } catch (err) {
-      console.error('🚨 [Guard Config] 写入文件失败:', err.message);
+      console.error(`❌ [Guard Config] ${C.red}写入文件失败: ${err.message}${C.reset}`);
     }
   }, 1000);
 }
@@ -186,8 +188,8 @@ export function saveGuardConfig() {
   try {
     const dataToSave = { configs: configs };
     fs.writeFileSync(GUARD_FILE, JSON.stringify(dataToSave, null, 2), 'utf-8');
-    console.log('✨ [Guard Config] 配置文件已完成代码同步与剪枝');
+    console.log(`✅ [Guard Config] ${C.green}配置文件已完成代码同步与剪枝${C.reset}`);
   } catch (err) {
-    console.error('🚨 [Guard Config] 最终同步保存失败:', err.message);
+    console.error(`❌ [Guard Config] ${C.red}最终同步保存失败: ${err.message}${C.reset}`);
   }
 }

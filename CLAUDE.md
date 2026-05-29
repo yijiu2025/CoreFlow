@@ -1,170 +1,327 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件为 Claude Code 提供项目指引，确保代码修改符合项目规范。
 
-## Commands
+## 常用命令
 
 ```bash
-npm run dev          # Start dev server with nodemon (loads .env)
-npm start            # Production start (loads .env.production)
-npm run migrate      # Run Umzug DB migrations
-npm run lint         # ESLint flat config with auto-fix
-npm run format       # Prettier format all files
-npm test             # Jest in ESM mode (--experimental-vm-modules)
-node src/test-db.js  # Test DB connection standalone
+npm run dev          # 启动开发服务器 (nodemon + .env)
+npm start            # 生产启动 (.env.production)
+npm run migrate      # 执行 Umzug 数据库迁移
+npm run lint         # ESLint 自动修复
+npm run format       # Prettier 格式化
+npm test             # Jest 测试 (ESM 模式)
 ```
 
-Run a single test: `node --experimental-vm-modules npx jest --testPathPattern <pattern>`
+单个测试：`node --experimental-vm-modules npx jest --testPathPattern <pattern>`
 
-## Tech Stack
+## 技术栈
 
-- **Runtime**: Node.js ESM (`"type": "module"`)
-- **Framework**: Fastify v5 (migrated from Koa — legacy Koa code in `src/validator/` and `src/auth/sso.js` is unused)
+- **运行时**: Node.js ESM (`"type": "module"`)
+- **框架**: Fastify v5
 - **ORM**: Sequelize v6 + MySQL2
-- **Cache**: Redis v5 (node-redis)
-- **Auth**: JWT (jsonwebtoken) + AsyncLocalStorage context
-- **Migration**: Umzug v3 (files in `migrations/`)
-- **Frontend**: Vue/Vite firewall dashboard lives in `firewall/`, builds to `public/firewall/`
+- **缓存**: Redis v5 (node-redis)，连接失败自动降级到内存
+- **认证**: Session-based（Cookie sid + Redis）+ OAuth 2.1 JWT（对外 API）
+- **迁移**: Umzug v3（`migrations/` 目录）
+- **前端**: Vue 3 + Vite + TypeScript（`oauth21/`、`firewall/`、`admin/`）
 
-## Boot Sequence
+## 启动流程
 
-`index.js` → `createApp()` in `src/app.js` → `initLoader(app)` → `runEngine()` in `src/loader/engine.js`
+```
+index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/loader/engine.js)
+```
 
-The engine scans `src/loader/registry/` alphabetically. Numeric prefixes control load order:
+引擎扫描 `src/loader/registry/` 目录，按文件名数字前缀顺序加载：
 
-1. `00-globals.js` — decorates `reply` with `.result.success()`, `.result.fail()`, `.result.unauth()`, `.result.forbidden()`
-2. `02-redis.js` — Redis connection, health monitor (injects `null` if unavailable)
-3. `03-db.js` — Sequelize connection, `app.db` decorated with instance + transaction helper
-4. `04-auth.js` — ALS initialization + JWT verification in single onRequest hook
-5. `05-firewall.js` — rate limiting, bot detection, geo-fencing, connection tracking
-6. `06-models.js` — auto-loads `src/models/` into `app.db[namespace][ModelName]`; runs `sequelize.sync({ alter: true })` when `DB_SYNC=true` (blocked in production)
-7. `07-api.js` — auto-loads API routes from `src/api/` (reads `system.json` for system name/prefix per subfolder)
+| 顺序 | 文件 | 职责 |
+|------|------|------|
+| 00 | `00-globals.js` | 装饰 `reply.result`（success/fail/unauth/forbidden） |
+| 02 | `02-redis.js` | Redis 连接 + 健康监控，失败注入 `null` |
+| 03 | `03-db.js` | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出 |
+| 04 | `04-auth.js` | Session 验证 + ALS 初始化（`src/auth/`） |
+| 05 | `05-firewall.js` | 五层拦截管道（限频/封禁/挑战/Bot/地理围栏） |
+| 06 | `06-models.js` | 自动加载 `src/models/`，按命名空间注册到 `app.db` |
+| 07 | `07-api.js` | 自动加载 `src/api/` 路由（读 `system.json`） |
+| 08 | `08-notice.js` | SMTP 配置种子数据 |
+| 09 | `09-pbac.js` | PBAC 角色同步到数据库 |
+| 10 | `10-seed-clients.js` | OAuth 客户端种子数据 |
 
-Each loader module exports a default function receiving the Fastify `app` instance. Errors in individual loaders are caught and logged without stopping the process.
+每个 loader 导出默认函数接收 `app` 实例，错误被捕获并记录，不阻塞其他模块。
 
-### Hook Execution Order
+## 请求处理链路
 
 ```
 onRequest[0]  →  @fastify/cookie     解析 cookies
-onRequest[1]  →  auth                ALS 初始化 + JWT 验证 → request.state.user 就绪
-onRequest[2]  →  @fastify/rateLimit  keyGenerator 可读 req.state.user.id
-onRequest[3]  →  firewall            五层拦截管道（连接→封禁→挑战→Bot→地理围栏）
-preHandler    →  guard               权限守卫（3 级级联）
+onRequest[1]  →  auth                Session 验证（sid cookie → Redis → request.state.user）
+                                      sid 过期时自动用 sid_r 刷新
+onRequest[2]  →  @fastify/rateLimit  全局限频（所有请求）
+onRequest[3]  →  firewall            五层拦截管道（所有请求都过）
+                                      已登录: 基础速率限制 + bot 检测
+                                      未登录: 全量拦截
+preHandler    →  guard               三级权限守卫（检查 request.state.user）
+preHandler    →  verifySignature     H5 签名验证（仅 OAuth21 路由）
 handler       →  业务路由
 onSend        →  日志 + 连接释放
 onResponse    →  扫描陷阱（404/403 检测）
 ```
 
-## API Route Convention
+## 认证系统 (`src/auth/`)
 
-Each API domain lives in `src/api/<domain>/` with:
-- `system.json` — defines `name`, `prefix`, and security defaults
-- `v1/<route>.js` — exports a Fastify plugin; uses `registerSecureRoute()` from `src/api/guard.js`
+```
+src/auth/
+├── index.js              # 独立 auth 插件：Session 验证 + ALS + app.auth 装饰
+├── cookie.js             # Cookie HMAC-SHA256 签名/验证
+├── session.js            # Session 管理：创建/验证/销毁/续期/刷新/踢下线
+├── permission-loader.js  # 按 appId 加载用户角色和权限 (PBAC)
+└── StpUtil.js            # 权限工具类（对标 Java Sa-Token）
+```
 
-Route files use `registerSecureRoute(app, systemKey, groupKey, { method, url, handler, schema?, ... })` which auto-constructs the full URL and attaches the 3-level cascade guard as a `preHandler`.
+### Session 双令牌机制
 
-## 3-Level Guard System
+**短期登录（不勾选"记住我"）：**
+- `sid` cookie: HMAC 签名的 sessionId，HttpOnly，Max-Age=2h
+- Redis: `session:<sessionId>` = JSON（用户信息+角色+权限），TTL=2h
 
-`src/api/guard.js` implements cascading access control:
-1. **System level** — from `system.json` (enable/disable, IP whitelist, login requirement)
-2. **Group level** — from `registerGroupMetadata()` calls in route files
-3. **API level** — from `registerSecureRoute()` config
+**长期登录（勾选"记住我"）：**
+- `sid` cookie: Max-Age=30min
+- `sid_r` cookie: refreshToken，Max-Age=30天
+- sid 过期时自动用 sid_r 刷新，用户无感知
 
-Each level can independently block based on: `enabled`, `allowIps` (wildcard + CIDR), `allowRoles`, `requireLogin`.
+**踢用户下线：** Redis 删除 session + DB 标记 revoked → 立即生效
 
-Guard config is persisted to `data/guard_config.json` after boot.
+### Session 数据结构（Redis）
 
-## Model Namespace Convention
+```json
+{
+  "userId": 123,
+  "uid": "uuid-xxx",
+  "username": "alice",
+  "email": "alice@example.com",
+  "appId": "firewall",
+  "roles": ["admin", "operator"],
+  "permissions": { "allows": ["user:read", "config:*"], "denies": ["user:delete"] },
+  "ip": "192.168.1.1",
+  "deviceId": "device-xxx",
+  "loginAt": 1717000000,
+  "rememberMe": false
+}
+```
 
-Models are organized by domain subdirectories under `src/models/`. The auto-loader registers them as `app.db.<namespace>.<ModelName>`. Current namespaces:
-- `db.user` — User, UserIdentity, Group, Permission, UserGroup, GroupPermission, EmailCode, Rbac
-- `db.sso` — SsoUser, SsoSession, SsoLog
+### `app.auth` (StpUtil)
 
-Associations are defined via each model's `static associate(db)` method.
+```js
+StpUtil.getLoginId()                    // 获取当前用户 ID
+StpUtil.check()                         // 强制登录检查（未登录抛 401）
+StpUtil.checkRole('admin')              // 角色校验
+StpUtil.hasPermission('user:read')      // 权限判断（支持通配符 + Deny 优先）
+StpUtil.checkPermission('user:write')   // 权限校验（不通过抛 403）
+StpUtil.checkPermissionAnd('a', 'b')    // 全部通过
+StpUtil.checkPermissionOr('a', 'b')     // 任一通过
+```
 
-## Auth System (`src/auth/`)
+### ALS 上下文
 
-- **onRequest hook**: creates `request.state`, runs ALS context, extracts JWT from cookie/Authorization/header, verifies, checks Redis blacklist — all in a single hook
-- **`app.auth`** (from `src/auth/xToken.js`): `login()`, `check()`, `getLoginId()`, `checkRole()`, `checkPermission()`
-- **ALS accessors** (`src/auth/als.js`): `getCtx()`, `getDb()`, `getRedis()`, `getServerResource()`
+```js
+import { requestContext, getCtx, getDb, getServerResource } from './auth/index.js';
+// requestContext: AsyncLocalStorage 实例
+// getCtx(): 获取当前 request 对象
+// getDb(): 获取 Sequelize 实例
+// getServerResource(name): 获取 Fastify 插件实例
+```
 
-## Redis System (`src/redis/`)
+## OAuth 2.1 系统 (`src/oauth21/`)
+
+```
+src/oauth21/
+├── config/           # OAuth 配置
+├── crypto/           # RSA 密钥管理 + JWT 签发/验证
+├── dao/              # 数据访问层（client, code, token, approval, consent, permission）
+├── middleware/        # H5 签名验证 + scope 校验
+├── services/         # 业务逻辑层
+├── utils/            # PbacRegistry（权限注册中心）
+└── view/             # 登录页面模板
+```
+
+### 授权流程
+
+1. 客户端 → `/oauth/authorize`（授权码 + PKCE）
+2. 用户登录 → Session 创建 → 授权码生成
+3. 客户端用授权码 → `/oauth/token` 换取 Access Token + Refresh Token
+4. 子服务器用公钥验证 JWT → 获取用户 claims
+
+### H5 签名验证（防爬防篡改）
+
+路由配置 `requireLogin: true` 时自动启用。前端用 `h5TokenMd5 + timestamp + nonce + url + body` 计算 SHA-256 签名，后端验证。
+
+## API 路由规范
+
+每个 API 域在 `src/api/<domain>/` 下：
+- `system.json` — 定义 `name`、`prefix`、安全默认值
+- `v1/<route>.js` — 导出 Fastify 插件，使用 `registerSecureRoute()` 注册
+
+```js
+registerSecureRoute(app, {
+  name: 'getUser',
+  method: 'GET',
+  url: '/profile',
+  requireLogin: true,
+  handler: async (request, reply) => { ... }
+});
+```
+
+## 三级守卫系统
+
+`src/api/guard.js` 实现级联访问控制：
+
+| 级别 | 来源 | 配置项 |
+|------|------|--------|
+| System | `system.json` | enabled, allowIps, requireLogin |
+| Group | `registerGroupMetadata()` | enabled, allowIps, allowRoles |
+| API | `registerSecureRoute()` | enabled, allowIps, allowRoles, requireLogin |
+
+每级可独立拦截：`enabled`、`allowIps`（通配符+CIDR）、`allowRoles`、`requireLogin`。
+
+配置持久化到 `data/guard_config.json`。
+
+## 模型命名空间
+
+模型按领域子目录自动注册为 `app.db.<namespace>.<ModelName>`：
+
+| 命名空间 | 模型 | 表名 |
+|----------|------|------|
+| `db.user` | User, UserIdentity | user_user, user_identity |
+| `db.iam` | Role, UserRole, InlinePolicy, Permission | iam_role, iam_user_role, iam_inline_policy, permissions |
+| `db.oauth21` | OauthClient, OauthCode, OauthToken, OauthApproval, OauthConsent | oauth_clients, oauth_codes, oauth_tokens, oauth_user_approval, oauth_consents |
+| `db.notice` | EmailCode, NoticeConfig | notice_email_codes, notice_configs |
+| `db.session` | UserSession, SessionToken, SessionLog | session_user_session, session_tokens, session_logs |
+
+关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/db/softDeleteHooks.js`）。
+
+## 数据库 (`src/db/`)
+
+```
+src/db/
+├── index.js           # Sequelize 实例 + 环境变量校验 + 连接池配置
+├── migrate.js         # Umzug 迁移运行器（--up / --down / --down-to / --status）
+├── softDeleteHooks.js # 软删除 delete_version 钩子
+└── README.md          # 模块文档
+```
+
+迁移命令：
+```bash
+npm run migrate                                          # 执行所有待运行迁移
+node --env-file=.env src/db/migrate.js --status          # 查看迁移状态
+node --env-file=.env src/db/migrate.js --down            # 回滚最近一次
+node --env-file=.env src/db/migrate.js --down-to <name>  # 回滚到指定版本
+```
+
+**禁止在生产环境使用 `DB_SYNC=true`**，必须通过迁移文件管理表结构变更。
+
+## Redis 系统 (`src/redis/`)
 
 ```
 src/redis/
-├── index.js              # Fastify 插件：创建连接、注入 app.redis
-├── health.js             # 事件驱动健康监控（error/ready/end 事件，非轮询）
-├── resilient-store.js    # @fastify/rate-limit 存储后端，Redis↔内存自动切换
-└── safe-redis.js         # safeRedis() 安全包装，操作失败返回 fallback
+├── index.js              # 连接初始化 + 密码/TLS/优雅退出
+├── health.js             # 事件驱动健康监控（零轮询开销）
+├── resilient-store.js    # @fastify/rate-limit 存储后端（MULTI/EXEC 原子操作）
+├── session-store.js      # 统一会话管理适配器（Redis + 内存降级）
+├── nonce-store.js        # Nonce 去重（Lua 脚本原子 check+mark）
+├── safe-redis.js         # 安全操作包装（区分网络/程序错误）
+└── README.md             # 模块文档
 ```
 
-- `reconnectStrategy: false` — 不自动重连，依赖进程重启
-- 健康状态通过 `app.redisHealthy` 和 `app.onRedisHealthChange()` 通知所有依赖模块
-- `02-redis.js` loader 是薄代理：`export { default } from '../../redis/index.js'`
+环境变量：`REDIS_ENABLED`、`REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_TLS`
 
-## Firewall System (`src/firewall/`)
+健康状态通过 `app.redisHealthy` 和 `app.onRedisHealthChange(cb)` 通知所有依赖模块。
 
-分层架构，每层职责单一：
+## 防火墙系统 (`src/firewall/`)
 
 ```
 src/firewall/
-├── index.js                          # 插件入口（纯钩子注册，零业务逻辑）
-├── config/
-│   └── config.js                     # 默认安全策略矩阵、IP 解析 API、常量
-├── data/
-│   ├── store.js                      # 流量统计（10000 条环形缓冲、WebSocket 广播）
-│   └── challenge-template.js         # 人机挑战页模板（HMAC 签名 + 指纹采集）
-├── dao/
-│   ├── dao.js                        # 配置持久化（JSON）、名单同步、节点定位
-│   └── block-manager.js              # 封禁/白名单查询 + API 操作封装
-├── util/
-│   ├── shared.js                     # 共享状态（内存 Map、Redis Key、Lua 脚本）
-│   ├── connection-tracker.js         # 并发连接追踪 + 僵尸清理
-│   └── fingerprint.js                # 请求指纹（IP+UA+Lang+Enc → SHA256）
+├── index.js                          # 插件入口
+├── config/config.js                  # 安全策略矩阵
+├── data/store.js                     # 流量统计（环形缓冲 + WebSocket 广播）
+├── data/challenge-template.js        # 人机挑战页模板
+├── dao/dao.js                        # 配置持久化 + 名单同步
+├── dao/block-manager.js              # 封禁/白名单 CRUD
+├── util/shared.js                    # 共享状态（内存 Map + Redis Key）
+├── util/connection-tracker.js        # 并发连接追踪
+├── util/fingerprint.js               # 请求指纹（SHA256）
 └── engine/
-    ├── index.js                      # barrel 导出
-    ├── pipeline.js                   # onRequest 五层拦截管道
-    ├── detectors/
-    │   ├── first-ratelimit.js        # 第一层：@fastify/rate-limit 插件注册
-    │   ├── rate-limiter.js           # 滑窗限频（Redis sorted-set + 内存降级）
-    │   ├── scan-trap.js              # 404/403 扫描陷阱
-    │   ├── brute-force.js            # 登录暴力破解防护
-    │   ├── geo-filter.js             # 地理围栏 + GeoIP
-    │   └── bot-detector.js           # Bot/僵尸网络检测
-    └── dao/
-        └── block-manager.js          # 封禁核心（checkGlobalBlock + CRUD）
+    ├── pipeline.js                   # 五层拦截管道
+    └── detectors/
+        ├── first-ratelimit.js        # @fastify/rate-limit 注册
+        ├── rate-limiter.js           # 滑窗限频（Redis sorted-set + 内存降级）
+        ├── scan-trap.js              # 404/403 扫描陷阱
+        ├── brute-force.js            # 登录暴力破解防护
+        ├── geo-filter.js             # 地理围栏 + GeoIP
+        └── bot-detector.js           # Bot/僵尸网络检测
 ```
 
 五层拦截流程：连接追踪 → 全局封禁 → 挑战 Cookie → Bot 检测 → 地理围栏/端点限频
 
-Config persisted to `data/firewall_config.json`, traffic stats to `data/traffic_stats.json` (in-memory ring buffer, max 10k records).
+## 环境变量
 
-## Response Pattern
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `NODE_ENV` | development | 运行环境 |
+| `PORT` | 3000 | 服务端口 |
+| `DB_TYPE` | mysql | 数据库类型 |
+| `DB_HOST` | - | 数据库地址 |
+| `DB_PORT` | 3306 | 数据库端口 |
+| `DB_NAME` | - | 数据库名称 |
+| `DB_USER` | - | 数据库用户 |
+| `DB_PASS` | - | 数据库密码 |
+| `DB_SYNC` | false | 启动时同步表结构（仅开发环境） |
+| `DB_POOL_MAX` | 10 | 连接池最大连接数 |
+| `REDIS_ENABLED` | false | 是否启用 Redis |
+| `REDIS_HOST` | - | Redis 地址 |
+| `REDIS_PORT` | 6379 | Redis 端口 |
+| `REDIS_PASSWORD` | - | Redis 密码 |
+| `APP_SECRET` | - | JWT 签名密钥 |
+| `SESSION_SECRET` | - | Cookie HMAC 签名密钥 |
+| `FIREWALL_SECRET` | - | 防火墙密钥 |
+| `CORS_ORIGINS` | - | 允许的跨域来源（逗号分隔） |
 
-Use `reply.result` convenience methods (decorated by `00-globals.js`):
-```js
-reply.result.success(data)
-reply.result.fail(message)
-reply.result.unauth()
-reply.result.forbidden()
+## 测试
+
+```bash
+npm test                    # 运行所有测试
+npm test -- --coverage      # 运行并生成覆盖率报告
 ```
 
-The `Result` class lives in `src/core/result.js`.
+测试文件在 `src/__tests__/` 下，使用 Fastify inject 进行集成测试。
 
-## Environment Variables
+覆盖率阈值：branches 30%, functions 40%, lines 40%, statements 40%
 
-See `.env.example` for the full list. Key vars: `PORT`, `DB_*`, `REDIS_*`, `APP_SECRET`, `DB_SYNC`, `FIREWALL_SECRET`.
+## 开发规范
 
-## Notes
+- 注释和文档使用简体中文
+- 修改现有代码前先说明改动计划
+- 遇到不确定的业务逻辑先提问再写代码
+- 每个函数写文档注释
+- 函数命名使用小驼峰（camelCase）
+- 每个独立功能使用单独的文件
+- 修改文件后在合适位置更新 README.md
 
-- No build step — runs directly as ESM JavaScript
-- `src/validator/` is legacy Koa-era code; active routes use Fastify's AJV JSON Schema validation
-- `firewall/` root directory is a separate Vite/Vue project with its own `node_modules`
+## 启动日志规范
 
-## 特殊指令
-- 注释和文档全部使用中文 每个函数都写文档和注释，每次在合适的位置更新README.md文件
-- 修改现有代码时，先说明改动计划再执行
-- 遇到不确定的业务逻辑，先提问再写代码
-- 所有中文注释使用简体中文
-- 每一个函数功能使用一个单独的文件
-- 函数命名使用小驼峰命名法
+使用 emoji + 彩色文字 + 统一标签格式：
+
+```js
+const C = { reset: '\x1b[0m', green: '\x1b[32m', yellow: '\x1b[33m', red: '\x1b[31m', cyan: '\x1b[36m', dim: '\x1b[2m' };
+
+console.log(`✅ [Redis] ${C.green}连接成功: ${host}:${port}${C.reset}`);
+console.warn(`⚠️ [Redis] ${C.yellow}连接失败，降级到内存模式${C.reset}`);
+console.error(`❌ [DB] ${C.red}缺少必要环境变量${C.reset}`);
+```
+
+| 级别 | emoji | 颜色 |
+|------|-------|------|
+| 成功 | ✅ | green |
+| 信息 | 📦 ℹ️ 🛡️ 🌱 | cyan |
+| 警告 | ⚠️ | yellow |
+| 错误 | ❌ 🚨 | red |
+| 持久化 | 💾 | dim |
+
+标准标签：`[Redis]` `[DB]` `[Migrate]` `[Loader]` `[Guard]` `[Guard Config]` `[Firewall]` `[PBAC]` `[Seed]` `[API]` `[Auth]`

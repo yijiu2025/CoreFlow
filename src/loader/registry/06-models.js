@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { sequelize } from '../../db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const C = { reset: '\x1b[0m', green: '\x1b[32m', yellow: '\x1b[33m', red: '\x1b[31m', cyan: '\x1b[36m' };
 
 export default async (app) => {
   const db = app.db;
@@ -45,7 +46,7 @@ export default async (app) => {
             loadedModels.push(model);
           }
         } catch (error) {
-          console.error(`[Loader: Models] 模型 [${entry.name}] 加载失败:`, error.message);
+          console.error(`❌ [Loader: Models] ${C.red}模型 [${entry.name}] 加载失败: ${error.message}${C.reset}`);
         }
       }
     }
@@ -63,19 +64,19 @@ export default async (app) => {
   // 自动同步表结构（仅限首次开发环境建表，后续变更请使用迁移）
   if (process.env.DB_SYNC === 'true') {
     if (process.env.NODE_ENV === 'production') {
-      console.error('[Loader: Models] 拒绝在生产环境执行 DB_SYNC！请使用 npm run migrate 管理表结构变更。');
+      console.error(`❌ [Loader: Models] ${C.red}拒绝在生产环境执行 DB_SYNC！请使用 npm run migrate 管理表结构变更。${C.reset}`);
       process.exit(1);
     } else {
       try {
-        console.warn('[Loader: Models] DB_SYNC=true: 正在 sync 建表（仅限首次开发环境）。');
-        console.warn('[Loader: Models] 后续表结构变更请创建迁移文件: npx umzug migration:create --name <描述>');
+        console.warn(`⚠️ [Loader: Models] ${C.yellow}DB_SYNC=true: 正在 sync 建表（仅限首次开发环境）。${C.reset}`);
+        console.warn(`⚠️ [Loader: Models] ${C.yellow}后续表结构变更请创建迁移文件: npx umzug migration:create --name <描述>${C.reset}`);
         await sequelize.sync({ alter: true });
-        console.log('[Loader: Models] 表结构同步完成');
+        console.log(`✅ [Loader: Models] ${C.green}表结构同步完成${C.reset}`);
       } catch (err) {
-        console.error('[Loader: Models] 表结构同步失败:', err.message);
+        console.error(`❌ [Loader: Models] ${C.red}表结构同步失败: ${err.message}${C.reset}`);
       }
     }
   }
 
-  console.log('[Loader: Models] 所有模型加载完毕');
+  console.log(`📦 [Loader: Models] ${C.cyan}所有模型加载完毕${C.reset}`);
 };

@@ -1,5 +1,5 @@
 // src/log/index.js
-import { als } from '../oauth21/utils/als.js';
+import { requestContext } from '../auth/index.js';
 
 /**
  * 日志系统：桥接到 Pino (Fastify 内置高性能日志引擎)
@@ -10,9 +10,9 @@ import { als } from '../oauth21/utils/als.js';
  */
 function getLoggerContext() {
   try {
-    const ctx = als.getStore();
-    if (ctx?.request?.log) {
-      return { pino: ctx.request.log, requestId: ctx.request.id };
+    const request = requestContext.getStore();
+    if (request?.log) {
+      return { pino: request.log, requestId: request.id };
     }
   } catch {
     // 非请求生命周期，正常降级
@@ -46,7 +46,9 @@ export class Logger {
     if (pino) {
       pino.info(logData, `[AuthLog] ${event}`);
     } else {
-      console.log(JSON.stringify({ level: 'info', msg: `[AuthLog] ${event}`, ...logData }));
+      console.log(
+        JSON.stringify({ level: 'info', msg: `[AuthLog] ${event}`, ...logData })
+      );
     }
   }
 
@@ -58,7 +60,9 @@ export class Logger {
     if (pino) {
       pino.info({ ...data, requestId }, message);
     } else {
-      console.log(JSON.stringify({ level: 'info', msg: message, requestId, ...data }));
+      console.log(
+        JSON.stringify({ level: 'info', msg: message, requestId, ...data })
+      );
     }
   }
 
@@ -67,7 +71,14 @@ export class Logger {
     if (pino) {
       pino.error({ err, requestId }, message);
     } else {
-      console.error(JSON.stringify({ level: 'error', msg: message, requestId, error: err?.message }));
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: message,
+          requestId,
+          error: err?.message
+        })
+      );
     }
   }
 
@@ -76,7 +87,9 @@ export class Logger {
     if (pino) {
       pino.warn({ ...data, requestId }, message);
     } else {
-      console.warn(JSON.stringify({ level: 'warn', msg: message, requestId, ...data }));
+      console.warn(
+        JSON.stringify({ level: 'warn', msg: message, requestId, ...data })
+      );
     }
   }
 }
