@@ -1,4 +1,4 @@
-import { registerDeleteVersionHooks } from '../../utils/softDeleteHooks.js';
+import { registerDeleteVersionHooks } from '../../db/softDeleteHooks.js';
 
 /**
  * 企业级 用户与角色关联表 (授权心脏表)

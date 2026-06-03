@@ -1,9 +1,8 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import verifyDao from '../../../verify/dao/verify.js';
+import { captchaDao } from '../../../verify/captcha/index.js';
+import { emailDao } from '../../../verify/email/index.js';
 import { getSessionStore } from '../../../redis/session-store.js';
-
-// 复用之前的 Schema (可以根据需要移动到 verify 目录下)
-import { generateCaptchaSchema, verifyCaptchaSchema } from '../../oauth21/v1/schemas.js';
+import { generateCaptchaSchema, verifyCaptchaSchema } from './schemas.js';
 
 export default async function (fastify, opts) {
   const captchaStore = getSessionStore(fastify, 'captcha');
@@ -27,9 +26,12 @@ export default async function (fastify, opts) {
     url: '/generate-captcha',
     schema: generateCaptchaSchema,
     handler: async (request, reply) => {
-      reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      
-      const result = await verifyDao.generateCaptcha(captchaStore);
+      reply.header(
+        'Cache-Control',
+        'no-store, no-cache, must-revalidate, proxy-revalidate'
+      );
+
+      const result = await captchaDao.generate(captchaStore);
       return reply.result.success('验证码生成成功', result);
     }
   });
@@ -45,10 +47,16 @@ export default async function (fastify, opts) {
     schema: verifyCaptchaSchema,
     handler: async (request, reply) => {
       try {
-        const result = await verifyDao.verifyCaptchaAndSendEmail(request.body, captchaStore, emailCodeStore);
-        return reply.result.success(result.message, { emailSent: result.emailSent });
+        const result = await captchaDao.verifyAndSendEmail(
+          request.body,
+          captchaStore,
+          emailCodeStore,
+          (email, sessionId, store) => emailDao.sendCode(email, sessionId, store)
+        );
+        return reply.result.success(result.message, {
+          emailSent: result.emailSent
+        });
       } catch (err) {
-        // 捕获业务逻辑错误并返回 400
         return reply.result.fail(err.message, null, 400);
       }
     }
@@ -65,7 +73,7 @@ export default async function (fastify, opts) {
     handler: async (request, reply) => {
       const { email, code } = request.body;
       try {
-        await verifyDao.checkEmailCode(email, code, emailCodeStore);
+        await emailDao.verifyCode(email, code, emailCodeStore);
         return reply.result.success('验证码校验通过');
       } catch (err) {
         return reply.result.fail(err.message, null, 400);

@@ -7,8 +7,8 @@
  * 注意：用户信息端点 /userinfo 已迁移至 user/v1/user.js
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import config from '../../../oauth21/config/config.js';
-import { getJWKS } from '../../../oauth21/crypto/keys.js';
+import config from '../../../app/oauth21/config/config.js';
+import { getJWKS } from '../../../app/oauth21/crypto/keys.js';
 
 export default async function (fastify) {
   registerGroupMetadata({

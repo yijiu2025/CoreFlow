@@ -1,5 +1,5 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import noticeDao from '../../../notice/dao/notice.js';
+import noticeDao from '../../../app/notice/dao/notice.js';
 import emailService from '../../../notice/services/email.js';
 
 export default async function (fastify, opts) {
@@ -68,8 +68,12 @@ export default async function (fastify, opts) {
     handler: async (request, reply) => {
       const { email } = request.body;
       if (!email) return reply.result.fail('邮箱不能为空');
-      
-      const success = await emailService.send(email, '通知中心测试邮件', '<p>这是一封来自系统的测试邮件，看到它说明您的 SMTP 配置已生效。</p>');
+
+      const success = await emailService.send(
+        email,
+        '通知中心测试邮件',
+        '<p>这是一封来自系统的测试邮件，看到它说明您的 SMTP 配置已生效。</p>'
+      );
       if (success) {
         return reply.result.success('测试邮件已发出，请注意查收');
       } else {

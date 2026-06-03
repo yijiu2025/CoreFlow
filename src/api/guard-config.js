@@ -1,12 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { C } from '../utils/colors.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const GUARD_FILE = path.resolve(__dirname, '../../data/guard_config.json');
-
-const C = { reset: '\x1b[0m', green: '\x1b[32m', red: '\x1b[31m', dim: '\x1b[2m' };
 
 /**
  * 核心配置存储 - 仅存放与 API 加载、权限策略相关的配置
@@ -27,10 +26,14 @@ try {
     } else {
       persistedConfigs = raw;
     }
-    console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据 (待与代码同步)${C.reset}`);
+    console.log(
+      `💾 [Guard Config] ${C.dim}已加载持久化策略数据 (待与代码同步)${C.reset}`
+    );
   }
 } catch (err) {
-  console.error(`❌ [Guard Config] ${C.red}加载持久化文件失败: ${err.message}${C.reset}`);
+  console.error(
+    `❌ [Guard Config] ${C.red}加载持久化文件失败: ${err.message}${C.reset}`
+  );
 }
 
 /**
@@ -44,9 +47,15 @@ function triggerSave() {
       const dataToSave = {
         configs: configs
       };
-      fs.writeFileSync(GUARD_FILE, JSON.stringify(dataToSave, null, 2), 'utf-8');
+      fs.writeFileSync(
+        GUARD_FILE,
+        JSON.stringify(dataToSave, null, 2),
+        'utf-8'
+      );
     } catch (err) {
-      console.error(`❌ [Guard Config] ${C.red}写入文件失败: ${err.message}${C.reset}`);
+      console.error(
+        `❌ [Guard Config] ${C.red}写入文件失败: ${err.message}${C.reset}`
+      );
     }
   }, 1000);
 }
@@ -71,20 +80,28 @@ export function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
 /**
  * 热更新配置 (支持 3 层更新)
  */
-export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null) {
+export function setGuardConfig(
+  systemKey,
+  patch,
+  groupKey = null,
+  apiKey = null
+) {
   if (!configs[systemKey]) return null;
 
   const updatePatch = { ...patch, updatedAt: new Date().toISOString() };
 
   if (apiKey && groupKey) {
-    Object.assign(configs[systemKey].groups[groupKey].apis[apiKey], updatePatch);
+    Object.assign(
+      configs[systemKey].groups[groupKey].apis[apiKey],
+      updatePatch
+    );
   } else if (groupKey) {
     Object.assign(configs[systemKey].groups[groupKey], updatePatch);
   } else {
     Object.assign(configs[systemKey], updatePatch);
   }
 
-  triggerSave(); 
+  triggerSave();
   return configs[systemKey];
 }
 
@@ -95,18 +112,18 @@ export function registerSystemMetadata(systemKey, metadata) {
   if (!configs[systemKey]) {
     configs[systemKey] = { groups: {} };
   }
-  
+
   const persisted = persistedConfigs[systemKey] || {};
-  
+
   Object.assign(configs[systemKey], {
     id: systemKey,
     name: metadata.alias || metadata.name || systemKey,
     description: metadata.description || '',
     prefix: metadata.prefix || '',
-    enabled: persisted.enabled ?? (metadata.enabled ?? true),
-    requireLogin: persisted.requireLogin ?? (metadata.requireLogin ?? false),
-    allowIps: persisted.allowIps || (metadata.allowIps || []),
-    allowRoles: persisted.allowRoles || (metadata.allowRoles || []),
+    enabled: persisted.enabled ?? metadata.enabled ?? true,
+    requireLogin: persisted.requireLogin ?? metadata.requireLogin ?? false,
+    allowIps: persisted.allowIps || metadata.allowIps || [],
+    allowRoles: persisted.allowRoles || metadata.allowRoles || [],
     updatedAt: new Date().toISOString()
   });
 }
@@ -116,23 +133,28 @@ export function registerSystemMetadata(systemKey, metadata) {
  */
 export function registerGroupMetadata(systemKey, groupKey, metadata) {
   if (!configs[systemKey]) {
-    configs[systemKey] = { id: systemKey, name: systemKey, enabled: true, groups: {} };
+    configs[systemKey] = {
+      id: systemKey,
+      name: systemKey,
+      enabled: true,
+      groups: {}
+    };
   }
   if (!configs[systemKey].groups[groupKey]) {
     configs[systemKey].groups[groupKey] = { apis: {} };
   }
 
-  const persisted = (persistedConfigs[systemKey]?.groups?.[groupKey]) || {};
+  const persisted = persistedConfigs[systemKey]?.groups?.[groupKey] || {};
 
   Object.assign(configs[systemKey].groups[groupKey], {
     id: groupKey,
     name: metadata.alias || metadata.name || groupKey,
     description: metadata.description || '',
     prefix: metadata.prefix || '',
-    enabled: persisted.enabled ?? (metadata.enabled ?? true),
-    requireLogin: persisted.requireLogin ?? (metadata.requireLogin ?? false),
-    allowIps: persisted.allowIps || (metadata.allowIps || []),
-    allowRoles: persisted.allowRoles || (metadata.allowRoles || []),
+    enabled: persisted.enabled ?? metadata.enabled ?? true,
+    requireLogin: persisted.requireLogin ?? metadata.requireLogin ?? false,
+    allowIps: persisted.allowIps || metadata.allowIps || [],
+    allowRoles: persisted.allowRoles || metadata.allowRoles || [],
     updatedAt: new Date().toISOString()
   });
 }
@@ -142,23 +164,34 @@ export function registerGroupMetadata(systemKey, groupKey, metadata) {
  */
 export function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
   if (!configs[systemKey]) {
-    configs[systemKey] = { id: systemKey, name: systemKey, enabled: true, groups: {} };
+    configs[systemKey] = {
+      id: systemKey,
+      name: systemKey,
+      enabled: true,
+      groups: {}
+    };
   }
   if (!configs[systemKey].groups[groupKey]) {
-    configs[systemKey].groups[groupKey] = { id: groupKey, name: groupKey, enabled: true, apis: {} };
+    configs[systemKey].groups[groupKey] = {
+      id: groupKey,
+      name: groupKey,
+      enabled: true,
+      apis: {}
+    };
   }
 
   const group = configs[systemKey].groups[groupKey];
-  const persisted = (persistedConfigs[systemKey]?.groups?.[groupKey]?.apis?.[apiKey]) || {};
+  const persisted =
+    persistedConfigs[systemKey]?.groups?.[groupKey]?.apis?.[apiKey] || {};
 
   if (!group.apis[apiKey]) {
     group.apis[apiKey] = {
       id: apiKey,
       name: metadata.alias || apiKey,
-      enabled: persisted.enabled ?? (metadata.enabled ?? true),
-      requireLogin: persisted.requireLogin ?? (metadata.requireLogin ?? false),
-      allowIps: persisted.allowIps || (metadata.allowIps || []),
-      allowRoles: persisted.allowRoles || (metadata.allowRoles || []),
+      enabled: persisted.enabled ?? metadata.enabled ?? true,
+      requireLogin: persisted.requireLogin ?? metadata.requireLogin ?? false,
+      allowIps: persisted.allowIps || metadata.allowIps || [],
+      allowRoles: persisted.allowRoles || metadata.allowRoles || [],
       url: metadata.url,
       method: metadata.method,
       updatedAt: new Date().toISOString()
@@ -184,12 +217,16 @@ export function getAllGuardConfigs() {
  */
 export function saveGuardConfig() {
   if (saveTimer) clearTimeout(saveTimer);
-  
+
   try {
     const dataToSave = { configs: configs };
     fs.writeFileSync(GUARD_FILE, JSON.stringify(dataToSave, null, 2), 'utf-8');
-    console.log(`✅ [Guard Config] ${C.green}配置文件已完成代码同步与剪枝${C.reset}`);
+    console.log(
+      `✅ [Guard Config] ${C.green}配置文件已完成代码同步与剪枝${C.reset}`
+    );
   } catch (err) {
-    console.error(`❌ [Guard Config] ${C.red}最终同步保存失败: ${err.message}${C.reset}`);
+    console.error(
+      `❌ [Guard Config] ${C.red}最终同步保存失败: ${err.message}${C.reset}`
+    );
   }
 }

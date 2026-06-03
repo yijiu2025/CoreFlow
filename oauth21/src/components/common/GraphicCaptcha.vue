@@ -57,6 +57,13 @@ const handleVerify = async () => {
   }
 }
 
+/** 只允许输入数字和字母，中文等立即过滤 */
+const onInput = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  userInput.value = target.value.replace(/[^a-zA-Z0-9]/g, '')
+  error.value = ''
+}
+
 // 自动检测：输入够4位自动提交
 watch(userInput, (val) => {
   if (val.length === 4) {
@@ -127,14 +134,14 @@ onMounted(() => {
             <!-- Large Input Area -->
             <div class="space-y-6">
               <div class="relative">
-                <input 
+                <input
                   ref="inputRef"
-                  v-model="userInput" 
+                  :value="userInput"
+                  @input="onInput"
                   @keyup.enter="handleVerify"
-                  @input="error = ''"
-                  type="text" 
+                  type="text"
                   maxlength="4"
-                  placeholder="验证码" 
+                  placeholder="验证码"
                   class="minimal-input-large"
                   :class="{ 'has-error': error }"
                 />

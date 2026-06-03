@@ -1,0 +1,8 @@
+{
+  "name": "system",
+  "alias": "系统",
+  "prefix": "",
+  "description": "系统级端点（健康检查等）",
+  "enabled": true,
+  "requireLogin": false
+}

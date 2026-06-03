@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SSO Login</title>
+    <!-- 引入 Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+      :root {
+        --primary: #ffe60f;
+        --text-main: #111;
+        --text-muted: #999;
+        --bg-light: #f7f7f7;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif;
+        /* 嵌套在 iframe 中时，使用透明或半透明背景 */
+        background-color: rgba(0, 0, 0, 0.05);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      .sso-modal {
+        width: 720px;
+        height: 400px;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+        display: flex;
+        position: relative;
+        overflow: hidden;
+      }
+      .close-btn {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        font-size: 24px;
+        color: #999;
+        cursor: pointer;
+        background: none;
+        border: none;
+        line-height: 1;
+        z-index: 10;
+        transition: color 0.2s;
+      }
+      .close-btn:hover {
+        color: #333;
+      }
+
+      .left-panel {
+        flex: 1;
+        padding: 40px;
+        display: flex;
+        flex-direction: column;
+      }
+      .right-panel {
+        width: 320px;
+        padding: 40px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        border-left: 1px solid #f0f0f0;
+      }
+
+      /* Tabs */
+      .tabs {
+        display: flex;
+        gap: 24px;
+        margin-bottom: 32px;
+        align-items: baseline;
+      }
+      .tab {
+        font-size: 16px;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .tab.active {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text-main);
+      }
+
+      /* Form Inputs */
+      .input-group {
+        background: var(--bg-light);
+        border-radius: 24px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        margin-bottom: 16px;
+        border: 1px solid transparent;
+        transition: all 0.3s;
+      }
+      .input-group:focus-within {
+        background: #fff;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 230, 15, 0.15);
+      }
+      .country-code {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-main);
+        cursor: pointer;
+      }
+      .divider {
+        width: 1px;
+        height: 14px;
+        background: #ccc;
+        margin: 0 12px;
+      }
+      input {
+        border: none;
+        background: transparent;
+        outline: none;
+        flex: 1;
+        font-size: 14px;
+        color: var(--text-main);
+      }
+      input::placeholder {
+        color: #bbb;
+      }
+
+      .get-code-btn {
+        background: none;
+        border: none;
+        color: var(--text-main);
+        font-size: 14px;
+        cursor: pointer;
+        padding-left: 16px;
+        border-left: 1px solid #eee;
+      }
+      .get-code-btn:hover {
+        color: #666;
+      }
+
+      /* Submit Button */
+      .submit-btn {
+        background: var(--primary);
+        border: none;
+        border-radius: 24px;
+        height: 48px;
+        width: 100%;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-main);
+        cursor: pointer;
+        margin-top: 8px;
+        margin-bottom: 16px;
+        transition: all 0.2s;
+      }
+      .submit-btn:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255, 230, 15, 0.3);
+      }
+      .submit-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      /* Agreement Checkbox */
+      .agreement {
+        display: flex;
+        align-items: flex-start;
+        font-size: 12px;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+      .agreement input[type='checkbox'] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        min-width: 14px;
+        border: 1px solid #ccc;
+        border-radius: 50%;
+        outline: none;
+        cursor: pointer;
+        margin-right: 8px;
+        margin-top: 2px;
+        position: relative;
+      }
+      .agreement input[type='checkbox']:checked {
+        border-color: var(--primary);
+        background-color: var(--primary);
+      }
+      .agreement input[type='checkbox']:checked::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 4px;
+        width: 3px;
+        height: 6px;
+        border: solid #111;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+      }
+      .agreement a {
+        color: var(--text-muted);
+        text-decoration: none;
+      }
+      .agreement a:hover {
+        text-decoration: underline;
+      }
+
+      /* Right Panel QR */
+      .qr-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-main);
+        margin-bottom: 32px;
+      }
+      .qr-box {
+        width: 160px;
+        height: 160px;
+        border: 1px solid #eee;
+        border-radius: 12px;
+        padding: 8px;
+        position: relative;
+        margin-bottom: 16px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .qr-image {
+        width: 100%;
+        height: 100%;
+      }
+      .qr-logo {
+        position: absolute;
+        width: 32px;
+        height: 32px;
+        background: var(--primary);
+        border-radius: 6px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 12px;
+        font-weight: bold;
+        color: #111;
+        border: 2px solid #fff;
+      }
+      .qr-text-main {
+        font-size: 14px;
+        color: var(--text-main);
+        margin-bottom: 4px;
+      }
+      .qr-text-sub {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="sso-modal">
+        <button class="close-btn" @click="closeModal" title="关闭">×</button>
+
+        <!-- 左侧表单区 -->
+        <div class="left-panel">
+          <div class="tabs">
+            <div
+              class="tab"
+              :class="{ active: loginType === 'sms' }"
+              @click="loginType = 'sms'"
+            >
+              短信登录
+            </div>
+            <div
+              class="tab"
+              :class="{ active: loginType === 'pwd' }"
+              @click="loginType = 'pwd'"
+            >
+              密码登录
+            </div>
+          </div>
+
+          <!-- 短信登录表单 -->
+          <template v-if="loginType === 'sms'">
+            <div class="input-group">
+              <div class="country-code">
+                +86 <span style="font-size: 10px">▼</span>
+              </div>
+              <div class="divider"></div>
+              <input
+                type="text"
+                v-model="phone"
+                placeholder="请输入手机号"
+                @keyup.enter="handleLogin"
+              />
+            </div>
+            <div class="input-group">
+              <input
+                type="text"
+                v-model="code"
+                placeholder="请输入验证码"
+                @keyup.enter="handleLogin"
+              />
+              <button class="get-code-btn">获取验证码</button>
+            </div>
+          </template>
+
+          <!-- 密码登录表单 -->
+          <template v-if="loginType === 'pwd'">
+            <div class="input-group">
+              <input
+                type="text"
+                v-model="username"
+                placeholder="请输入账号/手机号"
+                @keyup.enter="handleLogin"
+              />
+            </div>
+            <div class="input-group">
+              <input
+                type="password"
+                v-model="password"
+                placeholder="请输入密码"
+                @keyup.enter="handleLogin"
+              />
+            </div>
+          </template>
+
+          <button class="submit-btn" :disabled="loading" @click="handleLogin">
+            {{ loading ? '加密并登录中...' : '登录' }}
+          </button>
+
+          <div class="agreement">
+            <input type="checkbox" v-model="agreed" />
+            <span
+              >您已阅读并同意 <a href="#">《社区用户服务协议》</a>
+              <a href="#">《隐私政策》</a>
+              <a href="#">《软件许可协议》</a></span
+            >
+          </div>
+        </div>
+
+        <!-- 右侧二维码区 -->
+        <div class="right-panel">
+          <div class="qr-title">手机扫码安全登录</div>
+          <div class="qr-box">
+            <img
+              src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://example.com/sso"
+              alt="QR"
+              class="qr-image"
+            />
+            <div class="qr-logo">闲鱼</div>
+          </div>
+          <div class="qr-text-main">闲鱼APP扫码</div>
+          <div class="qr-text-sub">点击首页左上角"扫一扫"</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp, ref } = Vue;
+
+      createApp({
+        setup() {
+          const loginType = ref('sms');
+          const phone = ref('');
+          const code = ref('');
+          const username = ref('');
+          const password = ref('');
+          const agreed = ref(false);
+          const loading = ref(false);
+
+          // ==============================================================
+          // --- RSA 加密逻辑 (复用现有逻辑，完美适配后端) ---
+          // ==============================================================
+          const SERVER = 'http://localhost:3000';
+          let cachedPublicKey = null;
+
+          async function fetchPublicKey() {
+            if (cachedPublicKey) return cachedPublicKey;
+            const resp = await fetch(`${SERVER}/crypto/public-key`);
+            if (!resp.ok) throw new Error('获取公钥失败');
+            const data = await resp.json();
+            cachedPublicKey = await crypto.subtle.importKey(
+              'jwk',
+              data.key,
+              { name: 'RSA-OAEP', hash: 'SHA-256' },
+              false,
+              ['encrypt']
+            );
+            return cachedPublicKey;
+          }
+
+          function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (const b of bytes) binary += String.fromCharCode(b);
+            return btoa(binary);
+          }
+
+          async function rsaEncrypt(plaintext) {
+            const publicKey = await fetchPublicKey();
+            const encoded = new TextEncoder().encode(plaintext);
+            const encrypted = await crypto.subtle.encrypt(
+              { name: 'RSA-OAEP' },
+              publicKey,
+              encoded
+            );
+            return arrayBufferToBase64(encrypted);
+          }
+
+          function generateNonce() {
+            const bytes = crypto.getRandomValues(new Uint8Array(16));
+            return Array.from(bytes, (b) =>
+              b.toString(16).padStart(2, '0')
+            ).join('');
+          }
+          // ==============================================================
+
+          const handleLogin = async () => {
+            if (!agreed.value) {
+              alert('请先阅读并勾选同意相关协议');
+              return;
+            }
+
+            let payloadStr = '';
+            if (loginType.value === 'sms') {
+              if (!phone.value || !code.value) {
+                alert('请输入完整短信登录信息');
+                return;
+              }
+              // 短信登录载荷
+              payloadStr = JSON.stringify({
+                phone: phone.value,
+                code: code.value,
+                type: 'sms'
+              });
+            } else {
+              if (!username.value || !password.value) {
+                alert('请输入完整账号和密码');
+                return;
+              }
+              // 兼容已有的密码登录载荷
+              payloadStr = JSON.stringify({
+                username: username.value,
+                password: password.value
+              });
+            }
+
+            loading.value = true;
+            try {
+              // 1. 数据加密
+              const encrypted = await rsaEncrypt(payloadStr);
+
+              // 2. 构造请求体
+              const requestBody = {
+                encrypted,
+                timestamp: Date.now(),
+                nonce: generateNonce(),
+                scope: 'openid profile email'
+              };
+
+              // 3. 发送请求
+              const resp = await fetch(`${SERVER}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+              });
+
+              const data = await resp.json();
+              if (!resp.ok) {
+                throw new Error(
+                  data.error_description || data.error || '登录失败'
+                );
+              }
+
+              // 4. 成功后处理 SSO (向父级 iframe 通信)
+              console.log('Login success:', data);
+
+              // 嵌套在 iframe 中时发送消息
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage(
+                  {
+                    type: 'SSO_SUCCESS',
+                    token: data.access_token,
+                    id_token: data.id_token,
+                    data: data
+                  },
+                  '*'
+                );
+              } else {
+                // 独立访问时的提示
+                alert(
+                  '登录成功！获取到 Token:\n' +
+                    data.access_token.substring(0, 20) +
+                    '...'
+                );
+              }
+            } catch (err) {
+              console.error('Login Error:', err);
+              alert(err.message || '登录异常');
+            } finally {
+              loading.value = false;
+            }
+          };
+
+          const closeModal = () => {
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: 'SSO_CLOSE' }, '*');
+            } else {
+              console.log('Close button clicked');
+            }
+          };
+
+          return {
+            loginType,
+            phone,
+            code,
+            username,
+            password,
+            agreed,
+            loading,
+            handleLogin,
+            closeModal
+          };
+        }
+      });
+    </script>
+  </body>
+</html>

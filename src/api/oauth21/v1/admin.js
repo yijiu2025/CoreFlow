@@ -1,7 +1,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import ClientDao from '../../../oauth21/dao/client.dao.js';
-import UserDao from '../../../oauth21/dao/user.dao.js';
-import PermissionDao from '../../../oauth21/dao/permission.dao.js';
+import ClientDao from '../../../app/oauth21/dao/client.dao.js';
+import UserDao from '../../../app/oauth21/dao/user.dao.js';
+import PermissionDao from '../../../app/oauth21/dao/permission.dao.js';
 
 export default async function (fastify) {
   // 🔐 安全头处理：允许特定页面被 iframe 嵌入

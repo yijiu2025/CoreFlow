@@ -45,6 +45,7 @@ export async function createApp() {
 
   // 激活 Pino 内置高性能日志引擎
   const app = Fastify({
+    bodyLimit: 1048576, // 1MB JSON 请求体限制（multipart 由插件单独控制）
     logger: {
       level: 'info',
       // 开发环境：pino-pretty 美化输出；生产环境：纯 JSON（供 ELK/Loki 解析）

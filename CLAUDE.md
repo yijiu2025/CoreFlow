@@ -45,6 +45,7 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/l
 | 08 | `08-notice.js` | SMTP 配置种子数据 |
 | 09 | `09-pbac.js` | PBAC 角色同步到数据库 |
 | 10 | `10-seed-clients.js` | OAuth 客户端种子数据 |
+| 11 | `11-apps.js` | 扫描 `src/app/` 加载应用权限和配置 |
 
 每个 loader 导出默认函数接收 `app` 实例，错误被捕获并记录，不阻塞其他模块。
 
@@ -138,7 +139,7 @@ src/oauth21/
 ├── dao/              # 数据访问层（client, code, token, approval, consent, permission）
 ├── middleware/        # H5 签名验证 + scope 校验
 ├── services/         # 业务逻辑层
-├── utils/            # PbacRegistry（权限注册中心）
+├── utils/              # PbacRegistry（权限注册中心，系统层共享工具）
 └── view/             # 登录页面模板
 ```
 
@@ -182,6 +183,35 @@ registerSecureRoute(app, {
 每级可独立拦截：`enabled`、`allowIps`（通配符+CIDR）、`allowRoles`、`requireLogin`。
 
 配置持久化到 `data/guard_config.json`。
+
+## 目录结构（系统层 / 应用层）
+
+```
+src/
+│── 系统层（基础设施 + 通用工具）
+├── db/                # 数据库连接 + 迁移
+├── redis/             # 缓存
+├── log/               # 日志
+├── auth/              # 认证框架（Session + Cookie + ALS）
+├── firewall/          # 防火墙
+├── notice/            # 通知工具（邮件发送等通用服务）
+├── verify/            # 验证码工具（通用服务）
+├── models/session/    # 系统模型（UserSession, SessionToken, SessionLog）
+│
+│── 应用层
+├── app/
+│   ├── oauth21/       # OAuth 2.1 应用（config + permission/ + crypto + dao + services）
+│   ├── user/          # 用户应用（config + permission/ + dao）
+│   ├── admin/         # 管理应用（config + permission/ + dao）
+│   └── notice/        # 通知应用（config + permission/ + dao）
+│
+├── api/               # 路由（按应用分文件夹，含 guard.js）
+├── models/            # 业务模型（user/, oauth21/, iam/, notice/）
+├── loader/            # 加载器
+└── data/              # 运行时数据
+```
+
+每个应用目录结构：`config.js`（元数据）+ `permission/`（权限/角色定义）+ 业务代码
 
 ## 模型命名空间
 

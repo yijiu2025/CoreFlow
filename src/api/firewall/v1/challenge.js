@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { CHALLENGE_SECRET } from '../../../firewall/config/config.js';
-import { generateFingerprint } from '../../../firewall/util/fingerprint.js';
+import { CHALLENGE_SECRET } from '../../../app/firewall/config/config.js';
+import { generateFingerprint } from '../../../app/firewall/util/fingerprint.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 
 export default async function (fastify) {

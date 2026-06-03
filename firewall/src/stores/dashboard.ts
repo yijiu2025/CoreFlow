@@ -6,6 +6,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { firewallApi } from '@/api/firewall'
 import { useSettingsStore } from './settings'
+import { WS_HOST } from '@/config/services'
 import type { MonitorSummary, TrafficLog, ServerNode, PathStat, RegionStat } from '@/types'
 
 // WebSocket 实例和定时器（模块级，避免 Vue 代理）
@@ -36,7 +37,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = import.meta.env.DEV ? 'localhost:3000' : window.location.host
+    const host = WS_HOST || window.location.host
     const wsUrl = `${protocol}//${host}/api/firewall/v1/monitor/ws`
 
     socket = new WebSocket(wsUrl)

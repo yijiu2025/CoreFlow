@@ -1,38 +1,40 @@
 /* eslint-disable no-console */
-// src/db/migrate.js
-// 数据库迁移脚本运行器 (基于 Umzug + Sequelize)
-// 运行方式：
-//   node --env-file=.env src/db/migrate.js           # 执行所有待运行迁移
-//   node --env-file=.env src/db/migrate.js --down     # 回滚最近一次迁移
-//   node --env-file=.env src/db/migrate.js --status   # 查看迁移状态
+/**
+ * 数据库迁移脚本运行器 (基于 Umzug + Sequelize)
+ * 运行方式：
+ *   node --env-file=.env src/db/migrate.js           # 执行所有待运行迁移
+ *   node --env-file=.env src/db/migrate.js --down     # 回滚最近一次迁移
+ *   node --env-file=.env src/db/migrate.js --status   # 查看迁移状态
+ *   node --env-file=.env src/db/migrate.js --down-to <name> # 回滚到指定版本
+ */
 import { Umzug, SequelizeStorage } from 'umzug';
 import { sequelize } from './index.js';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from 'fs';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// 手动扫描迁移文件（避免 glob 在 Windows 上的兼容性问题）
+const migrationsDir = path.resolve(__dirname, '../../migrations');
+const migrationFiles = fs
+  .readdirSync(migrationsDir)
+  .filter((f) => f.endsWith('.js'))
+  .sort();
+
 const umzug = new Umzug({
-  migrations: {
-    glob: path.join(__dirname, '../../migrations/*.js'),
-    resolve: ({ name, path: migrationPath, context }) => ({
-      name,
-      up: async () => {
-        const { up } = await import(migrationPath);
-        return up({
-          queryInterface: context,
-          Sequelize: sequelize.constructor
-        });
-      },
-      down: async () => {
-        const { down } = await import(migrationPath);
-        return down({
-          queryInterface: context,
-          Sequelize: sequelize.constructor
-        });
-      }
-    })
-  },
+  migrations: migrationFiles.map((file) => ({
+    name: file.replace('.js', ''),
+    path: pathToFileURL(path.join(migrationsDir, file)).href,
+    up: async ({ context }) => {
+      const mod = await import(pathToFileURL(path.join(migrationsDir, file)).href);
+      return mod.up({ queryInterface: context, Sequelize: sequelize.constructor });
+    },
+    down: async ({ context }) => {
+      const mod = await import(pathToFileURL(path.join(migrationsDir, file)).href);
+      return mod.down({ queryInterface: context, Sequelize: sequelize.constructor });
+    }
+  })),
   storage: new SequelizeStorage({ sequelize }),
   context: sequelize.getQueryInterface(),
   logger: console
@@ -110,7 +112,7 @@ async function runStatus() {
 // 解析命令行参数
 const args = process.argv.slice(2);
 const command = args[0] || 'up';
-const downToTarget = args[1]; // --down-to <name> 的目标版本
+const downToTarget = args[1];
 
 async function main() {
   try {

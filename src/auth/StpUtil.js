@@ -1,8 +1,8 @@
 // src/auth/StpUtil.js
-// 权限认证核心工具类（合并 StpUtil + xToken）
-// 对标 Java Sa-Token 的 StpUtil，依赖 AsyncLocalStorage 实现静态上下文穿透
+// 权限认证核心工具类（对标 Java Sa-Token）
+// 依赖 AsyncLocalStorage 实现静态上下文穿透
 import { requestContext } from './index.js';
-import jwt from 'jsonwebtoken';
+import { createSession, detectDeviceType } from './session.js';
 
 /**
  * 权限不足异常
@@ -20,13 +20,8 @@ class NotPermissionException extends Error {
  * 在 HTTP 请求上下文中通过静态方法调用，无需手动传递 request 对象
  *
  * @example
- * // 获取当前登录用户 ID
  * const uid = StpUtil.getLoginId();
- *
- * // 检查权限（支持通配符 + Deny 优先）
  * StpUtil.checkPermission('user:admin:*');
- *
- * // 强制登录检查
  * const user = StpUtil.check();
  */
 export default class StpUtil {
@@ -35,7 +30,6 @@ export default class StpUtil {
   /**
    * 获取当前请求的 request 对象
    * @returns {import('fastify').FastifyRequest}
-   * @throws {Error} 在非请求上下文中调用时抛出
    */
   static _getRequest() {
     const req = requestContext.getStore();
@@ -47,8 +41,8 @@ export default class StpUtil {
 
   /**
    * 通配符正则匹配（支持 * 通配符）
-   * @param {string} pattern - 模式（如 'user:admin:*'）
-   * @param {string} target - 目标字符串
+   * @param {string} pattern 模式（如 'user:admin:*'）
+   * @param {string} target 目标字符串
    * @returns {boolean}
    */
   static _isMatch(pattern, target) {
@@ -58,7 +52,7 @@ export default class StpUtil {
     return regex.test(target);
   }
 
-  // ==================== 认证方法（原 xToken） ====================
+  // ==================== 认证方法 ====================
 
   /**
    * 获取当前登录用户 ID
@@ -87,61 +81,65 @@ export default class StpUtil {
   }
 
   /**
-   * 登录助手：签发 JWT Token 并处理多端适配
-   * @param {number|string} userId - 用户 ID
-   * @param {object} payload - 额外载荷（如 appId, scope 等）
-   * @param {object} options - 签发选项
-   * @param {string} options.secret - JWT 密钥，默认使用 process.env.JWT_SECRET
-   * @param {string} options.expiresIn - 过期时间，默认 '7d'
-   * @returns {string} 签发的 JWT Token
+   * 登录：创建 Session 并下发 Cookie
+   * @param {object} params 登录参数
+   * @param {number} params.userId 用户内部 ID
+   * @param {string} params.uid 用户 UUID
+   * @param {string} params.username 用户名
+   * @param {string} params.email 邮箱
+   * @param {string} params.avatar 头像
+   * @param {number} params.status 用户状态
+   * @param {string} params.appId 登录的应用 ID
+   * @param {string} [params.deviceId] 设备标识
+   * @param {string} [params.deviceType] 设备类型（browser/app/desktop/miniapp）
+   * @param {boolean} [params.rememberMe] 是否长期登录
+   * @returns {string} sessionId
    */
-  static login(userId, payload = {}, options = {}) {
+  static async login(params) {
     const req = StpUtil._getRequest();
-    const secret = options.secret || process.env.JWT_SECRET;
-    const expiresIn = options.expiresIn || '7d';
+    const redis = req.server.redis;
 
-    const token = jwt.sign(
-      {
-        uid: userId,
-        sub: userId,
-        ...payload,
-        iat: Math.floor(Date.now() / 1000)
-      },
-      secret,
-      { expiresIn }
-    );
+    // 从请求中推断设备信息
+    const userAgent = req.headers?.['user-agent'] || '';
+    const deviceType = params.deviceType || detectDeviceType(userAgent);
+    const ip = req.ip || req.socket?.remoteAddress || '';
 
-    // 浏览器端适配：注入 HttpOnly Cookie
-    if (req.raw && req.server) {
-      // Fastify 环境，通过 reply 设置 Cookie 需要在路由 handler 中调用
-      // 此处返回 token，由调用方决定如何设置 Cookie
-    }
+    const sessionId = await createSession({
+      redis,
+      userId: params.userId,
+      uid: params.uid,
+      username: params.username,
+      email: params.email,
+      avatar: params.avatar,
+      status: params.status,
+      appId: params.appId,
+      ip,
+      deviceId: params.deviceId || '',
+      deviceType,
+      userAgent,
+      rememberMe: params.rememberMe || false,
+      reply: req.raw?.reply || req.reply
+    });
 
-    return token;
+    return sessionId;
   }
 
   /**
    * 角色校验：当前用户是否拥有指定角色
-   * @param {string} role - 角色标识
+   * @param {string} role 角色标识
    * @throws {Error} 角色不匹配时抛出 403
    */
   static checkRole(role) {
     const user = StpUtil.check();
-    const userRole = user.role || user.roles;
-    if (Array.isArray(userRole)) {
-      if (!userRole.includes(role)) {
-        const err = new Error(`权限不足：需要角色 ${role}`);
-        err.statusCode = 403;
-        throw err;
-      }
-    } else if (userRole !== role) {
+    const userRoles = user.roles || [];
+    if (!userRoles.includes(role)) {
       const err = new Error(`权限不足：需要角色 ${role}`);
       err.statusCode = 403;
       throw err;
     }
   }
 
-  // ==================== 权限方法（原 StpUtil） ====================
+  // ==================== 权限方法 ====================
 
   /**
    * 获取当前账号所拥有的权限集合
@@ -154,13 +152,13 @@ export default class StpUtil {
 
   /**
    * 判断当前账号是否含有指定权限（支持通配符 + Deny 优先）
-   * @param {string} permission - 权限标识（如 'user:admin:*'）
+   * @param {string} permission 权限标识（如 'user:admin:*'）
    * @returns {boolean}
    */
   static hasPermission(permission) {
     const { allows, denies } = StpUtil.getPermissionList();
 
-    // 最高优：如果命中 Deny，立刻返回 false
+    // Deny 优先
     if (denies.some((p) => StpUtil._isMatch(p, permission))) {
       return false;
     }
@@ -175,7 +173,7 @@ export default class StpUtil {
 
   /**
    * 校验当前账号是否含有指定权限，未通过则抛出异常
-   * @param {string} permission - 权限标识
+   * @param {string} permission 权限标识
    * @throws {NotPermissionException} 权限不足时抛出
    */
   static checkPermission(permission) {
@@ -186,7 +184,7 @@ export default class StpUtil {
 
   /**
    * 校验当前账号是否含有指定权限（AND 语义：全部通过）
-   * @param {...string} permissions - 权限标识列表
+   * @param {...string} permissions 权限标识列表
    * @throws {NotPermissionException} 任一权限不足时抛出
    */
   static checkPermissionAnd(...permissions) {
@@ -199,7 +197,7 @@ export default class StpUtil {
 
   /**
    * 校验当前账号是否含有指定权限（OR 语义：任一通过）
-   * @param {...string} permissions - 权限标识列表
+   * @param {...string} permissions 权限标识列表
    * @throws {NotPermissionException} 全部权限不足时抛出
    */
   static checkPermissionOr(...permissions) {

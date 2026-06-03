@@ -5,7 +5,15 @@
 @tailwind utilities;
 
 :root {
-  --primary: #4f46e5; /* More vibrant Indigo */
+  /* HSL 色彩系统（由 theme store 驱动） */
+  --primary: 238.7 83.5% 66.7%;
+  --primary-light: 238.7 83.5% 76.7%;
+  --primary-dark: 238.7 83.5% 46.7%;
+  --accent: 238.3 82.7% 67.5%;
+  --muted: 210 40% 96.1%;
+  --ring: 222.2 47.4% 11.2%;
+
+  --primary: #4f46e5;
   --secondary: #7c3aed;
   --bg: #f8fafc;
   --text: #1e293b;
@@ -17,7 +25,14 @@
 }
 
 .dark {
-  --primary: #06b6d4; /* Cyan for Dark */
+  --primary: 188.9 94.4% 42.7%;
+  --primary-light: 188.9 94.4% 52.7%;
+  --primary-dark: 188.9 94.4% 32.7%;
+  --accent: 188.9 94.4% 42.7%;
+  --muted: 217.2 32.6% 17.5%;
+  --ring: 216 34% 17%;
+
+  --primary: #06b6d4;
   --secondary: #6366f1;
   --bg: #020617;
   --text: #f1f5f9;

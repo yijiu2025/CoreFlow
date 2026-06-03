@@ -7,7 +7,7 @@
  * POST /device/authorize  — 用户输入 user_code 并授权
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { DeviceService } from '../../../oauth21/services/device.service.js';
+import { DeviceService } from '../../../app/oauth21/services/device.service.js';
 
 const deviceService = new DeviceService();
 

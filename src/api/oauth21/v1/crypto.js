@@ -4,7 +4,7 @@
  * GET /crypto/public-key — 获取前端加密公钥
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { getEncryptionPublicKey } from '../../../oauth21/crypto/encryption.js';
+import { getEncryptionPublicKey } from '../../../app/oauth21/crypto/encryption.js';
 
 export default async function (fastify) {
   registerGroupMetadata({

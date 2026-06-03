@@ -1,9 +1,8 @@
-import IamDao from '../../../admin/dao/iam.dao.js';
-import { registerSecureRoute } from '../../guard.js'; 
-import { actionMetaRegistry } from '../../../utils/PbacRegistry.js'; 
+import IamDao from '../../../app/admin/dao/iam.dao.js';
+import { registerSecureRoute } from '../../guard.js';
+import { actionMetaRegistry } from '../../../utils/PbacRegistry.js';
 
 export default async function (fastify) {
-  
   /**
    * GET /admin/v1/iam/roles
    * 获取管理员有权分配的角色列表 (级别 <= 当前管理员级别)
@@ -37,7 +36,7 @@ export default async function (fastify) {
     url: '/admin/v1/iam/actions/dictionary',
     handler: async (request, reply) => {
       // actionMetaRegistry 是在各个业务模块加载时，通过 definePermissionMeta 压入内存的
-      return reply.result?.success 
+      return reply.result?.success
         ? reply.result.success('获取全量权限字典', actionMetaRegistry)
         : reply.send({ success: true, data: actionMetaRegistry });
     }
@@ -76,7 +75,7 @@ export default async function (fastify) {
     url: '/admin/v1/iam/roles/assign',
     handler: async (request, reply) => {
       // 从解析后的 JWT 中获取当前管理员 UID
-      const adminUid = request.user.uid; 
+      const adminUid = request.user.uid;
       const { targetUid, roleId, appId } = request.body;
 
       if (!targetUid || !roleId || !appId) {
@@ -84,7 +83,12 @@ export default async function (fastify) {
       }
 
       try {
-        const result = await IamDao.assignRole(adminUid, targetUid, roleId, appId);
+        const result = await IamDao.assignRole(
+          adminUid,
+          targetUid,
+          roleId,
+          appId
+        );
         return reply.send({ success: true, data: result });
       } catch (err) {
         return reply.code(403).send({ error: err.message });
@@ -110,7 +114,12 @@ export default async function (fastify) {
       }
 
       try {
-        const result = await IamDao.updateInlinePolicy(adminUid, targetUid, appId, policy);
+        const result = await IamDao.updateInlinePolicy(
+          adminUid,
+          targetUid,
+          appId,
+          policy
+        );
         return reply.send({ success: true, data: result });
       } catch (err) {
         return reply.code(403).send({ error: err.message });

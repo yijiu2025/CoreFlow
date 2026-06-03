@@ -1,13 +1,14 @@
 /**
  * User 用户中心
  *
- * GET /user/v1/userinfo  — 获取当前登录用户信息（OIDC scope 控制字段）
- * GET /user/v1/profile   — 获取当前用户基础资料（预留）
- * PUT /user/v1/update    — 更新当前用户信息（预留）
+ * GET /user/v1/userinfo     — 获取当前登录用户信息（OIDC scope 控制字段）
+ * GET /user/v1/permissions  — 获取当前用户的角色与权限列表
+ * GET /user/v1/profile      — 获取当前用户基础资料（预留）
+ * PUT /user/v1/update       — 更新当前用户信息（预留）
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import UserDao from '../../../oauth21/dao/user.dao.js';
+import UserDao from '../../../app/oauth21/dao/user.dao.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -65,6 +66,42 @@ export default async function (fastify) {
       }
 
       return reply.result.success('获取成功', info);
+    }
+  });
+
+  /**
+   * GET /user/v1/permissions
+   *
+   * 获取当前已认证用户的角色与权限列表。
+   * 数据直接从 session 中读取，无需额外查询数据库。
+   * 返回结构：
+   *  - roles: string[]              角色编码列表，如 ['admin', 'operator']
+   *  - permissions: { allows, denies }  权限策略，allows 为允许列表，denies 为拒绝列表
+   *
+   * 前端可用于：
+   *  - v-auth 指令控制按钮/元素显示
+   *  - 路由守卫控制页面访问
+   *  - 动态菜单生成
+   */
+  registerSecureRoute(fastify, {
+    name: 'permissions',
+    alias: '获取权限列表',
+    method: 'GET',
+    url: '/permissions',
+    requireLogin: true,
+    handler: async (request, reply) => {
+      const user = request.state?.user;
+      if (!user?.sub) {
+        return reply.code(401).send({
+          error: 'invalid_token',
+          error_description: '身份验证失败，请重新登录'
+        });
+      }
+
+      return reply.result.success('获取成功', {
+        roles: user.roles || [],
+        permissions: user.permissions || { allows: [], denies: [] }
+      });
     }
   });
 }

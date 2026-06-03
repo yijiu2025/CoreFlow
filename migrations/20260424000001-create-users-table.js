@@ -1,73 +1,81 @@
-// migrations/20260424000001-create-users-table.js
-// 示例迁移：创建用户基础信息表
-// 说明：每个迁移必须导出 up (前进) 和 down (回滚) 两个函数
-
 /**
- * 前进：创建 users 表
+ * 迁移：创建用户基础信息表
+ * 对应模型：src/models/user/User.js
+ * 表名：user_user
+ * 幂等设计：表已存在时跳过
  */
+
 export async function up({ queryInterface, Sequelize }) {
-  await queryInterface.createTable('users', {
-    uid: {
-      type: Sequelize.DataTypes.INTEGER,
+  const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
+  const exists = tables.some((t) => Object.values(t)[0] === 'user_user');
+  if (exists) return;
+
+  await queryInterface.createTable('user_user', {
+    id: {
+      type: Sequelize.BIGINT,
       primaryKey: true,
       autoIncrement: true,
-      comment: '用户唯一标识'
+      comment: '内部系统主键'
     },
-    username: {
-      type: Sequelize.DataTypes.STRING(50),
+    uid: {
+      type: Sequelize.UUID,
+      defaultValue: Sequelize.UUIDV4,
       unique: true,
       allowNull: false,
-      comment: '用户名'
+      comment: '对外全局唯一标识'
     },
-    nickname: {
-      type: Sequelize.DataTypes.STRING(50),
-      allowNull: true,
-      comment: '昵称'
+    username: {
+      type: Sequelize.STRING(50),
+      allowNull: false,
+      comment: '用户显示昵称'
     },
     email: {
-      type: Sequelize.DataTypes.STRING(100),
-      unique: true,
+      type: Sequelize.STRING(100),
       allowNull: true,
-      comment: '邮箱'
+      comment: '联系邮箱'
     },
     phone: {
-      type: Sequelize.DataTypes.STRING(20),
-      unique: true,
+      type: Sequelize.STRING(20),
       allowNull: true,
-      comment: '手机号'
+      comment: '联系手机号'
     },
     avatar: {
-      type: Sequelize.DataTypes.STRING(255),
+      type: Sequelize.STRING(255),
       allowNull: true,
       comment: '头像链接'
     },
     status: {
-      type: Sequelize.DataTypes.TINYINT,
+      type: Sequelize.TINYINT,
       defaultValue: 1,
-      comment: '1:可用, 0:禁用'
+      comment: '1:正常, 0:封禁, -1:已注销'
+    },
+    delete_version: {
+      type: Sequelize.BIGINT,
+      allowNull: false,
+      defaultValue: 0,
+      comment: '软删除版本标志'
     },
     created_at: {
-      type: Sequelize.DataTypes.DATE,
-      allowNull: false
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
     },
     updated_at: {
-      type: Sequelize.DataTypes.DATE,
-      allowNull: false
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    },
+    deleted_at: {
+      type: Sequelize.DATE,
+      allowNull: true
     }
   });
 
-  // 创建索引
-  await queryInterface.addIndex('users', ['email'], {
-    name: 'idx_users_email'
-  });
-  await queryInterface.addIndex('users', ['status'], {
-    name: 'idx_users_status'
-  });
+  await queryInterface.addIndex('user_user', ['uid'], { name: 'idx_uid' });
+  await queryInterface.addIndex('user_user', ['email', 'delete_version'], { unique: true, name: 'uk_email_delete_version' });
+  await queryInterface.addIndex('user_user', ['phone', 'delete_version'], { unique: true, name: 'uk_phone_delete_version' });
 }
 
-/**
- * 回滚：删除 users 表
- */
 export async function down({ queryInterface }) {
-  await queryInterface.dropTable('users');
+  await queryInterface.dropTable('user_user');
 }

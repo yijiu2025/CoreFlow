@@ -2,8 +2,8 @@ export default (sequelize, DataTypes) => {
   const SessionLog = sequelize.define(
     'SessionLog',
     {
-      /** 
-       * 自增主键 
+      /**
+       * 自增主键
        * 在分区表设计中，主键/唯一索引必须包含分区字段 (created_at)。
        * 因此将 id 与 created_at 设为联合主键 (Composite Primary Key)。
        */
@@ -29,7 +29,8 @@ export default (sequelize, DataTypes) => {
       event: {
         type: DataTypes.STRING(50),
         allowNull: false,
-        comment: '事件类型: LOGIN, LOGOUT, KICK, FORBIDDEN'
+        comment:
+          '事件类型: LOGIN, LOGIN_FAILED, LOGOUT, KICK, FORBIDDEN, SESSION_REFRESH'
       },
       app_id: {
         type: DataTypes.STRING(64),

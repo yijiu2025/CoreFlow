@@ -9,20 +9,30 @@
  */
 import { v4 as uuidv4 } from 'uuid';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { AuthorizationService, OAuthError } from '../../../oauth21/services/authorization.service.js';
-import { TokenService } from '../../../oauth21/services/token.service.js';
-import { decrypt, validateTimestamp } from '../../../oauth21/crypto/encryption.js';
-import { issueAccessToken, issueIdToken } from '../../../oauth21/crypto/jwt.js';
-import { generateToken } from '../../../oauth21/crypto/tokens.js';
-import ApprovalDao from '../../../oauth21/dao/approval.dao.js';
-import TokenDao from '../../../oauth21/dao/token.dao.js';
-import UserDao from '../../../oauth21/dao/user.dao.js';
-import ClientDao from '../../../oauth21/dao/client.dao.js';
-import captchaService from '../../../verify/captcha.js';
+import {
+  AuthorizationService,
+  OAuthError
+} from '../../../app/oauth21/services/authorization.service.js';
+import { TokenService } from '../../../app/oauth21/services/token.service.js';
+import {
+  decrypt,
+  validateTimestamp
+} from '../../../app/oauth21/crypto/encryption.js';
+import {
+  issueAccessToken,
+  issueIdToken
+} from '../../../app/oauth21/crypto/jwt.js';
+import { generateToken } from '../../../app/oauth21/crypto/tokens.js';
+import ApprovalDao from '../../../app/oauth21/dao/approval.dao.js';
+import TokenDao from '../../../app/oauth21/dao/token.dao.js';
+import UserDao from '../../../app/oauth21/dao/user.dao.js';
+import ClientDao from '../../../app/oauth21/dao/client.dao.js';
+import { captchaService } from '../../../verify/captcha/index.js';
 import { getSessionStore } from '../../../redis/session-store.js';
-import config from '../../../oauth21/config/config.js';
-import verifyDao from '../../../verify/dao/verify.js';
-import { issueH5Token } from './signature.js';
+import config from '../../../app/oauth21/config/config.js';
+import { emailDao } from '../../../verify/email/index.js';
+import { issueH5Token } from '../../../auth/signature.js';
+import { logLoginFailure } from '../../../auth/session.js';
 
 import { createNonceStore } from '../../../redis/nonce-store.js';
 
@@ -73,7 +83,9 @@ export default async function (fastify) {
   const qrStore = getSessionStore(fastify, 'qr');
   // 🔐 安全头处理：允许特定页面被 iframe 嵌入 (SSO 核心需求)
   fastify.addHook('onSend', (request, reply, payload, done) => {
-    const isMini = request.url.includes('mini-login') || request.url.includes('mini-register');
+    const isMini =
+      request.url.includes('mini-login') ||
+      request.url.includes('mini-register');
     if (isMini) {
       reply.header('X-Frame-Options', 'ALLOWALL');
       reply.header('Content-Security-Policy', "frame-ancestors 'self' *");
@@ -86,7 +98,6 @@ export default async function (fastify) {
     enabled: true,
     requireLogin: false
   });
-
 
   /**
    * GET /authorize — 授权请求入口
@@ -104,10 +115,16 @@ export default async function (fastify) {
     url: '/authorize',
     handler: async (request, reply) => {
       try {
-        const validated = await authService.validateAuthorizeRequest(request.query);
+        const validated = await authService.validateAuthorizeRequest(
+          request.query
+        );
 
         const sessionId = uuidv4();
-        await sessionStore.set(sessionId, { ...validated, query: request.query, createdAt: Date.now() });
+        await sessionStore.set(sessionId, {
+          ...validated,
+          query: request.query,
+          createdAt: Date.now()
+        });
 
         const userId = request.cookies?.user_id;
 
@@ -131,13 +148,21 @@ export default async function (fastify) {
           });
         }
 
-        const approval = await ApprovalDao.getEffectiveApproval(userId, validated.client.client_id);
+        const approval = await ApprovalDao.getEffectiveApproval(
+          userId,
+          validated.client.client_id
+        );
         const hasConsent = approval !== null;
 
         // 如果已经授权过，执行静默跳转 (SSO 核心体验)
         // 除非客户端明确要求 prompt=consent，但目前根据需求，如果有 Cookie 则走授权界面
         if (hasConsent && request.query.prompt !== 'consent') {
-          return await issueCodeAndRedirect(reply, sessionId, userId, sessionStore);
+          return await issueCodeAndRedirect(
+            reply,
+            sessionId,
+            userId,
+            sessionStore
+          );
         }
 
         // 返回 consent 动作以及完整的用户上下文信息，供前端展示“账号选择/点击授权”界面
@@ -157,7 +182,9 @@ export default async function (fastify) {
       } catch (err) {
         if (err instanceof OAuthError && request.query.redirect_uri) {
           const sep = request.query.redirect_uri.includes('?') ? '&' : '?';
-          return reply.redirect(`${request.query.redirect_uri}${sep}${err.toRedirectParams()}`);
+          return reply.redirect(
+            `${request.query.redirect_uri}${sep}${err.toRedirectParams()}`
+          );
         }
         throw err;
       }
@@ -176,7 +203,12 @@ export default async function (fastify) {
       const { sessionId, username, password } = request.body;
       const session = await sessionStore.get(sessionId);
       if (!session) {
-        return reply.code(400).send({ error: 'invalid_session', error_description: 'Invalid session' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_session',
+            error_description: 'Invalid session'
+          });
       }
 
       const user = await authService.authenticateUser(username, password);
@@ -190,11 +222,23 @@ export default async function (fastify) {
         });
       }
 
-      reply.setCookie('user_id', user.id, { httpOnly: true, maxAge: 3_600_000, path: '/' });
+      reply.setCookie('user_id', user.id, {
+        httpOnly: true,
+        maxAge: 3_600_000,
+        path: '/'
+      });
 
-      const approval = await ApprovalDao.getEffectiveApproval(user.id, session.client.client_id);
+      const approval = await ApprovalDao.getEffectiveApproval(
+        user.id,
+        session.client.client_id
+      );
       if (approval) {
-        return await issueCodeAndRedirect(reply, sessionId, user.id, sessionStore);
+        return await issueCodeAndRedirect(
+          reply,
+          sessionId,
+          user.id,
+          sessionStore
+        );
       }
 
       return reply.send({
@@ -219,7 +263,12 @@ export default async function (fastify) {
       const { sessionId, user_id, action } = request.body;
       const session = await sessionStore.get(sessionId);
       if (!session) {
-        return reply.code(400).send({ error: 'invalid_session', error_description: 'Invalid session' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_session',
+            error_description: 'Invalid session'
+          });
       }
 
       if (action === 'deny') {
@@ -234,35 +283,60 @@ export default async function (fastify) {
         appId: session.client.client_id,
         scopes: session.scope.split(' ')
       });
-      return await issueCodeAndRedirect(reply, sessionId, user_id, sessionStore);
+      return await issueCodeAndRedirect(
+        reply,
+        sessionId,
+        user_id,
+        sessionStore
+      );
     }
   });
 
   /**
    * ─── 统一直接令牌发放核心逻辑 ───
    */
-  async function issueDirectTokens(user, client_id, scope, oidcNonce, request, reply) {
-    const client = client_id ? (await tokenService.authenticateClient(request)) : {
-      client_id: 'first-party-app',
-      scope: 'openid profile email'
-    };
+  async function issueDirectTokens(
+    user,
+    client_id,
+    scope,
+    oidcNonce,
+    request,
+    reply
+  ) {
+    const client = client_id
+      ? await tokenService.authenticateClient(request)
+      : {
+          client_id: 'first-party-app',
+          scope: 'openid profile email'
+        };
 
     if (client_id && !client) {
       throw new Error('invalid_client');
     }
 
-    const finalScopes = (scope || client.scope || 'openid profile email').split(' ');
+    const finalScopes = (scope || client.scope || 'openid profile email').split(
+      ' '
+    );
     const scopeString = finalScopes.join(' ');
-    
+
     await ApprovalDao.saveApproval({
       uid: user.id,
       appId: client.client_id,
       scopes: finalScopes
     });
 
-    const accessToken = issueAccessToken({ sub: user.id, client_id: client.client_id, scope: scopeString });
+    const accessToken = issueAccessToken({
+      sub: user.id,
+      client_id: client.client_id,
+      scope: scopeString
+    });
     const refreshToken = generateToken(48);
-    await TokenDao.save(refreshToken, { sub: user.id, client_id: client.client_id, scope: scopeString, expiresIn: config.jwt.refreshTokenTTL });
+    await TokenDao.save(refreshToken, {
+      sub: user.id,
+      client_id: client.client_id,
+      scope: scopeString,
+      expiresIn: config.jwt.refreshTokenTTL
+    });
 
     const result = {
       access_token: accessToken,
@@ -303,14 +377,18 @@ export default async function (fastify) {
         path: '/oauth2.1/token',
         sameSite: 'strict'
       });
-      
+
       // 下发非 HttpOnly 的辅助 Cookie
-      reply.setCookie('tracknick', encodeURIComponent(user.name || user.username), {
-        path: '/',
-        httpOnly: false,
-        sameSite: 'lax',
-        maxAge: config.jwt.accessTokenTTL * 1000
-      });
+      reply.setCookie(
+        'tracknick',
+        encodeURIComponent(user.name || user.username),
+        {
+          path: '/',
+          httpOnly: false,
+          sameSite: 'lax',
+          maxAge: config.jwt.accessTokenTTL * 1000
+        }
+      );
       reply.setCookie('user_avatar', encodeURIComponent(user.avatar || ''), {
         path: '/',
         httpOnly: false,
@@ -346,7 +424,12 @@ export default async function (fastify) {
       const captchaStore = getSessionStore(fastify, 'captcha');
       const isVerified = await captchaService.consume(captchaKey, captchaStore);
       if (!isVerified) {
-        return reply.code(400).send({ error: 'invalid_captcha', error_description: '请先完成图形验证' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_captcha',
+            error_description: '请先完成图形验证'
+          });
       }
     }
 
@@ -355,11 +438,21 @@ export default async function (fastify) {
     // 2. 解密逻辑 (RSA-OAEP)
     if (encrypted) {
       if (!validateTimestamp(timestamp)) {
-        return reply.code(400).send({ error: 'invalid_request', error_description: '请求时间戳异常' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_request',
+            error_description: '请求时间戳异常'
+          });
       }
       const store = ensureNonceStore(request);
       if (!nonce || (await store.check(nonce))) {
-        return reply.code(400).send({ error: 'invalid_request', error_description: '重放攻击检测：nonce 无效' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_request',
+            error_description: '重放攻击检测：nonce 无效'
+          });
       }
       await store.mark(nonce);
 
@@ -372,7 +465,12 @@ export default async function (fastify) {
         email = payload.email;
         code = payload.code;
       } catch {
-        return reply.code(400).send({ error: 'invalid_request', error_description: '解密失败或格式错误' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_request',
+            error_description: '解密失败或格式错误'
+          });
       }
     } else {
       username = plainUsername;
@@ -386,31 +484,70 @@ export default async function (fastify) {
 
     if (type === 'email') {
       if (!email || !code) {
-        return reply.code(400).send({ error: 'invalid_request', error_description: '邮箱和验证码不能为空' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_request',
+            error_description: '邮箱和验证码不能为空'
+          });
       }
 
       // 校验验证码
       const emailCodeStore = getSessionStore(fastify, 'email_code');
       try {
-        await verifyDao.checkEmailCode(email, code, emailCodeStore);
+        await emailDao.verifyCode(email, code, emailCodeStore);
       } catch (err) {
-        return reply.code(400).send({ error: 'invalid_grant', error_description: err.message || '验证码错误或已过期' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_grant',
+            error_description: err.message || '验证码错误或已过期'
+          });
       }
 
       // 查找用户
       user = await UserDao.findByEmail(email);
       if (!user) {
-        return reply.code(404).send({ error: 'invalid_grant', error_description: '该邮箱尚未注册账户' });
+        await logLoginFailure({
+          email,
+          appId: 'oauth21',
+          ip: request.ip,
+          userAgent: request.headers['user-agent'] || '',
+          reason: '邮箱未注册'
+        });
+        return reply
+          .code(404)
+          .send({
+            error: 'invalid_grant',
+            error_description: '该邮箱尚未注册账户'
+          });
       }
     } else {
       if (!username || !password) {
-        return reply.code(400).send({ error: 'invalid_request', error_description: '用户名和密码不能为空' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_request',
+            error_description: '用户名和密码不能为空'
+          });
       }
 
       // 3. 验证用户
       user = await authService.authenticateUser(username, password);
       if (!user) {
-        return reply.code(401).send({ error: 'invalid_grant', error_description: '账号或密码错误' });
+        await logLoginFailure({
+          email: username,
+          appId: 'oauth21',
+          ip: request.ip,
+          userAgent: request.headers['user-agent'] || '',
+          reason: '密码错误'
+        });
+        return reply
+          .code(401)
+          .send({
+            error: 'invalid_grant',
+            error_description: '账号或密码错误'
+          });
       }
     }
 
@@ -426,29 +563,43 @@ export default async function (fastify) {
     } else {
       client = await ClientDao.findById(finalClientId);
       if (!client) {
-        return reply.code(400).send({ error: 'invalid_client', error_description: '无效的客户端 ID' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_client',
+            error_description: '无效的客户端 ID'
+          });
       }
     }
 
-    const finalScopes = (scope || client.scope || 'openid profile email').split(' ');
+    const finalScopes = (scope || client.scope || 'openid profile email').split(
+      ' '
+    );
     const scopeString = finalScopes.join(' ');
 
     // 检查用户是否已授权该应用
     if (client.client_id !== 'first-party-app') {
-      const approval = await ApprovalDao.getEffectiveApproval(user.id, client.client_id);
+      const approval = await ApprovalDao.getEffectiveApproval(
+        user.id,
+        client.client_id
+      );
       const hasConsent = approval !== null;
 
       if (!hasConsent) {
         // 创建临时授权 Key，有效期 5 分钟
         const consentKey = uuidv4();
         const consentStore = getSessionStore(fastify, 'consent_session');
-        await consentStore.set(consentKey, {
-          userId: user.id,
-          clientId: client.client_id,
-          scopes: finalScopes,
-          scopeStr: scopeString,
-          oidcNonce
-        }, 300); // 300秒 = 5分钟
+        await consentStore.set(
+          consentKey,
+          {
+            userId: user.id,
+            clientId: client.client_id,
+            scopes: finalScopes,
+            scopeStr: scopeString,
+            oidcNonce
+          },
+          300
+        ); // 300秒 = 5分钟
 
         return reply.send({
           action: 'consent',
@@ -482,11 +633,16 @@ export default async function (fastify) {
           refreshToken: result.refresh_token
         },
         ret: [`SUCCESS::登录成功`],
-        v: "1.0"
+        v: '1.0'
       };
     } catch (err) {
       if (err.message === 'invalid_client') {
-        return reply.code(401).send({ error: 'invalid_client', error_description: '客户端认证失败' });
+        return reply
+          .code(401)
+          .send({
+            error: 'invalid_client',
+            error_description: '客户端认证失败'
+          });
       }
       throw err;
     }
@@ -525,18 +681,30 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { consentKey } = request.body;
       if (!consentKey) {
-        return reply.code(400).send({ error: 'invalid_request', error_description: 'consentKey 不能为空' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_request',
+            error_description: 'consentKey 不能为空'
+          });
       }
 
       const consentStore = getSessionStore(fastify, 'consent_session');
       const session = await consentStore.get(consentKey);
       if (!session) {
-        return reply.code(400).send({ error: 'invalid_session', error_description: '授权会话已过期，请重新登录' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_session',
+            error_description: '授权会话已过期，请重新登录'
+          });
       }
 
       const user = await UserDao.findById(session.userId);
       if (!user) {
-        return reply.code(404).send({ error: 'invalid_grant', error_description: '用户不存在' });
+        return reply
+          .code(404)
+          .send({ error: 'invalid_grant', error_description: '用户不存在' });
       }
 
       // 1. 保存授权记录
@@ -552,7 +720,14 @@ export default async function (fastify) {
       // 3. 签发并返回令牌 (写入 client_id 以供 issueDirectTokens / tokenService.authenticateClient 读取)
       try {
         request.body.client_id = session.clientId;
-        const result = await issueDirectTokens(user, session.clientId, session.scopeStr, session.oidcNonce, request, reply);
+        const result = await issueDirectTokens(
+          user,
+          session.clientId,
+          session.scopeStr,
+          session.oidcNonce,
+          request,
+          reply
+        );
         return {
           data: {
             accessToken: result.access_token,
@@ -560,11 +735,16 @@ export default async function (fastify) {
             refreshToken: result.refresh_token
           },
           ret: [`SUCCESS::授权确认成功`],
-          v: "1.0"
+          v: '1.0'
         };
       } catch (err) {
         if (err.message === 'invalid_client') {
-          return reply.code(401).send({ error: 'invalid_client', error_description: '客户端认证失败' });
+          return reply
+            .code(401)
+            .send({
+              error: 'invalid_client',
+              error_description: '客户端认证失败'
+            });
         }
         throw err;
       }
@@ -583,7 +763,9 @@ export default async function (fastify) {
       // 转发至 SSO 注册逻辑 (这里简单复用，实际生产中可调用独立的注册 Service)
       const { username, password, email } = request.body;
       // 注意：此处应同样包含验证码校验逻辑，为简洁起见此处略去或调用统一校验函数
-      return reply.code(201).send({ message: '快捷注册功能暂由 SSO 注册接口统一处理' });
+      return reply
+        .code(201)
+        .send({ message: '快捷注册功能暂由 SSO 注册接口统一处理' });
     }
   });
 
@@ -601,9 +783,13 @@ export default async function (fastify) {
     url: '/qr/generate',
     handler: async (request, reply) => {
       const qrKey = uuidv4();
-      const qrData = { status: 'PENDING', userId: null, expiredAt: Date.now() + 120_000 };
+      const qrData = {
+        status: 'PENDING',
+        userId: null,
+        expiredAt: Date.now() + 120_000
+      };
       await qrStore.set(qrKey, qrData, 120);
-      
+
       return { qrKey, expires_in: 120 };
     }
   });
@@ -619,14 +805,19 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { qrKey } = request.body;
       const data = await qrStore.get(qrKey);
-      
+
       if (!data || data.status === 'CONFIRMED') {
-        return reply.code(400).send({ error: 'invalid_qr', error_description: '二维码不存在、已确认或已过期' });
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_qr',
+            error_description: '二维码不存在、已确认或已过期'
+          });
       }
 
       data.status = 'SCANNED';
       await qrStore.set(qrKey, data, 120);
-      
+
       return { success: true };
     }
   });
@@ -641,26 +832,36 @@ export default async function (fastify) {
     method: 'POST',
     url: '/qr/confirm',
     // 生产环境中，移动端发送此请求应携带自己的认证信息
-    // requireLogin: true, 
+    // requireLogin: true,
     handler: async (request, reply) => {
       const { qrKey } = request.body;
       const redisKey = `qr:${qrKey}`;
-      
+
       // 此处简化，假设移动端通过 Cookie/State 传递了当前登录用户的 ID
       // 实际应使用 request.state.user.id
-      const userId = request.cookies?.user_id || (request.state && request.state.user ? request.state.user.id : null);
+      const userId =
+        request.cookies?.user_id ||
+        (request.state && request.state.user ? request.state.user.id : null);
       if (!userId) {
-        return reply.code(401).send({ error: 'unauthorized', error_description: '移动端未登录' });
+        return reply
+          .code(401)
+          .send({ error: 'unauthorized', error_description: '移动端未登录' });
       }
 
       const data = await qrStore.get(qrKey);
-      
-      if (!data) return reply.code(400).send({ error: 'invalid_qr', error_description: '二维码无效或已过期' });
+
+      if (!data)
+        return reply
+          .code(400)
+          .send({
+            error: 'invalid_qr',
+            error_description: '二维码无效或已过期'
+          });
 
       data.status = 'CONFIRMED';
       data.userId = userId;
       await qrStore.set(qrKey, data, 120);
-      
+
       return { success: true };
     }
   });
@@ -676,19 +877,26 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { qrKey, client_id, scope, nonce: oidcNonce } = request.query;
       const data = await qrStore.get(qrKey);
-      
+
       if (!data) return { status: 'EXPIRED' };
-      
+
       // 如果已确认，执行令牌签发
       if (data.status === 'CONFIRMED') {
         const user = await UserDao.findById(data.userId);
         if (!user) {
-           return { status: 'ERROR', error: 'User not found' };
+          return { status: 'ERROR', error: 'User not found' };
         }
 
         try {
-          const result = await issueDirectTokens(user, client_id, scope, oidcNonce, request, reply);
-          
+          const result = await issueDirectTokens(
+            user,
+            client_id,
+            scope,
+            oidcNonce,
+            request,
+            reply
+          );
+
           // 签发成功后销毁二维码
           await qrStore.delete(qrKey);
 
@@ -701,7 +909,7 @@ export default async function (fastify) {
               refreshToken: result.refresh_token
             },
             ret: [`SUCCESS::扫码登录成功`],
-            v: "1.0"
+            v: '1.0'
           };
         } catch (err) {
           if (err.message === 'invalid_client') {
@@ -710,9 +918,8 @@ export default async function (fastify) {
           throw err;
         }
       }
-      
+
       return { status: data.status };
     }
   });
 }
-

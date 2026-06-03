@@ -5,9 +5,11 @@ import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-import { registerSystemMetadata, setRegistrationContext } from '../../api/guard.js';
-
-const C = { reset: '\x1b[0m', green: '\x1b[32m', yellow: '\x1b[33m', red: '\x1b[31m', cyan: '\x1b[36m' };
+import {
+  registerSystemMetadata,
+  setRegistrationContext
+} from '../../api/guard.js';
+import { C } from '../../utils/colors.js';
 
 export default async (app) => {
   const apiRoot = path.resolve(__dirname, '../../api');
@@ -55,7 +57,9 @@ export default async (app) => {
         }
       }
     } catch (err) {
-      console.warn(`⚠️ [Loader] ${C.yellow}读取目录失败: ${currentPath} ${err.message}${C.reset}`);
+      console.warn(
+        `⚠️ [Loader] ${C.yellow}读取目录失败: ${currentPath} ${err.message}${C.reset}`
+      );
     }
   }
 
@@ -67,10 +71,14 @@ export default async (app) => {
       if (typeof routerPlugin === 'function') {
         await app.register(routerPlugin);
         const relativePath = path.relative(apiRoot, filePath);
-        console.log(`✅ [API] ${C.green}已注册: /${relativePath.replace(/\\/g, '/')}${C.reset}`);
+        console.log(
+          `✅ [API] ${C.green}已注册: /${relativePath.replace(/\\/g, '/')}${C.reset}`
+        );
       }
     } catch (err) {
-      console.error(`❌ [API] ${C.red}文件加载失败: ${filePath} ${err.message}${C.reset}`);
+      console.error(
+        `❌ [API] ${C.red}文件加载失败: ${filePath} ${err.message}${C.reset}`
+      );
     }
   }
 

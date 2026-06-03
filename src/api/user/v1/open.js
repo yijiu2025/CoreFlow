@@ -7,10 +7,10 @@
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import userDao from '../../../user/dao/user.js';
-import verifyDao from '../../../verify/dao/verify.js';
+import userDao from '../../../app/user/dao/user.js';
+import { emailDao } from '../../../verify/email/index.js';
 import { getSessionStore } from '../../../redis/session-store.js';
-import '../../../user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
+import '../../../app/user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
 
 export default async function (fastify) {
   const emailCodeStore = getSessionStore(fastify, 'email_code');
@@ -35,7 +35,7 @@ export default async function (fastify) {
       // 验证邮件验证码
       try {
         const { email, code } = request.body;
-        await verifyDao.checkEmailCode(email, code, emailCodeStore);
+        await emailDao.verifyCode(email, code, emailCodeStore);
       } catch (err) {
         return reply.result.fail(err.message, null, 400);
       }

@@ -1,4 +1,4 @@
-import { registerDeleteVersionHooks } from '../../utils/softDeleteHooks.js';
+import { registerDeleteVersionHooks } from '../../db/softDeleteHooks.js';
 
 /**
  * 工业级用户基础信息模型 (User Profile)

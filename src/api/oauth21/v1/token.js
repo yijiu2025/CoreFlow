@@ -5,8 +5,8 @@
  * POST /revoke  — 令牌撤销（RFC 7009）
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { TokenService, TokenError } from '../../../oauth21/services/token.service.js';
-import config from '../../../oauth21/config/config.js';
+import { TokenService, TokenError } from '../../../app/oauth21/services/token.service.js';
+import config from '../../../app/oauth21/config/config.js';
 
 const tokenService = new TokenService();
 
@@ -41,7 +41,11 @@ export default async function (fastify) {
         });
       }
 
-      const client = await tokenService.authenticateClient(request);
+      // refresh_token 允许 first-party-app 无 client_secret 刷新
+      let client = await tokenService.authenticateClient(request);
+      if (!client && grant_type === 'refresh_token') {
+        client = { client_id: 'first-party-app', scope: 'openid profile email' };
+      }
       if (!client) {
         return reply.code(401).send({
           error: 'invalid_client',
@@ -72,7 +76,9 @@ export default async function (fastify) {
           case 'refresh_token': {
             const { refresh_token, scope } = request.body;
             if (!refresh_token) throw new TokenError('invalid_request', 'refresh_token is required');
-            result = await tokenService.handleRefreshToken({ refresh_token, scope, client });
+            // first-party-app 刷新无需客户端认证（前端直接刷新）
+            const refreshClient = client || { client_id: 'first-party-app', scope: 'openid profile email' };
+            result = await tokenService.handleRefreshToken({ refresh_token, scope, client: refreshClient });
             break;
           }
 

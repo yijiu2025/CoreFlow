@@ -15,7 +15,7 @@
       <div v-for="log in logs" :key="log.id || log.timestamp"
         class="group flex items-center px-3 py-2 rounded-lg transition-all animate-slide-in text-[12px] font-mono border"
         :class="[
-          log.blocked
+          log.blocked || isErrorStatus(log.statusCode)
             ? (isDark ? 'bg-red-500/10 text-red-200 border-transparent shadow-[inset_4px_0_0_#ef4444]' : 'bg-red-50 text-red-700 border-red-100 shadow-[inset_4px_0_0_#ef4444]')
             : (isDark ? 'hover:bg-white/5 text-slate-300 border-transparent hover:border-white/10' : 'hover:bg-slate-50 text-slate-700 border-transparent hover:border-slate-200')
         ]">
@@ -48,8 +48,8 @@
 
         <!-- Status -->
         <div class="w-16 text-right font-bold">
-          <span v-if="log.blocked" class="text-red-500 flex items-center justify-end gap-1">
-            <ShieldAlert class="w-3 h-3" />
+          <span v-if="log.blocked || isErrorStatus(log.statusCode)" class="text-red-500 flex items-center justify-end gap-1">
+            <ShieldAlert v-if="log.blocked" class="w-3 h-3" />
             {{ log.statusCode || 403 }}
           </span>
           <span v-else class="text-emerald-500">{{ log.statusCode || 200 }}</span>
@@ -72,6 +72,11 @@ defineProps({
   logs: Array,
   isDark: Boolean
 })
+
+/** 判断是否为失败状态码（4xx/5xx） */
+const isErrorStatus = (statusCode?: number) => {
+  return statusCode && statusCode >= 400
+}
 
 const getMethodClass = (method) => {
   const map = {

@@ -34,6 +34,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { X } from 'lucide-vue-next'
+import { SSO_URL } from '@/config/services'
 
 const props = defineProps({
   isOpen: Boolean
@@ -42,7 +43,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'login-success'])
 
 const loading = ref(true)
-const ssoUrl = (import.meta as any).env?.VITE_SSO_URL || 'http://localhost:5173'
+const ssoUrl = SSO_URL
 const loginUrl = `${ssoUrl}/mini-login?lang=zh_cn&appName=firewall&appEntrance=web&styleType=horizontal&bizParams=&notLoadSsoView=false&notKeepLogin=false&isMobile=false&qrCodeFirst=false&stie=01&rnd=${Math.random()}`
 
 function close() {
@@ -53,7 +54,7 @@ function close() {
 const handleMessage = (event: MessageEvent) => {
   // Logic to handle cross-origin messages from the login iframe
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
-    emit('login-success', event.data.user)
+    emit('login-success', { user: event.data.user, token: event.data.token })
     close()
   }
 }

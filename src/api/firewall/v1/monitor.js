@@ -1,5 +1,5 @@
 import { registerGroupMetadata, registerSecureRoute, getFullUrl } from '../../guard.js';
-import { getRecentRecords, getSummary, clearAll, setBroadcastHandler } from '../../../firewall/data/store.js';
+import { getRecentRecords, getSummary, clearAll, setBroadcastHandler } from '../../../app/firewall/data/store.js';
 import {
   getServerNode,
   updateServerNodeMetadata,
@@ -11,8 +11,8 @@ import {
   removeFromBlacklist,
   addToWhitelist,
   removeFromWhitelist
-} from '../../../firewall/dao/dao.js';
-import { setBlock, removeBlock } from '../../../firewall/engine/index.js';
+} from '../../../app/firewall/dao/dao.js';
+import { setBlock, removeBlock } from '../../../app/firewall/engine/index.js';
 import {
   getActiveBlocks,
   getActiveWhitelist,
@@ -22,7 +22,7 @@ import {
   removeBlockFp,
   setWhitelistFp,
   removeWhitelistFp
-} from '../../../firewall/dao/block-manager.js';
+} from '../../../app/firewall/dao/block-manager.js';
 import {
   summarySchema,
   updateNodeSchema,

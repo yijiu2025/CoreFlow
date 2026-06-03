@@ -1,4 +1,4 @@
-import { registerDeleteVersionHooks } from '../../utils/softDeleteHooks.js';
+import { registerDeleteVersionHooks } from '../../db/softDeleteHooks.js';
 
 /**
  * 工业级角色定义表 (PBAC 架构)

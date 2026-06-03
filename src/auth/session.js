@@ -3,6 +3,7 @@
  * 负责会话的创建、验证、销毁、续期和自动刷新
  */
 import crypto from 'node:crypto';
+import { Op } from 'sequelize';
 import sequelize from '../db/index.js';
 import {
   signCookie,
@@ -20,6 +21,122 @@ const SESSION_PREFIX = 'session:';
 const REFRESH_PREFIX = 'refresh:';
 
 /**
+ * 设备类型常量
+ */
+export const DEVICE_TYPE = {
+  BROWSER: 'browser', // 浏览器（Chrome/Firefox/Safari 等）
+  APP: 'app', // 移动端 App
+  DESKTOP: 'desktop', // 桌面客户端
+  MINIAPP: 'miniapp', // 小程序
+  API: 'api' // API 调用（服务间通信）
+};
+
+/**
+ * 从 User-Agent 推断设备类型
+ * @param {string} ua User-Agent 字符串
+ * @returns {string} 设备类型
+ */
+export function detectDeviceType(ua) {
+  if (!ua) return DEVICE_TYPE.API;
+  const lower = ua.toLowerCase();
+  if (lower.includes('miniprogram') || lower.includes('micromessenger'))
+    return DEVICE_TYPE.MINIAPP;
+  if (
+    lower.includes('android') ||
+    lower.includes('iphone') ||
+    lower.includes('mobile')
+  )
+    return DEVICE_TYPE.APP;
+  if (lower.includes('electron') || lower.includes('desktop'))
+    return DEVICE_TYPE.DESKTOP;
+  return DEVICE_TYPE.BROWSER;
+}
+
+/**
+ * 踢掉同设备类型的旧会话（单设备单登录）
+ * @param {object} redis Redis 客户端
+ * @param {number} userId 用户 ID
+ * @param {string} appId 应用 ID
+ * @param {string} deviceType 设备类型
+ */
+async function kickByDeviceType(redis, userId, appId, deviceType) {
+  if (!redis) return;
+
+  const { SessionToken, SessionLog } = sequelize.models;
+
+  // 查找该用户在该应用下同设备类型的未撤销会话
+  const oldTokens = await SessionToken.findAll({
+    where: { user_id: userId, app_id: appId, revoked: false }
+  });
+
+  for (const token of oldTokens) {
+    // 通过 Redis session 数据判断设备类型
+    const sessionData = await redis.get(`${SESSION_PREFIX}${token.token}`);
+    if (sessionData) {
+      const data = JSON.parse(sessionData);
+      if (data.deviceType === deviceType) {
+        // 删除 Redis session
+        await redis.del(`${SESSION_PREFIX}${token.token}`);
+        // 标记 revoked
+        await token.update({ revoked: true });
+        // 记录日志
+        await SessionLog.create({
+          user_id: userId,
+          event: 'KICK',
+          app_id: appId,
+          details: {
+            reason: 'single_device_login',
+            deviceType,
+            kickedSessionId: token.token
+          }
+        });
+      }
+    }
+  }
+}
+
+/**
+ * 限制并发会话数（超过限制时踢掉最旧的会话）
+ * @param {object} redis Redis 客户端
+ * @param {number} userId 用户 ID
+ * @param {string} appId 应用 ID
+ * @param {number} maxSessions 最大并发会话数（默认 5）
+ */
+async function enforceMaxSessions(redis, userId, appId, maxSessions = 5) {
+  if (!redis) return;
+
+  const { SessionToken, SessionLog } = sequelize.models;
+
+  // 查找该用户所有未撤销的会话
+  const tokens = await SessionToken.findAll({
+    where: { user_id: userId, revoked: false },
+    order: [['last_active', 'ASC']] // 最旧的排前面
+  });
+
+  // 超过限制时踢掉最旧的会话
+  while (tokens.length >= maxSessions) {
+    const oldest = tokens.shift();
+    if (!oldest) break;
+
+    // 删除 Redis session
+    await redis.del(`${SESSION_PREFIX}${oldest.token}`);
+    // 标记 revoked
+    await oldest.update({ revoked: true });
+    // 记录日志
+    await SessionLog.create({
+      user_id: userId,
+      event: 'KICK',
+      app_id: appId,
+      details: {
+        reason: 'max_sessions_exceeded',
+        maxSessions,
+        kickedSessionId: oldest.token
+      }
+    });
+  }
+}
+
+/**
  * 创建会话
  * @param {object} params
  * @param {object} params.redis Redis 客户端
@@ -32,6 +149,7 @@ const REFRESH_PREFIX = 'refresh:';
  * @param {string} params.appId 登录的应用 ID
  * @param {string} params.ip 客户端 IP
  * @param {string} params.deviceId 设备标识
+ * @param {string} params.deviceType 设备类型（browser/app/desktop/miniapp/api）
  * @param {string} params.userAgent User-Agent
  * @param {boolean} params.rememberMe 是否长期登录
  * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
@@ -49,12 +167,24 @@ export async function createSession(params) {
     appId,
     ip,
     deviceId,
+    deviceType,
     userAgent,
     rememberMe,
     reply
   } = params;
 
-  // 1. 加载该用户在该应用的角色和权限
+  // 1. 并发会话限制：超过 5 个时踢掉最旧的会话
+  await enforceMaxSessions(redis, userId, appId);
+
+  // 2. 单设备单登录：踢掉同用户同应用同设备类型的旧会话
+  await kickByDeviceType(
+    redis,
+    userId,
+    appId,
+    deviceType || DEVICE_TYPE.BROWSER
+  );
+
+  // 2. 加载该用户在该应用的角色和权限
   const { roles, permissions } = await loadUserPermissions(userId, appId);
 
   // 2. 生成 sessionId 和 refreshToken
@@ -76,6 +206,7 @@ export async function createSession(params) {
     permissions,
     ip,
     deviceId,
+    deviceType: deviceType || DEVICE_TYPE.BROWSER,
     userAgent,
     loginAt: Math.floor(Date.now() / 1000),
     lastActiveAt: Math.floor(Date.now() / 1000),
@@ -128,18 +259,22 @@ export async function createSession(params) {
     app_id: appId,
     ip,
     user_agent: userAgent,
-    details: { rememberMe, deviceId }
+    details: {
+      rememberMe,
+      deviceId,
+      deviceType: deviceType || DEVICE_TYPE.BROWSER
+    }
   });
 
-  // 6. 下发 Cookie
-  const sidValue = signCookie(sessionId);
+  // 6. 下发 Cookie（accessCount 从 0 开始）
+  const sidValue = signCookie(sessionId, 0);
   reply.setCookie(COOKIE_SID, sidValue, {
     ...COOKIE_OPTIONS.SID,
     maxAge: sessionTtl
   });
 
   if (refreshToken && rememberMe) {
-    const sidRValue = signCookie(refreshToken);
+    const sidRValue = signCookie(refreshToken, 0);
     reply.setCookie(COOKIE_SID_R, sidRValue, {
       ...COOKIE_OPTIONS.SID_R,
       maxAge: REFRESH_TOKEN_TTL
@@ -157,16 +292,28 @@ export async function createSession(params) {
  * @returns {object|null} 会话数据或 null
  */
 export async function getSession(params) {
-  const { redis, cookies } = params;
+  const { redis, cookies, reply } = params;
 
   // 1. 解析 sid cookie
   const sidCookie = cookies[COOKIE_SID];
   if (!sidCookie) return null;
 
-  const sessionId = verifyCookie(sidCookie);
-  if (!sessionId) return null;
+  const parsed = verifyCookie(sidCookie);
+  if (!parsed) return null;
 
-  // 2. Redis 查询
+  const { sessionId, accessCount } = parsed;
+
+  // 2. 递增访问次数，重新签名 cookie
+  if (reply) {
+    const newSidValue = signCookie(sessionId, accessCount + 1);
+    const isRememberMe = cookies[COOKIE_SID_R] ? true : false;
+    reply.setCookie(COOKIE_SID, newSidValue, {
+      ...COOKIE_OPTIONS.SID,
+      maxAge: isRememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL
+    });
+  }
+
+  // 3. Redis 查询
   if (redis) {
     const raw = await redis.get(`${SESSION_PREFIX}${sessionId}`);
     if (raw) {
@@ -174,11 +321,11 @@ export async function getSession(params) {
       // 续期
       const ttl = data.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
       await redis.expire(`${SESSION_PREFIX}${sessionId}`, ttl);
-      return { ...data, sessionId };
+      return { ...data, sessionId, accessCount: accessCount + 1 };
     }
   }
 
-  // 3. Redis 未命中，降级到 DB
+  // 4. Redis 未命中，降级到 DB
   const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
   const { SessionToken, User } = sequelize.models;
 
@@ -240,8 +387,10 @@ export async function refreshSession(params) {
   const sidRCookie = cookies[COOKIE_SID_R];
   if (!sidRCookie) return null;
 
-  const refreshToken = verifyCookie(sidRCookie);
-  if (!refreshToken) return null;
+  const parsed = verifyCookie(sidRCookie);
+  if (!parsed) return null;
+
+  const refreshToken = parsed.sessionId; // sid_r cookie 中存储的 payload 是 refreshToken
 
   // 2. Redis 查询 refreshToken 对应的旧 sessionId
   let oldSessionId = null;
@@ -249,35 +398,32 @@ export async function refreshSession(params) {
     oldSessionId = await redis.get(`${REFRESH_PREFIX}${refreshToken}`);
   }
 
-  // 3. DB 查询 refreshToken 记录
-  const tokenHash = crypto
-    .createHash('sha256')
-    .update(oldSessionId || refreshToken)
-    .digest('hex');
+  // 3. DB 查询会话记录（createSession 存储的是 sha256(sessionId)）
   const { SessionToken } = sequelize.models;
+  let record = null;
 
-  // 尝试用 refreshToken 的哈希查找
-  const refreshTokenHash = crypto
-    .createHash('sha256')
-    .update(refreshToken)
-    .digest('hex');
-  const tokenRecord = await SessionToken.findOne({
-    where: { token: refreshTokenHash, revoked: false }
-  });
-
-  // 也尝试用旧 sessionId 哈希查找
-  let oldTokenRecord = null;
   if (oldSessionId) {
+    // 优先用 Redis 中的 oldSessionId 精确查找
     const oldHash = crypto
       .createHash('sha256')
       .update(oldSessionId)
       .digest('hex');
-    oldTokenRecord = await SessionToken.findOne({
+    record = await SessionToken.findOne({
       where: { token: oldHash, revoked: false }
     });
   }
 
-  const record = tokenRecord || oldTokenRecord;
+  // Redis 未命中时，降级用 refreshToken 哈希查找（兼容旧数据）
+  if (!record) {
+    const refreshTokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+    record = await SessionToken.findOne({
+      where: { token: refreshTokenHash, revoked: false }
+    });
+  }
+
   if (!record) return null;
 
   // 4. 加载用户信息和权限
@@ -336,8 +482,23 @@ export async function refreshSession(params) {
     .digest('hex');
   await record.update({ token: newTokenHash, last_active: new Date() });
 
-  // 8. 下发新 sid cookie
-  const sidValue = signCookie(newSessionId);
+  // 8. 记录刷新日志（关联用户，操作留痕）
+  const { SessionLog } = sequelize.models;
+  await SessionLog.create({
+    user_id: record.user_id,
+    event: 'SESSION_REFRESH',
+    app_id: record.app_id,
+    ip: record.ip,
+    user_agent: record.user_agent,
+    details: {
+      oldSessionId: oldSessionId || '-',
+      newSessionId,
+      reason: 'cookie_expired_auto_refresh'
+    }
+  });
+
+  // 9. 下发新 sid cookie（刷新时 accessCount 清零）
+  const sidValue = signCookie(newSessionId, 0);
   reply.setCookie(COOKIE_SID, sidValue, {
     ...COOKIE_OPTIONS.SID,
     maxAge: sessionTtl
@@ -421,4 +582,97 @@ export async function kickUser(redis, userId, appId = null) {
     app_id: appId || 'ALL',
     details: { kickedCount: tokens.length }
   });
+}
+
+/**
+ * 记录登录失败日志
+ * @param {object} params
+ * @param {string} params.email 尝试登录的邮箱
+ * @param {string} params.appId 应用 ID
+ * @param {string} params.ip 客户端 IP
+ * @param {string} params.userAgent User-Agent
+ * @param {string} params.reason 失败原因
+ * @param {string} [params.deviceType] 设备类型
+ */
+export async function logLoginFailure(params) {
+  const { email, appId, ip, userAgent, reason, deviceType } = params;
+
+  const { SessionLog } = sequelize.models;
+  await SessionLog.create({
+    user_id: null, // 登录失败时可能没有 userId
+    event: 'LOGIN_FAILED',
+    app_id: appId,
+    ip,
+    user_agent: userAgent,
+    details: {
+      email,
+      reason,
+      deviceType: deviceType || DEVICE_TYPE.BROWSER
+    }
+  });
+}
+
+/**
+ * 获取会话统计信息
+ * @param {object} redis Redis 客户端
+ * @returns {Promise<{onlineUsers: number, activeDevices: number, redisSessions: number}>}
+ */
+export async function getSessionStats(redis) {
+  const { SessionToken, UserSession } = sequelize.models;
+
+  // 1. 在线用户数（最近 15 分钟有活跃记录）
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+  const onlineUsers = await UserSession.count({
+    where: { last_active_at: { [Op.gte]: fifteenMinutesAgo } }
+  });
+
+  // 2. 活跃设备数（未撤销的会话）
+  const activeDevices = await SessionToken.count({
+    where: { revoked: false }
+  });
+
+  // 3. Redis 中的活跃 session 数
+  let redisSessions = 0;
+  if (redis) {
+    try {
+      const keys = await redis.keys(`${SESSION_PREFIX}*`);
+      redisSessions = keys.length;
+    } catch {
+      // Redis 故障时忽略
+    }
+  }
+
+  return { onlineUsers, activeDevices, redisSessions };
+}
+
+/**
+ * 获取登录趋势（最近 N 天的登录次数）
+ * @param {number} days 天数（默认 7）
+ * @returns {Promise<Array<{date: string, count: number}>>}
+ */
+export async function getLoginTrend(days = 7) {
+  const { SessionLog } = sequelize.models;
+
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  const logs = await SessionLog.findAll({
+    where: {
+      event: 'LOGIN',
+      created_at: { [Op.gte]: startDate }
+    },
+    attributes: [
+      [sequelize.fn('DATE', sequelize.col('created_at')), 'date'],
+      [sequelize.fn('COUNT', '*'), 'count']
+    ],
+    group: [sequelize.fn('DATE', sequelize.col('created_at'))],
+    order: [[sequelize.fn('DATE', sequelize.col('created_at')), 'ASC']],
+    raw: true
+  });
+
+  return logs.map((row) => ({
+    date: row.date,
+    count: parseInt(row.count, 10)
+  }));
 }
