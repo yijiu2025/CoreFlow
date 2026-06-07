@@ -66,6 +66,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const securitySettings = ref<SecuritySettings>({
     defense: { ...DEFAULT_DEFENSE }
   })
+  const loaded = ref(false)
   const availableIpApis = ref<string[]>([])
   const activeSettingsTab = ref('node')
   const activeDefenseSubTab = ref('scanning')
@@ -102,6 +103,7 @@ export const useSettingsStore = defineStore('settings', () => {
       if (settingsData?.availableApis) {
         availableIpApis.value = settingsData.availableApis
       }
+      loaded.value = true
     } catch (err) {
       console.error('获取安全设置失败:', err)
     }
@@ -183,6 +185,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     securitySettings,
+    loaded,
     availableIpApis,
     activeSettingsTab,
     activeDefenseSubTab,

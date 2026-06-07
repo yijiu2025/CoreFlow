@@ -106,11 +106,11 @@ import PrimaryButton from '../ui/PrimaryButton.vue'
 defineProps({
   isOpen: Boolean,
   isDarkMode: Boolean,
-  form: Object,
+  form: { type: Object, default: () => ({}) },
   editingSystem: String,
   editingGroup: String,
   editingApi: String,
-  zIndex: { type: String, default: 'z-[3000]' }
+  zIndex: { type: String, default: 'z-[5000]' }
 })
 
 defineEmits(['close', 'save'])

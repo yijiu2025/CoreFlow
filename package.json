@@ -8,6 +8,7 @@
     "dev": "chcp 65001 >nul 2>&1 && nodemon --env-file=.env index.js",
     "start": "node --env-file=.env.production index.js",
     "migrate": "node --env-file=.env src/db/migrate.js",
+    "setup:admin": "node --env-file=.env scripts/setup-superadmin.js",
     "lint": "eslint . --fix",
     "format": "prettier --write .",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js"

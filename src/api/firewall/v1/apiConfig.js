@@ -9,7 +9,7 @@ export default async function (fastify) {
     description: '负责全域安全策略的实时分发与热更新，仅限受信任的管理内网访问。',
     prefix: '/v1/apiconfigs',
     enabled: true,
-    requireLogin: false,
+    requireLogin: true,
     allowIps: [],
     allowRoles: []
   });

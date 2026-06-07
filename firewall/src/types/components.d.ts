@@ -11,14 +11,11 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AnalyticsSidebar: typeof import('./../components/layout/AnalyticsSidebar.vue')['default']
     BaseModal: typeof import('./../components/ui/BaseModal.vue')['default']
     ConfigPanel: typeof import('./../components/ConfigPanel.vue')['default']
     DataTable: typeof import('./../components/ui/DataTable.vue')['default']
     DefenseManagementModal: typeof import('./../components/modals/DefenseManagementModal.vue')['default']
-    EmptyState: typeof import('./../components/ui/EmptyState.vue')['default']
     FormField: typeof import('./../components/ui/FormField.vue')['default']
-    GlassCard: typeof import('./../components/ui/GlassCard.vue')['default']
     LoginModal: typeof import('./../components/modals/LoginModal.vue')['default']
     LogTable: typeof import('./../components/LogTable.vue')['default']
     MapChart: typeof import('./../components/MapChart.vue')['default']
@@ -29,16 +26,13 @@ declare module 'vue' {
     RegionList: typeof import('./../components/RegionList.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    SectionHeader: typeof import('./../components/ui/SectionHeader.vue')['default']
     SecurityConsoleModal: typeof import('./../components/modals/SecurityConsoleModal.vue')['default']
     SettingRow: typeof import('./../components/ui/SettingRow.vue')['default']
-    StatsCard: typeof import('./../components/StatsCard.vue')['default']
     StatusPing: typeof import('./../components/ui/StatusPing.vue')['default']
     SystemSettingsModal: typeof import('./../components/modals/SystemSettingsModal.vue')['default']
     TagInput: typeof import('./../components/ui/TagInput.vue')['default']
     TheHeader: typeof import('./../components/layout/TheHeader.vue')['default']
-    ThreatChart: typeof import('./../components/ThreatChart.vue')['default']
     ToggleSwitch: typeof import('./../components/ui/ToggleSwitch.vue')['default']
-    TrafficSidebar: typeof import('./../components/layout/TrafficSidebar.vue')['default']
+    UserProfileDropdown: typeof import('./../components/layout/UserProfileDropdown.vue')['default']
   }
 }

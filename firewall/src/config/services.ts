@@ -16,3 +16,29 @@ export const SSO_URL = import.meta.env.VITE_SSO_URL || 'http://localhost:5174'
 
 /** 用户信息服务（获取 userinfo 等） */
 export const USER_API_URL = import.meta.env.VITE_USER_API_URL || API_BASE_URL
+
+/** SSO 登录页面路径 */
+export const SSO_LOGIN_PATH = '/mini-login'
+
+/** SSO 登录默认参数 */
+export const SSO_LOGIN_PARAMS = {
+  lang: 'zh_cn',
+  appName: 'firewall',
+  appEntrance: 'web',
+  styleType: 'horizontal',
+  bizParams: '',
+  notLoadSsoView: 'false',
+  notKeepLogin: 'false',
+  isMobile: 'false',
+  qrCodeFirst: 'false',
+  site: '01'
+}
+
+/** 构建 SSO 登录完整 URL */
+export function buildSsoLoginUrl(): string {
+  const params = new URLSearchParams({
+    ...SSO_LOGIN_PARAMS,
+    rnd: Math.random().toString()
+  })
+  return `${SSO_URL}${SSO_LOGIN_PATH}?${params.toString()}`
+}

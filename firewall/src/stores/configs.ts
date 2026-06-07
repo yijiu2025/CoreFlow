@@ -10,6 +10,7 @@ import type { ApiConfigs, EditForm, SaveNodePayload, ApiNodeConfig, GroupConfig,
 
 export const useConfigsStore = defineStore('configs', () => {
   const configs = ref<ApiConfigs>({})
+  const loaded = ref(false)
   const activeSystem = ref('firewall')
   const editingSystem = ref('')
   const editingGroup = ref('')
@@ -29,7 +30,10 @@ export const useConfigsStore = defineStore('configs', () => {
         if (err.code === 401) return null
         throw err
       })
-      configs.value = configData
+      if (configData) {
+        configs.value = configData
+        loaded.value = true
+      }
     } catch (err) {
       console.error('获取 API 配置失败:', err)
     }
@@ -115,6 +119,7 @@ export const useConfigsStore = defineStore('configs', () => {
 
   return {
     configs,
+    loaded,
     activeSystem,
     editingSystem,
     editingGroup,

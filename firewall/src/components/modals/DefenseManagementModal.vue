@@ -1,6 +1,6 @@
 <template>
   <BaseModal :model-value="isOpen" @update:model-value="$emit('close')" :is-dark="isDarkMode"
-    transition="slide" backdrop-class="bg-black/30 backdrop-blur-md" :z-index="zIndex">
+    transition="slide" backdrop-class="bg-black/30 backdrop-blur-md">
 
     <template #header>
       <div class="flex items-center gap-3">
@@ -71,7 +71,7 @@
               </div>
               <div class="flex items-center gap-3 mb-2">
                 <h1 class="text-3xl font-bold tracking-tight" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
-                  {{ $t(defenseRules.find(r => r.id === activeSubTab)?.labelKey) }}
+                  {{ $t(defenseRules.find(r => r.id === activeSubTab)?.labelKey || '') }}
                 </h1>
                 <span
                   class="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold border"
@@ -163,7 +163,7 @@
                 <p class="text-xs text-slate-400 mt-1">Changes are propagated globally across all edge clusters.</p>
               </div>
             </div>
-            <PrimaryButton @click="$emit('saveSecurity')" variant="cyan" size="lg">
+            <PrimaryButton @click="handleSaveSecurity()" variant="cyan" size="lg">
               {{ $t('settings.defense.deploy') }}
             </PrimaryButton>
           </div>
@@ -184,17 +184,21 @@ import NavItem from '../ui/NavItem.vue'
 import ToggleSwitch from '../ui/ToggleSwitch.vue'
 import SettingRow from '../ui/SettingRow.vue'
 import PrimaryButton from '../ui/PrimaryButton.vue'
+import { useUiStore } from '@/stores/ui'
+import { useDashboardStore } from '@/stores/dashboard'
+import { useSettingsStore } from '@/stores/settings'
+import { storeToRefs } from 'pinia'
 
-const props = defineProps({
-  isOpen: Boolean,
-  isDarkMode: Boolean,
-  securitySettings: Object,
-  summary: Object,
-  loading: Boolean,
-  zIndex: { type: String, default: 'z-[3000]' }
-})
+const props = defineProps<{ isOpen: boolean }>()
+const emit = defineEmits(['close'])
 
-const emit = defineEmits(['close', 'saveSecurity'])
+const uiStore = useUiStore()
+const dashboardStore = useDashboardStore()
+const settingsStore = useSettingsStore()
+
+const { isDarkMode, loading } = storeToRefs(uiStore)
+const { summary } = storeToRefs(dashboardStore)
+const { securitySettings } = storeToRefs(settingsStore)
 
 const activeSubTab = ref('scanning')
 
@@ -206,21 +210,33 @@ const defenseRules = [
   { id: 'geo', labelKey: 'settings.defense.geo_filter', icon: Target }
 ]
 
-const isRuleEnabled = (id) => {
-  if (id === 'scanning') return props.securitySettings.defense.enableAutoBlacklist
-  if (id === 'rate') return props.securitySettings.defense.enableRateLimit
-  if (id === 'brute') return props.securitySettings.defense.enableBruteForce
-  if (id === 'conn') return props.securitySettings.defense.enableConnLimit
-  if (id === 'geo') return props.securitySettings.defense.enableGeoFilter
-  return false
+const isRuleEnabled = (id: string) => {
+  const defense = securitySettings.value.defense
+  const map: Record<string, boolean> = {
+    scanning: defense.enableAutoBlacklist,
+    rate: defense.enableRateLimit,
+    brute: defense.enableBruteForce,
+    conn: defense.enableConnLimit,
+    geo: defense.enableGeoFilter
+  }
+  return map[id] || false
 }
 
-const toggleRuleEnabled = (id) => {
-  if (id === 'scanning') props.securitySettings.defense.enableAutoBlacklist = !props.securitySettings.defense.enableAutoBlacklist
-  if (id === 'rate') props.securitySettings.defense.enableRateLimit = !props.securitySettings.defense.enableRateLimit
-  if (id === 'brute') props.securitySettings.defense.enableBruteForce = !props.securitySettings.defense.enableBruteForce
-  if (id === 'conn') props.securitySettings.defense.enableConnLimit = !props.securitySettings.defense.enableConnLimit
-  if (id === 'geo') props.securitySettings.defense.enableGeoFilter = !props.securitySettings.defense.enableGeoFilter
+const toggleRuleEnabled = (id: string) => {
+  const defense = securitySettings.value.defense
+  const keyMap: Record<string, string> = {
+    scanning: 'enableAutoBlacklist',
+    rate: 'enableRateLimit',
+    brute: 'enableBruteForce',
+    conn: 'enableConnLimit',
+    geo: 'enableGeoFilter'
+  }
+  const key = keyMap[id]
+  if (key) defense[key] = !defense[key]
+}
+
+async function handleSaveSecurity() {
+  await settingsStore.saveSecuritySettings()
 }
 </script>
 

@@ -34,7 +34,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { X } from 'lucide-vue-next'
-import { SSO_URL } from '@/config/services'
+import { buildSsoLoginUrl } from '@/config/services'
+import { firewallApi } from '@/api/firewall'
 
 const props = defineProps({
   isOpen: Boolean
@@ -43,18 +44,36 @@ const props = defineProps({
 const emit = defineEmits(['close', 'login-success'])
 
 const loading = ref(true)
-const ssoUrl = SSO_URL
-const loginUrl = `${ssoUrl}/mini-login?lang=zh_cn&appName=firewall&appEntrance=web&styleType=horizontal&bizParams=&notLoadSsoView=false&notKeepLogin=false&isMobile=false&qrCodeFirst=false&stie=01&rnd=${Math.random()}`
+const loginUrl = buildSsoLoginUrl()
 
 function close() {
   emit('close')
 }
 
-// Handle message from iframe if needed (e.g., login success)
-const handleMessage = (event: MessageEvent) => {
-  // Logic to handle cross-origin messages from the login iframe
+// Handle message from iframe (e.g., login success)
+const handleMessage = async (event: MessageEvent) => {
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
-    emit('login-success', { user: event.data.user, token: event.data.token })
+    const { token, sessionToken, user } = event.data
+
+    // Session 模式：用临时 token 换取 sid/sid_r Cookie
+    if (sessionToken) {
+      try {
+        await firewallApi.bindSession(sessionToken)
+      } catch (err) {
+        console.warn('绑定 Session 失败:', err)
+      }
+    }
+
+    // JWT 模式：用 access_token 换取 Cookie
+    if (token) {
+      try {
+        await firewallApi.bindToken(token)
+      } catch (err) {
+        console.warn('绑定 Token 失败:', err)
+      }
+    }
+
+    emit('login-success', { user, token })
     close()
   }
 }

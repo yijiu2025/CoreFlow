@@ -212,6 +212,7 @@ declare global {
   const useMediaQuery: typeof import('@vueuse/core').useMediaQuery
   const useMemoize: typeof import('@vueuse/core').useMemoize
   const useMemory: typeof import('@vueuse/core').useMemory
+  const useMessage: typeof import('./composables/useMessage').useMessage
   const useModel: typeof import('vue').useModel
   const useMounted: typeof import('@vueuse/core').useMounted
   const useMouse: typeof import('@vueuse/core').useMouse
@@ -531,6 +532,7 @@ declare module 'vue' {
     readonly useMediaQuery: UnwrapRef<typeof import('@vueuse/core')['useMediaQuery']>
     readonly useMemoize: UnwrapRef<typeof import('@vueuse/core')['useMemoize']>
     readonly useMemory: UnwrapRef<typeof import('@vueuse/core')['useMemory']>
+    readonly useMessage: UnwrapRef<typeof import('./composables/useMessage')['useMessage']>
     readonly useModel: UnwrapRef<typeof import('vue')['useModel']>
     readonly useMounted: UnwrapRef<typeof import('@vueuse/core')['useMounted']>
     readonly useMouse: UnwrapRef<typeof import('@vueuse/core')['useMouse']>

@@ -200,6 +200,8 @@ export class TokenService {
     await TokenDao.revoke(refresh_token);
 
     const newScope = scope || tokenData.scope;
+
+    // 刷新时重新加载用户权限
     const accessToken = issueAccessToken({
       sub: tokenData.sub,
       client_id: client.client_id,

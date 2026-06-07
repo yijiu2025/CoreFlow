@@ -1,0 +1,10 @@
+{
+  "name": "Auth",
+  "alias": "认证服务",
+  "prefix": "/auth",
+  "description": "会话管理、Token 与 Cookie 互转、认证生命周期",
+  "enabled": true,
+  "requireLogin": false,
+  "allowIps": [],
+  "allowRoles": []
+}

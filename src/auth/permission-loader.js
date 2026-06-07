@@ -32,7 +32,23 @@ export async function loadUserPermissions(userId, appId) {
     ]
   });
 
-  const roles = userRoles.map((ur) => ur.role.code);
+  let roles = userRoles.map((ur) => ur.role.code);
+
+  // 1.5. GLOBAL superadmin 自动获得应用级超管权限
+  if (roles.includes('superadmin') && appId !== 'GLOBAL') {
+    const appAdminRole = `${appId}_admin`;
+    if (!roles.includes(appAdminRole)) {
+      roles.push(appAdminRole);
+      // 加载应用级超管角色的策略
+      const adminRole = await Role.findOne({
+        where: { code: appAdminRole, app_id: appId, delete_version: 0 }
+      });
+      if (adminRole?.policy) {
+        if (Array.isArray(adminRole.policy.allows)) allows.push(...adminRole.policy.allows);
+        if (Array.isArray(adminRole.policy.denies)) denies.push(...adminRole.policy.denies);
+      }
+    }
+  }
 
   // 2. 合并角色策略
   const allows = [];

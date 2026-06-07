@@ -86,9 +86,11 @@ export default async function (fastify) {
             throw new TokenError('unsupported_grant_type', `Grant type "${grant_type}" is not supported`);
         }
 
+        const isProduction = process.env.NODE_ENV === 'production';
         if (result && result.access_token) {
           reply.setCookie('access_token', result.access_token, {
             httpOnly: true,
+            secure: isProduction,
             maxAge: (result.expires_in || 600) * 1000,
             path: '/',
             sameSite: 'lax'
@@ -97,6 +99,7 @@ export default async function (fastify) {
         if (result && result.refresh_token) {
           reply.setCookie('refresh_token', result.refresh_token, {
             httpOnly: true,
+            secure: isProduction,
             maxAge: (config.jwt.refreshTokenTTL || 604800) * 1000,
             path: '/oauth2.1/token',
             sameSite: 'strict'

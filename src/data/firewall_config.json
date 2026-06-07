@@ -1,0 +1,251 @@
+{
+  "serverNode": {
+    "name": "核心防御节点",
+    "country": "中国",
+    "region": "河南",
+    "city": "郑州",
+    "ip": "127.0.0.1",
+    "lat": 34.75,
+    "lon": 113.65,
+    "lastUpdate": null
+  },
+  "securitySettings": {
+    "activeIpApi": "sohu",
+    "showTrajectory": true,
+    "defense": {
+      "manualBlacklistIps": [],
+      "manualBlacklistUsers": [],
+      "manualWhitelistIps": [],
+      "enableAutoBlacklist": true,
+      "maxNotFoundAttempts": 10,
+      "blacklistDuration": 3600,
+      "notFoundWindow": 60,
+      "safePaths": [
+        "/health",
+        "/favicon.ico",
+        "/robots.txt",
+        "/__fw/",
+        "/api/firewall/"
+      ],
+      "internalIpPrefixes": [
+        "127.",
+        "10.",
+        "192.168.",
+        "::1",
+        "172.16.",
+        "172.17.",
+        "172.18.",
+        "172.19.",
+        "172.20.",
+        "172.21.",
+        "172.22.",
+        "172.23.",
+        "172.24.",
+        "172.25.",
+        "172.26.",
+        "172.27.",
+        "172.28.",
+        "172.29.",
+        "172.30.",
+        "172.31."
+      ],
+      "idcIpPrefixes": [
+        "100.104.",
+        "101.37.",
+        "47.88.",
+        "162.14.",
+        "101.36.",
+        "52.82."
+      ],
+      "enableRateLimit": true,
+      "rateLimitRequests": 60,
+      "rateLimitWindow": 60,
+      "enableUserRateLimit": true,
+      "userRateLimitRequests": 120,
+      "userRateLimitWindow": 60,
+      "enableBruteForce": true,
+      "bruteLimit": 5,
+      "bruteWindow": 300,
+      "accountLockTime": 900,
+      "ipBlockTime": 600,
+      "bruteIpLimit": 10,
+      "enableConnLimit": true,
+      "maxConn": 100,
+      "enableGeoFilter": false,
+      "geoRules": {
+        "sensitivePaths": [
+          "/api/admin",
+          "/api/payment",
+          "/api/user/delete"
+        ],
+        "internalPrefixes": [
+          "/internal/"
+        ],
+        "overseasLimit": 10,
+        "overseasWindow": 60,
+        "overseasBlockTime": 3600
+      },
+      "endpointRateLimits": [
+        {
+          "path": "/api/sms",
+          "limit": 3,
+          "window": 600,
+          "blockTime": 1800
+        },
+        {
+          "path": "/api/order",
+          "limit": 10,
+          "window": 60,
+          "blockTime": 1800
+        },
+        {
+          "path": "/api/verify",
+          "limit": 10,
+          "window": 60,
+          "blockTime": 300
+        }
+      ],
+      "botPatterns": [
+        "python-requests",
+        "scrapy",
+        "httpclient",
+        "go-http-client",
+        "java/",
+        "libcurl",
+        "wget",
+        "axios",
+        "node-fetch",
+        "headless",
+        "phantomjs",
+        "selenium"
+      ],
+      "browserPatterns": [
+        "chrome",
+        "firefox",
+        "safari",
+        "edge",
+        "opera"
+      ],
+      "botChallengeNoUaLimit": 10,
+      "botChallengeBotLimit": 30,
+      "botChallengeBrowserLimit": 120
+    },
+    "enableAutoBlacklist": true,
+    "maxNotFoundAttempts": 10,
+    "blacklistDuration": 3600,
+    "notFoundWindow": 60,
+    "enableRateLimit": true,
+    "rateLimitRequests": 60,
+    "rateLimitWindow": 60,
+    "enableBruteForce": true,
+    "bruteLimit": 5,
+    "bruteWindow": 300,
+    "accountLockTime": 900,
+    "ipBlockTime": 600,
+    "bruteIpLimit": 10,
+    "enableConnLimit": true,
+    "maxConn": 100,
+    "enableGeoFilter": false,
+    "geoRules": {
+      "sensitivePaths": [
+        "/api/admin",
+        "/api/payment",
+        "/api/user/delete"
+      ],
+      "internalPrefixes": [
+        "/internal/"
+      ],
+      "overseasLimit": 10,
+      "overseasWindow": 60,
+      "overseasBlockTime": 3600
+    },
+    "enableBotChallenge": true,
+    "botPatterns": [
+      "python-requests",
+      "scrapy",
+      "httpclient",
+      "go-http-client",
+      "java/",
+      "libcurl",
+      "wget",
+      "axios",
+      "node-fetch",
+      "headless",
+      "phantomjs",
+      "selenium"
+    ],
+    "browserPatterns": [
+      "chrome",
+      "firefox",
+      "safari",
+      "edge",
+      "opera"
+    ],
+    "botChallengeNoUaLimit": 10,
+    "botChallengeBotLimit": 30,
+    "botChallengeBrowserLimit": 120,
+    "internalIpPrefixes": [
+      "127.",
+      "10.",
+      "192.168.",
+      "::1",
+      "172.16.",
+      "172.17.",
+      "172.18.",
+      "172.19.",
+      "172.20.",
+      "172.21.",
+      "172.22.",
+      "172.23.",
+      "172.24.",
+      "172.25.",
+      "172.26.",
+      "172.27.",
+      "172.28.",
+      "172.29.",
+      "172.30.",
+      "172.31."
+    ],
+    "idcIpPrefixes": [
+      "100.104.",
+      "101.37.",
+      "47.88.",
+      "162.14.",
+      "101.36.",
+      "52.82."
+    ],
+    "safePaths": [
+      "/health",
+      "/favicon.ico",
+      "/robots.txt",
+      "/__fw/",
+      "/api/firewall/"
+    ],
+    "manualBlacklistIps": [],
+    "manualBlacklistUsers": [],
+    "manualWhitelistIps": [],
+    "enableUserRateLimit": true,
+    "userRateLimitRequests": 120,
+    "userRateLimitWindow": 60,
+    "endpointRateLimits": [
+      {
+        "path": "/api/sms",
+        "limit": 3,
+        "window": 600,
+        "blockTime": 1800
+      },
+      {
+        "path": "/api/order",
+        "limit": 10,
+        "window": 60,
+        "blockTime": 1800
+      },
+      {
+        "path": "/api/verify",
+        "limit": 10,
+        "window": 60,
+        "blockTime": 300
+      }
+    ]
+  }
+}

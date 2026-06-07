@@ -4,7 +4,7 @@
   "description": "企业级核心边界安全矩阵，负责全域入站流量的实时过滤、身份校验与战术防御控制。",
   "prefix": "/api/firewall",
   "enabled": true,
-  "requireLogin": false,
+  "requireLogin": true,
   "allowIps": [],
   "allowRoles": []
 }

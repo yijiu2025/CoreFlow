@@ -41,12 +41,20 @@ async function handleTokenRefresh(): Promise<string> {
 /** 不需要刷新重试的路径（避免死循环） */
 const SKIP_REFRESH_PATHS = ['/user/v1/userinfo', '/user/v1/permissions']
 
+/** 触发登录弹窗（通过 auth store） */
+function triggerLoginModal() {
+  import('@/stores/auth').then(({ useAuthStore }) => {
+    useAuthStore().showLoginModal = true
+  })
+}
+
 /** 401 处理：加入队列或发起刷新 */
 async function handle401(config: AxiosRequestConfig): Promise<any> {
   const url = config.url || ''
 
   // 如果是 userinfo/permissions 等认证检查接口本身 401，直接失败，不重试
   if (SKIP_REFRESH_PATHS.some(p => url.includes(p))) {
+    triggerLoginModal()
     return Promise.reject(new Error('未登录或 Token 已过期'))
   }
 
@@ -59,9 +67,10 @@ async function handle401(config: AxiosRequestConfig): Promise<any> {
       }
       return apiClient(config)
     } catch {
-      // 刷新失败，清除状态
+      // 刷新失败，清除状态并触发登录弹窗
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem('firewall_user')
+      triggerLoginModal()
       return Promise.reject(new Error('Token 刷新失败'))
     } finally {
       isRefreshing = false
@@ -93,12 +102,13 @@ export function createHttp(baseURL?: string): AxiosInstance {
     headers: { 'Content-Type': 'application/json' }
   })
 
-  // 请求拦截
+  // 请求拦截：有 token 时带 Bearer header，否则依赖 Session Cookie
   instance.interceptors.request.use((config) => {
     const token = localStorage.getItem(TOKEN_KEY)
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    // withCredentials: true 确保 Session Cookie 自动携带
     return config
   })
 
@@ -222,6 +232,20 @@ export const firewallApi = {
   // 获取 SSO 用户信息
   getUserInfo: (): Promise<any> =>
     apiClient.get('/user/v1/userinfo'),
+
+  // 将 Bearer Token 绑定为 HttpOnly Cookie
+  bindToken: (token: string): Promise<any> =>
+    apiClient.post('/auth/v1/bind-token', null, {
+      headers: { Authorization: `Bearer ${token}` }
+    }),
+
+  // 用临时 session_token 换取 sid/sid_r Cookie（iframe 登录场景）
+  bindSession: (sessionToken: string): Promise<any> =>
+    apiClient.post('/auth/v1/bind-session', { session_token: sessionToken }),
+
+  // 清除认证 Cookie（退出登录）
+  clearCookie: (): Promise<any> =>
+    apiClient.post('/auth/v1/clear-cookie'),
 
   // 获取当前用户权限
   getPermissions: (): Promise<{ roles: string[], permissions: { allows: string[], denies: string[] } }> =>

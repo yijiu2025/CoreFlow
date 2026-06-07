@@ -5,40 +5,67 @@ import { useCache } from '@/composables/useCache'
 
 const cache = useCache('localStorage')
 
+/**
+ * 认证模式：
+ * - JWT 模式：token 存 localStorage，请求带 Authorization header
+ * - Session 模式（默认）：Cookie 自动携带，无需存 token
+ *
+ * 通过 checkSession 中的 getUserInfo 调用自动适配两种模式
+ */
 export const useAuthStore = defineStore('auth', () => {
   const isLoggedIn = ref(false)
   const user = ref<any>(null)
   const token = ref<string | null>(null)
   const roles = ref<string[]>([])
   const permissions = ref<{ allows: string[]; denies: string[] }>({ allows: [], denies: [] })
+  /** 控制登录弹窗显示（API 层 401 时自动设为 true） */
+  const showLoginModal = ref(false)
 
-  /** 是否为管理员 */
-  const isAdmin = computed(() => roles.value.includes('admin'))
+  /** 是否为管理员（GLOBAL 或 firewall 超管） */
+  const isAdmin = computed(() =>
+    roles.value.includes('admin') ||
+    roles.value.includes('superadmin') ||
+    roles.value.includes('fw_admin')
+  )
+
+  /** 主要角色显示名称 */
+  const roleName = computed(() => {
+    if (roles.value.includes('superadmin') || roles.value.includes('admin')) return '超级管理员'
+    if (roles.value.includes('fw_admin')) return '防火墙管理员'
+    if (roles.value.includes('fw_operator')) return '防火墙操作员'
+    if (roles.value.includes('fw_viewer')) return '观察者'
+    return '访客'
+  })
 
   /** 从缓存恢复状态 */
   function restore() {
-    const savedToken = cache.get<string>('token')
     const savedUser = cache.get<any>('user')
     const savedRoles = cache.get<string[]>('roles')
     const savedPerms = cache.get<any>('permissions')
+    const savedToken = cache.get<string>('token')
 
-    if (savedToken) {
-      token.value = savedToken
+    // 有缓存的用户信息就恢复（Session 模式下可能没有 token）
+    if (savedUser) {
+      user.value = savedUser
       isLoggedIn.value = true
-      if (savedUser) user.value = savedUser
-      if (savedRoles) roles.value = savedRoles
-      if (savedPerms) permissions.value = savedPerms
     }
+    if (savedToken) token.value = savedToken
+    if (savedRoles) roles.value = savedRoles
+    if (savedPerms) permissions.value = savedPerms
   }
 
   function setLoggedIn(status: boolean, userData: any = null, tokenStr?: string) {
     isLoggedIn.value = status
     user.value = userData
-    if (status && tokenStr) {
-      token.value = tokenStr
-      cache.set('token', tokenStr)
+
+    if (status) {
       if (userData) cache.set('user', userData)
+      if (tokenStr) {
+        token.value = tokenStr
+        cache.set('token', tokenStr)
+      }
     }
+
     if (!status) {
       token.value = null
       roles.value = []
@@ -53,7 +80,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 获取当前用户权限
-   * 登录成功后自动调用，将角色和权限存入 store 和缓存
    */
   async function fetchPermissions() {
     try {
@@ -69,30 +95,33 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * 检查会话有效性
+   * 自动适配 JWT 和 Session 两种模式：
+   * - JWT 模式：带 Bearer token 请求
+   * - Session 模式：Cookie 自动携带
+   */
   async function checkSession() {
-    if (!token.value) restore()
+    restore()
 
-    if (token.value) {
-      try {
-        const userInfo: any = await firewallApi.getUserInfo()
-        if (userInfo && userInfo.sub) {
-          // 增量合并，保留缓存中已有的完整数据
-          const merged = {
-            id: userInfo.sub || user.value?.id,
-            username: userInfo.preferred_username || userInfo.name || user.value?.username,
-            name: userInfo.name || user.value?.name,
-            email: userInfo.email || user.value?.email,
-            avatar: userInfo.avatar || user.value?.avatar
-          }
-          isLoggedIn.value = true
-          user.value = merged
-          cache.set('user', merged)
-          await fetchPermissions()
-          return true
+    try {
+      const userInfo: any = await firewallApi.getUserInfo()
+      if (userInfo && userInfo.sub) {
+        const merged = {
+          id: userInfo.sub || user.value?.id,
+          username: userInfo.preferred_username || userInfo.name || user.value?.username,
+          name: userInfo.name || user.value?.name,
+          email: userInfo.email || user.value?.email,
+          avatar: userInfo.avatar || user.value?.avatar
         }
-      } catch (err) {
-        console.log('🔒 Token 已失效')
+        isLoggedIn.value = true
+        user.value = merged
+        cache.set('user', merged)
+        await fetchPermissions()
+        return true
       }
+    } catch (err) {
+      console.log('🔒 未登录或会话已过期')
     }
 
     setLoggedIn(false, null)
@@ -100,8 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 刷新 Access Token
-   * 由 API 层 401 拦截器调用
+   * 刷新 Access Token（仅 JWT 模式使用）
    */
   async function refreshAccessToken(): Promise<string> {
     const refreshToken = cache.get<string>('refresh_token')
@@ -120,7 +148,6 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = newToken
     cache.set('token', newToken)
 
-    // 更新 refresh_token（如果后端返回了新的）
     if (res.refresh_token) {
       cache.set('refresh_token', res.refresh_token, { exp: 86400 })
     }
@@ -130,27 +157,17 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 检查是否拥有指定权限
-   * @param permission 权限标识，如 'config:write'
-   * 支持通配符匹配，deny 优先
    */
   function hasPermission(permission: string): boolean {
-    // 管理员拥有所有权限
     if (isAdmin.value) return true
 
     const { allows, denies } = permissions.value
-
-    // deny 优先：如果在拒绝列表中，直接返回 false
-    if (denies.some(p => isPermissionMatch(p, permission))) {
-      return false
-    }
-
-    // 检查允许列表
+    if (denies.some(p => isPermissionMatch(p, permission))) return false
     return allows.some(p => isPermissionMatch(p, permission))
   }
 
   /**
    * 检查是否拥有指定角色
-   * @param role 角色编码，如 'admin'
    */
   function hasRole(role: string): boolean {
     return roles.value.includes(role)
@@ -158,23 +175,19 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 权限通配符匹配
-   * 支持 '*' 通配符，如 'user:*' 匹配 'user:read', 'user:write' 等
    */
   function isPermissionMatch(pattern: string, target: string): boolean {
     if (pattern === '*') return true
     if (pattern === target) return true
-
-    // 通配符匹配：user:* → user:read, user:write 等
     if (pattern.endsWith(':*')) {
-      const prefix = pattern.slice(0, -1)
-      return target.startsWith(prefix)
+      return target.startsWith(pattern.slice(0, -1))
     }
-
     return false
   }
 
-  function logout() {
+  async function logout() {
     setLoggedIn(false, null)
+    try { await firewallApi.clearCookie() } catch {}
   }
 
   // 初始化时恢复状态
@@ -187,6 +200,8 @@ export const useAuthStore = defineStore('auth', () => {
     roles,
     permissions,
     isAdmin,
+    roleName,
+    showLoginModal,
     setLoggedIn,
     checkSession,
     fetchPermissions,

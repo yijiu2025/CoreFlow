@@ -27,7 +27,7 @@ export function verify(token) {
 /** 签发 Access Token */
 export function issueAccessToken({ sub, client_id, scope, aud }) {
   const now = Math.floor(Date.now() / 1000);
-  return sign({
+  const payload = {
     iss: config.server.issuer,
     sub,
     aud: aud || client_id,
@@ -37,7 +37,8 @@ export function issueAccessToken({ sub, client_id, scope, aud }) {
     exp: now + config.jwt.accessTokenTTL,
     jti: uuidv4(),
     token_type: 'access_token'
-  });
+  };
+  return sign(payload);
 }
 
 /** 签发 ID Token (OIDC) */

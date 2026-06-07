@@ -43,6 +43,11 @@ export default (sequelize, DataTypes) => {
       last_active: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW
+      },
+      revoked: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        comment: '是否已吊销'
       }
     },
     {

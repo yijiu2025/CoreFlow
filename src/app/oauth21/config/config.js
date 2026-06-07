@@ -7,6 +7,7 @@ const config = {
     issuer: process.env.ISSUER || 'http://localhost:3000'
   },
   jwt: {
+    enabled: process.env.JWT_ENABLED === 'true', // 默认关闭，使用 Session 认证
     accessTokenTTL: parseInt(process.env.ACCESS_TOKEN_TTL) || 600,
     refreshTokenTTL: parseInt(process.env.REFRESH_TOKEN_TTL) || 86400,
     idTokenTTL: parseInt(process.env.ID_TOKEN_TTL) || 3600,

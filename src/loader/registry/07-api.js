@@ -51,7 +51,16 @@ export default async (app) => {
         const fullPath = path.join(currentPath, item.name);
 
         if (item.isDirectory()) {
-          await scanDir(fullPath, false);
+          // 如果子目录有 index.js，只加载 index.js（由它组合子模块）
+          // 否则递归扫描
+          const subFiles = await fs.readdir(fullPath).catch(() => []);
+          const hasIndexFile = subFiles.includes('index.js');
+
+          if (hasIndexFile) {
+            await loadRouteFile(path.join(fullPath, 'index.js'));
+          } else {
+            await scanDir(fullPath, false);
+          }
         } else if (item.name.endsWith('.js')) {
           await loadRouteFile(fullPath);
         }

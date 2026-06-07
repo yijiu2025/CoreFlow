@@ -24,6 +24,7 @@ const UserDao = {
     return user
       ? {
           id: user.uid, // sub 字段对应 uid
+          numericId: user.id, // BIGINT 数字主键（Session 等内部使用）
           username: user.username,
           email: user.email,
           name: user.username,
@@ -48,6 +49,7 @@ const UserDao = {
     return user
       ? {
           id: user.uid, // sub 字段对应 uid
+          numericId: user.id, // BIGINT 数字主键（Session 等内部使用）
           username: user.username,
           email: user.email,
           name: user.username,
@@ -78,6 +80,7 @@ const UserDao = {
 
     return {
       id: identity.user.uid, // sub 字段对应 uid
+      numericId: identity.user.id, // BIGINT 数字主键
       username: identity.user.username,
       email: identity.user.email,
       name: identity.user.username,

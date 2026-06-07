@@ -146,6 +146,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
     summary.value = { totalRequests: 0, totalBlocked: 0, topRegions: [], topPaths: [] }
   }
 
+  /** 仅获取摘要数据（不连接 WebSocket） */
+  async function fetchSummary(): Promise<void> {
+    try {
+      const data = await firewallApi.getSummary()
+      if (data) summary.value = data
+    } catch (err) {
+      console.warn('获取摘要失败:', err)
+    }
+  }
+
   return {
     logs,
     summary,
@@ -154,6 +164,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     connectWS,
     disconnectWS,
     refreshNodeLocation,
-    resetSummary
+    resetSummary,
+    fetchSummary
   }
 })

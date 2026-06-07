@@ -1,6 +1,6 @@
 <template>
   <BaseModal :model-value="isOpen" @update:model-value="$emit('close')" :is-dark="isDarkMode"
-    backdrop-class="bg-black/30 backdrop-blur-md">
+    backdrop-class="bg-black/30 backdrop-blur-md" z-index="z-[3000]">
 
     <template #header>
       <div class="flex items-center gap-3">
@@ -50,7 +50,7 @@
             <div class="space-y-2">
               <SettingRow :is-dark="isDarkMode" :icon="Monitor" :title="$t('settings.node.name') || '节点名称'"
                 description="Identify this instance">
-                <input v-model="serverPosition.name" type="text" @blur="$emit('syncNode')"
+                <input v-model="serverPosition.name" type="text" @blur="handleSyncNode"
                   class="w-64 rounded-xl px-4 py-2.5 text-sm font-bold outline-none transition-all border text-right"
                   :class="isDarkMode ? 'bg-black/40 border-white/10 text-white focus:border-indigo-500/50' : 'bg-white border-slate-200 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'">
               </SettingRow>
@@ -65,13 +65,13 @@
                   </div>
                 </div>
                 <div class="grid grid-cols-3 gap-3 pl-14">
-                  <FormField v-model="serverPosition.country" :label="$t('settings.panel.country')" :is-dark="isDarkMode" placeholder="China" @blur="$emit('syncNode')" />
-                  <FormField v-model="serverPosition.region" :label="$t('settings.panel.region')" :is-dark="isDarkMode" placeholder="Henan" @blur="$emit('syncNode')" />
-                  <FormField v-model="serverPosition.city" :label="$t('settings.panel.city')" :is-dark="isDarkMode" placeholder="Zhengzhou" @blur="$emit('syncNode')" />
+                  <FormField v-model="serverPosition.country" :label="$t('settings.panel.country')" :is-dark="isDarkMode" placeholder="China" @blur="handleSyncNode" />
+                  <FormField v-model="serverPosition.region" :label="$t('settings.panel.region')" :is-dark="isDarkMode" placeholder="Henan" @blur="handleSyncNode" />
+                  <FormField v-model="serverPosition.city" :label="$t('settings.panel.city')" :is-dark="isDarkMode" placeholder="Zhengzhou" @blur="handleSyncNode" />
                 </div>
                 <div class="grid grid-cols-2 gap-3 pl-14">
-                  <FormField v-model.number="serverPosition.lat" :label="$t('settings.panel.latitude')" type="number" step="0.01" :is-dark="isDarkMode" placeholder="34.75" @blur="$emit('syncNode')" />
-                  <FormField v-model.number="serverPosition.lon" :label="$t('settings.panel.longitude')" type="number" step="0.01" :is-dark="isDarkMode" placeholder="113.65" @blur="$emit('syncNode')" />
+                  <FormField v-model.number="serverPosition.lat" :label="$t('settings.panel.latitude')" type="number" step="0.01" :is-dark="isDarkMode" placeholder="34.75" @blur="handleSyncNode" />
+                  <FormField v-model.number="serverPosition.lon" :label="$t('settings.panel.longitude')" type="number" step="0.01" :is-dark="isDarkMode" placeholder="113.65" @blur="handleSyncNode" />
                 </div>
               </div>
 
@@ -89,7 +89,7 @@
                       class="absolute right-0 mt-2 w-64 rounded-xl border shadow-2xl overflow-hidden z-50"
                       :class="isDarkMode ? 'bg-slate-800 border-white/10' : 'bg-white border-slate-200'">
                       <button v-for="api in availableIpApis" :key="api.id" type="button"
-                        @click="securitySettings.activeIpApi = api.id; $emit('savePartial', { activeIpApi: api.id }); apiDropdownOpen = false"
+                        @click="securitySettings.activeIpApi = api.id; handleSavePartial({ activeIpApi: api.id }); apiDropdownOpen = false"
                         class="w-full px-4 py-2.5 text-sm font-bold text-right transition-colors flex items-center justify-between"
                         :class="[
                           securitySettings.activeIpApi === api.id
@@ -106,7 +106,7 @@
 
               <SettingRow :is-dark="isDarkMode" :icon="RefreshCw" :title="$t('settings.panel.auto_detect')"
                 :description="$t('settings.panel.auto_detect_desc')" icon-bg="bg-emerald-500/10" icon-color="text-emerald-500">
-                <button @click="$emit('refreshNode')"
+                <button @click="handleRefreshNode()"
                   class="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border active:scale-95"
                   :class="isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'">
                   <RefreshCw class="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
@@ -117,7 +117,7 @@
               <SettingRow :is-dark="isDarkMode" :icon="Languages" :title="$t('settings.system.lang') || '系统语言'"
                 description="Interface language">
                 <div class="flex gap-2">
-                  <button v-for="l in ['zh', 'en', 'ja', 'fr', 'de']" :key="l" @click="$emit('setLocale', l)"
+                  <button v-for="l in ['zh', 'en', 'ja', 'fr', 'de']" :key="l" @click="uiStore.setLocale(l)"
                     class="px-3 py-2 rounded-lg text-[10px] font-black transition-all border uppercase"
                     :class="locale === l ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg' : (isDarkMode ? 'bg-black/20 text-slate-500 border-white/5 hover:bg-white/10' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')">
                     {{ l }}
@@ -132,7 +132,7 @@
             </div>
 
             <div class="pt-6 flex justify-end">
-              <PrimaryButton @click="$emit('saveNode')" variant="indigo">
+              <PrimaryButton @click="handleSaveNode()" variant="indigo">
                 {{ $t('common.save') || '保存更改' }}
               </PrimaryButton>
             </div>
@@ -149,7 +149,7 @@
                 <h4 class="text-2xl font-black tracking-tight" :class="isDarkMode ? 'text-white' : 'text-slate-900'">{{ $t('settings.panel.api_matrix') }}</h4>
                 <p class="text-xs text-slate-500 max-w-sm leading-relaxed font-bold uppercase tracking-wider">{{ $t('settings.panel.api_matrix_desc') }}</p>
               </div>
-              <PrimaryButton @click="$emit('openSecurityConsole')" variant="indigo" size="lg">
+              <PrimaryButton @click="defenseStore.isConfigModalOpen = true" variant="indigo" size="lg">
                 <LayoutGrid class="w-5 h-5" /> {{ $t('settings.panel.enter_matrix') }}
               </PrimaryButton>
             </div>
@@ -275,19 +275,19 @@
               <div class="space-y-5">
                 <TagInput v-model="securitySettings.defense.internalIpPrefixes" :label="$t('settings.firewall.internal_prefix')"
                   badge="IPv4/CIDR" :is-dark="isDarkMode" color="indigo"
-                  @add="val => $emit('tagAdd', { field: 'internalIpPrefixes', value: val })"
-                  @remove="i => $emit('tagRemove', { field: 'internalIpPrefixes', index: i })" />
+                  @add="val => handleTagAdd({ field: 'internalIpPrefixes', value: val })"
+                  @remove="i => handleTagRemove({ field: 'internalIpPrefixes', index: i })" />
                 <TagInput v-model="securitySettings.defense.idcIpPrefixes" :label="$t('settings.firewall.idc_prefix')"
                   badge="Cloud/IDC" :is-dark="isDarkMode" color="rose"
-                  @add="val => $emit('tagAdd', { field: 'idcIpPrefixes', value: val })"
-                  @remove="i => $emit('tagRemove', { field: 'idcIpPrefixes', index: i })" />
+                  @add="val => handleTagAdd({ field: 'idcIpPrefixes', value: val })"
+                  @remove="i => handleTagRemove({ field: 'idcIpPrefixes', index: i })" />
                 <TagInput v-model="securitySettings.defense.safePaths" :label="$t('settings.firewall.safe_paths')"
                   badge="Paths" :is-dark="isDarkMode" color="emerald"
-                  @add="val => $emit('tagAdd', { field: 'safePaths', value: val })"
-                  @remove="i => $emit('tagRemove', { field: 'safePaths', index: i })" />
+                  @add="val => handleTagAdd({ field: 'safePaths', value: val })"
+                  @remove="i => handleTagRemove({ field: 'safePaths', index: i })" />
               </div>
               <div class="mt-4 flex justify-end">
-                <PrimaryButton @click="$emit('savePartial', { internalIpPrefixes: securitySettings.defense.internalIpPrefixes, idcIpPrefixes: securitySettings.defense.idcIpPrefixes, safePaths: securitySettings.defense.safePaths })"
+                <PrimaryButton @click="handleSavePartial({ internalIpPrefixes: securitySettings.defense.internalIpPrefixes, idcIpPrefixes: securitySettings.defense.idcIpPrefixes, safePaths: securitySettings.defense.safePaths })"
                   variant="indigo" size="sm">
                   {{ $t('settings.firewall.save_trust') }}
                 </PrimaryButton>
@@ -295,7 +295,7 @@
             </div>
 
             <div class="pt-2 flex justify-end">
-              <PrimaryButton @click="$emit('saveSecurity')" variant="cyan" size="lg">
+              <PrimaryButton @click="handleSaveSecurity()" variant="cyan" size="lg">
                 {{ $t('settings.defense.deploy') || '应用防护策略' }}
               </PrimaryButton>
             </div>
@@ -306,12 +306,12 @@
             <div class="grid grid-cols-1 gap-3">
               <SettingRow :is-dark="isDarkMode" :icon="RefreshCw" :title="$t('settings.others.full_sync')"
                 :description="$t('settings.others.full_sync_desc')" icon-bg="bg-emerald-500/10" icon-color="text-emerald-400">
-                <PrimaryButton @click="$emit('fetchData')" variant="emerald" size="sm">{{ $t('settings.others.execute_sync') }}</PrimaryButton>
+                <PrimaryButton @click="handleFetchData()" variant="emerald" size="sm">{{ $t('settings.others.execute_sync') }}</PrimaryButton>
               </SettingRow>
 
               <SettingRow :is-dark="isDarkMode" :icon="Trash2" :title="$t('settings.others.audit_reset')"
                 :description="$t('settings.others.audit_reset_desc')" icon-bg="bg-rose-500/10" icon-color="text-rose-500">
-                <PrimaryButton @click="$emit('resetStats')" variant="rose" size="sm">{{ $t('settings.others.execute_reset') }}</PrimaryButton>
+                <PrimaryButton @click="handleResetStats()" variant="rose" size="sm">{{ $t('settings.others.execute_reset') }}</PrimaryButton>
               </SettingRow>
             </div>
 
@@ -324,7 +324,7 @@
                   <span class="text-xs font-black uppercase tracking-widest" :class="isDarkMode ? 'text-white' : 'text-slate-900'">{{ $t('settings.others.ban_management') }}</span>
                   <span class="text-[9px] font-black px-2 py-0.5 rounded-full" :class="isDarkMode ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-100 text-rose-600'">{{ activeBlocks.length }}</span>
                 </div>
-                <button @click="$emit('fetchBlocks')" class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors" :class="isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'">{{ $t('common.refresh') }}</button>
+                <button @click="defenseStore.fetchBlocks()" class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors" :class="isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'">{{ $t('common.refresh') }}</button>
               </div>
 
               <!-- Add block form -->
@@ -392,7 +392,7 @@
                   <span v-else class="text-[10px] font-bold" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">{{ formatRemaining(row.remainingSeconds) }}</span>
                 </template>
                 <template #cell-action="{ row }">
-                  <button @click="$emit('removeBlock', { type: row.type, value: row.type === 'fingerprint' ? row.fingerprint : row.ip })"
+                  <button @click="handleRemoveBlock({ type: row.type, value: row.type === 'fingerprint' ? row.fingerprint : row.ip })"
                     class="text-[10px] font-black uppercase tracking-tighter transition-colors"
                     :class="isDarkMode ? 'text-rose-500/80 hover:text-rose-400' : 'text-rose-600 hover:text-rose-500'">
                     {{ $t('common.unban') }}
@@ -410,7 +410,7 @@
                   <span class="text-xs font-black uppercase tracking-widest" :class="isDarkMode ? 'text-white' : 'text-slate-900'">{{ $t('settings.others.whitelist_management') }}</span>
                   <span class="text-[9px] font-black px-2 py-0.5 rounded-full" :class="isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-100 text-emerald-600'">{{ activeWhitelist.length }}</span>
                 </div>
-                <button @click="$emit('fetchWhitelist')" class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors" :class="isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'">{{ $t('common.refresh') }}</button>
+                <button @click="defenseStore.fetchWhitelist()" class="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors" :class="isDarkMode ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'">{{ $t('common.refresh') }}</button>
               </div>
 
               <div class="flex gap-4 items-end mb-6">
@@ -454,7 +454,7 @@
                   <span class="text-[10px] font-bold" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">{{ formatRemaining(row.remainingSeconds) }}</span>
                 </template>
                 <template #cell-action="{ row }">
-                  <button @click="$emit('removeWhitelist', { type: row.type, value: row.type === 'fingerprint' ? row.fingerprint : row.ip })"
+                  <button @click="handleRemoveWhitelist({ type: row.type, value: row.type === 'fingerprint' ? row.fingerprint : row.ip })"
                     class="text-[10px] font-black uppercase tracking-tighter transition-colors"
                     :class="isDarkMode ? 'text-rose-500/80 hover:text-rose-400' : 'text-rose-600 hover:text-rose-500'">
                     {{ $t('common.remove') }}
@@ -473,6 +473,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { storeToRefs } from 'pinia'
 import {
   Settings, Layout, ShieldCheck, ShieldAlert,
   MapPin, Activity, RefreshCw, Trash2,
@@ -487,29 +488,36 @@ import ToggleSwitch from '../ui/ToggleSwitch.vue'
 import TagInput from '../ui/TagInput.vue'
 import PrimaryButton from '../ui/PrimaryButton.vue'
 import DataTable from '../ui/DataTable.vue'
+import { useUiStore } from '@/stores/ui'
+import { useDashboardStore } from '@/stores/dashboard'
+import { useSettingsStore } from '@/stores/settings'
+import { useConfigsStore } from '@/stores/configs'
+import { useDefenseStore } from '@/stores/defense'
+import { firewallApi } from '@/api/firewall'
 
-const props = defineProps({
-  isOpen: Boolean,
-  isDarkMode: Boolean,
-  serverPosition: Object,
-  securitySettings: Object,
-  configs: Object,
-  summary: Object,
-  loading: Boolean,
-  availableIpApis: Array,
-  activeBlocks: { type: Array, default: () => [] },
-  activeWhitelist: { type: Array, default: () => [] }
-})
+const props = defineProps<{ isOpen: boolean }>()
+const emit = defineEmits(['close'])
 
-const emit = defineEmits(['close', 'saveNode', 'syncNode', 'refreshNode', 'openSecurityConsole', 'openDefense', 'setLocale', 'setTheme', 'fetchData', 'resetStats', 'addBlacklist', 'removeBlacklist', 'saveSecurity', 'savePartial', 'addBlock', 'removeBlock', 'fetchBlocks', 'addWhitelist', 'removeWhitelist', 'fetchWhitelist', 'tagAdd', 'tagRemove'])
+// 直接访问 stores
+const uiStore = useUiStore()
+const dashboardStore = useDashboardStore()
+const settingsStore = useSettingsStore()
+const configsStore = useConfigsStore()
+const defenseStore = useDefenseStore()
+
+const { isDarkMode, loading } = storeToRefs(uiStore)
+const { summary, serverPosition } = storeToRefs(dashboardStore)
+const { securitySettings, availableIpApis } = storeToRefs(settingsStore)
+const { configs } = storeToRefs(configsStore)
+const { activeBlocks, activeWhitelist } = storeToRefs(defenseStore)
 
 const { locale, t } = useI18n()
 const activeTab = ref('panel')
 const apiDropdownOpen = ref(false)
-const apiSelectRef = ref(null)
+const apiSelectRef = ref<HTMLElement | null>(null)
 
-const handleApiClickOutside = (e) => {
-  if (apiSelectRef.value && !apiSelectRef.value.contains(e.target)) {
+const handleApiClickOutside = (e: MouseEvent) => {
+  if (apiSelectRef.value && !apiSelectRef.value.contains(e.target as Node)) {
     apiDropdownOpen.value = false
   }
 }
@@ -529,13 +537,13 @@ const newBlockIp = ref('')
 const newBlockDuration = ref(86400)
 const newBlockPermanent = ref(true)
 const newBlockStatus = ref('BLOCKED')
-const newBlockType = ref('ip') // 'ip' or 'fingerprint'
+const newBlockType = ref<'ip' | 'fingerprint'>('ip')
 
 const newWlIp = ref('')
 const newWlDuration = ref(1200)
-const newWlType = ref('ip') // 'ip' or 'fingerprint'
+const newWlType = ref<'ip' | 'fingerprint'>('ip')
 
-function formatRemaining(seconds) {
+function formatRemaining(seconds: number | null | undefined) {
   if (seconds == null) return t('common.permanent')
   if (seconds <= 0) return t('common.expired')
   if (seconds < 60) return `${seconds}${t('common.sec')}`
@@ -547,47 +555,47 @@ function formatRemaining(seconds) {
 
 const botPatternsFormatted = computed({
   get: () => {
-    const val = props.securitySettings?.defense?.botPatterns
+    const val = securitySettings.value?.defense?.botPatterns
     return Array.isArray(val) ? val.join('\n') : ''
   },
   set: (val) => {
-    if (props.securitySettings?.defense) {
-      props.securitySettings.defense.botPatterns = val.split('\n').map(s => s.trim()).filter(Boolean)
+    if (securitySettings.value?.defense) {
+      securitySettings.value.defense.botPatterns = val.split('\n').map(s => s.trim()).filter(Boolean)
     }
   }
 })
 
 const browserPatternsFormatted = computed({
   get: () => {
-    const val = props.securitySettings?.defense?.browserPatterns
+    const val = securitySettings.value?.defense?.browserPatterns
     return Array.isArray(val) ? val.join('\n') : ''
   },
   set: (val) => {
-    if (props.securitySettings?.defense) {
-      props.securitySettings.defense.browserPatterns = val.split('\n').map(s => s.trim()).filter(Boolean)
+    if (securitySettings.value?.defense) {
+      securitySettings.value.defense.browserPatterns = val.split('\n').map(s => s.trim()).filter(Boolean)
     }
   }
 })
 
 const sensitivePathsFormatted = computed({
   get: () => {
-    const val = props.securitySettings?.defense?.geoRules?.sensitivePaths
+    const val = securitySettings.value?.defense?.geoRules?.sensitivePaths
     return Array.isArray(val) ? val.join('\n') : ''
   },
   set: (val) => {
-    if (props.securitySettings?.defense?.geoRules) {
-      props.securitySettings.defense.geoRules.sensitivePaths = val.split('\n').map(s => s.trim()).filter(Boolean)
+    if (securitySettings.value?.defense?.geoRules) {
+      securitySettings.value.defense.geoRules.sensitivePaths = val.split('\n').map(s => s.trim()).filter(Boolean)
     }
   }
 })
 
 const expandedSection = ref(null)
-const toggleSection = (key) => {
+const toggleSection = (key: string) => {
   expandedSection.value = expandedSection.value === key ? null : key
 }
 
-const onToggle = (key) => {
-  emit('savePartial', { [key]: props.securitySettings.defense[key] })
+const onToggle = (key: string) => {
+  settingsStore.handleSavePartial({ [key]: securitySettings.value.defense[key] })
 }
 
 const defenseModules = computed(() => [
@@ -599,9 +607,81 @@ const defenseModules = computed(() => [
   { key: 'enableBotChallenge', label: t('settings.firewall.defense_modules.bot_detect'), sub: 'Bot Detect', icon: Shield, iconBg: 'bg-violet-500/10', iconColor: 'text-violet-500' },
 ])
 
+async function handleSyncNode() {
+  try {
+    await firewallApi.updateNode(serverPosition.value)
+  } catch (err) {
+    console.error('同步节点失败:', err)
+  }
+}
+
+async function handleRefreshNode() {
+  loading.value = true
+  try {
+    await dashboardStore.refreshNodeLocation()
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleSaveNode() {
+  await handleSyncNode()
+  emit('close')
+}
+
+async function handleSaveSecurity() {
+  await settingsStore.saveSecuritySettings()
+}
+
+function handleSavePartial(data: Record<string, any>) {
+  settingsStore.handleSavePartial(data)
+}
+
+function handleTagAdd(data: { field: string; value: string }) {
+  settingsStore.handleTagAdd(data)
+}
+
+function handleTagRemove(data: { field: string; index: number }) {
+  settingsStore.handleTagRemove(data)
+}
+
+function handleRemoveBlock(data: { type: 'ip' | 'fingerprint'; value: string }) {
+  defenseStore.handleRemoveBlock(data)
+}
+
+function handleRemoveWhitelist(data: { type: 'ip' | 'fingerprint'; value: string }) {
+  defenseStore.handleRemoveWhitelist(data)
+}
+
+async function handleFetchData() {
+  loading.value = true
+  try {
+    await Promise.all([
+      configsStore.fetchConfigs(),
+      settingsStore.fetchSettings(),
+      defenseStore.fetchBlocks(),
+      defenseStore.fetchWhitelist()
+    ])
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleResetStats() {
+  if (!confirm('确认清除所有流量记录？')) return
+  loading.value = true
+  try {
+    await firewallApi.clearRecords()
+    dashboardStore.resetSummary()
+    await handleFetchData()
+  } finally {
+    loading.value = false
+  }
+}
+
 const handleAddBlock = () => {
   if (!newBlockIp.value) return
-  emit('addBlock', {
+  defenseStore.handleAddBlock({
     type: newBlockType.value,
     [newBlockType.value === 'fingerprint' ? 'fingerprint' : 'ip']: newBlockIp.value,
     permanent: newBlockPermanent.value,
@@ -613,7 +693,7 @@ const handleAddBlock = () => {
 
 const handleAddWhitelist = () => {
   if (!newWlIp.value) return
-  emit('addWhitelist', {
+  defenseStore.handleAddWhitelist({
     type: newWlType.value,
     [newWlType.value === 'fingerprint' ? 'fingerprint' : 'ip']: newWlIp.value,
     duration: newWlDuration.value || 1200

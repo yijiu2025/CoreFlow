@@ -53,8 +53,8 @@ export default async function (fastify) {
           'none'
         ],
         scopes_supported: ['openid', 'profile', 'email', 'api:read', 'api:write'],
-        code_challenge_methods_supported: ['S256', 'plain'],
-        claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'email', 'name', 'avatar', 'auth_time']
+        code_challenge_methods_supported: ['S256'],
+        claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'email', 'name', 'avatar', 'auth_time', 'roles', 'permissions']
       };
     }
   });
@@ -69,8 +69,18 @@ export default async function (fastify) {
     alias: 'JWKS 公钥集',
     method: 'GET',
     url: '/.well-known/jwks.json',
-    handler: async () => {
-      return getJWKS();
+    handler: async (request, reply) => {
+      // JWKS 相对稳定，缓存 1 小时
+      reply.header('Cache-Control', 'public, max-age=3600, immutable');
+      try {
+        return getJWKS();
+      } catch (err) {
+        return reply.code(500).send({
+          code: 500,
+          message: 'JWKS 获取失败',
+          data: null
+        });
+      }
     }
   });
 }

@@ -50,6 +50,8 @@ export function getServerResource(name) {
 
 /**
  * 从 Bearer Token 解析用户信息
+ * 优先从 JWT Claims 读取 roles/permissions（新版 token 已嵌入）
+ * 旧版 token 无 claims 时降级为数据库查询
  */
 async function getUserFromToken(token) {
   try {
@@ -62,12 +64,15 @@ async function getUserFromToken(token) {
     const userData = await UserDao.findById(payload.sub);
     if (!userData) return null;
 
-    // 加载权限（与 Session 路径一致）
-    const { loadUserPermissions } = await import('./permission-loader.js');
-    const { roles, permissions } = await loadUserPermissions(
-      userData.id,
-      payload.client_id || 'GLOBAL'
-    );
+    // 优先从 JWT 读取权限，无则从数据库加载
+    let roles = payload.roles;
+    let permissions = payload.permissions;
+    if (!roles || !permissions) {
+      const { loadUserPermissions } = await import('./permission-loader.js');
+      const loaded = await loadUserPermissions(userData.id, payload.client_id || 'GLOBAL');
+      roles = roles || loaded.roles;
+      permissions = permissions || loaded.permissions;
+    }
 
     return {
       sub: userData.id,
@@ -88,24 +93,41 @@ async function getUserFromToken(token) {
 }
 
 export default fp(async (app) => {
+  // 动态读取 JWT 配置
+  const { default: config } = await import('../app/oauth21/config/config.js');
+  const jwtEnabled = config.jwt.enabled;
+
   app.addHook('onRequest', async (request, reply) => {
     // 1. 初始化 request.state
     if (!request.state) request.state = {};
 
-    // 2. 尝试 Bearer Token 认证
-    const authHeader = request.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
-      const tokenUser = await getUserFromToken(token);
-      if (tokenUser) {
-        request.state.user = tokenUser;
-        return; // Token 认证成功，跳过 Session 验证
+    const cookies = request.cookies || {};
+
+    // 2. JWT 认证（仅在 JWT_ENABLED=true 时启用）
+    if (jwtEnabled) {
+      // 2a. Bearer Token（Header）
+      const authHeader = request.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        const tokenUser = await getUserFromToken(token);
+        if (tokenUser) {
+          request.state.user = tokenUser;
+          return;
+        }
+      }
+
+      // 2b. access_token Cookie
+      if (cookies['access_token']) {
+        const tokenUser = await getUserFromToken(cookies['access_token']);
+        if (tokenUser) {
+          request.state.user = tokenUser;
+          return;
+        }
       }
     }
 
-    // 3. Session Cookie 验证
+    // 3. Session Cookie 验证（sid / sid_r）— 主要认证方式
     const redis = request.server.redis;
-    const cookies = request.cookies || {};
 
     let sessionData = null;
 

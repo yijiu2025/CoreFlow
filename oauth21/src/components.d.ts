@@ -14,6 +14,8 @@ declare module 'vue' {
     AuthContainer: typeof import('./components/common/AuthContainer.vue')['default']
     GraphicCaptcha: typeof import('./components/common/GraphicCaptcha.vue')['default']
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
+    Icons: typeof import('./components/common/Icons.vue')['default']
+    MessageToast: typeof import('./components/common/MessageToast.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SliderCaptcha: typeof import('./components/common/SliderCaptcha.vue')['default']

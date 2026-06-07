@@ -39,6 +39,18 @@ const router = createRouter({
           meta: { title: '快捷登录' }
         },
         {
+          path: 'forgot-password',
+          name: 'ForgotPassword',
+          component: () => import('@/view/web/forgot-password/index.vue'),
+          meta: { title: '忘记密码' }
+        },
+        {
+          path: 'reset-password',
+          name: 'ResetPassword',
+          component: () => import('@/view/web/forgot-password/index.vue'),
+          meta: { title: '重置密码' }
+        },
+        {
           path: 'authorize',
           name: 'Authorize',
           component: () => import('@/view/web/auth/Authorize.vue'),

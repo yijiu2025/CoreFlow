@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import { rsaEncrypt, generateNonce } from '@/utils/crypto'
+import { rsaEncrypt, generateNonce, clearPublicKeyCache } from '@/utils/crypto'
 
 /**
  * 登录请求负载类型
@@ -20,20 +20,32 @@ export const authApi = {
   /**
    * 安全登录
    * @param payload 登录信息
+   * 解密失败时自动清除公钥缓存并重试一次（应对服务器重启密钥轮换）
    */
   async login(payload: LoginPayload & { captchaKey?: string; client_id?: string }) {
     const { captchaKey, client_id, ...rest } = payload
     const payloadStr = JSON.stringify(rest)
-    const encrypted = await rsaEncrypt(payloadStr)
-    
-    return request.post('/oauth2.1/login', {
-      encrypted,
-      timestamp: Date.now(),
-      nonce: generateNonce(),
-      scope: 'openid profile email',
-      captchaKey,
-      client_id
-    })
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const encrypted = await rsaEncrypt(payloadStr)
+        return await request.post('/oauth2.1/login', {
+          encrypted,
+          timestamp: Date.now(),
+          nonce: generateNonce(),
+          scope: 'openid profile email',
+          captchaKey,
+          client_id
+        })
+      } catch (err: any) {
+        if (attempt === 0 && err.message?.includes('解密失败')) {
+          // 公钥可能已过期（服务器重启），清除缓存重试
+          clearPublicKeyCache()
+          continue
+        }
+        throw err
+      }
+    }
   },
 
   /**
@@ -130,7 +142,42 @@ export const authApi = {
    * 提交授权 (针对已登录用户)
    */
   async authorizeConsent(data: { sessionId: string; user_id: string; action: 'approve' | 'deny' }) {
-    // 因为这会引发 302 跳转，可能需要特殊处理，但目前按普通 POST 发送
     return request.post('/authorize/consent', data)
+  },
+
+  /**
+   * 生成登录二维码
+   */
+  async generateQR() {
+    return request.get('/qr/generate')
+  },
+
+  /**
+   * 查询二维码状态
+   */
+  async checkQRStatus(qrKey: string) {
+    return request.get('/qr/status', { params: { qrKey } })
+  },
+
+  /**
+   * 重置密码（验证码方式）
+   */
+  async resetPassword(email: string, code: string, newPassword: string) {
+    return request.post('/user/v1/reset-password', { email, code, newPassword })
+  },
+
+  /**
+   * 发送密码重置链接到邮箱
+   * 需要先通过图形验证码
+   */
+  async sendResetLink(email: string, captchaKey: string) {
+    return request.post('/user/v1/send-reset-link', { email, captchaKey })
+  },
+
+  /**
+   * 通过链接 token 重置密码
+   */
+  async resetPasswordByLink(token: string, newPassword: string) {
+    return request.post('/user/v1/reset-password-by-link', { token, newPassword })
   }
 }
