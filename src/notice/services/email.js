@@ -203,7 +203,7 @@ class EmailService {
       <div style="background:#fff;padding:40px;border-radius:12px;max-width:600px;margin:0 auto;">
         <div style="color:#333;font-size:15px;line-height:1.8;">${bodyText}</div>
         <div style="text-align:center;margin-top:30px;color:#bbb;font-size:12px;border-top:1px solid #eee;padding-top:15px;">
-          © ${new Date().getFullYear()} Antigravity 自动回复系统
+          © ${new Date().getFullYear()} CoreFlow 自动回复系统
         </div>
       </div>
     </div>`;

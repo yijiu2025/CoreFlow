@@ -150,7 +150,7 @@ describe('数据库模型', () => {
     it('字段结构正确', () => {
       const client = {
         client_id: 'firewall',
-        client_name: 'Antigravity Firewall',
+        client_name: 'CoreFlow Firewall',
         client_secret: '$2a$10$...',
         redirect_uris: ['http://localhost:5173/firewall/'],
         grant_types: ['authorization_code', 'refresh_token'],

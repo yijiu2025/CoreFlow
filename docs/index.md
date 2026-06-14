@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: Antigravity
+  name: CoreFlow
   text: 企业级 Node.js 全栈框架
   tagline: 基于 Fastify + Sequelize + Vue 3 构建的现代化 Web 应用框架，内置认证、权限、防火墙、OAuth 2.1
   actions:
@@ -11,7 +11,7 @@ hero:
       link: /guide/quick-start
     - theme: alt
       text: 在 GitHub 上查看
-      link: https://github.com/yijiu2025/nodejsFaster
+      link: https://github.com/yijiu2025/CoreFlow
 
 features:
   - icon: 🔐

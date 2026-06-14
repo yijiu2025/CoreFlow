@@ -6,7 +6,7 @@
       <div class="flex items-center gap-3">
         <ShieldCheck :class="isDarkMode ? 'text-cyan-400' : 'text-indigo-600'" class="w-8 h-8" />
         <h1 class="text-xl font-bold tracking-tight uppercase"
-          :class="isDarkMode ? 'text-slate-100 glow-text' : 'text-slate-800'">Antigravity Firewall</h1>
+          :class="isDarkMode ? 'text-slate-100 glow-text' : 'text-slate-800'">CoreFlow Firewall</h1>
       </div>
       <div class="h-8 w-px" :class="isDarkMode ? 'bg-white/10' : 'bg-slate-200'"></div>
       <div class="flex gap-8">

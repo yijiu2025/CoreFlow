@@ -9,6 +9,8 @@
     "start": "node --env-file=.env.production index.js",
     "migrate": "node --env-file=.env src/db/migrate.js",
     "setup:admin": "node --env-file=.env scripts/setup-superadmin.js",
+    "revoke:admin": "node --env-file=.env scripts/revoke-superadmin.js",
+    "cli": "node --env-file=.env scripts/cli.js",
     "lint": "eslint . --fix",
     "format": "prettier --write .",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",

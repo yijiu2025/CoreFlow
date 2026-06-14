@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   lang: 'zh-CN',
-  title: 'Antigravity',
+  title: 'CoreFlow',
   description: '企业级 Node.js 全栈框架',
 
   head: [
@@ -22,7 +22,7 @@ export default defineConfig({
       {
         text: '相关链接',
         items: [
-          { text: 'GitHub', link: 'https://github.com/yijiu2025/nodejsFaster' },
+          { text: 'GitHub', link: 'https://github.com/yijiu2025/CoreFlow' },
           { text: 'Fastify', link: 'https://fastify.dev/' },
           { text: 'Sequelize', link: 'https://sequelize.org/' },
           { text: 'Vue 3', link: 'https://cn.vuejs.org/' }
@@ -36,7 +36,10 @@ export default defineConfig({
         items: [
           { text: '项目简介', link: '/guide/introduction' },
           { text: '快速上手', link: '/guide/quick-start' },
-          { text: '项目结构', link: '/guide/project-structure' }
+          { text: '项目结构', link: '/guide/project-structure' },
+          { text: '命令行工具', link: '/guide/cli' },
+          { text: 'CLI 插件开发', link: '/guide/cli-plugins' },
+          { text: 'AI 辅助开发', link: '/guide/ai-development' }
         ]
       },
       {
@@ -92,12 +95,12 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/yijiu2025/nodejsFaster' }
+      { icon: 'github', link: 'https://github.com/yijiu2025/CoreFlow' }
     ],
 
     footer: {
       message: '基于 MIT 许可发布',
-      copyright: 'Copyright © 2026 Antigravity'
+      copyright: 'Copyright © 2026 CoreFlow'
     },
 
     search: {
@@ -129,7 +132,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/yijiu2025/nodejsFaster/edit/main/docs/:path',
+      pattern: 'https://github.com/yijiu2025/CoreFlow/edit/main/docs/:path',
       text: '在 GitHub 上编辑此页面'
     }
   }

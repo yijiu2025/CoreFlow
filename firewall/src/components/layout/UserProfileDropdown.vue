@@ -135,7 +135,7 @@
         <!-- Footer -->
         <div class="pb-4 text-center">
           <p class="text-[9px] tracking-wider" :class="isDarkMode ? 'text-slate-600' : 'text-slate-300'">
-            Antigravity SSO 2.1
+            CoreFlow SSO 2.1
           </p>
         </div>
       </div>

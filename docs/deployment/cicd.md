@@ -62,7 +62,7 @@ npm install @fastify/swagger @fastify/swagger-ui
 // src/app.js
 await app.register(swagger, {
   openapi: {
-    info: { title: 'Antigravity API', version: '2.0.0' },
+    info: { title: 'CoreFlow API', version: '2.0.0' },
     servers: [{ url: 'http://localhost:3000' }]
   }
 });

@@ -63,7 +63,7 @@ router.beforeEach(async (to) => {
   NProgress.start()
 
   // 动态标题
-  document.title = `${(to.meta as any).title || 'Firewall'} - Antigravity`
+  document.title = `${(to.meta as any).title || 'Firewall'} - CoreFlow`
 
   // 权限校验
   if (to.meta.requiresAuth) {

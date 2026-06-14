@@ -1,6 +1,6 @@
 # 项目简介 {#introduction}
 
-Antigravity 是一个基于 **Fastify v5 + Sequelize v6 + Vue 3** 构建的企业级全栈框架。它提供了一套完整的后端基础设施，包括认证、权限、防火墙、OAuth 2.1 等核心能力，让开发者可以专注于业务逻辑。
+CoreFlow 是一个基于 **Fastify v5 + Sequelize v6 + Vue 3** 构建的企业级全栈框架。它提供了一套完整的后端基础设施，包括认证、权限、防火墙、OAuth 2.1 等核心能力，让开发者可以专注于业务逻辑。
 
 ## 核心特性
 

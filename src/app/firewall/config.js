@@ -13,7 +13,7 @@ export default {
   // OAuth 2.1 客户端配置（用于自动注册到 oauth_clients 表）
   oauth_client: {
     client_id: 'firewall',
-    client_name: 'Antigravity Firewall',
+    client_name: 'CoreFlow Firewall',
     client_secret: null,
     redirect_uris: [
       'http://localhost:5173/firewall/',

@@ -10,7 +10,7 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/yijiu2025/nodejsFaster.git
+git clone https://github.com/yijiu2025/CoreFlow.git
 cd antigravity
 
 # 安装依赖
@@ -80,6 +80,53 @@ cd firewall && npm run dev
 curl http://localhost:3000/health/live
 # 应返回: { "status": "ok", "uptime": ... }
 ```
+
+## 超级管理员管理
+
+### 首次初始化
+
+在 `.env` 中配置管理员信息：
+
+```ini
+SUPERADMIN_EMAIL=admin@example.com
+SUPERADMIN_PASSWORD=your-strong-password
+```
+
+运行初始化脚本（用户不存在时自动创建）：
+
+```bash
+npm run setup:admin
+```
+
+### 切换超级管理员
+
+```bash
+# 方式 1：给已有用户授予 superadmin（保留原管理员）
+npm run setup:admin -- --email new-admin@example.com
+
+# 方式 2：修改 .env 后重新运行（自动创建新用户）
+# 先修改 SUPERADMIN_EMAIL 和 SUPERADMIN_PASSWORD
+npm run setup:admin
+```
+
+::: tip 多管理员
+系统支持多个超级管理员。运行 `setup:admin` 只会新增，不会移除原有的。
+:::
+
+### 撤销超级管理员
+
+```bash
+npm run revoke:admin -- --email user@example.com
+```
+
+安全机制：
+- 自动检查是否为最后一个 superadmin（防止锁死系统）
+- 默认需要确认，`--force` 可跳过
+- 撤销后自动清除 Redis session
+
+::: warning 注意
+撤销后该用户需要重新登录，权限才会生效。
+:::
 
 ## 常用命令
 

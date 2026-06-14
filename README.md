@@ -1,4 +1,4 @@
-# Antigravity — 企业级全栈安全平台
+# CoreFlow — 企业级全栈安全平台
 
 <p align="center">
   <strong>基于 Node.js 的 OAuth 2.1 授权中心 + Web 应用防火墙 + PBAC 权限系统</strong>
