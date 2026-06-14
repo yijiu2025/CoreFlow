@@ -57,14 +57,15 @@ onResponse    →  扫描陷阱（404/403 检测）
 
 ```
 00-globals.js     → 装饰 reply.result
+01-monitor.js     → 请求监控 + 慢请求告警
 02-redis.js       → Redis 连接（失败降级到内存）
 03-db.js          → Sequelize 连接
 04-auth.js        → 认证插件
 05-firewall.js    → 防火墙
 06-models.js      → 自动加载模型
 07-api.js         → 自动加载路由
-09-pbac.js        → 角色同步
-11-apps.js        → 应用配置加载
+08-notice.js      → SMTP 配置种子数据
+09-apps.js        → 应用配置 + 权限 + 角色 + OAuth 客户端
 ```
 
 每个 Loader 导出默认函数接收 `app` 实例，错误被捕获并记录，不阻塞其他模块。
@@ -79,7 +80,7 @@ onResponse    →  扫描陷阱（404/403 检测）
 | `db.iam` | Role, UserRole, InlinePolicy, Permission | iam_role, iam_user_role, iam_inline_policy, permissions |
 | `db.oauth21` | OauthClient, OauthCode, OauthToken, OauthApproval, OauthConsent | oauth_clients, oauth_codes, oauth_tokens, oauth_user_approval, oauth_consents |
 | `db.notice` | EmailCode, NoticeConfig | notice_email_codes, notice_configs |
-| `db.session` | UserSession, SessionToken, SessionLog | session_user_session, session_tokens, session_logs |
+| `db.session` | UserSession, SessionToken, SessionLog, AuditLog | session_user_session, session_tokens, session_logs, session_audit_logs |
 
 ## 目录约定
 

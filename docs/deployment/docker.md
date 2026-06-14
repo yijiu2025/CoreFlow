@@ -82,7 +82,7 @@ docker-compose up -d --force-recreate
 
 在 `.env` 文件中配置，docker-compose 会自动读取：
 
-```env
+```ini
 DB_HOST=db
 DB_PASS=your_password
 DB_NAME=antigravity

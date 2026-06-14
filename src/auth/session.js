@@ -41,16 +41,9 @@ export const DEVICE_TYPE = {
 export function detectDeviceType(ua) {
   if (!ua) return DEVICE_TYPE.API;
   const lower = ua.toLowerCase();
-  if (lower.includes('miniprogram') || lower.includes('micromessenger'))
-    return DEVICE_TYPE.MINIAPP;
-  if (
-    lower.includes('android') ||
-    lower.includes('iphone') ||
-    lower.includes('mobile')
-  )
-    return DEVICE_TYPE.APP;
-  if (lower.includes('electron') || lower.includes('desktop'))
-    return DEVICE_TYPE.DESKTOP;
+  if (lower.includes('miniprogram') || lower.includes('micromessenger')) return DEVICE_TYPE.MINIAPP;
+  if (lower.includes('android') || lower.includes('iphone') || lower.includes('mobile')) return DEVICE_TYPE.APP;
+  if (lower.includes('electron') || lower.includes('desktop')) return DEVICE_TYPE.DESKTOP;
   return DEVICE_TYPE.BROWSER;
 }
 
@@ -128,7 +121,9 @@ export async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
         const d = JSON.parse(sessionData);
         info.deviceType = d.deviceType;
         info.appId = d.appId;
-      } catch {}
+      } catch {
+        /* session 解析失败，跳过 */
+      }
     }
     sessions.push(info);
   }
@@ -227,21 +222,14 @@ export async function createSession(params) {
   }
 
   // 2. 单设备单登录：踢掉同用户同应用同设备类型的旧会话
-  await kickByDeviceType(
-    redis,
-    userId,
-    appId,
-    deviceType || DEVICE_TYPE.BROWSER
-  );
+  await kickByDeviceType(redis, userId, appId, deviceType || DEVICE_TYPE.BROWSER);
 
   // 2. 加载该用户在该应用的角色和权限
   const { roles, permissions } = await loadUserPermissions(userId, appId);
 
   // 2. 生成 sessionId 和 refreshToken
   const sessionId = crypto.randomBytes(32).toString('hex');
-  const refreshToken = rememberMe
-    ? crypto.randomBytes(32).toString('hex')
-    : null;
+  const refreshToken = rememberMe ? crypto.randomBytes(32).toString('hex') : null;
 
   // 3. 构造 session 数据
   const sessionData = {
@@ -268,11 +256,7 @@ export async function createSession(params) {
   const userRefreshKey = `user_refresh:${userId}`;
 
   if (redis) {
-    await redis.set(
-      `${SESSION_PREFIX}${sessionId}`,
-      JSON.stringify(sessionData),
-      { EX: sessionTtl }
-    );
+    await redis.set(`${SESSION_PREFIX}${sessionId}`, JSON.stringify(sessionData), { EX: sessionTtl });
 
     if (refreshToken) {
       // 清理超出限制的旧 refresh token
@@ -280,7 +264,9 @@ export async function createSession(params) {
       if (count >= MAX_REFRESH_TOKENS) {
         // 删除最久未刷新的（score 最小的）
         const removeCount = count - MAX_REFRESH_TOKENS + 1;
-        const oldTokens = await redis.zRangeByScore(userRefreshKey, '-inf', '+inf', { LIMIT: { offset: 0, count: removeCount } });
+        const oldTokens = await redis.zRangeByScore(userRefreshKey, '-inf', '+inf', {
+          LIMIT: { offset: 0, count: removeCount }
+        });
         for (const oldRt of oldTokens) {
           const oldSessionId = await redis.get(`${REFRESH_PREFIX}${oldRt}`);
           if (oldSessionId) await redis.del(`${SESSION_PREFIX}${oldSessionId}`);
@@ -409,10 +395,7 @@ export async function getSession(params) {
 
   // 4. 重建 Redis 缓存
   const user = token.user;
-  const { roles, permissions } = await loadUserPermissions(
-    user.id,
-    token.app_id
-  );
+  const { roles, permissions } = await loadUserPermissions(user.id, token.app_id);
 
   const sessionData = {
     userId: user.id,
@@ -433,11 +416,7 @@ export async function getSession(params) {
   };
 
   if (redis) {
-    await redis.set(
-      `${SESSION_PREFIX}${sessionId}`,
-      JSON.stringify(sessionData),
-      { EX: SHORT_SESSION_TTL }
-    );
+    await redis.set(`${SESSION_PREFIX}${sessionId}`, JSON.stringify(sessionData), { EX: SHORT_SESSION_TTL });
   }
 
   return { ...sessionData, sessionId };
@@ -475,10 +454,7 @@ export async function refreshSession(params) {
 
   if (oldSessionId) {
     // 优先用 Redis 中的 oldSessionId 精确查找
-    const oldHash = crypto
-      .createHash('sha256')
-      .update(oldSessionId)
-      .digest('hex');
+    const oldHash = crypto.createHash('sha256').update(oldSessionId).digest('hex');
     record = await SessionToken.findOne({
       where: { token: oldHash, revoked: false }
     });
@@ -486,10 +462,7 @@ export async function refreshSession(params) {
 
   // Redis 未命中时，降级用 refreshToken 哈希查找（兼容旧数据）
   if (!record) {
-    const refreshTokenHash = crypto
-      .createHash('sha256')
-      .update(refreshToken)
-      .digest('hex');
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
     record = await SessionToken.findOne({
       where: { token: refreshTokenHash, revoked: false }
     });
@@ -502,10 +475,7 @@ export async function refreshSession(params) {
   const user = await User.findByPk(record.user_id);
   if (!user) return null;
 
-  const { roles, permissions } = await loadUserPermissions(
-    user.id,
-    record.app_id
-  );
+  const { roles, permissions } = await loadUserPermissions(user.id, record.app_id);
 
   // 5. 生成新 sessionId
   const newSessionId = crypto.randomBytes(32).toString('hex');
@@ -531,11 +501,7 @@ export async function refreshSession(params) {
 
   // 6. Redis 写入新 session
   if (redis) {
-    await redis.set(
-      `${SESSION_PREFIX}${newSessionId}`,
-      JSON.stringify(sessionData),
-      { EX: sessionTtl }
-    );
+    await redis.set(`${SESSION_PREFIX}${newSessionId}`, JSON.stringify(sessionData), { EX: sessionTtl });
     // 更新 refreshToken 映射
     await redis.set(`${REFRESH_PREFIX}${refreshToken}`, newSessionId, {
       EX: REFRESH_TOKEN_TTL
@@ -551,10 +517,7 @@ export async function refreshSession(params) {
   }
 
   // 7. DB 更新 token 哈希
-  const newTokenHash = crypto
-    .createHash('sha256')
-    .update(newSessionId)
-    .digest('hex');
+  const newTokenHash = crypto.createHash('sha256').update(newSessionId).digest('hex');
   await record.update({ token: newTokenHash, last_active: new Date() });
 
   // 8. 记录刷新日志（关联用户，操作留痕）
@@ -602,15 +565,9 @@ export async function destroySession(params) {
 
   // 2. DB 标记 revoked
   if (sessionId) {
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(sessionId)
-      .digest('hex');
+    const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
     const { SessionToken } = sequelize.models;
-    await SessionToken.update(
-      { revoked: true },
-      { where: { token: tokenHash } }
-    );
+    await SessionToken.update({ revoked: true }, { where: { token: tokenHash } });
   }
 
   // 3. 记录日志

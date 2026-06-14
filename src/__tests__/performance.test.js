@@ -9,7 +9,7 @@ describe('性能', () => {
   describe('大量数据处理', () => {
     it('大数组处理', () => {
       const arr = Array.from({ length: 10000 }, (_, i) => i);
-      const filtered = arr.filter(n => n % 2 === 0);
+      const filtered = arr.filter((n) => n % 2 === 0);
       expect(filtered.length).toBe(5000);
     });
 
@@ -66,15 +66,9 @@ describe('性能', () => {
     it('Promise 超时', async () => {
       const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
 
-      try {
-        await Promise.race([
-          new Promise(resolve => setTimeout(resolve, 200)),
-          timeout(100)
-        ]);
-        expect(true).toBe(false); // 不应该到达这里
-      } catch (err) {
-        expect(err.message).toBe('timeout');
-      }
+      await expect(Promise.race([new Promise((resolve) => setTimeout(resolve, 200)), timeout(100)])).rejects.toThrow(
+        'timeout'
+      );
     });
 
     it('异步操作完成', async () => {
@@ -93,11 +87,7 @@ describe('性能', () => {
     });
 
     it('Promise.allSettled 混合结果', async () => {
-      const tasks = [
-        Promise.resolve('success'),
-        Promise.reject(new Error('fail')),
-        Promise.resolve('ok')
-      ];
+      const tasks = [Promise.resolve('success'), Promise.reject(new Error('fail')), Promise.resolve('ok')];
       const results = await Promise.allSettled(tasks);
       expect(results[0].status).toBe('fulfilled');
       expect(results[1].status).toBe('rejected');

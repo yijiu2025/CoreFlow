@@ -34,7 +34,7 @@ if (cached) {
 
 ### 连接池配置
 
-```env
+```ini
 DB_POOL_MAX=10
 DB_POOL_MIN=2
 ```

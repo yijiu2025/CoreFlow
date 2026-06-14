@@ -70,6 +70,7 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/l
 | 顺序 | 文件 | 职责 |
 |------|------|------|
 | 00 | `00-globals.js` | 装饰 `reply.result`（success/fail/unauth/forbidden） |
+| 01 | `01-monitor.js` | 请求监控 + 慢请求告警 |
 | 02 | `02-redis.js` | Redis 连接 + 健康监控，失败注入 `null` |
 | 03 | `03-db.js` | Sequelize 连接 + `app.db` 装饰器 |
 | 04 | `04-auth.js` | Session 验证 + ALS 初始化 |
@@ -77,9 +78,7 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/l
 | 06 | `06-models.js` | 自动加载 `src/models/` |
 | 07 | `07-api.js` | 自动加载 `src/api/` 路由 |
 | 08 | `08-notice.js` | SMTP 配置种子数据 |
-| 09 | `09-pbac.js` | PBAC 角色同步到数据库 |
-| 10 | `10-seed-clients.js` | OAuth 客户端种子数据 |
-| 11 | `11-apps.js` | 扫描 `src/app/` 加载应用权限和配置 |
+| 09 | `09-apps.js` | 扫描 `src/app/` 加载应用配置 + 权限 + 角色 + OAuth 客户端 |
 
 每个 Loader 导出默认函数接收 `app` 实例，错误被捕获并记录，不阻塞其他模块。
 

@@ -43,8 +43,7 @@ export function getDb() {
  */
 export function getServerResource(name) {
   const resource = getCtx().server[name];
-  if (resource === undefined)
-    throw new Error(`Plugin "${name}" not registered`);
+  if (resource === undefined) throw new Error(`Plugin "${name}" not registered`);
   return resource;
 }
 
@@ -53,7 +52,7 @@ export function getServerResource(name) {
  * 优先从 JWT Claims 读取 roles/permissions（新版 token 已嵌入）
  * 旧版 token 无 claims 时降级为数据库查询
  */
-async function getUserFromToken(token) {
+async function getUserFromToken(token, redis) {
   try {
     const { verifyJwt } = await import('../shared/jwt.js');
     const { findUserById } = await import('../shared/user-dao.js');
@@ -69,7 +68,6 @@ async function getUserFromToken(token) {
     let permissions = payload.permissions;
     if (!roles || !permissions) {
       // 尝试从 Redis 缓存读取（避免每次请求查库）
-      const redis = request.server?.redis;
       const cacheKey = `perm:${userData.id}:${payload.client_id || 'GLOBAL'}`;
       if (redis) {
         try {
@@ -79,7 +77,9 @@ async function getUserFromToken(token) {
             roles = roles || parsed.roles;
             permissions = permissions || parsed.permissions;
           }
-        } catch {}
+        } catch {
+          /* 缓存读写失败，降级到数据库 */
+        }
       }
 
       // 缓存未命中，从数据库加载
@@ -93,7 +93,9 @@ async function getUserFromToken(token) {
         if (redis) {
           try {
             await redis.set(cacheKey, JSON.stringify({ roles, permissions }), { EX: 300 });
-          } catch {}
+          } catch {
+            /* 缓存读写失败，降级到数据库 */
+          }
         }
       }
     }
@@ -132,7 +134,7 @@ export default fp(async (app) => {
       const authHeader = request.headers.authorization;
       if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
-        const tokenUser = await getUserFromToken(token);
+        const tokenUser = await getUserFromToken(token, request.server.redis);
         if (tokenUser) {
           request.state.user = tokenUser;
           return;
@@ -141,7 +143,7 @@ export default fp(async (app) => {
 
       // 2b. access_token Cookie
       if (cookies['access_token']) {
-        const tokenUser = await getUserFromToken(cookies['access_token']);
+        const tokenUser = await getUserFromToken(cookies['access_token'], request.server.redis);
         if (tokenUser) {
           request.state.user = tokenUser;
           return;

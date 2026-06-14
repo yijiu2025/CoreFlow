@@ -29,7 +29,7 @@ cp .env.example .env
 
 编辑 `.env` 文件，配置以下必要变量：
 
-```env
+```ini
 # 数据库
 DB_HOST=127.0.0.1
 DB_PORT=3306

@@ -112,7 +112,9 @@ export default async function (fastify) {
             const sessionId = request.cookies?.sid;
             // 简单方案：不更新 session，前端通过 fetchPermissions 重新获取
           }
-        } catch {}
+        } catch {
+          /* session 更新失败，忽略 */
+        }
 
         return reply.result.success('头像上传成功', {
           avatar: avatarUrl

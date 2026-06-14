@@ -63,7 +63,7 @@ reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
 
 生产环境必须修改所有默认密钥：
 
-```env
+```ini
 APP_SECRET=强随机值（至少32字符）
 SESSION_SECRET=强随机值
 FIREWALL_SECRET=强随机值

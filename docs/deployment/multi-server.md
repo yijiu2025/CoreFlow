@@ -25,7 +25,7 @@
 
 **主服务器：**
 
-```env
+```ini
 SERVER_ROLE=auth
 MODULE_OAUTH21=true
 MODULE_USER=true
@@ -36,7 +36,7 @@ MODULE_SESSION=true
 
 **子服务器：**
 
-```env
+```ini
 SERVER_ROLE=app
 MODULE_OAUTH21=false
 MODULE_USER=false
