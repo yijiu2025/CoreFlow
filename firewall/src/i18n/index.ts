@@ -262,6 +262,9 @@ const messages = {
     },
     map: {
       server_node: '核心防御节点'
+    },
+    avatar: {
+      title: '更换头像'
     }
   },
   en: {
@@ -525,6 +528,9 @@ const messages = {
     },
     map: {
       server_node: 'Core Defense Node'
+    },
+    avatar: {
+      title: 'Change Avatar'
     }
   },
   ja: {

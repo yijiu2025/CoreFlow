@@ -249,7 +249,47 @@ export const firewallApi = {
 
   // 获取当前用户权限
   getPermissions: (): Promise<{ roles: string[], permissions: { allows: string[], denies: string[] } }> =>
-    apiClient.get('/user/v1/permissions')
+    apiClient.get('/user/v1/permissions'),
+
+  // 权限调试：检查指定权限
+  checkPermission: (permission: string): Promise<any> =>
+    apiClient.get('/user/v1/check-permission', { params: { permission } }),
+
+  // 获取活跃会话列表
+  getSessions: (): Promise<any> =>
+    apiClient.get('/user/v1/sessions'),
+
+  // 踢掉指定会话
+  kickSession: (sessionId: string): Promise<any> =>
+    apiClient.post('/user/v1/sessions/kick', { sessionId }),
+
+  // 踢掉所有其他会话
+  kickAllSessions: (): Promise<any> =>
+    apiClient.post('/user/v1/sessions/kick-all'),
+
+  // 获取审计日志
+  getAuditLogs: (params?: { limit?: number; event?: string }): Promise<any> =>
+    apiClient.get('/user/v1/audit-logs', { params }),
+
+  // 获取性能指标
+  getMetrics: (): Promise<any> =>
+    apiClient.get('/api/firewall/v1/metrics'),
+
+  // 导出封禁列表
+  exportBlocks: (): Promise<any> =>
+    apiClient.get('/api/firewall/v1/export/blocks'),
+
+  // 导出白名单
+  exportWhitelist: (): Promise<any> =>
+    apiClient.get('/api/firewall/v1/export/whitelist'),
+
+  // 导入封禁列表
+  importBlocks: (blocks: any[]): Promise<any> =>
+    apiClient.post('/api/firewall/v1/import/blocks', { blocks }),
+
+  // 导入白名单
+  importWhitelist: (whitelist: any[]): Promise<any> =>
+    apiClient.post('/api/firewall/v1/import/whitelist', { whitelist })
 }
 
 export default apiClient

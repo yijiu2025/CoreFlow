@@ -105,8 +105,9 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
   }
 
   // ── 模式 B：Session 启用（默认） ──
-  // iframe 中不直接设 Cookie（第三方 Cookie 会被浏览器阻止）
-  // 而是生成临时 token，由主页面调用 /auth/v1/bind-session 换取 Cookie
+  // appId：优先用请求中的 client_id（如 'firewall'），回退到 client.client_id
+  const sessionAppId = client_id || client.client_id || 'GLOBAL'
+
   if (reply && fastify) {
     const isIframe = request.headers['sec-fetch-dest'] === 'iframe' ||
                      request.headers['sec-fetch-mode'] === 'navigate'
@@ -116,40 +117,55 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
       const sessionToken = generateToken(32)
       const sessionStore = getSessionStore(fastify, 'session_token')
       await sessionStore.set(sessionToken, {
-        userId: user.numericId || user.id,   // BIGINT 数字主键
-        uid: user.uid || user.id,            // UUID 对外标识
+        userId: user.numericId || user.id,
+        uid: user.uid || user.id,
         username: user.username,
         email: user.email,
         avatar: user.avatar,
         status: user.status || 'active',
-        appId: client.client_id,
+        appId: sessionAppId,
         ip: request.ip,
         deviceId: request.headers['x-device-id'] || 'web',
         deviceType: 'browser',
         userAgent: request.headers['user-agent'] || '',
         rememberMe: true
-      }, 300) // 5 分钟有效
+      }, 300)
 
       result.session_token = sessionToken
     } else {
       // 非 iframe：直接创建 Session 并设 Cookie
       const redis = request.server.redis
-      await createSession({
-        redis,
-        userId: user.numericId || user.id,   // BIGINT 数字主键
-        uid: user.uid || user.id,            // UUID 对外标识
-        username: user.username,
-        email: user.email,
-        avatar: user.avatar,
-        status: user.status || 'active',
-        appId: client.client_id,
-        ip: request.ip,
-        deviceId: request.headers['x-device-id'] || 'web',
-        deviceType: 'browser',
-        userAgent: request.headers['user-agent'] || '',
-        rememberMe: true,
-        reply
-      })
+      try {
+        await createSession({
+          redis,
+          userId: user.numericId || user.id,
+          uid: user.uid || user.id,
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+          status: user.status || 'active',
+          appId: sessionAppId,
+          ip: request.ip,
+          deviceId: request.headers['x-device-id'] || 'web',
+          deviceType: 'browser',
+          userAgent: request.headers['user-agent'] || '',
+          rememberMe: true,
+          reply
+        })
+      } catch (err) {
+        if (err.code === 'MAX_SESSIONS_EXCEEDED') {
+          return {
+            code: 409,
+            message: '设备数量已达上限',
+            data: {
+              action: 'max_sessions',
+              maxSessions: err.maxSessions,
+              sessions: err.sessions
+            }
+          }
+        }
+        throw err
+      }
     }
   }
 

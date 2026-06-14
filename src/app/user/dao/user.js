@@ -2,8 +2,8 @@ import jwt from 'jsonwebtoken';
 import sequelize from '../../../db/index.js';
 import { decrypt } from '../../oauth21/crypto/encryption.js';
 import bcrypt from 'bcryptjs';
-import Logger from '../../../log/index.js';
 import IamDao from '../../admin/dao/iam.dao.js';
+import { validatePasswordStrength } from '../../../auth/password-policy.js';
 
 class UserDao {
   async checkUsernameExist(username) {
@@ -114,9 +114,11 @@ class UserDao {
     if (!username) username = email;
 
     const password = decrypt(encryptedPassword);
-    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).+$/;
-    if (!passwordRegex.test(password)) {
-      throw new Error('REGISTER_FAILED:密码必须同时包含数字和字母');
+
+    // 密码复杂度校验
+    const validation = validatePasswordStrength(password);
+    if (!validation.valid) {
+      throw new Error(`REGISTER_FAILED:${validation.errors[0]}`);
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10);

@@ -1,6 +1,7 @@
 import IamDao from '../../../app/admin/dao/iam.dao.js';
 import { registerSecureRoute } from '../../guard.js';
 import { actionMetaRegistry } from '../../../utils/PbacRegistry.js';
+import { logAuditEvent } from '../../../auth/audit-logger.js';
 
 export default async function (fastify) {
   /**
@@ -83,12 +84,18 @@ export default async function (fastify) {
       }
 
       try {
-        const result = await IamDao.assignRole(
-          adminUid,
-          targetUid,
-          roleId,
-          appId
-        );
+        const result = await IamDao.assignRole(adminUid, targetUid, roleId, appId);
+
+        // 审计日志：角色分配
+        await logAuditEvent(request.server.redis, {
+          type: 'ROLE_ASSIGNED',
+          userId: adminUid,
+          ip: request.ip,
+          userAgent: request.headers['user-agent'] || '',
+          appId,
+          details: { targetUid, roleId }
+        });
+
         return reply.send({ success: true, data: result });
       } catch (err) {
         return reply.code(403).send({ error: err.message });
@@ -114,12 +121,18 @@ export default async function (fastify) {
       }
 
       try {
-        const result = await IamDao.updateInlinePolicy(
-          adminUid,
-          targetUid,
+        const result = await IamDao.updateInlinePolicy(adminUid, targetUid, appId, policy);
+
+        // 审计日志：权限变更
+        await logAuditEvent(request.server.redis, {
+          type: 'PERMISSION_CHANGE',
+          userId: adminUid,
+          ip: request.ip,
+          userAgent: request.headers['user-agent'] || '',
           appId,
-          policy
-        );
+          details: { targetUid, action: 'update_inline_policy' }
+        });
+
         return reply.send({ success: true, data: result });
       } catch (err) {
         return reply.code(403).send({ error: err.message });

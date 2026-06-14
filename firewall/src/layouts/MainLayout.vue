@@ -86,7 +86,8 @@
     <LoginModal
       :is-open="isLoginModalOpen"
       @close="isLoginModalOpen = false"
-      @login-success="handleLoginSuccess" />
+      @login-success="handleLoginSuccess"
+      @max-sessions="handleMaxSessions" />
   </div>
 </template>
 
@@ -107,6 +108,7 @@ import { useConfigsStore } from '@/stores/configs'
 import { useDefenseStore } from '@/stores/defense'
 import { useAuthStore } from '@/stores/auth'
 import { useCache } from '@/composables/useCache'
+import { firewallApi } from '@/api/firewall'
 
 import MapChart from '@/components/MapChart.vue'
 import TheHeader from '@/components/layout/TheHeader.vue'
@@ -130,6 +132,8 @@ const authStore = useAuthStore()
 
 const isLoginModalOpen = ref(false)
 const isUserProfileOpen = ref(false)
+const showMaxSessionsModal = ref(false)
+const maxSessionsData = ref<any>(null)
 
 // 监听 auth store 的 showLoginModal（API 层 401 时自动触发）
 watch(() => authStore.showLoginModal, (val) => {
@@ -189,10 +193,44 @@ async function fetchSettingsOnDemand(): Promise<void> {
   }
 }
 
-function handleLoginSuccess(data: any) {
+async function handleLoginSuccess(data: any) {
   authStore.setLoggedIn(true, data.user, data.token)
   const rt = data.data?.refreshToken || data.data?.refresh_token
   if (rt) cache.set('refresh_token', rt, { exp: 86400 })
+  // 登录成功后获取权限 + 加载数据 + 连接 WebSocket
+  await authStore.fetchPermissions()
+  fetchData()
+  dashboardStore.connectWS()
+}
+
+function handleMaxSessions(data: { sessions: any[]; maxSessions: number }) {
+  // 存储会话数据并弹出设备管理弹窗
+  maxSessionsData.value = data
+  showMaxSessionsModal.value = true
+}
+
+async function handleKickSession(sessionId: string) {
+  try {
+    await firewallApi.kickSession(sessionId)
+    // 刷新会话列表
+    if (maxSessionsData.value) {
+      maxSessionsData.value.sessions = maxSessionsData.value.sessions.filter(
+        (s: any) => !s.sessionId?.startsWith(sessionId.substring(0, 16))
+      )
+    }
+  } catch (err) {
+    console.error('踢出会话失败:', err)
+  }
+}
+
+async function handleKickAll() {
+  try {
+    await firewallApi.kickAllSessions()
+    maxSessionsData.value = null
+    showMaxSessionsModal.value = false
+  } catch (err) {
+    console.error('踢出所有会话失败:', err)
+  }
 }
 
 // 点击外部关闭下拉菜单
@@ -204,12 +242,15 @@ function clickOutsideHandler(e: MouseEvent) {
   }
 }
 
-onMounted(() => {
-  authStore.checkSession()
-  fetchData()
-  dashboardStore.connectWS()
+onMounted(async () => {
+  const isLoggedIn = await authStore.checkSession()
   uiStore.setTheme(isDarkMode.value)
   window.addEventListener('click', clickOutsideHandler)
+
+  if (isLoggedIn) {
+    fetchData()
+    dashboardStore.connectWS()
+  }
 })
 
 onUnmounted(() => {

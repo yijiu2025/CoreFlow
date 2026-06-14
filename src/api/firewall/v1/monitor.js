@@ -1,4 +1,4 @@
-import { registerGroupMetadata, registerSecureRoute, getFullUrl } from '../../guard.js';
+import { registerGroupMetadata, registerSecureRoute, registerSecureWebSocket, getFullUrl } from '../../guard.js';
 import { getRecentRecords, getSummary, clearAll, setBroadcastHandler } from '../../../app/firewall/data/store.js';
 import {
   getServerNode,
@@ -373,42 +373,41 @@ export default async function (fastify) {
   });
 
   // ==================== WebSocket ====================
-  // WebSocket 升级处理
   const wsUrl = getFullUrl('/ws');
-  fastify.get(wsUrl, { websocket: true }, (connection, req) => {
-    // 鲁棒性获取 Socket 实例
-    const client = connection.socket || connection;
+  registerSecureWebSocket(fastify, {
+    url: wsUrl,
+    requireLogin: true,
+    handler: (connection, req, client) => {
+      if (!client || typeof client.on !== 'function') {
+        console.warn('⚠️  WebSocket 异常：未发现有效的 Socket 实例');
+        return;
+      }
 
-    if (!client || typeof client.on !== 'function') {
-      console.warn('⚠️  WebSocket 异常：未发现有效的 Socket 实例');
-      return;
-    }
+      const onData = (data) => {
+        if (data.toString() === 'PING') client.send('PONG');
+      };
+      client.on('message', onData);
+      clients.add(client);
+      client.on('close', () => {
+        clients.delete(client);
+        client.removeListener('message', onData);
+      });
 
-    const onData = (data) => {
-      if (data.toString() === 'PING') client.send('PONG');
-    };
-    client.on('message', onData);
-    clients.add(client);
-    client.on('close', () => {
-      clients.delete(client);
-      client.removeListener('message', onData);
-    });
-
-    // 确保连接处于开启状态后再发送
-    if (client.readyState === 1) {
-      client.send(
-        JSON.stringify({
-          type: 'INIT',
-          data: {
-            summary: {
-              ...getSummary(),
-              serverNode: getServerNode(),
-              securitySettings: getSecuritySettings()
-            },
-            records: getRecentRecords()
-          }
-        })
-      );
+      if (client.readyState === 1) {
+        client.send(
+          JSON.stringify({
+            type: 'INIT',
+            data: {
+              summary: {
+                ...getSummary(),
+                serverNode: getServerNode(),
+                securitySettings: getSecuritySettings()
+              },
+              records: getRecentRecords()
+            }
+          })
+        );
+      }
     }
   });
 }

@@ -16,9 +16,11 @@ import {
   REFRESH_TOKEN_TTL
 } from './cookie.js';
 import { loadUserPermissions } from './permission-loader.js';
+import { SESSION_CONFIG } from '../shared/config.js';
 
 const SESSION_PREFIX = 'session:';
 const REFRESH_PREFIX = 'refresh:';
+const MAX_REFRESH_TOKENS = SESSION_CONFIG.maxRefreshTokens || 10;
 
 /**
  * 设备类型常量
@@ -96,44 +98,85 @@ async function kickByDeviceType(redis, userId, appId, deviceType) {
 }
 
 /**
- * 限制并发会话数（超过限制时踢掉最旧的会话）
+ * 检查并发会话数
  * @param {object} redis Redis 客户端
  * @param {number} userId 用户 ID
  * @param {string} appId 应用 ID
  * @param {number} maxSessions 最大并发会话数（默认 5）
+ * @returns {null|object} null=未超限，object=超限返回活跃会话列表
  */
-async function enforceMaxSessions(redis, userId, appId, maxSessions = 5) {
-  if (!redis) return;
+export async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
+  if (!redis) return null;
 
-  const { SessionToken, SessionLog } = sequelize.models;
+  const { SessionToken } = sequelize.models;
 
-  // 查找该用户所有未撤销的会话
+  // 按应用过滤：只计算当前应用的会话
   const tokens = await SessionToken.findAll({
-    where: { user_id: userId, revoked: false },
-    order: [['last_active', 'ASC']] // 最旧的排前面
+    where: { user_id: userId, app_id: appId, revoked: false },
+    order: [['last_active', 'ASC']]
   });
 
-  // 超过限制时踢掉最旧的会话
-  while (tokens.length >= maxSessions) {
-    const oldest = tokens.shift();
-    if (!oldest) break;
+  if (tokens.length < maxSessions) return null;
 
-    // 删除 Redis session
-    await redis.del(`${SESSION_PREFIX}${oldest.token}`);
-    // 标记 revoked
-    await oldest.update({ revoked: true });
-    // 记录日志
-    await SessionLog.create({
-      user_id: userId,
-      event: 'KICK',
-      app_id: appId,
-      details: {
-        reason: 'max_sessions_exceeded',
-        maxSessions,
-        kickedSessionId: oldest.token
-      }
-    });
+  // 返回活跃会话列表，让调用方决定踢哪个
+  const sessions = [];
+  for (const t of tokens) {
+    const sessionData = await redis.get(`${SESSION_PREFIX}${t.token}`);
+    let info = { sessionId: t.token, ip: t.ip, userAgent: t.user_agent, lastActive: t.last_active };
+    if (sessionData) {
+      try {
+        const d = JSON.parse(sessionData);
+        info.deviceType = d.deviceType;
+        info.appId = d.appId;
+      } catch {}
+    }
+    sessions.push(info);
   }
+
+  return { maxSessions, current: sessions.length, sessions };
+}
+
+/**
+ * 踢掉指定会话
+ * @param {object} redis Redis 客户端
+ * @param {string} sessionId 要踢掉的会话 ID
+ * @param {number} userId 操作者用户 ID
+ */
+export async function kickSession(redis, sessionId, userId) {
+  const { SessionToken, SessionLog } = sequelize.models;
+
+  await redis.del(`${SESSION_PREFIX}${sessionId}`);
+  const token = await SessionToken.findOne({ where: { token: sessionId, revoked: false } });
+  if (token) {
+    await token.update({ revoked: true });
+  }
+  await SessionLog.create({
+    user_id: userId,
+    event: 'KICK',
+    details: { reason: 'user_kicked', kickedSessionId: sessionId }
+  });
+}
+
+/**
+ * 踢掉用户所有会话
+ */
+export async function kickAllSessions(redis, userId) {
+  const { SessionToken, SessionLog } = sequelize.models;
+
+  const tokens = await SessionToken.findAll({
+    where: { user_id: userId, revoked: false }
+  });
+
+  for (const t of tokens) {
+    await redis.del(`${SESSION_PREFIX}${t.token}`);
+    await t.update({ revoked: true });
+  }
+
+  await SessionLog.create({
+    user_id: userId,
+    event: 'KICK',
+    details: { reason: 'kick_all', count: tokens.length }
+  });
 }
 
 /**
@@ -173,8 +216,15 @@ export async function createSession(params) {
     reply
   } = params;
 
-  // 1. 并发会话限制：超过 5 个时踢掉最旧的会话
-  await enforceMaxSessions(redis, userId, appId);
+  // 1. 并发会话限制：检查是否超限（不自动踢人，由调用方处理）
+  const maxSessionsResult = await checkMaxSessions(redis, userId, appId);
+  if (maxSessionsResult) {
+    const err = new Error('MAX_SESSIONS_EXCEEDED');
+    err.code = 'MAX_SESSIONS_EXCEEDED';
+    err.sessions = maxSessionsResult.sessions;
+    err.maxSessions = maxSessionsResult.maxSessions;
+    throw err;
+  }
 
   // 2. 单设备单登录：踢掉同用户同应用同设备类型的旧会话
   await kickByDeviceType(
@@ -215,16 +265,37 @@ export async function createSession(params) {
 
   // 4. Redis 存储
   const sessionTtl = rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
+  const userRefreshKey = `user_refresh:${userId}`;
+
   if (redis) {
     await redis.set(
       `${SESSION_PREFIX}${sessionId}`,
       JSON.stringify(sessionData),
       { EX: sessionTtl }
     );
+
     if (refreshToken) {
+      // 清理超出限制的旧 refresh token
+      const count = await redis.zCard(userRefreshKey);
+      if (count >= MAX_REFRESH_TOKENS) {
+        // 删除最久未刷新的（score 最小的）
+        const removeCount = count - MAX_REFRESH_TOKENS + 1;
+        const oldTokens = await redis.zRangeByScore(userRefreshKey, '-inf', '+inf', { LIMIT: { offset: 0, count: removeCount } });
+        for (const oldRt of oldTokens) {
+          const oldSessionId = await redis.get(`${REFRESH_PREFIX}${oldRt}`);
+          if (oldSessionId) await redis.del(`${SESSION_PREFIX}${oldSessionId}`);
+          await redis.del(`${REFRESH_PREFIX}${oldRt}`);
+        }
+        await redis.zRem(userRefreshKey, oldTokens);
+      }
+
+      // 写入新的 refresh token
       await redis.set(`${REFRESH_PREFIX}${refreshToken}`, sessionId, {
         EX: REFRESH_TOKEN_TTL
       });
+      // 记录到用户的 refresh 索引（score = 当前时间戳）
+      await redis.zAdd(userRefreshKey, { score: Date.now(), value: refreshToken });
+      await redis.expire(userRefreshKey, REFRESH_TOKEN_TTL);
     }
   }
 
@@ -381,7 +452,7 @@ export async function getSession(params) {
  * @returns {object|null} 新的会话数据或 null
  */
 export async function refreshSession(params) {
-  const { redis, cookies, reply } = params;
+  const { redis, cookies, reply, request } = params;
 
   // 1. 解析 sid_r cookie
   const sidRCookie = cookies[COOKIE_SID_R];
@@ -450,9 +521,9 @@ export async function refreshSession(params) {
     appId: record.app_id,
     roles,
     permissions,
-    ip: record.ip,
+    ip: request?.ip || record.ip,
     deviceId: record.device_id,
-    userAgent: record.user_agent,
+    userAgent: request?.headers?.['user-agent'] || record.user_agent,
     loginAt: Math.floor(record.createdAt.getTime() / 1000),
     lastActiveAt: Math.floor(Date.now() / 1000),
     rememberMe: true
@@ -469,6 +540,10 @@ export async function refreshSession(params) {
     await redis.set(`${REFRESH_PREFIX}${refreshToken}`, newSessionId, {
       EX: REFRESH_TOKEN_TTL
     });
+    // 更新 refresh token 的活跃时间
+    const userRefreshKey = `user_refresh:${user.id}`;
+    await redis.zAdd(userRefreshKey, { score: Date.now(), value: refreshToken });
+    await redis.expire(userRefreshKey, REFRESH_TOKEN_TTL);
     // 清除旧 session
     if (oldSessionId) {
       await redis.del(`${SESSION_PREFIX}${oldSessionId}`);

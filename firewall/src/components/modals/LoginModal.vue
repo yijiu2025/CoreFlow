@@ -41,7 +41,7 @@ const props = defineProps({
   isOpen: Boolean
 })
 
-const emit = defineEmits(['close', 'login-success'])
+const emit = defineEmits(['close', 'login-success', 'max-sessions'])
 
 const loading = ref(true)
 const loginUrl = buildSsoLoginUrl()
@@ -74,6 +74,15 @@ const handleMessage = async (event: MessageEvent) => {
     }
 
     emit('login-success', { user, token })
+    close()
+  }
+
+  // 设备数量超限
+  if (event.data && event.data.type === 'MAX_SESSIONS') {
+    emit('max-sessions', {
+      sessions: event.data.sessions,
+      maxSessions: event.data.maxSessions
+    })
     close()
   }
 }

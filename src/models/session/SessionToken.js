@@ -71,6 +71,15 @@ export default (sequelize, DataTypes) => {
       onDelete: 'CASCADE',
       onUpdate: 'CASCADE'
     });
+
+    // 关联 User 表，用于 session 回退查询时加载用户信息
+    SessionToken.belongsTo(models.User, {
+      foreignKey: 'user_id',
+      targetKey: 'id',
+      as: 'user',
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE'
+    });
   };
 
   return SessionToken;

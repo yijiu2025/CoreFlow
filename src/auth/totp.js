@@ -21,7 +21,7 @@ const DEFAULT_CONFIG = {
  * @returns {{ secret: string, uri: string }} 密钥和 OTP Auth URI
  */
 export function generateSecret(issuer = 'App', account = '') {
-  const secret = crypto.randomBytes(20).toString('base32');
+  const secret = base32Encode(crypto.randomBytes(20));
   const uri = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 
   return { secret, uri };
@@ -83,6 +83,27 @@ export function verifyTOTP(secret, code, config = DEFAULT_CONFIG) {
   }
 
   return false;
+}
+
+/**
+ * Base32 编码
+ * @param {Buffer} buffer 字节数据
+ * @returns {string} Base32 字符串
+ */
+function base32Encode(buffer) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const byte of buffer) {
+    bits += byte.toString(2).padStart(8, '0');
+  }
+  // 补齐到 5 的倍数
+  while (bits.length % 5 !== 0) bits += '0';
+
+  let result = '';
+  for (let i = 0; i < bits.length; i += 5) {
+    result += alphabet[parseInt(bits.substr(i, 5), 2)];
+  }
+  return result;
 }
 
 /**

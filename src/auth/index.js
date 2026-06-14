@@ -55,23 +55,47 @@ export function getServerResource(name) {
  */
 async function getUserFromToken(token) {
   try {
-    const { verify } = await import('../app/oauth21/crypto/jwt.js');
-    const payload = verify(token);
+    const { verifyJwt } = await import('../shared/jwt.js');
+    const { findUserById } = await import('../shared/user-dao.js');
+
+    const payload = verifyJwt(token);
     if (!payload?.sub) return null;
 
-    // 查询用户详情
-    const { default: UserDao } = await import('../app/oauth21/dao/user.dao.js');
-    const userData = await UserDao.findById(payload.sub);
+    const userData = await findUserById(payload.sub);
     if (!userData) return null;
 
-    // 优先从 JWT 读取权限，无则从数据库加载
+    // 优先从 JWT 读取权限，无则从缓存/数据库加载
     let roles = payload.roles;
     let permissions = payload.permissions;
     if (!roles || !permissions) {
-      const { loadUserPermissions } = await import('./permission-loader.js');
-      const loaded = await loadUserPermissions(userData.id, payload.client_id || 'GLOBAL');
-      roles = roles || loaded.roles;
-      permissions = permissions || loaded.permissions;
+      // 尝试从 Redis 缓存读取（避免每次请求查库）
+      const redis = request.server?.redis;
+      const cacheKey = `perm:${userData.id}:${payload.client_id || 'GLOBAL'}`;
+      if (redis) {
+        try {
+          const cached = await redis.get(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            roles = roles || parsed.roles;
+            permissions = permissions || parsed.permissions;
+          }
+        } catch {}
+      }
+
+      // 缓存未命中，从数据库加载
+      if (!roles || !permissions) {
+        const { loadUserPermissions } = await import('./permission-loader.js');
+        const loaded = await loadUserPermissions(userData.id, payload.client_id || 'GLOBAL');
+        roles = roles || loaded.roles;
+        permissions = permissions || loaded.permissions;
+
+        // 写入缓存（5 分钟）
+        if (redis) {
+          try {
+            await redis.set(cacheKey, JSON.stringify({ roles, permissions }), { EX: 300 });
+          } catch {}
+        }
+      }
     }
 
     return {
@@ -93,9 +117,8 @@ async function getUserFromToken(token) {
 }
 
 export default fp(async (app) => {
-  // 动态读取 JWT 配置
-  const { default: config } = await import('../app/oauth21/config/config.js');
-  const jwtEnabled = config.jwt.enabled;
+  // 读取 JWT 配置（通过共享层，避免直接依赖 oauth21）
+  const { JWT_ENABLED: jwtEnabled } = await import('../shared/config.js');
 
   app.addHook('onRequest', async (request, reply) => {
     // 1. 初始化 request.state
@@ -138,7 +161,7 @@ export default fp(async (app) => {
 
     // sid 失效时尝试用 sid_r 刷新
     if (!sessionData && cookies[COOKIE_SID_R]) {
-      sessionData = await refreshSession({ redis, cookies, reply });
+      sessionData = await refreshSession({ redis, cookies, reply, request });
     }
 
     // 写入 request.state.user

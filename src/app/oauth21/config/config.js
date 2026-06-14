@@ -24,7 +24,8 @@ const config = {
     expiresIn: 600
   },
   session: {
-    secret: process.env.SESSION_SECRET || 'fallback-dev-secret'
+    secret: process.env.SESSION_SECRET || 'fallback-dev-secret',
+    maxRefreshTokens: parseInt(process.env.MAX_REFRESH_TOKENS) || 10
   }
 };
 

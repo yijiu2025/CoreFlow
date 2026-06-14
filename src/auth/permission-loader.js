@@ -6,6 +6,42 @@ import { Op } from 'sequelize';
 import sequelize from '../db/index.js';
 
 /**
+ * 从策略文档中提取权限
+ * 支持两种格式：
+ * 1. Statement 格式: { Statement: [{ Effect: 'Allow', Action: ['fw:admin:*'] }] }
+ * 2. 直接格式: { allows: ['fw:admin:*'], denies: [] }
+ */
+function extractPermissions(policy, allows, denies) {
+  if (!policy) return;
+
+  // 兼容 JSON 字符串格式
+  if (typeof policy === 'string') {
+    try {
+      policy = JSON.parse(policy);
+    } catch {
+      return;
+    }
+  }
+
+  // 格式 1: Statement 数组
+  if (Array.isArray(policy.Statement)) {
+    for (const stmt of policy.Statement) {
+      const actions = Array.isArray(stmt.Action) ? stmt.Action : [stmt.Action];
+      if (stmt.Effect === 'Allow') {
+        allows.push(...actions);
+      } else if (stmt.Effect === 'Deny') {
+        denies.push(...actions);
+      }
+    }
+    return;
+  }
+
+  // 格式 2: 直接 allows/denies 数组
+  if (Array.isArray(policy.allows)) allows.push(...policy.allows);
+  if (Array.isArray(policy.denies)) denies.push(...policy.denies);
+}
+
+/**
  * 加载用户在指定应用的角色和权限
  * @param {number} userId 用户内部 ID
  * @param {string} appId 应用标识
@@ -14,7 +50,7 @@ import sequelize from '../db/index.js';
 export async function loadUserPermissions(userId, appId) {
   const { Role, UserRole, InlinePolicy } = sequelize.models;
 
-  // 1. 加载角色 (当前应用 + 全局角色)
+  // 1. 加载角色 (当前应用 + 全局角色，排除其他应用的角色)
   const userRoles = await UserRole.findAll({
     where: {
       user_id: userId,
@@ -26,7 +62,10 @@ export async function loadUserPermissions(userId, appId) {
       {
         model: Role,
         as: 'role',
-        where: { delete_version: 0 },
+        where: {
+          delete_version: 0,
+          app_id: { [Op.in]: [appId, 'GLOBAL'] }
+        },
         required: true
       }
     ]
@@ -34,31 +73,25 @@ export async function loadUserPermissions(userId, appId) {
 
   let roles = userRoles.map((ur) => ur.role.code);
 
-  // 1.5. GLOBAL superadmin 自动获得应用级超管权限
-  if (roles.includes('superadmin') && appId !== 'GLOBAL') {
-    const appAdminRole = `${appId}_admin`;
-    if (!roles.includes(appAdminRole)) {
-      roles.push(appAdminRole);
-      // 加载应用级超管角色的策略
-      const adminRole = await Role.findOne({
-        where: { code: appAdminRole, app_id: appId, delete_version: 0 }
-      });
-      if (adminRole?.policy) {
-        if (Array.isArray(adminRole.policy.allows)) allows.push(...adminRole.policy.allows);
-        if (Array.isArray(adminRole.policy.denies)) denies.push(...adminRole.policy.denies);
-      }
-    }
-  }
-
   // 2. 合并角色策略
   const allows = [];
   const denies = [];
 
   for (const ur of userRoles) {
-    const policy = ur.role.policy;
-    if (policy) {
-      if (Array.isArray(policy.allows)) allows.push(...policy.allows);
-      if (Array.isArray(policy.denies)) denies.push(...policy.denies);
+    extractPermissions(ur.role.policy, allows, denies);
+  }
+
+  // 2.5. GLOBAL superadmin 自动获得应用级超管权限
+  if (roles.includes('superadmin') && appId !== 'GLOBAL') {
+    const appAdminRole = `${appId}_admin`;
+    if (!roles.includes(appAdminRole)) {
+      roles.push(appAdminRole);
+      const adminRole = await Role.findOne({
+        where: { code: appAdminRole, app_id: appId, delete_version: 0 }
+      });
+      if (adminRole?.policy) {
+        extractPermissions(adminRole.policy, allows, denies);
+      }
     }
   }
 
@@ -71,11 +104,7 @@ export async function loadUserPermissions(userId, appId) {
   });
 
   for (const ip of inlinePolicies) {
-    const policy = ip.policy;
-    if (policy) {
-      if (Array.isArray(policy.allows)) allows.push(...policy.allows);
-      if (Array.isArray(policy.denies)) denies.push(...policy.denies);
-    }
+    extractPermissions(ip.policy, allows, denies);
   }
 
   return {

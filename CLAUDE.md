@@ -166,6 +166,9 @@ registerSecureRoute(app, {
   method: 'GET',
   url: '/profile',
   requireLogin: true,
+  permission: 'user:read',           // 单个权限
+  // permission: { any: ['a', 'b'] }  // 任一满足 (OR)
+  // permission: { all: ['a', 'b'] }  // 全部满足 (AND)
   handler: async (request, reply) => { ... }
 });
 ```
@@ -178,9 +181,11 @@ registerSecureRoute(app, {
 |------|------|--------|
 | System | `system.json` | enabled, allowIps, requireLogin |
 | Group | `registerGroupMetadata()` | enabled, allowIps, allowRoles |
-| API | `registerSecureRoute()` | enabled, allowIps, allowRoles, requireLogin |
+| API | `registerSecureRoute()` | enabled, allowIps, allowRoles, requireLogin, permission |
 
-每级可独立拦截：`enabled`、`allowIps`（通配符+CIDR）、`allowRoles`、`requireLogin`。
+每级可独立拦截：`enabled`、`allowIps`（通配符+CIDR）、`allowRoles`、`requireLogin`、`permission`（权限校验，支持通配符 + deny 优先）。
+
+`permission` 是 `requirePermission` 的短别名。
 
 配置持久化到 `data/guard_config.json`。
 
@@ -333,6 +338,8 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 - 函数命名使用小驼峰（camelCase）
 - 每个独立功能使用单独的文件
 - 修改文件后在合适位置更新 README.md
+- 每次修改代码帮我主动提交github
+
 
 ## 启动日志规范
 

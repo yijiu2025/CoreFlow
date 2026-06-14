@@ -51,6 +51,28 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    port: 5174,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/verify': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/user': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/oauth2.1': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      }
+    }
+  },
   css: {
     preprocessorOptions: {
       scss: {

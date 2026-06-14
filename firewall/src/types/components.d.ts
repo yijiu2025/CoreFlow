@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AvatarUpload: typeof import('./../components/layout/AvatarUpload.vue')['default']
     BaseModal: typeof import('./../components/ui/BaseModal.vue')['default']
     ConfigPanel: typeof import('./../components/ConfigPanel.vue')['default']
     DataTable: typeof import('./../components/ui/DataTable.vue')['default']

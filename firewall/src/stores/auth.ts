@@ -190,6 +190,14 @@ export const useAuthStore = defineStore('auth', () => {
     try { await firewallApi.clearCookie() } catch {}
   }
 
+  /** 更新头像 URL */
+  function updateAvatar(url: string) {
+    if (!user.value) return
+    // 直接使用相对路径，由 Vite 代理或 Nginx 转发
+    user.value.avatar = url
+    cache.set('user', user.value)
+  }
+
   // 初始化时恢复状态
   restore()
 
@@ -208,6 +216,7 @@ export const useAuthStore = defineStore('auth', () => {
     refreshAccessToken,
     hasPermission,
     hasRole,
+    updateAvatar,
     logout
   }
 })

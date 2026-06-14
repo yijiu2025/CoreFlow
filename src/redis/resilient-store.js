@@ -65,12 +65,13 @@ export class ResilientStore {
 
     if (this.healthy && this.app.redis) {
       try {
-        const results = await this.app.redis.multi().incr(key).pexpire(key, windowMs).exec();
+        const results = await this.app.redis.multi().incr(key).pExpire(key, windowMs).exec();
 
         // 兼容 node-redis v4（直接值）和 v5（{ value } 包装）
         const count = typeof results[0] === 'object' ? results[0].value : results[0];
-        const ttl = await this.app.redis.pttl(key);
-        return cb(null, { current: count, ttl: ttl > 0 ? ttl : windowMs });
+        const ttlSec = await this.app.redis.ttl(key);
+        const ttlMs = ttlSec > 0 ? ttlSec * 1000 : windowMs;
+        return cb(null, { current: count, ttl: ttlMs });
       } catch (err) {
         this.healthy = false;
         this.log.warn?.({ err: { message: err.message } }, '[Redis] 限流写入失败，降级到内存');

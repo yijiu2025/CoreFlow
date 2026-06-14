@@ -53,15 +53,18 @@ export default async function (fastify) {
         });
       }
 
+      // 第一方应用直接返回完整信息，第三方应用按 scope 过滤
       const scopes = (tokenUser.scope || '').split(' ');
+      const isFirstParty = !tokenUser.scope || tokenUser.client_id === 'first-party-app';
+
       const info = { sub: userData.id };
 
-      if (scopes.includes('profile')) {
+      if (isFirstParty || scopes.includes('profile')) {
         info.name = userData.name;
         info.preferred_username = userData.username;
         info.avatar = userData.avatar || null;
       }
-      if (scopes.includes('email')) {
+      if (isFirstParty || scopes.includes('email')) {
         info.email = userData.email;
       }
 
@@ -104,4 +107,61 @@ export default async function (fastify) {
       });
     }
   });
+
+  /**
+   * GET /user/v1/check-permission
+   *
+   * 权限调试工具：检查当前用户是否拥有指定权限
+   * 用于前端调试和管理员排查权限问题
+   *
+   * Query: permission=fw:config:read
+   * 返回: { has: boolean, matched: string, denied: boolean }
+   */
+  registerSecureRoute(fastify, {
+    name: 'checkPermission',
+    alias: '权限调试检查',
+    method: 'GET',
+    url: '/check-permission',
+    requireLogin: true,
+    handler: async (request, reply) => {
+      const user = request.state?.user;
+      if (!user?.sub) {
+        return reply.code(401).send({ code: 401, message: '未登录', data: null });
+      }
+
+      const { permission } = request.query;
+      if (!permission) {
+        return reply.code(400).send({ code: 400, message: '缺少 permission 参数', data: null });
+      }
+
+      const { allows = [], denies = [] } = user.permissions || {};
+
+      // 检查 deny
+      const denied = denies.some(p => matchPermission(p, permission));
+      // 检查 allow
+      const allowed = allows.some(p => matchPermission(p, permission));
+
+      return reply.result.success('检查完成', {
+        permission,
+        has: allowed && !denied,
+        denied,
+        matched: denied ? 'denied' : allowed ? 'allowed' : 'none',
+        roles: user.roles || [],
+        allows: allows.slice(0, 20),  // 限制返回数量
+        denies: denies.slice(0, 20)
+      });
+    }
+  });
+}
+
+/**
+ * 权限通配符匹配
+ */
+function matchPermission(pattern, target) {
+  if (pattern === '*') return true;
+  if (pattern === target) return true;
+  if (pattern.endsWith(':*')) {
+    return target.startsWith(pattern.slice(0, -1));
+  }
+  return false;
 }

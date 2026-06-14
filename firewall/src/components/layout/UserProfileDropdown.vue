@@ -53,11 +53,8 @@
                 </span>
               </div>
             </div>
-            <!-- Camera badge -->
-            <div class="absolute -bottom-1 -right-1 p-1.5 rounded-xl shadow-md cursor-pointer hover:scale-110 transition-transform"
-              :class="isDarkMode ? 'bg-slate-700 text-cyan-400' : 'bg-white text-indigo-500'">
-              <Camera class="w-3 h-3" />
-            </div>
+            <!-- Camera badge (头像上传) -->
+            <AvatarUpload :is-dark-mode="isDarkMode" />
           </div>
         </div>
 
@@ -154,8 +151,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useDefenseStore } from '@/stores/defense'
 import { SSO_URL } from '@/config/services'
 import {
-  User, X, Camera, LogOut, ShieldCheck, Settings, ChevronRight, ExternalLink
+  User, X, LogOut, ShieldCheck, Settings, ChevronRight, ExternalLink
 } from 'lucide-vue-next'
+import AvatarUpload from './AvatarUpload.vue'
 
 defineProps<{
   isDarkMode: boolean

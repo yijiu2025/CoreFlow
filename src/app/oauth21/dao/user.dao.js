@@ -28,6 +28,7 @@ const UserDao = {
           username: user.username,
           email: user.email,
           name: user.username,
+          avatar: user.avatar,
           uid: user.uid
         }
       : null;
@@ -53,6 +54,7 @@ const UserDao = {
           username: user.username,
           email: user.email,
           name: user.username,
+          avatar: user.avatar,
           uid: user.uid
         }
       : null;
@@ -84,6 +86,7 @@ const UserDao = {
       username: identity.user.username,
       email: identity.user.email,
       name: identity.user.username,
+      avatar: identity.user.avatar,
       uid: identity.user.uid,
       credential: identity.credential // 密码 Hash
     };

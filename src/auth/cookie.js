@@ -81,10 +81,10 @@ export const COOKIE_OPTIONS = {
 };
 
 /** 短期登录: sid cookie maxAge (秒) */
-export const SHORT_SESSION_TTL = 7200; // 2小时
+export const SHORT_SESSION_TTL = 1800; // 30分钟
 
 /** 长期登录: sid cookie maxAge (秒) */
-export const LONG_SESSION_TTL = 1800; // 30分钟
+export const LONG_SESSION_TTL = 2592000; // 30天
 
 /** 长期登录: sid_r cookie maxAge (秒) */
 export const REFRESH_TOKEN_TTL = 2592000; // 30天

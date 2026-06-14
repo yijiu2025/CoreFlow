@@ -130,3 +130,71 @@ describe('守卫权限逻辑', () => {
     expect(r2.blocked).toBe(false);
   });
 });
+
+describe('权限匹配 (checkPermission)', () => {
+  function isPermissionMatch(pattern, target) {
+    if (pattern === '*') return true;
+    if (pattern === target) return true;
+    if (pattern.endsWith(':*')) return target.startsWith(pattern.slice(0, -1));
+    return false;
+  }
+
+  function matchSingle(perm, allows, denies) {
+    if (denies.some(d => isPermissionMatch(d, perm))) return false;
+    return allows.some(a => isPermissionMatch(a, perm));
+  }
+
+  function checkPermission(required, user) {
+    if (!user) return false;
+    const { allows = [], denies = [] } = user.permissions || {};
+    if (typeof required === 'string') return matchSingle(required, allows, denies);
+    if (required.any) return required.any.some(p => matchSingle(p, allows, denies));
+    if (required.all) return required.all.every(p => matchSingle(p, allows, denies));
+    return false;
+  }
+
+  test('单个权限精确匹配', () => {
+    const user = { permissions: { allows: ['fw:config:read'], denies: [] } };
+    expect(checkPermission('fw:config:read', user)).toBe(true);
+    expect(checkPermission('fw:config:write', user)).toBe(false);
+  });
+
+  test('通配符匹配 fw:admin:*', () => {
+    const user = { permissions: { allows: ['fw:admin:*'], denies: [] } };
+    expect(checkPermission('fw:admin:reset', user)).toBe(true);
+    expect(checkPermission('fw:admin:node', user)).toBe(true);
+    expect(checkPermission('fw:config:read', user)).toBe(false);
+  });
+
+  test('全局通配符 *', () => {
+    const user = { permissions: { allows: ['*'], denies: [] } };
+    expect(checkPermission('anything:here', user)).toBe(true);
+  });
+
+  test('deny 优先于 allow', () => {
+    const user = { permissions: { allows: ['*'], denies: ['user:delete'] } };
+    expect(checkPermission('user:read', user)).toBe(true);
+    expect(checkPermission('user:delete', user)).toBe(false);
+  });
+
+  test('any 模式（OR）', () => {
+    const user = { permissions: { allows: ['fw:config:read'], denies: [] } };
+    expect(checkPermission({ any: ['fw:config:read', 'fw:admin:*'] }, user)).toBe(true);
+    expect(checkPermission({ any: ['fw:block:write', 'fw:admin:*'] }, user)).toBe(false);
+  });
+
+  test('all 模式（AND）', () => {
+    const user = { permissions: { allows: ['fw:config:read', 'fw:config:write'], denies: [] } };
+    expect(checkPermission({ all: ['fw:config:read', 'fw:config:write'] }, user)).toBe(true);
+    expect(checkPermission({ all: ['fw:config:read', 'fw:admin:*'] }, user)).toBe(false);
+  });
+
+  test('空用户返回 false', () => {
+    expect(checkPermission('fw:config:read', null)).toBe(false);
+  });
+
+  test('空权限返回 false', () => {
+    const user = { permissions: { allows: [], denies: [] } };
+    expect(checkPermission('fw:config:read', user)).toBe(false);
+  });
+});

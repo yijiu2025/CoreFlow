@@ -178,9 +178,17 @@ const executeLogin = async () => {
     if (res && res.action === 'consent') {
       consentState.value = res
       showConsent.value = true
+    } else if (res && res.action === 'max_sessions') {
+      // 设备数量超限，通知父窗口处理
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: 'MAX_SESSIONS',
+          sessions: res.sessions,
+          maxSessions: res.maxSessions
+        }, '*')
+      }
     } else {
       notifyParentLoginSuccess(res)
-      console.log(res)
     }
   } catch (err: any) {
     showError(err.message || t('login.login_failed'))

@@ -13,6 +13,8 @@ import { issueDirectTokens } from '../shared/token-issuer.js';
 import { buildTokenResponse } from '../shared/cookies.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../shared/constants.js';
 import ApprovalDao from '../../../../app/oauth21/dao/approval.dao.js';
+import { logLogin } from '../../../../auth/audit-logger.js';
+import { detectLoginAnomaly, DETECT_RESULT } from '../../../../auth/anomaly-detector.js';
 import UserDao from '../../../../app/oauth21/dao/user.dao.js';
 import ClientDao from '../../../../app/oauth21/dao/client.dao.js';
 import { getSessionStore } from '../../../../redis/session-store.js';
@@ -39,6 +41,32 @@ async function handleDirectLogin(request, reply, fastify) {
   }
 
   const { username, password, type, email, code } = decryptResult.data;
+
+  // 1.5. 异常登录检测（暴力破解锁定）
+  const loginEmail = email || username;
+  if (loginEmail) {
+    const anomaly = await detectLoginAnomaly({
+      email: loginEmail,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] || '',
+      redis: request.server.redis
+    });
+    if (anomaly.status === DETECT_RESULT.BLOCK) {
+      await logLogin(request.server.redis, {
+        userId: null,
+        ip: request.ip,
+        userAgent: request.headers['user-agent'] || '',
+        appId: 'oauth21',
+        success: false,
+        reason: anomaly.reason
+      });
+      return reply.code(429).send({
+        code: 429,
+        message: anomaly.reason,
+        data: null
+      });
+    }
+  }
 
   // 2. 验证用户
   let user;
@@ -157,8 +185,28 @@ async function handleDirectLogin(request, reply, fastify) {
       reply,
       fastify
     );
+
+    // 审计日志：登录成功
+    await logLogin(request.server.redis, {
+      userId: user.id,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] || '',
+      appId: client.client_id,
+      success: true
+    });
+
     return buildTokenResponse(result);
   } catch (err) {
+    // 审计日志：登录失败
+    await logLogin(request.server.redis, {
+      userId: user.id,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] || '',
+      appId: client.client_id,
+      success: false,
+      reason: err.message
+    });
+
     if (err.message === 'invalid_client') {
       return reply.code(401).send({
         code: 401,

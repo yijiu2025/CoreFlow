@@ -146,12 +146,27 @@ export async function createApp() {
 
   await app.register(staticPlugin, {
     root: publicPath,
-    prefix: '/'
+    prefix: '/',
+    setHeaders: (res) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
   });
 
   await app.register(websocket);
 
   await app.register(cookie);
+
+  // 安全响应头
+  app.addHook('onSend', (request, reply, payload, done) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'SAMEORIGIN');
+    reply.header('X-XSS-Protection', '1; mode=block');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (!isDev) {
+      reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    done();
+  });
 
   // 2. 增强型全局错误处理
   app.setErrorHandler((error, request, reply) => {
