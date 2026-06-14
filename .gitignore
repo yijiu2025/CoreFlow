@@ -23,3 +23,7 @@ tokens.json
 # 忽略 public 下的上传文件，但保留目录本身
 public/uploads/*
 !public/uploads/.gitkeep
+
+# VitePress 构建缓存
+docs/.vitepress/cache
+docs/.vitepress/dist
