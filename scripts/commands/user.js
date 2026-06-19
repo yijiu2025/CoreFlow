@@ -94,10 +94,10 @@ export async function createUser() {
 }
 
 /**
- * 重置用户密码
+ * 重置用户密码（同时踢出所有登录）
  */
 export async function resetPassword() {
-  const { User, UserIdentity } = getModels();
+  const { User, UserIdentity, SessionToken } = getModels();
   const rl = createRl();
 
   try {
@@ -125,32 +125,43 @@ export async function resetPassword() {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
+    // 更新密码
     await UserIdentity.update(
       { credential: hashedPassword },
       { where: { user_id: user.id, identity_type: 'password' } }
     );
+    printSuccess(`密码已重置: ${user.email}`);
 
-    // 清除 session
+    // 吊销数据库中所有 session token
+    const revokedCount = await SessionToken.update(
+      { revoked: true },
+      { where: { user_id: user.id, revoked: false } }
+    );
+    if (revokedCount[0] > 0) {
+      printInfo(`已吊销 ${revokedCount[0]} 个数据库 Token`);
+    }
+
+    // 清除 Redis 中所有 session
     const redis = await connectRedis();
     if (redis) {
       const cleared = await clearUserSessions(redis, user.id, user.uid);
       await closeRedis(redis);
       if (cleared > 0) {
-        printInfo(`已清除 ${cleared} 个旧 Session`);
+        printInfo(`已清除 ${cleared} 个 Redis Session`);
       }
     }
 
-    printSuccess(`密码已重置: ${user.email}`);
+    printSuccess(`用户 ${email} 已被踢出所有设备，需重新登录`);
   } finally {
     closeRl(rl);
   }
 }
 
 /**
- * 禁用用户
+ * 禁用用户（同时踢出所有登录）
  */
 export async function disableUser() {
-  const { User } = getModels();
+  const { User, SessionToken } = getModels();
   const rl = createRl();
 
   try {
@@ -173,9 +184,19 @@ export async function disableUser() {
       return;
     }
 
+    // 禁用用户
     await user.update({ status: 0 });
 
-    // 清除 session
+    // 吊销数据库中所有 session token
+    const revokedCount = await SessionToken.update(
+      { revoked: true },
+      { where: { user_id: user.id, revoked: false } }
+    );
+    if (revokedCount[0] > 0) {
+      printInfo(`已吊销 ${revokedCount[0]} 个 Token`);
+    }
+
+    // 清除 Redis 中所有 session
     const redis = await connectRedis();
     if (redis) {
       const cleared = await clearUserSessions(redis, user.id, user.uid);
@@ -185,7 +206,7 @@ export async function disableUser() {
       }
     }
 
-    printSuccess(`用户已禁用: ${email}`);
+    printSuccess(`用户已禁用: ${email}（所有设备已踢出）`);
   } finally {
     closeRl(rl);
   }
@@ -266,10 +287,10 @@ export async function viewUser() {
 }
 
 /**
- * 删除用户（软删除）
+ * 删除用户（软删除，同时踢出所有登录）
  */
 export async function deleteUser() {
-  const { User } = getModels();
+  const { User, SessionToken } = getModels();
   const rl = createRl();
 
   try {
@@ -290,17 +311,23 @@ export async function deleteUser() {
       return;
     }
 
-    // 清除 session
+    // 吊销数据库中所有 session token
+    await SessionToken.update(
+      { revoked: true },
+      { where: { user_id: user.id, revoked: false } }
+    );
+
+    // 清除 Redis 中所有 session
     const redis = await connectRedis();
     if (redis) {
       await clearUserSessions(redis, user.id, user.uid);
       await closeRedis(redis);
     }
 
-    // 软删除
+    // 软删除用户
     await user.update({ delete_version: user.id });
 
-    printSuccess(`用户已删除: ${email}`);
+    printSuccess(`用户已删除: ${email}（所有设备已踢出）`);
   } finally {
     closeRl(rl);
   }
