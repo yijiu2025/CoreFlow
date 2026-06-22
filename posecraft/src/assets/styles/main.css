@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: 238.7 83.5% 66.7%;
+  --accent: 238.3 82.7% 67.5%;
+  --muted: 210 40% 96.1%;
+  --bg: #f8fafc;
+  --text: #1e293b;
+}
+
+.dark {
+  --primary: 188.9 94.4% 42.7%;
+  --muted: 217.2 32.6% 17.5%;
+  --bg: #020617;
+  --text: #f1f5f9;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* NProgress 自定义样式 */
+#nprogress .bar {
+  background: #6366f1 !important;
+  height: 3px !important;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.5);
+}

@@ -1,0 +1,45 @@
+{
+  "app": {
+    "title": "PoseCraft",
+    "subtitle": "AI 姿势分析平台",
+    "search_placeholder": "搜索模板、作品...",
+    "recommended": "推荐",
+    "nearby": "附近",
+    "gallery": "画廊",
+    "new_template": "新建模板",
+    "profile": "我的",
+    "settings": "设置",
+    "login": "登录",
+    "logout": "退出登录"
+  },
+  "home": {
+    "popular_templates": "热门模板",
+    "recent_works": "最新作品",
+    "load_more": "加载更多"
+  },
+  "editor": {
+    "title": "图片编辑器",
+    "save": "保存",
+    "export": "导出",
+    "undo": "撤销",
+    "redo": "重做"
+  },
+  "camera": {
+    "title": "AI 相机",
+    "capture": "拍照",
+    "analyze": "分析",
+    "switch_camera": "切换摄像头"
+  },
+  "common": {
+    "loading": "加载中...",
+    "no_data": "暂无数据",
+    "confirm": "确认",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建",
+    "success": "操作成功",
+    "error": "操作失败"
+  }
+}

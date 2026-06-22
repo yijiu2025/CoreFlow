@@ -338,7 +338,7 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 - 函数命名使用小驼峰（camelCase）
 - 每个独立功能使用单独的文件
 - 修改文件后在合适位置更新 README.md
-- 每次修改代码帮我主动提交github
+- 每次修改代码帮我主动提交github，更新commit信息
 
 
 ## 启动日志规范

@@ -7,6 +7,8 @@
 import {
   getActiveBlocks as _getActiveBlocks,
   getActiveWhitelist as _getActiveWhitelist,
+  setBlock as _setBlock,
+  removeBlock as _removeBlock,
   setBlockFp as _setBlockFp,
   removeBlockFp as _removeBlockFp,
   setWhitelist as _setWhitelist,
@@ -33,6 +35,25 @@ export const getActiveBlocks = _getActiveBlocks;
  * @returns {Promise<Array>} 白名单记录列表
  */
 export const getActiveWhitelist = _getActiveWhitelist;
+
+// ============== IP 封禁接口（API 手动拉黑） ==============
+
+/**
+ * 设置 IP 封禁（API 层调用）
+ *
+ * @param {object|null} redisClient Redis 客户端
+ * @param {string} ip IP 地址
+ * @param {object} metadata 封禁元数据
+ */
+export const setBlock = _setBlock;
+
+/**
+ * 移除 IP 封禁（API 层调用）
+ *
+ * @param {object|null} redisClient Redis 客户端
+ * @param {string} ip IP 地址
+ */
+export const removeBlock = _removeBlock;
 
 // ============== 指纹封禁接口（API 手动拉黑） ==============
 

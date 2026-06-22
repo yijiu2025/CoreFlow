@@ -1,0 +1,10 @@
+{
+  "name": "posecraft",
+  "alias": "PoseCraft",
+  "prefix": "/posecraft",
+  "description": "AI 姿势分析 + 图片编辑平台",
+  "enabled": true,
+  "requireLogin": false,
+  "allowIps": [],
+  "allowRoles": []
+}

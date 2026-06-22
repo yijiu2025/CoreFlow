@@ -2,7 +2,7 @@
  * OAuth2.1 应用配置
  * 供 loader 扫描时读取
  */
-import { registerCsrfProtection } from '../api/oauth21/v1/shared/csrf.js';
+import { registerCsrfProtection } from '../../api/oauth21/v1/shared/csrf.js';
 import { CSRF_EXCLUDE_PATHS } from './config/csrf-exclude.js';
 import { registerSensitiveRateLimits } from './middleware/rate-limiter.js';
 

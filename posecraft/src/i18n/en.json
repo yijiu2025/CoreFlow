@@ -1,0 +1,45 @@
+{
+  "app": {
+    "title": "PoseCraft",
+    "subtitle": "AI Pose Analysis Platform",
+    "search_placeholder": "Search templates, works...",
+    "recommended": "Recommended",
+    "nearby": "Nearby",
+    "gallery": "Gallery",
+    "new_template": "New Template",
+    "profile": "Profile",
+    "settings": "Settings",
+    "login": "Login",
+    "logout": "Logout"
+  },
+  "home": {
+    "popular_templates": "Popular Templates",
+    "recent_works": "Recent Works",
+    "load_more": "Load More"
+  },
+  "editor": {
+    "title": "Image Editor",
+    "save": "Save",
+    "export": "Export",
+    "undo": "Undo",
+    "redo": "Redo"
+  },
+  "camera": {
+    "title": "AI Camera",
+    "capture": "Capture",
+    "analyze": "Analyze",
+    "switch_camera": "Switch Camera"
+  },
+  "common": {
+    "loading": "Loading...",
+    "no_data": "No Data",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "success": "Success",
+    "error": "Error"
+  }
+}
