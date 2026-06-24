@@ -117,6 +117,13 @@
         <span>{{ guide.label }}</span>
       </button>
     </div>
+    <div class="guide-color-row">
+      <label class="color-label">参考线颜色</label>
+      <div class="color-swatch-sm">
+        <input type="color" :value="guideColor" @input="$emit('update:guideColor', ($event.target as HTMLInputElement).value)" id="guide-color-picker" />
+        <label for="guide-color-picker" class="swatch-sm" :style="{ background: guideColor }"></label>
+      </div>
+    </div>
   </PanelSection>
 </template>
 
@@ -133,9 +140,10 @@ defineProps<{
   shapeOpacity?: number
   presetColors?: string[]
   activeGuides?: string[]
+  guideColor?: string
 }>()
 
-defineEmits(['setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity'])
+defineEmits(['setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity', 'update:guideColor'])
 
 const guides = [
   { type: 'thirds', icon: '▦', label: '三分法' },
@@ -265,4 +273,17 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
   border-color: rgba(99,102,241,0.4);
   color: #a5b4fc;
 }
+
+.guide-color-row {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px;
+}
+.color-label { font-size: 11px; font-weight: 600; color: #64748b; }
+.color-swatch-sm { position: relative; }
+.color-swatch-sm input[type=color] { position: absolute; opacity: 0; width: 0; height: 0; }
+.swatch-sm {
+  width: 28px; height: 28px; border-radius: 6px;
+  border: 2px solid rgba(255,255,255,0.1); cursor: pointer;
+  display: block; transition: all 0.2s;
+}
+.swatch-sm:hover { border-color: rgba(99,102,241,0.5); }
 </style>

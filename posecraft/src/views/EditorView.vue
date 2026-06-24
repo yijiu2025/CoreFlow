@@ -253,6 +253,8 @@
           :shapeOpacity="shapeOpacity"
           :presetColors="presetColors"
           :activeGuides="activeGuides"
+          :guideColor="guideColor"
+          @update:guideColor="guideColor = $event"
           @addShape="addShape"
           @drawReference="drawReference"
           @toggleGuide="toggleGuide"
@@ -404,6 +406,7 @@ const shapeOpacity = ref(100)
 
 // 构图参考线状态（支持多选）
 const activeGuides = ref<string[]>([])
+const guideColor = ref('#6366f1')
 
 // 图片裁剪状态
 const isCropping = ref(false)
@@ -1792,7 +1795,7 @@ const toggleGuide = (type: string) => {
 
 const drawReference = (type: string) => {
   const { w, h, l, t } = getDrawArea()
-  const style: any = { stroke: currentColor.value, strokeWidth: strokeWidth.value, selectable: false, evented: false, opacity: 0.5, isGuide: true }
+  const style: any = { stroke: guideColor.value, strokeWidth: strokeWidth.value, selectable: false, evented: false, opacity: 0.5, isGuide: true }
 
   isStateSavingLocked = true
 
