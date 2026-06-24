@@ -151,7 +151,7 @@
 
         <!-- 未上传时的引导 -->
         <transition name="fade">
-          <div v-if="!bgImageUploaded" class="upload-cover" @click="triggerFileInput">
+          <div v-if="!bgImageUploaded && !isCropping" class="upload-cover" @click="triggerFileInput">
             <div class="upload-card">
               <div class="upload-icon">
                 <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
