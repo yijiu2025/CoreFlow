@@ -1036,7 +1036,23 @@ const handleMouseMove = (opt: any) => {
         const angle = (Math.PI * 2 / sides) * i - Math.PI / 2
         pts.push({ x: rx * Math.cos(angle), y: ry * Math.sin(angle) })
       }
-      currentRect.set({ points: pts, left: cx, top: cy })
+
+      // 动态计算真实的边界框，防止被缓存画布裁切
+      let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y
+      pts.forEach(p => {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
+      })
+
+      currentRect.set({
+        points: pts,
+        width: maxX - minX,
+        height: maxY - minY,
+        pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
+        left: cx,
+        top: cy,
+        dirty: true
+      })
     } else if (currentRect._isStar) {
       // 星形：使用椭圆半径生成顶点，支持非正星形
       const points = currentRect._starPoints || 5
@@ -1051,7 +1067,23 @@ const handleMouseMove = (opt: any) => {
         const angle = (Math.PI / points) * i - Math.PI / 2
         pts.push({ x: rx * Math.cos(angle), y: ry * Math.sin(angle) })
       }
-      currentRect.set({ points: pts, left: cx, top: cy })
+
+      // 动态计算真实的边界框，防止被缓存画布裁切
+      let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y
+      pts.forEach(p => {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
+      })
+
+      currentRect.set({
+        points: pts,
+        width: maxX - minX,
+        height: maxY - minY,
+        pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
+        left: cx,
+        top: cy,
+        dirty: true
+      })
     } else {
       currentRect.set({ left: l, top: t, width: w, height: h })
     }
