@@ -9,6 +9,12 @@
     <!-- 基础形状 -->
     <div class="section-label">基础形状</div>
     <div class="tool-grid">
+      <button class="grid-btn" :class="{ active: currentTool === 'line' }" @click="$emit('setTool', 'line')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="5" y1="19" x2="19" y2="5"/>
+        </svg>
+        <span>直线</span>
+      </button>
       <button class="grid-btn" @click="$emit('addShape', 'rect')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -20,6 +26,29 @@
           <circle cx="12" cy="12" r="10"/>
         </svg>
         <span>圆形</span>
+      </button>
+    </div>
+
+    <div class="panel-divider"></div>
+
+    <!-- 节点工具 -->
+    <div class="section-label">节点工具</div>
+    <div class="tool-grid">
+      <button class="grid-btn" :class="{ active: currentTool === 'addNode' }" @click="$emit('setTool', 'addNode')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="16"/>
+          <line x1="8" y1="12" x2="16" y2="12"/>
+        </svg>
+        <span>添加节点</span>
+      </button>
+      <button class="grid-btn" :class="{ active: currentTool === 'line' }" @click="$emit('setTool', 'line')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="5" cy="19" r="2"/>
+          <circle cx="19" cy="5" r="2"/>
+          <line x1="7" y1="17" x2="17" y2="7"/>
+        </svg>
+        <span>连接节点</span>
       </button>
     </div>
 
@@ -58,7 +87,11 @@
 <script setup lang="ts">
 import PanelSection from './PanelSection.vue'
 
-defineEmits(['addShape', 'drawReference', 'deleteGuides', 'clearCanvas'])
+defineProps<{
+  currentTool?: string
+}>()
+
+defineEmits(['addShape', 'drawReference', 'deleteGuides', 'clearCanvas', 'setTool'])
 
 const guides = [
   { type: 'thirds', icon: '▦', label: '三分法' },
