@@ -339,6 +339,23 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 - 每个独立功能使用单独的文件
 - 修改文件后在合适位置更新 README.md
 - 每次修改代码帮我主动提交github，更新commit信息
+- **修复问题时先分析原因再修改**：先定位问题根源（查看日志、检查代码流程、复现步骤），明确原因后再动手修改，避免盲目尝试
+
+### 文件大小限制
+
+**单个 JS/VUE 文件不超过 500 行**（含空行和注释）。超过时按功能拆分：
+
+| 文件类型 | 拆分策略 | 示例 |
+|---------|---------|------|
+| Vue 组件 | 按功能提取 composables（`use*.ts`）和子组件 | `EditorView.vue` → `useCanvas.ts` + `useTools.ts` + `panels/` |
+| JS 模块 | 按功能职责拆分为独立模块 | `auth.js` → `session.js` + `cookie.js` + `permission.js` |
+| API 路由 | 按业务功能拆分路由文件 | `user.js` → `user-profile.js` + `user-settings.js` |
+| 工具函数 | 按功能域拆分为独立文件 | `utils.js` → `format.js` + `validate.js` + `transform.js` |
+
+**拆分原则**：
+- **按功能聚合**：相关功能放在同一文件，不相关的拆分出去
+- **单一职责**：每个文件只负责一个功能域
+- **拆分时机**：当文件接近 400 行时，主动规划拆分方案
 
 
 ## 启动日志规范
