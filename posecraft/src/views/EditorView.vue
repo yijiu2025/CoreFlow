@@ -795,13 +795,21 @@ const handleMouseDown = (opt: any) => {
       // 点击在节点上 → 开始拖拽连接
       isDrawingLine.value = true; startPoint = { x: target.left, y: target.top }
       startNode = target
-      currentLine = new fabric.Line([target.left, target.top, target.left, target.top], { stroke: currentColor.value, strokeWidth: 3, selectable: false, evented: false, strokeLineCap: 'round', erasable: true })
+      currentLine = new fabric.Line([target.left, target.top, target.left, target.top], {
+        stroke: currentColor.value, strokeWidth: strokeWidth.value,
+        selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
+        strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
+      })
       fCanvas.value.add(currentLine)
     } else if (!target) {
       // 点击空白处 → 普通直线绘制
       isDrawingLine.value = true; startPoint = pointer
       startNode = null
-      currentLine = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], { stroke: currentColor.value, strokeWidth: 3, selectable: false, evented: false, strokeLineCap: 'round', erasable: true })
+      currentLine = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
+        stroke: currentColor.value, strokeWidth: strokeWidth.value,
+        selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
+        strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
+      })
       fCanvas.value.add(currentLine)
     }
   } else if (['rect', 'circle', 'triangle', 'star', 'polygon', 'arrow'].includes(tool)) {
@@ -1046,14 +1054,24 @@ const handleMouseUp = () => {
     }
   }
   if (isDrawingCrop.value) { isDrawingCrop.value = false; if (cropRect && cropRect.width > 5) analyzeArea(cropRect); fCanvas.value.remove(cropRect); cropRect = null }
-  // 矩形/圆形绘制完成
+  // 形状绘制完成
   if (isDrawingRect.value) {
     isDrawingRect.value = false
     if (currentRect) {
       const minSize = 5
-      const hasSize = currentRect.type === 'ellipse'
-        ? (currentRect.rx > minSize && currentRect.ry > minSize)
-        : (currentRect.width > minSize && currentRect.height > minSize)
+      let hasSize = false
+      // 椭圆：检查半径
+      if (currentRect.type === 'ellipse') {
+        hasSize = currentRect.rx > minSize && currentRect.ry > minSize
+      }
+      // 多边形/星形：检查是否有有效的顶点
+      else if (currentRect.type === 'polygon') {
+        hasSize = currentRect.points && currentRect.points.length > 2
+      }
+      // 三角形/矩形：检查宽高
+      else {
+        hasSize = currentRect.width > minSize && currentRect.height > minSize
+      }
       if (hasSize) {
         currentRect.set({ id: uuidv4(), selectable: true, evented: true })
         currentRect.setCoords()
