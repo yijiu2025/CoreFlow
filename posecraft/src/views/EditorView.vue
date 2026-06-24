@@ -139,8 +139,8 @@
         <!-- 颜色选择器（始终显示） -->
         <div class="color-picker-area">
           <div class="color-swatch">
-            <input type="color" v-model="currentColor" @input="updateColor" id="color-picker" />
-            <label for="color-picker" class="swatch-preview" :style="{ background: currentColor }"></label>
+            <input type="color" v-model="fillColor" id="color-picker" />
+            <label for="color-picker" class="swatch-preview" :style="{ background: fillColor }"></label>
           </div>
         </div>
       </aside>
