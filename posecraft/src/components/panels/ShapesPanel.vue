@@ -124,18 +124,6 @@
         <span>{{ guide.label }}</span>
       </button>
     </div>
-
-    <div class="panel-divider"></div>
-
-    <!-- 操作 -->
-    <div class="section-label">操作</div>
-    <button class="danger-btn" @click="$emit('clearCanvas')">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <polyline points="3 6 5 6 21 6"/>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-      </svg>
-      清空画布
-    </button>
   </PanelSection>
 </template>
 
@@ -154,7 +142,7 @@ defineProps<{
   activeGuides?: string[]
 }>()
 
-defineEmits(['addShape', 'clearCanvas', 'setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity'])
+defineEmits(['setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity'])
 
 const guides = [
   { type: 'thirds', icon: '▦', label: '三分法' },
@@ -272,12 +260,4 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
   border-color: rgba(99,102,241,0.4);
   color: #a5b4fc;
 }
-
-.danger-btn {
-  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
-  border-radius: 10px; color: #f87171; font-size: 13px; font-weight: 500;
-  cursor: pointer; transition: all 0.15s; margin-bottom: 8px;
-}
-.danger-btn:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); }
 </style>
