@@ -1808,8 +1808,8 @@ const drawReference = (type: string) => {
   if (type === 'golden' || type === 'all') {
     const phi = 0.618
     ;[phi, 1 - phi].forEach((f: number) => {
-      fCanvas.value.add(new fabric.Line([l+w*f, t, l+w*f, t+h], { ...style, stroke: '#f59e0b', opacity: 0.7 }))
-      fCanvas.value.add(new fabric.Line([l, t+h*f, l+w, t+h*f], { ...style, stroke: '#f59e0b', opacity: 0.7 }))
+      fCanvas.value.add(new fabric.Line([l+w*f, t, l+w*f, t+h], { ...style, opacity: 0.7 }))
+      fCanvas.value.add(new fabric.Line([l, t+h*f, l+w, t+h*f], { ...style, opacity: 0.7 }))
     })
   }
 
@@ -1826,7 +1826,7 @@ const drawReference = (type: string) => {
     fCanvas.value.add(new fabric.Line([l, cy, l+w, cy], style))
     fCanvas.value.add(Object.assign(new fabric.Circle({
       left: cx, top: cy, radius: 6,
-      fill: 'transparent', stroke: currentColor.value, strokeWidth: 1.5,
+      fill: 'transparent', stroke: fillColor.value, strokeWidth: 1.5,
       originX: 'center', originY: 'center',
       selectable: false, evented: false, opacity: 0.6
     }), { isGuide: true }))
@@ -1838,19 +1838,19 @@ const drawReference = (type: string) => {
     // 主矩形
     fCanvas.value.add(Object.assign(new fabric.Rect({
       left: l, top: t, width: w, height: h,
-      fill: 'transparent', stroke: currentColor.value, strokeWidth: 1,
+      fill: 'transparent', stroke: fillColor.value, strokeWidth: 1,
       selectable: false, evented: false, opacity: 0.3
     }), { isGuide: true }))
     // 黄金分割点连线
-    fCanvas.value.add(new fabric.Line([l, t, l+w*phi, t+h], { ...style, stroke: '#8b5cf6', opacity: 0.4 }))
-    fCanvas.value.add(new fabric.Line([l+w, t, l+w*(1-phi), t+h], { ...style, stroke: '#8b5cf6', opacity: 0.4 }))
-    fCanvas.value.add(new fabric.Line([l, t+h*phi, l+w, t], { ...style, stroke: '#8b5cf6', opacity: 0.4 }))
-    fCanvas.value.add(new fabric.Line([l, t+h, l+w, t+h*(1-phi)], { ...style, stroke: '#8b5cf6', opacity: 0.4 }))
+    fCanvas.value.add(new fabric.Line([l, t, l+w*phi, t+h], { ...style, opacity: 0.4 }))
+    fCanvas.value.add(new fabric.Line([l+w, t, l+w*(1-phi), t+h], { ...style, opacity: 0.4 }))
+    fCanvas.value.add(new fabric.Line([l, t+h*phi, l+w, t], { ...style, opacity: 0.4 }))
+    fCanvas.value.add(new fabric.Line([l, t+h, l+w, t+h*(1-phi)], { ...style, opacity: 0.4 }))
   }
 
   // 黄金螺旋（斐波那契螺旋）- 迭代切割法，整体可选中
   if (type === 'spiral' || type === 'all') {
-    const spiralColor = currentColor.value
+    const spiralColor = fillColor.value
     const R = 0.618
 
     let cx = l, cy = t, cw = w, ch = h
