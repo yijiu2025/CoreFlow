@@ -73,7 +73,7 @@
           <span>无填充</span>
         </button>
       </div>
-      <div v-if="!noFill" class="fill-color-picker">
+      <div class="fill-color-picker">
         <div class="color-swatch-lg">
           <input type="color" :value="fillColor" @input="$emit('update:fillColor', ($event.target as HTMLInputElement).value)" id="fill-color-picker" />
           <label for="fill-color-picker" class="swatch-lg" :style="{ background: fillColor }"></label>
