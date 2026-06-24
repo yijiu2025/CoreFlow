@@ -150,8 +150,7 @@ const guides = [
   { type: 'diagonal', icon: '╳', label: '对角线' },
   { type: 'center', icon: '⊕', label: '中心点' },
   { type: 'phi', icon: '◇', label: 'φ 网格' },
-  { type: 'spiral', icon: '🌀', label: '黄金螺旋' },
-  { type: 'all', icon: '⊞', label: '全部' }
+  { type: 'spiral', icon: '🌀', label: '黄金螺旋' }
 ]
 
 const shortcuts = [
