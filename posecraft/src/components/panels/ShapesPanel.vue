@@ -15,13 +15,13 @@
         </svg>
         <span>直线</span>
       </button>
-      <button class="grid-btn" @click="$emit('addShape', 'rect')">
+      <button class="grid-btn" :class="{ active: canvasTool === 'rect' }" @click="$emit('setDrawTool', 'rect')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
         </svg>
         <span>矩形</span>
       </button>
-      <button class="grid-btn" @click="$emit('addShape', 'circle')">
+      <button class="grid-btn" :class="{ active: canvasTool === 'circle' }" @click="$emit('setDrawTool', 'circle')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <circle cx="12" cy="12" r="10"/>
         </svg>

@@ -336,9 +336,11 @@ let isStateSavingLocked = false
 const isErasing = ref(false)
 const isDrawingLine = ref(false)
 const isDrawingCrop = ref(false)
+const isDrawingRect = ref(false)
 let isPanning = false
 let lastPanPoint: any = null
 let currentLine: any = null
+let currentRect: any = null // 正在绘制的矩形
 let startNode: any = null // 直线工具拖拽连接的起始节点
 let lastMouseEvent: any = null // 记录最后一次鼠标事件，用于 mouseup 时查找目标
 let cropRect: any = null
@@ -782,6 +784,22 @@ const handleMouseDown = (opt: any) => {
       currentLine = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], { stroke: currentColor.value, strokeWidth: 3, selectable: false, evented: false, strokeLineCap: 'round', erasable: true })
       fCanvas.value.add(currentLine)
     }
+  } else if (tool === 'rect') {
+    // 矩形工具：点击空白处开始拖拽绘制
+    const target = fCanvas.value.findTarget(opt.e, false)
+    if (!target) {
+      isDrawingRect.value = true; startPoint = pointer
+      currentRect = new fabric.Rect({ left: pointer.x, top: pointer.y, width: 0, height: 0, fill: 'transparent', stroke: currentColor.value, strokeWidth: 3, selectable: false, evented: false, erasable: true })
+      fCanvas.value.add(currentRect)
+    }
+  } else if (tool === 'circle') {
+    // 圆形工具：点击空白处开始拖拽绘制
+    const target = fCanvas.value.findTarget(opt.e, false)
+    if (!target) {
+      isDrawingRect.value = true; startPoint = pointer
+      currentRect = new fabric.Ellipse({ left: pointer.x, top: pointer.y, rx: 0, ry: 0, fill: 'transparent', stroke: currentColor.value, strokeWidth: 3, selectable: false, evented: false, erasable: true })
+      fCanvas.value.add(currentRect)
+    }
   } else if (tool === 'addNode') {
     // 添加节点工具：点击空白处添加新节点
     const target = fCanvas.value.findTarget(opt.e, false)
@@ -901,6 +919,19 @@ const handleMouseMove = (opt: any) => {
   }
   if (isDrawingLine.value && currentLine) { currentLine.set({ x2: pointer.x, y2: pointer.y }); fCanvas.value.renderAll() }
   if (isDrawingCrop.value && cropRect) { const l = Math.min(startPoint.x, pointer.x), t = Math.min(startPoint.y, pointer.y); cropRect.set({ left: l, top: t, width: Math.abs(startPoint.x - pointer.x), height: Math.abs(startPoint.y - pointer.y) }); fCanvas.value.renderAll() }
+  // 矩形/圆形拖拽绘制
+  if (isDrawingRect.value && currentRect && startPoint) {
+    const l = Math.min(startPoint.x, pointer.x)
+    const t = Math.min(startPoint.y, pointer.y)
+    const w = Math.abs(startPoint.x - pointer.x)
+    const h = Math.abs(startPoint.y - pointer.y)
+    if (currentRect.type === 'ellipse') {
+      currentRect.set({ left: l, top: t, rx: w / 2, ry: h / 2 })
+    } else {
+      currentRect.set({ left: l, top: t, width: w, height: h })
+    }
+    fCanvas.value.renderAll()
+  }
 }
 
 const handleMouseUp = () => {
@@ -934,6 +965,25 @@ const handleMouseUp = () => {
     }
   }
   if (isDrawingCrop.value) { isDrawingCrop.value = false; if (cropRect && cropRect.width > 5) analyzeArea(cropRect); fCanvas.value.remove(cropRect); cropRect = null }
+  // 矩形/圆形绘制完成
+  if (isDrawingRect.value) {
+    isDrawingRect.value = false
+    if (currentRect) {
+      const minSize = 5
+      const hasSize = currentRect.type === 'ellipse'
+        ? (currentRect.rx > minSize && currentRect.ry > minSize)
+        : (currentRect.width > minSize && currentRect.height > minSize)
+      if (hasSize) {
+        currentRect.set({ id: uuidv4(), selectable: true, evented: true })
+        currentRect.setCoords()
+        fCanvas.value.setActiveObject(currentRect)
+        saveState()
+      } else {
+        fCanvas.value.remove(currentRect)
+      }
+      currentRect = null
+    }
+  }
   // 橡皮擦光标保持可见（由 setTool 控制隐藏）
   if (eraserCursor && canvasTool.value !== 'eraser') eraserCursor.set('visible', false)
   fCanvas.value.renderAll()
@@ -1048,7 +1098,7 @@ const setDrawTool = (tool: string) => {
     setEvented(false)
 
     // 设置光标
-    if (tool === 'line' || tool === 'addNode') {
+    if (tool === 'line' || tool === 'addNode' || tool === 'rect' || tool === 'circle') {
       fCanvas.value.defaultCursor = 'crosshair'
       fCanvas.value.hoverCursor = 'crosshair'
     } else if (tool === 'hand') {
