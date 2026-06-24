@@ -367,6 +367,9 @@ const loadingStep = ref('')
 const analysisComplete = ref(false)
 const showHelp = ref(false)
 
+const undoStack = ref<any[]>([])
+const redoStack = ref<any[]>([])
+
 // AI 识别类型
 const detectionType = ref<'all' | 'pose' | 'face' | 'hand' | 'segmentation'>('all')
 const detectionTypes = [
@@ -406,11 +409,11 @@ const lineStyle = ref('solid') // solid | dashed | dotted
 const shapeOpacity = ref(100)
 
 // 初始化 composables
-const { undoStack, redoStack, saveState, undo, redo } = useHistory(fCanvas, { value: isStateSavingLocked }, null, null)
-const { selectTab, selectHandTool, setDrawTool, setTool } = useTools(fCanvas, activeTool, canvasTool)
-const { applyColor, addShape, addText, createStar, createPolygon, addArrowHead } = useShapes(fCanvas, currentColor, fillColor)
-const { activeGuides, drawReference, deleteGuides, toggleGuide } = useReferenceLines(fCanvas, fillColor, strokeWidth, saveState)
-const { drawPoseSkeleton, addSkeletonNode, addMidpointNode, connectNodes } = useSkeletonNodes(fCanvas, currentColor, saveState)
+const history = useHistory(fCanvas, { value: isStateSavingLocked }, null, null)
+const tools = useTools(fCanvas, activeTool, canvasTool)
+const shapes = useShapes(fCanvas, currentColor, fillColor)
+const guides = useReferenceLines(fCanvas, fillColor, strokeWidth, history.saveState)
+const skeleton = useSkeletonNodes(fCanvas, currentColor, history.saveState)
 
 // 同步 fillColor 和 currentColor
 watch(fillColor, (v) => { currentColor.value = v })
@@ -435,6 +438,10 @@ let inkCtx: any = null
 let inkLayer: any = null
 
 // AI detectors
+let detector: any = null
+let segmenter: any = null
+let faceDetector: any = null
+let handDetector: any = null
 
 // 工具切换时的画布状态已在 setTool/selectTab 中处理
 
@@ -573,6 +580,22 @@ onUnmounted(() => {
 })
 
 // ─── Canvas Utilities ──────────────────────────────────────
+const resizeCanvas = () => {
+  if (!fCanvas.value || !canvasContainer.value) return
+  const width = canvasContainer.value.clientWidth
+  const height = canvasContainer.value.clientHeight || 600
+  const bg = fCanvas.value.backgroundImage
+  if (bg && bg.width) {
+    const scale = Math.min(width / bg.width, height / bg.height) * 0.95
+    const newW = bg.width * scale, newH = bg.height * scale
+    fCanvas.value.setWidth(newW); fCanvas.value.setHeight(newH)
+    bg.set({ scaleX: scale, scaleY: scale, left: newW / 2, top: newH / 2, originX: 'center', originY: 'center' })
+    if (inkCanvas) { inkCanvas.width = newW; inkCanvas.height = newH }
+  } else {
+    fCanvas.value.setWidth(width); fCanvas.value.setHeight(height)
+  }
+  fCanvas.value.renderAll()
+}
 
 // 画布变换状态
 let canvasScale = 1
@@ -582,13 +605,53 @@ let canvasTranslateY = 0
 /**
  * 应用 CSS transform 到画布（缩放 + 平移）
  */
+const applyCanvasTransform = () => {
+  if (!fCanvas.value) return
+  const wrapper = fCanvas.value.wrapperEl
+  if (wrapper) {
+    wrapper.style.transformOrigin = 'center center'
+    wrapper.style.transform = `translate(${canvasTranslateX}px, ${canvasTranslateY}px) scale(${canvasScale})`
+  }
+}
 
 /**
  * 同步画布尺寸（缩放）
  */
+const syncCanvasDimensions = (zoom: number) => {
+  canvasScale = zoom
+  applyCanvasTransform()
+}
 
+const resetZoom = () => {
+  canvasScale = 1
+  canvasTranslateX = 0
+  canvasTranslateY = 0
+  applyCanvasTransform()
+  zoomSlider.value = 100
+}
 
 // 适应屏幕
+const fitToScreen = () => {
+  if (!fCanvas.value || !canvasContainer.value) return
+
+  const canvas = fCanvas.value
+  const container = canvasContainer.value
+
+  const containerWidth = container.clientWidth - 80
+  const containerHeight = container.clientHeight - 80
+
+  const canvasWidth = canvas.getWidth()
+  const canvasHeight = canvas.getHeight()
+
+  if (canvasWidth === 0 || canvasHeight === 0) return
+
+  const zoom = Math.min(containerWidth / canvasWidth, containerHeight / canvasHeight)
+  canvasScale = zoom
+  canvasTranslateX = 0
+  canvasTranslateY = 0
+  applyCanvasTransform()
+  zoomSlider.value = Math.round(zoom * 100)
+}
 
 // 缩放百分比
 const zoomPercent = computed(() => {
@@ -609,12 +672,154 @@ watch(zoomSlider, (newVal) => {
 const currentZoom = ref(1)
 
 // 放大
+const zoomIn = () => {
+  const zoom = Math.min(currentZoom.value * 1.2, 5)
+  currentZoom.value = zoom
+  zoomSlider.value = Math.round(zoom * 100)
+  syncCanvasDimensions(zoom)
+}
 
 // 缩小
+const zoomOut = () => {
+  const zoom = Math.max(currentZoom.value / 1.2, 0.1)
+  currentZoom.value = zoom
+  zoomSlider.value = Math.round(zoom * 100)
+  syncCanvasDimensions(zoom)
+}
 
 // ─── Canvas Init ───────────────────────────────────────────
+const initCanvas = () => {
+  const c = new fabric.Canvas('editor-canvas', {
+    width: canvasContainer.value?.clientWidth || 800, height: canvasContainer.value?.clientHeight || 600,
+    selection: true, preserveObjectStacking: true, isDrawingMode: false,
+    backgroundColor: 'rgba(0,0,0,0)', perPixelTargetFind: true, targetFindTolerance: 15
+  })
+  fCanvas.value = markRaw(c)
+  const w = fCanvas.value.width, h = fCanvas.value.height
+  inkCanvas = document.createElement('canvas'); inkCanvas.width = w; inkCanvas.height = h
+  inkCtx = inkCanvas.getContext('2d')
+  inkLayer = new fabric.Image(inkCanvas, { left: 0, top: 0, originX: 'left', originY: 'top', selectable: false, evented: false, erasable: false })
+  inkLayer.isInkLayer = true; fCanvas.value.add(inkLayer)
+  eraserCursor = new fabric.Circle({ radius: eraserSize.value / 2, fill: 'rgba(255,255,255,0.2)', stroke: 'rgba(255,255,255,0.8)', strokeWidth: 1, originX: 'center', originY: 'center', selectable: false, evented: false, visible: false, isEraserCursor: true })
+  fCanvas.value.add(eraserCursor)
+  fCanvas.value.on('mouse:down', handleMouseDown)
+  fCanvas.value.on('mouse:move', handleMouseMove)
+  fCanvas.value.on('mouse:up', handleMouseUp)
+  fCanvas.value.on('path:created', handlePathCreated)
+
+  // 监听选择事件，更新 selectedObject
+  fCanvas.value.on('selection:created', updateSelection)
+  fCanvas.value.on('selection:updated', updateSelection)
+  fCanvas.value.on('selection:cleared', updateSelection)
+
+  // 拖拽骨架节点时，锁定关联的线条 ID 和端点
+  let activeDragLines: Array<{ id: string, endpoint: 'start' | 'end' }> = []
+
+  // mouse:down: 拖拽开始时，按位置锁定关联线条
+  fCanvas.value.on('mouse:down', (e: any) => {
+    const obj = e.target
+    if (!obj || !obj.isSkeleton) { activeDragLines = []; return }
+    activeDragLines = (obj.connectedLines || []).map((c: any) => ({ id: c.id || c.line, endpoint: c.endpoint }))
+  })
+
+  // object:moving: 拖拽过程中更新线条
+  fCanvas.value.on('object:moving', (e: any) => {
+    const obj = e.target
+    if (!obj || !obj.isSkeleton) return
+
+    const canvas = fCanvas.value
+    if (!canvas) return
+
+    const objs = canvas.getObjects()
+    const idMap: any = {}
+    objs.forEach((o: any) => { if (o.id) idMap[o.id] = o })
+
+    // 优先使用锁定的线条，否则实时查找
+    if (activeDragLines.length > 0) {
+      activeDragLines.forEach(({ id, endpoint }) => {
+        const line = idMap[id]
+        if (!line) return
+        
+        const targetEndpoint = endpoint === 'start' ? 'end' : 'start';
+        const otherNode = objs.find((o: any) => o.isSkeleton && o.connectedLines?.some((c: any) => (c.id || c.line) === id && c.endpoint === targetEndpoint));
+        
+        if (!otherNode) return; // 找不到另一个节点则跳过
+
+        const x1 = endpoint === 'start' ? obj.left : otherNode.left;
+        const y1 = endpoint === 'start' ? obj.top : otherNode.top;
+        const x2 = endpoint === 'end' ? obj.left : otherNode.left;
+        const y2 = endpoint === 'end' ? obj.top : otherNode.top;
+        
+        line.set({ x1, y1, x2, y2, scaleX: 1, scaleY: 1 });
+        if (line._setWidthHeight) {
+          line._setWidthHeight();
+        } else {
+          line.set({
+            width: Math.abs(x1 - x2),
+            height: Math.abs(y1 - y2),
+            left: Math.min(x1, x2),
+            top: Math.min(y1, y2)
+          });
+        }
+        line.setCoords()
+      })
+    } else {
+      // fallback: 实时位置匹配
+      const lines = objs.filter((o: any) => o.isAutoGenerated && o.type === 'line')
+      lines.forEach((line: any) => {
+        if (Math.hypot(line.x1 - obj.left, line.y1 - obj.top) < 20) {
+          const x2 = line.x2, y2 = line.y2;
+          line.set({ x1: obj.left, y1: obj.top, left: Math.min(obj.left, x2), top: Math.min(obj.top, y2), width: Math.abs(obj.left - x2), height: Math.abs(obj.top - y2) });
+          line.setCoords()
+        } else if (Math.hypot(line.x2 - obj.left, line.y2 - obj.top) < 20) {
+          const x1 = line.x1, y1 = line.y1;
+          line.set({ x2: obj.left, y2: obj.top, left: Math.min(x1, obj.left), top: Math.min(y1, obj.top), width: Math.abs(x1 - obj.left), height: Math.abs(y1 - obj.top) });
+          line.setCoords()
+        }
+      })
+    }
+
+    canvas.renderAll()
+  })
+
+  // mouse:up: 拖拽结束，清空锁定
+  fCanvas.value.on('mouse:up', () => {
+    activeDragLines = []
+  })
+
+  // 对象修改完成时记录步骤（拖拽、缩放等）
+  fCanvas.value.on('object:modified', () => {
+    saveState()
+  })
+
+  // 鼠标滚轮缩放到容器上（更可靠）
+  if (canvasContainer.value) {
+    canvasContainer.value.addEventListener('wheel', handleWheel, { passive: false })
+  }
+
+  saveState()
+}
 
 // ─── Mouse Wheel Zoom（以鼠标为中心） ────────────────────
+const handleWheel = (e: WheelEvent) => {
+  e.preventDefault()
+  if (!fCanvas.value || !canvasContainer.value) return
+
+  const delta = e.deltaY
+  let zoom = currentZoom.value
+  const factor = 1.1
+
+  if (delta < 0) {
+    zoom = Math.min(zoom * factor, 5)
+  } else {
+    zoom = Math.max(zoom / factor, 0.1)
+  }
+
+  // 更新缩放
+  currentZoom.value = zoom
+  zoomSlider.value = Math.round(zoom * 100)
+  syncCanvasDimensions(zoom)
+}
 
 // ─── 几何工具函数 ──────────────────────────────────────────
 /** 计算点到线段的距离 */
@@ -994,13 +1199,522 @@ const handlePathCreated = (opt: any) => {
 }
 const refreshInkLayer = () => { if (!inkLayer || !fCanvas.value) return; inkLayer.setElement(inkCanvas); fCanvas.value.requestRenderAll() }
 
+// ─── Undo / Redo ───────────────────────────────────────────
+const saveState = () => {
+  if (isStateSavingLocked || !fCanvas.value) return
+  const json = fCanvas.value.toJSON(['id', 'selectable', 'evented', 'hasControls', 'hasBorders', 'strokeWidth', 'stroke', 'fill', 'radius', 'scaleX', 'scaleY', 'originX', 'originY', 'name', 'opacity', 'isInkLayer', 'isAutoGenerated', 'isSkeleton', 'connectedLines'])
+  const snapshot = { fabric: json, ink: inkCanvas.toDataURL() }
+  const last = undoStack.value[undoStack.value.length - 1]
+  if (last && JSON.stringify(snapshot) === JSON.stringify(last)) return
+  undoStack.value.push(snapshot); if (undoStack.value.length > 50) undoStack.value.shift(); redoStack.value = []
+}
+const restoreState = (snapshot: any) => {
+  if (!snapshot || !snapshot.fabric) return; isStateSavingLocked = true
+  const p = new Promise((resolve) => { if (!snapshot.ink) return resolve(null); const img = new Image(); img.onload = () => resolve(img); img.onerror = () => resolve(null); img.src = snapshot.ink })
+  fCanvas.value.loadFromJSON(snapshot.fabric, async () => {
+    const img = await p; if (img && inkCtx) { inkCtx.save(); inkCtx.globalCompositeOperation = 'copy'; inkCtx.drawImage(img, 0, 0); inkCtx.restore() };
+    inkLayer = fCanvas.value.getObjects().find((o: any) => o.isInkLayer);
+    if (inkLayer) inkLayer.setElement(inkCanvas);
+    // 恢复背景透明度变量
+    const bg = fCanvas.value.backgroundImage
+    if (bg) {
+      bgOpacity.value = Math.round((bg.opacity || 1) * 100)
+    }
+    fCanvas.value.renderAll(); isStateSavingLocked = false
+  })
+}
+const undo = () => { if (undoStack.value.length <= 1) return; const c = undoStack.value.pop(); redoStack.value.push(c); restoreState(undoStack.value[undoStack.value.length - 1]) }
+const redo = () => { if (!redoStack.value.length) return; const n = redoStack.value.pop(); undoStack.value.push(n); restoreState(n) }
 
+// ─── 工具切换（互斥） ─────────────────────────────────────
+const selectTab = (tab: string) => {
+  activeTool.value = tab
+  canvasTool.value = tab
+  if (fCanvas.value) {
+    fCanvas.value.isDrawingMode = false
+    // 取消选中并禁用所有对象的可选性
+    fCanvas.value.discardActiveObject()
+    fCanvas.value.selection = false
+    fCanvas.value.forEachObject((obj: any) => {
+      if (!obj.isInkLayer && !obj.isEraserCursor) {
+        obj.selectable = false
+        obj.evented = false
+      }
+    })
+    fCanvas.value.defaultCursor = 'default'
+    fCanvas.value.hoverCursor = 'default'
+    fCanvas.value.renderAll()
+  }
+}
+
+const selectHandTool = () => {
+  setTool('hand')
+}
+
+/**
+ * 设置绘图子工具（只切换 canvasTool，不切换 activeTool）
+ * 用于在 ShapesPanel 等面板内选择绘图工具
+ */
+const setDrawTool = (tool: string) => {
+  canvasTool.value = tool
+  // 切换工具时隐藏橡皮擦光标
+  if (tool !== 'eraser' && eraserCursor) {
+    eraserCursor.set({ visible: false })
+  }
+
+  if (fCanvas.value) {
+    // 选择模式：启用所有对象可选
+    if (tool === 'select') {
+      fCanvas.value.selection = true
+      fCanvas.value.defaultCursor = 'default'
+      fCanvas.value.hoverCursor = 'move'
+      fCanvas.value.isDrawingMode = false
+      fCanvas.value.forEachObject((obj: any) => {
+        if (obj.isInkLayer || obj.isEraserCursor) return
+        obj.selectable = true
+        obj.evented = true
+      })
+      fCanvas.value.renderAll()
+      return
+    }
+
+    // 绘图子工具需要与骨架节点交互
+    const isNodeTool = tool === 'addNode' || tool === 'line'
+
+    const setEvented = (evented: boolean) => {
+      fCanvas.value.forEachObject((obj: any) => {
+        if (obj.isInkLayer || obj.isEraserCursor) return
+        if (isNodeTool && obj.isSkeleton) {
+          obj.selectable = false
+          obj.evented = true
+        } else {
+          obj.selectable = false
+          obj.evented = evented
+        }
+      })
+    }
+
+    // 取消选中
+    fCanvas.value.discardActiveObject()
+    fCanvas.value.selection = false
+    setEvented(false)
+
+    // 设置光标
+    if (tool === 'line' || tool === 'addNode' || tool === 'rect' || tool === 'circle') {
+      fCanvas.value.defaultCursor = 'crosshair'
+      fCanvas.value.hoverCursor = 'crosshair'
+    } else if (tool === 'hand') {
+      fCanvas.value.defaultCursor = 'grab'
+      fCanvas.value.hoverCursor = 'grab'
+    } else {
+      fCanvas.value.defaultCursor = 'default'
+      fCanvas.value.hoverCursor = 'default'
+    }
+
+    // 画笔模式
+    fCanvas.value.isDrawingMode = (tool === 'draw')
+    if (tool === 'draw') {
+      fCanvas.value.freeDrawingBrush = new fabric.PencilBrush(fCanvas.value)
+      fCanvas.value.freeDrawingBrush.width = brushSize.value
+      fCanvas.value.freeDrawingBrush.color = currentColor.value
+      if (brushFeather.value > 0) {
+        fCanvas.value.freeDrawingBrush.shadow = new fabric.Shadow({
+          color: currentColor.value,
+          blur: brushFeather.value,
+          offsetX: 0,
+          offsetY: 0
+        })
+      } else {
+        fCanvas.value.freeDrawingBrush.shadow = null
+      }
+    }
+
+    fCanvas.value.renderAll()
+  }
+}
+
+// ─── Tools ─────────────────────────────────────────────────
+const setTool = (tool: string) => {
+  canvasTool.value = tool
+  // crop 模式不切换 activeTool（保持 AI 面板显示）
+  if (tool !== 'crop') {
+    activeTool.value = tool
+  }
+
+  // 切换工具时隐藏橡皮擦光标
+  if (tool !== 'eraser' && eraserCursor) {
+    eraserCursor.set({ visible: false })
+  }
+
+  if (fCanvas.value) {
+    console.log('[setTool] 切换工具:', tool)
+
+    // 切换工具时，统一管理对象可选状态
+    // 节点工具需要与骨架节点交互
+    const isNodeTool = tool === 'addNode' || tool === 'line'
+
+    const setSelectable = (selectable: boolean) => {
+      let count = 0
+      fCanvas.value.forEachObject((obj: any) => {
+        // 跳过特殊对象（inkLayer、eraserCursor）
+        if (obj.isInkLayer || obj.isEraserCursor) return
+        // 节点工具下，骨架节点保持可交互
+        if (isNodeTool && obj.isSkeleton) {
+          obj.selectable = false // 不可拖拽选中
+          obj.evented = true     // 但可以触发事件（findTarget 能找到）
+        } else {
+          obj.selectable = selectable
+          obj.evented = selectable
+        }
+        count++
+      })
+    }
+
+    if (tool === 'select') {
+      // 选择工具：启用所有对象的可选性
+      fCanvas.value.selection = true
+      fCanvas.value.defaultCursor = 'default'
+      fCanvas.value.hoverCursor = 'move'
+      setSelectable(true)
+    } else {
+      // 非选择工具：取消选中并禁用所有对象的可选性
+      fCanvas.value.discardActiveObject()
+      fCanvas.value.selection = false
+      setSelectable(false)
+    }
+    fCanvas.value.renderAll()
+
+    // 画笔模式
+    fCanvas.value.isDrawingMode = (tool === 'draw')
+    if (tool === 'draw') {
+      fCanvas.value.freeDrawingBrush = new fabric.PencilBrush(fCanvas.value)
+      fCanvas.value.freeDrawingBrush.width = brushSize.value
+      fCanvas.value.freeDrawingBrush.color = currentColor.value
+      // 羽化效果：通过 shadow 实现边缘模糊
+      if (brushFeather.value > 0) {
+        fCanvas.value.freeDrawingBrush.shadow = new fabric.Shadow({
+          color: currentColor.value,
+          blur: brushFeather.value,
+          offsetX: 0,
+          offsetY: 0
+        })
+      } else {
+        fCanvas.value.freeDrawingBrush.shadow = null
+      }
+    }
+
+    // 文字模式
+    if (tool === 'text') {
+      fCanvas.value.defaultCursor = 'text'
+      fCanvas.value.hoverCursor = 'text'
+    }
+    // 添加节点模式
+    if (tool === 'addNode') {
+      fCanvas.value.defaultCursor = 'crosshair'
+      fCanvas.value.hoverCursor = 'crosshair'
+    }
+    // 直线模式
+    if (tool === 'line') {
+      fCanvas.value.defaultCursor = 'crosshair'
+      fCanvas.value.hoverCursor = 'crosshair'
+    }
+
+    // 抓手模式
+    if (tool === 'hand') {
+      fCanvas.value.defaultCursor = 'grab'
+      fCanvas.value.hoverCursor = 'grab'
+    }
+    // 橡皮擦模式 - 只允许擦除
+    else if (tool === 'eraser') {
+      fCanvas.value.defaultCursor = 'none'
+      fCanvas.value.hoverCursor = 'none'
+      // 显示橡皮擦光标
+      if (eraserCursor) {
+        eraserCursor.set({ visible: true, radius: eraserSize.value / 2 })
+        fCanvas.value.bringToFront(eraserCursor)
+        fCanvas.value.renderAll()
+      }
+    }
+    // 画笔模式
+    else if (tool === 'draw') {
+      fCanvas.value.defaultCursor = 'crosshair'
+      fCanvas.value.hoverCursor = 'crosshair'
+    }
+    // 框选模式
+    else if (tool === 'crop') {
+      fCanvas.value.isDrawingMode = false
+      fCanvas.value.defaultCursor = 'crosshair'
+      fCanvas.value.hoverCursor = 'crosshair'
+    }
+  }
+}
 const updateColor = (e: Event) => {
   const newColor = (e.target as HTMLInputElement).value
   applyColor(newColor)
 }
+
+/**
+ * 从选择面板更新颜色
+ * @param newColor 新颜色值
+ */
 const updateColorFromPanel = (newColor: string) => {
   applyColor(newColor)
+}
+
+/**
+ * 给图片对象应用颜色滤镜
+ * 使用 BlendColor 滤镜将颜色叠加到图片上
+ * @param imgObj Fabric.js 图片对象
+ * @param color 目标颜色
+ */
+const applyColorToImage = (imgObj: any, color: string) => {
+  // 清除已有的颜色滤镜
+  imgObj.filters = []
+
+  // tint 模式：直接用目标色替换原图颜色，alpha 控制替换程度
+  imgObj.filters.push(new fabric.Image.filters.BlendColor({
+    color,
+    mode: 'tint',
+    alpha: 0.8
+  }))
+
+  imgObj.applyFilters()
+}
+
+/**
+ * 应用颜色到画笔和选中对象
+ * @param newColor 新颜色值
+ */
+const applyColor = (newColor: string) => {
+  currentColor.value = newColor
+
+  if (!fCanvas.value) return
+
+  // 更新画笔颜色
+  if (fCanvas.value.isDrawingMode && fCanvas.value.freeDrawingBrush) {
+    fCanvas.value.freeDrawingBrush.color = newColor
+  }
+
+  // 选中对象时，更新其颜色
+  const activeObj = fCanvas.value.getActiveObject()
+  if (!activeObj) return
+
+  console.log('[applyColor] 对象类型:', activeObj.type, '颜色:', newColor)
+
+  // 根据对象类型设置颜色
+  switch (activeObj.type) {
+    case 'i-text':
+    case 'text':
+    case 'textbox':
+      // 文字类型：设置填充色
+      activeObj.set('fill', newColor)
+      break
+    case 'line':
+    case 'path':
+      // 线条/路径：设置描边色
+      activeObj.set('stroke', newColor)
+      break
+    case 'rect':
+    case 'circle':
+    case 'triangle':
+    case 'polygon':
+    case 'ellipse':
+      // 基础形状：设置描边色（填充透明）
+      activeObj.set('stroke', newColor)
+      break
+    case 'group':
+      // 组合对象：遍历子对象设置颜色
+      activeObj.getObjects().forEach((obj: any) => {
+        if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
+          obj.set('fill', newColor)
+        } else {
+          obj.set('stroke', newColor)
+        }
+      })
+      break
+    case 'image':
+      // 图片对象：使用 BlendColor 滤镜上色
+      applyColorToImage(activeObj, newColor)
+      break
+    default:
+      // 其他类型：尝试设置 fill，失败则设置 stroke
+      try {
+        activeObj.set('fill', newColor)
+      } catch {
+        activeObj.set('stroke', newColor)
+      }
+  }
+
+  fCanvas.value.renderAll()
+  saveState()
+}
+
+/**
+ * 判断是否为画笔对象（原始路径或转图片的画笔）
+ */
+const isBrushObject = (obj: any) => {
+  return obj && (
+    (obj.type === 'path' && obj.erasable === true) ||
+    (obj.type === 'image' && obj.isUserStroke === true)
+  )
+}
+
+/**
+ * 更新选中画笔的描边粗细
+ * @param width 新的粗细值
+ */
+const updatePathStrokeWidth = (width: number) => {
+  if (!fCanvas.value) return
+  const activeObj = fCanvas.value.getActiveObject()
+  if (!activeObj || !isBrushObject(activeObj)) return
+
+  if (activeObj.type === 'path') {
+    // 原始路径：直接修改 strokeWidth
+    activeObj.set('strokeWidth', width)
+  }
+
+  fCanvas.value.renderAll()
+  saveState()
+}
+
+/**
+ * 更新选中画笔图片的缩放比例
+ * @param scale 缩放比例（1 = 100%）
+ */
+const updatePathScale = (scale: number) => {
+  if (!fCanvas.value) return
+  const activeObj = fCanvas.value.getActiveObject()
+  if (!activeObj || activeObj.type !== 'image' || !activeObj.isUserStroke) return
+
+  activeObj.set({ scaleX: scale, scaleY: scale })
+  fCanvas.value.renderAll()
+  saveState()
+}
+
+/**
+ * 更新选中画笔的羽化效果
+ * @param blur 新的羽化值（0 = 无羽化）
+ */
+const updatePathBlur = (blur: number) => {
+  pathBlur.value = blur
+  if (!fCanvas.value) return
+  const activeObj = fCanvas.value.getActiveObject()
+  if (!activeObj || !isBrushObject(activeObj)) return
+
+  // Fabric.js 使用 shadow 实现模糊效果
+  if (blur > 0) {
+    activeObj.set('shadow', new fabric.Shadow({
+      color: activeObj.stroke || currentColor.value,
+      blur: blur * 2, // shadow blur 是半径，需要乘 2
+      offsetX: 0,
+      offsetY: 0
+    }))
+  } else {
+    activeObj.set('shadow', null)
+  }
+
+  fCanvas.value.renderAll()
+  saveState()
+}
+
+/**
+ * 创建星形
+ * @param cx 中心 x
+ * @param cy 中心 y
+ * @param points 角数
+ * @param outerR 外半径
+ * @param innerR 内半径
+ * @param style 样式
+ */
+const createStar = (cx: number, cy: number, points: number, outerR: number, innerR: number, style: any) => {
+  // 确保最小半径，避免无法显示
+  const oR = Math.max(outerR, 2)
+  const iR = Math.max(innerR, oR * 0.4)
+  const pts: any[] = []
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? oR : iR
+    const angle = (Math.PI / points) * i - Math.PI / 2
+    pts.push({ x: r * Math.cos(angle), y: r * Math.sin(angle) })
+  }
+  return new fabric.Polygon(pts, { ...style, left: cx, top: cy })
+}
+
+/**
+ * 创建正多边形
+ * @param cx 中心 x
+ * @param cy 中心 y
+ * @param sides 边数
+ * @param radius 半径
+ * @param style 样式
+ */
+const createPolygon = (cx: number, cy: number, sides: number, radius: number, style: any) => {
+  // 确保最小半径，避免无法显示
+  const r = Math.max(radius, 2)
+  const pts: any[] = []
+  for (let i = 0; i < sides; i++) {
+    const angle = (Math.PI * 2 / sides) * i - Math.PI / 2
+    pts.push({ x: r * Math.cos(angle), y: r * Math.sin(angle) })
+  }
+  return new fabric.Polygon(pts, { ...style, left: cx, top: cy })
+}
+
+/**
+ * 为线条添加箭头头部
+ * @param line 线条对象
+ */
+const addArrowHead = (line: any) => {
+  if (!fCanvas.value || !line) return
+  const x2 = line.x2, y2 = line.y2
+  const angle = Math.atan2(y2 - line.y1, x2 - line.x1)
+  const headLen = 15 + line.strokeWidth
+
+  const arrowHead = new fabric.Triangle({
+    width: headLen,
+    height: headLen * 0.8,
+    left: x2,
+    top: y2,
+    originX: 'center',
+    originY: 'center',
+    angle: (angle * 180 / Math.PI) + 90,
+    fill: line.stroke || currentColor.value,
+    stroke: null,
+    selectable: false,
+    evented: false,
+    erasable: true,
+    isAutoGenerated: true
+  })
+  fCanvas.value.add(arrowHead)
+}
+
+const addShape = (type: string) => {
+  if (!fCanvas.value) return
+  const c = fCanvas.value.getCenter()
+  const shape = type === 'rect'
+    ? new fabric.Rect({ left: c.left, top: c.top, width: 120, height: 80, fill: 'transparent', stroke: currentColor.value, strokeWidth: 3, originX: 'center', originY: 'center', erasable: true })
+    : new fabric.Circle({ left: c.left, top: c.top, radius: 60, fill: 'transparent', stroke: currentColor.value, strokeWidth: 3, originX: 'center', originY: 'center', erasable: true })
+  fCanvas.value.add(shape)
+  fCanvas.value.setActiveObject(shape)
+  fCanvas.value.renderAll()
+  saveState()
+  // 切换到选择工具，让用户可以修改形状属性
+  setDrawTool('select')
+}
+
+// 添加文字
+const addText = () => {
+  if (!fCanvas.value) return
+  const c = fCanvas.value.getCenter()
+  const text = new fabric.IText('双击编辑', {
+    left: c.left, top: c.top,
+    fontSize: textFontSize.value,
+    fill: currentColor.value,
+    originX: 'center', originY: 'center',
+    erasable: true
+  })
+  fCanvas.value.add(text)
+  fCanvas.value.setActiveObject(text)
+  fCanvas.value.renderAll()
+  saveState()
 }
 
 const deleteSelected = () => { fCanvas.value.getActiveObjects().forEach((o: any) => fCanvas.value.remove(o)); fCanvas.value.discardActiveObject(); fCanvas.value.renderAll(); saveState() }
@@ -1062,6 +1776,14 @@ const pasteClipboard = () => {
 /**
  * 获取画布/背景图的绘制区域
  */
+const getDrawArea = () => {
+  const bg = fCanvas.value.backgroundImage
+  if (bg) {
+    const r = bg.getBoundingRect(true)
+    return { w: r.width, h: r.height, l: r.left, t: r.top }
+  }
+  return { w: fCanvas.value.width, h: fCanvas.value.height, l: 0, t: 0 }
+}
 
 /**
  * 绘制参考线
@@ -1071,11 +1793,180 @@ const pasteClipboard = () => {
  * 切换构图参考线显示/隐藏（支持多选）
  * @param type 参考线类型
  */
+const toggleGuide = (type: string) => {
+  const idx = activeGuides.value.indexOf(type)
+  if (idx > -1) {
+    // 已激活 → 关闭
+    activeGuides.value.splice(idx, 1)
+  } else {
+    // 未激活 → 打开
+    activeGuides.value.push(type)
+  }
+  // 重绘所有激活的参考线
+  deleteGuides()
+  activeGuides.value.forEach(t => drawReference(t))
+}
 
+const drawReference = (type: string) => {
+  const { w, h, l, t } = getDrawArea()
+  const style: any = { stroke: fillColor.value, strokeWidth: strokeWidth.value, selectable: false, evented: false, opacity: 0.5, isGuide: true }
+
+  isStateSavingLocked = true
+
+  // 三分法
+  if (type === 'thirds' || type === 'all') {
+    ;[1/3, 2/3].forEach((f: number) => {
+      fCanvas.value.add(new fabric.Line([l+w*f, t, l+w*f, t+h], style))
+      fCanvas.value.add(new fabric.Line([l, t+h*f, l+w, t+h*f], style))
+    })
+  }
+
+  // 黄金比例 (0.618)
+  if (type === 'golden' || type === 'all') {
+    const phi = 0.618
+    ;[phi, 1 - phi].forEach((f: number) => {
+      fCanvas.value.add(new fabric.Line([l+w*f, t, l+w*f, t+h], { ...style, opacity: 0.7 }))
+      fCanvas.value.add(new fabric.Line([l, t+h*f, l+w, t+h*f], { ...style, opacity: 0.7 }))
+    })
+  }
+
+  // 对角线
+  if (type === 'diagonal' || type === 'all') {
+    fCanvas.value.add(new fabric.Line([l, t, l+w, t+h], { ...style, opacity: 0.3 }))
+    fCanvas.value.add(new fabric.Line([l+w, t, l, t+h], { ...style, opacity: 0.3 }))
+  }
+
+  // 中心点
+  if (type === 'center' || type === 'all') {
+    const cx = l + w / 2, cy = t + h / 2
+    fCanvas.value.add(new fabric.Line([cx, t, cx, t+h], style))
+    fCanvas.value.add(new fabric.Line([l, cy, l+w, cy], style))
+    fCanvas.value.add(Object.assign(new fabric.Circle({
+      left: cx, top: cy, radius: 6,
+      fill: 'transparent', stroke: fillColor.value, strokeWidth: 1.5,
+      originX: 'center', originY: 'center',
+      selectable: false, evented: false, opacity: 0.6
+    }), { isGuide: true }))
+  }
+
+  // φ 网格 (黄金螺旋近似)
+  if (type === 'phi' || type === 'all') {
+    const phi = 0.618
+    // 主矩形
+    fCanvas.value.add(Object.assign(new fabric.Rect({
+      left: l, top: t, width: w, height: h,
+      fill: 'transparent', stroke: fillColor.value, strokeWidth: 1,
+      selectable: false, evented: false, opacity: 0.3
+    }), { isGuide: true }))
+    // 黄金分割点连线
+    fCanvas.value.add(new fabric.Line([l, t, l+w*phi, t+h], { ...style, opacity: 0.4 }))
+    fCanvas.value.add(new fabric.Line([l+w, t, l+w*(1-phi), t+h], { ...style, opacity: 0.4 }))
+    fCanvas.value.add(new fabric.Line([l, t+h*phi, l+w, t], { ...style, opacity: 0.4 }))
+    fCanvas.value.add(new fabric.Line([l, t+h, l+w, t+h*(1-phi)], { ...style, opacity: 0.4 }))
+  }
+
+  // 黄金螺旋（斐波那契螺旋）- 迭代切割法，整体可选中
+  if (type === 'spiral' || type === 'all') {
+    const spiralColor = fillColor.value
+    const R = 0.618
+
+    let cx = l, cy = t, cw = w, ch = h
+    let pathStr = ''
+    const objects: any[] = []
+
+    for (let i = 0; i < 6; i++) {
+      let dir = i % 4
+      let sqW, sqH, sqX, sqY
+      let startX, startY, endX, endY, rx, ry
+
+      if (dir === 0) {
+        sqW = cw * R; sqH = ch; sqX = cx; sqY = cy
+        startX = sqX; startY = sqY + sqH; endX = sqX + sqW; endY = sqY
+        rx = sqW; ry = sqH
+        if (i === 0) pathStr += `M ${startX} ${startY} `
+        pathStr += `A ${rx} ${ry} 0 0 1 ${endX} ${endY} `
+        cx += sqW; cw -= sqW
+      } else if (dir === 1) {
+        sqW = cw; sqH = ch * R; sqX = cx; sqY = cy
+        startX = sqX; startY = sqY; endX = sqX + sqW; endY = sqY + sqH
+        rx = sqW; ry = sqH
+        pathStr += `A ${rx} ${ry} 0 0 1 ${endX} ${endY} `
+        cy += sqH; ch -= sqH
+      } else if (dir === 2) {
+        sqW = cw * R; sqH = ch; sqX = cx + cw - sqW; sqY = cy
+        startX = sqX + sqW; startY = sqY; endX = sqX; endY = sqY + sqH
+        rx = sqW; ry = sqH
+        pathStr += `A ${rx} ${ry} 0 0 1 ${endX} ${endY} `
+        cw -= sqW
+      } else if (dir === 3) {
+        sqW = cw; sqH = ch * R; sqX = cx; sqY = cy + ch - sqH
+        startX = sqX + sqW; startY = sqY + sqH; endX = sqX; endY = sqY
+        rx = sqW; ry = sqH
+        pathStr += `A ${rx} ${ry} 0 0 1 ${endX} ${endY} `
+        ch -= sqH
+      }
+
+      objects.push(new fabric.Rect({
+        left: sqX, top: sqY, width: sqW, height: sqH,
+        fill: 'transparent', stroke: spiralColor, strokeWidth: 1,
+        selectable: false, evented: false, opacity: 0.3,
+        strokeUniform: true
+      }))
+    }
+
+    // 螺旋曲线
+    const spiralPath = new fabric.Path(pathStr, {
+      stroke: spiralColor, strokeWidth: 2, fill: 'transparent',
+      selectable: false, evented: false, opacity: 0.8,
+      strokeUniform: true
+    })
+    objects.push(spiralPath)
+
+    // 只有单独生成时才允许选中操作
+    const isInteractive = (type === 'spiral')
+
+    // 组合成一个可选中的组
+    const group = new fabric.Group(objects, {
+      selectable: isInteractive,
+      evented: isInteractive,
+      hasControls: isInteractive,
+      hasBorders: isInteractive,
+      erasable: true,
+      isGuide: true,
+      originX: 'center',
+      originY: 'center'
+    })
+
+    fCanvas.value.add(group)
+
+    // 只有单独生成时才将其设为当前高亮焦点
+    if (isInteractive) {
+      fCanvas.value.setActiveObject(group)
+    }
+
+    fCanvas.value.renderAll()
+    saveState()
+  }
+
+  isStateSavingLocked = false
+  fCanvas.value.renderAll()
+  saveState()
+}
 
 /**
  * 删除所有参考线
  */
+const deleteGuides = () => {
+  const guides = fCanvas.value.getObjects().filter((o: any) => o.isGuide)
+  if (guides.length === 0) {
+    printInfo('没有参考线')
+    return
+  }
+  guides.forEach((o: any) => fCanvas.value.remove(o))
+  fCanvas.value.renderAll()
+  saveState()
+  printSuccess(`已删除 ${guides.length} 条参考线`)
+}
 
 // 辅助函数
 // eslint-disable-next-line no-console
@@ -1434,23 +2325,183 @@ const cancelCrop = () => {
 }
 
 // ─── AI Model Loading ──────────────────────────────────────
+const ensureModelsLoaded = async () => {
+  if (isDetectorReady.value) return
+  try {
+    loadingStep.value = '正在初始化 AI 引擎...'; await tf.ready(); const base = origin()
+    loadingStep.value = '正在读取骨架模型...'
+    detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER, modelUrl: MOVENET_MODEL_URL() })
+    loadingStep.value = '正在读取遮罩模型...'
+    segmenter = await bodySegmentation.createSegmenter(bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation, { runtime: 'tfjs', modelUrl: `${base}/models/selfie_segmentation/model.json` })
+    loadingStep.value = '正在读取面部模型...'
+    faceDetector = await faceLandmarksDetection.createDetector(faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh, { runtime: 'tfjs', refineLandmarks: true, detectorModelUrl: `${base}/models/face_detector/model.json`, landmarkModelUrl: `${base}/models/face_landmark/model.json` })
+    loadingStep.value = '正在读取手部模型...'
+    handDetector = await handPoseDetection.createDetector(handPoseDetection.SupportedModels.MediaPipeHands, { runtime: 'tfjs', modelType: 'full', detectorModelUrl: `${base}/models/hand_detector/model.json`, landmarkModelUrl: `${base}/models/hand_landmark/model.json` })
+    isDetectorReady.value = true; loadingStep.value = ''
+  } catch (err) { console.error('AI models load fail:', err); loadingStep.value = '模型加载失败'; setTimeout(() => { loadingStep.value = ''; isAnalyzing.value = false }, 3000) }
+}
 
 // ─── AI Functions ──────────────────────────────────────────
+const mapPoint = (k: any, offset: any) => { if (offset) return { x: offset.x + k.x * offset.sw, y: offset.y + k.y * offset.sh }; const bg = fCanvas.value.backgroundImage; if (!bg) return { x: k.x, y: k.y }; return { x: bg.left - bg.getScaledWidth() / 2 + k.x * bg.scaleX, y: bg.top - bg.getScaledHeight() / 2 + k.y * bg.scaleY } }
 
+const drawPoseSkeleton = (pose: any, offset: any = null) => {
+  const fp = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear']; const kp: any = {}
+  pose.keypoints.forEach((k: any) => { if (k.score > 0.2 && !fp.includes(k.name)) kp[k.name] = mapPoint(k, offset) })
+  const edges = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['right_shoulder','right_elbow'],['left_elbow','left_wrist'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['right_hip','right_knee'],['left_knee','left_ankle'],['right_knee','right_ankle']]
+  const nm: any = {}
+  Object.entries(kp).forEach(([name, p]: [string, any]) => { const c = new fabric.Circle({ id: uuidv4(), left: p.x, top: p.y, radius: 8, fill: '#ffffff', stroke: currentColor.value, strokeWidth: 3, originX: 'center', originY: 'center', selectable: true, evented: true, isSkeleton: true, padding: 12, name, erasable: true }); c.connectedLines = []; nm[name] = c; fCanvas.value.add(c); c.setCoords() })
+  edges.forEach(([a, b]) => { if (!nm[a] || !nm[b]) return; const nA = nm[a], nB = nm[b], id = uuidv4(); const l = new fabric.Line([nA.left, nA.top, nB.left, nB.top], { id, stroke: currentColor.value, strokeWidth: 3, selectable: true, evented: true, isAutoGenerated: true, strokeLineCap: 'round', opacity: 0.8, erasable: true }); nA.connectedLines.push({ line: id, endpoint: 'start' }); nB.connectedLines.push({ line: id, endpoint: 'end' }); fCanvas.value.add(l); l.sendToBack() })
+  Object.values(nm).forEach((c: any) => c.bringToFront());
+}
 
 /**
  * 在指定位置添加新的骨架节点
  */
+const addSkeletonNode = (x: number, y: number) => {
+  if (!fCanvas.value) return
+  const id = uuidv4()
+  const node = new fabric.Circle({
+    id, left: x, top: y, radius: 8,
+    fill: '#ffffff', stroke: currentColor.value, strokeWidth: 3,
+    originX: 'center', originY: 'center',
+    selectable: true, evented: true,
+    isSkeleton: true, padding: 12,
+    name: `node_${Date.now()}`,
+    erasable: true
+  })
+  node.connectedLines = []
+  fCanvas.value.add(node)
+  node.bringToFront()
+  fCanvas.value.setActiveObject(node)
+  fCanvas.value.renderAll()
+  saveState()
+}
 
 /**
  * 在节点连接的线段中点添加新节点
  */
+const addMidpointNode = (node: any) => {
+  if (!fCanvas.value || !node.connectedLines?.length) return
+  const objs = fCanvas.value.getObjects()
+  const idMap: any = {}
+  objs.forEach((o: any) => { if (o.id) idMap[o.id] = o })
+
+  // 找到第一条连接的线，在其中点添加节点
+  const conn = node.connectedLines[0]
+  const line = idMap[conn.line || conn.id]
+  if (!line) return
+
+  const mx = (line.x1 + line.x2) / 2
+  const my = (line.y1 + line.y2) / 2
+
+  // 创建新节点
+  const id = uuidv4()
+  const newNode = new fabric.Circle({
+    id, left: mx, top: my, radius: 8,
+    fill: '#ffffff', stroke: currentColor.value, strokeWidth: 3,
+    originX: 'center', originY: 'center',
+    selectable: true, evented: true,
+    isSkeleton: true, padding: 12,
+    name: `node_${Date.now()}`,
+    erasable: true
+  })
+  newNode.connectedLines = []
+
+  // 找到线的另一个端点节点
+  const otherEndpoint = conn.endpoint === 'start' ? 'end' : 'start'
+  const otherConn = objs.find((o: any) =>
+    o.isSkeleton && o !== node && o.connectedLines?.some((c: any) => (c.line || c.id) === (conn.line || conn.id) && c.endpoint === otherEndpoint)
+  )
+
+  // 断开原线与原节点的连接
+  node.connectedLines = node.connectedLines.filter((c: any) => (c.line || c.id) !== (conn.line || conn.id))
+
+  // 删除原线
+  fCanvas.value.remove(line)
+
+  // 创建两条新线：node → newNode, newNode → otherNode
+  const line1Id = uuidv4()
+  const line1 = new fabric.Line([node.left, node.top, mx, my], {
+    id: line1Id, stroke: currentColor.value, strokeWidth: 3,
+    selectable: true, evented: true, isAutoGenerated: true,
+    strokeLineCap: 'round', opacity: 0.8, erasable: true
+  })
+  node.connectedLines.push({ line: line1Id, endpoint: 'start' })
+  newNode.connectedLines.push({ line: line1Id, endpoint: 'end' })
+
+  fCanvas.value.add(line1)
+  line1.sendToBack()
+
+  if (otherConn) {
+    const line2Id = uuidv4()
+    const line2 = new fabric.Line([mx, my, otherConn.left, otherConn.top], {
+      id: line2Id, stroke: currentColor.value, strokeWidth: 3,
+      selectable: true, evented: true, isAutoGenerated: true,
+      strokeLineCap: 'round', opacity: 0.8, erasable: true
+    })
+    newNode.connectedLines.push({ line: line2Id, endpoint: 'start' })
+    // 更新另一个节点的连接
+    otherConn.connectedLines = otherConn.connectedLines.map((c: any) => {
+      if ((c.line || c.id) === (conn.line || conn.id)) {
+        return { line: line2Id, endpoint: 'end' }
+      }
+      return c
+    })
+    fCanvas.value.add(line2)
+    line2.sendToBack()
+  }
+
+  fCanvas.value.add(newNode)
+  newNode.bringToFront()
+  fCanvas.value.setActiveObject(newNode)
+  fCanvas.value.renderAll()
+  saveState()
+}
 
 /**
  * 连接两个骨架节点
  * @param nodeA 起始节点
  * @param nodeB 结束节点
  */
+const connectNodes = (nodeA: any, nodeB: any) => {
+  if (!fCanvas.value) return
+
+  // 检查是否已存在连接
+  const existingConn = nodeA.connectedLines?.find((c: any) => {
+    const objs = fCanvas.value.getObjects()
+    const line = objs.find((o: any) => o.id === (c.line || c.id))
+    if (!line) return false
+    // 检查线的另一端是否是 nodeB
+    return objs.some((o: any) =>
+      o.isSkeleton && o === nodeB &&
+      o.connectedLines?.some((oc: any) => (oc.line || oc.id) === (c.line || c.id))
+    )
+  })
+
+  if (existingConn) return // 已存在连接，跳过
+
+  // 创建新连线
+  const id = uuidv4()
+  const line = new fabric.Line([nodeA.left, nodeA.top, nodeB.left, nodeB.top], {
+    id, stroke: currentColor.value, strokeWidth: 3,
+    selectable: true, evented: true,
+    isAutoGenerated: true, strokeLineCap: 'round',
+    opacity: 0.8, erasable: true
+  })
+
+  // 更新节点的连接信息
+  if (!nodeA.connectedLines) nodeA.connectedLines = []
+  if (!nodeB.connectedLines) nodeB.connectedLines = []
+  nodeA.connectedLines.push({ line: id, endpoint: 'start' })
+  nodeB.connectedLines.push({ line: id, endpoint: 'end' })
+
+  fCanvas.value.add(line)
+  line.sendToBack()
+  nodeA.bringToFront()
+  nodeB.bringToFront()
+  fCanvas.value.renderAll()
+  saveState()
+}
 
 const drawImageOutline = async (segs: any[], hex: string, offset: any = null) => {
   if (!segs?.length) return; const h = hex.replace('#', '')
