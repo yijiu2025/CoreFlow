@@ -252,7 +252,7 @@
           :lineStyle="lineStyle"
           :shapeOpacity="shapeOpacity"
           :presetColors="presetColors"
-          :activeGuide="activeGuide"
+          :activeGuides="activeGuides"
           @addShape="addShape"
           @drawReference="drawReference"
           @toggleGuide="toggleGuide"
@@ -402,8 +402,8 @@ const noFill = ref(true) // 默认无填充
 const lineStyle = ref('solid') // solid | dashed | dotted
 const shapeOpacity = ref(100)
 
-// 构图参考线状态
-const activeGuide = ref<string | null>(null)
+// 构图参考线状态（支持多选）
+const activeGuides = ref<string[]>([])
 
 // 图片裁剪状态
 const isCropping = ref(false)
@@ -1773,21 +1773,21 @@ const getDrawArea = () => {
  * @param type - 参考线类型: thirds, golden, diagonal, center, phi, all
  */
 /**
- * 切换构图参考线显示/隐藏
+ * 切换构图参考线显示/隐藏（支持多选）
  * @param type 参考线类型
  */
 const toggleGuide = (type: string) => {
-  // 如果点击已激活的参考线，则关闭
-  if (activeGuide.value === type) {
-    activeGuide.value = null
-    deleteGuides()
+  const idx = activeGuides.value.indexOf(type)
+  if (idx > -1) {
+    // 已激活 → 关闭
+    activeGuides.value.splice(idx, 1)
   } else {
-    // 先清除旧参考线
-    deleteGuides()
-    // 激活新参考线
-    activeGuide.value = type
-    drawReference(type)
+    // 未激活 → 打开
+    activeGuides.value.push(type)
   }
+  // 重绘所有激活的参考线
+  deleteGuides()
+  activeGuides.value.forEach(t => drawReference(t))
 }
 
 const drawReference = (type: string) => {

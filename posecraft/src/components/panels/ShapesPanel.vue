@@ -119,7 +119,7 @@
     <!-- 构图参考线 -->
     <div class="section-label">构图参考线</div>
     <div class="tool-grid guide-grid">
-      <button v-for="guide in guides" :key="guide.type" class="grid-btn" :class="{ active: activeGuide === guide.type }" @click="$emit('toggleGuide', guide.type)">
+      <button v-for="guide in guides" :key="guide.type" class="grid-btn" :class="{ active: activeGuides?.includes(guide.type) }" @click="$emit('toggleGuide', guide.type)">
         <span class="guide-icon">{{ guide.icon }}</span>
         <span>{{ guide.label }}</span>
       </button>
@@ -129,13 +129,6 @@
 
     <!-- 操作 -->
     <div class="section-label">操作</div>
-    <button class="danger-btn" @click="$emit('deleteGuides')">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <polyline points="3 6 5 6 21 6"/>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-      </svg>
-      清除参考线
-    </button>
     <button class="danger-btn" @click="$emit('clearCanvas')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <polyline points="3 6 5 6 21 6"/>
@@ -158,10 +151,10 @@ defineProps<{
   lineStyle?: string
   shapeOpacity?: number
   presetColors?: string[]
-  activeGuide?: string | null
+  activeGuides?: string[]
 }>()
 
-defineEmits(['addShape', 'drawReference', 'deleteGuides', 'clearCanvas', 'setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity'])
+defineEmits(['addShape', 'clearCanvas', 'setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity'])
 
 const guides = [
   { type: 'thirds', icon: '▦', label: '三分法' },
