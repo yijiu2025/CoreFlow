@@ -1153,11 +1153,16 @@ const saveState = () => {
 const restoreState = (snapshot: any) => {
   if (!snapshot || !snapshot.fabric) return; isStateSavingLocked = true
   const p = new Promise((resolve) => { if (!snapshot.ink) return resolve(null); const img = new Image(); img.onload = () => resolve(img); img.onerror = () => resolve(null); img.src = snapshot.ink })
-  fCanvas.value.loadFromJSON(snapshot.fabric, async () => { 
-    const img = await p; if (img && inkCtx) { inkCtx.save(); inkCtx.globalCompositeOperation = 'copy'; inkCtx.drawImage(img, 0, 0); inkCtx.restore() }; 
-    inkLayer = fCanvas.value.getObjects().find((o: any) => o.isInkLayer); 
-    if (inkLayer) inkLayer.setElement(inkCanvas); 
-    fCanvas.value.renderAll(); isStateSavingLocked = false 
+  fCanvas.value.loadFromJSON(snapshot.fabric, async () => {
+    const img = await p; if (img && inkCtx) { inkCtx.save(); inkCtx.globalCompositeOperation = 'copy'; inkCtx.drawImage(img, 0, 0); inkCtx.restore() };
+    inkLayer = fCanvas.value.getObjects().find((o: any) => o.isInkLayer);
+    if (inkLayer) inkLayer.setElement(inkCanvas);
+    // 恢复背景透明度变量
+    const bg = fCanvas.value.backgroundImage
+    if (bg) {
+      bgOpacity.value = Math.round((bg.opacity || 1) * 100)
+    }
+    fCanvas.value.renderAll(); isStateSavingLocked = false
   })
 }
 const undo = () => { if (undoStack.value.length <= 1) return; const c = undoStack.value.pop(); redoStack.value.push(c); restoreState(undoStack.value[undoStack.value.length - 1]) }
@@ -2022,6 +2027,7 @@ const updateBgOpacity = (opacity: number) => {
   if (bg) {
     bg.set({ opacity: opacity / 100 })
     fCanvas.value.renderAll()
+    saveState()
   }
 }
 
