@@ -102,6 +102,14 @@
               <line x1="8" y1="20" x2="16" y2="20"/>
             </svg>
           </button>
+          <!-- 图片编辑 -->
+          <button class="tool-btn" :class="{ active: activeTool === 'image' }" @click="selectTab('image')" title="图片编辑 (I)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
 
           <div class="tool-divider"></div>
 
@@ -272,6 +280,18 @@
           @fitToScreen="fitToScreen"
         />
 
+        <ImagePanel v-show="activeTool === 'image' && bgImageUploaded"
+          :bgOpacity="bgOpacity"
+          :currentColor="currentColor"
+          :cropAspectRatio="cropAspectRatio"
+          :presetColors="presetColors"
+          @replaceImage="triggerFileInput"
+          @cropImage="startCropMode"
+          @update:bgOpacity="updateBgOpacity"
+          @update:cropAspectRatio="cropAspectRatio = $event"
+          @update:currentColor="currentColor = $event"
+        />
+
         <CropPanel v-show="isCropping"
           :cropAspectRatio="cropAspectRatio"
           @update:cropAspectRatio="updateCropAspectRatio"
@@ -297,6 +317,7 @@ import EraserPanel from '@/components/panels/EraserPanel.vue'
 import ShapesPanel from '@/components/panels/ShapesPanel.vue'
 import HandPanel from '@/components/panels/HandPanel.vue'
 import CropPanel from '@/components/panels/CropPanel.vue'
+import ImagePanel from '@/components/panels/ImagePanel.vue'
 import TextPanel from '@/components/panels/TextPanel.vue'
 import HelpModal from '@/components/modals/HelpModal.vue'
 import { v4 as uuidv4 } from 'uuid'
@@ -1876,6 +1897,8 @@ const printSuccess = (msg: string) => console.log(`✅ ${msg}`)
 const triggerFileInput = () => fileInput.value?.click()
 const handleImageUpload = (e: Event) => {
   const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return
+  // 清空 input 值，确保下次选择同一文件也能触发
+  ;(e.target as HTMLInputElement).value = ''
   const reader = new FileReader()
   reader.onload = (ev) => {
     fabric.Image.fromURL(ev.target?.result, (img: any) => {
@@ -1889,51 +1912,114 @@ const handleImageUpload = (e: Event) => {
       fCanvas.value.clear()
       fCanvas.value.setDimensions({ width: fitW, height: fitH })
 
-      // 设置图片为可交互对象（非背景图）
+      // 直接设置为背景图
       img.set({
         originX: 'center', originY: 'center',
         left: fitW / 2, top: fitH / 2,
         scaleX: scale, scaleY: scale,
-        selectable: false, evented: false
+        selectable: false, evented: false,
+        opacity: bgOpacity.value / 100
       })
-      fCanvas.value.add(img)
-      uploadedImage = img
-
-      // 创建裁剪框（默认覆盖整个图片）
-      const margin = 20
-      cropBox = new fabric.Rect({
-        left: margin, top: margin,
-        width: fitW - margin * 2, height: fitH - margin * 2,
-        fill: 'transparent',
-        stroke: '#6366f1',
-        strokeWidth: 2,
-        strokeDashArray: [8, 4],
-        selectable: true,
-        evented: true,
-        hasControls: true,
-        hasBorders: true,
-        cornerColor: '#6366f1',
-        cornerSize: 10,
-        transparentCorners: false,
-        borderColor: '#6366f1',
-        isCropBox: true
+      fCanvas.value.clipPath = new fabric.Rect({
+        left: 0, top: 0, width: fitW, height: fitH, absolutePositioned: true
       })
-      fCanvas.value.add(cropBox)
-      fCanvas.value.setActiveObject(cropBox)
+      fCanvas.value.backgroundImage = img
 
-      // 监听裁剪框移动和缩放事件
-      cropBox.on('moving', onCropBoxMoving)
-      cropBox.on('scaling', onCropBoxScaling)
+      if (inkCanvas) {
+        inkCanvas.width = fitW; inkCanvas.height = fitH
+        if (inkLayer) { inkLayer.set({ left: 0, top: 0 }); inkLayer.setElement(inkCanvas) }
+      }
 
-      // 创建遮罩
-      updateCropOverlay(fitW, fitH)
+      // 重置缩放和平移
+      canvasScale = 1
+      canvasTranslateX = 0
+      canvasTranslateY = 0
+      applyCanvasTransform()
+      zoomSlider.value = 100
+      currentZoom.value = 1
 
-      // 进入裁剪模式
-      isCropping.value = true
       fCanvas.value.renderAll()
+      bgImageUploaded.value = true
+      saveState()
     })
   }
   reader.readAsDataURL(file)
+}
+
+/**
+ * 开始裁剪模式（从图片编辑面板调用）
+ */
+const startCropMode = () => {
+  if (!fCanvas.value || !bgImageUploaded.value) return
+
+  const bg = fCanvas.value.backgroundImage
+  if (!bg) return
+
+  // 将背景图转为普通对象
+  const cw = fCanvas.value.width
+  const ch = fCanvas.value.height
+
+  // 创建临时图片对象
+  const imgElement = bg.getElement()
+  const tempImg = new fabric.Image(imgElement, {
+    originX: 'center', originY: 'center',
+    left: bg.left, top: bg.top,
+    scaleX: bg.scaleX, scaleY: bg.scaleY,
+    selectable: false, evented: false
+  })
+
+  // 清空背景图
+  fCanvas.value.backgroundImage = null
+  fCanvas.value.clipPath = null
+  fCanvas.value.add(tempImg)
+  uploadedImage = tempImg
+
+  // 创建裁剪框
+  const margin = 20
+  cropBox = new fabric.Rect({
+    left: margin, top: margin,
+    width: cw - margin * 2, height: ch - margin * 2,
+    fill: 'transparent',
+    stroke: '#6366f1',
+    strokeWidth: 2,
+    strokeDashArray: [8, 4],
+    selectable: true,
+    evented: true,
+    hasControls: true,
+    hasBorders: true,
+    cornerColor: '#6366f1',
+    cornerSize: 10,
+    transparentCorners: false,
+    borderColor: '#6366f1',
+    isCropBox: true
+  })
+  fCanvas.value.add(cropBox)
+  fCanvas.value.setActiveObject(cropBox)
+
+  // 监听裁剪框事件
+  cropBox.on('moving', onCropBoxMoving)
+  cropBox.on('scaling', onCropBoxScaling)
+
+  // 创建遮罩
+  updateCropOverlay(cw, ch)
+
+  // 进入裁剪模式
+  isCropping.value = true
+  bgImageUploaded.value = false
+  fCanvas.value.renderAll()
+}
+
+/**
+ * 更新背景透明度
+ */
+const updateBgOpacity = (opacity: number) => {
+  bgOpacity.value = opacity
+  if (!fCanvas.value) return
+  const bg = fCanvas.value.backgroundImage
+  if (bg) {
+    bg.set({ opacity: opacity / 100 })
+    fCanvas.value.renderAll()
+  }
 }
 
 /**
