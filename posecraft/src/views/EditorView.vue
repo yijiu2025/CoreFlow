@@ -1792,7 +1792,7 @@ const toggleGuide = (type: string) => {
 
 const drawReference = (type: string) => {
   const { w, h, l, t } = getDrawArea()
-  const style: any = { stroke: currentColor.value, strokeWidth: 1, selectable: false, evented: false, opacity: 0.5, isGuide: true }
+  const style: any = { stroke: currentColor.value, strokeWidth: strokeWidth.value, selectable: false, evented: false, opacity: 0.5, isGuide: true }
 
   isStateSavingLocked = true
 
