@@ -348,7 +348,6 @@ const fCanvas = ref<any>(null)
 
 const bgImageUploaded = ref(false)
 const bgOpacity = ref(50)
-const currentColor = ref('#6366f1')
 
 // 统一工具状态（所有工具互斥，控制右侧面板显示）
 const activeTool = ref('select')  // select | ai | shapes | draw | eraser | text | hand
@@ -398,9 +397,14 @@ const pathBlur = ref(0) // 选中路径的羽化值
 // 形状样式状态
 const strokeWidth = ref(3)
 const fillColor = ref('#6366f1')
+const currentColor = ref('#6366f1') // 描边颜色，与 fillColor 同步
 const noFill = ref(true) // 默认无填充
 const lineStyle = ref('solid') // solid | dashed | dotted
 const shapeOpacity = ref(100)
+
+// 同步 fillColor 和 currentColor
+watch(fillColor, (v) => { currentColor.value = v })
+watch(currentColor, (v) => { fillColor.value = v })
 
 // 构图参考线状态（支持多选）
 const activeGuides = ref<string[]>([])
