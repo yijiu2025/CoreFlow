@@ -435,10 +435,6 @@ let inkCtx: any = null
 let inkLayer: any = null
 
 // AI detectors
-let detector: any = null
-let segmenter: any = null
-let faceDetector: any = null
-let handDetector: any = null
 
 // 工具切换时的画布状态已在 setTool/selectTab 中处理
 
@@ -577,22 +573,6 @@ onUnmounted(() => {
 })
 
 // ─── Canvas Utilities ──────────────────────────────────────
-const resizeCanvas = () => {
-  if (!fCanvas.value || !canvasContainer.value) return
-  const width = canvasContainer.value.clientWidth
-  const height = canvasContainer.value.clientHeight || 600
-  const bg = fCanvas.value.backgroundImage
-  if (bg && bg.width) {
-    const scale = Math.min(width / bg.width, height / bg.height) * 0.95
-    const newW = bg.width * scale, newH = bg.height * scale
-    fCanvas.value.setWidth(newW); fCanvas.value.setHeight(newH)
-    bg.set({ scaleX: scale, scaleY: scale, left: newW / 2, top: newH / 2, originX: 'center', originY: 'center' })
-    if (inkCanvas) { inkCanvas.width = newW; inkCanvas.height = newH }
-  } else {
-    fCanvas.value.setWidth(width); fCanvas.value.setHeight(height)
-  }
-  fCanvas.value.renderAll()
-}
 
 // 画布变换状态
 let canvasScale = 1
@@ -602,53 +582,13 @@ let canvasTranslateY = 0
 /**
  * 应用 CSS transform 到画布（缩放 + 平移）
  */
-const applyCanvasTransform = () => {
-  if (!fCanvas.value) return
-  const wrapper = fCanvas.value.wrapperEl
-  if (wrapper) {
-    wrapper.style.transformOrigin = 'center center'
-    wrapper.style.transform = `translate(${canvasTranslateX}px, ${canvasTranslateY}px) scale(${canvasScale})`
-  }
-}
 
 /**
  * 同步画布尺寸（缩放）
  */
-const syncCanvasDimensions = (zoom: number) => {
-  canvasScale = zoom
-  applyCanvasTransform()
-}
 
-const resetZoom = () => {
-  canvasScale = 1
-  canvasTranslateX = 0
-  canvasTranslateY = 0
-  applyCanvasTransform()
-  zoomSlider.value = 100
-}
 
 // 适应屏幕
-const fitToScreen = () => {
-  if (!fCanvas.value || !canvasContainer.value) return
-
-  const canvas = fCanvas.value
-  const container = canvasContainer.value
-
-  const containerWidth = container.clientWidth - 80
-  const containerHeight = container.clientHeight - 80
-
-  const canvasWidth = canvas.getWidth()
-  const canvasHeight = canvas.getHeight()
-
-  if (canvasWidth === 0 || canvasHeight === 0) return
-
-  const zoom = Math.min(containerWidth / canvasWidth, containerHeight / canvasHeight)
-  canvasScale = zoom
-  canvasTranslateX = 0
-  canvasTranslateY = 0
-  applyCanvasTransform()
-  zoomSlider.value = Math.round(zoom * 100)
-}
 
 // 缩放百分比
 const zoomPercent = computed(() => {
@@ -669,154 +609,12 @@ watch(zoomSlider, (newVal) => {
 const currentZoom = ref(1)
 
 // 放大
-const zoomIn = () => {
-  const zoom = Math.min(currentZoom.value * 1.2, 5)
-  currentZoom.value = zoom
-  zoomSlider.value = Math.round(zoom * 100)
-  syncCanvasDimensions(zoom)
-}
 
 // 缩小
-const zoomOut = () => {
-  const zoom = Math.max(currentZoom.value / 1.2, 0.1)
-  currentZoom.value = zoom
-  zoomSlider.value = Math.round(zoom * 100)
-  syncCanvasDimensions(zoom)
-}
 
 // ─── Canvas Init ───────────────────────────────────────────
-const initCanvas = () => {
-  const c = new fabric.Canvas('editor-canvas', {
-    width: canvasContainer.value?.clientWidth || 800, height: canvasContainer.value?.clientHeight || 600,
-    selection: true, preserveObjectStacking: true, isDrawingMode: false,
-    backgroundColor: 'rgba(0,0,0,0)', perPixelTargetFind: true, targetFindTolerance: 15
-  })
-  fCanvas.value = markRaw(c)
-  const w = fCanvas.value.width, h = fCanvas.value.height
-  inkCanvas = document.createElement('canvas'); inkCanvas.width = w; inkCanvas.height = h
-  inkCtx = inkCanvas.getContext('2d')
-  inkLayer = new fabric.Image(inkCanvas, { left: 0, top: 0, originX: 'left', originY: 'top', selectable: false, evented: false, erasable: false })
-  inkLayer.isInkLayer = true; fCanvas.value.add(inkLayer)
-  eraserCursor = new fabric.Circle({ radius: eraserSize.value / 2, fill: 'rgba(255,255,255,0.2)', stroke: 'rgba(255,255,255,0.8)', strokeWidth: 1, originX: 'center', originY: 'center', selectable: false, evented: false, visible: false, isEraserCursor: true })
-  fCanvas.value.add(eraserCursor)
-  fCanvas.value.on('mouse:down', handleMouseDown)
-  fCanvas.value.on('mouse:move', handleMouseMove)
-  fCanvas.value.on('mouse:up', handleMouseUp)
-  fCanvas.value.on('path:created', handlePathCreated)
-
-  // 监听选择事件，更新 selectedObject
-  fCanvas.value.on('selection:created', updateSelection)
-  fCanvas.value.on('selection:updated', updateSelection)
-  fCanvas.value.on('selection:cleared', updateSelection)
-
-  // 拖拽骨架节点时，锁定关联的线条 ID 和端点
-  let activeDragLines: Array<{ id: string, endpoint: 'start' | 'end' }> = []
-
-  // mouse:down: 拖拽开始时，按位置锁定关联线条
-  fCanvas.value.on('mouse:down', (e: any) => {
-    const obj = e.target
-    if (!obj || !obj.isSkeleton) { activeDragLines = []; return }
-    activeDragLines = (obj.connectedLines || []).map((c: any) => ({ id: c.id || c.line, endpoint: c.endpoint }))
-  })
-
-  // object:moving: 拖拽过程中更新线条
-  fCanvas.value.on('object:moving', (e: any) => {
-    const obj = e.target
-    if (!obj || !obj.isSkeleton) return
-
-    const canvas = fCanvas.value
-    if (!canvas) return
-
-    const objs = canvas.getObjects()
-    const idMap: any = {}
-    objs.forEach((o: any) => { if (o.id) idMap[o.id] = o })
-
-    // 优先使用锁定的线条，否则实时查找
-    if (activeDragLines.length > 0) {
-      activeDragLines.forEach(({ id, endpoint }) => {
-        const line = idMap[id]
-        if (!line) return
-        
-        const targetEndpoint = endpoint === 'start' ? 'end' : 'start';
-        const otherNode = objs.find((o: any) => o.isSkeleton && o.connectedLines?.some((c: any) => (c.id || c.line) === id && c.endpoint === targetEndpoint));
-        
-        if (!otherNode) return; // 找不到另一个节点则跳过
-
-        const x1 = endpoint === 'start' ? obj.left : otherNode.left;
-        const y1 = endpoint === 'start' ? obj.top : otherNode.top;
-        const x2 = endpoint === 'end' ? obj.left : otherNode.left;
-        const y2 = endpoint === 'end' ? obj.top : otherNode.top;
-        
-        line.set({ x1, y1, x2, y2, scaleX: 1, scaleY: 1 });
-        if (line._setWidthHeight) {
-          line._setWidthHeight();
-        } else {
-          line.set({
-            width: Math.abs(x1 - x2),
-            height: Math.abs(y1 - y2),
-            left: Math.min(x1, x2),
-            top: Math.min(y1, y2)
-          });
-        }
-        line.setCoords()
-      })
-    } else {
-      // fallback: 实时位置匹配
-      const lines = objs.filter((o: any) => o.isAutoGenerated && o.type === 'line')
-      lines.forEach((line: any) => {
-        if (Math.hypot(line.x1 - obj.left, line.y1 - obj.top) < 20) {
-          const x2 = line.x2, y2 = line.y2;
-          line.set({ x1: obj.left, y1: obj.top, left: Math.min(obj.left, x2), top: Math.min(obj.top, y2), width: Math.abs(obj.left - x2), height: Math.abs(obj.top - y2) });
-          line.setCoords()
-        } else if (Math.hypot(line.x2 - obj.left, line.y2 - obj.top) < 20) {
-          const x1 = line.x1, y1 = line.y1;
-          line.set({ x2: obj.left, y2: obj.top, left: Math.min(x1, obj.left), top: Math.min(y1, obj.top), width: Math.abs(x1 - obj.left), height: Math.abs(y1 - obj.top) });
-          line.setCoords()
-        }
-      })
-    }
-
-    canvas.renderAll()
-  })
-
-  // mouse:up: 拖拽结束，清空锁定
-  fCanvas.value.on('mouse:up', () => {
-    activeDragLines = []
-  })
-
-  // 对象修改完成时记录步骤（拖拽、缩放等）
-  fCanvas.value.on('object:modified', () => {
-    saveState()
-  })
-
-  // 鼠标滚轮缩放到容器上（更可靠）
-  if (canvasContainer.value) {
-    canvasContainer.value.addEventListener('wheel', handleWheel, { passive: false })
-  }
-
-  saveState()
-}
 
 // ─── Mouse Wheel Zoom（以鼠标为中心） ────────────────────
-const handleWheel = (e: WheelEvent) => {
-  e.preventDefault()
-  if (!fCanvas.value || !canvasContainer.value) return
-
-  const delta = e.deltaY
-  let zoom = currentZoom.value
-  const factor = 1.1
-
-  if (delta < 0) {
-    zoom = Math.min(zoom * factor, 5)
-  } else {
-    zoom = Math.max(zoom / factor, 0.1)
-  }
-
-  // 更新缩放
-  currentZoom.value = zoom
-  zoomSlider.value = Math.round(zoom * 100)
-  syncCanvasDimensions(zoom)
-}
 
 // ─── 几何工具函数 ──────────────────────────────────────────
 /** 计算点到线段的距离 */
@@ -1206,7 +1004,6 @@ const updateColorFromPanel = (newColor: string) => {
 }
 
 const deleteSelected = () => { fCanvas.value.getActiveObjects().forEach((o: any) => fCanvas.value.remove(o)); fCanvas.value.discardActiveObject(); fCanvas.value.renderAll(); saveState() }
-const clearCanvas = () => { if (!confirm('确定清空画布？')) return; fCanvas.value.getObjects().slice().forEach((o: any) => fCanvas.value.remove(o)); fCanvas.value.renderAll(); saveState() }
 const clearCanvas = () => { if (!confirm('确定清空画布？')) return; fCanvas.value.getObjects().slice().forEach((o: any) => fCanvas.value.remove(o)); fCanvas.value.renderAll(); saveState() }
 
 // 选中对象（使用 ref 而非 computed，通过 Fabric.js 事件更新）
@@ -1637,21 +1434,6 @@ const cancelCrop = () => {
 }
 
 // ─── AI Model Loading ──────────────────────────────────────
-const ensureModelsLoaded = async () => {
-  if (isDetectorReady.value) return
-  try {
-    loadingStep.value = '正在初始化 AI 引擎...'; await tf.ready(); const base = origin()
-    loadingStep.value = '正在读取骨架模型...'
-    detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, { modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER, modelUrl: MOVENET_MODEL_URL() })
-    loadingStep.value = '正在读取遮罩模型...'
-    segmenter = await bodySegmentation.createSegmenter(bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation, { runtime: 'tfjs', modelUrl: `${base}/models/selfie_segmentation/model.json` })
-    loadingStep.value = '正在读取面部模型...'
-    faceDetector = await faceLandmarksDetection.createDetector(faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh, { runtime: 'tfjs', refineLandmarks: true, detectorModelUrl: `${base}/models/face_detector/model.json`, landmarkModelUrl: `${base}/models/face_landmark/model.json` })
-    loadingStep.value = '正在读取手部模型...'
-    handDetector = await handPoseDetection.createDetector(handPoseDetection.SupportedModels.MediaPipeHands, { runtime: 'tfjs', modelType: 'full', detectorModelUrl: `${base}/models/hand_detector/model.json`, landmarkModelUrl: `${base}/models/hand_landmark/model.json` })
-    isDetectorReady.value = true; loadingStep.value = ''
-  } catch (err) { console.error('AI models load fail:', err); loadingStep.value = '模型加载失败'; setTimeout(() => { loadingStep.value = ''; isAnalyzing.value = false }, 3000) }
-}
 
 // ─── AI Functions ──────────────────────────────────────────
 
