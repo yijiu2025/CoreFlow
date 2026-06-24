@@ -31,29 +31,6 @@
 
     <div class="panel-divider"></div>
 
-    <!-- 节点工具 -->
-    <div class="section-label">节点工具</div>
-    <div class="tool-grid">
-      <button class="grid-btn" :class="{ active: canvasTool === 'addNode' }" @click="$emit('setDrawTool', 'addNode')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="16"/>
-          <line x1="8" y1="12" x2="16" y2="12"/>
-        </svg>
-        <span>添加节点</span>
-      </button>
-      <button class="grid-btn" :class="{ active: canvasTool === 'line' }" @click="$emit('setDrawTool', 'line')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <circle cx="5" cy="19" r="2"/>
-          <circle cx="19" cy="5" r="2"/>
-          <line x1="7" y1="17" x2="17" y2="7"/>
-        </svg>
-        <span>连接节点</span>
-      </button>
-    </div>
-
-    <div class="panel-divider"></div>
-
     <!-- 构图参考线 -->
     <div class="section-label">构图参考线</div>
     <div class="tool-grid">

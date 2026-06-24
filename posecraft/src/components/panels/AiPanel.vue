@@ -38,13 +38,36 @@
 
     <!-- 框选识别 -->
     <div class="section-label">局部识别</div>
-    <button class="crop-btn" :class="{ active: currentTool === 'crop' }" :disabled="isAnalyzing" @click="$emit('setTool', 'crop')">
+    <button class="crop-btn" :class="{ active: activeTool === 'crop' }" :disabled="isAnalyzing" @click="$emit('setTool', 'crop')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"/>
         <path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"/>
       </svg>
-      <span>{{ currentTool === 'crop' ? '拖拽框选区域...' : '框选识别' }}</span>
+      <span>{{ activeTool === 'crop' ? '拖拽框选区域...' : '框选识别' }}</span>
     </button>
+
+    <div class="panel-divider"></div>
+
+    <!-- 节点工具 -->
+    <div class="section-label">节点工具</div>
+    <div class="tool-grid">
+      <button class="grid-btn" :class="{ active: canvasTool === 'addNode' }" @click="$emit('setDrawTool', 'addNode')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="16"/>
+          <line x1="8" y1="12" x2="16" y2="12"/>
+        </svg>
+        <span>添加节点</span>
+      </button>
+      <button class="grid-btn" :class="{ active: canvasTool === 'line' }" @click="$emit('setDrawTool', 'line')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="5" cy="19" r="2"/>
+          <circle cx="19" cy="5" r="2"/>
+          <line x1="7" y1="17" x2="17" y2="7"/>
+        </svg>
+        <span>连接节点</span>
+      </button>
+    </div>
 
     <div class="panel-divider"></div>
 
@@ -93,14 +116,15 @@ import PanelSection from './PanelSection.vue'
 defineProps<{
   isAnalyzing: boolean
   modelValue: string
-  currentTool: string
+  activeTool: string
+  canvasTool: string
   bgOpacity: number
   currentColor: string
   detectionTypes: Array<{ value: string; icon: string; label: string; desc: string }>
   presetColors: string[]
 }>()
 
-defineEmits(['autoAnalyze', 'update:modelValue', 'setTool', 'update:bgOpacity', 'update:currentColor', 'clearAnalysis'])
+defineEmits(['autoAnalyze', 'update:modelValue', 'setTool', 'setDrawTool', 'update:bgOpacity', 'update:currentColor', 'clearAnalysis'])
 
 const shortcuts = [
   { keys: ['滚轮'], label: '缩放' },
@@ -253,4 +277,19 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
 .panel-divider {
   height: 1px; background: rgba(255,255,255,0.06); margin: 16px 0;
 }
+
+/* 工具网格 */
+.tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 8px; background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;
+  color: #64748b; cursor: pointer; transition: all 0.15s;
+}
+.grid-btn:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; border-color: rgba(255,255,255,0.1); }
+.grid-btn.active {
+  background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2));
+  color: #a5b4fc; border-color: rgba(99,102,241,0.4);
+}
+.grid-btn span { font-size: 11px; font-weight: 500; }
 </style>
