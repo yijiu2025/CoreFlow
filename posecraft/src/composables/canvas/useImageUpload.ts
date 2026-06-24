@@ -253,9 +253,21 @@ export function useImageUpload(
     fCanvas.value.renderAll(); bgImageUploaded.value = true; saveState()
   }
 
+  /** 更新背景透明度 */
+  const updateBgOpacity = (opacity: number) => {
+    bgOpacity.value = opacity
+    if (!fCanvas.value) return
+    const bg = fCanvas.value.backgroundImage
+    if (bg) {
+      bg.set({ opacity: opacity / 100 })
+      fCanvas.value.renderAll()
+      saveState()
+    }
+  }
+
   return {
     isCropping, cropAspectRatio,
     triggerFileInput, handleImageUpload, startCropMode,
-    updateCropAspectRatio, confirmCrop, cancelCrop, setDeps
+    updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop, setDeps
   }
 }
