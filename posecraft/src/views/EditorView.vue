@@ -671,6 +671,9 @@ watch(zoomSlider, (newVal) => {
 // 当前缩放级别
 const currentZoom = ref(1)
 
+// 图片上传/裁剪 composable
+const { triggerFileInput, handleImageUpload, startCropMode, updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop } = useImageUpload(fCanvas, activeTool, bgImageUploaded, bgOpacity, zoomSlider, currentZoom, saveState, applyCanvasTransform)
+
 // 放大
 const zoomIn = () => {
   const zoom = Math.min(currentZoom.value * 1.2, 5)
@@ -1333,9 +1336,6 @@ const pasteClipboard = () => {
 const printInfo = (msg: string) => console.log(`ℹ️ ${msg}`)
 // eslint-disable-next-line no-console
 const printSuccess = (msg: string) => console.log(`✅ ${msg}`)
-
-// 图片上传/裁剪已迁移到 useImageUpload composable
-const { triggerFileInput, handleImageUpload, startCropMode, updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop } = useImageUpload(fCanvas, activeTool, bgImageUploaded, bgOpacity, zoomSlider, currentZoom, saveState, applyCanvasTransform)
 
 // ─── Image Upload ──────────────────────────────────────────
 
