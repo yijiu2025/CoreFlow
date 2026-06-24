@@ -238,11 +238,22 @@
         <ShapesPanel v-show="activeTool === 'shapes'"
           :activeTool="activeTool"
           :canvasTool="canvasTool"
+          :strokeWidth="strokeWidth"
+          :fillColor="fillColor"
+          :noFill="noFill"
+          :lineStyle="lineStyle"
+          :shapeOpacity="shapeOpacity"
+          :presetColors="presetColors"
           @addShape="addShape"
           @drawReference="drawReference"
           @deleteGuides="deleteGuides"
           @clearCanvas="clearCanvas"
           @setDrawTool="setDrawTool"
+          @update:strokeWidth="strokeWidth = $event"
+          @update:fillColor="fillColor = $event"
+          @update:noFill="noFill = $event"
+          @update:lineStyle="lineStyle = $event"
+          @update:shapeOpacity="shapeOpacity = $event"
         />
 
         <TextPanel v-show="activeTool === 'text'"
@@ -352,6 +363,13 @@ const brushSize = ref(8)
 const brushFeather = ref(0)
 const textFontSize = ref(24)
 const pathBlur = ref(0) // 选中路径的羽化值
+
+// 形状样式状态
+const strokeWidth = ref(3)
+const fillColor = ref('#6366f1')
+const noFill = ref(true) // 默认无填充
+const lineStyle = ref('solid') // solid | dashed | dotted
+const shapeOpacity = ref(100)
 let startPoint: any = null
 let resizeObserver: any = null
 let spacePressed = false
@@ -786,21 +804,46 @@ const handleMouseDown = (opt: any) => {
       currentLine = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], { stroke: currentColor.value, strokeWidth: 3, selectable: false, evented: false, strokeLineCap: 'round', erasable: true })
       fCanvas.value.add(currentLine)
     }
-  } else if (tool === 'rect') {
-    // 矩形工具：点击空白处开始拖拽绘制
+  } else if (['rect', 'circle', 'triangle', 'star', 'polygon', 'arrow'].includes(tool)) {
+    // 形状工具：点击空白处开始拖拽绘制
     const target = fCanvas.value.findTarget(opt.e, false)
     if (!target) {
       isDrawingRect.value = true; startPoint = pointer
-      currentRect = new fabric.Rect({ left: pointer.x, top: pointer.y, width: 0, height: 0, fill: 'transparent', stroke: currentColor.value, strokeWidth: 3, selectable: false, evented: false, erasable: true })
-      fCanvas.value.add(currentRect)
-    }
-  } else if (tool === 'circle') {
-    // 圆形工具：点击空白处开始拖拽绘制
-    const target = fCanvas.value.findTarget(opt.e, false)
-    if (!target) {
-      isDrawingRect.value = true; startPoint = pointer
-      currentRect = new fabric.Ellipse({ left: pointer.x, top: pointer.y, rx: 0, ry: 0, fill: 'transparent', stroke: currentColor.value, strokeWidth: 3, selectable: false, evented: false, erasable: true })
-      fCanvas.value.add(currentRect)
+      const baseStyle = {
+        left: pointer.x, top: pointer.y,
+        stroke: currentColor.value,
+        strokeWidth: strokeWidth.value,
+        fill: noFill.value ? 'transparent' : fillColor.value,
+        selectable: false, evented: false, erasable: true,
+        opacity: shapeOpacity.value / 100,
+        strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
+      }
+      if (tool === 'rect') {
+        currentRect = new fabric.Rect({ ...baseStyle, width: 0, height: 0 })
+      } else if (tool === 'circle') {
+        currentRect = new fabric.Ellipse({ ...baseStyle, rx: 0, ry: 0 })
+      } else if (tool === 'triangle') {
+        currentRect = new fabric.Triangle({ ...baseStyle, width: 0, height: 0 })
+      } else if (tool === 'star') {
+        // 星形：先创建，后续在 mousemove 中更新大小
+        currentRect = createStar(pointer.x, pointer.y, 5, 0, 0, baseStyle)
+        currentRect._isStar = true
+        currentRect._starPoints = 5
+      } else if (tool === 'polygon') {
+        // 六边形
+        currentRect = createPolygon(pointer.x, pointer.y, 6, 0, baseStyle)
+        currentRect._sides = 6
+      } else if (tool === 'arrow') {
+        isDrawingRect.value = false // 箭头使用线条模式
+        isDrawingLine.value = true
+        currentLine = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
+          stroke: currentColor.value, strokeWidth: strokeWidth.value,
+          selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
+          strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
+        })
+        fCanvas.value.add(currentLine)
+      }
+      if (currentRect) fCanvas.value.add(currentRect)
     }
   } else if (tool === 'addNode') {
     // 添加节点工具：点击空白处添加新节点
@@ -921,7 +964,7 @@ const handleMouseMove = (opt: any) => {
   }
   if (isDrawingLine.value && currentLine) { currentLine.set({ x2: pointer.x, y2: pointer.y }); fCanvas.value.renderAll() }
   if (isDrawingCrop.value && cropRect) { const l = Math.min(startPoint.x, pointer.x), t = Math.min(startPoint.y, pointer.y); cropRect.set({ left: l, top: t, width: Math.abs(startPoint.x - pointer.x), height: Math.abs(startPoint.y - pointer.y) }); fCanvas.value.renderAll() }
-  // 矩形/圆形拖拽绘制
+  // 形状拖拽绘制
   if (isDrawingRect.value && currentRect && startPoint) {
     let w = Math.abs(startPoint.x - pointer.x)
     let h = Math.abs(startPoint.y - pointer.y)
@@ -932,8 +975,35 @@ const handleMouseMove = (opt: any) => {
     }
     const l = Math.min(startPoint.x, pointer.x)
     const t = Math.min(startPoint.y, pointer.y)
+    const cx = l + w / 2
+    const cy = t + h / 2
+
     if (currentRect.type === 'ellipse') {
       currentRect.set({ left: l, top: t, rx: w / 2, ry: h / 2 })
+    } else if (currentRect.type === 'triangle') {
+      currentRect.set({ left: l, top: t, width: w, height: h })
+    } else if (currentRect.type === 'polygon') {
+      // 多边形/星形：重新生成顶点
+      const sides = currentRect._sides || 6
+      const radius = Math.min(w, h) / 2
+      const pts: any[] = []
+      for (let i = 0; i < sides; i++) {
+        const angle = (Math.PI * 2 / sides) * i - Math.PI / 2
+        pts.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) })
+      }
+      currentRect.set({ points: pts, left: cx, top: cy })
+    } else if (currentRect._isStar) {
+      // 星形
+      const points = currentRect._starPoints || 5
+      const outerR = Math.min(w, h) / 2
+      const innerR = outerR * 0.4
+      const pts: any[] = []
+      for (let i = 0; i < points * 2; i++) {
+        const r = i % 2 === 0 ? outerR : innerR
+        const angle = (Math.PI / points) * i - Math.PI / 2
+        pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+      }
+      currentRect.set({ points: pts, left: cx, top: cy })
     } else {
       currentRect.set({ left: l, top: t, width: w, height: h })
     }
@@ -965,6 +1035,10 @@ const handleMouseUp = () => {
           connectNodes(startNode, endTarget)
         }
         startNode = null
+      } else if (canvasTool.value === 'arrow') {
+        // 箭头工具：添加箭头头部
+        addArrowHead(currentLine)
+        currentLine.set({ id: uuidv4() }); currentLine.setCoords(); saveState()
       } else {
         currentLine.set({ id: uuidv4() }); currentLine.setCoords(); saveState()
         startNode = null
@@ -1422,6 +1496,68 @@ const updatePathBlur = (blur: number) => {
   saveState()
 }
 
+/**
+ * 创建星形
+ * @param cx 中心 x
+ * @param cy 中心 y
+ * @param points 角数
+ * @param outerR 外半径
+ * @param innerR 内半径
+ * @param style 样式
+ */
+const createStar = (cx: number, cy: number, points: number, outerR: number, innerR: number, style: any) => {
+  const pts: any[] = []
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR
+    const angle = (Math.PI / points) * i - Math.PI / 2
+    pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+  }
+  return new fabric.Polygon(pts, { ...style, originX: 'center', originY: 'center' })
+}
+
+/**
+ * 创建正多边形
+ * @param cx 中心 x
+ * @param cy 中心 y
+ * @param sides 边数
+ * @param radius 半径
+ * @param style 样式
+ */
+const createPolygon = (cx: number, cy: number, sides: number, radius: number, style: any) => {
+  const pts: any[] = []
+  for (let i = 0; i < sides; i++) {
+    const angle = (Math.PI * 2 / sides) * i - Math.PI / 2
+    pts.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) })
+  }
+  return new fabric.Polygon(pts, { ...style, originX: 'center', originY: 'center' })
+}
+
+/**
+ * 为线条添加箭头头部
+ * @param line 线条对象
+ */
+const addArrowHead = (line: any) => {
+  if (!fCanvas.value || !line) return
+  const x1 = line.x1, y1 = line.y1, x2 = line.x2, y2 = line.y2
+  const angle = Math.atan2(y2 - y1, x2 - x1)
+  const headLen = 15
+  const headAngle = Math.PI / 6
+
+  const arrowHead = new fabric.Polygon([
+    { x: x2, y: y2 },
+    { x: x2 - headLen * Math.cos(angle - headAngle), y: y2 - headLen * Math.sin(angle - headAngle) },
+    { x: x2 - headLen * Math.cos(angle + headAngle), y: y2 - headLen * Math.sin(angle + headAngle) }
+  ], {
+    fill: line.stroke,
+    stroke: null,
+    selectable: false,
+    evented: false,
+    erasable: true,
+    isAutoGenerated: true
+  })
+  fCanvas.value.add(arrowHead)
+}
+
 const addShape = (type: string) => {
   if (!fCanvas.value) return
   const c = fCanvas.value.getCenter()
@@ -1701,8 +1837,8 @@ const handleImageUpload = (e: Event) => {
     fabric.Image.fromURL(ev.target?.result, (img: any) => {
       const cw = canvasContainer.value?.clientWidth || 800
       const ch = canvasContainer.value?.clientHeight || 600
-      // 计算适配比例，留出少量边距
-      const scale = Math.min(cw / img.width, ch / img.height) * 0.95
+      // 完全适配容器，不留边距
+      const scale = Math.min(cw / img.width, ch / img.height)
       const fitW = img.width * scale
       const fitH = img.height * scale
 
