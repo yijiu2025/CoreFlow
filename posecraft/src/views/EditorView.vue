@@ -991,25 +991,29 @@ const handleMouseMove = (opt: any) => {
     } else if (currentRect.type === 'triangle') {
       currentRect.set({ left: l, top: t, width: w, height: h })
     } else if (currentRect.type === 'polygon' && !currentRect._isStar) {
-      // 多边形：重新生成顶点（相对坐标）
+      // 多边形：使用椭圆半径生成顶点，支持非正多边形
       const sides = currentRect._sides || 6
-      const radius = Math.min(w, h) / 2
+      const rx = w / 2
+      const ry = h / 2
       const pts: any[] = []
       for (let i = 0; i < sides; i++) {
         const angle = (Math.PI * 2 / sides) * i - Math.PI / 2
-        pts.push({ x: radius * Math.cos(angle), y: radius * Math.sin(angle) })
+        pts.push({ x: rx * Math.cos(angle), y: ry * Math.sin(angle) })
       }
       currentRect.set({ points: pts, left: cx, top: cy })
     } else if (currentRect._isStar) {
-      // 星形：重新生成顶点（相对坐标）
+      // 星形：使用椭圆半径生成顶点，支持非正星形
       const points = currentRect._starPoints || 5
-      const outerR = Math.min(w, h) / 2
-      const innerR = outerR * 0.4
+      const outerRx = w / 2
+      const outerRy = h / 2
+      const innerRx = outerRx * 0.4
+      const innerRy = outerRy * 0.4
       const pts: any[] = []
       for (let i = 0; i < points * 2; i++) {
-        const r = i % 2 === 0 ? outerR : innerR
+        const rx = i % 2 === 0 ? outerRx : innerRx
+        const ry = i % 2 === 0 ? outerRy : innerRy
         const angle = (Math.PI / points) * i - Math.PI / 2
-        pts.push({ x: r * Math.cos(angle), y: r * Math.sin(angle) })
+        pts.push({ x: rx * Math.cos(angle), y: ry * Math.sin(angle) })
       }
       currentRect.set({ points: pts, left: cx, top: cy })
     } else {
@@ -1525,15 +1529,15 @@ const updatePathBlur = (blur: number) => {
  */
 const createStar = (cx: number, cy: number, points: number, outerR: number, innerR: number, style: any) => {
   // 确保最小半径，避免无法显示
-  const oR = Math.max(outerR, 1)
+  const oR = Math.max(outerR, 2)
   const iR = Math.max(innerR, oR * 0.4)
   const pts: any[] = []
   for (let i = 0; i < points * 2; i++) {
     const r = i % 2 === 0 ? oR : iR
     const angle = (Math.PI / points) * i - Math.PI / 2
-    pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+    pts.push({ x: r * Math.cos(angle), y: r * Math.sin(angle) })
   }
-  return new fabric.Polygon(pts, { ...style })
+  return new fabric.Polygon(pts, { ...style, left: cx, top: cy })
 }
 
 /**
@@ -1546,7 +1550,7 @@ const createStar = (cx: number, cy: number, points: number, outerR: number, inne
  */
 const createPolygon = (cx: number, cy: number, sides: number, radius: number, style: any) => {
   // 确保最小半径，避免无法显示
-  const r = Math.max(radius, 1)
+  const r = Math.max(radius, 2)
   const pts: any[] = []
   for (let i = 0; i < sides; i++) {
     const angle = (Math.PI * 2 / sides) * i - Math.PI / 2
