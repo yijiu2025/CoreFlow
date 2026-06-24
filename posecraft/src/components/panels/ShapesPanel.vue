@@ -117,13 +117,6 @@
         <span>{{ guide.label }}</span>
       </button>
     </div>
-    <div class="guide-color-row">
-      <label class="color-label">参考线颜色</label>
-      <div class="color-swatch-sm">
-        <input type="color" :value="guideColor" @input="$emit('update:guideColor', ($event.target as HTMLInputElement).value)" id="guide-color-picker" />
-        <label for="guide-color-picker" class="swatch-sm" :style="{ background: guideColor }"></label>
-      </div>
-    </div>
   </PanelSection>
 </template>
 
@@ -140,10 +133,9 @@ defineProps<{
   shapeOpacity?: number
   presetColors?: string[]
   activeGuides?: string[]
-  guideColor?: string
 }>()
 
-defineEmits(['setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity', 'update:guideColor'])
+defineEmits(['setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity'])
 
 const guides = [
   { type: 'thirds', icon: '▦', label: '三分法' },
