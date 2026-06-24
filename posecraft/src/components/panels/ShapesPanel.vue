@@ -119,7 +119,7 @@
     <!-- 构图参考线 -->
     <div class="section-label">构图参考线</div>
     <div class="tool-grid guide-grid">
-      <button v-for="guide in guides" :key="guide.type" class="grid-btn" @click="$emit('drawReference', guide.type)">
+      <button v-for="guide in guides" :key="guide.type" class="grid-btn" :class="{ active: activeGuide === guide.type }" @click="$emit('toggleGuide', guide.type)">
         <span class="guide-icon">{{ guide.icon }}</span>
         <span>{{ guide.label }}</span>
       </button>
@@ -158,9 +158,10 @@ defineProps<{
   lineStyle?: string
   shapeOpacity?: number
   presetColors?: string[]
+  activeGuide?: string | null
 }>()
 
-defineEmits(['addShape', 'drawReference', 'deleteGuides', 'clearCanvas', 'setDrawTool', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity'])
+defineEmits(['addShape', 'drawReference', 'deleteGuides', 'clearCanvas', 'setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity'])
 
 const guides = [
   { type: 'thirds', icon: '▦', label: '三分法' },

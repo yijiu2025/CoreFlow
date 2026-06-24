@@ -252,8 +252,10 @@
           :lineStyle="lineStyle"
           :shapeOpacity="shapeOpacity"
           :presetColors="presetColors"
+          :activeGuide="activeGuide"
           @addShape="addShape"
           @drawReference="drawReference"
+          @toggleGuide="toggleGuide"
           @deleteGuides="deleteGuides"
           @clearCanvas="clearCanvas"
           @setDrawTool="setDrawTool"
@@ -399,6 +401,9 @@ const fillColor = ref('#6366f1')
 const noFill = ref(true) // 默认无填充
 const lineStyle = ref('solid') // solid | dashed | dotted
 const shapeOpacity = ref(100)
+
+// 构图参考线状态
+const activeGuide = ref<string | null>(null)
 
 // 图片裁剪状态
 const isCropping = ref(false)
@@ -1767,6 +1772,24 @@ const getDrawArea = () => {
  * 绘制参考线
  * @param type - 参考线类型: thirds, golden, diagonal, center, phi, all
  */
+/**
+ * 切换构图参考线显示/隐藏
+ * @param type 参考线类型
+ */
+const toggleGuide = (type: string) => {
+  // 如果点击已激活的参考线，则关闭
+  if (activeGuide.value === type) {
+    activeGuide.value = null
+    deleteGuides()
+  } else {
+    // 先清除旧参考线
+    deleteGuides()
+    // 激活新参考线
+    activeGuide.value = type
+    drawReference(type)
+  }
+}
+
 const drawReference = (type: string) => {
   const { w, h, l, t } = getDrawArea()
   const style: any = { stroke: currentColor.value, strokeWidth: 1, selectable: false, evented: false, opacity: 0.5, isGuide: true }
