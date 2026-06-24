@@ -324,6 +324,12 @@ import TextPanel from '@/components/panels/TextPanel.vue'
 import HelpModal from '@/components/modals/HelpModal.vue'
 import { v4 as uuidv4 } from 'uuid'
 import * as fabricLib from 'fabric'
+// Composables
+import { useHistory } from '@/composables/canvas/useHistory'
+import { useTools } from '@/composables/canvas/useTools'
+import { useShapes } from '@/composables/canvas/useShapes'
+import { useReferenceLines } from '@/composables/canvas/useReferenceLines'
+import { useSkeletonNodes } from '@/composables/canvas/useSkeletonNodes'
 import * as tf from '@tensorflow/tfjs-core'
 import '@tensorflow/tfjs-backend-webgl'
 import * as poseDetection from '@tensorflow-models/pose-detection'
@@ -401,6 +407,13 @@ const currentColor = ref('#6366f1') // 描边颜色，与 fillColor 同步
 const noFill = ref(true) // 默认无填充
 const lineStyle = ref('solid') // solid | dashed | dotted
 const shapeOpacity = ref(100)
+
+// 初始化 composables
+const history = useHistory(fCanvas, { value: isStateSavingLocked }, null, null)
+const tools = useTools(fCanvas, activeTool, canvasTool)
+const shapes = useShapes(fCanvas, currentColor, fillColor)
+const guides = useReferenceLines(fCanvas, fillColor, strokeWidth, history.saveState)
+const skeleton = useSkeletonNodes(fCanvas, currentColor, history.saveState)
 
 // 同步 fillColor 和 currentColor
 watch(fillColor, (v) => { currentColor.value = v })
