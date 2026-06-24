@@ -9,7 +9,7 @@
     <!-- 基础形状 -->
     <div class="section-label">基础形状</div>
     <div class="tool-grid">
-      <button class="grid-btn" :class="{ active: currentTool === 'line' }" @click="$emit('setTool', 'line')">
+      <button class="grid-btn" :class="{ active: canvasTool === 'line' }" @click="$emit('setDrawTool', 'line')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <line x1="5" y1="19" x2="19" y2="5"/>
         </svg>
@@ -34,7 +34,7 @@
     <!-- 节点工具 -->
     <div class="section-label">节点工具</div>
     <div class="tool-grid">
-      <button class="grid-btn" :class="{ active: currentTool === 'addNode' }" @click="$emit('setTool', 'addNode')">
+      <button class="grid-btn" :class="{ active: canvasTool === 'addNode' }" @click="$emit('setDrawTool', 'addNode')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="8" x2="12" y2="16"/>
@@ -42,7 +42,7 @@
         </svg>
         <span>添加节点</span>
       </button>
-      <button class="grid-btn" :class="{ active: currentTool === 'line' }" @click="$emit('setTool', 'line')">
+      <button class="grid-btn" :class="{ active: canvasTool === 'line' }" @click="$emit('setDrawTool', 'line')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <circle cx="5" cy="19" r="2"/>
           <circle cx="19" cy="5" r="2"/>
@@ -88,10 +88,11 @@
 import PanelSection from './PanelSection.vue'
 
 defineProps<{
-  currentTool?: string
+  activeTool?: string
+  canvasTool?: string
 }>()
 
-defineEmits(['addShape', 'drawReference', 'deleteGuides', 'clearCanvas', 'setTool'])
+defineEmits(['addShape', 'drawReference', 'deleteGuides', 'clearCanvas', 'setDrawTool'])
 
 const guides = [
   { type: 'thirds', icon: '▦', label: '三分法' },

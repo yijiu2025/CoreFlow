@@ -235,11 +235,12 @@
 
         <ShapesPanel v-show="activeTool === 'shapes'"
           :activeTool="activeTool"
+          :canvasTool="canvasTool"
           @addShape="addShape"
           @drawReference="drawReference"
           @deleteGuides="deleteGuides"
           @clearCanvas="clearCanvas"
-          @setTool="setTool"
+          @setDrawTool="setDrawTool"
         />
 
         <TextPanel v-show="activeTool === 'text'"
@@ -998,6 +999,88 @@ const selectHandTool = () => {
   setTool('hand')
 }
 
+/**
+ * 设置绘图子工具（只切换 canvasTool，不切换 activeTool）
+ * 用于在 ShapesPanel 等面板内选择绘图工具
+ */
+const setDrawTool = (tool: string) => {
+  canvasTool.value = tool
+  // 切换工具时隐藏橡皮擦光标
+  if (tool !== 'eraser' && eraserCursor) {
+    eraserCursor.set({ visible: false })
+  }
+
+  if (fCanvas.value) {
+    // 选择模式：启用所有对象可选
+    if (tool === 'select') {
+      fCanvas.value.selection = true
+      fCanvas.value.defaultCursor = 'default'
+      fCanvas.value.hoverCursor = 'move'
+      fCanvas.value.isDrawingMode = false
+      fCanvas.value.forEachObject((obj: any) => {
+        if (obj.isInkLayer || obj.isEraserCursor) return
+        obj.selectable = true
+        obj.evented = true
+      })
+      fCanvas.value.renderAll()
+      return
+    }
+
+    // 绘图子工具需要与骨架节点交互
+    const isNodeTool = tool === 'addNode' || tool === 'line'
+
+    const setEvented = (evented: boolean) => {
+      fCanvas.value.forEachObject((obj: any) => {
+        if (obj.isInkLayer || obj.isEraserCursor) return
+        if (isNodeTool && obj.isSkeleton) {
+          obj.selectable = false
+          obj.evented = true
+        } else {
+          obj.selectable = false
+          obj.evented = evented
+        }
+      })
+    }
+
+    // 取消选中
+    fCanvas.value.discardActiveObject()
+    fCanvas.value.selection = false
+    setEvented(false)
+
+    // 设置光标
+    if (tool === 'line' || tool === 'addNode') {
+      fCanvas.value.defaultCursor = 'crosshair'
+      fCanvas.value.hoverCursor = 'crosshair'
+    } else if (tool === 'hand') {
+      fCanvas.value.defaultCursor = 'grab'
+      fCanvas.value.hoverCursor = 'grab'
+    } else {
+      fCanvas.value.defaultCursor = 'default'
+      fCanvas.value.hoverCursor = 'default'
+    }
+
+    // 画笔模式
+    fCanvas.value.isDrawingMode = (tool === 'draw')
+    if (tool === 'draw') {
+      fCanvas.value.freeDrawingBrush = new fabric.PencilBrush(fCanvas.value)
+      fCanvas.value.freeDrawingBrush.width = brushSize.value
+      fCanvas.value.freeDrawingBrush.color = currentColor.value
+      if (brushFeather.value > 0) {
+        fCanvas.value.freeDrawingBrush.shadow = new fabric.Shadow({
+          color: currentColor.value,
+          blur: brushFeather.value,
+          offsetX: 0,
+          offsetY: 0
+        })
+      } else {
+        fCanvas.value.freeDrawingBrush.shadow = null
+      }
+    }
+
+    fCanvas.value.renderAll()
+  }
+}
+
 // ─── Tools ─────────────────────────────────────────────────
 const setTool = (tool: string) => {
   canvasTool.value = tool
@@ -1292,8 +1375,8 @@ const addShape = (type: string) => {
   fCanvas.value.setActiveObject(shape)
   fCanvas.value.renderAll()
   saveState()
-  // 添加形状后切换到选择工具，显示属性面板
-  setTool('select')
+  // 切换到选择工具，让用户可以修改形状属性
+  setDrawTool('select')
 }
 
 // 添加文字
