@@ -280,7 +280,7 @@
           @fitToScreen="fitToScreen"
         />
 
-        <ImagePanel v-show="activeTool === 'image' && bgImageUploaded"
+        <ImagePanel v-show="activeTool === 'image' && bgImageUploaded && !isCropping"
           :bgOpacity="bgOpacity"
           :currentColor="currentColor"
           :cropAspectRatio="cropAspectRatio"
@@ -1957,58 +1957,59 @@ const startCropMode = () => {
   const bg = fCanvas.value.backgroundImage
   if (!bg) return
 
-  // 将背景图转为普通对象
-  const cw = fCanvas.value.width
-  const ch = fCanvas.value.height
+  // 保存画布尺寸
+  const canvasWidth = fCanvas.value.width
+  const canvasHeight = fCanvas.value.height
 
-  // 创建临时图片对象
-  const imgElement = bg.getElement()
-  const tempImg = new fabric.Image(imgElement, {
-    originX: 'center', originY: 'center',
-    left: bg.left, top: bg.top,
-    scaleX: bg.scaleX, scaleY: bg.scaleY,
-    selectable: false, evented: false
+  // 克隆背景图对象
+  bg.clone((clonedImg: any) => {
+    // 设置克隆图片的位置和属性
+    clonedImg.set({
+      selectable: false, evented: false,
+      isCropImage: true
+    })
+
+    // 清空背景图和裁剪路径
+    fCanvas.value.backgroundImage = null
+    fCanvas.value.clipPath = null
+
+    // 添加克隆图片到画布
+    fCanvas.value.add(clonedImg)
+    uploadedImage = clonedImg
+
+    // 创建裁剪框
+    const margin = 20
+    cropBox = new fabric.Rect({
+      left: margin, top: margin,
+      width: canvasWidth - margin * 2, height: canvasHeight - margin * 2,
+      fill: 'transparent',
+      stroke: '#6366f1',
+      strokeWidth: 2,
+      strokeDashArray: [8, 4],
+      selectable: true,
+      evented: true,
+      hasControls: true,
+      hasBorders: true,
+      cornerColor: '#6366f1',
+      cornerSize: 10,
+      transparentCorners: false,
+      borderColor: '#6366f1',
+      isCropBox: true
+    })
+    fCanvas.value.add(cropBox)
+    fCanvas.value.setActiveObject(cropBox)
+
+    // 监听裁剪框事件
+    cropBox.on('moving', onCropBoxMoving)
+    cropBox.on('scaling', onCropBoxScaling)
+
+    // 创建遮罩
+    updateCropOverlay(canvasWidth, canvasHeight)
+
+    // 进入裁剪模式
+    isCropping.value = true
+    fCanvas.value.renderAll()
   })
-
-  // 清空背景图
-  fCanvas.value.backgroundImage = null
-  fCanvas.value.clipPath = null
-  fCanvas.value.add(tempImg)
-  uploadedImage = tempImg
-
-  // 创建裁剪框
-  const margin = 20
-  cropBox = new fabric.Rect({
-    left: margin, top: margin,
-    width: cw - margin * 2, height: ch - margin * 2,
-    fill: 'transparent',
-    stroke: '#6366f1',
-    strokeWidth: 2,
-    strokeDashArray: [8, 4],
-    selectable: true,
-    evented: true,
-    hasControls: true,
-    hasBorders: true,
-    cornerColor: '#6366f1',
-    cornerSize: 10,
-    transparentCorners: false,
-    borderColor: '#6366f1',
-    isCropBox: true
-  })
-  fCanvas.value.add(cropBox)
-  fCanvas.value.setActiveObject(cropBox)
-
-  // 监听裁剪框事件
-  cropBox.on('moving', onCropBoxMoving)
-  cropBox.on('scaling', onCropBoxScaling)
-
-  // 创建遮罩
-  updateCropOverlay(cw, ch)
-
-  // 进入裁剪模式
-  isCropping.value = true
-  bgImageUploaded.value = false
-  fCanvas.value.renderAll()
 }
 
 /**
