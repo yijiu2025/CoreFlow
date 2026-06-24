@@ -98,6 +98,11 @@ const shortcuts = [
   color: #64748b; cursor: pointer; transition: all 0.15s;
 }
 .grid-btn:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; border-color: rgba(255,255,255,0.1); }
+.grid-btn.active {
+  background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2));
+  color: #a5b4fc; border-color: rgba(99,102,241,0.4);
+  box-shadow: 0 0 12px rgba(99,102,241,0.15);
+}
 .grid-btn span { font-size: 11px; font-weight: 500; }
 
 .section-label {
