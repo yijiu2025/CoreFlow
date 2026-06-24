@@ -1,6 +1,8 @@
 import { ref } from 'vue'
+
+import * as fabricLib from 'fabric'
+const fabric = (fabricLib as any).fabric || (fabricLib as any).default || fabricLib
 import type { Ref } from 'vue'
-import * as fabric from 'fabric'
 
 /**
  * 构图参考线管理

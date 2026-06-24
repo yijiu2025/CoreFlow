@@ -1,6 +1,8 @@
 import { ref, onMounted, onUnmounted } from 'vue'
+
+import * as fabricLib from 'fabric'
+const fabric = (fabricLib as any).fabric || (fabricLib as any).default || fabricLib
 import type { Ref } from 'vue'
-import * as fabric from 'fabric'
 
 /**
  * 画布初始化和管理

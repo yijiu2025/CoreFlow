@@ -1,4 +1,7 @@
 import { ref } from 'vue'
+
+import * as fabricLib from 'fabric'
+const fabric = (fabricLib as any).fabric || (fabricLib as any).default || fabricLib
 import type { Ref } from 'vue'
 
 /**
