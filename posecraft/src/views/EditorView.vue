@@ -1025,7 +1025,7 @@ const handleMouseMove = (opt: any) => {
     } else if (currentRect.type === 'triangle') {
       currentRect.set({ left: l, top: t, width: w, height: h })
     } else if (currentRect.type === 'polygon' && !currentRect._isStar) {
-      // 多边形：以鼠标按下点 startPoint 为中心向外展开
+      // 多边形：以鼠标按下点 startPoint 为绝对中心向外展开
       const sides = currentRect._sides || 6
       let rx = Math.abs(pointer.x - startPoint.x)
       let ry = Math.abs(pointer.y - startPoint.y)
@@ -1036,26 +1036,32 @@ const handleMouseMove = (opt: any) => {
         rx = r; ry = r
       }
 
-      const pw = rx * 2
-      const ph = ry * 2
-
       const pts: any[] = []
       for (let i = 0; i < sides; i++) {
         const angle = (Math.PI * 2 / sides) * i - Math.PI / 2
         pts.push({ x: rx * Math.cos(angle), y: ry * Math.sin(angle) })
       }
 
+      // 计算真实包围盒
+      let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y
+      pts.forEach(p => {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
+      })
+
       currentRect.set({
         points: pts,
-        width: pw,
-        height: ph,
-        pathOffset: { x: 0, y: 0 },
-        left: startPoint.x,
-        top: startPoint.y,
+        width: maxX - minX,
+        height: maxY - minY,
+        pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
+        left: startPoint.x + minX,
+        top: startPoint.y + minY,
+        originX: 'left',
+        originY: 'top',
         dirty: true
       })
     } else if (currentRect._isStar) {
-      // 星形：以鼠标按下点 startPoint 为中心向外展开
+      // 星形：以鼠标按下点 startPoint 为绝对中心向外展开
       const points = currentRect._starPoints || 5
       let rx = Math.abs(pointer.x - startPoint.x)
       let ry = Math.abs(pointer.y - startPoint.y)
@@ -1066,8 +1072,6 @@ const handleMouseMove = (opt: any) => {
         rx = r; ry = r
       }
 
-      const pw = rx * 2
-      const ph = ry * 2
       const innerRx = rx * 0.4
       const innerRy = ry * 0.4
 
@@ -1079,13 +1083,22 @@ const handleMouseMove = (opt: any) => {
         pts.push({ x: rX * Math.cos(angle), y: rY * Math.sin(angle) })
       }
 
+      // 计算真实包围盒
+      let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y
+      pts.forEach(p => {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
+      })
+
       currentRect.set({
         points: pts,
-        width: pw,
-        height: ph,
-        pathOffset: { x: 0, y: 0 },
-        left: startPoint.x,
-        top: startPoint.y,
+        width: maxX - minX,
+        height: maxY - minY,
+        pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
+        left: startPoint.x + minX,
+        top: startPoint.y + minY,
+        originX: 'left',
+        originY: 'top',
         dirty: true
       })
     } else {
