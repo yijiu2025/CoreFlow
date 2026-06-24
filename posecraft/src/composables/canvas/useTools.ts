@@ -16,12 +16,12 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
   let currentColor: Ref<string> | null = null
 
   /** 设置外部依赖 */
-  const setDeps = (deps: { eraserCursor?: any; eraserSize?: Ref<number>; brushSize?: Ref<number>; brushFeather?: Ref<number>; currentColor?: Ref<string> }) => {
-    eraserCursor = deps.eraserCursor
-    eraserSize = deps.eraserSize
-    brushSize = deps.brushSize
-    brushFeather = deps.brushFeather
-    currentColor = deps.currentColor
+  const setDeps = (deps: { eraserCursor?: any; eraserSize?: Ref<number> | null; brushSize?: Ref<number> | null; brushFeather?: Ref<number> | null; currentColor?: Ref<string> | null }) => {
+    eraserCursor = deps.eraserCursor ?? null
+    eraserSize = deps.eraserSize ?? null
+    brushSize = deps.brushSize ?? null
+    brushFeather = deps.brushFeather ?? null
+    currentColor = deps.currentColor ?? null
   }
 
   /** Tab 面板切换 */

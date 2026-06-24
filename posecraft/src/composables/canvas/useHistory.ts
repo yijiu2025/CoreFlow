@@ -39,7 +39,7 @@ export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: bool
       if (img && inkCtx && inkCanvas) {
         inkCtx.save()
         inkCtx.globalCompositeOperation = 'copy'
-        inkCtx.drawImage(img, 0, 0)
+        inkCtx.drawImage(img as HTMLImageElement, 0, 0)
         inkCtx.restore()
       }
       const inkLayer = fCanvas.value.getObjects().find((o: any) => o.isInkLayer)
