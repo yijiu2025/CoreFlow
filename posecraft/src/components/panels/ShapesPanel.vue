@@ -8,49 +8,42 @@
 
     <!-- 基础形状 -->
     <div class="section-label">基础形状</div>
-    <div class="tool-grid">
-      <button class="grid-btn" :class="{ active: canvasTool === 'line' }" @click="$emit('setDrawTool', 'line')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <div class="shape-grid">
+      <button class="shape-btn" :class="{ active: canvasTool === 'line' }" @click="$emit('setDrawTool', 'line')" title="直线">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <line x1="5" y1="19" x2="19" y2="5"/>
         </svg>
-        <span>直线</span>
       </button>
-      <button class="grid-btn" :class="{ active: canvasTool === 'arrow' }" @click="$emit('setDrawTool', 'arrow')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <button class="shape-btn" :class="{ active: canvasTool === 'arrow' }" @click="$emit('setDrawTool', 'arrow')" title="箭头">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <line x1="5" y1="19" x2="19" y2="5"/>
           <polyline points="13 5 19 5 19 11"/>
         </svg>
-        <span>箭头</span>
       </button>
-      <button class="grid-btn" :class="{ active: canvasTool === 'rect' }" @click="$emit('setDrawTool', 'rect')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <button class="shape-btn" :class="{ active: canvasTool === 'rect' }" @click="$emit('setDrawTool', 'rect')" title="矩形">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
         </svg>
-        <span>矩形</span>
       </button>
-      <button class="grid-btn" :class="{ active: canvasTool === 'circle' }" @click="$emit('setDrawTool', 'circle')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <button class="shape-btn" :class="{ active: canvasTool === 'circle' }" @click="$emit('setDrawTool', 'circle')" title="圆形">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <circle cx="12" cy="12" r="10"/>
         </svg>
-        <span>圆形</span>
       </button>
-      <button class="grid-btn" :class="{ active: canvasTool === 'triangle' }" @click="$emit('setDrawTool', 'triangle')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <button class="shape-btn" :class="{ active: canvasTool === 'triangle' }" @click="$emit('setDrawTool', 'triangle')" title="三角形">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <polygon points="12 2 22 22 2 22"/>
         </svg>
-        <span>三角形</span>
       </button>
-      <button class="grid-btn" :class="{ active: canvasTool === 'star' }" @click="$emit('setDrawTool', 'star')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <button class="shape-btn" :class="{ active: canvasTool === 'star' }" @click="$emit('setDrawTool', 'star')" title="星形">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
         </svg>
-        <span>星形</span>
       </button>
-      <button class="grid-btn" :class="{ active: canvasTool === 'polygon' }" @click="$emit('setDrawTool', 'polygon')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <button class="shape-btn" :class="{ active: canvasTool === 'polygon' }" @click="$emit('setDrawTool', 'polygon')" title="六边形">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/>
         </svg>
-        <span>六边形</span>
       </button>
     </div>
     <div class="hint-text">按住 Ctrl 绘制正方形/正圆</div>
@@ -163,6 +156,19 @@ const shortcuts = [
 
 <style scoped>
 .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.shape-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.shape-btn {
+  display: flex; align-items: center; justify-content: center;
+  padding: 10px 8px; background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;
+  color: #64748b; cursor: pointer; transition: all 0.15s;
+}
+.shape-btn:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; border-color: rgba(255,255,255,0.1); }
+.shape-btn.active {
+  background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2));
+  color: #a5b4fc; border-color: rgba(99,102,241,0.4);
+  box-shadow: 0 0 12px rgba(99,102,241,0.15);
+}
 .guide-grid { grid-template-columns: repeat(3, 1fr); }
 .grid-btn {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
