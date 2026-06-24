@@ -56,10 +56,10 @@
 
     <!-- 构图参考线 -->
     <div class="section-label">构图参考线</div>
-    <div class="guide-grid">
-      <button v-for="guide in guides" :key="guide.type" class="guide-btn" @click="$emit('drawReference', guide.type)">
+    <div class="tool-grid">
+      <button v-for="guide in guides" :key="guide.type" class="grid-btn" @click="$emit('drawReference', guide.type)">
         <span class="guide-icon">{{ guide.icon }}</span>
-        <span class="guide-label">{{ guide.label }}</span>
+        <span>{{ guide.label }}</span>
       </button>
     </div>
 
@@ -132,16 +132,7 @@ const shortcuts = [
   height: 1px; background: rgba(255,255,255,0.06); margin: 16px 0;
 }
 
-.guide-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.guide-btn {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;
-  color: #94a3b8; cursor: pointer; transition: all 0.15s; font-size: 12px;
-}
-.guide-btn:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; border-color: rgba(255,255,255,0.1); }
 .guide-icon { font-size: 16px; }
-.guide-label { font-weight: 500; }
 
 .danger-btn {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
