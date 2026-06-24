@@ -1940,6 +1940,8 @@ const handleImageUpload = (e: Event) => {
 
       fCanvas.value.renderAll()
       bgImageUploaded.value = true
+      // 上传后跳转到图片编辑面板
+      activeTool.value = 'image'
       saveState()
     })
   }
