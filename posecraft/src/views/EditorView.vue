@@ -923,10 +923,15 @@ const handleMouseMove = (opt: any) => {
   if (isDrawingCrop.value && cropRect) { const l = Math.min(startPoint.x, pointer.x), t = Math.min(startPoint.y, pointer.y); cropRect.set({ left: l, top: t, width: Math.abs(startPoint.x - pointer.x), height: Math.abs(startPoint.y - pointer.y) }); fCanvas.value.renderAll() }
   // 矩形/圆形拖拽绘制
   if (isDrawingRect.value && currentRect && startPoint) {
+    let w = Math.abs(startPoint.x - pointer.x)
+    let h = Math.abs(startPoint.y - pointer.y)
+    // 按住 Ctrl 键：强制正方形/正圆
+    if (opt.e.ctrlKey || opt.e.metaKey) {
+      const size = Math.max(w, h)
+      w = size; h = size
+    }
     const l = Math.min(startPoint.x, pointer.x)
     const t = Math.min(startPoint.y, pointer.y)
-    const w = Math.abs(startPoint.x - pointer.x)
-    const h = Math.abs(startPoint.y - pointer.y)
     if (currentRect.type === 'ellipse') {
       currentRect.set({ left: l, top: t, rx: w / 2, ry: h / 2 })
     } else {

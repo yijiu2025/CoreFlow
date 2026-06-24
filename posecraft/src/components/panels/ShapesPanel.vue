@@ -28,6 +28,7 @@
         <span>圆形</span>
       </button>
     </div>
+    <div class="hint-text">按住 Ctrl 绘制正方形/正圆</div>
 
     <div class="panel-divider"></div>
 
@@ -115,6 +116,13 @@ const shortcuts = [
 }
 
 .guide-icon { font-size: 16px; }
+
+.hint-text {
+  font-size: 11px; color: #4a5568; text-align: center;
+  margin-top: 8px; padding: 4px 8px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 6px;
+}
 
 .danger-btn {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
