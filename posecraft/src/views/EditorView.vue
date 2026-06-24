@@ -1019,69 +1019,73 @@ const handleMouseMove = (opt: any) => {
     }
     const l = Math.min(startPoint.x, pointer.x)
     const t = Math.min(startPoint.y, pointer.y)
-    const cx = l + w / 2
-    const cy = t + h / 2
 
     if (currentRect.type === 'ellipse') {
       currentRect.set({ left: l, top: t, rx: w / 2, ry: h / 2 })
     } else if (currentRect.type === 'triangle') {
       currentRect.set({ left: l, top: t, width: w, height: h })
     } else if (currentRect.type === 'polygon' && !currentRect._isStar) {
-      // 多边形：使用椭圆半径生成顶点，支持非正多边形
+      // 多边形：以鼠标按下点 startPoint 为中心向外展开
       const sides = currentRect._sides || 6
-      const rx = w / 2
-      const ry = h / 2
+      let rx = Math.abs(pointer.x - startPoint.x)
+      let ry = Math.abs(pointer.y - startPoint.y)
+
+      // 按住 Ctrl 键：等比例正多边形
+      if (opt.e.ctrlKey || opt.e.metaKey) {
+        const r = Math.max(rx, ry)
+        rx = r; ry = r
+      }
+
+      const pw = rx * 2
+      const ph = ry * 2
+
       const pts: any[] = []
       for (let i = 0; i < sides; i++) {
         const angle = (Math.PI * 2 / sides) * i - Math.PI / 2
         pts.push({ x: rx * Math.cos(angle), y: ry * Math.sin(angle) })
       }
 
-      // 动态计算真实的边界框，防止被缓存画布裁切
-      let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y
-      pts.forEach(p => {
-        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
-        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
-      })
-
       currentRect.set({
         points: pts,
-        width: maxX - minX,
-        height: maxY - minY,
-        pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
-        left: cx,
-        top: cy,
+        width: pw,
+        height: ph,
+        pathOffset: { x: 0, y: 0 },
+        left: startPoint.x,
+        top: startPoint.y,
         dirty: true
       })
     } else if (currentRect._isStar) {
-      // 星形：使用椭圆半径生成顶点，支持非正星形
+      // 星形：以鼠标按下点 startPoint 为中心向外展开
       const points = currentRect._starPoints || 5
-      const outerRx = w / 2
-      const outerRy = h / 2
-      const innerRx = outerRx * 0.4
-      const innerRy = outerRy * 0.4
-      const pts: any[] = []
-      for (let i = 0; i < points * 2; i++) {
-        const rx = i % 2 === 0 ? outerRx : innerRx
-        const ry = i % 2 === 0 ? outerRy : innerRy
-        const angle = (Math.PI / points) * i - Math.PI / 2
-        pts.push({ x: rx * Math.cos(angle), y: ry * Math.sin(angle) })
+      let rx = Math.abs(pointer.x - startPoint.x)
+      let ry = Math.abs(pointer.y - startPoint.y)
+
+      // 按住 Ctrl 键：等比例正星形
+      if (opt.e.ctrlKey || opt.e.metaKey) {
+        const r = Math.max(rx, ry)
+        rx = r; ry = r
       }
 
-      // 动态计算真实的边界框，防止被缓存画布裁切
-      let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y
-      pts.forEach(p => {
-        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
-        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
-      })
+      const pw = rx * 2
+      const ph = ry * 2
+      const innerRx = rx * 0.4
+      const innerRy = ry * 0.4
+
+      const pts: any[] = []
+      for (let i = 0; i < points * 2; i++) {
+        const rX = i % 2 === 0 ? rx : innerRx
+        const rY = i % 2 === 0 ? ry : innerRy
+        const angle = (Math.PI / points) * i - Math.PI / 2
+        pts.push({ x: rX * Math.cos(angle), y: rY * Math.sin(angle) })
+      }
 
       currentRect.set({
         points: pts,
-        width: maxX - minX,
-        height: maxY - minY,
-        pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
-        left: cx,
-        top: cy,
+        width: pw,
+        height: ph,
+        pathOffset: { x: 0, y: 0 },
+        left: startPoint.x,
+        top: startPoint.y,
         dirty: true
       })
     } else {
