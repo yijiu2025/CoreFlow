@@ -1701,7 +1701,8 @@ const handleImageUpload = (e: Event) => {
     fabric.Image.fromURL(ev.target?.result, (img: any) => {
       const cw = canvasContainer.value?.clientWidth || 800
       const ch = canvasContainer.value?.clientHeight || 600
-      const scale = Math.min(cw / img.width, ch / img.height) * 0.9
+      // 计算适配比例，留出少量边距
+      const scale = Math.min(cw / img.width, ch / img.height) * 0.95
       const fitW = img.width * scale
       const fitH = img.height * scale
 
