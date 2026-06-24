@@ -271,6 +271,13 @@
           @resetZoom="resetZoom"
           @fitToScreen="fitToScreen"
         />
+
+        <CropPanel v-show="isCropping"
+          :cropAspectRatio="cropAspectRatio"
+          @update:cropAspectRatio="updateCropAspectRatio"
+          @confirmCrop="confirmCrop"
+          @cancelCrop="cancelCrop"
+        />
       </aside>
     </div>
 
@@ -289,6 +296,7 @@ import DrawPanel from '@/components/panels/DrawPanel.vue'
 import EraserPanel from '@/components/panels/EraserPanel.vue'
 import ShapesPanel from '@/components/panels/ShapesPanel.vue'
 import HandPanel from '@/components/panels/HandPanel.vue'
+import CropPanel from '@/components/panels/CropPanel.vue'
 import TextPanel from '@/components/panels/TextPanel.vue'
 import HelpModal from '@/components/modals/HelpModal.vue'
 import { v4 as uuidv4 } from 'uuid'
@@ -370,6 +378,13 @@ const fillColor = ref('#6366f1')
 const noFill = ref(true) // 默认无填充
 const lineStyle = ref('solid') // solid | dashed | dotted
 const shapeOpacity = ref(100)
+
+// 图片裁剪状态
+const isCropping = ref(false)
+const cropAspectRatio = ref<number | null>(null) // null=自由，1=1:1，4/3=4:3，16/9=16:9
+let cropBox: any = null // 裁剪框对象
+let uploadedImage: any = null // 临时存储上传的图片
+let cropOverlay: any = null // 裁剪遮罩
 let startPoint: any = null
 let resizeObserver: any = null
 let spacePressed = false
@@ -1866,42 +1881,276 @@ const handleImageUpload = (e: Event) => {
     fabric.Image.fromURL(ev.target?.result, (img: any) => {
       const cw = canvasContainer.value?.clientWidth || 800
       const ch = canvasContainer.value?.clientHeight || 600
-      // 完全适配容器，不留边距
       const scale = Math.min(cw / img.width, ch / img.height)
       const fitW = img.width * scale
       const fitH = img.height * scale
 
+      // 清空画布
+      fCanvas.value.clear()
       fCanvas.value.setDimensions({ width: fitW, height: fitH })
+
+      // 设置图片为可交互对象（非背景图）
       img.set({
         originX: 'center', originY: 'center',
         left: fitW / 2, top: fitH / 2,
         scaleX: scale, scaleY: scale,
-        selectable: false, evented: false,
-        opacity: bgOpacity.value / 100
+        selectable: false, evented: false
       })
-      fCanvas.value.clipPath = new fabric.Rect({
-        left: 0, top: 0, width: fitW, height: fitH, absolutePositioned: true
+      fCanvas.value.add(img)
+      uploadedImage = img
+
+      // 创建裁剪框（默认覆盖整个图片）
+      const margin = 20
+      cropBox = new fabric.Rect({
+        left: margin, top: margin,
+        width: fitW - margin * 2, height: fitH - margin * 2,
+        fill: 'transparent',
+        stroke: '#6366f1',
+        strokeWidth: 2,
+        strokeDashArray: [8, 4],
+        selectable: true,
+        evented: true,
+        hasControls: true,
+        hasBorders: true,
+        cornerColor: '#6366f1',
+        cornerSize: 10,
+        transparentCorners: false,
+        borderColor: '#6366f1',
+        isCropBox: true
       })
-      fCanvas.value.backgroundImage = img
-      if (inkCanvas) {
-        inkCanvas.width = fitW; inkCanvas.height = fitH
-        if (inkLayer) { inkLayer.set({ left: 0, top: 0 }); inkLayer.setElement(inkCanvas) }
-      }
+      fCanvas.value.add(cropBox)
+      fCanvas.value.setActiveObject(cropBox)
 
-      // 重置缩放和平移
-      canvasScale = 1
-      canvasTranslateX = 0
-      canvasTranslateY = 0
-      applyCanvasTransform()
-      zoomSlider.value = 100
-      currentZoom.value = 1
+      // 监听裁剪框移动和缩放事件
+      cropBox.on('moving', onCropBoxMoving)
+      cropBox.on('scaling', onCropBoxScaling)
 
+      // 创建遮罩
+      updateCropOverlay(fitW, fitH)
+
+      // 进入裁剪模式
+      isCropping.value = true
       fCanvas.value.renderAll()
-      bgImageUploaded.value = true
-      saveState()
     })
   }
   reader.readAsDataURL(file)
+}
+
+/**
+ * 更新裁剪遮罩（裁剪框外区域半透明）
+ */
+const updateCropOverlay = (canvasW: number, canvasH: number) => {
+  if (!fCanvas.value || !cropBox) return
+  // 移除旧遮罩
+  if (cropOverlay) {
+    fCanvas.value.remove(cropOverlay)
+  }
+
+  // 创建遮罩路径（外框减去裁剪框）
+  const bx = cropBox.left, by = cropBox.top
+  const bw = cropBox.width * (cropBox.scaleX || 1), bh = cropBox.height * (cropBox.scaleY || 1)
+
+  cropOverlay = new fabric.Rect({
+    left: 0, top: 0,
+    width: canvasW, height: canvasH,
+    fill: 'rgba(0,0,0,0.5)',
+    selectable: false, evented: false,
+    isCropOverlay: true
+  })
+  fCanvas.value.add(cropOverlay)
+
+  // 使用 clipPath 裁剪遮罩，只显示裁剪框外的区域
+  const clipRect = new fabric.Rect({
+    left: bx, top: by,
+    width: bw, height: bh,
+    absolutePositioned: true,
+    inverted: true
+  })
+  cropOverlay.clipPath = clipRect
+
+  // 确保裁剪框在最上层
+  cropBox.bringToFront()
+  fCanvas.value.renderAll()
+}
+
+/**
+ * 裁剪框移动时更新遮罩
+ */
+const onCropBoxMoving = () => {
+  if (!fCanvas.value || !cropBox) return
+  const cw = fCanvas.value.width
+  const ch = fCanvas.value.height
+  updateCropOverlay(cw, ch)
+}
+
+/**
+ * 裁剪框缩放时更新比例约束
+ */
+const onCropBoxScaling = () => {
+  if (!cropBox || !cropAspectRatio.value) return
+  const ratio = cropAspectRatio.value
+  const newWidth = cropBox.width * (cropBox.scaleX || 1)
+  const newHeight = newWidth / ratio
+  cropBox.set({
+    height: newHeight / (cropBox.scaleY || 1),
+    scaleY: cropBox.scaleX
+  })
+}
+
+/**
+ * 更新裁剪比例
+ * @param ratio 新的比例值（null=自由）
+ */
+const updateCropAspectRatio = (ratio: number | null) => {
+  cropAspectRatio.value = ratio
+  if (!cropBox || !ratio || !fCanvas.value) return
+
+  // 根据新比例调整裁剪框
+  const currentWidth = cropBox.width * (cropBox.scaleX || 1)
+  const newHeight = currentWidth / ratio
+  cropBox.set({
+    height: newHeight / (cropBox.scaleY || 1),
+    scaleY: cropBox.scaleX
+  })
+
+  // 更新遮罩
+  updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
+  fCanvas.value.renderAll()
+}
+
+/**
+ * 确认裁剪
+ */
+const confirmCrop = () => {
+  if (!fCanvas.value || !cropBox || !uploadedImage) return
+
+  // 获取裁剪框位置和大小
+  const bx = cropBox.left
+  const by = cropBox.top
+  const bw = cropBox.width * (cropBox.scaleX || 1)
+  const bh = cropBox.height * (cropBox.scaleY || 1)
+
+  // 计算裁剪区域相对于原始图片的比例
+  const img = uploadedImage
+  const imgLeft = img.left - img.getScaledWidth() / 2
+  const imgTop = img.top - img.getScaledHeight() / 2
+  const imgScaleX = img.scaleX
+  const imgScaleY = img.scaleY
+
+  // 裁剪区域在原图中的位置
+  const cropX = (bx - imgLeft) / imgScaleX
+  const cropY = (by - imgTop) / imgScaleY
+  const cropW = bw / imgScaleX
+  const cropH = bh / imgScaleY
+
+  // 使用临时 canvas 裁剪图片
+  const tempCanvas = document.createElement('canvas')
+  tempCanvas.width = cropW
+  tempCanvas.height = cropH
+  const ctx = tempCanvas.getContext('2d')
+  if (!ctx) return
+
+  const imgElement = img.getElement()
+  ctx.drawImage(imgElement, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
+
+  // 清空画布
+  fCanvas.value.clear()
+
+  // 将裁剪后的图片设置为背景
+  const dataUrl = tempCanvas.toDataURL()
+  fabric.Image.fromURL(dataUrl, (croppedImg: any) => {
+    const cw = canvasContainer.value?.clientWidth || 800
+    const ch = canvasContainer.value?.clientHeight || 600
+    const scale = Math.min(cw / croppedImg.width, ch / croppedImg.height)
+    const fitW = croppedImg.width * scale
+    const fitH = croppedImg.height * scale
+
+    fCanvas.value.setDimensions({ width: fitW, height: fitH })
+    croppedImg.set({
+      originX: 'center', originY: 'center',
+      left: fitW / 2, top: fitH / 2,
+      scaleX: scale, scaleY: scale,
+      selectable: false, evented: false,
+      opacity: bgOpacity.value / 100
+    })
+    fCanvas.value.clipPath = new fabric.Rect({
+      left: 0, top: 0, width: fitW, height: fitH, absolutePositioned: true
+    })
+    fCanvas.value.backgroundImage = croppedImg
+
+    if (inkCanvas) {
+      inkCanvas.width = fitW; inkCanvas.height = fitH
+      if (inkLayer) { inkLayer.set({ left: 0, top: 0 }); inkLayer.setElement(inkCanvas) }
+    }
+
+    // 重置缩放和平移
+    canvasScale = 1
+    canvasTranslateX = 0
+    canvasTranslateY = 0
+    applyCanvasTransform()
+    zoomSlider.value = 100
+    currentZoom.value = 1
+
+    // 退出裁剪模式
+    isCropping.value = false
+    cropBox = null
+    cropOverlay = null
+    uploadedImage = null
+
+    fCanvas.value.renderAll()
+    bgImageUploaded.value = true
+    saveState()
+  })
+}
+
+/**
+ * 取消裁剪（使用原图）
+ */
+const cancelCrop = () => {
+  if (!fCanvas.value || !uploadedImage) return
+
+  const canvasW = fCanvas.value.width
+  const canvasH = fCanvas.value.height
+
+  // 清空画布
+  fCanvas.value.clear()
+
+  // 将原图设置为背景
+  const img = uploadedImage
+  fCanvas.value.setDimensions({ width: canvasW, height: canvasH })
+  img.set({
+    originX: 'center', originY: 'center',
+    left: canvasW / 2, top: canvasH / 2,
+    selectable: false, evented: false,
+    opacity: bgOpacity.value / 100
+  })
+  fCanvas.value.clipPath = new fabric.Rect({
+    left: 0, top: 0, width: canvasW, height: canvasH, absolutePositioned: true
+  })
+  fCanvas.value.backgroundImage = img
+
+  if (inkCanvas) {
+    inkCanvas.width = canvasW; inkCanvas.height = canvasH
+    if (inkLayer) { inkLayer.set({ left: 0, top: 0 }); inkLayer.setElement(inkCanvas) }
+  }
+
+  // 重置缩放和平移
+  canvasScale = 1
+  canvasTranslateX = 0
+  canvasTranslateY = 0
+  applyCanvasTransform()
+  zoomSlider.value = 100
+  currentZoom.value = 1
+
+  // 退出裁剪模式
+  isCropping.value = false
+  cropBox = null
+  cropOverlay = null
+  uploadedImage = null
+
+  fCanvas.value.renderAll()
+  bgImageUploaded.value = true
+  saveState()
 }
 
 // ─── AI Model Loading ──────────────────────────────────────
