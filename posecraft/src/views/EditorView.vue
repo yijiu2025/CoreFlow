@@ -1265,14 +1265,6 @@ const pasteClipboard = () => {
 /**
  * 获取画布/背景图的绘制区域
  */
-const getDrawArea = () => {
-  const bg = fCanvas.value.backgroundImage
-  if (bg) {
-    const r = bg.getBoundingRect(true)
-    return { w: r.width, h: r.height, l: r.left, t: r.top }
-  }
-  return { w: fCanvas.value.width, h: fCanvas.value.height, l: 0, t: 0 }
-}
 
 /**
  * 绘制参考线
@@ -1282,180 +1274,11 @@ const getDrawArea = () => {
  * 切换构图参考线显示/隐藏（支持多选）
  * @param type 参考线类型
  */
-const toggleGuide = (type: string) => {
-  const idx = activeGuides.value.indexOf(type)
-  if (idx > -1) {
-    // 已激活 → 关闭
-    activeGuides.value.splice(idx, 1)
-  } else {
-    // 未激活 → 打开
-    activeGuides.value.push(type)
-  }
-  // 重绘所有激活的参考线
-  deleteGuides()
-  activeGuides.value.forEach(t => drawReference(t))
-}
 
-const drawReference = (type: string) => {
-  const { w, h, l, t } = getDrawArea()
-  const style: any = { stroke: fillColor.value, strokeWidth: strokeWidth.value, selectable: false, evented: false, opacity: 0.5, isGuide: true }
-
-  isStateSavingLocked = true
-
-  // 三分法
-  if (type === 'thirds' || type === 'all') {
-    ;[1/3, 2/3].forEach((f: number) => {
-      fCanvas.value.add(new fabric.Line([l+w*f, t, l+w*f, t+h], style))
-      fCanvas.value.add(new fabric.Line([l, t+h*f, l+w, t+h*f], style))
-    })
-  }
-
-  // 黄金比例 (0.618)
-  if (type === 'golden' || type === 'all') {
-    const phi = 0.618
-    ;[phi, 1 - phi].forEach((f: number) => {
-      fCanvas.value.add(new fabric.Line([l+w*f, t, l+w*f, t+h], { ...style, opacity: 0.7 }))
-      fCanvas.value.add(new fabric.Line([l, t+h*f, l+w, t+h*f], { ...style, opacity: 0.7 }))
-    })
-  }
-
-  // 对角线
-  if (type === 'diagonal' || type === 'all') {
-    fCanvas.value.add(new fabric.Line([l, t, l+w, t+h], { ...style, opacity: 0.3 }))
-    fCanvas.value.add(new fabric.Line([l+w, t, l, t+h], { ...style, opacity: 0.3 }))
-  }
-
-  // 中心点
-  if (type === 'center' || type === 'all') {
-    const cx = l + w / 2, cy = t + h / 2
-    fCanvas.value.add(new fabric.Line([cx, t, cx, t+h], style))
-    fCanvas.value.add(new fabric.Line([l, cy, l+w, cy], style))
-    fCanvas.value.add(Object.assign(new fabric.Circle({
-      left: cx, top: cy, radius: 6,
-      fill: 'transparent', stroke: fillColor.value, strokeWidth: 1.5,
-      originX: 'center', originY: 'center',
-      selectable: false, evented: false, opacity: 0.6
-    }), { isGuide: true }))
-  }
-
-  // φ 网格 (黄金螺旋近似)
-  if (type === 'phi' || type === 'all') {
-    const phi = 0.618
-    // 主矩形
-    fCanvas.value.add(Object.assign(new fabric.Rect({
-      left: l, top: t, width: w, height: h,
-      fill: 'transparent', stroke: fillColor.value, strokeWidth: 1,
-      selectable: false, evented: false, opacity: 0.3
-    }), { isGuide: true }))
-    // 黄金分割点连线
-    fCanvas.value.add(new fabric.Line([l, t, l+w*phi, t+h], { ...style, opacity: 0.4 }))
-    fCanvas.value.add(new fabric.Line([l+w, t, l+w*(1-phi), t+h], { ...style, opacity: 0.4 }))
-    fCanvas.value.add(new fabric.Line([l, t+h*phi, l+w, t], { ...style, opacity: 0.4 }))
-    fCanvas.value.add(new fabric.Line([l, t+h, l+w, t+h*(1-phi)], { ...style, opacity: 0.4 }))
-  }
-
-  // 黄金螺旋（斐波那契螺旋）- 迭代切割法，整体可选中
-  if (type === 'spiral' || type === 'all') {
-    const spiralColor = fillColor.value
-    const R = 0.618
-
-    let cx = l, cy = t, cw = w, ch = h
-    let pathStr = ''
-    const objects: any[] = []
-
-    for (let i = 0; i < 6; i++) {
-      let dir = i % 4
-      let sqW, sqH, sqX, sqY
-      let startX, startY, endX, endY, rx, ry
-
-      if (dir === 0) {
-        sqW = cw * R; sqH = ch; sqX = cx; sqY = cy
-        startX = sqX; startY = sqY + sqH; endX = sqX + sqW; endY = sqY
-        rx = sqW; ry = sqH
-        if (i === 0) pathStr += `M ${startX} ${startY} `
-        pathStr += `A ${rx} ${ry} 0 0 1 ${endX} ${endY} `
-        cx += sqW; cw -= sqW
-      } else if (dir === 1) {
-        sqW = cw; sqH = ch * R; sqX = cx; sqY = cy
-        startX = sqX; startY = sqY; endX = sqX + sqW; endY = sqY + sqH
-        rx = sqW; ry = sqH
-        pathStr += `A ${rx} ${ry} 0 0 1 ${endX} ${endY} `
-        cy += sqH; ch -= sqH
-      } else if (dir === 2) {
-        sqW = cw * R; sqH = ch; sqX = cx + cw - sqW; sqY = cy
-        startX = sqX + sqW; startY = sqY; endX = sqX; endY = sqY + sqH
-        rx = sqW; ry = sqH
-        pathStr += `A ${rx} ${ry} 0 0 1 ${endX} ${endY} `
-        cw -= sqW
-      } else if (dir === 3) {
-        sqW = cw; sqH = ch * R; sqX = cx; sqY = cy + ch - sqH
-        startX = sqX + sqW; startY = sqY + sqH; endX = sqX; endY = sqY
-        rx = sqW; ry = sqH
-        pathStr += `A ${rx} ${ry} 0 0 1 ${endX} ${endY} `
-        ch -= sqH
-      }
-
-      objects.push(new fabric.Rect({
-        left: sqX, top: sqY, width: sqW, height: sqH,
-        fill: 'transparent', stroke: spiralColor, strokeWidth: 1,
-        selectable: false, evented: false, opacity: 0.3,
-        strokeUniform: true
-      }))
-    }
-
-    // 螺旋曲线
-    const spiralPath = new fabric.Path(pathStr, {
-      stroke: spiralColor, strokeWidth: 2, fill: 'transparent',
-      selectable: false, evented: false, opacity: 0.8,
-      strokeUniform: true
-    })
-    objects.push(spiralPath)
-
-    // 只有单独生成时才允许选中操作
-    const isInteractive = (type === 'spiral')
-
-    // 组合成一个可选中的组
-    const group = new fabric.Group(objects, {
-      selectable: isInteractive,
-      evented: isInteractive,
-      hasControls: isInteractive,
-      hasBorders: isInteractive,
-      erasable: true,
-      isGuide: true,
-      originX: 'center',
-      originY: 'center'
-    })
-
-    fCanvas.value.add(group)
-
-    // 只有单独生成时才将其设为当前高亮焦点
-    if (isInteractive) {
-      fCanvas.value.setActiveObject(group)
-    }
-
-    fCanvas.value.renderAll()
-    saveState()
-  }
-
-  isStateSavingLocked = false
-  fCanvas.value.renderAll()
-  saveState()
-}
 
 /**
  * 删除所有参考线
  */
-const deleteGuides = () => {
-  const guides = fCanvas.value.getObjects().filter((o: any) => o.isGuide)
-  if (guides.length === 0) {
-    printInfo('没有参考线')
-    return
-  }
-  guides.forEach((o: any) => fCanvas.value.remove(o))
-  fCanvas.value.renderAll()
-  saveState()
-  printSuccess(`已删除 ${guides.length} 条参考线`)
-}
 
 // 辅助函数
 // eslint-disable-next-line no-console
@@ -1831,166 +1654,21 @@ const ensureModelsLoaded = async () => {
 }
 
 // ─── AI Functions ──────────────────────────────────────────
-const mapPoint = (k: any, offset: any) => { if (offset) return { x: offset.x + k.x * offset.sw, y: offset.y + k.y * offset.sh }; const bg = fCanvas.value.backgroundImage; if (!bg) return { x: k.x, y: k.y }; return { x: bg.left - bg.getScaledWidth() / 2 + k.x * bg.scaleX, y: bg.top - bg.getScaledHeight() / 2 + k.y * bg.scaleY } }
 
-const drawPoseSkeleton = (pose: any, offset: any = null) => {
-  const fp = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear']; const kp: any = {}
-  pose.keypoints.forEach((k: any) => { if (k.score > 0.2 && !fp.includes(k.name)) kp[k.name] = mapPoint(k, offset) })
-  const edges = [['left_shoulder','right_shoulder'],['left_shoulder','left_elbow'],['right_shoulder','right_elbow'],['left_elbow','left_wrist'],['right_elbow','right_wrist'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],['left_hip','left_knee'],['right_hip','right_knee'],['left_knee','left_ankle'],['right_knee','right_ankle']]
-  const nm: any = {}
-  Object.entries(kp).forEach(([name, p]: [string, any]) => { const c = new fabric.Circle({ id: uuidv4(), left: p.x, top: p.y, radius: 8, fill: '#ffffff', stroke: currentColor.value, strokeWidth: 3, originX: 'center', originY: 'center', selectable: true, evented: true, isSkeleton: true, padding: 12, name, erasable: true }); c.connectedLines = []; nm[name] = c; fCanvas.value.add(c); c.setCoords() })
-  edges.forEach(([a, b]) => { if (!nm[a] || !nm[b]) return; const nA = nm[a], nB = nm[b], id = uuidv4(); const l = new fabric.Line([nA.left, nA.top, nB.left, nB.top], { id, stroke: currentColor.value, strokeWidth: 3, selectable: true, evented: true, isAutoGenerated: true, strokeLineCap: 'round', opacity: 0.8, erasable: true }); nA.connectedLines.push({ line: id, endpoint: 'start' }); nB.connectedLines.push({ line: id, endpoint: 'end' }); fCanvas.value.add(l); l.sendToBack() })
-  Object.values(nm).forEach((c: any) => c.bringToFront());
-}
 
 /**
  * 在指定位置添加新的骨架节点
  */
-const addSkeletonNode = (x: number, y: number) => {
-  if (!fCanvas.value) return
-  const id = uuidv4()
-  const node = new fabric.Circle({
-    id, left: x, top: y, radius: 8,
-    fill: '#ffffff', stroke: currentColor.value, strokeWidth: 3,
-    originX: 'center', originY: 'center',
-    selectable: true, evented: true,
-    isSkeleton: true, padding: 12,
-    name: `node_${Date.now()}`,
-    erasable: true
-  })
-  node.connectedLines = []
-  fCanvas.value.add(node)
-  node.bringToFront()
-  fCanvas.value.setActiveObject(node)
-  fCanvas.value.renderAll()
-  saveState()
-}
 
 /**
  * 在节点连接的线段中点添加新节点
  */
-const addMidpointNode = (node: any) => {
-  if (!fCanvas.value || !node.connectedLines?.length) return
-  const objs = fCanvas.value.getObjects()
-  const idMap: any = {}
-  objs.forEach((o: any) => { if (o.id) idMap[o.id] = o })
-
-  // 找到第一条连接的线，在其中点添加节点
-  const conn = node.connectedLines[0]
-  const line = idMap[conn.line || conn.id]
-  if (!line) return
-
-  const mx = (line.x1 + line.x2) / 2
-  const my = (line.y1 + line.y2) / 2
-
-  // 创建新节点
-  const id = uuidv4()
-  const newNode = new fabric.Circle({
-    id, left: mx, top: my, radius: 8,
-    fill: '#ffffff', stroke: currentColor.value, strokeWidth: 3,
-    originX: 'center', originY: 'center',
-    selectable: true, evented: true,
-    isSkeleton: true, padding: 12,
-    name: `node_${Date.now()}`,
-    erasable: true
-  })
-  newNode.connectedLines = []
-
-  // 找到线的另一个端点节点
-  const otherEndpoint = conn.endpoint === 'start' ? 'end' : 'start'
-  const otherConn = objs.find((o: any) =>
-    o.isSkeleton && o !== node && o.connectedLines?.some((c: any) => (c.line || c.id) === (conn.line || conn.id) && c.endpoint === otherEndpoint)
-  )
-
-  // 断开原线与原节点的连接
-  node.connectedLines = node.connectedLines.filter((c: any) => (c.line || c.id) !== (conn.line || conn.id))
-
-  // 删除原线
-  fCanvas.value.remove(line)
-
-  // 创建两条新线：node → newNode, newNode → otherNode
-  const line1Id = uuidv4()
-  const line1 = new fabric.Line([node.left, node.top, mx, my], {
-    id: line1Id, stroke: currentColor.value, strokeWidth: 3,
-    selectable: true, evented: true, isAutoGenerated: true,
-    strokeLineCap: 'round', opacity: 0.8, erasable: true
-  })
-  node.connectedLines.push({ line: line1Id, endpoint: 'start' })
-  newNode.connectedLines.push({ line: line1Id, endpoint: 'end' })
-
-  fCanvas.value.add(line1)
-  line1.sendToBack()
-
-  if (otherConn) {
-    const line2Id = uuidv4()
-    const line2 = new fabric.Line([mx, my, otherConn.left, otherConn.top], {
-      id: line2Id, stroke: currentColor.value, strokeWidth: 3,
-      selectable: true, evented: true, isAutoGenerated: true,
-      strokeLineCap: 'round', opacity: 0.8, erasable: true
-    })
-    newNode.connectedLines.push({ line: line2Id, endpoint: 'start' })
-    // 更新另一个节点的连接
-    otherConn.connectedLines = otherConn.connectedLines.map((c: any) => {
-      if ((c.line || c.id) === (conn.line || conn.id)) {
-        return { line: line2Id, endpoint: 'end' }
-      }
-      return c
-    })
-    fCanvas.value.add(line2)
-    line2.sendToBack()
-  }
-
-  fCanvas.value.add(newNode)
-  newNode.bringToFront()
-  fCanvas.value.setActiveObject(newNode)
-  fCanvas.value.renderAll()
-  saveState()
-}
 
 /**
  * 连接两个骨架节点
  * @param nodeA 起始节点
  * @param nodeB 结束节点
  */
-const connectNodes = (nodeA: any, nodeB: any) => {
-  if (!fCanvas.value) return
-
-  // 检查是否已存在连接
-  const existingConn = nodeA.connectedLines?.find((c: any) => {
-    const objs = fCanvas.value.getObjects()
-    const line = objs.find((o: any) => o.id === (c.line || c.id))
-    if (!line) return false
-    // 检查线的另一端是否是 nodeB
-    return objs.some((o: any) =>
-      o.isSkeleton && o === nodeB &&
-      o.connectedLines?.some((oc: any) => (oc.line || oc.id) === (c.line || c.id))
-    )
-  })
-
-  if (existingConn) return // 已存在连接，跳过
-
-  // 创建新连线
-  const id = uuidv4()
-  const line = new fabric.Line([nodeA.left, nodeA.top, nodeB.left, nodeB.top], {
-    id, stroke: currentColor.value, strokeWidth: 3,
-    selectable: true, evented: true,
-    isAutoGenerated: true, strokeLineCap: 'round',
-    opacity: 0.8, erasable: true
-  })
-
-  // 更新节点的连接信息
-  if (!nodeA.connectedLines) nodeA.connectedLines = []
-  if (!nodeB.connectedLines) nodeB.connectedLines = []
-  nodeA.connectedLines.push({ line: id, endpoint: 'start' })
-  nodeB.connectedLines.push({ line: id, endpoint: 'end' })
-
-  fCanvas.value.add(line)
-  line.sendToBack()
-  nodeA.bringToFront()
-  nodeB.bringToFront()
-  fCanvas.value.renderAll()
-  saveState()
-}
 
 const drawImageOutline = async (segs: any[], hex: string, offset: any = null) => {
   if (!segs?.length) return; const h = hex.replace('#', '')
