@@ -4,6 +4,7 @@ import * as poseDetection from '@tensorflow-models/pose-detection'
 import * as bodySegmentation from '@tensorflow-models/body-segmentation'
 import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection'
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection'
+// @ts-ignore
 import * as tf from '@tensorflow/tfjs'
 
 /**
