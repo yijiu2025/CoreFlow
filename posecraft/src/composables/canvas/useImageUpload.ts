@@ -181,9 +181,28 @@ export function useImageUpload(
         }
       })
 
-      // 监听对象缩放事件（限制边界 + 节流）
+      // 监听对象缩放事件（强制比例 + 限制边界 + 节流）
       fCanvas.value.on('object:scaling', (e: any) => {
         if (e.target === cropBox) {
+          // 强制保持比例
+          if (cropAspectRatio.value) {
+            const ratio = cropAspectRatio.value
+            const currentWidth = cropBox.width * cropBox.scaleX
+            const currentHeight = cropBox.height * cropBox.scaleY
+            const currentRatio = currentWidth / currentHeight
+
+            if (Math.abs(currentRatio - ratio) > 0.01) {
+              // 根据当前缩放方向调整
+              if (currentRatio > ratio) {
+                // 宽度偏大，调整宽度
+                cropBox.set({ scaleX: (currentHeight * ratio) / cropBox.width })
+              } else {
+                // 高度偏大，调整高度
+                cropBox.set({ scaleY: (currentWidth / ratio) / cropBox.height })
+              }
+            }
+          }
+
           // 限制缩放不超出边界
           const bw = cropBox.width * (cropBox.scaleX || 1)
           const bh = cropBox.height * (cropBox.scaleY || 1)
