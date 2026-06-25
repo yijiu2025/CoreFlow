@@ -8,12 +8,18 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AiPanel: typeof import('./../components/panels/AiPanel.vue')['default']
+    CropPanel: typeof import('./../components/panels/CropPanel.vue')['default']
+    DrawPanel: typeof import('./../components/panels/DrawPanel.vue')['default']
+    EraserPanel: typeof import('./../components/panels/EraserPanel.vue')['default']
     HandPanel: typeof import('./../components/panels/HandPanel.vue')['default']
+    HelpModal: typeof import('./../components/modals/HelpModal.vue')['default']
+    ImagePanel: typeof import('./../components/panels/ImagePanel.vue')['default']
     LoginModal: typeof import('./../components/modals/LoginModal.vue')['default']
     MarkupPanel: typeof import('./../components/panels/MarkupPanel.vue')['default']
     PanelSection: typeof import('./../components/panels/PanelSection.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SelectPanel: typeof import('./../components/panels/SelectPanel.vue')['default']
     ShapesPanel: typeof import('./../components/panels/ShapesPanel.vue')['default']
     TextPanel: typeof import('./../components/panels/TextPanel.vue')['default']
   }

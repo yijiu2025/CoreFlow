@@ -19,7 +19,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/roles",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.755Z"
+              "updatedAt": "2026-06-25T10:55:17.219Z"
             },
             "listPermissionDictionary": {
               "id": "listPermissionDictionary",
@@ -30,7 +30,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/actions/dictionary",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.756Z"
+              "updatedAt": "2026-06-25T10:55:17.221Z"
             },
             "listManageableUsers": {
               "id": "listManageableUsers",
@@ -41,7 +41,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/users",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.756Z"
+              "updatedAt": "2026-06-25T10:55:17.221Z"
             },
             "assignIamRole": {
               "id": "assignIamRole",
@@ -52,7 +52,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/roles/assign",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.757Z"
+              "updatedAt": "2026-06-25T10:55:17.222Z"
             },
             "updateInlinePolicy": {
               "id": "updateInlinePolicy",
@@ -63,7 +63,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/policies",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.757Z"
+              "updatedAt": "2026-06-25T10:55:17.222Z"
             }
           }
         }
@@ -82,7 +82,7 @@
               "allowRoles": [],
               "url": "/auth/v1/bind-token",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.783Z"
+              "updatedAt": "2026-06-25T10:55:17.275Z"
             },
             "bindSession": {
               "id": "bindSession",
@@ -93,7 +93,7 @@
               "allowRoles": [],
               "url": "/auth/v1/bind-session",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.783Z"
+              "updatedAt": "2026-06-25T10:55:17.275Z"
             },
             "clearCookie": {
               "id": "clearCookie",
@@ -104,7 +104,7 @@
               "allowRoles": [],
               "url": "/auth/v1/clear-cookie",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.783Z"
+              "updatedAt": "2026-06-25T10:55:17.275Z"
             }
           },
           "id": "session",
@@ -115,7 +115,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.783Z"
+          "updatedAt": "2026-06-25T10:55:17.275Z"
         }
       },
       "id": "Auth",
@@ -126,7 +126,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-06-22T16:52:39.758Z"
+      "updatedAt": "2026-06-25T10:55:17.225Z"
     },
     "firewall": {
       "groups": {
@@ -141,7 +141,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.787Z"
+              "updatedAt": "2026-06-25T10:55:17.279Z"
             },
             "updateConfig": {
               "id": "updateConfig",
@@ -152,7 +152,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/:system/:group",
               "method": "PATCH",
-              "updatedAt": "2026-06-22T16:52:39.788Z"
+              "updatedAt": "2026-06-25T10:55:17.280Z"
             },
             "toggleConfig": {
               "id": "toggleConfig",
@@ -163,7 +163,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle/:system/:group",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.789Z"
+              "updatedAt": "2026-06-25T10:55:17.280Z"
             },
             "toggleSystemConfig": {
               "id": "toggleSystemConfig",
@@ -174,7 +174,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle-system/:system",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.789Z"
+              "updatedAt": "2026-06-25T10:55:17.280Z"
             }
           },
           "id": "apiConfigs",
@@ -185,7 +185,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.787Z"
+          "updatedAt": "2026-06-25T10:55:17.279Z"
         },
         "challenge": {
           "apis": {
@@ -198,7 +198,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/challenge/verify",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.792Z"
+              "updatedAt": "2026-06-25T10:55:17.283Z"
             }
           },
           "id": "challenge",
@@ -209,7 +209,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.792Z"
+          "updatedAt": "2026-06-25T10:55:17.283Z"
         },
         "export": {
           "apis": {
@@ -224,7 +224,7 @@
               ],
               "url": "/api/firewall/v1/export/blocks",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.795Z"
+              "updatedAt": "2026-06-25T10:55:17.287Z"
             },
             "exportWhitelist": {
               "id": "exportWhitelist",
@@ -237,7 +237,7 @@
               ],
               "url": "/api/firewall/v1/export/whitelist",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.796Z"
+              "updatedAt": "2026-06-25T10:55:17.288Z"
             },
             "importBlocks": {
               "id": "importBlocks",
@@ -250,7 +250,7 @@
               ],
               "url": "/api/firewall/v1/export/blocks",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.796Z"
+              "updatedAt": "2026-06-25T10:55:17.288Z"
             },
             "importWhitelist": {
               "id": "importWhitelist",
@@ -263,7 +263,7 @@
               ],
               "url": "/api/firewall/v1/export/whitelist",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.796Z"
+              "updatedAt": "2026-06-25T10:55:17.288Z"
             }
           },
           "id": "export",
@@ -276,7 +276,7 @@
           "allowRoles": [
             "admin"
           ],
-          "updatedAt": "2026-06-22T16:52:39.795Z"
+          "updatedAt": "2026-06-25T10:55:17.287Z"
         },
         "metrics": {
           "apis": {
@@ -289,7 +289,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/metrics",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.798Z"
+              "updatedAt": "2026-06-25T10:55:17.291Z"
             }
           },
           "id": "metrics",
@@ -300,7 +300,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.798Z"
+          "updatedAt": "2026-06-25T10:55:17.291Z"
         },
         "firewall-monitor": {
           "apis": {
@@ -313,7 +313,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/summary",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.804Z"
+              "updatedAt": "2026-06-25T10:55:17.296Z"
             },
             "records": {
               "id": "records",
@@ -324,7 +324,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/records",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.805Z"
+              "updatedAt": "2026-06-25T10:55:17.296Z"
             },
             "clear": {
               "id": "clear",
@@ -335,7 +335,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/clear",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.805Z"
+              "updatedAt": "2026-06-25T10:55:17.297Z"
             },
             "updateNode": {
               "id": "updateNode",
@@ -346,7 +346,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/update",
               "method": "PATCH",
-              "updatedAt": "2026-06-22T16:52:39.805Z"
+              "updatedAt": "2026-06-25T10:55:17.297Z"
             },
             "refreshNode": {
               "id": "refreshNode",
@@ -357,7 +357,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/refresh",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.805Z"
+              "updatedAt": "2026-06-25T10:55:17.297Z"
             },
             "getSettings": {
               "id": "getSettings",
@@ -368,7 +368,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.805Z"
+              "updatedAt": "2026-06-25T10:55:17.297Z"
             },
             "updateSettings": {
               "id": "updateSettings",
@@ -379,7 +379,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "PATCH",
-              "updatedAt": "2026-06-22T16:52:39.805Z"
+              "updatedAt": "2026-06-25T10:55:17.297Z"
             },
             "addBlacklist": {
               "id": "addBlacklist",
@@ -390,7 +390,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.805Z"
+              "updatedAt": "2026-06-25T10:55:17.297Z"
             },
             "removeBlacklist": {
               "id": "removeBlacklist",
@@ -401,7 +401,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "DELETE",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.297Z"
             },
             "listBlocks": {
               "id": "listBlocks",
@@ -412,7 +412,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.297Z"
             },
             "addBlock": {
               "id": "addBlock",
@@ -423,7 +423,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.297Z"
             },
             "removeBlock": {
               "id": "removeBlock",
@@ -434,7 +434,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.298Z"
             },
             "listWhitelist": {
               "id": "listWhitelist",
@@ -445,7 +445,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.298Z"
             },
             "addWhitelist": {
               "id": "addWhitelist",
@@ -456,7 +456,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.298Z"
             },
             "removeWhitelist": {
               "id": "removeWhitelist",
@@ -467,7 +467,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.298Z"
             },
             "addBlockFp": {
               "id": "addBlockFp",
@@ -478,7 +478,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/fp",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.298Z"
             },
             "removeBlockFp": {
               "id": "removeBlockFp",
@@ -489,7 +489,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/fp/:fingerprint",
               "method": "DELETE",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.298Z"
             },
             "addWhitelistFp": {
               "id": "addWhitelistFp",
@@ -500,7 +500,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/fp",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.298Z"
             },
             "removeWhitelistFp": {
               "id": "removeWhitelistFp",
@@ -511,7 +511,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/fp/:fingerprint",
               "method": "DELETE",
-              "updatedAt": "2026-06-22T16:52:39.806Z"
+              "updatedAt": "2026-06-25T10:55:17.298Z"
             }
           },
           "id": "firewall-monitor",
@@ -522,7 +522,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.804Z"
+          "updatedAt": "2026-06-25T10:55:17.296Z"
         }
       },
       "id": "firewall",
@@ -533,7 +533,7 @@
       "requireLogin": true,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-06-22T16:52:39.784Z"
+      "updatedAt": "2026-06-25T10:55:17.277Z"
     },
     "Notice": {
       "groups": {
@@ -548,7 +548,7 @@
               "allowRoles": [],
               "url": "/notice/v1/channels",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.846Z"
+              "updatedAt": "2026-06-25T10:55:17.351Z"
             },
             "getConfig": {
               "id": "getConfig",
@@ -559,7 +559,7 @@
               "allowRoles": [],
               "url": "/notice/v1/config/:type",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.846Z"
+              "updatedAt": "2026-06-25T10:55:17.352Z"
             },
             "saveConfig": {
               "id": "saveConfig",
@@ -570,7 +570,7 @@
               "allowRoles": [],
               "url": "/notice/v1/config/:type",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.847Z"
+              "updatedAt": "2026-06-25T10:55:17.352Z"
             },
             "testEmail": {
               "id": "testEmail",
@@ -581,7 +581,7 @@
               "allowRoles": [],
               "url": "/notice/v1/test-email",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.847Z"
+              "updatedAt": "2026-06-25T10:55:17.352Z"
             }
           },
           "id": "config",
@@ -594,7 +594,7 @@
           "allowRoles": [
             "admin"
           ],
-          "updatedAt": "2026-06-22T16:52:39.846Z"
+          "updatedAt": "2026-06-25T10:55:17.351Z"
         }
       },
       "id": "Notice",
@@ -607,7 +607,7 @@
       "allowRoles": [
         "admin"
       ],
-      "updatedAt": "2026-06-22T16:52:39.809Z"
+      "updatedAt": "2026-06-25T10:55:17.300Z"
     },
     "OAuth2.1": {
       "groups": {
@@ -624,7 +624,7 @@
               ],
               "url": "/oauth2.1/admin/permissions/sync",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.854Z"
+              "updatedAt": "2026-06-25T10:55:17.365Z"
             },
             "createClient": {
               "id": "createClient",
@@ -637,7 +637,7 @@
               ],
               "url": "/oauth2.1/admin/client",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.854Z"
+              "updatedAt": "2026-06-25T10:55:17.365Z"
             },
             "listUsers": {
               "id": "listUsers",
@@ -650,7 +650,7 @@
               ],
               "url": "/oauth2.1/admin/users",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.854Z"
+              "updatedAt": "2026-06-25T10:55:17.365Z"
             }
           },
           "id": "admin",
@@ -663,7 +663,7 @@
           "allowRoles": [
             "admin"
           ],
-          "updatedAt": "2026-06-22T16:52:39.854Z"
+          "updatedAt": "2026-06-25T10:55:17.365Z"
         },
         "auth": {
           "apis": {
@@ -676,7 +676,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/authorize",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.885Z"
+              "updatedAt": "2026-06-25T10:55:17.412Z"
             },
             "authorizeLogin": {
               "id": "authorizeLogin",
@@ -687,7 +687,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/authorize/login",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.886Z"
+              "updatedAt": "2026-06-25T10:55:17.412Z"
             },
             "authorizeConsent": {
               "id": "authorizeConsent",
@@ -698,7 +698,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/authorize/consent",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.886Z"
+              "updatedAt": "2026-06-25T10:55:17.412Z"
             },
             "login": {
               "id": "login",
@@ -709,7 +709,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/login",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.886Z"
+              "updatedAt": "2026-06-25T10:55:17.412Z"
             },
             "miniLogin": {
               "id": "miniLogin",
@@ -720,7 +720,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/mini-login",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.886Z"
+              "updatedAt": "2026-06-25T10:55:17.413Z"
             },
             "confirmDirectConsent": {
               "id": "confirmDirectConsent",
@@ -731,7 +731,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/login/consent/confirm",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.886Z"
+              "updatedAt": "2026-06-25T10:55:17.413Z"
             },
             "qrGenerate": {
               "id": "qrGenerate",
@@ -742,7 +742,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/generate",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.886Z"
+              "updatedAt": "2026-06-25T10:55:17.413Z"
             },
             "qrScan": {
               "id": "qrScan",
@@ -753,7 +753,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/scan",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.886Z"
+              "updatedAt": "2026-06-25T10:55:17.413Z"
             },
             "qrConfirm": {
               "id": "qrConfirm",
@@ -764,7 +764,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/confirm",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.886Z"
+              "updatedAt": "2026-06-25T10:55:17.413Z"
             },
             "qrStatus": {
               "id": "qrStatus",
@@ -775,7 +775,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/status",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.886Z"
+              "updatedAt": "2026-06-25T10:55:17.413Z"
             },
             "miniRegister": {
               "id": "miniRegister",
@@ -786,7 +786,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/mini-register",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.887Z"
+              "updatedAt": "2026-06-25T10:55:17.413Z"
             }
           },
           "id": "auth",
@@ -797,7 +797,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.885Z"
+          "updatedAt": "2026-06-25T10:55:17.412Z"
         },
         "crypto": {
           "apis": {
@@ -810,7 +810,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/crypto/public-key",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.889Z"
+              "updatedAt": "2026-06-25T10:55:17.416Z"
             }
           },
           "id": "crypto",
@@ -821,7 +821,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.889Z"
+          "updatedAt": "2026-06-25T10:55:17.416Z"
         },
         "device": {
           "apis": {
@@ -834,7 +834,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device/code",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.891Z"
+              "updatedAt": "2026-06-25T10:55:17.420Z"
             },
             "deviceToken": {
               "id": "deviceToken",
@@ -845,7 +845,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device/token",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.891Z"
+              "updatedAt": "2026-06-25T10:55:17.421Z"
             },
             "devicePage": {
               "id": "devicePage",
@@ -856,7 +856,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.892Z"
+              "updatedAt": "2026-06-25T10:55:17.421Z"
             },
             "deviceAuthorize": {
               "id": "deviceAuthorize",
@@ -867,7 +867,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device/authorize",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.892Z"
+              "updatedAt": "2026-06-25T10:55:17.421Z"
             }
           },
           "id": "device",
@@ -878,7 +878,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.891Z"
+          "updatedAt": "2026-06-25T10:55:17.420Z"
         },
         "oidc": {
           "apis": {
@@ -891,7 +891,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/.well-known/openid-configuration",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.893Z"
+              "updatedAt": "2026-06-25T10:55:17.424Z"
             },
             "jwks": {
               "id": "jwks",
@@ -902,7 +902,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/.well-known/jwks.json",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.893Z"
+              "updatedAt": "2026-06-25T10:55:17.425Z"
             }
           },
           "id": "oidc",
@@ -913,7 +913,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.893Z"
+          "updatedAt": "2026-06-25T10:55:17.424Z"
         },
         "token": {
           "apis": {
@@ -926,7 +926,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/token",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.899Z"
+              "updatedAt": "2026-06-25T10:55:17.433Z"
             },
             "revokeToken": {
               "id": "revokeToken",
@@ -937,7 +937,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/revoke",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.899Z"
+              "updatedAt": "2026-06-25T10:55:17.433Z"
             }
           },
           "id": "token",
@@ -948,7 +948,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.899Z"
+          "updatedAt": "2026-06-25T10:55:17.433Z"
         }
       },
       "id": "OAuth2.1",
@@ -959,7 +959,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-06-22T16:52:39.848Z"
+      "updatedAt": "2026-06-25T10:55:17.353Z"
     },
     "posecraft": {
       "groups": {
@@ -974,7 +974,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/analysis",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.902Z"
+              "updatedAt": "2026-06-25T10:55:17.438Z"
             },
             "getAnalyses": {
               "id": "getAnalyses",
@@ -985,7 +985,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/analysis",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.902Z"
+              "updatedAt": "2026-06-25T10:55:17.438Z"
             },
             "getAnalysisStats": {
               "id": "getAnalysisStats",
@@ -996,7 +996,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/analysis/stats",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.903Z"
+              "updatedAt": "2026-06-25T10:55:17.438Z"
             }
           },
           "id": "analysis",
@@ -1007,7 +1007,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.902Z"
+          "updatedAt": "2026-06-25T10:55:17.438Z"
         },
         "template": {
           "apis": {
@@ -1020,7 +1020,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.905Z"
+              "updatedAt": "2026-06-25T10:55:17.441Z"
             },
             "getPopularTemplates": {
               "id": "getPopularTemplates",
@@ -1031,7 +1031,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/popular",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.905Z"
+              "updatedAt": "2026-06-25T10:55:17.442Z"
             },
             "getTemplate": {
               "id": "getTemplate",
@@ -1042,7 +1042,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.905Z"
+              "updatedAt": "2026-06-25T10:55:17.442Z"
             },
             "createTemplate": {
               "id": "createTemplate",
@@ -1053,7 +1053,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.905Z"
+              "updatedAt": "2026-06-25T10:55:17.442Z"
             },
             "updateTemplate": {
               "id": "updateTemplate",
@@ -1064,7 +1064,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id",
               "method": "PUT",
-              "updatedAt": "2026-06-22T16:52:39.905Z"
+              "updatedAt": "2026-06-25T10:55:17.442Z"
             },
             "deleteTemplate": {
               "id": "deleteTemplate",
@@ -1075,7 +1075,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id",
               "method": "DELETE",
-              "updatedAt": "2026-06-22T16:52:39.906Z"
+              "updatedAt": "2026-06-25T10:55:17.442Z"
             }
           },
           "id": "template",
@@ -1086,7 +1086,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.905Z"
+          "updatedAt": "2026-06-25T10:55:17.441Z"
         },
         "upload": {
           "apis": {
@@ -1099,7 +1099,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/upload",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.908Z"
+              "updatedAt": "2026-06-25T10:55:17.446Z"
             },
             "uploadBase64": {
               "id": "uploadBase64",
@@ -1110,7 +1110,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/upload/base64",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.908Z"
+              "updatedAt": "2026-06-25T10:55:17.446Z"
             }
           },
           "id": "upload",
@@ -1121,7 +1121,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.908Z"
+          "updatedAt": "2026-06-25T10:55:17.446Z"
         },
         "work": {
           "apis": {
@@ -1134,7 +1134,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.910Z"
+              "updatedAt": "2026-06-25T10:55:17.450Z"
             },
             "getRecommendedWorks": {
               "id": "getRecommendedWorks",
@@ -1145,7 +1145,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/recommended",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.910Z"
+              "updatedAt": "2026-06-25T10:55:17.450Z"
             },
             "getUserWorks": {
               "id": "getUserWorks",
@@ -1156,7 +1156,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/user/:userId",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.911Z"
+              "updatedAt": "2026-06-25T10:55:17.450Z"
             },
             "getWork": {
               "id": "getWork",
@@ -1167,7 +1167,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/:id",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.911Z"
+              "updatedAt": "2026-06-25T10:55:17.450Z"
             },
             "createWork": {
               "id": "createWork",
@@ -1178,7 +1178,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.911Z"
+              "updatedAt": "2026-06-25T10:55:17.450Z"
             },
             "deleteWork": {
               "id": "deleteWork",
@@ -1189,7 +1189,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/:id",
               "method": "DELETE",
-              "updatedAt": "2026-06-22T16:52:39.911Z"
+              "updatedAt": "2026-06-25T10:55:17.451Z"
             },
             "likeWork": {
               "id": "likeWork",
@@ -1200,7 +1200,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/:id/like",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.911Z"
+              "updatedAt": "2026-06-25T10:55:17.451Z"
             }
           },
           "id": "work",
@@ -1211,7 +1211,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.910Z"
+          "updatedAt": "2026-06-25T10:55:17.450Z"
         }
       },
       "id": "posecraft",
@@ -1222,7 +1222,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-06-22T16:52:39.900Z"
+      "updatedAt": "2026-06-25T10:55:17.435Z"
     },
     "system": {
       "groups": {
@@ -1237,7 +1237,7 @@
               "allowRoles": [],
               "url": "/v1/health",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.914Z"
+              "updatedAt": "2026-06-25T10:55:17.455Z"
             }
           },
           "id": "system",
@@ -1248,7 +1248,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.914Z"
+          "updatedAt": "2026-06-25T10:55:17.455Z"
         }
       },
       "id": "system",
@@ -1259,7 +1259,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-06-22T16:52:39.912Z"
+      "updatedAt": "2026-06-25T10:55:17.452Z"
     },
     "User": {
       "groups": {
@@ -1274,7 +1274,7 @@
               "allowRoles": [],
               "url": "/user/v1/register",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.919Z"
+              "updatedAt": "2026-06-25T10:55:17.465Z"
             },
             "checkEmail": {
               "id": "checkEmail",
@@ -1285,7 +1285,7 @@
               "allowRoles": [],
               "url": "/user/v1/check-email",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.920Z"
+              "updatedAt": "2026-06-25T10:55:17.465Z"
             }
           },
           "id": "userRegister",
@@ -1296,7 +1296,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.919Z"
+          "updatedAt": "2026-06-25T10:55:17.464Z"
         },
         "userSessions": {
           "apis": {
@@ -1309,7 +1309,7 @@
               "allowRoles": [],
               "url": "/user/v1/sessions",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.922Z"
+              "updatedAt": "2026-06-25T10:55:17.469Z"
             },
             "kickSession": {
               "id": "kickSession",
@@ -1320,7 +1320,7 @@
               "allowRoles": [],
               "url": "/user/v1/sessions/kick",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.922Z"
+              "updatedAt": "2026-06-25T10:55:17.469Z"
             },
             "kickAllSessions": {
               "id": "kickAllSessions",
@@ -1331,7 +1331,7 @@
               "allowRoles": [],
               "url": "/user/v1/sessions/kick-all",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.922Z"
+              "updatedAt": "2026-06-25T10:55:17.470Z"
             }
           },
           "id": "userSessions",
@@ -1342,7 +1342,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.922Z"
+          "updatedAt": "2026-06-25T10:55:17.469Z"
         },
         "upload": {
           "apis": {
@@ -1355,7 +1355,7 @@
               "allowRoles": [],
               "url": "/user/v1/avatar",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.946Z"
+              "updatedAt": "2026-06-25T10:55:17.536Z"
             }
           },
           "id": "upload",
@@ -1366,7 +1366,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.946Z"
+          "updatedAt": "2026-06-25T10:55:17.536Z"
         },
         "userProfile": {
           "apis": {
@@ -1379,7 +1379,7 @@
               "allowRoles": [],
               "url": "/user/v1/userinfo",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.948Z"
+              "updatedAt": "2026-06-25T10:55:17.539Z"
             },
             "permissions": {
               "id": "permissions",
@@ -1390,7 +1390,7 @@
               "allowRoles": [],
               "url": "/user/v1/permissions",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.948Z"
+              "updatedAt": "2026-06-25T10:55:17.539Z"
             },
             "checkPermission": {
               "id": "checkPermission",
@@ -1401,7 +1401,7 @@
               "allowRoles": [],
               "url": "/user/v1/check-permission",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.948Z"
+              "updatedAt": "2026-06-25T10:55:17.539Z"
             }
           },
           "id": "userProfile",
@@ -1412,7 +1412,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.948Z"
+          "updatedAt": "2026-06-25T10:55:17.539Z"
         }
       },
       "id": "User",
@@ -1423,7 +1423,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-06-22T16:52:39.915Z"
+      "updatedAt": "2026-06-25T10:55:17.456Z"
     },
     "Verify": {
       "groups": {
@@ -1438,7 +1438,7 @@
               "allowRoles": [],
               "url": "/verify/v1/generate-captcha",
               "method": "GET",
-              "updatedAt": "2026-06-22T16:52:39.952Z"
+              "updatedAt": "2026-06-25T10:55:17.546Z"
             },
             "verifyCaptcha": {
               "id": "verifyCaptcha",
@@ -1449,7 +1449,7 @@
               "allowRoles": [],
               "url": "/verify/v1/verify-captcha",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.952Z"
+              "updatedAt": "2026-06-25T10:55:17.546Z"
             },
             "checkEmailCode": {
               "id": "checkEmailCode",
@@ -1460,7 +1460,7 @@
               "allowRoles": [],
               "url": "/verify/v1/check-email-code",
               "method": "POST",
-              "updatedAt": "2026-06-22T16:52:39.952Z"
+              "updatedAt": "2026-06-25T10:55:17.546Z"
             }
           },
           "id": "v1",
@@ -1471,7 +1471,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-06-22T16:52:39.952Z"
+          "updatedAt": "2026-06-25T10:55:17.546Z"
         }
       },
       "id": "Verify",
@@ -1482,7 +1482,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-06-22T16:52:39.949Z"
+      "updatedAt": "2026-06-25T10:55:17.542Z"
     }
   }
 }
