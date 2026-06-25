@@ -184,32 +184,44 @@ export function useImageUpload(
       // 监听对象缩放事件（强制比例 + 限制边界 + 节流）
       fCanvas.value.on('object:scaling', (e: any) => {
         if (e.target === cropBox) {
+          // 先限制边界，再强制比例
+          let bw = cropBox.width * (cropBox.scaleX || 1)
+          let bh = cropBox.height * (cropBox.scaleY || 1)
+
+          // 限制不超出左上边界
+          if (cropBox.left < 0) cropBox.set({ left: 0 })
+          if (cropBox.top < 0) cropBox.set({ top: 0 })
+
+          // 限制不超出右下边界
+          if (cropBox.left + bw > canvasWidth) {
+            const maxScaleX = (canvasWidth - cropBox.left) / cropBox.width
+            cropBox.set({ scaleX: maxScaleX })
+          }
+          if (cropBox.top + bh > canvasHeight) {
+            const maxScaleY = (canvasHeight - cropBox.top) / cropBox.height
+            cropBox.set({ scaleY: maxScaleY })
+          }
+
           // 强制保持比例
           if (cropAspectRatio.value) {
             const ratio = cropAspectRatio.value
-            const currentWidth = cropBox.width * cropBox.scaleX
-            const currentHeight = cropBox.height * cropBox.scaleY
-            const currentRatio = currentWidth / currentHeight
+            bw = cropBox.width * cropBox.scaleX
+            bh = cropBox.height * cropBox.scaleY
+            const currentRatio = bw / bh
 
             if (Math.abs(currentRatio - ratio) > 0.01) {
-              // 根据当前缩放方向调整
               if (currentRatio > ratio) {
-                // 宽度偏大，调整宽度
-                cropBox.set({ scaleX: (currentHeight * ratio) / cropBox.width })
+                // 宽度偏大，以高度为基准调整宽度
+                const newScaleX = (bh * ratio) / cropBox.width
+                cropBox.set({ scaleX: Math.min(newScaleX, (canvasWidth - cropBox.left) / cropBox.width) })
               } else {
-                // 高度偏大，调整高度
-                cropBox.set({ scaleY: (currentWidth / ratio) / cropBox.height })
+                // 高度偏大，以宽度为基准调整高度
+                const newScaleY = (bw / ratio) / cropBox.height
+                cropBox.set({ scaleY: Math.min(newScaleY, (canvasHeight - cropBox.top) / cropBox.height) })
               }
             }
           }
 
-          // 限制缩放不超出边界
-          const bw = cropBox.width * (cropBox.scaleX || 1)
-          const bh = cropBox.height * (cropBox.scaleY || 1)
-          if (cropBox.left < 0) cropBox.set({ left: 0 })
-          if (cropBox.top < 0) cropBox.set({ top: 0 })
-          if (cropBox.left + bw > canvasWidth) cropBox.set({ scaleX: (canvasWidth - cropBox.left) / cropBox.width })
-          if (cropBox.top + bh > canvasHeight) cropBox.set({ scaleY: (canvasHeight - cropBox.top) / cropBox.height })
           if (rAFId) cancelAnimationFrame(rAFId)
           rAFId = requestAnimationFrame(() => {
             updateCropOverlay(canvasWidth, canvasHeight)
