@@ -81,7 +81,12 @@ export function useImageUpload(
 
         if (inkCanvas) {
           inkCanvas.width = fitW; inkCanvas.height = fitH
-          if (inkLayer) { inkLayer.set({ left: 0, top: 0 }); inkLayer.setElement(inkCanvas) }
+          if (inkLayer) {
+            inkLayer.set({ left: 0, top: 0 })
+            inkLayer.setElement(inkCanvas)
+            // 确保墨迹层在背景图之上
+            inkLayer.bringToFront()
+          }
         }
 
         canvasScale = 1; canvasTranslateX = 0; canvasTranslateY = 0
@@ -358,7 +363,7 @@ export function useImageUpload(
 
       if (inkCanvas) {
         inkCanvas.width = fitW; inkCanvas.height = fitH
-        if (inkLayer) { inkLayer.set({ left: 0, top: 0 }); inkLayer.setElement(inkCanvas) }
+        if (inkLayer) { inkLayer.set({ left: 0, top: 0 }); inkLayer.setElement(inkCanvas); inkLayer.bringToFront() }
       }
 
       canvasScale = 1; canvasTranslateX = 0; canvasTranslateY = 0
@@ -387,7 +392,7 @@ export function useImageUpload(
 
     if (inkCanvas) {
       inkCanvas.width = canvasW; inkCanvas.height = canvasH
-      if (inkLayer) { inkLayer.set({ left: 0, top: 0 }); inkLayer.setElement(inkCanvas) }
+      if (inkLayer) { inkLayer.set({ left: 0, top: 0 }); inkLayer.setElement(inkCanvas); inkLayer.bringToFront() }
     }
 
     canvasScale = 1; canvasTranslateX = 0; canvasTranslateY = 0
