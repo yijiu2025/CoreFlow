@@ -1381,11 +1381,20 @@ const printSuccess = (msg: string) => console.log(`✅ ${msg}`)
  */
 
 // ─── AI Model Loading ──────────────────────────────────────
-// 抑制 WebGL powerPreference 警告（Windows 已知问题）
+// 抑制已知的无害警告
 const originalWarn = console.warn
+const originalError = console.error
 console.warn = (...args: any[]) => {
-  if (args[0]?.includes?.('powerPreference')) return
+  const msg = String(args[0] || '')
+  // 忽略 powerPreference 和 willReadFrequently 警告
+  if (msg.includes('powerPreference') || msg.includes('willReadFrequently')) return
   originalWarn(...args)
+}
+console.error = (...args: any[]) => {
+  const msg = String(args[0] || '')
+  // 忽略浏览器扩展连接错误
+  if (msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist')) return
+  originalError(...args)
 }
 
 const ensureModelsLoaded = async () => {
