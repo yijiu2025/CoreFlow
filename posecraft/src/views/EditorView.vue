@@ -699,7 +699,7 @@ const initCanvas = () => {
   fCanvas.value = markRaw(c)
   const w = fCanvas.value.width, h = fCanvas.value.height
   inkCanvas = document.createElement('canvas'); inkCanvas.width = w; inkCanvas.height = h
-  inkCtx = inkCanvas.getContext('2d')
+  inkCtx = inkCanvas.getContext('2d', { willReadFrequently: true })
   inkLayer = new fabric.Image(inkCanvas, { left: 0, top: 0, originX: 'left', originY: 'top', selectable: false, evented: false, erasable: false })
   inkLayer.isInkLayer = true; fCanvas.value.add(inkLayer)
   eraserCursor = new fabric.Circle({ radius: eraserSize.value / 2, fill: 'rgba(255,255,255,0.2)', stroke: 'rgba(255,255,255,0.8)', strokeWidth: 1, originX: 'center', originY: 'center', selectable: false, evented: false, visible: false, isEraserCursor: true })
@@ -992,7 +992,7 @@ const handleMouseMove = (opt: any) => {
       if (obj.isUserStroke && obj.getElement && obj.getElement().tagName === 'CANVAS') {
         // 画笔笔触 - 像素级擦除
         const el = obj.getElement()
-        const ctx = el.getContext('2d')
+        const ctx = el.getContext('2d', { willReadFrequently: true })
         if (!ctx) return
         const localPoint = obj.toLocalPoint(pointer, 'left', 'top')
         const dpr = window.devicePixelRatio || 1
@@ -1409,8 +1409,8 @@ const drawImageOutline = async (segs: any[], hex: string, offset: any = null) =>
   if (!segs?.length) return; const h = hex.replace('#', '')
   const fg = { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16), a: 255 }
   const mask = await bodySegmentation.toBinaryMask(segs, fg, { r: 0, g: 0, b: 0, a: 0 })
-  const c1 = document.createElement('canvas'); c1.width = mask.width; c1.height = mask.height; c1.getContext('2d')!.putImageData(mask, 0, 0)
-  const c2 = document.createElement('canvas'); c2.width = mask.width; c2.height = mask.height; const ctx = c2.getContext('2d')!
+  const c1 = document.createElement('canvas'); c1.width = mask.width; c1.height = mask.height; c1.getContext('2d', { willReadFrequently: true })!.putImageData(mask, 0, 0)
+  const c2 = document.createElement('canvas'); c2.width = mask.width; c2.height = mask.height; const ctx = c2.getContext('2d', { willReadFrequently: true })!
   ;[[4,0],[-4,0],[0,4],[0,-4]].forEach(([dx,dy]) => ctx.drawImage(c1, dx, dy)); ctx.globalCompositeOperation = 'destination-out'; ctx.drawImage(c1, 0, 0)
   const bg = fCanvas.value.backgroundImage; const tx = offset ? offset.x : bg.left, ty = offset ? offset.y : bg.top, sx = offset ? offset.sw : bg.scaleX, sy = offset ? offset.sh : bg.scaleY
   inkCtx.save(); inkCtx.translate(tx, ty); inkCtx.scale(sx, sy); offset ? inkCtx.drawImage(c2, 0, 0) : inkCtx.drawImage(c2, -c2.width/2, -c2.height/2); inkCtx.restore(); refreshInkLayer()
@@ -1523,7 +1523,7 @@ const analyzeArea = async (rect: any) => {
     const bg = fCanvas.value.backgroundImage, el = bg.getElement()
     const cx = (rect.left - (bg.left - bg.getScaledWidth()/2)) / bg.scaleX, cy = (rect.top - (bg.top - bg.getScaledHeight()/2)) / bg.scaleY
     const cw = rect.width / bg.scaleX, ch = rect.height / bg.scaleY
-    const tmp = document.createElement('canvas'); tmp.width = cw; tmp.height = ch; tmp.getContext('2d')!.drawImage(el, cx, cy, cw, ch, 0, 0, cw, ch)
+    const tmp = document.createElement('canvas'); tmp.width = cw; tmp.height = ch; tmp.getContext('2d', { willReadFrequently: true })!.drawImage(el, cx, cy, cw, ch, 0, 0, cw, ch)
     await runFullAnalysis(tmp, { x: rect.left, y: rect.top, sw: rect.width / cw, sh: rect.height / ch })
     saveState() // 记录步数
   } catch (e) { console.error('Area analysis error:', e) } finally { isAnalyzing.value = false }
