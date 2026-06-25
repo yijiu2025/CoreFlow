@@ -1381,6 +1381,13 @@ const printSuccess = (msg: string) => console.log(`✅ ${msg}`)
  */
 
 // ─── AI Model Loading ──────────────────────────────────────
+// 抑制 WebGL powerPreference 警告（Windows 已知问题）
+const originalWarn = console.warn
+console.warn = (...args: any[]) => {
+  if (args[0]?.includes?.('powerPreference')) return
+  originalWarn(...args)
+}
+
 const ensureModelsLoaded = async () => {
   if (isDetectorReady.value) return
   try {
