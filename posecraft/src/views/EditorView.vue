@@ -1431,14 +1431,24 @@ const ensureModelsLoaded = async () => {
  */
 
 const drawImageOutline = async (segs: any[], hex: string, offset: any = null) => {
-  if (!segs?.length) return; const h = hex.replace('#', '')
-  const fg = { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16), a: 255 }
-  const mask = await bodySegmentation.toBinaryMask(segs, fg, { r: 0, g: 0, b: 0, a: 0 })
-  const c1 = document.createElement('canvas'); c1.width = mask.width; c1.height = mask.height; c1.getContext('2d', { willReadFrequently: true })!.putImageData(mask, 0, 0)
-  const c2 = document.createElement('canvas'); c2.width = mask.width; c2.height = mask.height; const ctx = c2.getContext('2d', { willReadFrequently: true })!
-  ;[[4,0],[-4,0],[0,4],[0,-4]].forEach(([dx,dy]) => ctx.drawImage(c1, dx, dy)); ctx.globalCompositeOperation = 'destination-out'; ctx.drawImage(c1, 0, 0)
-  const bg = fCanvas.value.backgroundImage; const tx = offset ? offset.x : bg.left, ty = offset ? offset.y : bg.top, sx = offset ? offset.sw : bg.scaleX, sy = offset ? offset.sh : bg.scaleY
-  inkCtx.save(); inkCtx.translate(tx, ty); inkCtx.scale(sx, sy); offset ? inkCtx.drawImage(c2, 0, 0) : inkCtx.drawImage(c2, -c2.width/2, -c2.height/2); inkCtx.restore(); refreshInkLayer()
+  if (!segs?.length) { console.warn('[AI] 轮廓数据为空'); return }
+  try {
+    const h = hex.replace('#', '')
+    const fg = { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16), a: 255 }
+    console.log('[AI] 生成轮廓遮罩...')
+    const mask = await bodySegmentation.toBinaryMask(segs, fg, { r: 0, g: 0, b: 0, a: 0 })
+    console.log('[AI] 遮罩尺寸:', mask.width, 'x', mask.height)
+    const c1 = document.createElement('canvas'); c1.width = mask.width; c1.height = mask.height; c1.getContext('2d', { willReadFrequently: true })!.putImageData(mask, 0, 0)
+    const c2 = document.createElement('canvas'); c2.width = mask.width; c2.height = mask.height; const ctx = c2.getContext('2d', { willReadFrequently: true })!
+    ;[[4,0],[-4,0],[0,4],[0,-4]].forEach(([dx,dy]) => ctx.drawImage(c1, dx, dy)); ctx.globalCompositeOperation = 'destination-out'; ctx.drawImage(c1, 0, 0)
+    const bg = fCanvas.value.backgroundImage
+    if (!bg) { console.warn('[AI] 背景图不存在'); return }
+    const tx = offset ? offset.x : bg.left, ty = offset ? offset.y : bg.top, sx = offset ? offset.sw : bg.scaleX, sy = offset ? offset.sh : bg.scaleY
+    inkCtx.save(); inkCtx.translate(tx, ty); inkCtx.scale(sx, sy); offset ? inkCtx.drawImage(c2, 0, 0) : inkCtx.drawImage(c2, -c2.width/2, -c2.height/2); inkCtx.restore(); refreshInkLayer()
+    console.log('[AI] 轮廓绘制完成')
+  } catch (err) {
+    console.error('[AI] 轮廓绘制失败:', err)
+  }
 }
 
 // 映射关键点坐标
@@ -1481,8 +1491,15 @@ const runFullAnalysis = async (src: any, offset: any = null) => {
   try {
     // 人体分割
     if ((type === 'all' || type === 'segmentation') && segmenter) {
-      const s = await segmenter.segmentPeople(src)
-      if (s?.length) { found = true; await drawImageOutline(s, currentColor.value, offset) }
+      console.log('[AI] 开始轮廓识别...')
+      try {
+        const s = await segmenter.segmentPeople(src)
+        console.log('[AI] 轮廓识别结果:', s?.length, '个人体')
+        if (s?.length) { found = true; await drawImageOutline(s, currentColor.value, offset) }
+        else { console.warn('[AI] 未检测到人体轮廓') }
+      } catch (segErr) {
+        console.error('[AI] 轮廓识别失败:', segErr)
+      }
     }
     // 姿势检测
     if ((type === 'all' || type === 'pose') && detector) {
