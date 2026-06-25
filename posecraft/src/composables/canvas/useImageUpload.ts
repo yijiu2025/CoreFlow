@@ -202,7 +202,7 @@ export function useImageUpload(
         }
       })
 
-      // 监听对象缩放事件（精确控制边界和锚点，修复拉伸错位）
+      // 监听对象缩放事件（精确控制边界和锚点，修复拉伸错位与边界撑破）
       fCanvas.value.on('object:scaling', (e: any) => {
         if (e.target === cropBox) {
           let left = cropBox.left
@@ -210,57 +210,74 @@ export function useImageUpload(
           let bw = cropBox.width * cropBox.scaleX
           let bh = cropBox.height * cropBox.scaleY
 
-          // 记录当前拖拽的锚点（例如拖右侧，锚点其实在左侧；拖左侧，锚点在右侧）
+          // 记录当前拖拽的锚点
           const originX = e.transform?.originX || 'left'
           const originY = e.transform?.originY || 'top'
-          // 计算锚点在画布上的绝对坐标（缩放时锚点这头应当岿然不动）
+
+          // 计算锚点在画布上的绝对坐标（缩放时该点绝对静止）
           const anchorX = originX === 'right' ? left + bw : (originX === 'center' ? left + bw / 2 : left)
           const anchorY = originY === 'bottom' ? top + bh : (originY === 'center' ? top + bh / 2 : top)
 
-          // 1. 限制不超出左上边界
-          if (left < 0) { bw += left; left = 0 }
-          if (top < 0) { bh += top; top = 0 }
+          // 1. 核心逻辑：基于静止锚点和画布边界，计算该方向上允许的最大绝对宽高
+          let maxW = originX === 'left' ? canvasWidth - anchorX
+                   : originX === 'right' ? anchorX
+                   : Math.min(anchorX, canvasWidth - anchorX) * 2
 
-          // 2. 限制不超出右下边界
-          if (left + bw > canvasWidth) { bw = canvasWidth - left }
-          if (top + bh > canvasHeight) { bh = canvasHeight - top }
+          let maxH = originY === 'top' ? canvasHeight - anchorY
+                   : originY === 'bottom' ? anchorY
+                   : Math.min(anchorY, canvasHeight - anchorY) * 2
 
-          // 3. 强制比例约束（修复四边拖拽的等比缩放）
+          // 防止极速拖拽产生负数
+          maxW = Math.max(0, maxW)
+          maxH = Math.max(0, maxH)
+
+          // 2. 强制比例约束与边界双杀拦截
           if (cropAspectRatio.value) {
             const ratio = cropAspectRatio.value
-            const corner = e.transform?.corner // 获取当前鼠标正在拖拽的控制点
+            const corner = e.transform?.corner
 
+            // 按拖动方向计算理想的宽/高
             if (corner === 'ml' || corner === 'mr') {
-              // 如果拖拽的是左右边框，说明是以宽度拉伸为主，据此重算高度
               bh = bw / ratio
             } else if (corner === 'mt' || corner === 'mb') {
-              // 如果拖拽的是上下边框，说明是以高度拉伸为主，据此重算宽度
               bw = bh * ratio
             } else {
-              // 如果拖拽的是四角：常规容错校验
               const currentRatio = bw / bh
               if (Math.abs(currentRatio - ratio) > 0.001) {
-                if (currentRatio > ratio) {
-                  bw = bh * ratio
-                } else {
-                  bh = bw / ratio
-                }
+                if (currentRatio > ratio) bw = bh * ratio
+                else bh = bw / ratio
               }
             }
+
+            // 如果理想宽高超出了允许的最大边界，立刻按比例"回退"卡死
+            if (bw > maxW) {
+              bw = maxW
+              bh = maxW / ratio
+            }
+            if (bh > maxH) {
+              bh = maxH
+              bw = maxH * ratio
+            }
+          } else {
+            // 自由模式，独立限制不超出边界即可
+            if (bw > maxW) bw = maxW
+            if (bh > maxH) bh = maxH
           }
 
-          // 4. 根据锚点重新推算 left 和 top，防止未操作的对边发生反向漂移
+          // 3. 根据固定锚点，重新安全推算 left 和 top
           if (originX === 'right') { left = anchorX - bw }
           else if (originX === 'center') { left = anchorX - bw / 2 }
+          else { left = anchorX }
 
           if (originY === 'bottom') { top = anchorY - bh }
           else if (originY === 'center') { top = anchorY - bh / 2 }
+          else { top = anchorY }
 
-          // 兜底校验：修正比例后极小概率会导致坐标出现微弱负数
+          // 兜底校验：修复计算后的微小浮点误差
           if (left < 0) left = 0
           if (top < 0) top = 0
 
-          // 应用修正后的最终尺寸
+          // 应用修正后的安全尺寸
           cropBox.set({
             left: left,
             top: top,
