@@ -19,7 +19,7 @@ async function handle401(config: AxiosRequestConfig): Promise<any> {
 
       // 尝试刷新 token
       const { authApi } = await import('@/api/auth')
-      const newToken = await authApi.refreshToken()
+      const newToken = (await authApi.refreshToken()) as any
 
       authStore.setLoggedIn(true, authStore.user, newToken)
       pendingQueue.forEach(cb => cb(newToken))

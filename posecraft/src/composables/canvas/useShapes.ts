@@ -174,8 +174,7 @@ export function useShapes(fCanvas: Ref<any>, currentColor: Ref<string>, fillColo
       left: c.left, top: c.top,
       fill: noFill.value ? 'transparent' : fillColor.value,
       stroke: currentColor.value, strokeWidth: strokeWidth.value,
-      originX: 'center', originY: 'center', erasable: true,
-      selectable: true, evented: true
+      originX: 'center', originY: 'center', erasable: true
     }
     const shape = type === 'rect'
       ? new fabric.Rect({ ...baseStyle, width: 120, height: 80 })
@@ -194,8 +193,7 @@ export function useShapes(fCanvas: Ref<any>, currentColor: Ref<string>, fillColo
       fontSize,
       fill: currentColor.value,
       originX: 'center', originY: 'center',
-      erasable: true,
-      selectable: true, evented: true
+      erasable: true
     })
     fCanvas.value.add(text)
     fCanvas.value.setActiveObject(text)

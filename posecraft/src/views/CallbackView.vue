@@ -34,7 +34,7 @@ onMounted(async () => {
     statusMessage.value = '正在换取访问令牌...'
 
     // 用授权码换取 Token
-    const data = await authApi.bindSession(code)
+    const data = (await authApi.bindSession(code)) as any
 
     if (data) {
       statusMessage.value = '登录成功，正在跳转...'

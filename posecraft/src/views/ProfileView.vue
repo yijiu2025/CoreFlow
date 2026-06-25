@@ -77,7 +77,7 @@ onMounted(async () => {
 
   try {
     if (authStore.user?.id) {
-      works.value = await workApi.getUserWorks(authStore.user.id) || []
+      works.value = (await workApi.getUserWorks(authStore.user.id)) as any || []
     }
   } catch (err) {
     console.error('加载作品失败:', err)

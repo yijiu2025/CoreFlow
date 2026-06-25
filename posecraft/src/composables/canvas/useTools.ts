@@ -105,6 +105,7 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
       fCanvas.value.freeDrawingBrush = new fabric.PencilBrush(fCanvas.value)
       fCanvas.value.freeDrawingBrush.width = brushSize.value
       fCanvas.value.freeDrawingBrush.color = currentColor.value
+      console.log('[画笔] setDrawTool 初始化粗细:', brushSize.value)
       if (brushFeather && brushFeather.value > 0) {
         fCanvas.value.freeDrawingBrush.shadow = new fabric.Shadow({
           color: currentColor.value,
