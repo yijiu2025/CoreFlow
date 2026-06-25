@@ -123,25 +123,19 @@ export function useImageUpload(
   }
 
   /** 动态更新裁剪框四边控制点的缩放行为 */
-  const setCropBoxControls = (isLocked: boolean) => {
+  const setCropBoxControls = () => {
     if (!cropBox) return
-    // 浅拷贝 controls，避免污染全局的 fabric.Rect 原型
     if (cropBox.controls === fabric.Rect.prototype.controls) {
       cropBox.controls = { ...fabric.Rect.prototype.controls }
     }
 
     const sideKeys = ['ml', 'mr', 'mt', 'mb']
     sideKeys.forEach(key => {
-      // 深度拷贝当前的控制点实例，避免相互影响
       const ctrl = Object.assign(new fabric.Control({}), cropBox.controls[key])
 
-      // 如果锁定比例，则将四边的行为全部改为「等比缩放」(scalingEqually)
-      // 如果自由比例，则恢复左右缩放(scalingX)或上下缩放(scalingY)
-      if (isLocked) {
-        ctrl.actionHandler = fabric.controlsUtils.scalingEqually
-      } else {
-        ctrl.actionHandler = (key === 'ml' || key === 'mr') ? fabric.controlsUtils.scalingX : fabric.controlsUtils.scalingY
-      }
+      // 永远使用原生的单轴缩放 (scalingX/Y)
+      // 把等比的计算工作交给 object:scaling 事件去完成
+      ctrl.actionHandler = (key === 'ml' || key === 'mr') ? fabric.controlsUtils.scalingX : fabric.controlsUtils.scalingY
       cropBox.controls[key] = ctrl
     })
 
@@ -179,7 +173,7 @@ export function useImageUpload(
       })
 
       // 动态应用控制点配置
-      setCropBoxControls(hasRatio)
+      setCropBoxControls()
 
       // 如果初始就有固定比例，重置宽高贴合比例
       if (hasRatio && cropAspectRatio.value) {
@@ -231,15 +225,26 @@ export function useImageUpload(
           if (left + bw > canvasWidth) { bw = canvasWidth - left }
           if (top + bh > canvasHeight) { bh = canvasHeight - top }
 
-          // 3. 强制比例约束（如果有）
+          // 3. 强制比例约束（修复四边拖拽的等比缩放）
           if (cropAspectRatio.value) {
             const ratio = cropAspectRatio.value
-            const currentRatio = bw / bh
-            if (Math.abs(currentRatio - ratio) > 0.001) {
-              if (currentRatio > ratio) {
-                bw = bh * ratio // 宽超出，基于高缩小宽
-              } else {
-                bh = bw / ratio // 高超出，基于宽缩小高
+            const corner = e.transform?.corner // 获取当前鼠标正在拖拽的控制点
+
+            if (corner === 'ml' || corner === 'mr') {
+              // 如果拖拽的是左右边框，说明是以宽度拉伸为主，据此重算高度
+              bh = bw / ratio
+            } else if (corner === 'mt' || corner === 'mb') {
+              // 如果拖拽的是上下边框，说明是以高度拉伸为主，据此重算宽度
+              bw = bh * ratio
+            } else {
+              // 如果拖拽的是四角：常规容错校验
+              const currentRatio = bw / bh
+              if (Math.abs(currentRatio - ratio) > 0.001) {
+                if (currentRatio > ratio) {
+                  bw = bh * ratio
+                } else {
+                  bh = bw / ratio
+                }
               }
             }
           }
@@ -281,12 +286,11 @@ export function useImageUpload(
     cropAspectRatio.value = ratio
     if (!cropBox || !fCanvas.value) return
 
-    const isLocked = ratio !== null
     // 更新等比锁定状态
-    cropBox.set({ lockUniScaling: isLocked })
+    cropBox.set({ lockUniScaling: ratio !== null })
 
     // 动态更新四边控制点行为并保持可见
-    setCropBoxControls(isLocked)
+    setCropBoxControls()
 
     if (ratio) {
       const currentWidth = cropBox.width * (cropBox.scaleX || 1)
