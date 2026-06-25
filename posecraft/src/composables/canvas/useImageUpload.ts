@@ -146,7 +146,7 @@ export function useImageUpload(
         selectable: true, evented: true, hasControls: true, hasBorders: true,
         cornerColor: '#6366f1', cornerSize: 10, transparentCorners: false,
         borderColor: '#6366f1', isCropBox: true,
-        lockUniScaling: cropAspectRatio.value !== null,
+        lockUniScaling: false,
         hasRotatingPoint: false,
         perPixelTargetFind: false,
         hoverCursor: 'move',
@@ -179,8 +179,17 @@ export function useImageUpload(
           if (cropAspectRatio.value) {
             const ratio = cropAspectRatio.value
             const currentWidth = cropBox.width * cropBox.scaleX
-            const targetHeight = currentWidth / ratio
-            cropBox.set({ scaleY: targetHeight / cropBox.height })
+            const currentHeight = cropBox.height * cropBox.scaleY
+            // 根据宽高比判断是水平还是垂直拖动
+            if (currentWidth / currentHeight > ratio) {
+              // 宽度偏大，以高度为基准调整宽度
+              const targetWidth = currentHeight * ratio
+              cropBox.set({ scaleX: targetWidth / cropBox.width })
+            } else {
+              // 高度偏大，以宽度为基准调整高度
+              const targetHeight = currentWidth / ratio
+              cropBox.set({ scaleY: targetHeight / cropBox.height })
+            }
           }
           // 限制缩放不超出边界
           const bw = cropBox.width * (cropBox.scaleX || 1)
