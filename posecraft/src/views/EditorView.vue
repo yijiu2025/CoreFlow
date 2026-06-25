@@ -422,12 +422,8 @@ watch(currentColor, (v) => { fillColor.value = v })
 
 // 构图参考线状态（支持多选）
 
-// 图片裁剪状态
-const isCropping = ref(false)
-const cropAspectRatio = ref<number | null>(null) // null=自由，1=1:1，4/3=4:3，16/9=16:9
-let cropBox: any = null // 裁剪框对象
-let uploadedImage: any = null // 临时存储上传的图片
-let cropOverlay: any = null // 裁剪遮罩
+// isCropping, cropAspectRatio 来自 useImageUpload composable
+// cropBox, uploadedImage, cropOverlay 是 composable 内部状态
 let startPoint: any = null
 let resizeObserver: any = null
 let spacePressed = false
@@ -672,7 +668,7 @@ watch(zoomSlider, (newVal) => {
 const currentZoom = ref(1)
 
 // 图片上传/裁剪 composable
-const { triggerFileInput, handleImageUpload, startCropMode, updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop, setFileInput, setDeps } = useImageUpload(fCanvas, activeTool, bgImageUploaded, bgOpacity, zoomSlider, currentZoom, saveState, applyCanvasTransform)
+const { isCropping, cropAspectRatio, triggerFileInput, handleImageUpload, startCropMode, updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop, setFileInput, setDeps } = useImageUpload(fCanvas, activeTool, bgImageUploaded, bgOpacity, zoomSlider, currentZoom, saveState, applyCanvasTransform)
 // 传入依赖引用
 watch(fileInput, (v) => { if (v) setFileInput(v) }, { immediate: true })
 watch(canvasContainer, (v) => { if (v) setDeps({ canvasContainer: v }) }, { immediate: true })
