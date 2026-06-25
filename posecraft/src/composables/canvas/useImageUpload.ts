@@ -97,41 +97,56 @@ export function useImageUpload(
   }
 
   /** 更新裁剪遮罩 */
+  let overlayRAF: number | null = null
+
   const updateCropOverlay = (canvasW: number, canvasH: number) => {
     if (!fCanvas.value || !cropBox) return
-    if (cropOverlay) fCanvas.value.remove(cropOverlay)
 
     const bx = cropBox.left, by = cropBox.top
     const bw = cropBox.width * (cropBox.scaleX || 1), bh = cropBox.height * (cropBox.scaleY || 1)
 
-    cropOverlay = new fabric.Rect({
-      left: 0, top: 0, width: canvasW, height: canvasH,
-      fill: 'rgba(0,0,0,0.5)', selectable: false, evented: false, isCropOverlay: true
-    })
-    fCanvas.value.add(cropOverlay)
+    // 复用已有的遮罩对象，只更新 clipPath
+    if (!cropOverlay) {
+      cropOverlay = new fabric.Rect({
+        left: 0, top: 0, width: canvasW, height: canvasH,
+        fill: 'rgba(0,0,0,0.5)', selectable: false, evented: false, isCropOverlay: true
+      })
+      fCanvas.value.add(cropOverlay)
+    }
 
-    const clipRect = new fabric.Rect({
+    // 更新裁剪区域
+    cropOverlay.clipPath = new fabric.Rect({
       left: bx, top: by, width: bw, height: bh,
       absolutePositioned: true, inverted: true
     })
-    cropOverlay.clipPath = clipRect
     cropBox.bringToFront()
     fCanvas.value.renderAll()
   }
 
-  /** 裁剪框移动回调 */
+  /** 裁剪框移动回调（节流） */
   const onCropBoxMoving = () => {
     if (!fCanvas.value || !cropBox) return
-    updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
+    if (overlayRAF) cancelAnimationFrame(overlayRAF)
+    overlayRAF = requestAnimationFrame(() => {
+      updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
+      overlayRAF = null
+    })
   }
 
-  /** 裁剪框缩放回调 */
+  /** 裁剪框缩放回调（节流） */
   const onCropBoxScaling = () => {
     if (!cropBox || !cropAspectRatio.value) return
     const ratio = cropAspectRatio.value
     const newWidth = cropBox.width * (cropBox.scaleX || 1)
     const newHeight = newWidth / ratio
     cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
+    // 缩放时也更新遮罩
+    if (!fCanvas.value) return
+    if (overlayRAF) cancelAnimationFrame(overlayRAF)
+    overlayRAF = requestAnimationFrame(() => {
+      updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
+      overlayRAF = null
+    })
   }
 
   /** 开始裁剪模式 */
