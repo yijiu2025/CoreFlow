@@ -139,6 +139,8 @@ export function useImageUpload(
       uploadedImage = clonedImg
 
       const margin = 20
+      const hasRatio = cropAspectRatio.value !== null
+
       cropBox = new fabric.Rect({
         left: margin, top: margin,
         width: canvasWidth - margin * 2, height: canvasHeight - margin * 2,
@@ -146,42 +148,20 @@ export function useImageUpload(
         selectable: true, evented: true, hasControls: true, hasBorders: true,
         cornerColor: '#6366f1', cornerSize: 10, transparentCorners: false,
         borderColor: '#6366f1', isCropBox: true,
-        lockUniScaling: false,
-        lockScalingX: false,
-        lockScalingY: false,
+        lockUniScaling: hasRatio,
         hasRotatingPoint: false,
         perPixelTargetFind: false,
         hoverCursor: 'move',
-        moveCursor: 'move',
-        // 自定义边线控制点为缩放行为
-        controls: {
-          ...fabric.Rect.prototype.controls,
-          ml: new fabric.Control({
-            x: -0.5, y: 0,
-            actionHandler: fabric.controlsUtils.scalingX,
-            cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
-            actionName: 'scaling'
-          }),
-          mr: new fabric.Control({
-            x: 0.5, y: 0,
-            actionHandler: fabric.controlsUtils.scalingX,
-            cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
-            actionName: 'scaling'
-          }),
-          mt: new fabric.Control({
-            x: 0, y: -0.5,
-            actionHandler: fabric.controlsUtils.scalingY,
-            cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
-            actionName: 'scaling'
-          }),
-          mb: new fabric.Control({
-            x: 0, y: 0.5,
-            actionHandler: fabric.controlsUtils.scalingY,
-            cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
-            actionName: 'scaling'
-          })
-        }
+        moveCursor: 'move'
       })
+
+      // 如果初始化时就有固定比例，隐藏四边控制点（只允许拉四角），并修正宽高
+      if (hasRatio && cropAspectRatio.value) {
+        cropBox.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false })
+        const currentWidth = cropBox.width * (cropBox.scaleX || 1)
+        const newHeight = currentWidth / cropAspectRatio.value
+        cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
+      }
 
       fCanvas.value.add(cropBox)
       fCanvas.value.setActiveObject(cropBox)
@@ -203,46 +183,60 @@ export function useImageUpload(
         }
       })
 
-      // 监听对象缩放事件（强制比例 + 限制边界 + 节流）
+      // 监听对象缩放事件（精确控制边界和锚点，修复拉伸错位）
       fCanvas.value.on('object:scaling', (e: any) => {
         if (e.target === cropBox) {
-          // 先限制边界，再强制比例
-          let bw = cropBox.width * (cropBox.scaleX || 1)
-          let bh = cropBox.height * (cropBox.scaleY || 1)
+          let left = cropBox.left
+          let top = cropBox.top
+          let bw = cropBox.width * cropBox.scaleX
+          let bh = cropBox.height * cropBox.scaleY
 
-          // 限制不超出左上边界
-          if (cropBox.left < 0) cropBox.set({ left: 0 })
-          if (cropBox.top < 0) cropBox.set({ top: 0 })
+          // 记录当前拖拽的锚点（例如拖右侧，锚点其实在左侧；拖左侧，锚点在右侧）
+          const originX = e.transform?.originX || 'left'
+          const originY = e.transform?.originY || 'top'
+          // 计算锚点在画布上的绝对坐标（缩放时锚点这头应当岿然不动）
+          const anchorX = originX === 'right' ? left + bw : (originX === 'center' ? left + bw / 2 : left)
+          const anchorY = originY === 'bottom' ? top + bh : (originY === 'center' ? top + bh / 2 : top)
 
-          // 限制不超出右下边界
-          if (cropBox.left + bw > canvasWidth) {
-            const maxScaleX = (canvasWidth - cropBox.left) / cropBox.width
-            cropBox.set({ scaleX: maxScaleX })
-          }
-          if (cropBox.top + bh > canvasHeight) {
-            const maxScaleY = (canvasHeight - cropBox.top) / cropBox.height
-            cropBox.set({ scaleY: maxScaleY })
-          }
+          // 1. 限制不超出左上边界
+          if (left < 0) { bw += left; left = 0 }
+          if (top < 0) { bh += top; top = 0 }
 
-          // 强制保持比例
+          // 2. 限制不超出右下边界
+          if (left + bw > canvasWidth) { bw = canvasWidth - left }
+          if (top + bh > canvasHeight) { bh = canvasHeight - top }
+
+          // 3. 强制比例约束（如果有）
           if (cropAspectRatio.value) {
             const ratio = cropAspectRatio.value
-            bw = cropBox.width * cropBox.scaleX
-            bh = cropBox.height * cropBox.scaleY
             const currentRatio = bw / bh
-
-            if (Math.abs(currentRatio - ratio) > 0.01) {
+            if (Math.abs(currentRatio - ratio) > 0.001) {
               if (currentRatio > ratio) {
-                // 宽度偏大，以高度为基准调整宽度
-                const newScaleX = (bh * ratio) / cropBox.width
-                cropBox.set({ scaleX: Math.min(newScaleX, (canvasWidth - cropBox.left) / cropBox.width) })
+                bw = bh * ratio // 宽超出，基于高缩小宽
               } else {
-                // 高度偏大，以宽度为基准调整高度
-                const newScaleY = (bw / ratio) / cropBox.height
-                cropBox.set({ scaleY: Math.min(newScaleY, (canvasHeight - cropBox.top) / cropBox.height) })
+                bh = bw / ratio // 高超出，基于宽缩小高
               }
             }
           }
+
+          // 4. 根据锚点重新推算 left 和 top，防止未操作的对边发生反向漂移
+          if (originX === 'right') { left = anchorX - bw }
+          else if (originX === 'center') { left = anchorX - bw / 2 }
+
+          if (originY === 'bottom') { top = anchorY - bh }
+          else if (originY === 'center') { top = anchorY - bh / 2 }
+
+          // 兜底校验：修正比例后极小概率会导致坐标出现微弱负数
+          if (left < 0) left = 0
+          if (top < 0) top = 0
+
+          // 应用修正后的最终尺寸
+          cropBox.set({
+            left: left,
+            top: top,
+            scaleX: bw / cropBox.width,
+            scaleY: bh / cropBox.height
+          })
 
           if (rAFId) cancelAnimationFrame(rAFId)
           rAFId = requestAnimationFrame(() => {
@@ -263,9 +257,17 @@ export function useImageUpload(
     if (!cropBox || !fCanvas.value) return
 
     if (ratio) {
+      // 启用固定比例时，锁定等比缩放并隐藏四边控制点（仅允许拖拽四个角）
+      cropBox.set({ lockUniScaling: true })
+      cropBox.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false })
+
       const currentWidth = cropBox.width * (cropBox.scaleX || 1)
       const newHeight = currentWidth / ratio
       cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
+    } else {
+      // 恢复自由模式时，解除限制并显示四边控制点
+      cropBox.set({ lockUniScaling: false })
+      cropBox.setControlsVisibility({ mt: true, mb: true, ml: true, mr: true })
     }
 
     updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
