@@ -22,6 +22,7 @@ export function useImageUpload(
   let cropBox: any = null
   let uploadedImage: any = null
   let cropOverlay: any = null
+  let fileInputRef: any = null
   let canvasContainer: HTMLElement | null = null
   let inkCanvas: HTMLCanvasElement | null = null
   let inkCtx: CanvasRenderingContext2D | null = null
@@ -41,8 +42,11 @@ export function useImageUpload(
     if (deps.canvasTranslateY !== undefined) canvasTranslateY = deps.canvasTranslateY
   }
 
+  /** 设置 fileInput 引用 */
+  const setFileInput = (ref: any) => { fileInputRef = ref }
+
   /** 触发文件选择 */
-  const triggerFileInput = (fileInput: any) => fileInput?.click()
+  const triggerFileInput = () => fileInputRef?.click()
 
   /** 处理图片上传 */
   const handleImageUpload = (e: Event) => {
@@ -268,6 +272,7 @@ export function useImageUpload(
   return {
     isCropping, cropAspectRatio,
     triggerFileInput, handleImageUpload, startCropMode,
-    updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop, setDeps
+    updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop,
+    setDeps, setFileInput
   }
 }
