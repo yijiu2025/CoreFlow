@@ -152,7 +152,13 @@ export function useImageUpload(
         hoverCursor: 'move',
         moveCursor: 'move',
         // 启用所有边线控制点
-        _controlsVisibility: { ml: true, mr: true, mt: true, mb: true }
+        controls: {
+          ...fabric.Rect.prototype.controls,
+          ml: new fabric.Control({ x: -0.5, y: 0, actionHandler: fabric.controlsUtils.scalingXOrSkewingY, cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler }),
+          mr: new fabric.Control({ x: 0.5, y: 0, actionHandler: fabric.controlsUtils.scalingXOrSkewingY, cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler }),
+          mt: new fabric.Control({ x: 0, y: -0.5, actionHandler: fabric.controlsUtils.scalingYOrSkewingX, cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler }),
+          mb: new fabric.Control({ x: 0, y: 0.5, actionHandler: fabric.controlsUtils.scalingYOrSkewingX, cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler })
+        }
       })
 
       fCanvas.value.add(cropBox)
@@ -204,18 +210,12 @@ export function useImageUpload(
     if (!cropBox || !fCanvas.value) return
 
     if (ratio) {
-      cropBox.set({
-        lockUniScaling: true,
-        _controlsVisibility: { ml: true, mr: true, mt: true, mb: true }
-      })
+      cropBox.set({ lockUniScaling: true })
       const currentWidth = cropBox.width * (cropBox.scaleX || 1)
       const newHeight = currentWidth / ratio
       cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
     } else {
-      cropBox.set({
-        lockUniScaling: false,
-        _controlsVisibility: { ml: true, mr: true, mt: true, mb: true }
-      })
+      cropBox.set({ lockUniScaling: false })
     }
 
     updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
