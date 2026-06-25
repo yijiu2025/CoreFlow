@@ -173,8 +173,15 @@ export function useImageUpload(
       })
       fCanvas.value.add(cropBox)
       fCanvas.value.setActiveObject(cropBox)
-      cropBox.on('moving', onCropBoxMoving)
-      cropBox.on('scaling', onCropBoxScaling)
+
+      // 在 canvas 级别监听事件（Fabric.js 的 scaling 事件在 canvas 上触发）
+      fCanvas.value.on('object:moving', (e: any) => {
+        if (e.target === cropBox) onCropBoxMoving()
+      })
+      fCanvas.value.on('object:scaling', (e: any) => {
+        if (e.target === cropBox) onCropBoxScaling()
+      })
+
       updateCropOverlay(canvasWidth, canvasHeight)
       isCropping.value = true
       fCanvas.value.renderAll()
