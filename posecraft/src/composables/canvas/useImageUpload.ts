@@ -168,18 +168,6 @@ export function useImageUpload(
         }
       })
 
-      // 使用 after:render 确保遮罩同步（兜底方案）
-      fCanvas.value.on('after:render', () => {
-        if (cropBox && cropOverlay) {
-          const bx = cropBox.left, by = cropBox.top
-          const bw = cropBox.width * (cropBox.scaleX || 1), bh = cropBox.height * (cropBox.scaleY || 1)
-          cropOverlay.clipPath = new fabric.Rect({
-            left: bx, top: by, width: bw, height: bh,
-            absolutePositioned: true, inverted: true
-          })
-        }
-      })
-
       updateCropOverlay(canvasWidth, canvasHeight)
       isCropping.value = true
       fCanvas.value.renderAll()
