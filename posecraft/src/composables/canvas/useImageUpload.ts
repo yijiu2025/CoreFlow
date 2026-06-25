@@ -133,20 +133,17 @@ export function useImageUpload(
     })
   }
 
-  /** 裁剪框缩放回调（节流） */
+  /** 裁剪框缩放回调（直接更新，不节流） */
   const onCropBoxScaling = () => {
     if (!cropBox || !cropAspectRatio.value) return
     const ratio = cropAspectRatio.value
     const newWidth = cropBox.width * (cropBox.scaleX || 1)
     const newHeight = newWidth / ratio
     cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
-    // 缩放时也更新遮罩
-    if (!fCanvas.value) return
-    if (overlayRAF) cancelAnimationFrame(overlayRAF)
-    overlayRAF = requestAnimationFrame(() => {
+    // 缩放时直接更新遮罩（不节流，保证实时性）
+    if (fCanvas.value && cropBox) {
       updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
-      overlayRAF = null
-    })
+    }
   }
 
   /** 开始裁剪模式 */
