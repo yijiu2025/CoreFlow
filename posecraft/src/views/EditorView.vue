@@ -672,9 +672,10 @@ watch(zoomSlider, (newVal) => {
 const currentZoom = ref(1)
 
 // 图片上传/裁剪 composable
-const { triggerFileInput, handleImageUpload, startCropMode, updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop, setFileInput } = useImageUpload(fCanvas, activeTool, bgImageUploaded, bgOpacity, zoomSlider, currentZoom, saveState, applyCanvasTransform)
-// 传入 fileInput 引用
+const { triggerFileInput, handleImageUpload, startCropMode, updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop, setFileInput, setDeps } = useImageUpload(fCanvas, activeTool, bgImageUploaded, bgOpacity, zoomSlider, currentZoom, saveState, applyCanvasTransform)
+// 传入依赖引用
 watch(fileInput, (v) => { if (v) setFileInput(v) }, { immediate: true })
+watch(canvasContainer, (v) => { if (v) setDeps({ canvasContainer: v }) }, { immediate: true })
 
 // 放大
 const zoomIn = () => {
