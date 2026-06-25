@@ -142,14 +142,15 @@ export function useImageUpload(
       cropBox = new fabric.Rect({
         left: margin, top: margin,
         width: canvasWidth - margin * 2, height: canvasHeight - margin * 2,
-        fill: 'transparent', stroke: '#6366f1', strokeWidth: 2, strokeDashArray: [8, 4],
+        fill: 'rgba(0,0,0,0.01)', stroke: '#6366f1', strokeWidth: 2, strokeDashArray: [8, 4],
         selectable: true, evented: true, hasControls: true, hasBorders: true,
         cornerColor: '#6366f1', cornerSize: 10, transparentCorners: false,
         borderColor: '#6366f1', isCropBox: true,
         lockUniScaling: cropAspectRatio.value !== null,
-        // 允许从中间拖动
         hasRotatingPoint: false,
-        perPixelTargetFind: false
+        perPixelTargetFind: false,
+        hoverCursor: 'move',
+        moveCursor: 'move'
       })
 
       fCanvas.value.add(cropBox)
