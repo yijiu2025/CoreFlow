@@ -146,15 +146,25 @@ export function useImageUpload(
         selectable: true, evented: true, hasControls: true, hasBorders: true,
         cornerColor: '#6366f1', cornerSize: 10, transparentCorners: false,
         borderColor: '#6366f1', isCropBox: true,
-        lockUniScaling: cropAspectRatio.value !== null
+        lockUniScaling: cropAspectRatio.value !== null,
+        // 允许从中间拖动
+        hasRotatingPoint: false,
+        perPixelTargetFind: false
       })
 
       fCanvas.value.add(cropBox)
       fCanvas.value.setActiveObject(cropBox)
 
-      // 监听对象移动事件（节流）
+      // 监听对象移动事件（限制边界 + 节流）
       fCanvas.value.on('object:moving', (e: any) => {
         if (e.target === cropBox) {
+          // 限制裁剪框不超出图片边界
+          const bw = cropBox.width * (cropBox.scaleX || 1)
+          const bh = cropBox.height * (cropBox.scaleY || 1)
+          cropBox.set({
+            left: Math.max(0, Math.min(cropBox.left, canvasWidth - bw)),
+            top: Math.max(0, Math.min(cropBox.top, canvasHeight - bh))
+          })
           if (rAFId) cancelAnimationFrame(rAFId)
           rAFId = requestAnimationFrame(() => {
             updateCropOverlay(canvasWidth, canvasHeight)
@@ -162,7 +172,7 @@ export function useImageUpload(
         }
       })
 
-      // 监听对象缩放事件（优化比例计算 + 节流）
+      // 监听对象缩放事件（优化比例计算 + 限制边界 + 节流）
       fCanvas.value.on('object:scaling', (e: any) => {
         if (e.target === cropBox) {
           if (cropAspectRatio.value) {
@@ -171,6 +181,13 @@ export function useImageUpload(
             const targetHeight = currentWidth / ratio
             cropBox.set({ scaleY: targetHeight / cropBox.height })
           }
+          // 限制缩放不超出边界
+          const bw = cropBox.width * (cropBox.scaleX || 1)
+          const bh = cropBox.height * (cropBox.scaleY || 1)
+          if (cropBox.left < 0) cropBox.set({ left: 0 })
+          if (cropBox.top < 0) cropBox.set({ top: 0 })
+          if (cropBox.left + bw > canvasWidth) cropBox.set({ scaleX: (canvasWidth - cropBox.left) / cropBox.width })
+          if (cropBox.top + bh > canvasHeight) cropBox.set({ scaleY: (canvasHeight - cropBox.top) / cropBox.height })
           if (rAFId) cancelAnimationFrame(rAFId)
           rAFId = requestAnimationFrame(() => {
             updateCropOverlay(canvasWidth, canvasHeight)
