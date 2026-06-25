@@ -30,6 +30,7 @@ export function useImageUpload(
   let canvasScale = 1
   let canvasTranslateX = 0
   let canvasTranslateY = 0
+  let rAFId: number | null = null
 
   /** 设置外部依赖 */
   const setDeps = (deps: { canvasContainer?: HTMLElement; inkCanvas?: HTMLCanvasElement; inkCtx?: CanvasRenderingContext2D; inkLayer?: any; canvasScale?: number; canvasTranslateX?: number; canvasTranslateY?: number }) => {
@@ -144,27 +145,36 @@ export function useImageUpload(
         fill: 'transparent', stroke: '#6366f1', strokeWidth: 2, strokeDashArray: [8, 4],
         selectable: true, evented: true, hasControls: true, hasBorders: true,
         cornerColor: '#6366f1', cornerSize: 10, transparentCorners: false,
-        borderColor: '#6366f1', isCropBox: true
+        borderColor: '#6366f1', isCropBox: true,
+        lockUniScaling: cropAspectRatio.value !== null
       })
+
       fCanvas.value.add(cropBox)
       fCanvas.value.setActiveObject(cropBox)
 
-      // 监听对象交互事件
+      // 监听对象移动事件（节流）
       fCanvas.value.on('object:moving', (e: any) => {
         if (e.target === cropBox) {
-          updateCropOverlay(canvasWidth, canvasHeight)
+          if (rAFId) cancelAnimationFrame(rAFId)
+          rAFId = requestAnimationFrame(() => {
+            updateCropOverlay(canvasWidth, canvasHeight)
+          })
         }
       })
+
+      // 监听对象缩放事件（优化比例计算 + 节流）
       fCanvas.value.on('object:scaling', (e: any) => {
         if (e.target === cropBox) {
-          // 更新裁剪比例约束
           if (cropAspectRatio.value) {
             const ratio = cropAspectRatio.value
-            const newWidth = cropBox.width * (cropBox.scaleX || 1)
-            const newHeight = newWidth / ratio
-            cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
+            const currentWidth = cropBox.width * cropBox.scaleX
+            const targetHeight = currentWidth / ratio
+            cropBox.set({ scaleY: targetHeight / cropBox.height })
           }
-          updateCropOverlay(canvasWidth, canvasHeight)
+          if (rAFId) cancelAnimationFrame(rAFId)
+          rAFId = requestAnimationFrame(() => {
+            updateCropOverlay(canvasWidth, canvasHeight)
+          })
         }
       })
 
@@ -177,10 +187,17 @@ export function useImageUpload(
   /** 更新裁剪比例 */
   const updateCropAspectRatio = (ratio: number | null) => {
     cropAspectRatio.value = ratio
-    if (!cropBox || !ratio || !fCanvas.value) return
-    const currentWidth = cropBox.width * (cropBox.scaleX || 1)
-    const newHeight = currentWidth / ratio
-    cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
+    if (!cropBox || !fCanvas.value) return
+
+    if (ratio) {
+      cropBox.set({ lockUniScaling: true })
+      const currentWidth = cropBox.width * (cropBox.scaleX || 1)
+      const newHeight = currentWidth / ratio
+      cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
+    } else {
+      cropBox.set({ lockUniScaling: false })
+    }
+
     updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
     fCanvas.value.renderAll()
   }
@@ -188,6 +205,7 @@ export function useImageUpload(
   /** 确认裁剪 */
   const confirmCrop = () => {
     if (!fCanvas.value || !cropBox || !uploadedImage) return
+    if (rAFId) cancelAnimationFrame(rAFId)
     const bx = cropBox.left, by = cropBox.top
     const bw = cropBox.width * (cropBox.scaleX || 1), bh = cropBox.height * (cropBox.scaleY || 1)
 
@@ -238,6 +256,7 @@ export function useImageUpload(
   /** 取消裁剪 */
   const cancelCrop = () => {
     if (!fCanvas.value || !uploadedImage) return
+    if (rAFId) cancelAnimationFrame(rAFId)
     const canvasW = fCanvas.value.width, canvasH = fCanvas.value.height
 
     fCanvas.value.clear()
