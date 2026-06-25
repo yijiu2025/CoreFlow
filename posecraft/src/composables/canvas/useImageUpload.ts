@@ -147,10 +147,40 @@ export function useImageUpload(
         cornerColor: '#6366f1', cornerSize: 10, transparentCorners: false,
         borderColor: '#6366f1', isCropBox: true,
         lockUniScaling: false,
+        lockScalingX: false,
+        lockScalingY: false,
         hasRotatingPoint: false,
         perPixelTargetFind: false,
         hoverCursor: 'move',
-        moveCursor: 'move'
+        moveCursor: 'move',
+        // 自定义边线控制点为缩放行为
+        controls: {
+          ...fabric.Rect.prototype.controls,
+          ml: new fabric.Control({
+            x: -0.5, y: 0,
+            actionHandler: fabric.controlsUtils.scalingX,
+            cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
+            actionName: 'scaling'
+          }),
+          mr: new fabric.Control({
+            x: 0.5, y: 0,
+            actionHandler: fabric.controlsUtils.scalingX,
+            cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
+            actionName: 'scaling'
+          }),
+          mt: new fabric.Control({
+            x: 0, y: -0.5,
+            actionHandler: fabric.controlsUtils.scalingY,
+            cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
+            actionName: 'scaling'
+          }),
+          mb: new fabric.Control({
+            x: 0, y: 0.5,
+            actionHandler: fabric.controlsUtils.scalingY,
+            cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
+            actionName: 'scaling'
+          })
+        }
       })
 
       fCanvas.value.add(cropBox)
