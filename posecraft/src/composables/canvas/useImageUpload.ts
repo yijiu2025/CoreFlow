@@ -146,11 +146,13 @@ export function useImageUpload(
         selectable: true, evented: true, hasControls: true, hasBorders: true,
         cornerColor: '#6366f1', cornerSize: 10, transparentCorners: false,
         borderColor: '#6366f1', isCropBox: true,
-        lockUniScaling: false,
+        lockUniScaling: true,
         hasRotatingPoint: false,
         perPixelTargetFind: false,
         hoverCursor: 'move',
-        moveCursor: 'move'
+        moveCursor: 'move',
+        // 启用所有边线控制点
+        _controlsVisibility: { ml: true, mr: true, mt: true, mb: true }
       })
 
       fCanvas.value.add(cropBox)
@@ -173,24 +175,9 @@ export function useImageUpload(
         }
       })
 
-      // 监听对象缩放事件（优化比例计算 + 限制边界 + 节流）
+      // 监听对象缩放事件（限制边界 + 节流）
       fCanvas.value.on('object:scaling', (e: any) => {
         if (e.target === cropBox) {
-          if (cropAspectRatio.value) {
-            const ratio = cropAspectRatio.value
-            const currentWidth = cropBox.width * cropBox.scaleX
-            const currentHeight = cropBox.height * cropBox.scaleY
-            // 根据宽高比判断是水平还是垂直拖动
-            if (currentWidth / currentHeight > ratio) {
-              // 宽度偏大，以高度为基准调整宽度
-              const targetWidth = currentHeight * ratio
-              cropBox.set({ scaleX: targetWidth / cropBox.width })
-            } else {
-              // 高度偏大，以宽度为基准调整高度
-              const targetHeight = currentWidth / ratio
-              cropBox.set({ scaleY: targetHeight / cropBox.height })
-            }
-          }
           // 限制缩放不超出边界
           const bw = cropBox.width * (cropBox.scaleX || 1)
           const bh = cropBox.height * (cropBox.scaleY || 1)
@@ -217,12 +204,18 @@ export function useImageUpload(
     if (!cropBox || !fCanvas.value) return
 
     if (ratio) {
-      cropBox.set({ lockUniScaling: true })
+      cropBox.set({
+        lockUniScaling: true,
+        _controlsVisibility: { ml: true, mr: true, mt: true, mb: true }
+      })
       const currentWidth = cropBox.width * (cropBox.scaleX || 1)
       const newHeight = currentWidth / ratio
       cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
     } else {
-      cropBox.set({ lockUniScaling: false })
+      cropBox.set({
+        lockUniScaling: false,
+        _controlsVisibility: { ml: true, mr: true, mt: true, mb: true }
+      })
     }
 
     updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
