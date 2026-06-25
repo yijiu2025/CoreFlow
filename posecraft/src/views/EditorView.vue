@@ -1444,8 +1444,9 @@ const drawImageOutline = async (segs: any[], hex: string, offset: any = null) =>
     const bg = fCanvas.value.backgroundImage
     if (!bg) { console.warn('[AI] 背景图不存在'); return }
     const tx = offset ? offset.x : bg.left, ty = offset ? offset.y : bg.top, sx = offset ? offset.sw : bg.scaleX, sy = offset ? offset.sh : bg.scaleY
+    console.log('[AI] 绘制位置:', { tx, ty, sx, sy, inkCanvasSize: `${inkCanvas.width}x${inkCanvas.height}` })
     inkCtx.save(); inkCtx.translate(tx, ty); inkCtx.scale(sx, sy); offset ? inkCtx.drawImage(c2, 0, 0) : inkCtx.drawImage(c2, -c2.width/2, -c2.height/2); inkCtx.restore(); refreshInkLayer()
-    console.log('[AI] 轮廓绘制完成')
+    console.log('[AI] 轮廓绘制完成, inkLayer visible:', inkLayer?.visible, 'opacity:', inkLayer?.opacity)
   } catch (err) {
     console.error('[AI] 轮廓绘制失败:', err)
   }
