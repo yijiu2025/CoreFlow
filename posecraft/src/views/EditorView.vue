@@ -797,7 +797,9 @@ const initCanvas = () => {
   })
 
   // 对象修改完成时记录步骤（拖拽、缩放等）
-  fCanvas.value.on('object:modified', () => {
+  fCanvas.value.on('object:modified', (e: any) => {
+    // 裁剪框的移动/缩放不计入步数
+    if (e.target?.isCropBox) return
     saveState()
   })
 
