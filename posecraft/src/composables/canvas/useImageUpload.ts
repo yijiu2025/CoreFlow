@@ -122,6 +122,33 @@ export function useImageUpload(
     fCanvas.value.renderAll()
   }
 
+  /** 动态更新裁剪框四边控制点的缩放行为 */
+  const setCropBoxControls = (isLocked: boolean) => {
+    if (!cropBox) return
+    // 浅拷贝 controls，避免污染全局的 fabric.Rect 原型
+    if (cropBox.controls === fabric.Rect.prototype.controls) {
+      cropBox.controls = { ...fabric.Rect.prototype.controls }
+    }
+
+    const sideKeys = ['ml', 'mr', 'mt', 'mb']
+    sideKeys.forEach(key => {
+      // 深度拷贝当前的控制点实例，避免相互影响
+      const ctrl = Object.assign(new fabric.Control({}), cropBox.controls[key])
+
+      // 如果锁定比例，则将四边的行为全部改为「等比缩放」(scalingEqually)
+      // 如果自由比例，则恢复左右缩放(scalingX)或上下缩放(scalingY)
+      if (isLocked) {
+        ctrl.actionHandler = fabric.controlsUtils.scalingEqually
+      } else {
+        ctrl.actionHandler = (key === 'ml' || key === 'mr') ? fabric.controlsUtils.scalingX : fabric.controlsUtils.scalingY
+      }
+      cropBox.controls[key] = ctrl
+    })
+
+    // 强制四边控制点始终显示
+    cropBox.setControlsVisibility({ mt: true, mb: true, ml: true, mr: true })
+  }
+
   /** 开始裁剪模式 */
   const startCropMode = () => {
     if (!fCanvas.value || !bgImageUploaded.value) return
@@ -148,16 +175,14 @@ export function useImageUpload(
         selectable: true, evented: true, hasControls: true, hasBorders: true,
         cornerColor: '#6366f1', cornerSize: 10, transparentCorners: false,
         borderColor: '#6366f1', isCropBox: true,
-        lockUniScaling: hasRatio,
-        hasRotatingPoint: false,
-        perPixelTargetFind: false,
-        hoverCursor: 'move',
-        moveCursor: 'move'
+        lockUniScaling: hasRatio
       })
 
-      // 如果初始化时就有固定比例，隐藏四边控制点（只允许拉四角），并修正宽高
+      // 动态应用控制点配置
+      setCropBoxControls(hasRatio)
+
+      // 如果初始就有固定比例，重置宽高贴合比例
       if (hasRatio && cropAspectRatio.value) {
-        cropBox.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false })
         const currentWidth = cropBox.width * (cropBox.scaleX || 1)
         const newHeight = currentWidth / cropAspectRatio.value
         cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
@@ -256,18 +281,17 @@ export function useImageUpload(
     cropAspectRatio.value = ratio
     if (!cropBox || !fCanvas.value) return
 
-    if (ratio) {
-      // 启用固定比例时，锁定等比缩放并隐藏四边控制点（仅允许拖拽四个角）
-      cropBox.set({ lockUniScaling: true })
-      cropBox.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false })
+    const isLocked = ratio !== null
+    // 更新等比锁定状态
+    cropBox.set({ lockUniScaling: isLocked })
 
+    // 动态更新四边控制点行为并保持可见
+    setCropBoxControls(isLocked)
+
+    if (ratio) {
       const currentWidth = cropBox.width * (cropBox.scaleX || 1)
       const newHeight = currentWidth / ratio
       cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
-    } else {
-      // 恢复自由模式时，解除限制并显示四边控制点
-      cropBox.set({ lockUniScaling: false })
-      cropBox.setControlsVisibility({ mt: true, mb: true, ml: true, mr: true })
     }
 
     updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
