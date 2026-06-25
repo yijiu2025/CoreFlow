@@ -410,7 +410,7 @@ const lineStyle = ref('solid') // solid | dashed | dotted
 const shapeOpacity = ref(100)
 
 // 初始化 composables
-const { undoStack, redoStack, saveState, undo, redo } = useHistory(fCanvas, { value: isStateSavingLocked }, null, null)
+const { undoStack, redoStack, saveState, undo, redo, setOnStateRestored } = useHistory(fCanvas, { value: isStateSavingLocked }, null, null)
 const { selectTab, selectHandTool, setDrawTool, setTool } = useTools(fCanvas, activeTool, canvasTool)
 const { applyColor } = useShapes(fCanvas, currentColor, fillColor)
 const { activeGuides, drawReference, deleteGuides, toggleGuide } = useReferenceLines(fCanvas, fillColor, strokeWidth, saveState)
@@ -672,6 +672,13 @@ const { isCropping, cropAspectRatio, triggerFileInput, handleImageUpload, startC
 // 传入依赖引用
 watch(fileInput, (v) => { if (v) setFileInput(v) }, { immediate: true })
 watch(canvasContainer, (v) => { if (v) setDeps({ canvasContainer: v }) }, { immediate: true })
+
+// 撤销/重做时重置裁剪模式
+setOnStateRestored(() => {
+  if (isCropping.value) {
+    isCropping.value = false
+  }
+})
 
 // 放大
 const zoomIn = () => {

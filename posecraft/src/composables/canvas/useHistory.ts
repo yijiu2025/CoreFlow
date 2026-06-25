@@ -10,6 +10,10 @@ import type { Ref } from 'vue'
 export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: boolean }, inkCanvas: HTMLCanvasElement | null, inkCtx: CanvasRenderingContext2D | null) {
   const undoStack = ref<any[]>([])
   const redoStack = ref<any[]>([])
+  let onStateRestored: (() => void) | null = null
+
+  /** 设置状态恢复后的回调 */
+  const setOnStateRestored = (cb: () => void) => { onStateRestored = cb }
 
   /** 保存当前状态到撤销栈 */
   const saveState = () => {
@@ -46,6 +50,8 @@ export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: bool
       if (inkLayer && inkCanvas) inkLayer.setElement(inkCanvas)
       fCanvas.value.renderAll()
       isStateSavingLocked.value = false
+      // 通知外部状态已恢复（用于重置裁剪模式等）
+      if (onStateRestored) onStateRestored()
     })
   }
 
@@ -65,5 +71,5 @@ export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: bool
     restoreState(n)
   }
 
-  return { undoStack, redoStack, saveState, restoreState, undo, redo }
+  return { undoStack, redoStack, saveState, restoreState, undo, redo, setOnStateRestored }
 }
