@@ -97,8 +97,6 @@ export function useImageUpload(
   }
 
   /** 更新裁剪遮罩 */
-  let overlayRAF: number | null = null
-
   const updateCropOverlay = (canvasW: number, canvasH: number) => {
     if (!fCanvas.value || !cropBox) return
 
@@ -121,29 +119,6 @@ export function useImageUpload(
     })
     cropBox.bringToFront()
     fCanvas.value.renderAll()
-  }
-
-  /** 裁剪框移动回调（节流） */
-  const onCropBoxMoving = () => {
-    if (!fCanvas.value || !cropBox) return
-    if (overlayRAF) cancelAnimationFrame(overlayRAF)
-    overlayRAF = requestAnimationFrame(() => {
-      updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
-      overlayRAF = null
-    })
-  }
-
-  /** 裁剪框缩放回调（直接更新，不节流） */
-  const onCropBoxScaling = () => {
-    if (!cropBox || !cropAspectRatio.value) return
-    const ratio = cropAspectRatio.value
-    const newWidth = cropBox.width * (cropBox.scaleX || 1)
-    const newHeight = newWidth / ratio
-    cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
-    // 缩放时直接更新遮罩（不节流，保证实时性）
-    if (fCanvas.value && cropBox) {
-      updateCropOverlay(fCanvas.value.width, fCanvas.value.height)
-    }
   }
 
   /** 开始裁剪模式 */
@@ -174,12 +149,35 @@ export function useImageUpload(
       fCanvas.value.add(cropBox)
       fCanvas.value.setActiveObject(cropBox)
 
-      // 在 canvas 级别监听事件（Fabric.js 的 scaling 事件在 canvas 上触发）
+      // 监听对象交互事件
       fCanvas.value.on('object:moving', (e: any) => {
-        if (e.target === cropBox) onCropBoxMoving()
+        if (e.target === cropBox) {
+          updateCropOverlay(canvasWidth, canvasHeight)
+        }
       })
       fCanvas.value.on('object:scaling', (e: any) => {
-        if (e.target === cropBox) onCropBoxScaling()
+        if (e.target === cropBox) {
+          // 更新裁剪比例约束
+          if (cropAspectRatio.value) {
+            const ratio = cropAspectRatio.value
+            const newWidth = cropBox.width * (cropBox.scaleX || 1)
+            const newHeight = newWidth / ratio
+            cropBox.set({ height: newHeight / (cropBox.scaleY || 1), scaleY: cropBox.scaleX })
+          }
+          updateCropOverlay(canvasWidth, canvasHeight)
+        }
+      })
+
+      // 使用 after:render 确保遮罩同步（兜底方案）
+      fCanvas.value.on('after:render', () => {
+        if (cropBox && cropOverlay) {
+          const bx = cropBox.left, by = cropBox.top
+          const bw = cropBox.width * (cropBox.scaleX || 1), bh = cropBox.height * (cropBox.scaleY || 1)
+          cropOverlay.clipPath = new fabric.Rect({
+            left: bx, top: by, width: bw, height: bh,
+            absolutePositioned: true, inverted: true
+          })
+        }
       })
 
       updateCropOverlay(canvasWidth, canvasHeight)
