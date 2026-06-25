@@ -1494,18 +1494,21 @@ const drawHandSkeleton = (hand: any, offset: any = null) => {
 const runFullAnalysis = async (src: any, offset: any = null) => {
   if (!bgImageUploaded.value || !detector) return; let found = false; isStateSavingLocked = true
   const type = detectionType.value
+  console.log('[AI] 分析类型:', type, 'segmenter:', !!segmenter, 'detector:', !!detector)
   try {
     // 人体分割
     if ((type === 'all' || type === 'segmentation') && segmenter) {
       console.log('[AI] 开始轮廓识别...')
       try {
         const s = await segmenter.segmentPeople(src)
-        console.log('[AI] 轮廓识别结果:', s?.length, '个人体')
+        console.log('[AI] 轮廓识别结果:', s?.length, '个人体', s)
         if (s?.length) { found = true; await drawImageOutline(s, currentColor.value, offset) }
         else { console.warn('[AI] 未检测到人体轮廓') }
       } catch (segErr) {
         console.error('[AI] 轮廓识别失败:', segErr)
       }
+    } else {
+      console.log('[AI] 跳过轮廓识别 - type:', type, 'segmenter:', !!segmenter)
     }
     // 姿势检测
     if ((type === 'all' || type === 'pose') && detector) {
