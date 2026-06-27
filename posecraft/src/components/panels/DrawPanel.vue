@@ -60,21 +60,11 @@
         {{ mode.label }}
       </button>
     </div>
-
-    <div class="panel-divider"></div>
-
-    <!-- 画笔颜色 -->
-    <ColorPanel
-      title="画笔颜色"
-      :modelValue="currentColor"
-      @update:modelValue="$emit('update:currentColor', $event)"
-    />
   </PanelSection>
 </template>
 
 <script setup lang="ts">
 import PanelSection from './PanelSection.vue'
-import ColorPanel from '../color/ColorPanel.vue'
 
 defineProps<{
   brushSize: number
@@ -82,11 +72,9 @@ defineProps<{
   brushFeather: number
   brushStyle: string
   brushBlend: string
-  currentColor: string
-  presetColors?: string[]
 }>()
 
-defineEmits(['update:brushSize', 'update:brushOpacity', 'update:brushFeather', 'update:brushStyle', 'update:brushBlend', 'update:currentColor'])
+defineEmits(['update:brushSize', 'update:brushOpacity', 'update:brushFeather', 'update:brushStyle', 'update:brushBlend'])
 
 const blendModes = [
   { value: 'source-over', label: '正常' },

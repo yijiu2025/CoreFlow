@@ -64,21 +64,6 @@
       </button>
     </div>
 
-    <div class="panel-divider"></div>
-
-    <!-- 分析颜色 -->
-    <div class="section-label">分析颜色</div>
-    <div class="color-section">
-      <div class="color-row">
-        <div class="color-swatch-lg">
-          <input type="color" :value="currentColor" @input="$emit('update:currentColor', ($event.target as HTMLInputElement).value)" id="image-color-picker" />
-          <label for="image-color-picker" class="swatch-lg" :style="{ background: currentColor }"></label>
-        </div>
-        <div class="preset-colors">
-          <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:currentColor', c)"></button>
-        </div>
-      </div>
-    </div>
   </PanelSection>
 </template>
 
@@ -87,9 +72,7 @@ import PanelSection from './PanelSection.vue'
 
 defineProps<{
   bgOpacity: number
-  currentColor: string
   cropAspectRatio: number | null
-  presetColors: string[]
 }>()
 
 defineEmits(['replaceImage', 'cropImage', 'update:bgOpacity', 'update:cropAspectRatio', 'update:currentColor'])

@@ -218,20 +218,15 @@
           :activeTool="canvasTool"
           :canvasTool="canvasTool"
           v-model:bgOpacity="bgOpacity"
-          v-model:currentColor="currentColor"
           :detectionTypes="detectionTypes"
-          :presetColors="presetColors"
           @autoAnalyze="autoAnalyze"
           @setTool="setTool"
           @setDrawTool="setDrawTool"
           @clearAnalysis="clearAnalysis"
-          @addText="addText"
         />
 
         <SelectPanel v-show="activeTool === 'select'"
           :selectedObject="selectedObject"
-          :currentColor="currentColor"
-          :presetColors="presetColors"
           :pathBlur="pathBlur"
           @deleteSelected="deleteSelected"
           @bringToFront="bringToFront"
@@ -240,7 +235,6 @@
           @moveDown="moveDown"
           @copySelected="copySelected"
           @pasteClipboard="pasteClipboard"
-          @update:currentColor="updateColorFromPanel"
           @update:pathStrokeWidth="updatePathStrokeWidth"
           @update:pathBlur="updatePathBlur"
           @update:pathScale="updatePathScale"
@@ -287,8 +281,6 @@
 
         <TextPanel v-show="activeTool === 'text'"
           v-model:fontSize="textFontSize"
-          v-model:currentColor="currentColor"
-          :presetColors="presetColors"
           @addText="addText"
         />
 
@@ -303,14 +295,11 @@
 
         <ImagePanel v-show="activeTool === 'image' && bgImageUploaded && !isCropping"
           :bgOpacity="bgOpacity"
-          :currentColor="currentColor"
           :cropAspectRatio="cropAspectRatio"
-          :presetColors="presetColors"
           @replaceImage="triggerFileInput"
           @cropImage="startCropMode"
           @update:bgOpacity="updateBgOpacity"
           @update:cropAspectRatio="cropAspectRatio = $event"
-          @update:currentColor="currentColor = $event"
         />
 
         <CropPanel v-show="isCropping"

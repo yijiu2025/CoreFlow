@@ -27,50 +27,33 @@
       <p>点击画布上的对象进行选择</p>
     </div>
 
-    <!-- 选中对象的颜色修改 -->
-    <template v-if="selectedObject">
+    <!-- 画笔路径的属性调整 -->
+    <template v-if="selectedObject && isBrushPath">
       <div class="panel-divider"></div>
-      <div class="section-label">修改颜色</div>
-      <div class="color-section">
-        <div class="color-row">
-          <div class="color-swatch-lg">
-            <input type="color" :value="currentColor" @input="$emit('update:currentColor', ($event.target as HTMLInputElement).value)" id="select-color-picker" />
-            <label for="select-color-picker" class="swatch-lg" :style="{ background: currentColor }"></label>
-          </div>
-          <div class="preset-colors">
-            <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:currentColor', c)"></button>
-          </div>
+      <div class="section-label">画笔属性</div>
+      <!-- 线条粗细：仅对原始 path 对象有效 -->
+      <div v-if="selectedObject?.type === 'path'" class="slider-group">
+        <label class="slider-label">线条粗细</label>
+        <div class="slider-row">
+          <input type="range" :value="selectedObject?.strokeWidth || 3" @input="$emit('update:pathStrokeWidth', Number(($event.target as HTMLInputElement).value))" min="1" max="50" />
+          <span class="slider-val">{{ selectedObject?.strokeWidth || 3 }}px</span>
         </div>
       </div>
-
-      <!-- 画笔路径的属性调整 -->
-      <template v-if="isBrushPath">
-        <div class="panel-divider"></div>
-        <div class="section-label">画笔属性</div>
-        <!-- 线条粗细：仅对原始 path 对象有效 -->
-        <div v-if="selectedObject?.type === 'path'" class="slider-group">
-          <label class="slider-label">线条粗细</label>
-          <div class="slider-row">
-            <input type="range" :value="selectedObject?.strokeWidth || 3" @input="$emit('update:pathStrokeWidth', Number(($event.target as HTMLInputElement).value))" min="1" max="50" />
-            <span class="slider-val">{{ selectedObject?.strokeWidth || 3 }}px</span>
-          </div>
+      <!-- 大小：对画笔转图片的对象有效 -->
+      <div v-if="selectedObject?.type === 'image'" class="slider-group">
+        <label class="slider-label">大小</label>
+        <div class="slider-row">
+          <input type="range" :value="Math.round((selectedObject?.scaleX || 1) * 100)" @input="$emit('update:pathScale', Number(($event.target as HTMLInputElement).value) / 100)" min="10" max="300" />
+          <span class="slider-val">{{ Math.round((selectedObject?.scaleX || 1) * 100) }}%</span>
         </div>
-        <!-- 大小：对画笔转图片的对象有效 -->
-        <div v-if="selectedObject?.type === 'image'" class="slider-group">
-          <label class="slider-label">大小</label>
-          <div class="slider-row">
-            <input type="range" :value="Math.round((selectedObject?.scaleX || 1) * 100)" @input="$emit('update:pathScale', Number(($event.target as HTMLInputElement).value) / 100)" min="10" max="300" />
-            <span class="slider-val">{{ Math.round((selectedObject?.scaleX || 1) * 100) }}%</span>
-          </div>
+      </div>
+      <div class="slider-group">
+        <label class="slider-label">羽化</label>
+        <div class="slider-row">
+          <input type="range" :value="pathBlur" @input="$emit('update:pathBlur', Number(($event.target as HTMLInputElement).value))" min="0" max="30" />
+          <span class="slider-val">{{ pathBlur === 0 ? '无' : pathBlur + 'px' }}</span>
         </div>
-        <div class="slider-group">
-          <label class="slider-label">羽化</label>
-          <div class="slider-row">
-            <input type="range" :value="pathBlur" @input="$emit('update:pathBlur', Number(($event.target as HTMLInputElement).value))" min="0" max="30" />
-            <span class="slider-val">{{ pathBlur === 0 ? '无' : pathBlur + 'px' }}</span>
-          </div>
-        </div>
-      </template>
+      </div>
     </template>
 
     <div class="panel-divider"></div>
@@ -145,12 +128,10 @@ import PanelSection from './PanelSection.vue'
 
 const props = defineProps<{
   selectedObject?: any
-  currentColor: string
-  presetColors: string[]
   pathBlur?: number
 }>()
 
-defineEmits(['deleteSelected', 'bringToFront', 'sendToBack', 'moveUp', 'moveDown', 'copySelected', 'pasteClipboard', 'update:currentColor', 'update:pathStrokeWidth', 'update:pathBlur', 'update:pathScale'])
+defineEmits(['deleteSelected', 'bringToFront', 'sendToBack', 'moveUp', 'moveDown', 'copySelected', 'pasteClipboard', 'update:pathStrokeWidth', 'update:pathBlur', 'update:pathScale'])
 
 /** 判断选中的是否为画笔路径（path 或带 isUserStroke 标记的图片） */
 const isBrushPath = computed(() => {

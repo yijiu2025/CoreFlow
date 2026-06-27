@@ -102,22 +102,6 @@
       </svg>
       清除分析结果
     </button>
-
-    <div class="panel-divider"></div>
-
-    <!-- 分析颜色 -->
-    <div class="section-label">分析颜色</div>
-    <div class="color-section">
-      <div class="color-row">
-        <div class="color-swatch-lg">
-          <input type="color" :value="currentColor" @input="$emit('update:currentColor', ($event.target as HTMLInputElement).value)" id="ai-color-picker" />
-          <label for="ai-color-picker" class="swatch-lg" :style="{ background: currentColor }"></label>
-        </div>
-        <div class="preset-colors">
-          <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:currentColor', c)"></button>
-        </div>
-      </div>
-    </div>
   </PanelSection>
 </template>
 
@@ -130,9 +114,7 @@ defineProps<{
   activeTool: string
   canvasTool: string
   bgOpacity: number
-  currentColor: string
   detectionTypes: Array<{ value: string; icon: string; label: string; desc: string }>
-  presetColors: string[]
 }>()
 
 defineEmits(['autoAnalyze', 'update:modelValue', 'setTool', 'setDrawTool', 'update:bgOpacity', 'update:currentColor', 'clearAnalysis'])

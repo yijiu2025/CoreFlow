@@ -28,22 +28,6 @@
 
     <div class="panel-divider"></div>
 
-    <!-- 文字颜色 -->
-    <div class="section-label">文字颜色</div>
-    <div class="color-section">
-      <div class="color-row">
-        <div class="color-swatch-lg">
-          <input type="color" :value="currentColor" @input="$emit('update:currentColor', ($event.target as HTMLInputElement).value)" id="text-color-picker" />
-          <label for="text-color-picker" class="swatch-lg" :style="{ background: currentColor }"></label>
-        </div>
-        <div class="preset-colors">
-          <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:currentColor', c)"></button>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel-divider"></div>
-
     <!-- 快速添加 -->
     <div class="section-label">快速添加</div>
     <div class="quick-text-grid">
@@ -60,11 +44,9 @@ import PanelSection from './PanelSection.vue'
 
 defineProps<{
   fontSize: number
-  currentColor: string
-  presetColors: string[]
 }>()
 
-defineEmits(['addText', 'update:fontSize', 'update:currentColor'])
+defineEmits(['addText', 'update:fontSize'])
 
 const quickTexts = [
   { icon: '📌', label: '标题', text: '标题文字' },
