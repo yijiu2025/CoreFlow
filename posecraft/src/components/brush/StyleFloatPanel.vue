@@ -21,7 +21,10 @@
         <div class="slider-group">
           <label class="slider-label">描边粗细</label>
           <div class="slider-row">
-            <input type="range" :value="strokeWidth" @input="$emit('update:strokeWidth', Number(($event.target as HTMLInputElement).value))" min="1" max="20" />
+            <input type="range" :value="strokeWidth"
+              @input="$emit('update:strokeWidth', Number(($event.target as HTMLInputElement).value))"
+              @change="$emit('saveState')"
+              min="1" max="20" />
             <span class="slider-val">{{ strokeWidth }}px</span>
           </div>
         </div>
@@ -30,7 +33,10 @@
         <div class="slider-group">
           <label class="slider-label">描边透明度</label>
           <div class="slider-row">
-            <input type="range" :value="strokeOpacity" @input="$emit('update:strokeOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
+            <input type="range" :value="strokeOpacity"
+              @input="$emit('update:strokeOpacity', Number(($event.target as HTMLInputElement).value))"
+              @change="$emit('saveState')"
+              min="10" max="100" />
             <span class="slider-val">{{ strokeOpacity }}%</span>
           </div>
         </div>
@@ -39,7 +45,10 @@
         <div class="slider-group">
           <label class="slider-label">填充透明度</label>
           <div class="slider-row">
-            <input type="range" :value="fillOpacity" @input="$emit('update:fillOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
+            <input type="range" :value="fillOpacity"
+              @input="$emit('update:fillOpacity', Number(($event.target as HTMLInputElement).value))"
+              @change="$emit('saveState')"
+              min="10" max="100" />
             <span class="slider-val">{{ fillOpacity }}%</span>
           </div>
         </div>
@@ -48,7 +57,10 @@
         <div class="slider-group">
           <label class="slider-label">圆角</label>
           <div class="slider-row">
-            <input type="range" :value="cornerRadius" @input="$emit('update:cornerRadius', Number(($event.target as HTMLInputElement).value))" min="0" max="50" />
+            <input type="range" :value="cornerRadius"
+              @input="$emit('update:cornerRadius', Number(($event.target as HTMLInputElement).value))"
+              @change="$emit('saveState')"
+              min="0" max="50" />
             <span class="slider-val">{{ cornerRadius }}px</span>
           </div>
         </div>
@@ -90,7 +102,7 @@ defineProps<{
   lineStyle: string
 }>()
 
-defineEmits(['close', 'update:strokeWidth', 'update:strokeOpacity', 'update:fillOpacity', 'update:cornerRadius', 'update:lineStyle'])
+defineEmits(['close', 'update:strokeWidth', 'update:strokeOpacity', 'update:fillOpacity', 'update:cornerRadius', 'update:lineStyle', 'saveState'])
 
 // 拖拽状态
 const isDragging = ref(false)

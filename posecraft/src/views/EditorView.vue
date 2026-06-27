@@ -322,6 +322,7 @@
       @update:fillOpacity="updateFillOpacity"
       @update:cornerRadius="updateCornerRadius"
       @update:lineStyle="updateLineStyle"
+      @saveState="saveState"
     />
 
     <!-- 帮助弹窗 -->
@@ -415,7 +416,7 @@ const {
 
 const { undoStack, redoStack, saveState, undo, redo, setOnStateRestored, setOnReapplyTool } = useHistory(fCanvas, { value: isStateSavingLocked }, null, null)
 const { selectTab, selectHandTool, setDrawTool, setTool, setDeps } = useTools(fCanvas, activeTool, canvasTool)
-const { applyColor, isBrushObject, updatePathStrokeWidth, updatePathScale, updatePathBlur, createStar, createPolygon, addArrowHead } = useShapes(fCanvas, currentColor, fillColor)
+const { applyColor, applyColorToImage, isBrushObject, updatePathStrokeWidth, updatePathScale, updatePathBlur, createStar, createPolygon, addArrowHead } = useShapes(fCanvas, currentColor, fillColor)
 const { activeGuides, drawReference, deleteGuides, toggleGuide } = useReferenceLines(fCanvas, currentColor, strokeWidth, saveState)
 const { drawPoseSkeleton, addSkeletonNode, addMidpointNode, connectNodes } = useSkeletonNodes(fCanvas, currentColor, saveState)
 
@@ -501,20 +502,53 @@ const updateSelection = () => {
   else pathBlur.value = 0
 
   if (obj) {
+    const parseColor = (colorStr: any) => {
+      if (!colorStr || colorStr === 'transparent') return null
+      if (colorStr.startsWith('#')) {
+        return { hex: colorStr, opacity: 1 }
+      } else if (colorStr.startsWith('rgb')) {
+        const match = colorStr.match(/[\d.]+/g)
+        if (match && match.length >= 3) {
+          const r = parseInt(match[0])
+          const g = parseInt(match[1])
+          const b = parseInt(match[2])
+          const a = match[3] !== undefined ? parseFloat(match[3]) : 1
+          const hexR = r.toString(16).padStart(2, '0')
+          const hexG = g.toString(16).padStart(2, '0')
+          const hexB = b.toString(16).padStart(2, '0')
+          return { hex: `#${hexR}${hexG}${hexB}`, opacity: a }
+        }
+      }
+      return null
+    }
+
     if (obj.type === 'i-text' || obj.type === 'textbox' || obj.type === 'text') {
-      if (obj.fill && typeof obj.fill === 'string') currentColor.value = obj.fill
+      const parsed = parseColor(obj.fill)
+      if (parsed) currentColor.value = parsed.hex
       noFill.value = true
     } else {
-      if (obj.stroke && typeof obj.stroke === 'string') currentColor.value = obj.stroke
+      const parsedStroke = parseColor(obj.stroke)
+      if (parsedStroke) {
+        currentColor.value = parsedStroke.hex
+        if (obj.type !== 'path') strokeOpacity.value = Math.round(parsedStroke.opacity * 100)
+      }
       if (obj.fill === 'transparent' || !obj.fill) {
         noFill.value = true
-      } else if (typeof obj.fill === 'string') {
+      } else {
         noFill.value = false
-        fillColor.value = obj.fill
+        const parsedFill = parseColor(obj.fill)
+        if (parsedFill) {
+          fillColor.value = parsedFill.hex
+          fillOpacity.value = Math.round(parsedFill.opacity * 100)
+        }
       }
     }
     if (obj.strokeWidth !== undefined) strokeWidth.value = obj.strokeWidth
-    if (obj.strokeOpacity !== undefined) strokeOpacity.value = Math.round(obj.strokeOpacity * 100)
+    if (obj.type === 'path' && obj.opacity !== undefined) {
+      strokeOpacity.value = Math.round(obj.opacity * 100)
+    } else if (obj.strokeOpacity !== undefined) {
+      strokeOpacity.value = Math.round(obj.strokeOpacity * 100)
+    }
     if (obj.fillOpacity !== undefined) fillOpacity.value = Math.round(obj.fillOpacity * 100)
     if (obj.rx !== undefined) cornerRadius.value = obj.rx
     
@@ -575,32 +609,74 @@ const applyToSelected = (props: Record<string, any>) => {
   } else {
     applyProps(obj)
   }
-  
+
   fCanvas.value.renderAll()
-  saveState()
+  // 注意：saveState 由滑块的 @change 事件触发，不在这里调用
 }
 
-/** 将 hex 颜色和透明度转换为 rgba */
-const toRgba = (hex: string, opacity: number) => {
-  const h = hex.replace('#', '')
-  const r = parseInt(h.slice(0, 2), 16)
-  const g = parseInt(h.slice(2, 4), 16)
-  const b = parseInt(h.slice(4, 6), 16)
+/** 将颜色和透明度转换为 rgba */
+const toRgba = (colorStr: string, opacity: number) => {
+  let r = 0, g = 0, b = 0
+  if (colorStr.startsWith('#')) {
+    const hex = colorStr.replace('#', '')
+    if (hex.length === 6) {
+      r = parseInt(hex.slice(0, 2), 16)
+      g = parseInt(hex.slice(2, 4), 16)
+      b = parseInt(hex.slice(4, 6), 16)
+    } else if (hex.length === 3) {
+      r = parseInt(hex[0] + hex[0], 16)
+      g = parseInt(hex[1] + hex[1], 16)
+      b = parseInt(hex[2] + hex[2], 16)
+    }
+  } else if (colorStr.startsWith('rgb')) {
+    const match = colorStr.match(/[\d.]+/g)
+    if (match && match.length >= 3) {
+      r = parseInt(match[0])
+      g = parseInt(match[1])
+      b = parseInt(match[2])
+    }
+  }
   return `rgba(${r},${g},${b},${opacity})`
 }
 
 /** 更新描边颜色（主颜色） */
 const updateCurrentColor = (color: string) => {
   currentColor.value = color
-  const obj = fCanvas.value?.getActiveObject()
-  if (obj && (obj.type === 'i-text' || obj.type === 'textbox' || obj.type === 'text')) {
-    applyToSelected({ fill: color })
-  } else if (obj && obj.type === 'path') {
-    // 画笔路径直接设置 stroke
-    applyToSelected({ stroke: color })
-  } else {
-    applyToSelected({ stroke: toRgba(color, strokeOpacity.value / 100) })
+  const activeObj = fCanvas.value?.getActiveObject()
+  if (!activeObj) return
+
+  const processObject = (obj: any) => {
+    if (obj.type === 'i-text' || obj.type === 'textbox' || obj.type === 'text') {
+      obj.set({ fill: color })
+    } else if (isBrushObject(obj)) {
+      if (obj.type === 'image') {
+        applyColorToImage(obj, color)
+      } else {
+        obj.set({ stroke: color })
+        if (obj.shadow) {
+          obj.set('shadow', new fabric.Shadow({
+            color: color,
+            blur: obj.shadow.blur,
+            offsetX: obj.shadow.offsetX,
+            offsetY: obj.shadow.offsetY
+          }))
+        }
+      }
+    } else {
+      obj.set({ stroke: toRgba(color, strokeOpacity.value / 100) })
+    }
+    obj.setCoords()
+    obj.dirty = true
   }
+
+  if (activeObj.type === 'activeSelection' || activeObj.type === 'group') {
+    activeObj.getObjects().forEach(processObject)
+    activeObj.addWithUpdate()
+  } else {
+    processObject(activeObj)
+  }
+  fCanvas.value.renderAll()
+  saveState()
 }
 
 /** 更新填充颜色 */
@@ -626,13 +702,27 @@ const updateStrokeWidth = (val: number) => {
 const updateStrokeOpacity = (val: number) => {
   strokeOpacity.value = val
   brushOpacity.value = val // 同步画笔透明度
-  const obj = fCanvas.value?.getActiveObject()
-  if (obj && obj.type === 'path') {
-    // 画笔路径使用整体 opacity
-    applyToSelected({ opacity: val / 100 })
-  } else {
-    applyToSelected({ stroke: toRgba(currentColor.value, val / 100) })
+  const activeObj = fCanvas.value?.getActiveObject()
+  if (!activeObj) return
+
+  const processObject = (obj: any) => {
+    if (isBrushObject(obj)) {
+      obj.set({ opacity: val / 100 })
+    } else {
+      obj.set({ stroke: toRgba(currentColor.value, val / 100) })
+    }
+    obj.setCoords()
+    obj.dirty = true
   }
+
+  if (activeObj.type === 'activeSelection' || activeObj.type === 'group') {
+    activeObj.getObjects().forEach(processObject)
+    activeObj.addWithUpdate()
+  } else {
+    processObject(activeObj)
+  }
+  fCanvas.value.renderAll()
+  saveState()
 }
 
 /** 更新填充透明度 */
