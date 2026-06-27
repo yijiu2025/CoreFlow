@@ -26,7 +26,7 @@ export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: bool
     const last = undoStack.value[undoStack.value.length - 1]
     if (last && JSON.stringify(snapshot) === JSON.stringify(last)) return
     undoStack.value.push(snapshot)
-    if (undoStack.value.length > 50) undoStack.value.shift()
+    if (undoStack.value.length > 100) undoStack.value.shift()
     redoStack.value = []
   }
 
