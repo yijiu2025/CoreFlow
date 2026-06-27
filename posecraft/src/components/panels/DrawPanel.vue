@@ -34,25 +34,6 @@
 
     <div class="panel-divider"></div>
 
-    <!-- 画笔样式 -->
-    <div class="section-label">画笔样式</div>
-    <div class="style-grid">
-      <button class="style-btn" :class="{ active: brushStyle === 'solid' }" @click="$emit('update:brushStyle', 'solid')">
-        <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" stroke-width="3"/></svg>
-        <span>实线</span>
-      </button>
-      <button class="style-btn" :class="{ active: brushStyle === 'dashed' }" @click="$emit('update:brushStyle', 'dashed')">
-        <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" stroke-width="3" stroke-dasharray="6,4"/></svg>
-        <span>虚线</span>
-      </button>
-      <button class="style-btn" :class="{ active: brushStyle === 'dotted' }" @click="$emit('update:brushStyle', 'dotted')">
-        <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" stroke-width="3" stroke-dasharray="2,4"/></svg>
-        <span>点线</span>
-      </button>
-    </div>
-
-    <div class="panel-divider"></div>
-
     <!-- 混合模式 -->
     <div class="section-label">混合模式</div>
     <div class="blend-modes">
@@ -70,11 +51,10 @@ defineProps<{
   brushSize: number
   brushOpacity: number
   brushFeather: number
-  brushStyle: string
   brushBlend: string
 }>()
 
-defineEmits(['update:brushSize', 'update:brushOpacity', 'update:brushFeather', 'update:brushStyle', 'update:brushBlend'])
+defineEmits(['update:brushSize', 'update:brushOpacity', 'update:brushFeather', 'update:brushBlend'])
 
 const blendModes = [
   { value: 'source-over', label: '正常' },
