@@ -267,7 +267,8 @@
           :fillColor="fillColor"
           :noFill="noFill"
           :lineStyle="lineStyle"
-          :shapeOpacity="shapeOpacity"
+          :strokeOpacity="strokeOpacity"
+          :fillOpacity="fillOpacity"
           :presetColors="presetColors"
           :activeGuides="activeGuides"
           @addShape="addShape"
@@ -280,7 +281,8 @@
           @update:fillColor="fillColor = $event"
           @update:noFill="noFill = $event"
           @update:lineStyle="lineStyle = $event"
-          @update:shapeOpacity="shapeOpacity = $event"
+          @update:strokeOpacity="strokeOpacity = $event"
+          @update:fillOpacity="fillOpacity = $event"
         />
 
         <TextPanel v-show="activeTool === 'text'"
@@ -335,12 +337,14 @@
     <StyleFloatPanel
       :visible="showStylePanel"
       :strokeWidth="strokeWidth"
-      :opacity="shapeOpacity"
+      :strokeOpacity="strokeOpacity"
+      :fillOpacity="fillOpacity"
       :cornerRadius="cornerRadius"
       :lineStyle="lineStyle"
       @close="showStylePanel = false"
       @update:strokeWidth="strokeWidth = $event"
-      @update:opacity="shapeOpacity = $event"
+      @update:strokeOpacity="strokeOpacity = $event"
+      @update:fillOpacity="fillOpacity = $event"
       @update:cornerRadius="cornerRadius = $event"
       @update:lineStyle="lineStyle = $event"
     />
@@ -420,7 +424,8 @@ const fillColor = ref('#6366f1')
 const currentColor = ref('#6366f1')
 const noFill = ref(true)
 const lineStyle = ref('solid')
-const shapeOpacity = ref(100)
+const strokeOpacity = ref(100)
+const fillOpacity = ref(100)
 const cornerRadius = ref(0)
 
 const {
@@ -446,7 +451,7 @@ const {
 const {
   handleMouseDown, handleMouseMove, handleMouseUp, handlePathCreated
 } = useMouseEvents(
-  fCanvas, canvasTool, activeTool, currentColor, strokeWidth, noFill, fillColor, shapeOpacity, lineStyle, eraserSize, textFontSize, cornerRadius, canvasDeps, saveState, addSkeletonNode, addMidpointNode, connectNodes, createStar, createPolygon, addArrowHead, analyzeArea, applyCanvasTransform, () => spacePressed
+  fCanvas, canvasTool, activeTool, currentColor, strokeWidth, noFill, fillColor, strokeOpacity, fillOpacity, lineStyle, eraserSize, textFontSize, cornerRadius, canvasDeps, saveState, addSkeletonNode, addMidpointNode, connectNodes, createStar, createPolygon, addArrowHead, analyzeArea, applyCanvasTransform, () => spacePressed
 )
 
 // currentColor 和 fillColor 现在独立设置，不再同步

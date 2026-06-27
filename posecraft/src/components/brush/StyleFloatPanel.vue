@@ -26,12 +26,21 @@
           </div>
         </div>
 
-        <!-- 透明度 -->
+        <!-- 描边透明度 -->
         <div class="slider-group">
-          <label class="slider-label">透明度</label>
+          <label class="slider-label">描边透明度</label>
           <div class="slider-row">
-            <input type="range" :value="opacity" @input="$emit('update:opacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
-            <span class="slider-val">{{ opacity }}%</span>
+            <input type="range" :value="strokeOpacity" @input="$emit('update:strokeOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
+            <span class="slider-val">{{ strokeOpacity }}%</span>
+          </div>
+        </div>
+
+        <!-- 填充透明度 -->
+        <div class="slider-group">
+          <label class="slider-label">填充透明度</label>
+          <div class="slider-row">
+            <input type="range" :value="fillOpacity" @input="$emit('update:fillOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
+            <span class="slider-val">{{ fillOpacity }}%</span>
           </div>
         </div>
 
@@ -75,12 +84,13 @@ import { ref, computed } from 'vue'
 defineProps<{
   visible: boolean
   strokeWidth: number
-  opacity: number
+  strokeOpacity: number
+  fillOpacity: number
   cornerRadius: number
   lineStyle: string
 }>()
 
-defineEmits(['close', 'update:strokeWidth', 'update:opacity', 'update:cornerRadius', 'update:lineStyle'])
+defineEmits(['close', 'update:strokeWidth', 'update:strokeOpacity', 'update:fillOpacity', 'update:cornerRadius', 'update:lineStyle'])
 
 // 拖拽状态
 const isDragging = ref(false)
