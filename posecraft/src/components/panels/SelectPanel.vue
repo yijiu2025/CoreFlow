@@ -35,7 +35,10 @@
       <div v-if="selectedObject?.type === 'path'" class="slider-group">
         <label class="slider-label">线条粗细</label>
         <div class="slider-row">
-          <input type="range" :value="selectedObject?.strokeWidth || 3" @input="$emit('update:pathStrokeWidth', Number(($event.target as HTMLInputElement).value))" min="1" max="50" />
+          <input type="range" :value="selectedObject?.strokeWidth || 3"
+            @input="$emit('update:pathStrokeWidth', Number(($event.target as HTMLInputElement).value))"
+            @change="$emit('saveState')"
+            min="1" max="50" />
           <span class="slider-val">{{ selectedObject?.strokeWidth || 3 }}px</span>
         </div>
       </div>
@@ -43,14 +46,20 @@
       <div v-if="selectedObject?.type === 'image'" class="slider-group">
         <label class="slider-label">大小</label>
         <div class="slider-row">
-          <input type="range" :value="Math.round((selectedObject?.scaleX || 1) * 100)" @input="$emit('update:pathScale', Number(($event.target as HTMLInputElement).value) / 100)" min="10" max="300" />
+          <input type="range" :value="Math.round((selectedObject?.scaleX || 1) * 100)"
+            @input="$emit('update:pathScale', Number(($event.target as HTMLInputElement).value) / 100)"
+            @change="$emit('saveState')"
+            min="10" max="300" />
           <span class="slider-val">{{ Math.round((selectedObject?.scaleX || 1) * 100) }}%</span>
         </div>
       </div>
       <div class="slider-group">
         <label class="slider-label">羽化</label>
         <div class="slider-row">
-          <input type="range" :value="pathBlur" @input="$emit('update:pathBlur', Number(($event.target as HTMLInputElement).value))" min="0" max="30" />
+          <input type="range" :value="pathBlur"
+            @input="$emit('update:pathBlur', Number(($event.target as HTMLInputElement).value))"
+            @change="$emit('saveState')"
+            min="0" max="30" />
           <span class="slider-val">{{ pathBlur === 0 ? '无' : pathBlur + 'px' }}</span>
         </div>
       </div>
@@ -133,7 +142,7 @@ const props = withDefaults(defineProps<{
   pathBlur: 0
 })
 
-defineEmits(['deleteSelected', 'bringToFront', 'sendToBack', 'moveUp', 'moveDown', 'copySelected', 'pasteClipboard', 'update:pathStrokeWidth', 'update:pathBlur', 'update:pathScale'])
+defineEmits(['deleteSelected', 'bringToFront', 'sendToBack', 'moveUp', 'moveDown', 'copySelected', 'pasteClipboard', 'update:pathStrokeWidth', 'update:pathBlur', 'update:pathScale', 'saveState'])
 
 /** 判断选中的是否为画笔路径（path 或带 isUserStroke 标记的图片） */
 const isBrushPath = computed(() => {

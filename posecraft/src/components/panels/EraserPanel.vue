@@ -12,7 +12,10 @@
     <div class="slider-group">
       <label class="slider-label">橡皮擦大小</label>
       <div class="slider-row">
-        <input type="range" :value="eraserSize" @input="$emit('update:eraserSize', Number(($event.target as HTMLInputElement).value))" min="5" max="100" />
+        <input type="range" :value="eraserSize"
+          @input="$emit('update:eraserSize', Number(($event.target as HTMLInputElement).value))"
+          @change="$emit('saveState')"
+          min="5" max="100" />
         <span class="slider-val">{{ eraserSize }}px</span>
       </div>
     </div>
@@ -21,7 +24,10 @@
     <div class="slider-group">
       <label class="slider-label">透明度</label>
       <div class="slider-row">
-        <input type="range" :value="eraserOpacity" @input="$emit('update:eraserOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
+        <input type="range" :value="eraserOpacity"
+          @input="$emit('update:eraserOpacity', Number(($event.target as HTMLInputElement).value))"
+          @change="$emit('saveState')"
+          min="10" max="100" />
         <span class="slider-val">{{ eraserOpacity }}%</span>
       </div>
     </div>
@@ -30,7 +36,10 @@
     <div class="slider-group">
       <label class="slider-label">硬度</label>
       <div class="slider-row">
-        <input type="range" :value="eraserHardness" @input="$emit('update:eraserHardness', Number(($event.target as HTMLInputElement).value))" min="0" max="100" />
+        <input type="range" :value="eraserHardness"
+          @input="$emit('update:eraserHardness', Number(($event.target as HTMLInputElement).value))"
+          @change="$emit('saveState')"
+          min="0" max="100" />
         <span class="slider-val">{{ eraserHardness === 0 ? '软' : eraserHardness === 100 ? '硬' : eraserHardness + '%' }}</span>
       </div>
     </div>
@@ -83,7 +92,7 @@ defineProps<{
   eraserMode: string
 }>()
 
-defineEmits(['update:eraserSize', 'update:eraserOpacity', 'update:eraserHardness', 'update:eraserShape', 'update:eraserMode'])
+defineEmits(['update:eraserSize', 'update:eraserOpacity', 'update:eraserHardness', 'update:eraserShape', 'update:eraserMode', 'saveState'])
 
 const shortcuts = [
   { keys: ['Ctrl', 'Z'], label: '撤销' },

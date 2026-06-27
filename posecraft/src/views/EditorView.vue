@@ -238,6 +238,7 @@
           @update:pathStrokeWidth="updatePathStrokeWidth"
           @update:pathBlur="updatePathBlur"
           @update:pathScale="updatePathScale"
+          @saveState="saveState"
         />
 
         <DrawPanel v-show="activeTool === 'draw'"
@@ -248,6 +249,7 @@
           v-model:brushBlend="brushBlend"
           v-model:currentColor="currentColor"
           :presetColors="presetColors"
+          @saveState="saveState"
         />
 
         <EraserPanel v-show="activeTool === 'eraser'"
@@ -256,6 +258,7 @@
           v-model:eraserHardness="eraserHardness"
           v-model:eraserShape="eraserShape"
           v-model:eraserMode="eraserMode"
+          @saveState="saveState"
         />
 
         <ShapesPanel v-show="activeTool === 'shapes'"

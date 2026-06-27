@@ -11,7 +11,10 @@
     <div class="slider-group">
       <label class="slider-label">画笔粗细</label>
       <div class="slider-row">
-        <input type="range" :value="brushSize" @input="$emit('update:brushSize', Number(($event.target as HTMLInputElement).value))" min="1" max="50" />
+        <input type="range" :value="brushSize"
+          @input="$emit('update:brushSize', Number(($event.target as HTMLInputElement).value))"
+          @change="$emit('saveState')"
+          min="1" max="50" />
         <span class="slider-val">{{ brushSize }}px</span>
       </div>
     </div>
@@ -19,7 +22,10 @@
     <div class="slider-group">
       <label class="slider-label">透明度</label>
       <div class="slider-row">
-        <input type="range" :value="brushOpacity" @input="$emit('update:brushOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
+        <input type="range" :value="brushOpacity"
+          @input="$emit('update:brushOpacity', Number(($event.target as HTMLInputElement).value))"
+          @change="$emit('saveState')"
+          min="10" max="100" />
         <span class="slider-val">{{ brushOpacity }}%</span>
       </div>
     </div>
@@ -27,7 +33,10 @@
     <div class="slider-group">
       <label class="slider-label">羽化</label>
       <div class="slider-row">
-        <input type="range" :value="brushFeather" @input="$emit('update:brushFeather', Number(($event.target as HTMLInputElement).value))" min="0" max="30" />
+        <input type="range" :value="brushFeather"
+          @input="$emit('update:brushFeather', Number(($event.target as HTMLInputElement).value))"
+          @change="$emit('saveState')"
+          min="0" max="30" />
         <span class="slider-val">{{ brushFeather === 0 ? '无' : brushFeather + 'px' }}</span>
       </div>
     </div>
@@ -54,7 +63,7 @@ defineProps<{
   brushBlend: string
 }>()
 
-defineEmits(['update:brushSize', 'update:brushOpacity', 'update:brushFeather', 'update:brushBlend'])
+defineEmits(['update:brushSize', 'update:brushOpacity', 'update:brushFeather', 'update:brushBlend', 'saveState'])
 
 const blendModes = [
   { value: 'source-over', label: '正常' },
