@@ -59,6 +59,30 @@ export function useMouseEvents(
     return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)))
   }
 
+  const toRgba = (colorStr: string, opacity: number) => {
+    let r = 0, g = 0, b = 0
+    if (colorStr.startsWith('#')) {
+      const hex = colorStr.replace('#', '')
+      if (hex.length === 6) {
+        r = parseInt(hex.slice(0, 2), 16)
+        g = parseInt(hex.slice(2, 4), 16)
+        b = parseInt(hex.slice(4, 6), 16)
+      } else if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16)
+        g = parseInt(hex[1] + hex[1], 16)
+        b = parseInt(hex[2] + hex[2], 16)
+      }
+    } else if (colorStr.startsWith('rgb')) {
+      const match = colorStr.match(/[\d.]+/g)
+      if (match && match.length >= 3) {
+        r = parseInt(match[0])
+        g = parseInt(match[1])
+        b = parseInt(match[2])
+      }
+    }
+    return `rgba(${r},${g},${b},${opacity})`
+  }
+
   const handleMouseDown = (opt: any) => {
     if (!fCanvas.value) return
     const pointer = fCanvas.value.getPointer(opt.e)
@@ -84,7 +108,7 @@ export function useMouseEvents(
         isDrawingLine.value = true; startPoint = { x: target.left, y: target.top }
         startNode = target
         currentLine = new fabric.Line([target.left, target.top, target.left, target.top], {
-          stroke: currentColor.value, strokeWidth: strokeWidth.value,
+          stroke: toRgba(currentColor.value, strokeOpacity.value / 100), strokeWidth: strokeWidth.value,
           selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
           strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
         })
@@ -94,7 +118,7 @@ export function useMouseEvents(
         isDrawingLine.value = true; startPoint = pointer
         startNode = null
         currentLine = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
-          stroke: currentColor.value, strokeWidth: strokeWidth.value,
+          stroke: toRgba(currentColor.value, strokeOpacity.value / 100), strokeWidth: strokeWidth.value,
           selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
           strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
         })
@@ -114,11 +138,9 @@ export function useMouseEvents(
         isDrawingRect.value = true; startPoint = pointer
         const baseStyle = {
           left: pointer.x, top: pointer.y,
-          stroke: currentColor.value,
+          stroke: toRgba(currentColor.value, strokeOpacity.value / 100),
           strokeWidth: strokeWidth.value,
-          strokeOpacity: strokeOpacity.value / 100,
-          fill: noFill.value ? 'transparent' : fillColor.value,
-          fillOpacity: fillOpacity.value / 100,
+          fill: noFill.value ? 'transparent' : toRgba(fillColor.value, fillOpacity.value / 100),
           selectable: false, evented: false, erasable: true,
           strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined,
           rx: cornerRadius.value,
@@ -141,7 +163,7 @@ export function useMouseEvents(
           isDrawingRect.value = false
           isDrawingLine.value = true
           currentLine = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
-            stroke: currentColor.value, strokeWidth: strokeWidth.value,
+            stroke: toRgba(currentColor.value, strokeOpacity.value / 100), strokeWidth: strokeWidth.value,
             selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
             strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
           })
