@@ -72,11 +72,11 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
       return
     }
 
-    const isNodeTool = tool === 'addNode' || tool === 'line'
+    const isNodeTool = tool === 'addNode' || tool === 'line' || tool === 'moveNode'
     fCanvas.value.forEachObject((obj: any) => {
       if (obj.isInkLayer || obj.isEraserCursor) return
       if (isNodeTool && obj.isSkeleton) {
-        obj.selectable = false
+        obj.selectable = tool === 'moveNode' // 只有 moveNode 工具允许选中
         obj.evented = true
       } else {
         obj.selectable = false
@@ -91,6 +91,9 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
     if (tool === 'line' || tool === 'addNode' || tool === 'rect' || tool === 'circle' || tool === 'triangle' || tool === 'star' || tool === 'polygon' || tool === 'arrow') {
       fCanvas.value.defaultCursor = 'crosshair'
       fCanvas.value.hoverCursor = 'crosshair'
+    } else if (tool === 'moveNode') {
+      fCanvas.value.defaultCursor = 'default'
+      fCanvas.value.hoverCursor = 'move'
     } else if (tool === 'hand') {
       fCanvas.value.defaultCursor = 'grab'
       fCanvas.value.hoverCursor = 'grab'

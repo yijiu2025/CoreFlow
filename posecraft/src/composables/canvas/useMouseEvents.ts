@@ -78,10 +78,15 @@ export function useMouseEvents(
     } else if (tool === 'line') {
       const target = fCanvas.value.findTarget(opt.e, false)
       if (target && target.isSkeleton) {
-        // 点击节点：允许拖拽移动节点
-        fCanvas.value.setActiveObject(target)
-        target.set({ selectable: true, hasControls: false, hasBorders: false })
-        fCanvas.value.renderAll()
+        // 点击节点：开始连接
+        isDrawingLine.value = true; startPoint = { x: target.left, y: target.top }
+        startNode = target
+        currentLine = new fabric.Line([target.left, target.top, target.left, target.top], {
+          stroke: currentColor.value, strokeWidth: strokeWidth.value,
+          selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
+          strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
+        })
+        fCanvas.value.add(currentLine)
       } else if (!target) {
         // 点击空白处：开始画线
         isDrawingLine.value = true; startPoint = pointer
@@ -92,6 +97,14 @@ export function useMouseEvents(
           strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
         })
         fCanvas.value.add(currentLine)
+      }
+    } else if (tool === 'moveNode') {
+      // 操作节点工具：点击节点可拖拽移动
+      const target = fCanvas.value.findTarget(opt.e, false)
+      if (target && target.isSkeleton) {
+        fCanvas.value.setActiveObject(target)
+        target.set({ selectable: true, hasControls: false, hasBorders: false })
+        fCanvas.value.renderAll()
       }
     } else if (['rect', 'circle', 'triangle', 'star', 'polygon', 'arrow'].includes(tool)) {
       const target = fCanvas.value.findTarget(opt.e, false)
@@ -136,11 +149,9 @@ export function useMouseEvents(
       if (!target) {
         // 点击空白处：添加新节点
         addSkeletonNode(pointer.x, pointer.y)
-      } else if (target.isSkeleton) {
-        // 点击节点：允许拖拽移动
-        fCanvas.value.setActiveObject(target)
-        target.set({ selectable: true, hasControls: false, hasBorders: false })
-        fCanvas.value.renderAll()
+      } else if (target.isSkeleton && target.connectedLines?.length > 0) {
+        // 点击现有节点：在中点添加新节点
+        addMidpointNode(target)
       }
     } else if (tool === 'crop') {
       isDrawingCrop.value = true; startPoint = pointer
