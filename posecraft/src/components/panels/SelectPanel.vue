@@ -30,28 +30,37 @@
     <!-- 画笔路径的属性调整 -->
     <template v-if="selectedObject && isBrushPath">
       <div class="panel-divider"></div>
-      <div class="section-label">画笔属性</div>
-      <!-- 线条粗细：仅对原始 path 对象有效 -->
-      <div v-if="selectedObject?.type === 'path'" class="slider-group">
-        <label class="slider-label">线条粗细</label>
-        <div class="slider-row">
-          <input type="range" :value="selectedObject?.strokeWidth || 3" @input="$emit('update:pathStrokeWidth', Number(($event.target as HTMLInputElement).value))" min="1" max="50" />
-          <span class="slider-val">{{ selectedObject?.strokeWidth || 3 }}px</span>
+      <div class="brush-props">
+        <div class="brush-props-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+          </svg>
+          <span>画笔属性</span>
         </div>
-      </div>
-      <!-- 大小：对画笔转图片的对象有效 -->
-      <div v-if="selectedObject?.type === 'image'" class="slider-group">
-        <label class="slider-label">大小</label>
-        <div class="slider-row">
-          <input type="range" :value="Math.round((selectedObject?.scaleX || 1) * 100)" @input="$emit('update:pathScale', Number(($event.target as HTMLInputElement).value) / 100)" min="10" max="300" />
-          <span class="slider-val">{{ Math.round((selectedObject?.scaleX || 1) * 100) }}%</span>
+        <!-- 线条粗细：仅对原始 path 对象有效 -->
+        <div v-if="selectedObject?.type === 'path'" class="slider-group">
+          <label class="slider-label">线条粗细</label>
+          <div class="slider-row">
+            <input type="range" :value="selectedObject?.strokeWidth || 3" @input="$emit('update:pathStrokeWidth', Number(($event.target as HTMLInputElement).value))" min="1" max="50" />
+            <span class="slider-val">{{ selectedObject?.strokeWidth || 3 }}px</span>
+          </div>
+          <div class="brush-preview" :style="{ height: (selectedObject?.strokeWidth || 3) + 'px', background: selectedObject?.stroke || '#6366f1' }"></div>
         </div>
-      </div>
-      <div class="slider-group">
-        <label class="slider-label">羽化</label>
-        <div class="slider-row">
-          <input type="range" :value="pathBlur" @input="$emit('update:pathBlur', Number(($event.target as HTMLInputElement).value))" min="0" max="30" />
-          <span class="slider-val">{{ pathBlur === 0 ? '无' : pathBlur + 'px' }}</span>
+        <!-- 大小：对画笔转图片的对象有效 -->
+        <div v-if="selectedObject?.type === 'image'" class="slider-group">
+          <label class="slider-label">大小</label>
+          <div class="slider-row">
+            <input type="range" :value="Math.round((selectedObject?.scaleX || 1) * 100)" @input="$emit('update:pathScale', Number(($event.target as HTMLInputElement).value) / 100)" min="10" max="300" />
+            <span class="slider-val">{{ Math.round((selectedObject?.scaleX || 1) * 100) }}%</span>
+          </div>
+        </div>
+        <div class="slider-group">
+          <label class="slider-label">羽化</label>
+          <div class="slider-row">
+            <input type="range" :value="pathBlur" @input="$emit('update:pathBlur', Number(($event.target as HTMLInputElement).value))" min="0" max="30" />
+            <span class="slider-val">{{ pathBlur === 0 ? '无' : pathBlur + 'px' }}</span>
+          </div>
+          <div class="feather-preview" :style="{ boxShadow: pathBlur > 0 ? '0 0 ' + (pathBlur * 2) + 'px ' + (selectedObject?.stroke || '#6366f1') : 'none' }"></div>
         </div>
       </div>
     </template>
@@ -126,10 +135,12 @@
 import { computed } from 'vue'
 import PanelSection from './PanelSection.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   selectedObject?: any
   pathBlur?: number
-}>()
+}>(), {
+  pathBlur: 0
+})
 
 defineEmits(['deleteSelected', 'bringToFront', 'sendToBack', 'moveUp', 'moveDown', 'copySelected', 'pasteClipboard', 'update:pathStrokeWidth', 'update:pathBlur', 'update:pathScale'])
 
@@ -202,6 +213,37 @@ const shortcuts = [
 .action-btn span { font-size: 11px; font-weight: 500; }
 
 .panel-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 16px 0; }
+
+/* 画笔属性区域 */
+.brush-props {
+  background: rgba(99,102,241,0.05);
+  border: 1px solid rgba(99,102,241,0.15);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.brush-props-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: #a5b4fc;
+  margin-bottom: 12px;
+}
+.brush-preview {
+  width: 100%; border-radius: 4px;
+  margin-top: 6px; transition: all 0.2s;
+}
+.feather-preview {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(99,102,241,0.2);
+  margin: 8px auto 0;
+  transition: all 0.2s;
+}
+
+.slider-group { margin-bottom: 10px; }
+.slider-label { font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 6px; display: block; }
+.slider-row { display: flex; align-items: center; gap: 10px; }
+.slider-val { font-size: 12px; color: #94a3b8; min-width: 36px; text-align: right; font-weight: 500; }
+input[type=range] { flex: 1; height: 4px; background: rgba(255,255,255,0.08); border-radius: 4px; appearance: none; cursor: pointer; }
+input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 50%; cursor: pointer; box-shadow: 0 2px 6px rgba(99,102,241,0.4); }
 
 .danger-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 10px; color: #f87171; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
 .danger-btn:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); }
