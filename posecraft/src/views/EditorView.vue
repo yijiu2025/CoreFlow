@@ -305,9 +305,9 @@
       :noFill="noFill"
       :presetColors="presetColors"
       @close="showColorPanel = false"
-      @update:currentColor="currentColor = $event"
-      @update:fillColor="fillColor = $event"
-      @update:noFill="noFill = $event"
+      @update:currentColor="updateCurrentColor"
+      @update:fillColor="updateFillColor"
+      @update:noFill="updateNoFill"
     />
     <StyleFloatPanel
       :visible="showStylePanel"
@@ -317,11 +317,11 @@
       :cornerRadius="cornerRadius"
       :lineStyle="lineStyle"
       @close="showStylePanel = false"
-      @update:strokeWidth="strokeWidth = $event"
-      @update:strokeOpacity="strokeOpacity = $event"
-      @update:fillOpacity="fillOpacity = $event"
-      @update:cornerRadius="cornerRadius = $event"
-      @update:lineStyle="lineStyle = $event"
+      @update:strokeWidth="updateStrokeWidth"
+      @update:strokeOpacity="updateStrokeOpacity"
+      @update:fillOpacity="updateFillOpacity"
+      @update:cornerRadius="updateCornerRadius"
+      @update:lineStyle="updateLineStyle"
     />
 
     <!-- 帮助弹窗 -->
@@ -527,6 +527,67 @@ const updateSelection = () => {
       fCanvas.value.renderAll()
     }
   }
+}
+
+// ═══ 浮动面板更新函数（同步更新全局状态和选中元素）═══
+
+/** 应用属性到选中元素 */
+const applyToSelected = (props: Record<string, any>) => {
+  const obj = fCanvas.value?.getActiveObject()
+  if (obj) {
+    obj.set(props)
+    fCanvas.value.renderAll()
+    saveState()
+  }
+}
+
+/** 更新描边颜色（主颜色） */
+const updateCurrentColor = (color: string) => {
+  currentColor.value = color
+  applyToSelected({ stroke: color })
+}
+
+/** 更新填充颜色 */
+const updateFillColor = (color: string) => {
+  fillColor.value = color
+  applyToSelected({ fill: color })
+}
+
+/** 更新填充开关 */
+const updateNoFill = (val: boolean) => {
+  noFill.value = val
+  applyToSelected({ fill: val ? 'transparent' : fillColor.value })
+}
+
+/** 更新描边粗细 */
+const updateStrokeWidth = (val: number) => {
+  strokeWidth.value = val
+  applyToSelected({ strokeWidth: val })
+}
+
+/** 更新描边透明度 */
+const updateStrokeOpacity = (val: number) => {
+  strokeOpacity.value = val
+  applyToSelected({ strokeOpacity: val / 100 })
+}
+
+/** 更新填充透明度 */
+const updateFillOpacity = (val: number) => {
+  fillOpacity.value = val
+  applyToSelected({ fillOpacity: val / 100 })
+}
+
+/** 更新圆角 */
+const updateCornerRadius = (val: number) => {
+  cornerRadius.value = val
+  applyToSelected({ rx: val, ry: val })
+}
+
+/** 更新线条样式 */
+const updateLineStyle = (val: string) => {
+  lineStyle.value = val
+  const dashArray = val === 'dashed' ? [10, 5] : val === 'dotted' ? [3, 5] : undefined
+  applyToSelected({ strokeDashArray: dashArray })
 }
 
 onMounted(async () => {
