@@ -64,23 +64,17 @@
     <div class="panel-divider"></div>
 
     <!-- 画笔颜色 -->
-    <div class="section-label">画笔颜色</div>
-    <div class="color-section">
-      <div class="color-row">
-        <div class="color-swatch-lg">
-          <input type="color" :value="currentColor" @input="$emit('update:currentColor', ($event.target as HTMLInputElement).value)" id="draw-color-picker" />
-          <label for="draw-color-picker" class="swatch-lg" :style="{ background: currentColor }"></label>
-        </div>
-        <div class="preset-colors">
-          <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:currentColor', c)"></button>
-        </div>
-      </div>
-    </div>
+    <ColorPanel
+      title="画笔颜色"
+      :modelValue="currentColor"
+      @update:modelValue="$emit('update:currentColor', $event)"
+    />
   </PanelSection>
 </template>
 
 <script setup lang="ts">
 import PanelSection from './PanelSection.vue'
+import ColorPanel from '../color/ColorPanel.vue'
 
 defineProps<{
   brushSize: number
@@ -89,7 +83,7 @@ defineProps<{
   brushStyle: string
   brushBlend: string
   currentColor: string
-  presetColors: string[]
+  presetColors?: string[]
 }>()
 
 defineEmits(['update:brushSize', 'update:brushOpacity', 'update:brushFeather', 'update:brushStyle', 'update:brushBlend', 'update:currentColor'])
@@ -119,16 +113,6 @@ input[type=range] { flex: 1; height: 4px; background: rgba(255,255,255,0.08); bo
 input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 50%; cursor: pointer; box-shadow: 0 2px 6px rgba(99,102,241,0.4); }
 
 .panel-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 16px 0; }
-
-.color-section { margin-bottom: 12px; }
-.color-row { display: flex; align-items: center; gap: 12px; }
-.color-swatch-lg { position: relative; }
-.color-swatch-lg input[type=color] { position: absolute; opacity: 0; width: 0; height: 0; }
-.swatch-lg { width: 40px; height: 40px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.1); cursor: pointer; display: block; transition: all 0.2s; }
-.swatch-lg:hover { border-color: rgba(99,102,241,0.5); }
-.preset-colors { display: flex; flex-wrap: wrap; gap: 6px; }
-.preset-color { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; transition: all 0.15s; }
-.preset-color:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.3); }
 
 /* 画笔样式 */
 .style-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
