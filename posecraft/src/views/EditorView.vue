@@ -416,7 +416,7 @@ const {
 const { undoStack, redoStack, saveState, undo, redo, setOnStateRestored, setOnReapplyTool } = useHistory(fCanvas, { value: isStateSavingLocked }, null, null)
 const { selectTab, selectHandTool, setDrawTool, setTool, setDeps } = useTools(fCanvas, activeTool, canvasTool)
 const { applyColor, isBrushObject, updatePathStrokeWidth, updatePathScale, updatePathBlur, createStar, createPolygon, addArrowHead } = useShapes(fCanvas, currentColor, fillColor)
-const { activeGuides, drawReference, deleteGuides, toggleGuide } = useReferenceLines(fCanvas, fillColor, strokeWidth, saveState)
+const { activeGuides, drawReference, deleteGuides, toggleGuide } = useReferenceLines(fCanvas, currentColor, strokeWidth, saveState)
 const { drawPoseSkeleton, addSkeletonNode, addMidpointNode, connectNodes } = useSkeletonNodes(fCanvas, currentColor, saveState)
 
 const canvasDeps = computed(() => getCanvasDeps()).value

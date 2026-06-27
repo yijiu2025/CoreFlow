@@ -7,7 +7,7 @@ import type { Ref } from 'vue'
 /**
  * 构图参考线管理
  */
-export function useReferenceLines(fCanvas: Ref<any>, fillColor: Ref<string>, strokeWidth: Ref<number>, saveState: () => void) {
+export function useReferenceLines(fCanvas: Ref<any>, currentColor: Ref<string>, strokeWidth: Ref<number>, saveState: () => void) {
   const activeGuides = ref<string[]>([])
 
   /** 获取绘制区域 */
@@ -24,7 +24,7 @@ export function useReferenceLines(fCanvas: Ref<any>, fillColor: Ref<string>, str
   const drawReference = (type: string) => {
     if (!fCanvas.value) return
     const { w, h, l, t } = getDrawArea()
-    const style: any = { stroke: fillColor.value, strokeWidth: strokeWidth.value, selectable: false, evented: false, opacity: 0.5, isGuide: true }
+    const style: any = { stroke: currentColor.value, strokeWidth: strokeWidth.value, selectable: false, evented: false, opacity: 0.5, isGuide: true }
 
     // 三分法
     if (type === 'thirds' || type === 'all') {
@@ -56,7 +56,7 @@ export function useReferenceLines(fCanvas: Ref<any>, fillColor: Ref<string>, str
       fCanvas.value.add(new fabric.Line([l, cy, l+w, cy], style))
       fCanvas.value.add(Object.assign(new fabric.Circle({
         left: cx, top: cy, radius: 6,
-        fill: 'transparent', stroke: fillColor.value, strokeWidth: 1.5,
+        fill: 'transparent', stroke: currentColor.value, strokeWidth: 1.5,
         originX: 'center', originY: 'center',
         selectable: false, evented: false, opacity: 0.6
       }), { isGuide: true }))
@@ -67,7 +67,7 @@ export function useReferenceLines(fCanvas: Ref<any>, fillColor: Ref<string>, str
       const phi = 0.618
       fCanvas.value.add(Object.assign(new fabric.Rect({
         left: l, top: t, width: w, height: h,
-        fill: 'transparent', stroke: fillColor.value, strokeWidth: 1,
+        fill: 'transparent', stroke: currentColor.value, strokeWidth: 1,
         selectable: false, evented: false, opacity: 0.3
       }), { isGuide: true }))
       fCanvas.value.add(new fabric.Line([l, t, l+w*phi, t+h], { ...style, opacity: 0.4 }))
@@ -78,7 +78,7 @@ export function useReferenceLines(fCanvas: Ref<any>, fillColor: Ref<string>, str
 
     // 黄金螺旋
     if (type === 'spiral' || type === 'all') {
-      const spiralColor = fillColor.value
+      const spiralColor = currentColor.value
       const R = 0.618
       let cx = l, cy = t, cw = w, ch = h
       let pathStr = ''
