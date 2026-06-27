@@ -89,6 +89,8 @@ export function useShapes(fCanvas: Ref<any>, currentColor: Ref<string>, fillColo
     if (!activeObj || !isBrushObject(activeObj)) return
     if (activeObj.type === 'path') {
       activeObj.set('strokeWidth', width)
+      activeObj.setCoords()
+      activeObj.dirty = true
     }
     fCanvas.value.renderAll()
   }
@@ -99,6 +101,8 @@ export function useShapes(fCanvas: Ref<any>, currentColor: Ref<string>, fillColo
     const activeObj = fCanvas.value.getActiveObject()
     if (!activeObj || activeObj.type !== 'image' || !activeObj.isUserStroke) return
     activeObj.set({ scaleX: scale, scaleY: scale })
+    activeObj.setCoords()
+    activeObj.dirty = true
     fCanvas.value.renderAll()
   }
 
@@ -109,15 +113,20 @@ export function useShapes(fCanvas: Ref<any>, currentColor: Ref<string>, fillColo
     const activeObj = fCanvas.value.getActiveObject()
     if (!activeObj || !isBrushObject(activeObj)) return
     if (blur > 0) {
-      activeObj.set('shadow', new fabric.Shadow({
-        color: activeObj.stroke || currentColor.value,
-        blur: blur * 2,
-        offsetX: 0,
-        offsetY: 0
-      }))
+      if (activeObj.shadow) {
+        activeObj.shadow.blur = blur * 2
+      } else {
+        activeObj.set('shadow', new fabric.Shadow({
+          color: activeObj.stroke || currentColor.value,
+          blur: blur * 2,
+          offsetX: 0,
+          offsetY: 0
+        }))
+      }
     } else {
       activeObj.set('shadow', null)
     }
+    activeObj.dirty = true
     fCanvas.value.renderAll()
   }
 

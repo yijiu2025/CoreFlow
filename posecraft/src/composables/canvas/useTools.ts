@@ -113,10 +113,10 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
       fCanvas.value.hoverCursor = 'default'
     }
 
-    // 画笔模式
-    fCanvas.value.isDrawingMode = (tool === 'draw')
     if (tool === 'draw' && brushSize && currentColor) {
-      fCanvas.value.freeDrawingBrush = new fabric.PencilBrush(fCanvas.value)
+      if (!fCanvas.value.freeDrawingBrush) {
+        fCanvas.value.freeDrawingBrush = new fabric.PencilBrush(fCanvas.value)
+      }
       fCanvas.value.freeDrawingBrush.width = brushSize.value
       fCanvas.value.freeDrawingBrush.color = currentColor.value
       // 透明度
@@ -139,6 +139,8 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
         fCanvas.value.freeDrawingBrush.shadow = null
       }
     }
+    // 画笔模式必须在画笔配置后设置，否则 Fabric 第一次绘制会使用默认画笔 (1px)
+    fCanvas.value.isDrawingMode = (tool === 'draw')
 
     fCanvas.value.renderAll()
   }
@@ -182,10 +184,10 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
     }
     fCanvas.value.renderAll()
 
-    // 画笔模式
-    fCanvas.value.isDrawingMode = (tool === 'draw')
     if (tool === 'draw' && brushSize && currentColor) {
-      fCanvas.value.freeDrawingBrush = new fabric.PencilBrush(fCanvas.value)
+      if (!fCanvas.value.freeDrawingBrush) {
+        fCanvas.value.freeDrawingBrush = new fabric.PencilBrush(fCanvas.value)
+      }
       fCanvas.value.freeDrawingBrush.width = brushSize.value
       fCanvas.value.freeDrawingBrush.color = currentColor.value
       if (brushFeather && brushFeather.value > 0) {
@@ -199,6 +201,8 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
         fCanvas.value.freeDrawingBrush.shadow = null
       }
     }
+    // 画笔模式必须在画笔配置后设置
+    fCanvas.value.isDrawingMode = (tool === 'draw')
 
     // 光标设置
     if (tool === 'text') {

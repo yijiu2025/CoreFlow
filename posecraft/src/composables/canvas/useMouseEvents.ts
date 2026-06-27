@@ -59,7 +59,8 @@ export function useMouseEvents(
     return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)))
   }
 
-  const toRgba = (colorStr: string, opacity: number) => {
+  const toRgba = (colorStr: any, opacity: number) => {
+    if (!colorStr || typeof colorStr !== 'string') return `rgba(0,0,0,${opacity})`
     let r = 0, g = 0, b = 0
     if (colorStr.startsWith('#')) {
       const hex = colorStr.replace('#', '')
@@ -250,11 +251,16 @@ export function useMouseEvents(
           const ctx = el.getContext('2d', { willReadFrequently: true })
           if (!ctx) return
           const localPoint = obj.toLocalPoint(pointer, 'left', 'top')
-          const dpr = window.devicePixelRatio || 1
-          const px = localPoint.x * dpr
-          const py = localPoint.y * dpr
+          
+          // Map localPoint (which is in Fabric's scaled space) to HTML Canvas pixels
+          const ratioX = el.width / (obj.width * (obj.scaleX || 1))
+          const ratioY = el.height / (obj.height * (obj.scaleY || 1))
+          const px = localPoint.x * ratioX
+          const py = localPoint.y * ratioY
+          
+          // Eraser radius in canvas pixels
           const scaleApprox = Math.sqrt(obj.scaleX * obj.scaleX + obj.scaleY * obj.scaleY) / Math.SQRT2
-          const eraserRadius = (radius * dpr) / (scaleApprox || 1)
+          const eraserRadius = (radius * (el.width / obj.width)) / (scaleApprox || 1)
 
           ctx.save()
           ctx.globalCompositeOperation = 'destination-out'
@@ -264,11 +270,18 @@ export function useMouseEvents(
           ctx.restore()
           obj.dirty = true
         } else if (obj.type === 'line') {
-          const dist = distToSegment(pointer, { x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 })
+          const matrix = obj.calcTransformMatrix()
+          const pts = obj.calcLinePoints()
+          const p1 = fabric.util.transformPoint(new fabric.Point(pts.x1, pts.y1), matrix)
+          const p2 = fabric.util.transformPoint(new fabric.Point(pts.x2, pts.y2), matrix)
+          const dist = distToSegment(pointer, p1, p2)
           if (dist < radius) fCanvas.value.remove(obj)
-        } else if (['circle', 'rect', 'triangle', 'i-text'].includes(obj.type)) {
-          const dist = Math.hypot(obj.left - pointer.x, obj.top - pointer.y)
-          if (dist < radius + 10) fCanvas.value.remove(obj)
+        } else if (['circle', 'rect', 'triangle', 'i-text', 'polygon'].includes(obj.type)) {
+          const pt = new fabric.Point(pointer.x, pointer.y)
+          const pMin = new fabric.Point(pointer.x - radius, pointer.y - radius)
+          const pMax = new fabric.Point(pointer.x + radius, pointer.y + radius)
+          const isColliding = obj.containsPoint(pt) || obj.intersectsWithRect(pMin, pMax)
+          if (isColliding) fCanvas.value.remove(obj)
         }
       })
       fCanvas.value.renderAll()

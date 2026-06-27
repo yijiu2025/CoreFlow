@@ -311,6 +311,7 @@
       @update:currentColor="updateCurrentColor"
       @update:fillColor="updateFillColor"
       @update:noFill="updateNoFill"
+      @saveState="saveState"
     />
     <StyleFloatPanel
       :visible="showStylePanel"
@@ -445,17 +446,19 @@ watch(brushSize, (newVal) => {
   if (fCanvas.value?.isDrawingMode && fCanvas.value.freeDrawingBrush) fCanvas.value.freeDrawingBrush.width = Number(newVal)
 })
 
-watch(currentColor, (newVal) => {
+watch([currentColor, brushOpacity], ([newColor, newOpacity]) => {
   if (fCanvas.value?.isDrawingMode && fCanvas.value.freeDrawingBrush) {
-    fCanvas.value.freeDrawingBrush.color = newVal
-    if (brushFeather.value > 0 && fCanvas.value.freeDrawingBrush.shadow) fCanvas.value.freeDrawingBrush.shadow.color = newVal
+    const rgbaColor = toRgba(newColor as string, (newOpacity as number) / 100)
+    fCanvas.value.freeDrawingBrush.color = rgbaColor
+    if (brushFeather.value > 0 && fCanvas.value.freeDrawingBrush.shadow) fCanvas.value.freeDrawingBrush.shadow.color = rgbaColor
   }
 })
 
 watch(brushFeather, (newVal) => {
   if (fCanvas.value?.isDrawingMode && fCanvas.value.freeDrawingBrush) {
     if (newVal > 0) {
-      fCanvas.value.freeDrawingBrush.shadow = new fabric.Shadow({ color: currentColor.value, blur: newVal, offsetX: 0, offsetY: 0 })
+      const rgbaColor = toRgba(currentColor.value, brushOpacity.value / 100)
+      fCanvas.value.freeDrawingBrush.shadow = new fabric.Shadow({ color: rgbaColor, blur: newVal, offsetX: 0, offsetY: 0 })
     } else {
       fCanvas.value.freeDrawingBrush.shadow = null
     }
@@ -679,7 +682,6 @@ const updateCurrentColor = (color: string) => {
     processObject(activeObj)
   }
   fCanvas.value.renderAll()
-  saveState()
 }
 
 /** 更新填充颜色 */
@@ -725,7 +727,6 @@ const updateStrokeOpacity = (val: number) => {
     processObject(activeObj)
   }
   fCanvas.value.renderAll()
-  saveState()
 }
 
 /** 更新填充透明度 */

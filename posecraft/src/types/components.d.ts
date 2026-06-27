@@ -8,6 +8,8 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AiPanel: typeof import('./../components/panels/AiPanel.vue')['default']
+    ColorFloatPanel: typeof import('./../components/color/ColorFloatPanel.vue')['default']
+    ColorPanel: typeof import('./../components/color/ColorPanel.vue')['default']
     CropPanel: typeof import('./../components/panels/CropPanel.vue')['default']
     DrawPanel: typeof import('./../components/panels/DrawPanel.vue')['default']
     EraserPanel: typeof import('./../components/panels/EraserPanel.vue')['default']
@@ -21,6 +23,7 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     SelectPanel: typeof import('./../components/panels/SelectPanel.vue')['default']
     ShapesPanel: typeof import('./../components/panels/ShapesPanel.vue')['default']
+    StyleFloatPanel: typeof import('./../components/brush/StyleFloatPanel.vue')['default']
     TextPanel: typeof import('./../components/panels/TextPanel.vue')['default']
   }
 }

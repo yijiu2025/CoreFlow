@@ -25,11 +25,11 @@
           <label class="color-label">主颜色</label>
           <div class="color-row">
             <div class="color-swatch-lg">
-              <input type="color" :value="currentColor" @input="$emit('update:currentColor', ($event.target as HTMLInputElement).value)" id="main-color" />
+              <input type="color" :value="currentColor" @input="$emit('update:currentColor', ($event.target as HTMLInputElement).value)" @change="$emit('saveState')" id="main-color" />
               <label for="main-color" class="swatch-lg" :style="{ background: currentColor }"></label>
             </div>
             <div class="preset-colors">
-              <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:currentColor', c)"></button>
+              <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:currentColor', c); $emit('saveState')"></button>
             </div>
           </div>
         </div>
@@ -40,22 +40,22 @@
         <div class="color-section">
           <label class="color-label">填充颜色</label>
           <div class="color-row">
-            <button class="color-toggle" :class="{ active: !noFill }" @click="$emit('update:noFill', false)">
+            <button class="color-toggle" :class="{ active: !noFill }" @click="$emit('update:noFill', false); $emit('saveState')">
               <div class="color-preview" :style="{ background: fillColor }"></div>
               <span>填充</span>
             </button>
-            <button class="color-toggle" :class="{ active: noFill }" @click="$emit('update:noFill', true)">
+            <button class="color-toggle" :class="{ active: noFill }" @click="$emit('update:noFill', true); $emit('saveState')">
               <div class="color-preview empty"></div>
               <span>无填充</span>
             </button>
           </div>
           <div v-if="!noFill" class="fill-color-picker">
             <div class="color-swatch-lg">
-              <input type="color" :value="fillColor" @input="$emit('update:fillColor', ($event.target as HTMLInputElement).value)" id="fill-color" />
+              <input type="color" :value="fillColor" @input="$emit('update:fillColor', ($event.target as HTMLInputElement).value)" @change="$emit('saveState')" id="fill-color" />
               <label for="fill-color" class="swatch-lg" :style="{ background: fillColor }"></label>
             </div>
             <div class="preset-colors">
-              <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:fillColor', c)"></button>
+              <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:fillColor', c); $emit('saveState')"></button>
             </div>
           </div>
         </div>
@@ -75,7 +75,7 @@ const props = defineProps<{
   presetColors: string[]
 }>()
 
-defineEmits(['close', 'update:currentColor', 'update:fillColor', 'update:noFill'])
+defineEmits(['close', 'update:currentColor', 'update:fillColor', 'update:noFill', 'saveState'])
 
 // 拖拽状态
 const isDragging = ref(false)
