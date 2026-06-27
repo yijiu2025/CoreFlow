@@ -414,7 +414,7 @@ const {
 } = useCanvasInit(canvasContainer, eraserSize)
 
 const { undoStack, redoStack, saveState, undo, redo, setOnStateRestored, setOnReapplyTool } = useHistory(fCanvas, { value: isStateSavingLocked }, null, null)
-const { selectTab, selectHandTool, setDrawTool, setTool } = useTools(fCanvas, activeTool, canvasTool)
+const { selectTab, selectHandTool, setDrawTool, setTool, setDeps } = useTools(fCanvas, activeTool, canvasTool)
 const { applyColor, isBrushObject, updatePathStrokeWidth, updatePathScale, updatePathBlur, createStar, createPolygon, addArrowHead } = useShapes(fCanvas, currentColor, fillColor)
 const { activeGuides, drawReference, deleteGuides, toggleGuide } = useReferenceLines(fCanvas, fillColor, strokeWidth, saveState)
 const { drawPoseSkeleton, addSkeletonNode, addMidpointNode, connectNodes } = useSkeletonNodes(fCanvas, currentColor, saveState)
@@ -438,7 +438,7 @@ const {
 let resizeObserver: any = null
 
 watch(brushSize, (newVal) => {
-  if (fCanvas.value?.isDrawingMode && fCanvas.value.freeDrawingBrush) fCanvas.value.freeDrawingBrush.width = newVal
+  if (fCanvas.value?.isDrawingMode && fCanvas.value.freeDrawingBrush) fCanvas.value.freeDrawingBrush.width = Number(newVal)
 })
 
 watch(currentColor, (newVal) => {
@@ -533,6 +533,17 @@ onMounted(async () => {
   if (!authStore.isLoggedIn) { router.push('/login'); return }
   initCanvas()
   
+  setDeps({
+    eraserCursor: canvasDeps.eraserCursor,
+    eraserSize,
+    brushSize,
+    brushOpacity,
+    brushFeather,
+    brushStyle,
+    brushBlend,
+    currentColor
+  })
+  
   fCanvas.value.on('mouse:down', handleMouseDown)
   fCanvas.value.on('mouse:move', handleMouseMove)
   fCanvas.value.on('mouse:up', handleMouseUp)
@@ -603,9 +614,9 @@ onUnmounted(() => {
   window.removeEventListener('keyup', handleKeyup)
 })
 
-const { isCropping, cropAspectRatio, triggerFileInput, handleImageUpload, startCropMode, updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop, setFileInput, setDeps } = useImageUpload(fCanvas, activeTool, bgImageUploaded, bgOpacity, zoomSlider, currentZoom, saveState, applyCanvasTransform)
+const { isCropping, cropAspectRatio, triggerFileInput, handleImageUpload, startCropMode, updateBgOpacity, updateCropAspectRatio, confirmCrop, cancelCrop, setFileInput, setDeps: setUploadDeps } = useImageUpload(fCanvas, activeTool, bgImageUploaded, bgOpacity, zoomSlider, currentZoom, saveState, applyCanvasTransform)
 watch(fileInput, (v) => { if (v) setFileInput(v) }, { immediate: true })
-watch(canvasContainer, (v) => { if (v) setDeps({ canvasContainer: v }) }, { immediate: true })
+watch(canvasContainer, (v) => { if (v) setUploadDeps({ canvasContainer: v }) }, { immediate: true })
 setOnStateRestored(() => { if (isCropping.value) { isCropping.value = false } })
 // 撤销/重做后重新应用当前工具的设置
 setOnReapplyTool(() => { setDrawTool(canvasTool.value) })
