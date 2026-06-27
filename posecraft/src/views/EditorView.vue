@@ -255,28 +255,10 @@
         />
 
         <ShapesPanel v-show="activeTool === 'shapes'"
-          :activeTool="activeTool"
           :canvasTool="canvasTool"
-          :strokeWidth="strokeWidth"
-          :fillColor="fillColor"
-          :noFill="noFill"
-          :lineStyle="lineStyle"
-          :strokeOpacity="strokeOpacity"
-          :fillOpacity="fillOpacity"
-          :presetColors="presetColors"
           :activeGuides="activeGuides"
-          @addShape="addShape"
-          @drawReference="drawReference"
           @toggleGuide="toggleGuide"
-          @deleteGuides="deleteGuides"
-          @clearCanvas="clearCanvas"
           @setDrawTool="setDrawTool"
-          @update:strokeWidth="strokeWidth = $event"
-          @update:fillColor="fillColor = $event"
-          @update:noFill="noFill = $event"
-          @update:lineStyle="lineStyle = $event"
-          @update:strokeOpacity="strokeOpacity = $event"
-          @update:fillOpacity="fillOpacity = $event"
         />
 
         <TextPanel v-show="activeTool === 'text'"

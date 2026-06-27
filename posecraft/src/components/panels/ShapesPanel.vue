@@ -50,65 +50,6 @@
 
     <div class="panel-divider"></div>
 
-    <!-- 形状样式 -->
-    <div class="section-label">形状样式</div>
-    <!-- 描边粗细 -->
-    <div class="slider-group">
-      <label class="slider-label">描边粗细</label>
-      <div class="slider-row">
-        <input type="range" :value="strokeWidth" @input="$emit('update:strokeWidth', Number(($event.target as HTMLInputElement).value))" min="1" max="20" />
-        <span class="slider-val">{{ strokeWidth }}px</span>
-      </div>
-    </div>
-    <!-- 填充颜色 -->
-    <div class="color-option">
-      <label class="color-label">填充颜色</label>
-      <div class="color-row">
-        <button class="color-toggle" :class="{ active: !noFill }" @click="$emit('update:noFill', false)">
-          <div class="color-preview" :style="{ background: fillColor }"></div>
-          <span>填充</span>
-        </button>
-        <button class="color-toggle" :class="{ active: noFill }" @click="$emit('update:noFill', true)">
-          <div class="color-preview empty"></div>
-          <span>无填充</span>
-        </button>
-      </div>
-      <div class="fill-color-picker">
-        <div class="color-swatch-lg">
-          <input type="color" :value="fillColor" @input="$emit('update:fillColor', ($event.target as HTMLInputElement).value)" id="fill-color-picker" />
-          <label for="fill-color-picker" class="swatch-lg" :style="{ background: fillColor }"></label>
-        </div>
-        <div class="preset-colors">
-          <button v-for="c in presetColors" :key="c" class="preset-color" :style="{ background: c }" @click="$emit('update:fillColor', c)"></button>
-        </div>
-      </div>
-    </div>
-    <!-- 虚线样式 -->
-    <div class="color-option">
-      <label class="color-label">线条样式</label>
-      <div class="line-styles">
-        <button class="style-btn" :class="{ active: lineStyle === 'solid' }" @click="$emit('update:lineStyle', 'solid')">
-          <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" stroke-width="2"/></svg>
-        </button>
-        <button class="style-btn" :class="{ active: lineStyle === 'dashed' }" @click="$emit('update:lineStyle', 'dashed')">
-          <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" stroke-width="2" stroke-dasharray="6,4"/></svg>
-        </button>
-        <button class="style-btn" :class="{ active: lineStyle === 'dotted' }" @click="$emit('update:lineStyle', 'dotted')">
-          <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" stroke-width="2" stroke-dasharray="2,4"/></svg>
-        </button>
-      </div>
-    </div>
-    <!-- 透明度 -->
-    <div class="slider-group">
-      <label class="slider-label">透明度</label>
-      <div class="slider-row">
-        <input type="range" :value="shapeOpacity" @input="$emit('update:shapeOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
-        <span class="slider-val">{{ shapeOpacity }}%</span>
-      </div>
-    </div>
-
-    <div class="panel-divider"></div>
-
     <!-- 构图参考线 -->
     <div class="section-label">构图参考线</div>
     <div class="tool-grid guide-grid">
@@ -124,18 +65,11 @@
 import PanelSection from './PanelSection.vue'
 
 defineProps<{
-  activeTool?: string
   canvasTool?: string
-  strokeWidth?: number
-  fillColor?: string
-  noFill?: boolean
-  lineStyle?: string
-  shapeOpacity?: number
-  presetColors?: string[]
   activeGuides?: string[]
 }>()
 
-defineEmits(['setDrawTool', 'toggleGuide', 'update:strokeWidth', 'update:fillColor', 'update:noFill', 'update:lineStyle', 'update:shapeOpacity'])
+defineEmits(['setDrawTool', 'toggleGuide'])
 
 const guides = [
   { type: 'thirds', icon: '▦', label: '三分法' },
