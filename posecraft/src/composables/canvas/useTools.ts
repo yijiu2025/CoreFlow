@@ -12,15 +12,26 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
   let eraserCursor: any = null
   let eraserSize: Ref<number> | null = null
   let brushSize: Ref<number> | null = null
+  let brushOpacity: Ref<number> | null = null
   let brushFeather: Ref<number> | null = null
+  let brushStyle: Ref<string> | null = null
+  let brushBlend: Ref<string> | null = null
   let currentColor: Ref<string> | null = null
 
   /** 设置外部依赖 */
-  const setDeps = (deps: { eraserCursor?: any; eraserSize?: Ref<number> | null; brushSize?: Ref<number> | null; brushFeather?: Ref<number> | null; currentColor?: Ref<string> | null }) => {
+  const setDeps = (deps: {
+    eraserCursor?: any; eraserSize?: Ref<number> | null; brushSize?: Ref<number> | null;
+    brushOpacity?: Ref<number> | null; brushFeather?: Ref<number> | null;
+    brushStyle?: Ref<string> | null; brushBlend?: Ref<string> | null;
+    currentColor?: Ref<string> | null
+  }) => {
     eraserCursor = deps.eraserCursor ?? null
     eraserSize = deps.eraserSize ?? null
     brushSize = deps.brushSize ?? null
+    brushOpacity = deps.brushOpacity ?? null
     brushFeather = deps.brushFeather ?? null
+    brushStyle = deps.brushStyle ?? null
+    brushBlend = deps.brushBlend ?? null
     currentColor = deps.currentColor ?? null
   }
 
@@ -108,7 +119,15 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
       fCanvas.value.freeDrawingBrush = new fabric.PencilBrush(fCanvas.value)
       fCanvas.value.freeDrawingBrush.width = brushSize.value
       fCanvas.value.freeDrawingBrush.color = currentColor.value
-      console.log('[画笔] setDrawTool 初始化粗细:', brushSize.value)
+      // 透明度
+      if (brushOpacity) fCanvas.value.freeDrawingBrush.opacity = brushOpacity.value / 100
+      // 虚线样式
+      if (brushStyle) {
+        fCanvas.value.freeDrawingBrush.strokeDashArray = brushStyle.value === 'dashed' ? [10, 5] : brushStyle.value === 'dotted' ? [3, 5] : undefined
+      }
+      // 混合模式
+      if (brushBlend) fCanvas.value.freeDrawingBrush.globalCompositeOperation = brushBlend.value
+      // 羽化
       if (brushFeather && brushFeather.value > 0) {
         fCanvas.value.freeDrawingBrush.shadow = new fabric.Shadow({
           color: currentColor.value,

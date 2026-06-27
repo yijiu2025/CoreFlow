@@ -17,11 +17,48 @@
     </div>
 
     <div class="slider-group">
+      <label class="slider-label">透明度</label>
+      <div class="slider-row">
+        <input type="range" :value="brushOpacity" @input="$emit('update:brushOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
+        <span class="slider-val">{{ brushOpacity }}%</span>
+      </div>
+    </div>
+
+    <div class="slider-group">
       <label class="slider-label">羽化</label>
       <div class="slider-row">
         <input type="range" :value="brushFeather" @input="$emit('update:brushFeather', Number(($event.target as HTMLInputElement).value))" min="0" max="30" />
         <span class="slider-val">{{ brushFeather === 0 ? '无' : brushFeather + 'px' }}</span>
       </div>
+    </div>
+
+    <div class="panel-divider"></div>
+
+    <!-- 画笔样式 -->
+    <div class="section-label">画笔样式</div>
+    <div class="style-grid">
+      <button class="style-btn" :class="{ active: brushStyle === 'solid' }" @click="$emit('update:brushStyle', 'solid')">
+        <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" stroke-width="3"/></svg>
+        <span>实线</span>
+      </button>
+      <button class="style-btn" :class="{ active: brushStyle === 'dashed' }" @click="$emit('update:brushStyle', 'dashed')">
+        <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" stroke-width="3" stroke-dasharray="6,4"/></svg>
+        <span>虚线</span>
+      </button>
+      <button class="style-btn" :class="{ active: brushStyle === 'dotted' }" @click="$emit('update:brushStyle', 'dotted')">
+        <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" stroke-width="3" stroke-dasharray="2,4"/></svg>
+        <span>点线</span>
+      </button>
+    </div>
+
+    <div class="panel-divider"></div>
+
+    <!-- 混合模式 -->
+    <div class="section-label">混合模式</div>
+    <div class="blend-modes">
+      <button v-for="mode in blendModes" :key="mode.value" class="blend-btn" :class="{ active: brushBlend === mode.value }" @click="$emit('update:brushBlend', mode.value)">
+        {{ mode.label }}
+      </button>
     </div>
 
     <div class="panel-divider"></div>
@@ -47,12 +84,24 @@ import PanelSection from './PanelSection.vue'
 
 defineProps<{
   brushSize: number
+  brushOpacity: number
   brushFeather: number
+  brushStyle: string
+  brushBlend: string
   currentColor: string
   presetColors: string[]
 }>()
 
-defineEmits(['update:brushSize', 'update:brushFeather', 'update:currentColor'])
+defineEmits(['update:brushSize', 'update:brushOpacity', 'update:brushFeather', 'update:brushStyle', 'update:brushBlend', 'update:currentColor'])
+
+const blendModes = [
+  { value: 'source-over', label: '正常' },
+  { value: 'multiply', label: '叠加' },
+  { value: 'screen', label: '滤色' },
+  { value: 'overlay', label: '柔光' },
+  { value: 'darken', label: '变暗' },
+  { value: 'lighten', label: '变亮' }
+]
 
 const shortcuts = [
   { keys: ['Ctrl', 'Z'], label: '撤销' },
@@ -80,4 +129,32 @@ input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height:
 .preset-colors { display: flex; flex-wrap: wrap; gap: 6px; }
 .preset-color { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; transition: all 0.15s; }
 .preset-color:hover { transform: scale(1.15); border-color: rgba(255,255,255,0.3); }
+
+/* 画笔样式 */
+.style-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.style-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 8px; background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;
+  color: #64748b; cursor: pointer; transition: all 0.15s;
+}
+.style-btn:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; border-color: rgba(255,255,255,0.1); }
+.style-btn.active {
+  background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2));
+  color: #a5b4fc; border-color: rgba(99,102,241,0.4);
+}
+.style-btn span { font-size: 11px; font-weight: 500; }
+
+/* 混合模式 */
+.blend-modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.blend-btn {
+  padding: 6px 12px; background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 6px;
+  color: #94a3b8; cursor: pointer; transition: all 0.15s; font-size: 11px;
+}
+.blend-btn:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+.blend-btn.active {
+  background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2));
+  color: #a5b4fc; border-color: rgba(99,102,241,0.4);
+}
 </style>

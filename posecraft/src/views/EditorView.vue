@@ -234,7 +234,10 @@
 
         <DrawPanel v-show="activeTool === 'draw'"
           v-model:brushSize="brushSize"
+          v-model:brushOpacity="brushOpacity"
           v-model:brushFeather="brushFeather"
+          v-model:brushStyle="brushStyle"
+          v-model:brushBlend="brushBlend"
           v-model:currentColor="currentColor"
           :presetColors="presetColors"
         />
@@ -362,7 +365,10 @@ let spacePressed = false
 
 const eraserSize = ref(20)
 const brushSize = ref(8)
+const brushOpacity = ref(100)
 const brushFeather = ref(0)
+const brushStyle = ref('solid')
+const brushBlend = ref('source-over')
 const textFontSize = ref(24)
 const pathBlur = ref(0)
 
