@@ -16,6 +16,7 @@ export function useMouseEvents(
   lineStyle: Ref<string>,
   eraserSize: Ref<number>,
   textFontSize: Ref<number>,
+  cornerRadius: Ref<number>,
   canvasDeps: any,
   saveState: () => void,
   addSkeletonNode: (x: number, y: number) => void,
@@ -117,7 +118,9 @@ export function useMouseEvents(
           fill: noFill.value ? 'transparent' : fillColor.value,
           selectable: false, evented: false, erasable: true,
           opacity: shapeOpacity.value / 100,
-          strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
+          strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined,
+          rx: cornerRadius.value,
+          ry: cornerRadius.value
         }
         if (tool === 'rect') {
           currentRect = new fabric.Rect({ ...baseStyle, width: 0, height: 0 })

@@ -336,10 +336,12 @@
       :visible="showStylePanel"
       :strokeWidth="strokeWidth"
       :opacity="shapeOpacity"
+      :cornerRadius="cornerRadius"
       :lineStyle="lineStyle"
       @close="showStylePanel = false"
       @update:strokeWidth="strokeWidth = $event"
       @update:opacity="shapeOpacity = $event"
+      @update:cornerRadius="cornerRadius = $event"
       @update:lineStyle="lineStyle = $event"
     />
 
@@ -419,6 +421,7 @@ const currentColor = ref('#6366f1')
 const noFill = ref(true)
 const lineStyle = ref('solid')
 const shapeOpacity = ref(100)
+const cornerRadius = ref(0)
 
 const {
   fCanvas, currentZoom, zoomSlider, zoomPercent,
@@ -443,7 +446,7 @@ const {
 const {
   handleMouseDown, handleMouseMove, handleMouseUp, handlePathCreated
 } = useMouseEvents(
-  fCanvas, canvasTool, activeTool, currentColor, strokeWidth, noFill, fillColor, shapeOpacity, lineStyle, eraserSize, textFontSize, canvasDeps, saveState, addSkeletonNode, addMidpointNode, connectNodes, createStar, createPolygon, addArrowHead, analyzeArea, applyCanvasTransform, () => spacePressed
+  fCanvas, canvasTool, activeTool, currentColor, strokeWidth, noFill, fillColor, shapeOpacity, lineStyle, eraserSize, textFontSize, cornerRadius, canvasDeps, saveState, addSkeletonNode, addMidpointNode, connectNodes, createStar, createPolygon, addArrowHead, analyzeArea, applyCanvasTransform, () => spacePressed
 )
 
 // currentColor 和 fillColor 现在独立设置，不再同步

@@ -35,6 +35,15 @@
           </div>
         </div>
 
+        <!-- 圆角 -->
+        <div class="slider-group">
+          <label class="slider-label">圆角</label>
+          <div class="slider-row">
+            <input type="range" :value="cornerRadius" @input="$emit('update:cornerRadius', Number(($event.target as HTMLInputElement).value))" min="0" max="50" />
+            <span class="slider-val">{{ cornerRadius }}px</span>
+          </div>
+        </div>
+
         <div class="panel-divider"></div>
 
         <!-- 线条样式 -->
@@ -67,10 +76,11 @@ defineProps<{
   visible: boolean
   strokeWidth: number
   opacity: number
+  cornerRadius: number
   lineStyle: string
 }>()
 
-defineEmits(['close', 'update:strokeWidth', 'update:opacity', 'update:lineStyle'])
+defineEmits(['close', 'update:strokeWidth', 'update:opacity', 'update:cornerRadius', 'update:lineStyle'])
 
 // 拖拽状态
 const isDragging = ref(false)
