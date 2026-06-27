@@ -500,6 +500,33 @@ const updateSelection = () => {
   if (isBrushObject(obj) && obj.shadow) pathBlur.value = Math.round(obj.shadow.blur / 2)
   else pathBlur.value = 0
 
+  if (obj) {
+    if (obj.type === 'i-text' || obj.type === 'textbox' || obj.type === 'text') {
+      if (obj.fill && typeof obj.fill === 'string') currentColor.value = obj.fill
+      noFill.value = true
+    } else {
+      if (obj.stroke && typeof obj.stroke === 'string') currentColor.value = obj.stroke
+      if (obj.fill === 'transparent' || !obj.fill) {
+        noFill.value = true
+      } else if (typeof obj.fill === 'string') {
+        noFill.value = false
+        fillColor.value = obj.fill
+      }
+    }
+    if (obj.strokeWidth !== undefined) strokeWidth.value = obj.strokeWidth
+    if (obj.strokeOpacity !== undefined) strokeOpacity.value = Math.round(obj.strokeOpacity * 100)
+    if (obj.fillOpacity !== undefined) fillOpacity.value = Math.round(obj.fillOpacity * 100)
+    if (obj.rx !== undefined) cornerRadius.value = obj.rx
+    
+    if (obj.strokeDashArray) {
+      if (obj.strokeDashArray.length > 0 && obj.strokeDashArray[0] === 10) lineStyle.value = 'dashed'
+      else if (obj.strokeDashArray.length > 0 && obj.strokeDashArray[0] === 3) lineStyle.value = 'dotted'
+      else lineStyle.value = 'solid'
+    } else {
+      lineStyle.value = 'solid'
+    }
+  }
+
   // 骨架节点选中特效
   if (fCanvas.value) {
     // 清除之前的选中特效
@@ -534,47 +561,84 @@ const updateSelection = () => {
 /** 应用属性到选中元素 */
 const applyToSelected = (props: Record<string, any>) => {
   const obj = fCanvas.value?.getActiveObject()
-  if (obj) {
-    obj.set(props)
-    fCanvas.value.renderAll()
-    saveState()
+  if (!obj) return
+  
+  const applyProps = (target: any) => {
+    target.set(props)
+    target.setCoords()
+    target.dirty = true
   }
+
+  if (obj.type === 'activeSelection' || obj.type === 'group') {
+    obj.getObjects().forEach(applyProps)
+    obj.addWithUpdate()
+  } else {
+    applyProps(obj)
+  }
+  
+  fCanvas.value.renderAll()
+  saveState()
+}
+
+/** 将 hex 颜色和透明度转换为 rgba */
+const toRgba = (hex: string, opacity: number) => {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${opacity})`
 }
 
 /** 更新描边颜色（主颜色） */
 const updateCurrentColor = (color: string) => {
   currentColor.value = color
-  applyToSelected({ stroke: color })
+  const obj = fCanvas.value?.getActiveObject()
+  if (obj && (obj.type === 'i-text' || obj.type === 'textbox' || obj.type === 'text')) {
+    applyToSelected({ fill: color })
+  } else if (obj && obj.type === 'path') {
+    // 画笔路径直接设置 stroke
+    applyToSelected({ stroke: color })
+  } else {
+    applyToSelected({ stroke: toRgba(color, strokeOpacity.value / 100) })
+  }
 }
 
 /** 更新填充颜色 */
 const updateFillColor = (color: string) => {
   fillColor.value = color
-  applyToSelected({ fill: color })
+  applyToSelected({ fill: toRgba(color, fillOpacity.value / 100) })
 }
 
 /** 更新填充开关 */
 const updateNoFill = (val: boolean) => {
   noFill.value = val
-  applyToSelected({ fill: val ? 'transparent' : fillColor.value })
+  applyToSelected({ fill: val ? 'transparent' : toRgba(fillColor.value, fillOpacity.value / 100) })
 }
 
 /** 更新描边粗细 */
 const updateStrokeWidth = (val: number) => {
   strokeWidth.value = val
+  brushSize.value = val // 同步画笔粗细
   applyToSelected({ strokeWidth: val })
 }
 
 /** 更新描边透明度 */
 const updateStrokeOpacity = (val: number) => {
   strokeOpacity.value = val
-  applyToSelected({ strokeOpacity: val / 100 })
+  brushOpacity.value = val // 同步画笔透明度
+  const obj = fCanvas.value?.getActiveObject()
+  if (obj && obj.type === 'path') {
+    // 画笔路径使用整体 opacity
+    applyToSelected({ opacity: val / 100 })
+  } else {
+    applyToSelected({ stroke: toRgba(currentColor.value, val / 100) })
+  }
 }
 
 /** 更新填充透明度 */
 const updateFillOpacity = (val: number) => {
   fillOpacity.value = val
-  applyToSelected({ fillOpacity: val / 100 })
+  applyToSelected({ fill: noFill.value ? 'transparent' : toRgba(fillColor.value, val / 100) })
 }
 
 /** 更新圆角 */
@@ -586,6 +650,7 @@ const updateCornerRadius = (val: number) => {
 /** 更新线条样式 */
 const updateLineStyle = (val: string) => {
   lineStyle.value = val
+  brushStyle.value = val // 同步画笔虚线样式
   const dashArray = val === 'dashed' ? [10, 5] : val === 'dotted' ? [3, 5] : undefined
   applyToSelected({ strokeDashArray: dashArray })
 }
