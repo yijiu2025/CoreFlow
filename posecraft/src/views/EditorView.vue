@@ -451,8 +451,7 @@ const {
   fCanvas, canvasTool, activeTool, currentColor, strokeWidth, noFill, fillColor, shapeOpacity, lineStyle, eraserSize, textFontSize, canvasDeps, saveState, addSkeletonNode, addMidpointNode, connectNodes, createStar, createPolygon, addArrowHead, analyzeArea, applyCanvasTransform, () => spacePressed
 )
 
-watch(fillColor, (v) => { currentColor.value = v })
-watch(currentColor, (v) => { fillColor.value = v })
+// currentColor 和 fillColor 现在独立设置，不再同步
 
 let resizeObserver: any = null
 

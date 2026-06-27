@@ -6,9 +6,9 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 export const useEditorStore = defineStore('editor', () => {
-  // ═══ 颜色状态 ═══
-  const currentColor = ref('#6366f1')
-  const fillColor = ref('#6366f1')
+  // ═══ 颜色状态（独立设置） ═══
+  const currentColor = ref('#6366f1')  // 描边/线条颜色
+  const fillColor = ref('#6366f1')     // 填充颜色
   const noFill = ref(true)
 
   // 预设颜色
@@ -17,15 +17,13 @@ export const useEditorStore = defineStore('editor', () => {
     '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899'
   ])
 
-  // 同步 currentColor 和 fillColor
+  // 独立设置颜色
   function setCurrentColor(color: string) {
     currentColor.value = color
-    fillColor.value = color
   }
 
   function setFillColor(color: string) {
     fillColor.value = color
-    currentColor.value = color
   }
 
   // ═══ 画笔状态 ═══
