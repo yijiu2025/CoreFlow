@@ -142,10 +142,7 @@
             <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
           </svg>
         </button>
-
-        <div class="tool-spacer"></div>
-
-        <!-- 常驻操作 -->
+        <!-- 清空画布 -->
         <button class="sub-btn danger" @click="clearCanvas" title="清空画布">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <polyline points="3 6 5 6 21 6"/>
@@ -155,12 +152,10 @@
 
         <div class="tool-spacer"></div>
 
-        <!-- 颜色选择器（始终显示） -->
-        <div class="color-picker-area">
-          <div class="color-swatch">
-            <input type="color" v-model="fillColor" id="color-picker" />
-            <label for="color-picker" class="swatch-preview" :style="{ background: fillColor }"></label>
-          </div>
+        <!-- 主颜色预览（左下角） -->
+        <div class="main-color-area" @click="showColorPanel = !showColorPanel" title="点击打开颜色面板">
+          <div class="main-color-swatch" :style="{ background: currentColor }"></div>
+          <span class="color-hint">颜色</span>
         </div>
       </aside>
 
@@ -801,6 +796,23 @@ const triggerExit = () => { if (confirm('确定退出？未保存的修改将丢
 .sub-btn:hover { background: rgba(255,255,255,0.06); color: #94a3b8; }
 .sub-btn.active { background: rgba(99,102,241,0.12); color: #818cf8; }
 .sub-btn.danger:hover { background: rgba(239,68,68,0.1); color: #f87171; }
+
+/* 主颜色预览区域 */
+.main-color-area {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 8px; cursor: pointer;
+  border-radius: 8px; transition: all 0.15s;
+}
+.main-color-area:hover { background: rgba(255,255,255,0.04); }
+.main-color-swatch {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 2px solid rgba(255,255,255,0.15);
+  transition: all 0.2s;
+}
+.main-color-area:hover .main-color-swatch { border-color: rgba(99,102,241,0.5); }
+.color-hint {
+  font-size: 10px; color: #4a5568; font-weight: 500;
+}
 
 .tool-spacer { flex: 1; }
 
