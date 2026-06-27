@@ -11,9 +11,12 @@ export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: bool
   const undoStack = ref<any[]>([])
   const redoStack = ref<any[]>([])
   let onStateRestored: (() => void) | null = null
+  let onReapplyTool: (() => void) | null = null
 
   /** 设置状态恢复后的回调 */
   const setOnStateRestored = (cb: () => void) => { onStateRestored = cb }
+  /** 设置重新应用工具的回调 */
+  const setOnReapplyTool = (cb: () => void) => { onReapplyTool = cb }
 
   /** 保存当前状态到撤销栈 */
   const saveState = () => {
@@ -50,8 +53,10 @@ export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: bool
       if (inkLayer && inkCanvas) inkLayer.setElement(inkCanvas)
       fCanvas.value.renderAll()
       isStateSavingLocked.value = false
-      // 通知外部状态已恢复（用于重置裁剪模式等）
+      // 通知外部状态已恢复
       if (onStateRestored) onStateRestored()
+      // 重新应用当前工具的设置
+      if (onReapplyTool) onReapplyTool()
     })
   }
 
@@ -71,5 +76,5 @@ export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: bool
     restoreState(n)
   }
 
-  return { undoStack, redoStack, saveState, restoreState, undo, redo, setOnStateRestored }
+  return { undoStack, redoStack, saveState, restoreState, undo, redo, setOnStateRestored, setOnReapplyTool }
 }
