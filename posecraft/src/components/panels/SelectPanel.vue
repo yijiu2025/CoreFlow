@@ -37,7 +37,8 @@
         <div class="slider-row">
           <input type="range" :value="selectedObject?.strokeWidth || 3"
             @input="$emit('update:pathStrokeWidth', Number(($event.target as HTMLInputElement).value))"
-            @change="$emit('saveState')"
+            @mouseup="$emit('saveState')"
+            @touchend="$emit('saveState')"
             min="1" max="50" />
           <span class="slider-val">{{ selectedObject?.strokeWidth || 3 }}px</span>
         </div>
@@ -48,7 +49,8 @@
         <div class="slider-row">
           <input type="range" :value="Math.round((selectedObject?.scaleX || 1) * 100)"
             @input="$emit('update:pathScale', Number(($event.target as HTMLInputElement).value) / 100)"
-            @change="$emit('saveState')"
+            @mouseup="$emit('saveState')"
+            @touchend="$emit('saveState')"
             min="10" max="300" />
           <span class="slider-val">{{ Math.round((selectedObject?.scaleX || 1) * 100) }}%</span>
         </div>
@@ -58,7 +60,8 @@
         <div class="slider-row">
           <input type="range" :value="pathBlur"
             @input="$emit('update:pathBlur', Number(($event.target as HTMLInputElement).value))"
-            @change="$emit('saveState')"
+            @mouseup="$emit('saveState')"
+            @touchend="$emit('saveState')"
             min="0" max="30" />
           <span class="slider-val">{{ pathBlur === 0 ? '无' : pathBlur + 'px' }}</span>
         </div>

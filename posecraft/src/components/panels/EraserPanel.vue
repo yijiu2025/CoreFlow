@@ -14,7 +14,8 @@
       <div class="slider-row">
         <input type="range" :value="eraserSize"
           @input="$emit('update:eraserSize', Number(($event.target as HTMLInputElement).value))"
-          @change="$emit('saveState')"
+          @mouseup="$emit('saveState')"
+          @touchend="$emit('saveState')"
           min="5" max="100" />
         <span class="slider-val">{{ eraserSize }}px</span>
       </div>
@@ -26,7 +27,8 @@
       <div class="slider-row">
         <input type="range" :value="eraserOpacity"
           @input="$emit('update:eraserOpacity', Number(($event.target as HTMLInputElement).value))"
-          @change="$emit('saveState')"
+          @mouseup="$emit('saveState')"
+          @touchend="$emit('saveState')"
           min="10" max="100" />
         <span class="slider-val">{{ eraserOpacity }}%</span>
       </div>
@@ -38,7 +40,8 @@
       <div class="slider-row">
         <input type="range" :value="eraserHardness"
           @input="$emit('update:eraserHardness', Number(($event.target as HTMLInputElement).value))"
-          @change="$emit('saveState')"
+          @mouseup="$emit('saveState')"
+          @touchend="$emit('saveState')"
           min="0" max="100" />
         <span class="slider-val">{{ eraserHardness === 0 ? '软' : eraserHardness === 100 ? '硬' : eraserHardness + '%' }}</span>
       </div>

@@ -23,7 +23,8 @@
           <div class="slider-row">
             <input type="range" :value="strokeWidth"
               @input="$emit('update:strokeWidth', Number(($event.target as HTMLInputElement).value))"
-              @change="$emit('saveState')"
+              @mouseup="$emit('saveState')"
+              @touchend="$emit('saveState')"
               min="1" max="20" />
             <span class="slider-val">{{ strokeWidth }}px</span>
           </div>
@@ -35,7 +36,8 @@
           <div class="slider-row">
             <input type="range" :value="strokeOpacity"
               @input="$emit('update:strokeOpacity', Number(($event.target as HTMLInputElement).value))"
-              @change="$emit('saveState')"
+              @mouseup="$emit('saveState')"
+              @touchend="$emit('saveState')"
               min="10" max="100" />
             <span class="slider-val">{{ strokeOpacity }}%</span>
           </div>
@@ -47,7 +49,8 @@
           <div class="slider-row">
             <input type="range" :value="fillOpacity"
               @input="$emit('update:fillOpacity', Number(($event.target as HTMLInputElement).value))"
-              @change="$emit('saveState')"
+              @mouseup="$emit('saveState')"
+              @touchend="$emit('saveState')"
               min="10" max="100" />
             <span class="slider-val">{{ fillOpacity }}%</span>
           </div>
@@ -59,7 +62,8 @@
           <div class="slider-row">
             <input type="range" :value="cornerRadius"
               @input="$emit('update:cornerRadius', Number(($event.target as HTMLInputElement).value))"
-              @change="$emit('saveState')"
+              @mouseup="$emit('saveState')"
+              @touchend="$emit('saveState')"
               min="0" max="50" />
             <span class="slider-val">{{ cornerRadius }}px</span>
           </div>
