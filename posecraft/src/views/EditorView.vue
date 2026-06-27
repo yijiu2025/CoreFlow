@@ -252,6 +252,10 @@
 
         <EraserPanel v-show="activeTool === 'eraser'"
           v-model:eraserSize="eraserSize"
+          v-model:eraserOpacity="eraserOpacity"
+          v-model:eraserHardness="eraserHardness"
+          v-model:eraserShape="eraserShape"
+          v-model:eraserMode="eraserMode"
         />
 
         <ShapesPanel v-show="activeTool === 'shapes'"
@@ -382,6 +386,10 @@ let isStateSavingLocked = false
 let spacePressed = false
 
 const eraserSize = ref(20)
+const eraserOpacity = ref(100)
+const eraserHardness = ref(100)
+const eraserShape = ref('circle')
+const eraserMode = ref('all')
 const brushSize = ref(8)
 const brushOpacity = ref(100)
 const brushFeather = ref(0)
