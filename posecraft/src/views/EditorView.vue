@@ -126,6 +126,25 @@
 
         <div class="tool-divider"></div>
 
+        <!-- 浮动面板开关 -->
+        <button class="sub-btn" :class="{ active: showColorPanel }" @click="showColorPanel = !showColorPanel" title="颜色面板">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="13.5" cy="6.5" r="2.5"/>
+            <circle cx="17.5" cy="10.5" r="2.5"/>
+            <circle cx="8.5" cy="7.5" r="2.5"/>
+            <circle cx="6.5" cy="12.5" r="2.5"/>
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+          </svg>
+        </button>
+        <button class="sub-btn" :class="{ active: showStylePanel }" @click="showStylePanel = !showStylePanel" title="样式面板">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+        </button>
+
+        <div class="tool-spacer"></div>
+
         <!-- 常驻操作 -->
         <button class="sub-btn danger" @click="clearCanvas" title="清空画布">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -306,6 +325,29 @@
       </aside>
     </div>
 
+    <!-- 浮动面板 -->
+    <ColorFloatPanel
+      :visible="showColorPanel"
+      :currentColor="currentColor"
+      :fillColor="fillColor"
+      :noFill="noFill"
+      :presetColors="presetColors"
+      @close="showColorPanel = false"
+      @update:currentColor="currentColor = $event"
+      @update:fillColor="fillColor = $event"
+      @update:noFill="noFill = $event"
+    />
+    <StyleFloatPanel
+      :visible="showStylePanel"
+      :strokeWidth="strokeWidth"
+      :opacity="shapeOpacity"
+      :lineStyle="lineStyle"
+      @close="showStylePanel = false"
+      @update:strokeWidth="strokeWidth = $event"
+      @update:opacity="shapeOpacity = $event"
+      @update:lineStyle="lineStyle = $event"
+    />
+
     <!-- 帮助弹窗 -->
     <HelpModal :isOpen="showHelp" @close="showHelp = false" />
   </div>
@@ -325,6 +367,8 @@ import CropPanel from '@/components/panels/CropPanel.vue'
 import ImagePanel from '@/components/panels/ImagePanel.vue'
 import TextPanel from '@/components/panels/TextPanel.vue'
 import HelpModal from '@/components/modals/HelpModal.vue'
+import ColorFloatPanel from '@/components/color/ColorFloatPanel.vue'
+import StyleFloatPanel from '@/components/brush/StyleFloatPanel.vue'
 import { v4 as uuidv4 } from 'uuid'
 import * as fabricLib from 'fabric'
 
@@ -357,6 +401,8 @@ const isAnalyzing = ref(false)
 const loadingStep = ref('')
 const analysisComplete = ref(false)
 const showHelp = ref(false)
+const showColorPanel = ref(false)
+const showStylePanel = ref(false)
 
 const detectionType = ref<'all' | 'pose' | 'face' | 'hand' | 'segmentation'>('all')
 
