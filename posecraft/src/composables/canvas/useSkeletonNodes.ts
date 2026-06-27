@@ -42,6 +42,7 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
         fill: '#ffffff', stroke: currentColor.value, strokeWidth: 3,
         originX: 'center', originY: 'center',
         selectable: true, evented: true, isSkeleton: true,
+        hasControls: false, hasBorders: false,
         padding: 12, name, erasable: true
       })
       c.connectedLines = []; nm[name] = c
@@ -71,6 +72,7 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
       fill: '#ffffff', stroke: currentColor.value, strokeWidth: 3,
       originX: 'center', originY: 'center',
       selectable: true, evented: true, isSkeleton: true,
+      hasControls: false, hasBorders: false,
       padding: 12, name: `node_${Date.now()}`, erasable: true
     })
     node.connectedLines = []
@@ -101,6 +103,7 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
       fill: '#ffffff', stroke: currentColor.value, strokeWidth: 3,
       originX: 'center', originY: 'center',
       selectable: true, evented: true, isSkeleton: true,
+      hasControls: false, hasBorders: false,
       padding: 12, name: `node_${Date.now()}`, erasable: true
     })
     newNode.connectedLines = []
