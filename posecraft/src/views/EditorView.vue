@@ -921,6 +921,7 @@ const addText = (text: string = '双击编辑') => {
     fill: currentColor.value,
     originX: 'center', originY: 'center',
     selectable: true, evented: true,
+    hasControls: true, hasBorders: true,
     erasable: true
   })
   fCanvas.value.add(textObj)

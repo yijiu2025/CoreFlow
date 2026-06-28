@@ -84,10 +84,15 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
     }
 
     const isNodeTool = tool === 'addNode' || tool === 'line' || tool === 'moveNode'
+    const isTextTool = tool === 'text'
     fCanvas.value.forEachObject((obj: any) => {
       if (obj.isInkLayer || obj.isEraserCursor) return
       if (isNodeTool && obj.isSkeleton) {
         obj.selectable = tool === 'moveNode' // 只有 moveNode 工具允许选中
+        obj.evented = true
+      } else if (isTextTool && (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox')) {
+        // 文字工具下文字对象可选中
+        obj.selectable = true
         obj.evented = true
       } else {
         obj.selectable = false
