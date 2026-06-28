@@ -218,6 +218,9 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
       fCanvas.value.defaultCursor = 'none'
       fCanvas.value.hoverCursor = 'none'
       if (eraserCursor && eraserSize) {
+        if (!fCanvas.value.getObjects().includes(eraserCursor)) {
+          fCanvas.value.add(eraserCursor)
+        }
         eraserCursor.set({ visible: true, radius: eraserSize.value / 2 })
         fCanvas.value.bringToFront(eraserCursor)
         fCanvas.value.renderAll()

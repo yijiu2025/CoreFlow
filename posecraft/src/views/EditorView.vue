@@ -424,7 +424,11 @@ const { applyColor, applyColorToImage, isBrushObject, updatePathStrokeWidth, upd
 const { activeGuides, drawReference, deleteGuides, toggleGuide } = useReferenceLines(fCanvas, currentColor, strokeWidth, saveState)
 const { drawPoseSkeleton, addSkeletonNode, addMidpointNode, connectNodes } = useSkeletonNodes(fCanvas, currentColor, saveState)
 
-const canvasDeps = computed(() => getCanvasDeps()).value
+const canvasDeps = Object.create(getCanvasDeps(), {
+  eraserOpacity: { get() { return eraserOpacity.value }, enumerable: true },
+  eraserHardness: { get() { return eraserHardness.value }, enumerable: true },
+  eraserShape: { get() { return eraserShape.value }, enumerable: true }
+})
 
 const {
   isDetectorReady, detectionTypes, ensureModelsLoaded, runFullAnalysis, autoAnalyze, clearAnalysis, analyzeArea
@@ -508,6 +512,11 @@ const updateSelection = () => {
   else pathBlur.value = 0
 
   if (obj) {
+    let targetObj = obj
+    if (obj.type === 'group') {
+      targetObj = obj.getObjects().find((o: any) => o.stroke || o.fill) || obj
+    }
+
     const parseColor = (colorStr: any) => {
       if (!colorStr || colorStr === 'transparent') return null
       if (colorStr.startsWith('#')) {
@@ -528,39 +537,39 @@ const updateSelection = () => {
       return null
     }
 
-    if (obj.type === 'i-text' || obj.type === 'textbox' || obj.type === 'text') {
-      const parsed = parseColor(obj.fill)
+    if (targetObj.type === 'i-text' || targetObj.type === 'textbox' || targetObj.type === 'text') {
+      const parsed = parseColor(targetObj.fill)
       if (parsed) currentColor.value = parsed.hex
       noFill.value = true
     } else {
-      const parsedStroke = parseColor(obj.stroke)
+      const parsedStroke = parseColor(targetObj.stroke)
       if (parsedStroke) {
         currentColor.value = parsedStroke.hex
-        if (obj.type !== 'path') strokeOpacity.value = Math.round(parsedStroke.opacity * 100)
+        if (targetObj.type !== 'path') strokeOpacity.value = Math.round(parsedStroke.opacity * 100)
       }
-      if (obj.fill === 'transparent' || !obj.fill) {
+      if (targetObj.fill === 'transparent' || !targetObj.fill) {
         noFill.value = true
       } else {
         noFill.value = false
-        const parsedFill = parseColor(obj.fill)
+        const parsedFill = parseColor(targetObj.fill)
         if (parsedFill) {
           fillColor.value = parsedFill.hex
           fillOpacity.value = Math.round(parsedFill.opacity * 100)
         }
       }
     }
-    if (obj.strokeWidth !== undefined) strokeWidth.value = obj.strokeWidth
-    if (obj.type === 'path' && obj.opacity !== undefined) {
-      strokeOpacity.value = Math.round(obj.opacity * 100)
-    } else if (obj.strokeOpacity !== undefined) {
-      strokeOpacity.value = Math.round(obj.strokeOpacity * 100)
+    if (targetObj.strokeWidth !== undefined) strokeWidth.value = targetObj.strokeWidth
+    if (targetObj.type === 'path' && targetObj.opacity !== undefined) {
+      strokeOpacity.value = Math.round(targetObj.opacity * 100)
+    } else if (targetObj.strokeOpacity !== undefined) {
+      strokeOpacity.value = Math.round(targetObj.strokeOpacity * 100)
     }
-    if (obj.fillOpacity !== undefined) fillOpacity.value = Math.round(obj.fillOpacity * 100)
-    if (obj.rx !== undefined) cornerRadius.value = obj.rx
+    if (targetObj.fillOpacity !== undefined) fillOpacity.value = Math.round(targetObj.fillOpacity * 100)
+    if (targetObj.rx !== undefined) cornerRadius.value = targetObj.rx
     
-    if (obj.strokeDashArray) {
-      if (obj.strokeDashArray.length > 0 && obj.strokeDashArray[0] === 10) lineStyle.value = 'dashed'
-      else if (obj.strokeDashArray.length > 0 && obj.strokeDashArray[0] === 3) lineStyle.value = 'dotted'
+    if (targetObj.strokeDashArray) {
+      if (targetObj.strokeDashArray.length > 0 && targetObj.strokeDashArray[0] === 10) lineStyle.value = 'dashed'
+      else if (targetObj.strokeDashArray.length > 0 && targetObj.strokeDashArray[0] === 3) lineStyle.value = 'dotted'
       else lineStyle.value = 'solid'
     } else {
       lineStyle.value = 'solid'
@@ -611,7 +620,11 @@ const applyToSelected = (props: Record<string, any>) => {
 
   if (obj.type === 'activeSelection' || obj.type === 'group') {
     obj.getObjects().forEach(applyProps)
-    obj.addWithUpdate()
+    if (obj.type === 'activeSelection') {
+      obj.addWithUpdate()
+    } else {
+      obj.dirty = true
+    }
   } else {
     applyProps(obj)
   }
@@ -722,7 +735,11 @@ const updateStrokeOpacity = (val: number) => {
 
   if (activeObj.type === 'activeSelection' || activeObj.type === 'group') {
     activeObj.getObjects().forEach(processObject)
-    activeObj.addWithUpdate()
+    if (activeObj.type === 'activeSelection') {
+      activeObj.addWithUpdate()
+    } else {
+      activeObj.dirty = true
+    }
   } else {
     processObject(activeObj)
   }

@@ -26,7 +26,7 @@ export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: bool
     const last = undoStack.value[undoStack.value.length - 1]
     if (last && JSON.stringify(snapshot) === JSON.stringify(last)) return
     undoStack.value.push(snapshot)
-    if (undoStack.value.length > 100) undoStack.value.shift()
+    if (undoStack.value.length > 500) undoStack.value.shift()
     redoStack.value = []
   }
 
@@ -41,7 +41,15 @@ export function useHistory(fCanvas: Ref<any>, isStateSavingLocked: { value: bool
       img.onerror = () => resolve(null)
       img.src = snapshot.ink
     })
+    const safetyTimeout = setTimeout(() => {
+      if (isStateSavingLocked.value) {
+        isStateSavingLocked.value = false
+        console.warn('[History] State restoration safety timeout triggered (unlocked state saving)')
+      }
+    }, 1500)
+
     fCanvas.value.loadFromJSON(snapshot.fabric, async () => {
+      clearTimeout(safetyTimeout)
       const img = await p
       if (img && inkCtx && inkCanvas) {
         inkCtx.save()

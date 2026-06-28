@@ -99,7 +99,7 @@ export function useMouseEvents(
     if (['draw', 'eraser'].includes(tool)) {
       isErasing.value = true; startPoint = pointer; saveState()
       if (tool === 'eraser' && canvasDeps.eraserCursor) {
-        canvasDeps.eraserCursor.set({ left: pointer.x, top: pointer.y })
+        canvasDeps.eraserCursor.set({ visible: true, left: pointer.x, top: pointer.y })
         fCanvas.value.bringToFront(canvasDeps.eraserCursor)
       }
     } else if (tool === 'line') {
@@ -145,7 +145,8 @@ export function useMouseEvents(
           selectable: false, evented: false, erasable: true,
           strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined,
           rx: cornerRadius.value,
-          ry: cornerRadius.value
+          ry: cornerRadius.value,
+          strokeUniform: true
         }
         if (tool === 'rect') {
           currentRect = new fabric.Rect({ ...baseStyle, width: 0, height: 0 })
@@ -225,27 +226,72 @@ export function useMouseEvents(
     }
 
     if (canvasDeps.eraserCursor && tool === 'eraser') {
-      canvasDeps.eraserCursor.set({ left: pointer.x, top: pointer.y, radius: eraserSize.value / 2 })
+      if (!fCanvas.value.getObjects().includes(canvasDeps.eraserCursor)) {
+        fCanvas.value.add(canvasDeps.eraserCursor)
+      }
+      canvasDeps.eraserCursor.set({ visible: true, left: pointer.x, top: pointer.y, radius: eraserSize.value / 2 })
       fCanvas.value.bringToFront(canvasDeps.eraserCursor)
-      fCanvas.value.renderAll()
+      fCanvas.value.requestRenderAll()
     }
 
     if (isErasing.value && tool === 'eraser') {
       const { inkCtx } = canvasDeps
+      const opacity = (canvasDeps.eraserOpacity ?? 100) / 100
+      const hardness = canvasDeps.eraserHardness ?? 100
+      const shape = canvasDeps.eraserShape ?? 'circle'
+      const radius = eraserSize.value / 2
+
       if (inkCtx) {
         inkCtx.save()
         inkCtx.globalCompositeOperation = 'destination-out'
-        inkCtx.beginPath()
-        inkCtx.arc(pointer.x, pointer.y, eraserSize.value / 2, 0, Math.PI * 2)
-        inkCtx.fill()
+        if (shape === 'square') {
+          if (hardness < 100) {
+            const grad = inkCtx.createRadialGradient(pointer.x, pointer.y, radius * (hardness / 100), pointer.x, pointer.y, radius)
+            grad.addColorStop(0, `rgba(0,0,0,${opacity})`)
+            grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`)
+            grad.addColorStop(1, 'rgba(0,0,0,0)')
+            inkCtx.fillStyle = grad
+          } else {
+            inkCtx.fillStyle = `rgba(0,0,0,${opacity})`
+          }
+          inkCtx.fillRect(pointer.x - radius, pointer.y - radius, radius * 2, radius * 2)
+        } else {
+          inkCtx.beginPath()
+          if (hardness < 100) {
+            const grad = inkCtx.createRadialGradient(pointer.x, pointer.y, radius * (hardness / 100), pointer.x, pointer.y, radius)
+            grad.addColorStop(0, `rgba(0,0,0,${opacity})`)
+            grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`)
+            grad.addColorStop(1, 'rgba(0,0,0,0)')
+            inkCtx.fillStyle = grad
+          } else {
+            inkCtx.fillStyle = `rgba(0,0,0,${opacity})`
+          }
+          inkCtx.arc(pointer.x, pointer.y, radius, 0, Math.PI * 2)
+          inkCtx.fill()
+        }
         inkCtx.restore()
         refreshInkLayer()
       }
-      const radius = eraserSize.value / 2
+      
       const objects = fCanvas.value.getObjects().filter((o: any) =>
         o.erasable && !o.isInkLayer && !o.isEraserCursor
       )
       objects.forEach((obj: any) => {
+        // Fast AABB bounding box check
+        const rect = obj.getBoundingRect()
+        const ex1 = pointer.x - radius
+        const ey1 = pointer.y - radius
+        const ex2 = pointer.x + radius
+        const ey2 = pointer.y + radius
+        
+        const rx1 = rect.left
+        const ry1 = rect.top
+        const rx2 = rect.left + rect.width
+        const ry2 = rect.top + rect.height
+        
+        const isOverlapping = !(ex2 < rx1 || ex1 > rx2 || ey2 < ry1 || ey1 > ry2)
+        if (!isOverlapping) return
+
         if (obj.isUserStroke && obj.getElement && obj.getElement().tagName === 'CANVAS') {
           const el = obj.getElement()
           const ctx = el.getContext('2d', { willReadFrequently: true })
@@ -264,9 +310,31 @@ export function useMouseEvents(
 
           ctx.save()
           ctx.globalCompositeOperation = 'destination-out'
-          ctx.beginPath()
-          ctx.arc(px, py, eraserRadius, 0, Math.PI * 2)
-          ctx.fill()
+          if (shape === 'square') {
+            if (hardness < 100) {
+              const grad = ctx.createRadialGradient(px, py, eraserRadius * (hardness / 100), px, py, eraserRadius)
+              grad.addColorStop(0, `rgba(0,0,0,${opacity})`)
+              grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`)
+              grad.addColorStop(1, 'rgba(0,0,0,0)')
+              ctx.fillStyle = grad
+            } else {
+              ctx.fillStyle = `rgba(0,0,0,${opacity})`
+            }
+            ctx.fillRect(px - eraserRadius, py - eraserRadius, eraserRadius * 2, eraserRadius * 2)
+          } else {
+            ctx.beginPath()
+            if (hardness < 100) {
+              const grad = ctx.createRadialGradient(px, py, eraserRadius * (hardness / 100), px, py, eraserRadius)
+              grad.addColorStop(0, `rgba(0,0,0,${opacity})`)
+              grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`)
+              grad.addColorStop(1, 'rgba(0,0,0,0)')
+              ctx.fillStyle = grad
+            } else {
+              ctx.fillStyle = `rgba(0,0,0,${opacity})`
+            }
+            ctx.arc(px, py, eraserRadius, 0, Math.PI * 2)
+            ctx.fill()
+          }
           ctx.restore()
           obj.dirty = true
         } else if (obj.type === 'line') {
@@ -284,19 +352,20 @@ export function useMouseEvents(
           if (isColliding) fCanvas.value.remove(obj)
         }
       })
-      fCanvas.value.renderAll()
+      fCanvas.value.requestRenderAll()
     }
 
     if (isDrawingLine.value && currentLine) {
       currentLine.set({ x2: pointer.x, y2: pointer.y })
-      fCanvas.value.renderAll()
+      currentLine.setCoords()
+      fCanvas.value.requestRenderAll()
     }
 
     if (isDrawingCrop.value && cropRect && startPoint) {
       const l = Math.min(startPoint.x, pointer.x)
       const t = Math.min(startPoint.y, pointer.y)
       cropRect.set({ left: l, top: t, width: Math.abs(startPoint.x - pointer.x), height: Math.abs(startPoint.y - pointer.y) })
-      fCanvas.value.renderAll()
+      fCanvas.value.requestRenderAll()
     }
 
     if (isDrawingRect.value && currentRect && startPoint) {
@@ -310,9 +379,11 @@ export function useMouseEvents(
       const t = Math.min(startPoint.y, pointer.y)
 
       if (currentRect.type === 'ellipse') {
-        currentRect.set({ left: l, top: t, rx: w / 2, ry: h / 2 })
+        currentRect.set({ left: l, top: t, rx: w / 2, ry: h / 2, width: w, height: h })
+        currentRect.setCoords()
       } else if (currentRect.type === 'triangle') {
         currentRect.set({ left: l, top: t, width: w, height: h })
+        currentRect.setCoords()
       } else if (currentRect.type === 'polygon' && !currentRect._isStar) {
         const sides = currentRect._sides || 6
         const rx = w / 2, ry = h / 2
@@ -331,6 +402,8 @@ export function useMouseEvents(
           pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
           left: l, top: t, originX: 'left', originY: 'top', dirty: true
         })
+        currentRect._initDimensions()
+        currentRect.setCoords()
       } else if (currentRect._isStar) {
         const points = currentRect._starPoints || 5
         const rx = w / 2, ry = h / 2
@@ -352,8 +425,11 @@ export function useMouseEvents(
           pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
           left: l, top: t, originX: 'left', originY: 'top', dirty: true
         })
+        currentRect._initDimensions()
+        currentRect.setCoords()
       } else {
         currentRect.set({ left: l, top: t, width: w, height: h })
+        currentRect.setCoords()
       }
       fCanvas.value.renderAll()
     }

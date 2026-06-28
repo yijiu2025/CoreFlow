@@ -9,6 +9,24 @@ import type { Ref } from 'vue'
  */
 export function useReferenceLines(fCanvas: Ref<any>, currentColor: Ref<string>, strokeWidth: Ref<number>, saveState: () => void) {
   const activeGuides = ref<string[]>([])
+  const guideStyles = ref<Record<string, { stroke: string; strokeWidth: number; opacity: number }>>({})
+
+  const saveCurrentGuideStyles = () => {
+    if (!fCanvas.value) return
+    fCanvas.value.getObjects().forEach((obj: any) => {
+      if (obj.isGuide && obj.guideType) {
+        let child = obj
+        if (obj.type === 'group') {
+          child = obj.getObjects().find((o: any) => o.stroke || o.fill) || obj
+        }
+        guideStyles.value[obj.guideType] = {
+          stroke: child.stroke || currentColor.value,
+          strokeWidth: child.strokeWidth !== undefined ? child.strokeWidth : strokeWidth.value,
+          opacity: obj.opacity !== undefined ? obj.opacity : 0.5
+        }
+      }
+    })
+  }
 
   /** 获取绘制区域 */
   const getDrawArea = () => {
@@ -24,56 +42,129 @@ export function useReferenceLines(fCanvas: Ref<any>, currentColor: Ref<string>, 
   const drawReference = (type: string) => {
     if (!fCanvas.value) return
     const { w, h, l, t } = getDrawArea()
-    const style: any = { stroke: currentColor.value, strokeWidth: strokeWidth.value, selectable: false, evented: false, opacity: 0.5, isGuide: true }
+    const isInteractive = (type !== 'all')
+    
+    const saved = guideStyles.value[type]
+    const gStroke = saved ? saved.stroke : currentColor.value
+    const gStrokeWidth = saved ? saved.strokeWidth : strokeWidth.value
+    const gOpacity = saved ? saved.opacity : (type === 'golden' ? 0.7 : type === 'diagonal' ? 0.3 : type === 'phi' ? 0.4 : type === 'spiral' ? 0.8 : 0.5)
+
+    const style: any = { stroke: gStroke, strokeWidth: gStrokeWidth, selectable: false, evented: false, opacity: gOpacity }
 
     // 三分法
     if (type === 'thirds' || type === 'all') {
+      const objects: any[] = []
       ;[1/3, 2/3].forEach((f: number) => {
-        fCanvas.value.add(new fabric.Line([l+w*f, t, l+w*f, t+h], style))
-        fCanvas.value.add(new fabric.Line([l, t+h*f, l+w, t+h*f], style))
+        objects.push(new fabric.Line([l+w*f, t, l+w*f, t+h], style))
+        objects.push(new fabric.Line([l, t+h*f, l+w, t+h*f], style))
       })
+      const group = new fabric.Group(objects, {
+        selectable: isInteractive, evented: isInteractive,
+        hasControls: isInteractive, hasBorders: isInteractive,
+        isGuide: true, guideType: type, type: 'group',
+        originX: 'center', originY: 'center'
+      })
+      fCanvas.value.add(group)
+      if (isInteractive && type === 'thirds') fCanvas.value.setActiveObject(group)
     }
 
     // 黄金比例 (0.618)
     if (type === 'golden' || type === 'all') {
       const phi = 0.618
+      const objects: any[] = []
       ;[phi, 1 - phi].forEach((f: number) => {
-        fCanvas.value.add(new fabric.Line([l+w*f, t, l+w*f, t+h], { ...style, opacity: 0.7 }))
-        fCanvas.value.add(new fabric.Line([l, t+h*f, l+w, t+h*f], { ...style, opacity: 0.7 }))
+        objects.push(new fabric.Line([l+w*f, t, l+w*f, t+h], { ...style, opacity: gOpacity }))
+        objects.push(new fabric.Line([l, t+h*f, l+w, t+h*f], { ...style, opacity: gOpacity }))
       })
+      const group = new fabric.Group(objects, {
+        selectable: isInteractive, evented: isInteractive,
+        hasControls: isInteractive, hasBorders: isInteractive,
+        isGuide: true, guideType: type, type: 'group',
+        originX: 'center', originY: 'center'
+      })
+      fCanvas.value.add(group)
+      if (isInteractive && type === 'golden') fCanvas.value.setActiveObject(group)
     }
 
     // 对角线
     if (type === 'diagonal' || type === 'all') {
-      fCanvas.value.add(new fabric.Line([l, t, l+w, t+h], { ...style, opacity: 0.3 }))
-      fCanvas.value.add(new fabric.Line([l+w, t, l, t+h], { ...style, opacity: 0.3 }))
+      const objects: any[] = []
+      objects.push(new fabric.Line([l, t, l+w, t+h], { ...style, opacity: gOpacity }))
+      objects.push(new fabric.Line([l+w, t, l, t+h], { ...style, opacity: gOpacity }))
+      const group = new fabric.Group(objects, {
+        selectable: isInteractive, evented: isInteractive,
+        hasControls: isInteractive, hasBorders: isInteractive,
+        isGuide: true, guideType: type, type: 'group',
+        originX: 'center', originY: 'center'
+      })
+      fCanvas.value.add(group)
+      if (isInteractive && type === 'diagonal') fCanvas.value.setActiveObject(group)
     }
 
     // 中心点
     if (type === 'center' || type === 'all') {
       const cx = l + w / 2, cy = t + h / 2
-      fCanvas.value.add(new fabric.Line([cx, t, cx, t+h], style))
-      fCanvas.value.add(new fabric.Line([l, cy, l+w, cy], style))
-      fCanvas.value.add(Object.assign(new fabric.Circle({
+      const objects: any[] = []
+      objects.push(new fabric.Line([cx, t, cx, t+h], style))
+      objects.push(new fabric.Line([l, cy, l+w, cy], style))
+      objects.push(new fabric.Circle({
         left: cx, top: cy, radius: 6,
-        fill: 'transparent', stroke: currentColor.value, strokeWidth: 1.5,
+        fill: 'transparent', stroke: gStroke, strokeWidth: 1.5,
         originX: 'center', originY: 'center',
-        selectable: false, evented: false, opacity: 0.6
-      }), { isGuide: true }))
+        selectable: false, evented: false, opacity: gOpacity
+      }))
+      const group = new fabric.Group(objects, {
+        selectable: isInteractive, evented: isInteractive,
+        hasControls: isInteractive, hasBorders: isInteractive,
+        isGuide: true, guideType: type, type: 'group',
+        originX: 'center', originY: 'center'
+      })
+      fCanvas.value.add(group)
+      if (isInteractive && type === 'center') fCanvas.value.setActiveObject(group)
     }
 
-    // φ 网格 (黄金螺旋近似)
+    // φ 网格 / 黄金三角
     if (type === 'phi' || type === 'all') {
-      const phi = 0.618
-      fCanvas.value.add(Object.assign(new fabric.Rect({
+      const objects: any[] = []
+      objects.push(new fabric.Rect({
         left: l, top: t, width: w, height: h,
-        fill: 'transparent', stroke: currentColor.value, strokeWidth: 1,
-        selectable: false, evented: false, opacity: 0.3
-      }), { isGuide: true }))
-      fCanvas.value.add(new fabric.Line([l, t, l+w*phi, t+h], { ...style, opacity: 0.4 }))
-      fCanvas.value.add(new fabric.Line([l+w, t, l+w*(1-phi), t+h], { ...style, opacity: 0.4 }))
-      fCanvas.value.add(new fabric.Line([l, t+h*phi, l+w, t], { ...style, opacity: 0.4 }))
-      fCanvas.value.add(new fabric.Line([l, t+h, l+w, t+h*(1-phi)], { ...style, opacity: 0.4 }))
+        fill: 'transparent', stroke: gStroke, strokeWidth: 1,
+        selectable: false, evented: false, opacity: gOpacity * 0.5
+      }))
+
+      const W2_H2 = w * w + h * h
+      if (W2_H2 > 0) {
+        // Main diagonal 1: Top-Left to Bottom-Right
+        objects.push(new fabric.Line([l, t, l + w, t + h], { ...style, opacity: gOpacity }))
+        // Perpendicular from Top-Right to Main diagonal 1
+        const xA = l + (w * w * w) / W2_H2
+        const yA = t + (w * w * h) / W2_H2
+        objects.push(new fabric.Line([l + w, t, xA, yA], { ...style, opacity: gOpacity }))
+        // Perpendicular from Bottom-Left to Main diagonal 1
+        const xB = l + (w * h * h) / W2_H2
+        const yB = t + (h * h * h) / W2_H2
+        objects.push(new fabric.Line([l, t + h, xB, yB], { ...style, opacity: gOpacity }))
+
+        // Main diagonal 2: Top-Right to Bottom-Left
+        objects.push(new fabric.Line([l + w, t, l, t + h], { ...style, opacity: gOpacity }))
+        // Perpendicular from Top-Left to Main diagonal 2
+        const xC = l + (w * h * h) / W2_H2
+        const yC = t + (w * w * h) / W2_H2
+        objects.push(new fabric.Line([l, t, xC, yC], { ...style, opacity: gOpacity }))
+        // Perpendicular from Bottom-Right to Main diagonal 2
+        const xD = l + (w * w * w) / W2_H2
+        const yD = t + (h * h * h) / W2_H2
+        objects.push(new fabric.Line([l + w, t + h, xD, yD], { ...style, opacity: gOpacity }))
+      }
+
+      const group = new fabric.Group(objects, {
+        selectable: isInteractive, evented: isInteractive,
+        hasControls: isInteractive, hasBorders: isInteractive,
+        isGuide: true, guideType: type, type: 'group',
+        originX: 'center', originY: 'center'
+      })
+      fCanvas.value.add(group)
+      if (isInteractive && type === 'phi') fCanvas.value.setActiveObject(group)
     }
 
     // 黄金螺旋
@@ -117,29 +208,28 @@ export function useReferenceLines(fCanvas: Ref<any>, currentColor: Ref<string>, 
 
         objects.push(new fabric.Rect({
           left: sqX, top: sqY, width: sqW, height: sqH,
-          fill: 'transparent', stroke: currentColor.value, strokeWidth: Math.max(style.strokeWidth, 1),
-          selectable: false, evented: false, opacity: 0.3,
-          strokeUniform: true, isGuide: true
+          fill: 'transparent', stroke: gStroke, strokeWidth: Math.max(gStrokeWidth, 1),
+          selectable: false, evented: false, opacity: gOpacity * 0.5,
+          strokeUniform: true
         }))
       }
 
       const spiralPath = new fabric.Path(pathStr, {
-        stroke: currentColor.value, strokeWidth: Math.max(style.strokeWidth, 2), fill: 'transparent',
-        selectable: false, evented: false, opacity: 0.8,
-        strokeUniform: true, isGuide: true
+        stroke: gStroke, strokeWidth: Math.max(gStrokeWidth, 2), fill: 'transparent',
+        selectable: false, evented: false, opacity: gOpacity,
+        strokeUniform: true
       })
       objects.push(spiralPath)
 
-      const isInteractive = (type === 'spiral')
       const group = new fabric.Group(objects, {
         selectable: isInteractive, evented: isInteractive,
         hasControls: isInteractive, hasBorders: isInteractive,
-        erasable: true, isGuide: true,
+        erasable: true, isGuide: true, guideType: type,
         originX: 'center', originY: 'center'
       })
 
       fCanvas.value.add(group)
-      if (isInteractive) fCanvas.value.setActiveObject(group)
+      if (isInteractive && type === 'spiral') fCanvas.value.setActiveObject(group)
     }
   }
 
@@ -165,6 +255,7 @@ export function useReferenceLines(fCanvas: Ref<any>, currentColor: Ref<string>, 
     } else {
       activeGuides.value.push(type)
     }
+    saveCurrentGuideStyles()
     deleteGuides()
     activeGuides.value.forEach(t => drawReference(t))
     saveState()

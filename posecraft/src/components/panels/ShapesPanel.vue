@@ -76,7 +76,7 @@ const guides = [
   { type: 'golden', icon: '⬡', label: '黄金比例' },
   { type: 'diagonal', icon: '╳', label: '对角线' },
   { type: 'center', icon: '⊕', label: '中心点' },
-  { type: 'phi', icon: '◇', label: 'φ 网格' },
+  { type: 'phi', icon: '◇', label: '黄金三角' },
   { type: 'spiral', icon: '🌀', label: '黄金螺旋' }
 ]
 
