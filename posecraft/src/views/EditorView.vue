@@ -281,16 +281,15 @@
           :warpStyle="warpStyle"
           @addText="addText"
           @saveState="saveState"
-          @update:fontSize="textFontSize = $event"
-          @update:fontFamily="textFontFamily = $event"
-          @update:lineHeight="textLineHeight = $event"
-          @update:letterSpacing="textLetterSpacing = $event"
-          @update:bold="textBold = $event"
-          @update:italic="textItalic = $event"
-          @update:underline="textUnderline = $event"
-          @update:strikethrough="textStrikethrough = $event"
-          @update:textAlign="textAlign = $event"
-          @update:warpStyle="warpStyle = $event"
+          @update:fontSize="(v) => { textFontSize = v; updateTextProperty('fontSize', v) }"
+          @update:fontFamily="(v) => { textFontFamily = v; updateTextProperty('fontFamily', v) }"
+          @update:lineHeight="(v) => { textLineHeight = v; updateTextProperty('lineHeight', v / 100) }"
+          @update:letterSpacing="(v) => { textLetterSpacing = v; updateTextProperty('charSpacing', v * 10) }"
+          @update:bold="(v) => { textBold = v; updateTextProperty('fontWeight', v ? 'bold' : 'normal') }"
+          @update:italic="(v) => { textItalic = v; updateTextProperty('fontStyle', v ? 'italic' : 'normal') }"
+          @update:underline="(v) => { textUnderline = v; updateTextProperty('underline', v) }"
+          @update:strikethrough="(v) => { textStrikethrough = v; updateTextProperty('linethrough', v) }"
+          @update:textAlign="(v) => { textAlign = v; updateTextProperty('textAlign', v) }"
         />
 
         <HandPanel v-show="activeTool === 'hand'"
@@ -569,7 +568,16 @@ const updateSelection = () => {
     if (targetObj.type === 'i-text' || targetObj.type === 'textbox' || targetObj.type === 'text') {
       const parsed = parseColor(targetObj.fill)
       if (parsed) currentColor.value = parsed.hex
-      noFill.value = true
+      // 同步文字属性到面板
+      textFontSize.value = targetObj.fontSize || 24
+      textFontFamily.value = targetObj.fontFamily || 'Arial'
+      textLineHeight.value = Math.round((targetObj.lineHeight || 1.2) * 100)
+      textLetterSpacing.value = Math.round((targetObj.charSpacing || 0) / 10)
+      textBold.value = targetObj.fontWeight === 'bold'
+      textItalic.value = targetObj.fontStyle === 'italic'
+      textUnderline.value = targetObj.underline || false
+      textStrikethrough.value = targetObj.linethrough || false
+      textAlign.value = targetObj.textAlign || 'left'
     } else {
       const parsedStroke = parseColor(targetObj.stroke)
       if (parsedStroke) {
@@ -917,6 +925,15 @@ const addText = (text: string = '双击编辑') => {
   })
   fCanvas.value.add(textObj)
   fCanvas.value.setActiveObject(textObj)
+  fCanvas.value.renderAll()
+  saveState()
+}
+
+/** 更新选中文字对象的属性 */
+const updateTextProperty = (prop: string, value: any) => {
+  const obj = fCanvas.value?.getActiveObject()
+  if (!obj || !obj.isType?.('i-text')) return
+  obj.set(prop, value)
   fCanvas.value.renderAll()
   saveState()
 }
