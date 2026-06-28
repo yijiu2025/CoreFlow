@@ -120,14 +120,14 @@ export function useReferenceLines(fCanvas: Ref<any>, currentColor: Ref<string>, 
           left: sqX, top: sqY, width: sqW, height: sqH,
           fill: 'transparent', stroke: spiralColor, strokeWidth: 1,
           selectable: false, evented: false, opacity: 0.3,
-          strokeUniform: true
+          strokeUniform: true, isGuide: true
         }))
       }
 
       const spiralPath = new fabric.Path(pathStr, {
         stroke: spiralColor, strokeWidth: 2, fill: 'transparent',
         selectable: false, evented: false, opacity: 0.8,
-        strokeUniform: true
+        strokeUniform: true, isGuide: true
       })
       objects.push(spiralPath)
 
@@ -148,7 +148,13 @@ export function useReferenceLines(fCanvas: Ref<any>, currentColor: Ref<string>, 
   const deleteGuides = () => {
     if (!fCanvas.value) return
     const guides = fCanvas.value.getObjects().filter((o: any) => o.isGuide)
-    guides.forEach((o: any) => fCanvas.value.remove(o))
+    guides.forEach((o: any) => {
+      // 如果是组合对象，先取消选中
+      if (o.type === 'group') {
+        fCanvas.value.discardActiveObject()
+      }
+      fCanvas.value.remove(o)
+    })
     fCanvas.value.renderAll()
   }
 
