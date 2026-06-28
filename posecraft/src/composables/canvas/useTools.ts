@@ -110,6 +110,10 @@ export function useTools(fCanvas: Ref<any>, activeTool: Ref<string>, canvasTool:
     } else if (tool === 'moveNode') {
       fCanvas.value.defaultCursor = 'default'
       fCanvas.value.hoverCursor = 'move'
+    } else if (tool === 'text') {
+      // 文字工具：默认光标，悬停文字时显示移动光标
+      fCanvas.value.defaultCursor = 'text'
+      fCanvas.value.hoverCursor = 'move'
     } else if (tool === 'hand') {
       fCanvas.value.defaultCursor = 'grab'
       fCanvas.value.hoverCursor = 'grab'
