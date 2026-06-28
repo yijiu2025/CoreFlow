@@ -269,8 +269,28 @@
         />
 
         <TextPanel v-show="activeTool === 'text'"
-          v-model:fontSize="textFontSize"
+          :fontSize="textFontSize"
+          :fontFamily="textFontFamily"
+          :lineHeight="textLineHeight"
+          :letterSpacing="textLetterSpacing"
+          :bold="textBold"
+          :italic="textItalic"
+          :underline="textUnderline"
+          :strikethrough="textStrikethrough"
+          :textAlign="textAlign"
+          :warpStyle="warpStyle"
           @addText="addText"
+          @saveState="saveState"
+          @update:fontSize="textFontSize = $event"
+          @update:fontFamily="textFontFamily = $event"
+          @update:lineHeight="textLineHeight = $event"
+          @update:letterSpacing="textLetterSpacing = $event"
+          @update:bold="textBold = $event"
+          @update:italic="textItalic = $event"
+          @update:underline="textUnderline = $event"
+          @update:strikethrough="textStrikethrough = $event"
+          @update:textAlign="textAlign = $event"
+          @update:warpStyle="warpStyle = $event"
         />
 
         <HandPanel v-show="activeTool === 'hand'"
@@ -401,6 +421,15 @@ const brushFeather = ref(0)
 const brushStyle = ref('solid')
 const brushBlend = ref('source-over')
 const textFontSize = ref(24)
+const textFontFamily = ref('Arial')
+const textLineHeight = ref(120)
+const textLetterSpacing = ref(0)
+const textBold = ref(false)
+const textItalic = ref(false)
+const textUnderline = ref(false)
+const textStrikethrough = ref(false)
+const textAlign = ref('left')
+const warpStyle = ref('none')
 const pathBlur = ref(0)
 
 const strokeWidth = ref(3)
@@ -867,11 +896,29 @@ const addShape = (type: string) => {
   fCanvas.value.add(shape); fCanvas.value.setActiveObject(shape); fCanvas.value.renderAll(); saveState(); setDrawTool('select')
 }
 
-const addText = () => {
+const addText = (text: string = '双击编辑') => {
   if (!fCanvas.value) return
   const c = fCanvas.value.getCenter()
-  const text = new fabric.IText('双击编辑', { left: c.left, top: c.top, fontSize: textFontSize.value, fill: currentColor.value, originX: 'center', originY: 'center', erasable: true })
-  fCanvas.value.add(text); fCanvas.value.setActiveObject(text); fCanvas.value.renderAll(); saveState()
+  const textObj = new fabric.IText(text, {
+    left: c.left, top: c.top,
+    fontSize: textFontSize.value,
+    fontFamily: textFontFamily.value,
+    lineHeight: textLineHeight.value / 100,
+    charSpacing: textLetterSpacing.value * 10,
+    fontWeight: textBold.value ? 'bold' : 'normal',
+    fontStyle: textItalic.value ? 'italic' : 'normal',
+    underline: textUnderline.value,
+    linethrough: textStrikethrough.value,
+    textAlign: textAlign.value,
+    fill: currentColor.value,
+    originX: 'center', originY: 'center',
+    selectable: true, evented: true,
+    erasable: true
+  })
+  fCanvas.value.add(textObj)
+  fCanvas.value.setActiveObject(textObj)
+  fCanvas.value.renderAll()
+  saveState()
 }
 
 const deleteSelected = () => { fCanvas.value.getActiveObjects().forEach((o: any) => fCanvas.value.remove(o)); fCanvas.value.discardActiveObject(); fCanvas.value.renderAll(); saveState() }

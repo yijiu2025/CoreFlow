@@ -194,18 +194,27 @@ export function useShapes(fCanvas: Ref<any>, currentColor: Ref<string>, fillColo
   }
 
   /** 添加文字 */
-  const addText = (fontSize: number = 24) => {
+  const addText = (text: string = '双击编辑', options: any = {}) => {
     if (!fCanvas.value) return
     const c = fCanvas.value.getCenter()
-    const text = new fabric.IText('双击编辑', {
+    const textObj = new fabric.IText(text, {
       left: c.left, top: c.top,
-      fontSize,
+      fontSize: options.fontSize || 24,
+      fontFamily: options.fontFamily || 'Arial',
+      lineHeight: (options.lineHeight || 120) / 100,
+      charSpacing: (options.letterSpacing || 0) * 10,
+      fontWeight: options.bold ? 'bold' : 'normal',
+      fontStyle: options.italic ? 'italic' : 'normal',
+      underline: options.underline || false,
+      linethrough: options.strikethrough || false,
+      textAlign: options.textAlign || 'left',
       fill: currentColor.value,
       originX: 'center', originY: 'center',
+      selectable: true, evented: true,
       erasable: true
     })
-    fCanvas.value.add(text)
-    fCanvas.value.setActiveObject(text)
+    fCanvas.value.add(textObj)
+    fCanvas.value.setActiveObject(textObj)
     fCanvas.value.renderAll()
   }
 
