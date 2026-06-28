@@ -10,7 +10,12 @@
           <div class="help-section">
             <h3>🛠️ 工具切换</h3>
             <div class="shortcut-grid">
+              <div class="shortcut-item"><kbd>V</kbd><span>选择工具</span></div>
+              <div class="shortcut-item"><kbd>B</kbd><span>画笔工具</span></div>
+              <div class="shortcut-item"><kbd>E</kbd><span>橡皮擦</span></div>
+              <div class="shortcut-item"><kbd>T</kbd><span>文字工具</span></div>
               <div class="shortcut-item"><kbd>H</kbd><span>抓手工具</span></div>
+              <div class="shortcut-item"><kbd>I</kbd><span>图片编辑</span></div>
               <div class="shortcut-item"><kbd>空格</kbd><span>临时抓手（按住）</span></div>
               <div class="shortcut-item"><kbd>Delete</kbd><span>删除选中</span></div>
             </div>
@@ -22,6 +27,9 @@
               <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>Z</kbd><span>撤销</span></div>
               <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>Y</kbd><span>重做</span></div>
               <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd><span>重做</span></div>
+              <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>C</kbd><span>复制</span></div>
+              <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>V</kbd><span>粘贴</span></div>
+              <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>S</kbd><span>保存</span></div>
             </div>
           </div>
 
@@ -36,13 +44,23 @@
           </div>
 
           <div class="help-section">
+            <h3>✏️ 形状工具</h3>
+            <div class="shortcut-grid">
+              <div class="shortcut-item"><kbd>Ctrl</kbd><span>按住绘制正圆/正方形</span></div>
+              <div class="shortcut-item"><kbd>Shift</kbd><span>按住等比缩放</span></div>
+            </div>
+          </div>
+
+          <div class="help-section">
             <h3>📖 使用说明</h3>
             <ul class="help-list">
               <li>上传图片后，点击 <b>智能分析</b> 自动检测姿势、面部、手部</li>
               <li>选择识别类型后，使用 <b>框选识别</b> 进行局部分析</li>
               <li><b>抓手工具</b> 可拖拽画布，按住空格键可临时切换</li>
               <li>参考线（三分法、黄金比例等）在 <b>形状</b> 面板中</li>
-              <li>所有操作支持撤销（Ctrl+Z）</li>
+              <li>所有操作支持撤销（Ctrl+Z），最多100步</li>
+              <li>颜色和样式可通过左侧浮动面板独立设置</li>
+              <li>文字工具单击选中，双击编辑内容</li>
             </ul>
           </div>
         </div>
