@@ -188,13 +188,19 @@ export function useMouseEvents(
       fCanvas.value.add(cropRect)
     } else if (tool === 'text') {
       const target = fCanvas.value.findTarget(opt.e, false)
+      const activeObj = fCanvas.value.getActiveObject()
+
       if (target && (target.type === 'i-text' || target.type === 'text' || target.type === 'textbox')) {
         // 点击已有文字：选中并显示调整框
         fCanvas.value.setActiveObject(target)
         target.set({ hasControls: true, hasBorders: true })
         fCanvas.value.renderAll()
-      } else if (!target) {
-        // 点击空白处：添加新文字
+      } else if (!target && activeObj && (activeObj.type === 'i-text' || activeObj.type === 'text' || activeObj.type === 'textbox')) {
+        // 有文字选中时点击空白处：取消选中
+        fCanvas.value.discardActiveObject()
+        fCanvas.value.renderAll()
+      } else if (!target && !activeObj) {
+        // 没有选中时点击空白处：添加新文字
         const text = new fabric.IText('双击编辑', {
           left: pointer.x, top: pointer.y,
           fontSize: textFontSize.value,
