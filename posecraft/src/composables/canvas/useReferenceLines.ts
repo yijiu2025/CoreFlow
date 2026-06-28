@@ -78,7 +78,6 @@ export function useReferenceLines(fCanvas: Ref<any>, currentColor: Ref<string>, 
 
     // 黄金螺旋
     if (type === 'spiral' || type === 'all') {
-      const spiralColor = currentColor.value
       const R = 0.618
       let cx = l, cy = t, cw = w, ch = h
       let pathStr = ''
@@ -118,14 +117,14 @@ export function useReferenceLines(fCanvas: Ref<any>, currentColor: Ref<string>, 
 
         objects.push(new fabric.Rect({
           left: sqX, top: sqY, width: sqW, height: sqH,
-          fill: 'transparent', stroke: spiralColor, strokeWidth: 1,
+          fill: 'transparent', stroke: currentColor.value, strokeWidth: Math.max(style.strokeWidth, 1),
           selectable: false, evented: false, opacity: 0.3,
           strokeUniform: true, isGuide: true
         }))
       }
 
       const spiralPath = new fabric.Path(pathStr, {
-        stroke: spiralColor, strokeWidth: 2, fill: 'transparent',
+        stroke: currentColor.value, strokeWidth: Math.max(style.strokeWidth, 2), fill: 'transparent',
         selectable: false, evented: false, opacity: 0.8,
         strokeUniform: true, isGuide: true
       })
