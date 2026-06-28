@@ -825,6 +825,17 @@ onMounted(async () => {
   fCanvas.value.on('selection:created', updateSelection)
   fCanvas.value.on('selection:updated', updateSelection)
   fCanvas.value.on('selection:cleared', updateSelection)
+
+  // 双击文字进入编辑模式
+  fCanvas.value.on('mouse:dblclick', (e: any) => {
+    const target = e.target
+    if (target && (target.type === 'i-text' || target.type === 'text' || target.type === 'textbox')) {
+      fCanvas.value.setActiveObject(target)
+      target.enterEditing()
+      target.selectAll()
+      fCanvas.value.renderAll()
+    }
+  })
   
   let activeDragLines: Array<{ id: string, endpoint: 'start' | 'end' }> = []
   fCanvas.value.on('mouse:down', (e: any) => {

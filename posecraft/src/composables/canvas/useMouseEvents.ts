@@ -188,17 +188,20 @@ export function useMouseEvents(
       fCanvas.value.add(cropRect)
     } else if (tool === 'text') {
       const target = fCanvas.value.findTarget(opt.e, false)
-      if (target && target.type === 'i-text') {
+      if (target && (target.type === 'i-text' || target.type === 'text' || target.type === 'textbox')) {
+        // 点击已有文字：选中并显示调整框
         fCanvas.value.setActiveObject(target)
-        target.enterEditing()
-        target.selectAll()
+        target.set({ hasControls: true, hasBorders: true })
         fCanvas.value.renderAll()
       } else if (!target) {
+        // 点击空白处：添加新文字
         const text = new fabric.IText('双击编辑', {
           left: pointer.x, top: pointer.y,
           fontSize: textFontSize.value,
           fill: currentColor.value,
           originX: 'center', originY: 'center',
+          selectable: true, evented: true,
+          hasControls: true, hasBorders: true,
           erasable: true
         })
         fCanvas.value.add(text)
