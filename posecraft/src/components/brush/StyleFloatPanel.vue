@@ -25,7 +25,7 @@
               @input="$emit('update:strokeWidth', Number(($event.target as HTMLInputElement).value))"
               @mouseup="$emit('saveState')"
               @touchend="$emit('saveState')"
-              min="1" max="20" />
+              min="0" max="20" />
             <span class="slider-val">{{ strokeWidth }}px</span>
           </div>
         </div>
@@ -38,7 +38,7 @@
               @input="$emit('update:strokeOpacity', Number(($event.target as HTMLInputElement).value))"
               @mouseup="$emit('saveState')"
               @touchend="$emit('saveState')"
-              min="10" max="100" />
+              min="0" max="100" />
             <span class="slider-val">{{ strokeOpacity }}%</span>
           </div>
         </div>
@@ -51,7 +51,7 @@
               @input="$emit('update:fillOpacity', Number(($event.target as HTMLInputElement).value))"
               @mouseup="$emit('saveState')"
               @touchend="$emit('saveState')"
-              min="10" max="100" />
+              min="0" max="100" />
             <span class="slider-val">{{ fillOpacity }}%</span>
           </div>
         </div>
