@@ -34,7 +34,7 @@
     <div class="slider-group">
       <label class="slider-label">背景透明度</label>
       <div class="slider-row">
-        <input type="range" :value="bgOpacity" @input="$emit('update:bgOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
+        <input type="range" :value="bgOpacity" @input="$emit('update:bgOpacity', Number(($event.target as HTMLInputElement).value))" @change="$emit('saveHistory')" min="10" max="100" />
         <span class="slider-val">{{ bgOpacity }}%</span>
       </div>
     </div>
@@ -75,7 +75,7 @@ defineProps<{
   cropAspectRatio: number | null
 }>()
 
-defineEmits(['replaceImage', 'cropImage', 'update:bgOpacity', 'update:cropAspectRatio', 'update:currentColor'])
+defineEmits(['replaceImage', 'cropImage', 'update:bgOpacity', 'update:cropAspectRatio', 'update:currentColor', 'saveHistory'])
 
 const shortcuts = [
   { keys: ['Ctrl', 'Z'], label: '撤销' }

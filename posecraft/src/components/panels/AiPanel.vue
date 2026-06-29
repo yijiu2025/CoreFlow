@@ -86,7 +86,7 @@
     <div class="slider-group">
       <label class="slider-label">背景透明度</label>
       <div class="slider-row">
-        <input type="range" :value="bgOpacity" @input="$emit('update:bgOpacity', Number(($event.target as HTMLInputElement).value))" min="10" max="100" />
+        <input type="range" :value="bgOpacity" @input="$emit('update:bgOpacity', Number(($event.target as HTMLInputElement).value))" @change="$emit('saveHistory')" min="10" max="100" />
         <span class="slider-val">{{ bgOpacity }}%</span>
       </div>
     </div>
@@ -117,7 +117,7 @@ defineProps<{
   detectionTypes: Array<{ value: string; icon: string; label: string; desc: string }>
 }>()
 
-defineEmits(['autoAnalyze', 'update:modelValue', 'setTool', 'setDrawTool', 'update:bgOpacity', 'update:currentColor', 'clearAnalysis'])
+defineEmits(['autoAnalyze', 'update:modelValue', 'setTool', 'setDrawTool', 'update:bgOpacity', 'update:currentColor', 'clearAnalysis', 'saveHistory'])
 
 const shortcuts = [
   { keys: ['滚轮'], label: '缩放' },
