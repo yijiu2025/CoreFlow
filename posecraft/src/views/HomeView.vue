@@ -66,21 +66,33 @@
       <!-- 顶部通栏搜索栏 -->
       <header class="top-nav">
         <div class="nav-inner">
-          <div class="search-bar">
-            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="搜索你感兴趣的姿势模板或精彩作品..."
-              class="search-input"
-            />
-          </div>
-          <div class="header-right-links">
-            <span class="link-item" @click="handleStartCreate">创作中心</span>
-            <span class="link-item">业务合作</span>
+          <div :class="['search-bar', { 'is-expanded': isAtTop }]">
+            <span v-if="isAtTop" class="purple-dot"></span>
+            
+            <!-- 第一行：输入框 -->
+            <div class="search-top-row">
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="搜索你感兴趣的姿势模板或精彩作品..."
+                class="search-input"
+              />
+            </div>
+            
+            <!-- 第二行：快捷标签与标记 -->
+            <div v-if="isAtTop" class="search-bottom-row">
+              <span class="plus-icon">＋</span>
+              <span class="divider">|</span>
+              <span class="hot-tag">🏠 简点点 <span class="ai-badge">AI</span></span>
+            </div>
+            
+            <!-- 搜索按钮 -->
+            <button class="search-btn">
+              <svg class="search-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </button>
           </div>
         </div>
       </header>
@@ -145,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
@@ -159,6 +171,11 @@ const authStore = useAuthStore()
 const searchQuery = ref('')
 const activeCategory = ref('all')
 const activeResourceType = ref('template') // 'template' | 'work'
+const isAtTop = ref(true)
+
+const handleScroll = () => {
+  isAtTop.value = window.scrollY < 20
+}
 
 const templates = ref<any[]>([])
 const works = ref<any[]>([])
@@ -238,12 +255,17 @@ const refreshData = async () => {
 
 onMounted(() => {
   refreshData()
+  window.addEventListener('scroll', handleScroll)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
 })
 </script>
 
 <style scoped>
-/* 页面主布局 - 大于 1728px 时两边空白 */
 .home-layout {
+  --horizontalGapPx: 24px;
   min-height: 100vh;
   width: 100%;
   margin: 0 auto;
@@ -275,7 +297,6 @@ onMounted(() => {
   padding-top: 30px;
   padding-bottom: 24px;
   border-right: 1px solid rgba(0, 0, 0, 0.05);
-  background: #ffffff;
   transition: background-color 0.3s, border-color 0.3s;
 }
 
@@ -440,35 +461,164 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  padding-top: 62px;
 }
 
 .search-bar {
+  position: relative;
   display: flex;
-  align-items: center;
-  background-color: #f5f5f5;
+  flex-direction: column;
+  background-color: #ffffff;
+  border: 1px solid #e3e3e3;
+  width: 920px;
+  max-width: 100%;
+  margin: 0 auto 34px auto;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+/* 简略态（未展开/已滚动） */
+.search-bar:not(.is-expanded) {
+  height: 56px;
   border-radius: 99px;
-  padding: 0 16px;
-  width: 100%;
-  max-width: 480px;
-  height: 36px;
-  margin: 0 auto;
+  padding: 0 56px 0 24px;
+  justify-content: center;
+}
+
+/* 完整态（已展开/在顶部） */
+.search-bar.is-expanded {
+  height: 116px;
+  border-radius: 24px;
+  padding: 20px 56px 20px 24px;
+  justify-content: space-between;
 }
 
 .dark-mode .search-bar {
   background-color: #1e1e24;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.search-bar:focus-within {
+  border-color: #ff2442;
+  box-shadow: 0 4px 12px rgba(255, 36, 66, 0.08);
+}
+
+/* 输入行 */
+.search-top-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .search-input {
-  background: transparent;
+  width: 100%;
   border: none;
+  background: transparent;
   outline: none;
-  flex-grow: 1;
   font-size: 13.5px;
   color: inherit;
+  padding: 0;
 }
 
-.search-icon {
+/* 第二行快捷键说明等 */
+.search-bottom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
   color: #999999;
+  margin-top: 4px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.plus-icon {
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.divider {
+  color: #e3e3e3;
+}
+
+.hot-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f5f5f5;
+  padding: 2px 10px;
+  border-radius: 99px;
+  color: #555555;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dark-mode .hot-tag {
+  background: #2a2a3e;
+  color: #c9d1d9;
+}
+
+.ai-badge {
+  font-size: 8px;
+  background: #8b5cf6;
+  color: #ffffff;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: bold;
+}
+
+/* 右侧搜索按钮定位 */
+.search-btn {
+  position: absolute;
+  right: 6px;
+  border-radius: 50%;
+  background-color: #333333;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.search-bar:not(.is-expanded) .search-btn {
+  top: 50%;
+  transform: translateY(-50%);
+  right: 8px;
+  width: 40px;
+  height: 40px;
+}
+
+.search-bar.is-expanded .search-btn {
+  bottom: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+}
+
+.search-btn:hover {
+  opacity: 0.9;
+}
+
+.search-btn-icon {
+  color: #ffffff;
+  stroke: #ffffff;
+}
+
+/* 顶部右侧状态亮点 */
+.purple-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background-color: #6366f1;
+  border-radius: 50%;
+  right: 28px;
+  top: 22px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .header-right-links {
@@ -552,7 +702,9 @@ onMounted(() => {
 
 /* 主内容瀑布流区 */
 .main-content {
-  padding: 16px 24px 60px;
+  padding: 0 var(--horizontalGapPx, 24px);
+  overflow-y: scroll;
+  padding-top: 62px;
 }
 
 .waterfall-grid {
