@@ -161,7 +161,7 @@
 
       <!-- 画布区域 -->
       <main class="canvas-area" ref="canvasContainer">
-        <input type="file" ref="fileInput" @change="handleImageUpload" accept="image/*" hidden />
+        <input type="file" ref="fileInput" @change="onImageFileChange" accept="image/*" hidden />
 
         <!-- 未上传时的引导 -->
         <transition name="fade">
@@ -223,6 +223,7 @@
           @setTool="setTool"
           @setDrawTool="setDrawTool"
           @clearAnalysis="clearAnalysis"
+          @saveHistory="saveState"
         />
 
         <SelectPanel v-show="activeTool === 'select'"
@@ -308,6 +309,7 @@
           @cropImage="startCropMode"
           @update:bgOpacity="updateBgOpacity"
           @update:cropAspectRatio="cropAspectRatio = $event"
+          @saveHistory="saveState"
         />
 
         <CropPanel v-show="isCropping"
@@ -350,12 +352,30 @@
 
     <!-- 帮助弹窗 -->
     <HelpModal :isOpen="showHelp" @close="showHelp = false" />
+
+    <!-- ── 保存详情弹窗 (Save Modal) ── -->
+    <SaveModal
+      :isOpen="showSaveModal"
+      :initialName="templateName"
+      :initialCoords="imageCoords"
+      :initialExif="imageExif"
+      @close="showSaveModal = false"
+      @save="confirmSave"
+    />
+
+    <!-- ── 退出确认弹窗 (Exit Confirmation) ── -->
+    <ExitModal
+      :isOpen="showExitModal"
+      @close="showExitModal = false"
+      @confirm="goHome"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTemplateSave } from '@/composables/canvas/useTemplateSave'
 import { useAuthStore } from '@/stores/auth'
 import AiPanel from '@/components/panels/AiPanel.vue'
 import SelectPanel from '@/components/panels/SelectPanel.vue'
@@ -367,6 +387,9 @@ import CropPanel from '@/components/panels/CropPanel.vue'
 import ImagePanel from '@/components/panels/ImagePanel.vue'
 import TextPanel from '@/components/panels/TextPanel.vue'
 import HelpModal from '@/components/modals/HelpModal.vue'
+import SaveModal from '@/components/modals/SaveModal.vue'
+import ExitModal from '@/components/modals/ExitModal.vue'
+import { parseImageExif } from '@/utils/exif'
 import ColorFloatPanel from '@/components/color/ColorFloatPanel.vue'
 import StyleFloatPanel from '@/components/brush/StyleFloatPanel.vue'
 import { v4 as uuidv4 } from 'uuid'
@@ -383,73 +406,108 @@ import { useCanvasInit } from '@/composables/canvas/useCanvasInit'
 import { useAIAnalysis } from '@/composables/canvas/useAIAnalysis'
 import { useMouseEvents } from '@/composables/canvas/useMouseEvents'
 
+// Fabric.js 兼容性处理（支持 ESM 和 CommonJS）
 const fabric = (fabricLib as any).fabric || (fabricLib as any).default || fabricLib
 const router = useRouter()
 const authStore = useAuthStore()
+
+/** 预设颜色面板（9色） */
 const presetColors = ['#000000', '#ffffff', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899']
 
-const canvasContainer = ref<any>(null)
-const fileInput = ref<any>(null)
+/** 画布容器 DOM 引用 */
+const canvasContainer = ref<HTMLElement | null>(null)
+/** 文件上传 input 引用 */
+const fileInput = ref<HTMLInputElement | null>(null)
+/** 是否已上传背景图 */
 const bgImageUploaded = ref(false)
+/** 背景图透明度 (10-100) */
 const bgOpacity = ref(50)
 
+/** 当前激活的面板工具 (select|ai|shapes|draw|eraser|text|image) */
 const activeTool = ref('select')
+/** 当前画布操作工具 */
 const canvasTool = ref('select')
 
+/** 作品名称 */
 const templateName = ref('')
+
+/** AI 分析状态 */
 const isAnalyzing = ref(false)
 const loadingStep = ref('')
 const analysisComplete = ref(false)
+
+/** 弹窗显示状态 */
 const showHelp = ref(false)
 const showColorPanel = ref(false)
 const showStylePanel = ref(false)
 
+/** AI 识别类型：all|pose|face|hand|segmentation */
 const detectionType = ref<'all' | 'pose' | 'face' | 'hand' | 'segmentation'>('all')
 
+/** 撤销栈锁定标志（某些操作不记录历史） */
 let isStateSavingLocked = false
+/** 空格键是否按下（临时抓手） */
 let spacePressed = false
 
-const eraserSize = ref(20)
-const eraserOpacity = ref(100)
-const eraserHardness = ref(100)
-const eraserShape = ref('circle')
-const eraserMode = ref('all')
-const brushSize = ref(8)
-const brushOpacity = ref(100)
-const brushFeather = ref(0)
-const brushStyle = ref('solid')
-const brushBlend = ref('source-over')
-const textFontSize = ref(24)
-const textFontFamily = ref('Arial')
-const textLineHeight = ref(120)
-const textLetterSpacing = ref(0)
-const textBold = ref(false)
-const textItalic = ref(false)
-const textUnderline = ref(false)
-const textStrikethrough = ref(false)
-const textAlign = ref('left')
-const warpStyle = ref('none')
-const pathBlur = ref(0)
+// ═══ 橡皮擦设置 ═══
+const eraserSize = ref(20)       // 橡皮擦半径
+const eraserOpacity = ref(100)   // 橡皮擦透明度
+const eraserHardness = ref(100)  // 橡皮擦硬度（0=软边，100=硬边）
+const eraserShape = ref('circle') // 橡皮擦形状（circle|square）
+const eraserMode = ref('all')      // 擦除模式（all|brush|shape）
 
-const strokeWidth = ref(3)
-const fillColor = ref('#6366f1')
-const currentColor = ref('#6366f1')
-const noFill = ref(true)
-const lineStyle = ref('solid')
-const strokeOpacity = ref(100)
-const fillOpacity = ref(100)
-const cornerRadius = ref(0)
+// ═══ 画笔设置 ═══
+const brushSize = ref(8)           // 画笔粗细 (1-50)
+const brushOpacity = ref(100)      // 画笔透明度 (0-100)
+const brushFeather = ref(0)        // 画笔羽化 (0-30)
+const brushStyle = ref('solid')    // 画笔样式（solid|dashed|dotted）
+const brushBlend = ref('source-over') // 混合模式
 
+// ═══ 文字设置 ═══
+const textFontSize = ref(24)       // 字体大小
+const textFontFamily = ref('Arial') // 字体
+const textLineHeight = ref(120)    // 行高 (%)
+const textLetterSpacing = ref(0)   // 字间距 (px)
+const textBold = ref(false)        // 粗体
+const textItalic = ref(false)      // 斜体
+const textUnderline = ref(false)   // 下划线
+const textStrikethrough = ref(false) // 删除线
+const textAlign = ref('left')      // 对齐（left|center|right）
+const warpStyle = ref('none')      // 文字变形样式
+const pathBlur = ref(0)            // 路径模糊值
+
+// ═══ 形状样式 ═══
+const strokeWidth = ref(3)         // 描边粗细 (0-20)
+const fillColor = ref('#6366f1')   // 填充颜色
+const currentColor = ref('#6366f1') // 当前描边颜色（与 fillColor 同步）
+const noFill = ref(true)           // 是否无填充
+const lineStyle = ref('solid')     // 线条样式（solid|dashed|dotted）
+const strokeOpacity = ref(100)     // 描边透明度 (0-100)
+const fillOpacity = ref(100)       // 填充透明度 (0-100)
+const cornerRadius = ref(0)        // 圆角半径 (0-50)
+
+// ═══ Composables 初始化 ═══
+
+/** 画布初始化（画布实例、缩放、平移） */
 const {
   fCanvas, currentZoom, zoomSlider, zoomPercent,
   initCanvas, resizeCanvas, resetZoom, fitToScreen, zoomIn, zoomOut,
   applyCanvasTransform, syncCanvasDimensions, getCanvasDeps
 } = useCanvasInit(canvasContainer, eraserSize)
 
+/** 历史管理（撤销/重做，最多100步） */
 const { undoStack, redoStack, saveState, undo, redo, setOnStateRestored, setOnReapplyTool } = useHistory(fCanvas, { value: isStateSavingLocked }, null, null)
+
+/** 工具管理（工具切换、光标、对象可选性） */
 const { selectTab, selectHandTool, setDrawTool, setTool, setDeps } = useTools(fCanvas, activeTool, canvasTool)
+
+/** 形状工具（颜色、描边、形状创建） */
 const { applyColor, applyColorToImage, isBrushObject, updatePathStrokeWidth, updatePathScale, updatePathBlur, createStar, createPolygon, addArrowHead } = useShapes(fCanvas, currentColor, fillColor)
+
+/** 构图参考线（三分法、黄金比例等） */
 const { activeGuides, drawReference, deleteGuides, toggleGuide } = useReferenceLines(fCanvas, currentColor, strokeWidth, saveState)
+
+/** 骨架节点（姿势、手部关键点） */
 const { drawPoseSkeleton, addSkeletonNode, addMidpointNode, connectNodes } = useSkeletonNodes(fCanvas, currentColor, saveState)
 
 const canvasDeps = Object.create(getCanvasDeps(), {
@@ -469,6 +527,36 @@ const {
 } = useMouseEvents(
   fCanvas, canvasTool, activeTool, currentColor, strokeWidth, noFill, fillColor, strokeOpacity, fillOpacity, lineStyle, eraserSize, textFontSize, cornerRadius, canvasDeps, saveState, addSkeletonNode, addMidpointNode, connectNodes, createStar, createPolygon, addArrowHead, analyzeArea, applyCanvasTransform, () => spacePressed
 )
+
+const {
+  showSaveModal,
+  showExitModal,
+  saveTemplate,
+  triggerExit,
+  goHome,
+  confirmSave
+} = useTemplateSave(fCanvas, templateName, () => canvasDeps.inkCanvas)
+
+const imageCoords = ref<{ lat: number; lng: number } | null>(null)
+const imageExif = ref<any>(null)
+
+const onImageFileChange = async (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) {
+    const res = await parseImageExif(file)
+    if (res.coords) {
+      imageCoords.value = res.coords
+    } else {
+      imageCoords.value = null
+    }
+    if (res.exif) {
+      imageExif.value = res.exif
+    } else {
+      imageExif.value = null
+    }
+  }
+  handleImageUpload(e)
+}
 
 // currentColor 和 fillColor 现在独立设置，不再同步
 
@@ -1007,52 +1095,6 @@ const restoreState = (snapshot: any) => {
 
 const updateColor = (e: Event) => { applyColor((e.target as HTMLInputElement).value) }
 const updateColorFromPanel = (newColor: string) => { applyColor(newColor) }
-const saveTemplate = () => {
-  if (!fCanvas.value) return
-
-  // 取消选中，防止控制点被存入
-  fCanvas.value.discardActiveObject()
-
-  // 生成预览图
-  const preview = fCanvas.value.toDataURL({ format: 'png', multiplier: 0.5 })
-
-  // 导出画布数据
-  const fabricJson = fCanvas.value.toJSON([
-    'id', 'selectable', 'evented', 'connectedLines',
-    'isSkeleton', 'isAutoGenerated', 'isGuide', 'isCropBox',
-    'erasable', 'isUserStroke', 'isFace', 'isHand', 'isOutline'
-  ])
-  fabricJson.width = fCanvas.value.width
-  fabricJson.height = fCanvas.value.height
-
-  // 构建模板数据
-  const templateData = {
-    id: `posecraft_${Date.now()}`,
-    name: templateName.value || '未命名作品',
-    thumb: preview,
-    fabricData: fabricJson,
-    inkData: inkCanvas?.toDataURL() || null,
-    createdAt: new Date().toISOString()
-  }
-
-  // 保存到本地存储
-  try {
-    const savedTemplates = JSON.parse(localStorage.getItem('posecraft_templates') || '[]')
-    const existingIdx = savedTemplates.findIndex((t: any) => t.name === templateData.name)
-    if (existingIdx >= 0) {
-      savedTemplates[existingIdx] = templateData
-    } else {
-      savedTemplates.push(templateData)
-    }
-    localStorage.setItem('posecraft_templates', JSON.stringify(savedTemplates))
-    alert('保存成功！')
-  } catch (err) {
-    console.error('保存失败:', err)
-    alert('保存失败，请重试')
-  }
-}
-
-const triggerExit = () => { if (confirm('确定退出？未保存的修改将丢失。')) router.push('/') }
 </script>
 
 <style scoped>
