@@ -22,8 +22,8 @@ export default (sequelize, DataTypes) => {
       },
       category: {
         type: DataTypes.STRING(50),
-        defaultValue: 'general',
-        comment: '分类: general, dance, yoga, sports, custom'
+        defaultValue: 'pose',
+        comment: '分类: pose, creative, sports, composition, technique, custom'
       },
       thumbnail_url: {
         type: DataTypes.STRING(500),
@@ -52,8 +52,8 @@ export default (sequelize, DataTypes) => {
       },
       status: {
         type: DataTypes.TINYINT,
-        defaultValue: 1,
-        comment: '状态: 1-公开, 0-私密, -1-已删除'
+        defaultValue: 2, // 默认值为 2-待审核，待管理员审核通过后改为 1-公开
+        comment: '状态: 2-待审核, 1-公开, 0-私密, -1-已删除, -2-审核拒绝'
       },
       likes_count: {
         type: DataTypes.INTEGER,

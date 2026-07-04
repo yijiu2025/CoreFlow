@@ -48,13 +48,62 @@ class WorkDao {
   }
 
   /**
+   * 后台：查询审核列表
+   */
+  async findAuditList(options = {}) {
+    const model = this.getModel();
+    const { Op } = await import('sequelize');
+    
+    // 默认查询待审核 (2)，但支持按 status 筛选
+    const where = { delete_version: 0 };
+    if (options.status !== undefined) {
+      where.status = options.status;
+    } else {
+      where.status = 2; // 默认查待审核
+    }
+    
+    if (options.keyword) {
+      where[Op.or] = [
+        { title: { [Op.like]: `%${options.keyword}%` } },
+        { description: { [Op.like]: `%${options.keyword}%` } }
+      ];
+    }
+    
+    const { count, rows } = await model.findAndCountAll({
+      where,
+      order: [['created_at', 'DESC']],
+      limit: options.limit || 20,
+      offset: options.offset || 0,
+      raw: true
+    });
+    
+    return {
+      list: rows,
+      total: count,
+      page: options.page || 1,
+      pageSize: options.limit || 20
+    };
+  }
+
+  /**
+   * 后台：更新状态 (审核)
+   */
+  async updateStatus(id, status) {
+    const model = this.getModel();
+    const result = await model.update({ status }, { where: { id, delete_version: 0 } });
+    return result[0] > 0;
+  }
+
+  /**
    * 查询推荐作品
    */
   async findRecommended(limit = 20) {
     const model = this.getModel();
     return await model.findAll({
       where: { status: 1, delete_version: 0 },
-      order: [['likes_count', 'DESC'], ['views_count', 'DESC']],
+      order: [
+        [sequelize.literal('(likes_count * 10 + views_count * 1 + RAND() * 30)'), 'DESC']
+      ],
       limit
     });
   }
@@ -64,8 +113,11 @@ class WorkDao {
    */
   async findById(id) {
     const model = this.getModel();
+    const User = sequelize.models.User;
+    
     return await model.findOne({
-      where: { id, delete_version: 0 }
+      where: { id, delete_version: 0 },
+      include: [{ model: User, as: 'author', attributes: ['id', 'username', 'avatar'] }]
     });
   }
 
@@ -121,6 +173,37 @@ class WorkDao {
     const model = this.getModel();
     return await model.count({
       where: { user_id: userId, delete_version: 0 }
+    });
+  }
+
+  /**
+   * 查询用户关注者的作品
+   */
+  async findFollowingWorks(userId, options = {}) {
+    const model = this.getModel();
+    const Follow = sequelize.models.Follow;
+
+    // 查出当前用户关注的所有人
+    const follows = await Follow.findAll({
+      where: { follower_id: userId, delete_version: 0 },
+      attributes: ['following_id']
+    });
+
+    const followingIds = follows.map(f => f.following_id);
+
+    if (followingIds.length === 0) {
+      return [];
+    }
+
+    return await model.findAll({
+      where: {
+        user_id: followingIds,
+        status: 1,
+        delete_version: 0
+      },
+      order: [['created_at', 'DESC']],
+      limit: options.limit || 20,
+      offset: options.offset || 0
     });
   }
 }

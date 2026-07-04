@@ -16,6 +16,10 @@ export const workApi = {
   getUserWorks: (userId: number, params?: { page?: number; pageSize?: number }) =>
     service.get(`/posecraft/v1/works/user/${userId}`, { params }),
 
+  /** 获取关注者的作品 */
+  getFollowingWorks: (params?: { page?: number; pageSize?: number }) =>
+    service.get('/posecraft/v1/works/following', { params }),
+
   /** 获取作品详情 */
   getDetail: (id: number) =>
     service.get(`/posecraft/v1/works/${id}`),

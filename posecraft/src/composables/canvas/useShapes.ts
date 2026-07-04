@@ -42,7 +42,11 @@ export function useShapes(fCanvas: Ref<any>, currentColor: Ref<string>, fillColo
       case 'i-text':
       case 'text':
       case 'textbox':
-        activeObj.set('fill', newColor)
+        if (activeObj.isEditing && typeof activeObj.setSelectionStyles === 'function' && activeObj.getSelectedText()) {
+          activeObj.setSelectionStyles({ fill: newColor })
+        } else {
+          activeObj.set('fill', newColor)
+        }
         break
       case 'line':
       case 'path':

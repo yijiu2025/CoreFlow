@@ -119,3 +119,128 @@ const emit = defineEmits([
   'clearCanvas'
 ])
 </script>
+
+<style scoped>
+/* ── 左侧工具栏主体 ── */
+.left-toolbar {
+  width: 56px;
+  background: rgba(15, 15, 25, 0.95);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 4px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.tool-divider {
+  width: 32px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 6px 0;
+}
+
+/* ── 工具栏按钮 ── */
+.tool-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.tool-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+}
+
+.tool-btn.active {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.3);
+}
+
+/* ── 辅助小按钮 ── */
+.sub-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: #4a4a5a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  margin: 0 auto;
+}
+
+.sub-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+}
+
+.sub-btn.active {
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+}
+
+.sub-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+}
+
+.tool-spacer {
+  flex: 1;
+}
+
+/* ── 底部主颜色预览 ── */
+.main-color-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+
+.main-color-area:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.main-color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.2s;
+}
+
+.main-color-area:hover .main-color-swatch {
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.color-hint {
+  font-size: 10px;
+  color: #4a5568;
+  font-weight: 500;
+}
+</style>

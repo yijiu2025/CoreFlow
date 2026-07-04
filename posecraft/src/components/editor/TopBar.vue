@@ -63,3 +63,202 @@ const historyStore = useHistoryStore()
 
 const emit = defineEmits(['exit', 'undo', 'redo', 'help', 'save'])
 </script>
+
+<style scoped>
+/* ── 顶部栏布局 ── */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 48px;
+  background: rgba(15, 15, 25, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.top-left, .top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* ── Logo 标志 ── */
+.logo-mark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-icon {
+  font-size: 20px;
+}
+
+.logo-text {
+  font-size: 14px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6366f1, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── 历史记录操作 ── */
+.history-btns {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.hbtn.history {
+  width: auto;
+  min-width: 64px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.hbtn.history:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.hbtn.history:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.btn-text {
+  font-size: 12px;
+}
+
+.step-counter {
+  font-size: 11px;
+  color: #6366f1;
+  font-weight: 600;
+  margin-left: 8px;
+  padding: 3px 8px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 6px;
+}
+
+/* ── 标题编辑输入框 ── */
+.title-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 8px;
+  width: 180px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.title-input:hover {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.title-input:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ── 功能按钮通用样式 ── */
+.hbtn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hbtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+}
+
+.hbtn:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
+.hbtn.sm {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+}
+
+.hbtn.back:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+}
+
+.hbar-div {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── 发布/保存按钮 ── */
+.btn-save {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  transition: all 0.2s;
+}
+
+.btn-save:hover {
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-save:disabled {
+  background: #1e1e2e;
+  color: #4a4a5a;
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+}
+</style>

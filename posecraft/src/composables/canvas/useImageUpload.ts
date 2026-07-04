@@ -406,13 +406,6 @@ export function useImageUpload(
   /** 更新背景透明度 */
   const updateBgOpacity = (opacity: number) => {
     bgOpacity.value = opacity
-    if (!fCanvas.value) return
-    const bg = fCanvas.value.backgroundImage
-    if (bg) {
-      bg.set({ opacity: opacity / 100 })
-      fCanvas.value.renderAll()
-      saveState()
-    }
   }
 
   return {

@@ -7,6 +7,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import i18n from './i18n'
+import { setupDirectives } from './directives'
 import './assets/styles/main.css'
 
 const app = createApp(App)
@@ -17,10 +18,11 @@ app.config.errorHandler = (err, instance, info) => {
   console.error('[Global Exception]', err, info)
 }
 
-// 2. 插件注册
+// 2. 插件及全局指令注册
 app.use(pinia)
 app.use(router)
 app.use(i18n)
+setupDirectives(app)
 
 // 3. 等待路由就绪后挂载
 router.isReady().then(() => {

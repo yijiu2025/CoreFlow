@@ -9,20 +9,16 @@ class TemplateDao {
   }
 
   /**
-   * 查询模板列表
+   * 查询模板列表 (带权限过滤)
    */
-  async findAll(options = {}) {
+  async findAll(options = {}, user = null, isAdmin = false) {
     const model = this.getModel();
     const { Op } = await import('sequelize');
 
-    const where = { status: 1, delete_version: 0 };
+    const where = { delete_version: 0 };
 
     if (options.category) {
       where.category = options.category;
-    }
-
-    if (options.userId) {
-      where.user_id = options.userId;
     }
 
     if (options.keyword) {
@@ -32,8 +28,36 @@ class TemplateDao {
       ];
     }
 
+    // 根据角色及登录态注入权限可见度控制
+    if (isAdmin) {
+      if (options.status !== undefined) {
+        where.status = Number(options.status);
+      }
+    } else if (user?.userId) {
+      if (options.status !== undefined) {
+        const targetStatus = Number(options.status);
+        where[Op.and] = [
+          { status: targetStatus },
+          {
+            [Op.or]: [
+              { status: 1 },
+              { user_id: user.userId }
+            ]
+          }
+        ];
+      } else {
+        where[Op.or] = [
+          { status: 1 },
+          { user_id: user.userId }
+        ];
+      }
+    } else {
+      where.status = 1; // 未登录只看公开
+    }
+
     return await model.findAll({
       where,
+      attributes: { exclude: ['pose_data'] },
       order: [['created_at', 'DESC']],
       limit: options.limit || 20,
       offset: options.offset || 0
@@ -47,9 +71,67 @@ class TemplateDao {
     const model = this.getModel();
     return await model.findAll({
       where: { status: 1, delete_version: 0 },
-      order: [['uses_count', 'DESC']],
+      attributes: { exclude: ['pose_data'] },
+      order: [
+        [sequelize.literal('(uses_count * 10 + likes_count * 5 + RAND() * 30)'), 'DESC']
+      ],
       limit
     });
+  }
+
+  /**
+   * 按用户查询模板
+   */
+  async findByUser(userId, options = {}, isAdmin = false) {
+    return await this.findAll({ ...options, userId }, { userId }, isAdmin);
+  }
+
+  /**
+   * 后台：查询审核列表
+   */
+  async findAuditList(options = {}) {
+    const model = this.getModel();
+    const { Op } = await import('sequelize');
+    
+    // 默认查询待审核 (2)，但支持按 status 筛选
+    const where = { delete_version: 0 };
+    if (options.status !== undefined) {
+      where.status = options.status;
+    } else {
+      where.status = 2; // 默认查待审核
+    }
+    
+    if (options.keyword) {
+      where[Op.or] = [
+        { title: { [Op.like]: `%${options.keyword}%` } },
+        { description: { [Op.like]: `%${options.keyword}%` } }
+      ];
+    }
+    
+    const { count, rows } = await model.findAndCountAll({
+      where,
+      attributes: { exclude: ['pose_data'] },
+      order: [['created_at', 'DESC']],
+      limit: options.limit || 20,
+      offset: options.offset || 0,
+      raw: true
+    });
+    
+    return {
+      list: rows,
+      total: count,
+      page: options.page || 1,
+      pageSize: options.limit || 20
+    };
+  }
+
+  /**
+   * 后台：更新状态 (审核)
+   */
+  async updateStatus(id, status) {
+    const model = this.getModel();
+    const result = await model.update({ status }, { where: { id, delete_version: 0 } });
+    return result[0] > 0;
   }
 
   /**

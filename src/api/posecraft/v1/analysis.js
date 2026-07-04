@@ -2,6 +2,7 @@
  * PoseCraft AI 分析 API
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import AnalysisDao from '../../../app/posecraft/dao/analysis.dao.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -21,9 +22,8 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { image_url, analysis_type, result_data, processing_time } = request.body;
       const user = request.state.user;
-      const { Analysis } = fastify.db.models;
 
-      const analysis = await Analysis.create({
+      const analysis = await AnalysisDao.create({
         user_id: user.userId,
         image_url,
         analysis_type,
@@ -47,14 +47,9 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { analysis_type, page = 1, pageSize = 20 } = request.query;
       const user = request.state.user;
-      const { Analysis } = fastify.db.models;
 
-      const where = { user_id: user.userId };
-      if (analysis_type) where.analysis_type = analysis_type;
-
-      const analyses = await Analysis.findAll({
-        where,
-        order: [['created_at', 'DESC']],
+      const analyses = await AnalysisDao.findByUser(user.userId, {
+        analysis_type,
         limit: parseInt(pageSize),
         offset: (parseInt(page) - 1) * parseInt(pageSize)
       });
@@ -73,27 +68,13 @@ export default async function (fastify) {
     permission: 'posecraft:analysis:view',
     handler: async (request, reply) => {
       const user = request.state.user;
-      const { Analysis } = fastify.db.models;
 
-      const total = await Analysis.count({
-        where: { user_id: user.userId }
-      });
-
-      const byType = await Analysis.findAll({
-        where: { user_id: user.userId },
-        attributes: [
-          'analysis_type',
-          [fastify.db.sequelize.fn('COUNT', fastify.db.sequelize.col('id')), 'count']
-        ],
-        group: ['analysis_type']
-      });
+      const total = await AnalysisDao.countByUser(user.userId);
+      const byType = await AnalysisDao.getStatsByType(user.userId);
 
       return reply.result.success('获取成功', {
         total,
-        byType: byType.map((item) => ({
-          type: item.analysis_type,
-          count: parseInt(item.getDataValue('count'))
-        }))
+        byType
       });
     }
   });

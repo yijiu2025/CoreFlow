@@ -195,3 +195,41 @@ const emit = defineEmits([
   'cancelCrop'
 ])
 </script>
+
+<style scoped>
+/* ── 右侧面板主体 ── */
+.right-panel {
+  width: 260px;
+  background: rgba(15, 15, 25, 0.95);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.panel-section {
+  padding: 0px;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── 裁剪框提示文本 ── */
+.hint-text {
+  font-size: 11px;
+  color: #4a5568;
+  text-align: center;
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+}
+</style>

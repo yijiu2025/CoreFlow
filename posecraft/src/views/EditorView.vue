@@ -143,9 +143,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, toRef } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useTemplateSave } from '@/composables/canvas/useTemplateSave'
 import { useAuthStore } from '@/stores/auth'
+import { templateApi } from '@/api/template'
 import { useCanvasStore, useToolStore, useHistoryStore } from '@/stores/editor'
 import { parseImageExif } from '@/utils/exif'
 import ColorFloatPanel from '@/components/color/ColorFloatPanel.vue'
@@ -180,6 +181,7 @@ import { useCanvasSelection } from '@/composables/canvas/useCanvasSelection'
 // 兼容并加载 Fabric 实例
 const fabric = (fabricLib as any).fabric || (fabricLib as any).default || fabricLib
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 // 引入全局 Pinia 状态管理
@@ -434,6 +436,41 @@ onMounted(async () => {
   // 绑定窗口自适应大小缩放监听器
   resizeObserver = new ResizeObserver(() => resizeCanvas())
   if (canvasContainer.value) resizeObserver.observe(canvasContainer.value)
+
+  // 💡 如果有传入的模板 ID 且具备编辑权限，从后台拉取模板数据进行二次编辑
+  const templateId = route.query.id ? Number(route.query.id) : null
+  if (templateId) {
+    try {
+      const template = await templateApi.getDetail(templateId) as any
+      if (template) {
+        canvasStore.templateName = template.title
+        
+        let poseData = template.pose_data
+        if (typeof poseData === 'string') {
+          try { poseData = JSON.parse(poseData) } catch (e) {}
+        }
+        
+        if (poseData?.fabricData && fCanvas.value) {
+          fCanvas.value.loadFromJSON(poseData.fabricData, () => {
+            const bgImage = fCanvas.value.backgroundImage
+            if (bgImage) {
+              bgImage.set({
+                originX: 'center',
+                originY: 'center',
+                left: fCanvas.value.width / 2,
+                top: fCanvas.value.height / 2
+              })
+              canvasStore.bgImageUploaded = true
+            }
+            fCanvas.value.renderAll()
+            saveState()
+          })
+        }
+      }
+    } catch (err) {
+      console.error('加载模板编辑数据失败:', err)
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -488,13 +525,29 @@ const { spacePressed } = useKeyboard({
 })
 </script>
 
-<style>
+<style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import '@/assets/styles/common.css';
-@import '@/assets/styles/editor.css';
 * { box-sizing: border-box; }
 
-/* 编辑器特有的组件级样式 */
+/* 编辑器根部及主体布局样式 */
+.editor-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: #0a0a0f;
+  color: #e2e8f0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
 .shortcut-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; }
 .shortcut-item kbd {
   display: inline-block; padding: 2px 6px;

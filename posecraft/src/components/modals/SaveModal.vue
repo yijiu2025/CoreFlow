@@ -19,6 +19,21 @@
           </div>
 
           <div class="form-group">
+            <label>作品分类</label>
+            <div style="display: flex; gap: 8px;">
+              <select v-model="category" class="modal-input" style="flex: 1;">
+                <option value="pose">姿势 (Pose)</option>
+                <option value="creative">创意 (Creative)</option>
+                <option value="sports">运动 (Sports)</option>
+                <option value="composition">构图 (Composition)</option>
+                <option value="technique">技巧 (Technique)</option>
+                <option value="custom">自定义 (Custom)</option>
+              </select>
+              <input v-if="category === 'custom'" v-model="customCategory" placeholder="输入自定义分类" class="modal-input" style="flex: 1;" />
+            </div>
+          </div>
+
+          <div class="form-group">
             <label>拍摄地点</label>
             <div class="input-with-btn">
               <input v-model="locationName" placeholder="命名这个拍摄位..." class="modal-input" />
@@ -133,6 +148,8 @@ const emit = defineEmits(['close', 'save'])
 
 const name = ref('')
 const description = ref('')
+const category = ref('pose')
+const customCategory = ref('')
 const locationName = ref('')
 const locationCoords = ref<{ lat: number; lng: number } | null>(null)
 const tags = ref<string[]>([])
@@ -317,9 +334,12 @@ const formatDate = (dateStr: string) => {
 }
 
 const confirmSave = () => {
+  const finalCategory = category.value === 'custom' ? (customCategory.value.trim() || 'pose') : category.value
+  
   emit('save', {
     name: name.value,
     description: description.value,
+    category: finalCategory,
     locationName: locationName.value,
     coords: locationCoords.value,
     ip: currentIP.value,

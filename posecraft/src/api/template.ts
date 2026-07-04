@@ -5,7 +5,7 @@ import service from '@/utils/request'
 
 export const templateApi = {
   /** 获取模板列表 */
-  getList: (params?: { category?: string; keyword?: string; page?: number; pageSize?: number }) =>
+  getList: (params?: { category?: string; keyword?: string; page?: number; pageSize?: number; status?: number }) =>
     service.get('/posecraft/v1/templates', { params }),
 
   /** 获取热门模板 */
@@ -33,5 +33,9 @@ export const templateApi = {
 
   /** 删除模板 */
   delete: (id: number) =>
-    service.delete(`/posecraft/v1/templates/${id}`)
+    service.delete(`/posecraft/v1/templates/${id}`),
+
+  /** 审核模板 (管理员) */
+  audit: (id: number, status: number) =>
+    service.post(`/posecraft/v1/templates/${id}/audit`, { status })
 }

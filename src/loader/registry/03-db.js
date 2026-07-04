@@ -15,7 +15,8 @@ export default async (app) => {
     const dbObj = {
       sequelize,
       Sequelize: sequelize.constructor,
-      transaction: (...args) => sequelize.transaction(...args)
+      transaction: (...args) => sequelize.transaction(...args),
+      models: sequelize.models
     };
     app.decorate('db', dbObj);
 

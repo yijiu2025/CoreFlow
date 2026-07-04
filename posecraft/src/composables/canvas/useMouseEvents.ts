@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import * as fabricLib from 'fabric'
 import { v4 as uuidv4 } from 'uuid'
@@ -42,6 +42,19 @@ export function useMouseEvents(
   let lastMouseEvent: any = null
   let cropRect: any = null
   let startPoint: any = null
+
+  let wasDeselectedThisClick = false
+
+  watch(fCanvas, (newCanvas) => {
+    if (newCanvas) {
+      newCanvas.on('selection:cleared', () => {
+        wasDeselectedThisClick = true
+        setTimeout(() => {
+          wasDeselectedThisClick = false
+        }, 50)
+      })
+    }
+  }, { immediate: true })
 
   const refreshInkLayer = () => {
     const { inkLayer, inkCanvas } = canvasDeps
@@ -96,12 +109,15 @@ export function useMouseEvents(
       return
     }
 
-    if (['draw', 'eraser'].includes(tool)) {
-      isErasing.value = true; startPoint = pointer; saveState()
-      if (tool === 'eraser' && canvasDeps.eraserCursor) {
+    if (tool === 'eraser') {
+      isErasing.value = true
+      startPoint = pointer
+      if (canvasDeps.eraserCursor) {
         canvasDeps.eraserCursor.set({ visible: true, left: pointer.x, top: pointer.y })
         fCanvas.value.bringToFront(canvasDeps.eraserCursor)
       }
+    } else if (tool === 'draw') {
+      startPoint = pointer
     } else if (tool === 'line') {
       const target = fCanvas.value.findTarget(opt.e, false)
       if (target && target.isSkeleton) {
@@ -188,18 +204,17 @@ export function useMouseEvents(
       fCanvas.value.add(cropRect)
     } else if (tool === 'text') {
       const target = fCanvas.value.findTarget(opt.e, false)
-      const activeObj = fCanvas.value.getActiveObject()
+      const justDeselected = wasDeselectedThisClick
+      wasDeselectedThisClick = false // Reset immediately
 
       if (target && (target.type === 'i-text' || target.type === 'text' || target.type === 'textbox')) {
         // 点击已有文字：选中并显示调整框
         fCanvas.value.setActiveObject(target)
         target.set({ hasControls: true, hasBorders: true })
-        fCanvas.value.renderAll()
-      } else if (!target && activeObj && (activeObj.type === 'i-text' || activeObj.type === 'text' || activeObj.type === 'textbox')) {
-        // 有文字选中时点击空白处：取消选中
-        fCanvas.value.discardActiveObject()
-        fCanvas.value.renderAll()
-      } else if (!target && !activeObj) {
+        fCanvas.value.requestRenderAll()
+      } else if (!target && justDeselected) {
+        // 有文字选中时点击空白处：仅取消选中，不新建文字 (Fabric.js already cleared it)
+      } else if (!target && !justDeselected) {
         // 没有选中时点击空白处：添加新文字
         const text = new fabric.IText('双击编辑', {
           left: pointer.x, top: pointer.y,
@@ -212,7 +227,9 @@ export function useMouseEvents(
         })
         fCanvas.value.add(text)
         fCanvas.value.setActiveObject(text)
-        fCanvas.value.renderAll()
+        text.enterEditing()
+        text.selectAll()
+        fCanvas.value.requestRenderAll()
         saveState()
       }
     }

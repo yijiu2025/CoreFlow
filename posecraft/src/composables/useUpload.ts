@@ -28,7 +28,7 @@ export function useUpload() {
       formData.append('file', file)
       formData.append('path', path)
 
-      const response = await axios.post('/api/upload', formData, {
+      const response = await axios.post('/posecraft/v1/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         withCredentials: true,
         onUploadProgress: (e) => {
@@ -61,7 +61,7 @@ export function useUpload() {
     error.value = null
 
     try {
-      const response = await axios.post('/api/upload/base64', {
+      const response = await axios.post('/posecraft/v1/upload/base64', {
         data: base64,
         filename,
         path: 'posecraft'
