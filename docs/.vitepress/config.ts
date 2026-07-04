@@ -66,6 +66,7 @@ export default defineConfig({
         text: '前端开发',
         items: [
           { text: '前端架构', link: '/frontend/overview' },
+          { text: '前端统一规范', link: '/frontend/coding-standard' },
           { text: '认证集成', link: '/frontend/auth-integration' },
           { text: '主题系统', link: '/frontend/theme' }
         ]
