@@ -155,6 +155,41 @@ export interface PageResult<T> {
 5. 不在业务组件中拼接重复 base URL，统一通过 Vite proxy 和 request 实例管理。
 6. 错误对象要保留 `code`、`message`、`response`，便于页面展示和日志排查。
 
+### 前后端响应契约
+
+除 OAuth/OIDC 协议接口、文件下载、静态资源、WebSocket 外，前端只接受后端业务接口返回以下两种结构。
+
+普通响应：
+
+```ts
+export interface ApiResult<T> {
+  code: number
+  message: string
+  data: T
+  timestamp?: number
+  requestId?: string
+}
+```
+
+分页响应：
+
+```ts
+export interface Pagination {
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface ApiPageResult<T> extends ApiResult<T[]> {
+  pagination: Pagination
+}
+```
+
+前端列表页禁止依赖“后端返回数组 + 前端本地截取”的模式。后端列表接口必须返回分页信息，前端根据 `pagination.total`、`pagination.totalPages` 渲染加载更多、分页器或空状态。
+
+协议例外必须在 API 模块里显式标注，例如 OAuth token、OIDC userinfo、文件上传下载。
+
 推荐 API 写法：
 
 ```ts
@@ -171,6 +206,20 @@ export const userApi = {
   }
 }
 ```
+
+### PoseCraft 联动要求
+
+`posecraft`、`poseadmin` 与后端 `posecraft` API 优先按以下契约改造：
+
+| 场景 | 后端契约 | 前端要求 |
+|------|----------|----------|
+| 模板列表 | `data: Template[]` + `pagination` | Home/Profile 使用分页加载，不写死 `pageSize: 60` |
+| 作品列表 | `data: Work[]` + `pagination` | 关注流、推荐流、用户作品统一列表组件 |
+| 审核列表 | `data: AuditItem[]` + `pagination` | poseadmin 使用统一分页表格 |
+| 点赞 | 返回 `{ liked, likesCount }` | 禁止只做本地自增，按后端状态回写 |
+| 关注 | 返回 `{ isFollowing, followersCount }` | 关注按钮和统计同步更新 |
+| 上传 | 返回 `{ url, filename, size, mimeType }` | 上传组件统一进度、错误和结果展示 |
+| 审核状态 | 使用统一 enum | 前端统一状态标签和筛选项 |
 
 ## 认证和权限
 
