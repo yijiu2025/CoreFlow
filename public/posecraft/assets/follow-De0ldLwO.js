@@ -1,0 +1,1 @@
+import{a as o}from"./request-C7YVMfa2.js";const l={follow:t=>o.post(`/posecraft/v1/follow/${t}`),unfollow:t=>o.delete(`/posecraft/v1/follow/${t}`),checkStatus:t=>o.get(`/posecraft/v1/follow/status/${t}`),getStats:t=>o.get(`/posecraft/v1/follow/stats/${t}`)};export{l as f};

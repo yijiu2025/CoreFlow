@@ -294,34 +294,50 @@
 
           <!-- 瀑布流 (仅当不是外部网址时显示) -->
           <div v-else>
-            <div class="waterfall-grid" v-if="filteredItems.length > 0">
-              <div
-                v-for="item in filteredItems"
-                :key="item.id"
-                class="card"
-                @click="openDetail(item)"
-              >
-                <div class="card-image">
-                  <img :src="item.thumbnail_url || item.image_url || '/placeholder.png'" :alt="item.title" />
-                  <div v-if="item.type === 'template'" class="card-badge">模板</div>
-                </div>
-                <div class="card-info">
-                  <h3 class="card-title">{{ item.title || '未命名作品' }}</h3>
-                  <div class="card-footer">
-                    <div class="card-author">
-                      <div class="author-avatar">{{ (item.username || 'U').charAt(0) }}</div>
-                      <span class="author-name">{{ item.username || '匿名用户' }}</span>
-                    </div>
-                    <div class="card-likes" @click.stop="likeItem(item)">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                      </svg>
-                      <span>{{ formatLikes(item.likes_count) }}</span>
+            <template v-if="filteredItems.length > 0">
+              <div class="waterfall-grid">
+                <div
+                  v-for="item in filteredItems"
+                  :key="item.id"
+                  class="card"
+                  @click="openDetail(item)"
+                >
+                  <div class="card-image">
+                    <img :src="item.thumbnail_url || item.image_url || '/placeholder.png'" :alt="item.title" />
+                    <div v-if="item.type === 'template'" class="card-badge">模板</div>
+                  </div>
+                  <div class="card-info">
+                    <h3 class="card-title">{{ item.title || '未命名作品' }}</h3>
+                    <div class="card-footer">
+                      <div class="card-author">
+                        <div class="author-avatar">{{ (item.username || 'U').charAt(0) }}</div>
+                        <span class="author-name">{{ item.username || '匿名用户' }}</span>
+                      </div>
+                      <div class="card-likes" @click.stop="likeItem(item)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                        <span>{{ formatLikes(item.likes_count) }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+
+              <!-- 加载更多 -->
+              <div class="load-more-container">
+                <button
+                  v-if="hasMore"
+                  @click="loadMore"
+                  :disabled="loading"
+                  class="load-more-btn"
+                >
+                  <span v-if="loading" class="animate-spin">🔄</span>
+                  <span>{{ loading ? '加载中...' : '加载更多' }}</span>
+                </button>
+                <span v-else class="no-more-text">没有更多内容了</span>
+              </div>
+            </template>
 
             <!-- 空状态 -->
             <div v-else class="empty-state">
@@ -483,6 +499,9 @@ const showToast = (msg: string) => {
 
 const templates = ref<any[]>([])
 const works = ref<any[]>([])
+const currentPage = ref(1)
+const hasMore = ref(true)
+const loading = ref(false)
 
 // 模拟推荐数据（当 API 无数据时展示）
 const mockRecommendations = [
@@ -747,27 +766,59 @@ const redirectToLogin = () => {
   router.push('/login')
 }
 
-const refreshData = async () => {
+const loadData = async (page: number) => {
+  if (loading.value) return
+  loading.value = true
   try {
-    const tplList = await templateApi.getList({ page: 1, pageSize: 60 }) as any
-    templates.value = (tplList || []).filter((t: any) => t.status === 1)
+    const tplRes = await templateApi.getList({ page, pageSize: 12 }) as any
+    const newTemplates = tplRes.list || []
     
+    let newWorks = []
+    let totalPages = 1
     if (activeNav.value === 'following' && authStore.isLoggedIn) {
-      const workList = await workApi.getFollowingWorks({ page: 1, pageSize: 60 }) as any
-      works.value = workList || []
+      const workRes = await workApi.getFollowingWorks({ page, pageSize: 12 }) as any
+      newWorks = workRes.list || []
+      totalPages = workRes.totalPages || 1
     } else {
-      const workList = await workApi.getList({ page: 1, pageSize: 60 }) as any
-      works.value = workList || []
+      const workRes = await workApi.getList({ page, pageSize: 12 }) as any
+      newWorks = workRes.list || []
+      totalPages = workRes.totalPages || 1
     }
 
-    if (authStore.isLoggedIn && authStore.user?.id) {
-      const stats = await followApi.getStats(authStore.user.id) as any
-      followingCount.value = stats.followingCount || 0
-      followersCount.value = stats.followersCount || 0
+    if (page === 1) {
+      templates.value = newTemplates.filter((t: any) => t.status === 1)
+      works.value = newWorks
+      
+      if (authStore.isLoggedIn && authStore.user?.id) {
+        const stats = await followApi.getStats(authStore.user.id) as any
+        followingCount.value = stats.followingCount || 0
+        followersCount.value = stats.followersCount || 0
+      }
+    } else {
+      templates.value = [...templates.value, ...newTemplates.filter((t: any) => t.status === 1)]
+      works.value = [...works.value, ...newWorks]
     }
+
+    const hasMoreTemplates = tplRes.page < tplRes.totalPages
+    const hasMoreWorks = page < totalPages
+    hasMore.value = hasMoreTemplates || hasMoreWorks
   } catch (err) {
     console.error('加载数据失败:', err)
+  } finally {
+    loading.value = false
   }
+}
+
+const refreshData = () => {
+  currentPage.value = 1
+  hasMore.value = true
+  loadData(1)
+}
+
+const loadMore = () => {
+  if (!hasMore.value || loading.value) return
+  currentPage.value++
+  loadData(currentPage.value)
 }
 
 watch(activeNav, () => {
@@ -2497,6 +2548,58 @@ onUnmounted(() => {
   .channel-tag {
     padding: 8px 14px;
     font-size: 13px;
+  }
+}
+
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  margin: 32px 0 48px;
+}
+
+.load-more-btn {
+  padding: 10px 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  background: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.load-more-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.no-more-text {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

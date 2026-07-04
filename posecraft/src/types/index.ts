@@ -75,3 +75,35 @@ export interface PoseAnalysisResult {
   width: number
   height: number
 }
+
+/** 统一 API 响应 */
+export interface ApiResult<T> {
+  code: number
+  message: string
+  data: T
+  timestamp?: number
+  requestId?: string
+}
+
+/** 分页元数据 */
+export interface Pagination {
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+/** 统一分页响应 */
+export interface ApiPageResult<T> extends ApiResult<T[]> {
+  pagination: Pagination
+}
+
+/** 统一前端分页结果对象 */
+export interface PageResult<T> {
+  list: T[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+

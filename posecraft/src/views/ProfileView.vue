@@ -147,12 +147,13 @@ const loadData = async () => {
   try {
     // 1. 获取我的作品
     if (authStore.user?.id) {
-      works.value = (await workApi.getUserWorks(authStore.user.id)) as any || []
+      const workRes = (await workApi.getUserWorks(authStore.user.id)) as any
+      works.value = workRes?.list || []
     }
 
     // 2. 获取模板列表（后端接口自动为已登录用户提取公开+自己上传的所有模板）
-    const tplList = await templateApi.getList({ page: 1, pageSize: 100 }) as any
-    allTemplates.value = tplList || []
+    const tplRes = await templateApi.getList({ page: 1, pageSize: 100 }) as any
+    allTemplates.value = tplRes?.list || []
 
     // 3. 获取统计数据
     if (authStore.user?.id) {

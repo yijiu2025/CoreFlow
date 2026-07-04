@@ -62,9 +62,20 @@ export function createHttp(baseURL?: string): AxiosInstance {
 
   // 响应拦截
   instance.interceptors.response.use(
-    (response) => {
+     (response) => {
       const res = response.data
-      if (res.code === 200) return res.data
+      if (res.code === 200) {
+        if (res.pagination) {
+          return {
+            list: res.data,
+            total: res.pagination.total,
+            page: res.pagination.page,
+            pageSize: res.pagination.pageSize,
+            totalPages: res.pagination.totalPages
+          }
+        }
+        return res.data
+      }
       const error = new Error(res.message || 'API Error')
       ;(error as any).code = res.code
       return Promise.reject(error)

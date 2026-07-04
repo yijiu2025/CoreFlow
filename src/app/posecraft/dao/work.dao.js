@@ -32,12 +32,24 @@ class WorkDao {
       ];
     }
 
-    return await model.findAll({
+    const page = options.page ? Number(options.page) : (options.limit ? Math.floor((options.offset || 0) / options.limit) + 1 : 1);
+    const pageSize = options.pageSize ? Number(options.pageSize) : (options.limit ? Number(options.limit) : 20);
+    const limit = pageSize;
+    const offset = (page - 1) * pageSize;
+
+    const { count, rows } = await model.findAndCountAll({
       where,
       order: [['created_at', 'DESC']],
-      limit: options.limit || 20,
-      offset: options.offset || 0
+      limit,
+      offset
     });
+
+    return {
+      list: rows,
+      total: count,
+      page,
+      pageSize
+    };
   }
 
   /**
@@ -191,20 +203,37 @@ class WorkDao {
 
     const followingIds = follows.map(f => f.following_id);
 
+    const page = options.page ? Number(options.page) : (options.limit ? Math.floor((options.offset || 0) / options.limit) + 1 : 1);
+    const pageSize = options.pageSize ? Number(options.pageSize) : (options.limit ? Number(options.limit) : 20);
+    const limit = pageSize;
+    const offset = (page - 1) * pageSize;
+
     if (followingIds.length === 0) {
-      return [];
+      return {
+        list: [],
+        total: 0,
+        page,
+        pageSize
+      };
     }
 
-    return await model.findAll({
+    const { count, rows } = await model.findAndCountAll({
       where: {
         user_id: followingIds,
         status: 1,
         delete_version: 0
       },
       order: [['created_at', 'DESC']],
-      limit: options.limit || 20,
-      offset: options.offset || 0
+      limit,
+      offset
     });
+
+    return {
+      list: rows,
+      total: count,
+      page,
+      pageSize
+    };
   }
 }
 

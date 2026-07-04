@@ -55,13 +55,25 @@ class TemplateDao {
       where.status = 1; // 未登录只看公开
     }
 
-    return await model.findAll({
+    const page = options.page ? Number(options.page) : (options.limit ? Math.floor((options.offset || 0) / options.limit) + 1 : 1);
+    const pageSize = options.pageSize ? Number(options.pageSize) : (options.limit ? Number(options.limit) : 20);
+    const limit = pageSize;
+    const offset = (page - 1) * pageSize;
+
+    const { count, rows } = await model.findAndCountAll({
       where,
       attributes: { exclude: ['pose_data'] },
       order: [['created_at', 'DESC']],
-      limit: options.limit || 20,
-      offset: options.offset || 0
+      limit,
+      offset
     });
+
+    return {
+      list: rows,
+      total: count,
+      page,
+      pageSize
+    };
   }
 
   /**

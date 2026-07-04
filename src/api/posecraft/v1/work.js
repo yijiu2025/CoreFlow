@@ -41,16 +41,26 @@ export default async function (fastify) {
     alias: '获取作品列表',
     method: 'GET',
     url: '/works',
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          keyword: { type: 'string', maxLength: 100 }
+        }
+      }
+    },
     handler: async (request, reply) => {
-      const { keyword, page = 1, pageSize = 20 } = request.query;
+      const { keyword, page, pageSize } = request.query;
 
-      const works = await workDao.findAll({
+      const result = await workDao.findAll({
         keyword,
-        limit: parseInt(pageSize),
-        offset: (parseInt(page) - 1) * parseInt(pageSize)
+        page,
+        pageSize
       });
 
-      return reply.result.success('获取成功', works);
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
     }
   });
 
@@ -75,16 +85,32 @@ export default async function (fastify) {
     alias: '获取用户作品',
     method: 'GET',
     url: '/works/user/:userId',
+    schema: {
+      params: {
+        type: 'object',
+        required: ['userId'],
+        properties: {
+          userId: { type: 'integer' }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
+      }
+    },
     handler: async (request, reply) => {
       const { userId } = request.params;
-      const { page = 1, pageSize = 20 } = request.query;
+      const { page, pageSize } = request.query;
 
-      const works = await workDao.findByUser(userId, {
-        limit: parseInt(pageSize),
-        offset: (parseInt(page) - 1) * parseInt(pageSize)
+      const result = await workDao.findByUser(userId, {
+        page,
+        pageSize
       });
 
-      return reply.result.success('获取成功', works);
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
     }
   });
 
@@ -193,16 +219,25 @@ export default async function (fastify) {
     method: 'GET',
     url: '/works/following',
     requireLogin: true,
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
+      }
+    },
     handler: async (request, reply) => {
-      const { page = 1, pageSize = 20 } = request.query;
+      const { page, pageSize } = request.query;
       const user = request.state.user;
 
-      const works = await workDao.findFollowingWorks(user.userId, {
-        limit: parseInt(pageSize),
-        offset: (parseInt(page) - 1) * parseInt(pageSize)
+      const result = await workDao.findFollowingWorks(user.userId, {
+        page,
+        pageSize
       });
 
-      return reply.result.success('获取成功', works);
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
     }
   });
 }

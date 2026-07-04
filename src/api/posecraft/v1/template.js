@@ -46,21 +46,33 @@ export default async function (fastify) {
     alias: '获取模板列表',
     method: 'GET',
     url: '/templates',
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          category: { type: 'string', maxLength: 50 },
+          keyword: { type: 'string', maxLength: 100 },
+          status: { type: 'integer' }
+        }
+      }
+    },
     handler: async (request, reply) => {
-      const { category, keyword, page = 1, pageSize = 20, status } = request.query;
+      const { category, keyword, page, pageSize, status } = request.query;
 
       const user = request.state?.user;
       const isAdmin = checkDataPermission({ user_id: -1 }, user); // 借用权限助手检测是否为管理员
 
-      const templates = await TemplateDao.findAll({
+      const result = await TemplateDao.findAll({
         category,
         keyword,
         status,
-        limit: parseInt(pageSize),
-        offset: (parseInt(page) - 1) * parseInt(pageSize)
+        page,
+        pageSize
       }, user, isAdmin);
 
-      return reply.result.success('获取成功', templates);
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
     }
   });
 
@@ -178,7 +190,7 @@ export default async function (fastify) {
       }
 
       if (![1, -2].includes(Number(status))) {
-        return reply.code(400).send({ error: '无效的审核状态，仅支持 1 (通过/公开) 或 -2 (拒绝)' });
+        return reply.result.fail('无效的审核状态，仅支持 1 (通过/公开) 或 -2 (拒绝)', null, 400);
       }
 
       const updated = await TemplateDao.update(id, { status: Number(status) });

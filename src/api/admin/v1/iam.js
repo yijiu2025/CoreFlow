@@ -19,9 +19,9 @@ export default async function (fastify) {
 
       try {
         const roles = await IamDao.getAssignableRoles(adminUid, appId);
-        return reply.send({ success: true, data: roles });
+        return reply.result.success('获取成功', roles);
       } catch (err) {
-        return reply.code(500).send({ error: err.message });
+        return reply.result.fail(err.message, null, 500);
       }
     }
   });
@@ -37,9 +37,7 @@ export default async function (fastify) {
     url: '/admin/v1/iam/actions/dictionary',
     handler: async (request, reply) => {
       // actionMetaRegistry 是在各个业务模块加载时，通过 definePermissionMeta 压入内存的
-      return reply.result?.success
-        ? reply.result.success('获取全量权限字典', actionMetaRegistry)
-        : reply.send({ success: true, data: actionMetaRegistry });
+      return reply.result.success('获取全量权限字典', actionMetaRegistry);
     }
   });
 
@@ -58,9 +56,9 @@ export default async function (fastify) {
 
       try {
         const users = await IamDao.getManageableUsers(adminUid, keyword);
-        return reply.send({ success: true, data: users });
+        return reply.result.success('获取成功', users);
       } catch (err) {
-        return reply.code(500).send({ error: err.message });
+        return reply.result.fail(err.message, null, 500);
       }
     }
   });
@@ -80,7 +78,7 @@ export default async function (fastify) {
       const { targetUid, roleId, appId } = request.body;
 
       if (!targetUid || !roleId || !appId) {
-        return reply.code(400).send({ error: '缺少必要参数' });
+        return reply.result.fail('缺少必要参数', null, 400);
       }
 
       try {
@@ -96,9 +94,9 @@ export default async function (fastify) {
           details: { targetUid, roleId }
         });
 
-        return reply.send({ success: true, data: result });
+        return reply.result.success('分配成功', result);
       } catch (err) {
-        return reply.code(403).send({ error: err.message });
+        return reply.result.fail(err.message, null, 403);
       }
     }
   });
@@ -117,7 +115,7 @@ export default async function (fastify) {
       const { targetUid, appId, policy } = request.body;
 
       if (!targetUid || !appId || !policy) {
-        return reply.code(400).send({ error: '缺少必要参数' });
+        return reply.result.fail('缺少必要参数', null, 400);
       }
 
       try {
@@ -133,9 +131,9 @@ export default async function (fastify) {
           details: { targetUid, action: 'update_inline_policy' }
         });
 
-        return reply.send({ success: true, data: result });
+        return reply.result.success('下发成功', result);
       } catch (err) {
-        return reply.code(403).send({ error: err.message });
+        return reply.result.fail(err.message, null, 403);
       }
     }
   });
