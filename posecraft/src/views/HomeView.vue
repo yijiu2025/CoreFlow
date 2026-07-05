@@ -16,7 +16,7 @@
         v-model:searchQuery="searchQuery"
         :page-title="getNavTitle()"
         :show-nav-search="(activeNav === 'featured' && showNavSearch) || activeNav === 'mine'"
-        :transparent-top="activeNav === 'mine' && mineAtTop"
+        :transparent-top="isMinePage && mineAtTop"
         :window-width="windowWidth"
         :is-vip="isVip"
         :search-suggestions="searchSuggestions"
@@ -76,7 +76,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onBeforeMount, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useHome } from '@/composables/useHome'
 import Sidebar from '@/components/home/Sidebar.vue'
@@ -84,14 +85,25 @@ import TopNav from '@/components/home/TopNav.vue'
 import ProfileModal from '@/components/home/ProfileModal.vue'
 
 const themeStore = useThemeStore()
+const route = useRoute()
 
-// MineView 页面滚动状态（控制 TopNav 透明度）
+// mine 页面 TopNav 透明度：在顶部时透明，滚动后不透明
 const mineAtTop = ref(true)
-const onMineScroll = (e: Event) => {
-  mineAtTop.value = (e as CustomEvent).detail?.atTop ?? true
+const isMinePage = computed(() => route.path === '/mine' || route.path.endsWith('/mine'))
+
+const onWindowScroll = () => {
+  if (isMinePage.value) {
+    mineAtTop.value = window.scrollY < 10
+  }
 }
-onBeforeMount(() => window.addEventListener('mine-scroll', onMineScroll as EventListener))
-onUnmounted(() => window.removeEventListener('mine-scroll', onMineScroll as EventListener))
+
+onMounted(() => window.addEventListener('scroll', onWindowScroll, { passive: true }))
+onUnmounted(() => window.removeEventListener('scroll', onWindowScroll))
+
+// 路由切换时重置
+watch(() => route.path, () => {
+  mineAtTop.value = true
+})
 
 // 使用主逻辑 Composable
 const {
@@ -158,7 +170,7 @@ const {
 }
 
 .main-content-area {
-  padding: 72px 0 32px; /* 顶部留出 TopNav 高度 */
+  padding: 0 0 32px;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -314,10 +326,6 @@ const {
     margin-left: 0 !important;
   }
 
-  .main-content-area {
-    padding-top: 56px;
-  }
-
   .content-container {
     padding: 16px 16px 0;
   }
@@ -331,20 +339,12 @@ const {
 }
 
 @media (min-width: 769px) and (max-width: 1024px) {
-  .main-content-area {
-    padding-top: 56px;
-  }
-
   .content-container {
     padding: 20px 24px 0;
   }
 }
 
 @media (max-width: 480px) {
-  .main-content-area {
-    padding-top: 52px;
-  }
-
   .content-container {
     padding: 12px 12px 0;
   }

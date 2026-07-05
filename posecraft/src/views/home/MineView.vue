@@ -333,7 +333,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useHome } from '@/composables/useHome'
 import { useThemeStore } from '@/stores/theme'
 import PoseCard from '@/components/home/PoseCard.vue'
@@ -355,17 +355,8 @@ const {
 
 const themeStore = useThemeStore()
 
-// 标记当前页面 + 滚动检测（控制 TopNav 透明度）
-onMounted(() => {
-  activeNav.value = 'mine'
-  window.addEventListener('scroll', onScroll, { passive: true })
-})
-onUnmounted(() => {
-  window.removeEventListener('scroll', onScroll)
-})
-const onScroll = () => {
-  window.dispatchEvent(new CustomEvent('mine-scroll', { detail: { atTop: window.scrollY < 10 } }))
-}
+// 标记当前页面
+onMounted(() => { activeNav.value = 'mine' })
 const activeTab = ref('works')
 const subTab = ref('public')
 const showLoginSave = ref(true)

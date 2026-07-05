@@ -1,5 +1,8 @@
 <template>
-  <header class="top-nav" :class="{ transparent: transparentTop }">
+  <header
+    class="top-nav"
+    :style="transparentTop ? { background: 'transparent', boxShadow: 'none' } : {}"
+  >
     <div class="nav-left">
       <!-- 小屏：侧边栏展开按钮 -->
       <button class="sidebar-toggle-btn" @click="sidebarOpen = !sidebarOpen" title="菜单">
@@ -173,14 +176,8 @@ const goToSearch = () => {
   transition: background-color 0.3s, box-shadow 0.3s;
 }
 
-/* 透明状态（mine 页面顶部时 TopNav 背景穿透） */
-:deep(.top-nav.transparent),
-.top-nav.transparent {
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.top-nav:not(.transparent) {
+/* 不透明状态有阴影 */
+.top-nav:not([style*="transparent"]) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
@@ -188,11 +185,7 @@ const goToSearch = () => {
   background: #121214;
 }
 
-.dark-mode .top-nav.transparent {
-  background: transparent !important;
-}
-
-.dark-mode .top-nav:not(.transparent) {
+.dark-mode .top-nav:not([style*="transparent"]) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
