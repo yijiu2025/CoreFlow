@@ -14,11 +14,12 @@
       <TopNav
         v-model:sidebarOpen="sidebarOpen"
         v-model:searchFocused="searchFocused"
+        v-model:searchQuery="searchQuery"
         :page-title="getNavTitle()"
         :show-nav-search="showNavSearch"
         :window-width="windowWidth"
-        :search-query="searchQuery"
         :is-vip="isVip"
+        :search-suggestions="searchSuggestions"
         @showToast="showToast"
         @handleStartCreate="handleStartCreate"
         @toggleProfileModal="toggleProfileModal"

@@ -17,14 +17,34 @@
       class="nav-search-inline"
       :class="{ visible: showNavSearch && windowWidth >= 760 }"
     >
-      <div class="inline-search-bar" @click="goToSearch">
+      <div class="inline-search-bar">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <circle cx="11" cy="11" r="8"/>
           <line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <span class="inline-search-placeholder">
-          {{ searchQuery.trim() ? searchQuery : '搜索姿势模板...' }}
-        </span>
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="搜索姿势模板..."
+          class="inline-search-input"
+          @focus="navSearchFocused = true"
+          @blur="onNavSearchBlur"
+        />
+      </div>
+
+      <!-- 顶部通栏下拉推荐框 -->
+      <div class="nav-suggestions-panel" v-show="navSearchFocused">
+        <div class="suggest-header">猜你想搜</div>
+        <div class="suggest-grid">
+          <button
+            v-for="word in searchSuggestions"
+            :key="word"
+            class="suggest-item"
+            @mousedown.prevent="searchQuery = word; navSearchFocused = false"
+          >
+            {{ word }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -79,19 +99,21 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
 
 const sidebarOpen = defineModel<boolean>('sidebarOpen', { required: true })
 const searchFocused = defineModel<boolean>('searchFocused', { default: false })
+const searchQuery = defineModel<string>('searchQuery', { required: true })
 
 defineProps<{
   pageTitle: string
   showNavSearch: boolean
   windowWidth: number
-  searchQuery: string
   isVip: boolean
+  searchSuggestions: string[]
 }>()
 
 const emit = defineEmits<{
@@ -100,6 +122,14 @@ const emit = defineEmits<{
   (e: 'toggleProfileModal'): void
   (e: 'goToSearch'): void
 }>()
+
+const navSearchFocused = ref(false)
+
+const onNavSearchBlur = () => {
+  setTimeout(() => {
+    navSearchFocused.value = false
+  }, 150)
+}
 
 const goToSearch = () => {
   emit('goToSearch')
@@ -420,5 +450,92 @@ const goToSearch = () => {
     padding: 0 12px;
     height: 52px;
   }
+}
+
+.inline-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  color: inherit;
+  height: 100%;
+  min-width: 0;
+}
+
+.inline-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.dark-mode .inline-search-input::placeholder {
+  color: #71717a;
+}
+
+.nav-suggestions-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  padding: 8px;
+  z-index: 100;
+}
+
+.dark-mode .nav-suggestions-panel {
+  background: #18181b;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+.nav-suggestions-panel .suggest-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  padding: 6px 12px;
+  letter-spacing: 0.5px;
+}
+
+.dark-mode .nav-suggestions-panel .suggest-header {
+  color: #71717a;
+}
+
+.nav-suggestions-panel .suggest-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.nav-suggestions-panel .suggest-item {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 8px;
+  font-size: 12.5px;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark-mode .nav-suggestions-panel .suggest-item {
+  color: #e4e4e7;
+}
+
+.nav-suggestions-panel .suggest-item:hover {
+  background: rgba(255, 36, 66, 0.06);
+  color: #ff2442;
+}
+
+.dark-mode .nav-suggestions-panel .suggest-item:hover {
+  background: rgba(255, 107, 107, 0.1);
+  color: #ff6b6b;
 }
 </style>

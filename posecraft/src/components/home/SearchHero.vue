@@ -33,7 +33,7 @@
       </div>
 
       <!-- 推荐面板 -->
-      <div class="search-suggestions-inner" v-show="searchFocused">
+      <div class="search-suggestions-inner" v-show="searchFocused && !showNavSearch">
         <div class="suggest-divider" style="margin-top: 0;"></div>
         <div class="suggest-header">猜你想搜</div>
         <div class="suggest-grid">
