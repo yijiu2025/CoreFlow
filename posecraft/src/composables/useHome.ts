@@ -564,9 +564,10 @@ export function useHome() {
 
   const updateUserProfile = async (data: any) => {
     try {
-      const res = await service.put('/user/v1/update', data)
-      if (res && res.data) {
-        userProfile.value = { ...userProfile.value, ...res.data }
+      const res = await service.put('/user/v1/update', data) as any
+      // 拦截器已 unwrap res.data，直接用 res
+      if (res) {
+        userProfile.value = { ...userProfile.value, ...res }
         showToast('个人资料更新成功')
         return true
       }

@@ -46,7 +46,7 @@
           </div>
 
           <div class="bio-row">
-            <span class="bio-short-text">{{ userProfile.bio || '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子...' }}</span>
+            <span class="bio-short-text">{{ bioShortText }}</span>
             <div class="bio-more-wrapper">
               <span class="bio-more">更多</span>
               <!-- 悬浮完整简介气泡 -->
@@ -367,9 +367,10 @@ const showDateDropdown = ref(false)
 const isManageMode = ref(false)
 const selectedIds = ref<string[]>([])
 
-// 解析简介多行
+// 解析简介多行（按换行符分割，与 textarea 输入对齐）
 const bioLines = computed(() => {
-  if (!userProfile.value?.bio) {
+  const bio = userProfile.value?.bio
+  if (!bio) {
     return [
       '✈️已飞0个国家❗️',
       '梦想是环游世界🌍',
@@ -383,7 +384,15 @@ const bioLines = computed(() => {
       '国家级证件持有者(身份证)💳'
     ]
   }
-  return userProfile.value.bio.split(/[|\n]/).map((line: string) => line.trim()).filter(Boolean)
+  return bio.split('\n').map((line: string) => line.trim()).filter(Boolean)
+})
+
+// 简介缩略：取第一行，超过 30 字截断
+const bioShortText = computed(() => {
+  const bio = userProfile.value?.bio
+  if (!bio) return '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子...'
+  const first = bio.split('\n')[0]?.trim() || ''
+  return first.length > 30 ? first.slice(0, 30) + '...' : first
 })
 
 const onSaveLoginChange = () => {
