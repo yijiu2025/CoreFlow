@@ -186,4 +186,264 @@ watch(
 )
 </script>
 
-<style scoped src="@/assets/styles/home-view.css"></style>
+<style scoped>
+.home-layout {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  background: #f8fafc;
+  color: #1e293b;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
+  transition: background-color 0.3s, color 0.3s;
+  position: relative;
+}
+
+.dark-mode {
+  background: #09090b;
+  color: #f4f4f5;
+}
+
+.main-container {
+  margin-left: 220px;
+  flex-grow: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content-area {
+  padding: 0 0 32px;
+  padding-top: max(0px, calc(64px));
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-container {
+  flex-grow: 1;
+  padding: 20px 32px 0;
+}
+
+.waterfall-grid {
+  column-count: 4;
+  column-gap: 20px;
+}
+
+@media (max-width: 1200px) {
+  .waterfall-grid {
+    column-count: 3;
+  }
+}
+
+@media (max-width: 900px) {
+  .waterfall-grid {
+    column-count: 2;
+  }
+}
+
+@media (max-width: 600px) {
+  .waterfall-grid {
+    column-count: 1;
+  }
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.empty-icon {
+  font-size: 54px;
+  margin-bottom: 16px;
+}
+
+.empty-text {
+  color: #64748b;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.empty-btn {
+  padding: 10px 28px;
+  border-radius: 20px;
+  background: #ff2442;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  transition: all 0.2s;
+  box-shadow: 0 4px 10px rgba(255, 36, 66, 0.2);
+}
+
+.empty-btn:hover {
+  background: #e11d48;
+}
+
+/* Toast 提示 */
+.toast-tip {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px 24px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 999;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  animation: fadeInUp 0.25s ease-out;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* 回到顶部浮动按钮 */
+.back-to-top-btn {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 85;
+  transition: all 0.25s ease;
+}
+
+.back-to-top-btn:hover {
+  background: #ff2442;
+  color: #ffffff;
+  border-color: #ff2442;
+  box-shadow: 0 6px 20px rgba(255, 36, 66, 0.25);
+  transform: translateY(-2px);
+}
+
+.dark-mode .back-to-top-btn {
+  background: #27272a;
+  border-color: #3f3f46;
+  color: #a1a1aa;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .back-to-top-btn:hover {
+  background: #ff2442;
+  color: #ffffff;
+  border-color: #ff2442;
+}
+
+/* 侧边栏遮罩层 */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 99;
+  animation: overlayFadeIn 0.2s ease;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 1024px) {
+  .main-container {
+    margin-left: 0 !important;
+  }
+
+  .main-content-area {
+    padding-top: 0;
+  }
+
+  .content-container {
+    padding: 16px 16px 0;
+  }
+
+  .back-to-top-btn {
+    bottom: 20px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .main-content-area {
+    padding-top: 0;
+  }
+
+  .content-container {
+    padding: 20px 24px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .content-container {
+    padding: 12px 12px 0;
+  }
+}
+
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  margin: 32px 0 48px;
+}
+
+.load-more-btn {
+  padding: 10px 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  background: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.load-more-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.no-more-text {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

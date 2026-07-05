@@ -148,3 +148,274 @@ const goHome = () => {
   router.push('/')
 }
 </script>
+
+<style scoped>
+.side-bar {
+  position: fixed;
+  width: 220px;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 30px 20px 24px 20px;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+  transition: all 0.3s;
+}
+
+.dark-mode .side-bar {
+  background: #121214;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.brand-header {
+  margin-bottom: 30px;
+  cursor: pointer;
+}
+
+.brand-logo {
+  display: inline-block;
+  background: linear-gradient(135deg, #ff2442, #ff6b6b);
+  color: white;
+  font-size: 16px;
+  font-weight: 900;
+  padding: 10px 24px;
+  border-radius: 99px;
+  text-align: center;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(255, 36, 66, 0.25);
+}
+
+/* 导航分类 */
+.sidebar-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.group-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding-left: 12px;
+  margin-bottom: 6px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.dark-mode .menu-item {
+  color: #a1a1aa;
+}
+
+.menu-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: #ff2442;
+}
+
+.dark-mode .menu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ff6b6b;
+}
+
+.menu-item.active {
+  background: rgba(255, 36, 66, 0.08);
+  color: #ff2442;
+}
+
+.dark-mode .menu-item.active {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+}
+
+.menu-icon {
+  font-size: 16px;
+}
+
+.menu-divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 4px 0;
+}
+
+.dark-mode .menu-divider {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 侧边栏底部设置/关于的悬浮菜单 */
+.sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.dark-mode .sidebar-bottom {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.bottom-menu-wrapper {
+  position: relative;
+}
+
+.bottom-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-align: left;
+  width: 100%;
+  transition: all 0.2s;
+}
+
+.dark-mode .bottom-item {
+  color: #a1a1aa;
+}
+
+.bottom-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: #1e293b;
+}
+
+.dark-mode .bottom-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f4f4f5;
+}
+
+/* Hover 弹出框样式 */
+.hover-dropdown-menu {
+  position: absolute;
+  left: 100%;
+  bottom: 0;
+  margin-left: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  width: 210px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  padding: 8px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 110;
+}
+
+.hover-dropdown-menu::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  bottom: -40px;
+  left: -25px;
+  width: 45px;
+}
+
+.dark-mode .hover-dropdown-menu {
+  background: rgba(24, 24, 27, 0.95);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.bottom-menu-wrapper:hover .hover-dropdown-menu {
+  display: flex;
+}
+
+.dropdown-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  padding: 6px 12px;
+  letter-spacing: 0.5px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #334155;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dark-mode .dropdown-item {
+  color: #e4e4e7;
+}
+
+.dropdown-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #ff2442;
+}
+
+.dark-mode .dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ff6b6b;
+}
+
+.item-icon {
+  font-size: 14px;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateX(5px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (max-width: 1024px) {
+  .side-bar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 101;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none;
+  }
+
+  .side-bar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  }
+}
+</style>
