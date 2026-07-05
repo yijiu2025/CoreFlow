@@ -408,8 +408,7 @@ const onBioTooltipEnter = (e: MouseEvent) => {
   const parentRect = row.closest('.profile-header-wrapper')?.getBoundingClientRect()
   if (parentRect) {
     el.style.left = rect.right - parentRect.left - 280 + 'px'
-    el.style.top = (rect.top - parentRect.top) - 8 + 'px'
-    el.style.transform = 'translateY(-100%)'
+    el.style.top = (rect.bottom - parentRect.top) + 8 + 'px'
   }
   el.style.display = 'block'
 }
@@ -1134,7 +1133,7 @@ const filteredItems = computed(() => {
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-  z-index: 87; /* 低于 sub-tabs(88) / tabs(89) / TopNav(90) */
+  z-index: 100; /* 高于 TopNav(90)，确保不被导航栏遮挡 */
   display: none;
   color: #334155;
   text-align: left;
