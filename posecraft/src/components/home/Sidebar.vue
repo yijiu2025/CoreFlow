@@ -161,14 +161,16 @@ const goHome = () => {
   flex-direction: column;
   justify-content: space-between;
   padding: 30px 20px 24px 20px;
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  border-right: none;
   background: #ffffff;
+  box-shadow: 1px 0 10px rgba(0, 0, 0, 0.02);
   transition: all 0.3s;
 }
 
 .dark-mode .side-bar {
   background: #121214;
-  border-color: rgba(255, 255, 255, 0.08);
+  border-right: none;
+  box-shadow: 1px 0 10px rgba(0, 0, 0, 0.2);
 }
 
 .brand-header {
@@ -178,15 +180,17 @@ const goHome = () => {
 
 .brand-logo {
   display: inline-block;
-  background: linear-gradient(135deg, #ff2442, #ff6b6b);
-  color: white;
-  font-size: 16px;
-  font-weight: 900;
-  padding: 10px 24px;
-  border-radius: 99px;
-  text-align: center;
-  letter-spacing: 1px;
-  box-shadow: 0 4px 15px rgba(255, 36, 66, 0.25);
+  color: #1e293b;
+  font-size: 20px;
+  font-weight: 800;
+  text-align: left;
+  letter-spacing: -0.5px;
+  padding: 6px 12px;
+  transition: color 0.3s;
+}
+
+.dark-mode .brand-logo {
+  color: #ffffff;
 }
 
 /* 导航分类 */

@@ -9,7 +9,6 @@
           <line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
-      <span class="page-title">{{ pageTitle }}</span>
     </div>
 
     <!-- 桌面端：搜索框滚出视野后，在 topnav 居中显示紧凑搜索 -->
@@ -34,15 +33,14 @@
 
       <!-- 顶部通栏下拉推荐框 -->
       <div class="nav-suggestions-panel" v-show="navSearchFocused">
-        <div class="suggest-header">猜你想搜</div>
-        <div class="suggest-grid">
+        <div class="suggest-list">
           <button
-            v-for="word in searchSuggestions"
+            v-for="word in searchSuggestions.slice(0, 8)"
             :key="word"
-            class="suggest-item"
+            class="suggest-list-item"
             @mousedown.prevent="searchQuery = word; navSearchFocused = false"
           >
-            {{ word }}
+            <span v-html="highlightText(word, searchQuery)"></span>
           </button>
         </div>
       </div>
@@ -62,26 +60,38 @@
         </svg>
       </button>
 
-      <!-- VIP标识 (如果有) -->
-      <div v-if="authStore.isLoggedIn && isVip" class="vip-badge">
-        <span class="vip-icon">👑</span>
+      <!-- VIP标识 -->
+      <div v-if="authStore.isLoggedIn && isVip" class="vip-badge-outline">
+        <svg class="vip-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"/>
+          <path d="M3 20h18"/>
+        </svg>
         <span class="vip-text">VIP 会员</span>
       </div>
 
       <!-- 通知 -->
       <button class="nav-action-btn" @click="$emit('showToast', '通知中心')" title="通知">
-        <span class="nav-action-icon">🔔</span>
+        <svg class="nav-svg-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
         <span class="badge-dot"></span>
       </button>
 
       <!-- 私信 -->
       <button class="nav-action-btn" @click="$emit('showToast', '私信列表')" title="私信">
-        <span class="nav-action-icon">💬</span>
+        <svg class="nav-svg-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
       </button>
 
       <!-- 投稿 -->
       <button class="btn-upload" @click="$emit('handleStartCreate')">
-        <span class="upload-icon">📤</span>
+        <svg class="upload-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
         <span>投稿</span>
       </button>
 
@@ -131,6 +141,15 @@ const onNavSearchBlur = () => {
   }, 150)
 }
 
+const highlightText = (text: string, query: string) => {
+  if (!query || !query.trim()) {
+    return `<span>${text}</span>`
+  }
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escapedQuery})`, 'gi')
+  return text.replace(regex, '<span class="highlight">$1</span>')
+}
+
 const goToSearch = () => {
   emit('goToSearch')
 }
@@ -139,9 +158,7 @@ const goToSearch = () => {
 <style scoped>
 .top-nav {
   height: 72px;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  background: #ffffff;
   padding: 0 32px;
   display: flex;
   align-items: center;
@@ -153,8 +170,7 @@ const goToSearch = () => {
 }
 
 .dark-mode .top-nav {
-  background: rgba(9, 9, 11, 0.8);
-  border-color: rgba(255, 255, 255, 0.06);
+  background: #121214;
 }
 
 .nav-left {
@@ -226,6 +242,7 @@ const goToSearch = () => {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
+  position: relative;
 }
 
 .nav-search-inline.visible {
@@ -281,17 +298,22 @@ const goToSearch = () => {
 }
 
 /* VIP标识 */
-.vip-badge {
+.vip-badge-outline {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  color: #78350f;
-  padding: 4px 12px;
+  gap: 5px;
+  border: 1px solid #d97706;
+  color: #d97706;
+  padding: 4px 14px;
   border-radius: 99px;
-  font-size: 11px;
-  font-weight: 800;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+  font-size: 12px;
+  font-weight: 700;
+  background: transparent;
+  cursor: default;
+}
+
+.vip-svg {
+  flex-shrink: 0;
 }
 
 .nav-action-btn {
@@ -323,8 +345,8 @@ const goToSearch = () => {
 
 .badge-dot {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   width: 6px;
   height: 6px;
   background-color: #ef4444;
@@ -336,21 +358,29 @@ const goToSearch = () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #ff2442;
+  background: #1e293b;
   color: white;
   border: none;
-  padding: 8px 16px;
-  border-radius: 20px;
+  padding: 8px 18px;
+  border-radius: 99px;
   font-size: 13.5px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 10px rgba(255, 36, 66, 0.15);
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.dark-mode .btn-upload {
+  background: #27272a;
 }
 
 .btn-upload:hover {
-  background: #e11d48;
+  background: #0f172a;
   transform: translateY(-1px);
+}
+
+.dark-mode .btn-upload:hover {
+  background: #3f3f46;
 }
 
 /* 头像 */
@@ -480,62 +510,57 @@ const goToSearch = () => {
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 12px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  padding: 8px;
+  padding: 8px 0;
   z-index: 100;
+  max-height: 280px;
+  overflow-y: auto;
 }
 
 .dark-mode .nav-suggestions-panel {
-  background: #18181b;
-  border-color: rgba(255, 255, 255, 0.08);
+  background: #1f2026;
+  border-color: rgba(255, 255, 255, 0.06);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
 }
 
-.nav-suggestions-panel .suggest-header {
-  font-size: 11px;
-  font-weight: 700;
-  color: #94a3b8;
-  padding: 6px 12px;
-  letter-spacing: 0.5px;
+.suggest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.dark-mode .nav-suggestions-panel .suggest-header {
-  color: #71717a;
-}
-
-.nav-suggestions-panel .suggest-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-}
-
-.nav-suggestions-panel .suggest-item {
-  display: block;
+.suggest-list-item {
+  display: flex;
+  align-items: center;
   width: 100%;
   background: transparent;
   border: none;
-  padding: 8px;
-  font-size: 12.5px;
-  color: #334155;
+  padding: 10px 20px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #1e293b;
   text-align: left;
   cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.15s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  transition: background 0.2s;
 }
 
-.dark-mode .nav-suggestions-panel .suggest-item {
-  color: #e4e4e7;
+.dark-mode .suggest-list-item {
+  color: #ffffff;
 }
 
-.nav-suggestions-panel .suggest-item:hover {
-  background: rgba(255, 36, 66, 0.06);
+.suggest-list-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.dark-mode .suggest-list-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:deep(.highlight) {
   color: #ff2442;
+  font-weight: 700;
 }
 
-.dark-mode .nav-suggestions-panel .suggest-item:hover {
-  background: rgba(255, 107, 107, 0.1);
-  color: #ff6b6b;
+.dark-mode :deep(.highlight) {
+  color: #ff3355;
 }
 </style>
