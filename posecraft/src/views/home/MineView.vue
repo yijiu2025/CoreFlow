@@ -1133,7 +1133,7 @@ const filteredItems = computed(() => {
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-  z-index: 9999;
+  z-index: 87; /* 低于 sub-tabs(88) / tabs(89) / TopNav(90) */
   display: none;
   color: #334155;
   text-align: left;
