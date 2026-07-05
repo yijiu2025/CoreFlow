@@ -949,6 +949,8 @@ const filteredItems = computed(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
+  /* 背景拉到 TopNav 后面重叠显示 */
+  margin-top: -72px;
 }
 
 /* 个人头部卡片 (颜色与背景完全融为一体) */
@@ -988,7 +990,7 @@ const filteredItems = computed(() => {
 .profile-header-content {
   position: relative;
   z-index: 1;
-  padding: 40px 48px 24px;
+  padding: 88px 48px 24px; /* 72px TopNav + 16px 间距 */
   display: flex;
   align-items: flex-start;
   gap: 32px;
@@ -2139,22 +2141,34 @@ input:checked + .slider:before {
   to   { transform: rotate(360deg); }
 }
 
-/* 响应式：tabs 吸附位置跟随 TopNav 高度变化 */
+/* 响应式：跟随 TopNav 高度变化 */
 @media (max-width: 1024px) {
+  .mine-page-container {
+    margin-top: -56px;
+  }
+  .profile-header-content {
+    padding-top: 72px; /* 56 + 16 */
+  }
   .tabs-outer-container {
     top: 56px;
   }
   .sub-tabs-container {
-    top: 104px; /* TopNav(56) + Tabs(~48) */
+    top: 104px;
   }
 }
 
 @media (max-width: 480px) {
+  .mine-page-container {
+    margin-top: -52px;
+  }
+  .profile-header-content {
+    padding-top: 68px; /* 52 + 16 */
+  }
   .tabs-outer-container {
     top: 52px;
   }
   .sub-tabs-container {
-    top: 100px; /* TopNav(52) + Tabs(~48) */
+    top: 100px;
   }
 }
 </style>

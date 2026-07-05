@@ -170,7 +170,7 @@ const {
 }
 
 .main-content-area {
-  padding: 0 0 32px;
+  padding: 72px 0 32px;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -326,6 +326,10 @@ const {
     margin-left: 0 !important;
   }
 
+  .main-content-area {
+    padding-top: 56px;
+  }
+
   .content-container {
     padding: 16px 16px 0;
   }
@@ -339,12 +343,20 @@ const {
 }
 
 @media (min-width: 769px) and (max-width: 1024px) {
+  .main-content-area {
+    padding-top: 56px;
+  }
+
   .content-container {
     padding: 20px 24px 0;
   }
 }
 
 @media (max-width: 480px) {
+  .main-content-area {
+    padding-top: 52px;
+  }
+
   .content-container {
     padding: 12px 12px 0;
   }
