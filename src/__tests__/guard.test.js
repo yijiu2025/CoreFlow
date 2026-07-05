@@ -3,30 +3,7 @@
  * 测试 IP 匹配引擎、权限校验逻辑
  */
 import { describe, test, expect } from '@jest/globals';
-
-// 直接提取 isIpMatch 纯函数进行测试（避免 guard-config 依赖）
-function isIpMatch(clientIp, rule) {
-  if (rule === '*' || rule === '0.0.0.0/0') return true;
-  if (clientIp === rule) return true;
-
-  if (rule.includes('*')) {
-    const prefix = rule.split('*')[0];
-    return clientIp.startsWith(prefix);
-  }
-
-  if (rule.includes('/')) {
-    try {
-      const [range, bits] = rule.split('/');
-      const mask = ~((1 << (32 - bits)) - 1);
-      const ipToLong = (ip) => ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-      return (ipToLong(clientIp) & mask) === (ipToLong(range) & mask);
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-}
+import { isIpMatch } from '../utils/ip.js';
 
 describe('IP 匹配引擎 (isIpMatch)', () => {
   test('通配符 * 应匹配所有 IP', () => {
@@ -70,6 +47,27 @@ describe('IP 匹配引擎 (isIpMatch)', () => {
   test('不匹配的 IP 应返回 false', () => {
     expect(isIpMatch('192.168.1.100', '10.0.0.0/8')).toBe(false);
     expect(isIpMatch('192.168.1.100', '172.16.0.0/12')).toBe(false);
+  });
+
+  test('IPv6 精确匹配', () => {
+    expect(isIpMatch('2001:db8::1', '2001:db8::1')).toBe(true);
+    expect(isIpMatch('2001:db8::1', '2001:db8::2')).toBe(false);
+  });
+
+  test('IPv6 通配符匹配 (::/0 匹配所有)', () => {
+    expect(isIpMatch('2001:db8::1', '::/0')).toBe(true);
+  });
+
+  test('IPv6 CIDR 子网匹配', () => {
+    expect(isIpMatch('2001:db8::1', '2001:db8::/32')).toBe(true);
+    expect(isIpMatch('2001:db8::1', '2001:db8::/64')).toBe(true);
+    expect(isIpMatch('2001:db8:85a3::8a2e:370:7334', '2001:db8::/32')).toBe(true);
+    expect(isIpMatch('2001:db9::1', '2001:db8::/32')).toBe(false);
+  });
+
+  test('IPv4-mapped IPv6 兼容匹配', () => {
+    expect(isIpMatch('::ffff:192.168.1.100', '192.168.1.0/24')).toBe(true);
+    expect(isIpMatch('192.168.1.100', '::ffff:192.168.1.0/24')).toBe(true);
   });
 });
 

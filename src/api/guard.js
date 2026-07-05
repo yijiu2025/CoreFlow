@@ -11,6 +11,7 @@ import {
   registerSystemMetadata,
   registerGroupMetadata as rawRegisterGroupMetadata
 } from './guard-config.js';
+import { isIpMatch } from '../utils/ip.js';
 
 /**
  * 注册受保护的 WebSocket 路由
@@ -118,35 +119,6 @@ function checkPermission(required, user) {
   // { all: [...] } — 全部满足
   if (required.all) {
     return required.all.every(p => matchSingle(p, allows, denies));
-  }
-
-  return false;
-}
-
-/**
- * 高性能 IP 匹配引擎
- */
-function isIpMatch(clientIp, rule) {
-  if (rule === '*' || rule === '0.0.0.0/0') return true;
-  if (clientIp === rule) return true;
-
-  // 1. 处理通配符规则: 192.168.1.*
-  if (rule.includes('*')) {
-    const prefix = rule.split('*')[0];
-    return clientIp.startsWith(prefix);
-  }
-
-  // 2. 处理 CIDR 规则: 192.168.1.0/24
-  if (rule.includes('/')) {
-    try {
-      const [range, bits] = rule.split('/');
-      const mask = ~((1 << (32 - bits)) - 1);
-      const ipToLong = (ip) => ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-      return (ipToLong(clientIp) & mask) === (ipToLong(range) & mask);
-    } catch (err) {
-      console.error('IP 匹配规则错误:', err);
-      return false;
-    }
   }
 
   return false;

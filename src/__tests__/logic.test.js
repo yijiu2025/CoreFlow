@@ -5,6 +5,7 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import crypto from 'crypto';
+import { isIpMatch } from '../utils/ip.js';
 
 describe('核心逻辑', () => {
   describe('权限匹配引擎', () => {
@@ -68,25 +69,6 @@ describe('核心逻辑', () => {
   });
 
   describe('IP 匹配引擎', () => {
-    function isIpMatch(clientIp, rule) {
-      if (rule === '*' || rule === '0.0.0.0/0') return true;
-      if (clientIp === rule) return true;
-      if (rule.includes('*')) {
-        const prefix = rule.split('*')[0];
-        return clientIp.startsWith(prefix);
-      }
-      if (rule.includes('/')) {
-        try {
-          const [range, bits] = rule.split('/');
-          const mask = ~((1 << (32 - parseInt(bits))) - 1);
-          const ipToLong = (ip) => ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
-          return (ipToLong(clientIp) & mask) === (ipToLong(range) & mask);
-        } catch {
-          return false;
-        }
-      }
-      return false;
-    }
 
     it('CIDR /24 匹配', () => {
       expect(isIpMatch('192.168.1.100', '192.168.1.0/24')).toBe(true);

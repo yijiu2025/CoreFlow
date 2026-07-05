@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 
 import helmet from '@fastify/helmet';
 import { initLoader } from './loader/index.js';
+import { ApiException } from './shared/exceptions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -170,24 +171,33 @@ export async function createApp() {
 
   // 2. 增强型全局错误处理
   app.setErrorHandler((error, request, reply) => {
-    const statusCode = error.statusCode || error.status || 500;
+    let statusCode = error.statusCode || error.status || 500;
+    let bizCode = null;
+    let message = error.message || '服务器内部错误';
+    let data = null;
+
+    if (error instanceof ApiException) {
+      statusCode = error.statusCode;
+      bizCode = error.bizCode;
+      message = error.message;
+      data = error.data;
+    } else if (error.validation) {
+      // AJV 校验失败的错误由 Fastify 以 400 返回，直接格式化消息
+      statusCode = 400;
+      message = error.validation.map((v) => v.message || v.instancePath).join('; ');
+    }
 
     // 利用 Pino 结构化记录错误
     if (statusCode >= 500) {
       request.log.error({ err: error, statusCode }, '服务器内部错误');
     } else {
-      request.log.warn({ statusCode, message: error.message }, '请求异常');
+      request.log.warn({ statusCode, message }, '请求异常');
     }
 
-    // AJV 校验失败的错误由 Fastify 以 400 返回，直接格式化消息
-    const message = error.validation
-      ? error.validation.map((v) => v.message || v.instancePath).join('; ')
-      : error.message || '服务器内部错误';
-
     reply.status(statusCode).send({
-      code: statusCode,
+      code: bizCode ?? statusCode,
       message,
-      data: null,
+      data: data ?? null,
       timestamp: Date.now(),
       requestId: request.id,
       stack: isDev ? error.stack : undefined,
