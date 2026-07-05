@@ -408,7 +408,8 @@ const onBioTooltipEnter = (e: MouseEvent) => {
   const parentRect = row.closest('.profile-header-wrapper')?.getBoundingClientRect()
   if (parentRect) {
     el.style.left = rect.right - parentRect.left - 280 + 'px'
-    el.style.top = (rect.bottom - parentRect.top) + 8 + 'px'
+    el.style.top = (rect.top - parentRect.top) - 8 + 'px'
+    el.style.transform = 'translateY(-100%)'
   }
   el.style.display = 'block'
 }
