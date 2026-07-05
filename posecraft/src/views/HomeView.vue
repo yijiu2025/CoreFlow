@@ -15,7 +15,8 @@
         v-model:searchFocused="searchFocused"
         v-model:searchQuery="searchQuery"
         :page-title="getNavTitle()"
-        :show-nav-search="activeNav === 'featured' && showNavSearch"
+        :show-nav-search="(activeNav === 'featured' && showNavSearch) || activeNav === 'mine'"
+        :transparent-top="activeNav === 'mine' && mineAtTop"
         :window-width="windowWidth"
         :is-vip="isVip"
         :search-suggestions="searchSuggestions"
@@ -75,6 +76,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 import { useHome } from '@/composables/useHome'
 import Sidebar from '@/components/home/Sidebar.vue'
@@ -82,6 +84,14 @@ import TopNav from '@/components/home/TopNav.vue'
 import ProfileModal from '@/components/home/ProfileModal.vue'
 
 const themeStore = useThemeStore()
+
+// MineView 页面滚动状态（控制 TopNav 透明度）
+const mineAtTop = ref(true)
+const onMineScroll = (e: Event) => {
+  mineAtTop.value = (e as CustomEvent).detail?.atTop ?? true
+}
+onMounted(() => window.addEventListener('mine-scroll', onMineScroll as EventListener))
+onUnmounted(() => window.removeEventListener('mine-scroll', onMineScroll as EventListener))
 
 // 使用主逻辑 Composable
 const {

@@ -333,7 +333,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useHome } from '@/composables/useHome'
 import { useThemeStore } from '@/stores/theme'
 import PoseCard from '@/components/home/PoseCard.vue'
@@ -349,10 +349,23 @@ const {
   worksCount,
   likesCount,
   fetchUserProfile,
-  updateUserProfile
+  updateUserProfile,
+  activeNav
 } = useHome()
 
 const themeStore = useThemeStore()
+
+// 标记当前页面 + 滚动检测（控制 TopNav 透明度）
+onMounted(() => {
+  activeNav.value = 'mine'
+  window.addEventListener('scroll', onScroll, { passive: true })
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
+})
+const onScroll = () => {
+  window.dispatchEvent(new CustomEvent('mine-scroll', { detail: { atTop: window.scrollY < 10 } }))
+}
 const activeTab = ref('works')
 const subTab = ref('public')
 const showLoginSave = ref(true)
@@ -569,7 +582,73 @@ const myWorks = ref([
     thumbnail_url: 'https://picsum.photos/seed/pose11/400/500',
     type: 'work',
     is_private: false,
-    created_at: '2026-05-12' // 近一年内
+    created_at: '2026-05-12'
+  },
+  {
+    id: 'my-7',
+    title: '黄昏逆光人像拍摄技巧',
+    description: '利用黄金时段的逆光拍出梦幻氛围感',
+    username: '摄影小王',
+    likes_count: 89,
+    thumbnail_url: 'https://picsum.photos/seed/my7/400/460',
+    type: 'work',
+    is_private: false,
+    created_at: '2026-07-03'
+  },
+  {
+    id: 'my-8',
+    title: '城市天际线延时摄影合集',
+    description: '从日出到日落，记录城市光影变化',
+    username: '摄影小王',
+    likes_count: 203,
+    thumbnail_url: 'https://picsum.photos/seed/my8/400/350',
+    type: 'collection',
+    is_private: false,
+    created_at: '2026-06-25'
+  },
+  {
+    id: 'my-9',
+    title: '日系清新色调调色分享',
+    description: '低饱和高光偏青的日系后期思路',
+    username: '摄影小王',
+    likes_count: 312,
+    thumbnail_url: 'https://picsum.photos/seed/my9/400/480',
+    type: 'work',
+    is_private: false,
+    created_at: '2026-06-18'
+  },
+  {
+    id: 'my-10',
+    title: '咖啡馆文艺人像摆姿',
+    description: '在咖啡馆场景下的12种自然坐姿',
+    username: '摄影小王',
+    likes_count: 76,
+    thumbnail_url: 'https://picsum.photos/seed/my10/400/520',
+    type: 'work',
+    is_private: false,
+    created_at: '2026-05-30'
+  },
+  {
+    id: 'my-11',
+    title: '雨天街拍情绪大片',
+    description: '雨中漫步的电影感构图与色彩',
+    username: '摄影小王',
+    likes_count: 145,
+    thumbnail_url: 'https://picsum.photos/seed/my11/400/400',
+    type: 'work',
+    is_private: true,
+    created_at: '2026-07-01'
+  },
+  {
+    id: 'my-12',
+    title: '短剧 2 - 街头摄影日记',
+    description: '跟着镜头探索城市角落的故事',
+    username: '摄影小王',
+    likes_count: 456,
+    thumbnail_url: 'https://picsum.photos/seed/my12/400/330',
+    type: 'series',
+    is_private: false,
+    created_at: '2026-06-08'
   }
 ])
 
@@ -595,6 +674,36 @@ const myRecommends = ref([
     thumbnail_url: 'https://picsum.photos/seed/rec2/400/320',
     type: 'video',
     created_at: '2026-06-28'
+  },
+  {
+    id: 'rec-3',
+    title: '电影感暗调人像布光详解',
+    description: '一盏灯就能拍出的高级质感肖像',
+    username: '光影实验室',
+    likes_count: 3210,
+    thumbnail_url: 'https://picsum.photos/seed/rec3/400/470',
+    type: 'work',
+    created_at: '2026-06-20'
+  },
+  {
+    id: 'rec-4',
+    title: '旅行Vlog转场技巧合集',
+    description: '10种丝滑转场让你的旅拍更有节奏感',
+    username: '旅行摄影师Leo',
+    likes_count: 8870,
+    thumbnail_url: 'https://picsum.photos/seed/rec4/400/380',
+    type: 'video',
+    created_at: '2026-07-02'
+  },
+  {
+    id: 'rec-5',
+    title: '手机摄影也能出大片',
+    description: '不靠器材，只靠构图和光线的手机拍摄指南',
+    username: '手机摄影达人',
+    likes_count: 12050,
+    thumbnail_url: 'https://picsum.photos/seed/rec5/400/500',
+    type: 'template',
+    created_at: '2026-06-15'
   }
 ])
 
@@ -619,6 +728,36 @@ const myLikes = ref([
     thumbnail_url: 'https://picsum.photos/seed/fol2/400/380',
     type: 'template',
     created_at: '2026-05-15'
+  },
+  {
+    id: 'like-3',
+    title: '海边日落情侣写真指南',
+    description: '抓住黄金20分钟，拍出最浪漫的瞬间',
+    username: '海边摄影师',
+    likes_count: 5621,
+    thumbnail_url: 'https://picsum.photos/seed/like3/400/450',
+    type: 'work',
+    created_at: '2026-06-22'
+  },
+  {
+    id: 'like-4',
+    title: '古风汉服拍摄场景推荐',
+    description: '最适合拍汉服的10个北京取景地',
+    username: '国风摄影',
+    likes_count: 2890,
+    thumbnail_url: 'https://picsum.photos/seed/like4/400/510',
+    type: 'work',
+    created_at: '2026-06-10'
+  },
+  {
+    id: 'like-5',
+    title: '运动抓拍连拍参数设置',
+    description: '高速快门+连续对焦，定格每一个精彩瞬间',
+    username: '体育摄影师',
+    likes_count: 1540,
+    thumbnail_url: 'https://picsum.photos/seed/like5/400/340',
+    type: 'template',
+    created_at: '2026-05-28'
   }
 ])
 
@@ -643,6 +782,36 @@ const myCollects = ref([
     thumbnail_url: 'https://picsum.photos/seed/rec4/400/480',
     type: 'work',
     created_at: '2026-06-15'
+  },
+  {
+    id: 'col-3',
+    title: '室内极简光影构图模板',
+    description: '利用百叶窗和自然光打造高级感',
+    username: '极简主义',
+    likes_count: 4120,
+    thumbnail_url: 'https://picsum.photos/seed/col3/400/420',
+    type: 'template',
+    created_at: '2026-06-28'
+  },
+  {
+    id: 'col-4',
+    title: '夜景人像闪光灯使用技巧',
+    description: '城市夜景+离机闪，拍出杂志封面感',
+    username: '夜拍大师',
+    likes_count: 6780,
+    thumbnail_url: 'https://picsum.photos/seed/col4/400/500',
+    type: 'work',
+    created_at: '2026-07-01'
+  },
+  {
+    id: 'col-5',
+    title: '胶片质感调色预设分享',
+    description: '一键还原柯达金200的经典色调',
+    username: '胶片玩家',
+    likes_count: 9340,
+    thumbnail_url: 'https://picsum.photos/seed/col5/400/360',
+    type: 'template',
+    created_at: '2026-05-20'
   }
 ])
 
@@ -1078,7 +1247,7 @@ input:checked + .slider:before {
   transform: translateX(16px);
 }
 
-/* 二级导航 Tabs */
+/* 二级导航 Tabs — 吸附在 TopNav 下方 */
 .tabs-outer-container {
   display: flex;
   align-items: center;
@@ -1086,6 +1255,9 @@ input:checked + .slider:before {
   border-bottom: 1px solid #e2e8f0;
   padding: 0 48px;
   background: white;
+  position: sticky;
+  top: 72px;
+  z-index: 89;
 }
 
 .dark-mode .tabs-outer-container {
@@ -1971,5 +2143,18 @@ input:checked + .slider:before {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+/* 响应式：tabs 吸附位置跟随 TopNav 高度变化 */
+@media (max-width: 1024px) {
+  .tabs-outer-container {
+    top: 56px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tabs-outer-container {
+    top: 52px;
+  }
 }
 </style>

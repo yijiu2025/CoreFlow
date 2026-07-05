@@ -1,5 +1,5 @@
 <template>
-  <header class="top-nav">
+  <header class="top-nav" :class="{ transparent: transparentTop }">
     <div class="nav-left">
       <!-- 小屏：侧边栏展开按钮 -->
       <button class="sidebar-toggle-btn" @click="sidebarOpen = !sidebarOpen" title="菜单">
@@ -121,6 +121,7 @@ const searchQuery = defineModel<string>('searchQuery', { required: true })
 defineProps<{
   pageTitle: string
   showNavSearch: boolean
+  transparentTop?: boolean
   windowWidth: number
   isVip: boolean
   searchSuggestions: string[]
@@ -167,10 +168,28 @@ const goToSearch = () => {
   position: sticky;
   top: 0;
   z-index: 90;
+  transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.top-nav.transparent {
+  background: transparent;
+  box-shadow: none;
+}
+
+.top-nav:not(.transparent) {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .dark-mode .top-nav {
   background: #121214;
+}
+
+.dark-mode .top-nav.transparent {
+  background: transparent;
+}
+
+.dark-mode .top-nav:not(.transparent) {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .nav-left {
