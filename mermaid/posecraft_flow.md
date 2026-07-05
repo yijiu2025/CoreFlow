@@ -57,3 +57,61 @@ flowchart TD
 *   **相机捕获页 (`CameraView.vue`)**：
     *   *功能*：调用本地摄像头，通过 WebGL 渲染和手势/骨骼识别算法实时提取人体关节点坐标。
     *   *交互*：捕捉完成后生成 JSON 数据，回传并跳转回编辑器。
+
+---
+
+## 3. 主界面布局与功能分区结构 (HomeView Layout Structure)
+
+下面使用 Mermaid 拓扑嵌套子图定义了主页面 `HomeView.vue` 内部各功能模块和布局层次的分配关系：
+
+```mermaid
+flowchart TB
+    subgraph HomeView["工作台主页 HomeView.vue 布局结构"]
+        direction LR
+        
+        subgraph Sidebar["左侧侧边栏 .side-bar"]
+            direction TB
+            Logo["Brand Header (Logo: PoseCraft)"]
+            
+            subgraph DiscoveryGroup["发现分类"]
+                Featured["💎 精选 (featured)"]
+                Recommend["✨ 推荐 (recommend)"]
+                Nearby["📍 附近 (nearby)"]
+                AiSearch["🔍 AI 搜索 (ai-search)"]
+            end
+            
+            subgraph SocialGroup["社交分类"]
+                Following["❤️ 关注 (following)"]
+                Friends["👥 朋友 (friends)"]
+                Mine["👤 我的 (mine)"]
+            end
+            
+            subgraph BottomMenu["底部悬浮设置"]
+                Settings["⚙️ 设置 (主题/通用/AI)"]
+                About["ℹ️ 关于我们"]
+            end
+        end
+
+        subgraph MainContainer["右侧主内容容器 .main-container"]
+            direction TB
+            
+            subgraph TopNav["顶部通栏导航 .top-nav"]
+                ToggleBtn["☰ 菜单折叠/展开"]
+                PageTitle["页面标题"]
+                SearchInline["🔍 紧凑搜索框"]
+                NavActions["VIP / 消息 🔔 / 私信 ✉️"]
+                Avatar["👤 头像下拉个人菜单"]
+            end
+            
+            subgraph ContentArea["主体内容区 .content-area"]
+                direction TB
+                PoseWaterfall["姿势卡片瀑布流 (Masonry Grid)"]
+                EmptyState["空数据占位视图"]
+                LoadingState["骨架屏加载占位"]
+            end
+        end
+        
+        Sidebar --- MainContainer
+    end
+```
+
