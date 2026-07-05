@@ -110,6 +110,7 @@ watch(
   width: 100%;
   display: flex;
   flex-direction: column;
+  padding-top: 64px;
 }
 
 .content-container {

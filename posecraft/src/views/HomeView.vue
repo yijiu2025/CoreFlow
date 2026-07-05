@@ -149,7 +149,6 @@ const {
 
 .main-content-area {
   padding: 0 0 32px;
-  padding-top: max(0px, calc(64px));
   flex-grow: 1;
   display: flex;
   flex-direction: column;
