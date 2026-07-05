@@ -2,25 +2,25 @@
   <div class="mine-page-container" :class="{ 'dark-mode': themeStore.isDark }">
     <!-- 背景和个人信息区域 (颜色与主页面统一为白底/黑底) -->
     <div class="profile-header-wrapper">
-      <div class="profile-bg-cover"></div>
+      <div class="profile-bg-cover" :style="{ backgroundImage: `linear-gradient(to left, rgba(255, 255, 255, 0) 10%, rgba(255, 255, 255, 1) 90%), url(${userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'})` }"></div>
       
       <div class="profile-header-content">
         <!-- 个人圆形头像 -->
         <div class="avatar-wrapper">
-          <img src="https://picsum.photos/seed/avatar_wang/150/150" alt="avatar" class="user-avatar" />
+          <img :src="userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'" alt="avatar" class="user-avatar" />
         </div>
 
         <!-- 个人信息详情 -->
         <div class="user-info-main">
           <div class="user-name-row">
-            <h1 class="username">摄影小王</h1>
-            <span class="edit-icon" @click="showToast('编辑昵称功能后期开放')">🖊️</span>
+            <h1 class="username">{{ userProfile.username || '摄影小王' }}</h1>
+            <span class="edit-icon" @click="openEditModal">🖊️</span>
           </div>
 
           <div class="stats-row">
             <div class="stat-item">
               <span class="stat-label">关注</span>
-              <span class="stat-val">89</span>
+              <span class="stat-val">{{ followingCount }}</span>
             </div>
             <!-- 直播胶囊徽章 -->
             <div class="live-badge">
@@ -29,36 +29,31 @@
             </div>
             <div class="stat-item">
               <span class="stat-label">粉丝</span>
-              <span class="stat-val">317</span>
+              <span class="stat-val">{{ followersCount }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">获赞</span>
-              <span class="stat-val">2524</span>
+              <span class="stat-val">{{ likesCount }}</span>
             </div>
           </div>
 
           <div class="meta-info-row">
-            <span>ID: pose_craft_wang</span>
-            <span>♂️ 27岁</span>
-            <span>北京 · 朝阳</span>
+            <span>ID: {{ userProfile.personal_id || userProfile.id || '未知ID' }}</span>
+            <span v-if="userProfile.gender || userProfile.age">
+              {{ userProfile.gender === 1 ? '♂️' : userProfile.gender === 2 ? '♀️' : '' }} {{ userProfile.age ? userProfile.age + '岁' : '' }}
+            </span>
+            <span>{{ userProfile.city || '北京 · 朝阳' }}</span>
           </div>
 
           <div class="bio-row">
-            <span class="bio-short-text">✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子...</span>
+            <span class="bio-short-text">{{ userProfile.bio || '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子...' }}</span>
             <div class="bio-more-wrapper">
               <span class="bio-more">更多</span>
               <!-- 悬浮完整简介气泡 -->
               <div class="bio-tooltip-card">
-                <div class="bio-tooltip-line">✈️已飞0个国家❗️</div>
-                <div class="bio-tooltip-line">梦想是环游世界🌍</div>
-                <div class="bio-tooltip-line">中国留子👧</div>
-                <div class="bio-tooltip-line">个人存款0.000000千万💵</div>
-                <div class="bio-tooltip-line">人生是干饭💤</div>
-                <div class="bio-tooltip-line">梦游国家40+ | 我命由我不由天🌚</div>
-                <div class="bio-tooltip-line">火锅品鉴师🍪 | 5G冲浪达人🏄</div>
-                <div class="bio-tooltip-line">pdd资深买手🛍️ | 草莓🍓狂热粉丝</div>
-                <div class="bio-tooltip-line">雅思托福没考📚 清华北大没考📖</div>
-                <div class="bio-tooltip-line">国家级证件持有者(身份证)💳</div>
+                <div v-for="(line, idx) in bioLines" :key="idx" class="bio-tooltip-line">
+                  {{ line }}
+                </div>
               </div>
             </div>
           </div>
@@ -256,6 +251,68 @@
         </div>
       </div>
     </div>
+    <!-- 编辑资料弹窗 -->
+    <Transition name="modal-fade">
+      <div v-if="showEditModal" class="edit-modal-overlay" @click.self="closeEditModal">
+        <div class="edit-modal-card" :class="{ 'dark-mode': themeStore.isDark }">
+          <!-- 顶部标题栏 -->
+          <div class="edit-modal-header">
+            <span class="edit-modal-title">编辑资料</span>
+            <button class="edit-modal-close" @click="closeEditModal">✕</button>
+          </div>
+
+          <!-- 头像修改区域 -->
+          <div class="edit-avatar-section">
+            <div class="edit-avatar-wrapper" @click="showToast('头像上传功能后期开放')">
+              <img :src="editForm.avatar || userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'" alt="avatar" class="edit-avatar-img" />
+              <div class="edit-avatar-mask">
+                <span class="camera-icon">📷</span>
+              </div>
+            </div>
+            <p class="edit-avatar-hint">点击修改头像</p>
+          </div>
+
+          <!-- 表单字段 -->
+          <div class="edit-form-body">
+            <!-- 名字 -->
+            <div class="edit-field-group">
+              <label class="edit-field-label">名字</label>
+              <div class="edit-input-wrapper">
+                <input
+                  v-model="editForm.username"
+                  type="text"
+                  maxlength="20"
+                  class="edit-input"
+                  placeholder="请输入昵称"
+                />
+                <span class="edit-char-count">{{ (editForm.username || '').length }}/20</span>
+              </div>
+            </div>
+
+            <!-- 简介 -->
+            <div class="edit-field-group">
+              <label class="edit-field-label">简介</label>
+              <textarea
+                v-model="editForm.bio"
+                maxlength="300"
+                rows="5"
+                class="edit-textarea"
+                placeholder="介绍一下自己吧..."
+              ></textarea>
+              <span class="edit-bio-count">{{ (editForm.bio || '').length }}/300</span>
+            </div>
+          </div>
+
+          <!-- 底部按钮 -->
+          <div class="edit-modal-footer">
+            <button class="edit-btn-cancel" @click="closeEditModal">取消</button>
+            <button class="edit-btn-save" :class="{ saving: editSaving }" :disabled="editSaving" @click="saveEditProfile">
+              {{ editSaving ? '保存中...' : '保存' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -268,7 +325,14 @@ import PoseCard from '@/components/home/PoseCard.vue'
 const {
   openDetail,
   likeItem,
-  showToast
+  showToast,
+  userProfile,
+  followingCount,
+  followersCount,
+  worksCount,
+  likesCount,
+  fetchUserProfile,
+  updateUserProfile
 } = useHome()
 
 const themeStore = useThemeStore()
@@ -286,8 +350,58 @@ const showDateDropdown = ref(false)
 const isManageMode = ref(false)
 const selectedIds = ref<string[]>([])
 
+// 解析简介多行
+const bioLines = computed(() => {
+  if (!userProfile.value?.bio) {
+    return [
+      '✈️已飞0个国家❗️',
+      '梦想是环游世界🌍',
+      '中国留子👧',
+      '个人存款0.000000千万💵',
+      '人生是干饭💤',
+      '梦游国家40+ | 我命由我不由天🌚',
+      '火锅品鉴师🍪 | 5G冲浪达人🏄',
+      'pdd资深买手🛍️ | 草莓🍓狂热粉丝',
+      '雅思托福没考📚 清华北大没考📖',
+      '国家级证件持有者(身份证)💳'
+    ]
+  }
+  return userProfile.value.bio.split(/[|\n]/).map((line: string) => line.trim()).filter(Boolean)
+})
+
 const onSaveLoginChange = () => {
   showToast(showLoginSave.value ? '已开启保存登录信息' : '已关闭保存登录信息')
+}
+
+// 编辑资料弹窗
+const showEditModal = ref(false)
+const editSaving = ref(false)
+const editForm = ref({
+  username: '',
+  avatar: '',
+  bio: ''
+})
+
+const openEditModal = () => {
+  editForm.value = {
+    username: userProfile.value.username || '',
+    avatar: userProfile.value.avatar || '',
+    bio: userProfile.value.bio || ''
+  }
+  showEditModal.value = true
+}
+
+const closeEditModal = () => {
+  showEditModal.value = false
+}
+
+const saveEditProfile = async () => {
+  editSaving.value = true
+  const ok = await updateUserProfile({ ...editForm.value })
+  editSaving.value = false
+  if (ok) {
+    showEditModal.value = false
+  }
 }
 
 // 统一的作品及合集数据源 (增加 type、is_private、created_at 属性)
@@ -360,10 +474,6 @@ const myWorks = ref([
   }
 ])
 
-// 统计公开作品和私密作品、合集、短剧的合计数
-const worksCount = computed(() => {
-  return myWorks.value.length
-})
 
 // 推荐列表
 const myRecommends = ref([
@@ -1392,5 +1502,362 @@ input:checked + .slider:before {
 .empty-text {
   color: #64748b;
   font-size: 14px;
+}
+
+/* ===== 编辑资料弹窗 ===== */
+.edit-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.edit-modal-card {
+  background: #ffffff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-modal-card.dark-mode {
+  background: #18181b;
+  color: #f4f4f5;
+}
+
+/* 头部 */
+.edit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dark-mode .edit-modal-header {
+  border-color: #27272a;
+}
+
+.edit-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.dark-mode .edit-modal-title {
+  color: #f4f4f5;
+}
+
+.edit-modal-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.edit-modal-close:hover {
+  background: #e2e8f0;
+}
+
+.dark-mode .edit-modal-close {
+  background: #27272a;
+  color: #a1a1aa;
+}
+
+/* 头像区 */
+.edit-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0 12px;
+}
+
+.edit-avatar-wrapper {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.edit-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.edit-avatar-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.edit-avatar-wrapper:hover .edit-avatar-mask {
+  opacity: 1;
+}
+
+.camera-icon {
+  font-size: 24px;
+}
+
+.edit-avatar-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* 表单 */
+.edit-form-body {
+  padding: 4px 24px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.edit-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.dark-mode .edit-field-label {
+  color: #a1a1aa;
+}
+
+.edit-input-wrapper {
+  position: relative;
+}
+
+.edit-input {
+  width: 100%;
+  padding: 10px 46px 10px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #f8fafc;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.edit-input-sm {
+  width: 120px;
+  padding-right: 14px;
+}
+
+.edit-input:focus {
+  border-color: #ff2442;
+  background: #fff;
+}
+
+.dark-mode .edit-input {
+  background: #27272a;
+  border-color: #3f3f46;
+  color: #f4f4f5;
+}
+
+.dark-mode .edit-input:focus {
+  border-color: #ff2442;
+  background: #1c1c1f;
+}
+
+.edit-char-count {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+/* 性别选择 */
+.edit-gender-row {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-gender-btn {
+  padding: 7px 18px;
+  border-radius: 99px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-gender-btn:hover {
+  border-color: #ff2442;
+  color: #ff2442;
+}
+
+.edit-gender-btn.active {
+  border-color: #ff2442;
+  background: #fff0f3;
+  color: #ff2442;
+  font-weight: 700;
+}
+
+.dark-mode .edit-gender-btn {
+  background: #27272a;
+  border-color: #3f3f46;
+  color: #a1a1aa;
+}
+
+.dark-mode .edit-gender-btn.active {
+  background: #2d1a1e;
+  color: #ff2442;
+}
+
+/* 简介文本框 */
+.edit-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #f8fafc;
+  outline: none;
+  resize: none;
+  line-height: 1.7;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.edit-textarea:focus {
+  border-color: #ff2442;
+  background: #fff;
+}
+
+.dark-mode .edit-textarea {
+  background: #27272a;
+  border-color: #3f3f46;
+  color: #f4f4f5;
+}
+
+.dark-mode .edit-textarea:focus {
+  border-color: #ff2442;
+  background: #1c1c1f;
+}
+
+.edit-bio-count {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: right;
+}
+
+/* 底部按钮 */
+.edit-modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px 24px;
+}
+
+.edit-btn-cancel {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 15px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-btn-cancel:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.dark-mode .edit-btn-cancel {
+  background: #27272a;
+  border-color: #3f3f46;
+  color: #a1a1aa;
+}
+
+.edit-btn-save {
+  flex: 2;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #ff2442, #ff6b6b);
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(255, 36, 66, 0.3);
+}
+
+.edit-btn-save:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 36, 66, 0.4);
+}
+
+.edit-btn-save:disabled,
+.edit-btn-save.saving {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 过渡动画 */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.22s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-active .edit-modal-card,
+.modal-fade-leave-active .edit-modal-card {
+  transition: transform 0.22s ease;
+}
+
+.modal-fade-enter-from .edit-modal-card,
+.modal-fade-leave-to .edit-modal-card {
+  transform: translateY(20px) scale(0.97);
 }
 </style>

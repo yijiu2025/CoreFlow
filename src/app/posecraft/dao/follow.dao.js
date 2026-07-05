@@ -99,6 +99,7 @@ class FollowDao {
    */
   async getStats(userId) {
     const Follow = this.getModel();
+    const { Work } = sequelize.models;
 
     const followersCount = await Follow.count({
       where: { following_id: userId, delete_version: 0 }
@@ -108,7 +109,19 @@ class FollowDao {
       where: { follower_id: userId, delete_version: 0 }
     });
 
-    return { followersCount, followingCount };
+    let worksCount = 0;
+    let likesCount = 0;
+
+    if (Work) {
+      worksCount = await Work.count({
+        where: { user_id: userId, delete_version: 0 }
+      });
+      likesCount = await Work.sum('likes_count', {
+        where: { user_id: userId, delete_version: 0 }
+      }) || 0;
+    }
+
+    return { followersCount, followingCount, worksCount, likesCount };
   }
 }
 

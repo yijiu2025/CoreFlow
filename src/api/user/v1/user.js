@@ -7,6 +7,7 @@
  * PUT /user/v1/update       — 更新当前用户信息（预留）
  */
 
+import sequelize from '../../../db/index.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import UserDao from '../../../app/oauth21/dao/user.dao.js';
 
@@ -149,6 +150,120 @@ export default async function (fastify) {
         roles: user.roles || [],
         allows: allows.slice(0, 20),  // 限制返回数量
         denies: denies.slice(0, 20)
+      });
+    }
+  });
+
+  /**
+   * GET /user/v1/profile
+   * 获取当前登录用户的基础个人资料
+   */
+  registerSecureRoute(fastify, {
+    name: 'userProfileDetails',
+    alias: '获取基础资料',
+    method: 'GET',
+    url: '/profile',
+    requireLogin: true,
+    handler: async (request, reply) => {
+      const tokenUser = request.state?.user;
+      if (!tokenUser?.userId) {
+        return reply.code(401).send({
+          error: 'unauthorized',
+          error_description: '请先登录'
+        });
+      }
+
+      const { User } = sequelize.models;
+      const user = await User.findOne({
+        where: { id: tokenUser.userId }
+      });
+
+      if (!user) {
+        return reply.code(404).send({
+          error: 'user_not_found',
+          error_description: '用户不存在'
+        });
+      }
+
+      // 如果是全新用户，在此初始化个人中心基础资料
+      if (!user.bio && !user.personal_id) {
+        await user.update({
+          gender: 1,
+          age: 27,
+          city: '甘肃 · 庆阳',
+          bio: '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子👧 | 个人存款0.000000千万💵 | 人生是干饭💤 | 梦游国家40+ | 我命由我不由天🌚 | 火锅品鉴师🍪 | 5G冲浪达人🏄 | pdd资深买手🛍️ | 草莓🍓狂热粉丝 | 雅思托福没考📚 清华北大没考📖 | 国家级证件持有者(身份证)💳',
+          personal_id: 'dy14a27nhlbkd'
+        });
+      }
+
+      return reply.result.success('获取成功', {
+        id: user.id,
+        uid: user.uid,
+        username: user.username,
+        avatar: user.avatar,
+        email: user.email,
+        phone: user.phone,
+        gender: user.gender,
+        age: user.age,
+        city: user.city,
+        bio: user.bio,
+        personal_id: user.personal_id
+      });
+    }
+  });
+
+  /**
+   * PUT /user/v1/update
+   * 更新当前用户的基础个人资料
+   */
+  registerSecureRoute(fastify, {
+    name: 'updateUserProfile',
+    alias: '更新基础资料',
+    method: 'PUT',
+    url: '/update',
+    requireLogin: true,
+    handler: async (request, reply) => {
+      const tokenUser = request.state?.user;
+      if (!tokenUser?.userId) {
+        return reply.code(401).send({
+          error: 'unauthorized',
+          error_description: '请先登录'
+        });
+      }
+
+      const { username, avatar, gender, age, city, bio, personal_id } = request.body || {};
+      const { User } = sequelize.models;
+      const user = await User.findOne({
+        where: { id: tokenUser.userId }
+      });
+
+      if (!user) {
+        return reply.code(404).send({
+          error: 'user_not_found',
+          error_description: '用户不存在'
+        });
+      }
+
+      const updateData = {};
+      if (username !== undefined) updateData.username = username;
+      if (avatar !== undefined) updateData.avatar = avatar;
+      if (gender !== undefined) updateData.gender = gender;
+      if (age !== undefined) updateData.age = age;
+      if (city !== undefined) updateData.city = city;
+      if (bio !== undefined) updateData.bio = bio;
+      if (personal_id !== undefined) updateData.personal_id = personal_id;
+
+      await user.update(updateData);
+
+      return reply.result.success('更新资料成功', {
+        id: user.id,
+        username: user.username,
+        avatar: user.avatar,
+        gender: user.gender,
+        age: user.age,
+        city: user.city,
+        bio: user.bio,
+        personal_id: user.personal_id
       });
     }
   });

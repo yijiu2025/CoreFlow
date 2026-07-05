@@ -34,6 +34,18 @@ export function useHome() {
   const isVip = ref(true) // Mock VIP status
   const followingCount = ref(0)
   const followersCount = ref(0)
+  const worksCount = ref(0)
+  const likesCount = ref(0)
+  
+  const userProfile = ref<any>({
+    username: '摄影小王',
+    avatar: 'https://picsum.photos/seed/avatar_wang/150/150',
+    gender: 0,
+    age: 27,
+    city: '北京 · 朝阳',
+    bio: '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子👧...',
+    personal_id: 'pose_craft_wang'
+  })
 
   // Toast 提示
   const toastMsg = ref('')
@@ -528,11 +540,49 @@ export function useHome() {
     loadData(currentPage.value)
   }
 
+  const fetchUserProfile = async () => {
+    try {
+      const profileRes = await service.get('/user/v1/profile')
+      if (profileRes && profileRes.data) {
+        userProfile.value = profileRes.data
+        
+        const userId = profileRes.data.id
+        if (userId) {
+          const statsRes = await service.get(`/posecraft/v1/follow/stats/${userId}`)
+          if (statsRes && statsRes.data) {
+            followingCount.value = statsRes.data.followingCount || 0
+            followersCount.value = statsRes.data.followersCount || 0
+            worksCount.value = statsRes.data.worksCount || 0
+            likesCount.value = statsRes.data.likesCount || 0
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('获取用户资料失败，降级展示默认数据', e)
+    }
+  }
+
+  const updateUserProfile = async (data: any) => {
+    try {
+      const res = await service.put('/user/v1/update', data)
+      if (res && res.data) {
+        userProfile.value = { ...userProfile.value, ...res.data }
+        showToast('个人资料更新成功')
+        return true
+      }
+    } catch (e) {
+      console.error('更新资料失败', e)
+      showToast('更新资料失败，请重试')
+    }
+    return false
+  }
+
   watch(activeNav, () => {
     refreshData()
   })
 
   onMounted(async () => {
+    await fetchUserProfile()
     refreshData()
     
     // 动态获取频道配置
@@ -599,6 +649,11 @@ export function useHome() {
     isVip,
     followingCount,
     followersCount,
+    worksCount,
+    likesCount,
+    userProfile,
+    fetchUserProfile,
+    updateUserProfile,
     toastMsg,
     showToast,
     channels,

@@ -43,6 +43,32 @@ export default (sequelize, DataTypes) => {
         allowNull: true,
         comment: '头像链接'
       },
+      gender: {
+        type: DataTypes.TINYINT,
+        allowNull: true,
+        defaultValue: 0,
+        comment: '性别 (1:男, 2:女, 0:保密)'
+      },
+      age: {
+        type: DataTypes.TINYINT,
+        allowNull: true,
+        comment: '年龄'
+      },
+      city: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+        comment: '城市/地区'
+      },
+      bio: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: '个人简介'
+      },
+      personal_id: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+        comment: '个人ID'
+      },
       status: {
         type: DataTypes.TINYINT,
         defaultValue: 1,
