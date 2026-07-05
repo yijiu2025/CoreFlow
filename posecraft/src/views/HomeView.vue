@@ -158,7 +158,7 @@ const {
 }
 
 .main-content-area {
-  padding: 0 0 32px;
+  padding: 72px 0 32px; /* 顶部留出 TopNav 高度 */
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -315,7 +315,7 @@ const {
   }
 
   .main-content-area {
-    padding-top: 0;
+    padding-top: 56px;
   }
 
   .content-container {
@@ -332,7 +332,7 @@ const {
 
 @media (min-width: 769px) and (max-width: 1024px) {
   .main-content-area {
-    padding-top: 0;
+    padding-top: 56px;
   }
 
   .content-container {
@@ -341,6 +341,10 @@ const {
 }
 
 @media (max-width: 480px) {
+  .main-content-area {
+    padding-top: 52px;
+  }
+
   .content-container {
     padding: 12px 12px 0;
   }

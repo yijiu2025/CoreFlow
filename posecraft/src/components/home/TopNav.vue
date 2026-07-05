@@ -165,8 +165,10 @@ const goToSearch = () => {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 220px;
+  right: 0;
   z-index: 90;
   transition: background-color 0.3s, box-shadow 0.3s;
 }
@@ -446,6 +448,7 @@ const goToSearch = () => {
   .top-nav {
     padding: 0 16px;
     height: 56px;
+    left: 0;
   }
 
   .btn-upload span:last-child {
@@ -500,6 +503,7 @@ const goToSearch = () => {
   .top-nav {
     padding: 0 12px;
     height: 52px;
+    left: 0;
   }
 }
 
