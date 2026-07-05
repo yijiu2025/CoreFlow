@@ -2,7 +2,7 @@
   <div class="mine-page-container" :class="{ 'dark-mode': themeStore.isDark }">
     <!-- 背景和个人信息区域 (颜色与主页面统一为白底/黑底) -->
     <div class="profile-header-wrapper">
-      <div class="profile-bg-cover" :style="{ backgroundImage: `${themeStore.isDark ? 'linear-gradient(to left, rgba(18, 18, 20, 0) 10%, rgba(18, 18, 20, 1) 90%)' : 'linear-gradient(to left, rgba(255, 255, 255, 0) 10%, rgba(255, 255, 255, 1) 90%)'}, url(${userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'})` }"></div>
+      <div class="profile-bg-cover" :style="{ backgroundImage: `${themeStore.isDark ? 'linear-gradient(to right, rgba(18, 18, 20, 0) 30%, rgba(18, 18, 20, 1) 100%)' : 'linear-gradient(to right, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 1) 100%)'}, url(${userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'})` }"></div>
       
       <div class="profile-header-content">
         <!-- 个人圆形头像 -->
@@ -972,18 +972,16 @@ const filteredItems = computed(() => {
 .profile-bg-cover {
   position: absolute;
   top: 0;
-  right: 0;
-  width: 45%;
+  left: 0;
+  width: 100%;
   height: 100%;
-  background-image: linear-gradient(to left, rgba(255, 255, 255, 0) 10%, rgba(255, 255, 255, 1) 90%), url('https://picsum.photos/seed/profile_bg/1200/400');
   background-size: cover;
-  background-position: center right;
+  background-position: center;
   opacity: 0.18;
   pointer-events: none;
 }
 
 .dark-mode .profile-bg-cover {
-  background-image: linear-gradient(to left, rgba(18, 18, 20, 0) 10%, rgba(18, 18, 20, 1) 90%), url('https://picsum.photos/seed/profile_bg/1200/400');
   opacity: 0.12;
 }
 
