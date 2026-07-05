@@ -405,8 +405,7 @@ const onBioTooltipEnter = (e: MouseEvent) => {
   el.style.bottom = 'auto'
   el.style.right = 'auto'
   el.style.left = rect.right - 280 + 'px'
-  el.style.top = rect.top - 8 + 'px'
-  el.style.transform = 'translateY(-100%)'
+  el.style.top = rect.bottom + 8 + 'px'
   el.style.display = 'block'
 }
 const onBioTooltipLeave = () => {
