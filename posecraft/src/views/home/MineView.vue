@@ -402,7 +402,9 @@ const bioTooltipRef = ref<HTMLElement | null>(null)
 const onBioTooltipEnter = (e: MouseEvent) => {
   const el = bioTooltipRef.value
   if (!el) return
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const row = e.currentTarget as HTMLElement
+  const moreBtn = row.querySelector('.bio-more') as HTMLElement
+  const rect = moreBtn ? moreBtn.getBoundingClientRect() : row.getBoundingClientRect()
   el.style.position = 'fixed'
   el.style.bottom = 'auto'
   el.style.right = 'auto'
