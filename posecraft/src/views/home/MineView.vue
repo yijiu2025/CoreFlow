@@ -397,7 +397,7 @@ const bioShortText = computed(() => {
   return joined.length > 40 ? joined.slice(0, 40) + '...' : joined
 })
 
-// 简介 tooltip 定位（fixed 定位，逃逸 overflow:hidden 容器）
+// 简介 tooltip 定位（absolute 定位，跟随内容滚动）
 const bioTooltipRef = ref<HTMLElement | null>(null)
 const onBioTooltipEnter = (e: MouseEvent) => {
   const el = bioTooltipRef.value
@@ -405,11 +405,11 @@ const onBioTooltipEnter = (e: MouseEvent) => {
   const row = e.currentTarget as HTMLElement
   const moreBtn = row.querySelector('.bio-more') as HTMLElement
   const rect = moreBtn ? moreBtn.getBoundingClientRect() : row.getBoundingClientRect()
-  el.style.position = 'fixed'
-  el.style.bottom = 'auto'
-  el.style.right = 'auto'
-  el.style.left = rect.right - 280 + 'px'
-  el.style.top = rect.bottom + 8 + 'px'
+  const parentRect = row.closest('.profile-header-wrapper')?.getBoundingClientRect()
+  if (parentRect) {
+    el.style.left = rect.right - parentRect.left - 280 + 'px'
+    el.style.top = (rect.bottom - parentRect.top) + 8 + 'px'
+  }
   el.style.display = 'block'
 }
 const onBioTooltipLeave = () => {
@@ -959,7 +959,7 @@ const filteredItems = computed(() => {
   width: 100%;
   background: white;
   color: #1e293b;
-  overflow: hidden;
+  overflow: visible;
   border-bottom: 1px solid #f1f5f9;
 }
 
@@ -1126,7 +1126,7 @@ const filteredItems = computed(() => {
 }
 
 .bio-tooltip-card {
-  position: fixed;
+  position: absolute;
   width: 280px;
   background: white;
   border: 1px solid #e2e8f0;
