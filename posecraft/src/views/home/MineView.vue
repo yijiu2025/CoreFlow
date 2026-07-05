@@ -47,10 +47,10 @@
 
           <div class="bio-row">
             <span class="bio-short-text">{{ bioShortText }}</span>
-            <div class="bio-more-wrapper">
+            <div class="bio-more-wrapper" @mouseenter="onBioTooltipEnter" @mouseleave="onBioTooltipLeave">
               <span class="bio-more">更多</span>
               <!-- 悬浮完整简介气泡 -->
-              <div class="bio-tooltip-card">
+              <div ref="bioTooltipRef" class="bio-tooltip-card">
                 <div v-for="(line, idx) in bioLines" :key="idx" class="bio-tooltip-line">
                   {{ line }}
                 </div>
@@ -387,13 +387,32 @@ const bioLines = computed(() => {
   return bio.split('\n').map((line: string) => line.trim()).filter(Boolean)
 })
 
-// 简介缩略：取第一行，超过 30 字截断
+// 简介缩略：所有行拼接为一行，超过 40 字截断
 const bioShortText = computed(() => {
   const bio = userProfile.value?.bio
   if (!bio) return '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子...'
-  const first = bio.split('\n')[0]?.trim() || ''
-  return first.length > 30 ? first.slice(0, 30) + '...' : first
+  const joined = bio.split('\n').map((l: string) => l.trim()).filter(Boolean).join(' | ')
+  return joined.length > 40 ? joined.slice(0, 40) + '...' : joined
 })
+
+// 简介 tooltip 定位（fixed 定位，逃逸 overflow:hidden 容器）
+const bioTooltipRef = ref<HTMLElement | null>(null)
+const onBioTooltipEnter = (e: MouseEvent) => {
+  const el = bioTooltipRef.value
+  if (!el) return
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  el.style.position = 'fixed'
+  el.style.bottom = 'auto'
+  el.style.right = 'auto'
+  el.style.left = rect.right - 280 + 'px'
+  el.style.top = rect.top - 8 + 'px'
+  el.style.transform = 'translateY(-100%)'
+  el.style.display = 'block'
+}
+const onBioTooltipLeave = () => {
+  const el = bioTooltipRef.value
+  if (el) el.style.display = 'none'
+}
 
 const onSaveLoginChange = () => {
   showToast(showLoginSave.value ? '已开启保存登录信息' : '已关闭保存登录信息')
@@ -953,17 +972,14 @@ const filteredItems = computed(() => {
 }
 
 .bio-tooltip-card {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 8px;
+  position: fixed;
   width: 280px;
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-  z-index: 100;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  z-index: 9999;
   display: none;
   color: #334155;
   text-align: left;
@@ -976,9 +992,7 @@ const filteredItems = computed(() => {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
-.bio-more-wrapper:hover .bio-tooltip-card {
-  display: block;
-}
+/* tooltip 显示由 JS 控制，不使用 CSS hover */
 
 .bio-tooltip-line {
   font-size: 12.5px;
