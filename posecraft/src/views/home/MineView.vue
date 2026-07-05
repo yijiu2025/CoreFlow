@@ -263,13 +263,29 @@
 
           <!-- 头像修改区域 -->
           <div class="edit-avatar-section">
-            <div class="edit-avatar-wrapper" @click="showToast('头像上传功能后期开放')">
-              <img :src="editForm.avatar || userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'" alt="avatar" class="edit-avatar-img" />
-              <div class="edit-avatar-mask">
-                <span class="camera-icon">📷</span>
+            <!-- 隐藏文件选择器 -->
+            <input
+              ref="avatarFileInput"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              style="display:none"
+              @change="onAvatarFileChange"
+            />
+            <div class="edit-avatar-wrapper" @click="avatarFileInput?.click()">
+              <img
+                :src="avatarPreview || editForm.avatar || userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'"
+                alt="avatar"
+                class="edit-avatar-img"
+              />
+              <!-- 上传 loading -->
+              <div class="edit-avatar-mask" :class="{ uploading: avatarUploading }">
+                <span v-if="avatarUploading" class="avatar-spinner">⟳</span>
+                <span v-else class="camera-icon">📷</span>
               </div>
             </div>
-            <p class="edit-avatar-hint">点击修改头像</p>
+            <p class="edit-avatar-hint">
+              {{ avatarUploading ? '上传中...' : '点击修改头像' }}
+            </p>
           </div>
 
           <!-- 表单字段 -->
@@ -321,6 +337,7 @@ import { ref, computed } from 'vue'
 import { useHome } from '@/composables/useHome'
 import { useThemeStore } from '@/stores/theme'
 import PoseCard from '@/components/home/PoseCard.vue'
+import { userApi } from '@/api/user'
 
 const {
   openDetail,
@@ -382,7 +399,44 @@ const editForm = ref({
   bio: ''
 })
 
+// 头像相关状态
+const avatarFileInput = ref<HTMLInputElement | null>(null)
+const avatarPreview = ref('')      // base64 本地预览
+const avatarUploading = ref(false) // 上传中状态
+
+/**
+ * 选择文件后立即上传到后端，回显新 URL
+ */
+const onAvatarFileChange = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  // 本地预览
+  avatarPreview.value = URL.createObjectURL(file)
+  avatarUploading.value = true
+
+  try {
+    const res = await userApi.uploadAvatar(file) as any
+    const newUrl = res?.avatar || res
+    if (newUrl) {
+      editForm.value.avatar = newUrl
+      // 同步更新 userProfile 头像（头像区域实时变化）
+      userProfile.value = { ...userProfile.value, avatar: newUrl }
+    }
+    showToast('头像上传成功 🎉')
+  } catch (err: any) {
+    avatarPreview.value = '' // 回退预览
+    showToast(err?.message || '头像上传失败，请重试')
+  } finally {
+    avatarUploading.value = false
+    // 重置 input 以便重复选同一文件
+    if (input) input.value = ''
+  }
+}
+
 const openEditModal = () => {
+  avatarPreview.value = ''
   editForm.value = {
     username: userProfile.value.username || '',
     avatar: userProfile.value.avatar || '',
@@ -392,15 +446,33 @@ const openEditModal = () => {
 }
 
 const closeEditModal = () => {
+  avatarPreview.value = ''
   showEditModal.value = false
 }
 
+/**
+ * 保存昵称 + 简介（头像已在上传时实时保存）
+ */
 const saveEditProfile = async () => {
   editSaving.value = true
-  const ok = await updateUserProfile({ ...editForm.value })
-  editSaving.value = false
-  if (ok) {
+  try {
+    const res = await userApi.updateProfile({
+      username: editForm.value.username,
+      bio: editForm.value.bio
+    }) as any
+
+    // 更新本地 userProfile
+    userProfile.value = {
+      ...userProfile.value,
+      username: res?.username ?? editForm.value.username,
+      bio: res?.bio ?? editForm.value.bio
+    }
+    showToast('个人资料已保存 ✅')
     showEditModal.value = false
+  } catch (err: any) {
+    showToast(err?.message || '保存失败，请重试')
+  } finally {
+    editSaving.value = false
   }
 }
 
@@ -1859,5 +1931,23 @@ input:checked + .slider:before {
 .modal-fade-enter-from .edit-modal-card,
 .modal-fade-leave-to .edit-modal-card {
   transform: translateY(20px) scale(0.97);
+}
+
+/* 头像上传 spinner */
+.edit-avatar-mask.uploading {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.avatar-spinner {
+  font-size: 28px;
+  color: #fff;
+  display: inline-block;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 </style>

@@ -542,18 +542,18 @@ export function useHome() {
 
   const fetchUserProfile = async () => {
     try {
-      const profileRes = await service.get('/user/v1/profile')
-      if (profileRes && profileRes.data) {
-        userProfile.value = profileRes.data
-        
-        const userId = profileRes.data.id
+      const profileRes = await service.get('/user/v1/profile') as any
+      if (profileRes) {
+        userProfile.value = profileRes
+
+        const userId = profileRes.id
         if (userId) {
-          const statsRes = await service.get(`/posecraft/v1/follow/stats/${userId}`)
-          if (statsRes && statsRes.data) {
-            followingCount.value = statsRes.data.followingCount || 0
-            followersCount.value = statsRes.data.followersCount || 0
-            worksCount.value = statsRes.data.worksCount || 0
-            likesCount.value = statsRes.data.likesCount || 0
+          const statsRes = await service.get(`/posecraft/v1/follow/stats/${userId}`) as any
+          if (statsRes) {
+            followingCount.value = statsRes.followingCount || 0
+            followersCount.value = statsRes.followersCount || 0
+            worksCount.value = statsRes.worksCount || 0
+            likesCount.value = statsRes.likesCount || 0
           }
         }
       }
