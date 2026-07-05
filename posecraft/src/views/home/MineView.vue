@@ -44,8 +44,23 @@
           </div>
 
           <div class="bio-row">
-            <span>✈️ 已保存30+个姿势 | 梦想是成为独立摄影师 📸 | 探索3D骨骼中...</span>
-            <span class="bio-more" @click="showToast('点击查看更多签名内容')">更多</span>
+            <span class="bio-short-text">✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子...</span>
+            <div class="bio-more-wrapper">
+              <span class="bio-more">更多</span>
+              <!-- 悬浮完整简介气泡 -->
+              <div class="bio-tooltip-card">
+                <div class="bio-tooltip-line">✈️已飞0个国家❗️</div>
+                <div class="bio-tooltip-line">梦想是环游世界🌍</div>
+                <div class="bio-tooltip-line">中国留子👧</div>
+                <div class="bio-tooltip-line">个人存款0.000000千万💵</div>
+                <div class="bio-tooltip-line">人生是干饭💤</div>
+                <div class="bio-tooltip-line">梦游国家40+ | 我命由我不由天🌚</div>
+                <div class="bio-tooltip-line">火锅品鉴师🍪 | 5G冲浪达人🏄</div>
+                <div class="bio-tooltip-line">pdd资深买手🛍️ | 草莓🍓狂热粉丝</div>
+                <div class="bio-tooltip-line">雅思托福没考📚 清华北大没考📖</div>
+                <div class="bio-tooltip-line">国家级证件持有者(身份证)💳</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -730,9 +745,59 @@ const filteredItems = computed(() => {
   color: #cbd5e1;
 }
 
+.bio-more-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
 .bio-more {
-  color: #94a3b8;
+  color: #64748b;
   cursor: pointer;
+  font-weight: 700;
+  transition: color 0.2s;
+}
+
+.bio-more:hover {
+  color: #ff2442;
+}
+
+.bio-tooltip-card {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  width: 280px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  z-index: 100;
+  display: none;
+  color: #334155;
+  text-align: left;
+}
+
+.dark-mode .bio-tooltip-card {
+  background: #18181b;
+  border-color: #27272a;
+  color: #e4e4e7;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.bio-more-wrapper:hover .bio-tooltip-card {
+  display: block;
+}
+
+.bio-tooltip-line {
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+  white-space: nowrap;
+}
+
+.bio-tooltip-line:last-child {
+  margin-bottom: 0;
 }
 
 .header-right-actions {
