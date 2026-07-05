@@ -260,7 +260,7 @@ defineExpose({
 .search-btn-float {
   position: absolute;
   right: 8px;
-  top: 50%;
+  top: 23px;
   transform: translateY(-50%);
   width: 32px;
   height: 32px;
@@ -281,7 +281,9 @@ defineExpose({
   background: #ff2442;
 }
 
-.search-hero-bar.focused .search-btn-float {
+.search-hero-bar.focused .search-btn-float,
+.search-hero-bar.at-top .search-btn-float {
+  top: 60px;
   width: 36px;
   height: 36px;
 }
