@@ -4,6 +4,10 @@
       <img :src="item.thumbnail_url || item.image_url || '/placeholder.png'" :alt="item.title" />
       <div v-if="item.type === 'template'" class="card-badge">模板</div>
       <div v-else-if="item.type === 'video'" class="card-badge video-badge">视频</div>
+      <div v-if="item.distance" class="card-location-badge">
+        <span class="location-pin">📍</span>
+        <span>{{ item.distance }}</span>
+      </div>
     </div>
     <div class="card-info">
       <h3 class="card-title">{{ item.title || '未命名作品' }}</h3>
@@ -226,5 +230,21 @@ const formatLikes = (num: number) => {
 
 .video-badge {
   background: rgba(59, 130, 246, 0.9) !important;
+}
+
+.card-location-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(4px);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 </style>

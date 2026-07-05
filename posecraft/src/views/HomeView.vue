@@ -16,7 +16,7 @@
         v-model:searchFocused="searchFocused"
         v-model:searchQuery="searchQuery"
         :page-title="getNavTitle()"
-        :show-nav-search="showNavSearch"
+        :show-nav-search="activeNav === 'featured' && showNavSearch"
         :window-width="windowWidth"
         :is-vip="isVip"
         :search-suggestions="searchSuggestions"
@@ -30,6 +30,7 @@
       <main class="main-content-area">
         <!-- 搜索与分类 Tab (Sticky Area) -->
         <SearchHero
+          v-if="activeNav === 'featured'"
           ref="searchHeroRef"
           v-model:searchQuery="searchQuery"
           v-model:searchFocused="searchFocused"
@@ -50,6 +51,21 @@
 
           <!-- 瀑布流 -->
           <div v-else>
+            <!-- 推荐大图 Banner -->
+            <div class="featured-banner" v-if="activeNav === 'featured' && activeChannel === 'recommend' && !searchQuery.trim()">
+              <div class="banner-content">
+                <div class="banner-badge">
+                  <span class="badge-icon">🏆</span>
+                  <span>每日精选</span>
+                </div>
+                <h1 class="banner-title">今日精选 · 100+ 优质姿势模板</h1>
+                <p class="banner-desc">编辑团队精心挑选，涵盖人像、风光、创意等多个领域</p>
+              </div>
+              <button class="banner-btn" @click="showToast('已进入精选主题页面')">
+                立即探索
+              </button>
+            </div>
+
             <template v-if="filteredItems.length > 0">
               <div class="waterfall-grid">
                 <PoseCard
@@ -451,6 +467,94 @@ watch(
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* 推荐大图 Banner */
+.featured-banner {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  border-radius: 20px;
+  background-image: linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.4)), url('https://picsum.photos/seed/banner/1200/300');
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  margin-bottom: 28px;
+  color: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+.banner-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.banner-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.banner-title {
+  font-size: 24px;
+  font-weight: 850;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.banner-desc {
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+.banner-btn {
+  background: #ff2442;
+  color: #ffffff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 99px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 15px rgba(255, 36, 66, 0.25);
+  flex-shrink: 0;
+}
+
+.banner-btn:hover {
+  background: #e11d48;
+  transform: scale(1.03);
+}
+
+@media (max-width: 768px) {
+  .featured-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    height: auto;
+    background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.7)), url('https://picsum.photos/seed/banner/1200/300');
+  }
+
+  .banner-btn {
+    align-self: flex-start;
   }
 }
 </style>

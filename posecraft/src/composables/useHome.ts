@@ -183,6 +183,156 @@ export function useHome() {
     '画图生成图纸', '画图制作文字', '人体骨骼姿势提取', 'WebGL 3D人体建模'
   ]
 
+  // 1. 推荐页专属数据
+  const mockRecommendItems = ref([
+    {
+      id: 'rec-1',
+      title: '法式穿搭九宫格构图分享',
+      description: '如何在法式街角拍出高级质感穿搭图',
+      username: 'ParisianStyle',
+      likes_count: 9821,
+      thumbnail_url: 'https://picsum.photos/seed/rec1/400/500',
+      type: 'work'
+    },
+    {
+      id: 'rec-2',
+      title: '猫咪视角拍摄大片技巧',
+      description: '蹲下身子，带你用宠物的眼睛看世界',
+      username: '喵星人摄影',
+      likes_count: 5431,
+      thumbnail_url: 'https://picsum.photos/seed/rec2/400/320',
+      type: 'video'
+    },
+    {
+      id: 'rec-3',
+      title: '极限跑酷空翻连贯拆解',
+      description: '全网首发超清跑酷细节连拍模板',
+      username: '飞檐走壁',
+      likes_count: 3201,
+      thumbnail_url: 'https://picsum.photos/seed/rec3/400/540',
+      type: 'template'
+    },
+    {
+      id: 'rec-4',
+      title: '夏日海边逆光拍照姿势',
+      description: '逆光微风下，轻松抓拍那一抹唯美少女感',
+      username: '海边微风',
+      likes_count: 7654,
+      thumbnail_url: 'https://picsum.photos/seed/rec4/400/480',
+      type: 'work'
+    }
+  ])
+
+  // 2. 附近页专属数据
+  const mockNearbyItems = ref([
+    {
+      id: 'near-1',
+      title: '朝阳公园草坪 · 复古飞盘动作',
+      description: '周末来朝阳公园草坪抓拍几个超阳光的接盘瞬间吧！',
+      username: '户外飞盘小分队',
+      likes_count: 1205,
+      thumbnail_url: 'https://picsum.photos/seed/near1/400/510',
+      distance: '0.8km',
+      type: 'work'
+    },
+    {
+      id: 'near-2',
+      title: '798艺术区 · 工业风人像姿势',
+      description: '在红色红砖墙前，教你如何摆出酷炫的高冷站姿',
+      username: '冷系胶片摄影',
+      likes_count: 452,
+      thumbnail_url: 'https://picsum.photos/seed/near2/400/400',
+      distance: '1.5km',
+      type: 'template'
+    },
+    {
+      id: 'near-3',
+      title: '三里屯太古里 · 街头潮流走秀摆拍',
+      description: '捕捉最潮的街头定格瞬间，手插裤兜经典姿势',
+      username: '时尚街头指南',
+      likes_count: 2310,
+      thumbnail_url: 'https://picsum.photos/seed/near3/400/580',
+      distance: '2.4km',
+      type: 'video'
+    },
+    {
+      id: 'near-4',
+      title: '颐和园昆明湖 · 古风汉服画中人',
+      description: '在十七孔桥头斜靠凭栏，拍出温婉的江南古典质感',
+      username: '古风人像馆',
+      likes_count: 1894,
+      thumbnail_url: 'https://picsum.photos/seed/near4/400/470',
+      distance: '4.8km',
+      type: 'work'
+    }
+  ])
+
+  // 3. 关注页专属数据
+  const mockFollowingItems = ref([
+    {
+      id: 'follow-1',
+      title: '复古机车拍照动作指南',
+      description: '坐在机车上的 3 个高级姿势，女孩子也能很酷！',
+      username: '摄影师小林',
+      likes_count: 8740,
+      thumbnail_url: 'https://picsum.photos/seed/fol1/400/520',
+      type: 'work'
+    },
+    {
+      id: 'follow-2',
+      title: '极简人像棚拍用光分解',
+      description: '经典伦勃朗光布局，小白也能拍出质感肖像',
+      username: '构图研究所',
+      likes_count: 3205,
+      thumbnail_url: 'https://picsum.photos/seed/fol2/400/380',
+      type: 'template'
+    }
+  ])
+
+  // 4. 朋友页专属数据
+  const mockFriendsItems = ref([
+    {
+      id: 'friend-1',
+      title: '周末露营大餐，帐篷前合照姿势',
+      description: '和集美一起出动，野餐垫上的自然松弛感！',
+      username: '闺蜜旅行日记',
+      likes_count: 673,
+      thumbnail_url: 'https://picsum.photos/seed/fr1/400/460',
+      type: 'work'
+    },
+    {
+      id: 'friend-2',
+      title: '海边悬崖秋千抓拍机位',
+      description: '面朝大海荡起秋千的完美仰拍视角',
+      username: '阿杰爱冲浪',
+      likes_count: 1045,
+      thumbnail_url: 'https://picsum.photos/seed/fr2/400/530',
+      type: 'video'
+    }
+  ])
+
+  // 5. 我的空间专属数据
+  const mockMyItems = ref([
+    {
+      id: 'my-1',
+      title: '我的WebGL 3D人体动作模板',
+      description: '我自己设计保存的3D骨骼姿势，可以免费导出',
+      username: '摄影小王',
+      likes_count: 23,
+      thumbnail_url: 'https://picsum.photos/seed/my1/400/490',
+      type: 'template'
+    },
+    {
+      id: 'my-2',
+      title: '午后书房阅读抓拍瞬间',
+      description: '在阳光照进书架时，安静阅读的自然动作',
+      username: '摄影小王',
+      likes_count: 15,
+      thumbnail_url: 'https://picsum.photos/seed/my2/400/390',
+      type: 'work'
+    }
+  ])
+
   const channels = ref([
     { value: 'recommend', label: '推荐' },
     { value: 'pose', label: '姿势' },
@@ -222,25 +372,35 @@ export function useHome() {
 
   // 过滤后的列表
   const filteredItems = computed(() => {
-    let list = allItems.value
+    let list: any[] = []
 
-    // 根据左侧导航类型进行筛选
-    if (activeNav.value === 'mine') {
-      list = list.filter(item => item.username === authStore.user?.username || (item.author && item.author.username === authStore.user?.username))
+    if (activeNav.value === 'featured') {
+      const tplList = templates.value.map(t => ({ ...t, type: 'template' }))
+      const workList = works.value.map(w => ({ ...w, type: 'work' }))
+      const apiItems = [...tplList, ...workList]
+      list = apiItems.length > 0 ? apiItems : mockRecommendations.map(m => ({ ...m }))
+
+      // 根据 channel 进行分类筛选
+      let categoryMapVal = 'all'
+      if (activeChannel.value === 'pose') categoryMapVal = 'pose'
+      else if (activeChannel.value === 'creative') categoryMapVal = 'creative'
+      else if (activeChannel.value === 'sports') categoryMapVal = 'sports'
+      else if (activeChannel.value === 'composition') categoryMapVal = 'composition'
+      else if (activeChannel.value === 'technique') categoryMapVal = 'technique'
+
+      if (categoryMapVal !== 'all') {
+        list = list.filter(item => item.category === categoryMapVal)
+      }
+    } else if (activeNav.value === 'recommend') {
+      list = mockRecommendItems.value.map(m => ({ ...m }))
+    } else if (activeNav.value === 'nearby') {
+      list = mockNearbyItems.value.map(m => ({ ...m }))
     } else if (activeNav.value === 'following') {
-      list = list.filter(item => item.type === 'work')
-    }
-
-    // 根据 channel 进行分类筛选
-    let categoryMapVal = 'all'
-    if (activeChannel.value === 'pose') categoryMapVal = 'pose'
-    else if (activeChannel.value === 'creative') categoryMapVal = 'creative'
-    else if (activeChannel.value === 'sports') categoryMapVal = 'sports'
-    else if (activeChannel.value === 'composition') categoryMapVal = 'composition'
-    else if (activeChannel.value === 'technique') categoryMapVal = 'technique'
-
-    if (categoryMapVal !== 'all') {
-      list = list.filter(item => item.category === categoryMapVal)
+      list = mockFollowingItems.value.map(m => ({ ...m }))
+    } else if (activeNav.value === 'friends') {
+      list = mockFriendsItems.value.map(m => ({ ...m }))
+    } else if (activeNav.value === 'mine') {
+      list = mockMyItems.value.map(m => ({ ...m }))
     }
 
     // 搜索关键字筛选
