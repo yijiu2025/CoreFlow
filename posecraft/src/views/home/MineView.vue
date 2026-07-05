@@ -1340,7 +1340,7 @@ input:checked + .slider:before {
   background: #e2e8f0;
 }
 
-/* 三级导航分类栏 */
+/* 三级导航分类栏 — 吸附在二级 Tabs 下方 */
 .sub-tabs-container {
   display: flex;
   align-items: center;
@@ -1348,6 +1348,9 @@ input:checked + .slider:before {
   padding: 14px 48px;
   background: white;
   border-bottom: 1px solid #f8fafc;
+  position: sticky;
+  top: 120px; /* TopNav(72) + Tabs(~48) */
+  z-index: 88;
 }
 
 .dark-mode .sub-tabs-container {
@@ -2150,11 +2153,17 @@ input:checked + .slider:before {
   .tabs-outer-container {
     top: 56px;
   }
+  .sub-tabs-container {
+    top: 104px; /* TopNav(56) + Tabs(~48) */
+  }
 }
 
 @media (max-width: 480px) {
   .tabs-outer-container {
     top: 52px;
+  }
+  .sub-tabs-container {
+    top: 100px; /* TopNav(52) + Tabs(~48) */
   }
 }
 </style>

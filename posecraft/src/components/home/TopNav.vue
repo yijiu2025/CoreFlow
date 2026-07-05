@@ -171,9 +171,11 @@ const goToSearch = () => {
   transition: background-color 0.3s, box-shadow 0.3s;
 }
 
+/* 透明状态（mine 页面顶部时 TopNav 背景穿透） */
+:deep(.top-nav.transparent),
 .top-nav.transparent {
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .top-nav:not(.transparent) {
@@ -185,7 +187,7 @@ const goToSearch = () => {
 }
 
 .dark-mode .top-nav.transparent {
-  background: transparent;
+  background: transparent !important;
 }
 
 .dark-mode .top-nav:not(.transparent) {
