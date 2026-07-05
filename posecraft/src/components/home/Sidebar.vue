@@ -11,24 +11,24 @@
         <div class="menu-group">
           <span class="group-title">发现</span>
           <button
-            @click="activeNav = 'featured'"
-            :class="['menu-item', { active: activeNav === 'featured' }]"
+            @click="navigateTo('/')"
+            :class="['menu-item', { active: isActive('/') }]"
           >
             <span class="menu-icon">💎</span>
             <span class="menu-label">精选</span>
           </button>
 
           <button
-            @click="activeNav = 'recommend'"
-            :class="['menu-item', { active: activeNav === 'recommend' }]"
+            @click="navigateTo('/recommend')"
+            :class="['menu-item', { active: isActive('/recommend') }]"
           >
             <span class="menu-icon">✨</span>
             <span class="menu-label">推荐</span>
           </button>
 
           <button
-            @click="activeNav = 'nearby'"
-            :class="['menu-item', { active: activeNav === 'nearby' }]"
+            @click="navigateTo('/nearby')"
+            :class="['menu-item', { active: isActive('/nearby') }]"
           >
             <span class="menu-icon">📍</span>
             <span class="menu-label">附近</span>
@@ -40,24 +40,24 @@
         <div class="menu-group">
           <span class="group-title">社交</span>
           <button
-            @click="activeNav = 'following'"
-            :class="['menu-item', { active: activeNav === 'following' }]"
+            @click="navigateTo('/following')"
+            :class="['menu-item', { active: isActive('/following') }]"
           >
             <span class="menu-icon">❤️</span>
             <span class="menu-label">关注</span>
           </button>
 
           <button
-            @click="activeNav = 'friends'"
-            :class="['menu-item', { active: activeNav === 'friends' }]"
+            @click="navigateTo('/friends')"
+            :class="['menu-item', { active: isActive('/friends') }]"
           >
             <span class="menu-icon">👥</span>
             <span class="menu-label">朋友</span>
           </button>
 
           <button
-            @click="activeNav = 'mine'"
-            :class="['menu-item', { active: activeNav === 'mine' }]"
+            @click="navigateTo('/mine')"
+            :class="['menu-item', { active: isActive('/mine') }]"
           >
             <span class="menu-icon">👤</span>
             <span class="menu-label">我的</span>
@@ -126,14 +126,13 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 
 const router = useRouter()
+const route = useRoute()
 const themeStore = useThemeStore()
 
-// 双向绑定属性
-const activeNav = defineModel<string>('activeNav', { required: true })
 const sidebarOpen = defineModel<boolean>('sidebarOpen', { required: true })
 
 defineProps<{
@@ -143,6 +142,17 @@ defineProps<{
 defineEmits<{
   (e: 'showToast', msg: string): void
 }>()
+
+const isActive = (path: string) => {
+  if (path === '/') {
+    return route.path === '/'
+  }
+  return route.path.startsWith(path)
+}
+
+const navigateTo = (path: string) => {
+  router.push(path)
+}
 
 const goHome = () => {
   router.push('/')

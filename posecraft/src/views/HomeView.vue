@@ -2,7 +2,6 @@
   <div class="home-layout" :class="{ 'dark-mode': themeStore.isDark }">
     <!-- 左侧侧边栏导航 -->
     <Sidebar
-      v-model:activeNav="activeNav"
       v-model:sidebarOpen="sidebarOpen"
       :is-mobile="isMobile"
       @showToast="showToast"
@@ -28,78 +27,11 @@
 
       <!-- 主区域 -->
       <main class="main-content-area">
-        <!-- 搜索与分类 Tab (Sticky Area) -->
-        <SearchHero
-          v-if="activeNav === 'featured'"
-          ref="searchHeroRef"
-          v-model:searchQuery="searchQuery"
-          v-model:searchFocused="searchFocused"
-          v-model:activeChannel="activeChannel"
-          :search-suggestions="searchSuggestions"
-          :channels="channels"
-          :show-nav-search="showNavSearch"
-          @blur="onSearchBlur"
-          @handleStartCreate="handleStartCreate"
-        />
-
-        <!-- 内容区域 -->
-        <div class="content-container">
-          <!-- 动态网址内容 (iframe) -->
-          <div v-if="currentChannelUrl" class="w-full" style="height: calc(100vh - 120px);">
-            <iframe :src="currentChannelUrl" class="w-full h-full border-0" sandbox="allow-scripts allow-same-origin"></iframe>
-          </div>
-
-          <!-- 瀑布流 -->
-          <div v-else>
-            <!-- 推荐大图 Banner -->
-            <div class="featured-banner" v-if="activeNav === 'featured' && activeChannel === 'recommend' && !searchQuery.trim()">
-              <div class="banner-content">
-                <div class="banner-badge">
-                  <span class="badge-icon">🏆</span>
-                  <span>每日精选</span>
-                </div>
-                <h1 class="banner-title">今日精选 · 100+ 优质姿势模板</h1>
-                <p class="banner-desc">编辑团队精心挑选，涵盖人像、风光、创意等多个领域</p>
-              </div>
-              <button class="banner-btn" @click="showToast('已进入精选主题页面')">
-                立即探索
-              </button>
-            </div>
-
-            <template v-if="filteredItems.length > 0">
-              <div class="waterfall-grid">
-                <PoseCard
-                  v-for="item in filteredItems"
-                  :key="item.id"
-                  :item="item"
-                  @click="openDetail"
-                  @like="likeItem"
-                />
-              </div>
-
-              <!-- 加载更多 -->
-              <div class="load-more-container">
-                <button
-                  v-if="hasMore"
-                  @click="loadMore"
-                  :disabled="loading"
-                  class="load-more-btn"
-                >
-                  <span v-if="loading" class="animate-spin">🔄</span>
-                  <span>{{ loading ? '加载中...' : '加载更多' }}</span>
-                </button>
-                <span v-else class="no-more-text">没有更多内容了</span>
-              </div>
-            </template>
-
-            <!-- 空状态 -->
-            <div v-else class="empty-state">
-              <div class="empty-icon">🎨</div>
-              <p class="empty-text">暂无发现符合条件的内容，去尝试创作一个吧！</p>
-              <button class="empty-btn" @click="handleStartCreate">开始创作</button>
-            </div>
-          </div>
-        </div>
+        <router-view v-slot="{ Component }">
+          <keep-alive>
+            <component :is="Component" />
+          </keep-alive>
+        </router-view>
       </main>
 
       <!-- 回到顶部浮动按钮 -->
@@ -143,13 +75,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 import { useHome } from '@/composables/useHome'
 import Sidebar from '@/components/home/Sidebar.vue'
 import TopNav from '@/components/home/TopNav.vue'
-import SearchHero from '@/components/home/SearchHero.vue'
-import PoseCard from '@/components/home/PoseCard.vue'
 import ProfileModal from '@/components/home/ProfileModal.vue'
 
 const themeStore = useThemeStore()
@@ -191,16 +120,6 @@ const {
   showBackToTop,
   searchSuggestions
 } = useHome()
-
-// 用于连接 SearchHero 中的 sentinel 节点
-const searchHeroRef = ref<any>(null)
-watch(
-  () => searchHeroRef.value?.sentinelRef,
-  (newVal) => {
-    searchSentinel.value = newVal
-  },
-  { immediate: true }
-)
 </script>
 
 <style scoped>

@@ -13,9 +13,45 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'home',
       component: () => import('@/views/HomeView.vue'),
-      meta: { title: '首页' }
+      children: [
+        {
+          path: '',
+          name: 'home-featured',
+          component: () => import('@/views/home/FeaturedView.vue'),
+          meta: { title: '精选姿势' }
+        },
+        {
+          path: 'recommend',
+          name: 'home-recommend',
+          component: () => import('@/views/home/RecommendView.vue'),
+          meta: { title: '推荐内容' }
+        },
+        {
+          path: 'nearby',
+          name: 'home-nearby',
+          component: () => import('@/views/home/NearbyView.vue'),
+          meta: { title: '附近创作者' }
+        },
+        {
+          path: 'following',
+          name: 'home-following',
+          component: () => import('@/views/home/FollowingView.vue'),
+          meta: { title: '我的关注', requiresAuth: true }
+        },
+        {
+          path: 'friends',
+          name: 'home-friends',
+          component: () => import('@/views/home/FriendsView.vue'),
+          meta: { title: '朋友动态' }
+        },
+        {
+          path: 'mine',
+          name: 'home-mine',
+          component: () => import('@/views/home/MineView.vue'),
+          meta: { title: '我的空间', requiresAuth: true }
+        }
+      ]
     },
     {
       path: '/editor',

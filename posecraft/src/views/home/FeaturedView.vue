@@ -1,0 +1,322 @@
+<template>
+  <div class="featured-page-container">
+    <!-- 搜索与分类 Tab (Sticky Area) -->
+    <SearchHero
+      ref="searchHeroRef"
+      v-model:searchQuery="searchQuery"
+      v-model:searchFocused="searchFocused"
+      v-model:activeChannel="activeChannel"
+      :search-suggestions="searchSuggestions"
+      :channels="channels"
+      :show-nav-search="showNavSearch"
+      @blur="onSearchBlur"
+      @handleStartCreate="handleStartCreate"
+    />
+
+    <!-- 内容区域 -->
+    <div class="content-container">
+      <!-- 动态网址内容 (iframe) -->
+      <div v-if="currentChannelUrl" class="w-full" style="height: calc(100vh - 120px);">
+        <iframe :src="currentChannelUrl" class="w-full h-full border-0" sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
+
+      <!-- 瀑布流 -->
+      <div v-else>
+        <!-- 推荐大图 Banner -->
+        <div class="featured-banner" v-if="activeChannel === 'recommend' && !searchQuery.trim()">
+          <div class="banner-content">
+            <div class="banner-badge">
+              <span class="badge-icon">🏆</span>
+              <span>每日精选</span>
+            </div>
+            <h1 class="banner-title">今日精选 · 100+ 优质姿势模板</h1>
+            <p class="banner-desc">编辑团队精心挑选，涵盖人像、风光、创意等多个领域</p>
+          </div>
+          <button class="banner-btn" @click="showToast('已进入精选主题页面')">
+            立即探索
+          </button>
+        </div>
+
+        <template v-if="filteredItems.length > 0">
+          <div class="waterfall-grid">
+            <PoseCard
+              v-for="item in filteredItems"
+              :key="item.id"
+              :item="item"
+              @click="openDetail"
+              @like="likeItem"
+            />
+          </div>
+          <div class="load-more-container" v-if="hasMore">
+            <button class="load-more-btn" @click="loadMore" :disabled="loading">
+              <span v-if="loading" class="animate-spin">🔄</span>
+              <span>{{ loading ? '加载中...' : '加载更多' }}</span>
+            </button>
+          </div>
+          <div class="load-more-container" v-else>
+            <span class="no-more-text">没有更多内容了</span>
+          </div>
+        </template>
+        <template v-else>
+          <div class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-text">没有找到相关的姿势模板</div>
+            <button class="empty-btn" @click="searchQuery = ''">重置搜索</button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+import { useHome } from '@/composables/useHome'
+import SearchHero from '@/components/home/SearchHero.vue'
+import PoseCard from '@/components/home/PoseCard.vue'
+
+const {
+  searchQuery,
+  searchFocused,
+  activeChannel,
+  searchSuggestions,
+  channels,
+  showNavSearch,
+  filteredItems,
+  currentChannelUrl,
+  hasMore,
+  loading,
+  loadMore,
+  showToast,
+  handleStartCreate,
+  openDetail,
+  likeItem,
+  onSearchBlur,
+  searchSentinel
+} = useHome()
+
+const searchHeroRef = ref<any>(null)
+watch(
+  () => searchHeroRef.value?.sentinelRef,
+  (newVal) => {
+    searchSentinel.value = newVal
+  },
+  { immediate: true }
+)
+</script>
+
+<style scoped>
+.featured-page-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-container {
+  flex-grow: 1;
+  padding: 20px 32px 0;
+}
+
+.waterfall-grid {
+  column-count: 5;
+  column-gap: 20px;
+}
+
+@media (max-width: 1400px) {
+  .waterfall-grid {
+    column-count: 4;
+  }
+}
+
+@media (max-width: 1100px) {
+  .waterfall-grid {
+    column-count: 3;
+  }
+}
+
+@media (max-width: 768px) {
+  .waterfall-grid {
+    column-count: 2;
+  }
+}
+
+@media (max-width: 480px) {
+  .waterfall-grid {
+    column-count: 1;
+  }
+}
+
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  margin: 32px 0 48px;
+}
+
+.load-more-btn {
+  padding: 10px 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  background: white;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.dark-mode .load-more-btn {
+  background: #27272a;
+  border-color: #3f3f46;
+  color: #cbd5e1;
+}
+
+.load-more-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.no-more-text {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.featured-banner {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  border-radius: 20px;
+  background-image: linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.4)), url('https://picsum.photos/seed/banner/1200/300');
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  margin-bottom: 28px;
+  color: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+.banner-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.banner-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.banner-title {
+  font-size: 24px;
+  font-weight: 850;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.banner-desc {
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+.banner-btn {
+  background: #ff2442;
+  color: #ffffff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 99px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 15px rgba(255, 36, 66, 0.25);
+  flex-shrink: 0;
+}
+
+.banner-btn:hover {
+  background: #e11d48;
+  transform: scale(1.03);
+}
+
+@media (max-width: 768px) {
+  .featured-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    height: auto;
+    background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.7)), url('https://picsum.photos/seed/banner/1200/300');
+  }
+
+  .banner-btn {
+    align-self: flex-start;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.empty-icon {
+  font-size: 54px;
+  margin-bottom: 16px;
+}
+
+.empty-text {
+  color: #64748b;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.empty-btn {
+  padding: 10px 28px;
+  border-radius: 20px;
+  background: #ff2442;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  transition: all 0.2s;
+  box-shadow: 0 4px 10px rgba(255, 36, 66, 0.2);
+}
+
+.empty-btn:hover {
+  background: #e11d48;
+}
+</style>
