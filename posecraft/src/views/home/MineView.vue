@@ -45,15 +45,13 @@
             <span>{{ userProfile.city || '北京 · 朝阳' }}</span>
           </div>
 
-          <div class="bio-row">
+          <div class="bio-row" @mouseenter="onBioTooltipEnter" @mouseleave="onBioTooltipLeave">
             <span class="bio-short-text">{{ bioShortText }}</span>
-            <div class="bio-more-wrapper" @mouseenter="onBioTooltipEnter" @mouseleave="onBioTooltipLeave">
-              <span class="bio-more">更多</span>
-              <!-- 悬浮完整简介气泡 -->
-              <div ref="bioTooltipRef" class="bio-tooltip-card">
-                <div v-for="(line, idx) in bioLines" :key="idx" class="bio-tooltip-line">
-                  {{ line }}
-                </div>
+            <span class="bio-more">更多</span>
+            <!-- 悬浮完整简介气泡 -->
+            <div ref="bioTooltipRef" class="bio-tooltip-card">
+              <div v-for="(line, idx) in bioLines" :key="idx" class="bio-tooltip-line">
+                {{ line }}
               </div>
             </div>
           </div>
@@ -1112,11 +1110,6 @@ const filteredItems = computed(() => {
 
 .dark-mode .bio-row {
   color: #cbd5e1;
-}
-
-.bio-more-wrapper {
-  position: relative;
-  display: inline-block;
 }
 
 .bio-more {
