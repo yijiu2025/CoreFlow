@@ -192,7 +192,7 @@ watch(
   min-height: 100vh;
   width: 100%;
   display: flex;
-  background: #f8fafc;
+  background: #ffffff;
   color: #1e293b;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
   transition: background-color 0.3s, color 0.3s;
@@ -200,7 +200,7 @@ watch(
 }
 
 .dark-mode {
-  background: #09090b;
+  background: #121214;
   color: #f4f4f5;
 }
 
@@ -226,23 +226,29 @@ watch(
 }
 
 .waterfall-grid {
-  column-count: 4;
+  column-count: 5;
   column-gap: 20px;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
+  .waterfall-grid {
+    column-count: 4;
+  }
+}
+
+@media (max-width: 1100px) {
   .waterfall-grid {
     column-count: 3;
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .waterfall-grid {
     column-count: 2;
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 480px) {
   .waterfall-grid {
     column-count: 1;
   }

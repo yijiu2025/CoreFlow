@@ -1,8 +1,9 @@
 <template>
   <div class="card" @click="$emit('click', item)">
-    <div class="card-image">
+    <div class="card-image" :style="{ aspectRatio: getAspectRatio(item.thumbnail_url || item.image_url) }">
       <img :src="item.thumbnail_url || item.image_url || '/placeholder.png'" :alt="item.title" />
       <div v-if="item.type === 'template'" class="card-badge">模板</div>
+      <div v-else-if="item.type === 'video'" class="card-badge video-badge">视频</div>
     </div>
     <div class="card-info">
       <h3 class="card-title">{{ item.title || '未命名作品' }}</h3>
@@ -11,11 +12,18 @@
           <div class="author-avatar">{{ (item.username || 'U').charAt(0) }}</div>
           <span class="author-name">{{ item.username || '匿名用户' }}</span>
         </div>
-        <div class="card-likes" @click.stop="$emit('like', item)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-          </svg>
-          <span>{{ formatLikes(item.likes_count) }}</span>
+        <div class="card-likes-fav-wrapper">
+          <div class="card-likes" @click.stop="$emit('like', item)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+            <span>{{ formatLikes(item.likes_count) }}</span>
+          </div>
+          <button class="card-fav" :class="{ favorited: isFavorited }" @click.stop="toggleFavorite" title="收藏">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -23,6 +31,8 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
+
 defineProps<{
   item: any
 }>()
@@ -31,6 +41,21 @@ defineEmits<{
   (e: 'click', item: any): void
   (e: 'like', item: any): void
 }>()
+
+const isFavorited = ref(false)
+const toggleFavorite = () => {
+  isFavorited.value = !isFavorited.value
+}
+
+const getAspectRatio = (url: string) => {
+  if (!url) return '4/5'
+  const match = url.match(/\/400\/(\d+)/)
+  if (match && match[1]) {
+    const height = parseInt(match[1])
+    return `400 / ${height}`
+  }
+  return '4/5'
+}
 
 const formatLikes = (num: number) => {
   if (!num) return '0'
@@ -42,9 +67,9 @@ const formatLikes = (num: number) => {
 <style scoped>
 .card {
   break-inside: avoid;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   background: #ffffff;
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -65,37 +90,44 @@ const formatLikes = (num: number) => {
 .card-image {
   position: relative;
   overflow: hidden;
+  width: 100%;
+  background: #f1f5f9;
+}
+
+.dark-mode .card-image {
+  background: #27272a;
 }
 
 .card-image img {
   width: 100%;
+  height: 100%;
   display: block;
   object-fit: cover;
 }
 
 .card-badge {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: 8px;
+  left: 8px;
   background: rgba(255, 36, 66, 0.9);
   backdrop-filter: blur(4px);
   color: white;
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
   font-weight: 700;
 }
 
 .card-info {
-  padding: 16px;
+  padding: 10px 12px;
 }
 
 .card-title {
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 700;
   line-height: 1.5;
   color: inherit;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -112,16 +144,16 @@ const formatLikes = (num: number) => {
 .card-author {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .author-avatar {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: linear-gradient(135deg, #ff2442, #ff8b63);
   color: white;
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -129,7 +161,7 @@ const formatLikes = (num: number) => {
 }
 
 .author-name {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 500;
   color: #64748b;
   max-width: 90px;
@@ -142,6 +174,12 @@ const formatLikes = (num: number) => {
   color: #a1a1aa;
 }
 
+.card-likes-fav-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .card-likes {
   display: flex;
   align-items: center;
@@ -149,18 +187,44 @@ const formatLikes = (num: number) => {
   font-size: 12px;
   color: #94a3b8;
   transition: color 0.2s;
+  cursor: pointer;
 }
 
 .card-likes:hover {
-  color: #ef4444;
+  color: #ff2442;
 }
 
 .card-likes svg {
-  transition: fill 0.2s;
+  transition: fill 0.2s, stroke 0.2s;
 }
 
 .card-likes:hover svg {
-  fill: #ef4444;
-  stroke: #ef4444;
+  fill: #ff2442;
+  stroke: #ff2442;
+}
+
+.card-fav {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  transition: all 0.2s;
+}
+
+.card-fav:hover {
+  color: #fbbf24;
+}
+
+.card-fav.favorited svg {
+  fill: #fbbf24;
+  stroke: #fbbf24;
+}
+
+.video-badge {
+  background: rgba(59, 130, 246, 0.9) !important;
 }
 </style>

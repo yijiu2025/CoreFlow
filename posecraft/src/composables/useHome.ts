@@ -62,7 +62,7 @@ export function useHome() {
       likes_count: 2341,
       thumbnail_url: 'https://picsum.photos/seed/pose1/400/560',
       category: 'pose',
-      type: 'work'
+      type: 'video'
     },
     {
       id: 'mock-2',
@@ -92,7 +92,7 @@ export function useHome() {
       likes_count: 3420,
       thumbnail_url: 'https://picsum.photos/seed/pose4/400/600',
       category: 'composition',
-      type: 'work'
+      type: 'video'
     },
     {
       id: 'mock-5',
