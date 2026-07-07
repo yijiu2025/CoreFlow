@@ -55,8 +55,7 @@ export function useTemplateSave(
       return new File([u8arr], filename, { type: mime })
     }
 
-    // 缩略图：使用 jpeg 和 0.8 质量进行压缩，为了在详情页高清展示，去除缩放(multiplier: 1)
-    const preview = fCanvas.value.toDataURL({ format: 'jpeg', quality: 0.8, multiplier: 1 })
+
     
     // 获取原始背景图(如果存在)
     let bgDataUrl = null
@@ -69,16 +68,10 @@ export function useTemplateSave(
         }
     }
     
-    // 真实上传流程 (不使用 Base64 降级，避免超过 DB 字段长度)
+    // 真实上传流程 (只上传原始背景图，预览图交由后端实时动态合成)
     let realBgUrl = ''
-    let realPreviewUrl = ''
     
     try {
-      const previewFile = dataURLtoFile(preview, `preview_${Date.now()}.jpg`)
-      const previewUpload = await uploadFile(previewFile, 'posecraft')
-      if (!previewUpload?.url) throw new Error('预览图上传失败')
-      realPreviewUrl = previewUpload.url
-      
       if (bgDataUrl) {
          if (bgDataUrl.startsWith('data:')) {
             const bgFile = dataURLtoFile(bgDataUrl, `bg_${Date.now()}.jpg`)
@@ -88,13 +81,11 @@ export function useTemplateSave(
          } else {
             realBgUrl = bgDataUrl
          }
-      } else {
-         realBgUrl = realPreviewUrl
       }
     } catch (e: any) {
-      console.error('图片上传完全失败:', e)
+      console.error('背景图片上传失败:', e)
       alert(e.message || '图片上传失败，请检查网络或图片尺寸')
-      return // 强制阻断保存，防止由于 Base64 超长引发 DB 崩溃
+      return // 强制阻断保存
     }
     
     const fabricJson = fCanvas.value.toJSON([
@@ -115,7 +106,7 @@ export function useTemplateSave(
       ip: formData.ip,
       tags: formData.tags,
       exifInfo: formData.exifInfo || null,
-      thumb: preview,
+      thumb: realBgUrl,
       fabricData: fabricJson,
       inkData: inkCanvas?.toDataURL() || null,
       createdAt: new Date().toISOString()
@@ -127,7 +118,6 @@ export function useTemplateSave(
         description: formData.description || '',
         category: formData.category || 'pose',
         image_url: realBgUrl,
-        thumbnail_url: realPreviewUrl,
         pose_data: {
           fabricData: fabricJson,
           inkData: inkCanvas?.toDataURL() || null,

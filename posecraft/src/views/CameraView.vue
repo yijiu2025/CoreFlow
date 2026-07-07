@@ -73,6 +73,7 @@ const templateCanvasRef = ref<HTMLCanvasElement | null>(null)
 let fCanvas: fabric.Canvas | null = null
 
 const isFlashing = ref(false)
+const templateTransform = ref<any>(null)
 
 onMounted(async () => {
   if (!authStore.isLoggedIn) {
@@ -103,7 +104,7 @@ onMounted(async () => {
   const templateId = Number(route.query.template)
   if (templateId && fCanvas) {
     try {
-      const template = await templateApi.getDetail(templateId) as any
+      const template = await templateApi.getDetail(templateId, { camera: true }) as any
       let poseData = template?.pose_data
       if (typeof poseData === 'string') {
         try { poseData = JSON.parse(poseData) } catch (e) {}
@@ -166,6 +167,16 @@ onMounted(async () => {
         // 2. 计算居中偏移量，把骨架平移到画布的正中央
         const offsetX = (vw - designW * scale) / 2
         const offsetY = (vh - designH * scale) / 2
+
+        templateTransform.value = {
+          scale,
+          offsetX,
+          offsetY,
+          designW,
+          designH,
+          vw,
+          vh
+        }
 
         const rawObjects = safeFabricData.objects || []
         
@@ -239,14 +250,15 @@ const handleCapture = async () => {
     const res = await workApi.create({
       title: '随手拍作品',
       template_id: route.query.template ? Number(route.query.template) : undefined,
-      image_url: uploadResult.url
+      image_url: uploadResult.url,
+      edit_data: templateTransform.value
     }) as any
 
     // 拍照成功，跳转到作品详情或者返回首页
     if (res && res.id) {
       router.push(`/work/${res.id}`)
     } else {
-      router.push('/profile')
+      router.push('/mine')
     }
   } catch (err: any) {
     alert('保存失败: ' + err.message)

@@ -23,10 +23,10 @@
               <span class="stat-val">{{ followingCount }}</span>
             </div>
             <!-- 直播胶囊徽章 -->
-            <div class="live-badge">
+            <!-- <div class="live-badge">
               <span class="pulse-dot"></span>
               <span>1人正在直播</span>
-            </div>
+            </div> -->
             <div class="stat-item">
               <span class="stat-label">粉丝</span>
               <span class="stat-val">{{ followersCount }}</span>
@@ -48,12 +48,6 @@
           <div class="bio-row" @mouseenter="onBioTooltipEnter" @mouseleave="onBioTooltipLeave">
             <span class="bio-short-text">{{ bioShortText }}</span>
             <span class="bio-more">更多</span>
-            <!-- 悬浮完整简介气泡 -->
-            <div ref="bioTooltipRef" class="bio-tooltip-card">
-              <div v-for="(line, idx) in bioLines" :key="idx" class="bio-tooltip-line">
-                {{ line }}
-              </div>
-            </div>
           </div>
         </div>
 
@@ -98,14 +92,12 @@
           :class="['tab-btn', { active: activeTab === 'collect' }]"
         >
           <span>收藏</span>
-          <span class="tab-lock">🔒</span>
         </button>
         <button 
           @click="changeTab('history')" 
           :class="['tab-btn', { active: activeTab === 'history' }]"
         >
           <span>观看历史</span>
-          <span class="tab-lock">🔒</span>
         </button>
         <button 
           @click="changeTab('watch-later')" 
@@ -327,15 +319,30 @@
         </div>
       </div>
     </Transition>
+
+    <!-- 简介 Tooltip 弹窗（脱离文档流独立定位） -->
+    <Teleport to="body">
+      <BioTooltip
+        ref="bioTooltipRef"
+        :bio-lines="bioLines"
+        :is-dark="themeStore.isDark"
+      />
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, toRef } from 'vue'
+import { useRoute } from 'vue-router'
 import { useHome } from '@/composables/useHome'
 import { useThemeStore } from '@/stores/theme'
-import PoseCard from '@/components/home/PoseCard.vue'
+import { useAuthStore } from '@/stores/auth'
+import PoseCard from '@/components/cards/home/PoseCard.vue'
+import BioTooltip from '@/components/popovers/mine/BioTooltip.vue'
 import { userApi } from '@/api/user'
+
+const route = useRoute()
+const authStore = useAuthStore()
 
 const {
   openDetail,
@@ -357,7 +364,16 @@ const themeStore = useThemeStore()
 onMounted(() => { activeNav.value = 'mine' })
 const activeTab = ref('works')
 const subTab = ref('public')
-const showLoginSave = ref(true)
+
+watch(() => route.query.tab, (newTab) => {
+  if (newTab && typeof newTab === 'string') {
+    activeTab.value = newTab
+  }
+}, { immediate: true })
+const showLoginSave = computed({
+  get: () => authStore.saveLoginInfo,
+  set: (val) => authStore.updateSaveLoginInfo(val)
+})
 const searchQuery = ref('')
 
 // 日期筛选状态
@@ -398,23 +414,24 @@ const bioShortText = computed(() => {
 })
 
 // 简介 tooltip 定位（absolute 定位，跟随内容滚动）
-const bioTooltipRef = ref<HTMLElement | null>(null)
+const bioTooltipRef = ref<any>(null)
 const onBioTooltipEnter = (e: MouseEvent) => {
-  const el = bioTooltipRef.value
+  const comp = bioTooltipRef.value
+  if (!comp) return
+  const el = comp.$el as HTMLElement
   if (!el) return
   const row = e.currentTarget as HTMLElement
   const moreBtn = row.querySelector('.bio-more') as HTMLElement
   const rect = moreBtn ? moreBtn.getBoundingClientRect() : row.getBoundingClientRect()
-  const parentRect = row.closest('.profile-header-wrapper')?.getBoundingClientRect()
-  if (parentRect) {
-    el.style.left = rect.right - parentRect.left - 280 + 'px'
-    el.style.top = (rect.bottom - parentRect.top) + 8 + 'px'
-  }
+  el.style.left = rect.right - 280 + 'px'
+  el.style.top = rect.bottom + 8 + 'px'
   el.style.display = 'block'
 }
 const onBioTooltipLeave = () => {
-  const el = bioTooltipRef.value
-  if (el) el.style.display = 'none'
+  const comp = bioTooltipRef.value
+  if (comp && comp.$el) {
+    comp.$el.style.display = 'none'
+  }
 }
 
 const onSaveLoginChange = () => {
@@ -507,141 +524,8 @@ const saveEditProfile = async () => {
   }
 }
 
-// 统一的作品及合集数据源 (增加 type、is_private、created_at 属性)
-const myWorks = ref([
-  {
-    id: 'my-1',
-    title: '我的WebGL 3D人体动作模板',
-    description: '我自己设计保存的3D骨骼姿势，可以免费导出',
-    username: '摄影小王',
-    likes_count: 23,
-    thumbnail_url: 'https://picsum.photos/seed/my1/400/490',
-    type: 'template',
-    is_private: false,
-    created_at: '2026-07-04' // 近一周内
-  },
-  {
-    id: 'my-2',
-    title: '午后书房阅读抓拍瞬间',
-    description: '在阳光照进书架时，安静阅读的自然动作',
-    username: '摄影小王',
-    likes_count: 15,
-    thumbnail_url: 'https://picsum.photos/seed/my2/400/390',
-    type: 'work',
-    is_private: false,
-    created_at: '2026-06-20' // 近一月内
-  },
-  {
-    id: 'my-3',
-    title: '[私密] 2026年7月室内私享构图',
-    description: '仅限个人可见的复古法式卧室打光姿势',
-    username: '摄影小王',
-    likes_count: 0,
-    thumbnail_url: 'https://picsum.photos/seed/my3/400/520',
-    type: 'work',
-    is_private: true,
-    created_at: '2026-07-02' // 近一周内
-  },
-  {
-    id: 'my-4',
-    title: '我的首发胶片合集 · 经典港风',
-    description: '打包汇总 10 组港风人像经典抓拍要点',
-    username: '摄影小王',
-    likes_count: 120,
-    thumbnail_url: 'https://picsum.photos/seed/my4/400/450',
-    type: 'collection',
-    is_private: false,
-    created_at: '2026-06-10' // 近一月内
-  },
-  {
-    id: 'my-5',
-    title: '短剧 1 - 摄影大师养成之路',
-    description: '如何从零入门，摆姿设光一贴搞定',
-    username: '摄影小王',
-    likes_count: 320,
-    thumbnail_url: 'https://picsum.photos/seed/my5/400/310',
-    type: 'series',
-    is_private: false,
-    created_at: '2026-07-01' // 近一周内
-  },
-  {
-    id: 'my-6',
-    title: '老屋檐瓦当构图之美',
-    description: '北京胡同古建筑屋顶的细节抓拍',
-    username: '摄影小王',
-    likes_count: 157,
-    thumbnail_url: 'https://picsum.photos/seed/pose11/400/500',
-    type: 'work',
-    is_private: false,
-    created_at: '2026-05-12'
-  },
-  {
-    id: 'my-7',
-    title: '黄昏逆光人像拍摄技巧',
-    description: '利用黄金时段的逆光拍出梦幻氛围感',
-    username: '摄影小王',
-    likes_count: 89,
-    thumbnail_url: 'https://picsum.photos/seed/my7/400/460',
-    type: 'work',
-    is_private: false,
-    created_at: '2026-07-03'
-  },
-  {
-    id: 'my-8',
-    title: '城市天际线延时摄影合集',
-    description: '从日出到日落，记录城市光影变化',
-    username: '摄影小王',
-    likes_count: 203,
-    thumbnail_url: 'https://picsum.photos/seed/my8/400/350',
-    type: 'collection',
-    is_private: false,
-    created_at: '2026-06-25'
-  },
-  {
-    id: 'my-9',
-    title: '日系清新色调调色分享',
-    description: '低饱和高光偏青的日系后期思路',
-    username: '摄影小王',
-    likes_count: 312,
-    thumbnail_url: 'https://picsum.photos/seed/my9/400/480',
-    type: 'work',
-    is_private: false,
-    created_at: '2026-06-18'
-  },
-  {
-    id: 'my-10',
-    title: '咖啡馆文艺人像摆姿',
-    description: '在咖啡馆场景下的12种自然坐姿',
-    username: '摄影小王',
-    likes_count: 76,
-    thumbnail_url: 'https://picsum.photos/seed/my10/400/520',
-    type: 'work',
-    is_private: false,
-    created_at: '2026-05-30'
-  },
-  {
-    id: 'my-11',
-    title: '雨天街拍情绪大片',
-    description: '雨中漫步的电影感构图与色彩',
-    username: '摄影小王',
-    likes_count: 145,
-    thumbnail_url: 'https://picsum.photos/seed/my11/400/400',
-    type: 'work',
-    is_private: true,
-    created_at: '2026-07-01'
-  },
-  {
-    id: 'my-12',
-    title: '短剧 2 - 街头摄影日记',
-    description: '跟着镜头探索城市角落的故事',
-    username: '摄影小王',
-    likes_count: 456,
-    thumbnail_url: 'https://picsum.photos/seed/my12/400/330',
-    type: 'series',
-    is_private: false,
-    created_at: '2026-06-08'
-  }
-])
+const myWorks = toRef(authStore, 'myWorks')
+
 
 
 // 推荐列表
@@ -699,116 +583,25 @@ const myRecommends = ref([
 ])
 
 // 喜欢列表
-const myLikes = ref([
-  {
-    id: 'like-1',
-    title: '复古机车拍照动作指南',
-    description: '坐在机车上的 3 个高级姿势，女孩子也能很酷！',
-    username: '摄影师小林',
-    likes_count: 8740,
-    thumbnail_url: 'https://picsum.photos/seed/fol1/400/520',
-    type: 'work',
-    created_at: '2026-07-03'
-  },
-  {
-    id: 'like-2',
-    title: '极简人像棚拍用光分解',
-    description: '经典伦勃朗光布局，小白也能拍出质感肖像',
-    username: '构图研究所',
-    likes_count: 3205,
-    thumbnail_url: 'https://picsum.photos/seed/fol2/400/380',
-    type: 'template',
-    created_at: '2026-05-15'
-  },
-  {
-    id: 'like-3',
-    title: '海边日落情侣写真指南',
-    description: '抓住黄金20分钟，拍出最浪漫的瞬间',
-    username: '海边摄影师',
-    likes_count: 5621,
-    thumbnail_url: 'https://picsum.photos/seed/like3/400/450',
-    type: 'work',
-    created_at: '2026-06-22'
-  },
-  {
-    id: 'like-4',
-    title: '古风汉服拍摄场景推荐',
-    description: '最适合拍汉服的10个北京取景地',
-    username: '国风摄影',
-    likes_count: 2890,
-    thumbnail_url: 'https://picsum.photos/seed/like4/400/510',
-    type: 'work',
-    created_at: '2026-06-10'
-  },
-  {
-    id: 'like-5',
-    title: '运动抓拍连拍参数设置',
-    description: '高速快门+连续对焦，定格每一个精彩瞬间',
-    username: '体育摄影师',
-    likes_count: 1540,
-    thumbnail_url: 'https://picsum.photos/seed/like5/400/340',
-    type: 'template',
-    created_at: '2026-05-28'
-  }
-])
+const myLikes = toRef(authStore, 'myLikes')
 
 // 收藏列表
-const myCollects = ref([
-  {
-    id: 'col-1',
-    title: '极限跑酷空翻连贯拆解',
-    description: '全网首发超清跑酷细节连拍模板',
-    username: '飞檐走壁',
-    likes_count: 3201,
-    thumbnail_url: 'https://picsum.photos/seed/rec3/400/540',
-    type: 'template',
-    created_at: '2026-07-02'
-  },
-  {
-    id: 'col-2',
-    title: '夏日海边逆光拍照姿势',
-    description: '逆光微风下，轻松抓拍那一抹唯美少女感',
-    username: '海边微风',
-    likes_count: 7654,
-    thumbnail_url: 'https://picsum.photos/seed/rec4/400/480',
-    type: 'work',
-    created_at: '2026-06-15'
-  },
-  {
-    id: 'col-3',
-    title: '室内极简光影构图模板',
-    description: '利用百叶窗和自然光打造高级感',
-    username: '极简主义',
-    likes_count: 4120,
-    thumbnail_url: 'https://picsum.photos/seed/col3/400/420',
-    type: 'template',
-    created_at: '2026-06-28'
-  },
-  {
-    id: 'col-4',
-    title: '夜景人像闪光灯使用技巧',
-    description: '城市夜景+离机闪，拍出杂志封面感',
-    username: '夜拍大师',
-    likes_count: 6780,
-    thumbnail_url: 'https://picsum.photos/seed/col4/400/500',
-    type: 'work',
-    created_at: '2026-07-01'
-  },
-  {
-    id: 'col-5',
-    title: '胶片质感调色预设分享',
-    description: '一键还原柯达金200的经典色调',
-    username: '胶片玩家',
-    likes_count: 9340,
-    thumbnail_url: 'https://picsum.photos/seed/col5/400/360',
-    type: 'template',
-    created_at: '2026-05-20'
-  }
-])
+const myCollects = toRef(authStore, 'myCollects')
+
+// 历史列表
+const myHistory = toRef(authStore, 'myHistory')
 
 const changeTab = (tabName: string) => {
   activeTab.value = tabName
   exitManageMode() // 切换 Tab 自动退出管理模式
+  
+  if (tabName === 'likes') {
+    authStore.fetchMyLikes()
+  } else if (tabName === 'collect') {
+    authStore.fetchMyCollects()
+  } else if (tabName === 'history') {
+    authStore.fetchMyHistory()
+  }
 }
 
 // 选择日期筛选
@@ -929,6 +722,8 @@ const filteredItems = computed(() => {
     list = myLikes.value
   } else if (activeTab.value === 'collect') {
     list = myCollects.value
+  } else if (activeTab.value === 'history') {
+    list = myHistory.value
   }
 
   // 搜索关键字筛选
@@ -1125,39 +920,6 @@ const filteredItems = computed(() => {
   color: #ff2442;
 }
 
-.bio-tooltip-card {
-  position: absolute;
-  width: 280px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-  z-index: 100; /* 高于 TopNav(90)，确保不被导航栏遮挡 */
-  display: none;
-  color: #334155;
-  text-align: left;
-}
-
-.dark-mode .bio-tooltip-card {
-  background: #18181b;
-  border-color: #27272a;
-  color: #e4e4e7;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
-
-/* tooltip 显示由 JS 控制，不使用 CSS hover */
-
-.bio-tooltip-line {
-  font-size: 12.5px;
-  line-height: 1.6;
-  margin-bottom: 8px;
-  white-space: nowrap;
-}
-
-.bio-tooltip-line:last-child {
-  margin-bottom: 0;
-}
 
 .header-right-actions {
   display: flex;

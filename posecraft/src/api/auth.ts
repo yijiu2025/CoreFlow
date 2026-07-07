@@ -39,5 +39,9 @@ export const authApi = {
 
   /** 绑定 Token（JWT 模式，用 access_token 换取 Cookie） */
   bindToken: (token: string) =>
-    service.post('/auth/v1/bind-token', { token })
+    service.post('/auth/v1/bind-token', { token }),
+
+  /** 更新记住我状态 */
+  updateRememberMe: (rememberMe: boolean) =>
+    service.post('/auth/v1/update-remember-me', { rememberMe })
 }

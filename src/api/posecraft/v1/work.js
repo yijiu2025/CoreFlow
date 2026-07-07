@@ -4,6 +4,61 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
+import sequelize from '../../../db/index.js';
+import fs from 'fs';
+import path from 'path';
+import sharp from 'sharp';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads/posecraft');
+
+function generateSvgFromFabric(fabricData) {
+  const width = fabricData.width || 800;
+  const height = fabricData.height || 600;
+  let svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
+  
+  const objects = fabricData.objects || [];
+  for (const obj of objects) {
+    if (obj.type === 'line') {
+      const x1 = obj.x1;
+      const y1 = obj.y1;
+      const x2 = obj.x2;
+      const y2 = obj.y2;
+      const stroke = obj.stroke || '#6366f1';
+      const strokeWidth = obj.strokeWidth || 3;
+      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
+      svgContent += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" />`;
+    } else if (obj.type === 'circle') {
+      const radius = obj.radius || 8;
+      const originX = obj.originX || 'left';
+      const originY = obj.originY || 'top';
+      const cx = originX === 'center' ? obj.left : obj.left + radius;
+      const cy = originY === 'center' ? obj.top : obj.top + radius;
+      const fill = obj.fill || '#ffffff';
+      const stroke = obj.stroke || '#6366f1';
+      const strokeWidth = obj.strokeWidth || 3;
+      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
+      svgContent += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`;
+    } else if (obj.type === 'path') {
+      const stroke = obj.stroke || '#6366f1';
+      const strokeWidth = obj.strokeWidth || 3;
+      const fill = obj.fill || 'none';
+      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
+      let pathD = '';
+      if (Array.isArray(obj.path)) {
+        pathD = obj.path.map(cmd => cmd.join(' ')).join(' ');
+      } else if (typeof obj.path === 'string') {
+        pathD = obj.path;
+      }
+      if (pathD) {
+        svgContent += `<path d="${pathD}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" stroke-linejoin="round" />`;
+      }
+    }
+  }
+  svgContent += `</svg>`;
+  return Buffer.from(svgContent);
+}
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -136,6 +191,75 @@ export default async function (fastify) {
     }
   });
 
+  registerSecureRoute(fastify, {
+    name: 'getWorkPreview',
+    alias: '获取作品实时预览图',
+    method: 'GET',
+    url: '/works/:id/preview',
+    handler: async (request, reply) => {
+      const { id } = request.params;
+      const work = await workDao.findById(id);
+      if (!work) {
+        return reply.code(404).send('Work not found');
+      }
+
+      // 1. 获取关联模板的骨骼数据来进行合成
+      if (work.template_id) {
+        const { Template } = sequelize.models;
+        const template = await Template.findOne({ where: { id: work.template_id, delete_version: 0 } });
+        if (template) {
+          let poseData = template.pose_data;
+          if (typeof poseData === 'string') {
+            try { poseData = JSON.parse(poseData); } catch (e) {}
+          }
+          let fabricData = poseData?.fabricData;
+          if (typeof fabricData === 'string') {
+            try { fabricData = JSON.parse(fabricData); } catch (e) {}
+          }
+
+          if (fabricData) {
+            const width = fabricData.width || 800;
+            const height = fabricData.height || 600;
+
+            // 创建透明画布
+            const bgImg = sharp({
+              create: {
+                width,
+                height,
+                channels: 4,
+                background: { r: 0, g: 0, b: 0, alpha: 0 } // 透明
+              }
+            });
+
+            const svgBuffer = generateSvgFromFabric(fabricData);
+            try {
+              const compositeBuffer = await bgImg
+                .composite([{ input: svgBuffer, top: 0, left: 0 }])
+                .png()
+                .toBuffer();
+              reply.type('image/png');
+              return reply.send(compositeBuffer);
+            } catch (err) {
+              fastify.log.error(err, 'Composite transparent work image failed');
+            }
+          }
+        }
+      }
+
+      // 兜底返回 1x1 透明图片
+      const fallback = await sharp({
+        create: {
+          width: 1,
+          height: 1,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        }
+      }).png().toBuffer();
+      reply.type('image/png');
+      return reply.send(fallback);
+    }
+  });
+
   // 创建作品（需要登录）
   registerSecureRoute(fastify, {
     name: 'createWork',
@@ -145,7 +269,7 @@ export default async function (fastify) {
     requireLogin: true,
     permission: 'posecraft:work:create',
     handler: async (request, reply) => {
-      const { title, description, template_id, image_url, thumbnail_url, analysis_data, edit_data } = request.body;
+      const { title, description, template_id, image_url, analysis_data, edit_data } = request.body;
       const user = request.state.user;
 
       const work = await workDao.create({
@@ -153,12 +277,17 @@ export default async function (fastify) {
         description,
         template_id,
         image_url,
-        thumbnail_url,
+        thumbnail_url: '', // 下面会自动更新填充为动态预览路径
         analysis_data,
         edit_data,
         user_id: user.userId,
         status: 1,
         delete_version: 0
+      });
+
+      // 自动回填动态合成预览 URL，避免前端多传预览图
+      await work.update({
+        thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
       });
 
       return reply.result.success('创建成功', work);

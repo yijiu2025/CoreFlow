@@ -72,8 +72,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useHome } from '@/composables/useHome'
-import SearchHero from '@/components/home/SearchHero.vue'
-import PoseCard from '@/components/home/PoseCard.vue'
+import SearchHero from '@/components/widgets/home/SearchHero.vue'
+import PoseCard from '@/components/cards/home/PoseCard.vue'
 
 const {
   searchQuery,

@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import { useHome } from '@/composables/useHome'
-import PoseCard from '@/components/home/PoseCard.vue'
+import PoseCard from '@/components/cards/home/PoseCard.vue'
 
 const {
   activeNav,

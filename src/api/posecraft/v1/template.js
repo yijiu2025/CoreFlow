@@ -4,6 +4,60 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import TemplateDao from '../../../app/posecraft/dao/template.dao.js';
+import fs from 'fs';
+import path from 'path';
+import sharp from 'sharp';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads/posecraft');
+
+function generateSvgFromFabric(fabricData) {
+  const width = fabricData.width || 800;
+  const height = fabricData.height || 600;
+  let svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
+  
+  const objects = fabricData.objects || [];
+  for (const obj of objects) {
+    if (obj.type === 'line') {
+      const x1 = obj.x1;
+      const y1 = obj.y1;
+      const x2 = obj.x2;
+      const y2 = obj.y2;
+      const stroke = obj.stroke || '#6366f1';
+      const strokeWidth = obj.strokeWidth || 3;
+      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
+      svgContent += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" />`;
+    } else if (obj.type === 'circle') {
+      const radius = obj.radius || 8;
+      const originX = obj.originX || 'left';
+      const originY = obj.originY || 'top';
+      const cx = originX === 'center' ? obj.left : obj.left + radius;
+      const cy = originY === 'center' ? obj.top : obj.top + radius;
+      const fill = obj.fill || '#ffffff';
+      const stroke = obj.stroke || '#6366f1';
+      const strokeWidth = obj.strokeWidth || 3;
+      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
+      svgContent += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`;
+    } else if (obj.type === 'path') {
+      const stroke = obj.stroke || '#6366f1';
+      const strokeWidth = obj.strokeWidth || 3;
+      const fill = obj.fill || 'none';
+      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
+      let pathD = '';
+      if (Array.isArray(obj.path)) {
+        pathD = obj.path.map(cmd => cmd.join(' ')).join(' ');
+      } else if (typeof obj.path === 'string') {
+        pathD = obj.path;
+      }
+      if (pathD) {
+        svgContent += `<path d="${pathD}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" stroke-linejoin="round" />`;
+      }
+    }
+  }
+  svgContent += `</svg>`;
+  return Buffer.from(svgContent);
+}
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -104,6 +158,7 @@ export default async function (fastify) {
     url: '/templates/:id',
     handler: async (request, reply) => {
       const { id } = request.params;
+      const { camera } = request.query || {};
 
       const template = await TemplateDao.findById(id);
 
@@ -121,19 +176,82 @@ export default async function (fastify) {
         }
       }
 
-      // 机密信息保护：pose_data 只有创建者本人、管理员、或具备相关权限的用户才能获取
+      // 机密信息保护：pose_data 只有在辅助拍照并且有权限时才返回，其它普通浏览情况一律剥离
       const isCreator = template.user_id == user?.userId;
-      // 这里可以按需配置专门的权限点，比如 'posecraft:template:purchase' 或 'posecraft:vip:premium_templates'
       const hasPrivilege = user?.permissions?.allows?.some((p) => 
         ['posecraft:work:read', 'posecraft:vip:premium_templates', 'posecraft:template:purchase'].includes(p)
       );
+      const isAuthorized = isCreator || isAdmin || hasPrivilege;
 
-      if (!isCreator && !isAdmin && !hasPrivilege) {
-        // 如果没有权限获取机密信息，则剥离 pose_data
+      if ((camera === 'true' || camera === true) && isAuthorized) {
+        // 辅助拍照且有权限时，只返回 pose_data 纯模板数据，不需要返回底图
+        template.setDataValue('image_url', undefined);
+        template.setDataValue('thumbnail_url', undefined);
+      } else {
+        // 其它任何情况下，均不向前端返回 pose_data 骨骼明文数据，只能加载渲染图
         template.setDataValue('pose_data', undefined);
       }
 
       return reply.result.success('获取成功', template);
+    }
+  });
+
+  /**
+   * GET /templates/:id/preview - 后端实时合成模板预览图
+   */
+  registerSecureRoute(fastify, {
+    name: 'getTemplatePreview',
+    alias: '获取模板实时预览图',
+    method: 'GET',
+    url: '/templates/:id/preview',
+    handler: async (request, reply) => {
+      const { id } = request.params;
+      const template = await TemplateDao.findById(id);
+      if (!template) {
+        return reply.code(404).send('Template not found');
+      }
+
+      // 获取 pose_data 和 fabricData
+      let poseData = template.pose_data;
+      if (typeof poseData === 'string') {
+        try { poseData = JSON.parse(poseData); } catch (e) {}
+      }
+      let fabricData = poseData?.fabricData;
+      if (typeof fabricData === 'string') {
+        try { fabricData = JSON.parse(fabricData); } catch (e) {}
+      }
+
+      let width = fabricData?.width || 800;
+      let height = fabricData?.height || 600;
+
+      // 1. 初始化透明背景图 (预览图应为透明背景的纯模板/骨架数据)
+      const bgImg = sharp({
+        create: {
+          width,
+          height,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 } // 透明背景
+        }
+      });
+
+      // 2. 如果存在骨骼数据，生成 SVG 并进行合成
+      if (fabricData) {
+        const svgBuffer = generateSvgFromFabric(fabricData);
+        try {
+          const compositeBuffer = await bgImg
+            .composite([{ input: svgBuffer, top: 0, left: 0 }])
+            .png()
+            .toBuffer();
+          reply.type('image/png');
+          return reply.send(compositeBuffer);
+        } catch (err) {
+          fastify.log.error(err, 'Composite transparent template image failed');
+        }
+      }
+
+      const finalBuffer = await bgImg.png().toBuffer();
+      reply.type('image/png');
+      return reply.send(finalBuffer);
     }
   });
 
@@ -149,7 +267,7 @@ export default async function (fastify) {
     requireLogin: true,
     permission: 'posecraft:work:create', // 已合并模板与作品权限
     handler: async (request, reply) => {
-      const { title, description, category, image_url, thumbnail_url, pose_data, tags } = request.body;
+      const { title, description, category, image_url, pose_data, tags } = request.body;
       const user = request.state.user;
 
       const template = await TemplateDao.create({
@@ -157,13 +275,37 @@ export default async function (fastify) {
         description,
         category: category || 'general',
         image_url,
-        thumbnail_url,
+        thumbnail_url: '', // 下面会自动更新填充为动态预览路径
         pose_data,
         tags,
         user_id: user.userId,
         status: 2, // 默认 2 - 待审核，不可直接公开
         delete_version: 0
       });
+
+      // 自动回填动态合成预览 URL，避免前端多传预览图
+      await template.update({
+        thumbnail_url: `/posecraft/v1/templates/${template.id}/preview`
+      });
+
+      // 同步保存底图为一个单独的作品 (Work)
+      if (image_url) {
+        const { Work } = sequelize.models;
+        const work = await Work.create({
+          user_id: user.userId,
+          template_id: template.id,
+          title: title || '模板底图作品',
+          description: description || '',
+          image_url: image_url,
+          thumbnail_url: `/posecraft/v1/works/temp_${template.id}/preview`,
+          edit_data: { is_template_work: true },
+          status: 1, // 模板底图作品公开可见
+          delete_version: 0
+        });
+        await work.update({
+          thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
+        });
+      }
 
       return reply.result.success('发布成功，已提交管理员审核', template);
     }
@@ -225,6 +367,9 @@ export default async function (fastify) {
         return reply.result.forbidden('无权编辑他人的模板');
       }
 
+      // 强制覆盖或回填为动态合成的预览 URL，避免浪费带宽与存储
+      data.thumbnail_url = `/posecraft/v1/templates/${id}/preview`;
+
       // 修改后如果需要重新审核，在此处将 status 重置为 2（非管理员修改后重置）
       const isAdmin = checkDataPermission({ user_id: -1 }, user);
       if (data.status === undefined && !isAdmin) {
@@ -232,6 +377,38 @@ export default async function (fastify) {
       }
 
       const updated = await TemplateDao.update(id, data);
+
+      // 同步更新或创建对应的底图作品 (Work)
+      const { Work } = sequelize.models;
+      let work = await Work.findOne({
+        where: {
+          template_id: id,
+          delete_version: 0
+        }
+      });
+      const workData = {
+        title: data.title || template.title,
+        description: data.description || template.description,
+        image_url: data.image_url || template.image_url,
+        status: 1
+      };
+
+      if (work) {
+        // 更新存在的关联底图作品
+        await work.update(workData);
+      } else if (data.image_url || template.image_url) {
+        work = await Work.create({
+          user_id: template.user_id,
+          template_id: id,
+          ...workData,
+          edit_data: { is_template_work: true },
+          delete_version: 0
+        });
+        await work.update({
+          thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
+        });
+      }
+
       return reply.result.success(
         isAdmin ? '更新成功' : '更新成功，已进入重新审核阶段',
         updated
@@ -263,6 +440,15 @@ export default async function (fastify) {
 
       // Admin or owner deleting
       await TemplateDao.delete(id, template.user_id); 
+
+      // 同步级联删除关联的模板底图作品
+      const { Work } = sequelize.models;
+      const workDao = (await import('../../../app/posecraft/dao/work.dao.js')).default;
+      const templateWork = await Work.findOne({ where: { template_id: id, delete_version: 0 } });
+      if (templateWork) {
+        await workDao.delete(templateWork.id, templateWork.user_id);
+      }
+
       return reply.result.success('删除成功');
     }
   });

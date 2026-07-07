@@ -55,17 +55,15 @@
       @click="sidebarOpen = false"
     ></div>
 
-    <!-- 用户信息 Modal -->
-    <ProfileModal
-      v-if="showProfileModal"
-      v-model:saveLoginInfo="saveLoginInfo"
-      :is-vip="isVip"
-      :following-count="followingCount"
-      :followers-count="followersCount"
-      @close="showProfileModal = false"
+
+
+    <!-- 系统设置 Modal -->
+    <SettingsModal
+      v-if="showSettingsModal"
+      v-model:showTemplate="showTemplate"
+      :active-section="settingsActiveSection"
+      @close="showSettingsModal = false"
       @showToast="showToast"
-      @logout="handleLogout"
-      @login="redirectToLogin"
     />
 
     <!-- 简易通知 Toast 提示 -->
@@ -80,9 +78,10 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useHome } from '@/composables/useHome'
-import Sidebar from '@/components/home/Sidebar.vue'
-import TopNav from '@/components/home/TopNav.vue'
-import ProfileModal from '@/components/home/ProfileModal.vue'
+import Sidebar from '@/components/layouts/home/Sidebar.vue'
+import TopNav from '@/components/layouts/home/TopNav.vue'
+
+import SettingsModal from '@/components/modals/home/SettingsModal.vue'
 
 const themeStore = useThemeStore()
 const route = useRoute()
@@ -116,7 +115,9 @@ const {
   activeNav,
   activeChannel,
   searchSentinel,
-  showProfileModal,
+  showTemplate,
+  showSettingsModal,
+  settingsActiveSection,
   saveLoginInfo,
   isVip,
   followingCount,
@@ -134,8 +135,6 @@ const {
   onSearchBlur,
   goToSearch,
   scrollToTop,
-  handleLogout,
-  redirectToLogin,
   hasMore,
   loading,
   loadMore,

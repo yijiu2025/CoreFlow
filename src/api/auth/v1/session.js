@@ -12,6 +12,9 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { verify } from '../../../app/oauth21/crypto/jwt.js';
 import { createSession } from '../../../auth/session.js';
 import { getSessionStore } from '../../../redis/session-store.js';
+import sequelize from '../../../db/index.js';
+import crypto from 'node:crypto';
+import { signCookie, COOKIE_OPTIONS, SHORT_SESSION_TTL, LONG_SESSION_TTL } from '../../../auth/cookie.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -173,6 +176,83 @@ export default async function (fastify) {
       reply.clearCookie('sid', { path: '/' });
       reply.clearCookie('sid_r', { path: '/' });
       return reply.result.success('Cookie 已清除');
+    }
+  });
+
+  /**
+   * POST /auth/v1/update-remember-me
+   *
+   * 动态更新当前会话的 "记住我/保存登录信息" 状态
+   */
+  registerSecureRoute(fastify, {
+    name: 'updateRememberMe',
+    alias: '更新记住我状态',
+    method: 'POST',
+    url: '/update-remember-me',
+    requireLogin: true,
+    handler: async (request, reply) => {
+      const { rememberMe } = request.body || {};
+      const user = request.state.user;
+      if (!user?.sessionId) {
+        return reply.code(401).send({ code: 401, message: '未登录' });
+      }
+
+      const redis = request.server.redis;
+      const sessionId = user.sessionId;
+
+      // 1. 读取当前 Redis 会话
+      if (redis) {
+        const raw = await redis.get(`session:${sessionId}`);
+        if (raw) {
+          const sessionData = JSON.parse(raw);
+          sessionData.rememberMe = !!rememberMe;
+          const ttl = rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
+          await redis.set(`session:${sessionId}`, JSON.stringify(sessionData), { EX: ttl });
+        }
+      }
+
+      // 2. 更新或删除数据库中的 refresh_token 记录，以及更新客户端的 sid_r / sid Cookie
+      const { SessionToken } = sequelize.models;
+      const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
+      const tokenRecord = await SessionToken.findOne({ where: { token: tokenHash, revoked: false } });
+
+      if (rememberMe) {
+        let refreshToken = tokenRecord?.refresh_token;
+        if (!refreshToken) {
+          refreshToken = crypto.randomBytes(32).toString('hex');
+          if (tokenRecord) {
+            await tokenRecord.update({ refresh_token: refreshToken });
+          }
+        }
+
+        if (refreshToken) {
+          if (redis) {
+            await redis.set(`refresh:${refreshToken}`, sessionId, { EX: LONG_SESSION_TTL });
+          }
+          const sidRValue = signCookie(refreshToken, 0);
+          reply.setCookie('sid_r', sidRValue, {
+            ...COOKIE_OPTIONS.SID_R,
+            maxAge: LONG_SESSION_TTL * 1000
+          });
+        }
+      } else {
+        if (tokenRecord?.refresh_token) {
+          if (redis) {
+            await redis.del(`refresh:${tokenRecord.refresh_token}`);
+          }
+          await tokenRecord.update({ refresh_token: null });
+        }
+        reply.clearCookie('sid_r', { path: '/' });
+      }
+
+      // 更新客户端主 sid cookie 的 maxAge
+      const sidValue = signCookie(sessionId, user.accessCount || 0);
+      reply.setCookie('sid', sidValue, {
+        ...COOKIE_OPTIONS.SID,
+        maxAge: rememberMe ? LONG_SESSION_TTL * 1000 : SHORT_SESSION_TTL * 1000
+      });
+
+      return reply.result.success('保存登录状态更新成功', { rememberMe: !!rememberMe });
     }
   });
 }

@@ -149,19 +149,19 @@ import { useAuthStore } from '@/stores/auth'
 import { templateApi } from '@/api/template'
 import { useCanvasStore, useToolStore, useHistoryStore } from '@/stores/editor'
 import { parseImageExif } from '@/utils/exif'
-import ColorFloatPanel from '@/components/color/ColorFloatPanel.vue'
-import StyleFloatPanel from '@/components/brush/StyleFloatPanel.vue'
-import HelpModal from '@/components/modals/HelpModal.vue'
-import SaveModal from '@/components/modals/SaveModal.vue'
-import ExitModal from '@/components/modals/ExitModal.vue'
+import ColorFloatPanel from '@/components/panels/editor/ColorFloatPanel.vue'
+import StyleFloatPanel from '@/components/panels/editor/StyleFloatPanel.vue'
+import HelpModal from '@/components/modals/editor/HelpModal.vue'
+import SaveModal from '@/components/modals/editor/SaveModal.vue'
+import ExitModal from '@/components/modals/editor/ExitModal.vue'
 import { v4 as uuidv4 } from 'uuid'
 import * as fabricLib from 'fabric'
 
 // 导入重构拆分的子组件
-import TopBar from '@/components/editor/TopBar.vue'
-import LeftToolbar from '@/components/editor/LeftToolbar.vue'
-import CanvasArea from '@/components/editor/CanvasArea.vue'
-import RightPanel from '@/components/editor/RightPanel.vue'
+import TopBar from '@/components/layouts/editor/TopBar.vue'
+import LeftToolbar from '@/components/layouts/editor/LeftToolbar.vue'
+import CanvasArea from '@/components/layouts/editor/CanvasArea.vue'
+import RightPanel from '@/components/layouts/editor/RightPanel.vue'
 
 // 导入核心画布操作 Composables
 import { useHistory } from '@/composables/canvas/useHistory'
@@ -526,7 +526,6 @@ const { spacePressed } = useKeyboard({
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import '@/assets/styles/common.css';
 * { box-sizing: border-box; }
 

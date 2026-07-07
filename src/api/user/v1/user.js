@@ -199,7 +199,6 @@ export default async function (fastify) {
       }
 
       return reply.result.success('获取成功', {
-        id: user.id,
         uid: user.uid,
         username: user.username,
         avatar: user.avatar,

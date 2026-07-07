@@ -13,8 +13,8 @@ export const templateApi = {
     service.get('/posecraft/v1/templates/popular', { params: { limit } }),
 
   /** 获取模板详情 */
-  getDetail: (id: number) =>
-    service.get(`/posecraft/v1/templates/${id}`),
+  getDetail: (id: number, params?: { camera?: boolean }) =>
+    service.get(`/posecraft/v1/templates/${id}`, { params }),
 
   /** 创建模板 */
   create: (data: {

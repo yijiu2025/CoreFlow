@@ -98,20 +98,32 @@ class FollowDao {
    * 获取用户的粉丝数和关注数
    */
   async getStats(userId) {
-    const Follow = this.getModel();
-    const { Work } = sequelize.models;
+    const followStats = await this.getFollowStatsCount(userId);
+    const workStats = await this.getWorkStatsCount(userId);
+    return { ...followStats, ...workStats };
+  }
 
+  /**
+   * 仅获取粉丝数和关注数
+   */
+  async getFollowStatsCount(userId) {
+    const Follow = this.getModel();
     const followersCount = await Follow.count({
       where: { following_id: userId, delete_version: 0 }
     });
-
     const followingCount = await Follow.count({
       where: { follower_id: userId, delete_version: 0 }
     });
+    return { followersCount, followingCount };
+  }
 
+  /**
+   * 仅获取作品数和获赞数
+   */
+  async getWorkStatsCount(userId) {
+    const { Work } = sequelize.models;
     let worksCount = 0;
     let likesCount = 0;
-
     if (Work) {
       worksCount = await Work.count({
         where: { user_id: userId, delete_version: 0 }
@@ -120,8 +132,7 @@ class FollowDao {
         where: { user_id: userId, delete_version: 0 }
       }) || 0;
     }
-
-    return { followersCount, followingCount, worksCount, likesCount };
+    return { worksCount, likesCount };
   }
 }
 

@@ -43,7 +43,7 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import LoginModal from '@/components/modals/LoginModal.vue'
+import LoginModal from '@/components/modals/login/LoginModal.vue'
 
 const router = useRouter()
 const route = useRoute()

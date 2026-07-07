@@ -65,12 +65,7 @@ const router = createRouter({
       component: () => import('@/views/CameraView.vue'),
       meta: { title: '相机', requiresAuth: true }
     },
-    {
-      path: '/profile',
-      name: 'profile',
-      component: () => import('@/views/ProfileView.vue'),
-      meta: { title: '我的', requiresAuth: true }
-    },
+
     {
       path: '/login',
       name: 'login',
@@ -86,7 +81,7 @@ const router = createRouter({
     {
       path: '/template/:id',
       name: 'template-detail',
-      component: () => import('@/views/TemplateDetail.vue'),
+      component: () => import('@/views/WorkDetail.vue'),
       meta: { title: '模板详情' }
     },
     {

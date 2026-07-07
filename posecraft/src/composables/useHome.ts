@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted, computed, watch, type Ref } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, type Ref, provide, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
@@ -7,7 +7,14 @@ import { workApi } from '@/api/work'
 import { followApi } from '@/api/follow'
 import service from '@/utils/request'
 
+const HomeStateSymbol = Symbol('HomeState')
+
 export function useHome() {
+  const injected = inject<any>(HomeStateSymbol, null)
+  if (injected) {
+    return injected
+  }
+
   const router = useRouter()
   const themeStore = useThemeStore()
   const authStore = useAuthStore()
@@ -27,24 +34,35 @@ export function useHome() {
   // DOM refs
   const searchStickyHeader = ref<HTMLElement | null>(null)
   const searchSentinel = ref<HTMLElement | null>(null)
+  const showTemplate = ref(true) // 全局控制骨骼图层显隐的开关
+  const showSettingsModal = ref(false)
+  const settingsActiveSection = ref('general')
 
   // 用户数据及状态
-  const showProfileModal = ref(false)
-  const saveLoginInfo = ref(true)
+  const saveLoginInfo = computed({
+    get: () => authStore.saveLoginInfo,
+    set: (v) => { authStore.updateSaveLoginInfo(v) }
+  })
   const isVip = ref(true) // Mock VIP status
-  const followingCount = ref(0)
-  const followersCount = ref(0)
-  const worksCount = ref(0)
-  const likesCount = ref(0)
-  
-  const userProfile = ref<any>({
-    username: '摄影小王',
-    avatar: 'https://picsum.photos/seed/avatar_wang/150/150',
-    gender: 0,
-    age: 27,
-    city: '北京 · 朝阳',
-    bio: '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子👧...',
-    personal_id: 'pose_craft_wang'
+  const followingCount = computed({
+    get: () => authStore.followingCount,
+    set: (v) => { authStore.followingCount = v }
+  })
+  const followersCount = computed({
+    get: () => authStore.followersCount,
+    set: (v) => { authStore.followersCount = v }
+  })
+  const worksCount = computed({
+    get: () => authStore.worksCount,
+    set: (v) => { authStore.worksCount = v }
+  })
+  const likesCount = computed({
+    get: () => authStore.likesCount,
+    set: (v) => { authStore.likesCount = v }
+  })
+  const userProfile = computed({
+    get: () => authStore.userProfile,
+    set: (v) => { authStore.userProfile = v }
   })
 
   // Toast 提示
@@ -386,10 +404,11 @@ export function useHome() {
   const filteredItems = computed(() => {
     let list: any[] = []
 
+    const tplList = templates.value.map(t => ({ ...t, type: 'template' }))
+    const workList = works.value.map(w => ({ ...w, type: 'work' }))
+    const apiItems = [...tplList, ...workList]
+
     if (activeNav.value === 'featured') {
-      const tplList = templates.value.map(t => ({ ...t, type: 'template' }))
-      const workList = works.value.map(w => ({ ...w, type: 'work' }))
-      const apiItems = [...tplList, ...workList]
       list = apiItems.length > 0 ? apiItems : mockRecommendations.map(m => ({ ...m }))
 
       // 根据 channel 进行分类筛选
@@ -404,15 +423,15 @@ export function useHome() {
         list = list.filter(item => item.category === categoryMapVal)
       }
     } else if (activeNav.value === 'recommend') {
-      list = mockRecommendItems.value.map(m => ({ ...m }))
+      list = apiItems.length > 0 ? apiItems : mockRecommendItems.value.map(m => ({ ...m }))
     } else if (activeNav.value === 'nearby') {
-      list = mockNearbyItems.value.map(m => ({ ...m }))
+      list = apiItems.length > 0 ? apiItems : mockNearbyItems.value.map(m => ({ ...m }))
     } else if (activeNav.value === 'following') {
-      list = mockFollowingItems.value.map(m => ({ ...m }))
+      list = (apiItems.length > 0 && authStore.isLoggedIn) ? apiItems : mockFollowingItems.value.map(m => ({ ...m }))
     } else if (activeNav.value === 'friends') {
-      list = mockFriendsItems.value.map(m => ({ ...m }))
+      list = (apiItems.length > 0 && authStore.isLoggedIn) ? apiItems : mockFriendsItems.value.map(m => ({ ...m }))
     } else if (activeNav.value === 'mine') {
-      list = mockMyItems.value.map(m => ({ ...m }))
+      list = (apiItems.length > 0 && authStore.isLoggedIn) ? apiItems : mockMyItems.value.map(m => ({ ...m }))
     }
 
     // 搜索关键字筛选
@@ -455,7 +474,7 @@ export function useHome() {
   }
 
   const toggleProfileModal = () => {
-    showProfileModal.value = !showProfileModal.value
+    router.push('/login')
   }
 
   const onSearchBlur = () => {
@@ -474,16 +493,7 @@ export function useHome() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleLogout = () => {
-    authStore.logout()
-    showProfileModal.value = false
-    showToast('已退出登录')
-  }
 
-  const redirectToLogin = () => {
-    showProfileModal.value = false
-    router.push('/login')
-  }
 
   const loadData = async (page: number) => {
     if (loading.value) return
@@ -498,6 +508,10 @@ export function useHome() {
         const workRes = await workApi.getFollowingWorks({ page, pageSize: 12 }) as any
         newWorks = workRes.list || []
         totalPages = workRes.totalPages || 1
+      } else if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
+        const workRes = await workApi.getUserWorks(authStore.user.id, { page, pageSize: 12 }) as any
+        newWorks = workRes.list || []
+        totalPages = workRes.totalPages || 1
       } else {
         const workRes = await workApi.getList({ page, pageSize: 12 }) as any
         newWorks = workRes.list || []
@@ -505,16 +519,18 @@ export function useHome() {
       }
 
       if (page === 1) {
-        templates.value = newTemplates.filter((t: any) => t.status === 1)
-        works.value = newWorks
-        
-        if (authStore.isLoggedIn && authStore.user?.id) {
-          const stats = await followApi.getStats(authStore.user.id) as any
-          followingCount.value = stats.followingCount || 0
-          followersCount.value = stats.followersCount || 0
+        if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
+          templates.value = newTemplates.filter((t: any) => t.user_id === authStore.user.id)
+        } else {
+          templates.value = newTemplates.filter((t: any) => t.status === 1)
         }
+        works.value = newWorks
       } else {
-        templates.value = [...templates.value, ...newTemplates.filter((t: any) => t.status === 1)]
+        if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
+          templates.value = [...templates.value, ...newTemplates.filter((t: any) => t.user_id === authStore.user.id)]
+        } else {
+          templates.value = [...templates.value, ...newTemplates.filter((t: any) => t.status === 1)]
+        }
         works.value = [...works.value, ...newWorks]
       }
 
@@ -541,40 +557,20 @@ export function useHome() {
   }
 
   const fetchUserProfile = async () => {
-    try {
-      const profileRes = await service.get('/user/v1/profile') as any
-      if (profileRes) {
-        userProfile.value = profileRes
-
-        const userId = profileRes.id
-        if (userId) {
-          const statsRes = await service.get(`/posecraft/v1/follow/stats/${userId}`) as any
-          if (statsRes) {
-            followingCount.value = statsRes.followingCount || 0
-            followersCount.value = statsRes.followersCount || 0
-            worksCount.value = statsRes.worksCount || 0
-            likesCount.value = statsRes.likesCount || 0
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('获取用户资料失败，降级展示默认数据', e)
+    if (!authStore.initialized) {
+      await authStore.checkSession()
+    } else if (authStore.isLoggedIn && !authStore.userProfile?.uid) {
+      await authStore.fetchUserProfile()
     }
   }
 
   const updateUserProfile = async (data: any) => {
-    try {
-      const res = await service.put('/user/v1/update', data) as any
-      // 拦截器已 unwrap res.data，直接用 res
-      if (res) {
-        userProfile.value = { ...userProfile.value, ...res }
-        showToast('个人资料更新成功')
-        return true
-      }
-    } catch (e) {
-      console.error('更新资料失败', e)
-      showToast('更新资料失败，请重试')
+    const success = await authStore.updateUserProfile(data)
+    if (success) {
+      showToast('个人资料更新成功')
+      return true
     }
+    showToast('更新资料失败，请重试')
     return false
   }
 
@@ -631,7 +627,7 @@ export function useHome() {
     }
   })
 
-  return {
+  const state = {
     themeStore,
     authStore,
     windowWidth,
@@ -645,7 +641,9 @@ export function useHome() {
     activeChannel,
     searchStickyHeader,
     searchSentinel,
-    showProfileModal,
+    showTemplate,
+    showSettingsModal,
+    settingsActiveSection,
     saveLoginInfo,
     isVip,
     followingCount,
@@ -669,11 +667,14 @@ export function useHome() {
     onSearchBlur,
     goToSearch,
     scrollToTop,
-    handleLogout,
-    redirectToLogin,
     hasMore,
     loading,
+    refreshData,
     loadMore,
     searchSuggestions
   }
+
+  provide(HomeStateSymbol, state)
+
+  return state
 }

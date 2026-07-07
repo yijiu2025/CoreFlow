@@ -340,6 +340,24 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 - 修改文件后在合适位置更新 README.md
 - 每次修改代码帮我主动提交github，更新commit信息
 - **修复问题时先分析原因再修改**：先定位问题根源（查看日志、检查代码流程、复现步骤），明确原因后再动手修改，避免盲目尝试
+- **前端组件目录架构规范**：`src/components` 下的所有组件必须按 `功能分类 -> 业务页面 -> 组件文件` 的三层结构进行放置与管理，避免扁平化或 Ad-hoc 零散建目录：
+  * **第一层（功能分类，Functional Types）**：按组件在客户端所表现的技术/形态性质进行划分，包括：
+    - `modals/` : 弹窗/模态对话框
+    - `popovers/` : 悬浮卡片/气泡/信息提示
+    - `panels/` : 控制面板/侧栏工具箱/浮动面板
+    - `layouts/` : 结构布局/导航/顶栏/核心渲染区等支撑骨架
+    - `cards/` : 具有重复渲染特性的数据或业务卡片
+    - `widgets/` : 大幅定制的小部件/页面特色区块
+  * **第二层（业务页面，Target Pages/Views）**：按该组件专属的视图页面或领域模块进行划分，包括：
+    - `home/` : 首页/展示流页面
+    - `editor/` : 画布编辑中心页面
+    - `login/` : 登录/验证页面
+    - `mine/` : 我的个人资产/历史信息页面
+    - `common/` : 多个业务域共用的全局基础通用组件
+  * **示例路径**：
+    - `src/components/modals/home/SettingsModal.vue`（系统设置弹窗）
+    - `src/components/layouts/editor/CanvasArea.vue`（编辑器画布区域）
+    - `src/components/panels/editor/AiPanel.vue`（编辑器 AI 分析面板）
 
 ### 文件大小限制
 
