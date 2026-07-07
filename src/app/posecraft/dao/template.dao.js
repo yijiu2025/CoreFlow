@@ -200,6 +200,76 @@ class TemplateDao {
     const model = this.getModel();
     await model.increment('likes_count', { where: { id } });
   }
+
+  /**
+   * 同步为模板创建作品记录
+   */
+  async syncCreateWork(template, userId) {
+    const Work = sequelize.models.Work;
+    if (template.image_url) {
+      const work = await Work.create({
+        user_id: userId,
+        template_id: template.id,
+        title: template.title || '模板底图作品',
+        description: template.description || '',
+        image_url: template.image_url,
+        thumbnail_url: `/posecraft/v1/works/temp_${template.id}/preview`,
+        edit_data: { is_template_work: true },
+        status: 1, // 模板底图作品公开可见
+        delete_version: 0
+      });
+      await work.update({
+        thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
+      });
+    }
+  }
+
+  /**
+   * 同步更新模板对应的作品记录
+   */
+  async syncUpdateWork(templateId, data, template) {
+    const Work = sequelize.models.Work;
+    let work = await Work.findOne({
+      where: {
+        template_id: templateId,
+        delete_version: 0
+      }
+    });
+
+    const workData = {
+      title: data.title || template.title,
+      description: data.description || template.description,
+      image_url: data.image_url || template.image_url,
+      status: 1
+    };
+
+    if (work) {
+      await work.update(workData);
+    } else if (data.image_url || template.image_url) {
+      work = await Work.create({
+        user_id: template.user_id,
+        template_id: templateId,
+        ...workData,
+        edit_data: { is_template_work: true },
+        delete_version: 0
+      });
+      await work.update({
+        thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
+      });
+    }
+  }
+
+  /**
+   * 同步删除模板对应的作品记录
+   */
+  async syncDeleteWork(templateId) {
+    const Work = sequelize.models.Work;
+    const templateWork = await Work.findOne({ where: { template_id: templateId, delete_version: 0 } });
+    if (templateWork) {
+      // 级联软删除对应的模板底图作品
+      await templateWork.update({ delete_version: templateWork.id });
+    }
+  }
 }
 
 export default new TemplateDao();

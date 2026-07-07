@@ -4,7 +4,6 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import TemplateDao from '../../../app/posecraft/dao/template.dao.js';
-import { sequelize } from '../../../db/index.js';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -290,23 +289,7 @@ export default async function (fastify) {
       });
 
       // 同步保存底图为一个单独的作品 (Work)
-      if (image_url) {
-        const { Work } = sequelize.models;
-        const work = await Work.create({
-          user_id: user.userId,
-          template_id: template.id,
-          title: title || '模板底图作品',
-          description: description || '',
-          image_url: image_url,
-          thumbnail_url: `/posecraft/v1/works/temp_${template.id}/preview`,
-          edit_data: { is_template_work: true },
-          status: 1, // 模板底图作品公开可见
-          delete_version: 0
-        });
-        await work.update({
-          thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
-        });
-      }
+      await TemplateDao.syncCreateWork(template, user.userId);
 
       return reply.result.success('发布成功，已提交管理员审核', template);
     }
@@ -380,35 +363,7 @@ export default async function (fastify) {
       const updated = await TemplateDao.update(id, data);
 
       // 同步更新或创建对应的底图作品 (Work)
-      const { Work } = sequelize.models;
-      let work = await Work.findOne({
-        where: {
-          template_id: id,
-          delete_version: 0
-        }
-      });
-      const workData = {
-        title: data.title || template.title,
-        description: data.description || template.description,
-        image_url: data.image_url || template.image_url,
-        status: 1
-      };
-
-      if (work) {
-        // 更新存在的关联底图作品
-        await work.update(workData);
-      } else if (data.image_url || template.image_url) {
-        work = await Work.create({
-          user_id: template.user_id,
-          template_id: id,
-          ...workData,
-          edit_data: { is_template_work: true },
-          delete_version: 0
-        });
-        await work.update({
-          thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
-        });
-      }
+      await TemplateDao.syncUpdateWork(id, data, template);
 
       return reply.result.success(
         isAdmin ? '更新成功' : '更新成功，已进入重新审核阶段',
@@ -443,12 +398,7 @@ export default async function (fastify) {
       await TemplateDao.delete(id, template.user_id); 
 
       // 同步级联删除关联的模板底图作品
-      const { Work } = sequelize.models;
-      const workDao = (await import('../../../app/posecraft/dao/work.dao.js')).default;
-      const templateWork = await Work.findOne({ where: { template_id: id, delete_version: 0 } });
-      if (templateWork) {
-        await workDao.delete(templateWork.id, templateWork.user_id);
-      }
+      await TemplateDao.syncDeleteWork(id);
 
       return reply.result.success('删除成功');
     }
