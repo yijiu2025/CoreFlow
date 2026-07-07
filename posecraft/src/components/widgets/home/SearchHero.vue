@@ -111,7 +111,8 @@ defineExpose({
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
-  min-height: 46px; /* 固定高度，不受 actions 影响，防止 layout shift */
+  /* 固定高度 = 输入行(46px) + 操作行(36px) = 82px，永不变化，彻底消除 layout shift */
+  min-height: 82px;
   background: #ffffff;
   border: 1.5px solid #e8edf2;
   border-radius: 16px;
@@ -167,12 +168,6 @@ defineExpose({
 .search-hero-bar.focused .search-row-actions {
   opacity: 1;
   pointer-events: auto;
-}
-
-.search-hero-bar.at-top,
-.search-hero-bar.focused {
-  /* 展开时额外留出 actions 的空间 */
-  padding-bottom: 36px;
 }
 
 .search-plus-btn {
