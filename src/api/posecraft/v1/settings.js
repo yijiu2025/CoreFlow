@@ -1,8 +1,9 @@
 /**
  * PoseCraft 用户个性设置
  *
- * GET  /posecraft/v1/settings         — 一次性拉取全部设置（登录后调用）
- * PUT  /posecraft/v1/settings/:field  — 改单字段，value 由前端传入
+ * GET  /posecraft/v1/settings          — 一次性拉取全部设置（登录后调用）
+ * GET  /posecraft/v1/settings/:field   — 读取单个字段
+ * PUT  /posecraft/v1/settings/:field   — 改单字段，value 由前端传入
  *
  * 字段不存在时：mergeUpdate 会把新字段一起写入，无需前端额外处理
  */
@@ -14,6 +15,31 @@ export default async function (fastify) {
     name: 'settings',
     description: 'PoseCraft 用户个性设置（UI 偏好）',
     prefix: '/v1'
+  });
+
+  // 读取单个字段（必须先于 /settings 注册，避免被通配符吃掉）
+  registerSecureRoute(fastify, {
+    name: 'getUserSettingField',
+    alias: '获取单个设置字段',
+    method: 'GET',
+    url: '/settings/:field',
+    requireLogin: true,
+    handler: async (request, reply) => {
+      const userId = request.state?.user?.userId;
+      if (!userId) {
+        return reply.code(401).send({ code: 401, message: '未登录', data: null });
+      }
+
+      const { field } = request.params;
+      const allSettings = await settingsDao.getByUserId(userId);
+      const value = allSettings[field];
+
+      return reply.result.success('获取成功', {
+        field,
+        value: value !== undefined ? value : null,
+        exists: value !== undefined
+      });
+    }
   });
 
   // 一次性拉取全部设置（登录后调用）
