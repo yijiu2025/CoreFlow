@@ -1,7 +1,7 @@
 <template>
   <div class="search-sticky-header">
     <!-- 搜索框主体 -->
-    <div class="search-hero-bar" :class="{ focused: searchFocused, 'at-top': !showNavSearch }">
+    <div class="search-hero-bar" :class="{ focused: searchFocused }">
       <!-- 第一行：输入框 -->
       <div class="search-row-input">
         <input
@@ -152,19 +152,20 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 8px;
-  /* absolute 定位脱离文档流，避免 height 变化引起 layout shift 和滚动抖动 */
+  /* absolute 定位脱离文档流 */
   position: absolute;
   bottom: 0;
   left: 12px;
   right: 0;
   height: 36px;
   padding-bottom: 8px;
-  opacity: 0;
-  pointer-events: none;
+  /* 操作行默认常驻显示，不随滚动变化 */
+  opacity: 1;
+  pointer-events: auto;
   transition: opacity 0.2s ease;
 }
 
-.search-hero-bar.at-top .search-row-actions,
+/* 聚焦时保持显示 */
 .search-hero-bar.focused .search-row-actions {
   opacity: 1;
   pointer-events: auto;
