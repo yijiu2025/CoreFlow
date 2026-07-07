@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onActivated, onDeactivated } from 'vue'
 import { useHome } from '@/composables/useHome'
 import SearchHero from '@/components/widgets/home/SearchHero.vue'
 import PoseCard from '@/components/cards/home/PoseCard.vue'
@@ -92,8 +92,22 @@ const {
   openDetail,
   likeItem,
   onSearchBlur,
-  searchSentinel
+  searchSentinel,
+  activeNav
 } = useHome()
+
+// 设置当前导航标识为精选
+onMounted(() => {
+  activeNav.value = 'featured'
+})
+// keep-alive 激活时重新设置
+onActivated(() => {
+  activeNav.value = 'featured'
+})
+// keep-alive 隐藏时清除 sentinel，避免 IO 继续触发
+onDeactivated(() => {
+  searchSentinel.value = null
+})
 
 const searchHeroRef = ref<any>(null)
 watch(
