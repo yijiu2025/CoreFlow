@@ -554,7 +554,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   background: #f8fafc;
-  color: #1e29b;
+  color: #1e293b;
   overflow: hidden;
   transition: background-color .3s, color .3s;
 }
