@@ -575,10 +575,9 @@ export function useHome() {
   }
 
   watch(activeNav, (newNav) => {
-    // 切换到精选页时，重置 showNavSearch（让 IntersectionObserver 重新判断）
-    if (newNav === 'featured') {
-      showNavSearch.value = false
-    }
+    // 非精选页：强制关闭搜索框提示，由 activeNav 控制而非 IO
+    // 精选页：重置为 false，等 IO 判断实际位置
+    showNavSearch.value = false
     refreshData()
   })
 
@@ -605,16 +604,26 @@ export function useHome() {
     window.addEventListener('scroll', handleScroll, { passive: true })
 
     let io: IntersectionObserver | null = null
+
+    const disconnectIO = () => {
+      io?.disconnect()
+      io = null
+      showNavSearch.value = false
+    }
+
     const setupIO = () => {
       io?.disconnect()
-      if (!searchSentinel.value) {
-        // sentinel 不存在（非精选页），强制还原
+      if (!searchSentinel.value || activeNav.value !== 'featured') {
+        // sentinel 不存在或不在精选页，直接关闭
         showNavSearch.value = false
         return
       }
       io = new IntersectionObserver(
         ([entry]) => {
-          showNavSearch.value = !entry.isIntersecting
+          // 仅当处于精选页时才更新
+          if (activeNav.value === 'featured') {
+            showNavSearch.value = !entry.isIntersecting
+          }
         },
         { rootMargin: '-72px 0px 0px 0px', threshold: 0 }
       )
@@ -622,9 +631,23 @@ export function useHome() {
     }
     setTimeout(setupIO, 100)
 
-    // 当 searchSentinel 引用变化时（keep-alive 切回精选页）重建 IO
+    // sentinel 引用变化（keep-alive 切换回精选页时）重建 IO
     watch(searchSentinel, () => {
-      setupIO()
+      if (activeNav.value === 'featured') {
+        setupIO()
+      } else {
+        disconnectIO()
+      }
+    })
+
+    // activeNav 变化时：非精选页立即断开 IO 并重置，精选页重建 IO
+    watch(activeNav, (newNav) => {
+      if (newNav !== 'featured') {
+        disconnectIO()
+      } else {
+        // 延迟一帧让 keep-alive 恢复 DOM，再重建 IO
+        setTimeout(setupIO, 50)
+      }
     })
 
     ;(window as any).__cleanupHome = () => {
