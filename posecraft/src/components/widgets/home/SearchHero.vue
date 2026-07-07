@@ -49,6 +49,9 @@
       </div>
     </div>
 
+    <!-- Sentinel：紧跟搜索框之后，搜索框滚出视野时立即触发 -->
+    <div ref="sentinelRef" class="search-sentinel"></div>
+
     <!-- 分类 Tab -->
     <div class="channel-container">
       <div class="channel-inner">
@@ -62,9 +65,6 @@
         </button>
       </div>
     </div>
-
-    <!-- Sentinel：位于 header 底部 -->
-    <div ref="sentinelRef" class="search-sentinel"></div>
   </div>
 </template>
 
