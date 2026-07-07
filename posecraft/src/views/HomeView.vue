@@ -15,7 +15,7 @@
         v-model:searchFocused="searchFocused"
         v-model:searchQuery="searchQuery"
         :page-title="getNavTitle()"
-        :show-nav-search="(activeNav === 'featured' && showNavSearch) || isMinePage"
+        :show-nav-search="activeNav !== 'featured' || showNavSearch"
         :transparent-top="isMinePage && mineAtTop"
         :window-width="windowWidth"
         :is-vip="isVip"
