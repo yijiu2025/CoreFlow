@@ -1,190 +1,239 @@
 <template>
-  <div class="h-screen w-screen flex flex-col md:flex-row bg-slate-100 dark:bg-slate-950 overflow-hidden text-slate-800 dark:text-slate-100">
-    
-    <!-- 左侧主工作区：可视底画与骨骼覆盖 (占满剩余宽屏) -->
-    <div class="flex-grow h-2/3 md:h-full flex flex-col bg-slate-950 relative border-b md:border-b-0 border-slate-800 z-10 select-none">
-      <!-- 顶部控制条：返回首页与标签 -->
-      <div class="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/80 to-transparent flex items-center justify-between px-6 z-20">
-        <router-link to="/" class="flex items-center text-white hover:text-primary-400 font-semibold drop-shadow-md text-sm">
-          <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-          </svg>
-          返回主页
-        </router-link>
-        <span class="text-white/80 font-bold text-xs uppercase tracking-widest drop-shadow-md">
-          {{ isTemplate ? '姿势模板预览' : '摄影作品解析' }}
-        </span>
-      </div>
+  <div class="work-detail-root" :class="{ 'dark': isDark }">
+    <!-- 顶部返回条 -->
+    <button class="back-btn" @click="goBack" aria-label="返回">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </button>
 
-      <!-- 核心画布工作区 -->
-      <div class="flex-grow flex items-center justify-center p-8 relative overflow-hidden">
-        <div class="relative shadow-2xl border border-slate-800/60 rounded-2xl overflow-hidden flex items-center justify-center select-none max-h-[80vh] max-w-[90%]" :style="containerStyle">
-          <!-- 底图照片 -->
-          <img 
-            v-if="work?.image_url" 
-            :src="work.image_url" 
-            :alt="work.title" 
-            class="w-full h-full object-contain pointer-events-none transition-opacity duration-300" 
-            :style="{ opacity: computedPhotoOpacity }" 
+    <!-- 主体 -->
+    <main class="layout">
+      <!-- 左侧：沉浸图片浏览 -->
+      <section class="media-pane">
+        <div class="media-canvas" :style="containerStyle">
+          <!-- 底图 -->
+          <img
+            v-if="work?.image_url"
+            :src="work.image_url"
+            :alt="work.title"
+            class="base-image"
+            :style="{ opacity: computedPhotoOpacity }"
           />
-          <!-- 无底图占位 (针对纯骨架模板) -->
-          <div v-else class="absolute inset-0 w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-900/60">
-            <span class="text-5xl mb-3">👤</span>
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">纯姿势骨骼模板</span>
+          <!-- 无底图 -->
+          <div v-else class="no-image">
+            <span class="no-image-icon">👤</span>
+            <span class="no-image-label">纯姿势骨骼模板</span>
           </div>
-
-          <!-- 骨架重叠图 -->
-          <img 
-            v-if="showLocalTemplate && work?.thumbnail_url" 
-            :src="work.thumbnail_url" 
-            alt="skeleton" 
-            class="absolute pointer-events-none z-10 filter drop-shadow-[0_0_12px_rgba(99,102,241,0.65)]" 
-            :style="overlayStyle" 
+          <!-- 骨架叠加 -->
+          <img
+            v-if="showOverlay && work?.thumbnail_url"
+            :src="work.thumbnail_url"
+            alt="skeleton"
+            class="skeleton-overlay"
+            :style="overlayStyle"
           />
         </div>
-      </div>
 
-      <!-- 底部悬浮控制面板 -->
-      <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md border border-slate-800/80 px-6 py-4 rounded-2xl shadow-2xl z-20 w-[90%] max-w-md flex flex-col gap-3">
-        <!-- 叠加 Toggle -->
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-extrabold text-white">✨ 叠加模板骨骼</span>
+        <!-- 骨架叠加浮动胶囊 -->
+        <div class="floating-controls" v-if="work?.thumbnail_url">
+          <button
+            class="ctrl-pill"
+            :class="{ active: showOverlay }"
+            @click="showOverlay = !showOverlay"
+          >
+            <span class="pill-icon">✨</span>
+            <span class="pill-label">{{ showOverlay ? '隐藏骨骼' : '显示骨骼' }}</span>
+          </button>
+          <transition name="fade">
+            <div v-if="showOverlay && work?.image_url" class="opacity-slider">
+              <input
+                type="range" min="0" max="1" step="0.05"
+                v-model.number="photoOpacity"
+              />
+            </div>
+          </transition>
+        </div>
+      </section>
+
+      <!-- 右侧：社区信息流 -->
+      <aside class="social-pane">
+        <!-- 作者卡 -->
+        <div class="author-card">
+          <div class="author-avatar">
+            {{ (authorInitial || 'U') }}
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="showLocalTemplate" class="sr-only peer">
-            <div class="w-9 h-5 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-500"></div>
-          </label>
-        </div>
-
-        <!-- 透明度滑杆 (只有当存在底图且开启叠加时可见) -->
-        <div v-show="showLocalTemplate && work?.image_url" class="flex items-center gap-3 pt-2 border-t border-slate-800">
-          <span class="text-[10px] font-bold text-slate-400 select-none shrink-0">底图不透明度</span>
-          <input 
-            type="range" 
-            min="0" 
-            max="1" 
-            step="0.05" 
-            v-model.number="photoOpacity" 
-            class="flex-grow accent-primary-500 bg-slate-800 h-1 rounded-lg appearance-none cursor-pointer"
-          />
-          <span class="text-[10px] font-bold text-slate-300 w-8 text-right">{{ Math.round(photoOpacity * 100) }}%</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 右侧滚动信息栏 -->
-    <div class="w-full md:w-[380px] lg:w-[410px] h-1/3 md:h-full flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 z-10 shrink-0">
-      
-      <!-- 信息展示滚动区 -->
-      <div class="flex-grow overflow-y-auto p-6 space-y-6">
-        
-        <!-- 标题及头部标签 -->
-        <div class="space-y-3" v-if="work">
-          <div class="flex items-center justify-between">
-            <span class="px-2.5 py-0.5 text-[10px] font-bold uppercase rounded-md tracking-wider" :class="isTemplate || isTemplateWork ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 border border-indigo-100 dark:border-indigo-900/50' : 'bg-primary-50 dark:bg-primary-950/40 text-primary-500 border border-primary-100 dark:border-primary-900/50'">
-              {{ isTemplate || isTemplateWork ? '姿势模板' : '摄影作品' }}
-            </span>
-            <div class="flex gap-2" v-if="isOwner">
-              <button @click="editWork" class="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition">编辑</button>
-              <span class="text-slate-300 dark:text-slate-700">|</span>
-              <button @click="deleteWork" class="text-xs font-semibold text-red-500 hover:text-red-600 transition">删除</button>
+          <div class="author-meta">
+            <div class="author-name">{{ work?.author?.username || '匿名用户' }}</div>
+            <div class="author-sub" v-if="authorStats">
+              {{ authorStats.followers ?? '—' }} 粉丝 · {{ authorStats.works ?? '—' }} 作品
             </div>
           </div>
-          <h2 class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white leading-tight">
-            {{ work.title || '未命名作品' }}
-          </h2>
-          <p v-if="work.description" class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed whitespace-pre-line">
-            {{ work.description }}
-          </p>
-        </div>
-
-        <!-- 📸 辅助拍照大按钮 (仅模板/有绑定模板的作品可点击) -->
-        <div v-if="work && (isTemplate || work.template_id)" class="pt-1">
           <button
-            @click="handleShoot"
-            class="w-full py-4 bg-gradient-to-r from-primary-500 to-indigo-600 hover:from-primary-600 hover:to-indigo-700 text-white rounded-2xl font-bold shadow-lg shadow-primary-500/20 hover:shadow-primary-600/30 transition flex items-center justify-center gap-2 select-none active:scale-[0.99]"
-          >
-            <span>📸</span>
-            <span>{{ isTemplate || isTemplateWork ? '使用此姿势辅助拍照' : '使用同款姿势拍摄' }}</span>
-          </button>
-        </div>
-
-        <!-- 作者信息卡片 -->
-        <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/50 flex items-center gap-4" v-if="work">
-          <div class="w-11 h-11 bg-gradient-to-tr from-primary-500 to-purple-500 text-white rounded-full flex items-center justify-center font-bold shadow">
-            {{ (work.author?.username || 'U').charAt(0).toUpperCase() }}
-          </div>
-          <div class="flex-grow">
-            <div class="font-bold text-sm text-slate-800 dark:text-white">{{ work.author?.username || '未知作者' }}</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">PoseCraft 平台创作者</div>
-          </div>
-          <button
-            v-if="!isOwner && authStore.isLoggedIn"
+            v-if="!isOwner"
+            class="follow-btn"
+            :class="{ following: isFollowing }"
             @click="toggleFollow"
-            class="px-4 py-1.5 rounded-full text-xs font-bold transition duration-200"
-            :class="isFollowing ? 'bg-slate-250 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-primary-500 text-white hover:bg-primary-600'"
           >
             {{ isFollowing ? '已关注' : '+ 关注' }}
           </button>
+          <button
+            v-if="isOwner"
+            class="more-btn"
+            @click="menuOpen = !menuOpen"
+            aria-label="更多"
+          >
+            ⋯
+          </button>
         </div>
 
-        <!-- 数据及日期分析指标 -->
-        <div class="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800/20 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800/60 text-center" v-if="work">
-          <div>
-            <div class="text-[10px] text-slate-400 font-semibold uppercase">❤️ 点赞</div>
-            <div class="text-sm font-black text-slate-800 dark:text-white mt-1">{{ work.likes_count }}</div>
+        <!-- 更多菜单 -->
+        <transition name="fade">
+          <div v-if="isOwner && menuOpen" class="more-menu" @click="menuOpen = false">
+            <button @click="editWork">✏️ 编辑</button>
+            <button @click="deleteWork" class="danger">🗑️ 删除</button>
           </div>
-          <div class="border-x border-slate-200 dark:border-slate-800">
-            <div class="text-[10px] text-slate-400 font-semibold uppercase">👁️ 浏览</div>
-            <div class="text-sm font-black text-slate-800 dark:text-white mt-1">{{ work.views_count }}</div>
-          </div>
-          <div>
-            <div class="text-[10px] text-slate-400 font-semibold uppercase">📅 日期</div>
-            <div class="text-sm font-black text-slate-800 dark:text-white mt-1">{{ new Date(work.created_at).toLocaleDateString() }}</div>
-          </div>
-        </div>
+        </transition>
 
-        <!-- AI 人体特征分析 -->
-        <div v-if="work && work.analysis_data" class="space-y-3">
-          <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest">🤖 AI 人体特征数据</h3>
-          <div v-if="typeof work.analysis_data === 'object' && Object.keys(work.analysis_data).length > 0" class="grid grid-cols-2 gap-3">
-            <div v-for="(val, key) in work.analysis_data" :key="key" class="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-100 dark:border-slate-850">
-              <div class="text-[10px] text-slate-400 uppercase font-semibold">{{ key }}</div>
-              <div class="text-xs font-bold text-slate-700 dark:text-slate-200 mt-1 truncate">
-                {{ typeof val === 'object' ? JSON.stringify(val) : val }}
+        <!-- 滚动内容 -->
+        <div class="content-scroll" ref="scrollRef">
+          <!-- 标题 -->
+          <h1 class="work-title">{{ work?.title || '未命名作品' }}</h1>
+
+          <!-- 描述 -->
+          <div class="work-desc-wrapper">
+            <p
+              class="work-desc"
+              :class="{ collapsed: descCollapsed && descOverflow }"
+            >{{ work?.description || '暂无描述' }}</p>
+            <button
+              v-if="descOverflow"
+              class="expand-btn"
+              @click="descCollapsed = !descCollapsed"
+            >
+              {{ descCollapsed ? '展开' : '收起' }}
+            </button>
+          </div>
+
+          <!-- 标签 -->
+          <div class="tags-row" v-if="displayTags.length">
+            <span v-for="tag in displayTags" :key="tag" class="tag-pill">#{{ tag }}</span>
+          </div>
+
+          <!-- 元数据行 -->
+          <div class="meta-row">
+            <span class="meta-item">👁 {{ work?.views_count ?? 0 }}</span>
+            <span class="meta-dot">·</span>
+            <span class="meta-item">{{ formatDate(work?.created_at) }}</span>
+            <span v-if="work?.distance" class="meta-dot">·</span>
+            <span v-if="work?.distance" class="meta-item">📍 {{ work.distance }}</span>
+          </div>
+
+          <!-- 使用模板拍照 CTA -->
+          <button
+            v-if="work && (isTemplate || work.template_id)"
+            class="cta-shoot"
+            @click="handleShoot"
+          >
+            <span class="cta-icon">📸</span>
+            <span>{{ isTemplate || isTemplateWork ? '使用此姿势拍照' : '使用同款姿势拍摄' }}</span>
+            <svg class="cta-arrow" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+
+          <!-- AI 人体特征（折叠） -->
+          <details v-if="work?.analysis_data" class="analysis-block">
+            <summary class="analysis-summary">
+              <span>🤖 AI 人体特征数据</span>
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </summary>
+            <div v-if="typeof work.analysis_data === 'object' && Object.keys(work.analysis_data).length" class="analysis-grid">
+              <div v-for="(val, key) in work.analysis_data" :key="key" class="analysis-cell">
+                <div class="cell-key">{{ key }}</div>
+                <div class="cell-val">
+                  {{ typeof val === 'object' ? JSON.stringify(val) : val }}
+                </div>
               </div>
             </div>
-          </div>
-          <pre v-else class="text-xs font-mono text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl overflow-x-auto">{{ JSON.stringify(work.analysis_data, null, 2) }}</pre>
+            <pre v-else class="analysis-raw">{{ JSON.stringify(work.analysis_data, null, 2) }}</pre>
+          </details>
+
+          <!-- 评论 -->
+          <section class="comments-block" ref="commentsRef">
+            <h3 class="comments-title">
+              评论
+              <span v-if="comments.length" class="comments-count">{{ comments.length }}</span>
+            </h3>
+            <div class="comment-composer">
+              <div class="composer-avatar">我</div>
+              <input
+                v-model="newComment"
+                class="composer-input"
+                placeholder="说点什么吧..."
+                @keyup.enter="submitComment"
+              />
+              <button class="composer-send" :disabled="!newComment.trim()" @click="submitComment">发送</button>
+            </div>
+            <div class="comment-list" v-if="comments.length">
+              <div v-for="comment in comments" :key="comment.id" class="comment-item">
+                <div class="comment-avatar">{{ (comment.author || 'U').charAt(0).toUpperCase() }}</div>
+                <div class="comment-body">
+                  <div class="comment-author">{{ comment.author }}</div>
+                  <p class="comment-text">{{ comment.text }}</p>
+                  <div class="comment-time">{{ formatTime(comment.created_at) }}</div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="comments-empty">
+              💬 还没有人评论，快来抢沙发
+            </div>
+          </section>
         </div>
-      </div>
 
-      <!-- 底部操作按钮栏 -->
-      <div class="p-6 border-t border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur grid grid-cols-2 gap-3 shrink-0" v-if="work">
-        <button
-          @click="toggleLike"
-          :class="['py-3 border.5 rounded-2xl font-bold transition flex items-center justify-center gap-2 select-none active:scale-[0.98]', isLiked ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20 text-primary-500 dark:border-primary-900/50' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300']"
-        >
-          <span class="text-base">{{ isLiked ? '❤️' : '🤍' }}</span>
-          <span class="text-sm">点赞 {{ work?.likes_count || 0 }}</span>
-        </button>
-        <button
-          @click="toggleCollect"
-          :class="['py-3 border.5 rounded-2xl font-bold transition flex items-center justify-center gap-2 select-none active:scale-[0.98]', isCollected ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-500 dark:border-yellow-900/50' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300']"
-        >
-          <span class="text-base">{{ isCollected ? '⭐' : '☆' }}</span>
-          <span class="text-sm">收藏</span>
-        </button>
-      </div>
+        <!-- 互动栏 (sticky bottom on mobile / desktop side) -->
+        <div class="action-bar">
+          <button
+            class="action-btn"
+            :class="{ active: isLiked, pulse: likePulse }"
+            @click="toggleLike"
+          >
+            <span class="action-icon">{{ isLiked ? '❤️' : '🤍' }}</span>
+            <span class="action-count">{{ formattedLikes }}</span>
+          </button>
+          <button
+            class="action-btn"
+            :class="{ active: isCollected }"
+            @click="toggleCollect"
+          >
+            <span class="action-icon">{{ isCollected ? '⭐' : '☆' }}</span>
+            <span class="action-count">收藏</span>
+          </button>
+          <button class="action-btn" @click="scrollToComments">
+            <span class="action-icon">💬</span>
+            <span class="action-count">{{ comments.length || '' }}</span>
+          </button>
+          <button class="action-btn" @click="share">
+            <span class="action-icon">↗️</span>
+            <span class="action-count">分享</span>
+          </button>
+        </div>
+      </aside>
+    </main>
 
-    </div>
+    <!-- Toast -->
+    <transition name="toast">
+      <div v-if="toastMsg" class="toast">{{ toastMsg }}</div>
+    </transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 import { useHome } from '@/composables/useHome'
 import { workApi } from '@/api/work'
@@ -193,131 +242,173 @@ import { followApi } from '@/api/follow'
 
 const route = useRoute()
 const router = useRouter()
+const themeStore = useThemeStore()
 const authStore = useAuthStore()
-const { showTemplate } = useHome()  // showTemplate 现在是 computed，来自 userSettings store
+const { showTemplate } = useHome()
+
 const work = ref<any>(null)
 const isFollowing = ref(false)
 const isLiked = ref(false)
 const isCollected = ref(false)
+const likePulse = ref(false)
 
-const showLocalTemplate = ref(true)
+const showOverlay = ref(true)
 const photoOpacity = ref(0.5)
+const menuOpen = ref(false)
 
-const isTemplate = computed(() => {
-  return route.path.startsWith('/template') || route.name === 'template-detail'
+// 描述折叠
+const descCollapsed = ref(true)
+const descOverflow = ref(false)
+const scrollRef = ref<HTMLElement | null>(null)
+const commentsRef = ref<HTMLElement | null>(null)
+
+// 作者数据（按作品 author 字段）
+const authorInitial = computed(() => {
+  if (!work.value) return 'U'
+  const name = work.value.author?.username || work.value.username
+  return (name || 'U').charAt(0).toUpperCase()
 })
+const authorStats = computed(() => work.value?.author?.stats || null)
+
+// 评论本地状态（后端接入前用本地）
+interface LocalComment {
+  id: number
+  author: string
+  text: string
+  created_at: number
+}
+const comments = ref<LocalComment[]>([])
+const newComment = ref('')
+let commentIdSeq = 1
+
+const isDark = computed(() => themeStore.isDark)
+
+const isTemplate = computed(() =>
+  route.path.startsWith('/template') || route.name === 'template-detail'
+)
 
 const isTemplateWork = computed(() => {
   if (!work.value?.edit_data) return false
   try {
     const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
     return !!data?.is_template_work
-  } catch (e) {
+  } catch {
     return false
   }
 })
 
-const computedPhotoOpacity = computed(() => {
-  return showLocalTemplate.value ? photoOpacity.value : 1.0
-})
+const isOwner = computed(() => authStore.user?.id === work.value?.user_id)
+
+const computedPhotoOpacity = computed(() =>
+  showOverlay.value ? photoOpacity.value : 1.0
+)
 
 const containerStyle = computed(() => {
   if (!work.value?.edit_data) return { aspectRatio: '4/3' }
   try {
     const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
     const { vw, vh } = data
-    if (vw && vh) {
-      return { aspectRatio: `${vw} / ${vh}` }
-    }
-  } catch (e) {}
+    if (vw && vh) return { aspectRatio: `${vw} / ${vh}` }
+  } catch {}
   return { aspectRatio: '4/3' }
 })
 
 const overlayStyle = computed<any>(() => {
   if (!work.value?.edit_data) {
-    return {
-      left: '0',
-      top: '0',
-      width: '100%',
-      height: '100%',
-      objectFit: 'cover'
-    }
+    return { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover' }
   }
   try {
     const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
     const { scale, offsetX, offsetY, designW, designH, vw, vh } = data
     if (!vw || !vh) {
-      return {
-        left: '0',
-        top: '0',
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover'
-      }
+      return { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover' }
     }
     return {
       position: 'absolute',
       left: `${(offsetX / vw) * 100}%`,
       top: `${(offsetY / vh) * 100}%`,
       width: `${((designW * scale) / vw) * 100}%`,
-      height: `${((designH * scale) / vh) * 100}%`
+      height: `${((designH * scale) / vh) * 100}%`,
     }
-  } catch (e) {
-    return {
-      left: '0',
-      top: '0',
-      width: '100%',
-      height: '100%',
-      objectFit: 'cover'
-    }
+  } catch {
+    return { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover' }
   }
 })
 
-const isOwner = computed(() => {
-  return authStore.user?.id === work.value?.user_id
+// 标签
+const displayTags = computed(() => {
+  const raw = work.value?.tags || work.value?.category
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw
+  return [raw]
 })
 
-onMounted(async () => {
-  showLocalTemplate.value = showTemplate.value
-  const id = Number(route.params.id)
-  try {
-    if (isTemplate.value) {
-      work.value = await templateApi.getDetail(id)
-    } else {
-      work.value = await workApi.getDetail(id)
-    }
-    
-    if (authStore.isLoggedIn && work.value) {
-      // 1. 记录浏览历史 (同时递增 views_count)
-      await authStore.recordHistoryAction(
-        isTemplate.value ? { templateId: work.value.id } : { workId: work.value.id }
-      )
- 
-      // 2. 重新加载详情以显示最新 views_count
-      if (isTemplate.value) {
-        work.value = await templateApi.getDetail(id)
-      } else {
-        work.value = await workApi.getDetail(id)
-      }
- 
-      // 3. 查询是否关注作者
-      if (!isOwner.value && work.value.user_id) {
-        const res = await followApi.checkStatus(work.value.user_id) as any
-        isFollowing.value = res.isFollowing
-      }
- 
-      // 4. 查询当前用户对该作品的点赞、收藏状态
-      const { interactionApi } = await import('@/api/interaction')
-      const statusRes = await interactionApi.checkStatus(
-        isTemplate.value ? { templateId: work.value.id } : { workId: work.value.id }
-      ) as any
-      isLiked.value = statusRes.liked
-      isCollected.value = statusRes.collected
-    }
-  } catch (err) {
-    console.error('加载详情及状态失败:', err)
-  }
+const formattedLikes = computed(() => {
+  const n = work.value?.likes_count ?? 0
+  if (n >= 10000) return (n / 10000).toFixed(1) + '万'
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
+  return String(n)
 })
+
+function formatDate(d: string | number | undefined) {
+  if (!d) return ''
+  const date = new Date(d)
+  if (isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+}
+
+function formatTime(ts: number | undefined) {
+  if (!ts) return ''
+  const diff = Date.now() - ts
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分钟前`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}小时前`
+  return formatDate(ts)
+}
+
+const toastMsg = ref('')
+let toastTimer: any = null
+function toast(msg: string) {
+  toastMsg.value = msg
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toastMsg.value = '' }, 2000)
+}
+
+function goBack() {
+  if (window.history.length > 1) router.back()
+  else router.push('/')
+}
+
+function scrollToComments() {
+  commentsRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// 描述溢出检测
+watch(work, async () => {
+  descCollapsed.value = true
+  descOverflow.value = false
+  await nextTick()
+  const el = scrollRef.value?.querySelector('.work-desc')
+  if (el) descOverflow.value = el.scrollHeight > 80 // ~5 lines max
+}, { immediate: true })
+
+// 提交评论（本地，后端就绪后可替换）
+function submitComment() {
+  const txt = newComment.value.trim()
+  if (!txt) return
+  if (!authStore.isLoggedIn) {
+    router.push('/login')
+    return
+  }
+  comments.value.unshift({
+    id: commentIdSeq++,
+    author: authStore.userProfile?.username || authStore.user?.username || '我',
+    text: txt,
+    created_at: Date.now()
+  })
+  newComment.value = ''
+  toast('评论成功')
+}
 
 async function toggleFollow() {
   if (!work.value?.user_id) return
@@ -325,12 +416,15 @@ async function toggleFollow() {
     if (isFollowing.value) {
       await followApi.unfollow(work.value.user_id)
       isFollowing.value = false
+      toast('已取消关注')
     } else {
       await followApi.follow(work.value.user_id)
       isFollowing.value = true
+      toast('关注成功')
     }
   } catch (err) {
     console.error('操作关注失败:', err)
+    toast('操作失败，请重试')
   }
 }
 
@@ -342,16 +436,16 @@ async function toggleLike() {
   }
   const nextState = !isLiked.value
   const success = await authStore.toggleLikeAction(
-    isTemplate.value 
+    isTemplate.value
       ? { templateId: work.value.id, like: nextState }
       : { workId: work.value.id, like: nextState }
   )
   if (success) {
     isLiked.value = nextState
+    work.value.likes_count += nextState ? 1 : -1
     if (nextState) {
-      work.value.likes_count++
-    } else {
-      work.value.likes_count--
+      likePulse.value = true
+      setTimeout(() => { likePulse.value = false }, 600)
     }
   }
 }
@@ -364,12 +458,13 @@ async function toggleCollect() {
   }
   const nextState = !isCollected.value
   const success = await authStore.toggleCollectAction(
-    isTemplate.value 
+    isTemplate.value
       ? { templateId: work.value.id, collect: nextState }
       : { workId: work.value.id, collect: nextState }
   )
   if (success) {
     isCollected.value = nextState
+    toast(nextState ? '已收藏' : '已取消收藏')
   }
 }
 
@@ -384,6 +479,7 @@ async function deleteWork() {
     router.push('/')
   } catch (err) {
     console.error('删除失败:', err)
+    toast('删除失败，请重试')
   }
 }
 
@@ -402,8 +498,713 @@ function editWork() {
 
 function handleShoot() {
   const tplId = isTemplate.value ? work.value.id : work.value.template_id
-  if (tplId) {
-    router.push({ path: '/camera', query: { template: tplId } })
+  if (tplId) router.push({ path: '/camera', query: { template: tplId } })
+}
+
+async function share() {
+  const url = window.location.href
+  try {
+    await navigator.clipboard.writeText(url)
+    toast('链接已复制，快去分享吧')
+  } catch {
+    toast('分享链接：' + url)
   }
 }
+
+onMounted(async () => {
+  showOverlay.value = showTemplate.value
+  const id = Number(route.params.id)
+  try {
+    if (isTemplate.value) {
+      work.value = await templateApi.getDetail(id)
+    } else {
+      work.value = await workApi.getDetail(id)
+    }
+
+    if (authStore.isLoggedIn && work.value) {
+      await authStore.recordHistoryAction(
+        isTemplate.value ? { templateId: work.value.id } : { workId: work.value.id }
+      )
+      if (isTemplate.value) {
+        work.value = await templateApi.getDetail(id)
+      } else {
+        work.value = await workApi.getDetail(id)
+      }
+      if (!isOwner.value && work.value.user_id) {
+        const res = await followApi.checkStatus(work.value.user_id) as any
+        isFollowing.value = res.isFollowing
+      }
+      const { interactionApi } = await import('@/api/interaction')
+      const statusRes = await interactionApi.checkStatus(
+        isTemplate.value ? { templateId: work.value.id } : { workId: work.value.id }
+      ) as any
+      isLiked.value = statusRes.liked
+      isCollected.value = statusRes.collected
+    }
+  } catch (err) {
+    console.error('加载详情及状态失败:', err)
+  }
+})
 </script>
+
+<style scoped>
+.work-detail-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f8fafc;
+  color: #1e29b;
+  overflow: hidden;
+  transition: background-color .3s, color .3s;
+}
+.work-detail-root.dark {
+  background: #09090b;
+  color: #f4f4f5;
+}
+
+/* 返回按钮 */
+.back-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: #1e293b;
+  cursor: pointer;
+  transition: transform .15s ease;
+}
+.back-btn:hover { transform: scale(1.06); }
+.dark .back-btn {
+  background: rgba(39, 39, 42, 0.85);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f4f4f5;
+}
+
+/* 主体布局 */
+.layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+@media (min-width: 768px) {
+  .layout {
+    flex-direction: row;
+  }
+}
+
+/* 左侧沉浸图片 */
+.media-pane {
+  position: relative;
+  flex: 0 0 50%;
+  max-height: 50vh;
+  background: #09090b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+@media (min-width: 768px) {
+  .media-pane {
+    flex: 1 1 60%;
+    max-height: 100%;
+  }
+}
+
+.media-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-height: 50vh;
+  background: #09090b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@media (min-width: 768px) {
+  .media-canvas { max-height: 100%; }
+}
+
+.base-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  transition: opacity .25s ease;
+}
+
+.no-image {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #0f172a;
+  color: #94a3b8;
+}
+.no-image-icon { font-size: 3rem; }
+.no-image-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.skeleton-overlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 2;
+  filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.6));
+}
+
+/* 浮动控制胶囊 */
+.floating-controls {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 5;
+}
+.ctrl-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.ctrl-pill:hover { background: rgba(30, 41, 59, 0.85); }
+.ctrl-pill.active {
+  background: rgba(99, 102, 241, 0.85);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+.pill-icon { font-size: 0.9rem; }
+
+.opacity-slider {
+  width: 120px;
+}
+.opacity-slider input {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  outline: none;
+}
+.opacity-slider input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* 右侧社区区 */
+.social-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #fff;
+}
+.dark .social-pane { background: #18181b; }
+@media (min-width: 768px) {
+  .social-pane { max-width: 420px; }
+}
+
+/* 作者卡 */
+.author-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 4;
+}
+.dark .author-card { border-color: rgba(255, 255, 255, 0.06); }
+
+.author-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff2442, #ff8b63);
+  color: #fff;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.author-meta { flex: 1; min-width: 0; }
+.author-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.author-sub {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+.dark .author-sub { color: #a1a1aa; }
+
+.follow-btn {
+  padding: 6px 16px;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: #ff2442;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: all .2s ease;
+  flex-shrink: 0;
+}
+.follow-btn:hover { background: #e61e3c; }
+.follow-btn.following {
+  background: rgba(0, 0, 0, 0.05);
+  color: #64748b;
+}
+.dark .follow-btn.following {
+  background: rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+}
+
+/* 滚动内容 */
+.content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.work-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.4;
+  color: inherit;
+  margin-bottom: 8px;
+}
+.work-desc-wrapper { margin-bottom: 12px; }
+.work-desc {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #475569;
+  white-space: pre-line;
+  margin: 0;
+}
+.dark .work-desc { color: #cbd5e1; }
+.work-desc.collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.expand-btn {
+  font-size: 0.85rem;
+  color: #6366f1;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* 标签 */
+.tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.tag-pill {
+  font-size: 0.8rem;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.08);
+  padding: 4px 10px;
+  border-radius: 9999px;
+}
+.dark .tag-pill { background: rgba(99, 102, 241, 0.15); }
+
+/* 元数据 */
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+.dark .meta-row { color: #71717a; }
+.meta-item { white-space: nowrap; }
+
+/* CTA 拍照 */
+.cta-shoot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ff2442, #e11d48);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  margin-bottom: 16px;
+  transition: transform .15s ease, box-shadow .15s ease;
+  box-shadow: 0 6px 16px -4px rgba(255, 36, 66, 0.35);
+}
+.cta-shoot:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px -4px rgba(255, 36, 66, 0.45);
+}
+.cta-arrow { transition: transform .2s ease; }
+.cta-shoot:hover .cta-arrow { transform: translateX(3px); }
+
+/* AI 分析 */
+.analysis-block {
+  margin-bottom: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 12px;
+}
+.dark .analysis-block { border-color: rgba(255, 255, 255, 0.06); }
+.analysis-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  color: #64748b;
+}
+.dark .analysis-summary { color: #a1a1aa; }
+.analysis-summary::-webkit-details-marker { display: none; }
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.analysis-cell {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+  padding: 8px;
+}
+.dark .analysis-cell { background: rgba(255, 255, 255, 0.04); }
+.cell-key {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.cell-val {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: inherit;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.analysis-raw {
+  margin-top: 12px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  background: rgba(0, 0, 0, 0.03);
+  padding: 8px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+/* 评论 */
+.comments-block {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding-top: 16px;
+}
+.dark .comments-block { border-color: rgba(255, 255, 255, 0.06); }
+.comments-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.comments-count {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+.comment-composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.composer-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.composer-input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+  font-size: 0.85rem;
+  outline: none;
+  color: inherit;
+}
+.dark .composer-input {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.composer-input:focus { border-color: #6366f1; }
+.composer-send {
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.composer-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.comment-item {
+  display: flex;
+  gap: 8px;
+}
+.comment-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.comment-body { flex: 1; min-width: 0; }
+.comment-author {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: inherit;
+}
+.comment-text {
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.5;
+  margin: 2px 0;
+}
+.dark .comment-text { color: #cbd5e1; }
+.comment-time {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+.comments-empty {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  padding: 32px 0;
+  border: 1px dashed rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+}
+.dark .comments-empty { border-color: rgba(255, 255, 255, 0.1); }
+
+/* 互动栏 */
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 8px 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+}
+.dark .action-bar {
+  background: #18181b;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.action-btn:hover { background: rgba(0, 0, 0, 0.04); }
+.dark .action-btn:hover { background: rgba(255, 255, 255, 0.04); }
+.action-btn.active { color: #ff2442; }
+.action-btn.pulse { animation: likePulse .6s ease; }
+.action-icon { font-size: 1.2rem; line-height: 1; }
+.action-count { font-size: 0.8rem; min-width: 18px; text-align: left; }
+
+@keyframes likePulse {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.25); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+/* 点赞飞心 */
+.fly-heart {
+  position: absolute;
+  font-size: 1.5rem;
+  pointer-events: none;
+  animation: flyUp .8s ease forwards;
+}
+@keyframes flyUp {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-80px) scale(1.4); }
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+.toast-enter-active, .toast-leave-active { transition: opacity .25s ease, transform .25s ease; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px); }
+
+/* 过渡 */
+.fade-enter-active, .fade-leave-active { transition: opacity .2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* 更多菜单 */
+.more-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #64748b;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+.dark .more-btn { border-color: rgba(255, 255, 255, 0.08); color: #a1a1aa; }
+.more-btn:hover { background: rgba(0, 0, 0, 0.04); }
+.more-menu {
+  position: absolute;
+  top: 70px;
+  right: 16px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  z-index: 6;
+  min-width: 140px;
+  overflow: hidden;
+}
+.dark .more-menu {
+  background: #27272a;
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: 0.9rem;
+  color: inherit;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.more-menu button:hover { background: rgba(0, 0, 0, 0.04); }
+.dark .more-menu button:hover { background: rgba(255, 255, 255, 0.04); }
+.more-menu button.danger { color: #ef4444; }
+
+/* 滚动条 */
+.content-scroll::-webkit-scrollbar { width: 4px; }
+.content-scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 9999px; }
+.dark .content-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); }
+
+/* line-clamp 兜底 */
+.work-desc.collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+</style>
