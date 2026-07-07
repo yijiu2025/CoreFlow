@@ -8,6 +8,7 @@ import App from './App.vue'
 import router from './router'
 import i18n from './i18n'
 import { setupDirectives } from './directives'
+import { useUserSettings } from './stores/userSettings'
 import './assets/styles/main.css'
 
 const app = createApp(App)
@@ -24,7 +25,10 @@ app.use(router)
 app.use(i18n)
 setupDirectives(app)
 
-// 3. 等待路由就绪后挂载
+// 3. 用户个性设置初始化（缓存恢复 + 监听登录状态自动同步）
+useUserSettings().init()
+
+// 4. 等待路由就绪后挂载
 router.isReady().then(() => {
   app.mount('#app')
 })

@@ -194,7 +194,7 @@ import { followApi } from '@/api/follow'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const { showTemplate } = useHome()
+const { showTemplate } = useHome()  // showTemplate 现在是 computed，来自 userSettings store
 const work = ref<any>(null)
 const isFollowing = ref(false)
 const isLiked = ref(false)

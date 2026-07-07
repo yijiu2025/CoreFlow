@@ -63,25 +63,25 @@ activeNav.value = 'following'
   column-gap: 20px;
 }
 
-@media (max-width: 1400px) {
+@media (max-width: 1200px) {
   .waterfall-grid {
     column-count: 4;
   }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 800px) {
   .waterfall-grid {
     column-count: 3;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 500px) {
   .waterfall-grid {
     column-count: 2;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 320px) {
   .waterfall-grid {
     column-count: 1;
   }

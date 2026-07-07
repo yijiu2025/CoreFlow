@@ -1,4 +1,5 @@
 import { ref, onMounted, onUnmounted, computed, watch, type Ref, provide, inject } from 'vue'
+import { useUserSettings } from '@/stores/userSettings'
 import { useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
@@ -34,7 +35,12 @@ export function useHome() {
   // DOM refs
   const searchStickyHeader = ref<HTMLElement | null>(null)
   const searchSentinel = ref<HTMLElement | null>(null)
-  const showTemplate = ref(true) // 全局控制骨骼图层显隐的开关
+  // 骨骼线图层显隐：从用户设置 store 读取（缓存优先 + 登录后同步后端）
+  const userSettings = useUserSettings()
+  const showTemplate = computed({
+    get: () => userSettings.settings.showTemplate,
+    set: (v) => userSettings.setSetting('showTemplate', v)
+  })
   const showSettingsModal = ref(false)
   const settingsActiveSection = ref('general')
 

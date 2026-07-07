@@ -124,11 +124,8 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AvatarHoverCard from '@/components/popovers/home/AvatarHoverCard.vue'
 
-import { useHome } from '@/composables/useHome'
-
 const router = useRouter()
 const authStore = useAuthStore()
-const { showTemplate } = useHome()
 
 const goToMyWorks = () => {
   router.push('/mine')

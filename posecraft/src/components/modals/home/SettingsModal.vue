@@ -156,7 +156,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
+import { useUserSettings } from '@/stores/userSettings'
 
 const props = defineProps<{
   activeSection: string
@@ -167,7 +168,11 @@ const emit = defineEmits<{
   (e: 'showToast', msg: string): void
 }>()
 
-const showTemplate = defineModel<boolean>('showTemplate', { required: true })
+const userSettings = useUserSettings()
+const showTemplate = computed({
+  get: () => userSettings.settings.showTemplate,
+  set: (v) => userSettings.setSetting('showTemplate', v)
+})
 
 const currentSection = ref('general')
 const scrollContainer = ref<HTMLElement | null>(null)

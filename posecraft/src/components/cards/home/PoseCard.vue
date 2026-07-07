@@ -1,6 +1,6 @@
 <template>
   <div class="card" @click="$emit('click', item)">
-    <div class="card-image" :style="{ aspectRatio: getAspectRatio(item.image_url || item.thumbnail_url) }">
+    <div class="card-image" :style="{ aspectRatio }">
       <!-- 1. 底图层 -->
       <img v-if="item.image_url" :src="item.image_url" :alt="item.title" class="base-image" />
       <div v-else class="empty-base-bg"></div>
@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useHome } from '@/composables/useHome'
 
 const props = defineProps<{
@@ -74,15 +74,39 @@ const isTemplateWork = computed(() => {
   }
 })
 
-const getAspectRatio = (url: string) => {
-  if (!url) return '4/5'
+// 真实图片宽高比，默认 4/5（未加载或加载失败时）
+const aspectRatio = ref<string>('4/5')
+
+/**
+ * 解析图片真实宽高比：
+ * 1. 优先从 URL 提取 picsum 假数据的 /400/560 模式
+ * 2. 真实图片通过 Image 对象加载后读取 naturalWidth/Height
+ */
+const loadAspectRatio = (url: string) => {
+  if (!url) return
+  // 假数据快速路径
   const match = url.match(/\/400\/(\d+)/)
-  if (match && match[1]) {
-    const height = parseInt(match[1])
-    return `400 / ${height}`
+  if (match?.[1]) {
+    aspectRatio.value = `400 / ${parseInt(match[1])}`
+    return
   }
-  return '4/5'
+  // 真实图片：加载后读取实际尺寸
+  const img = new Image()
+  img.onload = () => {
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      aspectRatio.value = `${img.naturalWidth} / ${img.naturalHeight}`
+    }
+  }
+  img.onerror = () => {
+    // 加载失败保持默认 4/5
+  }
+  img.src = url
 }
+
+onMounted(() => {
+  const url = props.item?.image_url || props.item?.thumbnail_url
+  loadAspectRatio(url)
+})
 
 const formatLikes = (num: number) => {
   if (!num) return '0'
