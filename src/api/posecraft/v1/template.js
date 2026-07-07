@@ -4,6 +4,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import TemplateDao from '../../../app/posecraft/dao/template.dao.js';
+import { sequelize } from '../../../db/index.js';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
