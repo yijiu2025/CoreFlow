@@ -574,7 +574,11 @@ export function useHome() {
     return false
   }
 
-  watch(activeNav, () => {
+  watch(activeNav, (newNav) => {
+    // 切换到精选页时，重置 showNavSearch（让 IntersectionObserver 重新判断）
+    if (newNav === 'featured') {
+      showNavSearch.value = false
+    }
     refreshData()
   })
 
@@ -603,7 +607,11 @@ export function useHome() {
     let io: IntersectionObserver | null = null
     const setupIO = () => {
       io?.disconnect()
-      if (!searchSentinel.value) return
+      if (!searchSentinel.value) {
+        // sentinel 不存在（非精选页），强制还原
+        showNavSearch.value = false
+        return
+      }
       io = new IntersectionObserver(
         ([entry]) => {
           showNavSearch.value = !entry.isIntersecting
@@ -613,6 +621,11 @@ export function useHome() {
       io.observe(searchSentinel.value)
     }
     setTimeout(setupIO, 100)
+
+    // 当 searchSentinel 引用变化时（keep-alive 切回精选页）重建 IO
+    watch(searchSentinel, () => {
+      setupIO()
+    })
 
     ;(window as any).__cleanupHome = () => {
       io?.disconnect()
