@@ -304,13 +304,16 @@ const computedPhotoOpacity = computed(() =>
 )
 
 const containerStyle = computed(() => {
-  if (!work.value?.edit_data) return { aspectRatio: '4/3' }
-  try {
-    const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
-    const { vw, vh } = data
-    if (vw && vh) return { aspectRatio: `${vw} / ${vh}` }
-  } catch {}
-  return { aspectRatio: '4/3' }
+  // 有 edit_data（带设计稿比例）：按设计稿锁定容器比例
+  if (work.value?.edit_data) {
+    try {
+      const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
+      const { vw, vh } = data
+      if (vw && vh) return { aspectRatio: `${vw} / ${vh}` }
+    } catch {}
+  }
+  // 真实图片：不锁定比例，让 base-image 用 height:auto 自己撑开
+  return { width: '100%' }
 })
 
 const overlayStyle = computed<any>(() => {
@@ -605,41 +608,50 @@ onMounted(async () => {
 /* 左侧沉浸图片 */
 .media-pane {
   position: relative;
-  flex: 0 0 50%;
-  max-height: 50vh;
+  flex: 0 0 auto;
   background: #09090b;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  /* 移动端给一个合理的上限，防止长图占满整个屏幕 */
+  max-height: 60vh;
 }
 @media (min-width: 768px) {
   .media-pane {
     flex: 1 1 60%;
     max-height: 100%;
+    min-height: 0;
   }
 }
 
 .media-canvas {
   position: relative;
   width: 100%;
-  height: 100%;
-  max-height: 50vh;
+  /* 高度由 aspect-ratio 驱动，不再强制 max-height 截断 */
   background: #09090b;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 @media (min-width: 768px) {
-  .media-canvas { max-height: 100%; }
+  .media-canvas { height: 100%; }
 }
 
 .base-image {
   width: 100%;
-  height: 100%;
+  height: auto;
+  /* 高度由 aspect-ratio 驱动，max-height 兜底避免超长图溢出视口 */
+  max-height: 60vh;
   object-fit: contain;
   pointer-events: none;
   transition: opacity .25s ease;
+}
+@media (min-width: 768px) {
+  .base-image {
+    max-height: 100%;
+    height: 100%;
+  }
 }
 
 .no-image {
@@ -666,6 +678,9 @@ onMounted(async () => {
   pointer-events: none;
   z-index: 2;
   filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.6));
+  /* 叠加图跟随 media-canvas 尺寸，而不是整个 pane */
+  max-width: 100%;
+  max-height: 100%;
 }
 
 /* 浮动控制胶囊 */
