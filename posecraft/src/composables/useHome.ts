@@ -598,60 +598,31 @@ export function useHome() {
     const handleResize = () => { windowWidth.value = window.innerWidth }
     window.addEventListener('resize', handleResize, { passive: true })
 
+    // 搜索框内容区高度计算：
+    // main-content-area padding-top 72px + search-sticky padding 16px + search-row-input 46px = 134px
+    // 当 scrollY > 134 - 72 = 62px 时，搜索框已完全滚入 TopNav 背后
+    const SEARCH_HERO_THRESHOLD = 62
+
     const handleScroll = () => {
       showBackToTop.value = window.scrollY > 100
+      // 精选页：基于滚动位置实时判断，无布局剪载，无闪烁
+      if (activeNav.value === 'featured') {
+        showNavSearch.value = window.scrollY > SEARCH_HERO_THRESHOLD
+      }
     }
     window.addEventListener('scroll', handleScroll, { passive: true })
 
-    let io: IntersectionObserver | null = null
-
-    const disconnectIO = () => {
-      io?.disconnect()
-      io = null
-      showNavSearch.value = false
-    }
-
-    const setupIO = () => {
-      io?.disconnect()
-      if (!searchSentinel.value || activeNav.value !== 'featured') {
-        // sentinel 不存在或不在精选页，直接关闭
-        showNavSearch.value = false
-        return
-      }
-      io = new IntersectionObserver(
-        ([entry]) => {
-          // 仅当处于精选页时才更新
-          if (activeNav.value === 'featured') {
-            showNavSearch.value = !entry.isIntersecting
-          }
-        },
-        { rootMargin: '-72px 0px 0px 0px', threshold: 0 }
-      )
-      io.observe(searchSentinel.value)
-    }
-    setTimeout(setupIO, 100)
-
-    // sentinel 引用变化（keep-alive 切换回精选页时）重建 IO
-    watch(searchSentinel, () => {
-      if (activeNav.value === 'featured') {
-        setupIO()
-      } else {
-        disconnectIO()
-      }
-    })
-
-    // activeNav 变化时：非精选页立即断开 IO 并重置，精选页重建 IO
+    // activeNav 变化时：非精选页立即重置，精选页重新根据 scroll 判断
     watch(activeNav, (newNav) => {
       if (newNav !== 'featured') {
-        disconnectIO()
+        showNavSearch.value = false
       } else {
-        // 延迟一帧让 keep-alive 恢复 DOM，再重建 IO
-        setTimeout(setupIO, 50)
+        // 切回精选页时立即根据当前滚动位置判断
+        showNavSearch.value = window.scrollY > SEARCH_HERO_THRESHOLD
       }
     })
 
     ;(window as any).__cleanupHome = () => {
-      io?.disconnect()
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('scroll', handleScroll)
     }

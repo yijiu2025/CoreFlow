@@ -49,9 +49,6 @@
       </div>
     </div>
 
-    <!-- Sentinel：紧跟搜索框之后，搜索框滚出视野时立即触发 -->
-    <div ref="sentinelRef" class="search-sentinel"></div>
-
     <!-- 分类 Tab -->
     <div class="channel-container">
       <div class="channel-inner">
@@ -114,14 +111,14 @@ defineExpose({
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
-  min-height: 46px;
+  min-height: 46px; /* 固定高度，不受 actions 影响，防止 layout shift */
   background: #ffffff;
   border: 1.5px solid #e8edf2;
   border-radius: 16px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   overflow: visible;
   z-index: 10;
-  transition: border-radius 0.25s ease, border-color 0.25s ease;
+  transition: border-radius 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .dark-mode .search-hero-bar {
@@ -154,18 +151,28 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 0;
+  /* absolute 定位脱离文档流，避免 height 变化引起 layout shift 和滚动抖动 */
+  position: absolute;
+  bottom: 0;
+  left: 12px;
+  right: 0;
+  height: 36px;
+  padding-bottom: 8px;
   opacity: 0;
-  overflow: hidden;
-  transition: all 0.25s ease;
-  padding: 0 0 0 12px;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 .search-hero-bar.at-top .search-row-actions,
 .search-hero-bar.focused .search-row-actions {
-  height: 36px;
   opacity: 1;
-  padding: 0 0 8px 12px;
+  pointer-events: auto;
+}
+
+.search-hero-bar.at-top,
+.search-hero-bar.focused {
+  /* 展开时额外留出 actions 的空间 */
+  padding-bottom: 36px;
 }
 
 .search-plus-btn {

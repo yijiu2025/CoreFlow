@@ -1,0 +1,1 @@
+import{b as r}from"./request-Cc9Z8ASZ.js";import"./index-QCFm8qAQ.js";const p={getProfile:()=>r.get("/user/v1/profile"),updateProfile:t=>r.put("/user/v1/update",t),uploadAvatar:t=>{const a=new FormData;return a.append("avatar",t),r.post("/user/v1/avatar",a,{headers:{"Content-Type":"multipart/form-data"}})}};export{p as userApi};
