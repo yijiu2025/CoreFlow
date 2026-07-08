@@ -64,14 +64,12 @@ const toggleFavorite = () => {
   isFavorited.value = !isFavorited.value
 }
 
+/**
+ * 是否为模板底图作品（由后端 is_template_work 字段决定）
+ * 模板一对一绑定一个作品，该作品显示「模板」徽章
+ */
 const isTemplateWork = computed(() => {
-  if (!props.item?.edit_data) return false
-  try {
-    const data = typeof props.item.edit_data === 'string' ? JSON.parse(props.item.edit_data) : props.item.edit_data
-    return !!data?.is_template_work
-  } catch (e) {
-    return false
-  }
+  return !!props.item?.is_template_work
 })
 
 // 真实图片宽高比，默认 4/5（未加载或加载失败时）

@@ -272,22 +272,20 @@ export default async function (fastify) {
       const { title, description, template_id, image_url, analysis_data, edit_data } = request.body;
       const user = request.state.user;
 
+      // 作品的 thumbnail_url = 底图原图（不含骨架）
+      // 模板底图作品的创建走 TemplateDao.syncCreateWork，不在本接口
       const work = await workDao.create({
         title,
         description,
         template_id,
         image_url,
-        thumbnail_url: '', // 下面会自动更新填充为动态预览路径
+        thumbnail_url: image_url || '',
         analysis_data,
         edit_data,
+        is_template_work: false,
         user_id: user.userId,
         status: 1,
         delete_version: 0
-      });
-
-      // 自动回填动态合成预览 URL，避免前端多传预览图
-      await work.update({
-        thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
       });
 
       return reply.result.success('创建成功', work);

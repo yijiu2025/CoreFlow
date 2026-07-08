@@ -25,15 +25,15 @@ export default (sequelize, DataTypes) => {
         defaultValue: 'pose',
         comment: '分类: pose, creative, sports, composition, technique, custom'
       },
-      thumbnail_url: {
-        type: DataTypes.STRING(500),
-        field: 'thumbnail_url',
-        comment: '缩略图 URL'
-      },
       image_url: {
         type: DataTypes.STRING(500),
         field: 'image_url',
         comment: '原图 URL'
+      },
+      thumbnail_url: {
+        type: DataTypes.STRING(500),
+        field: 'thumbnail_url',
+        comment: '骨架预览图 URL（透明背景 PNG），后端生成'
       },
       pose_data: {
         type: DataTypes.JSON,
@@ -67,6 +67,11 @@ export default (sequelize, DataTypes) => {
         field: 'uses_count',
         comment: '使用次数'
       },
+      work_id: {
+        type: DataTypes.BIGINT,
+        field: 'work_id',
+        comment: '该模板对应的底图作品 ID（一对一绑定）'
+      },
       delete_version: {
         type: DataTypes.BIGINT,
         allowNull: false,
@@ -80,7 +85,8 @@ export default (sequelize, DataTypes) => {
       indexes: [
         { fields: ['user_id'], name: 'idx_template_user' },
         { fields: ['category'], name: 'idx_template_category' },
-        { fields: ['status'], name: 'idx_template_status' }
+        { fields: ['status'], name: 'idx_template_status' },
+        { fields: ['work_id'], name: 'idx_template_work' }
       ],
       comment: 'PoseCraft 模板表'
     }
@@ -88,7 +94,8 @@ export default (sequelize, DataTypes) => {
 
   Template.associate = (models) => {
     Template.belongsTo(models.User, { foreignKey: 'user_id', as: 'creator' });
-    Template.hasMany(models.Work, { foreignKey: 'template_id', as: 'works' });
+    // 模板一对一绑定底图作品（反向指针）
+    Template.hasOne(models.Work, { foreignKey: 'template_id', as: 'templateWork' });
   };
 
   return Template;

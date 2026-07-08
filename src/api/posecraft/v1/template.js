@@ -4,6 +4,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import TemplateDao from '../../../app/posecraft/dao/template.dao.js';
+import { generateSvgFromFabric } from '../../../app/posecraft/utils/preview.js';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -11,53 +12,6 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads/posecraft');
-
-function generateSvgFromFabric(fabricData) {
-  const width = fabricData.width || 800;
-  const height = fabricData.height || 600;
-  let svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
-  
-  const objects = fabricData.objects || [];
-  for (const obj of objects) {
-    if (obj.type === 'line') {
-      const x1 = obj.x1;
-      const y1 = obj.y1;
-      const x2 = obj.x2;
-      const y2 = obj.y2;
-      const stroke = obj.stroke || '#6366f1';
-      const strokeWidth = obj.strokeWidth || 3;
-      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
-      svgContent += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" />`;
-    } else if (obj.type === 'circle') {
-      const radius = obj.radius || 8;
-      const originX = obj.originX || 'left';
-      const originY = obj.originY || 'top';
-      const cx = originX === 'center' ? obj.left : obj.left + radius;
-      const cy = originY === 'center' ? obj.top : obj.top + radius;
-      const fill = obj.fill || '#ffffff';
-      const stroke = obj.stroke || '#6366f1';
-      const strokeWidth = obj.strokeWidth || 3;
-      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
-      svgContent += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`;
-    } else if (obj.type === 'path') {
-      const stroke = obj.stroke || '#6366f1';
-      const strokeWidth = obj.strokeWidth || 3;
-      const fill = obj.fill || 'none';
-      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
-      let pathD = '';
-      if (Array.isArray(obj.path)) {
-        pathD = obj.path.map(cmd => cmd.join(' ')).join(' ');
-      } else if (typeof obj.path === 'string') {
-        pathD = obj.path;
-      }
-      if (pathD) {
-        svgContent += `<path d="${pathD}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" stroke-linejoin="round" />`;
-      }
-    }
-  }
-  svgContent += `</svg>`;
-  return Buffer.from(svgContent);
-}
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -275,17 +229,11 @@ export default async function (fastify) {
         description,
         category: category || 'general',
         image_url,
-        thumbnail_url: '', // 下面会自动更新填充为动态预览路径
         pose_data,
         tags,
         user_id: user.userId,
         status: 2, // 默认 2 - 待审核，不可直接公开
         delete_version: 0
-      });
-
-      // 自动回填动态合成预览 URL，避免前端多传预览图
-      await template.update({
-        thumbnail_url: `/posecraft/v1/templates/${template.id}/preview`
       });
 
       // 同步保存底图为一个单独的作品 (Work)
@@ -320,6 +268,10 @@ export default async function (fastify) {
       }
 
       const updated = await TemplateDao.update(id, { status: Number(status) });
+
+      // 审核通过/拒绝后，同步更新对应底图作品的状态
+      await TemplateDao.syncAuditWork(id, Number(status));
+
       return reply.result.success('审核处理完成', updated);
     }
   });
@@ -351,9 +303,6 @@ export default async function (fastify) {
         return reply.result.forbidden('无权编辑他人的模板');
       }
 
-      // 强制覆盖或回填为动态合成的预览 URL，避免浪费带宽与存储
-      data.thumbnail_url = `/posecraft/v1/templates/${id}/preview`;
-
       // 修改后如果需要重新审核，在此处将 status 重置为 2（非管理员修改后重置）
       const isAdmin = checkDataPermission({ user_id: -1 }, user);
       if (data.status === undefined && !isAdmin) {
@@ -361,6 +310,15 @@ export default async function (fastify) {
       }
 
       const updated = await TemplateDao.update(id, data);
+
+      // 若 pose_data 发生变化，重新生成骨架预览图
+      if (data.pose_data !== undefined) {
+        const { generateSkeletonPreview } = await import('../../../app/posecraft/utils/preview.js');
+        const skeletonUrl = await generateSkeletonPreview(updated.pose_data);
+        if (skeletonUrl) {
+          await TemplateDao.update(id, { thumbnail_url: skeletonUrl });
+        }
+      }
 
       // 同步更新或创建对应的底图作品 (Work)
       await TemplateDao.syncUpdateWork(id, data, template);
