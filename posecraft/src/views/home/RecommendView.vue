@@ -5,7 +5,7 @@
         <div class="waterfall-grid">
           <PoseCard
             v-for="item in filteredItems"
-            :key="item.id"
+            :key="item._key ?? item.id"
             :item="item"
             @click="openDetail"
             @like="likeItem"

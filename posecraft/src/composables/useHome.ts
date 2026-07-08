@@ -398,9 +398,10 @@ export function useHome() {
   }
 
   // 合并模板和作品并映射标识（API 无数据时用模拟推荐数据）
+  // _key 用 "type-id" 拼接，避免 templates 与 works 数字 id 重复导致 Vue duplicate key 警告
   const allItems = computed(() => {
-    const tplList = templates.value.map(t => ({ ...t, type: 'template' }))
-    const workList = works.value.map(w => ({ ...w, type: 'work' }))
+    const tplList = templates.value.map(t => ({ ...t, type: 'template', _key: `template-${t.id}` }))
+    const workList = works.value.map(w => ({ ...w, type: 'work', _key: `work-${w.id}` }))
     const apiItems = [...tplList, ...workList]
     if (apiItems.length > 0) return apiItems
     return mockRecommendations.map(m => ({ ...m }))
@@ -410,8 +411,9 @@ export function useHome() {
   const filteredItems = computed(() => {
     let list: any[] = []
 
-    const tplList = templates.value.map(t => ({ ...t, type: 'template' }))
-    const workList = works.value.map(w => ({ ...w, type: 'work' }))
+    // _key = "type-id" 保证跨数据源唯一，防止 Vue v-for :key 重复警告
+    const tplList = templates.value.map(t => ({ ...t, type: 'template', _key: `template-${t.id}` }))
+    const workList = works.value.map(w => ({ ...w, type: 'work', _key: `work-${w.id}` }))
     const apiItems = [...tplList, ...workList]
 
     if (activeNav.value === 'featured') {
