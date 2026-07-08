@@ -1,5 +1,6 @@
 import { ref, onMounted, onUnmounted, computed, watch, type Ref, provide, inject } from 'vue'
 import { useUserSettings } from '@/stores/userSettings'
+import { useTemplateThumbnailRegistry } from '@/composables/useTemplateThumbnailRegistry'
 import { useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
@@ -37,6 +38,8 @@ export function useHome() {
   const searchSentinel = ref<HTMLElement | null>(null)
   // 骨骼线图层显隐：从用户设置 store 读取（缓存优先 + 登录后同步后端）
   const userSettings = useUserSettings()
+  const { registerBatch } = useTemplateThumbnailRegistry()
+  const registerTemplateThumbnails = registerBatch
   const showTemplate = computed({
     get: () => userSettings.settings.showTemplate,
     set: (v) => userSettings.setSetting('showTemplate', v)
@@ -541,6 +544,9 @@ export function useHome() {
         }
         works.value = [...works.value, ...newWorks]
       }
+
+      // 把模板的骨架预览图注册到注册表，供 PoseCard 骨架叠加层使用
+      registerTemplateThumbnails(templates.value)
 
       const hasMoreTemplates = tplRes.page < tplRes.totalPages
       const hasMoreWorks = page < totalPages

@@ -2,7 +2,7 @@
  * PoseCraft 模板数据访问层
  */
 import sequelize from '../../../db/index.js';
-import { generateSkeletonPreview } from '../utils/preview.js';
+import { generateSkeletonPreview, generateImageThumbnail } from '../utils/preview.js';
 
 class TemplateDao {
   getModel() {
@@ -207,8 +207,8 @@ class TemplateDao {
    *
    * 1. 创建 Work 并以 template_id 指向本模板
    * 2. 回填 Template.work_id 实现双向绑定
-   * 3. 为模板生成骨架预览图（thumbnail_url = 纯骨架 PNG）
-   * 4. 作品的 thumbnail_url = image_url（底图原图，不含骨架）
+   * 3. 为模板生成骨架预览图（thumbnail_url = 纯骨架 PNG，透明背景）
+   * 4. 作品的 thumbnail_url = 底图原图压缩版（WebP 70%，尺寸不变）
    *
    * @param {Template} template - 已持久化的 Template 实例
    * @param {number} userId - 创建者 ID
@@ -218,14 +218,17 @@ class TemplateDao {
     const Work = sequelize.models.Work;
     if (!template.image_url) return null;
 
-    // 创建底图作品，thumbnail_url = 底图原图
+    // 生成作品缩略图：底图原图压缩（WebP 70%，尺寸不变）；失败则回退原图
+    const thumbUrl = (await generateImageThumbnail(template.image_url)) || template.image_url;
+
+    // 创建底图作品
     const work = await Work.create({
       user_id: userId,
       template_id: template.id,
       title: template.title || '模板底图作品',
       description: template.description || '',
       image_url: template.image_url,
-      thumbnail_url: template.image_url,
+      thumbnail_url: thumbUrl,
       edit_data: { is_template_work: true },
       is_template_work: true, // 独立字段，方便列表查询筛选
       status: 2, // 模板底图作品待审核，不可见
@@ -247,7 +250,7 @@ class TemplateDao {
   /**
    * 同步更新模板对应的作品记录
    *
-   * - 移除旧 thumbnail_url 残留，改为 thumbnail_url = image_url（底图原图）
+   * - 作品的 thumbnail_url = 底图原图压缩版（WebP 70%，尺寸不变）
    * - 非管理员更新后重置为 status: 2（待审核），而非直接公开
    * - 若 Work 不存在则创建，并回填 template.work_id
    *
@@ -264,18 +267,22 @@ class TemplateDao {
       }
     });
 
+    const newImageUrl = data.image_url || template.image_url;
+    // 压缩底图为缩略图；失败则回退原图
+    const thumbUrl = (await generateImageThumbnail(newImageUrl)) || newImageUrl;
+
     const workData = {
       title: data.title || template.title,
       description: data.description || template.description,
-      image_url: data.image_url || template.image_url,
-      thumbnail_url: data.image_url || template.image_url,
+      image_url: newImageUrl,
+      thumbnail_url: thumbUrl,
       is_template_work: true, // 始终是模板底图作品
       status: 2 // 更新后重新走审核流程，不可直接公开
     };
 
     if (work) {
       await work.update(workData);
-    } else if (data.image_url || template.image_url) {
+    } else if (newImageUrl) {
       work = await Work.create({
         user_id: template.user_id,
         template_id: templateId,
