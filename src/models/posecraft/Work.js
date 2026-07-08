@@ -38,7 +38,7 @@ export default (sequelize, DataTypes) => {
       thumbnail_url: {
         type: DataTypes.STRING(500),
         field: 'thumbnail_url',
-        comment: '缩略图 URL'
+        comment: '作品缩略图 URL（默认为 image_url 底图原图）'
       },
       analysis_data: {
         type: DataTypes.JSON,
@@ -50,10 +50,16 @@ export default (sequelize, DataTypes) => {
         field: 'edit_data',
         comment: 'Fabric.js 编辑数据'
       },
+      is_template_work: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: 'is_template_work',
+        comment: '是否为模板底图作品（模板一对一绑定的作品），true 时前端显示「模板」徽章'
+      },
       status: {
         type: DataTypes.TINYINT,
-        defaultValue: 1,
-        comment: '状态: 1-公开, 0-私密, -1-已删除'
+        defaultValue: 2,
+        comment: '状态: 2-待审核, 1-公开, 0-私密, -1-已删除, -2-审核拒绝'
       },
       likes_count: {
         type: DataTypes.INTEGER,
@@ -81,7 +87,8 @@ export default (sequelize, DataTypes) => {
         { fields: ['user_id'], name: 'idx_work_user' },
         { fields: ['template_id'], name: 'idx_work_template' },
         { fields: ['status'], name: 'idx_work_status' },
-        { fields: ['created_at'], name: 'idx_work_created' }
+        { fields: ['created_at'], name: 'idx_work_created' },
+        { fields: ['is_template_work'], name: 'idx_work_is_template' }
       ],
       comment: 'PoseCraft 作品表'
     }
@@ -90,6 +97,8 @@ export default (sequelize, DataTypes) => {
   Work.associate = (models) => {
     Work.belongsTo(models.User, { foreignKey: 'user_id', as: 'author' });
     Work.belongsTo(models.Template, { foreignKey: 'template_id', as: 'template' });
+    // 反向：该作品作为模板底图时，Template.work_id 指向本 Work
+    Work.hasOne(models.Template, { foreignKey: 'work_id', as: 'boundTemplate' });
   };
 
   return Work;

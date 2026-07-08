@@ -2,6 +2,7 @@
  * PoseCraft 模板数据访问层
  */
 import sequelize from '../../../db/index.js';
+import { generateSkeletonPreview } from '../utils/preview.js';
 
 class TemplateDao {
   getModel() {
@@ -202,30 +203,57 @@ class TemplateDao {
   }
 
   /**
-   * 同步为模板创建作品记录
+   * 同步为模板创建作品记录（模板的底图作品）
+   *
+   * 1. 创建 Work 并以 template_id 指向本模板
+   * 2. 回填 Template.work_id 实现双向绑定
+   * 3. 为模板生成骨架预览图（thumbnail_url = 纯骨架 PNG）
+   * 4. 作品的 thumbnail_url = image_url（底图原图，不含骨架）
+   *
+   * @param {Template} template - 已持久化的 Template 实例
+   * @param {number} userId - 创建者 ID
+   * @returns {Promise<Work|null>} 创建的 Work 实例，无 image_url 时返回 null
    */
   async syncCreateWork(template, userId) {
     const Work = sequelize.models.Work;
-    if (template.image_url) {
-      const work = await Work.create({
-        user_id: userId,
-        template_id: template.id,
-        title: template.title || '模板底图作品',
-        description: template.description || '',
-        image_url: template.image_url,
-        thumbnail_url: `/posecraft/v1/works/temp_${template.id}/preview`,
-        edit_data: { is_template_work: true },
-        status: 1, // 模板底图作品公开可见
-        delete_version: 0
-      });
-      await work.update({
-        thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
-      });
+    if (!template.image_url) return null;
+
+    // 创建底图作品，thumbnail_url = 底图原图
+    const work = await Work.create({
+      user_id: userId,
+      template_id: template.id,
+      title: template.title || '模板底图作品',
+      description: template.description || '',
+      image_url: template.image_url,
+      thumbnail_url: template.image_url,
+      edit_data: { is_template_work: true },
+      is_template_work: true, // 独立字段，方便列表查询筛选
+      status: 2, // 模板底图作品待审核，不可见
+      delete_version: 0
+    });
+
+    // 回填 template.work_id，实现双向绑定
+    await template.update({ work_id: work.id });
+
+    // 生成骨架预览图给模板（透明背景 PNG）
+    const skeletonUrl = await generateSkeletonPreview(template.pose_data);
+    if (skeletonUrl) {
+      await template.update({ thumbnail_url: skeletonUrl });
     }
+
+    return work;
   }
 
   /**
    * 同步更新模板对应的作品记录
+   *
+   * - 移除旧 thumbnail_url 残留，改为 thumbnail_url = image_url（底图原图）
+   * - 非管理员更新后重置为 status: 2（待审核），而非直接公开
+   * - 若 Work 不存在则创建，并回填 template.work_id
+   *
+   * @param {number} templateId - 模板 ID
+   * @param {object} data - 本次更新的字段
+   * @param {Template} template - 当前 Template 实例
    */
   async syncUpdateWork(templateId, data, template) {
     const Work = sequelize.models.Work;
@@ -240,7 +268,9 @@ class TemplateDao {
       title: data.title || template.title,
       description: data.description || template.description,
       image_url: data.image_url || template.image_url,
-      status: 1
+      thumbnail_url: data.image_url || template.image_url,
+      is_template_work: true, // 始终是模板底图作品
+      status: 2 // 更新后重新走审核流程，不可直接公开
     };
 
     if (work) {
@@ -251,12 +281,28 @@ class TemplateDao {
         template_id: templateId,
         ...workData,
         edit_data: { is_template_work: true },
+        is_template_work: true,
         delete_version: 0
       });
-      await work.update({
-        thumbnail_url: `/posecraft/v1/works/${work.id}/preview`
-      });
     }
+
+    // 确保双向绑定（新创建或历史缺失都补上）
+    if (work && !template.work_id) {
+      await template.update({ work_id: work.id });
+    }
+  }
+
+  /**
+   * 审核模板时联动同步对应底图作品的状态
+   *
+   * @param {number} templateId - 模板 ID
+   * @param {number} status - 审核后的状态（1-公开 / -2-拒绝）
+   */
+  async syncAuditWork(templateId, status) {
+    const template = await this.findById(templateId);
+    if (!template?.work_id) return;
+    const Work = sequelize.models.Work;
+    await Work.update({ status }, { where: { id: template.work_id, delete_version: 0 } });
   }
 
   /**
