@@ -94,6 +94,50 @@ export function extractFabricData(poseData) {
 }
 
 /**
+ * 作品的底图原图压缩为低画质缩略图（用于渐进加载，省带宽）
+ *
+ * 与骨架预览图不同：
+ * - 骨架预览图（generateSkeletonPreview）= 透明背景，纯骨架，用于模板
+ * - 本函数 = 底图原图压缩，**保持原始尺寸**，改用 WebP 70% 质量降低文件体积
+ *
+ * @param {string} imageUrl - 底图 URL，如 '/uploads/posecraft/xxx.jpg'
+ * @returns {Promise<string|null>} 相对 URL；失败时返回 null（调用方应回退到原图）
+ */
+export async function generateImageThumbnail(imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
+
+  try {
+    // 仅处理本地上传图片（以 /uploads/ 开头）
+    const localPath = path.resolve(process.cwd(), 'public', imageUrl.replace(/^\//, ''));
+    if (!fs.existsSync(localPath)) return null;
+
+    // 保持原始尺寸，仅改格式为 WebP + 降低质量
+    const thumbBuffer = await sharp(localPath)
+      .webp({ quality: 70 })
+      .toBuffer();
+
+    // 仅当压缩后比原图小 30% 以上才使用缩略图，否则保留原图更划算
+    const origStat = fs.statSync(localPath);
+    if (thumbBuffer.length >= origStat.size * 0.7) return null;
+
+    fs.mkdirSync(PREVIEW_DIR, { recursive: true });
+    const hash = crypto.createHash('sha256').update(thumbBuffer).digest('hex').slice(0, 16);
+    const filename = `${hash}.webp`;
+    const filePath = path.join(PREVIEW_DIR, filename);
+
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, thumbBuffer);
+    }
+
+    return `/uploads/posecraft/previews/${filename}`;
+  } catch (err) {
+    const log = globalThis?.fastify?.log || console;
+    log.error?.(err, 'PoseCraft image thumbnail generation failed');
+    return null;
+  }
+}
+
+/**
  * 生成纯骨架预览图（透明背景），保存为静态文件
  * 用于模板（Template.thumbnail_url）
  *

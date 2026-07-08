@@ -272,14 +272,17 @@ export default async function (fastify) {
       const { title, description, template_id, image_url, analysis_data, edit_data } = request.body;
       const user = request.state.user;
 
-      // 作品的 thumbnail_url = 底图原图（不含骨架）
+      // 作品的 thumbnail_url = 底图原图压缩版（WebP 70%，尺寸不变，省带宽）
       // 模板底图作品的创建走 TemplateDao.syncCreateWork，不在本接口
+      const { generateImageThumbnail } = await import('../../../app/posecraft/utils/preview.js');
+      const thumbUrl = (image_url && (await generateImageThumbnail(image_url))) || image_url || '';
+
       const work = await workDao.create({
         title,
         description,
         template_id,
         image_url,
-        thumbnail_url: image_url || '',
+        thumbnail_url: thumbUrl,
         analysis_data,
         edit_data,
         is_template_work: false,
