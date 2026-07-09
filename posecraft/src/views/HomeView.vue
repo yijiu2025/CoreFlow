@@ -57,9 +57,10 @@
 
 
 
-    <!-- 系统设置 Modal -->
-    <SettingsModal
+    <!-- 系统设置 Modal（首次打开时才异步加载，减少首屏体积） -->
+    <component
       v-if="showSettingsModal"
+      :is="SettingsModal"
       :active-section="settingsActiveSection"
       @close="showSettingsModal = false"
       @showToast="showToast"
@@ -73,14 +74,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, shallowRef, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useHome } from '@/composables/useHome'
 import Sidebar from '@/components/layouts/home/Sidebar.vue'
 import TopNav from '@/components/layouts/home/TopNav.vue'
 
-import SettingsModal from '@/components/modals/home/SettingsModal.vue'
+/** 系统设置 Modal：仅在首次打开时才异步加载（code-splitting，减少首屏 JS 体积） */
+const SettingsModal = shallowRef<any>(null)
+const ensureSettingsModal = async () => {
+  if (!SettingsModal.value) {
+    SettingsModal.value = defineAsyncComponent(() => import('@/components/modals/home/SettingsModal.vue'))
+  }
+  return SettingsModal.value
+}
 
 const themeStore = useThemeStore()
 const route = useRoute()
@@ -140,6 +148,11 @@ const {
   showBackToTop,
   searchSuggestions
 } = useHome()
+
+// 设置 Modal 首次打开时才异步加载组件
+watch(showSettingsModal, (visible) => {
+  if (visible) ensureSettingsModal()
+}, { immediate: true })
 </script>
 
 <style scoped>
