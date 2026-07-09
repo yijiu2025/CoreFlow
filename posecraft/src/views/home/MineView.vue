@@ -179,7 +179,14 @@
 
     <!-- 瀑布流内容区 -->
     <div class="content-container">
-      <template v-if="filteredItems.length > 0">
+      <!-- 首次加载中：骨架占位 -->
+      <template v-if="loading && filteredItems.length === 0">
+        <div class="waterfall-grid">
+          <SkeletonCard v-for="n in 8" :key="n" />
+        </div>
+      </template>
+
+      <template v-else-if="filteredItems.length > 0">
         <div class="waterfall-grid">
           <!-- 包裹管理模式的容器 -->
           <div
@@ -195,7 +202,7 @@
                 <span v-if="selectedIds.includes(item.id)" class="checkbox-tick">✓</span>
               </div>
             </div>
-            
+
             <PoseCard
               :item="item"
               @like="likeItem"
@@ -338,6 +345,7 @@ import { useHome } from '@/composables/useHome'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 import PoseCard from '@/components/cards/home/PoseCard.vue'
+import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
 import BioTooltip from '@/components/popovers/mine/BioTooltip.vue'
 import { userApi } from '@/api/user'
 
@@ -355,7 +363,8 @@ const {
   likesCount,
   fetchUserProfile,
   updateUserProfile,
-  activeNav
+  activeNav,
+  loading
 } = useHome()
 
 const themeStore = useThemeStore()

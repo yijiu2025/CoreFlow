@@ -1,7 +1,14 @@
 <template>
   <div class="nearby-page-container">
     <div class="content-container">
-      <template v-if="filteredItems.length > 0">
+      <!-- 首次加载中：骨架占位 -->
+      <template v-if="loading && filteredItems.length === 0">
+        <div class="waterfall-grid">
+          <SkeletonCard v-for="n in 8" :key="n" />
+        </div>
+      </template>
+
+      <template v-else-if="filteredItems.length > 0">
         <div class="waterfall-grid">
           <PoseCard
             v-for="item in filteredItems"
@@ -34,6 +41,7 @@
 <script setup lang="ts">
 import { useHome } from '@/composables/useHome'
 import PoseCard from '@/components/cards/home/PoseCard.vue'
+import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
 
 const {
   activeNav,
