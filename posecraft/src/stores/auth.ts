@@ -175,6 +175,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /** 获取当前用户的上传作品列表 */
+  async function fetchMyWorks() {
+    try {
+      const userId = user.value?.id
+      if (!userId) return
+      const { workApi } = await import('@/api/work')
+      const res = await workApi.getUserWorks(userId, { page: 1, pageSize: 100 }) as any
+      myWorks.value = res?.list || []
+    } catch (e) {
+      console.warn('获取我的作品失败', e)
+    }
+  }
+
   async function fetchMyLikes() {
     try {
       const { interactionApi } = await import('@/api/interaction')
@@ -333,6 +346,7 @@ export const useAuthStore = defineStore('auth', () => {
     myLikes,
     myCollects,
     myHistory,
+    fetchMyWorks,
     fetchMyHistory,
     fetchMyLikes,
     fetchMyCollects,
