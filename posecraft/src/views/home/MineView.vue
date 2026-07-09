@@ -2,12 +2,12 @@
   <div class="mine-page-container" :class="{ 'dark-mode': themeStore.isDark }">
     <!-- 背景和个人信息区域 (颜色与主页面统一为白底/黑底) -->
     <div class="profile-header-wrapper">
-      <div class="profile-bg-cover" :style="{ backgroundImage: `${themeStore.isDark ? 'linear-gradient(to left, rgba(18, 18, 20, 0) 10%, rgba(18, 18, 20, 1) 90%)' : 'linear-gradient(to left, rgba(255, 255, 255, 0) 10%, rgba(255, 255, 255, 1) 90%)'}, url(${userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'})` }"></div>
-      
+      <div class="profile-bg-cover" :style="{ backgroundImage: `${themeStore.isDark ? 'linear-gradient(to left, rgba(18, 18, 20, 0) 10%, rgba(18, 18, 20, 1) 90%)' : 'linear-gradient(to left, rgba(255, 255, 255, 0) 10%, rgba(255, 255, 255, 1) 90%)'}, url(${authStore.safeAvatar})` }"></div>
+
       <div class="profile-header-content">
         <!-- 个人圆形头像 -->
         <div class="avatar-wrapper">
-          <img :src="userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'" alt="avatar" class="user-avatar" />
+          <img :src="authStore.safeAvatar" alt="avatar" class="user-avatar" />
         </div>
 
         <!-- 个人信息详情 -->
@@ -270,7 +270,7 @@
             />
             <div class="edit-avatar-wrapper" @click="avatarFileInput?.click()">
               <img
-                :src="avatarPreview || editForm.avatar || userProfile.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'"
+                :src="avatarPreview || editForm.avatar || authStore.safeAvatar"
                 alt="avatar"
                 class="edit-avatar-img"
               />
@@ -535,61 +535,8 @@ const saveEditProfile = async () => {
 
 const myWorks = toRef(authStore, 'myWorks')
 
-
-
-// 推荐列表
-const myRecommends = ref([
-  {
-    id: 'rec-1',
-    title: '法式穿搭九宫格构图分享',
-    description: '如何在法式街角拍出高级质感穿搭图',
-    username: 'ParisianStyle',
-    likes_count: 9821,
-    thumbnail_url: 'https://picsum.photos/seed/rec1/400/500',
-    type: 'work',
-    created_at: '2026-07-01'
-  },
-  {
-    id: 'rec-2',
-    title: '猫咪视角拍摄大片技巧',
-    description: '蹲下身子，带你用宠物的眼睛看世界',
-    username: '喵星人摄影',
-    likes_count: 5431,
-    thumbnail_url: 'https://picsum.photos/seed/rec2/400/320',
-    type: 'video',
-    created_at: '2026-06-28'
-  },
-  {
-    id: 'rec-3',
-    title: '电影感暗调人像布光详解',
-    description: '一盏灯就能拍出的高级质感肖像',
-    username: '光影实验室',
-    likes_count: 3210,
-    thumbnail_url: 'https://picsum.photos/seed/rec3/400/470',
-    type: 'work',
-    created_at: '2026-06-20'
-  },
-  {
-    id: 'rec-4',
-    title: '旅行Vlog转场技巧合集',
-    description: '10种丝滑转场让你的旅拍更有节奏感',
-    username: '旅行摄影师Leo',
-    likes_count: 8870,
-    thumbnail_url: 'https://picsum.photos/seed/rec4/400/380',
-    type: 'video',
-    created_at: '2026-07-02'
-  },
-  {
-    id: 'rec-5',
-    title: '手机摄影也能出大片',
-    description: '不靠器材，只靠构图和光线的手机拍摄指南',
-    username: '手机摄影达人',
-    likes_count: 12050,
-    thumbnail_url: 'https://picsum.photos/seed/rec5/400/500',
-    type: 'template',
-    created_at: '2026-06-15'
-  }
-])
+// 推荐列表（复用 myWorks 数据，避免重复 mock）
+const myRecommends = myWorks
 
 // 喜欢列表
 const myLikes = toRef(authStore, 'myLikes')

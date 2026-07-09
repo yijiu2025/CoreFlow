@@ -2,7 +2,7 @@
   <div class="avatar-hover-card">
     <!-- 用户基本信息 -->
     <div class="card-user-info" @click="goToMyWorks">
-      <img :src="authStore.userProfile?.avatar || 'https://picsum.photos/seed/avatar_wang/150/150'" alt="avatar" class="card-avatar" />
+      <img :src="authStore.safeAvatar" alt="avatar" class="card-avatar" />
       <div class="card-user-detail">
         <div class="card-username">{{ authStore.userProfile?.username || authStore.user?.username || '用户' }}</div>
         <div class="card-social-stats">
@@ -164,15 +164,9 @@ const saveLoginState = computed({
   set: (val) => authStore.updateSaveLoginInfo(val)
 })
 
-const historyList = ref([
-  { id: 'h-1', title: '黄昏街头胶片滤镜调色', thumbnail_url: 'https://picsum.photos/seed/hist1/400/400' },
-  { id: 'h-2', title: 'WebGL 3D人体骨骼基础讲解', thumbnail_url: 'https://picsum.photos/seed/hist2/400/400' },
-  { id: 'h-3', title: '日常室内温暖打光实操', thumbnail_url: 'https://picsum.photos/seed/hist3/400/400' }
-])
+const historyList = ref<any[]>([])
 
-const watchLaterList = ref([
-  { id: 'w-1', title: '复古法式卧室构图教程', thumbnail_url: 'https://picsum.photos/seed/wl1/400/400' }
-])
+const watchLaterList = ref<any[]>([])
 
 const emit = defineEmits<{
   (e: 'showToast', msg: string): void

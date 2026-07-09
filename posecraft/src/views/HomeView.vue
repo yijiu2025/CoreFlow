@@ -431,7 +431,7 @@ watch(showSettingsModal, (visible) => {
   width: 100%;
   height: 180px;
   border-radius: 20px;
-  background-image: linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.4)), url('https://picsum.photos/seed/banner/1200/300');
+  background-image: linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.4)), ;
   background-size: cover;
   background-position: center;
   display: flex;
@@ -505,7 +505,7 @@ watch(showSettingsModal, (visible) => {
     gap: 16px;
     padding: 24px;
     height: auto;
-    background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.7)), url('https://picsum.photos/seed/banner/1200/300');
+    background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.7)), ;
   }
 
   .banner-btn {
