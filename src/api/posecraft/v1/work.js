@@ -169,6 +169,33 @@ export default async function (fastify) {
     }
   });
 
+  // 获取当前登录用户自己的作品（从 session 识别用户，无需传 id）
+  registerSecureRoute(fastify, {
+    name: 'getMyWorks',
+    alias: '获取我的作品',
+    method: 'GET',
+    url: '/works/mine',
+    requireLogin: true,
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
+      }
+    },
+    handler: async (request, reply) => {
+      const user = request.state?.user;
+      if (!user?.userId) {
+        return reply.result.fail('未登录', null, 401);
+      }
+      const { page, pageSize } = request.query;
+      const result = await workDao.findByUser(user.userId, { page, pageSize });
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
+    }
+  });
+
   // 获取作品详情（公开）
   registerSecureRoute(fastify, {
     name: 'getWork',

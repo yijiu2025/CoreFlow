@@ -244,7 +244,7 @@ export function useHome() {
         newWorks = workRes.list || []
         totalPages = workRes.totalPages || 1
       } else if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
-        const workRes = await workApi.getUserWorks(authStore.user.id, { page, pageSize: 12 }) as any
+        const workRes = await workApi.getMyWorks({ page, pageSize: 12 }) as any
         newWorks = workRes.list || []
         totalPages = workRes.totalPages || 1
       } else {
