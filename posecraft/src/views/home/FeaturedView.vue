@@ -37,7 +37,15 @@
           </button>
         </div>
 
-        <template v-if="filteredItems.length > 0">
+        <!-- 首次加载中：骨架占位（瀑布流结构） -->
+        <template v-if="loading && filteredItems.length === 0">
+          <div class="waterfall-grid">
+            <SkeletonCard v-for="n in 8" :key="n" />
+          </div>
+        </template>
+
+        <!-- 有数据：真实卡片列表 -->
+        <template v-else-if="filteredItems.length > 0">
           <div class="waterfall-grid">
             <PoseCard
               v-for="item in filteredItems"
@@ -57,6 +65,8 @@
             <span class="no-more-text">没有更多内容了</span>
           </div>
         </template>
+
+        <!-- 无数据无加载中：空状态 -->
         <template v-else>
           <div class="empty-state">
             <div class="empty-icon">🔍</div>
@@ -74,6 +84,7 @@ import { ref, watch, onMounted, onActivated, onDeactivated } from 'vue'
 import { useHome } from '@/composables/useHome'
 import SearchHero from '@/components/widgets/home/SearchHero.vue'
 import PoseCard from '@/components/cards/home/PoseCard.vue'
+import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
 
 const {
   searchQuery,
