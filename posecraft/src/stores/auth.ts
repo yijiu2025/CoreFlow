@@ -56,7 +56,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const myWorks = ref<any[]>([])
-  
+  const myTemplates = ref<any[]>([])
+
   const myLikes = ref<any[]>([])
   const myCollects = ref<any[]>([])
   const myHistory = ref<any[]>([])
@@ -183,6 +184,17 @@ export const useAuthStore = defineStore('auth', () => {
       myWorks.value = res?.list || []
     } catch (e) {
       console.warn('获取我的作品失败', e)
+    }
+  }
+
+  /** 获取当前登录用户自己上传的模板（后端从 session 识别用户） */
+  async function fetchMyTemplates() {
+    try {
+      const { templateApi } = await import('@/api/template')
+      const res = await templateApi.getMyTemplates({ page: 1, pageSize: 100 }) as any
+      myTemplates.value = res?.list || []
+    } catch (e) {
+      console.warn('获取我的模板失败', e)
     }
   }
 
@@ -341,10 +353,12 @@ export const useAuthStore = defineStore('auth', () => {
     watchLaterCount,
     historyText,
     myWorks,
+    myTemplates,
     myLikes,
     myCollects,
     myHistory,
     fetchMyWorks,
+    fetchMyTemplates,
     fetchMyHistory,
     fetchMyLikes,
     fetchMyCollects,

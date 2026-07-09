@@ -67,15 +67,21 @@
     <!-- 二级导航 Tabs 栏 -->
     <div class="tabs-outer-container">
       <div class="profile-tabs">
-        <button 
-          @click="changeTab('works')" 
+        <button
+          @click="changeTab('works')"
           :class="['tab-btn', { active: activeTab === 'works' }]"
         >
           <span>作品</span>
           <span>{{ worksCount }}</span>
         </button>
-        <button 
-          @click="changeTab('recommend')" 
+        <button
+          @click="changeTab('templates')"
+          :class="['tab-btn', { active: activeTab === 'templates' }]"
+        >
+          <span>模板</span>
+        </button>
+        <button
+          @click="changeTab('recommend')"
           :class="['tab-btn', { active: activeTab === 'recommend' }]"
         >
           <span>推荐</span>
@@ -553,6 +559,7 @@ const saveEditProfile = async () => {
 }
 
 const myWorks = toRef(authStore, 'myWorks')
+const myTemplates = toRef(authStore, 'myTemplates')
 
 // 推荐列表（复用 myWorks 数据，避免重复 mock）
 const myRecommends = myWorks
@@ -569,6 +576,13 @@ const myHistory = toRef(authStore, 'myHistory')
 const changeTab = (tabName: string) => {
   activeTab.value = tabName
   exitManageMode() // 切换 Tab 自动退出管理模式
+
+  // 切换 Tab 时按需加载真实数据
+  if (tabName === 'templates') {
+    authStore.fetchMyTemplates()
+  } else if (tabName === 'works') {
+    authStore.fetchMyWorks()
+  }
   
   if (tabName === 'likes') {
     authStore.fetchMyLikes()
@@ -659,7 +673,7 @@ const handleDeleteSingle = async (item: any) => {
   if (!confirm(`确定要删除「${item.title || '该作品'}」吗？删除后不可恢复。`)) return
   try {
     const id = Number(item.id)
-    if (item.type === 'template') {
+    if (item.type === 'template' || activeTab.value === 'templates') {
       await templateApi.delete(id)
     } else {
       await workApi.delete(id)
@@ -690,7 +704,7 @@ const batchDelete = async () => {
     for (const sid of selectedIds.value) {
       const id = Number(sid)
       const item = filteredItems.value.find(f => Number(f.id) === id)
-      if (item?.type === 'template') {
+      if (item?.type === 'template' || activeTab.value === 'templates') {
         await templateApi.delete(id)
       } else {
         workApi.delete(id).catch(() => {})
@@ -721,6 +735,8 @@ const filteredItems = computed(() => {
 
     // 根据日期范围筛选
     list = list.filter(w => isInDateRange(w.created_at))
+  } else if (activeTab.value === 'templates') {
+    list = myTemplates.value
   } else if (activeTab.value === 'recommend') {
     list = myRecommends.value
   } else if (activeTab.value === 'likes') {
