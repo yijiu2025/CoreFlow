@@ -203,6 +203,19 @@
               </div>
             </div>
 
+            <!-- 单个删除按钮（管理模式下显示） -->
+            <button
+              v-if="isManageMode"
+              class="card-delete-btn"
+              title="删除"
+              @click.stop="handleDeleteSingle(item)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+
             <PoseCard
               :item="item"
               @like="likeItem"
@@ -348,6 +361,8 @@ import PoseCard from '@/components/cards/home/PoseCard.vue'
 import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
 import BioTooltip from '@/components/popovers/mine/BioTooltip.vue'
 import { userApi } from '@/api/user'
+import { workApi } from '@/api/work'
+import { templateApi } from '@/api/template'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -635,23 +650,53 @@ const batchChangePrivacy = () => {
   exitManageMode()
 }
 
-// 批量删除
-const batchDelete = () => {
+// 删除单个作品/模板（调后端 API + 本地移除）
+const handleDeleteSingle = async (item: any) => {
+  if (!confirm(`确定要删除「${item.title || '该作品'}」吗？删除后不可恢复。`)) return
+  try {
+    const id = Number(item.id)
+    if (item.type === 'template') {
+      await templateApi.delete(id)
+    } else {
+      await workApi.delete(id)
+    }
+    removeFromLocalList(id)
+    showToast('删除成功')
+  } catch (err: any) {
+    showToast(err.message || '删除失败')
+  }
+}
+
+// 从本地所有列表中移除指定 id 的项
+const removeFromLocalList = (id: string | number) => {
+  myWorks.value = myWorks.value.filter(w => w.id !== id)
+  myRecommends.value = myRecommends.value.filter(w => w.id !== id)
+  myLikes.value = myLikes.value.filter(w => w.id !== id)
+  myCollects.value = myCollects.value.filter(w => w.id !== id)
+  selectedIds.value = selectedIds.value.filter(sid => sid !== id)
+}
+
+// 批量删除（调后端 API + 本地移除）
+const batchDelete = async () => {
   if (!selectedIds.value.length) return
   const count = selectedIds.value.length
-  
-  if (activeTab.value === 'works') {
-    myWorks.value = myWorks.value.filter(item => !selectedIds.value.includes(item.id))
-  } else if (activeTab.value === 'recommend') {
-    myRecommends.value = myRecommends.value.filter(item => !selectedIds.value.includes(item.id))
-  } else if (activeTab.value === 'likes') {
-    myLikes.value = myLikes.value.filter(item => !selectedIds.value.includes(item.id))
-  } else if (activeTab.value === 'collect') {
-    myCollects.value = myCollects.value.filter(item => !selectedIds.value.includes(item.id))
-  }
+  if (!confirm(`确定要删除选中的 ${count} 项内容吗？删除后不可恢复。`)) return
 
-  showToast(`已成功删除选中的 ${count} 项内容`)
-  exitManageMode()
+  try {
+    for (const sid of selectedIds.value) {
+      const id = Number(sid)
+      const item = filteredItems.value.find(f => Number(f.id) === id)
+      if (item?.type === 'template') {
+        await templateApi.delete(id)
+      } else {
+        workApi.delete(id).catch(() => {})
+      }
+    }
+    showToast(`已成功删除选中的 ${count} 项内容`)
+    exitManageMode()
+  } catch (err: any) {
+    showToast(err.message || '删除失败')
+  }
 }
 
 // 过滤后的列表计算
@@ -1334,6 +1379,37 @@ input:checked + .slider:before {
   color: white;
   font-size: 12px;
   font-weight: 900;
+}
+
+/* 单个删除按钮 */
+.card-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 36, 66, 0.9);
+  backdrop-filter: blur(4px);
+  border: none;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 11;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(255, 36, 66, 0.3);
+}
+.manageable-card-wrapper:hover .card-delete-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+.card-delete-btn:hover {
+  background: #e11d48;
+  transform: scale(1.1) !important;
 }
 
 /* 底部批量管理悬浮操作面板 */
