@@ -231,7 +231,7 @@ watch(
   width: 100%;
   height: 180px;
   border-radius: 20px;
-  background-image: linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.4)), ;
+  background-image: linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.4)), url('/posecraft/logo.svg');
   background-size: cover;
   background-position: center;
   display: flex;
@@ -305,7 +305,7 @@ watch(
     gap: 16px;
     padding: 24px;
     height: auto;
-    background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.7)), ;
+    background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.7)), url('/posecraft/logo.svg');
   }
 
   .banner-btn {
