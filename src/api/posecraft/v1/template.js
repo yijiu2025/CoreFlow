@@ -102,6 +102,36 @@ export default async function (fastify) {
   });
 
   /**
+   * GET /templates/mine - 获取当前登录用户自己上传的模板
+   * 从 session 识别用户，无需传 id
+   */
+  registerSecureRoute(fastify, {
+    name: 'getMyTemplates',
+    alias: '获取我的模板',
+    method: 'GET',
+    url: '/templates/mine',
+    requireLogin: true,
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
+      }
+    },
+    handler: async (request, reply) => {
+      const user = request.state?.user;
+      if (!user?.userId) {
+        return reply.result.fail('未登录', null, 401);
+      }
+      const { page, pageSize } = request.query;
+      const result = await TemplateDao.findByUser(user.userId, { page, pageSize });
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
+    }
+  });
+
+  /**
    * GET /templates/:id - 获取模板详情
    * 包含访问权限校验：非公开模板只有其创建者或管理员才允许访问。
    */
@@ -353,7 +383,7 @@ export default async function (fastify) {
       }
 
       // Admin or owner deleting
-      await TemplateDao.delete(id, template.user_id); 
+      await TemplateDao.delete(id, template.user_id);
 
       // 同步级联删除关联的模板底图作品
       await TemplateDao.syncDeleteWork(id);
