@@ -91,286 +91,12 @@ export function useHome() {
   const hasMore = ref(true)
   const loading = ref(false)
 
-  // 模拟推荐数据（当 API 无数据时展示）
-  const mockRecommendations = [
-    {
-      id: 'mock-1',
-      title: '复古胶片风人像姿势指南',
-      description: '适合初学者的5个经典胶片人像姿势，轻松拍出高级感',
-      username: '摄影小王',
-      likes_count: 2341,
-      thumbnail_url: 'https://picsum.photos/seed/pose1/400/560',
-      category: 'pose',
-      type: 'video'
-    },
-    {
-      id: 'mock-2',
-      title: '瑜伽拉伸 · 清晨唤醒序列',
-      description: '10分钟瑜伽拉伸，唤醒身体每一天',
-      username: '瑜伽Lily',
-      likes_count: 5678,
-      thumbnail_url: 'https://picsum.photos/seed/pose2/400/300',
-      category: 'technique',
-      type: 'work'
-    },
-    {
-      id: 'mock-3',
-      title: '篮球动作分解模板',
-      description: '从基础运球到扣篮，一图看懂每个动作细节',
-      username: '体育达人阿杰',
-      likes_count: 1892,
-      thumbnail_url: 'https://picsum.photos/seed/pose3/400/500',
-      category: 'sports',
-      type: 'template'
-    },
-    {
-      id: 'mock-4',
-      title: '舞蹈编舞构图技巧分享',
-      description: '舞台编舞中的黄金分割构图法，让画面更具张力',
-      username: '编舞师Coco',
-      likes_count: 3420,
-      thumbnail_url: 'https://picsum.photos/seed/pose4/400/600',
-      category: 'composition',
-      type: 'video'
-    },
-    {
-      id: 'mock-5',
-      title: '街头潮牌穿搭姿势灵感',
-      description: '用这些姿势让你的街拍瞬间出片',
-      username: '潮流捕手',
-      likes_count: 4105,
-      thumbnail_url: 'https://picsum.photos/seed/pose5/400/480',
-      category: 'creative',
-      type: 'work'
-    },
-    {
-      id: 'mock-6',
-      title: '动态人像追踪构图模板',
-      description: '专业摄影师常用的动态构图模板，快速上手',
-      username: '构图研究所',
-      likes_count: 1267,
-      thumbnail_url: 'https://picsum.photos/seed/pose6/400/350',
-      category: 'pose',
-      type: 'template'
-    },
-    {
-      id: 'mock-7',
-      title: '普拉提核心训练打卡姿势',
-      description: '每天一组普拉提核心动作，30天练出马甲线',
-      username: '健身教练Kira',
-      likes_count: 8934,
-      thumbnail_url: 'https://picsum.photos/seed/pose7/400/550',
-      category: 'technique',
-      type: 'work'
-    },
-    {
-      id: 'mock-8',
-      title: '极限运动 · 跑酷动作模板',
-      description: '从基础翻越到空中转体，跑酷动作全收录',
-      username: '跑酷小子',
-      likes_count: 3210,
-      thumbnail_url: 'https://picsum.photos/seed/pose8/400/420',
-      category: 'sports',
-      type: 'template'
-    },
-    {
-      id: 'mock-9',
-      title: '日系清新风 · 校园拍照姿势',
-      description: '还原日剧感校园拍照，每张都是青春电影画面',
-      username: '日系拍照日记',
-      likes_count: 6789,
-      thumbnail_url: 'https://picsum.photos/seed/pose9/400/500',
-      category: 'creative',
-      type: 'work'
-    },
-    {
-      id: 'mock-10',
-      title: '舞台表演人物群像构图',
-      description: '多人舞台场景构图模板，适用于汇报演出和集体照',
-      username: '编导工作室',
-      likes_count: 1543,
-      thumbnail_url: 'https://picsum.photos/seed/pose10/400/380',
-      category: 'composition',
-      type: 'template'
-    },
-    {
-      id: 'mock-11',
-      title: '水下摄影姿势大全',
-      description: '水下的每一个动作都要特别练习，这些姿势让你从容应对',
-      username: '水下摄影师阿伟',
-      likes_count: 4521,
-      thumbnail_url: 'https://picsum.photos/seed/pose11/400/520',
-      category: 'pose',
-      type: 'work'
-    },
-    {
-      id: 'mock-12',
-      title: '太极养生动作图解模板',
-      description: '24式太极拳动作分解，中老年人也能轻松跟练',
-      username: '养生堂',
-      likes_count: 2100,
-      thumbnail_url: 'https://picsum.photos/seed/pose12/400/450',
-      category: 'technique',
-      type: 'template'
-    }
-  ]
-
   // 搜索建议词（猜你想搜）
   const searchSuggestions = [
     '画图编程代码', '画图生成建模', '画图出数模', 'mermaid代码',
     '画图自动生成模型', '画图生成电子签名', '画图生成设计', '画图生成3d代码',
     '画图生成图纸', '画图制作文字', '人体骨骼姿势提取', 'WebGL 3D人体建模'
   ]
-
-  // 1. 推荐页专属数据
-  const mockRecommendItems = ref([
-    {
-      id: 'rec-1',
-      title: '法式穿搭九宫格构图分享',
-      description: '如何在法式街角拍出高级质感穿搭图',
-      username: 'ParisianStyle',
-      likes_count: 9821,
-      thumbnail_url: 'https://picsum.photos/seed/rec1/400/500',
-      type: 'work'
-    },
-    {
-      id: 'rec-2',
-      title: '猫咪视角拍摄大片技巧',
-      description: '蹲下身子，带你用宠物的眼睛看世界',
-      username: '喵星人摄影',
-      likes_count: 5431,
-      thumbnail_url: 'https://picsum.photos/seed/rec2/400/320',
-      type: 'video'
-    },
-    {
-      id: 'rec-3',
-      title: '极限跑酷空翻连贯拆解',
-      description: '全网首发超清跑酷细节连拍模板',
-      username: '飞檐走壁',
-      likes_count: 3201,
-      thumbnail_url: 'https://picsum.photos/seed/rec3/400/540',
-      type: 'template'
-    },
-    {
-      id: 'rec-4',
-      title: '夏日海边逆光拍照姿势',
-      description: '逆光微风下，轻松抓拍那一抹唯美少女感',
-      username: '海边微风',
-      likes_count: 7654,
-      thumbnail_url: 'https://picsum.photos/seed/rec4/400/480',
-      type: 'work'
-    }
-  ])
-
-  // 2. 附近页专属数据
-  const mockNearbyItems = ref([
-    {
-      id: 'near-1',
-      title: '朝阳公园草坪 · 复古飞盘动作',
-      description: '周末来朝阳公园草坪抓拍几个超阳光的接盘瞬间吧！',
-      username: '户外飞盘小分队',
-      likes_count: 1205,
-      thumbnail_url: 'https://picsum.photos/seed/near1/400/510',
-      distance: '0.8km',
-      type: 'work'
-    },
-    {
-      id: 'near-2',
-      title: '798艺术区 · 工业风人像姿势',
-      description: '在红色红砖墙前，教你如何摆出酷炫的高冷站姿',
-      username: '冷系胶片摄影',
-      likes_count: 452,
-      thumbnail_url: 'https://picsum.photos/seed/near2/400/400',
-      distance: '1.5km',
-      type: 'template'
-    },
-    {
-      id: 'near-3',
-      title: '三里屯太古里 · 街头潮流走秀摆拍',
-      description: '捕捉最潮的街头定格瞬间，手插裤兜经典姿势',
-      username: '时尚街头指南',
-      likes_count: 2310,
-      thumbnail_url: 'https://picsum.photos/seed/near3/400/580',
-      distance: '2.4km',
-      type: 'video'
-    },
-    {
-      id: 'near-4',
-      title: '颐和园昆明湖 · 古风汉服画中人',
-      description: '在十七孔桥头斜靠凭栏，拍出温婉的江南古典质感',
-      username: '古风人像馆',
-      likes_count: 1894,
-      thumbnail_url: 'https://picsum.photos/seed/near4/400/470',
-      distance: '4.8km',
-      type: 'work'
-    }
-  ])
-
-  // 3. 关注页专属数据
-  const mockFollowingItems = ref([
-    {
-      id: 'follow-1',
-      title: '复古机车拍照动作指南',
-      description: '坐在机车上的 3 个高级姿势，女孩子也能很酷！',
-      username: '摄影师小林',
-      likes_count: 8740,
-      thumbnail_url: 'https://picsum.photos/seed/fol1/400/520',
-      type: 'work'
-    },
-    {
-      id: 'follow-2',
-      title: '极简人像棚拍用光分解',
-      description: '经典伦勃朗光布局，小白也能拍出质感肖像',
-      username: '构图研究所',
-      likes_count: 3205,
-      thumbnail_url: 'https://picsum.photos/seed/fol2/400/380',
-      type: 'template'
-    }
-  ])
-
-  // 4. 朋友页专属数据
-  const mockFriendsItems = ref([
-    {
-      id: 'friend-1',
-      title: '周末露营大餐，帐篷前合照姿势',
-      description: '和集美一起出动，野餐垫上的自然松弛感！',
-      username: '闺蜜旅行日记',
-      likes_count: 673,
-      thumbnail_url: 'https://picsum.photos/seed/fr1/400/460',
-      type: 'work'
-    },
-    {
-      id: 'friend-2',
-      title: '海边悬崖秋千抓拍机位',
-      description: '面朝大海荡起秋千的完美仰拍视角',
-      username: '阿杰爱冲浪',
-      likes_count: 1045,
-      thumbnail_url: 'https://picsum.photos/seed/fr2/400/530',
-      type: 'video'
-    }
-  ])
-
-  // 5. 我的空间专属数据
-  const mockMyItems = ref([
-    {
-      id: 'my-1',
-      title: '我的WebGL 3D人体动作模板',
-      description: '我自己设计保存的3D骨骼姿势，可以免费导出',
-      username: '摄影小王',
-      likes_count: 23,
-      thumbnail_url: 'https://picsum.photos/seed/my1/400/490',
-      type: 'template'
-    },
-    {
-      id: 'my-2',
-      title: '午后书房阅读抓拍瞬间',
-      description: '在阳光照进书架时，安静阅读的自然动作',
-      username: '摄影小王',
-      likes_count: 15,
-      thumbnail_url: 'https://picsum.photos/seed/my2/400/390',
-      type: 'work'
-    }
-  ])
 
   const channels = ref([
     { value: 'recommend', label: '推荐' },
@@ -402,12 +128,11 @@ export function useHome() {
 
   // 合并模板和作品并映射标识（API 无数据时用模拟推荐数据）
   // _key 用 "type-id" 拼接，避免 templates 与 works 数字 id 重复导致 Vue duplicate key 警告
+  // 注意：已移除所有 mock/模拟数据；API 无数据时走骨架屏 + 空状态
   const allItems = computed(() => {
     const tplList = templates.value.map(t => ({ ...t, type: 'template', _key: `template-${t.id}` }))
     const workList = works.value.map(w => ({ ...w, type: 'work', _key: `work-${w.id}` }))
-    const apiItems = [...tplList, ...workList]
-    if (apiItems.length > 0) return apiItems
-    return mockRecommendations.map(m => ({ ...m }))
+    return [...tplList, ...workList]
   })
 
   // 过滤后的列表
@@ -420,7 +145,7 @@ export function useHome() {
     const apiItems = [...tplList, ...workList]
 
     if (activeNav.value === 'featured') {
-      list = apiItems.length > 0 ? apiItems : mockRecommendations.map(m => ({ ...m }))
+      list = apiItems
 
       // 根据 channel 进行分类筛选
       let categoryMapVal = 'all'
@@ -434,15 +159,15 @@ export function useHome() {
         list = list.filter(item => item.category === categoryMapVal)
       }
     } else if (activeNav.value === 'recommend') {
-      list = apiItems.length > 0 ? apiItems : mockRecommendItems.value.map(m => ({ ...m }))
+      list = apiItems
     } else if (activeNav.value === 'nearby') {
-      list = apiItems.length > 0 ? apiItems : mockNearbyItems.value.map(m => ({ ...m }))
+      list = apiItems
     } else if (activeNav.value === 'following') {
-      list = (apiItems.length > 0 && authStore.isLoggedIn) ? apiItems : mockFollowingItems.value.map(m => ({ ...m }))
+      list = apiItems
     } else if (activeNav.value === 'friends') {
-      list = (apiItems.length > 0 && authStore.isLoggedIn) ? apiItems : mockFriendsItems.value.map(m => ({ ...m }))
+      list = apiItems
     } else if (activeNav.value === 'mine') {
-      list = (apiItems.length > 0 && authStore.isLoggedIn) ? apiItems : mockMyItems.value.map(m => ({ ...m }))
+      list = apiItems
     }
 
     // 搜索关键字筛选
