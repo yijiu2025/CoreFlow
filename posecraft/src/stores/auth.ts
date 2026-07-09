@@ -8,6 +8,9 @@ import { useCache } from '@/composables/useCache'
 
 const cache = useCache('localStorage', 'posecraft_')
 
+/** 本地 SVG 默认头像（data URI，零网络请求） */
+export const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 150 150'%3E%3Crect width='150' height='150' fill='%23e2e8f0'/%3E%3Ccircle cx='75' cy='60' r='25' fill='%2394a3b8'/%3E%3Cellipse cx='75' cy='130' rx='40' ry='30' fill='%2394a3b8'/%3E%3C/svg%3E"
+
 export const useAuthStore = defineStore('auth', () => {
   const isLoggedIn = ref(false)
   const user = ref<any>(null)
@@ -22,13 +25,16 @@ export const useAuthStore = defineStore('auth', () => {
   const likesCount = ref(0)
   const userProfile = ref<any>({
     username: '摄影小王',
-    avatar: 'https://picsum.photos/seed/avatar_wang/150/150',
+    avatar: DEFAULT_AVATAR,
     gender: 0,
     age: 27,
     city: '北京 · 朝阳',
     bio: '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子👧...',
     personal_id: 'pose_craft_wang'
   })
+
+  /** 带兜底的头像 URL（空值时返回本地默认头像，零网络请求） */
+  const safeAvatar = computed(() => userProfile.value?.avatar || DEFAULT_AVATAR)
 
   const likedWorksCount = ref(280)
   const collectsCount = ref(246)
@@ -49,140 +55,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const myWorks = ref<any[]>([
-    {
-      id: 'my-1',
-      title: '我的WebGL 3D人体动作模板',
-      description: '我自己设计保存的3D骨骼姿势，可以免费导出',
-      username: '摄影小王',
-      likes_count: 23,
-      thumbnail_url: 'https://picsum.photos/seed/my1/400/490',
-      type: 'template',
-      is_private: false,
-      created_at: '2026-07-04'
-    },
-    {
-      id: 'my-2',
-      title: '午后书房阅读抓拍瞬间',
-      description: '在阳光照进书架时，安静阅读的自然动作',
-      username: '摄影小王',
-      likes_count: 15,
-      thumbnail_url: 'https://picsum.photos/seed/my2/400/390',
-      type: 'work',
-      is_private: false,
-      created_at: '2026-06-20'
-    },
-    {
-      id: 'my-3',
-      title: '[私密] 2026年7月室内私享构图',
-      description: '仅限个人可见的复古法式卧室打光姿势',
-      username: '摄影小王',
-      likes_count: 0,
-      thumbnail_url: 'https://picsum.photos/seed/my3/400/520',
-      type: 'work',
-      is_private: true,
-      created_at: '2026-07-02'
-    },
-    {
-      id: 'my-4',
-      title: '我的首发胶片合集 · 经典港风',
-      description: '打包汇总 10 组港风人像经典抓拍要点',
-      username: '摄影小王',
-      likes_count: 120,
-      thumbnail_url: 'https://picsum.photos/seed/my4/400/450',
-      type: 'collection',
-      is_private: false,
-      created_at: '2026-06-10'
-    },
-    {
-      id: 'my-5',
-      title: '短剧 1 - 摄影大师养成之路',
-      description: '如何从零入门，摆姿设光一贴搞定',
-      username: '摄影小王',
-      likes_count: 320,
-      thumbnail_url: 'https://picsum.photos/seed/my5/400/310',
-      type: 'series',
-      is_private: false,
-      created_at: '2026-07-01'
-    },
-    {
-      id: 'my-6',
-      title: '老屋檐瓦当构图之美',
-      description: '北京胡同古建筑屋顶的细节抓拍',
-      username: '摄影小王',
-      likes_count: 157,
-      thumbnail_url: 'https://picsum.photos/seed/pose11/400/500',
-      type: 'work',
-      is_private: false,
-      created_at: '2026-05-12'
-    },
-    {
-      id: 'my-7',
-      title: '黄昏逆光人像拍摄技巧',
-      description: '利用黄金时段的逆光拍出梦幻氛围感',
-      username: '摄影小王',
-      likes_count: 89,
-      thumbnail_url: 'https://picsum.photos/seed/my7/400/460',
-      type: 'work',
-      is_private: false,
-      created_at: '2026-07-03'
-    },
-    {
-      id: 'my-8',
-      title: '城市天际线延时摄影合集',
-      description: '从日出到日落，记录城市光影变化',
-      username: '摄影小王',
-      likes_count: 203,
-      thumbnail_url: 'https://picsum.photos/seed/my8/400/350',
-      type: 'collection',
-      is_private: false,
-      created_at: '2026-06-25'
-    },
-    {
-      id: 'my-9',
-      title: '日系清新色调调色分享',
-      description: '低饱和高光偏青的日系后期思路',
-      username: '摄影小王',
-      likes_count: 312,
-      thumbnail_url: 'https://picsum.photos/seed/my9/400/480',
-      type: 'work',
-      is_private: false,
-      created_at: '2026-06-18'
-    },
-    {
-      id: 'my-10',
-      title: '咖啡馆文艺人像摆姿',
-      description: '在咖啡馆场景下的12种自然坐姿',
-      username: '摄影小王',
-      likes_count: 76,
-      thumbnail_url: 'https://picsum.photos/seed/my10/400/520',
-      type: 'work',
-      is_private: false,
-      created_at: '2026-05-30'
-    },
-    {
-      id: 'my-11',
-      title: '雨天街拍情绪大片',
-      description: '雨中漫步的电影感构图与色彩',
-      username: '摄影小王',
-      likes_count: 145,
-      thumbnail_url: 'https://picsum.photos/seed/my11/400/400',
-      type: 'work',
-      is_private: true,
-      created_at: '2026-07-01'
-    },
-    {
-      id: 'my-12',
-      title: '短剧 2 - 街头摄影日记',
-      description: '跟着镜头探索城市角落的故事',
-      username: '摄影小王',
-      likes_count: 456,
-      thumbnail_url: 'https://picsum.photos/seed/my12/400/330',
-      type: 'series',
-      is_private: false,
-      created_at: '2026-06-08'
-    }
-  ])
+  const myWorks = ref<any[]>([])
   
   const myLikes = ref<any[]>([])
   const myCollects = ref<any[]>([])
@@ -467,6 +340,7 @@ export const useAuthStore = defineStore('auth', () => {
     toggleLikeAction,
     toggleCollectAction,
     saveLoginInfo,
-    updateSaveLoginInfo
+    updateSaveLoginInfo,
+    safeAvatar
   }
 })
