@@ -179,10 +179,14 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchMyWorks() {
     try {
       const userId = user.value?.id
-      if (!userId) return
+      if (!userId) {
+        console.warn('fetchMyWorks: userId 为空')
+        return
+      }
       const { workApi } = await import('@/api/work')
       const res = await workApi.getUserWorks(userId, { page: 1, pageSize: 100 }) as any
       myWorks.value = res?.list || []
+      console.log(`fetchMyWorks: 加载了 ${myWorks.value.length} 个作品 (userId=${userId})`)
     } catch (e) {
       console.warn('获取我的作品失败', e)
     }
