@@ -12,15 +12,7 @@
       />
       <div v-else class="empty-base-bg"></div>
 
-      <!-- 2. 骨骼线覆盖层：仅当该作品关联了模板（item.template_id）且模板有骨架预览图时显示 -->
-      <img
-        v-if="skeletonUrl"
-        :src="skeletonUrl"
-        alt="skeleton"
-        class="skeleton-overlay animate-fade-in"
-        loading="lazy"
-      />
-
+      <!-- 模板/视频徽章 -->
       <div v-if="item.type === 'template' || isTemplateWork" class="card-badge">模板</div>
       <div v-else-if="item.type === 'video'" class="card-badge video-badge">视频</div>
       <div v-if="item.distance" class="card-location-badge">
@@ -55,7 +47,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useTemplateThumbnailRegistry } from '@/composables/useTemplateThumbnailRegistry'
 
 const props = defineProps<{
   item: any
@@ -66,31 +57,10 @@ defineEmits<{
   (e: 'like', item: any): void
 }>()
 
-const { getThumbnail } = useTemplateThumbnailRegistry()
 const isFavorited = ref(false)
 const toggleFavorite = () => {
   isFavorited.value = !isFavorited.value
 }
-
-/**
- * 作品的骨架预览图 URL（来自关联模板的 thumbnail_url 骨架 PNG）
- * - 有 template_id → 从注册表取（命中缓存直接显示，未命中触发懒加载）
- * - 无 template_id → null（不显示骨架叠加层）
- */
-const skeletonUrl = computed(() => {
-  const tid = props.item?.template_id
-  if (!tid) return null
-  const url = getThumbnail(Number(tid))
-  // 缓存未命中时返回 null（等待 API 写回注册表后触发重新计算）
-  return url && url.length > 0 ? url : null
-})
-
-// mounted 时主动触发懒加载：若注册表尚未包含该模板的骨架图，则拉取
-onMounted(() => {
-  if (props.item?.template_id) {
-    getThumbnail(Number(props.item.template_id))
-  }
-})
 
 /**
  * 是否为模板底图作品（由后端 is_template_work 字段决定）
