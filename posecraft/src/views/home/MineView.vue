@@ -382,10 +382,14 @@ const {
   loading
 } = useHome()
 
+// 页面挂载时加载当前用户的上传作品
+onMounted(async () => {
+  activeNav.value = 'mine'
+  await authStore.fetchMyWorks()
+})
+
 const themeStore = useThemeStore()
 
-// 标记当前页面
-onMounted(() => { activeNav.value = 'mine' })
 const activeTab = ref('works')
 const subTab = ref('public')
 
