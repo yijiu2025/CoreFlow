@@ -20,6 +20,10 @@ export const workApi = {
   getFollowingWorks: (params?: { page?: number; pageSize?: number }) =>
     service.get('/posecraft/v1/works/following', { params }),
 
+  /** 获取当前登录用户自己的作品（从 session 识别用户） */
+  getMyWorks: (params?: { page?: number; pageSize?: number }) =>
+    service.get('/posecraft/v1/works/mine', { params }),
+
   /** 获取作品详情 */
   getDetail: (id: number) =>
     service.get(`/posecraft/v1/works/${id}`),
