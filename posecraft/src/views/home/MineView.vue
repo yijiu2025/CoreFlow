@@ -72,7 +72,7 @@
           :class="['tab-btn', { active: activeTab === 'works' }]"
         >
           <span>作品</span>
-          <span>{{ worksCount }}</span>
+          <span>{{ realWorksCount }}</span>
         </button>
         <button
           @click="changeTab('templates')"
@@ -717,20 +717,27 @@ const batchDelete = async () => {
   }
 }
 
+// 作品数（排除创建模板时自动生成的底图作品）
+const realWorksCount = computed(() => myWorks.value.filter(w => !w.is_template_work).length)
+
 // 过滤后的列表计算
 const filteredItems = computed(() => {
   let list: any[] = []
   
   if (activeTab.value === 'works') {
+    // 作品 Tab：排除创建模板时自动生成的底图作品（is_template_work=true）
+    // 只保留通过相机拍摄发表的真实作品
+    const realWorks = myWorks.value.filter(w => !w.is_template_work)
+
     // 根据三级分类进行过滤
     if (subTab.value === 'public') {
-      list = myWorks.value.filter(w => !w.is_private && w.type !== 'collection' && w.type !== 'series')
+      list = realWorks.filter(w => !w.is_private && w.type !== 'collection' && w.type !== 'series')
     } else if (subTab.value === 'private') {
-      list = myWorks.value.filter(w => w.is_private)
+      list = realWorks.filter(w => w.is_private)
     } else if (subTab.value === 'collection') {
-      list = myWorks.value.filter(w => w.type === 'collection')
+      list = realWorks.filter(w => w.type === 'collection')
     } else if (subTab.value === 'series') {
-      list = myWorks.value.filter(w => w.type === 'series')
+      list = realWorks.filter(w => w.type === 'series')
     }
 
     // 根据日期范围筛选
