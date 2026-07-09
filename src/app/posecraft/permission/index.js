@@ -44,6 +44,11 @@ export const POSECRAFT_PERMISSIONS = createPermissionRegistry('posecraft', 'Pose
     AUDIT:      { code: 'posecraft:work:audit',      label: '审核作品与模板', type: 'high_risk' },
     DELETE_ANY: { code: 'posecraft:work:delete_any', label: '强制下架删除他人项目', type: 'high_risk' },
     UPDATE_ANY: { code: 'posecraft:work:update_any', label: '强制编辑他人项目信息', type: 'high_risk' }
+  },
+
+  // G. Banner 管理
+  BANNER: {
+    MANAGE: { code: 'posecraft:banner:manage', label: '管理首页 Banner', type: 'high_risk' }
   }
 });
 

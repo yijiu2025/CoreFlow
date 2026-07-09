@@ -22,18 +22,24 @@
 
       <!-- 瀑布流 -->
       <div v-else>
-        <!-- 推荐大图 Banner -->
-        <div class="featured-banner" v-if="activeChannel === 'recommend' && !searchQuery.trim()">
+        <!-- 推荐大图 Banner（从后端 BannerConfig 动态渲染） -->
+        <div
+          v-for="banner in activeBanners"
+          :key="banner.id"
+          class="featured-banner"
+          v-if="activeChannel === 'recommend' && !searchQuery.trim()"
+          :style="{ backgroundImage: `linear-gradient(to right, rgba(15,23,42,0.95), rgba(15,23,42,0.4)), url(${banner.image_url})` }"
+        >
           <div class="banner-content">
-            <div class="banner-badge">
+            <div class="banner-badge" v-if="banner.badge_text">
               <span class="badge-icon">🏆</span>
-              <span>每日精选</span>
+              <span>{{ banner.badge_text }}</span>
             </div>
-            <h1 class="banner-title">今日精选 · 100+ 优质姿势模板</h1>
-            <p class="banner-desc">编辑团队精心挑选，涵盖人像、风光、创意等多个领域</p>
+            <h1 class="banner-title">{{ banner.title }}</h1>
+            <p class="banner-desc" v-if="banner.description">{{ banner.description }}</p>
           </div>
-          <button class="banner-btn" @click="showToast('已进入精选主题页面')">
-            立即探索
+          <button class="banner-btn" @click="onBannerClick(banner)">
+            {{ banner.button_text || '立即探索' }}
           </button>
         </div>
 
@@ -104,8 +110,15 @@ const {
   likeItem,
   onSearchBlur,
   searchSentinel,
-  activeNav
+  activeNav,
+  activeBanners
 } = useHome()
+
+/** 按钮点击：有 link_url 则跳转，否则走 fallback */
+const onBannerClick = (banner: any) => {
+  if (banner.link_url) window.open(banner.link_url, '_blank')
+  else showToast('已进入精选主题页面')
+}
 
 // 设置当前导航标识为精选
 onMounted(() => {

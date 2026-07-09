@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { templateApi } from '@/api/template'
 import { workApi } from '@/api/work'
 import { followApi } from '@/api/follow'
+import { bannerConfigApi } from '@/api/bannerConfig'
 import service from '@/utils/request'
 
 const HomeStateSymbol = Symbol('HomeState')
@@ -84,6 +85,7 @@ export function useHome() {
 
   const templates = ref<any[]>([])
   const works = ref<any[]>([])
+  const activeBanners = ref<any[]>([])
   const currentPage = ref(1)
   const hasMore = ref(true)
   const loading = ref(false)
@@ -267,6 +269,13 @@ export function useHome() {
         works.value = [...works.value, ...newWorks]
       }
 
+      // 加载 Banner 配置（当前生效的）
+      try {
+        const bannerRes = await bannerConfigApi.getActive()
+        activeBanners.value = (bannerRes as any)?.data?.data || []
+      } catch {
+        activeBanners.value = []
+      }
 
       const hasMoreTemplates = tplRes.page < tplRes.totalPages
       const hasMoreWorks = page < totalPages
@@ -412,7 +421,8 @@ export function useHome() {
     loading,
     refreshData,
     loadMore,
-    searchSuggestions
+    searchSuggestions,
+    activeBanners
   }
 
   provide(HomeStateSymbol, state)
