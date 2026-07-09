@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { ref } from 'vue'
+import { PictureRounded } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const isCollapse = ref(false)
@@ -26,6 +27,10 @@ const isCollapse = ref(false)
         <el-menu-item index="/templates">
           <el-icon><Document /></el-icon>
           <template #title>模板审核</template>
+        </el-menu-item>
+        <el-menu-item index="/banner">
+          <el-icon><PictureRounded /></el-icon>
+          <template #title>Banner 管理</template>
         </el-menu-item>
       </el-menu>
     </el-aside>

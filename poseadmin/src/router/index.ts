@@ -19,6 +19,12 @@ const router = createRouter({
           name: 'TemplatesAudit',
           component: () => import('../views/TemplatesAudit.vue'),
           meta: { title: '模板审核' }
+        },
+        {
+          path: 'banner',
+          name: 'BannerManage',
+          component: () => import('../views/BannerManage.vue'),
+          meta: { title: 'Banner 管理' }
         }
       ]
     }
