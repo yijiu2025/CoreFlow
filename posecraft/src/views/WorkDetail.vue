@@ -25,10 +25,10 @@
             <span class="no-image-icon">👤</span>
             <span class="no-image-label">纯姿势骨骼模板</span>
           </div>
-          <!-- 骨架叠加 -->
+          <!-- 骨架叠加：模板详情中的 thumbnail_url（骨架 PNG），点开详情时才加载 -->
           <img
-            v-if="showOverlay && work?.thumbnail_url"
-            :src="work.thumbnail_url"
+            v-if="showOverlay && templateSkeletonUrl"
+            :src="templateSkeletonUrl"
             alt="skeleton"
             class="skeleton-overlay"
             :style="overlayStyle"
@@ -36,7 +36,7 @@
         </div>
 
         <!-- 骨架叠加浮动胶囊 -->
-        <div class="floating-controls" v-if="work?.thumbnail_url">
+        <div class="floating-controls" v-if="templateSkeletonUrl">
           <button
             class="ctrl-pill"
             :class="{ active: showOverlay }"
@@ -255,6 +255,9 @@ const likePulse = ref(false)
 const showOverlay = ref(true)
 const photoOpacity = ref(0.5)
 const menuOpen = ref(false)
+
+/** 关联模板的骨架预览图 URL（点开详情时才加载，获取模板的 thumbnail_url 骨架 PNG） */
+const templateSkeletonUrl = ref<string | null>(null)
 
 // 描述折叠
 const descCollapsed = ref(true)
@@ -522,6 +525,16 @@ onMounted(async () => {
       work.value = await templateApi.getDetail(id)
     } else {
       work.value = await workApi.getDetail(id)
+    }
+
+    // 作品关联了模板：点开详情时才加载模板详情获取骨架图 URL（thumbnail_url = 骨架 PNG）
+    if (work.value && !isTemplate.value && work.value.template_id) {
+      try {
+        const tplRes: any = await templateApi.getDetail(work.value.template_id)
+        templateSkeletonUrl.value = tplRes?.thumbnail_url || null
+      } catch (e) {
+        console.warn('加载关联模板骨架图失败:', e)
+      }
     }
 
     if (authStore.isLoggedIn && work.value) {
