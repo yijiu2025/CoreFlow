@@ -317,11 +317,24 @@ export function registerSecureRoute(fastify, options) {
   const systemConfig = getGuardConfig(targetSystem);
   const systemPrefix = systemConfig?.prefix || '';
   const fullUrl = '/' + joinUrl(systemPrefix, currentPrefix, url);
+  const methodUpper = method.toUpperCase();
+
+  // ⚡ 实时路由重复检测：在 Fastify 注册前主动拦截，避免错误延后暴露到无关模块
+  const routeKey = `${methodUpper}:${fullUrl}`;
+  if (_routeRegistry.has(routeKey)) {
+    const dup = _routeRegistry.get(routeKey);
+    throw new Error(
+      `路由重复注册: ${methodUpper} ${fullUrl}\n` +
+      `  → 首次注册: [${dup.group}] ${dup.name}\n` +
+      `  → 重复注册: [${targetGroup}] ${name}`
+    );
+  }
+  _routeRegistry.set(routeKey, { group: targetGroup, name, fullUrl, method: methodUpper });
 
   registerApiMetadata(targetSystem, targetGroup, apiKey, {
     alias,
     url: fullUrl,
-    method: method.toUpperCase(),
+    method: methodUpper,
     allowRoles,
     allowIps,
     requireLogin,
@@ -342,3 +355,6 @@ export function registerSecureRoute(fastify, options) {
     handler
   });
 }
+
+/** 路由注册表：method+fullUrl → { group, name }。用于实时检测重复注册 */
+const _routeRegistry = new Map();
