@@ -105,11 +105,7 @@ export default async (app) => {
 
     // 5. 调用 init 函数注册应用插件（如 config.js 中定义了 init）
     if (appConfig?.init && typeof appConfig.init === 'function') {
-      try {
-        await app.register(appConfig.init);
-      } catch (err) {
-        console.error(`❌ [Apps] ${C.red}${appConfig.name || dir.name} 初始化失败: ${err.message}${C.reset}`);
-      }
+      await app.register(appConfig.init);
     }
 
     // 6. 打印应用加载完成

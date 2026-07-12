@@ -73,22 +73,17 @@ export default async (app) => {
   }
 
   async function loadRouteFile(filePath) {
-    try {
-      const fileUrl = pathToFileURL(filePath).href;
-      const { default: routerPlugin } = await import(fileUrl);
+    const fileUrl = pathToFileURL(filePath).href;
+    const { default: routerPlugin } = await import(fileUrl);
 
-      if (typeof routerPlugin === 'function') {
-        await app.register(routerPlugin);
-        const relativePath = path.relative(apiRoot, filePath);
-        console.log(
-          `✅ [API] ${C.green}已注册: /${relativePath.replace(/\\/g, '/')}${C.reset}`
-        );
-      }
-    } catch (err) {
-      console.error(
-        `❌ [API] ${C.red}文件加载失败: ${filePath} ${err.message}${C.reset}`
-      );
-    }
+    if (typeof routerPlugin !== 'function') return;
+
+    // 路由注册失败直接抛出，由 engine.js 统一收集；禁止静默吞错导致后续模块"背锅"
+    await app.register(routerPlugin);
+    const relativePath = path.relative(apiRoot, filePath);
+    console.log(
+      `✅ [API] ${C.green}已注册: /${relativePath.replace(/\\/g, '/')}${C.reset}`
+    );
   }
 
   const systemFolders = await fs.readdir(apiRoot, { withFileTypes: true });
