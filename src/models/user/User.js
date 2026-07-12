@@ -67,7 +67,8 @@ export default (sequelize, DataTypes) => {
       personal_id: {
         type: DataTypes.STRING(50),
         allowNull: true,
-        comment: '个人ID'
+        unique: true,
+        comment: '个人唯一 ID（对外展示，如 pose_craft_xxx）'
       },
       status: {
         type: DataTypes.TINYINT,

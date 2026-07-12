@@ -11,6 +11,32 @@ import sequelize from '../../../db/index.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import UserDao from '../../../app/oauth21/dao/user.dao.js';
 
+/**
+ * 生成唯一的 personal_id（格式 pose_craft_ + 8位字母数字）
+ * 碰撞时递归重试，最多 10 次
+ */
+async function generateUniquePersonalId(attempt = 0) {
+  if (attempt >= 10) {
+    // 极端情况：用时间戳后缀兜底
+    return `pose_craft_${Date.now().toString(36)}`;
+  }
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let suffix = '';
+  for (let i = 0; i < 8; i++) {
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  const candidate = `pose_craft_${suffix}`;
+  // 查重
+  const existing = await sequelize.models.User.findOne({
+    where: { personal_id: candidate },
+    attributes: ['id']
+  });
+  if (existing) {
+    return generateUniquePersonalId(attempt + 1);
+  }
+  return candidate;
+}
+
 export default async function (fastify) {
   registerGroupMetadata({
     name: 'userProfile',
@@ -192,7 +218,7 @@ export default async function (fastify) {
           age: 27,
           city: '甘肃 · 庆阳',
           bio: '✈️已飞0个国家❗️\n梦想是环游世界🌍\n中国留子👧\n个人存款0.000000千万💵\n人生是干饭💤\n梦游国家40+ | 我命由我不由天🌚\n火锅品鉴师🍪 | 5G冲浪达人🏄\npdd资深买手🛍️ | 草莓🍓狂热粉丝\n雅思托福没考📚 清华北大没考📖\n国家级证件持有者(身份证)💳',
-          personal_id: 'dy14a27nhlbkd'
+          personal_id: await generateUniquePersonalId()
         });
         // 刷新 user 对象以获取更新后数据
         await user.reload();
