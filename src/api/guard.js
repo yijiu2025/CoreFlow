@@ -252,6 +252,22 @@ export function setRegistrationContext(systemKey) {
 }
 
 /**
+ * 【Loader 调用】获取当前注册上下文（供 07-api.js 保存/恢复）
+ */
+export function getRegistrationContext() {
+  return { currentSystem, currentGroup, currentPrefix };
+}
+
+/**
+ * 【Loader 调用】恢复注册上下文（供 07-api.js 在 loadRouteFile 后还原）
+ */
+export function restoreRegistrationContext(ctx) {
+  currentSystem = ctx.currentSystem;
+  currentGroup = ctx.currentGroup;
+  currentPrefix = ctx.currentPrefix;
+}
+
+/**
  * 【Level 2】注册模块/文件级元数据
  * 支持单对象签名：registerGroupMetadata({ name: 'key', ... })
  * 无需手动指定 System，Loader 会根据文件夹自动设置上下文
