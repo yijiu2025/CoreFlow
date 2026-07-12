@@ -17,8 +17,18 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** 预览图存储目录（绝对路径） */
-const PREVIEW_DIR = path.resolve(__dirname, '../../../public/uploads/posecraft/previews');
+/** 预览图存储根目录（绝对路径） */
+const PREVIEW_ROOT = path.resolve(__dirname, '../../../public/uploads/posecraft/previews')
+
+/**
+ * 根据类型获取预览图存储子目录
+ * - work     → previews/work/
+ * - template → previews/template/
+ */
+const getPreviewDir = (type) => path.join(PREVIEW_ROOT, type === 'template' ? 'template' : 'work')
+
+/** 预览图 URL 前缀 */
+const getPreviewUrlPrefix = (type) => `/uploads/posecraft/previews/${type === 'template' ? 'template' : 'work'}`;
 
 /** 预览图最大宽度（缩略图），像素 */
 const THUMB_MAX_WIDTH = 600;
@@ -120,16 +130,18 @@ export async function generateImageThumbnail(imageUrl) {
     const origStat = fs.statSync(localPath);
     if (thumbBuffer.length >= origStat.size * 0.7) return null;
 
-    fs.mkdirSync(PREVIEW_DIR, { recursive: true });
+    // 作品缩略图保存到 previews/work/
+    const previewDir = getPreviewDir('work');
+    fs.mkdirSync(previewDir, { recursive: true });
     const hash = crypto.createHash('sha256').update(thumbBuffer).digest('hex').slice(0, 16);
     const filename = `${hash}.webp`;
-    const filePath = path.join(PREVIEW_DIR, filename);
+    const filePath = path.join(previewDir, filename);
 
     if (!fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, thumbBuffer);
     }
 
-    return `/uploads/posecraft/previews/${filename}`;
+    return `${getPreviewUrlPrefix('work')}/${filename}`;
   } catch (err) {
     const log = globalThis?.fastify?.log || console;
     log.error?.(err, 'PoseCraft image thumbnail generation failed');
@@ -142,7 +154,7 @@ export async function generateImageThumbnail(imageUrl) {
  * 用于模板（Template.thumbnail_url）
  *
  * @param {object|string} poseData - pose_data（含 fabricData）
- * @returns {Promise<string|null>} 相对 URL，如 '/uploads/posecraft/previews/xxxx.png'；失败或无骨架数据时返回 null
+ * @returns {Promise<string|null>} 相对 URL；失败或无骨架数据时返回 null
  */
 export async function generateSkeletonPreview(poseData) {
   const fabricData = extractFabricData(poseData);
@@ -171,17 +183,18 @@ export async function generateSkeletonPreview(poseData) {
       .png()
       .toBuffer();
 
-    // 保存为静态文件（hash 命名，相同内容不重复写）
-    fs.mkdirSync(PREVIEW_DIR, { recursive: true });
+    // 模板骨架预览图保存到 previews/template/
+    const previewDir = getPreviewDir('template');
+    fs.mkdirSync(previewDir, { recursive: true });
     const hash = crypto.createHash('sha256').update(finalBuffer).digest('hex').slice(0, 16);
     const filename = `${hash}.png`;
-    const filePath = path.join(PREVIEW_DIR, filename);
+    const filePath = path.join(previewDir, filename);
 
     if (!fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, finalBuffer);
     }
 
-    return `/uploads/posecraft/previews/${filename}`;
+    return `${getPreviewUrlPrefix('template')}/${filename}`;
   } catch (err) {
     // 预览图生成失败不应阻塞主流程，仅记录日志
     const log = globalThis?.fastify?.log || console;
