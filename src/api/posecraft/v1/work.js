@@ -60,6 +60,39 @@ function generateSvgFromFabric(fabricData) {
   return Buffer.from(svgContent);
 }
 
+/**
+ * 作品结构化输出：只返回前端需要的字段
+ * 排除：user_id、analysis_data、delete_version、deleted_at、edit_data
+ */
+function formatWork(work) {
+  if (!work) return null;
+  const data = work.toJSON ? work.toJSON() : work;
+  return {
+    id: data.id,
+    template_id: data.template_id,
+    title: data.title,
+    description: data.description,
+    image_url: data.image_url,
+    thumbnail_url: data.thumbnail_url,
+    is_template_work: data.is_template_work,
+    status: data.status,
+    likes_count: data.likes_count,
+    views_count: data.views_count,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+    author: data.author ? {
+      id: data.author.id,
+      username: data.author.username,
+      avatar: data.author.avatar
+    } : undefined
+  };
+}
+
+/** 批量结构化输出 */
+function formatWorkList(list) {
+  return (list || []).map(formatWork);
+}
+
 export default async function (fastify) {
   registerGroupMetadata({
     name: 'work',
@@ -115,7 +148,7 @@ export default async function (fastify) {
         pageSize
       });
 
-      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
+      return reply.result.paginated(formatWorkList(result.list), result.total, result.page, result.pageSize);
     }
   });
 
@@ -130,7 +163,7 @@ export default async function (fastify) {
 
       const works = await workDao.findRecommended(parseInt(limit));
 
-      return reply.result.success('获取成功', works);
+      return reply.result.success('获取成功', formatWorkList(works));
     }
   });
 
@@ -165,7 +198,7 @@ export default async function (fastify) {
         pageSize
       });
 
-      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
+      return reply.result.paginated(formatWorkList(result.list), result.total, result.page, result.pageSize);
     }
   });
 
@@ -192,7 +225,7 @@ export default async function (fastify) {
       }
       const { page, pageSize } = request.query;
       const result = await workDao.findByUser(user.userId, { page, pageSize });
-      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
+      return reply.result.paginated(formatWorkList(result.list), result.total, result.page, result.pageSize);
     }
   });
 
@@ -214,7 +247,7 @@ export default async function (fastify) {
       // 增加浏览量
       await workDao.incrementViews(id);
 
-      return reply.result.success('获取成功', work);
+      return reply.result.success('获取成功', formatWork(work));
     }
   });
 
