@@ -3,7 +3,6 @@ import { useUserSettings } from '@/stores/userSettings'
 import { useRouter } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
-import { templateApi } from '@/api/template'
 import { workApi } from '@/api/work'
 import { followApi } from '@/api/follow'
 import { bannerConfigApi } from '@/api/bannerConfig'
@@ -234,9 +233,7 @@ export function useHome() {
     if (loading.value) return
     loading.value = true
     try {
-      const tplRes = await templateApi.getList({ page, pageSize: 12 }) as any
-      const newTemplates = tplRes.list || []
-      
+      // 首页只加载作品——模板通过作品的 template_id 绑定，不在首页单独展示
       let newWorks = []
       let totalPages = 1
       if (activeNav.value === 'following' && authStore.isLoggedIn) {
@@ -254,18 +251,8 @@ export function useHome() {
       }
 
       if (page === 1) {
-        if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
-          templates.value = newTemplates.filter((t: any) => t.user_id === authStore.user.id)
-        } else {
-          templates.value = newTemplates.filter((t: any) => t.status === 1)
-        }
         works.value = newWorks
       } else {
-        if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
-          templates.value = [...templates.value, ...newTemplates.filter((t: any) => t.user_id === authStore.user.id)]
-        } else {
-          templates.value = [...templates.value, ...newTemplates.filter((t: any) => t.status === 1)]
-        }
         works.value = [...works.value, ...newWorks]
       }
 
@@ -277,9 +264,7 @@ export function useHome() {
         activeBanners.value = []
       }
 
-      const hasMoreTemplates = tplRes.page < tplRes.totalPages
-      const hasMoreWorks = page < totalPages
-      hasMore.value = hasMoreTemplates || hasMoreWorks
+      hasMore.value = page < totalPages
     } catch (err) {
       console.error('加载数据失败:', err)
     } finally {
