@@ -270,13 +270,11 @@ export const useAuthStore = defineStore('auth', () => {
         userProfile.value = profileRes
         user.value = { ...user.value, ...profileRes, id: user.value?.sub || user.value?.id }
 
+        // 只加载基础统计（关注/粉丝/作品数），个人内容（历史/喜欢/收藏）在切换到对应 Tab 时才加载
         const userUid = profileRes.uid
         if (userUid) {
           await fetchFollowStats(userUid)
           await fetchWorkStats(userUid)
-          await fetchMyHistory()
-          await fetchMyLikes()
-          await fetchMyCollects()
         }
       }
     } catch (e) {
