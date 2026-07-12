@@ -84,7 +84,7 @@ export default async function (fastify) {
       const scopes = (tokenUser.scope || '').split(' ');
       const isFirstParty = !tokenUser.scope || tokenUser.client_id === 'first-party-app';
 
-      const info = { sub: userData.id };
+      const info = { uid: userData.uid };
 
       if (isFirstParty || scopes.includes('profile')) {
         info.name = userData.name;
