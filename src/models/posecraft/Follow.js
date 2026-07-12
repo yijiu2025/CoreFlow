@@ -22,6 +22,12 @@ export default (sequelize, DataTypes) => {
         field: 'following_id',
         comment: '被关注者用户ID'
       },
+      mutual: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: 'mutual',
+        comment: '是否互关（双方都关注对方）'
+      },
       delete_version: {
         type: DataTypes.BIGINT,
         allowNull: false,
