@@ -221,7 +221,7 @@ class TemplateDao {
     // 生成作品缩略图：底图原图压缩（WebP 70%，尺寸不变）；失败则回退原图
     const thumbUrl = (await generateImageThumbnail(template.image_url)) || template.image_url;
 
-    // 创建底图作品
+    // 创建底图作品（is_template_work 为独立字段，不再重复存入 edit_data）
     const work = await Work.create({
       user_id: userId,
       template_id: template.id,
@@ -229,7 +229,7 @@ class TemplateDao {
       description: template.description || '',
       image_url: template.image_url,
       thumbnail_url: thumbUrl,
-      edit_data: { is_template_work: true },
+      edit_data: {},
       is_template_work: true, // 独立字段，方便列表查询筛选
       status: 2, // 模板底图作品待审核，不可见
       delete_version: 0
