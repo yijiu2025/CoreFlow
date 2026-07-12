@@ -97,20 +97,6 @@ export function useTemplateSave(
     fabricJson.height = fCanvas.value.height
 
     const inkCanvas = getInkCanvas()
-    const templateData = {
-      id: route.query.id || `posecraft_${Date.now()}`,
-      name: formData.name || '未命名作品',
-      description: formData.description || '',
-      locationName: formData.locationName || '',
-      coords: formData.coords,
-      ip: formData.ip,
-      tags: formData.tags,
-      exifInfo: formData.exifInfo || null,
-      thumb: realBgUrl,
-      fabricData: fabricJson,
-      inkData: inkCanvas?.toDataURL() || null,
-      createdAt: new Date().toISOString()
-    }
 
     try {
       const apiData = {
