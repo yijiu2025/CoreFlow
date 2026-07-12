@@ -78,8 +78,8 @@ function formatWork(work) {
     status: data.status,
     likes_count: data.likes_count,
     views_count: data.views_count,
-    created_at: data.created_at,
-    updated_at: data.updated_at,
+    created_at: data.createdAt,
+    updated_at: data.updatedAt,
     author: data.author ? {
       id: data.author.id,
       username: data.author.username,
