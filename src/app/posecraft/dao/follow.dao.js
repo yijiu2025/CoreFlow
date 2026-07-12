@@ -41,6 +41,12 @@ class FollowDao {
       return { success: true, message: '已经关注了该用户' };
     }
 
+    // 检查对方是否关注了我（互关判断）
+    const reverseFollow = await Follow.findOne({
+      where: { follower_id: followingId, following_id: followerId, delete_version: 0 }
+    });
+    const isMutual = !!reverseFollow;
+
     // 这里直接复用曾经软删除的记录（如果存在）或创建新记录
     const deletedRecord = await Follow.findOne({
       where: { follower_id: followerId, following_id: followingId },
@@ -48,15 +54,21 @@ class FollowDao {
     });
 
     if (deletedRecord && deletedRecord.delete_version !== 0) {
-      // 恢复软删除
+      // 恢复软删除，并设置互关状态
       await deletedRecord.restore();
-      await deletedRecord.update({ delete_version: 0 });
+      await deletedRecord.update({ delete_version: 0, mutual: isMutual });
     } else {
       await Follow.create({
         follower_id: followerId,
         following_id: followingId,
+        mutual: isMutual,
         delete_version: 0
       });
+    }
+
+    // 如果互关，把对方记录的 mutual 也置为 true
+    if (isMutual && reverseFollow) {
+      await reverseFollow.update({ mutual: true });
     }
 
     return { success: true, message: '关注成功' };
@@ -76,6 +88,16 @@ class FollowDao {
       // 软删除
       await record.update({ delete_version: record.id });
       await record.destroy();
+
+      // 如果原来是互关，把对方的 mutual 置为 false
+      if (record.mutual) {
+        const reverseRecord = await Follow.findOne({
+          where: { follower_id: followingId, following_id: followerId, delete_version: 0 }
+        });
+        if (reverseRecord) {
+          await reverseRecord.update({ mutual: false });
+        }
+      }
     }
 
     return true;
@@ -115,6 +137,16 @@ class FollowDao {
       where: { follower_id: userId, delete_version: 0 }
     });
     return { followersCount, followingCount };
+  }
+
+  /**
+   * 获取互关数量（follower_id=X 且 mutual=true 的记录数）
+   */
+  async getMutualCount(userId) {
+    const Follow = this.getModel();
+    return await Follow.count({
+      where: { follower_id: userId, mutual: true, delete_version: 0 }
+    });
   }
 
   /**

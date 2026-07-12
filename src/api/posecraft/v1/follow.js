@@ -172,4 +172,74 @@ export default async function (fastify) {
       return reply.result.success('查询成功', stats);
     }
   });
+
+  // ========== 个人完整统计（关注/粉丝/互关/获赞/作品/模板/收藏）==========
+
+  // 获取当前登录用户的完整统计（从 session 识别）
+  registerSecureRoute(fastify, {
+    name: 'getMyProfileStats',
+    alias: '获取我的完整统计',
+    method: 'GET',
+    url: '/profile/stats',
+    requireLogin: true,
+    handler: async (request, reply) => {
+      const currentUser = request.state?.user;
+      if (!currentUser?.userId) {
+        return reply.result.fail('未登录', null, 401);
+      }
+      const stats = await getProfileStats(currentUser.userId);
+      return reply.result.success('查询成功', stats);
+    }
+  });
+
+  // 获取其他用户的完整统计（通过 uid/personal_id）
+  registerSecureRoute(fastify, {
+    name: 'getUserProfileStats',
+    alias: '获取用户完整统计',
+    method: 'GET',
+    url: '/profile/stats/:userId',
+    requireLogin: true,
+    handler: async (request, reply) => {
+      const { userId } = request.params;
+      let targetUserId;
+      try {
+        targetUserId = await getInternalUserId(userId);
+      } catch (err) {
+        return reply.code(404).send({ code: 404, message: '用户不存在' });
+      }
+      const stats = await getProfileStats(targetUserId);
+      return reply.result.success('查询成功', stats);
+    }
+  });
+}
+
+/**
+ * 聚合个人完整统计（关注/粉丝/互关/获赞/作品/模板/收藏）
+ */
+async function getProfileStats(userId) {
+  const followStats = await followDao.getFollowStatsCount(userId);
+  const mutual = await followDao.getMutualCount(userId);
+  const workStats = await followDao.getWorkStatsCount(userId);
+
+  // 模板数量
+  const { Template } = sequelize.models;
+  const templatesCount = await Template.count({
+    where: { user_id: userId, delete_version: 0 }
+  });
+
+  // 收藏数量
+  const { UserCollect } = sequelize.models;
+  const collectsCount = await UserCollect.count({
+    where: { user_id: userId, delete_version: 0 }
+  });
+
+  return {
+    following: followStats.followingCount,
+    followers: followStats.followersCount,
+    mutual,
+    likes_received: workStats.likesCount,
+    works_count: workStats.worksCount,
+    templates_count: templatesCount,
+    collects_count: collectsCount
+  };
 }
