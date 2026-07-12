@@ -23,6 +23,10 @@ export const useAuthStore = defineStore('auth', () => {
   const followersCount = ref(0)
   const worksCount = ref(0)
   const likesCount = ref(0)
+  const mutualCount = ref(0)        // 互关数
+  const templatesCount = ref(0)        // 模板数
+  const collectsCount = ref(0)         // 收藏数
+  const recommendationsCount = ref(0)  // 推荐数
   const userProfile = ref<any>({
     username: '摄影小王',
     avatar: DEFAULT_AVATAR,
@@ -36,9 +40,8 @@ export const useAuthStore = defineStore('auth', () => {
   /** 带兜底的头像 URL（空值时返回本地默认头像，零网络请求） */
   const safeAvatar = computed(() => userProfile.value?.avatar || DEFAULT_AVATAR)
 
-  const likedWorksCount = ref(280)
-  const collectsCount = ref(246)
-  const watchLaterCount = ref(1)
+  const likedWorksCount = ref(0)   // 喜欢数（从接口加载）
+  const watchLaterCount = ref(0)   // 稍后再看（预留）
   const historyText = ref('30天内')
   const saveLoginInfo = ref(cache.get('save_login_info') !== false)
 
@@ -140,29 +143,27 @@ export const useAuthStore = defineStore('auth', () => {
     return false
   }
 
-  async function fetchFollowStats(userId: string) {
+  /**
+   * 获取当前登录用户的完整统计（统一接口，替换旧的 fetchFollowStats + fetchWorkStats）
+   * 返回：following / followers / mutual / likes_received / works_count / templates_count / collects_count
+   */
+  async function fetchMyStats() {
     try {
-      const { followApi } = await import('@/api/follow')
-      const statsRes = await followApi.getFollowStatsOnly(userId) as any
-      if (statsRes) {
-        followingCount.value = statsRes.followingCount || 0
-        followersCount.value = statsRes.followersCount || 0
+      const { profileApi } = await import('@/api/profile')
+      const res = await profileApi.getMyStats() as any
+      const stats = res?.data || res
+      if (stats) {
+        followingCount.value = stats.following || 0
+        followersCount.value = stats.followers || 0
+        worksCount.value = stats.works_count || 0
+        likesCount.value = stats.likes_received || 0
+        mutualCount.value = stats.mutual || 0
+        templatesCount.value = stats.templates_count || 0
+        collectsCount.value = stats.collects_count || 0
+        recommendationsCount.value = stats.recommendations_count || 0
       }
     } catch (e) {
-      console.warn('获取关注统计失败', e)
-    }
-  }
-
-  async function fetchWorkStats(userId: string) {
-    try {
-      const { followApi } = await import('@/api/follow')
-      const statsRes = await followApi.getWorkStatsOnly(userId) as any
-      if (statsRes) {
-        worksCount.value = statsRes.worksCount || 0
-        likesCount.value = statsRes.likesCount || 0
-      }
-    } catch (e) {
-      console.warn('获取作品统计失败', e)
+      console.warn('获取个人统计失败', e)
     }
   }
 
@@ -218,6 +219,37 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // 我的推荐列表
+  const myRecommendations = ref<any[]>([])
+
+  async function fetchMyRecommendations(options = { page: 1, pageSize: 20 }) {
+    try {
+      const { recommendationApi } = await import('@/api/recommendation')
+      const res = await recommendationApi.getMyList(options) as any
+      myRecommendations.value = res?.list || []
+    } catch (e) {
+      console.warn('获取推荐列表失败', e)
+    }
+  }
+
+  async function cancelRecommendation(params: { workId?: number; templateId?: number }) {
+    try {
+      const { recommendationApi } = await import('@/api/recommendation')
+      if (params.workId) {
+        await recommendationApi.cancelRecommendWork(params.workId)
+      } else if (params.templateId) {
+        await recommendationApi.cancelRecommendTemplate(params.templateId)
+      }
+      // 更新本地列表和计数
+      myRecommendations.value = myRecommendations.value.filter(
+        (r) => !(params.workId && r.target_id === params.workId) && !(params.templateId && r.target_id === params.templateId)
+      )
+      recommendationsCount.value = Math.max(0, recommendationsCount.value - 1)
+    } catch (e) {
+      console.warn('取消推荐失败', e)
+    }
+  }
+
   async function recordHistoryAction(params: { workId?: number; templateId?: number }) {
     if (!isLoggedIn.value) return
     try {
@@ -235,9 +267,7 @@ export const useAuthStore = defineStore('auth', () => {
       const { interactionApi } = await import('@/api/interaction')
       const res = await interactionApi.toggleLike(params) as any
       if (res && res.liked !== undefined) {
-        if (user.value?.uid) {
-          fetchWorkStats(user.value.uid)
-        }
+        fetchMyStats()
         fetchMyLikes()
         return true
       }
@@ -270,12 +300,8 @@ export const useAuthStore = defineStore('auth', () => {
         userProfile.value = profileRes
         user.value = { ...user.value, ...profileRes, id: user.value?.sub || user.value?.id }
 
-        // 只加载基础统计（关注/粉丝/作品数），个人内容（历史/喜欢/收藏）在切换到对应 Tab 时才加载
-        const userUid = profileRes.uid
-        if (userUid) {
-          await fetchFollowStats(userUid)
-          await fetchWorkStats(userUid)
-        }
+        // 加载完整统计（关注/粉丝/互关/获赞/作品/模板/收藏），个人内容列表在切换到对应 Tab 时才加载
+        await fetchMyStats()
       }
     } catch (e) {
       console.warn('获取用户资料失败，降级展示默认数据', e)
@@ -341,10 +367,12 @@ export const useAuthStore = defineStore('auth', () => {
     followersCount,
     worksCount,
     likesCount,
+    mutualCount,
+    templatesCount,
+    recommendationsCount,
     userProfile,
     fetchUserProfile,
-    fetchFollowStats,
-    fetchWorkStats,
+    fetchMyStats,
     updateUserProfile,
     likedWorksCount,
     collectsCount,
@@ -355,11 +383,14 @@ export const useAuthStore = defineStore('auth', () => {
     myLikes,
     myCollects,
     myHistory,
+    myRecommendations,
     fetchMyWorks,
     fetchMyTemplates,
     fetchMyHistory,
     fetchMyLikes,
     fetchMyCollects,
+    fetchMyRecommendations,
+    cancelRecommendation,
     recordHistoryAction,
     toggleLikeAction,
     toggleCollectAction,

@@ -229,6 +229,36 @@ export default async function (fastify) {
     }
   });
 
+  // 获取其他用户作品（通过 uid/personal_id）
+  registerSecureRoute(fastify, {
+    name: 'getUserWorks',
+    alias: '获取用户作品',
+    method: 'GET',
+    url: '/works/user/:userId',
+    schema: {
+      params: {
+        type: 'object',
+        required: ['userId'],
+        properties: {
+          userId: { type: 'integer' }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
+      }
+    },
+    handler: async (request, reply) => {
+      const { userId } = request.params;
+      const { page, pageSize } = request.query;
+      const result = await workDao.findByUser(userId, { page, pageSize });
+      return reply.result.paginated(formatWorkList(result.list), result.total, result.page, result.pageSize);
+    }
+  });
+
   // 获取作品详情（公开）
   registerSecureRoute(fastify, {
     name: 'getWork',

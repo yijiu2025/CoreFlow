@@ -66,6 +66,22 @@ export function useHome() {
     get: () => authStore.likesCount,
     set: (v) => { authStore.likesCount = v }
   })
+  const mutualCount = computed({
+    get: () => authStore.mutualCount,
+    set: (v) => { authStore.mutualCount = v }
+  })
+  const templatesCount = computed({
+    get: () => authStore.templatesCount,
+    set: (v) => { authStore.templatesCount = v }
+  })
+  const recommendationsCount = computed({
+    get: () => authStore.recommendationsCount,
+    set: (v) => { authStore.recommendationsCount = v }
+  })
+  const collectsCount = computed({
+    get: () => authStore.collectsCount,
+    set: (v) => { authStore.collectsCount = v }
+  })
   const userProfile = computed({
     get: () => authStore.userProfile,
     set: (v) => { authStore.userProfile = v }
@@ -292,6 +308,9 @@ export function useHome() {
     }
   }
 
+  /** 获取当前用户完整统计（代理 authStore.fetchMyStats） */
+  const fetchMyStats = () => authStore.fetchMyStats()
+
   const updateUserProfile = async (data: any) => {
     const success = await authStore.updateUserProfile(data)
     if (success) {
@@ -385,8 +404,13 @@ export function useHome() {
     followersCount,
     worksCount,
     likesCount,
+    mutualCount,
+    templatesCount,
+    recommendationsCount,
+    collectsCount,
     userProfile,
     fetchUserProfile,
+    fetchMyStats,
     updateUserProfile,
     toastMsg,
     showToast,
