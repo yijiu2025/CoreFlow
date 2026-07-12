@@ -19,29 +19,23 @@ export const useAuthStore = defineStore('auth', () => {
   const permissions = ref<{ allows: string[]; denies: string[] }>({ allows: [], denies: [] })
   const initialized = ref(false)
 
+  // ── 对外展示的个人统计（关注/粉丝/互关/获赞/作品/模板/收藏/推荐）──
   const followingCount = ref(0)
   const followersCount = ref(0)
   const worksCount = ref(0)
   const likesCount = ref(0)
-  const mutualCount = ref(0)        // 互关数
-  const templatesCount = ref(0)        // 模板数
-  const collectsCount = ref(0)         // 收藏数
-  const recommendationsCount = ref(0)  // 推荐数
-  const userProfile = ref<any>({
-    username: '摄影小王',
-    avatar: DEFAULT_AVATAR,
-    gender: 0,
-    age: 27,
-    city: '北京 · 朝阳',
-    bio: '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子👧...',
-    personal_id: 'pose_craft_wang'
-  })
+  const mutualCount = ref(0)
+  const templatesCount = ref(0)
+  const collectsCount = ref(0)
+  const recommendationsCount = ref(0)
+
+  const userProfile = ref<any>(null)
 
   /** 带兜底的头像 URL（空值时返回本地默认头像，零网络请求） */
   const safeAvatar = computed(() => userProfile.value?.avatar || DEFAULT_AVATAR)
 
-  const likedWorksCount = ref(0)   // 喜欢数（从接口加载）
-  const watchLaterCount = ref(0)   // 稍后再看（预留）
+  const likedWorksCount = ref(0)
+  const watchLaterCount = ref(0)
   const historyText = ref('30天内')
   const saveLoginInfo = ref(cache.get('save_login_info') !== false)
 
@@ -67,7 +61,11 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAdmin = computed(() => roles.value.includes('admin') || roles.value.includes('posecraft_admin'))
 
-  /** 从缓存恢复状态（不验证有效性） */
+  /**
+   * 从缓存恢复状态（仅用于快速 UI 显示，不验证有效性）
+   * 安全说明：缓存的角色/权限仅影响 UI 展示，所有实际操作均由后端 session 验证。
+   * 下次 API 调用（checkSession）会从后端拉取最新权威数据覆盖。
+   */
   function restoreFromCache() {
     const savedUser = cache.get<any>('user')
     if (savedUser) {
@@ -79,26 +77,39 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = cache.get<string>('token')
   }
 
-  /** 设置登录状态 */
+  /** 设置登录状态（登录时恢复用户信息，登出时清空所有个人数据） */
   function setLoggedIn(status: boolean, userData: any = null, tokenStr?: string) {
     isLoggedIn.value = status
     user.value = userData
 
     if (status) {
       // 保存用户信息到缓存（无论是否有 token）
-      if (userData) {
-        cache.set('user', userData)
-      }
+      if (userData) cache.set('user', userData)
       if (tokenStr) {
         token.value = tokenStr
         cache.set('token', tokenStr)
       }
-    }
-
-    if (!status) {
+    } else {
+      // 登出：清空所有个人数据与缓存
       token.value = null
       roles.value = []
       permissions.value = { allows: [], denies: [] }
+      followingCount.value = 0
+      followersCount.value = 0
+      worksCount.value = 0
+      likesCount.value = 0
+      mutualCount.value = 0
+      templatesCount.value = 0
+      collectsCount.value = 0
+      recommendationsCount.value = 0
+      likedWorksCount.value = 0
+      myWorks.value = []
+      myTemplates.value = []
+      myLikes.value = []
+      myCollects.value = []
+      myHistory.value = []
+      myRecommendations.value = []
+      userProfile.value = null
       cache.del('user')
       cache.del('token')
       cache.del('roles')
@@ -123,29 +134,38 @@ export const useAuthStore = defineStore('auth', () => {
   async function checkSession(): Promise<boolean> {
     try {
       const { authApi } = await import('@/api/auth')
-      const userData = await authApi.getUserInfo()
+      const userData: any = await authApi.getUserInfo()
 
-      if (userData) {
-        user.value = { ...userData, id: (userData as any).sub }
-        isLoggedIn.value = true
-        cache.set('user', user.value)
-        await fetchPermissions()
-        await fetchUserProfile()
+      if (!userData) {
+        // Session 无效，清除所有状态
+        setLoggedIn(false, null)
         initialized.value = true
-        return true
+        return false
       }
-    } catch {
-      // Session 无效，清除状态
-      setLoggedIn(false, null)
-    }
 
-    initialized.value = true
-    return false
+      // Session 有效，恢复用户身份
+      user.value = { uid: userData.uid, ...userData }
+      isLoggedIn.value = true
+      cache.set('user', user.value)
+
+      // 权限 + 资料加载失败时不影响登录态，分别捕获
+      await fetchPermissions().catch(() => {})
+      await fetchUserProfile().catch(() => {})
+
+      initialized.value = true
+      return true
+    } catch {
+      // 顶层保险：任何未知错误视为未登录
+      setLoggedIn(false, null)
+      initialized.value = true
+      return false
+    }
   }
 
   /**
-   * 获取当前登录用户的完整统计（统一接口，替换旧的 fetchFollowStats + fetchWorkStats）
-   * 返回：following / followers / mutual / likes_received / works_count / templates_count / collects_count
+   * 获取当前登录用户的完整统计（统一接口）
+   * 返回：following / followers / mutual / likes_received / works_count / templates_count / collects_count / recommendations_count
+   * 注意：API 失败时保留旧值不清零
    */
   async function fetchMyStats() {
     try {
@@ -153,16 +173,17 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await profileApi.getMyStats() as any
       const stats = res?.data || res
       if (stats) {
-        followingCount.value = stats.following || 0
-        followersCount.value = stats.followers || 0
-        worksCount.value = stats.works_count || 0
-        likesCount.value = stats.likes_received || 0
-        mutualCount.value = stats.mutual || 0
-        templatesCount.value = stats.templates_count || 0
-        collectsCount.value = stats.collects_count || 0
-        recommendationsCount.value = stats.recommendations_count || 0
+        if (stats.following !== undefined) followingCount.value = stats.following
+        if (stats.followers !== undefined) followersCount.value = stats.followers
+        if (stats.works_count !== undefined) worksCount.value = stats.works_count
+        if (stats.likes_received !== undefined) likesCount.value = stats.likes_received
+        if (stats.mutual !== undefined) mutualCount.value = stats.mutual
+        if (stats.templates_count !== undefined) templatesCount.value = stats.templates_count
+        if (stats.collects_count !== undefined) collectsCount.value = stats.collects_count
+        if (stats.recommendations_count !== undefined) recommendationsCount.value = stats.recommendations_count
       }
     } catch (e) {
+      // 静默失败：保持旧值，不清零
       console.warn('获取个人统计失败', e)
     }
   }
@@ -267,7 +288,7 @@ export const useAuthStore = defineStore('auth', () => {
       const { interactionApi } = await import('@/api/interaction')
       const res = await interactionApi.toggleLike(params) as any
       if (res && res.liked !== undefined) {
-        fetchMyStats()
+        // 同步更新本地喜欢的列表，不重新拉全部统计
         fetchMyLikes()
         return true
       }
@@ -296,15 +317,17 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const { userApi } = await import('@/api/user')
       const profileRes = await userApi.getProfile() as any
-      if (profileRes) {
-        userProfile.value = profileRes
-        user.value = { ...user.value, ...profileRes, id: user.value?.sub || user.value?.id }
+      if (!profileRes) return
 
-        // 加载完整统计（关注/粉丝/互关/获赞/作品/模板/收藏），个人内容列表在切换到对应 Tab 时才加载
-        await fetchMyStats()
-      }
+      userProfile.value = profileRes
+      // user.id 来自 session sub（数字），profileRes 不包含 id，直接用 fallback
+      user.value = { ...user.value, ...profileRes, id: user.value?.sub || user.value?.id }
+
+      // 加载完整统计（关注/粉丝/互关/获赞/作品/模板/收藏/推荐），个人内容列表在切换到对应 Tab 时才加载
+      await fetchMyStats()
     } catch (e) {
-      console.warn('获取用户资料失败，降级展示默认数据', e)
+      // 静默失败：保持旧值，不清零
+      console.warn('获取用户资料失败', e)
     }
   }
 
