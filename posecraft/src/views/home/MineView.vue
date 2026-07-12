@@ -22,14 +22,13 @@
               <span class="stat-label">关注</span>
               <span class="stat-val">{{ followingCount }}</span>
             </div>
-            <!-- 直播胶囊徽章 -->
-            <!-- <div class="live-badge">
-              <span class="pulse-dot"></span>
-              <span>1人正在直播</span>
-            </div> -->
             <div class="stat-item">
               <span class="stat-label">粉丝</span>
               <span class="stat-val">{{ followersCount }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">互关</span>
+              <span class="stat-val">{{ mutualCount }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">获赞</span>
@@ -79,12 +78,14 @@
           :class="['tab-btn', { active: activeTab === 'templates' }]"
         >
           <span>模板</span>
+          <span>{{ templatesCount }}</span>
         </button>
         <button
           @click="changeTab('recommend')"
           :class="['tab-btn', { active: activeTab === 'recommend' }]"
         >
           <span>推荐</span>
+          <span>{{ recommendationsCount }}</span>
         </button>
         <button 
           @click="changeTab('likes')" 
@@ -93,11 +94,12 @@
           <span>喜欢</span>
           <span class="tab-lock">🔒</span>
         </button>
-        <button 
-          @click="changeTab('collect')" 
+        <button
+          @click="changeTab('collect')"
           :class="['tab-btn', { active: activeTab === 'collect' }]"
         >
           <span>收藏</span>
+          <span>{{ collectsCount }}</span>
         </button>
         <button 
           @click="changeTab('history')" 
@@ -209,9 +211,9 @@
               </div>
             </div>
 
-            <!-- 单个删除按钮（管理模式下显示） -->
+            <!-- 删除按钮（作品/模板/喜欢/收藏 管理模式） -->
             <button
-              v-if="isManageMode"
+              v-if="isManageMode && activeTab !== 'recommend'"
               class="card-delete-btn"
               title="删除"
               @click.stop="handleDeleteSingle(item)"
@@ -219,6 +221,19 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+
+            <!-- 取消推荐按钮（推荐 Tab 管理模式） -->
+            <button
+              v-if="isManageMode && activeTab === 'recommend'"
+              class="card-cancel-btn"
+              title="取消推荐"
+              @click.stop="handleCancelRecommend(item)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
             </button>
 
@@ -382,6 +397,10 @@ const {
   followersCount,
   worksCount,
   likesCount,
+  mutualCount,
+  templatesCount,
+  recommendationsCount,
+  collectsCount,
   fetchUserProfile,
   updateUserProfile,
   activeNav,
@@ -561,8 +580,8 @@ const saveEditProfile = async () => {
 const myWorks = toRef(authStore, 'myWorks')
 const myTemplates = toRef(authStore, 'myTemplates')
 
-// 推荐列表（复用 myWorks 数据，避免重复 mock）
-const myRecommends = myWorks
+// 推荐列表（推荐过的内容，支持取消推荐）
+const myRecommends = toRef(authStore, 'myRecommendations')
 
 // 喜欢列表
 const myLikes = toRef(authStore, 'myLikes')
@@ -582,9 +601,9 @@ const changeTab = (tabName: string) => {
     authStore.fetchMyTemplates()
   } else if (tabName === 'works') {
     authStore.fetchMyWorks()
-  }
-  
-  if (tabName === 'likes') {
+  } else if (tabName === 'recommend') {
+    authStore.fetchMyRecommendations()
+  } else if (tabName === 'likes') {
     authStore.fetchMyLikes()
   } else if (tabName === 'collect') {
     authStore.fetchMyCollects()
@@ -685,10 +704,24 @@ const handleDeleteSingle = async (item: any) => {
   }
 }
 
+// 取消推荐（推荐 Tab 专用）
+const handleCancelRecommend = async (item: any) => {
+  try {
+    await authStore.cancelRecommendation({
+      workId: item.type === 'work' ? Number(item.target_id) : undefined,
+      templateId: item.type === 'template' ? Number(item.target_id) : undefined
+    })
+    showToast('已取消推荐')
+  } catch (err: any) {
+    showToast(err.message || '取消推荐失败')
+  }
+}
+
 // 从本地所有列表中移除指定 id 的项
 const removeFromLocalList = (id: string | number) => {
   myWorks.value = myWorks.value.filter(w => w.id !== id)
-  myRecommends.value = myRecommends.value.filter(w => w.id !== id)
+  // 推荐列表按 target_id 匹配（推荐的目标作品/模板 ID）
+  myRecommends.value = myRecommends.value.filter(w => w.target_id !== id)
   myLikes.value = myLikes.value.filter(w => w.id !== id)
   myCollects.value = myCollects.value.filter(w => w.id !== id)
   selectedIds.value = selectedIds.value.filter(sid => sid !== id)
@@ -1436,6 +1469,37 @@ input:checked + .slider:before {
 }
 .card-delete-btn:hover {
   background: #e11d48;
+  transform: scale(1.1) !important;
+}
+
+/* 取消推荐按钮 */
+.card-cancel-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.9);
+  backdrop-filter: blur(4px);
+  border: none;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 11;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+.manageable-card-wrapper:hover .card-cancel-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+.card-cancel-btn:hover {
+  background: #d97706;
   transform: scale(1.1) !important;
 }
 

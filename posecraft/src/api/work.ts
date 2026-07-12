@@ -8,14 +8,6 @@ export const workApi = {
   getList: (params?: { keyword?: string; page?: number; pageSize?: number }) =>
     service.get('/posecraft/v1/works', { params }),
 
-  /** 获取推荐作品 */
-  getRecommended: (limit?: number) =>
-    service.get('/posecraft/v1/works/recommended', { params: { limit } }),
-
-  /** 获取用户作品 */
-  getUserWorks: (userId: number, params?: { page?: number; pageSize?: number }) =>
-    service.get(`/posecraft/v1/works/user/${userId}`, { params }),
-
   /** 获取关注者的作品 */
   getFollowingWorks: (params?: { page?: number; pageSize?: number }) =>
     service.get('/posecraft/v1/works/following', { params }),
@@ -34,16 +26,11 @@ export const workApi = {
     description?: string
     template_id?: number
     image_url: string
-    thumbnail_url?: string
-    analysis_data?: any
+    thumbnail_url?: string,
     edit_data?: any
   }) => service.post('/posecraft/v1/works', data),
 
   /** 删除作品 */
   delete: (id: number) =>
-    service.delete(`/posecraft/v1/works/${id}`),
-
-  /** 点赞作品 */
-  like: (id: number) =>
-    service.post(`/posecraft/v1/works/${id}/like`)
+    service.delete(`/posecraft/v1/works/${id}`)
 }

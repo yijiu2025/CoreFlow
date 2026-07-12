@@ -233,6 +233,12 @@ async function getProfileStats(userId) {
     where: { user_id: userId, delete_version: 0 }
   });
 
+  // 推荐数量
+  const { Recommendation } = sequelize.models;
+  const recommendationsCount = await Recommendation.count({
+    where: { user_id: userId, delete_version: 0 }
+  });
+
   return {
     following: followStats.followingCount,
     followers: followStats.followersCount,
@@ -240,6 +246,7 @@ async function getProfileStats(userId) {
     likes_received: workStats.likesCount,
     works_count: workStats.worksCount,
     templates_count: templatesCount,
-    collects_count: collectsCount
+    collects_count: collectsCount,
+    recommendations_count: recommendationsCount
   };
 }
