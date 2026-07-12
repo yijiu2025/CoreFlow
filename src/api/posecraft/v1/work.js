@@ -81,7 +81,7 @@ function formatWork(work) {
     created_at: data.createdAt,
     updated_at: data.updatedAt,
     author: data.author ? {
-      id: data.author.id,
+      uid: data.author.uid,
       username: data.author.username,
       avatar: data.author.avatar
     } : undefined

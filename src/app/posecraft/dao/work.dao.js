@@ -39,9 +39,7 @@ class WorkDao {
 
     const { count, rows } = await model.findAndCountAll({
       where,
-      // 关联作者，只取 username 和 avatar
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['id', 'username', 'avatar'] }],
-      attributes: { exclude: ['analysis_data', 'delete_version'] },
+      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       order: [['created_at', 'DESC']],
       limit,
       offset
@@ -116,7 +114,7 @@ class WorkDao {
     const model = this.getModel();
     return await model.findAll({
       where: { status: 1, delete_version: 0 },
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['id', 'username', 'avatar'] }],
+      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       attributes: { exclude: ['analysis_data', 'delete_version'] },
       order: [
         [sequelize.literal('(likes_count * 10 + views_count * 1 + RAND() * 30)'), 'DESC']
@@ -134,8 +132,8 @@ class WorkDao {
 
     return await model.findOne({
       where: { id, delete_version: 0 },
-      include: [{ model: User, as: 'author', attributes: ['id', 'username', 'avatar'] }],
-      attributes: { exclude: ['analysis_data', 'delete_version'] }
+      include: [{ model: User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
+      attributes: { exclude: ['analysis_data', 'delete_version', 'user_id', 'deleted_at'] }
     });
   }
 
@@ -229,7 +227,7 @@ class WorkDao {
         status: 1,
         delete_version: 0
       },
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['id', 'username', 'avatar'] }],
+      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       attributes: { exclude: ['analysis_data', 'delete_version'] },
       order: [['created_at', 'DESC']],
       limit,
