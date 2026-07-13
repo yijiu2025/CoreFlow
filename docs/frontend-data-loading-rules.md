@@ -1,6 +1,6 @@
 # 前端数据加载规则
 
-> 核心原则：**展示什么才获取什么**。数据必须在用户即将看到它的那一刻才发起请求，禁止在父级 mount 时预取子级数据。
+> 核心原则：**展示什么才获取什么，所有请求必须通过 API 文件**。数据必须在用户即将看到它的那一刻才发起请求，禁止在父级 mount 时预取子级数据；所有 HTTP 请求必须在 `posecraft/src/api/` 下按功能分类的 API 文件中定义，禁止直接在组件或 composable 中调用 `service.get()`。
 
 ## 规则 1：按可见性触发请求
 
@@ -101,10 +101,55 @@ watch(activeNav, (newNav) => {
 </template>
 ```
 
+## 规则 8：所有请求必须通过 API 文件
+
+❌ **禁止**在组件 / composable 中直接调用 `service.get()` / `service.post()`：
+
+```js
+// ❌ 错误：绕过 API 文件直接发请求
+const res = await service.get('/posecraft/v1/config/channels')
+const res = await axios.post('/posecraft/v1/works', data)
+```
+
+✅ **正确**：所有请求必须在 `posecraft/src/api/` 下按功能分类的 API 文件中定义：
+
+```js
+// posecraft/src/api/bannerConfig.ts
+export const bannerConfigApi = {
+  getActive: () => service.get('/posecraft/v1/banner-configs/active')
+}
+
+// posecraft/src/api/channel.ts（不存在则新建）
+export const channelApi = {
+  getList: () => service.get('/posecraft/v1/config/channels')
+}
+
+// composable 中导入使用
+import { channelApi } from '@/api/channel'
+const res = await channelApi.getList()
+```
+
+现有 API 文件结构：
+
+```
+posecraft/src/api/
+├── bannerConfig.ts    # Banner 配置
+├── work.ts            # 作品
+├── template.ts        # 模板
+├── follow.ts          # 关注
+├── interaction.ts     # 互动（点赞/收藏/历史）
+├── recommendation.ts  # 推荐
+├── user.ts            # 用户资料
+└── profile.ts         # 个人统计
+```
+
+新增 API 时按功能归类，不属于现有文件的**新建文件**再写。
+
 ## 检查清单
 
 新增 API 调用前确认：
 
+- [ ] 是否已在对应的 API 文件中定义？（无则新建文件）
 - [ ] 数据是否即将展示给用户？
 - [ ] 是否可以在用户切换到对应 Tab / 页面时才加载？
 - [ ] 多个数据同时需要时是否并行请求？
