@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { workApi } from '@/api/work'
 import { followApi } from '@/api/follow'
 import { bannerConfigApi } from '@/api/bannerConfig'
-import service from '@/utils/request'
+import { channelApi } from '@/api/channel'
 
 const HomeStateSymbol = Symbol('HomeState')
 
@@ -353,7 +353,7 @@ export function useHome() {
    */
   const loadChannels = async () => {
     try {
-      const res = await service.get('/posecraft/v1/config/channels')
+      const res = await channelApi.getList()
       if (Array.isArray(res) && res.length > 0) {
         channels.value = res
       }
