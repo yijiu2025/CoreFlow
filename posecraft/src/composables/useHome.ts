@@ -347,14 +347,10 @@ export function useHome() {
     return false
   }
 
-  watch(activeNav, (newNav) => {
-    // 非精选页：强制关闭搜索框提示，由 activeNav 控制而非 IO
-    // 精选页：重置为 false，等 IO 判断实际位置
-    showNavSearch.value = false
-    refreshData()
-  }, { immediate: true }) // 初始化即触发，替代 onMounted 里的显式调用，避免重复请求
-
-  /** 加载频道配置（在首页渲染前优先调用，决定哪些 Tab 可见） */
+  /** 加载频道配置（首页渲染前调用，决定 Tab 结构）
+   * 加载完毕后触发首次数据请求 → 整个生命周期只自动加载这一次
+   * 切换菜单不刷新，只有 pull-to-refresh / loadMore 才重新请求
+   */
   const loadChannels = async () => {
     try {
       const res = await service.get('/posecraft/v1/config/channels')
@@ -363,17 +359,19 @@ export function useHome() {
       }
     } catch (err) {
       console.warn('获取动态频道配置失败，使用默认配置')
+    } finally {
+      // 频道加载完毕 → 首页首次自动加载 banner + works（仅这一次）
+      // 切换菜单不再刷新，只有 pull-to-refresh / loadMore 才重新请求
+      refreshData()
     }
   }
 
   onMounted(async () => {
-    // ① 先加载频道配置（决定 Tab 结构）
+    // ① 先加载频道配置（决定 Tab 结构，完成后自动触发首次 refreshData）
     await loadChannels()
 
     // ② 加载用户资料（并行不影响首屏）
     await fetchUserProfile()
-
-    // ③ 由 watch(immediate) 自动触发 refreshData()，避免与 onMounted 重复
 
     const handleResize = () => { windowWidth.value = window.innerWidth }
     window.addEventListener('resize', handleResize, { passive: true })
