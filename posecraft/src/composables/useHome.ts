@@ -352,7 +352,7 @@ export function useHome() {
     // 精选页：重置为 false，等 IO 判断实际位置
     showNavSearch.value = false
     refreshData()
-  })
+  }, { immediate: true }) // 初始化即触发，替代 onMounted 里的显式调用，避免重复请求
 
   /** 加载频道配置（在首页渲染前优先调用，决定哪些 Tab 可见） */
   const loadChannels = async () => {
@@ -373,8 +373,7 @@ export function useHome() {
     // ② 加载用户资料（并行不影响首屏）
     await fetchUserProfile()
 
-    // ③ 加载 Banner + 作品（已在 loadData 内按频道分流）
-    refreshData()
+    // ③ 由 watch(immediate) 自动触发 refreshData()，避免与 onMounted 重复
 
     const handleResize = () => { windowWidth.value = window.innerWidth }
     window.addEventListener('resize', handleResize, { passive: true })
