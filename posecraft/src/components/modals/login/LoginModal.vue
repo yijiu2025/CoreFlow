@@ -41,7 +41,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { buildSsoLoginUrl } from '@/config/services'
-import service from '@/utils/request'
+import { authApi } from '@/api/auth'
 
 const props = defineProps({
   isOpen: Boolean
@@ -66,7 +66,7 @@ const handleMessage = async (event: MessageEvent) => {
     // Session 模式：用临时 token 换取 sid/sid_r Cookie
     if (sessionToken) {
       try {
-        const result = await service.post('/auth/v1/bind-session', { session_token: sessionToken })
+        const result = await authApi.bindSession(sessionToken)
         console.log('Session 绑定成功:', result)
       } catch (err) {
         console.warn('绑定 Session 失败:', err)
@@ -76,7 +76,7 @@ const handleMessage = async (event: MessageEvent) => {
     // JWT 模式：用 access_token 换取 Cookie
     if (token) {
       try {
-        await service.post('/auth/v1/bind-token', { token })
+        await authApi.bindToken(token)
       } catch (err) {
         console.warn('绑定 Token 失败:', err)
       }
