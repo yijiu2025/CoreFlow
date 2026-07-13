@@ -23,13 +23,13 @@
       <!-- 瀑布流 -->
       <div v-else>
         <!-- 推荐大图 Banner（从后端 BannerConfig 动态渲染） -->
-        <div
-          v-for="banner in activeBanners"
-          :key="banner.id"
-          class="featured-banner"
-          v-if="activeChannel === 'recommend' && !searchQuery.trim()"
-          :style="{ backgroundImage: `linear-gradient(to right, rgba(15,23,42,0.95), rgba(15,23,42,0.4)), url(${banner.image_url})` }"
-        >
+        <template v-if="activeChannel === 'recommend' && !searchQuery.trim() && activeBanners.length > 0">
+          <div
+            v-for="banner in activeBanners"
+            :key="banner.id"
+            class="featured-banner"
+            :style="{ backgroundImage: `linear-gradient(to right, rgba(15,23,42,0.95), rgba(15,23,42,0.4)), url(${banner.image_url})` }"
+          >
           <div class="banner-content">
             <div class="banner-badge" v-if="banner.badge_text">
               <span class="badge-icon">🏆</span>
@@ -42,6 +42,7 @@
             {{ banner.button_text || '立即探索' }}
           </button>
         </div>
+        </template>
 
         <!-- 首次加载中：骨架占位（瀑布流结构） -->
         <template v-if="loading && filteredItems.length === 0">
