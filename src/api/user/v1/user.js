@@ -224,12 +224,15 @@ export default async function (fastify) {
         await user.reload();
       }
 
+      // 手机号脱敏：仅返回掩码格式（如 138****1234），明文不暴露
+      const { maskPhone } = await import('../../../utils/crypto.js')
+
       return reply.result.success('获取成功', {
         uid: user.uid,
         username: user.username,
         avatar: user.avatar,
         email: user.email,
-        phone: user.phone,
+        phone: user.phone ? maskPhone(user.phone) : null,
         gender: user.gender,
         age: user.age,
         city: user.city,

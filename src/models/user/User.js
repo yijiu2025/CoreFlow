@@ -1,4 +1,5 @@
 import { registerDeleteVersionHooks } from '../../db/softDeleteHooks.js';
+import { encryptPhone, decryptPhone, isEncrypted } from '../../utils/crypto.js';
 
 /**
  * 工业级用户基础信息模型 (User Profile)
@@ -33,10 +34,10 @@ export default (sequelize, DataTypes) => {
         comment: '联系邮箱 (仅用于通知或展示)'
       },
       phone: {
-        type: DataTypes.STRING(20),
+        type: DataTypes.TEXT, // 使用 TEXT 存储密文（明文≤20 字节，密文约 100+ 字节）
         allowNull: true,
         // 修正：追加了 phone 唯一性安全防线，改用下方的联合唯一索引 uk_phone_delete_version，保证手机号全局唯一且支持软删除
-        comment: '联系手机号 (可用于通知、展示以及安全登录找回密码)'
+        comment: '联系手机号（AES-256-CBC 加密存储，格式: base64(IV):base64(ciphertext)）'
       },
       avatar: {
         type: DataTypes.STRING(255),
@@ -163,6 +164,40 @@ export default (sequelize, DataTypes) => {
 
   // 🔐 注册软删除防 NULL 穿透生命周期钩子
   registerDeleteVersionHooks(User);
+
+  // 🔐 手机号加密/解密 hooks
+
+  /**
+   * 保存前：检测 phone 是否为明文（不含 ':'），是则加密
+   */
+  User.beforeValidate((user) => {
+    if (user.phone && !isEncrypted(user.phone)) {
+      user.phone = encryptPhone(user.phone);
+    }
+  });
+
+  /**
+   * 查询后：自动解密所有记录的 phone 字段
+   */
+  User.afterFind((results) => {
+    if (!results) return
+    const items = Array.isArray(results) ? results : [results]
+    for (const item of items) {
+      if (item && item.phone && isEncrypted(item.phone)) {
+        item.phone = decryptPhone(item.phone)
+      }
+    }
+  })
+
+  /**
+   * 静态方法：供迁移脚本调用，对明文手机号加密
+   */
+  User.encryptPhoneStatic = encryptPhone
+
+  /**
+   * 静态方法：供 API 层按需调用
+   */
+  User.decryptPhoneStatic = decryptPhone
 
   return User;
 };
