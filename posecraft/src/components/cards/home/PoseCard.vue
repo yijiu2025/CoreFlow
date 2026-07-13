@@ -31,14 +31,16 @@
           <span class="author-name">{{ item.author?.username || '匿名用户' }}</span>
         </div>
         <div class="card-likes-fav-wrapper">
-          <div class="card-likes" @click.stop="$emit('like', item)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <!-- 点赞按钮：已赞时爱心变红 -->
+          <div class="card-likes" :class="{ liked: item.liked }" @click.stop="$emit('like', item)">
+            <svg width="12" height="12" viewBox="0 0 24 24" :fill="item.liked ? '#ff2442' : 'none'" stroke="currentColor" stroke-width="2">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
             <span>{{ formatLikes(item.likes_count) }}</span>
           </div>
-          <button class="card-fav" :class="{ favorited: isFavorited }" @click.stop="toggleFavorite" title="收藏">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- 收藏按钮：已收藏时标签变金 -->
+          <button class="card-fav" :class="{ favorited: item.collected }" @click.stop="$emit('collect', item)" title="收藏">
+            <svg width="12" height="12" viewBox="0 0 24 24" :fill="item.collected ? '#fbbf24' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
           </button>
@@ -58,12 +60,8 @@ const props = defineProps<{
 defineEmits<{
   (e: 'click', item: any): void
   (e: 'like', item: any): void
+  (e: 'collect', item: any): void
 }>()
-
-const isFavorited = ref(false)
-const toggleFavorite = () => {
-  isFavorited.value = !isFavorited.value
-}
 
 /**
  * 是否为模板底图作品（由后端 is_template_work 字段决定）

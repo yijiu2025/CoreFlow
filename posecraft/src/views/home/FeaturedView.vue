@@ -59,7 +59,8 @@
               :key="item._key ?? item.id"
               :item="item"
               @click="openDetail"
-              @like="likeItem"
+              @like="handleLike"
+              @collect="handleCollect"
             />
           </div>
           <div class="load-more-container" v-if="hasMore">
@@ -108,7 +109,8 @@ const {
   showToast,
   handleStartCreate,
   openDetail,
-  likeItem,
+  handleLike,
+  handleCollect,
   onSearchBlur,
   searchSentinel,
   activeNav,

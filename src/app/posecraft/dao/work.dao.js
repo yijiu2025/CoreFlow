@@ -10,6 +10,8 @@ class WorkDao {
 
   /**
    * 查询作品列表
+   * @param {object} options
+   * @param {number} [options.currentUserId] - 当前登录用户 ID（用于标记 liked/collected 状态）
    */
   async findAll(options = {}) {
     const model = this.getModel();
@@ -45,12 +47,58 @@ class WorkDao {
       offset
     });
 
+    // 当前用户已点赞/已收藏的作品 ID 集合（用于前端标记状态）
+    if (options.currentUserId && rows.length > 0) {
+      const workIds = rows.map((w) => w.id);
+      const [likedIds, collectedIds] = await Promise.all([
+        this._getLikedTargetIds(options.currentUserId, workIds),
+        this._getCollectedTargetIds(options.currentUserId, workIds)
+      ]);
+      for (const work of rows) {
+        work.setDataValue('liked', likedIds.has(Number(work.id)));
+        work.setDataValue('collected', collectedIds.has(Number(work.id)));
+      }
+    } else {
+      for (const work of rows) {
+        work.setDataValue('liked', false);
+        work.setDataValue('collected', false);
+      }
+    }
+
     return {
       list: rows,
       total: count,
       page,
       pageSize
     };
+  }
+
+  /**
+   * 获取当前用户已点赞的作品 ID 集合
+   */
+  async _getLikedTargetIds(userId, workIds) {
+    if (!workIds.length) return new Set();
+    const { Op } = await import('sequelize');
+    const UserLike = sequelize.models.UserLike;
+    const records = await UserLike.findAll({
+      where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
+      attributes: ['work_id']
+    });
+    return new Set(records.map((r) => Number(r.work_id)));
+  }
+
+  /**
+   * 获取当前用户已收藏的作品 ID 集合
+   */
+  async _getCollectedTargetIds(userId, workIds) {
+    if (!workIds.length) return new Set();
+    const { Op } = await import('sequelize');
+    const UserCollect = sequelize.models.UserCollect;
+    const records = await UserCollect.findAll({
+      where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
+      attributes: ['work_id']
+    });
+    return new Set(records.map((r) => Number(r.work_id)));
   }
 
   /**

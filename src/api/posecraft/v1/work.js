@@ -78,6 +78,8 @@ function formatWork(work) {
     status: data.status,
     likes_count: data.likes_count,
     views_count: data.views_count,
+    liked: !!data.liked,             // 当前用户是否已点赞
+    collected: !!data.collected,     // 当前用户是否已收藏
     created_at: data.createdAt,
     updated_at: data.updatedAt,
     author: data.author ? {
