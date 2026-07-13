@@ -2,7 +2,7 @@
  * 文件上传组合式函数
  */
 import { ref } from 'vue'
-import axios from 'axios'
+import { uploadFile as apiUploadFile, uploadBase64 as apiUploadBase64 } from '@/api/upload'
 
 export interface UploadResult {
   url: string
@@ -24,18 +24,8 @@ export function useUpload() {
     error.value = null
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('path', path)
-
-      const response = await axios.post('/posecraft/v1/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        withCredentials: true,
-        onUploadProgress: (e) => {
-          if (e.total) {
-            progress.value = Math.round((e.loaded / e.total) * 100)
-          }
-        }
+      const response = await apiUploadFile(file, path, (percent) => {
+        progress.value = percent
       })
 
       if (response.data.code === 200) {
@@ -61,17 +51,8 @@ export function useUpload() {
     error.value = null
 
     try {
-      const response = await axios.post('/posecraft/v1/upload/base64', {
-        data: base64,
-        filename,
-        path: 'posecraft'
-      }, {
-        withCredentials: true,
-        onUploadProgress: (e) => {
-          if (e.total) {
-            progress.value = Math.round((e.loaded / e.total) * 100)
-          }
-        }
+      const response = await apiUploadBase64(base64, filename, 'posecraft', (percent) => {
+        progress.value = percent
       })
 
       if (response.data.code === 200) {
