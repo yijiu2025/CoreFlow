@@ -275,7 +275,8 @@ export function useHome() {
       // 加载 Banner 配置（当前生效的）
       try {
         const bannerRes = await bannerConfigApi.getActive()
-        activeBanners.value = (bannerRes as any)?.data?.data || []
+        // 响应拦截器已返回 res.data（数组），无需再解包 .data
+        activeBanners.value = (bannerRes as any) || []
       } catch {
         activeBanners.value = []
       }
