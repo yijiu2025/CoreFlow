@@ -18,6 +18,7 @@
 | 用户资料 `userProfile` | 首页 `onMounted`（与 channels 并行） | 影响"我的"入口显示 |
 | 权限 `permissions` / 角色 `roles` | 登录后首次进入首页 | 影响按钮/操作显隐 |
 | 个人统计 `myStats` | 首页 `onMounted`（与 channels 并行） | 关注/粉丝/获赞数等 |
+| 个人设置 `settings` | 首页 `onMounted`（与 channels 并行） | showTemplate 等 UI 偏好 |
 
 ```js
 // ✅ 正确：首页 mount 时并行加载底层数据
@@ -25,7 +26,8 @@ onMounted(async () => {
   await loadChannels()           // 频道配置（阻塞后续）
   await Promise.all([
     fetchUserProfile(),          // 用户资料（并行）
-    fetchMyStats()               // 个人统计（并行）
+    fetchMyStats(),              // 个人统计（并行）
+    fetchUserSettings()          // 个人设置（并行）
   ])
   // 展示数据（banner + works）在 channels 加载后触发
 })
@@ -168,13 +170,15 @@ const res = await channelApi.getList()
 ```
 posecraft/src/api/
 ├── bannerConfig.ts    # Banner 配置
+├── channel.ts         # 频道配置（待新建）
 ├── work.ts            # 作品
 ├── template.ts        # 模板
 ├── follow.ts          # 关注
 ├── interaction.ts     # 互动（点赞/收藏/历史）
 ├── recommendation.ts  # 推荐
 ├── user.ts            # 用户资料
-└── profile.ts         # 个人统计
+├── profile.ts         # 个人统计
+└── settings.ts        # 个人设置
 ```
 
 新增 API 时按功能归类，不属于现有文件的**新建文件**再写。
@@ -200,6 +204,7 @@ posecraft/src/api/
 | 用户资料 userProfile | 作品列表 works |
 | 个人统计 myStats | 模板列表 templates |
 | 权限 permissions / 角色 roles | 喜欢列表 likes |
-| 关注统计（关注数/粉丝数） | 收藏列表 collects |
-| 互关数 mutual | 历史记录 history |
-| 推荐数 recommendations | 推荐列表 recommend |
+| 个人设置 settings | 收藏列表 collects |
+| 关注统计（关注数/粉丝数） | 历史记录 history |
+| 互关数 mutual | 推荐列表 recommend |
+| 推荐数 recommendations | — |
