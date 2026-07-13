@@ -245,6 +245,11 @@ export function useHome() {
 
 
 
+  /**
+   * 首页数据加载（频道识别后调用）
+   * - 非 recommend 频道：仅加载作品
+   * - recommend 频道：并行加载 Banner + 作品（先显示占位，数据到齐后渲染）
+   */
   const loadData = async (page: number) => {
     if (loading.value) return
     loading.value = true
@@ -252,33 +257,53 @@ export function useHome() {
       // 首页只加载作品——模板通过作品的 template_id 绑定，不在首页单独展示
       let newWorks = []
       let totalPages = 1
-      if (activeNav.value === 'following' && authStore.isLoggedIn) {
-        const workRes = await workApi.getFollowingWorks({ page, pageSize: 12 }) as any
-        newWorks = workRes.list || []
-        totalPages = workRes.totalPages || 1
-      } else if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
-        const workRes = await workApi.getMyWorks({ page, pageSize: 12 }) as any
-        newWorks = workRes.list || []
-        totalPages = workRes.totalPages || 1
+
+      // ★ recommend 频道：Banner 与作品并行加载（提升首屏速度）
+      if (activeChannel.value === 'recommend') {
+        const [workResult, bannerResult] = await Promise.allSettled([
+          (async () => {
+            if (activeNav.value === 'following' && authStore.isLoggedIn) {
+              return await workApi.getFollowingWorks({ page, pageSize: 12 })
+            } else if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
+              return await workApi.getMyWorks({ page, pageSize: 12 })
+            }
+            return await workApi.getList({ page, pageSize: 12 })
+          })(),
+          bannerConfigApi.getActive().catch(() => null)
+        ])
+
+        // 处理作品结果
+        if (workResult.status === 'fulfilled') {
+          const workRes = workResult.value as any
+          newWorks = workRes?.list || []
+          totalPages = workRes?.totalPages || 1
+        }
+
+        // 处理 Banner 结果
+        if (bannerResult.status === 'fulfilled' && bannerResult.value) {
+          activeBanners.value = Array.isArray(bannerResult.value) ? bannerResult.value : []
+        } else {
+          activeBanners.value = []
+        }
       } else {
-        const workRes = await workApi.getList({ page, pageSize: 12 }) as any
-        newWorks = workRes.list || []
-        totalPages = workRes.totalPages || 1
+        // ★ 非 recommend 频道：仅加载作品
+        let workRes: any
+        if (activeNav.value === 'following' && authStore.isLoggedIn) {
+          workRes = await workApi.getFollowingWorks({ page, pageSize: 12 })
+        } else if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
+          workRes = await workApi.getMyWorks({ page, pageSize: 12 })
+        } else {
+          workRes = await workApi.getList({ page, pageSize: 12 })
+        }
+        newWorks = workRes?.list || []
+        totalPages = workRes?.totalPages || 1
+        activeBanners.value = [] // 非 recommend 不显示 banner
       }
 
       if (page === 1) {
         works.value = newWorks
       } else {
         works.value = [...works.value, ...newWorks]
-      }
-
-      // 加载 Banner 配置（当前生效的）
-      try {
-        const bannerRes = await bannerConfigApi.getActive()
-        // 响应拦截器已返回 res.data（数组），无需再解包 .data
-        activeBanners.value = (bannerRes as any) || []
-      } catch {
-        activeBanners.value = []
       }
 
       hasMore.value = page < totalPages
@@ -329,19 +354,27 @@ export function useHome() {
     refreshData()
   })
 
-  onMounted(async () => {
-    await fetchUserProfile()
-    refreshData()
-    
-    // 动态获取频道配置
+  /** 加载频道配置（在首页渲染前优先调用，决定哪些 Tab 可见） */
+  const loadChannels = async () => {
     try {
       const res = await service.get('/posecraft/v1/config/channels')
-      if (res?.data?.length > 0) {
-        channels.value = res.data
+      if (Array.isArray(res) && res.length > 0) {
+        channels.value = res
       }
     } catch (err) {
       console.warn('获取动态频道配置失败，使用默认配置')
     }
+  }
+
+  onMounted(async () => {
+    // ① 先加载频道配置（决定 Tab 结构）
+    await loadChannels()
+
+    // ② 加载用户资料（并行不影响首屏）
+    await fetchUserProfile()
+
+    // ③ 加载 Banner + 作品（已在 loadData 内按频道分流）
+    refreshData()
 
     const handleResize = () => { windowWidth.value = window.innerWidth }
     window.addEventListener('resize', handleResize, { passive: true })
@@ -431,6 +464,7 @@ export function useHome() {
     loading,
     refreshData,
     loadMore,
+    loadChannels,
     searchSuggestions,
     activeBanners
   }
