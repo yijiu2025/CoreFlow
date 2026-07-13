@@ -143,11 +143,14 @@ export default async function (fastify) {
     },
     handler: async (request, reply) => {
       const { keyword, page, pageSize } = request.query;
+      // 从 session 获取权威用户 ID（数字），无需前端传递
+      const currentUserId = request.state?.user?.userId
 
       const result = await workDao.findAll({
         keyword,
         page,
-        pageSize
+        pageSize,
+        currentUserId
       });
 
       return reply.result.paginated(formatWorkList(result.list), result.total, result.page, result.pageSize);
@@ -194,10 +197,12 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { userId } = request.params;
       const { page, pageSize } = request.query;
+      const currentUserId = request.state?.user?.userId
 
       const result = await workDao.findByUser(userId, {
         page,
-        pageSize
+        pageSize,
+        currentUserId
       });
 
       return reply.result.paginated(formatWorkList(result.list), result.total, result.page, result.pageSize);
