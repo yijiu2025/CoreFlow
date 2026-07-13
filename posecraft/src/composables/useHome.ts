@@ -218,9 +218,44 @@ export function useHome() {
     }
   }
 
-  const likeItem = (item: any) => {
-    item.likes_count = (item.likes_count || 0) + 1
-    showToast('点赞成功！')
+  /**
+   * 点赞/取消点赞（调后端 API + 乐观更新）
+   * @param {object} item - 作品对象
+   */
+  const handleLike = async (item: any) => {
+    if (!authStore.isLoggedIn) return router.push('/login')
+    const newLiked = !item.liked
+    // 乐观更新
+    item.liked = newLiked
+    item.likes_count = (item.likes_count || 0) + (newLiked ? 1 : -1)
+    try {
+      const { interactionApi } = await import('@/api/interaction')
+      await interactionApi.toggleLike({ workId: item.id, like: newLiked })
+    } catch (err) {
+      // 失败回滚
+      item.liked = !newLiked
+      item.likes_count = (item.likes_count || 0) + (newLiked ? -1 : 1)
+      showToast('操作失败，请重试')
+    }
+  }
+
+  /**
+   * 收藏/取消收藏（调后端 API + 乐观更新）
+   * @param {object} item - 作品对象
+   */
+  const handleCollect = async (item: any) => {
+    if (!authStore.isLoggedIn) return router.push('/login')
+    const newCollected = !item.collected
+    // 乐观更新
+    item.collected = newCollected
+    try {
+      const { interactionApi } = await import('@/api/interaction')
+      await interactionApi.toggleCollect({ workId: item.id, collect: newCollected })
+    } catch (err) {
+      // 失败回滚
+      item.collected = !newCollected
+      showToast('操作失败，请重试')
+    }
   }
 
   const toggleProfileModal = () => {
@@ -258,16 +293,20 @@ export function useHome() {
       let newWorks = []
       let totalPages = 1
 
+      // 当前用户 ID（用于后端标记 liked/collected 状态）
+      const currentUserId = authStore.user?.id
+      const workQueryOptions = { page, pageSize: 12, ...(currentUserId ? { currentUserId } : {}) }
+
       // ★ recommend 频道：Banner 与作品并行加载（提升首屏速度）
       if (activeChannel.value === 'recommend') {
         const [workResult, bannerResult] = await Promise.allSettled([
           (async () => {
             if (activeNav.value === 'following' && authStore.isLoggedIn) {
-              return await workApi.getFollowingWorks({ page, pageSize: 12 })
+              return await workApi.getFollowingWorks(workQueryOptions)
             } else if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
-              return await workApi.getMyWorks({ page, pageSize: 12 })
+              return await workApi.getMyWorks(workQueryOptions)
             }
-            return await workApi.getList({ page, pageSize: 12 })
+            return await workApi.getList(workQueryOptions)
           })(),
           bannerConfigApi.getActive().catch(() => null)
         ])
@@ -289,11 +328,11 @@ export function useHome() {
         // ★ 非 recommend 频道：仅加载作品
         let workRes: any
         if (activeNav.value === 'following' && authStore.isLoggedIn) {
-          workRes = await workApi.getFollowingWorks({ page, pageSize: 12 })
+          workRes = await workApi.getFollowingWorks(workQueryOptions)
         } else if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
-          workRes = await workApi.getMyWorks({ page, pageSize: 12 })
+          workRes = await workApi.getMyWorks(workQueryOptions)
         } else {
-          workRes = await workApi.getList({ page, pageSize: 12 })
+          workRes = await workApi.getList(workQueryOptions)
         }
         newWorks = workRes?.list || []
         totalPages = workRes?.totalPages || 1
@@ -452,7 +491,8 @@ export function useHome() {
     formatLikes,
     handleStartCreate,
     openDetail,
-    likeItem,
+    handleLike,
+    handleCollect,
     toggleProfileModal,
     onSearchBlur,
     goToSearch,
