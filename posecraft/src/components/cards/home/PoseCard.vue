@@ -24,8 +24,11 @@
       <h3 class="card-title">{{ item.title || '未命名作品' }}</h3>
       <div class="card-footer">
         <div class="card-author">
-          <div class="author-avatar">{{ (item.username || 'U').charAt(0) }}</div>
-          <span class="author-name">{{ item.username || '匿名用户' }}</span>
+          <div class="author-avatar">
+            <img v-if="item.author?.avatar" :src="item.author.avatar" :alt="item.author.username" class="author-avatar-img" />
+            <span v-else>{{ (item.author?.username || 'U').charAt(0).toUpperCase() }}</span>
+          </div>
+          <span class="author-name">{{ item.author?.username || '匿名用户' }}</span>
         </div>
         <div class="card-likes-fav-wrapper">
           <div class="card-likes" @click.stop="$emit('like', item)">
@@ -223,6 +226,12 @@ const formatLikes = (num: number) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+.author-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .author-name {
