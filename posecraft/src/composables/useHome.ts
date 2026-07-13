@@ -220,40 +220,48 @@ export function useHome() {
 
   /**
    * 点赞/取消点赞（调后端 API + 乐观更新）
+   * 注意：必须改 works.value 源数据，filteredItems 是 computed 副本无法触发响应式
    * @param {object} item - 作品对象
    */
   const handleLike = async (item: any) => {
     if (!authStore.isLoggedIn) return router.push('/login')
-    const newLiked = !item.liked
-    // 乐观更新
-    item.liked = newLiked
-    item.likes_count = (item.likes_count || 0) + (newLiked ? 1 : -1)
+    // 找到源数据（响应式）
+    const original = works.value.find((w: any) => w.id === item.id)
+    if (!original) return
+    const newLiked = !original.liked
+    // 乐观更新源数据
+    original.liked = newLiked
+    original.likes_count = (original.likes_count || 0) + (newLiked ? 1 : -1)
     try {
       const { interactionApi } = await import('@/api/interaction')
       await interactionApi.toggleLike({ workId: item.id, like: newLiked })
     } catch (err) {
-      // 失败回滚
-      item.liked = !newLiked
-      item.likes_count = (item.likes_count || 0) + (newLiked ? -1 : 1)
+      // 失败回滚源数据
+      original.liked = !newLiked
+      original.likes_count = (original.likes_count || 0) + (newLiked ? -1 : 1)
       showToast('操作失败，请重试')
     }
   }
 
   /**
    * 收藏/取消收藏（调后端 API + 乐观更新）
+   * 注意：必须改 works.value 源数据，filteredItems 是 computed 副本无法触发响应式
    * @param {object} item - 作品对象
    */
   const handleCollect = async (item: any) => {
     if (!authStore.isLoggedIn) return router.push('/login')
-    const newCollected = !item.collected
-    // 乐观更新
-    item.collected = newCollected
+    // 找到源数据（响应式）
+    const original = works.value.find((w: any) => w.id === item.id)
+    if (!original) return
+    const newCollected = !original.collected
+    // 乐观更新源数据
+    original.collected = newCollected
     try {
       const { interactionApi } = await import('@/api/interaction')
       await interactionApi.toggleCollect({ workId: item.id, collect: newCollected })
     } catch (err) {
-      // 失败回滚
-      item.collected = !newCollected
+      // 失败回滚源数据
+      original.collected = !newCollected
       showToast('操作失败，请重试')
     }
   }
@@ -293,9 +301,8 @@ export function useHome() {
       let newWorks = []
       let totalPages = 1
 
-      // 当前用户 ID（用于后端标记 liked/collected 状态）
-      const currentUserId = authStore.user?.id
-      const workQueryOptions = { page, pageSize: 12, ...(currentUserId ? { currentUserId } : {}) }
+      // 后端从 session 获取 currentUserId，无需前端传递
+      const workQueryOptions = { page, pageSize: 12 }
 
       // ★ recommend 频道：Banner 与作品并行加载（提升首屏速度）
       if (activeChannel.value === 'recommend') {
