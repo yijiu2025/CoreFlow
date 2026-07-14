@@ -26,7 +26,7 @@ export async function runEngine(app) {
       loadErrors.push({ file, message: err.message });
       // 关键错误（路由重复等）立即终止，避免后续模块"背锅"
       if (err.message && err.message.includes('路由重复注册')) {
-        throw new Error(formatErrors([{ file, message: err.message }]));
+        throw new Error(formatErrors([{ file, message: err.message }]), { cause: err });
       }
     }
   }

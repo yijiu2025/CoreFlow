@@ -5,6 +5,14 @@
  * 如：showTemplate、saveLoginInfo、theme 等。
  *
  * 由前端写回、登录时拉取，后端只负责持久化与合并，不解析具体字段语义。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} UserSettings 模型
  */
 export default (sequelize, DataTypes) => {
   const UserSettings = sequelize.define(
@@ -40,6 +48,10 @@ export default (sequelize, DataTypes) => {
     }
   );
 
+  /**
+   * 模型关联定义
+   * @param {object} models - 所有已注册模型的集合
+   */
   UserSettings.associate = (models) => {
     UserSettings.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
   };

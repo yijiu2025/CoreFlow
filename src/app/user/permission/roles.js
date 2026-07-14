@@ -1,3 +1,17 @@
+/**
+ * 用户模块的基础角色配置 (PBAC)
+ *
+ * 定义用户应用域的三种角色：普通用户、VIP会员、小黑屋用户。
+ * 直接调用 defineRoles，当此文件被任意业务代码 (如 api 路由) import 时，即会触发静态注册。
+ *
+ * 角色等级（rank_level）：
+ * - user_banned: 1（最低，受限用户）
+ * - user_normal: 10（普通用户）
+ * - user_vip: 50（高级用户）
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { defineRoles } from '../../../utils/PbacRegistry.js';
 import { USER_PERMISSIONS } from './index.js';
 

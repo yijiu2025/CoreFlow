@@ -1,17 +1,25 @@
 /**
  * PoseCraft 作品数据访问层
+ * 负责作品的 CRUD、推荐查询、关注用户作品查询及 liked/collected 状态标记
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import sequelize from '../../../db/index.js';
 
 class WorkDao {
+  /**
+   * 获取 Work 模型
+   * @returns {Model} Work 模型
+   */
   getModel() {
     return sequelize.models.Work;
   }
 
   /**
-   * 查询作品列表
-   * @param {object} options
-   * @param {number} [options.currentUserId] - 当前登录用户 ID（用于标记 liked/collected 状态）
+   * 查询作品列表（自动携带当前用户 liked/collected 状态）
+   * @param {object} options - 查询参数（userId/templateId/keyword/page/pageSize/currentUserId）
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async findAll(options = {}) {
     const model = this.getModel();
@@ -74,7 +82,10 @@ class WorkDao {
   }
 
   /**
-   * 获取当前用户已点赞的作品 ID 集合
+   * 获取当前用户已点赞的作品 ID 集合（内部辅助）
+   * @param {number} userId - 用户 ID
+   * @param {number[]} workIds - 作品 ID 数组
+   * @returns {Promise<Set<number>>}
    */
   async _getLikedTargetIds(userId, workIds) {
     if (!workIds.length) return new Set();
@@ -88,7 +99,10 @@ class WorkDao {
   }
 
   /**
-   * 获取当前用户已收藏的作品 ID 集合
+   * 获取当前用户已收藏的作品 ID 集合（内部辅助）
+   * @param {number} userId - 用户 ID
+   * @param {number[]} workIds - 作品 ID 数组
+   * @returns {Promise<Set<number>>}
    */
   async _getCollectedTargetIds(userId, workIds) {
     if (!workIds.length) return new Set();
@@ -103,6 +117,9 @@ class WorkDao {
 
   /**
    * 查询用户作品
+   * @param {number} userId - 用户 ID
+   * @param {object} [options] - 额外查询参数
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async findByUser(userId, options = {}) {
     return await this.findAll({ ...options, userId });
@@ -110,6 +127,8 @@ class WorkDao {
 
   /**
    * 后台：查询审核列表
+   * @param {object} [options] - 查询参数（status/keyword/limit/offset/page）
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async findAuditList(options = {}) {
     const model = this.getModel();
@@ -148,6 +167,9 @@ class WorkDao {
 
   /**
    * 后台：更新状态 (审核)
+   * @param {number} id - 作品 ID
+   * @param {number} status - 目标状态
+   * @returns {Promise<boolean>}
    */
   async updateStatus(id, status) {
     const model = this.getModel();
@@ -156,7 +178,9 @@ class WorkDao {
   }
 
   /**
-   * 查询推荐作品
+   * 查询推荐作品（按点赞数+浏览数加权随机排序）
+   * @param {number} [limit=20] - 返回条数
+   * @returns {Promise<Array<Work>>}
    */
   async findRecommended(limit = 20) {
     const model = this.getModel();
@@ -172,7 +196,9 @@ class WorkDao {
   }
 
   /**
-   * 根据 ID 查询
+   * 根据 ID 查询（携带 author 信息，排除敏感字段）
+   * @param {number} id - 作品 ID
+   * @returns {Promise<Work|null>}
    */
   async findById(id) {
     const model = this.getModel();
@@ -187,6 +213,8 @@ class WorkDao {
 
   /**
    * 创建作品
+   * @param {object} data - 作品数据
+   * @returns {Promise<Work>}
    */
   async create(data) {
     const model = this.getModel();
@@ -195,6 +223,9 @@ class WorkDao {
 
   /**
    * 更新作品
+   * @param {number} id - 作品 ID
+   * @param {object} data - 更新字段
+   * @returns {Promise<Work|null>}
    */
   async update(id, data) {
     const model = this.getModel();
@@ -204,7 +235,10 @@ class WorkDao {
   }
 
   /**
-   * 删除作品（软删除）
+   * 删除作品（软删除），只有作者可删除
+   * @param {number} id - 作品 ID
+   * @param {number} userId - 当前用户 ID
+   * @returns {Promise<boolean>}
    */
   async delete(id, userId) {
     const model = this.getModel();
@@ -216,6 +250,8 @@ class WorkDao {
 
   /**
    * 增加浏览量
+   * @param {number} id - 作品 ID
+   * @returns {Promise<void>}
    */
   async incrementViews(id) {
     const model = this.getModel();
@@ -224,6 +260,8 @@ class WorkDao {
 
   /**
    * 增加点赞数
+   * @param {number} id - 作品 ID
+   * @returns {Promise<void>}
    */
   async incrementLikes(id) {
     const model = this.getModel();
@@ -231,7 +269,9 @@ class WorkDao {
   }
 
   /**
-   * 统计用户作品数
+   * 统计用户作品数（未软删）
+   * @param {number} userId - 用户 ID
+   * @returns {Promise<number>}
    */
   async countByUser(userId) {
     const model = this.getModel();
@@ -241,7 +281,10 @@ class WorkDao {
   }
 
   /**
-   * 查询用户关注者的作品
+   * 查询用户关注者的作品（"关注" Tab）
+   * @param {number} userId - 当前用户 ID
+   * @param {object} [options] - 分页参数
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async findFollowingWorks(userId, options = {}) {
     const model = this.getModel();

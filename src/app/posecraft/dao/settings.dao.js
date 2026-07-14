@@ -1,10 +1,17 @@
 /**
  * PoseCraft 用户个性设置 DAO
  * 只负责 settings 字段的读写与合并，不解析字段语义
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import sequelize from '../../../db/index.js';
 
 class SettingsDao {
+  /**
+   * 获取 UserSettings 模型
+   * @returns {Model}
+   */
   getSettingsModel() {
     return sequelize.models.UserSettings;
   }

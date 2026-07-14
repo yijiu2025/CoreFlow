@@ -1,3 +1,12 @@
+<!--
+ * 附近创作视图
+ *
+ * 展示当前用户附近（基于地理位置）发布的姿势作品/模板瀑布流，
+ * 支持骨架占位、加载更多、空状态提示。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ -->
 <template>
   <div class="nearby-page-container">
     <div class="content-container">

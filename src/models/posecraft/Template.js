@@ -1,6 +1,14 @@
 /**
  * PoseCraft 模板模型
  * 存储姿势模板
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} Template 模型
  */
 export default (sequelize, DataTypes) => {
   const Template = sequelize.define(
@@ -92,6 +100,10 @@ export default (sequelize, DataTypes) => {
     }
   );
 
+  /**
+   * 模型关联定义
+   * @param {object} models - 所有已注册模型的集合
+   */
   Template.associate = (models) => {
     Template.belongsTo(models.User, { foreignKey: 'user_id', as: 'creator' });
     // 模板一对一绑定底图作品（反向指针）

@@ -1,8 +1,13 @@
 /**
- * OAuth 2.1 用户数据访问层 (已整合至统一 IAM 平台)
+ * OAuth 2.1 用户数据访问层
  *
- * 彻底消除“身份孤岛”问题，直接适配主系统的 User & UserIdentity 体系。
- * OAuth 2.1 授权服务器中的 sub (Subject) 字段全部对应主系统的 User.uid (UUID)。
+ * 已整合至统一 IAM 平台，彻底消除”身份孤岛”问题。
+ * 直接适配主系统的 User & UserIdentity 体系，sub (Subject) 字段对应 User.uid (UUID)。
+ *
+ * 提供用户查找、密码验证等能力，供授权服务器在用户认证阶段调用。
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import bcrypt from 'bcryptjs';
 import sequelize from '../../../db/index.js';

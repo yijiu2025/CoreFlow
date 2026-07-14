@@ -1,6 +1,14 @@
 /**
  * PoseCraft 作品模型
  * 存储用户创作的作品
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} Work 模型
  */
 export default (sequelize, DataTypes) => {
   const Work = sequelize.define(
@@ -94,6 +102,10 @@ export default (sequelize, DataTypes) => {
     }
   );
 
+  /**
+   * 模型关联定义
+   * @param {object} models - 所有已注册模型的集合
+   */
   Work.associate = (models) => {
     Work.belongsTo(models.User, { foreignKey: 'user_id', as: 'author' });
     Work.belongsTo(models.Template, { foreignKey: 'template_id', as: 'template' });

@@ -1,3 +1,10 @@
+/**
+ * PoseCraft 用户互动 API
+ * 负责浏览历史记录、点赞/收藏切换与状态查询、以及历史/点赞/收藏列表获取。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import interactionDao from '../../../app/posecraft/dao/interaction.dao.js';
 

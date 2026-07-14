@@ -1,15 +1,31 @@
 /**
  * 权限加载器
- * 按 appId 加载用户的角色和权限，用于 Session 数据构建
+ *
+ * 按 appId 加载用户在该应用下的角色和权限，用于 Session 数据构建。
+ * 聚合角色策略（Role.policy）和内联策略（InlinePolicy），输出统一的 allows/denies 权限集合。
+ *
+ * 加载逻辑：
+ * 1. 查询当前应用 + GLOBAL 角色（排除已过期的 UserRole）
+ * 2. GLOBAL superadmin 自动获得各应用级超管权限（{appId}_admin）
+ * 3. 查询内联策略（用户级自定义权限）
+ * 4. 合并所有策略 → { roles, permissions: { allows, denies } }
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import { Op } from 'sequelize';
 import sequelize from '../db/index.js';
 
 /**
  * 从策略文档中提取权限
+ *
  * 支持两种格式：
  * 1. Statement 格式: { Statement: [{ Effect: 'Allow', Action: ['fw:admin:*'] }] }
  * 2. 直接格式: { allows: ['fw:admin:*'], denies: [] }
+ *
+ * @param {object|string} policy - 策略文档（对象或 JSON 字符串）
+ * @param {string[]} allows - 允许权限数组（引用传递，直接追加）
+ * @param {string[]} denies - 拒绝权限数组（引用传递，直接追加）
  */
 function extractPermissions(policy, allows, denies) {
   if (!policy) return;

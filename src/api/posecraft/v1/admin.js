@@ -1,5 +1,9 @@
 /**
  * PoseCraft 管理后台 API
+ * 提供作品/模板审核、Banner 管理等管理员操作接口。
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import templateDao from '../../../app/posecraft/dao/template.dao.js';

@@ -2,13 +2,20 @@
  * 手机号加密工具
  * 使用 AES-256-CBC + 确定性 IV（HMAC-SHA256 派生），保证同一明文产生同一密文
  * 目的：加密存储手机号，同时保持唯一索引可用性
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import crypto from 'node:crypto';
 
 const ALGO = 'aes-256-cbc';
 const IV_LENGTH = 16;
 
-/** 从环境变量获取密钥（32 字节 hex 字符串） */
+/**
+ * 从环境变量获取密钥（32 字节 hex 字符串）
+ * @returns {Buffer} 32 字节密钥 buffer
+ * @throws {Error} PHONE_ENCRYPT_KEY 未配置或长度错误
+ */
 function getKey() {
   const keyHex = process.env.PHONE_ENCRYPT_KEY;
   if (!keyHex || keyHex.length !== 64) {
@@ -20,6 +27,8 @@ function getKey() {
 /**
  * 生成确定性 IV：HMAC-SHA256(密钥, 手机号).slice(0, 16)
  * 确保同一手机号始终产生相同密文 → 唯一索引可用
+ * @param {string} plain - 明文手机号
+ * @returns {Buffer} 16 字节 IV buffer
  */
 function deriveIv(plain) {
   const key = getKey();

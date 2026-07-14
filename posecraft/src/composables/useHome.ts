@@ -1,3 +1,12 @@
+/**
+ * 首页状态管理组合式函数
+ *
+ * 负责首页数据加载、频道切换、搜索、点赞收藏等交互逻辑
+ * 通过 provide/inject 实现单例模式，避免重复初始化
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { ref, onMounted, onUnmounted, computed, watch, type Ref, provide, inject } from 'vue'
 import { useUserSettings } from '@/stores/userSettings'
 import { useRouter } from 'vue-router'
@@ -10,6 +19,11 @@ import { channelApi } from '@/api/channel'
 
 const HomeStateSymbol = Symbol('HomeState')
 
+/**
+ * 首页组合式函数
+ * 提供首页所需的全部响应式状态和业务逻辑
+ * @returns 首页状态对象
+ */
 export function useHome() {
   const injected = inject<any>(HomeStateSymbol, null)
   if (injected) {
@@ -89,6 +103,10 @@ export function useHome() {
 
   // Toast 提示
   const toastMsg = ref('')
+  /**
+   * 显示 Toast 提示
+   * @param msg - 提示消息
+   */
   const showToast = (msg: string) => {
     toastMsg.value = msg
     setTimeout(() => {
@@ -122,11 +140,13 @@ export function useHome() {
     { value: 'technique', label: '技巧' }
   ])
 
+  /** 当前频道外链 URL（如风景频道跳转 Bing） */
   const currentChannelUrl = computed(() => {
     const channel = channels.value.find(c => c.value === activeChannel.value)
     return channel?.url || ''
   })
 
+  /** 根据当前导航项获取页面标题 */
   const getNavTitle = () => {
     switch (activeNav.value) {
       case 'featured': return '精选姿势'
@@ -196,12 +216,14 @@ export function useHome() {
     return list
   })
 
+  /** 格式化点赞数（万为单位） */
   const formatLikes = (num: number) => {
     if (!num) return '0'
     if (num >= 10000) return (num / 10000).toFixed(1) + '万'
     return num.toString()
   }
 
+  /** 开始创作（已登录跳编辑器，未登录跳登录页） */
   const handleStartCreate = () => {
     if (authStore.isLoggedIn) {
       router.push('/editor')
@@ -210,6 +232,7 @@ export function useHome() {
     }
   }
 
+  /** 打开作品/模板详情页 */
   const openDetail = (item: any) => {
     if (item.type === 'template') {
       router.push(`/template/${item.id}`)
@@ -266,14 +289,17 @@ export function useHome() {
     }
   }
 
+  /** 打开登录页（未登录时点击头像） */
   const toggleProfileModal = () => {
     router.push('/login')
   }
 
+  /** 搜索框失焦（延迟 150ms 避免点击建议词失效） */
   const onSearchBlur = () => {
     setTimeout(() => { searchFocused.value = false }, 150)
   }
 
+  /** 跳转搜索（PC 端聚焦搜索框，移动端跳搜索页） */
   const goToSearch = () => {
     if (!isMobile.value) {
       searchFocused.value = true
@@ -282,6 +308,7 @@ export function useHome() {
     }
   }
 
+  /** 滚动到页面顶部 */
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -360,18 +387,21 @@ export function useHome() {
     }
   }
 
+  /** 刷新首页数据（重置分页重新加载） */
   const refreshData = () => {
     currentPage.value = 1
     hasMore.value = true
     loadData(1)
   }
 
+  /** 加载更多（下一页数据追加） */
   const loadMore = () => {
     if (!hasMore.value || loading.value) return
     currentPage.value++
     loadData(currentPage.value)
   }
 
+  /** 获取用户资料（未初始化时先检查 session） */
   const fetchUserProfile = async () => {
     if (!authStore.initialized) {
       await authStore.checkSession()
@@ -383,6 +413,11 @@ export function useHome() {
   /** 获取当前用户完整统计（代理 authStore.fetchMyStats） */
   const fetchMyStats = () => authStore.fetchMyStats()
 
+  /**
+   * 更新用户资料
+   * @param data - 更新的资料数据
+   * @returns 是否成功
+   */
   const updateUserProfile = async (data: any) => {
     const success = await authStore.updateUserProfile(data)
     if (success) {

@@ -1,3 +1,13 @@
+/**
+ * 用户应用数据访问层
+ *
+ * 提供用户注册、登录认证、信息查询等数据操作能力。
+ * 使用 RSA 解密前端传输的密码，通过 bcrypt 进行密码哈希存储与验证。
+ * 登录成功后通过 PBAC 计算用户策略并签发 JWT Token。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import jwt from 'jsonwebtoken';
 import sequelize from '../../../db/index.js';
 import { decrypt } from '../../oauth21/crypto/encryption.js';
@@ -6,6 +16,11 @@ import IamDao from '../../admin/dao/iam.dao.js';
 import { validatePasswordStrength } from '../../../auth/password-policy.js';
 
 class UserDao {
+  /**
+   * 检查用户名是否已存在
+   * @param {string} username - 用户名
+   * @returns {Promise<boolean>} 是否存在
+   */
   async checkUsernameExist(username) {
     const isExist = await sequelize.models.User.findOne({
       where: { username }
@@ -13,11 +28,25 @@ class UserDao {
     return !!isExist;
   }
 
+  /**
+   * 检查邮箱是否已存在
+   * @param {string} email - 邮箱地址
+   * @returns {Promise<boolean>} 是否存在
+   */
   async checkEmailExist(email) {
     const isExist = await sequelize.models.User.findOne({ where: { email } });
     return !!isExist;
   }
 
+  /**
+   * 创建新用户
+   *
+   * 校验用户名/邮箱唯一性和角色有效性后，调用 registerUser 完成注册。
+   *
+   * @param {import('fastify').FastifyRequest} request - Fastify 请求对象
+   * @returns {Promise<object>} 新创建的 User 模型实例
+   * @throws {Error} 用户名或邮箱为空、邮箱已存在、角色不存在时抛出
+   */
   async createUser(request) {
     let { username, email } = request.body;
     if (!username) username = email;
@@ -39,6 +68,20 @@ class UserDao {
     return await this.registerUser(request);
   }
 
+  /**
+   * 用户登录认证并签发 Token
+   *
+   * 流程：
+   * 1. 解密前端 RSA 加密的密码
+   * 2. 通过 UserIdentity 查找凭证并 bcrypt 验证密码
+   * 3. PBAC 计算当前应用下的有效策略
+   * 4. 更新全局会话和身份表的登录时间
+   * 5. 签发 Access Token（嵌入权限策略）和 Refresh Token
+   *
+   * @param {import('fastify').FastifyRequest} request - Fastify 请求对象（需包含 body.username, body.password, body.appId）
+   * @returns {Promise<{accessToken: string, refreshToken: string}>} Token 对
+   * @throws {Error} 用户名/密码为空或验证失败时抛出 AUTH_FAILED
+   */
   async getTokens(request) {
     const { username, appId, password: encryptedPassword } = request.body;
     const password = decrypt(encryptedPassword);
@@ -94,6 +137,11 @@ class UserDao {
     return { accessToken, refreshToken };
   }
 
+  /**
+   * 根据 UID 获取用户详细信息（含关联角色）
+   * @param {object} ctx - Fastify 请求上下文（ctx.state.user.uid）
+   * @returns {Promise<object|null>} User 模型实例（包含 roles 关联）
+   */
   async getInformation(ctx) {
     const { uid } = ctx.state.user;
     return await sequelize.models.User.findOne({
@@ -108,6 +156,18 @@ class UserDao {
     });
   }
 
+  /**
+   * 用户注册（事务操作）
+   *
+   * 在单个数据库事务中完成：
+   * 1. 创建 User 基础信息
+   * 2. 创建 UserIdentity 密码凭证
+   * 3. 分配指定角色或默认 guest 角色
+   *
+   * @param {import('fastify').FastifyRequest} request - Fastify 请求对象（需包含 body.email, body.password, body.username?, body.role_ids?）
+   * @returns {Promise<object>} 新创建的 User 模型实例
+   * @throws {Error} 密码复杂度不足时抛出 REGISTER_FAILED
+   */
   async registerUser(request) {
     const { email, password: encryptedPassword, role_ids } = request.body;
     let { username } = request.body;

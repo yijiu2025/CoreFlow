@@ -1,3 +1,16 @@
+/**
+ * 用户基础信息模型 (User Profile)
+ *
+ * 存储用户核心资料信息，包含基础字段（用户名、邮箱、头像等）和系统字段（uid、status、personal_id）。
+ * 不包含任何认证敏感数据（密码等），认证凭证由 UserIdentity 模型管理。
+ *
+ * 安全特性：
+ * - 手机号 AES-256-CBC 加密存储（beforeValidate 自动加密，afterFind 自动解密）
+ * - phone/email 唯一索引结合 delete_version 实现软删除安全的唯一约束
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { registerDeleteVersionHooks } from '../../db/softDeleteHooks.js';
 import { encryptPhone, decryptPhone, isEncrypted } from '../../utils/crypto.js';
 

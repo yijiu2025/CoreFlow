@@ -1,3 +1,14 @@
+<!--
+ * PoseCraft 主页面布局
+ *
+ * 整体框架：左侧 Sidebar 导航 + 顶部 TopNav 通栏 + 右侧内容区（router-view + keep-alive）
+ * 内容区各频道视图作为子路由在 <router-view> 中切换，通过 keep-alive 缓存状态
+ *
+ * 负责组装：Sidebar / TopNav / SettingsModal / Toast / 回到顶部按钮 / 移动端遮罩层
+ *
+ * @author Claude
+ * @since 2026-07-13
+ -->
 <template>
   <div class="home-layout" :class="{ 'dark-mode': themeStore.isDark }">
     <!-- 左侧侧边栏导航 -->

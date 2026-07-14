@@ -1,6 +1,9 @@
 /**
  * PoseCraft 作品 API
  * 负责作品的查询、创建、删除及互动。
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
@@ -13,6 +16,11 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads/posecraft');
 
+/**
+ * 将 fabricData 骨骼数据序列化为 SVG buffer（透明背景，仅骨架线条）
+ * @param {object} fabricData - pose_data.fabricData，包含 width/height/objects
+ * @returns {Buffer} SVG buffer
+ */
 function generateSvgFromFabric(fabricData) {
   const width = fabricData.width || 800;
   const height = fabricData.height || 600;
@@ -63,6 +71,8 @@ function generateSvgFromFabric(fabricData) {
 /**
  * 作品结构化输出：只返回前端需要的字段
  * 排除：user_id、analysis_data、delete_version、deleted_at、edit_data
+ * @param {object} work - 作品 Sequelize 实例或普通对象
+ * @returns {object|null} 格式化后的作品对象，null 时返回 null
  */
 function formatWork(work) {
   if (!work) return null;
@@ -90,7 +100,11 @@ function formatWork(work) {
   };
 }
 
-/** 批量结构化输出 */
+/**
+ * 批量结构化输出
+ * @param {Array<object>} workList - 作品实例数组
+ * @returns {Array<object>} 格式化后的作品数组
+ */
 function formatWorkList(list) {
   return (list || []).map(formatWork);
 }
@@ -106,6 +120,9 @@ export default async function (fastify) {
    * 细粒度数据级权限校验通用助手
    * 1. 资源创建者本人：允许对其自己创建的作品进行操作。
    * 2. 管理员（包含 posecraft_admin 角色、全局 admin 角色或拥有 posecraft:work:audit 权限）：允许越权管理任何用户的作品。
+   * @param {object} item - 资源对象，需包含 user_id 字段
+   * @param {object} user - 当前登录用户（session 用户对象）
+   * @returns {boolean} 是否拥有数据级操作权限
    */
   const checkDataPermission = (item, user) => {
     if (!item || !user) return false;

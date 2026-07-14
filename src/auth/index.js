@@ -1,18 +1,30 @@
 /**
  * 独立认证插件
- * 不依赖任何业务模块，负责：
- * 1. ALS 上下文初始化
- * 2. Session Cookie 验证 → request.state.user
- * 3. Bearer Token 验证 → request.state.user
- * 4. 已登录用户自动续期
- * 5. sid 过期时用 sid_r 自动刷新
+ *
+ * 不依赖任何业务模块，负责 Session/Token 认证与权限上下文传递。
+ * 作为 Fastify onRequest 钩子注册，在每个请求开始时执行认证流程。
+ *
+ * 核心职责：
+ * 1. ALS (AsyncLocalStorage) 上下文初始化，实现请求级别的上下文穿透
+ * 2. Session Cookie 验证 → request.state.user（主要认证方式）
+ * 3. Bearer Token / access_token Cookie 验证 → request.state.user（OAuth 2.1 兼容）
+ * 4. sid 过期时用 sid_r 自动刷新（双令牌续期机制）
+ *
+ * 认证优先级：Bearer Token > access_token Cookie > Session Cookie (sid) > Refresh Token (sid_r)
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import fp from 'fastify-plugin';
 import { AsyncLocalStorage } from 'async_hooks';
 import { getSession, refreshSession } from './session.js';
 import { COOKIE_SID, COOKIE_SID_R } from './cookie.js';
 
-/** 全局 AsyncLocalStorage 实例 */
+/**
+ * 全局 AsyncLocalStorage 实例
+ * 用于在 HTTP 请求生命周期内传递 request 对象，实现静态上下文穿透
+ * @type {AsyncLocalStorage}
+ */
 export const requestContext = new AsyncLocalStorage();
 
 /**
@@ -49,8 +61,13 @@ export function getServerResource(name) {
 
 /**
  * 从 Bearer Token 解析用户信息
- * 优先从 JWT Claims 读取 roles/permissions（新版 token 已嵌入）
- * 旧版 token 无 claims 时降级为数据库查询
+ *
+ * 优先从 JWT Claims 读取 roles/permissions（新版 token 已嵌入），
+ * 旧版 token 无 claims 时降级为 Redis 缓存 → 数据库查询。
+ *
+ * @param {string} token - JWT access_token
+ * @param {object} redis - Redis 客户端（可选，用于权限缓存）
+ * @returns {Promise<object|null} 用户信息对象或 null（验证失败时）
  */
 async function getUserFromToken(token, redis) {
   try {

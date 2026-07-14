@@ -219,8 +219,8 @@ export const DEFAULT_SECURITY_SETTINGS = {
     ],
 
     // --- 全局限频 ---
-    enableRateLimit: true,
-    rateLimitRequests: parseInt(process.env.FW_RATE_LIMIT || '60'),
+    enableRateLimit: false,
+    rateLimitRequests: parseInt(process.env.FW_RATE_LIMIT || '10000'),
     rateLimitWindow: parseInt(process.env.FW_RATE_WINDOW || '60'),
 
     // --- 用户级限频 ---

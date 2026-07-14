@@ -1,5 +1,9 @@
 /**
  * PoseCraft 文件上传 API
+ * 支持 multipart 文件上传和 Base64 图片上传，保存到本地公共目录。
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import fs from 'fs';

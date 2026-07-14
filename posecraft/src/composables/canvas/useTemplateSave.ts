@@ -1,9 +1,24 @@
+/**
+ * 模板保存组合式函数
+ *
+ * 负责编辑器中模板的发布/更新流程：
+ * 上传背景图 → 序列化 Fabric.js 画布数据 → 调用 API 创建或更新模板
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { ref, Ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { templateApi } from '@/api/template'
 import { useUpload } from '@/composables/useUpload'
 import { useAuthStore } from '@/stores/auth'
 
+/**
+ * 模板保存组合式函数
+ * @param fCanvas - Fabric.js 画布实例
+ * @param templateName - 模板名称
+ * @param getInkCanvas - 获取画布元素的方法
+ */
 export function useTemplateSave(
   fCanvas: Ref<any>,
   templateName: Ref<string>,
@@ -17,18 +32,28 @@ export function useTemplateSave(
   const showSaveModal = ref(false)
   const showExitModal = ref(false)
 
+  /** 显示保存确认弹窗 */
   const saveTemplate = () => {
     showSaveModal.value = true
   }
 
+  /** 显示退出确认弹窗 */
   const triggerExit = () => {
     showExitModal.value = true
   }
 
+  /** 返回首页 */
   const goHome = () => {
     router.push('/')
   }
 
+  /**
+   * 确认保存/发布模板
+   * - 上传原始背景图到对象存储
+   * - 序列化 Fabric.js 画布数据（保留骨架/手势/裁剪框等元数据）
+   * - 调用 API 创建新模板或更新已有模板
+   * @param formData - 模板表单数据（名称/描述/类别/标签/位置信息）
+   */
   const confirmSave = async (formData: {
     name: string
     description: string

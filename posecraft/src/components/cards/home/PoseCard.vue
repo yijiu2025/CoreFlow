@@ -1,3 +1,15 @@
+<!--
+ * 姿势/作品瀑布流卡片
+ *
+ * 展示单张作品或模板：底图（懒加载）、模板/视频徽章、距离标签、标题、
+ * 作者头像+昵称、点赞数、收藏按钮。支持点击进详情、点赞、收藏事件冒泡。
+ *
+ * 自动解析图片真实宽高比（picsum 假数据快速路径 + 真实图片 Image 对象加载），
+ * 未加载完成时默认 4/5 占位。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ -->
 <template>
   <div class="card" @click="$emit('click', item)">
     <div class="card-image" :style="{ aspectRatio }">

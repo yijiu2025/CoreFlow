@@ -1,10 +1,22 @@
 /**
  * Cookie 签名与验证工具
- * 使用 HMAC-SHA256 对 Session ID 签名，防篡改
+ *
+ * 使用 HMAC-SHA256 对 Session ID 签名，防止客户端篡改 Cookie 内容。
+ * 每次请求验证时递增 accessCount 并重新签名，实现 Cookie 的轮转更新。
  *
  * Cookie 格式: payload.signature
- * - payload: base64(sessionId:accessCount) — 内部编码，外部不可读
- * - signature: HMAC-SHA256(payload, SECRET)
+ * - payload: base64url(sessionId:accessCount) — 内部编码，外部不可读
+ * - signature: HMAC-SHA256(payload, SESSION_SECRET)
+ *
+ * 配置常量：
+ * - COOKIE_SID: 短期/长期会话 Cookie 名称（默认 "sid"）
+ * - COOKIE_SID_R: 长期登录刷新令牌 Cookie 名称（默认 "sid_r"）
+ * - SHORT_SESSION_TTL: 30分钟（不勾选"记住我"）
+ * - LONG_SESSION_TTL: 30天（勾选"记住我"）
+ * - REFRESH_TOKEN_TTL: 30天（sid_r 有效期）
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import crypto from 'node:crypto';
 

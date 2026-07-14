@@ -1,6 +1,9 @@
 /**
  * PoseCraft 模板 API
  * 负责模板的查询、创建、更新、删除及管理员审核流程。
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import TemplateDao from '../../../app/posecraft/dao/template.dao.js';
@@ -24,6 +27,9 @@ export default async function (fastify) {
    * 细粒度数据级权限校验通用助手
    * 1. 资源创建者本人：允许对其自己创建的模板进行修改/删除。
    * 2. 管理员（包含 posecraft_admin 角色、全局 admin 角色或拥有 posecraft:work:audit 权限）：允许越权管理任何用户的模板。
+   * @param {object} item - 资源对象，需包含 user_id 字段
+   * @param {object} user - 当前登录用户（session 用户对象）
+   * @returns {boolean} 是否拥有数据级操作权限
    */
   const checkDataPermission = (item, user) => {
     if (!item || !user) return false;

@@ -1,5 +1,13 @@
 /**
  * PoseCraft 关注关系模型
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} Follow 模型
  */
 export default (sequelize, DataTypes) => {
   const Follow = sequelize.define(
@@ -53,6 +61,10 @@ export default (sequelize, DataTypes) => {
     }
   );
 
+  /**
+   * 模型关联定义
+   * @param {object} models - 所有已注册模型的集合
+   */
   Follow.associate = (models) => {
     // 关注者 (A) 关注了 (B)
     Follow.belongsTo(models.User, { foreignKey: 'follower_id', as: 'follower' });

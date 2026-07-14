@@ -1,3 +1,10 @@
+/**
+ * PoseCraft 关注/统计 API
+ * 负责用户关注/取消关注、关注状态查询、粉丝关注统计以及个人主页完整统计聚合。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import followDao from '../../../app/posecraft/dao/follow.dao.js';
 import sequelize from '../../../db/index.js';
@@ -12,6 +19,9 @@ export default async function (fastify) {
 
   /**
    * 根据 id/uid/personal_id 获取数据库内部整型用户 ID
+   * @param {string|number} idOrUid - 用户整型 ID、uid 或 personal_id
+   * @returns {Promise<number|null>} 数据库整型用户 ID；纯数字直接返回，无效值返回 null
+   * @throws {Error} 非数字且数据库查不到时抛出 USER_NOT_FOUND
    */
   const getInternalUserId = async (idOrUid) => {
     if (!idOrUid) return null;
@@ -215,6 +225,8 @@ export default async function (fastify) {
 
 /**
  * 聚合个人完整统计（关注/粉丝/互关/获赞/作品/模板/收藏）
+ * @param {number} userId - 数据库整型用户 ID
+ * @returns {Promise<object>} 完整统计数据对象
  */
 async function getProfileStats(userId) {
   const followStats = await followDao.getFollowStatsCount(userId);

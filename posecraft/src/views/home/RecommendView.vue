@@ -1,3 +1,12 @@
+<!--
+ * 推荐频道视图
+ *
+ * 根据用户偏好推荐的瀑布流内容，共享 useHome 的状态（filteredItems / loading / loadMore）。
+ * 首次加载显示骨架占位，触底自动加载更多，无数据时显示空状态。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ -->
 <template>
   <div class="recommend-page-container">
     <div class="content-container">

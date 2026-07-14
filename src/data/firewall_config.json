@@ -58,7 +58,7 @@
         "52.82."
       ],
       "enableRateLimit": true,
-      "rateLimitRequests": 60,
+      "rateLimitRequests": 10000,
       "rateLimitWindow": 60,
       "enableUserRateLimit": true,
       "userRateLimitRequests": 120,

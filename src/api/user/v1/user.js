@@ -13,7 +13,11 @@ import UserDao from '../../../app/oauth21/dao/user.dao.js';
 
 /**
  * 生成唯一的 personal_id（格式 pose_craft_ + 8位字母数字）
- * 碰撞时递归重试，最多 10 次
+ *
+ * 碰撞时递归重试，最多 10 次，极端情况用时间戳后缀兜底。
+ *
+ * @param {number} [attempt=0] - 当前重试次数
+ * @returns {Promise<string>} 唯一的 personal_id
  */
 async function generateUniquePersonalId(attempt = 0) {
   if (attempt >= 10) {
@@ -301,6 +305,15 @@ export default async function (fastify) {
 
 /**
  * 权限通配符匹配
+ *
+ * 支持的匹配模式：
+ * - '*' 匹配所有权限
+ * - 精确匹配（如 'user:read' === 'user:read'）
+ * - 后缀通配符（如 'user:*' 匹配 'user:read'、'user:write' 等）
+ *
+ * @param {string} pattern - 权限模式（可包含 '*' 通配符）
+ * @param {string} target - 待匹配的权限标识
+ * @returns {boolean} 是否匹配
  */
 function matchPermission(pattern, target) {
   if (pattern === '*') return true;

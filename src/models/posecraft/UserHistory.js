@@ -1,5 +1,13 @@
 /**
  * PoseCraft 用户访问历史记录模型
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} UserHistory 模型
  */
 export default (sequelize, DataTypes) => {
   const UserHistory = sequelize.define(
@@ -45,6 +53,10 @@ export default (sequelize, DataTypes) => {
     }
   );
 
+  /**
+   * 模型关联定义
+   * @param {object} models - 所有已注册模型的集合
+   */
   UserHistory.associate = (models) => {
     UserHistory.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
     UserHistory.belongsTo(models.Work, { foreignKey: 'work_id', as: 'work' });

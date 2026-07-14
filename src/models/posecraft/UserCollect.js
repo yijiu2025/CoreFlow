@@ -1,5 +1,13 @@
 /**
  * PoseCraft 用户收藏模型
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} UserCollect 模型
  */
 export default (sequelize, DataTypes) => {
   const UserCollect = sequelize.define(
@@ -54,6 +62,10 @@ export default (sequelize, DataTypes) => {
     }
   );
 
+  /**
+   * 模型关联定义
+   * @param {object} models - 所有已注册模型的集合
+   */
   UserCollect.associate = (models) => {
     UserCollect.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
     UserCollect.belongsTo(models.Work, { foreignKey: 'work_id', as: 'work' });

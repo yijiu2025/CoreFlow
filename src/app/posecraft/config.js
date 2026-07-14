@@ -1,6 +1,9 @@
 /**
  * PoseCraft 应用配置
- * 供 loader 扫描时读取
+ * 供 loader 扫描时读取，包含 OAuth 2.1 客户端注册信息。
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 export default {
   app_id: 'posecraft',

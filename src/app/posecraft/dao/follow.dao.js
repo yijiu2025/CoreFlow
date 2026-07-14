@@ -1,13 +1,25 @@
 /**
  * PoseCraft 关注系统数据访问层
+ * 负责用户之间的关注、取消关注、互关判断及粉丝/关注统计
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import sequelize from '../../../db/index.js';
 
 class FollowDao {
+  /**
+   * 获取 Follow 模型
+   * @returns {Model}
+   */
   getModel() {
     return sequelize.models.Follow;
   }
 
+  /**
+   * 获取 User 模型
+   * @returns {Model}
+   */
   getUserModel() {
     return sequelize.models.User;
   }
@@ -75,7 +87,10 @@ class FollowDao {
   }
 
   /**
-   * 取消关注
+   * 取消关注，联动解除对方互关状态
+   * @param {number} followerId - 关注者 ID
+   * @param {number} followingId - 被关注者 ID
+   * @returns {Promise<boolean>}
    */
   async unfollow(followerId, followingId) {
     const Follow = this.getModel();
@@ -104,7 +119,10 @@ class FollowDao {
   }
 
   /**
-   * 检查是否已关注
+   * 检查 A 是否已关注 B
+   * @param {number} followerId - 关注者 ID
+   * @param {number} followingId - 被关注者 ID
+   * @returns {Promise<boolean>}
    */
   async checkStatus(followerId, followingId) {
     const Follow = this.getModel();
@@ -117,7 +135,9 @@ class FollowDao {
   }
 
   /**
-   * 获取用户的粉丝数和关注数
+   * 获取用户的粉丝数、关注数、作品数、获赞数（聚合）
+   * @param {number} userId - 用户 ID
+   * @returns {Promise<{followersCount: number, followingCount: number, worksCount: number, likesCount: number}>}
    */
   async getStats(userId) {
     const followStats = await this.getFollowStatsCount(userId);
@@ -127,6 +147,8 @@ class FollowDao {
 
   /**
    * 仅获取粉丝数和关注数
+   * @param {number} userId - 用户 ID
+   * @returns {Promise<{followersCount: number, followingCount: number}>}
    */
   async getFollowStatsCount(userId) {
     const Follow = this.getModel();
@@ -141,6 +163,8 @@ class FollowDao {
 
   /**
    * 获取互关数量（follower_id=X 且 mutual=true 的记录数）
+   * @param {number} userId - 用户 ID
+   * @returns {Promise<number>}
    */
   async getMutualCount(userId) {
     const Follow = this.getModel();
@@ -151,6 +175,8 @@ class FollowDao {
 
   /**
    * 仅获取作品数和获赞数
+   * @param {number} userId - 用户 ID
+   * @returns {Promise<{worksCount: number, likesCount: number}>}
    */
   async getWorkStatsCount(userId) {
     const { Work } = sequelize.models;
