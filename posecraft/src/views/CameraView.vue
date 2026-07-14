@@ -254,8 +254,9 @@ const handleCapture = async () => {
       edit_data: templateTransform.value
     }) as any
 
-    // 拍照成功，跳转到作品详情或者返回首页
+    // 拍照成功，本地递增作品数（同步 MineView Tab 数字）
     if (res && res.id) {
+      authStore.incrementWorksCount()
       router.push(`/work/${res.id}`)
     } else {
       router.push('/mine')

@@ -2,6 +2,7 @@ import { ref, Ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { templateApi } from '@/api/template'
 import { useUpload } from '@/composables/useUpload'
+import { useAuthStore } from '@/stores/auth'
 
 export function useTemplateSave(
   fCanvas: Ref<any>,
@@ -11,6 +12,7 @@ export function useTemplateSave(
   const router = useRouter()
   const route = useRoute()
   const { uploadFile } = useUpload()
+  const authStore = useAuthStore()
 
   const showSaveModal = ref(false)
   const showExitModal = ref(false)
@@ -119,6 +121,7 @@ export function useTemplateSave(
         await templateApi.update(id, apiData)
       } else {
         await templateApi.create(apiData)
+        authStore.incrementTemplatesCount() // 本地递增模板数
       }
 
       alert('发布成功，已提交管理员审核！您和管理员可以随时查看您的作品。')

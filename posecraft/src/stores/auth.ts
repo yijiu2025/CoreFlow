@@ -29,6 +29,11 @@ export const useAuthStore = defineStore('auth', () => {
   const collectsCount = ref(0)
   const recommendationsCount = ref(0)
 
+  /** 本地递增作品数（创建成功后调用） */
+  const incrementWorksCount = () => { worksCount.value++ }
+  /** 本地递增模板数（创建成功后调用） */
+  const incrementTemplatesCount = () => { templatesCount.value++ }
+
   const userProfile = ref<any>(null)
 
   /** 带兜底的头像 URL（空值时返回本地默认头像，零网络请求） */
@@ -389,9 +394,11 @@ export const useAuthStore = defineStore('auth', () => {
     followingCount,
     followersCount,
     worksCount,
+    templatesCount,
+    incrementWorksCount,
+    incrementTemplatesCount,
     likesCount,
     mutualCount,
-    templatesCount,
     recommendationsCount,
     userProfile,
     fetchUserProfile,
