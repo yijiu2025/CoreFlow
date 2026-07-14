@@ -71,14 +71,14 @@
           :class="['tab-btn', { active: activeTab === 'works' }]"
         >
           <span>作品</span>
-          <span v-if="realWorksCount > 0">{{ realWorksCount }}</span>
+          <span v-if="authStore.worksCount > 0">{{ authStore.worksCount }}</span>
         </button>
         <button
           @click="changeTab('templates')"
           :class="['tab-btn', { active: activeTab === 'templates' }]"
         >
           <span>模板</span>
-          <span v-if="authStore.myTemplates.length > 0">{{ authStore.myTemplates.length }}</span>
+          <span v-if="authStore.templatesCount > 0">{{ authStore.templatesCount }}</span>
         </button>
         <button
           @click="changeTab('recommend')"
@@ -392,7 +392,6 @@ const {
   userProfile,
   followingCount,
   followersCount,
-  worksCount,
   likesCount,
   mutualCount,
   fetchUserProfile,
@@ -686,10 +685,13 @@ const handleDeleteSingle = async (item: any) => {
   if (!confirm(`确定要删除「${item.title || '该作品'}」吗？删除后不可恢复。`)) return
   try {
     const id = Number(item.id)
-    if (item.type === 'template' || activeTab.value === 'templates') {
+    const isTemplate = item.type === 'template' || activeTab.value === 'templates'
+    if (isTemplate) {
       await templateApi.delete(id)
+      authStore.templatesCount = Math.max(0, authStore.templatesCount - 1)
     } else {
       await workApi.delete(id)
+      authStore.worksCount = Math.max(0, authStore.worksCount - 1)
     }
     removeFromLocalList(id)
     showToast('删除成功')
@@ -727,16 +729,25 @@ const batchDelete = async () => {
   const count = selectedIds.value.length
   if (!confirm(`确定要删除选中的 ${count} 项内容吗？删除后不可恢复。`)) return
 
+  // 统计本次删除的作品/模板数量（用于本地更新 Tab 数字）
+  let removedWorks = 0
+  let removedTemplates = 0
+
   try {
     for (const sid of selectedIds.value) {
       const id = Number(sid)
       const item = filteredItems.value.find(f => Number(f.id) === id)
       if (item?.type === 'template' || activeTab.value === 'templates') {
         await templateApi.delete(id)
+        removedTemplates++
       } else {
-        workApi.delete(id).catch(() => {})
+        await workApi.delete(id).catch(() => {})
+        removedWorks++
       }
     }
+    // 本地同步 Tab 数字
+    authStore.worksCount = Math.max(0, authStore.worksCount - removedWorks)
+    authStore.templatesCount = Math.max(0, authStore.templatesCount - removedTemplates)
     showToast(`已成功删除选中的 ${count} 项内容`)
     exitManageMode()
   } catch (err: any) {
