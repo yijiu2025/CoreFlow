@@ -1,32 +1,59 @@
 /**
  * PoseCraft 用户互动数据访问层 (点赞、收藏、历史记录)
+ * 负责用户对作品/模板的点赞、收藏、浏览历史记录及相关列表查询
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import sequelize from '../../../db/index.js';
 import { Op } from 'sequelize';
 
 class InteractionDao {
+  /**
+   * 获取 UserLike 模型
+   * @returns {Model}
+   */
   getLikeModel() {
     return sequelize.models.UserLike;
   }
 
+  /**
+   * 获取 UserCollect 模型
+   * @returns {Model}
+   */
   getCollectModel() {
     return sequelize.models.UserCollect;
   }
 
+  /**
+   * 获取 UserHistory 模型
+   * @returns {Model}
+   */
   getHistoryModel() {
     return sequelize.models.UserHistory;
   }
 
+  /**
+   * 获取 Work 模型
+   * @returns {Model}
+   */
   getWorkModel() {
     return sequelize.models.Work;
   }
 
+  /**
+   * 获取 Template 模型
+   * @returns {Model}
+   */
   getTemplateModel() {
     return sequelize.models.Template;
   }
 
   /**
-   * 记录浏览历史，并递增作品/模板的浏览数
+   * 记录浏览历史，并递增作品/模板的浏览数；重复浏览仅更新时间戳
+   * @param {number} userId - 用户 ID
+   * @param {object} payload - { workId?, templateId? }
+   * @returns {Promise<boolean>}
    */
   async recordHistory(userId, { workId, templateId }) {
     const History = this.getHistoryModel();
@@ -67,7 +94,10 @@ class InteractionDao {
   }
 
   /**
-   * 切换点赞状态
+   * 切换点赞状态（点赞/取消点赞），联动更新 like 计数
+   * @param {number} userId - 用户 ID
+   * @param {object} payload - { workId?, templateId?, like: boolean }
+   * @returns {Promise<{success: boolean, liked: boolean, message: string}>}
    */
   async toggleLike(userId, { workId, templateId, like }) {
     const Like = this.getLikeModel();
@@ -121,7 +151,10 @@ class InteractionDao {
   }
 
   /**
-   * 切换收藏状态
+   * 切换收藏状态（收藏/取消收藏）
+   * @param {number} userId - 用户 ID
+   * @param {object} payload - { workId?, templateId?, collect: boolean }
+   * @returns {Promise<{success: boolean, collected: boolean, message: string}>}
    */
   async toggleCollect(userId, { workId, templateId, collect }) {
     const Collect = this.getCollectModel();
@@ -159,7 +192,10 @@ class InteractionDao {
   }
 
   /**
-   * 检查是否已点赞、已收藏
+   * 检查当前用户对某作品/模板是否已点赞、已收藏
+   * @param {number} userId - 用户 ID
+   * @param {object} payload - { workId?, templateId? }
+   * @returns {Promise<{liked: boolean, collected: boolean}>}
    */
   async checkStatus(userId, { workId, templateId }) {
     const Like = this.getLikeModel();
@@ -181,7 +217,10 @@ class InteractionDao {
   }
 
   /**
-   * 分页查询用户的浏览历史记录
+   * 分页查询用户的浏览历史记录（扁平化返回，附带作品/模板详情）
+   * @param {number} userId - 用户 ID
+   * @param {object} [options] - { page, pageSize }
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async getHistoryList(userId, { page = 1, pageSize = 20 } = {}) {
     const History = this.getHistoryModel();
@@ -233,7 +272,10 @@ class InteractionDao {
   }
 
   /**
-   * 分页查询用户点赞列表
+   * 分页查询用户点赞列表（扁平化返回）
+   * @param {number} userId - 用户 ID
+   * @param {object} [options] - { page, pageSize }
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async getLikesList(userId, { page = 1, pageSize = 20 } = {}) {
     const Like = this.getLikeModel();
@@ -286,7 +328,10 @@ class InteractionDao {
   }
 
   /**
-   * 分页查询用户收藏列表
+   * 分页查询用户收藏列表（扁平化返回）
+   * @param {number} userId - 用户 ID
+   * @param {object} [options] - { page, pageSize }
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async getCollectsList(userId, { page = 1, pageSize = 20 } = {}) {
     const Collect = this.getCollectModel();

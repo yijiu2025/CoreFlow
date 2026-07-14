@@ -1,5 +1,8 @@
 /**
  * 个人统计 API（关注/粉丝/互关/获赞/作品/模板/收藏）
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import service from '@/utils/request'
 

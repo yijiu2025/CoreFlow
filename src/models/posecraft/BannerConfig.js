@@ -1,6 +1,14 @@
 /**
  * PoseCraft Banner 配置模型
  * 存储首页推荐大图 Banner 的可配置内容（标题/描述/背景图/开关/定时展示）
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} BannerConfig 模型
  */
 export default (sequelize, DataTypes) => {
   const BannerConfig = sequelize.define(

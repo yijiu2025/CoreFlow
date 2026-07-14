@@ -1,3 +1,12 @@
+/**
+ * 用户应用域 (User Domain) 权限字典常量
+ *
+ * 使用工厂函数自动合并元数据注册与常量导出，遵循 DRY 原则。
+ * 权限按功能分组：基础操作(BASE)、VIP专属(VIP)、管理员高危操作(ADMIN)。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
 
 /**

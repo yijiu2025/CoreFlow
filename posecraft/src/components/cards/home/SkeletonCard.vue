@@ -1,3 +1,12 @@
+<!--
+ * 骨架占位卡片
+ *
+ * 首次加载数据时模拟真实 PoseCard 结构（图片、标题、头像、点赞），
+ * 通过 CSS pulse 动画呈现闪烁效果，减少感知加载时间。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ -->
 <template>
   <!-- 骨架占位卡片：首次加载时模拟真实卡片结构 -->
   <div class="skeleton-card">

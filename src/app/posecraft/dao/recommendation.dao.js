@@ -1,9 +1,17 @@
 /**
  * PoseCraft 推荐数据访问层
+ * 负责用户推荐作品/模板给朋友看的创建、取消、查询及统计
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import sequelize from '../../../db/index.js';
 
 class RecommendationDao {
+  /**
+   * 获取 Recommendation 模型
+   * @returns {Model}
+   */
   getModel() {
     return sequelize.models.Recommendation;
   }
@@ -11,6 +19,9 @@ class RecommendationDao {
   /**
    * 创建推荐（用户推荐某个作品/模板给朋友看）
    * 重复推荐同一内容幂等：返回已有记录
+   * @param {number} userId - 推荐者 ID
+   * @param {object} [payload] - { workId?, templateId? }
+   * @returns {Promise<Recommendation>}
    */
   async create(userId, { workId, templateId } = {}) {
     const Model = this.getModel();
@@ -29,6 +40,9 @@ class RecommendationDao {
 
   /**
    * 取消推荐（软删除）
+   * @param {number} userId - 推荐者 ID
+   * @param {object} [payload] - { workId?, templateId? }
+   * @returns {Promise<boolean>}
    */
   async cancel(userId, { workId, templateId } = {}) {
     const Model = this.getModel();
@@ -48,6 +62,9 @@ class RecommendationDao {
 
   /**
    * 检查当前用户是否已推荐某内容
+   * @param {number} userId - 用户 ID
+   * @param {object} [payload] - { workId?, templateId? }
+   * @returns {Promise<boolean>}
    */
   async checkStatus(userId, { workId, templateId } = {}) {
     const Model = this.getModel();
@@ -63,7 +80,10 @@ class RecommendationDao {
   }
 
   /**
-   * 分页查询我推荐的内容（"我的→推荐"Tab）
+   * 分页查询我推荐的内容（"我的→推荐"Tab），扁平化返回
+   * @param {number} userId - 用户 ID
+   * @param {object} [options] - { page, pageSize }
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async findMyRecommendations(userId, { page = 1, pageSize = 20 } = {}) {
     const Model = this.getModel();
@@ -97,7 +117,9 @@ class RecommendationDao {
   }
 
   /**
-   * 获取推荐数量
+   * 获取用户推荐数量
+   * @param {number} userId - 用户 ID
+   * @returns {Promise<number>}
    */
   async getCount(userId) {
     const Model = this.getModel();

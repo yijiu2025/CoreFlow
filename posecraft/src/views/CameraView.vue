@@ -1,3 +1,15 @@
+<!--
+ * 相机拍摄页面
+ *
+ * 全屏相机取景画面，叠加 Fabric.js 画布实时渲染姿势骨架模板（line + circle），
+ * 拍照后将 Base64 上传并创建作品记录，拍照时带闪光灯动效。
+ *
+ * 模板适配算法：按设计稿宽高等比缩放（取短边），居中平移，保证骨架完全装进屏幕。
+ * 仅渲染骨架图形（不加载原图），保障模板机密数据安全。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ -->
 <template>
   <div class="h-screen w-screen flex flex-col bg-black relative overflow-hidden">
     <!-- 顶部导航栏 -->

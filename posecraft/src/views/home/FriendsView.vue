@@ -1,3 +1,13 @@
+</longcat_think>
+<!--
+ * 朋友动态视图
+ *
+ * 展示用户好友发布的最新作品/模板瀑布流，
+ * 支持骨架占位、加载更多、空状态提示。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ -->
 <template>
   <div class="friends-page-container">
     <div class="content-container">

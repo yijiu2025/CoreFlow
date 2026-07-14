@@ -1,6 +1,14 @@
 /**
  * PoseCraft 分析记录模型
  * 存储 AI 分析历史
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} Analysis 模型
  */
 export default (sequelize, DataTypes) => {
   const Analysis = sequelize.define(
@@ -56,6 +64,10 @@ export default (sequelize, DataTypes) => {
     }
   );
 
+  /**
+   * 模型关联定义
+   * @param {object} models - 所有已注册模型的集合
+   */
   Analysis.associate = (models) => {
     Analysis.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
   };

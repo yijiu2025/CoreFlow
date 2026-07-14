@@ -1,5 +1,9 @@
 /**
  * PoseCraft AI 分析 API
+ * 负责分析结果保存、分析记录查询以及分析统计数据获取。
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import AnalysisDao from '../../../app/posecraft/dao/analysis.dao.js';

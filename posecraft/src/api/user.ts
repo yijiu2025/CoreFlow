@@ -3,6 +3,9 @@
  * - GET  /user/v1/profile   获取当前用户资料
  * - PUT  /user/v1/update    更新昵称/简介
  * - POST /user/v1/avatar    上传头像（multipart/form-data）
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import service from '@/utils/request'
 

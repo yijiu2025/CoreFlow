@@ -1,3 +1,12 @@
+<!--
+ * 关注动态视图
+ *
+ * 展示当前用户关注的用户发布的最新作品/模板瀑布流，
+ * 支持骨架占位、加载更多、空状态提示。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ -->
 <template>
   <div class="following-page-container">
     <div class="content-container">

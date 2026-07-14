@@ -1,4 +1,20 @@
-// src/services/authorization.service.js
+/**
+ * OAuth 2.1 授权服务
+ *
+ * 负责授权码流程的请求验证、用户认证、授权同意检查和授权码发放。
+ * 实现 OAuth 2.1 授权服务器中 /authorize 端点的核心逻辑。
+ *
+ * 验证流程：
+ * 1. 验证请求参数（response_type、client_id、redirect_uri）
+ * 2. 校验客户端身份和 redirect_uri 白名单
+ * 3. 强制 PKCE（OAuth 2.1 要求）
+ * 4. 用户登录认证
+ * 5. 检查用户授权同意
+ * 6. 发放一次性授权码
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import CodeDao from '../dao/code.dao.js';
 import UserDao from '../dao/user.dao.js';
 import ClientDao from '../dao/client.dao.js';
@@ -6,7 +22,15 @@ import ConsentDao from '../dao/consent.dao.js';
 import { generateAuthorizationCode } from '../crypto/tokens.js';
 import config from '../config/config.js';
 
+/**
+ * OAuth 授权错误（RFC 6749 标准错误格式）
+ */
 export class OAuthError extends Error {
+  /**
+   * @param {string} error - 错误码（如 invalid_request、unauthorized_client）
+   * @param {string} description - 错误描述
+   * @param {number} [statusCode=400] - HTTP 状态码
+   */
   constructor(error, description, statusCode = 400) {
     super(description);
     this.name = 'OAuthError';
@@ -15,10 +39,18 @@ export class OAuthError extends Error {
     this.statusCode = statusCode;
   }
 
+  /**
+   * 序列化为 URL 查询参数（用于重定向错误响应）
+   * @returns {string} URL 编码的错误参数字符串
+   */
   toRedirectParams() {
     return `error=${encodeURIComponent(this.error)}&error_description=${encodeURIComponent(this.description)}`;
   }
 
+  /**
+   * 序列化为 JSON 错误响应
+   * @returns {{error: string, error_description: string}}
+   */
   toJSON() {
     return { error: this.error, error_description: this.description };
   }

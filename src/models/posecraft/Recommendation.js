@@ -2,6 +2,14 @@
  * PoseCraft 推荐记录模型
  * 用户浏览别人作品/模板时，点击"推荐"让我的朋友也能看见
  * "我的→推荐"Tab 展示自己推荐过的内容 + 取消推荐
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} Recommendation 模型
  */
 export default (sequelize, DataTypes) => {
   const Recommendation = sequelize.define(
@@ -49,6 +57,10 @@ export default (sequelize, DataTypes) => {
     }
   );
 
+  /**
+   * 模型关联定义
+   * @param {object} models - 所有已注册模型的集合
+   */
   Recommendation.associate = (models) => {
     Recommendation.belongsTo(models.User, { foreignKey: 'user_id', as: 'recommender' });
     Recommendation.belongsTo(models.Work, { foreignKey: 'work_id', as: 'work' });

@@ -1,3 +1,16 @@
+<!--
+ * 精选频道视图
+ *
+ * 顶部 SearchHero（搜索框 + 分类 Tab 切换），下方内容区根据频道类型二选一：
+ *   - 动态网址频道：iframe 嵌入外部页面
+ *   - 普通频道（如 recommend）：推荐 Banner + 瀑布流卡片
+ *
+ * 支持骨架占位（首次加载）、空状态、加载更多、Banner 跳转。
+ * 通过 keep-alive 激活/隐藏生命周期管理 IntersectionObserver sentinel。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ -->
 <template>
   <div class="featured-page-container">
     <!-- 搜索与分类 Tab (Sticky Area) -->

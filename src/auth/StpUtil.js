@@ -1,6 +1,21 @@
-// src/auth/StpUtil.js
-// 权限认证核心工具类（对标 Java Sa-Token）
-// 依赖 AsyncLocalStorage 实现静态上下文穿透
+/**
+ * 权限认证核心工具类
+ *
+ * 对标 Java Sa-Token 设计，提供静态方法调用的认证与权限校验能力。
+ * 依赖 AsyncLocalStorage 实现请求级别的上下文穿透，无需手动传递 request 对象。
+ *
+ * 使用方式：
+ * ```js
+ * const uid = StpUtil.getLoginId();              // 获取当前用户 ID
+ * StpUtil.check();                                 // 强制登录检查（未登录抛 401）
+ * StpUtil.checkRole('admin');                      // 角色校验
+ * StpUtil.hasPermission('user:read');             // 权限判断
+ * StpUtil.checkPermission('user:write');          // 权限校验（不通过抛 403）
+ * ```
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { requestContext } from './index.js';
 import { createSession, detectDeviceType } from './session.js';
 

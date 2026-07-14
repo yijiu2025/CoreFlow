@@ -1,3 +1,10 @@
+/**
+ * IP 工具集
+ * 提供 IP 规范化、CIDR/通配符/IPV6 等多种规则的高性能匹配。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import net from 'net';
 
 /**

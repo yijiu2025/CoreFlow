@@ -8,6 +8,9 @@
  *
  * 前端 PoseCard 已有 base-image + skeleton-overlay 双层结构，
  * 作品卡片显示底图后，叠加模板的 thumbnail_url（骨架）即可看到完整效果。
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import sharp from 'sharp';
 import crypto from 'crypto';

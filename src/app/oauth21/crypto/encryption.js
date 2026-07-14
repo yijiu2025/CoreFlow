@@ -1,4 +1,12 @@
-// src/crypto/encryption.js
+/**
+ * RSA 加密/解密与时间戳验证工具
+ *
+ * 提供前端加密公钥获取、后端解密和防重放时间戳验证能力。
+ * 使用 RSA-OAEP (SHA-256) 算法，前端用公钥加密密码等敏感数据，后端用私钥解密。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import crypto from 'node:crypto';
 import { getPrivateKey, getPublicKey } from './keys.js';
 
@@ -7,6 +15,7 @@ const HASH = 'sha256';
 
 /**
  * 获取用于前端加密的公钥（PEM + JWK 格式）
+ * @returns {{pem: string, jwk: object, keyId: string, algorithm: string}} 公钥信息
  */
 export function getEncryptionPublicKey() {
   const publicKey = getPublicKey();

@@ -1,6 +1,9 @@
 /**
  * PoseCraft Banner 配置公开 API
  * 前台获取当前展示的 Banner（公开、无登录）
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import BannerConfigDao from '../../../app/posecraft/dao/bannerConfig.dao.js';

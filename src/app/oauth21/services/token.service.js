@@ -1,4 +1,18 @@
-// src/services/token.service.js
+/**
+ * OAuth 2.1 令牌服务
+ *
+ * 负责客户端身份验证和令牌发放/刷新/撤销。
+ * 支持授权码模式（含 PKCE）、客户端凭证模式和刷新令牌模式。
+ *
+ * 安全特性：
+ * - 客户端身份验证（HTTP Basic / POST body / 公共客户端）
+ * - PKCE 强制验证（OAuth 2.1 要求）
+ * - 刷新令牌轮换（每次刷新生成新 refresh_token，吊销旧的）
+ * - 授权码一次性消费（防重放攻击）
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import bcrypt from 'bcryptjs';
 import CodeDao from '../dao/code.dao.js';
 import TokenDao from '../dao/token.dao.js';
@@ -9,7 +23,15 @@ import { generateToken } from '../crypto/tokens.js';
 import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';
 import config from '../config/config.js';
 
+/**
+ * 令牌错误（RFC 6749 标准错误格式）
+ */
 export class TokenError extends Error {
+  /**
+   * @param {string} error - 错误码（如 invalid_grant、unauthorized_client）
+   * @param {string} description - 错误描述
+   * @param {number} [statusCode=400] - HTTP 状态码
+   */
   constructor(error, description, statusCode = 400) {
     super(description);
     this.name = 'TokenError';
@@ -18,6 +40,10 @@ export class TokenError extends Error {
     this.statusCode = statusCode;
   }
 
+  /**
+   * 序列化为 JSON 错误响应
+   * @returns {{error: string, error_description: string}}
+   */
   toJSON() {
     return { error: this.error, error_description: this.description };
   }

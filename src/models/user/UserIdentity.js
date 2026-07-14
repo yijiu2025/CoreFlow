@@ -1,3 +1,18 @@
+/**
+ * 用户安全凭证模型 (多源认证中心)
+ *
+ * 统一存储用户的多种认证凭证（密码、微信、GitHub、短信验证码等），
+ * 实现 N:1 关联到 User 模型的多源认证体系。
+ *
+ * 安全特性：
+ * - 密码使用 bcrypt 哈希存储，支持 failed_attempts 防爆破
+ * - 支持账号风控锁定（locked_until）
+ * - identity_type + identifier 唯一索引防止重复注册
+ * - delete_version 联合唯一索引解决软删除唯一性失效问题
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { registerDeleteVersionHooks } from '../../db/softDeleteHooks.js';
 
 /**

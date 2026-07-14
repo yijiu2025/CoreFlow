@@ -154,6 +154,8 @@ export async function kickSession(redis, sessionId, userId) {
 
 /**
  * 踢掉用户所有会话
+ * @param {object} redis Redis 客户端
+ * @param {number} userId 用户 ID
  */
 export async function kickAllSessions(redis, userId) {
   const { SessionToken, SessionLog } = sequelize.models;

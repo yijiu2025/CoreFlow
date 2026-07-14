@@ -1,3 +1,10 @@
+/**
+ * PoseCraft 频道配置 API
+ * 给前端提供频道分类列表（推荐、姿势、创意等），公开无需登录。
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 
 export default async function (fastify) {

@@ -1,16 +1,28 @@
 /**
  * PoseCraft 模板数据访问层
+ * 负责模板的 CRUD、权限过滤查询、以及与底图作品的双向同步
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import sequelize from '../../../db/index.js';
 import { generateSkeletonPreview, generateImageThumbnail } from '../utils/preview.js';
 
 class TemplateDao {
+  /**
+   * 获取 Template 模型
+   * @returns {Model} Template 模型
+   */
   getModel() {
     return sequelize.models.Template;
   }
 
   /**
    * 查询模板列表 (带权限过滤)
+   * @param {object} options - 查询参数（category/keyword/status/page/pageSize/limit/offset/userId）
+   * @param {object} [user] - 当前登录用户（{ userId }）
+   * @param {boolean} [isAdmin] - 是否为管理员
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async findAll(options = {}, user = null, isAdmin = false) {
     const model = this.getModel();
@@ -78,7 +90,9 @@ class TemplateDao {
   }
 
   /**
-   * 查询热门模板
+   * 查询热门模板（按使用数+点赞数加权随机排序）
+   * @param {number} [limit=10] - 返回条数
+   * @returns {Promise<Array<Template>>}
    */
   async findPopular(limit = 10) {
     const model = this.getModel();
@@ -94,6 +108,10 @@ class TemplateDao {
 
   /**
    * 按用户查询模板
+   * @param {number} userId - 用户 ID
+   * @param {object} [options] - 额外查询参数
+   * @param {boolean} [isAdmin] - 是否为管理员
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async findByUser(userId, options = {}, isAdmin = false) {
     return await this.findAll({ ...options, userId }, { userId }, isAdmin);
@@ -101,6 +119,8 @@ class TemplateDao {
 
   /**
    * 后台：查询审核列表
+   * @param {object} [options] - 查询参数（status/keyword/limit/offset/page）
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
   async findAuditList(options = {}) {
     const model = this.getModel();
@@ -140,6 +160,9 @@ class TemplateDao {
 
   /**
    * 后台：更新状态 (审核)
+   * @param {number} id - 模板 ID
+   * @param {number} status - 目标状态（1-公开 / -2-拒绝）
+   * @returns {Promise<boolean>} 是否更新成功
    */
   async updateStatus(id, status) {
     const model = this.getModel();
@@ -148,7 +171,9 @@ class TemplateDao {
   }
 
   /**
-   * 根据 ID 查询
+   * 根据 ID 查询（未软删）
+   * @param {number} id - 模板 ID
+   * @returns {Promise<Template|null>}
    */
   async findById(id) {
     const model = this.getModel();
@@ -159,6 +184,8 @@ class TemplateDao {
 
   /**
    * 创建模板
+   * @param {object} data - 模板数据
+   * @returns {Promise<Template>}
    */
   async create(data) {
     const model = this.getModel();
@@ -167,6 +194,9 @@ class TemplateDao {
 
   /**
    * 更新模板
+   * @param {number} id - 模板 ID
+   * @param {object} data - 更新字段
+   * @returns {Promise<Template|null>}
    */
   async update(id, data) {
     const model = this.getModel();
@@ -176,7 +206,10 @@ class TemplateDao {
   }
 
   /**
-   * 删除模板（软删除）
+   * 删除模板（软删除），只有创建者可删除
+   * @param {number} id - 模板 ID
+   * @param {number} userId - 当前用户 ID
+   * @returns {Promise<boolean>}
    */
   async delete(id, userId) {
     const model = this.getModel();
@@ -188,6 +221,8 @@ class TemplateDao {
 
   /**
    * 增加使用次数
+   * @param {number} id - 模板 ID
+   * @returns {Promise<void>}
    */
   async incrementUses(id) {
     const model = this.getModel();
@@ -196,6 +231,8 @@ class TemplateDao {
 
   /**
    * 增加点赞数
+   * @param {number} id - 模板 ID
+   * @returns {Promise<void>}
    */
   async incrementLikes(id) {
     const model = this.getModel();
@@ -313,7 +350,9 @@ class TemplateDao {
   }
 
   /**
-   * 同步删除模板对应的作品记录
+   * 同步删除模板对应的作品记录（级联软删除）
+   * @param {number} templateId - 模板 ID
+   * @returns {Promise<void>}
    */
   async syncDeleteWork(templateId) {
     const Work = sequelize.models.Work;

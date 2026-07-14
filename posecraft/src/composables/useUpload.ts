@@ -1,5 +1,10 @@
 /**
  * 文件上传组合式函数
+ *
+ * 提供文件上传、Base64 上传、Canvas 截图上传、文件验证、图片压缩等功能
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import { ref } from 'vue'
 import { uploadFile as apiUploadFile, uploadBase64 as apiUploadBase64 } from '@/api/upload'
@@ -10,6 +15,11 @@ export interface UploadResult {
   size: number
 }
 
+/**
+ * 文件上传组合式函数
+ * 管理上传状态（进度、错误）并提供多种上传方式
+ * @returns 上传相关状态和方法
+ */
 export function useUpload() {
   const uploading = ref(false)
   const progress = ref(0)
@@ -17,6 +27,9 @@ export function useUpload() {
 
   /**
    * 上传文件
+   * @param file - 要上传的文件
+   * @param path - 存储路径（默认 posecraft）
+   * @returns 上传结果（url/filename/size）或失败时返回 null
    */
   async function uploadFile(file: File, path = 'posecraft'): Promise<UploadResult | null> {
     uploading.value = true
@@ -44,6 +57,9 @@ export function useUpload() {
 
   /**
    * 上传 Base64 图片
+   * @param base64 - Base64 编码的图片数据
+   * @param filename - 文件名
+   * @returns 上传结果或失败时返回 null
    */
   async function uploadBase64(base64: string, filename: string): Promise<UploadResult | null> {
     uploading.value = true
@@ -71,6 +87,9 @@ export function useUpload() {
 
   /**
    * 上传 Canvas 截图
+   * @param canvas - 画布元素
+   * @param filename - 可选文件名（默认自动生成）
+   * @returns 上传结果或失败时返回 null
    */
   async function uploadCanvas(canvas: HTMLCanvasElement, filename?: string): Promise<UploadResult | null> {
     const dataUrl = canvas.toDataURL('image/png')
@@ -79,7 +98,10 @@ export function useUpload() {
   }
 
   /**
-   * 验证文件
+   * 验证文件大小和类型
+   * @param file - 要验证的文件
+   * @param options - 验证选项（maxSize/allowedTypes）
+   * @returns 是否通过验证
    */
   function validateFile(file: File, options?: {
     maxSize?: number
@@ -102,7 +124,11 @@ export function useUpload() {
   }
 
   /**
-   * 压缩图片
+   * 压缩图片（等比缩放至最大宽度）
+   * @param file - 原始图片文件
+   * @param maxWidth - 最大宽度（默认 1920px）
+   * @param quality - 压缩质量 0-1（默认 0.8）
+   * @returns 压缩后的 File 对象
    */
   function compressImage(file: File, maxWidth = 1920, quality = 0.8): Promise<File> {
     return new Promise((resolve, reject) => {

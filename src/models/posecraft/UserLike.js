@@ -1,5 +1,13 @@
 /**
  * PoseCraft 用户点赞模型
+ *
+ * @author Claude
+ * @since 2026-07-13
+ */
+/**
+ * @param {object} sequelize - Sequelize 实例
+ * @param {object} DataTypes - Sequelize 数据类型
+ * @returns {Model} UserLike 模型
  */
 export default (sequelize, DataTypes) => {
   const UserLike = sequelize.define(
@@ -54,6 +62,10 @@ export default (sequelize, DataTypes) => {
     }
   );
 
+  /**
+   * 模型关联定义
+   * @param {object} models - 所有已注册模型的集合
+   */
   UserLike.associate = (models) => {
     UserLike.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
     UserLike.belongsTo(models.Work, { foreignKey: 'work_id', as: 'work' });

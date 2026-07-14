@@ -1,5 +1,8 @@
 /**
  * 频道配置 API
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 import service from '@/utils/request'
 

@@ -1,5 +1,12 @@
 /**
  * PoseCraft 类型定义
+ *
+ * 包含核心业务实体：Template（模板）、Work（作品）、Analysis（分析记录）、
+ * User（用户）、PoseKeypoint（姿势关键点）、PoseAnalysisResult（AI 分析结果），
+ * 以及统一 API 响应（ApiResult / ApiPageResult）和分页元数据（Pagination / PageResult）。
+ *
+ * @author Claude
+ * @since 2026-07-13
  */
 
 /** 模板 */
