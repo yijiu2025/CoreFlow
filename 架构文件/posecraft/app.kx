@@ -1,0 +1,213 @@
+# PoseCraft 全局架构
+
+@page / (PoseCraft 主页) {
+  @slot top (role: header) {
+    @component header TopNav {
+      @component button 会员功能
+      @component button 通知
+      @component button 私信
+      @component button 投稿 @navigate click -> /editor
+      @component avatar 头像 @navigate click -> /mine
+    }
+  }
+
+  @slot left (role: aside) {
+    @component logo Logo
+    @component menu Sidebar {
+      @component item 精选 @navigate click -> /featured
+      @component item 推荐 @navigate click -> /recommend
+      @component item 附近 @navigate click -> /nearby
+      @component item 关注 @navigate click -> /following
+      @component item 朋友 @navigate click -> /friends
+      @component item 我的 @navigate click -> /mine
+    }
+  }
+
+  @slot main (role: main) {
+    @component tab ChannelTabs {
+      @api GET /posecraft/v1/config/channels -> channels
+    }
+    @component banner HomeBanner {
+      @api GET /posecraft/v1/banner-configs/active -> banners
+      @render when: activeChannel === 'recommend' && banners.length > 0
+    }
+    @component list Waterfall {
+      @api GET /posecraft/v1/works (query: page, pageSize, keyword) -> works
+      @component skeleton SkeletonCard (count: 8) @render when: loading
+      @component empty EmptyState @render unless: works.length
+      @component card PoseCard (v-for: item in works) {
+        @prop item: Work
+        @component avatar 作者 (bind: item.author)
+        @component badge 模板 @render when: item.is_template_work
+        @component action 点赞 {
+          @api POST /posecraft/v1/works/:id/like
+          @mutation works[item].liked @sync = works[item].likes_count
+          @login
+        }
+      }
+    }
+    @component button 加载更多 {
+      @api GET /posecraft/v1/works (page: nextPage) -> works(append)
+      @render when: hasMore
+    }
+  }
+}
+
+@page /featured (精选) {
+  # 继承主页结构，仅主内容区展示精选数据
+  @slot main {
+    @component list Waterfall {
+      @api GET /posecraft/v1/works (category: featured) -> works
+      @component card PoseCard (v-for)
+    }
+  }
+}
+
+@page /recommend (推荐) {
+  @slot main {
+    @component list Waterfall {
+      @api GET /posecraft/v1/works/recommended -> works
+      @component card PoseCard (v-for)
+    }
+  }
+}
+
+@page /nearby (附近) {
+  @slot main {
+    @component list Waterfall {
+      @api GET /posecraft/v1/works (sort: nearby) -> works
+      @component card PoseCard (v-for) {
+        @component badge 距离 (bind: item.distance)
+      }
+    }
+  }
+}
+
+@page /following (关注) {
+  @slot main {
+    @component list Waterfall {
+      @api GET /posecraft/v1/works/following -> works
+      @component card PoseCard (v-for)
+    }
+  }
+}
+
+@page /friends (朋友) {
+  @slot main {
+    @component list Waterfall {
+      @api GET /posecraft/v1/works (sort: friends) -> works
+      @component card PoseCard (v-for)
+    }
+  }
+}
+
+@page /mine (我的) {
+  @slot main {
+    @component header ProfileHeader {
+      @api GET /user/v1/profile -> userProfile
+      @component avatar 头像 (bind: userProfile.avatar)
+      @component stat 关注 (bind: followingCount)
+      @component stat 粉丝 (bind: followersCount)
+      @component stat 互关 (bind: mutualCount)
+      @component stat 获赞 (bind: likesCount)
+    }
+    @component tab SubTabs {
+      @component item 作品 @sync = myWorks.length
+      @component item 模板 @sync = myTemplates.length
+      @component item 推荐
+      @component item 喜欢
+      @component item 收藏
+      @component item 观看历史
+      @component item 稍后再看
+    }
+    @component list Content {
+      @render when: activeTab === 'works'
+      @api GET /posecraft/v1/works/mine -> myWorks
+      @component card PoseCard (v-for: item in myWorks)
+      @component action 删除 {
+        @api DELETE /works/:id
+        @mutation myWorks DELETE id
+      }
+    }
+    @component list Content {
+      @render when: activeTab === 'templates'
+      @api GET /posecraft/v1/templates/mine -> myTemplates
+      @component card PoseCard (v-for: item in myTemplates)
+      @component action 删除 {
+        @api DELETE /templates/:id
+        @mutation myTemplates DELETE id
+      }
+    }
+  }
+}
+
+@page /work/:id (作品详情) {
+  @slot main {
+    @component detail WorkDetail {
+      @api GET /posecraft/v1/works/:id -> work
+      @component media 图片 (bind: work.image_url)
+      @component skeleton SkeletonCard @render when: loading
+      @component author 作者区 {
+        @component avatar 头像 (bind: work.author)
+        @component button 关注 {
+          @api POST /posecraft/v1/follow/:userId
+          @permission loggedIn
+        }
+      }
+      @component action 点赞 {
+        @api POST /posecraft/v1/works/:id/like
+        @mutation work.liked @sync = work.likes_count
+        @permission loggedIn
+      }
+      @component action 收藏 {
+        @api POST /posecraft/v1/interaction/collect
+        @mutation work.collected
+        @permission loggedIn
+      }
+      @component action 推荐 {
+        @api POST /posecraft/v1/works/:id/recommend
+        @permission loggedIn
+      }
+    }
+  }
+}
+
+@page /editor (编辑器) {
+  @slot main {
+    @component editor EditorCanvas {
+      @component toolbar LeftToolbar
+      @component canvas CanvasArea
+      @component panel RightPanel
+      @component button 保存 {
+        @api POST /posecraft/v1/templates
+        @permission posecraft:work:create
+        @navigate success -> /
+      }
+    }
+  }
+}
+
+@page /camera (拍照) {
+  @slot main {
+    @component camera CameraView {
+      @component button 拍照 {
+        @api POST /posecraft/v1/upload (formData: image)
+        @api POST /posecraft/v1/works (body: { image_url, template_id })
+        @navigate success -> /work/:id
+      }
+    }
+  }
+}
+
+# ==================== 文档说明 ====================
+# @page        - 定义页面路由
+# @slot        - 页面区域（header/aside/main）
+# @component   - 组件声明（类型 + 名称）
+# @prop        - 组件属性
+# @api         - 接口请求（方法 + 路径 -> 写入的状态）
+# @mutation    - 本地状态变更（数组增删改）
+# @sync        - 同步表达式（Tab 数字等）
+# @navigate    - 路由跳转
+# @permission  - 权限校验
+# @render      - 条件渲染
+# @login       - 需要登录（快捷方式）
