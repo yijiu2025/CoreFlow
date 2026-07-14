@@ -85,21 +85,18 @@
           :class="['tab-btn', { active: activeTab === 'recommend' }]"
         >
           <span>推荐</span>
-          <span v-if="authStore.myRecommendations.length > 0">{{ authStore.myRecommendations.length }}</span>
         </button>
         <button
           @click="changeTab('likes')"
           :class="['tab-btn', { active: activeTab === 'likes' }]"
         >
           <span>喜欢</span>
-          <span v-if="authStore.myLikes.length > 0">{{ authStore.myLikes.length }}</span>
         </button>
         <button
           @click="changeTab('collect')"
           :class="['tab-btn', { active: activeTab === 'collect' }]"
         >
           <span>收藏</span>
-          <span v-if="authStore.myCollects.length > 0">{{ authStore.myCollects.length }}</span>
         </button>
         <button 
           @click="changeTab('history')" 
