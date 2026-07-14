@@ -71,35 +71,35 @@
           :class="['tab-btn', { active: activeTab === 'works' }]"
         >
           <span>作品</span>
-          <span>{{ realWorksCount }}</span>
+          <span v-if="realWorksCount > 0">{{ realWorksCount }}</span>
         </button>
         <button
           @click="changeTab('templates')"
           :class="['tab-btn', { active: activeTab === 'templates' }]"
         >
           <span>模板</span>
-          <span>{{ templatesCount }}</span>
+          <span v-if="authStore.myTemplates.length > 0">{{ authStore.myTemplates.length }}</span>
         </button>
         <button
           @click="changeTab('recommend')"
           :class="['tab-btn', { active: activeTab === 'recommend' }]"
         >
           <span>推荐</span>
-          <span>{{ recommendationsCount }}</span>
+          <span v-if="authStore.myRecommendations.length > 0">{{ authStore.myRecommendations.length }}</span>
         </button>
-        <button 
-          @click="changeTab('likes')" 
+        <button
+          @click="changeTab('likes')"
           :class="['tab-btn', { active: activeTab === 'likes' }]"
         >
           <span>喜欢</span>
-          <span class="tab-lock">🔒</span>
+          <span v-if="authStore.myLikes.length > 0">{{ authStore.myLikes.length }}</span>
         </button>
         <button
           @click="changeTab('collect')"
           :class="['tab-btn', { active: activeTab === 'collect' }]"
         >
           <span>收藏</span>
-          <span>{{ collectsCount }}</span>
+          <span v-if="authStore.myCollects.length > 0">{{ authStore.myCollects.length }}</span>
         </button>
         <button 
           @click="changeTab('history')" 
@@ -398,9 +398,6 @@ const {
   worksCount,
   likesCount,
   mutualCount,
-  templatesCount,
-  recommendationsCount,
-  collectsCount,
   fetchUserProfile,
   updateUserProfile,
   activeNav,
