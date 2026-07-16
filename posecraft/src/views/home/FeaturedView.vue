@@ -18,13 +18,26 @@
       ref="searchHeroRef"
       v-model:searchQuery="searchQuery"
       v-model:searchFocused="searchFocused"
-      v-model:activeChannel="activeChannel"
       :search-suggestions="searchSuggestions"
-      :channels="channels"
       :show-nav-search="showNavSearch"
       @blur="onSearchBlur"
       @handleStartCreate="handleStartCreate"
     />
+
+    <!-- 分类 Tab -->
+    <div class="channel-container">
+      <div class="channel-inner">
+        <button
+          v-for="ch in channels"
+          :key="ch.value"
+          @click="activeChannel = ch.value"
+          :class="['channel-tag', { active: activeChannel === ch.value }]"
+        >
+          <span v-if="ch.icon" class="channel-icon">{{ ch.icon }}</span>
+          {{ ch.label }}
+        </button>
+      </div>
+    </div>
 
     <!-- 内容区域 -->
     <div class="content-container">
@@ -162,6 +175,63 @@ watch(
 </script>
 
 <style scoped>
+/* 分类 Tab */
+.channel-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 12px 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.channel-container::-webkit-scrollbar { display: none; }
+
+.channel-inner {
+  display: flex;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.channel-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 10px 20px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+.channel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.dark-mode .channel-tag { color: #a1a1aa; }
+.channel-tag:hover { color: #ff2442; }
+.dark-mode .channel-tag:hover { color: #ff6b6b; }
+.channel-tag.active { color: #1e293b; }
+.dark-mode .channel-tag.active { color: #f4f4f5; }
+.channel-tag.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 3px;
+  background: #ff2442;
+  border-radius: 99px 99px 0 0;
+}
+.dark-mode .channel-tag.active::after { background: #ff6b6b; }
+
 .featured-page-container {
   width: 100%;
   display: flex;
