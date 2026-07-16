@@ -58,8 +58,16 @@ export function useTemplateSave(
     name: string
     description: string
     category: string
+    publication_address?: string | null
+    publication_lat?: number | null
+    publication_lng?: number | null
+    publication_source?: string | null
     locationName: string
     coords: { lat: number; lng: number } | null
+    work_address?: string | null
+    work_lat?: number | null
+    work_lng?: number | null
+    work_address_source?: string | null
     ip: string
     tags: string[]
     exifInfo?: any
@@ -138,7 +146,16 @@ export function useTemplateSave(
           coords: formData.coords,
           exifInfo: formData.exifInfo || null
         },
-        tags: formData.tags
+        tags: formData.tags,
+        // 地址字段
+        publication_address: formData.publication_address || null,
+        publication_lat: formData.publication_lat || null,
+        publication_lng: formData.publication_lng || null,
+        publication_source: formData.publication_source || null,
+        work_address: formData.work_address || null,
+        work_lat: formData.work_lat || null,
+        work_lng: formData.work_lng || null,
+        work_address_source: formData.work_address_source || null
       }
       
       const id = route.query.id ? Number(route.query.id) : null

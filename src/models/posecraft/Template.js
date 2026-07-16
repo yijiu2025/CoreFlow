@@ -80,6 +80,48 @@ export default (sequelize, DataTypes) => {
         field: 'work_id',
         comment: '该模板对应的底图作品 ID（一对一绑定）'
       },
+      // ── 发布地址（自动采集，不可修改）──
+      publication_address: {
+        type: DataTypes.STRING(500),
+        field: 'publication_address',
+        comment: '发布地址文本（GPS/IP 自动获取）'
+      },
+      publication_lat: {
+        type: DataTypes.DECIMAL(10, 7),
+        field: 'publication_lat',
+        comment: '发布地址纬度'
+      },
+      publication_lng: {
+        type: DataTypes.DECIMAL(10, 7),
+        field: 'publication_lng',
+        comment: '发布地址经度'
+      },
+      publication_source: {
+        type: DataTypes.ENUM('gps', 'ip'),
+        field: 'publication_source',
+        comment: '发布地址来源：gps=GPS定位 ip=IP定位'
+      },
+      // ── 作品地址（EXIF GPS 或 用户手动选择）──
+      work_address: {
+        type: DataTypes.STRING(500),
+        field: 'work_address',
+        comment: '作品地址文本（EXIF GPS 或手动选择）'
+      },
+      work_lat: {
+        type: DataTypes.DECIMAL(10, 7),
+        field: 'work_lat',
+        comment: '作品地址纬度'
+      },
+      work_lng: {
+        type: DataTypes.DECIMAL(10, 7),
+        field: 'work_lng',
+        comment: '作品地址经度'
+      },
+      work_address_source: {
+        type: DataTypes.ENUM('exif', 'manual'),
+        field: 'work_address_source',
+        comment: '作品地址来源：exif=照片GPS manual=用户选择'
+      },
       delete_version: {
         type: DataTypes.BIGINT,
         allowNull: false,

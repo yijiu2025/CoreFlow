@@ -1,4 +1,4 @@
-</longcat_think>
+
 <!--
  * 朋友动态视图
  *
@@ -25,7 +25,8 @@
             :key="item._key ?? item.id"
             :item="item"
             @click="openDetail"
-            @like="likeItem"
+            @like="handleLike"
+            @collect="handleCollect"
           />
         </div>
         <div class="load-more-container" v-if="hasMore">
@@ -60,7 +61,8 @@ const {
   loading,
   loadMore,
   openDetail,
-  likeItem
+  handleLike,
+  handleCollect
 } = useHome()
 
 // 切换当前导航状态

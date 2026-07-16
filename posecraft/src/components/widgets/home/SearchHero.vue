@@ -58,6 +58,7 @@
           @click="activeChannel = ch.value"
           :class="['channel-tag', { active: activeChannel === ch.value }]"
         >
+          <span v-if="ch.icon" class="channel-icon">{{ ch.icon }}</span>
           {{ ch.label }}
         </button>
       </div>
@@ -407,6 +408,9 @@ defineExpose({
 }
 
 .channel-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
   border: none;
   padding: 10px 20px;
@@ -417,6 +421,15 @@ defineExpose({
   position: relative;
   transition: color 0.2s;
   white-space: nowrap;
+}
+
+.channel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .dark-mode .channel-tag {

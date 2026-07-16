@@ -35,8 +35,8 @@
 
       <!-- 瀑布流 -->
       <div v-else>
-        <!-- 推荐大图 Banner（从后端 BannerConfig 动态渲染） -->
-        <template v-if="activeChannel === 'recommend' && !searchQuery.trim() && activeBanners.length > 0">
+        <!-- 频道 Banner（仅 has_banner=true 的频道展示，从后端动态渲染） -->
+        <template v-if="currentChannelShowBanner && !searchQuery.trim() && activeBanners.length > 0">
           <div
             v-for="banner in activeBanners"
             :key="banner.id"
@@ -115,7 +115,9 @@ const {
   channels,
   showNavSearch,
   filteredItems,
+  currentChannel,
   currentChannelUrl,
+  currentChannelShowBanner,
   hasMore,
   loading,
   loadMore,

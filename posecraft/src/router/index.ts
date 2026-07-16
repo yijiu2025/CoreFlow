@@ -43,7 +43,7 @@ const router = createRouter({
           path: 'friends',
           name: 'home-friends',
           component: () => import('@/views/home/FriendsView.vue'),
-          meta: { title: '朋友动态' }
+          meta: { title: '朋友动态', requiresAuth: true }
         },
         {
           path: 'mine',

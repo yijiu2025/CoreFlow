@@ -25,6 +25,12 @@ const router = createRouter({
           name: 'BannerManage',
           component: () => import('../views/BannerManage.vue'),
           meta: { title: 'Banner 管理' }
+        },
+        {
+          path: 'channels',
+          name: 'ChannelManage',
+          component: () => import('../views/ChannelManage.vue'),
+          meta: { title: '频道管理' }
         }
       ]
     }
