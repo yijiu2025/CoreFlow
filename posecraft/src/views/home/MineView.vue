@@ -1,4 +1,4 @@
-</longcat_think>
+
 <!--
  * 我的主页（个人中心）
  *
@@ -247,7 +247,8 @@
 
             <PoseCard
               :item="item"
-              @like="likeItem"
+              @like="handleLike"
+              @collect="handleCollect"
             />
           </div>
         </div>
@@ -398,7 +399,8 @@ const authStore = useAuthStore()
 
 const {
   openDetail,
-  likeItem,
+  handleLike,
+  handleCollect,
   showToast,
   userProfile,
   followingCount,

@@ -9,6 +9,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import templateDao from '../../../app/posecraft/dao/template.dao.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
 import bannerConfigDao from '../../../app/posecraft/dao/bannerConfig.dao.js';
+import channelDao from '../../../app/posecraft/dao/channel.dao.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -193,6 +194,101 @@ export default async function (fastify) {
       const success = await bannerConfigDao.delete(id);
       if (!success) {
         return reply.result.fail('Banner 不存在或已删除', null, 404);
+      }
+      return reply.result.success('删除成功');
+    }
+  });
+
+  // 9. 频道管理 —— 分页列表
+  registerSecureRoute(fastify, {
+    name: 'adminListChannels',
+    alias: '获取频道列表',
+    method: 'GET',
+    url: '/channels',
+    requireLogin: true,
+    permission: 'posecraft:channel:manage',
+    handler: async (request, reply) => {
+      const page = parseInt(request.query.page) || 1;
+      const pageSize = parseInt(request.query.pageSize) || 20;
+      const offset = (page - 1) * pageSize;
+      const result = await channelDao.findAll({ limit: pageSize, offset });
+      return reply.result.paginated(result.list, result.total, page, pageSize);
+    }
+  });
+
+  // 10. 频道管理 —— 新建
+  registerSecureRoute(fastify, {
+    name: 'adminCreateChannel',
+    alias: '新建频道',
+    method: 'POST',
+    url: '/channels',
+    requireLogin: true,
+    permission: 'posecraft:channel:manage',
+    handler: async (request, reply) => {
+      const {
+        value, label, icon, type, url, route, category,
+        has_banner, sort_order, enabled, start_at, end_at
+      } = request.body;
+
+      if (!value || !label) {
+        return reply.result.fail('value 和 label 不能为空', null, 400);
+      }
+
+      // 检查 value 唯一性
+      const existing = await channelDao.findByValue(value);
+      if (existing) {
+        return reply.result.fail('频道标识已存在', null, 409);
+      }
+
+      const item = await channelDao.create({
+        value,
+        label,
+        icon: icon || null,
+        type: type || 'content',
+        url: url || null,
+        route: route || null,
+        category: category || null,
+        has_banner: !!has_banner,
+        sort_order: sort_order !== undefined ? Number(sort_order) : 0,
+        enabled: enabled !== undefined ? !!enabled : true,
+        start_at: start_at || null,
+        end_at: end_at || null
+      });
+      return reply.result.success('创建成功', item);
+    }
+  });
+
+  // 11. 频道管理 —— 更新
+  registerSecureRoute(fastify, {
+    name: 'adminUpdateChannel',
+    alias: '更新频道',
+    method: 'PUT',
+    url: '/channels/:id',
+    requireLogin: true,
+    permission: 'posecraft:channel:manage',
+    handler: async (request, reply) => {
+      const id = Number(request.params.id);
+      const updated = await channelDao.update(id, request.body);
+      if (!updated) {
+        return reply.result.fail('频道不存在或已删除', null, 404);
+      }
+      return reply.result.success('更新成功', updated);
+    }
+  });
+
+  // 12. 频道管理 —— 删除（软删除）
+  registerSecureRoute(fastify, {
+    name: 'adminDeleteChannel',
+    alias: '删除频道',
+    method: 'DELETE',
+    url: '/channels/:id',
+    requireLogin: true,
+    permission: 'posecraft:channel:manage',
+    handler: async (request, reply) => {
+      const id = Number(request.params.id);
+      const success = await channelDao.delete(id);
+      if (!success) {
+        return reply.result.fail('频道不存在或已删除', null, 404);
       }
       return reply.result.success('删除成功');
     }

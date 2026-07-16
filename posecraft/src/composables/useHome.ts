@@ -130,20 +130,26 @@ export function useHome() {
     '画图生成图纸', '画图制作文字', '人体骨骼姿势提取', 'WebGL 3D人体建模'
   ]
 
-  const channels = ref([
-    { value: 'recommend', label: '推荐' },
-    { value: 'pose', label: '姿势' },
-    { value: 'creative', label: '创意' },
-    { value: 'scenery', label: '风景', url: 'https://cn.bing.com/images/search?q=%E9%A3%8E%E6%99%AF' },
-    { value: 'sports', label: '运动' },
-    { value: 'composition', label: '构图' },
-    { value: 'technique', label: '技巧' }
-  ])
+  // 频道配置（从后端 /config/channels 拉取，含 value/label/icon/type/url/route/category/has_banner）
+  const channels = ref<any[]>([])
 
-  /** 当前频道外链 URL（如风景频道跳转 Bing） */
-  const currentChannelUrl = computed(() => {
-    const channel = channels.value.find(c => c.value === activeChannel.value)
-    return channel?.url || ''
+  /** 当前激活的频道对象 */
+  const currentChannel = computed(() => {
+    return channels.value.find(c => c.value === activeChannel.value) || null
+  })
+
+  /** 当前频道外链 URL（iframe / external 类型） */
+  const currentChannelUrl = computed(() => currentChannel.value?.url || '')
+
+  /** 当前频道是否展示 Banner */
+  const currentChannelShowBanner = computed(() => {
+    return currentChannel.value?.has_banner === true && activeChannel.value === 'recommend'
+  })
+
+  /** 当前频道的分类筛选值（直接读 channel.category，替代旧的 if/else 映射） */
+  const currentCategoryFilter = computed(() => {
+    if (!currentChannel.value) return 'all'
+    return currentChannel.value.category || 'all'
   })
 
   /** 根据当前导航项获取页面标题 */
@@ -181,16 +187,9 @@ export function useHome() {
     if (activeNav.value === 'featured') {
       list = apiItems
 
-      // 根据 channel 进行分类筛选
-      let categoryMapVal = 'all'
-      if (activeChannel.value === 'pose') categoryMapVal = 'pose'
-      else if (activeChannel.value === 'creative') categoryMapVal = 'creative'
-      else if (activeChannel.value === 'sports') categoryMapVal = 'sports'
-      else if (activeChannel.value === 'composition') categoryMapVal = 'composition'
-      else if (activeChannel.value === 'technique') categoryMapVal = 'technique'
-
-      if (categoryMapVal !== 'all') {
-        list = list.filter(item => item.category === categoryMapVal)
+      // 根据频道配置的 category 字段进行筛选（替代旧的硬编码 if/else）
+      if (currentCategoryFilter.value !== 'all') {
+        list = list.filter(item => item.category === currentCategoryFilter.value)
       }
     } else if (activeNav.value === 'recommend') {
       list = apiItems
@@ -246,45 +245,65 @@ export function useHome() {
    * 注意：必须改 works.value 源数据，filteredItems 是 computed 副本无法触发响应式
    * @param {object} item - 作品对象
    */
+  /**
+   * 在多个数据源中查找同一个作品（首页 / 我的作品 / 模板 / 点赞 / 收藏列表）
+   */
+  const findInAllSources = (id: number | string) => {
+    const sources = [works.value, authStore.myWorks, authStore.myTemplates, authStore.myLikes, authStore.myCollects]
+    for (const src of sources) {
+      const found = src.find((w: any) => w.id === id)
+      if (found) return found
+    }
+    return null
+  }
+
+  /** 获取所有数据源的扁平列表 */
+  const getAllItemRefs = () => [
+    ...works.value,
+    ...authStore.myWorks,
+    ...authStore.myTemplates,
+    ...authStore.myLikes,
+    ...authStore.myCollects
+  ]
+
   const handleLike = async (item: any) => {
     if (!authStore.isLoggedIn) return router.push('/login')
-    // 找到源数据（响应式）
-    const original = works.value.find((w: any) => w.id === item.id)
+    const original = findInAllSources(item.id)
     if (!original) return
     const newLiked = !original.liked
-    // 乐观更新源数据
-    original.liked = newLiked
-    original.likes_count = (original.likes_count || 0) + (newLiked ? 1 : -1)
+    // 乐观更新所有数据源中该作品
+    getAllItemRefs().filter((w: any) => w.id === item.id).forEach((w: any) => {
+      w.liked = newLiked
+      w.likes_count = (w.likes_count || 0) + (newLiked ? 1 : -1)
+    })
     try {
       const { interactionApi } = await import('@/api/interaction')
       await interactionApi.toggleLike({ workId: item.id, like: newLiked })
     } catch (err) {
-      // 失败回滚源数据
-      original.liked = !newLiked
-      original.likes_count = (original.likes_count || 0) + (newLiked ? -1 : 1)
+      getAllItemRefs().filter((w: any) => w.id === item.id).forEach((w: any) => {
+        w.liked = !newLiked
+        w.likes_count = (w.likes_count || 0) + (newLiked ? -1 : 1)
+      })
       showToast('操作失败，请重试')
     }
   }
 
-  /**
-   * 收藏/取消收藏（调后端 API + 乐观更新）
-   * 注意：必须改 works.value 源数据，filteredItems 是 computed 副本无法触发响应式
-   * @param {object} item - 作品对象
-   */
   const handleCollect = async (item: any) => {
     if (!authStore.isLoggedIn) return router.push('/login')
-    // 找到源数据（响应式）
-    const original = works.value.find((w: any) => w.id === item.id)
+    const original = findInAllSources(item.id)
     if (!original) return
     const newCollected = !original.collected
-    // 乐观更新源数据
-    original.collected = newCollected
+    // 乐观更新所有数据源中该作品
+    getAllItemRefs().filter((w: any) => w.id === item.id).forEach((w: any) => {
+      w.collected = newCollected
+    })
     try {
       const { interactionApi } = await import('@/api/interaction')
       await interactionApi.toggleCollect({ workId: item.id, collect: newCollected })
     } catch (err) {
-      // 失败回滚源数据
-      original.collected = !newCollected
+      getAllItemRefs().filter((w: any) => w.id === item.id).forEach((w: any) => {
+        w.collected = !newCollected
+      })
       showToast('操作失败，请重试')
     }
   }
@@ -331,8 +350,8 @@ export function useHome() {
       // 后端从 session 获取 currentUserId，无需前端传递
       const workQueryOptions = { page, pageSize: 12 }
 
-      // ★ recommend 频道：Banner 与作品并行加载（提升首屏速度）
-      if (activeChannel.value === 'recommend') {
+      // ★ has_banner=true 的频道：Banner 与作品并行加载（提升首屏速度）
+      if (currentChannel.value?.has_banner) {
         const [workResult, bannerResult] = await Promise.allSettled([
           (async () => {
             if (activeNav.value === 'following' && authStore.isLoggedIn) {
@@ -387,6 +406,10 @@ export function useHome() {
     }
   }
 
+  /**
+   * 批量获取当前用户对一组作品的点赞/收藏状态
+   * 后端 checkStatus 当前仅支持单个查询，此处循环调用并合并结果到 works 源数据
+   */
   /** 刷新首页数据（重置分页重新加载） */
   const refreshData = () => {
     currentPage.value = 1
@@ -432,17 +455,29 @@ export function useHome() {
    * 加载完毕后触发首次数据请求 → 整个生命周期只自动加载这一次
    * 切换菜单不刷新，只有 pull-to-refresh / loadMore 才重新请求
    */
+  // 兜底频道（API 全失败时使用，保证基本可用）
+  const FALLBACK_CHANNELS = [
+    { value: 'recommend', label: '推荐', icon: '🔥', type: 'content', has_banner: true },
+    { value: 'pose', label: '姿势', icon: '👤', type: 'content', category: 'pose' },
+    { value: 'creative', label: '创意', icon: '💡', type: 'content', category: 'creative' },
+    { value: 'scenery', label: '风景', icon: '📷', type: 'iframe', url: 'https://cn.bing.com/images/search?q=%E9%A3%8E%E6%99%AF' },
+    { value: 'sports', label: '运动', icon: '🏆', type: 'content', category: 'sports' },
+    { value: 'composition', label: '构图', icon: '📐', type: 'content', category: 'composition' },
+    { value: 'technique', label: '技巧', icon: '🔧', type: 'content', category: 'technique' }
+  ]
+
   const loadChannels = async () => {
     try {
       const res = await channelApi.getList()
       if (Array.isArray(res) && res.length > 0) {
         channels.value = res
+      } else {
+        channels.value = FALLBACK_CHANNELS
       }
     } catch (err) {
-      console.warn('获取动态频道配置失败，使用默认配置')
+      console.warn('获取动态频道配置失败，使用默认配置', err)
+      channels.value = FALLBACK_CHANNELS
     } finally {
-      // 频道加载完毕 → 首页首次自动加载 banner + works（仅这一次）
-      // 切换菜单不再刷新，只有 pull-to-refresh / loadMore 才重新请求
       refreshData()
     }
   }
@@ -527,7 +562,10 @@ export function useHome() {
     toastMsg,
     showToast,
     channels,
+    currentChannel,
     currentChannelUrl,
+    currentChannelShowBanner,
+    currentCategoryFilter,
     getNavTitle,
     filteredItems,
     formatLikes,

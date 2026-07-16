@@ -257,8 +257,15 @@ export default async function (fastify) {
     requireLogin: true,
     permission: 'posecraft:work:create', // 已合并模板与作品权限
     handler: async (request, reply) => {
-      const { title, description, category, image_url, pose_data, tags } = request.body;
+      const {
+        title, description, category, image_url, pose_data, tags,
+        publication_address, publication_lat, publication_lng, publication_source,
+        work_address, work_lat, work_lng, work_address_source
+      } = request.body;
       const user = request.state.user;
+
+      // 从 pose_data 中提取旧版兼容字段（如果有）
+      const pd = pose_data || {};
 
       const template = await TemplateDao.create({
         title,
@@ -269,7 +276,16 @@ export default async function (fastify) {
         tags,
         user_id: user.userId,
         status: 2, // 默认 2 - 待审核，不可直接公开
-        delete_version: 0
+        delete_version: 0,
+        // 地址字段（优先用顶层字段，否则回退到 pose_data 里的旧数据）
+        publication_address: publication_address || pd.locationName || null,
+        publication_lat: publication_lat || pd.coords?.lat || null,
+        publication_lng: publication_lng || pd.coords?.lng || null,
+        publication_source: publication_source || (pd.coords ? 'gps' : null),
+        work_address: work_address || pd.locationName || null,
+        work_lat: work_lat || pd.coords?.lat || null,
+        work_lng: work_lng || pd.coords?.lng || null,
+        work_address_source: work_address_source || (pd.exifInfo?.latitude ? 'exif' : pd.coords ? 'manual' : null)
       });
 
       // 同步保存底图为一个单独的作品 (Work)

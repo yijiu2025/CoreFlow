@@ -325,12 +325,42 @@ class WorkDao {
       offset
     });
 
+    // 补充当前用户对关注者作品的点赞/收藏状态
+    if (rows.length > 0) {
+      const workIds = rows.map((w) => w.id);
+      const [likedIds, collectedIds] = await Promise.all([
+        this._getLikedTargetIds(userId, workIds),
+        this._getCollectedTargetIds(userId, workIds)
+      ]);
+      for (const work of rows) {
+        work.setDataValue('liked', likedIds.has(Number(work.id)));
+        work.setDataValue('collected', collectedIds.has(Number(work.id)));
+      }
+    }
+
     return {
       list: rows,
       total: count,
       page,
       pageSize
     };
+  }
+
+  /**
+   * 获取当前用户已收藏的作品 ID 集合（内部辅助）
+   * @param {number} userId - 用户 ID
+   * @param {number[]} workIds - 作品 ID 数组
+   * @returns {Promise<Set<number>>}
+   */
+  async _getCollectedTargetIds(userId, workIds) {
+    if (!workIds.length) return new Set();
+    const { Op } = await import('sequelize');
+    const UserCollect = sequelize.models.UserCollect;
+    const records = await UserCollect.findAll({
+      where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
+      attributes: ['work_id']
+    });
+    return new Set(records.map((r) => Number(r.work_id)));
   }
 }
 

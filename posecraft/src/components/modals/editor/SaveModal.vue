@@ -33,8 +33,23 @@
             </div>
           </div>
 
+          <!-- 发布地址（自动采集，不可修改）-->
           <div class="form-group">
-            <label>拍摄地点</label>
+            <label>发布地址</label>
+            <div class="input-with-btn">
+              <input :value="publicationAddress || '定位中...'" class="modal-input" readonly />
+              <button class="loc-action-btn" :class="{ loading: isLocating }" @click="refreshPublicationLocation">
+                <span>{{ isLocating ? '⌛' : '📍' }}</span>
+              </button>
+            </div>
+            <div v-if="publicationAddress" class="coords-badge">
+              📍 {{ publicationSource === 'gps' ? 'GPS定位' : 'IP定位' }} · {{ pubLat && pubLng ? pubLat.toFixed(4) + ', ' + pubLng.toFixed(4) : '' }}
+            </div>
+          </div>
+
+          <!-- 作品地址（EXIF GPS 或 手动选择）-->
+          <div class="form-group">
+            <label>作品地址</label>
             <div class="input-with-btn">
               <input v-model="locationName" placeholder="命名这个拍摄位..." class="modal-input" />
               <button class="loc-action-btn" :class="{ loading: isLocating }" @click="getCurrentLocation">
@@ -43,16 +58,19 @@
               <button class="loc-action-btn" @click="showMapModal = true">🗺️</button>
             </div>
 
+            <div v-if="workAddressSource === 'exif' && locationCoords" class="coords-badge">
+              📷 来自照片 EXIF · {{ locationCoords.lat.toFixed(5) }}, {{ locationCoords.lng.toFixed(5) }}
+            </div>
+            <div v-else-if="locationCoords" class="coords-badge">
+              实时坐标: {{ locationCoords.lat.toFixed(5) }}, {{ locationCoords.lng.toFixed(5) }}
+            </div>
+
             <div v-if="nearbyPlaces.length > 0" class="location-suggestions animate-fade-in">
               <div v-for="p in nearbyPlaces" :key="p.name" class="suggestion-item"
                 :class="{ active: locationName === p.name }" @click="selectNearby(p)">
                 <span class="sug-icon">{{ getCategoryIcon(p.category) }}</span>
                 <span class="sug-name">{{ p.name }}</span>
               </div>
-            </div>
-
-            <div v-if="locationCoords" class="coords-badge">
-              实时坐标: {{ locationCoords.lat.toFixed(5) }}, {{ locationCoords.lng.toFixed(5) }}
             </div>
           </div>
 
@@ -136,6 +154,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import MapModal from './MapModal.vue'
+import { useLocation } from '@/composables/useLocation'
 
 const props = defineProps<{
   isOpen: boolean
@@ -152,6 +171,7 @@ const category = ref('pose')
 const customCategory = ref('')
 const locationName = ref('')
 const locationCoords = ref<{ lat: number; lng: number } | null>(null)
+const workAddressSource = ref<'exif' | 'manual' | ''>('')
 const tags = ref<string[]>([])
 const newTag = ref('')
 const isLocating = ref(false)
@@ -159,15 +179,41 @@ const currentIP = ref('')
 const nearbyPlaces = ref<any[]>([])
 const showMapModal = ref(false)
 
+// 发布地址（自动采集，不可修改）
+const publicationAddress = ref('')
+const pubLat = ref<number | null>(null)
+const pubLng = ref<number | null>(null)
+const publicationSource = ref<'gps' | 'ip' | ''>('')
+
+const { autoLocate, getIPLocation } = useLocation()
+
+/** 刷新发布地址 */
+const refreshPublicationLocation = async () => {
+  isLocating.value = true
+  const result = await autoLocate()
+  if (result) {
+    publicationAddress.value = result.address
+    pubLat.value = result.lat
+    pubLng.value = result.lng
+    publicationSource.value = result.source
+  }
+  isLocating.value = false
+}
+
 watch(() => props.isOpen, (val) => {
   if (val) {
     name.value = props.initialName
+    // 作品地址：有 EXIF 自动填入，否则手动选
     if (props.initialCoords) {
       locationCoords.value = props.initialCoords
+      workAddressSource.value = 'exif'
       handlePositionChange(props.initialCoords.lat, props.initialCoords.lng)
     } else {
+      workAddressSource.value = 'manual'
       fetchCurrentIP()
     }
+    // 发布地址：自动采集
+    refreshPublicationLocation()
   }
 })
 
@@ -335,13 +381,23 @@ const formatDate = (dateStr: string) => {
 
 const confirmSave = () => {
   const finalCategory = category.value === 'custom' ? (customCategory.value.trim() || 'pose') : category.value
-  
+
   emit('save', {
     name: name.value,
     description: description.value,
     category: finalCategory,
+    // 发布地址（自动采集，不可修改）
+    publication_address: publicationAddress.value || null,
+    publication_lat: pubLat.value,
+    publication_lng: pubLng.value,
+    publication_source: publicationSource.value || null,
+    // 作品地址（EXIF 或手动）
     locationName: locationName.value,
     coords: locationCoords.value,
+    work_address: locationName.value || null,
+    work_lat: locationCoords.value?.lat || null,
+    work_lng: locationCoords.value?.lng || null,
+    work_address_source: workAddressSource.value || null,
     ip: currentIP.value,
     tags: tags.value,
     exifInfo: props.initialExif

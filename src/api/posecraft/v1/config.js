@@ -1,11 +1,12 @@
 /**
  * PoseCraft 频道配置 API
- * 给前端提供频道分类列表（推荐、姿势、创意等），公开无需登录。
+ * 从数据库读取频道分类列表（推荐、姿势、创意等），公开无需登录。
  *
  * @author Claude
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import channelDao from '../../../app/posecraft/dao/channel.dao.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -20,18 +21,19 @@ export default async function (fastify) {
     method: 'GET',
     url: '/channels',
     handler: async (request, reply) => {
-      // 在这里可以替换为从数据库读取
-      const channels = [
-        { value: 'recommend', label: '推荐' },
-        { value: 'pose', label: '姿势' },
-        { value: 'creative', label: '创意' },
-        { value: 'scenery', label: '风景', url: 'https://cn.bing.com/images/search?q=%E9%A3%8E%E6%99%AF' },
-        { value: 'sports', label: '运动' },
-        { value: 'composition', label: '构图' },
-        { value: 'technique', label: '技巧' }
-      ];
-      
-      return reply.result.success('获取成功', channels);
+      const channels = await channelDao.findActive();
+      // 输出精简字段，与前端旧格式兼容并扩展
+      const list = channels.map(c => ({
+        value: c.value,
+        label: c.label,
+        icon: c.icon,
+        type: c.type,
+        url: c.url,
+        route: c.route,
+        category: c.category,
+        has_banner: c.has_banner
+      }));
+      return reply.result.success('获取成功', list);
     }
   });
 }

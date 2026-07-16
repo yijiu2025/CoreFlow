@@ -90,6 +90,15 @@ function formatWork(work) {
     views_count: data.views_count,
     liked: !!data.liked,             // 当前用户是否已点赞
     collected: !!data.collected,     // 当前用户是否已收藏
+    // 地址信息
+    publication_address: data.publication_address,
+    publication_lat: data.publication_lat ? Number(data.publication_lat) : null,
+    publication_lng: data.publication_lng ? Number(data.publication_lng) : null,
+    publication_source: data.publication_source,
+    work_address: data.work_address,
+    work_lat: data.work_lat ? Number(data.work_lat) : null,
+    work_lng: data.work_lng ? Number(data.work_lng) : null,
+    work_address_source: data.work_address_source,
     created_at: data.createdAt,
     updated_at: data.updatedAt,
     author: data.author ? {
@@ -248,7 +257,7 @@ export default async function (fastify) {
         return reply.result.fail('未登录', null, 401);
       }
       const { page, pageSize } = request.query;
-      const result = await workDao.findByUser(user.userId, { page, pageSize });
+      const result = await workDao.findByUser(user.userId, { page, pageSize, currentUserId: user.userId });
       return reply.result.paginated(formatWorkList(result.list), result.total, result.page, result.pageSize);
     }
   });
@@ -353,11 +362,14 @@ export default async function (fastify) {
     requireLogin: true,
     permission: 'posecraft:work:create',
     handler: async (request, reply) => {
-      const { title, description, template_id, image_url, analysis_data, edit_data } = request.body;
+      const {
+        title, description, template_id, image_url, analysis_data, edit_data,
+        publication_address, publication_lat, publication_lng, publication_source,
+        work_address, work_lat, work_lng, work_address_source
+      } = request.body;
       const user = request.state.user;
 
       // 作品的 thumbnail_url = 底图原图压缩版（WebP 70%，尺寸不变，省带宽）
-      // 模板底图作品的创建走 TemplateDao.syncCreateWork，不在本接口
       const { generateImageThumbnail } = await import('../../../app/posecraft/utils/preview.js');
       const thumbUrl = (image_url && (await generateImageThumbnail(image_url))) || image_url || '';
 
@@ -372,7 +384,16 @@ export default async function (fastify) {
         is_template_work: false,
         user_id: user.userId,
         status: 1,
-        delete_version: 0
+        delete_version: 0,
+        // 地址字段
+        publication_address: publication_address || null,
+        publication_lat: publication_lat || null,
+        publication_lng: publication_lng || null,
+        publication_source: publication_source || null,
+        work_address: work_address || null,
+        work_lat: work_lat || null,
+        work_lng: work_lng || null,
+        work_address_source: work_address_source || null
       });
 
       return reply.result.success('创建成功', work);

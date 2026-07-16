@@ -241,7 +241,7 @@ onUnmounted(() => {
 
 const handleCapture = async () => {
   if (uploading.value) return
-  
+
   // 闪光灯特效
   isFlashing.value = true
   setTimeout(() => { isFlashing.value = false }, 150)
@@ -258,12 +258,21 @@ const handleCapture = async () => {
     const uploadResult = await uploadBase64(base64, `posecraft_${Date.now()}.png`)
     if (!uploadResult) return
 
-    // 保存作品记录
+    // 自动采集发布地址（GPS → IP 兜底）
+    isFlashing.value = false
+    const loc = await autoLocate()
+
+    // 保存作品记录（携带地址数据）
     const res = await workApi.create({
       title: '随手拍作品',
       template_id: route.query.template ? Number(route.query.template) : undefined,
       image_url: uploadResult.url,
-      edit_data: templateTransform.value
+      edit_data: templateTransform.value,
+      // 自动采集的发布地址（不可修改）
+      publication_address: loc?.address || null,
+      publication_lat: loc?.lat || null,
+      publication_lng: loc?.lng || null,
+      publication_source: loc?.source || null
     }) as any
 
     // 拍照成功，本地递增作品数（同步 MineView Tab 数字）

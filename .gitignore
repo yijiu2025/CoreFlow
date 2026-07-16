@@ -27,3 +27,6 @@ public/uploads/*
 # VitePress 构建缓存
 docs/.vitepress/cache
 docs/.vitepress/dist
+
+架构文件/kx-lang-extension/
+架构文件/kx-lang/
