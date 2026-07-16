@@ -137,8 +137,21 @@
             <span class="meta-item">👁 {{ work?.views_count ?? 0 }}</span>
             <span class="meta-dot">·</span>
             <span class="meta-item">{{ formatDate(work?.created_at) }}</span>
-            <span v-if="work?.distance" class="meta-dot">·</span>
-            <span v-if="work?.distance" class="meta-item">📍 {{ work.distance }}</span>
+          </div>
+
+          <!-- 地址信息 -->
+          <div class="address-row" v-if="work?.publication_address || work?.work_address">
+            <div v-if="work?.publication_address" class="address-item pub-addr">
+              <span class="addr-icon">📍</span>
+              <span class="addr-label">发布于</span>
+              <span class="addr-text">{{ work.publication_address }}</span>
+              <span class="addr-source">({{ work.publication_source === 'gps' ? 'GPS' : 'IP' }})</span>
+            </div>
+            <div v-if="work?.work_address" class="address-item work-addr">
+              <span class="addr-icon">📷</span>
+              <span class="addr-label">{{ work.work_address_source === 'exif' ? '拍摄于' : '位于' }}</span>
+              <span class="addr-text">{{ work.work_address }}</span>
+            </div>
           </div>
 
           <!-- 使用模板拍照 CTA -->
@@ -907,6 +920,45 @@ onMounted(async () => {
 }
 .dark .meta-row { color: #71717a; }
 .meta-item { white-space: nowrap; }
+
+/* 地址信息 */
+.address-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.dark-mode .address-row {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.address-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+.addr-icon { font-size: 14px; }
+.addr-label {
+  color: #94a3b8;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.dark-mode .addr-label { color: #71717a; }
+.addr-text {
+  color: #334155;
+  font-weight: 600;
+}
+.dark-mode .addr-text { color: #e4e4e7; }
+.addr-source {
+  color: #94a3b8;
+  font-size: 0.65rem;
+}
+.dark-mode .addr-source { color: #71717a; }
 
 /* CTA 拍照 */
 .cta-shoot {
