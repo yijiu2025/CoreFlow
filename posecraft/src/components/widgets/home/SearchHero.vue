@@ -1,7 +1,7 @@
 <template>
   <div class="search-sticky-header">
     <!-- 搜索框主体 -->
-    <div class="search-hero-bar" :class="{ focused: searchFocused }">
+    <div class="search-hero-bar at-top" :class="{ focused: searchFocused }">
       <!-- 第一行：输入框 -->
       <div class="search-row-input">
         <input
