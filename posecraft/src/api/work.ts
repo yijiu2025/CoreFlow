@@ -31,6 +31,15 @@ export const workApi = {
     image_url: string
     thumbnail_url?: string,
     edit_data?: any
+    // 地址字段
+    publication_address?: string | null
+    publication_lat?: number | null
+    publication_lng?: number | null
+    publication_source?: string | null
+    work_address?: string | null
+    work_lat?: number | null
+    work_lng?: number | null
+    work_address_source?: string | null
   }) => service.post('/posecraft/v1/works', data),
 
   /** 删除作品 */

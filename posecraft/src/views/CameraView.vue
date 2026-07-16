@@ -72,6 +72,7 @@ import { fabric } from 'fabric'
 import { useAuthStore } from '@/stores/auth'
 import { useCamera } from '@/composables/useCamera'
 import { useUpload } from '@/composables/useUpload'
+import { useLocation } from '@/composables/useLocation'
 import { workApi } from '@/api/work'
 import { templateApi } from '@/api/template'
 
@@ -80,6 +81,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 const camera = useCamera()
 const { uploading, uploadBase64 } = useUpload()
+const { autoLocate } = useLocation()
 
 const templateCanvasRef = ref<HTMLCanvasElement | null>(null)
 let fCanvas: fabric.Canvas | null = null
