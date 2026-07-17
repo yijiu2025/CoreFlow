@@ -7,8 +7,16 @@
 import service from '@/utils/request'
 
 export const workApi = {
-  /** 获取作品列表 */
-  getList: (params?: { keyword?: string; page?: number; pageSize?: number }) =>
+  /** 获取作品列表（支持按频道 category 过滤 / sort 排序） */
+  getList: (params?: {
+    keyword?: string
+    page?: number
+    pageSize?: number
+    /** 分类过滤：pose / creative / sports / composition / technique */
+    category?: string
+    /** 排序方式：recommended（热度+随机）/ 不传则按时间降序 */
+    sort?: string
+  }) =>
     service.get('/posecraft/v1/works', { params }),
 
   /** 获取关注者的作品 */

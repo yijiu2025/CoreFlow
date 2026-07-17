@@ -175,35 +175,14 @@ export function useHome() {
     return [...tplList, ...workList]
   })
 
-  // 过滤后的列表
+  // 过滤后的列表（数据已由后端按 channel 参数过滤，前端只做搜索关键字过滤）
   const filteredItems = computed(() => {
-    let list: any[] = []
-
     // _key = "type-id" 保证跨数据源唯一，防止 Vue v-for :key 重复警告
     const tplList = templates.value.map(t => ({ ...t, type: 'template', _key: `template-${t.id}` }))
     const workList = works.value.map(w => ({ ...w, type: 'work', _key: `work-${w.id}` }))
-    const apiItems = [...tplList, ...workList]
+    let list: any[] = [...tplList, ...workList]
 
-    if (activeNav.value === 'featured') {
-      list = apiItems
-
-      // 根据频道配置的 category 字段进行筛选（替代旧的硬编码 if/else）
-      if (currentCategoryFilter.value !== 'all') {
-        list = list.filter(item => item.category === currentCategoryFilter.value)
-      }
-    } else if (activeNav.value === 'recommend') {
-      list = apiItems
-    } else if (activeNav.value === 'nearby') {
-      list = apiItems
-    } else if (activeNav.value === 'following') {
-      list = apiItems
-    } else if (activeNav.value === 'friends') {
-      list = apiItems
-    } else if (activeNav.value === 'mine') {
-      list = apiItems
-    }
-
-    // 搜索关键字筛选
+    // 搜索关键字筛选（本地过滤，仅用于当前已加载数据的搜索体验）
     if (searchQuery.value.trim()) {
       const q = searchQuery.value.toLowerCase()
       list = list.filter(item =>
@@ -335,22 +314,44 @@ export function useHome() {
 
 
   /**
+   * 构建当前频道的后端请求参数
+   * - recommend 频道：sort=recommended（按热度+随机权重排序）
+   * - 姿势/创意/运动等：category=<channel.category>（按分类过滤）
+   * - 无特殊配置：不传额外参数（返回全部）
+   */
+  const buildChannelParams = () => {
+    const ch = currentChannel.value
+    if (!ch) return {}
+    const params: any = {}
+    // 推荐频道：服务端按热度+随机排序
+    if (ch.value === 'recommend') {
+      params.sort = 'recommended'
+    }
+    // 其他内容频道：按 category 字段过滤
+    if (ch.category && ch.category !== 'all') {
+      params.category = ch.category
+    }
+    return params
+  }
+
+  /**
    * 首页数据加载（频道识别后调用）
-   * - 非 recommend 频道：仅加载作品
-   * - recommend 频道：并行加载 Banner + 作品（先显示占位，数据到齐后渲染）
+   * - has_banner 频道：Banner 与作品并行加载（提升首屏速度）
+   * - 其他频道：仅加载作品
+   * 请求参数由 buildChannelParams() 按 channel 配置自动构建
    */
   const loadData = async (page: number) => {
     if (loading.value) return
     loading.value = true
     try {
-      // 首页只加载作品——模板通过作品的 template_id 绑定，不在首页单独展示
-      let newWorks = []
+      let newWorks: any[] = []
       let totalPages = 1
 
-      // 后端从 session 获取 currentUserId，无需前端传递
-      const workQueryOptions = { page, pageSize: 12 }
+      // 按当前频道配置自动构建请求参数（sort/category）
+      const channelParams = buildChannelParams()
+      const workQueryOptions = { page, pageSize: 12, ...channelParams }
 
-      // ★ has_banner=true 的频道：Banner 与作品并行加载（提升首屏速度）
+      // ★ has_banner=true 的频道（推荐页）：Banner 与作品并行加载
       if (currentChannel.value?.has_banner) {
         const [workResult, bannerResult] = await Promise.allSettled([
           (async () => {
@@ -364,21 +365,19 @@ export function useHome() {
           bannerConfigApi.getActive().catch(() => null)
         ])
 
-        // 处理作品结果
         if (workResult.status === 'fulfilled') {
           const workRes = workResult.value as any
           newWorks = workRes?.list || []
           totalPages = workRes?.totalPages || 1
         }
 
-        // 处理 Banner 结果
         if (bannerResult.status === 'fulfilled' && bannerResult.value) {
           activeBanners.value = Array.isArray(bannerResult.value) ? bannerResult.value : []
         } else {
           activeBanners.value = []
         }
       } else {
-        // ★ 非 recommend 频道：仅加载作品
+        // ★ 普通频道：仅加载作品（category/sort 参数已在 workQueryOptions 中）
         let workRes: any
         if (activeNav.value === 'following' && authStore.isLoggedIn) {
           workRes = await workApi.getFollowingWorks(workQueryOptions)
@@ -389,7 +388,7 @@ export function useHome() {
         }
         newWorks = workRes?.list || []
         totalPages = workRes?.totalPages || 1
-        activeBanners.value = [] // 非 recommend 不显示 banner
+        activeBanners.value = []
       }
 
       if (page === 1) {
@@ -406,14 +405,11 @@ export function useHome() {
     }
   }
 
-  /**
-   * 批量获取当前用户对一组作品的点赞/收藏状态
-   * 后端 checkStatus 当前仅支持单个查询，此处循环调用并合并结果到 works 源数据
-   */
-  /** 刷新首页数据（重置分页重新加载） */
+  /** 刷新首页数据（重置分页重新加载，切换频道 Tab 时调用） */
   const refreshData = () => {
     currentPage.value = 1
     hasMore.value = true
+    works.value = []   // 立即清空旧数据，避免 Tab 切换时短暂显示上一个频道的内容
     loadData(1)
   }
 
@@ -478,9 +474,19 @@ export function useHome() {
       console.warn('获取动态频道配置失败，使用默认配置', err)
       channels.value = FALLBACK_CHANNELS
     } finally {
+      // 频道加载完毕后，按当前激活频道触发首次数据加载
       refreshData()
     }
   }
+
+  /**
+   * 监听 activeChannel 切换，切换时重置数据并按新频道参数重新请求后端
+   * 跳过初始化阶段（channels 尚未加载完毕时不触发）
+   */
+  watch(activeChannel, () => {
+    if (channels.value.length === 0) return // 频道列表尚未初始化，跳过
+    refreshData()
+  })
 
   onMounted(async () => {
     // ① 先加载频道配置（决定 Tab 结构，完成后自动触发首次 refreshData）
