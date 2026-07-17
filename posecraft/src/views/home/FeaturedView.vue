@@ -177,19 +177,20 @@ watch(
 <style scoped>
 /* 分类 Tab */
 .channel-container {
-  display: flex;
-  justify-content: center;
   width: 100%;
+  min-width: 0;           /* 允许收缩，不向外撑大 */
   padding: 12px 0 0;
-  overflow-x: auto;
+  overflow-x: auto;       /* Tab 过多时内部滚动，不影响页面宽度 */
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 .channel-container::-webkit-scrollbar { display: none; }
 
 .channel-inner {
-  display: flex;
+  display: inline-flex;   /* 宽度由内容决定，由 channel-container 滚动承载 */
   gap: 0;
-  flex-shrink: 0;
+  min-width: max-content; /* Tab 不折行，超出时横向滚动 */
+  padding: 0 16px;        /* 左右留边距，避免首尾 Tab 贴边 */
 }
 
 .channel-tag {
@@ -234,6 +235,9 @@ watch(
 
 .featured-page-container {
   width: 100%;
+  min-width: 0;          /* 防止内部内容撑开容器最小宽度 */
+  max-width: 100%;       /* 不能超出父容器 */
+  overflow-x: hidden;    /* 截断水平溢出传播链 */
   display: flex;
   flex-direction: column;
   padding-top: 64px;
@@ -259,17 +263,36 @@ watch(
   .waterfall-grid {
     column-count: 3;
   }
+  .channel-tag {
+    padding: 10px 14px;
+    font-size: 13.5px;
+  }
 }
 
 @media (max-width: 500px) {
   .waterfall-grid {
     column-count: 2;
   }
+  .channel-tag {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .channel-inner {
+    padding: 0 8px;
+  }
 }
 
 @media (max-width: 320px) {
   .waterfall-grid {
     column-count: 1;
+  }
+  .channel-tag {
+    padding: 8px 10px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  .channel-icon {
+    font-size: 14px;
   }
 }
 
