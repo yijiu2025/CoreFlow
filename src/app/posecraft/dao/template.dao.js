@@ -362,6 +362,18 @@ class TemplateDao {
       await templateWork.update({ delete_version: templateWork.id });
     }
   }
+
+  /**
+   * 递增模板使用次数（用户每次基于该模板创建作品时调用）
+   * 使用 SQL INCREMENT 原子操作，避免并发读写竞争
+   * @param {number} templateId - 模板 ID
+   * @returns {Promise<void>}
+   */
+  async incrementUses(templateId) {
+    if (!templateId) return;
+    const model = this.getModel();
+    await model.increment('uses_count', { where: { id: templateId, delete_version: 0 } });
+  }
 }
 
 export default new TemplateDao();

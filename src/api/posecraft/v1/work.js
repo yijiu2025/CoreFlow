@@ -7,6 +7,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
+import templateDao from '../../../app/posecraft/dao/template.dao.js';
 import sequelize from '../../../db/index.js';
 import fs from 'fs';
 import path from 'path';
@@ -74,7 +75,10 @@ function generateSvgFromFabric(fabricData) {
  * @param {object} work - 作品 Sequelize 实例或普通对象
  * @returns {object|null} 格式化后的作品对象，null 时返回 null
  */
-function formatWork(work) {
+/**
+ * 作品公共序列化（列表/详情共用，不含 views_count）
+ */
+function formatWork(work, isOwner = false) {
   if (!work) return null;
   const data = work.toJSON ? work.toJSON() : work;
   return {
@@ -84,21 +88,26 @@ function formatWork(work) {
     description: data.description,
     image_url: data.image_url,
     thumbnail_url: data.thumbnail_url,
-    is_template_work: data.is_template_work,
+    type: data.is_template_work ? 'template' : 'work',
     status: data.status,
-    likes_count: data.likes_count,
-    views_count: data.views_count,
-    liked: !!data.liked,             // 当前用户是否已点赞
-    collected: !!data.collected,     // 当前用户是否已收藏
-    // 地址信息
-    publication_address: data.publication_address,
-    publication_lat: data.publication_lat ? Number(data.publication_lat) : null,
-    publication_lng: data.publication_lng ? Number(data.publication_lng) : null,
-    publication_source: data.publication_source,
-    work_address: data.work_address,
-    work_lat: data.work_lat ? Number(data.work_lat) : null,
-    work_lng: data.work_lng ? Number(data.work_lng) : null,
-    work_address_source: data.work_address_source,
+    // 计数（集中管理）
+    count: {
+      likes: data.likes_count,
+      collects: data.collects_count || 0,
+      shares: data.shares_count || 0,
+      comments: data.comments_count || 0,
+      views: isOwner ? data.views_count : undefined  // 仅作者可见
+    },
+    // 当前用户互动状态
+    userInteraction: {
+      liked: !!data.liked,
+      collected: !!data.collected,
+      shared: !!data.shared
+    },
+    address: {
+      publication: data.publication_address || null,
+      work: data.work_address || null
+    },
     created_at: data.createdAt,
     updated_at: data.updatedAt,
     author: data.author ? {
@@ -107,6 +116,28 @@ function formatWork(work) {
       avatar: data.author.avatar
     } : undefined
   };
+}
+
+/**
+ * 作品详情序列化（含完整地址 + GPS）
+ * @param {object} work
+ * @param {boolean} isOwner 是否为作者本人
+ */
+function formatWorkDetail(work, isOwner = false) {
+  const base = formatWork(work, isOwner);
+  const data = work.toJSON ? work.toJSON() : work;
+  // 地址详情（含 GPS）
+  base.address = {
+    publication: data.publication_address || null,
+    publication_lat: data.publication_lat ? Number(data.publication_lat) : null,
+    publication_lng: data.publication_lng ? Number(data.publication_lng) : null,
+    publication_source: data.publication_source || null,
+    work: data.work_address || null,
+    work_lat: data.work_lat ? Number(data.work_lat) : null,
+    work_lng: data.work_lng ? Number(data.work_lng) : null,
+    work_address_source: data.work_address_source || null
+  };
+  return base;
 }
 
 /**
@@ -163,12 +194,14 @@ export default async function (fastify) {
         properties: {
           page: { type: 'integer', minimum: 1, default: 1 },
           pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-          keyword: { type: 'string', maxLength: 100 }
+          keyword: { type: 'string', maxLength: 100 },
+          category: { type: 'string', maxLength: 50 },
+          sort: { type: 'string', maxLength: 50 }
         }
       }
     },
     handler: async (request, reply) => {
-      const { keyword, page, pageSize } = request.query;
+      const { keyword, page, pageSize, category, sort } = request.query;
       // 从 session 获取权威用户 ID（数字），无需前端传递
       const currentUserId = request.state?.user?.userId
 
@@ -176,7 +209,9 @@ export default async function (fastify) {
         keyword,
         page,
         pageSize,
-        currentUserId
+        currentUserId,
+        category,
+        sort
       });
 
       return reply.result.paginated(formatWorkList(result.list), result.total, result.page, result.pageSize);
@@ -270,6 +305,7 @@ export default async function (fastify) {
     url: '/works/:id',
     handler: async (request, reply) => {
       const { id } = request.params;
+      const user = request.state?.user;
 
       const work = await workDao.findById(id);
 
@@ -280,7 +316,10 @@ export default async function (fastify) {
       // 增加浏览量
       await workDao.incrementViews(id);
 
-      return reply.result.success('获取成功', formatWork(work));
+      // 判断是否为作者本人
+      const isOwner = !!(user?.userId && work.user_id === user.userId);
+
+      return reply.result.success('获取成功', formatWorkDetail(work, isOwner));
     }
   });
 
@@ -363,7 +402,7 @@ export default async function (fastify) {
     permission: 'posecraft:work:create',
     handler: async (request, reply) => {
       const {
-        title, description, template_id, image_url, analysis_data, edit_data,
+        title, description, template_id, image_url, analysis_data, edit_data, category,
         publication_address, publication_lat, publication_lng, publication_source,
         work_address, work_lat, work_lng, work_address_source
       } = request.body;
@@ -381,6 +420,7 @@ export default async function (fastify) {
         thumbnail_url: thumbUrl,
         analysis_data,
         edit_data,
+        category: category || 'pose',
         is_template_work: false,
         user_id: user.userId,
         status: 1,
@@ -395,6 +435,13 @@ export default async function (fastify) {
         work_lng: work_lng || null,
         work_address_source: work_address_source || null
       });
+
+      // 若基于模板创建，异步递增模板使用次数（不阻塞响应）
+      if (template_id) {
+        templateDao.incrementUses(template_id).catch((err) => {
+          fastify.log.warn({ err, template_id }, '[Work] 递增模板使用次数失败');
+        });
+      }
 
       return reply.result.success('创建成功', work);
     }

@@ -42,34 +42,53 @@ class WorkDao {
       ];
     }
 
+    // 按频道分类筛选
+    if (options.category) {
+      where.category = options.category;
+    }
+
     const page = options.page ? Number(options.page) : (options.limit ? Math.floor((options.offset || 0) / options.limit) + 1 : 1);
     const pageSize = options.pageSize ? Number(options.pageSize) : (options.limit ? Number(options.limit) : 20);
     const limit = pageSize;
     const offset = (page - 1) * pageSize;
 
+    // 排序方式
+    let order = [['created_at', 'DESC']]
+    if (options.sort === 'recommended') {
+      // 推荐排序公式：点赞×15 + 收藏×12 + 分享×8 + 浏览×1 + 随机执20
+      // 昔权重设计：收藏 > 分享 > 点赞 > 浏览（表达真实用户意图）
+      // 随机扰动避免高点赞内容固化在首位（马太效应）
+      order = [
+        [sequelize.literal('(likes_count * 15 + collects_count * 12 + shares_count * 8 + views_count * 1 + RAND() * 20)'), 'DESC']
+      ]
+    }
+
     const { count, rows } = await model.findAndCountAll({
       where,
       include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
-      order: [['created_at', 'DESC']],
+      order,
       limit,
       offset
     });
 
-    // 当前用户已点赞/已收藏的作品 ID 集合（用于前端标记状态）
+    // 当前用户已点赞/已收藏/已分享的作品 ID 集合（用于前端标记状态）
     if (options.currentUserId && rows.length > 0) {
       const workIds = rows.map((w) => w.id);
-      const [likedIds, collectedIds] = await Promise.all([
+      const [likedIds, collectedIds, sharedIds] = await Promise.all([
         this._getLikedTargetIds(options.currentUserId, workIds),
-        this._getCollectedTargetIds(options.currentUserId, workIds)
+        this._getCollectedTargetIds(options.currentUserId, workIds),
+        this._getSharedTargetIds(options.currentUserId, workIds)
       ]);
       for (const work of rows) {
         work.setDataValue('liked', likedIds.has(Number(work.id)));
         work.setDataValue('collected', collectedIds.has(Number(work.id)));
+        work.setDataValue('shared', sharedIds.has(Number(work.id)));
       }
     } else {
       for (const work of rows) {
         work.setDataValue('liked', false);
         work.setDataValue('collected', false);
+        work.setDataValue('shared', false);
       }
     }
 
@@ -109,6 +128,25 @@ class WorkDao {
     const { Op } = await import('sequelize');
     const UserCollect = sequelize.models.UserCollect;
     const records = await UserCollect.findAll({
+      where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
+      attributes: ['work_id']
+    });
+    return new Set(records.map((r) => Number(r.work_id)));
+  }
+
+  /**
+   * 获取当前用户已分享的作品 ID 集合（内部辅助）
+   * @param {number} userId - 用户 ID
+   * @param {number[]} workIds - 作品 ID 数组
+   * @returns {Promise<Set<number>>}
+   */
+  async _getSharedTargetIds(userId, workIds) {
+    if (!workIds.length) return new Set();
+    const { Op } = await import('sequelize');
+    const UserShare = sequelize.models.UserShare;
+    // 如果 UserShare 模型不存在，返回空集合（分享功能预留）
+    if (!UserShare) return new Set();
+    const records = await UserShare.findAll({
       where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
       attributes: ['work_id']
     });
@@ -178,7 +216,9 @@ class WorkDao {
   }
 
   /**
-   * 查询推荐作品（按点赞数+浏览数加权随机排序）
+   * 查询推荐作品（多维加权随机排序）
+   * 公式：点赞×15 + 收藏×12 + 分享×8 + 浏览×1 + 随机执20
+   * 收藏权重最高（代表用户的最强意图）；浏览权重最低（容易刪曲）
    * @param {number} [limit=20] - 返回条数
    * @returns {Promise<Array<Work>>}
    */
@@ -189,7 +229,7 @@ class WorkDao {
       include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       attributes: { exclude: ['analysis_data', 'delete_version'] },
       order: [
-        [sequelize.literal('(likes_count * 10 + views_count * 1 + RAND() * 30)'), 'DESC']
+        [sequelize.literal('(likes_count * 15 + collects_count * 12 + shares_count * 8 + views_count * 1 + RAND() * 20)'), 'DESC']
       ],
       limit
     });
