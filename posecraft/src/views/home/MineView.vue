@@ -132,35 +132,52 @@
       </div>
     </div>
 
-    <!-- 三级菜单分类栏 (仅在“作品”Tab下展示，右侧带有搜索与日期筛选) -->
-    <div class="sub-tabs-container" v-if="activeTab === 'works'">
+    <!-- 三级菜单分类栏 (作品/模板Tab 下展示) -->
+    <div class="sub-tabs-container" v-if="activeTab === 'works' || activeTab === 'templates'">
       <!-- 左侧三级分类 Tab -->
       <div class="sub-tabs">
-        <button 
-          :class="['sub-tab-btn', { active: subTab === 'public' }]" 
-          @click="subTab = 'public'"
-        >
-          作品
-        </button>
-        <button 
-          :class="['sub-tab-btn', { active: subTab === 'private' }]" 
-          @click="subTab = 'private'"
-        >
-          <span>私密作品</span>
-          <span class="sub-lock"><Lock :size="11" /></span>
-        </button>
-        <button 
-          :class="['sub-tab-btn', { active: subTab === 'collection' }]" 
-          @click="subTab = 'collection'"
-        >
-          合集
-        </button>
-        <button 
-          :class="['sub-tab-btn', { active: subTab === 'series' }]" 
-          @click="subTab = 'series'"
-        >
-          短剧
-        </button>
+        <template v-if="activeTab === 'works'">
+          <button
+            :class="['sub-tab-btn', { active: subTab === 'public' }]"
+            @click="subTab = 'public'"
+          >
+            作品
+          </button>
+          <button
+            :class="['sub-tab-btn', { active: subTab === 'private' }]"
+            @click="subTab = 'private'"
+          >
+            <span>私密作品</span>
+            <span class="sub-lock"><Lock :size="11" /></span>
+          </button>
+          <button
+            :class="['sub-tab-btn', { active: subTab === 'collection' }]"
+            @click="subTab = 'collection'"
+          >
+            合集
+          </button>
+        </template>
+        <template v-else-if="activeTab === 'templates'">
+          <button
+            :class="['sub-tab-btn', { active: subTab === 'all' }]"
+            @click="subTab = 'all'"
+          >
+            模板
+          </button>
+          <button
+            :class="['sub-tab-btn', { active: subTab === 'private' }]"
+            @click="subTab = 'private'"
+          >
+            <span>私密模板</span>
+            <span class="sub-lock"><Lock :size="11" /></span>
+          </button>
+          <button
+            :class="['sub-tab-btn', { active: subTab === 'collected' }]"
+            @click="subTab = 'collected'"
+          >
+            收藏的模板
+          </button>
+        </template>
       </div>
 
       <!-- 右侧日期筛选及搜索框 -->
@@ -423,7 +440,7 @@ onMounted(async () => {
 const themeStore = useThemeStore()
 
 const activeTab = ref('works')
-const subTab = ref('public')
+const subTab = ref<string>('public')
 
 watch(() => route.query.tab, (newTab) => {
   if (newTab && typeof newTab === 'string') {
@@ -603,6 +620,9 @@ const changeTab = (tabName: string) => {
   activeTab.value = tabName
   exitManageMode() // 切换 Tab 自动退出管理模式
 
+  // 重置子Tab 为默认值
+  subTab.value = tabName === 'templates' ? 'all' : 'public'
+
   // 切换 Tab 时按需加载真实数据
   if (tabName === 'templates') {
     authStore.fetchMyTemplates()
@@ -775,27 +795,31 @@ const realWorksCount = computed(() => myWorks.value.filter(w => w.type !== 'temp
 // 过滤后的列表计算
 const filteredItems = computed(() => {
   let list: any[] = []
-  
+
   if (activeTab.value === 'works') {
     // 作品 Tab：排除创建模板时自动生成的底图作品（is_template_work=true）
-    // 只保留通过相机拍摄发表的真实作品
     const realWorks = myWorks.value.filter(w => w.type !== 'template' && !w.is_template_work)
 
-    // 根据三级分类进行过滤
     if (subTab.value === 'public') {
-      list = realWorks.filter(w => !w.is_private && w.type !== 'collection' && w.type !== 'series')
+      list = realWorks.filter(w => w.status === 1) // 公开
     } else if (subTab.value === 'private') {
-      list = realWorks.filter(w => w.is_private)
+      list = realWorks.filter(w => w.status === 0) // 私密
     } else if (subTab.value === 'collection') {
-      list = realWorks.filter(w => w.type === 'collection')
-    } else if (subTab.value === 'series') {
-      list = realWorks.filter(w => w.type === 'series')
+      // 合集：从收藏列表中筛选作品类型
+      list = myCollects.value.filter((c: any) => c.work_id)
     }
 
     // 根据日期范围筛选
     list = list.filter(w => isInDateRange(w.created_at))
   } else if (activeTab.value === 'templates') {
-    list = myTemplates.value
+    if (subTab.value === 'all') {
+      list = myTemplates.value
+    } else if (subTab.value === 'private') {
+      list = myTemplates.value.filter((t: any) => t.status === 0)
+    } else if (subTab.value === 'collected') {
+      // 收藏的模板：从收藏列表中筛选模板类型
+      list = myCollects.value.filter((c: any) => c.template_id)
+    }
   } else if (activeTab.value === 'recommend') {
     list = myRecommends.value
   } else if (activeTab.value === 'likes') {
@@ -809,7 +833,7 @@ const filteredItems = computed(() => {
   // 搜索关键字筛选
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase()
-    list = list.filter(item => 
+    list = list.filter(item =>
       (item.title && item.title.toLowerCase().includes(q)) ||
       (item.description && item.description.toLowerCase().includes(q))
     )

@@ -42,6 +42,6 @@ export const templateApi = {
     service.post(`/posecraft/v1/templates/${id}/audit`, { status }),
 
   /** 获取当前登录用户自己上传的模板（从 session 识别用户） */
-  getMyTemplates: (params?: { page?: number; pageSize?: number }) =>
+  getMyTemplates: (params?: { page?: number; pageSize?: number; status?: number }) =>
     service.get('/posecraft/v1/templates/mine', { params })
 }

@@ -39,11 +39,13 @@
 
       <!-- 主区域 -->
       <main class="main-content-area">
-        <router-view v-slot="{ Component }">
-          <keep-alive>
-            <component :is="Component" />
-          </keep-alive>
-        </router-view>
+        <div class="router-wrap">
+          <router-view v-slot="{ Component }">
+            <keep-alive>
+              <component :is="Component" />
+            </keep-alive>
+          </router-view>
+        </div>
       </main>
 
       <!-- 回到顶部浮动按钮 -->
@@ -77,6 +79,13 @@
       @showToast="showToast"
     />
 
+    <!-- 关于弹窗（首次打开时异步加载） -->
+    <component
+      v-if="showAboutModal"
+      :is="AboutModal"
+      @close="showAboutModal = false"
+    />
+
     <!-- 简易通知 Toast 提示 -->
     <div v-if="toastMsg" class="toast-tip">
       <span>{{ toastMsg }}</span>
@@ -99,6 +108,15 @@ const ensureSettingsModal = async () => {
     SettingsModal.value = defineAsyncComponent(() => import('@/components/modals/home/SettingsModal.vue'))
   }
   return SettingsModal.value
+}
+
+/** 关于弹窗：同样异步加载 */
+const AboutModal = shallowRef<any>(null)
+const ensureAboutModal = async () => {
+  if (!AboutModal.value) {
+    AboutModal.value = defineAsyncComponent(() => import('@/components/modals/home/AboutModal.vue'))
+  }
+  return AboutModal.value
 }
 
 const themeStore = useThemeStore()
@@ -135,6 +153,7 @@ const {
   searchSentinel,
   showTemplate,
   showSettingsModal,
+  showAboutModal,
   settingsActiveSection,
   saveLoginInfo,
   isVip,
@@ -163,6 +182,11 @@ const {
 // 设置 Modal 首次打开时才异步加载组件
 watch(showSettingsModal, (visible) => {
   if (visible) ensureSettingsModal()
+}, { immediate: true })
+
+// 关于弹窗首次打开时才异步加载
+watch(showAboutModal, (visible) => {
+  if (visible) ensureAboutModal()
 }, { immediate: true })
 </script>
 
@@ -198,6 +222,14 @@ watch(showSettingsModal, (visible) => {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+}
+
+.router-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .content-container {

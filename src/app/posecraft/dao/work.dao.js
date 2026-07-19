@@ -25,10 +25,16 @@ class WorkDao {
     const model = this.getModel();
     const { Op } = await import('sequelize');
 
-    const where = { status: 1, delete_version: 0 };
+    const where = { delete_version: 0 };
 
     if (options.userId) {
       where.user_id = options.userId;
+    } else {
+      where.status = 1; // 非用户查询时默认只返回公开作品
+    }
+
+    if (options.status !== undefined) {
+      where.status = options.status;
     }
 
     if (options.templateId) {
@@ -65,7 +71,10 @@ class WorkDao {
 
     const { count, rows } = await model.findAndCountAll({
       where,
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
+      include: [
+        { model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] },
+        { model: sequelize.models.Template, as: 'template', attributes: ['id', 'status', 'delete_version', 'title'], required: false }
+      ],
       order,
       limit,
       offset
@@ -246,7 +255,10 @@ class WorkDao {
 
     return await model.findOne({
       where: { id, delete_version: 0 },
-      include: [{ model: User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
+      include: [
+        { model: User, as: 'author', attributes: ['uid', 'username', 'avatar'] },
+        { model: sequelize.models.Template, as: 'template', attributes: ['id', 'status', 'delete_version', 'title'], required: false }
+      ],
       attributes: { exclude: ['analysis_data', 'delete_version', 'user_id', 'deleted_at'] }
     });
   }

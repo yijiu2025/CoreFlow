@@ -7,6 +7,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AboutModal: typeof import('./../components/modals/home/AboutModal.vue')['default']
     AiPanel: typeof import('./../components/panels/editor/AiPanel.vue')['default']
     AvatarHoverCard: typeof import('./../components/popovers/home/AvatarHoverCard.vue')['default']
     BioTooltip: typeof import('./../components/popovers/mine/BioTooltip.vue')['default']

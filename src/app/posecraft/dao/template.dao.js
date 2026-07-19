@@ -202,7 +202,13 @@ class TemplateDao {
     const model = this.getModel();
     const template = await this.findById(id);
     if (!template) return null;
-    return await template.update(data);
+    const updated = await template.update(data);
+    // 模板状态变更时同步到底图作品
+    if (data.status !== undefined && template.work_id) {
+      const Work = sequelize.models.Work;
+      await Work.update({ status: data.status }, { where: { id: template.work_id, delete_version: 0 } });
+    }
+    return updated;
   }
 
   /**
