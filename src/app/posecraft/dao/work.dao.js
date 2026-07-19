@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PoseCraft 作品数据访问层
  * 负责作品的 CRUD、推荐查询、关注用户作品查询及 liked/collected 状态标记
  *
@@ -321,40 +321,36 @@ class WorkDao {
   }
 
   /**
-   * 查询用户关注者的作品（"关注" Tab）
+   * 查询互关好友的作品（"朋友" Tab）
+   * 仅包含 mutual=true 的关注关系，排除自己
    * @param {number} userId - 当前用户 ID
-   * @param {object} [options] - 分页参数
+   * @param {object} [options] - 分页参数 { page, pageSize }
    * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
-  async findFollowingWorks(userId, options = {}) {
+  async findFriendsWorks(userId, options = {}) {
     const model = this.getModel();
     const Follow = sequelize.models.Follow;
 
-    // 查出当前用户关注的所有人
-    const follows = await Follow.findAll({
-      where: { follower_id: userId, delete_version: 0 },
+    // 查出所有互关好友（follower_id=userId 且 mutual=true）
+    const mutuals = await Follow.findAll({
+      where: { follower_id: userId, mutual: true, delete_version: 0 },
       attributes: ['following_id']
     });
 
-    const followingIds = follows.map(f => f.following_id);
+    const friendIds = mutuals.map(f => f.following_id);
 
-    const page = options.page ? Number(options.page) : (options.limit ? Math.floor((options.offset || 0) / options.limit) + 1 : 1);
-    const pageSize = options.pageSize ? Number(options.pageSize) : (options.limit ? Number(options.limit) : 20);
+    const page = options.page ? Number(options.page) : 1;
+    const pageSize = options.pageSize ? Number(options.pageSize) : 20;
     const limit = pageSize;
     const offset = (page - 1) * pageSize;
 
-    if (followingIds.length === 0) {
-      return {
-        list: [],
-        total: 0,
-        page,
-        pageSize
-      };
+    if (friendIds.length === 0) {
+      return { list: [], total: 0, page, pageSize };
     }
 
     const { count, rows } = await model.findAndCountAll({
       where: {
-        user_id: followingIds,
+        user_id: friendIds,
         status: 1,
         delete_version: 0
       },
@@ -365,7 +361,7 @@ class WorkDao {
       offset
     });
 
-    // 补充当前用户对关注者作品的点赞/收藏状态
+    // 补充当前用户对好友作品的点赞/收藏状态
     if (rows.length > 0) {
       const workIds = rows.map((w) => w.id);
       const [likedIds, collectedIds] = await Promise.all([
@@ -378,30 +374,93 @@ class WorkDao {
       }
     }
 
-    return {
-      list: rows,
-      total: count,
-      page,
-      pageSize
-    };
+    return { list: rows, total: count, page, pageSize };
   }
 
   /**
-   * 获取当前用户已收藏的作品 ID 集合（内部辅助）
-   * @param {number} userId - 用户 ID
-   * @param {number[]} workIds - 作品 ID 数组
-   * @returns {Promise<Set<number>>}
+   * 查询附近作品（"附近" Tab）
+   * 使用球面余弦公式按 publication_lat/lng 计算距离
+   * @param {object} options - 查询参数
+   * @param {number} options.lat - 中心纬度
+   * @param {number} options.lng - 中心经度
+   * @param {number} [options.radius=50] - 半径（公里）
+   * @param {number} [options.page=1] - 页码
+   * @param {number} [options.pageSize=20] - 每页条数
+   * @param {number} [options.currentUserId] - 当前用户 ID（标记互动状态）
+   * @returns {Promise<{list: Array, total: number, page: number, pageSize: number}>}
    */
-  async _getCollectedTargetIds(userId, workIds) {
-    if (!workIds.length) return new Set();
+  async findNearbyWorks(options = {}) {
+    const model = this.getModel();
     const { Op } = await import('sequelize');
-    const UserCollect = sequelize.models.UserCollect;
-    const records = await UserCollect.findAll({
-      where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
-      attributes: ['work_id']
+
+    const lat = Number(options.lat);
+    const lng = Number(options.lng);
+    const radius = Number(options.radius) || 50;
+
+    if (isNaN(lat) || isNaN(lng)) {
+      return { list: [], total: 0, page: 1, pageSize: 20 };
+    }
+
+    const page = options.page ? Number(options.page) : 1;
+    const pageSize = options.pageSize ? Number(options.pageSize) : 20;
+    const limit = pageSize;
+    const offset = (page - 1) * pageSize;
+
+    // 球面余弦公式 + bounding box 预过滤（减少全表扫描量）
+    const latDegPerKm = 1 / 111.32;
+    const lngDegPerKm = 1 / (111.32 * Math.cos(lat * Math.PI / 180));
+    const latMin = lat - radius * latDegPerKm;
+    const latMax = lat + radius * latDegPerKm;
+    const lngMin = lng - radius * lngDegPerKm;
+    const lngMax = lng + radius * lngDegPerKm;
+
+    const distanceExpr = sequelize.literal(
+      'ACOS(SIN(RADIANS(' + lat + ')) * SIN(RADIANS(publication_lat)) + ' +
+      'COS(RADIANS(' + lat + ')) * COS(RADIANS(publication_lat)) * ' +
+      'COS(RADIANS(' + lng + ' - publication_lng))) * 6371'
+    );
+
+    const radiusCondition = sequelize.literal(
+      'ACOS(SIN(RADIANS(' + lat + ')) * SIN(RADIANS(publication_lat)) + ' +
+      'COS(RADIANS(' + lat + ')) * COS(RADIANS(publication_lat)) * ' +
+      'COS(RADIANS(' + lng + ' - publication_lng))) * 6371 <= ' + radius
+    );
+
+    const { count, rows } = await model.findAndCountAll({
+      where: {
+        status: 1,
+        delete_version: 0,
+        publication_lat: { [Op.ne]: null, [Op.between]: [latMin, latMax] },
+        publication_lng: { [Op.ne]: null, [Op.between]: [lngMin, lngMax] },
+        [Op.and]: radiusCondition
+      },
+      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
+      attributes: {
+        exclude: ['analysis_data', 'delete_version'],
+        include: [[distanceExpr, 'distance']]
+      },
+      order: [[sequelize.literal('distance'), 'ASC']],
+      limit,
+      offset
     });
-    return new Set(records.map((r) => Number(r.work_id)));
+
+    // 补充当前用户互动状态
+    const currentUserId = options.currentUserId;
+    if (currentUserId && rows.length > 0) {
+      const workIds = rows.map((w) => w.id);
+      const [likedIds, collectedIds] = await Promise.all([
+        this._getLikedTargetIds(currentUserId, workIds),
+        this._getCollectedTargetIds(currentUserId, workIds)
+      ]);
+      for (const work of rows) {
+        work.setDataValue('liked', likedIds.has(Number(work.id)));
+        work.setDataValue('collected', collectedIds.has(Number(work.id)));
+      }
+    }
+
+    return { list: rows, total: count, page, pageSize };
   }
+
 }
 
 export default new WorkDao();

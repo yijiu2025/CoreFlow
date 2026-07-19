@@ -4,11 +4,11 @@
       <div class="help-modal">
         <div class="help-header">
           <h2>快捷键与使用说明</h2>
-          <button class="help-close" @click="$emit('close')">✕</button>
+          <button class="help-close" @click="$emit('close')"><X :size="16" /></button>
         </div>
         <div class="help-body">
           <div class="help-section">
-            <h3>🛠️ 工具切换</h3>
+            <h3><Wrench :size="14" /> 工具切换</h3>
             <div class="shortcut-grid">
               <div class="shortcut-item"><kbd>V</kbd><span>选择工具</span></div>
               <div class="shortcut-item"><kbd>B</kbd><span>画笔工具</span></div>
@@ -22,7 +22,7 @@
           </div>
 
           <div class="help-section">
-            <h3>📝 编辑操作</h3>
+            <h3><PenLine :size="14" /> 编辑操作</h3>
             <div class="shortcut-grid">
               <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>Z</kbd><span>撤销</span></div>
               <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>Y</kbd><span>重做</span></div>
@@ -34,7 +34,7 @@
           </div>
 
           <div class="help-section">
-            <h3>🔍 缩放操作</h3>
+            <h3><Search :size="14" /> 缩放操作</h3>
             <div class="shortcut-grid">
               <div class="shortcut-item"><kbd>滚轮</kbd><span>缩放（鼠标中心）</span></div>
               <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>=</kbd><span>放大</span></div>
@@ -44,7 +44,7 @@
           </div>
 
           <div class="help-section">
-            <h3>✏️ 形状工具</h3>
+            <h3><Pencil :size="14" /> 形状工具</h3>
             <div class="shortcut-grid">
               <div class="shortcut-item"><kbd>Ctrl</kbd><span>按住绘制正圆/正方形</span></div>
               <div class="shortcut-item"><kbd>Shift</kbd><span>按住等比缩放</span></div>
@@ -52,7 +52,7 @@
           </div>
 
           <div class="help-section">
-            <h3>📖 使用说明</h3>
+            <h3><BookOpen :size="14" /> 使用说明</h3>
             <ul class="help-list">
               <li>上传图片后，点击 <b>智能分析</b> 自动检测姿势、面部、手部</li>
               <li>选择识别类型后，使用 <b>框选识别</b> 进行局部分析</li>
@@ -70,6 +70,8 @@
 </template>
 
 <script setup lang="ts">
+import { X, Wrench, PenLine, Search, Pencil, BookOpen } from 'lucide-vue-next'
+
 defineProps<{
   isOpen: boolean
 }>()

@@ -29,7 +29,7 @@
     <div class="section-label">识别类型</div>
     <div class="type-tabs">
       <button v-for="dt in detectionTypes" :key="dt.value" class="type-tab" :class="{ active: modelValue === dt.value }" @click="$emit('update:modelValue', dt.value)">
-        <span class="type-tab-icon">{{ dt.icon }}</span>
+        <Icon :name="dt.icon" :size="14" class="type-tab-icon" />
         <span class="type-tab-label">{{ dt.label }}</span>
       </button>
     </div>
@@ -194,7 +194,7 @@ const shortcuts = [
   color: #a5b4fc; border-color: rgba(99,102,241,0.4);
   box-shadow: 0 0 12px rgba(99,102,241,0.15);
 }
-.type-tab-icon { font-size: 14px; flex-shrink: 0; }
+.type-tab-icon { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
 .type-tab-label { font-weight: 600; white-space: nowrap; }
 
 .crop-btn {

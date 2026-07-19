@@ -13,6 +13,7 @@
     "autoprefixer": "^10.5.2",
     "axios": "^1.18.1",
     "element-plus": "^2.14.2",
+    "lucide-vue-next": "^1.0.0",
     "pinia": "^3.0.4",
     "postcss": "^8.5.16",
     "tailwindcss": "^4.3.2",

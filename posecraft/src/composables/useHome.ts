@@ -16,6 +16,7 @@ import { workApi } from '@/api/work'
 import { followApi } from '@/api/follow'
 import { bannerConfigApi } from '@/api/bannerConfig'
 import { channelApi } from '@/api/channel'
+import { useLocation } from '@/composables/useLocation'
 
 const HomeStateSymbol = Symbol('HomeState')
 
@@ -116,12 +117,31 @@ export function useHome() {
     }, 2000)
   }
 
+  /** 按 nav + channel 缓存的作品数据
+   *  键格式："channel:<channelValue>"（FeaturedView 子频道）/ "nav:<navValue>"（独立导航页） */
+  const channelCache = ref<Record<string, {
+    works: any[]
+    hasMore: boolean
+    currentPage: number
+    banners: any[]
+  }>>({})
+
+  /** 计算缓存键：featured 页按频道键，其他 nav 页按导航键 */
+  const getCacheKey = (): string => {
+    if (activeNav.value === 'featured') return `channel:${activeChannel.value}`
+    return `nav:${activeNav.value}`
+  }
+
   const templates = ref<any[]>([])
   const works = ref<any[]>([])
   const activeBanners = ref<any[]>([])
   const currentPage = ref(1)
   const hasMore = ref(true)
   const loading = ref(false)
+
+  // 用户位置（用于"附近"Tab 数据加载）
+  const { autoLocate } = useLocation()
+  const userLocation = ref<{ lat: number; lng: number } | null>(null)
 
   // 搜索建议词（猜你想搜）
   const searchSuggestions = [
@@ -314,20 +334,16 @@ export function useHome() {
 
 
   /**
-   * 构建当前频道的后端请求参数
-   * - recommend 频道：sort=recommended（按热度+随机权重排序）
+   * 构建当前频道的后端请求参数（仅 FeaturedView 子频道使用）
    * - 姿势/创意/运动等：category=<channel.category>（按分类过滤）
-   * - 无特殊配置：不传额外参数（返回全部）
+   * - 无特殊配置：不传额外参数
+   * 注：recommend 排序由 fetchWorksForNav() 按 activeNav 分发到 API 端点处理
    */
   const buildChannelParams = () => {
     const ch = currentChannel.value
     if (!ch) return {}
     const params: any = {}
-    // 推荐频道：服务端按热度+随机排序
-    if (ch.value === 'recommend') {
-      params.sort = 'recommended'
-    }
-    // 其他内容频道：按 category 字段过滤
+    // 内容频道：按 category 字段过滤（姿势/创意/运动/构图/技巧）
     if (ch.category && ch.category !== 'all') {
       params.category = ch.category
     }
@@ -340,6 +356,56 @@ export function useHome() {
    * - 其他频道：仅加载作品
    * 请求参数由 buildChannelParams() 按 channel 配置自动构建
    */
+  /** 根据 activeNav 分发到不同的 API 端点 */
+  const fetchWorksForNav = async (opts: { page: number; pageSize: number }) => {
+    const nav = activeNav.value
+    let res: any
+
+    switch (nav) {
+      case 'friends':
+        if (!authStore.isLoggedIn) { res = { list: [] }; break }
+        res = await workApi.getFriendsWorks({ page: opts.page, pageSize: opts.pageSize })
+        break
+
+      case 'following':
+        if (!authStore.isLoggedIn) { res = { list: [] }; break }
+        res = await workApi.getFollowingWorks({ page: opts.page, pageSize: opts.pageSize })
+        break
+
+      case 'mine':
+        if (!authStore.isLoggedIn || !authStore.user?.id) { res = { list: [] }; break }
+        res = await workApi.getMyWorks({ page: opts.page, pageSize: opts.pageSize })
+        break
+
+      case 'nearby': {
+        const loc = userLocation.value
+        if (!loc) { res = { list: [] }; break }
+        res = await workApi.getNearbyWorks({
+          page: opts.page, pageSize: opts.pageSize,
+          lat: loc.lat, lng: loc.lng, radius: 50
+        })
+        break
+      }
+
+      case 'recommend':
+        res = await workApi.getList({ page: opts.page, pageSize: opts.pageSize, sort: 'recommended' })
+        break
+
+      default:
+        // featured 及其他：使用 channel 参数（category/sort）
+        res = await workApi.getList(opts)
+        break
+    }
+
+    // 统一返回结构，屏蔽 axios response 和空结果的类型差异
+    return {
+      list: res?.list || [],
+      totalPages: res?.totalPages || 1,
+      page: res?.page || opts.page,
+      pageSize: res?.pageSize || opts.pageSize
+    }
+  }
+
   const loadData = async (page: number) => {
     if (loading.value) return
     loading.value = true
@@ -352,16 +418,9 @@ export function useHome() {
       const workQueryOptions = { page, pageSize: 12, ...channelParams }
 
       // ★ has_banner=true 的频道（推荐页）：Banner 与作品并行加载
-      if (currentChannel.value?.has_banner) {
+      if (currentChannel.value?.has_banner && activeNav.value === 'featured') {
         const [workResult, bannerResult] = await Promise.allSettled([
-          (async () => {
-            if (activeNav.value === 'following' && authStore.isLoggedIn) {
-              return await workApi.getFollowingWorks(workQueryOptions)
-            } else if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
-              return await workApi.getMyWorks(workQueryOptions)
-            }
-            return await workApi.getList(workQueryOptions)
-          })(),
+          fetchWorksForNav(workQueryOptions),
           bannerConfigApi.getActive().catch(() => null)
         ])
 
@@ -377,15 +436,8 @@ export function useHome() {
           activeBanners.value = []
         }
       } else {
-        // ★ 普通频道：仅加载作品（category/sort 参数已在 workQueryOptions 中）
-        let workRes: any
-        if (activeNav.value === 'following' && authStore.isLoggedIn) {
-          workRes = await workApi.getFollowingWorks(workQueryOptions)
-        } else if (activeNav.value === 'mine' && authStore.isLoggedIn && authStore.user?.id) {
-          workRes = await workApi.getMyWorks(workQueryOptions)
-        } else {
-          workRes = await workApi.getList(workQueryOptions)
-        }
+        // ★ 普通频道 / 独立导航页：仅加载作品
+        const workRes = await fetchWorksForNav(workQueryOptions)
         newWorks = workRes?.list || []
         totalPages = workRes?.totalPages || 1
         activeBanners.value = []
@@ -398,6 +450,15 @@ export function useHome() {
       }
 
       hasMore.value = page < totalPages
+
+      // 加载完成后保存到缓存
+      const cacheKey = getCacheKey()
+      channelCache.value[cacheKey] = {
+        works: [...works.value],
+        hasMore: hasMore.value,
+        currentPage: page,
+        banners: [...activeBanners.value]
+      }
     } catch (err) {
       console.error('加载数据失败:', err)
     } finally {
@@ -405,11 +466,28 @@ export function useHome() {
     }
   }
 
-  /** 刷新首页数据（重置分页重新加载，切换频道 Tab 时调用） */
+  /** 从缓存恢复数据，未缓存时返回 false */
+  const restoreFromCache = (): boolean => {
+    const cacheKey = getCacheKey()
+    const cached = channelCache.value[cacheKey]
+    if (!cached) return false
+    works.value = [...cached.works]
+    hasMore.value = cached.hasMore
+    currentPage.value = cached.currentPage
+    activeBanners.value = cached.banners ? [...cached.banners] : []
+    return true
+  }
+
+  /** 刷新首页数据（切换频道 Tab 或 Nav Tab 时调用）
+   *  优先从缓存恢复，无缓存时首次请求 */
   const refreshData = () => {
+    // 有缓存直接恢复，不请求后端
+    if (restoreFromCache()) return
+
     currentPage.value = 1
     hasMore.value = true
-    works.value = []   // 立即清空旧数据，避免 Tab 切换时短暂显示上一个频道的内容
+    works.value = []
+    activeBanners.value = []
     loadData(1)
   }
 
@@ -453,13 +531,13 @@ export function useHome() {
    */
   // 兜底频道（API 全失败时使用，保证基本可用）
   const FALLBACK_CHANNELS = [
-    { value: 'recommend', label: '推荐', icon: '🔥', type: 'content', has_banner: true },
-    { value: 'pose', label: '姿势', icon: '👤', type: 'content', category: 'pose' },
-    { value: 'creative', label: '创意', icon: '💡', type: 'content', category: 'creative' },
-    { value: 'scenery', label: '风景', icon: '📷', type: 'iframe', url: 'https://cn.bing.com/images/search?q=%E9%A3%8E%E6%99%AF' },
-    { value: 'sports', label: '运动', icon: '🏆', type: 'content', category: 'sports' },
-    { value: 'composition', label: '构图', icon: '📐', type: 'content', category: 'composition' },
-    { value: 'technique', label: '技巧', icon: '🔧', type: 'content', category: 'technique' }
+    { value: 'recommend', label: '推荐', icon: 'flame', type: 'content', has_banner: true },
+    { value: 'pose', label: '姿势', icon: 'user', type: 'content', category: 'pose' },
+    { value: 'creative', label: '创意', icon: 'lightbulb', type: 'content', category: 'creative' },
+    { value: 'scenery', label: '风景', icon: 'camera', type: 'iframe', url: 'https://cn.bing.com/images/search?q=%E9%A3%8E%E6%99%AF' },
+    { value: 'sports', label: '运动', icon: 'trophy', type: 'content', category: 'sports' },
+    { value: 'composition', label: '构图', icon: 'ruler', type: 'content', category: 'composition' },
+    { value: 'technique', label: '技巧', icon: 'wrench', type: 'content', category: 'technique' }
   ]
 
   const loadChannels = async () => {
@@ -488,12 +566,26 @@ export function useHome() {
     refreshData()
   })
 
+  /** 监听 activeNav 切换：切到不同导航页时从缓存恢复或请求数据 */
+  watch(activeNav, (newNav, oldNav) => {
+    if (channels.value.length === 0 || newNav === oldNav) return
+    // featured 页由 activeChannel watch 触发数据加载，此处跳过
+    if (newNav === 'featured') return
+    activeBanners.value = []
+    refreshData()
+  })
+
   onMounted(async () => {
     // ① 先加载频道配置（决定 Tab 结构，完成后自动触发首次 refreshData）
     await loadChannels()
 
     // ② 加载用户资料（并行不影响首屏）
     await fetchUserProfile()
+
+    // ③ 后台异步获取用户位置（不阻塞首屏，用于\"附近\"页）
+    autoLocate().then(loc => {
+      if (loc) userLocation.value = { lat: loc.lat, lng: loc.lng }
+    }).catch(() => {})
 
     const handleResize = () => { windowWidth.value = window.innerWidth }
     window.addEventListener('resize', handleResize, { passive: true })

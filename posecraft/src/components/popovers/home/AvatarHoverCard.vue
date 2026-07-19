@@ -19,7 +19,7 @@
       <!-- 我的喜欢 (带3个缩略图) -->
       <div class="card-menu-group" @click="goToTab('likes')">
         <div class="card-menu-title">
-          <span class="title-left">❤️ 我的喜欢</span>
+          <span class="title-left"><Heart :size="14" /> 我的喜欢</span>
           <span class="card-menu-count">
             {{ authStore.likedWorksCount }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
@@ -40,7 +40,7 @@
       <!-- 我的收藏 (带3个缩略图) -->
       <div class="card-menu-group" @click="goToTab('collect')">
         <div class="card-menu-title">
-          <span class="title-left">⭐ 我的收藏</span>
+          <span class="title-left"><Star :size="14" /> 我的收藏</span>
           <span class="card-menu-count">
             {{ authStore.collectsCount }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
@@ -61,7 +61,7 @@
       <!-- 观看历史 (带3个缩略图) -->
       <div class="card-menu-group" @click="goToTab('history')">
         <div class="card-menu-title">
-          <span class="title-left">🕒 观看历史</span>
+          <span class="title-left"><Clock :size="14" /> 观看历史</span>
           <span class="card-menu-count">
             {{ authStore.historyText }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
@@ -82,7 +82,7 @@
       <!-- 稍后再看 (带3个缩略图) -->
       <div class="card-menu-group" @click="goToTab('watch-later')">
         <div class="card-menu-title">
-          <span class="title-left">🎬 稍后再看</span>
+          <span class="title-left"><Clapperboard :size="14" /> 稍后再看</span>
           <span class="card-menu-count">
             {{ authStore.watchLaterCount }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
@@ -103,7 +103,7 @@
       <!-- 我的作品 (带3个缩略图) -->
       <div class="card-menu-group" @click="goToTab('works')">
         <div class="card-menu-title">
-          <span class="title-left">▶️ 我的作品</span>
+          <span class="title-left"><Play :size="14" /> 我的作品</span>
           <span class="card-menu-count">
             {{ authStore.worksCount || 14 }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
@@ -122,12 +122,12 @@
       </div>
 
       <div class="card-menu-item" @click="$emit('showToast', '我的预约')">
-        <span class="menu-icon">🔔</span>
+        <Bell class="menu-icon" :size="15" />
         <span>我的预约</span>
       </div>
 
       <div class="card-menu-item" @click="$emit('showToast', '我的订单')">
-        <span class="menu-icon">📄</span>
+        <FileText class="menu-icon" :size="15" />
         <span>我的订单</span>
       </div>
     </div>
@@ -155,6 +155,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { Heart, Star, Clock, Clapperboard, Play, Bell, FileText } from 'lucide-vue-next'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -446,7 +447,10 @@ const handleLogout = () => {
 
 .menu-icon {
   margin-right: 8px;
-  font-size: 15px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .menu-value {

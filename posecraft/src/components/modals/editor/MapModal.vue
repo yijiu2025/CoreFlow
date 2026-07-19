@@ -3,7 +3,7 @@
     <div v-if="isOpen" class="modal-overlay" @click.self="emit('close')">
       <div class="map-modal-frame glass-panel">
         <div class="map-modal-header">
-          <h3>📍 选择拍摄地</h3>
+          <h3><MapPin :size="16" /> 选择拍摄地</h3>
           <button class="close-btn" @click="emit('close')">×</button>
         </div>
 
@@ -28,6 +28,7 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
+import { MapPin } from 'lucide-vue-next'
 
 const props = defineProps<{
   isOpen: boolean

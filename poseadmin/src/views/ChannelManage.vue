@@ -21,28 +21,28 @@ const typeOptions = [
   { value: 'external', label: '外部跳转' }
 ]
 
-// 预设图标选项（emoji — 前端直接渲染）
+// 预设图标选项（lucide 图标名称 — 前端通过 Icon.vue 渲染）
 const iconOptions = [
-  { value: '🔥', label: '🔥 热门' },
-  { value: '👤', label: '👤 人物' },
-  { value: '💡', label: '💡 创意' },
-  { value: '📷', label: '📷 摄影' },
-  { value: '🏆', label: '🏆 运动' },
-  { value: '📐', label: '📐 构图' },
-  { value: '🔧', label: '🔧 技巧' },
-  { value: '✨', label: '✨ 精选' },
-  { value: '🎨', label: '🎨 艺术' },
-  { value: '🌟', label: '🌟 推荐' },
-  { value: '💎', label: '💎 精品' },
-  { value: '🎯', label: '🎯 目标' },
-  { value: '🏠', label: '🏠 生活' },
-  { value: '🐱', label: '🐱 宠物' },
-  { value: '🌸', label: '🌸 花卉' },
-  { value: '🍳', label: '🍳 美食' },
-  { value: '✈️', label: '✈️ 旅行' },
-  { value: '🎵', label: '🎵 音乐' },
-  { value: '📚', label: '📚 学习' },
-  { value: '❤️', label: '❤️ 喜欢' }
+  { value: 'flame', label: '🔥 热门' },
+  { value: 'user', label: '👤 人物' },
+  { value: 'lightbulb', label: '💡 创意' },
+  { value: 'camera', label: '📷 摄影' },
+  { value: 'trophy', label: '🏆 运动' },
+  { value: 'ruler', label: '📐 构图' },
+  { value: 'wrench', label: '🔧 技巧' },
+  { value: 'sparkles', label: '✨ 精选' },
+  { value: 'palette', label: '🎨 艺术' },
+  { value: 'star', label: '🌟 推荐' },
+  { value: 'gem', label: '💎 精品' },
+  { value: 'target', label: '🎯 目标' },
+  { value: 'home', label: '🏠 生活' },
+  { value: 'cat', label: '🐱 宠物' },
+  { value: 'flower-2', label: '🌸 花卉' },
+  { value: 'utensils', label: '🍳 美食' },
+  { value: 'plane', label: '✈️ 旅行' },
+  { value: 'music', label: '🎵 音乐' },
+  { value: 'book-heart', label: '📚 学习' },
+  { value: 'heart', label: '❤️ 喜欢' }
 ]
 
 const fetchList = async () => {
@@ -172,10 +172,11 @@ onMounted(() => { fetchList() })
       <el-table-column prop="value" label="标识" width="120" show-overflow-tooltip />
       <el-table-column prop="label" label="名称" width="100" />
       <el-table-column label="图标" width="70" align="center">
-        <template #default="{ row }">
-          <span style="font-size: 20px; line-height: 1;">{{ row.icon || '—' }}</span>
-        </template>
-      </el-table-column>
+  <template #default="{ row }">
+    <Icon v-if="row.icon" :name="row.icon" :size="20" />
+    <span v-else>&mdash;</span>
+  </template>
+</el-table-column>
       <el-table-column label="类型" width="100" align="center">
         <template #default="{ row }">
           <el-tag size="small" :type="row.type === 'content' ? 'success' : row.type === 'iframe' ? 'warning' : row.type === 'route' ? 'primary' : 'info'">
@@ -238,14 +239,16 @@ onMounted(() => { fetchList() })
         <el-form-item label="图标">
           <el-select v-model="form.icon" placeholder="选择图标" clearable filterable style="width: 100%">
             <el-option
-              v-for="opt in iconOptions"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            >
-              <span style="font-size: 16px; margin-right: 8px;">{{ opt.value }}</span>
-              <span class="text-gray-500">{{ opt.label }}</span>
-            </el-option>
+  v-for="opt in iconOptions"
+  :key="opt.value"
+  :label="opt.label"
+  :value="opt.value"
+>
+  <span style="display: inline-flex; align-items: center; gap: 8px;">
+    <Icon :name="opt.value" :size="16" />
+    <span class="text-gray-500">{{ opt.label }}</span>
+  </span>
+</el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="类型" required>

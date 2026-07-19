@@ -270,8 +270,8 @@ const handleCapture = async () => {
       template_id: route.query.template ? Number(route.query.template) : undefined,
       image_url: uploadResult.url,
       edit_data: templateTransform.value,
-      // 自动采集的发布地址（不可修改）
-      publication_address: loc?.address || null,
+      // 自动采集的发布地址（只存区域级别：国家/省份/城市）
+      publication_address: loc?.region || loc?.address || null,
       publication_lat: loc?.lat || null,
       publication_lng: loc?.lng || null,
       publication_source: loc?.source || null

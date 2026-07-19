@@ -1,1 +1,0 @@
-import{$ as a}from"./index-BBygRlhQ.js";const o={getProfile:()=>a.get("/user/v1/profile"),updateProfile:t=>a.put("/user/v1/update",t),uploadAvatar:t=>{const e=new FormData;return e.append("avatar",t),a.post("/user/v1/avatar",e,{headers:{"Content-Type":"multipart/form-data"}})}};export{o as userApi};

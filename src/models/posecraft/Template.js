@@ -69,6 +69,24 @@ export default (sequelize, DataTypes) => {
         field: 'likes_count',
         comment: '点赞数'
       },
+      collects_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        field: 'collects_count',
+        comment: '收藏数（预留）'
+      },
+      shares_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        field: 'shares_count',
+        comment: '分享数（预留）'
+      },
+      comments_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        field: 'comments_count',
+        comment: '评论数（预留）'
+      },
       uses_count: {
         type: DataTypes.INTEGER,
         defaultValue: 0,

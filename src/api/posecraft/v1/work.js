@@ -522,4 +522,58 @@ export default async function (fastify) {
       return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
     }
   });
+
+  // 获取互关朋友的作品
+  registerSecureRoute(fastify, {
+    name: 'getFriendsWorks',
+    alias: '获取互关朋友的作品',
+    method: 'GET',
+    url: '/works/friends',
+    requireLogin: true,
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
+      }
+    },
+    handler: async (request, reply) => {
+      const { page, pageSize } = request.query;
+      const user = request.state.user;
+
+      const result = await workDao.findFriendsWorks(user.userId, { page, pageSize });
+
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
+    }
+  });
+
+  // 获取附近的公开作品
+  registerSecureRoute(fastify, {
+    name: 'getNearbyWorks',
+    alias: '获取附近的公开作品',
+    method: 'GET',
+    url: '/works/nearby',
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          lat: { type: 'number' },
+          lng: { type: 'number' },
+          radius: { type: 'number', default: 50 },
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
+      }
+    },
+    handler: async (request, reply) => {
+      const { lat, lng, radius, page, pageSize } = request.query;
+      const currentUserId = request.state?.user?.userId;
+
+      const result = await workDao.findNearbyWorks({ lat, lng, radius, page, pageSize, currentUserId });
+
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
+    }
+  });
 }

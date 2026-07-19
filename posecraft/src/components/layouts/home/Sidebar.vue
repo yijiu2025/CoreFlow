@@ -14,7 +14,7 @@
             @click="navigateTo('/')"
             :class="['menu-item', { active: isActive('/') }]"
           >
-            <span class="menu-icon">💎</span>
+            <Gem class="menu-icon" :size="18" />
             <span class="menu-label">精选</span>
           </button>
 
@@ -22,7 +22,7 @@
             @click="navigateTo('/recommend')"
             :class="['menu-item', { active: isActive('/recommend') }]"
           >
-            <span class="menu-icon">✨</span>
+            <Sparkles class="menu-icon" :size="18" />
             <span class="menu-label">推荐</span>
           </button>
 
@@ -30,7 +30,7 @@
             @click="navigateTo('/nearby')"
             :class="['menu-item', { active: isActive('/nearby') }]"
           >
-            <span class="menu-icon">📍</span>
+            <MapPin class="menu-icon" :size="18" />
             <span class="menu-label">附近</span>
           </button>
         </div>
@@ -43,7 +43,7 @@
             @click="navigateTo('/following')"
             :class="['menu-item', { active: isActive('/following') }]"
           >
-            <span class="menu-icon">❤️</span>
+            <Heart class="menu-icon" :size="18" />
             <span class="menu-label">关注</span>
           </button>
 
@@ -51,7 +51,7 @@
             @click="navigateTo('/friends')"
             :class="['menu-item', { active: isActive('/friends') }]"
           >
-            <span class="menu-icon">👥</span>
+            <Users class="menu-icon" :size="18" />
             <span class="menu-label">朋友</span>
           </button>
 
@@ -59,7 +59,7 @@
             @click="navigateTo('/mine')"
             :class="['menu-item', { active: isActive('/mine') }]"
           >
-            <span class="menu-icon">👤</span>
+            <User class="menu-icon" :size="18" />
             <span class="menu-label">我的</span>
           </button>
         </div>
@@ -71,33 +71,33 @@
       <!-- 设置 -->
       <div class="bottom-menu-wrapper">
         <button class="bottom-item">
-          <span class="bottom-icon">⚙️</span>
+          <Settings class="bottom-icon" :size="16" />
           <span>设置</span>
         </button>
         <div class="hover-dropdown-menu">
           <div class="dropdown-header">系统设置</div>
           <button class="dropdown-item" @click="themeStore.toggleTheme()">
-            <span class="item-icon">🌗</span>
+            <Contrast class="item-icon" :size="16" />
             <span>{{ themeStore.isDark ? '浅色模式' : '深色模式' }}</span>
           </button>
           <button class="dropdown-item" @click="openSettings('general')">
-            <span class="item-icon">🛠️</span>
+            <Wrench class="item-icon" :size="16" />
             <span>通用设置</span>
           </button>
           <button class="dropdown-item" @click="openSettings('ai')">
-            <span class="item-icon">🤖</span>
+            <Bot class="item-icon" :size="16" />
             <span>AI设置</span>
           </button>
           <button class="dropdown-item" @click="openSettings('shortcuts')">
-            <span class="item-icon">⌨️</span>
+            <Keyboard class="item-icon" :size="16" />
             <span>键盘快捷键</span>
           </button>
           <button class="dropdown-item" @click="openSettings('faq')">
-            <span class="item-icon">❓</span>
+            <HelpCircle class="item-icon" :size="16" />
             <span>常见问题</span>
           </button>
           <button class="dropdown-item" @click="$emit('showToast', '我的客服')">
-            <span class="item-icon">🎧</span>
+            <Headphones class="item-icon" :size="16" />
             <span>我的客服</span>
           </button>
         </div>
@@ -106,17 +106,17 @@
       <!-- 关于 -->
       <div class="bottom-menu-wrapper">
         <button class="bottom-item">
-          <span class="bottom-icon">ℹ️</span>
+          <Info class="bottom-icon" :size="16" />
           <span>关于</span>
         </button>
         <div class="hover-dropdown-menu">
           <div class="dropdown-header">关于我们</div>
           <button class="dropdown-item" @click="$emit('showToast', '关于 PoseCraft')">
-            <span class="item-icon">✨</span>
+            <Sparkles class="item-icon" :size="16" />
             <span>关于 PoseCraft</span>
           </button>
           <button class="dropdown-item" @click="$emit('showToast', '联系我们')">
-            <span class="item-icon">📞</span>
+            <Phone class="item-icon" :size="16" />
             <span>联系我们</span>
           </button>
         </div>
@@ -129,6 +129,10 @@
 import { useRouter, useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useHome } from '@/composables/useHome'
+import {
+  Gem, Sparkles, MapPin, Heart, Users, User, Settings, Contrast,
+  Wrench, Bot, Keyboard, HelpCircle, Headphones, Info, Phone
+} from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
@@ -275,7 +279,10 @@ const goHome = () => {
 }
 
 .menu-icon {
-  font-size: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .menu-divider {
@@ -414,7 +421,10 @@ const goHome = () => {
 }
 
 .item-icon {
-  font-size: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @keyframes popIn {

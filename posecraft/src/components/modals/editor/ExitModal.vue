@@ -3,7 +3,7 @@
     <div v-if="isOpen" class="modal-overlay" @click.self="emit('close')">
       <div class="save-modal glass-panel alert">
         <div class="modal-body alert-body">
-          <div class="alert-icon">⚠️</div>
+          <div class="alert-icon"><AlertTriangle :size="40" /></div>
           <h3>确认退出？</h3>
           <p>当前修改尚未保存，退出后将丢失所有未发布的改动。</p>
         </div>
@@ -17,6 +17,8 @@
 </template>
 
 <script setup lang="ts">
+import { AlertTriangle } from 'lucide-vue-next'
+
 const props = defineProps<{
   isOpen: boolean
 }>()
@@ -71,7 +73,11 @@ const emit = defineEmits(['close', 'confirm'])
   align-items: center; text-align: center; padding: 30px 20px;
 }
 .alert-icon {
-  font-size: 40px; margin-bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f87171;
+  margin-bottom: 12px;
 }
 .alert-body h3 {
   margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #f87171;

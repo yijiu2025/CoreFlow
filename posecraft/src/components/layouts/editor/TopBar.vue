@@ -7,7 +7,7 @@
         </svg>
       </button>
       <div class="logo-mark">
-        <span class="logo-icon">📸</span>
+        <span class="logo-icon"><Aperture :size="18" /></span>
         <span class="logo-text">PoseCraft</span>
       </div>
       <div class="hbar-div"></div>
@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { useCanvasStore, useHistoryStore } from '@/stores/editor'
+import { Aperture } from 'lucide-vue-next'
 
 const canvasStore = useCanvasStore()
 const historyStore = useHistoryStore()
@@ -101,7 +102,9 @@ const emit = defineEmits(['exit', 'undo', 'redo', 'help', 'save'])
 }
 
 .logo-icon {
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .logo-text {

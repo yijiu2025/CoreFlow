@@ -34,7 +34,7 @@
           />
           <!-- 无底图 -->
           <div v-else class="no-image">
-            <span class="no-image-icon">👤</span>
+            <User class="no-image-icon" :size="48" />
             <span class="no-image-label">纯姿势骨骼模板</span>
           </div>
           <!-- 骨架叠加：模板详情中的 thumbnail_url（骨架 PNG），点开详情时才加载 -->
@@ -54,7 +54,7 @@
             :class="{ active: showOverlay }"
             @click="showOverlay = !showOverlay"
           >
-            <span class="pill-icon">✨</span>
+            <Sparkles class="pill-icon" :size="14" />
             <span class="pill-label">{{ showOverlay ? '隐藏骨骼' : '显示骨骼' }}</span>
           </button>
           <transition name="fade">
@@ -102,8 +102,8 @@
         <!-- 更多菜单 -->
         <transition name="fade">
           <div v-if="isOwner && menuOpen" class="more-menu" @click="menuOpen = false">
-            <button @click="editWork">✏️ 编辑</button>
-            <button @click="deleteWork" class="danger">🗑️ 删除</button>
+            <button @click="editWork"><Pencil :size="14" /> 编辑</button>
+            <button @click="deleteWork" class="danger"><Trash2 :size="14" /> 删除</button>
           </div>
         </transition>
 
@@ -134,23 +134,22 @@
 
           <!-- 元数据行 -->
           <div class="meta-row">
-            <span class="meta-item">👁 {{ work?.views_count ?? 0 }}</span>
+            <span class="meta-item"><Eye :size="13" /> {{ work?.views_count ?? 0 }}</span>
             <span class="meta-dot">·</span>
             <span class="meta-item">{{ formatDate(work?.created_at) }}</span>
           </div>
 
-          <!-- 地址信息 -->
-          <div class="address-row" v-if="work?.publication_address || work?.work_address">
-            <div v-if="work?.publication_address" class="address-item pub-addr">
-              <span class="addr-icon">📍</span>
+          <!-- 地址信息（只显示国家/省份/城市级别）-->
+          <div class="address-row" v-if="work?.address?.publication || work?.address?.work">
+            <div v-if="work?.address?.publication" class="address-item pub-addr">
+              <MapPin class="addr-icon" :size="14" />
               <span class="addr-label">发布于</span>
-              <span class="addr-text">{{ work.publication_address }}</span>
-              <span class="addr-source">({{ work.publication_source === 'gps' ? 'GPS' : 'IP' }})</span>
+              <span class="addr-text">{{ work.address.publication }}</span>
             </div>
-            <div v-if="work?.work_address" class="address-item work-addr">
-              <span class="addr-icon">📷</span>
-              <span class="addr-label">{{ work.work_address_source === 'exif' ? '拍摄于' : '位于' }}</span>
-              <span class="addr-text">{{ work.work_address }}</span>
+            <div v-if="work?.address?.work" class="address-item work-addr">
+              <Camera class="addr-icon" :size="14" />
+              <span class="addr-label">{{ work.address.work_address_source === 'exif' ? '拍摄于' : '位于' }}</span>
+              <span class="addr-text">{{ work.address.work }}</span>
             </div>
           </div>
 
@@ -160,7 +159,7 @@
             class="cta-shoot"
             @click="handleShoot"
           >
-            <span class="cta-icon">📸</span>
+            <Aperture class="cta-icon" :size="18" />
             <span>{{ isTemplate || isTemplateWork ? '使用此姿势拍照' : '使用同款姿势拍摄' }}</span>
             <svg class="cta-arrow" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
@@ -170,7 +169,7 @@
           <!-- AI 人体特征（折叠） -->
           <details v-if="work?.analysis_data" class="analysis-block">
             <summary class="analysis-summary">
-              <span>🤖 AI 人体特征数据</span>
+              <span class="analysis-title"><Bot :size="14" /> AI 人体特征数据</span>
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
               </svg>
@@ -213,7 +212,7 @@
               </div>
             </div>
             <div v-else class="comments-empty">
-              💬 还没有人评论，快来抢沙发
+              <MessageCircle :size="20" /> 没有人评论，快来抢沙发
             </div>
           </section>
         </div>
@@ -225,7 +224,8 @@
             :class="{ active: isLiked, pulse: likePulse }"
             @click="toggleLike"
           >
-            <span class="action-icon">{{ isLiked ? '❤️' : '🤍' }}</span>
+            <Heart v-if="!isLiked" class="action-icon" :size="20" />
+            <Heart v-else class="action-icon" :size="20" fill="currentColor" />
             <span class="action-count">{{ formattedLikes }}</span>
           </button>
           <button
@@ -233,15 +233,15 @@
             :class="{ active: isCollected }"
             @click="toggleCollect"
           >
-            <span class="action-icon">{{ isCollected ? '⭐' : '☆' }}</span>
+            <Star class="action-icon" :size="20" :fill="isCollected ? 'currentColor' : 'none'" />
             <span class="action-count">收藏</span>
           </button>
           <button class="action-btn" @click="scrollToComments">
-            <span class="action-icon">💬</span>
+            <MessageCircle class="action-icon" :size="20" />
             <span class="action-count">{{ comments.length || '' }}</span>
           </button>
           <button class="action-btn" @click="share">
-            <span class="action-icon">↗️</span>
+            <Share2 class="action-icon" :size="20" />
             <span class="action-count">分享</span>
           </button>
         </div>
@@ -264,6 +264,10 @@ import { useHome } from '@/composables/useHome'
 import { workApi } from '@/api/work'
 import { templateApi } from '@/api/template'
 import { followApi } from '@/api/follow'
+import {
+  User, Sparkles, Pencil, Trash2, Eye, MapPin, Camera, Aperture,
+  Bot, MessageCircle, Heart, Star, Share2
+} from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -316,13 +320,16 @@ const isTemplate = computed(() =>
 )
 
 const isTemplateWork = computed(() => {
-  if (!work.value?.edit_data) return false
-  try {
-    const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
-    return !!data?.is_template_work
-  } catch {
-    return false
+  // 新方式：通过 type 字段判断
+  if (work.value?.type === 'template') return true
+  // 兼容旧数据：通过 edit_data 中的 is_template_work 判断
+  if (work.value?.edit_data) {
+    try {
+      const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
+      return !!data?.is_template_work
+    } catch { /* ignore */ }
   }
+  return false
 })
 
 const isOwner = computed(() => authStore.user?.id === work.value?.user_id)
@@ -703,7 +710,7 @@ onMounted(async () => {
   background: #0f172a;
   color: #94a3b8;
 }
-.no-image-icon { font-size: 3rem; }
+.no-image-icon { display: inline-flex; align-items: center; }
 .no-image-label {
   font-size: 0.7rem;
   font-weight: 700;
@@ -753,7 +760,7 @@ onMounted(async () => {
   background: rgba(99, 102, 241, 0.85);
   border-color: rgba(99, 102, 241, 0.4);
 }
-.pill-icon { font-size: 0.9rem; }
+.pill-icon { display: inline-flex; }
 
 .opacity-slider {
   width: 120px;
@@ -942,7 +949,7 @@ onMounted(async () => {
   gap: 6px;
   font-size: 0.75rem;
 }
-.addr-icon { font-size: 14px; }
+.addr-icon { display: inline-flex; align-items: center; }
 .addr-label {
   color: #94a3b8;
   font-weight: 500;
@@ -1193,7 +1200,7 @@ onMounted(async () => {
 .dark .action-btn:hover { background: rgba(255, 255, 255, 0.04); }
 .action-btn.active { color: #ff2442; }
 .action-btn.pulse { animation: likePulse .6s ease; }
-.action-icon { font-size: 1.2rem; line-height: 1; }
+.action-icon { display: inline-flex; align-items: center; justify-content: center; }
 .action-count { font-size: 0.8rem; min-width: 18px; text-align: left; }
 
 @keyframes likePulse {

@@ -25,7 +25,7 @@
         <div class="user-info-main">
           <div class="user-name-row">
             <h1 class="username">{{ userProfile.username || '摄影小王' }}</h1>
-            <span class="edit-icon" @click="openEditModal">🖊️</span>
+            <span class="edit-icon" @click="openEditModal"><Pen :size="16" /></span>
           </div>
 
           <div class="stats-row">
@@ -120,7 +120,7 @@
           :class="['tab-btn', { active: activeTab === 'watch-later' }]"
         >
           <span>稍后再看</span>
-          <span class="tab-lock">🔒</span>
+          <span class="tab-lock"><Lock :size="12" /></span>
         </button>
       </div>
 
@@ -147,7 +147,7 @@
           @click="subTab = 'private'"
         >
           <span>私密作品</span>
-          <span class="sub-lock">🔒</span>
+          <span class="sub-lock"><Lock :size="11" /></span>
         </button>
         <button 
           :class="['sub-tab-btn', { active: subTab === 'collection' }]" 
@@ -166,7 +166,7 @@
       <!-- 右侧日期筛选及搜索框 -->
       <div class="sub-right-actions">
         <div class="tab-search-wrapper">
-          <span class="tab-search-icon">🔍</span>
+          <Search class="tab-search-icon" :size="14" />
           <input 
             type="text" 
             v-model="searchQuery" 
@@ -180,7 +180,7 @@
         <!-- 日期筛选下拉组件 -->
         <div class="date-filter-wrapper">
           <button class="date-filter-btn" @click="showDateDropdown = !showDateDropdown">
-            <span>📅 {{ dateFilterLabel }}</span>
+            <span><Calendar :size="13" /> {{ dateFilterLabel }}</span>
             <span class="arrow-icon" :class="{ open: showDateDropdown }">▼</span>
           </button>
           <div v-if="showDateDropdown" class="date-dropdown-menu">
@@ -255,7 +255,7 @@
       </template>
       <template v-else>
         <div class="empty-state">
-          <div class="empty-icon">📂</div>
+          <Folder class="empty-icon" :size="54" />
           <div class="empty-text">当前分类或时间范围内没有找到作品</div>
         </div>
       </template>
@@ -298,7 +298,7 @@
           <!-- 顶部标题栏 -->
           <div class="edit-modal-header">
             <span class="edit-modal-title">编辑资料</span>
-            <button class="edit-modal-close" @click="closeEditModal">✕</button>
+            <button class="edit-modal-close" @click="closeEditModal"><X :size="16" /></button>
           </div>
 
           <!-- 头像修改区域 -->
@@ -320,7 +320,7 @@
               <!-- 上传 loading -->
               <div class="edit-avatar-mask" :class="{ uploading: avatarUploading }">
                 <span v-if="avatarUploading" class="avatar-spinner">⟳</span>
-                <span v-else class="camera-icon">📷</span>
+                <span v-else class="camera-icon"><Camera :size="20" /></span>
               </div>
             </div>
             <p class="edit-avatar-hint">
@@ -387,6 +387,7 @@ import { useRoute } from 'vue-router'
 import { useHome } from '@/composables/useHome'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
+import { Pen, Lock, Search, Calendar, Folder, X, Camera } from 'lucide-vue-next'
 import PoseCard from '@/components/cards/home/PoseCard.vue'
 import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
 import BioTooltip from '@/components/popovers/mine/BioTooltip.vue'
@@ -769,7 +770,7 @@ const batchDelete = async () => {
 }
 
 // 作品数（排除创建模板时自动生成的底图作品）
-const realWorksCount = computed(() => myWorks.value.filter(w => !w.is_template_work).length)
+const realWorksCount = computed(() => myWorks.value.filter(w => w.type !== 'template' && !w.is_template_work).length)
 
 // 过滤后的列表计算
 const filteredItems = computed(() => {
@@ -778,7 +779,7 @@ const filteredItems = computed(() => {
   if (activeTab.value === 'works') {
     // 作品 Tab：排除创建模板时自动生成的底图作品（is_template_work=true）
     // 只保留通过相机拍摄发表的真实作品
-    const realWorks = myWorks.value.filter(w => !w.is_template_work)
+    const realWorks = myWorks.value.filter(w => w.type !== 'template' && !w.is_template_work)
 
     // 根据三级分类进行过滤
     if (subTab.value === 'public') {
@@ -902,7 +903,8 @@ const filteredItems = computed(() => {
 }
 
 .edit-icon {
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
   cursor: pointer;
   opacity: 0.7;
 }
@@ -1137,7 +1139,8 @@ input:checked + .slider:before {
 }
 
 .tab-lock {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
   opacity: 0.6;
 }
 
@@ -1221,7 +1224,8 @@ input:checked + .slider:before {
 }
 
 .sub-lock {
-  font-size: 9px;
+  display: inline-flex;
+  align-items: center;
   opacity: 0.75;
 }
 
@@ -1653,7 +1657,10 @@ input:checked + .slider:before {
 }
 
 .empty-icon {
-  font-size: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
   margin-bottom: 16px;
 }
 
@@ -1781,7 +1788,9 @@ input:checked + .slider:before {
 }
 
 .camera-icon {
-  font-size: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .edit-avatar-hint {

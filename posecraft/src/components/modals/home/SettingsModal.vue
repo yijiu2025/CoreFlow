@@ -4,7 +4,7 @@
       <!-- 头部 -->
       <div class="modal-header">
         <div class="header-title-group">
-          <span class="header-icon">⚙️</span>
+          <span class="header-icon"><Settings :size="18" /></span>
           <h3>系统设置</h3>
         </div>
         <button class="close-btn" @click="$emit('close')">×</button>
@@ -20,7 +20,7 @@
             :class="['tab-btn', { active: currentSection === tab.id }]"
             @click="scrollToTab(tab.id)"
           >
-            <span class="tab-icon">{{ tab.icon }}</span>
+            <span class="tab-icon"><Icon :name="tab.icon" :size="16" /></span>
             <span class="tab-label">{{ tab.name }}</span>
           </button>
         </aside>
@@ -29,7 +29,7 @@
         <main class="settings-content" ref="scrollContainer" @scroll="handleScroll">
           <!-- 通用设置 -->
           <section id="settings-sec-general" class="settings-section">
-            <h4 class="section-title">🛠️ 通用设置</h4>
+            <h4 class="section-title"><Wrench :size="15" /> 通用设置</h4>
             
             <div class="setting-row">
               <div class="setting-info">
@@ -69,7 +69,7 @@
 
           <!-- AI设置 -->
           <section id="settings-sec-ai" class="settings-section">
-            <h4 class="section-title">🤖 AI 辅助设置</h4>
+            <h4 class="section-title"><Bot :size="15" /> AI 辅助设置</h4>
 
             <div class="setting-row">
               <div class="setting-info">
@@ -108,7 +108,7 @@
 
           <!-- 键盘快捷键 -->
           <section id="settings-sec-shortcuts" class="settings-section">
-            <h4 class="section-title">⌨️ 键盘快捷键</h4>
+            <h4 class="section-title"><Keyboard :size="15" /> 键盘快捷键</h4>
             <div class="shortcuts-grid">
               <div class="shortcut-item">
                 <span class="shortcut-action">撤销上一步</span>
@@ -133,7 +133,7 @@
 
           <!-- 常见问题 -->
           <section id="settings-sec-faq" class="settings-section">
-            <h4 class="section-title">❓ 常见问题 FAQ</h4>
+            <h4 class="section-title"><HelpCircle :size="15" /> 常见问题 FAQ</h4>
             <div class="faq-list">
               <div class="faq-item">
                 <div class="faq-q">Q: 为什么拍照后骨骼没有完全对齐？</div>
@@ -158,6 +158,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useUserSettings } from '@/stores/userSettings'
+import { Settings, Wrench, Bot, Keyboard, HelpCircle } from 'lucide-vue-next'
 
 const props = defineProps<{
   activeSection: string
@@ -185,10 +186,10 @@ const sensitivity = ref(60)
 const preferLocal = ref(false)
 
 const tabs = [
-  { id: 'general', name: '通用设置', icon: '🛠️' },
-  { id: 'ai', name: 'AI 辅助', icon: '🤖' },
-  { id: 'shortcuts', name: '快捷键', icon: '⌨️' },
-  { id: 'faq', name: '常见问题', icon: '❓' }
+  { id: 'general', name: '通用设置', icon: 'wrench' },
+  { id: 'ai', name: 'AI 辅助', icon: 'bot' },
+  { id: 'shortcuts', name: '快捷键', icon: 'keyboard' },
+  { id: 'faq', name: '常见问题', icon: 'help-circle' }
 ]
 
 const scrollToTab = (sectionId: string) => {
@@ -288,7 +289,9 @@ watch(() => props.activeSection, (newVal) => {
 }
 
 .header-icon {
-  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .modal-header h3 {

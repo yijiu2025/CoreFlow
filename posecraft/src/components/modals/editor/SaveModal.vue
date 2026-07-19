@@ -3,7 +3,7 @@
     <div v-if="isOpen" class="modal-overlay" @click.self="emit('close')">
       <div class="save-modal glass-panel">
         <div class="modal-header">
-          <h3>🎨 发布作品</h3>
+          <h3><Palette :size="16" /> 发布作品</h3>
           <button class="close-btn" @click="emit('close')">×</button>
         </div>
 
@@ -39,11 +39,12 @@
             <div class="input-with-btn">
               <input :value="publicationAddress || '定位中...'" class="modal-input" readonly />
               <button class="loc-action-btn" :class="{ loading: isLocating }" @click="refreshPublicationLocation">
-                <span>{{ isLocating ? '⌛' : '📍' }}</span>
+                <Loader2 v-if="isLocating" class="spin" :size="16" />
+                <MapPin v-else :size="16" />
               </button>
             </div>
             <div v-if="publicationAddress" class="coords-badge">
-              📍 {{ publicationSource === 'gps' ? 'GPS定位' : 'IP定位' }} · {{ pubLat && pubLng ? pubLat.toFixed(4) + ', ' + pubLng.toFixed(4) : '' }}
+              <MapPin :size="11" /> {{ publicationSource === 'gps' ? 'GPS定位' : 'IP定位' }} · {{ pubLat && pubLng ? pubLat.toFixed(4) + ', ' + pubLng.toFixed(4) : '' }}
             </div>
           </div>
 
@@ -53,13 +54,14 @@
             <div class="input-with-btn">
               <input v-model="locationName" placeholder="命名这个拍摄位..." class="modal-input" />
               <button class="loc-action-btn" :class="{ loading: isLocating }" @click="getCurrentLocation">
-                <span>{{ isLocating ? '⌛' : '📍' }}</span>
+                <Loader2 v-if="isLocating" class="spin" :size="16" />
+                <MapPin v-else :size="16" />
               </button>
-              <button class="loc-action-btn" @click="showMapModal = true">🗺️</button>
+              <button class="loc-action-btn" @click="showMapModal = true"><Map :size="16" /></button>
             </div>
 
             <div v-if="workAddressSource === 'exif' && locationCoords" class="coords-badge">
-              📷 来自照片 EXIF · {{ locationCoords.lat.toFixed(5) }}, {{ locationCoords.lng.toFixed(5) }}
+              <Camera :size="11" /> 来自照片 EXIF · {{ locationCoords.lat.toFixed(5) }}, {{ locationCoords.lng.toFixed(5) }}
             </div>
             <div v-else-if="locationCoords" class="coords-badge">
               实时坐标: {{ locationCoords.lat.toFixed(5) }}, {{ locationCoords.lng.toFixed(5) }}
@@ -68,7 +70,7 @@
             <div v-if="nearbyPlaces.length > 0" class="location-suggestions animate-fade-in">
               <div v-for="p in nearbyPlaces" :key="p.name" class="suggestion-item"
                 :class="{ active: locationName === p.name }" @click="selectNearby(p)">
-                <span class="sug-icon">{{ getCategoryIcon(p.category) }}</span>
+                <span class="sug-icon"><Icon :name="getCategoryIcon(p.category)" :size="14" /></span>
                 <span class="sug-name">{{ p.name }}</span>
               </div>
             </div>
@@ -87,7 +89,7 @@
           <!-- 相机拍摄参数 (EXIF 参数卡片) -->
           <div v-if="initialExif" class="exif-card">
             <div class="exif-card-header">
-              <span class="exif-icon">📸</span>
+              <span class="exif-icon"><Aperture :size="14" /></span>
               <span class="exif-title">背景图拍摄及元数据参数</span>
             </div>
             <div class="exif-grid">
@@ -155,6 +157,7 @@
 import { ref, watch, onMounted } from 'vue'
 import MapModal from './MapModal.vue'
 import { useLocation } from '@/composables/useLocation'
+import { Palette, Loader2, MapPin, Map, Camera, Aperture } from 'lucide-vue-next'
 
 const props = defineProps<{
   isOpen: boolean
@@ -192,7 +195,8 @@ const refreshPublicationLocation = async () => {
   isLocating.value = true
   const result = await autoLocate()
   if (result) {
-    publicationAddress.value = result.address
+    // 前端只展示区域级别（国家/省份/城市），不暴露精确位置
+    publicationAddress.value = result.region || result.address
     pubLat.value = result.lat
     pubLng.value = result.lng
     publicationSource.value = result.source
@@ -219,16 +223,16 @@ watch(() => props.isOpen, (val) => {
 
 const getCategoryIcon = (cat: string) => {
   const map: any = {
-    'park': '🌳',
-    'cafe': '☕',
-    'tourism': '📸',
-    'attraction': '🎡',
-    'viewpoint': '🔭',
-    'museum': '🏛️',
-    'hotel': '🏨',
-    'current': '📍'
+    'park': 'tree-pine',
+    'cafe': 'coffee',
+    'tourism': 'aperture',
+    'attraction': 'ferris-wheel',
+    'viewpoint': 'telescope',
+    'museum': 'landmark',
+    'hotel': 'hotel',
+    'current': 'map-pin'
   }
-  return map[cat.toLowerCase()] || '📍'
+  return map[cat.toLowerCase()] || 'map-pin'
 }
 
 const addTag = () => {
@@ -386,12 +390,12 @@ const confirmSave = () => {
     name: name.value,
     description: description.value,
     category: finalCategory,
-    // 发布地址（自动采集，不可修改）
+    // 发布地址（只存区域级别：国家/省份/城市）
     publication_address: publicationAddress.value || null,
     publication_lat: pubLat.value,
     publication_lng: pubLng.value,
     publication_source: publicationSource.value || null,
-    // 作品地址（EXIF 或手动）
+    // 作品地址（EXIF 或手动，只存区域级别）
     locationName: locationName.value,
     coords: locationCoords.value,
     work_address: locationName.value || null,
@@ -491,7 +495,10 @@ const confirmSave = () => {
   background: rgba(99, 102, 241, 0.15); color: #818cf8;
 }
 .sug-icon {
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 .sug-name {
   font-size: 12px; font-weight: 500;

@@ -3,7 +3,7 @@
     <div class="w-full max-w-md p-8">
       <div class="text-center mb-8">
         <div class="w-16 h-16 bg-gradient-to-br from-primary-500 to-purple-500 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4">
-          📸
+          <Aperture class="w-8 h-8" />
         </div>
         <h1 class="text-2xl font-bold">欢迎使用 PoseCraft</h1>
         <p class="text-slate-500 mt-2">AI 姿势分析 + 图片编辑平台</p>
@@ -15,7 +15,7 @@
           @click="showLoginModal = true"
           class="w-full py-3 bg-primary-500 text-white rounded-xl font-medium hover:bg-primary-600 transition flex items-center justify-center gap-2"
         >
-          🔐 使用 CoreFlow 账号登录
+          <Lock :size="16" /> 使用 CoreFlow 账号登录
         </button>
 
         <p class="text-center text-sm text-slate-500">
@@ -43,6 +43,7 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { Aperture, Lock } from 'lucide-vue-next'
 import LoginModal from '@/components/modals/login/LoginModal.vue'
 
 const router = useRouter()

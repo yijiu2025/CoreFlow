@@ -19,6 +19,7 @@ declare module 'vue' {
     ExitModal: typeof import('./../components/modals/editor/ExitModal.vue')['default']
     HandPanel: typeof import('./../components/panels/editor/HandPanel.vue')['default']
     HelpModal: typeof import('./../components/modals/editor/HelpModal.vue')['default']
+    Icon: typeof import('./../components/common/Icon.vue')['default']
     ImagePanel: typeof import('./../components/panels/editor/ImagePanel.vue')['default']
     LeftToolbar: typeof import('./../components/layouts/editor/LeftToolbar.vue')['default']
     LoginModal: typeof import('./../components/modals/login/LoginModal.vue')['default']

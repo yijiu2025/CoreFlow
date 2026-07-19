@@ -139,7 +139,7 @@
     <div class="section-label">快速添加</div>
     <div class="quick-text-grid">
       <button v-for="item in quickTexts" :key="item.text" class="quick-text-btn" @click="$emit('addText', item.text)">
-        <span class="quick-text-icon">{{ item.icon }}</span>
+        <Icon :name="item.icon" :size="14" class="quick-text-icon" />
         <span class="quick-text-label">{{ item.label }}</span>
       </button>
     </div>
@@ -195,12 +195,12 @@ const warps = [
 ]
 
 const quickTexts = [
-  { icon: '📌', label: '标题', text: '标题文字' },
-  { icon: '📝', label: '正文', text: '正文内容' },
-  { icon: '💡', label: '提示', text: '提示信息' },
-  { icon: '⚠️', label: '警告', text: '警告：注意安全' },
-  { icon: '✅', label: '完成', text: '已完成' },
-  { icon: '❌', label: '错误', text: '错误' }
+  { icon: 'pin', label: '标题', text: '标题文字' },
+  { icon: 'pen-line', label: '正文', text: '正文内容' },
+  { icon: 'lightbulb', label: '提示', text: '提示信息' },
+  { icon: 'alert-triangle', label: '警告', text: '警告：注意安全' },
+  { icon: 'check', label: '完成', text: '已完成' },
+  { icon: 'x', label: '错误', text: '错误' }
 ]
 
 const shortcuts = [
@@ -295,6 +295,6 @@ input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height:
   background: rgba(255,255,255,0.06); color: #e2e8f0;
   border-color: rgba(255,255,255,0.1);
 }
-.quick-text-icon { font-size: 14px; }
+.quick-text-icon { display: inline-flex; align-items: center; justify-content: center; }
 .quick-text-label { font-weight: 500; }
 </style>

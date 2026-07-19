@@ -1,0 +1,83 @@
+<!--
+ * 通用图标映射组件
+ *
+ * 数据驱动的 SVG 图标渲染：通过 name 映射到 lucide-vue-next 组件。
+ * 用于频道标签、AI 分析类型等动态配置的图标场景（icon 字段为字符串）。
+ * 同时收录 emoji → component 的兼容映射，保证后端仍返回 emoji 时也能正常渲染。
+ *
+ * @author Claude
+ * @since 2026-07-19
+ -->
+<template>
+  <component :is="comp" v-if="comp" :size="size" :stroke-width="strokeWidth" :class="props.class" />
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import {
+  Flame, User, Lightbulb, Camera, Trophy, Ruler, Wrench,
+  Sparkles, MapPin, Heart, Users, Search, Loader2,
+  Gem, Settings, Sun, Moon, Bot, Keyboard, HelpCircle,
+  Headphones, Info, Phone, Pencil, Trash2, Eye, Aperture,
+  MessageCircle, Star, Share2, Clock, Clapperboard, Play, Bell,
+  FileText, Palette, Map, Coffee, FerrisWheel, Telescope, Landmark,
+  Hotel, TreePine, Pen, Lock, Calendar, X, Check, AlertTriangle,
+  BookOpen, PenLine, Pin, Activity, Smile, Hand, HeartOff,
+  Plus, Minus, ChevronDown, ChevronRight, ArrowRight, ArrowUp,
+  Compass, Image, ShieldAlert, Globe, Send, RotateCcw, Save
+} from 'lucide-vue-next'
+
+/** 图标名称 → lucide 组件映射表（同时收录旧 emoji 作为兼容键） */
+const iconMap: Record<string, any> = {
+  // 名称键（推荐使用）
+  flame: Flame, user: User, lightbulb: Lightbulb, camera: Camera,
+  trophy: Trophy, ruler: Ruler, wrench: Wrench, sparkles: Sparkles,
+  'map-pin': MapPin, mappin: MapPin, heart: Heart, users: Users,
+  search: Search, loading: Loader2, loader: Loader2,
+  gem: Gem, settings: Settings, sun: Sun, moon: Moon, bot: Bot,
+  keyboard: Keyboard, 'help-circle': HelpCircle, helpcircle: HelpCircle,
+  headphones: Headphones, info: Info, phone: Phone, pencil: Pencil,
+  trash: Trash2, 'trash-2': Trash2, eye: Eye, aperture: Aperture,
+  message: MessageCircle, 'message-circle': MessageCircle, star: Star,
+  share: Share2, 'share-2': Share2, clock: Clock,
+  clapperboard: Clapperboard, play: Play, bell: Bell, file: FileText,
+  'file-text': FileText, palette: Palette, map: Map, coffee: Coffee,
+  'ferris-wheel': FerrisWheel, ferriswheel: FerrisWheel, telescope: Telescope,
+  landmark: Landmark, hotel: Hotel, tree: TreePine, 'tree-pine': TreePine,
+  pen: Pen, lock: Lock, calendar: Calendar, x: X, check: Check,
+  alert: AlertTriangle, 'alert-triangle': AlertTriangle, book: BookOpen,
+  'book-open': BookOpen, 'pen-line': PenLine, penline: PenLine, pin: Pin,
+  activity: Activity, smiley: Smile, hand: Hand,
+  'heart-off': HeartOff, heartoff: HeartOff,
+  plus: Plus, minus: Minus, 'chevron-down': ChevronDown, chevrondown: ChevronDown,
+  'chevron-right': ChevronRight, chevronright: ChevronRight,
+  'arrow-right': ArrowRight, arrowright: ArrowRight, 'arrow-up': ArrowUp, arrowup: ArrowUp,
+  compass: Compass, image: Image, 'shield-alert': ShieldAlert, shieldalert: ShieldAlert,
+  globe: Globe, send: Send, 'rotate-ccw': RotateCcw, rotateccw: RotateCcw, save: Save,
+
+  // emoji 兼容键（后端 / 旧数据仍返回 emoji 时兜底）
+  '🔥': Flame, '👤': User, '💡': Lightbulb, '📷': Camera, '🏆': Trophy,
+  '📐': Ruler, '🔧': Wrench, '✨': Sparkles, '💎': Gem, '📍': MapPin,
+  '❤️': Heart, '👥': Users,
+  '⚙️': Settings, '🌗': Sun, '🛠️': Wrench, '🤖': Bot, '⌨️': Keyboard,
+  '❓': HelpCircle, '🎧': Headphones, 'ℹ️': Info, '📞': Phone,
+  '✏️': Pencil, '🗑️': Trash2, '👁': Eye, '📸': Aperture,
+  '💬': MessageCircle, '⭐': Star, '↗️': Share2, '🕒': Clock,
+  '🎬': Clapperboard, '▶️': Play, '🔔': Bell, '📄': FileText,
+  '🎨': Palette, '🗺️': Map, '☕': Coffee, '🎡': FerrisWheel,
+  '🔭': Telescope, '🏛️': Landmark, '🏨': Hotel, '🌳': TreePine,
+  '🔒': Lock, '📅': Calendar, '✕': X, '☆': Star,
+  '⚠️': AlertTriangle, '📖': BookOpen, '📝': PenLine,
+  '📌': Pin, '🏃': Activity, '😊': Smile, '✋': Hand, '🤍': HeartOff,
+  '🌙': Moon, '☀️': Sun, '🔐': Lock, '🌐': Globe, '🔄': Loader2
+}
+
+const props = defineProps<{
+  name: string
+  size?: number
+  strokeWidth?: number | string
+  class?: string
+}>()
+
+const comp = computed(() => iconMap[props.name])
+</script>

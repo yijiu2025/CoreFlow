@@ -11,7 +11,7 @@
           @click="close"
           class="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all"
         >
-          ✕
+          <X :size="16" />
         </button>
 
         <!-- Title -->
@@ -40,6 +40,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { X } from 'lucide-vue-next'
 import { buildSsoLoginUrl } from '@/config/services'
 import { authApi } from '@/api/auth'
 
