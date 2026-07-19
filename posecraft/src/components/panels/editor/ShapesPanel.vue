@@ -54,7 +54,7 @@
     <div class="section-label">构图参考线</div>
     <div class="tool-grid guide-grid">
       <button v-for="guide in guides" :key="guide.type" class="grid-btn" :class="{ active: activeGuides?.includes(guide.type) }" @click="$emit('toggleGuide', guide.type)">
-        <span class="guide-icon">{{ guide.icon }}</span>
+        <span class="guide-icon" v-html="guide.icon"></span>
         <span>{{ guide.label }}</span>
       </button>
     </div>
@@ -72,12 +72,12 @@ defineProps<{
 defineEmits(['setDrawTool', 'toggleGuide'])
 
 const guides = [
-  { type: 'thirds', icon: '▦', label: '三分法' },
-  { type: 'golden', icon: '⬡', label: '黄金比例' },
-  { type: 'diagonal', icon: '╳', label: '对角线' },
-  { type: 'center', icon: '⊕', label: '中心点' },
-  { type: 'phi', icon: '◇', label: '黄金三角' },
-  { type: 'spiral', icon: '🌀', label: '黄金螺旋' }
+  { type: 'thirds', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8h20M2 16h20M8 2v20M16 2v20"/></svg>', label: '三分法' },
+  { type: 'golden', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18"/><line x1="3" y1="3" x2="13" y2="21"/></svg>', label: '黄金比例' },
+  { type: 'diagonal', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="3" y1="3" x2="21" y2="21"/><line x1="21" y1="3" x2="3" y2="21"/></svg>', label: '对角线' },
+  { type: 'center', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="8"/><line x1="12" y1="16" x2="12" y2="22"/><line x1="2" y1="12" x2="8" y2="12"/><line x1="16" y1="12" x2="22" y2="12"/></svg>', label: '中心点' },
+  { type: 'phi', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 22 22 2 22"/><line x1="12" y1="2" x2="12" y2="22"/></svg>', label: '黄金三角' },
+  { type: 'spiral', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a10 10 0 0 1 0 20A10 10 0 0 1 5 6.5 8 8 0 0 1 17 7a6 6 0 0 1-2 10 4 4 0 0 1-3-6 2 2 0 0 1 1 2"/></svg>', label: '黄金螺旋' }
 ]
 
 const shortcuts = [
@@ -127,7 +127,7 @@ const shortcuts = [
   height: 1px; background: rgba(255,255,255,0.06); margin: 16px 0;
 }
 
-.guide-icon { font-size: 16px; }
+.guide-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; }
 
 .hint-text {
   font-size: 11px; color: #4a5568; text-align: center;

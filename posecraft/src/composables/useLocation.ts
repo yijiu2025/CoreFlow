@@ -8,7 +8,8 @@
 import { ref } from 'vue'
 
 export interface LocationResult {
-  address: string
+  address: string        // 完整地址（内部记录用）
+  region: string         // 区域文本（前端展示：国家 / 省份 / 城市）
   lat: number
   lng: number
   source: 'gps' | 'ip'
@@ -32,9 +33,9 @@ export function useLocation() {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           const { latitude, longitude } = pos.coords
-          const address = await reverseGeocode(latitude, longitude)
+          const { region, fullAddr } = await reverseGeocode(latitude, longitude)
           loading.value = false
-          resolve({ address: address || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, lat: latitude, lng: longitude, source: 'gps' })
+          resolve({ address: fullAddr || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, region: region || fullAddr || '', lat: latitude, lng: longitude, source: 'gps' })
         },
         () => {
           loading.value = false
@@ -57,8 +58,8 @@ export function useLocation() {
       const data = await res.json()
       loading.value = false
       if (data.latitude && data.longitude) {
-        const address = [data.city, data.region, data.county].filter(Boolean).join(' ') || `${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`
-        return { address, lat: data.latitude, lng: data.longitude, source: 'ip' }
+        const region = [data.country_name, data.region, data.city].filter(Boolean).join(' ')
+        return { address: region, region, lat: data.latitude, lng: data.longitude, source: 'ip' }
       }
       return null
     } catch (err) {
@@ -81,23 +82,30 @@ export function useLocation() {
   }
 
   /**
-   * 逆编码：经纬度 → 地址文本
+   * 逆编码：经纬度 → 区域文本（只提取国家/省份/城市级别）
+   * 返回 { region, fullAddr }：region 用于前端展示，fullAddr 存 DB
    */
-  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+  const reverseGeocode = async (lat: number, lng: number): Promise<{ region: string; fullAddr: string }> => {
     try {
-      // Photon 逆编码（国内可用）
       const res = await fetch(`https://photon.komoot.io/reverse/?lat=${lat}&lon=${lng}&limit=1&lang=zh`)
       if (res.ok) {
         const data = await res.json()
         if (data.features?.length) {
-          const props = data.features[0].properties
-          return props.name || [props.city, props.state, props.country].filter(Boolean).join(' ')
+          const p = data.features[0].properties
+          const country = p.country || ''
+          const state = p.state || p.region || ''
+          const city = p.city || p.county || ''
+          // 前端只展示：国家 + 省份 + 城市（不暴露精确位置）
+          const region = [country, state, city].filter(Boolean).join(' ')
+          // 完整地址存 DB（含具体地名，内部使用）
+          const fullAddr = p.name || [city, state, country].filter(Boolean).join(' ')
+          return { region: region || fullAddr, fullAddr: fullAddr || region }
         }
       }
     } catch (err) {
       console.warn('逆编码失败:', err)
     }
-    return ''
+    return { region: '', fullAddr: '' }
   }
 
   return {

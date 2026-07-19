@@ -186,6 +186,7 @@ watch(showSettingsModal, (visible) => {
 .main-container {
   margin-left: 220px;
   flex-grow: 1;
+  min-width: 0;         /* 防止 Tab 过多时被内容撑宽，允许缩小到视口宽度 */
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -194,6 +195,7 @@ watch(showSettingsModal, (visible) => {
 .main-content-area {
   padding: 72px 0 32px;
   flex-grow: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }

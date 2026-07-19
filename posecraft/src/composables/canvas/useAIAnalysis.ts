@@ -31,11 +31,11 @@ export function useAIAnalysis(
   let isStateSavingLocked = false
 
   const detectionTypes = [
-    { value: 'all', label: '全部', icon: '✨', desc: '姿势+面部+手部+轮廓' },
-    { value: 'pose', label: '姿势', icon: '🏃', desc: '人体骨骼关键点' },
-    { value: 'face', label: '面部', icon: '😊', desc: '面部网格 468 点' },
-    { value: 'hand', label: '手部', icon: '✋', desc: '手部关键点 21 点' },
-    { value: 'segmentation', label: '轮廓', icon: '👤', desc: '人体分割描边' },
+    { value: 'all', label: '全部', icon: 'sparkles', desc: '姿势+面部+手部+轮廓' },
+    { value: 'pose', label: '姿势', icon: 'activity', desc: '人体骨骼关键点' },
+    { value: 'face', label: '面部', icon: 'smile', desc: '面部网格 468 点' },
+    { value: 'hand', label: '手部', icon: 'hand', desc: '手部关键点 21 点' },
+    { value: 'segmentation', label: '轮廓', icon: 'user', desc: '人体分割描边' },
   ]
 
   const originalWarn = console.warn

@@ -23,6 +23,18 @@ export const workApi = {
   getFollowingWorks: (params?: { page?: number; pageSize?: number }) =>
     service.get('/posecraft/v1/works/following', { params }),
 
+  /** 获取互关朋友的作品（仅 mutual=true 的用户） */
+  getFriendsWorks: (params?: { page?: number; pageSize?: number }) =>
+    service.get('/posecraft/v1/works/friends', { params }),
+
+  /** 获取附近的公开作品（按 publication_lat/lng 计算距离） */
+  getNearbyWorks: (params?: { lat?: number; lng?: number; radius?: number; page?: number; pageSize?: number }) =>
+    service.get('/posecraft/v1/works/nearby', { params }),
+
+  /** 获取推荐作品（多维加权随机排序） */
+  getRecommendedWorks: (params?: { limit?: number }) =>
+    service.get('/posecraft/v1/works/recommended', { params }),
+
   /** 获取当前登录用户自己的作品（从 session 识别用户） */
   getMyWorks: (params?: { page?: number; pageSize?: number }) =>
     service.get('/posecraft/v1/works/mine', { params }),

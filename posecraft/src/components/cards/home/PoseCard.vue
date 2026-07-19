@@ -28,7 +28,7 @@
       <div v-if="item.type === 'template' || isTemplateWork" class="card-badge">模板</div>
       <div v-else-if="item.type === 'video'" class="card-badge video-badge">视频</div>
       <div v-if="item.distance" class="card-location-badge">
-        <span class="location-pin">📍</span>
+        <MapPin :size="12" class="location-pin" />
         <span>{{ item.distance }}</span>
       </div>
     </div>
@@ -64,6 +64,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { MapPin } from 'lucide-vue-next'
 
 const props = defineProps<{
   item: any
@@ -80,7 +81,7 @@ defineEmits<{
  * 模板一对一绑定一个作品，该作品显示「模板」徽章
  */
 const isTemplateWork = computed(() => {
-  return !!props.item?.is_template_work
+  return props.item?.type === 'template' || !!props.item?.is_template_work
 })
 
 // 真实图片宽高比，默认 4/5（未加载或加载失败时）

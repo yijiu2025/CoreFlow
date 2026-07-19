@@ -38,7 +38,9 @@ export interface Work {
   thumbnail_url?: string
   analysis_data?: any
   edit_data?: any
-  /** 是否为模板底图作品（模板一对一绑定的作品），true 时显示「模板」徽章 */
+  /** 作品类型：template=模板底图作品，work=普通作品 */
+  type?: 'template' | 'work'
+  /** @deprecated 使用 type 代替 */
   is_template_work?: boolean
   status: number
   likes_count: number

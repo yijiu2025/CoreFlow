@@ -31,7 +31,7 @@
         </div>
         <div class="load-more-container" v-if="hasMore">
           <button class="load-more-btn" @click="loadMore" :disabled="loading">
-            <span v-if="loading" class="animate-spin">🔄</span>
+            <Loader2 v-if="loading" class="animate-spin" :size="16" />
             <span>{{ loading ? '加载中...' : '加载更多' }}</span>
           </button>
         </div>
@@ -41,7 +41,7 @@
       </template>
       <template v-else>
         <div class="empty-state">
-          <div class="empty-icon">👥</div>
+          <Users class="empty-icon" :size="54" />
           <div class="empty-text">您的朋友们最近很低调，什么都没发</div>
         </div>
       </template>
@@ -51,6 +51,7 @@
 
 <script setup lang="ts">
 import { useHome } from '@/composables/useHome'
+import { Loader2, Users } from 'lucide-vue-next'
 import PoseCard from '@/components/cards/home/PoseCard.vue'
 import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
 
@@ -167,7 +168,10 @@ activeNav.value = 'friends'
 }
 
 .empty-icon {
-  font-size: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
   margin-bottom: 16px;
 }
 

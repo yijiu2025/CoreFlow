@@ -25,22 +25,27 @@
     />
 
     <!-- 分类 Tab -->
-    <div class="channel-container">
-      <div class="channel-inner">
+    <div ref="channelContainerRef" class="channel-container" :class="{ 'justify-start': tabOverflow }" @mousedown="onDragStart" @mousemove="onDragMove" @mouseup="onDragEnd" @mouseleave="onDragEnd">
+      <div ref="channelInnerRef" class="channel-inner">
         <button
           v-for="ch in channels"
           :key="ch.value"
-          @click="activeChannel = ch.value"
+          @click="onTabClick(ch.value)"
           :class="['channel-tag', { active: activeChannel === ch.value }]"
         >
-          <span v-if="ch.icon" class="channel-icon">{{ ch.icon }}</span>
+          <Icon v-if="ch.icon" :name="ch.icon" :size="16" class="channel-icon" />
           {{ ch.label }}
         </button>
       </div>
     </div>
 
     <!-- 内容区域 -->
-    <div class="content-container">
+    <div class="content-container"
+      @mousedown="onContentDragStart"
+      @mousemove="onContentDragMove"
+      @mouseup="onContentDragEnd"
+      @mouseleave="onContentDragEnd"
+      @click.capture="onContentClick">
       <!-- 动态网址内容 (iframe) -->
       <div v-if="currentChannelUrl" class="w-full" style="height: calc(100vh - 120px);">
         <iframe :src="currentChannelUrl" class="w-full h-full border-0" sandbox="allow-scripts allow-same-origin"></iframe>
@@ -58,7 +63,7 @@
           >
           <div class="banner-content">
             <div class="banner-badge" v-if="banner.badge_text">
-              <span class="badge-icon">🏆</span>
+              <Trophy class="badge-icon" :size="14" />
               <span>{{ banner.badge_text }}</span>
             </div>
             <h1 class="banner-title">{{ banner.title }}</h1>
@@ -91,7 +96,7 @@
           </div>
           <div class="load-more-container" v-if="hasMore">
             <button class="load-more-btn" @click="loadMore" :disabled="loading">
-              <span v-if="loading" class="animate-spin">🔄</span>
+              <Loader2 v-if="loading" class="animate-spin" :size="16" />
               <span>{{ loading ? '加载中...' : '加载更多' }}</span>
             </button>
           </div>
@@ -103,7 +108,7 @@
         <!-- 无数据无加载中：空状态 -->
         <template v-else>
           <div class="empty-state">
-            <div class="empty-icon">🔍</div>
+            <Search class="empty-icon" :size="54" />
             <div class="empty-text">没有找到相关的姿势模板</div>
             <button class="empty-btn" @click="searchQuery = ''">重置搜索</button>
           </div>
@@ -114,8 +119,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onActivated, onDeactivated } from 'vue'
+import { ref, watch, onMounted, onActivated, onDeactivated, onUnmounted, nextTick } from 'vue'
 import { useHome } from '@/composables/useHome'
+import { Trophy, Loader2, Search } from 'lucide-vue-next'
 import SearchHero from '@/components/widgets/home/SearchHero.vue'
 import PoseCard from '@/components/cards/home/PoseCard.vue'
 import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
@@ -159,10 +165,119 @@ onMounted(() => {
 onActivated(() => {
   activeNav.value = 'featured'
 })
-// keep-alive 隐藏时清除 sentinel，避免 IO 继续触发
+const channelContainerRef = ref<HTMLElement | null>(null)
+const channelInnerRef = ref<HTMLElement | null>(null)
+const tabOverflow = ref(false)
+
+// ─── 溢出检测 ─────────────────────────────────────
+
+/** 检测 Tab 是否溢出容器，动态切换对齐方式：
+ *  少 Tab → justify-content: center（居中）
+ *  多 Tab → justify-content: flex-start（左对齐 + 滚动） */
+const checkTabOverflow = () => {
+  const container = channelContainerRef.value
+  const inner = channelInnerRef.value
+  if (container && inner) {
+    tabOverflow.value = inner.scrollWidth > container.clientWidth
+  }
+}
+
+let overflowObserver: ResizeObserver | null = null
+onMounted(() => {
+  nextTick(checkTabOverflow)
+  overflowObserver = new ResizeObserver(checkTabOverflow)
+  if (channelContainerRef.value) overflowObserver.observe(channelContainerRef.value)
+  if (channelInnerRef.value) overflowObserver.observe(channelInnerRef.value)
+})
+onActivated(() => {
+  nextTick(checkTabOverflow)
+})
 onDeactivated(() => {
   searchSentinel.value = null
 })
+onUnmounted(() => {
+  overflowObserver?.disconnect()
+})
+
+// ─── 拖拽滚动 ─────────────────────────────────────
+
+/** 鼠标拖拽横向滚动分类 Tab */
+const dragState = { startX: 0, startScrollLeft: 0, moved: false }
+const DRAG_THRESHOLD = 5 // 超过 5px 视为拖拽，不触发 click
+
+const onDragStart = (e: MouseEvent) => {
+  const el = channelContainerRef.value
+  if (!el) return
+  dragState.startX = e.clientX
+  dragState.startScrollLeft = el.scrollLeft
+  dragState.moved = false
+  el.classList.add('dragging')
+  document.body.style.cursor = 'grabbing'
+  document.body.style.userSelect = 'none'
+}
+
+const onDragMove = (e: MouseEvent) => {
+  const el = channelContainerRef.value
+  if (!el || dragState.startX === 0) return
+  const dx = e.clientX - dragState.startX
+  if (Math.abs(dx) > DRAG_THRESHOLD) dragState.moved = true
+  el.scrollLeft = dragState.startScrollLeft - dx
+}
+
+const onDragEnd = () => {
+  const el = channelContainerRef.value
+  if (el) el.classList.remove('dragging')
+  dragState.startX = 0
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
+/** Tab 点击事件：拖拽后不切换 */
+const onTabClick = (value: string) => {
+  if (dragState.moved) {
+    dragState.moved = false
+    return
+  }
+  activeChannel.value = value
+}
+
+// ─── 内容区拖拽滚动 ─────────────────────────────────
+
+/** 鼠标拖拽内容区上下滚动页面 */
+const contentDragState = { startY: 0, startScrollY: 0, moved: false }
+
+const onContentDragStart = (e: MouseEvent) => {
+  // 忽略 Tab 区、搜索框、按钮等交互元素的拖拽
+  const target = e.target as HTMLElement
+  if (target.closest('button, a, input, textarea, select, iframe')) return
+  contentDragState.startY = e.clientY
+  contentDragState.startScrollY = window.scrollY
+  contentDragState.moved = false
+  document.body.style.cursor = 'grabbing'
+  document.body.style.userSelect = 'none'
+}
+
+const onContentDragMove = (e: MouseEvent) => {
+  if (contentDragState.startY === 0) return
+  const dy = e.clientY - contentDragState.startY
+  if (Math.abs(dy) > DRAG_THRESHOLD) contentDragState.moved = true
+  window.scrollTo(window.scrollX, contentDragState.startScrollY - dy)
+}
+
+const onContentDragEnd = () => {
+  contentDragState.startY = 0
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
+/** 拖拽后阻止卡片点击事件 */
+const onContentClick = (e: MouseEvent) => {
+  if (contentDragState.moved) {
+    e.stopPropagation()
+    e.preventDefault()
+    contentDragState.moved = false
+  }
+}
 
 const searchHeroRef = ref<any>(null)
 watch(
@@ -177,20 +292,31 @@ watch(
 <style scoped>
 /* 分类 Tab */
 .channel-container {
+  display: flex;
+  justify-content: center;
   width: 100%;
-  min-width: 0;           /* 允许收缩，不向外撑大 */
+  min-width: 0;
   padding: 12px 0 0;
-  overflow-x: auto;       /* Tab 过多时内部滚动，不影响页面宽度 */
+  overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
 .channel-container::-webkit-scrollbar { display: none; }
 
+.channel-container.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.channel-container.justify-start {
+  justify-content: flex-start;
+}
+
 .channel-inner {
-  display: inline-flex;   /* 宽度由内容决定，由 channel-container 滚动承载 */
+  display: flex;
   gap: 0;
-  min-width: max-content; /* Tab 不折行，超出时横向滚动 */
-  padding: 0 16px;        /* 左右留边距，避免首尾 Tab 贴边 */
+  flex-shrink: 0;
 }
 
 .channel-tag {
@@ -212,8 +338,6 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  line-height: 1;
   flex-shrink: 0;
 }
 .dark-mode .channel-tag { color: #a1a1aa; }
@@ -221,23 +345,11 @@ watch(
 .dark-mode .channel-tag:hover { color: #ff6b6b; }
 .channel-tag.active { color: #1e293b; }
 .dark-mode .channel-tag.active { color: #f4f4f5; }
-.channel-tag.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 20%;
-  right: 20%;
-  height: 3px;
-  background: #ff2442;
-  border-radius: 99px 99px 0 0;
-}
-.dark-mode .channel-tag.active::after { background: #ff6b6b; }
 
 .featured-page-container {
   width: 100%;
-  min-width: 0;          /* 防止内部内容撑开容器最小宽度 */
-  max-width: 100%;       /* 不能超出父容器 */
-  overflow-x: hidden;    /* 截断水平溢出传播链 */
+  min-width: 0;          /* 允许在 flex 容器中缩小到最小宽度，避免 Tab 撑开页面 */
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   padding-top: 64px;
@@ -292,7 +404,7 @@ watch(
     gap: 4px;
   }
   .channel-icon {
-    font-size: 14px;
+    display: inline-flex;
   }
 }
 
@@ -443,7 +555,10 @@ watch(
 }
 
 .empty-icon {
-  font-size: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
   margin-bottom: 16px;
 }
 

@@ -38,6 +38,11 @@ export default (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
         comment: '作品描述'
       },
+      category: {
+        type: DataTypes.STRING(50),
+        defaultValue: 'pose',
+        comment: '作品分类: pose, creative, sports, composition, technique, custom'
+      },
       image_url: {
         type: DataTypes.STRING(500),
         field: 'image_url',
@@ -75,11 +80,29 @@ export default (sequelize, DataTypes) => {
         field: 'likes_count',
         comment: '点赞数'
       },
+      collects_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        field: 'collects_count',
+        comment: '收藏数（预留）'
+      },
+      shares_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        field: 'shares_count',
+        comment: '分享数（预留）'
+      },
+      comments_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        field: 'comments_count',
+        comment: '评论数（预留）'
+      },
       views_count: {
         type: DataTypes.INTEGER,
         defaultValue: 0,
         field: 'views_count',
-        comment: '浏览数'
+        comment: '浏览数（仅作者可见）'
       },
       // ── 发布地址（自动采集，不可修改）──
       publication_address: {

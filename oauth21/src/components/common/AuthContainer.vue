@@ -182,8 +182,10 @@ const isEmbedded = computed(() => {
       @click="themeStore.toggleTheme"
       class="theme-toggle-floating flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700 text-sm font-medium hover:scale-105 transition-all active:scale-95 z-50"
     >
-      <span v-if="themeStore.isDark">🌙 Dark Mode</span>
-      <span v-else>☀️ Light Mode</span>
+      <Icons v-if="themeStore.isDark" name="moon" :size="16" />
+      <Icons v-else name="sun" :size="16" />
+      <span v-if="themeStore.isDark"> Dark Mode</span>
+      <span v-else> Light Mode</span>
     </button>
   </div>
 </template>
