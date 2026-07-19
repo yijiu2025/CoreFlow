@@ -50,6 +50,7 @@
 
 <script setup lang="ts">
 import { useHome } from '@/composables/useHome'
+import { onActivated } from 'vue'
 import { Loader2, Sparkles } from 'lucide-vue-next'
 import PoseCard from '@/components/cards/home/PoseCard.vue'
 import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
@@ -67,20 +68,28 @@ const {
 
 // 切换当前导航状态
 activeNav.value = 'recommend'
+onActivated(() => { activeNav.value = 'recommend' })
 </script>
 
 <style scoped>
 .recommend-page-container {
   width: 100%;
+  flex: 1;
+  display: flex;
+  min-height: 0;
 }
 
 .content-container {
-  padding: 20px 32px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .waterfall-grid {
   column-count: 5;
   column-gap: 20px;
+  padding: 20px 32px 0;
 }
 
 @media (max-width: 1200px) {
@@ -162,8 +171,14 @@ activeNav.value = 'recommend'
 }
 
 .empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 80px 20px;
+  padding: 20px;
+  margin-top: -5%;
 }
 
 .empty-icon {

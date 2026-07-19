@@ -52,7 +52,7 @@
       </div>
 
       <!-- 瀑布流 -->
-      <div v-else>
+      <div v-else class="content-body">
         <!-- 频道 Banner（仅 has_banner=true 的频道展示，从后端动态渲染） -->
         <template v-if="currentChannelShowBanner && !searchQuery.trim() && activeBanners.length > 0">
           <div
@@ -348,21 +348,34 @@ watch(
 
 .featured-page-container {
   width: 100%;
-  min-width: 0;          /* 允许在 flex 容器中缩小到最小宽度，避免 Tab 撑开页面 */
+  min-width: 0;
   max-width: 100%;
   display: flex;
   flex-direction: column;
   padding-top: 64px;
+  flex: 1;
+  min-height: 0;
 }
 
 .content-container {
-  flex-grow: 1;
-  padding: 20px 32px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .waterfall-grid {
   column-count: 5;
   column-gap: 20px;
+  padding: 20px 32px 0;
 }
 
 @media (max-width: 1200px) {
@@ -550,8 +563,14 @@ watch(
 }
 
 .empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 80px 20px;
+  padding: 20px;
+  margin-top: -5%;
 }
 
 .empty-icon {

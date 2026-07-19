@@ -114,7 +114,10 @@ function formatWork(work, isOwner = false) {
       uid: data.author.uid,
       username: data.author.username,
       avatar: data.author.avatar
-    } : undefined
+    } : undefined,
+    // 关联模板状态（null=正常/无模板, -1=已删除, 0=私密, -2=审核拒绝）
+    template_status: data.template?.status ?? null,
+    template_deleted: data.template ? data.template.delete_version !== 0 : false
   };
 }
 
@@ -282,7 +285,8 @@ export default async function (fastify) {
         type: 'object',
         properties: {
           page: { type: 'integer', minimum: 1, default: 1 },
-          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          status: { type: 'integer' }
         }
       }
     },
@@ -291,8 +295,10 @@ export default async function (fastify) {
       if (!user?.userId) {
         return reply.result.fail('未登录', null, 401);
       }
-      const { page, pageSize } = request.query;
-      const result = await workDao.findByUser(user.userId, { page, pageSize, currentUserId: user.userId });
+      const { page, pageSize, status } = request.query;
+      const opts = { page, pageSize, currentUserId: user.userId };
+      if (status !== undefined) opts.status = status;
+      const result = await workDao.findByUser(user.userId, opts);
       return reply.result.paginated(formatWorkList(result.list), result.total, result.page, result.pageSize);
     }
   });

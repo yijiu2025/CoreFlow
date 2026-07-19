@@ -153,9 +153,15 @@
             </div>
           </div>
 
-          <!-- 使用模板拍照 CTA -->
+          <!-- 模板状态警告 -->
+          <div v-if="templateStatusMessage" class="template-warning">
+            <AlertTriangle :size="16" />
+            <span>{{ templateStatusMessage }}</span>
+          </div>
+
+          <!-- 使用模板拍照 CTA（模板不可用时隐藏） -->
           <button
-            v-if="work && (isTemplate || work.template_id)"
+            v-if="work && (isTemplate || work.template_id) && !templateUnavailable"
             class="cta-shoot"
             @click="handleShoot"
           >
@@ -266,7 +272,7 @@ import { templateApi } from '@/api/template'
 import { followApi } from '@/api/follow'
 import {
   User, Sparkles, Pencil, Trash2, Eye, MapPin, Camera, Aperture,
-  Bot, MessageCircle, Heart, Star, Share2
+  Bot, MessageCircle, Heart, Star, Share2, AlertTriangle
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -333,6 +339,24 @@ const isTemplateWork = computed(() => {
 })
 
 const isOwner = computed(() => authStore.user?.id === work.value?.user_id)
+
+/** 模板不可用：已删除/私密/审核拒绝 */
+const templateUnavailable = computed(() => {
+  if (!work.value?.template_id) return false
+  return work.value.template_deleted === true ||
+    work.value.template_status === -1 ||
+    work.value.template_status === 0 ||
+    work.value.template_status === -2
+})
+
+/** 模板状态警告文案 */
+const templateStatusMessage = computed(() => {
+  if (!work.value?.template_id) return null
+  if (work.value.template_deleted || work.value.template_status === -1) return '此作品使用的模板已被删除，无法查看模板详情'
+  if (work.value.template_status === 0) return '此作品使用的模板已被设为私密，无法查看模板详情'
+  if (work.value.template_status === -2) return '此作品使用的模板未通过审核，无法查看模板详情'
+  return null
+})
 
 const computedPhotoOpacity = computed(() =>
   showOverlay.value ? photoOpacity.value : 1.0
@@ -992,6 +1016,21 @@ onMounted(async () => {
 }
 .cta-arrow { transition: transform .2s ease; }
 .cta-shoot:hover .cta-arrow { transform: translateX(3px); }
+
+/* 模板状态警告 */
+.template-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #d97706;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
 
 /* AI 分析 */
 .analysis-block {

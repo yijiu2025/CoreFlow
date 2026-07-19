@@ -9,7 +9,7 @@
  */
 import { ref, onMounted, onUnmounted, computed, watch, type Ref, provide, inject } from 'vue'
 import { useUserSettings } from '@/stores/userSettings'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 import { workApi } from '@/api/work'
@@ -32,6 +32,7 @@ export function useHome() {
   }
 
   const router = useRouter()
+  const route = useRoute()
   const themeStore = useThemeStore()
   const authStore = useAuthStore()
 
@@ -57,6 +58,7 @@ export function useHome() {
     set: (v) => userSettings.setSetting('showTemplate', v)
   })
   const showSettingsModal = ref(false)
+  const showAboutModal = ref(false)
   const settingsActiveSection = ref('general')
 
   // 用户数据及状态
@@ -488,6 +490,8 @@ export function useHome() {
     hasMore.value = true
     works.value = []
     activeBanners.value = []
+    // 重置 loading，避免前一次未完成的请求阻塞本次加载
+    loading.value = false
     loadData(1)
   }
 
@@ -566,6 +570,26 @@ export function useHome() {
     refreshData()
   })
 
+  /** 监听路由变化，同步 activeNav 并触发数据加载（解决 keep-alive 缓存导致 activeNav 不更新 + 精选页回退时数据不加载的问题） */
+  watch(() => route.path, (path) => {
+    const navMap: Record<string, string> = {
+      '/': 'featured',
+      '/recommend': 'recommend',
+      '/nearby': 'nearby',
+      '/following': 'following',
+      '/friends': 'friends',
+      '/mine': 'mine'
+    }
+    const target = navMap[path]
+    if (target && target !== activeNav.value) {
+      activeNav.value = target
+    }
+    // 精选页由 activeChannel 驱动数据，但回退时 activeChannel 不变不会触发加载，需要主动刷新
+    if (path === '/' && channels.value.length > 0) {
+      refreshData()
+    }
+  })
+
   /** 监听 activeNav 切换：切到不同导航页时从缓存恢复或请求数据 */
   watch(activeNav, (newNav, oldNav) => {
     if (channels.value.length === 0 || newNav === oldNav) return
@@ -642,6 +666,7 @@ export function useHome() {
     searchSentinel,
     showTemplate,
     showSettingsModal,
+    showAboutModal,
     settingsActiveSection,
     saveLoginInfo,
     isVip,

@@ -111,11 +111,11 @@
         </button>
         <div class="hover-dropdown-menu">
           <div class="dropdown-header">关于我们</div>
-          <button class="dropdown-item" @click="$emit('showToast', '关于 PoseCraft')">
+          <button class="dropdown-item" @click="showAboutModal = true">
             <Sparkles class="item-icon" :size="16" />
             <span>关于 PoseCraft</span>
           </button>
-          <button class="dropdown-item" @click="$emit('showToast', '联系我们')">
+          <button class="dropdown-item" @click="showAboutModal = true">
             <Phone class="item-icon" :size="16" />
             <span>联系我们</span>
           </button>
@@ -137,7 +137,7 @@ import {
 const router = useRouter()
 const route = useRoute()
 const themeStore = useThemeStore()
-const { showSettingsModal, settingsActiveSection } = useHome()
+const { showSettingsModal, settingsActiveSection, showAboutModal } = useHome()
 
 const openSettings = (section: string) => {
   settingsActiveSection.value = section

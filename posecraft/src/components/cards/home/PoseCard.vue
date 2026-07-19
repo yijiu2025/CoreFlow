@@ -31,6 +31,7 @@
         <MapPin :size="12" class="location-pin" />
         <span>{{ item.distance }}</span>
       </div>
+      <div v-if="item.template_deleted || item.template_status === -1 || item.template_status === 0 || item.template_status === -2" class="template-warning-pill">模板已失效</div>
     </div>
     <div class="card-info">
       <h3 class="card-title">{{ item.title || '未命名作品' }}</h3>
@@ -328,4 +329,17 @@ const formatLikes = (num: number) => {
   align-items: center;
   gap: 2px;
 }
+
+.template-warning-pill {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(245, 158, 11, 0.9);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 </style>
