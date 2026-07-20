@@ -131,7 +131,53 @@ schema: {
 
 ---
 
-## 七、重型库安全（前端）
+## 七、CSRF 防护
+
+### 原理
+
+CSRF（跨站请求伪造）利用用户已登录的身份，诱骗用户在不知情的情况下发送恶意请求。
+
+### 防护措施
+
+| 措施 | 说明 | 适用场景 |
+|------|------|----------|
+| SameSite Cookie | 设置 `SameSite=Strict` 或 `Lax`，阻止跨站携带 Cookie | 所有 Cookie |
+| CSRF Token | 表单提交时携带随机 Token，服务端校验 | 表单提交 |
+| Origin/Referer 校验 | 检查请求头中的 Origin 或 Referer | API 接口 |
+| 双重提交 Cookie | Cookie 和请求体中都携带 Token 并比对 | 无状态 API |
+
+### Fastify 配置
+
+```js
+// 使用 @fastify/csrf-protection
+import csrf from '@fastify/csrf-protection'
+
+await fastify.register(csrf, {
+  sessionPlugin: '@fastify/cookie',  // 需要 session 支持
+  key: 'csrf-secret',
+  cookieOpts: { sameSite: 'lax', path: '/' }
+})
+```
+
+### 前端配合
+
+```vue
+<!-- 表单中携带 CSRF Token -->
+<form @submit.prevent="submit">
+  <input type="hidden" name="_csrf" :value="csrfToken" />
+  <!-- 其他表单字段 -->
+</form>
+```
+
+### 注意事项
+
+- SPA + API 模式下，如果 Cookie 设置了 `SameSite=Strict`，通常不需要 CSRF Token
+- 如果使用 JWT Token（放在 Authorization 头），不受 CSRF 攻击影响
+- OAuth21 回调接口需要特殊处理，建议验证 state 参数
+
+---
+
+## 八、重型库安全（前端）
 
 | 规则 | 说明 |
 |------|------|
@@ -141,7 +187,7 @@ schema: {
 
 ---
 
-## 八、环境变量管理
+## 九、环境变量管理
 
 ### 文件层级
 
@@ -180,7 +226,7 @@ id_rsa
 
 ---
 
-## 九、安全自查清单
+## 十、安全自查清单
 
 提交代码前逐项检查：
 
