@@ -1,37 +1,49 @@
 /**
- * v-role 角色权限控制指令
+ * v-role 角色指令
  *
- * 用法举例：
- *   <button v-role="'admin'">系统管理</button>
- *   <button v-role="['admin', 'operator']">编辑配置</button>
+ * 用法：
+ *   <button v-role="'admin'">管理</button>                    <!-- 单角色，不匹配时移除 -->
+ *   <button v-role="['admin', 'operator']">操作</button>       <!-- 多角色（任一满足） -->
  *
- * 说明：
- *   如果当前登录用户不具备指定的角色，该指令会自动从 DOM 中移除绑定的元素。
+ * 角色数据结构：
+ *   { roles: string[], permissions: { allows: string[], denies: string[] } }
+ *   roles 数组包含用户的所有角色编码
  */
 import type { Directive, DirectiveBinding } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 
 /**
- * 校验当前登录用户是否具备要求的角色之一
+ * 校验当前用户是否拥有指定角色之一
  */
 function checkRole(value: string | string[]): boolean {
-  const authStore = useAuthStore()
-  // 未登录直接无权限
-  if (!authStore.isLoggedIn) return false
+  try {
+    const authStore = useAuthStore()
+    if (!authStore.isLoggedIn) return false
 
-  // 格式化为数组，支持传入单字符串或多字符串数组
-  const required = Array.isArray(value) ? value : [value]
-  return required.some(r => authStore.hasRole(r))
+    const required = Array.isArray(value) ? value : [value]
+    return required.some(r => authStore.hasRole(r))
+  } catch {
+    return false
+  }
 }
 
 export const roleDirective: Directive = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    const value = binding.value
-    if (!value) return
+    if (!binding.value) return
 
-    // 校验未通过时，将元素从其父节点中物理移出
-    if (!checkRole(value)) {
-      el.parentNode?.removeChild(el)
+    if (!checkRole(binding.value)) {
+      el.remove()
+    }
+  },
+
+  /**
+   * binding.value 动态变化时重新校验
+   */
+  updated(el: HTMLElement, binding: DirectiveBinding) {
+    if (!binding.value) return
+
+    if (!checkRole(binding.value)) {
+      el.remove()
     }
   }
 }

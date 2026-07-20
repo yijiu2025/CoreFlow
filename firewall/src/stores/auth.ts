@@ -157,12 +157,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 检查是否拥有指定权限
+   * deny 永远优先于 admin 放行
    */
   function hasPermission(permission: string): boolean {
-    if (isAdmin.value) return true
-
     const { allows, denies } = permissions.value
+    // 1. deny 优先：即使 admin 也拒绝
     if (denies.some(p => isPermissionMatch(p, permission))) return false
+    // 2. admin 放行（deny 未命中时）
+    if (isAdmin.value) return true
+    // 3. allow 匹配
     return allows.some(p => isPermissionMatch(p, permission))
   }
 
