@@ -1,0 +1,314 @@
+# Node.js + Fastify 后端模板
+
+## 目录结构
+
+```
+src/
+├── db/            # Sequelize 实例 + 迁移 + 软删除钩子
+├── redis/         # Redis 连接 + 健康监控 + 各存储后端
+├── auth/          # Session + Cookie + ALS + StpUtil
+├── firewall/      # 五层拦截管道
+├── loader/        # 引擎扫描 registry/ 按数字前缀加载
+├── api/           # 路由（按应用分文件夹，含 guard.js）
+├── app/<name>/    # 应用层（config + permission/ + dao/ + services/）
+├── models/<name>/ # Sequelize 模型（按命名空间注册）
+└── data/          # 运行时数据
+```
+
+---
+
+## 一、API 路由模板
+
+### 路由文件 `src/api/<domain>/v1/<route>.js`
+
+```js
+import { registerSecureRoute } from '../../../guard.js'
+
+/** <路由功能描述> */
+export default async function (fastify, opts) {
+  registerSecureRoute(fastify, {
+    name: '<routeName>',
+    alias: '<中文别名>',
+    method: 'GET',
+    url: '/<path>',
+    requireLogin: true,
+    permission: '<app>:<resource>:<action>',
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
+      }
+    },
+    handler: async (request, reply) => {
+      const user = request.state?.user
+      if (!user?.userId) return reply.result.fail('未登录', null, 401)
+      const { page, pageSize } = request.query
+      const result = await xxxDao.findAll({ page, pageSize, currentUserId: user.userId })
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize)
+    }
+  })
+}
+```
+
+### 系统配置 `src/api/<domain>/system.json`
+
+```json
+{
+  "name": "<domain>",
+  "prefix": "/posecraft/v1",
+  "enabled": true,
+  "requireLogin": false,
+  "allowIps": []
+}
+```
+
+> 权限支持：字符串 / `{ any: ['a','b'] }` / `{ all: ['a','b'] }`。
+
+---
+
+## 二、DAO 模板 `src/app/<app>/dao/`
+
+```js
+import sequelize from '../../../db/index.js'
+
+class XxxDao {
+  getModel() { return sequelize.models.Xxx }
+
+  async findAll(options = {}) {
+    const model = this.getModel()
+    const { Op } = await import('sequelize')
+    const where = { delete_version: 0 }
+    if (options.userId) where.user_id = options.userId
+    if (options.status !== undefined) where.status = options.status
+    if (options.keyword) {
+      where[Op.or] = [
+        { title: { [Op.like]: `%${options.keyword}%` } }
+      ]
+    }
+    const page = options.page || 1
+    const pageSize = options.pageSize || 20
+    const { count, rows } = await model.findAndCountAll({
+      where,
+      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid','username','avatar'] }],
+      order: [['created_at', 'DESC']],
+      limit: pageSize,
+      offset: (page - 1) * pageSize
+    })
+    return { list: rows, total: count, page, pageSize }
+  }
+
+  async findById(id) {
+    const model = this.getModel()
+    return await model.findOne({
+      where: { id, delete_version: 0 },
+      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid','username','avatar'] }]
+    })
+  }
+
+  async create(data) { return await this.getModel().create(data) }
+
+  async update(id, data) {
+    const record = await this.findById(id)
+    if (!record) return null
+    return await record.update(data)
+  }
+
+  /** 软删除：delete_version 设为自身 id */
+  async delete(id, userId) {
+    const record = await this.findById(id)
+    if (!record || record.user_id !== userId) return false
+    await record.update({ delete_version: id })
+    return true
+  }
+}
+
+export default new XxxDao()
+```
+
+---
+
+## 三、模型模板 `src/models/<app>/<Model>.js`
+
+```js
+export default (sequelize, DataTypes) => {
+  const Xxx = sequelize.define('Xxx', {
+    id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
+    title: { type: DataTypes.STRING(200), allowNull: false, comment: '标题' },
+    status: { type: DataTypes.TINYINT, defaultValue: 2, comment: '2待审核 1公开 0私密 -1删除 -2拒绝' },
+    user_id: { type: DataTypes.BIGINT, allowNull: false, field: 'user_id' },
+    delete_version: { type: DataTypes.BIGINT, allowNull: false, defaultValue: 0 }
+  }, {
+    tableName: 'posecraft_xxx',
+    timestamps: true,
+    paranoid: true,
+    indexes: [{ fields: ['user_id'] }, { fields: ['status'] }],
+    comment: 'PoseCraft Xxx 表'
+  })
+
+  Xxx.associate = (models) => {
+    Xxx.belongsTo(models.User, { foreignKey: 'user_id', as: 'author' })
+  }
+
+  return Xxx
+}
+```
+
+---
+
+## 四、迁移文件模板 `migrations/<timestamp>-<name>.js`
+
+```js
+export async function up(queryInterface, Sequelize) {
+  await queryInterface.createTable('posecraft_xxx', {
+    id: { type: Sequelize.BIGINT, primaryKey: true, autoIncrement: true },
+    title: { type: Sequelize.STRING(200), allowNull: false },
+    user_id: { type: Sequelize.BIGINT, allowNull: false },
+    status: { type: Sequelize.TINYINT, defaultValue: 2 },
+    delete_version: { type: Sequelize.BIGINT, allowNull: false, defaultValue: 0 },
+    created_at: { type: Sequelize.DATE, allowNull: false },
+    updated_at: { type: Sequelize.DATE, allowNull: false }
+  })
+}
+
+export async function down(queryInterface) {
+  await queryInterface.dropTable('posecraft_xxx')
+}
+```
+
+---
+
+## 五、序列化函数模板 `formatXxx`
+
+集中管理字段输出，避免敏感字段泄漏：
+
+```js
+function formatXxx(record, isOwner = false) {
+  if (!record) return null
+  const data = record.toJSON ? record.toJSON() : record
+  return {
+    id: data.id,
+    title: data.title,
+    status: data.status,
+    count: {
+      likes: data.likes_count,
+      views: isOwner ? data.views_count : undefined  // 仅作者可见
+    },
+    userInteraction: { liked: !!data.liked, collected: !!data.collected },
+    created_at: data.createdAt,
+    author: data.author ? { uid: data.author.uid, username: data.author.username } : undefined
+  }
+}
+```
+
+---
+
+## 六、关联查询模板
+
+```js
+include: [
+  { model: sequelize.models.User, as: 'author', attributes: ['uid','username','avatar'] },
+  { model: sequelize.models.Template, as: 'template', attributes: ['id','status','delete_version'], required: false }
+]
+```
+
+---
+
+## 七、Loader 注册模板 `src/loader/registry/NN-<name>.js`
+
+```js
+export default async function (app) {
+  try {
+    // 业务逻辑
+    app.decorate('<name>', instance)
+    console.log(`✅ [Loader] ${C.green}<name> 加载成功${C.reset}`)
+  } catch (err) {
+    console.error(`❌ [Loader] ${C.red}<name> 加载失败: ${err.message}${C.reset}`)
+  }
+}
+```
+
+---
+
+## 八、系统架构参考
+
+### 统一异常处理
+
+异常基类 `ApiException`（`src/shared/exceptions.js`）：
+
+| 异常类 | 状态码 | 说明 |
+|--------|--------|------|
+| `BadRequestException` | 400 | 参数错误 |
+| `UnauthorizedException` | 401 | 未登录/未授权 |
+| `ForbiddenException` | 403 | 权限不足 |
+| `NotFoundException` | 404 | 资源不存在 |
+| `ConflictException` | 409 | 资源冲突 |
+| `TooManyRequestsException` | 429 | 请求频率过高 |
+
+统一响应格式：
+
+```json
+{ "code": 403, "message": "权限不足", "data": null, "timestamp": 1717000000, "requestId": "req-xxx" }
+```
+
+### 认证系统
+
+- Session 双令牌：`sid`（2h）+ 可选 `sid_r`（30d 刷新）
+- Redis: `session:<id>` = JSON（用户+角色+权限），TTL 与 cookie 同步
+- `StpUtil`：`getLoginId()` / `check()` / `checkRole()` / `hasPermission()` / `checkPermissionAnd/Or()`
+- ALS：`getCtx()` / `getDb()` / `getServerResource(name)`
+
+### 三级守卫
+
+```
+System（system.json）→ Group（registerGroupMetadata()）→ API（registerSecureRoute()）
+```
+
+每级可独立拦截：`enabled` / `allowIps` / `allowRoles` / `requireLogin` / `permission`。
+
+### 数据库
+
+- 模型命名空间：`app.db.<namespace>.<Model>`（user / iam / oauth21 / notice / session / posecraft 等）
+- 软删除：`delete_version` 模式（`delete_version = id` 表示已删，查询过滤 `delete_version: 0`）
+- 关联：`Model.associate = (models) => {}`
+- 迁移：`npm run migrate`，回滚 `--down` / `--down-to <name>`
+
+---
+
+## 九、错误处理最佳实践
+
+### 分层职责
+
+| 层级 | 职责 | 示例 |
+|------|------|------|
+| Controller (路由 handler) | 捕获所有异常，转为统一响应格式 | try/catch + reply.result.fail() |
+| Service | 抛出业务异常，不捕获 | throw new BadRequestException('参数错误') |
+| DAO | 不捕获，让异常自然传播 | 直接 await，异常向上传递 |
+
+### 模板
+
+```js
+handler: async (request, reply) => {
+  try {
+    const result = await xxxService.doSomething(request.body)
+    return reply.result.success(result)
+  } catch (e) {
+    // 业务异常已携带状态码
+    if (e instanceof ApiException) {
+      return reply.result.fail(e.message, null, e.code)
+    }
+    // 未知异常记录日志
+    console.error(`❌ [API] ${C.red}未知错误: ${e.message}${C.reset}`)
+    return reply.result.fail('服务器内部错误', null, 500)
+  }
+}
+```
+
+### 禁止事项
+
+- ❌ 吞掉异常：`catch (e) { }`
+- ❌ 只打印不处理：`catch (e) { console.log(e) }`
+- ❌ catch 后继续执行：异常后代码可能在数据损坏状态下运行
+- ✅ 记录日志 + 向上抛或给用户反馈
