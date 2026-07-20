@@ -8,7 +8,6 @@ import App from './App.vue'
 import router from './router'
 import i18n from './i18n'
 import { authDirective } from './directives/auth'
-import { roleDirective } from './directives/role'
 import './style.css'
 
 const app = createApp(App)
@@ -24,9 +23,8 @@ app.use(pinia)
 app.use(router)
 app.use(i18n)
 
-// 3. 注册全局指令
+// 3. 注册全局指令（v-auth 支持权限 + 角色组合验证）
 app.directive('auth', authDirective)
-app.directive('role', roleDirective)
 
 // 4. 等待路由就绪后挂载（避免白屏闪烁）
 router.isReady().then(() => {
