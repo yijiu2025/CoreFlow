@@ -233,3 +233,69 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 npm test -- --watch         # 监听模式
 npm test -- --testPathPattern user  # 只运行 user 相关测试
 ```
+
+---
+
+## 六、E2E 测试（Playwright）
+
+### 适用场景
+
+- 关键用户流程（登录、注册、支付、核心业务操作）
+- 跨页面/跨组件的集成行为
+- 需要真实浏览器环境的测试
+
+### 测试文件命名
+
+```
+e2e/
+├── auth/
+│   ├── login.spec.ts
+│   └── register.spec.ts
+├── dashboard/
+│   └── navigation.spec.ts
+└── helpers/
+    └── auth.helper.ts        # 登录等通用操作封装
+```
+
+### 测试模板
+
+```ts
+import { test, expect } from '@playwright/test'
+
+test.describe('用户登录', () => {
+  test('正常登录跳转首页', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="username"]', 'admin')
+    await page.fill('input[name="password"]', '123456')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL('/dashboard')
+    await expect(page.locator('.user-name')).toContainText('admin')
+  })
+
+  test('密码错误显示提示', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('input[name="username"]', 'admin')
+    await page.fill('input[name="password"]', 'wrong')
+    await page.click('button[type="submit"]')
+    await expect(page.locator('.error-message')).toContainText('密码错误')
+  })
+})
+```
+
+### E2E 测试原则
+
+| 原则 | 说明 |
+|------|------|
+| 测业务流程 | 测"用户能做什么"，不测实现细节 |
+| 稳定优先 | 使用 data-testid 或 aria-label 定位，避免脆弱的选择器 |
+| 隔离性 | 每个测试独立运行，不依赖其他测试的状态 |
+| 数据准备 | 测试前通过 API 或 fixture 准备数据，不依赖手动操作 |
+
+### 运行命令
+
+```bash
+npx playwright test                    # 运行所有 E2E 测试
+npx playwright test --headed           # 有头模式（可视化调试）
+npx playwright test --project=chromium # 只运行 Chromium
+npx playwright show-report             # 查看测试报告
+```
