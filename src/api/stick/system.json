@@ -1,0 +1,10 @@
+{
+  "name": "stick",
+  "alias": "股票分析",
+  "prefix": "/stick",
+  "description": "股票分析系统",
+  "enabled": true,
+  "requireLogin": true,
+  "allowIps": [],
+  "allowRoles": []
+}

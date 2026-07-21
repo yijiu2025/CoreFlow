@@ -230,7 +230,7 @@ src/
 | `db.notice` | EmailCode, NoticeConfig | notice_email_codes, notice_configs |
 | `db.session` | UserSession, SessionToken, SessionLog | session_user_session, session_tokens, session_logs |
 
-关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/db/softDeleteHooks.js`）。
+关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/db/softDeleteHooks.js`），模型定义时 `paranoid` 必须设为 `false`（不使用 Sequelize 内置的 deletedAt 机制）。
 
 ## 数据库 (`src/db/`)
 

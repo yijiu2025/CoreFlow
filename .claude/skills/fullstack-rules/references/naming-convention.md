@@ -54,6 +54,10 @@ const Model = sequelize.define('Model', {
 | 工具文件 | `kebab-case` | `safe-redis.js` — `src/redis/` | Redis 安全操作封装 |
 | | | `session-store.js` — `src/redis/` | 会话存储适配器 |
 | | | `nonce-store.js` — `src/redis/` | Nonce 去重存储 |
+| Composables | `camelCase` | `usePoseData.ts` — `hooks/` | 姿态数据组合式函数 |
+| | | `useCanvas.ts` — `hooks/` | 画布组合式函数 |
+
+> **hooks/composables 例外**：`hooks/` 目录下的文件用 `camelCase`（`useXxx.ts`），其他工具文件统一 `kebab-case`。
 | 路由文件 | `kebab-case` | `auth.js` — `src/api/auth/v1/` | 认证路由 |
 | | | `user-info.js` — `src/api/user/v1/` | 用户信息路由 |
 | | | `traffic-stats.js` — `src/api/firewall/v1/` | 流量统计路由 |
