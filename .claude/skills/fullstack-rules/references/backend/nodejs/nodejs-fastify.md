@@ -19,6 +19,28 @@ src/
 
 ## 一、API 路由模板
 
+### 路由三级前缀拼接规则
+
+总路由由三个层级的前缀拼接而成，**写完 API 后必须逐级检查**：
+
+```
+system.json 中 prefix: "/stick"          ← 系统级
+registerGroupMetadata 中 prefix: "/v1"   ← 分组级
+registerSecureRoute 中 url: "/analysis/:stockCode"  ← 路由级
+────────────────────────────────────────────
+最终路由: /stick/v1/analysis/:stockCode
+```
+
+各层级配置示例：
+
+| 层级 | 配置位置 | 示例 | 说明 |
+|------|---------|------|------|
+| System | `system.json` | `"prefix": "/stick"` | 功能域前缀，通常为 `/{appName}` |
+| Group | `registerGroupMetadata()` | `prefix: '/v1'` | 版本号前缀，通常为 `/v1` |
+| Route | `registerSecureRoute()` | `url: '/analysis/:stockCode'` | 实际路径，不含前面的前缀 |
+
+> ⚠️ **常见错误**：`registerSecureRoute` 的 `url` 从 `/` 开始，但**不包含** system 和 group 的前缀。三个前缀由框架自动拼接，url 中不要重复写。
+
 ### 路由文件 `src/api/<domain>/v1/<route>.js`
 
 ```js
@@ -143,7 +165,7 @@ export default (sequelize, DataTypes) => {
   }, {
     tableName: 'posecraft_xxx',
     timestamps: true,
-    paranoid: true,
+    paranoid: false,               // 使用自定义 delete_version 软删除，不启用 Sequelize 内置 paranoid
     indexes: [{ fields: ['user_id'] }, { fields: ['status'] }],
     comment: 'PoseCraft Xxx 表'
   })
@@ -312,3 +334,31 @@ handler: async (request, reply) => {
 - ❌ 只打印不处理：`catch (e) { console.log(e) }`
 - ❌ catch 后继续执行：异常后代码可能在数据损坏状态下运行
 - ✅ 记录日志 + 向上抛或给用户反馈
+
+---
+
+## 十、开发完成后验证清单
+
+每写完一个 API，逐项检查：
+
+### 路由检查
+
+- [ ] `system.json` 的 `prefix` + `registerGroupMetadata` 的 `prefix` + `registerSecureRoute` 的 `url` 拼接正确
+- [ ] 最终路由无重复前缀（如 `/stick/v1/stocks` 无误写为 `/stick/stocks` 或 `/stick/v1/v1/stocks`）
+- [ ] 路由注册无冲突（同名 `name` 或同 `method+url` 组合）
+- [ ] 前端 API 文件中 `baseURL` 或调用路径与后端路由一致
+
+### 功能检查
+
+- [ ] 用 `curl` 或浏览器测试所有 method（GET / POST / PUT / DELETE）
+- [ ] 测试 200 正常响应格式
+- [ ] 测试 400 参数错误
+- [ ] 测试 401 未登录
+- [ ] 测试 403 无权限
+- [ ] 测试 404 资源不存在
+
+### 前后端对应检查
+
+- [ ] 后端路由的 `url` 和前端 `api/xxx.ts` 中的路径一致
+- [ ] 后端 `permission` 和前端 `v-auth` 指令中的权限编码一致
+- [ ] 后端请求/响应字段名和前端 TypeScript 类型定义一致

@@ -36,6 +36,68 @@
 
 ---
 
+## 环境变量配置
+
+### 变量清单
+
+前端通过 `VITE_` 前缀的环境变量与后端通信，项目初始化时必须创建 `.env` 文件：
+
+| 变量 | 说明 | 开发默认值 | 必填 |
+|------|------|-----------|------|
+| `VITE_API_URL` | 后端 API 地址 | `http://localhost:3000` | ✅ |
+| `VITE_WS_HOST` | WebSocket 地址 | `localhost:3000` | 按需 |
+| `VITE_SSO_URL` | SSO 登录页面地址 | `http://localhost:5174` | 按需 |
+
+### 文件层级
+
+```
+.env                # 开发环境（commit 时不提交，仅提交 .env.example）
+.env.example        # 模板，列出所有变量和默认值
+.env.production     # 生产环境（不提交 git）
+```
+
+### Axios 实例配置
+
+`src/api/index.ts` 中通过环境变量拼接后端地址，而非硬编码：
+
+```typescript
+import axios from 'axios'
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL + '/stick/v1',
+  timeout: 10000,
+  withCredentials: true  // 跨域携带 Cookie
+})
+```
+
+### 开发环境代理
+
+开发时 Vite 代理将请求转发到后端，避免跨域问题（`vite.config.ts`）：
+
+```typescript
+server: {
+  port: 5177,
+  proxy: {
+    '/stick': {
+      target: 'http://localhost:3000',  // 对应 VITE_API_URL
+      changeOrigin: true
+    }
+  }
+}
+```
+
+> ⚠️ **开发依赖 proxy，生产依赖 VITE_API_URL**：开发时 Axios 请求发到 Vite 自身（`/stick/v1/...`），由 proxy 转发到后端。生产构建后 proxy 不存在，Axios 必须通过 `VITE_API_URL` 直接访问后端。`baseURL` 应设计为同时兼容两种模式，或用环境变量区分。
+
+### 创建步骤
+
+1. 前端开发完成后，创建 `.env.example` 列出所有变量
+2. 复制为 `.env` 填入开发环境值
+3. 部署时创建 `.env.production` 填入生产环境值
+4. 将 `.env` 和 `.env.production` 加入 `.gitignore`
+5. 确认 `src/api/index.ts` 中的 `baseURL` 使用 `import.meta.env.VITE_*`
+
+---
+
 ## 一、认证与权限系统
 
 ### 权限数据结构
@@ -112,7 +174,91 @@ export function setupDirectives(app: App) {
 
 ---
 
-## 二、SFC 代码块顺序
+## 二、路由规范
+
+### 路由配置
+
+路由文件统一放在 `src/router/index.ts` 中，使用 `vue-router` 的 createRouter：
+
+```typescript
+import { createRouter, createWebHistory } from 'vue-router'
+
+const routes = [
+  {
+    path: '/',
+    name: 'home',
+    component: () => import('@/views/HomeView.vue'),
+    meta: { title: '首页', requireLogin: false }
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/LoginView.vue'),
+    meta: { title: '登录', requireLogin: false }
+  },
+  {
+    path: '/dashboard',
+    name: 'dashboard',
+    component: () => import('@/views/DashboardView.vue'),
+    meta: { title: '仪表盘', requireLogin: true, permission: 'dashboard:read' }
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+```
+
+### 路由懒加载
+
+所有页面组件使用动态 `import()` 懒加载，禁止直接 import 页面组件：
+
+```typescript
+// ✅ 正确：懒加载
+component: () => import('@/views/HomeView.vue')
+
+// ❌ 错误：同步加载，会增加首屏包体积
+import HomeView from '@/views/HomeView.vue'
+component: HomeView
+```
+
+### 路由守卫
+
+使用 `router.beforeEach` 全局前置守卫做权限校验：
+
+```typescript
+router.beforeEach(async (to, from, next) => {
+  // 设置页面标题
+  document.title = (to.meta.title as string) || '默认标题'
+
+  // 需要登录但未登录 → 跳转登录页
+  if (to.meta.requireLogin && !authStore.isLoggedIn) {
+    return next({ name: 'login', query: { redirect: to.fullPath } })
+  }
+
+  // 需要权限但无权限 → 跳转 403
+  if (to.meta.permission && !authStore.hasPermission(to.meta.permission as string)) {
+    return next({ name: 'forbidden' })
+  }
+
+  next()
+})
+```
+
+### 路由元信息（meta）
+
+| 字段 | 类型 | 说明 | 示例 |
+|------|------|------|------|
+| `title` | `string` | 页面标题，守卫中设置 `document.title` | `'首页'` |
+| `requireLogin` | `boolean` | 是否需要登录 | `true` |
+| `permission` | `string` | 需要的权限编码 | `'dashboard:read'` |
+| `roles` | `string[]` | 允许的角色列表 | `['admin', 'operator']` |
+| `keepAlive` | `boolean` | 是否启用 keep-alive | `true` |
+
+---
+
+## 三、SFC 代码块顺序
 
 ```vue
 <template> ... </template>
@@ -122,16 +268,16 @@ export function setupDirectives(app: App) {
 
 ---
 
-## 三、组件开发规范
+## 四、组件开发规范
 
-### 3.1 组件职责
+### 4.1 组件职责
 
 - **单一职责**：一个组件只负责一个功能域
 - **不内嵌其他模块**：组件 A 中不出现组件 B 的 UI/逻辑
 - **跨模块通信**：通过 props / emit / v-model / 共享 composable 实现
 - **禁止反向依赖**：子组件不依赖父组件的内部结构
 
-### 3.2 状态完备性
+### 4.2 状态完备性
 
 每个可交互组件必须覆盖以下状态：
 
@@ -140,7 +286,7 @@ export function setupDirectives(app: App) {
 - **error**：加载/操作失败提示
 - **disabled**：禁用态控制
 
-### 3.3 弹窗模板
+### 4.3 弹窗模板
 
 ```vue
 <template>
@@ -165,7 +311,7 @@ export function setupDirectives(app: App) {
   animation: fadeIn .2s ease forwards; }
 ```
 
-### 3.4 懒加载弹窗
+### 4.4 懒加载弹窗
 
 ```ts
 const Modal = shallowRef<any>(null)
@@ -175,7 +321,7 @@ const ensureModal = async () => {
 watch(showModal, (v) => { if (v) ensureModal() }, { immediate: true })
 ```
 
-### 3.5 keep-alive 视图
+### 4.5 keep-alive 视图
 
 ```ts
 import { onActivated } from 'vue'
@@ -187,7 +333,7 @@ onActivated(() => {
 })
 ```
 
-### 3.6 Composable 单例模式
+### 4.6 Composable 单例模式
 
 ```ts
 const MyStateSymbol = Symbol('myState')
@@ -198,7 +344,7 @@ export function useMyState() {
 }
 ```
 
-### 3.7 空状态视图
+### 4.7 空状态视图
 
 ```css
 .empty-state { flex: 1; display: flex; flex-direction: column;
@@ -207,7 +353,7 @@ export function useMyState() {
 
 ---
 
-## 四、图标规范
+## 五、图标规范
 
 - 统一使用 SVG 图标库（如 `lucide-vue-next`）
 - **禁止在 UI 中使用 emoji 作为图标**
@@ -216,7 +362,7 @@ export function useMyState() {
 
 ---
 
-## 五、样式规范
+## 六、样式规范
 
 - `<style scoped>` 默认带 dark-mode 变体
 - 品牌色使用 CSS 变量定义（`--primary`、`--accent` 等），统一管理
@@ -224,7 +370,7 @@ export function useMyState() {
 
 ---
 
-## 六、安全规范
+## 七、安全规范
 
 - 禁止使用 `v-html` 渲染未经净化的用户输入（防 XSS）
 - iframe 嵌入必须配置 `sandbox` 属性
@@ -232,7 +378,7 @@ export function useMyState() {
 
 ---
 
-## 七、组件目录架构
+## 八、组件目录架构
 
 **三层结构**：`功能分类 -> 业务页面 -> 组件文件`
 

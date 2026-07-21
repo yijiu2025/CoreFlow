@@ -202,43 +202,6 @@ $primary-color: var(--color-primary);
 
 ---
 
-### 错误处理反例
-
-```js
-// ❌ 吞掉异常
-try {
-  await api.save(data)
-} catch {
-  // 啥也不做
-}
-
-// ❌ 只打印不处理
-try {
-  await api.save(data)
-} catch (e) {
-  console.log(e)
-}
-
-// ❌ catch 后继续执行，数据已损坏
-try {
-  await api.save(data)
-} catch (e) {
-  console.error(e)
-}
-// 这里 data 可能没保存成功，但代码继续往下走
-notifySuccess()
-
-// ✅ 记录日志 + 向上抛或给用户反馈
-try {
-  await api.save(data)
-} catch (e) {
-  logger.error(`保存失败: ${e.message}`)
-  throw e  // 或给用户提示
-}
-```
-
----
-
 ## 四、控制台日志规范
 
 ### 格式模板
