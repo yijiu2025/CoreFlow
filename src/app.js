@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import helmet from '@fastify/helmet';
 import { initLoader } from './loader/index.js';
+import { flushGuardConfig } from './api/guard-config.js';
 import { ApiException } from './shared/exceptions.js';
 
 // 应用层不信任任意代理 IP，仅允许本地回环。
@@ -236,6 +237,11 @@ export async function createApp() {
 
   // 启动加载器引擎，按顺序初始化 Redis → DB → Auth → Firewall → Models → API → Apps
   await initLoader(app);
+
+  // 注册优雅关闭钩子：确保防抖中的守卫配置在退出前写入数据库
+  app.addHook('onClose', async () => {
+    await flushGuardConfig();
+  });
 
   return app;
 }

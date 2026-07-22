@@ -1,18 +1,40 @@
-// src/loader/engine.js
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+/**
+ * 加载器引擎：按顺序执行 registry 目录下的所有加载模块
+ * 扫描 `src/loader/registry/` 目录，按文件名数字前缀排序加载
+ * 收集非致命错误最后一并报告，关键错误立即终止
+ *
+ * @author yijiu2025
+ * @since 2026-07-22
+ */
+
+/* eslint-disable no-console */
+
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { C } from '../utils/colors.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const C = { reset: '\x1b[0m', red: '\x1b[31m', yellow: '\x1b[33m', cyan: '\x1b[36m', dim: '\x1b[2m' };
-
+/**
+ * 按文件名顺序加载 registry 目录下的所有模块
+ * 每个模块导出默认函数 `register(app)`，失败时收集到 loadErrors
+ * 路由重复注册等关键错误立即终止，非关键错误汇总警告
+ * 每个模块有 30 秒超时限制，防止挂起模块阻塞服务启动
+ *
+ * @param {import('fastify').FastifyInstance} app - Fastify 实例
+ * @returns {Promise<void>}
+ * @throws {Error} 关键加载错误（如路由重复注册）时抛出
+ */
 export async function runEngine(app) {
   const registryDir = path.resolve(__dirname, './registry');
   const files = await fs.readdir(registryDir);
   const sortedFiles = files.filter((f) => f.endsWith('.js')).sort();
 
-  // 收集所有加载错误，最后一并报告（一次性看到所有问题）
+  /** 每个模块加载超时时间（毫秒） */
+  const LOAD_TIMEOUT = 30000;
+
+  // 收集所有非关键加载错误，最后一并报告（一次性看到所有问题）
   const loadErrors = [];
 
   for (const file of sortedFiles) {
@@ -20,33 +42,30 @@ export async function runEngine(app) {
     try {
       const { default: register } = await import(fileUrl);
       if (typeof register === 'function') {
-        await register(app);
+        // 使用 Promise.race 实现模块加载超时保护
+        await Promise.race([
+          register(app),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(Object.assign(new Error(`模块加载超时 (${LOAD_TIMEOUT}ms)`), { code: 'LOAD_TIMEOUT' })),
+              LOAD_TIMEOUT
+            )
+          )
+        ]);
       }
     } catch (err) {
-      loadErrors.push({ file, message: err.message });
-      // 关键错误（路由重复等）立即终止，避免后续模块"背锅"
-      if (err.message && err.message.includes('路由重复注册')) {
-        throw new Error(formatErrors([{ file, message: err.message }]), { cause: err });
+      // 路由重复注册等关键错误使用错误码判断（不依赖错误消息文本）
+      if (err.code === 'DUPLICATE_ROUTE') {
+        throw err;
       }
+      // 非关键错误收集到数组，最后统一报告
+      loadErrors.push({ file, message: err.message });
     }
   }
 
   // 非关键错误汇总报告
   if (loadErrors.length > 0) {
-    const fatal = loadErrors.find((e) => e.message.includes('路由重复注册'));
-    if (fatal) {
-      throw new Error(formatErrors(loadErrors));
-    }
     console.warn(`\n⚠️ [Loader] ${C.yellow}以下加载项出错（非致命）：${C.reset}`);
     loadErrors.forEach((e) => console.warn(`  • [${e.file}] ${e.message}`));
   }
-}
-
-/** 格式化错误清单 */
-function formatErrors(errors) {
-  return (
-    `\n❌ 加载失败（${errors.length} 项错误）：\n` +
-    errors.map((e) => `  • [${e.file}] ${e.message}`).join('\n') +
-    '\n'
-  );
 }
