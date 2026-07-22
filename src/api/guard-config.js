@@ -52,16 +52,25 @@ export async function loadGuardConfig() {
  */
 function mergeDbConfig(dbConfigs) {
   for (const [systemKey, dbSystem] of Object.entries(dbConfigs)) {
-    if (!configs[systemKey]) continue;
+    if (!configs[systemKey]) {
+      console.warn(`⚠️ [Guard Config] DB 中存在已删除或未注册的系统配置: ${systemKey}，已忽略`);
+      continue;
+    }
     // 覆盖系统级运行时字段
     overrideRuntimeFields(configs[systemKey], dbSystem);
     // 覆盖模块级运行时字段
     for (const [groupKey, dbGroup] of Object.entries(dbSystem.groups || {})) {
-      if (!configs[systemKey].groups[groupKey]) continue;
+      if (!configs[systemKey].groups[groupKey]) {
+        console.warn(`⚠️ [Guard Config] DB 中存在已删除的模块配置: ${systemKey}/${groupKey}，已忽略`);
+        continue;
+      }
       overrideRuntimeFields(configs[systemKey].groups[groupKey], dbGroup);
       // 覆盖 API 级运行时字段
       for (const [apiKey, dbApi] of Object.entries(dbGroup.apis || {})) {
-        if (!configs[systemKey].groups[groupKey].apis[apiKey]) continue;
+        if (!configs[systemKey].groups[groupKey].apis[apiKey]) {
+          console.warn(`⚠️ [Guard Config] DB 中存在已删除的 API 配置: ${systemKey}/${groupKey}/${apiKey}，已忽略`);
+          continue;
+        }
         overrideRuntimeFields(configs[systemKey].groups[groupKey].apis[apiKey], dbApi);
       }
     }
@@ -106,16 +115,22 @@ export function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
  * 热更新配置 (支持 3 层更新)
  */
 export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null) {
-  if (!configs[systemKey]) return null;
+  const system = configs[systemKey];
+  if (!system) return null;
 
   const updatePatch = { ...patch, updatedAt: new Date().toISOString() };
 
   if (apiKey && groupKey) {
-    Object.assign(configs[systemKey].groups[groupKey].apis[apiKey], updatePatch);
+    const group = system.groups?.[groupKey];
+    const api = group?.apis?.[apiKey];
+    if (!api) return null;
+    Object.assign(api, updatePatch);
   } else if (groupKey) {
-    Object.assign(configs[systemKey].groups[groupKey], updatePatch);
+    const group = system.groups?.[groupKey];
+    if (!group) return null;
+    Object.assign(group, updatePatch);
   } else {
-    Object.assign(configs[systemKey], updatePatch);
+    Object.assign(system, updatePatch);
   }
 
   triggerSave();
@@ -189,6 +204,12 @@ export function registerGroupMetadata(systemKey, groupKey, metadata) {
 
 /**
  * 3层注册：API 级元数据 (Level 3)
+ *
+ * 注意：首次注册和后续更新的行为不对称：
+ * - 首次注册：创建完整条目，包含 enabled/requireLogin 等运行时字段（使用 metadata 参数值）
+ * - 后续更新：仅更新 name/url/method 等结构字段，不覆盖运行时字段
+ *   运行时字段由 DB 持久化配置控制（loadGuardConfig 时覆盖），
+ *   避免代码热更新意外重置运维配置
  */
 export function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
   if (!configs[systemKey]) {
@@ -228,6 +249,25 @@ export function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
       url: metadata.url,
       method: metadata.method
     });
+  }
+}
+
+/**
+ * 立即刷新待保存的配置到数据库（用于优雅关闭）
+ * 清除防抖定时器并立即执行一次保存
+ *
+ * @returns {Promise<void>}
+ */
+export async function flushGuardConfig() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  try {
+    currentVersion = await GuardConfigDao.saveToDB(configs, currentVersion);
+    console.log(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}`);
+  } catch (err) {
+    console.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败: ${err.message}${C.reset}`);
   }
 }
 

@@ -15,50 +15,114 @@ import { isIpMatch } from '../utils/ip.js';
 
 /**
  * 注册受保护的 WebSocket 路由
- * 使用与 HTTP 路由相同的三级守卫机制
+ * 使用与 HTTP 路由相同的三级守卫机制（System → Group → API）
+ * 支持 IP 白名单、角色校验、权限校验和登录校验
+ *
+ * 注意：HTTP 路由的 applyGuardLogic 遇到 authError（TokenExpiredError 等）
+ * 会返回 JSON 错误体，WebSocket 只有 close code，无法携带 JSON 错误详情。
+ * 因此 WebSocket 的 authError 会在 close 时简化为通用 4001 码。
  *
  * @param {object} fastify - Fastify 实例
  * @param {object} options - 路由选项
  * @param {string} options.url - WebSocket URL
+ * @param {string} [options.group] - 所属模块组，默认使用 currentGroup
  * @param {boolean} [options.requireLogin=true] - 是否需要登录
  * @param {string[]} [options.allowRoles=[]] - 允许的角色
+ * @param {string[]} [options.allowIps=[]] - IP 白名单（支持通配符/CIDR）
+ * @param {string|object} [options.requirePermission=null] - 权限校验
  * @param {Function} options.handler - WebSocket 处理函数 (connection, req, client) => void
  */
 export function registerSecureWebSocket(fastify, options) {
   const {
     url,
+    group,
     requireLogin = true,
     allowRoles = [],
+    allowIps = [],
+    requirePermission = null,
     handler
   } = options;
 
   const targetSystem = currentSystem;
+  const targetGroup = group || currentGroup;
+  const apiKey = `ws:${url.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+  // 在守卫配置中注册该 WebSocket 路由，支持三级级联校验
+  registerApiMetadata(targetSystem, targetGroup, apiKey, {
+    url,
+    method: 'WS',
+    allowRoles,
+    allowIps,
+    requireLogin,
+    requirePermission
+  });
 
   fastify.get(url, { websocket: true }, async (connection, req) => {
     const client = connection.socket || connection;
-
-    // 执行守卫逻辑
     const user = req.state?.user;
+    const clientIp = req.ip;
 
-    // 检查系统级开关
-    if (targetSystem) {
-      const sys = getGuardConfig(targetSystem);
-      if (sys && !sys.enabled) {
-        if (client?.close) client.close(4003, '系统已禁用');
+    // 1. 系统级校验
+    const sys = getGuardConfig(targetSystem);
+    if (sys) {
+      const result = checkGuardBase(sys, user, clientIp);
+      if (!result.passed) {
+        if (client?.close) client.close(result.status, result.message);
         return;
       }
     }
 
-    // 检查登录状态
+    // 2. 模块级校验
+    const grp = getGuardConfig(targetSystem, targetGroup);
+    if (grp) {
+      const result = checkGuardBase(grp, user, clientIp);
+      if (!result.passed) {
+        if (client?.close) client.close(result.status, result.message);
+        return;
+      }
+    }
+
+    // 3. API 级校验
+    const api = getGuardConfig(targetSystem, targetGroup, apiKey);
+    if (api) {
+      const result = checkGuardBase(api, user, clientIp);
+      if (!result.passed) {
+        if (client?.close) client.close(result.status, result.message);
+        return;
+      }
+    }
+
+    // 4. 当前路由选项级的 IP 白名单校验（高于配置的层级）
+    if (allowIps.length > 0) {
+      const isAllowed = allowIps.some((rule) => isIpMatch(clientIp, rule));
+      if (!isAllowed) {
+        if (client?.close) client.close(4003, `IP [${clientIp}] 无权访问`);
+        return;
+      }
+    }
+
+    // 5. 当前路由选项级的登录校验
     if (requireLogin && !user?.sub) {
       if (client?.close) client.close(4001, '未登录');
       return;
     }
 
-    // 检查角色
+    // 6. 当前路由选项级的角色校验
     if (allowRoles.length > 0 && user) {
       const userRoles = user.roles || [];
       if (!allowRoles.some(r => userRoles.includes(r))) {
+        if (client?.close) client.close(4003, '权限不足');
+        return;
+      }
+    }
+
+    // 7. 当前路由选项级的权限校验
+    if (requirePermission) {
+      if (!user) {
+        if (client?.close) client.close(4001, '未登录');
+        return;
+      }
+      if (!checkPermission(requirePermission, user)) {
         if (client?.close) client.close(4003, '权限不足');
         return;
       }
@@ -121,7 +185,46 @@ function checkPermission(required, user) {
     return required.all.every(p => matchSingle(p, allows, denies));
   }
 
+  // 非预期的权限格式（如 {}、{ invalid: [...] }），记录日志便于排查错误配置
+  console.warn(`⚠️ [Guard] 非预期的权限格式: ${JSON.stringify(required)}`);
   return false;
+}
+
+/**
+ * 基础守卫规则检查（纯函数，不依赖 reply 对象）
+ * 用于 WebSocket 等非 HTTP 场景，与 applyGuardLogic 共享同一套规则
+ *
+ * @param {object} opts - 守卫配置（enabled, allowIps, allowRoles, requireLogin）
+ * @param {object|null} user - 用户对象
+ * @param {string} clientIp - 客户端 IP
+ * @returns {{ passed: boolean, status?: number, message?: string }}
+ */
+function checkGuardBase(opts, user, clientIp) {
+  const { enabled = true, allowIps = [], allowRoles = [], requireLogin = false } = opts;
+
+  if (!enabled) {
+    return { passed: false, status: 4003, message: '该安全节点已禁用' };
+  }
+
+  if (allowIps.length > 0) {
+    const isAllowed = allowIps.some((rule) => isIpMatch(clientIp, rule));
+    if (!isAllowed) {
+      return { passed: false, status: 4003, message: `IP [${clientIp}] 无权访问` };
+    }
+  }
+
+  if (requireLogin && !user?.sub) {
+    return { passed: false, status: 4001, message: '未登录' };
+  }
+
+  if (allowRoles.length > 0 && user) {
+    const userRoles = user.roles || [];
+    if (!allowRoles.some(r => userRoles.includes(r))) {
+      return { passed: false, status: 4003, message: '权限不足' };
+    }
+  }
+
+  return { passed: true };
 }
 
 /**
@@ -246,7 +349,10 @@ export { registerSystemMetadata };
  * 【Loader 调用】设置当前扫描的系统上下文
  */
 export function setRegistrationContext(systemKey) {
-  currentSystem = systemKey || 'api-' + Math.random().toString(36).substring(7);
+  // 空字符串、null、undefined 均使用固定默认值，避免随机数导致路由注册到不可预期的系统
+  currentSystem = (systemKey && typeof systemKey === 'string' && systemKey.trim().length > 0)
+    ? systemKey.trim()
+    : 'system-default';
   currentGroup = ''; // 重置组
   currentPrefix = ''; // 重置前缀
 }
@@ -339,11 +445,13 @@ export function registerSecureRoute(fastify, options) {
   const routeKey = `${methodUpper}:${fullUrl}`;
   if (_routeRegistry.has(routeKey)) {
     const dup = _routeRegistry.get(routeKey);
-    throw new Error(
+    const err = new Error(
       `路由重复注册: ${methodUpper} ${fullUrl}\n` +
       `  → 首次注册: [${dup.group}] ${dup.name}\n` +
       `  → 重复注册: [${targetGroup}] ${name}`
     );
+    err.code = 'DUPLICATE_ROUTE';
+    throw err;
   }
   _routeRegistry.set(routeKey, { group: targetGroup, name, fullUrl, method: methodUpper });
 
