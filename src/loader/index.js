@@ -25,6 +25,9 @@ import { C } from '../utils/colors.js';
  * @throws {Error} 引擎初始化失败时向上冒泡，阻止服务启动
  */
 export async function initLoader(app) {
+  // 防御性校验：防止传入 undefined 时抛出难以定位的 TypeError
+  if (!app) throw new Error('initLoader: 参数 app 不能为空');
+
   console.log(`📦 [Loader] ${C.cyan}模块开始初始化...${C.reset}`);
   try {
     // 1. 按顺序加载所有注册模块（06-models 加载模型后 DB 操作才可用）
