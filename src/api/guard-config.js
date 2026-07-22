@@ -1,7 +1,8 @@
 /**
  * 守卫配置存储
  * 三级守卫配置的注册/查询/持久化，使用数据库存储替代 JSON 文件
- * 启动时 DB → 内存，运行时读内存，配置变更时异步原子写入 DB
+ * 启动时 register* 设置代码级默认值 → loadGuardConfig 从 DB 加载覆盖（运维优先）
+ * 运行时读内存，配置变更时异步原子写入 DB
  *
  * @author yijiu2025
  * @since 2026-07-22
@@ -14,31 +15,74 @@ import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
 
 /**
  * 核心配置存储 - 仅存放与 API 加载、权限策略相关的配置
- * 启动时从 DB 加载，运行时全内存操作，变更后异步写回 DB
+ * 启动时 register* 构建代码级配置，随后 loadGuardConfig 用 DB 配置覆盖
  */
 let configs = {};
 let currentVersion = 0;
 
 /**
- * 从数据库加载持久化配置到内存
- * 在 runEngine 之前调用，确保注册阶段可以读取已持久化的 enabled/allowIps 等
+ * 从数据库加载持久化配置，覆盖内存中的代码级默认值
+ * 必须在 runEngine（register* 调用完成）之后执行
+ * DB 配置优先，确保运维修改不因重启丢失
  *
  * @returns {Promise<void>}
  */
 export async function loadGuardConfig() {
   try {
     const data = await GuardConfigDao.loadFromDB();
-    configs = data.configs;
-    currentVersion = data.version;
-    if (currentVersion > 0) {
+    if (data.version > 0) {
+      // 合并：DB 配置覆盖代码级配置（仅覆盖运行时字段，不覆盖结构）
+      mergeDbConfig(data.configs);
+      currentVersion = data.version;
       console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据 (version=${currentVersion})${C.reset}`);
+    } else {
+      // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
+      currentVersion = await GuardConfigDao.saveToDB(configs, 0);
+      console.log(`💾 [Guard Config] ${C.dim}已写入初始策略数据 (version=${currentVersion})${C.reset}`);
     }
   } catch (err) {
-    // 首次运行或无数据时使用空配置，不阻止启动
-    configs = {};
-    currentVersion = 0;
-    console.warn(`⚠️ [Guard Config] ${C.yellow}数据库加载失败，使用空配置: ${err.message}${C.reset}`);
+    // 数据库不可用时使用代码级配置，不阻止启动
+    console.warn(`⚠️ [Guard Config] ${C.yellow}数据库加载失败，使用代码级配置: ${err.message}${C.reset}`);
   }
+}
+
+/**
+ * 将 DB 配置合并到内存中，仅覆盖运行时字段，不覆盖结构定义
+ * @param {object} dbConfigs - 从 DB 加载的完整配置树
+ */
+function mergeDbConfig(dbConfigs) {
+  for (const [systemKey, dbSystem] of Object.entries(dbConfigs)) {
+    if (!configs[systemKey]) continue;
+    // 覆盖系统级运行时字段
+    overrideRuntimeFields(configs[systemKey], dbSystem);
+    // 覆盖模块级运行时字段
+    for (const [groupKey, dbGroup] of Object.entries(dbSystem.groups || {})) {
+      if (!configs[systemKey].groups[groupKey]) continue;
+      overrideRuntimeFields(configs[systemKey].groups[groupKey], dbGroup);
+      // 覆盖 API 级运行时字段
+      for (const [apiKey, dbApi] of Object.entries(dbGroup.apis || {})) {
+        if (!configs[systemKey].groups[groupKey].apis[apiKey]) continue;
+        overrideRuntimeFields(configs[systemKey].groups[groupKey].apis[apiKey], dbApi);
+      }
+    }
+  }
+}
+
+/** 运行时字段列表（仅覆盖这些字段，不覆盖 id/name/url/method 等结构字段） */
+const RUNTIME_FIELDS = ['enabled', 'requireLogin', 'allowIps', 'allowRoles'];
+
+/**
+ * 用 DB 值覆盖目标对象的运行时字段
+ * @param {object} target - 内存中的配置对象
+ * @param {object} source - DB 中的配置对象
+ */
+function overrideRuntimeFields(target, source) {
+  for (const field of RUNTIME_FIELDS) {
+    if (source[field] !== undefined) {
+      target[field] = source[field];
+    }
+  }
+  target.updatedAt = new Date().toISOString();
 }
 
 /**
@@ -101,17 +145,15 @@ export function registerSystemMetadata(systemKey, metadata) {
     configs[systemKey] = { groups: {} };
   }
 
-  const persisted = (currentVersion > 0 && configs[systemKey]) || {};
-
   Object.assign(configs[systemKey], {
     id: systemKey,
     name: metadata.alias || metadata.name || systemKey,
     description: metadata.description || '',
     prefix: metadata.prefix || '',
-    enabled: persisted.enabled ?? metadata.enabled ?? true,
-    requireLogin: persisted.requireLogin ?? metadata.requireLogin ?? false,
-    allowIps: persisted.allowIps || metadata.allowIps || [],
-    allowRoles: persisted.allowRoles || metadata.allowRoles || [],
+    enabled: metadata.enabled ?? true,
+    requireLogin: metadata.requireLogin ?? false,
+    allowIps: metadata.allowIps || [],
+    allowRoles: metadata.allowRoles || [],
     updatedAt: new Date().toISOString()
   });
 }
@@ -132,17 +174,15 @@ export function registerGroupMetadata(systemKey, groupKey, metadata) {
     configs[systemKey].groups[groupKey] = { apis: {} };
   }
 
-  const persisted = (currentVersion > 0 && configs[systemKey]?.groups?.[groupKey]) || {};
-
   Object.assign(configs[systemKey].groups[groupKey], {
     id: groupKey,
     name: metadata.alias || metadata.name || groupKey,
     description: metadata.description || '',
     prefix: metadata.prefix || '',
-    enabled: persisted.enabled ?? metadata.enabled ?? true,
-    requireLogin: persisted.requireLogin ?? metadata.requireLogin ?? false,
-    allowIps: persisted.allowIps || metadata.allowIps || [],
-    allowRoles: persisted.allowRoles || metadata.allowRoles || [],
+    enabled: metadata.enabled ?? true,
+    requireLogin: metadata.requireLogin ?? false,
+    allowIps: metadata.allowIps || [],
+    allowRoles: metadata.allowRoles || [],
     updatedAt: new Date().toISOString()
   });
 }
@@ -169,16 +209,15 @@ export function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
   }
 
   const group = configs[systemKey].groups[groupKey];
-  const persisted = (currentVersion > 0 && configs[systemKey]?.groups?.[groupKey]?.apis?.[apiKey]) || {};
 
   if (!group.apis[apiKey]) {
     group.apis[apiKey] = {
       id: apiKey,
       name: metadata.alias || apiKey,
-      enabled: persisted.enabled ?? metadata.enabled ?? true,
-      requireLogin: persisted.requireLogin ?? metadata.requireLogin ?? false,
-      allowIps: persisted.allowIps || metadata.allowIps || [],
-      allowRoles: persisted.allowRoles || metadata.allowRoles || [],
+      enabled: metadata.enabled ?? true,
+      requireLogin: metadata.requireLogin ?? false,
+      allowIps: metadata.allowIps || [],
+      allowRoles: metadata.allowRoles || [],
       url: metadata.url,
       method: metadata.method,
       updatedAt: new Date().toISOString()
