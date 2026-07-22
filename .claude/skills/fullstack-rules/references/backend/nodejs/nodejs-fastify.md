@@ -41,6 +41,8 @@ registerSecureRoute 中 url: "/analysis/:stockCode"  ← 路由级
 
 > ⚠️ **常见错误**：`registerSecureRoute` 的 `url` 从 `/` 开始，但**不包含** system 和 group 的前缀。三个前缀由框架自动拼接，url 中不要重复写。
 
+> 🛠️ **开发阶段权限绕过**：开发调试时，将 `requireLogin` 设为 `false`、去掉 `permission`，避免权限拦截影响功能测试。功能调通后，再恢复权限校验并重启验证。
+
 ### 路由文件 `src/api/<domain>/v1/<route>.js`
 
 ```js
@@ -350,11 +352,18 @@ handler: async (request, reply) => {
 
 ### 功能检查
 
-- [ ] 用 `curl` 或浏览器测试所有 method（GET / POST / PUT / DELETE）
-- [ ] 测试 200 正常响应格式
+- [ ] 用 `curl` 或 Node.js 发送真实请求验证响应，**不依赖前端**
+- [ ] 测试 200 正常响应格式，确认返回数据结构与前端类型定义一致
 - [ ] 测试 400 参数错误
 - [ ] 测试 401 未登录
 - [ ] 测试 403 无权限
+- [ ] 测试 404 资源不存在
+- [ ] 测试空数据边界（空数组、null 字段）
+
+### 外部 API 验证
+
+- [ ] 调用外部数据源前，先用 `curl` 单独请求该外部接口，确认返回格式
+- [ ] 集成代码写完后再用 `curl` 验证后端 → 外部 API → 前端的全链路
 - [ ] 测试 404 资源不存在
 
 ### 前后端对应检查

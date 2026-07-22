@@ -19,7 +19,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/roles",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.488Z"
+              "updatedAt": "2026-07-21T15:35:01.645Z"
             },
             "listPermissionDictionary": {
               "id": "listPermissionDictionary",
@@ -30,7 +30,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/actions/dictionary",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.490Z"
+              "updatedAt": "2026-07-21T15:35:01.647Z"
             },
             "listManageableUsers": {
               "id": "listManageableUsers",
@@ -41,7 +41,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/users",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.491Z"
+              "updatedAt": "2026-07-21T15:35:01.647Z"
             },
             "assignIamRole": {
               "id": "assignIamRole",
@@ -52,7 +52,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/roles/assign",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.491Z"
+              "updatedAt": "2026-07-21T15:35:01.647Z"
             },
             "updateInlinePolicy": {
               "id": "updateInlinePolicy",
@@ -63,7 +63,7 @@
               "allowRoles": [],
               "url": "/admin/v1/iam/policies",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.491Z"
+              "updatedAt": "2026-07-21T15:35:01.647Z"
             }
           }
         }
@@ -82,7 +82,7 @@
               "allowRoles": [],
               "url": "/auth/v1/bind-token",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.523Z"
+              "updatedAt": "2026-07-21T15:35:01.670Z"
             },
             "bindSession": {
               "id": "bindSession",
@@ -93,7 +93,7 @@
               "allowRoles": [],
               "url": "/auth/v1/bind-session",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.524Z"
+              "updatedAt": "2026-07-21T15:35:01.670Z"
             },
             "clearCookie": {
               "id": "clearCookie",
@@ -104,7 +104,7 @@
               "allowRoles": [],
               "url": "/auth/v1/clear-cookie",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.524Z"
+              "updatedAt": "2026-07-21T15:35:01.670Z"
             },
             "updateRememberMe": {
               "id": "updateRememberMe",
@@ -115,7 +115,7 @@
               "allowRoles": [],
               "url": "/auth/v1/update-remember-me",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.524Z"
+              "updatedAt": "2026-07-21T15:35:01.670Z"
             }
           },
           "id": "session",
@@ -126,7 +126,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.523Z"
+          "updatedAt": "2026-07-21T15:35:01.670Z"
         }
       },
       "id": "Auth",
@@ -137,7 +137,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-07-21T11:08:06.493Z"
+      "updatedAt": "2026-07-21T15:35:01.649Z"
     },
     "firewall": {
       "groups": {
@@ -152,7 +152,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.527Z"
+              "updatedAt": "2026-07-21T15:35:01.674Z"
             },
             "updateConfig": {
               "id": "updateConfig",
@@ -163,7 +163,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/:system/:group",
               "method": "PATCH",
-              "updatedAt": "2026-07-21T11:08:06.527Z"
+              "updatedAt": "2026-07-21T15:35:01.675Z"
             },
             "toggleConfig": {
               "id": "toggleConfig",
@@ -174,7 +174,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle/:system/:group",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.528Z"
+              "updatedAt": "2026-07-21T15:35:01.675Z"
             },
             "toggleSystemConfig": {
               "id": "toggleSystemConfig",
@@ -185,7 +185,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/apiconfigs/toggle-system/:system",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.528Z"
+              "updatedAt": "2026-07-21T15:35:01.675Z"
             }
           },
           "id": "apiConfigs",
@@ -196,7 +196,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.527Z"
+          "updatedAt": "2026-07-21T15:35:01.674Z"
         },
         "challenge": {
           "apis": {
@@ -209,7 +209,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/challenge/verify",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.530Z"
+              "updatedAt": "2026-07-21T15:35:01.678Z"
             }
           },
           "id": "challenge",
@@ -220,7 +220,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.530Z"
+          "updatedAt": "2026-07-21T15:35:01.678Z"
         },
         "export": {
           "apis": {
@@ -235,7 +235,7 @@
               ],
               "url": "/api/firewall/v1/export/blocks",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.533Z"
+              "updatedAt": "2026-07-21T15:35:01.681Z"
             },
             "exportWhitelist": {
               "id": "exportWhitelist",
@@ -248,7 +248,7 @@
               ],
               "url": "/api/firewall/v1/export/whitelist",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.533Z"
+              "updatedAt": "2026-07-21T15:35:01.682Z"
             },
             "importBlocks": {
               "id": "importBlocks",
@@ -261,7 +261,7 @@
               ],
               "url": "/api/firewall/v1/export/blocks",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.533Z"
+              "updatedAt": "2026-07-21T15:35:01.682Z"
             },
             "importWhitelist": {
               "id": "importWhitelist",
@@ -274,7 +274,7 @@
               ],
               "url": "/api/firewall/v1/export/whitelist",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.533Z"
+              "updatedAt": "2026-07-21T15:35:01.682Z"
             }
           },
           "id": "export",
@@ -287,7 +287,7 @@
           "allowRoles": [
             "admin"
           ],
-          "updatedAt": "2026-07-21T11:08:06.533Z"
+          "updatedAt": "2026-07-21T15:35:01.681Z"
         },
         "metrics": {
           "apis": {
@@ -300,7 +300,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/metrics",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.535Z"
+              "updatedAt": "2026-07-21T15:35:01.684Z"
             }
           },
           "id": "metrics",
@@ -311,7 +311,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.535Z"
+          "updatedAt": "2026-07-21T15:35:01.684Z"
         },
         "firewall-monitor": {
           "apis": {
@@ -324,7 +324,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/summary",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.538Z"
+              "updatedAt": "2026-07-21T15:35:01.689Z"
             },
             "records": {
               "id": "records",
@@ -335,7 +335,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/records",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.539Z"
+              "updatedAt": "2026-07-21T15:35:01.689Z"
             },
             "clear": {
               "id": "clear",
@@ -346,7 +346,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/clear",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.539Z"
+              "updatedAt": "2026-07-21T15:35:01.689Z"
             },
             "updateNode": {
               "id": "updateNode",
@@ -357,7 +357,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/update",
               "method": "PATCH",
-              "updatedAt": "2026-07-21T11:08:06.539Z"
+              "updatedAt": "2026-07-21T15:35:01.689Z"
             },
             "refreshNode": {
               "id": "refreshNode",
@@ -368,7 +368,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/node/refresh",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.539Z"
+              "updatedAt": "2026-07-21T15:35:01.690Z"
             },
             "getSettings": {
               "id": "getSettings",
@@ -379,7 +379,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.539Z"
+              "updatedAt": "2026-07-21T15:35:01.690Z"
             },
             "updateSettings": {
               "id": "updateSettings",
@@ -390,7 +390,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/settings",
               "method": "PATCH",
-              "updatedAt": "2026-07-21T11:08:06.539Z"
+              "updatedAt": "2026-07-21T15:35:01.690Z"
             },
             "addBlacklist": {
               "id": "addBlacklist",
@@ -401,7 +401,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.540Z"
+              "updatedAt": "2026-07-21T15:35:01.690Z"
             },
             "removeBlacklist": {
               "id": "removeBlacklist",
@@ -412,7 +412,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blacklist",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.540Z"
+              "updatedAt": "2026-07-21T15:35:01.690Z"
             },
             "listBlocks": {
               "id": "listBlocks",
@@ -423,7 +423,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.540Z"
+              "updatedAt": "2026-07-21T15:35:01.690Z"
             },
             "addBlock": {
               "id": "addBlock",
@@ -434,7 +434,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.540Z"
+              "updatedAt": "2026-07-21T15:35:01.690Z"
             },
             "removeBlock": {
               "id": "removeBlock",
@@ -445,7 +445,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.540Z"
+              "updatedAt": "2026-07-21T15:35:01.690Z"
             },
             "listWhitelist": {
               "id": "listWhitelist",
@@ -456,7 +456,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.540Z"
+              "updatedAt": "2026-07-21T15:35:01.690Z"
             },
             "addWhitelist": {
               "id": "addWhitelist",
@@ -467,7 +467,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.540Z"
+              "updatedAt": "2026-07-21T15:35:01.691Z"
             },
             "removeWhitelist": {
               "id": "removeWhitelist",
@@ -478,7 +478,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/:ip",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.540Z"
+              "updatedAt": "2026-07-21T15:35:01.691Z"
             },
             "addBlockFp": {
               "id": "addBlockFp",
@@ -489,7 +489,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/fp",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.540Z"
+              "updatedAt": "2026-07-21T15:35:01.691Z"
             },
             "removeBlockFp": {
               "id": "removeBlockFp",
@@ -500,7 +500,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/blocks/fp/:fingerprint",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.541Z"
+              "updatedAt": "2026-07-21T15:35:01.691Z"
             },
             "addWhitelistFp": {
               "id": "addWhitelistFp",
@@ -511,7 +511,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/fp",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.541Z"
+              "updatedAt": "2026-07-21T15:35:01.691Z"
             },
             "removeWhitelistFp": {
               "id": "removeWhitelistFp",
@@ -522,7 +522,7 @@
               "allowRoles": [],
               "url": "/api/firewall/v1/monitor/whitelist/fp/:fingerprint",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.541Z"
+              "updatedAt": "2026-07-21T15:35:01.691Z"
             }
           },
           "id": "firewall-monitor",
@@ -533,7 +533,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.538Z"
+          "updatedAt": "2026-07-21T15:35:01.689Z"
         }
       },
       "id": "firewall",
@@ -544,7 +544,7 @@
       "requireLogin": true,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-07-21T11:08:06.525Z"
+      "updatedAt": "2026-07-21T15:35:01.672Z"
     },
     "Notice": {
       "groups": {
@@ -559,7 +559,7 @@
               "allowRoles": [],
               "url": "/notice/v1/channels",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.592Z"
+              "updatedAt": "2026-07-21T15:35:01.731Z"
             },
             "getConfig": {
               "id": "getConfig",
@@ -570,7 +570,7 @@
               "allowRoles": [],
               "url": "/notice/v1/config/:type",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.592Z"
+              "updatedAt": "2026-07-21T15:35:01.732Z"
             },
             "saveConfig": {
               "id": "saveConfig",
@@ -581,7 +581,7 @@
               "allowRoles": [],
               "url": "/notice/v1/config/:type",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.593Z"
+              "updatedAt": "2026-07-21T15:35:01.732Z"
             },
             "testEmail": {
               "id": "testEmail",
@@ -592,7 +592,7 @@
               "allowRoles": [],
               "url": "/notice/v1/test-email",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.593Z"
+              "updatedAt": "2026-07-21T15:35:01.732Z"
             }
           },
           "id": "config",
@@ -605,7 +605,7 @@
           "allowRoles": [
             "admin"
           ],
-          "updatedAt": "2026-07-21T11:08:06.592Z"
+          "updatedAt": "2026-07-21T15:35:01.731Z"
         }
       },
       "id": "Notice",
@@ -618,7 +618,7 @@
       "allowRoles": [
         "admin"
       ],
-      "updatedAt": "2026-07-21T11:08:06.544Z"
+      "updatedAt": "2026-07-21T15:35:01.693Z"
     },
     "OAuth2.1": {
       "groups": {
@@ -635,7 +635,7 @@
               ],
               "url": "/oauth2.1/admin/permissions/sync",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.600Z"
+              "updatedAt": "2026-07-21T15:35:01.739Z"
             },
             "createClient": {
               "id": "createClient",
@@ -648,7 +648,7 @@
               ],
               "url": "/oauth2.1/admin/client",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.600Z"
+              "updatedAt": "2026-07-21T15:35:01.739Z"
             },
             "listUsers": {
               "id": "listUsers",
@@ -661,7 +661,7 @@
               ],
               "url": "/oauth2.1/admin/users",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.600Z"
+              "updatedAt": "2026-07-21T15:35:01.740Z"
             }
           },
           "id": "admin",
@@ -674,7 +674,7 @@
           "allowRoles": [
             "admin"
           ],
-          "updatedAt": "2026-07-21T11:08:06.600Z"
+          "updatedAt": "2026-07-21T15:35:01.739Z"
         },
         "auth": {
           "apis": {
@@ -687,7 +687,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/authorize",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.638Z"
+              "updatedAt": "2026-07-21T15:35:01.771Z"
             },
             "authorizeLogin": {
               "id": "authorizeLogin",
@@ -698,7 +698,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/authorize/login",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.638Z"
+              "updatedAt": "2026-07-21T15:35:01.771Z"
             },
             "authorizeConsent": {
               "id": "authorizeConsent",
@@ -709,7 +709,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/authorize/consent",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.638Z"
+              "updatedAt": "2026-07-21T15:35:01.771Z"
             },
             "login": {
               "id": "login",
@@ -720,7 +720,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/login",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.639Z"
+              "updatedAt": "2026-07-21T15:35:01.772Z"
             },
             "miniLogin": {
               "id": "miniLogin",
@@ -731,7 +731,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/mini-login",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.639Z"
+              "updatedAt": "2026-07-21T15:35:01.772Z"
             },
             "confirmDirectConsent": {
               "id": "confirmDirectConsent",
@@ -742,7 +742,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/login/consent/confirm",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.639Z"
+              "updatedAt": "2026-07-21T15:35:01.772Z"
             },
             "qrGenerate": {
               "id": "qrGenerate",
@@ -753,7 +753,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/generate",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.639Z"
+              "updatedAt": "2026-07-21T15:35:01.772Z"
             },
             "qrScan": {
               "id": "qrScan",
@@ -764,7 +764,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/scan",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.639Z"
+              "updatedAt": "2026-07-21T15:35:01.772Z"
             },
             "qrConfirm": {
               "id": "qrConfirm",
@@ -775,7 +775,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/confirm",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.639Z"
+              "updatedAt": "2026-07-21T15:35:01.772Z"
             },
             "qrStatus": {
               "id": "qrStatus",
@@ -786,7 +786,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/qr/status",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.639Z"
+              "updatedAt": "2026-07-21T15:35:01.772Z"
             },
             "miniRegister": {
               "id": "miniRegister",
@@ -797,7 +797,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/mini-register",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.640Z"
+              "updatedAt": "2026-07-21T15:35:01.772Z"
             }
           },
           "id": "auth",
@@ -808,7 +808,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.638Z"
+          "updatedAt": "2026-07-21T15:35:01.771Z"
         },
         "crypto": {
           "apis": {
@@ -821,7 +821,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/crypto/public-key",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.642Z"
+              "updatedAt": "2026-07-21T15:35:01.775Z"
             }
           },
           "id": "crypto",
@@ -832,7 +832,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.642Z"
+          "updatedAt": "2026-07-21T15:35:01.775Z"
         },
         "device": {
           "apis": {
@@ -845,7 +845,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device/code",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.645Z"
+              "updatedAt": "2026-07-21T15:35:01.779Z"
             },
             "deviceToken": {
               "id": "deviceToken",
@@ -856,7 +856,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device/token",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.645Z"
+              "updatedAt": "2026-07-21T15:35:01.779Z"
             },
             "devicePage": {
               "id": "devicePage",
@@ -867,7 +867,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.645Z"
+              "updatedAt": "2026-07-21T15:35:01.779Z"
             },
             "deviceAuthorize": {
               "id": "deviceAuthorize",
@@ -878,7 +878,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/v1/dev/device/authorize",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.645Z"
+              "updatedAt": "2026-07-21T15:35:01.779Z"
             }
           },
           "id": "device",
@@ -889,7 +889,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.644Z"
+          "updatedAt": "2026-07-21T15:35:01.779Z"
         },
         "oidc": {
           "apis": {
@@ -902,7 +902,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/.well-known/openid-configuration",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.647Z"
+              "updatedAt": "2026-07-21T15:35:01.782Z"
             },
             "jwks": {
               "id": "jwks",
@@ -913,7 +913,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/.well-known/jwks.json",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.647Z"
+              "updatedAt": "2026-07-21T15:35:01.782Z"
             }
           },
           "id": "oidc",
@@ -924,7 +924,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.647Z"
+          "updatedAt": "2026-07-21T15:35:01.782Z"
         },
         "token": {
           "apis": {
@@ -937,7 +937,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/token",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.653Z"
+              "updatedAt": "2026-07-21T15:35:01.789Z"
             },
             "revokeToken": {
               "id": "revokeToken",
@@ -948,7 +948,7 @@
               "allowRoles": [],
               "url": "/oauth2.1/revoke",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.653Z"
+              "updatedAt": "2026-07-21T15:35:01.789Z"
             }
           },
           "id": "token",
@@ -959,7 +959,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.653Z"
+          "updatedAt": "2026-07-21T15:35:01.789Z"
         }
       },
       "id": "OAuth2.1",
@@ -970,7 +970,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-07-21T11:08:06.595Z"
+      "updatedAt": "2026-07-21T15:35:01.734Z"
     },
     "posecraft": {
       "groups": {
@@ -985,7 +985,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/works",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.723Z"
+              "updatedAt": "2026-07-21T15:35:01.822Z"
             },
             "adminAuditWork": {
               "id": "adminAuditWork",
@@ -996,7 +996,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/works/:id/audit",
               "method": "PUT",
-              "updatedAt": "2026-07-21T11:08:06.724Z"
+              "updatedAt": "2026-07-21T15:35:01.822Z"
             },
             "adminGetTemplates": {
               "id": "adminGetTemplates",
@@ -1007,7 +1007,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/templates",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.724Z"
+              "updatedAt": "2026-07-21T15:35:01.822Z"
             },
             "adminAuditTemplate": {
               "id": "adminAuditTemplate",
@@ -1018,7 +1018,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/templates/:id/audit",
               "method": "PUT",
-              "updatedAt": "2026-07-21T11:08:06.724Z"
+              "updatedAt": "2026-07-21T15:35:01.823Z"
             },
             "adminListBannerConfigs": {
               "id": "adminListBannerConfigs",
@@ -1029,7 +1029,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/banner-configs",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.724Z"
+              "updatedAt": "2026-07-21T15:35:01.823Z"
             },
             "adminCreateBannerConfig": {
               "id": "adminCreateBannerConfig",
@@ -1040,7 +1040,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/banner-configs",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.724Z"
+              "updatedAt": "2026-07-21T15:35:01.823Z"
             },
             "adminUpdateBannerConfig": {
               "id": "adminUpdateBannerConfig",
@@ -1051,7 +1051,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/banner-configs/:id",
               "method": "PUT",
-              "updatedAt": "2026-07-21T11:08:06.724Z"
+              "updatedAt": "2026-07-21T15:35:01.823Z"
             },
             "adminDeleteBannerConfig": {
               "id": "adminDeleteBannerConfig",
@@ -1062,7 +1062,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/banner-configs/:id",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.725Z"
+              "updatedAt": "2026-07-21T15:35:01.823Z"
             },
             "adminListChannels": {
               "id": "adminListChannels",
@@ -1073,7 +1073,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/channels",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.725Z"
+              "updatedAt": "2026-07-21T15:35:01.823Z"
             },
             "adminCreateChannel": {
               "id": "adminCreateChannel",
@@ -1084,7 +1084,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/channels",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.725Z"
+              "updatedAt": "2026-07-21T15:35:01.823Z"
             },
             "adminUpdateChannel": {
               "id": "adminUpdateChannel",
@@ -1095,7 +1095,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/channels/:id",
               "method": "PUT",
-              "updatedAt": "2026-07-21T11:08:06.725Z"
+              "updatedAt": "2026-07-21T15:35:01.823Z"
             },
             "adminDeleteChannel": {
               "id": "adminDeleteChannel",
@@ -1106,7 +1106,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/admin/channels/:id",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.725Z"
+              "updatedAt": "2026-07-21T15:35:01.823Z"
             }
           },
           "id": "admin",
@@ -1117,7 +1117,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.723Z"
+          "updatedAt": "2026-07-21T15:35:01.822Z"
         },
         "analysis": {
           "apis": {
@@ -1130,7 +1130,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/analysis",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.727Z"
+              "updatedAt": "2026-07-21T15:35:01.826Z"
             },
             "getAnalyses": {
               "id": "getAnalyses",
@@ -1141,7 +1141,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/analysis",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.728Z"
+              "updatedAt": "2026-07-21T15:35:01.826Z"
             },
             "getAnalysisStats": {
               "id": "getAnalysisStats",
@@ -1152,7 +1152,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/analysis/stats",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.728Z"
+              "updatedAt": "2026-07-21T15:35:01.826Z"
             }
           },
           "id": "analysis",
@@ -1163,7 +1163,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.727Z"
+          "updatedAt": "2026-07-21T15:35:01.826Z"
         },
         "bannerConfig": {
           "apis": {
@@ -1176,7 +1176,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/banner-configs/active",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.730Z"
+              "updatedAt": "2026-07-21T15:35:01.829Z"
             }
           },
           "id": "bannerConfig",
@@ -1187,7 +1187,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.730Z"
+          "updatedAt": "2026-07-21T15:35:01.829Z"
         },
         "config": {
           "apis": {
@@ -1200,7 +1200,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/config/channels",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.732Z"
+              "updatedAt": "2026-07-21T15:35:01.830Z"
             }
           },
           "id": "config",
@@ -1211,7 +1211,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.732Z"
+          "updatedAt": "2026-07-21T15:35:01.830Z"
         },
         "follow": {
           "apis": {
@@ -1224,7 +1224,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/follow/:userId",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.736Z"
+              "updatedAt": "2026-07-21T15:35:01.834Z"
             },
             "unfollowUser": {
               "id": "unfollowUser",
@@ -1235,7 +1235,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/follow/:userId",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.736Z"
+              "updatedAt": "2026-07-21T15:35:01.835Z"
             },
             "checkFollowStatus": {
               "id": "checkFollowStatus",
@@ -1246,7 +1246,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/follow/status/:userId",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.736Z"
+              "updatedAt": "2026-07-21T15:35:01.835Z"
             },
             "getFollowStats": {
               "id": "getFollowStats",
@@ -1257,7 +1257,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/follow/stats/:userId",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.736Z"
+              "updatedAt": "2026-07-21T15:35:01.835Z"
             },
             "getFollowStatsOnly": {
               "id": "getFollowStatsOnly",
@@ -1268,7 +1268,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/follow/stats/count/:userId",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.736Z"
+              "updatedAt": "2026-07-21T15:35:01.836Z"
             },
             "getWorkStatsOnly": {
               "id": "getWorkStatsOnly",
@@ -1279,7 +1279,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/follow/stats/works/:userId",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.736Z"
+              "updatedAt": "2026-07-21T15:35:01.836Z"
             },
             "getMyProfileStats": {
               "id": "getMyProfileStats",
@@ -1290,7 +1290,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/profile/stats",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.737Z"
+              "updatedAt": "2026-07-21T15:35:01.836Z"
             },
             "getUserProfileStats": {
               "id": "getUserProfileStats",
@@ -1301,7 +1301,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/profile/stats/:userId",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.737Z"
+              "updatedAt": "2026-07-21T15:35:01.836Z"
             }
           },
           "id": "follow",
@@ -1312,7 +1312,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.736Z"
+          "updatedAt": "2026-07-21T15:35:01.834Z"
         },
         "interaction": {
           "apis": {
@@ -1325,7 +1325,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/interaction/history",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.741Z"
+              "updatedAt": "2026-07-21T15:35:01.840Z"
             },
             "toggleLike": {
               "id": "toggleLike",
@@ -1336,7 +1336,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/interaction/like",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.741Z"
+              "updatedAt": "2026-07-21T15:35:01.841Z"
             },
             "toggleCollect": {
               "id": "toggleCollect",
@@ -1347,7 +1347,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/interaction/collect",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.741Z"
+              "updatedAt": "2026-07-21T15:35:01.841Z"
             },
             "checkInteractionStatus": {
               "id": "checkInteractionStatus",
@@ -1358,7 +1358,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/interaction/status",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.741Z"
+              "updatedAt": "2026-07-21T15:35:01.841Z"
             },
             "getHistoryList": {
               "id": "getHistoryList",
@@ -1369,7 +1369,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/interaction/history/list",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.741Z"
+              "updatedAt": "2026-07-21T15:35:01.841Z"
             },
             "getLikesList": {
               "id": "getLikesList",
@@ -1380,7 +1380,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/interaction/like/list",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.741Z"
+              "updatedAt": "2026-07-21T15:35:01.842Z"
             },
             "getCollectsList": {
               "id": "getCollectsList",
@@ -1391,7 +1391,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/interaction/collect/list",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.741Z"
+              "updatedAt": "2026-07-21T15:35:01.842Z"
             }
           },
           "id": "interaction",
@@ -1402,7 +1402,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.741Z"
+          "updatedAt": "2026-07-21T15:35:01.840Z"
         },
         "recommendation": {
           "apis": {
@@ -1415,7 +1415,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/:id/recommend",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.744Z"
+              "updatedAt": "2026-07-21T15:35:01.846Z"
             },
             "cancelRecommendWork": {
               "id": "cancelRecommendWork",
@@ -1426,7 +1426,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/:id/recommend",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.745Z"
+              "updatedAt": "2026-07-21T15:35:01.846Z"
             },
             "recommendTemplate": {
               "id": "recommendTemplate",
@@ -1437,7 +1437,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id/recommend",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.745Z"
+              "updatedAt": "2026-07-21T15:35:01.846Z"
             },
             "cancelRecommendTemplate": {
               "id": "cancelRecommendTemplate",
@@ -1448,7 +1448,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id/recommend",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.745Z"
+              "updatedAt": "2026-07-21T15:35:01.847Z"
             },
             "getMyRecommendations": {
               "id": "getMyRecommendations",
@@ -1459,7 +1459,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/recommendations/mine",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.745Z"
+              "updatedAt": "2026-07-21T15:35:01.847Z"
             },
             "getMyRecommendationCount": {
               "id": "getMyRecommendationCount",
@@ -1470,7 +1470,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/recommendations/mine/count",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.745Z"
+              "updatedAt": "2026-07-21T15:35:01.847Z"
             },
             "checkRecommendationStatus": {
               "id": "checkRecommendationStatus",
@@ -1481,7 +1481,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/recommendations/status",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.745Z"
+              "updatedAt": "2026-07-21T15:35:01.847Z"
             }
           },
           "id": "recommendation",
@@ -1492,7 +1492,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.744Z"
+          "updatedAt": "2026-07-21T15:35:01.846Z"
         },
         "settings": {
           "apis": {
@@ -1505,7 +1505,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/settings/:field",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.748Z"
+              "updatedAt": "2026-07-21T15:35:01.852Z"
             },
             "getUserSettings": {
               "id": "getUserSettings",
@@ -1516,7 +1516,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/settings",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.748Z"
+              "updatedAt": "2026-07-21T15:35:01.852Z"
             },
             "updateUserSettingField": {
               "id": "updateUserSettingField",
@@ -1527,7 +1527,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/settings/:field",
               "method": "PUT",
-              "updatedAt": "2026-07-21T11:08:06.748Z"
+              "updatedAt": "2026-07-21T15:35:01.852Z"
             }
           },
           "id": "settings",
@@ -1538,7 +1538,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.748Z"
+          "updatedAt": "2026-07-21T15:35:01.852Z"
         },
         "template": {
           "apis": {
@@ -1551,7 +1551,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.751Z"
+              "updatedAt": "2026-07-21T15:35:01.856Z"
             },
             "getPopularTemplates": {
               "id": "getPopularTemplates",
@@ -1562,7 +1562,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/popular",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.751Z"
+              "updatedAt": "2026-07-21T15:35:01.856Z"
             },
             "getMyTemplates": {
               "id": "getMyTemplates",
@@ -1573,7 +1573,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/mine",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.751Z"
+              "updatedAt": "2026-07-21T15:35:01.856Z"
             },
             "getTemplate": {
               "id": "getTemplate",
@@ -1584,7 +1584,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.751Z"
+              "updatedAt": "2026-07-21T15:35:01.857Z"
             },
             "getTemplatePreview": {
               "id": "getTemplatePreview",
@@ -1595,7 +1595,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id/preview",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.751Z"
+              "updatedAt": "2026-07-21T15:35:01.857Z"
             },
             "createTemplate": {
               "id": "createTemplate",
@@ -1606,7 +1606,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.751Z"
+              "updatedAt": "2026-07-21T15:35:01.857Z"
             },
             "auditTemplate": {
               "id": "auditTemplate",
@@ -1617,7 +1617,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id/audit",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.752Z"
+              "updatedAt": "2026-07-21T15:35:01.857Z"
             },
             "updateTemplate": {
               "id": "updateTemplate",
@@ -1628,7 +1628,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id",
               "method": "PUT",
-              "updatedAt": "2026-07-21T11:08:06.752Z"
+              "updatedAt": "2026-07-21T15:35:01.857Z"
             },
             "deleteTemplate": {
               "id": "deleteTemplate",
@@ -1639,7 +1639,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/templates/:id",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.752Z"
+              "updatedAt": "2026-07-21T15:35:01.857Z"
             }
           },
           "id": "template",
@@ -1650,7 +1650,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.751Z"
+          "updatedAt": "2026-07-21T15:35:01.856Z"
         },
         "upload": {
           "apis": {
@@ -1663,7 +1663,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/upload",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.754Z"
+              "updatedAt": "2026-07-21T15:35:01.860Z"
             },
             "uploadBase64": {
               "id": "uploadBase64",
@@ -1674,7 +1674,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/upload/base64",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.754Z"
+              "updatedAt": "2026-07-21T15:35:01.860Z"
             }
           },
           "id": "upload",
@@ -1685,7 +1685,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.754Z"
+          "updatedAt": "2026-07-21T15:35:01.860Z"
         },
         "work": {
           "apis": {
@@ -1698,7 +1698,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.757Z"
+              "updatedAt": "2026-07-21T15:35:01.863Z"
             },
             "getRecommendedWorks": {
               "id": "getRecommendedWorks",
@@ -1709,7 +1709,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/recommended",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.757Z"
+              "updatedAt": "2026-07-21T15:35:01.864Z"
             },
             "getUserWorks": {
               "id": "getUserWorks",
@@ -1720,7 +1720,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/user/:userId",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.757Z"
+              "updatedAt": "2026-07-21T15:35:01.864Z"
             },
             "getMyWorks": {
               "id": "getMyWorks",
@@ -1731,7 +1731,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/mine",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.758Z"
+              "updatedAt": "2026-07-21T15:35:01.864Z"
             },
             "getWork": {
               "id": "getWork",
@@ -1742,7 +1742,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/:id",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.758Z"
+              "updatedAt": "2026-07-21T15:35:01.864Z"
             },
             "getWorkPreview": {
               "id": "getWorkPreview",
@@ -1753,7 +1753,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/:id/preview",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.758Z"
+              "updatedAt": "2026-07-21T15:35:01.864Z"
             },
             "createWork": {
               "id": "createWork",
@@ -1764,7 +1764,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.758Z"
+              "updatedAt": "2026-07-21T15:35:01.864Z"
             },
             "deleteWork": {
               "id": "deleteWork",
@@ -1775,7 +1775,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/:id",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.758Z"
+              "updatedAt": "2026-07-21T15:35:01.864Z"
             },
             "likeWork": {
               "id": "likeWork",
@@ -1786,7 +1786,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/:id/like",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.758Z"
+              "updatedAt": "2026-07-21T15:35:01.864Z"
             },
             "getFollowingWorks": {
               "id": "getFollowingWorks",
@@ -1797,7 +1797,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/following",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.758Z"
+              "updatedAt": "2026-07-21T15:35:01.865Z"
             },
             "getFriendsWorks": {
               "id": "getFriendsWorks",
@@ -1808,7 +1808,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/friends",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.758Z"
+              "updatedAt": "2026-07-21T15:35:01.865Z"
             },
             "getNearbyWorks": {
               "id": "getNearbyWorks",
@@ -1819,7 +1819,7 @@
               "allowRoles": [],
               "url": "/posecraft/v1/works/nearby",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.759Z"
+              "updatedAt": "2026-07-21T15:35:01.865Z"
             }
           },
           "id": "work",
@@ -1830,7 +1830,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.757Z"
+          "updatedAt": "2026-07-21T15:35:01.863Z"
         }
       },
       "id": "posecraft",
@@ -1841,7 +1841,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-07-21T11:08:06.654Z"
+      "updatedAt": "2026-07-21T15:35:01.790Z"
     },
     "stick": {
       "groups": {
@@ -1849,25 +1849,25 @@
           "apis": {
             "getAnalysis": {
               "id": "getAnalysis",
-              "name": "获取分析结果",
+              "name": "getAnalysis",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/analysis/:stockCode",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.764Z"
+              "updatedAt": "2026-07-21T15:35:01.870Z"
             },
             "triggerAnalysis": {
               "id": "triggerAnalysis",
-              "name": "触发 AI 分析",
+              "name": "triggerAnalysis",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/analysis/:stockCode",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.765Z"
+              "updatedAt": "2026-07-21T15:35:01.871Z"
             }
           },
           "id": "stickAnalysis",
@@ -1878,20 +1878,20 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.764Z"
+          "updatedAt": "2026-07-21T15:35:01.870Z"
         },
         "stickDashboard": {
           "apis": {
             "getDashboard": {
               "id": "getDashboard",
-              "name": "获取仪表盘数据",
+              "name": "getDashboard",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/dashboard",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.768Z"
+              "updatedAt": "2026-07-21T15:35:01.873Z"
             }
           },
           "id": "stickDashboard",
@@ -1902,145 +1902,145 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.768Z"
+          "updatedAt": "2026-07-21T15:35:01.873Z"
         },
         "stickJournal": {
           "apis": {
-            "getJournals": {
-              "id": "getJournals",
-              "name": "获取日志列表",
+            "listJournals": {
+              "id": "listJournals",
+              "name": "listJournals",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/journal",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.771Z"
+              "updatedAt": "2026-07-21T15:35:01.876Z"
             },
-            "addJournal": {
-              "id": "addJournal",
-              "name": "添加日志",
+            "createJournal": {
+              "id": "createJournal",
+              "name": "createJournal",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/journal",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.772Z"
+              "updatedAt": "2026-07-21T15:35:01.876Z"
             },
             "updateJournal": {
               "id": "updateJournal",
-              "name": "更新日志",
+              "name": "updateJournal",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/journal/:id",
               "method": "PUT",
-              "updatedAt": "2026-07-21T11:08:06.772Z"
+              "updatedAt": "2026-07-21T15:35:01.876Z"
             },
             "deleteJournal": {
               "id": "deleteJournal",
-              "name": "删除日志",
+              "name": "deleteJournal",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/journal/:id",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.772Z"
+              "updatedAt": "2026-07-21T15:35:01.876Z"
             }
           },
           "id": "stickJournal",
-          "name": "交易日志",
+          "name": "投资日志",
           "description": "",
           "prefix": "/v1",
           "enabled": true,
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.771Z"
+          "updatedAt": "2026-07-21T15:35:01.876Z"
         },
         "stickMarket": {
           "apis": {
             "searchMarket": {
               "id": "searchMarket",
-              "name": "搜索股票",
+              "name": "searchMarket",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/market/search",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.774Z"
+              "updatedAt": "2026-07-21T15:35:01.878Z"
             },
             "getMarketQuote": {
               "id": "getMarketQuote",
-              "name": "获取实时行情",
+              "name": "getMarketQuote",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/market/:code",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.774Z"
+              "updatedAt": "2026-07-21T15:35:01.878Z"
+            },
+            "getKlineData": {
+              "id": "getKlineData",
+              "name": "getKlineData",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/stick/v1/market/kline/:code",
+              "method": "GET",
+              "updatedAt": "2026-07-21T15:35:01.878Z"
             }
           },
           "id": "stickMarket",
-          "name": "实时行情",
+          "name": "行情",
           "description": "",
           "prefix": "/v1",
           "enabled": true,
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.774Z"
+          "updatedAt": "2026-07-21T15:35:01.878Z"
         },
         "stickPositions": {
           "apis": {
-            "getPositions": {
-              "id": "getPositions",
-              "name": "获取持仓列表",
+            "listPositions": {
+              "id": "listPositions",
+              "name": "listPositions",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/positions",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.777Z"
+              "updatedAt": "2026-07-21T15:35:01.880Z"
             },
-            "addPosition": {
-              "id": "addPosition",
-              "name": "添加持仓",
+            "createPosition": {
+              "id": "createPosition",
+              "name": "createPosition",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/positions",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.777Z"
-            },
-            "updatePosition": {
-              "id": "updatePosition",
-              "name": "更新持仓",
-              "enabled": true,
-              "requireLogin": true,
-              "allowIps": [],
-              "allowRoles": [],
-              "url": "/stick/v1/positions/:id",
-              "method": "PUT",
-              "updatedAt": "2026-07-21T11:08:06.777Z"
+              "updatedAt": "2026-07-21T15:35:01.880Z"
             },
             "deletePosition": {
               "id": "deletePosition",
-              "name": "删除持仓",
+              "name": "deletePosition",
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
               "allowRoles": [],
               "url": "/stick/v1/positions/:id",
               "method": "DELETE",
-              "updatedAt": "2026-07-21T11:08:06.777Z"
+              "updatedAt": "2026-07-21T15:35:01.880Z"
             }
           },
           "id": "stickPositions",
@@ -2051,18 +2051,121 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.777Z"
+          "updatedAt": "2026-07-21T15:35:01.880Z"
+        },
+        "stickStocks": {
+          "apis": {
+            "searchStocks": {
+              "id": "searchStocks",
+              "name": "searchStocks",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/stick/v1/stocks",
+              "method": "GET",
+              "updatedAt": "2026-07-21T15:35:01.882Z"
+            },
+            "getStockDetail": {
+              "id": "getStockDetail",
+              "name": "getStockDetail",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/stick/v1/stocks/:code",
+              "method": "GET",
+              "updatedAt": "2026-07-21T15:35:01.882Z"
+            },
+            "addWatch": {
+              "id": "addWatch",
+              "name": "addWatch",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/stick/v1/stocks/watch",
+              "method": "POST",
+              "updatedAt": "2026-07-21T15:35:01.882Z"
+            },
+            "removeWatch": {
+              "id": "removeWatch",
+              "name": "removeWatch",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/stick/v1/stocks/watch/:code",
+              "method": "DELETE",
+              "updatedAt": "2026-07-21T15:35:01.883Z"
+            },
+            "getWatchlist": {
+              "id": "getWatchlist",
+              "name": "getWatchlist",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/stick/v1/stocks/watch",
+              "method": "GET",
+              "updatedAt": "2026-07-21T15:35:01.883Z"
+            }
+          },
+          "id": "stickStocks",
+          "name": "股票管理",
+          "description": "",
+          "prefix": "/v1",
+          "enabled": true,
+          "requireLogin": true,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-07-21T15:35:01.882Z"
+        },
+        "stickTrades": {
+          "apis": {
+            "listTrades": {
+              "id": "listTrades",
+              "name": "listTrades",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/stick/v1/trades",
+              "method": "GET",
+              "updatedAt": "2026-07-21T15:35:01.885Z"
+            },
+            "createTrade": {
+              "id": "createTrade",
+              "name": "createTrade",
+              "enabled": true,
+              "requireLogin": true,
+              "allowIps": [],
+              "allowRoles": [],
+              "url": "/stick/v1/trades",
+              "method": "POST",
+              "updatedAt": "2026-07-21T15:35:01.885Z"
+            }
+          },
+          "id": "stickTrades",
+          "name": "交易记录",
+          "description": "",
+          "prefix": "/v1",
+          "enabled": true,
+          "requireLogin": true,
+          "allowIps": [],
+          "allowRoles": [],
+          "updatedAt": "2026-07-21T15:35:01.885Z"
         }
       },
       "id": "stick",
-      "name": "股票分析",
-      "description": "股票分析系统",
+      "name": "stick",
+      "description": "",
       "prefix": "/stick",
       "enabled": true,
       "requireLogin": true,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-07-21T11:08:06.760Z"
+      "updatedAt": "2026-07-21T15:35:01.867Z"
     },
     "system": {
       "groups": {
@@ -2077,7 +2180,7 @@
               "allowRoles": [],
               "url": "/v1/health",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.781Z"
+              "updatedAt": "2026-07-21T15:35:01.887Z"
             }
           },
           "id": "system",
@@ -2088,7 +2191,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.781Z"
+          "updatedAt": "2026-07-21T15:35:01.887Z"
         }
       },
       "id": "system",
@@ -2099,7 +2202,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-07-21T11:08:06.779Z"
+      "updatedAt": "2026-07-21T15:35:01.886Z"
     },
     "User": {
       "groups": {
@@ -2114,7 +2217,7 @@
               "allowRoles": [],
               "url": "/user/v1/register",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.787Z"
+              "updatedAt": "2026-07-21T15:35:01.893Z"
             },
             "checkEmail": {
               "id": "checkEmail",
@@ -2125,7 +2228,7 @@
               "allowRoles": [],
               "url": "/user/v1/check-email",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.788Z"
+              "updatedAt": "2026-07-21T15:35:01.893Z"
             }
           },
           "id": "userRegister",
@@ -2136,7 +2239,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.787Z"
+          "updatedAt": "2026-07-21T15:35:01.893Z"
         },
         "userSessions": {
           "apis": {
@@ -2149,7 +2252,7 @@
               "allowRoles": [],
               "url": "/user/v1/sessions",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.790Z"
+              "updatedAt": "2026-07-21T15:35:01.895Z"
             },
             "kickSession": {
               "id": "kickSession",
@@ -2160,7 +2263,7 @@
               "allowRoles": [],
               "url": "/user/v1/sessions/kick",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.790Z"
+              "updatedAt": "2026-07-21T15:35:01.895Z"
             },
             "kickAllSessions": {
               "id": "kickAllSessions",
@@ -2171,7 +2274,7 @@
               "allowRoles": [],
               "url": "/user/v1/sessions/kick-all",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.790Z"
+              "updatedAt": "2026-07-21T15:35:01.895Z"
             }
           },
           "id": "userSessions",
@@ -2182,7 +2285,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.790Z"
+          "updatedAt": "2026-07-21T15:35:01.895Z"
         },
         "upload": {
           "apis": {
@@ -2195,7 +2298,7 @@
               "allowRoles": [],
               "url": "/user/v1/avatar",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.794Z"
+              "updatedAt": "2026-07-21T15:35:01.899Z"
             }
           },
           "id": "upload",
@@ -2206,7 +2309,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.794Z"
+          "updatedAt": "2026-07-21T15:35:01.899Z"
         },
         "userProfile": {
           "apis": {
@@ -2219,7 +2322,7 @@
               "allowRoles": [],
               "url": "/user/v1/userinfo",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.796Z"
+              "updatedAt": "2026-07-21T15:35:01.901Z"
             },
             "permissions": {
               "id": "permissions",
@@ -2230,7 +2333,7 @@
               "allowRoles": [],
               "url": "/user/v1/permissions",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.796Z"
+              "updatedAt": "2026-07-21T15:35:01.901Z"
             },
             "checkPermission": {
               "id": "checkPermission",
@@ -2241,7 +2344,7 @@
               "allowRoles": [],
               "url": "/user/v1/check-permission",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.796Z"
+              "updatedAt": "2026-07-21T15:35:01.902Z"
             },
             "userProfileDetails": {
               "id": "userProfileDetails",
@@ -2252,7 +2355,7 @@
               "allowRoles": [],
               "url": "/user/v1/profile",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.797Z"
+              "updatedAt": "2026-07-21T15:35:01.902Z"
             },
             "updateUserProfile": {
               "id": "updateUserProfile",
@@ -2263,7 +2366,7 @@
               "allowRoles": [],
               "url": "/user/v1/update",
               "method": "PUT",
-              "updatedAt": "2026-07-21T11:08:06.797Z"
+              "updatedAt": "2026-07-21T15:35:01.902Z"
             }
           },
           "id": "userProfile",
@@ -2274,7 +2377,7 @@
           "requireLogin": true,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.796Z"
+          "updatedAt": "2026-07-21T15:35:01.901Z"
         }
       },
       "id": "User",
@@ -2285,7 +2388,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-07-21T11:08:06.782Z"
+      "updatedAt": "2026-07-21T15:35:01.888Z"
     },
     "Verify": {
       "groups": {
@@ -2300,7 +2403,7 @@
               "allowRoles": [],
               "url": "/verify/v1/generate-captcha",
               "method": "GET",
-              "updatedAt": "2026-07-21T11:08:06.801Z"
+              "updatedAt": "2026-07-21T15:35:01.908Z"
             },
             "verifyCaptcha": {
               "id": "verifyCaptcha",
@@ -2311,7 +2414,7 @@
               "allowRoles": [],
               "url": "/verify/v1/verify-captcha",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.802Z"
+              "updatedAt": "2026-07-21T15:35:01.908Z"
             },
             "checkEmailCode": {
               "id": "checkEmailCode",
@@ -2322,7 +2425,7 @@
               "allowRoles": [],
               "url": "/verify/v1/check-email-code",
               "method": "POST",
-              "updatedAt": "2026-07-21T11:08:06.802Z"
+              "updatedAt": "2026-07-21T15:35:01.908Z"
             }
           },
           "id": "v1",
@@ -2333,7 +2436,7 @@
           "requireLogin": false,
           "allowIps": [],
           "allowRoles": [],
-          "updatedAt": "2026-07-21T11:08:06.801Z"
+          "updatedAt": "2026-07-21T15:35:01.908Z"
         }
       },
       "id": "Verify",
@@ -2344,7 +2447,7 @@
       "requireLogin": false,
       "allowIps": [],
       "allowRoles": [],
-      "updatedAt": "2026-07-21T11:08:06.798Z"
+      "updatedAt": "2026-07-21T15:35:01.905Z"
     }
   }
 }
