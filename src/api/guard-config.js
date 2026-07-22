@@ -28,21 +28,25 @@ let currentVersion = 0;
  * @returns {Promise<void>}
  */
 export async function loadGuardConfig() {
+  let data;
   try {
-    const data = await GuardConfigDao.loadFromDB();
-    if (data.version > 0) {
-      // 合并：DB 配置覆盖代码级配置（仅覆盖运行时字段，不覆盖结构）
-      mergeDbConfig(data.configs);
-      currentVersion = data.version;
-      console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据 (version=${currentVersion})${C.reset}`);
-    } else {
-      // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
-      currentVersion = await GuardConfigDao.saveToDB(configs, 0);
-      console.log(`💾 [Guard Config] ${C.dim}已写入初始策略数据 (version=${currentVersion})${C.reset}`);
-    }
+    data = await GuardConfigDao.loadFromDB();
   } catch (err) {
     // 数据库不可用时使用代码级配置，不阻止启动
     console.warn(`⚠️ [Guard Config] ${C.yellow}数据库加载失败，使用代码级配置: ${err.message}${C.reset}`);
+    return;
+  }
+
+  if (data.version > 0) {
+    // 合并：DB 配置覆盖代码级配置（仅覆盖运行时字段，不覆盖结构）
+    mergeDbConfig(data.configs);
+    currentVersion = data.version;
+    console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据 (version=${currentVersion})${C.reset}`);
+  } else {
+    // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
+    // 写入失败向上冒泡，让 initLoader 感知并阻止启动
+    currentVersion = await GuardConfigDao.saveToDB(configs, 0);
+    console.log(`💾 [Guard Config] ${C.dim}已写入初始策略数据 (version=${currentVersion})${C.reset}`);
   }
 }
 
