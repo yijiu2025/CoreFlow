@@ -66,6 +66,40 @@ await Promise.race([
 | 数据库连接池 | 使用连接池自带的 `close()` | `sequelize.close()` |
 | 文件写入流 | `stream.end()` 或 `fs.promises` 的 `close()` | `writeStream.end()` |
 
+### 2.4 onClose 钩子必须自己 try-catch
+
+**框架（Fastify、Express 等）的关闭钩子通常不暴露异步错误**。如果钩子内抛异常，错误会被静默吞掉。
+
+```js
+// ❌ 禁止：onClose 异步错误被静默吞掉
+app.addHook('onClose', async () => {
+  await flushGuardConfig();  // 如果这里抛异常，没人知道
+});
+
+// ✅ 正确：onClose 中自己 try-catch
+app.addHook('onClose', async () => {
+  try {
+    await flushGuardConfig();
+  } catch (err) {
+    console.error(`❌ [App] 优雅关闭失败: ${err.message}`);
+  }
+});
+```
+
+### 2.5 进程退出时必须确保日志已刷新
+
+`process.exit(1)` 立即终止进程，**不等待 stdout/stderr 刷新**。在 CI/CD、Docker、systemd 等非交互式环境中，错误消息可能被截断。
+
+```js
+// ❌ 禁止：日志可能未刷新
+console.error('❌ 安全错误: 密钥不合法');
+process.exit(1);
+
+// ✅ 正确：给 stderr 刷新时间
+console.error('❌ 安全错误: 密钥不合法');
+setTimeout(() => process.exit(1), 100);
+```
+
 ---
 
 ## 三、空值安全
@@ -218,6 +252,27 @@ console.error(`❌ [Module] ${C.red}错误信息${C.reset}`);
 - 错误计数（按错误类型统计）
 - 降级标记（如 Redis 降级到内存）
 - 配置变更事件（谁、什么时间、改了哪个字段）
+
+### 7.3 生产环境配置警告
+
+**生产环境未配置关键参数时，必须在启动日志中输出明确警告**。运维人员部署时可能不知道某些配置未设置，启动警告能帮助快速定位问题。
+
+审查以下场景是否需要启动警告：
+
+| 场景 | 警告内容 | 严重程度 |
+|------|---------|---------|
+| CORS 白名单为空 | 所有跨域请求将被拒绝 | 中（功能受限） |
+| Redis 降级到内存 | 缓存失效，重启后数据丢失 | 中 |
+| 密钥使用默认值 | 安全风险，立即修改 | 高 |
+| 数据库连接池过小 | 高并发下连接等待 | 低 |
+| 外部 API 依赖未配置 | 某功能不可用 | 中 |
+
+```js
+// ✅ 正确：启动时主动提醒
+if (isProduction && CORS_ORIGINS.length === 0) {
+  console.warn('⚠️ [App] 生产环境未配置 CORS_ORIGINS，所有跨域请求将被拒绝');
+}
+```
 
 ---
 
