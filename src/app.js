@@ -59,7 +59,8 @@ function validateSecrets() {
     console.error(
       `❌ [App] 安全错误：检测到不安全的默认密钥或密钥长度不足 32 位，请在 .env 中设置强随机值：APP_SECRET / SESSION_SECRET / FIREWALL_SECRET`
     );
-    process.exit(1);
+    // 给 stderr 100ms 刷新时间，确保 CI/Docker 环境下错误消息完整输出
+    setTimeout(() => process.exit(1), 100);
   }
 }
 
@@ -124,6 +125,11 @@ export async function createApp() {
     validateSecrets();
   }
 
+  // 生产环境未配置 CORS 白名单时记录警告，避免运维人员误以为跨域请求可以正常访问
+  if (isProduction && CORS_ORIGINS.length === 0) {
+    console.warn('⚠️ [App] 生产环境未配置 CORS_ORIGINS，所有跨域请求将被拒绝。请在 .env 中设置允许的来源（逗号分隔）');
+  }
+
   // 创建 Fastify 实例，开发环境 pino-pretty 美化，生产环境 JSON 结构化供 ELK/Loki 解析
   const app = Fastify({
     bodyLimit: 5242880, // 5MB JSON 请求体限制
@@ -175,6 +181,9 @@ export async function createApp() {
           directives: {
             defaultSrc: ["'self'"],
             // TODO: 迁移到 nonce 或 hash 模式，彻底关闭 unsafe-inline 以启用 XSS 防护
+            // 方案：使用 @fastify/helmet 的 nonce 功能，在 onRequest 钩子中生成 nonce，
+            // 注入到 reply 的 locals 中，前端模板通过 `__NONCE__` 占位符获取。
+            // 参考：https://github.com/helmetjs/helmet/tree/main#content-security-policy
             scriptSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", 'data:', 'blob:'],
@@ -240,7 +249,12 @@ export async function createApp() {
 
   // 注册优雅关闭钩子：确保防抖中的守卫配置在退出前写入数据库
   app.addHook('onClose', async () => {
-    await flushGuardConfig();
+    try {
+      await flushGuardConfig();
+    } catch (err) {
+      // Fastify onClose 不暴露异步错误，必须在此捕获防止静默丢失
+      console.error(`❌ [App] 优雅关闭时保存守卫配置失败: ${err.message}`);
+    }
   });
 
   return app;
