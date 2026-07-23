@@ -1,3 +1,11 @@
+/**
+ * 数据库连接初始化
+ * 创建 Sequelize 实例，校验必要环境变量，配置连接池
+ *
+ * @author yijiu2025
+ * @since 2026-07-22
+ */
+
 import { Sequelize } from 'sequelize';
 
 const C = { reset: '\x1b[0m', red: '\x1b[31m' };

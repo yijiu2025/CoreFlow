@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Redis 客户端初始化插件
  * 创建连接、注册健康监控、注入 app.redis / app.redisHealthy
