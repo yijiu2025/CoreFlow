@@ -126,14 +126,16 @@ function checkGuardBase(opts, user, clientIp) {
     }
   }
 
-  if (requireLogin && !user?.sub) {
-    return { passed: false, status: 4001, message: '未登录' };
-  }
-
-  if (allowRoles.length > 0 && user) {
-    const userRoles = user.roles || [];
-    if (!allowRoles.some(r => userRoles.includes(r))) {
-      return { passed: false, status: 4003, message: '权限不足' };
+  // 登录与角色校验：设置了 requireLogin 或 allowRoles 时，必须登录
+  if (requireLogin || allowRoles.length > 0) {
+    if (!user?.sub) {
+      return { passed: false, status: 4001, message: '未登录' };
+    }
+    if (allowRoles.length > 0) {
+      const userRoles = user.roles || [];
+      if (!allowRoles.some(r => userRoles.includes(r))) {
+        return { passed: false, status: 4003, message: '权限不足' };
+      }
     }
   }
 
@@ -496,8 +498,8 @@ export function registerSecureWebSocket(fastify, options) {
       }
     }
 
-    // 5. 当前路由选项级的登录校验
-    if (requireLogin && !user?.sub) {
+    // 5. 登录校验（设置了 requireLogin 或 allowRoles 或 requirePermission 时，必须登录）
+    if ((requireLogin || allowRoles.length > 0 || requirePermission) && !user?.sub) {
       if (client?.close) client.close(4001, '未登录');
       return;
     }
@@ -513,10 +515,6 @@ export function registerSecureWebSocket(fastify, options) {
 
     // 7. 当前路由选项级的权限校验
     if (requirePermission) {
-      if (!user) {
-        if (client?.close) client.close(4001, '未登录');
-        return;
-      }
       if (!checkPermission(requirePermission, user)) {
         if (client?.close) client.close(4003, '权限不足');
         return;
