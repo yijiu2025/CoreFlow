@@ -21,6 +21,7 @@ import { logAuditEvent } from '../auth/audit-logger.js';
 let configs = {};
 let currentVersion = 0;
 let _dbVersions = {}; // 每行独立版本号: { systemKey: version }
+let _dirtySystems = new Set(); // 待保存的脏系统列表
 
 /**
  * 从数据库加载持久化配置，覆盖内存中的代码级默认值
@@ -44,7 +45,7 @@ export async function loadGuardConfig() {
     mergeDbConfig(data.configs);
     currentVersion = data.version;
     _dbVersions = data.versions || {};
-    console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据 (version=${currentVersion})${C.reset}`);
+    console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据${C.reset}`);
 
     // 将内存中的完整配置写回 DB，确保新增/删除的 API 路由同步到数据库
     // 新增的 API 路由在 runEngine 阶段已注册到内存，但 DB 中可能没有
@@ -206,7 +207,7 @@ export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null,
     Object.assign(system, updatePatch);
   }
 
-  triggerSave();
+  triggerSave(systemKey);
 
   // 审计日志：记录配置变更
   logAuditEvent(operator.redis, {
@@ -232,15 +233,18 @@ export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null,
  * 带超时保护的数据库写入
  * 所有写入路径统一使用此函数，确保超时行为一致
  *
- * @param {number} expectedVersion - 期望的当前版本号
- * @returns {Promise<number>} 新版本号
- * @throws {Error} 写入超时或版本冲突时抛出
+ * @param {string[]|null} [systemKeys] - 要写入的系统列表，null 表示全部写入
+ * @returns {Promise<{maxVersion: number, updated: string[], versions: object}>}
+ * @throws {Error} 写入超时或配置校验失败时抛出
  */
-async function saveWithTimeout() {
+async function saveWithTimeout(systemKeys = null) {
   // 写入前校验结构完整性
   if (!validateConfigs(configs)) {
     throw new Error('配置结构校验失败，已取消写入');
   }
+
+  // 只写入指定系统，或全部写入
+  const toSave = systemKeys ? Object.fromEntries(systemKeys.map(k => [k, configs[k]]).filter(([, v]) => v)) : configs;
 
   // 备份当前状态，用于写入失败时回滚
   _previousSnapshot = {
@@ -254,7 +258,7 @@ async function saveWithTimeout() {
     timeoutId = setTimeout(() => reject(new Error(`写入超时 (>${SAVE_TIMEOUT}ms)`)), SAVE_TIMEOUT);
   });
   const result = await Promise.race([
-    GuardConfigDao.saveToDB(configs, _dbVersions).finally(() => clearTimeout(timeoutId)),
+    GuardConfigDao.saveToDB(toSave, _dbVersions).finally(() => clearTimeout(timeoutId)),
     timeoutPromise
   ]);
   // 更新每行独立版本号
@@ -264,13 +268,19 @@ async function saveWithTimeout() {
 
 /**
  * 异步保存配置到数据库 (防抖处理)
+ * 只保存标记为脏的系统，避免全量写入
+ *
+ * @param {string} [systemKey] - 被修改的系统标识，用于标记脏系统
  */
 let saveTimer = null;
-function triggerSave() {
+function triggerSave(systemKey) {
+  if (systemKey) _dirtySystems.add(systemKey);
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
+    const keys = _dirtySystems.size > 0 ? [..._dirtySystems] : null;
+    _dirtySystems.clear();
     try {
-      currentVersion = await saveWithTimeout();
+      currentVersion = await saveWithTimeout(keys);
     } catch (err) {
       // 写入失败时回滚内存状态到写入前的快照
       if (_previousSnapshot) {
@@ -415,8 +425,10 @@ export async function flushGuardConfig() {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
+  const keys = _dirtySystems.size > 0 ? [..._dirtySystems] : null;
+  _dirtySystems.clear();
   try {
-    currentVersion = await saveWithTimeout();
+    currentVersion = await saveWithTimeout(keys);
     console.log(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}`);
   } catch (err) {
     console.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败: ${err.message}${C.reset}`);
