@@ -2,7 +2,14 @@
  * 404/403 扫描陷阱检测
  * 短时间内大量访问不存在的路径 → 判定为扫描器 → 自动封禁
  */
-import { getConfig, KEY, LUA_INCR_WITH_EXPIRE, memorySlidingWindow, memoryBlocks, getBlockStatus } from '../../util/shared.js';
+import {
+  getConfig,
+  KEY,
+  LUA_INCR_WITH_EXPIRE,
+  memorySlidingWindow,
+  memoryBlocks,
+  getBlockStatus
+} from '../../util/shared.js';
 import { setBlock } from '../dao/block-manager.js';
 
 /**
@@ -67,8 +74,11 @@ export const checkNotFoundTrap = async (redisClient, ip, url, statusCode) => {
     const blocked = memorySlidingWindow(`trap:${ip}`, limit, window);
     if (blocked) {
       await setBlock(null, ip, {
-        status: 'SCANNER', source: 'auto', permanent: false,
-        createdAt: Date.now(), expiresAt: Date.now() + duration * 1000,
+        status: 'SCANNER',
+        source: 'auto',
+        permanent: false,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + duration * 1000
       });
       console.warn(`[Firewall] Scanner detected (mem): ${ip}, blocked ${duration}s`);
       const err = new Error('Scanner detected (memory fallback)');
@@ -84,8 +94,11 @@ export const checkNotFoundTrap = async (redisClient, ip, url, statusCode) => {
 
   if (count >= limit) {
     await setBlock(redisClient, ip, {
-      status: 'SCANNER', source: 'auto', permanent: false,
-      createdAt: Date.now(), expiresAt: Date.now() + duration * 1000,
+      status: 'SCANNER',
+      source: 'auto',
+      permanent: false,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + duration * 1000
     });
     await redisClient.del(trapKey);
     console.warn(`[Firewall] Scanner detected: ${ip}, blocked ${duration}s`);

@@ -614,7 +614,8 @@ const messages = {
       l2: 'レベル2 モジュール',
       l3: 'レベル3 API',
       inheritance_title: '継承ルール',
-      inheritance: '優先順位: システム (L1) > モジュール (L2) > API (L3)。上位が無効な場合、下位も自動的にブロックされます。',
+      inheritance:
+        '優先順位: システム (L1) > モジュール (L2) > API (L3)。上位が無効な場合、下位も自動的にブロックされます。',
       node_desc: 'ノードの説明',
       edit_system: 'システム設定を編集',
       edit_endpoint: 'APIポリシーを編集',
@@ -1003,7 +1004,8 @@ const messages = {
         title: 'Politique de Défense Avancée',
         trap_title: 'Piège Comportemental',
         trap_404: 'Interception de chemin inexistant (404 Trap)',
-        trap_404_desc: "Active automatiquement le protocole de liste noire lorsqu'un visiteur sonde des points d'accès inexistants.",
+        trap_404_desc:
+          "Active automatiquement le protocole de liste noire lorsqu'un visiteur sonde des points d'accès inexistants.",
         trap_404_limit: 'Seuil 404 (Hits/Min)',
         block_duration: 'Durée de bannissement (Sec)',
         rate_limit: 'Limitation de débit (Rate Limit)',
@@ -1030,7 +1032,8 @@ const messages = {
         active: 'Actif',
         paused: 'En pause',
         launch_btn: 'Lancer la Console de Défense',
-        desc_launch: "Configurez la protection granulaire L4-L7, les limites de débit et les règles d'atténuation automatique.",
+        desc_launch:
+          "Configurez la protection granulaire L4-L7, les limites de débit et les règles d'atténuation automatique.",
         trap_trigger: 'Déclenchements du piège',
         trap_trigger_desc: "Nombre maximal d'erreurs 404 avant blacklist automatique",
         block_time: 'Durée de bannissement',
@@ -1046,7 +1049,8 @@ const messages = {
         sync_desc: 'Forcer la réinitialisation de tous les liens WebSocket et extraire les configurations du backend',
         execute_sync: 'Exécuter la Sync',
         reset_audit: "Réinitialisation des Journaux d'Audit",
-        reset_audit_desc: 'Efface tous les journaux de trafic historiques. Cette action est destructive et irréversible.',
+        reset_audit_desc:
+          'Efface tous les journaux de trafic historiques. Cette action est destructive et irréversible.',
         reset_btn: 'Effacer les Records'
       }
     },
@@ -1265,7 +1269,8 @@ const messages = {
         title: 'Erweiterte Abwehrrichtlinie',
         trap_title: 'Verhaltensfalle',
         trap_404: 'Abfangen nicht existierender Pfade (404 Trap)',
-        trap_404_desc: 'Aktiviert automatisch das Blacklist-Protokoll, wenn ein Besucher nicht existierende Endpunkte sondiert.',
+        trap_404_desc:
+          'Aktiviert automatisch das Blacklist-Protokoll, wenn ein Besucher nicht existierende Endpunkte sondiert.',
         trap_404_limit: '404-Schwellenwert (Treffer/Min)',
         block_duration: 'Sperrdauer (Sek)',
         rate_limit: 'Ratenbegrenzung (Rate Limit)',

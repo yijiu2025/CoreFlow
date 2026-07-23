@@ -26,13 +26,13 @@ src/__tests__/
 
 ## 测试优先级
 
-| 优先级 | 模块 | 原因 |
-|--------|------|------|
-| P0 | `detector.js` 的 checkGlobalBlock/checkRateLimit | 安全核心 |
-| P0 | `auth/xToken.js` 的 login/check | 认证核心 |
-| P0 | `api/guard.js` 的 isIpMatch | IP 匹配逻辑 |
-| P1 | API 路由集成测试 | 请求链路正确 |
-| P1 | `fingerprint.js` | 指纹生成一致性 |
+| 优先级 | 模块                                             | 原因           |
+| ------ | ------------------------------------------------ | -------------- |
+| P0     | `detector.js` 的 checkGlobalBlock/checkRateLimit | 安全核心       |
+| P0     | `auth/xToken.js` 的 login/check                  | 认证核心       |
+| P0     | `api/guard.js` 的 isIpMatch                      | IP 匹配逻辑    |
+| P1     | API 路由集成测试                                 | 请求链路正确   |
+| P1     | `fingerprint.js`                                 | 指纹生成一致性 |
 
 ## 覆盖率目标
 

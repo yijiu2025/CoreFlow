@@ -67,11 +67,8 @@ const user = await app.db.user.User.findByPk(1);
 const role = await app.db.iam.Role.findOne({ where: { code: 'admin' } });
 
 // 事务
-const result = await app.db.transaction(async (t) => {
-  const user = await app.db.user.User.create(
-    { username: 'test' },
-    { transaction: t }
-  );
+const result = await app.db.transaction(async t => {
+  const user = await app.db.user.User.create({ username: 'test' }, { transaction: t });
   await app.db.user.UserIdentity.create(
     {
       user_id: user.id,
@@ -136,16 +133,13 @@ export async function up({ queryInterface, Sequelize }) {
     updated_at: {
       type: Sequelize.DATE,
       allowNull: false,
-      defaultValue: Sequelize.literal(
-        'CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
-      )
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
     }
   });
-  await queryInterface.addIndex(
-    'iam_role',
-    ['app_id', 'code', 'delete_version'],
-    { unique: true, name: 'uk_role_app_code' }
-  );
+  await queryInterface.addIndex('iam_role', ['app_id', 'code', 'delete_version'], {
+    unique: true,
+    name: 'uk_role_app_code'
+  });
 }
 
 export async function down({ queryInterface }) {
@@ -201,7 +195,7 @@ export default (sequelize, DataTypes) => {
   );
 
   // 关联定义
-  Role.associate = (models) => {
+  Role.associate = models => {
     Role.hasMany(models.UserRole, { foreignKey: 'role_id', as: 'userRoles' });
   };
 

@@ -12,29 +12,29 @@
  * @type {object}
  */
 export const colors = {
-  reset:     '\x1b[0m',
-  bold:      '\x1b[1m',
-  dim:       '\x1b[2m',
-  italic:    '\x1b[3m',
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  italic: '\x1b[3m',
   underline: '\x1b[4m',
 
   // 前景色
-  black:   '\x1b[30m',
-  red:     '\x1b[31m',
-  green:   '\x1b[32m',
-  yellow:  '\x1b[33m',
-  blue:    '\x1b[34m',
+  black: '\x1b[30m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
   magenta: '\x1b[35m',
-  cyan:    '\x1b[36m',
-  white:   '\x1b[37m',
+  cyan: '\x1b[36m',
+  white: '\x1b[37m',
 
   // 背景色
-  bgRed:     '\x1b[41m',
-  bgGreen:   '\x1b[42m',
-  bgYellow:  '\x1b[43m',
-  bgBlue:    '\x1b[44m',
+  bgRed: '\x1b[41m',
+  bgGreen: '\x1b[42m',
+  bgYellow: '\x1b[43m',
+  bgBlue: '\x1b[44m',
   bgMagenta: '\x1b[45m',
-  bgCyan:    '\x1b[46m',
+  bgCyan: '\x1b[46m'
 };
 
 // ============== 表格打印 ==============
@@ -82,7 +82,7 @@ export function printTable(headers, rows, options = {}) {
   console.log(line);
 
   // 打印数据行
-  rows.forEach((row) => {
+  rows.forEach(row => {
     console.log(row.map((cell, i) => padRight(String(cell || ''), widths[i])).join('│'));
   });
 
@@ -245,7 +245,7 @@ export function printSpinner(frame, message = '') {
  * @param {string} [bullet='•'] - 列表符号
  */
 export function printList(items, bullet = '•') {
-  items.forEach((item) => {
+  items.forEach(item => {
     console.log(`  ${bullet} ${item}`);
   });
 }

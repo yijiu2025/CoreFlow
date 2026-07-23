@@ -178,7 +178,7 @@ export default async function (fastify) {
         denied,
         matched: denied ? 'denied' : allowed ? 'allowed' : 'none',
         roles: user.roles || [],
-        allows: allows.slice(0, 20),  // 限制返回数量
+        allows: allows.slice(0, 20), // 限制返回数量
         denies: denies.slice(0, 20)
       });
     }
@@ -229,7 +229,7 @@ export default async function (fastify) {
       }
 
       // 手机号脱敏：仅返回掩码格式（如 138****1234），明文不暴露
-      const { maskPhone } = await import('../../../utils/crypto.js')
+      const { maskPhone } = await import('../../../utils/crypto.js');
 
       return reply.result.success('获取成功', {
         uid: user.uid,

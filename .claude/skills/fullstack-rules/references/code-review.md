@@ -48,9 +48,7 @@ if (err.code === 'DUPLICATE_ROUTE') { throw err; }
 // ✅ 正确：Promise.race 超时保护
 await Promise.race([
   register(app),
-  new Promise((_, reject) =>
-    setTimeout(() => reject(Object.assign(new Error('超时'), { code: 'TIMEOUT' })), 30000)
-  )
+  new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('超时'), { code: 'TIMEOUT' })), 30000))
 ]);
 ```
 
@@ -58,13 +56,13 @@ await Promise.race([
 
 所有定时器、异步队列、未完成的写操作必须有优雅关闭机制：
 
-| 场景 | 处理方式 | 示例 |
-|------|---------|------|
-| 防抖保存 | 暴露 `flush()` 方法，`onClose` 钩子调用 | `flushGuardConfig()` |
-| 定时器 | `clearTimeout` / `clearInterval` | `if (timer) clearTimeout(timer)` |
-| WebSocket 连接 | 关闭所有活跃连接 | `clients.forEach(c => c.close())` |
-| 数据库连接池 | 使用连接池自带的 `close()` | `sequelize.close()` |
-| 文件写入流 | `stream.end()` 或 `fs.promises` 的 `close()` | `writeStream.end()` |
+| 场景           | 处理方式                                     | 示例                              |
+| -------------- | -------------------------------------------- | --------------------------------- |
+| 防抖保存       | 暴露 `flush()` 方法，`onClose` 钩子调用      | `flushGuardConfig()`              |
+| 定时器         | `clearTimeout` / `clearInterval`             | `if (timer) clearTimeout(timer)`  |
+| WebSocket 连接 | 关闭所有活跃连接                             | `clients.forEach(c => c.close())` |
+| 数据库连接池   | 使用连接池自带的 `close()`                   | `sequelize.close()`               |
+| 文件写入流     | `stream.end()` 或 `fs.promises` 的 `close()` | `writeStream.end()`               |
 
 ### 2.4 onClose 钩子必须自己 try-catch
 
@@ -73,7 +71,7 @@ await Promise.race([
 ```js
 // ❌ 禁止：onClose 异步错误被静默吞掉
 app.addHook('onClose', async () => {
-  await flushGuardConfig();  // 如果这里抛异常，没人知道
+  await flushGuardConfig(); // 如果这里抛异常，没人知道
 });
 
 // ✅ 正确：onClose 中自己 try-catch
@@ -120,8 +118,8 @@ Object.assign(api, patch);
 ### 3.2 空值合并优先级
 
 ```js
-const value = obj?.prop ?? defaultValue;  // ✅ 正确：null/undefined 用默认值
-const value = obj?.prop || defaultValue;  // ⚠️ 谨慎：0 / '' / false 也会走默认值
+const value = obj?.prop ?? defaultValue; // ✅ 正确：null/undefined 用默认值
+const value = obj?.prop || defaultValue; // ⚠️ 谨慎：0 / '' / false 也会走默认值
 ```
 
 ### 3.3 函数参数默认值
@@ -143,12 +141,12 @@ function handle(opts = {}) {
 
 **相同功能的不同实现路径必须具有相同级别的安全保护。**
 
-| 路径 | 必须支持 | 常见遗漏 |
-|------|---------|---------|
-| HTTP 路由 | enabled, allowIps, requireLogin, allowRoles, requirePermission | — |
-| WebSocket 路由 | 同上全部 | allowIps, requirePermission, 三级级联 |
-| 文件上传 | 类型校验, 大小限制, 权限校验 | MIME magic bytes 校验 |
-| 内部 API | 鉴权, 速率限制 | 权限校验 |
+| 路径           | 必须支持                                                       | 常见遗漏                              |
+| -------------- | -------------------------------------------------------------- | ------------------------------------- |
+| HTTP 路由      | enabled, allowIps, requireLogin, allowRoles, requirePermission | —                                     |
+| WebSocket 路由 | 同上全部                                                       | allowIps, requirePermission, 三级级联 |
+| 文件上传       | 类型校验, 大小限制, 权限校验                                   | MIME magic bytes 校验                 |
+| 内部 API       | 鉴权, 速率限制                                                 | 权限校验                              |
 
 ### 4.2 对称性
 
@@ -216,14 +214,14 @@ return false;
 
 推荐使用 `err.code` 字符串常量，格式为 `DOMAIN_ERROR_TYPE`：
 
-| 错误码 | 场景 | 说明 |
-|--------|------|------|
-| `DUPLICATE_ROUTE` | 路由重复注册 | 模块加载时检测 |
-| `LOAD_TIMEOUT` | 模块加载超时 | 超过 30s 未完成 |
-| `CONFIG_VERSION_CONFLICT` | 配置版本冲突 | 乐观锁更新失败 |
-| `DB_CONNECTION_FAILED` | 数据库连接失败 | 启动时检测 |
-| `REDIS_CONNECTION_FAILED` | Redis 连接失败 | 启动时检测 |
-| `INVALID_PARAM` | 函数参数无效 | 公共 API 参数校验失败 |
+| 错误码                    | 场景           | 说明                  |
+| ------------------------- | -------------- | --------------------- |
+| `DUPLICATE_ROUTE`         | 路由重复注册   | 模块加载时检测        |
+| `LOAD_TIMEOUT`            | 模块加载超时   | 超过 30s 未完成       |
+| `CONFIG_VERSION_CONFLICT` | 配置版本冲突   | 乐观锁更新失败        |
+| `DB_CONNECTION_FAILED`    | 数据库连接失败 | 启动时检测            |
+| `REDIS_CONNECTION_FAILED` | Redis 连接失败 | 启动时检测            |
+| `INVALID_PARAM`           | 函数参数无效   | 公共 API 参数校验失败 |
 
 ### 5.4 公共 API 函数参数校验
 
@@ -283,6 +281,7 @@ let saveTimer = null;
 ### 6.2 防抖与竞态
 
 防抖延迟写入时，必须考虑：
+
 - 关闭时未完成的写入 → 添加 `flush()` 方法
 - 连续写入的顺序 → 单线程 JS 保证顺序，但 version 乐观锁兜底
 - 写入失败的重试 → 不要在防抖回调中重试（会无限重试）
@@ -303,6 +302,7 @@ console.error(`❌ [Module] ${C.red}错误信息${C.reset}`);
 ### 7.2 可观测性
 
 审查以下内容是否缺失：
+
 - 启动耗时统计（每个模块加载耗时）
 - 错误计数（按错误类型统计）
 - 降级标记（如 Redis 降级到内存）
@@ -314,13 +314,13 @@ console.error(`❌ [Module] ${C.red}错误信息${C.reset}`);
 
 审查以下场景是否需要启动警告：
 
-| 场景 | 警告内容 | 严重程度 |
-|------|---------|---------|
-| CORS 白名单为空 | 所有跨域请求将被拒绝 | 中（功能受限） |
-| Redis 降级到内存 | 缓存失效，重启后数据丢失 | 中 |
-| 密钥使用默认值 | 安全风险，立即修改 | 高 |
-| 数据库连接池过小 | 高并发下连接等待 | 低 |
-| 外部 API 依赖未配置 | 某功能不可用 | 中 |
+| 场景                | 警告内容                 | 严重程度       |
+| ------------------- | ------------------------ | -------------- |
+| CORS 白名单为空     | 所有跨域请求将被拒绝     | 中（功能受限） |
+| Redis 降级到内存    | 缓存失效，重启后数据丢失 | 中             |
+| 密钥使用默认值      | 安全风险，立即修改       | 高             |
+| 数据库连接池过小    | 高并发下连接等待         | 低             |
+| 外部 API 依赖未配置 | 某功能不可用             | 中             |
 
 ```js
 // ✅ 正确：启动时主动提醒
@@ -364,9 +364,9 @@ if (isProduction && CORS_ORIGINS.length === 0) {
 
 ## 九、相关规范
 
-| 规范 | 文件 | 说明 |
-|------|------|------|
-| 🔒 安全红线 | [security.md](security.md) | 敏感信息、XSS、SQL 注入、权限校验 |
-| ⚙️ 后端规范 | [backend/main.md](backend/main.md) | 目录结构、API 路由、守卫、数据库 |
-| 🏷️ 命名规范 | [naming-convention.md](naming-convention.md) | 代码/文件/API 命名 |
-| 📝 注释规范 | [note.md](note.md) | 文件头注释、函数注释、TODO 标记 |
+| 规范        | 文件                                         | 说明                              |
+| ----------- | -------------------------------------------- | --------------------------------- |
+| 🔒 安全红线 | [security.md](security.md)                   | 敏感信息、XSS、SQL 注入、权限校验 |
+| ⚙️ 后端规范 | [backend/main.md](backend/main.md)           | 目录结构、API 路由、守卫、数据库  |
+| 🏷️ 命名规范 | [naming-convention.md](naming-convention.md) | 代码/文件/API 命名                |
+| 📝 注释规范 | [note.md](note.md)                           | 文件头注释、函数注释、TODO 标记   |

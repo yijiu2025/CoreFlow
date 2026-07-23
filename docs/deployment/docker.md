@@ -29,7 +29,7 @@ CMD ["node", "index.js"]
 services:
   app:
     build: .
-    ports: ["3000:3000"]
+    ports: ['3000:3000']
     env_file: .env
     depends_on: [db, redis]
     restart: unless-stopped
@@ -40,11 +40,11 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_PASS}
       MYSQL_DATABASE: ${DB_NAME}
     volumes: [db_data:/var/lib/mysql]
-    ports: ["3306:3306"]
+    ports: ['3306:3306']
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports: ['6379:6379']
     volumes: [redis_data:/data]
 
 volumes:

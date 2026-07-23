@@ -31,15 +31,15 @@ export function getConfig() {
 // ============== Redis Key 前缀 ==============
 
 export const KEY = {
-  block: (id) => `fw:block:${id}`,
-  rateLimit: (id) => `fw:rl:${id}`,
-  trap: (ip) => `fw:trap:${ip}`,
-  bruteIp: (ip) => `fw:brute:ip:${ip}`,
-  bruteUser: (user) => `fw:brute:user:${user}`,
-  accountLock: (user) => `fw:lock:${user}`,
-  whitelist: (ip) => `fw:whitelist:${ip}`,
-  blockFp: (fp) => `fw:block:fp:${fp}`,
-  whitelistFp: (fp) => `fw:whitelist:fp:${fp}`,
+  block: id => `fw:block:${id}`,
+  rateLimit: id => `fw:rl:${id}`,
+  trap: ip => `fw:trap:${ip}`,
+  bruteIp: ip => `fw:brute:ip:${ip}`,
+  bruteUser: user => `fw:brute:user:${user}`,
+  accountLock: user => `fw:lock:${user}`,
+  whitelist: ip => `fw:whitelist:${ip}`,
+  blockFp: fp => `fw:block:fp:${fp}`,
+  whitelistFp: fp => `fw:whitelist:fp:${fp}`
 };
 
 export const HASH_BLOCKED = 'fw:blocked:ips';

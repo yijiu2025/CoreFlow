@@ -85,7 +85,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  OauthCode.associate = (models) => {
+  OauthCode.associate = models => {
     // 建立与 User 模型的关联关联关系 (基于 sub -> User.uid)
     OauthCode.belongsTo(models.User, {
       foreignKey: 'sub',

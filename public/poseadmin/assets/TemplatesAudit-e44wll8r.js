@@ -1,1 +1,254 @@
-import{At as e,Q as t,V as n,X as r,Y as i,_t as a,cn as o,et as s,jt as c,mt as l,nt as u,tt as d,xt as f,zt as p}from"./index-qAhX_anO.js";import{n as m,x as h}from"./css-1h04YQ5P.js";import{a as g,c as _,f as v,i as y,m as b,n as x,o as S,r as C,t as w}from"./axios-BbkQ5DQD.js";import{t as T}from"./css-D5-QsHoJ.js";import{n as E,t as D}from"./css-BhRj5d5w.js";import"./css-B6D8VRp3.js";var O={class:`p-6 h-full flex flex-col gap-4`},k={class:`flex items-center justify-between`},A={class:`flex gap-2`},j={key:0,class:`flex items-center justify-center gap-2`},M={class:`flex justify-end pt-4`},N=u({__name:`TemplatesAudit`,setup(u){let N=p(!1),P=p([]),F=p(0),I=p({page:1,pageSize:20,status:2,keyword:``}),L=async()=>{N.value=!0;try{let e=await w.get(`/posecraft/v1/admin/templates`,{params:I.value});e.data.code===200?(P.value=e.data.data,F.value=e.data.total):C.error(e.data.message||`获取列表失败`)}catch(e){C.error(e.message||`获取列表失败`)}finally{N.value=!1}},R=async(e,t)=>{let n=t===1?`通过`:`驳回`;try{await x.confirm(`确定要${n}该模板吗？`,`审核确认`,{type:t===1?`success`:`warning`});let r=await w.put(`/posecraft/v1/admin/templates/${e}/audit`,{status:t});r.data.code===200?(C.success(`审核成功`),L()):C.error(r.data.message||`审核失败`)}catch(e){e!==`cancel`&&console.error(e)}},z=e=>{I.value.pageSize=e,L()},B=e=>{I.value.page=e,L()};return l(()=>{L()}),(l,u)=>{let p=D,x=E,C=f(`Search`),w=h,V=m,H=b,U=S,W=T,G=v,K=g,q=_,J=y;return a(),t(`div`,O,[i(`div`,k,[d(x,{modelValue:I.value.status,"onUpdate:modelValue":u[0]||=e=>I.value.status=e,onChange:L},{default:e(()=>[d(p,{value:2},{default:e(()=>[...u[4]||=[s(`待审核`,-1)]]),_:1}),d(p,{value:1},{default:e(()=>[...u[5]||=[s(`已公开`,-1)]]),_:1}),d(p,{value:-2},{default:e(()=>[...u[6]||=[s(`已驳回`,-1)]]),_:1}),d(p,{value:0},{default:e(()=>[...u[7]||=[s(`私密`,-1)]]),_:1})]),_:1},8,[`modelValue`]),i(`div`,A,[d(H,{modelValue:I.value.keyword,"onUpdate:modelValue":u[1]||=e=>I.value.keyword=e,placeholder:`搜索标题/描述`,clearable:``,onKeyup:n(L,[`enter`]),class:`w-64`},{append:e(()=>[d(V,{onClick:L},{default:e(()=>[d(w,null,{default:e(()=>[d(C)]),_:1})]),_:1})]),_:1},8,[`modelValue`])])]),c((a(),r(K,{data:P.value,border:``,class:`w-full flex-1`,height:`100%`},{default:e(()=>[d(U,{prop:`id`,label:`ID`,width:`80`,align:`center`}),d(U,{label:`预览图`,width:`120`,align:`center`},{default:e(({row:e})=>[d(W,{class:`w-16 h-16 rounded cursor-pointer`,src:e.thumbnail_url,"preview-src-list":[e.thumbnail_url,e.image_url].filter(Boolean),fit:`cover`,"preview-teleported":``},null,8,[`src`,`preview-src-list`])]),_:1}),d(U,{prop:`title`,label:`标题`,"min-width":`150`,"show-overflow-tooltip":``}),d(U,{prop:`category`,label:`分类`,width:`100`,align:`center`},{default:e(({row:t})=>[d(G,null,{default:e(()=>[s(o(t.category),1)]),_:2},1024)]),_:1}),d(U,{prop:`description`,label:`描述`,"min-width":`200`,"show-overflow-tooltip":``}),d(U,{prop:`user_id`,label:`作者ID`,width:`100`,align:`center`}),d(U,{prop:`created_at`,label:`创建时间`,width:`170`,align:`center`}),d(U,{label:`操作`,width:`160`,fixed:`right`,align:`center`},{default:e(({row:n})=>[n.status===2?(a(),t(`div`,j,[d(V,{type:`success`,size:`small`,plain:``,onClick:e=>R(n.id,1)},{default:e(()=>[...u[8]||=[s(`通过`,-1)]]),_:1},8,[`onClick`]),d(V,{type:`danger`,size:`small`,plain:``,onClick:e=>R(n.id,-2)},{default:e(()=>[...u[9]||=[s(`驳回`,-1)]]),_:1},8,[`onClick`])])):n.status===1?(a(),r(G,{key:1,type:`success`},{default:e(()=>[...u[10]||=[s(`已通过`,-1)]]),_:1})):n.status===-2?(a(),r(G,{key:2,type:`danger`},{default:e(()=>[...u[11]||=[s(`已驳回`,-1)]]),_:1})):(a(),r(G,{key:3,type:`info`},{default:e(()=>[...u[12]||=[s(`已处理`,-1)]]),_:1}))]),_:1})]),_:1},8,[`data`])),[[J,N.value]]),i(`div`,M,[d(q,{"current-page":I.value.page,"onUpdate:currentPage":u[2]||=e=>I.value.page=e,"page-size":I.value.pageSize,"onUpdate:pageSize":u[3]||=e=>I.value.pageSize=e,"page-sizes":[10,20,50,100],background:``,layout:`total, sizes, prev, pager, next, jumper`,total:F.value,onSizeChange:z,onCurrentChange:B},null,8,[`current-page`,`page-size`,`total`])])])}}});export{N as default};
+import {
+  At as e,
+  Q as t,
+  V as n,
+  X as r,
+  Y as i,
+  _t as a,
+  cn as o,
+  et as s,
+  jt as c,
+  mt as l,
+  nt as u,
+  tt as d,
+  xt as f,
+  zt as p
+} from './index-qAhX_anO.js';
+import { n as m, x as h } from './css-1h04YQ5P.js';
+import { a as g, c as _, f as v, i as y, m as b, n as x, o as S, r as C, t as w } from './axios-BbkQ5DQD.js';
+import { t as T } from './css-D5-QsHoJ.js';
+import { n as E, t as D } from './css-BhRj5d5w.js';
+import './css-B6D8VRp3.js';
+var O = { class: `p-6 h-full flex flex-col gap-4` },
+  k = { class: `flex items-center justify-between` },
+  A = { class: `flex gap-2` },
+  j = { key: 0, class: `flex items-center justify-center gap-2` },
+  M = { class: `flex justify-end pt-4` },
+  N = u({
+    __name: `TemplatesAudit`,
+    setup(u) {
+      let N = p(!1),
+        P = p([]),
+        F = p(0),
+        I = p({ page: 1, pageSize: 20, status: 2, keyword: `` }),
+        L = async () => {
+          N.value = !0;
+          try {
+            let e = await w.get(`/posecraft/v1/admin/templates`, { params: I.value });
+            e.data.code === 200
+              ? ((P.value = e.data.data), (F.value = e.data.total))
+              : C.error(e.data.message || `获取列表失败`);
+          } catch (e) {
+            C.error(e.message || `获取列表失败`);
+          } finally {
+            N.value = !1;
+          }
+        },
+        R = async (e, t) => {
+          let n = t === 1 ? `通过` : `驳回`;
+          try {
+            await x.confirm(`确定要${n}该模板吗？`, `审核确认`, { type: t === 1 ? `success` : `warning` });
+            let r = await w.put(`/posecraft/v1/admin/templates/${e}/audit`, { status: t });
+            r.data.code === 200 ? (C.success(`审核成功`), L()) : C.error(r.data.message || `审核失败`);
+          } catch (e) {
+            e !== `cancel` && console.error(e);
+          }
+        },
+        z = e => {
+          ((I.value.pageSize = e), L());
+        },
+        B = e => {
+          ((I.value.page = e), L());
+        };
+      return (
+        l(() => {
+          L();
+        }),
+        (l, u) => {
+          let p = D,
+            x = E,
+            C = f(`Search`),
+            w = h,
+            V = m,
+            H = b,
+            U = S,
+            W = T,
+            G = v,
+            K = g,
+            q = _,
+            J = y;
+          return (
+            a(),
+            t(`div`, O, [
+              i(`div`, k, [
+                d(
+                  x,
+                  {
+                    modelValue: I.value.status,
+                    'onUpdate:modelValue': (u[0] ||= e => (I.value.status = e)),
+                    onChange: L
+                  },
+                  {
+                    default: e(() => [
+                      d(p, { value: 2 }, { default: e(() => [...(u[4] ||= [s(`待审核`, -1)])]), _: 1 }),
+                      d(p, { value: 1 }, { default: e(() => [...(u[5] ||= [s(`已公开`, -1)])]), _: 1 }),
+                      d(p, { value: -2 }, { default: e(() => [...(u[6] ||= [s(`已驳回`, -1)])]), _: 1 }),
+                      d(p, { value: 0 }, { default: e(() => [...(u[7] ||= [s(`私密`, -1)])]), _: 1 })
+                    ]),
+                    _: 1
+                  },
+                  8,
+                  [`modelValue`]
+                ),
+                i(`div`, A, [
+                  d(
+                    H,
+                    {
+                      modelValue: I.value.keyword,
+                      'onUpdate:modelValue': (u[1] ||= e => (I.value.keyword = e)),
+                      placeholder: `搜索标题/描述`,
+                      clearable: ``,
+                      onKeyup: n(L, [`enter`]),
+                      class: `w-64`
+                    },
+                    {
+                      append: e(() => [
+                        d(
+                          V,
+                          { onClick: L },
+                          { default: e(() => [d(w, null, { default: e(() => [d(C)]), _: 1 })]), _: 1 }
+                        )
+                      ]),
+                      _: 1
+                    },
+                    8,
+                    [`modelValue`]
+                  )
+                ])
+              ]),
+              c(
+                (a(),
+                r(
+                  K,
+                  { data: P.value, border: ``, class: `w-full flex-1`, height: `100%` },
+                  {
+                    default: e(() => [
+                      d(U, { prop: `id`, label: `ID`, width: `80`, align: `center` }),
+                      d(
+                        U,
+                        { label: `预览图`, width: `120`, align: `center` },
+                        {
+                          default: e(({ row: e }) => [
+                            d(
+                              W,
+                              {
+                                class: `w-16 h-16 rounded cursor-pointer`,
+                                src: e.thumbnail_url,
+                                'preview-src-list': [e.thumbnail_url, e.image_url].filter(Boolean),
+                                fit: `cover`,
+                                'preview-teleported': ``
+                              },
+                              null,
+                              8,
+                              [`src`, `preview-src-list`]
+                            )
+                          ]),
+                          _: 1
+                        }
+                      ),
+                      d(U, { prop: `title`, label: `标题`, 'min-width': `150`, 'show-overflow-tooltip': `` }),
+                      d(
+                        U,
+                        { prop: `category`, label: `分类`, width: `100`, align: `center` },
+                        {
+                          default: e(({ row: t }) => [
+                            d(G, null, { default: e(() => [s(o(t.category), 1)]), _: 2 }, 1024)
+                          ]),
+                          _: 1
+                        }
+                      ),
+                      d(U, { prop: `description`, label: `描述`, 'min-width': `200`, 'show-overflow-tooltip': `` }),
+                      d(U, { prop: `user_id`, label: `作者ID`, width: `100`, align: `center` }),
+                      d(U, { prop: `created_at`, label: `创建时间`, width: `170`, align: `center` }),
+                      d(
+                        U,
+                        { label: `操作`, width: `160`, fixed: `right`, align: `center` },
+                        {
+                          default: e(({ row: n }) => [
+                            n.status === 2
+                              ? (a(),
+                                t(`div`, j, [
+                                  d(
+                                    V,
+                                    { type: `success`, size: `small`, plain: ``, onClick: e => R(n.id, 1) },
+                                    { default: e(() => [...(u[8] ||= [s(`通过`, -1)])]), _: 1 },
+                                    8,
+                                    [`onClick`]
+                                  ),
+                                  d(
+                                    V,
+                                    { type: `danger`, size: `small`, plain: ``, onClick: e => R(n.id, -2) },
+                                    { default: e(() => [...(u[9] ||= [s(`驳回`, -1)])]), _: 1 },
+                                    8,
+                                    [`onClick`]
+                                  )
+                                ]))
+                              : n.status === 1
+                                ? (a(),
+                                  r(
+                                    G,
+                                    { key: 1, type: `success` },
+                                    { default: e(() => [...(u[10] ||= [s(`已通过`, -1)])]), _: 1 }
+                                  ))
+                                : n.status === -2
+                                  ? (a(),
+                                    r(
+                                      G,
+                                      { key: 2, type: `danger` },
+                                      { default: e(() => [...(u[11] ||= [s(`已驳回`, -1)])]), _: 1 }
+                                    ))
+                                  : (a(),
+                                    r(
+                                      G,
+                                      { key: 3, type: `info` },
+                                      { default: e(() => [...(u[12] ||= [s(`已处理`, -1)])]), _: 1 }
+                                    ))
+                          ]),
+                          _: 1
+                        }
+                      )
+                    ]),
+                    _: 1
+                  },
+                  8,
+                  [`data`]
+                )),
+                [[J, N.value]]
+              ),
+              i(`div`, M, [
+                d(
+                  q,
+                  {
+                    'current-page': I.value.page,
+                    'onUpdate:currentPage': (u[2] ||= e => (I.value.page = e)),
+                    'page-size': I.value.pageSize,
+                    'onUpdate:pageSize': (u[3] ||= e => (I.value.pageSize = e)),
+                    'page-sizes': [10, 20, 50, 100],
+                    background: ``,
+                    layout: `total, sizes, prev, pager, next, jumper`,
+                    total: F.value,
+                    onSizeChange: z,
+                    onCurrentChange: B
+                  },
+                  null,
+                  8,
+                  [`current-page`, `page-size`, `total`]
+                )
+              ])
+            ])
+          );
+        }
+      );
+    }
+  });
+export { N as default };

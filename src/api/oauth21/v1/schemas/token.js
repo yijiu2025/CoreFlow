@@ -24,7 +24,7 @@ export const tokenSchema = {
     if: { properties: { grant_type: { const: 'authorization_code' } } },
     then: { required: ['code', 'redirect_uri'] }
   }
-}
+};
 
 /** POST /revoke */
 export const revokeSchema = {
@@ -37,4 +37,4 @@ export const revokeSchema = {
     },
     additionalProperties: false
   }
-}
+};

@@ -230,9 +230,7 @@
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
-              "allowRoles": [
-                "admin"
-              ],
+              "allowRoles": ["admin"],
               "url": "/api/firewall/v1/export/blocks",
               "method": "GET",
               "updatedAt": "2026-07-21T15:35:01.681Z"
@@ -243,9 +241,7 @@
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
-              "allowRoles": [
-                "admin"
-              ],
+              "allowRoles": ["admin"],
               "url": "/api/firewall/v1/export/whitelist",
               "method": "GET",
               "updatedAt": "2026-07-21T15:35:01.682Z"
@@ -256,9 +252,7 @@
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
-              "allowRoles": [
-                "admin"
-              ],
+              "allowRoles": ["admin"],
               "url": "/api/firewall/v1/export/blocks",
               "method": "POST",
               "updatedAt": "2026-07-21T15:35:01.682Z"
@@ -269,9 +263,7 @@
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
-              "allowRoles": [
-                "admin"
-              ],
+              "allowRoles": ["admin"],
               "url": "/api/firewall/v1/export/whitelist",
               "method": "POST",
               "updatedAt": "2026-07-21T15:35:01.682Z"
@@ -284,9 +276,7 @@
           "enabled": true,
           "requireLogin": true,
           "allowIps": [],
-          "allowRoles": [
-            "admin"
-          ],
+          "allowRoles": ["admin"],
           "updatedAt": "2026-07-21T15:35:01.681Z"
         },
         "metrics": {
@@ -602,9 +592,7 @@
           "enabled": true,
           "requireLogin": true,
           "allowIps": [],
-          "allowRoles": [
-            "admin"
-          ],
+          "allowRoles": ["admin"],
           "updatedAt": "2026-07-21T15:35:01.731Z"
         }
       },
@@ -615,9 +603,7 @@
       "enabled": true,
       "requireLogin": true,
       "allowIps": [],
-      "allowRoles": [
-        "admin"
-      ],
+      "allowRoles": ["admin"],
       "updatedAt": "2026-07-21T15:35:01.693Z"
     },
     "OAuth2.1": {
@@ -630,9 +616,7 @@
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
-              "allowRoles": [
-                "admin"
-              ],
+              "allowRoles": ["admin"],
               "url": "/oauth2.1/admin/permissions/sync",
               "method": "POST",
               "updatedAt": "2026-07-21T15:35:01.739Z"
@@ -643,9 +627,7 @@
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
-              "allowRoles": [
-                "admin"
-              ],
+              "allowRoles": ["admin"],
               "url": "/oauth2.1/admin/client",
               "method": "POST",
               "updatedAt": "2026-07-21T15:35:01.739Z"
@@ -656,9 +638,7 @@
               "enabled": true,
               "requireLogin": true,
               "allowIps": [],
-              "allowRoles": [
-                "admin"
-              ],
+              "allowRoles": ["admin"],
               "url": "/oauth2.1/admin/users",
               "method": "GET",
               "updatedAt": "2026-07-21T15:35:01.740Z"
@@ -671,9 +651,7 @@
           "enabled": true,
           "requireLogin": true,
           "allowIps": [],
-          "allowRoles": [
-            "admin"
-          ],
+          "allowRoles": ["admin"],
           "updatedAt": "2026-07-21T15:35:01.739Z"
         },
         "auth": {

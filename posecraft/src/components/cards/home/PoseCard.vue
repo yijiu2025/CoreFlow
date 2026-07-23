@@ -31,14 +31,29 @@
         <MapPin :size="12" class="location-pin" />
         <span>{{ item.distance }}</span>
       </div>
-      <div v-if="item.template_deleted || item.template_status === -1 || item.template_status === 0 || item.template_status === -2" class="template-warning-pill">模板已失效</div>
+      <div
+        v-if="
+          item.template_deleted ||
+          item.template_status === -1 ||
+          item.template_status === 0 ||
+          item.template_status === -2
+        "
+        class="template-warning-pill"
+      >
+        模板已失效
+      </div>
     </div>
     <div class="card-info">
       <h3 class="card-title">{{ item.title || '未命名作品' }}</h3>
       <div class="card-footer">
         <div class="card-author">
           <div class="author-avatar">
-            <img v-if="item.author?.avatar" :src="item.author.avatar" :alt="item.author.username" class="author-avatar-img" />
+            <img
+              v-if="item.author?.avatar"
+              :src="item.author.avatar"
+              :alt="item.author.username"
+              class="author-avatar-img"
+            />
             <span v-else>{{ (item.author?.username || 'U').charAt(0).toUpperCase() }}</span>
           </div>
           <span class="author-name">{{ item.author?.username || '匿名用户' }}</span>
@@ -46,15 +61,38 @@
         <div class="card-likes-fav-wrapper">
           <!-- 点赞按钮：已赞时爱心变红 -->
           <div class="card-likes" :class="{ liked: item.liked }" @click.stop="$emit('like', item)">
-            <svg width="12" height="12" viewBox="0 0 24 24" :fill="item.liked ? '#ff2442' : 'none'" stroke="currentColor" stroke-width="2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              :fill="item.liked ? '#ff2442' : 'none'"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+              />
             </svg>
             <span>{{ formatLikes(item.likes_count) }}</span>
           </div>
           <!-- 收藏按钮：已收藏时标签变金 -->
-          <button class="card-fav" :class="{ favorited: item.collected }" @click.stop="$emit('collect', item)" title="收藏">
-            <svg width="12" height="12" viewBox="0 0 24 24" :fill="item.collected ? '#fbbf24' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+          <button
+            class="card-fav"
+            :class="{ favorited: item.collected }"
+            @click.stop="$emit('collect', item)"
+            title="收藏"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              :fill="item.collected ? '#fbbf24' : 'none'"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
           </button>
         </div>
@@ -64,29 +102,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { MapPin } from 'lucide-vue-next'
+import { ref, computed, onMounted } from 'vue';
+import { MapPin } from 'lucide-vue-next';
 
 const props = defineProps<{
-  item: any
-}>()
+  item: any;
+}>();
 
 defineEmits<{
-  (e: 'click', item: any): void
-  (e: 'like', item: any): void
-  (e: 'collect', item: any): void
-}>()
+  (e: 'click', item: any): void;
+  (e: 'like', item: any): void;
+  (e: 'collect', item: any): void;
+}>();
 
 /**
  * 是否为模板底图作品（由后端 is_template_work 字段决定）
  * 模板一对一绑定一个作品，该作品显示「模板」徽章
  */
 const isTemplateWork = computed(() => {
-  return props.item?.type === 'template' || !!props.item?.is_template_work
-})
+  return props.item?.type === 'template' || !!props.item?.is_template_work;
+});
 
 // 真实图片宽高比，默认 4/5（未加载或加载失败时）
-const aspectRatio = ref<string>('4/5')
+const aspectRatio = ref<string>('4/5');
 
 /**
  * 解析图片真实宽高比：
@@ -94,36 +132,36 @@ const aspectRatio = ref<string>('4/5')
  * 2. 真实图片通过 Image 对象加载后读取 naturalWidth/Height
  */
 const loadAspectRatio = (url: string) => {
-  if (!url) return
+  if (!url) return;
   // 假数据快速路径
-  const match = url.match(/\/400\/(\d+)/)
+  const match = url.match(/\/400\/(\d+)/);
   if (match?.[1]) {
-    aspectRatio.value = `400 / ${parseInt(match[1])}`
-    return
+    aspectRatio.value = `400 / ${parseInt(match[1])}`;
+    return;
   }
   // 真实图片：加载后读取实际尺寸
-  const img = new Image()
+  const img = new Image();
   img.onload = () => {
     if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-      aspectRatio.value = `${img.naturalWidth} / ${img.naturalHeight}`
+      aspectRatio.value = `${img.naturalWidth} / ${img.naturalHeight}`;
     }
-  }
+  };
   img.onerror = () => {
     // 加载失败保持默认 4/5
-  }
-  img.src = url
-}
+  };
+  img.src = url;
+};
 
 onMounted(() => {
-  const url = props.item?.image_url || props.item?.thumbnail_url
-  loadAspectRatio(url)
-})
+  const url = props.item?.image_url || props.item?.thumbnail_url;
+  loadAspectRatio(url);
+});
 
 const formatLikes = (num: number) => {
-  if (!num) return '0'
-  if (num >= 10000) return (num / 10000).toFixed(1) + '万'
-  return num.toString()
-}
+  if (!num) return '0';
+  if (num >= 10000) return (num / 10000).toFixed(1) + '万';
+  return num.toString();
+};
 </script>
 
 <style scoped>
@@ -136,7 +174,9 @@ const formatLikes = (num: number) => {
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   border: 1px solid rgba(0, 0, 0, 0.04);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01), 0 2px 4px -1px rgba(0, 0, 0, 0.006);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.01),
+    0 2px 4px -1px rgba(0, 0, 0, 0.006);
 }
 
 .dark-mode .card {
@@ -281,7 +321,9 @@ const formatLikes = (num: number) => {
 }
 
 .card-likes svg {
-  transition: fill 0.2s, stroke 0.2s;
+  transition:
+    fill 0.2s,
+    stroke 0.2s;
 }
 
 .card-likes:hover svg {
@@ -341,5 +383,4 @@ const formatLikes = (num: number) => {
   font-size: 10px;
   font-weight: 700;
 }
-
 </style>

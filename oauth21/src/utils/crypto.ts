@@ -26,13 +26,9 @@ export async function fetchPublicKey(): Promise<CryptoKey> {
   if (cachedPublicKey && cachedKeyId === keyId) return cachedPublicKey;
 
   // 密钥变化或首次获取，重新导入
-  cachedPublicKey = await crypto.subtle.importKey(
-    'jwk',
-    data.key,
-    { name: 'RSA-OAEP', hash: 'SHA-256' },
-    false,
-    ['encrypt']
-  );
+  cachedPublicKey = await crypto.subtle.importKey('jwk', data.key, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, [
+    'encrypt'
+  ]);
   cachedKeyId = keyId;
 
   return cachedPublicKey;
@@ -65,11 +61,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 export async function rsaEncrypt(plaintext: string): Promise<string> {
   const publicKey = await fetchPublicKey();
   const encoded = new TextEncoder().encode(plaintext);
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'RSA-OAEP' }, 
-    publicKey, 
-    encoded
-  );
+  const encrypted = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, encoded);
   return arrayBufferToBase64(encrypted);
 }
 

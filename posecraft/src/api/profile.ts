@@ -4,7 +4,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import service from '@/utils/request'
+import service from '@/utils/request';
 
 export const profileApi = {
   /** 获取当前登录用户的完整统计（从 session 识别） */
@@ -12,4 +12,4 @@ export const profileApi = {
 
   /** 获取其他用户的完整统计（支持 uid 或 personal_id） */
   getUserStats: (uid: string) => service.get(`/posecraft/v1/profile/stats/${uid}`)
-}
+};

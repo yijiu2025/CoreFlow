@@ -27,7 +27,7 @@ export const checkGeoReputation = async (redisClient, ip, url) => {
     await checkRateLimit(redisClient, `IDC:${ip}`, {
       limit: settings.idcLimit || 60,
       window: 60,
-      blockTime: 3600,
+      blockTime: 3600
     });
   }
 
@@ -36,7 +36,7 @@ export const checkGeoReputation = async (redisClient, ip, url) => {
     await checkRateLimit(redisClient, `OVERSEAS:${ip}`, {
       limit: geoRules.overseasInternalLimit || 30,
       window: 60,
-      blockTime: 1800,
+      blockTime: 1800
     });
   }
 
@@ -45,7 +45,7 @@ export const checkGeoReputation = async (redisClient, ip, url) => {
     await checkRateLimit(redisClient, `OVERSEAS_SENS:${ip}`, {
       limit: geoRules.overseasLimit || 10,
       window: geoRules.overseasWindow || 60,
-      blockTime: geoRules.overseasBlockTime || 3600,
+      blockTime: geoRules.overseasBlockTime || 3600
     });
   }
 };

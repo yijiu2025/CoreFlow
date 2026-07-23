@@ -137,7 +137,7 @@ describe('权限系统', () => {
       const denies = ['fw:config:write'];
 
       // deny 优先
-      const hasPermission = (perm) => {
+      const hasPermission = perm => {
         if (denies.some(d => d === perm)) return false;
         return allows.includes(perm);
       };

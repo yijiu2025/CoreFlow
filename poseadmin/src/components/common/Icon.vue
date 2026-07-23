@@ -12,33 +12,90 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from 'vue';
 import {
-  Flame, User, Lightbulb, Camera, Trophy, Ruler, Wrench,
-  Sparkles, Gem, Star, Target, Home, Cat, Flower2, UtensilsCrossed,
-  Plane, Music, BookHeart, Heart, Search, MapPin, HelpCircle,
-  Settings, Sun, Moon, Palette, Award
-} from 'lucide-vue-next'
+  Flame,
+  User,
+  Lightbulb,
+  Camera,
+  Trophy,
+  Ruler,
+  Wrench,
+  Sparkles,
+  Gem,
+  Star,
+  Target,
+  Home,
+  Cat,
+  Flower2,
+  UtensilsCrossed,
+  Plane,
+  Music,
+  BookHeart,
+  Heart,
+  Search,
+  MapPin,
+  HelpCircle,
+  Settings,
+  Sun,
+  Moon,
+  Palette,
+  Award
+} from 'lucide-vue-next';
 
 const iconMap: Record<string, any> = {
-  flame: Flame, user: User, lightbulb: Lightbulb, camera: Camera,
-  trophy: Trophy, ruler: Ruler, wrench: Wrench, sparkles: Sparkles,
-  gem: Gem, star: Star, target: Target, home: Home, cat: Cat,
-  'flower-2': Flower2, flower2: Flower2, utensils: UtensilsCrossed,
-  plane: Plane, music: Music, 'book-heart': BookHeart, bookheart: BookHeart,
-  heart: Heart, search: Search, 'map-pin': MapPin, award: Award,
+  flame: Flame,
+  user: User,
+  lightbulb: Lightbulb,
+  camera: Camera,
+  trophy: Trophy,
+  ruler: Ruler,
+  wrench: Wrench,
+  sparkles: Sparkles,
+  gem: Gem,
+  star: Star,
+  target: Target,
+  home: Home,
+  cat: Cat,
+  'flower-2': Flower2,
+  flower2: Flower2,
+  utensils: UtensilsCrossed,
+  plane: Plane,
+  music: Music,
+  'book-heart': BookHeart,
+  bookheart: BookHeart,
+  heart: Heart,
+  search: Search,
+  'map-pin': MapPin,
+  award: Award,
   palette: Palette,
-  '🔥': Flame, '👤': User, '💡': Lightbulb, '📷': Camera, '🏆': Trophy,
-  '📐': Ruler, '🔧': Wrench, '✨': Sparkles, '💎': Gem, '🌟': Star,
-  '🎯': Target, '🏠': Home, '🐱': Cat, '🌸': Flower2, '🍳': UtensilsCrossed,
-  '✈️': Plane, '🎵': Music, '📚': BookHeart, '❤️': Heart, '🎨': Palette
-}
+  '🔥': Flame,
+  '👤': User,
+  '💡': Lightbulb,
+  '📷': Camera,
+  '🏆': Trophy,
+  '📐': Ruler,
+  '🔧': Wrench,
+  '✨': Sparkles,
+  '💎': Gem,
+  '🌟': Star,
+  '🎯': Target,
+  '🏠': Home,
+  '🐱': Cat,
+  '🌸': Flower2,
+  '🍳': UtensilsCrossed,
+  '✈️': Plane,
+  '🎵': Music,
+  '📚': BookHeart,
+  '❤️': Heart,
+  '🎨': Palette
+};
 
 const props = defineProps<{
-  name: string
-  size?: number
-  class?: string
-}>()
+  name: string;
+  size?: number;
+  class?: string;
+}>();
 
-const comp = computed(() => iconMap[props.name])
+const comp = computed(() => iconMap[props.name]);
 </script>

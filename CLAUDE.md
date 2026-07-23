@@ -33,19 +33,19 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/l
 
 引擎扫描 `src/loader/registry/` 目录，按文件名数字前缀顺序加载：
 
-| 顺序 | 文件 | 职责 |
-|------|------|------|
-| 00 | `00-globals.js` | 装饰 `reply.result`（success/fail/unauth/forbidden） |
-| 02 | `02-redis.js` | Redis 连接 + 健康监控，失败注入 `null` |
-| 03 | `03-db.js` | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出 |
-| 04 | `04-auth.js` | Session 验证 + ALS 初始化（`src/auth/`） |
-| 05 | `05-firewall.js` | 五层拦截管道（限频/封禁/挑战/Bot/地理围栏） |
-| 06 | `06-models.js` | 自动加载 `src/models/`，按命名空间注册到 `app.db` |
-| 07 | `07-api.js` | 自动加载 `src/api/` 路由（读 `system.json`） |
-| 08 | `08-notice.js` | SMTP 配置种子数据 |
-| 09 | `09-pbac.js` | PBAC 角色同步到数据库 |
-| 10 | `10-seed-clients.js` | OAuth 客户端种子数据 |
-| 11 | `11-apps.js` | 扫描 `src/app/` 加载应用权限和配置 |
+| 顺序 | 文件                 | 职责                                                  |
+| ---- | -------------------- | ----------------------------------------------------- |
+| 00   | `00-globals.js`      | 装饰 `reply.result`（success/fail/unauth/forbidden）  |
+| 02   | `02-redis.js`        | Redis 连接 + 健康监控，失败注入 `null`                |
+| 03   | `03-db.js`           | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出 |
+| 04   | `04-auth.js`         | Session 验证 + ALS 初始化（`src/auth/`）              |
+| 05   | `05-firewall.js`     | 五层拦截管道（限频/封禁/挑战/Bot/地理围栏）           |
+| 06   | `06-models.js`       | 自动加载 `src/models/`，按命名空间注册到 `app.db`     |
+| 07   | `07-api.js`          | 自动加载 `src/api/` 路由（读 `system.json`）          |
+| 08   | `08-notice.js`       | SMTP 配置种子数据                                     |
+| 09   | `09-pbac.js`         | PBAC 角色同步到数据库                                 |
+| 10   | `10-seed-clients.js` | OAuth 客户端种子数据                                  |
+| 11   | `11-apps.js`         | 扫描 `src/app/` 加载应用权限和配置                    |
 
 每个 loader 导出默认函数接收 `app` 实例，错误被捕获并记录，不阻塞其他模块。
 
@@ -80,10 +80,12 @@ src/auth/
 ### Session 双令牌机制
 
 **短期登录（不勾选"记住我"）：**
+
 - `sid` cookie: HMAC 签名的 sessionId，HttpOnly，Max-Age=2h
 - Redis: `session:<sessionId>` = JSON（用户信息+角色+权限），TTL=2h
 
 **长期登录（勾选"记住我"）：**
+
 - `sid` cookie: Max-Age=30min
 - `sid_r` cookie: refreshToken，Max-Age=30天
 - sid 过期时自动用 sid_r 刷新，用户无感知
@@ -111,13 +113,13 @@ src/auth/
 ### `app.auth` (StpUtil)
 
 ```js
-StpUtil.getLoginId()                    // 获取当前用户 ID
-StpUtil.check()                         // 强制登录检查（未登录抛 401）
-StpUtil.checkRole('admin')              // 角色校验
-StpUtil.hasPermission('user:read')      // 权限判断（支持通配符 + Deny 优先）
-StpUtil.checkPermission('user:write')   // 权限校验（不通过抛 403）
-StpUtil.checkPermissionAnd('a', 'b')    // 全部通过
-StpUtil.checkPermissionOr('a', 'b')     // 任一通过
+StpUtil.getLoginId(); // 获取当前用户 ID
+StpUtil.check(); // 强制登录检查（未登录抛 401）
+StpUtil.checkRole('admin'); // 角色校验
+StpUtil.hasPermission('user:read'); // 权限判断（支持通配符 + Deny 优先）
+StpUtil.checkPermission('user:write'); // 权限校验（不通过抛 403）
+StpUtil.checkPermissionAnd('a', 'b'); // 全部通过
+StpUtil.checkPermissionOr('a', 'b'); // 任一通过
 ```
 
 ### ALS 上下文
@@ -157,6 +159,7 @@ src/oauth21/
 ## API 路由规范
 
 每个 API 域在 `src/api/<domain>/` 下：
+
 - `system.json` — 定义 `name`、`prefix`、安全默认值
 - `v1/<route>.js` — 导出 Fastify 插件，使用 `registerSecureRoute()` 注册
 
@@ -177,11 +180,11 @@ registerSecureRoute(app, {
 
 `src/api/guard.js` 实现级联访问控制：
 
-| 级别 | 来源 | 配置项 |
-|------|------|--------|
-| System | `system.json` | enabled, allowIps, requireLogin |
-| Group | `registerGroupMetadata()` | enabled, allowIps, allowRoles |
-| API | `registerSecureRoute()` | enabled, allowIps, allowRoles, requireLogin, permission |
+| 级别   | 来源                      | 配置项                                                  |
+| ------ | ------------------------- | ------------------------------------------------------- |
+| System | `system.json`             | enabled, allowIps, requireLogin                         |
+| Group  | `registerGroupMetadata()` | enabled, allowIps, allowRoles                           |
+| API    | `registerSecureRoute()`   | enabled, allowIps, allowRoles, requireLogin, permission |
 
 每级可独立拦截：`enabled`、`allowIps`（通配符+CIDR）、`allowRoles`、`requireLogin`、`permission`（权限校验，支持通配符 + deny 优先）。
 
@@ -222,13 +225,13 @@ src/
 
 模型按领域子目录自动注册为 `app.db.<namespace>.<ModelName>`：
 
-| 命名空间 | 模型 | 表名 |
-|----------|------|------|
-| `db.user` | User, UserIdentity | user_user, user_identity |
-| `db.iam` | Role, UserRole, InlinePolicy, Permission | iam_role, iam_user_role, iam_inline_policy, permissions |
+| 命名空间     | 模型                                                            | 表名                                                                          |
+| ------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `db.user`    | User, UserIdentity                                              | user_user, user_identity                                                      |
+| `db.iam`     | Role, UserRole, InlinePolicy, Permission                        | iam_role, iam_user_role, iam_inline_policy, permissions                       |
 | `db.oauth21` | OauthClient, OauthCode, OauthToken, OauthApproval, OauthConsent | oauth_clients, oauth_codes, oauth_tokens, oauth_user_approval, oauth_consents |
-| `db.notice` | EmailCode, NoticeConfig | notice_email_codes, notice_configs |
-| `db.session` | UserSession, SessionToken, SessionLog | session_user_session, session_tokens, session_logs |
+| `db.notice`  | EmailCode, NoticeConfig                                         | notice_email_codes, notice_configs                                            |
+| `db.session` | UserSession, SessionToken, SessionLog                           | session_user_session, session_tokens, session_logs                            |
 
 关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/db/softDeleteHooks.js`）。
 
@@ -243,6 +246,7 @@ src/db/
 ```
 
 迁移命令：
+
 ```bash
 npm run migrate                                          # 执行所有待运行迁移
 node --env-file=.env src/db/migrate.js --status          # 查看迁移状态
@@ -297,26 +301,26 @@ src/firewall/
 
 ## 环境变量
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `NODE_ENV` | development | 运行环境 |
-| `PORT` | 3000 | 服务端口 |
-| `DB_TYPE` | mysql | 数据库类型 |
-| `DB_HOST` | - | 数据库地址 |
-| `DB_PORT` | 3306 | 数据库端口 |
-| `DB_NAME` | - | 数据库名称 |
-| `DB_USER` | - | 数据库用户 |
-| `DB_PASS` | - | 数据库密码 |
-| `DB_SYNC` | false | 启动时同步表结构（仅开发环境） |
-| `DB_POOL_MAX` | 10 | 连接池最大连接数 |
-| `REDIS_ENABLED` | false | 是否启用 Redis |
-| `REDIS_HOST` | - | Redis 地址 |
-| `REDIS_PORT` | 6379 | Redis 端口 |
-| `REDIS_PASSWORD` | - | Redis 密码 |
-| `APP_SECRET` | - | JWT 签名密钥 |
-| `SESSION_SECRET` | - | Cookie HMAC 签名密钥 |
-| `FIREWALL_SECRET` | - | 防火墙密钥 |
-| `CORS_ORIGINS` | - | 允许的跨域来源（逗号分隔） |
+| 变量              | 默认值      | 说明                           |
+| ----------------- | ----------- | ------------------------------ |
+| `NODE_ENV`        | development | 运行环境                       |
+| `PORT`            | 3000        | 服务端口                       |
+| `DB_TYPE`         | mysql       | 数据库类型                     |
+| `DB_HOST`         | -           | 数据库地址                     |
+| `DB_PORT`         | 3306        | 数据库端口                     |
+| `DB_NAME`         | -           | 数据库名称                     |
+| `DB_USER`         | -           | 数据库用户                     |
+| `DB_PASS`         | -           | 数据库密码                     |
+| `DB_SYNC`         | false       | 启动时同步表结构（仅开发环境） |
+| `DB_POOL_MAX`     | 10          | 连接池最大连接数               |
+| `REDIS_ENABLED`   | false       | 是否启用 Redis                 |
+| `REDIS_HOST`      | -           | Redis 地址                     |
+| `REDIS_PORT`      | 6379        | Redis 端口                     |
+| `REDIS_PASSWORD`  | -           | Redis 密码                     |
+| `APP_SECRET`      | -           | JWT 签名密钥                   |
+| `SESSION_SECRET`  | -           | Cookie HMAC 签名密钥           |
+| `FIREWALL_SECRET` | -           | 防火墙密钥                     |
+| `CORS_ORIGINS`    | -           | 允许的跨域来源（逗号分隔）     |
 
 ## 测试
 
@@ -349,14 +353,15 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 
 **单个 JS/VUE 文件不超过 500 行**（含空行和注释）。超过时按功能拆分：
 
-| 文件类型 | 拆分策略 | 示例 |
-|---------|---------|------|
+| 文件类型 | 拆分策略                                    | 示例                                                          |
+| -------- | ------------------------------------------- | ------------------------------------------------------------- |
 | Vue 组件 | 按功能提取 composables（`use*.ts`）和子组件 | `EditorView.vue` → `useCanvas.ts` + `useTools.ts` + `panels/` |
-| JS 模块 | 按功能职责拆分为独立模块 | `auth.js` → `session.js` + `cookie.js` + `permission.js` |
-| API 路由 | 按业务功能拆分路由文件 | `user.js` → `user-profile.js` + `user-settings.js` |
-| 工具函数 | 按功能域拆分为独立文件 | `utils.js` → `format.js` + `validate.js` + `transform.js` |
+| JS 模块  | 按功能职责拆分为独立模块                    | `auth.js` → `session.js` + `cookie.js` + `permission.js`      |
+| API 路由 | 按业务功能拆分路由文件                      | `user.js` → `user-profile.js` + `user-settings.js`            |
+| 工具函数 | 按功能域拆分为独立文件                      | `utils.js` → `format.js` + `validate.js` + `transform.js`     |
 
 **拆分原则**：
+
 - **按功能聚合**：相关功能放在同一文件，不相关的拆分出去
 - **单一职责**：每个文件只负责一个功能域
 - **拆分时机**：当文件接近 400 行时，主动规划拆分方案
@@ -365,23 +370,23 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 
 **核心原则**：每个 `.vue` 文件是一个独立的、自包含的模块，**不包含、不内嵌其他模块的功能**。
 
-| 规则 | 说明 | 示例 |
-|:---|:---|:---|
-| **职责单一** | 一个组件只负责一个功能域 | SearchHero 只管搜索框，不管分类 Tab |
-| **不内嵌其他模块** | 组件 A 中不出现组件 B 的 UI/逻辑 | FeaturedView 里的 Tab 不应写在 SearchHero 里 |
-| **状态归属** | 由消费方（父组件）管理状态，不内嵌数据 | channels/Tab 状态属于 FeaturedView，不属于 SearchHero |
-| **跨模块通信** | 通过 props / emit / v-model / 共享 composable | 子组件需要数据 → props；需要通知 → emit |
-| **禁止反向依赖** | 子组件不依赖父组件的内部结构 | SearchHero 不应知道 FeaturedView 的存在 |
+| 规则               | 说明                                          | 示例                                                  |
+| :----------------- | :-------------------------------------------- | :---------------------------------------------------- |
+| **职责单一**       | 一个组件只负责一个功能域                      | SearchHero 只管搜索框，不管分类 Tab                   |
+| **不内嵌其他模块** | 组件 A 中不出现组件 B 的 UI/逻辑              | FeaturedView 里的 Tab 不应写在 SearchHero 里          |
+| **状态归属**       | 由消费方（父组件）管理状态，不内嵌数据        | channels/Tab 状态属于 FeaturedView，不属于 SearchHero |
+| **跨模块通信**     | 通过 props / emit / v-model / 共享 composable | 子组件需要数据 → props；需要通知 → emit               |
+| **禁止反向依赖**   | 子组件不依赖父组件的内部结构                  | SearchHero 不应知道 FeaturedView 的存在               |
 
 **判断标准**：如果修改功能 X 需要改动组件 Y 的文件，说明边界划错了。
 
 **正反对照**：
 
-| ❌ 违反 | ✅ 正确 |
-|:---|:---|
+| ❌ 违反                                    | ✅ 正确                                        |
+| :----------------------------------------- | :--------------------------------------------- |
 | SearchHero 里写了分类 Tab 的 HTML/CSS/逻辑 | FeaturedView 自己渲染 Tab，SearchHero 只做搜索 |
-| Header 组件里写了侧边栏的 Toggle 逻辑 | 侧边栏状态由父组件管理，Header 通过 emit 通知 |
-| 列表组件里写了搜索框 | 搜索框是独立组件，通过 emit 把搜索词传给列表 |
+| Header 组件里写了侧边栏的 Toggle 逻辑      | 侧边栏状态由父组件管理，Header 通过 emit 通知  |
+| 列表组件里写了搜索框                       | 搜索框是独立组件，通过 emit 把搜索词传给列表   |
 
 **例外**：当一个功能**永远只出现在同一个位置**且**不可复用时**，可以作为父组件的内联部分（如 FeaturedView 内部的 Banner 区）。
 
@@ -396,20 +401,27 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 使用 emoji + 彩色文字 + 统一标签格式：
 
 ```js
-const C = { reset: '\x1b[0m', green: '\x1b[32m', yellow: '\x1b[33m', red: '\x1b[31m', cyan: '\x1b[36m', dim: '\x1b[2m' };
+const C = {
+  reset: '\x1b[0m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+  cyan: '\x1b[36m',
+  dim: '\x1b[2m'
+};
 
 console.log(`✅ [Redis] ${C.green}连接成功: ${host}:${port}${C.reset}`);
 console.warn(`⚠️ [Redis] ${C.yellow}连接失败，降级到内存模式${C.reset}`);
 console.error(`❌ [DB] ${C.red}缺少必要环境变量${C.reset}`);
 ```
 
-| 级别 | emoji | 颜色 |
-|------|-------|------|
-| 成功 | ✅ | green |
-| 信息 | 📦 ℹ️ 🛡️ 🌱 | cyan |
-| 警告 | ⚠️ | yellow |
-| 错误 | ❌ 🚨 | red |
-| 持久化 | 💾 | dim |
+| 级别   | emoji       | 颜色   |
+| ------ | ----------- | ------ |
+| 成功   | ✅          | green  |
+| 信息   | 📦 ℹ️ 🛡️ 🌱 | cyan   |
+| 警告   | ⚠️          | yellow |
+| 错误   | ❌ 🚨       | red    |
+| 持久化 | 💾          | dim    |
 
 标准标签：`[Redis]` `[DB]` `[Migrate]` `[Loader]` `[Guard]` `[Guard Config]` `[Firewall]` `[PBAC]` `[Seed]` `[API]` `[Auth]`
 
@@ -446,7 +458,7 @@ console.error(`❌ [DB] ${C.red}缺少必要环境变量${C.reset}`);
 
 ### 错误码速查
 
-| 错误码 | 来源 | 说明 |
-|--------|------|------|
-| `DUPLICATE_ROUTE` | `guard.js` | 路由重复注册 |
-| `LOAD_TIMEOUT` | `engine.js` | 模块加载超时（>30s） |
+| 错误码            | 来源        | 说明                 |
+| ----------------- | ----------- | -------------------- |
+| `DUPLICATE_ROUTE` | `guard.js`  | 路由重复注册         |
+| `LOAD_TIMEOUT`    | `engine.js` | 模块加载超时（>30s） |

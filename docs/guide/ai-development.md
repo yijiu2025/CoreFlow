@@ -7,6 +7,7 @@
 > **你描述业务需求，AI 生成符合项目规范的代码。**
 
 框架的约定性设计让 AI 能够：
+
 - 自动遵循目录结构和命名规范
 - 生成可直接运行的代码（无需手动调整）
 - 保持认证、权限、路由的一致性
@@ -70,25 +71,29 @@ AI 会生成：
 ```js
 // src/models/shop/Order.js
 export default (sequelize, DataTypes) => {
-  const Order = sequelize.define('Order', {
-    id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-    order_no: { type: DataTypes.STRING(64), allowNull: false, unique: true, field: 'order_no' },
-    user_id: { type: DataTypes.BIGINT, allowNull: false, field: 'user_id' },
-    amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
-    status: { type: DataTypes.TINYINT, defaultValue: 0 },
-    paid_at: { type: DataTypes.DATE, field: 'paid_at' },
-    delete_version: { type: DataTypes.BIGINT, allowNull: false, defaultValue: 0 }
-  }, {
-    tableName: 'shop_order',
-    timestamps: true,
-    paranoid: true,
-    indexes: [
-      { fields: ['user_id'], name: 'idx_order_user' },
-      { unique: true, fields: ['order_no'], name: 'uk_order_no' }
-    ]
-  });
+  const Order = sequelize.define(
+    'Order',
+    {
+      id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
+      order_no: { type: DataTypes.STRING(64), allowNull: false, unique: true, field: 'order_no' },
+      user_id: { type: DataTypes.BIGINT, allowNull: false, field: 'user_id' },
+      amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+      status: { type: DataTypes.TINYINT, defaultValue: 0 },
+      paid_at: { type: DataTypes.DATE, field: 'paid_at' },
+      delete_version: { type: DataTypes.BIGINT, allowNull: false, defaultValue: 0 }
+    },
+    {
+      tableName: 'shop_order',
+      timestamps: true,
+      paranoid: true,
+      indexes: [
+        { fields: ['user_id'], name: 'idx_order_user' },
+        { unique: true, fields: ['order_no'], name: 'uk_order_no' }
+      ]
+    }
+  );
 
-  Order.associate = (models) => {
+  Order.associate = models => {
     Order.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
   };
 
@@ -137,27 +142,21 @@ AI 会生成：
 
 ```typescript
 // api/blog.ts
-import service from '@/utils/request'
+import service from '@/utils/request';
 
 export const blogApi = {
   // 文章
-  getPosts: (params?: { page?: number; pageSize?: number }) =>
-    service.get('/blog/v1/posts', { params }),
-  getPost: (id: number) =>
-    service.get(`/blog/v1/posts/${id}`),
-  createPost: (data: { title: string; content: string }) =>
-    service.post('/blog/v1/posts', data),
+  getPosts: (params?: { page?: number; pageSize?: number }) => service.get('/blog/v1/posts', { params }),
+  getPost: (id: number) => service.get(`/blog/v1/posts/${id}`),
+  createPost: (data: { title: string; content: string }) => service.post('/blog/v1/posts', data),
   updatePost: (id: number, data: { title?: string; content?: string; status?: number }) =>
     service.put(`/blog/v1/posts/${id}`, data),
-  deletePost: (id: number) =>
-    service.delete(`/blog/v1/posts/${id}`),
+  deletePost: (id: number) => service.delete(`/blog/v1/posts/${id}`),
 
   // 评论
-  getComments: (postId: number) =>
-    service.get(`/blog/v1/posts/${postId}/comments`),
-  createComment: (postId: number, data: { content: string }) =>
-    service.post(`/blog/v1/posts/${postId}/comments`, data)
-}
+  getComments: (postId: number) => service.get(`/blog/v1/posts/${postId}/comments`),
+  createComment: (postId: number, data: { content: string }) => service.post(`/blog/v1/posts/${postId}/comments`, data)
+};
 ```
 
 ### 生成 Store
@@ -201,6 +200,7 @@ export const blogApi = {
 请根据以下需求生成完整的后端模块代码：
 
 ## 项目框架信息
+
 - 框架：Fastify v5 + Sequelize v6
 - 认证：Session-based（Cookie sid + Redis）
 - 权限：PBAC（createPermissionRegistry + defineRoles）
@@ -208,9 +208,11 @@ export const blogApi = {
 - 响应：reply.result.success/fail/unauth/forbidden
 
 ## 需求描述
+
 [你的业务需求]
 
 ## 输出要求
+
 1. 按项目规范生成所有文件
 2. 包含 config.js、permission/、models/、api/、dao/、services/
 3. 模型使用 field 映射（camelCase → snake_case）
@@ -224,6 +226,7 @@ export const blogApi = {
 请根据以下需求生成前端页面代码：
 
 ## 项目框架信息
+
 - 框架：Vue 3 + TypeScript + Pinia + Vue Router
 - HTTP：Axios（withCredentials: true）
 - 认证：Cookie 自动携带，authStore 管理状态
@@ -231,12 +234,15 @@ export const blogApi = {
 - 样式：Tailwind CSS + HSL 变量
 
 ## 后端接口
+
 [接口列表]
 
 ## 需求描述
+
 [页面功能需求]
 
 ## 输出要求
+
 1. 使用 <script setup lang="ts">
 2. 使用 Composition API
 3. 包含完整的类型定义
@@ -286,14 +292,14 @@ export const blogApi = {
 
 ## 常见生成场景
 
-| 场景 | 输入 | 输出 |
-|------|------|------|
-| 新建应用 | 业务需求描述 | 完整的应用目录（config + permission + models + api） |
-| 新增接口 | 接口路径 + 参数 + 权限 | 路由文件 + Schema 定义 |
-| 新增模型 | 字段列表 + 关系 | 模型文件 + 迁移文件 |
-| 新增页面 | 页面功能 + 接口列表 | Vue 组件 + API 模块 + Store |
-| 新增权限 | 权限编码 + 角色 | permission/index.js + roles.js |
-| 代码重构 | 现有代码 + 改进目标 | 重构后的代码 |
+| 场景     | 输入                   | 输出                                                 |
+| -------- | ---------------------- | ---------------------------------------------------- |
+| 新建应用 | 业务需求描述           | 完整的应用目录（config + permission + models + api） |
+| 新增接口 | 接口路径 + 参数 + 权限 | 路由文件 + Schema 定义                               |
+| 新增模型 | 字段列表 + 关系        | 模型文件 + 迁移文件                                  |
+| 新增页面 | 页面功能 + 接口列表    | Vue 组件 + API 模块 + Store                          |
+| 新增权限 | 权限编码 + 角色        | permission/index.js + roles.js                       |
+| 代码重构 | 现有代码 + 改进目标    | 重构后的代码                                         |
 
 ---
 

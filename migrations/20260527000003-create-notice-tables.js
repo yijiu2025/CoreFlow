@@ -7,7 +7,7 @@
 export async function up({ queryInterface, Sequelize }) {
   async function createTableIfNotExists(tableName, columns) {
     const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
-    const exists = tables.some((t) => Object.values(t)[0] === tableName);
+    const exists = tables.some(t => Object.values(t)[0] === tableName);
     if (!exists) await queryInterface.createTable(tableName, columns);
   }
 
@@ -28,7 +28,11 @@ export async function up({ queryInterface, Sequelize }) {
     session_id: { type: Sequelize.STRING(64), allowNull: true, comment: '会话ID' },
     expired_at: { type: Sequelize.DATE, allowNull: false, comment: '过期时间' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
   await addIndexIfNotExists('notice_email_codes', ['email', 'code', 'status'], { name: 'idx_email_code_status' });
@@ -40,7 +44,11 @@ export async function up({ queryInterface, Sequelize }) {
     description: { type: Sequelize.STRING(255), allowNull: true },
     category: { type: Sequelize.STRING(32), allowNull: true, defaultValue: 'email' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 }
 

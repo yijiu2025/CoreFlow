@@ -70,55 +70,124 @@
 </template>
 
 <script setup lang="ts">
-import { X, Wrench, PenLine, Search, Pencil, BookOpen } from 'lucide-vue-next'
+import { X, Wrench, PenLine, Search, Pencil, BookOpen } from 'lucide-vue-next';
 
 defineProps<{
-  isOpen: boolean
-}>()
+  isOpen: boolean;
+}>();
 
-defineEmits(['close'])
+defineEmits(['close']);
 </script>
 
 <style scoped>
 .help-overlay {
-  position: fixed; inset: 0; z-index: 200;
-  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-  display: flex; align-items: center; justify-content: center;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 20px;
 }
 .help-modal {
-  width: 100%; max-width: 520px; max-height: 80vh;
+  width: 100%;
+  max-width: 520px;
+  max-height: 80vh;
   background: linear-gradient(145deg, #1a1a2e, #16162a);
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
-  overflow: hidden; display: flex; flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 .help-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.help-header h2 { font-size: 16px; font-weight: 600; color: #e2e8f0; margin: 0; }
+.help-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0;
+}
 .help-close {
-  width: 28px; height: 28px; background: none; border: none;
-  color: #64748b; cursor: pointer; border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.15s;
 }
-.help-close:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
-.help-body { padding: 20px; overflow-y: auto; }
-.help-section { margin-bottom: 20px; }
-.help-section:last-child { margin-bottom: 0; }
-.help-section h3 { font-size: 13px; font-weight: 600; color: #94a3b8; margin: 0 0 12px 0; }
-.shortcut-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.shortcut-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
-.shortcut-item kbd {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 24px; height: 22px; padding: 0 6px;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 4px; font-size: 11px; font-family: 'Inter', monospace; color: #94a3b8;
+.help-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
 }
-.shortcut-item span { margin-left: auto; }
-.help-list { margin: 0; padding: 0 0 0 16px; }
-.help-list li { font-size: 13px; color: #94a3b8; line-height: 1.8; }
-.help-list li b { color: #e2e8f0; }
+.help-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+.help-section {
+  margin-bottom: 20px;
+}
+.help-section:last-child {
+  margin-bottom: 0;
+}
+.help-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin: 0 0 12px 0;
+}
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+.shortcut-item kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'Inter', monospace;
+  color: #94a3b8;
+}
+.shortcut-item span {
+  margin-left: auto;
+}
+.help-list {
+  margin: 0;
+  padding: 0 0 0 16px;
+}
+.help-list li {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.8;
+}
+.help-list li b {
+  color: #e2e8f0;
+}
 </style>

@@ -42,16 +42,16 @@ CoreFlow 是一个基于 **Fastify v5 + Sequelize v6 + Vue 3** 构建的企业�
 
 ## 技术栈
 
-| 层级 | 技术 | 版本 |
-|------|------|------|
-| 运行时 | Node.js | ESM |
-| 框架 | Fastify | v5 |
-| ORM | Sequelize | v6 |
-| 数据库 | MySQL | 8.0+ |
-| 缓存 | Redis | v5 (node-redis) |
-| 前端 | Vue 3 + Vite + TypeScript | - |
-| 认证 | Session + JWT | - |
-| 迁移 | Umzug | v3 |
+| 层级   | 技术                      | 版本            |
+| ------ | ------------------------- | --------------- |
+| 运行时 | Node.js                   | ESM             |
+| 框架   | Fastify                   | v5              |
+| ORM    | Sequelize                 | v6              |
+| 数据库 | MySQL                     | 8.0+            |
+| 缓存   | Redis                     | v5 (node-redis) |
+| 前端   | Vue 3 + Vite + TypeScript | -               |
+| 认证   | Session + JWT             | -               |
+| 迁移   | Umzug                     | v3              |
 
 ## 设计理念
 

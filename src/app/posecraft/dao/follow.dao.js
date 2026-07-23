@@ -186,9 +186,10 @@ class FollowDao {
       worksCount = await Work.count({
         where: { user_id: userId, delete_version: 0 }
       });
-      likesCount = await Work.sum('likes_count', {
-        where: { user_id: userId, delete_version: 0 }
-      }) || 0;
+      likesCount =
+        (await Work.sum('likes_count', {
+          where: { user_id: userId, delete_version: 0 }
+        })) || 0;
     }
     return { worksCount, likesCount };
   }

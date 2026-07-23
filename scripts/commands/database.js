@@ -80,7 +80,7 @@ export async function dbTableInfo() {
     console.log('  列名'.padEnd(25) + '类型'.padEnd(25) + '允许空'.padEnd(10) + '键');
     printLine(80);
 
-    columns.forEach((col) => {
+    columns.forEach(col => {
       const key = col.Key === 'PRI' ? '🔑 主键' : col.Key === 'MUL' ? '🔗 索引' : col.Key === 'UNI' ? '✨ 唯一' : '';
       console.log(
         `  ${col.Field.padEnd(23)}${col.Type.padEnd(23)}${(col.Null === 'YES' ? '是' : '否').padEnd(8)}${key}`

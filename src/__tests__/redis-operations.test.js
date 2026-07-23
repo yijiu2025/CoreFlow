@@ -29,7 +29,7 @@ describe('Redis 操作', () => {
     });
 
     it('session TTL 正确设置', () => {
-      const SHORT_TTL = 1800;   // 30 分钟
+      const SHORT_TTL = 1800; // 30 分钟
       const LONG_TTL = 2592000; // 30 天
       expect(SHORT_TTL).toBeLessThan(LONG_TTL);
     });

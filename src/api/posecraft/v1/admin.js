@@ -51,7 +51,7 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const id = request.params.id;
       const { status } = request.body;
-      
+
       if (![1, -2].includes(status)) {
         return reply.result.fail('非法的审核状态');
       }
@@ -98,7 +98,7 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const id = request.params.id;
       const { status } = request.body;
-      
+
       if (![1, -2].includes(status)) {
         return reply.result.fail('非法的审核状态');
       }
@@ -139,8 +139,16 @@ export default async function (fastify) {
     permission: 'posecraft:banner:manage',
     handler: async (request, reply) => {
       const {
-        title, description, badge_text, button_text,
-        image_url, link_url, sort_order, enabled, start_at, end_at
+        title,
+        description,
+        badge_text,
+        button_text,
+        image_url,
+        link_url,
+        sort_order,
+        enabled,
+        start_at,
+        end_at
       } = request.body;
 
       if (!title) {
@@ -225,10 +233,8 @@ export default async function (fastify) {
     requireLogin: true,
     permission: 'posecraft:channel:manage',
     handler: async (request, reply) => {
-      const {
-        value, label, icon, type, url, route, category,
-        has_banner, sort_order, enabled, start_at, end_at
-      } = request.body;
+      const { value, label, icon, type, url, route, category, has_banner, sort_order, enabled, start_at, end_at } =
+        request.body;
 
       if (!value || !label) {
         return reply.result.fail('value 和 label 不能为空', null, 400);

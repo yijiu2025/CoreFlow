@@ -70,6 +70,7 @@ cd firewall && npm run dev
 ```
 
 访问：
+
 - 后端 API：`http://localhost:3000`
 - 前端面板：`http://localhost:5173`
 
@@ -120,6 +121,7 @@ npm run revoke:admin -- --email user@example.com
 ```
 
 安全机制：
+
 - 自动检查是否为最后一个 superadmin（防止锁死系统）
 - 默认需要确认，`--force` 可跳过
 - 撤销后自动清除 Redis session

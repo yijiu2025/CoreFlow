@@ -21,9 +21,7 @@ export default async function (fastify) {
 
   // 安全头处理：允许特定页面被 iframe 嵌入
   fastify.addHook('onSend', (request, reply, payload, done) => {
-    const isMini =
-      request.url.includes('mini-login') ||
-      request.url.includes('mini-register');
+    const isMini = request.url.includes('mini-login') || request.url.includes('mini-register');
     if (isMini) {
       reply.header('X-Frame-Options', 'ALLOWALL');
       reply.header('Content-Security-Policy', "frame-ancestors 'self' *");

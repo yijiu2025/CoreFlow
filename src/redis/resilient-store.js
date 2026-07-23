@@ -36,7 +36,7 @@ export class ResilientStore {
 
     // 监听全局健康状态变化
     if (app.onRedisHealthChange) {
-      app.onRedisHealthChange((state) => {
+      app.onRedisHealthChange(state => {
         this.healthy = state;
         if (state) {
           this.log.info?.('[Redis] 限流器切回分布式模式');

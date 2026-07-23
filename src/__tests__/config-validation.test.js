@@ -41,7 +41,7 @@ describe('配置验证', () => {
     });
 
     it('TTL 配置正确', () => {
-      const SHORT_SESSION_TTL = 1800;   // 30 分钟
+      const SHORT_SESSION_TTL = 1800; // 30 分钟
       const LONG_SESSION_TTL = 2592000; // 30 天
       const REFRESH_TOKEN_TTL = 2592000; // 30 天
       expect(SHORT_SESSION_TTL).toBeLessThan(LONG_SESSION_TTL);

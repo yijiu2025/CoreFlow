@@ -1,5 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import BlankLayout from '@/layouts/BlankLayout.vue'
+import { createRouter, createWebHistory } from 'vue-router';
+import BlankLayout from '@/layouts/BlankLayout.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -59,14 +59,14 @@ const router = createRouter({
       ]
     }
   ]
-})
+});
 
 // 路由守卫
-router.beforeEach((to) => {
+router.beforeEach(to => {
   // 动态标题
   if (to.meta.title) {
-    document.title = `${to.meta.title} | Enterprise SSO`
+    document.title = `${to.meta.title} | Enterprise SSO`;
   }
-})
+});
 
-export default router
+export default router;

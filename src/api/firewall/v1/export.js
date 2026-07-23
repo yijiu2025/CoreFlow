@@ -8,7 +8,12 @@
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { getActiveBlocks, getActiveWhitelist, setBlock, setWhitelist } from '../../../app/firewall/dao/block-manager.js';
+import {
+  getActiveBlocks,
+  getActiveWhitelist,
+  setBlock,
+  setWhitelist
+} from '../../../app/firewall/dao/block-manager.js';
 
 export default async function (fastify) {
   registerGroupMetadata({

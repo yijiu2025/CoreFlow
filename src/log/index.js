@@ -46,9 +46,7 @@ export class Logger {
     if (pino) {
       pino.info(logData, `[AuthLog] ${event}`);
     } else {
-      console.log(
-        JSON.stringify({ level: 'info', msg: `[AuthLog] ${event}`, ...logData })
-      );
+      console.log(JSON.stringify({ level: 'info', msg: `[AuthLog] ${event}`, ...logData }));
     }
   }
 
@@ -60,9 +58,7 @@ export class Logger {
     if (pino) {
       pino.info({ ...data, requestId }, message);
     } else {
-      console.log(
-        JSON.stringify({ level: 'info', msg: message, requestId, ...data })
-      );
+      console.log(JSON.stringify({ level: 'info', msg: message, requestId, ...data }));
     }
   }
 
@@ -87,9 +83,7 @@ export class Logger {
     if (pino) {
       pino.warn({ ...data, requestId }, message);
     } else {
-      console.warn(
-        JSON.stringify({ level: 'warn', msg: message, requestId, ...data })
-      );
+      console.warn(JSON.stringify({ level: 'warn', msg: message, requestId, ...data }));
     }
   }
 }

@@ -22,21 +22,25 @@ function ensurePatternsCompiled() {
   if (hash === lastConfigHash) return;
   lastConfigHash = hash;
 
-  compiledBotPatterns = (settings.botPatterns || []).map((p) => {
-    try {
-      return new RegExp(p, 'i');
-    } catch {
-      return null;
-    }
-  }).filter(Boolean);
+  compiledBotPatterns = (settings.botPatterns || [])
+    .map(p => {
+      try {
+        return new RegExp(p, 'i');
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
 
-  compiledBrowserPatterns = (settings.browserPatterns || []).map((p) => {
-    try {
-      return new RegExp(p, 'i');
-    } catch {
-      return null;
-    }
-  }).filter(Boolean);
+  compiledBrowserPatterns = (settings.browserPatterns || [])
+    .map(p => {
+      try {
+        return new RegExp(p, 'i');
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -51,29 +55,38 @@ export const checkBotChallenge = async (redisClient, ip, ua, requestCount) => {
   if (!ua) {
     if (requestCount > (settings.botChallengeNoUaLimit || 10)) {
       await setBlock(redisClient, ip, {
-        status: 'CHALLENGE', source: 'auto', permanent: false,
-        createdAt: now, expiresAt: now + 1800 * 1000
+        status: 'CHALLENGE',
+        source: 'auto',
+        permanent: false,
+        createdAt: now,
+        expiresAt: now + 1800 * 1000
       });
       return true;
     }
     return false;
   }
 
-  const isBotUA = compiledBotPatterns.some((p) => p.test(ua));
-  const isBrowserUA = compiledBrowserPatterns.some((p) => p.test(ua));
+  const isBotUA = compiledBotPatterns.some(p => p.test(ua));
+  const isBrowserUA = compiledBrowserPatterns.some(p => p.test(ua));
 
   if (isBotUA && requestCount > (settings.botChallengeBotLimit || 30)) {
     await setBlock(redisClient, ip, {
-      status: 'CHALLENGE', source: 'auto', permanent: false,
-      createdAt: now, expiresAt: now + 1800 * 1000
+      status: 'CHALLENGE',
+      source: 'auto',
+      permanent: false,
+      createdAt: now,
+      expiresAt: now + 1800 * 1000
     });
     return true;
   }
 
   if (isBrowserUA && requestCount > (settings.botChallengeBrowserLimit || 120)) {
     await setBlock(redisClient, ip, {
-      status: 'CHALLENGE', source: 'auto', permanent: false,
-      createdAt: now, expiresAt: now + 1800 * 1000
+      status: 'CHALLENGE',
+      source: 'auto',
+      permanent: false,
+      createdAt: now,
+      expiresAt: now + 1800 * 1000
     });
     return true;
   }

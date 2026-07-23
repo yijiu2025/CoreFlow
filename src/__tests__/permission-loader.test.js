@@ -62,7 +62,11 @@ describe('permission-loader', () => {
     function extractPermissions(policy, allows, denies) {
       if (!policy) return;
       if (typeof policy === 'string') {
-        try { policy = JSON.parse(policy); } catch { return; }
+        try {
+          policy = JSON.parse(policy);
+        } catch {
+          return;
+        }
       }
       if (Array.isArray(policy.Statement)) {
         for (const stmt of policy.Statement) {
@@ -79,10 +83,7 @@ describe('permission-loader', () => {
     it('解析 Statement 格式 - Allow', () => {
       const allows = [];
       const denies = [];
-      extractPermissions(
-        { Statement: [{ Effect: 'Allow', Action: ['fw:admin:*'] }] },
-        allows, denies
-      );
+      extractPermissions({ Statement: [{ Effect: 'Allow', Action: ['fw:admin:*'] }] }, allows, denies);
       expect(allows).toEqual(['fw:admin:*']);
       expect(denies).toEqual([]);
     });
@@ -90,10 +91,7 @@ describe('permission-loader', () => {
     it('解析 Statement 格式 - Deny', () => {
       const allows = [];
       const denies = [];
-      extractPermissions(
-        { Statement: [{ Effect: 'Deny', Action: ['user:delete'] }] },
-        allows, denies
-      );
+      extractPermissions({ Statement: [{ Effect: 'Deny', Action: ['user:delete'] }] }, allows, denies);
       expect(allows).toEqual([]);
       expect(denies).toEqual(['user:delete']);
     });
@@ -101,12 +99,16 @@ describe('permission-loader', () => {
     it('解析 Statement 格式 - 混合', () => {
       const allows = [];
       const denies = [];
-      extractPermissions({
-        Statement: [
-          { Effect: 'Allow', Action: ['fw:read', 'fw:write'] },
-          { Effect: 'Deny', Action: ['fw:delete'] }
-        ]
-      }, allows, denies);
+      extractPermissions(
+        {
+          Statement: [
+            { Effect: 'Allow', Action: ['fw:read', 'fw:write'] },
+            { Effect: 'Deny', Action: ['fw:delete'] }
+          ]
+        },
+        allows,
+        denies
+      );
       expect(allows).toEqual(['fw:read', 'fw:write']);
       expect(denies).toEqual(['fw:delete']);
     });
@@ -114,20 +116,14 @@ describe('permission-loader', () => {
     it('解析 JSON 字符串格式', () => {
       const allows = [];
       const denies = [];
-      extractPermissions(
-        '{"Statement":[{"Effect":"Allow","Action":["*"]}]}',
-        allows, denies
-      );
+      extractPermissions('{"Statement":[{"Effect":"Allow","Action":["*"]}]}', allows, denies);
       expect(allows).toEqual(['*']);
     });
 
     it('解析直接格式 allows/denies', () => {
       const allows = [];
       const denies = [];
-      extractPermissions(
-        { allows: ['user:read'], denies: ['user:delete'] },
-        allows, denies
-      );
+      extractPermissions({ allows: ['user:read'], denies: ['user:delete'] }, allows, denies);
       expect(allows).toEqual(['user:read']);
       expect(denies).toEqual(['user:delete']);
     });
@@ -151,10 +147,7 @@ describe('permission-loader', () => {
     it('Action 为字符串时转为数组', () => {
       const allows = [];
       const denies = [];
-      extractPermissions(
-        { Statement: [{ Effect: 'Allow', Action: 'single:action' }] },
-        allows, denies
-      );
+      extractPermissions({ Statement: [{ Effect: 'Allow', Action: 'single:action' }] }, allows, denies);
       expect(allows).toEqual(['single:action']);
     });
   });

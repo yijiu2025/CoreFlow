@@ -15,8 +15,8 @@
         <!-- 搜索按钮 -->
         <button class="search-btn-float">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </button>
       </div>
@@ -25,7 +25,8 @@
       <div class="search-row-actions">
         <button class="search-plus-btn" @click="$emit('handleStartCreate')" title="创作">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
         </button>
         <div class="search-divider-v"></div>
@@ -34,14 +35,17 @@
 
       <!-- 推荐面板 -->
       <div class="search-suggestions-inner" v-show="searchFocused && !showNavSearch">
-        <div class="suggest-divider" style="margin-top: 0;"></div>
+        <div class="suggest-divider" style="margin-top: 0"></div>
         <div class="suggest-header">猜你想搜</div>
         <div class="suggest-grid">
           <button
             v-for="word in searchSuggestions"
             :key="word"
             class="suggest-item"
-            @mousedown.prevent="searchQuery = word; searchFocused = false"
+            @mousedown.prevent="
+              searchQuery = word;
+              searchFocused = false;
+            "
           >
             {{ word }}
           </button>
@@ -52,26 +56,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref } from 'vue';
 
-const searchQuery = defineModel<string>('searchQuery', { required: true })
-const searchFocused = defineModel<boolean>('searchFocused', { required: true })
+const searchQuery = defineModel<string>('searchQuery', { required: true });
+const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 
 defineProps<{
-  searchSuggestions: string[]
-  showNavSearch: boolean
-}>()
+  searchSuggestions: string[];
+  showNavSearch: boolean;
+}>();
 
 defineEmits<{
-  (e: 'blur'): void
-  (e: 'handleStartCreate'): void
-}>()
+  (e: 'blur'): void;
+  (e: 'handleStartCreate'): void;
+}>();
 
-const sentinelRef = ref<HTMLElement | null>(null)
+const sentinelRef = ref<HTMLElement | null>(null);
 
 defineExpose({
   sentinelRef
-})
+});
 </script>
 
 <style scoped>
@@ -103,7 +107,10 @@ defineExpose({
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   overflow: visible;
   z-index: 10;
-  transition: border-radius 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    border-radius 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .dark-mode .search-hero-bar {
@@ -116,12 +123,16 @@ defineExpose({
   z-index: 20;
   border-radius: 16px 16px 0 0;
   border-color: #ff2442;
-  box-shadow: 0 0 0 3px rgba(255, 36, 66, 0.08), 0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 0 0 3px rgba(255, 36, 66, 0.08),
+    0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .dark-mode .search-hero-bar.focused {
   border-color: #ff6b6b;
-  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.15), 0 1px 4px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 0 0 3px rgba(255, 107, 107, 0.15),
+    0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 .search-row-input {
@@ -166,7 +177,9 @@ defineExpose({
   color: #64748b;
   cursor: pointer;
   flex-shrink: 0;
-  transition: color 0.2s, background 0.2s;
+  transition:
+    color 0.2s,
+    background 0.2s;
   border-radius: 8px;
 }
 
@@ -297,7 +310,9 @@ defineExpose({
   opacity: 0;
   transform: translateY(-12px);
   pointer-events: none;
-  transition: opacity 0.22s ease, transform 0.22s ease;
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
 }
 
 .search-hero-bar.focused .search-suggestions-inner {
@@ -410,6 +425,5 @@ defineExpose({
     height: 28px;
     right: 6px;
   }
-
 }
 </style>

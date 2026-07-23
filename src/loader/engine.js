@@ -38,7 +38,7 @@ export async function runEngine(app) {
   }
 
   const files = await fs.readdir(registryDir);
-  const sortedFiles = files.filter((f) => f.endsWith('.js')).sort();
+  const sortedFiles = files.filter(f => f.endsWith('.js')).sort();
 
   /** 每个模块加载超时时间（毫秒） */
   const LOAD_TIMEOUT = 30000;
@@ -79,7 +79,7 @@ export async function runEngine(app) {
   // 非关键错误汇总报告
   if (loadErrors.length > 0) {
     console.warn(`\n⚠️ [Loader] ${C.yellow}以下加载项出错（非致命）：${C.reset}`);
-    loadErrors.forEach((e) => console.warn(`  • [${e.file}] ${e.message}`));
+    loadErrors.forEach(e => console.warn(`  • [${e.file}] ${e.message}`));
   }
 
   return {

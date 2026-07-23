@@ -1,1 +1,8 @@
-.modal-fade-enter-active[data-v-62f4f0c9],.modal-fade-leave-active[data-v-62f4f0c9]{transition:opacity .3s ease}.modal-fade-enter-from[data-v-62f4f0c9],.modal-fade-leave-to[data-v-62f4f0c9]{opacity:0}
+.modal-fade-enter-active[data-v-62f4f0c9],
+.modal-fade-leave-active[data-v-62f4f0c9] {
+  transition: opacity 0.3s ease;
+}
+.modal-fade-enter-from[data-v-62f4f0c9],
+.modal-fade-leave-to[data-v-62f4f0c9] {
+  opacity: 0;
+}

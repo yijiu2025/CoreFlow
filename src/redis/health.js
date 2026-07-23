@@ -74,7 +74,7 @@ export function setupRedisHealthMonitor(app, redis) {
   });
 
   /** 注册健康状态变化回调，返回取消函数 */
-  app.decorate('onRedisHealthChange', (cb) => {
+  app.decorate('onRedisHealthChange', cb => {
     callbacks.add(cb);
     return () => callbacks.delete(cb);
   });

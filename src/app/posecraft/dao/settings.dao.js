@@ -50,7 +50,7 @@ class SettingsDao {
     } else {
       await Model.create({ user_id: userId, settings: JSON.stringify(merged) });
     }
-    return merged
+    return merged;
   }
 }
 

@@ -77,9 +77,7 @@ class GuardConfigDao {
           const latest = await this.loadFromDB();
           return this.saveToDB(configs, latest.version, retryCount + 1);
         }
-        throw new Error(
-          `版本冲突: 当前版本=${currentVersion}，数据库版本已被其他进程修改（已重试 ${MAX_RETRY} 次）`
-        );
+        throw new Error(`版本冲突: 当前版本=${currentVersion}，数据库版本已被其他进程修改（已重试 ${MAX_RETRY} 次）`);
       }
     }
 

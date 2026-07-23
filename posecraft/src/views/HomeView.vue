@@ -12,11 +12,7 @@
 <template>
   <div class="home-layout" :class="{ 'dark-mode': themeStore.isDark }">
     <!-- 左侧侧边栏导航 -->
-    <Sidebar
-      v-model:sidebarOpen="sidebarOpen"
-      :is-mobile="isMobile"
-      @showToast="showToast"
-    />
+    <Sidebar v-model:sidebarOpen="sidebarOpen" :is-mobile="isMobile" @showToast="showToast" />
 
     <!-- 右侧内容容器 -->
     <div class="main-container">
@@ -49,26 +45,24 @@
       </main>
 
       <!-- 回到顶部浮动按钮 -->
-      <button
-        v-show="showBackToTop"
-        class="back-to-top-btn"
-        @click="scrollToTop"
-        title="回到顶部"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="18 15 12 9 6 15"/>
+      <button v-show="showBackToTop" class="back-to-top-btn" @click="scrollToTop" title="回到顶部">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="18 15 12 9 6 15" />
         </svg>
       </button>
     </div>
 
     <!-- 移动端侧边栏遮罩层 -->
-    <div
-      v-if="sidebarOpen && isMobile"
-      class="sidebar-overlay"
-      @click="sidebarOpen = false"
-    ></div>
-
-
+    <div v-if="sidebarOpen && isMobile" class="sidebar-overlay" @click="sidebarOpen = false"></div>
 
     <!-- 系统设置 Modal（首次打开时才异步加载，减少首屏体积） -->
     <component
@@ -80,11 +74,7 @@
     />
 
     <!-- 关于弹窗（首次打开时异步加载） -->
-    <component
-      v-if="showAboutModal"
-      :is="AboutModal"
-      @close="showAboutModal = false"
-    />
+    <component v-if="showAboutModal" :is="AboutModal" @close="showAboutModal = false" />
 
     <!-- 简易通知 Toast 提示 -->
     <div v-if="toastMsg" class="toast-tip">
@@ -94,51 +84,54 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, shallowRef, defineAsyncComponent } from 'vue'
-import { useRoute } from 'vue-router'
-import { useThemeStore } from '@/stores/theme'
-import { useHome } from '@/composables/useHome'
-import Sidebar from '@/components/layouts/home/Sidebar.vue'
-import TopNav from '@/components/layouts/home/TopNav.vue'
+import { ref, computed, onMounted, onUnmounted, watch, shallowRef, defineAsyncComponent } from 'vue';
+import { useRoute } from 'vue-router';
+import { useThemeStore } from '@/stores/theme';
+import { useHome } from '@/composables/useHome';
+import Sidebar from '@/components/layouts/home/Sidebar.vue';
+import TopNav from '@/components/layouts/home/TopNav.vue';
 
 /** 系统设置 Modal：仅在首次打开时才异步加载（code-splitting，减少首屏 JS 体积） */
-const SettingsModal = shallowRef<any>(null)
+const SettingsModal = shallowRef<any>(null);
 const ensureSettingsModal = async () => {
   if (!SettingsModal.value) {
-    SettingsModal.value = defineAsyncComponent(() => import('@/components/modals/home/SettingsModal.vue'))
+    SettingsModal.value = defineAsyncComponent(() => import('@/components/modals/home/SettingsModal.vue'));
   }
-  return SettingsModal.value
-}
+  return SettingsModal.value;
+};
 
 /** 关于弹窗：同样异步加载 */
-const AboutModal = shallowRef<any>(null)
+const AboutModal = shallowRef<any>(null);
 const ensureAboutModal = async () => {
   if (!AboutModal.value) {
-    AboutModal.value = defineAsyncComponent(() => import('@/components/modals/home/AboutModal.vue'))
+    AboutModal.value = defineAsyncComponent(() => import('@/components/modals/home/AboutModal.vue'));
   }
-  return AboutModal.value
-}
+  return AboutModal.value;
+};
 
-const themeStore = useThemeStore()
-const route = useRoute()
+const themeStore = useThemeStore();
+const route = useRoute();
 
 // mine 页面 TopNav 透明度：在顶部时透明，滚动后不透明
-const mineAtTop = ref(true)
-const isMinePage = computed(() => route.path === '/mine' || route.path.endsWith('/mine'))
+const mineAtTop = ref(true);
+const isMinePage = computed(() => route.path === '/mine' || route.path.endsWith('/mine'));
 
 const onWindowScroll = () => {
   if (isMinePage.value) {
-    mineAtTop.value = window.scrollY < 10
+    mineAtTop.value = window.scrollY < 10;
   }
-}
+};
 
-onMounted(() => window.addEventListener('scroll', onWindowScroll, { passive: true }))
-onUnmounted(() => window.removeEventListener('scroll', onWindowScroll))
+onMounted(() => window.addEventListener('scroll', onWindowScroll, { passive: true }));
+onUnmounted(() => window.removeEventListener('scroll', onWindowScroll));
 
 // 路由切换时重置
-watch(() => route.path, () => {
-  mineAtTop.value = true
-})
+watch(
+  () => route.path,
+  () => {
+    mineAtTop.value = true;
+  }
+);
 
 // 使用主逻辑 Composable
 const {
@@ -177,17 +170,25 @@ const {
   loadMore,
   showBackToTop,
   searchSuggestions
-} = useHome()
+} = useHome();
 
 // 设置 Modal 首次打开时才异步加载组件
-watch(showSettingsModal, (visible) => {
-  if (visible) ensureSettingsModal()
-}, { immediate: true })
+watch(
+  showSettingsModal,
+  visible => {
+    if (visible) ensureSettingsModal();
+  },
+  { immediate: true }
+);
 
 // 关于弹窗首次打开时才异步加载
-watch(showAboutModal, (visible) => {
-  if (visible) ensureAboutModal()
-}, { immediate: true })
+watch(
+  showAboutModal,
+  visible => {
+    if (visible) ensureAboutModal();
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>
@@ -197,8 +198,10 @@ watch(showAboutModal, (visible) => {
   display: flex;
   background: #ffffff;
   color: #1e293b;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
-  transition: background-color 0.3s, color 0.3s;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'PingFang SC', sans-serif;
+  transition:
+    background-color 0.3s,
+    color 0.3s;
   position: relative;
 }
 
@@ -210,7 +213,7 @@ watch(showAboutModal, (visible) => {
 .main-container {
   margin-left: 220px;
   flex-grow: 1;
-  min-width: 0;         /* 防止 Tab 过多时被内容撑宽，允许缩小到视口宽度 */
+  min-width: 0; /* 防止 Tab 过多时被内容撑宽，允许缩小到视口宽度 */
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -318,8 +321,14 @@ watch(showAboutModal, (visible) => {
 }
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translate(-50%, 10px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 /* 回到顶部浮动按钮 */
@@ -373,8 +382,12 @@ watch(showAboutModal, (visible) => {
 }
 
 @keyframes overlayFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -469,5 +482,4 @@ watch(showAboutModal, (visible) => {
     transform: rotate(360deg);
   }
 }
-
 </style>

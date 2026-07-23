@@ -1,1 +1,242 @@
-import{d as C,A as w,c as l,b as i,p as $,y as r,e as z,f as M,t as d,s as k,n as h,k as S,l as B,o,Q as V}from"./index-C531BqZY.js";import{M as p}from"./map-pin-CeIDkRSF.js";import{_ as f}from"./_plugin-vue_export-helper-DTPmx0_K.js";const x=["src","alt"],I={key:1,class:"empty-base-bg"},N={key:2,class:"card-badge"},P={key:3,class:"card-badge video-badge"},A={key:4,class:"card-location-badge"},L={key:5,class:"template-warning-pill"},R={class:"card-info"},W={class:"card-title"},H={class:"card-footer"},U={class:"card-author"},j={class:"author-avatar"},D=["src","alt"],E={key:1},F={class:"author-name"},Q={class:"card-likes-fav-wrapper"},T=["fill"],_=["fill"],q=C({__name:"PoseCard",props:{item:{}},emits:["click","like","collect"],setup(t){const n=t,g=S(()=>{var a,e;return((a=n.item)==null?void 0:a.type)==="template"||!!((e=n.item)!=null&&e.is_template_work)}),c=B("4/5"),y=a=>{if(!a)return;const e=a.match(/\/400\/(\d+)/);if(e!=null&&e[1]){c.value=`400 / ${parseInt(e[1])}`;return}const s=new Image;s.onload=()=>{s.naturalWidth>0&&s.naturalHeight>0&&(c.value=`${s.naturalWidth} / ${s.naturalHeight}`)},s.onerror=()=>{},s.src=a};w(()=>{var e,s;const a=((e=n.item)==null?void 0:e.image_url)||((s=n.item)==null?void 0:s.thumbnail_url);y(a)});const b=a=>a?a>=1e4?(a/1e4).toFixed(1)+"万":a.toString():"0";return(a,e)=>{var s,m,u;return o(),l("div",{class:"card",onClick:e[2]||(e[2]=v=>a.$emit("click",t.item))},[i("div",{class:"card-image",style:$({aspectRatio:c.value})},[t.item.image_url?(o(),l("img",{key:0,src:t.item.image_url,alt:t.item.title,class:"base-image",loading:"lazy",decoding:"async"},null,8,x)):(o(),l("div",I)),t.item.type==="template"||g.value?(o(),l("div",N,"模板")):t.item.type==="video"?(o(),l("div",P,"视频")):r("",!0),t.item.distance?(o(),l("div",A,[z(M(p),{size:12,class:"location-pin"}),i("span",null,d(t.item.distance),1)])):r("",!0),t.item.template_deleted||t.item.template_status===-1||t.item.template_status===0||t.item.template_status===-2?(o(),l("div",L,"模板已失效")):r("",!0)],4),i("div",R,[i("h3",W,d(t.item.title||"未命名作品"),1),i("div",H,[i("div",U,[i("div",j,[(s=t.item.author)!=null&&s.avatar?(o(),l("img",{key:0,src:t.item.author.avatar,alt:t.item.author.username,class:"author-avatar-img"},null,8,D)):(o(),l("span",E,d((((m=t.item.author)==null?void 0:m.username)||"U").charAt(0).toUpperCase()),1))]),i("span",F,d(((u=t.item.author)==null?void 0:u.username)||"匿名用户"),1)]),i("div",Q,[i("div",{class:h(["card-likes",{liked:t.item.liked}]),onClick:e[0]||(e[0]=k(v=>a.$emit("like",t.item),["stop"]))},[(o(),l("svg",{width:"12",height:"12",viewBox:"0 0 24 24",fill:t.item.liked?"#ff2442":"none",stroke:"currentColor","stroke-width":"2"},[...e[3]||(e[3]=[i("path",{d:"M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"},null,-1)])],8,T)),i("span",null,d(b(t.item.likes_count)),1)],2),i("button",{class:h(["card-fav",{favorited:t.item.collected}]),onClick:e[1]||(e[1]=k(v=>a.$emit("collect",t.item),["stop"])),title:"收藏"},[(o(),l("svg",{width:"12",height:"12",viewBox:"0 0 24 24",fill:t.item.collected?"#fbbf24":"none",stroke:"currentColor","stroke-width":"2","stroke-linecap":"round","stroke-linejoin":"round"},[...e[4]||(e[4]=[i("path",{d:"M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"},null,-1)])],8,_))],2)])])])])}}}),Z=f(q,[["__scopeId","data-v-83d6a451"]]),G={},J={class:"skeleton-card"};function K(t,n){return o(),l("div",J,[...n[0]||(n[0]=[V('<div class="skeleton-image animate-pulse" data-v-a7427252></div><div class="skeleton-info" data-v-a7427252><div class="skeleton-title animate-pulse" data-v-a7427252></div><div class="skeleton-footer" data-v-a7427252><div class="skeleton-avatar animate-pulse" data-v-a7427252></div><div class="skeleton-likes animate-pulse" data-v-a7427252></div></div></div>',2)])])}const tt=f(G,[["render",K],["__scopeId","data-v-a7427252"]]);export{Z as P,tt as S};
+import {
+  d as C,
+  A as w,
+  c as l,
+  b as i,
+  p as $,
+  y as r,
+  e as z,
+  f as M,
+  t as d,
+  s as k,
+  n as h,
+  k as S,
+  l as B,
+  o,
+  Q as V
+} from './index-C531BqZY.js';
+import { M as p } from './map-pin-CeIDkRSF.js';
+import { _ as f } from './_plugin-vue_export-helper-DTPmx0_K.js';
+const x = ['src', 'alt'],
+  I = { key: 1, class: 'empty-base-bg' },
+  N = { key: 2, class: 'card-badge' },
+  P = { key: 3, class: 'card-badge video-badge' },
+  A = { key: 4, class: 'card-location-badge' },
+  L = { key: 5, class: 'template-warning-pill' },
+  R = { class: 'card-info' },
+  W = { class: 'card-title' },
+  H = { class: 'card-footer' },
+  U = { class: 'card-author' },
+  j = { class: 'author-avatar' },
+  D = ['src', 'alt'],
+  E = { key: 1 },
+  F = { class: 'author-name' },
+  Q = { class: 'card-likes-fav-wrapper' },
+  T = ['fill'],
+  _ = ['fill'],
+  q = C({
+    __name: 'PoseCard',
+    props: { item: {} },
+    emits: ['click', 'like', 'collect'],
+    setup(t) {
+      const n = t,
+        g = S(() => {
+          var a, e;
+          return (
+            ((a = n.item) == null ? void 0 : a.type) === 'template' || !!((e = n.item) != null && e.is_template_work)
+          );
+        }),
+        c = B('4/5'),
+        y = a => {
+          if (!a) return;
+          const e = a.match(/\/400\/(\d+)/);
+          if (e != null && e[1]) {
+            c.value = `400 / ${parseInt(e[1])}`;
+            return;
+          }
+          const s = new Image();
+          ((s.onload = () => {
+            s.naturalWidth > 0 && s.naturalHeight > 0 && (c.value = `${s.naturalWidth} / ${s.naturalHeight}`);
+          }),
+            (s.onerror = () => {}),
+            (s.src = a));
+        };
+      w(() => {
+        var e, s;
+        const a = ((e = n.item) == null ? void 0 : e.image_url) || ((s = n.item) == null ? void 0 : s.thumbnail_url);
+        y(a);
+      });
+      const b = a => (a ? (a >= 1e4 ? (a / 1e4).toFixed(1) + '万' : a.toString()) : '0');
+      return (a, e) => {
+        var s, m, u;
+        return (
+          o(),
+          l('div', { class: 'card', onClick: e[2] || (e[2] = v => a.$emit('click', t.item)) }, [
+            i(
+              'div',
+              { class: 'card-image', style: $({ aspectRatio: c.value }) },
+              [
+                t.item.image_url
+                  ? (o(),
+                    l(
+                      'img',
+                      {
+                        key: 0,
+                        src: t.item.image_url,
+                        alt: t.item.title,
+                        class: 'base-image',
+                        loading: 'lazy',
+                        decoding: 'async'
+                      },
+                      null,
+                      8,
+                      x
+                    ))
+                  : (o(), l('div', I)),
+                t.item.type === 'template' || g.value
+                  ? (o(), l('div', N, '模板'))
+                  : t.item.type === 'video'
+                    ? (o(), l('div', P, '视频'))
+                    : r('', !0),
+                t.item.distance
+                  ? (o(),
+                    l('div', A, [z(M(p), { size: 12, class: 'location-pin' }), i('span', null, d(t.item.distance), 1)]))
+                  : r('', !0),
+                t.item.template_deleted ||
+                t.item.template_status === -1 ||
+                t.item.template_status === 0 ||
+                t.item.template_status === -2
+                  ? (o(), l('div', L, '模板已失效'))
+                  : r('', !0)
+              ],
+              4
+            ),
+            i('div', R, [
+              i('h3', W, d(t.item.title || '未命名作品'), 1),
+              i('div', H, [
+                i('div', U, [
+                  i('div', j, [
+                    (s = t.item.author) != null && s.avatar
+                      ? (o(),
+                        l(
+                          'img',
+                          {
+                            key: 0,
+                            src: t.item.author.avatar,
+                            alt: t.item.author.username,
+                            class: 'author-avatar-img'
+                          },
+                          null,
+                          8,
+                          D
+                        ))
+                      : (o(),
+                        l(
+                          'span',
+                          E,
+                          d((((m = t.item.author) == null ? void 0 : m.username) || 'U').charAt(0).toUpperCase()),
+                          1
+                        ))
+                  ]),
+                  i('span', F, d(((u = t.item.author) == null ? void 0 : u.username) || '匿名用户'), 1)
+                ]),
+                i('div', Q, [
+                  i(
+                    'div',
+                    {
+                      class: h(['card-likes', { liked: t.item.liked }]),
+                      onClick: e[0] || (e[0] = k(v => a.$emit('like', t.item), ['stop']))
+                    },
+                    [
+                      (o(),
+                      l(
+                        'svg',
+                        {
+                          width: '12',
+                          height: '12',
+                          viewBox: '0 0 24 24',
+                          fill: t.item.liked ? '#ff2442' : 'none',
+                          stroke: 'currentColor',
+                          'stroke-width': '2'
+                        },
+                        [
+                          ...(e[3] ||
+                            (e[3] = [
+                              i(
+                                'path',
+                                {
+                                  d: 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z'
+                                },
+                                null,
+                                -1
+                              )
+                            ]))
+                        ],
+                        8,
+                        T
+                      )),
+                      i('span', null, d(b(t.item.likes_count)), 1)
+                    ],
+                    2
+                  ),
+                  i(
+                    'button',
+                    {
+                      class: h(['card-fav', { favorited: t.item.collected }]),
+                      onClick: e[1] || (e[1] = k(v => a.$emit('collect', t.item), ['stop'])),
+                      title: '收藏'
+                    },
+                    [
+                      (o(),
+                      l(
+                        'svg',
+                        {
+                          width: '12',
+                          height: '12',
+                          viewBox: '0 0 24 24',
+                          fill: t.item.collected ? '#fbbf24' : 'none',
+                          stroke: 'currentColor',
+                          'stroke-width': '2',
+                          'stroke-linecap': 'round',
+                          'stroke-linejoin': 'round'
+                        },
+                        [
+                          ...(e[4] ||
+                            (e[4] = [i('path', { d: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z' }, null, -1)]))
+                        ],
+                        8,
+                        _
+                      ))
+                    ],
+                    2
+                  )
+                ])
+              ])
+            ])
+          ])
+        );
+      };
+    }
+  }),
+  Z = f(q, [['__scopeId', 'data-v-83d6a451']]),
+  G = {},
+  J = { class: 'skeleton-card' };
+function K(t, n) {
+  return (
+    o(),
+    l('div', J, [
+      ...(n[0] ||
+        (n[0] = [
+          V(
+            '<div class="skeleton-image animate-pulse" data-v-a7427252></div><div class="skeleton-info" data-v-a7427252><div class="skeleton-title animate-pulse" data-v-a7427252></div><div class="skeleton-footer" data-v-a7427252><div class="skeleton-avatar animate-pulse" data-v-a7427252></div><div class="skeleton-likes animate-pulse" data-v-a7427252></div></div></div>',
+            2
+          )
+        ]))
+    ])
+  );
+}
+const tt = f(G, [
+  ['render', K],
+  ['__scopeId', 'data-v-a7427252']
+]);
+export { Z as P, tt as S };

@@ -8,10 +8,7 @@
  * - 验证码校验
  */
 
-import {
-  decrypt,
-  validateTimestamp
-} from '../../../../app/oauth21/crypto/encryption.js';
+import { decrypt, validateTimestamp } from '../../../../app/oauth21/crypto/encryption.js';
 import { captchaService } from '../../../../verify/captcha/index.js';
 import { emailDao } from '../../../../verify/email/index.js';
 import { getSessionStore } from '../../../../redis/session-store.js';

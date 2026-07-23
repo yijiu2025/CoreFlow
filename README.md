@@ -118,11 +118,11 @@ sequenceDiagram
 
 ### 三级守卫
 
-| 级别 | 来源 | 配置项 |
-|------|------|--------|
-| System | `system.json` | enabled, allowIps, requireLogin |
-| Group | `registerGroupMetadata()` | enabled, allowIps, allowRoles |
-| API | `registerSecureRoute()` | permission, requireLogin |
+| 级别   | 来源                      | 配置项                          |
+| ------ | ------------------------- | ------------------------------- |
+| System | `system.json`             | enabled, allowIps, requireLogin |
+| Group  | `registerGroupMetadata()` | enabled, allowIps, allowRoles   |
+| API    | `registerSecureRoute()`   | permission, requireLogin        |
 
 ### 权限匹配
 
@@ -172,25 +172,25 @@ superadmin (rank:99)    — 超级管理员（全局）
 
 ### 检测器
 
-| 检测器 | 功能 |
-|--------|------|
+| 检测器         | 功能                                    |
+| -------------- | --------------------------------------- |
 | `rate-limiter` | 滑窗限频（Redis sorted-set + 内存降级） |
-| `bot-detector` | UA 分析 + 行为模式识别 |
-| `brute-force` | 登录暴力破解防护 |
-| `scan-trap` | 404/403 扫描陷阱 |
-| `geo-filter` | 地理围栏 + GeoIP |
+| `bot-detector` | UA 分析 + 行为模式识别                  |
+| `brute-force`  | 登录暴力破解防护                        |
+| `scan-trap`    | 404/403 扫描陷阱                        |
+| `geo-filter`   | 地理围栏 + GeoIP                        |
 
 ---
 
 ## 数据库模型
 
-| 命名空间 | 模型 | 说明 |
-|----------|------|------|
-| `user` | User, UserIdentity | 用户 + 多源认证凭证 |
-| `iam` | Role, UserRole, InlinePolicy | PBAC 权限体系 |
-| `oauth21` | OauthClient, OauthCode, OauthToken, OauthApproval, OauthConsent | OAuth 2.1 全套 |
-| `session` | UserSession, SessionToken, SessionLog | 会话管理 |
-| `notice` | NoticeConfig, EmailCode | 通知配置 |
+| 命名空间  | 模型                                                            | 说明                |
+| --------- | --------------------------------------------------------------- | ------------------- |
+| `user`    | User, UserIdentity                                              | 用户 + 多源认证凭证 |
+| `iam`     | Role, UserRole, InlinePolicy                                    | PBAC 权限体系       |
+| `oauth21` | OauthClient, OauthCode, OauthToken, OauthApproval, OauthConsent | OAuth 2.1 全套      |
+| `session` | UserSession, SessionToken, SessionLog                           | 会话管理            |
+| `notice`  | NoticeConfig, EmailCode                                         | 通知配置            |
 
 ---
 
@@ -229,26 +229,26 @@ SMTP_PASSWORD=your_smtp_password
 
 ## API 模块
 
-| 模块 | 前缀 | 路由数 | 说明 |
-|------|------|:------:|------|
-| OAuth 2.1 | `/oauth2.1` | 21 | 授权、登录、Token、OIDC |
-| User | `/user` | 7 | 用户信息、权限、会话、头像 |
-| Admin | `/admin` | 6 | IAM 角色/策略管理 |
-| Auth | `/auth` | 4 | Session/Token 绑定 |
-| Notice | `/notice` | 4 | 通知配置 |
-| Verify | `/verify` | 4 | 验证码服务 |
-| Firewall | `/api/firewall` | 24 | 监控、封禁、配置 |
-| **总计** | | **97** | |
+| 模块      | 前缀            | 路由数 | 说明                       |
+| --------- | --------------- | :----: | -------------------------- |
+| OAuth 2.1 | `/oauth2.1`     |   21   | 授权、登录、Token、OIDC    |
+| User      | `/user`         |   7    | 用户信息、权限、会话、头像 |
+| Admin     | `/admin`        |   6    | IAM 角色/策略管理          |
+| Auth      | `/auth`         |   4    | Session/Token 绑定         |
+| Notice    | `/notice`       |   4    | 通知配置                   |
+| Verify    | `/verify`       |   4    | 验证码服务                 |
+| Firewall  | `/api/firewall` |   24   | 监控、封禁、配置           |
+| **总计**  |                 | **97** |                            |
 
 ---
 
 ## 前端应用
 
-| 应用 | 目录 | 端口 | 技术栈 | 功能 |
-|------|------|:----:|--------|------|
-| 防火墙 | `firewall/` | 5173 | Vue 3 + ECharts + Tailwind | 实时监控、封禁管理、安全配置 |
-| SSO 登录 | `oauth21/` | 5174 | Vue 3 + VeeValidate + Zod | 登录/注册/授权确认 |
-| 管理后台 | `admin/` | 5175 | Vue 3 + Tailwind | IAM 管理（扩展中） |
+| 应用     | 目录        | 端口 | 技术栈                     | 功能                         |
+| -------- | ----------- | :--: | -------------------------- | ---------------------------- |
+| 防火墙   | `firewall/` | 5173 | Vue 3 + ECharts + Tailwind | 实时监控、封禁管理、安全配置 |
+| SSO 登录 | `oauth21/`  | 5174 | Vue 3 + VeeValidate + Zod  | 登录/注册/授权确认           |
+| 管理后台 | `admin/`    | 5175 | Vue 3 + Tailwind           | IAM 管理（扩展中）           |
 
 ---
 

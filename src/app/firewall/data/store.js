@@ -264,9 +264,7 @@ export function clearAll() {
     pathStats: [],
     ipStats: []
   };
-  fs.promises
-    .writeFile(DATA_FILE, JSON.stringify(data), 'utf-8')
-    .catch((err) => {
-      console.error('[Firewall Store] 清空持久化数据失败:', err.message);
-    });
+  fs.promises.writeFile(DATA_FILE, JSON.stringify(data), 'utf-8').catch(err => {
+    console.error('[Firewall Store] 清空持久化数据失败:', err.message);
+  });
 }

@@ -10,12 +10,12 @@ export async function up({ queryInterface }) {
     sports: '🏆',
     composition: '📐',
     technique: '🔧'
-  }
+  };
   for (const [value, icon] of Object.entries(iconMap)) {
     await queryInterface.sequelize.query(
       `UPDATE posecraft_channel SET icon = :icon WHERE value = :value AND delete_version = 0`,
       { replacements: { icon, value } }
-    )
+    );
   }
 }
 
@@ -29,11 +29,11 @@ export async function down({ queryInterface }) {
     sports: 'TrophyOutlined',
     composition: 'AppstoreOutlined',
     technique: 'ToolOutlined'
-  }
+  };
   for (const [value, icon] of Object.entries(iconMap)) {
     await queryInterface.sequelize.query(
       `UPDATE posecraft_channel SET icon = :icon WHERE value = :value AND delete_version = 0`,
       { replacements: { icon, value } }
-    )
+    );
   }
 }

@@ -3,6 +3,7 @@
 ## 项目概述
 
 **PoseCraft** 是一个 AI 姿势分析 + 图片编辑应用，使用 TensorFlow.js 实现：
+
 - 人体姿态检测 (MoveNet)
 - 面部特征识别
 - 手部追踪
@@ -12,6 +13,7 @@
 ## 现状分析
 
 ### 当前架构
+
 ```
 phonecopy/
 ├── src/                    # Vue 3 前端
@@ -24,6 +26,7 @@ phonecopy/
 ```
 
 ### 问题
+
 1. 独立后端（Express + SQLite），未接入 CoreFlow
 2. 独立认证系统，未使用 CoreFlow Session/PBAC
 3. 前端未遵循 CoreFlow 规范（无 Pinia、无权限指令）
@@ -136,15 +139,15 @@ posecraft/                  # 独立前端项目
 
 #### 2.3 核心功能
 
-| 功能 | 技术方案 |
-|------|----------|
-| 姿势检测 | TensorFlow.js MoveNet |
-| 面部识别 | TensorFlow.js FaceMesh |
-| 手部追踪 | TensorFlow.js HandPose |
+| 功能     | 技术方案                       |
+| -------- | ------------------------------ |
+| 姿势检测 | TensorFlow.js MoveNet          |
+| 面部识别 | TensorFlow.js FaceMesh         |
+| 手部追踪 | TensorFlow.js HandPose         |
 | 人体分割 | TensorFlow.js BodySegmentation |
-| 图片编辑 | Fabric.js 5.x |
-| 相机捕获 | Capacitor Camera API |
-| 文件存储 | CoreFlow OSS/本地存储 |
+| 图片编辑 | Fabric.js 5.x                  |
+| 相机捕获 | Capacitor Camera API           |
+| 文件存储 | CoreFlow OSS/本地存储          |
 
 ### Phase 3: 数据库设计（0.5天）
 
@@ -213,18 +216,18 @@ npm run cli -- posecraft analyze    # 测试 AI 分析
 
 ## 技术栈对照
 
-| 组件 | 旧方案 | 新方案 |
-|------|--------|--------|
-| 后端 | Express + SQLite | CoreFlow (Fastify + MySQL) |
-| 认证 | 独立 JWT | CoreFlow Session + PBAC |
-| 数据库 | SQLite | MySQL + Sequelize |
-| 前端框架 | Vue 3 (JS) | Vue 3 + TypeScript |
-| 状态管理 | 无 | Pinia |
-| 路由 | Vue Router | Vue Router + 权限守卫 |
-| HTTP | fetch | Axios + 401 刷新队列 |
-| AI | TensorFlow.js | TensorFlow.js（保留） |
-| 编辑器 | Fabric.js | Fabric.js（保留） |
-| 移动端 | Capacitor | Capacitor（保留） |
+| 组件     | 旧方案           | 新方案                     |
+| -------- | ---------------- | -------------------------- |
+| 后端     | Express + SQLite | CoreFlow (Fastify + MySQL) |
+| 认证     | 独立 JWT         | CoreFlow Session + PBAC    |
+| 数据库   | SQLite           | MySQL + Sequelize          |
+| 前端框架 | Vue 3 (JS)       | Vue 3 + TypeScript         |
+| 状态管理 | 无               | Pinia                      |
+| 路由     | Vue Router       | Vue Router + 权限守卫      |
+| HTTP     | fetch            | Axios + 401 刷新队列       |
+| AI       | TensorFlow.js    | TensorFlow.js（保留）      |
+| 编辑器   | Fabric.js        | Fabric.js（保留）          |
+| 移动端   | Capacitor        | Capacitor（保留）          |
 
 ---
 

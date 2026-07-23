@@ -27,8 +27,8 @@ function createRl() {
 }
 
 function ask(rl, question) {
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => resolve(answer.trim()));
+  return new Promise(resolve => {
+    rl.question(question, answer => resolve(answer.trim()));
   });
 }
 
@@ -88,7 +88,7 @@ async function main() {
 
   if (emailArg || uidArg) {
     // 命令行指定
-    targetUserRole = superadmins.find((ur) => {
+    targetUserRole = superadmins.find(ur => {
       if (emailArg) return ur.user.email === emailArg;
       if (uidArg) return ur.user.uid === uidArg;
       return false;
@@ -107,7 +107,7 @@ async function main() {
         targetUser = targetUserRole.user;
       } else {
         // 按邮箱
-        targetUserRole = superadmins.find((ur) => ur.user.email === input);
+        targetUserRole = superadmins.find(ur => ur.user.email === input);
         targetUser = targetUserRole?.user;
       }
     } finally {
@@ -164,7 +164,9 @@ async function main() {
               await redis.del(key);
               cleared++;
             }
-          } catch { /* 跳过 */ }
+          } catch {
+            /* 跳过 */
+          }
         }
       }
       await redis.quit();
@@ -181,9 +183,11 @@ async function main() {
   console.log('   该用户重新登录后，权限将立即生效。');
 }
 
-main().catch((err) => {
-  console.error('❌ 操作失败:', err.message);
-  process.exit(1);
-}).finally(async () => {
-  await sequelize.close();
-});
+main()
+  .catch(err => {
+    console.error('❌ 操作失败:', err.message);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await sequelize.close();
+  });

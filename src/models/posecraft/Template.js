@@ -164,7 +164,7 @@ export default (sequelize, DataTypes) => {
    * 模型关联定义
    * @param {object} models - 所有已注册模型的集合
    */
-  Template.associate = (models) => {
+  Template.associate = models => {
     Template.belongsTo(models.User, { foreignKey: 'user_id', as: 'creator' });
     // 模板一对一绑定底图作品（反向指针）
     Template.hasOne(models.Work, { foreignKey: 'template_id', as: 'templateWork' });

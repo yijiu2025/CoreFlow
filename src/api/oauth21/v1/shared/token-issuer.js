@@ -37,9 +37,7 @@ const tokenService = new TokenService();
  * @returns {object} 令牌结果
  */
 export async function issueDirectTokens(user, client_id, scope, oidcNonce, request, reply, fastify) {
-  const client = client_id
-    ? await tokenService.authenticateClient(request)
-    : { ...FIRST_PARTY_APP };
+  const client = client_id ? await tokenService.authenticateClient(request) : { ...FIRST_PARTY_APP };
 
   if (client_id && !client) {
     throw new Error('invalid_client');
@@ -106,35 +104,38 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
 
   // ── 模式 B：Session 启用（默认） ──
   // appId：优先用请求中的 client_id（如 'firewall'），回退到 client.client_id
-  const sessionAppId = client_id || client.client_id || 'GLOBAL'
+  const sessionAppId = client_id || client.client_id || 'GLOBAL';
 
   if (reply && fastify) {
-    const isIframe = request.headers['sec-fetch-dest'] === 'iframe' ||
-                     request.headers['sec-fetch-mode'] === 'navigate'
+    const isIframe = request.headers['sec-fetch-dest'] === 'iframe' || request.headers['sec-fetch-mode'] === 'navigate';
 
     if (isIframe) {
       // iframe 模式：生成临时 session token 存入 Redis
-      const sessionToken = generateToken(32)
-      const sessionStore = getSessionStore(fastify, 'session_token')
-      await sessionStore.set(sessionToken, {
-        userId: user.numericId || user.id,
-        uid: user.uid || user.id,
-        username: user.username,
-        email: user.email,
-        avatar: user.avatar,
-        status: user.status || 'active',
-        appId: sessionAppId,
-        ip: request.ip,
-        deviceId: request.headers['x-device-id'] || 'web',
-        deviceType: 'browser',
-        userAgent: request.headers['user-agent'] || '',
-        rememberMe: true
-      }, 300)
+      const sessionToken = generateToken(32);
+      const sessionStore = getSessionStore(fastify, 'session_token');
+      await sessionStore.set(
+        sessionToken,
+        {
+          userId: user.numericId || user.id,
+          uid: user.uid || user.id,
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+          status: user.status || 'active',
+          appId: sessionAppId,
+          ip: request.ip,
+          deviceId: request.headers['x-device-id'] || 'web',
+          deviceType: 'browser',
+          userAgent: request.headers['user-agent'] || '',
+          rememberMe: true
+        },
+        300
+      );
 
-      result.session_token = sessionToken
+      result.session_token = sessionToken;
     } else {
       // 非 iframe：直接创建 Session 并设 Cookie
-      const redis = request.server.redis
+      const redis = request.server.redis;
       try {
         await createSession({
           redis,
@@ -151,7 +152,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
           userAgent: request.headers['user-agent'] || '',
           rememberMe: true,
           reply
-        })
+        });
       } catch (err) {
         if (err.code === 'MAX_SESSIONS_EXCEEDED') {
           return {
@@ -162,9 +163,9 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
               maxSessions: err.maxSessions,
               sessions: err.sessions
             }
-          }
+          };
         }
-        throw err
+        throw err;
       }
     }
   }

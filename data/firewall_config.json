@@ -20,22 +20,9 @@
       "maxNotFoundAttempts": 10,
       "blacklistDuration": 3600,
       "notFoundWindow": 60,
-      "safePaths": [
-        "/health",
-        "/favicon.ico",
-        "/robots.txt",
-        "/__fw/",
-        "/api/firewall/"
-      ],
+      "safePaths": ["/health", "/favicon.ico", "/robots.txt", "/__fw/", "/api/firewall/"],
       "internalIpPrefixes": "192.168.1.1,192.168.*",
-      "idcIpPrefixes": [
-        "100.104.",
-        "101.37.",
-        "47.88.",
-        "162.14.",
-        "101.36.",
-        "52.82."
-      ],
+      "idcIpPrefixes": ["100.104.", "101.37.", "47.88.", "162.14.", "101.36.", "52.82."],
       "enableRateLimit": true,
       "rateLimitRequests": 60,
       "rateLimitWindow": 60,
@@ -49,14 +36,8 @@
       "maxConn": 100,
       "enableGeoFilter": true,
       "geoRules": {
-        "sensitivePaths": [
-          "/api/admin",
-          "/api/payment",
-          "/api/user/delete"
-        ],
-        "internalPrefixes": [
-          "/internal/"
-        ],
+        "sensitivePaths": ["/api/admin", "/api/payment", "/api/user/delete"],
+        "internalPrefixes": ["/internal/"],
         "overseasLimit": 10,
         "overseasWindow": 60,
         "overseasBlockTime": 3600
@@ -75,13 +56,7 @@
         "phantomjs",
         "selenium"
       ],
-      "browserPatterns": [
-        "chrome",
-        "firefox",
-        "safari",
-        "edge",
-        "opera"
-      ],
+      "browserPatterns": ["chrome", "firefox", "safari", "edge", "opera"],
       "botChallengeNoUaLimit": 10,
       "botChallengeBotLimit": 30,
       "botChallengeBrowserLimit": 120
@@ -103,14 +78,8 @@
     "maxConn": 100,
     "enableGeoFilter": false,
     "geoRules": {
-      "sensitivePaths": [
-        "/api/admin",
-        "/api/payment",
-        "/api/user/delete"
-      ],
-      "internalPrefixes": [
-        "/internal/"
-      ],
+      "sensitivePaths": ["/api/admin", "/api/payment", "/api/user/delete"],
+      "internalPrefixes": ["/internal/"],
       "overseasLimit": 10,
       "overseasWindow": 60,
       "overseasBlockTime": 3600
@@ -130,35 +99,13 @@
       "phantomjs",
       "selenium"
     ],
-    "browserPatterns": [
-      "chrome",
-      "firefox",
-      "safari",
-      "edge",
-      "opera"
-    ],
+    "browserPatterns": ["chrome", "firefox", "safari", "edge", "opera"],
     "botChallengeNoUaLimit": 10,
     "botChallengeBotLimit": 30,
     "botChallengeBrowserLimit": 120,
-    "internalIpPrefixes": [
-      "192.168.1.1",
-      "192.168.1.*"
-    ],
-    "idcIpPrefixes": [
-      "100.104.",
-      "101.37.",
-      "47.88.",
-      "162.14.",
-      "101.36.",
-      "52.82."
-    ],
-    "safePaths": [
-      "/health",
-      "/favicon.ico",
-      "/robots.txt",
-      "/__fw/",
-      "/api/firewall/"
-    ],
+    "internalIpPrefixes": ["192.168.1.1", "192.168.1.*"],
+    "idcIpPrefixes": ["100.104.", "101.37.", "47.88.", "162.14.", "101.36.", "52.82."],
+    "safePaths": ["/health", "/favicon.ico", "/robots.txt", "/__fw/", "/api/firewall/"],
     "manualBlacklistIps": [],
     "manualBlacklistUsers": [],
     "manualWhitelistIps": []

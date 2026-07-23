@@ -1,1 +1,12 @@
-import{a0 as e}from"./index-C531BqZY.js";const s={getList:t=>e.get("/posecraft/v1/templates",{params:t}),getPopular:t=>e.get("/posecraft/v1/templates/popular",{params:{limit:t}}),getDetail:(t,a)=>e.get(`/posecraft/v1/templates/${t}`,{params:a}),create:t=>e.post("/posecraft/v1/templates",t),update:(t,a)=>e.put(`/posecraft/v1/templates/${t}`,a),delete:t=>e.delete(`/posecraft/v1/templates/${t}`),audit:(t,a)=>e.post(`/posecraft/v1/templates/${t}/audit`,{status:a}),getMyTemplates:t=>e.get("/posecraft/v1/templates/mine",{params:t})};export{s as templateApi};
+import { a0 as e } from './index-C531BqZY.js';
+const s = {
+  getList: t => e.get('/posecraft/v1/templates', { params: t }),
+  getPopular: t => e.get('/posecraft/v1/templates/popular', { params: { limit: t } }),
+  getDetail: (t, a) => e.get(`/posecraft/v1/templates/${t}`, { params: a }),
+  create: t => e.post('/posecraft/v1/templates', t),
+  update: (t, a) => e.put(`/posecraft/v1/templates/${t}`, a),
+  delete: t => e.delete(`/posecraft/v1/templates/${t}`),
+  audit: (t, a) => e.post(`/posecraft/v1/templates/${t}/audit`, { status: a }),
+  getMyTemplates: t => e.get('/posecraft/v1/templates/mine', { params: t })
+};
+export { s as templateApi };

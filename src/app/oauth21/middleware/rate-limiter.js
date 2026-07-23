@@ -31,9 +31,7 @@ export function createIpRateLimiter(redis, prefix, maxRequests, windowSec) {
 
         if (count >= maxRequests) {
           const oldest = await redis.zRange(key, 0, 0, { REV: false });
-          const retryAfter = oldest.length > 0
-            ? Math.ceil((parseInt(oldest[0]) + windowMs - now) / 1000)
-            : windowSec;
+          const retryAfter = oldest.length > 0 ? Math.ceil((parseInt(oldest[0]) + windowMs - now) / 1000) : windowSec;
           return { allowed: false, retryAfter };
         }
 

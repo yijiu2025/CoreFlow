@@ -48,7 +48,7 @@ async function listTemplates() {
   console.log('\n📋 模板列表：');
   printTable(
     ['ID', '标题', '分类', '使用次数', '创建时间'],
-    templates.map((t) => [
+    templates.map(t => [
       t.id,
       t.title?.substring(0, 20),
       t.category,
@@ -77,7 +77,7 @@ async function listWorks() {
   console.log('\n🎨 作品列表：');
   printTable(
     ['ID', '标题', '点赞', '浏览', '创建时间'],
-    works.map((w) => [
+    works.map(w => [
       w.id,
       w.title?.substring(0, 20),
       w.likes_count,
@@ -93,8 +93,8 @@ export default {
   appName: 'posecraft',
   description: 'PoseCraft AI 姿势分析',
   subcommands: {
-    'stats':     { description: '统计信息', handler: posecraftStats },
-    'templates': { description: '模板列表', handler: listTemplates },
-    'works':     { description: '作品列表', handler: listWorks }
+    stats: { description: '统计信息', handler: posecraftStats },
+    templates: { description: '模板列表', handler: listTemplates },
+    works: { description: '作品列表', handler: listWorks }
   }
 };

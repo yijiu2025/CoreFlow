@@ -1,4 +1,3 @@
-
 <!--
  * 朋友动态视图
  *
@@ -50,26 +49,19 @@
 </template>
 
 <script setup lang="ts">
-import { useHome } from '@/composables/useHome'
-import { onActivated } from 'vue'
-import { Loader2, Users } from 'lucide-vue-next'
-import PoseCard from '@/components/cards/home/PoseCard.vue'
-import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
+import { useHome } from '@/composables/useHome';
+import { onActivated } from 'vue';
+import { Loader2, Users } from 'lucide-vue-next';
+import PoseCard from '@/components/cards/home/PoseCard.vue';
+import SkeletonCard from '@/components/cards/home/SkeletonCard.vue';
 
-const {
-  activeNav,
-  filteredItems,
-  hasMore,
-  loading,
-  loadMore,
-  openDetail,
-  handleLike,
-  handleCollect
-} = useHome()
+const { activeNav, filteredItems, hasMore, loading, loadMore, openDetail, handleLike, handleCollect } = useHome();
 
 // 切换当前导航状态
-activeNav.value = 'friends'
-onActivated(() => { activeNav.value = 'friends' })
+activeNav.value = 'friends';
+onActivated(() => {
+  activeNav.value = 'friends';
+});
 </script>
 
 <style scoped>
@@ -167,8 +159,12 @@ onActivated(() => { activeNav.value = 'friends' })
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .empty-state {

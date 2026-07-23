@@ -21,17 +21,17 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** 预览图存储根目录（绝对路径） */
-const PREVIEW_ROOT = path.resolve(__dirname, '../../../public/uploads/posecraft/previews')
+const PREVIEW_ROOT = path.resolve(__dirname, '../../../public/uploads/posecraft/previews');
 
 /**
  * 根据类型获取预览图存储子目录
  * - work     → previews/work/
  * - template → previews/template/
  */
-const getPreviewDir = (type) => path.join(PREVIEW_ROOT, type === 'template' ? 'template' : 'work')
+const getPreviewDir = type => path.join(PREVIEW_ROOT, type === 'template' ? 'template' : 'work');
 
 /** 预览图 URL 前缀 */
-const getPreviewUrlPrefix = (type) => `/uploads/posecraft/previews/${type === 'template' ? 'template' : 'work'}`;
+const getPreviewUrlPrefix = type => `/uploads/posecraft/previews/${type === 'template' ? 'template' : 'work'}`;
 
 /** 预览图最大宽度（缩略图），像素 */
 const THUMB_MAX_WIDTH = 600;
@@ -97,11 +97,19 @@ export function extractFabricData(poseData) {
   if (!poseData) return null;
   let data = poseData;
   if (typeof data === 'string') {
-    try { data = JSON.parse(data); } catch (e) { return null; }
+    try {
+      data = JSON.parse(data);
+    } catch (e) {
+      return null;
+    }
   }
   let fabricData = data?.fabricData;
   if (typeof fabricData === 'string') {
-    try { fabricData = JSON.parse(fabricData); } catch (e) { return null; }
+    try {
+      fabricData = JSON.parse(fabricData);
+    } catch (e) {
+      return null;
+    }
   }
   return fabricData && fabricData.objects?.length ? fabricData : null;
 }
@@ -125,9 +133,7 @@ export async function generateImageThumbnail(imageUrl) {
     if (!fs.existsSync(localPath)) return null;
 
     // 保持原始尺寸，仅改格式为 WebP + 降低质量
-    const thumbBuffer = await sharp(localPath)
-      .webp({ quality: 70 })
-      .toBuffer();
+    const thumbBuffer = await sharp(localPath).webp({ quality: 70 }).toBuffer();
 
     // 仅当压缩后比原图小 30% 以上才使用缩略图，否则保留原图更划算
     const origStat = fs.statSync(localPath);
@@ -173,10 +179,7 @@ export async function generateSkeletonPreview(poseData) {
 
     // 生成骨骼 SVG → PNG
     const svgBuffer = generateSvgFromFabric(fabricData);
-    const skeletonPng = await sharp(svgBuffer)
-      .resize(width, height, { fit: 'fill' })
-      .png()
-      .toBuffer();
+    const skeletonPng = await sharp(svgBuffer).resize(width, height, { fit: 'fill' }).png().toBuffer();
 
     // 合成到透明背景（保持骨架半透明效果）
     const finalBuffer = await sharp({

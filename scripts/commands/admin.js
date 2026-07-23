@@ -33,7 +33,7 @@ export async function listSuperadmins() {
   console.log('\n👑 超级管理员列表：');
   printTable(
     ['ID', '用户名', '邮箱'],
-    superadmins.map((ur) => [ur.user.id, ur.user.username, ur.user.email])
+    superadmins.map(ur => [ur.user.id, ur.user.username, ur.user.email])
   );
   console.log(`\n共 ${superadmins.length} 个超级管理员`);
 }
@@ -200,7 +200,7 @@ export async function revokeSuperadmin() {
     if (!isNaN(index) && index >= 1 && index <= superadmins.length) {
       target = superadmins[index - 1];
     } else {
-      target = superadmins.find((ur) => ur.user.email === input);
+      target = superadmins.find(ur => ur.user.email === input);
     }
 
     if (!target) {

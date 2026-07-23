@@ -4,11 +4,11 @@
 
 三级守卫系统实现级联访问控制：
 
-| 级别 | 来源 | 配置项 |
-|------|------|--------|
-| System | `system.json` | enabled, allowIps, requireLogin |
-| Group | `registerGroupMetadata()` | enabled, allowIps, allowRoles |
-| API | `registerSecureRoute()` | enabled, allowIps, allowRoles, requireLogin, permission |
+| 级别   | 来源                      | 配置项                                                  |
+| ------ | ------------------------- | ------------------------------------------------------- |
+| System | `system.json`             | enabled, allowIps, requireLogin                         |
+| Group  | `registerGroupMetadata()` | enabled, allowIps, allowRoles                           |
+| API    | `registerSecureRoute()`   | enabled, allowIps, allowRoles, requireLogin, permission |
 
 每级可独立拦截，任一级拒绝则请求被拦截。
 
@@ -87,13 +87,17 @@ registerSecureRoute(fastify, {
 
 ```js
 // 单个权限
-permission: 'fw:config:read'
+permission: 'fw:config:read';
 
 // 任一满足（OR）
-permission: { any: ['fw:block:write', 'fw:admin:*'] }
+permission: {
+  any: ['fw:block:write', 'fw:admin:*'];
+}
 
 // 全部满足（AND）
-permission: { all: ['fw:admin:reset', 'fw:admin:*'] }
+permission: {
+  all: ['fw:admin:reset', 'fw:admin:*'];
+}
 ```
 
 ## IP 匹配
@@ -102,11 +106,11 @@ permission: { all: ['fw:admin:reset', 'fw:admin:*'] }
 
 ```js
 allowIps: [
-  '192.168.1.100',      // 精确匹配
-  '192.168.1.*',        // 通配符
-  '10.0.0.0/8',         // CIDR
-  '*'                    // 全部允许
-]
+  '192.168.1.100', // 精确匹配
+  '192.168.1.*', // 通配符
+  '10.0.0.0/8', // CIDR
+  '*' // 全部允许
+];
 ```
 
 ## WebSocket 守卫
@@ -129,10 +133,12 @@ registerSecureWebSocket(fastify, {
 ```
 
 示例：
+
 ```json
 // system.json
 { "prefix": "/blog" }
 ```
+
 ```js
 registerGroupMetadata({ prefix: '/v1' });
 registerSecureRoute(fastify, { url: '/posts', ... });

@@ -7,85 +7,90 @@
  * - 401 无感刷新：多个并发请求只发一次刷新，其余排队等待
  * - createHttp() 工厂：可创建独立实例（刷新 token 时避免递归拦截）
  */
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
+import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import type {
-  MonitorSummary, SettingsResponse, ApiConfigs, BlockEntry,
-  AddBlockData, AddWhitelistData, ServerNode
-} from '@/types'
-import { API_BASE_URL } from '@/config/services'
+  MonitorSummary,
+  SettingsResponse,
+  ApiConfigs,
+  BlockEntry,
+  AddBlockData,
+  AddWhitelistData,
+  ServerNode
+} from '@/types';
+import { API_BASE_URL } from '@/config/services';
 
-const TOKEN_KEY = 'firewall_token'
+const TOKEN_KEY = 'firewall_token';
 
 // 自定义错误类型
 interface ApiError extends Error {
-  code?: number
+  code?: number;
 }
 
 // ==================== Token 刷新队列 ====================
-let isRefreshing = false
-let pendingQueue: Array<(token: string) => void> = []
+let isRefreshing = false;
+let pendingQueue: Array<(token: string) => void> = [];
 
 /** 刷新 Token 并重放排队请求 */
 async function handleTokenRefresh(): Promise<string> {
   // 动态导入避免循环依赖
-  const { useAuthStore } = await import('@/stores/auth')
-  const authStore = useAuthStore()
+  const { useAuthStore } = await import('@/stores/auth');
+  const authStore = useAuthStore();
 
-  const newToken = await authStore.refreshAccessToken()
+  const newToken = await authStore.refreshAccessToken();
   // 重放所有排队请求
-  pendingQueue.forEach(cb => cb(newToken))
-  pendingQueue = []
-  return newToken
+  pendingQueue.forEach(cb => cb(newToken));
+  pendingQueue = [];
+  return newToken;
 }
 
 /** 不需要刷新重试的路径（避免死循环） */
-const SKIP_REFRESH_PATHS = ['/user/v1/userinfo', '/user/v1/permissions']
+const SKIP_REFRESH_PATHS = ['/user/v1/userinfo', '/user/v1/permissions'];
 
 /** 触发登录弹窗（通过 auth store） */
 function triggerLoginModal() {
   import('@/stores/auth').then(({ useAuthStore }) => {
-    useAuthStore().showLoginModal = true
-  })
+    useAuthStore().showLoginModal = true;
+  });
 }
 
 /** 401 处理：加入队列或发起刷新 */
 async function handle401(config: AxiosRequestConfig): Promise<any> {
-  const url = config.url || ''
+  const url = config.url || '';
 
   // 如果是 userinfo/permissions 等认证检查接口本身 401，直接失败，不重试
   if (SKIP_REFRESH_PATHS.some(p => url.includes(p))) {
-    triggerLoginModal()
-    return Promise.reject(new Error('未登录或 Token 已过期'))
+    triggerLoginModal();
+    return Promise.reject(new Error('未登录或 Token 已过期'));
   }
 
   if (!isRefreshing) {
-    isRefreshing = true
+    isRefreshing = true;
     try {
-      const newToken = await handleTokenRefresh()
+      const newToken = await handleTokenRefresh();
       if (config.headers) {
-        config.headers.Authorization = `Bearer ${newToken}`
+        config.headers.Authorization = `Bearer ${newToken}`;
       }
-      return apiClient(config)
+      return apiClient(config);
     } catch {
       // 刷新失败，清除状态并触发登录弹窗
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem('firewall_user')
-      triggerLoginModal()
-      return Promise.reject(new Error('Token 刷新失败'))
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem('firewall_user');
+      triggerLoginModal();
+      return Promise.reject(new Error('Token 刷新失败'));
     } finally {
-      isRefreshing = false
+      isRefreshing = false;
     }
   }
 
   // 已在刷新中，当前请求加入队列挂起
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     pendingQueue.push((token: string) => {
       if (config.headers) {
-        config.headers.Authorization = `Bearer ${token}`
+        config.headers.Authorization = `Bearer ${token}`;
       }
-      resolve(apiClient(config))
-    })
-  })
+      resolve(apiClient(config));
+    });
+  });
 }
 
 // ==================== Axios 实例 ====================
@@ -100,69 +105,64 @@ export function createHttp(baseURL?: string): AxiosInstance {
     timeout: 10000,
     withCredentials: true,
     headers: { 'Content-Type': 'application/json' }
-  })
+  });
 
   // 请求拦截：有 token 时带 Bearer header，否则依赖 Session Cookie
-  instance.interceptors.request.use((config) => {
-    const token = localStorage.getItem(TOKEN_KEY)
+  instance.interceptors.request.use(config => {
+    const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+      config.headers.Authorization = `Bearer ${token}`;
     }
     // withCredentials: true 确保 Session Cookie 自动携带
-    return config
-  })
+    return config;
+  });
 
   // 响应拦截
   instance.interceptors.response.use(
     (response: AxiosResponse) => {
-      const res = response.data
-      if (res.code === 200) return res.data
-      const error: ApiError = new Error(res.message || 'API Error')
-      error.code = res.code
-      return Promise.reject(error)
+      const res = response.data;
+      if (res.code === 200) return res.data;
+      const error: ApiError = new Error(res.message || 'API Error');
+      error.code = res.code;
+      return Promise.reject(error);
     },
-    (error) => {
+    error => {
       if (error.response?.status === 401) {
-        return handle401(error.config)
+        return handle401(error.config);
       }
-      const message = error.response?.data?.message || error.message
-      console.error('🌐 [API Error]', message)
-      return Promise.reject(error)
+      const message = error.response?.data?.message || error.message;
+      console.error('🌐 [API Error]', message);
+      return Promise.reject(error);
     }
-  )
+  );
 
-  return instance
+  return instance;
 }
 
 // 默认实例
-const apiClient = createHttp()
+const apiClient = createHttp();
 
 // ==================== 业务 API ====================
 
 export const firewallApi = {
   // 获取摘要数据
-  getSummary: (): Promise<MonitorSummary> =>
-    apiClient.get('/api/firewall/v1/monitor/summary'),
+  getSummary: (): Promise<MonitorSummary> => apiClient.get('/api/firewall/v1/monitor/summary'),
 
   // 获取流量记录
-  getRecords: (): Promise<any[]> =>
-    apiClient.get('/api/firewall/v1/monitor/records'),
+  getRecords: (): Promise<any[]> => apiClient.get('/api/firewall/v1/monitor/records'),
 
   // 清空记录
-  clearRecords: (): Promise<void> =>
-    apiClient.post('/api/firewall/v1/monitor/clear'),
+  clearRecords: (): Promise<void> => apiClient.post('/api/firewall/v1/monitor/clear'),
 
   // 更新节点信息
   updateNode: (data: Partial<ServerNode>): Promise<any> =>
     apiClient.patch('/api/firewall/v1/monitor/node/update', data),
 
   // 触发自动定位
-  refreshNode: (): Promise<ServerNode> =>
-    apiClient.post('/api/firewall/v1/monitor/node/refresh'),
+  refreshNode: (): Promise<ServerNode> => apiClient.post('/api/firewall/v1/monitor/node/refresh'),
 
   // 获取安全设置
-  getSettings: (): Promise<SettingsResponse> =>
-    apiClient.get('/api/firewall/v1/monitor/settings'),
+  getSettings: (): Promise<SettingsResponse> => apiClient.get('/api/firewall/v1/monitor/settings'),
 
   // 更新安全设置
   updateSettings: (data: Record<string, any>): Promise<any> =>
@@ -177,28 +177,23 @@ export const firewallApi = {
     apiClient.delete('/api/firewall/v1/monitor/blacklist', { data: { type, value } }),
 
   // ==================== 封禁管理 ====================
-  getBlocks: (): Promise<BlockEntry[]> =>
-    apiClient.get('/api/firewall/v1/monitor/blocks'),
+  getBlocks: (): Promise<BlockEntry[]> => apiClient.get('/api/firewall/v1/monitor/blocks'),
 
-  addBlock: (data: AddBlockData): Promise<any> =>
-    apiClient.post('/api/firewall/v1/monitor/blocks', data),
+  addBlock: (data: AddBlockData): Promise<any> => apiClient.post('/api/firewall/v1/monitor/blocks', data),
 
   removeBlock: (ip: string): Promise<any> =>
     apiClient.delete(`/api/firewall/v1/monitor/blocks/${encodeURIComponent(ip)}`),
 
   // ==================== 指纹封禁管理 ====================
-  addBlockFp: (data: AddBlockData): Promise<any> =>
-    apiClient.post('/api/firewall/v1/monitor/blocks/fp', data),
+  addBlockFp: (data: AddBlockData): Promise<any> => apiClient.post('/api/firewall/v1/monitor/blocks/fp', data),
 
   removeBlockFp: (fingerprint: string): Promise<any> =>
     apiClient.delete(`/api/firewall/v1/monitor/blocks/fp/${encodeURIComponent(fingerprint)}`),
 
   // ==================== 白名单管理 ====================
-  getWhitelist: (): Promise<BlockEntry[]> =>
-    apiClient.get('/api/firewall/v1/monitor/whitelist'),
+  getWhitelist: (): Promise<BlockEntry[]> => apiClient.get('/api/firewall/v1/monitor/whitelist'),
 
-  addWhitelist: (data: AddWhitelistData): Promise<any> =>
-    apiClient.post('/api/firewall/v1/monitor/whitelist', data),
+  addWhitelist: (data: AddWhitelistData): Promise<any> => apiClient.post('/api/firewall/v1/monitor/whitelist', data),
 
   removeWhitelist: (ip: string): Promise<any> =>
     apiClient.delete(`/api/firewall/v1/monitor/whitelist/${encodeURIComponent(ip)}`),
@@ -211,27 +206,30 @@ export const firewallApi = {
     apiClient.delete(`/api/firewall/v1/monitor/whitelist/fp/${encodeURIComponent(fingerprint)}`),
 
   // ==================== API 配置与守卫管理 ====================
-  getApiConfigs: (): Promise<ApiConfigs> =>
-    apiClient.get('/api/firewall/v1/apiconfigs/'),
+  getApiConfigs: (): Promise<ApiConfigs> => apiClient.get('/api/firewall/v1/apiconfigs/'),
 
   toggleGuard: (systemKey: string, groupKey: string, apiKey: string | null = null): Promise<any> => {
-    let url = `/api/firewall/v1/apiconfigs/toggle/${systemKey}/${groupKey}`
-    if (apiKey) url += `?apiKey=${apiKey}`
-    return apiClient.post(url)
+    let url = `/api/firewall/v1/apiconfigs/toggle/${systemKey}/${groupKey}`;
+    if (apiKey) url += `?apiKey=${apiKey}`;
+    return apiClient.post(url);
   },
 
   toggleSystem: (systemKey: string): Promise<any> =>
     apiClient.post(`/api/firewall/v1/apiconfigs/toggle-system/${systemKey}`),
 
-  updateConfig: (systemKey: string, groupKey: string, apiKey?: string | null, data?: Record<string, any>): Promise<any> => {
-    let url = `/api/firewall/v1/apiconfigs/${systemKey}/${groupKey}`
-    if (apiKey) url += `?apiKey=${apiKey}`
-    return apiClient.patch(url, data)
+  updateConfig: (
+    systemKey: string,
+    groupKey: string,
+    apiKey?: string | null,
+    data?: Record<string, any>
+  ): Promise<any> => {
+    let url = `/api/firewall/v1/apiconfigs/${systemKey}/${groupKey}`;
+    if (apiKey) url += `?apiKey=${apiKey}`;
+    return apiClient.patch(url, data);
   },
 
   // 获取 SSO 用户信息
-  getUserInfo: (): Promise<any> =>
-    apiClient.get('/user/v1/userinfo'),
+  getUserInfo: (): Promise<any> => apiClient.get('/user/v1/userinfo'),
 
   // 将 Bearer Token 绑定为 HttpOnly Cookie
   bindToken: (token: string): Promise<any> =>
@@ -244,11 +242,10 @@ export const firewallApi = {
     apiClient.post('/auth/v1/bind-session', { session_token: sessionToken }),
 
   // 清除认证 Cookie（退出登录）
-  clearCookie: (): Promise<any> =>
-    apiClient.post('/auth/v1/clear-cookie'),
+  clearCookie: (): Promise<any> => apiClient.post('/auth/v1/clear-cookie'),
 
   // 获取当前用户权限
-  getPermissions: (): Promise<{ roles: string[], permissions: { allows: string[], denies: string[] } }> =>
+  getPermissions: (): Promise<{ roles: string[]; permissions: { allows: string[]; denies: string[] } }> =>
     apiClient.get('/user/v1/permissions'),
 
   // 权限调试：检查指定权限
@@ -256,40 +253,33 @@ export const firewallApi = {
     apiClient.get('/user/v1/check-permission', { params: { permission } }),
 
   // 获取活跃会话列表
-  getSessions: (): Promise<any> =>
-    apiClient.get('/user/v1/sessions'),
+  getSessions: (): Promise<any> => apiClient.get('/user/v1/sessions'),
 
   // 踢掉指定会话
-  kickSession: (sessionId: string): Promise<any> =>
-    apiClient.post('/user/v1/sessions/kick', { sessionId }),
+  kickSession: (sessionId: string): Promise<any> => apiClient.post('/user/v1/sessions/kick', { sessionId }),
 
   // 踢掉所有其他会话
-  kickAllSessions: (): Promise<any> =>
-    apiClient.post('/user/v1/sessions/kick-all'),
+  kickAllSessions: (): Promise<any> => apiClient.post('/user/v1/sessions/kick-all'),
 
   // 获取审计日志
   getAuditLogs: (params?: { limit?: number; event?: string }): Promise<any> =>
     apiClient.get('/user/v1/audit-logs', { params }),
 
   // 获取性能指标
-  getMetrics: (): Promise<any> =>
-    apiClient.get('/api/firewall/v1/metrics'),
+  getMetrics: (): Promise<any> => apiClient.get('/api/firewall/v1/metrics'),
 
   // 导出封禁列表
-  exportBlocks: (): Promise<any> =>
-    apiClient.get('/api/firewall/v1/export/blocks'),
+  exportBlocks: (): Promise<any> => apiClient.get('/api/firewall/v1/export/blocks'),
 
   // 导出白名单
-  exportWhitelist: (): Promise<any> =>
-    apiClient.get('/api/firewall/v1/export/whitelist'),
+  exportWhitelist: (): Promise<any> => apiClient.get('/api/firewall/v1/export/whitelist'),
 
   // 导入封禁列表
-  importBlocks: (blocks: any[]): Promise<any> =>
-    apiClient.post('/api/firewall/v1/import/blocks', { blocks }),
+  importBlocks: (blocks: any[]): Promise<any> => apiClient.post('/api/firewall/v1/import/blocks', { blocks }),
 
   // 导入白名单
   importWhitelist: (whitelist: any[]): Promise<any> =>
     apiClient.post('/api/firewall/v1/import/whitelist', { whitelist })
-}
+};
 
-export default apiClient
+export default apiClient;

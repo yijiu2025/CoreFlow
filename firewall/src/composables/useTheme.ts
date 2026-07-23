@@ -4,24 +4,23 @@
  */
 
 interface ThemeProps {
-  isDarkMode?: boolean
-  isDark?: boolean
+  isDarkMode?: boolean;
+  isDark?: boolean;
 }
 
 interface ThemeReturn {
-  isDark: () => boolean
-  t: (darkClass: string, lightClass: string) => string
-  tm: (base: string, darkClass: string, lightClass: string) => string
+  isDark: () => boolean;
+  t: (darkClass: string, lightClass: string) => string;
+  tm: (base: string, darkClass: string, lightClass: string) => string;
 }
 
 export function useTheme(props: ThemeProps): ThemeReturn {
-  const isDark = (): boolean => props.isDarkMode ?? props.isDark ?? false
+  const isDark = (): boolean => props.isDarkMode ?? props.isDark ?? false;
 
-  const t = (darkClass: string, lightClass: string): string =>
-    isDark() ? darkClass : lightClass
+  const t = (darkClass: string, lightClass: string): string => (isDark() ? darkClass : lightClass);
 
   const tm = (base: string, darkClass: string, lightClass: string): string =>
-    `${base} ${isDark() ? darkClass : lightClass}`
+    `${base} ${isDark() ? darkClass : lightClass}`;
 
-  return { isDark, t, tm }
+  return { isDark, t, tm };
 }

@@ -26,7 +26,7 @@ npx umzug migration:create --name create-myapp-tables
 export async function up({ queryInterface, Sequelize }) {
   async function createTableIfNotExists(tableName, columns) {
     const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
-    const exists = tables.some((t) => Object.values(t)[0] === tableName);
+    const exists = tables.some(t => Object.values(t)[0] === tableName);
     if (!exists) await queryInterface.createTable(tableName, columns);
   }
 
@@ -68,12 +68,12 @@ export async function down({ queryInterface }) {
 
 ## 迁移文件规范
 
-| 规则 | 说明 |
-|------|------|
-| 文件名 | `{timestamp}-{description}.js` |
-| 导出 | `up` 和 `down` 两个异步函数 |
-| 幂等性 | 使用 `createTableIfNotExists` 等辅助函数 |
-| 回滚 | `down` 函数必须能完全回滚 `up` 的操作 |
+| 规则     | 说明                                              |
+| -------- | ------------------------------------------------- |
+| 文件名   | `{timestamp}-{description}.js`                    |
+| 导出     | `up` 和 `down` 两个异步函数                       |
+| 幂等性   | 使用 `createTableIfNotExists` 等辅助函数          |
+| 回滚     | `down` 函数必须能完全回滚 `up` 的操作             |
 | 时间戳列 | 统一使用 `created_at`, `updated_at`, `deleted_at` |
 
 ## MySQL 表分区（海量数据）

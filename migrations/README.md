@@ -29,7 +29,11 @@ export async function up({ queryInterface, Sequelize }) {
     status: { type: Sequelize.TINYINT, defaultValue: 1, comment: '状态' },
     delete_version: { type: Sequelize.BIGINT, allowNull: false, defaultValue: 0, comment: '软删除标志' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') },
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    },
     deleted_at: { type: Sequelize.DATE, allowNull: true }
   });
 
@@ -51,7 +55,7 @@ export async function down({ queryInterface }) {
  */
 async function createTableIfNotExists(queryInterface, tableName, columns) {
   const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
-  const exists = tables.some((t) => Object.values(t)[0] === tableName);
+  const exists = tables.some(t => Object.values(t)[0] === tableName);
   if (!exists) {
     await queryInterface.createTable(tableName, columns);
   }
@@ -71,17 +75,17 @@ async function addIndexIfNotExists(queryInterface, tableName, columns, options =
 
 ## 字段类型速查
 
-| 用途 | Sequelize 类型 | 说明 |
-|------|---------------|------|
-| 主键 | `Sequelize.BIGINT` + `primaryKey: true, autoIncrement: true` | 自增主键 |
-| UUID | `Sequelize.UUID` + `defaultValue: Sequelize.UUIDV4` | 对外标识 |
-| 字符串 | `Sequelize.STRING(N)` | N 为最大长度 |
-| 文本 | `Sequelize.TEXT` | 长文本 |
-| 整数 | `Sequelize.INTEGER` / `Sequelize.TINYINT` | TINYINT 用于状态标志 |
-| 布尔 | `Sequelize.BOOLEAN` + `defaultValue: false` | |
-| 日期 | `Sequelize.DATE` | |
-| JSON | `Sequelize.JSON` | MySQL 5.7+ |
-| 枚举 | `Sequelize.ENUM('a', 'b')` | 不推荐，改用 STRING + 应用层校验 |
+| 用途   | Sequelize 类型                                               | 说明                             |
+| ------ | ------------------------------------------------------------ | -------------------------------- |
+| 主键   | `Sequelize.BIGINT` + `primaryKey: true, autoIncrement: true` | 自增主键                         |
+| UUID   | `Sequelize.UUID` + `defaultValue: Sequelize.UUIDV4`          | 对外标识                         |
+| 字符串 | `Sequelize.STRING(N)`                                        | N 为最大长度                     |
+| 文本   | `Sequelize.TEXT`                                             | 长文本                           |
+| 整数   | `Sequelize.INTEGER` / `Sequelize.TINYINT`                    | TINYINT 用于状态标志             |
+| 布尔   | `Sequelize.BOOLEAN` + `defaultValue: false`                  |                                  |
+| 日期   | `Sequelize.DATE`                                             |                                  |
+| JSON   | `Sequelize.JSON`                                             | MySQL 5.7+                       |
+| 枚举   | `Sequelize.ENUM('a', 'b')`                                   | 不推荐，改用 STRING + 应用层校验 |
 
 ## 软删除字段规范
 
@@ -105,11 +109,11 @@ await addIndexIfNotExists(queryInterface, 'table_name', ['code', 'delete_version
 
 ## 索引命名规范
 
-| 类型 | 前缀 | 示例 |
-|------|------|------|
-| 唯一索引 | `uk_` | `uk_email_delete_version` |
-| 普通索引 | `idx_` | `idx_user_id` |
-| 复合索引 | `idx_` | `idx_user_app_expire` |
+| 类型     | 前缀   | 示例                      |
+| -------- | ------ | ------------------------- |
+| 唯一索引 | `uk_`  | `uk_email_delete_version` |
+| 普通索引 | `idx_` | `idx_user_id`             |
+| 复合索引 | `idx_` | `idx_user_app_expire`     |
 
 ## 常用命令
 

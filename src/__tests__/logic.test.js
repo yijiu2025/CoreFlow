@@ -69,7 +69,6 @@ describe('核心逻辑', () => {
   });
 
   describe('IP 匹配引擎', () => {
-
     it('CIDR /24 匹配', () => {
       expect(isIpMatch('192.168.1.100', '192.168.1.0/24')).toBe(true);
       expect(isIpMatch('192.168.2.100', '192.168.1.0/24')).toBe(false);

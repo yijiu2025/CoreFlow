@@ -53,16 +53,12 @@ async function processQueue() {
     try {
       const transporter = await getTransporter();
       const info = await transporter.sendMail({
-        from:
-          (await noticeDao.getConfig('email')).from ||
-          (await noticeDao.getConfig('email')).user,
+        from: (await noticeDao.getConfig('email')).from || (await noticeDao.getConfig('email')).user,
         to: task.email,
         subject: task.subject,
         html: task.content
       });
-      Logger.info(
-        `[Notice:Email] 发送成功: ${task.email}, MessageID: ${info.messageId}`
-      );
+      Logger.info(`[Notice:Email] 发送成功: ${task.email}, MessageID: ${info.messageId}`);
       task.resolve(true);
     } catch (err) {
       Logger.error(`[Notice:Email] 发送失败: ${task.email} - ${err.message}`);
@@ -116,23 +112,17 @@ class EmailService {
           html: content
         });
 
-        Logger.info(
-          `[Notice:Email] 发送成功: ${email}, MessageID: ${info.messageId}`
-        );
+        Logger.info(`[Notice:Email] 发送成功: ${email}, MessageID: ${info.messageId}`);
         return true;
       } catch (error) {
         if (attempt === maxRetries) {
-          Logger.error(
-            `[Notice:Email] 发送失败 (已重试${maxRetries}次): ${email} - ${error.message}`
-          );
+          Logger.error(`[Notice:Email] 发送失败 (已重试${maxRetries}次): ${email} - ${error.message}`);
           cachedTransporter = null;
           cachedConfigHash = '';
           return false;
         }
-        Logger.warn(
-          `[Notice:Email] 发送失败，${attempt + 1}/${maxRetries}次重试: ${email}`
-        );
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        Logger.warn(`[Notice:Email] 发送失败，${attempt + 1}/${maxRetries}次重试: ${email}`);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
       }
     }
     return false;
@@ -146,7 +136,7 @@ class EmailService {
    * @returns {Promise<boolean>}
    */
   async sendAsync(email, subject, content) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       sendQueue.push({ email, subject, content, resolve });
 
       // 队列满时立即处理

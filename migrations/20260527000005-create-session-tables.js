@@ -7,7 +7,7 @@
 export async function up({ queryInterface, Sequelize }) {
   async function createTableIfNotExists(tableName, columns) {
     const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
-    const exists = tables.some((t) => Object.values(t)[0] === tableName);
+    const exists = tables.some(t => Object.values(t)[0] === tableName);
     if (!exists) await queryInterface.createTable(tableName, columns);
   }
 
@@ -25,9 +25,17 @@ export async function up({ queryInterface, Sequelize }) {
     last_login_at: { type: Sequelize.DATE, comment: '最后登录时间' },
     last_login_ip: { type: Sequelize.STRING(50), comment: '最后登录IP' },
     last_login_app: { type: Sequelize.STRING(64), comment: '最后登录应用' },
-    last_active_at: { type: Sequelize.DATE, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'), comment: '最后活跃时间' },
+    last_active_at: {
+      type: Sequelize.DATE,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
+      comment: '最后活跃时间'
+    },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
   // 2. session_tokens
@@ -42,7 +50,11 @@ export async function up({ queryInterface, Sequelize }) {
     user_agent: { type: Sequelize.TEXT },
     last_active: { type: Sequelize.DATE, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
   await addIndexIfNotExists('session_tokens', ['user_id']);
@@ -54,7 +66,13 @@ export async function up({ queryInterface, Sequelize }) {
   // 3. session_logs
   await createTableIfNotExists('session_logs', {
     id: { type: Sequelize.BIGINT, primaryKey: true, autoIncrement: true, comment: '自增主键' },
-    created_at: { type: Sequelize.DATE, primaryKey: true, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'), comment: '创建时间' },
+    created_at: {
+      type: Sequelize.DATE,
+      primaryKey: true,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
+      comment: '创建时间'
+    },
     user_id: { type: Sequelize.BIGINT, allowNull: true, comment: '用户ID' },
     event: { type: Sequelize.STRING(50), allowNull: false, comment: '事件类型: LOGIN, LOGOUT, KICK' },
     app_id: { type: Sequelize.STRING(64), comment: '应用ID' },
@@ -62,7 +80,11 @@ export async function up({ queryInterface, Sequelize }) {
     location: { type: Sequelize.STRING(100) },
     user_agent: { type: Sequelize.TEXT },
     details: { type: Sequelize.JSON, comment: '详情JSON' },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
   await addIndexIfNotExists('session_logs', ['user_id', 'event', 'created_at'], { name: 'idx_session_log_audit' });

@@ -25,12 +25,12 @@ import { ApiException } from './shared/exceptions.js';
 // 应用层不信任任意代理 IP，仅允许本地回环。
 // 生产环境若有反向代理（Nginx / Cloudflare / ALB），通过 PROXY_TRUST_CIDR 环境变量指定信任网段
 const PROXY_TRUST_CIDR = process.env.PROXY_TRUST_CIDR?.trim();
-const trustProxy = PROXY_TRUST_CIDR ? PROXY_TRUST_CIDR.split(',').map((s) => s.trim()) : ['127.0.0.1', '::1'];
+const trustProxy = PROXY_TRUST_CIDR ? PROXY_TRUST_CIDR.split(',').map(s => s.trim()) : ['127.0.0.1', '::1'];
 
 // 启动时解析 CORS 白名单，避免每次请求重复解析环境变量
 const CORS_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
   .split(',')
-  .map((s) => s.trim())
+  .map(s => s.trim())
   .filter(Boolean);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,7 +54,7 @@ const INSECURE_SECRETS = [
  */
 function validateSecrets() {
   const secrets = [process.env.APP_SECRET, process.env.SESSION_SECRET, process.env.FIREWALL_SECRET];
-  const weak = secrets.filter((s) => !s || s.length < 32 || INSECURE_SECRETS.includes(s));
+  const weak = secrets.filter(s => !s || s.length < 32 || INSECURE_SECRETS.includes(s));
   if (weak.length > 0) {
     console.error(
       `❌ [App] 安全错误：检测到不安全的默认密钥或密钥长度不足 32 位，请在 .env 中设置强随机值：APP_SECRET / SESSION_SECRET / FIREWALL_SECRET`
@@ -87,7 +87,7 @@ function createErrorHandler(isProduction) {
     } else if (error.validation) {
       // AJV 校验失败以 400 返回，拼接所有校验错误信息方便前端定位
       statusCode = 400;
-      message = error.validation.map((v) => v.message || v.instancePath).join('; ');
+      message = error.validation.map(v => v.message || v.instancePath).join('; ');
     }
 
     // 500+ 记录完整错误栈，400 仅记录摘要
@@ -166,7 +166,7 @@ export async function createApp() {
             }
           })
     },
-    genReqId: (req) => req.headers['x-request-id'] || crypto.randomUUID(),
+    genReqId: req => req.headers['x-request-id'] || crypto.randomUUID(),
     // 尾部斜杠由网关层（Nginx）统一处理，应用层不做模糊匹配以提升路由性能
     trustProxy
   });
@@ -232,7 +232,7 @@ export async function createApp() {
   await app.register(staticPlugin, {
     root: publicPath,
     prefix: '/',
-    setHeaders: (res) => {
+    setHeaders: res => {
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
   });

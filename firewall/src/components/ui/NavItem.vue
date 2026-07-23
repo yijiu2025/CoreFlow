@@ -1,10 +1,11 @@
 <template>
-  <div @click="$emit('click')"
+  <div
+    @click="$emit('click')"
     class="flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all group"
-    :class="isActive ? activeClass : inactiveClass">
+    :class="isActive ? activeClass : inactiveClass"
+  >
     <div class="flex items-center gap-3">
-      <component :is="icon" v-if="icon" class="w-4 h-4"
-        :class="isActive ? activeIconClass : inactiveIconClass" />
+      <component :is="icon" v-if="icon" class="w-4 h-4" :class="isActive ? activeIconClass : inactiveIconClass" />
       <span class="text-sm font-semibold">{{ label }}</span>
     </div>
     <ChevronRight v-if="isActive && showChevron" class="w-4 h-4 opacity-50" />
@@ -12,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronRight } from 'lucide-vue-next'
+import { ChevronRight } from 'lucide-vue-next';
 
 const props = defineProps({
   isActive: { type: Boolean, default: false },
@@ -21,9 +22,9 @@ const props = defineProps({
   isDark: { type: Boolean, default: false },
   showChevron: { type: Boolean, default: true },
   variant: { type: String, default: 'cyan' }
-})
+});
 
-defineEmits(['click'])
+defineEmits(['click']);
 
 const variants = {
   cyan: {
@@ -38,12 +39,13 @@ const variants = {
     iconActiveDark: 'text-indigo-400',
     iconActiveLight: 'text-white'
   }
-}
+};
 
-const v = variants[props.variant] || variants.cyan
+const v = variants[props.variant] || variants.cyan;
 
-const activeClass = props.isDark ? v.activeDark : v.activeLight
-const inactiveClass = 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
-const activeIconClass = props.isDark ? v.iconActiveDark : v.iconActiveLight
-const inactiveIconClass = 'text-slate-400 dark:text-slate-600 group-hover:text-slate-600 dark:group-hover:text-slate-400'
+const activeClass = props.isDark ? v.activeDark : v.activeLight;
+const inactiveClass = 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5';
+const activeIconClass = props.isDark ? v.iconActiveDark : v.iconActiveLight;
+const inactiveIconClass =
+  'text-slate-400 dark:text-slate-600 group-hover:text-slate-600 dark:group-hover:text-slate-400';
 </script>

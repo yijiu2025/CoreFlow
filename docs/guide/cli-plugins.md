@@ -24,15 +24,15 @@ src/app/{app_name}/
 import { listItems, createItem } from './items.js';
 
 export default {
-  command: 'myapp',           // 主命令名
-  appName: 'myapp',           // 应用名称
+  command: 'myapp', // 主命令名
+  appName: 'myapp', // 应用名称
   description: '我的应用管理', // 命令描述
   subcommands: {
-    'list': {
+    list: {
       description: '列出数据',
       handler: listItems
     },
-    'create': {
+    create: {
       description: '创建数据',
       handler: createItem
     }
@@ -58,7 +58,7 @@ export async function listItems() {
   console.log('\n📋 数据列表：');
   printTable(
     ['ID', '名称', '状态'],
-    items.map((item) => [item.id, item.name, item.status])
+    items.map(item => [item.id, item.name, item.status])
   );
 }
 
@@ -148,8 +148,13 @@ try {
 
 ```js
 import {
-  printTable, printSuccess, printInfo,
-  printWarning, printError, printLine, printTitle
+  printTable,
+  printSuccess,
+  printInfo,
+  printWarning,
+  printError,
+  printLine,
+  printTitle
 } from '../../../../scripts/lib/table.js';
 
 printTitle('我的应用');
@@ -162,7 +167,10 @@ printLine();
 // 打印表格
 printTable(
   ['ID', '名称'],
-  [[1, '测试'], [2, '示例']]
+  [
+    [1, '测试'],
+    [2, '示例']
+  ]
 );
 ```
 
@@ -192,24 +200,24 @@ npm run cli -- firewall stats      # 流量统计
 
 ## 插件规范
 
-| 规则 | 说明 |
-|------|------|
-| 入口文件 | `cli/index.js` 必须存在 |
+| 规则     | 说明                                                   |
+| -------- | ------------------------------------------------------ |
+| 入口文件 | `cli/index.js` 必须存在                                |
 | 导出格式 | `export default { command, description, subcommands }` |
-| 命令名 | 全局唯一，不能与内置命令冲突 |
-| handler | 必须是 async 函数 |
-| 工具导入 | 使用相对路径导入 `scripts/lib/` 下的工具 |
+| 命令名   | 全局唯一，不能与内置命令冲突                           |
+| handler  | 必须是 async 函数                                      |
+| 工具导入 | 使用相对路径导入 `scripts/lib/` 下的工具               |
 
 ## 内置命令列表
 
-| 命令 | 说明 |
-|------|------|
-| `user` | 用户管理 |
-| `role` | 角色管理 |
-| `db` | 数据库操作 |
-| `redis` | Redis 操作 |
-| `admin` | 管理员管理 |
-| `system` | 系统操作 |
-| `help` | 帮助信息 |
+| 命令     | 说明       |
+| -------- | ---------- |
+| `user`   | 用户管理   |
+| `role`   | 角色管理   |
+| `db`     | 数据库操作 |
+| `redis`  | Redis 操作 |
+| `admin`  | 管理员管理 |
+| `system` | 系统操作   |
+| `help`   | 帮助信息   |
 
 应用自定义命令会自动加载，与内置命令使用方式相同。

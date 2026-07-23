@@ -9,7 +9,15 @@ describe('安全模块', () => {
   describe('密码策略', () => {
     // 模拟 validatePasswordStrength
     function validatePasswordStrength(password, policy = {}) {
-      const cfg = { minLength: 8, maxLength: 128, requireUppercase: true, requireLowercase: true, requireNumbers: true, requireSpecial: false, ...policy };
+      const cfg = {
+        minLength: 8,
+        maxLength: 128,
+        requireUppercase: true,
+        requireLowercase: true,
+        requireNumbers: true,
+        requireSpecial: false,
+        ...policy
+      };
       const errors = [];
       if (!password || typeof password !== 'string') return { valid: false, errors: ['密码不能为空'] };
       if (password.length < cfg.minLength) errors.push(`密码长度不能少于 ${cfg.minLength} 个字符`);

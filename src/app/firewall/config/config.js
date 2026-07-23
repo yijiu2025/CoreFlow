@@ -9,10 +9,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const FIREWALL_FILE = path.resolve(
-  __dirname,
-  '../../../data/firewall_config.json'
-);
+export const FIREWALL_FILE = path.resolve(__dirname, '../../../data/firewall_config.json');
 
 export const CHALLENGE_SECRET = process.env.FIREWALL_SECRET;
 
@@ -80,9 +77,8 @@ export const DEFAULT_IP_APIS = [
     name: 'ipinfo.io',
     url: 'https://ipinfo.io/json',
     isText: false,
-    parse: (data) => {
-      if (data.error || data.status === 429)
-        throw new Error(data.error?.message || '请求被限流');
+    parse: data => {
+      if (data.error || data.status === 429) throw new Error(data.error?.message || '请求被限流');
       if (!data.ip) throw new Error('返回数据缺少 IP');
       const [lat, lon] = (data.loc || '').split(',').map(Number);
       return {
@@ -100,7 +96,7 @@ export const DEFAULT_IP_APIS = [
     name: 'ipapi.co',
     url: 'https://ipapi.co/json/',
     isText: false,
-    parse: (data) => {
+    parse: data => {
       if (data.error || !data.ip) throw new Error(data.reason || '请求失败');
       return {
         ip: data.ip,
@@ -117,16 +113,12 @@ export const DEFAULT_IP_APIS = [
     name: '搜狐IP (国内)',
     url: 'http://pv.sohu.com/cityjson?ie=utf-8',
     isText: true,
-    parse: (text) => {
+    parse: text => {
       const match = text.match(/returnCitySN\s*=\s*(\{.+\})/);
       if (!match) throw new Error('解析失败');
       const data = JSON.parse(match[1]);
-      if (!data.cip || data.cip === '127.0.0.1')
-        throw new Error('获取到的是本地地址');
-      const city = (data.cid || '').replace(
-        /省|市|自治区|壮族|回族|维吾尔|特别行政区/g,
-        ''
-      );
+      if (!data.cip || data.cip === '127.0.0.1') throw new Error('获取到的是本地地址');
+      const city = (data.cid || '').replace(/省|市|自治区|壮族|回族|维吾尔|特别行政区/g, '');
       return {
         ip: data.cip,
         country: '中国',
@@ -142,9 +134,8 @@ export const DEFAULT_IP_APIS = [
     name: '百度IP',
     url: 'https://qifu-api.baidubce.com/ip/local/geo/v1/district',
     isText: false,
-    parse: (data) => {
-      if (data.code === 'KeyDisabled' || data.code === 'InvalidKey')
-        throw new Error('API Key 未配置');
+    parse: data => {
+      if (data.code === 'KeyDisabled' || data.code === 'InvalidKey') throw new Error('API Key 未配置');
       if (!data.ip) throw new Error('返回数据缺少 IP');
       return {
         ip: data.ip,
@@ -158,7 +149,7 @@ export const DEFAULT_IP_APIS = [
   }
 ];
 
-export const DEFAULT_IP_API = DEFAULT_IP_APIS.find((api) => api.id === 'sohu');
+export const DEFAULT_IP_API = DEFAULT_IP_APIS.find(api => api.id === 'sohu');
 
 /**
  * 默认安全策略矩阵
@@ -178,13 +169,7 @@ export const DEFAULT_SECURITY_SETTINGS = {
     maxNotFoundAttempts: parseInt(process.env.FW_SCAN_THRESHOLD || '10'),
     blacklistDuration: parseInt(process.env.FW_BLACKLIST_DURATION || '3600'),
     notFoundWindow: parseInt(process.env.FW_SCAN_WINDOW || '60'),
-    safePaths: [
-      '/health',
-      '/favicon.ico',
-      '/robots.txt',
-      '/__fw/',
-      '/api/firewall/'
-    ],
+    safePaths: ['/health', '/favicon.ico', '/robots.txt', '/__fw/', '/api/firewall/'],
 
     internalIpPrefixes: [
       '127.',
@@ -209,14 +194,7 @@ export const DEFAULT_SECURITY_SETTINGS = {
       '172.31.'
     ],
 
-    idcIpPrefixes: [
-      '100.104.',
-      '101.37.',
-      '47.88.',
-      '162.14.',
-      '101.36.',
-      '52.82.'
-    ],
+    idcIpPrefixes: ['100.104.', '101.37.', '47.88.', '162.14.', '101.36.', '52.82.'],
 
     // --- 全局限频 ---
     enableRateLimit: false,
@@ -275,9 +253,7 @@ export const DEFAULT_SECURITY_SETTINGS = {
       'headless',
       'phantomjs',
       'selenium',
-      ...(process.env.FW_BOT_PATTERNS
-        ? process.env.FW_BOT_PATTERNS.split(',')
-        : [])
+      ...(process.env.FW_BOT_PATTERNS ? process.env.FW_BOT_PATTERNS.split(',') : [])
     ],
     browserPatterns: ['chrome', 'firefox', 'safari', 'edge', 'opera'],
     botChallengeNoUaLimit: parseInt(process.env.FW_BOT_NOUA_LIMIT || '10'),

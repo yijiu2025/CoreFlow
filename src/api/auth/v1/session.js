@@ -107,31 +107,31 @@ export default async function (fastify) {
     method: 'POST',
     url: '/bind-session',
     handler: async (request, reply) => {
-      const { session_token } = request.body
+      const { session_token } = request.body;
       if (!session_token) {
         return reply.code(400).send({
           code: 400,
           message: '缺少 session_token',
           data: null
-        })
+        });
       }
 
       // 从 Redis 读取临时 session 数据
-      const sessionStore = getSessionStore(fastify, 'session_token')
-      const sessionData = await sessionStore.get(session_token)
+      const sessionStore = getSessionStore(fastify, 'session_token');
+      const sessionData = await sessionStore.get(session_token);
       if (!sessionData) {
         return reply.code(401).send({
           code: 401,
           message: 'session_token 无效或已过期',
           data: null
-        })
+        });
       }
 
       // 删除临时 token（一次性使用）
-      await sessionStore.delete(session_token)
+      await sessionStore.delete(session_token);
 
       // 创建正式 Session，设置 sid/sid_r Cookie
-      const redis = request.server.redis
+      const redis = request.server.redis;
       await createSession({
         redis,
         userId: sessionData.userId,
@@ -147,7 +147,7 @@ export default async function (fastify) {
         userAgent: request.headers['user-agent'] || '',
         rememberMe: sessionData.rememberMe,
         reply
-      })
+      });
 
       return reply.result.success('Session 已绑定', {
         user: {
@@ -157,7 +157,7 @@ export default async function (fastify) {
           email: sessionData.email,
           avatar: sessionData.avatar
         }
-      })
+      });
     }
   });
 

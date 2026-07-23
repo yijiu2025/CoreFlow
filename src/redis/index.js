@@ -19,22 +19,18 @@ import { C } from '../utils/colors.js';
 export let globalRedis = null;
 
 export default fp(
-  async (app) => {
+  async app => {
     const enabled = process.env.REDIS_ENABLED === 'true';
 
     if (!enabled) {
-      console.log(
-        `ℹ️ [Redis] ${C.cyan}REDIS_ENABLED 未开启，跳过连接，使用内存降级模式${C.reset}`
-      );
+      console.log(`ℹ️ [Redis] ${C.cyan}REDIS_ENABLED 未开启，跳过连接，使用内存降级模式${C.reset}`);
       app.decorate('redis', null);
       app.redisHealthy = false;
       return;
     }
 
     if (!process.env.REDIS_HOST) {
-      console.log(
-        `ℹ️ [Redis] ${C.cyan}REDIS_HOST 未配置，跳过连接，使用内存降级模式${C.reset}`
-      );
+      console.log(`ℹ️ [Redis] ${C.cyan}REDIS_HOST 未配置，跳过连接，使用内存降级模式${C.reset}`);
       app.decorate('redis', null);
       app.redisHealthy = false;
       return;
@@ -50,24 +46,20 @@ export default fp(
         port,
         tls: useTls,
         rejectUnauthorized: useTls,
-        reconnectStrategy: (retries) => {
+        reconnectStrategy: retries => {
           if (retries > 10) {
-            console.warn(
-              `⚠️ [Redis] ${C.yellow}重连次数超限（10次），停止重连${C.reset}`
-            );
+            console.warn(`⚠️ [Redis] ${C.yellow}重连次数超限（10次），停止重连${C.reset}`);
             return new Error('Redis max retries exceeded');
           }
           const delay = Math.min(3000 * Math.pow(2, retries), 30_000);
-          console.warn(
-            `⚠️ [Redis] ${C.yellow}第 ${retries + 1} 次重连，${delay / 1000}秒后重试...${C.reset}`
-          );
+          console.warn(`⚠️ [Redis] ${C.yellow}第 ${retries + 1} 次重连，${delay / 1000}秒后重试...${C.reset}`);
           return delay;
         }
       },
       password: process.env.REDIS_PASSWORD || undefined
     });
 
-    redis.on('error', (err) => {
+    redis.on('error', err => {
       console.warn(`⚠️ [Redis] ${C.yellow}连接错误: ${err.message}${C.reset}`);
     });
 
@@ -88,9 +80,7 @@ export default fp(
         globalRedis = null;
       });
     } catch (err) {
-      console.warn(
-        `❌ [Redis] ${C.red}连接失败 ${host}:${port}，降级到内存模式: ${err.message}${C.reset}`
-      );
+      console.warn(`❌ [Redis] ${C.red}连接失败 ${host}:${port}，降级到内存模式: ${err.message}${C.reset}`);
       globalRedis = null;
       app.decorate('redis', null);
       app.redisHealthy = false;

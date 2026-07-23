@@ -705,7 +705,7 @@ export async function getLoginTrend(days = 7) {
     raw: true
   });
 
-  return logs.map((row) => ({
+  return logs.map(row => ({
     date: row.date,
     count: parseInt(row.count, 10)
   }));

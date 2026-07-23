@@ -1,8 +1,12 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-purple-50 dark:from-slate-950 dark:to-slate-900">
+  <div
+    class="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-purple-50 dark:from-slate-950 dark:to-slate-900"
+  >
     <div class="w-full max-w-md p-8">
       <div class="text-center mb-8">
-        <div class="w-16 h-16 bg-gradient-to-br from-primary-500 to-purple-500 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4">
+        <div
+          class="w-16 h-16 bg-gradient-to-br from-primary-500 to-purple-500 rounded-2xl flex items-center justify-center text-white text-3xl mx-auto mb-4"
+        >
           <Aperture class="w-8 h-8" />
         </div>
         <h1 class="text-2xl font-bold">欢迎使用 PoseCraft</h1>
@@ -18,9 +22,7 @@
           <Lock :size="16" /> 使用 CoreFlow 账号登录
         </button>
 
-        <p class="text-center text-sm text-slate-500">
-          登录即表示您同意 PoseCraft 的服务条款
-        </p>
+        <p class="text-center text-sm text-slate-500">登录即表示您同意 PoseCraft 的服务条款</p>
       </div>
 
       <!-- 底部说明 -->
@@ -40,33 +42,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { Aperture, Lock } from 'lucide-vue-next'
-import LoginModal from '@/components/modals/login/LoginModal.vue'
+import { ref } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { Aperture, Lock } from 'lucide-vue-next';
+import LoginModal from '@/components/modals/login/LoginModal.vue';
 
-const router = useRouter()
-const route = useRoute()
-const authStore = useAuthStore()
+const router = useRouter();
+const route = useRoute();
+const authStore = useAuthStore();
 
-const showLoginModal = ref(false)
+const showLoginModal = ref(false);
 
 /**
  * 登录成功回调
  */
 async function handleLoginSuccess(data: { user: any; token?: string }) {
-  authStore.setLoggedIn(true, data.user, data.token)
-  await authStore.fetchPermissions()
+  authStore.setLoggedIn(true, data.user, data.token);
+  await authStore.fetchPermissions();
 
-  const redirect = (route.query.redirect as string) || '/'
-  router.push(redirect)
+  const redirect = (route.query.redirect as string) || '/';
+  router.push(redirect);
 }
 
 /**
  * 设备数量超限回调
  */
 function handleMaxSessions(data: { sessions: number; maxSessions: number }) {
-  alert(`设备数量已达上限 (${data.sessions}/${data.maxSessions})，请先退出其他设备`)
+  alert(`设备数量已达上限 (${data.sessions}/${data.maxSessions})，请先退出其他设备`);
 }
 </script>

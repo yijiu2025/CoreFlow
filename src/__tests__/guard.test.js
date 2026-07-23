@@ -79,7 +79,7 @@ describe('守卫权限逻辑', () => {
     if (!enabled) return { blocked: true, reason: 'disabled' };
 
     if (allowIps.length > 0) {
-      const isAllowed = allowIps.some((rule) => isIpMatch(clientIp, rule));
+      const isAllowed = allowIps.some(rule => isIpMatch(clientIp, rule));
       if (!isAllowed) return { blocked: true, reason: 'ip_denied' };
     }
 

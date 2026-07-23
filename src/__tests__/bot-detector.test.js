@@ -14,8 +14,8 @@ function classifyRequest(ua, requestCount, settings = {}) {
     botChallengeBrowserLimit = 120
   } = settings;
 
-  const botRegs = botPatterns.map((p) => new RegExp(p, 'i'));
-  const browserRegs = browserPatterns.map((p) => new RegExp(p, 'i'));
+  const botRegs = botPatterns.map(p => new RegExp(p, 'i'));
+  const browserRegs = browserPatterns.map(p => new RegExp(p, 'i'));
 
   // 无 UA
   if (!ua) {
@@ -25,8 +25,8 @@ function classifyRequest(ua, requestCount, settings = {}) {
     };
   }
 
-  const isBotUA = botRegs.some((p) => p.test(ua));
-  const isBrowserUA = browserRegs.some((p) => p.test(ua));
+  const isBotUA = botRegs.some(p => p.test(ua));
+  const isBrowserUA = browserRegs.some(p => p.test(ua));
 
   // Bot UA 超限
   if (isBotUA && requestCount > botChallengeBotLimit) {

@@ -28,18 +28,12 @@ class EmailDao {
     if (current) {
       const diff = (Date.now() - current.sentAt) / 1000;
       if (diff < this.rateLimit) {
-        throw new Error(
-          `SEND_CODE_FAILED:发送过于频繁，请在 ${Math.ceil(this.rateLimit - diff)} 秒后再试`
-        );
+        throw new Error(`SEND_CODE_FAILED:发送过于频繁，请在 ${Math.ceil(this.rateLimit - diff)} 秒后再试`);
       }
     }
 
     // 存储验证码
-    await store.set(
-      email,
-      { code, sentAt: Date.now(), sessionId },
-      this.codeTtl
-    );
+    await store.set(email, { code, sentAt: Date.now(), sessionId }, this.codeTtl);
 
     // 发送邮件
     const mailSent = await emailService.send(email, code);

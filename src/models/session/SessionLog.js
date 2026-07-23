@@ -29,8 +29,7 @@ export default (sequelize, DataTypes) => {
       event: {
         type: DataTypes.STRING(50),
         allowNull: false,
-        comment:
-          '事件类型: LOGIN, LOGIN_FAILED, LOGOUT, KICK, FORBIDDEN, SESSION_REFRESH'
+        comment: '事件类型: LOGIN, LOGIN_FAILED, LOGOUT, KICK, FORBIDDEN, SESSION_REFRESH'
       },
       app_id: {
         type: DataTypes.STRING(64),

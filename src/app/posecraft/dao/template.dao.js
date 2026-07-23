@@ -52,24 +52,22 @@ class TemplateDao {
         where[Op.and] = [
           { status: targetStatus },
           {
-            [Op.or]: [
-              { status: 1 },
-              { user_id: user.userId }
-            ]
+            [Op.or]: [{ status: 1 }, { user_id: user.userId }]
           }
         ];
       } else {
-        where[Op.or] = [
-          { status: 1 },
-          { user_id: user.userId }
-        ];
+        where[Op.or] = [{ status: 1 }, { user_id: user.userId }];
       }
     } else {
       where.status = 1; // 未登录只看公开
     }
 
-    const page = options.page ? Number(options.page) : (options.limit ? Math.floor((options.offset || 0) / options.limit) + 1 : 1);
-    const pageSize = options.pageSize ? Number(options.pageSize) : (options.limit ? Number(options.limit) : 20);
+    const page = options.page
+      ? Number(options.page)
+      : options.limit
+        ? Math.floor((options.offset || 0) / options.limit) + 1
+        : 1;
+    const pageSize = options.pageSize ? Number(options.pageSize) : options.limit ? Number(options.limit) : 20;
     const limit = pageSize;
     const offset = (page - 1) * pageSize;
 
@@ -99,9 +97,7 @@ class TemplateDao {
     return await model.findAll({
       where: { status: 1, delete_version: 0 },
       attributes: { exclude: ['pose_data'] },
-      order: [
-        [sequelize.literal('(uses_count * 10 + likes_count * 5 + RAND() * 30)'), 'DESC']
-      ],
+      order: [[sequelize.literal('(uses_count * 10 + likes_count * 5 + RAND() * 30)'), 'DESC']],
       limit
     });
   }
@@ -125,7 +121,7 @@ class TemplateDao {
   async findAuditList(options = {}) {
     const model = this.getModel();
     const { Op } = await import('sequelize');
-    
+
     // 默认查询待审核 (2)，但支持按 status 筛选
     const where = { delete_version: 0 };
     if (options.status !== undefined) {
@@ -133,14 +129,14 @@ class TemplateDao {
     } else {
       where.status = 2; // 默认查待审核
     }
-    
+
     if (options.keyword) {
       where[Op.or] = [
         { title: { [Op.like]: `%${options.keyword}%` } },
         { description: { [Op.like]: `%${options.keyword}%` } }
       ];
     }
-    
+
     const { count, rows } = await model.findAndCountAll({
       where,
       attributes: { exclude: ['pose_data'] },
@@ -149,7 +145,7 @@ class TemplateDao {
       offset: options.offset || 0,
       raw: true
     });
-    
+
     return {
       list: rows,
       total: count,

@@ -69,8 +69,8 @@ config.js（统一配置）
 import config from '../verify/config.js';
 
 // 使用
-const ttl = config.captcha.ttl;           // 图形验证码 TTL
-const smsProvider = config.sms.provider;   // 短信服务商
+const ttl = config.captcha.ttl; // 图形验证码 TTL
+const smsProvider = config.sms.provider; // 短信服务商
 ```
 
 ### 环境变量清单
@@ -189,6 +189,7 @@ const isConsumed = await sliderDao.consume(sliderKey, store);
 ```
 
 **工作流程：**
+
 1. 前端获取滑块参数，展示背景图和滑块
 2. 用户拖动滑块，前端发送 X 坐标
 3. 后端验证 X 坐标是否在容差范围内

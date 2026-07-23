@@ -5,46 +5,52 @@
  * @author Claude
  * @since 2026-07-16
  */
-import { ref } from 'vue'
+import { ref } from 'vue';
 
 export interface LocationResult {
-  address: string        // 完整地址（内部记录用）
-  region: string         // 区域文本（前端展示：国家 / 省份 / 城市）
-  lat: number
-  lng: number
-  source: 'gps' | 'ip'
+  address: string; // 完整地址（内部记录用）
+  region: string; // 区域文本（前端展示：国家 / 省份 / 城市）
+  lat: number;
+  lng: number;
+  source: 'gps' | 'ip';
 }
 
 export function useLocation() {
-  const loading = ref(false)
-  const error = ref('')
+  const loading = ref(false);
+  const error = ref('');
 
   /**
    * GPS 定位（浏览器原生 API）
    * @returns Promise<LocationResult | null>
    */
   const getGPSPosition = (): Promise<LocationResult | null> => {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       if (!navigator.geolocation) {
-        resolve(null)
-        return
+        resolve(null);
+        return;
       }
-      loading.value = true
+      loading.value = true;
       navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const { latitude, longitude } = pos.coords
-          const { region, fullAddr } = await reverseGeocode(latitude, longitude)
-          loading.value = false
-          resolve({ address: fullAddr || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, region: region || fullAddr || '', lat: latitude, lng: longitude, source: 'gps' })
+        async pos => {
+          const { latitude, longitude } = pos.coords;
+          const { region, fullAddr } = await reverseGeocode(latitude, longitude);
+          loading.value = false;
+          resolve({
+            address: fullAddr || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            region: region || fullAddr || '',
+            lat: latitude,
+            lng: longitude,
+            source: 'gps'
+          });
         },
         () => {
-          loading.value = false
-          resolve(null)
+          loading.value = false;
+          resolve(null);
         },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-      )
-    })
-  }
+      );
+    });
+  };
 
   /**
    * IP 定位（ipapi.co 免费接口）
@@ -52,22 +58,22 @@ export function useLocation() {
    */
   const getIPLocation = async (): Promise<LocationResult | null> => {
     try {
-      loading.value = true
-      const res = await fetch('https://ipapi.co/json/')
-      if (!res.ok) throw new Error('IP API failed')
-      const data = await res.json()
-      loading.value = false
+      loading.value = true;
+      const res = await fetch('https://ipapi.co/json/');
+      if (!res.ok) throw new Error('IP API failed');
+      const data = await res.json();
+      loading.value = false;
       if (data.latitude && data.longitude) {
-        const region = [data.country_name, data.region, data.city].filter(Boolean).join(' ')
-        return { address: region, region, lat: data.latitude, lng: data.longitude, source: 'ip' }
+        const region = [data.country_name, data.region, data.city].filter(Boolean).join(' ');
+        return { address: region, region, lat: data.latitude, lng: data.longitude, source: 'ip' };
       }
-      return null
+      return null;
     } catch (err) {
-      loading.value = false
-      console.warn('IP 定位失败:', err)
-      return null
+      loading.value = false;
+      console.warn('IP 定位失败:', err);
+      return null;
     }
-  }
+  };
 
   /**
    * 自动定位：优先 GPS，失败则 IP 兜底
@@ -75,11 +81,11 @@ export function useLocation() {
    */
   const autoLocate = async (): Promise<LocationResult | null> => {
     // 先尝试 GPS
-    const gps = await getGPSPosition()
-    if (gps) return gps
+    const gps = await getGPSPosition();
+    if (gps) return gps;
     // GPS 失败 → IP 兜底
-    return await getIPLocation()
-  }
+    return await getIPLocation();
+  };
 
   /**
    * 逆编码：经纬度 → 区域文本（只提取国家/省份/城市级别）
@@ -87,26 +93,26 @@ export function useLocation() {
    */
   const reverseGeocode = async (lat: number, lng: number): Promise<{ region: string; fullAddr: string }> => {
     try {
-      const res = await fetch(`https://photon.komoot.io/reverse/?lat=${lat}&lon=${lng}&limit=1&lang=zh`)
+      const res = await fetch(`https://photon.komoot.io/reverse/?lat=${lat}&lon=${lng}&limit=1&lang=zh`);
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json();
         if (data.features?.length) {
-          const p = data.features[0].properties
-          const country = p.country || ''
-          const state = p.state || p.region || ''
-          const city = p.city || p.county || ''
+          const p = data.features[0].properties;
+          const country = p.country || '';
+          const state = p.state || p.region || '';
+          const city = p.city || p.county || '';
           // 前端只展示：国家 + 省份 + 城市（不暴露精确位置）
-          const region = [country, state, city].filter(Boolean).join(' ')
+          const region = [country, state, city].filter(Boolean).join(' ');
           // 完整地址存 DB（含具体地名，内部使用）
-          const fullAddr = p.name || [city, state, country].filter(Boolean).join(' ')
-          return { region: region || fullAddr, fullAddr: fullAddr || region }
+          const fullAddr = p.name || [city, state, country].filter(Boolean).join(' ');
+          return { region: region || fullAddr, fullAddr: fullAddr || region };
         }
       }
     } catch (err) {
-      console.warn('逆编码失败:', err)
+      console.warn('逆编码失败:', err);
     }
-    return { region: '', fullAddr: '' }
-  }
+    return { region: '', fullAddr: '' };
+  };
 
   return {
     loading,
@@ -115,5 +121,5 @@ export function useLocation() {
     getIPLocation,
     autoLocate,
     reverseGeocode
-  }
+  };
 }

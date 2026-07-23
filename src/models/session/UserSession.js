@@ -38,7 +38,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  UserSession.associate = (models) => {
+  UserSession.associate = models => {
     UserSession.belongsTo(models.User, {
       foreignKey: 'user_id',
       as: 'profile',

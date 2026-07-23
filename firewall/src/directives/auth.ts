@@ -18,104 +18,108 @@
  *   { roles: string[], permissions: { allows: string[], denies: string[] } }
  *   支持通配符匹配（* 和 xxx:*），deny 永远优先于 admin 放行
  */
-import type { Directive, DirectiveBinding } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import type { Directive, DirectiveBinding } from 'vue';
+import { useAuthStore } from '@/stores/auth';
 
-type PermSpec = string | string[] | { any: string[] } | { all: string[] }
+type PermSpec = string | string[] | { any: string[] } | { all: string[] };
 
 interface AuthValue {
-  perm?: PermSpec
-  role?: string | string[]
+  perm?: PermSpec;
+  role?: string | string[];
 }
 
-type BindingValue = string | string[] | AuthValue
+type BindingValue = string | string[] | AuthValue;
 
 function matchSingle(pattern: string, target: string): boolean {
-  if (pattern === '*') return true
-  if (pattern === target) return true
-  if (pattern.endsWith(':*')) return target.startsWith(pattern.slice(0, -1))
-  return false
+  if (pattern === '*') return true;
+  if (pattern === target) return true;
+  if (pattern.endsWith(':*')) return target.startsWith(pattern.slice(0, -1));
+  return false;
 }
 
 function checkPermission(perm: PermSpec): boolean {
   try {
-    const authStore = useAuthStore()
-    if (!authStore.isLoggedIn) return false
+    const authStore = useAuthStore();
+    if (!authStore.isLoggedIn) return false;
 
-    const { allows, denies } = authStore.permissions
+    const { allows, denies } = authStore.permissions;
 
-    let required: string[]
-    let mode: 'any' | 'all'
+    let required: string[];
+    let mode: 'any' | 'all';
 
     if (typeof perm === 'string') {
-      required = [perm]; mode = 'any'
+      required = [perm];
+      mode = 'any';
     } else if (Array.isArray(perm)) {
-      required = perm; mode = 'any'
+      required = perm;
+      mode = 'any';
     } else if ('any' in perm) {
-      required = perm.any; mode = 'any'
+      required = perm.any;
+      mode = 'any';
     } else {
-      required = perm.all; mode = 'all'
+      required = perm.all;
+      mode = 'all';
     }
 
     // deny 优先
-    if (denies.some((p: string) => required.some(r => matchSingle(p, r)))) return false
+    if (denies.some((p: string) => required.some(r => matchSingle(p, r)))) return false;
     // admin 放行（deny 未命中时）
-    if (authStore.isAdmin) return true
+    if (authStore.isAdmin) return true;
 
     if (mode === 'all') {
-      return required.every(r => allows.some((p: string) => matchSingle(p, r)))
+      return required.every(r => allows.some((p: string) => matchSingle(p, r)));
     }
-    return required.some(r => allows.some((p: string) => matchSingle(p, r)))
+    return required.some(r => allows.some((p: string) => matchSingle(p, r)));
   } catch {
-    return false
+    return false;
   }
 }
 
 function checkRole(role: string | string[]): boolean {
   try {
-    const authStore = useAuthStore()
-    if (!authStore.isLoggedIn) return false
-    const required = Array.isArray(role) ? role : [role]
-    return required.some(r => authStore.hasRole(r))
+    const authStore = useAuthStore();
+    if (!authStore.isLoggedIn) return false;
+    const required = Array.isArray(role) ? role : [role];
+    return required.some(r => authStore.hasRole(r));
   } catch {
-    return false
+    return false;
   }
 }
 
 function checkValue(value: BindingValue): boolean {
   if (typeof value === 'string' || Array.isArray(value)) {
-    return checkPermission(value)
+    return checkPermission(value);
   }
-  const { perm, role } = value
-  const permOk = perm ? checkPermission(perm) : true
-  const roleOk = role ? checkRole(role) : true
-  return permOk && roleOk
+  const { perm, role } = value;
+  const permOk = perm ? checkPermission(perm) : true;
+  const roleOk = role ? checkRole(role) : true;
+  return permOk && roleOk;
 }
 
 function applyResult(el: HTMLElement, passed: boolean, modifiers: Record<string, boolean>) {
   if (passed) {
-    if (modifiers.disabled) el.removeAttribute('disabled')
-    if (modifiers.hidden) el.style.display = ''
-    return
+    if (modifiers.disabled) el.removeAttribute('disabled');
+    if (modifiers.hidden) el.style.display = '';
+    return;
   }
 
   if (modifiers.disabled) {
-    el.setAttribute('disabled', 'disabled')
+    el.setAttribute('disabled', 'disabled');
   } else if (modifiers.hidden) {
-    el.style.display = 'none'
+    el.style.display = 'none';
   } else {
-    el.remove()
+    el.remove();
   }
 }
 
 export const authDirective: Directive = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    if (!binding.value) return
-    applyResult(el, checkValue(binding.value), binding.modifiers as Record<string, boolean>)
+    if (!binding.value) return;
+    applyResult(el, checkValue(binding.value), binding.modifiers as Record<string, boolean>);
   },
 
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    if (!binding.value) return
-    applyResult(el, checkValue(binding.value), binding.modifiers as Record<string, boolean>)
+    if (!binding.value) return;
+    applyResult(el, checkValue(binding.value), binding.modifiers as Record<string, boolean>);
   }
-}
+};

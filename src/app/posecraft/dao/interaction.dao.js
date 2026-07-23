@@ -210,8 +210,8 @@ class InteractionDao {
       return { liked: false, collected: false };
     }
 
-    const liked = await Like.count({ where }) > 0;
-    const collected = await Collect.count({ where }) > 0;
+    const liked = (await Like.count({ where })) > 0;
+    const collected = (await Collect.count({ where })) > 0;
 
     return { liked, collected };
   }
@@ -239,34 +239,36 @@ class InteractionDao {
     });
 
     // 过滤并扁平化返回数据
-    const list = rows.map(r => {
-      if (r.work) {
-        return {
-          id: r.id,
-          type: 'work',
-          work_id: r.work.id,
-          title: r.work.title,
-          description: r.work.description,
-          thumbnail_url: r.work.thumbnail_url,
-          image_url: r.work.image_url,
-          created_at: r.work.created_at,
-          viewed_at: r.updated_at
-        };
-      } else if (r.template) {
-        return {
-          id: r.id,
-          type: 'template',
-          template_id: r.template.id,
-          title: r.template.title,
-          description: r.template.description,
-          thumbnail_url: r.template.thumbnail_url,
-          image_url: r.template.image_url,
-          created_at: r.template.created_at,
-          viewed_at: r.updated_at
-        };
-      }
-      return null;
-    }).filter(Boolean);
+    const list = rows
+      .map(r => {
+        if (r.work) {
+          return {
+            id: r.id,
+            type: 'work',
+            work_id: r.work.id,
+            title: r.work.title,
+            description: r.work.description,
+            thumbnail_url: r.work.thumbnail_url,
+            image_url: r.work.image_url,
+            created_at: r.work.created_at,
+            viewed_at: r.updated_at
+          };
+        } else if (r.template) {
+          return {
+            id: r.id,
+            type: 'template',
+            template_id: r.template.id,
+            title: r.template.title,
+            description: r.template.description,
+            thumbnail_url: r.template.thumbnail_url,
+            image_url: r.template.image_url,
+            created_at: r.template.created_at,
+            viewed_at: r.updated_at
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
 
     return { list, total: count, page, pageSize };
   }
@@ -293,36 +295,38 @@ class InteractionDao {
       offset
     });
 
-    const list = rows.map(r => {
-      if (r.work) {
-        return {
-          id: r.id,
-          type: 'work',
-          work_id: r.work.id,
-          title: r.work.title,
-          description: r.work.description,
-          thumbnail_url: r.work.thumbnail_url,
-          image_url: r.work.image_url,
-          likes_count: r.work.likes_count,
-          created_at: r.work.created_at,
-          liked_at: r.created_at
-        };
-      } else if (r.template) {
-        return {
-          id: r.id,
-          type: 'template',
-          template_id: r.template.id,
-          title: r.template.title,
-          description: r.template.description,
-          thumbnail_url: r.template.thumbnail_url,
-          image_url: r.template.image_url,
-          likes_count: r.template.likes_count,
-          created_at: r.template.created_at,
-          liked_at: r.created_at
-        };
-      }
-      return null;
-    }).filter(Boolean);
+    const list = rows
+      .map(r => {
+        if (r.work) {
+          return {
+            id: r.id,
+            type: 'work',
+            work_id: r.work.id,
+            title: r.work.title,
+            description: r.work.description,
+            thumbnail_url: r.work.thumbnail_url,
+            image_url: r.work.image_url,
+            likes_count: r.work.likes_count,
+            created_at: r.work.created_at,
+            liked_at: r.created_at
+          };
+        } else if (r.template) {
+          return {
+            id: r.id,
+            type: 'template',
+            template_id: r.template.id,
+            title: r.template.title,
+            description: r.template.description,
+            thumbnail_url: r.template.thumbnail_url,
+            image_url: r.template.image_url,
+            likes_count: r.template.likes_count,
+            created_at: r.template.created_at,
+            liked_at: r.created_at
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
 
     return { list, total: count, page, pageSize };
   }
@@ -349,36 +353,38 @@ class InteractionDao {
       offset
     });
 
-    const list = rows.map(r => {
-      if (r.work) {
-        return {
-          id: r.id,
-          type: 'work',
-          work_id: r.work.id,
-          title: r.work.title,
-          description: r.work.description,
-          thumbnail_url: r.work.thumbnail_url,
-          image_url: r.work.image_url,
-          likes_count: r.work.likes_count,
-          created_at: r.work.created_at,
-          collected_at: r.created_at
-        };
-      } else if (r.template) {
-        return {
-          id: r.id,
-          type: 'template',
-          template_id: r.template.id,
-          title: r.template.title,
-          description: r.template.description,
-          thumbnail_url: r.template.thumbnail_url,
-          image_url: r.template.image_url,
-          likes_count: r.template.likes_count,
-          created_at: r.template.created_at,
-          collected_at: r.created_at
-        };
-      }
-      return null;
-    }).filter(Boolean);
+    const list = rows
+      .map(r => {
+        if (r.work) {
+          return {
+            id: r.id,
+            type: 'work',
+            work_id: r.work.id,
+            title: r.work.title,
+            description: r.work.description,
+            thumbnail_url: r.work.thumbnail_url,
+            image_url: r.work.image_url,
+            likes_count: r.work.likes_count,
+            created_at: r.work.created_at,
+            collected_at: r.created_at
+          };
+        } else if (r.template) {
+          return {
+            id: r.id,
+            type: 'template',
+            template_id: r.template.id,
+            title: r.template.title,
+            description: r.template.description,
+            thumbnail_url: r.template.thumbnail_url,
+            image_url: r.template.image_url,
+            likes_count: r.template.likes_count,
+            created_at: r.template.created_at,
+            collected_at: r.created_at
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
 
     return { list, total: count, page, pageSize };
   }

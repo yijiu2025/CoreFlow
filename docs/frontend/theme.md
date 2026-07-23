@@ -29,58 +29,66 @@
 ## theme Store
 
 ```typescript
-import { defineStore } from 'pinia'
-import { ref, watchEffect } from 'vue'
-import { useColorMode, usePreferredDark } from '@vueuse/core'
+import { defineStore } from 'pinia';
+import { ref, watchEffect } from 'vue';
+import { useColorMode, usePreferredDark } from '@vueuse/core';
 
 export const useThemeStore = defineStore('theme', () => {
-  const colorMode = useColorMode({ storageKey: 'theme_mode' })
-  const isDark = ref(false)
-  const preferredDark = usePreferredDark()
+  const colorMode = useColorMode({ storageKey: 'theme_mode' });
+  const isDark = ref(false);
+  const preferredDark = usePreferredDark();
 
   watchEffect(() => {
-    isDark.value = colorMode.value === 'dark' ||
-      (colorMode.value === 'auto' && preferredDark.value)
-    document.documentElement.classList.toggle('dark', isDark.value)
-  })
+    isDark.value = colorMode.value === 'dark' || (colorMode.value === 'auto' && preferredDark.value);
+    document.documentElement.classList.toggle('dark', isDark.value);
+  });
 
   function toggleTheme() {
-    colorMode.value = colorMode.value === 'light' ? 'dark' : 'light'
+    colorMode.value = colorMode.value === 'light' ? 'dark' : 'light';
   }
 
-  return { isDark, colorMode, toggleTheme }
-})
+  return { isDark, colorMode, toggleTheme };
+});
 ```
 
 ## 字体栈
 
 ```css
 /* 标题 */
-h1, h2, h3 { font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif; }
+h1,
+h2,
+h3 {
+  font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+}
 
 /* 正文 */
-body { font-family: 'DM Sans', 'Source Sans 3', system-ui, sans-serif; }
+body {
+  font-family: 'DM Sans', 'Source Sans 3', system-ui, sans-serif;
+}
 
 /* 代码 */
-code, pre { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+code,
+pre {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
 ```
 
 ## UI 风格预设
 
-| 风格 | 特点 |
-|------|------|
-| Minimalist | 极简、高留白、细边框 |
-| Glassmorphism | 毛玻璃、半透明、灵动渐变 |
-| Shadcn/Radix | 现代极简原语风格，HSL 变量驱动 |
+| 风格          | 特点                           |
+| ------------- | ------------------------------ |
+| Minimalist    | 极简、高留白、细边框           |
+| Glassmorphism | 毛玻璃、半透明、灵动渐变       |
+| Shadcn/Radix  | 现代极简原语风格，HSL 变量驱动 |
 
 ## Vite 配置
 
 ```typescript
 // vite.config.ts
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import AutoImport from 'unplugin-auto-import/vite'
-import Components from 'unplugin-vue-components/vite'
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import AutoImport from 'unplugin-auto-import/vite';
+import Components from 'unplugin-vue-components/vite';
 
 export default defineConfig({
   plugins: [
@@ -106,5 +114,5 @@ export default defineConfig({
     outDir: '../public/your-app-name',
     emptyOutDir: true
   }
-})
+});
 ```

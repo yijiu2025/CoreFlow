@@ -93,8 +93,29 @@ class RecommendationDao {
     const { count, rows } = await Model.findAndCountAll({
       where: { user_id: userId, delete_version: 0 },
       include: [
-        { model: sequelize.models.Work, as: 'work', required: false, where: { delete_version: 0 }, attributes: ['id', 'title', 'description', 'image_url', 'thumbnail_url', 'likes_count', 'is_template_work', 'created_at'] },
-        { model: sequelize.models.Template, as: 'template', required: false, where: { delete_version: 0 }, attributes: ['id', 'title', 'description', 'image_url', 'thumbnail_url', 'category', 'created_at'] }
+        {
+          model: sequelize.models.Work,
+          as: 'work',
+          required: false,
+          where: { delete_version: 0 },
+          attributes: [
+            'id',
+            'title',
+            'description',
+            'image_url',
+            'thumbnail_url',
+            'likes_count',
+            'is_template_work',
+            'created_at'
+          ]
+        },
+        {
+          model: sequelize.models.Template,
+          as: 'template',
+          required: false,
+          where: { delete_version: 0 },
+          attributes: ['id', 'title', 'description', 'image_url', 'thumbnail_url', 'category', 'created_at']
+        }
       ],
       order: [['created_at', 'DESC']],
       limit,
@@ -102,16 +123,40 @@ class RecommendationDao {
     });
 
     // 扁平化：统一为 { id, type, work_id/template_id, title, description, image_url, thumbnail_url, ... }
-    const list = rows.map((r) => {
-      const data = r.toJSON();
-      if (data.work) {
-        return { id: data.id, type: 'work', target_id: data.work.id, title: data.work.title, description: data.work.description, image_url: data.work.image_url, thumbnail_url: data.work.thumbnail_url, likes_count: data.work.likes_count, created_at: data.created_at, recommended_at: data.created_at };
-      }
-      if (data.template) {
-        return { id: data.id, type: 'template', target_id: data.template.id, title: data.template.title, description: data.template.description, image_url: data.template.image_url, thumbnail_url: data.template.thumbnail_url, category: data.template.category, created_at: data.template.created_at, recommended_at: data.created_at };
-      }
-      return null;
-    }).filter(Boolean);
+    const list = rows
+      .map(r => {
+        const data = r.toJSON();
+        if (data.work) {
+          return {
+            id: data.id,
+            type: 'work',
+            target_id: data.work.id,
+            title: data.work.title,
+            description: data.work.description,
+            image_url: data.work.image_url,
+            thumbnail_url: data.work.thumbnail_url,
+            likes_count: data.work.likes_count,
+            created_at: data.created_at,
+            recommended_at: data.created_at
+          };
+        }
+        if (data.template) {
+          return {
+            id: data.id,
+            type: 'template',
+            target_id: data.template.id,
+            title: data.template.title,
+            description: data.template.description,
+            image_url: data.template.image_url,
+            thumbnail_url: data.template.thumbnail_url,
+            category: data.template.category,
+            created_at: data.template.created_at,
+            recommended_at: data.created_at
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
 
     return { list, total: count, page, pageSize };
   }

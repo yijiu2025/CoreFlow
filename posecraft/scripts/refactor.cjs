@@ -1,14 +1,14 @@
-const fs = require('fs')
+const fs = require('fs');
 
-const path = 'c:/Users/22701/Desktop/nodeServers/posecraft/src/views/EditorView.vue'
-let content = fs.readFileSync(path, 'utf8')
+const path = 'c:/Users/22701/Desktop/nodeServers/posecraft/src/views/EditorView.vue';
+let content = fs.readFileSync(path, 'utf8');
 
-const startScript = content.indexOf('<script setup lang="ts">')
-const endScript = content.indexOf('</script>') + 9
+const startScript = content.indexOf('<script setup lang="ts">');
+const endScript = content.indexOf('</script>') + 9;
 
 if (startScript === -1 || endScript === -1) {
-  console.log('Could not find script block')
-  process.exit(1)
+  console.log('Could not find script block');
+  process.exit(1);
 }
 
 const scriptContent = `<script setup lang="ts">
@@ -306,8 +306,8 @@ const updateColor = (e: Event) => { applyColor((e.target as HTMLInputElement).va
 const updateColorFromPanel = (newColor: string) => { applyColor(newColor) }
 const saveTemplate = () => { alert('保存功能开发中') }
 const triggerExit = () => { if (confirm('确定退出？未保存的修改将丢失。')) router.push('/') }
-</script>`
+</script>`;
 
-const newContent = content.substring(0, startScript) + scriptContent + content.substring(endScript)
-fs.writeFileSync(path, newContent)
-console.log('Successfully updated EditorView.vue')
+const newContent = content.substring(0, startScript) + scriptContent + content.substring(endScript);
+fs.writeFileSync(path, newContent);
+console.log('Successfully updated EditorView.vue');

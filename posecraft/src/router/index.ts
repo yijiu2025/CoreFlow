@@ -1,12 +1,12 @@
 /**
  * PoseCraft 路由配置
  */
-import { createRouter, createWebHistory } from 'vue-router'
-import NProgress from 'nprogress'
-import 'nprogress/nprogress.css'
-import { useAuthStore } from '@/stores/auth'
+import { createRouter, createWebHistory } from 'vue-router';
+import NProgress from 'nprogress';
+import 'nprogress/nprogress.css';
+import { useAuthStore } from '@/stores/auth';
 
-NProgress.configure({ showSpinner: false })
+NProgress.configure({ showSpinner: false });
 
 const router = createRouter({
   history: createWebHistory('/posecraft/'),
@@ -91,30 +91,30 @@ const router = createRouter({
       meta: { title: '作品详情' }
     }
   ]
-})
+});
 
-router.beforeEach(async (to) => {
-  NProgress.start()
-  document.title = `${to.meta.title || 'PoseCraft'} - CoreFlow`
+router.beforeEach(async to => {
+  NProgress.start();
+  document.title = `${to.meta.title || 'PoseCraft'} - CoreFlow`;
 
   if (to.meta.requiresAuth) {
-    const authStore = useAuthStore()
+    const authStore = useAuthStore();
 
     // 首次访问时验证 Session（Cookie 模式）
     if (!authStore.initialized) {
-      const valid = await authStore.checkSession()
+      const valid = await authStore.checkSession();
       if (!valid) {
-        return { name: 'login', query: { redirect: to.fullPath } }
+        return { name: 'login', query: { redirect: to.fullPath } };
       }
     }
 
     // 已初始化但未登录
     if (!authStore.isLoggedIn) {
-      return { name: 'login', query: { redirect: to.fullPath } }
+      return { name: 'login', query: { redirect: to.fullPath } };
     }
   }
-})
+});
 
-router.afterEach(() => NProgress.done())
+router.afterEach(() => NProgress.done());
 
-export default router
+export default router;

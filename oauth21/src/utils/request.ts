@@ -14,7 +14,7 @@ const service = axios.create({
 import { sha256 } from './sha256';
 
 service.interceptors.request.use(
-  async (config) => {
+  async config => {
     // 纯 Cookie 鉴权模式，不需要手动往 Headers 注入 Authorization 头部
 
     // 计算并注入动态签名（后端仅对 requireLogin 路由校验，公开接口自动跳过）
@@ -41,7 +41,7 @@ service.interceptors.request.use(
 
     return config;
   },
-  (error) => {
+  error => {
     return Promise.reject(error);
   }
 );
@@ -51,7 +51,7 @@ let isRefreshing = false;
 let pendingQueue: Array<(token: string) => void> = [];
 
 service.interceptors.response.use(
-  (res) => {
+  res => {
     // 假设后端返回结构为 { code, message, data }
     const { code, message, data } = res.data;
     // 如果没有 code，则认为直接返回的是数据 (兼容普通 REST)
@@ -67,7 +67,7 @@ service.interceptors.response.use(
     }
     return data;
   },
-  (error) => {
+  error => {
     if (axios.isCancel(error)) return Promise.reject(error);
 
     // 优先从后端返回的 JSON 数据中提取 message
@@ -92,7 +92,7 @@ async function handle401(config: AxiosRequestConfig) {
       // 这里应该调用 api/auth.ts 中的 refreshToken
       // const newToken = await refreshToken()
       const newToken = ''; // 占位
-      pendingQueue.forEach((cb) => cb(newToken));
+      pendingQueue.forEach(cb => cb(newToken));
       pendingQueue = [];
       if (config.headers) config.headers.Authorization = `Bearer ${newToken}`;
       return service(config);
@@ -104,8 +104,8 @@ async function handle401(config: AxiosRequestConfig) {
     }
   }
 
-  return new Promise((resolve) => {
-    pendingQueue.push((token) => {
+  return new Promise(resolve => {
+    pendingQueue.push(token => {
       if (config.headers) config.headers.Authorization = `Bearer ${token}`;
       resolve(service(config));
     });

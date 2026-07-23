@@ -62,7 +62,10 @@ export default async function (fastify) {
             if (!code) throw new TokenError('invalid_request', 'code is required');
             if (!redirect_uri) throw new TokenError('invalid_request', 'redirect_uri is required');
             result = await tokenService.handleAuthorizationCode({
-              code, redirect_uri, code_verifier, client
+              code,
+              redirect_uri,
+              code_verifier,
+              client
             });
             break;
           }

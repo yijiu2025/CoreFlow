@@ -30,12 +30,7 @@ export function trackRequestCount(ip) {
  * 核心速率限制检查
  */
 export const checkRateLimit = async (redisClient, actorId, options = {}) => {
-  const {
-    limit = 50,
-    window = 60,
-    blockTime = 60,
-    retryAfter = 60,
-  } = options;
+  const { limit = 50, window = 60, blockTime = 60, retryAfter = 60 } = options;
 
   const settings = getConfig().defense;
   if (!settings.enableRateLimit) return true;
@@ -44,7 +39,7 @@ export const checkRateLimit = async (redisClient, actorId, options = {}) => {
   const blockStatus = await getBlockStatus(redisClient, blockKey);
 
   if (blockStatus) {
-    const ttl = await safeRedis(redisClient, (r) => r.ttl(blockKey)) || retryAfter;
+    const ttl = (await safeRedis(redisClient, r => r.ttl(blockKey))) || retryAfter;
 
     if (blockStatus === 'CHALLENGE') {
       const err = new Error('Challenge required');
@@ -92,8 +87,11 @@ export const checkRateLimit = async (redisClient, actorId, options = {}) => {
 
   if (count > limit) {
     await setBlock(redisClient, actorId, {
-      status: 'BLOCKED', source: 'auto', permanent: false,
-      createdAt: now, expiresAt: now + blockTime * 1000,
+      status: 'BLOCKED',
+      source: 'auto',
+      permanent: false,
+      createdAt: now,
+      expiresAt: now + blockTime * 1000
     });
     const err = new Error(`Too Many Requests. Blocked for ${blockTime}s`);
     err.statusCode = 429;

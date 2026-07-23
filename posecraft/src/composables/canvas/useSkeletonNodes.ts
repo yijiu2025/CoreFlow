@@ -1,58 +1,66 @@
-import { ref } from 'vue'
-import * as fabricLib from 'fabric'
-import type { Ref } from 'vue'
-import { v4 as uuidv4 } from 'uuid'
-import { useToolStore } from '@/stores/editor'
+import { ref } from 'vue';
+import * as fabricLib from 'fabric';
+import type { Ref } from 'vue';
+import { v4 as uuidv4 } from 'uuid';
+import { useToolStore } from '@/stores/editor';
 
 // 兼容并加载 Fabric 实例
-const fabric = (fabricLib as any).fabric || (fabricLib as any).default || fabricLib
+const fabric = (fabricLib as any).fabric || (fabricLib as any).default || fabricLib;
 
 /**
  * 骨架节点及肢体连接线管理 Composable
  * 负责解析 AI 预测得到的关键点并渲染骨架、动态添加新节点、在线段中点插入节点以及将两个节点连接。
  */
 export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, saveState: () => void) {
-  const toolStore = useToolStore()
+  const toolStore = useToolStore();
 
   /**
    * 映射 AI 预测关键点的百分比坐标至画布上的物理像素坐标
    */
   const mapPoint = (k: any, offset: any) => {
-    if (offset) return { x: offset.x + k.x * offset.sw, y: offset.y + k.y * offset.sh }
-    const bg = fCanvas.value?.backgroundImage
-    if (!bg) return { x: k.x, y: k.y }
+    if (offset) return { x: offset.x + k.x * offset.sw, y: offset.y + k.y * offset.sh };
+    const bg = fCanvas.value?.backgroundImage;
+    if (!bg) return { x: k.x, y: k.y };
     return {
       x: bg.left - bg.getScaledWidth() / 2 + k.x * bg.scaleX,
       y: bg.top - bg.getScaledHeight() / 2 + k.y * bg.scaleY
-    }
-  }
+    };
+  };
 
   /**
    * 根据预测结果绘制整套人体姿势骨架（包括关节节点与连线）
    */
   const drawPoseSkeleton = (pose: any, offset: any = null) => {
-    if (!fCanvas.value) return
-    
+    if (!fCanvas.value) return;
+
     // 过滤掉人脸五官，仅保留身体核心关节点
-    const fp = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear']
-    const kp: any = {}
+    const fp = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear'];
+    const kp: any = {};
     pose.keypoints.forEach((k: any) => {
-      if (k.score > 0.2 && !fp.includes(k.name)) kp[k.name] = mapPoint(k, offset)
-    })
-    
+      if (k.score > 0.2 && !fp.includes(k.name)) kp[k.name] = mapPoint(k, offset);
+    });
+
     // 定义核心骨骼边缘连线关系
     const edges = [
-      ['left_shoulder', 'right_shoulder'], ['left_shoulder', 'left_elbow'], ['right_shoulder', 'right_elbow'],
-      ['left_elbow', 'left_wrist'], ['right_elbow', 'right_wrist'], ['left_shoulder', 'left_hip'],
-      ['right_shoulder', 'right_hip'], ['left_hip', 'right_hip'], ['left_hip', 'left_knee'],
-      ['right_hip', 'right_knee'], ['left_knee', 'left_ankle'], ['right_knee', 'right_ankle']
-    ]
-    
-    const nm: any = {}
-    
+      ['left_shoulder', 'right_shoulder'],
+      ['left_shoulder', 'left_elbow'],
+      ['right_shoulder', 'right_elbow'],
+      ['left_elbow', 'left_wrist'],
+      ['right_elbow', 'right_wrist'],
+      ['left_shoulder', 'left_hip'],
+      ['right_shoulder', 'right_hip'],
+      ['left_hip', 'right_hip'],
+      ['left_hip', 'left_knee'],
+      ['right_hip', 'right_knee'],
+      ['left_knee', 'left_ankle'],
+      ['right_knee', 'right_ankle']
+    ];
+
+    const nm: any = {};
+
     // 1. 渲染身体节点（圆圈）
     Object.entries(kp).forEach(([name, p]: [string, any]) => {
-      const isSelectable = toolStore.canvasTool === 'moveNode' // 仅在 moveNode 工具激活时允许拖拽
+      const isSelectable = toolStore.canvasTool === 'moveNode'; // 仅在 moveNode 工具激活时允许拖拽
       const c = new fabric.Circle({
         id: uuidv4(),
         left: p.x,
@@ -71,17 +79,19 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
         padding: 12,
         name,
         erasable: true
-      })
-      c.connectedLines = []
-      nm[name] = c
-      fCanvas.value.add(c)
-      c.setCoords()
-    })
-    
+      });
+      c.connectedLines = [];
+      nm[name] = c;
+      fCanvas.value.add(c);
+      c.setCoords();
+    });
+
     // 2. 渲染节点之间的骨骼连接线
     edges.forEach(([a, b]) => {
-      if (!nm[a] || !nm[b]) return
-      const nA = nm[a], nB = nm[b], id = uuidv4()
+      if (!nm[a] || !nm[b]) return;
+      const nA = nm[a],
+        nB = nm[b],
+        id = uuidv4();
       const l = new fabric.Line([nA.left, nA.top, nB.left, nB.top], {
         id,
         stroke: currentColor.value,
@@ -93,24 +103,24 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
         strokeLineCap: 'round',
         opacity: 0.8,
         erasable: true
-      })
-      nA.connectedLines.push({ line: id, endpoint: 'start' })
-      nB.connectedLines.push({ line: id, endpoint: 'end' })
-      fCanvas.value.add(l)
-      l.sendToBack()
-    })
-    
+      });
+      nA.connectedLines.push({ line: id, endpoint: 'start' });
+      nB.connectedLines.push({ line: id, endpoint: 'end' });
+      fCanvas.value.add(l);
+      l.sendToBack();
+    });
+
     // 确保圆圈节点图层处于连线之上，便于用户点选
-    Object.values(nm).forEach((c: any) => c.bringToFront())
-  }
+    Object.values(nm).forEach((c: any) => c.bringToFront());
+  };
 
   /**
    * 手动添加单个独立的骨架节点
    */
   const addSkeletonNode = (x: number, y: number) => {
-    if (!fCanvas.value) return
-    const id = uuidv4()
-    const isSelectable = toolStore.canvasTool === 'moveNode' // 根据当前工具判断是否可被拖动
+    if (!fCanvas.value) return;
+    const id = uuidv4();
+    const isSelectable = toolStore.canvasTool === 'moveNode'; // 根据当前工具判断是否可被拖动
     const node = new fabric.Circle({
       id,
       left: x,
@@ -129,34 +139,36 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
       padding: 12,
       name: `node_${Date.now()}`,
       erasable: true
-    })
-    node.connectedLines = []
-    fCanvas.value.add(node)
-    node.bringToFront()
-    fCanvas.value.setActiveObject(node)
-    fCanvas.value.renderAll()
-    saveState()
-  }
+    });
+    node.connectedLines = [];
+    fCanvas.value.add(node);
+    node.bringToFront();
+    fCanvas.value.setActiveObject(node);
+    fCanvas.value.renderAll();
+    saveState();
+  };
 
   /**
    * 在已有节点连接线的中点，插入一个新的关节点
    */
   const addMidpointNode = (node: any) => {
-    if (!fCanvas.value || !node.connectedLines?.length) return
-    const objs = fCanvas.value.getObjects()
-    const idMap: any = {}
-    objs.forEach((o: any) => { if (o.id) idMap[o.id] = o })
+    if (!fCanvas.value || !node.connectedLines?.length) return;
+    const objs = fCanvas.value.getObjects();
+    const idMap: any = {};
+    objs.forEach((o: any) => {
+      if (o.id) idMap[o.id] = o;
+    });
 
-    const conn = node.connectedLines[0]
-    const line = idMap[conn.line || conn.id]
-    if (!line) return
+    const conn = node.connectedLines[0];
+    const line = idMap[conn.line || conn.id];
+    if (!line) return;
 
     // 计算中点坐标
-    const mx = (line.x1 + line.x2) / 2
-    const my = (line.y1 + line.y2) / 2
+    const mx = (line.x1 + line.x2) / 2;
+    const my = (line.y1 + line.y2) / 2;
 
-    const id = uuidv4()
-    const isSelectable = toolStore.canvasTool === 'moveNode'
+    const id = uuidv4();
+    const isSelectable = toolStore.canvasTool === 'moveNode';
     const newNode = new fabric.Circle({
       id,
       left: mx,
@@ -175,22 +187,23 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
       padding: 12,
       name: `node_${Date.now()}`,
       erasable: true
-    })
-    newNode.connectedLines = []
+    });
+    newNode.connectedLines = [];
 
-    const otherEndpoint = conn.endpoint === 'start' ? 'end' : 'start'
-    const otherConn = objs.find((o: any) =>
-      o.isSkeleton && o !== node && o.connectedLines?.some((c: any) =>
-        (c.line || c.id) === (conn.line || conn.id) && c.endpoint === otherEndpoint
-      )
-    )
+    const otherEndpoint = conn.endpoint === 'start' ? 'end' : 'start';
+    const otherConn = objs.find(
+      (o: any) =>
+        o.isSkeleton &&
+        o !== node &&
+        o.connectedLines?.some((c: any) => (c.line || c.id) === (conn.line || conn.id) && c.endpoint === otherEndpoint)
+    );
 
     // 移除老线，准备分裂为两条新线段
-    node.connectedLines = node.connectedLines.filter((c: any) => (c.line || c.id) !== (conn.line || conn.id))
-    fCanvas.value.remove(line)
+    node.connectedLines = node.connectedLines.filter((c: any) => (c.line || c.id) !== (conn.line || conn.id));
+    fCanvas.value.remove(line);
 
     // 绘制新分裂出的第一根线
-    const line1Id = uuidv4()
+    const line1Id = uuidv4();
     const line1 = new fabric.Line([node.left, node.top, mx, my], {
       id: line1Id,
       stroke: currentColor.value,
@@ -201,15 +214,15 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
       strokeLineCap: 'round',
       opacity: 0.8,
       erasable: true
-    })
-    node.connectedLines.push({ line: line1Id, endpoint: 'start' })
-    newNode.connectedLines.push({ line: line1Id, endpoint: 'end' })
-    fCanvas.value.add(line1)
-    line1.sendToBack()
+    });
+    node.connectedLines.push({ line: line1Id, endpoint: 'start' });
+    newNode.connectedLines.push({ line: line1Id, endpoint: 'end' });
+    fCanvas.value.add(line1);
+    line1.sendToBack();
 
     // 绘制新分裂出的第二根线
     if (otherConn) {
-      const line2Id = uuidv4()
+      const line2Id = uuidv4();
       const line2 = new fabric.Line([mx, my, otherConn.left, otherConn.top], {
         id: line2Id,
         stroke: currentColor.value,
@@ -220,42 +233,42 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
         strokeLineCap: 'round',
         opacity: 0.8,
         erasable: true
-      })
-      newNode.connectedLines.push({ line: line2Id, endpoint: 'start' })
+      });
+      newNode.connectedLines.push({ line: line2Id, endpoint: 'start' });
       otherConn.connectedLines = otherConn.connectedLines.map((c: any) => {
-        if ((c.line || c.id) === (conn.line || conn.id)) return { line: line2Id, endpoint: 'end' }
-        return c
-      })
-      fCanvas.value.add(line2)
-      line2.sendToBack()
+        if ((c.line || c.id) === (conn.line || conn.id)) return { line: line2Id, endpoint: 'end' };
+        return c;
+      });
+      fCanvas.value.add(line2);
+      line2.sendToBack();
     }
 
-    fCanvas.value.add(newNode)
-    newNode.bringToFront()
-    fCanvas.value.setActiveObject(newNode)
-    fCanvas.value.renderAll()
-    saveState()
-  }
+    fCanvas.value.add(newNode);
+    newNode.bringToFront();
+    fCanvas.value.setActiveObject(newNode);
+    fCanvas.value.renderAll();
+    saveState();
+  };
 
   /**
    * 将两个关节点通过一根直线连结
    */
   const connectNodes = (nodeA: any, nodeB: any) => {
-    if (!fCanvas.value) return
+    if (!fCanvas.value) return;
 
     // 如果两个节点之间已存在连接线，直接返回，避免重复连接
     const existingConn = nodeA.connectedLines?.find((c: any) => {
-      const objs = fCanvas.value.getObjects()
-      const line = objs.find((o: any) => o.id === (c.line || c.id))
-      if (!line) return false
-      return objs.some((o: any) =>
-        o.isSkeleton && o === nodeB &&
-        o.connectedLines?.some((oc: any) => (oc.line || oc.id) === (c.line || c.id))
-      )
-    })
-    if (existingConn) return
+      const objs = fCanvas.value.getObjects();
+      const line = objs.find((o: any) => o.id === (c.line || c.id));
+      if (!line) return false;
+      return objs.some(
+        (o: any) =>
+          o.isSkeleton && o === nodeB && o.connectedLines?.some((oc: any) => (oc.line || oc.id) === (c.line || c.id))
+      );
+    });
+    if (existingConn) return;
 
-    const id = uuidv4()
+    const id = uuidv4();
     const line = new fabric.Line([nodeA.left, nodeA.top, nodeB.left, nodeB.top], {
       id,
       stroke: currentColor.value,
@@ -266,20 +279,20 @@ export function useSkeletonNodes(fCanvas: Ref<any>, currentColor: Ref<string>, s
       strokeLineCap: 'round',
       opacity: 0.8,
       erasable: true
-    })
+    });
 
-    if (!nodeA.connectedLines) nodeA.connectedLines = []
-    if (!nodeB.connectedLines) nodeB.connectedLines = []
-    nodeA.connectedLines.push({ line: id, endpoint: 'start' })
-    nodeB.connectedLines.push({ line: id, endpoint: 'end' })
+    if (!nodeA.connectedLines) nodeA.connectedLines = [];
+    if (!nodeB.connectedLines) nodeB.connectedLines = [];
+    nodeA.connectedLines.push({ line: id, endpoint: 'start' });
+    nodeB.connectedLines.push({ line: id, endpoint: 'end' });
 
-    fCanvas.value.add(line)
-    line.sendToBack()
-    nodeA.bringToFront()
-    nodeB.bringToFront()
-    fCanvas.value.renderAll()
-    saveState()
-  }
+    fCanvas.value.add(line);
+    line.sendToBack();
+    nodeA.bringToFront();
+    nodeB.bringToFront();
+    fCanvas.value.renderAll();
+    saveState();
+  };
 
-  return { mapPoint, drawPoseSkeleton, addSkeletonNode, addMidpointNode, connectNodes }
+  return { mapPoint, drawPoseSkeleton, addSkeletonNode, addMidpointNode, connectNodes };
 }

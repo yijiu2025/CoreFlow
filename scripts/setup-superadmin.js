@@ -29,7 +29,7 @@ function createRl() {
 
 /** 提示用户输入 */
 function ask(rl, question, hidden = false) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     if (hidden) {
       // 隐藏输入（密码）
       process.stdout.write(question);
@@ -38,7 +38,7 @@ function ask(rl, question, hidden = false) {
       process.stdin.resume();
       process.stdin.setEncoding('utf8');
 
-      const onData = (char) => {
+      const onData = char => {
         if (char === '\n' || char === '\r' || char === '') {
           process.stdin.setRawMode(false);
           process.stdin.pause();
@@ -61,7 +61,7 @@ function ask(rl, question, hidden = false) {
       };
       process.stdin.on('data', onData);
     } else {
-      rl.question(question, (answer) => resolve(answer.trim()));
+      rl.question(question, answer => resolve(answer.trim()));
     }
   });
 }
@@ -249,7 +249,9 @@ async function main() {
                 await redis.del(key);
                 cleared++;
               }
-            } catch { /* 跳过 */ }
+            } catch {
+              /* 跳过 */
+            }
           }
         }
         await redis.quit();
@@ -264,15 +266,16 @@ async function main() {
     console.log('\n🎉 初始化完成！');
     console.log('   该用户现在拥有系统全部权限。');
     console.log('   重新登录后，访问任意应用将自动获得该应用的管理员权限。');
-
   } finally {
     rl.close();
   }
 }
 
-main().catch((err) => {
-  console.error('❌ 初始化失败:', err.message);
-  process.exit(1);
-}).finally(async () => {
-  await sequelize.close();
-});
+main()
+  .catch(err => {
+    console.error('❌ 初始化失败:', err.message);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await sequelize.close();
+  });

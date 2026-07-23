@@ -54,8 +54,8 @@ export default (sequelize, DataTypes) => {
       tableName: 'session_tokens',
       timestamps: true,
       indexes: [
-        { fields: ['user_id'] }, 
-        { fields: ['app_id'] }, 
+        { fields: ['user_id'] },
+        { fields: ['app_id'] },
         { fields: ['device_id'] },
         { fields: ['token'], name: 'idx_session_token_identifier' }, // 增加索引，以便黑名单/吊销查询时实现 O(1) 速度
         { fields: ['user_id', 'app_id', 'device_id'], name: 'idx_user_app_device' } // 高频：多端互踢查询
@@ -63,7 +63,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  SessionToken.associate = (models) => {
+  SessionToken.associate = models => {
     SessionToken.belongsTo(models.UserSession, {
       foreignKey: 'user_id',
       targetKey: 'user_id',

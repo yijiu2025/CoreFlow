@@ -16,13 +16,9 @@ export async function up({ queryInterface, Sequelize }) {
     }
     const newId = `pose_craft_${suffix}`;
     // 确保不与其他记录冲突
-    const [dup] = await queryInterface.sequelize.query(
-      `SELECT id FROM ${tableName} WHERE personal_id = '${newId}'`
-    );
+    const [dup] = await queryInterface.sequelize.query(`SELECT id FROM ${tableName} WHERE personal_id = '${newId}'`);
     if (dup.length === 0) {
-      await queryInterface.sequelize.query(
-        `UPDATE ${tableName} SET personal_id = '${newId}' WHERE id = ${u.id}`
-      );
+      await queryInterface.sequelize.query(`UPDATE ${tableName} SET personal_id = '${newId}' WHERE id = ${u.id}`);
     }
   }
 

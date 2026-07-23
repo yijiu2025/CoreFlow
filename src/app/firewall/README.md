@@ -90,43 +90,43 @@ firewall onResponse 钩子
 
 ### config/ — 配置文件
 
-| 文件 | 职责 | 关键导出 |
-|------|------|----------|
+| 文件      | 职责                                  | 关键导出                                                                            |
+| --------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
 | config.js | 默认安全策略矩阵、IP 解析源、常量路径 | `DEFAULT_SECURITY_SETTINGS`, `DEFAULT_IP_APIS`, `CHALLENGE_SECRET`, `FIREWALL_FILE` |
 
 ### data/ — 运行中数据
 
-| 文件 | 职责 | 关键导出 |
-|------|------|----------|
-| store.js | 10000 条环形缓冲区、地域/路径/IP 统计、10 秒节流持久化 | `pushRecord`, `getRecentRecords`, `getSummary`, `clearAll`, `setBroadcastHandler` |
-| challenge-template.js | 生成含 HMAC 签名的挑战 HTML 页面 | `buildChallengePage` |
+| 文件                  | 职责                                                   | 关键导出                                                                          |
+| --------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| store.js              | 10000 条环形缓冲区、地域/路径/IP 统计、10 秒节流持久化 | `pushRecord`, `getRecentRecords`, `getSummary`, `clearAll`, `setBroadcastHandler` |
+| challenge-template.js | 生成含 HMAC 签名的挑战 HTML 页面                       | `buildChallengePage`                                                              |
 
 ### dao/ — 数据交互层
 
-| 文件 | 职责 | 关键导出 |
-|------|------|----------|
-| dao.js | JSON 文件持久化、名单同步到 Redis、节点自动定位 | `getSecuritySettings`, `updateSecuritySettings`, `getServerNode`, `refreshServerNodeAuto`, `addToBlacklist`, `removeFromBlacklist`, `addToWhitelist`, `removeFromWhitelist` |
-| block-manager.js | 封禁/白名单查询（前端面板）+ API 操作封装 | `getActiveBlocks`, `getActiveWhitelist`, `setBlockFp`, `removeBlockFp`, `setWhitelist`, `removeWhitelist`, `setWhitelistFp`, `removeWhitelistFp` |
+| 文件             | 职责                                            | 关键导出                                                                                                                                                                    |
+| ---------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| dao.js           | JSON 文件持久化、名单同步到 Redis、节点自动定位 | `getSecuritySettings`, `updateSecuritySettings`, `getServerNode`, `refreshServerNodeAuto`, `addToBlacklist`, `removeFromBlacklist`, `addToWhitelist`, `removeFromWhitelist` |
+| block-manager.js | 封禁/白名单查询（前端面板）+ API 操作封装       | `getActiveBlocks`, `getActiveWhitelist`, `setBlockFp`, `removeBlockFp`, `setWhitelist`, `removeWhitelist`, `setWhitelistFp`, `removeWhitelistFp`                            |
 
 ### util/ — 公共工具
 
-| 文件 | 职责 | 关键导出 |
-|------|------|----------|
-| shared.js | 共享状态容器（内存 Map、Redis Key、Lua 脚本、配置缓存） | `activeConnections`, `getConfig`, `KEY`, `memoryBlocks`, `memoryWhitelist` 等 |
-| connection-tracker.js | 并发连接追踪 + 僵尸清理 | `trackConnection`, `getConnectionStats`, `cleanupStaleConnections`, `startCleanupTask` |
-| fingerprint.js | 请求指纹生成 | `generateFingerprint` |
+| 文件                  | 职责                                                    | 关键导出                                                                               |
+| --------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| shared.js             | 共享状态容器（内存 Map、Redis Key、Lua 脚本、配置缓存） | `activeConnections`, `getConfig`, `KEY`, `memoryBlocks`, `memoryWhitelist` 等          |
+| connection-tracker.js | 并发连接追踪 + 僵尸清理                                 | `trackConnection`, `getConnectionStats`, `cleanupStaleConnections`, `startCleanupTask` |
+| fingerprint.js        | 请求指纹生成                                            | `generateFingerprint`                                                                  |
 
 ### engine/ — 防火墙核心逻辑
 
-| 文件 | 职责 | 关键导出 |
-|------|------|----------|
-| pipeline.js | onRequest 五层拦截管道 + onSend 日志记录 | `shouldSkipDeepCheck`, `buildRequestContext`, `checkGlobalBlockPhase`, `checkChallengeCookie`, `runDetectionPipeline`, `recordLog` |
-| detectors/rate-limiter.js | Redis 滑窗限频，内存降级 | `trackRequestCount`, `checkRateLimit` |
-| detectors/scan-trap.js | 404/403 扫描行为检测 | `checkNotFoundTrap` |
-| detectors/brute-force.js | 登录暴力破解防护 | `checkLoginBruteForce`, `isAccountLocked` |
-| detectors/geo-filter.js | 地理围栏 + GeoIP 解析 | `checkGeoReputation`, `resolveGeoInfo` |
-| detectors/bot-detector.js | Bot/僵尸网络检测 | `checkBotChallenge` |
-| dao/block-manager.js | IP/指纹封禁核心（checkGlobalBlock + CRUD，Redis 双写 + 内存缓存） | `setBlock`, `removeBlock`, `checkGlobalBlock` |
+| 文件                      | 职责                                                              | 关键导出                                                                                                                           |
+| ------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| pipeline.js               | onRequest 五层拦截管道 + onSend 日志记录                          | `shouldSkipDeepCheck`, `buildRequestContext`, `checkGlobalBlockPhase`, `checkChallengeCookie`, `runDetectionPipeline`, `recordLog` |
+| detectors/rate-limiter.js | Redis 滑窗限频，内存降级                                          | `trackRequestCount`, `checkRateLimit`                                                                                              |
+| detectors/scan-trap.js    | 404/403 扫描行为检测                                              | `checkNotFoundTrap`                                                                                                                |
+| detectors/brute-force.js  | 登录暴力破解防护                                                  | `checkLoginBruteForce`, `isAccountLocked`                                                                                          |
+| detectors/geo-filter.js   | 地理围栏 + GeoIP 解析                                             | `checkGeoReputation`, `resolveGeoInfo`                                                                                             |
+| detectors/bot-detector.js | Bot/僵尸网络检测                                                  | `checkBotChallenge`                                                                                                                |
+| dao/block-manager.js      | IP/指纹封禁核心（checkGlobalBlock + CRUD，Redis 双写 + 内存缓存） | `setBlock`, `removeBlock`, `checkGlobalBlock`                                                                                      |
 
 ## 外部依赖
 
@@ -136,8 +136,8 @@ firewall onResponse 钩子
 
 ## 数据持久化
 
-| 文件 | 内容 | 更新频率 |
-|------|------|----------|
-| `data/firewall_config.json` | 服务器节点信息 + 安全策略配置 | 防抖 1 秒 |
-| `data/traffic_stats.json` | 流量记录 + 统计数据 | 节流 10 秒 |
-| `data/guard_config.json` | 3 级 Guard 配置（由 `src/api/guard.js` 管理） | 启动时 + 变更时 |
+| 文件                        | 内容                                          | 更新频率        |
+| --------------------------- | --------------------------------------------- | --------------- |
+| `data/firewall_config.json` | 服务器节点信息 + 安全策略配置                 | 防抖 1 秒       |
+| `data/traffic_stats.json`   | 流量记录 + 统计数据                           | 节流 10 秒      |
+| `data/guard_config.json`    | 3 级 Guard 配置（由 `src/api/guard.js` 管理） | 启动时 + 变更时 |

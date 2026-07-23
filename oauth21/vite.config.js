@@ -1,10 +1,10 @@
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import path from 'path'
-import AutoImport from 'unplugin-auto-import/vite'
-import Components from 'unplugin-vue-components/vite'
-import { createSvgIconsPlugin } from 'vite-plugin-svg-icons'
-import { VitePWA } from 'vite-plugin-pwa'
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import path from 'path';
+import AutoImport from 'unplugin-auto-import/vite';
+import Components from 'unplugin-vue-components/vite';
+import { createSvgIconsPlugin } from 'vite-plugin-svg-icons';
+import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -14,16 +14,16 @@ export default defineConfig({
       imports: ['vue', 'vue-router', 'pinia', '@vueuse/core', 'vue-i18n'],
       dts: 'src/auto-import.d.ts',
       dirs: ['src/composables', 'src/stores'],
-      vueTemplate: true,
+      vueTemplate: true
     }),
     Components({
       extensions: ['vue'],
       include: [/\.vue$/, /\.vue\?vue/],
-      dts: 'src/components.d.ts',
+      dts: 'src/components.d.ts'
     }),
     createSvgIconsPlugin({
       iconDirs: [path.resolve(process.cwd(), 'src/assets/icons')],
-      symbolId: 'icon-[dir]-[name]',
+      symbolId: 'icon-[dir]-[name]'
     }),
     VitePWA({
       registerType: 'autoUpdate',
@@ -35,21 +35,21 @@ export default defineConfig({
           {
             src: '/pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/png',
+            type: 'image/png'
           },
           {
             src: '/pwa-512x512.png',
             sizes: '512x512',
-            type: 'image/png',
-          },
-        ],
-      },
-    }),
+            type: 'image/png'
+          }
+        ]
+      }
+    })
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
+      '@': path.resolve(__dirname, './src')
+    }
   },
   server: {
     port: 5174,
@@ -57,7 +57,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        rewrite: path => path.replace(/^\/api/, '')
       },
       '/verify': {
         target: 'http://localhost:3000',
@@ -76,8 +76,8 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        additionalData: `@use "@/assets/styles/variables.scss" as *;`,
-      },
-    },
-  },
-})
+        additionalData: `@use "@/assets/styles/variables.scss" as *;`
+      }
+    }
+  }
+});

@@ -3,13 +3,7 @@
  * 账号维度 + IP 维度双重防护，触发后锁定账号并挑战 IP
  */
 import { safeRedis } from '../../../../redis/safe-redis.js';
-import {
-  getConfig,
-  KEY,
-  LUA_INCR_WITH_EXPIRE,
-  memorySlidingWindow,
-  getBlockStatus
-} from '../../util/shared.js';
+import { getConfig, KEY, LUA_INCR_WITH_EXPIRE, memorySlidingWindow, getBlockStatus } from '../../util/shared.js';
 import { setBlock } from '../dao/block-manager.js';
 
 const C = { reset: '\x1b[0m', yellow: '\x1b[33m' };
@@ -17,12 +11,7 @@ const C = { reset: '\x1b[0m', yellow: '\x1b[33m' };
 /**
  * 登录暴力破解检测
  */
-export const checkLoginBruteForce = async (
-  redisClient,
-  ip,
-  username,
-  success
-) => {
+export const checkLoginBruteForce = async (redisClient, ip, username, success) => {
   const settings = getConfig().defense;
   if (!settings.enableBruteForce) return;
 
@@ -33,7 +22,7 @@ export const checkLoginBruteForce = async (
   const ipLimit = settings.bruteIpLimit || 10;
 
   if (success) {
-    await safeRedis(redisClient, async (r) => {
+    await safeRedis(redisClient, async r => {
       const pipeline = r.pipeline();
       pipeline.del(KEY.bruteIp(ip));
       if (username) pipeline.del(KEY.bruteUser(username));
@@ -48,18 +37,11 @@ export const checkLoginBruteForce = async (
   if (!redisClient) {
     let blocked = false;
     if (memorySlidingWindow(`brute:ip:${ip}`, ipLimit, bruteWindow)) {
-      console.warn(
-        `⚠️ [Firewall] ${C.yellow}暴力破解 IP (mem): ${ip}${C.reset}`
-      );
+      console.warn(`⚠️ [Firewall] ${C.yellow}暴力破解 IP (mem): ${ip}${C.reset}`);
       blocked = true;
     }
-    if (
-      username &&
-      memorySlidingWindow(`brute:user:${username}`, bruteLimit, bruteWindow)
-    ) {
-      console.warn(
-        `⚠️ [Firewall] ${C.yellow}暴力破解账号 (mem): ${username}${C.reset}`
-      );
+    if (username && memorySlidingWindow(`brute:user:${username}`, bruteLimit, bruteWindow)) {
+      console.warn(`⚠️ [Firewall] ${C.yellow}暴力破解账号 (mem): ${username}${C.reset}`);
       blocked = true;
     }
     if (blocked) {
@@ -73,14 +55,7 @@ export const checkLoginBruteForce = async (
 
   const [ipCount, userCount] = await Promise.all([
     redisClient.eval(LUA_INCR_WITH_EXPIRE, 1, KEY.bruteIp(ip), bruteWindow),
-    username
-      ? redisClient.eval(
-          LUA_INCR_WITH_EXPIRE,
-          1,
-          KEY.bruteUser(username),
-          bruteWindow
-        )
-      : 0
+    username ? redisClient.eval(LUA_INCR_WITH_EXPIRE, 1, KEY.bruteUser(username), bruteWindow) : 0
   ]);
 
   const now = Date.now();
@@ -93,9 +68,7 @@ export const checkLoginBruteForce = async (
       createdAt: now,
       expiresAt: now + ipBlockTime * 1000
     });
-    console.warn(
-      `⚠️ [Firewall] ${C.yellow}暴力破解(IP): ${ip} 失败 ${ipCount}次, 挑战 ${ipBlockTime}秒${C.reset}`
-    );
+    console.warn(`⚠️ [Firewall] ${C.yellow}暴力破解(IP): ${ip} 失败 ${ipCount}次, 挑战 ${ipBlockTime}秒${C.reset}`);
     return;
   }
 

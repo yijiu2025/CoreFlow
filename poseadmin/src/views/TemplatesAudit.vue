@@ -1,69 +1,69 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, onMounted } from 'vue';
+import axios from 'axios';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
-const loading = ref(false)
-const list = ref([])
-const total = ref(0)
+const loading = ref(false);
+const list = ref([]);
+const total = ref(0);
 const query = ref({
   page: 1,
   pageSize: 20,
   status: 2, // 默认查待审核
   keyword: ''
-})
+});
 
 const fetchList = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    const res = await axios.get('/posecraft/v1/admin/templates', { params: query.value })
+    const res = await axios.get('/posecraft/v1/admin/templates', { params: query.value });
     if (res.data.code === 200) {
-      list.value = res.data.data
-      total.value = res.data.total
+      list.value = res.data.data;
+      total.value = res.data.total;
     } else {
-      ElMessage.error(res.data.message || '获取列表失败')
+      ElMessage.error(res.data.message || '获取列表失败');
     }
   } catch (err: any) {
-    ElMessage.error(err.message || '获取列表失败')
+    ElMessage.error(err.message || '获取列表失败');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const handleAudit = async (id: number, status: number) => {
-  const actionText = status === 1 ? '通过' : '驳回'
+  const actionText = status === 1 ? '通过' : '驳回';
   try {
     await ElMessageBox.confirm(`确定要${actionText}该模板吗？`, '审核确认', {
       type: status === 1 ? 'success' : 'warning'
-    })
-    
-    const res = await axios.put(`/posecraft/v1/admin/templates/${id}/audit`, { status })
+    });
+
+    const res = await axios.put(`/posecraft/v1/admin/templates/${id}/audit`, { status });
     if (res.data.code === 200) {
-      ElMessage.success('审核成功')
-      fetchList()
+      ElMessage.success('审核成功');
+      fetchList();
     } else {
-      ElMessage.error(res.data.message || '审核失败')
+      ElMessage.error(res.data.message || '审核失败');
     }
   } catch (e) {
     if (e !== 'cancel') {
-      console.error(e)
+      console.error(e);
     }
   }
-}
+};
 
 const handleSizeChange = (val: number) => {
-  query.value.pageSize = val
-  fetchList()
-}
+  query.value.pageSize = val;
+  fetchList();
+};
 
 const handleCurrentChange = (val: number) => {
-  query.value.page = val
-  fetchList()
-}
+  query.value.page = val;
+  fetchList();
+};
 
 onMounted(() => {
-  fetchList()
-})
+  fetchList();
+});
 </script>
 
 <template>
@@ -75,11 +75,13 @@ onMounted(() => {
         <el-radio-button :value="-2">已驳回</el-radio-button>
         <el-radio-button :value="0">私密</el-radio-button>
       </el-radio-group>
-      
+
       <div class="flex gap-2">
         <el-input v-model="query.keyword" placeholder="搜索标题/描述" clearable @keyup.enter="fetchList" class="w-64">
           <template #append>
-            <el-button @click="fetchList"><el-icon><Search /></el-icon></el-button>
+            <el-button @click="fetchList"
+              ><el-icon><Search /></el-icon
+            ></el-button>
           </template>
         </el-input>
       </div>
@@ -107,7 +109,7 @@ onMounted(() => {
       <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
       <el-table-column prop="user_id" label="作者ID" width="100" align="center" />
       <el-table-column prop="created_at" label="创建时间" width="170" align="center" />
-      
+
       <el-table-column label="操作" width="160" fixed="right" align="center">
         <template #default="{ row }">
           <div class="flex items-center justify-center gap-2" v-if="row.status === 2">

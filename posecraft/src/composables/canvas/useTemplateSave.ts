@@ -7,11 +7,11 @@
  * @author Claude
  * @since 2026-07-13
  */
-import { ref, Ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { templateApi } from '@/api/template'
-import { useUpload } from '@/composables/useUpload'
-import { useAuthStore } from '@/stores/auth'
+import { ref, Ref } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { templateApi } from '@/api/template';
+import { useUpload } from '@/composables/useUpload';
+import { useAuthStore } from '@/stores/auth';
 
 /**
  * 模板保存组合式函数
@@ -24,28 +24,28 @@ export function useTemplateSave(
   templateName: Ref<string>,
   getInkCanvas: () => HTMLCanvasElement | null
 ) {
-  const router = useRouter()
-  const route = useRoute()
-  const { uploadFile } = useUpload()
-  const authStore = useAuthStore()
+  const router = useRouter();
+  const route = useRoute();
+  const { uploadFile } = useUpload();
+  const authStore = useAuthStore();
 
-  const showSaveModal = ref(false)
-  const showExitModal = ref(false)
+  const showSaveModal = ref(false);
+  const showExitModal = ref(false);
 
   /** 显示保存确认弹窗 */
   const saveTemplate = () => {
-    showSaveModal.value = true
-  }
+    showSaveModal.value = true;
+  };
 
   /** 显示退出确认弹窗 */
   const triggerExit = () => {
-    showExitModal.value = true
-  }
+    showExitModal.value = true;
+  };
 
   /** 返回首页 */
   const goHome = () => {
-    router.push('/')
-  }
+    router.push('/');
+  };
 
   /**
    * 确认保存/发布模板
@@ -55,83 +55,91 @@ export function useTemplateSave(
    * @param formData - 模板表单数据（名称/描述/类别/标签/位置信息）
    */
   const confirmSave = async (formData: {
-    name: string
-    description: string
-    category: string
-    publication_address?: string | null
-    publication_lat?: number | null
-    publication_lng?: number | null
-    publication_source?: string | null
-    locationName: string
-    coords: { lat: number; lng: number } | null
-    work_address?: string | null
-    work_lat?: number | null
-    work_lng?: number | null
-    work_address_source?: string | null
-    ip: string
-    tags: string[]
-    exifInfo?: any
+    name: string;
+    description: string;
+    category: string;
+    publication_address?: string | null;
+    publication_lat?: number | null;
+    publication_lng?: number | null;
+    publication_source?: string | null;
+    locationName: string;
+    coords: { lat: number; lng: number } | null;
+    work_address?: string | null;
+    work_lat?: number | null;
+    work_lng?: number | null;
+    work_address_source?: string | null;
+    ip: string;
+    tags: string[];
+    exifInfo?: any;
   }) => {
-    if (!fCanvas.value) return
-    fCanvas.value.discardActiveObject()
-    
+    if (!fCanvas.value) return;
+    fCanvas.value.discardActiveObject();
+
     // 给渲染留出 100ms 呼吸时间，确保预览图不全为空白
-    await new Promise(r => setTimeout(r, 100))
+    await new Promise(r => setTimeout(r, 100));
     // 辅助函数：将 Base64 转为 File 对象用于直传 FormData
     const dataURLtoFile = (dataurl: string, filename: string) => {
-      const arr = dataurl.split(',')
-      const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg'
-      const bstr = atob(arr[1])
-      let n = bstr.length
-      const u8arr = new Uint8Array(n)
+      const arr = dataurl.split(',');
+      const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
       while (n--) {
-        u8arr[n] = bstr.charCodeAt(n)
+        u8arr[n] = bstr.charCodeAt(n);
       }
-      return new File([u8arr], filename, { type: mime })
-    }
+      return new File([u8arr], filename, { type: mime });
+    };
 
-
-    
     // 获取原始背景图(如果存在)
-    let bgDataUrl = null
-    const bgImage = fCanvas.value.backgroundImage
+    let bgDataUrl = null;
+    const bgImage = fCanvas.value.backgroundImage;
     if (bgImage) {
-        if (bgImage.getSrc) {
-            bgDataUrl = bgImage.getSrc()
-        } else if (bgImage.toDataURL) {
-            bgDataUrl = bgImage.toDataURL({ format: 'jpeg', quality: 0.8 })
-        }
+      if (bgImage.getSrc) {
+        bgDataUrl = bgImage.getSrc();
+      } else if (bgImage.toDataURL) {
+        bgDataUrl = bgImage.toDataURL({ format: 'jpeg', quality: 0.8 });
+      }
     }
-    
+
     // 真实上传流程 (只上传原始背景图，预览图交由后端实时动态合成)
-    let realBgUrl = ''
-    
+    let realBgUrl = '';
+
     try {
       if (bgDataUrl) {
-         if (bgDataUrl.startsWith('data:')) {
-            const bgFile = dataURLtoFile(bgDataUrl, `bg_${Date.now()}.jpg`)
-            const bgUpload = await uploadFile(bgFile, 'posecraft')
-            if (!bgUpload?.url) throw new Error('背景图上传失败')
-            realBgUrl = bgUpload.url
-         } else {
-            realBgUrl = bgDataUrl
-         }
+        if (bgDataUrl.startsWith('data:')) {
+          const bgFile = dataURLtoFile(bgDataUrl, `bg_${Date.now()}.jpg`);
+          const bgUpload = await uploadFile(bgFile, 'posecraft');
+          if (!bgUpload?.url) throw new Error('背景图上传失败');
+          realBgUrl = bgUpload.url;
+        } else {
+          realBgUrl = bgDataUrl;
+        }
       }
     } catch (e: any) {
-      console.error('背景图片上传失败:', e)
-      alert(e.message || '图片上传失败，请检查网络或图片尺寸')
-      return // 强制阻断保存
+      console.error('背景图片上传失败:', e);
+      alert(e.message || '图片上传失败，请检查网络或图片尺寸');
+      return; // 强制阻断保存
     }
-    
-    const fabricJson = fCanvas.value.toJSON([
-      'id', 'selectable', 'evented', 'connectedLines',
-      'isSkeleton', 'isAutoGenerated', 'isGuide', 'isCropBox',
-      'erasable', 'isUserStroke', 'isFace', 'isHand', 'isOutline'
-    ])
-    fabricJson.width = fCanvas.value.width
-    fabricJson.height = fCanvas.value.height
 
-    const inkCanvas = getInkCanvas()
+    const fabricJson = fCanvas.value.toJSON([
+      'id',
+      'selectable',
+      'evented',
+      'connectedLines',
+      'isSkeleton',
+      'isAutoGenerated',
+      'isGuide',
+      'isCropBox',
+      'erasable',
+      'isUserStroke',
+      'isFace',
+      'isHand',
+      'isOutline'
+    ]);
+    fabricJson.width = fCanvas.value.width;
+    fabricJson.height = fCanvas.value.height;
+
+    const inkCanvas = getInkCanvas();
 
     try {
       const apiData = {
@@ -156,24 +164,24 @@ export function useTemplateSave(
         work_lat: formData.work_lat || null,
         work_lng: formData.work_lng || null,
         work_address_source: formData.work_address_source || null
-      }
-      
-      const id = route.query.id ? Number(route.query.id) : null
+      };
+
+      const id = route.query.id ? Number(route.query.id) : null;
       if (id) {
-        await templateApi.update(id, apiData)
+        await templateApi.update(id, apiData);
       } else {
-        await templateApi.create(apiData)
-        authStore.incrementTemplatesCount() // 本地递增模板数
+        await templateApi.create(apiData);
+        authStore.incrementTemplatesCount(); // 本地递增模板数
       }
 
-      alert('发布成功，已提交管理员审核！您和管理员可以随时查看您的作品。')
-      showSaveModal.value = false
-      goHome()
+      alert('发布成功，已提交管理员审核！您和管理员可以随时查看您的作品。');
+      showSaveModal.value = false;
+      goHome();
     } catch (err) {
-      console.error('发布失败:', err)
-      alert('保存失败，可能是图片上传过大或网络异常，请重试。')
+      console.error('发布失败:', err);
+      alert('保存失败，可能是图片上传过大或网络异常，请重试。');
     }
-  }
+  };
 
   return {
     showSaveModal,
@@ -182,5 +190,5 @@ export function useTemplateSave(
     triggerExit,
     goHome,
     confirmSave
-  }
+  };
 }

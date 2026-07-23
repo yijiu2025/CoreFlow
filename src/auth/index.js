@@ -135,7 +135,7 @@ async function getUserFromToken(token, redis) {
   }
 }
 
-export default fp(async (app) => {
+export default fp(async app => {
   // 读取 JWT 配置（通过共享层，避免直接依赖 oauth21）
   const { JWT_ENABLED: jwtEnabled } = await import('../shared/config.js');
 

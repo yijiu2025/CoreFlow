@@ -5,7 +5,7 @@
 export async function up({ queryInterface, Sequelize }) {
   async function createTableIfNotExists(tableName, columns) {
     const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
-    const exists = tables.some((t) => Object.values(t)[0] === tableName);
+    const exists = tables.some(t => Object.values(t)[0] === tableName);
     if (!exists) await queryInterface.createTable(tableName, columns);
   }
 
@@ -33,7 +33,11 @@ export async function up({ queryInterface, Sequelize }) {
     uses_count: { type: Sequelize.INTEGER, defaultValue: 0 },
     delete_version: { type: Sequelize.BIGINT, allowNull: false, defaultValue: 0 },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') },
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    },
     deleted_at: { type: Sequelize.DATE, allowNull: true }
   });
 
@@ -57,7 +61,11 @@ export async function up({ queryInterface, Sequelize }) {
     views_count: { type: Sequelize.INTEGER, defaultValue: 0 },
     delete_version: { type: Sequelize.BIGINT, allowNull: false, defaultValue: 0 },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') },
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    },
     deleted_at: { type: Sequelize.DATE, allowNull: true }
   });
 
@@ -76,7 +84,11 @@ export async function up({ queryInterface, Sequelize }) {
     processing_time: { type: Sequelize.INTEGER },
     status: { type: Sequelize.TINYINT, defaultValue: 1 },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
   await addIndexIfNotExists('posecraft_analysis', ['user_id'], { name: 'idx_analysis_user' });

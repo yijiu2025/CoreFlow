@@ -54,7 +54,7 @@ export async function setBlock(redisClient, ip, metadata) {
       status: metadata.status,
       source: metadata.source || 'auto',
       permanent: metadata.permanent || false,
-      expiresAt: metadata.permanent ? Infinity : metadata.expiresAt,
+      expiresAt: metadata.permanent ? Infinity : metadata.expiresAt
     });
     return;
   }
@@ -76,7 +76,7 @@ export async function setBlock(redisClient, ip, metadata) {
       status: metadata.status,
       source: metadata.source || 'auto',
       permanent: metadata.permanent || false,
-      expiresAt: metadata.permanent ? Infinity : metadata.expiresAt,
+      expiresAt: metadata.permanent ? Infinity : metadata.expiresAt
     });
   }
 }
@@ -162,7 +162,7 @@ export async function setBlockFp(redisClient, fingerprint, metadata) {
       status: metadata.status,
       source: metadata.source || 'manual',
       permanent: metadata.permanent || false,
-      expiresAt: metadata.permanent ? Infinity : metadata.expiresAt,
+      expiresAt: metadata.permanent ? Infinity : metadata.expiresAt
     });
     return;
   }
@@ -180,7 +180,7 @@ export async function setBlockFp(redisClient, fingerprint, metadata) {
       status: metadata.status,
       source: metadata.source || 'manual',
       permanent: metadata.permanent || false,
-      expiresAt: metadata.permanent ? Infinity : metadata.expiresAt,
+      expiresAt: metadata.permanent ? Infinity : metadata.expiresAt
     });
   }
 }
@@ -391,7 +391,11 @@ export async function getActiveWhitelist(redisClient) {
     const key = `fp:${fp}`;
     if (wlMap.has(key)) continue;
     if (now > meta.expiresAt) continue;
-    wlMap.set(key, { fingerprint: fp, type: 'fingerprint', remainingSeconds: Math.max(0, Math.ceil((meta.expiresAt - now) / 1000)) });
+    wlMap.set(key, {
+      fingerprint: fp,
+      type: 'fingerprint',
+      remainingSeconds: Math.max(0, Math.ceil((meta.expiresAt - now) / 1000))
+    });
   }
 
   return [...wlMap.values()].sort((a, b) => a.remainingSeconds - b.remainingSeconds);
@@ -461,7 +465,7 @@ export const checkGlobalBlock = async (redisClient, ip, fingerprint) => {
       const fpStatus = await getBlockStatus(redisClient, KEY.blockFp(fingerprint));
       if (fpStatus) {
         // 获取剩余 TTL，永久封禁（TTL=-1）默认给 24 小时
-        let ttl = await safeRedis(redisClient, (r) => r.ttl(KEY.blockFp(fingerprint))) || 60;
+        let ttl = (await safeRedis(redisClient, r => r.ttl(KEY.blockFp(fingerprint)))) || 60;
         if (ttl === -1) ttl = 86400;
         const err = new Error(fpStatus === 'SCANNER' ? 'Scanner blocked' : 'Access temporary denied');
         err.statusCode = fpStatus === 'SCANNER' ? 403 : 429;
@@ -475,9 +479,7 @@ export const checkGlobalBlock = async (redisClient, ip, fingerprint) => {
         if (!memFpBlock.permanent && now > memFpBlock.expiresAt) {
           memoryBlocksFp.delete(fingerprint);
         } else {
-          const ttl = memFpBlock.permanent
-            ? 86400
-            : Math.max(1, Math.ceil((memFpBlock.expiresAt - now) / 1000));
+          const ttl = memFpBlock.permanent ? 86400 : Math.max(1, Math.ceil((memFpBlock.expiresAt - now) / 1000));
           const err = new Error(memFpBlock.status === 'SCANNER' ? 'Scanner blocked' : 'Access temporary denied');
           err.statusCode = memFpBlock.status === 'SCANNER' ? 403 : 429;
           err.headers = { 'Retry-After': String(ttl) };
@@ -497,9 +499,7 @@ export const checkGlobalBlock = async (redisClient, ip, fingerprint) => {
       if (!memBlock.permanent && now > memBlock.expiresAt) {
         memoryBlocks.delete(ip);
       } else {
-        const ttl = memBlock.permanent
-          ? 86400
-          : Math.max(1, Math.ceil((memBlock.expiresAt - now) / 1000));
+        const ttl = memBlock.permanent ? 86400 : Math.max(1, Math.ceil((memBlock.expiresAt - now) / 1000));
         const err = new Error(memBlock.status === 'SCANNER' ? 'Scanner blocked' : 'Access temporary denied');
         err.statusCode = memBlock.status === 'SCANNER' ? 403 : 429;
         err.headers = { 'Retry-After': String(ttl) };
@@ -521,7 +521,7 @@ export const checkGlobalBlock = async (redisClient, ip, fingerprint) => {
   const status = await getBlockStatus(redisClient, blockKey);
 
   if (status) {
-    let ttl = await safeRedis(redisClient, (r) => r.ttl(blockKey)) || 60;
+    let ttl = (await safeRedis(redisClient, r => r.ttl(blockKey))) || 60;
     if (ttl === -1) ttl = 86400;
     const err = new Error(status === 'SCANNER' ? 'Scanner blocked' : 'Access temporary denied');
     err.statusCode = status === 'SCANNER' ? 403 : 429;

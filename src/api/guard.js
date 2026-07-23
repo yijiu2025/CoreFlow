@@ -107,7 +107,7 @@ export function registerSecureWebSocket(fastify, options) {
 
     // 4. 当前路由选项级的 IP 白名单校验（高于配置的层级）
     if (allowIps.length > 0) {
-      const isAllowed = allowIps.some((rule) => isIpMatch(clientIp, rule));
+      const isAllowed = allowIps.some(rule => isIpMatch(clientIp, rule));
       if (!isAllowed) {
         if (client?.close) client.close(4003, `IP [${clientIp}] 无权访问`);
         return;
@@ -123,7 +123,7 @@ export function registerSecureWebSocket(fastify, options) {
     // 6. 当前路由选项级的角色校验
     if (allowRoles.length > 0 && user) {
       const userRoles = user.roles || [];
-      if (!allowRoles.some((r) => userRoles.includes(r))) {
+      if (!allowRoles.some(r => userRoles.includes(r))) {
         if (client?.close) client.close(4003, '权限不足');
         return;
       }
@@ -165,8 +165,8 @@ function isPermissionMatch(pattern, target) {
  * 检查用户是否匹配单个权限
  */
 function matchSingle(perm, allows, denies) {
-  if (denies.some((d) => isPermissionMatch(d, perm))) return false;
-  return allows.some((a) => isPermissionMatch(a, perm));
+  if (denies.some(d => isPermissionMatch(d, perm))) return false;
+  return allows.some(a => isPermissionMatch(a, perm));
 }
 
 /**
@@ -190,12 +190,12 @@ function checkPermission(required, user) {
 
   // { any: [...] } — 任一满足
   if (required.any) {
-    return required.any.some((p) => matchSingle(p, allows, denies));
+    return required.any.some(p => matchSingle(p, allows, denies));
   }
 
   // { all: [...] } — 全部满足
   if (required.all) {
-    return required.all.every((p) => matchSingle(p, allows, denies));
+    return required.all.every(p => matchSingle(p, allows, denies));
   }
 
   // 非预期的权限格式（如 {}、{ invalid: [...] }），记录日志便于排查错误配置
@@ -220,7 +220,7 @@ function checkGuardBase(opts, user, clientIp) {
   }
 
   if (allowIps.length > 0) {
-    const isAllowed = allowIps.some((rule) => isIpMatch(clientIp, rule));
+    const isAllowed = allowIps.some(rule => isIpMatch(clientIp, rule));
     if (!isAllowed) {
       return { passed: false, status: 4003, message: `IP [${clientIp}] 无权访问` };
     }
@@ -232,7 +232,7 @@ function checkGuardBase(opts, user, clientIp) {
 
   if (allowRoles.length > 0 && user) {
     const userRoles = user.roles || [];
-    if (!allowRoles.some((r) => userRoles.includes(r))) {
+    if (!allowRoles.some(r => userRoles.includes(r))) {
       return { passed: false, status: 4003, message: '权限不足' };
     }
   }
@@ -254,7 +254,7 @@ async function applyGuardLogic(opts = {}, request, reply) {
   // 2. IP 白名单校验
   if (allowIps.length > 0) {
     const clientIp = request.ip;
-    const isAllowed = allowIps.some((rule) => isIpMatch(clientIp, rule));
+    const isAllowed = allowIps.some(rule => isIpMatch(clientIp, rule));
     if (!isAllowed) {
       return reply.result.forbidden(`IP [${clientIp}] 无权访问此受保护区域`);
     }
@@ -285,7 +285,7 @@ async function applyGuardLogic(opts = {}, request, reply) {
     }
     if (allowRoles.length > 0) {
       const userRoles = user.roles || [];
-      if (!allowRoles.some((r) => userRoles.includes(r))) {
+      if (!allowRoles.some(r => userRoles.includes(r))) {
         return reply.result.forbidden(`权限不足：需要 [${allowRoles.join('/')}] 角色`);
       }
     }
@@ -416,8 +416,8 @@ export function registerGroupMetadata(metadata) {
  */
 function joinUrl(...parts) {
   return parts
-    .map((part) => part.replace(/(^\/+|\/+$)/g, '')) // 去掉两端斜杠
-    .filter((part) => part.length > 0)
+    .map(part => part.replace(/(^\/+|\/+$)/g, '')) // 去掉两端斜杠
+    .filter(part => part.length > 0)
     .join('/');
 }
 

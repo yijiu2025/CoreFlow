@@ -29,7 +29,7 @@ export async function registerRateLimit(app) {
       skipOnError: false,
 
       // 已登录用 user.id 限流，未登录用 IP 限流
-      keyGenerator: (req) => {
+      keyGenerator: req => {
         if (req.state?.user?.id) {
           return `rate:user:${req.state.user.id}`;
         }

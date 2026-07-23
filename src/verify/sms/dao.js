@@ -25,18 +25,12 @@ class SmsDao {
     if (current) {
       const diff = (Date.now() - current.sentAt) / 1000;
       if (diff < smsConfig.rateLimit) {
-        throw new Error(
-          `SEND_CODE_FAILED:发送过于频繁，请在 ${Math.ceil(smsConfig.rateLimit - diff)} 秒后再试`
-        );
+        throw new Error(`SEND_CODE_FAILED:发送过于频繁，请在 ${Math.ceil(smsConfig.rateLimit - diff)} 秒后再试`);
       }
     }
 
     // 存储验证码
-    await store.set(
-      phone,
-      { code, sentAt: Date.now(), sessionId },
-      smsConfig.ttl
-    );
+    await store.set(phone, { code, sentAt: Date.now(), sessionId }, smsConfig.ttl);
 
     // 发送短信
     const sent = await smsService.send(phone, code);

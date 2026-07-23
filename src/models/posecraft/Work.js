@@ -171,7 +171,7 @@ export default (sequelize, DataTypes) => {
    * 模型关联定义
    * @param {object} models - 所有已注册模型的集合
    */
-  Work.associate = (models) => {
+  Work.associate = models => {
     Work.belongsTo(models.User, { foreignKey: 'user_id', as: 'author' });
     Work.belongsTo(models.Template, { foreignKey: 'template_id', as: 'template' });
     // 反向：该作品作为模板底图时，Template.work_id 指向本 Work

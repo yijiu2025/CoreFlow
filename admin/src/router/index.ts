@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router';
 
 const router = createRouter({
   history: createWebHistory('/'),
@@ -16,14 +16,14 @@ const router = createRouter({
       meta: { title: '用户管理' }
     }
   ]
-})
+});
 
 // 动态标题守卫
 router.beforeEach((to, from, next) => {
   if (to.meta.title) {
-    document.title = `${to.meta.title} - IAM Admin`
+    document.title = `${to.meta.title} - IAM Admin`;
   }
-  next()
-})
+  next();
+});
 
-export default router
+export default router;

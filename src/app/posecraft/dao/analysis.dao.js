@@ -34,7 +34,7 @@ class AnalysisDao {
    */
   async findByUser(userId, options = {}) {
     const model = this.getModel();
-    
+
     const where = { user_id: userId };
     if (options.analysis_type) {
       where.analysis_type = options.analysis_type;
@@ -67,13 +67,10 @@ class AnalysisDao {
    */
   async getStatsByType(userId) {
     const model = this.getModel();
-    
+
     const stats = await model.findAll({
       where: { user_id: userId },
-      attributes: [
-        'analysis_type',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
-      ],
+      attributes: ['analysis_type', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
       group: ['analysis_type']
     });
 

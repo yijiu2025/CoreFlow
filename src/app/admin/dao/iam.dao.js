@@ -12,9 +12,7 @@ class IamDao {
     const highestRole = await sequelize.models.UserRole.findOne({
       where: { user_id: user.id, app_id: [appId, 'GLOBAL'] },
       order: [['role_id', 'DESC']],
-      include: [
-        { model: sequelize.models.Role, as: 'role', attributes: ['rank_level'] }
-      ]
+      include: [{ model: sequelize.models.Role, as: 'role', attributes: ['rank_level'] }]
     });
     return highestRole?.role?.rank_level || 0;
   }
@@ -23,10 +21,7 @@ class IamDao {
    * 获取当前管理员有权分配的角色列表
    */
   async getAssignableRoles(adminUid, targetAppId) {
-    const adminLevel = await this.getMemberLevel(
-      adminUid,
-      targetAppId || 'GLOBAL'
-    );
+    const adminLevel = await this.getMemberLevel(adminUid, targetAppId || 'GLOBAL');
     const { Op } = sequelize.Sequelize;
     const where = { rank_level: { [Op.lte]: adminLevel } };
 
@@ -164,18 +159,15 @@ class IamDao {
     const effectiveAllows = new Set();
     const effectiveDenies = new Set();
 
-    const allPolicies = [
-      ...roles.map((r) => r.policy),
-      ...inlinePolicies.map((p) => p.policy)
-    ].map((p) => (typeof p === 'string' ? JSON.parse(p) : p));
+    const allPolicies = [...roles.map(r => r.policy), ...inlinePolicies.map(p => p.policy)].map(p =>
+      typeof p === 'string' ? JSON.parse(p) : p
+    );
 
     for (const doc of allPolicies) {
       if (!doc || !doc.Statement) continue;
       for (const stmt of doc.Statement) {
-        if (stmt.Effect === 'Allow')
-          stmt.Action.forEach((a) => effectiveAllows.add(a));
-        if (stmt.Effect === 'Deny')
-          stmt.Action.forEach((a) => effectiveDenies.add(a));
+        if (stmt.Effect === 'Allow') stmt.Action.forEach(a => effectiveAllows.add(a));
+        if (stmt.Effect === 'Deny') stmt.Action.forEach(a => effectiveDenies.add(a));
       }
     }
 

@@ -39,7 +39,8 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 ```js
 registerSecureRoute(fastify, {
   name: 'liveness',
-  method: 'GET', url: '/health/live',
+  method: 'GET',
+  url: '/health/live',
   handler: async (req, reply) => reply.send({ status: 'ok', uptime: process.uptime() })
 });
 ```
@@ -47,10 +48,10 @@ registerSecureRoute(fastify, {
 ### 1.3 Redis 重连策略
 
 ```js
-reconnectStrategy: (retries) => {
+reconnectStrategy: retries => {
   if (retries > 10) return new Error('Redis max retries reached');
   return Math.min(retries * 200, 5000); // 指数退避，最大 5s
-}
+};
 ```
 
 ### 1.4 Docker 化 ✅ 已完成
@@ -93,10 +94,10 @@ stores/
 
 ```ts
 const routes = [
-  { path: '/',           component: () => import('./views/Dashboard.vue') },
-  { path: '/firewall',   component: () => import('./views/Firewall.vue') },
-  { path: '/settings',   component: () => import('./views/Settings.vue') },
-  { path: '/logs',       component: () => import('./views/Logs.vue') },
+  { path: '/', component: () => import('./views/Dashboard.vue') },
+  { path: '/firewall', component: () => import('./views/Firewall.vue') },
+  { path: '/settings', component: () => import('./views/Settings.vue') },
+  { path: '/logs', component: () => import('./views/Logs.vue') }
 ];
 ```
 
@@ -143,13 +144,13 @@ Week 8+: Phase 6 (按需迭代)
 
 ## 成功指标
 
-| 指标 | 目标值 |
-|------|--------|
-| 安全漏洞 (Critical) | 0 |
-| 测试覆盖率 | > 60% |
-| TypeScript 覆盖 | > 80% |
-| API 自动文档 | Swagger UI |
-| 部署时间 | CI/CD 自动 |
-| 容器化 | Docker + Compose |
-| 前端 App.vue 行数 | < 200 |
-| 首屏加载时间 | < 2s |
+| 指标                | 目标值           |
+| ------------------- | ---------------- |
+| 安全漏洞 (Critical) | 0                |
+| 测试覆盖率          | > 60%            |
+| TypeScript 覆盖     | > 80%            |
+| API 自动文档        | Swagger UI       |
+| 部署时间            | CI/CD 自动       |
+| 容器化              | Docker + Compose |
+| 前端 App.vue 行数   | < 200            |
+| 首屏加载时间        | < 2s             |

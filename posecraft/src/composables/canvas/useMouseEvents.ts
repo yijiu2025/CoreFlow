@@ -1,8 +1,8 @@
-import { ref, watch } from 'vue'
-import type { Ref } from 'vue'
-import * as fabricLib from 'fabric'
-import { v4 as uuidv4 } from 'uuid'
-const fabric = (fabricLib as any).fabric || (fabricLib as any).default || fabricLib
+import { ref, watch } from 'vue';
+import type { Ref } from 'vue';
+import * as fabricLib from 'fabric';
+import { v4 as uuidv4 } from 'uuid';
+const fabric = (fabricLib as any).fabric || (fabricLib as any).default || fabricLib;
 
 export function useMouseEvents(
   fCanvas: Ref<any>,
@@ -30,518 +30,625 @@ export function useMouseEvents(
   applyCanvasTransform: () => void,
   getSpacePressed: () => boolean
 ) {
-  const isErasing = ref(false)
-  const isDrawingLine = ref(false)
-  const isDrawingCrop = ref(false)
-  const isDrawingRect = ref(false)
-  let isPanning = false
-  let lastPanPoint: any = null
-  let currentLine: any = null
-  let currentRect: any = null
-  let startNode: any = null
-  let lastMouseEvent: any = null
-  let cropRect: any = null
-  let startPoint: any = null
+  const isErasing = ref(false);
+  const isDrawingLine = ref(false);
+  const isDrawingCrop = ref(false);
+  const isDrawingRect = ref(false);
+  let isPanning = false;
+  let lastPanPoint: any = null;
+  let currentLine: any = null;
+  let currentRect: any = null;
+  let startNode: any = null;
+  let lastMouseEvent: any = null;
+  let cropRect: any = null;
+  let startPoint: any = null;
 
-  let wasDeselectedThisClick = false
+  let wasDeselectedThisClick = false;
 
-  watch(fCanvas, (newCanvas) => {
-    if (newCanvas) {
-      newCanvas.on('selection:cleared', () => {
-        wasDeselectedThisClick = true
-        setTimeout(() => {
-          wasDeselectedThisClick = false
-        }, 50)
-      })
-    }
-  }, { immediate: true })
+  watch(
+    fCanvas,
+    newCanvas => {
+      if (newCanvas) {
+        newCanvas.on('selection:cleared', () => {
+          wasDeselectedThisClick = true;
+          setTimeout(() => {
+            wasDeselectedThisClick = false;
+          }, 50);
+        });
+      }
+    },
+    { immediate: true }
+  );
 
   const refreshInkLayer = () => {
-    const { inkLayer, inkCanvas } = canvasDeps
-    if (!inkLayer || !fCanvas.value) return
-    inkLayer.setElement(inkCanvas)
-    inkLayer.dirty = true
-    fCanvas.value.requestRenderAll()
-  }
+    const { inkLayer, inkCanvas } = canvasDeps;
+    if (!inkLayer || !fCanvas.value) return;
+    inkLayer.setElement(inkCanvas);
+    inkLayer.dirty = true;
+    fCanvas.value.requestRenderAll();
+  };
 
   const distToSegment = (p: any, v: any, w: any) => {
-    const l2 = (w.x - v.x) ** 2 + (w.y - v.y) ** 2
-    if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y)
-    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2
-    t = Math.max(0, Math.min(1, t))
-    return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)))
-  }
+    const l2 = (w.x - v.x) ** 2 + (w.y - v.y) ** 2;
+    if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
+    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)));
+  };
 
   const toRgba = (colorStr: any, opacity: number) => {
-    if (!colorStr || typeof colorStr !== 'string') return `rgba(0,0,0,${opacity})`
-    let r = 0, g = 0, b = 0
+    if (!colorStr || typeof colorStr !== 'string') return `rgba(0,0,0,${opacity})`;
+    let r = 0,
+      g = 0,
+      b = 0;
     if (colorStr.startsWith('#')) {
-      const hex = colorStr.replace('#', '')
+      const hex = colorStr.replace('#', '');
       if (hex.length === 6) {
-        r = parseInt(hex.slice(0, 2), 16)
-        g = parseInt(hex.slice(2, 4), 16)
-        b = parseInt(hex.slice(4, 6), 16)
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
       } else if (hex.length === 3) {
-        r = parseInt(hex[0] + hex[0], 16)
-        g = parseInt(hex[1] + hex[1], 16)
-        b = parseInt(hex[2] + hex[2], 16)
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
       }
     } else if (colorStr.startsWith('rgb')) {
-      const match = colorStr.match(/[\d.]+/g)
+      const match = colorStr.match(/[\d.]+/g);
       if (match && match.length >= 3) {
-        r = parseInt(match[0])
-        g = parseInt(match[1])
-        b = parseInt(match[2])
+        r = parseInt(match[0]);
+        g = parseInt(match[1]);
+        b = parseInt(match[2]);
       }
     }
-    return `rgba(${r},${g},${b},${opacity})`
-  }
+    return `rgba(${r},${g},${b},${opacity})`;
+  };
 
   const handleMouseDown = (opt: any) => {
-    if (!fCanvas.value) return
-    const pointer = fCanvas.value.getPointer(opt.e)
-    const tool = canvasTool.value
+    if (!fCanvas.value) return;
+    const pointer = fCanvas.value.getPointer(opt.e);
+    const tool = canvasTool.value;
 
     if (tool === 'hand' || getSpacePressed()) {
-      isPanning = true
-      lastPanPoint = { x: opt.e.clientX, y: opt.e.clientY }
-      fCanvas.value.defaultCursor = 'grabbing'
-      return
+      isPanning = true;
+      lastPanPoint = { x: opt.e.clientX, y: opt.e.clientY };
+      fCanvas.value.defaultCursor = 'grabbing';
+      return;
     }
 
     if (tool === 'eraser') {
-      isErasing.value = true
-      startPoint = pointer
+      isErasing.value = true;
+      startPoint = pointer;
       if (canvasDeps.eraserCursor) {
-        canvasDeps.eraserCursor.set({ visible: true, left: pointer.x, top: pointer.y })
-        fCanvas.value.bringToFront(canvasDeps.eraserCursor)
+        canvasDeps.eraserCursor.set({ visible: true, left: pointer.x, top: pointer.y });
+        fCanvas.value.bringToFront(canvasDeps.eraserCursor);
       }
     } else if (tool === 'draw') {
-      startPoint = pointer
+      startPoint = pointer;
     } else if (tool === 'line') {
-      const target = fCanvas.value.findTarget(opt.e, false)
+      const target = fCanvas.value.findTarget(opt.e, false);
       if (target && target.isSkeleton) {
         // 点击节点：开始连接
-        isDrawingLine.value = true; startPoint = { x: target.left, y: target.top }
-        startNode = target
+        isDrawingLine.value = true;
+        startPoint = { x: target.left, y: target.top };
+        startNode = target;
         currentLine = new fabric.Line([target.left, target.top, target.left, target.top], {
-          stroke: toRgba(currentColor.value, strokeOpacity.value / 100), strokeWidth: strokeWidth.value,
-          selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
+          stroke: toRgba(currentColor.value, strokeOpacity.value / 100),
+          strokeWidth: strokeWidth.value,
+          selectable: false,
+          evented: false,
+          strokeLineCap: 'round',
+          erasable: true,
           strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
-        })
-        fCanvas.value.add(currentLine)
+        });
+        fCanvas.value.add(currentLine);
       } else if (!target) {
         // 点击空白处：开始画线
-        isDrawingLine.value = true; startPoint = pointer
-        startNode = null
+        isDrawingLine.value = true;
+        startPoint = pointer;
+        startNode = null;
         currentLine = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
-          stroke: toRgba(currentColor.value, strokeOpacity.value / 100), strokeWidth: strokeWidth.value,
-          selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
+          stroke: toRgba(currentColor.value, strokeOpacity.value / 100),
+          strokeWidth: strokeWidth.value,
+          selectable: false,
+          evented: false,
+          strokeLineCap: 'round',
+          erasable: true,
           strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
-        })
-        fCanvas.value.add(currentLine)
+        });
+        fCanvas.value.add(currentLine);
       }
     } else if (tool === 'moveNode') {
       // 操作节点工具：点击节点可拖拽移动
-      const target = fCanvas.value.findTarget(opt.e, false)
+      const target = fCanvas.value.findTarget(opt.e, false);
       if (target && target.isSkeleton) {
-        fCanvas.value.setActiveObject(target)
-        target.set({ selectable: true, hasControls: false, hasBorders: false })
-        fCanvas.value.renderAll()
+        fCanvas.value.setActiveObject(target);
+        target.set({ selectable: true, hasControls: false, hasBorders: false });
+        fCanvas.value.renderAll();
       }
     } else if (['rect', 'circle', 'triangle', 'star', 'polygon', 'arrow'].includes(tool)) {
-      const target = fCanvas.value.findTarget(opt.e, false)
+      const target = fCanvas.value.findTarget(opt.e, false);
       if (!target) {
-        isDrawingRect.value = true; startPoint = pointer
+        isDrawingRect.value = true;
+        startPoint = pointer;
         const baseStyle = {
-          left: pointer.x, top: pointer.y,
+          left: pointer.x,
+          top: pointer.y,
           stroke: toRgba(currentColor.value, strokeOpacity.value / 100),
           strokeWidth: strokeWidth.value,
           fill: noFill.value ? 'transparent' : toRgba(fillColor.value, fillOpacity.value / 100),
-          selectable: false, evented: false, erasable: true,
+          selectable: false,
+          evented: false,
+          erasable: true,
           strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined,
           rx: cornerRadius.value,
           ry: cornerRadius.value,
           strokeUniform: true
-        }
+        };
         if (tool === 'rect') {
-          currentRect = new fabric.Rect({ ...baseStyle, width: 0, height: 0 })
+          currentRect = new fabric.Rect({ ...baseStyle, width: 0, height: 0 });
         } else if (tool === 'circle') {
-          currentRect = new fabric.Ellipse({ ...baseStyle, rx: 0, ry: 0 })
+          currentRect = new fabric.Ellipse({ ...baseStyle, rx: 0, ry: 0 });
         } else if (tool === 'triangle') {
-          currentRect = new fabric.Triangle({ ...baseStyle, width: 0, height: 0 })
+          currentRect = new fabric.Triangle({ ...baseStyle, width: 0, height: 0 });
         } else if (tool === 'star') {
-          currentRect = createStar(pointer.x, pointer.y, 5, 0, 0, baseStyle)
-          currentRect._isStar = true
-          currentRect._starPoints = 5
+          currentRect = createStar(pointer.x, pointer.y, 5, 0, 0, baseStyle);
+          currentRect._isStar = true;
+          currentRect._starPoints = 5;
         } else if (tool === 'polygon') {
-          currentRect = createPolygon(pointer.x, pointer.y, 6, 0, baseStyle)
-          currentRect._sides = 6
+          currentRect = createPolygon(pointer.x, pointer.y, 6, 0, baseStyle);
+          currentRect._sides = 6;
         } else if (tool === 'arrow') {
-          isDrawingRect.value = false
-          isDrawingLine.value = true
+          isDrawingRect.value = false;
+          isDrawingLine.value = true;
           currentLine = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
-            stroke: toRgba(currentColor.value, strokeOpacity.value / 100), strokeWidth: strokeWidth.value,
-            selectable: false, evented: false, strokeLineCap: 'round', erasable: true,
+            stroke: toRgba(currentColor.value, strokeOpacity.value / 100),
+            strokeWidth: strokeWidth.value,
+            selectable: false,
+            evented: false,
+            strokeLineCap: 'round',
+            erasable: true,
             strokeDashArray: lineStyle.value === 'dashed' ? [10, 5] : lineStyle.value === 'dotted' ? [3, 5] : undefined
-          })
-          fCanvas.value.add(currentLine)
+          });
+          fCanvas.value.add(currentLine);
         }
-        if (currentRect) fCanvas.value.add(currentRect)
+        if (currentRect) fCanvas.value.add(currentRect);
       }
     } else if (tool === 'addNode') {
-      const target = fCanvas.value.findTarget(opt.e, false)
+      const target = fCanvas.value.findTarget(opt.e, false);
       if (!target) {
         // 点击空白处：添加新节点
-        addSkeletonNode(pointer.x, pointer.y)
+        addSkeletonNode(pointer.x, pointer.y);
       } else if (target.isSkeleton && target.connectedLines?.length > 0) {
         // 点击现有节点：在中点添加新节点
-        addMidpointNode(target)
+        addMidpointNode(target);
       }
     } else if (tool === 'crop') {
-      isDrawingCrop.value = true; startPoint = pointer
-      cropRect = new fabric.Rect({ left: pointer.x, top: pointer.y, width: 0, height: 0, fill: 'rgba(99,102,241,0.1)', stroke: '#6366f1', strokeWidth: 1, strokeDashArray: [5, 5], selectable: false, evented: false, isCropRect: true })
-      fCanvas.value.add(cropRect)
+      isDrawingCrop.value = true;
+      startPoint = pointer;
+      cropRect = new fabric.Rect({
+        left: pointer.x,
+        top: pointer.y,
+        width: 0,
+        height: 0,
+        fill: 'rgba(99,102,241,0.1)',
+        stroke: '#6366f1',
+        strokeWidth: 1,
+        strokeDashArray: [5, 5],
+        selectable: false,
+        evented: false,
+        isCropRect: true
+      });
+      fCanvas.value.add(cropRect);
     } else if (tool === 'text') {
-      const target = fCanvas.value.findTarget(opt.e, false)
-      const justDeselected = wasDeselectedThisClick
-      wasDeselectedThisClick = false // Reset immediately
+      const target = fCanvas.value.findTarget(opt.e, false);
+      const justDeselected = wasDeselectedThisClick;
+      wasDeselectedThisClick = false; // Reset immediately
 
       if (target && (target.type === 'i-text' || target.type === 'text' || target.type === 'textbox')) {
         // 点击已有文字：选中并显示调整框
-        fCanvas.value.setActiveObject(target)
-        target.set({ hasControls: true, hasBorders: true })
-        fCanvas.value.requestRenderAll()
+        fCanvas.value.setActiveObject(target);
+        target.set({ hasControls: true, hasBorders: true });
+        fCanvas.value.requestRenderAll();
       } else if (!target && justDeselected) {
         // 有文字选中时点击空白处：仅取消选中，不新建文字 (Fabric.js already cleared it)
       } else if (!target && !justDeselected) {
         // 没有选中时点击空白处：添加新文字
         const text = new fabric.IText('双击编辑', {
-          left: pointer.x, top: pointer.y,
+          left: pointer.x,
+          top: pointer.y,
           fontSize: textFontSize.value,
           fill: currentColor.value,
-          originX: 'center', originY: 'center',
-          selectable: true, evented: true,
-          hasControls: true, hasBorders: true,
+          originX: 'center',
+          originY: 'center',
+          selectable: true,
+          evented: true,
+          hasControls: true,
+          hasBorders: true,
           erasable: true
-        })
-        fCanvas.value.add(text)
-        fCanvas.value.setActiveObject(text)
-        text.enterEditing()
-        text.selectAll()
-        fCanvas.value.requestRenderAll()
-        saveState()
+        });
+        fCanvas.value.add(text);
+        fCanvas.value.setActiveObject(text);
+        text.enterEditing();
+        text.selectAll();
+        fCanvas.value.requestRenderAll();
+        saveState();
       }
     }
-  }
+  };
 
   const handleMouseMove = (opt: any) => {
-    if (!fCanvas.value) return
-    const pointer = fCanvas.value.getPointer(opt.e)
-    const tool = canvasTool.value
-    lastMouseEvent = opt.e
+    if (!fCanvas.value) return;
+    const pointer = fCanvas.value.getPointer(opt.e);
+    const tool = canvasTool.value;
+    lastMouseEvent = opt.e;
 
     if (isPanning && lastPanPoint) {
-      const dx = opt.e.clientX - lastPanPoint.x
-      const dy = opt.e.clientY - lastPanPoint.y
-      canvasDeps.canvasTranslateX += dx
-      canvasDeps.canvasTranslateY += dy
-      applyCanvasTransform()
-      lastPanPoint = { x: opt.e.clientX, y: opt.e.clientY }
-      return
+      const dx = opt.e.clientX - lastPanPoint.x;
+      const dy = opt.e.clientY - lastPanPoint.y;
+      canvasDeps.canvasTranslateX += dx;
+      canvasDeps.canvasTranslateY += dy;
+      applyCanvasTransform();
+      lastPanPoint = { x: opt.e.clientX, y: opt.e.clientY };
+      return;
     }
 
     if (canvasDeps.eraserCursor && tool === 'eraser') {
       if (!fCanvas.value.getObjects().includes(canvasDeps.eraserCursor)) {
-        fCanvas.value.add(canvasDeps.eraserCursor)
+        fCanvas.value.add(canvasDeps.eraserCursor);
       }
-      canvasDeps.eraserCursor.set({ visible: true, left: pointer.x, top: pointer.y, radius: eraserSize.value / 2 })
-      fCanvas.value.bringToFront(canvasDeps.eraserCursor)
-      fCanvas.value.requestRenderAll()
+      canvasDeps.eraserCursor.set({ visible: true, left: pointer.x, top: pointer.y, radius: eraserSize.value / 2 });
+      fCanvas.value.bringToFront(canvasDeps.eraserCursor);
+      fCanvas.value.requestRenderAll();
     }
 
     if (isErasing.value && tool === 'eraser') {
-      const { inkCtx } = canvasDeps
-      const opacity = (canvasDeps.eraserOpacity ?? 100) / 100
-      const hardness = canvasDeps.eraserHardness ?? 100
-      const shape = canvasDeps.eraserShape ?? 'circle'
-      const radius = eraserSize.value / 2
+      const { inkCtx } = canvasDeps;
+      const opacity = (canvasDeps.eraserOpacity ?? 100) / 100;
+      const hardness = canvasDeps.eraserHardness ?? 100;
+      const shape = canvasDeps.eraserShape ?? 'circle';
+      const radius = eraserSize.value / 2;
 
       if (inkCtx) {
-        inkCtx.save()
-        inkCtx.globalCompositeOperation = 'destination-out'
+        inkCtx.save();
+        inkCtx.globalCompositeOperation = 'destination-out';
         if (shape === 'square') {
           if (hardness < 100) {
-            const grad = inkCtx.createRadialGradient(pointer.x, pointer.y, radius * (hardness / 100), pointer.x, pointer.y, radius)
-            grad.addColorStop(0, `rgba(0,0,0,${opacity})`)
-            grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`)
-            grad.addColorStop(1, 'rgba(0,0,0,0)')
-            inkCtx.fillStyle = grad
+            const grad = inkCtx.createRadialGradient(
+              pointer.x,
+              pointer.y,
+              radius * (hardness / 100),
+              pointer.x,
+              pointer.y,
+              radius
+            );
+            grad.addColorStop(0, `rgba(0,0,0,${opacity})`);
+            grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            inkCtx.fillStyle = grad;
           } else {
-            inkCtx.fillStyle = `rgba(0,0,0,${opacity})`
+            inkCtx.fillStyle = `rgba(0,0,0,${opacity})`;
           }
-          inkCtx.fillRect(pointer.x - radius, pointer.y - radius, radius * 2, radius * 2)
+          inkCtx.fillRect(pointer.x - radius, pointer.y - radius, radius * 2, radius * 2);
         } else {
-          inkCtx.beginPath()
+          inkCtx.beginPath();
           if (hardness < 100) {
-            const grad = inkCtx.createRadialGradient(pointer.x, pointer.y, radius * (hardness / 100), pointer.x, pointer.y, radius)
-            grad.addColorStop(0, `rgba(0,0,0,${opacity})`)
-            grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`)
-            grad.addColorStop(1, 'rgba(0,0,0,0)')
-            inkCtx.fillStyle = grad
+            const grad = inkCtx.createRadialGradient(
+              pointer.x,
+              pointer.y,
+              radius * (hardness / 100),
+              pointer.x,
+              pointer.y,
+              radius
+            );
+            grad.addColorStop(0, `rgba(0,0,0,${opacity})`);
+            grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            inkCtx.fillStyle = grad;
           } else {
-            inkCtx.fillStyle = `rgba(0,0,0,${opacity})`
+            inkCtx.fillStyle = `rgba(0,0,0,${opacity})`;
           }
-          inkCtx.arc(pointer.x, pointer.y, radius, 0, Math.PI * 2)
-          inkCtx.fill()
+          inkCtx.arc(pointer.x, pointer.y, radius, 0, Math.PI * 2);
+          inkCtx.fill();
         }
-        inkCtx.restore()
-        refreshInkLayer()
+        inkCtx.restore();
+        refreshInkLayer();
       }
-      
-      const objects = fCanvas.value.getObjects().filter((o: any) =>
-        o.erasable && !o.isInkLayer && !o.isEraserCursor
-      )
+
+      const objects = fCanvas.value.getObjects().filter((o: any) => o.erasable && !o.isInkLayer && !o.isEraserCursor);
       objects.forEach((obj: any) => {
         // Fast AABB bounding box check
-        const rect = obj.getBoundingRect()
-        const ex1 = pointer.x - radius
-        const ey1 = pointer.y - radius
-        const ex2 = pointer.x + radius
-        const ey2 = pointer.y + radius
-        
-        const rx1 = rect.left
-        const ry1 = rect.top
-        const rx2 = rect.left + rect.width
-        const ry2 = rect.top + rect.height
-        
-        const isOverlapping = !(ex2 < rx1 || ex1 > rx2 || ey2 < ry1 || ey1 > ry2)
-        if (!isOverlapping) return
+        const rect = obj.getBoundingRect();
+        const ex1 = pointer.x - radius;
+        const ey1 = pointer.y - radius;
+        const ex2 = pointer.x + radius;
+        const ey2 = pointer.y + radius;
+
+        const rx1 = rect.left;
+        const ry1 = rect.top;
+        const rx2 = rect.left + rect.width;
+        const ry2 = rect.top + rect.height;
+
+        const isOverlapping = !(ex2 < rx1 || ex1 > rx2 || ey2 < ry1 || ey1 > ry2);
+        if (!isOverlapping) return;
 
         if (obj.isUserStroke && obj.getElement && obj.getElement().tagName === 'CANVAS') {
-          const el = obj.getElement()
-          const ctx = el.getContext('2d', { willReadFrequently: true })
-          if (!ctx) return
-          const localPoint = obj.toLocalPoint(pointer, 'left', 'top')
-          
-          // Map localPoint (which is in Fabric's scaled space) to HTML Canvas pixels
-          const ratioX = el.width / (obj.width * (obj.scaleX || 1))
-          const ratioY = el.height / (obj.height * (obj.scaleY || 1))
-          const px = localPoint.x * ratioX
-          const py = localPoint.y * ratioY
-          
-          // Eraser radius in canvas pixels
-          const scaleApprox = Math.sqrt(obj.scaleX * obj.scaleX + obj.scaleY * obj.scaleY) / Math.SQRT2
-          const eraserRadius = (radius * (el.width / obj.width)) / (scaleApprox || 1)
+          const el = obj.getElement();
+          const ctx = el.getContext('2d', { willReadFrequently: true });
+          if (!ctx) return;
+          const localPoint = obj.toLocalPoint(pointer, 'left', 'top');
 
-          ctx.save()
-          ctx.globalCompositeOperation = 'destination-out'
+          // Map localPoint (which is in Fabric's scaled space) to HTML Canvas pixels
+          const ratioX = el.width / (obj.width * (obj.scaleX || 1));
+          const ratioY = el.height / (obj.height * (obj.scaleY || 1));
+          const px = localPoint.x * ratioX;
+          const py = localPoint.y * ratioY;
+
+          // Eraser radius in canvas pixels
+          const scaleApprox = Math.sqrt(obj.scaleX * obj.scaleX + obj.scaleY * obj.scaleY) / Math.SQRT2;
+          const eraserRadius = (radius * (el.width / obj.width)) / (scaleApprox || 1);
+
+          ctx.save();
+          ctx.globalCompositeOperation = 'destination-out';
           if (shape === 'square') {
             if (hardness < 100) {
-              const grad = ctx.createRadialGradient(px, py, eraserRadius * (hardness / 100), px, py, eraserRadius)
-              grad.addColorStop(0, `rgba(0,0,0,${opacity})`)
-              grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`)
-              grad.addColorStop(1, 'rgba(0,0,0,0)')
-              ctx.fillStyle = grad
+              const grad = ctx.createRadialGradient(px, py, eraserRadius * (hardness / 100), px, py, eraserRadius);
+              grad.addColorStop(0, `rgba(0,0,0,${opacity})`);
+              grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`);
+              grad.addColorStop(1, 'rgba(0,0,0,0)');
+              ctx.fillStyle = grad;
             } else {
-              ctx.fillStyle = `rgba(0,0,0,${opacity})`
+              ctx.fillStyle = `rgba(0,0,0,${opacity})`;
             }
-            ctx.fillRect(px - eraserRadius, py - eraserRadius, eraserRadius * 2, eraserRadius * 2)
+            ctx.fillRect(px - eraserRadius, py - eraserRadius, eraserRadius * 2, eraserRadius * 2);
           } else {
-            ctx.beginPath()
+            ctx.beginPath();
             if (hardness < 100) {
-              const grad = ctx.createRadialGradient(px, py, eraserRadius * (hardness / 100), px, py, eraserRadius)
-              grad.addColorStop(0, `rgba(0,0,0,${opacity})`)
-              grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`)
-              grad.addColorStop(1, 'rgba(0,0,0,0)')
-              ctx.fillStyle = grad
+              const grad = ctx.createRadialGradient(px, py, eraserRadius * (hardness / 100), px, py, eraserRadius);
+              grad.addColorStop(0, `rgba(0,0,0,${opacity})`);
+              grad.addColorStop(hardness / 100, `rgba(0,0,0,${opacity})`);
+              grad.addColorStop(1, 'rgba(0,0,0,0)');
+              ctx.fillStyle = grad;
             } else {
-              ctx.fillStyle = `rgba(0,0,0,${opacity})`
+              ctx.fillStyle = `rgba(0,0,0,${opacity})`;
             }
-            ctx.arc(px, py, eraserRadius, 0, Math.PI * 2)
-            ctx.fill()
+            ctx.arc(px, py, eraserRadius, 0, Math.PI * 2);
+            ctx.fill();
           }
-          ctx.restore()
-          obj.dirty = true
+          ctx.restore();
+          obj.dirty = true;
         } else if (obj.type === 'line') {
-          const matrix = obj.calcTransformMatrix()
-          const pts = obj.calcLinePoints()
-          const p1 = fabric.util.transformPoint(new fabric.Point(pts.x1, pts.y1), matrix)
-          const p2 = fabric.util.transformPoint(new fabric.Point(pts.x2, pts.y2), matrix)
-          const dist = distToSegment(pointer, p1, p2)
-          if (dist < radius) fCanvas.value.remove(obj)
+          const matrix = obj.calcTransformMatrix();
+          const pts = obj.calcLinePoints();
+          const p1 = fabric.util.transformPoint(new fabric.Point(pts.x1, pts.y1), matrix);
+          const p2 = fabric.util.transformPoint(new fabric.Point(pts.x2, pts.y2), matrix);
+          const dist = distToSegment(pointer, p1, p2);
+          if (dist < radius) fCanvas.value.remove(obj);
         } else if (['circle', 'rect', 'triangle', 'i-text', 'polygon'].includes(obj.type)) {
-          const pt = new fabric.Point(pointer.x, pointer.y)
-          const pMin = new fabric.Point(pointer.x - radius, pointer.y - radius)
-          const pMax = new fabric.Point(pointer.x + radius, pointer.y + radius)
-          const isColliding = obj.containsPoint(pt) || obj.intersectsWithRect(pMin, pMax)
-          if (isColliding) fCanvas.value.remove(obj)
+          const pt = new fabric.Point(pointer.x, pointer.y);
+          const pMin = new fabric.Point(pointer.x - radius, pointer.y - radius);
+          const pMax = new fabric.Point(pointer.x + radius, pointer.y + radius);
+          const isColliding = obj.containsPoint(pt) || obj.intersectsWithRect(pMin, pMax);
+          if (isColliding) fCanvas.value.remove(obj);
         }
-      })
-      fCanvas.value.requestRenderAll()
+      });
+      fCanvas.value.requestRenderAll();
     }
 
     if (isDrawingLine.value && currentLine) {
-      currentLine.set({ x2: pointer.x, y2: pointer.y })
-      currentLine.setCoords()
-      fCanvas.value.requestRenderAll()
+      currentLine.set({ x2: pointer.x, y2: pointer.y });
+      currentLine.setCoords();
+      fCanvas.value.requestRenderAll();
     }
 
     if (isDrawingCrop.value && cropRect && startPoint) {
-      const l = Math.min(startPoint.x, pointer.x)
-      const t = Math.min(startPoint.y, pointer.y)
-      cropRect.set({ left: l, top: t, width: Math.abs(startPoint.x - pointer.x), height: Math.abs(startPoint.y - pointer.y) })
-      fCanvas.value.requestRenderAll()
+      const l = Math.min(startPoint.x, pointer.x);
+      const t = Math.min(startPoint.y, pointer.y);
+      cropRect.set({
+        left: l,
+        top: t,
+        width: Math.abs(startPoint.x - pointer.x),
+        height: Math.abs(startPoint.y - pointer.y)
+      });
+      fCanvas.value.requestRenderAll();
     }
 
     if (isDrawingRect.value && currentRect && startPoint) {
-      let w = Math.abs(startPoint.x - pointer.x)
-      let h = Math.abs(startPoint.y - pointer.y)
+      let w = Math.abs(startPoint.x - pointer.x);
+      let h = Math.abs(startPoint.y - pointer.y);
       if (opt.e.ctrlKey || opt.e.metaKey) {
-        const size = Math.max(w, h)
-        w = size; h = size
+        const size = Math.max(w, h);
+        w = size;
+        h = size;
       }
-      const l = Math.min(startPoint.x, pointer.x)
-      const t = Math.min(startPoint.y, pointer.y)
+      const l = Math.min(startPoint.x, pointer.x);
+      const t = Math.min(startPoint.y, pointer.y);
 
       if (currentRect.type === 'ellipse') {
-        currentRect.set({ left: l, top: t, rx: w / 2, ry: h / 2, width: w, height: h })
-        currentRect.setCoords()
+        currentRect.set({ left: l, top: t, rx: w / 2, ry: h / 2, width: w, height: h });
+        currentRect.setCoords();
       } else if (currentRect.type === 'triangle') {
-        currentRect.set({ left: l, top: t, width: w, height: h })
-        currentRect.setCoords()
+        currentRect.set({ left: l, top: t, width: w, height: h });
+        currentRect.setCoords();
       } else if (currentRect.type === 'polygon' && !currentRect._isStar) {
-        const sides = currentRect._sides || 6
-        const rx = w / 2, ry = h / 2
-        const pts: any[] = []
+        const sides = currentRect._sides || 6;
+        const rx = w / 2,
+          ry = h / 2;
+        const pts: any[] = [];
         for (let i = 0; i < sides; i++) {
-          const angle = (Math.PI * 2 / sides) * i - Math.PI / 2
-          pts.push({ x: rx * Math.cos(angle), y: ry * Math.sin(angle) })
+          const angle = ((Math.PI * 2) / sides) * i - Math.PI / 2;
+          pts.push({ x: rx * Math.cos(angle), y: ry * Math.sin(angle) });
         }
-        let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y
+        let minX = pts[0].x,
+          maxX = pts[0].x,
+          minY = pts[0].y,
+          maxY = pts[0].y;
         pts.forEach(p => {
-          if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
-          if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
-        })
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        });
         currentRect.set({
-          points: pts, width: maxX - minX, height: maxY - minY,
+          points: pts,
+          width: maxX - minX,
+          height: maxY - minY,
           pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
-          left: l, top: t, originX: 'left', originY: 'top', dirty: true
-        })
-        currentRect._initDimensions()
-        currentRect.setCoords()
+          left: l,
+          top: t,
+          originX: 'left',
+          originY: 'top',
+          dirty: true
+        });
+        currentRect._initDimensions();
+        currentRect.setCoords();
       } else if (currentRect._isStar) {
-        const points = currentRect._starPoints || 5
-        const rx = w / 2, ry = h / 2
-        const innerRx = rx * 0.4, innerRy = ry * 0.4
-        const pts: any[] = []
+        const points = currentRect._starPoints || 5;
+        const rx = w / 2,
+          ry = h / 2;
+        const innerRx = rx * 0.4,
+          innerRy = ry * 0.4;
+        const pts: any[] = [];
         for (let i = 0; i < points * 2; i++) {
-          const rX = i % 2 === 0 ? rx : innerRx
-          const rY = i % 2 === 0 ? ry : innerRy
-          const angle = (Math.PI / points) * i - Math.PI / 2
-          pts.push({ x: rX * Math.cos(angle), y: rY * Math.sin(angle) })
+          const rX = i % 2 === 0 ? rx : innerRx;
+          const rY = i % 2 === 0 ? ry : innerRy;
+          const angle = (Math.PI / points) * i - Math.PI / 2;
+          pts.push({ x: rX * Math.cos(angle), y: rY * Math.sin(angle) });
         }
-        let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y
+        let minX = pts[0].x,
+          maxX = pts[0].x,
+          minY = pts[0].y,
+          maxY = pts[0].y;
         pts.forEach(p => {
-          if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
-          if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
-        })
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        });
         currentRect.set({
-          points: pts, width: maxX - minX, height: maxY - minY,
+          points: pts,
+          width: maxX - minX,
+          height: maxY - minY,
           pathOffset: { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 },
-          left: l, top: t, originX: 'left', originY: 'top', dirty: true
-        })
-        currentRect._initDimensions()
-        currentRect.setCoords()
+          left: l,
+          top: t,
+          originX: 'left',
+          originY: 'top',
+          dirty: true
+        });
+        currentRect._initDimensions();
+        currentRect.setCoords();
       } else {
-        currentRect.set({ left: l, top: t, width: w, height: h })
-        currentRect.setCoords()
+        currentRect.set({ left: l, top: t, width: w, height: h });
+        currentRect.setCoords();
       }
-      fCanvas.value.renderAll()
+      fCanvas.value.renderAll();
     }
-  }
+  };
 
   const handleMouseUp = () => {
-    if (!fCanvas.value) return
+    if (!fCanvas.value) return;
     if (isPanning) {
-      isPanning = false
-      lastPanPoint = null
-      fCanvas.value.defaultCursor = canvasTool.value === 'hand' ? 'grab' : 'default'
-      return
+      isPanning = false;
+      lastPanPoint = null;
+      fCanvas.value.defaultCursor = canvasTool.value === 'hand' ? 'grab' : 'default';
+      return;
     }
 
-    if (isErasing.value) { isErasing.value = false; saveState() }
-    
+    if (isErasing.value) {
+      isErasing.value = false;
+      saveState();
+    }
+
     if (isDrawingLine.value) {
-      isDrawingLine.value = false
+      isDrawingLine.value = false;
       if (currentLine) {
         if (startNode && canvasTool.value === 'line' && lastMouseEvent) {
-          const endTarget = fCanvas.value.findTarget(lastMouseEvent, false)
-          fCanvas.value.remove(currentLine)
-          currentLine = null
+          const endTarget = fCanvas.value.findTarget(lastMouseEvent, false);
+          fCanvas.value.remove(currentLine);
+          currentLine = null;
           if (endTarget && endTarget.isSkeleton && endTarget !== startNode) {
-            connectNodes(startNode, endTarget)
+            connectNodes(startNode, endTarget);
           }
-          startNode = null
+          startNode = null;
         } else if (canvasTool.value === 'arrow') {
-          addArrowHead(currentLine)
-          currentLine.set({ id: uuidv4() }); currentLine.setCoords(); saveState()
+          addArrowHead(currentLine);
+          currentLine.set({ id: uuidv4() });
+          currentLine.setCoords();
+          saveState();
         } else {
-          currentLine.set({ id: uuidv4() }); currentLine.setCoords(); saveState()
-          startNode = null
+          currentLine.set({ id: uuidv4() });
+          currentLine.setCoords();
+          saveState();
+          startNode = null;
         }
       }
     }
 
     if (isDrawingCrop.value) {
-      isDrawingCrop.value = false
-      if (cropRect && cropRect.width > 5) analyzeArea(cropRect)
-      if (cropRect) fCanvas.value.remove(cropRect)
-      cropRect = null
+      isDrawingCrop.value = false;
+      if (cropRect && cropRect.width > 5) analyzeArea(cropRect);
+      if (cropRect) fCanvas.value.remove(cropRect);
+      cropRect = null;
     }
 
     if (isDrawingRect.value) {
-      isDrawingRect.value = false
+      isDrawingRect.value = false;
       if (currentRect) {
-        const minSize = 5
-        let hasSize = false
+        const minSize = 5;
+        let hasSize = false;
         if (currentRect.type === 'ellipse') {
-          hasSize = currentRect.rx > minSize && currentRect.ry > minSize
+          hasSize = currentRect.rx > minSize && currentRect.ry > minSize;
         } else if (currentRect.type === 'polygon') {
-          hasSize = currentRect.points && currentRect.points.length > 2
+          hasSize = currentRect.points && currentRect.points.length > 2;
         } else {
-          hasSize = currentRect.width > minSize && currentRect.height > minSize
+          hasSize = currentRect.width > minSize && currentRect.height > minSize;
         }
         if (hasSize) {
-          currentRect.set({ id: uuidv4(), selectable: true, evented: true })
-          currentRect.setCoords()
-          fCanvas.value.setActiveObject(currentRect)
-          saveState()
+          currentRect.set({ id: uuidv4(), selectable: true, evented: true });
+          currentRect.setCoords();
+          fCanvas.value.setActiveObject(currentRect);
+          saveState();
         } else {
-          fCanvas.value.remove(currentRect)
+          fCanvas.value.remove(currentRect);
         }
-        currentRect = null
+        currentRect = null;
       }
     }
 
     if (canvasDeps.eraserCursor && canvasTool.value !== 'eraser') {
-      canvasDeps.eraserCursor.set('visible', false)
+      canvasDeps.eraserCursor.set('visible', false);
     }
-    fCanvas.value.renderAll()
-  }
+    fCanvas.value.renderAll();
+  };
 
   const handlePathCreated = (opt: any) => {
-    if (!fCanvas.value) return
-    const path = opt.path; if (!path) return; path.setCoords()
-    const center = path.getCenterPoint(), dpr = window.devicePixelRatio || 1
-    const el = path.toCanvasElement({ multiplier: dpr })
-    const img = new fabric.Image(el, { left: center.x, top: center.y, originX: 'center', originY: 'center', scaleX: (path.scaleX || 1) / dpr, scaleY: (path.scaleY || 1) / dpr, angle: path.angle || 0, erasable: true, isUserStroke: true })
+    if (!fCanvas.value) return;
+    const path = opt.path;
+    if (!path) return;
+    path.setCoords();
+    const center = path.getCenterPoint(),
+      dpr = window.devicePixelRatio || 1;
+    const el = path.toCanvasElement({ multiplier: dpr });
+    const img = new fabric.Image(el, {
+      left: center.x,
+      top: center.y,
+      originX: 'center',
+      originY: 'center',
+      scaleX: (path.scaleX || 1) / dpr,
+      scaleY: (path.scaleY || 1) / dpr,
+      angle: path.angle || 0,
+      erasable: true,
+      isUserStroke: true
+    });
     if (activeTool.value !== 'select') {
-      img.selectable = false
-      img.evented = false
+      img.selectable = false;
+      img.evented = false;
     }
-    fCanvas.value.add(img); fCanvas.value.remove(path); saveState(); fCanvas.value.renderAll()
-  }
+    fCanvas.value.add(img);
+    fCanvas.value.remove(path);
+    saveState();
+    fCanvas.value.renderAll();
+  };
 
   return {
     handleMouseDown,
@@ -552,5 +659,5 @@ export function useMouseEvents(
     isDrawingLine,
     isDrawingRect,
     isDrawingCrop
-  }
+  };
 }

@@ -290,35 +290,35 @@ async findPage({ page = 1, pageSize = 20, keyword }) {
 
 ```ts
 export interface ApiResult<T> {
-  code: number
-  message: string
-  data: T
-  timestamp?: number
-  requestId?: string
+  code: number;
+  message: string;
+  data: T;
+  timestamp?: number;
+  requestId?: string;
 }
 
 export interface Pagination {
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface ApiPageResult<T> extends ApiResult<T[]> {
-  pagination: Pagination
+  pagination: Pagination;
 }
 ```
 
 ### PoseCraft 优先联动项
 
-| 后端任务 | 前端配套 |
-|----------|----------|
+| 后端任务                    | 前端配套                                                 |
+| --------------------------- | -------------------------------------------------------- |
 | 模板/作品公开列表改分页响应 | Home/Profile 列表改为分页加载，去掉一次性 `pageSize: 60` |
-| 模板和作品权限点拆分 | 前端按钮、菜单、路由按新权限控制 |
-| 点赞接口增加幂等记录 | 前端显示 liked 状态，避免本地点赞假成功 |
-| 关注接口补 schema 和分页 | 前端关注流支持加载更多 |
-| 上传接口统一返回文件元信息 | 前端上传组件统一展示进度、错误和最终 URL |
-| 审核状态 enum 文档化 | poseadmin 使用统一状态字典渲染标签和筛选 |
+| 模板和作品权限点拆分        | 前端按钮、菜单、路由按新权限控制                         |
+| 点赞接口增加幂等记录        | 前端显示 liked 状态，避免本地点赞假成功                  |
+| 关注接口补 schema 和分页    | 前端关注流支持加载更多                                   |
+| 上传接口统一返回文件元信息  | 前端上传组件统一展示进度、错误和最终 URL                 |
+| 审核状态 enum 文档化        | poseadmin 使用统一状态字典渲染标签和筛选                 |
 
 ### 统一状态字典
 

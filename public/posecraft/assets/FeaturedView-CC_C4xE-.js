@@ -1,1 +1,592 @@
-import{_ as me,T as fe}from"./Icon.vue_vue_type_script_setup_true_lang-D-OxR9Ey.js";import{u as ge}from"./useHome-R4pP8npN.js";import{d as j,a as X,c as l,b as e,w as V,q as pe,j as W,x as ye,F as p,r as b,n as L,m as U,l as _,o as r,s as ke,t as f,A,L as E,M as q,N as be,B as _e,C as we,e as M,f as t,D as O,y as k,z as D,p as Ce}from"./index-C531BqZY.js";import{_ as G}from"./_plugin-vue_export-helper-DTPmx0_K.js";import{S as Se,P as xe}from"./SkeletonCard-DNRU_iEi.js";import{L as Me}from"./loader-circle-BU5vGQ8h.js";import{S as $e}from"./search-oUkp4cYT.js";import"./x-dxW7U81h.js";import"./triangle-alert-htK-bCwW.js";import"./user-Cti-8Le8.js";import"./wrench-CXNTiZy0.js";import"./message-circle-C3r4ZyRP.js";import"./aperture-CMAIhw8p.js";import"./users-BaaIlyJv.js";import"./heart-DQGPeVSk.js";import"./map-pin-CeIDkRSF.js";import"./sparkles-CSDhrUXU.js";import"./camera-nl1SqI33.js";import"./work-CSZq0nvF.js";import"./useLocation-BzKEbus-.js";const Be={class:"search-sticky-header"},De={class:"search-row-input"},Le={class:"search-row-actions"},Fe={class:"search-suggestions-inner"},Re={class:"suggest-grid"},Ye=["onMousedown"],Te=j({__name:"SearchHero",props:U({searchSuggestions:{},showNavSearch:{type:Boolean}},{searchQuery:{required:!0},searchQueryModifiers:{},searchFocused:{type:Boolean,required:!0},searchFocusedModifiers:{}}),emits:U(["blur","handleStartCreate"],["update:searchQuery","update:searchFocused"]),setup(y,{expose:d}){const v=X(y,"searchQuery"),h=X(y,"searchFocused"),$=_(null);return d({sentinelRef:$}),(w,a)=>(r(),l("div",Be,[e("div",{class:L(["search-hero-bar at-top",{focused:h.value}])},[e("div",De,[V(e("input",{"onUpdate:modelValue":a[0]||(a[0]=i=>v.value=i),type:"text",placeholder:"搜索感兴趣的姿势模板、创意构图、运动技巧...",class:"search-input-new",onFocus:a[1]||(a[1]=i=>h.value=!0),onBlur:a[2]||(a[2]=i=>w.$emit("blur"))},null,544),[[pe,v.value]]),a[4]||(a[4]=e("button",{class:"search-btn-float"},[e("svg",{width:"16",height:"16",viewBox:"0 0 24 24",fill:"none",stroke:"currentColor","stroke-width":"2.5"},[e("circle",{cx:"11",cy:"11",r:"8"}),e("line",{x1:"21",y1:"21",x2:"16.65",y2:"16.65"})])],-1))]),e("div",Le,[e("button",{class:"search-plus-btn",onClick:a[3]||(a[3]=i=>w.$emit("handleStartCreate")),title:"创作"},[...a[5]||(a[5]=[e("svg",{width:"18",height:"18",viewBox:"0 0 24 24",fill:"none",stroke:"currentColor","stroke-width":"2.5"},[e("line",{x1:"12",y1:"5",x2:"12",y2:"19"}),e("line",{x1:"5",y1:"12",x2:"19",y2:"12"})],-1)])]),a[6]||(a[6]=e("div",{class:"search-divider-v"},null,-1)),a[7]||(a[7]=e("span",{class:"search-ai-hint"},[W("问点点 "),e("span",{class:"ai-badge"},"AI")],-1))]),V(e("div",Fe,[a[8]||(a[8]=e("div",{class:"suggest-divider",style:{"margin-top":"0"}},null,-1)),a[9]||(a[9]=e("div",{class:"suggest-header"},"猜你想搜",-1)),e("div",Re,[(r(!0),l(p,null,b(y.searchSuggestions,i=>(r(),l("button",{key:i,class:"suggest-item",onMousedown:ke(J=>{v.value=i,h.value=!1},["prevent"])},f(i),41,Ye))),128))])],512),[[ye,h.value&&!y.showNavSearch]])],2)]))}}),He=G(Te,[["__scopeId","data-v-4171bf70"]]),Ne={class:"featured-page-container"},Qe=["onClick"],ze={key:0,class:"w-full",style:{height:"calc(100vh - 120px)"}},Ie=["src"],Xe={key:1,class:"content-body"},Ve={class:"banner-content"},Ue={key:0,class:"banner-badge"},Ae={class:"banner-title"},Ee={key:1,class:"banner-desc"},qe=["onClick"],Oe={key:1,class:"waterfall-grid"},Pe={class:"waterfall-grid"},je={key:0,class:"load-more-container"},We=["disabled"],Ge={key:1,class:"load-more-container"},Je={key:3,class:"empty-state"},P=5,Ke=j({__name:"FeaturedView",setup(y){const{searchQuery:d,searchFocused:v,activeChannel:h,searchSuggestions:$,channels:w,showNavSearch:a,filteredItems:i,currentChannel:J,currentChannelUrl:F,currentChannelShowBanner:K,hasMore:Z,loading:C,loadMore:R,showToast:ee,handleStartCreate:te,openDetail:se,handleLike:oe,handleCollect:ne,onSearchBlur:ae,searchSentinel:Y,activeNav:T,activeBanners:H}=ge(),re=o=>{o.link_url?window.open(o.link_url,"_blank"):ee("已进入精选主题页面")};A(()=>{T.value="featured"}),E(()=>{T.value="featured"});const m=_(null),S=_(null),N=_(!1),B=()=>{const o=m.value,n=S.value;o&&n&&(N.value=n.scrollWidth>o.clientWidth)};let g=null;A(()=>{q(B),g=new ResizeObserver(B),m.value&&g.observe(m.value),S.value&&g.observe(S.value)}),E(()=>{q(B)}),be(()=>{Y.value=null}),_e(()=>{g==null||g.disconnect()});const c={startX:0,startScrollLeft:0,moved:!1},le=o=>{const n=m.value;n&&(c.startX=o.clientX,c.startScrollLeft=n.scrollLeft,c.moved=!1,n.classList.add("dragging"),document.body.style.cursor="grabbing",document.body.style.userSelect="none")},ie=o=>{const n=m.value;if(!n||c.startX===0)return;const x=o.clientX-c.startX;Math.abs(x)>P&&(c.moved=!0),n.scrollLeft=c.startScrollLeft-x},Q=()=>{const o=m.value;o&&o.classList.remove("dragging"),c.startX=0,document.body.style.cursor="",document.body.style.userSelect=""},ce=o=>{if(c.moved){c.moved=!1;return}h.value=o},u={startY:0,startScrollY:0,moved:!1},ue=o=>{o.target.closest("button, a, input, textarea, select, iframe")||(u.startY=o.clientY,u.startScrollY=window.scrollY,u.moved=!1,document.body.style.cursor="grabbing",document.body.style.userSelect="none")},de=o=>{if(u.startY===0)return;const n=o.clientY-u.startY;Math.abs(n)>P&&(u.moved=!0),window.scrollTo(window.scrollX,u.startScrollY-n)},z=()=>{u.startY=0,document.body.style.cursor="",document.body.style.userSelect=""},ve=o=>{u.moved&&(o.stopPropagation(),o.preventDefault(),u.moved=!1)},I=_(null);return we(()=>{var o;return(o=I.value)==null?void 0:o.sentinelRef},o=>{Y.value=o},{immediate:!0}),(o,n)=>{const x=me;return r(),l("div",Ne,[M(He,{ref_key:"searchHeroRef",ref:I,searchQuery:t(d),"onUpdate:searchQuery":n[0]||(n[0]=s=>O(d)?d.value=s:null),searchFocused:t(v),"onUpdate:searchFocused":n[1]||(n[1]=s=>O(v)?v.value=s:null),"search-suggestions":t($),"show-nav-search":t(a),onBlur:t(ae),onHandleStartCreate:t(te)},null,8,["searchQuery","searchFocused","search-suggestions","show-nav-search","onBlur","onHandleStartCreate"]),e("div",{ref_key:"channelContainerRef",ref:m,class:L(["channel-container",{"justify-start":N.value}]),onMousedown:le,onMousemove:ie,onMouseup:Q,onMouseleave:Q},[e("div",{ref_key:"channelInnerRef",ref:S,class:"channel-inner"},[(r(!0),l(p,null,b(t(w),s=>(r(),l("button",{key:s.value,onClick:he=>ce(s.value),class:L(["channel-tag",{active:t(h)===s.value}])},[s.icon?(r(),D(x,{key:0,name:s.icon,size:16,class:"channel-icon"},null,8,["name"])):k("",!0),W(" "+f(s.label),1)],10,Qe))),128))],512)],34),e("div",{class:"content-container",onMousedown:ue,onMousemove:de,onMouseup:z,onMouseleave:z,onClickCapture:ve},[t(F)?(r(),l("div",ze,[e("iframe",{src:t(F),class:"w-full h-full border-0",sandbox:"allow-scripts allow-same-origin"},null,8,Ie)])):(r(),l("div",Xe,[t(K)&&!t(d).trim()&&t(H).length>0?(r(!0),l(p,{key:0},b(t(H),s=>(r(),l("div",{key:s.id,class:"featured-banner",style:Ce({backgroundImage:`linear-gradient(to right, rgba(15,23,42,0.95), rgba(15,23,42,0.4)), url(${s.image_url})`})},[e("div",Ve,[s.badge_text?(r(),l("div",Ue,[M(t(fe),{class:"badge-icon",size:14}),e("span",null,f(s.badge_text),1)])):k("",!0),e("h1",Ae,f(s.title),1),s.description?(r(),l("p",Ee,f(s.description),1)):k("",!0)]),e("button",{class:"banner-btn",onClick:he=>re(s)},f(s.button_text||"立即探索"),9,qe)],4))),128)):k("",!0),t(C)&&t(i).length===0?(r(),l("div",Oe,[(r(),l(p,null,b(8,s=>M(Se,{key:s})),64))])):t(i).length>0?(r(),l(p,{key:2},[e("div",Pe,[(r(!0),l(p,null,b(t(i),s=>(r(),D(xe,{key:s._key??s.id,item:s,onClick:t(se),onLike:t(oe),onCollect:t(ne)},null,8,["item","onClick","onLike","onCollect"]))),128))]),t(Z)?(r(),l("div",je,[e("button",{class:"load-more-btn",onClick:n[2]||(n[2]=(...s)=>t(R)&&t(R)(...s)),disabled:t(C)},[t(C)?(r(),D(t(Me),{key:0,class:"animate-spin",size:16})):k("",!0),e("span",null,f(t(C)?"加载中...":"加载更多"),1)],8,We)])):(r(),l("div",Ge,[...n[4]||(n[4]=[e("span",{class:"no-more-text"},"没有更多内容了",-1)])]))],64)):(r(),l("div",Je,[M(t($e),{class:"empty-icon",size:54}),n[5]||(n[5]=e("div",{class:"empty-text"},"没有找到相关的姿势模板",-1)),e("button",{class:"empty-btn",onClick:n[3]||(n[3]=s=>d.value="")},"重置搜索")]))]))],32)])}}}),kt=G(Ke,[["__scopeId","data-v-f000dfa9"]]);export{kt as default};
+import { _ as me, T as fe } from './Icon.vue_vue_type_script_setup_true_lang-D-OxR9Ey.js';
+import { u as ge } from './useHome-R4pP8npN.js';
+import {
+  d as j,
+  a as X,
+  c as l,
+  b as e,
+  w as V,
+  q as pe,
+  j as W,
+  x as ye,
+  F as p,
+  r as b,
+  n as L,
+  m as U,
+  l as _,
+  o as r,
+  s as ke,
+  t as f,
+  A,
+  L as E,
+  M as q,
+  N as be,
+  B as _e,
+  C as we,
+  e as M,
+  f as t,
+  D as O,
+  y as k,
+  z as D,
+  p as Ce
+} from './index-C531BqZY.js';
+import { _ as G } from './_plugin-vue_export-helper-DTPmx0_K.js';
+import { S as Se, P as xe } from './SkeletonCard-DNRU_iEi.js';
+import { L as Me } from './loader-circle-BU5vGQ8h.js';
+import { S as $e } from './search-oUkp4cYT.js';
+import './x-dxW7U81h.js';
+import './triangle-alert-htK-bCwW.js';
+import './user-Cti-8Le8.js';
+import './wrench-CXNTiZy0.js';
+import './message-circle-C3r4ZyRP.js';
+import './aperture-CMAIhw8p.js';
+import './users-BaaIlyJv.js';
+import './heart-DQGPeVSk.js';
+import './map-pin-CeIDkRSF.js';
+import './sparkles-CSDhrUXU.js';
+import './camera-nl1SqI33.js';
+import './work-CSZq0nvF.js';
+import './useLocation-BzKEbus-.js';
+const Be = { class: 'search-sticky-header' },
+  De = { class: 'search-row-input' },
+  Le = { class: 'search-row-actions' },
+  Fe = { class: 'search-suggestions-inner' },
+  Re = { class: 'suggest-grid' },
+  Ye = ['onMousedown'],
+  Te = j({
+    __name: 'SearchHero',
+    props: U(
+      { searchSuggestions: {}, showNavSearch: { type: Boolean } },
+      {
+        searchQuery: { required: !0 },
+        searchQueryModifiers: {},
+        searchFocused: { type: Boolean, required: !0 },
+        searchFocusedModifiers: {}
+      }
+    ),
+    emits: U(['blur', 'handleStartCreate'], ['update:searchQuery', 'update:searchFocused']),
+    setup(y, { expose: d }) {
+      const v = X(y, 'searchQuery'),
+        h = X(y, 'searchFocused'),
+        $ = _(null);
+      return (
+        d({ sentinelRef: $ }),
+        (w, a) => (
+          r(),
+          l('div', Be, [
+            e(
+              'div',
+              { class: L(['search-hero-bar at-top', { focused: h.value }]) },
+              [
+                e('div', De, [
+                  V(
+                    e(
+                      'input',
+                      {
+                        'onUpdate:modelValue': a[0] || (a[0] = i => (v.value = i)),
+                        type: 'text',
+                        placeholder: '搜索感兴趣的姿势模板、创意构图、运动技巧...',
+                        class: 'search-input-new',
+                        onFocus: a[1] || (a[1] = i => (h.value = !0)),
+                        onBlur: a[2] || (a[2] = i => w.$emit('blur'))
+                      },
+                      null,
+                      544
+                    ),
+                    [[pe, v.value]]
+                  ),
+                  a[4] ||
+                    (a[4] = e(
+                      'button',
+                      { class: 'search-btn-float' },
+                      [
+                        e(
+                          'svg',
+                          {
+                            width: '16',
+                            height: '16',
+                            viewBox: '0 0 24 24',
+                            fill: 'none',
+                            stroke: 'currentColor',
+                            'stroke-width': '2.5'
+                          },
+                          [
+                            e('circle', { cx: '11', cy: '11', r: '8' }),
+                            e('line', { x1: '21', y1: '21', x2: '16.65', y2: '16.65' })
+                          ]
+                        )
+                      ],
+                      -1
+                    ))
+                ]),
+                e('div', Le, [
+                  e(
+                    'button',
+                    {
+                      class: 'search-plus-btn',
+                      onClick: a[3] || (a[3] = i => w.$emit('handleStartCreate')),
+                      title: '创作'
+                    },
+                    [
+                      ...(a[5] ||
+                        (a[5] = [
+                          e(
+                            'svg',
+                            {
+                              width: '18',
+                              height: '18',
+                              viewBox: '0 0 24 24',
+                              fill: 'none',
+                              stroke: 'currentColor',
+                              'stroke-width': '2.5'
+                            },
+                            [
+                              e('line', { x1: '12', y1: '5', x2: '12', y2: '19' }),
+                              e('line', { x1: '5', y1: '12', x2: '19', y2: '12' })
+                            ],
+                            -1
+                          )
+                        ]))
+                    ]
+                  ),
+                  a[6] || (a[6] = e('div', { class: 'search-divider-v' }, null, -1)),
+                  a[7] ||
+                    (a[7] = e(
+                      'span',
+                      { class: 'search-ai-hint' },
+                      [W('问点点 '), e('span', { class: 'ai-badge' }, 'AI')],
+                      -1
+                    ))
+                ]),
+                V(
+                  e(
+                    'div',
+                    Fe,
+                    [
+                      a[8] || (a[8] = e('div', { class: 'suggest-divider', style: { 'margin-top': '0' } }, null, -1)),
+                      a[9] || (a[9] = e('div', { class: 'suggest-header' }, '猜你想搜', -1)),
+                      e('div', Re, [
+                        (r(!0),
+                        l(
+                          p,
+                          null,
+                          b(
+                            y.searchSuggestions,
+                            i => (
+                              r(),
+                              l(
+                                'button',
+                                {
+                                  key: i,
+                                  class: 'suggest-item',
+                                  onMousedown: ke(
+                                    J => {
+                                      ((v.value = i), (h.value = !1));
+                                    },
+                                    ['prevent']
+                                  )
+                                },
+                                f(i),
+                                41,
+                                Ye
+                              )
+                            )
+                          ),
+                          128
+                        ))
+                      ])
+                    ],
+                    512
+                  ),
+                  [[ye, h.value && !y.showNavSearch]]
+                )
+              ],
+              2
+            )
+          ])
+        )
+      );
+    }
+  }),
+  He = G(Te, [['__scopeId', 'data-v-4171bf70']]),
+  Ne = { class: 'featured-page-container' },
+  Qe = ['onClick'],
+  ze = { key: 0, class: 'w-full', style: { height: 'calc(100vh - 120px)' } },
+  Ie = ['src'],
+  Xe = { key: 1, class: 'content-body' },
+  Ve = { class: 'banner-content' },
+  Ue = { key: 0, class: 'banner-badge' },
+  Ae = { class: 'banner-title' },
+  Ee = { key: 1, class: 'banner-desc' },
+  qe = ['onClick'],
+  Oe = { key: 1, class: 'waterfall-grid' },
+  Pe = { class: 'waterfall-grid' },
+  je = { key: 0, class: 'load-more-container' },
+  We = ['disabled'],
+  Ge = { key: 1, class: 'load-more-container' },
+  Je = { key: 3, class: 'empty-state' },
+  P = 5,
+  Ke = j({
+    __name: 'FeaturedView',
+    setup(y) {
+      const {
+          searchQuery: d,
+          searchFocused: v,
+          activeChannel: h,
+          searchSuggestions: $,
+          channels: w,
+          showNavSearch: a,
+          filteredItems: i,
+          currentChannel: J,
+          currentChannelUrl: F,
+          currentChannelShowBanner: K,
+          hasMore: Z,
+          loading: C,
+          loadMore: R,
+          showToast: ee,
+          handleStartCreate: te,
+          openDetail: se,
+          handleLike: oe,
+          handleCollect: ne,
+          onSearchBlur: ae,
+          searchSentinel: Y,
+          activeNav: T,
+          activeBanners: H
+        } = ge(),
+        re = o => {
+          o.link_url ? window.open(o.link_url, '_blank') : ee('已进入精选主题页面');
+        };
+      (A(() => {
+        T.value = 'featured';
+      }),
+        E(() => {
+          T.value = 'featured';
+        }));
+      const m = _(null),
+        S = _(null),
+        N = _(!1),
+        B = () => {
+          const o = m.value,
+            n = S.value;
+          o && n && (N.value = n.scrollWidth > o.clientWidth);
+        };
+      let g = null;
+      (A(() => {
+        (q(B), (g = new ResizeObserver(B)), m.value && g.observe(m.value), S.value && g.observe(S.value));
+      }),
+        E(() => {
+          q(B);
+        }),
+        be(() => {
+          Y.value = null;
+        }),
+        _e(() => {
+          g == null || g.disconnect();
+        }));
+      const c = { startX: 0, startScrollLeft: 0, moved: !1 },
+        le = o => {
+          const n = m.value;
+          n &&
+            ((c.startX = o.clientX),
+            (c.startScrollLeft = n.scrollLeft),
+            (c.moved = !1),
+            n.classList.add('dragging'),
+            (document.body.style.cursor = 'grabbing'),
+            (document.body.style.userSelect = 'none'));
+        },
+        ie = o => {
+          const n = m.value;
+          if (!n || c.startX === 0) return;
+          const x = o.clientX - c.startX;
+          (Math.abs(x) > P && (c.moved = !0), (n.scrollLeft = c.startScrollLeft - x));
+        },
+        Q = () => {
+          const o = m.value;
+          (o && o.classList.remove('dragging'),
+            (c.startX = 0),
+            (document.body.style.cursor = ''),
+            (document.body.style.userSelect = ''));
+        },
+        ce = o => {
+          if (c.moved) {
+            c.moved = !1;
+            return;
+          }
+          h.value = o;
+        },
+        u = { startY: 0, startScrollY: 0, moved: !1 },
+        ue = o => {
+          o.target.closest('button, a, input, textarea, select, iframe') ||
+            ((u.startY = o.clientY),
+            (u.startScrollY = window.scrollY),
+            (u.moved = !1),
+            (document.body.style.cursor = 'grabbing'),
+            (document.body.style.userSelect = 'none'));
+        },
+        de = o => {
+          if (u.startY === 0) return;
+          const n = o.clientY - u.startY;
+          (Math.abs(n) > P && (u.moved = !0), window.scrollTo(window.scrollX, u.startScrollY - n));
+        },
+        z = () => {
+          ((u.startY = 0), (document.body.style.cursor = ''), (document.body.style.userSelect = ''));
+        },
+        ve = o => {
+          u.moved && (o.stopPropagation(), o.preventDefault(), (u.moved = !1));
+        },
+        I = _(null);
+      return (
+        we(
+          () => {
+            var o;
+            return (o = I.value) == null ? void 0 : o.sentinelRef;
+          },
+          o => {
+            Y.value = o;
+          },
+          { immediate: !0 }
+        ),
+        (o, n) => {
+          const x = me;
+          return (
+            r(),
+            l('div', Ne, [
+              M(
+                He,
+                {
+                  ref_key: 'searchHeroRef',
+                  ref: I,
+                  searchQuery: t(d),
+                  'onUpdate:searchQuery': n[0] || (n[0] = s => (O(d) ? (d.value = s) : null)),
+                  searchFocused: t(v),
+                  'onUpdate:searchFocused': n[1] || (n[1] = s => (O(v) ? (v.value = s) : null)),
+                  'search-suggestions': t($),
+                  'show-nav-search': t(a),
+                  onBlur: t(ae),
+                  onHandleStartCreate: t(te)
+                },
+                null,
+                8,
+                [
+                  'searchQuery',
+                  'searchFocused',
+                  'search-suggestions',
+                  'show-nav-search',
+                  'onBlur',
+                  'onHandleStartCreate'
+                ]
+              ),
+              e(
+                'div',
+                {
+                  ref_key: 'channelContainerRef',
+                  ref: m,
+                  class: L(['channel-container', { 'justify-start': N.value }]),
+                  onMousedown: le,
+                  onMousemove: ie,
+                  onMouseup: Q,
+                  onMouseleave: Q
+                },
+                [
+                  e(
+                    'div',
+                    { ref_key: 'channelInnerRef', ref: S, class: 'channel-inner' },
+                    [
+                      (r(!0),
+                      l(
+                        p,
+                        null,
+                        b(
+                          t(w),
+                          s => (
+                            r(),
+                            l(
+                              'button',
+                              {
+                                key: s.value,
+                                onClick: he => ce(s.value),
+                                class: L(['channel-tag', { active: t(h) === s.value }])
+                              },
+                              [
+                                s.icon
+                                  ? (r(),
+                                    D(x, { key: 0, name: s.icon, size: 16, class: 'channel-icon' }, null, 8, ['name']))
+                                  : k('', !0),
+                                W(' ' + f(s.label), 1)
+                              ],
+                              10,
+                              Qe
+                            )
+                          )
+                        ),
+                        128
+                      ))
+                    ],
+                    512
+                  )
+                ],
+                34
+              ),
+              e(
+                'div',
+                {
+                  class: 'content-container',
+                  onMousedown: ue,
+                  onMousemove: de,
+                  onMouseup: z,
+                  onMouseleave: z,
+                  onClickCapture: ve
+                },
+                [
+                  t(F)
+                    ? (r(),
+                      l('div', ze, [
+                        e(
+                          'iframe',
+                          { src: t(F), class: 'w-full h-full border-0', sandbox: 'allow-scripts allow-same-origin' },
+                          null,
+                          8,
+                          Ie
+                        )
+                      ]))
+                    : (r(),
+                      l('div', Xe, [
+                        t(K) && !t(d).trim() && t(H).length > 0
+                          ? (r(!0),
+                            l(
+                              p,
+                              { key: 0 },
+                              b(
+                                t(H),
+                                s => (
+                                  r(),
+                                  l(
+                                    'div',
+                                    {
+                                      key: s.id,
+                                      class: 'featured-banner',
+                                      style: Ce({
+                                        backgroundImage: `linear-gradient(to right, rgba(15,23,42,0.95), rgba(15,23,42,0.4)), url(${s.image_url})`
+                                      })
+                                    },
+                                    [
+                                      e('div', Ve, [
+                                        s.badge_text
+                                          ? (r(),
+                                            l('div', Ue, [
+                                              M(t(fe), { class: 'badge-icon', size: 14 }),
+                                              e('span', null, f(s.badge_text), 1)
+                                            ]))
+                                          : k('', !0),
+                                        e('h1', Ae, f(s.title), 1),
+                                        s.description ? (r(), l('p', Ee, f(s.description), 1)) : k('', !0)
+                                      ]),
+                                      e(
+                                        'button',
+                                        { class: 'banner-btn', onClick: he => re(s) },
+                                        f(s.button_text || '立即探索'),
+                                        9,
+                                        qe
+                                      )
+                                    ],
+                                    4
+                                  )
+                                )
+                              ),
+                              128
+                            ))
+                          : k('', !0),
+                        t(C) && t(i).length === 0
+                          ? (r(),
+                            l('div', Oe, [
+                              (r(),
+                              l(
+                                p,
+                                null,
+                                b(8, s => M(Se, { key: s })),
+                                64
+                              ))
+                            ]))
+                          : t(i).length > 0
+                            ? (r(),
+                              l(
+                                p,
+                                { key: 2 },
+                                [
+                                  e('div', Pe, [
+                                    (r(!0),
+                                    l(
+                                      p,
+                                      null,
+                                      b(
+                                        t(i),
+                                        s => (
+                                          r(),
+                                          D(
+                                            xe,
+                                            {
+                                              key: s._key ?? s.id,
+                                              item: s,
+                                              onClick: t(se),
+                                              onLike: t(oe),
+                                              onCollect: t(ne)
+                                            },
+                                            null,
+                                            8,
+                                            ['item', 'onClick', 'onLike', 'onCollect']
+                                          )
+                                        )
+                                      ),
+                                      128
+                                    ))
+                                  ]),
+                                  t(Z)
+                                    ? (r(),
+                                      l('div', je, [
+                                        e(
+                                          'button',
+                                          {
+                                            class: 'load-more-btn',
+                                            onClick: n[2] || (n[2] = (...s) => t(R) && t(R)(...s)),
+                                            disabled: t(C)
+                                          },
+                                          [
+                                            t(C)
+                                              ? (r(), D(t(Me), { key: 0, class: 'animate-spin', size: 16 }))
+                                              : k('', !0),
+                                            e('span', null, f(t(C) ? '加载中...' : '加载更多'), 1)
+                                          ],
+                                          8,
+                                          We
+                                        )
+                                      ]))
+                                    : (r(),
+                                      l('div', Ge, [
+                                        ...(n[4] ||
+                                          (n[4] = [e('span', { class: 'no-more-text' }, '没有更多内容了', -1)]))
+                                      ]))
+                                ],
+                                64
+                              ))
+                            : (r(),
+                              l('div', Je, [
+                                M(t($e), { class: 'empty-icon', size: 54 }),
+                                n[5] || (n[5] = e('div', { class: 'empty-text' }, '没有找到相关的姿势模板', -1)),
+                                e(
+                                  'button',
+                                  { class: 'empty-btn', onClick: n[3] || (n[3] = s => (d.value = '')) },
+                                  '重置搜索'
+                                )
+                              ]))
+                      ]))
+                ],
+                32
+              )
+            ])
+          );
+        }
+      );
+    }
+  }),
+  kt = G(Ke, [['__scopeId', 'data-v-f000dfa9']]);
+export { kt as default };

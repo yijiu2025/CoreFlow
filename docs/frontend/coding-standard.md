@@ -14,14 +14,14 @@
 
 ## 当前项目画像
 
-| 项目 | 定位 | 技术栈特征 | 当前关注点 |
-|------|------|------------|------------|
-| `admin/` | 通用管理后台 | Vue 3 + Vite + TypeScript + Pinia + Tailwind | API 类型、刷新 Token TODO、目录名 `view` 迁移 |
-| `firewall/` | 防火墙控制台 | Vue 3 + Vite + TypeScript + ECharts + Tailwind | 大组件拆分、i18n 资源拆分 |
-| `oauth21/` | 登录/授权前端 | Vue 3 + Vite + TypeScript + VeeValidate + Zod + PWA | 表单组件复用、日志清理、目录名 `view` 迁移 |
-| `poseadmin/` | PoseCraft 管理后台 | Vue 3 + Vite + TypeScript + Element Plus | 按后台规范补齐 API/Store/权限层 |
-| `posecraft/` | PoseCraft 创作前端 | Vue 3 + Vite + TypeScript + Fabric + TensorFlow | 编码乱码、文件超限、`any` 收敛、Canvas 逻辑拆分 |
-| `phonecopy/` | 移动端/混合应用 | Vue 3 + Vite + Capacitor + TensorFlow + Fabric | 从 JS 迁移 TS、超大页面拆分、模型资源外置 |
+| 项目         | 定位               | 技术栈特征                                          | 当前关注点                                      |
+| ------------ | ------------------ | --------------------------------------------------- | ----------------------------------------------- |
+| `admin/`     | 通用管理后台       | Vue 3 + Vite + TypeScript + Pinia + Tailwind        | API 类型、刷新 Token TODO、目录名 `view` 迁移   |
+| `firewall/`  | 防火墙控制台       | Vue 3 + Vite + TypeScript + ECharts + Tailwind      | 大组件拆分、i18n 资源拆分                       |
+| `oauth21/`   | 登录/授权前端      | Vue 3 + Vite + TypeScript + VeeValidate + Zod + PWA | 表单组件复用、日志清理、目录名 `view` 迁移      |
+| `poseadmin/` | PoseCraft 管理后台 | Vue 3 + Vite + TypeScript + Element Plus            | 按后台规范补齐 API/Store/权限层                 |
+| `posecraft/` | PoseCraft 创作前端 | Vue 3 + Vite + TypeScript + Fabric + TensorFlow     | 编码乱码、文件超限、`any` 收敛、Canvas 逻辑拆分 |
+| `phonecopy/` | 移动端/混合应用    | Vue 3 + Vite + Capacitor + TensorFlow + Fabric      | 从 JS 迁移 TS、超大页面拆分、模型资源外置       |
 
 ## 统一目录结构
 
@@ -54,17 +54,17 @@ src/
 
 ## 文件和命名
 
-| 类型 | 规范 | 示例 |
-|------|------|------|
-| Vue 页面 | PascalCase 或 `index.vue`，目录表达业务域 | `UserList.vue`, `views/users/index.vue` |
-| Vue 组件 | PascalCase | `UserAvatar.vue`, `SystemSettingsModal.vue` |
-| Composable | `use` + PascalCase | `useAuth.ts`, `useCanvasHistory.ts` |
-| Store | camelCase 文件名，`useXxxStore` 导出 | `auth.ts`, `useAuthStore` |
-| API 模块 | 业务名 camelCase 或 kebab-case | `user.ts`, `pose-template.ts` |
-| 类型文件 | 业务名 camelCase 或 `index.ts` | `auth.ts`, `canvas.ts` |
-| CSS 类名 | kebab-case | `user-card`, `toolbar-button` |
-| 常量 | `SCREAMING_SNAKE_CASE` | `MAX_UPLOAD_SIZE` |
-| 函数/变量 | camelCase | `fetchUserList` |
+| 类型       | 规范                                      | 示例                                        |
+| ---------- | ----------------------------------------- | ------------------------------------------- |
+| Vue 页面   | PascalCase 或 `index.vue`，目录表达业务域 | `UserList.vue`, `views/users/index.vue`     |
+| Vue 组件   | PascalCase                                | `UserAvatar.vue`, `SystemSettingsModal.vue` |
+| Composable | `use` + PascalCase                        | `useAuth.ts`, `useCanvasHistory.ts`         |
+| Store      | camelCase 文件名，`useXxxStore` 导出      | `auth.ts`, `useAuthStore`                   |
+| API 模块   | 业务名 camelCase 或 kebab-case            | `user.ts`, `pose-template.ts`               |
+| 类型文件   | 业务名 camelCase 或 `index.ts`            | `auth.ts`, `canvas.ts`                      |
+| CSS 类名   | kebab-case                                | `user-card`, `toolbar-button`               |
+| 常量       | `SCREAMING_SNAKE_CASE`                    | `MAX_UPLOAD_SIZE`                           |
+| 函数/变量  | camelCase                                 | `fetchUserList`                             |
 
 生成文件如 `auto-imports.d.ts`、`components.d.ts` 可以超过普通文件行数限制，不手动编辑。
 
@@ -72,13 +72,13 @@ src/
 
 普通源码文件应控制在 500 行以内，接近 400 行时必须评估拆分。
 
-| 文件类型 | 拆分方向 |
-|----------|----------|
-| 页面组件 | 页面壳、业务区块组件、弹窗组件、列表项组件、页面级 composable |
-| 表单页面 | schema/校验、提交逻辑、字段组件、API 类型 |
-| 编辑器/Canvas | 初始化、历史、选择、快捷键、鼠标事件、图形对象、导入导出分别拆分 |
-| 大型 i18n | 按模块拆成 `zh/*.json`、`en/*.json` 后聚合 |
-| 大型静态数据 | 移到 `constants/` 或 `assets/data/`，模型权重放 `public/models/` 或远端资源 |
+| 文件类型      | 拆分方向                                                                    |
+| ------------- | --------------------------------------------------------------------------- |
+| 页面组件      | 页面壳、业务区块组件、弹窗组件、列表项组件、页面级 composable               |
+| 表单页面      | schema/校验、提交逻辑、字段组件、API 类型                                   |
+| 编辑器/Canvas | 初始化、历史、选择、快捷键、鼠标事件、图形对象、导入导出分别拆分            |
+| 大型 i18n     | 按模块拆成 `zh/*.json`、`en/*.json` 后聚合                                  |
+| 大型静态数据  | 移到 `constants/` 或 `assets/data/`，模型权重放 `public/models/` 或远端资源 |
 
 禁止把大量 mock 数据、模型权重、长 Base64 字符串直接塞进页面组件。
 
@@ -129,16 +129,16 @@ src/
 
 ```ts
 export interface ApiResult<T> {
-  code: number
-  message: string
-  data: T
+  code: number;
+  message: string;
+  data: T;
 }
 
 export interface PageResult<T> {
-  list: T[]
-  total: number
-  page: number
-  pageSize: number
+  list: T[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 ```
 
@@ -163,11 +163,11 @@ export interface PageResult<T> {
 
 ```ts
 export interface ApiResult<T> {
-  code: number
-  message: string
-  data: T
-  timestamp?: number
-  requestId?: string
+  code: number;
+  message: string;
+  data: T;
+  timestamp?: number;
+  requestId?: string;
 }
 ```
 
@@ -175,14 +175,14 @@ export interface ApiResult<T> {
 
 ```ts
 export interface Pagination {
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface ApiPageResult<T> extends ApiResult<T[]> {
-  pagination: Pagination
+  pagination: Pagination;
 }
 ```
 
@@ -193,33 +193,33 @@ export interface ApiPageResult<T> extends ApiResult<T[]> {
 推荐 API 写法：
 
 ```ts
-import request from '@/utils/request'
-import type { PageResult } from '@/types/api'
-import type { User } from '@/types/user'
+import request from '@/utils/request';
+import type { PageResult } from '@/types/api';
+import type { User } from '@/types/user';
 
 export const userApi = {
   list(params: { page: number; pageSize: number }) {
-    return request.get<PageResult<User>>('/admin/v1/iam/users', { params })
+    return request.get<PageResult<User>>('/admin/v1/iam/users', { params });
   },
   detail(id: number) {
-    return request.get<User>(`/admin/v1/iam/users/${id}`)
+    return request.get<User>(`/admin/v1/iam/users/${id}`);
   }
-}
+};
 ```
 
 ### PoseCraft 联动要求
 
 `posecraft`、`poseadmin` 与后端 `posecraft` API 优先按以下契约改造：
 
-| 场景 | 后端契约 | 前端要求 |
-|------|----------|----------|
-| 模板列表 | `data: Template[]` + `pagination` | Home/Profile 使用分页加载，不写死 `pageSize: 60` |
-| 作品列表 | `data: Work[]` + `pagination` | 关注流、推荐流、用户作品统一列表组件 |
-| 审核列表 | `data: AuditItem[]` + `pagination` | poseadmin 使用统一分页表格 |
-| 点赞 | 返回 `{ liked, likesCount }` | 禁止只做本地自增，按后端状态回写 |
-| 关注 | 返回 `{ isFollowing, followersCount }` | 关注按钮和统计同步更新 |
-| 上传 | 返回 `{ url, filename, size, mimeType }` | 上传组件统一进度、错误和结果展示 |
-| 审核状态 | 使用统一 enum | 前端统一状态标签和筛选项 |
+| 场景     | 后端契约                                 | 前端要求                                         |
+| -------- | ---------------------------------------- | ------------------------------------------------ |
+| 模板列表 | `data: Template[]` + `pagination`        | Home/Profile 使用分页加载，不写死 `pageSize: 60` |
+| 作品列表 | `data: Work[]` + `pagination`            | 关注流、推荐流、用户作品统一列表组件             |
+| 审核列表 | `data: AuditItem[]` + `pagination`       | poseadmin 使用统一分页表格                       |
+| 点赞     | 返回 `{ liked, likesCount }`             | 禁止只做本地自增，按后端状态回写                 |
+| 关注     | 返回 `{ isFollowing, followersCount }`   | 关注按钮和统计同步更新                           |
+| 上传     | 返回 `{ url, filename, size, mimeType }` | 上传组件统一进度、错误和结果展示                 |
+| 审核状态 | 使用统一 enum                            | 前端统一状态标签和筛选项                         |
 
 ## 认证和权限
 
@@ -242,10 +242,10 @@ export const userApi = {
 ```ts
 declare module 'vue-router' {
   interface RouteMeta {
-    title?: string
-    requiresAuth?: boolean
-    permission?: string | string[]
-    roles?: string[]
+    title?: string;
+    requiresAuth?: boolean;
+    permission?: string | string[];
+    roles?: string[];
   }
 }
 ```
@@ -307,14 +307,14 @@ declare module 'vue-router' {
 
 建议端口：
 
-| 项目 | 端口 | base | 构建输出 |
-|------|------|------|----------|
-| `firewall` | 5173 | `/firewall/` | `../public/firewall` |
-| `oauth21` | 5174 | 按部署配置 | 建议 `../public/oauth21` 或后端约定目录 |
-| `admin` | 5175 | `/admin/` 或 `/` | 建议 `../public/admin` |
-| `posecraft` | 5176 | `/posecraft/` | `../public/posecraft` |
-| `poseadmin` | 5177 | `/poseadmin/` | `../public/poseadmin` |
-| `phonecopy` | 5178 | 按 Capacitor/部署配置 | `dist` |
+| 项目        | 端口 | base                  | 构建输出                                |
+| ----------- | ---- | --------------------- | --------------------------------------- |
+| `firewall`  | 5173 | `/firewall/`          | `../public/firewall`                    |
+| `oauth21`   | 5174 | 按部署配置            | 建议 `../public/oauth21` 或后端约定目录 |
+| `admin`     | 5175 | `/admin/` 或 `/`      | 建议 `../public/admin`                  |
+| `posecraft` | 5176 | `/posecraft/`         | `../public/posecraft`                   |
+| `poseadmin` | 5177 | `/poseadmin/`         | `../public/poseadmin`                   |
+| `phonecopy` | 5178 | 按 Capacitor/部署配置 | `dist`                                  |
 
 ## 质量门禁
 

@@ -49,26 +49,19 @@
 </template>
 
 <script setup lang="ts">
-import { useHome } from '@/composables/useHome'
-import { onActivated } from 'vue'
-import { Loader2, Sparkles } from 'lucide-vue-next'
-import PoseCard from '@/components/cards/home/PoseCard.vue'
-import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
+import { useHome } from '@/composables/useHome';
+import { onActivated } from 'vue';
+import { Loader2, Sparkles } from 'lucide-vue-next';
+import PoseCard from '@/components/cards/home/PoseCard.vue';
+import SkeletonCard from '@/components/cards/home/SkeletonCard.vue';
 
-const {
-  activeNav,
-  filteredItems,
-  hasMore,
-  loading,
-  loadMore,
-  openDetail,
-  handleLike,
-  handleCollect
-} = useHome()
+const { activeNav, filteredItems, hasMore, loading, loadMore, openDetail, handleLike, handleCollect } = useHome();
 
 // 切换当前导航状态
-activeNav.value = 'recommend'
-onActivated(() => { activeNav.value = 'recommend' })
+activeNav.value = 'recommend';
+onActivated(() => {
+  activeNav.value = 'recommend';
+});
 </script>
 
 <style scoped>
@@ -166,8 +159,12 @@ onActivated(() => { activeNav.value = 'recommend' })
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .empty-state {

@@ -86,22 +86,22 @@ System 级 (system.json) → Group 级 (registerGroupMetadata) → API 级 (regi
 
 ```js
 handler: async (request, reply) => {
-  const user = request.state.user;  // 已验证的用户信息
+  const user = request.state.user; // 已验证的用户信息
   // 业务逻辑...
   return reply.result.success('操作成功', data);
-}
+};
 ```
 
 ## 变量预估值
 
-| 变量 | 典型值 | 说明 |
-|------|--------|------|
-| `request.id` | UUID v4 | 请求唯一标识 |
-| `request.ip` | `"192.168.1.100"` | 客户端 IP |
-| `request.cookies.sid` | `"a1b2c3.d4e5f6.g7h8i9"` | 三段式 cookie |
-| `sessionData.roles` | `["user_normal"]` | 角色数组 |
-| `sessionData.permissions` | `{ allows: [...], denies: [...] }` | PBAC 权限 |
-| `fingerprint` | `"sha256:a1b2c3d4..."` | 设备指纹哈希 |
+| 变量                      | 典型值                             | 说明          |
+| ------------------------- | ---------------------------------- | ------------- |
+| `request.id`              | UUID v4                            | 请求唯一标识  |
+| `request.ip`              | `"192.168.1.100"`                  | 客户端 IP     |
+| `request.cookies.sid`     | `"a1b2c3.d4e5f6.g7h8i9"`           | 三段式 cookie |
+| `sessionData.roles`       | `["user_normal"]`                  | 角色数组      |
+| `sessionData.permissions` | `{ allows: [...], denies: [...] }` | PBAC 权限     |
+| `fingerprint`             | `"sha256:a1b2c3d4..."`             | 设备指纹哈希  |
 
 ## 异常路径
 

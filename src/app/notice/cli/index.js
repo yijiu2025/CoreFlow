@@ -7,7 +7,14 @@
  *   npm run cli -- notice test      # 测试邮件发送
  */
 import { getModels } from '../../../../scripts/lib/db.js';
-import { printTable, printSuccess, printInfo, printWarning, printError, printLine } from '../../../../scripts/lib/table.js';
+import {
+  printTable,
+  printSuccess,
+  printInfo,
+  printWarning,
+  printError,
+  printLine
+} from '../../../../scripts/lib/table.js';
 import { createRl, ask, closeRl } from '../../../../scripts/lib/input.js';
 
 /**
@@ -15,15 +22,15 @@ import { createRl, ask, closeRl } from '../../../../scripts/lib/input.js';
  */
 async function listChannels() {
   const channels = [
-    { id: 'email',   name: '邮件通知',   icon: '📧' },
+    { id: 'email', name: '邮件通知', icon: '📧' },
     { id: 'dingtalk', name: '钉钉机器人', icon: '🔔' },
-    { id: 'wechat',  name: '微信推送',   icon: '💬' },
-    { id: 'sms',     name: '短信通知',   icon: '📱' }
+    { id: 'wechat', name: '微信推送', icon: '💬' },
+    { id: 'sms', name: '短信通知', icon: '📱' }
   ];
 
   console.log('\n📮 通知通道：');
   printLine();
-  channels.forEach((ch) => {
+  channels.forEach(ch => {
     console.log(`  ${ch.icon} ${ch.id.padEnd(12)} ${ch.name}`);
   });
   printLine();
@@ -48,12 +55,7 @@ async function showConfig() {
     console.log('\n⚙️ 通知通道配置：');
     printTable(
       ['ID', '类型', '启用', '更新时间'],
-      configs.map((c) => [
-        c.id,
-        c.type,
-        c.enabled ? '✅ 是' : '❌ 否',
-        new Date(c.updated_at).toLocaleString('zh-CN')
-      ])
+      configs.map(c => [c.id, c.type, c.enabled ? '✅ 是' : '❌ 否', new Date(c.updated_at).toLocaleString('zh-CN')])
     );
   } catch {
     printWarning('NoticeConfig 模型未加载');
@@ -101,8 +103,8 @@ export default {
   appName: 'notice',
   description: '通知中心',
   subcommands: {
-    'channels': { description: '查看通知通道', handler: listChannels },
-    'config':   { description: '查看通道配置', handler: showConfig },
-    'test':     { description: '测试邮件发送', handler: testEmail }
+    channels: { description: '查看通知通道', handler: listChannels },
+    config: { description: '查看通道配置', handler: showConfig },
+    test: { description: '测试邮件发送', handler: testEmail }
   }
 };

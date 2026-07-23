@@ -35,7 +35,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  InlinePolicy.associate = (models) => {
+  InlinePolicy.associate = models => {
     InlinePolicy.belongsTo(models.User, {
       foreignKey: 'user_id',
       as: 'user',

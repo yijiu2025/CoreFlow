@@ -42,11 +42,15 @@ class CaptchaService {
     const tag = uuidv4();
     const expired = Date.now() + cfg.ttl * 1000;
 
-    await store.set(tag, {
-      text: text.toLowerCase(),
-      verified: false,
-      expired
-    }, cfg.ttl);
+    await store.set(
+      tag,
+      {
+        text: text.toLowerCase(),
+        verified: false,
+        expired
+      },
+      cfg.ttl
+    );
 
     return { captchaImage: image, captchaKey: tag };
   }

@@ -4,7 +4,7 @@
  */
 
 // 基础响应结构 (Standard Response Wrapper)
-const baseResponse = (dataSchema) => ({
+const baseResponse = dataSchema => ({
   type: 'object',
   properties: {
     code: { type: 'number', example: 200 },
@@ -12,7 +12,7 @@ const baseResponse = (dataSchema) => ({
     timestamp: { type: 'number', example: Date.now() },
     data: dataSchema
   }
-})
+});
 
 // 1. 监控摘要响应
 export const summarySchema = {
@@ -23,7 +23,7 @@ export const summarySchema = {
       properties: {
         totalRequests: { type: 'number' },
         totalBlocked: { type: 'number' },
-        topRegions: { 
+        topRegions: {
           type: 'array',
           items: {
             type: 'object',
@@ -33,7 +33,7 @@ export const summarySchema = {
             }
           }
         },
-        topPaths: { 
+        topPaths: {
           type: 'array',
           items: {
             type: 'object',
@@ -47,7 +47,7 @@ export const summarySchema = {
       }
     })
   }
-}
+};
 
 // 2. 更新节点信息请求
 export const updateNodeSchema = {
@@ -67,7 +67,7 @@ export const updateNodeSchema = {
   response: {
     200: baseResponse({ type: 'object' })
   }
-}
+};
 
 // 3. 更新安全设置请求
 export const updateSettingsSchema = {
@@ -103,7 +103,7 @@ export const updateSettingsSchema = {
   response: {
     200: baseResponse({ type: 'object' })
   }
-}
+};
 
 // 4. 黑名单操作请求
 export const blacklistSchema = {
@@ -121,7 +121,7 @@ export const blacklistSchema = {
   response: {
     200: baseResponse({ type: 'object' })
   }
-}
+};
 
 // 5. 封禁管理请求
 export const blocksSchema = {
@@ -139,7 +139,7 @@ export const blocksSchema = {
   response: {
     200: baseResponse({ type: 'object' })
   }
-}
+};
 
 // 6. 白名单管理请求
 export const whitelistSchema = {
@@ -155,4 +155,4 @@ export const whitelistSchema = {
   response: {
     200: baseResponse({ type: 'object' })
   }
-}
+};

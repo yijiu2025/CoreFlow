@@ -39,11 +39,7 @@ export async function seedUserRoles() {
         Statement: [
           {
             Effect: 'Allow',
-            Action: [
-              USER_PERMISSIONS.BASE.READ,
-              USER_PERMISSIONS.BASE.WRITE,
-              USER_PERMISSIONS.VIP.PREMIUM_FEATURE
-            ]
+            Action: [USER_PERMISSIONS.BASE.READ, USER_PERMISSIONS.BASE.WRITE, USER_PERMISSIONS.VIP.PREMIUM_FEATURE]
           }
         ]
       }
@@ -60,10 +56,7 @@ export async function seedUserRoles() {
           {
             // PBAC 精髓：显式拒绝最高优。挂上此角色后，无论有多少个 Allow 都无效
             Effect: 'Deny',
-            Action: [
-              USER_PERMISSIONS.BASE.WRITE,
-              USER_PERMISSIONS.VIP.PREMIUM_FEATURE
-            ]
+            Action: [USER_PERMISSIONS.BASE.WRITE, USER_PERMISSIONS.VIP.PREMIUM_FEATURE]
           }
         ]
       }

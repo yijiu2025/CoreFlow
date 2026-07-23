@@ -14,7 +14,7 @@ export default (sequelize, DataTypes) => {
         defaultValue: DataTypes.UUIDV4,
         primaryKey: true
       },
-      /** 
+      /**
        * 受权主体用户 ID (sub claim，存储主系统 User.uid)
        * 安全与对齐：主系统 User.uid 为 UUID，故 sub 统一为 UUID 类型以便建立物理索引外键关联与提升 JOIN 效能
        */
@@ -29,8 +29,8 @@ export default (sequelize, DataTypes) => {
         allowNull: false,
         comment: '应用唯一标识'
       },
-      /** 
-       * 授权的权限范围 
+      /**
+       * 授权的权限范围
        * 统一使用 JSON 数据类型替代 TEXT，提供原生的结构校验和高效率解析
        */
       scopes: {
@@ -64,7 +64,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  OauthApproval.associate = (models) => {
+  OauthApproval.associate = models => {
     // 建立与 User 模型的关联关联关系 (基于 sub -> User.uid)
     OauthApproval.belongsTo(models.User, {
       foreignKey: 'sub',

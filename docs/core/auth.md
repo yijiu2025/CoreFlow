@@ -2,10 +2,10 @@
 
 ## 认证模式
 
-| 模式 | 启用方式 | Token 存储 | 验证方式 |
-|------|----------|------------|----------|
-| Session（默认） | `JWT_ENABLED=false` | Redis (sid/sid_r Cookie) | Cookie 自动携带 |
-| JWT | `JWT_ENABLED=true` | localStorage + Bearer Header | JWT 签名验证 |
+| 模式            | 启用方式            | Token 存储                   | 验证方式        |
+| --------------- | ------------------- | ---------------------------- | --------------- |
+| Session（默认） | `JWT_ENABLED=false` | Redis (sid/sid_r Cookie)     | Cookie 自动携带 |
+| JWT             | `JWT_ENABLED=true`  | localStorage + Bearer Header | JWT 签名验证    |
 
 ## Session 双令牌机制
 
@@ -92,12 +92,12 @@ access_token 过期（10分钟）
 
 ## 登录方式
 
-| 方式 | 流程 | 适用场景 |
-|------|------|----------|
-| 邮箱验证码 | 输入邮箱 → 图形验证码 → 邮箱验证码 → 登录 | Web 端 |
-| 密码登录 | 输入账号密码 → RSA 加密 → 登录 | Web 端 |
-| 扫码登录 | 生成二维码 → 手机扫码 → 确认 | PC + 移动端 |
-| 设备码登录 | 生成设备码 → 用户在另一设备输入 → 授权 | IoT/TV/CLI |
+| 方式       | 流程                                      | 适用场景    |
+| ---------- | ----------------------------------------- | ----------- |
+| 邮箱验证码 | 输入邮箱 → 图形验证码 → 邮箱验证码 → 登录 | Web 端      |
+| 密码登录   | 输入账号密码 → RSA 加密 → 登录            | Web 端      |
+| 扫码登录   | 生成二维码 → 手机扫码 → 确认              | PC + 移动端 |
+| 设备码登录 | 生成设备码 → 用户在另一设备输入 → 授权    | IoT/TV/CLI  |
 
 ## iframe 快捷登录
 
@@ -108,7 +108,7 @@ access_token 过期（10分钟）
 ```
 
 ```javascript
-window.addEventListener('message', (event) => {
+window.addEventListener('message', event => {
   if (event.origin !== 'http://auth.yourdomain.com') return;
   const { type, token, user, data } = event.data;
   if (type === 'LOGIN_SUCCESS') {
@@ -126,20 +126,20 @@ window.addEventListener('message', (event) => {
 // 方式 1：从 request.state 获取
 handler: async (request, reply) => {
   const user = request.state.user;
-  console.log(user.uid);          // 用户 UUID
-  console.log(user.userId);       // 用户内部 ID
-  console.log(user.username);     // 用户名
-  console.log(user.roles);        // ['admin', 'user']
-  console.log(user.permissions);  // { allows: [...], denies: [...] }
-}
+  console.log(user.uid); // 用户 UUID
+  console.log(user.userId); // 用户内部 ID
+  console.log(user.username); // 用户名
+  console.log(user.roles); // ['admin', 'user']
+  console.log(user.permissions); // { allows: [...], denies: [...] }
+};
 
 // 方式 2：通过 StpUtil
 import StpUtil from '../../auth/StpUtil.js';
 
-StpUtil.getLoginId();              // 获取当前用户 ID
-StpUtil.check();                   // 强制登录检查（未登录抛 401）
-StpUtil.checkRole('admin');        // 角色校验
-StpUtil.hasPermission('user:read');// 权限判断
+StpUtil.getLoginId(); // 获取当前用户 ID
+StpUtil.check(); // 强制登录检查（未登录抛 401）
+StpUtil.checkRole('admin'); // 角色校验
+StpUtil.hasPermission('user:read'); // 权限判断
 ```
 
 ## 踢用户下线

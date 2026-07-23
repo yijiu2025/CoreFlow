@@ -66,7 +66,7 @@ export default (sequelize, DataTypes) => {
    * 模型关联定义
    * @param {object} models - 所有已注册模型的集合
    */
-  UserLike.associate = (models) => {
+  UserLike.associate = models => {
     UserLike.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
     UserLike.belongsTo(models.Work, { foreignKey: 'work_id', as: 'work' });
     UserLike.belongsTo(models.Template, { foreignKey: 'template_id', as: 'template' });

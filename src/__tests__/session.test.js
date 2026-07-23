@@ -13,10 +13,7 @@ describe('session', () => {
     function signCookie(sessionId, accessCount) {
       const payload = `${sessionId}:${accessCount}`;
       const encoded = Buffer.from(payload).toString('base64url');
-      const signature = crypto
-        .createHmac('sha256', SECRET)
-        .update(encoded)
-        .digest('base64url');
+      const signature = crypto.createHmac('sha256', SECRET).update(encoded).digest('base64url');
       return `${encoded}.${signature}`;
     }
 
@@ -25,10 +22,7 @@ describe('session', () => {
       const parts = cookieValue.split('.');
       if (parts.length !== 2) return null;
       const [encoded, signature] = parts;
-      const expectedSig = crypto
-        .createHmac('sha256', SECRET)
-        .update(encoded)
-        .digest('base64url');
+      const expectedSig = crypto.createHmac('sha256', SECRET).update(encoded).digest('base64url');
       if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
         return null;
       }

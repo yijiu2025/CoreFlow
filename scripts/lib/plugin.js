@@ -20,7 +20,7 @@ export async function loadAppCommands() {
   }
 
   const entries = fs.readdirSync(appsDir, { withFileTypes: true });
-  const appDirs = entries.filter((e) => e.isDirectory());
+  const appDirs = entries.filter(e => e.isDirectory());
 
   for (const dir of appDirs) {
     const cliIndexPath = path.join(appsDir, dir.name, 'cli', 'index.js');

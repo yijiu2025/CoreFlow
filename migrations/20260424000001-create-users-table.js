@@ -7,7 +7,7 @@
 
 export async function up({ queryInterface, Sequelize }) {
   const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
-  const exists = tables.some((t) => Object.values(t)[0] === 'user_user');
+  const exists = tables.some(t => Object.values(t)[0] === 'user_user');
   if (exists) return;
 
   await queryInterface.createTable('user_user', {
@@ -72,8 +72,14 @@ export async function up({ queryInterface, Sequelize }) {
   });
 
   await queryInterface.addIndex('user_user', ['uid'], { name: 'idx_uid' });
-  await queryInterface.addIndex('user_user', ['email', 'delete_version'], { unique: true, name: 'uk_email_delete_version' });
-  await queryInterface.addIndex('user_user', ['phone', 'delete_version'], { unique: true, name: 'uk_phone_delete_version' });
+  await queryInterface.addIndex('user_user', ['email', 'delete_version'], {
+    unique: true,
+    name: 'uk_email_delete_version'
+  });
+  await queryInterface.addIndex('user_user', ['phone', 'delete_version'], {
+    unique: true,
+    name: 'uk_phone_delete_version'
+  });
 }
 
 export async function down({ queryInterface }) {

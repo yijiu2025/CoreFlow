@@ -45,7 +45,11 @@ describe('集成流程', () => {
         { step: '1', action: '请求到达', data: { cookies: { sid: 'abc123' } } },
         { step: '2', action: 'auth 中间件验证 sid' },
         { step: '3', action: 'Redis 查找 session' },
-        { step: '4', action: '返回 session 数据', data: { roles: ['admin'], permissions: { allows: ['*'], denies: [] } } },
+        {
+          step: '4',
+          action: '返回 session 数据',
+          data: { roles: ['admin'], permissions: { allows: ['*'], denies: [] } }
+        },
         { step: '5', action: '写入 request.state.user' }
       ];
       expect(flow[3].data.roles).toContain('admin');

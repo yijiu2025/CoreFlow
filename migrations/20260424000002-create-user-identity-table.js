@@ -7,7 +7,7 @@
 
 export async function up({ queryInterface, Sequelize }) {
   const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
-  const exists = tables.some((t) => Object.values(t)[0] === 'user_identity');
+  const exists = tables.some(t => Object.values(t)[0] === 'user_identity');
   if (exists) return;
 
   await queryInterface.createTable('user_identity', {

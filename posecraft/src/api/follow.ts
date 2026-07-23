@@ -4,7 +4,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import request from '@/utils/request'
+import request from '@/utils/request';
 
 export const followApi = {
   /**
@@ -12,7 +12,7 @@ export const followApi = {
    * @param userId - 目标用户 ID
    */
   follow: (userId: string | number) => {
-    return request.post(`/posecraft/v1/follow/${userId}`)
+    return request.post(`/posecraft/v1/follow/${userId}`);
   },
 
   /**
@@ -20,7 +20,7 @@ export const followApi = {
    * @param userId - 目标用户 ID
    */
   unfollow: (userId: string | number) => {
-    return request.delete(`/posecraft/v1/follow/${userId}`)
+    return request.delete(`/posecraft/v1/follow/${userId}`);
   },
 
   /**
@@ -28,6 +28,6 @@ export const followApi = {
    * @param userId - 目标用户 ID
    */
   checkStatus: (userId: string | number) => {
-    return request.get(`/posecraft/v1/follow/status/${userId}`)
+    return request.get(`/posecraft/v1/follow/status/${userId}`);
   }
-}
+};
