@@ -41,7 +41,12 @@ export default async function (fastify) {
       const { system, group } = request.params;
       const { apiKey } = request.query;
       const patch = request.body;
-      const updated = setGuardConfig(system, patch, group, apiKey);
+      const operator = {
+        userId: request.state?.user?.uid,
+        ip: request.ip,
+        redis: request.server?.redis
+      };
+      const updated = setGuardConfig(system, patch, group, apiKey, operator);
       if (!updated) return reply.result.fail('未找到指定配置路径', 404);
       return reply.result.success('安全策略已更新', updated);
     }
@@ -63,7 +68,11 @@ export default async function (fastify) {
       let current = apiKey ? (group.apis ? group.apis[apiKey] : null) : group;
       if (!current) return reply.result.fail('接口不存在', 404);
       const newState = !current.enabled;
-      setGuardConfig(system, { enabled: newState }, groupKey, apiKey);
+      setGuardConfig(system, { enabled: newState }, groupKey, apiKey, {
+        userId: request.state?.user?.uid,
+        ip: request.ip,
+        redis: request.server?.redis
+      });
       return reply.result.success('操作成功', { enabled: newState });
     }
   });
@@ -78,7 +87,11 @@ export default async function (fastify) {
       const configs = getAllGuardConfigs();
       if (!configs[system]) return reply.result.fail('系统不存在', 404);
       const newState = !configs[system].enabled;
-      setGuardConfig(system, { enabled: newState });
+      setGuardConfig(system, { enabled: newState }, null, null, {
+        userId: request.state?.user?.uid,
+        ip: request.ip,
+        redis: request.server?.redis
+      });
       return reply.result.success('操作成功', { enabled: newState });
     }
   });
