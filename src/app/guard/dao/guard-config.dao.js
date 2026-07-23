@@ -11,6 +11,9 @@
 import sequelize from '../../../db/index.js';
 
 class GuardConfigDao {
+  /** 上次从 DB 加载的序列化配置快照，用于检测变更 */
+  _snapshot = {};
+
   /**
    * 从数据库加载所有系统的配置
    * 读取所有行，按 system_key 合并为对象，返回每行独立版本号
@@ -25,6 +28,9 @@ class GuardConfigDao {
     const versions = {};
     let maxVersion = 0;
 
+    // 重置快照
+    this._snapshot = {};
+
     for (const row of rows) {
       let config = row.config || {};
       if (typeof config === 'string') {
@@ -37,19 +43,43 @@ class GuardConfigDao {
       configs[row.system_key] = config;
       versions[row.system_key] = row.version || 0;
       maxVersion = Math.max(maxVersion, row.version || 0);
+      // 保存原始序列化字符串用于后续比较（排除 updatedAt 干扰）
+      this._snapshot[row.system_key] = this._serializeForCompare(config);
     }
 
     return { configs, version: maxVersion, versions };
   }
 
   /**
+   * 序列化配置用于比较（排除 updatedAt，避免时间戳差异导致误判）
+   */
+  _serializeForCompare(config) {
+    const copy = { ...config };
+    delete copy.updatedAt;
+    // 递归删除 groups 和 apis 中的 updatedAt
+    if (copy.groups && typeof copy.groups === 'object') {
+      for (const g of Object.values(copy.groups)) {
+        if (g && typeof g === 'object') {
+          delete g.updatedAt;
+          if (g.apis && typeof g.apis === 'object') {
+            for (const a of Object.values(g.apis)) {
+              if (a && typeof a === 'object') delete a.updatedAt;
+            }
+          }
+        }
+      }
+    }
+    return JSON.stringify(copy);
+  }
+
+  /**
    * 增量写入配置到数据库
-   * 对比内存和 DB 的版本号，仅 upsert 有变更的系统
-   * 每行独立版本号，无变更的行不受影响
+   * 对比内存和 DB 的序列化内容，仅更新有变更的系统
+   * 每行独立版本号，无变更的行版本号不变
    *
    * @param {object} configs - 完整配置树（{ systemKey: config, ... }）
    * @param {object<string, number>} dbVersions - 当前 DB 中每行的版本号
-   * @returns {Promise<number>} 新的最大版本号
+   * @returns {Promise<{maxVersion: number, updated: string[], versions: object<string, number>}>}
    */
   async saveToDB(configs, dbVersions) {
     const Model = sequelize.models.GuardConfig;
@@ -61,6 +91,8 @@ class GuardConfigDao {
       const serialized = JSON.stringify(config);
       const dbVersion = dbVersions[systemKey] || 0;
       const newVersion = dbVersion + 1;
+      const compareKey = this._serializeForCompare(config);
+      const isChanged = compareKey !== this._snapshot[systemKey];
 
       const [row] = await Model.findOrCreate({
         where: { system_key: systemKey },
@@ -72,18 +104,23 @@ class GuardConfigDao {
       });
 
       if (row) {
-        // 只在版本号不同时更新（即数据有变更）
-        if (row.version !== newVersion) {
+        // 新创建的行（row 是创建的实例，version 是 newVersion）
+        // 或已有行但数据变更时，更新
+        if (isChanged) {
           await Model.update({ config: serialized, version: newVersion }, { where: { system_key: systemKey } });
           updated.push(systemKey);
+          versions[systemKey] = newVersion;
+        } else {
+          // 无变更，保持原版本号
+          versions[systemKey] = dbVersion;
         }
       } else {
-        // 新创建的行也算变更
+        // 新创建的行
         updated.push(systemKey);
+        versions[systemKey] = newVersion;
       }
 
-      versions[systemKey] = newVersion;
-      maxVersion = Math.max(maxVersion, newVersion);
+      maxVersion = Math.max(maxVersion, versions[systemKey]);
     }
 
     return { maxVersion, updated, versions };
