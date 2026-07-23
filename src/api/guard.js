@@ -282,6 +282,10 @@ export function getRegistrationContext() {
  * 【Loader 调用】恢复注册上下文（供 07-api.js 在 loadRouteFile 后还原）
  */
 export function restoreRegistrationContext(ctx) {
+  if (!ctx || typeof ctx !== 'object') {
+    console.warn('⚠️ [Guard] restoreRegistrationContext: ctx 参数无效');
+    return;
+  }
   currentSystem = ctx.currentSystem;
   currentGroup = ctx.currentGroup;
   currentPrefix = ctx.currentPrefix;
@@ -316,6 +320,18 @@ export function registerGroupMetadata(metadata) {
  * 【Level 3】高层级安全路由注册
  */
 export function registerSecureRoute(fastify, options) {
+  // 参数防御性校验
+  if (!options || typeof options !== 'object') {
+    const err = new Error('registerSecureRoute: options 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+  if (!fastify || typeof fastify !== 'object') {
+    const err = new Error('registerSecureRoute: fastify 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+
   const {
     name,
     alias,
@@ -419,6 +435,11 @@ export function registerSecureRoute(fastify, options) {
  * @param {Function} options.handler - WebSocket 处理函数 (connection, req, client) => void
  */
 export function registerSecureWebSocket(fastify, options) {
+  if (!fastify || typeof fastify !== 'object') {
+    const err = new Error('registerSecureWebSocket: fastify 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
   if (!options || typeof options !== 'object') {
     const err = new Error('registerSecureWebSocket: options 参数无效');
     err.code = 'INVALID_PARAM';
@@ -439,6 +460,13 @@ export function registerSecureWebSocket(fastify, options) {
     requirePermission = null,
     handler
   } = options;
+
+  // url 参数校验
+  if (!url || typeof url !== 'string') {
+    const err = new Error('registerSecureWebSocket: url 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
 
   const targetSystem = currentSystem;
   const targetGroup = group || currentGroup;
@@ -534,6 +562,11 @@ export function registerSecureWebSocket(fastify, options) {
  * 外部辅助：获取当前上下文下的完整 URL (用于 WebSockets 等手动注册场景)
  */
 export function getFullUrl(url) {
+  if (!url || typeof url !== 'string') {
+    const err = new Error('getFullUrl: url 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
   const systemConfig = getGuardConfig(currentSystem);
   const systemPrefix = systemConfig?.prefix || '';
   const full = '/' + joinUrl(systemPrefix, currentPrefix, url);
