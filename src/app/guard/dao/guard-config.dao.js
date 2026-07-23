@@ -57,14 +57,17 @@ class GuardConfigDao {
     const Model = sequelize.models.GuardConfig;
     const newVersion = currentVersion + 1;
 
+    // 列类型为 longtext，Sequelize 期望字符串，需要手动序列化
+    const serialized = JSON.stringify(configs);
+
     const [, created] = await Model.findOrCreate({
       where: { id: 1 },
-      defaults: { configs, version: newVersion }
+      defaults: { configs: serialized, version: newVersion }
     });
 
     if (!created) {
       const [affected] = await Model.update(
-        { configs, version: newVersion },
+        { configs: serialized, version: newVersion },
         {
           where: { id: 1, version: currentVersion },
           limit: 1
