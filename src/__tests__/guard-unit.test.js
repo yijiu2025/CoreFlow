@@ -8,8 +8,16 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 // Mock 数据库模块，避免 import 链触发 process.exit(1)
 jest.unstable_mockModule('../app/guard/dao/guard-config.dao.js', () => ({
   default: {
-    loadFromDB: async () => ({ configs: {}, version: 0 }),
-    saveToDB: async (_configs, version) => version + 1
+    loadFromDB: async () => ({ configs: {}, version: 0, versions: {} }),
+    saveToDB: async (_configs, _dbVersions) => {
+      const vals = Object.values(_dbVersions);
+      const maxVersion = vals.length > 0 ? Math.max(...vals) + 1 : 1;
+      const versions = {};
+      for (const key of Object.keys(_configs)) {
+        versions[key] = maxVersion;
+      }
+      return { maxVersion, updated: [], versions };
+    }
   }
 }));
 

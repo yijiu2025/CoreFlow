@@ -50,8 +50,14 @@ export async function loadGuardConfig() {
     // 新增的 API 路由在 runEngine 阶段已注册到内存，但 DB 中可能没有
     // 删除的 API 路由 DB 中仍有残留，写入时会被覆盖清理
     try {
-      currentVersion = await saveWithTimeout();
-      console.log(`💾 [Guard Config] ${C.dim}已同步代码级配置到数据库 (version=${currentVersion})${C.reset}`);
+      const result = await saveWithTimeout();
+      currentVersion = result.maxVersion;
+      if (result.updated.length > 0) {
+        const detail = result.updated.map(k => `${k}(v${result.versions[k]})`).join(', ');
+        console.log(`💾 [Guard Config] ${C.dim}已同步代码级配置 — 更新: ${detail}${C.reset}`);
+      } else {
+        console.log(`💾 [Guard Config] ${C.dim}已同步代码级配置 — 无变更${C.reset}`);
+      }
     } catch (err) {
       // 同步失败不阻止启动，下次启动会重试
       console.warn(`⚠️ [Guard Config] ${C.yellow}代码级配置同步失败: ${err.message}，下次启动将重试${C.reset}`);
@@ -59,8 +65,11 @@ export async function loadGuardConfig() {
   } else {
     // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
     // 写入失败向上冒泡，让 initLoader 感知并阻止启动
-    currentVersion = await saveWithTimeout();
-    console.log(`💾 [Guard Config] ${C.dim}已写入初始策略数据 (version=${currentVersion})${C.reset}`);
+    const result = await saveWithTimeout();
+    currentVersion = result.maxVersion;
+    console.log(
+      `💾 [Guard Config] ${C.dim}已写入初始策略数据 (${Object.keys(configs).length} 个系统, version=${currentVersion})${C.reset}`
+    );
   }
 }
 
@@ -244,16 +253,13 @@ async function saveWithTimeout() {
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(`写入超时 (>${SAVE_TIMEOUT}ms)`)), SAVE_TIMEOUT);
   });
-  const newVersion = await Promise.race([
+  const result = await Promise.race([
     GuardConfigDao.saveToDB(configs, _dbVersions).finally(() => clearTimeout(timeoutId)),
     timeoutPromise
   ]);
-  // 更新每行版本号
-  _dbVersions = {};
-  for (const systemKey of Object.keys(configs)) {
-    _dbVersions[systemKey] = newVersion;
-  }
-  return newVersion;
+  // 更新每行独立版本号
+  _dbVersions = result.versions;
+  return result;
 }
 
 /**
