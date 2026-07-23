@@ -160,6 +160,22 @@ function handle(opts = {}) {
 // - 后续：仅更新结构字段，不覆盖运行时字段（由 DB 控制）
 ```
 
+### 4.3 reply.sent 显式标记
+
+直接调用 `reply.send()` 或 `reply.code(N).send()` 时，**必须显式标记 `reply.sent = true`**。`createGuard` 等中间件依赖 `reply.sent` 判断是否已发送响应，不标记会导致守卫继续执行后续校验。
+
+```js
+// ❌ 禁止：直接 return reply.send()，不标记 sent
+return reply.code(401).send({ error: 'invalid_token' });
+
+// ✅ 正确：send 后显式标记 sent
+reply.code(401).send({ error: 'invalid_token' });
+reply.sent = true;
+return;
+```
+
+注意：`reply.result.*`（如 `reply.result.forbidden()`）内部已设置 `reply.sent`，无需手动标记。
+
 ---
 
 ## 五、错误处理
@@ -207,6 +223,45 @@ return false;
 | `CONFIG_VERSION_CONFLICT` | 配置版本冲突 | 乐观锁更新失败 |
 | `DB_CONNECTION_FAILED` | 数据库连接失败 | 启动时检测 |
 | `REDIS_CONNECTION_FAILED` | Redis 连接失败 | 启动时检测 |
+| `INVALID_PARAM` | 函数参数无效 | 公共 API 参数校验失败 |
+
+### 5.4 公共 API 函数参数校验
+
+**所有 export 的公共函数必须对参数做防御性校验。** 调用方可能传错参数，校验失败时抛出带错误码的异常，而非让崩溃发生在深层调用中。
+
+```js
+// ❌ 禁止：假设参数有效
+export function registerSecureRoute(fastify, options) {
+  const { method, url, handler } = options;
+  const methodUpper = method.toUpperCase();  // method 为 undefined 时崩溃
+
+// ✅ 正确：防御性校验 + 错误码
+export function registerSecureRoute(fastify, options) {
+  if (!options.method || typeof options.method !== 'string') {
+    const err = new Error(`method 无效`);
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+  // 或者使用 guard-config.js 的 register* 模式：console.warn + return
+  if (!metadata || typeof metadata !== 'object') {
+    console.warn(`⚠️ [Module] metadata 参数无效`);
+    return;
+  }
+```
+
+### 5.5 错误对象构造方式
+
+构造带错误码的 Error 时，**使用 `err.code = '...'` 赋值，而非 `Object.assign`**：
+
+```js
+// ❌ 禁止：Object.assign 方式（linter 格式化困难）
+throw Object.assign(new Error('消息'), { code: 'ERROR_CODE' });
+
+// ✅ 正确：先创建 Error，再赋值 code
+const err = new Error('消息');
+err.code = 'ERROR_CODE';
+throw err;
+```
 
 ---
 

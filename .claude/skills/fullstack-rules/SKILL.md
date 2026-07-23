@@ -1,6 +1,6 @@
 ---
 name: fullstack-rules
-version: 1.7.0
+version: 1.8.0
 description: 前后端全栈开发规范。涵盖：创建项目、新增App、写API、写页面、调外部接口、修复Bug、代码审查。每次触发时，必须按以下顺序执行：① 有外部 API 的先 curl 验证格式 ② 写后端路由 ③ curl 验证后端 ④ 写前端 ⑤ 验证全链路。禁止假数据，禁止半截功能。审查代码时执行企业级审查清单。代码审查模式：无需执行①-⑤，直接执行审查清单。
 type: prompt
 whenToUse: 用户任何涉及代码的操作时自动触发：创建新项目、新增业务模块、编写前后端代码、设计API接口、审查代码质量、修复Bug、开发新功能、调用外部API、对接第三方数据、创建Vue页面、编写Node.js后端、设计数据库模型、配置路由、写curl命令、测试接口、查看API返回数据、股票分析、行情数据、K线图、**kt架构/KX架构、.kx文件、KX规范、页面描述语言、架构描述文件、架构设计模式、设计模式评分**。注意：本 skill 强制要求 curl 验证外部 API 格式、禁止假数据、禁止半截功能。
@@ -314,6 +314,9 @@ Step 5: 开始生成代码
 | onClose 错误 | `onClose` 钩子不 catch，异步异常静默丢失 | 内部 try-catch + console.error |
 | 进程退出日志 | `process.exit(1)` 导致日志可能被截断 | `setTimeout(() => process.exit(1), 100)` 给刷新时间 |
 | 配置无警告 | 生产环境缺少关键配置，启动时不提醒 | 启动时输出 `⚠️ [App]` 警告，附修复指引 |
+| 公共 API 参数 | 假设调用方总传有效参数，深层崩溃 | 入口处 `if (!param) { err.code='INVALID_PARAM'; throw err; }` |
+| 标识符生成 | 用 `Math.random()` 生成标识符 | 用固定默认值 `'default'` 或 `crypto.randomUUID()` |
+| reply.sent | 直接 `return reply.send(...)` 不标记 sent | `reply.send(...); reply.sent = true; return;` |
 
 ---
 
