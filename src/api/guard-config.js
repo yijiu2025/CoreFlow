@@ -246,6 +246,11 @@ async function saveWithTimeout(systemKeys = null) {
   // 只写入指定系统，或全部写入
   const toSave = systemKeys ? Object.fromEntries(systemKeys.map(k => [k, configs[k]]).filter(([, v]) => v)) : configs;
 
+  // 没有需要写入的系统时直接返回
+  if (Object.keys(toSave).length === 0) {
+    return { maxVersion: currentVersion, updated: [], versions: { ..._dbVersions } };
+  }
+
   // 备份当前状态，用于写入失败时回滚
   _previousSnapshot = {
     configs: structuredClone(configs),
@@ -425,7 +430,7 @@ export async function flushGuardConfig() {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
-  const keys = _dirtySystems.size > 0 ? [..._dirtySystems] : null;
+  const keys = _dirtySystems.size > 0 ? [..._dirtySystems] : [];
   _dirtySystems.clear();
   try {
     currentVersion = await saveWithTimeout(keys);
