@@ -123,7 +123,7 @@ export function registerSecureWebSocket(fastify, options) {
     // 6. 当前路由选项级的角色校验
     if (allowRoles.length > 0 && user) {
       const userRoles = user.roles || [];
-      if (!allowRoles.some(r => userRoles.includes(r))) {
+      if (!allowRoles.some((r) => userRoles.includes(r))) {
         if (client?.close) client.close(4003, '权限不足');
         return;
       }
@@ -165,8 +165,8 @@ function isPermissionMatch(pattern, target) {
  * 检查用户是否匹配单个权限
  */
 function matchSingle(perm, allows, denies) {
-  if (denies.some(d => isPermissionMatch(d, perm))) return false;
-  return allows.some(a => isPermissionMatch(a, perm));
+  if (denies.some((d) => isPermissionMatch(d, perm))) return false;
+  return allows.some((a) => isPermissionMatch(a, perm));
 }
 
 /**
@@ -190,12 +190,12 @@ function checkPermission(required, user) {
 
   // { any: [...] } — 任一满足
   if (required.any) {
-    return required.any.some(p => matchSingle(p, allows, denies));
+    return required.any.some((p) => matchSingle(p, allows, denies));
   }
 
   // { all: [...] } — 全部满足
   if (required.all) {
-    return required.all.every(p => matchSingle(p, allows, denies));
+    return required.all.every((p) => matchSingle(p, allows, denies));
   }
 
   // 非预期的权限格式（如 {}、{ invalid: [...] }），记录日志便于排查错误配置
@@ -232,7 +232,7 @@ function checkGuardBase(opts, user, clientIp) {
 
   if (allowRoles.length > 0 && user) {
     const userRoles = user.roles || [];
-    if (!allowRoles.some(r => userRoles.includes(r))) {
+    if (!allowRoles.some((r) => userRoles.includes(r))) {
       return { passed: false, status: 4003, message: '权限不足' };
     }
   }
@@ -285,7 +285,7 @@ async function applyGuardLogic(opts = {}, request, reply) {
     }
     if (allowRoles.length > 0) {
       const userRoles = user.roles || [];
-      if (!allowRoles.some(r => userRoles.includes(r))) {
+      if (!allowRoles.some((r) => userRoles.includes(r))) {
         return reply.result.forbidden(`权限不足：需要 [${allowRoles.join('/')}] 角色`);
       }
     }
@@ -298,9 +298,10 @@ async function applyGuardLogic(opts = {}, request, reply) {
       return reply.result.unauth('身份验证失败，请先登录');
     }
     if (!checkPermission(requirePermission, user)) {
-      const label = typeof requirePermission === 'string'
-        ? requirePermission
-        : (requirePermission.any || requirePermission.all || []).join(', ');
+      const label =
+        typeof requirePermission === 'string'
+          ? requirePermission
+          : (requirePermission.any || requirePermission.all || []).join(', ');
       return reply.result.forbidden(`权限不足：需要 [${label}] 权限`);
     }
   }
@@ -367,9 +368,8 @@ export { registerSystemMetadata };
  */
 export function setRegistrationContext(systemKey) {
   // 空字符串、null、undefined 均使用固定默认值，避免随机数导致路由注册到不可预期的系统
-  currentSystem = (systemKey && typeof systemKey === 'string' && systemKey.trim().length > 0)
-    ? systemKey.trim()
-    : 'system-default';
+  currentSystem =
+    systemKey && typeof systemKey === 'string' && systemKey.trim().length > 0 ? systemKey.trim() : 'system-default';
   currentGroup = ''; // 重置组
   currentPrefix = ''; // 重置前缀
 }
@@ -486,8 +486,8 @@ export function registerSecureRoute(fastify, options) {
     const dup = _routeRegistry.get(routeKey);
     const err = new Error(
       `路由重复注册: ${methodUpper} ${fullUrl}\n` +
-      `  → 首次注册: [${dup.group}] ${dup.name}\n` +
-      `  → 重复注册: [${targetGroup}] ${name}`
+        `  → 首次注册: [${dup.group}] ${dup.name}\n` +
+        `  → 重复注册: [${targetGroup}] ${name}`
     );
     err.code = 'DUPLICATE_ROUTE';
     throw err;
