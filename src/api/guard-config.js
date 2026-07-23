@@ -45,7 +45,7 @@ export async function loadGuardConfig() {
   } else {
     // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
     // 写入失败向上冒泡，让 initLoader 感知并阻止启动
-    currentVersion = await GuardConfigDao.saveToDB(configs, 0);
+    currentVersion = await saveWithTimeout(0);
     console.log(`💾 [Guard Config] ${C.dim}已写入初始策略数据 (version=${currentVersion})${C.reset}`);
   }
 }
@@ -162,10 +162,14 @@ const SAVE_TIMEOUT = 10000;
  * @throws {Error} 写入超时或版本冲突时抛出
  */
 async function saveWithTimeout(expectedVersion) {
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`写入超时 (>${SAVE_TIMEOUT}ms)`)), SAVE_TIMEOUT)
-  );
-  return Promise.race([GuardConfigDao.saveToDB(configs, expectedVersion), timeoutPromise]);
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`写入超时 (>${SAVE_TIMEOUT}ms)`)), SAVE_TIMEOUT);
+  });
+  return Promise.race([
+    GuardConfigDao.saveToDB(configs, expectedVersion).finally(() => clearTimeout(timeoutId)),
+    timeoutPromise
+  ]);
 }
 
 /**
@@ -297,7 +301,8 @@ export function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
     Object.assign(group.apis[apiKey], {
       name: metadata.alias || group.apis[apiKey].name,
       url: metadata.url,
-      method: metadata.method
+      method: metadata.method,
+      updatedAt: new Date().toISOString()
     });
   }
 }
