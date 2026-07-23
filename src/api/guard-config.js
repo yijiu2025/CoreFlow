@@ -42,6 +42,17 @@ export async function loadGuardConfig() {
     mergeDbConfig(data.configs);
     currentVersion = data.version;
     console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据 (version=${currentVersion})${C.reset}`);
+
+    // 将内存中的完整配置写回 DB，确保新增/删除的 API 路由同步到数据库
+    // 新增的 API 路由在 runEngine 阶段已注册到内存，但 DB 中可能没有
+    // 删除的 API 路由 DB 中仍有残留，写入时会被覆盖清理
+    try {
+      currentVersion = await saveWithTimeout(currentVersion);
+      console.log(`💾 [Guard Config] ${C.dim}已同步代码级配置到数据库 (version=${currentVersion})${C.reset}`);
+    } catch (err) {
+      // 同步失败不阻止启动，下次启动会重试
+      console.warn(`⚠️ [Guard Config] ${C.yellow}代码级配置同步失败: ${err.message}，下次启动将重试${C.reset}`);
+    }
   } else {
     // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
     // 写入失败向上冒泡，让 initLoader 感知并阻止启动
