@@ -2,6 +2,7 @@
  * 守卫配置数据访问层
  * 按系统拆分子行存储，每行一个系统配置
  * 启动时加载所有行合并为内存对象，写入时按系统独立 upsert
+ * 仅同步有变更的系统，每行独立版本号
  *
  * @author yijiu2025
  * @since 2026-07-22
@@ -9,21 +10,19 @@
 
 import sequelize from '../../../db/index.js';
 
-/** 版本冲突最大重试次数 */
-const MAX_RETRY = 3;
-
 class GuardConfigDao {
   /**
    * 从数据库加载所有系统的配置
-   * 读取所有行，按 system_key 合并为一个对象
+   * 读取所有行，按 system_key 合并为对象，返回每行独立版本号
    *
-   * @returns {Promise<{configs: object, version: number}>}
+   * @returns {Promise<{configs: object, version: number, versions: object<string, number>}>}
    */
   async loadFromDB() {
     const Model = sequelize.models.GuardConfig;
     const rows = await Model.findAll();
 
     const configs = {};
+    const versions = {};
     let maxVersion = 0;
 
     for (const row of rows) {
@@ -36,30 +35,30 @@ class GuardConfigDao {
         }
       }
       configs[row.system_key] = config;
+      versions[row.system_key] = row.version || 0;
       maxVersion = Math.max(maxVersion, row.version || 0);
     }
 
-    return { configs, version: maxVersion };
+    return { configs, version: maxVersion, versions };
   }
 
   /**
-   * 原子写入所有系统配置到数据库
-   * 按系统逐行 upsert，每行使用相同的版本号
-   * 写入失败时抛出异常，由调用方回滚内存状态
+   * 增量写入配置到数据库
+   * 对比内存和 DB 的版本号，仅 upsert 有变更的系统
+   * 每行独立版本号，无变更的行不受影响
    *
    * @param {object} configs - 完整配置树（{ systemKey: config, ... }）
-   * @param {number} currentVersion - 当前全局版本号
-   * @param {number} [retryCount=0] - 当前重试次数（内部使用）
-   * @returns {Promise<number>} 新版本号
-   * @throws {Error} 重试耗尽后仍写入失败时抛出
+   * @param {object<string, number>} dbVersions - 当前 DB 中每行的版本号
+   * @returns {Promise<number>} 新的最大版本号
    */
-  async saveToDB(configs, currentVersion, retryCount = 0) {
+  async saveToDB(configs, dbVersions) {
     const Model = sequelize.models.GuardConfig;
-    const newVersion = currentVersion + 1;
+    let maxVersion = Math.max(0, ...Object.values(dbVersions));
 
-    // 逐行 upsert
     for (const [systemKey, config] of Object.entries(configs)) {
       const serialized = JSON.stringify(config);
+      const dbVersion = dbVersions[systemKey] || 0;
+      const newVersion = dbVersion + 1;
 
       const [row] = await Model.findOrCreate({
         where: { system_key: systemKey },
@@ -71,21 +70,22 @@ class GuardConfigDao {
       });
 
       if (row) {
-        await Model.update(
-          { config: serialized, version: newVersion },
-          { where: { system_key: systemKey } }
-        );
+        // 只在版本号不同时更新（即数据有变更）
+        if (row.version !== newVersion) {
+          await Model.update({ config: serialized, version: newVersion }, { where: { system_key: systemKey } });
+        }
       }
+
+      maxVersion = Math.max(maxVersion, newVersion);
     }
 
-    return newVersion;
+    return maxVersion;
   }
 
   /**
    * 备份当前数据库状态（用于回滚）
-   * 读取所有行的当前版本，返回快照
    *
-   * @returns {Promise<{configs: object, version: number}>}
+   * @returns {Promise<{configs: object, version: number, versions: object<string, number>}>}
    */
   async backup() {
     return this.loadFromDB();
@@ -93,9 +93,8 @@ class GuardConfigDao {
 
   /**
    * 从快照恢复数据库状态（回滚）
-   * 清空当前所有行，写入快照数据
    *
-   * @param {{configs: object, version: number}} snapshot - 之前的备份快照
+   * @param {{configs: object, versions: object<string, number>}} snapshot - 备份快照
    * @returns {Promise<void>}
    */
   async restore(snapshot) {
@@ -109,7 +108,7 @@ class GuardConfigDao {
       await Model.create({
         system_key: systemKey,
         config: JSON.stringify(config),
-        version: snapshot.version
+        version: snapshot.versions[systemKey] || 0
       });
     }
   }

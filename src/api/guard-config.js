@@ -20,6 +20,7 @@ import { logAuditEvent } from '../auth/audit-logger.js';
  */
 let configs = {};
 let currentVersion = 0;
+let _dbVersions = {}; // 每行独立版本号: { systemKey: version }
 
 /**
  * 从数据库加载持久化配置，覆盖内存中的代码级默认值
@@ -42,13 +43,14 @@ export async function loadGuardConfig() {
     // 合并：DB 配置覆盖代码级配置（仅覆盖运行时字段，不覆盖结构）
     mergeDbConfig(data.configs);
     currentVersion = data.version;
+    _dbVersions = data.versions || {};
     console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据 (version=${currentVersion})${C.reset}`);
 
     // 将内存中的完整配置写回 DB，确保新增/删除的 API 路由同步到数据库
     // 新增的 API 路由在 runEngine 阶段已注册到内存，但 DB 中可能没有
     // 删除的 API 路由 DB 中仍有残留，写入时会被覆盖清理
     try {
-      currentVersion = await saveWithTimeout(currentVersion);
+      currentVersion = await saveWithTimeout();
       console.log(`💾 [Guard Config] ${C.dim}已同步代码级配置到数据库 (version=${currentVersion})${C.reset}`);
     } catch (err) {
       // 同步失败不阻止启动，下次启动会重试
@@ -57,7 +59,7 @@ export async function loadGuardConfig() {
   } else {
     // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
     // 写入失败向上冒泡，让 initLoader 感知并阻止启动
-    currentVersion = await saveWithTimeout(0);
+    currentVersion = await saveWithTimeout();
     console.log(`💾 [Guard Config] ${C.dim}已写入初始策略数据 (version=${currentVersion})${C.reset}`);
   }
 }
@@ -225,23 +227,33 @@ export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null,
  * @returns {Promise<number>} 新版本号
  * @throws {Error} 写入超时或版本冲突时抛出
  */
-async function saveWithTimeout(expectedVersion) {
+async function saveWithTimeout() {
   // 写入前校验结构完整性
   if (!validateConfigs(configs)) {
     throw new Error('配置结构校验失败，已取消写入');
   }
 
   // 备份当前状态，用于写入失败时回滚
-  _previousSnapshot = { configs: structuredClone(configs), version: currentVersion };
+  _previousSnapshot = {
+    configs: structuredClone(configs),
+    versions: { ..._dbVersions },
+    version: currentVersion
+  };
 
   let timeoutId;
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(`写入超时 (>${SAVE_TIMEOUT}ms)`)), SAVE_TIMEOUT);
   });
-  return Promise.race([
-    GuardConfigDao.saveToDB(configs, expectedVersion).finally(() => clearTimeout(timeoutId)),
+  const newVersion = await Promise.race([
+    GuardConfigDao.saveToDB(configs, _dbVersions).finally(() => clearTimeout(timeoutId)),
     timeoutPromise
   ]);
+  // 更新每行版本号
+  _dbVersions = {};
+  for (const systemKey of Object.keys(configs)) {
+    _dbVersions[systemKey] = newVersion;
+  }
+  return newVersion;
 }
 
 /**
@@ -252,12 +264,13 @@ function triggerSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
-      currentVersion = await saveWithTimeout(currentVersion);
+      currentVersion = await saveWithTimeout();
     } catch (err) {
       // 写入失败时回滚内存状态到写入前的快照
       if (_previousSnapshot) {
         configs = structuredClone(_previousSnapshot.configs);
         currentVersion = _previousSnapshot.version;
+        _dbVersions = { ..._previousSnapshot.versions };
         _previousSnapshot = null;
       }
       console.error(`❌ [Guard Config] ${C.red}异步写入失败: ${err.message}${C.reset}`);
@@ -397,7 +410,7 @@ export async function flushGuardConfig() {
     saveTimer = null;
   }
   try {
-    currentVersion = await saveWithTimeout(currentVersion);
+    currentVersion = await saveWithTimeout();
     console.log(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}`);
   } catch (err) {
     console.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败: ${err.message}${C.reset}`);
@@ -426,7 +439,7 @@ export async function saveGuardConfig() {
   }
 
   try {
-    currentVersion = await saveWithTimeout(currentVersion);
+    currentVersion = await saveWithTimeout();
     console.log(`✅ [Guard Config] ${C.green}数据库已同步 (version=${currentVersion})${C.reset}`);
   } catch (err) {
     console.error(`❌ [Guard Config] ${C.red}同步失败: ${err.message}${C.reset}`);
