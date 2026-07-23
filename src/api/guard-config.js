@@ -12,6 +12,7 @@
 
 import { C } from '../utils/colors.js';
 import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
+import { logAuditEvent } from '../auth/audit-logger.js';
 
 /**
  * 核心配置存储 - 仅存放与 API 加载、权限策略相关的配置
@@ -95,6 +96,33 @@ function mergeDbConfig(dbConfigs) {
 /** 运行时字段列表（仅覆盖这些字段，不覆盖 id/name/url/method 等结构字段） */
 const RUNTIME_FIELDS = ['enabled', 'requireLogin', 'allowIps', 'allowRoles'];
 
+/** 每次写入前备份的旧版本快照，用于写入失败时回滚 */
+let _previousSnapshot = null;
+
+/**
+ * 验证 configs 对象结构完整性
+ * 检查每个系统是否包含必要的字段
+ *
+ * @param {object} configs - 要验证的配置树
+ * @returns {boolean}
+ */
+function validateConfigs(configs) {
+  for (const [systemKey, system] of Object.entries(configs)) {
+    if (!system || typeof system !== 'object') {
+      console.warn(`⚠️ [Guard Config] 验证失败: 系统 ${systemKey} 配置无效`);
+      return false;
+    }
+    if (!system.groups || typeof system.groups !== 'object') {
+      console.warn(`⚠️ [Guard Config] 验证失败: 系统 ${systemKey} 缺少 groups`);
+      return false;
+    }
+  }
+  return true;
+}
+
+/** 异步写入超时时间（毫秒） */
+const SAVE_TIMEOUT = 10000;
+
 /**
  * 用 DB 值覆盖目标对象的运行时字段
  * @param {object} target - 内存中的配置对象
@@ -131,8 +159,18 @@ export function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
 
 /**
  * 热更新配置 (支持 3 层更新)
+ *
+ * @param {string} systemKey - 系统标识
+ * @param {object} patch - 要更新的字段
+ * @param {string} [groupKey=null] - 模块标识
+ * @param {string} [apiKey=null] - API 标识
+ * @param {object} [operator={}] - 操作者信息（用于审计日志）
+ * @param {string|number} [operator.userId] - 操作者用户 ID
+ * @param {string} [operator.ip] - 操作者 IP
+ * @param {object} [operator.redis] - Redis 实例（可选）
+ * @returns {object|null} 更新后的系统配置，失败返回 null
  */
-export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null) {
+export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null, operator = {}) {
   const system = configs[systemKey];
   if (!system) return null;
 
@@ -158,11 +196,26 @@ export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null)
   }
 
   triggerSave();
+
+  // 审计日志：记录配置变更
+  logAuditEvent(operator.redis, {
+    type: 'PERMISSION_CHANGE',
+    userId: operator.userId || null,
+    ip: operator.ip || null,
+    appId: 'guard',
+    details: {
+      systemKey,
+      groupKey: groupKey || null,
+      apiKey: apiKey || null,
+      patch: Object.keys(patch),
+      timestamp: new Date().toISOString()
+    }
+  }).catch(() => {
+    // 审计日志写入失败不影响配置更新
+  });
+
   return configs[systemKey];
 }
-
-/** 异步写入超时时间（毫秒） */
-const SAVE_TIMEOUT = 10000;
 
 /**
  * 带超时保护的数据库写入
@@ -173,6 +226,14 @@ const SAVE_TIMEOUT = 10000;
  * @throws {Error} 写入超时或版本冲突时抛出
  */
 async function saveWithTimeout(expectedVersion) {
+  // 写入前校验结构完整性
+  if (!validateConfigs(configs)) {
+    throw new Error('配置结构校验失败，已取消写入');
+  }
+
+  // 备份当前状态，用于写入失败时回滚
+  _previousSnapshot = { configs: structuredClone(configs), version: currentVersion };
+
   let timeoutId;
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(`写入超时 (>${SAVE_TIMEOUT}ms)`)), SAVE_TIMEOUT);
@@ -193,6 +254,12 @@ function triggerSave() {
     try {
       currentVersion = await saveWithTimeout(currentVersion);
     } catch (err) {
+      // 写入失败时回滚内存状态到写入前的快照
+      if (_previousSnapshot) {
+        configs = structuredClone(_previousSnapshot.configs);
+        currentVersion = _previousSnapshot.version;
+        _previousSnapshot = null;
+      }
       console.error(`❌ [Guard Config] ${C.red}异步写入失败: ${err.message}${C.reset}`);
     }
   }, 1000);
