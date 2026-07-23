@@ -5,6 +5,8 @@
 // 支持：System (层) -> Group (文件) -> API (接口) 的级联校验与动态热更新
 // ─────────────────────────────────────────────────────────────────────────────
 
+/* eslint-disable no-console */
+
 import {
   getGuardConfig,
   registerApiMetadata,
@@ -33,6 +35,17 @@ import { isIpMatch } from '../utils/ip.js';
  * @param {Function} options.handler - WebSocket 处理函数 (connection, req, client) => void
  */
 export function registerSecureWebSocket(fastify, options) {
+  if (!options || typeof options !== 'object') {
+    const err = new Error('registerSecureWebSocket: options 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+  if (typeof options.handler !== 'function') {
+    const err = new Error('registerSecureWebSocket: handler 必须是函数');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+
   const {
     url,
     group,
@@ -254,15 +267,19 @@ async function applyGuardLogic(opts = {}, request, reply) {
       const authError = request.state?.authError;
       if (authError) {
         if (authError.name === 'TokenExpiredError') {
-          return reply.code(401).send({
+          reply.code(401).send({
             error: 'invalid_token',
             error_description: 'Token expired'
           });
+          reply.sent = true;
+          return;
         }
-        return reply.code(401).send({
+        reply.code(401).send({
           error: 'invalid_token',
           error_description: authError.name === 'NotBeforeError' ? 'Token not yet valid' : 'Invalid token'
         });
+        reply.sent = true;
+        return;
       }
       return reply.result.unauth('身份验证失败，请先登录');
     }
@@ -379,6 +396,11 @@ export function restoreRegistrationContext(ctx) {
  * 无需手动指定 System，Loader 会根据文件夹自动设置上下文
  */
 export function registerGroupMetadata(metadata) {
+  if (!metadata || typeof metadata !== 'object') {
+    console.warn('⚠️ [Guard] registerGroupMetadata: metadata 参数无效');
+    return;
+  }
+
   const groupKey = metadata.name || 'default';
   currentGroup = groupKey;
   currentPrefix = metadata.prefix || '';
@@ -429,10 +451,27 @@ export function registerSecureRoute(fastify, options) {
     permission = null
   } = options;
 
+  // 参数防御性校验
+  if (!method || typeof method !== 'string') {
+    const err = new Error(`registerSecureRoute: method 参数无效，name=${name || 'unnamed'}`);
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+  if (!url || typeof url !== 'string') {
+    const err = new Error(`registerSecureRoute: url 参数无效，name=${name || 'unnamed'}`);
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+  if (typeof handler !== 'function') {
+    const err = new Error(`registerSecureRoute: handler 必须是函数，name=${name || 'unnamed'}`);
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+
   // permission 是 requirePermission 的短别名
   const perm = requirePermission || permission;
 
-  const targetSystem = currentSystem || 'api-' + Math.random().toString(36).substring(7);
+  const targetSystem = currentSystem || 'system-default';
   const targetGroup = options.group || currentGroup;
   const apiKey = name || url.replace(/\//g, '_');
 
