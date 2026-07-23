@@ -54,6 +54,8 @@ class GuardConfigDao {
   async saveToDB(configs, dbVersions) {
     const Model = sequelize.models.GuardConfig;
     let maxVersion = Math.max(0, ...Object.values(dbVersions));
+    const updated = [];
+    const versions = {};
 
     for (const [systemKey, config] of Object.entries(configs)) {
       const serialized = JSON.stringify(config);
@@ -73,13 +75,18 @@ class GuardConfigDao {
         // 只在版本号不同时更新（即数据有变更）
         if (row.version !== newVersion) {
           await Model.update({ config: serialized, version: newVersion }, { where: { system_key: systemKey } });
+          updated.push(systemKey);
         }
+      } else {
+        // 新创建的行也算变更
+        updated.push(systemKey);
       }
 
+      versions[systemKey] = newVersion;
       maxVersion = Math.max(maxVersion, newVersion);
     }
 
-    return maxVersion;
+    return { maxVersion, updated, versions };
   }
 
   /**
