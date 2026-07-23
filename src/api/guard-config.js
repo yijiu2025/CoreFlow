@@ -95,6 +95,9 @@ function overrideRuntimeFields(target, source) {
       target[field] = source[field];
     }
   }
+  // 更新内存中的 updatedAt 时间戳，但注意这里不触发 triggerSave
+  // 因此内存和 DB 的 updatedAt 可能不一致。updatedAt 仅用于展示，
+  // 守卫逻辑不依赖该字段，因此不触发 DB 写入是合理的性能优化
   target.updatedAt = new Date().toISOString();
 }
 
@@ -122,6 +125,12 @@ export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null)
   const system = configs[systemKey];
   if (!system) return null;
 
+  // patch 无效时直接返回，避免静默 no-op 让人困惑
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    console.warn(`⚠️ [Guard Config] setGuardConfig: patch 参数无效，systemKey=${systemKey}`);
+    return null;
+  }
+
   const updatePatch = { ...patch, updatedAt: new Date().toISOString() };
 
   if (apiKey && groupKey) {
@@ -145,6 +154,21 @@ export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null)
 const SAVE_TIMEOUT = 10000;
 
 /**
+ * 带超时保护的数据库写入
+ * 所有写入路径统一使用此函数，确保超时行为一致
+ *
+ * @param {number} expectedVersion - 期望的当前版本号
+ * @returns {Promise<number>} 新版本号
+ * @throws {Error} 写入超时或版本冲突时抛出
+ */
+async function saveWithTimeout(expectedVersion) {
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`写入超时 (>${SAVE_TIMEOUT}ms)`)), SAVE_TIMEOUT)
+  );
+  return Promise.race([GuardConfigDao.saveToDB(configs, expectedVersion), timeoutPromise]);
+}
+
+/**
  * 异步保存配置到数据库 (防抖处理)
  */
 let saveTimer = null;
@@ -152,11 +176,7 @@ function triggerSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
-      // 数据库写入加超时保护，防止连接池耗尽时配置更新永久挂起
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`写入超时 (>${SAVE_TIMEOUT}ms)`)), SAVE_TIMEOUT)
-      );
-      currentVersion = await Promise.race([GuardConfigDao.saveToDB(configs, currentVersion), timeoutPromise]);
+      currentVersion = await saveWithTimeout(currentVersion);
     } catch (err) {
       console.error(`❌ [Guard Config] ${C.red}异步写入失败: ${err.message}${C.reset}`);
     }
@@ -294,7 +314,7 @@ export async function flushGuardConfig() {
     saveTimer = null;
   }
   try {
-    currentVersion = await GuardConfigDao.saveToDB(configs, currentVersion);
+    currentVersion = await saveWithTimeout(currentVersion);
     console.log(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}`);
   } catch (err) {
     console.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败: ${err.message}${C.reset}`);
@@ -306,7 +326,7 @@ export async function flushGuardConfig() {
  * 注意：返回的数据量大时注意性能，当前配置规模在 KB 级别，深拷贝可接受
  */
 export function getAllGuardConfigs() {
-  return JSON.parse(JSON.stringify(configs));
+  return structuredClone(configs);
 }
 
 /**
@@ -317,10 +337,13 @@ export function getAllGuardConfigs() {
  * @throws {Error} 版本冲突或数据库写入失败时抛出
  */
 export async function saveGuardConfig() {
-  if (saveTimer) clearTimeout(saveTimer);
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
 
   try {
-    currentVersion = await GuardConfigDao.saveToDB(configs, currentVersion);
+    currentVersion = await saveWithTimeout(currentVersion);
     console.log(`✅ [Guard Config] ${C.green}数据库已同步 (version=${currentVersion})${C.reset}`);
   } catch (err) {
     console.error(`❌ [Guard Config] ${C.red}同步失败: ${err.message}${C.reset}`);
