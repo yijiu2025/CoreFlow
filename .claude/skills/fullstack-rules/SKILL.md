@@ -1,7 +1,7 @@
 ---
 name: fullstack-rules
-version: 1.5.0
-description: 前后端全栈开发规范。涵盖：创建项目、新增App、写API、写页面、调外部接口、修复Bug。每次触发时，必须按以下顺序执行：① 有外部 API 的先 curl 验证格式 ② 写后端路由 ③ curl 验证后端 ④ 写前端 ⑤ 验证全链路。禁止假数据，禁止半截功能。
+version: 1.6.0
+description: 前后端全栈开发规范。涵盖：创建项目、新增App、写API、写页面、调外部接口、修复Bug、代码审查。每次触发时，必须按以下顺序执行：① 有外部 API 的先 curl 验证格式 ② 写后端路由 ③ curl 验证后端 ④ 写前端 ⑤ 验证全链路。禁止假数据，禁止半截功能。审查代码时执行企业级审查清单。代码审查模式：无需执行①-⑤，直接执行审查清单。
 type: prompt
 whenToUse: 用户任何涉及代码的操作时自动触发：创建新项目、新增业务模块、编写前后端代码、设计API接口、审查代码质量、修复Bug、开发新功能、调用外部API、对接第三方数据、创建Vue页面、编写Node.js后端、设计数据库模型、配置路由、写curl命令、测试接口、查看API返回数据、股票分析、行情数据、K线图、**kt架构/KX架构、.kx文件、KX规范、页面描述语言、架构描述文件、架构设计模式、设计模式评分**。注意：本 skill 强制要求 curl 验证外部 API 格式、禁止假数据、禁止半截功能。
 arguments:
@@ -165,6 +165,11 @@ arguments:
 | **开发时关权限** | `requireLogin: false`，功能调通后再恢复 |
 | **API 必须 curl 验证** | 写完 API 立即 curl 验证：状态码 + 数据结构 + 边界值 |
 | **外部 API 先 curl** | 调用外部 API 前先 curl 确认字段名，不猜测返回格式 |
+| **追踪调用链** | 审查代码时追踪 import 依赖和调用方（至少 2 层），不只看单个文件 |
+| **功能一致性** | 相同功能的不同路径安全级别必须一致（如 HTTP 和 WebSocket 守卫） |
+| **错误码优先** | 错误判断用 `err.code`，不用 `err.message.includes()` 匹配文本 |
+| **空值保护** | 所有嵌套对象访问用可选链 `?.`，逐层保护 |
+| **超时保护** | 所有可能阻塞的异步操作设置超时 |
 
 ### 任务执行规范
 
@@ -298,6 +303,13 @@ Step 5: 开始生成代码
 | 分支同步 | `git merge develop` 在 feature 分支 | `git rebase develop` 保持线性历史 |
 | 敏感信息 | 代码中硬编码 `apiKey: "sk-xxx"` | 从 `process.env.API_KEY` 读取 |
 | 文件大小 | 一个文件 2000 行不拆分 | 超过 700 行按功能拆分为独立模块 |
+| 错误判断 | `err.message.includes('路由重复')` 匹配中文文本 | `err.code === 'DUPLICATE_ROUTE'` 用错误码 |
+| 嵌套访问 | `configs[a].groups[b].apis[c]` 直接链式访问 | `configs[a]?.groups?.[b]?.apis?.[c]` 可选链保护 |
+| 跳过路径 | `if (!x) continue` 静默跳过 | `if (!x) { console.warn('...'); continue; }` 记录日志 |
+| 异步超时 | `await register(app)` 无超时限制 | `Promise.race([register(app), timeoutPromise])` 超时保护 |
+| 优雅关闭 | `setTimeout` 定时任务无人清理 | 暴露 `flush()` 方法，`onClose` 钩子调用 |
+| 安全一致性 | HTTP 路由有 IP 白名单，WebSocket 没有 | 所有入口路径安全级别一致 |
+| 异常输入 | 非预期格式静默返回 false | 记录 `console.warn` 告知配置错误
 
 ---
 
@@ -315,6 +327,7 @@ Step 5: 开始生成代码
 | 🎯 Git 规范 | [git-patterns.md](references/git-patterns.md) | 分支模型、提交信息、PR 模板、版本号 |
 | 🏗️ KX 架构规范 | [assets/project-template/kt/kx-lang/SPEC.md](assets/project-template/kt/kx-lang/SPEC.md) | KX 页面描述语言完整语法、AI 生成映射表 |
 | 📖 KX 快速入门 | [assets/project-template/kt/kx-lang/README.zh.md](assets/project-template/kt/kx-lang/README.zh.md) | KX 设计理念、快速上手、核心概念
+| 🔍 代码审查 | [code-review.md](references/code-review.md) | 企业级代码审查清单、空值安全、控制流安全、优雅关闭
 
 ---
 
@@ -323,9 +336,11 @@ Step 5: 开始生成代码
 **先分析再修改**，禁止盲目尝试：
 
 1. **定位根因** — 看日志错误栈 → 检查代码流程 → 复现最小步骤 → 必要时 git blame 了解改动意图
-2. **明确原因** — 确认是逻辑错误、边界条件、还是外部依赖问题
-3. **动手改** — 只改必要代码，不顺便重构无关逻辑
-4. **验证** — 确认修复有效且不破坏相关功能
+2. **追踪调用链** — 检查该文件的 import 依赖和调用方（至少 2 层），不只看单个文件
+3. **明确原因** — 确认是逻辑错误、边界条件、还是外部依赖问题
+4. **对照清单** — 执行企业级审查清单（Output Format 第 6 项）
+5. **动手改** — 只改必要代码，不顺便重构无关逻辑
+6. **验证** — 确认修复有效且不破坏相关功能
 
 ---
 
@@ -363,4 +378,19 @@ Step 5: 开始生成代码
    [ ] KX 语法检查 → @sync 不用常量赋值 / @empty 在容器内 / @mutation 用展开语法
    [ ] KX 引用检查 → 页面文件顶部有 @ref 引用模型
    [ ] KX 组件检查 → 复杂组件有 @prop 接口定义，非仅 @note 描述
+   ```
+
+6. **企业级审查清单（审查代码/修复问题时自动执行）**:
+
+   ```
+   [ ] 追踪调用链 → 已检查 import 依赖和调用方（至少 2 层）
+   [ ] 错误码优先 → 所有错误判断使用 err.code 而非消息文本
+   [ ] 空值保护 → 所有嵌套对象访问有可选链保护
+   [ ] 超时保护 → 所有异步操作有超时兜底
+   [ ] 优雅关闭 → 所有定时器/防抖有 flush 路径
+   [ ] 静默失败 → 所有 continue/return 跳过路径有日志
+   [ ] 功能一致性 → 相同功能的不同路径安全级别一致
+   [ ] 异常输入 → 非预期格式有警告日志而非静默返回
+   [ ] 不对称行为 → 首次/后续调用差异已文档化
+   [ ] 并发安全 → 模块级可变状态已审查写入路径
    ```
