@@ -24,8 +24,17 @@ class GuardConfigDao {
     const row = await Model.findOne({ order: [['id', 'ASC']] });
 
     if (row) {
+      // 列类型为 longtext，Sequelize 返回字符串而非已解析对象，需要手动解析
+      let configs = row.configs || {};
+      if (typeof configs === 'string') {
+        try {
+          configs = JSON.parse(configs);
+        } catch {
+          configs = {};
+        }
+      }
       return {
-        configs: row.configs || {},
+        configs,
         version: row.version || 0
       };
     }

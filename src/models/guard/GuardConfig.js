@@ -17,9 +17,9 @@ export default (sequelize, DataTypes) => {
         autoIncrement: true
       },
       configs: {
-        type: DataTypes.JSON,
+        type: DataTypes.TEXT('long'),
         allowNull: false,
-        comment: '完整守卫配置树 (System → Group → API)'
+        comment: '完整守卫配置树 (JSON 字符串，DAO 层手动解析)'
       },
       version: {
         type: DataTypes.INTEGER,
