@@ -141,6 +141,9 @@ export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null)
   return configs[systemKey];
 }
 
+/** 异步写入超时时间（毫秒） */
+const SAVE_TIMEOUT = 10000;
+
 /**
  * 异步保存配置到数据库 (防抖处理)
  */
@@ -149,7 +152,11 @@ function triggerSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
-      currentVersion = await GuardConfigDao.saveToDB(configs, currentVersion);
+      // 数据库写入加超时保护，防止连接池耗尽时配置更新永久挂起
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`写入超时 (>${SAVE_TIMEOUT}ms)`)), SAVE_TIMEOUT)
+      );
+      currentVersion = await Promise.race([GuardConfigDao.saveToDB(configs, currentVersion), timeoutPromise]);
     } catch (err) {
       console.error(`❌ [Guard Config] ${C.red}异步写入失败: ${err.message}${C.reset}`);
     }
@@ -160,6 +167,11 @@ function triggerSave() {
  * 1层注册：系统级元数据 (Level 1)
  */
 export function registerSystemMetadata(systemKey, metadata) {
+  if (!metadata || typeof metadata !== 'object') {
+    console.warn(`⚠️ [Guard Config] registerSystemMetadata: metadata 参数无效，systemKey=${systemKey}`);
+    return;
+  }
+
   if (!configs[systemKey]) {
     configs[systemKey] = { groups: {} };
   }
@@ -181,6 +193,13 @@ export function registerSystemMetadata(systemKey, metadata) {
  * 2层注册：模块/文件级元数据 (Level 2)
  */
 export function registerGroupMetadata(systemKey, groupKey, metadata) {
+  if (!metadata || typeof metadata !== 'object') {
+    console.warn(
+      `⚠️ [Guard Config] registerGroupMetadata: metadata 参数无效，systemKey=${systemKey}, groupKey=${groupKey}`
+    );
+    return;
+  }
+
   if (!configs[systemKey]) {
     configs[systemKey] = {
       id: systemKey,
@@ -216,6 +235,13 @@ export function registerGroupMetadata(systemKey, groupKey, metadata) {
  *   避免代码热更新意外重置运维配置
  */
 export function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
+  if (!metadata || typeof metadata !== 'object') {
+    console.warn(
+      `⚠️ [Guard Config] registerApiMetadata: metadata 参数无效，systemKey=${systemKey}, groupKey=${groupKey}, apiKey=${apiKey}`
+    );
+    return;
+  }
+
   if (!configs[systemKey]) {
     configs[systemKey] = {
       id: systemKey,
@@ -276,10 +302,11 @@ export async function flushGuardConfig() {
 }
 
 /**
- * 获取所有配置
+ * 获取所有配置（深拷贝，防止外部篡改内部状态）
+ * 注意：返回的数据量大时注意性能，当前配置规模在 KB 级别，深拷贝可接受
  */
 export function getAllGuardConfigs() {
-  return configs;
+  return JSON.parse(JSON.stringify(configs));
 }
 
 /**
