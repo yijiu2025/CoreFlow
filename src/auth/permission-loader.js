@@ -87,7 +87,7 @@ export async function loadUserPermissions(userId, appId) {
     ]
   });
 
-  let roles = userRoles.map((ur) => ur.role.code);
+  let roles = userRoles.map(ur => ur.role.code);
 
   // 2. 合并角色策略
   const allows = [];

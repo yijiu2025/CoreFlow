@@ -38,7 +38,7 @@ export async function up({ queryInterface, Sequelize }) {
     unique: true,
     name: 'uk_posecraft_follow'
   });
-  
+
   await queryInterface.addIndex('posecraft_follow', ['following_id', 'delete_version'], {
     name: 'idx_posecraft_follow_following'
   });

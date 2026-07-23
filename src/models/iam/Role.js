@@ -71,7 +71,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  Role.associate = (models) => {
+  Role.associate = models => {
     // 角色属于多个用户 (通过 PBAC 授权表)
     Role.belongsToMany(models.User, {
       through: models.UserRole,

@@ -25,7 +25,7 @@ export const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10
 
 /** Session TTL 常量（秒） */
 export const SESSION_TTL = {
-  SHORT: 1800,       // 30 分钟
-  LONG: 2592000,     // 30 天
-  REFRESH: 2592000   // 30 天
+  SHORT: 1800, // 30 分钟
+  LONG: 2592000, // 30 天
+  REFRESH: 2592000 // 30 天
 };

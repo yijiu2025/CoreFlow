@@ -3,85 +3,85 @@
  * 方式一：验证码重置密码
  * 流程：输入邮箱 → 图形验证码 → 邮箱验证码 → 设置新密码
  */
-import { ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { authApi } from '@/api/auth'
-import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue'
-import Icons from '@/components/common/Icons.vue'
-import { useMessage } from '@/composables/useMessage'
+import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { authApi } from '@/api/auth';
+import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
+import Icons from '@/components/common/Icons.vue';
+import { useMessage } from '@/composables/useMessage';
 
-const { t } = useI18n()
-const { error: showError, success: showSuccess } = useMessage()
+const { t } = useI18n();
+const { error: showError, success: showSuccess } = useMessage();
 
-const email = ref('')
-const code = ref('')
-const newPassword = ref('')
-const confirmPassword = ref('')
-const step = ref<'email' | 'code' | 'done'>('email')
-const isSubmitting = ref(false)
-const isCountingDown = ref(false)
-const countdown = ref(60)
+const email = ref('');
+const code = ref('');
+const newPassword = ref('');
+const confirmPassword = ref('');
+const step = ref<'email' | 'code' | 'done'>('email');
+const isSubmitting = ref(false);
+const isCountingDown = ref(false);
+const countdown = ref(60);
 
-const showCaptcha = ref(false)
-const captchaKey = ref('')
+const showCaptcha = ref(false);
+const captchaKey = ref('');
 
 function sendCode() {
   if (!email.value || !email.value.includes('@')) {
-    showError(t('validation.email_invalid'))
-    return
+    showError(t('validation.email_invalid'));
+    return;
   }
-  showCaptcha.value = true
+  showCaptcha.value = true;
 }
 
 async function onCaptchaSuccess(data: { captchaKey: string }) {
-  showCaptcha.value = false
-  captchaKey.value = data.captchaKey
+  showCaptcha.value = false;
+  captchaKey.value = data.captchaKey;
 
   try {
-    await authApi.sendEmailCode(email.value, captchaKey.value)
-    showSuccess(t('forgot.code_sent'))
-    step.value = 'code'
-    startCountdown()
+    await authApi.sendEmailCode(email.value, captchaKey.value);
+    showSuccess(t('forgot.code_sent'));
+    step.value = 'code';
+    startCountdown();
   } catch (err: any) {
-    showError(err.message || t('forgot.send_failed'))
+    showError(err.message || t('forgot.send_failed'));
   }
 }
 
 function startCountdown() {
-  isCountingDown.value = true
-  countdown.value = 60
+  isCountingDown.value = true;
+  countdown.value = 60;
   const timer = setInterval(() => {
-    countdown.value--
+    countdown.value--;
     if (countdown.value <= 0) {
-      clearInterval(timer)
-      isCountingDown.value = false
+      clearInterval(timer);
+      isCountingDown.value = false;
     }
-  }, 1000)
+  }, 1000);
 }
 
 async function handleReset() {
   if (!code.value || code.value.length < 4) {
-    showError(t('forgot.code_required'))
-    return
+    showError(t('forgot.code_required'));
+    return;
   }
   if (!newPassword.value || newPassword.value.length < 6) {
-    showError(t('forgot.password_min'))
-    return
+    showError(t('forgot.password_min'));
+    return;
   }
   if (newPassword.value !== confirmPassword.value) {
-    showError(t('forgot.password_mismatch'))
-    return
+    showError(t('forgot.password_mismatch'));
+    return;
   }
 
-  isSubmitting.value = true
+  isSubmitting.value = true;
   try {
-    await authApi.resetPassword(email.value, code.value, newPassword.value)
-    step.value = 'done'
-    showSuccess(t('forgot.reset_success'))
+    await authApi.resetPassword(email.value, code.value, newPassword.value);
+    step.value = 'done';
+    showSuccess(t('forgot.reset_success'));
   } catch (err: any) {
-    showError(err.message || t('forgot.reset_failed'))
+    showError(err.message || t('forgot.reset_failed'));
   } finally {
-    isSubmitting.value = false
+    isSubmitting.value = false;
   }
 }
 </script>
@@ -140,7 +140,13 @@ async function handleReset() {
     </div>
 
     <div class="relative">
-      <input v-model="confirmPassword" type="password" :placeholder="t('forgot.confirm_password')" class="input-field pl-11" @keyup.enter="handleReset" />
+      <input
+        v-model="confirmPassword"
+        type="password"
+        :placeholder="t('forgot.confirm_password')"
+        class="input-field pl-11"
+        @keyup.enter="handleReset"
+      />
       <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
         <Icons name="lock" :size="16" />
       </div>
@@ -151,7 +157,10 @@ async function handleReset() {
       :disabled="isSubmitting"
       class="w-full h-12 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
     >
-      <span v-if="isSubmitting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+      <span
+        v-if="isSubmitting"
+        class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+      ></span>
       {{ t('forgot.reset_password') }}
     </button>
   </div>

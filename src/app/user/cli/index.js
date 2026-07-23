@@ -47,7 +47,7 @@ async function recentUsers() {
   console.log('\n📋 最近注册用户：');
   printTable(
     ['ID', '用户名', '邮箱', '状态', '注册时间'],
-    users.map((u) => [
+    users.map(u => [
       u.id,
       u.username,
       u.email,
@@ -63,7 +63,7 @@ export default {
   appName: 'user',
   description: '用户中心',
   subcommands: {
-    'stats':  { description: '用户统计',   handler: userStats },
-    'recent': { description: '最近注册',   handler: recentUsers }
+    stats: { description: '用户统计', handler: userStats },
+    recent: { description: '最近注册', handler: recentUsers }
   }
 };

@@ -38,8 +38,8 @@ export function ask(rl, question, hidden = false) {
   if (hidden) {
     return askPassword(question);
   }
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => resolve(answer.trim()));
+  return new Promise(resolve => {
+    rl.question(question, answer => resolve(answer.trim()));
   });
 }
 
@@ -49,7 +49,7 @@ export function ask(rl, question, hidden = false) {
  * @returns {Promise<string>}
  */
 function askPassword(question) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     process.stdout.write(question);
     let password = '';
 
@@ -57,7 +57,7 @@ function askPassword(question) {
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
 
-    const onData = (char) => {
+    const onData = char => {
       switch (char) {
         case '\n':
         case '\r':
@@ -148,7 +148,7 @@ export async function multiSelect(rl, title, items) {
   });
 
   const input = await ask(rl, '\n请输入序号: ');
-  const indices = input.split(',').map((s) => parseInt(s.trim(), 10));
+  const indices = input.split(',').map(s => parseInt(s.trim(), 10));
 
   const selected = [];
   for (const index of indices) {

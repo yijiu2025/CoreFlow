@@ -7,7 +7,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import service from '@/utils/request'
+import service from '@/utils/request';
 
 export const userApi = {
   /** 获取当前用户个人资料 */
@@ -17,8 +17,7 @@ export const userApi = {
    * 更新资料（昵称 / 简介）
    * @param data { username?, bio? }
    */
-  updateProfile: (data: { username?: string; bio?: string }) =>
-    service.put('/user/v1/update', data),
+  updateProfile: (data: { username?: string; bio?: string }) => service.put('/user/v1/update', data),
 
   /**
    * 上传头像
@@ -26,10 +25,10 @@ export const userApi = {
    * @returns { avatar: string } 新头像 URL
    */
   uploadAvatar: (file: File) => {
-    const form = new FormData()
-    form.append('avatar', file)
+    const form = new FormData();
+    form.append('avatar', file);
     return service.post('/user/v1/avatar', form, {
       headers: { 'Content-Type': 'multipart/form-data' }
-    } as any)
+    } as any);
   }
-}
+};

@@ -42,8 +42,8 @@ DB_POOL_MIN=2
 ### 优雅关闭
 
 ```js
-const shutdown = async (signal) => {
-  await server.close();           // 停止接受新请求
+const shutdown = async signal => {
+  await server.close(); // 停止接受新请求
   await server.db?.sequelize?.close();
   await server.redis?.quit();
   process.exit(0);
@@ -55,14 +55,14 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 
 ## 前端优化
 
-| 优化项 | 做法 |
-|--------|------|
-| 路由懒加载 | `component: () => import('./views/X.vue')` |
-| 组件异步加载 | `defineAsyncComponent(() => import('./HeavyChart.vue'))` |
-| 虚拟滚动 | `@tanstack/vue-virtual` 替代全量渲染 |
-| 图表按需加载 | ECharts tree-shaking |
-| 图片/字体优化 | 字体 `font-display: swap` |
-| Service Worker | PWA 离线缓存静态资源 |
+| 优化项         | 做法                                                     |
+| -------------- | -------------------------------------------------------- |
+| 路由懒加载     | `component: () => import('./views/X.vue')`               |
+| 组件异步加载   | `defineAsyncComponent(() => import('./HeavyChart.vue'))` |
+| 虚拟滚动       | `@tanstack/vue-virtual` 替代全量渲染                     |
+| 图表按需加载   | ECharts tree-shaking                                     |
+| 图片/字体优化  | 字体 `font-display: swap`                                |
+| Service Worker | PWA 离线缓存静态资源                                     |
 
 ## 慢请求告警
 

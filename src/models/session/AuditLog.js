@@ -43,12 +43,7 @@ export default (sequelize, DataTypes) => {
     {
       tableName: 'audit_logs',
       timestamps: true,
-      indexes: [
-        { fields: ['user_id'] },
-        { fields: ['event'] },
-        { fields: ['created_at'] },
-        { fields: ['ip'] }
-      ],
+      indexes: [{ fields: ['user_id'] }, { fields: ['event'] }, { fields: ['created_at'] }, { fields: ['ip'] }],
       comment: '安全审计日志表'
     }
   );

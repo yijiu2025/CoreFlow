@@ -26,7 +26,7 @@ function generateSvgFromFabric(fabricData) {
   const width = fabricData.width || 800;
   const height = fabricData.height || 600;
   let svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
-  
+
   const objects = fabricData.objects || [];
   for (const obj of objects) {
     if (obj.type === 'line') {
@@ -96,7 +96,7 @@ function formatWork(work, isOwner = false) {
       collects: data.collects_count || 0,
       shares: data.shares_count || 0,
       comments: data.comments_count || 0,
-      views: isOwner ? data.views_count : undefined  // 仅作者可见
+      views: isOwner ? data.views_count : undefined // 仅作者可见
     },
     // 当前用户互动状态
     userInteraction: {
@@ -110,11 +110,13 @@ function formatWork(work, isOwner = false) {
     },
     created_at: data.createdAt,
     updated_at: data.updatedAt,
-    author: data.author ? {
-      uid: data.author.uid,
-      username: data.author.username,
-      avatar: data.author.avatar
-    } : undefined,
+    author: data.author
+      ? {
+          uid: data.author.uid,
+          username: data.author.username,
+          avatar: data.author.avatar
+        }
+      : undefined,
     // 关联模板状态（null=正常/无模板, -1=已删除, 0=私密, -2=审核拒绝）
     template_status: data.template?.status ?? null,
     template_deleted: data.template ? data.template.delete_version !== 0 : false
@@ -169,10 +171,10 @@ export default async function (fastify) {
    */
   const checkDataPermission = (item, user) => {
     if (!item || !user) return false;
-    
+
     // 如果是创建者本人，通过
     if (item.user_id === user.userId) return true;
-    
+
     // 如果是管理员/运营角色或拥有审核/删单权限，通过
     const userRoles = user.roles || [];
     const userPermissions = user.permissions?.allows || [];
@@ -206,7 +208,7 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { keyword, page, pageSize, category, sort } = request.query;
       // 从 session 获取权威用户 ID（数字），无需前端传递
-      const currentUserId = request.state?.user?.userId
+      const currentUserId = request.state?.user?.userId;
 
       const result = await workDao.findAll({
         keyword,
@@ -261,7 +263,7 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { userId } = request.params;
       const { page, pageSize } = request.query;
-      const currentUserId = request.state?.user?.userId
+      const currentUserId = request.state?.user?.userId;
 
       const result = await workDao.findByUser(userId, {
         page,
@@ -348,11 +350,15 @@ export default async function (fastify) {
         if (template) {
           let poseData = template.pose_data;
           if (typeof poseData === 'string') {
-            try { poseData = JSON.parse(poseData); } catch (e) {}
+            try {
+              poseData = JSON.parse(poseData);
+            } catch (e) {}
           }
           let fabricData = poseData?.fabricData;
           if (typeof fabricData === 'string') {
-            try { fabricData = JSON.parse(fabricData); } catch (e) {}
+            try {
+              fabricData = JSON.parse(fabricData);
+            } catch (e) {}
           }
 
           if (fabricData) {
@@ -392,7 +398,9 @@ export default async function (fastify) {
           channels: 4,
           background: { r: 0, g: 0, b: 0, alpha: 0 }
         }
-      }).png().toBuffer();
+      })
+        .png()
+        .toBuffer();
       reply.type('image/png');
       return reply.send(fallback);
     }
@@ -408,9 +416,21 @@ export default async function (fastify) {
     permission: 'posecraft:work:create',
     handler: async (request, reply) => {
       const {
-        title, description, template_id, image_url, analysis_data, edit_data, category,
-        publication_address, publication_lat, publication_lng, publication_source,
-        work_address, work_lat, work_lng, work_address_source
+        title,
+        description,
+        template_id,
+        image_url,
+        analysis_data,
+        edit_data,
+        category,
+        publication_address,
+        publication_lat,
+        publication_lng,
+        publication_source,
+        work_address,
+        work_lat,
+        work_lng,
+        work_address_source
       } = request.body;
       const user = request.state.user;
 
@@ -444,7 +464,7 @@ export default async function (fastify) {
 
       // 若基于模板创建，异步递增模板使用次数（不阻塞响应）
       if (template_id) {
-        templateDao.incrementUses(template_id).catch((err) => {
+        templateDao.incrementUses(template_id).catch(err => {
           fastify.log.warn({ err, template_id }, '[Work] 递增模板使用次数失败');
         });
       }
@@ -496,7 +516,7 @@ export default async function (fastify) {
       }
 
       await workDao.incrementLikes(id);
-      
+
       return reply.result.success('点赞成功');
     }
   });

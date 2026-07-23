@@ -77,17 +77,25 @@ body {
 }
 
 @keyframes scan {
-  0% { top: -10%; }
-  100% { top: 110%; }
+  0% {
+    top: -10%;
+  }
+  100% {
+    top: 110%;
+  }
 }
 
 /* Custom Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { 
-  background: var(--primary); 
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
   opacity: 0.3;
-  border-radius: 10px; 
+  border-radius: 10px;
 }
 
 /* User Profile Dropdown Animation */
@@ -100,4 +108,3 @@ body {
   opacity: 0;
   transform: translateY(-8px) scale(0.95);
 }
-

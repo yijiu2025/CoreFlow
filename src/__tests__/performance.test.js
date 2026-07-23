@@ -9,7 +9,7 @@ describe('性能', () => {
   describe('大量数据处理', () => {
     it('大数组处理', () => {
       const arr = Array.from({ length: 10000 }, (_, i) => i);
-      const filtered = arr.filter((n) => n % 2 === 0);
+      const filtered = arr.filter(n => n % 2 === 0);
       expect(filtered.length).toBe(5000);
     });
 
@@ -64,9 +64,9 @@ describe('性能', () => {
 
   describe('超时处理', () => {
     it('Promise 超时', async () => {
-      const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
+      const timeout = ms => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
 
-      await expect(Promise.race([new Promise((resolve) => setTimeout(resolve, 200)), timeout(100)])).rejects.toThrow(
+      await expect(Promise.race([new Promise(resolve => setTimeout(resolve, 200)), timeout(100)])).rejects.toThrow(
         'timeout'
       );
     });

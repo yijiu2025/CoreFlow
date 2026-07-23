@@ -1,1 +1,11 @@
-import{a0 as e}from"./index-C531BqZY.js";const i={recordHistory:t=>e.post("/posecraft/v1/interaction/history",t),toggleLike:t=>e.post("/posecraft/v1/interaction/like",t),toggleCollect:t=>e.post("/posecraft/v1/interaction/collect",t),checkStatus:t=>e.get("/posecraft/v1/interaction/status",{params:t}),getHistoryList:t=>e.get("/posecraft/v1/interaction/history/list",{params:t}),getLikesList:t=>e.get("/posecraft/v1/interaction/like/list",{params:t}),getCollectsList:t=>e.get("/posecraft/v1/interaction/collect/list",{params:t})};export{i as interactionApi};
+import { a0 as e } from './index-C531BqZY.js';
+const i = {
+  recordHistory: t => e.post('/posecraft/v1/interaction/history', t),
+  toggleLike: t => e.post('/posecraft/v1/interaction/like', t),
+  toggleCollect: t => e.post('/posecraft/v1/interaction/collect', t),
+  checkStatus: t => e.get('/posecraft/v1/interaction/status', { params: t }),
+  getHistoryList: t => e.get('/posecraft/v1/interaction/history/list', { params: t }),
+  getLikesList: t => e.get('/posecraft/v1/interaction/like/list', { params: t }),
+  getCollectsList: t => e.get('/posecraft/v1/interaction/collect/list', { params: t })
+};
+export { i as interactionApi };

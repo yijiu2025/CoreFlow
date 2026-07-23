@@ -44,9 +44,9 @@ describe('加密模块', () => {
 
     it('JWT TTL 配置正确', () => {
       const config = {
-        accessTokenTTL: 600,     // 10 分钟
-        refreshTokenTTL: 86400,  // 24 小时
-        idTokenTTL: 3600         // 1 小时
+        accessTokenTTL: 600, // 10 分钟
+        refreshTokenTTL: 86400, // 24 小时
+        idTokenTTL: 3600 // 1 小时
       };
       expect(config.accessTokenTTL).toBeLessThan(config.refreshTokenTTL);
       expect(config.idTokenTTL).toBeLessThan(config.refreshTokenTTL);

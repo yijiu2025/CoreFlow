@@ -52,9 +52,7 @@ defineRoles([
     rank_level: 1,
     policy: {
       Version: '2026-06-06',
-      Statement: [
-        { Effect: 'Allow', Action: [FIREWALL_PERMISSIONS.MONITOR.READ] }
-      ]
+      Statement: [{ Effect: 'Allow', Action: [FIREWALL_PERMISSIONS.MONITOR.READ] }]
     }
   }
 ]);
@@ -107,12 +105,12 @@ function matchSingle(perm, allows, denies) {
 
 ## 分级委派管理
 
-| 角色级别 | 权重 | 作用域 | 管理能力 |
-|----------|------|--------|----------|
-| L1: 超级管理员 | 99 | GLOBAL | 系统最高权限 |
-| L2: 全局管理员 | 80 | GLOBAL | 跨应用管理 |
-| L3: 应用管理员 | 60 | specific_app | 单应用管理 |
-| L4: 模块管理员 | 40 | specific_app | 局部管理 |
+| 角色级别       | 权重 | 作用域       | 管理能力     |
+| -------------- | ---- | ------------ | ------------ |
+| L1: 超级管理员 | 99   | GLOBAL       | 系统最高权限 |
+| L2: 全局管理员 | 80   | GLOBAL       | 跨应用管理   |
+| L3: 应用管理员 | 60   | specific_app | 单应用管理   |
+| L4: 模块管理员 | 40   | specific_app | 局部管理     |
 
 ## OAuth 2.1 与 PBAC 的交互
 
@@ -130,8 +128,8 @@ PBAC 的 allows/denies = 用户实际拥有什么权限
 ```js
 import StpUtil from '../../auth/StpUtil.js';
 
-StpUtil.hasPermission('user:admin:*');           // 判断：返回 true/false
-StpUtil.checkPermission('user:admin:*');         // 校验：不通过抛 403
-StpUtil.checkPermissionAnd('a', 'b');            // 全部通过
-StpUtil.checkPermissionOr('a', 'b');             // 任一通过
+StpUtil.hasPermission('user:admin:*'); // 判断：返回 true/false
+StpUtil.checkPermission('user:admin:*'); // 校验：不通过抛 403
+StpUtil.checkPermissionAnd('a', 'b'); // 全部通过
+StpUtil.checkPermissionOr('a', 'b'); // 任一通过
 ```

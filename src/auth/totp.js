@@ -8,10 +8,10 @@ import crypto from 'node:crypto';
 
 /** 默认配置 */
 const DEFAULT_CONFIG = {
-  digits: 6,           // 验证码位数
-  period: 30,          // 时间步长（秒）
-  algorithm: 'SHA-1',  // 哈希算法
-  window: 1            // 容错窗口（前后各 1 个时间步长）
+  digits: 6, // 验证码位数
+  period: 30, // 时间步长（秒）
+  algorithm: 'SHA-1', // 哈希算法
+  window: 1 // 容错窗口（前后各 1 个时间步长）
 };
 
 /**
@@ -53,12 +53,12 @@ export function generateTOTP(secret, time = Date.now(), config = DEFAULT_CONFIG)
 
   // 动态截断
   const offset = hash[hash.length - 1] & 0x0f;
-  const code = (
-    ((hash[offset] & 0x7f) << 24) |
-    ((hash[offset + 1] & 0xff) << 16) |
-    ((hash[offset + 2] & 0xff) << 8) |
-    (hash[offset + 3] & 0xff)
-  ) % Math.pow(10, config.digits);
+  const code =
+    (((hash[offset] & 0x7f) << 24) |
+      ((hash[offset + 1] & 0xff) << 16) |
+      ((hash[offset + 2] & 0xff) << 8) |
+      (hash[offset + 3] & 0xff)) %
+    Math.pow(10, config.digits);
 
   return code.toString().padStart(config.digits, '0');
 }

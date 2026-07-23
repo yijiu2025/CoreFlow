@@ -131,7 +131,7 @@ export async function listRedisKeys() {
   try {
     const rl = createRl();
     try {
-      const pattern = await rl.question('请输入 key 模例（留空显示全部）: ') || '*';
+      const pattern = (await rl.question('请输入 key 模例（留空显示全部）: ')) || '*';
       const keys = await redis.keys(pattern);
 
       if (keys.length === 0) {

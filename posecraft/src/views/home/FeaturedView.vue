@@ -25,7 +25,15 @@
     />
 
     <!-- 分类 Tab -->
-    <div ref="channelContainerRef" class="channel-container" :class="{ 'justify-start': tabOverflow }" @mousedown="onDragStart" @mousemove="onDragMove" @mouseup="onDragEnd" @mouseleave="onDragEnd">
+    <div
+      ref="channelContainerRef"
+      class="channel-container"
+      :class="{ 'justify-start': tabOverflow }"
+      @mousedown="onDragStart"
+      @mousemove="onDragMove"
+      @mouseup="onDragEnd"
+      @mouseleave="onDragEnd"
+    >
       <div ref="channelInnerRef" class="channel-inner">
         <button
           v-for="ch in channels"
@@ -40,15 +48,21 @@
     </div>
 
     <!-- 内容区域 -->
-    <div class="content-container"
+    <div
+      class="content-container"
       @mousedown="onContentDragStart"
       @mousemove="onContentDragMove"
       @mouseup="onContentDragEnd"
       @mouseleave="onContentDragEnd"
-      @click.capture="onContentClick">
+      @click.capture="onContentClick"
+    >
       <!-- 动态网址内容 (iframe) -->
-      <div v-if="currentChannelUrl" class="w-full" style="height: calc(100vh - 120px);">
-        <iframe :src="currentChannelUrl" class="w-full h-full border-0" sandbox="allow-scripts allow-same-origin"></iframe>
+      <div v-if="currentChannelUrl" class="w-full" style="height: calc(100vh - 120px)">
+        <iframe
+          :src="currentChannelUrl"
+          class="w-full h-full border-0"
+          sandbox="allow-scripts allow-same-origin"
+        ></iframe>
       </div>
 
       <!-- 瀑布流 -->
@@ -59,20 +73,22 @@
             v-for="banner in activeBanners"
             :key="banner.id"
             class="featured-banner"
-            :style="{ backgroundImage: `linear-gradient(to right, rgba(15,23,42,0.95), rgba(15,23,42,0.4)), url(${banner.image_url})` }"
+            :style="{
+              backgroundImage: `linear-gradient(to right, rgba(15,23,42,0.95), rgba(15,23,42,0.4)), url(${banner.image_url})`
+            }"
           >
-          <div class="banner-content">
-            <div class="banner-badge" v-if="banner.badge_text">
-              <Trophy class="badge-icon" :size="14" />
-              <span>{{ banner.badge_text }}</span>
+            <div class="banner-content">
+              <div class="banner-badge" v-if="banner.badge_text">
+                <Trophy class="badge-icon" :size="14" />
+                <span>{{ banner.badge_text }}</span>
+              </div>
+              <h1 class="banner-title">{{ banner.title }}</h1>
+              <p class="banner-desc" v-if="banner.description">{{ banner.description }}</p>
             </div>
-            <h1 class="banner-title">{{ banner.title }}</h1>
-            <p class="banner-desc" v-if="banner.description">{{ banner.description }}</p>
+            <button class="banner-btn" @click="onBannerClick(banner)">
+              {{ banner.button_text || '立即探索' }}
+            </button>
           </div>
-          <button class="banner-btn" @click="onBannerClick(banner)">
-            {{ banner.button_text || '立即探索' }}
-          </button>
-        </div>
         </template>
 
         <!-- 首次加载中：骨架占位（瀑布流结构） -->
@@ -119,12 +135,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onActivated, onDeactivated, onUnmounted, nextTick } from 'vue'
-import { useHome } from '@/composables/useHome'
-import { Trophy, Loader2, Search } from 'lucide-vue-next'
-import SearchHero from '@/components/widgets/home/SearchHero.vue'
-import PoseCard from '@/components/cards/home/PoseCard.vue'
-import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
+import { ref, watch, onMounted, onActivated, onDeactivated, onUnmounted, nextTick } from 'vue';
+import { useHome } from '@/composables/useHome';
+import { Trophy, Loader2, Search } from 'lucide-vue-next';
+import SearchHero from '@/components/widgets/home/SearchHero.vue';
+import PoseCard from '@/components/cards/home/PoseCard.vue';
+import SkeletonCard from '@/components/cards/home/SkeletonCard.vue';
 
 const {
   searchQuery,
@@ -149,25 +165,25 @@ const {
   searchSentinel,
   activeNav,
   activeBanners
-} = useHome()
+} = useHome();
 
 /** 按钮点击：有 link_url 则跳转，否则走 fallback */
 const onBannerClick = (banner: any) => {
-  if (banner.link_url) window.open(banner.link_url, '_blank')
-  else showToast('已进入精选主题页面')
-}
+  if (banner.link_url) window.open(banner.link_url, '_blank');
+  else showToast('已进入精选主题页面');
+};
 
 // 设置当前导航标识为精选
 onMounted(() => {
-  activeNav.value = 'featured'
-})
+  activeNav.value = 'featured';
+});
 // keep-alive 激活时重新设置
 onActivated(() => {
-  activeNav.value = 'featured'
-})
-const channelContainerRef = ref<HTMLElement | null>(null)
-const channelInnerRef = ref<HTMLElement | null>(null)
-const tabOverflow = ref(false)
+  activeNav.value = 'featured';
+});
+const channelContainerRef = ref<HTMLElement | null>(null);
+const channelInnerRef = ref<HTMLElement | null>(null);
+const tabOverflow = ref(false);
 
 // ─── 溢出检测 ─────────────────────────────────────
 
@@ -175,118 +191,118 @@ const tabOverflow = ref(false)
  *  少 Tab → justify-content: center（居中）
  *  多 Tab → justify-content: flex-start（左对齐 + 滚动） */
 const checkTabOverflow = () => {
-  const container = channelContainerRef.value
-  const inner = channelInnerRef.value
+  const container = channelContainerRef.value;
+  const inner = channelInnerRef.value;
   if (container && inner) {
-    tabOverflow.value = inner.scrollWidth > container.clientWidth
+    tabOverflow.value = inner.scrollWidth > container.clientWidth;
   }
-}
+};
 
-let overflowObserver: ResizeObserver | null = null
+let overflowObserver: ResizeObserver | null = null;
 onMounted(() => {
-  nextTick(checkTabOverflow)
-  overflowObserver = new ResizeObserver(checkTabOverflow)
-  if (channelContainerRef.value) overflowObserver.observe(channelContainerRef.value)
-  if (channelInnerRef.value) overflowObserver.observe(channelInnerRef.value)
-})
+  nextTick(checkTabOverflow);
+  overflowObserver = new ResizeObserver(checkTabOverflow);
+  if (channelContainerRef.value) overflowObserver.observe(channelContainerRef.value);
+  if (channelInnerRef.value) overflowObserver.observe(channelInnerRef.value);
+});
 onActivated(() => {
-  nextTick(checkTabOverflow)
-})
+  nextTick(checkTabOverflow);
+});
 onDeactivated(() => {
-  searchSentinel.value = null
-})
+  searchSentinel.value = null;
+});
 onUnmounted(() => {
-  overflowObserver?.disconnect()
-})
+  overflowObserver?.disconnect();
+});
 
 // ─── 拖拽滚动 ─────────────────────────────────────
 
 /** 鼠标拖拽横向滚动分类 Tab */
-const dragState = { startX: 0, startScrollLeft: 0, moved: false }
-const DRAG_THRESHOLD = 5 // 超过 5px 视为拖拽，不触发 click
+const dragState = { startX: 0, startScrollLeft: 0, moved: false };
+const DRAG_THRESHOLD = 5; // 超过 5px 视为拖拽，不触发 click
 
 const onDragStart = (e: MouseEvent) => {
-  const el = channelContainerRef.value
-  if (!el) return
-  dragState.startX = e.clientX
-  dragState.startScrollLeft = el.scrollLeft
-  dragState.moved = false
-  el.classList.add('dragging')
-  document.body.style.cursor = 'grabbing'
-  document.body.style.userSelect = 'none'
-}
+  const el = channelContainerRef.value;
+  if (!el) return;
+  dragState.startX = e.clientX;
+  dragState.startScrollLeft = el.scrollLeft;
+  dragState.moved = false;
+  el.classList.add('dragging');
+  document.body.style.cursor = 'grabbing';
+  document.body.style.userSelect = 'none';
+};
 
 const onDragMove = (e: MouseEvent) => {
-  const el = channelContainerRef.value
-  if (!el || dragState.startX === 0) return
-  const dx = e.clientX - dragState.startX
-  if (Math.abs(dx) > DRAG_THRESHOLD) dragState.moved = true
-  el.scrollLeft = dragState.startScrollLeft - dx
-}
+  const el = channelContainerRef.value;
+  if (!el || dragState.startX === 0) return;
+  const dx = e.clientX - dragState.startX;
+  if (Math.abs(dx) > DRAG_THRESHOLD) dragState.moved = true;
+  el.scrollLeft = dragState.startScrollLeft - dx;
+};
 
 const onDragEnd = () => {
-  const el = channelContainerRef.value
-  if (el) el.classList.remove('dragging')
-  dragState.startX = 0
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
-}
+  const el = channelContainerRef.value;
+  if (el) el.classList.remove('dragging');
+  dragState.startX = 0;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+};
 
 /** Tab 点击事件：拖拽后不切换 */
 const onTabClick = (value: string) => {
   if (dragState.moved) {
-    dragState.moved = false
-    return
+    dragState.moved = false;
+    return;
   }
-  activeChannel.value = value
-}
+  activeChannel.value = value;
+};
 
 // ─── 内容区拖拽滚动 ─────────────────────────────────
 
 /** 鼠标拖拽内容区上下滚动页面 */
-const contentDragState = { startY: 0, startScrollY: 0, moved: false }
+const contentDragState = { startY: 0, startScrollY: 0, moved: false };
 
 const onContentDragStart = (e: MouseEvent) => {
   // 忽略 Tab 区、搜索框、按钮等交互元素的拖拽
-  const target = e.target as HTMLElement
-  if (target.closest('button, a, input, textarea, select, iframe')) return
-  contentDragState.startY = e.clientY
-  contentDragState.startScrollY = window.scrollY
-  contentDragState.moved = false
-  document.body.style.cursor = 'grabbing'
-  document.body.style.userSelect = 'none'
-}
+  const target = e.target as HTMLElement;
+  if (target.closest('button, a, input, textarea, select, iframe')) return;
+  contentDragState.startY = e.clientY;
+  contentDragState.startScrollY = window.scrollY;
+  contentDragState.moved = false;
+  document.body.style.cursor = 'grabbing';
+  document.body.style.userSelect = 'none';
+};
 
 const onContentDragMove = (e: MouseEvent) => {
-  if (contentDragState.startY === 0) return
-  const dy = e.clientY - contentDragState.startY
-  if (Math.abs(dy) > DRAG_THRESHOLD) contentDragState.moved = true
-  window.scrollTo(window.scrollX, contentDragState.startScrollY - dy)
-}
+  if (contentDragState.startY === 0) return;
+  const dy = e.clientY - contentDragState.startY;
+  if (Math.abs(dy) > DRAG_THRESHOLD) contentDragState.moved = true;
+  window.scrollTo(window.scrollX, contentDragState.startScrollY - dy);
+};
 
 const onContentDragEnd = () => {
-  contentDragState.startY = 0
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
-}
+  contentDragState.startY = 0;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+};
 
 /** 拖拽后阻止卡片点击事件 */
 const onContentClick = (e: MouseEvent) => {
   if (contentDragState.moved) {
-    e.stopPropagation()
-    e.preventDefault()
-    contentDragState.moved = false
+    e.stopPropagation();
+    e.preventDefault();
+    contentDragState.moved = false;
   }
-}
+};
 
-const searchHeroRef = ref<any>(null)
+const searchHeroRef = ref<any>(null);
 watch(
   () => searchHeroRef.value?.sentinelRef,
-  (newVal) => {
-    searchSentinel.value = newVal
+  newVal => {
+    searchSentinel.value = newVal;
   },
   { immediate: true }
-)
+);
 </script>
 
 <style scoped>
@@ -302,7 +318,9 @@ watch(
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
-.channel-container::-webkit-scrollbar { display: none; }
+.channel-container::-webkit-scrollbar {
+  display: none;
+}
 
 .channel-container.dragging {
   cursor: grabbing;
@@ -340,11 +358,21 @@ watch(
   justify-content: center;
   flex-shrink: 0;
 }
-.dark-mode .channel-tag { color: #a1a1aa; }
-.channel-tag:hover { color: #ff2442; }
-.dark-mode .channel-tag:hover { color: #ff6b6b; }
-.channel-tag.active { color: #1e293b; }
-.dark-mode .channel-tag.active { color: #f4f4f5; }
+.dark-mode .channel-tag {
+  color: #a1a1aa;
+}
+.channel-tag:hover {
+  color: #ff2442;
+}
+.dark-mode .channel-tag:hover {
+  color: #ff6b6b;
+}
+.channel-tag.active {
+  color: #1e293b;
+}
+.dark-mode .channel-tag.active {
+  color: #f4f4f5;
+}
 
 .featured-page-container {
   width: 100%;
@@ -471,8 +499,12 @@ watch(
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .featured-banner {
@@ -480,7 +512,8 @@ watch(
   width: 100%;
   height: 180px;
   border-radius: 20px;
-  background-image: linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.4)), url('/posecraft/logo.svg');
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.4)), url('/posecraft/logo.svg');
   background-size: cover;
   background-position: center;
   display: flex;
@@ -554,7 +587,8 @@ watch(
     gap: 16px;
     padding: 24px;
     height: auto;
-    background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.7)), url('/posecraft/logo.svg');
+    background-image:
+      linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.7)), url('/posecraft/logo.svg');
   }
 
   .banner-btn {

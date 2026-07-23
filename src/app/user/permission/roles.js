@@ -47,11 +47,7 @@ defineRoles([
       Statement: [
         {
           Effect: 'Allow',
-          Action: [
-            USER_PERMISSIONS.BASE.READ,
-            USER_PERMISSIONS.BASE.WRITE,
-            USER_PERMISSIONS.VIP.PREMIUM_FEATURE
-          ]
+          Action: [USER_PERMISSIONS.BASE.READ, USER_PERMISSIONS.BASE.WRITE, USER_PERMISSIONS.VIP.PREMIUM_FEATURE]
         }
       ]
     }
@@ -67,10 +63,7 @@ defineRoles([
       Statement: [
         {
           Effect: 'Deny',
-          Action: [
-            USER_PERMISSIONS.BASE.WRITE,
-            USER_PERMISSIONS.VIP.PREMIUM_FEATURE
-          ]
+          Action: [USER_PERMISSIONS.BASE.WRITE, USER_PERMISSIONS.VIP.PREMIUM_FEATURE]
         }
       ]
     }

@@ -61,7 +61,7 @@ export default (sequelize, DataTypes) => {
    * 模型关联定义
    * @param {object} models - 所有已注册模型的集合
    */
-  Recommendation.associate = (models) => {
+  Recommendation.associate = models => {
     Recommendation.belongsTo(models.User, { foreignKey: 'user_id', as: 'recommender' });
     Recommendation.belongsTo(models.Work, { foreignKey: 'work_id', as: 'work' });
     Recommendation.belongsTo(models.Template, { foreignKey: 'template_id', as: 'template' });

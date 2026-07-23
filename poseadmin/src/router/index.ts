@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router';
 
 const router = createRouter({
   history: createWebHistory('/poseadmin/'),
@@ -35,12 +35,12 @@ const router = createRouter({
       ]
     }
   ]
-})
+});
 
 // 全局路由守卫
 router.beforeEach((to, from, next) => {
-  document.title = `${to.meta.title || '管理后台'} - PoseCraft`
-  next()
-})
+  document.title = `${to.meta.title || '管理后台'} - PoseCraft`;
+  next();
+});
 
-export default router
+export default router;

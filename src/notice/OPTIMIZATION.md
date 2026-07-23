@@ -5,6 +5,7 @@
 **当前状态：** `getAvailableChannels()` 中 `dingtalk: enabled: false`
 
 **实现方案：**
+
 ```js
 // src/notice/services/dingtalk.js
 class DingtalkService {
@@ -19,6 +20,7 @@ class DingtalkService {
 ```
 
 **环境变量：**
+
 ```env
 DINGTALK_WEBHOOK_URL=https://oapi.dingtalk.com/robot/send?access_token=xxx
 DINGTALK_SECRET=xxx
@@ -31,6 +33,7 @@ DINGTALK_SECRET=xxx
 **当前状态：** `getAvailableChannels()` 中 `wechat: enabled: false`
 
 **实现方案：**
+
 ```js
 // src/notice/services/wechat.js
 class WechatService {
@@ -46,6 +49,7 @@ class WechatService {
 ```
 
 **环境变量：**
+
 ```env
 WECHAT_APP_ID=xxx
 WECHAT_APP_SECRET=xxx
@@ -58,6 +62,7 @@ WECHAT_APP_SECRET=xxx
 **当前状态：** 短信功能在 `src/verify/sms/` 中，但通知模块未集成
 
 **实现方案：**
+
 ```js
 // src/notice/services/sms.js
 class SmsService {
@@ -76,6 +81,7 @@ class SmsService {
 **当前状态：** 邮件发送后只写日志，无 DB 记录
 
 **实现方案：**
+
 ```js
 // 新增 src/models/notice/NoticeLog.js
 {
@@ -97,6 +103,7 @@ class SmsService {
 **当前状态：** 模板通过 `saveTemplate()` 保存，但无前端编辑接口
 
 **实现方案：**
+
 ```js
 // src/api/notice/v1/template.js
 registerSecureRoute(fastify, {
@@ -129,6 +136,7 @@ registerSecureRoute(fastify, {
 **当前状态：** 无全局发送频率限制，可能被滥用
 
 **实现方案：**
+
 ```js
 // 在 email.js 中添加全局限流
 let dailySentCount = 0;
@@ -145,6 +153,7 @@ async send(email, subject, content) {
 ```
 
 **环境变量：**
+
 ```env
 EMAIL_DAILY_LIMIT=1000
 ```
@@ -156,6 +165,7 @@ EMAIL_DAILY_LIMIT=1000
 **当前状态：** 仅支持出站通知，不支持入站 Webhook
 
 **实现方案：**
+
 ```js
 // src/api/notice/v1/webhook.js
 registerSecureRoute(fastify, {
@@ -178,6 +188,7 @@ registerSecureRoute(fastify, {
 **当前状态：** 模板渲染后无法预览
 
 **实现方案：**
+
 ```js
 // src/api/notice/v1/preview.js
 registerSecureRoute(fastify, {
@@ -200,6 +211,7 @@ registerSecureRoute(fastify, {
 **当前状态：** 模板仅支持中文
 
 **实现方案：**
+
 ```js
 // 模板支持语言后缀
 const templates = {
@@ -220,6 +232,7 @@ async sendVerificationCode(email, code, lang = 'zh') {
 **当前状态：** 发送队列在内存中，进程重启丢失
 
 **实现方案：**
+
 ```js
 // 使用 Redis List 作为持久化队列
 async function enqueue(email, subject, content) {
@@ -245,6 +258,7 @@ async function processQueue() {
 **当前状态：** 仅支持 HTML 正文，不支持附件
 
 **实现方案：**
+
 ```js
 async sendWithAttachment(email, subject, content, attachments) {
   const transporter = await getTransporter();
@@ -269,6 +283,7 @@ async sendWithAttachment(email, subject, content, attachments) {
 **当前状态：** 逐个发送，无批量支持
 
 **实现方案：**
+
 ```js
 async sendBatch(recipients, subject, content, concurrency = 5) {
   const chunks = [];
@@ -293,6 +308,7 @@ async sendBatch(recipients, subject, content, concurrency = 5) {
 **当前状态：** 无退订功能，用户无法拒绝通知
 
 **实现方案：**
+
 ```js
 // 新增 Unsubscribe 模型
 // 邮件底部添加退订链接
@@ -314,6 +330,7 @@ async function isUnsubscribed(email, channel) {
 **当前状态：** 无 SMTP 发送速率限制，可能触发服务商限流
 
 **实现方案：**
+
 ```js
 // 令牌桶限流
 class RateLimiter {
@@ -349,6 +366,7 @@ const limiter = new RateLimiter(10); // 每秒最多 10 封
 **当前状态：** 无法追踪邮件是否被打开或链接被点击
 
 **实现方案：**
+
 ```js
 // 嵌入追踪像素
 const trackingPixel = `<img src="https://example.com/api/notice/track/open?mid=${messageId}" width="1" height="1" style="display:none">`;
@@ -364,6 +382,7 @@ const trackedLink = `https://example.com/api/notice/track/click?mid=${messageId}
 **当前状态：** 用户无法选择接收哪些通知
 
 **实现方案：**
+
 ```js
 // 新增 NotificationPreference 模型
 // { user_id, channel, notification_type, enabled }
@@ -384,6 +403,7 @@ async function shouldNotify(userId, channel, type) {
 **当前状态：** 模板渲染在主线程执行，复杂模板可能阻塞
 
 **实现方案：**
+
 ```js
 import { Worker } from 'worker_threads';
 
@@ -405,6 +425,7 @@ async function renderTemplateAsync(template, vars) {
 **当前状态：** 每条通知单独发送，高频通知可能骚扰用户
 
 **实现方案：**
+
 ```js
 // 聚合多条通知为一封摘要邮件
 async function sendDigest(userId) {
@@ -429,6 +450,7 @@ setInterval(() => sendDigests(), 30 * 60 * 1000);
 **当前状态：** 通知配置全局共享，不支持多租户
 
 **实现方案：**
+
 ```js
 // 配置按租户隔离
 async function getConfig(type, tenantId) {
@@ -450,6 +472,7 @@ async function sendForTenant(tenantId, email, subject, content) {
 **当前状态：** 仅有发送日志，无审计追踪
 
 **实现方案：**
+
 ```js
 // 新增 NoticeAudit 模型
 // { user_id, action, target, details, ip, created_at }

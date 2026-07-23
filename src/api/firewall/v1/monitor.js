@@ -48,13 +48,13 @@ export default async function (fastify) {
   });
 
   // 2. 订阅推送逻辑
-  setBroadcastHandler((record) => {
+  setBroadcastHandler(record => {
     try {
       const data = JSON.stringify({ type: 'LOG', data: record });
       for (const client of clients) {
         try {
           if (client && client.readyState === 1) {
-            client.send(data, (err) => {
+            client.send(data, err => {
               if (err) clients.delete(client);
             });
           }
@@ -168,7 +168,7 @@ export default async function (fastify) {
           source: 'manual',
           permanent: isPermanent,
           createdAt: Date.now(),
-          expiresAt: isPermanent ? null : Date.now() + (duration || 86400) * 1000,
+          expiresAt: isPermanent ? null : Date.now() + (duration || 86400) * 1000
         });
       }
 
@@ -228,7 +228,7 @@ export default async function (fastify) {
         source: 'manual',
         permanent: isPermanent,
         createdAt: Date.now(),
-        expiresAt: isPermanent ? null : Date.now() + (duration || 86400) * 1000,
+        expiresAt: isPermanent ? null : Date.now() + (duration || 86400) * 1000
       });
 
       // 同步到配置持久化
@@ -318,7 +318,7 @@ export default async function (fastify) {
         source: 'manual',
         permanent: isPermanent,
         createdAt: Date.now(),
-        expiresAt: isPermanent ? null : Date.now() + (duration || 86400) * 1000,
+        expiresAt: isPermanent ? null : Date.now() + (duration || 86400) * 1000
       });
 
       return reply.result.success(isPermanent ? '已永久封禁该指纹' : `已封禁指纹 ${duration || 86400} 秒`);
@@ -383,7 +383,7 @@ export default async function (fastify) {
         return;
       }
 
-      const onData = (data) => {
+      const onData = data => {
         if (data.toString() === 'PING') client.send('PONG');
       };
       client.on('message', onData);

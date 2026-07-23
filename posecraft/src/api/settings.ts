@@ -4,12 +4,12 @@
  * - GET  /posecraft/v1/settings/:field  读取单个字段
  * - PUT  /posecraft/v1/settings/:field  单字段更新（前端改动时）
  */
-import service from '@/utils/request'
+import service from '@/utils/request';
 
 export interface SettingFieldResponse {
-  field: string
-  value: any
-  exists: boolean
+  field: string;
+  value: any;
+  exists: boolean;
 }
 
 export const settingsApi = {
@@ -17,13 +17,9 @@ export const settingsApi = {
   getAll: () => service.get<Record<string, any>>('/posecraft/v1/settings'),
 
   /** 读取单个字段 */
-  getField: (field: string) =>
-    service.get<SettingFieldResponse>(`/posecraft/v1/settings/${encodeURIComponent(field)}`),
+  getField: (field: string) => service.get<SettingFieldResponse>(`/posecraft/v1/settings/${encodeURIComponent(field)}`),
 
   /** 写入单个字段 */
   setField: (field: string, value: any) =>
-    service.put<SettingFieldResponse>(
-      `/posecraft/v1/settings/${encodeURIComponent(field)}`,
-      { value }
-    )
-}
+    service.put<SettingFieldResponse>(`/posecraft/v1/settings/${encodeURIComponent(field)}`, { value })
+};

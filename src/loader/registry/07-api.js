@@ -13,7 +13,7 @@ import {
 } from '../../api/guard.js';
 import { C } from '../../utils/colors.js';
 
-export default async (app) => {
+export default async app => {
   const apiRoot = path.resolve(__dirname, '../../api');
 
   console.log(`📦 [Loader] ${C.cyan}启动 API 递归加载引擎...${C.reset}`);
@@ -24,7 +24,7 @@ export default async (app) => {
 
       if (isSystemRoot) {
         const folderName = path.basename(currentPath);
-        const hasSystemJson = items.find((i) => i.name === 'system.json');
+        const hasSystemJson = items.find(i => i.name === 'system.json');
 
         let systemKey = folderName;
         let config = {};
@@ -68,9 +68,7 @@ export default async (app) => {
         }
       }
     } catch (err) {
-      console.warn(
-        `⚠️ [Loader] ${C.yellow}读取目录失败: ${currentPath} ${err.message}${C.reset}`
-      );
+      console.warn(`⚠️ [Loader] ${C.yellow}读取目录失败: ${currentPath} ${err.message}${C.reset}`);
     }
   }
 
@@ -92,9 +90,7 @@ export default async (app) => {
     }
 
     const relativePath = path.relative(apiRoot, filePath);
-    console.log(
-      `✅ [API] ${C.green}已注册: /${relativePath.replace(/\\/g, '/')}${C.reset}`
-    );
+    console.log(`✅ [API] ${C.green}已注册: /${relativePath.replace(/\\/g, '/')}${C.reset}`);
   }
 
   const systemFolders = await fs.readdir(apiRoot, { withFileTypes: true });

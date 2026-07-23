@@ -19,10 +19,12 @@ hotfix/*      # 紧急修复，从 main 切，合并到 main + develop
 ```
 
 > **首次使用需初始化 `develop` 分支**：Git 不会自动创建 `develop`，如果仓库只有 `main`，需要手动执行：
+>
 > ```bash
 > git checkout -b develop main
 > git push -u origin develop
 > ```
+>
 > 后续 `feature/*` 和 `release/*` 才能从 `develop` 切出。
 
 ### 分支命名
@@ -38,12 +40,12 @@ hotfix/fix-npe-on-login     # 紧急修复
 chore/upgrade-sequelize     # 杂务（依赖升级、配置变更等）
 ```
 
-| 类型 | 基线分支 | 合并目标 | 说明 |
-|------|---------|---------|------|
-| `feature/*` | `develop` | `develop` | 日常开发 |
+| 类型        | 基线分支  | 合并目标           | 说明                        |
+| ----------- | --------- | ------------------ | --------------------------- |
+| `feature/*` | `develop` | `develop`          | 日常开发                    |
 | `release/*` | `develop` | `main` + `develop` | 发布准备，只修 bug 不添功能 |
-| `hotfix/*` | `main` | `main` + `develop` | 生产紧急修复 |
-| `chore/*` | `develop` | `develop` | 构建、依赖、配置变更 |
+| `hotfix/*`  | `main`    | `main` + `develop` | 生产紧急修复                |
+| `chore/*`   | `develop` | `develop`          | 构建、依赖、配置变更        |
 
 ---
 
@@ -61,18 +63,18 @@ chore/upgrade-sequelize     # 杂务（依赖升级、配置变更等）
 
 ### 类型（type）
 
-| 类型 | 说明 | 示例 |
-|------|------|------|
-| `feat` | 新功能 | `feat(auth): 新增 Google OAuth2 登录` |
-| `fix` | Bug 修复 | `fix(login): 修复空指针异常` |
-| `refactor` | 重构（不修 bug 不加功能） | `refactor(session): 抽取双令牌刷新逻辑` |
-| `perf` | 性能优化 | `perf(db): 优化 N+1 查询，加 eager loading` |
-| `style` | 代码格式（不影响逻辑） | `style: 统一 prettier 格式化` |
-| `docs` | 文档 | `docs(api): 补充用户接口 JSDoc` |
-| `test` | 测试 | `test(auth): 新增 Session 续期测试用例` |
-| `chore` | 构建/依赖/配置 | `chore: 升级 sequelize 到 v6.35` |
-| `ci` | CI/CD | `ci: 添加 GitHub Actions 自动部署` |
-| `revert` | 回滚 | `revert: 回滚 feat(auth): 新增 Google OAuth2 登录` |
+| 类型       | 说明                      | 示例                                               |
+| ---------- | ------------------------- | -------------------------------------------------- |
+| `feat`     | 新功能                    | `feat(auth): 新增 Google OAuth2 登录`              |
+| `fix`      | Bug 修复                  | `fix(login): 修复空指针异常`                       |
+| `refactor` | 重构（不修 bug 不加功能） | `refactor(session): 抽取双令牌刷新逻辑`            |
+| `perf`     | 性能优化                  | `perf(db): 优化 N+1 查询，加 eager loading`        |
+| `style`    | 代码格式（不影响逻辑）    | `style: 统一 prettier 格式化`                      |
+| `docs`     | 文档                      | `docs(api): 补充用户接口 JSDoc`                    |
+| `test`     | 测试                      | `test(auth): 新增 Session 续期测试用例`            |
+| `chore`    | 构建/依赖/配置            | `chore: 升级 sequelize 到 v6.35`                   |
+| `ci`       | CI/CD                     | `ci: 添加 GitHub Actions 自动部署`                 |
+| `revert`   | 回滚                      | `revert: 回滚 feat(auth): 新增 Google OAuth2 登录` |
 
 ### 范围（scope）
 
@@ -193,13 +195,13 @@ git rebase develop
 
 ### 3.4 合并策略
 
-| 场景 | 策略 | 说明 |
-|------|------|------|
+| 场景              | 策略             | 说明                                                  |
+| ----------------- | ---------------- | ----------------------------------------------------- |
 | feature → develop | **Squash merge** | 功能分支的多个小提交压缩为一个，保持 develop 历史清晰 |
-| hotfix → main | **Merge commit** | 保留修复上下文，方便追溯 |
-| release → main | **Merge commit** | 保留发布节点 |
-| release → develop | **Merge commit** | 确保 develop 包含 release 的修复 |
-| develop → main | **Merge commit** | 常规发布 |
+| hotfix → main     | **Merge commit** | 保留修复上下文，方便追溯                              |
+| release → main    | **Merge commit** | 保留发布节点                                          |
+| release → develop | **Merge commit** | 确保 develop 包含 release 的修复                      |
+| develop → main    | **Merge commit** | 常规发布                                              |
 
 ### 3.5 合并信息规范
 
@@ -215,7 +217,7 @@ git commit -m "feat(auth): 新增 Google OAuth2 登录"
 git push origin feature/user-login
 ```
 
-**禁止 `git push --force`** 到共享分支（develop、main、release/*）。个人 feature 分支如需 force push，先确认队友没有基于它工作。
+**禁止 `git push --force`** 到共享分支（develop、main、release/\*）。个人 feature 分支如需 force push，先确认队友没有基于它工作。
 
 ### 3.7 分支清理与生命周期
 
@@ -232,11 +234,11 @@ git push origin --delete feature/user-login
 git fetch -p
 ```
 
-| 规则 | 说明 |
-|------|------|
-| 合并即删 | feature 分支合并到 develop 后立即删除本地和远程 |
+| 规则     | 说明                                              |
+| -------- | ------------------------------------------------- |
+| 合并即删 | feature 分支合并到 develop 后立即删除本地和远程   |
 | 拒绝长寿 | 功能分支生命周期不超过 2 周，长期未完成应考虑拆分 |
-| 定期清理 | 每周执行 `git fetch -p` 清理远程失效分支引用 |
+| 定期清理 | 每周执行 `git fetch -p` 清理远程失效分支引用      |
 
 ---
 
@@ -410,11 +412,11 @@ echo 'npx lint-staged' > .husky/pre-commit
 
 ### 8.3 当前项目状态（均未启用）
 
-| 卡点 | 状态 | 说明 |
-|------|------|------|
-| husky | ✅ 已安装 | hooks 目录在 `.husky/` |
-| commitlint | ❌ 未配置 | 无 `commit-msg` hook，无 `commitlint.config.js` |
-| lint-staged | ❌ 未启用 | `pre-commit` hook 被注释，`lint-staged` 未安装 |
+| 卡点        | 状态      | 说明                                            |
+| ----------- | --------- | ----------------------------------------------- |
+| husky       | ✅ 已安装 | hooks 目录在 `.husky/`                          |
+| commitlint  | ❌ 未配置 | 无 `commit-msg` hook，无 `commitlint.config.js` |
+| lint-staged | ❌ 未启用 | `pre-commit` hook 被注释，`lint-staged` 未安装  |
 
 > ⚠️ **当前项目以上卡点均未实际启用**，提交信息的规范校验完全依赖人工遵守。如需启用，请按 8.1 和 8.2 的步骤配置。
 

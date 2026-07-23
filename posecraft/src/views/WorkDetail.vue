@@ -11,11 +11,11 @@
  * @since 2026-07-13
  -->
 <template>
-  <div class="work-detail-root" :class="{ 'dark': isDark }">
+  <div class="work-detail-root" :class="{ dark: isDark }">
     <!-- 顶部返回条 -->
     <button class="back-btn" @click="goBack" aria-label="返回">
       <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
       </svg>
     </button>
 
@@ -49,20 +49,13 @@
 
         <!-- 骨架叠加浮动胶囊 -->
         <div class="floating-controls" v-if="templateSkeletonUrl">
-          <button
-            class="ctrl-pill"
-            :class="{ active: showOverlay }"
-            @click="showOverlay = !showOverlay"
-          >
+          <button class="ctrl-pill" :class="{ active: showOverlay }" @click="showOverlay = !showOverlay">
             <Sparkles class="pill-icon" :size="14" />
             <span class="pill-label">{{ showOverlay ? '隐藏骨骼' : '显示骨骼' }}</span>
           </button>
           <transition name="fade">
             <div v-if="showOverlay && work?.image_url" class="opacity-slider">
-              <input
-                type="range" min="0" max="1" step="0.05"
-                v-model.number="photoOpacity"
-              />
+              <input type="range" min="0" max="1" step="0.05" v-model.number="photoOpacity" />
             </div>
           </transition>
         </div>
@@ -73,7 +66,7 @@
         <!-- 作者卡 -->
         <div class="author-card">
           <div class="author-avatar">
-            {{ (authorInitial || 'U') }}
+            {{ authorInitial || 'U' }}
           </div>
           <div class="author-meta">
             <div class="author-name">{{ work?.author?.username || '匿名用户' }}</div>
@@ -81,22 +74,10 @@
               {{ authorStats.followers ?? '—' }} 粉丝 · {{ authorStats.works ?? '—' }} 作品
             </div>
           </div>
-          <button
-            v-if="!isOwner"
-            class="follow-btn"
-            :class="{ following: isFollowing }"
-            @click="toggleFollow"
-          >
+          <button v-if="!isOwner" class="follow-btn" :class="{ following: isFollowing }" @click="toggleFollow">
             {{ isFollowing ? '已关注' : '+ 关注' }}
           </button>
-          <button
-            v-if="isOwner"
-            class="more-btn"
-            @click="menuOpen = !menuOpen"
-            aria-label="更多"
-          >
-            ⋯
-          </button>
+          <button v-if="isOwner" class="more-btn" @click="menuOpen = !menuOpen" aria-label="更多">⋯</button>
         </div>
 
         <!-- 更多菜单 -->
@@ -114,15 +95,10 @@
 
           <!-- 描述 -->
           <div class="work-desc-wrapper">
-            <p
-              class="work-desc"
-              :class="{ collapsed: descCollapsed && descOverflow }"
-            >{{ work?.description || '暂无描述' }}</p>
-            <button
-              v-if="descOverflow"
-              class="expand-btn"
-              @click="descCollapsed = !descCollapsed"
-            >
+            <p class="work-desc" :class="{ collapsed: descCollapsed && descOverflow }">
+              {{ work?.description || '暂无描述' }}
+            </p>
+            <button v-if="descOverflow" class="expand-btn" @click="descCollapsed = !descCollapsed">
               {{ descCollapsed ? '展开' : '收起' }}
             </button>
           </div>
@@ -167,8 +143,16 @@
           >
             <Aperture class="cta-icon" :size="18" />
             <span>{{ isTemplate || isTemplateWork ? '使用此姿势拍照' : '使用同款姿势拍摄' }}</span>
-            <svg class="cta-arrow" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+            <svg
+              class="cta-arrow"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.4"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>
 
@@ -177,10 +161,13 @@
             <summary class="analysis-summary">
               <span class="analysis-title"><Bot :size="14" /> AI 人体特征数据</span>
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </summary>
-            <div v-if="typeof work.analysis_data === 'object' && Object.keys(work.analysis_data).length" class="analysis-grid">
+            <div
+              v-if="typeof work.analysis_data === 'object' && Object.keys(work.analysis_data).length"
+              class="analysis-grid"
+            >
               <div v-for="(val, key) in work.analysis_data" :key="key" class="analysis-cell">
                 <div class="cell-key">{{ key }}</div>
                 <div class="cell-val">
@@ -217,28 +204,18 @@
                 </div>
               </div>
             </div>
-            <div v-else class="comments-empty">
-              <MessageCircle :size="20" /> 没有人评论，快来抢沙发
-            </div>
+            <div v-else class="comments-empty"><MessageCircle :size="20" /> 没有人评论，快来抢沙发</div>
           </section>
         </div>
 
         <!-- 互动栏 (sticky bottom on mobile / desktop side) -->
         <div class="action-bar">
-          <button
-            class="action-btn"
-            :class="{ active: isLiked, pulse: likePulse }"
-            @click="toggleLike"
-          >
+          <button class="action-btn" :class="{ active: isLiked, pulse: likePulse }" @click="toggleLike">
             <Heart v-if="!isLiked" class="action-icon" :size="20" />
             <Heart v-else class="action-icon" :size="20" fill="currentColor" />
             <span class="action-count">{{ formattedLikes }}</span>
           </button>
-          <button
-            class="action-btn"
-            :class="{ active: isCollected }"
-            @click="toggleCollect"
-          >
+          <button class="action-btn" :class="{ active: isCollected }" @click="toggleCollect">
             <Star class="action-icon" :size="20" :fill="isCollected ? 'currentColor' : 'none'" />
             <span class="action-count">收藏</span>
           </button>
@@ -262,361 +239,376 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useThemeStore } from '@/stores/theme'
-import { useAuthStore } from '@/stores/auth'
-import { useHome } from '@/composables/useHome'
-import { workApi } from '@/api/work'
-import { templateApi } from '@/api/template'
-import { followApi } from '@/api/follow'
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useThemeStore } from '@/stores/theme';
+import { useAuthStore } from '@/stores/auth';
+import { useHome } from '@/composables/useHome';
+import { workApi } from '@/api/work';
+import { templateApi } from '@/api/template';
+import { followApi } from '@/api/follow';
 import {
-  User, Sparkles, Pencil, Trash2, Eye, MapPin, Camera, Aperture,
-  Bot, MessageCircle, Heart, Star, Share2, AlertTriangle
-} from 'lucide-vue-next'
+  User,
+  Sparkles,
+  Pencil,
+  Trash2,
+  Eye,
+  MapPin,
+  Camera,
+  Aperture,
+  Bot,
+  MessageCircle,
+  Heart,
+  Star,
+  Share2,
+  AlertTriangle
+} from 'lucide-vue-next';
 
-const route = useRoute()
-const router = useRouter()
-const themeStore = useThemeStore()
-const authStore = useAuthStore()
-const { showTemplate } = useHome()
+const route = useRoute();
+const router = useRouter();
+const themeStore = useThemeStore();
+const authStore = useAuthStore();
+const { showTemplate } = useHome();
 
-const work = ref<any>(null)
-const isFollowing = ref(false)
-const isLiked = ref(false)
-const isCollected = ref(false)
-const likePulse = ref(false)
+const work = ref<any>(null);
+const isFollowing = ref(false);
+const isLiked = ref(false);
+const isCollected = ref(false);
+const likePulse = ref(false);
 
-const showOverlay = ref(true)
-const photoOpacity = ref(0.5)
-const menuOpen = ref(false)
+const showOverlay = ref(true);
+const photoOpacity = ref(0.5);
+const menuOpen = ref(false);
 
 /** 关联模板的骨架预览图 URL（点开详情时才加载，获取模板的 thumbnail_url 骨架 PNG） */
-const templateSkeletonUrl = ref<string | null>(null)
+const templateSkeletonUrl = ref<string | null>(null);
 
 // 描述折叠
-const descCollapsed = ref(true)
-const descOverflow = ref(false)
-const scrollRef = ref<HTMLElement | null>(null)
-const commentsRef = ref<HTMLElement | null>(null)
+const descCollapsed = ref(true);
+const descOverflow = ref(false);
+const scrollRef = ref<HTMLElement | null>(null);
+const commentsRef = ref<HTMLElement | null>(null);
 
 // 作者数据（按作品 author 字段）
 const authorInitial = computed(() => {
-  if (!work.value) return 'U'
-  const name = work.value.author?.username || work.value.username
-  return (name || 'U').charAt(0).toUpperCase()
-})
-const authorStats = computed(() => work.value?.author?.stats || null)
+  if (!work.value) return 'U';
+  const name = work.value.author?.username || work.value.username;
+  return (name || 'U').charAt(0).toUpperCase();
+});
+const authorStats = computed(() => work.value?.author?.stats || null);
 
 // 评论本地状态（后端接入前用本地）
 interface LocalComment {
-  id: number
-  author: string
-  text: string
-  created_at: number
+  id: number;
+  author: string;
+  text: string;
+  created_at: number;
 }
-const comments = ref<LocalComment[]>([])
-const newComment = ref('')
-let commentIdSeq = 1
+const comments = ref<LocalComment[]>([]);
+const newComment = ref('');
+let commentIdSeq = 1;
 
-const isDark = computed(() => themeStore.isDark)
+const isDark = computed(() => themeStore.isDark);
 
-const isTemplate = computed(() =>
-  route.path.startsWith('/template') || route.name === 'template-detail'
-)
+const isTemplate = computed(() => route.path.startsWith('/template') || route.name === 'template-detail');
 
 const isTemplateWork = computed(() => {
   // 新方式：通过 type 字段判断
-  if (work.value?.type === 'template') return true
+  if (work.value?.type === 'template') return true;
   // 兼容旧数据：通过 edit_data 中的 is_template_work 判断
   if (work.value?.edit_data) {
     try {
-      const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
-      return !!data?.is_template_work
-    } catch { /* ignore */ }
+      const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data;
+      return !!data?.is_template_work;
+    } catch {
+      /* ignore */
+    }
   }
-  return false
-})
+  return false;
+});
 
-const isOwner = computed(() => authStore.user?.id === work.value?.user_id)
+const isOwner = computed(() => authStore.user?.id === work.value?.user_id);
 
 /** 模板不可用：已删除/私密/审核拒绝 */
 const templateUnavailable = computed(() => {
-  if (!work.value?.template_id) return false
-  return work.value.template_deleted === true ||
+  if (!work.value?.template_id) return false;
+  return (
+    work.value.template_deleted === true ||
     work.value.template_status === -1 ||
     work.value.template_status === 0 ||
     work.value.template_status === -2
-})
+  );
+});
 
 /** 模板状态警告文案 */
 const templateStatusMessage = computed(() => {
-  if (!work.value?.template_id) return null
-  if (work.value.template_deleted || work.value.template_status === -1) return '此作品使用的模板已被删除，无法查看模板详情'
-  if (work.value.template_status === 0) return '此作品使用的模板已被设为私密，无法查看模板详情'
-  if (work.value.template_status === -2) return '此作品使用的模板未通过审核，无法查看模板详情'
-  return null
-})
+  if (!work.value?.template_id) return null;
+  if (work.value.template_deleted || work.value.template_status === -1)
+    return '此作品使用的模板已被删除，无法查看模板详情';
+  if (work.value.template_status === 0) return '此作品使用的模板已被设为私密，无法查看模板详情';
+  if (work.value.template_status === -2) return '此作品使用的模板未通过审核，无法查看模板详情';
+  return null;
+});
 
-const computedPhotoOpacity = computed(() =>
-  showOverlay.value ? photoOpacity.value : 1.0
-)
+const computedPhotoOpacity = computed(() => (showOverlay.value ? photoOpacity.value : 1.0));
 
 const containerStyle = computed(() => {
   // 有 edit_data（带设计稿比例）：按设计稿锁定容器比例
   if (work.value?.edit_data) {
     try {
-      const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
-      const { vw, vh } = data
-      if (vw && vh) return { aspectRatio: `${vw} / ${vh}` }
+      const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data;
+      const { vw, vh } = data;
+      if (vw && vh) return { aspectRatio: `${vw} / ${vh}` };
     } catch {}
   }
   // 真实图片：不锁定比例，让 base-image 用 height:auto 自己撑开
-  return { width: '100%' }
-})
+  return { width: '100%' };
+});
 
 const overlayStyle = computed<any>(() => {
   if (!work.value?.edit_data) {
-    return { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover' }
+    return { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover' };
   }
   try {
-    const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data
-    const { scale, offsetX, offsetY, designW, designH, vw, vh } = data
+    const data = typeof work.value.edit_data === 'string' ? JSON.parse(work.value.edit_data) : work.value.edit_data;
+    const { scale, offsetX, offsetY, designW, designH, vw, vh } = data;
     if (!vw || !vh) {
-      return { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover' }
+      return { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover' };
     }
     return {
       position: 'absolute',
       left: `${(offsetX / vw) * 100}%`,
       top: `${(offsetY / vh) * 100}%`,
       width: `${((designW * scale) / vw) * 100}%`,
-      height: `${((designH * scale) / vh) * 100}%`,
-    }
+      height: `${((designH * scale) / vh) * 100}%`
+    };
   } catch {
-    return { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover' }
+    return { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover' };
   }
-})
+});
 
 // 标签
 const displayTags = computed(() => {
-  const raw = work.value?.tags || work.value?.category
-  if (!raw) return []
-  if (Array.isArray(raw)) return raw
-  return [raw]
-})
+  const raw = work.value?.tags || work.value?.category;
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  return [raw];
+});
 
 const formattedLikes = computed(() => {
-  const n = work.value?.likes_count ?? 0
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万'
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
-  return String(n)
-})
+  const n = work.value?.likes_count ?? 0;
+  if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+});
 
 function formatDate(d: string | number | undefined) {
-  if (!d) return ''
-  const date = new Date(d)
-  if (isNaN(date.getTime())) return ''
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+  if (!d) return '';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function formatTime(ts: number | undefined) {
-  if (!ts) return ''
-  const diff = Date.now() - ts
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分钟前`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}小时前`
-  return formatDate(ts)
+  if (!ts) return '';
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分钟前`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}小时前`;
+  return formatDate(ts);
 }
 
-const toastMsg = ref('')
-let toastTimer: any = null
+const toastMsg = ref('');
+let toastTimer: any = null;
 function toast(msg: string) {
-  toastMsg.value = msg
-  clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { toastMsg.value = '' }, 2000)
+  toastMsg.value = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toastMsg.value = '';
+  }, 2000);
 }
 
 function goBack() {
-  if (window.history.length > 1) router.back()
-  else router.push('/')
+  if (window.history.length > 1) router.back();
+  else router.push('/');
 }
 
 function scrollToComments() {
-  commentsRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  commentsRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // 描述溢出检测
-watch(work, async () => {
-  descCollapsed.value = true
-  descOverflow.value = false
-  await nextTick()
-  const el = scrollRef.value?.querySelector('.work-desc')
-  if (el) descOverflow.value = el.scrollHeight > 80 // ~5 lines max
-}, { immediate: true })
+watch(
+  work,
+  async () => {
+    descCollapsed.value = true;
+    descOverflow.value = false;
+    await nextTick();
+    const el = scrollRef.value?.querySelector('.work-desc');
+    if (el) descOverflow.value = el.scrollHeight > 80; // ~5 lines max
+  },
+  { immediate: true }
+);
 
 // 提交评论（本地，后端就绪后可替换）
 function submitComment() {
-  const txt = newComment.value.trim()
-  if (!txt) return
+  const txt = newComment.value.trim();
+  if (!txt) return;
   if (!authStore.isLoggedIn) {
-    router.push('/login')
-    return
+    router.push('/login');
+    return;
   }
   comments.value.unshift({
     id: commentIdSeq++,
     author: authStore.userProfile?.username || authStore.user?.username || '我',
     text: txt,
     created_at: Date.now()
-  })
-  newComment.value = ''
-  toast('评论成功')
+  });
+  newComment.value = '';
+  toast('评论成功');
 }
 
 async function toggleFollow() {
-  if (!work.value?.user_id) return
+  if (!work.value?.user_id) return;
   try {
     if (isFollowing.value) {
-      await followApi.unfollow(work.value.user_id)
-      isFollowing.value = false
-      toast('已取消关注')
+      await followApi.unfollow(work.value.user_id);
+      isFollowing.value = false;
+      toast('已取消关注');
     } else {
-      await followApi.follow(work.value.user_id)
-      isFollowing.value = true
-      toast('关注成功')
+      await followApi.follow(work.value.user_id);
+      isFollowing.value = true;
+      toast('关注成功');
     }
   } catch (err) {
-    console.error('操作关注失败:', err)
-    toast('操作失败，请重试')
+    console.error('操作关注失败:', err);
+    toast('操作失败，请重试');
   }
 }
 
 async function toggleLike() {
-  if (!work.value) return
+  if (!work.value) return;
   if (!authStore.isLoggedIn) {
-    router.push('/login')
-    return
+    router.push('/login');
+    return;
   }
-  const nextState = !isLiked.value
+  const nextState = !isLiked.value;
   const success = await authStore.toggleLikeAction(
-    isTemplate.value
-      ? { templateId: work.value.id, like: nextState }
-      : { workId: work.value.id, like: nextState }
-  )
+    isTemplate.value ? { templateId: work.value.id, like: nextState } : { workId: work.value.id, like: nextState }
+  );
   if (success) {
-    isLiked.value = nextState
-    work.value.likes_count += nextState ? 1 : -1
+    isLiked.value = nextState;
+    work.value.likes_count += nextState ? 1 : -1;
     if (nextState) {
-      likePulse.value = true
-      setTimeout(() => { likePulse.value = false }, 600)
+      likePulse.value = true;
+      setTimeout(() => {
+        likePulse.value = false;
+      }, 600);
     }
   }
 }
 
 async function toggleCollect() {
-  if (!work.value) return
+  if (!work.value) return;
   if (!authStore.isLoggedIn) {
-    router.push('/login')
-    return
+    router.push('/login');
+    return;
   }
-  const nextState = !isCollected.value
+  const nextState = !isCollected.value;
   const success = await authStore.toggleCollectAction(
-    isTemplate.value
-      ? { templateId: work.value.id, collect: nextState }
-      : { workId: work.value.id, collect: nextState }
-  )
+    isTemplate.value ? { templateId: work.value.id, collect: nextState } : { workId: work.value.id, collect: nextState }
+  );
   if (success) {
-    isCollected.value = nextState
-    toast(nextState ? '已收藏' : '已取消收藏')
+    isCollected.value = nextState;
+    toast(nextState ? '已收藏' : '已取消收藏');
   }
 }
 
 async function deleteWork() {
-  if (!work.value || !confirm(isTemplate.value ? '确定删除此模板？' : '确定删除此作品？')) return
+  if (!work.value || !confirm(isTemplate.value ? '确定删除此模板？' : '确定删除此作品？')) return;
   try {
     if (isTemplate.value) {
-      await templateApi.delete(work.value.id)
+      await templateApi.delete(work.value.id);
     } else {
-      await workApi.delete(work.value.id)
+      await workApi.delete(work.value.id);
     }
-    router.push('/')
+    router.push('/');
   } catch (err) {
-    console.error('删除失败:', err)
-    toast('删除失败，请重试')
+    console.error('删除失败:', err);
+    toast('删除失败，请重试');
   }
 }
 
 function editWork() {
-  if (!work.value) return
+  if (!work.value) return;
   if (isTemplate.value) {
-    router.push({ path: '/editor', query: { id: work.value.id } })
+    router.push({ path: '/editor', query: { id: work.value.id } });
   } else {
     if (work.value.template_id) {
-      router.push({ path: '/editor', query: { id: work.value.template_id } })
+      router.push({ path: '/editor', query: { id: work.value.template_id } });
     } else {
-      router.push('/editor')
+      router.push('/editor');
     }
   }
 }
 
 function handleShoot() {
-  const tplId = isTemplate.value ? work.value.id : work.value.template_id
-  if (tplId) router.push({ path: '/camera', query: { template: tplId } })
+  const tplId = isTemplate.value ? work.value.id : work.value.template_id;
+  if (tplId) router.push({ path: '/camera', query: { template: tplId } });
 }
 
 async function share() {
-  const url = window.location.href
+  const url = window.location.href;
   try {
-    await navigator.clipboard.writeText(url)
-    toast('链接已复制，快去分享吧')
+    await navigator.clipboard.writeText(url);
+    toast('链接已复制，快去分享吧');
   } catch {
-    toast('分享链接：' + url)
+    toast('分享链接：' + url);
   }
 }
 
 onMounted(async () => {
-  showOverlay.value = showTemplate.value
-  const id = Number(route.params.id)
+  showOverlay.value = showTemplate.value;
+  const id = Number(route.params.id);
   try {
     if (isTemplate.value) {
-      work.value = await templateApi.getDetail(id)
+      work.value = await templateApi.getDetail(id);
     } else {
-      work.value = await workApi.getDetail(id)
+      work.value = await workApi.getDetail(id);
     }
 
     // 作品关联了模板：点开详情时才加载模板详情获取骨架图 URL（thumbnail_url = 骨架 PNG）
     if (work.value && !isTemplate.value && work.value.template_id) {
       try {
-        const tplRes: any = await templateApi.getDetail(work.value.template_id)
-        templateSkeletonUrl.value = tplRes?.thumbnail_url || null
+        const tplRes: any = await templateApi.getDetail(work.value.template_id);
+        templateSkeletonUrl.value = tplRes?.thumbnail_url || null;
       } catch (e) {
-        console.warn('加载关联模板骨架图失败:', e)
+        console.warn('加载关联模板骨架图失败:', e);
       }
     }
 
     if (authStore.isLoggedIn && work.value) {
-      await authStore.recordHistoryAction(
-        isTemplate.value ? { templateId: work.value.id } : { workId: work.value.id }
-      )
+      await authStore.recordHistoryAction(isTemplate.value ? { templateId: work.value.id } : { workId: work.value.id });
       if (isTemplate.value) {
-        work.value = await templateApi.getDetail(id)
+        work.value = await templateApi.getDetail(id);
       } else {
-        work.value = await workApi.getDetail(id)
+        work.value = await workApi.getDetail(id);
       }
       if (!isOwner.value && work.value.user_id) {
-        const res = await followApi.checkStatus(work.value.user_id) as any
-        isFollowing.value = res.isFollowing
+        const res = (await followApi.checkStatus(work.value.user_id)) as any;
+        isFollowing.value = res.isFollowing;
       }
-      const { interactionApi } = await import('@/api/interaction')
-      const statusRes = await interactionApi.checkStatus(
+      const { interactionApi } = await import('@/api/interaction');
+      const statusRes = (await interactionApi.checkStatus(
         isTemplate.value ? { templateId: work.value.id } : { workId: work.value.id }
-      ) as any
-      isLiked.value = statusRes.liked
-      isCollected.value = statusRes.collected
+      )) as any;
+      isLiked.value = statusRes.liked;
+      isCollected.value = statusRes.collected;
     }
   } catch (err) {
-    console.error('加载详情及状态失败:', err)
+    console.error('加载详情及状态失败:', err);
   }
-})
+});
 </script>
 
 <style scoped>
@@ -628,7 +620,9 @@ onMounted(async () => {
   background: #f8fafc;
   color: #1e293b;
   overflow: hidden;
-  transition: background-color .3s, color .3s;
+  transition:
+    background-color 0.3s,
+    color 0.3s;
 }
 .work-detail-root.dark {
   background: #09090b;
@@ -652,9 +646,11 @@ onMounted(async () => {
   border: 1px solid rgba(0, 0, 0, 0.06);
   color: #1e293b;
   cursor: pointer;
-  transition: transform .15s ease;
+  transition: transform 0.15s ease;
 }
-.back-btn:hover { transform: scale(1.06); }
+.back-btn:hover {
+  transform: scale(1.06);
+}
 .dark .back-btn {
   background: rgba(39, 39, 42, 0.85);
   border-color: rgba(255, 255, 255, 0.08);
@@ -704,7 +700,9 @@ onMounted(async () => {
   justify-content: center;
 }
 @media (min-width: 768px) {
-  .media-canvas { height: 100%; }
+  .media-canvas {
+    height: 100%;
+  }
 }
 
 .base-image {
@@ -714,7 +712,7 @@ onMounted(async () => {
   max-height: 60vh;
   object-fit: contain;
   pointer-events: none;
-  transition: opacity .25s ease;
+  transition: opacity 0.25s ease;
 }
 @media (min-width: 768px) {
   .base-image {
@@ -734,7 +732,10 @@ onMounted(async () => {
   background: #0f172a;
   color: #94a3b8;
 }
-.no-image-icon { display: inline-flex; align-items: center; }
+.no-image-icon {
+  display: inline-flex;
+  align-items: center;
+}
 .no-image-label {
   font-size: 0.7rem;
   font-weight: 700;
@@ -777,14 +778,18 @@ onMounted(async () => {
   font-weight: 600;
   border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
-  transition: all .2s ease;
+  transition: all 0.2s ease;
 }
-.ctrl-pill:hover { background: rgba(30, 41, 59, 0.85); }
+.ctrl-pill:hover {
+  background: rgba(30, 41, 59, 0.85);
+}
 .ctrl-pill.active {
   background: rgba(99, 102, 241, 0.85);
   border-color: rgba(99, 102, 241, 0.4);
 }
-.pill-icon { display: inline-flex; }
+.pill-icon {
+  display: inline-flex;
+}
 
 .opacity-slider {
   width: 120px;
@@ -816,9 +821,13 @@ onMounted(async () => {
   min-height: 0;
   background: #fff;
 }
-.dark .social-pane { background: #18181b; }
+.dark .social-pane {
+  background: #18181b;
+}
 @media (min-width: 768px) {
-  .social-pane { max-width: 420px; }
+  .social-pane {
+    max-width: 420px;
+  }
 }
 
 /* 作者卡 */
@@ -833,7 +842,9 @@ onMounted(async () => {
   background: inherit;
   z-index: 4;
 }
-.dark .author-card { border-color: rgba(255, 255, 255, 0.06); }
+.dark .author-card {
+  border-color: rgba(255, 255, 255, 0.06);
+}
 
 .author-avatar {
   width: 40px;
@@ -847,7 +858,10 @@ onMounted(async () => {
   justify-content: center;
   flex-shrink: 0;
 }
-.author-meta { flex: 1; min-width: 0; }
+.author-meta {
+  flex: 1;
+  min-width: 0;
+}
 .author-name {
   font-size: 0.95rem;
   font-weight: 700;
@@ -861,7 +875,9 @@ onMounted(async () => {
   color: #94a3b8;
   margin-top: 2px;
 }
-.dark .author-sub { color: #a1a1aa; }
+.dark .author-sub {
+  color: #a1a1aa;
+}
 
 .follow-btn {
   padding: 6px 16px;
@@ -872,10 +888,12 @@ onMounted(async () => {
   color: #fff;
   border: none;
   cursor: pointer;
-  transition: all .2s ease;
+  transition: all 0.2s ease;
   flex-shrink: 0;
 }
-.follow-btn:hover { background: #e61e3c; }
+.follow-btn:hover {
+  background: #e61e3c;
+}
 .follow-btn.following {
   background: rgba(0, 0, 0, 0.05);
   color: #64748b;
@@ -899,7 +917,9 @@ onMounted(async () => {
   color: inherit;
   margin-bottom: 8px;
 }
-.work-desc-wrapper { margin-bottom: 12px; }
+.work-desc-wrapper {
+  margin-bottom: 12px;
+}
 .work-desc {
   font-size: 0.9rem;
   line-height: 1.6;
@@ -907,7 +927,9 @@ onMounted(async () => {
   white-space: pre-line;
   margin: 0;
 }
-.dark .work-desc { color: #cbd5e1; }
+.dark .work-desc {
+  color: #cbd5e1;
+}
 .work-desc.collapsed {
   display: -webkit-box;
   -webkit-line-clamp: 4;
@@ -938,7 +960,9 @@ onMounted(async () => {
   padding: 4px 10px;
   border-radius: 9999px;
 }
-.dark .tag-pill { background: rgba(99, 102, 241, 0.15); }
+.dark .tag-pill {
+  background: rgba(99, 102, 241, 0.15);
+}
 
 /* 元数据 */
 .meta-row {
@@ -949,8 +973,12 @@ onMounted(async () => {
   color: #94a3b8;
   margin-bottom: 16px;
 }
-.dark .meta-row { color: #71717a; }
-.meta-item { white-space: nowrap; }
+.dark .meta-row {
+  color: #71717a;
+}
+.meta-item {
+  white-space: nowrap;
+}
 
 /* 地址信息 */
 .address-row {
@@ -973,23 +1001,32 @@ onMounted(async () => {
   gap: 6px;
   font-size: 0.75rem;
 }
-.addr-icon { display: inline-flex; align-items: center; }
+.addr-icon {
+  display: inline-flex;
+  align-items: center;
+}
 .addr-label {
   color: #94a3b8;
   font-weight: 500;
   white-space: nowrap;
 }
-.dark-mode .addr-label { color: #71717a; }
+.dark-mode .addr-label {
+  color: #71717a;
+}
 .addr-text {
   color: #334155;
   font-weight: 600;
 }
-.dark-mode .addr-text { color: #e4e4e7; }
+.dark-mode .addr-text {
+  color: #e4e4e7;
+}
 .addr-source {
   color: #94a3b8;
   font-size: 0.65rem;
 }
-.dark-mode .addr-source { color: #71717a; }
+.dark-mode .addr-source {
+  color: #71717a;
+}
 
 /* CTA 拍照 */
 .cta-shoot {
@@ -1007,15 +1044,21 @@ onMounted(async () => {
   border: none;
   cursor: pointer;
   margin-bottom: 16px;
-  transition: transform .15s ease, box-shadow .15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
   box-shadow: 0 6px 16px -4px rgba(255, 36, 66, 0.35);
 }
 .cta-shoot:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 22px -4px rgba(255, 36, 66, 0.45);
 }
-.cta-arrow { transition: transform .2s ease; }
-.cta-shoot:hover .cta-arrow { transform: translateX(3px); }
+.cta-arrow {
+  transition: transform 0.2s ease;
+}
+.cta-shoot:hover .cta-arrow {
+  transform: translateX(3px);
+}
 
 /* 模板状态警告 */
 .template-warning {
@@ -1039,7 +1082,9 @@ onMounted(async () => {
   border: 1px solid rgba(0, 0, 0, 0.06);
   padding: 12px;
 }
-.dark .analysis-block { border-color: rgba(255, 255, 255, 0.06); }
+.dark .analysis-block {
+  border-color: rgba(255, 255, 255, 0.06);
+}
 .analysis-summary {
   display: flex;
   justify-content: space-between;
@@ -1050,8 +1095,12 @@ onMounted(async () => {
   list-style: none;
   color: #64748b;
 }
-.dark .analysis-summary { color: #a1a1aa; }
-.analysis-summary::-webkit-details-marker { display: none; }
+.dark .analysis-summary {
+  color: #a1a1aa;
+}
+.analysis-summary::-webkit-details-marker {
+  display: none;
+}
 .analysis-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1063,7 +1112,9 @@ onMounted(async () => {
   border-radius: 8px;
   padding: 8px;
 }
-.dark .analysis-cell { background: rgba(255, 255, 255, 0.04); }
+.dark .analysis-cell {
+  background: rgba(255, 255, 255, 0.04);
+}
 .cell-key {
   font-size: 0.65rem;
   text-transform: uppercase;
@@ -1094,7 +1145,9 @@ onMounted(async () => {
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   padding-top: 16px;
 }
-.dark .comments-block { border-color: rgba(255, 255, 255, 0.06); }
+.dark .comments-block {
+  border-color: rgba(255, 255, 255, 0.06);
+}
 .comments-title {
   display: flex;
   align-items: center;
@@ -1141,7 +1194,9 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
 }
-.composer-input:focus { border-color: #6366f1; }
+.composer-input:focus {
+  border-color: #6366f1;
+}
 .composer-send {
   padding: 8px 14px;
   border-radius: 9999px;
@@ -1178,7 +1233,10 @@ onMounted(async () => {
   justify-content: center;
   flex-shrink: 0;
 }
-.comment-body { flex: 1; min-width: 0; }
+.comment-body {
+  flex: 1;
+  min-width: 0;
+}
 .comment-author {
   font-size: 0.85rem;
   font-weight: 600;
@@ -1190,7 +1248,9 @@ onMounted(async () => {
   line-height: 1.5;
   margin: 2px 0;
 }
-.dark .comment-text { color: #cbd5e1; }
+.dark .comment-text {
+  color: #cbd5e1;
+}
 .comment-time {
   font-size: 0.7rem;
   color: #94a3b8;
@@ -1203,7 +1263,9 @@ onMounted(async () => {
   border: 1px dashed rgba(0, 0, 0, 0.1);
   border-radius: 12px;
 }
-.dark .comments-empty { border-color: rgba(255, 255, 255, 0.1); }
+.dark .comments-empty {
+  border-color: rgba(255, 255, 255, 0.1);
+}
 
 /* 互动栏 */
 .action-bar {
@@ -1233,20 +1295,44 @@ onMounted(async () => {
   font-weight: 600;
   color: #64748b;
   cursor: pointer;
-  transition: all .2s ease;
+  transition: all 0.2s ease;
 }
-.action-btn:hover { background: rgba(0, 0, 0, 0.04); }
-.dark .action-btn:hover { background: rgba(255, 255, 255, 0.04); }
-.action-btn.active { color: #ff2442; }
-.action-btn.pulse { animation: likePulse .6s ease; }
-.action-icon { display: inline-flex; align-items: center; justify-content: center; }
-.action-count { font-size: 0.8rem; min-width: 18px; text-align: left; }
+.action-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.dark .action-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.action-btn.active {
+  color: #ff2442;
+}
+.action-btn.pulse {
+  animation: likePulse 0.6s ease;
+}
+.action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.action-count {
+  font-size: 0.8rem;
+  min-width: 18px;
+  text-align: left;
+}
 
 @keyframes likePulse {
-  0% { transform: scale(1); }
-  25% { transform: scale(1.25); }
-  50% { transform: scale(0.95); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.25);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* 点赞飞心 */
@@ -1254,11 +1340,17 @@ onMounted(async () => {
   position: absolute;
   font-size: 1.5rem;
   pointer-events: none;
-  animation: flyUp .8s ease forwards;
+  animation: flyUp 0.8s ease forwards;
 }
 @keyframes flyUp {
-  0% { opacity: 1; transform: translateY(0) scale(1); }
-  100% { opacity: 0; transform: translateY(-80px) scale(1.4); }
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-80px) scale(1.4);
+  }
 }
 
 /* Toast */
@@ -1276,12 +1368,27 @@ onMounted(async () => {
   z-index: 100;
   backdrop-filter: blur(8px);
 }
-.toast-enter-active, .toast-leave-active { transition: opacity .25s ease, transform .25s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px); }
+.toast-enter-active,
+.toast-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+}
 
 /* 过渡 */
-.fade-enter-active, .fade-leave-active { transition: opacity .2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 
 /* 更多菜单 */
 .more-btn {
@@ -1296,8 +1403,13 @@ onMounted(async () => {
   font-size: 1rem;
   line-height: 1;
 }
-.dark .more-btn { border-color: rgba(255, 255, 255, 0.08); color: #a1a1aa; }
-.more-btn:hover { background: rgba(0, 0, 0, 0.04); }
+.dark .more-btn {
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+}
+.more-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
 .more-menu {
   position: absolute;
   top: 70px;
@@ -1326,16 +1438,29 @@ onMounted(async () => {
   font-size: 0.9rem;
   color: inherit;
   cursor: pointer;
-  transition: background .15s ease;
+  transition: background 0.15s ease;
 }
-.more-menu button:hover { background: rgba(0, 0, 0, 0.04); }
-.dark .more-menu button:hover { background: rgba(255, 255, 255, 0.04); }
-.more-menu button.danger { color: #ef4444; }
+.more-menu button:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.dark .more-menu button:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.more-menu button.danger {
+  color: #ef4444;
+}
 
 /* 滚动条 */
-.content-scroll::-webkit-scrollbar { width: 4px; }
-.content-scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 9999px; }
-.dark .content-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); }
+.content-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.content-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}
+.dark .content-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
 
 /* line-clamp 兜底 */
 .work-desc.collapsed {

@@ -7,7 +7,7 @@
 export async function up({ queryInterface, Sequelize }) {
   async function createTableIfNotExists(tableName, columns) {
     const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
-    const exists = tables.some((t) => Object.values(t)[0] === tableName);
+    const exists = tables.some(t => Object.values(t)[0] === tableName);
     if (!exists) await queryInterface.createTable(tableName, columns);
   }
 
@@ -31,7 +31,11 @@ export async function up({ queryInterface, Sequelize }) {
     token_endpoint_auth_method: { type: Sequelize.STRING(50), defaultValue: 'none', comment: '认证方式' },
     application_type: { type: Sequelize.STRING(20), defaultValue: 'web', comment: '应用类型' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
   // 2. oauth_codes
@@ -47,10 +51,16 @@ export async function up({ queryInterface, Sequelize }) {
     consumed: { type: Sequelize.BOOLEAN, defaultValue: false, comment: '是否已消费' },
     expires_at: { type: Sequelize.DATE, allowNull: false, comment: '过期时间' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
-  await addIndexIfNotExists('oauth_codes', ['client_id', 'consumed', 'expires_at'], { name: 'idx_code_validate_cleanup' });
+  await addIndexIfNotExists('oauth_codes', ['client_id', 'consumed', 'expires_at'], {
+    name: 'idx_code_validate_cleanup'
+  });
 
   // 3. oauth_tokens
   await createTableIfNotExists('oauth_tokens', {
@@ -62,7 +72,11 @@ export async function up({ queryInterface, Sequelize }) {
     revoked: { type: Sequelize.BOOLEAN, defaultValue: false, comment: '是否已吊销' },
     expires_at: { type: Sequelize.DATE, allowNull: false, comment: '过期时间' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
   await addIndexIfNotExists('oauth_tokens', ['client_id'], { name: 'idx_token_client' });
@@ -77,9 +91,17 @@ export async function up({ queryInterface, Sequelize }) {
     app_id: { type: Sequelize.STRING(64), allowNull: false, comment: '应用标识' },
     scopes: { type: Sequelize.JSON, defaultValue: [], comment: '授权范围' },
     status: { type: Sequelize.TINYINT, defaultValue: 1, comment: '1:正常, 0:已撤销' },
-    last_auth_at: { type: Sequelize.DATE, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'), comment: '最后授权时间' },
+    last_auth_at: {
+      type: Sequelize.DATE,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
+      comment: '最后授权时间'
+    },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
   await addIndexIfNotExists('oauth_user_approval', ['sub', 'app_id'], { unique: true, name: 'uk_approval_sub_app' });
@@ -91,7 +113,11 @@ export async function up({ queryInterface, Sequelize }) {
     client_id: { type: Sequelize.STRING(128), allowNull: false, comment: '客户端ID' },
     scopes: { type: Sequelize.JSON, defaultValue: [], comment: '已授权范围' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
   await addIndexIfNotExists('oauth_consents', ['sub', 'client_id'], { unique: true, name: 'uk_sub_client' });

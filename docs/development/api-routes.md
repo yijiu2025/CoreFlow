@@ -25,39 +25,43 @@ export default async function (fastify) {
 
 ## 配置项
 
-| 选项 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `name` | string | - | 路由唯一标识 |
-| `alias` | string | - | 显示名称 |
-| `method` | string | - | HTTP 方法 |
-| `url` | string | - | 路由路径 |
-| `handler` | function | - | 处理函数 |
-| `requireLogin` | boolean | `false` | 是否需要登录 |
-| `permission` | string/object | `null` | 权限校验 |
-| `allowRoles` | string[] | `[]` | 角色白名单 |
-| `allowIps` | string[] | `[]` | IP 白名单 |
-| `schema` | object | `{}` | JSON Schema 校验 |
+| 选项           | 类型          | 默认值  | 说明             |
+| -------------- | ------------- | ------- | ---------------- |
+| `name`         | string        | -       | 路由唯一标识     |
+| `alias`        | string        | -       | 显示名称         |
+| `method`       | string        | -       | HTTP 方法        |
+| `url`          | string        | -       | 路由路径         |
+| `handler`      | function      | -       | 处理函数         |
+| `requireLogin` | boolean       | `false` | 是否需要登录     |
+| `permission`   | string/object | `null`  | 权限校验         |
+| `allowRoles`   | string[]      | `[]`    | 角色白名单       |
+| `allowIps`     | string[]      | `[]`    | IP 白名单        |
+| `schema`       | object        | `{}`    | JSON Schema 校验 |
 
 ## 权限配置
 
 ```js
 // 单个权限
-permission: 'fw:config:read'
+permission: 'fw:config:read';
 
 // 任一满足（OR）
-permission: { any: ['fw:block:write', 'fw:admin:*'] }
+permission: {
+  any: ['fw:block:write', 'fw:admin:*'];
+}
 
 // 全部满足（AND）
-permission: { all: ['fw:admin:reset', 'fw:admin:*'] }
+permission: {
+  all: ['fw:admin:reset', 'fw:admin:*'];
+}
 ```
 
 ## 响应格式
 
 ```js
-reply.result.success(message, data)    // 200 成功
-reply.result.fail(message, data, code) // 400 业务失败
-reply.result.unauth(message)           // 401 未登录
-reply.result.forbidden(message)        // 403 权限不足
+reply.result.success(message, data); // 200 成功
+reply.result.fail(message, data, code); // 400 业务失败
+reply.result.unauth(message); // 401 未登录
+reply.result.forbidden(message); // 403 权限不足
 ```
 
 响应结构：

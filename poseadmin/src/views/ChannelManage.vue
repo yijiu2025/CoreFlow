@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check, Close } from '@element-plus/icons-vue'
-import { channelApi } from '../api/channel'
+import { ref, onMounted } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { Check, Close } from '@element-plus/icons-vue';
+import { channelApi } from '../api/channel';
 
-const loading = ref(false)
-const list = ref<any[]>([])
-const total = ref(0)
-const dialogVisible = ref(false)
-const dialogTitle = ref('')
-const saving = ref(false)
-const form = ref<any>({})
-const query = ref({ page: 1, pageSize: 20 })
+const loading = ref(false);
+const list = ref<any[]>([]);
+const total = ref(0);
+const dialogVisible = ref(false);
+const dialogTitle = ref('');
+const saving = ref(false);
+const form = ref<any>({});
+const query = ref({ page: 1, pageSize: 20 });
 
 // 频道类型选项
 const typeOptions = [
@@ -19,7 +19,7 @@ const typeOptions = [
   { value: 'iframe', label: '内嵌 iframe' },
   { value: 'route', label: 'SPA 路由' },
   { value: 'external', label: '外部跳转' }
-]
+];
 
 // 预设图标选项（lucide 图标名称 — 前端通过 Icon.vue 渲染）
 const iconOptions = [
@@ -43,24 +43,24 @@ const iconOptions = [
   { value: 'music', label: '🎵 音乐' },
   { value: 'book-heart', label: '📚 学习' },
   { value: 'heart', label: '❤️ 喜欢' }
-]
+];
 
 const fetchList = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    const res = await channelApi.list(query.value)
+    const res = await channelApi.list(query.value);
     if (res.data.code === 200) {
-      list.value = res.data.data
-      total.value = res.data.total
+      list.value = res.data.data;
+      total.value = res.data.total;
     } else {
-      ElMessage.error(res.data.message || '获取列表失败')
+      ElMessage.error(res.data.message || '获取列表失败');
     }
   } catch (err: any) {
-    ElMessage.error(err.message || '获取列表失败')
+    ElMessage.error(err.message || '获取列表失败');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const resetForm = () => {
   form.value = {
@@ -76,88 +76,90 @@ const resetForm = () => {
     enabled: true,
     start_at: null,
     end_at: null
-  }
-}
+  };
+};
 
 const handleCreate = () => {
-  resetForm()
-  dialogTitle.value = '新建频道'
-  dialogVisible.value = true
-}
+  resetForm();
+  dialogTitle.value = '新建频道';
+  dialogVisible.value = true;
+};
 
 const handleEdit = (row: any) => {
   form.value = {
     ...row,
     start_at: row.start_at ? new Date(row.start_at) : null,
     end_at: row.end_at ? new Date(row.end_at) : null
-  }
-  dialogTitle.value = '编辑频道'
-  dialogVisible.value = true
-}
+  };
+  dialogTitle.value = '编辑频道';
+  dialogVisible.value = true;
+};
 
 const handleSave = async () => {
   if (!form.value.value || !form.value.label) {
-    ElMessage.warning('标识和名称不能为空')
-    return
+    ElMessage.warning('标识和名称不能为空');
+    return;
   }
-  saving.value = true
+  saving.value = true;
   try {
-    const data = { ...form.value }
-    if (data.start_at) data.start_at = new Date(data.start_at).toISOString()
-    if (data.end_at) data.end_at = new Date(data.end_at).toISOString()
+    const data = { ...form.value };
+    if (data.start_at) data.start_at = new Date(data.start_at).toISOString();
+    if (data.end_at) data.end_at = new Date(data.end_at).toISOString();
 
     if (data.id) {
-      await channelApi.update(data.id, data)
-      ElMessage.success('更新成功')
+      await channelApi.update(data.id, data);
+      ElMessage.success('更新成功');
     } else {
-      await channelApi.create(data)
-      ElMessage.success('创建成功')
+      await channelApi.create(data);
+      ElMessage.success('创建成功');
     }
-    dialogVisible.value = false
-    fetchList()
+    dialogVisible.value = false;
+    fetchList();
   } catch (err: any) {
-    ElMessage.error(err.message || '保存失败')
+    ElMessage.error(err.message || '保存失败');
   } finally {
-    saving.value = false
+    saving.value = false;
   }
-}
+};
 
 const handleDelete = async (id: number) => {
   try {
-    await ElMessageBox.confirm('确定要删除该频道吗？', '删除确认', { type: 'warning' })
-    await channelApi.remove(id)
-    ElMessage.success('删除成功')
-    fetchList()
+    await ElMessageBox.confirm('确定要删除该频道吗？', '删除确认', { type: 'warning' });
+    await channelApi.remove(id);
+    ElMessage.success('删除成功');
+    fetchList();
   } catch (e) {
-    if (e !== 'cancel') console.error(e)
+    if (e !== 'cancel') console.error(e);
   }
-}
+};
 
 const handleToggleEnabled = async (row: any) => {
   try {
-    await channelApi.update(row.id, { enabled: row.enabled })
-    ElMessage.success('已更新')
+    await channelApi.update(row.id, { enabled: row.enabled });
+    ElMessage.success('已更新');
   } catch (err: any) {
-    ElMessage.error(err.message || '更新失败')
-    row.enabled = !row.enabled
+    ElMessage.error(err.message || '更新失败');
+    row.enabled = !row.enabled;
   }
-}
+};
 
 const handleSizeChange = (val: number) => {
-  query.value.pageSize = val
-  fetchList()
-}
+  query.value.pageSize = val;
+  fetchList();
+};
 
 const handleCurrentChange = (val: number) => {
-  query.value.page = val
-  fetchList()
-}
+  query.value.page = val;
+  fetchList();
+};
 
-const fmtTime = (v: string | null) => v ? new Date(v).toLocaleString() : '—'
+const fmtTime = (v: string | null) => (v ? new Date(v).toLocaleString() : '—');
 
-const typeLabel = (v: string) => typeOptions.find(o => o.value === v)?.label || v
+const typeLabel = (v: string) => typeOptions.find(o => o.value === v)?.label || v;
 
-onMounted(() => { fetchList() })
+onMounted(() => {
+  fetchList();
+});
 </script>
 
 <template>
@@ -172,14 +174,25 @@ onMounted(() => { fetchList() })
       <el-table-column prop="value" label="标识" width="120" show-overflow-tooltip />
       <el-table-column prop="label" label="名称" width="100" />
       <el-table-column label="图标" width="70" align="center">
-  <template #default="{ row }">
-    <Icon v-if="row.icon" :name="row.icon" :size="20" />
-    <span v-else>&mdash;</span>
-  </template>
-</el-table-column>
+        <template #default="{ row }">
+          <Icon v-if="row.icon" :name="row.icon" :size="20" />
+          <span v-else>&mdash;</span>
+        </template>
+      </el-table-column>
       <el-table-column label="类型" width="100" align="center">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.type === 'content' ? 'success' : row.type === 'iframe' ? 'warning' : row.type === 'route' ? 'primary' : 'info'">
+          <el-tag
+            size="small"
+            :type="
+              row.type === 'content'
+                ? 'success'
+                : row.type === 'iframe'
+                  ? 'warning'
+                  : row.type === 'route'
+                    ? 'primary'
+                    : 'info'
+            "
+          >
             {{ typeLabel(row.type) }}
           </el-tag>
         </template>
@@ -238,17 +251,12 @@ onMounted(() => { fetchList() })
         </el-form-item>
         <el-form-item label="图标">
           <el-select v-model="form.icon" placeholder="选择图标" clearable filterable style="width: 100%">
-            <el-option
-  v-for="opt in iconOptions"
-  :key="opt.value"
-  :label="opt.label"
-  :value="opt.value"
->
-  <span style="display: inline-flex; align-items: center; gap: 8px;">
-    <Icon :name="opt.value" :size="16" />
-    <span class="text-gray-500">{{ opt.label }}</span>
-  </span>
-</el-option>
+            <el-option v-for="opt in iconOptions" :key="opt.value" :label="opt.label" :value="opt.value">
+              <span style="display: inline-flex; align-items: center; gap: 8px">
+                <Icon :name="opt.value" :size="16" />
+                <span class="text-gray-500">{{ opt.label }}</span>
+              </span>
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="类型" required>
@@ -263,7 +271,10 @@ onMounted(() => { fetchList() })
           <el-input v-model="form.url" placeholder="外部链接或 iframe src（type=iframe/external 时填）" />
         </el-form-item>
         <el-form-item label="作品分类">
-          <el-input v-model="form.category" placeholder="筛选作品分类，如 pose, creative（type=content 时填，留空=不筛选）" />
+          <el-input
+            v-model="form.category"
+            placeholder="筛选作品分类，如 pose, creative（type=content 时填，留空=不筛选）"
+          />
         </el-form-item>
         <el-form-item label="展示 Banner">
           <el-switch v-model="form.has_banner" />

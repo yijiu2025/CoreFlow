@@ -147,13 +147,17 @@ async function handleDirectLogin(request, reply, fastify) {
     if (!approval) {
       const consentKey = uuidv4();
       const consentStore = getSessionStore(fastify, 'consent_session');
-      await consentStore.set(consentKey, {
-        userId: user.id,
-        clientId: client.client_id,
-        scopes: finalScopes,
-        scopeStr: scopeString,
-        oidcNonce
-      }, 300);
+      await consentStore.set(
+        consentKey,
+        {
+          userId: user.id,
+          clientId: client.client_id,
+          scopes: finalScopes,
+          scopeStr: scopeString,
+          oidcNonce
+        },
+        300
+      );
 
       return reply.send({
         code: 200,

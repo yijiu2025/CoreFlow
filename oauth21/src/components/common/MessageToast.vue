@@ -13,9 +13,40 @@
               'bg-slate-800/90 text-white dark:bg-slate-700/90': msg.type === 'info'
             }"
           >
-            <svg v-if="msg.type === 'success'" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            <svg v-else-if="msg.type === 'error'" class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-            <svg v-else class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <svg
+              v-if="msg.type === 'success'"
+              class="w-4 h-4 shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <svg
+              v-else-if="msg.type === 'error'"
+              class="w-4 h-4 shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            <svg
+              v-else
+              class="w-4 h-4 shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
             <span>{{ msg.text }}</span>
           </div>
         </TransitionGroup>
@@ -25,13 +56,23 @@
 </template>
 
 <script setup lang="ts">
-import { useMessage } from '@/composables/useMessage'
-const { messages } = useMessage()
+import { useMessage } from '@/composables/useMessage';
+const { messages } = useMessage();
 </script>
 
 <style scoped>
-.toast-item-enter-active { transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-.toast-item-leave-active { transition: all 0.2s ease-in; }
-.toast-item-enter-from { opacity: 0; transform: translateX(100px); }
-.toast-item-leave-to { opacity: 0; transform: translateX(100px) scale(0.9); }
+.toast-item-enter-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.toast-item-leave-active {
+  transition: all 0.2s ease-in;
+}
+.toast-item-enter-from {
+  opacity: 0;
+  transform: translateX(100px);
+}
+.toast-item-leave-to {
+  opacity: 0;
+  transform: translateX(100px) scale(0.9);
+}
 </style>

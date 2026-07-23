@@ -33,11 +33,11 @@ registerSecureRoute 中 url: "/analysis/:stockCode"  ← 路由级
 
 各层级配置示例：
 
-| 层级 | 配置位置 | 示例 | 说明 |
-|------|---------|------|------|
-| System | `system.json` | `"prefix": "/stick"` | 功能域前缀，通常为 `/{appName}` |
-| Group | `registerGroupMetadata()` | `prefix: '/v1'` | 版本号前缀，通常为 `/v1` |
-| Route | `registerSecureRoute()` | `url: '/analysis/:stockCode'` | 实际路径，不含前面的前缀 |
+| 层级   | 配置位置                  | 示例                          | 说明                            |
+| ------ | ------------------------- | ----------------------------- | ------------------------------- |
+| System | `system.json`             | `"prefix": "/stick"`          | 功能域前缀，通常为 `/{appName}` |
+| Group  | `registerGroupMetadata()` | `prefix: '/v1'`               | 版本号前缀，通常为 `/v1`        |
+| Route  | `registerSecureRoute()`   | `url: '/analysis/:stockCode'` | 实际路径，不含前面的前缀        |
 
 > ⚠️ **常见错误**：`registerSecureRoute` 的 `url` 从 `/` 开始，但**不包含** system 和 group 的前缀。三个前缀由框架自动拼接，url 中不要重复写。
 
@@ -46,7 +46,7 @@ registerSecureRoute 中 url: "/analysis/:stockCode"  ← 路由级
 ### 路由文件 `src/api/<domain>/v1/<route>.js`
 
 ```js
-import { registerSecureRoute } from '../../../guard.js'
+import { registerSecureRoute } from '../../../guard.js';
 
 /** <路由功能描述> */
 export default async function (fastify, opts) {
@@ -67,13 +67,13 @@ export default async function (fastify, opts) {
       }
     },
     handler: async (request, reply) => {
-      const user = request.state?.user
-      if (!user?.userId) return reply.result.fail('未登录', null, 401)
-      const { page, pageSize } = request.query
-      const result = await xxxDao.findAll({ page, pageSize, currentUserId: user.userId })
-      return reply.result.paginated(result.list, result.total, result.page, result.pageSize)
+      const user = request.state?.user;
+      if (!user?.userId) return reply.result.fail('未登录', null, 401);
+      const { page, pageSize } = request.query;
+      const result = await xxxDao.findAll({ page, pageSize, currentUserId: user.userId });
+      return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
     }
-  })
+  });
 }
 ```
 
@@ -96,60 +96,62 @@ export default async function (fastify, opts) {
 ## 二、DAO 模板 `src/app/<app>/dao/`
 
 ```js
-import sequelize from '../../../db/index.js'
+import sequelize from '../../../db/index.js';
 
 class XxxDao {
-  getModel() { return sequelize.models.Xxx }
+  getModel() {
+    return sequelize.models.Xxx;
+  }
 
   async findAll(options = {}) {
-    const model = this.getModel()
-    const { Op } = await import('sequelize')
-    const where = { delete_version: 0 }
-    if (options.userId) where.user_id = options.userId
-    if (options.status !== undefined) where.status = options.status
+    const model = this.getModel();
+    const { Op } = await import('sequelize');
+    const where = { delete_version: 0 };
+    if (options.userId) where.user_id = options.userId;
+    if (options.status !== undefined) where.status = options.status;
     if (options.keyword) {
-      where[Op.or] = [
-        { title: { [Op.like]: `%${options.keyword}%` } }
-      ]
+      where[Op.or] = [{ title: { [Op.like]: `%${options.keyword}%` } }];
     }
-    const page = options.page || 1
-    const pageSize = options.pageSize || 20
+    const page = options.page || 1;
+    const pageSize = options.pageSize || 20;
     const { count, rows } = await model.findAndCountAll({
       where,
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid','username','avatar'] }],
+      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       order: [['created_at', 'DESC']],
       limit: pageSize,
       offset: (page - 1) * pageSize
-    })
-    return { list: rows, total: count, page, pageSize }
+    });
+    return { list: rows, total: count, page, pageSize };
   }
 
   async findById(id) {
-    const model = this.getModel()
+    const model = this.getModel();
     return await model.findOne({
       where: { id, delete_version: 0 },
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid','username','avatar'] }]
-    })
+      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }]
+    });
   }
 
-  async create(data) { return await this.getModel().create(data) }
+  async create(data) {
+    return await this.getModel().create(data);
+  }
 
   async update(id, data) {
-    const record = await this.findById(id)
-    if (!record) return null
-    return await record.update(data)
+    const record = await this.findById(id);
+    if (!record) return null;
+    return await record.update(data);
   }
 
   /** 软删除：delete_version 设为自身 id */
   async delete(id, userId) {
-    const record = await this.findById(id)
-    if (!record || record.user_id !== userId) return false
-    await record.update({ delete_version: id })
-    return true
+    const record = await this.findById(id);
+    if (!record || record.user_id !== userId) return false;
+    await record.update({ delete_version: id });
+    return true;
   }
 }
 
-export default new XxxDao()
+export default new XxxDao();
 ```
 
 ---
@@ -158,26 +160,30 @@ export default new XxxDao()
 
 ```js
 export default (sequelize, DataTypes) => {
-  const Xxx = sequelize.define('Xxx', {
-    id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
-    title: { type: DataTypes.STRING(200), allowNull: false, comment: '标题' },
-    status: { type: DataTypes.TINYINT, defaultValue: 2, comment: '2待审核 1公开 0私密 -1删除 -2拒绝' },
-    user_id: { type: DataTypes.BIGINT, allowNull: false, field: 'user_id' },
-    delete_version: { type: DataTypes.BIGINT, allowNull: false, defaultValue: 0 }
-  }, {
-    tableName: 'posecraft_xxx',
-    timestamps: true,
-    paranoid: false,               // 使用自定义 delete_version 软删除，不启用 Sequelize 内置 paranoid
-    indexes: [{ fields: ['user_id'] }, { fields: ['status'] }],
-    comment: 'PoseCraft Xxx 表'
-  })
+  const Xxx = sequelize.define(
+    'Xxx',
+    {
+      id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
+      title: { type: DataTypes.STRING(200), allowNull: false, comment: '标题' },
+      status: { type: DataTypes.TINYINT, defaultValue: 2, comment: '2待审核 1公开 0私密 -1删除 -2拒绝' },
+      user_id: { type: DataTypes.BIGINT, allowNull: false, field: 'user_id' },
+      delete_version: { type: DataTypes.BIGINT, allowNull: false, defaultValue: 0 }
+    },
+    {
+      tableName: 'posecraft_xxx',
+      timestamps: true,
+      paranoid: false, // 使用自定义 delete_version 软删除，不启用 Sequelize 内置 paranoid
+      indexes: [{ fields: ['user_id'] }, { fields: ['status'] }],
+      comment: 'PoseCraft Xxx 表'
+    }
+  );
 
-  Xxx.associate = (models) => {
-    Xxx.belongsTo(models.User, { foreignKey: 'user_id', as: 'author' })
-  }
+  Xxx.associate = models => {
+    Xxx.belongsTo(models.User, { foreignKey: 'user_id', as: 'author' });
+  };
 
-  return Xxx
-}
+  return Xxx;
+};
 ```
 
 ---
@@ -194,11 +200,11 @@ export async function up(queryInterface, Sequelize) {
     delete_version: { type: Sequelize.BIGINT, allowNull: false, defaultValue: 0 },
     created_at: { type: Sequelize.DATE, allowNull: false },
     updated_at: { type: Sequelize.DATE, allowNull: false }
-  })
+  });
 }
 
 export async function down(queryInterface) {
-  await queryInterface.dropTable('posecraft_xxx')
+  await queryInterface.dropTable('posecraft_xxx');
 }
 ```
 
@@ -210,20 +216,20 @@ export async function down(queryInterface) {
 
 ```js
 function formatXxx(record, isOwner = false) {
-  if (!record) return null
-  const data = record.toJSON ? record.toJSON() : record
+  if (!record) return null;
+  const data = record.toJSON ? record.toJSON() : record;
   return {
     id: data.id,
     title: data.title,
     status: data.status,
     count: {
       likes: data.likes_count,
-      views: isOwner ? data.views_count : undefined  // 仅作者可见
+      views: isOwner ? data.views_count : undefined // 仅作者可见
     },
     userInteraction: { liked: !!data.liked, collected: !!data.collected },
     created_at: data.createdAt,
     author: data.author ? { uid: data.author.uid, username: data.author.username } : undefined
-  }
+  };
 }
 ```
 
@@ -233,9 +239,9 @@ function formatXxx(record, isOwner = false) {
 
 ```js
 include: [
-  { model: sequelize.models.User, as: 'author', attributes: ['uid','username','avatar'] },
-  { model: sequelize.models.Template, as: 'template', attributes: ['id','status','delete_version'], required: false }
-]
+  { model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] },
+  { model: sequelize.models.Template, as: 'template', attributes: ['id', 'status', 'delete_version'], required: false }
+];
 ```
 
 ---
@@ -246,10 +252,10 @@ include: [
 export default async function (app) {
   try {
     // 业务逻辑
-    app.decorate('<name>', instance)
-    console.log(`✅ [Loader] ${C.green}<name> 加载成功${C.reset}`)
+    app.decorate('<name>', instance);
+    console.log(`✅ [Loader] ${C.green}<name> 加载成功${C.reset}`);
   } catch (err) {
-    console.error(`❌ [Loader] ${C.red}<name> 加载失败: ${err.message}${C.reset}`)
+    console.error(`❌ [Loader] ${C.red}<name> 加载失败: ${err.message}${C.reset}`);
   }
 }
 ```
@@ -262,14 +268,14 @@ export default async function (app) {
 
 异常基类 `ApiException`（`src/shared/exceptions.js`）：
 
-| 异常类 | 状态码 | 说明 |
-|--------|--------|------|
-| `BadRequestException` | 400 | 参数错误 |
-| `UnauthorizedException` | 401 | 未登录/未授权 |
-| `ForbiddenException` | 403 | 权限不足 |
-| `NotFoundException` | 404 | 资源不存在 |
-| `ConflictException` | 409 | 资源冲突 |
-| `TooManyRequestsException` | 429 | 请求频率过高 |
+| 异常类                     | 状态码 | 说明          |
+| -------------------------- | ------ | ------------- |
+| `BadRequestException`      | 400    | 参数错误      |
+| `UnauthorizedException`    | 401    | 未登录/未授权 |
+| `ForbiddenException`       | 403    | 权限不足      |
+| `NotFoundException`        | 404    | 资源不存在    |
+| `ConflictException`        | 409    | 资源冲突      |
+| `TooManyRequestsException` | 429    | 请求频率过高  |
 
 统一响应格式：
 
@@ -305,29 +311,29 @@ System（system.json）→ Group（registerGroupMetadata()）→ API（registerS
 
 ### 分层职责
 
-| 层级 | 职责 | 示例 |
-|------|------|------|
-| Controller (路由 handler) | 捕获所有异常，转为统一响应格式 | try/catch + reply.result.fail() |
-| Service | 抛出业务异常，不捕获 | throw new BadRequestException('参数错误') |
-| DAO | 不捕获，让异常自然传播 | 直接 await，异常向上传递 |
+| 层级                      | 职责                           | 示例                                      |
+| ------------------------- | ------------------------------ | ----------------------------------------- |
+| Controller (路由 handler) | 捕获所有异常，转为统一响应格式 | try/catch + reply.result.fail()           |
+| Service                   | 抛出业务异常，不捕获           | throw new BadRequestException('参数错误') |
+| DAO                       | 不捕获，让异常自然传播         | 直接 await，异常向上传递                  |
 
 ### 模板
 
 ```js
 handler: async (request, reply) => {
   try {
-    const result = await xxxService.doSomething(request.body)
-    return reply.result.success(result)
+    const result = await xxxService.doSomething(request.body);
+    return reply.result.success(result);
   } catch (e) {
     // 业务异常已携带状态码
     if (e instanceof ApiException) {
-      return reply.result.fail(e.message, null, e.code)
+      return reply.result.fail(e.message, null, e.code);
     }
     // 未知异常记录日志
-    console.error(`❌ [API] ${C.red}未知错误: ${e.message}${C.reset}`)
-    return reply.result.fail('服务器内部错误', null, 500)
+    console.error(`❌ [API] ${C.red}未知错误: ${e.message}${C.reset}`);
+    return reply.result.fail('服务器内部错误', null, 500);
   }
-}
+};
 ```
 
 ### 禁止事项

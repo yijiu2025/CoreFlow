@@ -41,9 +41,7 @@ export default (sequelize, DataTypes) => {
     {
       tableName: 'posecraft_user_settings',
       timestamps: true,
-      indexes: [
-        { unique: true, fields: ['user_id'], name: 'uk_settings_user' }
-      ],
+      indexes: [{ unique: true, fields: ['user_id'], name: 'uk_settings_user' }],
       comment: 'PoseCraft 用户个性设置（UI 偏好），由前端维护字段语义'
     }
   );
@@ -52,7 +50,7 @@ export default (sequelize, DataTypes) => {
    * 模型关联定义
    * @param {object} models - 所有已注册模型的集合
    */
-  UserSettings.associate = (models) => {
+  UserSettings.associate = models => {
     UserSettings.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
   };
 

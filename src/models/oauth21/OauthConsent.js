@@ -15,7 +15,7 @@ export default (sequelize, DataTypes) => {
         autoIncrement: true,
         comment: '自增主键'
       },
-      /** 
+      /**
        * 受权主体用户 ID (存储主系统 User.uid)
        * 对齐主系统的 UUID 类型，支持外键关联和高效 JOIN 动作
        */
@@ -51,7 +51,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  OauthConsent.associate = (models) => {
+  OauthConsent.associate = models => {
     // 建立与 User 模型的关联关联关系 (基于 sub -> User.uid)
     OauthConsent.belongsTo(models.User, {
       foreignKey: 'sub',

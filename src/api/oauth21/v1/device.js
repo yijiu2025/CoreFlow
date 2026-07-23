@@ -99,9 +99,17 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       // 转义 HTML 特殊字符，防止 XSS
       const rawCode = request.query.user_code ?? '';
-      const userCode = rawCode.replace(/[&<>"']/g, (c) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-      }[c]));
+      const userCode = rawCode.replace(
+        /[&<>"']/g,
+        c =>
+          ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+          })[c]
+      );
 
       // 读取模板文件并替换占位符
       const fs = await import('node:fs');

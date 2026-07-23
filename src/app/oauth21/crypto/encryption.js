@@ -56,7 +56,6 @@ export function decrypt(encryptedBase64) {
  * @returns {boolean}
  */
 export function validateTimestamp(timestamp, maxAgeMs = 30_000) {
-  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp))
-    return false;
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return false;
   return Math.abs(Date.now() - timestamp) <= maxAgeMs;
 }

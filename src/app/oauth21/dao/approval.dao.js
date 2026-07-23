@@ -93,10 +93,7 @@ class ApprovalDao {
    */
   async revokeApproval(sub, appId) {
     const OauthApproval = getModel();
-    return await OauthApproval.update(
-      { status: 0 },
-      { where: { sub, app_id: appId } }
-    );
+    return await OauthApproval.update({ status: 0 }, { where: { sub, app_id: appId } });
   }
 }
 

@@ -30,11 +30,12 @@ export default {
   app_id: 'myapp',
   name: '我的应用',
   description: '这是一个示例应用',
-  init: initMyApp,              // 可选：Fastify 插件初始化
-  oauth_client: {               // 可选：OAuth 2.1 客户端配置
+  init: initMyApp, // 可选：Fastify 插件初始化
+  oauth_client: {
+    // 可选：OAuth 2.1 客户端配置
     client_id: 'myapp',
     client_name: '我的应用',
-    client_secret: null,        // null = 公共客户端（SPA）
+    client_secret: null, // null = 公共客户端（SPA）
     redirect_uris: ['http://localhost:5173/myapp/callback'],
     grant_types: ['authorization_code', 'refresh_token'],
     response_types: ['code'],
@@ -46,6 +47,7 @@ export default {
 ```
 
 加载器自动处理：
+
 - 读取 `config.name` → 打印日志
 - 读取 `config.init` → 调用 `app.register(init)`
 - 读取 `config.oauth_client` → 同步到 `oauth_clients` 表
@@ -81,10 +83,12 @@ defineRoles([
     rank_level: 10,
     policy: {
       Version: '2026-05-18',
-      Statement: [{
-        Effect: 'Allow',
-        Action: [MYAPP_PERMISSIONS.ARTICLE.READ, MYAPP_PERMISSIONS.ARTICLE.WRITE]
-      }]
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: [MYAPP_PERMISSIONS.ARTICLE.READ, MYAPP_PERMISSIONS.ARTICLE.WRITE]
+        }
+      ]
     }
   },
   {
@@ -94,10 +98,12 @@ defineRoles([
     rank_level: 80,
     policy: {
       Version: '2026-05-18',
-      Statement: [{
-        Effect: 'Allow',
-        Action: [MYAPP_PERMISSIONS.ADMIN.ALL]
-      }]
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: [MYAPP_PERMISSIONS.ADMIN.ALL]
+        }
+      ]
     }
   }
 ]);

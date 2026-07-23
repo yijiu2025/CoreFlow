@@ -9,29 +9,29 @@
  *   { roles: string[], permissions: { allows: string[], denies: string[] } }
  *   roles 数组包含用户的所有角色编码
  */
-import type { Directive, DirectiveBinding } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import type { Directive, DirectiveBinding } from 'vue';
+import { useAuthStore } from '@/stores/auth';
 
 function checkRole(value: string | string[]): boolean {
   try {
-    const authStore = useAuthStore()
-    if (!authStore.isLoggedIn) return false
+    const authStore = useAuthStore();
+    if (!authStore.isLoggedIn) return false;
 
-    const required = Array.isArray(value) ? value : [value]
-    return required.some(r => authStore.hasRole(r))
+    const required = Array.isArray(value) ? value : [value];
+    return required.some(r => authStore.hasRole(r));
   } catch {
-    return false
+    return false;
   }
 }
 
 export const roleDirective: Directive = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    if (!binding.value) return
-    if (!checkRole(binding.value)) el.remove()
+    if (!binding.value) return;
+    if (!checkRole(binding.value)) el.remove();
   },
 
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    if (!binding.value) return
-    if (!checkRole(binding.value)) el.remove()
+    if (!binding.value) return;
+    if (!checkRole(binding.value)) el.remove();
   }
-}
+};

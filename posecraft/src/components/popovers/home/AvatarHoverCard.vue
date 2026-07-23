@@ -6,9 +6,13 @@
       <div class="card-user-detail">
         <div class="card-username">{{ authStore.userProfile?.username || authStore.user?.username || '用户' }}</div>
         <div class="card-social-stats">
-          <span>关注 <strong class="stat-highlight">{{ authStore.followingCount }}</strong></span>
+          <span
+            >关注 <strong class="stat-highlight">{{ authStore.followingCount }}</strong></span
+          >
           <span class="social-divider">|</span>
-          <span>粉丝 <strong class="stat-highlight">{{ authStore.followersCount }}</strong></span>
+          <span
+            >粉丝 <strong class="stat-highlight">{{ authStore.followersCount }}</strong></span
+          >
         </div>
       </div>
     </div>
@@ -23,7 +27,7 @@
           <span class="card-menu-count">
             {{ authStore.likedWorksCount }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
-              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
             </svg>
           </span>
         </div>
@@ -44,7 +48,7 @@
           <span class="card-menu-count">
             {{ authStore.collectsCount }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
-              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
             </svg>
           </span>
         </div>
@@ -65,7 +69,7 @@
           <span class="card-menu-count">
             {{ authStore.historyText }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
-              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
             </svg>
           </span>
         </div>
@@ -86,7 +90,7 @@
           <span class="card-menu-count">
             {{ authStore.watchLaterCount }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
-              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
             </svg>
           </span>
         </div>
@@ -107,7 +111,7 @@
           <span class="card-menu-count">
             {{ authStore.worksCount || 14 }}
             <svg class="arrow-svg" viewBox="0 0 24 24" width="14" height="14">
-              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+              <path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
             </svg>
           </span>
         </div>
@@ -135,8 +139,16 @@
     <!-- 底部动作 -->
     <div class="card-footer">
       <button class="btn-card-logout" @click="handleLogout">
-        <svg class="logout-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+        <svg
+          class="logout-icon"
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
         </svg>
         <span>退出登录</span>
       </button>
@@ -152,43 +164,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { Heart, Star, Clock, Clapperboard, Play, Bell, FileText } from 'lucide-vue-next'
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { Heart, Star, Clock, Clapperboard, Play, Bell, FileText } from 'lucide-vue-next';
 
-const router = useRouter()
-const authStore = useAuthStore()
+const router = useRouter();
+const authStore = useAuthStore();
 
 const saveLoginState = computed({
   get: () => authStore.saveLoginInfo,
-  set: (val) => authStore.updateSaveLoginInfo(val)
-})
+  set: val => authStore.updateSaveLoginInfo(val)
+});
 
-const historyList = ref<any[]>([])
+const historyList = ref<any[]>([]);
 
-const watchLaterList = ref<any[]>([])
+const watchLaterList = ref<any[]>([]);
 
 const emit = defineEmits<{
-  (e: 'showToast', msg: string): void
-}>()
+  (e: 'showToast', msg: string): void;
+}>();
 
 const onSaveLoginChange = () => {
-  emit('showToast', saveLoginState.value ? '已开启保存登录信息' : '已关闭保存登录信息')
-}
+  emit('showToast', saveLoginState.value ? '已开启保存登录信息' : '已关闭保存登录信息');
+};
 
 const goToMyWorks = () => {
-  router.push('/mine')
-}
+  router.push('/mine');
+};
 
 const goToTab = (tabName: string) => {
-  router.push({ path: '/mine', query: { tab: tabName } })
-}
+  router.push({ path: '/mine', query: { tab: tabName } });
+};
 
 const handleLogout = () => {
-  authStore.logout()
-  emit('showToast', '已退出登录')
-}
+  authStore.logout();
+  emit('showToast', '已退出登录');
+};
 </script>
 
 <style scoped>
@@ -218,8 +230,14 @@ const handleLogout = () => {
 }
 
 @keyframes cardFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 用户基本信息 */
@@ -316,7 +334,9 @@ const handleLogout = () => {
   border-radius: 12px;
   padding: 10px 12px;
   cursor: pointer;
-  transition: background 0.2s, all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background 0.2s,
+    all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
 }
 
@@ -337,9 +357,10 @@ const handleLogout = () => {
   max-height: 0;
   overflow: hidden;
   opacity: 0;
-  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.25s ease,
-              margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease,
+    margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   margin-top: 0;
   width: 100%;
 }
@@ -541,7 +562,7 @@ const handleLogout = () => {
   right: 0;
   bottom: 0;
   background-color: #cbd5e1;
-  transition: .3s;
+  transition: 0.3s;
   border-radius: 20px;
 }
 
@@ -551,13 +572,13 @@ const handleLogout = () => {
 
 .card-slider:before {
   position: absolute;
-  content: "";
+  content: '';
   height: 12px;
   width: 12px;
   left: 3px;
   bottom: 3px;
   background-color: white;
-  transition: .3s;
+  transition: 0.3s;
   border-radius: 50%;
 }
 

@@ -1,4 +1,3 @@
-
 <!--
  * 我的主页（个人中心）
  *
@@ -13,7 +12,12 @@
   <div class="mine-page-container" :class="{ 'dark-mode': themeStore.isDark }">
     <!-- 背景和个人信息区域 (颜色与主页面统一为白底/黑底) -->
     <div class="profile-header-wrapper">
-      <div class="profile-bg-cover" :style="{ backgroundImage: `${themeStore.isDark ? 'linear-gradient(to left, rgba(18, 18, 20, 0) 10%, rgba(18, 18, 20, 1) 90%)' : 'linear-gradient(to left, rgba(255, 255, 255, 0) 10%, rgba(255, 255, 255, 1) 90%)'}, url(${authStore.safeAvatar})` }"></div>
+      <div
+        class="profile-bg-cover"
+        :style="{
+          backgroundImage: `${themeStore.isDark ? 'linear-gradient(to left, rgba(18, 18, 20, 0) 10%, rgba(18, 18, 20, 1) 90%)' : 'linear-gradient(to left, rgba(255, 255, 255, 0) 10%, rgba(255, 255, 255, 1) 90%)'}, url(${authStore.safeAvatar})`
+        }"
+      ></div>
 
       <div class="profile-header-content">
         <!-- 个人圆形头像 -->
@@ -50,7 +54,8 @@
           <div class="meta-info-row">
             <span>ID: {{ userProfile.personal_id || userProfile.id || '未知ID' }}</span>
             <span v-if="userProfile.gender || userProfile.age">
-              {{ userProfile.gender === 1 ? '♂️' : userProfile.gender === 2 ? '♀️' : '' }} {{ userProfile.age ? userProfile.age + '岁' : '' }}
+              {{ userProfile.gender === 1 ? '♂️' : userProfile.gender === 2 ? '♀️' : '' }}
+              {{ userProfile.age ? userProfile.age + '岁' : '' }}
             </span>
             <span>{{ userProfile.city || '北京 · 朝阳' }}</span>
           </div>
@@ -77,48 +82,27 @@
     <!-- 二级导航 Tabs 栏 -->
     <div class="tabs-outer-container">
       <div class="profile-tabs">
-        <button
-          @click="changeTab('works')"
-          :class="['tab-btn', { active: activeTab === 'works' }]"
-        >
+        <button @click="changeTab('works')" :class="['tab-btn', { active: activeTab === 'works' }]">
           <span>作品</span>
           <span v-if="authStore.worksCount > 0">{{ authStore.worksCount }}</span>
         </button>
-        <button
-          @click="changeTab('templates')"
-          :class="['tab-btn', { active: activeTab === 'templates' }]"
-        >
+        <button @click="changeTab('templates')" :class="['tab-btn', { active: activeTab === 'templates' }]">
           <span>模板</span>
           <span v-if="authStore.templatesCount > 0">{{ authStore.templatesCount }}</span>
         </button>
-        <button
-          @click="changeTab('recommend')"
-          :class="['tab-btn', { active: activeTab === 'recommend' }]"
-        >
+        <button @click="changeTab('recommend')" :class="['tab-btn', { active: activeTab === 'recommend' }]">
           <span>推荐</span>
         </button>
-        <button
-          @click="changeTab('likes')"
-          :class="['tab-btn', { active: activeTab === 'likes' }]"
-        >
+        <button @click="changeTab('likes')" :class="['tab-btn', { active: activeTab === 'likes' }]">
           <span>喜欢</span>
         </button>
-        <button
-          @click="changeTab('collect')"
-          :class="['tab-btn', { active: activeTab === 'collect' }]"
-        >
+        <button @click="changeTab('collect')" :class="['tab-btn', { active: activeTab === 'collect' }]">
           <span>收藏</span>
         </button>
-        <button 
-          @click="changeTab('history')" 
-          :class="['tab-btn', { active: activeTab === 'history' }]"
-        >
+        <button @click="changeTab('history')" :class="['tab-btn', { active: activeTab === 'history' }]">
           <span>观看历史</span>
         </button>
-        <button 
-          @click="changeTab('watch-later')" 
-          :class="['tab-btn', { active: activeTab === 'watch-later' }]"
-        >
+        <button @click="changeTab('watch-later')" :class="['tab-btn', { active: activeTab === 'watch-later' }]">
           <span>稍后再看</span>
           <span class="tab-lock"><Lock :size="12" /></span>
         </button>
@@ -137,44 +121,22 @@
       <!-- 左侧三级分类 Tab -->
       <div class="sub-tabs">
         <template v-if="activeTab === 'works'">
-          <button
-            :class="['sub-tab-btn', { active: subTab === 'public' }]"
-            @click="subTab = 'public'"
-          >
-            作品
-          </button>
-          <button
-            :class="['sub-tab-btn', { active: subTab === 'private' }]"
-            @click="subTab = 'private'"
-          >
+          <button :class="['sub-tab-btn', { active: subTab === 'public' }]" @click="subTab = 'public'">作品</button>
+          <button :class="['sub-tab-btn', { active: subTab === 'private' }]" @click="subTab = 'private'">
             <span>私密作品</span>
             <span class="sub-lock"><Lock :size="11" /></span>
           </button>
-          <button
-            :class="['sub-tab-btn', { active: subTab === 'collection' }]"
-            @click="subTab = 'collection'"
-          >
+          <button :class="['sub-tab-btn', { active: subTab === 'collection' }]" @click="subTab = 'collection'">
             合集
           </button>
         </template>
         <template v-else-if="activeTab === 'templates'">
-          <button
-            :class="['sub-tab-btn', { active: subTab === 'all' }]"
-            @click="subTab = 'all'"
-          >
-            模板
-          </button>
-          <button
-            :class="['sub-tab-btn', { active: subTab === 'private' }]"
-            @click="subTab = 'private'"
-          >
+          <button :class="['sub-tab-btn', { active: subTab === 'all' }]" @click="subTab = 'all'">模板</button>
+          <button :class="['sub-tab-btn', { active: subTab === 'private' }]" @click="subTab = 'private'">
             <span>私密模板</span>
             <span class="sub-lock"><Lock :size="11" /></span>
           </button>
-          <button
-            :class="['sub-tab-btn', { active: subTab === 'collected' }]"
-            @click="subTab = 'collected'"
-          >
+          <button :class="['sub-tab-btn', { active: subTab === 'collected' }]" @click="subTab = 'collected'">
             收藏的模板
           </button>
         </template>
@@ -184,14 +146,9 @@
       <div class="sub-right-actions">
         <div class="tab-search-wrapper">
           <Search class="tab-search-icon" :size="14" />
-          <input 
-            type="text" 
-            v-model="searchQuery" 
-            placeholder="搜索我发布的作品" 
-            class="tab-search-input" 
-          />
+          <input type="text" v-model="searchQuery" placeholder="搜索我发布的作品" class="tab-search-input" />
         </div>
-        
+
         <span class="divider-line">|</span>
 
         <!-- 日期筛选下拉组件 -->
@@ -226,7 +183,7 @@
             v-for="item in filteredItems"
             :key="item.id"
             class="manageable-card-wrapper"
-            :class="{ 'manage-active': isManageMode, 'selected': selectedIds.includes(item.id) }"
+            :class="{ 'manage-active': isManageMode, selected: selectedIds.includes(item.id) }"
             @click="handleCardClick(item)"
           >
             <!-- 遮罩多选框 -->
@@ -243,9 +200,18 @@
               title="删除"
               @click.stop="handleDeleteSingle(item)"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
             </button>
 
@@ -256,17 +222,22 @@
               title="取消推荐"
               @click.stop="handleCancelRecommend(item)"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
 
-            <PoseCard
-              :item="item"
-              @like="handleLike"
-              @collect="handleCollect"
-            />
+            <PoseCard :item="item" @like="handleLike" @collect="handleCollect" />
           </div>
         </div>
       </template>
@@ -288,23 +259,11 @@
           <button class="batch-btn select-all-btn" @click="toggleSelectAll">
             {{ selectedIds.length === filteredItems.length && filteredItems.length > 0 ? '取消全选' : '全选' }}
           </button>
-          <button 
-            class="batch-btn privacy-btn" 
-            @click="batchChangePrivacy" 
-            :disabled="!selectedIds.length"
-          >
+          <button class="batch-btn privacy-btn" @click="batchChangePrivacy" :disabled="!selectedIds.length">
             公开 / 私密
           </button>
-          <button 
-            class="batch-btn delete-btn" 
-            @click="batchDelete" 
-            :disabled="!selectedIds.length"
-          >
-            删除
-          </button>
-          <button class="batch-btn cancel-btn" @click="exitManageMode">
-            取消
-          </button>
+          <button class="batch-btn delete-btn" @click="batchDelete" :disabled="!selectedIds.length">删除</button>
+          <button class="batch-btn cancel-btn" @click="exitManageMode">取消</button>
         </div>
       </div>
     </div>
@@ -325,7 +284,7 @@
               ref="avatarFileInput"
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
-              style="display:none"
+              style="display: none"
               @change="onAvatarFileChange"
             />
             <div class="edit-avatar-wrapper" @click="avatarFileInput?.click()">
@@ -379,7 +338,12 @@
           <!-- 底部按钮 -->
           <div class="edit-modal-footer">
             <button class="edit-btn-cancel" @click="closeEditModal">取消</button>
-            <button class="edit-btn-save" :class="{ saving: editSaving }" :disabled="editSaving" @click="saveEditProfile">
+            <button
+              class="edit-btn-save"
+              :class="{ saving: editSaving }"
+              :disabled="editSaving"
+              @click="saveEditProfile"
+            >
               {{ editSaving ? '保存中...' : '保存' }}
             </button>
           </div>
@@ -389,31 +353,27 @@
 
     <!-- 简介 Tooltip 弹窗（脱离文档流独立定位） -->
     <Teleport to="body">
-      <BioTooltip
-        ref="bioTooltipRef"
-        :bio-lines="bioLines"
-        :is-dark="themeStore.isDark"
-      />
+      <BioTooltip ref="bioTooltipRef" :bio-lines="bioLines" :is-dark="themeStore.isDark" />
     </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, toRef } from 'vue'
-import { useRoute } from 'vue-router'
-import { useHome } from '@/composables/useHome'
-import { useThemeStore } from '@/stores/theme'
-import { useAuthStore } from '@/stores/auth'
-import { Pen, Lock, Search, Calendar, Folder, X, Camera } from 'lucide-vue-next'
-import PoseCard from '@/components/cards/home/PoseCard.vue'
-import SkeletonCard from '@/components/cards/home/SkeletonCard.vue'
-import BioTooltip from '@/components/popovers/mine/BioTooltip.vue'
-import { userApi } from '@/api/user'
-import { workApi } from '@/api/work'
-import { templateApi } from '@/api/template'
+import { ref, computed, onMounted, watch, toRef } from 'vue';
+import { useRoute } from 'vue-router';
+import { useHome } from '@/composables/useHome';
+import { useThemeStore } from '@/stores/theme';
+import { useAuthStore } from '@/stores/auth';
+import { Pen, Lock, Search, Calendar, Folder, X, Camera } from 'lucide-vue-next';
+import PoseCard from '@/components/cards/home/PoseCard.vue';
+import SkeletonCard from '@/components/cards/home/SkeletonCard.vue';
+import BioTooltip from '@/components/popovers/mine/BioTooltip.vue';
+import { userApi } from '@/api/user';
+import { workApi } from '@/api/work';
+import { templateApi } from '@/api/template';
 
-const route = useRoute()
-const authStore = useAuthStore()
+const route = useRoute();
+const authStore = useAuthStore();
 
 const {
   openDetail,
@@ -429,42 +389,46 @@ const {
   updateUserProfile,
   activeNav,
   loading
-} = useHome()
+} = useHome();
 
 // 页面挂载时加载当前用户的上传作品
 onMounted(async () => {
-  activeNav.value = 'mine'
-  await authStore.fetchMyWorks()
-})
+  activeNav.value = 'mine';
+  await authStore.fetchMyWorks();
+});
 
-const themeStore = useThemeStore()
+const themeStore = useThemeStore();
 
-const activeTab = ref('works')
-const subTab = ref<string>('public')
+const activeTab = ref('works');
+const subTab = ref<string>('public');
 
-watch(() => route.query.tab, (newTab) => {
-  if (newTab && typeof newTab === 'string') {
-    activeTab.value = newTab
-  }
-}, { immediate: true })
+watch(
+  () => route.query.tab,
+  newTab => {
+    if (newTab && typeof newTab === 'string') {
+      activeTab.value = newTab;
+    }
+  },
+  { immediate: true }
+);
 const showLoginSave = computed({
   get: () => authStore.saveLoginInfo,
-  set: (val) => authStore.updateSaveLoginInfo(val)
-})
-const searchQuery = ref('')
+  set: val => authStore.updateSaveLoginInfo(val)
+});
+const searchQuery = ref('');
 
 // 日期筛选状态
-const dateFilter = ref('all')
-const dateFilterLabel = ref('全部时间')
-const showDateDropdown = ref(false)
+const dateFilter = ref('all');
+const dateFilterLabel = ref('全部时间');
+const showDateDropdown = ref(false);
 
 // 批量管理状态
-const isManageMode = ref(false)
-const selectedIds = ref<string[]>([])
+const isManageMode = ref(false);
+const selectedIds = ref<string[]>([]);
 
 // 解析简介多行（按换行符分割，与 textarea 输入对齐）
 const bioLines = computed(() => {
-  const bio = userProfile.value?.bio
+  const bio = userProfile.value?.bio;
   if (!bio) {
     return [
       '✈️已飞0个国家❗️',
@@ -477,262 +441,269 @@ const bioLines = computed(() => {
       'pdd资深买手🛍️ | 草莓🍓狂热粉丝',
       '雅思托福没考📚 清华北大没考📖',
       '国家级证件持有者(身份证)💳'
-    ]
+    ];
   }
-  return bio.split('\n').map((line: string) => line.trim()).filter(Boolean)
-})
+  return bio
+    .split('\n')
+    .map((line: string) => line.trim())
+    .filter(Boolean);
+});
 
 // 简介缩略：所有行拼接为一行，超过 40 字截断
 const bioShortText = computed(() => {
-  const bio = userProfile.value?.bio
-  if (!bio) return '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子...'
-  const joined = bio.split('\n').map((l: string) => l.trim()).filter(Boolean).join(' | ')
-  return joined.length > 40 ? joined.slice(0, 40) + '...' : joined
-})
+  const bio = userProfile.value?.bio;
+  if (!bio) return '✈️已飞0个国家❗️ | 梦想是环游世界🌍 | 中国留子...';
+  const joined = bio
+    .split('\n')
+    .map((l: string) => l.trim())
+    .filter(Boolean)
+    .join(' | ');
+  return joined.length > 40 ? joined.slice(0, 40) + '...' : joined;
+});
 
 // 简介 tooltip 定位（absolute 定位，跟随内容滚动）
-const bioTooltipRef = ref<any>(null)
+const bioTooltipRef = ref<any>(null);
 const onBioTooltipEnter = (e: MouseEvent) => {
-  const comp = bioTooltipRef.value
-  if (!comp) return
-  const el = comp.$el as HTMLElement
-  if (!el) return
-  const row = e.currentTarget as HTMLElement
-  const moreBtn = row.querySelector('.bio-more') as HTMLElement
-  const rect = moreBtn ? moreBtn.getBoundingClientRect() : row.getBoundingClientRect()
-  el.style.left = rect.right - 280 + 'px'
-  el.style.top = rect.bottom + 8 + 'px'
-  el.style.display = 'block'
-}
+  const comp = bioTooltipRef.value;
+  if (!comp) return;
+  const el = comp.$el as HTMLElement;
+  if (!el) return;
+  const row = e.currentTarget as HTMLElement;
+  const moreBtn = row.querySelector('.bio-more') as HTMLElement;
+  const rect = moreBtn ? moreBtn.getBoundingClientRect() : row.getBoundingClientRect();
+  el.style.left = rect.right - 280 + 'px';
+  el.style.top = rect.bottom + 8 + 'px';
+  el.style.display = 'block';
+};
 const onBioTooltipLeave = () => {
-  const comp = bioTooltipRef.value
+  const comp = bioTooltipRef.value;
   if (comp && comp.$el) {
-    comp.$el.style.display = 'none'
+    comp.$el.style.display = 'none';
   }
-}
+};
 
 const onSaveLoginChange = () => {
-  showToast(showLoginSave.value ? '已开启保存登录信息' : '已关闭保存登录信息')
-}
+  showToast(showLoginSave.value ? '已开启保存登录信息' : '已关闭保存登录信息');
+};
 
 // 编辑资料弹窗
-const showEditModal = ref(false)
-const editSaving = ref(false)
+const showEditModal = ref(false);
+const editSaving = ref(false);
 const editForm = ref({
   username: '',
   avatar: '',
   bio: ''
-})
+});
 
 // 头像相关状态
-const avatarFileInput = ref<HTMLInputElement | null>(null)
-const avatarPreview = ref('')      // base64 本地预览
-const avatarUploading = ref(false) // 上传中状态
+const avatarFileInput = ref<HTMLInputElement | null>(null);
+const avatarPreview = ref(''); // base64 本地预览
+const avatarUploading = ref(false); // 上传中状态
 
 /**
  * 选择文件后立即上传到后端，回显新 URL
  */
 const onAvatarFileChange = async (e: Event) => {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
 
   // 本地预览
-  avatarPreview.value = URL.createObjectURL(file)
-  avatarUploading.value = true
+  avatarPreview.value = URL.createObjectURL(file);
+  avatarUploading.value = true;
 
   try {
-    const res = await userApi.uploadAvatar(file) as any
-    const newUrl = res?.avatar || res
+    const res = (await userApi.uploadAvatar(file)) as any;
+    const newUrl = res?.avatar || res;
     if (newUrl) {
-      editForm.value.avatar = newUrl
+      editForm.value.avatar = newUrl;
       // 同步更新 userProfile 头像（头像区域实时变化）
-      userProfile.value = { ...userProfile.value, avatar: newUrl }
+      userProfile.value = { ...userProfile.value, avatar: newUrl };
     }
-    showToast('头像上传成功 🎉')
+    showToast('头像上传成功 🎉');
   } catch (err: any) {
-    avatarPreview.value = '' // 回退预览
-    showToast(err?.message || '头像上传失败，请重试')
+    avatarPreview.value = ''; // 回退预览
+    showToast(err?.message || '头像上传失败，请重试');
   } finally {
-    avatarUploading.value = false
+    avatarUploading.value = false;
     // 重置 input 以便重复选同一文件
-    if (input) input.value = ''
+    if (input) input.value = '';
   }
-}
+};
 
 const openEditModal = () => {
-  avatarPreview.value = ''
+  avatarPreview.value = '';
   editForm.value = {
     username: userProfile.value.username || '',
     avatar: userProfile.value.avatar || '',
     bio: userProfile.value.bio || ''
-  }
-  showEditModal.value = true
-}
+  };
+  showEditModal.value = true;
+};
 
 const closeEditModal = () => {
-  avatarPreview.value = ''
-  showEditModal.value = false
-}
+  avatarPreview.value = '';
+  showEditModal.value = false;
+};
 
 /**
  * 保存昵称 + 简介（头像已在上传时实时保存）
  */
 const saveEditProfile = async () => {
-  editSaving.value = true
+  editSaving.value = true;
   try {
-    const res = await userApi.updateProfile({
+    const res = (await userApi.updateProfile({
       username: editForm.value.username,
       bio: editForm.value.bio
-    }) as any
+    })) as any;
 
     // 更新本地 userProfile
     userProfile.value = {
       ...userProfile.value,
       username: res?.username ?? editForm.value.username,
       bio: res?.bio ?? editForm.value.bio
-    }
-    showToast('个人资料已保存 ✅')
-    showEditModal.value = false
+    };
+    showToast('个人资料已保存 ✅');
+    showEditModal.value = false;
   } catch (err: any) {
-    showToast(err?.message || '保存失败，请重试')
+    showToast(err?.message || '保存失败，请重试');
   } finally {
-    editSaving.value = false
+    editSaving.value = false;
   }
-}
+};
 
-const myWorks = toRef(authStore, 'myWorks')
-const myTemplates = toRef(authStore, 'myTemplates')
+const myWorks = toRef(authStore, 'myWorks');
+const myTemplates = toRef(authStore, 'myTemplates');
 
 // 推荐列表（推荐过的内容，支持取消推荐）
-const myRecommends = toRef(authStore, 'myRecommendations')
+const myRecommends = toRef(authStore, 'myRecommendations');
 
 // 喜欢列表
-const myLikes = toRef(authStore, 'myLikes')
+const myLikes = toRef(authStore, 'myLikes');
 
 // 收藏列表
-const myCollects = toRef(authStore, 'myCollects')
+const myCollects = toRef(authStore, 'myCollects');
 
 // 历史列表
-const myHistory = toRef(authStore, 'myHistory')
+const myHistory = toRef(authStore, 'myHistory');
 
 const changeTab = (tabName: string) => {
-  activeTab.value = tabName
-  exitManageMode() // 切换 Tab 自动退出管理模式
+  activeTab.value = tabName;
+  exitManageMode(); // 切换 Tab 自动退出管理模式
 
   // 重置子Tab 为默认值
-  subTab.value = tabName === 'templates' ? 'all' : 'public'
+  subTab.value = tabName === 'templates' ? 'all' : 'public';
 
   // 切换 Tab 时按需加载真实数据
   if (tabName === 'templates') {
-    authStore.fetchMyTemplates()
+    authStore.fetchMyTemplates();
   } else if (tabName === 'works') {
-    authStore.fetchMyWorks()
+    authStore.fetchMyWorks();
   } else if (tabName === 'recommend') {
-    authStore.fetchMyRecommendations()
+    authStore.fetchMyRecommendations();
   } else if (tabName === 'likes') {
-    authStore.fetchMyLikes()
+    authStore.fetchMyLikes();
   } else if (tabName === 'collect') {
-    authStore.fetchMyCollects()
+    authStore.fetchMyCollects();
   } else if (tabName === 'history') {
-    authStore.fetchMyHistory()
+    authStore.fetchMyHistory();
   }
-}
+};
 
 // 选择日期筛选
 const selectDateFilter = (filterType: string, label: string) => {
-  dateFilter.value = filterType
-  dateFilterLabel.value = label
-  showDateDropdown.value = false
-}
+  dateFilter.value = filterType;
+  dateFilterLabel.value = label;
+  showDateDropdown.value = false;
+};
 
 // 检查是否在指定日期范围内
 const isInDateRange = (dateStr: string) => {
-  if (dateFilter.value === 'all') return true
-  const now = new Date()
-  const itemDate = new Date(dateStr)
-  const diffTime = Math.abs(now.getTime() - itemDate.getTime())
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  if (dateFilter.value === 'all') return true;
+  const now = new Date();
+  const itemDate = new Date(dateStr);
+  const diffTime = Math.abs(now.getTime() - itemDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   if (dateFilter.value === 'week') {
-    return diffDays <= 7
+    return diffDays <= 7;
   } else if (dateFilter.value === 'month') {
-    return diffDays <= 30
+    return diffDays <= 30;
   } else if (dateFilter.value === 'year') {
-    return diffDays <= 365
+    return diffDays <= 365;
   }
-  return true
-}
+  return true;
+};
 
 // 切换管理模式
 const toggleManageMode = () => {
-  isManageMode.value = !isManageMode.value
+  isManageMode.value = !isManageMode.value;
   if (!isManageMode.value) {
-    selectedIds.value = []
+    selectedIds.value = [];
   }
-}
+};
 
 // 退出管理模式
 const exitManageMode = () => {
-  isManageMode.value = false
-  selectedIds.value = []
-}
+  isManageMode.value = false;
+  selectedIds.value = [];
+};
 
 // 选中/取消选中卡片
 const handleCardClick = (item: any) => {
   if (isManageMode.value) {
-    const idx = selectedIds.value.indexOf(item.id)
+    const idx = selectedIds.value.indexOf(item.id);
     if (idx > -1) {
-      selectedIds.value.splice(idx, 1)
+      selectedIds.value.splice(idx, 1);
     } else {
-      selectedIds.value.push(item.id)
+      selectedIds.value.push(item.id);
     }
   } else {
-    openDetail(item)
+    openDetail(item);
   }
-}
+};
 
 // 全选/取消全选
 const toggleSelectAll = () => {
   if (selectedIds.value.length === filteredItems.value.length) {
-    selectedIds.value = []
+    selectedIds.value = [];
   } else {
-    selectedIds.value = filteredItems.value.map(item => item.id)
+    selectedIds.value = filteredItems.value.map(item => item.id);
   }
-}
+};
 
 // 批量修改公开/私密状态
 const batchChangePrivacy = () => {
-  if (!selectedIds.value.length) return
+  if (!selectedIds.value.length) return;
   myWorks.value = myWorks.value.map(item => {
     if (selectedIds.value.includes(item.id)) {
-      return { ...item, is_private: !item.is_private }
+      return { ...item, is_private: !item.is_private };
     }
-    return item
-  })
-  showToast(`成功将选中的 ${selectedIds.value.length} 项作品修改了可见性`)
-  exitManageMode()
-}
+    return item;
+  });
+  showToast(`成功将选中的 ${selectedIds.value.length} 项作品修改了可见性`);
+  exitManageMode();
+};
 
 // 删除单个作品/模板（调后端 API + 本地移除）
 const handleDeleteSingle = async (item: any) => {
-  if (!confirm(`确定要删除「${item.title || '该作品'}」吗？删除后不可恢复。`)) return
+  if (!confirm(`确定要删除「${item.title || '该作品'}」吗？删除后不可恢复。`)) return;
   try {
-    const id = Number(item.id)
-    const isTemplate = item.type === 'template' || activeTab.value === 'templates'
+    const id = Number(item.id);
+    const isTemplate = item.type === 'template' || activeTab.value === 'templates';
     if (isTemplate) {
-      await templateApi.delete(id)
-      authStore.templatesCount = Math.max(0, authStore.templatesCount - 1)
+      await templateApi.delete(id);
+      authStore.templatesCount = Math.max(0, authStore.templatesCount - 1);
     } else {
-      await workApi.delete(id)
-      authStore.worksCount = Math.max(0, authStore.worksCount - 1)
+      await workApi.delete(id);
+      authStore.worksCount = Math.max(0, authStore.worksCount - 1);
     }
-    removeFromLocalList(id)
-    showToast('删除成功')
+    removeFromLocalList(id);
+    showToast('删除成功');
   } catch (err: any) {
-    showToast(err.message || '删除失败')
+    showToast(err.message || '删除失败');
   }
-}
+};
 
 // 取消推荐（推荐 Tab 专用）
 const handleCancelRecommend = async (item: any) => {
@@ -740,107 +711,108 @@ const handleCancelRecommend = async (item: any) => {
     await authStore.cancelRecommendation({
       workId: item.type === 'work' ? Number(item.target_id) : undefined,
       templateId: item.type === 'template' ? Number(item.target_id) : undefined
-    })
-    showToast('已取消推荐')
+    });
+    showToast('已取消推荐');
   } catch (err: any) {
-    showToast(err.message || '取消推荐失败')
+    showToast(err.message || '取消推荐失败');
   }
-}
+};
 
 // 从本地所有列表中移除指定 id 的项
 const removeFromLocalList = (id: string | number) => {
-  myWorks.value = myWorks.value.filter(w => w.id !== id)
+  myWorks.value = myWorks.value.filter(w => w.id !== id);
   // 推荐列表按 target_id 匹配（推荐的目标作品/模板 ID）
-  myRecommends.value = myRecommends.value.filter(w => w.target_id !== id)
-  myLikes.value = myLikes.value.filter(w => w.id !== id)
-  myCollects.value = myCollects.value.filter(w => w.id !== id)
-  selectedIds.value = selectedIds.value.filter(sid => sid !== id)
-}
+  myRecommends.value = myRecommends.value.filter(w => w.target_id !== id);
+  myLikes.value = myLikes.value.filter(w => w.id !== id);
+  myCollects.value = myCollects.value.filter(w => w.id !== id);
+  selectedIds.value = selectedIds.value.filter(sid => sid !== id);
+};
 
 // 批量删除（调后端 API + 本地移除）
 const batchDelete = async () => {
-  if (!selectedIds.value.length) return
-  const count = selectedIds.value.length
-  if (!confirm(`确定要删除选中的 ${count} 项内容吗？删除后不可恢复。`)) return
+  if (!selectedIds.value.length) return;
+  const count = selectedIds.value.length;
+  if (!confirm(`确定要删除选中的 ${count} 项内容吗？删除后不可恢复。`)) return;
 
   // 统计本次删除的作品/模板数量（用于本地更新 Tab 数字）
-  let removedWorks = 0
-  let removedTemplates = 0
+  let removedWorks = 0;
+  let removedTemplates = 0;
 
   try {
     for (const sid of selectedIds.value) {
-      const id = Number(sid)
-      const item = filteredItems.value.find(f => Number(f.id) === id)
+      const id = Number(sid);
+      const item = filteredItems.value.find(f => Number(f.id) === id);
       if (item?.type === 'template' || activeTab.value === 'templates') {
-        await templateApi.delete(id)
-        removedTemplates++
+        await templateApi.delete(id);
+        removedTemplates++;
       } else {
-        await workApi.delete(id).catch(() => {})
-        removedWorks++
+        await workApi.delete(id).catch(() => {});
+        removedWorks++;
       }
     }
     // 本地同步 Tab 数字
-    authStore.worksCount = Math.max(0, authStore.worksCount - removedWorks)
-    authStore.templatesCount = Math.max(0, authStore.templatesCount - removedTemplates)
-    showToast(`已成功删除选中的 ${count} 项内容`)
-    exitManageMode()
+    authStore.worksCount = Math.max(0, authStore.worksCount - removedWorks);
+    authStore.templatesCount = Math.max(0, authStore.templatesCount - removedTemplates);
+    showToast(`已成功删除选中的 ${count} 项内容`);
+    exitManageMode();
   } catch (err: any) {
-    showToast(err.message || '删除失败')
+    showToast(err.message || '删除失败');
   }
-}
+};
 
 // 作品数（排除创建模板时自动生成的底图作品）
-const realWorksCount = computed(() => myWorks.value.filter(w => w.type !== 'template' && !w.is_template_work).length)
+const realWorksCount = computed(() => myWorks.value.filter(w => w.type !== 'template' && !w.is_template_work).length);
 
 // 过滤后的列表计算
 const filteredItems = computed(() => {
-  let list: any[] = []
+  let list: any[] = [];
 
   if (activeTab.value === 'works') {
     // 作品 Tab：排除创建模板时自动生成的底图作品（is_template_work=true）
-    const realWorks = myWorks.value.filter(w => w.type !== 'template' && !w.is_template_work)
+    const realWorks = myWorks.value.filter(w => w.type !== 'template' && !w.is_template_work);
 
     if (subTab.value === 'public') {
-      list = realWorks.filter(w => w.status === 1) // 公开
+      list = realWorks.filter(w => w.status === 1); // 公开
     } else if (subTab.value === 'private') {
-      list = realWorks.filter(w => w.status === 0) // 私密
+      list = realWorks.filter(w => w.status === 0); // 私密
     } else if (subTab.value === 'collection') {
       // 合集：从收藏列表中筛选作品类型
-      list = myCollects.value.filter((c: any) => c.work_id)
+      list = myCollects.value.filter((c: any) => c.work_id);
     }
 
     // 根据日期范围筛选
-    list = list.filter(w => isInDateRange(w.created_at))
+    list = list.filter(w => isInDateRange(w.created_at));
   } else if (activeTab.value === 'templates') {
     if (subTab.value === 'all') {
-      list = myTemplates.value
+      list = myTemplates.value;
     } else if (subTab.value === 'private') {
-      list = myTemplates.value.filter((t: any) => t.status === 0)
+      list = myTemplates.value.filter((t: any) => t.status === 0);
     } else if (subTab.value === 'collected') {
       // 收藏的模板：从收藏列表中筛选模板类型
-      list = myCollects.value.filter((c: any) => c.template_id)
+      list = myCollects.value.filter((c: any) => c.template_id);
     }
   } else if (activeTab.value === 'recommend') {
-    list = myRecommends.value
+    list = myRecommends.value;
   } else if (activeTab.value === 'likes') {
-    list = myLikes.value
+    list = myLikes.value;
   } else if (activeTab.value === 'collect') {
-    list = myCollects.value
+    list = myCollects.value;
   } else if (activeTab.value === 'history') {
-    list = myHistory.value
+    list = myHistory.value;
   }
 
   // 搜索关键字筛选
   if (searchQuery.value.trim()) {
-    const q = searchQuery.value.toLowerCase()
-    list = list.filter(item =>
-      (item.title && item.title.toLowerCase().includes(q)) ||
-      (item.description && item.description.toLowerCase().includes(q))
-    )
+    const q = searchQuery.value.toLowerCase();
+    list = list.filter(
+      item =>
+        (item.title && item.title.toLowerCase().includes(q)) ||
+        (item.description && item.description.toLowerCase().includes(q))
+    );
   }
 
-  return list
-})
+  return list;
+});
 </script>
 
 <style scoped>
@@ -984,9 +956,18 @@ const filteredItems = computed(() => {
 }
 
 @keyframes pulse {
-  0% { transform: scale(0.8); opacity: 0.5; }
-  50% { transform: scale(1.2); opacity: 1; }
-  100% { transform: scale(0.8); opacity: 0.5; }
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
 }
 
 .meta-info-row {
@@ -1024,7 +1005,6 @@ const filteredItems = computed(() => {
 .bio-more:hover {
   color: #ff2442;
 }
-
 
 .header-right-actions {
   display: flex;
@@ -1072,7 +1052,7 @@ const filteredItems = computed(() => {
   right: 0;
   bottom: 0;
   background-color: #cbd5e1;
-  transition: .3s;
+  transition: 0.3s;
   border-radius: 20px;
 }
 
@@ -1082,13 +1062,13 @@ const filteredItems = computed(() => {
 
 .slider:before {
   position: absolute;
-  content: "";
+  content: '';
   height: 12px;
   width: 12px;
   left: 3px;
   bottom: 3px;
   background-color: white;
-  transition: .3s;
+  transition: 0.3s;
   border-radius: 50%;
 }
 
@@ -1643,7 +1623,8 @@ input:checked + .slider:before {
   background: #e11d48;
 }
 
-.privacy-btn:disabled, .delete-btn:disabled {
+.privacy-btn:disabled,
+.delete-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -2066,8 +2047,12 @@ input:checked + .slider:before {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 响应式：跟随 TopNav 高度变化 */

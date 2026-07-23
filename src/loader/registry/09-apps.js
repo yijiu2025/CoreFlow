@@ -19,7 +19,7 @@ import { roleRegistry } from '../../utils/PbacRegistry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default async (app) => {
+export default async app => {
   const appsDir = path.resolve(__dirname, '../../app');
 
   if (!fs.existsSync(appsDir)) {
@@ -28,7 +28,7 @@ export default async (app) => {
   }
 
   const entries = fs.readdirSync(appsDir, { withFileTypes: true });
-  const appDirs = entries.filter((e) => e.isDirectory());
+  const appDirs = entries.filter(e => e.isDirectory());
   let loadedCount = 0;
 
   // ============== 阶段 1：扫描应用，加载配置/权限/角色/OAuth 客户端 ==============

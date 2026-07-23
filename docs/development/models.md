@@ -46,15 +46,13 @@ export default (sequelize, DataTypes) => {
       tableName: 'myapp_article',
       timestamps: true,
       paranoid: true,
-      indexes: [
-        { fields: ['user_id'], name: 'idx_article_user' }
-      ],
+      indexes: [{ fields: ['user_id'], name: 'idx_article_user' }],
       comment: '文章表'
     }
   );
 
   // 关联定义
-  Article.associate = (models) => {
+  Article.associate = models => {
     Article.belongsTo(models.User, {
       foreignKey: 'user_id',
       as: 'author',
@@ -68,15 +66,15 @@ export default (sequelize, DataTypes) => {
 
 ## 文件规范
 
-| 规则 | 说明 |
-|------|------|
+| 规则   | 说明                                             |
+| ------ | ------------------------------------------------ |
 | 文件名 | 大驼峰，与 `sequelize.define()` 的第一个参数一致 |
-| 目录 | 按应用放入 `src/models/{app_name}/` |
-| 导出 | 工厂函数 `(sequelize, DataTypes) => Model` |
-| 关联 | 通过 `Model.associate = (models) => {}` 定义 |
-| 软删除 | 需要 `paranoid: true` + `delete_version` 字段 |
-| 时间戳 | 统一 `timestamps: true` |
-| 表名 | `{app_name}_{功能}` 格式 |
+| 目录   | 按应用放入 `src/models/{app_name}/`              |
+| 导出   | 工厂函数 `(sequelize, DataTypes) => Model`       |
+| 关联   | 通过 `Model.associate = (models) => {}` 定义     |
+| 软删除 | 需要 `paranoid: true` + `delete_version` 字段    |
+| 时间戳 | 统一 `timestamps: true`                          |
+| 表名   | `{app_name}_{功能}` 格式                         |
 
 ## 自动注册
 
@@ -89,13 +87,13 @@ const user = await app.db.user.User.findByPk(article.user_id);
 
 ## DDD 分域
 
-| 域 | 目录 | 模型 | 核心问题 |
-|----|------|------|----------|
-| 身份核心 | `models/user/` | User, UserIdentity | "你是谁？" |
-| 访问控制 | `models/iam/` | Role, UserRole, InlinePolicy | "你能干什么？" |
+| 域       | 目录              | 模型                                   | 核心问题           |
+| -------- | ----------------- | -------------------------------------- | ------------------ |
+| 身份核心 | `models/user/`    | User, UserIdentity                     | "你是谁？"         |
+| 访问控制 | `models/iam/`     | Role, UserRole, InlinePolicy           | "你能干什么？"     |
 | 委派授权 | `models/oauth21/` | OauthClient, OauthToken, OauthApproval | "第三方能干什么？" |
-| 会话管理 | `models/session/` | UserSession, SessionToken, SessionLog | "你在哪登录？" |
-| 系统设施 | `models/notice/` | EmailCode, NoticeConfig | 系统配置 |
+| 会话管理 | `models/session/` | UserSession, SessionToken, SessionLog  | "你在哪登录？"     |
+| 系统设施 | `models/notice/`  | EmailCode, NoticeConfig                | 系统配置           |
 
 ## Sequelize 查询
 
@@ -112,7 +110,7 @@ await user.update({ username: 'bob' });
 await User.update({ status: 0 }, { where: { id: 1 } });
 
 // 删除
-await User.destroy({ where: { id: 1 } });           // 软删除
+await User.destroy({ where: { id: 1 } }); // 软删除
 await User.destroy({ where: { id: 1 }, force: true }); // 硬删除
 
 // 复杂查询
@@ -128,7 +126,7 @@ const users = await User.findAll({
 });
 
 // 事务
-const result = await sequelize.transaction(async (t) => {
+const result = await sequelize.transaction(async t => {
   const user = await User.create({ username: 'alice' }, { transaction: t });
   await UserIdentity.create({ user_id: user.id }, { transaction: t });
   return user;

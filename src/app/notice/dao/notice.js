@@ -116,10 +116,7 @@ class NoticeDao {
     if (!NoticeConfig) return DEFAULT_CHANNELS;
 
     // 尝试从 DB 读取通道配置
-    const channelsConfig = await NoticeConfig.getVal(
-      'notification_channels',
-      null
-    );
+    const channelsConfig = await NoticeConfig.getVal('notification_channels', null);
     if (channelsConfig) {
       try {
         return JSON.parse(channelsConfig);
@@ -137,12 +134,7 @@ class NoticeDao {
   async updateChannels(channels) {
     const { NoticeConfig } = sequelize.models;
     if (!NoticeConfig) throw new Error('NoticeConfig model not found');
-    await NoticeConfig.setVal(
-      'notification_channels',
-      JSON.stringify(channels),
-      '通知通道配置',
-      'system'
-    );
+    await NoticeConfig.setVal('notification_channels', JSON.stringify(channels), '通知通道配置', 'system');
   }
 
   /**

@@ -5,14 +5,14 @@
 
 /** 默认密码策略 */
 const DEFAULT_POLICY = {
-  minLength: 8,           // 最小长度
-  maxLength: 128,         // 最大长度
+  minLength: 8, // 最小长度
+  maxLength: 128, // 最大长度
   requireUppercase: true, // 需要大写字母
   requireLowercase: true, // 需要小写字母
-  requireNumbers: true,   // 需要数字
-  requireSpecial: false,  // 需要特殊字符
-  maxHistory: 5,          // 记住最近 N 个密码，防止重复使用
-  maxAgeDays: 0           // 密码有效期（天），0 表示永不过期
+  requireNumbers: true, // 需要数字
+  requireSpecial: false, // 需要特殊字符
+  maxHistory: 5, // 记住最近 N 个密码，防止重复使用
+  maxAgeDays: 0 // 密码有效期（天），0 表示永不过期
 };
 
 /**

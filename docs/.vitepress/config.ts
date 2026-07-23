@@ -1,13 +1,11 @@
-import { defineConfig } from 'vitepress'
+import { defineConfig } from 'vitepress';
 
 export default defineConfig({
   lang: 'zh-CN',
   title: 'CoreFlow',
   description: '企业级 Node.js 全栈框架',
 
-  head: [
-    ['link', { rel: 'icon', href: '/logo.svg' }]
-  ],
+  head: [['link', { rel: 'icon', href: '/logo.svg' }]],
 
   themeConfig: {
     logo: '/logo.svg',
@@ -90,15 +88,11 @@ export default defineConfig({
       },
       {
         text: '路线图',
-        items: [
-          { text: '升级路线图', link: '/roadmap/' }
-        ]
+        items: [{ text: '升级路线图', link: '/roadmap/' }]
       }
     ],
 
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/yijiu2025/CoreFlow' }
-    ],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/yijiu2025/CoreFlow' }],
 
     footer: {
       message: '基于 MIT 许可发布',
@@ -138,4 +132,4 @@ export default defineConfig({
       text: '在 GitHub 上编辑此页面'
     }
   }
-})
+});

@@ -13,7 +13,7 @@ import fp from 'fastify-plugin';
  * @property {(data: any[], total: number, page: number, pageSize: number) => import('fastify').FastifyReply} paginated - 分页响应
  */
 
-export default fp(async (app) => {
+export default fp(async app => {
   app.decorateReply('result', {
     getter() {
       const reply = this;

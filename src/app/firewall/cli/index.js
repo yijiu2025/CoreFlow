@@ -22,12 +22,12 @@ export default {
   appName: 'firewall',
   description: '防火墙管理',
   subcommands: {
-    'status':    { description: '查看防火墙状态', handler: status },
-    'blocks':    { description: '查看封禁列表',   handler: listBlocks },
-    'whitelist': { description: '查看白名单',     handler: listWhitelist },
-    'ban':       { description: '添加封禁 IP',    handler: addBlock },
-    'unban':     { description: '解除封禁 IP',    handler: removeBlock },
-    'allow':     { description: '添加白名单 IP',  handler: addWhitelist },
-    'stats':     { description: '流量统计',       handler: trafficStats },
+    status: { description: '查看防火墙状态', handler: status },
+    blocks: { description: '查看封禁列表', handler: listBlocks },
+    whitelist: { description: '查看白名单', handler: listWhitelist },
+    ban: { description: '添加封禁 IP', handler: addBlock },
+    unban: { description: '解除封禁 IP', handler: removeBlock },
+    allow: { description: '添加白名单 IP', handler: addWhitelist },
+    stats: { description: '流量统计', handler: trafficStats }
   }
 };

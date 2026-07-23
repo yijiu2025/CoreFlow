@@ -8,7 +8,7 @@ export async function up({ queryInterface, Sequelize }) {
   // 辅助函数：幂等建表
   async function createTableIfNotExists(tableName, columns, options = {}) {
     const [tables] = await queryInterface.sequelize.query('SHOW TABLES');
-    const exists = tables.some((t) => Object.values(t)[0] === tableName);
+    const exists = tables.some(t => Object.values(t)[0] === tableName);
     if (!exists) {
       await queryInterface.createTable(tableName, columns, options);
     }
@@ -34,11 +34,18 @@ export async function up({ queryInterface, Sequelize }) {
     description: { type: Sequelize.STRING(255), comment: '角色描述' },
     delete_version: { type: Sequelize.BIGINT, allowNull: false, defaultValue: 0, comment: '软删除版本标志' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') },
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    },
     deleted_at: { type: Sequelize.DATE, allowNull: true }
   });
 
-  await addIndexIfNotExists('iam_role', ['app_id', 'code', 'delete_version'], { unique: true, name: 'uk_role_app_code' });
+  await addIndexIfNotExists('iam_role', ['app_id', 'code', 'delete_version'], {
+    unique: true,
+    name: 'uk_role_app_code'
+  });
 
   // 2. iam_user_role - 用户与角色关联表
   await createTableIfNotExists('iam_user_role', {
@@ -50,11 +57,18 @@ export async function up({ queryInterface, Sequelize }) {
     granted_by: { type: Sequelize.BIGINT, allowNull: true, comment: '授权人ID' },
     delete_version: { type: Sequelize.BIGINT, allowNull: false, defaultValue: 0, comment: '软删除版本标志' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') },
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    },
     deleted_at: { type: Sequelize.DATE, allowNull: true }
   });
 
-  await addIndexIfNotExists('iam_user_role', ['user_id', 'role_id', 'app_id', 'delete_version'], { unique: true, name: 'uk_user_role' });
+  await addIndexIfNotExists('iam_user_role', ['user_id', 'role_id', 'app_id', 'delete_version'], {
+    unique: true,
+    name: 'uk_user_role'
+  });
   await addIndexIfNotExists('iam_user_role', ['user_id', 'app_id', 'expire_at'], { name: 'idx_user_app_expire' });
 
   // 3. iam_inline_policy - 用户内联策略表
@@ -64,7 +78,11 @@ export async function up({ queryInterface, Sequelize }) {
     app_id: { type: Sequelize.STRING(64), allowNull: false, defaultValue: 'GLOBAL', comment: '应用标识' },
     policy: { type: Sequelize.JSON, allowNull: false, comment: '用户个人策略文档' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') },
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    },
     deleted_at: { type: Sequelize.DATE, allowNull: true }
   });
 
@@ -78,10 +96,17 @@ export async function up({ queryInterface, Sequelize }) {
     action: { type: Sequelize.STRING(100), allowNull: false, comment: '操作编码' },
     app_id: { type: Sequelize.STRING(100), allowNull: false, comment: '所属应用ID' },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
 
-  await addIndexIfNotExists('permissions', ['app_id', 'module', 'action'], { unique: true, name: 'uk_app_module_action' });
+  await addIndexIfNotExists('permissions', ['app_id', 'module', 'action'], {
+    unique: true,
+    name: 'uk_app_module_action'
+  });
 }
 
 export async function down({ queryInterface }) {

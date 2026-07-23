@@ -15,10 +15,10 @@ const qrcodeConfig = config.qrcode;
 
 /** 扫码状态 */
 export const QR_STATUS = {
-  PENDING: 'pending',     // 等待扫码
-  SCANNED: 'scanned',     // 已扫码，待确认
+  PENDING: 'pending', // 等待扫码
+  SCANNED: 'scanned', // 已扫码，待确认
   CONFIRMED: 'confirmed', // 已确认
-  EXPIRED: 'expired'      // 已过期
+  EXPIRED: 'expired' // 已过期
 };
 
 class QrCodeService {
@@ -33,13 +33,17 @@ class QrCodeService {
     const sessionId = uuidv4();
     const expiresAt = Date.now() + cfg.ttl * 1000;
 
-    await store.set(sessionId, {
-      status: QR_STATUS.PENDING,
-      scannedBy: null,
-      confirmedBy: null,
-      createdAt: Date.now(),
-      expiresAt
-    }, cfg.ttl);
+    await store.set(
+      sessionId,
+      {
+        status: QR_STATUS.PENDING,
+        scannedBy: null,
+        confirmedBy: null,
+        createdAt: Date.now(),
+        expiresAt
+      },
+      cfg.ttl
+    );
 
     // 二维码内容：包含 sessionId 的登录 URL
     const qrContent = `auth://login?sessionId=${sessionId}`;

@@ -2,12 +2,12 @@
 
 ## 技术选型
 
-| 领域 | 选型 |
-|------|------|
-| 语言 | **TypeScript 严格模式**，禁止无故使用 `any` |
-| 构建 | Vite |
-| 请求 | Axios，所有 API 调用在统一层管理 |
-| 代码质量 | ESLint + Prettier |
+| 领域     | 选型                                        |
+| -------- | ------------------------------------------- |
+| 语言     | **TypeScript 严格模式**，禁止无故使用 `any` |
+| 构建     | Vite                                        |
+| 请求     | Axios，所有 API 调用在统一层管理            |
+| 代码质量 | ESLint + Prettier                           |
 
 ### TypeScript 严格模式配置
 
@@ -26,12 +26,12 @@
 }
 ```
 
-| 选项 | 说明 |
-|------|------|
-| `strict: true` | 启用所有严格类型检查 |
-| `noUncheckedIndexedAccess` | 数组/对象索引返回 `T \| undefined` |
-| `noUnusedLocals` | 禁止未使用的局部变量 |
-| `noUnusedParameters` | 禁止未使用的参数 |
+| 选项                         | 说明                                           |
+| ---------------------------- | ---------------------------------------------- |
+| `strict: true`               | 启用所有严格类型检查                           |
+| `noUncheckedIndexedAccess`   | 数组/对象索引返回 `T \| undefined`             |
+| `noUnusedLocals`             | 禁止未使用的局部变量                           |
+| `noUnusedParameters`         | 禁止未使用的参数                               |
 | `exactOptionalPropertyTypes` | 可选属性不能赋值 `undefined`（视项目情况启用） |
 
 ---
@@ -42,10 +42,10 @@
 
 前端通过 `VITE_` 前缀的环境变量与后端通信，项目初始化时必须创建 `.env` 文件：
 
-| 变量 | 说明 | 开发默认值 | 必填 |
-|------|------|-----------|------|
-| `VITE_API_URL` | 后端 API 地址 | `http://localhost:3000` | ✅ |
-| `VITE_WS_HOST` | WebSocket 地址 | `localhost:3000` | 按需 |
+| 变量           | 说明             | 开发默认值              | 必填 |
+| -------------- | ---------------- | ----------------------- | ---- |
+| `VITE_API_URL` | 后端 API 地址    | `http://localhost:3000` | ✅   |
+| `VITE_WS_HOST` | WebSocket 地址   | `localhost:3000`        | 按需 |
 | `VITE_SSO_URL` | SSO 登录页面地址 | `http://localhost:5174` | 按需 |
 
 ### 文件层级
@@ -61,13 +61,13 @@
 `src/api/index.ts` 中通过环境变量拼接后端地址，而非硬编码：
 
 ```typescript
-import axios from 'axios'
+import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL + '/stick/v1',
   timeout: 10000,
-  withCredentials: true  // 跨域携带 Cookie
-})
+  withCredentials: true // 跨域携带 Cookie
+});
 ```
 
 ### 开发环境代理
@@ -106,22 +106,22 @@ server: {
 
 ```typescript
 interface AuthData {
-  roles: string[]           // 角色编码列表
+  roles: string[]; // 角色编码列表
   permissions: {
-    allows: string[]         // 允许列表，支持通配符
-    denies: string[]         // 拒绝列表，deny 优先
-  }
+    allows: string[]; // 允许列表，支持通配符
+    denies: string[]; // 拒绝列表，deny 优先
+  };
 }
 ```
 
 ### 通配符规则
 
-| 模式 | 匹配范围 | 示例 |
-|------|----------|------|
-| `*` | 所有权限 | 管理员拥有全部权限 |
-| `模块名:*` | 某模块下所有权限 | `模块名:资源:操作` |
-| `模块名:资源:*` | 某资源的所有操作 | `模块名:资源:create`、`模块名:资源:delete` |
-| `模块名:资源:操作` | 精确匹配 | 只匹配该权限 |
+| 模式               | 匹配范围         | 示例                                       |
+| ------------------ | ---------------- | ------------------------------------------ |
+| `*`                | 所有权限         | 管理员拥有全部权限                         |
+| `模块名:*`         | 某模块下所有权限 | `模块名:资源:操作`                         |
+| `模块名:资源:*`    | 某资源的所有操作 | `模块名:资源:create`、`模块名:资源:delete` |
+| `模块名:资源:操作` | 精确匹配         | 只匹配该权限                               |
 
 ### 权限判断逻辑（deny 永远优先）
 
@@ -137,18 +137,22 @@ interface AuthData {
 
 ### 全局指令
 
-| 指令 | 用途 | 说明 |
-|------|------|------|
+| 指令     | 用途     | 说明                                                       |
+| -------- | -------- | ---------------------------------------------------------- |
 | `v-auth` | 权限控制 | 支持仅验权限、或权限+角色组合验证。无权限时元素从 DOM 移除 |
 
 ### v-auth 指令
 
 ```vue
 <!-- 仅验权限 -->
-<button v-auth="'system:config:write'">保存</button>                          <!-- 单权限 -->
-<button v-auth="['system:config:write', 'system:config:delete']">操作</button>  <!-- 多权限 OR -->
-<button v-auth="{ any: ['system:config:write', 'system:config:delete'] }">操作</button>  <!-- 显式 OR -->
-<button v-auth="{ all: ['system:config:write', 'system:config:delete'] }">操作</button>  <!-- AND -->
+<button v-auth="'system:config:write'">保存</button>
+<!-- 单权限 -->
+<button v-auth="['system:config:write', 'system:config:delete']">操作</button>
+<!-- 多权限 OR -->
+<button v-auth="{ any: ['system:config:write', 'system:config:delete'] }">操作</button>
+<!-- 显式 OR -->
+<button v-auth="{ all: ['system:config:write', 'system:config:delete'] }">操作</button>
+<!-- AND -->
 
 <!-- 权限 + 角色组合验证（同时满足才放行） -->
 <button v-auth="{ perm: 'system:config:write', role: 'admin' }">保存</button>
@@ -156,19 +160,21 @@ interface AuthData {
 <button v-auth="{ perm: { all: ['a', 'b'] }, role: 'admin' }">操作</button>
 
 <!-- 可选 modifier -->
-<button v-auth:disabled="'system:config:write'">保存</button>   <!-- 无权限时禁用，不移除 -->
-<button v-auth:hidden="'system:config:write'">保存</button>     <!-- 无权限时隐藏，不移除 -->
+<button v-auth:disabled="'system:config:write'">保存</button>
+<!-- 无权限时禁用，不移除 -->
+<button v-auth:hidden="'system:config:write'">保存</button>
+<!-- 无权限时隐藏，不移除 -->
 ```
 
 ### 指令注册
 
 ```typescript
 // src/directives/index.ts
-import type { App } from 'vue'
-import { authDirective } from './auth'
+import type { App } from 'vue';
+import { authDirective } from './auth';
 
 export function setupDirectives(app: App) {
-  app.directive('auth', authDirective)
+  app.directive('auth', authDirective);
 }
 ```
 
@@ -181,7 +187,7 @@ export function setupDirectives(app: App) {
 路由文件统一放在 `src/router/index.ts` 中，使用 `vue-router` 的 createRouter：
 
 ```typescript
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router';
 
 const routes = [
   {
@@ -202,12 +208,12 @@ const routes = [
     component: () => import('@/views/DashboardView.vue'),
     meta: { title: '仪表盘', requireLogin: true, permission: 'dashboard:read' }
   }
-]
+];
 
 const router = createRouter({
   history: createWebHistory(),
   routes
-})
+});
 ```
 
 ### 路由懒加载
@@ -216,11 +222,11 @@ const router = createRouter({
 
 ```typescript
 // ✅ 正确：懒加载
-component: () => import('@/views/HomeView.vue')
+component: () => import('@/views/HomeView.vue');
 
 // ❌ 错误：同步加载，会增加首屏包体积
-import HomeView from '@/views/HomeView.vue'
-component: HomeView
+import HomeView from '@/views/HomeView.vue';
+component: HomeView;
 ```
 
 ### 路由守卫
@@ -230,40 +236,44 @@ component: HomeView
 ```typescript
 router.beforeEach(async (to, from, next) => {
   // 设置页面标题
-  document.title = (to.meta.title as string) || '默认标题'
+  document.title = (to.meta.title as string) || '默认标题';
 
   // 需要登录但未登录 → 跳转登录页
   if (to.meta.requireLogin && !authStore.isLoggedIn) {
-    return next({ name: 'login', query: { redirect: to.fullPath } })
+    return next({ name: 'login', query: { redirect: to.fullPath } });
   }
 
   // 需要权限但无权限 → 跳转 403
   if (to.meta.permission && !authStore.hasPermission(to.meta.permission as string)) {
-    return next({ name: 'forbidden' })
+    return next({ name: 'forbidden' });
   }
 
-  next()
-})
+  next();
+});
 ```
 
 ### 路由元信息（meta）
 
-| 字段 | 类型 | 说明 | 示例 |
-|------|------|------|------|
-| `title` | `string` | 页面标题，守卫中设置 `document.title` | `'首页'` |
-| `requireLogin` | `boolean` | 是否需要登录 | `true` |
-| `permission` | `string` | 需要的权限编码 | `'dashboard:read'` |
-| `roles` | `string[]` | 允许的角色列表 | `['admin', 'operator']` |
-| `keepAlive` | `boolean` | 是否启用 keep-alive | `true` |
+| 字段           | 类型       | 说明                                  | 示例                    |
+| -------------- | ---------- | ------------------------------------- | ----------------------- |
+| `title`        | `string`   | 页面标题，守卫中设置 `document.title` | `'首页'`                |
+| `requireLogin` | `boolean`  | 是否需要登录                          | `true`                  |
+| `permission`   | `string`   | 需要的权限编码                        | `'dashboard:read'`      |
+| `roles`        | `string[]` | 允许的角色列表                        | `['admin', 'operator']` |
+| `keepAlive`    | `boolean`  | 是否启用 keep-alive                   | `true`                  |
 
 ---
 
 ## 三、SFC 代码块顺序
 
 ```vue
-<template> ... </template>
-<script setup lang="ts"> ... </script>
-<style scoped> ... </style>
+<template>...</template>
+<script setup lang="ts">
+...
+</script>
+<style scoped>
+...
+</style>
 ```
 
 ---
@@ -303,52 +313,82 @@ router.beforeEach(async (to, from, next) => {
 ```
 
 ```css
-.modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.45);
-  backdrop-filter: blur(12px); display: flex; align-items: center;
-  justify-content: center; z-index: 1000; padding: 20px; }
-.modal-card { width: 100%; max-width: 420px; background: var(--bg-card);
-  border-radius: 20px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15);
-  animation: fadeIn .2s ease forwards; }
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.modal-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-card);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+  animation: fadeIn 0.2s ease forwards;
+}
 ```
 
 ### 4.4 懒加载弹窗
 
 ```ts
-const Modal = shallowRef<any>(null)
+const Modal = shallowRef<any>(null);
 const ensureModal = async () => {
-  if (!Modal.value) Modal.value = defineAsyncComponent(() => import('@/components/...'))
-}
-watch(showModal, (v) => { if (v) ensureModal() }, { immediate: true })
+  if (!Modal.value) Modal.value = defineAsyncComponent(() => import('@/components/...'));
+};
+watch(
+  showModal,
+  v => {
+    if (v) ensureModal();
+  },
+  { immediate: true }
+);
 ```
 
 ### 4.5 keep-alive 视图
 
 ```ts
-import { onActivated } from 'vue'
+import { onActivated } from 'vue';
 
 // 子路由切换回来时重置状态
 onActivated(() => {
-  activeTab.value = 'default'
-  scrollToTop()
-})
+  activeTab.value = 'default';
+  scrollToTop();
+});
 ```
 
 ### 4.6 Composable 单例模式
 
 ```ts
-const MyStateSymbol = Symbol('myState')
+const MyStateSymbol = Symbol('myState');
 export function useMyState() {
-  const injected = inject<ReturnType<typeof createState>>(MyStateSymbol, null)
-  if (injected) return injected
-  const state = createState(); provide(MyStateSymbol, state); return state
+  const injected = inject<ReturnType<typeof createState>>(MyStateSymbol, null);
+  if (injected) return injected;
+  const state = createState();
+  provide(MyStateSymbol, state);
+  return state;
 }
 ```
 
 ### 4.7 空状态视图
 
 ```css
-.empty-state { flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; text-align: center; padding: 20px; margin-top: -5%; }
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+  margin-top: -5%;
+}
 ```
 
 ---
@@ -384,24 +424,24 @@ export function useMyState() {
 
 ### 第一层：功能分类
 
-| 分类 | 说明 |
-|------|------|
-| `modals/` | 弹窗/模态对话框 |
-| `popovers/` | 悬浮卡片/气泡/信息提示 |
-| `panels/` | 控制面板/侧栏工具箱/浮动面板 |
-| `layouts/` | 结构布局/导航/顶栏/核心渲染区 |
-| `cards/` | 具有重复渲染特性的数据或业务卡片 |
-| `widgets/` | 大幅定制的小部件/页面特色区块 |
-| `common/` | 跨业务通用的基础组件 |
+| 分类        | 说明                             |
+| ----------- | -------------------------------- |
+| `modals/`   | 弹窗/模态对话框                  |
+| `popovers/` | 悬浮卡片/气泡/信息提示           |
+| `panels/`   | 控制面板/侧栏工具箱/浮动面板     |
+| `layouts/`  | 结构布局/导航/顶栏/核心渲染区    |
+| `cards/`    | 具有重复渲染特性的数据或业务卡片 |
+| `widgets/`  | 大幅定制的小部件/页面特色区块    |
+| `common/`   | 跨业务通用的基础组件             |
 
 ### 第二层：业务页面
 
-| 页面 | 说明 |
-|------|------|
-| `home/` | 首页/展示流页面 |
-| `editor/` | 画布编辑中心页面 |
-| `login/` | 登录/验证页面 |
-| `mine/` | 我的个人资产/历史信息页面 |
+| 页面      | 说明                      |
+| --------- | ------------------------- |
+| `home/`   | 首页/展示流页面           |
+| `editor/` | 画布编辑中心页面          |
+| `login/`  | 登录/验证页面             |
+| `mine/`   | 我的个人资产/历史信息页面 |
 
 ### 完整示例
 

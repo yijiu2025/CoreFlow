@@ -1,6 +1,156 @@
-import{d as y,u as _,o as k,c as u,b as s,e as i,f as e,Q as f,t as a,n as x,s as b,k as w}from"./index-C531BqZY.js";import{I as g}from"./wrench-CXNTiZy0.js";import{c as q,_ as C}from"./_plugin-vue_export-helper-DTPmx0_K.js";import{M as z}from"./message-circle-C3r4ZyRP.js";import{U as M}from"./users-BaaIlyJv.js";/**
+import {
+  d as y,
+  u as _,
+  o as k,
+  c as u,
+  b as s,
+  e as i,
+  f as e,
+  Q as f,
+  t as a,
+  n as x,
+  s as b,
+  k as w
+} from './index-C531BqZY.js';
+import { I as g } from './wrench-CXNTiZy0.js';
+import { c as q, _ as C } from './_plugin-vue_export-helper-DTPmx0_K.js';
+import { M as z } from './message-circle-C3r4ZyRP.js';
+import { U as M } from './users-BaaIlyJv.js';
+/**
  * @license lucide-vue-next v1.0.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
- */const S=q("mail",[["path",{d:"m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7",key:"132q7q"}],["rect",{x:"2",y:"4",width:"20",height:"16",rx:"2",key:"izxlao"}]]),E={class:"modal-header"},I={class:"header-title-group"},V={class:"modal-body"},A={class:"brand-panel"},B={class:"brand-sticky"},D={class:"tech-list"},Q={class:"tech-row"},$={class:"tech-val"},L={class:"tech-row"},N={class:"tech-val"},T={class:"contact-panel"},j={class:"contact-card"},P={class:"contact-icon"},U={class:"contact-body"},F=["href"],G={class:"contact-card"},Y={class:"contact-icon"},H={class:"contact-card"},J={class:"contact-icon"},K={class:"qrcode-box"},O={class:"copyright"},c="qirlyh@163.com",n="柒染靓月",R="770605918",W="/posecraft/src/assets/imgs/qrcode.jpg",X=y({__name:"AboutModal",emits:["close"],setup(Z){const d=_(),l=w(()=>d.isDark),r="生产环境",v="5.x",p=new Date().getFullYear(),h=o=>{const t=o.target;t.style.display="none"};return(o,t)=>(k(),u("div",{class:"modal-overlay animate-fade-in",onClick:t[1]||(t[1]=b(m=>o.$emit("close"),["self"]))},[s("div",{class:x(["about-modal-card",{"dark-mode":l.value}])},[s("div",E,[s("div",I,[i(e(g),{size:18}),t[2]||(t[2]=s("h3",null,"关于",-1))]),s("button",{class:"close-btn",onClick:t[0]||(t[0]=m=>o.$emit("close"))},"×")]),s("div",V,[s("div",A,[s("div",B,[t[7]||(t[7]=f('<div class="app-logo" data-v-e0809e25><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-v-e0809e25><rect x="2" y="4" width="20" height="16" rx="3" data-v-e0809e25></rect><circle cx="12" cy="12" r="2.5" fill="white" data-v-e0809e25></circle><circle cx="12" cy="9" r="1.5" stroke-width="1.2" data-v-e0809e25></circle><line x1="12" y1="10.5" x2="12" y2="14" stroke-width="1.2" data-v-e0809e25></line><line x1="12" y1="12" x2="9.5" y2="10" stroke-width="1" data-v-e0809e25></line><line x1="12" y1="12" x2="14.5" y2="10" stroke-width="1" data-v-e0809e25></line><line x1="12" y1="14" x2="10" y2="16.5" stroke-width="1" data-v-e0809e25></line><line x1="12" y1="14" x2="14" y2="16.5" stroke-width="1" data-v-e0809e25></line></svg></div><div class="app-name" data-v-e0809e25>PoseCraft</div><div class="app-desc" data-v-e0809e25>AI 智能姿势分析与图片编辑平台</div><div class="version-badge" data-v-e0809e25>v1.0.0</div><div class="brand-divider" data-v-e0809e25></div>',5)),s("div",D,[s("div",Q,[t[3]||(t[3]=s("span",{class:"tech-key"},"运行环境",-1)),s("span",$,a(e(r)),1)]),t[5]||(t[5]=s("div",{class:"tech-row"},[s("span",{class:"tech-key"},"前端框架"),s("span",{class:"tech-val"},"Vue 3 + TypeScript")],-1)),s("div",L,[t[4]||(t[4]=s("span",{class:"tech-key"},"构建工具",-1)),s("span",N,"Vite "+a(e(v)),1)]),t[6]||(t[6]=s("div",{class:"tech-row"},[s("span",{class:"tech-key"},"图标库"),s("span",{class:"tech-val"},"Lucide")],-1))])])]),s("div",T,[t[11]||(t[11]=s("div",{class:"section-title"},"联系方式",-1)),s("div",j,[s("div",P,[i(e(S),{size:18})]),s("div",U,[t[8]||(t[8]=s("span",{class:"contact-label"},"邮箱",-1)),s("a",{href:"mailto:"+c,class:"contact-link"},a(c),8,F)])]),s("div",G,[s("div",Y,[i(e(z),{size:18})]),s("div",{class:"contact-body"},[t[9]||(t[9]=s("span",{class:"contact-label"},"公众号",-1)),s("span",{class:"contact-text"},a(n))])]),s("div",H,[s("div",J,[i(e(M),{size:18})]),s("div",{class:"contact-body"},[t[10]||(t[10]=s("span",{class:"contact-label"},"QQ群",-1)),s("span",{class:"contact-text"},a(R))])]),s("div",K,[s("img",{src:W,alt:"公众号二维码",class:"qrcode-img",onError:h},null,32),s("span",{class:"qrcode-hint"},"微信扫码关注「"+a(n)+"」")]),s("div",O,"© "+a(e(p))+" PoseCraft",1)])])],2)]))}}),is=C(X,[["__scopeId","data-v-e0809e25"]]);export{is as default};
+ */ const S = q('mail', [
+    ['path', { d: 'm22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7', key: '132q7q' }],
+    ['rect', { x: '2', y: '4', width: '20', height: '16', rx: '2', key: 'izxlao' }]
+  ]),
+  E = { class: 'modal-header' },
+  I = { class: 'header-title-group' },
+  V = { class: 'modal-body' },
+  A = { class: 'brand-panel' },
+  B = { class: 'brand-sticky' },
+  D = { class: 'tech-list' },
+  Q = { class: 'tech-row' },
+  $ = { class: 'tech-val' },
+  L = { class: 'tech-row' },
+  N = { class: 'tech-val' },
+  T = { class: 'contact-panel' },
+  j = { class: 'contact-card' },
+  P = { class: 'contact-icon' },
+  U = { class: 'contact-body' },
+  F = ['href'],
+  G = { class: 'contact-card' },
+  Y = { class: 'contact-icon' },
+  H = { class: 'contact-card' },
+  J = { class: 'contact-icon' },
+  K = { class: 'qrcode-box' },
+  O = { class: 'copyright' },
+  c = 'qirlyh@163.com',
+  n = '柒染靓月',
+  R = '770605918',
+  W = '/posecraft/src/assets/imgs/qrcode.jpg',
+  X = y({
+    __name: 'AboutModal',
+    emits: ['close'],
+    setup(Z) {
+      const d = _(),
+        l = w(() => d.isDark),
+        r = '生产环境',
+        v = '5.x',
+        p = new Date().getFullYear(),
+        h = o => {
+          const t = o.target;
+          t.style.display = 'none';
+        };
+      return (o, t) => (
+        k(),
+        u(
+          'div',
+          { class: 'modal-overlay animate-fade-in', onClick: t[1] || (t[1] = b(m => o.$emit('close'), ['self'])) },
+          [
+            s(
+              'div',
+              { class: x(['about-modal-card', { 'dark-mode': l.value }]) },
+              [
+                s('div', E, [
+                  s('div', I, [i(e(g), { size: 18 }), t[2] || (t[2] = s('h3', null, '关于', -1))]),
+                  s('button', { class: 'close-btn', onClick: t[0] || (t[0] = m => o.$emit('close')) }, '×')
+                ]),
+                s('div', V, [
+                  s('div', A, [
+                    s('div', B, [
+                      t[7] ||
+                        (t[7] = f(
+                          '<div class="app-logo" data-v-e0809e25><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-v-e0809e25><rect x="2" y="4" width="20" height="16" rx="3" data-v-e0809e25></rect><circle cx="12" cy="12" r="2.5" fill="white" data-v-e0809e25></circle><circle cx="12" cy="9" r="1.5" stroke-width="1.2" data-v-e0809e25></circle><line x1="12" y1="10.5" x2="12" y2="14" stroke-width="1.2" data-v-e0809e25></line><line x1="12" y1="12" x2="9.5" y2="10" stroke-width="1" data-v-e0809e25></line><line x1="12" y1="12" x2="14.5" y2="10" stroke-width="1" data-v-e0809e25></line><line x1="12" y1="14" x2="10" y2="16.5" stroke-width="1" data-v-e0809e25></line><line x1="12" y1="14" x2="14" y2="16.5" stroke-width="1" data-v-e0809e25></line></svg></div><div class="app-name" data-v-e0809e25>PoseCraft</div><div class="app-desc" data-v-e0809e25>AI 智能姿势分析与图片编辑平台</div><div class="version-badge" data-v-e0809e25>v1.0.0</div><div class="brand-divider" data-v-e0809e25></div>',
+                          5
+                        )),
+                      s('div', D, [
+                        s('div', Q, [
+                          t[3] || (t[3] = s('span', { class: 'tech-key' }, '运行环境', -1)),
+                          s('span', $, a(e(r)), 1)
+                        ]),
+                        t[5] ||
+                          (t[5] = s(
+                            'div',
+                            { class: 'tech-row' },
+                            [
+                              s('span', { class: 'tech-key' }, '前端框架'),
+                              s('span', { class: 'tech-val' }, 'Vue 3 + TypeScript')
+                            ],
+                            -1
+                          )),
+                        s('div', L, [
+                          t[4] || (t[4] = s('span', { class: 'tech-key' }, '构建工具', -1)),
+                          s('span', N, 'Vite ' + a(e(v)), 1)
+                        ]),
+                        t[6] ||
+                          (t[6] = s(
+                            'div',
+                            { class: 'tech-row' },
+                            [s('span', { class: 'tech-key' }, '图标库'), s('span', { class: 'tech-val' }, 'Lucide')],
+                            -1
+                          ))
+                      ])
+                    ])
+                  ]),
+                  s('div', T, [
+                    t[11] || (t[11] = s('div', { class: 'section-title' }, '联系方式', -1)),
+                    s('div', j, [
+                      s('div', P, [i(e(S), { size: 18 })]),
+                      s('div', U, [
+                        t[8] || (t[8] = s('span', { class: 'contact-label' }, '邮箱', -1)),
+                        s('a', { href: 'mailto:' + c, class: 'contact-link' }, a(c), 8, F)
+                      ])
+                    ]),
+                    s('div', G, [
+                      s('div', Y, [i(e(z), { size: 18 })]),
+                      s('div', { class: 'contact-body' }, [
+                        t[9] || (t[9] = s('span', { class: 'contact-label' }, '公众号', -1)),
+                        s('span', { class: 'contact-text' }, a(n))
+                      ])
+                    ]),
+                    s('div', H, [
+                      s('div', J, [i(e(M), { size: 18 })]),
+                      s('div', { class: 'contact-body' }, [
+                        t[10] || (t[10] = s('span', { class: 'contact-label' }, 'QQ群', -1)),
+                        s('span', { class: 'contact-text' }, a(R))
+                      ])
+                    ]),
+                    s('div', K, [
+                      s('img', { src: W, alt: '公众号二维码', class: 'qrcode-img', onError: h }, null, 32),
+                      s('span', { class: 'qrcode-hint' }, '微信扫码关注「' + a(n) + '」')
+                    ]),
+                    s('div', O, '© ' + a(e(p)) + ' PoseCraft', 1)
+                  ])
+                ])
+              ],
+              2
+            )
+          ]
+        )
+      );
+    }
+  }),
+  is = C(X, [['__scopeId', 'data-v-e0809e25']]);
+export { is as default };

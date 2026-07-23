@@ -36,13 +36,13 @@ arguments:
 
 ### 什么时候用 KX？
 
-| 场景 | 触发词 | 操作 |
-|------|--------|------|
-| **新项目/新 App** | "kt架构"、"架构文件"、".kx" | 先输出需求文档 → 多轮提问确认 → 创建 `guide/` 目录下的 `.kx` 文件 |
-| **新增页面** | "新页面"、"写页面"、"页面描述" | 先确认页面功能 → 在 `pages/` 下新增 `.kx` 文件 |
-| **定义数据模型** | "数据模型"、"实体设计" | 在 `models/` 下新增 `.kx` 文件 |
-| **定义 API** | "接口设计"、"API 规划" | 在 `models/api.kx` 中集中定义 |
-| **生成代码** | "生成代码"、"根据架构生成" | 读取 `.kx` 文件 → 生成 Vue 3 代码 |
+| 场景              | 触发词                         | 操作                                                              |
+| ----------------- | ------------------------------ | ----------------------------------------------------------------- |
+| **新项目/新 App** | "kt架构"、"架构文件"、".kx"    | 先输出需求文档 → 多轮提问确认 → 创建 `guide/` 目录下的 `.kx` 文件 |
+| **新增页面**      | "新页面"、"写页面"、"页面描述" | 先确认页面功能 → 在 `pages/` 下新增 `.kx` 文件                    |
+| **定义数据模型**  | "数据模型"、"实体设计"         | 在 `models/` 下新增 `.kx` 文件                                    |
+| **定义 API**      | "接口设计"、"API 规划"         | 在 `models/api.kx` 中集中定义                                     |
+| **生成代码**      | "生成代码"、"根据架构生成"     | 读取 `.kx` 文件 → 生成 Vue 3 代码                                 |
 
 ### KX 文件结构
 
@@ -80,36 +80,36 @@ arguments:
 
 编写 `.kx` 文件时，必须遵守以下规则，避免反模式：
 
-| 规则 | 说明 | 反例 | 正例 |
-|:---|:---|:---|:---|
-| `@sync` 只用于计算属性 | 不是变量赋值 | `@sync = 'all'` | `@navigate click -> @state activeTab = 'all'` |
-| `@empty` 在容器内 | 必须在 @list/@detail 内 | `@empty 独立` | `@list { @empty { ... } }` |
-| 数组操作用 `=` 展开 | 不用 JS 方法名 | `.unshift(new)` | `= [new, ...old]` |
-| `@model` 命名规范 | API 用 `@model API` | `@model StockAPI` | `@model API { @api ... }` |
-| 组件定义接口 | 复杂组件声明 @prop | `@note K线图组件` | `@detail KChart { @prop data }` |
-| 页面引用模型 | 顶部加 @ref | 无 @ref | `@ref ../models/stock.kx` |
-| 全局状态在布局 | 共享状态在 layouts/ | 每个页面重复声明 | 布局文件 `@state isLoggedIn` |
-| 循环不写死名称 | 动态列表用变量名 | `@card 上证指数 (v-for: idx)` | `@card 指数卡片 (v-for: idx)` |
+| 规则                   | 说明                    | 反例                          | 正例                                          |
+| :--------------------- | :---------------------- | :---------------------------- | :-------------------------------------------- |
+| `@sync` 只用于计算属性 | 不是变量赋值            | `@sync = 'all'`               | `@navigate click -> @state activeTab = 'all'` |
+| `@empty` 在容器内      | 必须在 @list/@detail 内 | `@empty 独立`                 | `@list { @empty { ... } }`                    |
+| 数组操作用 `=` 展开    | 不用 JS 方法名          | `.unshift(new)`               | `= [new, ...old]`                             |
+| `@model` 命名规范      | API 用 `@model API`     | `@model StockAPI`             | `@model API { @api ... }`                     |
+| 组件定义接口           | 复杂组件声明 @prop      | `@note K线图组件`             | `@detail KChart { @prop data }`               |
+| 页面引用模型           | 顶部加 @ref             | 无 @ref                       | `@ref ../models/stock.kx`                     |
+| 全局状态在布局         | 共享状态在 layouts/     | 每个页面重复声明              | 布局文件 `@state isLoggedIn`                  |
+| 循环不写死名称         | 动态列表用变量名        | `@card 上证指数 (v-for: idx)` | `@card 指数卡片 (v-for: idx)`                 |
 
 ### KX 核心语法速览
 
-| 指令 | 用途 | 示例 |
-|------|------|------|
-| `@page` | 页面定义 | `@page /home (首页) extends Layout` |
-| `@layout` / `@slot` | 布局骨架 | `@layout Main { @slot main (role: main) }` |
-| `@model` / `@field` | 数据模型 | `@model User { @field name: string }` |
-| `@api` | 接口请求 | `@api GET /works -> works` |
-| `@state` / `@prop` / `@param` | 状态/属性/参数 | `@state page: number = 1` |
-| `@mutation` | 状态变更 | `@mutation set list[idx].liked = true` |
-| `@sync` | 计算属性 | `@sync filtered = list.filter(...)` |
-| `@render` | 条件渲染 | `@render when: loading` |
-| `@navigate` | 路由跳转 | `@navigate click -> /detail` |
-| `@button` / `@card` / `@list` | 组件 | 23 种组件指令 |
-| `@modal` / `@popover` | 弹窗/浮窗 | `@modal 确认删除` |
-| `@hover` / `@leave` / `@delay` | 悬浮交互 | `@hover -> @popover 详情` |
-| `@login` / `@permission` | 权限控制 | `@login` / `@permission work:create` |
-| `@note` | 业务约束（AI 强制识别） | `@note 仅 VIP 可见` |
-| `@ref` | 跨文件引用 | `@ref ../models/user.kx` |
+| 指令                           | 用途                    | 示例                                       |
+| ------------------------------ | ----------------------- | ------------------------------------------ |
+| `@page`                        | 页面定义                | `@page /home (首页) extends Layout`        |
+| `@layout` / `@slot`            | 布局骨架                | `@layout Main { @slot main (role: main) }` |
+| `@model` / `@field`            | 数据模型                | `@model User { @field name: string }`      |
+| `@api`                         | 接口请求                | `@api GET /works -> works`                 |
+| `@state` / `@prop` / `@param`  | 状态/属性/参数          | `@state page: number = 1`                  |
+| `@mutation`                    | 状态变更                | `@mutation set list[idx].liked = true`     |
+| `@sync`                        | 计算属性                | `@sync filtered = list.filter(...)`        |
+| `@render`                      | 条件渲染                | `@render when: loading`                    |
+| `@navigate`                    | 路由跳转                | `@navigate click -> /detail`               |
+| `@button` / `@card` / `@list`  | 组件                    | 23 种组件指令                              |
+| `@modal` / `@popover`          | 弹窗/浮窗               | `@modal 确认删除`                          |
+| `@hover` / `@leave` / `@delay` | 悬浮交互                | `@hover -> @popover 详情`                  |
+| `@login` / `@permission`       | 权限控制                | `@login` / `@permission work:create`       |
+| `@note`                        | 业务约束（AI 强制识别） | `@note 仅 VIP 可见`                        |
+| `@ref`                         | 跨文件引用              | `@ref ../models/user.kx`                   |
 
 完整语法和 AI 生成映射表见 [KX 规范](assets/project-template/kt/kx-lang/SPEC.md)。
 
@@ -129,13 +129,13 @@ arguments:
 
 ### 模块边界规则（核心铁律第3条展开）
 
-| 规则 | 说明 | 示例 |
-|:---|:---|:---|
-| **职责单一** | 一个组件只负责一个功能域 | 搜索组件只管搜索框，不管分类 Tab |
-| **不内嵌其他模块** | 组件 A 中不出现组件 B 的 UI/逻辑 | 列表页里的 Tab 不应写在搜索组件里 |
-| **状态归属** | 由消费方（父组件）管理状态，不内嵌数据 | Tab 切换状态属于列表页，不属于搜索组件 |
-| **跨模块通信** | 通过 props / emit / v-model / 共享 composable | 子组件需要数据 → props；需要通知 → emit |
-| **禁止反向依赖** | 子组件不依赖父组件的内部结构 | 搜索组件不应知道列表页的存在 |
+| 规则               | 说明                                          | 示例                                    |
+| :----------------- | :-------------------------------------------- | :-------------------------------------- |
+| **职责单一**       | 一个组件只负责一个功能域                      | 搜索组件只管搜索框，不管分类 Tab        |
+| **不内嵌其他模块** | 组件 A 中不出现组件 B 的 UI/逻辑              | 列表页里的 Tab 不应写在搜索组件里       |
+| **状态归属**       | 由消费方（父组件）管理状态，不内嵌数据        | Tab 切换状态属于列表页，不属于搜索组件  |
+| **跨模块通信**     | 通过 props / emit / v-model / 共享 composable | 子组件需要数据 → props；需要通知 → emit |
+| **禁止反向依赖**   | 子组件不依赖父组件的内部结构                  | 搜索组件不应知道列表页的存在            |
 
 **判断标准**：如果修改功能 X 需要改动组件 Y 的文件，说明边界划错了。
 
@@ -153,24 +153,24 @@ arguments:
 
 > 以下规则约束 AI 在修改代码时的行为，防止盲目操作。
 
-| 规则 | 说明 |
-|:---|:---|
-| **先读后改** | 修改前先 Read，禁止凭记忆修改代码 |
-| **不改无关代码** | 只改任务相关部分，不顺便重构 |
-| **不确定先问** | 业务逻辑不确定时先提问，不猜测 |
-| **不删未读内容** | 不删除未读过的文件内容 |
-| **KX 先读规范** | 涉及 KX 架构文件时，先读取 SPEC.md 了解完整语法，不凭记忆写 `.kx` 文件 |
-| **禁止假数据** | 严禁 mock 数据。必须全链路打通：后端 API → 真实数据源 → 前端展示 |
-| **功能完整性** | 写了页面必须有对应 API，写了 API 必须有对应 DAO/Service，不允许半截功能 |
-| **开发时关权限** | `requireLogin: false`，功能调通后再恢复 |
-| **API 必须 curl 验证** | 写完 API 立即 curl 验证：状态码 + 数据结构 + 边界值 |
-| **外部 API 先 curl** | 调用外部 API 前先 curl 确认字段名，不猜测返回格式 |
-| **追踪调用链** | 审查代码时追踪 import 依赖和调用方（至少 2 层），不只看单个文件 |
-| **功能一致性** | 相同功能的不同路径安全级别必须一致（如 HTTP 和 WebSocket 守卫） |
-| **错误码优先** | 错误判断用 `err.code`，不用 `err.message.includes()` 匹配文本 |
-| **空值保护** | 所有嵌套对象访问用可选链 `?.`，逐层保护 |
-| **超时保护** | 所有可能阻塞的异步操作设置超时 |
-| **提交后复盘** | 每次提交后，回顾本次对话和修改，提取可复用的模式/反模式，更新 skill 自身 |
+| 规则                   | 说明                                                                     |
+| :--------------------- | :----------------------------------------------------------------------- |
+| **先读后改**           | 修改前先 Read，禁止凭记忆修改代码                                        |
+| **不改无关代码**       | 只改任务相关部分，不顺便重构                                             |
+| **不确定先问**         | 业务逻辑不确定时先提问，不猜测                                           |
+| **不删未读内容**       | 不删除未读过的文件内容                                                   |
+| **KX 先读规范**        | 涉及 KX 架构文件时，先读取 SPEC.md 了解完整语法，不凭记忆写 `.kx` 文件   |
+| **禁止假数据**         | 严禁 mock 数据。必须全链路打通：后端 API → 真实数据源 → 前端展示         |
+| **功能完整性**         | 写了页面必须有对应 API，写了 API 必须有对应 DAO/Service，不允许半截功能  |
+| **开发时关权限**       | `requireLogin: false`，功能调通后再恢复                                  |
+| **API 必须 curl 验证** | 写完 API 立即 curl 验证：状态码 + 数据结构 + 边界值                      |
+| **外部 API 先 curl**   | 调用外部 API 前先 curl 确认字段名，不猜测返回格式                        |
+| **追踪调用链**         | 审查代码时追踪 import 依赖和调用方（至少 2 层），不只看单个文件          |
+| **功能一致性**         | 相同功能的不同路径安全级别必须一致（如 HTTP 和 WebSocket 守卫）          |
+| **错误码优先**         | 错误判断用 `err.code`，不用 `err.message.includes()` 匹配文本            |
+| **空值保护**           | 所有嵌套对象访问用可选链 `?.`，逐层保护                                  |
+| **超时保护**           | 所有可能阻塞的异步操作设置超时                                           |
+| **提交后复盘**         | 每次提交后，回顾本次对话和修改，提取可复用的模式/反模式，更新 skill 自身 |
 
 ### 任务执行规范
 
@@ -205,34 +205,41 @@ Step 5: 开始生成代码
 # 项目名称需求文档
 
 ## 1. 产品定位
+
 - 一句话描述：这个项目/App 做什么？
 - 目标用户：谁会用？
 - 核心价值：解决什么问题？
 
 ## 2. 功能清单
+
 - 功能 A：描述
 - 功能 B：描述
 - ...
 
 ## 3. 页面规划
+
 - 页面 1：路由 /xxx，用途
 - 页面 2：路由 /xxx，用途
 - ...
 
 ## 4. 数据模型
+
 - 实体 1：字段列表
 - 实体 2：字段列表
 - ...
 
 ## 5. API 接口
+
 - 接口 1：GET /api/xxx，用途
 - 接口 2：POST /api/xxx，用途
 - ...
 
 ## 6. 数据来源
+
 - 外部 API / 本地数据库 / 第三方服务
 
 ## 7. 权限设计
+
 - 角色：操作权限
 ```
 
@@ -241,22 +248,26 @@ Step 5: 开始生成代码
 需求文档输出后，**不要直接写代码**。必须通过多轮提问确认需求，每轮 2-4 个问题：
 
 **第一轮（产品定位）：**
+
 - 项目名称和定位是什么？
 - 目标用户是谁？使用场景是什么？
 - 核心功能有哪些？（列出 3-5 个主要功能点）
 
 **第二轮（功能细节）：**
+
 - 数据模型有哪些？（核心实体和字段）
 - API 需要哪些接口？（method + url 列表）
 - 前端页面有哪些？（路由列表）
 
 **第三轮（技术选型与约束）：**
+
 - 数据来源？（本地数据库 / 外部 API / 第三方服务）
 - 权限设计？（角色 + 权限编码）
 - 前端架构？（Vue 3 / React / 其他）
 - 是否需要先创建 KX 架构文件？（新项目/新 App 默认需要）
 
 **提问规范：**
+
 - 开放式问题优先（"这个功能期望达到什么效果？"）
 - 避免只有"是/否"的封闭问题
 - 如果涉及多个方案，列出选项让用户选择
@@ -292,49 +303,49 @@ Step 5: 开始生成代码
 
 ## 反例速查
 
-| 场景 | ❌ 错误写法 | ✅ 正确做法 |
-|------|-----------|-----------|
-| API 请求 | 组件内直接 `axios.get('/api/users')` | 封装到 `src/api/user.ts`，组件调 `getUser()` |
-| 错误处理 | `catch { /* 吞掉 */ }` | `catch (e) { logger.error(e); throw e }` |
-| 注释 | 只写"做了什么" `// 设置用户名为张三` | 写"为什么" `// 用户未设置昵称时用手机号占位` |
-| 类型 | `const data: any = res.data` | `const data: ApiResult<User> = res.data` |
-| 样式 | 内联 `style="color: red"` | CSS 变量 `var(--color-error)` 或 Tailwind 类 |
-| 数据库 | `WHERE id = ${id}` 拼接 SQL | 参数化 `WHERE id = ?` / Sequelize `where: { id }` |
-| 提交 | `git commit -m "fix bug"` | `git commit -m "fix(login): 修复空指针异常"` |
-| 分支同步 | `git merge develop` 在 feature 分支 | `git rebase develop` 保持线性历史 |
-| 敏感信息 | 代码中硬编码 `apiKey: "sk-xxx"` | 从 `process.env.API_KEY` 读取 |
-| 文件大小 | 一个文件 2000 行不拆分 | 超过 700 行按功能拆分为独立模块 |
-| 错误判断 | `err.message.includes('路由重复')` 匹配中文文本 | `err.code === 'DUPLICATE_ROUTE'` 用错误码 |
-| 嵌套访问 | `configs[a].groups[b].apis[c]` 直接链式访问 | `configs[a]?.groups?.[b]?.apis?.[c]` 可选链保护 |
-| 跳过路径 | `if (!x) continue` 静默跳过 | `if (!x) { console.warn('...'); continue; }` 记录日志 |
-| 异步超时 | `await register(app)` 无超时限制 | `Promise.race([register(app), timeoutPromise])` 超时保护 |
-| 优雅关闭 | `setTimeout` 定时任务无人清理 | 暴露 `flush()` 方法，`onClose` 钩子调用 |
-| 安全一致性 | HTTP 路由有 IP 白名单，WebSocket 没有 | 所有入口路径安全级别一致 |
-| 异常输入 | 非预期格式静默返回 false | 记录 `console.warn` 告知配置错误 |
-| onClose 错误 | `onClose` 钩子不 catch，异步异常静默丢失 | 内部 try-catch + console.error |
-| 进程退出日志 | `process.exit(1)` 导致日志可能被截断 | `setTimeout(() => process.exit(1), 100)` 给刷新时间 |
-| 配置无警告 | 生产环境缺少关键配置，启动时不提醒 | 启动时输出 `⚠️ [App]` 警告，附修复指引 |
-| 公共 API 参数 | 假设调用方总传有效参数，深层崩溃 | 入口处 `if (!param) { err.code='INVALID_PARAM'; throw err; }` |
-| 标识符生成 | 用 `Math.random()` 生成标识符 | 用固定默认值 `'default'` 或 `crypto.randomUUID()` |
-| reply.sent | 直接 `return reply.send(...)` 不标记 sent | `reply.send(...); reply.sent = true; return;` |
+| 场景          | ❌ 错误写法                                     | ✅ 正确做法                                                   |
+| ------------- | ----------------------------------------------- | ------------------------------------------------------------- |
+| API 请求      | 组件内直接 `axios.get('/api/users')`            | 封装到 `src/api/user.ts`，组件调 `getUser()`                  |
+| 错误处理      | `catch { /* 吞掉 */ }`                          | `catch (e) { logger.error(e); throw e }`                      |
+| 注释          | 只写"做了什么" `// 设置用户名为张三`            | 写"为什么" `// 用户未设置昵称时用手机号占位`                  |
+| 类型          | `const data: any = res.data`                    | `const data: ApiResult<User> = res.data`                      |
+| 样式          | 内联 `style="color: red"`                       | CSS 变量 `var(--color-error)` 或 Tailwind 类                  |
+| 数据库        | `WHERE id = ${id}` 拼接 SQL                     | 参数化 `WHERE id = ?` / Sequelize `where: { id }`             |
+| 提交          | `git commit -m "fix bug"`                       | `git commit -m "fix(login): 修复空指针异常"`                  |
+| 分支同步      | `git merge develop` 在 feature 分支             | `git rebase develop` 保持线性历史                             |
+| 敏感信息      | 代码中硬编码 `apiKey: "sk-xxx"`                 | 从 `process.env.API_KEY` 读取                                 |
+| 文件大小      | 一个文件 2000 行不拆分                          | 超过 700 行按功能拆分为独立模块                               |
+| 错误判断      | `err.message.includes('路由重复')` 匹配中文文本 | `err.code === 'DUPLICATE_ROUTE'` 用错误码                     |
+| 嵌套访问      | `configs[a].groups[b].apis[c]` 直接链式访问     | `configs[a]?.groups?.[b]?.apis?.[c]` 可选链保护               |
+| 跳过路径      | `if (!x) continue` 静默跳过                     | `if (!x) { console.warn('...'); continue; }` 记录日志         |
+| 异步超时      | `await register(app)` 无超时限制                | `Promise.race([register(app), timeoutPromise])` 超时保护      |
+| 优雅关闭      | `setTimeout` 定时任务无人清理                   | 暴露 `flush()` 方法，`onClose` 钩子调用                       |
+| 安全一致性    | HTTP 路由有 IP 白名单，WebSocket 没有           | 所有入口路径安全级别一致                                      |
+| 异常输入      | 非预期格式静默返回 false                        | 记录 `console.warn` 告知配置错误                              |
+| onClose 错误  | `onClose` 钩子不 catch，异步异常静默丢失        | 内部 try-catch + console.error                                |
+| 进程退出日志  | `process.exit(1)` 导致日志可能被截断            | `setTimeout(() => process.exit(1), 100)` 给刷新时间           |
+| 配置无警告    | 生产环境缺少关键配置，启动时不提醒              | 启动时输出 `⚠️ [App]` 警告，附修复指引                        |
+| 公共 API 参数 | 假设调用方总传有效参数，深层崩溃                | 入口处 `if (!param) { err.code='INVALID_PARAM'; throw err; }` |
+| 标识符生成    | 用 `Math.random()` 生成标识符                   | 用固定默认值 `'default'` 或 `crypto.randomUUID()`             |
+| reply.sent    | 直接 `return reply.send(...)` 不标记 sent       | `reply.send(...); reply.sent = true; return;`                 |
 
 ---
 
 ## 规范参考文档
 
-| 规范 | 文件 | 说明 |
-|------|------|------|
-| 📝 注释规范 | [note.md](references/note.md) | 文件头注释、函数注释、行内注释、TODO 标记、控制台日志 |
-| 🏷️ 命名规范 | [naming-convention.md](references/naming-convention.md) | 代码/文件/数据库/权限/API 命名规则 |
-| ⚙️ 后端规范 | [backend/main.md](references/backend/main.md) | 目录结构、API 路由、认证、守卫、数据库 |
-| 🎨 前端规范 | [frontend/main.md](references/frontend/main.md) | 技术栈、组件开发、数据加载、API 响应格式 |
-| 🧪 测试规范 | [testing.md](references/testing.md) | 测试文件命名、Jest/Vitest 模板、覆盖率阈值 |
-| 🔒 安全红线 | [security.md](references/security.md) | 敏感信息、XSS 防护、SQL 注入、权限校验、输入验证 |
-| 🌱 新项目模板 | [new-project.md](references/new-project.md) | 从零创建新项目时的初始化流程 |
-| 🎯 Git 规范 | [git-patterns.md](references/git-patterns.md) | 分支模型、提交信息、PR 模板、版本号 |
-| 🏗️ KX 架构规范 | [assets/project-template/kt/kx-lang/SPEC.md](assets/project-template/kt/kx-lang/SPEC.md) | KX 页面描述语言完整语法、AI 生成映射表 |
-| 📖 KX 快速入门 | [assets/project-template/kt/kx-lang/README.zh.md](assets/project-template/kt/kx-lang/README.zh.md) | KX 设计理念、快速上手、核心概念
-| 🔍 代码审查 | [code-review.md](references/code-review.md) | 企业级代码审查清单、空值安全、控制流安全、优雅关闭
+| 规范           | 文件                                                                                               | 说明                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 📝 注释规范    | [note.md](references/note.md)                                                                      | 文件头注释、函数注释、行内注释、TODO 标记、控制台日志 |
+| 🏷️ 命名规范    | [naming-convention.md](references/naming-convention.md)                                            | 代码/文件/数据库/权限/API 命名规则                    |
+| ⚙️ 后端规范    | [backend/main.md](references/backend/main.md)                                                      | 目录结构、API 路由、认证、守卫、数据库                |
+| 🎨 前端规范    | [frontend/main.md](references/frontend/main.md)                                                    | 技术栈、组件开发、数据加载、API 响应格式              |
+| 🧪 测试规范    | [testing.md](references/testing.md)                                                                | 测试文件命名、Jest/Vitest 模板、覆盖率阈值            |
+| 🔒 安全红线    | [security.md](references/security.md)                                                              | 敏感信息、XSS 防护、SQL 注入、权限校验、输入验证      |
+| 🌱 新项目模板  | [new-project.md](references/new-project.md)                                                        | 从零创建新项目时的初始化流程                          |
+| 🎯 Git 规范    | [git-patterns.md](references/git-patterns.md)                                                      | 分支模型、提交信息、PR 模板、版本号                   |
+| 🏗️ KX 架构规范 | [assets/project-template/kt/kx-lang/SPEC.md](assets/project-template/kt/kx-lang/SPEC.md)           | KX 页面描述语言完整语法、AI 生成映射表                |
+| 📖 KX 快速入门 | [assets/project-template/kt/kx-lang/README.zh.md](assets/project-template/kt/kx-lang/README.zh.md) | KX 设计理念、快速上手、核心概念                       |
+| 🔍 代码审查    | [code-review.md](references/code-review.md)                                                        | 企业级代码审查清单、空值安全、控制流安全、优雅关闭    |
 
 ---
 
@@ -354,6 +365,7 @@ Step 5: 开始生成代码
 ## Output Format (输出要求)
 
 1. **任务计划**: 接到任务后，先输出任务拆解列表，格式如下：
+
    ```
    ── 任务拆解 ──
    Task 1: xxx
@@ -362,11 +374,12 @@ Step 5: 开始生成代码
    Task 2: xxx
    ── 请确认是否按此计划执行 ──
    ```
+
    等待用户确认后再开始写代码。
 
 2. **思考过程**: 在写代码前，先简要分析需求并列出实现步骤。
 
-3. **代码输出**: 
+3. **代码输出**:
    - 每次只输出必要的文件，并在代码块上方标注完整的文件路径（例如：`src/components/Button.tsx`）。
    - 代码必须完整，不要使用 `// ... existing code ...` 这种省略号敷衍。
 
@@ -412,10 +425,9 @@ Step 5: 开始生成代码
    ```
 
    **复盘指南**：
-
    - 每次提交后，强制回顾本次对话中发现的问题
    - 问自己三个问题：
-     - *"这次修复的问题，有没有在其他地方也出现过？"* → 如果是，抽象为通用规则
-     - *"如果下次遇到类似场景，我希望 AI 自动做什么？"* → 添加到检查清单
-     - *"这次发现的模式，是项目特有的还是通用的？"* → 项目特有加 CLAUDE.md，通用加 skill
+     - _"这次修复的问题，有没有在其他地方也出现过？"_ → 如果是，抽象为通用规则
+     - _"如果下次遇到类似场景，我希望 AI 自动做什么？"_ → 添加到检查清单
+     - _"这次发现的模式，是项目特有的还是通用的？"_ → 项目特有加 CLAUDE.md，通用加 skill
    - 更新完成后在 commit message 中标注 `feat(skill):`

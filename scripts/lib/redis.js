@@ -94,14 +94,9 @@ export async function testRedisConnection() {
  * @returns {Promise<RedisInfo>}
  */
 export async function getRedisInfo(client) {
-  const [serverInfo, memoryInfo] = await Promise.all([
-    client.info('server'),
-    client.info('memory')
-  ]);
+  const [serverInfo, memoryInfo] = await Promise.all([client.info('server'), client.info('memory')]);
 
-  const [totalKeys] = await Promise.all([
-    client.dbsize()
-  ]);
+  const [totalKeys] = await Promise.all([client.dbsize()]);
 
   return {
     version: parseInfo(serverInfo, 'redis_version'),

@@ -9,10 +9,5 @@
       "@/*": ["src/*"]
     }
   },
-  "exclude": [
-    "node_modules",
-    "**/node_modules/*",
-    "oauth21",
-    "firewall"
-  ]
+  "exclude": ["node_modules", "**/node_modules/*", "oauth21", "firewall"]
 }

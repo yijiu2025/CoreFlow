@@ -3,11 +3,7 @@
  * Fastify 插件入口：注册速率限制、同步名单、挂载生命周期钩子
  * 安全检测逻辑委托给 engine/pipeline.js
  */
-import {
-  syncManualBlacklistToRedis,
-  syncManualWhitelistToRedis,
-  cleanupSaveTimer
-} from './dao/dao.js';
+import { syncManualBlacklistToRedis, syncManualWhitelistToRedis, cleanupSaveTimer } from './dao/dao.js';
 import {
   startCleanupTask,
   trackConnection,
@@ -45,13 +41,7 @@ export const initFirewall = fp(async function (app) {
     const { ip, ua, fingerprint } = buildRequestContext(request);
 
     // 第 1 阶段：全局封禁检查（连接数 + 黑名单）
-    const blocked = await checkGlobalBlockPhase(
-      app.redis,
-      ip,
-      fingerprint,
-      request._firewallLog,
-      reply
-    );
+    const blocked = await checkGlobalBlockPhase(app.redis, ip, fingerprint, request._firewallLog, reply);
     if (blocked) {
       request._firewallLogged = true;
       return;
@@ -61,12 +51,7 @@ export const initFirewall = fp(async function (app) {
     if (shouldSkipDeepCheck(request.url)) return;
 
     // 第 2 阶段：挑战 Cookie 验证（已通过的直接放行）
-    const passed = await checkChallengeCookie(
-      app.redis,
-      request,
-      ip,
-      fingerprint
-    );
+    const passed = await checkChallengeCookie(app.redis, request, ip, fingerprint);
     if (passed) return;
 
     // 第 3 阶段：深度检测管道（Bot / 地理信誉 / 端点限频）
@@ -118,12 +103,7 @@ export const initFirewall = fp(async function (app) {
   app.addHook('onResponse', async (request, reply) => {
     if ([404, 403].includes(reply.statusCode)) {
       try {
-        await checkNotFoundTrap(
-          app.redis,
-          request.ip,
-          request.url,
-          reply.statusCode
-        );
+        await checkNotFoundTrap(app.redis, request.ip, request.url, reply.statusCode);
       } catch (err) {
         console.warn(`[Firewall] Trap Triggered: ${request.ip} -> ${err.rule}`);
       }

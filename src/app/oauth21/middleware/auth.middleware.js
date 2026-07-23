@@ -42,7 +42,7 @@ export function checkScope(...requiredScopes) {
     }
 
     const userScopes = user.scope.split(' ');
-    const hasAll = requiredScopes.every((s) => userScopes.includes(s));
+    const hasAll = requiredScopes.every(s => userScopes.includes(s));
 
     if (!hasAll) {
       return reply.code(403).send({

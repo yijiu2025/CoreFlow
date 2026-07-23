@@ -82,14 +82,7 @@ export function issueAccessToken({ sub, client_id, scope, aud }) {
  * @param {string} [params.name] - 用户名称
  * @returns {string} JWT ID Token
  */
-export function issueIdToken({
-  sub,
-  client_id,
-  nonce,
-  auth_time,
-  email,
-  name
-}) {
+export function issueIdToken({ sub, client_id, nonce, auth_time, email, name }) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: config.server.issuer,

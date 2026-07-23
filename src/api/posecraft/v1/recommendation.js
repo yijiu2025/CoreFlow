@@ -47,9 +47,7 @@ export default async function (fastify) {
       const userId = request.state.user.userId;
 
       const success = await RecommendationDao.cancel(userId, { workId });
-      return success
-        ? reply.result.success('已取消推荐')
-        : reply.result.fail('未推荐过该作品', null, 404);
+      return success ? reply.result.success('已取消推荐') : reply.result.fail('未推荐过该作品', null, 404);
     }
   });
 
@@ -85,9 +83,7 @@ export default async function (fastify) {
       const userId = request.state.user.userId;
 
       const success = await RecommendationDao.cancel(userId, { templateId });
-      return success
-        ? reply.result.success('已取消推荐')
-        : reply.result.fail('未推荐过该模板', null, 404);
+      return success ? reply.result.success('已取消推荐') : reply.result.fail('未推荐过该模板', null, 404);
     }
   });
 

@@ -1,33 +1,33 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { bannerApi } from '../api/banner'
+import { ref, onMounted } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { bannerApi } from '../api/banner';
 
-const loading = ref(false)
-const list = ref<any[]>([])
-const total = ref(0)
-const dialogVisible = ref(false)
-const dialogTitle = ref('')
-const saving = ref(false)
-const form = ref<any>({})
-const query = ref({ page: 1, pageSize: 20 })
+const loading = ref(false);
+const list = ref<any[]>([]);
+const total = ref(0);
+const dialogVisible = ref(false);
+const dialogTitle = ref('');
+const saving = ref(false);
+const form = ref<any>({});
+const query = ref({ page: 1, pageSize: 20 });
 
 const fetchList = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    const res = await bannerApi.list(query.value)
+    const res = await bannerApi.list(query.value);
     if (res.data.code === 200) {
-      list.value = res.data.data
-      total.value = res.data.total
+      list.value = res.data.data;
+      total.value = res.data.total;
     } else {
-      ElMessage.error(res.data.message || '获取列表失败')
+      ElMessage.error(res.data.message || '获取列表失败');
     }
   } catch (err: any) {
-    ElMessage.error(err.message || '获取列表失败')
+    ElMessage.error(err.message || '获取列表失败');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const resetForm = () => {
   form.value = {
@@ -41,86 +41,88 @@ const resetForm = () => {
     enabled: true,
     start_at: null,
     end_at: null
-  }
-}
+  };
+};
 
 const handleCreate = () => {
-  resetForm()
-  dialogTitle.value = '新建 Banner'
-  dialogVisible.value = true
-}
+  resetForm();
+  dialogTitle.value = '新建 Banner';
+  dialogVisible.value = true;
+};
 
 const handleEdit = (row: any) => {
   form.value = {
     ...row,
     start_at: row.start_at ? new Date(row.start_at) : null,
     end_at: row.end_at ? new Date(row.end_at) : null
-  }
-  dialogTitle.value = '编辑 Banner'
-  dialogVisible.value = true
-}
+  };
+  dialogTitle.value = '编辑 Banner';
+  dialogVisible.value = true;
+};
 
 const handleSave = async () => {
   if (!form.value.title) {
-    ElMessage.warning('标题不能为空')
-    return
+    ElMessage.warning('标题不能为空');
+    return;
   }
-  saving.value = true
+  saving.value = true;
   try {
-    const data = { ...form.value }
-    if (data.start_at) data.start_at = new Date(data.start_at).toISOString()
-    if (data.end_at) data.end_at = new Date(data.end_at).toISOString()
+    const data = { ...form.value };
+    if (data.start_at) data.start_at = new Date(data.start_at).toISOString();
+    if (data.end_at) data.end_at = new Date(data.end_at).toISOString();
 
     if (data.id) {
-      await bannerApi.update(data.id, data)
-      ElMessage.success('更新成功')
+      await bannerApi.update(data.id, data);
+      ElMessage.success('更新成功');
     } else {
-      await bannerApi.create(data)
-      ElMessage.success('创建成功')
+      await bannerApi.create(data);
+      ElMessage.success('创建成功');
     }
-    dialogVisible.value = false
-    fetchList()
+    dialogVisible.value = false;
+    fetchList();
   } catch (err: any) {
-    ElMessage.error(err.message || '保存失败')
+    ElMessage.error(err.message || '保存失败');
   } finally {
-    saving.value = false
+    saving.value = false;
   }
-}
+};
 
 const handleDelete = async (id: number) => {
   try {
-    await ElMessageBox.confirm('确定要删除该 Banner 吗？', '删除确认', { type: 'warning' })
-    await bannerApi.remove(id)
-    ElMessage.success('删除成功')
-    fetchList()
+    await ElMessageBox.confirm('确定要删除该 Banner 吗？', '删除确认', { type: 'warning' });
+    await bannerApi.remove(id);
+    ElMessage.success('删除成功');
+    fetchList();
   } catch (e) {
-    if (e !== 'cancel') console.error(e)
+    if (e !== 'cancel') console.error(e);
   }
-}
+};
 
 const handleToggleEnabled = async (row: any) => {
   try {
-    await bannerApi.update(row.id, { enabled: row.enabled })
-    ElMessage.success('已更新')
+    await bannerApi.update(row.id, { enabled: row.enabled });
+    ElMessage.success('已更新');
   } catch (err: any) {
-    ElMessage.error(err.message || '更新失败')
-    row.enabled = !row.enabled // 回滚
+    ElMessage.error(err.message || '更新失败');
+    row.enabled = !row.enabled; // 回滚
   }
-}
+};
 
 const handleSizeChange = (val: number) => {
-  query.value.pageSize = val
-  fetchList()
-}
+  query.value.pageSize = val;
+  fetchList();
+};
 
 const handleCurrentChange = (val: number) => {
-  query.value.page = val
-  fetchList()
-}
+  query.value.page = val;
+  fetchList();
+};
 
-const fmtTime = (v: string | null) => v ? new Date(v).toLocaleString() : '—'
+const fmtTime = (v: string | null) => (v ? new Date(v).toLocaleString() : '—');
 
-onMounted(() => { fetchList() })
+onMounted(() => {
+  fetchList();
+});
 </script>
 
 <template>

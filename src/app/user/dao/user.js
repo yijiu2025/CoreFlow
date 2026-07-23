@@ -102,10 +102,7 @@ class UserDao {
     const user = identity.user;
 
     // [PBAC 核心]：计算当前应用下的有效策略
-    const { allows, denies } = await IamDao.buildUserEffectivePolicy(
-      user.uid,
-      appId || 'GLOBAL'
-    );
+    const { allows, denies } = await IamDao.buildUserEffectivePolicy(user.uid, appId || 'GLOBAL');
 
     if (sequelize.models.UserSession) {
       await sequelize.models.UserSession.upsert({
@@ -126,13 +123,9 @@ class UserDao {
       permissions: { allows, denies } // 将策略压入 Token
     });
 
-    const refreshToken = jwt.sign(
-      { uid: user.uid, appId, type: 'refresh' },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: '30d'
-      }
-    );
+    const refreshToken = jwt.sign({ uid: user.uid, appId, type: 'refresh' }, process.env.JWT_SECRET, {
+      expiresIn: '30d'
+    });
 
     return { accessToken, refreshToken };
   }
@@ -183,11 +176,8 @@ class UserDao {
 
     const hashedPassword = bcrypt.hashSync(password, 10);
 
-    return await sequelize.transaction(async (t) => {
-      const user = await sequelize.models.User.create(
-        { username, email },
-        { transaction: t }
-      );
+    return await sequelize.transaction(async t => {
+      const user = await sequelize.models.User.create({ username, email }, { transaction: t });
 
       await sequelize.models.UserIdentity.create(
         {

@@ -30,11 +30,7 @@ export async function listBlocks() {
       entries.map(([ip, data]) => {
         try {
           const info = JSON.parse(data);
-          return [
-            ip,
-            new Date(info.timestamp).toLocaleString('zh-CN'),
-            info.reason || '手动封禁'
-          ];
+          return [ip, new Date(info.timestamp).toLocaleString('zh-CN'), info.reason || '手动封禁'];
         } catch {
           return [ip, '未知', '未知'];
         }
@@ -64,7 +60,7 @@ export async function addBlock() {
       return;
     }
 
-    const reason = await ask(rl, '📝 封禁原因（可选）: ') || '手动封禁';
+    const reason = (await ask(rl, '📝 封禁原因（可选）: ')) || '手动封禁';
 
     const ok = await confirm(rl, `确认封禁 IP: ${ip}？`);
     if (!ok) {
@@ -72,11 +68,15 @@ export async function addBlock() {
       return;
     }
 
-    await redis.hset('fw:blocked:ips', ip, JSON.stringify({
-      timestamp: Date.now(),
-      reason,
-      source: 'manual'
-    }));
+    await redis.hset(
+      'fw:blocked:ips',
+      ip,
+      JSON.stringify({
+        timestamp: Date.now(),
+        reason,
+        source: 'manual'
+      })
+    );
 
     printSuccess(`已封禁 IP: ${ip}`);
   } finally {

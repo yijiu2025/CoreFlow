@@ -1,16 +1,16 @@
 /**
  * Fabric.js 编辑器组合式函数
  */
-import { ref, shallowRef, onUnmounted } from 'vue'
-import { fabric } from 'fabric'
+import { ref, shallowRef, onUnmounted } from 'vue';
+import { fabric } from 'fabric';
 
 export function useEditor() {
-  const canvas = shallowRef<fabric.Canvas | null>(null)
-  const activeTool = ref<string>('select')
-  const history = ref<string[]>([])
-  const historyIndex = ref(-1)
-  const canUndo = ref(false)
-  const canRedo = ref(false)
+  const canvas = shallowRef<fabric.Canvas | null>(null);
+  const activeTool = ref<string>('select');
+  const history = ref<string[]>([]);
+  const historyIndex = ref(-1);
+  const canUndo = ref(false);
+  const canRedo = ref(false);
 
   /**
    * 初始化画布
@@ -21,59 +21,59 @@ export function useEditor() {
       height,
       backgroundColor: '#ffffff',
       preserveObjectStacking: true
-    })
+    });
 
     // 监听变化保存历史
-    canvas.value.on('object:modified', saveHistory)
-    canvas.value.on('object:added', saveHistory)
+    canvas.value.on('object:modified', saveHistory);
+    canvas.value.on('object:added', saveHistory);
 
-    saveHistory()
-    return canvas.value
+    saveHistory();
+    return canvas.value;
   }
 
   /**
    * 保存历史状态
    */
   function saveHistory() {
-    if (!canvas.value) return
+    if (!canvas.value) return;
 
-    const json = JSON.stringify(canvas.value.toJSON())
-    history.value = history.value.slice(0, historyIndex.value + 1)
-    history.value.push(json)
-    historyIndex.value = history.value.length - 1
+    const json = JSON.stringify(canvas.value.toJSON());
+    history.value = history.value.slice(0, historyIndex.value + 1);
+    history.value.push(json);
+    historyIndex.value = history.value.length - 1;
 
-    canUndo.value = historyIndex.value > 0
-    canRedo.value = false
+    canUndo.value = historyIndex.value > 0;
+    canRedo.value = false;
   }
 
   /**
    * 撤销
    */
   function undo() {
-    if (!canvas.value || historyIndex.value <= 0) return
+    if (!canvas.value || historyIndex.value <= 0) return;
 
-    historyIndex.value--
-    const json = history.value[historyIndex.value]
+    historyIndex.value--;
+    const json = history.value[historyIndex.value];
     canvas.value.loadFromJSON(json, () => {
-      canvas.value?.renderAll()
-      canUndo.value = historyIndex.value > 0
-      canRedo.value = historyIndex.value < history.value.length - 1
-    })
+      canvas.value?.renderAll();
+      canUndo.value = historyIndex.value > 0;
+      canRedo.value = historyIndex.value < history.value.length - 1;
+    });
   }
 
   /**
    * 重做
    */
   function redo() {
-    if (!canvas.value || historyIndex.value >= history.value.length - 1) return
+    if (!canvas.value || historyIndex.value >= history.value.length - 1) return;
 
-    historyIndex.value++
-    const json = history.value[historyIndex.value]
+    historyIndex.value++;
+    const json = history.value[historyIndex.value];
     canvas.value.loadFromJSON(json, () => {
-      canvas.value?.renderAll()
-      canUndo.value = historyIndex.value > 0
-      canRedo.value = historyIndex.value < history.value.length - 1
-    })
+      canvas.value?.renderAll();
+      canUndo.value = historyIndex.value > 0;
+      canRedo.value = historyIndex.value < history.value.length - 1;
+    });
   }
 
   /**
@@ -81,41 +81,42 @@ export function useEditor() {
    */
   function loadImage(url: string): Promise<fabric.Image> {
     return new Promise((resolve, reject) => {
-      fabric.Image.fromURL(url, (img) => {
-        if (!canvas.value) {
-          reject(new Error('画布未初始化'))
-          return
-        }
+      fabric.Image.fromURL(
+        url,
+        img => {
+          if (!canvas.value) {
+            reject(new Error('画布未初始化'));
+            return;
+          }
 
-        // 缩放图片适应画布
-        const canvasWidth = canvas.value.getWidth()
-        const canvasHeight = canvas.value.getHeight()
-        const scale = Math.min(
-          canvasWidth / (img.width || 1),
-          canvasHeight / (img.height || 1)
-        )
+          // 缩放图片适应画布
+          const canvasWidth = canvas.value.getWidth();
+          const canvasHeight = canvas.value.getHeight();
+          const scale = Math.min(canvasWidth / (img.width || 1), canvasHeight / (img.height || 1));
 
-        img.set({
-          scaleX: scale,
-          scaleY: scale,
-          left: (canvasWidth - (img.width || 0) * scale) / 2,
-          top: (canvasHeight - (img.height || 0) * scale) / 2,
-          selectable: true
-        })
+          img.set({
+            scaleX: scale,
+            scaleY: scale,
+            left: (canvasWidth - (img.width || 0) * scale) / 2,
+            top: (canvasHeight - (img.height || 0) * scale) / 2,
+            selectable: true
+          });
 
-        canvas.value.add(img)
-        canvas.value.setActiveObject(img)
-        canvas.value.renderAll()
-        resolve(img)
-      }, { crossOrigin: 'anonymous' })
-    })
+          canvas.value.add(img);
+          canvas.value.setActiveObject(img);
+          canvas.value.renderAll();
+          resolve(img);
+        },
+        { crossOrigin: 'anonymous' }
+      );
+    });
   }
 
   /**
    * 添加文字
    */
   function addText(text = '双击编辑', options?: fabric.ITextOptions) {
-    if (!canvas.value) return
+    if (!canvas.value) return;
 
     const textObj = new fabric.IText(text, {
       left: canvas.value.getWidth() / 2,
@@ -126,18 +127,18 @@ export function useEditor() {
       originX: 'center',
       originY: 'center',
       ...options
-    })
+    });
 
-    canvas.value.add(textObj)
-    canvas.value.setActiveObject(textObj)
-    canvas.value.renderAll()
+    canvas.value.add(textObj);
+    canvas.value.setActiveObject(textObj);
+    canvas.value.renderAll();
   }
 
   /**
    * 添加形状
    */
   function addShape(type: 'rect' | 'circle' | 'triangle', options?: fabric.IObjectOptions) {
-    if (!canvas.value) return
+    if (!canvas.value) return;
 
     const defaultOptions = {
       left: canvas.value.getWidth() / 2,
@@ -149,63 +150,63 @@ export function useEditor() {
       originX: 'center' as const,
       originY: 'center' as const,
       ...options
-    }
+    };
 
-    let shape: fabric.Object
+    let shape: fabric.Object;
 
     switch (type) {
       case 'rect':
-        shape = new fabric.Rect(defaultOptions)
-        break
+        shape = new fabric.Rect(defaultOptions);
+        break;
       case 'circle':
-        shape = new fabric.Circle(defaultOptions)
-        break
+        shape = new fabric.Circle(defaultOptions);
+        break;
       case 'triangle':
-        shape = new fabric.Triangle(defaultOptions)
-        break
+        shape = new fabric.Triangle(defaultOptions);
+        break;
       default:
-        return
+        return;
     }
 
-    canvas.value.add(shape)
-    canvas.value.setActiveObject(shape)
-    canvas.value.renderAll()
+    canvas.value.add(shape);
+    canvas.value.setActiveObject(shape);
+    canvas.value.renderAll();
   }
 
   /**
    * 设置画笔
    */
   function setDrawingMode(enabled: boolean, color = '#000000', width = 5) {
-    if (!canvas.value) return
+    if (!canvas.value) return;
 
-    canvas.value.isDrawingMode = enabled
+    canvas.value.isDrawingMode = enabled;
     if (enabled) {
-      canvas.value.freeDrawingBrush.color = color
-      canvas.value.freeDrawingBrush.width = width
+      canvas.value.freeDrawingBrush.color = color;
+      canvas.value.freeDrawingBrush.width = width;
     }
-    activeTool.value = enabled ? 'draw' : 'select'
+    activeTool.value = enabled ? 'draw' : 'select';
   }
 
   /**
    * 删除选中对象
    */
   function deleteSelected() {
-    if (!canvas.value) return
+    if (!canvas.value) return;
 
-    const activeObjects = canvas.value.getActiveObjects()
-    activeObjects.forEach(obj => canvas.value?.remove(obj))
-    canvas.value.discardActiveObject()
-    canvas.value.renderAll()
+    const activeObjects = canvas.value.getActiveObjects();
+    activeObjects.forEach(obj => canvas.value?.remove(obj));
+    canvas.value.discardActiveObject();
+    canvas.value.renderAll();
   }
 
   /**
    * 设置滤镜
    */
   function applyFilter(filterType: string, value?: number) {
-    if (!canvas.value) return
+    if (!canvas.value) return;
 
-    const activeObject = canvas.value.getActiveObject() as fabric.Image
-    if (!activeObject || activeObject.type !== 'image') return
+    const activeObject = canvas.value.getActiveObject() as fabric.Image;
+    if (!activeObject || activeObject.type !== 'image') return;
 
     const filters: Record<string, any> = {
       brightness: new fabric.Image.filters.Brightness({ brightness: (value || 0) / 100 }),
@@ -214,13 +215,13 @@ export function useEditor() {
       grayscale: new fabric.Image.filters.Grayscale(),
       invert: new fabric.Image.filters.Invert(),
       sepia: new fabric.Image.filters.Sepia()
-    }
+    };
 
-    const filter = filters[filterType]
+    const filter = filters[filterType];
     if (filter) {
-      activeObject.filters = [filter]
-      activeObject.applyFilters()
-      canvas.value.renderAll()
+      activeObject.filters = [filter];
+      activeObject.applyFilters();
+      canvas.value.renderAll();
     }
   }
 
@@ -228,48 +229,48 @@ export function useEditor() {
    * 导出为图片
    */
   function exportImage(format: 'png' | 'jpeg' = 'png', quality = 1): string | null {
-    if (!canvas.value) return null
+    if (!canvas.value) return null;
 
     return canvas.value.toDataURL({
       format,
       quality,
       multiplier: 2
-    })
+    });
   }
 
   /**
    * 导出为 JSON
    */
   function exportJSON(): string | null {
-    if (!canvas.value) return null
-    return JSON.stringify(canvas.value.toJSON())
+    if (!canvas.value) return null;
+    return JSON.stringify(canvas.value.toJSON());
   }
 
   /**
    * 从 JSON 加载
    */
   function loadFromJSON(json: string): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       if (!canvas.value) {
-        resolve()
-        return
+        resolve();
+        return;
       }
 
       canvas.value.loadFromJSON(json, () => {
-        canvas.value?.renderAll()
-        resolve()
-      })
-    })
+        canvas.value?.renderAll();
+        resolve();
+      });
+    });
   }
 
   /**
    * 清空画布
    */
   function clearCanvas() {
-    if (!canvas.value) return
-    canvas.value.clear()
-    canvas.value.backgroundColor = '#ffffff'
-    canvas.value.renderAll()
+    if (!canvas.value) return;
+    canvas.value.clear();
+    canvas.value.backgroundColor = '#ffffff';
+    canvas.value.renderAll();
   }
 
   /**
@@ -277,14 +278,14 @@ export function useEditor() {
    */
   function dispose() {
     if (canvas.value) {
-      canvas.value.dispose()
-      canvas.value = null
+      canvas.value.dispose();
+      canvas.value = null;
     }
   }
 
   onUnmounted(() => {
-    dispose()
-  })
+    dispose();
+  });
 
   return {
     canvas,
@@ -305,5 +306,5 @@ export function useEditor() {
     undo,
     redo,
     dispose
-  }
+  };
 }

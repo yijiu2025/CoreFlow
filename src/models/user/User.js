@@ -127,7 +127,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  User.associate = (models) => {
+  User.associate = models => {
     // 1:N 关联多源身份凭证表 (启用 hooks 以在代码层面级联触发软删除)
     User.hasMany(models.UserIdentity, {
       foreignKey: 'user_id',
@@ -183,7 +183,7 @@ export default (sequelize, DataTypes) => {
   /**
    * 保存前：检测 phone 是否为明文（不含 ':'），是则加密
    */
-  User.beforeValidate((user) => {
+  User.beforeValidate(user => {
     if (user.phone && !isEncrypted(user.phone)) {
       user.phone = encryptPhone(user.phone);
     }
@@ -192,25 +192,25 @@ export default (sequelize, DataTypes) => {
   /**
    * 查询后：自动解密所有记录的 phone 字段
    */
-  User.afterFind((results) => {
-    if (!results) return
-    const items = Array.isArray(results) ? results : [results]
+  User.afterFind(results => {
+    if (!results) return;
+    const items = Array.isArray(results) ? results : [results];
     for (const item of items) {
       if (item && item.phone && isEncrypted(item.phone)) {
-        item.phone = decryptPhone(item.phone)
+        item.phone = decryptPhone(item.phone);
       }
     }
-  })
+  });
 
   /**
    * 静态方法：供迁移脚本调用，对明文手机号加密
    */
-  User.encryptPhoneStatic = encryptPhone
+  User.encryptPhoneStatic = encryptPhone;
 
   /**
    * 静态方法：供 API 层按需调用
    */
-  User.decryptPhoneStatic = decryptPhone
+  User.decryptPhoneStatic = decryptPhone;
 
   return User;
 };

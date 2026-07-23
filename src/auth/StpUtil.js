@@ -74,10 +74,7 @@ export default class StpUtil {
    * @returns {string|number|undefined}
    */
   static getLoginId() {
-    return (
-      StpUtil._getRequest().state?.user?.sub ||
-      StpUtil._getRequest().state?.user?.uid
-    );
+    return StpUtil._getRequest().state?.user?.sub || StpUtil._getRequest().state?.user?.uid;
   }
 
   /**
@@ -174,12 +171,12 @@ export default class StpUtil {
     const { allows, denies } = StpUtil.getPermissionList();
 
     // Deny 优先
-    if (denies.some((p) => StpUtil._isMatch(p, permission))) {
+    if (denies.some(p => StpUtil._isMatch(p, permission))) {
       return false;
     }
 
     // 匹配 Allow 通配符
-    if (allows.some((p) => StpUtil._isMatch(p, permission))) {
+    if (allows.some(p => StpUtil._isMatch(p, permission))) {
       return true;
     }
 

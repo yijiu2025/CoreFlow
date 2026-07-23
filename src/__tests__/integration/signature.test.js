@@ -12,11 +12,15 @@ import crypto from 'node:crypto';
 function createMockSessionStore() {
   const store = new Map();
   return {
-    async get(key) { return store.get(key) || null; },
+    async get(key) {
+      return store.get(key) || null;
+    },
     async set(key, value) {
       store.set(key, value);
     },
-    async exists(key) { return store.has(key); }
+    async exists(key) {
+      return store.has(key);
+    }
   };
 }
 
@@ -35,8 +39,12 @@ async function buildSignatureApp() {
     getter() {
       const reply = this;
       return {
-        success(msg, data) { return reply.code(200).send({ code: 200, message: msg, data }); },
-        forbidden(msg) { return reply.code(403).send({ code: 403, message: msg }); }
+        success(msg, data) {
+          return reply.code(200).send({ code: 200, message: msg, data });
+        },
+        forbidden(msg) {
+          return reply.code(403).send({ code: 403, message: msg });
+        }
       };
     }
   });
@@ -174,7 +182,7 @@ describe('H5 Token 签名验证流程', () => {
       const secondRes = await app.inject({
         method: 'GET',
         url: '/api/secure',
-        cookies: { '_m_h5_tk': h5Cookie.value }
+        cookies: { _m_h5_tk: h5Cookie.value }
       });
 
       expect(secondRes.statusCode).toBe(200);
@@ -185,7 +193,7 @@ describe('H5 Token 签名验证流程', () => {
     test('有效签名通过验证', async () => {
       // 先获取 cookie
       const initRes = await app.inject({ method: 'GET', url: '/api/secure' });
-      const h5Cookie = initRes.cookies.find((c) => c.name === '_m_h5_tk');
+      const h5Cookie = initRes.cookies.find(c => c.name === '_m_h5_tk');
       const [h5TokenMd5] = h5Cookie.value.split('_');
 
       // 计算签名
@@ -199,7 +207,7 @@ describe('H5 Token 签名验证流程', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/secure',
-        cookies: { '_m_h5_tk': h5Cookie.value },
+        cookies: { _m_h5_tk: h5Cookie.value },
         headers: {
           'x-sign': sign,
           'x-timestamp': String(timestamp),
@@ -213,12 +221,12 @@ describe('H5 Token 签名验证流程', () => {
 
     test('错误签名返回 403', async () => {
       const initRes = await app.inject({ method: 'GET', url: '/api/secure' });
-      const h5Cookie = initRes.cookies.find((c) => c.name === '_m_h5_tk');
+      const h5Cookie = initRes.cookies.find(c => c.name === '_m_h5_tk');
 
       const res = await app.inject({
         method: 'GET',
         url: '/api/secure',
-        cookies: { '_m_h5_tk': h5Cookie.value },
+        cookies: { _m_h5_tk: h5Cookie.value },
         headers: {
           'x-sign': 'invalid-signature',
           'x-timestamp': String(Date.now()),
@@ -234,7 +242,7 @@ describe('H5 Token 签名验证流程', () => {
   describe('防重放攻击', () => {
     test('过期时间戳返回 403', async () => {
       const initRes = await app.inject({ method: 'GET', url: '/api/secure' });
-      const h5Cookie = initRes.cookies.find((c) => c.name === '_m_h5_tk');
+      const h5Cookie = initRes.cookies.find(c => c.name === '_m_h5_tk');
       const [h5TokenMd5] = h5Cookie.value.split('_');
 
       // 使用 5 分钟前的时间戳
@@ -246,7 +254,7 @@ describe('H5 Token 签名验证流程', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/secure',
-        cookies: { '_m_h5_tk': h5Cookie.value },
+        cookies: { _m_h5_tk: h5Cookie.value },
         headers: {
           'x-sign': sign,
           'x-timestamp': String(oldTimestamp),
@@ -260,12 +268,12 @@ describe('H5 Token 签名验证流程', () => {
 
     test('无效时间戳格式返回 403', async () => {
       const initRes = await app.inject({ method: 'GET', url: '/api/secure' });
-      const h5Cookie = initRes.cookies.find((c) => c.name === '_m_h5_tk');
+      const h5Cookie = initRes.cookies.find(c => c.name === '_m_h5_tk');
 
       const res = await app.inject({
         method: 'GET',
         url: '/api/secure',
-        cookies: { '_m_h5_tk': h5Cookie.value },
+        cookies: { _m_h5_tk: h5Cookie.value },
         headers: {
           'x-sign': 'some-sign',
           'x-timestamp': 'not-a-number',
@@ -285,7 +293,7 @@ describe('H5 Token 签名验证流程', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/secure',
-        cookies: { '_m_h5_tk': fakeCookie },
+        cookies: { _m_h5_tk: fakeCookie },
         headers: {
           'x-sign': 'some-sign',
           'x-timestamp': String(Date.now()),
@@ -304,7 +312,7 @@ describe('H5 Token 签名验证流程', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/secure',
-        cookies: { '_m_h5_tk': expiredCookie },
+        cookies: { _m_h5_tk: expiredCookie },
         headers: {
           'x-sign': 'some-sign',
           'x-timestamp': String(Date.now()),
@@ -324,7 +332,7 @@ describe('H5 Token 签名验证流程', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().message).toBe('公开接口');
       // 不应下发 h5_token cookie
-      const h5Cookie = res.cookies.find((c) => c.name === '_m_h5_tk');
+      const h5Cookie = res.cookies.find(c => c.name === '_m_h5_tk');
       expect(h5Cookie).toBeUndefined();
     });
   });

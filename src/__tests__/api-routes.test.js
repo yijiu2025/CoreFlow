@@ -147,9 +147,7 @@ describe('API 路由', () => {
     it('export 响应结构', () => {
       const response = {
         count: 10,
-        blocks: [
-          { ip: '1.2.3.4', type: 'ip', reason: 'scan', status: 'BLOCKED' }
-        ]
+        blocks: [{ ip: '1.2.3.4', type: 'ip', reason: 'scan', status: 'BLOCKED' }]
       };
       expect(response).toHaveProperty('count');
       expect(response).toHaveProperty('blocks');

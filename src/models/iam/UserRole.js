@@ -70,7 +70,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  UserRole.associate = (models) => {
+  UserRole.associate = models => {
     UserRole.belongsTo(models.User, {
       foreignKey: 'user_id',
       as: 'user',
@@ -85,8 +85,8 @@ export default (sequelize, DataTypes) => {
       onUpdate: 'CASCADE'
     });
 
-    UserRole.belongsTo(models.User, { 
-      foreignKey: 'granted_by', 
+    UserRole.belongsTo(models.User, {
+      foreignKey: 'granted_by',
       as: 'grantor',
       onDelete: 'SET NULL',
       onUpdate: 'CASCADE'

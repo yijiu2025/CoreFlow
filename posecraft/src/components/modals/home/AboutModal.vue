@@ -25,7 +25,16 @@
         <div class="brand-panel">
           <div class="brand-sticky">
             <div class="app-logo">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <rect x="2" y="4" width="20" height="16" rx="3" />
                 <circle cx="12" cy="12" r="2.5" fill="white" />
                 <circle cx="12" cy="9" r="1.5" stroke-width="1.2" />
@@ -102,27 +111,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useThemeStore } from '@/stores/theme'
-import { Info, Mail, MessageCircle, Users } from 'lucide-vue-next'
+import { computed } from 'vue';
+import { useThemeStore } from '@/stores/theme';
+import { Info, Mail, MessageCircle, Users } from 'lucide-vue-next';
 
-const themeStore = useThemeStore()
-const isDark = computed(() => themeStore.isDark)
+const themeStore = useThemeStore();
+const isDark = computed(() => themeStore.isDark);
 
-defineEmits(['close'])
+defineEmits(['close']);
 
-const contactEmail = 'qirlyh@163.com'
-const officialAccount = '柒染靓月'
-const qqGroup = '770605918'
-const qrCodeSrc = '/posecraft/src/assets/imgs/qrcode.jpg'
-const runtimeEnv = import.meta.env.MODE === 'production' ? '生产环境' : '开发环境'
-const buildTime = import.meta.env.VITE_BUILD_TIME || '5.x'
-const year = new Date().getFullYear()
+const contactEmail = 'qirlyh@163.com';
+const officialAccount = '柒染靓月';
+const qqGroup = '770605918';
+const qrCodeSrc = '/posecraft/src/assets/imgs/qrcode.jpg';
+const runtimeEnv = import.meta.env.MODE === 'production' ? '生产环境' : '开发环境';
+const buildTime = import.meta.env.VITE_BUILD_TIME || '5.x';
+const year = new Date().getFullYear();
 
 const onQrError = (e: Event) => {
-  const img = e.target as HTMLElement
-  img.style.display = 'none'
-}
+  const img = e.target as HTMLElement;
+  img.style.display = 'none';
+};
 </script>
 
 <style scoped>
@@ -192,7 +201,9 @@ const onQrError = (e: Event) => {
   transition: color 0.15s;
 }
 
-.close-btn:hover { color: #ff2442; }
+.close-btn:hover {
+  color: #ff2442;
+}
 
 /* 内容：左右分栏 */
 .modal-body {
@@ -201,8 +212,12 @@ const onQrError = (e: Event) => {
 }
 
 @media (max-width: 600px) {
-  .modal-body { flex-direction: column; }
-  .about-modal-card { max-width: 420px; }
+  .modal-body {
+    flex-direction: column;
+  }
+  .about-modal-card {
+    max-width: 420px;
+  }
 }
 
 /* 左侧品牌区 */
@@ -257,7 +272,9 @@ const onQrError = (e: Event) => {
   line-height: 1.5;
 }
 
-.dark-mode .app-desc { color: #71717a; }
+.dark-mode .app-desc {
+  color: #71717a;
+}
 
 .version-badge {
   font-size: 11px;
@@ -306,7 +323,9 @@ const onQrError = (e: Event) => {
   color: inherit;
 }
 
-.dark-mode .tech-val { color: #e4e4e7; }
+.dark-mode .tech-val {
+  color: #e4e4e7;
+}
 
 /* 右侧联系方式区 */
 .contact-panel {
@@ -325,7 +344,9 @@ const onQrError = (e: Event) => {
   letter-spacing: 0.8px;
 }
 
-.dark-mode .section-title { color: #71717a; }
+.dark-mode .section-title {
+  color: #71717a;
+}
 
 .contact-card {
   display: flex;
@@ -378,7 +399,9 @@ const onQrError = (e: Event) => {
   word-break: break-all;
 }
 
-.contact-link:hover { text-decoration: underline; }
+.contact-link:hover {
+  text-decoration: underline;
+}
 
 .contact-text {
   font-size: 13.5px;
@@ -426,10 +449,18 @@ const onQrError = (e: Event) => {
   padding-top: 4px;
 }
 
-.dark-mode .copyright { color: #52525b; }
+.dark-mode .copyright {
+  color: #52525b;
+}
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 </style>

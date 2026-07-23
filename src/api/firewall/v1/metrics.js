@@ -38,9 +38,8 @@ export default async function (fastify) {
         requests: {
           total: summary.totalRequests || 0,
           blocked: summary.totalBlocked || 0,
-          rate: summary.totalRequests > 0
-            ? ((summary.totalBlocked / summary.totalRequests) * 100).toFixed(2) + '%'
-            : '0%'
+          rate:
+            summary.totalRequests > 0 ? ((summary.totalBlocked / summary.totalRequests) * 100).toFixed(2) + '%' : '0%'
         },
         blocks: {
           total: blocks.length,

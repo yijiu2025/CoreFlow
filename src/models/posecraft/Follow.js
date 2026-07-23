@@ -65,7 +65,7 @@ export default (sequelize, DataTypes) => {
    * 模型关联定义
    * @param {object} models - 所有已注册模型的集合
    */
-  Follow.associate = (models) => {
+  Follow.associate = models => {
     // 关注者 (A) 关注了 (B)
     Follow.belongsTo(models.User, { foreignKey: 'follower_id', as: 'follower' });
     // 被关注者 (B) 被 (A) 关注

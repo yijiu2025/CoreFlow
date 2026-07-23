@@ -71,10 +71,7 @@ export async function verifySignature(request, reply) {
   const bodyStr = request.body ? JSON.stringify(request.body) : '';
   const signString = `${h5TokenMd5}&${timestamp}&${nonce}&${url}&${bodyStr}`;
 
-  const serverSign = crypto
-    .createHash('sha256')
-    .update(signString)
-    .digest('hex');
+  const serverSign = crypto.createHash('sha256').update(signString).digest('hex');
 
   if (serverSign !== sign) {
     return reply.code(403).send({
@@ -92,10 +89,7 @@ export async function issueH5Token(fastify, reply) {
   const sessionStore = getSessionStore(fastify, 'h5_token');
   // 生成随机 H5 Token 密钥
   const rawH5Token = crypto.randomBytes(24).toString('hex');
-  const h5TokenMd5 = crypto
-    .createHash('sha256')
-    .update(rawH5Token)
-    .digest('hex');
+  const h5TokenMd5 = crypto.createHash('sha256').update(rawH5Token).digest('hex');
 
   const ttlSeconds = 3600; // 1小时有效期
   const expiredTime = Date.now() + ttlSeconds * 1000;

@@ -73,10 +73,7 @@ async function roleStats() {
   }
 
   console.log('\n🎭 角色统计：');
-  printTable(
-    ['ID', '编码', '应用', '名称', '权重', '用户数'],
-    stats
-  );
+  printTable(['ID', '编码', '应用', '名称', '权重', '用户数'], stats);
 }
 
 // 导出 CLI 插件配置
@@ -85,8 +82,8 @@ export default {
   appName: 'admin',
   description: 'IAM 权限管理',
   subcommands: {
-    'stats':  { description: '管理统计', handler: adminStats },
-    'users':  { description: '用户统计', handler: userStats },
-    'roles':  { description: '角色统计', handler: roleStats }
+    stats: { description: '管理统计', handler: adminStats },
+    users: { description: '用户统计', handler: userStats },
+    roles: { description: '角色统计', handler: roleStats }
   }
 };

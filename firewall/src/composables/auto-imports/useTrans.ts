@@ -6,10 +6,10 @@
  *   const t = useTrans()
  *   t('common.save')  // 全局翻译
  */
-import { useI18n } from 'vue-i18n'
+import { useI18n } from 'vue-i18n';
 
 export function useTrans() {
-  const { t, locale } = useI18n()
+  const { t, locale } = useI18n();
 
   /**
    * 翻译 key
@@ -17,8 +17,8 @@ export function useTrans() {
    * @returns 翻译后的文本
    */
   function translate(key: string): string {
-    return t(key)
+    return t(key);
   }
 
-  return { t: translate, locale }
+  return { t: translate, locale };
 }

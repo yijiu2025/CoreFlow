@@ -27,14 +27,14 @@ export async function up({ queryInterface, Sequelize }) {
       type: Sequelize.DATE,
       allowNull: false
     }
-  })
+  });
 
   await queryInterface.addIndex('posecraft_user_settings', ['user_id'], {
     unique: true,
     name: 'uk_settings_user'
-  })
+  });
 }
 
 export async function down({ queryInterface }) {
-  await queryInterface.dropTable('posecraft_user_settings')
+  await queryInterface.dropTable('posecraft_user_settings');
 }

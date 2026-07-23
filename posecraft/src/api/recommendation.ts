@@ -4,7 +4,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import service from '@/utils/request'
+import service from '@/utils/request';
 
 export const recommendationApi = {
   /** 推荐作品 */
@@ -29,4 +29,4 @@ export const recommendationApi = {
   /** 检查是否已推荐 */
   checkStatus: (params: { work_id?: number; template_id?: number }) =>
     service.get('/posecraft/v1/recommendations/status', { params })
-}
+};

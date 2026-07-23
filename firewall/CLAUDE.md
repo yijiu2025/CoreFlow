@@ -205,51 +205,51 @@ if (authStore.hasRole('admin')) { ... }
 
 ## 状态管理架构
 
-| Store | 职责 | 关键状态 |
-|-------|------|----------|
-| `auth` | 认证 + 权限 | `isLoggedIn`, `user`, `token`, `roles`, `permissions`, `isAdmin` |
-| `dashboard` | 实时数据 | `logs`, `summary`, `wsEvents`, `serverPosition` |
-| `configs` | 守卫配置树 | `configs`（System → Group → API 三级结构） |
-| `defense` | 封禁管理 | `activeBlocks`, `activeWhitelist` |
-| `settings` | 安全设置 | `securitySettings`（限频/暴力破解/地理围栏等） |
-| `theme` | 主题 | `isDark`, `primaryColor`, `colorMode` |
-| `ui` | UI 状态 | `isUIVisible`, `loading` |
+| Store       | 职责        | 关键状态                                                         |
+| ----------- | ----------- | ---------------------------------------------------------------- |
+| `auth`      | 认证 + 权限 | `isLoggedIn`, `user`, `token`, `roles`, `permissions`, `isAdmin` |
+| `dashboard` | 实时数据    | `logs`, `summary`, `wsEvents`, `serverPosition`                  |
+| `configs`   | 守卫配置树  | `configs`（System → Group → API 三级结构）                       |
+| `defense`   | 封禁管理    | `activeBlocks`, `activeWhitelist`                                |
+| `settings`  | 安全设置    | `securitySettings`（限频/暴力破解/地理围栏等）                   |
+| `theme`     | 主题        | `isDark`, `primaryColor`, `colorMode`                            |
+| `ui`        | UI 状态     | `isUIVisible`, `loading`                                         |
 
 ## 缓存规范
 
 统一使用 `useCache` 封装，Key 自动加 `fw_` 前缀：
 
 ```ts
-import { useCache } from '@/composables/useCache'
-const cache = useCache('localStorage')
+import { useCache } from '@/composables/useCache';
+const cache = useCache('localStorage');
 
-cache.set('key', value)              // 永不过期
-cache.set('key', value, { exp: 3600 }) // 1 小时过期
-cache.get('key')                     // 读取（过期返回 null）
-cache.del('key')                     // 删除
-cache.clear()                        // 清除所有 fw_ 前缀的缓存
+cache.set('key', value); // 永不过期
+cache.set('key', value, { exp: 3600 }); // 1 小时过期
+cache.get('key'); // 读取（过期返回 null）
+cache.del('key'); // 删除
+cache.clear(); // 清除所有 fw_ 前缀的缓存
 ```
 
 ## 环境变量
 
 配置在 `firewall/.env`：
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `VITE_API_URL` | 防火墙 API 地址 | 开发: `http://localhost:3000` |
-| `VITE_WS_HOST` | WebSocket 地址 | 开发: `localhost:3000` |
-| `VITE_SSO_URL` | OAuth21 认证服务器 | `http://localhost:5174` |
-| `VITE_USER_API_URL` | 用户信息接口 | 与 `VITE_API_URL` 相同 |
+| 变量                | 说明               | 默认值                        |
+| ------------------- | ------------------ | ----------------------------- |
+| `VITE_API_URL`      | 防火墙 API 地址    | 开发: `http://localhost:3000` |
+| `VITE_WS_HOST`      | WebSocket 地址     | 开发: `localhost:3000`        |
+| `VITE_SSO_URL`      | OAuth21 认证服务器 | `http://localhost:5174`       |
+| `VITE_USER_API_URL` | 用户信息接口       | 与 `VITE_API_URL` 相同        |
 
 ## 路由配置
 
-| 路径 | 名称 | 视图 | 需要登录 |
-|------|------|------|----------|
-| `/` | Dashboard | DashboardView | ❌ |
-| `/firewall` | Firewall | FirewallView | ✅ |
-| `/settings` | Settings | SettingsView | ✅ |
-| `/console` | Console | ConsoleView | ✅ |
-| `/logs` | Logs | LogsView | ✅ |
+| 路径        | 名称      | 视图          | 需要登录 |
+| ----------- | --------- | ------------- | -------- |
+| `/`         | Dashboard | DashboardView | ❌       |
+| `/firewall` | Firewall  | FirewallView  | ✅       |
+| `/settings` | Settings  | SettingsView  | ✅       |
+| `/console`  | Console   | ConsoleView   | ✅       |
+| `/logs`     | Logs      | LogsView      | ✅       |
 
 路由守卫：NProgress 进度条 + Token 校验 + 动态标题
 
@@ -258,13 +258,13 @@ cache.clear()                        // 清除所有 fw_ 前缀的缓存
 基于 CSS 变量 + VueUse `useColorMode`：
 
 ```ts
-import { useThemeStore } from '@/stores/theme'
-const themeStore = useThemeStore()
+import { useThemeStore } from '@/stores/theme';
+const themeStore = useThemeStore();
 
-themeStore.isDark          // 是否深色模式
-themeStore.toggleTheme()   // 切换：light → dark → auto → light
-themeStore.setTheme('dark') // 直接设置
-themeStore.setPrimaryColor('200 80% 50%') // 设置主题色（HSL）
+themeStore.isDark; // 是否深色模式
+themeStore.toggleTheme(); // 切换：light → dark → auto → light
+themeStore.setTheme('dark'); // 直接设置
+themeStore.setPrimaryColor('200 80% 50%'); // 设置主题色（HSL）
 ```
 
 CSS 变量定义在 `style.css`：

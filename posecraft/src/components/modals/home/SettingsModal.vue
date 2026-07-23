@@ -30,11 +30,13 @@
           <!-- 通用设置 -->
           <section id="settings-sec-general" class="settings-section">
             <h4 class="section-title"><Wrench :size="15" /> 通用设置</h4>
-            
+
             <div class="setting-row">
               <div class="setting-info">
                 <div class="setting-label">默认显示模板骨骼</div>
-                <div class="setting-desc">在浏览列表及作品卡片时，默认加载并显示姿势骨骼层。若关闭此项，将不加载骨骼层图片，仅加载底图，可节省服务器带宽。</div>
+                <div class="setting-desc">
+                  在浏览列表及作品卡片时，默认加载并显示姿势骨骼层。若关闭此项，将不加载骨骼层图片，仅加载底图，可节省服务器带宽。
+                </div>
               </div>
               <label class="switch-label">
                 <input type="checkbox" v-model="showTemplate" class="switch-input" />
@@ -137,15 +139,24 @@
             <div class="faq-list">
               <div class="faq-item">
                 <div class="faq-q">Q: 为什么拍照后骨骼没有完全对齐？</div>
-                <div class="faq-a">A: 辅助拍照时请尽量让被摄者与屏幕上的骨骼对齐。系统会自动记录当时拍摄的视口及缩放比例（保存在 edit_data 内），并在详情页跨屏幕尺寸百分百等比例还原，无需担心对不齐问题。</div>
+                <div class="faq-a">
+                  A: 辅助拍照时请尽量让被摄者与屏幕上的骨骼对齐。系统会自动记录当时拍摄的视口及缩放比例（保存在
+                  edit_data 内），并在详情页跨屏幕尺寸百分百等比例还原，无需担心对不齐问题。
+                </div>
               </div>
               <div class="faq-item">
                 <div class="faq-q">Q: 全局开关关闭后会发生什么？</div>
-                <div class="faq-a">A: 关闭全局模板显示后，首页所有列表将**不再加载**透明骨架图片，只加载照片原图，节省约 90% 的带宽。您依然可以随时在作品详情页中单独点击开关加载和渲染骨架。</div>
+                <div class="faq-a">
+                  A: 关闭全局模板显示后，首页所有列表将**不再加载**透明骨架图片，只加载照片原图，节省约 90%
+                  的带宽。您依然可以随时在作品详情页中单独点击开关加载和渲染骨架。
+                </div>
               </div>
               <div class="faq-item">
                 <div class="faq-q">Q: 能自主上传参考模板吗？</div>
-                <div class="faq-a">A: 可以的。点击左侧菜单“发现”底下的投稿按钮，或在编辑器中设计好骨架姿势，直接上传底图和参考线，提交给管理员审核通过后即成为公共姿势模板。</div>
+                <div class="faq-a">
+                  A:
+                  可以的。点击左侧菜单“发现”底下的投稿按钮，或在编辑器中设计好骨架姿势，直接上传底图和参考线，提交给管理员审核通过后即成为公共姿势模板。
+                </div>
               </div>
             </div>
           </section>
@@ -156,85 +167,88 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
-import { useUserSettings } from '@/stores/userSettings'
-import { Settings, Wrench, Bot, Keyboard, HelpCircle } from 'lucide-vue-next'
+import { ref, onMounted, watch, computed } from 'vue';
+import { useUserSettings } from '@/stores/userSettings';
+import { Settings, Wrench, Bot, Keyboard, HelpCircle } from 'lucide-vue-next';
 
 const props = defineProps<{
-  activeSection: string
-}>()
+  activeSection: string;
+}>();
 
 const emit = defineEmits<{
-  (e: 'close'): void
-  (e: 'showToast', msg: string): void
-}>()
+  (e: 'close'): void;
+  (e: 'showToast', msg: string): void;
+}>();
 
-const userSettings = useUserSettings()
+const userSettings = useUserSettings();
 const showTemplate = computed({
   get: () => userSettings.settings.showTemplate,
-  set: (v) => userSettings.setSetting('showTemplate', v)
-})
+  set: v => userSettings.setSetting('showTemplate', v)
+});
 
-const currentSection = ref('general')
-const scrollContainer = ref<HTMLElement | null>(null)
+const currentSection = ref('general');
+const scrollContainer = ref<HTMLElement | null>(null);
 
 // 用户习惯设置 state
-const highQuality = ref(true)
-const language = ref('zh')
-const autoAnalysis = ref(true)
-const sensitivity = ref(60)
-const preferLocal = ref(false)
+const highQuality = ref(true);
+const language = ref('zh');
+const autoAnalysis = ref(true);
+const sensitivity = ref(60);
+const preferLocal = ref(false);
 
 const tabs = [
   { id: 'general', name: '通用设置', icon: 'wrench' },
   { id: 'ai', name: 'AI 辅助', icon: 'bot' },
   { id: 'shortcuts', name: '快捷键', icon: 'keyboard' },
   { id: 'faq', name: '常见问题', icon: 'help-circle' }
-]
+];
 
 const scrollToTab = (sectionId: string) => {
-  currentSection.value = sectionId
-  const element = document.getElementById(`settings-sec-${sectionId}`)
+  currentSection.value = sectionId;
+  const element = document.getElementById(`settings-sec-${sectionId}`);
   if (element && scrollContainer.value) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
-}
+};
 
 // 监听滑块滚动，更新左侧激活的 tab 标签
 const handleScroll = () => {
-  if (!scrollContainer.value) return
-  const container = scrollContainer.value
-  const scrollTop = container.scrollTop
+  if (!scrollContainer.value) return;
+  const container = scrollContainer.value;
+  const scrollTop = container.scrollTop;
 
   for (const tab of tabs) {
-    const el = document.getElementById(`settings-sec-${tab.id}`)
+    const el = document.getElementById(`settings-sec-${tab.id}`);
     if (el) {
-      const offsetTop = el.offsetTop - container.offsetTop
+      const offsetTop = el.offsetTop - container.offsetTop;
       // 设置约 30px 的容差
       if (scrollTop >= offsetTop - 30 && scrollTop < offsetTop + el.clientHeight - 30) {
-        currentSection.value = tab.id
-        break
+        currentSection.value = tab.id;
+        break;
       }
     }
   }
-}
+};
 
 // 挂载时，根据传入的 activeSection 自动滚动到对应位置
 onMounted(() => {
   if (props.activeSection) {
     // 延迟 100ms 保证 Modal 弹窗 DOM 渲染完成
     setTimeout(() => {
-      scrollToTab(props.activeSection)
-    }, 100)
+      scrollToTab(props.activeSection);
+    }, 100);
   }
-})
+});
 
 // 监听 activeSection 变化，再次滚动
-watch(() => props.activeSection, (newVal) => {
-  if (newVal) {
-    scrollToTab(newVal)
+watch(
+  () => props.activeSection,
+  newVal => {
+    if (newVal) {
+      scrollToTab(newVal);
+    }
   }
-})
+);
 </script>
 
 <style scoped>
@@ -467,7 +481,7 @@ watch(() => props.activeSection, (newVal) => {
   inset: 0;
   background-color: #cbd5e1;
   border-radius: 22px;
-  transition: .25s ease;
+  transition: 0.25s ease;
 }
 
 .dark-mode .switch-slider {
@@ -476,14 +490,14 @@ watch(() => props.activeSection, (newVal) => {
 
 .switch-slider:before {
   position: absolute;
-  content: "";
+  content: '';
   height: 18px;
   width: 18px;
   left: 2px;
   bottom: 2px;
   background-color: white;
   border-radius: 50%;
-  transition: .25s ease;
+  transition: 0.25s ease;
 }
 
 .switch-input:checked + .switch-slider {
@@ -605,7 +619,13 @@ watch(() => props.activeSection, (newVal) => {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.97); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 </style>

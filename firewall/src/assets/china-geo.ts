@@ -1,15 +1,23 @@
 // src/assets/china-geo.js
 // 这是一个简化版的中国地图 GeoJSON 数据，用于 ECharts 展示
 export const chinaGeo = {
-  "type": "FeatureCollection",
-  "features": [
+  type: 'FeatureCollection',
+  features: [
     {
-      "type": "Feature",
-      "properties": { "name": "中国" },
-      "geometry": {
-        "type": "MultiPolygon",
-        "coordinates": [
-          [[[110, 20], [120, 20], [120, 30], [110, 30], [110, 20]]] // 这是一个极其简化的占位符
+      type: 'Feature',
+      properties: { name: '中国' },
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [
+            [
+              [110, 20],
+              [120, 20],
+              [120, 30],
+              [110, 30],
+              [110, 20]
+            ]
+          ] // 这是一个极其简化的占位符
         ]
       }
     }

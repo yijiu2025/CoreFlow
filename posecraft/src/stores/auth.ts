@@ -2,69 +2,74 @@
  * 认证状态管理
  * 接入 CoreFlow Session 认证（Cookie 模式）
  */
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { useCache } from '@/composables/useCache'
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import { useCache } from '@/composables/useCache';
 
-const cache = useCache('localStorage', 'posecraft_')
+const cache = useCache('localStorage', 'posecraft_');
 
 /** 本地 SVG 默认头像（data URI，零网络请求） */
-export const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 150 150'%3E%3Crect width='150' height='150' fill='%23e2e8f0'/%3E%3Ccircle cx='75' cy='60' r='25' fill='%2394a3b8'/%3E%3Cellipse cx='75' cy='130' rx='40' ry='30' fill='%2394a3b8'/%3E%3C/svg%3E"
+export const DEFAULT_AVATAR =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 150 150'%3E%3Crect width='150' height='150' fill='%23e2e8f0'/%3E%3Ccircle cx='75' cy='60' r='25' fill='%2394a3b8'/%3E%3Cellipse cx='75' cy='130' rx='40' ry='30' fill='%2394a3b8'/%3E%3C/svg%3E";
 
 export const useAuthStore = defineStore('auth', () => {
-  const isLoggedIn = ref(false)
-  const user = ref<any>(null)
-  const token = ref<string | null>(null)
-  const roles = ref<string[]>([])
-  const permissions = ref<{ allows: string[]; denies: string[] }>({ allows: [], denies: [] })
-  const initialized = ref(false)
+  const isLoggedIn = ref(false);
+  const user = ref<any>(null);
+  const token = ref<string | null>(null);
+  const roles = ref<string[]>([]);
+  const permissions = ref<{ allows: string[]; denies: string[] }>({ allows: [], denies: [] });
+  const initialized = ref(false);
 
   // ── 对外展示的个人统计（关注/粉丝/互关/获赞/作品/模板/收藏/推荐）──
-  const followingCount = ref(0)
-  const followersCount = ref(0)
-  const worksCount = ref(0)
-  const likesCount = ref(0)
-  const mutualCount = ref(0)
-  const templatesCount = ref(0)
-  const collectsCount = ref(0)
-  const recommendationsCount = ref(0)
+  const followingCount = ref(0);
+  const followersCount = ref(0);
+  const worksCount = ref(0);
+  const likesCount = ref(0);
+  const mutualCount = ref(0);
+  const templatesCount = ref(0);
+  const collectsCount = ref(0);
+  const recommendationsCount = ref(0);
 
   /** 本地递增作品数（创建成功后调用） */
-  const incrementWorksCount = () => { worksCount.value++ }
+  const incrementWorksCount = () => {
+    worksCount.value++;
+  };
   /** 本地递增模板数（创建成功后调用） */
-  const incrementTemplatesCount = () => { templatesCount.value++ }
+  const incrementTemplatesCount = () => {
+    templatesCount.value++;
+  };
 
-  const userProfile = ref<any>(null)
+  const userProfile = ref<any>(null);
 
   /** 带兜底的头像 URL（空值时返回本地默认头像，零网络请求） */
-  const safeAvatar = computed(() => userProfile.value?.avatar || DEFAULT_AVATAR)
+  const safeAvatar = computed(() => userProfile.value?.avatar || DEFAULT_AVATAR);
 
-  const likedWorksCount = ref(0)
-  const watchLaterCount = ref(0)
-  const historyText = ref('30天内')
-  const saveLoginInfo = ref(cache.get('save_login_info') !== false)
+  const likedWorksCount = ref(0);
+  const watchLaterCount = ref(0);
+  const historyText = ref('30天内');
+  const saveLoginInfo = ref(cache.get('save_login_info') !== false);
 
   async function updateSaveLoginInfo(value: boolean) {
-    saveLoginInfo.value = value
-    cache.set('save_login_info', value)
+    saveLoginInfo.value = value;
+    cache.set('save_login_info', value);
     if (isLoggedIn.value) {
       try {
-        const { authApi } = await import('@/api/auth')
-        await authApi.updateRememberMe(value)
+        const { authApi } = await import('@/api/auth');
+        await authApi.updateRememberMe(value);
       } catch (err) {
-        console.warn('同步保存登录信息状态失败:', err)
+        console.warn('同步保存登录信息状态失败:', err);
       }
     }
   }
 
-  const myWorks = ref<any[]>([])
-  const myTemplates = ref<any[]>([])
+  const myWorks = ref<any[]>([]);
+  const myTemplates = ref<any[]>([]);
 
-  const myLikes = ref<any[]>([])
-  const myCollects = ref<any[]>([])
-  const myHistory = ref<any[]>([])
+  const myLikes = ref<any[]>([]);
+  const myCollects = ref<any[]>([]);
+  const myHistory = ref<any[]>([]);
 
-  const isAdmin = computed(() => roles.value.includes('admin') || roles.value.includes('posecraft_admin'))
+  const isAdmin = computed(() => roles.value.includes('admin') || roles.value.includes('posecraft_admin'));
 
   /**
    * 从缓存恢复状态（仅用于快速 UI 显示，不验证有效性）
@@ -72,98 +77,98 @@ export const useAuthStore = defineStore('auth', () => {
    * 下次 API 调用（checkSession）会从后端拉取最新权威数据覆盖。
    */
   function restoreFromCache() {
-    const savedUser = cache.get<any>('user')
+    const savedUser = cache.get<any>('user');
     if (savedUser) {
-      user.value = savedUser
-      isLoggedIn.value = true
-      roles.value = cache.get('roles') || []
-      permissions.value = cache.get('permissions') || { allows: [], denies: [] }
+      user.value = savedUser;
+      isLoggedIn.value = true;
+      roles.value = cache.get('roles') || [];
+      permissions.value = cache.get('permissions') || { allows: [], denies: [] };
     }
-    token.value = cache.get<string>('token')
+    token.value = cache.get<string>('token');
   }
 
   /** 设置登录状态（登录时恢复用户信息，登出时清空所有个人数据） */
   function setLoggedIn(status: boolean, userData: any = null, tokenStr?: string) {
-    isLoggedIn.value = status
-    user.value = userData
+    isLoggedIn.value = status;
+    user.value = userData;
 
     if (status) {
       // 保存用户信息到缓存（无论是否有 token）
-      if (userData) cache.set('user', userData)
+      if (userData) cache.set('user', userData);
       if (tokenStr) {
-        token.value = tokenStr
-        cache.set('token', tokenStr)
+        token.value = tokenStr;
+        cache.set('token', tokenStr);
       }
     } else {
       // 登出：清空所有个人数据与缓存
-      token.value = null
-      roles.value = []
-      permissions.value = { allows: [], denies: [] }
-      followingCount.value = 0
-      followersCount.value = 0
-      worksCount.value = 0
-      likesCount.value = 0
-      mutualCount.value = 0
-      templatesCount.value = 0
-      collectsCount.value = 0
-      recommendationsCount.value = 0
-      likedWorksCount.value = 0
-      myWorks.value = []
-      myTemplates.value = []
-      myLikes.value = []
-      myCollects.value = []
-      myHistory.value = []
-      myRecommendations.value = []
-      userProfile.value = null
-      cache.del('user')
-      cache.del('token')
-      cache.del('roles')
-      cache.del('permissions')
+      token.value = null;
+      roles.value = [];
+      permissions.value = { allows: [], denies: [] };
+      followingCount.value = 0;
+      followersCount.value = 0;
+      worksCount.value = 0;
+      likesCount.value = 0;
+      mutualCount.value = 0;
+      templatesCount.value = 0;
+      collectsCount.value = 0;
+      recommendationsCount.value = 0;
+      likedWorksCount.value = 0;
+      myWorks.value = [];
+      myTemplates.value = [];
+      myLikes.value = [];
+      myCollects.value = [];
+      myHistory.value = [];
+      myRecommendations.value = [];
+      userProfile.value = null;
+      cache.del('user');
+      cache.del('token');
+      cache.del('roles');
+      cache.del('permissions');
     }
   }
 
   /** 获取权限 */
   async function fetchPermissions() {
     try {
-      const { authApi } = await import('@/api/auth')
-      const res: any = await authApi.getPermissions()
-      roles.value = res.roles || []
-      permissions.value = res.permissions || { allows: [], denies: [] }
-      cache.set('roles', roles.value)
-      cache.set('permissions', permissions.value)
+      const { authApi } = await import('@/api/auth');
+      const res: any = await authApi.getPermissions();
+      roles.value = res.roles || [];
+      permissions.value = res.permissions || { allows: [], denies: [] };
+      cache.set('roles', roles.value);
+      cache.set('permissions', permissions.value);
     } catch (err) {
-      console.error('获取权限失败:', err)
+      console.error('获取权限失败:', err);
     }
   }
 
   async function checkSession(): Promise<boolean> {
     try {
-      const { authApi } = await import('@/api/auth')
-      const userData: any = await authApi.getUserInfo()
+      const { authApi } = await import('@/api/auth');
+      const userData: any = await authApi.getUserInfo();
 
       if (!userData) {
         // Session 无效，清除所有状态
-        setLoggedIn(false, null)
-        initialized.value = true
-        return false
+        setLoggedIn(false, null);
+        initialized.value = true;
+        return false;
       }
 
       // Session 有效，恢复用户身份
-      user.value = { uid: userData.uid, ...userData }
-      isLoggedIn.value = true
-      cache.set('user', user.value)
+      user.value = { uid: userData.uid, ...userData };
+      isLoggedIn.value = true;
+      cache.set('user', user.value);
 
       // 权限 + 资料加载失败时不影响登录态，分别捕获
-      await fetchPermissions().catch(() => {})
-      await fetchUserProfile().catch(() => {})
+      await fetchPermissions().catch(() => {});
+      await fetchUserProfile().catch(() => {});
 
-      initialized.value = true
-      return true
+      initialized.value = true;
+      return true;
     } catch {
       // 顶层保险：任何未知错误视为未登录
-      setLoggedIn(false, null)
-      initialized.value = true
-      return false
+      setLoggedIn(false, null);
+      initialized.value = true;
+      return false;
     }
   }
 
@@ -174,208 +179,209 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function fetchMyStats() {
     try {
-      const { profileApi } = await import('@/api/profile')
-      const res = await profileApi.getMyStats() as any
-      const stats = res?.data || res
+      const { profileApi } = await import('@/api/profile');
+      const res = (await profileApi.getMyStats()) as any;
+      const stats = res?.data || res;
       if (stats) {
-        if (stats.following !== undefined) followingCount.value = stats.following
-        if (stats.followers !== undefined) followersCount.value = stats.followers
-        if (stats.works_count !== undefined) worksCount.value = stats.works_count
-        if (stats.likes_received !== undefined) likesCount.value = stats.likes_received
-        if (stats.mutual !== undefined) mutualCount.value = stats.mutual
-        if (stats.templates_count !== undefined) templatesCount.value = stats.templates_count
-        if (stats.collects_count !== undefined) collectsCount.value = stats.collects_count
-        if (stats.recommendations_count !== undefined) recommendationsCount.value = stats.recommendations_count
+        if (stats.following !== undefined) followingCount.value = stats.following;
+        if (stats.followers !== undefined) followersCount.value = stats.followers;
+        if (stats.works_count !== undefined) worksCount.value = stats.works_count;
+        if (stats.likes_received !== undefined) likesCount.value = stats.likes_received;
+        if (stats.mutual !== undefined) mutualCount.value = stats.mutual;
+        if (stats.templates_count !== undefined) templatesCount.value = stats.templates_count;
+        if (stats.collects_count !== undefined) collectsCount.value = stats.collects_count;
+        if (stats.recommendations_count !== undefined) recommendationsCount.value = stats.recommendations_count;
       }
     } catch (e) {
       // 静默失败：保持旧值，不清零
-      console.warn('获取个人统计失败', e)
+      console.warn('获取个人统计失败', e);
     }
   }
 
   async function fetchMyHistory() {
     try {
-      const { interactionApi } = await import('@/api/interaction')
-      const res = await interactionApi.getHistoryList({ page: 1, pageSize: 100 }) as any
-      myHistory.value = res.list || []
+      const { interactionApi } = await import('@/api/interaction');
+      const res = (await interactionApi.getHistoryList({ page: 1, pageSize: 100 })) as any;
+      myHistory.value = res.list || [];
     } catch (e) {
-      console.warn('获取浏览历史失败', e)
+      console.warn('获取浏览历史失败', e);
     }
   }
 
   /** 获取当前登录用户自己的作品（后端从 session 识别用户） */
   async function fetchMyWorks() {
     try {
-      const { workApi } = await import('@/api/work')
-      const res = await workApi.getMyWorks({ page: 1, pageSize: 100 }) as any
-      myWorks.value = res?.list || []
+      const { workApi } = await import('@/api/work');
+      const res = (await workApi.getMyWorks({ page: 1, pageSize: 100 })) as any;
+      myWorks.value = res?.list || [];
     } catch (e) {
-      console.warn('获取我的作品失败', e)
+      console.warn('获取我的作品失败', e);
     }
   }
 
   /** 获取当前登录用户自己上传的模板（后端从 session 识别用户） */
   async function fetchMyTemplates() {
     try {
-      const { templateApi } = await import('@/api/template')
-      const res = await templateApi.getMyTemplates({ page: 1, pageSize: 100 }) as any
-      myTemplates.value = res?.list || []
+      const { templateApi } = await import('@/api/template');
+      const res = (await templateApi.getMyTemplates({ page: 1, pageSize: 100 })) as any;
+      myTemplates.value = res?.list || [];
     } catch (e) {
-      console.warn('获取我的模板失败', e)
+      console.warn('获取我的模板失败', e);
     }
   }
 
   async function fetchMyLikes() {
     try {
-      const { interactionApi } = await import('@/api/interaction')
-      const res = await interactionApi.getLikesList({ page: 1, pageSize: 100 }) as any
-      myLikes.value = res.list || []
+      const { interactionApi } = await import('@/api/interaction');
+      const res = (await interactionApi.getLikesList({ page: 1, pageSize: 100 })) as any;
+      myLikes.value = res.list || [];
     } catch (e) {
-      console.warn('获取点赞列表失败', e)
+      console.warn('获取点赞列表失败', e);
     }
   }
 
   async function fetchMyCollects() {
     try {
-      const { interactionApi } = await import('@/api/interaction')
-      const res = await interactionApi.getCollectsList({ page: 1, pageSize: 100 }) as any
-      myCollects.value = res.list || []
+      const { interactionApi } = await import('@/api/interaction');
+      const res = (await interactionApi.getCollectsList({ page: 1, pageSize: 100 })) as any;
+      myCollects.value = res.list || [];
     } catch (e) {
-      console.warn('获取收藏列表失败', e)
+      console.warn('获取收藏列表失败', e);
     }
   }
 
   // 我的推荐列表
-  const myRecommendations = ref<any[]>([])
+  const myRecommendations = ref<any[]>([]);
 
   async function fetchMyRecommendations(options = { page: 1, pageSize: 20 }) {
     try {
-      const { recommendationApi } = await import('@/api/recommendation')
-      const res = await recommendationApi.getMyList(options) as any
-      myRecommendations.value = res?.list || []
+      const { recommendationApi } = await import('@/api/recommendation');
+      const res = (await recommendationApi.getMyList(options)) as any;
+      myRecommendations.value = res?.list || [];
     } catch (e) {
-      console.warn('获取推荐列表失败', e)
+      console.warn('获取推荐列表失败', e);
     }
   }
 
   async function cancelRecommendation(params: { workId?: number; templateId?: number }) {
     try {
-      const { recommendationApi } = await import('@/api/recommendation')
+      const { recommendationApi } = await import('@/api/recommendation');
       if (params.workId) {
-        await recommendationApi.cancelRecommendWork(params.workId)
+        await recommendationApi.cancelRecommendWork(params.workId);
       } else if (params.templateId) {
-        await recommendationApi.cancelRecommendTemplate(params.templateId)
+        await recommendationApi.cancelRecommendTemplate(params.templateId);
       }
       // 更新本地列表和计数
       myRecommendations.value = myRecommendations.value.filter(
-        (r) => !(params.workId && r.target_id === params.workId) && !(params.templateId && r.target_id === params.templateId)
-      )
-      recommendationsCount.value = Math.max(0, recommendationsCount.value - 1)
+        r =>
+          !(params.workId && r.target_id === params.workId) && !(params.templateId && r.target_id === params.templateId)
+      );
+      recommendationsCount.value = Math.max(0, recommendationsCount.value - 1);
     } catch (e) {
-      console.warn('取消推荐失败', e)
+      console.warn('取消推荐失败', e);
     }
   }
 
   async function recordHistoryAction(params: { workId?: number; templateId?: number }) {
-    if (!isLoggedIn.value) return
+    if (!isLoggedIn.value) return;
     try {
-      const { interactionApi } = await import('@/api/interaction')
-      await interactionApi.recordHistory(params)
-      fetchMyHistory()
+      const { interactionApi } = await import('@/api/interaction');
+      await interactionApi.recordHistory(params);
+      fetchMyHistory();
     } catch (e) {
-      console.error('记录历史失败', e)
+      console.error('记录历史失败', e);
     }
   }
 
   async function toggleLikeAction(params: { workId?: number; templateId?: number; like: boolean }) {
-    if (!isLoggedIn.value) return false
+    if (!isLoggedIn.value) return false;
     try {
-      const { interactionApi } = await import('@/api/interaction')
-      const res = await interactionApi.toggleLike(params) as any
+      const { interactionApi } = await import('@/api/interaction');
+      const res = (await interactionApi.toggleLike(params)) as any;
       if (res && res.liked !== undefined) {
         // 同步更新本地喜欢的列表，不重新拉全部统计
-        fetchMyLikes()
-        return true
+        fetchMyLikes();
+        return true;
       }
     } catch (e) {
-      console.error('点赞操作失败', e)
+      console.error('点赞操作失败', e);
     }
-    return false
+    return false;
   }
 
   async function toggleCollectAction(params: { workId?: number; templateId?: number; collect: boolean }) {
-    if (!isLoggedIn.value) return false
+    if (!isLoggedIn.value) return false;
     try {
-      const { interactionApi } = await import('@/api/interaction')
-      const res = await interactionApi.toggleCollect(params) as any
+      const { interactionApi } = await import('@/api/interaction');
+      const res = (await interactionApi.toggleCollect(params)) as any;
       if (res && res.collected !== undefined) {
-        fetchMyCollects()
-        return true
+        fetchMyCollects();
+        return true;
       }
     } catch (e) {
-      console.error('收藏操作失败', e)
+      console.error('收藏操作失败', e);
     }
-    return false
+    return false;
   }
 
   async function fetchUserProfile() {
     try {
-      const { userApi } = await import('@/api/user')
-      const profileRes = await userApi.getProfile() as any
-      if (!profileRes) return
+      const { userApi } = await import('@/api/user');
+      const profileRes = (await userApi.getProfile()) as any;
+      if (!profileRes) return;
 
-      userProfile.value = profileRes
+      userProfile.value = profileRes;
       // user.id 来自 session sub（数字），profileRes 不包含 id，直接用 fallback
-      user.value = { ...user.value, ...profileRes, id: user.value?.sub || user.value?.id }
+      user.value = { ...user.value, ...profileRes, id: user.value?.sub || user.value?.id };
 
       // 加载完整统计（关注/粉丝/互关/获赞/作品/模板/收藏/推荐），个人内容列表在切换到对应 Tab 时才加载
-      await fetchMyStats()
+      await fetchMyStats();
     } catch (e) {
       // 静默失败：保持旧值，不清零
-      console.warn('获取用户资料失败', e)
+      console.warn('获取用户资料失败', e);
     }
   }
 
   async function updateUserProfile(data: any) {
     try {
-      const { userApi } = await import('@/api/user')
-      const res = await userApi.updateProfile(data) as any
+      const { userApi } = await import('@/api/user');
+      const res = (await userApi.updateProfile(data)) as any;
       if (res) {
-        userProfile.value = { ...userProfile.value, ...res }
-        user.value = { ...user.value, ...res }
-        return true
+        userProfile.value = { ...userProfile.value, ...res };
+        user.value = { ...user.value, ...res };
+        return true;
       }
     } catch (e) {
-      console.error('更新资料失败', e)
+      console.error('更新资料失败', e);
     }
-    return false
+    return false;
   }
 
   /** 权限检查 */
   function hasPermission(permission: string): boolean {
-    if (isAdmin.value) return true
-    const { allows, denies } = permissions.value
-    if (denies.some((p) => isPermissionMatch(p, permission))) return false
-    return allows.some((p) => isPermissionMatch(p, permission))
+    if (isAdmin.value) return true;
+    const { allows, denies } = permissions.value;
+    if (denies.some(p => isPermissionMatch(p, permission))) return false;
+    return allows.some(p => isPermissionMatch(p, permission));
   }
 
   function hasRole(role: string): boolean {
-    return roles.value.includes(role)
+    return roles.value.includes(role);
   }
 
   function isPermissionMatch(pattern: string, target: string): boolean {
-    if (pattern === '*') return true
-    if (pattern === target) return true
-    if (pattern.endsWith(':*')) return target.startsWith(pattern.slice(0, -1))
-    return false
+    if (pattern === '*') return true;
+    if (pattern === target) return true;
+    if (pattern.endsWith(':*')) return target.startsWith(pattern.slice(0, -1));
+    return false;
   }
 
   function logout() {
-    setLoggedIn(false, null)
+    setLoggedIn(false, null);
   }
 
   // 启动时从缓存恢复（快速显示 UI）
-  restoreFromCache()
+  restoreFromCache();
 
   return {
     isLoggedIn,
@@ -427,5 +433,5 @@ export const useAuthStore = defineStore('auth', () => {
     saveLoginInfo,
     updateSaveLoginInfo,
     safeAvatar
-  }
-})
+  };
+});

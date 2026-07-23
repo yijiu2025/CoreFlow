@@ -1,6 +1,7 @@
 <template>
   <aside class="right-panel" v-show="canvasStore.bgImageUploaded">
-    <AiPanel v-show="toolStore.activeTool === 'ai' || toolStore.canvasTool === 'crop'"
+    <AiPanel
+      v-show="toolStore.activeTool === 'ai' || toolStore.canvasTool === 'crop'"
       :isAnalyzing="canvasStore.isAnalyzing"
       v-model="canvasStore.detectionType"
       :activeTool="toolStore.canvasTool"
@@ -14,7 +15,8 @@
       @saveHistory="emit('saveState')"
     />
 
-    <SelectPanel v-show="toolStore.activeTool === 'select'"
+    <SelectPanel
+      v-show="toolStore.activeTool === 'select'"
       :selectedObject="toolStore.selectedObject"
       :pathBlur="toolStore.pathBlur"
       @deleteSelected="emit('deleteSelected')"
@@ -30,7 +32,8 @@
       @saveState="emit('saveState')"
     />
 
-    <DrawPanel v-show="toolStore.activeTool === 'draw'"
+    <DrawPanel
+      v-show="toolStore.activeTool === 'draw'"
       v-model:brushSize="toolStore.brushSize"
       v-model:brushOpacity="toolStore.brushOpacity"
       v-model:brushFeather="toolStore.brushFeather"
@@ -41,7 +44,8 @@
       @saveState="emit('saveState')"
     />
 
-    <EraserPanel v-show="toolStore.activeTool === 'eraser'"
+    <EraserPanel
+      v-show="toolStore.activeTool === 'eraser'"
       v-model:eraserSize="toolStore.eraserSize"
       v-model:eraserOpacity="toolStore.eraserOpacity"
       v-model:eraserHardness="toolStore.eraserHardness"
@@ -50,14 +54,16 @@
       @saveState="emit('saveState')"
     />
 
-    <ShapesPanel v-show="toolStore.activeTool === 'shapes'"
+    <ShapesPanel
+      v-show="toolStore.activeTool === 'shapes'"
       :canvasTool="toolStore.canvasTool"
       :activeGuides="toolStore.activeGuides"
       @toggleGuide="emit('toggleGuide', $event)"
       @setDrawTool="emit('setDrawTool', $event)"
     />
 
-    <TextPanel v-show="toolStore.activeTool === 'text'"
+    <TextPanel
+      v-show="toolStore.activeTool === 'text'"
       :fontSize="fontSize"
       :fontFamily="fontFamily"
       :lineHeight="lineHeight"
@@ -81,7 +87,8 @@
       @update:textAlign="emit('update:textAlign', $event)"
     />
 
-    <HandPanel v-show="toolStore.activeTool === 'hand'"
+    <HandPanel
+      v-show="toolStore.activeTool === 'hand'"
       :zoomPercent="canvasStore.zoomPercent"
       v-model:zoomSlider="canvasStore.zoomSlider"
       @zoomIn="emit('zoomIn')"
@@ -90,7 +97,8 @@
       @fitToScreen="emit('fitToScreen')"
     />
 
-    <ImagePanel v-show="toolStore.activeTool === 'image' && canvasStore.bgImageUploaded && !isCropping"
+    <ImagePanel
+      v-show="toolStore.activeTool === 'image' && canvasStore.bgImageUploaded && !isCropping"
       :bgOpacity="canvasStore.bgOpacity"
       :cropAspectRatio="toolStore.cropAspectRatio"
       @replaceImage="emit('replaceImage')"
@@ -100,7 +108,8 @@
       @saveHistory="emit('saveState')"
     />
 
-    <CropPanel v-show="isCropping"
+    <CropPanel
+      v-show="isCropping"
       :cropAspectRatio="toolStore.cropAspectRatio"
       @update:cropAspectRatio="emit('updateCropAspectRatio', $event)"
       @confirmCrop="emit('confirmCrop')"
@@ -110,35 +119,35 @@
 </template>
 
 <script setup lang="ts">
-import { useCanvasStore, useToolStore } from '@/stores/editor'
-import AiPanel from '@/components/panels/editor/AiPanel.vue'
-import SelectPanel from '@/components/panels/editor/SelectPanel.vue'
-import DrawPanel from '@/components/panels/editor/DrawPanel.vue'
-import EraserPanel from '@/components/panels/editor/EraserPanel.vue'
-import ShapesPanel from '@/components/panels/editor/ShapesPanel.vue'
-import TextPanel from '@/components/panels/editor/TextPanel.vue'
-import HandPanel from '@/components/panels/editor/HandPanel.vue'
-import ImagePanel from '@/components/panels/editor/ImagePanel.vue'
-import CropPanel from '@/components/panels/editor/CropPanel.vue'
+import { useCanvasStore, useToolStore } from '@/stores/editor';
+import AiPanel from '@/components/panels/editor/AiPanel.vue';
+import SelectPanel from '@/components/panels/editor/SelectPanel.vue';
+import DrawPanel from '@/components/panels/editor/DrawPanel.vue';
+import EraserPanel from '@/components/panels/editor/EraserPanel.vue';
+import ShapesPanel from '@/components/panels/editor/ShapesPanel.vue';
+import TextPanel from '@/components/panels/editor/TextPanel.vue';
+import HandPanel from '@/components/panels/editor/HandPanel.vue';
+import ImagePanel from '@/components/panels/editor/ImagePanel.vue';
+import CropPanel from '@/components/panels/editor/CropPanel.vue';
 
-const canvasStore = useCanvasStore()
-const toolStore = useToolStore()
+const canvasStore = useCanvasStore();
+const toolStore = useToolStore();
 
 withDefaults(
   defineProps<{
-    isCropping?: boolean
-    detectionTypes?: any[]
-    
-    fontSize?: number
-    fontFamily?: string
-    lineHeight?: number
-    letterSpacing?: number
-    bold?: boolean
-    italic?: boolean
-    underline?: boolean
-    strikethrough?: boolean
-    textAlign?: string
-    warpStyle?: string
+    isCropping?: boolean;
+    detectionTypes?: any[];
+
+    fontSize?: number;
+    fontFamily?: string;
+    lineHeight?: number;
+    letterSpacing?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    strikethrough?: boolean;
+    textAlign?: string;
+    warpStyle?: string;
   }>(),
   {
     isCropping: false,
@@ -154,7 +163,7 @@ withDefaults(
     textAlign: 'left',
     warpStyle: 'none'
   }
-)
+);
 
 const emit = defineEmits([
   'autoAnalyze',
@@ -193,7 +202,7 @@ const emit = defineEmits([
   'updateCropAspectRatio',
   'confirmCrop',
   'cancelCrop'
-])
+]);
 </script>
 
 <style scoped>

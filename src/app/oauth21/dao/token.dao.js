@@ -54,10 +54,7 @@ const TokenDao = {
    */
   async revoke(refreshToken) {
     const model = getModel();
-    await model.update(
-      { revoked: true },
-      { where: { refresh_token: refreshToken } }
-    );
+    await model.update({ revoked: true }, { where: { refresh_token: refreshToken } });
   },
 
   /**

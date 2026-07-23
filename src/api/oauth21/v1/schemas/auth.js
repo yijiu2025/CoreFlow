@@ -23,7 +23,7 @@ export const loginSchema = {
     },
     additionalProperties: false
   }
-}
+};
 
 /** POST /login/consent/confirm */
 export const consentConfirmSchema = {
@@ -35,7 +35,7 @@ export const consentConfirmSchema = {
     },
     additionalProperties: false
   }
-}
+};
 
 /** POST /authorize/login */
 export const authorizeLoginSchema = {
@@ -49,7 +49,7 @@ export const authorizeLoginSchema = {
     },
     additionalProperties: false
   }
-}
+};
 
 /** POST /authorize/consent */
 export const authorizeConsentSchema = {
@@ -63,4 +63,4 @@ export const authorizeConsentSchema = {
     },
     additionalProperties: false
   }
-}
+};

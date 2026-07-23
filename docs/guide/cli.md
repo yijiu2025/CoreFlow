@@ -20,59 +20,59 @@ npm run cli -- firewall status
 
 ### 用户管理 `user`
 
-| 命令 | 说明 |
-|------|------|
-| `user list` | 列出所有用户 |
-| `user create` | 创建新用户（交互式输入） |
-| `user view` | 查看用户详情（含角色） |
-| `user reset-password` | 重置密码（**踢出所有设备**） |
-| `user disable` | 禁用用户（**踢出所有设备**） |
-| `user enable` | 启用用户 |
-| `user delete` | 删除用户（**踢出所有设备**，软删除） |
+| 命令                  | 说明                                 |
+| --------------------- | ------------------------------------ |
+| `user list`           | 列出所有用户                         |
+| `user create`         | 创建新用户（交互式输入）             |
+| `user view`           | 查看用户详情（含角色）               |
+| `user reset-password` | 重置密码（**踢出所有设备**）         |
+| `user disable`        | 禁用用户（**踢出所有设备**）         |
+| `user enable`         | 启用用户                             |
+| `user delete`         | 删除用户（**踢出所有设备**，软删除） |
 
 ### 角色管理 `role`
 
-| 命令 | 说明 |
-|------|------|
-| `role list` | 列出所有角色 |
-| `role view` | 查看角色详情（含用户列表） |
-| `role assign` | 分配角色给用户 |
-| `role revoke` | 撤销用户角色 |
-| `role stats` | 角色统计（用户数） |
+| 命令          | 说明                       |
+| ------------- | -------------------------- |
+| `role list`   | 列出所有角色               |
+| `role view`   | 查看角色详情（含用户列表） |
+| `role assign` | 分配角色给用户             |
+| `role revoke` | 撤销用户角色               |
+| `role stats`  | 角色统计（用户数）         |
 
 ### 数据库操作 `db`
 
-| 命令 | 说明 |
-|------|------|
-| `db status` | 查看数据库状态 |
-| `db migrate` | 执行数据库迁移 |
+| 命令          | 说明             |
+| ------------- | ---------------- |
+| `db status`   | 查看数据库状态   |
+| `db migrate`  | 执行数据库迁移   |
 | `db rollback` | 回滚最近一次迁移 |
-| `db tables` | 查看所有表结构 |
-| `db optimize` | 优化数据库表 |
+| `db tables`   | 查看所有表结构   |
+| `db optimize` | 优化数据库表     |
 
 ### Redis 操作 `redis`
 
-| 命令 | 说明 |
-|------|------|
-| `redis status` | 查看 Redis 状态 |
-| `redis clear` | 清除所有 session |
-| `redis pattern` | 按模式清除缓存 |
-| `redis keys` | 查看 key 列表 |
+| 命令            | 说明             |
+| --------------- | ---------------- |
+| `redis status`  | 查看 Redis 状态  |
+| `redis clear`   | 清除所有 session |
+| `redis pattern` | 按模式清除缓存   |
+| `redis keys`    | 查看 key 列表    |
 
 ### 管理员管理 `admin`
 
-| 命令 | 说明 |
-|------|------|
-| `admin list` | 列出超级管理员 |
-| `admin setup` | 初始化超级管理员（支持交互式） |
-| `admin revoke` | 撤销超级管理员（安全检查） |
+| 命令           | 说明                           |
+| -------------- | ------------------------------ |
+| `admin list`   | 列出超级管理员                 |
+| `admin setup`  | 初始化超级管理员（支持交互式） |
+| `admin revoke` | 撤销超级管理员（安全检查）     |
 
 ### 系统操作 `system`
 
-| 命令 | 说明 |
-|------|------|
-| `system health` | 系统健康检查 |
-| `system info` | 查看系统信息 |
+| 命令             | 说明         |
+| ---------------- | ------------ |
+| `system health`  | 系统健康检查 |
+| `system info`    | 查看系统信息 |
 | `system cleanup` | 清理过期数据 |
 
 ## 应用插件命令
@@ -81,15 +81,15 @@ npm run cli -- firewall status
 
 ### 防火墙 `firewall`
 
-| 命令 | 说明 |
-|------|------|
-| `firewall status` | 查看防火墙状态 |
-| `firewall blocks` | 查看封禁列表 |
-| `firewall whitelist` | 查看白名单 |
-| `firewall ban` | 添加封禁 IP |
-| `firewall unban` | 解除封禁 IP |
-| `firewall allow` | 添加白名单 IP |
-| `firewall stats` | 流量统计 |
+| 命令                 | 说明           |
+| -------------------- | -------------- |
+| `firewall status`    | 查看防火墙状态 |
+| `firewall blocks`    | 查看封禁列表   |
+| `firewall whitelist` | 查看白名单     |
+| `firewall ban`       | 添加封禁 IP    |
+| `firewall unban`     | 解除封禁 IP    |
+| `firewall allow`     | 添加白名单 IP  |
+| `firewall stats`     | 流量统计       |
 
 ## 使用示例
 
@@ -164,12 +164,12 @@ npm run cli -- firewall stats
 
 以下操作会**同时踢出用户所有设备**（吊销数据库 Token + 清除 Redis Session）：
 
-| 操作 | 说明 |
-|------|------|
+| 操作                  | 说明                           |
+| --------------------- | ------------------------------ |
 | `user reset-password` | 重置密码后，所有设备需重新登录 |
-| `user disable` | 禁用用户后，所有设备立即失效 |
-| `user delete` | 删除用户后，所有设备立即失效 |
-| `admin revoke` | 撤销管理员后，该用户需重新登录 |
+| `user disable`        | 禁用用户后，所有设备立即失效   |
+| `user delete`         | 删除用户后，所有设备立即失效   |
+| `admin revoke`        | 撤销管理员后，该用户需重新登录 |
 
 ## 常用场景
 
@@ -241,9 +241,11 @@ export default {
   appName: 'myapp',
   description: '我的应用管理',
   subcommands: {
-    'list': {
+    list: {
       description: '列出数据',
-      handler: async () => { /* ... */ }
+      handler: async () => {
+        /* ... */
+      }
     }
   }
 };

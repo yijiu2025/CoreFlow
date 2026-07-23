@@ -21,10 +21,8 @@ export function generateUserCode() {
   const chars = 'BCDFGHJKLMNPQRSTVWXYZ';
   const digits = '0123456789';
   let code = '';
-  for (let i = 0; i < 4; i++)
-    code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
   code += '-';
-  for (let i = 0; i < 4; i++)
-    code += digits[Math.floor(Math.random() * digits.length)];
+  for (let i = 0; i < 4; i++) code += digits[Math.floor(Math.random() * digits.length)];
   return code;
 }

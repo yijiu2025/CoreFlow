@@ -59,7 +59,7 @@ async function buildTestApp() {
   });
 
   // 注册 request.state（模拟 auth middleware）
-  app.addHook('onRequest', async (request) => {
+  app.addHook('onRequest', async request => {
     request.state = request.state || {};
   });
 
@@ -206,7 +206,7 @@ describe('应用核心流程集成测试', () => {
           };
         }
       });
-      authApp.addHook('onRequest', async (request) => {
+      authApp.addHook('onRequest', async request => {
         request.state = {
           user: { uid: 'test-uid-123', role: 'user' }
         };
@@ -232,13 +232,19 @@ describe('应用核心流程集成测试', () => {
         getter() {
           const reply = this;
           return {
-            success(msg) { return reply.code(200).send({ code: 200, message: msg }); },
-            unauth(msg) { return reply.code(401).send({ code: 401, message: msg }); },
-            forbidden(msg) { return reply.code(403).send({ code: 403, message: msg }); }
+            success(msg) {
+              return reply.code(200).send({ code: 200, message: msg });
+            },
+            unauth(msg) {
+              return reply.code(401).send({ code: 401, message: msg });
+            },
+            forbidden(msg) {
+              return reply.code(403).send({ code: 403, message: msg });
+            }
           };
         }
       });
-      roleApp.addHook('onRequest', async (request) => {
+      roleApp.addHook('onRequest', async request => {
         request.state = { user: { uid: 'user-1', role: 'user' } };
       });
       roleApp.get('/api/admin', async (request, reply) => {
@@ -261,12 +267,16 @@ describe('应用核心流程集成测试', () => {
         getter() {
           const reply = this;
           return {
-            success(msg) { return reply.code(200).send({ code: 200, message: msg }); },
-            forbidden(msg) { return reply.code(403).send({ code: 403, message: msg }); }
+            success(msg) {
+              return reply.code(200).send({ code: 200, message: msg });
+            },
+            forbidden(msg) {
+              return reply.code(403).send({ code: 403, message: msg });
+            }
           };
         }
       });
-      adminApp.addHook('onRequest', async (request) => {
+      adminApp.addHook('onRequest', async request => {
         request.state = { user: { uid: 'admin-1', role: 'admin' } };
       });
       adminApp.get('/api/admin', async (request, reply) => {

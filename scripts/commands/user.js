@@ -26,7 +26,7 @@ export async function listUsers() {
   console.log('\n👥 用户列表：');
   printTable(
     ['ID', '用户名', '邮箱', '状态', '创建时间'],
-    users.map((u) => [
+    users.map(u => [
       u.id,
       u.username,
       u.email,
@@ -57,7 +57,7 @@ export async function createUser() {
       return;
     }
 
-    const username = await ask(rl, '👤 用户名（留空使用邮箱前缀）: ') || email.split('@')[0];
+    const username = (await ask(rl, '👤 用户名（留空使用邮箱前缀）: ')) || email.split('@')[0];
     const password = await ask(rl, '🔑 密码（至少6位）: ', true);
     if (!password || password.length < 6) {
       printError('密码不能为空且至少6位');
@@ -133,10 +133,7 @@ export async function resetPassword() {
     printSuccess(`密码已重置: ${user.email}`);
 
     // 吊销数据库中所有 session token
-    const revokedCount = await SessionToken.update(
-      { revoked: true },
-      { where: { user_id: user.id, revoked: false } }
-    );
+    const revokedCount = await SessionToken.update({ revoked: true }, { where: { user_id: user.id, revoked: false } });
     if (revokedCount[0] > 0) {
       printInfo(`已吊销 ${revokedCount[0]} 个数据库 Token`);
     }
@@ -188,10 +185,7 @@ export async function disableUser() {
     await user.update({ status: 0 });
 
     // 吊销数据库中所有 session token
-    const revokedCount = await SessionToken.update(
-      { revoked: true },
-      { where: { user_id: user.id, revoked: false } }
-    );
+    const revokedCount = await SessionToken.update({ revoked: true }, { where: { user_id: user.id, revoked: false } });
     if (revokedCount[0] > 0) {
       printInfo(`已吊销 ${revokedCount[0]} 个 Token`);
     }
@@ -273,7 +267,7 @@ export async function viewUser() {
 
     if (userRoles.length > 0) {
       console.log('\n  角色:');
-      userRoles.forEach((ur) => {
+      userRoles.forEach(ur => {
         console.log(`    - ${ur.role.code} (${ur.role.name}, ${ur.role.app_id})`);
       });
     } else {
@@ -312,10 +306,7 @@ export async function deleteUser() {
     }
 
     // 吊销数据库中所有 session token
-    await SessionToken.update(
-      { revoked: true },
-      { where: { user_id: user.id, revoked: false } }
-    );
+    await SessionToken.update({ revoked: true }, { where: { user_id: user.id, revoked: false } });
 
     // 清除 Redis 中所有 session
     const redis = await connectRedis();

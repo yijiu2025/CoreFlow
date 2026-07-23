@@ -36,11 +36,8 @@ export async function healthCheck() {
   }
 
   // 环境变量
-  const requiredVars = [
-    'DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASS',
-    'APP_SECRET', 'SESSION_SECRET', 'FIREWALL_SECRET'
-  ];
-  const missingVars = requiredVars.filter((v) => !process.env[v]);
+  const requiredVars = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASS', 'APP_SECRET', 'SESSION_SECRET', 'FIREWALL_SECRET'];
+  const missingVars = requiredVars.filter(v => !process.env[v]);
   if (missingVars.length === 0) {
     printSuccess('环境变量: 配置完整');
   } else {

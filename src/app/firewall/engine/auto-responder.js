@@ -14,15 +14,15 @@ const DEFAULT_CONFIG = {
   enabled: true,
   autoBlock: {
     enabled: true,
-    scanThreshold: 20,      // 404/403 扫描次数阈值
+    scanThreshold: 20, // 404/403 扫描次数阈值
     rateLimitThreshold: 100, // 限频触发次数阈值
-    blockDuration: 3600      // 自动封禁时长（秒）
+    blockDuration: 3600 // 自动封禁时长（秒）
   },
   alert: {
     enabled: true,
-    email: '',               // 告警邮箱
-    webhookUrl: '',          // Webhook URL
-    cooldownMs: 300000       // 同一 IP 告警冷却时间（5 分钟）
+    email: '', // 告警邮箱
+    webhookUrl: '', // Webhook URL
+    cooldownMs: 300000 // 同一 IP 告警冷却时间（5 分钟）
   }
 };
 

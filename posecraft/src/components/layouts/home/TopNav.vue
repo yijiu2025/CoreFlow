@@ -1,30 +1,40 @@
 <template>
-  <header
-    class="top-nav"
-    :style="transparentTop ? { background: 'transparent', boxShadow: 'none' } : {}"
-  >
+  <header class="top-nav" :style="transparentTop ? { background: 'transparent', boxShadow: 'none' } : {}">
     <div class="nav-left">
       <!-- 小屏：侧边栏展开按钮 -->
       <button class="sidebar-toggle-btn" @click="sidebarOpen = !sidebarOpen" title="菜单">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+        >
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
       </button>
     </div>
 
     <!-- 桌面端：搜索框滚出视野后，在 topnav 居中显示紧凑搜索 -->
-    <div
-      class="nav-search-inline"
-      :class="{ visible: showNavSearch && windowWidth >= 760 }"
-    >
+    <div class="nav-search-inline" :class="{ visible: showNavSearch && windowWidth >= 760 }">
       <div class="inline-search-bar" :class="{ 'is-focused': navSearchFocused }">
         <!-- 左侧搜索图标 -->
         <div class="search-icon-wrap">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </div>
 
@@ -40,15 +50,18 @@
 
         <!-- 右侧：有内容时显示清除，无内容时显示快捷键提示 -->
         <div class="search-bar-right">
-          <button
-            v-if="searchQuery"
-            class="search-clear-btn"
-            @mousedown.prevent="searchQuery = ''"
-            title="清除"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
+          <button v-if="searchQuery" class="search-clear-btn" @mousedown.prevent="searchQuery = ''" title="清除">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.8"
+              stroke-linecap="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
           <kbd v-else class="search-kbd">/</kbd>
@@ -56,9 +69,17 @@
 
         <!-- 右侧搜索执行按钮 -->
         <button class="inline-search-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </button>
       </div>
@@ -74,10 +95,23 @@
             v-for="word in searchSuggestions.slice(0, 8)"
             :key="word"
             class="suggest-list-item"
-            @mousedown.prevent="searchQuery = word; navSearchFocused = false"
+            @mousedown.prevent="
+              searchQuery = word;
+              navSearchFocused = false;
+            "
           >
-            <svg class="suggest-item-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <svg
+              class="suggest-item-icon"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <span v-html="highlightText(word, searchQuery)"></span>
           </button>
@@ -94,42 +128,82 @@
         title="搜索"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
       </button>
 
       <!-- VIP标识 -->
       <div v-if="authStore.isLoggedIn && isVip" class="vip-badge-outline">
-        <svg class="vip-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"/>
-          <path d="M3 20h18"/>
+        <svg
+          class="vip-svg"
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z" />
+          <path d="M3 20h18" />
         </svg>
         <span class="vip-text">VIP 会员</span>
       </div>
 
       <!-- 通知 -->
       <button class="nav-action-btn" @click="$emit('showToast', '通知中心')" title="通知">
-        <svg class="nav-svg-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        <svg
+          class="nav-svg-icon"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         <span class="badge-dot"></span>
       </button>
 
       <!-- 私信 -->
       <button class="nav-action-btn" @click="$emit('showToast', '私信列表')" title="私信">
-        <svg class="nav-svg-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        <svg
+          class="nav-svg-icon"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
       </button>
 
       <!-- 投稿 -->
       <button class="btn-upload" @click="$emit('handleStartCreate')">
-        <svg class="upload-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="17 8 12 3 7 8"/>
-          <line x1="12" y1="3" x2="12" y2="15"/>
+        <svg
+          class="upload-svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
         <span>投稿</span>
       </button>
@@ -137,76 +211,78 @@
       <!-- 头像 -->
       <div class="avatar-wrapper">
         <div class="user-avatar-btn" v-if="authStore.isLoggedIn" @click="goToMyWorks">
-          <img v-if="authStore.userProfile?.avatar" :src="authStore.userProfile.avatar" alt="avatar" class="user-avatar-img" />
-          <span v-else>{{ (authStore.userProfile?.username || authStore.user?.username || 'U').charAt(0).toUpperCase() }}</span>
+          <img
+            v-if="authStore.userProfile?.avatar"
+            :src="authStore.userProfile.avatar"
+            alt="avatar"
+            class="user-avatar-img"
+          />
+          <span v-else>{{
+            (authStore.userProfile?.username || authStore.user?.username || 'U').charAt(0).toUpperCase()
+          }}</span>
         </div>
-        <div class="user-avatar-btn guest" v-else @click="$emit('toggleProfileModal')">
-          ?
-        </div>
+        <div class="user-avatar-btn guest" v-else @click="$emit('toggleProfileModal')">?</div>
 
         <!-- 悬浮卡片 (仅当 isLoggedIn 为 true 时显示) -->
-        <AvatarHoverCard
-          v-if="authStore.isLoggedIn"
-          @show-toast="(msg) => $emit('showToast', msg)"
-        />
+        <AvatarHoverCard v-if="authStore.isLoggedIn" @show-toast="msg => $emit('showToast', msg)" />
       </div>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import AvatarHoverCard from '@/components/popovers/home/AvatarHoverCard.vue'
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import AvatarHoverCard from '@/components/popovers/home/AvatarHoverCard.vue';
 
-const router = useRouter()
-const authStore = useAuthStore()
+const router = useRouter();
+const authStore = useAuthStore();
 
 const goToMyWorks = () => {
-  router.push('/mine')
-}
+  router.push('/mine');
+};
 
-const sidebarOpen = defineModel<boolean>('sidebarOpen', { required: true })
-const searchFocused = defineModel<boolean>('searchFocused', { default: false })
-const searchQuery = defineModel<string>('searchQuery', { required: true })
+const sidebarOpen = defineModel<boolean>('sidebarOpen', { required: true });
+const searchFocused = defineModel<boolean>('searchFocused', { default: false });
+const searchQuery = defineModel<string>('searchQuery', { required: true });
 
 defineProps<{
-  pageTitle: string
-  showNavSearch: boolean
-  transparentTop?: boolean
-  windowWidth: number
-  isVip: boolean
-  searchSuggestions: string[]
-}>()
+  pageTitle: string;
+  showNavSearch: boolean;
+  transparentTop?: boolean;
+  windowWidth: number;
+  isVip: boolean;
+  searchSuggestions: string[];
+}>();
 
 const emit = defineEmits<{
-  (e: 'showToast', msg: string): void
-  (e: 'handleStartCreate'): void
-  (e: 'toggleProfileModal'): void
-  (e: 'goToSearch'): void
-}>()
+  (e: 'showToast', msg: string): void;
+  (e: 'handleStartCreate'): void;
+  (e: 'toggleProfileModal'): void;
+  (e: 'goToSearch'): void;
+}>();
 
-const navSearchFocused = ref(false)
+const navSearchFocused = ref(false);
 
 const onNavSearchBlur = () => {
   setTimeout(() => {
-    navSearchFocused.value = false
-  }, 150)
-}
+    navSearchFocused.value = false;
+  }, 150);
+};
 
 const highlightText = (text: string, query: string) => {
   if (!query || !query.trim()) {
-    return `<span>${text}</span>`
+    return `<span>${text}</span>`;
   }
-  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`(${escapedQuery})`, 'gi')
-  return text.replace(regex, '<span class="highlight">$1</span>')
-}
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escapedQuery})`, 'gi');
+  return text.replace(regex, '<span class="highlight">$1</span>');
+};
 
 const goToSearch = () => {
-  emit('goToSearch')
-}
+  emit('goToSearch');
+};
 </script>
 
 <style scoped>
@@ -223,11 +299,13 @@ const goToSearch = () => {
   left: 220px;
   right: 0;
   z-index: 90;
-  transition: background-color 0.3s, box-shadow 0.3s;
+  transition:
+    background-color 0.3s,
+    box-shadow 0.3s;
 }
 
 /* 不透明状态有阴影 */
-.top-nav:not([style*="transparent"]) {
+.top-nav:not([style*='transparent']) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
@@ -235,7 +313,7 @@ const goToSearch = () => {
   background: #121214;
 }
 
-.dark-mode .top-nav:not([style*="transparent"]) {
+.dark-mode .top-nav:not([style*='transparent']) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
@@ -259,7 +337,9 @@ const goToSearch = () => {
   color: #64748b;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .sidebar-toggle-btn:hover {
@@ -328,7 +408,10 @@ const goToSearch = () => {
   padding: 0 6px 0 14px;
   gap: 6px;
   cursor: text;
-  transition: border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease,
+    box-shadow 0.22s ease;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -341,7 +424,9 @@ const goToSearch = () => {
 .inline-search-bar.is-focused {
   border-color: #ff2442;
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(255, 36, 66, 0.09), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 0 0 3px rgba(255, 36, 66, 0.09),
+    0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .dark-mode .inline-search-bar {
@@ -357,7 +442,9 @@ const goToSearch = () => {
 .dark-mode .inline-search-bar.is-focused {
   border-color: #ff4d6a;
   background: #18181b;
-  box-shadow: 0 0 0 3px rgba(255, 77, 106, 0.15), 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 0 0 3px rgba(255, 77, 106, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* ── 左侧搜索图标 ────────────────────────────────── */
@@ -397,7 +484,9 @@ const goToSearch = () => {
   border-radius: 50%;
   color: #64748b;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
   flex-shrink: 0;
 }
 
@@ -454,7 +543,10 @@ const goToSearch = () => {
   border-radius: 50%;
   color: #ffffff;
   cursor: pointer;
-  transition: background 0.22s ease, transform 0.15s ease, box-shadow 0.22s ease;
+  transition:
+    background 0.22s ease,
+    transform 0.15s ease,
+    box-shadow 0.22s ease;
 }
 
 .inline-search-btn:hover {
@@ -714,7 +806,9 @@ const goToSearch = () => {
   background: rgba(255, 255, 255, 0.98);
   border: 1.5px solid rgba(255, 36, 66, 0.15);
   border-radius: 16px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.06);
   padding: 6px 0 10px;
   z-index: 100;
   backdrop-filter: blur(12px);
@@ -725,7 +819,9 @@ const goToSearch = () => {
 .dark-mode .nav-suggestions-panel {
   background: rgba(24, 24, 27, 0.97);
   border-color: rgba(255, 77, 106, 0.2);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .suggest-panel-header {
@@ -754,7 +850,9 @@ const goToSearch = () => {
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 
 .suggest-close:hover {
@@ -783,7 +881,9 @@ const goToSearch = () => {
   text-align: left;
   cursor: pointer;
   border-radius: 10px;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .dark-mode .suggest-list-item {

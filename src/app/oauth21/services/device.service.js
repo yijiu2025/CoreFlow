@@ -65,10 +65,8 @@ export class DeviceService {
 
     const entry = await this.deviceStore.get(ref.deviceCode);
     if (!entry) return { success: false, error: 'invalid_user_code' };
-    if (entry.status !== 'pending')
-      return { success: false, error: 'already_processed' };
-    if (Date.now() > entry.expiresAt)
-      return { success: false, error: 'expired' };
+    if (entry.status !== 'pending') return { success: false, error: 'already_processed' };
+    if (Date.now() > entry.expiresAt) return { success: false, error: 'expired' };
 
     entry.status = 'authorized';
     entry.sub = userId;

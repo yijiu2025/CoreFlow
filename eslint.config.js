@@ -46,7 +46,7 @@ export default [
           printWidth: 120,
           semi: true,
           singleQuote: true,
-          arrowParens: 'always',
+          arrowParens: 'avoid',
           endOfLine: 'auto',
           trailingComma: 'none'
         }

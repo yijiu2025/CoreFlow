@@ -8,9 +8,9 @@
  */
 const SLOW_THRESHOLD = parseInt(process.env.SLOW_REQUEST_THRESHOLD || '2000');
 
-export default async (app) => {
+export default async app => {
   // 记录请求开始时间（使用高精度计时器）
-  app.addHook('onRequest', async (request) => {
+  app.addHook('onRequest', async request => {
     request.startTime = performance.now();
   });
 
@@ -23,13 +23,16 @@ export default async (app) => {
 
     // 慢请求告警
     if (ms > SLOW_THRESHOLD) {
-      request.log.warn({
-        duration: `${ms}ms`,
-        method: request.method,
-        url: request.url,
-        statusCode: reply.statusCode,
-        userId: request.state?.user?.uid || '-'
-      }, `慢请求 (> ${SLOW_THRESHOLD}ms)`);
+      request.log.warn(
+        {
+          duration: `${ms}ms`,
+          method: request.method,
+          url: request.url,
+          statusCode: reply.statusCode,
+          userId: request.state?.user?.uid || '-'
+        },
+        `慢请求 (> ${SLOW_THRESHOLD}ms)`
+      );
     }
   });
 };

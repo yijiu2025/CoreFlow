@@ -35,14 +35,18 @@ class SliderService {
     const token = crypto.randomBytes(16).toString('hex');
 
     // 存储目标坐标和 token
-    await store.set(sliderKey, {
-      x,
-      y,
-      token,
-      verified: false,
-      attempts: 0,
-      expired: Date.now() + cfg.ttl * 1000
-    }, cfg.ttl);
+    await store.set(
+      sliderKey,
+      {
+        x,
+        y,
+        token,
+        verified: false,
+        attempts: 0,
+        expired: Date.now() + cfg.ttl * 1000
+      },
+      cfg.ttl
+    );
 
     // 返回给前端的信息（不含真实坐标）
     return {
@@ -51,7 +55,7 @@ class SliderService {
       bgHeight,
       sliderWidth,
       sliderHeight,
-      token  // 前端用于加密坐标的 token
+      token // 前端用于加密坐标的 token
     };
   }
 

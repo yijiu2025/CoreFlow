@@ -7,8 +7,8 @@ import { Op } from 'sequelize';
 
 /** 检测配置 */
 const CONFIG = {
-  maxFailuresPerIp: 10,      // 同一 IP 最大失败次数（15 分钟内）
-  maxFailuresPerAccount: 5,  // 同一账号最大失败次数（15 分钟内）
+  maxFailuresPerIp: 10, // 同一 IP 最大失败次数（15 分钟内）
+  maxFailuresPerAccount: 5, // 同一账号最大失败次数（15 分钟内）
   failureWindowMs: 15 * 60 * 1000, // 失败检测窗口（15 分钟）
   lockoutDurationMs: 30 * 60 * 1000 // 锁定时长（30 分钟）
 };
@@ -18,8 +18,8 @@ const CONFIG = {
  */
 export const DETECT_RESULT = {
   SAFE: 'safe',
-  WARN: 'warn',           // 异常但允许登录
-  BLOCK: 'block'          // 阻止登录
+  WARN: 'warn', // 异常但允许登录
+  BLOCK: 'block' // 阻止登录
 };
 
 /**

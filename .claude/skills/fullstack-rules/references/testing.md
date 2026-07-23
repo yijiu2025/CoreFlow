@@ -11,26 +11,26 @@
 
 ```js
 // ❌ 测试实现细节（脆弱）
-const spy = vi.spyOn(wrapper.vm, 'handleClick')
-wrapper.find('button').trigger('click')
-expect(spy).toHaveBeenCalled()
+const spy = vi.spyOn(wrapper.vm, 'handleClick');
+wrapper.find('button').trigger('click');
+expect(spy).toHaveBeenCalled();
 
 // ✅ 测试行为结果（健壮）
-wrapper.find('button').trigger('click')
-expect(wrapper.find('.error-message').exists()).toBe(true)
+wrapper.find('button').trigger('click');
+expect(wrapper.find('.error-message').exists()).toBe(true);
 ```
 
 ```js
 // ❌ 测试框架本身
 // Vue 的响应式不需要我们来测
-const count = ref(0)
-count.value++
-expect(count.value).toBe(1)  // 无意义
+const count = ref(0);
+count.value++;
+expect(count.value).toBe(1); // 无意义
 
 // ✅ 测试业务逻辑
-const user = reactive({ name: 'Alice', age: 17 })
-const result = checkAdult(user)  // 自定义函数
-expect(result).toBe(false)
+const user = reactive({ name: 'Alice', age: 17 });
+const result = checkAdult(user); // 自定义函数
+expect(result).toBe(false);
 ```
 
 ```js
@@ -49,11 +49,11 @@ test('登录失败时按钮恢复可用', () => { ... })
 
 ## 一、测试文件命名
 
-| 类型 | 命名规范 | 示例 |
-|------|----------|------|
-| 单元测试 | `*.test.js` 或 `*.spec.js` | `user.test.js`、`auth.spec.js` |
-| 集成测试 | `*.test.js` | `api.test.js` |
-| 测试工具 | `*.helper.js` | `setup.helper.js`、`factory.helper.js` |
+| 类型     | 命名规范                   | 示例                                   |
+| -------- | -------------------------- | -------------------------------------- |
+| 单元测试 | `*.test.js` 或 `*.spec.js` | `user.test.js`、`auth.spec.js`         |
+| 集成测试 | `*.test.js`                | `api.test.js`                          |
+| 测试工具 | `*.helper.js`              | `setup.helper.js`、`factory.helper.js` |
 
 测试文件与源码保持相同目录结构，放在 `src/__tests__/` 下：
 
@@ -93,56 +93,56 @@ export default {
       statements: 40
     }
   }
-}
+};
 ```
 
 ### Fastify inject 测试模板
 
 ```js
-import app from '../../src/app.js'
+import app from '../../src/app.js';
 
 describe('用户信息 API', () => {
-  let fastify
+  let fastify;
 
   beforeAll(async () => {
-    fastify = await app()
-    await fastify.ready()
-  })
+    fastify = await app();
+    await fastify.ready();
+  });
 
   afterAll(async () => {
-    await fastify.close()
-  })
+    await fastify.close();
+  });
 
   test('GET /api/user/v1/profile - 未登录返回 401', async () => {
     const res = await fastify.inject({
       method: 'GET',
       url: '/api/user/v1/profile'
-    })
+    });
 
-    expect(res.statusCode).toBe(401)
+    expect(res.statusCode).toBe(401);
     expect(res.json()).toMatchObject({
       code: 401,
       message: expect.any(String)
-    })
-  })
+    });
+  });
 
   test('GET /api/user/v1/profile - 已登录返回用户信息', async () => {
     const res = await fastify.inject({
       method: 'GET',
       url: '/api/user/v1/profile',
       cookies: { sid: 'valid-session-id' }
-    })
+    });
 
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
       code: 200,
       data: expect.objectContaining({
         uid: expect.any(String),
         username: expect.any(String)
       })
-    })
-  })
-})
+    });
+  });
+});
 ```
 
 ### 测试场景检查清单
@@ -174,52 +174,52 @@ src/
 ### 组件测试模板
 
 ```ts
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
-import LoginForm from '@/components/LoginForm.vue'
+import { describe, it, expect } from 'vitest';
+import { mount } from '@vue/test-utils';
+import LoginForm from '@/components/LoginForm.vue';
 
 describe('LoginForm', () => {
   it('渲染登录按钮', () => {
-    const wrapper = mount(LoginForm)
-    expect(wrapper.text()).toContain('登录')
-  })
+    const wrapper = mount(LoginForm);
+    expect(wrapper.text()).toContain('登录');
+  });
 
   it('空表单提交时显示错误', async () => {
-    const wrapper = mount(LoginForm)
-    await wrapper.find('button[type="submit"]').trigger('click')
-    expect(wrapper.text()).toContain('请输入用户名')
-  })
-})
+    const wrapper = mount(LoginForm);
+    await wrapper.find('button[type="submit"]').trigger('click');
+    expect(wrapper.text()).toContain('请输入用户名');
+  });
+});
 ```
 
 ### Store 测试模板
 
 ```ts
-import { setActivePinia, createPinia } from 'pinia'
-import { useAuthStore } from '@/stores/auth'
+import { setActivePinia, createPinia } from 'pinia';
+import { useAuthStore } from '@/stores/auth';
 
 describe('AuthStore', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
-  })
+    setActivePinia(createPinia());
+  });
 
   it('初始状态为未登录', () => {
-    const store = useAuthStore()
-    expect(store.isLoggedIn).toBe(false)
-  })
-})
+    const store = useAuthStore();
+    expect(store.isLoggedIn).toBe(false);
+  });
+});
 ```
 
 ---
 
 ## 四、测试覆盖率
 
-| 指标 | 阈值 | 说明 |
-|------|------|------|
-| Branches | >= 30% | 分支覆盖（if/else、switch） |
-| Functions | >= 40% | 函数覆盖 |
-| Lines | >= 40% | 行覆盖 |
-| Statements | >= 40% | 语句覆盖 |
+| 指标       | 阈值   | 说明                        |
+| ---------- | ------ | --------------------------- |
+| Branches   | >= 30% | 分支覆盖（if/else、switch） |
+| Functions  | >= 40% | 函数覆盖                    |
+| Lines      | >= 40% | 行覆盖                      |
+| Statements | >= 40% | 语句覆盖                    |
 
 > 覆盖率阈值是底线，新功能建议达到 60%+。核心业务逻辑（auth、权限校验、支付等）要求 80%+。
 
@@ -260,36 +260,36 @@ e2e/
 ### 测试模板
 
 ```ts
-import { test, expect } from '@playwright/test'
+import { test, expect } from '@playwright/test';
 
 test.describe('用户登录', () => {
   test('正常登录跳转首页', async ({ page }) => {
-    await page.goto('/login')
-    await page.fill('input[name="username"]', 'admin')
-    await page.fill('input[name="password"]', '123456')
-    await page.click('button[type="submit"]')
-    await expect(page).toHaveURL('/dashboard')
-    await expect(page.locator('.user-name')).toContainText('admin')
-  })
+    await page.goto('/login');
+    await page.fill('input[name="username"]', 'admin');
+    await page.fill('input[name="password"]', '123456');
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL('/dashboard');
+    await expect(page.locator('.user-name')).toContainText('admin');
+  });
 
   test('密码错误显示提示', async ({ page }) => {
-    await page.goto('/login')
-    await page.fill('input[name="username"]', 'admin')
-    await page.fill('input[name="password"]', 'wrong')
-    await page.click('button[type="submit"]')
-    await expect(page.locator('.error-message')).toContainText('密码错误')
-  })
-})
+    await page.goto('/login');
+    await page.fill('input[name="username"]', 'admin');
+    await page.fill('input[name="password"]', 'wrong');
+    await page.click('button[type="submit"]');
+    await expect(page.locator('.error-message')).toContainText('密码错误');
+  });
+});
 ```
 
 ### E2E 测试原则
 
-| 原则 | 说明 |
-|------|------|
-| 测业务流程 | 测"用户能做什么"，不测实现细节 |
-| 稳定优先 | 使用 data-testid 或 aria-label 定位，避免脆弱的选择器 |
-| 隔离性 | 每个测试独立运行，不依赖其他测试的状态 |
-| 数据准备 | 测试前通过 API 或 fixture 准备数据，不依赖手动操作 |
+| 原则       | 说明                                                  |
+| ---------- | ----------------------------------------------------- |
+| 测业务流程 | 测"用户能做什么"，不测实现细节                        |
+| 稳定优先   | 使用 data-testid 或 aria-label 定位，避免脆弱的选择器 |
+| 隔离性     | 每个测试独立运行，不依赖其他测试的状态                |
+| 数据准备   | 测试前通过 API 或 fixture 准备数据，不依赖手动操作    |
 
 ### 运行命令
 

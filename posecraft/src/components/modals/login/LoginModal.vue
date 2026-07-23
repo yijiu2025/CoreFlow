@@ -5,7 +5,9 @@
       <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="close"></div>
 
       <!-- Modal Content -->
-      <div class="relative w-[856px] h-[484px] bg-slate-900/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
+      <div
+        class="relative w-[856px] h-[484px] bg-slate-900/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col"
+      >
         <!-- Close Button -->
         <button
           @click="close"
@@ -22,14 +24,13 @@
 
         <!-- iframe -->
         <div class="flex-1 w-full relative">
-          <iframe
-            :src="loginUrl"
-            class="w-full h-full border-none"
-            allow="payment"
-          ></iframe>
+          <iframe :src="loginUrl" class="w-full h-full border-none" allow="payment"></iframe>
 
           <!-- Loading State -->
-          <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-md">
+          <div
+            v-if="loading"
+            class="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-md"
+          >
             <div class="w-12 h-12 border-4 border-primary-500/30 border-t-primary-400 rounded-full animate-spin"></div>
           </div>
         </div>
@@ -39,22 +40,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { X } from 'lucide-vue-next'
-import { buildSsoLoginUrl } from '@/config/services'
-import { authApi } from '@/api/auth'
+import { ref, onMounted, onUnmounted } from 'vue';
+import { X } from 'lucide-vue-next';
+import { buildSsoLoginUrl } from '@/config/services';
+import { authApi } from '@/api/auth';
 
 const props = defineProps({
   isOpen: Boolean
-})
+});
 
-const emit = defineEmits(['close', 'login-success', 'max-sessions'])
+const emit = defineEmits(['close', 'login-success', 'max-sessions']);
 
-const loading = ref(true)
-const loginUrl = buildSsoLoginUrl()
+const loading = ref(true);
+const loginUrl = buildSsoLoginUrl();
 
 function close() {
-  emit('close')
+  emit('close');
 }
 
 /**
@@ -62,29 +63,29 @@ function close() {
  */
 const handleMessage = async (event: MessageEvent) => {
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
-    const { token, sessionToken, user } = event.data
+    const { token, sessionToken, user } = event.data;
 
     // Session 模式：用临时 token 换取 sid/sid_r Cookie
     if (sessionToken) {
       try {
-        const result = await authApi.bindSession(sessionToken)
-        console.log('Session 绑定成功:', result)
+        const result = await authApi.bindSession(sessionToken);
+        console.log('Session 绑定成功:', result);
       } catch (err) {
-        console.warn('绑定 Session 失败:', err)
+        console.warn('绑定 Session 失败:', err);
       }
     }
 
     // JWT 模式：用 access_token 换取 Cookie
     if (token) {
       try {
-        await authApi.bindToken(token)
+        await authApi.bindToken(token);
       } catch (err) {
-        console.warn('绑定 Token 失败:', err)
+        console.warn('绑定 Token 失败:', err);
       }
     }
 
-    emit('login-success', { user, token })
-    close()
+    emit('login-success', { user, token });
+    close();
   }
 
   // 设备数量超限
@@ -92,21 +93,21 @@ const handleMessage = async (event: MessageEvent) => {
     emit('max-sessions', {
       sessions: event.data.sessions,
       maxSessions: event.data.maxSessions
-    })
-    close()
+    });
+    close();
   }
-}
+};
 
 onMounted(() => {
-  window.addEventListener('message', handleMessage)
+  window.addEventListener('message', handleMessage);
   setTimeout(() => {
-    loading.value = false
-  }, 1500)
-})
+    loading.value = false;
+  }, 1500);
+});
 
 onUnmounted(() => {
-  window.removeEventListener('message', handleMessage)
-})
+  window.removeEventListener('message', handleMessage);
+});
 </script>
 
 <style scoped>

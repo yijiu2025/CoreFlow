@@ -93,7 +93,7 @@ export default (sequelize, DataTypes) => {
     }
   );
 
-  UserIdentity.associate = (models) => {
+  UserIdentity.associate = models => {
     UserIdentity.belongsTo(models.User, {
       foreignKey: 'user_id',
       as: 'user',

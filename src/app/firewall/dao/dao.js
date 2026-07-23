@@ -8,12 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { safeRedis } from '../../../redis/safe-redis.js';
 import { C } from '../../../utils/colors.js';
-import {
-  FIREWALL_FILE,
-  DEFAULT_SERVER_NODE,
-  DEFAULT_SECURITY_SETTINGS,
-  DEFAULT_IP_APIS
-} from '../config/config.js';
+import { FIREWALL_FILE, DEFAULT_SERVER_NODE, DEFAULT_SECURITY_SETTINGS, DEFAULT_IP_APIS } from '../config/config.js';
 
 let serverNode = { ...DEFAULT_SERVER_NODE };
 let securitySettings = { ...DEFAULT_SECURITY_SETTINGS };
@@ -32,22 +27,15 @@ export function initDao() {
     if (fs.existsSync(FIREWALL_FILE)) {
       const raw = JSON.parse(fs.readFileSync(FIREWALL_FILE, 'utf-8'));
       if (raw.serverNode) serverNode = { ...serverNode, ...raw.serverNode };
-      if (raw.securitySettings)
-        securitySettings = deepMerge(securitySettings, raw.securitySettings);
-      console.log(
-        `💾 [Firewall DAO] ${C.dim}已从文件恢复安全策略与节点数据${C.reset}`
-      );
+      if (raw.securitySettings) securitySettings = deepMerge(securitySettings, raw.securitySettings);
+      console.log(`💾 [Firewall DAO] ${C.dim}已从文件恢复安全策略与节点数据${C.reset}`);
     } else {
-      refreshServerNodeAuto().catch((err) => {
-        console.error(
-          `❌ [Firewall DAO] ${C.red}节点初始化异常: ${err.message}${C.reset}`
-        );
+      refreshServerNodeAuto().catch(err => {
+        console.error(`❌ [Firewall DAO] ${C.red}节点初始化异常: ${err.message}${C.reset}`);
       });
     }
   } catch (err) {
-    console.error(
-      `🚨 [Firewall DAO] ${C.red}加载持久化文件失败: ${err.message}${C.reset}`
-    );
+    console.error(`🚨 [Firewall DAO] ${C.red}加载持久化文件失败: ${err.message}${C.reset}`);
   }
 }
 
@@ -72,9 +60,7 @@ function triggerSave() {
       fs.writeFileSync(tmpFile, JSON.stringify(dataToSave, null, 2), 'utf-8');
       fs.renameSync(tmpFile, FIREWALL_FILE);
     } catch (err) {
-      console.error(
-        `🚨 [Firewall DAO] ${C.red}写入文件失败: ${err.message}${C.reset}`
-      );
+      console.error(`🚨 [Firewall DAO] ${C.red}写入文件失败: ${err.message}${C.reset}`);
     }
   }, 1000);
 }
@@ -156,15 +142,9 @@ export function updateSecuritySettings(patch) {
 export function addToBlacklist(type, value) {
   if (!value || typeof value !== 'string') return securitySettings.defense;
 
-  if (
-    type === 'ip' &&
-    !securitySettings.defense.manualBlacklistIps.includes(value)
-  ) {
+  if (type === 'ip' && !securitySettings.defense.manualBlacklistIps.includes(value)) {
     securitySettings.defense.manualBlacklistIps.push(value);
-  } else if (
-    type === 'user' &&
-    !securitySettings.defense.manualBlacklistUsers.includes(value)
-  ) {
+  } else if (type === 'user' && !securitySettings.defense.manualBlacklistUsers.includes(value)) {
     securitySettings.defense.manualBlacklistUsers.push(value);
   }
   triggerSave();
@@ -179,11 +159,13 @@ export function addToBlacklist(type, value) {
  */
 export function removeFromBlacklist(type, value) {
   if (type === 'ip') {
-    securitySettings.defense.manualBlacklistIps =
-      securitySettings.defense.manualBlacklistIps.filter((ip) => ip !== value);
+    securitySettings.defense.manualBlacklistIps = securitySettings.defense.manualBlacklistIps.filter(
+      ip => ip !== value
+    );
   } else if (type === 'user') {
-    securitySettings.defense.manualBlacklistUsers =
-      securitySettings.defense.manualBlacklistUsers.filter((u) => u !== value);
+    securitySettings.defense.manualBlacklistUsers = securitySettings.defense.manualBlacklistUsers.filter(
+      u => u !== value
+    );
   }
   triggerSave();
   return securitySettings.defense;
@@ -204,9 +186,7 @@ export async function addToWhitelist(ip, durationSeconds, redisClient = null) {
   if (!securitySettings.defense.manualWhitelistIps) {
     securitySettings.defense.manualWhitelistIps = [];
   }
-  const existing = securitySettings.defense.manualWhitelistIps.find(
-    (e) => e.ip === ip
-  );
+  const existing = securitySettings.defense.manualWhitelistIps.find(e => e.ip === ip);
   if (existing) {
     existing.duration = durationSeconds;
     existing.addedAt = Date.now();
@@ -221,12 +201,8 @@ export async function addToWhitelist(ip, durationSeconds, redisClient = null) {
   // 同步 Redis
   if (redisClient) {
     const meta = { expiresAt: Date.now() + durationSeconds * 1000 };
-    await safeRedis(redisClient, (r) =>
-      r.set(`fw:whitelist:${ip}`, '1', { EX: durationSeconds })
-    );
-    await safeRedis(redisClient, (r) =>
-      r.hset(HASH_WHITELIST, ip, JSON.stringify(meta))
-    );
+    await safeRedis(redisClient, r => r.set(`fw:whitelist:${ip}`, '1', { EX: durationSeconds }));
+    await safeRedis(redisClient, r => r.hset(HASH_WHITELIST, ip, JSON.stringify(meta)));
   }
 
   triggerSave();
@@ -243,13 +219,12 @@ export async function removeFromWhitelist(ip, redisClient = null) {
   if (!securitySettings.defense.manualWhitelistIps) {
     securitySettings.defense.manualWhitelistIps = [];
   }
-  securitySettings.defense.manualWhitelistIps =
-    securitySettings.defense.manualWhitelistIps.filter((e) => e.ip !== ip);
+  securitySettings.defense.manualWhitelistIps = securitySettings.defense.manualWhitelistIps.filter(e => e.ip !== ip);
 
   // 同步 Redis
   if (redisClient) {
-    await safeRedis(redisClient, (r) => r.del(`fw:whitelist:${ip}`));
-    await safeRedis(redisClient, (r) => r.hdel(HASH_WHITELIST, ip));
+    await safeRedis(redisClient, r => r.del(`fw:whitelist:${ip}`));
+    await safeRedis(redisClient, r => r.hdel(HASH_WHITELIST, ip));
   }
 
   triggerSave();
@@ -269,19 +244,17 @@ const HASH_WHITELIST = 'fw:whitelisted:ips';
 async function migrateBlockKey(redisClient, key) {
   if (key === HASH_BLOCKED) return;
   const ip = key.replace('fw:block:', '');
-  const raw = await safeRedis(redisClient, (r) => r.get(key));
+  const raw = await safeRedis(redisClient, r => r.get(key));
   if (!raw) return;
 
-  const inHash = await safeRedis(redisClient, (r) =>
-    r.hexists(HASH_BLOCKED, ip)
-  );
+  const inHash = await safeRedis(redisClient, r => r.hexists(HASH_BLOCKED, ip));
   if (inHash) return;
 
   let meta;
   if (raw.startsWith('{')) {
     meta = JSON.parse(raw);
   } else {
-    const ttl = await safeRedis(redisClient, (r) => r.ttl(key), -1);
+    const ttl = await safeRedis(redisClient, r => r.ttl(key), -1);
     meta = {
       status: raw === '1' ? 'BLOCKED' : raw,
       source: 'auto',
@@ -290,9 +263,7 @@ async function migrateBlockKey(redisClient, key) {
       expiresAt: ttl > 0 ? Date.now() + ttl * 1000 : null
     };
   }
-  await safeRedis(redisClient, (r) =>
-    r.hset(HASH_BLOCKED, ip, JSON.stringify(meta))
-  );
+  await safeRedis(redisClient, r => r.hset(HASH_BLOCKED, ip, JSON.stringify(meta)));
 }
 
 /**
@@ -314,21 +285,17 @@ export async function syncManualBlacklistToRedis(redisClient) {
       expiresAt: null
     };
     const value = JSON.stringify(meta);
-    const existing = await safeRedis(redisClient, (r) =>
-      r.get(`fw:block:${ip}`)
-    );
+    const existing = await safeRedis(redisClient, r => r.get(`fw:block:${ip}`));
     if (!existing) {
-      await safeRedis(redisClient, (r) => r.set(`fw:block:${ip}`, value));
+      await safeRedis(redisClient, r => r.set(`fw:block:${ip}`, value));
     }
-    await safeRedis(redisClient, (r) => r.hset(HASH_BLOCKED, ip, value));
+    await safeRedis(redisClient, r => r.hset(HASH_BLOCKED, ip, value));
   }
 
   // 扫描并迁移旧格式的 fw:block:* 键到 hash 索引
   let cursor = '0';
   do {
-    const result = await safeRedis(redisClient, (r) =>
-      r.scan(cursor, { MATCH: 'fw:block:*', COUNT: 100 })
-    );
+    const result = await safeRedis(redisClient, r => r.scan(cursor, { MATCH: 'fw:block:*', COUNT: 100 }));
     if (!result) break;
     cursor = result.cursor;
     for (const key of result.keys || []) {
@@ -336,9 +303,7 @@ export async function syncManualBlacklistToRedis(redisClient) {
     }
   } while (cursor !== '0');
 
-  console.log(
-    `💾 [Firewall DAO] ${C.dim}已迁移现有封禁键到 hash 索引${C.reset}`
-  );
+  console.log(`💾 [Firewall DAO] ${C.dim}已迁移现有封禁键到 hash 索引${C.reset}`);
 }
 
 /**
@@ -351,15 +316,10 @@ export async function syncManualWhitelistToRedis(redisClient) {
   const entries = securitySettings.defense.manualWhitelistIps || [];
   for (const entry of entries) {
     const ip = typeof entry === 'string' ? entry : entry.ip;
-    const duration =
-      typeof entry === 'string' ? 86400 : entry.duration || 86400;
+    const duration = typeof entry === 'string' ? 86400 : entry.duration || 86400;
     const meta = { expiresAt: Date.now() + duration * 1000 };
-    await safeRedis(redisClient, (r) =>
-      r.set(`fw:whitelist:${ip}`, '1', { EX: duration })
-    );
-    await safeRedis(redisClient, (r) =>
-      r.hset(HASH_WHITELIST, ip, JSON.stringify(meta))
-    );
+    await safeRedis(redisClient, r => r.set(`fw:whitelist:${ip}`, '1', { EX: duration }));
+    await safeRedis(redisClient, r => r.hset(HASH_WHITELIST, ip, JSON.stringify(meta)));
   }
 }
 
@@ -370,8 +330,7 @@ export async function syncManualWhitelistToRedis(redisClient) {
  */
 export async function refreshServerNodeAuto() {
   const activeApiId = securitySettings.activeIpApi || 'sohu';
-  const apiConfig =
-    DEFAULT_IP_APIS.find((a) => a.id === activeApiId) || DEFAULT_IP_APIS[0];
+  const apiConfig = DEFAULT_IP_APIS.find(a => a.id === activeApiId) || DEFAULT_IP_APIS[0];
 
   try {
     const controller = new AbortController();
@@ -397,10 +356,7 @@ export async function refreshServerNodeAuto() {
       ...serverNode,
       ip: parsed.ip,
       country: parsed.country || serverNode.country,
-      region: (parsed.region || '未知').replace(
-        /省|市|自治区|壮族|回族|维吾尔|特别行政区/g,
-        ''
-      ),
+      region: (parsed.region || '未知').replace(/省|市|自治区|壮族|回族|维吾尔|特别行政区/g, ''),
       city: parsed.city || serverNode.city,
       lat: parsed.lat || serverNode.lat,
       lon: parsed.lon || serverNode.lon,
@@ -413,8 +369,6 @@ export async function refreshServerNodeAuto() {
         `[${serverNode.lat},${serverNode.lon}]${C.reset}`
     );
   } catch (err) {
-    console.warn(
-      `⚠️ [Firewall DAO] ${C.yellow}${apiConfig.name} 定位失败: ${err.message}${C.reset}`
-    );
+    console.warn(`⚠️ [Firewall DAO] ${C.yellow}${apiConfig.name} 定位失败: ${err.message}${C.reset}`);
   }
 }

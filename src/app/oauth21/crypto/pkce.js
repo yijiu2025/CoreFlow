@@ -8,10 +8,7 @@ export function verifyPKCE(codeVerifier, codeChallenge, method = 'S256') {
   if (!codeVerifier || !codeChallenge) return false;
 
   if (method === 'S256') {
-    const hash = crypto
-      .createHash('sha256')
-      .update(codeVerifier)
-      .digest('base64url');
+    const hash = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
     return hash === codeChallenge;
   }
 

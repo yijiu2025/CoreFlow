@@ -17,11 +17,7 @@ defineRoles([
       Statement: [
         {
           Effect: 'Allow',
-          Action: [
-            OAUTH_PERMISSIONS.CLIENT.READ,
-            OAUTH_PERMISSIONS.TOKEN.READ,
-            OAUTH_PERMISSIONS.SCOPE.READ
-          ]
+          Action: [OAUTH_PERMISSIONS.CLIENT.READ, OAUTH_PERMISSIONS.TOKEN.READ, OAUTH_PERMISSIONS.SCOPE.READ]
         }
       ]
     }

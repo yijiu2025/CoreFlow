@@ -61,7 +61,7 @@ if (app.redis) {
 注册健康状态变化回调，返回取消函数。
 
 ```js
-const unsubscribe = app.onRedisHealthChange((healthy) => {
+const unsubscribe = app.onRedisHealthChange(healthy => {
   console.log('Redis 状态:', healthy ? '恢复' : '中断');
 });
 
@@ -79,10 +79,10 @@ unsubscribe();
 import { safeRedis } from './redis/safe-redis.js';
 
 // 基础用法：Redis 不可用时返回 null
-const value = await safeRedis(app.redis, (r) => r.get('key'), null);
+const value = await safeRedis(app.redis, r => r.get('key'), null);
 
 // 带结构化日志：传入 Pino logger（自动区分 warn/error 级别）
-const value = await safeRedis(app.redis, (r) => r.get('key'), null, app.log);
+const value = await safeRedis(app.redis, r => r.get('key'), null, app.log);
 ```
 
 **错误分级：** 网络错误（`ECONNREFUSED`/`AbortError`/`ClientClosedError`）记为 warn，程序错误记为 error。

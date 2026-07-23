@@ -27,7 +27,7 @@ async function listClients() {
   console.log('\n🔑 OAuth 客户端：');
   printTable(
     ['Client ID', '名称', '类型', '创建时间'],
-    clients.map((c) => [
+    clients.map(c => [
       c.client_id,
       c.client_name,
       c.application_type || 'web',
@@ -80,8 +80,8 @@ export default {
   appName: 'oauth21',
   description: 'OAuth 2.1 授权中心',
   subcommands: {
-    'clients': { description: '查看 OAuth 客户端', handler: listClients },
-    'tokens':  { description: '查看 Token 统计',   handler: tokenStats },
-    'stats':   { description: 'OAuth 统计',         handler: oauthStats }
+    clients: { description: '查看 OAuth 客户端', handler: listClients },
+    tokens: { description: '查看 Token 统计', handler: tokenStats },
+    stats: { description: 'OAuth 统计', handler: oauthStats }
   }
 };

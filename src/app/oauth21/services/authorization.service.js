@@ -61,25 +61,13 @@ export class AuthorizationService {
    * 验证 /authorize 请求参数
    */
   async validateAuthorizeRequest(query) {
-    const {
-      response_type,
-      client_id,
-      redirect_uri,
-      scope,
-      code_challenge,
-      code_challenge_method
-    } = query;
+    const { response_type, client_id, redirect_uri, scope, code_challenge, code_challenge_method } = query;
 
     // 1. 必须参数
-    if (!client_id)
-      throw new OAuthError('invalid_request', 'client_id is required');
-    if (!redirect_uri)
-      throw new OAuthError('invalid_request', 'redirect_uri is required');
+    if (!client_id) throw new OAuthError('invalid_request', 'client_id is required');
+    if (!redirect_uri) throw new OAuthError('invalid_request', 'redirect_uri is required');
     if (response_type !== 'code') {
-      throw new OAuthError(
-        'unsupported_response_type',
-        'Only response_type=code is supported'
-      );
+      throw new OAuthError('unsupported_response_type', 'Only response_type=code is supported');
     }
 
     // 2. 查找客户端
@@ -93,28 +81,16 @@ export class AuthorizationService {
 
     // 4. grant_type 兼容性
     if (!client.grant_types.includes('authorization_code')) {
-      throw new OAuthError(
-        'unauthorized_client',
-        'Client not authorized for authorization_code grant'
-      );
+      throw new OAuthError('unauthorized_client', 'Client not authorized for authorization_code grant');
     }
 
     // 5. PKCE（OAuth 2.1 强制）
     if (config.pkce.required) {
       if (!code_challenge) {
-        throw new OAuthError(
-          'invalid_request',
-          'code_challenge is required (OAuth 2.1)'
-        );
+        throw new OAuthError('invalid_request', 'code_challenge is required (OAuth 2.1)');
       }
-      if (
-        code_challenge_method &&
-        !['S256', 'plain'].includes(code_challenge_method)
-      ) {
-        throw new OAuthError(
-          'invalid_request',
-          'code_challenge_method must be S256 or plain'
-        );
+      if (code_challenge_method && !['S256', 'plain'].includes(code_challenge_method)) {
+        throw new OAuthError('invalid_request', 'code_challenge_method must be S256 or plain');
       }
     }
 
@@ -145,21 +121,13 @@ export class AuthorizationService {
     const consent = await ConsentDao.find(userId, clientId);
     if (!consent) return false;
     const needed = requestedScopes.split(' ');
-    return needed.every((s) => consent.scopes.includes(s));
+    return needed.every(s => consent.scopes.includes(s));
   }
 
   /**
    * 发放授权码
    */
-  async issueAuthorizationCode({
-    userId,
-    clientId,
-    scope,
-    redirectUri,
-    codeChallenge,
-    codeChallengeMethod,
-    nonce
-  }) {
+  async issueAuthorizationCode({ userId, clientId, scope, redirectUri, codeChallenge, codeChallengeMethod, nonce }) {
     const code = generateAuthorizationCode();
 
     await CodeDao.save(code, {

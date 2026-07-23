@@ -8,9 +8,9 @@
 
 <script setup lang="ts">
 defineProps<{
-  bioLines: string[]
-  isDark: boolean
-}>()
+  bioLines: string[];
+  isDark: boolean;
+}>();
 </script>
 
 <style scoped>

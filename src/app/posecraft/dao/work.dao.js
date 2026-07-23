@@ -53,27 +53,41 @@ class WorkDao {
       where.category = options.category;
     }
 
-    const page = options.page ? Number(options.page) : (options.limit ? Math.floor((options.offset || 0) / options.limit) + 1 : 1);
-    const pageSize = options.pageSize ? Number(options.pageSize) : (options.limit ? Number(options.limit) : 20);
+    const page = options.page
+      ? Number(options.page)
+      : options.limit
+        ? Math.floor((options.offset || 0) / options.limit) + 1
+        : 1;
+    const pageSize = options.pageSize ? Number(options.pageSize) : options.limit ? Number(options.limit) : 20;
     const limit = pageSize;
     const offset = (page - 1) * pageSize;
 
     // 排序方式
-    let order = [['created_at', 'DESC']]
+    let order = [['created_at', 'DESC']];
     if (options.sort === 'recommended') {
       // 推荐排序公式：点赞×15 + 收藏×12 + 分享×8 + 浏览×1 + 随机执20
       // 昔权重设计：收藏 > 分享 > 点赞 > 浏览（表达真实用户意图）
       // 随机扰动避免高点赞内容固化在首位（马太效应）
       order = [
-        [sequelize.literal('(likes_count * 15 + collects_count * 12 + shares_count * 8 + views_count * 1 + RAND() * 20)'), 'DESC']
-      ]
+        [
+          sequelize.literal(
+            '(likes_count * 15 + collects_count * 12 + shares_count * 8 + views_count * 1 + RAND() * 20)'
+          ),
+          'DESC'
+        ]
+      ];
     }
 
     const { count, rows } = await model.findAndCountAll({
       where,
       include: [
         { model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] },
-        { model: sequelize.models.Template, as: 'template', attributes: ['id', 'status', 'delete_version', 'title'], required: false }
+        {
+          model: sequelize.models.Template,
+          as: 'template',
+          attributes: ['id', 'status', 'delete_version', 'title'],
+          required: false
+        }
       ],
       order,
       limit,
@@ -82,7 +96,7 @@ class WorkDao {
 
     // 当前用户已点赞/已收藏/已分享的作品 ID 集合（用于前端标记状态）
     if (options.currentUserId && rows.length > 0) {
-      const workIds = rows.map((w) => w.id);
+      const workIds = rows.map(w => w.id);
       const [likedIds, collectedIds, sharedIds] = await Promise.all([
         this._getLikedTargetIds(options.currentUserId, workIds),
         this._getCollectedTargetIds(options.currentUserId, workIds),
@@ -123,7 +137,7 @@ class WorkDao {
       where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
       attributes: ['work_id']
     });
-    return new Set(records.map((r) => Number(r.work_id)));
+    return new Set(records.map(r => Number(r.work_id)));
   }
 
   /**
@@ -140,7 +154,7 @@ class WorkDao {
       where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
       attributes: ['work_id']
     });
-    return new Set(records.map((r) => Number(r.work_id)));
+    return new Set(records.map(r => Number(r.work_id)));
   }
 
   /**
@@ -159,7 +173,7 @@ class WorkDao {
       where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
       attributes: ['work_id']
     });
-    return new Set(records.map((r) => Number(r.work_id)));
+    return new Set(records.map(r => Number(r.work_id)));
   }
 
   /**
@@ -180,7 +194,7 @@ class WorkDao {
   async findAuditList(options = {}) {
     const model = this.getModel();
     const { Op } = await import('sequelize');
-    
+
     // 默认查询待审核 (2)，但支持按 status 筛选
     const where = { delete_version: 0 };
     if (options.status !== undefined) {
@@ -188,14 +202,14 @@ class WorkDao {
     } else {
       where.status = 2; // 默认查待审核
     }
-    
+
     if (options.keyword) {
       where[Op.or] = [
         { title: { [Op.like]: `%${options.keyword}%` } },
         { description: { [Op.like]: `%${options.keyword}%` } }
       ];
     }
-    
+
     const { count, rows } = await model.findAndCountAll({
       where,
       order: [['created_at', 'DESC']],
@@ -203,7 +217,7 @@ class WorkDao {
       offset: options.offset || 0,
       raw: true
     });
-    
+
     return {
       list: rows,
       total: count,
@@ -238,7 +252,12 @@ class WorkDao {
       include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       attributes: { exclude: ['analysis_data', 'delete_version'] },
       order: [
-        [sequelize.literal('(likes_count * 15 + collects_count * 12 + shares_count * 8 + views_count * 1 + RAND() * 20)'), 'DESC']
+        [
+          sequelize.literal(
+            '(likes_count * 15 + collects_count * 12 + shares_count * 8 + views_count * 1 + RAND() * 20)'
+          ),
+          'DESC'
+        ]
       ],
       limit
     });
@@ -257,7 +276,12 @@ class WorkDao {
       where: { id, delete_version: 0 },
       include: [
         { model: User, as: 'author', attributes: ['uid', 'username', 'avatar'] },
-        { model: sequelize.models.Template, as: 'template', attributes: ['id', 'status', 'delete_version', 'title'], required: false }
+        {
+          model: sequelize.models.Template,
+          as: 'template',
+          attributes: ['id', 'status', 'delete_version', 'title'],
+          required: false
+        }
       ],
       attributes: { exclude: ['analysis_data', 'delete_version', 'user_id', 'deleted_at'] }
     });
@@ -375,7 +399,7 @@ class WorkDao {
 
     // 补充当前用户对好友作品的点赞/收藏状态
     if (rows.length > 0) {
-      const workIds = rows.map((w) => w.id);
+      const workIds = rows.map(w => w.id);
       const [likedIds, collectedIds] = await Promise.all([
         this._getLikedTargetIds(userId, workIds),
         this._getCollectedTargetIds(userId, workIds)
@@ -420,22 +444,35 @@ class WorkDao {
 
     // 球面余弦公式 + bounding box 预过滤（减少全表扫描量）
     const latDegPerKm = 1 / 111.32;
-    const lngDegPerKm = 1 / (111.32 * Math.cos(lat * Math.PI / 180));
+    const lngDegPerKm = 1 / (111.32 * Math.cos((lat * Math.PI) / 180));
     const latMin = lat - radius * latDegPerKm;
     const latMax = lat + radius * latDegPerKm;
     const lngMin = lng - radius * lngDegPerKm;
     const lngMax = lng + radius * lngDegPerKm;
 
     const distanceExpr = sequelize.literal(
-      'ACOS(SIN(RADIANS(' + lat + ')) * SIN(RADIANS(publication_lat)) + ' +
-      'COS(RADIANS(' + lat + ')) * COS(RADIANS(publication_lat)) * ' +
-      'COS(RADIANS(' + lng + ' - publication_lng))) * 6371'
+      'ACOS(SIN(RADIANS(' +
+        lat +
+        ')) * SIN(RADIANS(publication_lat)) + ' +
+        'COS(RADIANS(' +
+        lat +
+        ')) * COS(RADIANS(publication_lat)) * ' +
+        'COS(RADIANS(' +
+        lng +
+        ' - publication_lng))) * 6371'
     );
 
     const radiusCondition = sequelize.literal(
-      'ACOS(SIN(RADIANS(' + lat + ')) * SIN(RADIANS(publication_lat)) + ' +
-      'COS(RADIANS(' + lat + ')) * COS(RADIANS(publication_lat)) * ' +
-      'COS(RADIANS(' + lng + ' - publication_lng))) * 6371 <= ' + radius
+      'ACOS(SIN(RADIANS(' +
+        lat +
+        ')) * SIN(RADIANS(publication_lat)) + ' +
+        'COS(RADIANS(' +
+        lat +
+        ')) * COS(RADIANS(publication_lat)) * ' +
+        'COS(RADIANS(' +
+        lng +
+        ' - publication_lng))) * 6371 <= ' +
+        radius
     );
 
     const { count, rows } = await model.findAndCountAll({
@@ -459,7 +496,7 @@ class WorkDao {
     // 补充当前用户互动状态
     const currentUserId = options.currentUserId;
     if (currentUserId && rows.length > 0) {
-      const workIds = rows.map((w) => w.id);
+      const workIds = rows.map(w => w.id);
       const [likedIds, collectedIds] = await Promise.all([
         this._getLikedTargetIds(currentUserId, workIds),
         this._getCollectedTargetIds(currentUserId, workIds)
@@ -472,7 +509,6 @@ class WorkDao {
 
     return { list: rows, total: count, page, pageSize };
   }
-
 }
 
 export default new WorkDao();

@@ -10,9 +10,7 @@ export async function up({ queryInterface }) {
   // 所有表结构已通过 sequelize.sync() 在开发环境建立
   // 后续变更请创建新的迁移文件，例如：
   //   npx umzug migration:create --name add-xxx-column
-  console.log(
-    '✅ [Migration] 基线迁移已记录，后续表结构变更请使用迁移文件管理'
-  );
+  console.log('✅ [Migration] 基线迁移已记录，后续表结构变更请使用迁移文件管理');
 }
 
 export async function down({ queryInterface }) {

@@ -1,7 +1,7 @@
 /**
  * 用户交互 API（浏览历史、点赞、收藏）
  */
-import request from '@/utils/request'
+import request from '@/utils/request';
 
 export const interactionApi = {
   /**
@@ -9,7 +9,7 @@ export const interactionApi = {
    * @param data - workId 或 templateId（二选一）
    */
   recordHistory: (data: { workId?: number; templateId?: number }) => {
-    return request.post('/posecraft/v1/interaction/history', data)
+    return request.post('/posecraft/v1/interaction/history', data);
   },
 
   /**
@@ -17,7 +17,7 @@ export const interactionApi = {
    * @param data - workId 或 templateId + like 状态
    */
   toggleLike: (data: { workId?: number; templateId?: number; like: boolean }) => {
-    return request.post('/posecraft/v1/interaction/like', data)
+    return request.post('/posecraft/v1/interaction/like', data);
   },
 
   /**
@@ -25,7 +25,7 @@ export const interactionApi = {
    * @param data - workId 或 templateId + collect 状态
    */
   toggleCollect: (data: { workId?: number; templateId?: number; collect: boolean }) => {
-    return request.post('/posecraft/v1/interaction/collect', data)
+    return request.post('/posecraft/v1/interaction/collect', data);
   },
 
   /**
@@ -33,7 +33,7 @@ export const interactionApi = {
    * @param params - workId 或 templateId
    */
   checkStatus: (params: { workId?: number; templateId?: number }) => {
-    return request.get('/posecraft/v1/interaction/status', { params })
+    return request.get('/posecraft/v1/interaction/status', { params });
   },
 
   /**
@@ -41,7 +41,7 @@ export const interactionApi = {
    * @param params - 分页参数
    */
   getHistoryList: (params: { page: number; pageSize: number }) => {
-    return request.get('/posecraft/v1/interaction/history/list', { params })
+    return request.get('/posecraft/v1/interaction/history/list', { params });
   },
 
   /**
@@ -49,7 +49,7 @@ export const interactionApi = {
    * @param params - 分页参数
    */
   getLikesList: (params: { page: number; pageSize: number }) => {
-    return request.get('/posecraft/v1/interaction/like/list', { params })
+    return request.get('/posecraft/v1/interaction/like/list', { params });
   },
 
   /**
@@ -57,6 +57,6 @@ export const interactionApi = {
    * @param params - 分页参数
    */
   getCollectsList: (params: { page: number; pageSize: number }) => {
-    return request.get('/posecraft/v1/interaction/collect/list', { params })
+    return request.get('/posecraft/v1/interaction/collect/list', { params });
   }
-}
+};

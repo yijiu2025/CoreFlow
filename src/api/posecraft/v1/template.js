@@ -33,10 +33,10 @@ export default async function (fastify) {
    */
   const checkDataPermission = (item, user) => {
     if (!item || !user) return false;
-    
+
     // 如果是创建者本人，通过
     if (item.user_id === user.userId) return true;
-    
+
     // 如果是管理员/运营角色或拥有审核/删单权限，通过
     const userRoles = user.roles || [];
     const userPermissions = user.permissions?.allows || [];
@@ -78,13 +78,17 @@ export default async function (fastify) {
       const user = request.state?.user;
       const isAdmin = checkDataPermission({ user_id: -1 }, user); // 借用权限助手检测是否为管理员
 
-      const result = await TemplateDao.findAll({
-        category,
-        keyword,
-        status,
-        page,
-        pageSize
-      }, user, isAdmin);
+      const result = await TemplateDao.findAll(
+        {
+          category,
+          keyword,
+          status,
+          page,
+          pageSize
+        },
+        user,
+        isAdmin
+      );
 
       return reply.result.paginated(result.list, result.total, result.page, result.pageSize);
     }
@@ -159,7 +163,7 @@ export default async function (fastify) {
       // 安全校验：未审核通过/非公开模板的可见度检查
       const user = request.state?.user;
       const isAdmin = checkDataPermission({ user_id: -1 }, user);
-      
+
       if (template.status !== 1) {
         if (template.user_id !== user?.userId && !isAdmin) {
           return reply.result.forbidden('无权查看此未公开或审核中的模板');
@@ -168,7 +172,7 @@ export default async function (fastify) {
 
       // 机密信息保护：pose_data 只有在辅助拍照并且有权限时才返回，其它普通浏览情况一律剥离
       const isCreator = template.user_id == user?.userId;
-      const hasPrivilege = user?.permissions?.allows?.some((p) => 
+      const hasPrivilege = user?.permissions?.allows?.some(p =>
         ['posecraft:work:read', 'posecraft:vip:premium_templates', 'posecraft:template:purchase'].includes(p)
       );
       const isAuthorized = isCreator || isAdmin || hasPrivilege;
@@ -204,11 +208,15 @@ export default async function (fastify) {
       // 获取 pose_data 和 fabricData
       let poseData = template.pose_data;
       if (typeof poseData === 'string') {
-        try { poseData = JSON.parse(poseData); } catch (e) {}
+        try {
+          poseData = JSON.parse(poseData);
+        } catch (e) {}
       }
       let fabricData = poseData?.fabricData;
       if (typeof fabricData === 'string') {
-        try { fabricData = JSON.parse(fabricData); } catch (e) {}
+        try {
+          fabricData = JSON.parse(fabricData);
+        } catch (e) {}
       }
 
       let width = fabricData?.width || 800;
@@ -258,9 +266,20 @@ export default async function (fastify) {
     permission: 'posecraft:work:create', // 已合并模板与作品权限
     handler: async (request, reply) => {
       const {
-        title, description, category, image_url, pose_data, tags,
-        publication_address, publication_lat, publication_lng, publication_source,
-        work_address, work_lat, work_lng, work_address_source
+        title,
+        description,
+        category,
+        image_url,
+        pose_data,
+        tags,
+        publication_address,
+        publication_lat,
+        publication_lng,
+        publication_source,
+        work_address,
+        work_lat,
+        work_lng,
+        work_address_source
       } = request.body;
       const user = request.state.user;
 
@@ -358,7 +377,7 @@ export default async function (fastify) {
       // 修改后如果需要重新审核，在此处将 status 重置为 2（非管理员修改后重置）
       const isAdmin = checkDataPermission({ user_id: -1 }, user);
       if (data.status === undefined && !isAdmin) {
-        data.status = 2; 
+        data.status = 2;
       }
 
       const updated = await TemplateDao.update(id, data);
@@ -375,10 +394,7 @@ export default async function (fastify) {
       // 同步更新或创建对应的底图作品 (Work)
       await TemplateDao.syncUpdateWork(id, data, template);
 
-      return reply.result.success(
-        isAdmin ? '更新成功' : '更新成功，已进入重新审核阶段',
-        updated
-      );
+      return reply.result.success(isAdmin ? '更新成功' : '更新成功，已进入重新审核阶段', updated);
     }
   });
 

@@ -9,13 +9,23 @@ export async function up({ queryInterface, Sequelize }) {
     template_id: { type: Sequelize.BIGINT, allowNull: true, comment: '推荐的模板 ID' },
     delete_version: { type: Sequelize.BIGINT, allowNull: false, defaultValue: 0 },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') },
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    },
     deleted_at: { type: Sequelize.DATE, allowNull: true }
   });
 
-  await queryInterface.addIndex('posecraft_recommendation', ['user_id', 'delete_version'], { name: 'idx_recommendation_user' });
-  await queryInterface.addIndex('posecraft_recommendation', ['work_id', 'delete_version'], { name: 'idx_recommendation_work' });
-  await queryInterface.addIndex('posecraft_recommendation', ['template_id', 'delete_version'], { name: 'idx_recommendation_template' });
+  await queryInterface.addIndex('posecraft_recommendation', ['user_id', 'delete_version'], {
+    name: 'idx_recommendation_user'
+  });
+  await queryInterface.addIndex('posecraft_recommendation', ['work_id', 'delete_version'], {
+    name: 'idx_recommendation_work'
+  });
+  await queryInterface.addIndex('posecraft_recommendation', ['template_id', 'delete_version'], {
+    name: 'idx_recommendation_template'
+  });
 }
 
 export async function down({ queryInterface }) {

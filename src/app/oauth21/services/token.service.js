@@ -99,10 +99,7 @@ export class TokenService {
     // 1. 消费授权码（一次性 + 重放检测）
     const codeData = await CodeDao.consume(code);
     if (!codeData) {
-      throw new TokenError(
-        'invalid_grant',
-        'Invalid or expired authorization code'
-      );
+      throw new TokenError('invalid_grant', 'Invalid or expired authorization code');
     }
 
     // 2. client_id 匹配
@@ -174,17 +171,12 @@ export class TokenService {
    */
   async handleClientCredentials({ client, scope }) {
     if (!client.grant_types.includes('client_credentials')) {
-      throw new TokenError(
-        'unauthorized_client',
-        'Client not authorized for client_credentials'
-      );
+      throw new TokenError('unauthorized_client', 'Client not authorized for client_credentials');
     }
 
     const allowedScopes = client.scope.split(' ');
     const requestedScopes = (scope || client.scope).split(' ');
-    const validScopes = requestedScopes.filter((s) =>
-      allowedScopes.includes(s)
-    );
+    const validScopes = requestedScopes.filter(s => allowedScopes.includes(s));
 
     if (validScopes.length === 0) {
       throw new TokenError('invalid_scope', 'No valid scopes');
@@ -216,10 +208,7 @@ export class TokenService {
     // first-party-app 的 token 保存时 client_id 为 null，需特殊匹配
     const tokenClientId = tokenData.client_id || 'first-party-app';
     if (tokenClientId !== client.client_id) {
-      throw new TokenError(
-        'invalid_grant',
-        'Refresh token does not belong to this client'
-      );
+      throw new TokenError('invalid_grant', 'Refresh token does not belong to this client');
     }
 
     // 轮换：吊销旧刷新令牌

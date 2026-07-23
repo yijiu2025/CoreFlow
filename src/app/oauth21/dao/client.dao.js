@@ -32,22 +32,13 @@ const ClientDao = {
    * @param {string} [params.application_type] 应用类型
    * @returns {Promise<object>} 创建的客户端数据 (首次创建时，client_secret 为明文返回以便展示)
    */
-  async create({
-    client_name,
-    redirect_uris,
-    grant_types,
-    scope,
-    application_type
-  }) {
+  async create({ client_name, redirect_uris, grant_types, scope, application_type }) {
     const { v4: uuidv4 } = await import('uuid');
     const crypto = await import('node:crypto');
 
     const client_id = `client-${uuidv4().slice(0, 8)}`;
     // 生成原始明文 client_secret
-    const rawSecret =
-      application_type === 'service'
-        ? crypto.randomBytes(32).toString('base64url')
-        : null;
+    const rawSecret = application_type === 'service' ? crypto.randomBytes(32).toString('base64url') : null;
 
     // 对 client_secret 进行安全哈希存储 (bcrypt)
     const hashedSecret = rawSecret ? bcrypt.hashSync(rawSecret, 10) : null;
@@ -80,7 +71,7 @@ const ClientDao = {
   async list() {
     const model = getModel();
     const clients = await model.findAll();
-    return clients.map((c) => {
+    return clients.map(c => {
       const { client_secret, ...rest } = c.toJSON();
       return rest;
     });

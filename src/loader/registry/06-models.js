@@ -7,7 +7,7 @@ import { C } from '../../utils/colors.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default async (app) => {
+export default async app => {
   const db = app.db;
   const modelsPath = path.resolve(__dirname, '../../models');
   const loadedModels = []; // 收集所有加载的模型，避免二次遍历
@@ -34,10 +34,7 @@ export default async (app) => {
           const { default: modelDefine } = await import(fileUrl);
           const result = modelDefine(sequelize, DataTypes);
 
-          const models =
-            result.name || typeof result !== 'object'
-              ? [result]
-              : Object.values(result);
+          const models = result.name || typeof result !== 'object' ? [result] : Object.values(result);
 
           for (const model of models) {
             if (!model || !model.name) continue;
@@ -49,9 +46,7 @@ export default async (app) => {
             loadedModels.push(model);
           }
         } catch (error) {
-          console.error(
-            `❌ [Loader: Models] ${C.red}模型 [${entry.name}] 加载失败: ${error.message}${C.reset}`
-          );
+          console.error(`❌ [Loader: Models] ${C.red}模型 [${entry.name}] 加载失败: ${error.message}${C.reset}`);
         }
       }
     }
@@ -60,7 +55,7 @@ export default async (app) => {
   await scanModels(modelsPath);
 
   // 执行模型关联 (associate)
-  loadedModels.forEach((model) => {
+  loadedModels.forEach(model => {
     if (model.associate) {
       model.associate(sequelize.models);
     }
@@ -75,18 +70,14 @@ export default async (app) => {
       process.exit(1);
     } else {
       try {
-        console.warn(
-          `⚠️ [Loader: Models] ${C.yellow}DB_SYNC=true: 正在 sync 建表（仅限首次开发环境）。${C.reset}`
-        );
+        console.warn(`⚠️ [Loader: Models] ${C.yellow}DB_SYNC=true: 正在 sync 建表（仅限首次开发环境）。${C.reset}`);
         console.warn(
           `⚠️ [Loader: Models] ${C.yellow}后续表结构变更请创建迁移文件: npx umzug migration:create --name <描述>${C.reset}`
         );
         await sequelize.sync({ alter: true });
         console.log(`✅ [Loader: Models] ${C.green}表结构同步完成${C.reset}`);
       } catch (err) {
-        console.error(
-          `❌ [Loader: Models] ${C.red}表结构同步失败: ${err.message}${C.reset}`
-        );
+        console.error(`❌ [Loader: Models] ${C.red}表结构同步失败: ${err.message}${C.reset}`);
       }
     }
   }

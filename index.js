@@ -66,7 +66,7 @@ const start = async () => {
   console.log(`🚀 [Server] ${color}${addr}${reset}`);
 };
 
-start().catch((err) => {
+start().catch(err => {
   const color = IS_TTY ? C.red : '';
   const reset = IS_TTY ? C.reset : '';
   console.error(`🚨 [Server] ${color}启动异常: ${err.message}${reset}`, err.stack);

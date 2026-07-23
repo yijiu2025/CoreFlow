@@ -11,13 +11,15 @@ export { checkGeoReputation, resolveGeoInfo } from './detectors/geo-filter.js';
 export { checkBotChallenge } from './detectors/bot-detector.js';
 
 // --- 封禁核心 ---
-export {
-  setBlock, removeBlock,
-  checkGlobalBlock
-} from './dao/block-manager.js';
+export { setBlock, removeBlock, checkGlobalBlock } from './dao/block-manager.js';
 
 // --- 公共工具（util 层） ---
-export { trackConnection, getConnectionStats, cleanupStaleConnections, startCleanupTask } from '../util/connection-tracker.js';
+export {
+  trackConnection,
+  getConnectionStats,
+  cleanupStaleConnections,
+  startCleanupTask
+} from '../util/connection-tracker.js';
 export { generateFingerprint } from '../util/fingerprint.js';
 
 // --- 请求管道 ---

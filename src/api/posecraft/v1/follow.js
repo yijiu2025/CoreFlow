@@ -23,7 +23,7 @@ export default async function (fastify) {
    * @returns {Promise<number|null>} 数据库整型用户 ID；纯数字直接返回，无效值返回 null
    * @throws {Error} 非数字且数据库查不到时抛出 USER_NOT_FOUND
    */
-  const getInternalUserId = async (idOrUid) => {
+  const getInternalUserId = async idOrUid => {
     if (!idOrUid) return null;
     // 如果是纯数字，直接返回数字
     if (!isNaN(Number(idOrUid))) {
@@ -33,10 +33,7 @@ export default async function (fastify) {
     const { User } = sequelize.models;
     const user = await User.findOne({
       where: {
-        [Op.or]: [
-          { uid: idOrUid },
-          { personal_id: idOrUid }
-        ]
+        [Op.or]: [{ uid: idOrUid }, { personal_id: idOrUid }]
       }
     });
     if (!user) {
@@ -64,7 +61,7 @@ export default async function (fastify) {
       }
 
       const result = await followDao.follow(followerId, targetFollowingId);
-      
+
       if (!result.success) {
         return reply.result.fail(result.message);
       }
@@ -131,14 +128,14 @@ export default async function (fastify) {
     url: '/follow/stats/:userId',
     handler: async (request, reply) => {
       const { userId } = request.params;
-      
+
       let targetUserId;
       try {
         targetUserId = await getInternalUserId(userId);
       } catch (err) {
         return reply.code(404).send({ code: 404, message: '用户不存在' });
       }
-      
+
       const stats = await followDao.getStats(targetUserId);
 
       return reply.result.success('查询成功', stats);

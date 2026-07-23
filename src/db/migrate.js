@@ -19,11 +19,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, '../../migrations');
 const migrationFiles = fs
   .readdirSync(migrationsDir)
-  .filter((f) => f.endsWith('.js'))
+  .filter(f => f.endsWith('.js'))
   .sort();
 
 const umzug = new Umzug({
-  migrations: migrationFiles.map((file) => ({
+  migrations: migrationFiles.map(file => ({
     name: file.replace('.js', ''),
     path: pathToFileURL(path.join(migrationsDir, file)).href,
     up: async ({ context }) => {
@@ -49,7 +49,7 @@ async function runUp() {
     console.log('[Migrate] 没有需要执行的迁移，数据库已是最新状态。');
   } else {
     console.log(`[Migrate] 成功执行了 ${migrations.length} 个迁移：`);
-    migrations.forEach((m) => console.log(`  + ${m.name}`));
+    migrations.forEach(m => console.log(`  + ${m.name}`));
   }
 }
 
@@ -62,7 +62,7 @@ async function runDown() {
     console.log('[Migrate] 没有可回滚的迁移。');
   } else {
     console.log(`[Migrate] 已回滚 ${migrations.length} 个迁移：`);
-    migrations.forEach((m) => console.log(`  - ${m.name}`));
+    migrations.forEach(m => console.log(`  - ${m.name}`));
   }
 }
 
@@ -72,7 +72,7 @@ async function runDown() {
  */
 async function runDownTo(targetName) {
   const executed = await umzug.executed();
-  const target = executed.find((m) => m.name === targetName || m.name.endsWith(targetName));
+  const target = executed.find(m => m.name === targetName || m.name.endsWith(targetName));
   if (!target) {
     console.error(`[Migrate] 未找到已执行的迁移: ${targetName}`);
     process.exit(1);
@@ -82,7 +82,7 @@ async function runDownTo(targetName) {
     console.log('[Migrate] 没有可回滚的迁移。');
   } else {
     console.log(`[Migrate] 已回滚 ${migrations.length} 个迁移至 ${targetName}：`);
-    migrations.forEach((m) => console.log(`  - ${m.name}`));
+    migrations.forEach(m => console.log(`  - ${m.name}`));
   }
 }
 
@@ -97,14 +97,14 @@ async function runStatus() {
   if (executed.length === 0) {
     console.log('  (无)');
   } else {
-    executed.forEach((m) => console.log(`  * ${m.name}`));
+    executed.forEach(m => console.log(`  * ${m.name}`));
   }
 
   console.log('\n[Migrate] 待执行的迁移:');
   if (pending.length === 0) {
     console.log('  (无，数据库已是最新状态)');
   } else {
-    pending.forEach((m) => console.log(`  ! ${m.name}`));
+    pending.forEach(m => console.log(`  ! ${m.name}`));
   }
   console.log();
 }

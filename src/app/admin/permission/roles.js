@@ -17,11 +17,7 @@ defineRoles([
       Statement: [
         {
           Effect: 'Allow',
-          Action: [
-            ADMIN_PERMISSIONS.USER.READ,
-            ADMIN_PERMISSIONS.ROLE.READ,
-            ADMIN_PERMISSIONS.POLICY.READ
-          ]
+          Action: [ADMIN_PERMISSIONS.USER.READ, ADMIN_PERMISSIONS.ROLE.READ, ADMIN_PERMISSIONS.POLICY.READ]
         }
       ]
     }
@@ -37,11 +33,7 @@ defineRoles([
       Statement: [
         {
           Effect: 'Allow',
-          Action: [
-            ADMIN_PERMISSIONS.USER.ALL,
-            ADMIN_PERMISSIONS.ROLE.ALL,
-            ADMIN_PERMISSIONS.POLICY.READ
-          ]
+          Action: [ADMIN_PERMISSIONS.USER.ALL, ADMIN_PERMISSIONS.ROLE.ALL, ADMIN_PERMISSIONS.POLICY.READ]
         }
       ]
     }

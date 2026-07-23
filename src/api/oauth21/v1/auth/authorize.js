@@ -8,10 +8,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { registerSecureRoute } from '../../../guard.js';
-import {
-  AuthorizationService,
-  OAuthError
-} from '../../../../app/oauth21/services/authorization.service.js';
+import { AuthorizationService, OAuthError } from '../../../../app/oauth21/services/authorization.service.js';
 import ApprovalDao from '../../../../app/oauth21/dao/approval.dao.js';
 import UserDao from '../../../../app/oauth21/dao/user.dao.js';
 
@@ -125,9 +122,7 @@ export default function registerAuthorizeRoutes(fastify, sessionStore) {
       } catch (err) {
         if (err instanceof OAuthError && request.query.redirect_uri) {
           const sep = request.query.redirect_uri.includes('?') ? '&' : '?';
-          return reply.redirect(
-            `${request.query.redirect_uri}${sep}${err.toRedirectParams()}`
-          );
+          return reply.redirect(`${request.query.redirect_uri}${sep}${err.toRedirectParams()}`);
         }
         throw err;
       }

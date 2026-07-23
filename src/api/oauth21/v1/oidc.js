@@ -47,14 +47,22 @@ export default async function (fastify) {
         ],
         subject_types_supported: ['public'],
         id_token_signing_alg_values_supported: ['RS256'],
-        token_endpoint_auth_methods_supported: [
-          'client_secret_basic',
-          'client_secret_post',
-          'none'
-        ],
+        token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post', 'none'],
         scopes_supported: ['openid', 'profile', 'email', 'api:read', 'api:write'],
         code_challenge_methods_supported: ['S256'],
-        claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'email', 'name', 'avatar', 'auth_time', 'roles', 'permissions']
+        claims_supported: [
+          'sub',
+          'iss',
+          'aud',
+          'exp',
+          'iat',
+          'email',
+          'name',
+          'avatar',
+          'auth_time',
+          'roles',
+          'permissions'
+        ]
       };
     }
   });

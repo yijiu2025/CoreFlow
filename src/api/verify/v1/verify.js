@@ -26,10 +26,7 @@ export default async function (fastify, opts) {
     url: '/generate-captcha',
     schema: generateCaptchaSchema,
     handler: async (request, reply) => {
-      reply.header(
-        'Cache-Control',
-        'no-store, no-cache, must-revalidate, proxy-revalidate'
-      );
+      reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
       const result = await captchaDao.generate(captchaStore);
       return reply.result.success('验证码生成成功', result);

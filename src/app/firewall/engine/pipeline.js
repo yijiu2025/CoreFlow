@@ -74,13 +74,7 @@ export function buildRequestContext(request) {
  * @param {import('fastify').FastifyReply} reply 响应对象
  * @returns {Promise<boolean>} true 表示被封禁（已响应），false 表示放行
  */
-export async function checkGlobalBlockPhase(
-  redis,
-  ip,
-  fingerprint,
-  firewallLog,
-  reply
-) {
+export async function checkGlobalBlockPhase(redis, ip, fingerprint, firewallLog, reply) {
   try {
     trackConnection(ip, 1);
     await checkGlobalBlock(redis, ip, fingerprint);
@@ -114,10 +108,8 @@ export async function checkChallengeCookie(redis, request, ip, fingerprint) {
   if (!clientToken) return false;
 
   const [fpPassed, ipPassed] = await Promise.all([
-    safeRedis(redis, (r) =>
-      r.exists(`fw:pass:fp:${fingerprint}:${clientToken}`)
-    ),
-    safeRedis(redis, (r) => r.exists(`fw:pass:${ip}:${clientToken}`))
+    safeRedis(redis, r => r.exists(`fw:pass:fp:${fingerprint}:${clientToken}`)),
+    safeRedis(redis, r => r.exists(`fw:pass:${ip}:${clientToken}`))
   ]);
 
   return !!(fpPassed || ipPassed);
@@ -139,15 +131,7 @@ export async function checkChallengeCookie(redis, request, ip, fingerprint) {
  * @param {import('fastify').FastifyReply} reply 响应对象
  * @returns {Promise<boolean>} true 表示被拦截（已响应），false 表示放行
  */
-export async function runDetectionPipeline(
-  redis,
-  ip,
-  ua,
-  url,
-  firewallLog,
-  fingerprint,
-  reply
-) {
+export async function runDetectionPipeline(redis, ip, ua, url, firewallLog, fingerprint, reply) {
   try {
     // Bot 检测：基于 UA 模式 + 请求频率
     const requestCount = trackRequestCount(ip);
@@ -160,7 +144,7 @@ export async function runDetectionPipeline(
     }
 
     // 地理信誉：IDC 限频、境外敏感路径拦截
-    await safeRedis(redis, (r) => checkGeoReputation(r, ip, url));
+    await safeRedis(redis, r => checkGeoReputation(r, ip, url));
 
     // 端点级限频（从配置读取规则）
     const settings = getSecuritySettings();

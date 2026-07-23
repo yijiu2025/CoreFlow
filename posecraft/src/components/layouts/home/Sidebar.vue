@@ -10,26 +10,17 @@
       <nav class="sidebar-menu">
         <div class="menu-group">
           <span class="group-title">发现</span>
-          <button
-            @click="navigateTo('/')"
-            :class="['menu-item', { active: isActive('/') }]"
-          >
+          <button @click="navigateTo('/')" :class="['menu-item', { active: isActive('/') }]">
             <Gem class="menu-icon" :size="18" />
             <span class="menu-label">精选</span>
           </button>
 
-          <button
-            @click="navigateTo('/recommend')"
-            :class="['menu-item', { active: isActive('/recommend') }]"
-          >
+          <button @click="navigateTo('/recommend')" :class="['menu-item', { active: isActive('/recommend') }]">
             <Sparkles class="menu-icon" :size="18" />
             <span class="menu-label">推荐</span>
           </button>
 
-          <button
-            @click="navigateTo('/nearby')"
-            :class="['menu-item', { active: isActive('/nearby') }]"
-          >
+          <button @click="navigateTo('/nearby')" :class="['menu-item', { active: isActive('/nearby') }]">
             <MapPin class="menu-icon" :size="18" />
             <span class="menu-label">附近</span>
           </button>
@@ -39,26 +30,17 @@
 
         <div class="menu-group">
           <span class="group-title">社交</span>
-          <button
-            @click="navigateTo('/following')"
-            :class="['menu-item', { active: isActive('/following') }]"
-          >
+          <button @click="navigateTo('/following')" :class="['menu-item', { active: isActive('/following') }]">
             <Heart class="menu-icon" :size="18" />
             <span class="menu-label">关注</span>
           </button>
 
-          <button
-            @click="navigateTo('/friends')"
-            :class="['menu-item', { active: isActive('/friends') }]"
-          >
+          <button @click="navigateTo('/friends')" :class="['menu-item', { active: isActive('/friends') }]">
             <Users class="menu-icon" :size="18" />
             <span class="menu-label">朋友</span>
           </button>
 
-          <button
-            @click="navigateTo('/mine')"
-            :class="['menu-item', { active: isActive('/mine') }]"
-          >
+          <button @click="navigateTo('/mine')" :class="['menu-item', { active: isActive('/mine') }]">
             <User class="menu-icon" :size="18" />
             <span class="menu-label">我的</span>
           </button>
@@ -126,48 +108,61 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter, useRoute } from 'vue-router'
-import { useThemeStore } from '@/stores/theme'
-import { useHome } from '@/composables/useHome'
+import { useRouter, useRoute } from 'vue-router';
+import { useThemeStore } from '@/stores/theme';
+import { useHome } from '@/composables/useHome';
 import {
-  Gem, Sparkles, MapPin, Heart, Users, User, Settings, Contrast,
-  Wrench, Bot, Keyboard, HelpCircle, Headphones, Info, Phone
-} from 'lucide-vue-next'
+  Gem,
+  Sparkles,
+  MapPin,
+  Heart,
+  Users,
+  User,
+  Settings,
+  Contrast,
+  Wrench,
+  Bot,
+  Keyboard,
+  HelpCircle,
+  Headphones,
+  Info,
+  Phone
+} from 'lucide-vue-next';
 
-const router = useRouter()
-const route = useRoute()
-const themeStore = useThemeStore()
-const { showSettingsModal, settingsActiveSection, showAboutModal } = useHome()
+const router = useRouter();
+const route = useRoute();
+const themeStore = useThemeStore();
+const { showSettingsModal, settingsActiveSection, showAboutModal } = useHome();
 
 const openSettings = (section: string) => {
-  settingsActiveSection.value = section
-  showSettingsModal.value = true
-}
+  settingsActiveSection.value = section;
+  showSettingsModal.value = true;
+};
 
-const sidebarOpen = defineModel<boolean>('sidebarOpen', { required: true })
+const sidebarOpen = defineModel<boolean>('sidebarOpen', { required: true });
 
 defineProps<{
-  isMobile: boolean
-}>()
+  isMobile: boolean;
+}>();
 
 defineEmits<{
-  (e: 'showToast', msg: string): void
-}>()
+  (e: 'showToast', msg: string): void;
+}>();
 
 const isActive = (path: string) => {
   if (path === '/') {
-    return route.path === '/'
+    return route.path === '/';
   }
-  return route.path.startsWith(path)
-}
+  return route.path.startsWith(path);
+};
 
 const navigateTo = (path: string) => {
-  router.push(path)
-}
+  router.push(path);
+};
 
 const goHome = () => {
-  router.push('/')
-}
+  router.push('/');
+};
 </script>
 
 <style scoped>
@@ -364,7 +359,7 @@ const goHome = () => {
 }
 
 .hover-dropdown-menu::before {
-  content: "";
+  content: '';
   position: absolute;
   top: -40px;
   bottom: -40px;
@@ -428,8 +423,14 @@ const goHome = () => {
 }
 
 @keyframes popIn {
-  from { opacity: 0; transform: translateX(5px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @media (max-width: 1024px) {

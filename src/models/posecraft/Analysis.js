@@ -68,7 +68,7 @@ export default (sequelize, DataTypes) => {
    * 模型关联定义
    * @param {object} models - 所有已注册模型的集合
    */
-  Analysis.associate = (models) => {
+  Analysis.associate = models => {
     Analysis.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
   };
 

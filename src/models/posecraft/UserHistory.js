@@ -46,9 +46,7 @@ export default (sequelize, DataTypes) => {
       tableName: 'posecraft_user_history',
       timestamps: true,
       paranoid: true,
-      indexes: [
-        { fields: ['user_id', 'created_at'], name: 'idx_user_history_user_created' }
-      ],
+      indexes: [{ fields: ['user_id', 'created_at'], name: 'idx_user_history_user_created' }],
       comment: 'PoseCraft 用户访问历史表'
     }
   );
@@ -57,7 +55,7 @@ export default (sequelize, DataTypes) => {
    * 模型关联定义
    * @param {object} models - 所有已注册模型的集合
    */
-  UserHistory.associate = (models) => {
+  UserHistory.associate = models => {
     UserHistory.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
     UserHistory.belongsTo(models.Work, { foreignKey: 'work_id', as: 'work' });
     UserHistory.belongsTo(models.Template, { foreignKey: 'template_id', as: 'template' });

@@ -74,23 +74,23 @@ onResponse    →  扫描陷阱（404/403 检测）
 
 模型按领域子目录自动注册为 `app.db.<namespace>.<ModelName>`：
 
-| 命名空间 | 模型 | 表名 |
-|----------|------|------|
-| `db.user` | User, UserIdentity | user_user, user_identity |
-| `db.iam` | Role, UserRole, InlinePolicy, Permission | iam_role, iam_user_role, iam_inline_policy, permissions |
+| 命名空间     | 模型                                                            | 表名                                                                          |
+| ------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `db.user`    | User, UserIdentity                                              | user_user, user_identity                                                      |
+| `db.iam`     | Role, UserRole, InlinePolicy, Permission                        | iam_role, iam_user_role, iam_inline_policy, permissions                       |
 | `db.oauth21` | OauthClient, OauthCode, OauthToken, OauthApproval, OauthConsent | oauth_clients, oauth_codes, oauth_tokens, oauth_user_approval, oauth_consents |
-| `db.notice` | EmailCode, NoticeConfig | notice_email_codes, notice_configs |
-| `db.session` | UserSession, SessionToken, SessionLog, AuditLog | session_user_session, session_tokens, session_logs, session_audit_logs |
+| `db.notice`  | EmailCode, NoticeConfig                                         | notice_email_codes, notice_configs                                            |
+| `db.session` | UserSession, SessionToken, SessionLog, AuditLog                 | session_user_session, session_tokens, session_logs, session_audit_logs        |
 
 ## 目录约定
 
-| 目录 | 职责 | 是否必须 |
-|------|------|----------|
-| `src/app/{name}/config.js` | 应用配置 | ✅ |
-| `src/app/{name}/permission/` | 权限定义 | 可选 |
-| `src/api/{name}/system.json` | 路由域配置 | ✅ |
-| `src/api/{name}/v1/*.js` | 路由文件 | ✅ |
-| `src/models/{name}/` | 数据模型 | 可选 |
+| 目录                         | 职责       | 是否必须 |
+| ---------------------------- | ---------- | -------- |
+| `src/app/{name}/config.js`   | 应用配置   | ✅       |
+| `src/app/{name}/permission/` | 权限定义   | 可选     |
+| `src/api/{name}/system.json` | 路由域配置 | ✅       |
+| `src/api/{name}/v1/*.js`     | 路由文件   | ✅       |
+| `src/models/{name}/`         | 数据模型   | 可选     |
 
 ## 下一步
 

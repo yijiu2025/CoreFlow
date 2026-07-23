@@ -25,18 +25,12 @@ class VoiceDao {
     if (current) {
       const diff = (Date.now() - current.sentAt) / 1000;
       if (diff < smsConfig.rateLimit) {
-        throw new Error(
-          `SEND_CODE_FAILED:发送过于频繁，请在 ${Math.ceil(smsConfig.rateLimit - diff)} 秒后再试`
-        );
+        throw new Error(`SEND_CODE_FAILED:发送过于频繁，请在 ${Math.ceil(smsConfig.rateLimit - diff)} 秒后再试`);
       }
     }
 
     // 存储验证码（复用短信配置）
-    await store.set(
-      phone,
-      { code, sentAt: Date.now(), sessionId, type: 'voice' },
-      smsConfig.ttl
-    );
+    await store.set(phone, { code, sentAt: Date.now(), sessionId, type: 'voice' }, smsConfig.ttl);
 
     // 发送语音
     const sent = await voiceService.send(phone, code);

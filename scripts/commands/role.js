@@ -24,14 +24,7 @@ export async function listRoles() {
   console.log('\n🎭 角色列表：');
   printTable(
     ['ID', '编码', '应用', '名称', '权重', '创建时间'],
-    roles.map((r) => [
-      r.id,
-      r.code,
-      r.app_id,
-      r.name,
-      r.rank_level,
-      new Date(r.created_at).toLocaleString('zh-CN')
-    ])
+    roles.map(r => [r.id, r.code, r.app_id, r.name, r.rank_level, new Date(r.created_at).toLocaleString('zh-CN')])
   );
   console.log(`\n共 ${roles.length} 个角色`);
 }
@@ -53,7 +46,7 @@ export async function viewRole() {
     const roleId = await select(
       rl,
       '请选择角色:',
-      roles.map((r) => ({
+      roles.map(r => ({
         label: `${r.code} - ${r.name} (${r.app_id}, 权重:${r.rank_level})`,
         value: r.id
       }))
@@ -78,7 +71,7 @@ export async function viewRole() {
 
     if (userRoles.length > 0) {
       console.log(`\n  拥有此角色的用户 (${userRoles.length}):`);
-      userRoles.forEach((ur) => {
+      userRoles.forEach(ur => {
         console.log(`    - ${ur.user.username} (${ur.user.email})`);
       });
     } else {
@@ -115,7 +108,7 @@ export async function assignRole() {
     const roleId = await select(
       rl,
       '请选择要分配的角色:',
-      roles.map((r) => ({
+      roles.map(r => ({
         label: `${r.code} - ${r.name} (${r.app_id}, 权重:${r.rank_level})`,
         value: r.id
       }))
@@ -186,7 +179,7 @@ export async function revokeRole() {
     const userRoleId = await select(
       rl,
       `用户 ${email} 的角色:`,
-      userRoles.map((ur) => ({
+      userRoles.map(ur => ({
         label: `${ur.role.code} - ${ur.role.name} (${ur.role.app_id})`,
         value: ur.id
       }))
@@ -194,7 +187,7 @@ export async function revokeRole() {
 
     if (!userRoleId) return;
 
-    const userRole = userRoles.find((ur) => ur.id === userRoleId);
+    const userRole = userRoles.find(ur => ur.id === userRoleId);
 
     const ok = await confirm(rl, `确认撤销角色 ${userRole.role.code}？`);
     if (!ok) {
@@ -241,8 +234,5 @@ export async function roleStats() {
   }
 
   console.log('\n📊 角色统计：');
-  printTable(
-    ['ID', '编码', '应用', '名称', '权重', '用户数'],
-    stats
-  );
+  printTable(['ID', '编码', '应用', '名称', '权重', '用户数'], stats);
 }
