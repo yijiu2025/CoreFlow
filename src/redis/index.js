@@ -8,7 +8,13 @@
  *   REDIS_PORT     - Redis 端口，默认 6379
  *   REDIS_PASSWORD  - Redis 密码（可选）
  *   REDIS_TLS      - 是否启用 TLS（true/false），默认 false
+ *
+ * @author yijiu2025
+ * @since 2026-07-22
  */
+
+/* eslint-disable no-console */
+
 import { createClient } from 'redis';
 import fp from 'fastify-plugin';
 import { setupRedisHealthMonitor } from './health.js';
@@ -17,21 +23,28 @@ import { C } from '../utils/colors.js';
 /** 全局 Redis 客户端引用（向后兼容，推荐使用 app.redis） */
 export let globalRedis = null;
 
+/**
+ * 降级到内存模式
+ * 注入 null redis 实例，标记健康状态为 false
+ */
+function degrade(app, reason) {
+  console.log(`ℹ️ [Redis] ${C.cyan}${reason}，使用内存降级模式${C.reset}`);
+  globalRedis = null;
+  app.decorate('redis', null);
+  app.redisHealthy = false;
+}
+
 export default fp(
   async app => {
     const enabled = process.env.REDIS_ENABLED === 'true';
 
     if (!enabled) {
-      console.log(`ℹ️ [Redis] ${C.cyan}REDIS_ENABLED 未开启，跳过连接，使用内存降级模式${C.reset}`);
-      app.decorate('redis', null);
-      app.redisHealthy = false;
+      degrade(app, 'REDIS_ENABLED 未开启，跳过连接');
       return;
     }
 
     if (!process.env.REDIS_HOST) {
-      console.log(`ℹ️ [Redis] ${C.cyan}REDIS_HOST 未配置，跳过连接，使用内存降级模式${C.reset}`);
-      app.decorate('redis', null);
-      app.redisHealthy = false;
+      degrade(app, 'REDIS_HOST 未配置，跳过连接');
       return;
     }
 
@@ -68,6 +81,7 @@ export default fp(
 
       globalRedis = redis;
       app.decorate('redis', redis);
+      app.redisHealthy = true;
       setupRedisHealthMonitor(app, redis);
 
       app.addHook('onClose', async () => {
@@ -79,10 +93,8 @@ export default fp(
         globalRedis = null;
       });
     } catch (err) {
-      console.warn(`❌ [Redis] ${C.red}连接失败 ${host}:${port}，降级到内存模式: ${err.message}${C.reset}`);
-      globalRedis = null;
-      app.decorate('redis', null);
-      app.redisHealthy = false;
+      console.warn(`❌ [Redis] ${C.red}连接失败 ${host}:${port}: ${err.message}${C.reset}`);
+      degrade(app, '连接失败');
     }
   },
   { name: 'redis-plugin' }
