@@ -99,6 +99,7 @@ src/redis/
 | `REDIS_HOST`     | -       | Redis 主机地址     |
 | `REDIS_PORT`     | `6379`  | Redis 端口         |
 | `REDIS_PASSWORD` | -       | Redis 密码（可选） |
+| `REDIS_DB`       | `0`     | 默认数据库编号     |
 | `REDIS_TLS`      | `false` | 是否启用 TLS       |
 
 ## 启动流程
