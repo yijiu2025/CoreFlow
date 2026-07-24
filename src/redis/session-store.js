@@ -9,6 +9,22 @@
 
 /* eslint-disable no-console */
 
+/** 前缀 → 数据库编号映射表 */
+const prefixDbMap = new Map();
+let _nextDb = 1; // 0 为默认数据库
+
+/**
+ * 根据前缀自动分配数据库编号
+ * 同前缀始终返回同一编号，自动递增
+ */
+function getDbForPrefix(prefix) {
+  if (!prefixDbMap.has(prefix)) {
+    prefixDbMap.set(prefix, _nextDb % 16);
+    _nextDb++;
+  }
+  return prefixDbMap.get(prefix);
+}
+
 /**
  * 统一会话管理适配器
  * @param {import('fastify').FastifyInstance} fastify fastify 实例，用于访问 fastify.redis
@@ -39,16 +55,26 @@ export const getSessionStore = (fastify, prefix = 'session') => {
     localSessions.clear();
   }
 
+  /** 获取指定数据库的 Redis 连接，自动分配数据库编号 */
+  async function getRedis() {
+    const db = getDbForPrefix(prefix);
+    if (fastify.redisDb) {
+      return await fastify.redisDb(db);
+    }
+    return fastify.redis;
+  }
+
   return {
     async get(key) {
       const fullKey = `${prefix}:${key}`;
+      const redis = await getRedis();
 
-      if (fastify.redis) {
+      if (redis) {
         try {
-          const raw = await fastify.redis.get(fullKey);
+          const raw = await redis.get(fullKey);
           return raw ? JSON.parse(raw) : null;
         } catch (err) {
-          console.warn(`⚠️ [Session] Redis 读取失败，降级到内存: ${err.message}`);
+          console.warn(`⚠️ [Session] Redis 读取失败 (db${getDbForPrefix(prefix)}), 降级到内存: ${err.message}`);
         }
       }
 
@@ -62,13 +88,14 @@ export const getSessionStore = (fastify, prefix = 'session') => {
 
     async set(key, value, ttl = 600) {
       const fullKey = `${prefix}:${key}`;
+      const redis = await getRedis();
 
-      if (fastify.redis) {
+      if (redis) {
         try {
-          await fastify.redis.set(fullKey, JSON.stringify(value), { EX: ttl });
+          await redis.set(fullKey, JSON.stringify(value), { EX: ttl });
           return;
         } catch (err) {
-          console.warn(`⚠️ [Session] Redis 写入失败，降级到内存: ${err.message}`);
+          console.warn(`⚠️ [Session] Redis 写入失败 (db${getDbForPrefix(prefix)}), 降级到内存: ${err.message}`);
         }
       }
 
@@ -77,13 +104,14 @@ export const getSessionStore = (fastify, prefix = 'session') => {
 
     async delete(key) {
       const fullKey = `${prefix}:${key}`;
+      const redis = await getRedis();
 
-      if (fastify.redis) {
+      if (redis) {
         try {
-          await fastify.redis.del(fullKey);
+          await redis.del(fullKey);
           return;
         } catch (err) {
-          console.warn(`⚠️ [Session] Redis 删除失败，降级到内存: ${err.message}`);
+          console.warn(`⚠️ [Session] Redis 删除失败 (db${getDbForPrefix(prefix)}), 降级到内存: ${err.message}`);
         }
       }
 
