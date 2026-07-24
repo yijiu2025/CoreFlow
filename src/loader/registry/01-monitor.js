@@ -6,7 +6,7 @@
  *   SLOW_REQUEST_THRESHOLD - 慢请求阈值毫秒数（默认 2000），非数字值时使用默认值
  *
  * @author yijiu2025
- * @since 2026-07-22
+ * @since 2026-07-24
  */
 
 const SLOW_THRESHOLD = parseInt(process.env.SLOW_REQUEST_THRESHOLD || '2000', 10) || 2000;

@@ -3,7 +3,7 @@
  * 事件驱动 + 按需探测：健康时零开销，不健康时定时 ping 检测恢复
  *
  * @author yijiu2025
- * @since 2026-07-22
+ * @since 2026-07-24
  */
 
 /* eslint-disable no-console */
