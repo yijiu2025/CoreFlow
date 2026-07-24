@@ -1,7 +1,12 @@
 /**
  * Redis 全局健康监控器
  * 事件驱动 + 按需探测：健康时零开销，不健康时定时 ping 检测恢复
+ *
+ * @author yijiu2025
+ * @since 2026-07-22
  */
+
+/* eslint-disable no-console */
 
 /**
  * 为 Fastify 实例设置 Redis 健康监控
