@@ -14,8 +14,11 @@ import fp from 'fastify-plugin';
  * @property {(message?: string, data?: any, httpCode?: number, bizCode?: number) => import('fastify').FastifyReply} fail - 失败响应
  * @property {(data?: any) => import('fastify').FastifyReply} created - 201 创建成功
  * @property {() => import('fastify').FastifyReply} noContent - 204 无内容
+ * @property {(message?: string) => import('fastify').FastifyReply} badRequest - 400 请求参数错误
  * @property {(message?: string) => import('fastify').FastifyReply} unauth - 401 认证失败
  * @property {(message?: string) => import('fastify').FastifyReply} forbidden - 403 权限不足
+ * @property {(message?: string) => import('fastify').FastifyReply} notFound - 404 资源不存在
+ * @property {(message?: string) => import('fastify').FastifyReply} conflict - 409 资源冲突
  * @property {(message?: string) => import('fastify').FastifyReply} tooManyRequests - 429 请求过于频繁
  * @property {(data: any[], total: number, page: number, pageSize: number) => import('fastify').FastifyReply} paginated - 分页响应
  */
@@ -50,12 +53,24 @@ export default fp(async app => {
           return reply.code(204).send();
         },
 
+        badRequest(message = '请求参数错误') {
+          return reply.code(400).send(build(400, message, null));
+        },
+
         unauth(message = '身份验证失败') {
           return reply.code(401).send(build(401, message, null));
         },
 
         forbidden(message = '权限不足') {
           return reply.code(403).send(build(403, message, null));
+        },
+
+        notFound(message = '资源不存在') {
+          return reply.code(404).send(build(404, message, null));
+        },
+
+        conflict(message = '资源冲突') {
+          return reply.code(409).send(build(409, message, null));
         },
 
         tooManyRequests(message = '请求过于频繁，请稍后再试') {
