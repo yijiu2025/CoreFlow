@@ -3,7 +3,12 @@
  * 用于 RSA 加密登录的防重放校验，支持多实例部署
  *
  * 核心安全设计：check 和 mark 合并为原子操作，消除并发窗口
+ *
+ * @author yijiu2025
+ * @since 2026-07-22
  */
+
+/* eslint-disable no-console */
 
 const PREFIX = 'nonce:';
 const DEFAULT_TTL = 60; // 秒
@@ -29,7 +34,7 @@ end
  * 创建 Nonce 存储实例
  * @param {import('redis').RedisClientType} redisClient - Redis 客户端实例（可为 null，自动降级到内存）
  * @param {number} ttlSeconds - Nonce 过期时间（秒）
- * @returns {{ check: (nonce: string) => Promise<boolean>, mark: (nonce: string) => Promise<void>, checkAndMark: (nonce: string) => Promise<boolean> }}
+ * @returns {{ check: (nonce: string) => Promise<boolean>, mark: (nonce: string) => Promise<void>, checkAndMark: (nonce: string) => Promise<boolean>, destroy: () => void }}
  */
 export function createNonceStore(redisClient, ttlSeconds = DEFAULT_TTL) {
   // 内存降级：Map + 分批定时清理
@@ -46,6 +51,14 @@ export function createNonceStore(redisClient, ttlSeconds = DEFAULT_TTL) {
   }, ttlSeconds * 1000);
   cleanupInterval.unref();
 
+  /**
+   * 清理定时器和内存（用于优雅关闭）
+   */
+  function destroy() {
+    clearInterval(cleanupInterval);
+    memoryNonces.clear();
+  }
+
   return {
     /**
      * 检查 nonce 是否已使用（仅查询，不标记）
@@ -57,7 +70,8 @@ export function createNonceStore(redisClient, ttlSeconds = DEFAULT_TTL) {
         try {
           const exists = await redisClient.exists(`${PREFIX}${nonce}`);
           return exists === 1;
-        } catch {
+        } catch (err) {
+          console.warn(`⚠️ [Nonce] Redis 检查失败，降级到内存: ${err.message}`);
           return memoryNonces.has(nonce);
         }
       }
@@ -73,8 +87,8 @@ export function createNonceStore(redisClient, ttlSeconds = DEFAULT_TTL) {
         try {
           await redisClient.set(`${PREFIX}${nonce}`, '1', { EX: ttlSeconds });
           return;
-        } catch {
-          // 降级到内存
+        } catch (err) {
+          console.warn(`⚠️ [Nonce] Redis 写入失败，降级到内存: ${err.message}`);
         }
       }
       memoryNonces.set(nonce, Date.now());
@@ -94,8 +108,8 @@ export function createNonceStore(redisClient, ttlSeconds = DEFAULT_TTL) {
             arguments: [String(ttlSeconds)]
           });
           return result === 1;
-        } catch {
-          // Redis 故障时降级到内存原子操作
+        } catch (err) {
+          console.warn(`⚠️ [Nonce] Redis 原子操作失败，降级到内存: ${err.message}`);
         }
       }
 
@@ -105,6 +119,8 @@ export function createNonceStore(redisClient, ttlSeconds = DEFAULT_TTL) {
       }
       memoryNonces.set(nonce, Date.now());
       return false;
-    }
+    },
+
+    destroy
   };
 }
