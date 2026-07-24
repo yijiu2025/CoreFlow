@@ -12,6 +12,9 @@
 /** 前缀 → 数据库编号映射表 */
 const prefixDbMap = new Map();
 
+/** 内存降级最大条目数，防止 DoS 耗尽内存 */
+const MAX_MEMORY_ENTRIES = 10000;
+
 /**
  * 根据前缀的哈希值分配数据库编号
  * 哈希算法确保：同前缀始终返回同一编号，重启后依然一致
@@ -36,6 +39,9 @@ export const getSessionStore = (fastify, prefix = 'session') => {
   /** 简易会话存储（兜底方案） */
   const localSessions = new Map();
 
+  /** 缓存 Redis 连接，避免每次操作都异步获取 */
+  let _redisCache = null;
+
   /** 定期清理内存中的过期 Key，防止内存泄漏 (10分钟执行一次) */
   const cleanupInterval = setInterval(
     () => {
@@ -56,13 +62,12 @@ export const getSessionStore = (fastify, prefix = 'session') => {
     localSessions.clear();
   }
 
-  /** 获取指定数据库的 Redis 连接，自动分配数据库编号 */
+  /** 获取指定数据库的 Redis 连接，自动分配数据库编号（结果缓存） */
   async function getRedis() {
+    if (_redisCache) return _redisCache;
     const db = getDbForPrefix(prefix);
-    if (fastify.redisDb) {
-      return await fastify.redisDb(db);
-    }
-    return fastify.redis;
+    _redisCache = fastify.redisDb ? await fastify.redisDb(db) : fastify.redis;
+    return _redisCache;
   }
 
   return {
@@ -101,6 +106,12 @@ export const getSessionStore = (fastify, prefix = 'session') => {
       }
 
       localSessions.set(fullKey, { value, expiredAt: Date.now() + ttl * 1000 });
+      // 内存降级上限保护：超过最大条目时丢弃最旧的一半
+      if (localSessions.size > MAX_MEMORY_ENTRIES) {
+        const entries = [...localSessions.entries()].sort((a, b) => a[1].expiredAt - b[1].expiredAt);
+        const toDelete = Math.floor(entries.length / 2);
+        for (let i = 0; i < toDelete; i++) localSessions.delete(entries[i][0]);
+      }
     },
 
     async delete(key) {
