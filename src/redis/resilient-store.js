@@ -3,6 +3,9 @@
  * 用于速率限制，当 Redis 不可用时能够自动降级到内存存储。
  * 健康状态来自全局 Redis 健康监控器 (app.redisHealthy)
  * 业务配置通过 options.getWindowMs 回调注入，不反向依赖应用层
+ *
+ * @author yijiu2025
+ * @since 2026-07-22
  */
 
 /** 内存清理间隔（30 秒） */
@@ -98,7 +101,7 @@ export class ResilientStore {
    * @param {object} routeOptions 路由配置
    * @returns {ResilientStore} 新的存储实例
    */
-  child(routeOptions) {
+  child(_routeOptions) {
     return new ResilientStore(this.app, { getWindowMs: this.getWindowMs });
   }
 }
