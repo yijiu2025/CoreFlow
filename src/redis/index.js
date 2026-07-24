@@ -201,8 +201,8 @@ export default fp(
       app.decorate('redis', client);
       app.redisHealthy = true;
       setupRedisHealthMonitor(app, client, () => {
-        // 备库恢复时尝试切回主库
-        if (isBackup && !isBackupInstance) {
+        // 当前使用备库时，检测到主库恢复则尝试切回
+        if (isBackup) {
           console.log(`ℹ️ [Redis] ${C.cyan}主库恢复，尝试切回: ${host}:${port}${C.reset}`);
           tryConnect(host, port, '主库')
             .then(c => {
