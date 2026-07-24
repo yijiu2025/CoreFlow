@@ -19,25 +19,8 @@ const SNAPSHOT_DIR = path.resolve(__dirname, '../../data/session');
 /** 快照保存间隔（5分钟） */
 const SNAPSHOT_INTERVAL = 5 * 60 * 1000;
 
-/** 前缀 → 数据库编号映射表 */
-const prefixDbMap = new Map();
-
 /** 内存降级最大条目数，防止 DoS 耗尽内存 */
 const MAX_MEMORY_ENTRIES = 10000;
-
-/**
- * 根据前缀的哈希值分配数据库编号
- * 哈希算法确保：同前缀始终返回同一编号，重启后依然一致
- */
-function getDbForPrefix(prefix) {
-  if (!prefixDbMap.has(prefix)) {
-    // djb2 哈希算法：将字符串映射到 1-15 的数据库编号（0 保留给默认）
-    let hash = 5381;
-    for (const ch of prefix) hash = (hash << 5) + hash + ch.charCodeAt(0);
-    prefixDbMap.set(prefix, (Math.abs(hash) % 15) + 1);
-  }
-  return prefixDbMap.get(prefix);
-}
 
 /**
  * 统一会话管理适配器
@@ -51,15 +34,6 @@ export const getSessionStore = (fastify, prefix = 'session') => {
 
   /** 缓存 Redis 连接，避免每次操作都异步获取 */
   let _redisCache = null;
-
-  /** 缓存数据库编号，避免重复哈希计算 */
-  let _dbNumber = null;
-
-  /** 获取数据库编号（缓存） */
-  function getDb() {
-    if (_dbNumber === null) _dbNumber = getDbForPrefix(prefix);
-    return _dbNumber;
-  }
 
   /** 定期清理内存中的过期 Key，防止内存泄漏 (10分钟执行一次) */
   const cleanupInterval = setInterval(
@@ -114,10 +88,10 @@ export const getSessionStore = (fastify, prefix = 'session') => {
     localSessions.clear();
   }
 
-  /** 获取指定数据库的 Redis 连接，自动分配数据库编号（结果缓存） */
+  /** 获取 Redis 连接（结果缓存） */
   async function getRedis() {
     if (_redisCache) return _redisCache;
-    _redisCache = fastify.redisDb ? await fastify.redisDb(getDb()) : fastify.redis;
+    _redisCache = fastify.redis;
     return _redisCache;
   }
 
@@ -161,7 +135,7 @@ export const getSessionStore = (fastify, prefix = 'session') => {
           const raw = await redis.get(fullKey);
           return raw ? JSON.parse(raw) : null;
         } catch (err) {
-          console.warn(`⚠️ [Session] Redis 读取失败 (db${getDb()}), 降级到内存: ${err.message}`);
+          console.warn(`⚠️ [Session] Redis 读取失败，降级到内存: ${err.message}`);
         }
       }
 
@@ -182,7 +156,7 @@ export const getSessionStore = (fastify, prefix = 'session') => {
           await redis.set(fullKey, JSON.stringify(value), { EX: ttl });
           return;
         } catch (err) {
-          console.warn(`⚠️ [Session] Redis 写入失败 (db${getDb()}), 降级到内存: ${err.message}`);
+          console.warn(`⚠️ [Session] Redis 写入失败，降级到内存: ${err.message}`);
         }
       }
 
@@ -203,7 +177,7 @@ export const getSessionStore = (fastify, prefix = 'session') => {
           await redis.del(fullKey);
           return;
         } catch (err) {
-          console.warn(`⚠️ [Session] Redis 删除失败 (db${getDb()}), 降级到内存: ${err.message}`);
+          console.warn(`⚠️ [Session] Redis 删除失败，降级到内存: ${err.message}`);
         }
       }
 
