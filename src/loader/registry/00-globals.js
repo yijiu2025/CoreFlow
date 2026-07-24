@@ -20,6 +20,7 @@ import fp from 'fastify-plugin';
  * @property {(message?: string) => import('fastify').FastifyReply} notFound - 404 资源不存在
  * @property {(message?: string) => import('fastify').FastifyReply} conflict - 409 资源冲突
  * @property {(message?: string) => import('fastify').FastifyReply} tooManyRequests - 429 请求过于频繁
+ * @property {(message?: string) => import('fastify').FastifyReply} internalError - 500 服务器内部错误
  * @property {(data: any[], total: number, page: number, pageSize: number) => import('fastify').FastifyReply} paginated - 分页响应
  */
 
@@ -75,6 +76,10 @@ export default fp(async app => {
 
         tooManyRequests(message = '请求过于频繁，请稍后再试') {
           return reply.code(429).send(build(429, message, null));
+        },
+
+        internalError(message = '服务器内部错误') {
+          return reply.code(500).send(build(500, message, null));
         },
 
         /**
