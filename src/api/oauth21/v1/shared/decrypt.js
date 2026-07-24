@@ -49,12 +49,11 @@ export async function decryptLoginRequest(request, fastify) {
       return { success: false, error: '请求时间戳异常', statusCode: 400 };
     }
 
-    // Nonce 防重放
+    // Nonce 防重放（使用原子 checkAndMark 消除并发窗口）
     const store = ensureNonceStore(request);
-    if (!nonce || (await store.check(nonce))) {
+    if (!nonce || (await store.checkAndMark(nonce))) {
       return { success: false, error: '重放攻击检测：nonce 无效', statusCode: 400 };
     }
-    await store.mark(nonce);
 
     // 解密
     try {
