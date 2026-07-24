@@ -16,6 +16,9 @@ const DEFAULT_TTL = 60; // 秒
 /** 内存清理每次最大扫描条目数 */
 const CLEANUP_BATCH_SIZE = 1000;
 
+/** 内存降级最大条目数，防止 DoS 耗尽内存 */
+const MAX_MEMORY_ENTRIES = 10000;
+
 /**
  * Lua 脚本：原子性 check + mark
  * 如果 nonce 不存在则写入并返回 0（首次使用）
@@ -92,6 +95,12 @@ export function createNonceStore(redisClient, ttlSeconds = DEFAULT_TTL) {
         }
       }
       memoryNonces.set(nonce, Date.now());
+      // 内存降级上限保护：超过最大条目时丢弃最旧的一半
+      if (memoryNonces.size > MAX_MEMORY_ENTRIES) {
+        const entries = [...memoryNonces.entries()].sort((a, b) => a[1] - b[1]);
+        const toDelete = Math.floor(entries.length / 2);
+        for (let i = 0; i < toDelete; i++) memoryNonces.delete(entries[i][0]);
+      }
     },
 
     /**
@@ -118,6 +127,12 @@ export function createNonceStore(redisClient, ttlSeconds = DEFAULT_TTL) {
         return true;
       }
       memoryNonces.set(nonce, Date.now());
+      // 内存降级上限保护：超过最大条目时丢弃最旧的一半
+      if (memoryNonces.size > MAX_MEMORY_ENTRIES) {
+        const entries = [...memoryNonces.entries()].sort((a, b) => a[1] - b[1]);
+        const toDelete = Math.floor(entries.length / 2);
+        for (let i = 0; i < toDelete; i++) memoryNonces.delete(entries[i][0]);
+      }
       return false;
     },
 
