@@ -12,8 +12,9 @@
  * 为 Fastify 实例设置 Redis 健康监控
  * @param {import('fastify').FastifyInstance} app Fastify 实例
  * @param {import('redis').RedisClientType} redis Redis 客户端
+ * @param {Function} [onRecovered] 恢复回调（主备切换后切回主库时使用）
  */
-export function setupRedisHealthMonitor(app, redis) {
+export function setupRedisHealthMonitor(app, redis, onRecovered) {
   let healthy = true;
   let pingTimer = null;
   const callbacks = new Set();
@@ -59,6 +60,8 @@ export function setupRedisHealthMonitor(app, redis) {
       pingTimer = null;
     }
     notify(true);
+    // 触发恢复回调（如主备切换后切回主库）
+    if (typeof onRecovered === 'function') onRecovered();
   }
 
   // 监听 Redis 客户端事件
