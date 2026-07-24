@@ -11,16 +11,17 @@
 
 /** 前缀 → 数据库编号映射表 */
 const prefixDbMap = new Map();
-let _nextDb = 1; // 0 为默认数据库
 
 /**
- * 根据前缀自动分配数据库编号
- * 同前缀始终返回同一编号，自动递增
+ * 根据前缀的哈希值分配数据库编号
+ * 哈希算法确保：同前缀始终返回同一编号，重启后依然一致
  */
 function getDbForPrefix(prefix) {
   if (!prefixDbMap.has(prefix)) {
-    prefixDbMap.set(prefix, _nextDb % 16);
-    _nextDb++;
+    // djb2 哈希算法：将字符串映射到 1-15 的数据库编号（0 保留给默认）
+    let hash = 5381;
+    for (const ch of prefix) hash = (hash << 5) + hash + ch.charCodeAt(0);
+    prefixDbMap.set(prefix, (Math.abs(hash) % 15) + 1);
   }
   return prefixDbMap.get(prefix);
 }
