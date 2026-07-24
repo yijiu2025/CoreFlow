@@ -328,6 +328,7 @@ Step 5: 开始生成代码
 | 公共 API 参数 | 假设调用方总传有效参数，深层崩溃                | 入口处 `if (!param) { err.code='INVALID_PARAM'; throw err; }` |
 | 标识符生成    | 用 `Math.random()` 生成标识符                   | 用固定默认值 `'default'` 或 `crypto.randomUUID()`             |
 | reply.sent    | 直接 `return reply.send(...)` 不标记 sent       | `reply.send(...); reply.sent = true; return;`                 |
+| 统一响应      | `reply.code(400).send({error})` 直接 send       | `reply.result.badRequest('消息')` 用统一方法                  |
 
 ---
 

@@ -262,7 +262,40 @@ export default async function (app) {
 
 ---
 
-## 八、系统架构参考
+## 八、统一响应格式
+
+### reply.result 响应方法
+
+所有响应必须通过 `reply.result.*` 方法返回，确保统一格式：
+
+```json
+{ "code": 200, "message": "操作成功", "data": null, "timestamp": 1717000000, "requestId": "req-xxx" }
+```
+
+| 方法 | 状态码 | 说明 |
+|------|--------|------|
+| `reply.result.success(data)` | 200 | 成功响应 |
+| `reply.result.paginated(data, total, page, pageSize)` | 200 | 分页响应 |
+| `reply.result.created(data)` | 201 | 创建成功 |
+| `reply.result.noContent()` | 204 | 无内容 |
+| `reply.result.fail(message, data, httpCode, bizCode)` | 400 | 通用失败 |
+| `reply.result.badRequest(message)` | 400 | 请求参数错误 |
+| `reply.result.unauth(message)` | 401 | 认证失败 |
+| `reply.result.forbidden(message)` | 403 | 权限不足 |
+| `reply.result.notFound(message)` | 404 | 资源不存在 |
+| `reply.result.conflict(message)` | 409 | 资源冲突 |
+| `reply.result.tooManyRequests(message)` | 429 | 请求频繁 |
+| `reply.result.internalError(message)` | 500 | 服务器内部错误 |
+
+```js
+// ✅ 正确：使用统一响应方法
+return reply.result.success({ id: 1, name: 'test' });
+return reply.result.badRequest('参数缺失');
+return reply.result.notFound('用户不存在');
+
+// ❌ 禁止：直接 reply.code().send()
+return reply.code(400).send({ error: '参数缺失' });
+```
 
 ### 统一异常处理
 
