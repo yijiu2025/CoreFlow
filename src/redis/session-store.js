@@ -9,6 +9,16 @@
 
 /* eslint-disable no-console */
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SNAPSHOT_DIR = path.resolve(__dirname, '../../data/session');
+
+/** 快照保存间隔（5分钟） */
+const SNAPSHOT_INTERVAL = 5 * 60 * 1000;
+
 /** 前缀 → 数据库编号映射表 */
 const prefixDbMap = new Map();
 
@@ -33,7 +43,7 @@ function getDbForPrefix(prefix) {
  * 统一会话管理适配器
  * @param {import('fastify').FastifyInstance} fastify fastify 实例，用于访问 fastify.redis
  * @param {string} prefix Redis Key 前缀 (默认为 session)
- * @returns {{ get: (key: string) => Promise<any>, set: (key: string, value: any, ttl?: number) => Promise<void>, delete: (key: string) => Promise<void>, destroy: () => void }}
+ * @returns {{ get: (key: string) => Promise<any>, set: (key: string, value: any, ttl?: number) => Promise<void>, delete: (key: string) => Promise<void>, flushToRedis: () => Promise<number>, destroy: () => void }}
  */
 export const getSessionStore = (fastify, prefix = 'session') => {
   /** 简易会话存储（兜底方案） */
@@ -65,9 +75,42 @@ export const getSessionStore = (fastify, prefix = 'session') => {
   );
   cleanupInterval.unref();
 
-  /** 清理定时器和内存（用于优雅关闭） */
+  /** 定期快照到磁盘（5分钟一次），防止进程崩溃时内存数据丢失 */
+  const snapshotInterval = setInterval(() => {
+    if (localSessions.size === 0) return;
+    try {
+      if (!fs.existsSync(SNAPSHOT_DIR)) fs.mkdirSync(SNAPSHOT_DIR, { recursive: true });
+      const snapshot = {};
+      for (const [k, v] of localSessions) {
+        snapshot[k] = v;
+      }
+      fs.writeFileSync(path.join(SNAPSHOT_DIR, `${prefix}.json`), JSON.stringify(snapshot));
+    } catch (err) {
+      console.warn(`⚠️ [Session] 快照写入失败 [${prefix}]: ${err.message}`);
+    }
+  }, SNAPSHOT_INTERVAL);
+  snapshotInterval.unref();
+
+  /** 从快照恢复（启动时加载） */
+  try {
+    const snapshotPath = path.join(SNAPSHOT_DIR, `${prefix}.json`);
+    if (fs.existsSync(snapshotPath)) {
+      const raw = fs.readFileSync(snapshotPath, 'utf-8');
+      const snapshot = JSON.parse(raw);
+      for (const [k, v] of Object.entries(snapshot)) {
+        if (v.expiredAt && v.expiredAt > Date.now()) {
+          localSessions.set(k, v);
+        }
+      }
+    }
+  } catch {
+    /* 快照恢复失败不影响运行 */
+  }
+
+  /** 清理定时器、快照和内存（用于优雅关闭） */
   function destroy() {
     clearInterval(cleanupInterval);
+    clearInterval(snapshotInterval);
     localSessions.clear();
   }
 
@@ -76,6 +119,36 @@ export const getSessionStore = (fastify, prefix = 'session') => {
     if (_redisCache) return _redisCache;
     _redisCache = fastify.redisDb ? await fastify.redisDb(getDb()) : fastify.redis;
     return _redisCache;
+  }
+
+  /**
+   * 将内存数据写回 Redis（Redis 恢复后调用）
+   * @returns {Promise<number>} 写入条目数
+   */
+  async function flushToRedis() {
+    const redis = await getRedis();
+    if (!redis) return 0;
+    let count = 0;
+    for (const [k, v] of localSessions) {
+      const ttl = Math.max(1, Math.round((v.expiredAt - Date.now()) / 1000));
+      try {
+        await redis.set(k, JSON.stringify(v.value), { EX: ttl });
+        count++;
+      } catch {
+        /* 单条写入失败跳过 */
+      }
+    }
+    if (count > 0) {
+      console.log(`✅ [Session] 内存数据已回迁到 Redis [${prefix}]: ${count} 条`);
+    }
+    return count;
+  }
+
+  // 监听 Redis 恢复，自动回迁内存数据
+  if (fastify.onRedisHealthChange) {
+    fastify.onRedisHealthChange(healthy => {
+      if (healthy) flushToRedis();
+    });
   }
 
   return {
@@ -114,7 +187,6 @@ export const getSessionStore = (fastify, prefix = 'session') => {
       }
 
       localSessions.set(fullKey, { value, expiredAt: Date.now() + ttl * 1000 });
-      // 内存降级上限保护：超过最大条目时丢弃最旧的一半
       if (localSessions.size > MAX_MEMORY_ENTRIES) {
         const entries = [...localSessions.entries()].sort((a, b) => a[1].expiredAt - b[1].expiredAt);
         const toDelete = Math.floor(entries.length / 2);
@@ -138,6 +210,7 @@ export const getSessionStore = (fastify, prefix = 'session') => {
       localSessions.delete(fullKey);
     },
 
+    flushToRedis,
     destroy
   };
 };
