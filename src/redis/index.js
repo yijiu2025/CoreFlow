@@ -190,7 +190,8 @@ export default fp(
             cached.lastUsed = Date.now();
             return cached.client;
           }
-          // 连接不可用，移除缓存
+          // 连接不可用，移除缓存并关闭旧连接
+          cached.client.quit().catch(() => {});
           _dbConnections.delete(db);
         }
 
