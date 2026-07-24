@@ -62,7 +62,11 @@ export function setupRedisHealthMonitor(app, redis) {
   }
 
   // 监听 Redis 客户端事件
-  redis.on('error', () => markUnhealthy());
+  // 注意：error 事件包含瞬时错误（如命令超时），不一定会断开连接
+  // 因此检查 isReady 避免不必要的健康状态翻转
+  redis.on('error', () => {
+    if (!redis.isReady) markUnhealthy();
+  });
   redis.on('ready', () => markHealthy());
   redis.on('end', () => markUnhealthy());
 

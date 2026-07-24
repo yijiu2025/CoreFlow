@@ -42,6 +42,15 @@ export const getSessionStore = (fastify, prefix = 'session') => {
   /** 缓存 Redis 连接，避免每次操作都异步获取 */
   let _redisCache = null;
 
+  /** 缓存数据库编号，避免重复哈希计算 */
+  let _dbNumber = null;
+
+  /** 获取数据库编号（缓存） */
+  function getDb() {
+    if (_dbNumber === null) _dbNumber = getDbForPrefix(prefix);
+    return _dbNumber;
+  }
+
   /** 定期清理内存中的过期 Key，防止内存泄漏 (10分钟执行一次) */
   const cleanupInterval = setInterval(
     () => {
@@ -65,8 +74,7 @@ export const getSessionStore = (fastify, prefix = 'session') => {
   /** 获取指定数据库的 Redis 连接，自动分配数据库编号（结果缓存） */
   async function getRedis() {
     if (_redisCache) return _redisCache;
-    const db = getDbForPrefix(prefix);
-    _redisCache = fastify.redisDb ? await fastify.redisDb(db) : fastify.redis;
+    _redisCache = fastify.redisDb ? await fastify.redisDb(getDb()) : fastify.redis;
     return _redisCache;
   }
 
@@ -80,7 +88,7 @@ export const getSessionStore = (fastify, prefix = 'session') => {
           const raw = await redis.get(fullKey);
           return raw ? JSON.parse(raw) : null;
         } catch (err) {
-          console.warn(`⚠️ [Session] Redis 读取失败 (db${getDbForPrefix(prefix)}), 降级到内存: ${err.message}`);
+          console.warn(`⚠️ [Session] Redis 读取失败 (db${getDb()}), 降级到内存: ${err.message}`);
         }
       }
 
@@ -101,7 +109,7 @@ export const getSessionStore = (fastify, prefix = 'session') => {
           await redis.set(fullKey, JSON.stringify(value), { EX: ttl });
           return;
         } catch (err) {
-          console.warn(`⚠️ [Session] Redis 写入失败 (db${getDbForPrefix(prefix)}), 降级到内存: ${err.message}`);
+          console.warn(`⚠️ [Session] Redis 写入失败 (db${getDb()}), 降级到内存: ${err.message}`);
         }
       }
 
@@ -123,7 +131,7 @@ export const getSessionStore = (fastify, prefix = 'session') => {
           await redis.del(fullKey);
           return;
         } catch (err) {
-          console.warn(`⚠️ [Session] Redis 删除失败 (db${getDbForPrefix(prefix)}), 降级到内存: ${err.message}`);
+          console.warn(`⚠️ [Session] Redis 删除失败 (db${getDb()}), 降级到内存: ${err.message}`);
         }
       }
 
