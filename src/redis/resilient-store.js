@@ -5,7 +5,7 @@
  * 业务配置通过 options.getWindowMs 回调注入，不反向依赖应用层
  *
  * @author yijiu2025
- * @since 2026-07-22
+ * @since 2026-07-24
  */
 
 /** 内存清理间隔（30 秒） */

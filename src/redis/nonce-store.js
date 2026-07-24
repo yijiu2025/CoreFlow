@@ -5,7 +5,7 @@
  * 核心安全设计：check 和 mark 合并为原子操作，消除并发窗口
  *
  * @author yijiu2025
- * @since 2026-07-22
+ * @since 2026-07-24
  */
 
 /* eslint-disable no-console */

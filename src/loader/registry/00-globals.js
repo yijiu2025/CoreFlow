@@ -3,7 +3,7 @@
  * 装饰 reply.result 对象，提供统一的 success/fail/unauth/forbidden 等响应方法
  *
  * @author yijiu2025
- * @since 2026-07-22
+ * @since 2026-07-24
  */
 
 import fp from 'fastify-plugin';
