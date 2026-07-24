@@ -1,12 +1,15 @@
 /**
  * 请求监控
- * - 记录请求耗时
- * - 慢请求告警（可配置阈值）
+ * 记录请求耗时，添加 X-Response-Time 响应头，慢请求告警
  *
  * 环境变量：
- *   SLOW_REQUEST_THRESHOLD - 慢请求阈值毫秒数（默认 2000）
+ *   SLOW_REQUEST_THRESHOLD - 慢请求阈值毫秒数（默认 2000），非数字值时使用默认值
+ *
+ * @author yijiu2025
+ * @since 2026-07-22
  */
-const SLOW_THRESHOLD = parseInt(process.env.SLOW_REQUEST_THRESHOLD || '2000');
+
+const SLOW_THRESHOLD = parseInt(process.env.SLOW_REQUEST_THRESHOLD || '2000', 10) || 2000;
 
 export default async app => {
   // 记录请求开始时间（使用高精度计时器）
