@@ -6,7 +6,6 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { safeRedis } from '../../../redis/safe-redis.js';
 import { C } from '../../../utils/colors.js';
 import { FIREWALL_FILE, DEFAULT_SERVER_NODE, DEFAULT_SECURITY_SETTINGS, DEFAULT_IP_APIS } from '../config/config.js';
 
@@ -201,8 +200,8 @@ export async function addToWhitelist(ip, durationSeconds, redisClient = null) {
   // 同步 Redis
   if (redisClient) {
     const meta = { expiresAt: Date.now() + durationSeconds * 1000 };
-    await safeRedis(redisClient, r => r.set(`fw:whitelist:${ip}`, '1', { EX: durationSeconds }));
-    await safeRedis(redisClient, r => r.hset(HASH_WHITELIST, ip, JSON.stringify(meta)));
+    await redisClient.set(`fw:whitelist:${ip}`, '1', { EX: durationSeconds });
+    await redisClient.hset(HASH_WHITELIST, ip, JSON.stringify(meta));
   }
 
   triggerSave();
@@ -223,8 +222,8 @@ export async function removeFromWhitelist(ip, redisClient = null) {
 
   // 同步 Redis
   if (redisClient) {
-    await safeRedis(redisClient, r => r.del(`fw:whitelist:${ip}`));
-    await safeRedis(redisClient, r => r.hdel(HASH_WHITELIST, ip));
+    await redisClient.del(`fw:whitelist:${ip}`);
+    await redisClient.hdel(HASH_WHITELIST, ip);
   }
 
   triggerSave();
@@ -244,17 +243,17 @@ const HASH_WHITELIST = 'fw:whitelisted:ips';
 async function migrateBlockKey(redisClient, key) {
   if (key === HASH_BLOCKED) return;
   const ip = key.replace('fw:block:', '');
-  const raw = await safeRedis(redisClient, r => r.get(key));
+  const raw = await redisClient.get(key);
   if (!raw) return;
 
-  const inHash = await safeRedis(redisClient, r => r.hexists(HASH_BLOCKED, ip));
+  const inHash = await redisClient.hexists(HASH_BLOCKED, ip);
   if (inHash) return;
 
   let meta;
   if (raw.startsWith('{')) {
     meta = JSON.parse(raw);
   } else {
-    const ttl = await safeRedis(redisClient, r => r.ttl(key), -1);
+    const ttl = await redisClient.ttl(key);
     meta = {
       status: raw === '1' ? 'BLOCKED' : raw,
       source: 'auto',
@@ -263,7 +262,7 @@ async function migrateBlockKey(redisClient, key) {
       expiresAt: ttl > 0 ? Date.now() + ttl * 1000 : null
     };
   }
-  await safeRedis(redisClient, r => r.hset(HASH_BLOCKED, ip, JSON.stringify(meta)));
+  await redisClient.hset(HASH_BLOCKED, ip, JSON.stringify(meta));
 }
 
 /**
@@ -285,17 +284,17 @@ export async function syncManualBlacklistToRedis(redisClient) {
       expiresAt: null
     };
     const value = JSON.stringify(meta);
-    const existing = await safeRedis(redisClient, r => r.get(`fw:block:${ip}`));
+    const existing = await redisClient.get(`fw:block:${ip}`);
     if (!existing) {
-      await safeRedis(redisClient, r => r.set(`fw:block:${ip}`, value));
+      await redisClient.set(`fw:block:${ip}`, value);
     }
-    await safeRedis(redisClient, r => r.hset(HASH_BLOCKED, ip, value));
+    await redisClient.hset(HASH_BLOCKED, ip, value);
   }
 
   // 扫描并迁移旧格式的 fw:block:* 键到 hash 索引
   let cursor = '0';
   do {
-    const result = await safeRedis(redisClient, r => r.scan(cursor, { MATCH: 'fw:block:*', COUNT: 100 }));
+    const result = await redisClient.scan(cursor, { MATCH: 'fw:block:*', COUNT: 100 });
     if (!result) break;
     cursor = result.cursor;
     for (const key of result.keys || []) {
@@ -318,8 +317,8 @@ export async function syncManualWhitelistToRedis(redisClient) {
     const ip = typeof entry === 'string' ? entry : entry.ip;
     const duration = typeof entry === 'string' ? 86400 : entry.duration || 86400;
     const meta = { expiresAt: Date.now() + duration * 1000 };
-    await safeRedis(redisClient, r => r.set(`fw:whitelist:${ip}`, '1', { EX: duration }));
-    await safeRedis(redisClient, r => r.hset(HASH_WHITELIST, ip, JSON.stringify(meta)));
+    await redisClient.set(`fw:whitelist:${ip}`, '1', { EX: duration });
+    await redisClient.hset(HASH_WHITELIST, ip, JSON.stringify(meta));
   }
 }
 

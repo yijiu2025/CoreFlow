@@ -18,7 +18,7 @@ import TokenDao from '../../../../app/oauth21/dao/token.dao.js';
 import { TokenService } from '../../../../app/oauth21/services/token.service.js';
 import config from '../../../../app/oauth21/config/config.js';
 import { createSession } from '../../../../auth/session.js';
-import { getSessionStore } from '../../../../redis/session-store.js';
+import { getStore } from '../../../../redis/index.js';
 import { setAuthCookies } from './cookies.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from './constants.js';
 
@@ -112,7 +112,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
     if (isIframe) {
       // iframe 模式：生成临时 session token 存入 Redis
       const sessionToken = generateToken(32);
-      const sessionStore = getSessionStore(fastify, 'session_token');
+      const sessionStore = getStore('session_token');
       await sessionStore.set(
         sessionToken,
         {

@@ -1,7 +1,7 @@
 /**
  * 设备授权服务（RFC 8628）
  *
- * 使用项目统一的 getSessionStore 持久化数据，
+ * 使用项目统一的 getStore 持久化数据，
  * Redis 可用时自动使用 Redis，否则降级为内存 Map。
  */
 
@@ -11,14 +11,14 @@ import TokenDao from '../dao/token.dao.js';
 import ClientDao from '../dao/client.dao.js';
 import { generateToken } from '../crypto/tokens.js';
 import config from '../config/config.js';
-import { getSessionStore } from '../../../redis/session-store.js';
+import { getStore } from '../../../redis/index.js';
 
 const EXPIRES_IN = config.device.expiresIn; // 秒
 
 export class DeviceService {
   constructor(fastify) {
-    this.deviceStore = getSessionStore(fastify, 'device');
-    this.userCodeStore = getSessionStore(fastify, 'device_uc');
+    this.deviceStore = getStore('device');
+    this.userCodeStore = getStore('device_uc');
   }
 
   /**

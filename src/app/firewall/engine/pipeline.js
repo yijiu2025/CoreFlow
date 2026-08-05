@@ -2,7 +2,6 @@
  * 请求安全处理管道
  * 将 onRequest 钩子中的安全检查逻辑拆分为独立步骤，提高可读性
  */
-import { safeRedis } from '../../../redis/safe-redis.js';
 import { buildChallengePage } from '../data/challenge-template.js';
 import {
   checkRateLimit,
@@ -108,8 +107,8 @@ export async function checkChallengeCookie(redis, request, ip, fingerprint) {
   if (!clientToken) return false;
 
   const [fpPassed, ipPassed] = await Promise.all([
-    safeRedis(redis, r => r.exists(`fw:pass:fp:${fingerprint}:${clientToken}`)),
-    safeRedis(redis, r => r.exists(`fw:pass:${ip}:${clientToken}`))
+    redis.exists(`fw:pass:fp:${fingerprint}:${clientToken}`),
+    redis.exists(`fw:pass:${ip}:${clientToken}`)
   ]);
 
   return !!(fpPassed || ipPassed);
@@ -144,7 +143,7 @@ export async function runDetectionPipeline(redis, ip, ua, url, firewallLog, fing
     }
 
     // 地理信誉：IDC 限频、境外敏感路径拦截
-    await safeRedis(redis, r => checkGeoReputation(r, ip, url));
+    await checkGeoReputation(redis, ip, url);
 
     // 端点级限频（从配置读取规则）
     const settings = getSecuritySettings();

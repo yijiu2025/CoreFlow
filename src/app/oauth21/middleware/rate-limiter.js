@@ -4,11 +4,28 @@
  * 基于 IP 的速率限制，用于登录、注册、验证码等接口。
  * 使用 Redis Sorted Set 实现滑窗限频，Redis 不可用时降级到内存。
  */
-
-import { createNonceStore } from '../../../redis/nonce-store.js';
-
-/** 内存降级存储 */
 const memoryStore = new Map();
+
+/** 内存降级上限保护，防止 DoS 耗尽内存 */
+const MEMORY_MAX = 100000;
+/** 内存降级清理间隔（60 秒） */
+const MEMORY_CLEANUP_INTERVAL = 60_000;
+
+// 定期清理过期条目，防止内存泄漏
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of memoryStore) {
+    if (v.expires < now) memoryStore.delete(k);
+  }
+  // 如果仍超过上限，淘汰一半最早过期条目
+  if (memoryStore.size > MEMORY_MAX) {
+    const toDelete = Math.floor(memoryStore.size / 2);
+    const entries = [...memoryStore.entries()].sort((a, b) => a[1].expires - b[1].expires);
+    for (let i = 0; i < toDelete; i++) {
+      memoryStore.delete(entries[i][0]);
+    }
+  }
+}, MEMORY_CLEANUP_INTERVAL).unref();
 
 /**
  * 创建 IP 限频器

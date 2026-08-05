@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { getSessionStore } from '../redis/session-store.js';
+import { getStore } from '../redis/index.js';
 
 /**
  * 校验客户端请求签名，防爬防篡改防重放 (类似阿里巴巴 H5 Mtop 签名校验)
@@ -55,7 +55,7 @@ export async function verifySignature(request, reply) {
   }
 
   // 5. 从 Redis 验证 token 存在性
-  const sessionStore = getSessionStore(request.server, 'h5_token');
+  const sessionStore = getStore('h5_token');
   const h5Token = await sessionStore.get(h5TokenMd5);
 
   if (!h5Token) {
@@ -86,7 +86,7 @@ export async function verifySignature(request, reply) {
  * 登录成功或页面访问时下发/更新 H5 Token
  */
 export async function issueH5Token(fastify, reply) {
-  const sessionStore = getSessionStore(fastify, 'h5_token');
+  const sessionStore = getStore('h5_token');
   // 生成随机 H5 Token 密钥
   const rawH5Token = crypto.randomBytes(24).toString('hex');
   const h5TokenMd5 = crypto.createHash('sha256').update(rawH5Token).digest('hex');

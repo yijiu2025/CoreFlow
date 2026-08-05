@@ -17,7 +17,7 @@ import { logLogin } from '../../../../auth/audit-logger.js';
 import { detectLoginAnomaly, DETECT_RESULT } from '../../../../auth/anomaly-detector.js';
 import UserDao from '../../../../app/oauth21/dao/user.dao.js';
 import ClientDao from '../../../../app/oauth21/dao/client.dao.js';
-import { getSessionStore } from '../../../../redis/session-store.js';
+import { getStore } from '../../../../redis/index.js';
 import { logLoginFailure } from '../../../../auth/session.js';
 import { AuthorizationService } from '../../../../app/oauth21/services/authorization.service.js';
 
@@ -146,7 +146,7 @@ async function handleDirectLogin(request, reply, fastify) {
     const approval = await ApprovalDao.getEffectiveApproval(user.id, client.client_id);
     if (!approval) {
       const consentKey = uuidv4();
-      const consentStore = getSessionStore(fastify, 'consent_session');
+      const consentStore = getStore('consent_session');
       await consentStore.set(
         consentKey,
         {
@@ -260,7 +260,7 @@ export default function registerLoginRoutes(fastify) {
         });
       }
 
-      const consentStore = getSessionStore(fastify, 'consent_session');
+      const consentStore = getStore('consent_session');
       const session = await consentStore.get(consentKey);
       if (!session) {
         return reply.code(400).send({

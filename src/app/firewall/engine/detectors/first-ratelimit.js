@@ -4,7 +4,7 @@
  * 在 onRequest 阶段（认证之后）执行，被限流的请求直接拒绝。
  */
 import rateLimit from '@fastify/rate-limit';
-import { createBoundStore } from '../../../../redis/resilient-store.js';
+import { createBoundStore } from '../../../../redis/index.js';
 import { getSecuritySettings } from '../../dao/dao.js';
 import { resolveGeoInfo } from './geo-filter.js';
 import { pushRecord } from '../../data/store.js';

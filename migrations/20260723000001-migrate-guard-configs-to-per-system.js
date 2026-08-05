@@ -12,7 +12,9 @@
 
 export async function up({ queryInterface, Sequelize }) {
   // 1. 读取旧数据
-  const [rows] = await queryInterface.sequelize.query('SELECT id, configs, version, created_at, updated_at FROM guard_configs LIMIT 1');
+  const [rows] = await queryInterface.sequelize.query(
+    'SELECT id, configs, version, created_at, updated_at FROM guard_configs LIMIT 1'
+  );
 
   // 2. 重命名旧表（保留数据以便回滚）
   await queryInterface.sequelize.query('RENAME TABLE guard_configs TO guard_configs_v1');
@@ -66,7 +68,9 @@ export async function up({ queryInterface, Sequelize }) {
 
 export async function down({ queryInterface, Sequelize }) {
   // 回滚：读取新表数据，合并回单行
-  const [rows] = await queryInterface.sequelize.query('SELECT system_key, config, version, created_at, updated_at FROM guard_configs');
+  const [rows] = await queryInterface.sequelize.query(
+    'SELECT system_key, config, version, created_at, updated_at FROM guard_configs'
+  );
 
   await queryInterface.sequelize.query('RENAME TABLE guard_configs TO guard_configs_v2');
 
