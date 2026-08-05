@@ -10,11 +10,12 @@
 | 场景                     | 推荐方式                                          | 说明                             |
 | ------------------------ | ------------------------------------------------- | -------------------------------- |
 | 便捷存储（推荐）         | `getStore('prefix')`                              | 自动选择 Redis 或 MapStore       |
-| 短时效数据（备用 Redis） | `getStore('prefix', { backup: true })`            | 使用备用 Redis，未配置时回退主库 |
+| 短时效数据（备用 Redis） | `getStore('prefix', { backup: true })`            | 使用备用 Redis，主库不通切备库   |
 | 纯内存临时数据           | `MapStore`                                        | 不依赖 Redis，全局单例           |
-| 防重放（nonce）          | `createNonceStore(app, ttl)`                      | Lua 原子操作，Redis 不可用时抛错 |
-| 限流                     | `createBoundStore(app)`                           | 使用主 Redis，故障时降级内存 |
-| 消息队列                 | `createQueue('prefix')`                           | 基于 MapStore 的 FIFO 队列       |
+| 防重放（nonce）          | `createNonceStore(ttl)`                           | 双后端：Redis Lua / MapStore     |
+| 限流                     | `createBoundStore(app)`                           | 使用主 Redis，故障时降级内存     |
+| 消息队列                 | `createQueue('prefix')`                           | 双后端：MapStore / Redis         |
+| 循环队列                 | `createRingQueue('prefix')`                       | 满时自动覆盖最旧，双后端         |
 | 直接操作 `app.redis`     | 允许，但建议加超时保护                            | 简单场景直接调更快               |
 
 ## 目录
@@ -26,7 +27,7 @@
   - [app.redis — Redis 客户端](#appredis--redis-客户端)
   - [app.redisHealthy — 健康状态](#appredischealthy--健康状态)
   - [app.onRedisHealthChange — 健康回调](#apponredischealthchange--健康回调)
-  - [app.redisMetrics — 连接池指标](#appredismetrics--连接池指标)
+  - [app.redisMetrics — 指标查询](#appredismetrics--指标查询)
   - [getStore — 统一存储工厂](#getstore--统一存储工厂)
   - [app.backupRedis / app.backupRedisHealthy — 备用 Redis](#appbackupredis--appbackupredischealthy--备用-redis)
   - [MapStore — 纯内存存储](#mapstore--纯内存存储)
@@ -34,6 +35,7 @@
   - [createNonceStore — Nonce 防重放](#createnoncestore--nonce-防重放)
   - [createBoundStore / ResilientStore — 限流存储](#createboundstore--resilientstore--限流存储)
   - [createQueue — FIFO 消息队列](#createqueue--fifo-消息队列)
+  - [createRingQueue — 循环队列](#createringqueue--循环队列)
   - [RedisRequiredError — 错误类](#redisrequirederror--错误类)
 - [环境变量](#环境变量)
 - [降级策略](#降级策略)
@@ -47,15 +49,16 @@
 src/redis/
 ├── index.js              ← 统一出口，所有 API 从这里导出
 ├── plugin.js             ← 连接管理：创建、主备切换、优雅关闭
-├── health.js             ← 事件驱动健康监控
+├── health.js             ← 事件驱动健康监控 + SLOWLOG 采集
 ├── utils.js              ← 共享工具函数（超时、序列化、key 构建）
 ├── errors.js             ← RedisRequiredError 错误类
-├── get-store.js          ← 统一存储工厂（推荐入口）
-├── redis-store.js        ← Redis 会话存储（强制 Redis 模式）
+├── get-store.js          ← 统一存储工厂（路由入口，无内联命令）
+├── redis-store.js        ← Redis 会话存储 + getRedisStore 工厂
 ├── map-store.js          ← 纯内存 Map 存储（单例，不依赖 Redis）
-├── nonce-store.js        ← Nonce 去重存储（Lua 原子防重放）
-├── resilient-store.js    ← 限流存储后端（@fastify/rate-limit）
-├── queue-store.js        ← 基于 MapStore 的 FIFO 消息队列
+├── nonce-store.js        ← Nonce 防重放（双后端：Redis / MapStore）
+├── resilient-store.js    ← 限流弹性后端（@fastify/rate-limit）
+├── queue-store.js        ← FIFO 消息队列（双后端：MapStore / Redis）
+├── ring-queue-store.js   ← 循环队列（双后端，满时自动覆盖最旧）
 └── README.md             ← 本文档
 ```
 
@@ -73,7 +76,7 @@ import redisPlugin from './redis/index.js';
 import redisPlugin, { getStore, createNonceStore } from './redis/index.js';
 
 // 仅导入工具函数
-import { getStore, createNonceStore, createBoundStore } from './redis/index.js';
+import { getStore, createNonceStore, createBoundStore, createQueue, createRingQueue } from './redis/index.js';
 
 // 导入错误类
 import { RedisRequiredError } from './redis/index.js';
@@ -152,11 +155,11 @@ unsubscribe();
 
 ---
 
-### app.redisMetrics — 连接池指标
+### app.redisMetrics — 指标查询
 
 **签名**: `() => RedisMetrics`
 
-返回当前连接池状态指标，适合 Prometheus 等监控系统接入。
+返回当前连接池状态指标和缓存命中率，适合 Prometheus 等监控系统接入。
 
 ```js
 const metrics = app.redisMetrics();
@@ -165,7 +168,8 @@ const metrics = app.redisMetrics();
 //   host: '127.0.0.1',
 //   port: 6379,
 //   backupHealthy: true,
-//   backupHost: '192.168.1.100'
+//   backupHost: '192.168.1.100',
+//   cache: { hits: 1250, misses: 37, ratio: 0.971 }
 // }
 ```
 
@@ -196,34 +200,50 @@ await store.set('key', value, 60);
 | ----------------- | --------- | -------- | -------------------------------- |
 | `prefix`          | `string`  | `''`     | Key 前缀，用于命名空间隔离       |
 | `options.timeout` | `number`  | `5000`   | 操作超时（毫秒），MapStore 忽略  |
-| `options.backup`  | `boolean` | `false`  | 使用备用 Redis（需配置 `REDIS_BACKUP_HOST`） |
+| `options.backup`  | `boolean` | `false`  | 主库不通切备库，都不行抛 503     |
 
-**备用 Redis 模式**: 传 `{ backup: true }` 时使用备用 Redis 连接，适用于限流计数、验证码等短时效数据。备用 Redis 未配置时自动回退到主 Redis。
+**`backup: true` 行为**：主库优先 → 主库不可用时自动切备库 → 都不行抛 `RedisRequiredError`（503）。不降级 MapStore。
 
-**缓存策略**: 相同 prefix + timeout + backup 返回同一个 store 实例，Redis 健康状态变更时自动失效重建。
+**缓存策略**：相同 prefix + timeout + backup 返回同一个 store 实例（LRU 缓存，上限 1000 条），Redis 健康状态变更时自动失效重建。
+
+**架构说明**：所有 Redis 操作委托给 `RedisStore`，所有 MapStore 操作委托给 `getMapStore`。`getStore` 本身不包含任何内联 Redis 命令，仅做路由和缓存。
 
 **返回值**: `Store` 对象:
 
-| 方法     | 签名                                                       | 说明                              |
-| -------- | ---------------------------------------------------------- | --------------------------------- |
-| `get`    | `(key: string) => Promise<any>`                            | 读取值，不存在或已过期返回 `null` |
-| `set`    | `(key: string, value: any, ttl?: number) => Promise<void>` | 写入值，ttl 默认 600 秒           |
-| `delete` | `(key: string) => Promise<void>`                           | 删除值                            |
-| `has`    | `(key: string) => Promise<boolean>`                        | 判断 key 是否存在                 |
-| `ttl`    | `(key: string) => Promise<number>`                         | 获取剩余过期时间                  |
-| `expire` | `(key: string, ttl: number) => Promise<void>`              | 修改过期时间                      |
-| `getDel` | `(key: string) => Promise<any>`                            | 原子读取并删除                    |
-| `list`   | `(limit?: number) => Promise<string[]>`                    | 列出键（Redis 模式）              |
-| `count`  | `(limit?: number) => Promise<number>`                      | 条目数（Redis 模式）              |
-| `destroy`| `() => Promise<void>`                                      | 销毁命名空间                      |
-| `clear`  | `() => Promise<void>`                                      | 销毁所有数据                      |
-| `hset`   | `(key, field, value) => Promise<number>`                   | **仅 Redis** Hash 写入            |
-| `hget`   | `(key, field) => Promise<string>`                          | **仅 Redis** Hash 读取            |
-| `hgetall`| `(key) => Promise<object>`                                 | **仅 Redis** 获取所有 Hash 字段   |
-| `hdel`   | `(key, ...fields) => Promise<number>`                      | **仅 Redis** 删除 Hash 字段       |
-| `scan`   | `(cursor, opts?) => Promise<[number, string[]]>`           | **仅 Redis** 游标扫描             |
-| `getStore`| `(subPrefix, opts?) => Store`                             | 嵌套前缀创建子 Store              |
+| 方法       | 签名                                                          | 说明                              |
+| ---------- | ------------------------------------------------------------- | --------------------------------- |
+| `get`      | `(key: string) => Promise<any>`                               | 读取值，不存在或已过期返回 `null` |
+| `set`      | `(key: string, value: any, ttl?: number) => Promise<void>`    | 写入值，ttl 默认 600 秒           |
+| `delete`   | `(key: string) => Promise<void>`                              | 删除值                            |
+| `has`      | `(key: string) => Promise<boolean>`                           | 判断 key 是否存在                 |
+| `ttl`      | `(key: string) => Promise<number>`                            | 获取剩余过期时间                  |
+| `expire`   | `(key: string, ttl: number) => Promise<void>`                 | 修改过期时间                      |
+| `getDel`   | `(key: string) => Promise<any>`                               | 原子读取并删除                    |
+| `list`     | `(limit?: number) => Promise<string[]>`                       | 列出键（Redis 模式）              |
+| `size`     | `(limit?: number) => Promise<number>`                         | 条目数（Redis 模式）              |
+| `sizeValid`| `() => Promise<number>`                                       | 有效条目数                        |
+| `mget`     | `(keys: string[]) => Promise<any[]>`                          | 批量读取                          |
+| `mset`     | `(entries: [string, any][], ttl?: number) => Promise<void>`   | 批量写入                          |
+| `destroy`  | `() => Promise<void>`                                         | 销毁命名空间                      |
+| `clear`    | `() => Promise<void>`                                         | 销毁所有数据                      |
+| `hset`     | `(key, field, value) => Promise<number>`                      | **仅 Redis** Hash 写入            |
+| `hget`     | `(key, field) => Promise<string>`                             | **仅 Redis** Hash 读取            |
+| `hgetall`  | `(key) => Promise<object>`                                    | **仅 Redis** 获取所有 Hash 字段   |
+| `hdel`     | `(key, ...fields) => Promise<number>`                         | **仅 Redis** 删除 Hash 字段       |
+| `hexists`  | `(key, field) => Promise<boolean>`                            | **仅 Redis** 判断 Hash 字段       |
+| `exists`   | `(key) => Promise<boolean>`                                   | **仅 Redis** 判断 key 是否存在    |
+| `scan`     | `(cursor, opts?) => Promise<[number, string[]]>`              | **仅 Redis** 游标扫描             |
+| `call`     | `(fn, timeout?) => Promise<any>`                              | **仅 Redis** 通用命令执行器       |
+| `setPrefix`| `(subPrefix) => Store`                                        | 链式设置子前缀                    |
 
+**未定义的方法自动转发到 Redis 客户端**（Proxy 机制）：
+
+```js
+const store = getStore('fw');
+await store.hlen('hash'); // → client.hLen('fw:hash')
+```
+
+**示例**:
 ```js
 import { getStore } from './redis/index.js';
 
@@ -236,10 +256,9 @@ await captchaStore.set('user@example.com', { code: '123456' }, 600);
 // 读取
 const data = await captchaStore.get('user@example.com');
 
-// 嵌套前缀
-const fw = getStore('fw');
-const blocks = fw.getStore('block');
-await blocks.set('ip:192.168.1.1', val);  // → Redis: fw:block:ip:192.168.1.1
+// 链式子前缀
+const aaa = getStore('first');
+const bbb = aaa.setPrefix('second'); // first:second:key
 ```
 
 ---
@@ -274,29 +293,44 @@ MapStore.delete('email_code', 'user@example.com');
 | `cleanupInterval` | `3600000` | 兜底清理间隔（毫秒），0 不自动清理 |
 | `batchSize`       | `1000`    | `set()` 触发清理时每次扫描条数     |
 | `timerBatchSize`  | `10000`   | 兜底定时器每次扫描条数             |
+| `clone`           | `false`   | 是否深拷贝 value（JSON 往返）       |
+| `serializer`      | `null`    | 序列化函数，`clone=true` 自动配置   |
+| `deserializer`    | `null`    | 反序列化函数，`clone=true` 自动配置 |
 
 ```js
 MapStore.config('email_code', { maxSize: 5000, ttl: 300 });
+
+// 深拷贝模式：防止外部修改影响 store 内部数据
+MapStore.config('captcha', { clone: true });
 ```
 
 **API 一览：**
 
-| 方法         | 签名                         | 说明                               |
-| ------------ | ---------------------------- | ---------------------------------- |
-| `get`        | `(prefix, key)`              | 读取，不存在或已过期返回 `null`    |
-| `set`        | `(prefix, key, value, ttl?)` | 写入，新 key 写入前检查上限        |
-| `has`        | `(prefix, key)`              | 判断是否存在且未过期               |
-| `delete`     | `(prefix, key)`              | 删除                               |
-| `ttl`        | `(prefix, key)`              | 剩余秒数，`-1` 无过期，`-2` 不存在 |
-| `expire`     | `(prefix, key, ttl)`         | 修改已存在 key 的过期时间          |
-| `getDel`     | `(prefix, key)`              | 原子读取并删除                     |
-| `list`       | `(prefix, limit?, offset?)`  | 列出键（无固定顺序，可能含过期）   |
-| `listValid`  | `(prefix, limit?)`           | 列出有效（未过期）键，附带清理     |
-| `count`      | `(prefix)`                   | 条目数（含过期）                   |
-| `countValid` | `(prefix, skipCleanup?)`     | 有效条目数，默认清理过期           |
-| `config`     | `(prefix, options)`          | 动态配置命名空间                   |
-| `destroy`    | `(prefix)`                   | 销毁指定命名空间                   |
-| `clear`      | `()`                         | 销毁所有数据                       |
+| 方法         | 签名                              | 说明                               |
+| ------------ | --------------------------------- | ---------------------------------- |
+| `get`        | `(prefix, key)`                   | 读取，不存在或已过期返回 `null`    |
+| `set`        | `(prefix, key, value, ttl?)`      | 写入，新 key 写入前检查上限        |
+| `has`        | `(prefix, key)`                   | 判断是否存在且未过期               |
+| `delete`     | `(prefix, key)`                   | 删除                               |
+| `ttl`        | `(prefix, key)`                   | 剩余秒数，`-1` 无过期，`-2` 不存在 |
+| `expire`     | `(prefix, key, ttl)`              | 修改过期时间，已过期视为不存在     |
+| `getDel`     | `(prefix, key)`                   | 原子读取并删除                     |
+| `mget`       | `(prefix, keys)`                  | 批量读取                           |
+| `mset`       | `(prefix, entries, ttl?)`         | 批量写入（预检空间）               |
+| `list`       | `(prefix, limit?, offset?)`       | 列出键（无固定顺序，可能含过期）   |
+| `listValid`  | `(prefix, limit?, offset?)`       | 列出有效（未过期）键，附带清理     |
+| `keys`       | `(prefix, clean?)`                | 列出键，clean=true 时过滤过期      |
+| `values`     | `(prefix, clean?)`                | 列出值，clean=true 时过滤过期      |
+| `entries`    | `(prefix, clean?)`                | 列出 [key, value]，clean 过滤过期  |
+| `forEach`    | `(prefix, fn, thisArg?, clean?)`  | 遍历，clean=true 时清理过期        |
+| `size`       | `(prefix)`                        | 条目数（含过期）                   |
+| `sizeValid`  | `(prefix, skipCleanup?)`          | 有效条目数，默认清理过期           |
+| `config`     | `(prefix, options)`               | 动态配置命名空间                   |
+| `usage`      | `(prefix)`                        | 容量使用情况 + 内存估算            |
+| `destroy`    | `(prefix)`                        | 销毁指定命名空间                   |
+| `clear`      | `(prefix)`                        | 清空数据（保留配置）               |
+
+**`getMapStore(prefix)`**: 创建 Promise 包装的 MapStore 操作对象，与 `getStore` 返回的接口一致。
 
 ---
 
@@ -304,7 +338,7 @@ MapStore.config('email_code', { maxSize: 5000, ttl: 300 });
 
 基于 Redis 的临时数据存储，适用于验证码、登录凭证、扫码状态等。Redis 不可用时抛出 `RedisRequiredError`，不使用内存降级。
 
-所有 KV 方法支持可选的 `timeout` 参数，调用方可按需覆盖默认超时（3000ms）。
+所有方法支持可选的 `timeout` 和 `useBackup` 参数，调用方可按需覆盖默认超时（3000ms）。
 
 ```js
 import { RedisStore } from './redis/index.js';
@@ -314,47 +348,44 @@ const data = await RedisStore.get('email_code', 'user@example.com');
 const exists = await RedisStore.has('email_code', 'user@example.com');
 const remaining = await RedisStore.ttl('email_code', 'user@example.com');
 await RedisStore.delete('email_code', 'user@example.com');
-
-// 指定超时
-const data = await RedisStore.get('email_code', 'user@example.com', 5000);
 ```
 
-**架构说明**: `getStore()` 的主 Redis 模式底层委托给 `RedisStore`，复用其冷却机制、超时保护和错误包装。备用 Redis 模式及 Hash/Scan 操作保持内联实现。
+**架构说明**: `getStore()` 底层委托给 `RedisStore`，复用其超时保护和错误包装。`useBackup` 参数控制主备切换。
 
-**日志注入**: 可通过 `setLogger()` 注入 Fastify 日志器，替换默认的 `console.log` 调试输出：
+**日志注入**: 可通过 `setLogger()` 注入 Fastify 日志器：
 
 ```js
 import { setLogger } from './redis/index.js';
 setLogger(app.log);  // 由 plugin.js 自动调用
 ```
 
-**注意**: 大多数场景推荐使用 `getStore`，它自动处理 Redis 与 MapStore 的选择。仅在需要明确保证 Redis 可用时（如防重放、跨实例共享）才直接使用 `RedisStore`。
+**`getRedisStore(prefix, timeout, useBackup)`**：创建前缀绑定的 Redis store 对象，返回的 store 通过 Proxy 自动转发未定义命令到 Redis 客户端。
 
 ---
 
 ### createNonceStore — Nonce 防重放
 
-用于 RSA 加密登录等安全场景。核心方法 `checkAndMark` 使用 Lua 脚本保证原子性，消除并发窗口。
+用于 RSA 加密登录等安全场景。根据 `isRedisConfigured()` 自动选择后端。
 
 ```js
-import { createNonceStore, RedisRequiredError } from './redis/index.js';
+import { createNonceStore } from './redis/index.js';
 
-const nonceStore = createNonceStore(app, 60);
+const nonceStore = createNonceStore(60);  // 不再需要 app 参数
 
-try {
-  const isReplay = await nonceStore.checkAndMark(nonce);
-  if (isReplay) {
-    return reply.code(403).send({ error: 'replay_detected' });
-  }
-} catch (err) {
-  if (err instanceof RedisRequiredError) {
-    return reply.code(503).send({ error: 'service_unavailable' });
-  }
-  throw err;
+const isReplay = await nonceStore.checkAndMark(nonce);
+if (isReplay) {
+  return reply.code(403).send({ error: 'replay_detected' });
 }
 ```
 
-**Lua 脚本**: 使用 `EVALSHA` 缓存编译后的脚本，`NOSCRIPT` 错误时自动回退到 `EVAL`。
+**双后端**：
+
+| 后端 | 实现 | 适用场景 |
+|------|------|----------|
+| Redis | Lua 脚本原子操作（EVALSHA + NOSCRIPT 回退） | 多实例部署 |
+| MapStore | 同步 get + set（单线程安全） | 单进程部署 |
+
+**注意**：MapStore 版不支持多实例共享 nonce 状态，多实例部署必须配置 Redis。
 
 ---
 
@@ -378,28 +409,66 @@ await app.register(rateLimit, {
 - Redis 故障：单次失败后冷却 5 秒，期间走内存 Map
 - Redis 恢复：自动切回分布式模式
 
-**资源释放**: 每个实例持有全局引用，不再需要时应调用 `close()` 释放：
-
-```js
-const store = new ResilientStore(app);
-// ... 使用完毕
-store.close();  // 从全局集合移除，允许 GC 回收
-```
+**资源释放**：应用关闭时 `onClose` 钩子统一清理所有实例，无需手动调用 `close()`。
 
 ---
 
 ### createQueue — FIFO 消息队列
 
-基于 MapStore 实现，不依赖 Redis，所有数据在进程内存中。适合消息推送、任务队列、事件缓冲等场景。
+支持 MapStore 和 Redis 双后端。
 
 ```js
 import { createQueue } from './redis/index.js';
 
+// MapStore 版（默认）
 const queue = createQueue('notify', { maxSize: 100000 });
+
+// Redis 版（多实例共享）
+const queue = createQueue('notify', { maxSize: 100000, backend: 'redis' });
+
 queue.push({ id: 1, text: 'hello' });
-const msg = queue.shift(); // { data: { id: 1, text: 'hello' }, createdAt: 1745678901234 }
+const msg = queue.shift(); // { data: { id: 1, text: 'hello' }, createdAt: ... }
 queue.length();            // 0
 ```
+
+**参数**:
+
+| 参数       | 默认值   | 说明                             |
+| ---------- | -------- | -------------------------------- |
+| `maxSize`  | `100000` | 队列最大长度，满时拒绝写入       |
+| `dataTtl`  | `0`      | 数据 TTL（秒），0 永不过期       |
+| `backend`  | `'map'`  | `'map'` 或 `'redis'`             |
+| `timeout`  | `3000`   | Redis 操作超时（毫秒）           |
+
+---
+
+### createRingQueue — 循环队列
+
+固定大小的循环队列，满时自动覆盖最旧数据。适合日志缓冲、操作历史、事件记录等"只保留最近 N 条"的场景。
+
+```js
+import { createRingQueue } from './redis/index.js';
+
+// MapStore 版（默认）
+const ring = createRingQueue('audit', { maxSize: 100 });
+
+// Redis 版（多实例共享）
+const ring = createRingQueue('audit', { maxSize: 100, backend: 'redis' });
+
+ring.push({ event: 'login', user: 'alice' });
+ring.push({ event: 'logout', user: 'alice' });
+ring.toArray();  // [{ data: {...}, createdAt: ... }, ...]
+ring.length();   // 2
+```
+
+**参数**:
+
+| 参数       | 默认值  | 说明                             |
+| ---------- | ------- | -------------------------------- |
+| `maxSize`  | `1000`  | 最大条目数，满时自动覆盖最旧     |
+| `dataTtl`  | `0`     | 数据 TTL（秒），0 永不过期       |
+| `backend`  | `'map'` | `'map'` 或 `'redis'`             |
+| `timeout`  | `3000`  | Redis 操作超时（毫秒）           |
 
 ---
 
@@ -432,7 +501,8 @@ import { RedisRequiredError } from './redis/index.js';
 | `REDIS_DB`              | `0`     | 默认数据库编号（0-15）          |
 | `REDIS_TLS`             | `false` | 是否启用 TLS                    |
 | `REDIS_TLS_CA`          | —       | TLS CA 证书路径（自签证书场景） |
-| `REDIS_BACKUP_HOST`     | —       | 备库主机地址（可选，独立连接，不承担主库 failover） |
+| `REDIS_TLS_SKIP_VERIFY` | `false` | 跳过 TLS 证书验证（调试用）     |
+| `REDIS_BACKUP_HOST`     | —       | 备库主机地址（独立连接）        |
 | `REDIS_BACKUP_PORT`     | `6379`  | 备库端口                        |
 | `REDIS_CONNECT_TIMEOUT` | `5000`  | 连接超时毫秒                    |
 | `REDIS_MAX_RETRIES`     | `10`    | 运行期重连最大次数              |
@@ -450,11 +520,10 @@ import { RedisRequiredError } from './redis/index.js';
 
 ### 备用 Redis — 短时效数据
 
-- 通过 `REDIS_BACKUP_HOST` 配置，独立连接
+- 通过 `REDIS_BACKUP_HOST` 配置，独立连接，后台静默连接不阻塞启动
 - 仅用于限流计数、验证码等短时效数据
 - 需在 `getStore()` 中传 `{ backup: true }` 显式启用
-- 备用未配置或不可用时，自动回退到主 Redis
-- `ResilientStore`（限流）自动优先使用备用 Redis
+- `backup: true` 时：主库优先 → 主库不通切备库 → 都不行抛 503
 
 ---
 
@@ -462,21 +531,20 @@ import { RedisRequiredError } from './redis/index.js';
 
 | 存储                                 | 默认     | 行为                                           |
 | ------------------------------------ | -------- | ---------------------------------------------- |
-| `getStore('prefix')`                 | 自动降级 | Redis 可用 → Redis，不可用 → MapStore          |
-| `createNonceStore(app, 60)`          | 禁止降级 | Redis 不可用时抛出 `RedisRequiredError`（503） |
+| `getStore('prefix')`                 | 强制 Redis | 配置了 Redis 就强制 Redis 模式，不通抛 503    |
+| `getStore('prefix', { backup: true })` | 强制 Redis | 主库不通切备库，都不行抛 503                   |
+| `getStore('prefix')` 未配置 Redis    | MapStore  | 环境变量未配置 Redis 时使用 MapStore           |
+| `createNonceStore(ttl)`              | 自动选择 | Redis 配置时用 Lua，否则 MapStore              |
 | `RedisStore`                         | 禁止降级 | Redis 不可用时抛出 `RedisRequiredError`（503） |
 
-**安全模式**（`RedisStore` / `createNonceStore`）：
-
+**安全模式（`RedisStore`）**：
 - 适用于防重放、跨实例共享数据等场景
 - Redis 不可用时立刻失败，业务层收到 `RedisRequiredError`（statusCode 503）
 - 避免多实例下内存数据不一致导致的安全漏洞
 
-**自动降级模式**（`getStore` / `MapStore`）：
-
-- 适用于验证码、单实例临时状态等场景
-- Redis 不可用时自动降级到内存 Map，业务无感知
-- Redis 恢复后自动切换回分布式存储
+**自动降级模式（`MapStore`）**：
+- 适用于单实例临时状态等场景
+- Redis 未配置时自动使用 MapStore
 
 ---
 
@@ -485,11 +553,12 @@ import { RedisRequiredError } from './redis/index.js';
 ```
 Redis 正常 → 零开销（仅事件监听）
     ↓ error/end 事件
-标记不健康 → 启动 30s 间隔 ping 探测（复用持久连接）
+标记不健康 → 启动 10s 间隔 ping 探测（复用持久连接）
     ↓ ping 成功
-标记健康 → 停止探测，通知所有监听者
+标记健康 → 停止探测，通知所有监听者，启动 SLOWLOG 采集
 ```
 
 - 事件驱动：`error` / `ready` / `end` 事件触发状态切换
 - 持久探活连接：避免每 10 秒建连/断连的开销
 - 回调通知：通过 `app.onRedisHealthChange()` 注册回调
+- SLOWLOG 采集：每 60s 采集一次，超过 100ms 的慢查询记录到 `app.log.warn`
