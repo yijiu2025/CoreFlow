@@ -1,12 +1,12 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { captchaDao } from '../../../verify/captcha/index.js';
 import { emailDao } from '../../../verify/email/index.js';
-import { getSessionStore } from '../../../redis/session-store.js';
+import { getStore } from '../../../redis/index.js';
 import { generateCaptchaSchema, verifyCaptchaSchema } from './schemas.js';
 
 export default async function (fastify, opts) {
-  const captchaStore = getSessionStore(fastify, 'captcha');
-  const emailCodeStore = getSessionStore(fastify, 'email_code');
+  const captchaStore = getStore('captcha');
+  const emailCodeStore = getStore('email_code');
 
   registerGroupMetadata({
     name: 'v1',

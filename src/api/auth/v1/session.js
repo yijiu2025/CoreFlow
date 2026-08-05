@@ -11,7 +11,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { verify } from '../../../app/oauth21/crypto/jwt.js';
 import { createSession } from '../../../auth/session.js';
-import { getSessionStore } from '../../../redis/session-store.js';
+import { getStore } from '../../../redis/index.js';
 import sequelize from '../../../db/index.js';
 import crypto from 'node:crypto';
 import { signCookie, COOKIE_OPTIONS, SHORT_SESSION_TTL, LONG_SESSION_TTL } from '../../../auth/cookie.js';
@@ -117,7 +117,7 @@ export default async function (fastify) {
       }
 
       // 从 Redis 读取临时 session 数据
-      const sessionStore = getSessionStore(fastify, 'session_token');
+      const sessionStore = getStore('session_token');
       const sessionData = await sessionStore.get(session_token);
       if (!sessionData) {
         return reply.code(401).send({

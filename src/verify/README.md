@@ -123,9 +123,9 @@ const store = {
   async delete(key) { ... }
 };
 
-// 使用 Redis session-store
-import { getSessionStore } from '../redis/session-store.js';
-const captchaStore = getSessionStore(fastify, 'captcha');
+// 使用 Redis 或内存存储（根据配置自动选择）
+import { getStore } from '../redis/get-store.js';
+const captchaStore = getStore('captcha');
 ```
 
 ## 已实现模块

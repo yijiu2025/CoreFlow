@@ -17,6 +17,7 @@
 | 技术栈                        | 参考文件                                      | 说明                                |
 | ----------------------------- | --------------------------------------------- | ----------------------------------- |
 | Node.js + Fastify + Sequelize | [nodejs-fastify.md](nodejs/nodejs-fastify.md) | API 路由、DAO、模型、迁移等代码模板 |
+| Redis                         | [redis.md](redis.md)                          | 数据结构、命令、主备、监控、本项目规范 |
 | Java + Spring Boot            | 待添加                                        | -                                   |
 | Python + FastAPI              | 待添加                                        | -                                   |
 | Go + Gin                      | 待添加                                        | -                                   |

@@ -9,15 +9,15 @@
  */
 
 import { registerGroupMetadata } from '../../../guard.js';
-import { getSessionStore } from '../../../../redis/session-store.js';
+import { getStore } from '../../../../redis/index.js';
 import registerAuthorizeRoutes from './authorize.js';
 import registerLoginRoutes from './login.js';
 import registerQrRoutes from './qr.js';
 import registerRegisterRoutes from './register.js';
 
 export default async function (fastify) {
-  const sessionStore = getSessionStore(fastify, 'session');
-  const qrStore = getSessionStore(fastify, 'qr');
+  const sessionStore = getStore('session');
+  const qrStore = getStore('qr');
 
   // 安全头处理：允许特定页面被 iframe 嵌入
   fastify.addHook('onSend', (request, reply, payload, done) => {

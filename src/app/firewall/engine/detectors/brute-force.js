@@ -2,7 +2,6 @@
  * 登录暴力破解检测
  * 账号维度 + IP 维度双重防护，触发后锁定账号并挑战 IP
  */
-import { safeRedis } from '../../../../redis/safe-redis.js';
 import { getConfig, KEY, LUA_INCR_WITH_EXPIRE, memorySlidingWindow, getBlockStatus } from '../../util/shared.js';
 import { setBlock } from '../dao/block-manager.js';
 
@@ -22,12 +21,7 @@ export const checkLoginBruteForce = async (redisClient, ip, username, success) =
   const ipLimit = settings.bruteIpLimit || 10;
 
   if (success) {
-    await safeRedis(redisClient, async r => {
-      const pipeline = r.pipeline();
-      pipeline.del(KEY.bruteIp(ip));
-      if (username) pipeline.del(KEY.bruteUser(username));
-      await pipeline.exec();
-    });
+    await redisClient.pipeline().del(KEY.bruteIp(ip)).del(KEY.bruteUser(username)).exec();
     return;
   }
 

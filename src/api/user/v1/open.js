@@ -9,11 +9,11 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import userDao from '../../../app/user/dao/user.js';
 import { emailDao } from '../../../verify/email/index.js';
-import { getSessionStore } from '../../../redis/session-store.js';
+import { getStore } from '../../../redis/index.js';
 import '../../../app/user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
 
 export default async function (fastify) {
-  const emailCodeStore = getSessionStore(fastify, 'email_code');
+  const emailCodeStore = getStore('email_code');
 
   registerGroupMetadata({
     name: 'userRegister',

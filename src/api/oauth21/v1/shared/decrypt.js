@@ -11,15 +11,14 @@
 import { decrypt, validateTimestamp } from '../../../../app/oauth21/crypto/encryption.js';
 import { captchaService } from '../../../../verify/captcha/index.js';
 import { emailDao } from '../../../../verify/email/index.js';
-import { getSessionStore } from '../../../../redis/session-store.js';
-import { createNonceStore } from '../../../../redis/nonce-store.js';
+import { getStore, createNonceStore } from '../../../../redis/index.js';
 
-// nonce 去重存储（延迟初始化）
+// nonce 去重存储（延迟初始化，通过 app 引用自动感知 failover 切换）
 let nonceStore = null;
 
 function ensureNonceStore(request) {
   if (!nonceStore) {
-    nonceStore = createNonceStore(request.server?.redis || null);
+    nonceStore = createNonceStore();
   }
   return nonceStore;
 }
@@ -35,7 +34,7 @@ export async function decryptLoginRequest(request, fastify) {
 
   // 1. 验证码校验
   if (captchaKey) {
-    const captchaStore = getSessionStore(fastify, 'captcha');
+    const captchaStore = getStore('captcha');
     const isVerified = await captchaService.consume(captchaKey, captchaStore);
     if (!isVerified) {
       return { success: false, error: '请先完成图形验证', statusCode: 400 };
@@ -104,7 +103,7 @@ export async function decryptLoginRequest(request, fastify) {
  * @returns {object} { success?, error? }
  */
 export async function verifyEmailCode(email, code, fastify) {
-  const emailCodeStore = getSessionStore(fastify, 'email_code');
+  const emailCodeStore = getStore('email_code');
   try {
     await emailDao.verifyCode(email, code, emailCodeStore);
     return { success: true };

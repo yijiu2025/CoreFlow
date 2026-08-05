@@ -15,7 +15,6 @@
  *   - 指纹白名单：  fw:whitelist:fp:{fp} → '1'（带 TTL）
  *   - 指纹白名单索引：fw:whitelisted:fps → Hash（fp → JSON）
  */
-import { safeRedis } from '../../../../redis/safe-redis.js';
 import {
   getConfig,
   KEY,
@@ -465,7 +464,7 @@ export const checkGlobalBlock = async (redisClient, ip, fingerprint) => {
       const fpStatus = await getBlockStatus(redisClient, KEY.blockFp(fingerprint));
       if (fpStatus) {
         // 获取剩余 TTL，永久封禁（TTL=-1）默认给 24 小时
-        let ttl = (await safeRedis(redisClient, r => r.ttl(KEY.blockFp(fingerprint)))) || 60;
+        let ttl = (await redisClient.ttl(KEY.blockFp(fingerprint))) || 60;
         if (ttl === -1) ttl = 86400;
         const err = new Error(fpStatus === 'SCANNER' ? 'Scanner blocked' : 'Access temporary denied');
         err.statusCode = fpStatus === 'SCANNER' ? 403 : 429;
@@ -521,7 +520,7 @@ export const checkGlobalBlock = async (redisClient, ip, fingerprint) => {
   const status = await getBlockStatus(redisClient, blockKey);
 
   if (status) {
-    let ttl = (await safeRedis(redisClient, r => r.ttl(blockKey))) || 60;
+    let ttl = (await redisClient.ttl(blockKey)) || 60;
     if (ttl === -1) ttl = 86400;
     const err = new Error(status === 'SCANNER' ? 'Scanner blocked' : 'Access temporary denied');
     err.statusCode = status === 'SCANNER' ? 403 : 429;

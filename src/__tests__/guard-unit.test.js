@@ -63,12 +63,27 @@ function mockFastify() {
 function mockReply() {
   const reply = { sent: false, statusCode: 200 };
   reply.result = {
-    success: () => { reply.sent = true; return reply; },
-    unauth: () => { reply.sent = true; return reply; },
-    forbidden: () => { reply.sent = true; return reply; }
+    success: () => {
+      reply.sent = true;
+      return reply;
+    },
+    unauth: () => {
+      reply.sent = true;
+      return reply;
+    },
+    forbidden: () => {
+      reply.sent = true;
+      return reply;
+    }
   };
-  reply.code = (code) => { reply.statusCode = code; return reply; };
-  reply.send = () => { reply.sent = true; return reply; };
+  reply.code = code => {
+    reply.statusCode = code;
+    return reply;
+  };
+  reply.send = () => {
+    reply.sent = true;
+    return reply;
+  };
   return reply;
 }
 
@@ -157,7 +172,9 @@ describe('registerSecureRoute', () => {
   it('正常注册路由', () => {
     const fastify = mockFastify();
     registerSecureRoute(fastify, {
-      name: 'testRoute', method: 'GET', url: '/test',
+      name: 'testRoute',
+      method: 'GET',
+      url: '/test',
       handler: async () => {}
     });
     expect(fastify.routes).toHaveLength(1);
@@ -167,7 +184,9 @@ describe('registerSecureRoute', () => {
   it('method 参数无效时抛出 INVALID_PARAM', () => {
     expectCode(() => {
       registerSecureRoute(mockFastify(), {
-        name: 'test', url: '/test', handler: () => {}
+        name: 'test',
+        url: '/test',
+        handler: () => {}
       });
     }, 'INVALID_PARAM');
   });
@@ -175,7 +194,9 @@ describe('registerSecureRoute', () => {
   it('url 参数无效时抛出 INVALID_PARAM', () => {
     expectCode(() => {
       registerSecureRoute(mockFastify(), {
-        name: 'test', method: 'GET', handler: () => {}
+        name: 'test',
+        method: 'GET',
+        handler: () => {}
       });
     }, 'INVALID_PARAM');
   });
@@ -183,7 +204,9 @@ describe('registerSecureRoute', () => {
   it('handler 参数无效时抛出 INVALID_PARAM', () => {
     expectCode(() => {
       registerSecureRoute(mockFastify(), {
-        name: 'test', method: 'GET', url: '/test',
+        name: 'test',
+        method: 'GET',
+        url: '/test',
         handler: 'not a function'
       });
     }, 'INVALID_PARAM');
@@ -193,11 +216,17 @@ describe('registerSecureRoute', () => {
     const fastify = mockFastify();
     const handler = async () => {};
     registerSecureRoute(fastify, {
-      name: 'route1', method: 'GET', url: '/dup', handler
+      name: 'route1',
+      method: 'GET',
+      url: '/dup',
+      handler
     });
     expectCode(() => {
       registerSecureRoute(fastify, {
-        name: 'route2', method: 'GET', url: '/dup', handler
+        name: 'route2',
+        method: 'GET',
+        url: '/dup',
+        handler
       });
     }, 'DUPLICATE_ROUTE');
   });
@@ -218,7 +247,8 @@ describe('registerSecureWebSocket', () => {
   it('handler 参数无效时抛出 INVALID_PARAM', () => {
     expectCode(() => {
       registerSecureWebSocket(mockFastify(), {
-        url: '/ws/test', handler: 'not a function'
+        url: '/ws/test',
+        handler: 'not a function'
       });
     }, 'INVALID_PARAM');
   });
@@ -226,7 +256,8 @@ describe('registerSecureWebSocket', () => {
   it('正常注册 WebSocket 路由', () => {
     const fastify = mockFastify();
     registerSecureWebSocket(fastify, {
-      url: '/ws/test', handler: () => {}
+      url: '/ws/test',
+      handler: () => {}
     });
     expect(fastify.routes).toHaveLength(1);
     expect(fastify.routes[0].method).toBe('GET');

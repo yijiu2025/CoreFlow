@@ -2,7 +2,6 @@
  * 速率限制检测
  * 基于 Redis 滑动窗口的 IP 限频，Redis 不可用时降级到内存
  */
-import { safeRedis } from '../../../../redis/safe-redis.js';
 import { getConfig, KEY, memorySlidingWindow, ipRequestTimestamps, getBlockStatus } from '../../util/shared.js';
 import { setBlock } from '../dao/block-manager.js';
 
@@ -39,7 +38,7 @@ export const checkRateLimit = async (redisClient, actorId, options = {}) => {
   const blockStatus = await getBlockStatus(redisClient, blockKey);
 
   if (blockStatus) {
-    const ttl = (await safeRedis(redisClient, r => r.ttl(blockKey))) || retryAfter;
+    const ttl = (await redisClient.ttl(blockKey)) || retryAfter;
 
     if (blockStatus === 'CHALLENGE') {
       const err = new Error('Challenge required');

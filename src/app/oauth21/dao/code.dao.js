@@ -4,22 +4,28 @@
  * 授权码作为短效临时票据将直接存于 Redis 内存中，
  * 并提供自带的 TTL 过期及原子性"一次性消费" (GETDEL)，消除任何并发竞争与重放安全隐患。
  * Redis 不可用时自动降级到 MySQL。
+ *
+ * 注意：所有 Redis 操作均直接调用 redis.get/set，Redis 连接由调用方保证
  */
 import { Op } from 'sequelize';
 import sequelize from '../../../db/index.js';
-import { globalRedis } from '../../../redis/index.js';
+import { globalRedis } from '../../../redis/plugin.js';
 
-/** 获取当前可用的 Redis 客户端（null 表示降级到 MySQL） */
+/** 获取当前可用的 Redis 客户端 */
 function getRedis() {
   return globalRedis;
 }
 
-/** 获取 OauthCode 模型（延迟获取，确保模型已加载） */
+/** 获取 OauthCode 模型 */
 const getModel = () => sequelize.models.OauthCode;
 
 const CodeDao = {
   /**
    * 保存授权码
+   * @param {string} code - 授权码
+   * @param {object} data - 授权数据
+   * @param {number} [data.expiresIn=600] - 过期时间（秒）
+   * @returns {Promise<void>}
    */
   async save(code, data) {
     const expiresIn = data.expiresIn || 600;
@@ -59,6 +65,8 @@ const CodeDao = {
 
   /**
    * 查找授权码（不消耗）
+   * @param {string} code - 授权码
+   * @returns {Promise<object|null>} 授权数据，不存在返回 null
    */
   async find(code) {
     const redis = getRedis();
@@ -76,6 +84,8 @@ const CodeDao = {
 
   /**
    * 消费授权码（一次性使用，带重放检测）
+   * @param {string} code - 授权码
+   * @returns {Promise<object|null>} 消费后的授权数据，已消费或不存在返回 null
    */
   async consume(code) {
     const redis = getRedis();
@@ -117,6 +127,7 @@ const CodeDao = {
 
   /**
    * 清理过期授权码
+   * @returns {Promise<number>} 清理条数
    */
   async cleanup() {
     if (getRedis()) {
