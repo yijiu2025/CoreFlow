@@ -6,6 +6,8 @@
  * @since 2026-07-22
  */
 
+/* eslint-disable no-console */
+
 import { Sequelize } from 'sequelize';
 
 const C = { reset: '\x1b[0m', red: '\x1b[31m' };
@@ -17,7 +19,8 @@ const required = { DB_HOST, DB_NAME, DB_USER };
 const missing = Object.entries(required).filter(([, v]) => !v);
 if (missing.length > 0) {
   console.error(`❌ [DB] ${C.red}缺少必要环境变量: ${missing.map(([k]) => k).join(', ')}${C.reset}`);
-  process.exit(1);
+  // 延迟退出，确保错误日志刷新
+  setTimeout(() => process.exit(1), 100);
 }
 
 const dsn = `${DB_TYPE || 'mysql'}://${DB_USER}:${encodeURIComponent(DB_PASS || '')}@${DB_HOST}:${DB_PORT || 3306}/${DB_NAME}`;
