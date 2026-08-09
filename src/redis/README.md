@@ -20,6 +20,7 @@
 
 ## 目录
 
+- [📖 使用教程（推荐）](TUTORIAL.md)
 - [模块结构](#模块结构)
 - [导入指南](#导入指南)
 - [API 参考](#api-参考)
@@ -55,10 +56,14 @@ src/redis/
 ├── get-store.js          ← 统一存储工厂（路由入口，无内联命令）
 ├── redis-store.js        ← Redis 会话存储 + getRedisStore 工厂
 ├── map-store.js          ← 纯内存 Map 存储（单例，不依赖 Redis）
+├── cache.js              ← Cache-Aside + singleflight 防击穿
+├── lock-store.js         ← 分布式锁（SET NX + Lua 安全释放）
 ├── nonce-store.js        ← Nonce 防重放（双后端：Redis / MapStore）
 ├── resilient-store.js    ← 限流弹性后端（@fastify/rate-limit）
 ├── queue-store.js        ← FIFO 消息队列（双后端：MapStore / Redis）
 ├── ring-queue-store.js   ← 循环队列（双后端，满时自动覆盖最旧）
+├── stream-store.js       ← Stream 消息队列（持久化 + 消费者组）
+├── TUTORIAL.md           ← 使用教程（图文并茂，推荐先读）
 └── README.md             ← 本文档
 ```
 
