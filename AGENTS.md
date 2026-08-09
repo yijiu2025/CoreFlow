@@ -260,16 +260,52 @@ node --env-file=.env src/db/migrate.js --down-to <name>  # 回滚到指定版本
 
 ```
 src/redis/
-├── index.js              # 连接初始化 + 密码/TLS/优雅退出
-├── health.js             # 事件驱动健康监控（零轮询开销）
-├── resilient-store.js    # @fastify/rate-limit 存储后端（MULTI/EXEC 原子操作）
-├── session-store.js      # 统一会话管理适配器（Redis + 内存降级）
-├── nonce-store.js        # Nonce 去重（Lua 脚本原子 check+mark）
-├── safe-redis.js         # 安全操作包装（区分网络/程序错误）
+├── index.js              # 统一出口，所有 API 从这里导出
+├── plugin.js             # 连接管理：创建、主备切换、优雅关闭
+├── health.js             # 事件驱动健康监控 + SLOWLOG 采集
+├── utils.js              # 共享工具函数（超时、序列化、key 构建）
+├── errors.js             # RedisRequiredError 错误类
+├── get-store.js          # 统一存储工厂（推荐入口）
+├── redis-store.js        # Redis 会话存储 + getRedisStore 工厂
+├── map-store.js          # 纯内存 Map 存储（单例，不依赖 Redis）
+├── cache.js              # Cache-Aside + singleflight 防击穿
+├── lock-store.js         # 分布式锁（SET NX + Lua 安全释放）
+├── nonce-store.js        # Nonce 防重放（双后端：Redis / MapStore）
+├── resilient-store.js    # 限流弹性后端（@fastify/rate-limit）
+├── queue-store.js        # FIFO 消息队列（双后端：MapStore / Redis）
+├── ring-queue-store.js   # 循环队列（双后端，满时自动覆盖最旧）
+├── stream-store.js       # Stream 消息队列（持久化 + 消费者组）
+├── TUTORIAL.md           # 使用教程
 └── README.md             # 模块文档
 ```
 
-环境变量：`REDIS_ENABLED`、`REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_TLS`
+### 核心用法
+
+```js
+// 统一存储工厂（推荐入口）
+const store = getStore('captcha', { timeout: 3000 });
+await store.set('key', value, 600);
+const data = await store.get('key');
+
+// 缓存防击穿
+const user = await cacheThrough('user:1001', () => db.findUser(1001), 600);
+
+// 分布式锁
+const lock = createLock('task:sync', { ttl: 30000 });
+if (await lock.tryAcquire()) {
+  try { await doWork(); } finally { await lock.release(); }
+}
+
+// 消息队列
+const queue = createQueue('notify', { backend: 'redis' });
+queue.push({ id: 1, text: 'hello' });
+const msg = queue.shift();
+```
+
+完整教程见 [src/redis/TUTORIAL.md](src/redis/TUTORIAL.md)。
+
+环境变量：`REDIS_ENABLED`、`REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_TLS`、
+`REDIS_TLS_SKIP_VERIFY`、`REDIS_BACKUP_HOST`、`REDIS_CONNECT_TIMEOUT`、`REDIS_MAX_RETRIES`
 
 健康状态通过 `app.redisHealthy` 和 `app.onRedisHealthChange(cb)` 通知所有依赖模块。
 
