@@ -46,7 +46,7 @@
  * @since 2026-07-28
  */
 
-import { getRedisStore } from './redis-store.js';
+import { getRedisStore, setTtlJitter } from './redis-store.js';
 import { getMapStore } from './map-store.js';
 import { isRedisConfigured } from './utils.js';
 
@@ -61,15 +61,21 @@ const DEFAULT_TIMEOUT = 5000;
  * @param {boolean} [options.backup=false] - 允许使用备用 Redis 作为主库故障降级
  *                                   true  = 主库不通切备库，都不行抛 503
  *                                   false = 仅主库，不通则抛 503
+ * @param {number} [options.ttlJitter=0] - TTL 随机抖动范围（秒），防缓存雪崩
  * @returns {object} 存储对象
  */
 function getStore(prefix, options = {}) {
   if (prefix !== undefined && prefix !== '' && typeof prefix !== 'string') {
     throw new TypeError('getStore: prefix 必须是字符串');
   }
-  const { timeout = DEFAULT_TIMEOUT, backup = false } = options;
+  const { timeout = DEFAULT_TIMEOUT, backup = false, ttlJitter } = options;
   const useRedis = isRedisConfigured();
   const resolvedPrefix = prefix ?? '';
+
+  // 配置全局 TTL 随机抖动
+  if (ttlJitter !== undefined) {
+    setTtlJitter(ttlJitter);
+  }
 
   const store = useRedis ? getRedisStore(resolvedPrefix, timeout, backup) : getMapStore(resolvedPrefix);
 

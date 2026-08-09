@@ -32,32 +32,68 @@ end
 `;
 
 /**
+ * 解析 createNonceStore 参数，支持多种调用形式
+ * - createNonceStore()                          → 默认
+ * - createNonceStore(60)                        → 旧版：ttl
+ * - createNonceStore('nonce', 60)               → prefix + ttl
+ * - createNonceStore({ ttl: 60 })               → options 对象
+ * - createNonceStore('nonce', { ttl: 60 })      → prefix + options
+ * @param {string|number|object} [prefixOrTtl]
+ * @param {number|object} [ttlOrOptions]
+ * @returns {{ prefix: string, ttl: number }}
+ */
+function _parseNonceOptions(prefixOrTtl, ttlOrOptions) {
+  // 旧版：createNonceStore(ttl)
+  if (typeof prefixOrTtl === 'number') {
+    return { prefix: 'nonce', ttl: prefixOrTtl };
+  }
+  // 新版：createNonceStore(prefix, ttl)
+  if (typeof prefixOrTtl === 'string' && typeof ttlOrOptions === 'number') {
+    return { prefix: prefixOrTtl, ttl: ttlOrOptions };
+  }
+  // 新版：createNonceStore({ ttl })
+  if (typeof prefixOrTtl === 'object' && prefixOrTtl !== null) {
+    return { prefix: 'nonce', ttl: prefixOrTtl.ttl ?? DEFAULT_TTL };
+  }
+  // 新版：createNonceStore(prefix, { ttl })
+  if (typeof prefixOrTtl === 'string') {
+    const options = ttlOrOptions || {};
+    return { prefix: prefixOrTtl, ttl: options.ttl ?? DEFAULT_TTL };
+  }
+  // 默认
+  return { prefix: 'nonce', ttl: DEFAULT_TTL };
+}
+
+/**
  * 创建 Nonce 存储实例
  * 根据 isRedisConfigured() 自动选择 Redis 或 MapStore
  * Redis 版抛 RedisRequiredError，MapStore 版抛 TypeError
- * @param {number} [ttlSeconds=60] - Nonce 过期时间（秒）
+ *
+ * @param {string|number|object} [prefixOrTtl='nonce'] - 命名空间前缀或旧版 ttl
+ * @param {number|object} [ttlOrOptions] - ttl 秒数或 options 对象
  * @returns {{ checkAndMark: (nonce: string) => Promise<boolean>, destroy: () => void }}
  */
-function createNonceStore(ttlSeconds = DEFAULT_TTL) {
+function createNonceStore(prefixOrTtl, ttlOrOptions) {
+  const { prefix, ttl } = _parseNonceOptions(prefixOrTtl, ttlOrOptions);
   const useRedis = isRedisConfigured();
 
   if (useRedis) {
-    return _createRedisNonceStore(ttlSeconds);
+    return _createRedisNonceStore(prefix, ttl);
   }
-  return _createMapNonceStore(ttlSeconds);
+  return _createMapNonceStore(prefix, ttl);
 }
 
 /**
  * Redis 版：通过 Lua 脚本保证原子性，支持多实例部署
  */
-function _createRedisNonceStore(ttlSeconds) {
+function _createRedisNonceStore(prefix, ttlSeconds) {
   let _scriptSha = null;
 
   return {
     async checkAndMark(nonce) {
-      const key = `nonce:${nonce}`;
+      const key = `${prefix}:${nonce}`;
       return RedisStore.call(
-        'nonce',
+        prefix,
         async redis => {
           if (!_scriptSha) {
             try {
@@ -108,11 +144,10 @@ function _createRedisNonceStore(ttlSeconds) {
  * 安全性说明：
  * - checkAndMark 虽然是 async 函数，但内部无 await，实际是同步执行
  * - Node.js 单线程模型下，同步的 get + set 之间不会有其他代码插入
- * - 先 getDel 再 set 确保即使有极端情况也不会残留旧值
  */
-function _createMapNonceStore(ttlSeconds) {
+function _createMapNonceStore(prefix, ttlSeconds) {
   // 配置 nonce 命名空间上限，config.ttl 作为默认值，显式传参的 set 不受影响
-  MapStore.config('nonce', {
+  MapStore.config(prefix, {
     maxSize: 100000,
     ttl: ttlSeconds,
     cleanupInterval: 300_000,
@@ -128,14 +163,14 @@ function _createMapNonceStore(ttlSeconds) {
      */
     async checkAndMark(nonce) {
       // Node.js 单线程模型：同步的 get + set 之间无竞态
-      const exists = MapStore.get('nonce', nonce);
+      const exists = MapStore.get(prefix, nonce);
       if (exists) return true;
-      MapStore.set('nonce', nonce, 1, ttlSeconds);
+      MapStore.set(prefix, nonce, 1, ttlSeconds);
       return false;
     },
 
     destroy() {
-      MapStore.destroy('nonce');
+      MapStore.destroy(prefix);
     }
   };
 }
