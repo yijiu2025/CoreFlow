@@ -227,6 +227,10 @@ const RedisStore = {
     } catch (err) {
       throw new TypeError(`RedisStore: value 序列化失败 — ${err.message}`, { cause: err });
     }
+    // 大 Key 告警：超过 1MB 时记录，辅助排查内存问题
+    if (typeof serialized === 'string' && serialized.length > 1024 * 1024) {
+      _log(`[RedisStore] 大 Key 告警: ${prefix}:${key} ${(serialized.length / 1024 / 1024).toFixed(1)}MB`);
+    }
     const finalTtl = _ttlJitter > 0 ? ttl + Math.floor(Math.random() * (_ttlJitter + 1)) : ttl;
     const redis = _getRedis('set', prefix, useBackup);
     const fullKey = makeKey(prefix, key);
@@ -343,8 +347,9 @@ const RedisStore = {
           break;
         }
         const remaining = deadline - Date.now();
+        const count = limit > 0 ? Math.min(limit, 1000) : 100;
         const [nextCursor, batch] = await withTimeoutPromise(
-          redis.scan(cursor, { MATCH: pattern, COUNT: 100 }),
+          redis.scan(cursor, { MATCH: pattern, COUNT: count }),
           remaining
         );
         cursor = nextCursor;

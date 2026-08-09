@@ -109,15 +109,10 @@ function createLock(name, options = {}) {
    * @returns {Promise<boolean>} true = 获取成功
    */
   async function acquire(timeout = 30000) {
-    const deadline = Date.now() + timeout;
-    while (timeout > 0 && Date.now() >= deadline) {
-      // 超时了还拿不到就放弃
-    }
-
     // 先尝试一次
     if (await tryAcquire()) return true;
 
-    // 拿不到则轮询
+    // 拿不到则轮询，最多等 timeout 毫秒（timeout <= 0 表示无限等待）
     const deadlineMs = timeout > 0 ? Date.now() + timeout : Infinity;
     while (Date.now() < deadlineMs) {
       await new Promise(r => setTimeout(r, retryDelay));
