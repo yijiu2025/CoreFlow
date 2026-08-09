@@ -9,10 +9,13 @@
 
 export { default } from './plugin.js';
 export { ResilientStore, createBoundStore } from './resilient-store.js';
-export { RedisStore, setLogger } from './redis-store.js';
+export { RedisStore, setLogger, setTtlJitter } from './redis-store.js';
 export { getStore } from './get-store.js';
 export { MapStore } from './map-store.js';
 export { createQueue } from './queue-store.js';
 export { createRingQueue } from './ring-queue-store.js';
+export { createStream } from './stream-store.js';
+export { createLock } from './lock-store.js';
 export { createNonceStore } from './nonce-store.js';
 export { RedisRequiredError } from './errors.js';
+export { cacheThrough } from './cache.js';

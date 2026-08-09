@@ -50,6 +50,7 @@ const DEFAULTS = {
   cleanupInterval: 3600_000,
   batchSize: 1000, // set() 触发清理时，每次扫多少条
   timerBatchSize: 10000, // 兜底定时器清理时，每次扫多少条
+  ttlJitter: 0, // TTL 随机抖动范围（秒），防缓存雪崩
   clone: false, // 是否深拷贝 value（JSON 往返），防止外部修改影响 store 内部数据
   serializer: null, // (value) => any，clone=true 时自动设为 JSON.stringify
   deserializer: null // (any) => value，clone=true 时自动设为 JSON.parse
@@ -255,6 +256,7 @@ function _checkConfigOptions(options) {
   if (options.cleanupInterval !== undefined) _checkArg('cleanupInterval', options.cleanupInterval, 'number');
   if (options.batchSize !== undefined) _checkArg('batchSize', options.batchSize, 'number');
   if (options.timerBatchSize !== undefined) _checkArg('timerBatchSize', options.timerBatchSize, 'number');
+  if (options.ttlJitter !== undefined) _checkArg('ttlJitter', options.ttlJitter, 'number');
   if (options.serializer !== undefined && options.serializer !== null && typeof options.serializer !== 'function') {
     throw new TypeError('MapStore: serializer 必须是函数或 null');
   }
@@ -362,7 +364,10 @@ const MapStore = {
     if (value === undefined) throw new TypeError('MapStore: value 不能为 undefined');
     _checkArg('ttl', ttl, 'number');
     const entry = _ensure(prefix);
-    const expiresIn = (ttl ?? entry.config.ttl) * 1000;
+    const baseTtl = ttl ?? entry.config.ttl;
+    const jitter = entry.config.ttlJitter || 0;
+    const finalTtl = jitter > 0 && baseTtl > 0 ? baseTtl + Math.floor(Math.random() * (jitter + 1)) : baseTtl;
+    const expiresIn = finalTtl * 1000;
 
     // 更新已有 key 不增加条目数，无需检查上限
     if (entry.store.has(key)) {
@@ -659,6 +664,7 @@ const MapStore = {
    * @param {number} [options.timerBatchSize=10000] - 兜底定时器每次扫描条数
    * @param {function|null} [options.serializer=null] - 序列化函数 (value) => any
    * @param {function|null} [options.deserializer=null] - 反序列化函数 (any) => value
+   * @param {number} [options.ttlJitter=0] - TTL 随机抖动范围（秒），防缓存雪崩
    * @param {boolean} [options.clone=false] - 是否深拷贝 value（JSON 往返），自动配置 serializer/deserializer
    * @throws {TypeError} 参数无效时
    */

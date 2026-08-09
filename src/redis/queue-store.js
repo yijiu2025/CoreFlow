@@ -203,10 +203,17 @@ function _createRedisQueue(prefix, maxSize, dataTtl, timeout) {
         }
       }
 
-      await store.set(`data:${m.tail}`, { data, createdAt: Date.now() }, dataTtl);
+      // MULTI 原子写入：data + meta 在一次往返中完成
+      await store.call(redis => {
+        const multi = redis
+          .multi()
+          .set(`data:${m.tail}`, JSON.stringify({ data, createdAt: Date.now() }))
+          .set('meta', JSON.stringify({ head: m.head, tail: m.tail + 1 }));
+        if (dataTtl > 0) multi.expire(`data:${m.tail}`, dataTtl);
+        return multi.exec();
+      });
       m.tail++;
-      await store.set('meta', m);
-      _saveMeta(m);
+      _saveMeta({ head: m.head, tail: m.tail });
       return m.tail - m.head;
     },
 

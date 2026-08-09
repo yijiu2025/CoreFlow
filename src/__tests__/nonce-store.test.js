@@ -13,7 +13,7 @@ describe('Nonce 存储（MapStore 版）', () => {
 
   beforeEach(() => {
     MapStore.destroy('nonce');
-    store = _createMapNonceStore(60);
+    store = _createMapNonceStore('nonce', 60);
   });
 
   afterEach(() => {
@@ -42,7 +42,7 @@ describe('Nonce 存储（MapStore 版）', () => {
 
   it('TTL 过期后 nonce 可重新使用', async () => {
     // 使用 1 秒 TTL 的 store
-    const shortStore = _createMapNonceStore(1);
+    const shortStore = _createMapNonceStore('nonce', 1);
     await shortStore.checkAndMark('nonce-expire');
     await shortStore.checkAndMark('nonce-expire'); // 未过期 → true
 
@@ -63,7 +63,7 @@ describe('Nonce 存储（MapStore 版）', () => {
 
   it('createNonceStore 根据配置选择后端', async () => {
     // 直接测试 MapStore 版函数
-    const ms = _createMapNonceStore(60);
+    const ms = _createMapNonceStore('nonce', 60);
     expect(ms).toHaveProperty('checkAndMark');
     expect(ms).toHaveProperty('destroy');
     ms.destroy();

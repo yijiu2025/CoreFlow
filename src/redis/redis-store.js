@@ -51,6 +51,17 @@ let _logger = null;
 let _cacheHits = 0;
 let _cacheMisses = 0;
 
+/** TTL 随机抖动范围（秒），防缓存雪崩，0 表示不抖动 */
+let _ttlJitter = 0;
+
+/**
+ * 设置全局 TTL 随机抖动范围
+ * @param {number} jitter - 抖动秒数，0 或负数表示关闭
+ */
+function setTtlJitter(jitter) {
+  _ttlJitter = Number.isFinite(jitter) && jitter > 0 ? Math.floor(jitter) : 0;
+}
+
 /**
  * 获取缓存命中率统计
  * @returns {{ hits: number, misses: number, ratio: number }}
@@ -216,11 +227,12 @@ const RedisStore = {
     } catch (err) {
       throw new TypeError(`RedisStore: value 序列化失败 — ${err.message}`, { cause: err });
     }
+    const finalTtl = _ttlJitter > 0 ? ttl + Math.floor(Math.random() * (_ttlJitter + 1)) : ttl;
     const redis = _getRedis('set', prefix, useBackup);
     const fullKey = makeKey(prefix, key);
     try {
-      await withTimeout(redis, r => r.set(fullKey, serialized, { EX: ttl }), timeout);
-      _log(`[RedisStore] SET ${fullKey} TTL=${ttl}s`);
+      await withTimeout(redis, r => r.set(fullKey, serialized, { EX: finalTtl }), timeout);
+      _log(`[RedisStore] SET ${fullKey} TTL=${finalTtl}s`);
     } catch (err) {
       _wrapRedisError(err, 'set', prefix);
     }
@@ -791,4 +803,4 @@ function getRedisStore(resolvedPrefix, timeout, useBackup) {
   });
 }
 
-export { RedisStore, getRedisStore, setLogger, getCacheStats };
+export { RedisStore, getRedisStore, setLogger, getCacheStats, setTtlJitter };

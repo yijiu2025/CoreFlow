@@ -49,6 +49,8 @@ function setupRedisHealthMonitor(app, options = {}) {
   let pingTimer = null;
   /** SLOWLOG 采集定时器 */
   let slowlogTimer = null;
+  /** 上次已上报的 SLOWLOG 条目 ID，用于判重替代 RESET */
+  let _lastSlowlogId = '0';
   /** 绑定到 monitored 的 error 处理函数引用（便于解绑） */
   let onError = null;
   let onReady = null;
@@ -120,7 +122,7 @@ function setupRedisHealthMonitor(app, options = {}) {
   /**
    * 启动 SLOWLOG 采集
    * 每 60s 采集一次，超过 100ms 的慢查询记录到 app.log.warn
-   * 采集后自动 RESET 防重复上报
+   * 用条目 ID 判重，不 RESET 日志，避免干扰其他监控工具
    * 防重复：slowlogTimer 已存在时直接返回
    */
   function startSlowlog() {
@@ -135,8 +137,10 @@ function setupRedisHealthMonitor(app, options = {}) {
         ]);
         if (logs && logs.length > 0) {
           for (const entry of logs) {
+            const id = String(entry[0]); // 条目唯一 ID
             const duration = entry[1]; // 微秒
             const args = entry[3]?.join(' ') || '';
+            if (id <= _lastSlowlogId) continue; // 已上报过，跳过
             if (duration >= SLOWLOG_WARN_THRESHOLD) {
               app.log.warn?.(
                 { module: 'Redis', duration, command: args },
@@ -144,10 +148,9 @@ function setupRedisHealthMonitor(app, options = {}) {
               );
             }
           }
-          await Promise.race([
-            monitored.sendCommand(['SLOWLOG', 'RESET']),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('SLOWLOG RESET 超时')), SLOWLOG_TIMEOUT))
-          ]);
+          // 更新最新 ID，不执行 RESET 以兼容其他监控工具
+          const latestId = String(logs[0][0]);
+          if (latestId > _lastSlowlogId) _lastSlowlogId = latestId;
         }
       } catch {
         /* SLOWLOG 采集失败不阻塞健康逻辑 */
