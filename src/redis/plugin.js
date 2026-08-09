@@ -149,11 +149,12 @@ function createRedisConnection({ host, port, useTls, db = 0, label = '', connect
     if (ca) socket.ca = ca;
   }
 
-  // 重连策略：首次 500ms 快速恢复，然后指数退避，超限后停止重连
+  // 重连策略：首次 500ms 快速恢复，然后指数退避
+  // 超限后改为 30s 低频探测，不停止重连，确保 Redis 恢复后自动连回
   socket.reconnectStrategy = retries => {
     if (retries >= maxRetries) {
-      console.warn(`⚠️ [Redis] ${C.yellow}重连次数超限（${maxRetries} 次），停止重连 ${tag}${C.reset}`);
-      return new Error('Redis max retries exceeded');
+      console.warn(`⚠️ [Redis] ${C.yellow}重连超限，进入慢速探测模式 ${tag}${C.reset}`);
+      return 30_000;
     }
     const delay = retries === 0 ? 500 : Math.min(1000 * Math.pow(2, retries - 1), 15_000);
     console.warn(`⚠️ [Redis] ${C.yellow}第 ${retries + 1} 次重连 ${tag}，${delay / 1000}秒后重试...${C.reset}`);
@@ -310,12 +311,20 @@ export default fp(
         connectTimeout: Math.min(connectTimeout, 3000),
         maxRetries: 3
       });
-      // 监听备用 Redis 断开事件，更新健康状态
+
+      // 监听备用 Redis 断开/就绪事件，更新健康状态
       backupClient.on('end', () => {
         backupRedisHealthy = false;
         app.backupRedisHealthy = false;
       });
-      // 静默重连策略由 createRedisConnection 的 reconnectStrategy 管理
+      backupClient.on('ready', () => {
+        backupRedis = backupClient;
+        backupRedisHealthy = true;
+        app.backupRedis = backupClient;
+        app.backupRedisHealthy = true;
+      });
+
+      // 静默连接，失败后由 reconnectStrategy 继续重连，不丢弃客户端
       connectWithRetry(backupClient, 1)
         .then(() => {
           backupRedis = backupClient;
@@ -325,10 +334,10 @@ export default fp(
           console.log(`✅ [Redis] ${C.green}备用 Redis 连接成功: ${backupHost}:${backupPort}${C.reset}`);
         })
         .catch(err => {
-          console.warn(`⚠️ [Redis] ${C.yellow}备用 Redis 连接失败: ${err.message}${C.reset}`);
-          backupRedis = null;
+          console.warn(`⚠️ [Redis] ${C.yellow}备用 Redis 首次连接失败，后台重连中... ${err.message}${C.reset}`);
+          // 不设 backupRedis = null，让 reconnectStrategy 继续重连
+          // ready 事件触发后会自动更新状态
           backupRedisHealthy = false;
-          app.backupRedis = null;
           app.backupRedisHealthy = false;
         });
     }
@@ -344,6 +353,37 @@ export default fp(
         backupHost: backupHost || null,
         cache: cacheStats
       };
+    });
+
+    // 异步获取 Redis INFO 指标（连接数、内存、命中率、吞吐量）
+    app.decorate('getRedisInfo', async () => {
+      if (!app.redis || !app.redis.isReady) return null;
+      try {
+        const info = await Promise.race([
+          app.redis.info(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('INFO 超时')), 3000))
+        ]);
+        const lines = info.split('\r\n');
+        const get = key => {
+          const line = lines.find(l => l.startsWith(key + ':'));
+          return line ? line.split(':')[1] : '0';
+        };
+        return {
+          connectedClients: parseInt(get('connected_clients'), 10),
+          usedMemory: parseInt(get('used_memory'), 10),
+          usedMemoryHuman: get('used_memory_human'),
+          opsPerSec: parseInt(get('instantaneous_ops_per_sec'), 10),
+          hitRatio: (() => {
+            const hits = parseInt(get('keyspace_hits'), 10);
+            const misses = parseInt(get('keyspace_misses'), 10);
+            const total = hits + misses;
+            return total > 0 ? (hits / total).toFixed(3) : '0';
+          })(),
+          uptimeInSeconds: parseInt(get('uptime_in_seconds'), 10)
+        };
+      } catch {
+        return null;
+      }
     });
 
     app.addHook('onClose', async () => {

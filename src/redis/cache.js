@@ -40,9 +40,13 @@ export async function cacheThrough(key, fetchFn, ttl, options = {}) {
   const acquired = await lock.tryAcquire();
 
   if (!acquired) {
-    // 其他请求正在重建，短暂等待后重试
-    await new Promise(r => setTimeout(r, retryDelay));
-    return store.get(key);
+    // 其他请求正在重建，指数退避等待，最多重试 3 次
+    for (let i = 0; i < 3; i++) {
+      await new Promise(r => setTimeout(r, retryDelay * Math.pow(2, i)));
+      const value = await store.get(key);
+      if (value !== null) return value;
+    }
+    return null;
   }
 
   try {
@@ -58,4 +62,29 @@ export async function cacheThrough(key, fetchFn, ttl, options = {}) {
   } finally {
     await lock.release();
   }
+}
+
+/**
+ * 更新 DB 时主动失效缓存（延迟双删）
+ * 先更新 DB，再删除缓存，500ms 后再删一次，防止并发读写导致脏数据
+ *
+ * @param {string} key - 缓存 key
+ * @param {Function} updateFn - DB 更新函数
+ * @param {string} [prefix='cache'] - 缓存前缀
+ * @returns {Promise<any>} updateFn 的返回值
+ */
+export async function cacheInvalidate(key, updateFn, prefix = 'cache') {
+  const store = getStore(prefix);
+  const result = await updateFn();
+  // 先删缓存
+  await store.delete(key);
+  // 延迟再删一次（防并发读写）
+  setTimeout(async () => {
+    try {
+      await store.delete(key);
+    } catch {
+      /* 安全忽略 */
+    }
+  }, 500);
+  return result;
 }
