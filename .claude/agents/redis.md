@@ -22,17 +22,23 @@ description: Redis 专家 agent — 数据结构设计、命令优化、故障�
 
 ```
 src/redis/
+├── index.js            # 统一出口，所有 API 从这里导出
 ├── plugin.js           # 连接初始化 + 主备 Redis
-├── health.js           # 事件驱动健康监控
-├── redis-store.js      # Redis 会话存储 + getRedisStore 工厂
-├── map-store.js        # 内存 Map 存储 + getMapStore 工厂
-├── get-store.js        # 统一存储工厂（路由入口）
-├── resilient-store.js  # 限流弹性后端
-├── nonce-store.js      # Nonce 防重放
-├── queue-store.js      # FIFO 消息队列
+├── health.js           # 事件驱动健康监控 + SLOWLOG
 ├── utils.js            # 共享工具函数
 ├── errors.js           # RedisRequiredError
-└── index.js            # 统一导出入口
+├── get-store.js        # 统一存储工厂（路由入口）
+├── redis-store.js      # Redis 会话存储 + getRedisStore 工厂
+├── map-store.js        # 内存 Map 存储 + getMapStore 工厂
+├── cache.js            # Cache-Aside + singleflight 防击穿
+├── lock-store.js       # 分布式锁（SET NX + Lua）
+├── nonce-store.js      # Nonce 防重放
+├── resilient-store.js  # 限流弹性后端
+├── queue-store.js      # FIFO 消息队列
+├── ring-queue-store.js # 循环队列（满时覆盖最旧）
+├── stream-store.js     # Stream 消息队列（消费者组 + ACK）
+├── TUTORIAL.md         # 使用教程
+└── README.md           # 模块文档
 ```
 
 ### 核心设计原则
@@ -42,6 +48,22 @@ src/redis/
 - **主备自动切换**：`backup: true` 时主库不通自动切备库，都不行抛 503
 - **Proxy 转发**：store 未定义的方法自动转发到 Redis 客户端
 - **无冷却机制**：Redis 故障检测依赖全局健康监控 + `isReady` 检查，无 per-prefix 冷却
+- **缓存防击穿**：`cacheThrough(key, fetchFn, ttl)` 用分布式锁 singleflight 防热点击穿
+- **TTL 抖动**：`setTtlJitter(n)` 或 `getStore(prefix, { ttlJitter: n })` 防缓存雪崩
+
+### 核心 API
+
+| 函数 | 用途 |
+|------|------|
+| `getStore(prefix, opts)` | 统一存储工厂（KV/Hash/批量） |
+| `cacheThrough(key, fn, ttl, opts)` | 缓存防击穿 |
+| `createLock(name, opts)` | 分布式锁 |
+| `createQueue(prefix, opts)` | FIFO 队列 |
+| `createRingQueue(prefix, opts)` | 循环队列 |
+| `createStream(prefix, opts)` | Stream 消息队列 |
+| `createNonceStore(opts)` | 防重放 |
+| `createBoundStore(app, opts)` | 限流后端 |
+| `MapStore` | 纯内存存储 |
 
 ### 常见问题排查
 
