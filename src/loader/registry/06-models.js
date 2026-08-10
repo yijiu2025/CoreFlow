@@ -2,7 +2,7 @@ import { DataTypes } from 'sequelize';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { sequelize } from '../../db/index.js';
+import { sequelize, getModel } from '../../db/index.js';
 import { C } from '../../utils/colors.js';
 
 /* eslint-disable no-console */
@@ -70,26 +70,33 @@ export default async app => {
   db.getModel = (namespace, modelName) => {
     let ns = namespace;
     let name = modelName;
+
     // 兼容 getModel('user.User') 单参数点号写法
     if (name === undefined && typeof ns === 'string' && ns.includes('.')) {
       const idx = ns.lastIndexOf('.');
       name = ns.slice(idx + 1);
       ns = ns.slice(0, idx);
     }
-    if (!ns || !name) {
-      throw new TypeError('getModel: 需要命名空间和模型名，如 getModel("user.User") 或 getModel("user", "User")');
-    }
 
-    const cacheKey = `${ns}.${name}`;
-    if (_modelCache.has(cacheKey)) return _modelCache.get(cacheKey);
-
-    const model = db[ns]?.[name];
-    if (!model) {
+    // 双参数或点号：namespace 查找
+    if (ns && name) {
+      const cacheKey = `${ns}.${name}`;
+      if (_modelCache.has(cacheKey)) return _modelCache.get(cacheKey);
+      const model = db[ns]?.[name];
+      if (model) {
+        _modelCache.set(cacheKey, model);
+        return model;
+      }
       const available = Object.keys(db).filter(k => typeof db[k] === 'object' && db[k] !== null);
       throw new TypeError(`getModel: 模型 ${cacheKey} 不存在。可用命名空间: ${available.join(', ') || '(无)'}`);
     }
-    _modelCache.set(cacheKey, model);
-    return model;
+
+    // 单参数无点号：flat 查找，复用独立 getModel
+    if (ns && !name) {
+      return getModel(ns);
+    }
+
+    throw new TypeError('getModel: 需要命名空间和模型名，如 getModel("user.User") 或 getModel("user", "User")');
   };
 
   // 自动同步表结构（仅限首次开发环境建表，后续变更请使用迁移）
