@@ -13,7 +13,7 @@ import { verifySignature } from '../../../auth/signature.js';
  * 注册 OAuth2.1 业务中间件
  * - preHandler: H5 签名验证（仅对 requireSignature 路由生效）
  */
-export const initOAuthMiddleware = fp(async function (app) {
+const initOAuthMiddleware = fp(async function (app) {
   // H5 签名验证拦截器
   app.addHook('preHandler', async (request, reply) => {
     if (request.url.startsWith('/assets') || request.url === '/favicon.ico') {
@@ -30,7 +30,7 @@ export const initOAuthMiddleware = fp(async function (app) {
  * @param {...string} requiredScopes 需要的 scope 列表
  * @returns {Function} Fastify preHandler 钩子
  */
-export function checkScope(...requiredScopes) {
+function checkScope(...requiredScopes) {
   return async function scopeGuard(request, reply) {
     const user = request.state?.user;
 
@@ -52,3 +52,5 @@ export function checkScope(...requiredScopes) {
     }
   };
 }
+
+export { initOAuthMiddleware, checkScope };

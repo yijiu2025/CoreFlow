@@ -26,7 +26,7 @@ const MAX_REFRESH_TOKENS = SESSION_CONFIG.maxRefreshTokens || 10;
 /**
  * 设备类型常量
  */
-export const DEVICE_TYPE = {
+const DEVICE_TYPE = {
   BROWSER: 'browser', // 浏览器（Chrome/Firefox/Safari 等）
   APP: 'app', // 移动端 App
   DESKTOP: 'desktop', // 桌面客户端
@@ -39,7 +39,7 @@ export const DEVICE_TYPE = {
  * @param {string} ua User-Agent 字符串
  * @returns {string} 设备类型
  */
-export function detectDeviceType(ua) {
+function detectDeviceType(ua) {
   if (!ua) return DEVICE_TYPE.API;
   const lower = ua.toLowerCase();
   if (lower.includes('miniprogram') || lower.includes('micromessenger')) return DEVICE_TYPE.MINIAPP;
@@ -100,7 +100,7 @@ async function kickByDeviceType(redis, userId, appId, deviceType) {
  * @param {number} maxSessions 最大并发会话数（默认 5）
  * @returns {null|object} null=未超限，object=超限返回活跃会话列表
  */
-export async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
+async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
   if (!redis) return null;
 
   const SessionToken = getModel('SessionToken');
@@ -139,7 +139,7 @@ export async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
  * @param {string} sessionId 要踢掉的会话 ID
  * @param {number} userId 操作者用户 ID
  */
-export async function kickSession(redis, sessionId, userId) {
+async function kickSession(redis, sessionId, userId) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
@@ -160,7 +160,7 @@ export async function kickSession(redis, sessionId, userId) {
  * @param {object} redis Redis 客户端
  * @param {number} userId 用户 ID
  */
-export async function kickAllSessions(redis, userId) {
+async function kickAllSessions(redis, userId) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
@@ -199,7 +199,7 @@ export async function kickAllSessions(redis, userId) {
  * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
  * @returns {string} sessionId
  */
-export async function createSession(params) {
+async function createSession(params) {
   const {
     redis,
     userId,
@@ -356,7 +356,7 @@ export async function createSession(params) {
  * @param {object} params.cookies 请求的 cookies
  * @returns {object|null} 会话数据或 null
  */
-export async function getSession(params) {
+async function getSession(params) {
   const { redis, cookies, reply } = params;
 
   // 1. 解析 sid cookie
@@ -439,7 +439,7 @@ export async function getSession(params) {
  * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
  * @returns {object|null} 新的会话数据或 null
  */
-export async function refreshSession(params) {
+async function refreshSession(params) {
   const { redis, cookies, reply, request } = params;
 
   // 1. 解析 sid_r cookie
@@ -564,7 +564,7 @@ export async function refreshSession(params) {
  * @param {string} params.ip 客户端 IP
  * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
  */
-export async function destroySession(params) {
+async function destroySession(params) {
   const { redis, sessionId, userId, appId, ip, reply } = params;
 
   // 1. Redis 删除
@@ -599,7 +599,7 @@ export async function destroySession(params) {
  * @param {number} userId 用户 ID
  * @param {string|null} appId 指定应用 (null = 全部应用)
  */
-export async function kickUser(redis, userId, appId = null) {
+async function kickUser(redis, userId, appId = null) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
@@ -636,7 +636,7 @@ export async function kickUser(redis, userId, appId = null) {
  * @param {string} params.reason 失败原因
  * @param {string} [params.deviceType] 设备类型
  */
-export async function logLoginFailure(params) {
+async function logLoginFailure(params) {
   const { email, appId, ip, userAgent, reason, deviceType } = params;
 
   const SessionLog = getModel('SessionLog');
@@ -659,7 +659,7 @@ export async function logLoginFailure(params) {
  * @param {object} redis Redis 客户端
  * @returns {Promise<{onlineUsers: number, activeDevices: number, redisSessions: number}>}
  */
-export async function getSessionStats(redis) {
+async function getSessionStats(redis) {
   const SessionToken = getModel('SessionToken');
   const UserSession = getModel('UserSession');
 
@@ -693,7 +693,7 @@ export async function getSessionStats(redis) {
  * @param {number} days 天数（默认 7）
  * @returns {Promise<Array<{date: string, count: number}>>}
  */
-export async function getLoginTrend(days = 7) {
+async function getLoginTrend(days = 7) {
   const SessionLog = getModel('SessionLog');
 
   const startDate = new Date();
@@ -719,3 +719,19 @@ export async function getLoginTrend(days = 7) {
     count: parseInt(row.count, 10)
   }));
 }
+
+export {
+  DEVICE_TYPE,
+  detectDeviceType,
+  checkMaxSessions,
+  kickSession,
+  kickAllSessions,
+  createSession,
+  getSession,
+  refreshSession,
+  destroySession,
+  kickUser,
+  logLoginFailure,
+  getSessionStats,
+  getLoginTrend
+};

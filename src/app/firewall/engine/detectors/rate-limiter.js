@@ -8,7 +8,7 @@ import { setBlock } from '../dao/block-manager.js';
 /**
  * 追踪 IP 请求次数（基于内存滑动窗口）
  */
-export function trackRequestCount(ip) {
+function trackRequestCount(ip) {
   const now = Date.now();
   const windowMs = 60_000;
 
@@ -28,7 +28,7 @@ export function trackRequestCount(ip) {
 /**
  * 核心速率限制检查
  */
-export const checkRateLimit = async (redisClient, actorId, options = {}) => {
+const checkRateLimit = async (redisClient, actorId, options = {}) => {
   const { limit = 50, window = 60, blockTime = 60, retryAfter = 60 } = options;
 
   const settings = getConfig().defense;
@@ -100,3 +100,5 @@ export const checkRateLimit = async (redisClient, actorId, options = {}) => {
 
   return true;
 };
+
+export { trackRequestCount, checkRateLimit };

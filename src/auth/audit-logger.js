@@ -16,7 +16,7 @@ const MAX_REDIS_ENTRIES = 1000;
  * @param {object} redis - Redis 客户端（可选）
  * @param {object} event - 事件对象
  */
-export async function logAuditEvent(redis, event) {
+async function logAuditEvent(redis, event) {
   const AuditLog = getModel('AuditLog');
 
   // 1. 写入数据库（持久化）
@@ -57,7 +57,7 @@ export async function logAuditEvent(redis, event) {
  * @param {number} options.userId - 用户 ID 过滤
  * @returns {Promise<object[]>}
  */
-export async function getAuditLogs(options = {}) {
+async function getAuditLogs(options = {}) {
   const AuditLog = getModel('AuditLog');
   if (!AuditLog) return [];
 
@@ -76,7 +76,7 @@ export async function getAuditLogs(options = {}) {
 /**
  * 便捷方法：记录登录事件
  */
-export async function logLogin(redis, { userId, ip, userAgent, appId, success, reason }) {
+async function logLogin(redis, { userId, ip, userAgent, appId, success, reason }) {
   await logAuditEvent(redis, {
     type: success ? 'LOGIN_SUCCESS' : 'LOGIN_FAILED',
     userId,
@@ -90,7 +90,7 @@ export async function logLogin(redis, { userId, ip, userAgent, appId, success, r
 /**
  * 便捷方法：记录登出事件
  */
-export async function logLogout(redis, { userId, ip, appId }) {
+async function logLogout(redis, { userId, ip, appId }) {
   await logAuditEvent(redis, {
     type: 'LOGOUT',
     userId,
@@ -102,7 +102,7 @@ export async function logLogout(redis, { userId, ip, appId }) {
 /**
  * 便捷方法：记录踢出设备事件
  */
-export async function logKick(redis, { userId, ip, targetSessionId, reason }) {
+async function logKick(redis, { userId, ip, targetSessionId, reason }) {
   await logAuditEvent(redis, {
     type: 'SESSION_KICK',
     userId,
@@ -114,7 +114,7 @@ export async function logKick(redis, { userId, ip, targetSessionId, reason }) {
 /**
  * 便捷方法：记录密码修改事件
  */
-export async function logPasswordChange(redis, { userId, ip, userAgent }) {
+async function logPasswordChange(redis, { userId, ip, userAgent }) {
   await logAuditEvent(redis, {
     type: 'PASSWORD_CHANGE',
     userId,
@@ -122,3 +122,5 @@ export async function logPasswordChange(redis, { userId, ip, userAgent }) {
     userAgent
   });
 }
+
+export { logAuditEvent, getAuditLogs, logLogin, logLogout, logKick, logPasswordChange };

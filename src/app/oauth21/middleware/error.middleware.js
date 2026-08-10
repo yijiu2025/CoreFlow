@@ -9,7 +9,7 @@
  * Fastify 错误处理插件
  * @param {object} fastify - Fastify 实例
  */
-export function registerOAuthErrorHandler(fastify) {
+function registerOAuthErrorHandler(fastify) {
   fastify.setErrorHandler((err, request, reply) => {
     const statusCode = err.statusCode || 500;
     const isOAuthError = err.error && err.error_description;
@@ -37,7 +37,7 @@ export function registerOAuthErrorHandler(fastify) {
 /**
  * Express 错误处理中间件（向后兼容遗留代码）
  */
-export function oauthErrorHandler(err, req, res, _next) {
+function oauthErrorHandler(err, req, res, _next) {
   console.error(`[Auth] ${err.error ?? 'server_error'}: ${err.message}`);
 
   const statusCode = err.statusCode ?? 500;
@@ -47,3 +47,5 @@ export function oauthErrorHandler(err, req, res, _next) {
     data: err.error ? { error: err.error } : null
   });
 }
+
+export { registerOAuthErrorHandler, oauthErrorHandler };

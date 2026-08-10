@@ -46,7 +46,7 @@ function ensurePatternsCompiled() {
 /**
  * 僵尸网络/机器人挑战检查
  */
-export const checkBotChallenge = async (redisClient, ip, ua, requestCount) => {
+const checkBotChallenge = async (redisClient, ip, ua, requestCount) => {
   ensurePatternsCompiled();
 
   const settings = getConfig().defense;
@@ -93,3 +93,5 @@ export const checkBotChallenge = async (redisClient, ip, ua, requestCount) => {
 
   return false;
 };
+
+export { checkBotChallenge };

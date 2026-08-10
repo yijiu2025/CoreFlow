@@ -25,7 +25,7 @@ const MASK = '***';
  * @param {number} depth - 递归深度限制
  * @returns {object} 脱敏后的对象副本
  */
-export function sanitizeForLog(obj, depth = 3) {
+function sanitizeForLog(obj, depth = 3) {
   if (depth <= 0 || !obj || typeof obj !== 'object') return obj;
 
   if (Array.isArray(obj)) {
@@ -57,7 +57,7 @@ function isSensitive(key) {
  * @param {string} url - URL 字符串
  * @returns {string} 脱敏后的 URL
  */
-export function sanitizeUrl(url) {
+function sanitizeUrl(url) {
   if (!url || typeof url !== 'string') return url;
   // 脱敏 query 参数中的敏感字段
   return url.replace(/([?&])(password|token|secret|key)=([^&]*)/gi, '$1$2=***');
@@ -68,8 +68,10 @@ export function sanitizeUrl(url) {
  * @param {string} ua - User-Agent 字符串
  * @returns {string} 脱敏后的 UA
  */
-export function sanitizeUserAgent(ua) {
+function sanitizeUserAgent(ua) {
   if (!ua || typeof ua !== 'string') return ua;
   // 只保留前 100 个字符
   return ua.length > 100 ? ua.substring(0, 100) + '...' : ua;
 }
+
+export { sanitizeForLog, sanitizeUrl, sanitizeUserAgent };

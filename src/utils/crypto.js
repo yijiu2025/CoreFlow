@@ -40,7 +40,7 @@ function deriveIv(plain) {
  * @param {string} plain - 明文手机号，如 '13812345678'
  * @returns {string} 加密字符串，格式: base64(IV):base64(ciphertext)
  */
-export function encryptPhone(plain) {
+function encryptPhone(plain) {
   if (!plain) return plain;
   const key = getKey();
   const iv = deriveIv(plain);
@@ -54,7 +54,7 @@ export function encryptPhone(plain) {
  * @param {string} encryptedStr - 加密字符串（格式: base64(IV):base64(ciphertext)）
  * @returns {string} 明文手机号
  */
-export function decryptPhone(encryptedStr) {
+function decryptPhone(encryptedStr) {
   if (!encryptedStr || !encryptedStr.includes(':')) return encryptedStr;
   try {
     const [ivB64, cipherB64] = encryptedStr.split(':');
@@ -74,7 +74,7 @@ export function decryptPhone(encryptedStr) {
  * @param {string} phone
  * @returns {string}
  */
-export function maskPhone(phone) {
+function maskPhone(phone) {
   if (!phone || phone.length < 7) return '****';
   return phone.slice(0, 3) + '****' + phone.slice(-4);
 }
@@ -84,6 +84,8 @@ export function maskPhone(phone) {
  * @param {string} value
  * @returns {boolean}
  */
-export function isEncrypted(value) {
+function isEncrypted(value) {
   return typeof value === 'string' && value.includes(':') && value.split(':').length === 2;
 }
+
+export { encryptPhone, decryptPhone, maskPhone, isEncrypted };

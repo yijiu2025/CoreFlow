@@ -14,7 +14,7 @@
  * @param {Map<string, any>} map
  * @param {number} maxEntries
  */
-export function capMapSize(map, maxEntries) {
+function capMapSize(map, maxEntries) {
   if (map.size <= maxEntries) return;
   const toDelete = Math.floor(map.size / 2);
   let i = 0;
@@ -24,3 +24,5 @@ export function capMapSize(map, maxEntries) {
     i++;
   }
 }
+
+export { capMapSize };

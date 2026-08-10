@@ -15,7 +15,7 @@ import { getStore } from '../../../redis/index.js';
 
 const EXPIRES_IN = config.device.expiresIn; // 秒
 
-export class DeviceService {
+class DeviceService {
   constructor(fastify) {
     this.deviceStore = getStore('device');
     this.userCodeStore = getStore('device_uc');
@@ -144,3 +144,5 @@ export class DeviceService {
     return { error: 'server_error', error_description: 'Unknown status' };
   }
 }
+
+export { DeviceService };

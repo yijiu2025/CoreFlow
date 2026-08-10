@@ -5,7 +5,7 @@ import config from '../config/config.js';
 let keyPair = null;
 let jwkPublic = null;
 
-export function generateKeyPair() {
+function generateKeyPair() {
   if (keyPair) return keyPair;
 
   const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
@@ -29,17 +29,19 @@ export function generateKeyPair() {
   return keyPair;
 }
 
-export function getPrivateKey() {
+function getPrivateKey() {
   if (!keyPair) generateKeyPair();
   return keyPair.privateKey;
 }
 
-export function getPublicKey() {
+function getPublicKey() {
   if (!keyPair) generateKeyPair();
   return keyPair.publicKey;
 }
 
-export function getJWKS() {
+function getJWKS() {
   if (!jwkPublic) generateKeyPair();
   return { keys: [jwkPublic] };
 }
+
+export { generateKeyPair, getPrivateKey, getPublicKey, getJWKS };

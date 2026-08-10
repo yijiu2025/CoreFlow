@@ -18,7 +18,7 @@ import { setBlock } from '../dao/block-manager.js';
  * @param {string} ip 客户端 IP
  * @param {string} email 尝试登录的邮箱
  */
-export async function recordLoginFailure(redisClient, ip) {
+async function recordLoginFailure(redisClient, ip) {
   if (!redisClient) return;
 
   const settings = getConfig().defense;
@@ -50,7 +50,7 @@ export async function recordLoginFailure(redisClient, ip) {
 /**
  * 检测 404/403 扫描陷阱
  */
-export const checkNotFoundTrap = async (redisClient, ip, url, statusCode) => {
+const checkNotFoundTrap = async (redisClient, ip, url, statusCode) => {
   const settings = getConfig().defense;
   if (!settings.enableAutoBlacklist) return;
 
@@ -109,3 +109,5 @@ export const checkNotFoundTrap = async (redisClient, ip, url, statusCode) => {
     throw err;
   }
 };
+
+export { recordLoginFailure, checkNotFoundTrap };

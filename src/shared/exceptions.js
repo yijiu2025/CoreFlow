@@ -1,7 +1,7 @@
 /**
  * 统一 API 异常基类
  */
-export class ApiException extends Error {
+class ApiException extends Error {
   /**
    * @param {string} message - 错误信息
    * @param {number} [statusCode=500] - HTTP 状态码
@@ -21,7 +21,7 @@ export class ApiException extends Error {
 /**
  * 400 异常：请求参数错误
  */
-export class BadRequestException extends ApiException {
+class BadRequestException extends ApiException {
   constructor(message = '请求参数错误', bizCode = null, data = null) {
     super(message, 400, bizCode, data);
   }
@@ -30,7 +30,7 @@ export class BadRequestException extends ApiException {
 /**
  * 401 异常：身份验证失败
  */
-export class UnauthorizedException extends ApiException {
+class UnauthorizedException extends ApiException {
   constructor(message = '身份验证失败', bizCode = null, data = null) {
     super(message, 401, bizCode, data);
   }
@@ -39,7 +39,7 @@ export class UnauthorizedException extends ApiException {
 /**
  * 403 异常：权限不足
  */
-export class ForbiddenException extends ApiException {
+class ForbiddenException extends ApiException {
   constructor(message = '权限不足', bizCode = null, data = null) {
     super(message, 403, bizCode, data);
   }
@@ -48,7 +48,7 @@ export class ForbiddenException extends ApiException {
 /**
  * 404 异常：资源未找到
  */
-export class NotFoundException extends ApiException {
+class NotFoundException extends ApiException {
   constructor(message = '资源不存在', bizCode = null, data = null) {
     super(message, 404, bizCode, data);
   }
@@ -57,7 +57,7 @@ export class NotFoundException extends ApiException {
 /**
  * 409 异常：资源冲突
  */
-export class ConflictException extends ApiException {
+class ConflictException extends ApiException {
   constructor(message = '资源冲突', bizCode = null, data = null) {
     super(message, 409, bizCode, data);
   }
@@ -66,7 +66,7 @@ export class ConflictException extends ApiException {
 /**
  * 429 异常：请求过于频繁
  */
-export class TooManyRequestsException extends ApiException {
+class TooManyRequestsException extends ApiException {
   constructor(message = '请求过于频繁，请稍后再试', bizCode = null, data = null) {
     super(message, 429, bizCode, data);
   }
@@ -75,8 +75,19 @@ export class TooManyRequestsException extends ApiException {
 /**
  * 500 异常：服务器内部错误
  */
-export class InternalServerException extends ApiException {
+class InternalServerException extends ApiException {
   constructor(message = '服务器内部错误', bizCode = null, data = null) {
     super(message, 500, bizCode, data);
   }
 }
+
+export {
+  ApiException,
+  BadRequestException,
+  UnauthorizedException,
+  ForbiddenException,
+  NotFoundException,
+  ConflictException,
+  TooManyRequestsException,
+  InternalServerException
+};

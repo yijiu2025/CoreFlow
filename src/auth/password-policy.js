@@ -21,7 +21,7 @@ const DEFAULT_POLICY = {
  * @param {object} [policy] 策略配置（覆盖默认值）
  * @returns {{ valid: boolean, errors: string[] }}
  */
-export function validatePasswordStrength(password, policy = {}) {
+function validatePasswordStrength(password, policy = {}) {
   const cfg = { ...DEFAULT_POLICY, ...policy };
   const errors = [];
 
@@ -49,7 +49,7 @@ export function validatePasswordStrength(password, policy = {}) {
     errors.push('密码必须包含至少一个数字');
   }
 
-  if (cfg.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+  if (cfg.requireSpecial && !/[!@#$%^&*()_+\-={}[\]{};':"\\|,.<>/?]/.test(password)) {
     errors.push('密码必须包含至少一个特殊字符');
   }
 
@@ -63,7 +63,7 @@ export function validatePasswordStrength(password, policy = {}) {
  * @param {Function} hashFn 哈希函数（如 bcrypt.compare）
  * @returns {Promise<boolean>} true = 密码在历史记录中，应拒绝
  */
-export async function isPasswordReused(password, passwordHistory, hashFn) {
+async function isPasswordReused(password, passwordHistory, hashFn) {
   if (!passwordHistory || passwordHistory.length === 0) return false;
 
   for (const oldHash of passwordHistory) {
@@ -80,7 +80,7 @@ export async function isPasswordReused(password, passwordHistory, hashFn) {
  * @param {number} maxAgeDays 有效期天数（0 = 永不过期）
  * @returns {{ expired: boolean, daysRemaining: number }}
  */
-export function checkPasswordAge(lastPasswordChange, maxAgeDays = 0) {
+function checkPasswordAge(lastPasswordChange, maxAgeDays = 0) {
   if (maxAgeDays <= 0) {
     return { expired: false, daysRemaining: -1 };
   }
@@ -99,4 +99,5 @@ export function checkPasswordAge(lastPasswordChange, maxAgeDays = 0) {
   };
 }
 
+export { validatePasswordStrength, isPasswordReused, checkPasswordAge };
 export default DEFAULT_POLICY;

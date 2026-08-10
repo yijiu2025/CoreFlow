@@ -14,7 +14,7 @@ import config from '../config.js';
 const qrcodeConfig = config.qrcode;
 
 /** 扫码状态 */
-export const QR_STATUS = {
+const QR_STATUS = {
   PENDING: 'pending', // 等待扫码
   SCANNED: 'scanned', // 已扫码，待确认
   CONFIRMED: 'confirmed', // 已确认
@@ -135,4 +135,5 @@ class QrCodeService {
   }
 }
 
+export { QR_STATUS };
 export default new QrCodeService();

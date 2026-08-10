@@ -26,7 +26,7 @@ const SKIP_PATTERN = /\.(js|css|png|jpg|ico|svg|woff2?)$/i;
  * @param {string} url 请求路径
  * @returns {boolean} true 表示跳过
  */
-export function shouldSkipDeepCheck(url) {
+function shouldSkipDeepCheck(url) {
   return url === '/api/firewall/v1/challenge/verify' || SKIP_PATTERN.test(url);
 }
 
@@ -39,7 +39,7 @@ export function shouldSkipDeepCheck(url) {
  * @param {import('fastify').FastifyRequest} request 请求对象
  * @returns {object} 包含 ip、fingerprint、geoInfo 的上下文
  */
-export function buildRequestContext(request) {
+function buildRequestContext(request) {
   const ip = request.ip;
   const ua = request.headers['user-agent'] || '';
   const fingerprint = generateFingerprint(request);
@@ -73,7 +73,7 @@ export function buildRequestContext(request) {
  * @param {import('fastify').FastifyReply} reply 响应对象
  * @returns {Promise<boolean>} true 表示被封禁（已响应），false 表示放行
  */
-export async function checkGlobalBlockPhase(redis, ip, fingerprint, firewallLog, reply) {
+async function checkGlobalBlockPhase(redis, ip, fingerprint, firewallLog, reply) {
   try {
     trackConnection(ip, 1);
     await checkGlobalBlock(redis, ip, fingerprint);
@@ -102,7 +102,7 @@ export async function checkGlobalBlockPhase(redis, ip, fingerprint, firewallLog,
  * @param {string} fingerprint 设备指纹
  * @returns {Promise<boolean>} true 表示已通过挑战验证，false 表示需要继续检测
  */
-export async function checkChallengeCookie(redis, request, ip, fingerprint) {
+async function checkChallengeCookie(redis, request, ip, fingerprint) {
   const clientToken = request.cookies?.fw_verified;
   if (!clientToken) return false;
 
@@ -130,7 +130,7 @@ export async function checkChallengeCookie(redis, request, ip, fingerprint) {
  * @param {import('fastify').FastifyReply} reply 响应对象
  * @returns {Promise<boolean>} true 表示被拦截（已响应），false 表示放行
  */
-export async function runDetectionPipeline(redis, ip, ua, url, firewallLog, fingerprint, reply) {
+async function runDetectionPipeline(redis, ip, ua, url, firewallLog, fingerprint, reply) {
   try {
     // Bot 检测：基于 UA 模式 + 请求频率
     const requestCount = trackRequestCount(ip);
@@ -193,8 +193,17 @@ export async function runDetectionPipeline(redis, ip, ua, url, firewallLog, fing
  * @param {number} statusCode HTTP 状态码
  * @param {boolean} [alreadyLogged=false] 是否已记录（防止重复）
  */
-export function recordLog(firewallLog, statusCode, alreadyLogged = false) {
+function recordLog(firewallLog, statusCode, alreadyLogged = false) {
   if (firewallLog && !alreadyLogged) {
     pushRecord({ ...firewallLog, statusCode });
   }
 }
+
+export {
+  shouldSkipDeepCheck,
+  buildRequestContext,
+  checkGlobalBlockPhase,
+  checkChallengeCookie,
+  runDetectionPipeline,
+  recordLog
+};
