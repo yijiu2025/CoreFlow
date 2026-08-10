@@ -65,39 +65,9 @@ export default async app => {
     }
   });
 
-  // 注册模型获取方法：app.db.getModel('user.User') / app.db.getModel('user', 'User')
-  const _modelCache = new Map();
-  db.getModel = (namespace, modelName) => {
-    let ns = namespace;
-    let name = modelName;
-
-    // 兼容 getModel('user.User') 单参数点号写法
-    if (name === undefined && typeof ns === 'string' && ns.includes('.')) {
-      const idx = ns.lastIndexOf('.');
-      name = ns.slice(idx + 1);
-      ns = ns.slice(0, idx);
-    }
-
-    // 双参数或点号：namespace 查找
-    if (ns && name) {
-      const cacheKey = `${ns}.${name}`;
-      if (_modelCache.has(cacheKey)) return _modelCache.get(cacheKey);
-      const model = db[ns]?.[name];
-      if (model) {
-        _modelCache.set(cacheKey, model);
-        return model;
-      }
-      const available = Object.keys(db).filter(k => typeof db[k] === 'object' && db[k] !== null);
-      throw new TypeError(`getModel: 模型 ${cacheKey} 不存在。可用命名空间: ${available.join(', ') || '(无)'}`);
-    }
-
-    // 单参数无点号：flat 查找，复用独立 getModel
-    if (ns && !name) {
-      return getModel(ns);
-    }
-
-    throw new TypeError('getModel: 需要命名空间和模型名，如 getModel("user.User") 或 getModel("user", "User")');
-  };
+  // 注册模型获取方法：app.db.getModel 委托给独立 getModel
+  // 支持 getModel('User') / getModel('user.User') / getModel('user', 'User')
+  db.getModel = getModel;
 
   // 自动同步表结构（仅限首次开发环境建表，后续变更请使用迁移）
   if (process.env.DB_SYNC === 'true') {
