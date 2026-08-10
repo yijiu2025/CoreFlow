@@ -14,7 +14,7 @@ class TemplateDao {
    * @returns {Model} Template 模型
    */
   getModel() {
-    return sequelize.models.Template;
+    return getModel('Template');
   }
 
   /**
@@ -201,7 +201,7 @@ class TemplateDao {
     const updated = await template.update(data);
     // 模板状态变更时同步到底图作品
     if (data.status !== undefined && template.work_id) {
-      const Work = sequelize.models.Work;
+      const Work = getModel('Work');
       await Work.update({ status: data.status }, { where: { id: template.work_id, delete_version: 0 } });
     }
     return updated;
@@ -254,7 +254,7 @@ class TemplateDao {
    * @returns {Promise<Work|null>} 创建的 Work 实例，无 image_url 时返回 null
    */
   async syncCreateWork(template, userId) {
-    const Work = sequelize.models.Work;
+    const Work = getModel('Work');
     if (!template.image_url) return null;
 
     // 生成作品缩略图：底图原图压缩（WebP 70%，尺寸不变）；失败则回退原图
@@ -298,7 +298,7 @@ class TemplateDao {
    * @param {Template} template - 当前 Template 实例
    */
   async syncUpdateWork(templateId, data, template) {
-    const Work = sequelize.models.Work;
+    const Work = getModel('Work');
     let work = await Work.findOne({
       where: {
         template_id: templateId,
@@ -347,7 +347,7 @@ class TemplateDao {
   async syncAuditWork(templateId, status) {
     const template = await this.findById(templateId);
     if (!template?.work_id) return;
-    const Work = sequelize.models.Work;
+    const Work = getModel('Work');
     await Work.update({ status }, { where: { id: template.work_id, delete_version: 0 } });
   }
 
@@ -357,7 +357,7 @@ class TemplateDao {
    * @returns {Promise<void>}
    */
   async syncDeleteWork(templateId) {
-    const Work = sequelize.models.Work;
+    const Work = getModel('Work');
     const templateWork = await Work.findOne({ where: { template_id: templateId, delete_version: 0 } });
     if (templateWork) {
       // 级联软删除对应的模板底图作品

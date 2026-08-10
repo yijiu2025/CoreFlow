@@ -1,4 +1,5 @@
 import { sequelize } from '../../db/index.js';
+import { getModel } from '../../db/index.js';
 
 const C = { reset: '\x1b[0m', cyan: '\x1b[36m' };
 
@@ -8,7 +9,7 @@ const C = { reset: '\x1b[0m', cyan: '\x1b[36m' };
  * 环境变量仅用于首次初始化的默认值。
  */
 export default async app => {
-  const { NoticeConfig } = sequelize.models;
+  const NoticeConfig = getModel('NoticeConfig');
   if (!NoticeConfig) return;
 
   const defaults = [

@@ -13,7 +13,7 @@ class AnalysisDao {
    * @returns {Model}
    */
   getModel() {
-    return sequelize.models.Analysis;
+    return getModel("Analysis");
   }
 
   /**

@@ -1,4 +1,5 @@
 import sequelize from '../../../db/index.js';
+import { getModel } from '../../../db/index.js';
 import Logger from '../../../log/index.js';
 
 /** 默认通道配置 */
@@ -60,7 +61,7 @@ class NoticeDao {
    * @returns {Promise<object>}
    */
   async getConfig(type) {
-    const { NoticeConfig } = sequelize.models;
+    const NoticeConfig = getModel("NoticeConfig");
     if (!NoticeConfig) return {};
 
     if (type === 'email') {
@@ -83,7 +84,7 @@ class NoticeDao {
    * @returns {Promise<boolean>}
    */
   async saveConfig(type, config) {
-    const { NoticeConfig } = sequelize.models;
+    const NoticeConfig = getModel("NoticeConfig");
     if (!NoticeConfig) throw new Error('NoticeConfig model not found');
 
     Logger.info(`[Notice:Dao] 更新 ${type} 配置`);
@@ -112,7 +113,7 @@ class NoticeDao {
    * @returns {Promise<Array<{id: string, name: string, enabled: boolean}>>}
    */
   async getAvailableChannels() {
-    const { NoticeConfig } = sequelize.models;
+    const NoticeConfig = getModel("NoticeConfig");
     if (!NoticeConfig) return DEFAULT_CHANNELS;
 
     // 尝试从 DB 读取通道配置
@@ -132,7 +133,7 @@ class NoticeDao {
    * @param {Array} channels 通道列表
    */
   async updateChannels(channels) {
-    const { NoticeConfig } = sequelize.models;
+    const NoticeConfig = getModel("NoticeConfig");
     if (!NoticeConfig) throw new Error('NoticeConfig model not found');
     await NoticeConfig.setVal('notification_channels', JSON.stringify(channels), '通知通道配置', 'system');
   }
@@ -143,7 +144,7 @@ class NoticeDao {
    * @returns {Promise<object|null>}
    */
   async getTemplate(templateId) {
-    const { NoticeConfig } = sequelize.models;
+    const NoticeConfig = getModel("NoticeConfig");
     if (!NoticeConfig) return DEFAULT_TEMPLATES[templateId] || null;
 
     const saved = await NoticeConfig.getVal(`template_${templateId}`, null);
@@ -163,7 +164,7 @@ class NoticeDao {
    * @param {object} template 模板对象 { name, subject, content }
    */
   async saveTemplate(templateId, template) {
-    const { NoticeConfig } = sequelize.models;
+    const NoticeConfig = getModel("NoticeConfig");
     if (!NoticeConfig) throw new Error('NoticeConfig model not found');
     await NoticeConfig.setVal(
       `template_${templateId}`,
@@ -178,7 +179,7 @@ class NoticeDao {
    * @returns {Promise<object>}
    */
   async getAllTemplates() {
-    const { NoticeConfig } = sequelize.models;
+    const NoticeConfig = getModel("NoticeConfig");
     if (!NoticeConfig) return DEFAULT_TEMPLATES;
 
     const result = { ...DEFAULT_TEMPLATES };

@@ -8,6 +8,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import followDao from '../../../app/posecraft/dao/follow.dao.js';
 import sequelize from '../../../db/index.js';
+import { getModel } from '../../../db/index.js';
 import { Op } from 'sequelize';
 
 export default async function (fastify) {
@@ -30,7 +31,7 @@ export default async function (fastify) {
       return Number(idOrUid);
     }
     // 否则去数据库中查找对应的用户
-    const { User } = sequelize.models;
+    const User = getModel("User");
     const user = await User.findOne({
       where: {
         [Op.or]: [{ uid: idOrUid }, { personal_id: idOrUid }]
@@ -231,19 +232,19 @@ async function getProfileStats(userId) {
   const workStats = await followDao.getWorkStatsCount(userId);
 
   // 模板数量
-  const { Template } = sequelize.models;
+  const Template = getModel("Template");
   const templatesCount = await Template.count({
     where: { user_id: userId, delete_version: 0 }
   });
 
   // 收藏数量
-  const { UserCollect } = sequelize.models;
+  const UserCollect = getModel("UserCollect");
   const collectsCount = await UserCollect.count({
     where: { user_id: userId, delete_version: 0 }
   });
 
   // 推荐数量
-  const { Recommendation } = sequelize.models;
+  const Recommendation = getModel("Recommendation");
   const recommendationsCount = await Recommendation.count({
     where: { user_id: userId, delete_version: 0 }
   });

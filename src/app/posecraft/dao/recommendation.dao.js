@@ -13,7 +13,7 @@ class RecommendationDao {
    * @returns {Model}
    */
   getModel() {
-    return sequelize.models.Recommendation;
+    return getModel('Recommendation');
   }
 
   /**
@@ -94,7 +94,7 @@ class RecommendationDao {
       where: { user_id: userId, delete_version: 0 },
       include: [
         {
-          model: sequelize.models.Work,
+          model: getModel('Work'),
           as: 'work',
           required: false,
           where: { delete_version: 0 },
@@ -110,7 +110,7 @@ class RecommendationDao {
           ]
         },
         {
-          model: sequelize.models.Template,
+          model: getModel('Template'),
           as: 'template',
           required: false,
           where: { delete_version: 0 },

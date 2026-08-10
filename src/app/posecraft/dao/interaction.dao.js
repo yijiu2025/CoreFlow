@@ -6,6 +6,7 @@
  * @since 2026-07-13
  */
 import sequelize from '../../../db/index.js';
+import { getModel } from '../../../db/index.js';
 import { Op } from 'sequelize';
 
 class InteractionDao {
@@ -14,7 +15,7 @@ class InteractionDao {
    * @returns {Model}
    */
   getLikeModel() {
-    return sequelize.models.UserLike;
+    return getModel('UserLike');
   }
 
   /**
@@ -22,7 +23,7 @@ class InteractionDao {
    * @returns {Model}
    */
   getCollectModel() {
-    return sequelize.models.UserCollect;
+    return getModel('UserCollect');
   }
 
   /**
@@ -30,7 +31,7 @@ class InteractionDao {
    * @returns {Model}
    */
   getHistoryModel() {
-    return sequelize.models.UserHistory;
+    return getModel('UserHistory');
   }
 
   /**
@@ -38,7 +39,7 @@ class InteractionDao {
    * @returns {Model}
    */
   getWorkModel() {
-    return sequelize.models.Work;
+    return getModel('Work');
   }
 
   /**
@@ -46,7 +47,7 @@ class InteractionDao {
    * @returns {Model}
    */
   getTemplateModel() {
-    return sequelize.models.Template;
+    return getModel('Template');
   }
 
   /**
@@ -230,8 +231,8 @@ class InteractionDao {
     const { count, rows } = await History.findAndCountAll({
       where: { user_id: userId, delete_version: 0 },
       include: [
-        { model: sequelize.models.Work, as: 'work', required: false, where: { delete_version: 0 } },
-        { model: sequelize.models.Template, as: 'template', required: false, where: { delete_version: 0 } }
+        { model: getModel('Work'), as: 'work', required: false, where: { delete_version: 0 } },
+        { model: getModel('Template'), as: 'template', required: false, where: { delete_version: 0 } }
       ],
       order: [['updated_at', 'DESC']],
       limit,
@@ -287,8 +288,8 @@ class InteractionDao {
     const { count, rows } = await Like.findAndCountAll({
       where: { user_id: userId, delete_version: 0 },
       include: [
-        { model: sequelize.models.Work, as: 'work', required: false, where: { delete_version: 0 } },
-        { model: sequelize.models.Template, as: 'template', required: false, where: { delete_version: 0 } }
+        { model: getModel('Work'), as: 'work', required: false, where: { delete_version: 0 } },
+        { model: getModel('Template'), as: 'template', required: false, where: { delete_version: 0 } }
       ],
       order: [['created_at', 'DESC']],
       limit,
@@ -345,8 +346,8 @@ class InteractionDao {
     const { count, rows } = await Collect.findAndCountAll({
       where: { user_id: userId, delete_version: 0 },
       include: [
-        { model: sequelize.models.Work, as: 'work', required: false, where: { delete_version: 0 } },
-        { model: sequelize.models.Template, as: 'template', required: false, where: { delete_version: 0 } }
+        { model: getModel('Work'), as: 'work', required: false, where: { delete_version: 0 } },
+        { model: getModel('Template'), as: 'template', required: false, where: { delete_version: 0 } }
       ],
       order: [['created_at', 'DESC']],
       limit,

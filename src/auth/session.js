@@ -5,6 +5,7 @@
 import crypto from 'node:crypto';
 import { Op } from 'sequelize';
 import sequelize from '../db/index.js';
+import { getModel } from '../db/index.js';
 import {
   signCookie,
   verifyCookie,
@@ -57,7 +58,8 @@ export function detectDeviceType(ua) {
 async function kickByDeviceType(redis, userId, appId, deviceType) {
   if (!redis) return;
 
-  const { SessionToken, SessionLog } = sequelize.models;
+  const SessionToken = getModel('SessionToken');
+  const SessionLog = getModel('SessionLog');
 
   // 查找该用户在该应用下同设备类型的未撤销会话
   const oldTokens = await SessionToken.findAll({
@@ -101,7 +103,7 @@ async function kickByDeviceType(redis, userId, appId, deviceType) {
 export async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
   if (!redis) return null;
 
-  const { SessionToken } = sequelize.models;
+  const SessionToken = getModel('SessionToken');
 
   // 按应用过滤：只计算当前应用的会话
   const tokens = await SessionToken.findAll({
@@ -138,7 +140,8 @@ export async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
  * @param {number} userId 操作者用户 ID
  */
 export async function kickSession(redis, sessionId, userId) {
-  const { SessionToken, SessionLog } = sequelize.models;
+  const SessionToken = getModel('SessionToken');
+  const SessionLog = getModel('SessionLog');
 
   await redis.del(`${SESSION_PREFIX}${sessionId}`);
   const token = await SessionToken.findOne({ where: { token: sessionId, revoked: false } });
@@ -158,7 +161,8 @@ export async function kickSession(redis, sessionId, userId) {
  * @param {number} userId 用户 ID
  */
 export async function kickAllSessions(redis, userId) {
-  const { SessionToken, SessionLog } = sequelize.models;
+  const SessionToken = getModel('SessionToken');
+  const SessionLog = getModel('SessionLog');
 
   const tokens = await SessionToken.findAll({
     where: { user_id: userId, revoked: false }
@@ -288,7 +292,9 @@ export async function createSession(params) {
   }
 
   // 5. DB 写入
-  const { UserSession, SessionToken, SessionLog } = sequelize.models;
+  const UserSession = getModel('UserSession');
+  const SessionToken = getModel('SessionToken');
+  const SessionLog = getModel('SessionLog');
 
   // 更新用户全局会话
   await UserSession.upsert({
@@ -386,7 +392,8 @@ export async function getSession(params) {
 
   // 4. Redis 未命中，降级到 DB
   const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
-  const { SessionToken, User } = sequelize.models;
+  const SessionToken = getModel('SessionToken');
+  const User = getModel('User');
 
   const token = await SessionToken.findOne({
     where: { token: tokenHash, revoked: false },
@@ -451,7 +458,7 @@ export async function refreshSession(params) {
   }
 
   // 3. DB 查询会话记录（createSession 存储的是 sha256(sessionId)）
-  const { SessionToken } = sequelize.models;
+  const SessionToken = getModel('SessionToken');
   let record = null;
 
   if (oldSessionId) {
@@ -473,7 +480,7 @@ export async function refreshSession(params) {
   if (!record) return null;
 
   // 4. 加载用户信息和权限
-  const { User } = sequelize.models;
+  const User = getModel('User');
   const user = await User.findByPk(record.user_id);
   if (!user) return null;
 
@@ -523,7 +530,7 @@ export async function refreshSession(params) {
   await record.update({ token: newTokenHash, last_active: new Date() });
 
   // 8. 记录刷新日志（关联用户，操作留痕）
-  const { SessionLog } = sequelize.models;
+  const SessionLog = getModel('SessionLog');
   await SessionLog.create({
     user_id: record.user_id,
     event: 'SESSION_REFRESH',
@@ -568,12 +575,12 @@ export async function destroySession(params) {
   // 2. DB 标记 revoked
   if (sessionId) {
     const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
-    const { SessionToken } = sequelize.models;
+    const SessionToken = getModel('SessionToken');
     await SessionToken.update({ revoked: true }, { where: { token: tokenHash } });
   }
 
   // 3. 记录日志
-  const { SessionLog } = sequelize.models;
+  const SessionLog = getModel('SessionLog');
   await SessionLog.create({
     user_id: userId,
     event: 'LOGOUT',
@@ -593,7 +600,8 @@ export async function destroySession(params) {
  * @param {string|null} appId 指定应用 (null = 全部应用)
  */
 export async function kickUser(redis, userId, appId = null) {
-  const { SessionToken, SessionLog } = sequelize.models;
+  const SessionToken = getModel('SessionToken');
+  const SessionLog = getModel('SessionLog');
 
   const where = { user_id: userId, revoked: false };
   if (appId) where.app_id = appId;
@@ -631,7 +639,7 @@ export async function kickUser(redis, userId, appId = null) {
 export async function logLoginFailure(params) {
   const { email, appId, ip, userAgent, reason, deviceType } = params;
 
-  const { SessionLog } = sequelize.models;
+  const SessionLog = getModel('SessionLog');
   await SessionLog.create({
     user_id: null, // 登录失败时可能没有 userId
     event: 'LOGIN_FAILED',
@@ -652,7 +660,8 @@ export async function logLoginFailure(params) {
  * @returns {Promise<{onlineUsers: number, activeDevices: number, redisSessions: number}>}
  */
 export async function getSessionStats(redis) {
-  const { SessionToken, UserSession } = sequelize.models;
+  const SessionToken = getModel('SessionToken');
+  const UserSession = getModel('UserSession');
 
   // 1. 在线用户数（最近 15 分钟有活跃记录）
   const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
@@ -685,7 +694,7 @@ export async function getSessionStats(redis) {
  * @returns {Promise<Array<{date: string, count: number}>>}
  */
 export async function getLoginTrend(days = 7) {
-  const { SessionLog } = sequelize.models;
+  const SessionLog = getModel('SessionLog');
 
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);

@@ -13,7 +13,7 @@ class WorkDao {
    * @returns {Model} Work 模型
    */
   getModel() {
-    return sequelize.models.Work;
+    return getModel('Work');
   }
 
   /**
@@ -81,9 +81,9 @@ class WorkDao {
     const { count, rows } = await model.findAndCountAll({
       where,
       include: [
-        { model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] },
+        { model: getModel('User'), as: 'author', attributes: ['uid', 'username', 'avatar'] },
         {
-          model: sequelize.models.Template,
+          model: getModel('Template'),
           as: 'template',
           attributes: ['id', 'status', 'delete_version', 'title'],
           required: false
@@ -132,7 +132,7 @@ class WorkDao {
   async _getLikedTargetIds(userId, workIds) {
     if (!workIds.length) return new Set();
     const { Op } = await import('sequelize');
-    const UserLike = sequelize.models.UserLike;
+    const UserLike = getModel('UserLike');
     const records = await UserLike.findAll({
       where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
       attributes: ['work_id']
@@ -149,7 +149,7 @@ class WorkDao {
   async _getCollectedTargetIds(userId, workIds) {
     if (!workIds.length) return new Set();
     const { Op } = await import('sequelize');
-    const UserCollect = sequelize.models.UserCollect;
+    const UserCollect = getModel('UserCollect');
     const records = await UserCollect.findAll({
       where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
       attributes: ['work_id']
@@ -166,7 +166,7 @@ class WorkDao {
   async _getSharedTargetIds(userId, workIds) {
     if (!workIds.length) return new Set();
     const { Op } = await import('sequelize');
-    const UserShare = sequelize.models.UserShare;
+    const UserShare = getModel('UserShare');
     // 如果 UserShare 模型不存在，返回空集合（分享功能预留）
     if (!UserShare) return new Set();
     const records = await UserShare.findAll({
@@ -249,7 +249,7 @@ class WorkDao {
     const model = this.getModel();
     return await model.findAll({
       where: { status: 1, delete_version: 0 },
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
+      include: [{ model: getModel('User'), as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       attributes: { exclude: ['analysis_data', 'delete_version'] },
       order: [
         [
@@ -270,14 +270,14 @@ class WorkDao {
    */
   async findById(id) {
     const model = this.getModel();
-    const User = sequelize.models.User;
+    const User = getModel('User');
 
     return await model.findOne({
       where: { id, delete_version: 0 },
       include: [
         { model: User, as: 'author', attributes: ['uid', 'username', 'avatar'] },
         {
-          model: sequelize.models.Template,
+          model: getModel('Template'),
           as: 'template',
           attributes: ['id', 'status', 'delete_version', 'title'],
           required: false
@@ -365,7 +365,7 @@ class WorkDao {
    */
   async findFriendsWorks(userId, options = {}) {
     const model = this.getModel();
-    const Follow = sequelize.models.Follow;
+    const Follow = getModel('Follow');
 
     // 查出所有互关好友（follower_id=userId 且 mutual=true）
     const mutuals = await Follow.findAll({
@@ -390,7 +390,7 @@ class WorkDao {
         status: 1,
         delete_version: 0
       },
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
+      include: [{ model: getModel('User'), as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       attributes: { exclude: ['analysis_data', 'delete_version'] },
       order: [['created_at', 'DESC']],
       limit,
@@ -483,7 +483,7 @@ class WorkDao {
         publication_lng: { [Op.ne]: null, [Op.between]: [lngMin, lngMax] },
         [Op.and]: radiusCondition
       },
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
+      include: [{ model: getModel('User'), as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       attributes: {
         exclude: ['analysis_data', 'delete_version'],
         include: [[distanceExpr, 'distance']]

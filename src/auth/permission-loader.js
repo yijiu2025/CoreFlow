@@ -15,6 +15,7 @@
  */
 import { Op } from 'sequelize';
 import sequelize from '../db/index.js';
+import { getModel } from '../db/index.js';
 
 /**
  * 从策略文档中提取权限
@@ -64,7 +65,9 @@ function extractPermissions(policy, allows, denies) {
  * @returns {{ roles: string[], permissions: { allows: string[], denies: string[] } }}
  */
 export async function loadUserPermissions(userId, appId) {
-  const { Role, UserRole, InlinePolicy } = sequelize.models;
+  const Role = getModel('Role');
+  const UserRole = getModel('UserRole');
+  const InlinePolicy = getModel('InlinePolicy');
 
   // 1. 加载角色 (当前应用 + 全局角色，排除其他应用的角色)
   const userRoles = await UserRole.findAll({

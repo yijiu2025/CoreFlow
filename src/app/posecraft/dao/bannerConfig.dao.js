@@ -13,7 +13,7 @@ class BannerConfigDao {
    * @returns {Model} BannerConfig 模型
    */
   getModel() {
-    return sequelize.models.BannerConfig;
+    return getModel("BannerConfig");
   }
 
   /**

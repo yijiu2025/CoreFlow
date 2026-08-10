@@ -11,6 +11,7 @@
  */
 import bcrypt from 'bcryptjs';
 import sequelize from '../../../db/index.js';
+import { getModel } from '../../../db/index.js';
 
 const UserDao = {
   /**
@@ -19,7 +20,7 @@ const UserDao = {
    * @returns {Promise<object|null>} 适配后的用户数据或 null
    */
   async findById(uid) {
-    const { User } = sequelize.models;
+    const User = getModel("User");
     if (!User) return null;
 
     const user = await User.findOne({
@@ -45,7 +46,7 @@ const UserDao = {
    * @returns {Promise<object|null>} 适配后的用户数据或 null
    */
   async findByEmail(email) {
-    const { User } = sequelize.models;
+    const User = getModel("User");
     if (!User) return null;
 
     const user = await User.findOne({
@@ -71,7 +72,7 @@ const UserDao = {
    * @returns {Promise<object|null>} 适配后的用户数据及凭证或 null
    */
   async findByUsername(username) {
-    const { User, UserIdentity } = sequelize.models;
+    const User = getModel("User"); const UserIdentity = getModel("UserIdentity");
     if (!User || !UserIdentity) return null;
 
     // 从统一的凭证表 UserIdentity 中查找密码记录

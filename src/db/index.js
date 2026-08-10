@@ -42,5 +42,39 @@ const sequelize = new Sequelize(dsn, {
   }
 });
 
-export { sequelize, Sequelize };
+/**
+ * 获取模型
+ * 支持两种调用方式：
+ *   getModel('Role')              → 按模型名查找（flat，从 sequelize.models）
+ *   getModel('user', 'User')      → 按命名空间 + 模型名查找（需 app.db 上下文）
+ *
+ * @param {string} namespaceOrName - 命名空间（如 'user'）或单参数时的模型名
+ * @param {string} [modelName] - 模型名（如 'User'），不传时 namespaceOrName 为模型名
+ * @returns {object} Sequelize 模型
+ * @throws {TypeError} 模型不存在时
+ */
+function getModel(namespaceOrName, modelName) {
+  if (modelName === undefined) {
+    // 单参数：getModel('User')
+    const model = sequelize.models[namespaceOrName];
+    if (!model) {
+      throw new TypeError(
+        `getModel: 模型 "${namespaceOrName}" 不存在。可用模型: ${Object.keys(sequelize.models).join(', ') || '(无)'}`
+      );
+    }
+    return model;
+  }
+  // 双参数：getModel('user', 'User') — 需要 app.db 上下文
+  const ns = namespaceOrName;
+  const name = modelName;
+  const model = sequelize.models[name];
+  if (!model) {
+    throw new TypeError(
+      `getModel: 模型 "${ns}.${name}" 不存在。可用模型: ${Object.keys(sequelize.models).join(', ') || '(无)'}`
+    );
+  }
+  return model;
+}
+
+export { sequelize, Sequelize, getModel };
 export default sequelize;

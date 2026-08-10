@@ -9,6 +9,7 @@
  */
 
 import sequelize from '../../../db/index.js';
+import { getModel } from '../../../db/index.js';
 
 class GuardConfigDao {
   /** 上次从 DB 加载的序列化配置快照，用于检测变更 */
@@ -21,7 +22,7 @@ class GuardConfigDao {
    * @returns {Promise<{configs: object, version: number, versions: object<string, number>}>}
    */
   async loadFromDB() {
-    const Model = sequelize.models.GuardConfig;
+    const Model = getModel('GuardConfig');
     const rows = await Model.findAll();
 
     const configs = {};
@@ -82,7 +83,7 @@ class GuardConfigDao {
    * @returns {Promise<{maxVersion: number, updated: string[], versions: object<string, number>}>}
    */
   async saveToDB(configs, dbVersions) {
-    const Model = sequelize.models.GuardConfig;
+    const Model = getModel('GuardConfig');
     let maxVersion = Math.max(0, ...Object.values(dbVersions));
     const updated = [];
     const versions = {};
@@ -142,7 +143,7 @@ class GuardConfigDao {
    * @returns {Promise<void>}
    */
   async restore(snapshot) {
-    const Model = sequelize.models.GuardConfig;
+    const Model = getModel('GuardConfig');
 
     // 清空所有行
     await Model.destroy({ where: {}, truncate: true });
