@@ -10,22 +10,45 @@
  * @since 2026-07-22
  */
 export function registerDeleteVersionHooks(Model) {
-  // 针对单条记录销毁，将 delete_version 设为该记录 ID
-  Model.addHook('beforeDestroy', instance => {
+  // 1. 硬删除保护：禁止 force: true 绕过软删除
+  Model.addHook('beforeDestroy', (instance, options) => {
+    if (options.force) {
+      throw new Error(`[软删除] 禁止硬删除，请使用软删除。模型: ${Model.name}, id: ${instance.id}`);
+    }
     instance.delete_version = instance.id;
   });
 
-  // 针对单条记录恢复，将 delete_version 恢复为 0 (代表活跃状态)
-  Model.addHook('beforeRestore', instance => {
+  // 2. 恢复时检查：禁止重复恢复
+  Model.addHook('beforeRestore', async instance => {
+    if (instance.delete_version === 0) {
+      throw new Error(`[软删除] 记录未删除，禁止重复恢复。模型: ${Model.name}, id: ${instance.id}`);
+    }
     instance.delete_version = 0;
   });
 
-  // 防御批量操作：强制开启 individualHooks 选项，以确保触发单条记录的 beforeDestroy/beforeRestore 钩子
+  // 3. 防止误改 delete_version：禁止手动修改软删除标记
+  Model.addHook('beforeUpdate', instance => {
+    if (
+      instance.changed('delete_version') &&
+      instance.delete_version !== 0 &&
+      instance.delete_version !== instance.id
+    ) {
+      throw new Error(`[软删除] 禁止手动修改 delete_version。模型: ${Model.name}, id: ${instance.id}`);
+    }
+  });
+
+  // 4. 批量删除保护：禁止无 where 条件的 destroy
   Model.addHook('beforeBulkDestroy', options => {
+    if (!options.where || Object.keys(options.where).length === 0) {
+      throw new Error(`[软删除] 禁止无 where 条件的批量 destroy。模型: ${Model.name}`);
+    }
     options.individualHooks = true;
   });
 
   Model.addHook('beforeBulkRestore', options => {
+    if (!options.where || Object.keys(options.where).length === 0) {
+      throw new Error(`[软删除] 禁止无 where 条件的批量 restore。模型: ${Model.name}`);
+    }
     options.individualHooks = true;
   });
 }
