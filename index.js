@@ -47,6 +47,9 @@ if (process.platform === 'win32' && process.stdout.isTTY) {
   }
 }
 
+/** 优雅关闭超时（毫秒），超时强制退出 */
+const SHUTDOWN_TIMEOUT = 30_000;
+
 /**
  * 启动 Fastify 服务
  * 依次初始化应用、绑定端口、监听启动日志
@@ -64,6 +67,34 @@ const start = async () => {
   const color = IS_TTY ? C.cyan : '';
   const reset = IS_TTY ? C.reset : '';
   console.log(`🚀 [Server] ${color}${addr}${reset}`);
+
+  // ---------------------------------------------------------------------------
+  // 3. 优雅关闭：处理系统信号
+  // ---------------------------------------------------------------------------
+  const shutdown = async signal => {
+    console.log(`\n📦 [Server] 收到 ${signal}，正在优雅关闭...`);
+
+    // 超时兜底：30s 后强制退出，防止 onClose 钩子挂起
+    const forceExit = setTimeout(() => {
+      console.error(`🚨 [Server] ${C.red}优雅关闭超时，强制退出${C.reset}`);
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT);
+    forceExit.unref();
+
+    try {
+      await app.close(); // 触发所有 onClose 钩子（DB/Redis/GuardConfig）
+      clearTimeout(forceExit);
+      console.log(`✅ [Server] ${C.green}已安全关闭${C.reset}`);
+      process.exit(0);
+    } catch (err) {
+      clearTimeout(forceExit);
+      console.error(`❌ [Server] ${C.red}关闭异常: ${err.message}${C.reset}`);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 };
 
 start().catch(err => {
