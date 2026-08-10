@@ -7,7 +7,6 @@
  * PUT /user/v1/update       — 更新当前用户信息（预留）
  */
 
-import sequelize from '../../../db/index.js';
 import { getModel } from '../db/index.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import UserDao from '../../../app/oauth21/dao/user.dao.js';
@@ -204,7 +203,7 @@ export default async function (fastify) {
         });
       }
 
-      const User = getModel("User");
+      const User = getModel('User');
       const user = await User.findOne({
         where: { id: tokenUser.userId }
       });
@@ -267,7 +266,7 @@ export default async function (fastify) {
       }
 
       const { username, avatar, gender, age, city, bio, personal_id } = request.body || {};
-      const User = getModel("User");
+      const User = getModel('User');
       const user = await User.findOne({
         where: { id: tokenUser.userId }
       });

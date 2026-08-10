@@ -13,7 +13,6 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { sequelize } from '../../db/index.js';
 import { getModel } from '../../db/index.js';
 import { C } from '../../utils/colors.js';
 import { roleRegistry } from '../../utils/PbacRegistry.js';

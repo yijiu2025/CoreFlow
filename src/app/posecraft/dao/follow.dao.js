@@ -5,7 +5,6 @@
  * @author Claude
  * @since 2026-07-13
  */
-import sequelize from '../../../db/index.js';
 
 class FollowDao {
   /**

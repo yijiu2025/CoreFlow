@@ -8,7 +8,6 @@
  * @since 2026-07-22
  */
 
-import sequelize from '../../../db/index.js';
 import { getModel } from '../../../db/index.js';
 
 class GuardConfigDao {

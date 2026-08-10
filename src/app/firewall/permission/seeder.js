@@ -1,4 +1,3 @@
-import sequelize from '../../../db/index.js';
 import { getModel } from '../../../db/index.js';
 import Logger from '../../../log/index.js';
 import { FIREWALL_PERMISSIONS } from './index.js';
@@ -7,7 +6,7 @@ import { FIREWALL_PERMISSIONS } from './index.js';
  * 自动加载防火墙模块的基础角色配置 (Upsert)
  */
 export async function seedFirewallRoles() {
-  const Role = getModel("Role");
+  const Role = getModel('Role');
 
   if (!Role) return;
 

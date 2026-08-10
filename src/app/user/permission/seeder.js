@@ -1,4 +1,3 @@
-import sequelize from '../../../db/index.js';
 import { getModel } from '../../../db/index.js';
 import Logger from '../../../log/index.js';
 import { USER_PERMISSIONS } from './index.js';

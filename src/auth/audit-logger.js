@@ -5,7 +5,6 @@
  * 写入数据库（持久化）+ Redis（快速查询最近日志）
  */
 
-import sequelize from '../db/index.js';
 import { getModel } from '../db/index.js';
 import Logger from '../log/index.js';
 

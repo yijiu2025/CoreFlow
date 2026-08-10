@@ -12,7 +12,6 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { verify } from '../../../app/oauth21/crypto/jwt.js';
 import { createSession } from '../../../auth/session.js';
 import { getStore } from '../../../redis/index.js';
-import sequelize from '../../../db/index.js';
 import { getModel } from '../../../db/index.js';
 import crypto from 'node:crypto';
 import { signCookie, COOKIE_OPTIONS, SHORT_SESSION_TTL, LONG_SESSION_TTL } from '../../../auth/cookie.js';
@@ -213,7 +212,7 @@ export default async function (fastify) {
       }
 
       // 2. 更新或删除数据库中的 refresh_token 记录，以及更新客户端的 sid_r / sid Cookie
-      const SessionToken = getModel("SessionToken");
+      const SessionToken = getModel('SessionToken');
       const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
       const tokenRecord = await SessionToken.findOne({ where: { token: tokenHash, revoked: false } });
 
