@@ -8,6 +8,7 @@
  */
 
 import sequelize from '../../../db/index.js';
+import { getModel } from '../db/index.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import UserDao from '../../../app/oauth21/dao/user.dao.js';
 
@@ -31,7 +32,7 @@ async function generateUniquePersonalId(attempt = 0) {
   }
   const candidate = `pose_craft_${suffix}`;
   // 查重
-  const existing = await sequelize.models.User.findOne({
+  const existing = await getModel('User').findOne({
     where: { personal_id: candidate },
     attributes: ['id']
   });
@@ -203,7 +204,7 @@ export default async function (fastify) {
         });
       }
 
-      const { User } = sequelize.models;
+      const User = getModel("User");
       const user = await User.findOne({
         where: { id: tokenUser.userId }
       });
@@ -266,7 +267,7 @@ export default async function (fastify) {
       }
 
       const { username, avatar, gender, age, city, bio, personal_id } = request.body || {};
-      const { User } = sequelize.models;
+      const User = getModel("User");
       const user = await User.findOne({
         where: { id: tokenUser.userId }
       });

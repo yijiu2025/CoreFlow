@@ -1,4 +1,5 @@
 import sequelize from '../../../db/index.js';
+import { getModel } from '../db/index.js';
 import { QueryTypes } from 'sequelize';
 
 class IamDao {
@@ -6,13 +7,13 @@ class IamDao {
    * 获取某应用下的最高职级 (权重压制判定核心)
    */
   async getMemberLevel(uid, appId) {
-    const user = await sequelize.models.User.findOne({ where: { uid } });
+    const user = await getModel('User').findOne({ where: { uid } });
     if (!user) return 0;
 
-    const highestRole = await sequelize.models.UserRole.findOne({
+    const highestRole = await getModel('UserRole').findOne({
       where: { user_id: user.id, app_id: [appId, 'GLOBAL'] },
       order: [['role_id', 'DESC']],
-      include: [{ model: sequelize.models.Role, as: 'role', attributes: ['rank_level'] }]
+      include: [{ model: getModel('Role'), as: 'role', attributes: ['rank_level'] }]
     });
     return highestRole?.role?.rank_level || 0;
   }
@@ -29,7 +30,7 @@ class IamDao {
       where.app_id = { [Op.in]: [targetAppId, 'GLOBAL'] };
     }
 
-    return await sequelize.models.Role.findAll({
+    return await getModel('Role').findAll({
       where,
       order: [['rank_level', 'DESC']]
     });
@@ -71,7 +72,7 @@ class IamDao {
       this.getMemberLevel(targetUid, appId)
     ]);
 
-    const targetRole = await sequelize.models.Role.findByPk(targetRoleId);
+    const targetRole = await getModel('Role').findByPk(targetRoleId);
     if (!targetRole) throw new Error('ROLE_NOT_FOUND: 目标角色不存在');
 
     if (adminLevel <= targetRole.rank_level) {
@@ -82,14 +83,14 @@ class IamDao {
       throw new Error('FORBIDDEN: 您无法对等级高于或等于自己的用户进行操作');
     }
 
-    const targetUser = await sequelize.models.User.findOne({
+    const targetUser = await getModel('User').findOne({
       where: { uid: targetUid }
     });
-    const grantor = await sequelize.models.User.findOne({
+    const grantor = await getModel('User').findOne({
       where: { uid: adminUid }
     });
 
-    return await sequelize.models.UserRole.findOrCreate({
+    return await getModel('UserRole').findOrCreate({
       where: { user_id: targetUser.id, app_id: appId, role_id: targetRoleId },
       defaults: {
         user_id: targetUser.id,
@@ -113,12 +114,12 @@ class IamDao {
       throw new Error('FORBIDDEN: 您无法修改高级别用户的策略');
     }
 
-    const targetUser = await sequelize.models.User.findOne({
+    const targetUser = await getModel('User').findOne({
       where: { uid: targetUid }
     });
     if (!targetUser) throw new Error('USER_NOT_FOUND: 目标用户不存在');
 
-    const [policy, created] = await sequelize.models.InlinePolicy.findOrCreate({
+    const [policy, created] = await getModel('InlinePolicy').findOrCreate({
       where: { user_id: targetUser.id, app_id: appId },
       defaults: { user_id: targetUser.id, app_id: appId, policy: policyDoc }
     });
@@ -135,7 +136,7 @@ class IamDao {
    * [PBAC 核心逻辑]：提取并合并用户的所有策略
    */
   async buildUserEffectivePolicy(uid, appId) {
-    const user = await sequelize.models.User.findOne({ where: { uid } });
+    const user = await getModel('User').findOne({ where: { uid } });
     if (!user) return { allows: [], denies: [] };
 
     // 1. 提取角色策略
@@ -152,7 +153,7 @@ class IamDao {
     );
 
     // 2. 提取个人内联策略
-    const inlinePolicies = await sequelize.models.InlinePolicy.findAll({
+    const inlinePolicies = await getModel('InlinePolicy').findAll({
       where: { user_id: user.id, app_id: [appId, 'GLOBAL'] }
     });
 

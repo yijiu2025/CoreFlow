@@ -1,7 +1,7 @@
 import sequelize from '../../../db/index.js';
 
 /** 获取 OauthApproval 模型 (延迟加载) */
-const getModel = () => sequelize.models.OauthApproval;
+const getModel = () => getModel("OauthApproval");
 
 class ApprovalDao {
   /**
@@ -50,20 +50,20 @@ class ApprovalDao {
       } else {
         // [新增逻辑]：首次授权，自动授予该应用的默认权限角色
         // 假设我们约定，每个应用下 rank_level=1 的角色为“默认普通用户角色”
-        const defaultRole = await sequelize.models.Role.findOne({
+        const defaultRole = await getModel("Role").findOne({
           where: { app_id: appId, rank_level: 1 },
           transaction: t
         });
 
         if (defaultRole) {
           // 获取用户的内部 ID
-          const user = await sequelize.models.User.findOne({
+          const user = await getModel("User").findOne({
             where: { uid: userSub },
             transaction: t
           });
           if (user) {
             // 确保没有重复绑定
-            await sequelize.models.UserRole.findOrCreate({
+            await getModel("UserRole").findOrCreate({
               where: {
                 user_id: user.id,
                 app_id: appId,

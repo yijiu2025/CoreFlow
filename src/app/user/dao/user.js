@@ -10,6 +10,7 @@
  */
 import jwt from 'jsonwebtoken';
 import sequelize from '../../../db/index.js';
+import { getModel } from '../db/index.js';
 import { decrypt } from '../../oauth21/crypto/encryption.js';
 import bcrypt from 'bcryptjs';
 import IamDao from '../../admin/dao/iam.dao.js';
@@ -22,7 +23,7 @@ class UserDao {
    * @returns {Promise<boolean>} 是否存在
    */
   async checkUsernameExist(username) {
-    const isExist = await sequelize.models.User.findOne({
+    const isExist = await getModel('User').findOne({
       where: { username }
     });
     return !!isExist;
@@ -34,7 +35,7 @@ class UserDao {
    * @returns {Promise<boolean>} 是否存在
    */
   async checkEmailExist(email) {
-    const isExist = await sequelize.models.User.findOne({ where: { email } });
+    const isExist = await getModel('User').findOne({ where: { email } });
     return !!isExist;
   }
 
@@ -53,14 +54,14 @@ class UserDao {
     if (!username) throw new Error('REGISTER_FAILED:用户名或邮箱不能为空');
 
     if (email && email.trim() !== '') {
-      let user = await sequelize.models.User.findOne({ where: { email } });
+      let user = await getModel('User').findOne({ where: { email } });
       if (user) throw new Error('REGISTER_FAILED:邮箱已存在');
     }
 
     const roleIds = request.body.role_ids || [];
     if (roleIds.length > 0) {
       for (const id of roleIds) {
-        const role = await sequelize.models.Role.findByPk(id);
+        const role = await getModel('Role').findByPk(id);
         if (!role) throw new Error(`NOT_FOUND:角色[${id}]不存在`);
       }
     }
@@ -90,9 +91,9 @@ class UserDao {
       throw new Error('AUTH_FAILED:邮箱或密码不能为空');
     }
 
-    const identity = await sequelize.models.UserIdentity.findOne({
+    const identity = await getModel('UserIdentity').findOne({
       where: { identifier: username, identity_type: 'password' },
-      include: [{ model: sequelize.models.User, as: 'user' }]
+      include: [{ model: getModel('User'), as: 'user' }]
     });
 
     if (!identity || !bcrypt.compareSync(password, identity.credential)) {
@@ -104,8 +105,8 @@ class UserDao {
     // [PBAC 核心]：计算当前应用下的有效策略
     const { allows, denies } = await IamDao.buildUserEffectivePolicy(user.uid, appId || 'GLOBAL');
 
-    if (sequelize.models.UserSession) {
-      await sequelize.models.UserSession.upsert({
+    if (getModel('UserSession')) {
+      await getModel('UserSession').upsert({
         user_id: user.id,
         last_login_at: new Date(),
         last_login_ip: request.ip || request.state?.clientInfo?.ip,
@@ -137,11 +138,11 @@ class UserDao {
    */
   async getInformation(ctx) {
     const { uid } = ctx.state.user;
-    return await sequelize.models.User.findOne({
+    return await getModel('User').findOne({
       where: { uid },
       include: [
         {
-          model: sequelize.models.Role,
+          model: getModel('Role'),
           as: 'roles',
           through: { attributes: [] }
         }
@@ -177,9 +178,9 @@ class UserDao {
     const hashedPassword = bcrypt.hashSync(password, 10);
 
     return await sequelize.transaction(async t => {
-      const user = await sequelize.models.User.create({ username, email }, { transaction: t });
+      const user = await getModel('User').create({ username, email }, { transaction: t });
 
-      await sequelize.models.UserIdentity.create(
+      await getModel('UserIdentity').create(
         {
           user_id: user.id,
           identity_type: 'password',
@@ -192,7 +193,7 @@ class UserDao {
       const roleIds = role_ids || [];
       if (roleIds.length > 0) {
         for (const rid of roleIds) {
-          await sequelize.models.UserRole.create(
+          await getModel('UserRole').create(
             {
               user_id: user.id,
               role_id: rid,
@@ -202,12 +203,12 @@ class UserDao {
           );
         }
       } else {
-        const guestRole = await sequelize.models.Role.findOne({
+        const guestRole = await getModel('Role').findOne({
           where: { rank_level: 1, app_id: 'GLOBAL' },
           transaction: t
         });
         if (guestRole) {
-          await sequelize.models.UserRole.create(
+          await getModel('UserRole').create(
             {
               user_id: user.id,
               role_id: guestRole.id,

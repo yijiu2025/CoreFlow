@@ -3,6 +3,7 @@
  * 检测异地登录、频繁失败、设备指纹变更等异常行为
  */
 import sequelize from '../db/index.js';
+import { getModel } from '../db/index.js';
 import { Op } from 'sequelize';
 
 /** 检测配置 */
@@ -33,7 +34,7 @@ export const DETECT_RESULT = {
  */
 export async function detectLoginAnomaly(params) {
   const { email, ip, userAgent, redis } = params;
-  const { SessionLog } = sequelize.models;
+  const SessionLog = getModel('SessionLog');
 
   // 1. 检查同一 IP 的失败次数
   const ipFailures = await countRecentFailures(null, ip);
@@ -79,7 +80,7 @@ export async function detectLoginAnomaly(params) {
  * @returns {Promise<number>}
  */
 async function countRecentFailures(email, ip) {
-  const { SessionLog } = sequelize.models;
+  const SessionLog = getModel('SessionLog');
   const since = new Date(Date.now() - CONFIG.failureWindowMs);
 
   const where = {

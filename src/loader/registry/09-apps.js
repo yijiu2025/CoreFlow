@@ -14,6 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { sequelize } from '../../db/index.js';
+import { getModel } from '../../db/index.js';
 import { C } from '../../utils/colors.js';
 import { roleRegistry } from '../../utils/PbacRegistry.js';
 
@@ -76,7 +77,7 @@ export default async app => {
 
     // 4. 注册 OAuth 客户端（config.oauth_client）
     if (appConfig?.oauth_client) {
-      const { OauthClient } = sequelize.models;
+      const OauthClient = getModel('OauthClient');
       if (OauthClient) {
         try {
           const client = appConfig.oauth_client;
@@ -127,7 +128,7 @@ export default async app => {
 
   // ============== 阶段 2：同步 PBAC 角色到数据库 ==============
 
-  const { Role } = sequelize.models;
+  const Role = getModel('Role');
   if (Role && roleRegistry.length > 0) {
     try {
       let successCount = 0;

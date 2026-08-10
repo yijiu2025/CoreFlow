@@ -6,6 +6,7 @@
  */
 
 import sequelize from '../db/index.js';
+import { getModel } from '../db/index.js';
 import Logger from '../log/index.js';
 
 const AUDIT_KEY = 'audit:security';
@@ -17,7 +18,7 @@ const MAX_REDIS_ENTRIES = 1000;
  * @param {object} event - 事件对象
  */
 export async function logAuditEvent(redis, event) {
-  const { AuditLog } = sequelize.models;
+  const AuditLog = getModel('AuditLog');
 
   // 1. 写入数据库（持久化）
   if (AuditLog) {
@@ -58,7 +59,7 @@ export async function logAuditEvent(redis, event) {
  * @returns {Promise<object[]>}
  */
 export async function getAuditLogs(options = {}) {
-  const { AuditLog } = sequelize.models;
+  const AuditLog = getModel('AuditLog');
   if (!AuditLog) return [];
 
   const { limit = 100, event: eventType, userId } = options;

@@ -9,6 +9,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
 import templateDao from '../../../app/posecraft/dao/template.dao.js';
 import sequelize from '../../../db/index.js';
+import { getModel } from '../../../db/index.js';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -345,7 +346,7 @@ export default async function (fastify) {
 
       // 1. 获取关联模板的骨骼数据来进行合成
       if (work.template_id) {
-        const { Template } = sequelize.models;
+        const Template = getModel("Template");
         const template = await Template.findOne({ where: { id: work.template_id, delete_version: 0 } });
         if (template) {
           let poseData = template.pose_data;

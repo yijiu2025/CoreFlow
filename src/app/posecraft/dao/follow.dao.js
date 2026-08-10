@@ -13,7 +13,7 @@ class FollowDao {
    * @returns {Model}
    */
   getModel() {
-    return sequelize.models.Follow;
+    return getModel('Follow');
   }
 
   /**
@@ -21,7 +21,7 @@ class FollowDao {
    * @returns {Model}
    */
   getUserModel() {
-    return sequelize.models.User;
+    return getModel('User');
   }
 
   /**
@@ -179,7 +179,7 @@ class FollowDao {
    * @returns {Promise<{worksCount: number, likesCount: number}>}
    */
   async getWorkStatsCount(userId) {
-    const { Work } = sequelize.models;
+    const Work = getModel('Work');
     let worksCount = 0;
     let likesCount = 0;
     if (Work) {

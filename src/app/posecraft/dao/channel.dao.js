@@ -13,7 +13,7 @@ class ChannelDao {
    * @returns {Model}
    */
   getModel() {
-    return sequelize.models.Channel;
+    return getModel('Channel');
   }
 
   /**

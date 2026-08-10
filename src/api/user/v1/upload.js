@@ -12,6 +12,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import sharp from 'sharp';
 import { uploadFile, deleteFile } from '../../../app/user/services/oss.service.js';
 import sequelize from '../../../db/index.js';
+import { getModel } from '../../../db/index.js';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
@@ -92,7 +93,7 @@ export default async function (fastify) {
         const avatarUrl = await uploadFile(processed, fileName, 'image/jpeg');
 
         // 8. 更新数据库
-        const { User } = sequelize.models;
+        const User = getModel("User");
         const dbUser = await User.findOne({ where: { uid: user.sub } });
         if (dbUser) {
           const oldAvatar = dbUser.avatar;
