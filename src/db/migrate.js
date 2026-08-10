@@ -6,6 +6,9 @@
  *   node --env-file=.env src/db/migrate.js --down     # 回滚最近一次迁移
  *   node --env-file=.env src/db/migrate.js --status   # 查看迁移状态
  *   node --env-file=.env src/db/migrate.js --down-to <name> # 回滚到指定版本
+ *
+ * @author yijiu2025
+ * @since 2026-07-22
  */
 import { Umzug, SequelizeStorage } from 'umzug';
 import { sequelize } from './index.js';
@@ -75,13 +78,13 @@ async function runDownTo(targetName) {
   const target = executed.find(m => m.name === targetName || m.name.endsWith(targetName));
   if (!target) {
     console.error(`[Migrate] 未找到已执行的迁移: ${targetName}`);
-    process.exit(1);
+    setTimeout(() => process.exit(1), 100);
   }
-  const migrations = await umzug.down({ to: targetName });
+  const migrations = await umzug.down({ to: target.name });
   if (migrations.length === 0) {
     console.log('[Migrate] 没有可回滚的迁移。');
   } else {
-    console.log(`[Migrate] 已回滚 ${migrations.length} 个迁移至 ${targetName}：`);
+    console.log(`[Migrate] 已回滚 ${migrations.length} 个迁移至 ${target.name}：`);
     migrations.forEach(m => console.log(`  - ${m.name}`));
   }
 }
@@ -123,7 +126,7 @@ async function main() {
       case '--down-to':
         if (!downToTarget) {
           console.error('[Migrate] 用法: node --env-file=.env src/db/migrate.js --down-to <迁移名称>');
-          process.exit(1);
+          setTimeout(() => process.exit(1), 100);
         }
         await runDownTo(downToTarget);
         break;
@@ -143,7 +146,7 @@ async function main() {
     }
   } catch (err) {
     console.error('[Migrate] 执行失败:', err.message);
-    process.exit(1);
+    setTimeout(() => process.exit(1), 100);
   } finally {
     await sequelize.close();
   }
