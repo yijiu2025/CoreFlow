@@ -5,12 +5,15 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { sequelize } from '../../db/index.js';
 import { C } from '../../utils/colors.js';
 
+/* eslint-disable no-console */
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default async app => {
   const db = app.db;
   const modelsPath = path.resolve(__dirname, '../../models');
   const loadedModels = []; // 收集所有加载的模型，避免二次遍历
+  const loadErrors = []; // 收集加载失败的模型，末尾统一告警
 
   /**
    * 递归扫描模型目录，按子目录自动创建命名空间
@@ -34,7 +37,7 @@ export default async app => {
           const { default: modelDefine } = await import(fileUrl);
           const result = modelDefine(sequelize, DataTypes);
 
-          const models = result.name || typeof result !== 'object' ? [result] : Object.values(result);
+          const models = result.name ? [result] : Object.values(result);
 
           for (const model of models) {
             if (!model || !model.name) continue;
@@ -46,6 +49,7 @@ export default async app => {
             loadedModels.push(model);
           }
         } catch (error) {
+          loadErrors.push({ file: entry.name, error: error.message });
           console.error(`❌ [Loader: Models] ${C.red}模型 [${entry.name}] 加载失败: ${error.message}${C.reset}`);
         }
       }
@@ -83,4 +87,10 @@ export default async app => {
   }
 
   console.log(`📦 [Loader: Models] ${C.cyan}所有模型加载完毕${C.reset}`);
+
+  // 模型加载失败告警
+  if (loadErrors.length > 0) {
+    console.error(`⚠️ [Loader: Models] ${C.yellow}${loadErrors.length} 个模型加载失败，请检查:${C.reset}`);
+    loadErrors.forEach(e => console.error(`  - ${e.file}: ${e.error}`));
+  }
 };
