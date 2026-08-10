@@ -7,7 +7,8 @@
 ```
 src/db/
 ├── index.js              # Sequelize 实例初始化、连接池配置
-└── migrate.js            # Umzug 迁移运行器（独立脚本）
+├── migrate.js            # Umzug 迁移运行器（独立脚本）
+└── softDeleteHooks.js    # 软删除 delete_version 钩子工具
 
 src/models/               # 模型定义目录（按领域分子目录）
 ├── user/                 # 用户域：User, UserIdentity
@@ -15,9 +16,6 @@ src/models/               # 模型定义目录（按领域分子目录）
 ├── oauth21/              # OAuth 域：OauthClient, OauthCode, OauthToken, OauthApproval, OauthConsent
 ├── notice/               # 通知域：EmailCode, NoticeConfig
 └── session/              # 会话域：UserSession, SessionToken, SessionLog
-
-src/utils/
-└── softDeleteHooks.js    # 软删除 delete_version 钩子工具
 
 migrations/               # Umzug 迁移文件目录
 ```
@@ -165,7 +163,7 @@ export async function down({ queryInterface }) {
 
 ```js
 // src/models/iam/Role.js
-import { registerDeleteVersionHooks } from '../../utils/softDeleteHooks.js';
+import { registerDeleteVersionHooks } from '../../db/softDeleteHooks.js';
 
 export default (sequelize, DataTypes) => {
   const Role = sequelize.define(
