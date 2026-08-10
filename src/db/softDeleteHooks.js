@@ -3,6 +3,11 @@
  *
  * 用于自动为开启了 delete_version 机制的 paranoid 模型挂载生命周期钩子，
  * 解决 MySQL 唯一索引与 NULL 值的冲突漏洞。
+ *
+ * 调用链：模型定义时调用 → 注册 Sequelize 生命周期钩子 → 每次 delete/restore 时触发
+ *
+ * @author yijiu2025
+ * @since 2026-07-22
  */
 export function registerDeleteVersionHooks(Model) {
   // 针对单条记录销毁，将 delete_version 设为该记录 ID
