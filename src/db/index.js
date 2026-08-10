@@ -44,33 +44,36 @@ const sequelize = new Sequelize(dsn, {
 
 /**
  * 获取模型
- * 支持两种调用方式：
- *   getModel('Role')              → 按模型名查找（flat，从 sequelize.models）
- *   getModel('user', 'User')      → 按命名空间 + 模型名查找（需 app.db 上下文）
+ * 支持三种调用方式：
+ *   getModel('User')              → 按模型名查找（flat，从 sequelize.models）
+ *   getModel('user.User')         → 点号写法（命名空间 + 模型名）
+ *   getModel('user', 'User')      → 双参数（命名空间 + 模型名）
+ * 模型名全局唯一，命名空间仅作组织用途，最终都从 sequelize.models 查找
  *
  * @param {string} namespaceOrName - 命名空间（如 'user'）或单参数时的模型名
- * @param {string} [modelName] - 模型名（如 'User'），不传时 namespaceOrName 为模型名
+ * @param {string} [modelName] - 模型名（如 'User'），不传时 namespaceOrName 为模型名或点号写法
  * @returns {object} Sequelize 模型
  * @throws {TypeError} 模型不存在时
  */
 function getModel(namespaceOrName, modelName) {
-  if (modelName === undefined) {
-    // 单参数：getModel('User')
-    const model = sequelize.models[namespaceOrName];
-    if (!model) {
-      throw new TypeError(
-        `getModel: 模型 "${namespaceOrName}" 不存在。可用模型: ${Object.keys(sequelize.models).join(', ') || '(无)'}`
-      );
-    }
-    return model;
+  let name = modelName;
+  let ns = namespaceOrName;
+
+  // 单参数点号写法：getModel('user.User')
+  if (name === undefined && typeof ns === 'string' && ns.includes('.')) {
+    const idx = ns.lastIndexOf('.');
+    name = ns.slice(idx + 1);
+    ns = ns.slice(0, idx);
   }
-  // 双参数：getModel('user', 'User') — 需要 app.db 上下文
-  const ns = namespaceOrName;
-  const name = modelName;
+  // 单参数：getModel('User') → name = ns
+  if (name === undefined) {
+    name = ns;
+  }
+
   const model = sequelize.models[name];
   if (!model) {
     throw new TypeError(
-      `getModel: 模型 "${ns}.${name}" 不存在。可用模型: ${Object.keys(sequelize.models).join(', ') || '(无)'}`
+      `getModel: 模型 "${name}" 不存在。可用模型: ${Object.keys(sequelize.models).join(', ') || '(无)'}`
     );
   }
   return model;
