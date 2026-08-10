@@ -1,4 +1,3 @@
-import { sequelize } from '../../db/index.js';
 import { getModel } from '../../db/index.js';
 
 const C = { reset: '\x1b[0m', cyan: '\x1b[36m' };
