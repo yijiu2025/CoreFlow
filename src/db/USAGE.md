@@ -6,18 +6,58 @@
 src/db/
 ├── index.js              # Sequelize 实例初始化、连接池配置
 ├── migrate.js            # Umzug 迁移运行器（独立 CLI 脚本）
-└── softDeleteHooks.js    # 软删除 delete_version 钩子工具函数
+├── softDeleteHooks.js    # 软删除 delete_version 钩子工具函数
+└── USAGE.md              # 本文档
 
 src/loader/registry/
 ├── 03-db.js              # 启动时注入 app.db 装饰器
-└── 06-models.js          # 自动加载 src/models/ 下的模型
+└── 06-models.js          # 自动加载 src/models/ 下的模型 + 注册 getModel
 
 migrations/               # Umzug 迁移文件目录
 ```
 
 ---
 
-## 一、连接管理
+## 一、模型获取
+
+### 1.1 `app.db.getModel()` — 推荐入口
+
+统一获取模型，支持命名空间点号或双参数两种写法：
+
+```js
+// 方式一：点号分隔（推荐）
+const userModel = app.db.getModel('user.User');
+const user = await userModel.findByPk(1);
+
+// 方式二：双参数
+const roleModel = app.db.getModel('iam', 'Role');
+const roles = await roleModel.findAll({ where: { app_id: 'admin' } });
+```
+
+**相比直接 `app.db.user.User` 的优势：**
+- 统一的错误提示（模型不存在时列出可用命名空间）
+- Map 缓存，重复调用无遍历开销
+- 点号语法更简洁，避免深层嵌套
+
+**错误处理：**
+```js
+app.db.getModel('unknown.Model');
+// TypeError: getModel: 模型 unknown.Model 不存在。可用命名空间: user, iam, oauth21, notice, session
+
+app.db.getModel('user');
+// TypeError: getModel: 需要命名空间和模型名，如 getModel("user.User") 或 getModel("user", "User")
+```
+
+### 1.2 直接访问（等价）
+
+```js
+const user = await app.db.user.User.findByPk(1);
+const role = await app.db.iam.Role.findOne({ where: { code: 'admin' } });
+```
+
+---
+
+## 二、连接管理
 
 ### 1.1 环境变量
 
