@@ -9,7 +9,7 @@ import { checkRateLimit } from './rate-limiter.js';
 /**
  * 基于地理位置和网络类型的信誉检查
  */
-export const checkGeoReputation = async (redisClient, ip, url) => {
+const checkGeoReputation = async (redisClient, ip, url) => {
   const settings = getConfig().defense;
 
   const internalPrefixes = settings.internalIpPrefixes || ['127.', '10.', '192.168.', '::1'];
@@ -53,7 +53,7 @@ export const checkGeoReputation = async (redisClient, ip, url) => {
 /**
  * 将 IP 解析为地理位置信息
  */
-export function resolveGeoInfo(ip) {
+function resolveGeoInfo(ip) {
   if (!ip) return { region: '未知', city: '未知' };
 
   const internalPrefixes = ['127.', '10.', '192.168.', '::1', '172.'];
@@ -75,3 +75,5 @@ export function resolveGeoInfo(ip) {
 
   return { region: '未知', city: '未知' };
 }
+
+export { checkGeoReputation, resolveGeoInfo };

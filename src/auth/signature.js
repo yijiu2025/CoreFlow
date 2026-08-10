@@ -4,7 +4,7 @@ import { getStore } from '../redis/index.js';
 /**
  * 校验客户端请求签名，防爬防篡改防重放 (类似阿里巴巴 H5 Mtop 签名校验)
  */
-export async function verifySignature(request, reply) {
+async function verifySignature(request, reply) {
   // 1. 仅对 requireLogin 的路由校验签名，公开接口自动跳过
   if (!request.routeConfig?.requireSignature) {
     return;
@@ -85,7 +85,7 @@ export async function verifySignature(request, reply) {
 /**
  * 登录成功或页面访问时下发/更新 H5 Token
  */
-export async function issueH5Token(fastify, reply) {
+async function issueH5Token(fastify, reply) {
   const sessionStore = getStore('h5_token');
   // 生成随机 H5 Token 密钥
   const rawH5Token = crypto.randomBytes(24).toString('hex');
@@ -108,3 +108,5 @@ export async function issueH5Token(fastify, reply) {
 
   return rawH5Token;
 }
+
+export { verifySignature, issueH5Token };

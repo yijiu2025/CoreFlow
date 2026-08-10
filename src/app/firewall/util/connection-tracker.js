@@ -17,7 +17,7 @@ import { getConfig, activeConnections } from './shared.js';
  * @returns {number} 该 IP 当前的并发连接数
  * @throws {Error} 超过连接数限制时抛出，statusCode=429，rule='connection-limit'
  */
-export const trackConnection = (ip, delta) => {
+const trackConnection = (ip, delta) => {
   const settings = getConfig().defense;
   const maxConn = settings.maxConn || settings.maxConnections || 100;
 
@@ -51,7 +51,7 @@ export const trackConnection = (ip, delta) => {
  * @returns {number} return.totalConnections 总并发连接数
  * @returns {Array<{ip: string, count: number}>} return.topIPs 连接数最多的前 10 个 IP
  */
-export function getConnectionStats() {
+function getConnectionStats() {
   const sorted = [...activeConnections.entries()].sort((a, b) => b[1] - a[1]);
   return {
     totalIPs: activeConnections.size,
@@ -64,7 +64,7 @@ export function getConnectionStats() {
  * 清理僵尸连接记录
  * 移除连接数异常高的记录（超过最大限制的 2 倍，通常意味着计数器未正确递减）。
  */
-export function cleanupStaleConnections() {
+function cleanupStaleConnections() {
   const settings = getConfig().defense;
   const limit = (settings.maxConn || settings.maxConnections || 100) * 2;
   for (const [ip, count] of activeConnections) {
@@ -81,7 +81,9 @@ export function cleanupStaleConnections() {
  *
  * @param {import('fastify').FastifyInstance} app Fastify 实例
  */
-export function startCleanupTask(app) {
+function startCleanupTask(app) {
   const timer = setInterval(() => cleanupStaleConnections(), 5 * 60 * 1000);
   app.addHook('onClose', async () => clearInterval(timer));
 }
+
+export { trackConnection, getConnectionStats, cleanupStaleConnections, startCleanupTask };

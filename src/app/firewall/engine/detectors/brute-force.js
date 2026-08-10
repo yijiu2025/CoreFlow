@@ -10,7 +10,7 @@ const C = { reset: '\x1b[0m', yellow: '\x1b[33m' };
 /**
  * 登录暴力破解检测
  */
-export const checkLoginBruteForce = async (redisClient, ip, username, success) => {
+const checkLoginBruteForce = async (redisClient, ip, username, success) => {
   const settings = getConfig().defense;
   if (!settings.enableBruteForce) return;
 
@@ -84,7 +84,7 @@ export const checkLoginBruteForce = async (redisClient, ip, username, success) =
   }
 };
 
-export const isAccountLocked = async (redisClient, username) => {
+const isAccountLocked = async (redisClient, username) => {
   if (!redisClient || !username) return false;
   try {
     return !!(await redisClient.get(KEY.accountLock(username)));
@@ -92,3 +92,5 @@ export const isAccountLocked = async (redisClient, username) => {
     return false;
   }
 };
+
+export { checkLoginBruteForce, isAccountLocked };

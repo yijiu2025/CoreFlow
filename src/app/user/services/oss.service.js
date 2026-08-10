@@ -63,7 +63,7 @@ function getOssClient() {
  * @param {string} mimeType - MIME 类型
  * @returns {Promise<string>} 文件访问 URL
  */
-export async function uploadFile(buffer, fileName, mimeType) {
+async function uploadFile(buffer, fileName, mimeType) {
   const client = getOssClient();
 
   if (client) {
@@ -118,7 +118,7 @@ async function uploadToLocal(buffer, fileName) {
 /**
  * 删除旧头像（可选，不阻塞主流程）
  */
-export async function deleteFile(url) {
+async function deleteFile(url) {
   if (!url) return;
 
   try {
@@ -143,3 +143,5 @@ export async function deleteFile(url) {
     Logger.warn(`[OSS] 删除旧头像失败: ${err.message}`);
   }
 }
+
+export { uploadFile, deleteFile };

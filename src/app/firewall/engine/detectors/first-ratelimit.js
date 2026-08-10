@@ -15,7 +15,7 @@ import { pushRecord } from '../../data/store.js';
  *
  * @param {import('fastify').FastifyInstance} app Fastify 实例
  */
-export async function registerRateLimit(app) {
+async function registerRateLimit(app) {
   const defense = getSecuritySettings().defense;
   if (!defense.enableRateLimit) return;
 
@@ -64,3 +64,5 @@ export async function registerRateLimit(app) {
     console.warn('[Firewall] Rate Limit Plugin Failed:', err);
   }
 }
+
+export { registerRateLimit };

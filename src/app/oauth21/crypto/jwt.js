@@ -24,7 +24,7 @@ const KEY_ID = 'oauth21-key-1';
  * @param {object} [options=jsonwebtoken.SignOptions] - 额外签名选项
  * @returns {string} JWT 字符串
  */
-export function sign(payload, options = {}) {
+function sign(payload, options = {}) {
   const privateKey = getPrivateKey();
   return jwt.sign(payload, privateKey, {
     algorithm: config.jwt.algorithm,
@@ -39,7 +39,7 @@ export function sign(payload, options = {}) {
  * @returns {object} 解码后的 Payload
  * @throws {jwt.JsonWebTokenError} 签名无效或令牌过期时抛出
  */
-export function verify(token) {
+function verify(token) {
   const publicKey = getPublicKey();
   return jwt.verify(token, publicKey, {
     algorithms: [config.jwt.algorithm]
@@ -55,7 +55,7 @@ export function verify(token) {
  * @param {string} [params.aud] - 受众（默认使用 client_id）
  * @returns {string} JWT Access Token
  */
-export function issueAccessToken({ sub, client_id, scope, aud }) {
+function issueAccessToken({ sub, client_id, scope, aud }) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: config.server.issuer,
@@ -82,7 +82,7 @@ export function issueAccessToken({ sub, client_id, scope, aud }) {
  * @param {string} [params.name] - 用户名称
  * @returns {string} JWT ID Token
  */
-export function issueIdToken({ sub, client_id, nonce, auth_time, email, name }) {
+function issueIdToken({ sub, client_id, nonce, auth_time, email, name }) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: config.server.issuer,
@@ -97,3 +97,5 @@ export function issueIdToken({ sub, client_id, nonce, auth_time, email, name }) 
   if (name) payload.name = name;
   return sign(payload);
 }
+
+export { sign, verify, issueAccessToken, issueIdToken };

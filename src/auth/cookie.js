@@ -28,7 +28,7 @@ const SECRET = process.env.SESSION_SECRET || 'change-me-session-secret';
  * @param {number} [accessCount=0] 访问次数
  * @returns {string} 格式: payload.signature
  */
-export function signCookie(sessionId, accessCount = 0) {
+function signCookie(sessionId, accessCount = 0) {
   const payload = Buffer.from(`${sessionId}:${accessCount}`).toString('base64url');
   const signature = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
   return `${payload}.${signature}`;
@@ -39,7 +39,7 @@ export function signCookie(sessionId, accessCount = 0) {
  * @param {string} cookieValue cookie 值 (格式: payload.signature)
  * @returns {{ sessionId: string, accessCount: number } | null}
  */
-export function verifyCookie(cookieValue) {
+function verifyCookie(cookieValue) {
   if (!cookieValue || typeof cookieValue !== 'string') return null;
 
   // 按 '.' 分割为 2 段: payload, signature
@@ -77,7 +77,7 @@ export function verifyCookie(cookieValue) {
 /**
  * Cookie 配置常量
  */
-export const COOKIE_OPTIONS = {
+const COOKIE_OPTIONS = {
   SID: {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -93,14 +93,25 @@ export const COOKIE_OPTIONS = {
 };
 
 /** 短期登录: sid cookie maxAge (秒) */
-export const SHORT_SESSION_TTL = 1800; // 30分钟
+const SHORT_SESSION_TTL = 1800; // 30分钟
 
 /** 长期登录: sid cookie maxAge (秒) */
-export const LONG_SESSION_TTL = 2592000; // 30天
+const LONG_SESSION_TTL = 2592000; // 30天
 
 /** 长期登录: sid_r cookie maxAge (秒) */
-export const REFRESH_TOKEN_TTL = 2592000; // 30天
+const REFRESH_TOKEN_TTL = 2592000; // 30天
 
 /** Cookie 名称 */
-export const COOKIE_SID = 'sid';
-export const COOKIE_SID_R = 'sid_r';
+const COOKIE_SID = 'sid';
+const COOKIE_SID_R = 'sid_r';
+
+export {
+  signCookie,
+  verifyCookie,
+  COOKIE_OPTIONS,
+  SHORT_SESSION_TTL,
+  LONG_SESSION_TTL,
+  REFRESH_TOKEN_TTL,
+  COOKIE_SID,
+  COOKIE_SID_R
+};

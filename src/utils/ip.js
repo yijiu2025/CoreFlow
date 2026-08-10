@@ -12,7 +12,7 @@ import net from 'net';
  * @param {string} ip
  * @returns {string}
  */
-export function normalizeIp(ip) {
+function normalizeIp(ip) {
   if (typeof ip !== 'string') return '';
   let clean = ip.trim();
   if (clean.startsWith('::ffff:')) {
@@ -31,7 +31,7 @@ export function normalizeIp(ip) {
  *   - CIDR 子网（如 '192.168.1.0/24' 或 '2001:db8::/32'）
  * @returns {boolean}
  */
-export function isIpMatch(clientIp, rule) {
+function isIpMatch(clientIp, rule) {
   if (!clientIp || !rule) return false;
 
   const cleanIp = normalizeIp(clientIp);
@@ -79,3 +79,5 @@ export function isIpMatch(clientIp, rule) {
 
   return false;
 }
+
+export { normalizeIp, isIpMatch };

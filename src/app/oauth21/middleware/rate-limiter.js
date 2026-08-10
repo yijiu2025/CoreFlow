@@ -34,7 +34,7 @@ setInterval(() => {
  * @param {number} maxRequests - 窗口内最大请求数
  * @param {number} windowSec - 窗口时间（秒）
  */
-export function createIpRateLimiter(redis, prefix, maxRequests, windowSec) {
+function createIpRateLimiter(redis, prefix, maxRequests, windowSec) {
   return async function checkRateLimit(ip) {
     const key = `rl:${prefix}:${ip}`;
     const now = Date.now();
@@ -80,7 +80,7 @@ export function createIpRateLimiter(redis, prefix, maxRequests, windowSec) {
  * @param {object} fastify - Fastify 实例
  * @param {object} redis - Redis 客户端
  */
-export function registerSensitiveRateLimits(fastify, redis) {
+function registerSensitiveRateLimits(fastify, redis) {
   // 登录接口：每 IP 每分钟 5 次
   const loginLimiter = createIpRateLimiter(redis, 'login', 5, 60);
 
@@ -116,3 +116,5 @@ export function registerSensitiveRateLimits(fastify, redis) {
     }
   });
 }
+
+export { createIpRateLimiter, registerSensitiveRateLimits };

@@ -18,7 +18,7 @@ let securitySettings = { ...DEFAULT_SECURITY_SETTINGS };
  * 初始化 DAO，从磁盘加载配置
  * 注意：此函数由 index.js 在插件注册时调用，不在模块顶层执行
  */
-export function initDao() {
+function initDao() {
   try {
     if (!fs.existsSync(path.dirname(FIREWALL_FILE))) {
       fs.mkdirSync(path.dirname(FIREWALL_FILE), { recursive: true });
@@ -39,9 +39,9 @@ export function initDao() {
 }
 
 // --- 核心状态获取函数 ---
-export const getServerNode = () => serverNode;
-export const getSecuritySettings = () => securitySettings;
-export const getIpApis = () => DEFAULT_IP_APIS;
+const getServerNode = () => serverNode;
+const getSecuritySettings = () => securitySettings;
+const getIpApis = () => DEFAULT_IP_APIS;
 
 // ============== 状态更新与持久化机制 ==============
 
@@ -67,7 +67,7 @@ function triggerSave() {
 /**
  * 清理保存定时器（应用关闭时调用，防止定时器在退出后执行）
  */
-export function cleanupSaveTimer() {
+function cleanupSaveTimer() {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -109,7 +109,7 @@ function deepMerge(target, source) {
  * @param {object} patch 要合并的字段
  * @returns {object} 更新后的节点信息
  */
-export function updateServerNodeMetadata(patch) {
+function updateServerNodeMetadata(patch) {
   serverNode = {
     ...serverNode,
     ...patch,
@@ -124,7 +124,7 @@ export function updateServerNodeMetadata(patch) {
  * @param {object} patch 要深度合并的配置
  * @returns {object} 更新后的安全设置
  */
-export function updateSecuritySettings(patch) {
+function updateSecuritySettings(patch) {
   securitySettings = deepMerge(securitySettings, patch);
   triggerSave();
   return securitySettings;
@@ -138,7 +138,7 @@ export function updateSecuritySettings(patch) {
  * @param {string} value 值
  * @returns {object} 当前防御配置
  */
-export function addToBlacklist(type, value) {
+function addToBlacklist(type, value) {
   if (!value || typeof value !== 'string') return securitySettings.defense;
 
   if (type === 'ip' && !securitySettings.defense.manualBlacklistIps.includes(value)) {
@@ -156,7 +156,7 @@ export function addToBlacklist(type, value) {
  * @param {string} value 值
  * @returns {object} 当前防御配置
  */
-export function removeFromBlacklist(type, value) {
+function removeFromBlacklist(type, value) {
   if (type === 'ip') {
     securitySettings.defense.manualBlacklistIps = securitySettings.defense.manualBlacklistIps.filter(
       ip => ip !== value
@@ -179,7 +179,7 @@ export function removeFromBlacklist(type, value) {
  * @param {object|null} redisClient Redis 客户端（可选）
  * @returns {object} 当前防御配置
  */
-export async function addToWhitelist(ip, durationSeconds, redisClient = null) {
+async function addToWhitelist(ip, durationSeconds, redisClient = null) {
   if (!ip || typeof ip !== 'string') return securitySettings.defense;
 
   if (!securitySettings.defense.manualWhitelistIps) {
@@ -214,7 +214,7 @@ export async function addToWhitelist(ip, durationSeconds, redisClient = null) {
  * @param {object|null} redisClient Redis 客户端（可选）
  * @returns {object} 当前防御配置
  */
-export async function removeFromWhitelist(ip, redisClient = null) {
+async function removeFromWhitelist(ip, redisClient = null) {
   if (!securitySettings.defense.manualWhitelistIps) {
     securitySettings.defense.manualWhitelistIps = [];
   }
@@ -270,7 +270,7 @@ async function migrateBlockKey(redisClient, key) {
  * 同时迁移已有的 fw:block:* 键到 fw:blocked:ips hash 索引
  * @param {object} redisClient Redis 客户端
  */
-export async function syncManualBlacklistToRedis(redisClient) {
+async function syncManualBlacklistToRedis(redisClient) {
   if (!redisClient) return;
 
   // 同步手动封禁列表
@@ -309,7 +309,7 @@ export async function syncManualBlacklistToRedis(redisClient) {
  * 启动时同步白名单到 Redis
  * @param {object} redisClient Redis 客户端
  */
-export async function syncManualWhitelistToRedis(redisClient) {
+async function syncManualWhitelistToRedis(redisClient) {
   if (!redisClient) return;
 
   const entries = securitySettings.defense.manualWhitelistIps || [];
@@ -327,7 +327,7 @@ export async function syncManualWhitelistToRedis(redisClient) {
 /**
  * 自动刷新服务器节点定位信息
  */
-export async function refreshServerNodeAuto() {
+async function refreshServerNodeAuto() {
   const activeApiId = securitySettings.activeIpApi || 'sohu';
   const apiConfig = DEFAULT_IP_APIS.find(a => a.id === activeApiId) || DEFAULT_IP_APIS[0];
 
@@ -371,3 +371,20 @@ export async function refreshServerNodeAuto() {
     console.warn(`⚠️ [Firewall DAO] ${C.yellow}${apiConfig.name} 定位失败: ${err.message}${C.reset}`);
   }
 }
+
+export {
+  initDao,
+  getServerNode,
+  getSecuritySettings,
+  getIpApis,
+  cleanupSaveTimer,
+  updateServerNodeMetadata,
+  updateSecuritySettings,
+  addToBlacklist,
+  removeFromBlacklist,
+  addToWhitelist,
+  removeFromWhitelist,
+  syncManualBlacklistToRedis,
+  syncManualWhitelistToRedis,
+  refreshServerNodeAuto
+};

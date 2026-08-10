@@ -26,7 +26,7 @@ import config from '../config/config.js';
 /**
  * 令牌错误（RFC 6749 标准错误格式）
  */
-export class TokenError extends Error {
+class TokenError extends Error {
   /**
    * @param {string} error - 错误码（如 invalid_grant、unauthorized_client）
    * @param {string} description - 错误描述
@@ -49,7 +49,7 @@ export class TokenError extends Error {
   }
 }
 
-export class TokenService {
+class TokenService {
   /**
    * 验证客户端身份（HTTP Basic / POST body）
    */
@@ -250,3 +250,5 @@ export class TokenService {
     return true;
   }
 }
+
+export { TokenError, TokenService };

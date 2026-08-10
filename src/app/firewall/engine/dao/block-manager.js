@@ -44,7 +44,7 @@ import {
  * @param {boolean} [metadata.permanent=false] 是否永久封禁
  * @param {number} metadata.expiresAt 封禁过期时间戳（毫秒），permanent=true 时忽略
  */
-export async function setBlock(redisClient, ip, metadata) {
+async function setBlock(redisClient, ip, metadata) {
   const value = JSON.stringify(metadata);
 
   // 无 Redis 时直接写内存
@@ -87,7 +87,7 @@ export async function setBlock(redisClient, ip, metadata) {
  * @param {object|null} redisClient Redis 客户端
  * @param {string} ip 要解封的 IP 地址
  */
-export async function removeBlock(redisClient, ip) {
+async function removeBlock(redisClient, ip) {
   memoryBlocks.delete(ip);
   if (!redisClient) return;
   try {
@@ -109,7 +109,7 @@ export async function removeBlock(redisClient, ip) {
  * @param {string} ip 要加入白名单的 IP 地址
  * @param {number} durationSeconds 白名单持续时间（秒）
  */
-export async function setWhitelist(redisClient, ip, durationSeconds) {
+async function setWhitelist(redisClient, ip, durationSeconds) {
   const metadata = { expiresAt: Date.now() + durationSeconds * 1000 };
   const value = JSON.stringify(metadata);
 
@@ -131,7 +131,7 @@ export async function setWhitelist(redisClient, ip, durationSeconds) {
  * @param {object|null} redisClient Redis 客户端
  * @param {string} ip 要移除白名单的 IP 地址
  */
-export async function removeWhitelist(redisClient, ip) {
+async function removeWhitelist(redisClient, ip) {
   memoryWhitelist.delete(ip);
   if (!redisClient) return;
   try {
@@ -154,7 +154,7 @@ export async function removeWhitelist(redisClient, ip) {
  * @param {string} fingerprint 设备指纹（SHA256 哈希的前 16 位）
  * @param {object} metadata 封禁元数据，同 setBlock
  */
-export async function setBlockFp(redisClient, fingerprint, metadata) {
+async function setBlockFp(redisClient, fingerprint, metadata) {
   const value = JSON.stringify(metadata);
   if (!redisClient) {
     memoryBlocksFp.set(fingerprint, {
@@ -190,7 +190,7 @@ export async function setBlockFp(redisClient, fingerprint, metadata) {
  * @param {object|null} redisClient Redis 客户端
  * @param {string} fingerprint 设备指纹
  */
-export async function removeBlockFp(redisClient, fingerprint) {
+async function removeBlockFp(redisClient, fingerprint) {
   memoryBlocksFp.delete(fingerprint);
   if (!redisClient) return;
   try {
@@ -211,7 +211,7 @@ export async function removeBlockFp(redisClient, fingerprint) {
  * @param {string} fingerprint 设备指纹
  * @param {number} durationSeconds 白名单持续时间（秒）
  */
-export async function setWhitelistFp(redisClient, fingerprint, durationSeconds) {
+async function setWhitelistFp(redisClient, fingerprint, durationSeconds) {
   const metadata = { expiresAt: Date.now() + durationSeconds * 1000 };
   const value = JSON.stringify(metadata);
   memoryWhitelistFp.set(fingerprint, { expiresAt: metadata.expiresAt });
@@ -230,7 +230,7 @@ export async function setWhitelistFp(redisClient, fingerprint, durationSeconds) 
  * @param {object|null} redisClient Redis 客户端
  * @param {string} fingerprint 设备指纹
  */
-export async function removeWhitelistFp(redisClient, fingerprint) {
+async function removeWhitelistFp(redisClient, fingerprint) {
   memoryWhitelistFp.delete(fingerprint);
   if (!redisClient) return;
   try {
@@ -251,7 +251,7 @@ export async function removeWhitelistFp(redisClient, fingerprint) {
  * @param {object|null} redisClient Redis 客户端
  * @returns {Promise<Array>} 封禁记录列表，每项包含 ip/fingerprint、type、remainingSeconds 等字段
  */
-export async function getActiveBlocks(redisClient) {
+async function getActiveBlocks(redisClient) {
   const blockMap = new Map();
 
   // ——— 从 Redis Hash 读取 ———
@@ -335,7 +335,7 @@ export async function getActiveBlocks(redisClient) {
  * @param {object|null} redisClient Redis 客户端
  * @returns {Promise<Array>} 白名单记录列表，每项包含 ip/fingerprint、type、remainingSeconds
  */
-export async function getActiveWhitelist(redisClient) {
+async function getActiveWhitelist(redisClient) {
   const wlMap = new Map();
 
   // ——— 从 Redis Hash 读取 ———
@@ -419,7 +419,7 @@ export async function getActiveWhitelist(redisClient) {
  * @param {string} [fingerprint] 设备指纹（可选）
  * @throws {Error} 被封禁时抛出异常，包含 statusCode 和 Retry-After 头
  */
-export const checkGlobalBlock = async (redisClient, ip, fingerprint) => {
+const checkGlobalBlock = async (redisClient, ip, fingerprint) => {
   const now = Date.now();
 
   // ——— 第 1 步：白名单检查（指纹优先） ———
@@ -527,4 +527,18 @@ export const checkGlobalBlock = async (redisClient, ip, fingerprint) => {
     err.headers = { 'Retry-After': String(ttl) };
     throw err;
   }
+};
+
+export {
+  setBlock,
+  removeBlock,
+  setWhitelist,
+  removeWhitelist,
+  setBlockFp,
+  removeBlockFp,
+  setWhitelistFp,
+  removeWhitelistFp,
+  getActiveBlocks,
+  getActiveWhitelist,
+  checkGlobalBlock
 };

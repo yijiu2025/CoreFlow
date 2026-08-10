@@ -25,13 +25,13 @@ import { COOKIE_SID, COOKIE_SID_R } from './cookie.js';
  * 用于在 HTTP 请求生命周期内传递 request 对象，实现静态上下文穿透
  * @type {AsyncLocalStorage}
  */
-export const requestContext = new AsyncLocalStorage();
+const requestContext = new AsyncLocalStorage();
 
 /**
  * 获取当前请求上下文
  * @returns {import('fastify').FastifyRequest}
  */
-export function getCtx() {
+function getCtx() {
   const req = requestContext.getStore();
   if (!req) {
     const err = new Error('INTERNAL_CONTEXT_ERROR');
@@ -44,7 +44,7 @@ export function getCtx() {
 /**
  * 获取数据库实例
  */
-export function getDb() {
+function getDb() {
   const db = getCtx().server.db;
   if (!db) throw new Error('Database plugin not registered');
   return db;
@@ -53,7 +53,7 @@ export function getDb() {
 /**
  * 通用服务器资源访问器
  */
-export function getServerResource(name) {
+function getServerResource(name) {
   const resource = getCtx().server[name];
   if (resource === undefined) throw new Error(`Plugin "${name}" not registered`);
   return resource;
@@ -130,10 +130,12 @@ async function getUserFromToken(token, redis) {
       permissions,
       tokenType: 'bearer'
     };
-  } catch (err) {
+  } catch {
     return null;
   }
 }
+
+export { requestContext, getCtx, getDb, getServerResource };
 
 export default fp(async app => {
   // 读取 JWT 配置（通过共享层，避免直接依赖 oauth21）

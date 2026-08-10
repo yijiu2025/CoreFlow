@@ -14,7 +14,6 @@
  * @since 2026-07-13
  */
 import { Op } from 'sequelize';
-import sequelize from '../db/index.js';
 import { getModel } from '../db/index.js';
 
 /**
@@ -64,7 +63,7 @@ function extractPermissions(policy, allows, denies) {
  * @param {string} appId 应用标识
  * @returns {{ roles: string[], permissions: { allows: string[], denies: string[] } }}
  */
-export async function loadUserPermissions(userId, appId) {
+async function loadUserPermissions(userId, appId) {
   const Role = getModel('Role');
   const UserRole = getModel('UserRole');
   const InlinePolicy = getModel('InlinePolicy');
@@ -131,3 +130,5 @@ export async function loadUserPermissions(userId, appId) {
     permissions: { allows, denies }
   };
 }
+
+export { loadUserPermissions };

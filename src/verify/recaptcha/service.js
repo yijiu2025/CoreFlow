@@ -7,7 +7,7 @@ import config from '../config.js';
 const recaptchaConfig = config.recaptcha;
 
 /** 验证结果 */
-export const VERIFY_RESULT = {
+const VERIFY_RESULT = {
   SUCCESS: 'success',
   FAIL: 'fail',
   ERROR: 'error'
@@ -123,4 +123,5 @@ class RecaptchaService {
   }
 }
 
+export { VERIFY_RESULT };
 export default new RecaptchaService();

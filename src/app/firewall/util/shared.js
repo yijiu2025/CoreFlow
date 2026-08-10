@@ -6,13 +6,13 @@ import { getSecuritySettings } from '../dao/dao.js';
 
 // ============== 内存状态 ==============
 
-export const activeConnections = new Map();
-export const memoryWindows = new Map();
-export const ipRequestTimestamps = new Map();
-export const memoryBlocks = new Map();
-export const memoryWhitelist = new Map();
-export const memoryBlocksFp = new Map();
-export const memoryWhitelistFp = new Map();
+const activeConnections = new Map();
+const memoryWindows = new Map();
+const ipRequestTimestamps = new Map();
+const memoryBlocks = new Map();
+const memoryWhitelist = new Map();
+const memoryBlocksFp = new Map();
+const memoryWhitelistFp = new Map();
 
 // ============== 配置缓存 ==============
 
@@ -20,7 +20,7 @@ let _cachedSettings = null;
 let _cacheTime = 0;
 const CONFIG_TTL = 30000;
 
-export function getConfig() {
+function getConfig() {
   if (Date.now() - _cacheTime > CONFIG_TTL) {
     _cachedSettings = getSecuritySettings();
     _cacheTime = Date.now();
@@ -30,7 +30,7 @@ export function getConfig() {
 
 // ============== Redis Key 前缀 ==============
 
-export const KEY = {
+const KEY = {
   block: id => `fw:block:${id}`,
   rateLimit: id => `fw:rl:${id}`,
   trap: ip => `fw:trap:${ip}`,
@@ -42,12 +42,12 @@ export const KEY = {
   whitelistFp: fp => `fw:whitelist:fp:${fp}`
 };
 
-export const HASH_BLOCKED = 'fw:blocked:ips';
-export const HASH_WHITELIST = 'fw:whitelisted:ips';
-export const HASH_BLOCKED_FP = 'fw:blocked:fps';
-export const HASH_WHITELIST_FP = 'fw:whitelisted:fps';
+const HASH_BLOCKED = 'fw:blocked:ips';
+const HASH_WHITELIST = 'fw:whitelisted:ips';
+const HASH_BLOCKED_FP = 'fw:blocked:fps';
+const HASH_WHITELIST_FP = 'fw:whitelisted:fps';
 
-export const LUA_INCR_WITH_EXPIRE = `
+const LUA_INCR_WITH_EXPIRE = `
   local current = redis.call('incr', KEYS[1])
   if current == 1 then
     redis.call('expire', KEYS[1], ARGV[1])
@@ -57,7 +57,7 @@ export const LUA_INCR_WITH_EXPIRE = `
 
 // ============== 内存滑动窗口 ==============
 
-export function memorySlidingWindow(key, limit, windowSec) {
+function memorySlidingWindow(key, limit, windowSec) {
   const now = Date.now();
   const windowMs = windowSec * 1000;
   const start = now - windowMs;
@@ -76,7 +76,7 @@ export function memorySlidingWindow(key, limit, windowSec) {
 /**
  * 获取封禁状态（兼容旧格式字符串 + 新格式 JSON）
  */
-export async function getBlockStatus(redisClient, blockKey) {
+async function getBlockStatus(redisClient, blockKey) {
   if (!redisClient) return null;
   try {
     const raw = await redisClient.get(blockKey);
@@ -128,3 +128,22 @@ setInterval(() => {
     if (now > entry.expiresAt) memoryWhitelistFp.delete(fp);
   }
 }, 60000);
+
+export {
+  activeConnections,
+  memoryWindows,
+  ipRequestTimestamps,
+  memoryBlocks,
+  memoryWhitelist,
+  memoryBlocksFp,
+  memoryWhitelistFp,
+  getConfig,
+  KEY,
+  HASH_BLOCKED,
+  HASH_WHITELIST,
+  HASH_BLOCKED_FP,
+  HASH_WHITELIST_FP,
+  LUA_INCR_WITH_EXPIRE,
+  memorySlidingWindow,
+  getBlockStatus
+};

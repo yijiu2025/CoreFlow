@@ -12,7 +12,7 @@ import UserDao from '../app/oauth21/dao/user.dao.js';
  * @param {string} uid - 用户 UUID
  * @returns {Promise<object|null>}
  */
-export async function findUserById(uid) {
+async function findUserById(uid) {
   return UserDao.findById(uid);
 }
 
@@ -21,7 +21,7 @@ export async function findUserById(uid) {
  * @param {string} email
  * @returns {Promise<object|null>}
  */
-export async function findUserByEmail(email) {
+async function findUserByEmail(email) {
   return UserDao.findByEmail(email);
 }
 
@@ -30,6 +30,8 @@ export async function findUserByEmail(email) {
  * @param {string} username
  * @returns {Promise<object|null>}
  */
-export async function findUserByUsername(username) {
+async function findUserByUsername(username) {
   return UserDao.findByUsername(username);
 }
+
+export { findUserById, findUserByEmail, findUserByUsername };

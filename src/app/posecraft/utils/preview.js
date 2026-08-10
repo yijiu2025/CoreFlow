@@ -41,7 +41,7 @@ const THUMB_MAX_WIDTH = 600;
  * @param {object} fabricData - pose_data.fabricData
  * @returns {Buffer} SVG buffer
  */
-export function generateSvgFromFabric(fabricData) {
+function generateSvgFromFabric(fabricData) {
   const width = fabricData.width || 800;
   const height = fabricData.height || 600;
   let svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
@@ -93,7 +93,7 @@ export function generateSvgFromFabric(fabricData) {
  * @param {object|string} poseData - 模板/作品的 pose_data
  * @returns {object|null}
  */
-export function extractFabricData(poseData) {
+function extractFabricData(poseData) {
   if (!poseData) return null;
   let data = poseData;
   if (typeof data === 'string') {
@@ -124,7 +124,7 @@ export function extractFabricData(poseData) {
  * @param {string} imageUrl - 底图 URL，如 '/uploads/posecraft/xxx.jpg'
  * @returns {Promise<string|null>} 相对 URL；失败时返回 null（调用方应回退到原图）
  */
-export async function generateImageThumbnail(imageUrl) {
+async function generateImageThumbnail(imageUrl) {
   if (!imageUrl || typeof imageUrl !== 'string') return null;
 
   try {
@@ -165,7 +165,7 @@ export async function generateImageThumbnail(imageUrl) {
  * @param {object|string} poseData - pose_data（含 fabricData）
  * @returns {Promise<string|null>} 相对 URL；失败或无骨架数据时返回 null
  */
-export async function generateSkeletonPreview(poseData) {
+async function generateSkeletonPreview(poseData) {
   const fabricData = extractFabricData(poseData);
   if (!fabricData) return null;
 
@@ -208,3 +208,5 @@ export async function generateSkeletonPreview(poseData) {
     return null;
   }
 }
+
+export { generateSvgFromFabric, extractFabricData, generateImageThumbnail, generateSkeletonPreview };

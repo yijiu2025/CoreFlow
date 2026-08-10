@@ -38,7 +38,7 @@ const alertCooldown = new Map();
  * @param {object} params.details - 攻击详情
  * @param {object} params.config - 防火墙配置
  */
-export async function handleAttackEvent(params) {
+async function handleAttackEvent(params) {
   const { redis, ip, type, details, config } = params;
   const autoConfig = { ...DEFAULT_CONFIG.autoBlock, ...config?.defense };
   const alertConfig = { ...DEFAULT_CONFIG.alert };
@@ -128,3 +128,5 @@ async function sendAlert(ip, type, details, config) {
     }
   }
 }
+
+export { handleAttackEvent };

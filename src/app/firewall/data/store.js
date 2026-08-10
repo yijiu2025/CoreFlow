@@ -128,7 +128,7 @@ loadData();
  * 设置 WebSocket 广播处理器
  * @param {Function} handler
  */
-export function setBroadcastHandler(handler) {
+function setBroadcastHandler(handler) {
   broadcastHandler = handler;
 }
 
@@ -136,7 +136,7 @@ export function setBroadcastHandler(handler) {
  * 记录新的访问请求
  * @param {Object} record
  */
-export function pushRecord(record) {
+function pushRecord(record) {
   records.push(record);
   totalRequests++;
 
@@ -206,7 +206,7 @@ export function pushRecord(record) {
  * @param {number} limit
  * @returns {Array}
  */
-export function getRecentRecords(limit = 100) {
+function getRecentRecords(limit = 100) {
   return records.slice(limit);
 }
 
@@ -214,7 +214,7 @@ export function getRecentRecords(limit = 100) {
  * 获取统计摘要
  * @returns {Object}
  */
-export function getSummary() {
+function getSummary() {
   const topRegions = [...regionStats.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 20)
@@ -248,7 +248,7 @@ export function getSummary() {
 /**
  * 清空所有数据
  */
-export function clearAll() {
+function clearAll() {
   records.clear();
   regionStats.clear();
   pathStats.clear();
@@ -268,3 +268,5 @@ export function clearAll() {
     console.error('[Firewall Store] 清空持久化数据失败:', err.message);
   });
 }
+
+export { setBroadcastHandler, pushRecord, getRecentRecords, getSummary, clearAll };

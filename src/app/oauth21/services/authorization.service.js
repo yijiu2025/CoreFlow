@@ -25,7 +25,7 @@ import config from '../config/config.js';
 /**
  * OAuth 授权错误（RFC 6749 标准错误格式）
  */
-export class OAuthError extends Error {
+class OAuthError extends Error {
   /**
    * @param {string} error - 错误码（如 invalid_request、unauthorized_client）
    * @param {string} description - 错误描述
@@ -56,7 +56,7 @@ export class OAuthError extends Error {
   }
 }
 
-export class AuthorizationService {
+class AuthorizationService {
   /**
    * 验证 /authorize 请求参数
    */
@@ -144,3 +144,5 @@ export class AuthorizationService {
     return code;
   }
 }
+
+export { OAuthError, AuthorizationService };

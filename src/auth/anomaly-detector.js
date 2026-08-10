@@ -2,7 +2,6 @@
  * 异常登录检测模块
  * 检测异地登录、频繁失败、设备指纹变更等异常行为
  */
-import sequelize from '../db/index.js';
 import { getModel } from '../db/index.js';
 import { Op } from 'sequelize';
 
@@ -17,7 +16,7 @@ const CONFIG = {
 /**
  * 检测结果
  */
-export const DETECT_RESULT = {
+const DETECT_RESULT = {
   SAFE: 'safe',
   WARN: 'warn', // 异常但允许登录
   BLOCK: 'block' // 阻止登录
@@ -32,9 +31,8 @@ export const DETECT_RESULT = {
  * @param {object} [params.redis] Redis 客户端
  * @returns {Promise<{status: string, reason?: string}>}
  */
-export async function detectLoginAnomaly(params) {
-  const { email, ip, userAgent, redis } = params;
-  const SessionLog = getModel('SessionLog');
+async function detectLoginAnomaly(params) {
+  const { email, ip, redis } = params;
 
   // 1. 检查同一 IP 的失败次数
   const ipFailures = await countRecentFailures(null, ip);
@@ -104,7 +102,7 @@ async function countRecentFailures(email, ip) {
  * @param {object} redis Redis 客户端
  * @param {string} email 邮箱
  */
-export async function clearAccountLock(redis, email) {
+async function clearAccountLock(redis, email) {
   if (!redis) return;
   await redis.del(`lockout:email:${email}`);
 }
@@ -114,9 +112,10 @@ export async function clearAccountLock(redis, email) {
  * @param {object} redis Redis 客户端
  * @param {string} ip IP 地址
  */
-export async function clearIpLock(redis, ip) {
+async function clearIpLock(redis, ip) {
   if (!redis) return;
   await redis.del(`lockout:ip:${ip}`);
 }
 
+export { DETECT_RESULT, detectLoginAnomaly, clearAccountLock, clearIpLock };
 export default CONFIG;
