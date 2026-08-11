@@ -24,8 +24,23 @@ import { findUserById } from '../shared/user-dao.js';
 import { loadUserPermissions } from './permission-loader.js';
 import StpUtil from './StpUtil.js';
 
+/* eslint-disable no-console */
+
 /** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
 const jwtEnabled = process.env.JWT_ENABLED === 'true';
+
+/** Redis 操作超时（毫秒） */
+const REDIS_TIMEOUT = 3000;
+
+/**
+ * 带超时的 Promise
+ * @param {Promise} promise
+ * @param {number} ms
+ * @returns {Promise<any>}
+ */
+function withTimeout(promise, ms = REDIS_TIMEOUT) {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('Redis 操作超时')), ms))]);
+}
 
 /**
  * 全局 AsyncLocalStorage 实例
@@ -92,14 +107,14 @@ async function getUserFromToken(token, redis) {
       const cacheKey = `perm:${userData.id}:${payload.client_id || 'GLOBAL'}`;
       if (redis) {
         try {
-          const cached = await redis.get(cacheKey);
+          const cached = await withTimeout(redis.get(cacheKey));
           if (cached) {
             const parsed = JSON.parse(cached);
             roles = roles || parsed.roles;
             permissions = permissions || parsed.permissions;
           }
-        } catch {
-          /* 缓存读写失败，降级到数据库 */
+        } catch (err) {
+          console.warn('[Auth] 缓存读取失败，降级到数据库:', err.message);
         }
       }
 
@@ -112,9 +127,9 @@ async function getUserFromToken(token, redis) {
         // 写入缓存（5 分钟）
         if (redis) {
           try {
-            await redis.set(cacheKey, JSON.stringify({ roles, permissions }), { EX: 300 });
-          } catch {
-            /* 缓存读写失败，降级到数据库 */
+            await withTimeout(redis.set(cacheKey, JSON.stringify({ roles, permissions }), { EX: 300 }));
+          } catch (err) {
+            console.warn('[Auth] 缓存写入失败，降级到数据库:', err.message);
           }
         }
       }
