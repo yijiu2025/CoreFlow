@@ -256,6 +256,25 @@ node --env-file=.env src/db/migrate.js --down-to <name>  # 回滚到指定版本
 
 **禁止在生产环境使用 `DB_SYNC=true`**，必须通过迁移文件管理表结构变更。
 
+### 模型获取规范
+
+所有 DAO/Service 层必须通过 `getModel` 获取模型，禁止动态 import 模型文件：
+
+```js
+// ✅ 正确
+import { getModel } from '../db/index.js';
+const User = getModel('User');
+await User.findByPk(1);
+
+// ❌ 禁止
+const { default: User } = await import('../models/user/User.js');
+```
+
+`getModel` 支持三种调用方式：
+- `getModel('User')` — 按模型名 flat 查找（从 `sequelize.models`）
+- `getModel('user.User')` — 点号写法（命名空间 + 模型名）
+- `getModel('user', 'User')` — 双参数
+
 ## Redis 系统 (`src/redis/`)
 
 ```

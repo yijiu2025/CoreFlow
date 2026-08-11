@@ -6,6 +6,8 @@
  * @since 2026-07-13
  */
 
+import { getModel } from '../../../db/index.js';
+
 class FollowDao {
   /**
    * 获取 Follow 模型
