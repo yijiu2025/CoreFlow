@@ -1,11 +1,13 @@
 /**
  * Session 管理器
  * 负责会话的创建、验证、销毁、续期和自动刷新
+ * 所有 Redis 操作统一通过 getStore 管理（自带超时、序列化、降级）
  */
 import crypto from 'node:crypto';
 import { Op } from 'sequelize';
 import sequelize from '../db/index.js';
 import { getModel } from '../db/index.js';
+import { getStore } from '../redis/index.js';
 import {
   signCookie,
   verifyCookie,
@@ -18,9 +20,12 @@ import {
 } from './cookie.js';
 import { loadUserPermissions } from './permission-loader.js';
 
-const SESSION_PREFIX = 'session:';
-const REFRESH_PREFIX = 'refresh:';
 const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
+
+// 统一存储实例（getStore 自动处理 Redis/MapStore、超时、序列化）
+const sessionStore = getStore('session');
+const refreshStore = getStore('refresh');
+const userRefreshStore = getStore('user_refresh');
 
 /**
  * 设备类型常量
@@ -49,14 +54,11 @@ function detectDeviceType(ua) {
 
 /**
  * 踢掉同设备类型的旧会话（单设备单登录）
- * @param {object} redis Redis 客户端
  * @param {number} userId 用户 ID
  * @param {string} appId 应用 ID
  * @param {string} deviceType 设备类型
  */
-async function kickByDeviceType(redis, userId, appId, deviceType) {
-  if (!redis) return;
-
+async function kickByDeviceType(userId, appId, deviceType) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
@@ -67,12 +69,11 @@ async function kickByDeviceType(redis, userId, appId, deviceType) {
 
   for (const token of oldTokens) {
     // 通过 Redis session 数据判断设备类型
-    const sessionData = await redis.get(`${SESSION_PREFIX}${token.token}`);
+    const sessionData = await sessionStore.get(token.token);
     if (sessionData) {
-      const data = JSON.parse(sessionData);
-      if (data.deviceType === deviceType) {
+      if (sessionData.deviceType === deviceType) {
         // 删除 Redis session
-        await redis.del(`${SESSION_PREFIX}${token.token}`);
+        await sessionStore.delete(token.token);
         // 标记 revoked
         await token.update({ revoked: true });
         // 记录日志
@@ -93,15 +94,12 @@ async function kickByDeviceType(redis, userId, appId, deviceType) {
 
 /**
  * 检查并发会话数
- * @param {object} redis Redis 客户端
  * @param {number} userId 用户 ID
  * @param {string} appId 应用 ID
  * @param {number} maxSessions 最大并发会话数（默认 5）
  * @returns {null|object} null=未超限，object=超限返回活跃会话列表
  */
-async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
-  if (!redis) return null;
-
+async function checkMaxSessions(userId, appId, maxSessions = 5) {
   const SessionToken = getModel('SessionToken');
 
   // 按应用过滤：只计算当前应用的会话
@@ -115,16 +113,11 @@ async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
   // 返回活跃会话列表，让调用方决定踢哪个
   const sessions = [];
   for (const t of tokens) {
-    const sessionData = await redis.get(`${SESSION_PREFIX}${t.token}`);
+    const sessionData = await sessionStore.get(t.token);
     let info = { sessionId: t.token, ip: t.ip, userAgent: t.user_agent, lastActive: t.last_active };
     if (sessionData) {
-      try {
-        const d = JSON.parse(sessionData);
-        info.deviceType = d.deviceType;
-        info.appId = d.appId;
-      } catch {
-        /* session 解析失败，跳过 */
-      }
+      info.deviceType = sessionData.deviceType;
+      info.appId = sessionData.appId;
     }
     sessions.push(info);
   }
@@ -134,15 +127,14 @@ async function checkMaxSessions(redis, userId, appId, maxSessions = 5) {
 
 /**
  * 踢掉指定会话
- * @param {object} redis Redis 客户端
  * @param {string} sessionId 要踢掉的会话 ID
  * @param {number} userId 操作者用户 ID
  */
-async function kickSession(redis, sessionId, userId) {
+async function kickSession(sessionId, userId) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
-  await redis.del(`${SESSION_PREFIX}${sessionId}`);
+  await sessionStore.delete(sessionId);
   const token = await SessionToken.findOne({ where: { token: sessionId, revoked: false } });
   if (token) {
     await token.update({ revoked: true });
@@ -156,10 +148,9 @@ async function kickSession(redis, sessionId, userId) {
 
 /**
  * 踢掉用户所有会话
- * @param {object} redis Redis 客户端
  * @param {number} userId 用户 ID
  */
-async function kickAllSessions(redis, userId) {
+async function kickAllSessions(userId) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
@@ -168,7 +159,7 @@ async function kickAllSessions(redis, userId) {
   });
 
   for (const t of tokens) {
-    await redis.del(`${SESSION_PREFIX}${t.token}`);
+    await sessionStore.delete(t.token);
     await t.update({ revoked: true });
   }
 
@@ -182,7 +173,6 @@ async function kickAllSessions(redis, userId) {
 /**
  * 创建会话
  * @param {object} params
- * @param {object} params.redis Redis 客户端
  * @param {number} params.userId 用户内部 ID
  * @param {string} params.uid 用户 UUID
  * @param {string} params.username 用户名
@@ -200,7 +190,6 @@ async function kickAllSessions(redis, userId) {
  */
 async function createSession(params) {
   const {
-    redis,
     userId,
     uid,
     username,
@@ -217,7 +206,7 @@ async function createSession(params) {
   } = params;
 
   // 1. 并发会话限制：检查是否超限（不自动踢人，由调用方处理）
-  const maxSessionsResult = await checkMaxSessions(redis, userId, appId);
+  const maxSessionsResult = await checkMaxSessions(userId, appId);
   if (maxSessionsResult) {
     const err = new Error('MAX_SESSIONS_EXCEEDED');
     err.code = 'MAX_SESSIONS_EXCEEDED';
@@ -227,7 +216,7 @@ async function createSession(params) {
   }
 
   // 2. 单设备单登录：踢掉同用户同应用同设备类型的旧会话
-  await kickByDeviceType(redis, userId, appId, deviceType || DEVICE_TYPE.BROWSER);
+  await kickByDeviceType(userId, appId, deviceType || DEVICE_TYPE.BROWSER);
 
   // 2. 加载该用户在该应用的角色和权限
   const { roles, permissions } = await loadUserPermissions(userId, appId);
@@ -258,36 +247,31 @@ async function createSession(params) {
 
   // 4. Redis 存储
   const sessionTtl = rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
-  const userRefreshKey = `user_refresh:${userId}`;
 
-  if (redis) {
-    await redis.set(`${SESSION_PREFIX}${sessionId}`, JSON.stringify(sessionData), { EX: sessionTtl });
+  await sessionStore.set(sessionId, sessionData, sessionTtl);
 
-    if (refreshToken) {
-      // 清理超出限制的旧 refresh token
-      const count = await redis.zCard(userRefreshKey);
-      if (count >= MAX_REFRESH_TOKENS) {
-        // 删除最久未刷新的（score 最小的）
-        const removeCount = count - MAX_REFRESH_TOKENS + 1;
-        const oldTokens = await redis.zRangeByScore(userRefreshKey, '-inf', '+inf', {
-          LIMIT: { offset: 0, count: removeCount }
-        });
-        for (const oldRt of oldTokens) {
-          const oldSessionId = await redis.get(`${REFRESH_PREFIX}${oldRt}`);
-          if (oldSessionId) await redis.del(`${SESSION_PREFIX}${oldSessionId}`);
-          await redis.del(`${REFRESH_PREFIX}${oldRt}`);
-        }
-        await redis.zRem(userRefreshKey, oldTokens);
-      }
-
-      // 写入新的 refresh token
-      await redis.set(`${REFRESH_PREFIX}${refreshToken}`, sessionId, {
-        EX: REFRESH_TOKEN_TTL
+  if (refreshToken) {
+    // 清理超出限制的旧 refresh token
+    const count = await userRefreshStore.zCard(String(userId));
+    if (count >= MAX_REFRESH_TOKENS) {
+      // 删除最久未刷新的（score 最小的）
+      const removeCount = count - MAX_REFRESH_TOKENS + 1;
+      const oldTokens = await userRefreshStore.zRangeByScore(String(userId), '-inf', '+inf', {
+        LIMIT: { offset: 0, count: removeCount }
       });
-      // 记录到用户的 refresh 索引（score = 当前时间戳）
-      await redis.zAdd(userRefreshKey, { score: Date.now(), value: refreshToken });
-      await redis.expire(userRefreshKey, REFRESH_TOKEN_TTL);
+      for (const oldRt of oldTokens) {
+        const oldSessionId = await refreshStore.get(oldRt);
+        if (oldSessionId) await sessionStore.delete(oldSessionId);
+        await refreshStore.delete(oldRt);
+      }
+      await userRefreshStore.zRem(String(userId), oldTokens);
     }
+
+    // 写入新的 refresh token
+    await refreshStore.set(refreshToken, sessionId, REFRESH_TOKEN_TTL);
+    // 记录到用户的 refresh 索引（score = 当前时间戳）
+    await userRefreshStore.zAdd(String(userId), Date.now(), refreshToken);
+    await userRefreshStore.call(redis => redis.expire(`user_refresh:${userId}`, REFRESH_TOKEN_TTL));
   }
 
   // 5. DB 写入
@@ -351,12 +335,11 @@ async function createSession(params) {
 /**
  * 从请求中验证并获取会话数据
  * @param {object} params
- * @param {object} params.redis Redis 客户端
  * @param {object} params.cookies 请求的 cookies
  * @returns {object|null} 会话数据或 null
  */
 async function getSession(params) {
-  const { redis, cookies, reply } = params;
+  const { cookies, reply } = params;
 
   // 1. 解析 sid cookie
   const sidCookie = cookies[COOKIE_SID];
@@ -378,15 +361,12 @@ async function getSession(params) {
   }
 
   // 3. Redis 查询
-  if (redis) {
-    const raw = await redis.get(`${SESSION_PREFIX}${sessionId}`);
-    if (raw) {
-      const data = JSON.parse(raw);
-      // 续期
-      const ttl = data.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
-      await redis.expire(`${SESSION_PREFIX}${sessionId}`, ttl);
-      return { ...data, sessionId, accessCount: accessCount + 1 };
-    }
+  const raw = await sessionStore.get(sessionId);
+  if (raw) {
+    // 续期
+    const ttl = raw.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
+    await sessionStore.expire(sessionId, ttl);
+    return { ...raw, sessionId, accessCount: accessCount + 1 };
   }
 
   // 4. Redis 未命中，降级到 DB
@@ -423,9 +403,7 @@ async function getSession(params) {
     rememberMe: false
   };
 
-  if (redis) {
-    await redis.set(`${SESSION_PREFIX}${sessionId}`, JSON.stringify(sessionData), { EX: SHORT_SESSION_TTL });
-  }
+  await sessionStore.set(sessionId, sessionData, SHORT_SESSION_TTL);
 
   return { ...sessionData, sessionId };
 }
@@ -433,13 +411,12 @@ async function getSession(params) {
 /**
  * 刷新会话 (sid 过期时用 sid_r 自动续期)
  * @param {object} params
- * @param {object} params.redis Redis 客户端
  * @param {object} params.cookies 请求的 cookies
  * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
  * @returns {object|null} 新的会话数据或 null
  */
 async function refreshSession(params) {
-  const { redis, cookies, reply, request } = params;
+  const { cookies, reply, request } = params;
 
   // 1. 解析 sid_r cookie
   const sidRCookie = cookies[COOKIE_SID_R];
@@ -451,10 +428,7 @@ async function refreshSession(params) {
   const refreshToken = parsed.sessionId; // sid_r cookie 中存储的 payload 是 refreshToken
 
   // 2. Redis 查询 refreshToken 对应的旧 sessionId
-  let oldSessionId = null;
-  if (redis) {
-    oldSessionId = await redis.get(`${REFRESH_PREFIX}${refreshToken}`);
-  }
+  const oldSessionId = await refreshStore.get(refreshToken);
 
   // 3. DB 查询会话记录（createSession 存储的是 sha256(sessionId)）
   const SessionToken = getModel('SessionToken');
@@ -508,20 +482,15 @@ async function refreshSession(params) {
   };
 
   // 6. Redis 写入新 session
-  if (redis) {
-    await redis.set(`${SESSION_PREFIX}${newSessionId}`, JSON.stringify(sessionData), { EX: sessionTtl });
-    // 更新 refreshToken 映射
-    await redis.set(`${REFRESH_PREFIX}${refreshToken}`, newSessionId, {
-      EX: REFRESH_TOKEN_TTL
-    });
-    // 更新 refresh token 的活跃时间
-    const userRefreshKey = `user_refresh:${user.id}`;
-    await redis.zAdd(userRefreshKey, { score: Date.now(), value: refreshToken });
-    await redis.expire(userRefreshKey, REFRESH_TOKEN_TTL);
-    // 清除旧 session
-    if (oldSessionId) {
-      await redis.del(`${SESSION_PREFIX}${oldSessionId}`);
-    }
+  await sessionStore.set(newSessionId, sessionData, sessionTtl);
+  // 更新 refreshToken 映射
+  await refreshStore.set(refreshToken, newSessionId, REFRESH_TOKEN_TTL);
+  // 更新 refresh token 的活跃时间
+  await userRefreshStore.zAdd(String(user.id), Date.now(), refreshToken);
+  await userRefreshStore.call(redis => redis.expire(`user_refresh:${user.id}`, REFRESH_TOKEN_TTL));
+  // 清除旧 session
+  if (oldSessionId) {
+    await sessionStore.delete(oldSessionId);
   }
 
   // 7. DB 更新 token 哈希
@@ -556,7 +525,6 @@ async function refreshSession(params) {
 /**
  * 销毁会话 (登出)
  * @param {object} params
- * @param {object} params.redis Redis 客户端
  * @param {string} params.sessionId 会话 ID
  * @param {number} params.userId 用户 ID (用于日志)
  * @param {string} params.appId 应用 ID (用于日志)
@@ -564,11 +532,11 @@ async function refreshSession(params) {
  * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
  */
 async function destroySession(params) {
-  const { redis, sessionId, userId, appId, ip, reply } = params;
+  const { sessionId, userId, appId, ip, reply } = params;
 
   // 1. Redis 删除
-  if (redis && sessionId) {
-    await redis.del(`${SESSION_PREFIX}${sessionId}`);
+  if (sessionId) {
+    await sessionStore.delete(sessionId);
   }
 
   // 2. DB 标记 revoked
@@ -594,11 +562,10 @@ async function destroySession(params) {
 
 /**
  * 踢用户下线 (管理员操作)
- * @param {object} redis Redis 客户端
  * @param {number} userId 用户 ID
  * @param {string|null} appId 指定应用 (null = 全部应用)
  */
-async function kickUser(redis, userId, appId = null) {
+async function kickUser(userId, appId = null) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
@@ -609,9 +576,7 @@ async function kickUser(redis, userId, appId = null) {
 
   for (const token of tokens) {
     // 删除 Redis session
-    if (redis) {
-      await redis.del(`${SESSION_PREFIX}${token.token}`);
-    }
+    await sessionStore.delete(token.token);
     // 标记 revoked
     await token.update({ revoked: true });
   }
@@ -655,10 +620,9 @@ async function logLoginFailure(params) {
 
 /**
  * 获取会话统计信息
- * @param {object} redis Redis 客户端
  * @returns {Promise<{onlineUsers: number, activeDevices: number, redisSessions: number}>}
  */
-async function getSessionStats(redis) {
+async function getSessionStats() {
   const SessionToken = getModel('SessionToken');
   const UserSession = getModel('UserSession');
 
@@ -673,15 +637,12 @@ async function getSessionStats(redis) {
     where: { revoked: false }
   });
 
-  // 3. Redis 中的活跃 session 数
+  // 3. Redis 中的活跃 session 数（SCAN 遍历，避免 KEYS 阻塞）
   let redisSessions = 0;
-  if (redis) {
-    try {
-      const keys = await redis.keys(`${SESSION_PREFIX}*`);
-      redisSessions = keys.length;
-    } catch {
-      // Redis 故障时忽略
-    }
+  try {
+    redisSessions = await sessionStore.size();
+  } catch {
+    // Redis 故障时忽略
   }
 
   return { onlineUsers, activeDevices, redisSessions };

@@ -685,6 +685,90 @@ const RedisStore = {
     }
   },
 
+  // ========== 有序集合（ZSet）操作 ==========
+
+  /**
+   * 向有序集合添加元素
+   * @param {string} prefix - 命名空间
+   * @param {string} key - 键
+   * @param {number} score - 分数
+   * @param {string} value - 成员值
+   * @param {number} [timeout] - 超时毫秒
+   * @param {boolean} [useBackup] - 是否使用备用 Redis
+   */
+  async zAdd(prefix, key, score, value, timeout, useBackup) {
+    _validateInput(prefix, key);
+    const redis = _getRedis('zAdd', prefix, useBackup);
+    const fullKey = makeKey(prefix, key);
+    try {
+      await withTimeout(redis, r => r.zAdd(fullKey, { score, value }), timeout);
+    } catch (err) {
+      _wrapRedisError(err, 'zAdd', prefix);
+    }
+  },
+
+  /**
+   * 获取有序集合的基数（元素数量）
+   * @param {string} prefix - 命名空间
+   * @param {string} key - 键
+   * @param {number} [timeout] - 超时毫秒
+   * @param {boolean} [useBackup] - 是否使用备用 Redis
+   * @returns {Promise<number>}
+   */
+  async zCard(prefix, key, timeout, useBackup) {
+    _validateInput(prefix, key);
+    const redis = _getRedis('zCard', prefix, useBackup);
+    const fullKey = makeKey(prefix, key);
+    try {
+      return await withTimeout(redis, r => r.zCard(fullKey), timeout);
+    } catch (err) {
+      _wrapRedisError(err, 'zCard', prefix);
+    }
+  },
+
+  /**
+   * 按分数范围获取有序集合成员
+   * @param {string} prefix - 命名空间
+   * @param {string} key - 键
+   * @param {number|string} min - 最小分数（'-inf' 表示负无穷）
+   * @param {number|string} max - 最大分数（'+inf' 表示正无穷）
+   * @param {object} [opts] - 选项（如 LIMIT）
+   * @param {number} [timeout] - 超时毫秒
+   * @param {boolean} [useBackup] - 是否使用备用 Redis
+   * @returns {Promise<string[]>} 成员值数组
+   */
+  async zRangeByScore(prefix, key, min, max, opts, timeout, useBackup) {
+    _validateInput(prefix, key);
+    const redis = _getRedis('zRangeByScore', prefix, useBackup);
+    const fullKey = makeKey(prefix, key);
+    try {
+      return await withTimeout(redis, r => r.zRangeByScore(fullKey, min, max, opts), timeout);
+    } catch (err) {
+      _wrapRedisError(err, 'zRangeByScore', prefix);
+    }
+  },
+
+  /**
+   * 从有序集合中移除成员
+   * @param {string} prefix - 命名空间
+   * @param {string} key - 键
+   * @param {string|string[]} members - 要移除的成员值（可传数组）
+   * @param {number} [timeout] - 超时毫秒
+   * @param {boolean} [useBackup] - 是否使用备用 Redis
+   * @returns {Promise<number>} 移除的元素数量
+   */
+  async zRem(prefix, key, members, timeout, useBackup) {
+    _validateInput(prefix, key);
+    const redis = _getRedis('zRem', prefix, useBackup);
+    const fullKey = makeKey(prefix, key);
+    const args = Array.isArray(members) ? members : [members];
+    try {
+      return await withTimeout(redis, r => r.zRem(fullKey, args), timeout);
+    } catch (err) {
+      _wrapRedisError(err, 'zRem', prefix);
+    }
+  },
+
   // ========== 批量操作 ==========
 
   /**
@@ -787,6 +871,13 @@ function getRedisStore(resolvedPrefix, timeout, useBackup) {
       return _getRedisClient(useBackup);
     },
     call: (fn, opTimeout) => RedisStore.call(resolvedPrefix, fn, opTimeout ?? timeout, useBackup),
+
+    // ========== 有序集合（ZSet）操作 ==========
+    zAdd: (key, score, value) => RedisStore.zAdd(resolvedPrefix, key, score, value, timeout, useBackup),
+    zCard: key => RedisStore.zCard(resolvedPrefix, key, timeout, useBackup),
+    zRangeByScore: (key, min, max, opts) => RedisStore.zRangeByScore(resolvedPrefix, key, min, max, opts, timeout, useBackup),
+    zRem: (key, members) => RedisStore.zRem(resolvedPrefix, key, members, timeout, useBackup),
+
     // ========== 后端类型标记（用于缓存失效判断） ==========
     _backend: 'redis'
   };
