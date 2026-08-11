@@ -23,24 +23,12 @@ import { verifyJwt } from '../shared/jwt.js';
 import { findUserById } from '../shared/user-dao.js';
 import { loadUserPermissions } from './permission-loader.js';
 import StpUtil from './StpUtil.js';
+import { getStore } from '../redis/index.js';
 
 /* eslint-disable no-console */
 
 /** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
 const jwtEnabled = process.env.JWT_ENABLED === 'true';
-
-/** Redis 操作超时（毫秒） */
-const REDIS_TIMEOUT = 3000;
-
-/**
- * 带超时的 Promise
- * @param {Promise} promise
- * @param {number} ms
- * @returns {Promise<any>}
- */
-function withTimeout(promise, ms = REDIS_TIMEOUT) {
-  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('Redis 操作超时')), ms))]);
-}
 
 /**
  * 全局 AsyncLocalStorage 实例
@@ -86,12 +74,12 @@ function getServerResource(name) {
  *
  * 优先从 JWT Claims 读取 roles/permissions（新版 token 已嵌入），
  * 旧版 token 无 claims 时降级为 Redis 缓存 → 数据库查询。
+ * 缓存通过 getStore 统一管理，自带超时保护、序列化和降级。
  *
  * @param {string} token - JWT access_token
- * @param {object} redis - Redis 客户端（可选，用于权限缓存）
  * @returns {Promise<object|null} 用户信息对象或 null（验证失败时）
  */
-async function getUserFromToken(token, redis) {
+async function getUserFromToken(token) {
   try {
     const payload = verifyJwt(token);
     if (!payload?.sub) return null;
@@ -103,19 +91,17 @@ async function getUserFromToken(token, redis) {
     let roles = payload.roles;
     let permissions = payload.permissions;
     if (!roles || !permissions) {
-      // 尝试从 Redis 缓存读取（避免每次请求查库）
-      const cacheKey = `perm:${userData.id}:${payload.client_id || 'GLOBAL'}`;
-      if (redis) {
-        try {
-          const cached = await withTimeout(redis.get(cacheKey));
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            roles = roles || parsed.roles;
-            permissions = permissions || parsed.permissions;
-          }
-        } catch (err) {
-          console.warn('[Auth] 缓存读取失败，降级到数据库:', err.message);
+      const permStore = getStore('perm', { timeout: 3000 });
+      const cacheKey = `${userData.id}:${payload.client_id || 'GLOBAL'}`;
+
+      try {
+        const cached = await permStore.get(cacheKey);
+        if (cached) {
+          roles = roles || cached.roles;
+          permissions = permissions || cached.permissions;
         }
+      } catch (err) {
+        console.warn('[Auth] 缓存读取失败，降级到数据库:', err.message);
       }
 
       // 缓存未命中，从数据库加载
@@ -124,13 +110,11 @@ async function getUserFromToken(token, redis) {
         roles = roles || loaded.roles;
         permissions = permissions || loaded.permissions;
 
-        // 写入缓存（5 分钟）
-        if (redis) {
-          try {
-            await withTimeout(redis.set(cacheKey, JSON.stringify({ roles, permissions }), { EX: 300 }));
-          } catch (err) {
-            console.warn('[Auth] 缓存写入失败，降级到数据库:', err.message);
-          }
+        // 写入缓存（5 分钟），getStore 自带超时和序列化
+        try {
+          await permStore.set(cacheKey, { roles, permissions }, 300);
+        } catch (err) {
+          console.warn('[Auth] 缓存写入失败:', err.message);
         }
       }
     }
@@ -168,7 +152,7 @@ export default fp(async app => {
       const authHeader = request.headers.authorization;
       if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
-        const tokenUser = await getUserFromToken(token, request.server.redis);
+        const tokenUser = await getUserFromToken(token);
         if (tokenUser) {
           request.state.user = tokenUser;
           return;
@@ -177,7 +161,7 @@ export default fp(async app => {
 
       // 2b. access_token Cookie
       if (cookies['access_token']) {
-        const tokenUser = await getUserFromToken(cookies['access_token'], request.server.redis);
+        const tokenUser = await getUserFromToken(cookies['access_token']);
         if (tokenUser) {
           request.state.user = tokenUser;
           return;
