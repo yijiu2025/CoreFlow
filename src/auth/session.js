@@ -17,11 +17,10 @@ import {
   REFRESH_TOKEN_TTL
 } from './cookie.js';
 import { loadUserPermissions } from './permission-loader.js';
-import { SESSION_CONFIG } from '../shared/config.js';
 
 const SESSION_PREFIX = 'session:';
 const REFRESH_PREFIX = 'refresh:';
-const MAX_REFRESH_TOKENS = SESSION_CONFIG.maxRefreshTokens || 10;
+const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
 
 /**
  * 设备类型常量
