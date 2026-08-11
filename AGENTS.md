@@ -260,6 +260,10 @@ node --env-file=.env src/db/migrate.js --down-to <name>  # 回滚到指定版本
 
 DAO/Service 层统一使用 `getModel` 获取模型，禁止动态 import 模型文件。支持 `getModel('User')`、`getModel('user.User')`、`getModel('user', 'User')` 三种写法。
 
+### 数据库查询规范
+
+禁止直接写 SQL 语句，必须使用 Sequelize 模型方法（`findAll`/`findOne`/`findByPk`/`create`/`update` 等）。软删除模型禁止设置 `paranoid: true`，必须使用 `delete_version` 机制 + `registerDeleteVersionHooks` 钩子。
+
 ## Redis 系统 (`src/redis/`)
 
 ```

@@ -275,6 +275,33 @@ const { default: User } = await import('../models/user/User.js');
 - `getModel('user.User')` — 点号写法（命名空间 + 模型名）
 - `getModel('user', 'User')` — 双参数
 
+### 数据库查询规范
+
+**禁止直接写 SQL 语句**，所有数据库查询必须使用 Sequelize 模型方法：
+
+```js
+// ✅ 正确：使用模型方法
+const user = await getModel('User').findByPk(1);
+const works = await getModel('Work').findAll({ where: { status: 1 } });
+
+// ❌ 禁止：直接写 SQL
+await sequelize.query('SELECT * FROM users WHERE id = 1');
+```
+
+**软删除模型禁止设置 `paranoid: true`**，必须使用 `delete_version` 机制 + `registerDeleteVersionHooks` 钩子：
+
+```js
+// ✅ 正确：使用 delete_version
+timestamps: true,
+paranoid: false,  // 禁用 Sequelize 内置 paranoid
+// 在模型末尾调用
+registerDeleteVersionHooks(Model);
+
+// ❌ 禁止：paranoid: true（会生成 deleted_at 查询，但表无此列）
+timestamps: true,
+paranoid: true,  // 错误！
+```
+
 ## Redis 系统 (`src/redis/`)
 
 ```
