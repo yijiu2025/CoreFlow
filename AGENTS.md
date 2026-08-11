@@ -256,6 +256,10 @@ node --env-file=.env src/db/migrate.js --down-to <name>  # 回滚到指定版本
 
 **禁止在生产环境使用 `DB_SYNC=true`**，必须通过迁移文件管理表结构变更。
 
+### 模型获取规范
+
+DAO/Service 层统一使用 `getModel` 获取模型，禁止动态 import 模型文件。支持 `getModel('User')`、`getModel('user.User')`、`getModel('user', 'User')` 三种写法。
+
 ## Redis 系统 (`src/redis/`)
 
 ```

@@ -5,7 +5,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import sequelize from '../../../db/index.js';
+import { getModel, sequelize } from '../../../db/index.js';
 
 class WorkDao {
   /**
@@ -166,9 +166,13 @@ class WorkDao {
   async _getSharedTargetIds(userId, workIds) {
     if (!workIds.length) return new Set();
     const { Op } = await import('sequelize');
-    const UserShare = getModel('UserShare');
-    // 如果 UserShare 模型不存在，返回空集合（分享功能预留）
-    if (!UserShare) return new Set();
+    let UserShare;
+    try {
+      UserShare = getModel('UserShare');
+    } catch {
+      // UserShare 模型不存在（分享功能未启用），返回空集合
+      return new Set();
+    }
     const records = await UserShare.findAll({
       where: { user_id: userId, work_id: { [Op.in]: workIds }, delete_version: 0 },
       attributes: ['work_id']
