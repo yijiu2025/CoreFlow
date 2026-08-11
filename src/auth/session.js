@@ -3,6 +3,9 @@
  * 负责会话的创建、验证、销毁、续期和自动刷新
  * 所有 Redis 操作统一通过 getStore 管理（自带超时、序列化、降级）
  */
+
+/* eslint-disable no-console */
+
 import crypto from 'node:crypto';
 import { Op } from 'sequelize';
 import sequelize from '../db/index.js';
@@ -21,6 +24,12 @@ import {
 import { loadUserPermissions } from './permission-loader.js';
 
 const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
+
+/** 认证调试开关 */
+const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';
+function _debug(...args) {
+  if (DEBUG_AUTH) console.log('[Auth Debug]', ...args);
+}
 
 // 统一存储实例（getStore 自动处理 Redis/MapStore、超时、序列化）
 const sessionStore = getStore('session');
@@ -344,11 +353,16 @@ async function getSession(params) {
   // 1. 解析 sid cookie
   const sidCookie = cookies[COOKIE_SID];
   if (!sidCookie) return null;
+  _debug('📋 解析 sid Cookie: %s...', sidCookie.slice(0, 16));
 
   const parsed = verifyCookie(sidCookie);
-  if (!parsed) return null;
+  if (!parsed) {
+    _debug('❌ sid Cookie 签名验证失败');
+    return null;
+  }
 
   const { sessionId, accessCount } = parsed;
+  _debug('📋 sid 解析成功: sessionId=%s, accessCount=%s', sessionId, accessCount);
 
   // 2. 递增访问次数，重新签名 cookie
   if (reply) {
@@ -361,13 +375,17 @@ async function getSession(params) {
   }
 
   // 3. Redis 查询
+  _debug('📋 Redis 查询 session: %s', sessionId);
   const raw = await sessionStore.get(sessionId);
   if (raw) {
+    _debug('✅ Redis 命中: userId=%s, username=%s', raw.userId, raw.username);
     // 续期
     const ttl = raw.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
     await sessionStore.expire(sessionId, ttl);
+    _debug('📋 Session 续期: TTL=%ss', ttl);
     return { ...raw, sessionId, accessCount: accessCount + 1 };
   }
+  _debug('❌ Redis 未命中，降级到 DB');
 
   // 4. Redis 未命中，降级到 DB
   const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');

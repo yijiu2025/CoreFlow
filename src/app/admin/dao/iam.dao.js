@@ -1,5 +1,5 @@
 import sequelize from '../../../db/index.js';
-import { getModel } from '../db/index.js';
+import { getModel } from '../../../db/index.js';
 import { QueryTypes } from 'sequelize';
 
 class IamDao {

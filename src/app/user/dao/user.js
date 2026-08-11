@@ -10,7 +10,7 @@
  */
 import jwt from 'jsonwebtoken';
 import sequelize from '../../../db/index.js';
-import { getModel } from '../db/index.js';
+import { getModel } from '../../../db/index.js';
 import { decrypt } from '../../oauth21/crypto/encryption.js';
 import bcrypt from 'bcryptjs';
 import IamDao from '../../admin/dao/iam.dao.js';

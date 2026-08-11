@@ -30,6 +30,15 @@ import { getStore } from '../redis/index.js';
 /** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
 const jwtEnabled = process.env.JWT_ENABLED === 'true';
 
+/** 认证调试开关 */
+const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';
+function _debug(...args) {
+  if (DEBUG_AUTH) {
+    const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    console.log('[Auth Debug]', msg);
+  }
+}
+
 /**
  * 全局 AsyncLocalStorage 实例
  * 用于在 HTTP 请求生命周期内传递 request 对象，实现静态上下文穿透
@@ -83,6 +92,7 @@ async function getUserFromToken(token) {
   try {
     const payload = verifyJwt(token);
     if (!payload?.sub) return null;
+    _debug('🔑 JWT 解析成功: sub=%s, client_id=%s, scope=%s', payload.sub, payload.client_id, payload.scope);
 
     // 1. 优先查用户缓存（30s TTL），避免每次请求打 DB
     //    缓存未命中才查库，兼顾性能与账号实时状态
@@ -95,6 +105,7 @@ async function getUserFromToken(token) {
     }
 
     if (!userData) {
+      _debug('📦 用户缓存未命中，查 DB: userId=%s', payload.sub);
       userData = await findUserById(payload.sub);
       if (!userData) return null;
       // 写入缓存（30 秒），账号禁用等状态变更 30s 内生效
@@ -103,10 +114,15 @@ async function getUserFromToken(token) {
       } catch (err) {
         console.warn('[Auth] 用户缓存写入失败:', err.message);
       }
+    } else {
+      _debug('📦 用户缓存命中: userId=%s, username=%s', userData.id, userData.username);
     }
 
     // 2. 检查账号状态（禁用则拒绝）
-    if (userData.status === 0) return null;
+    if (userData.status === 0) {
+      _debug('🚫 账号已禁用: userId=%s', userData.id);
+      return null;
+    }
 
     // 3. 优先从 JWT 读取权限，无则从缓存/数据库加载
     let roles = payload.roles;
@@ -164,18 +180,24 @@ export default fp(async app => {
     if (!request.state) request.state = {};
 
     const cookies = request.cookies || {};
+    _debug('━━━ 请求认证开始 ━━━ url=%s, ip=%s', request.url, request.ip);
+    _debug('Cookie: sid=%s, sid_r=%s', cookies.sid ? '✅' : '❌', cookies.sid_r ? '✅' : '❌');
 
     // 2. JWT 认证（仅在 JWT_ENABLED=true 时启用）
     if (jwtEnabled) {
+      _debug('📋 JWT 模式已启用');
       // 2a. Bearer Token（Header）
       const authHeader = request.headers.authorization;
       if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.slice(7);
+        _debug('🔑 检测到 Bearer Token: %s...', token.slice(0, 20));
         const tokenUser = await getUserFromToken(token);
         if (tokenUser) {
+          _debug('✅ JWT 认证成功: userId=%s, username=%s', tokenUser.userId, tokenUser.username);
           request.state.user = tokenUser;
           return;
         }
+        _debug('❌ JWT 认证失败（Token 无效或用户不存在）');
       }
 
       // 2b. access_token Cookie
@@ -193,16 +215,21 @@ export default fp(async app => {
 
     // 尝试用 sid 获取 session（同时递增访问次数）
     if (cookies[COOKIE_SID]) {
+      _debug('📋 检测到 sid Cookie，尝试 Session 认证');
       sessionData = await getSession({ cookies, reply });
+      _debug('📋 Session 认证结果: %s', sessionData ? '✅ 成功' : '❌ 未命中');
     }
 
     // sid 失效时尝试用 sid_r 刷新
     if (!sessionData && cookies[COOKIE_SID_R]) {
+      _debug('📋 sid 未命中，尝试 sid_r 刷新');
       sessionData = await refreshSession({ cookies, reply, request });
+      _debug('📋 sid_r 刷新结果: %s', sessionData ? '✅ 成功' : '❌ 失败');
     }
 
     // 写入 request.state.user
     if (sessionData) {
+      _debug('✅ 认证完成: userId=%s, username=%s', sessionData.userId, sessionData.username);
       request.state.user = {
         sub: sessionData.uid,
         uid: sessionData.uid,
