@@ -47,7 +47,7 @@ export default (sequelize, DataTypes) => {
     {
       tableName: 'posecraft_user_share',
       timestamps: true,
-      paranoid: true,
+      paranoid: false,
       indexes: [
         {
           unique: true,

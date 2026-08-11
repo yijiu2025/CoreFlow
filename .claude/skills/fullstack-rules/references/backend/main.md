@@ -7,6 +7,8 @@
 | 架构     | 严格遵循分层架构（Controller / Service / DAO），各层职责单一      |
 | API      | 遵循 RESTful 风格，统一响应格式                                   |
 | 数据库   | 所有表必须包含 `created_at` 和 `updated_at` 字段                  |
+| 数据库   | 禁止直接写 SQL，使用 Sequelize 模型方法（findAll/findByPk 等）    |
+| 数据库   | 软删除使用 `delete_version` 机制，禁止 `paranoid: true`           |
 | 安全性   | 涉及用户身份的接口必须校验权限，防范 SQL 注入和 XSS               |
 | 目录结构 | 按功能模块划分目录，api/models/app 内按业务子模块或应用区分文件夹 |
 
