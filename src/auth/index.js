@@ -19,6 +19,10 @@ import fp from 'fastify-plugin';
 import { AsyncLocalStorage } from 'async_hooks';
 import { getSession, refreshSession } from './session.js';
 import { COOKIE_SID, COOKIE_SID_R } from './cookie.js';
+import { verifyJwt } from '../shared/jwt.js';
+import { findUserById } from '../shared/user-dao.js';
+import { loadUserPermissions } from './permission-loader.js';
+import StpUtil from './StpUtil.js';
 
 /** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
 const jwtEnabled = process.env.JWT_ENABLED === 'true';
@@ -74,9 +78,6 @@ function getServerResource(name) {
  */
 async function getUserFromToken(token, redis) {
   try {
-    const { verifyJwt } = await import('../shared/jwt.js');
-    const { findUserById } = await import('../shared/user-dao.js');
-
     const payload = verifyJwt(token);
     if (!payload?.sub) return null;
 
@@ -104,7 +105,6 @@ async function getUserFromToken(token, redis) {
 
       // 缓存未命中，从数据库加载
       if (!roles || !permissions) {
-        const { loadUserPermissions } = await import('./permission-loader.js');
         const loaded = await loadUserPermissions(userData.id, payload.client_id || 'GLOBAL');
         roles = roles || loaded.roles;
         permissions = permissions || loaded.permissions;
@@ -211,6 +211,5 @@ export default fp(async app => {
   });
 
   // 挂载 StpUtil 到 app
-  const { default: StpUtil } = await import('./StpUtil.js');
   app.decorate('auth', StpUtil);
 });
