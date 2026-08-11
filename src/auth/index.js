@@ -12,13 +12,16 @@
  *
  * 认证优先级：Bearer Token > access_token Cookie > Session Cookie (sid) > Refresh Token (sid_r)
  *
- * @author Claude
+ * @author yijiu
  * @since 2026-07-13
  */
 import fp from 'fastify-plugin';
 import { AsyncLocalStorage } from 'async_hooks';
 import { getSession, refreshSession } from './session.js';
 import { COOKIE_SID, COOKIE_SID_R } from './cookie.js';
+
+/** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
+const jwtEnabled = process.env.JWT_ENABLED === 'true';
 
 /**
  * 全局 AsyncLocalStorage 实例
@@ -138,9 +141,6 @@ async function getUserFromToken(token, redis) {
 export { requestContext, getCtx, getDb, getServerResource };
 
 export default fp(async app => {
-  // 读取 JWT 配置（通过共享层，避免直接依赖 oauth21）
-  const { JWT_ENABLED: jwtEnabled } = await import('../shared/config.js');
-
   app.addHook('onRequest', async (request, reply) => {
     // 1. 初始化 request.state
     if (!request.state) request.state = {};
