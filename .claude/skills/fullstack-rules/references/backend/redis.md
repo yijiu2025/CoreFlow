@@ -107,6 +107,41 @@
 
 ## 本项目 Redis 模块规则
 
+### 核心原则：所有 Redis 操作必须经过 Redis 模块
+
+**禁止直接操作 `request.server.redis` 或 `app.redis` 等原始客户端。**
+
+所有 Redis 操作必须通过 `src/redis/` 模块暴露的 API 执行：
+
+```js
+// ✅ 正确：通过 Redis 模块
+import { getStore } from './redis/index.js';
+const store = getStore('captcha');
+await store.get('key');
+
+// ❌ 禁止：直接操作原始客户端
+const redis = request.server.redis;
+await redis.get('session:key');
+```
+
+### 功能缺失时的处理
+
+如果 Redis 模块缺少某个 Redis 命令，**不得绕过模块直接调用**，而应**在 `RedisStore` 中补充该方法**，走统一的超时保护和错误包装：
+
+```js
+// 在 src/redis/redis-store.js 中添加新方法
+async zAdd(prefix, key, score, value, timeout, useBackup) {
+  _validateInput(prefix, key);
+  const redis = _getRedis('zAdd', prefix, useBackup);
+  const fullKey = makeKey(prefix, key);
+  try {
+    await withTimeout(redis, r => r.zAdd(fullKey, { score, value }), timeout);
+  } catch (err) {
+    _wrapRedisError(err, 'zAdd', prefix);
+  }
+}
+```
+
 ### 存储选择
 
 ```js
