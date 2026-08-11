@@ -84,10 +84,31 @@ async function getUserFromToken(token) {
     const payload = verifyJwt(token);
     if (!payload?.sub) return null;
 
-    const userData = await findUserById(payload.sub);
-    if (!userData) return null;
+    // 1. 优先查用户缓存（30s TTL），避免每次请求打 DB
+    //    缓存未命中才查库，兼顾性能与账号实时状态
+    const userStore = getStore('user', { timeout: 3000 });
+    let userData = null;
+    try {
+      userData = await userStore.get(String(payload.sub));
+    } catch (err) {
+      console.warn('[Auth] 用户缓存读取失败，降级到数据库:', err.message);
+    }
 
-    // 优先从 JWT 读取权限，无则从缓存/数据库加载
+    if (!userData) {
+      userData = await findUserById(payload.sub);
+      if (!userData) return null;
+      // 写入缓存（30 秒），账号禁用等状态变更 30s 内生效
+      try {
+        await userStore.set(String(payload.sub), userData, 30);
+      } catch (err) {
+        console.warn('[Auth] 用户缓存写入失败:', err.message);
+      }
+    }
+
+    // 2. 检查账号状态（禁用则拒绝）
+    if (userData.status === 0) return null;
+
+    // 3. 优先从 JWT 读取权限，无则从缓存/数据库加载
     let roles = payload.roles;
     let permissions = payload.permissions;
     if (!roles || !permissions) {
