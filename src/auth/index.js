@@ -137,8 +137,6 @@ async function getUserFromToken(token) {
   }
 }
 
-export { requestContext, getCtx, getDb, getServerResource };
-
 export default fp(async app => {
   app.addHook('onRequest', async (request, reply) => {
     // 1. 初始化 request.state
@@ -170,18 +168,16 @@ export default fp(async app => {
     }
 
     // 3. Session Cookie 验证（sid / sid_r）— 主要认证方式
-    const redis = request.server.redis;
-
     let sessionData = null;
 
     // 尝试用 sid 获取 session（同时递增访问次数）
     if (cookies[COOKIE_SID]) {
-      sessionData = await getSession({ redis, cookies, reply });
+      sessionData = await getSession({ cookies, reply });
     }
 
     // sid 失效时尝试用 sid_r 刷新
     if (!sessionData && cookies[COOKIE_SID_R]) {
-      sessionData = await refreshSession({ redis, cookies, reply, request });
+      sessionData = await refreshSession({ cookies, reply, request });
     }
 
     // 写入 request.state.user
@@ -212,3 +208,5 @@ export default fp(async app => {
   // 挂载 StpUtil 到 app
   app.decorate('auth', StpUtil);
 });
+
+export { requestContext, getCtx, getDb, getServerResource };

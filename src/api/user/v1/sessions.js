@@ -35,8 +35,7 @@ export default async function (fastify) {
         return reply.code(401).send({ code: 401, message: '未登录', data: null });
       }
 
-      const redis = request.server.redis;
-      const result = await checkMaxSessions(redis, user.userId || user.sub, 'GLOBAL', 9999);
+      const result = await checkMaxSessions(user.userId || user.sub, 'GLOBAL', 9999);
       const sessions = result?.sessions || [];
 
       return reply.result.success('获取成功', {
@@ -74,8 +73,7 @@ export default async function (fastify) {
         return reply.code(400).send({ code: 400, message: '缺少 sessionId', data: null });
       }
 
-      const redis = request.server.redis;
-      await kickSession(redis, sessionId, user.userId || user.sub);
+      await kickSession(sessionId, user.userId || user.sub);
 
       return reply.result.success('会话已踢出');
     }
@@ -97,8 +95,7 @@ export default async function (fastify) {
         return reply.code(401).send({ code: 401, message: '未登录', data: null });
       }
 
-      const redis = request.server.redis;
-      await kickAllSessions(redis, user.userId || user.sub);
+      await kickAllSessions(user.userId || user.sub);
 
       return reply.result.success('所有其他会话已踢出');
     }

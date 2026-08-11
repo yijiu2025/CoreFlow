@@ -135,10 +135,8 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
       result.session_token = sessionToken;
     } else {
       // 非 iframe：直接创建 Session 并设 Cookie
-      const redis = request.server.redis;
       try {
         await createSession({
-          redis,
           userId: user.numericId || user.id,
           uid: user.uid || user.id,
           username: user.username,

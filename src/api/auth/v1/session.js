@@ -78,7 +78,7 @@ export default async function (fastify) {
         return reply.result.success('Cookie 已绑定', {
           expiresAt: payload.exp
         });
-      } catch (err) {
+      } catch {
         return reply.code(401).send({
           error: 'invalid_token',
           error_description: 'Token 已过期或无效'
@@ -131,9 +131,7 @@ export default async function (fastify) {
       await sessionStore.delete(session_token);
 
       // 创建正式 Session，设置 sid/sid_r Cookie
-      const redis = request.server.redis;
       await createSession({
-        redis,
         userId: sessionData.userId,
         uid: sessionData.uid,
         username: sessionData.username,
