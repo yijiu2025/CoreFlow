@@ -309,6 +309,8 @@ const msg = queue.shift();
 
 健康状态通过 `app.redisHealthy` 和 `app.onRedisHealthChange(cb)` 通知所有依赖模块。
 
+**铁律：所有 Redis 操作必须经过 `src/redis/` 模块**，禁止直接操作 `request.server.redis`/`app.redis` 原始客户端。缺 Redis 命令时在 `RedisStore` 补充，不绕过模块。
+
 ## 防火墙系统 (`src/firewall/`)
 
 ```
