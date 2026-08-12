@@ -11,6 +11,7 @@ import { Op } from 'sequelize';
 import sequelize from '../db/index.js';
 import { getModel } from '../db/index.js';
 import { getStore } from '../redis/index.js';
+import { getSystemPrefix } from '../api/guard-config.js';
 import {
   signCookie,
   verifyCookie,
@@ -323,10 +324,12 @@ async function createSession(params) {
     }
   });
 
-  // 6. 下发 Cookie（accessCount 从 0 开始）
+  // 6. 下发 Cookie（accessCount 从 0 开始），按 app 隔离 path
+  const cookiePath = getSystemPrefix(appId);
   const sidValue = signCookie(sessionId, 0);
   reply.setCookie(COOKIE_SID, sidValue, {
     ...COOKIE_OPTIONS.SID,
+    path: cookiePath,
     maxAge: sessionTtl
   });
 
@@ -334,6 +337,7 @@ async function createSession(params) {
     const sidRValue = signCookie(refreshToken, 0);
     reply.setCookie(COOKIE_SID_R, sidRValue, {
       ...COOKIE_OPTIONS.SID_R,
+      path: cookiePath,
       maxAge: REFRESH_TOKEN_TTL
     });
   }
@@ -363,25 +367,23 @@ async function getSession(params) {
   const { sessionId, accessCount } = parsed;
   _debug('📋 sid 解析成功: sessionId=%s, accessCount=%s', sessionId, accessCount);
 
-  // 2. 递增访问次数，重新签名 cookie
-  if (reply) {
-    const newSidValue = signCookie(sessionId, accessCount + 1);
-    const isRememberMe = cookies[COOKIE_SID_R] ? true : false;
-    reply.setCookie(COOKIE_SID, newSidValue, {
-      ...COOKIE_OPTIONS.SID,
-      maxAge: isRememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL
-    });
-  }
-
   // 3. Redis 查询
   _debug('📋 Redis 查询 session: %s', sessionId);
   const raw = await sessionStore.get(sessionId);
   _debug('📋 Redis 查询 raw: %s', raw);
   if (raw) {
     _debug('✅ Redis 命中: userId=%s, username=%s', raw.userId, raw.username);
-    // 续期
+    // 续期 + 重新签名 cookie（带 app 隔离的 path）
     const ttl = raw.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
     await sessionStore.expire(sessionId, ttl);
+    if (reply) {
+      const newSidValue = signCookie(sessionId, accessCount + 1);
+      reply.setCookie(COOKIE_SID, newSidValue, {
+        ...COOKIE_OPTIONS.SID,
+        path: getSystemPrefix(raw.appId),
+        maxAge: ttl
+      });
+    }
     _debug('📋 Session 续期: TTL=%ss', ttl);
     return { ...raw, sessionId, accessCount: accessCount + 1 };
   }
@@ -422,6 +424,16 @@ async function getSession(params) {
   };
 
   await sessionStore.set(sessionId, sessionData, SHORT_SESSION_TTL);
+
+  // 重新签名 cookie（带 app 隔离的 path）
+  if (reply) {
+    const newSidValue = signCookie(sessionId, 0);
+    reply.setCookie(COOKIE_SID, newSidValue, {
+      ...COOKIE_OPTIONS.SID,
+      path: getSystemPrefix(sessionData.appId),
+      maxAge: SHORT_SESSION_TTL
+    });
+  }
 
   return { ...sessionData, sessionId };
 }
@@ -530,10 +542,11 @@ async function refreshSession(params) {
     }
   });
 
-  // 9. 下发新 sid cookie（刷新时 accessCount 清零）
+  // 9. 下发新 sid cookie（刷新时 accessCount 清零），带 app 隔离的 path
   const sidValue = signCookie(newSessionId, 0);
   reply.setCookie(COOKIE_SID, sidValue, {
     ...COOKIE_OPTIONS.SID,
+    path: getSystemPrefix(record.app_id),
     maxAge: sessionTtl
   });
 

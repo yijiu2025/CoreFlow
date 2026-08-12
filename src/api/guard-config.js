@@ -170,6 +170,17 @@ export function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
 }
 
 /**
+ * 获取指定系统的 URL 前缀
+ * 用于 cookie 路径隔离，使不同 app 的 sid cookie 仅在其对应的 URL 路径下生效
+ * @param {string} systemKey - 系统标识
+ * @returns {string} URL 前缀（如 /posecraft），未注册时返回 /${systemKey}
+ */
+export function getSystemPrefix(systemKey) {
+  const system = configs[systemKey];
+  return system?.prefix || `/${systemKey}`;
+}
+
+/**
  * 热更新配置 (支持 3 层更新)
  *
  * @param {string} systemKey - 系统标识
