@@ -300,6 +300,19 @@ async function createSession(params) {
 
   // 记录设备 Token
   const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
+
+  // 清理同用户同设备的旧 token，防止 SessionToken 表数据爆炸
+  // 同一设备重复登录时，只保留最新的一条（deviceId 为空时跳过，避免误删）
+  if (deviceId) {
+    try {
+      await SessionToken.destroy({
+        where: { user_id: userId, device_id: deviceId, revoked: false }
+      });
+    } catch (err) {
+      console.warn('[Session] 清理旧 token 失败:', err.message);
+    }
+  }
+
   await SessionToken.create({
     user_id: userId,
     app_id: appId,
@@ -400,6 +413,17 @@ async function getSession(params) {
   });
 
   if (!token) return null;
+
+  // 检查 session 是否超过 TTL（短期 30min / 长期 30天）
+  // Redis 过期后 DB 降级不应复活已过期的 session
+  const isRememberMe = !!cookies[COOKIE_SID_R];
+  const sessionTtl = isRememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
+  const expiresAt = new Date(token.createdAt.getTime() + sessionTtl * 1000);
+  if (Date.now() > expiresAt.getTime()) {
+    _debug('❌ Session 已过期（创建于 %s，TTL=%ss），标记 revoked 并拒绝', token.createdAt.toISOString(), sessionTtl);
+    await token.update({ revoked: true });
+    return null;
+  }
 
   // 4. 重建 Redis 缓存
   const user = token.user;
