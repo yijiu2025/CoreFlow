@@ -21,6 +21,23 @@ import { createSession } from '../../../../auth/session.js';
 import { getStore } from '../../../../redis/index.js';
 import { setAuthCookies } from './cookies.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from './constants.js';
+import crypto from 'node:crypto';
+
+/**
+ * 生成设备指纹，用于区分不同浏览器
+ * 优先使用 x-device-id 头，否则用默认值 'web'，结合 user-agent 编码
+ * @param {import('fastify').FastifyRequest} request
+ * @returns {string} 16 位设备标识
+ */
+function getDeviceId(request) {
+  const header = request.headers['x-device-id'] || 'web';
+  const ua = request.headers['user-agent'] || '';
+  return crypto
+    .createHash('sha256')
+    .update(header + '|' + ua)
+    .digest('hex')
+    .slice(0, 16);
+}
 
 const tokenService = new TokenService();
 
@@ -124,7 +141,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
           status: user.status || 'active',
           appId: sessionAppId,
           ip: request.ip,
-          deviceId: request.headers['x-device-id'] || 'web',
+          deviceId: getDeviceId(request),
           deviceType: 'browser',
           userAgent: request.headers['user-agent'] || '',
           rememberMe: true
@@ -145,7 +162,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
           status: user.status || 'active',
           appId: sessionAppId,
           ip: request.ip,
-          deviceId: request.headers['x-device-id'] || 'web',
+          deviceId: getDeviceId(request),
           deviceType: 'browser',
           userAgent: request.headers['user-agent'] || '',
           rememberMe: true,
