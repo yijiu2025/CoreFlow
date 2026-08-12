@@ -53,6 +53,7 @@ function verifyCookie(cookieValue) {
 
   // 验证签名
   const expected = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+
   if (signature.length !== expected.length) return null;
   if (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) {
     return null;
@@ -61,6 +62,7 @@ function verifyCookie(cookieValue) {
   // 解码 payload
   try {
     const decoded = Buffer.from(payload, 'base64url').toString('utf-8');
+
     const colonIndex = decoded.indexOf(':');
     if (colonIndex <= 0) return null;
 

@@ -353,7 +353,6 @@ async function getSession(params) {
   // 1. 解析 sid cookie
   const sidCookie = cookies[COOKIE_SID];
   if (!sidCookie) return null;
-  _debug('📋 解析 sid Cookie: %s...', sidCookie.slice(0, 16));
 
   const parsed = verifyCookie(sidCookie);
   if (!parsed) {
@@ -377,6 +376,7 @@ async function getSession(params) {
   // 3. Redis 查询
   _debug('📋 Redis 查询 session: %s', sessionId);
   const raw = await sessionStore.get(sessionId);
+  _debug('📋 Redis 查询 raw: %s', raw);
   if (raw) {
     _debug('✅ Redis 命中: userId=%s, username=%s', raw.userId, raw.username);
     // 续期
