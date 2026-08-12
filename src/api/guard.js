@@ -223,6 +223,18 @@ export function createGuard(systemKey, groupKey, apiKey = null) {
     request.state.groupKey = groupKey;
     request.state.apiKey = apiKey;
 
+    // 0级：会话归属校验 — 确保 session 的 appId 与当前请求的 systemKey 匹配
+    // 防止 sid cookie 跨 app 混用（如 posecraft 的 sid 被 stick 使用）
+    if (request.state.user?.appId && request.state.user.appId !== systemKey) {
+      request.log.warn(
+        { guard: { systemKey, userAppId: request.state.user.appId } },
+        `🛡️  [Guard] 会话归属校验失败：session 属于 ${request.state.user.appId}，当前请求为 ${systemKey}`
+      );
+      reply.code(403).send({ code: 403, error: 'session_mismatch', message: '会话不属于当前应用' });
+      reply.sent = true;
+      return;
+    }
+
     // 1级：系统级校验
     const sys = getGuardConfig(systemKey);
     if (sys) {
