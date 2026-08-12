@@ -13,6 +13,7 @@ import { verify } from '../../../app/oauth21/crypto/jwt.js';
 import { createSession } from '../../../auth/session.js';
 import { getStore } from '../../../redis/index.js';
 import { getModel } from '../../../db/index.js';
+import { getSystemPrefix } from '../../guard-config.js';
 import crypto from 'node:crypto';
 import { signCookie, COOKIE_OPTIONS, SHORT_SESSION_TTL, LONG_SESSION_TTL } from '../../../auth/cookie.js';
 
@@ -170,9 +171,10 @@ export default async function (fastify) {
     method: 'POST',
     url: '/clear-cookie',
     handler: async (request, reply) => {
-      reply.clearCookie('access_token', { path: '/' });
-      reply.clearCookie('sid', { path: '/' });
-      reply.clearCookie('sid_r', { path: '/' });
+      const cookiePath = getSystemPrefix(request.state.systemKey);
+      reply.clearCookie('access_token', { path: cookiePath });
+      reply.clearCookie('sid', { path: cookiePath });
+      reply.clearCookie('sid_r', { path: cookiePath });
       return reply.result.success('Cookie 已清除');
     }
   });
@@ -240,7 +242,7 @@ export default async function (fastify) {
           }
           await tokenRecord.update({ refresh_token: null });
         }
-        reply.clearCookie('sid_r', { path: '/' });
+        reply.clearCookie('sid_r', { path: getSystemPrefix(request.state?.systemKey) });
       }
 
       // 更新客户端主 sid cookie 的 maxAge

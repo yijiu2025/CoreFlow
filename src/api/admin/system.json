@@ -1,0 +1,10 @@
+{
+  "name": "Admin",
+  "alias": "认证服务",
+  "prefix": "/admin",
+  "description": "用户管理",
+  "enabled": true,
+  "requireLogin": true,
+  "allowIps": [],
+  "allowRoles": []
+}

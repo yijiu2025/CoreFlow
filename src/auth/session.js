@@ -586,9 +586,10 @@ async function destroySession(params) {
     ip
   });
 
-  // 4. 清除 Cookie
-  reply.clearCookie(COOKIE_SID, { path: '/' });
-  reply.clearCookie(COOKIE_SID_R, { path: '/' });
+  // 4. 清除 Cookie（path 必须与设置时一致，否则浏览器不会清除）
+  const cookiePath = getSystemPrefix(appId);
+  reply.clearCookie(COOKIE_SID, { path: cookiePath });
+  reply.clearCookie(COOKIE_SID_R, { path: cookiePath });
 }
 
 /**
