@@ -1,9 +1,17 @@
 import IamDao from '../../../app/admin/dao/iam.dao.js';
-import { registerSecureRoute } from '../../guard.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { actionMetaRegistry } from '../../../utils/PbacRegistry.js';
 import { logAuditEvent } from '../../../auth/audit-logger.js';
 
 export default async function (fastify) {
+  registerGroupMetadata({
+    name: 'iam',
+    alias: '权限管理',
+    description: '用户角色、权限管理',
+    prefix: '/v1',
+    enabled: true,
+    requireLogin: false
+  });
   /**
    * GET /admin/v1/iam/roles
    * 获取管理员有权分配的角色列表 (级别 <= 当前管理员级别)
