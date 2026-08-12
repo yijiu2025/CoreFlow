@@ -195,6 +195,7 @@ async function kickAllSessions(userId) {
  * @param {string} params.deviceType 设备类型（browser/app/desktop/miniapp/api）
  * @param {string} params.userAgent User-Agent
  * @param {boolean} params.rememberMe 是否长期登录
+ * @param {boolean} [params.multiDevice=false] 是否允许多设备登录，true=不踢旧会话，false=同设备类型只允许一个
  * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
  * @returns {string} sessionId
  */
@@ -226,7 +227,10 @@ async function createSession(params) {
   }
 
   // 2. 单设备单登录：踢掉同用户同应用同设备类型的旧会话
-  await kickByDeviceType(userId, appId, deviceType || DEVICE_TYPE.BROWSER);
+  // multiDevice=true 时允许多设备登录，不踢旧会话
+  if (!params.multiDevice) {
+    await kickByDeviceType(userId, appId, deviceType || DEVICE_TYPE.BROWSER);
+  }
 
   // 2. 加载该用户在该应用的角色和权限
   const { roles, permissions } = await loadUserPermissions(userId, appId);
