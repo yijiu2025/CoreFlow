@@ -192,7 +192,7 @@ async function handleDirectLogin(request, reply, fastify) {
 
     // 审计日志：登录成功
     await logLogin(request.server.redis, {
-      userId: user.id,
+      userId: user.numericId || user.id,
       ip: request.ip,
       userAgent: request.headers['user-agent'] || '',
       appId: client.client_id,
@@ -203,7 +203,7 @@ async function handleDirectLogin(request, reply, fastify) {
   } catch (err) {
     // 审计日志：登录失败
     await logLogin(request.server.redis, {
-      userId: user.id,
+      userId: user.numericId || user.id,
       ip: request.ip,
       userAgent: request.headers['user-agent'] || '',
       appId: client.client_id,
