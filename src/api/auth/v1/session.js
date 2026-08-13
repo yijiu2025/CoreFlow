@@ -171,10 +171,9 @@ export default async function (fastify) {
     method: 'POST',
     url: '/clear-cookie',
     handler: async (request, reply) => {
-      const cookiePath = getSystemPrefix(request.state.systemKey);
-      reply.clearCookie('access_token', { path: cookiePath });
-      reply.clearCookie('sid', { path: cookiePath });
-      reply.clearCookie('sid_r', { path: cookiePath });
+      reply.clearCookie('access_token', { path: '/' });
+      reply.clearCookie('sid', { path: '/' });
+      reply.clearCookie('sid_r', { path: '/' });
       return reply.result.success('Cookie 已清除');
     }
   });

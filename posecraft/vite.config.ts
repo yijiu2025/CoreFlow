@@ -24,6 +24,7 @@ export default defineConfig({
   },
   server: {
     port: 5176,
+    host: '0.0.0.0',
     proxy: {
       // 代理 API 接口（不代理前端路由）
       '/auth/': {

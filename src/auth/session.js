@@ -11,7 +11,6 @@ import { Op } from 'sequelize';
 import sequelize from '../db/index.js';
 import { getModel } from '../db/index.js';
 import { getStore } from '../redis/index.js';
-import { getSystemPrefix } from '../api/guard-config.js';
 import {
   signCookie,
   verifyCookie,
@@ -341,12 +340,10 @@ async function createSession(params) {
     }
   });
 
-  // 6. 下发 Cookie（accessCount 从 0 开始），按 app 隔离 path
-  const cookiePath = getSystemPrefix(appId);
+  // 6. 下发 Cookie（accessCount 从 0 开始）
   const sidValue = signCookie(sessionId, 0);
   reply.setCookie(COOKIE_SID, sidValue, {
     ...COOKIE_OPTIONS.SID,
-    path: cookiePath,
     maxAge: sessionTtl
   });
 
@@ -354,7 +351,6 @@ async function createSession(params) {
     const sidRValue = signCookie(refreshToken, 0);
     reply.setCookie(COOKIE_SID_R, sidRValue, {
       ...COOKIE_OPTIONS.SID_R,
-      path: cookiePath,
       maxAge: REFRESH_TOKEN_TTL
     });
   }
@@ -397,7 +393,6 @@ async function getSession(params) {
       const newSidValue = signCookie(sessionId, accessCount + 1);
       reply.setCookie(COOKIE_SID, newSidValue, {
         ...COOKIE_OPTIONS.SID,
-        path: getSystemPrefix(raw.appId),
         maxAge: ttl
       });
     }
@@ -458,7 +453,6 @@ async function getSession(params) {
     const newSidValue = signCookie(sessionId, 0);
     reply.setCookie(COOKIE_SID, newSidValue, {
       ...COOKIE_OPTIONS.SID,
-      path: getSystemPrefix(sessionData.appId),
       maxAge: SHORT_SESSION_TTL
     });
   }
@@ -574,7 +568,6 @@ async function refreshSession(params) {
   const sidValue = signCookie(newSessionId, 0);
   reply.setCookie(COOKIE_SID, sidValue, {
     ...COOKIE_OPTIONS.SID,
-    path: getSystemPrefix(record.app_id),
     maxAge: sessionTtl
   });
 
@@ -614,10 +607,9 @@ async function destroySession(params) {
     ip
   });
 
-  // 4. 清除 Cookie（path 必须与设置时一致，否则浏览器不会清除）
-  const cookiePath = getSystemPrefix(appId);
-  reply.clearCookie(COOKIE_SID, { path: cookiePath });
-  reply.clearCookie(COOKIE_SID_R, { path: cookiePath });
+  // 4. 清除 Cookie
+  reply.clearCookie(COOKIE_SID, { path: '/' });
+  reply.clearCookie(COOKIE_SID_R, { path: '/' });
 }
 
 /**
