@@ -24,6 +24,8 @@ import {
 import { loadUserPermissions } from './permission-loader.js';
 
 const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
+// 设备类型常量与判定统一由 device.js 提供，此处导入为本地绑定并在文件末尾 re-export
+import { DEVICE_TYPE, detectDeviceType } from './device.js';
 
 /** 认证调试开关 */
 const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';
@@ -35,31 +37,6 @@ function _debug(...args) {
 const sessionStore = getStore('session');
 const refreshStore = getStore('refresh');
 const userRefreshStore = getStore('user_refresh');
-
-/**
- * 设备类型常量
- */
-const DEVICE_TYPE = {
-  BROWSER: 'browser', // 浏览器（Chrome/Firefox/Safari 等）
-  APP: 'app', // 移动端 App
-  DESKTOP: 'desktop', // 桌面客户端
-  MINIAPP: 'miniapp', // 小程序
-  API: 'api' // API 调用（服务间通信）
-};
-
-/**
- * 从 User-Agent 推断设备类型
- * @param {string} ua User-Agent 字符串
- * @returns {string} 设备类型
- */
-function detectDeviceType(ua) {
-  if (!ua) return DEVICE_TYPE.API;
-  const lower = ua.toLowerCase();
-  if (lower.includes('miniprogram') || lower.includes('micromessenger')) return DEVICE_TYPE.MINIAPP;
-  if (lower.includes('android') || lower.includes('iphone') || lower.includes('mobile')) return DEVICE_TYPE.APP;
-  if (lower.includes('electron') || lower.includes('desktop')) return DEVICE_TYPE.DESKTOP;
-  return DEVICE_TYPE.BROWSER;
-}
 
 /**
  * 踢掉同设备类型的旧会话（单设备单登录）
