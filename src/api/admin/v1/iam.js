@@ -20,7 +20,7 @@ export default async function (fastify) {
     name: 'listAssignableRoles',
     alias: '获取可分配角色',
     method: 'GET',
-    url: '/v1/iam/roles',
+    url: '/iam/roles',
     handler: async (request, reply) => {
       const adminUid = request.user.uid;
       const { appId } = request.query || {};
@@ -42,7 +42,7 @@ export default async function (fastify) {
     name: 'listPermissionDictionary',
     alias: '获取权限字典树',
     method: 'GET',
-    url: '/v1/iam/actions/dictionary',
+    url: '/iam/actions/dictionary',
     handler: async (request, reply) => {
       // actionMetaRegistry 是在各个业务模块加载时，通过 definePermissionMeta 压入内存的
       return reply.result.success('获取全量权限字典', actionMetaRegistry);
@@ -57,7 +57,7 @@ export default async function (fastify) {
     name: 'listManageableUsers',
     alias: '获取可管理用户列表',
     method: 'GET',
-    url: '/v1/iam/users',
+    url: '/iam/users',
     handler: async (request, reply) => {
       const adminUid = request.user.uid;
       const { keyword } = request.query || {};
@@ -79,7 +79,7 @@ export default async function (fastify) {
     name: 'assignIamRole',
     alias: '分配角色',
     method: 'POST',
-    url: '/v1/iam/roles/assign',
+    url: '/iam/roles/assign',
     handler: async (request, reply) => {
       // 从解析后的 JWT 中获取当前管理员 UID
       const adminUid = request.user.uid;
@@ -117,7 +117,7 @@ export default async function (fastify) {
     name: 'updateInlinePolicy',
     alias: '下发内联策略',
     method: 'POST',
-    url: '/v1/iam/policies',
+    url: '/iam/policies',
     handler: async (request, reply) => {
       const adminUid = request.user.uid;
       const { targetUid, appId, policy } = request.body;
