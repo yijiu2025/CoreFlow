@@ -111,7 +111,26 @@ async function kickByDeviceType(userId, appId, deviceType) {
 async function checkMaxSessions(userId, appId, maxSessions = 5) {
   const SessionToken = getModel('SessionToken');
 
-  // 按应用过滤：只计算当前应用的会话
+  // 先回收已过期的会话：DB 行不会随 Redis TTL 自动消失，需在此标记 revoked，
+  // 否则过期会话堆积会占用并发名额，导致新登录被 MAX_SESSIONS 误拦。
+  // 以最长 TTL（长期登录 30 天）为回收阈值，超过即视为过期。
+  const expiryThreshold = new Date(Date.now() - LONG_SESSION_TTL * 1000);
+  const expiredCount = await SessionToken.update(
+    { revoked: true },
+    {
+      where: {
+        user_id: userId,
+        app_id: appId,
+        revoked: false,
+        last_active: { [Op.lt]: expiryThreshold }
+      }
+    }
+  );
+  if (expiredCount?.[0] > 0) {
+    _debug('🔍 [session] 回收 %s 条过期会话: userId=%s, appId=%s', expiredCount[0], userId, appId);
+  }
+
+  // 按应用过滤：只计算当前应用的未撤销会话
   const tokens = await SessionToken.findAll({
     where: { user_id: userId, app_id: appId, revoked: false },
     order: [['last_active', 'ASC']]
