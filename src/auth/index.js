@@ -17,8 +17,8 @@
  */
 import fp from 'fastify-plugin';
 import { AsyncLocalStorage } from 'async_hooks';
-import { getSession, refreshSession } from './session.js';
-import { COOKIE_SID, COOKIE_SID_R } from './cookie.js';
+import { getSession } from './session.js';
+import { COOKIE_SID } from './cookie.js';
 import { verifyJwt } from '../shared/jwt.js';
 import { findUserById } from '../shared/user-dao.js';
 import { loadUserPermissions } from './permission-loader.js';
@@ -210,7 +210,7 @@ export default fp(async app => {
       }
     }
 
-    // 3. Session Cookie 验证（sid / sid_r）— 主要认证方式
+    // 3. Session Cookie 验证（sid）— 主要认证方式
     let sessionData = null;
 
     // 尝试用 sid 获取 session（同时递增访问次数）
@@ -218,13 +218,6 @@ export default fp(async app => {
       _debug('📋 检测到 sid Cookie，尝试 Session 认证');
       sessionData = await getSession({ cookies, reply });
       _debug('📋 Session 认证结果: %s', sessionData ? '✅ 成功' : '❌ 未命中');
-    }
-
-    // sid 失效时尝试用 sid_r 刷新
-    if (!sessionData && cookies[COOKIE_SID_R]) {
-      _debug('📋 sid 未命中，尝试 sid_r 刷新');
-      sessionData = await refreshSession({ cookies, reply, request });
-      _debug('📋 sid_r 刷新结果: %s', sessionData ? '✅ 成功' : '❌ 失败');
     }
 
     // 写入 request.state.user
