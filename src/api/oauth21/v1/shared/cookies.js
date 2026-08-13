@@ -87,7 +87,10 @@ export function buildTokenResponse(result, message = '登录成功') {
       tokenType: 'Bearer',
       expiresIn: config.jwt.accessTokenTTL,
       scope: result.scope,
-      user: result.user
+      user: result.user,
+      // iframe SSO 场景：父窗口（firewall/posecraft）用此临时 token
+      // 调 /auth/v1/bind-session 在自身域上换取 sid/sid_r Cookie
+      session_token: result.session_token
     }
   };
 }

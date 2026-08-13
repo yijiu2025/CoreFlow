@@ -42,6 +42,12 @@ function getDeviceId(request) {
 
 const tokenService = new TokenService();
 
+/** 认证调试开关（与 auth/index.js 一致，DEBUG_AUTH=true 时输出） */
+const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';
+function _debug(...args) {
+  if (DEBUG_AUTH) console.log('[Auth Debug]', ...args);
+}
+
 /**
  * 签发直接令牌
  *
@@ -125,9 +131,15 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
   const sessionAppId = client_id || client.client_id || 'GLOBAL';
 
   if (reply && fastify) {
-    const isIframe = request.headers['sec-fetch-dest'] === 'iframe' || request.headers['sec-fetch-mode'] === 'navigate';
+    // 跨应用 SSO 登录检测：
+    // 第三方 client（client_id 非空、非第一方）通过 SSO iframe 登录时，sid Cookie 会被设到
+    // SSO/API 域，父应用（posecraft/firewall）拿不到，必须改走 session_token 流程——
+    // 由父应用调 /auth/v1/bind-session 在自身域上换取 sid/sid_r Cookie。
+    // 注意：Sec-Fetch-Dest 没有 'iframe' 值，sec-fetch 无法可靠检测 iframe 嵌入，故改用 client_id 判断。
+    const isSsoLogin = !!(client_id && client_id !== FIRST_PARTY_APP.client_id);
+    _debug('🔍 [token-issuer] SSO 检测: client_id=%s → isSsoLogin=%s', client_id || '(first-party)', isSsoLogin);
 
-    if (isIframe) {
+    if (isSsoLogin) {
       // iframe 模式：生成临时 session token 存入 Redis
       const sessionToken = generateToken(32);
       const sessionStore = getStore('session_token');
@@ -151,8 +163,13 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
       );
 
       result.session_token = sessionToken;
+      _debug(
+        '🔍 [token-issuer] ✅ SSO 分支：已生成 session_token=%s...（供父窗口 bindSession）',
+        sessionToken.slice(0, 12)
+      );
     } else {
-      // 非 iframe：直接创建 Session 并设 Cookie
+      // 第一方直接登录：在本应用域直接创建 Session 并设 Cookie
+      _debug('🔍 [token-issuer] 第一方登录：直接 createSession 设 sid cookie');
       try {
         await createSession({
           userId: user.numericId || user.id,
@@ -186,5 +203,12 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
     }
   }
 
+  // 🔍 调试：返回结果概览（session_token 是否存在是 iframe SSO 能否绑定的关键）
+  _debug(
+    '🔍 [token-issuer] 返回 result: keys=%s, has session_token=%s, has access_token=%s',
+    Object.keys(result).join(','),
+    !!result.session_token,
+    !!result.access_token
+  );
   return result;
 }

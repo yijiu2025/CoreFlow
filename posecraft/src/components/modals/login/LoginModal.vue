@@ -64,15 +64,22 @@ function close() {
 const handleMessage = async (event: MessageEvent) => {
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
     const { token, sessionToken, user } = event.data;
+    // 🔍 调试：父窗口收到 iframe 登录成功消息
+    console.log('[posecraft LoginModal] 🔍 收到 LOGIN_SUCCESS ->', {
+      token: token ? '✅ 有' : '❌ 无',
+      sessionToken: sessionToken ? '✅ 有' : '❌ 无'
+    });
 
     // Session 模式：用临时 token 换取 sid/sid_r Cookie
     if (sessionToken) {
       try {
         const result = await authApi.bindSession(sessionToken);
-        console.log('Session 绑定成功:', result);
+        console.log('[posecraft LoginModal] ✅ bindSession 成功:', result);
       } catch (err) {
-        console.warn('绑定 Session 失败:', err);
+        console.warn('[posecraft LoginModal] ❌ bindSession 失败:', err);
       }
+    } else {
+      console.warn('[posecraft LoginModal] ⚠️ sessionToken 为空，跳过 bindSession → 后续请求将无 sid cookie → 401');
     }
 
     // JWT 模式：用 access_token 换取 Cookie

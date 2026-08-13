@@ -22,8 +22,8 @@ export const authApi = {
   /** 获取权限 */
   getPermissions: () => service.get('/user/v1/permissions'),
 
-  /** 刷新 Token */
-  refreshToken: () => service.post('/oauth21/v1/auth/refresh'),
+  /** 刷新会话（sid 过期时用 sid_r cookie 换新 sid，后端 POST /auth/v1/refresh-session） */
+  refreshToken: () => service.post('/auth/v1/refresh-session'),
 
   /** 发送验证码 */
   sendCode: (email: string) => service.post('/oauth21/v1/auth/send-email-code', { email }),
