@@ -10,7 +10,7 @@
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { verify } from '../../../app/oauth21/crypto/jwt.js';
-import { createSession } from '../../../auth/session.js';
+import { createSession, refreshSession } from '../../../auth/session.js';
 import { getStore } from '../../../redis/index.js';
 import { getModel } from '../../../db/index.js';
 import { getSystemPrefix } from '../../guard-config.js';
@@ -253,6 +253,33 @@ export default async function (fastify) {
       });
 
       return reply.result.success('保存登录状态更新成功', { rememberMe: !!rememberMe });
+    }
+  });
+
+  /**
+   * POST /auth/v1/refresh-session
+   *
+   * 用 sid_r cookie 刷新 sid session。
+   * 前端收到 401 时调用此接口，后端验证 sid_r 后签发新 sid。
+   *
+   * 流程：
+   * 1. 前端请求 API 返回 401（sid 过期）
+   * 2. 前端调用 POST /auth/v1/refresh-session（携带 sid_r cookie）
+   * 3. 后端验证 sid_r → 签新 sid → 设置新 sid cookie
+   * 4. 前端收到 200 后重试原请求
+   */
+  registerSecureRoute(fastify, {
+    name: 'refreshSession',
+    alias: '刷新会话',
+    method: 'POST',
+    url: '/refresh-session',
+    requireLogin: false,
+    handler: async (request, reply) => {
+      const sessionData = await refreshSession({ cookies: request.cookies, reply, request });
+      if (!sessionData) {
+        return reply.result.unauth('刷新失败，请重新登录');
+      }
+      return reply.result.success('会话已刷新', { userId: sessionData.userId });
     }
   });
 }
