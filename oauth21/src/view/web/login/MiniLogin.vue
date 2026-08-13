@@ -149,6 +149,13 @@ function notifyParentLoginSuccess(res: any) {
   const token = res.access_token || res.data?.accessToken;
   const sessionToken = res.session_token || res.data?.session_token;
   const user = res.user || res.data?.user || {};
+  // 🔍 调试：iframe 登录成功后向父窗口传递的凭证
+  console.log('[MiniLogin] 🔍 notifyParentLoginSuccess ->', {
+    token: token ? `${token.slice(0, 12)}...` : '❌ undefined',
+    sessionToken: sessionToken ? `${sessionToken.slice(0, 12)}...` : '❌ undefined',
+    resKeys: Object.keys(res || {}),
+    isIframe: window.parent !== window
+  });
   window.parent.postMessage({ type: 'SSO_SUCCESS', token, sessionToken, data: res }, '*');
   window.parent.postMessage(
     {
