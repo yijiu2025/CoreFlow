@@ -132,21 +132,37 @@ export default async function (fastify) {
       await sessionStore.delete(session_token);
 
       // 创建正式 Session，设置 sid/sid_r Cookie
-      await createSession({
-        userId: sessionData.userId,
-        uid: sessionData.uid,
-        username: sessionData.username,
-        email: sessionData.email,
-        avatar: sessionData.avatar,
-        status: sessionData.status,
-        appId: sessionData.appId,
-        ip: request.ip,
-        deviceId: sessionData.deviceId,
-        deviceType: sessionData.deviceType,
-        userAgent: request.headers['user-agent'] || '',
-        rememberMe: sessionData.rememberMe,
-        reply
-      });
+      try {
+        await createSession({
+          userId: sessionData.userId,
+          uid: sessionData.uid,
+          username: sessionData.username,
+          email: sessionData.email,
+          avatar: sessionData.avatar,
+          status: sessionData.status,
+          appId: sessionData.appId,
+          ip: request.ip,
+          deviceId: sessionData.deviceId,
+          deviceType: sessionData.deviceType,
+          userAgent: request.headers['user-agent'] || '',
+          rememberMe: sessionData.rememberMe,
+          reply
+        });
+      } catch (err) {
+        // 并发会话超限：返回结构化 409，便于前端引导用户踢掉旧设备（不再抛 500）
+        if (err.code === 'MAX_SESSIONS_EXCEEDED') {
+          return reply.code(409).send({
+            code: 409,
+            message: '设备数量已达上限',
+            data: {
+              action: 'max_sessions',
+              maxSessions: err.maxSessions,
+              sessions: err.sessions
+            }
+          });
+        }
+        throw err;
+      }
 
       return reply.result.success('Session 已绑定', {
         user: {
