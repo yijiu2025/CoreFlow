@@ -76,7 +76,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
   if (config.jwt.enabled) {
     const accessToken = issueAccessToken({
       sub: user.id,
-      client_id: client.client_id,
+      aud: client.client_id,
       scope: scopeString
     });
     const refreshToken = generateToken(48);
@@ -95,7 +95,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
     if (finalScopes.includes('openid')) {
       result.id_token = issueIdToken({
         sub: user.id,
-        client_id: client.client_id,
+        aud: client.client_id,
         nonce: oidcNonce,
         auth_time: Math.floor(Date.now() / 1000),
         email: user.email,

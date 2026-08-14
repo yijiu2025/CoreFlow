@@ -131,7 +131,7 @@ class TokenService {
 
     const accessToken = issueAccessToken({
       sub: codeData.sub,
-      client_id: client.client_id,
+      aud: client.client_id,
       scope: codeData.scope
     });
 
@@ -155,7 +155,7 @@ class TokenService {
     if (codeData.scope?.includes('openid')) {
       result.id_token = issueIdToken({
         sub: codeData.sub,
-        client_id: client.client_id,
+        aud: client.client_id,
         nonce: codeData.nonce,
         auth_time: Math.floor(Date.now() / 1000) - 60,
         email: user?.email,
@@ -185,7 +185,7 @@ class TokenService {
     const finalScope = validScopes.join(' ');
     const accessToken = issueAccessToken({
       sub: client.client_id,
-      client_id: client.client_id,
+      aud: client.client_id,
       scope: finalScope
     });
 
@@ -240,7 +240,7 @@ class TokenService {
     // 刷新时重新签发 access token（权限已嵌入 JWT，刷新即重新加载最新 scope）
     const accessToken = issueAccessToken({
       sub: tokenData.sub,
-      client_id: client.client_id,
+      aud: client.client_id,
       scope: newScope
     });
 
