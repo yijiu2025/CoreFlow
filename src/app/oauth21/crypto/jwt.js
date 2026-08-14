@@ -47,27 +47,54 @@ function verify(token) {
 }
 
 /**
- * 签发 Access Token
- * @param {object} params - 令牌参数
- * @param {string} params.sub - 用户标识（User.uid）
- * @param {string} params.client_id - 客户端 ID
+ * 签发 JWT 令牌
+ *
+ * 支持四种令牌类型：
+ * - access_token: 资源访问令牌（OAuth 2.1 标准）
+ * - id_token: OIDC 身份令牌（含用户身份信息）
+ * - refresh_token: 刷新令牌（JWT 格式，用于长期刷新）
+ * - client_token: 客户端凭证令牌（M2M，无用户上下文）
+ *
+ * @param {object} params
+ * @param {string} params.sub - 主体 ID（用户 ID 或客户端 ID）
+ * @param {string} params.client_id - 客户端 ID（作为 aud 写入）
  * @param {string} [params.scope] - 授权范围
- * @param {string} [params.aud] - 受众（默认使用 client_id）
- * @returns {string} JWT Access Token
+ * @param {'access_token'|'id_token'|'refresh_token'|'client_token'} [params.token_type='access_token'] - 令牌类型
+ * @param {number} [params.ttl] - 过期时间（秒），默认使用 config 对应配置
+ * @returns {string} JWT 字符串
  */
-function issueAccessToken({ sub, client_id, scope }) {
+function issueToken({ sub, client_id, scope, token_type = 'access_token', ttl }) {
   const now = Math.floor(Date.now() / 1000);
+  const defaultTtl = {
+    access_token: config.jwt.accessTokenTTL,
+    id_token: config.jwt.idTokenTTL,
+    refresh_token: config.jwt.refreshTokenTTL,
+    client_token: config.jwt.accessTokenTTL
+  };
+  const exp = ttl || defaultTtl[token_type] || config.jwt.accessTokenTTL;
   const payload = {
     iss: config.server.issuer,
     sub,
     aud: client_id,
     scope,
     iat: now,
-    exp: now + config.jwt.accessTokenTTL,
+    exp: now + exp,
     jti: uuidv4(),
-    token_type: 'access_token'
+    token_type
   };
   return sign(payload);
+}
+
+/**
+ * 签发 Access Token（issueToken 的快捷调用）
+ * @param {object} params
+ * @param {string} params.sub - 用户标识
+ * @param {string} params.client_id - 客户端 ID
+ * @param {string} [params.scope] - 授权范围
+ * @returns {string} JWT Access Token
+ */
+function issueAccessToken({ sub, client_id, scope }) {
+  return issueToken({ sub, client_id, scope, token_type: 'access_token' });
 }
 
 /**
@@ -82,14 +109,14 @@ function issueAccessToken({ sub, client_id, scope }) {
  * @returns {string} JWT ID Token
  */
 function issueIdToken({ sub, client_id, nonce, auth_time, email, name }) {
-  const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: config.server.issuer,
     sub,
     aud: client_id,
-    iat: now,
-    exp: now + config.jwt.idTokenTTL,
-    auth_time: auth_time || now
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + config.jwt.idTokenTTL,
+    auth_time: auth_time || Math.floor(Date.now() / 1000),
+    token_type: 'id_token'
   };
   if (nonce) payload.nonce = nonce;
   if (email) payload.email = email;
@@ -97,4 +124,4 @@ function issueIdToken({ sub, client_id, nonce, auth_time, email, name }) {
   return sign(payload);
 }
 
-export { sign, verify, issueAccessToken, issueIdToken };
+export { sign, verify, issueToken, issueAccessToken, issueIdToken };
