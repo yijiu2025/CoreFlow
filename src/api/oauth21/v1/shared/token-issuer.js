@@ -107,84 +107,84 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
     if (reply) {
       await setAuthCookies(reply, { accessToken, refreshToken, user: result.user }, fastify);
     }
-  }
+  } else {
+    // ── 模式 B：Session（默认）──
+    // appId：优先用请求中的 client_id（如 'firewall'），回退到 client.client_id
+    const sessionAppId = client_id || client.client_id || 'GLOBAL';
 
-  // ── 模式 B：Session 启用（默认） ──
-  // appId：优先用请求中的 client_id（如 'firewall'），回退到 client.client_id
-  const sessionAppId = client_id || client.client_id || 'GLOBAL';
+    if (reply && fastify) {
+      // 跨应用 SSO 登录检测：
+      // 第三方 client（client_id 非空、非第一方）通过 SSO iframe 登录时，sid Cookie 会被设到
+      // SSO/API 域，父应用（posecraft/firewall）拿不到，必须改走 session_token 流程——
+      // 由父应用调 /auth/v1/bind-session 在自身域上换取 sid/sid_r Cookie。
+      // 注意：Sec-Fetch-Dest 没有 'iframe' 值，sec-fetch 无法可靠检测 iframe 嵌入，故改用 client_id 判断。
+      const isSsoLogin = !!(client_id && client_id !== FIRST_PARTY_APP.client_id);
+      _debug('🔍 [token-issuer] SSO 检测: client_id=%s → isSsoLogin=%s', client_id || '(first-party)', isSsoLogin);
 
-  if (reply && fastify) {
-    // 跨应用 SSO 登录检测：
-    // 第三方 client（client_id 非空、非第一方）通过 SSO iframe 登录时，sid Cookie 会被设到
-    // SSO/API 域，父应用（posecraft/firewall）拿不到，必须改走 session_token 流程——
-    // 由父应用调 /auth/v1/bind-session 在自身域上换取 sid/sid_r Cookie。
-    // 注意：Sec-Fetch-Dest 没有 'iframe' 值，sec-fetch 无法可靠检测 iframe 嵌入，故改用 client_id 判断。
-    const isSsoLogin = !!(client_id && client_id !== FIRST_PARTY_APP.client_id);
-    _debug('🔍 [token-issuer] SSO 检测: client_id=%s → isSsoLogin=%s', client_id || '(first-party)', isSsoLogin);
+      if (isSsoLogin) {
+        // iframe 模式：生成临时 session token 存入 Redis
+        const sessionToken = generateToken(32);
+        const sessionStore = getStore('session_token');
+        await sessionStore.set(
+          sessionToken,
+          {
+            userId: user.numericId || user.id,
+            uid: user.uid || user.id,
+            username: user.username,
+            email: user.email,
+            avatar: user.avatar,
+            status: user.status || 'active',
+            appId: sessionAppId,
+            ip: request.ip,
+            deviceId: getDeviceId(request),
+            deviceType: 'browser',
+            userAgent: request.headers['user-agent'] || '',
+            rememberMe: true
+          },
+          300
+        );
 
-    if (isSsoLogin) {
-      // iframe 模式：生成临时 session token 存入 Redis
-      const sessionToken = generateToken(32);
-      const sessionStore = getStore('session_token');
-      await sessionStore.set(
-        sessionToken,
-        {
-          userId: user.numericId || user.id,
-          uid: user.uid || user.id,
-          username: user.username,
-          email: user.email,
-          avatar: user.avatar,
-          status: user.status || 'active',
-          appId: sessionAppId,
-          ip: request.ip,
-          deviceId: getDeviceId(request),
-          deviceType: 'browser',
-          userAgent: request.headers['user-agent'] || '',
-          rememberMe: true
-        },
-        300
-      );
-
-      result.session_token = sessionToken;
-      _debug(
-        '🔍 [token-issuer] ✅ SSO 分支：已生成 session_token=%s...（供父窗口 bindSession）',
-        sessionToken.slice(0, 12)
-      );
-    } else {
-      // 第一方直接登录：在本应用域直接创建 Session 并设 Cookie
-      _debug('🔍 [token-issuer] 第一方登录：直接 createSession 设 sid cookie');
-      try {
-        await createSession({
-          userId: user.numericId || user.id,
-          uid: user.uid || user.id,
-          username: user.username,
-          email: user.email,
-          avatar: user.avatar,
-          status: user.status || 'active',
-          appId: sessionAppId,
-          ip: request.ip,
-          deviceId: getDeviceId(request),
-          deviceType: 'browser',
-          userAgent: request.headers['user-agent'] || '',
-          rememberMe: true,
-          reply
-        });
-      } catch (err) {
-        if (err.code === 'MAX_SESSIONS_EXCEEDED') {
-          return {
-            code: 409,
-            message: '设备数量已达上限',
-            data: {
-              action: 'max_sessions',
-              maxSessions: err.maxSessions,
-              sessions: err.sessions
-            }
-          };
+        result.session_token = sessionToken;
+        _debug(
+          '🔍 [token-issuer] ✅ SSO 分支：已生成 session_token=%s...（供父窗口 bindSession）',
+          sessionToken.slice(0, 12)
+        );
+      } else {
+        // 第一方直接登录：在本应用域直接创建 Session 并设 Cookie
+        _debug('🔍 [token-issuer] 第一方登录：直接 createSession 设 sid cookie');
+        try {
+          await createSession({
+            userId: user.numericId || user.id,
+            uid: user.uid || user.id,
+            username: user.username,
+            email: user.email,
+            avatar: user.avatar,
+            status: user.status || 'active',
+            appId: sessionAppId,
+            ip: request.ip,
+            deviceId: getDeviceId(request),
+            deviceType: 'browser',
+            userAgent: request.headers['user-agent'] || '',
+            rememberMe: true,
+            reply
+          });
+        } catch (err) {
+          if (err.code === 'MAX_SESSIONS_EXCEEDED') {
+            return {
+              code: 409,
+              message: '设备数量已达上限',
+              data: {
+                action: 'max_sessions',
+                maxSessions: err.maxSessions,
+                sessions: err.sessions
+              }
+            };
+          }
+          throw err;
         }
-        throw err;
       }
     }
-  }
+  } // 结束 Session 模式 else
 
   // 🔍 调试：返回结果概览（session_token 是否存在是 iframe SSO 能否绑定的关键）
   _debug(
