@@ -94,7 +94,7 @@ export default async function (fastify) {
           reply.setCookie('access_token', result.access_token, {
             httpOnly: true,
             secure: isProduction,
-            maxAge: (result.expires_in || 600) * 1000,
+            maxAge: result.expires_in || 600, // @fastify/cookie maxAge 单位为秒
             path: '/',
             sameSite: 'lax'
           });
@@ -103,7 +103,7 @@ export default async function (fastify) {
           reply.setCookie('refresh_token', result.refresh_token, {
             httpOnly: true,
             secure: isProduction,
-            maxAge: (config.jwt.refreshTokenTTL || 604800) * 1000,
+            maxAge: config.jwt.refreshTokenTTL || 604800, // 秒
             path: '/oauth2.1/token',
             sameSite: 'strict'
           });

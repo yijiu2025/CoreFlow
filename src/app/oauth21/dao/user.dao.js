@@ -34,7 +34,8 @@ const UserDao = {
           email: user.email,
           name: user.username,
           avatar: user.avatar,
-          uid: user.uid
+          uid: user.uid,
+          status: user.status // 账号状态（0=禁用，登录/刷新时校验）
         }
       : null;
   },
@@ -60,7 +61,8 @@ const UserDao = {
           email: user.email,
           name: user.username,
           avatar: user.avatar,
-          uid: user.uid
+          uid: user.uid,
+          status: user.status // 账号状态（0=禁用，登录/刷新时校验）
         }
       : null;
   },
