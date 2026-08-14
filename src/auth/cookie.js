@@ -86,11 +86,13 @@ const COOKIE_OPTIONS = {
     sameSite: 'lax',
     path: '/'
   },
+  // sid_r 仅在刷新端点携带：path 收窄到 /auth/v1/refresh-session + sameSite=strict，
+  // 避免长期 refresh token 在每个业务请求暴露（与 JWT 模式 refresh_token 一致）
   SID_R: {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/'
+    sameSite: 'strict',
+    path: REFRESH_COOKIE_PATH
   }
 };
 
@@ -103,6 +105,12 @@ const LONG_SESSION_TTL = 2592000; // 30天
 /** 长期登录: sid_r cookie maxAge (秒) */
 const REFRESH_TOKEN_TTL = 2592000; // 30天
 
+/** sid_r 刷新端点路径（sid_r cookie 的 path，只在该端点携带） */
+const REFRESH_COOKIE_PATH = '/auth/v1/refresh-session';
+
+/** 旧 sid_r 轮转后保留"已轮转"标记的时长（秒），用于复用盗用检测；默认 7 天 */
+const ROTATED_RETENTION = parseInt(process.env.ROTATED_RETENTION) || 604800;
+
 /** Cookie 名称 */
 const COOKIE_SID = 'sid';
 const COOKIE_SID_R = 'sid_r';
@@ -114,6 +122,8 @@ export {
   SHORT_SESSION_TTL,
   LONG_SESSION_TTL,
   REFRESH_TOKEN_TTL,
+  REFRESH_COOKIE_PATH,
+  ROTATED_RETENTION,
   COOKIE_SID,
   COOKIE_SID_R
 };
