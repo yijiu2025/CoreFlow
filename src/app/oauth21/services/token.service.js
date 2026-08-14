@@ -198,17 +198,38 @@ class TokenService {
   }
 
   /**
-   * 刷新令牌模式（带令牌轮换）
+   * 刷新令牌模式（带令牌轮换 + 盗用检测 + 用户状态校验）
+   *
+   * 安全特性：
+   * - 已轮转的旧 refresh_token 再次使用 = 盗用 → 吊销该用户全部 refresh_token
+   * - 用户已禁用(status=0) → 吊销该用户全部 refresh_token，拒绝刷新
    */
   async handleRefreshToken({ refresh_token, scope, client }) {
     const tokenData = await TokenDao.find(refresh_token);
     if (!tokenData || tokenData.revoked) {
+      // 已吊销/过期再用：检测是否为盗用（findRevoked 返回被 revoke 的记录）
+      const revokedRecord = await TokenDao.findRevoked(refresh_token);
+      if (revokedRecord && revokedRecord.sub) {
+        // 旧 refresh_token 在轮转后被再次使用 = 盗用，吊销该用户全部 refresh token
+        console.warn(`🚨 [OAuth] refresh_token 复用盗用，吊销用户全部令牌: sub=${revokedRecord.sub}`);
+        await TokenDao.revokeAllForUser(revokedRecord.sub);
+      }
       throw new TokenError('invalid_grant', 'Invalid or revoked refresh token');
     }
-    // first-party-app 的 token 保存时 client_id 为 null，需特殊匹配
+    // first-party-app 的 token 保存时 client_id 为 'first-party-app'，直接匹配
     const tokenClientId = tokenData.client_id || 'first-party-app';
     if (tokenClientId !== client.client_id) {
       throw new TokenError('invalid_grant', 'Refresh token does not belong to this client');
+    }
+
+    // 用户状态校验：禁用用户不允许刷新（防止禁用后靠 refresh_token 续期）
+    const user = await UserDao.findById(tokenData.sub);
+    if (!user) {
+      throw new TokenError('invalid_grant', 'User not found');
+    }
+    if (user.status === 0) {
+      await TokenDao.revokeAllForUser(tokenData.sub);
+      throw new TokenError('invalid_grant', 'Account disabled');
     }
 
     // 轮换：吊销旧刷新令牌
@@ -216,7 +237,7 @@ class TokenService {
 
     const newScope = scope || tokenData.scope;
 
-    // 刷新时重新加载用户权限
+    // 刷新时重新签发 access token（权限已嵌入 JWT，刷新即重新加载最新 scope）
     const accessToken = issueAccessToken({
       sub: tokenData.sub,
       client_id: client.client_id,
