@@ -92,7 +92,7 @@ async function getUserFromToken(token) {
   try {
     const payload = verifyJwt(token);
     if (!payload?.sub) return null;
-    _debug('🔑 JWT 解析成功: sub=%s, client_id=%s, scope=%s', payload.sub, payload.client_id, payload.scope);
+    _debug('🔑 JWT 解析成功: sub=%s, aud=%s, scope=%s', payload.sub, payload.aud, payload.scope);
 
     // 1. 优先查用户缓存（30s TTL），避免每次请求打 DB
     //    缓存未命中才查库，兼顾性能与账号实时状态
@@ -129,7 +129,7 @@ async function getUserFromToken(token) {
     let permissions = payload.permissions;
     if (!roles || !permissions) {
       const permStore = getStore('perm', { timeout: 3000 });
-      const cacheKey = `${userData.id}:${payload.client_id || 'GLOBAL'}`;
+      const cacheKey = `${userData.id}:${payload.aud || 'GLOBAL'}`;
 
       try {
         const cached = await permStore.get(cacheKey);
@@ -143,7 +143,7 @@ async function getUserFromToken(token) {
 
       // 缓存未命中，从数据库加载
       if (!roles || !permissions) {
-        const loaded = await loadUserPermissions(userData.id, payload.client_id || 'GLOBAL');
+        const loaded = await loadUserPermissions(userData.id, payload.aud || 'GLOBAL');
         roles = roles || loaded.roles;
         permissions = permissions || loaded.permissions;
 
