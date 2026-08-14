@@ -55,13 +55,12 @@ function verify(token) {
  * @param {string} [params.aud] - 受众（默认使用 client_id）
  * @returns {string} JWT Access Token
  */
-function issueAccessToken({ sub, client_id, scope, aud }) {
+function issueAccessToken({ sub, client_id, scope }) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: config.server.issuer,
     sub,
-    aud: aud || client_id,
-    client_id,
+    aud: client_id,
     scope,
     iat: now,
     exp: now + config.jwt.accessTokenTTL,
