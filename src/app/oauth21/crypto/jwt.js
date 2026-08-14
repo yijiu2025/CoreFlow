@@ -57,13 +57,13 @@ function verify(token) {
  *
  * @param {object} params
  * @param {string} params.sub - 主体 ID（用户 ID 或客户端 ID）
- * @param {string} params.client_id - 客户端 ID（作为 aud 写入）
+ * @param {string} params.aud - 受众（接收令牌的客户端 ID）
  * @param {string} [params.scope] - 授权范围
  * @param {'access_token'|'id_token'|'refresh_token'|'client_token'} [params.token_type='access_token'] - 令牌类型
  * @param {number} [params.ttl] - 过期时间（秒），默认使用 config 对应配置
  * @returns {string} JWT 字符串
  */
-function issueToken({ sub, client_id, scope, token_type = 'access_token', ttl }) {
+function issueToken({ sub, aud, scope, token_type = 'access_token', ttl }) {
   const now = Math.floor(Date.now() / 1000);
   const defaultTtl = {
     access_token: config.jwt.accessTokenTTL,
@@ -75,7 +75,7 @@ function issueToken({ sub, client_id, scope, token_type = 'access_token', ttl })
   const payload = {
     iss: config.server.issuer,
     sub,
-    aud: client_id,
+    aud,
     scope,
     iat: now,
     exp: now + exp,
@@ -89,30 +89,30 @@ function issueToken({ sub, client_id, scope, token_type = 'access_token', ttl })
  * 签发 Access Token（issueToken 的快捷调用）
  * @param {object} params
  * @param {string} params.sub - 用户标识
- * @param {string} params.client_id - 客户端 ID
+ * @param {string} params.aud - 受众（客户端 ID）
  * @param {string} [params.scope] - 授权范围
  * @returns {string} JWT Access Token
  */
-function issueAccessToken({ sub, client_id, scope }) {
-  return issueToken({ sub, client_id, scope, token_type: 'access_token' });
+function issueAccessToken({ sub, aud, scope }) {
+  return issueToken({ sub, aud, scope, token_type: 'access_token' });
 }
 
 /**
  * 签发 ID Token (OIDC)
  * @param {object} params - 令牌参数
  * @param {string} params.sub - 用户标识（User.uid）
- * @param {string} params.client_id - 客户端 ID
+ * @param {string} params.aud - 受众（客户端 ID）
  * @param {string} [params.nonce] - 一次性随机数（防重放）
  * @param {number} [params.auth_time] - 用户认证时间戳
  * @param {string} [params.email] - 用户邮箱
  * @param {string} [params.name] - 用户名称
  * @returns {string} JWT ID Token
  */
-function issueIdToken({ sub, client_id, nonce, auth_time, email, name }) {
+function issueIdToken({ sub, aud, nonce, auth_time, email, name }) {
   const payload = {
     iss: config.server.issuer,
     sub,
-    aud: client_id,
+    aud,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + config.jwt.idTokenTTL,
     auth_time: auth_time || Math.floor(Date.now() / 1000),
