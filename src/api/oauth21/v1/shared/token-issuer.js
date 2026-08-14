@@ -19,6 +19,7 @@ import { TokenService } from '../../../../app/oauth21/services/token.service.js'
 import config from '../../../../app/oauth21/config/config.js';
 import { createSession } from '../../../../auth/session.js';
 import { getDeviceId, detectDeviceType } from '../../../../auth/device.js';
+import { loadUserPermissions } from '../../../../auth/permission-loader.js';
 import { getStore } from '../../../../redis/index.js';
 import { setAuthCookies } from './cookies.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from './constants.js';
@@ -89,6 +90,17 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
     result.access_token = accessToken;
     result.refresh_token = refreshToken;
     result.expires_in = config.jwt.accessTokenTTL;
+
+    // 预热权限缓存：签发时查好 roles/permissions 写入 perm store（30s TTL），
+    // 验证侧 getUserFromToken 优先读缓存，避免每次请求都查 DB。
+    // 不影响 JWT 本体（不嵌入权限），权限变更最多 30s 生效。
+    const permStore = getStore('perm', { timeout: 3000 });
+    try {
+      const { roles, permissions } = await loadUserPermissions(user.id, client.client_id);
+      await permStore.set(`${user.id}:${client.client_id}`, { roles, permissions }, 30);
+    } catch (err) {
+      console.warn('[Auth] 权限缓存预热失败:', err.message);
+    }
 
     // OIDC ID Token
     if (finalScopes.includes('openid')) {
