@@ -76,8 +76,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
   if (config.jwt.enabled) {
     const accessToken = issueAccessToken({
       sub: user.id,
-      aud: client.client_id,
-      scope: scopeString
+      aud: client.client_id
     });
     const refreshToken = generateToken(48);
     await TokenDao.save(refreshToken, {
