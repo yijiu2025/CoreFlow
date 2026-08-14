@@ -20,6 +20,13 @@
  */
 import crypto from 'node:crypto';
 
+// 生产环境必须显式配置 SESSION_SECRET，否则 HMAC 签名可被伪造 sid，直接拒绝启动
+if (!process.env.SESSION_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET 未配置：生产环境必须设置该环境变量（随机长字符串）');
+  }
+  console.warn('⚠️ [Auth] SESSION_SECRET 未配置，开发环境使用默认值，生产必须配置');
+}
 const SECRET = process.env.SESSION_SECRET || 'change-me-session-secret';
 
 /**

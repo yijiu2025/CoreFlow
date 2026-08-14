@@ -18,7 +18,7 @@ import TokenDao from '../../../../app/oauth21/dao/token.dao.js';
 import { TokenService } from '../../../../app/oauth21/services/token.service.js';
 import config from '../../../../app/oauth21/config/config.js';
 import { createSession } from '../../../../auth/session.js';
-import { getDeviceId } from '../../../../auth/device.js';
+import { getDeviceId, detectDeviceType } from '../../../../auth/device.js';
 import { getStore } from '../../../../redis/index.js';
 import { setAuthCookies } from './cookies.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from './constants.js';
@@ -137,7 +137,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
             appId: sessionAppId,
             ip: request.ip,
             deviceId: getDeviceId(request),
-            deviceType: 'browser',
+            deviceType: detectDeviceType(request.headers['user-agent'] || ''),
             userAgent: request.headers['user-agent'] || '',
             rememberMe: true
           },
@@ -163,7 +163,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
             appId: sessionAppId,
             ip: request.ip,
             deviceId: getDeviceId(request),
-            deviceType: 'browser',
+            deviceType: detectDeviceType(request.headers['user-agent'] || ''),
             userAgent: request.headers['user-agent'] || '',
             rememberMe: true,
             reply
