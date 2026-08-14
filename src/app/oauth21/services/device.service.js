@@ -116,8 +116,7 @@ class DeviceService {
     if (entry.status === 'authorized') {
       const accessToken = issueAccessToken({
         sub: entry.sub,
-        aud: entry.client_id,
-        scope: entry.scope
+        aud: entry.client_id
       });
 
       const refreshToken = generateToken(48);

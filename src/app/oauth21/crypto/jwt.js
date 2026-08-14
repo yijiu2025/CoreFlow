@@ -49,6 +49,10 @@ function verify(token) {
 /**
  * 签发 JWT 令牌
  *
+ * JWT 仅做身份认证，不嵌入权限（permissions）。
+ * 权限由验证侧从 Redis/DB 加载（loadUserPermissions），
+ * 保持令牌轻量，权限变更即时生效无需等待 token 过期。
+ *
  * 支持四种令牌类型：
  * - access_token: 资源访问令牌（OAuth 2.1 标准）
  * - id_token: OIDC 身份令牌（含用户身份信息）
@@ -58,12 +62,11 @@ function verify(token) {
  * @param {object} params
  * @param {string} params.sub - 主体 ID（用户 ID 或客户端 ID）
  * @param {string} params.aud - 受众（接收令牌的客户端 ID）
- * @param {string} [params.scope] - 授权范围
  * @param {'access_token'|'id_token'|'refresh_token'|'client_token'} [params.token_type='access_token'] - 令牌类型
  * @param {number} [params.ttl] - 过期时间（秒），默认使用 config 对应配置
  * @returns {string} JWT 字符串
  */
-function issueToken({ sub, aud, scope, token_type = 'access_token', ttl }) {
+function issueToken({ sub, aud, token_type = 'access_token', ttl }) {
   const now = Math.floor(Date.now() / 1000);
   const defaultTtl = {
     access_token: config.jwt.accessTokenTTL,
@@ -76,7 +79,6 @@ function issueToken({ sub, aud, scope, token_type = 'access_token', ttl }) {
     iss: config.server.issuer,
     sub,
     aud,
-    scope,
     iat: now,
     exp: now + exp,
     jti: uuidv4(),
@@ -90,11 +92,10 @@ function issueToken({ sub, aud, scope, token_type = 'access_token', ttl }) {
  * @param {object} params
  * @param {string} params.sub - 用户标识
  * @param {string} params.aud - 受众（客户端 ID）
- * @param {string} [params.scope] - 授权范围
  * @returns {string} JWT Access Token
  */
-function issueAccessToken({ sub, aud, scope }) {
-  return issueToken({ sub, aud, scope, token_type: 'access_token' });
+function issueAccessToken({ sub, aud }) {
+  return issueToken({ sub, aud, token_type: 'access_token' });
 }
 
 /**

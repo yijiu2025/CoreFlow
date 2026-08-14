@@ -131,8 +131,7 @@ class TokenService {
 
     const accessToken = issueAccessToken({
       sub: codeData.sub,
-      aud: client.client_id,
-      scope: codeData.scope
+      aud: client.client_id
     });
 
     const refreshToken = generateToken(48);
@@ -185,8 +184,7 @@ class TokenService {
     const finalScope = validScopes.join(' ');
     const accessToken = issueAccessToken({
       sub: client.client_id,
-      aud: client.client_id,
-      scope: finalScope
+      aud: client.client_id
     });
 
     return {
@@ -240,8 +238,7 @@ class TokenService {
     // 刷新时重新签发 access token（权限已嵌入 JWT，刷新即重新加载最新 scope）
     const accessToken = issueAccessToken({
       sub: tokenData.sub,
-      aud: client.client_id,
-      scope: newScope
+      aud: client.client_id
     });
 
     const newRefreshToken = generateToken(48);

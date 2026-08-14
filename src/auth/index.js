@@ -92,13 +92,7 @@ async function getUserFromToken(token) {
   try {
     const payload = verifyJwt(token);
     if (!payload?.sub) return null;
-    _debug(
-      '🔑 JWT 解析成功: sub=%s, aud=%s, scope=%s, token_type=%s',
-      payload.sub,
-      payload.aud,
-      payload.scope,
-      payload.token_type
-    );
+    _debug('🔑 JWT 解析成功: sub=%s, aud=%s, token_type=%s', payload.sub, payload.aud, payload.token_type);
 
     // client_token：客户端凭证令牌（M2M），无用户上下文，直接返回客户端信息
     if (payload.token_type === 'client_token') {
@@ -109,7 +103,6 @@ async function getUserFromToken(token) {
         email: null,
         avatar: null,
         status: 1,
-        scope: payload.scope,
         roles: [],
         permissions: { allows: [], denies: [] },
         tokenType: 'client_token'
@@ -186,7 +179,6 @@ async function getUserFromToken(token) {
       email: userData.email,
       avatar: userData.avatar,
       status: userData.status,
-      scope: payload.scope,
       roles,
       permissions,
       tokenType: 'bearer'
