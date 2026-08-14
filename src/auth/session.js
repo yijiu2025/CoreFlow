@@ -42,6 +42,14 @@ const userRefreshStore = getStore('user_refresh');
 const rotatedStore = getStore('refresh_rotated');
 // family 集合：familyId → zset[refreshToken]，用于盗用检测后只吊销同 family
 const familyStore = getStore('session_family');
+// 用户会话索引：userId → zset[raw sessionId]，供 kick/单设备互踢按 raw sid 定位 Redis session
+// （DB 仅存 sha256(sessionId) 无法反查 raw sid，故用 Redis 逆索引，不暴露 raw sid 到 DB）
+const userSessionsStore = getStore('user_sessions');
+
+/** sessionId → DB token 列存的哈希（sha256），集中一处避免散落 */
+function sidHash(sessionId) {
+  return crypto.createHash('sha256').update(sessionId).digest('hex');
+}
 
 /**
  * 踢掉同设备类型的旧会话（单设备单登录）
@@ -52,33 +60,29 @@ const familyStore = getStore('session_family');
 async function kickByDeviceType(userId, appId, deviceType) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
+  const target = deviceType || DEVICE_TYPE.BROWSER;
 
-  // 查找该用户在该应用下同设备类型的未撤销会话
-  const oldTokens = await SessionToken.findAll({
-    where: { user_id: userId, app_id: appId, revoked: false }
-  });
-
-  for (const token of oldTokens) {
-    // 通过 Redis session 数据判断设备类型
-    const sessionData = await sessionStore.get(token.token);
-    if (sessionData) {
-      if (sessionData.deviceType === deviceType) {
-        // 删除 Redis session
-        await sessionStore.delete(token.token);
-        // 标记 revoked
-        await token.update({ revoked: true });
-        // 记录日志
-        await SessionLog.create({
-          user_id: userId,
-          event: 'KICK',
-          app_id: appId,
-          details: {
-            reason: 'single_device_login',
-            deviceType,
-            kickedSessionId: token.token
-          }
-        });
-      }
+  // 遍历用户会话索引（raw sid），逐个检查 Redis session 的 deviceType/appId
+  // 注意：DB 只存 sha256(sid) 无法反查 raw sid，必须用 user_sessions 逆索引定位
+  const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
+  for (const sid of sids) {
+    const sd = await sessionStore.get(sid);
+    if (!sd) {
+      // Redis 已过期，清理索引
+      await userSessionsStore.zRem(String(userId), [sid]);
+      continue;
+    }
+    if (sd.appId === appId && (sd.deviceType || DEVICE_TYPE.BROWSER) === target) {
+      // 删 Redis session + DB 标记 revoked + 清索引
+      await sessionStore.delete(sid);
+      await SessionToken.update({ revoked: true }, { where: { token: sidHash(sid) } });
+      await userSessionsStore.zRem(String(userId), [sid]);
+      await SessionLog.create({
+        user_id: userId,
+        event: 'KICK',
+        app_id: appId,
+        details: { reason: 'single_device_login', deviceType: target, kickedSessionId: sid }
+      });
     }
   }
 }
@@ -112,25 +116,28 @@ async function checkMaxSessions(userId, appId, maxSessions = 5) {
     _debug('🔍 [session] 回收 %s 条过期会话: userId=%s, appId=%s', expiredCount[0], userId, appId);
   }
 
-  // 按应用过滤：只计算当前应用的未撤销会话
-  const tokens = await SessionToken.findAll({
-    where: { user_id: userId, app_id: appId, revoked: false },
-    order: [['last_active', 'ASC']]
-  });
-
-  if (tokens.length < maxSessions) return null;
-
-  // 返回活跃会话列表，让调用方决定踢哪个
+  // 按应用过滤：遍历 user_sessions 索引统计该应用的活跃会话（Redis 仍存活的才算）
+  // 顺带清理索引中 Redis 已过期的僵尸条目
+  const allSids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
   const sessions = [];
-  for (const t of tokens) {
-    const sessionData = await sessionStore.get(t.token);
-    let info = { sessionId: t.token, ip: t.ip, userAgent: t.user_agent, lastActive: t.last_active };
-    if (sessionData) {
-      info.deviceType = sessionData.deviceType;
-      info.appId = sessionData.appId;
+  for (const sid of allSids) {
+    const sd = await sessionStore.get(sid);
+    if (!sd) {
+      await userSessionsStore.zRem(String(userId), [sid]);
+      continue;
     }
-    sessions.push(info);
+    if (sd.appId !== appId) continue;
+    sessions.push({
+      sessionId: sid,
+      ip: sd.ip,
+      userAgent: sd.userAgent,
+      lastActive: sd.lastActiveAt,
+      deviceType: sd.deviceType || DEVICE_TYPE.BROWSER,
+      appId: sd.appId
+    });
   }
+
+  if (sessions.length < maxSessions) return null;
 
   return { maxSessions, current: sessions.length, sessions };
 }
@@ -144,11 +151,11 @@ async function kickSession(sessionId, userId) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
+  // sessionId 为 raw sid（来自 checkMaxSessions 返回列表）
   await sessionStore.delete(sessionId);
-  const token = await SessionToken.findOne({ where: { token: sessionId, revoked: false } });
-  if (token) {
-    await token.update({ revoked: true });
-  }
+  await SessionToken.update({ revoked: true }, { where: { token: sidHash(sessionId) } });
+  if (userId != null) await userSessionsStore.zRem(String(userId), [sessionId]);
+
   await SessionLog.create({
     user_id: userId,
     event: 'KICK',
@@ -164,19 +171,21 @@ async function kickAllSessions(userId) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
-  const tokens = await SessionToken.findAll({
-    where: { user_id: userId, revoked: false }
-  });
-
-  for (const t of tokens) {
-    await sessionStore.delete(t.token);
-    await t.update({ revoked: true });
+  // 用逆索引遍历 raw sid，删 Redis session + DB revoke + 清索引（DB hash 无法反查 raw sid）
+  const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
+  const hashes = [];
+  for (const sid of sids) {
+    await sessionStore.delete(sid);
+    hashes.push(sidHash(sid));
+  }
+  if (hashes.length) {
+    await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
   }
 
   await SessionLog.create({
     user_id: userId,
     event: 'KICK',
-    details: { reason: 'kick_all', count: tokens.length }
+    details: { reason: 'kick_all', count: sids.length }
   });
 }
 
@@ -266,6 +275,10 @@ async function createSession(params) {
   const sessionTtl = rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
 
   await sessionStore.set(sessionId, sessionData, sessionTtl);
+
+  // 记录到用户会话索引（raw sid），供 kick/单设备互踢按 raw sid 定位 Redis session
+  await userSessionsStore.zAdd(String(userId), Date.now(), sessionId);
+  await userSessionsStore.expire(String(userId), LONG_SESSION_TTL);
 
   if (refreshToken) {
     // 清理超出限制的旧 refresh token
@@ -540,6 +553,15 @@ async function refreshSession(params) {
   }
   if (!familyId) familyId = crypto.randomBytes(16).toString('hex');
 
+  // 6.1 用户已禁用：直接吊销整个 family，拒绝刷新（防止禁用后靠 sid_r 续期 30 天）
+  if (user.status === 0) {
+    _debug('🚫 [Session] 用户已禁用，拒绝刷新并吊销 family: userId=%s', user.id);
+    await revokeFamily(familyId, user.id);
+    reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+    reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
+    return null;
+  }
+
   // 7. 每次刷新轮转 sid_r：生成新 sessionId + 新 refreshToken
   const newSessionId = crypto.randomBytes(32).toString('hex');
   const newRefreshToken = crypto.randomBytes(32).toString('hex');
@@ -564,21 +586,26 @@ async function refreshSession(params) {
     rememberMe: true
   };
 
-  // 8. 失效旧 sid_r：标记已轮转（供盗用检测）+ 删活跃映射 + 删旧 session
+  // 8. 失效旧 sid_r：标记已轮转（供盗用检测）+ 删活跃映射 + 删旧 session + 清索引/family
   await rotatedStore.set(refreshToken, { familyId, userId: user.id }, ROTATED_RETENTION);
   await refreshStore.delete(refreshToken);
   await userRefreshStore.zRem(String(user.id), [refreshToken]);
+  await familyStore.zRem(familyId, [refreshToken]); // 清 family 集合中的旧 RT，避免膨胀
   if (oldSessionId) {
     await sessionStore.delete(oldSessionId);
+    await userSessionsStore.zRem(String(user.id), [oldSessionId]); // 清旧 sid 索引
   }
 
-  // 9. 新 refreshToken → newSessionId（滑动 30d）+ family 集合
+  // 9. 新 refreshToken → newSessionId（滑动 30d）+ family/会话索引
   await sessionStore.set(newSessionId, sessionData, sessionTtl);
   await refreshStore.set(newRefreshToken, newSessionId, REFRESH_TOKEN_TTL);
   await userRefreshStore.zAdd(String(user.id), Date.now(), newRefreshToken);
   await userRefreshStore.expire(String(user.id), REFRESH_TOKEN_TTL);
   await familyStore.zAdd(familyId, Date.now(), newRefreshToken);
   await familyStore.expire(familyId, REFRESH_TOKEN_TTL);
+  // 新 session 入用户会话索引（供后续 kick 定位）
+  await userSessionsStore.zAdd(String(user.id), Date.now(), newSessionId);
+  await userSessionsStore.expire(String(user.id), LONG_SESSION_TTL);
 
   // 10. DB 更新 token 哈希
   const newTokenHash = crypto.createHash('sha256').update(newSessionId).digest('hex');
@@ -627,7 +654,8 @@ async function revokeFamily(familyId, userId = null) {
     const sid = await refreshStore.get(rt);
     if (sid) {
       await sessionStore.delete(sid);
-      hashes.push(crypto.createHash('sha256').update(sid).digest('hex'));
+      if (userId != null) await userSessionsStore.zRem(String(userId), [sid]); // 清会话索引
+      hashes.push(sidHash(sid));
     }
     await refreshStore.delete(rt);
     await rotatedStore.delete(rt);
@@ -713,6 +741,8 @@ async function destroySession(params) {
     const old = await sessionStore.get(sessionId);
     familyId = old?.familyId || null;
     await sessionStore.delete(sessionId);
+    // 清用户会话索引
+    if (userId != null) await userSessionsStore.zRem(String(userId), [sessionId]);
   }
 
   // 2. 删除该 session 对应的 refreshToken（取消长期登录能力）
@@ -750,24 +780,33 @@ async function kickUser(userId, appId = null) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
-  const where = { user_id: userId, revoked: false };
-  if (appId) where.app_id = appId;
-
-  const tokens = await SessionToken.findAll({ where });
-
-  for (const token of tokens) {
-    // 删除 Redis session
-    await sessionStore.delete(token.token);
-    // 标记 revoked
-    await token.update({ revoked: true });
+  // 用逆索引遍历 raw sid；按 appId 过滤（null=全部应用）
+  const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
+  const hashes = [];
+  let kicked = 0;
+  for (const sid of sids) {
+    if (appId) {
+      const sd = await sessionStore.get(sid);
+      if (!sd) {
+        await userSessionsStore.zRem(String(userId), [sid]);
+        continue;
+      }
+      if (sd.appId !== appId) continue;
+    }
+    await sessionStore.delete(sid);
+    await userSessionsStore.zRem(String(userId), [sid]);
+    hashes.push(sidHash(sid));
+    kicked++;
+  }
+  if (hashes.length) {
+    await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
   }
 
-  // 记录日志
   await SessionLog.create({
     user_id: userId,
     event: 'KICK',
     app_id: appId || 'ALL',
-    details: { kickedCount: tokens.length }
+    details: { kickedCount: kicked }
   });
 }
 
