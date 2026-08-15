@@ -16,6 +16,7 @@ export {
   generateKeyPair,
   createKey,
   rotateKey,
+  pruneExpiredRetired,
   listKeys,
   deleteKey,
   refreshCache,

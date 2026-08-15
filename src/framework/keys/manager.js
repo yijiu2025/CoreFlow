@@ -14,10 +14,10 @@
 /* eslint-disable no-console */
 
 import crypto from 'node:crypto';
-import { ALGORITHMS, MODULUS_LENGTH_2048 } from './config.js';
+import { ALGORITHMS, MODULUS_LENGTH_2048, withinGrace } from './config.js';
 import { C } from '../../utils/colors.js';
 import { setCachedKey, deleteCachedKey, setCurrentKid, getCurrentKid, clearCache } from './cache.js';
-import { findNewestActive, findAll, insertKey, removeByName, existsByName } from './repository.js';
+import { findNewestActive, findAll, insertKey, removeByName, setActive, existsByName } from './repository.js';
 
 /** 自动生成 kid 碰撞时的重试上限（64 bit 熵下几乎不可能触发） */
 const MAX_KID_RETRIES = 5;
@@ -65,17 +65,6 @@ function generateKeyPair({ modulusLength = MODULUS_LENGTH_2048, algorithm = ALGO
   return { privateKey, publicKey, jwk: { ...jwk, kid, use: 'sig', alg: algorithm } };
 }
 
-/**
- * 生成新密钥对并写入 DB + 缓存，同时设为当前密钥
- *
- * @param {object} [options]
- * @param {string} [options.kid] - 指定 kid，未提供则自动生成唯一字母数字
- * @param {string} [options.algorithm=ALGORITHMS.RS256]
- * @param {number} [options.modulusLength=MODULUS_LENGTH_2048]
- * @param {string} [options.remark]
- * @returns {Promise<{publicKey: string, privateKey: string, jwk: object, kid: string}>}
- * @throws {Error} kid 已存在
- */
 /**
  * 落地单个密钥对（生成 + 写 DB + 缓存 + 设为当前），不做存在性校验
  *
@@ -181,15 +170,49 @@ async function deleteKey(kid) {
 /**
  * 手动轮转密钥
  *
- * 生成新密钥并设为当前，旧密钥保留 active（旧 token 仍可验证，
- * 待自然过期后由 deleteKey 清理）。调用后新签发的 token 使用新 kid。
+ * 生成新密钥并设为当前；旧密钥标记 active=false（updated_at 刷新为退役时刻），
+ * 在宽限期内仍保留于 JWKS / 可验签旧 token；超过宽限的退役密钥在本次清理。
  *
  * @param {object} [options]
  * @param {string} [options.remark] - 备注标记
  * @returns {Promise<{publicKey: string, privateKey: string, jwk: object, kid: string}>} 新密钥信息
  */
 async function rotateKey({ remark } = {}) {
-  return createKey({ remark: remark || 'rotateKey 轮转' });
+  const oldKid = getCurrentKid();
+  const created = await createKey({ remark: remark || 'rotateKey 轮转' });
+
+  // 停用旧密钥：active=false，updated_at 自动刷新为退役时刻（宽限期内仍可验签）
+  if (oldKid && oldKid !== created.kid) {
+    await setActive(oldKid, false);
+    deleteCachedKey(oldKid); // 移出缓存，验签时按需从 DB 读以准确判定宽限
+  }
+
+  // 清理已过宽限期的退役密钥，DB 不无限膨胀
+  await pruneExpiredRetired();
+  return created;
+}
+
+/**
+ * 清理超过退役宽限期的密钥
+ *
+ * active=false 且 updated_at 超过宽限的密钥物理删除（其签发的 token 此时已全过期）。
+ * @returns {Promise<number>} 清理数量
+ */
+async function pruneExpiredRetired() {
+  const all = await findAll();
+  let removed = 0;
+  for (const record of all) {
+    if (record.active) continue;
+    if (!withinGrace(record.updated_at)) {
+      await removeByName(record.name);
+      deleteCachedKey(record.name);
+      removed++;
+    }
+  }
+  if (removed > 0) {
+    console.log(`🧹 [Keys] ${C.dim}已清理 ${removed} 个过期退役密钥${C.reset}`);
+  }
+  return removed;
 }
 
 /**
@@ -235,4 +258,14 @@ async function ensureCurrentKey() {
   return kid;
 }
 
-export { generateKid, generateKeyPair, createKey, rotateKey, listKeys, deleteKey, refreshCache, ensureCurrentKey };
+export {
+  generateKid,
+  generateKeyPair,
+  createKey,
+  rotateKey,
+  pruneExpiredRetired,
+  listKeys,
+  deleteKey,
+  refreshCache,
+  ensureCurrentKey
+};

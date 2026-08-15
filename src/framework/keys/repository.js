@@ -30,6 +30,31 @@ async function findActiveByName(name) {
 }
 
 /**
+ * 按名(kid)查密钥对（不论 active 状态）
+ *
+ * 供验签路径：旧 token 的 kid 可能指向已退役但仍处宽限期的密钥。
+ * 是否可用（active 或在宽限内）由调用方判定。
+ * @param {string} name - kid
+ * @returns {Promise<object|null>}
+ */
+async function findByName(name) {
+  const KeyPair = getKeyPairModel();
+  if (!KeyPair) return null;
+  return KeyPair.findOne({ where: { name } });
+}
+
+/**
+ * 修改密钥启用状态（轮转时停用旧密钥，updated_at 自动刷新为退役时刻）
+ * @param {string} name - kid
+ * @param {boolean} active
+ */
+async function setActive(name, active) {
+  const KeyPair = getKeyPairModel();
+  if (!KeyPair) throw new Error('KeyPair 模型未加载');
+  await KeyPair.update({ active }, { where: { name } });
+}
+
+/**
  * 查最新的启用密钥对（按创建时间倒序）
  * @returns {Promise<object|null>}
  */
@@ -97,4 +122,14 @@ async function existsByName(name) {
   return !!(await KeyPair.findOne({ where: { name }, attributes: ['id'] }));
 }
 
-export { findActiveByName, findNewestActive, findAllActive, findAll, insertKey, removeByName, existsByName };
+export {
+  findActiveByName,
+  findByName,
+  findNewestActive,
+  findAllActive,
+  findAll,
+  insertKey,
+  removeByName,
+  setActive,
+  existsByName
+};
