@@ -19,7 +19,7 @@ import fp from 'fastify-plugin';
 import { AsyncLocalStorage } from 'async_hooks';
 import { getSession } from './session.js';
 import { COOKIE_SID } from './cookie.js';
-import { verifyJwt } from '../shared/jwt.js';
+import { verify } from '../utils/jwt/verify.js';
 import { findUserById } from '../shared/user-dao.js';
 import { loadUserPermissions } from './permission-loader.js';
 import StpUtil from './StpUtil.js';
@@ -90,7 +90,7 @@ function getServerResource(name) {
  */
 async function getUserFromToken(token) {
   try {
-    const payload = verifyJwt(token);
+    const payload = verify(token);
     if (!payload?.sub) return null;
     _debug('🔑 JWT 解析成功: sub=%s, aud=%s, token_type=%s', payload.sub, payload.aud, payload.token_type);
 

@@ -9,7 +9,7 @@
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { verify } from '../../../app/oauth21/crypto/jwt.js';
+import { verify } from '../../../utils/jwt/verify.js';
 import { createSession, refreshSession, updateRememberMe } from '../../../auth/session.js';
 import { getStore } from '../../../redis/index.js';
 import {

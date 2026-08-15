@@ -11,40 +11,10 @@
  * @author Claude
  * @since 2026-07-13
  */
-import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import config from '../config/config.js';
-import { getPrivateKey, getPublicKey } from './keys.js';
-
-const KEY_ID = 'oauth21-key-1';
-
-/**
- * 签发 JWT
- * @param {object} payload - JWT Payload
- * @param {object} [options=jsonwebtoken.SignOptions] - 额外签名选项
- * @returns {string} JWT 字符串
- */
-function sign(payload, options = {}) {
-  const privateKey = getPrivateKey();
-  return jwt.sign(payload, privateKey, {
-    algorithm: config.jwt.algorithm,
-    keyid: KEY_ID,
-    ...options
-  });
-}
-
-/**
- * 验证 JWT
- * @param {string} token - JWT 字符串
- * @returns {object} 解码后的 Payload
- * @throws {jwt.JsonWebTokenError} 签名无效或令牌过期时抛出
- */
-function verify(token) {
-  const publicKey = getPublicKey();
-  return jwt.verify(token, publicKey, {
-    algorithms: [config.jwt.algorithm]
-  });
-}
+import { sign } from '../../../utils/jwt/sign.js';
+import { verify } from '../../../utils/jwt/verify.js';
 
 /**
  * 签发 JWT 令牌
