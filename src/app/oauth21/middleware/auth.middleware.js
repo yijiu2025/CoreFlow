@@ -7,7 +7,7 @@
  * 通用身份验证（Token 提取、JWT 验证、Session 管理）由 src/auth/ 处理
  */
 import fp from 'fastify-plugin';
-import { verifySignature } from '../../../auth/signature.js';
+import { verifySignature } from '../../../framework/auth/signature.js';
 
 /**
  * 注册 OAuth2.1 业务中间件

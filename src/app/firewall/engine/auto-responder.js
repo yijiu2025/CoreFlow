@@ -5,7 +5,7 @@
  * 阈值可配置，支持邮件和 Webhook 告警。
  */
 
-import Logger from '../../../log/index.js';
+import Logger from '../../../framework/log/index.js';
 import { setBlock } from './index.js';
 import { pushRecord } from '../data/store.js';
 

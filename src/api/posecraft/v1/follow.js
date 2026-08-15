@@ -7,8 +7,8 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import followDao from '../../../app/posecraft/dao/follow.dao.js';
-import sequelize from '../../../db/index.js';
-import { getModel } from '../../../db/index.js';
+import sequelize from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 import { Op } from 'sequelize';
 
 export default async function (fastify) {

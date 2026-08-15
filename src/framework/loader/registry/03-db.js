@@ -10,7 +10,7 @@
 /* eslint-disable no-console */
 
 import { sequelize } from '../../db/index.js';
-import { C } from '../../utils/colors.js';
+import { C } from '../../../utils/colors.js';
 
 /** 数据库连接超时（毫秒） */
 const DB_CONNECT_TIMEOUT = 30_000;

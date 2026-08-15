@@ -5,7 +5,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import { getModel, sequelize } from '../../../db/index.js';
+import { getModel, sequelize } from '../../../framework/db/index.js';
 
 class WorkDao {
   /**

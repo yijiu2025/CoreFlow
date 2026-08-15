@@ -5,7 +5,7 @@
  * 底层通过 Sequelize 模型访问 oauth_clients 表。
  */
 import bcrypt from 'bcryptjs';
-import sequelize from '../../../db/index.js';
+import sequelize from '../../../framework/db/index.js';
 
 /** 获取 OauthClient 模型（延迟获取，确保模型已加载） */
 const getModel = () => sequelize.models.OauthClient;

@@ -5,7 +5,7 @@
  * @author Claude
  * @since 2026-07-16
  */
-import { getModel } from '../../../db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 
 class ChannelDao {
   /**

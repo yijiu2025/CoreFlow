@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { sequelize, getModel } from '../../db/index.js';
-import { C } from '../../utils/colors.js';
+import { C } from '../../../utils/colors.js';
 
 /* eslint-disable no-console */
 
@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default async app => {
   const db = app.db;
-  const modelsPath = path.resolve(__dirname, '../../models');
+  const modelsPath = path.resolve(__dirname, '../../../models');
   const loadedModels = []; // 收集所有加载的模型，避免二次遍历
   const loadErrors = []; // 收集加载失败的模型，末尾统一告警
 

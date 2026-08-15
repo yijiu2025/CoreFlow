@@ -10,11 +10,11 @@ import {
   setRegistrationContext,
   getRegistrationContext,
   restoreRegistrationContext
-} from '../../api/guard.js';
-import { C } from '../../utils/colors.js';
+} from '../../../api/guard.js';
+import { C } from '../../../utils/colors.js';
 
 export default async app => {
-  const apiRoot = path.resolve(__dirname, '../../api');
+  const apiRoot = path.resolve(__dirname, '../../../api');
 
   console.log(`📦 [Loader] ${C.cyan}启动 API 递归加载引擎...${C.reset}`);
 

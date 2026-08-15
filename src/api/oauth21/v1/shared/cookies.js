@@ -4,7 +4,7 @@
  */
 
 import config from '../../../../app/oauth21/config/config.js';
-import { issueH5Token } from '../../../../auth/signature.js';
+import { issueH5Token } from '../../../../framework/auth/signature.js';
 import { IS_PRODUCTION } from './constants.js';
 
 /**

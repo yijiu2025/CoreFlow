@@ -4,7 +4,7 @@
  */
 import nodemailer from 'nodemailer';
 import Logger from '../../log/index.js';
-import noticeDao from '../../app/notice/dao/notice.js';
+import noticeDao from '../../../app/notice/dao/notice.js';
 
 /** 缓存的 transporter 和配置哈希 */
 let cachedTransporter = null;

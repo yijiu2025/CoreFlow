@@ -8,8 +8,8 @@
  * 注意：所有 Redis 操作均直接调用 redis.get/set，Redis 连接由调用方保证
  */
 import { Op } from 'sequelize';
-import sequelize from '../../../db/index.js';
-import { globalRedis } from '../../../redis/plugin.js';
+import sequelize from '../../../framework/db/index.js';
+import { globalRedis } from '../../../framework/redis/plugin.js';
 
 /** 获取当前可用的 Redis 客户端 */
 function getRedis() {

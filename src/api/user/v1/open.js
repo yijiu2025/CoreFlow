@@ -8,8 +8,8 @@
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import userDao from '../../../app/user/dao/user.js';
-import { emailDao } from '../../../verify/email/index.js';
-import { getStore } from '../../../redis/index.js';
+import { emailDao } from '../../../framework/verify/email/index.js';
+import { getStore } from '../../../framework/redis/index.js';
 import '../../../app/user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
 
 export default async function (fastify) {

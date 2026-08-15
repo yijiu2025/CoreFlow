@@ -9,12 +9,12 @@
  * @since 2026-07-13
  */
 import jwt from 'jsonwebtoken';
-import sequelize from '../../../db/index.js';
-import { getModel } from '../../../db/index.js';
+import sequelize from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 import { decrypt } from '../../oauth21/crypto/encryption.js';
 import bcrypt from 'bcryptjs';
 import IamDao from '../../admin/dao/iam.dao.js';
-import { validatePasswordStrength } from '../../../auth/password-policy.js';
+import { validatePasswordStrength } from '../../../framework/auth/password-policy.js';
 
 class UserDao {
   /**

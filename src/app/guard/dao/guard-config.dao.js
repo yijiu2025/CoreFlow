@@ -8,7 +8,7 @@
  * @since 2026-07-22
  */
 
-import { getModel } from '../../../db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 
 class GuardConfigDao {
   /** 上次从 DB 加载的序列化配置快照，用于检测变更 */

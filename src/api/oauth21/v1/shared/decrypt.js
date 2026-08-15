@@ -9,9 +9,9 @@
  */
 
 import { decrypt, validateTimestamp } from '../../../../app/oauth21/crypto/encryption.js';
-import { captchaService } from '../../../../verify/captcha/index.js';
-import { emailDao } from '../../../../verify/email/index.js';
-import { getStore, createNonceStore } from '../../../../redis/index.js';
+import { captchaService } from '../../../../framework/verify/captcha/index.js';
+import { emailDao } from '../../../../framework/verify/email/index.js';
+import { getStore, createNonceStore } from '../../../../framework/redis/index.js';
 
 // nonce 去重存储（延迟初始化，通过 app 引用自动感知 failover 切换）
 let nonceStore = null;

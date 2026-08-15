@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import helmet from '@fastify/helmet';
-import { initLoader } from './loader/index.js';
+import { initLoader } from './framework/loader/index.js';
 import { flushGuardConfig } from './api/guard-config.js';
 import { ApiException } from './shared/exceptions.js';
 

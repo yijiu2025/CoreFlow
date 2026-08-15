@@ -1,7 +1,7 @@
 import IamDao from '../../../app/admin/dao/iam.dao.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { actionMetaRegistry } from '../../../utils/PbacRegistry.js';
-import { logAuditEvent } from '../../../auth/audit-logger.js';
+import { logAuditEvent } from '../../../framework/auth/audit-logger.js';
 
 export default async function (fastify) {
   registerGroupMetadata({

@@ -39,7 +39,7 @@ import path from 'node:path';
 import fp from 'fastify-plugin';
 import { setupRedisHealthMonitor } from './health.js';
 import { setLogger, getCacheStats } from './redis-store.js';
-import { C } from '../utils/colors.js';
+import { C } from '../../utils/colors.js';
 
 /** 全局主 Redis 客户端引用（推荐使用 app.redis） */
 let globalRedis = null;

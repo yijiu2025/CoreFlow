@@ -7,7 +7,7 @@
  * PUT /user/v1/update       — 更新当前用户信息（预留）
  */
 
-import { getModel } from '../../../db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import UserDao from '../../../app/oauth21/dao/user.dao.js';
 

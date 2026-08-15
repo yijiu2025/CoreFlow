@@ -10,7 +10,7 @@
 /* eslint-disable no-console */
 
 import initAuth from '../../auth/index.js';
-import { C } from '../../utils/colors.js';
+import { C } from '../../../utils/colors.js';
 
 export default async app => {
   await app.register(initAuth);

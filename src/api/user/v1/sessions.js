@@ -7,7 +7,7 @@
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { checkMaxSessions, kickSession, kickAllSessions } from '../../../auth/session.js';
+import { checkMaxSessions, kickSession, kickAllSessions } from '../../../framework/auth/session.js';
 
 export default async function (fastify) {
   registerGroupMetadata({

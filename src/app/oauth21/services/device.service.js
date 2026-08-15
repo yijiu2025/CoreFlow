@@ -11,7 +11,7 @@ import TokenDao from '../dao/token.dao.js';
 import ClientDao from '../dao/client.dao.js';
 import { generateToken } from '../crypto/tokens.js';
 import config from '../config/config.js';
-import { getStore } from '../../../redis/index.js';
+import { getStore } from '../../../framework/redis/index.js';
 
 const EXPIRES_IN = config.device.expiresIn; // 秒
 
