@@ -178,4 +178,14 @@ describe('keys 组件', () => {
     const { token } = await sign({ sub: 'u2' });
     expect(token).toBeTruthy();
   });
+
+  test('sign 无当前密钥时自动刷新 kid 重试（不抛错）', async () => {
+    // 不预初始化，getCurrentKid 为 null
+    expect(getCurrentKid()).toBeNull();
+    const { token, kid } = await sign({ sub: 'u3' });
+    expect(kid).toMatch(/^k[0-9a-f]{16}$/);
+    expect(getCurrentKid()).toBe(kid); // 刷新后已设为当前
+    const payload = await verify(token);
+    expect(payload.sub).toBe('u3');
+  });
 });
