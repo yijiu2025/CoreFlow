@@ -129,7 +129,7 @@ class TokenService {
     // 5. 签发令牌
     const user = await UserDao.findById(codeData.sub);
 
-    const accessToken = await issueAccessToken({
+    const { token: accessToken, kid: accessKid } = await issueAccessToken({
       sub: codeData.sub,
       aud: client.client_id
     });
@@ -144,6 +144,7 @@ class TokenService {
 
     const result = {
       access_token: accessToken,
+      access_token_kid: accessKid,
       token_type: 'Bearer',
       expires_in: config.jwt.accessTokenTTL,
       refresh_token: refreshToken,
@@ -152,7 +153,7 @@ class TokenService {
 
     // 6. OIDC: scope 包含 openid → 签发 ID Token
     if (codeData.scope?.includes('openid')) {
-      result.id_token = await issueIdToken({
+      const { token: idToken, kid: idKid } = await issueIdToken({
         sub: codeData.sub,
         aud: client.client_id,
         nonce: codeData.nonce,
@@ -160,6 +161,8 @@ class TokenService {
         email: user?.email,
         name: user?.name
       });
+      result.id_token = idToken;
+      result.id_token_kid = idKid;
     }
 
     return result;
@@ -182,7 +185,7 @@ class TokenService {
     }
 
     const finalScope = validScopes.join(' ');
-    const accessToken = await issueAccessToken({
+    const { token: accessToken } = await issueAccessToken({
       sub: client.client_id,
       aud: client.client_id
     });
@@ -236,7 +239,7 @@ class TokenService {
     const newScope = scope || tokenData.scope;
 
     // 刷新时重新签发 access token（权限已嵌入 JWT，刷新即重新加载最新 scope）
-    const accessToken = await issueAccessToken({
+    const { token: accessToken } = await issueAccessToken({
       sub: tokenData.sub,
       aud: client.client_id
     });

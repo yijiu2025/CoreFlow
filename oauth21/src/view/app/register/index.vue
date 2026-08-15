@@ -5,6 +5,7 @@ import { useForm } from 'vee-validate';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
+import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -64,7 +65,13 @@ const handleRegister = handleSubmit(async data => {
     return;
   }
   try {
-    await authApi.register(data);
+    const { confirmPassword, ...submitData } = data;
+    const encryptedPassword = await rsaEncrypt(submitData.password);
+    await authApi.register({
+      ...submitData,
+      password: encryptedPassword,
+      kid: getCachedKid()
+    });
     alert('注册成功！');
     router.push('/m/login');
   } catch (err: any) {

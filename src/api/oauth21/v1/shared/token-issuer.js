@@ -75,7 +75,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
 
   // ── 模式 A：JWT 启用 ──
   if (config.jwt.enabled) {
-    const accessToken = await issueAccessToken({
+    const { token: accessToken, kid: accessKid } = await issueAccessToken({
       sub: user.id,
       aud: client.client_id
     });
@@ -88,6 +88,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
     });
 
     result.access_token = accessToken;
+    result.access_token_kid = accessKid;
     result.refresh_token = refreshToken;
     result.expires_in = config.jwt.accessTokenTTL;
 
@@ -104,7 +105,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
 
     // OIDC ID Token
     if (finalScopes.includes('openid')) {
-      result.id_token = await issueIdToken({
+      const { token: idToken, kid: idKid } = await issueIdToken({
         sub: user.id,
         aud: client.client_id,
         nonce: oidcNonce,
@@ -112,6 +113,8 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
         email: user.email,
         name: user.name
       });
+      result.id_token = idToken;
+      result.id_token_kid = idKid;
     }
 
     // 设置 JWT Cookie

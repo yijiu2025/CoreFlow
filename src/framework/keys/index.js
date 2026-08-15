@@ -2,22 +2,17 @@
  * 密钥管理子系统
  *
  * 统一出口，所有模块通过此文件导入密钥管理功能。
- * 不直接操作 DB，仅通过此 API 申请/获取/管理密钥。
+ * 内部按职责拆分：cache（缓存）/repository（DB）/accessor（读 API）/manager（生命周期）。
  *
  * @author yijiu
  * @since 2026-08-14
  */
 
-export {
-  generateKeyPair,
-  getPrivateKey,
-  getPublicKey,
-  getPublicKeyByKid,
-  getJWKS,
-  createKey,
-  listKeys,
-  deleteKey,
-  clearCache
-} from './manager.js';
-
-export { ensureDefaultKey } from './ensure.js';
+// 读 API
+export { getPrivateKey, getPublicKey, getPublicKeyByKid, getJWKS } from './accessor.js';
+// 生命周期/CRUD
+export { generateKid, generateKeyPair, createKey, listKeys, deleteKey, ensureCurrentKey } from './manager.js';
+// 缓存（供测试/管理刷新）
+export { clearCache, getCurrentKid } from './cache.js';
+// 常量
+export { MODULUS_LENGTH_2048, ALGORITHMS } from './config.js';

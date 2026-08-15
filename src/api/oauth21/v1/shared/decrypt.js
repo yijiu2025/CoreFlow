@@ -30,7 +30,7 @@ function ensureNonceStore(request) {
  * @returns {object} { success, data?, error?, statusCode? }
  */
 export async function decryptLoginRequest(request, fastify) {
-  const { encrypted, timestamp, nonce, captchaKey } = request.body;
+  const { encrypted, timestamp, nonce, captchaKey, kid } = request.body;
 
   // 1. 验证码校验
   if (captchaKey) {
@@ -56,7 +56,7 @@ export async function decryptLoginRequest(request, fastify) {
 
     // 解密
     try {
-      const decrypted = decrypt(encrypted);
+      const decrypted = await decrypt(encrypted, kid);
       const payload = JSON.parse(decrypted);
       return {
         success: true,

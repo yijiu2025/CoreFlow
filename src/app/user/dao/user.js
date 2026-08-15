@@ -84,8 +84,8 @@ class UserDao {
    * @throws {Error} 用户名/密码为空或验证失败时抛出 AUTH_FAILED
    */
   async getTokens(request) {
-    const { username, appId, password: encryptedPassword } = request.body;
-    const password = decrypt(encryptedPassword);
+    const { username, appId, password: encryptedPassword, kid } = request.body;
+    const password = await decrypt(encryptedPassword, kid);
 
     if (!username || !password) {
       throw new Error('AUTH_FAILED:邮箱或密码不能为空');
@@ -163,11 +163,11 @@ class UserDao {
    * @throws {Error} 密码复杂度不足时抛出 REGISTER_FAILED
    */
   async registerUser(request) {
-    const { email, password: encryptedPassword, role_ids } = request.body;
+    const { email, password: encryptedPassword, role_ids, kid } = request.body;
     let { username } = request.body;
     if (!username) username = email;
 
-    const password = decrypt(encryptedPassword);
+    const password = await decrypt(encryptedPassword, kid);
 
     // 密码复杂度校验
     const validation = validatePasswordStrength(password);

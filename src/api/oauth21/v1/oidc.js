@@ -8,7 +8,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import config from '../../../app/oauth21/config/config.js';
-import { getJWKS } from '../../../app/oauth21/crypto/keys.js';
+import { getJWKS } from '../../../framework/keys/index.js';
 
 export default async function (fastify) {
   registerGroupMetadata({

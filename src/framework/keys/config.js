@@ -6,9 +6,6 @@
  * @since 2026-08-14
  */
 
-/** 默认密钥对名称 */
-const DEFAULT_KEY_NAME = 'default';
-
 /** 默认 RSA 密钥长度（2048 位） */
 const MODULUS_LENGTH_2048 = 2048;
 
@@ -42,4 +39,4 @@ const ALGORITHMS = {
   EdDSA: 'EdDSA'
 };
 
-export { DEFAULT_KEY_NAME, MODULUS_LENGTH_2048, ALGORITHMS };
+export { MODULUS_LENGTH_2048, ALGORITHMS };
