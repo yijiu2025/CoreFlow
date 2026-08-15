@@ -16,8 +16,23 @@
 import crypto from 'node:crypto';
 import { ALGORITHMS, MODULUS_LENGTH_2048 } from './config.js';
 import { C } from '../../utils/colors.js';
-import { setCachedKey, deleteCachedKey, setCurrentKid, getCurrentKid } from './cache.js';
+import { setCachedKey, deleteCachedKey, setCurrentKid, getCurrentKid, clearCache } from './cache.js';
 import { findNewestActive, findAll, insertKey, removeByName, existsByName } from './repository.js';
+
+/** 自动生成 kid 碰撞时的重试上限（64 bit 熵下几乎不可能触发） */
+const MAX_KID_RETRIES = 5;
+
+/**
+ * 判断是否为唯一约束冲突
+ *
+ * DB 的 unique 索引是 kid 唯一性的最终兜底；并发写入时可能在
+ * existsByName 校验之后才触发唯一冲突，此时换 kid 重试即可。
+ * @param {Error} err
+ * @returns {boolean}
+ */
+function isUniqueViolation(err) {
+  return err?.name === 'SequelizeUniqueConstraintError' || err?.parent?.code === 'ER_DUP_ENTRY';
+}
 
 /**
  * 生成唯一字母数字 kid
@@ -61,17 +76,19 @@ function generateKeyPair({ modulusLength = MODULUS_LENGTH_2048, algorithm = ALGO
  * @returns {Promise<{publicKey: string, privateKey: string, jwk: object, kid: string}>}
  * @throws {Error} kid 已存在
  */
-async function createKey({ kid, algorithm = ALGORITHMS.RS256, modulusLength = MODULUS_LENGTH_2048, remark } = {}) {
-  const resolvedKid = kid || generateKid();
-
-  if (await existsByName(resolvedKid)) {
-    throw new Error(`密钥对 "${resolvedKid}" 已存在`);
-  }
-
-  const { privateKey, publicKey, jwk } = generateKeyPair({ modulusLength, algorithm, kid: resolvedKid });
+/**
+ * 落地单个密钥对（生成 + 写 DB + 缓存 + 设为当前），不做存在性校验
+ *
+ * 供 createKey 在校验通过后调用；唯一性由调用方的重试循环 + DB 索引共同保证。
+ * @param {string} kid
+ * @param {object} opts - { algorithm, modulusLength, remark }
+ * @returns {Promise<{publicKey: string, privateKey: string, jwk: object, kid: string}>}
+ */
+async function persistKey(kid, { algorithm, modulusLength, remark }) {
+  const { privateKey, publicKey, jwk } = generateKeyPair({ modulusLength, algorithm, kid });
 
   await insertKey({
-    name: resolvedKid,
+    name: kid,
     algorithm,
     private_key: privateKey,
     public_key: publicKey,
@@ -80,11 +97,56 @@ async function createKey({ kid, algorithm = ALGORITHMS.RS256, modulusLength = MO
     remark
   });
 
-  setCachedKey(resolvedKid, { privateKey, publicKey, jwk });
-  setCurrentKid(resolvedKid); // 新密钥即当前签名密钥
+  setCachedKey(kid, { privateKey, publicKey, jwk });
+  setCurrentKid(kid); // 新密钥即当前签名密钥
 
-  console.log(`✅ [Keys] ${C.green}已生成密钥对: ${resolvedKid} (${algorithm})${C.reset}`);
-  return { publicKey, privateKey, jwk, kid: resolvedKid };
+  console.log(`✅ [Keys] ${C.green}已生成密钥对: ${kid} (${algorithm})${C.reset}`);
+  return { publicKey, privateKey, jwk, kid };
+}
+
+/**
+ * 生成新密钥对并写入 DB + 缓存，同时设为当前密钥
+ *
+ * kid 策略：
+ * - 显式指定 kid：撞名直接抛错（调用方想要这个特定名，不能替换）
+ * - 自动生成 kid：碰撞自动换 kid 重试，尽量不抛错（DB 唯一索引兜底并发冲突）
+ *
+ * @param {object} [options]
+ * @param {string} [options.kid] - 指定 kid，未提供则自动生成唯一字母数字
+ * @param {string} [options.algorithm=ALGORITHMS.RS256]
+ * @param {number} [options.modulusLength=MODULUS_LENGTH_2048]
+ * @param {string} [options.remark]
+ * @returns {Promise<{publicKey: string, privateKey: string, jwk: object, kid: string}>}
+ * @throws {Error} 显式 kid 已存在，或重试上限后仍碰撞
+ */
+async function createKey({ kid, algorithm = ALGORITHMS.RS256, modulusLength = MODULUS_LENGTH_2048, remark } = {}) {
+  const opts = { algorithm, modulusLength, remark };
+
+  // 显式指定 kid：撞名直接抛（调用方想要这个特定名，不能换）
+  if (kid) {
+    if (await existsByName(kid)) throw new Error(`密钥对 "${kid}" 已存在`);
+    try {
+      return await persistKey(kid, opts);
+    } catch (err) {
+      // 并发写入导致 DB 唯一冲突 → 视为已存在
+      if (isUniqueViolation(err)) throw new Error(`密钥对 "${kid}" 已存在`, { cause: err });
+      throw err;
+    }
+  }
+
+  // 自动生成 kid：碰撞自动重试，尽量不抛错
+  for (let attempt = 0; attempt < MAX_KID_RETRIES; attempt++) {
+    const candidate = generateKid();
+    if (await existsByName(candidate)) continue; // 校验碰撞 → 换 kid
+    try {
+      return await persistKey(candidate, opts);
+    } catch (err) {
+      // 并发写入碰撞（DB 唯一索引兜底）→ 换 kid 重试
+      if (isUniqueViolation(err)) continue;
+      throw err;
+    }
+  }
+  throw new Error(`生成唯一 kid 失败（重试 ${MAX_KID_RETRIES} 次仍碰撞）`);
 }
 
 /**
@@ -117,6 +179,33 @@ async function deleteKey(kid) {
 }
 
 /**
+ * 手动轮转密钥
+ *
+ * 生成新密钥并设为当前，旧密钥保留 active（旧 token 仍可验证，
+ * 待自然过期后由 deleteKey 清理）。调用后新签发的 token 使用新 kid。
+ *
+ * @param {object} [options]
+ * @param {string} [options.remark] - 备注标记
+ * @returns {Promise<{publicKey: string, privateKey: string, jwk: object, kid: string}>} 新密钥信息
+ */
+async function rotateKey({ remark } = {}) {
+  return createKey({ remark: remark || 'rotateKey 轮转' });
+}
+
+/**
+ * 手动刷新缓存
+ *
+ * 清空内存缓存并从 DB 重新加载当前密钥。用于缓存与 DB 不一致
+ * （多实例、手动改库、密钥外部变更）时手动同步。
+ *
+ * @returns {Promise<string|null>} 当前 kid
+ */
+async function refreshCache() {
+  clearCache();
+  return ensureCurrentKey();
+}
+
+/**
  * 启动初始化：确保系统有"当前密钥"
  *
  * 取 DB 最新 active 密钥设为当前并入缓存；DB 无密钥则生成新密钥。
@@ -146,4 +235,4 @@ async function ensureCurrentKey() {
   return kid;
 }
 
-export { generateKid, generateKeyPair, createKey, listKeys, deleteKey, ensureCurrentKey };
+export { generateKid, generateKeyPair, createKey, rotateKey, listKeys, deleteKey, refreshCache, ensureCurrentKey };
