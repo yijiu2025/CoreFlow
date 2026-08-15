@@ -90,7 +90,7 @@ function getServerResource(name) {
  */
 async function getUserFromToken(token) {
   try {
-    const payload = verify(token);
+    const payload = await verify(token);
     if (!payload?.sub) return null;
     _debug('🔑 JWT 解析成功: sub=%s, aud=%s, token_type=%s', payload.sub, payload.aud, payload.token_type);
 

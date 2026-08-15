@@ -75,7 +75,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
 
   // ── 模式 A：JWT 启用 ──
   if (config.jwt.enabled) {
-    const accessToken = issueAccessToken({
+    const accessToken = await issueAccessToken({
       sub: user.id,
       aud: client.client_id
     });
@@ -104,7 +104,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
 
     // OIDC ID Token
     if (finalScopes.includes('openid')) {
-      result.id_token = issueIdToken({
+      result.id_token = await issueIdToken({
         sub: user.id,
         aud: client.client_id,
         nonce: oidcNonce,

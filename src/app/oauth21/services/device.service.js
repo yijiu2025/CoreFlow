@@ -114,7 +114,7 @@ class DeviceService {
     }
 
     if (entry.status === 'authorized') {
-      const accessToken = issueAccessToken({
+      const accessToken = await issueAccessToken({
         sub: entry.sub,
         aud: entry.client_id
       });

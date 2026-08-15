@@ -62,7 +62,7 @@ function issueToken({ sub, aud, token_type = 'access_token', ttl }) {
  * @param {object} params
  * @param {string} params.sub - 用户标识
  * @param {string} params.aud - 受众（客户端 ID）
- * @returns {string} JWT Access Token
+ * @returns {Promise<string>} JWT Access Token
  */
 function issueAccessToken({ sub, aud }) {
   return issueToken({ sub, aud, token_type: 'access_token' });
@@ -77,7 +77,7 @@ function issueAccessToken({ sub, aud }) {
  * @param {number} [params.auth_time] - 用户认证时间戳
  * @param {string} [params.email] - 用户邮箱
  * @param {string} [params.name] - 用户名称
- * @returns {string} JWT ID Token
+ * @returns {Promise<string>} JWT ID Token
  */
 function issueIdToken({ sub, aud, nonce, auth_time, email, name }) {
   const payload = {

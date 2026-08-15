@@ -1,47 +1,52 @@
-// src/crypto/keys.js
-import crypto from 'node:crypto';
-import config from '../config/config.js';
+/**
+ * 密钥管理——旧接口代理
+ *
+ * 保留向后兼容的同步接口，内部委托到 src/keys/ 子系统。
+ * 新代码应直接使用 src/keys/。
+ */
 
-let keyPair = null;
-let jwkPublic = null;
+import {
+  getPrivateKey as _getPrivateKey,
+  getPublicKey as _getPublicKey,
+  getJWKS as _getJWKS,
+  generateKeyPair as _generateKeyPair,
+  clearCache
+} from '../../../keys/index.js';
 
-function generateKeyPair() {
-  if (keyPair) return keyPair;
+export { clearCache };
 
-  const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-  });
-
-  const pubKeyObj = crypto.createPublicKey(publicKey);
-  const jwk = pubKeyObj.export({ format: 'jwk' });
-
-  keyPair = { privateKey, publicKey };
-  jwkPublic = {
-    ...jwk,
-    kid: 'oauth21-key-1',
-    use: 'sig',
-    alg: config.jwt.algorithm
-  };
-
-  console.log('[Keys] RSA-2048 key pair generated');
-  return keyPair;
+/**
+ * 生成 RSA 密钥对（内存操作，不写 DB，同步）
+ * @param {object} [options]
+ * @returns {{ privateKey, publicKey, jwk }}
+ */
+export function generateKeyPair(options) {
+  return _generateKeyPair(options);
 }
 
-function getPrivateKey() {
-  if (!keyPair) generateKeyPair();
-  return keyPair.privateKey;
+/**
+ * 获取私钥 PEM（委托到 src/keys/，保持同步接口以防已有同步调用方）
+ * @param {string} [name='default']
+ * @returns {Promise<string>}
+ */
+export function getPrivateKey(name = 'default') {
+  return _getPrivateKey(name);
 }
 
-function getPublicKey() {
-  if (!keyPair) generateKeyPair();
-  return keyPair.publicKey;
+/**
+ * 获取公钥 PEM
+ * @param {string} [name='default']
+ * @returns {Promise<string>}
+ */
+export function getPublicKey(name = 'default') {
+  return _getPublicKey(name);
 }
 
-function getJWKS() {
-  if (!jwkPublic) generateKeyPair();
-  return { keys: [jwkPublic] };
+/**
+ * 获取 JWK 公钥集合
+ * @param {string} [name='default']
+ * @returns {Promise<object|null>}
+ */
+export function getJWKS(name = 'default') {
+  return _getJWKS(name);
 }
-
-export { generateKeyPair, getPrivateKey, getPublicKey, getJWKS };

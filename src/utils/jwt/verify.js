@@ -2,26 +2,26 @@
  * JWT 验证原语
  *
  * 纯工具函数，封装 jsonwebtoken 的 verify 操作。
- * 密钥从 oauth21 crypto/keys.js 获取。
+ * 从 JWT header 读取 kid 确定公钥，算法从 src/keys/config.js 读取。
  *
  * @author yijiu
  * @since 2026-08-14
  */
 
 import jwt from 'jsonwebtoken';
-import { getPublicKey } from '../../app/oauth21/crypto/keys.js';
-import config from '../../app/oauth21/config/config.js';
-
-const ALGORITHM = config.jwt.algorithm;
+import { getPublicKeyByKid } from '../../keys/index.js';
+import { ALGORITHM, DEFAULT_KEY_NAME } from '../../keys/config.js';
 
 /**
  * 验证 JWT
  * @param {string} token - JWT 字符串
- * @returns {object} 解码后的 Payload
+ * @returns {Promise<object>} 解码后的 Payload
  * @throws {jwt.JsonWebTokenError} 签名无效或令牌过期时抛出
  */
-export function verify(token) {
-  const publicKey = getPublicKey();
+export async function verify(token) {
+  const header = jwt.decode(token, { complete: true })?.header;
+  const kid = header?.kid || DEFAULT_KEY_NAME;
+  const publicKey = await getPublicKeyByKid(kid);
   return jwt.verify(token, publicKey, {
     algorithms: [ALGORITHM]
   });
