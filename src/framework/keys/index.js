@@ -11,7 +11,16 @@
 // 读 API
 export { getPrivateKey, getPublicKey, getPublicKeyByKid, getJWKS } from './accessor.js';
 // 生命周期/CRUD
-export { generateKid, generateKeyPair, createKey, listKeys, deleteKey, ensureCurrentKey } from './manager.js';
+export {
+  generateKid,
+  generateKeyPair,
+  createKey,
+  rotateKey,
+  listKeys,
+  deleteKey,
+  refreshCache,
+  ensureCurrentKey
+} from './manager.js';
 // 缓存（供测试/管理刷新）
 export { clearCache, getCurrentKid } from './cache.js';
 // 常量

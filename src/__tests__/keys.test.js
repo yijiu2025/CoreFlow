@@ -16,6 +16,14 @@ import jwt from 'jsonwebtoken';
 // 内存 KeyPair 模型
 const store = new Map();
 let idSeq = 1;
+// 模拟 DB 唯一冲突：前 N 次 create 抛 SequelizeUniqueConstraintError，之后正常
+let createSabotage = 0;
+function uniqueViolationError() {
+  const e = new Error('Duplicate entry');
+  e.name = 'SequelizeUniqueConstraintError';
+  e.parent = { code: 'ER_DUP_ENTRY' };
+  return e;
+}
 const InMemKeyPair = {
   async findOne({ where }) {
     for (const r of store.values()) {
@@ -29,6 +37,13 @@ const InMemKeyPair = {
     return arr.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   },
   async create(data) {
+    // 破坏：前 createSabotage 次抛唯一冲突，模拟并发/碰撞
+    if (createSabotage > 0) {
+      createSabotage--;
+      throw uniqueViolationError();
+    }
+    // 真实 DB 的唯一约束：name 重复则抛错
+    if (store.has(data.name)) throw uniqueViolationError();
     const rec = { id: idSeq++, created_at: Date.now(), ...data };
     store.set(rec.name, rec);
     return rec;
@@ -44,7 +59,8 @@ jest.unstable_mockModule('../framework/db/index.js', () => ({
   getModel: () => InMemKeyPair
 }));
 
-const { createKey, ensureCurrentKey, listKeys, deleteKey } = await import('../framework/keys/manager.js');
+const { createKey, rotateKey, ensureCurrentKey, listKeys, deleteKey, refreshCache } =
+  await import('../framework/keys/manager.js');
 const { getPrivateKey, getPublicKey, getPublicKeyByKid, getJWKS } = await import('../framework/keys/accessor.js');
 const { clearCache, getCurrentKid } = await import('../framework/keys/cache.js');
 const { sign, verify } = await import('../framework/jwt/index.js');
@@ -52,6 +68,7 @@ const { sign, verify } = await import('../framework/jwt/index.js');
 function reset() {
   store.clear();
   idSeq = 1;
+  createSabotage = 0;
   clearCache();
 }
 
@@ -118,5 +135,47 @@ describe('keys 组件', () => {
     expect(getCurrentKid()).toBe(b.kid);
     await deleteKey(b.kid);
     expect(getCurrentKid()).toBe(a.kid);
+  });
+
+  test('createKey 自动生成 kid 遇 DB 唯一冲突自动重试不抛错', async () => {
+    createSabotage = 2; // 前两次 insert 抛唯一冲突
+    const { kid } = await createKey({ remark: 'retry' });
+    expect(kid).toMatch(/^k[0-9a-f]{16}$/);
+    expect(createSabotage).toBe(0); // 破坏已耗尽
+    expect(getCurrentKid()).toBe(kid);
+  });
+
+  test('createKey 显式 kid 撞名抛错（不重试换名）', async () => {
+    await createKey({ kid: 'fixed-kid', remark: 'a' });
+    await expect(createKey({ kid: 'fixed-kid', remark: 'b' })).rejects.toThrow('已存在');
+    // 旧记录未被覆盖
+    const all = await listKeys();
+    expect(all.length).toBe(1);
+    expect(all[0].remark).toBe('a');
+  });
+
+  test('rotateKey 生成新密钥设为当前，旧密钥保留 active', async () => {
+    await ensureCurrentKey();
+    const oldKid = getCurrentKid();
+    const { kid: newKid } = await rotateKey({ remark: 'manual-rotate' });
+    expect(newKid).not.toBe(oldKid);
+    expect(getCurrentKid()).toBe(newKid);
+    const all = await listKeys();
+    expect(all.length).toBe(2); // 旧密钥仍保留
+    // 旧 kid 公钥仍可查（验证旧 token 用）
+    const old = await getPublicKeyByKid(oldKid);
+    expect(old.kid).toBe(oldKid);
+  });
+
+  test('refreshCache 清空并从 DB 重载当前密钥', async () => {
+    const { kid } = await createKey({ remark: 'a' });
+    clearCache(); // 模拟缓存丢失
+    expect(getCurrentKid()).toBeNull();
+    const reloaded = await refreshCache();
+    expect(reloaded).toBe(kid);
+    expect(getCurrentKid()).toBe(kid);
+    // 重载后仍能正常签发
+    const { token } = await sign({ sub: 'u2' });
+    expect(token).toBeTruthy();
   });
 });
