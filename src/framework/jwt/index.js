@@ -8,7 +8,7 @@
  */
 
 import jwt from 'jsonwebtoken';
-import { getPrivateKey, getPublicKeyByKid, getCurrentKid } from '../keys/index.js';
+import { getPrivateKey, getPublicKeyByKid, getCurrentKid, ensureCurrentKey } from '../keys/index.js';
 import { ALGORITHMS } from '../keys/config.js';
 
 /**
@@ -18,12 +18,17 @@ import { ALGORITHMS } from '../keys/config.js';
  * @param {string} [options.keyName] - 指定密钥 kid，未提供则用当前密钥
  * @param {string} [options.algorithm=ALGORITHMS.RS256] - 签名算法
  * @returns {Promise<{token: string, kid: string}>} JWT 字符串与使用的密钥 ID
- * @throws {Error} 无可用密钥时抛出
  */
 async function sign(payload, options = {}) {
   const { keyName, algorithm = ALGORITHMS.RS256, ...signOptions } = options;
-  const kid = keyName || getCurrentKid();
-  if (!kid) throw new Error('无可用的当前密钥，无法签发 JWT');
+  let kid = keyName || getCurrentKid();
+
+  // 无可用 kid（未指定且无当前密钥）→ 手动刷新确保当前密钥存在后重试，尽量不抛错
+  if (!kid) {
+    await ensureCurrentKey();
+    kid = keyName || getCurrentKid();
+    if (!kid) throw new Error('刷新后仍无可用当前密钥，无法签发 JWT');
+  }
 
   const privateKey = await getPrivateKey(kid);
   const token = jwt.sign(payload, privateKey, {
