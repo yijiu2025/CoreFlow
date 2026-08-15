@@ -8,28 +8,35 @@
  * 不传/空 kid 时使用"当前密钥"指针（cache.currentKid），
  * 运行期纯走缓存，缓存未命中才落 DB。
  *
+ * 退役密钥宽限：旧密钥 active=false 后仍可在宽限期内验签（旧 token 未过期），
+ * 超过宽限则视为不可用（getJWKS 不再暴露、loadKey 返回 null）。
+ *
  * @author yijiu
  * @since 2026-08-15
  */
 
 import { getCachedKey, setCachedKey, getCurrentKid, getAllCachedKeys } from './cache.js';
-import { findActiveByName, findAllActive } from './repository.js';
+import { findByName, findAll } from './repository.js';
 import { createKey } from './manager.js';
+import { withinGrace } from './config.js';
 
 /**
- * 从 DB 加载密钥对并写入缓存
+ * 从 DB 加载密钥对并写入缓存（仅 active 的才缓存）
  * @param {string} kid
  * @returns {Promise<object|null>} { privateKey, publicKey, jwk }
  */
 async function loadKey(kid) {
-  const record = await findActiveByName(kid);
+  const record = await findByName(kid);
   if (!record) return null;
+  // active 或在退役宽限期内才可用；过期退役密钥视为不存在
+  if (!record.active && !withinGrace(record.updated_at)) return null;
   const keyData = {
     privateKey: record.private_key,
     publicKey: record.public_key,
     jwk: record.jwk ? JSON.parse(record.jwk) : null
   };
-  setCachedKey(kid, keyData);
+  // 仅缓存 active 密钥；退役密钥每次从 DB 读以保证宽限判断准确
+  if (record.active) setCachedKey(kid, keyData);
   return keyData;
 }
 
@@ -44,7 +51,7 @@ async function getPrivateKey(kid) {
   if (!resolvedKid) throw new Error('无可用的当前密钥，请先初始化密钥');
   let key = getCachedKey(resolvedKid);
   if (!key) key = await loadKey(resolvedKid);
-  if (!key) throw new Error(`密钥对 "${resolvedKid}" 不存在或未启用`);
+  if (!key) throw new Error(`密钥对 "${resolvedKid}" 不存在或已退役`);
   return key.privateKey;
 }
 
@@ -62,13 +69,11 @@ async function getPublicKey(kid) {
     let key = getCachedKey(resolvedKid);
     if (!key) key = await loadKey(resolvedKid);
     if (key) return { pem: key.publicKey, kid: resolvedKid };
-    throw new Error(`密钥对 "${resolvedKid}" 不存在或未启用`);
+    throw new Error(`密钥对 "${resolvedKid}" 不存在或已退役`);
   }
 
   // 无当前密钥 → 生成新密钥（写 DB+缓存，并设为当前）
-  const { publicKey, kid: newKid } = await createKey({
-    remark: 'getPublicKey 自动生成'
-  });
+  const { publicKey, kid: newKid } = await createKey({ remark: 'getPublicKey 自动生成' });
   return { pem: publicKey, kid: newKid };
 }
 
@@ -85,10 +90,10 @@ async function getPublicKeyByKid(kid) {
 }
 
 /**
- * 获取 JWKS（所有启用公钥）
+ * 获取 JWKS（所有可用公钥）
  *
- * JWKS 需暴露全部 active 公钥，密钥轮转后旧 kid 仍需用于验旧 token，
- * 缓存不一定持有全部，故查 DB 合并缓存。
+ * 暴露 active 密钥 + 退役宽限期内的密钥（旧 token 仍需验签）。
+ * 超过宽限的退役密钥不再暴露，避免 JWKS 无限膨胀。
  *
  * @returns {Promise<{keys: object[]}>}
  */
@@ -96,17 +101,18 @@ async function getJWKS() {
   const seen = new Set();
   const keys = [];
 
-  // DB 全量 active（权威来源）
-  const records = await findAllActive();
+  // DB 全量（含退役），按 active 或宽限过滤
+  const records = await findAll();
   for (const record of records) {
     if (!record.jwk) continue;
+    if (!record.active && !withinGrace(record.updated_at)) continue; // 过宽限的退役密钥跳过
     const jwk = typeof record.jwk === 'string' ? JSON.parse(record.jwk) : record.jwk;
     if (!jwk || seen.has(jwk.kid)) continue;
     seen.add(jwk.kid);
     keys.push(jwk);
   }
 
-  // 合并缓存（防御性：理论上缓存 ⊆ DB，此处兜底）
+  // 合并缓存（防御性：理论上 active 缓存 ⊆ DB）
   for (const [, keyData] of getAllCachedKeys()) {
     if (!keyData.jwk || seen.has(keyData.jwk.kid)) continue;
     seen.add(keyData.jwk.kid);

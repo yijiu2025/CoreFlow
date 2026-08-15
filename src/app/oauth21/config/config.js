@@ -4,7 +4,7 @@ import 'dotenv/config';
 const config = {
   server: {
     port: parseInt(process.env.PORT) || 3000,
-    issuer: process.env.ISSUER || 'http://localhost:3000'
+    issuer: process.env.ISSUER || 'http://localhost:3000/oauth2.1'
   },
   jwt: {
     enabled: process.env.JWT_ENABLED === 'true', // 默认关闭，使用 Session 认证

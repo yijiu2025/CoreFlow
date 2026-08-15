@@ -44,13 +44,24 @@ const InMemKeyPair = {
     }
     // 真实 DB 的唯一约束：name 重复则抛错
     if (store.has(data.name)) throw uniqueViolationError();
-    const rec = { id: idSeq++, created_at: Date.now(), ...data };
+    const now = Date.now();
+    const rec = { id: idSeq++, created_at: now, updated_at: now, ...data };
     store.set(rec.name, rec);
     return rec;
   },
+  async update(values, { where }) {
+    let n = 0;
+    for (const r of store.values()) {
+      if (Object.entries(where).every(([k, v]) => r[k] === v)) {
+        Object.assign(r, values, { updated_at: Date.now() });
+        n++;
+      }
+    }
+    return [n];
+  },
   async destroy({ where }) {
-    for (const name of Object.keys(store)) {
-      if (Object.entries(where).every(([k, v]) => store.get(name)[k] === v)) store.delete(name);
+    for (const name of [...store.keys()]) {
+      if (Object.entries(where).every(([k, v]) => store.get(name)?.[k] === v)) store.delete(name);
     }
   }
 };
@@ -59,7 +70,7 @@ jest.unstable_mockModule('../framework/db/index.js', () => ({
   getModel: () => InMemKeyPair
 }));
 
-const { createKey, rotateKey, ensureCurrentKey, listKeys, deleteKey, refreshCache } =
+const { createKey, rotateKey, pruneExpiredRetired, ensureCurrentKey, listKeys, deleteKey, refreshCache } =
   await import('../framework/keys/manager.js');
 const { getPrivateKey, getPublicKey, getPublicKeyByKid, getJWKS } = await import('../framework/keys/accessor.js');
 const { clearCache, getCurrentKid } = await import('../framework/keys/cache.js');
@@ -154,17 +165,53 @@ describe('keys 组件', () => {
     expect(all[0].remark).toBe('a');
   });
 
-  test('rotateKey 生成新密钥设为当前，旧密钥保留 active', async () => {
+  test('rotateKey 停用旧密钥，宽限内仍可验签且 JWKS 含两把', async () => {
     await ensureCurrentKey();
     const oldKid = getCurrentKid();
     const { kid: newKid } = await rotateKey({ remark: 'manual-rotate' });
     expect(newKid).not.toBe(oldKid);
     expect(getCurrentKid()).toBe(newKid);
+
+    // 旧密钥 active=false（停用）但仍保留在 DB
     const all = await listKeys();
-    expect(all.length).toBe(2); // 旧密钥仍保留
-    // 旧 kid 公钥仍可查（验证旧 token 用）
+    expect(all.length).toBe(2);
+    const oldRec = all.find(r => r.name === oldKid);
+    expect(oldRec.active).toBe(false);
+
+    // 宽限内旧 kid 仍可验签
     const old = await getPublicKeyByKid(oldKid);
     expect(old.kid).toBe(oldKid);
+
+    // JWKS 含两把（新 + 宽限内的旧）
+    const { keys } = await getJWKS();
+    expect(keys.length).toBe(2);
+  });
+
+  test('退役密钥过宽限后从 JWKS 移除且不可验签', async () => {
+    await ensureCurrentKey();
+    const oldKid = getCurrentKid();
+    await rotateKey();
+    // 手动把旧 key 的 updated_at 调到 31 天前（模拟过宽限）
+    const rec = [...store.values()].find(r => r.name === oldKid);
+    rec.updated_at = new Date(Date.now() - 31 * 86400 * 1000);
+
+    // JWKS 不再含旧 key
+    const { keys } = await getJWKS();
+    expect(keys.find(k => k.kid === oldKid)).toBeUndefined();
+    // 验签旧 token 失败（密钥不可用）
+    await expect(getPublicKeyByKid(oldKid)).rejects.toThrow('已退役');
+  });
+
+  test('pruneExpiredRetired 物理清理过宽限退役密钥', async () => {
+    await ensureCurrentKey();
+    const oldKid = getCurrentKid();
+    await rotateKey();
+    const rec = [...store.values()].find(r => r.name === oldKid);
+    rec.updated_at = new Date(Date.now() - 31 * 86400 * 1000);
+
+    const removed = await pruneExpiredRetired();
+    expect(removed).toBe(1);
+    expect([...store.values()].find(r => r.name === oldKid)).toBeUndefined();
   });
 
   test('refreshCache 清空并从 DB 重载当前密钥', async () => {
