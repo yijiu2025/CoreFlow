@@ -59,7 +59,7 @@ export default async function (fastify) {
 
       const token = authHeader.slice(7);
       try {
-        const payload = verify(token);
+        const payload = await verify(token);
         if (!payload?.sub) {
           return reply.code(401).send({
             error: 'invalid_token',

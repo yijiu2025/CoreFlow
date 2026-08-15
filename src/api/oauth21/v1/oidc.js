@@ -81,7 +81,7 @@ export default async function (fastify) {
       // JWKS 相对稳定，缓存 1 小时
       reply.header('Cache-Control', 'public, max-age=3600, immutable');
       try {
-        return getJWKS();
+        return await getJWKS();
       } catch (err) {
         return reply.code(500).send({
           code: 500,
