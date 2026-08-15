@@ -10,8 +10,8 @@
 /* eslint-disable no-console */
 
 import { runEngine } from './engine.js';
-import { loadGuardConfig } from '../api/guard-config.js';
-import { C } from '../utils/colors.js';
+import { loadGuardConfig } from '../../api/guard-config.js';
+import { C } from '../../utils/colors.js';
 
 /**
  * 模块对外唯一接口，按引擎顺序初始化所有子模块

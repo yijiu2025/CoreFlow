@@ -8,7 +8,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
 import templateDao from '../../../app/posecraft/dao/template.dao.js';
-import { getModel } from '../../../db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';

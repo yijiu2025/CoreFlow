@@ -11,7 +11,7 @@
  */
 import { Op } from 'sequelize';
 import crypto from 'node:crypto';
-import sequelize from '../../../db/index.js';
+import sequelize from '../../../framework/db/index.js';
 
 /** 获取 OauthToken 模型（延迟获取，确保模型已加载） */
 const getModel = () => sequelize.models.OauthToken;

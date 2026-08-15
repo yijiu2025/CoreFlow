@@ -20,6 +20,25 @@
  */
 import crypto from 'node:crypto';
 
+/** sid_r 刷新端点路径（sid_r cookie 的 path，只在该端点携带） */
+const REFRESH_COOKIE_PATH = '/auth/v1/refresh-session';
+
+/** 短期登录: sid cookie maxAge (秒) */
+const SHORT_SESSION_TTL = 1800; // 30分钟
+
+/** 长期登录: sid cookie maxAge (秒) */
+const LONG_SESSION_TTL = 2592000; // 30天
+
+/** 长期登录: sid_r cookie maxAge (秒) */
+const REFRESH_TOKEN_TTL = 2592000; // 30天
+
+/** 旧 sid_r 轮转后保留"已轮转"标记的时长（秒），用于复用盗用检测；默认 7 天 */
+const ROTATED_RETENTION = parseInt(process.env.ROTATED_RETENTION) || 604800;
+
+/** Cookie 名称 */
+const COOKIE_SID = 'sid';
+const COOKIE_SID_R = 'sid_r';
+
 // 生产环境必须显式配置 SESSION_SECRET，否则 HMAC 签名可被伪造 sid，直接拒绝启动
 if (!process.env.SESSION_SECRET) {
   if (process.env.NODE_ENV === 'production') {
@@ -103,24 +122,6 @@ const COOKIE_OPTIONS = {
   }
 };
 
-/** 短期登录: sid cookie maxAge (秒) */
-const SHORT_SESSION_TTL = 1800; // 30分钟
-
-/** 长期登录: sid cookie maxAge (秒) */
-const LONG_SESSION_TTL = 2592000; // 30天
-
-/** 长期登录: sid_r cookie maxAge (秒) */
-const REFRESH_TOKEN_TTL = 2592000; // 30天
-
-/** sid_r 刷新端点路径（sid_r cookie 的 path，只在该端点携带） */
-const REFRESH_COOKIE_PATH = '/auth/v1/refresh-session';
-
-/** 旧 sid_r 轮转后保留"已轮转"标记的时长（秒），用于复用盗用检测；默认 7 天 */
-const ROTATED_RETENTION = parseInt(process.env.ROTATED_RETENTION) || 604800;
-
-/** Cookie 名称 */
-const COOKIE_SID = 'sid';
-const COOKIE_SID_R = 'sid_r';
 
 export {
   signCookie,

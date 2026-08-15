@@ -1,6 +1,6 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import noticeDao from '../../../app/notice/dao/notice.js';
-import emailService from '../../../notice/services/email.js';
+import emailService from '../../../framework/notice/services/email.js';
 
 export default async function (fastify, opts) {
   registerGroupMetadata({

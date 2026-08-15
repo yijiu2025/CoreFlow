@@ -17,10 +17,10 @@ import ApprovalDao from '../../../../app/oauth21/dao/approval.dao.js';
 import TokenDao from '../../../../app/oauth21/dao/token.dao.js';
 import { TokenService } from '../../../../app/oauth21/services/token.service.js';
 import config from '../../../../app/oauth21/config/config.js';
-import { createSession } from '../../../../auth/session.js';
-import { getDeviceId, detectDeviceType } from '../../../../auth/device.js';
-import { loadUserPermissions } from '../../../../auth/permission-loader.js';
-import { getStore } from '../../../../redis/index.js';
+import { createSession } from '../../../../framework/auth/session.js';
+import { getDeviceId, detectDeviceType } from '../../../../framework/auth/device.js';
+import { loadUserPermissions } from '../../../../framework/auth/permission-loader.js';
+import { getStore } from '../../../../framework/redis/index.js';
 import { setAuthCookies } from './cookies.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from './constants.js';
 

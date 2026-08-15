@@ -13,12 +13,12 @@ import { issueDirectTokens } from '../shared/token-issuer.js';
 import { buildTokenResponse } from '../shared/cookies.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../shared/constants.js';
 import ApprovalDao from '../../../../app/oauth21/dao/approval.dao.js';
-import { logLogin } from '../../../../auth/audit-logger.js';
-import { detectLoginAnomaly, DETECT_RESULT } from '../../../../auth/anomaly-detector.js';
+import { logLogin } from '../../../../framework/auth/audit-logger.js';
+import { detectLoginAnomaly, DETECT_RESULT } from '../../../../framework/auth/anomaly-detector.js';
 import UserDao from '../../../../app/oauth21/dao/user.dao.js';
 import ClientDao from '../../../../app/oauth21/dao/client.dao.js';
-import { getStore } from '../../../../redis/index.js';
-import { logLoginFailure } from '../../../../auth/session.js';
+import { getStore } from '../../../../framework/redis/index.js';
+import { logLoginFailure } from '../../../../framework/auth/session.js';
 import { AuthorizationService } from '../../../../app/oauth21/services/authorization.service.js';
 
 const authService = new AuthorizationService();

@@ -5,7 +5,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import sequelize from '../../../db/index.js';
+import sequelize from '../../../framework/db/index.js';
 import { generateSkeletonPreview, generateImageThumbnail } from '../utils/preview.js';
 
 class TemplateDao {

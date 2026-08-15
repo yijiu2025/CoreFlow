@@ -6,7 +6,7 @@
  * @since 2026-07-13
  */
 
-import { getModel } from '../../../db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 
 class FollowDao {
   /**

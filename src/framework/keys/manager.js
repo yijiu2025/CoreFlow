@@ -11,19 +11,23 @@
  * @since 2026-08-14
  */
 
+/* eslint-disable no-console */
+
 import crypto from 'node:crypto';
-import { getModel } from '../../../db/index.js';
+import { getModel } from '../db/index.js';
+import { ALGORITHMS, DEFAULT_KEY_NAME, MODULUS_LENGTH_2048 } from './config.js';
+import { C } from '../../utils/colors.js';
 
 const KEY_CACHE = new Map();
 
 /**
  * 在内存中生成 RSA 密钥对（不写 DB）
  * @param {object} [options]
- * @param {number} [options.modulusLength=2048]
- * @param {string} [options.algorithm='RS256']
+ * @param {number} [options.modulusLength=MODULUS_LENGTH_2048]
+ * @param {string} [options.algorithm=ALGORITHMS.RS256]
  * @returns {{ privateKey: string, publicKey: string, jwk: object }}
  */
-export function generateKeyPair({ modulusLength = 2048, algorithm = 'RS256' } = {}) {
+function generateKeyPair({ modulusLength = MODULUS_LENGTH_2048, algorithm = ALGORITHMS.RS256 } = {}) {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
     modulusLength,
     publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -63,10 +67,10 @@ async function loadKey(name) {
 
 /**
  * 获取私钥 PKCS#8 PEM
- * @param {string} [name='default'] - 密钥对名称
+ * @param {string} [name=DEFAULT_KEY_NAME] - 密钥对名称
  * @returns {Promise<string>}
  */
-export async function getPrivateKey(name = 'default') {
+async function getPrivateKey(name = DEFAULT_KEY_NAME) {
   let key = KEY_CACHE.get(name);
   if (!key) key = await loadKey(name);
   if (!key) throw new Error(`密钥对 "${name}" 不存在或未启用`);
@@ -75,10 +79,10 @@ export async function getPrivateKey(name = 'default') {
 
 /**
  * 获取公钥 SPKI PEM
- * @param {string} [name='default'] - 密钥对名称
+ * @param {string} [name=DEFAULT_KEY_NAME] - 密钥对名称
  * @returns {Promise<string>}
  */
-export async function getPublicKey(name = 'default') {
+async function getPublicKey(name = DEFAULT_KEY_NAME) {
   let key = KEY_CACHE.get(name);
   if (!key) key = await loadKey(name);
   if (!key) throw new Error(`密钥对 "${name}" 不存在或未启用`);
@@ -87,10 +91,10 @@ export async function getPublicKey(name = 'default') {
 
 /**
  * 获取 JWK 格式公钥
- * @param {string} [name='default'] - 密钥对名称
+ * @param {string} [name=DEFAULT_KEY_NAME] - 密钥对名称
  * @returns {Promise<{keys:object[]}|null>}
  */
-export async function getJWKS(name = 'default') {
+async function getJWKS(name = DEFAULT_KEY_NAME) {
   let key = KEY_CACHE.get(name);
   if (!key) key = await loadKey(name);
   if (!key) return null;
@@ -102,8 +106,8 @@ export async function getJWKS(name = 'default') {
  * @param {string} kid - 密钥 ID（JWT header kid）
  * @returns {Promise<string>}
  */
-export async function getPublicKeyByKid(kid) {
-  if (!kid) return getPublicKey('default');
+async function getPublicKeyByKid(kid) {
+  if (!kid) return getPublicKey(DEFAULT_KEY_NAME);
   return getPublicKey(kid);
 }
 
@@ -111,12 +115,12 @@ export async function getPublicKeyByKid(kid) {
  * 生成新密钥对并写入 DB
  * @param {object} params
  * @param {string} params.name - 密钥对名称（唯一）
- * @param {string} [params.algorithm='RS256']
- * @param {number} [params.modulusLength=2048]
+ * @param {string} [params.algorithm=ALGORITHMS.RS256]
+ * @param {number} [params.modulusLength=MODULUS_LENGTH_2048]
  * @param {string} [params.remark]
  * @returns {Promise<object>} 数据库记录
  */
-export async function createKey({ name, algorithm = 'RS256', modulusLength = 2048, remark }) {
+async function createKey({ name, algorithm = ALGORITHMS.RS256, modulusLength = MODULUS_LENGTH_2048, remark }) {
   const KeyPair = getModel('KeyPair');
   if (!KeyPair) throw new Error('KeyPair 模型未加载');
 
@@ -137,7 +141,7 @@ export async function createKey({ name, algorithm = 'RS256', modulusLength = 204
   });
 
   KEY_CACHE.set(name, { privateKey, publicKey, jwk });
-  console.log(`[Keys] 已生成密钥对: ${name} (${algorithm})`);
+  console.log(`✅ [Keys] ${C.green}已生成密钥对: ${name} (${algorithm})${C.reset}`);
   return record;
 }
 
@@ -145,28 +149,40 @@ export async function createKey({ name, algorithm = 'RS256', modulusLength = 204
  * 列出所有密钥对
  * @returns {Promise<Array>}
  */
-export async function listKeys() {
+async function listKeys() {
   const KeyPair = getModel('KeyPair');
   if (!KeyPair) return [];
   return KeyPair.findAll({ order: [['created_at', 'DESC']] });
 }
 
 /**
- * 销毁指定密钥对（从 DB 删除 + 清缓存）—— 仅主动轮转时使用
+ * 销毁指定密钥对（从 DB 删除 + 清缓存）
  * 建议先标记为非活跃（active=false），待旧 token 全部过期后再物理删除
  * @param {string} name
  */
-export async function deleteKey(name) {
+async function deleteKey(name) {
   const KeyPair = getModel('KeyPair');
   if (!KeyPair) throw new Error('KeyPair 模型未加载');
   await KeyPair.destroy({ where: { name } });
   KEY_CACHE.delete(name);
-  console.log(`[Keys] 已删除密钥对: ${name}`);
+  console.log(`✅ [Keys] ${C.green}已删除密钥对: ${name}${C.reset}`);
 }
 
 /**
  * 清空内存缓存（供测试或配置变更后刷新）
  */
-export function clearCache() {
+function clearCache() {
   KEY_CACHE.clear();
 }
+
+export {
+  generateKeyPair,
+  getPrivateKey,
+  getPublicKey,
+  getPublicKeyByKid,
+  getJWKS,
+  createKey,
+  listKeys,
+  deleteKey,
+  clearCache
+};

@@ -5,8 +5,8 @@
  * @author Claude
  * @since 2026-07-13
  */
-import sequelize from '../../../db/index.js';
-import { getModel } from '../../../db/index.js';
+import sequelize from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 import { Op } from 'sequelize';
 
 class InteractionDao {

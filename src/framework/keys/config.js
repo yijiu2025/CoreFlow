@@ -7,16 +7,13 @@
  */
 
 /** 默认密钥对名称 */
-export const DEFAULT_KEY_NAME = 'default';
+const DEFAULT_KEY_NAME = 'default';
 
-/** 默认 RSA 密钥长度 */
-export const DEFAULT_MODULUS_LENGTH = 2048;
-
-/** 默认签名算法 */
-export const ALGORITHM = 'RS256';
+/** 默认 RSA 密钥长度（2048 位） */
+const MODULUS_LENGTH_2048 = 2048;
 
 /** 支持的签名算法 */
-export const ALGORITHMS = {
+const ALGORITHMS = {
   /** HMAC with SHA-256 */
   HS256: 'HS256',
   /** HMAC with SHA-384 */
@@ -44,3 +41,5 @@ export const ALGORITHMS = {
   /** EdDSA (Ed25519 / Ed448) */
   EdDSA: 'EdDSA'
 };
+
+export { DEFAULT_KEY_NAME, MODULUS_LENGTH_2048, ALGORITHMS };

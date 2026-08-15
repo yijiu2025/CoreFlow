@@ -11,7 +11,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import { registerDeleteVersionHooks } from '../../db/softDeleteHooks.js';
+import { registerDeleteVersionHooks } from '../../framework/db/softDeleteHooks.js';
 import { encryptPhone, decryptPhone, isEncrypted } from '../../utils/crypto.js';
 
 /**

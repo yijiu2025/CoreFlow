@@ -19,7 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // 手动扫描迁移文件（避免 glob 在 Windows 上的兼容性问题）
-const migrationsDir = path.resolve(__dirname, '../../migrations');
+const migrationsDir = path.resolve(__dirname, '../../../migrations');
 const migrationFiles = fs
   .readdirSync(migrationsDir)
   .filter(f => f.endsWith('.js'))

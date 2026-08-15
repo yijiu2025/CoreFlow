@@ -9,16 +9,16 @@
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { verify } from '../../../utils/jwt/verify.js';
-import { createSession, refreshSession, updateRememberMe } from '../../../auth/session.js';
-import { getStore } from '../../../redis/index.js';
+import { verify } from '../../../framework/jwt/index.js';
+import { createSession, refreshSession, updateRememberMe } from '../../../framework/auth/session.js';
+import { getStore } from '../../../framework/redis/index.js';
 import {
   signCookie,
   COOKIE_OPTIONS,
   SHORT_SESSION_TTL,
   LONG_SESSION_TTL,
   REFRESH_TOKEN_TTL
-} from '../../../auth/cookie.js';
+} from '../../../framework/auth/cookie.js';
 
 export default async function (fastify) {
   registerGroupMetadata({

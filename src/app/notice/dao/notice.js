@@ -1,5 +1,5 @@
-import { getModel } from '../../../db/index.js';
-import Logger from '../../../log/index.js';
+import { getModel } from '../../../framework/db/index.js';
+import Logger from '../../../framework/log/index.js';
 
 /** 默认通道配置 */
 const DEFAULT_CHANNELS = [

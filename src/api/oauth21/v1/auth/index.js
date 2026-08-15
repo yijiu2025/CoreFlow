@@ -9,7 +9,7 @@
  */
 
 import { registerGroupMetadata } from '../../../guard.js';
-import { getStore } from '../../../../redis/index.js';
+import { getStore } from '../../../../framework/redis/index.js';
 import registerAuthorizeRoutes from './authorize.js';
 import registerLoginRoutes from './login.js';
 import registerQrRoutes from './qr.js';

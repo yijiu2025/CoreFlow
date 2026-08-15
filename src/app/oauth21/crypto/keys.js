@@ -11,7 +11,7 @@ import {
   getJWKS as _getJWKS,
   generateKeyPair as _generateKeyPair,
   clearCache
-} from '../../../keys/index.js';
+} from '../../../framework/keys/index.js';
 
 export { clearCache };
 

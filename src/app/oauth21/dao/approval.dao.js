@@ -1,5 +1,5 @@
-import sequelize from '../../../db/index.js';
-import { getModel } from '../../../db/index.js';
+import sequelize from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 
 /** 获取 OauthApproval 模型 (延迟加载) */
 const getOauthApproval = () => getModel('OauthApproval');

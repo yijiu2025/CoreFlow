@@ -12,7 +12,7 @@
 
 import { C } from '../utils/colors.js';
 import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
-import { logAuditEvent } from '../auth/audit-logger.js';
+import { logAuditEvent } from '../framework/auth/audit-logger.js';
 
 /**
  * 核心配置存储 - 仅存放与 API 加载、权限策略相关的配置

@@ -9,7 +9,7 @@
  */
 
 import { ensureDefaultKey } from '../../keys/index.js';
-import { C } from '../../utils/colors.js';
+import { C } from '../../../utils/colors.js';
 
 /* eslint-disable no-console */
 

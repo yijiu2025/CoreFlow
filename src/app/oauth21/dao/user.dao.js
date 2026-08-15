@@ -10,7 +10,7 @@
  * @since 2026-07-13
  */
 import bcrypt from 'bcryptjs';
-import { getModel } from '../../../db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 
 const UserDao = {
   /**

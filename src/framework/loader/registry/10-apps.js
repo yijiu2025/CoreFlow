@@ -14,13 +14,13 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { getModel } from '../../db/index.js';
-import { C } from '../../utils/colors.js';
-import { roleRegistry } from '../../utils/PbacRegistry.js';
+import { C } from '../../../utils/colors.js';
+import { roleRegistry } from '../../../utils/PbacRegistry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default async app => {
-  const appsDir = path.resolve(__dirname, '../../app');
+  const appsDir = path.resolve(__dirname, '../../../app');
 
   if (!fs.existsSync(appsDir)) {
     console.log(`ℹ️ [Apps] ${C.cyan}src/app/ 目录不存在，跳过应用加载${C.reset}`);
