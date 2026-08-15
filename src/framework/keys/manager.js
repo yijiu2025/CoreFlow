@@ -1,33 +1,43 @@
 /**
- * 密钥管理器
+ * 密钥生命周期管理
  *
- * 管理 RSA 密钥对的完整生命周期：
- * - 生成新密钥对并持久化到 DB（私钥 PEM + 公钥 PEM + JWK）
- * - 按名称缓存查询，支持多密钥轮转（kid 标识）
- * - 持有者通过名称传递密钥：签发时指定名称（写入 JWT header kid），
- *   验证时从 JWT header 读取 kid 确定公钥。
+ * 负责密钥对的生成、持久化、CRUD 与启动初始化。
+ * 读 API 见 accessor.js；DB 访问见 repository.js；缓存见 cache.js。
+ *
+ * kid 规则：每个密钥对的 name 即 kid，由 generateKid() 生成唯一字母数字串，
+ * 便于在 DB/日志中检索；不再使用固定的 'default'。
  *
  * @author yijiu
- * @since 2026-08-14
+ * @since 2026-08-15
  */
 
 /* eslint-disable no-console */
 
 import crypto from 'node:crypto';
-import { getModel } from '../db/index.js';
-import { ALGORITHMS, DEFAULT_KEY_NAME, MODULUS_LENGTH_2048 } from './config.js';
+import { ALGORITHMS, MODULUS_LENGTH_2048 } from './config.js';
 import { C } from '../../utils/colors.js';
+import { setCachedKey, deleteCachedKey, setCurrentKid, getCurrentKid } from './cache.js';
+import { findNewestActive, findAll, insertKey, removeByName, existsByName } from './repository.js';
 
-const KEY_CACHE = new Map();
+/**
+ * 生成唯一字母数字 kid
+ *
+ * 格式：'k' + 16 位 hex（crypto.randomBytes），字母数字、唯一、便于检索。
+ * @returns {string}
+ */
+function generateKid() {
+  return `k${crypto.randomBytes(8).toString('hex')}`;
+}
 
 /**
  * 在内存中生成 RSA 密钥对（不写 DB）
  * @param {object} [options]
  * @param {number} [options.modulusLength=MODULUS_LENGTH_2048]
  * @param {string} [options.algorithm=ALGORITHMS.RS256]
+ * @param {string} [options.kid] - 写入 jwk 的 kid，未提供则由调用方补
  * @returns {{ privateKey: string, publicKey: string, jwk: object }}
  */
-function generateKeyPair({ modulusLength = MODULUS_LENGTH_2048, algorithm = ALGORITHMS.RS256 } = {}) {
+function generateKeyPair({ modulusLength = MODULUS_LENGTH_2048, algorithm = ALGORITHMS.RS256, kid = '' } = {}) {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
     modulusLength,
     publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -37,101 +47,31 @@ function generateKeyPair({ modulusLength = MODULUS_LENGTH_2048, algorithm = ALGO
   const pubKeyObj = crypto.createPublicKey(publicKey);
   const jwk = pubKeyObj.export({ format: 'jwk' });
 
-  return { privateKey, publicKey, jwk: { ...jwk, kid: '', use: 'sig', alg: algorithm } };
+  return { privateKey, publicKey, jwk: { ...jwk, kid, use: 'sig', alg: algorithm } };
 }
 
 /**
- * 从 DB 加载密钥对到缓存
- * @param {string} name
- * @returns {Promise<object|null>}
+ * 生成新密钥对并写入 DB + 缓存，同时设为当前密钥
+ *
+ * @param {object} [options]
+ * @param {string} [options.kid] - 指定 kid，未提供则自动生成唯一字母数字
+ * @param {string} [options.algorithm=ALGORITHMS.RS256]
+ * @param {number} [options.modulusLength=MODULUS_LENGTH_2048]
+ * @param {string} [options.remark]
+ * @returns {Promise<{publicKey: string, privateKey: string, jwk: object, kid: string}>}
+ * @throws {Error} kid 已存在
  */
-async function loadKey(name) {
-  const KeyPair = getModel('KeyPair');
-  if (!KeyPair) return null;
+async function createKey({ kid, algorithm = ALGORITHMS.RS256, modulusLength = MODULUS_LENGTH_2048, remark } = {}) {
+  const resolvedKid = kid || generateKid();
 
-  try {
-    const record = await KeyPair.findOne({ where: { name, active: true } });
-    if (!record) return null;
-
-    const keyData = {
-      privateKey: record.private_key,
-      publicKey: record.public_key,
-      jwk: record.jwk ? JSON.parse(record.jwk) : null
-    };
-    KEY_CACHE.set(name, keyData);
-    return keyData;
-  } catch {
-    return null;
+  if (await existsByName(resolvedKid)) {
+    throw new Error(`密钥对 "${resolvedKid}" 已存在`);
   }
-}
 
-/**
- * 获取私钥 PKCS#8 PEM
- * @param {string} [name=DEFAULT_KEY_NAME] - 密钥对名称
- * @returns {Promise<string>}
- */
-async function getPrivateKey(name = DEFAULT_KEY_NAME) {
-  let key = KEY_CACHE.get(name);
-  if (!key) key = await loadKey(name);
-  if (!key) throw new Error(`密钥对 "${name}" 不存在或未启用`);
-  return key.privateKey;
-}
+  const { privateKey, publicKey, jwk } = generateKeyPair({ modulusLength, algorithm, kid: resolvedKid });
 
-/**
- * 获取公钥 SPKI PEM
- * @param {string} [name=DEFAULT_KEY_NAME] - 密钥对名称
- * @returns {Promise<string>}
- */
-async function getPublicKey(name = DEFAULT_KEY_NAME) {
-  let key = KEY_CACHE.get(name);
-  if (!key) key = await loadKey(name);
-  if (!key) throw new Error(`密钥对 "${name}" 不存在或未启用`);
-  return key.publicKey;
-}
-
-/**
- * 获取 JWK 格式公钥
- * @param {string} [name=DEFAULT_KEY_NAME] - 密钥对名称
- * @returns {Promise<{keys:object[]}|null>}
- */
-async function getJWKS(name = DEFAULT_KEY_NAME) {
-  let key = KEY_CACHE.get(name);
-  if (!key) key = await loadKey(name);
-  if (!key) return null;
-  return { keys: [key.jwk] };
-}
-
-/**
- * 从 JWT header 的 kid 字段获取公钥 PEM
- * @param {string} kid - 密钥 ID（JWT header kid）
- * @returns {Promise<string>}
- */
-async function getPublicKeyByKid(kid) {
-  if (!kid) return getPublicKey(DEFAULT_KEY_NAME);
-  return getPublicKey(kid);
-}
-
-/**
- * 生成新密钥对并写入 DB
- * @param {object} params
- * @param {string} params.name - 密钥对名称（唯一）
- * @param {string} [params.algorithm=ALGORITHMS.RS256]
- * @param {number} [params.modulusLength=MODULUS_LENGTH_2048]
- * @param {string} [params.remark]
- * @returns {Promise<object>} 数据库记录
- */
-async function createKey({ name, algorithm = ALGORITHMS.RS256, modulusLength = MODULUS_LENGTH_2048, remark }) {
-  const KeyPair = getModel('KeyPair');
-  if (!KeyPair) throw new Error('KeyPair 模型未加载');
-
-  const existing = await KeyPair.findOne({ where: { name } });
-  if (existing) throw new Error(`密钥对名称 "${name}" 已存在`);
-
-  const { privateKey, publicKey, jwk } = generateKeyPair({ modulusLength, algorithm });
-  jwk.kid = name;
-
-  const record = await KeyPair.create({
-    name,
+  await insertKey({
+    name: resolvedKid,
     algorithm,
     private_key: privateKey,
     public_key: publicKey,
@@ -140,49 +80,70 @@ async function createKey({ name, algorithm = ALGORITHMS.RS256, modulusLength = M
     remark
   });
 
-  KEY_CACHE.set(name, { privateKey, publicKey, jwk });
-  console.log(`✅ [Keys] ${C.green}已生成密钥对: ${name} (${algorithm})${C.reset}`);
-  return record;
+  setCachedKey(resolvedKid, { privateKey, publicKey, jwk });
+  setCurrentKid(resolvedKid); // 新密钥即当前签名密钥
+
+  console.log(`✅ [Keys] ${C.green}已生成密钥对: ${resolvedKid} (${algorithm})${C.reset}`);
+  return { publicKey, privateKey, jwk, kid: resolvedKid };
 }
 
 /**
- * 列出所有密钥对
+ * 列出所有密钥对（含未启用，供管理端）
  * @returns {Promise<Array>}
  */
 async function listKeys() {
-  const KeyPair = getModel('KeyPair');
-  if (!KeyPair) return [];
-  return KeyPair.findAll({ order: [['created_at', 'DESC']] });
+  return findAll();
 }
 
 /**
- * 销毁指定密钥对（从 DB 删除 + 清缓存）
- * 建议先标记为非活跃（active=false），待旧 token 全部过期后再物理删除
- * @param {string} name
+ * 删除指定密钥对（DB + 缓存）
+ *
+ * 建议先标记 active=false 待旧 token 过期再物理删除。
+ * 若删除的是当前密钥，自动将最新 active 密钥提升为当前。
+ *
+ * @param {string} kid
  */
-async function deleteKey(name) {
-  const KeyPair = getModel('KeyPair');
-  if (!KeyPair) throw new Error('KeyPair 模型未加载');
-  await KeyPair.destroy({ where: { name } });
-  KEY_CACHE.delete(name);
-  console.log(`✅ [Keys] ${C.green}已删除密钥对: ${name}${C.reset}`);
+async function deleteKey(kid) {
+  await removeByName(kid);
+  deleteCachedKey(kid);
+
+  // 删除当前密钥后，重选最新 active 为当前
+  if (getCurrentKid() === kid) {
+    const newest = await findNewestActive();
+    setCurrentKid(newest ? newest.name : null);
+  }
+
+  console.log(`✅ [Keys] ${C.green}已删除密钥对: ${kid}${C.reset}`);
 }
 
 /**
- * 清空内存缓存（供测试或配置变更后刷新）
+ * 启动初始化：确保系统有"当前密钥"
+ *
+ * 取 DB 最新 active 密钥设为当前并入缓存；DB 无密钥则生成新密钥。
+ * 仅在启动时调用一次，依赖 KeyPair 模型已加载。
+ *
+ * @returns {Promise<string|null>} 当前 kid
  */
-function clearCache() {
-  KEY_CACHE.clear();
+async function ensureCurrentKey() {
+  // 1. 已有当前密钥（缓存）则跳过
+  if (getCurrentKid()) return getCurrentKid();
+
+  // 2. 取 DB 最新 active 密钥
+  const newest = await findNewestActive();
+  if (newest) {
+    setCachedKey(newest.name, {
+      privateKey: newest.private_key,
+      publicKey: newest.public_key,
+      jwk: newest.jwk ? JSON.parse(newest.jwk) : null
+    });
+    setCurrentKid(newest.name);
+    console.log(`📦 [Keys] ${C.cyan}当前密钥: ${newest.name}${C.reset}`);
+    return newest.name;
+  }
+
+  // 3. DB 无任何密钥 → 生成
+  const { kid } = await createKey({ remark: 'ensureCurrentKey 自动生成' });
+  return kid;
 }
 
-export {
-  generateKeyPair,
-  getPrivateKey,
-  getPublicKey,
-  getPublicKeyByKid,
-  getJWKS,
-  createKey,
-  listKeys,
-  deleteKey,
-  clearCache
-};
+export { generateKid, generateKeyPair, createKey, listKeys, deleteKey, ensureCurrentKey };

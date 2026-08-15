@@ -1,5 +1,5 @@
 import request from '@/utils/request';
-import { rsaEncrypt, generateNonce, clearPublicKeyCache } from '@/utils/crypto';
+import { rsaEncrypt, generateNonce, clearPublicKeyCache, getCachedKid } from '@/utils/crypto';
 
 /**
  * 登录请求负载类型
@@ -31,6 +31,7 @@ export const authApi = {
         const encrypted = await rsaEncrypt(payloadStr);
         return await request.post('/oauth2.1/login', {
           encrypted,
+          kid: getCachedKid(),
           timestamp: Date.now(),
           nonce: generateNonce(),
           scope: 'openid profile email',

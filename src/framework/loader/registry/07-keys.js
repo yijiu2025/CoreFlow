@@ -8,14 +8,14 @@
  * @since 2026-08-14
  */
 
-import { ensureDefaultKey } from '../../keys/index.js';
+import { ensureCurrentKey } from '../../keys/index.js';
 import { C } from '../../../utils/colors.js';
 
 /* eslint-disable no-console */
 
 export default async function (app) {
   try {
-    await ensureDefaultKey();
+    await ensureCurrentKey();
     console.log(`🔑 [Loader: Keys] ${C.cyan}密钥初始化完成${C.reset}`);
   } catch (err) {
     console.error(`❌ [Loader: Keys] ${C.red}密钥初始化失败: ${err.message}${C.reset}`);

@@ -5,6 +5,9 @@
  * 公钥缓存策略：
  * - 正常情况：缓存在内存中，页面生命周期内复用
  * - 解密失败时：调用 clearPublicKeyCache() 清除缓存，下次请求自动重新获取
+ *
+ * kid 回传：fetchPublicKey 缓存当前公钥的 kid，调用方通过 getCachedKid()
+ * 取出并随登录/注册请求回传，后端用该 kid 查私钥解密。
  */
 
 const SERVER = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
@@ -13,25 +16,34 @@ let cachedKeyId: string | null = null;
 
 /**
  * 获取并导入服务器公钥
- * 通过 keyId 判断密钥是否更新，自动刷新缓存
+ * 通过 kid 判断密钥是否更新，自动刷新缓存
  */
 export async function fetchPublicKey(): Promise<CryptoKey> {
   const resp = await fetch(`${SERVER}/oauth2.1/crypto/public-key`);
   if (!resp.ok) throw new Error('获取公钥失败');
 
   const data = await resp.json();
-  const keyId = data.keyId;
+  const kid = data.kid;
 
   // 密钥未变化且已缓存，直接返回
-  if (cachedPublicKey && cachedKeyId === keyId) return cachedPublicKey;
+  if (cachedPublicKey && cachedKeyId === kid) return cachedPublicKey;
 
   // 密钥变化或首次获取，重新导入
   cachedPublicKey = await crypto.subtle.importKey('jwk', data.key, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, [
     'encrypt'
   ]);
-  cachedKeyId = keyId;
+  cachedKeyId = kid;
 
   return cachedPublicKey;
+}
+
+/**
+ * 获取当前缓存的 kid（供登录/注册请求回传）
+ * 必须在 rsaEncrypt 之后调用（rsaEncrypt 会触发 fetchPublicKey 缓存 kid）
+ * @returns 当前公钥 kid，未获取过返回 null
+ */
+export function getCachedKid(): string | null {
+  return cachedKeyId;
 }
 
 /**

@@ -7,7 +7,7 @@ import { ref, computed } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
-import { rsaEncrypt } from '@/utils/crypto';
+import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -136,7 +136,8 @@ const executeRegister = async () => {
     const encryptedPassword = await rsaEncrypt(submitData.password!);
     await authApi.register({
       ...submitData,
-      password: encryptedPassword
+      password: encryptedPassword,
+      kid: getCachedKid()
     });
     alert('注册成功！现在您可以返回登录了');
 

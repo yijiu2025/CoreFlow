@@ -27,13 +27,13 @@ export default async function (fastify) {
     method: 'GET',
     url: '/crypto/public-key',
     handler: async (request, reply) => {
-      const { jwk, keyId, algorithm } = getEncryptionPublicKey();
+      const { jwk, kid, algorithm } = await getEncryptionPublicKey();
 
       reply.header('Cache-Control', 'public, max-age=300');
 
       return {
         key: jwk,
-        kid: keyId,
+        kid,
         alg: algorithm,
         cache_hint: 'Cache for 5 minutes'
       };

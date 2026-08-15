@@ -8,7 +8,7 @@
  * - Access Token: 资源访问令牌，包含 sub、client_id、scope 等标准 claims
  * - ID Token: OIDC 身份令牌，包含用户身份信息（email、name 等）
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { v4 as uuidv4 } from 'uuid';
@@ -33,9 +33,9 @@ import { sign, verify } from '../../../framework/jwt/index.js';
  * @param {string} params.aud - 受众（接收令牌的客户端 ID）
  * @param {'access_token'|'id_token'|'refresh_token'|'client_token'} [params.token_type='access_token'] - 令牌类型
  * @param {number} [params.ttl] - 过期时间（秒），默认使用 config 对应配置
- * @returns {string} JWT 字符串
+ * @returns {Promise<{token: string, kid: string}>} JWT 字符串与密钥 ID
  */
-function issueToken({ sub, aud, token_type = 'access_token', ttl }) {
+async function issueToken({ sub, aud, token_type = 'access_token', ttl }) {
   const now = Math.floor(Date.now() / 1000);
   const defaultTtl = {
     access_token: config.jwt.accessTokenTTL,
@@ -53,7 +53,8 @@ function issueToken({ sub, aud, token_type = 'access_token', ttl }) {
     jti: uuidv4(),
     token_type
   };
-  return sign(payload);
+  const { token, kid } = await sign(payload);
+  return { token, kid };
 }
 
 /**
@@ -61,9 +62,9 @@ function issueToken({ sub, aud, token_type = 'access_token', ttl }) {
  * @param {object} params
  * @param {string} params.sub - 用户标识
  * @param {string} params.aud - 受众（客户端 ID）
- * @returns {Promise<string>} JWT Access Token
+ * @returns {Promise<{token: string, kid: string}>} JWT Access Token 与密钥 ID
  */
-function issueAccessToken({ sub, aud }) {
+async function issueAccessToken({ sub, aud }) {
   return issueToken({ sub, aud, token_type: 'access_token' });
 }
 
@@ -76,9 +77,9 @@ function issueAccessToken({ sub, aud }) {
  * @param {number} [params.auth_time] - 用户认证时间戳
  * @param {string} [params.email] - 用户邮箱
  * @param {string} [params.name] - 用户名称
- * @returns {Promise<string>} JWT ID Token
+ * @returns {Promise<{token: string, kid: string}>} JWT ID Token 与密钥 ID
  */
-function issueIdToken({ sub, aud, nonce, auth_time, email, name }) {
+async function issueIdToken({ sub, aud, nonce, auth_time, email, name }) {
   const payload = {
     iss: config.server.issuer,
     sub,
@@ -91,7 +92,8 @@ function issueIdToken({ sub, aud, nonce, auth_time, email, name }) {
   if (nonce) payload.nonce = nonce;
   if (email) payload.email = email;
   if (name) payload.name = name;
-  return sign(payload);
+  const { token, kid } = await sign(payload);
+  return { token, kid };
 }
 
 export { sign, verify, issueToken, issueAccessToken, issueIdToken };
