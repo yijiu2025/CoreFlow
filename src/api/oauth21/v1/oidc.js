@@ -79,10 +79,12 @@ export default async function (fastify) {
     method: 'GET',
     url: '/.well-known/jwks.json',
     handler: async (request, reply) => {
-      // JWKS 相对稳定，缓存 1 小时
+      // JWKS 相对稳定，缓存 1 小时（按 kid 查询时该 kid 对应公钥同样稳定）
       reply.header('Cache-Control', 'public, max-age=3600, immutable');
       try {
-        return await getJWKS();
+        // 可选 kid 查询参数：传入则只返回该 kid 的公钥，不传返回全部（标准 JWKS）
+        const { kid } = request.query || {};
+        return await getJWKS(kid);
       } catch (err) {
         return reply.code(500).send({
           code: 500,
