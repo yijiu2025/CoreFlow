@@ -8,6 +8,7 @@
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { checkMaxSessions, kickSession, kickAllSessions } from '../../../framework/auth/session.js';
+import { formatSessionList } from '../../../app/user/services/session-view.service.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -36,17 +37,11 @@ export default async function (fastify) {
       }
 
       const result = await checkMaxSessions(user.userId || user.sub, 'GLOBAL', 9999);
-      const sessions = result?.sessions || [];
+      const view = formatSessionList(result?.sessions || [], request.cookies?.sid);
 
       return reply.result.success('获取成功', {
-        sessions: sessions.map(s => ({
-          sessionId: s.sessionId?.substring(0, 16) + '...',
-          deviceType: s.deviceType || 'browser',
-          ip: s.ip,
-          lastActive: s.lastActive,
-          isCurrent: request.cookies?.sid?.includes(s.sessionId?.substring(0, 16))
-        })),
-        total: sessions.length,
+        sessions: view.sessions,
+        total: view.total,
         maxSessions: result?.maxSessions || 5
       });
     }

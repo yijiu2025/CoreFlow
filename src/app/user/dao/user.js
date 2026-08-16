@@ -15,6 +15,7 @@ import { decrypt } from '../../oauth21/crypto/encryption.js';
 import bcrypt from 'bcryptjs';
 import IamDao from '../../admin/dao/iam.dao.js';
 import { validatePasswordStrength } from '../../../framework/auth/password-policy.js';
+import { maskPhone } from '../../../utils/crypto.js';
 
 class UserDao {
   /**
@@ -221,6 +222,141 @@ class UserDao {
 
       return user;
     });
+  }
+
+  /**
+   * 根据用户 UID 查找用户（适配后返回，sub 对应 uid）
+   * @param {string} uid 用户唯一标识 (UUID)
+   * @returns {Promise<object|null>} 适配后的用户数据或 null
+   */
+  async findById(uid) {
+    const User = getModel('User');
+    if (!User) return null;
+    const user = await User.findOne({ where: { uid } });
+    return user
+      ? {
+          id: user.uid,
+          numericId: user.id,
+          username: user.username,
+          email: user.email,
+          name: user.username,
+          avatar: user.avatar,
+          uid: user.uid,
+          status: user.status
+        }
+      : null;
+  }
+
+  /**
+   * 生成唯一的 personal_id（格式 pose_craft_ + 8位字母数字）
+   *
+   * 碰撞时递归重试，最多 10 次，极端情况用时间戳后缀兜底。
+   * @param {number} [attempt=0] - 当前重试次数
+   * @returns {Promise<string>} 唯一的 personal_id
+   */
+  async generateUniquePersonalId(attempt = 0) {
+    if (attempt >= 10) {
+      return `pose_craft_${Date.now().toString(36)}`;
+    }
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let suffix = '';
+    for (let i = 0; i < 8; i++) {
+      suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const candidate = `pose_craft_${suffix}`;
+    const existing = await getModel('User').findOne({
+      where: { personal_id: candidate },
+      attributes: ['id']
+    });
+    if (existing) {
+      return this.generateUniquePersonalId(attempt + 1);
+    }
+    return candidate;
+  }
+
+  /**
+   * 获取用户基础资料（含全新用户默认资料初始化 + 手机号脱敏）
+   *
+   * 全新用户（无 bio 且无 personal_id）在此初始化个人中心基础资料。
+   * 手机号仅返回掩码格式，明文不暴露。
+   * @param {number} userId - 用户内部 id
+   * @returns {Promise<object|null>} 资料对象或 null（用户不存在）
+   */
+  async getProfile(userId) {
+    const User = getModel('User');
+    let user = await User.findOne({ where: { id: userId } });
+    if (!user) return null;
+
+    // 全新用户初始化默认资料
+    if (!user.bio && !user.personal_id) {
+      await user.update({
+        gender: 1,
+        age: 27,
+        city: '甘肃 · 庆阳',
+        bio: '✈️已飞0个国家❗️\n梦想是环游世界🌍\n中国留子👧\n个人存款0.000000千万💵\n人生是干饭💤\n梦游国家40+ | 我命由我不由天🌚\n火锅品鉴师🍪 | 5G冲浪达人🏄\npdd资深买手🛍️ | 草莓🍓狂热粉丝\n雅思托福没考📚 清华北大没考📖\n国家级证件持有者(身份证)💳',
+        personal_id: await this.generateUniquePersonalId()
+      });
+      user = await User.findOne({ where: { id: userId } });
+    }
+
+    return {
+      uid: user.uid,
+      username: user.username,
+      avatar: user.avatar,
+      email: user.email,
+      phone: user.phone ? maskPhone(user.phone) : null,
+      gender: user.gender,
+      age: user.age,
+      city: user.city,
+      bio: user.bio,
+      personal_id: user.personal_id
+    };
+  }
+
+  /**
+   * 更新用户头像，返回旧头像 URL（供调用方清理旧文件）
+   * @param {number} userId - 用户内部 id
+   * @param {string} newUrl - 新头像 URL
+   * @returns {Promise<string|null>} 旧头像 URL 或 null（用户不存在）
+   */
+  async updateAvatar(userId, newUrl) {
+    const User = getModel('User');
+    const user = await User.findOne({ where: { id: userId } });
+    if (!user) return null;
+    const oldAvatar = user.avatar;
+    user.avatar = newUrl;
+    await user.save();
+    return oldAvatar;
+  }
+
+  /**
+   * 更新用户基础资料（仅允许指定字段，防注入）
+   * @param {number} userId - 用户内部 id
+   * @param {object} data - 待更新字段（username/avatar/gender/age/city/bio/personal_id）
+   * @returns {Promise<object|null>} 更新后资料或 null（用户不存在）
+   */
+  async updateProfile(userId, data) {
+    const User = getModel('User');
+    const user = await User.findOne({ where: { id: userId } });
+    if (!user) return null;
+
+    const allowedFields = ['username', 'avatar', 'gender', 'age', 'city', 'bio', 'personal_id'];
+    const updateData = {};
+    for (const k of allowedFields) {
+      if (data[k] !== undefined) updateData[k] = data[k];
+    }
+    await user.update(updateData);
+
+    return {
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      gender: user.gender,
+      age: user.age,
+      city: user.city,
+      bio: user.bio,
+      personal_id: user.personal_id
+    };
   }
 }
 
