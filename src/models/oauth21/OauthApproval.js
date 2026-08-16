@@ -3,6 +3,9 @@
  *
  * 记录用户（由 OIDC sub 标识）对具体应用（app_id）的授权信息以及分配的 scopes。
  * 遵循项目统一的 snake_case 命名规范。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export default (sequelize, DataTypes) => {
   const OauthApproval = sequelize.define(

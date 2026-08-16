@@ -2,6 +2,9 @@
  * 错误处理测试
  *
  * 覆盖：统一错误格式、HTTP 状态码、日志脱敏
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

@@ -8,6 +8,9 @@
  *
  * 安全：refresh_token 以 sha256 哈希入库（与 Session 的 sid 一致），
  * 避免数据库泄露导致 refresh token 直接可用。调用方传明文，DAO 内部统一哈希。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { Op } from 'sequelize';
 import crypto from 'node:crypto';

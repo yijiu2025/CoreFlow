@@ -35,8 +35,6 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/* eslint-disable no-console */
-
 // 不安全的默认密钥列表（启动时校验，防止误部署）
 const INSECURE_SECRETS = [
   'your_super_secret_key_2026',

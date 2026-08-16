@@ -25,8 +25,6 @@
  * @since 2026-07-25
  */
 
-/* eslint-disable no-console */
-
 import { RedisRequiredError } from './errors.js';
 import {
   withTimeout as withTimeoutPromise,
@@ -875,7 +873,8 @@ function getRedisStore(resolvedPrefix, timeout, useBackup) {
     // ========== 有序集合（ZSet）操作 ==========
     zAdd: (key, score, value) => RedisStore.zAdd(resolvedPrefix, key, score, value, timeout, useBackup),
     zCard: key => RedisStore.zCard(resolvedPrefix, key, timeout, useBackup),
-    zRangeByScore: (key, min, max, opts) => RedisStore.zRangeByScore(resolvedPrefix, key, min, max, opts, timeout, useBackup),
+    zRangeByScore: (key, min, max, opts) =>
+      RedisStore.zRangeByScore(resolvedPrefix, key, min, max, opts, timeout, useBackup),
     zRem: (key, members) => RedisStore.zRem(resolvedPrefix, key, members, timeout, useBackup),
 
     // ========== 后端类型标记（用于缓存失效判断） ==========

@@ -6,6 +6,9 @@
  * 1. generate() 随机生成滑块目标坐标 (x, y)
  * 2. 前端根据坐标裁剪滑块图片，用户拖动滑块
  * 3. verify() 验证用户拖动的 X 坐标是否在容差范围内
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'node:crypto';

@@ -2,6 +2,9 @@
  * 集成流程测试
  *
  * 覆盖：完整登录流程、权限加载流程、会话管理流程
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

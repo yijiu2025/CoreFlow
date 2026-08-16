@@ -1,5 +1,8 @@
 /**
  * 封禁管理命令
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { connectRedis, closeRedis } from '../../../../scripts/lib/redis.js';
 import { printTable, printSuccess, printInfo, printError, printWarning } from '../../../../scripts/lib/table.js';

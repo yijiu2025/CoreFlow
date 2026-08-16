@@ -1,5 +1,8 @@
 /**
  * 二维码扫码数据访问层
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import qrcodeService from './service.js';
 

@@ -2,6 +2,9 @@
  * 三级守卫系统单元测试
  *
  * 覆盖：路由注册、参数校验、权限匹配、上下文管理
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 

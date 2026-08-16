@@ -1,6 +1,9 @@
 /**
  * 邮件发送服务
  * 接入 Nodemailer，支持动态配置、连接复用、发送重试、异步队列、模板系统
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import nodemailer from 'nodemailer';
 import Logger from '../../log/index.js';

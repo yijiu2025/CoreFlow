@@ -13,7 +13,7 @@ class BannerConfigDao {
    * @returns {Model} BannerConfig 模型
    */
   getModel() {
-    return getModel("BannerConfig");
+    return getModel('BannerConfig');
   }
 
   /**
@@ -85,7 +85,6 @@ class BannerConfigDao {
    * @returns {Promise<BannerConfig|null>}
    */
   async update(id, data) {
-    const model = this.getModel();
     const item = await this.findById(id);
     if (!item) return null;
     return await item.update(data);
@@ -97,7 +96,6 @@ class BannerConfigDao {
    * @returns {Promise<boolean>}
    */
   async delete(id) {
-    const model = this.getModel();
     const item = await this.findById(id);
     if (!item) return false;
     await item.update({ delete_version: id });

@@ -3,6 +3,9 @@
  *
  * 覆盖：MapStore 版和 Redis 版的核心逻辑
  * Redis 版需要 Redis 环境，当前仅测试 MapStore 版
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { MapStore } from '../redis/map-store.js';

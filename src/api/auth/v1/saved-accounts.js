@@ -7,6 +7,9 @@
  * 业务逻辑见 framework/auth/session-api.service.js（switchAccount / removeSavedAccount）。
  * 凭据为 device_id cookie（见 device-accounts.js），非 UA 指纹。
  * 展示账号清单由 accounts cookie 提供，前端直读，无需 GET 端点。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { switchAccount, removeSavedAccount } from '../../../framework/auth/session-api.service.js';

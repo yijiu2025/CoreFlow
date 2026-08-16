@@ -6,6 +6,9 @@
  * Redis 不可用时自动降级到 MySQL。
  *
  * 注意：所有 Redis 操作均直接调用 redis.get/set，Redis 连接由调用方保证
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { Op } from 'sequelize';
 import sequelize from '../../../framework/db/index.js';

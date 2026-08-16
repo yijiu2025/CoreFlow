@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * 应用扫描加载器（合并原 09-pbac + 10-seed-clients + 11-apps）
  *
@@ -9,6 +8,9 @@
  * 4. 同步 PBAC 角色到数据库
  * 5. 注册 OAuth 客户端（config.oauth_client）
  * 6. 调用 init 函数注册应用插件
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import fs from 'fs';
 import path from 'path';

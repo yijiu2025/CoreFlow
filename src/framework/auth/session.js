@@ -2,9 +2,10 @@
  * Session 管理器
  * 负责会话的创建、验证、销毁、续期和自动刷新
  * 所有 Redis 操作统一通过 getStore 管理（自带超时、序列化、降级）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
-
-/* eslint-disable no-console */
 
 import crypto from 'node:crypto';
 import { Op } from 'sequelize';

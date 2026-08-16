@@ -1,4 +1,9 @@
-// src/config/config.js
+/**
+ * OAuth2.1 应用配置（JWT/Session 模式、TTL、issuer 等）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import 'dotenv/config';
 
 const config = {

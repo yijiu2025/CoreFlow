@@ -14,6 +14,9 @@
  *   - 指纹封禁索引：fw:blocked:fps     → Hash（fp → JSON）
  *   - 指纹白名单：  fw:whitelist:fp:{fp} → '1'（带 TTL）
  *   - 指纹白名单索引：fw:whitelisted:fps → Hash（fp → JSON）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import {
   getConfig,

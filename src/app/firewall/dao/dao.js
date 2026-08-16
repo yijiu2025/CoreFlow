@@ -3,6 +3,9 @@
  * 负责安全配置、节点信息以及黑白名单的持久化读写与管理。
  *
  * 系统级模块：日志使用 console（Pino 结构化日志用于请求生命周期）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import fs from 'fs';
 import path from 'path';

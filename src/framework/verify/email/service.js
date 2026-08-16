@@ -1,6 +1,9 @@
 /**
  * 邮箱验证码核心服务
  * 纯验证逻辑，不含存储
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import emailService from '../../notice/services/email.js';
 import config from '../config.js';

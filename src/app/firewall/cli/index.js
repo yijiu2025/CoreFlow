@@ -9,6 +9,9 @@
  *   npm run cli -- firewall unban      # 解除封禁
  *   npm run cli -- firewall allow      # 添加白名单
  *   npm run cli -- firewall stats      # 流量统计
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { status } from './status.js';

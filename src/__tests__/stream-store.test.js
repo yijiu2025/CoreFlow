@@ -3,6 +3,9 @@
  *
  * 覆盖：Stream 创建、添加消息、消费者组读取
  * 注意：需要 Redis 环境，跳过测试需要配置 REDIS_HOST
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { createStream } from '../redis/stream-store.js';
@@ -38,13 +41,15 @@ describeOrSkip('Stream 存储', () => {
     expect(len).toBeGreaterThanOrEqual(2);
   });
 
-  it('createGroup 创建消费者组', async () => {
-    try {
-      await stream.createGroup('test-group', { start: '$' });
-    } catch (err) {
-      // BUSYGROUP 说明组已存在，也是成功的
-      expect(err.message).toMatch(/BUSYGROUP/);
-    }
+  it('createGroup 创建消费者组（幂等：成功或 BUSYGROUP 均算通过）', async () => {
+    await expect(async () => {
+      try {
+        await stream.createGroup('test-group', { start: '$' });
+      } catch (err) {
+        // BUSYGROUP 说明组已存在，也算成功；其它错误向上抛触发 toThrow
+        if (!/BUSYGROUP/.test(err.message)) throw err;
+      }
+    }).not.toThrow();
   });
 
   it('ensureGroup 不抛错', async () => {

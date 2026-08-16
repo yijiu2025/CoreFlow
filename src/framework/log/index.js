@@ -1,4 +1,9 @@
-// src/log/index.js
+/**
+ * 日志工具（统一日志出口）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { requestContext } from '../auth/index.js';
 
 /**

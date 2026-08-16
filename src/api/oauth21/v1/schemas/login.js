@@ -4,6 +4,9 @@
  * 两种登录路径：
  * - 密码登录：encrypted(RSA 密文) + timestamp + nonce + kid + keepLogin
  * - 邮箱验证码登录：type=email + email + code
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 /** POST /login、/mini-login */

@@ -3,6 +3,9 @@
  *
  * 提供前端管理面板需要的查询接口，以及 API 层手动操作的薄封装。
  * 核心检测逻辑仍在 engine/block-manager.js。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import {
   getActiveBlocks as _getActiveBlocks,

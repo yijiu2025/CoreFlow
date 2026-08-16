@@ -3,6 +3,9 @@
  *
  * 检测到攻击时自动封禁 IP 并发送告警通知。
  * 阈值可配置，支持邮件和 Webhook 告警。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import Logger from '../../../framework/log/index.js';

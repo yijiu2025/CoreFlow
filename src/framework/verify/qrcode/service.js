@@ -7,6 +7,9 @@
  * 2. 前端展示二维码，用户用手机扫码
  * 3. 手机端调用 confirm() 确认登录
  * 4. 前端轮询 poll() 获取扫码状态
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { v4 as uuidv4 } from 'uuid';
 import config from '../config.js';

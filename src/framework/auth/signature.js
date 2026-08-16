@@ -1,3 +1,9 @@
+/**
+ * H5 签名工具（HMAC-SHA256）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import crypto from 'node:crypto';
 import { getStore } from '../redis/index.js';
 

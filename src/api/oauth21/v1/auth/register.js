@@ -2,6 +2,9 @@
  * 注册模块
  *
  * POST /mini-register — 快捷注册
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { registerSecureRoute } from '../../../guard.js';

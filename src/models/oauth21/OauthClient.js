@@ -39,6 +39,9 @@
  *   token_endpoint_auth_method: 'client_secret_basic',
  *   application_type: 'service'
  * }
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export default (sequelize, DataTypes) => {
   const OauthClient = sequelize.define(

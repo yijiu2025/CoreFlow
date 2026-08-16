@@ -1,3 +1,9 @@
+/**
+ * IAM Permission 模型
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 export default (sequelize, DataTypes) => {
   const Permission = sequelize.define(
     'Permission',

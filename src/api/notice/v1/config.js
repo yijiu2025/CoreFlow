@@ -1,3 +1,9 @@
+/**
+ * OAuth2.1 应用配置
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import noticeDao from '../../../app/notice/dao/notice.js';
 import emailService from '../../../framework/notice/services/email.js';

@@ -1,4 +1,9 @@
-// src/loader/registry/05-api.js
+/**
+ * Loader：API 路由自动加载（扫描 src/api/）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';

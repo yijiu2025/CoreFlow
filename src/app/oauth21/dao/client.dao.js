@@ -3,6 +3,9 @@
  *
  * 提供客户端的增删查操作，替代原内存 Map 存储。
  * 底层通过 Sequelize 模型访问 oauth_clients 表。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import bcrypt from 'bcryptjs';
 import sequelize from '../../../framework/db/index.js';

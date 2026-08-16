@@ -1,3 +1,9 @@
+/**
+ * 通知数据访问层
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { getModel } from '../../../framework/db/index.js';
 import Logger from '../../../framework/log/index.js';
 

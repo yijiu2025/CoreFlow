@@ -1,6 +1,9 @@
 /**
  * 异常登录检测模块
  * 检测异地登录、频繁失败、设备指纹变更等异常行为
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getModel } from '../db/index.js';
 import { Op } from 'sequelize';

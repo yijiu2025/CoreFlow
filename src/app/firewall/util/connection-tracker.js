@@ -4,6 +4,9 @@
  * 基于内存 Map 追踪每个 IP 的并发连接数。
  * 请求进入时 +1，响应完成时 -1，超过限制时拒绝请求。
  * 同时提供统计查询和僵尸连接清理能力。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getConfig, activeConnections } from './shared.js';
 

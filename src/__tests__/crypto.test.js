@@ -2,6 +2,9 @@
  * 加密模块测试
  *
  * 覆盖：JWT 签名/验证、RSA 加密、PKCE、Cookie 签名
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 import crypto from 'crypto';

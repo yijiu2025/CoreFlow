@@ -3,6 +3,9 @@
  *
  * 使用项目统一的 getStore 持久化数据，
  * Redis 可用时自动使用 Redis，否则降级为内存 Map。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { generateDeviceCode, generateUserCode } from '../crypto/tokens.js';

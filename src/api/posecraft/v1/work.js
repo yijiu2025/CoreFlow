@@ -10,7 +10,7 @@ import workDao from '../../../app/posecraft/dao/work.dao.js';
 import templateDao from '../../../app/posecraft/dao/template.dao.js';
 import { composeWorkPreview, generateImageThumbnail } from '../../../app/posecraft/utils/preview.js';
 import { checkDataPermission } from '../../../app/posecraft/services/permission.service.js';
-import { formatWork, formatWorkDetail, formatWorkList } from '../../../app/posecraft/services/work-view.service.js';
+import { formatWorkDetail, formatWorkList } from '../../../app/posecraft/services/work-view.service.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -282,7 +282,6 @@ export default async function (fastify) {
     requireLogin: true,
     handler: async (request, reply) => {
       const { id } = request.params;
-      const user = request.state.user;
 
       const work = await workDao.findById(id);
 

@@ -7,6 +7,9 @@
  * POST  /toggle-system/:system — 系统全局防御开关
  *
  * 业务逻辑见 app/guard/services/config.service.js（updateConfig/toggleConfig/toggleSystemConfig）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { getAllGuardConfigs } from '../../guard-config.js';

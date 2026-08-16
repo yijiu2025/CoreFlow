@@ -1,3 +1,9 @@
+/**
+ * Loader：通知配置种子
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { getModel } from '../../db/index.js';
 
 const C = { reset: '\x1b[0m', cyan: '\x1b[36m' };

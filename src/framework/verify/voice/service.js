@@ -1,6 +1,9 @@
 /**
  * 语音验证码核心服务
  * 复用短信验证码的存储逻辑，调用语音播报 API
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import config from '../config.js';
 

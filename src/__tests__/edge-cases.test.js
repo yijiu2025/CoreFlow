@@ -2,6 +2,9 @@
  * 边界情况测试
  *
  * 覆盖：空值处理、类型检查、边界条件
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

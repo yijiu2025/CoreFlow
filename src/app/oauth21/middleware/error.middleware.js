@@ -3,6 +3,9 @@
  *
  * 同时支持 Fastify 和 Express。
  * 错误响应格式统一为 { code, message, data }
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 /**

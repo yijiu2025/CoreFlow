@@ -1,4 +1,9 @@
-// src/crypto/pkce.js
+/**
+ * PKCE 工具（code_verifier 生成 + code_challenge S256 计算）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import crypto from 'node:crypto';
 
 /**

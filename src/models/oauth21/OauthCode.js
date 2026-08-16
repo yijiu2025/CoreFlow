@@ -3,6 +3,9 @@
  *
  * 存储授权码流程中颁发的一次性授权码。
  * 每个授权码关联一个客户端和用户，消费后标记为已使用。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export default (sequelize, DataTypes) => {
   const OauthCode = sequelize.define(

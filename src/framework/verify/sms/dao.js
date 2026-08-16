@@ -1,6 +1,9 @@
 /**
  * 短信验证码数据访问层
  * 处理频率限制、存储、校验逻辑
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import Logger from '../../log/index.js';
 import smsService from './service.js';

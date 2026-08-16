@@ -5,6 +5,9 @@
  * POST /revoke  — 令牌撤销（RFC 7009）
  *
  * 业务逻辑见 app/oauth21/services/token.service.js（handleTokenGrant / handleRevoke）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { TokenService } from '../../../app/oauth21/services/token.service.js';

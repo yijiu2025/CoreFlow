@@ -4,6 +4,9 @@
  * GET  /user/v1/sessions       — 获取当前用户的活跃会话列表
  * POST /user/v1/sessions/kick  — 踢掉指定会话
  * POST /user/v1/sessions/kick-all — 踢掉所有其他会话
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';

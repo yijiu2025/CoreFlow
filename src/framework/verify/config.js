@@ -1,6 +1,9 @@
 /**
  * 验证模块统一配置
  * 读取环境变量，提供默认值，所有 verify 子模块引用此文件
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export default {
   // 图形验证码

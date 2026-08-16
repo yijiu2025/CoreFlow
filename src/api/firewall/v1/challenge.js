@@ -4,6 +4,9 @@
  * POST /api/firewall/v1/challenge/verify — 提交验证结果
  *
  * 业务逻辑见 app/firewall/services/challenge.service.js（verifyChallenge）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { verifyChallenge } from '../../../app/firewall/services/challenge.service.js';

@@ -25,8 +25,6 @@ import { loadUserPermissions } from './permission-loader.js';
 import StpUtil from './StpUtil.js';
 import { getStore } from '../redis/index.js';
 
-/* eslint-disable no-console */
-
 /** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
 const jwtEnabled = process.env.JWT_ENABLED === 'true';
 

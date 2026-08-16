@@ -1,5 +1,8 @@
 /**
  * 授权码流程 Schema（/authorize 子流程）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 /** POST /authorize/login — 授权页登录 */

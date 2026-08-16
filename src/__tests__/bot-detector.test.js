@@ -1,6 +1,9 @@
 /**
  * Bot 检测器测试
  * 测试 UA 模式匹配 + 请求频率阈值判定逻辑
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, test, expect } from '@jest/globals';
 

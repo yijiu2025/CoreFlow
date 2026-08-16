@@ -1,11 +1,15 @@
+/**
+ * Loader：模型自动加载
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { DataTypes } from 'sequelize';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { sequelize, getModel } from '../../db/index.js';
 import { C } from '../../../utils/colors.js';
-
-/* eslint-disable no-console */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

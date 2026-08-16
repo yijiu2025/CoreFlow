@@ -35,7 +35,8 @@ export default [
         }
       ],
       'no-undef': 'error',
-      'no-console': 'warn',
+      // 项目规范允许控制台日志（emoji + 彩色前缀，见 CLAUDE.md），no-console 不适用
+      'no-console': 'off',
       camelcase: 'off',
       'no-unused-expressions': 'off',
 
@@ -54,7 +55,9 @@ export default [
 
       // 5. Jest 测试规则
       ...jestPlugin.configs.recommended.rules,
-      'jest/no-focused-tests': 'error'
+      'jest/no-focused-tests': 'error',
+      // expectCode 是项目自定义断言 helper（内部含 expect），识别为断言函数避免 expect-expect 误报
+      'jest/expect-expect': ['warn', { assertFunctionNames: ['expect', 'expectCode'] }]
     }
   },
 

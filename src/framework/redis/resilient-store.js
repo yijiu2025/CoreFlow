@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 /**
  * 弹性存储类
  * 用于速率限制，当 Redis 不可用时能够自动降级到内存存储。

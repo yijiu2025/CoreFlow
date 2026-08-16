@@ -3,6 +3,9 @@
  * 负责内存中访问记录的维护、持久化存储以及统计数据的汇总。
  *
  * 使用环形缓冲区存储最近的访问记录，固定内存占用，O(1) 写入。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import fs from 'fs';
 import path from 'path';

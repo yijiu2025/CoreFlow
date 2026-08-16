@@ -1,5 +1,8 @@
 /**
  * 用户内联策略表 (PBAC 个人特权/黑名单)
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export default (sequelize, DataTypes) => {
   const InlinePolicy = sequelize.define(

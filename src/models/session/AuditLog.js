@@ -1,6 +1,9 @@
 /**
  * 安全审计日志模型
  * 记录关键安全事件：登录/登出/权限变更/密码修改/踢出设备
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export default (sequelize, DataTypes) => {
   const AuditLog = sequelize.define(

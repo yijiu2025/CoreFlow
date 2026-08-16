@@ -2,6 +2,9 @@
  * 第一层速率限制
  * 注册 @fastify/rate-limit 插件，基于用户/IP 双维度限频。
  * 在 onRequest 阶段（认证之后）执行，被限流的请求直接拒绝。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import rateLimit from '@fastify/rate-limit';
 import { createBoundStore } from '../../../../framework/redis/index.js';

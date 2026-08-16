@@ -4,6 +4,9 @@
  * POST /user/v1/avatar — 上传头像
  *
  * 业务逻辑见 app/user/services/avatar.service.js（processAndUploadAvatar）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';

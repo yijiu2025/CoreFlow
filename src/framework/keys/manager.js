@@ -11,8 +11,6 @@
  * @since 2026-08-15
  */
 
-/* eslint-disable no-console */
-
 import crypto from 'node:crypto';
 import { ALGORITHMS, MODULUS_LENGTH_2048, withinGrace } from './config.js';
 import { C } from '../../utils/colors.js';

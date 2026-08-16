@@ -1,6 +1,9 @@
 /**
  * 三级级联守卫测试
  * 测试 IP 匹配引擎、权限校验逻辑
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, test, expect } from '@jest/globals';
 import { isIpMatch } from '../utils/ip.js';

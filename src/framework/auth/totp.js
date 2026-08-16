@@ -3,6 +3,9 @@
  * 基于 Web Crypto API 实现，无需外部依赖
  *
  * 用于二次验证（2FA），用户绑定后每次登录需要输入 6 位验证码
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import crypto from 'node:crypto';
 

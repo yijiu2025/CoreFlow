@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 /**
  * 循环队列（Ring Queue）
  *

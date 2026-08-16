@@ -31,8 +31,6 @@
  * @since 2026-07-24
  */
 
-/* eslint-disable no-console */
-
 import { createClient } from 'redis';
 import fs from 'node:fs';
 import path from 'node:path';

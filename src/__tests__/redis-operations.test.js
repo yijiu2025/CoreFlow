@@ -2,6 +2,9 @@
  * Redis 操作测试
  *
  * 覆盖：Session Store、Nonce Store、Resilient Store
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

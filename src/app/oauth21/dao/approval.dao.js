@@ -1,3 +1,9 @@
+/**
+ * 授权记录数据访问层
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import sequelize from '../../../framework/db/index.js';
 import { getModel } from '../../../framework/db/index.js';
 

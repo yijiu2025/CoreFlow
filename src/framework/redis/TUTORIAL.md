@@ -52,7 +52,7 @@ const store = getStore('captcha', { ttlJitter: 60 });
 
 ```js
 const fw = getStore('fw');
-const blocks = fw.setPrefix('block');   // fw:block:key
+const blocks = fw.setPrefix('block'); // fw:block:key
 const whitelist = fw.setPrefix('allow'); // fw:allow:key
 await blocks.set('ip:1.2.3.4', value);
 ```
@@ -61,8 +61,8 @@ await blocks.set('ip:1.2.3.4', value);
 
 ```js
 const store = getStore('fw');
-await store.hlen('myhash');   // → client.hLen('fw:myhash')
-await store.zAdd('ranking', { score: 1, value: 'a' });  // Proxy 自动转发
+await store.hlen('myhash'); // → client.hLen('fw:myhash')
+await store.zAdd('ranking', { score: 1, value: 'a' }); // Proxy 自动转发
 ```
 
 ### 通用命令执行器
@@ -85,9 +85,9 @@ import { cacheThrough } from './redis/index.js';
 // 热点数据查询：缓存命中直接返回，未命中加锁查 DB
 const user = await cacheThrough(
   'user:1001',
-  () => db.findUser(1001),   // 数据获取函数
-  600,                        // TTL（秒）
-  { prefix: 'user' }          // 缓存前缀
+  () => db.findUser(1001), // 数据获取函数
+  600, // TTL（秒）
+  { prefix: 'user' } // 缓存前缀
 );
 
 // 并发 100 个请求同时打这里，只有 1 个查 DB，其余等待后读缓存
@@ -116,14 +116,20 @@ const lock = createLock('task:sync-users', { ttl: 30000 });
 
 // 非阻塞尝试
 if (await lock.tryAcquire()) {
-  try { await syncUsers(); } finally { await lock.release(); }
+  try {
+    await syncUsers();
+  } finally {
+    await lock.release();
+  }
 }
 
 // 长时间任务 + 自动续期
 const longLock = createLock('task:backup', { ttl: 60000 });
 if (await longLock.tryAcquire()) {
-  longLock.startRenew();  // 每 20s 自动续期
-  try { await backupDatabase(); } finally {
+  longLock.startRenew(); // 每 20s 自动续期
+  try {
+    await backupDatabase();
+  } finally {
     longLock.stopRenew();
     await longLock.release();
   }
@@ -131,7 +137,11 @@ if (await longLock.tryAcquire()) {
 
 // 阻塞等待（最多 10s）
 if (await lock3.acquire(10000)) {
-  try { await rebuildCache(); } finally { await lock3.release(); }
+  try {
+    await rebuildCache();
+  } finally {
+    await lock3.release();
+  }
 }
 ```
 
@@ -153,8 +163,8 @@ const queue = createQueue('notify', { maxSize: 100000, backend: 'redis' });
 queue.push({ id: 1, text: 'hello' });
 const msg = queue.shift(); // { data: { id: 1, text: 'hello' }, createdAt: ... }
 queue.length();
-queue.list(10);    // 列出最近 10 条
-queue.clear();     // 清空
+queue.list(10); // 列出最近 10 条
+queue.clear(); // 清空
 ```
 
 ### 循环队列（满时自动覆盖最旧）
@@ -165,8 +175,8 @@ import { createRingQueue } from './redis/index.js';
 const ring = createRingQueue('audit', { maxSize: 1000 });
 ring.push({ event: 'login', user: 'alice' });
 ring.push({ event: 'logout', user: 'alice' });
-ring.toArray(10);   // 返回最近 10 条
-ring.length();       // 当前条数
+ring.toArray(10); // 返回最近 10 条
+ring.length(); // 当前条数
 ```
 
 ### Stream 消息队列（持久化 + 消费者组）
@@ -206,11 +216,11 @@ for (const p of pending) {
 import { createNonceStore } from './redis/index.js';
 
 // 多种调用方式
-createNonceStore(60)                  // ttl
-createNonceStore('nonce', 60)         // prefix + ttl
-createNonceStore({ ttl: 60 })         // options 对象
-createNonceStore('nonce', { ttl: 60 }) // prefix + options
-createNonceStore()                     // 默认 prefix='nonce', ttl=60
+createNonceStore(60); // ttl
+createNonceStore('nonce', 60); // prefix + ttl
+createNonceStore({ ttl: 60 }); // options 对象
+createNonceStore('nonce', { ttl: 60 }); // prefix + options
+createNonceStore(); // 默认 prefix='nonce', ttl=60
 
 // 使用
 const nonceStore = createNonceStore(60);
@@ -248,7 +258,7 @@ MapStore.delete('email_code', 'user@example.com');
 // 迭代方法
 MapStore.forEach('email_code', (value, key) => console.log(key, value));
 MapStore.keys('email_code');
-MapStore.values('email_code', true);  // true = 清理过期
+MapStore.values('email_code', true); // true = 清理过期
 MapStore.entries('email_code');
 ```
 
@@ -276,11 +286,11 @@ app.onRedisHealthChange(healthy => {
 
 ## 错误处理
 
-| 错误类型 | statusCode | 含义 | 处理方式 |
-|---------|:----------:|------|---------|
-| `RedisRequiredError` | 503 | Redis 不可用 | 降级或重试 |
-| `TypeError` | 400 | 参数无效 | 修复调用代码 |
-| 超时 | 503 | 操作超时 | 重试 |
+| 错误类型             | statusCode | 含义         | 处理方式     |
+| -------------------- | :--------: | ------------ | ------------ |
+| `RedisRequiredError` |    503     | Redis 不可用 | 降级或重试   |
+| `TypeError`          |    400     | 参数无效     | 修复调用代码 |
+| 超时                 |    503     | 操作超时     | 重试         |
 
 ```js
 import { RedisRequiredError } from './redis/index.js';

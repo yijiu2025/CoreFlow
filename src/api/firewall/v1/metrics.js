@@ -4,6 +4,9 @@
  * GET /api/firewall/v1/metrics — 获取性能指标
  *
  * 业务逻辑见 app/firewall/services/metrics.service.js（getMetricsView）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { getMetricsView } from '../../../app/firewall/services/metrics.service.js';

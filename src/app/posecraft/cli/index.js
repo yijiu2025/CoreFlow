@@ -5,6 +5,9 @@
  *   npm run cli -- posecraft stats       # 统计信息
  *   npm run cli -- posecraft templates   # 模板列表
  *   npm run cli -- posecraft works       # 作品列表
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';

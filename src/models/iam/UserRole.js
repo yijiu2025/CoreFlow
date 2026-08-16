@@ -1,3 +1,9 @@
+/**
+ * IAM UserRole 模型
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { registerDeleteVersionHooks } from '../../framework/db/softDeleteHooks.js';
 
 /**

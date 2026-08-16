@@ -1,6 +1,9 @@
 /**
  * 速率限制器测试
  * 测试内存滑动窗口限频逻辑（不依赖 Redis）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, test, expect, beforeEach } from '@jest/globals';
 

@@ -3,6 +3,9 @@
  * 基于 User-Agent 模式匹配 + 请求频率，超过阈值触发人机挑战
  *
  * 正则表达式在模块加载时预编译，避免每次请求创建 RegExp 对象
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getConfig } from '../../util/shared.js';
 import { setBlock } from '../dao/block-manager.js';

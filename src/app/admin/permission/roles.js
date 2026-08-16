@@ -1,6 +1,9 @@
 /**
  * 管理后台角色定义
  * 使用 defineRoles 注册角色，loader 启动时自动同步到数据库
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { defineRoles } from '../../../utils/PbacRegistry.js';
 import { ADMIN_PERMISSIONS } from './index.js';

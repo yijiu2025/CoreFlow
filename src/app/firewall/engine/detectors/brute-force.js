@@ -1,6 +1,9 @@
 /**
  * 登录暴力破解检测
  * 账号维度 + IP 维度双重防护，触发后锁定账号并挑战 IP
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getConfig, KEY, LUA_INCR_WITH_EXPIRE, memorySlidingWindow, getBlockStatus } from '../../util/shared.js';
 import { setBlock } from '../dao/block-manager.js';

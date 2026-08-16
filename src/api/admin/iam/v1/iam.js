@@ -1,3 +1,9 @@
+/**
+ * IAM 权限管理路由（角色/策略/可管理用户）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import IamDao from '../../../../app/admin/dao/iam.dao.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { actionMetaRegistry } from '../../../../utils/PbacRegistry.js';

@@ -2,6 +2,9 @@
  * WebSocket 测试
  *
  * 覆盖：连接认证、消息格式、心跳、重连
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

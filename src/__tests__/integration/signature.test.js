@@ -1,6 +1,9 @@
 /**
  * 集成测试：H5 Token 签名验证流程
  * 测试签名验证中间件的完整流程，包括 cookie 下发、签名计算、防重放
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import Fastify from 'fastify';
@@ -150,12 +153,11 @@ async function buildSignatureApp() {
 }
 
 describe('H5 Token 签名验证流程', () => {
-  let app, sessionStore;
+  let app;
 
   beforeAll(async () => {
     const built = await buildSignatureApp();
     app = built.app;
-    sessionStore = built.sessionStore;
   });
 
   afterAll(async () => {

@@ -3,6 +3,9 @@
  *
  * 记录用户对某个客户端的授权同意信息。
  * 遵循 OIDC 规范，将用户外部标识字段统一命名为 sub，类型保持 UUID，与主系统的 User.uid 保持一致。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export default (sequelize, DataTypes) => {
   const OauthConsent = sequelize.define(

@@ -4,6 +4,9 @@
  * 仪表盘基础 / 节点定位 / 安全策略 / 黑名单 / 封禁 / 白名单 / WebSocket
  *
  * 业务逻辑见 app/firewall/services/monitor.service.js（WS 广播 + 封禁/白名单编排）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute, registerSecureWebSocket, getFullUrl } from '../../guard.js';
 import { getRecentRecords, getSummary } from '../../../app/firewall/data/store.js';

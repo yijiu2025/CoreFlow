@@ -2,6 +2,9 @@
  * 安全测试用例
  *
  * 覆盖：CSRF、限频、密码策略、日志脱敏、Cookie 安全
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

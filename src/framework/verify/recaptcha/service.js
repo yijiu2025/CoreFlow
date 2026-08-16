@@ -1,6 +1,9 @@
 /**
  * 人机验证核心服务
  * 对接 Google reCAPTCHA / hCaptcha API
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import config from '../config.js';
 

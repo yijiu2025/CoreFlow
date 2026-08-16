@@ -6,6 +6,9 @@
  *
  * POST /admin/oauth21/v1/permissions/sync — 子应用上报权限点
  * POST /admin/oauth21/v1/client              — 创建 OAuth 客户端
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import ClientDao from '../../../../app/oauth21/dao/client.dao.js';

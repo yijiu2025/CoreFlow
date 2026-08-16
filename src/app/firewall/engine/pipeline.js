@@ -1,6 +1,9 @@
 /**
  * 请求安全处理管道
  * 将 onRequest 钩子中的安全检查逻辑拆分为独立步骤，提高可读性
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { buildChallengePage } from '../data/challenge-template.js';
 import {

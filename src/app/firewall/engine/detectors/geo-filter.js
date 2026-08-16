@@ -1,6 +1,9 @@
 /**
  * 地理位置过滤与信誉检查
  * 基于 GeoIP 的地域围栏：IDC 限频、境外敏感路径拦截
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import geoip from 'geoip-lite';
 import { getConfig } from '../../util/shared.js';

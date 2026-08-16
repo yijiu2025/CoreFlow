@@ -1,4 +1,10 @@
-﻿/**
+/**
+ * PoseCraft 作品数据访问层
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
+/**
  * PoseCraft 作品数据访问层
  * 负责作品的 CRUD、推荐查询、关注用户作品查询及 liked/collected 状态标记
  *
@@ -308,7 +314,6 @@ class WorkDao {
    * @returns {Promise<Work|null>}
    */
   async update(id, data) {
-    const model = this.getModel();
     const work = await this.findById(id);
     if (!work) return null;
     return await work.update(data);
@@ -321,7 +326,6 @@ class WorkDao {
    * @returns {Promise<boolean>}
    */
   async delete(id, userId) {
-    const model = this.getModel();
     const work = await this.findById(id);
     if (!work || work.user_id !== userId) return false;
     await work.update({ delete_version: id });

@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 /**
  * 纯内存 Map 存储（单例模式）
  *

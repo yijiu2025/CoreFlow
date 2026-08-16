@@ -3,6 +3,9 @@
  *
  * 支持阿里云 OSS 和本地存储降级。
  * 优先使用 OSS，未配置时自动降级到本地 public/uploads/ 目录。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import path from 'node:path';

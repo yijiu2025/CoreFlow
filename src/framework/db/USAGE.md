@@ -35,11 +35,13 @@ const roles = await roleModel.findAll({ where: { app_id: 'admin' } });
 ```
 
 **相比直接 `app.db.user.User` 的优势：**
+
 - 统一的错误提示（模型不存在时列出可用命名空间）
 - Map 缓存，重复调用无遍历开销
 - 点号语法更简洁，避免深层嵌套
 
 **错误处理：**
+
 ```js
 app.db.getModel('unknown.Model');
 // TypeError: getModel: 模型 unknown.Model 不存在。可用命名空间: user, iam, oauth21, notice, session
@@ -61,19 +63,19 @@ const role = await app.db.iam.Role.findOne({ where: { code: 'admin' } });
 
 ### 1.1 环境变量
 
-| 变量              | 默认值  | 说明                                     |
-| ----------------- | ------- | ---------------------------------------- |
-| `DB_TYPE`         | `mysql` | 数据库类型                                |
-| `DB_HOST`         | -       | 数据库主机地址（必填）                    |
-| `DB_PORT`         | `3306`  | 数据库端口                                |
-| `DB_NAME`         | -       | 数据库名称（必填）                        |
-| `DB_USER`         | -       | 数据库用户名（必填）                      |
-| `DB_PASS`         | -       | 数据库密码                                |
-| `DB_SYNC`         | `false` | 启动时自动同步表结构（仅开发环境）        |
-| `DB_POOL_MAX`     | `10`    | 连接池最大连接数                          |
-| `DB_POOL_MIN`     | `2`     | 连接池最小连接数                          |
-| `DB_POOL_ACQUIRE` | `30000` | 获取连接超时（ms）                        |
-| `DB_POOL_IDLE`    | `10000` | 空闲连接释放时间（ms）                   |
+| 变量              | 默认值  | 说明                               |
+| ----------------- | ------- | ---------------------------------- |
+| `DB_TYPE`         | `mysql` | 数据库类型                         |
+| `DB_HOST`         | -       | 数据库主机地址（必填）             |
+| `DB_PORT`         | `3306`  | 数据库端口                         |
+| `DB_NAME`         | -       | 数据库名称（必填）                 |
+| `DB_USER`         | -       | 数据库用户名（必填）               |
+| `DB_PASS`         | -       | 数据库密码                         |
+| `DB_SYNC`         | `false` | 启动时自动同步表结构（仅开发环境） |
+| `DB_POOL_MAX`     | `10`    | 连接池最大连接数                   |
+| `DB_POOL_MIN`     | `2`     | 连接池最小连接数                   |
+| `DB_POOL_ACQUIRE` | `30000` | 获取连接超时（ms）                 |
+| `DB_POOL_IDLE`    | `10000` | 空闲连接释放时间（ms）             |
 
 ### 1.2 连接池配置
 
@@ -89,11 +91,11 @@ pool: {
 
 **推荐生产环境配置：**
 
-| 场景 | DB_POOL_MAX | DB_POOL_MIN | 说明 |
-|------|:-----------:|:-----------:|------|
-| 低并发（< 100 QPS） | 10 | 2 | 默认 |
-| 中等并发（100-500 QPS） | 20 | 5 | 适中 |
-| 高并发（> 500 QPS） | 50 | 10 | 注意 DB 连接数上限 |
+| 场景                    | DB_POOL_MAX | DB_POOL_MIN | 说明               |
+| ----------------------- | :---------: | :---------: | ------------------ |
+| 低并发（< 100 QPS）     |     10      |      2      | 默认               |
+| 中等并发（100-500 QPS） |     20      |      5      | 适中               |
+| 高并发（> 500 QPS）     |     50      |     10      | 注意 DB 连接数上限 |
 
 ### 1.3 启动流程
 
@@ -176,10 +178,8 @@ export default (sequelize, DataTypes) => {
     {
       tableName: 'iam_role',
       timestamps: true,
-      paranoid: true,  // 启用软删除
-      indexes: [
-        { unique: true, fields: ['app_id', 'code', 'delete_version'], name: 'uk_role_app_code' }
-      ]
+      paranoid: true, // 启用软删除
+      indexes: [{ unique: true, fields: ['app_id', 'code', 'delete_version'], name: 'uk_role_app_code' }]
     }
   );
 
@@ -196,13 +196,13 @@ export default (sequelize, DataTypes) => {
 
 `06-models.js` 自动扫描 `src/models/` 子目录，按目录名注册命名空间：
 
-| 命名空间 | 目录 | 模型 |
-|----------|------|------|
-| `app.db.user` | `src/models/user/` | User, UserIdentity |
-| `app.db.iam` | `src/models/iam/` | Role, UserRole, InlinePolicy, Permission |
+| 命名空间         | 目录                  | 模型                                                            |
+| ---------------- | --------------------- | --------------------------------------------------------------- |
+| `app.db.user`    | `src/models/user/`    | User, UserIdentity                                              |
+| `app.db.iam`     | `src/models/iam/`     | Role, UserRole, InlinePolicy, Permission                        |
 | `app.db.oauth21` | `src/models/oauth21/` | OauthClient, OauthCode, OauthToken, OauthApproval, OauthConsent |
-| `app.db.notice` | `src/models/notice/` | EmailCode, NoticeConfig |
-| `app.db.session` | `src/models/session/` | UserSession, SessionToken, SessionLog |
+| `app.db.notice`  | `src/models/notice/`  | EmailCode, NoticeConfig                                         |
+| `app.db.session` | `src/models/session/` | UserSession, SessionToken, SessionLog                           |
 
 ---
 
@@ -237,14 +237,14 @@ registerDeleteVersionHooks(User, { checkConflict: true });
 
 ### 3.3 安全防护
 
-| 防护 | 钩子 | 行为 |
-|------|------|------|
-| 硬删除保护 | `beforeDestroy` | 拦截 `force: true`，抛出 Error |
-| 重复恢复保护 | `beforeRestore` | `delete_version === 0` 时抛 Error |
-| 防误改标记 | `beforeUpdate` | 手动改 `delete_version` 抛 Error |
-| 无 where 批量删除 | `beforeBulkDestroy` | 无条件 `destroy()` 抛 Error |
-| 无 where 批量恢复 | `beforeBulkRestore` | 无条件 `restore()` 抛 Error |
-| 恢复冲突预检 | `beforeRestore` | `checkConflict=true` 时查唯一索引冲突 |
+| 防护              | 钩子                | 行为                                  |
+| ----------------- | ------------------- | ------------------------------------- |
+| 硬删除保护        | `beforeDestroy`     | 拦截 `force: true`，抛出 Error        |
+| 重复恢复保护      | `beforeRestore`     | `delete_version === 0` 时抛 Error     |
+| 防误改标记        | `beforeUpdate`      | 手动改 `delete_version` 抛 Error      |
+| 无 where 批量删除 | `beforeBulkDestroy` | 无条件 `destroy()` 抛 Error           |
+| 无 where 批量恢复 | `beforeBulkRestore` | 无条件 `restore()` 抛 Error           |
+| 恢复冲突预检      | `beforeRestore`     | `checkConflict=true` 时查唯一索引冲突 |
 
 ### 3.4 使用示例
 
@@ -319,10 +319,15 @@ export async function up({ queryInterface, Sequelize }) {
     name: { type: Sequelize.STRING(50), allowNull: false },
     delete_version: { type: Sequelize.BIGINT, allowNull: false, defaultValue: 0 },
     created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') },
-    updated_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP') }
+    updated_at: {
+      type: Sequelize.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    }
   });
   await queryInterface.addIndex('iam_role', ['app_id', 'code', 'delete_version'], {
-    unique: true, name: 'uk_role_app_code'
+    unique: true,
+    name: 'uk_role_app_code'
   });
 }
 

@@ -2,6 +2,9 @@
  * 数据库模型测试
  *
  * 覆盖：模型结构、关联关系、验证规则
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

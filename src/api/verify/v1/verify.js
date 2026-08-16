@@ -1,3 +1,9 @@
+/**
+ * 验证码路由
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { captchaDao } from '../../../framework/verify/captcha/index.js';
 import { emailDao } from '../../../framework/verify/email/index.js';

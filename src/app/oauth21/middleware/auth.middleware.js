@@ -5,6 +5,9 @@
  * - Scope 校验 (checkScope)
  *
  * 通用身份验证（Token 提取、JWT 验证、Session 管理）由 src/auth/ 处理
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import fp from 'fastify-plugin';
 import { verifySignature } from '../../../framework/auth/signature.js';

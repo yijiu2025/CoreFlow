@@ -1,6 +1,9 @@
 /**
  * Cookie 设置工具函数
  * 统一管理所有认证相关 Cookie 的设置逻辑
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import config from '../config/config.js';
