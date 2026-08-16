@@ -109,6 +109,25 @@ const UserDao = {
   async verifyPassword(user, password) {
     if (!user || !user.credential) return false;
     return bcrypt.compare(password, user.credential);
+  },
+
+  /**
+   * 分页查询用户列表（管理端）
+   *
+   * 排除内部 id（绝不对外暴露）与 phone（AES 密文，列表不返回）。
+   * @param {object} [opts]
+   * @param {number} [opts.limit=50] 上限 200
+   * @param {number} [opts.offset=0]
+   * @returns {Promise<object[]>}
+   */
+  async listUsers({ limit = 50, offset = 0 } = {}) {
+    const User = getModel('User');
+    return User.findAll({
+      limit: Math.min(Number(limit), 200),
+      offset: Number(offset),
+      attributes: { exclude: ['id', 'phone'] },
+      order: [['created_at', 'DESC']]
+    });
   }
 };
 

@@ -1,10 +1,13 @@
 /**
  * OAuth 2.1 设备授权端点（RFC 8628）
  *
- * POST /device/code       — 发起设备授权
- * POST /device/token      — 设备端轮询获取令牌
- * GET  /device            — 用户验证页面
- * POST /device/authorize  — 用户输入 user_code 并授权
+ * POST /device_authorization — 发起设备授权
+ * POST /device/token         — 设备端轮询获取令牌
+ * GET  /device               — 用户验证页面（verification_uri 指向此）
+ * POST /device/authorize     — 用户输入 user_code 并授权
+ *
+ * 注意：group 不设 prefix，路由直接落在 oauth21 system 前缀 /oauth2.1 下，
+ * 与 oidc 发现文档声明的 device_authorization_endpoint 一致（避免双重前缀）。
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { DeviceService } from '../../../app/oauth21/services/device.service.js';
@@ -15,13 +18,12 @@ export default async function (fastify) {
   registerGroupMetadata({
     name: 'device',
     description: '设备授权流程（RFC 8628）',
-    prefix: '/v1/dev',
     enabled: true,
     requireLogin: false
   });
 
   /**
-   * POST /device/code — 发起设备授权
+   * POST /device_authorization — 发起设备授权
    *
    * 适用于输入受限设备（智能电视、CLI 工具等）。
    * 返回 device_code、user_code 和验证地址。
@@ -30,7 +32,7 @@ export default async function (fastify) {
     name: 'deviceCode',
     alias: '设备授权发起',
     method: 'POST',
-    url: '/device/code',
+    url: '/device_authorization',
     handler: async (request, reply) => {
       const { client_id, scope } = request.body;
       if (!client_id) {
