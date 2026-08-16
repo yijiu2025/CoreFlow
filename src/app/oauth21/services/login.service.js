@@ -1,0 +1,295 @@
+/**
+ * 登录业务服务
+ *
+ * 从 api/oauth21/v1/auth/login.js 下沉：统一直接登录 + 授权确认的业务编排。
+ * 路由层只调本服务 + reply。
+ *
+ * 职责：解密/异常检测/用户验证/客户端检查/授权确认/令牌签发/审计。
+ *
+ * @author yijiu
+ * @since 2026-08-16
+ */
+import { v4 as uuidv4 } from 'uuid';
+import { decryptLoginRequest, verifyEmailCode } from './decrypt.service.js';
+import { issueDirectTokens } from './token-issuer.service.js';
+import { buildTokenResponse } from './cookies.service.js';
+import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../config/constants.js';
+import ApprovalDao from '../dao/approval.dao.js';
+import UserDao from '../dao/user.dao.js';
+import ClientDao from '../dao/client.dao.js';
+import { logLogin } from '../../../framework/auth/audit-logger.js';
+import { detectLoginAnomaly, DETECT_RESULT } from '../../../framework/auth/anomaly-detector.js';
+import { logLoginFailure } from '../../../framework/auth/session.js';
+import { getStore } from '../../../framework/redis/index.js';
+import { AuthorizationService } from './authorization.service.js';
+
+const authService = new AuthorizationService();
+
+/**
+ * 统一直接登录
+ *
+ * @param {object} request - Fastify request
+ * @param {object} reply - Fastify reply
+ * @param {object} fastify - Fastify 实例（H5 token 等用）
+ * @returns {Promise<object>} reply 结果
+ */
+export async function directLogin(request, reply, fastify) {
+  const { client_id, scope } = request.body;
+  const oidcNonce = request.body.oidcNonce;
+
+  // 1. 解密与验证（RSA + 时间戳 + Nonce + 验证码）
+  const decryptResult = await decryptLoginRequest(request, fastify);
+  if (!decryptResult.success) {
+    return reply.code(decryptResult.statusCode || 400).send({
+      code: decryptResult.statusCode || 400,
+      message: decryptResult.error,
+      data: null
+    });
+  }
+
+  const { username, password, type, email, code, keepLogin } = decryptResult.data;
+
+  // 1.5. 异常登录检测（暴力破解锁定）
+  const loginEmail = email || username;
+  if (loginEmail) {
+    const anomaly = await detectLoginAnomaly({
+      email: loginEmail,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] || '',
+      redis: request.server.redis
+    });
+    if (anomaly.status === DETECT_RESULT.BLOCK) {
+      await logLogin(request.server.redis, {
+        userId: null,
+        ip: request.ip,
+        userAgent: request.headers['user-agent'] || '',
+        appId: 'oauth21',
+        success: false,
+        reason: anomaly.reason
+      });
+      return reply.code(429).send({
+        code: 429,
+        message: anomaly.reason,
+        data: null
+      });
+    }
+  }
+
+  // 2. 验证用户
+  let user;
+
+  if (type === 'email') {
+    const emailVerify = await verifyEmailCode(email, code, fastify);
+    if (!emailVerify.success) {
+      return reply.code(400).send({
+        code: 400,
+        message: emailVerify.error,
+        data: null
+      });
+    }
+
+    user = await UserDao.findByEmail(email);
+    if (!user) {
+      await logLoginFailure({
+        email,
+        appId: 'oauth21',
+        ip: request.ip,
+        userAgent: request.headers['user-agent'] || '',
+        reason: '邮箱未注册'
+      });
+      return reply.code(404).send({
+        code: 404,
+        message: '该邮箱尚未注册账户',
+        data: null
+      });
+    }
+  } else {
+    if (!username || !password) {
+      return reply.code(400).send({
+        code: 400,
+        message: '用户名和密码不能为空',
+        data: null
+      });
+    }
+
+    user = await authService.authenticateUser(username, password);
+    if (!user) {
+      await logLoginFailure({
+        email: username,
+        appId: 'oauth21',
+        ip: request.ip,
+        userAgent: request.headers['user-agent'] || '',
+        reason: '密码错误'
+      });
+      return reply.code(401).send({
+        code: 401,
+        message: '账号或密码错误',
+        data: null
+      });
+    }
+  }
+
+  // 3. 检查客户端与授权状态
+  const finalClientId = client_id || FIRST_PARTY_APP.client_id;
+  let client;
+  if (finalClientId === FIRST_PARTY_APP.client_id) {
+    client = { ...FIRST_PARTY_APP };
+  } else {
+    client = await ClientDao.findById(finalClientId);
+    if (!client) {
+      return reply.code(400).send({
+        code: 400,
+        message: '无效的客户端 ID',
+        data: null
+      });
+    }
+  }
+
+  const finalScopes = (scope || client.scope || DEFAULT_SCOPE).split(' ');
+  const scopeString = finalScopes.join(' ');
+
+  // 4. 检查用户是否已授权该应用
+  if (client.client_id !== FIRST_PARTY_APP.client_id) {
+    const approval = await ApprovalDao.getEffectiveApproval(user.id, client.client_id);
+    if (!approval) {
+      const consentKey = uuidv4();
+      const consentStore = getStore('consent_session');
+      await consentStore.set(
+        consentKey,
+        {
+          userId: user.id,
+          clientId: client.client_id,
+          scopes: finalScopes,
+          scopeStr: scopeString,
+          oidcNonce
+        },
+        300
+      );
+
+      return reply.send({
+        code: 200,
+        message: '需要授权确认',
+        data: {
+          action: 'consent',
+          consentKey,
+          client_id: client.client_id,
+          client_name: client.client_name,
+          scope: scopeString,
+          user: {
+            username: user.username,
+            name: user.name || user.username,
+            email: user.email
+          }
+        }
+      });
+    }
+  }
+
+  // 5. 签发令牌
+  try {
+    const result = await issueDirectTokens(
+      user,
+      client.client_id === FIRST_PARTY_APP.client_id ? null : client.client_id,
+      scopeString,
+      oidcNonce,
+      request,
+      reply,
+      fastify,
+      { rememberMe: keepLogin !== false }
+    );
+
+    // 审计日志：登录成功
+    await logLogin(request.server.redis, {
+      userId: user.numericId || user.id,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] || '',
+      appId: client.client_id,
+      success: true
+    });
+
+    return buildTokenResponse(result);
+  } catch (err) {
+    // 审计日志：登录失败
+    await logLogin(request.server.redis, {
+      userId: user.numericId || user.id,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] || '',
+      appId: client.client_id,
+      success: false,
+      reason: err.message
+    });
+
+    if (err.message === 'invalid_client') {
+      return reply.code(401).send({
+        code: 401,
+        message: '客户端认证失败',
+        data: null
+      });
+    }
+    throw err;
+  }
+}
+
+/**
+ * 快捷登录确认授权（consentKey 换令牌）
+ */
+export async function confirmDirectConsent(request, reply, fastify) {
+  const { consentKey } = request.body;
+  if (!consentKey) {
+    return reply.code(400).send({
+      code: 400,
+      message: 'consentKey 不能为空',
+      data: null
+    });
+  }
+
+  const consentStore = getStore('consent_session');
+  const session = await consentStore.get(consentKey);
+  if (!session) {
+    return reply.code(400).send({
+      code: 400,
+      message: '授权会话已过期，请重新登录',
+      data: null
+    });
+  }
+
+  const user = await UserDao.findById(session.userId);
+  if (!user) {
+    return reply.code(404).send({
+      code: 404,
+      message: '用户不存在',
+      data: null
+    });
+  }
+
+  await ApprovalDao.saveApproval({
+    uid: user.id,
+    appId: session.clientId,
+    scopes: session.scopes
+  });
+
+  await consentStore.delete(consentKey);
+
+  try {
+    request.body.client_id = session.clientId;
+    const result = await issueDirectTokens(
+      user,
+      session.clientId,
+      session.scopeStr,
+      session.oidcNonce,
+      request,
+      reply,
+      fastify
+    );
+    return buildTokenResponse(result, '授权确认成功');
+  } catch (err) {
+    if (err.message === 'invalid_client') {
+      return reply.code(401).send({
+        code: 401,
+        message: '客户端认证失败',
+        data: null
+      });
+    }
+    throw err;
+  }
+}

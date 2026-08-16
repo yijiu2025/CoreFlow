@@ -22,6 +22,7 @@ import { verifyPKCE, isValidCodeVerifier } from '../crypto/pkce.js';
 import { generateToken } from '../crypto/tokens.js';
 import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';
 import config from '../config/config.js';
+import { FIRST_PARTY_APP } from '../config/constants.js';
 
 /**
  * 令牌错误（RFC 6749 标准错误格式）
@@ -269,6 +270,113 @@ class TokenService {
       await TokenDao.revoke(token);
     }
     return true;
+  }
+
+  /**
+   * POST /token 路由编排：grant 分发 + first-party 降级 + Cookie 下发
+   *
+   * 从 api/oauth21/v1/token.js 下沉。grant_type 分发到 handleAuthorizationCode /
+   * handleClientCredentials / handleRefreshToken；JWT 模式下把 access/refresh 写入 Cookie。
+   * @param {object} request - Fastify request
+   * @param {object} reply - Fastify reply
+   * @returns {Promise<object>} token 响应体
+   */
+  async handleTokenGrant(request, reply) {
+    const { grant_type } = request.body;
+
+    // refresh_token 允许 first-party-app 无 client_secret 刷新
+    let client = await this.authenticateClient(request);
+    if (!client && grant_type === 'refresh_token') {
+      client = FIRST_PARTY_APP;
+    }
+    if (!client) {
+      return reply.code(401).send({
+        error: 'invalid_client',
+        error_description: 'Client authentication failed'
+      });
+    }
+
+    try {
+      let result;
+
+      switch (grant_type) {
+        case 'authorization_code': {
+          const { code, redirect_uri, code_verifier } = request.body;
+          if (!code) throw new TokenError('invalid_request', 'code is required');
+          if (!redirect_uri) throw new TokenError('invalid_request', 'redirect_uri is required');
+          result = await this.handleAuthorizationCode({ code, redirect_uri, code_verifier, client });
+          break;
+        }
+
+        case 'client_credentials': {
+          const { scope } = request.body;
+          result = await this.handleClientCredentials({ client, scope });
+          break;
+        }
+
+        case 'refresh_token': {
+          const { refresh_token, scope } = request.body;
+          if (!refresh_token) throw new TokenError('invalid_request', 'refresh_token is required');
+          // first-party-app 刷新无需客户端认证（前端直接刷新）
+          const refreshClient = client || FIRST_PARTY_APP;
+          result = await this.handleRefreshToken({ refresh_token, scope, client: refreshClient });
+          break;
+        }
+
+        default:
+          throw new TokenError('unsupported_grant_type', `Grant type "${grant_type}" is not supported`);
+      }
+
+      // JWT 模式：access/refresh 写 Cookie（Session 模式 result 无 access_token，跳过）
+      const isProduction = process.env.NODE_ENV === 'production';
+      if (result?.access_token) {
+        reply.setCookie('access_token', result.access_token, {
+          httpOnly: true,
+          secure: isProduction,
+          maxAge: result.expires_in || 600,
+          path: '/',
+          sameSite: 'lax'
+        });
+      }
+      if (result?.refresh_token) {
+        reply.setCookie('refresh_token', result.refresh_token, {
+          httpOnly: true,
+          secure: isProduction,
+          maxAge: config.jwt.refreshTokenTTL || 604800,
+          path: '/oauth2.1/token',
+          sameSite: 'strict'
+        });
+      }
+
+      return result;
+    } catch (err) {
+      if (err instanceof TokenError) {
+        return reply.code(err.statusCode).send(err.toJSON());
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * POST /revoke 路由编排：客户端认证 + 令牌撤销
+   * @returns {Promise<void>} reply 200/400/401
+   */
+  async handleRevoke(request, reply) {
+    const client = await this.authenticateClient(request);
+    if (!client) {
+      return reply.code(401).send({ error: 'invalid_client' });
+    }
+
+    const { token, token_type_hint } = request.body;
+    if (!token) {
+      return reply.code(400).send({
+        error: 'invalid_request',
+        error_description: 'token is required'
+      });
+    }
+
+    await this.revokeToken({ token, token_type_hint, client });
+    return reply.code(200).send();
   }
 }
 
