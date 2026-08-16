@@ -6,32 +6,25 @@
 
       <!-- Modal Content -->
       <div
-        class="relative w-[856px] h-[484px] bg-slate-900/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col"
+        class="relative w-[856px] h-[484px] glass-dark rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-300"
       >
         <!-- Close Button -->
         <button
           @click="close"
-          class="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+          class="absolute top-6 right-6 z-10 p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all"
         >
-          <X :size="16" />
+          <X class="w-5 h-5" />
         </button>
 
-        <!-- Title -->
-        <div class="px-6 pt-4 pb-2">
-          <h2 class="text-lg font-bold text-white">登录 PoseCraft</h2>
-          <p class="text-sm text-slate-400">使用 CoreFlow 账号授权登录</p>
-        </div>
-
-        <!-- iframe -->
         <div class="flex-1 w-full relative">
           <iframe :src="loginUrl" class="w-full h-full border-none" allow="payment"></iframe>
 
-          <!-- Loading State -->
+          <!-- Loading State Overlay -->
           <div
             v-if="loading"
             class="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-md"
           >
-            <div class="w-12 h-12 border-4 border-primary-500/30 border-t-primary-400 rounded-full animate-spin"></div>
+            <div class="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
           </div>
         </div>
       </div>
@@ -59,27 +52,19 @@ function close() {
 }
 
 /**
- * 处理 iframe 消息
+ * 处理 iframe postMessage：登录成功 → 换 cookie → 通知父级；设备超限 → 冒泡
  */
 const handleMessage = async (event: MessageEvent) => {
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
     const { token, sessionToken, user } = event.data;
-    // 🔍 调试：父窗口收到 iframe 登录成功消息
-    console.log('[posecraft LoginModal] 🔍 收到 LOGIN_SUCCESS ->', {
-      token: token ? '✅ 有' : '❌ 无',
-      sessionToken: sessionToken ? '✅ 有' : '❌ 无'
-    });
 
-    // Session 模式：用临时 token 换取 sid/sid_r Cookie
+    // Session 模式：用临时 session_token 换取 sid/sid_r Cookie
     if (sessionToken) {
       try {
-        const result = await authApi.bindSession(sessionToken);
-        console.log('[posecraft LoginModal] ✅ bindSession 成功:', result);
+        await authApi.bindSession(sessionToken);
       } catch (err) {
-        console.warn('[posecraft LoginModal] ❌ bindSession 失败:', err);
+        console.warn('绑定 Session 失败:', err);
       }
-    } else {
-      console.warn('[posecraft LoginModal] ⚠️ sessionToken 为空，跳过 bindSession → 后续请求将无 sid cookie → 401');
     }
 
     // JWT 模式：用 access_token 换取 Cookie
@@ -118,6 +103,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.glass-dark {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(20px);
+}
+
 .modal-fade-enter-active,
 .modal-fade-leave-active {
   transition: opacity 0.3s ease;

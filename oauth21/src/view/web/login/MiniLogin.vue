@@ -220,6 +220,7 @@ const executeLogin = async () => {
   try {
     const loginPayload = {
       ...values,
+      keepLogin: keepLogin.value,
       captchaKey: captchaKey.value,
       client_id: route.query.client_id || route.query.appName
     };

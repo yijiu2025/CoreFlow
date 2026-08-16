@@ -28,9 +28,11 @@ async function handle401(config: AxiosRequestConfig): Promise<any> {
       if (config.headers) config.headers.Authorization = `Bearer ${newToken}`;
       return apiClient(config);
     } catch {
+      // 刷新失败：内联弹窗重新登录（不跳页，保留当前页面上下文）
       const { useAuthStore } = await import('@/stores/auth');
-      useAuthStore().logout();
-      window.location.href = '/posecraft/login';
+      const authStore = useAuthStore();
+      authStore.logout();
+      authStore.openLoginModal();
     } finally {
       isRefreshing = false;
     }
