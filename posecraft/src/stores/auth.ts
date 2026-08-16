@@ -22,11 +22,19 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 全局登录弹窗开关（401 刷新失败 / 未登录点头像 → 内联弹窗，不跳页）
   const showLoginModal = ref(false);
-  function openLoginModal() {
+  // 登录成功后需跳回的原路由（受保护路由未登录时记录，登录后 redirect 回去）
+  const pendingRedirect = ref<string | null>(null);
+  function openLoginModal(redirect?: string) {
+    if (redirect) pendingRedirect.value = redirect;
     showLoginModal.value = true;
   }
   function closeLoginModal() {
     showLoginModal.value = false;
+  }
+  function consumePendingRedirect(): string | null {
+    const r = pendingRedirect.value;
+    pendingRedirect.value = null;
+    return r;
   }
 
   // ── 对外展示的个人统计（关注/粉丝/互关/获赞/作品/模板/收藏/推荐）──
@@ -444,6 +452,8 @@ export const useAuthStore = defineStore('auth', () => {
     safeAvatar,
     showLoginModal,
     openLoginModal,
-    closeLoginModal
+    closeLoginModal,
+    pendingRedirect,
+    consumePendingRedirect
   };
 });
