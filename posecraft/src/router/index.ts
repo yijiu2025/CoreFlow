@@ -104,13 +104,15 @@ router.beforeEach(async to => {
     if (!authStore.initialized) {
       const valid = await authStore.checkSession();
       if (!valid) {
-        return { name: 'login', query: { redirect: to.fullPath } };
+        authStore.openLoginModal(to.fullPath);
+        return { name: 'home-featured' };
       }
     }
 
-    // 已初始化但未登录
+    // 已初始化但未登录 → 弹窗（不跳 /login），回首页保留上下文
     if (!authStore.isLoggedIn) {
-      return { name: 'login', query: { redirect: to.fullPath } };
+      authStore.openLoginModal(to.fullPath);
+      return { name: 'home-featured' };
     }
   }
 });

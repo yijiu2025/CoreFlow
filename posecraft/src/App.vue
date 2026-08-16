@@ -17,18 +17,25 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router';
 import { useThemeStore } from '@/stores/theme';
 import { useAuthStore } from '@/stores/auth';
 import LoginModal from '@/components/modals/login/LoginModal.vue';
 
 const themeStore = useThemeStore();
 const authStore = useAuthStore();
+const router = useRouter();
 
-/** 全局弹窗登录成功：恢复登录态 + 拉权限（复用 LoginView 逻辑） */
+/** 全局弹窗登录成功：恢复登录态 + 拉权限 + 跳回原意图路由 */
 async function handleLoginSuccess(data: { user: any; token?: string }) {
   authStore.setLoggedIn(true, data.user, data.token);
   await authStore.fetchPermissions();
   authStore.closeLoginModal();
+  // 跳回受保护路由登录前的原意图（如 /mine、/editor）
+  const redirect = authStore.consumePendingRedirect();
+  if (redirect && redirect !== router.currentRoute.value.fullPath) {
+    router.push(redirect);
+  }
 }
 
 /** 设备数量超限 */
