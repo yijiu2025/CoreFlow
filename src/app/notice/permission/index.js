@@ -1,3 +1,9 @@
+/**
+ * 权限定义入口
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
 
 /**

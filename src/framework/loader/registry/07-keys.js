@@ -11,8 +11,6 @@
 import { ensureCurrentKey } from '../../keys/index.js';
 import { C } from '../../../utils/colors.js';
 
-/* eslint-disable no-console */
-
 export default async function (app) {
   try {
     await ensureCurrentKey();

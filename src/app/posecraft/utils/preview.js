@@ -100,7 +100,7 @@ function extractFabricData(poseData) {
   if (typeof data === 'string') {
     try {
       data = JSON.parse(data);
-    } catch (e) {
+    } catch {
       return null;
     }
   }
@@ -108,7 +108,7 @@ function extractFabricData(poseData) {
   if (typeof fabricData === 'string') {
     try {
       fabricData = JSON.parse(fabricData);
-    } catch (e) {
+    } catch {
       return null;
     }
   }

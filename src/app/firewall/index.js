@@ -2,6 +2,9 @@
  * 防火墙核心模块
  * Fastify 插件入口：注册速率限制、同步名单、挂载生命周期钩子
  * 安全检测逻辑委托给 engine/pipeline.js
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { syncManualBlacklistToRedis, syncManualWhitelistToRedis, cleanupSaveTimer } from './dao/dao.js';
 import {

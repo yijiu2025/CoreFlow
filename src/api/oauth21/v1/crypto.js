@@ -2,6 +2,9 @@
  * OAuth 2.1 加密工具端点
  *
  * GET /crypto/public-key — 获取前端加密公钥
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { getEncryptionPublicKey } from '../../../app/oauth21/crypto/encryption.js';

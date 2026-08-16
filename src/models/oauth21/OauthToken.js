@@ -24,6 +24,9 @@
  *   revoked: false,
  *   expires_at: '2026-05-08T12:00:00Z'
  * }
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export default (sequelize, DataTypes) => {
   const OauthToken = sequelize.define(

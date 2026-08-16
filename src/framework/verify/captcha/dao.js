@@ -1,9 +1,11 @@
 /**
  * 图形验证码数据访问层
  * 协调 service 与存储层，处理频率限制等业务逻辑
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import captchaService from './service.js';
-import config from '../config.js';
 
 class CaptchaDao {
   /**

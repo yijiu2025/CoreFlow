@@ -1,6 +1,9 @@
 /**
  * 验证挑战页面模板
  * 生成一个包含指纹采集脚本的 HTML 页面，用于区分真实用户和自动化机器人。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import crypto from 'crypto';
 import { CHALLENGE_SECRET } from '../config/config.js';

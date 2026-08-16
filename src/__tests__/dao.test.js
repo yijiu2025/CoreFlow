@@ -2,6 +2,9 @@
  * DAO 层测试
  *
  * 覆盖：UserDAO、ApprovalDAO、TokenDAO 核心逻辑
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

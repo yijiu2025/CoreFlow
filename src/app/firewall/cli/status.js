@@ -1,5 +1,8 @@
 /**
  * 防火墙状态查看
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { connectRedis, closeRedis } from '../../../../scripts/lib/redis.js';
 import { printError, printWarning, printLine } from '../../../../scripts/lib/table.js';

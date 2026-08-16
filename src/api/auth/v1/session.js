@@ -8,6 +8,9 @@
  * POST /auth/v1/refresh-session    — 用 sid_r 刷新 sid
  *
  * 业务逻辑见 framework/auth/session-api.service.js（复用 createSession/updateRememberMe/cookie 工具）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { refreshSession } from '../../../framework/auth/session.js';

@@ -6,6 +6,9 @@
  * - 时间戳验证
  * - Nonce 防重放
  * - 验证码校验
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { decrypt, validateTimestamp } from '../crypto/encryption.js';

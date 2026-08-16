@@ -8,8 +8,6 @@
  * @since 2026-07-22
  */
 
-/* eslint-disable no-console */
-
 import { C } from '../utils/colors.js';
 import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
 import { logAuditEvent } from '../framework/auth/audit-logger.js';

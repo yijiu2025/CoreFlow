@@ -7,8 +7,6 @@
  * @since 2026-07-24
  */
 
-/* eslint-disable no-console */
-
 import { sequelize } from '../../../framework/db/index.js';
 import { C } from '../../../utils/colors.js';
 

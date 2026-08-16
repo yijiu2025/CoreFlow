@@ -3,6 +3,9 @@
  *
  * 覆盖：tryAcquire/release/互斥/自动续期
  * 注意：需要 Redis 环境，无 Redis 时跳过
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { createLock } from '../redis/lock-store.js';

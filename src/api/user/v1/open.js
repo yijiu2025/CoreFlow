@@ -4,6 +4,9 @@
  * POST /user/register — 注册新用户
  * GET /check-email — 校验邮箱是否重复
  * GET /check-username — 校验用户名是否重复
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';

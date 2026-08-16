@@ -1,3 +1,9 @@
+/**
+ * 角色定义
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { defineRoles } from '../../../utils/PbacRegistry.js';
 import { FIREWALL_PERMISSIONS } from './index.js';
 

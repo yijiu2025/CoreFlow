@@ -2,6 +2,9 @@
  * 配置验证测试
  *
  * 覆盖：环境变量、配置结构、默认值
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

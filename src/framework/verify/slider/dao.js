@@ -1,6 +1,9 @@
 /**
  * 滑块验证码数据访问层
  * 协调 service 与存储层
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import sliderService from './service.js';
 

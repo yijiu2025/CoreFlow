@@ -1,5 +1,8 @@
 /**
  * 流量统计命令
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { connectRedis, closeRedis } from '../../../../scripts/lib/redis.js';
 import { printWarning, printLine } from '../../../../scripts/lib/table.js';

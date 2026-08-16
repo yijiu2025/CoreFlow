@@ -6,6 +6,9 @@
  * GET /admin/user/v1/list — 用户列表（分页，admin only）
  *
  * TODO（桩，暂未实现）：ban/unban/setrole/getrole/setpermission/listbycondition
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import UserDao from '../../../../app/oauth21/dao/user.dao.js';

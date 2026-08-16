@@ -1,6 +1,9 @@
 /**
  * Firewall 应用配置
  * 供 loader 扫描时读取，决定如何加载此应用
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { initFirewall } from './index.js';
 

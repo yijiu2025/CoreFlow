@@ -2,6 +2,9 @@
  * API 路由集成测试
  *
  * 覆盖：认证流程、权限检查、错误处理
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

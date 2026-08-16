@@ -2,6 +2,9 @@
  * 核心逻辑测试
  *
  * 测试实际业务逻辑，而非仅验证数据结构
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 import crypto from 'crypto';

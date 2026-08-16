@@ -1,6 +1,9 @@
 /**
  * OAuth 2.1 权限常量
  * 使用 createPermissionRegistry 工厂函数定义权限
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
 

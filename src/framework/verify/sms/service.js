@@ -1,6 +1,9 @@
 /**
  * 短信验证码核心服务
  * 对接短信 API（阿里云/腾讯云），纯发送逻辑，不含存储
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import config from '../config.js';
 

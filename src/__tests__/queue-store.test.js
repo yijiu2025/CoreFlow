@@ -2,6 +2,9 @@
  * 队列存储单元测试
  *
  * 覆盖：push/shift/peek/clear/满队列重置/空洞跳过
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { MapStore } from '../redis/map-store.js';

@@ -7,6 +7,9 @@
  * GET  /qr/status   — 轮询二维码状态（PC 端调用）
  *
  * 业务逻辑见 app/oauth21/services/qr.service.js。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerSecureRoute } from '../../../guard.js';
 import { generateQrCode, scanQrCode, confirmQrCode, getQrStatus } from '../../../../app/oauth21/services/qr.service.js';

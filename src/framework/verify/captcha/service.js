@@ -1,6 +1,9 @@
 /**
  * 图形验证码核心服务
  * 纯验证逻辑，不含存储，通过 Store 适配器解耦
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import svgCaptcha from 'svg-captcha';
 import { v4 as uuidv4 } from 'uuid';

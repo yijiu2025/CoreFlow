@@ -8,6 +8,9 @@
  * - getPublicKey()/getPrivateKey(kid) round-trip
  * - getJWKS 返回所有 active 公钥
  * - sign/verify JWT 端到端
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { jest } from '@jest/globals';
 import crypto from 'node:crypto';

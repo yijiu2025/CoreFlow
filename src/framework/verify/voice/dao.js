@@ -1,6 +1,9 @@
 /**
  * 语音验证码数据访问层
  * 复用短信验证码的存储和频率限制逻辑
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import Logger from '../../log/index.js';
 import voiceService from './service.js';

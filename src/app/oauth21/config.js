@@ -1,6 +1,9 @@
 /**
  * OAuth2.1 应用配置
  * 供 loader 扫描时读取
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerCsrfProtection } from './middleware/csrf.middleware.js';
 import { CSRF_EXCLUDE_PATHS } from './config/csrf-exclude.js';

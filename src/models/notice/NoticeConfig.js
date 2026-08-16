@@ -1,3 +1,9 @@
+/**
+ * 通知 NoticeConfig 模型
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 export default (sequelize, DataTypes) => {
   const NoticeConfig = sequelize.define(
     'NoticeConfig',

@@ -5,6 +5,9 @@
  *   npm run cli -- notice channels  # 查看通知通道
  *   npm run cli -- notice config    # 查看通道配置
  *   npm run cli -- notice test      # 测试邮件发送
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import {

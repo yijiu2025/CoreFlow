@@ -1,60 +1,10 @@
 /**
  * 权限加载器测试
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-
-// 模拟 Sequelize 模型
-const mockRole = {
-  findOne: async () => ({
-    code: 'fw_admin',
-    app_id: 'firewall',
-    policy: { Statement: [{ Effect: 'Allow', Action: ['fw:admin:*'] }] }
-  })
-};
-
-const mockUserRole = {
-  findAll: async () => [
-    {
-      role: {
-        code: 'superadmin',
-        app_id: 'GLOBAL',
-        policy: '{"Statement":[{"Effect":"Allow","Action":["*"]}]}'
-      }
-    },
-    {
-      role: {
-        code: 'fw_admin',
-        app_id: 'firewall',
-        policy: { Statement: [{ Effect: 'Allow', Action: ['fw:admin:*'] }] }
-      }
-    }
-  ]
-};
-
-const mockInlinePolicy = {
-  findAll: async () => [
-    {
-      policy: { Statement: [{ Effect: 'Deny', Action: ['user:delete'] }] }
-    }
-  ]
-};
-
-// 模拟 sequelize
-const mockSequelize = {
-  models: {
-    Role: mockRole,
-    UserRole: mockUserRole,
-    InlinePolicy: mockInlinePolicy
-  }
-};
-
-// 动态导入被测模块
-let loadUserPermissions;
-
-beforeAll(async () => {
-  // 由于模块使用 sequelize，需要 mock
-  // 这里直接测试 extractPermissions 逻辑
-});
+import { describe, it, expect } from '@jest/globals';
 
 describe('permission-loader', () => {
   describe('extractPermissions', () => {

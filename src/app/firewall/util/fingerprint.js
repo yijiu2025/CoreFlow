@@ -1,6 +1,9 @@
 /**
  * 请求指纹模块
  * 从请求头生成设备指纹，用于精准封禁（避免同 IP 误杀）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import crypto from 'crypto';
 

@@ -1,5 +1,8 @@
 /**
  * Token 端点 Schema（RFC 6749）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 /** POST /token — 授权码/客户端凭证/刷新令牌 */

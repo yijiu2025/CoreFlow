@@ -7,8 +7,6 @@
  * @since 2026-07-22
  */
 
-/* eslint-disable no-console */
-
 import { runEngine } from './engine.js';
 import { loadGuardConfig } from '../../api/guard-config.js';
 import { C } from '../../utils/colors.js';

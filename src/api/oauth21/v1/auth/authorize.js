@@ -7,6 +7,9 @@
  *
  * 业务逻辑见 app/oauth21/services/authorization.service.js
  * （handleAuthorize / handleAuthorizeLogin / handleAuthorizeConsent）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerSecureRoute } from '../../../guard.js';
 import { AuthorizationService } from '../../../../app/oauth21/services/authorization.service.js';

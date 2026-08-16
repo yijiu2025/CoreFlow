@@ -4,6 +4,9 @@
  * 使用方式：
  *   npm run cli -- usercenter stats    # 用户统计
  *   npm run cli -- usercenter recent   # 最近注册
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
@@ -12,7 +15,7 @@ import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.
  * 用户统计
  */
 async function userStats() {
-  const { User, UserIdentity } = getModels();
+  const { User } = getModels();
 
   const [total, active, disabled] = await Promise.all([
     User.count(),

@@ -1,3 +1,9 @@
+/**
+ * 权限角色种子数据
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { getModel } from '../../../framework/db/index.js';
 import Logger from '../../../framework/log/index.js';
 import { USER_PERMISSIONS } from './index.js';
@@ -65,7 +71,7 @@ export async function seedUserRoles() {
 
   try {
     for (const roleDef of baseRoles) {
-      const [role, created] = await Role.findOrCreate({
+      await Role.findOrCreate({
         where: { code: roleDef.code, app_id: roleDef.app_id },
         defaults: roleDef
       });

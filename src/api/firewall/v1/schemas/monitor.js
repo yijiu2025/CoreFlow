@@ -1,6 +1,9 @@
 /**
  * 防火墙模块 API Schema 定义
  * 使用 JSON Schema 约束请求参数与响应结构
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 // 基础响应结构 (Standard Response Wrapper)

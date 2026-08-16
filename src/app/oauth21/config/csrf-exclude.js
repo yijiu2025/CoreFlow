@@ -7,6 +7,9 @@
  * - 第三方回调（device、qr）
  * - WebSocket 连接
  * - 跨域 API 绑定接口
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export const CSRF_EXCLUDE_PATHS = [
   // 登录/注册

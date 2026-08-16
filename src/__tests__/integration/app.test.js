@@ -1,10 +1,12 @@
 /**
  * 集成测试：应用核心流程端到端验证
  * 使用 Fastify inject() 模拟 HTTP 请求，无需真实数据库/Redis
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import Fastify from 'fastify';
-import crypto from 'node:crypto';
 
 /**
  * 构建轻量级测试应用

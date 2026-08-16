@@ -3,6 +3,9 @@
  *
  * 从 oauth21/dao/user.dao.js 中提取常用查询，
  * 供 auth/ 模块使用，避免直接依赖 oauth21。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import UserDao from '../app/oauth21/dao/user.dao.js';

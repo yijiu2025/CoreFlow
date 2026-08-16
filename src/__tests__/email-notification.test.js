@@ -2,6 +2,9 @@
  * 邮件通知测试
  *
  * 覆盖：邮件发送、模板渲染、配置验证
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

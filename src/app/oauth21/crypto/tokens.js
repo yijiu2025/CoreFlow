@@ -1,4 +1,9 @@
-// src/crypto/tokens.js
+/**
+ * 随机令牌生成工具（授权码/设备码/refresh token 等）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import crypto from 'node:crypto';
 
 /** 生成安全的随机令牌（URL-safe base64） */

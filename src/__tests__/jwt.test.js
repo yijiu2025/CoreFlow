@@ -1,6 +1,9 @@
 /**
  * JWT 签发与验证测试
  * 测试 RS256 签名、Access Token、ID Token 的签发和验证流程
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, test, expect, beforeAll } from '@jest/globals';
 import jwt from 'jsonwebtoken';

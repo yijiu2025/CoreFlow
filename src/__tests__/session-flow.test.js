@@ -2,6 +2,9 @@
  * Session 完整流程测试
  *
  * 覆盖：创建 → 验证 → 刷新 → 销毁
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 import crypto from 'crypto';

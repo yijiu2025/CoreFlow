@@ -6,6 +6,9 @@
  * - login.js     — 直接登录（login/mini-login/consent/confirm）
  * - qr.js        — 扫码登录（qr/*）
  * - register.js  — 注册（mini-register）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { registerGroupMetadata } from '../../../guard.js';

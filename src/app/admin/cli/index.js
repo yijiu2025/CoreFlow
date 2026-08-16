@@ -5,6 +5,9 @@
  *   npm run cli -- admin stats     # 管理统计
  *   npm run cli -- admin users     # 用户统计
  *   npm run cli -- admin roles     # 角色统计
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';

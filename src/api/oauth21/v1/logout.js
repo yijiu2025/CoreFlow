@@ -8,6 +8,9 @@
  * 未登录也可调用（幂等：仅清 Cookie）。
  *
  * TODO: post_logout_redirect_uri 校验（需查客户端注册的 post_logout_redirect_uris 防开放重定向）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { destroySession } from '../../../framework/auth/session.js';

@@ -3,6 +3,9 @@
  *
  * 提供用户授权同意记录的查增删操作。
  * 已升级适配统一 IAM 规范：底层的 user_id 列已变更为 sub，以存放 User.uid。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import sequelize from '../../../framework/db/index.js';
 

@@ -30,7 +30,7 @@ export default async function (fastify) {
       let targetFollowingId;
       try {
         targetFollowingId = await resolveInternalUserId(followingId);
-      } catch (err) {
+      } catch {
         return reply.code(404).send({ code: 404, message: '目标用户不存在' });
       }
 
@@ -58,7 +58,7 @@ export default async function (fastify) {
       let targetFollowingId;
       try {
         targetFollowingId = await resolveInternalUserId(followingId);
-      } catch (err) {
+      } catch {
         return reply.code(404).send({ code: 404, message: '目标用户不存在' });
       }
 
@@ -82,7 +82,7 @@ export default async function (fastify) {
       let targetFollowingId;
       try {
         targetFollowingId = await resolveInternalUserId(followingId);
-      } catch (err) {
+      } catch {
         return reply.code(404).send({ code: 404, message: '目标用户不存在' });
       }
 
@@ -106,7 +106,7 @@ export default async function (fastify) {
       let targetUserId;
       try {
         targetUserId = await resolveInternalUserId(userId);
-      } catch (err) {
+      } catch {
         return reply.code(404).send({ code: 404, message: '用户不存在' });
       }
 
@@ -127,7 +127,7 @@ export default async function (fastify) {
       let targetUserId;
       try {
         targetUserId = await resolveInternalUserId(userId);
-      } catch (err) {
+      } catch {
         return reply.code(404).send({ code: 404, message: '用户不存在' });
       }
       const stats = await followDao.getFollowStatsCount(targetUserId);
@@ -146,7 +146,7 @@ export default async function (fastify) {
       let targetUserId;
       try {
         targetUserId = await resolveInternalUserId(userId);
-      } catch (err) {
+      } catch {
         return reply.code(404).send({ code: 404, message: '用户不存在' });
       }
       const stats = await followDao.getWorkStatsCount(targetUserId);
@@ -185,7 +185,7 @@ export default async function (fastify) {
       let targetUserId;
       try {
         targetUserId = await resolveInternalUserId(userId);
-      } catch (err) {
+      } catch {
         return reply.code(404).send({ code: 404, message: '用户不存在' });
       }
       const stats = await getProfileStats(targetUserId);

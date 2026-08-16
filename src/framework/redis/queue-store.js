@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 /**
  * FIFO 消息队列
  *

@@ -1,6 +1,9 @@
 /**
  * 通知应用配置
  * 供 loader 扫描时读取
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 export default {
   app_id: 'notice',

@@ -2,6 +2,9 @@
  * 防火墙管道测试
  *
  * 覆盖：检测器、管道、告警、导入导出
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

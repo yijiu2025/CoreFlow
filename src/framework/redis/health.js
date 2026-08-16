@@ -13,8 +13,6 @@
  * @since 2026-07-24
  */
 
-/* eslint-disable no-console */
-
 /** 不可用时恢复探测间隔（毫秒） */
 const PING_INTERVAL = 10_000;
 

@@ -95,7 +95,6 @@ class ChannelDao {
    * @returns {Promise<Channel|null>}
    */
   async update(id, data) {
-    const model = this.getModel();
     const item = await this.findById(id);
     if (!item) return null;
     return await item.update(data);
@@ -107,7 +106,6 @@ class ChannelDao {
    * @returns {Promise<boolean>}
    */
   async delete(id) {
-    const model = this.getModel();
     const item = await this.findById(id);
     if (!item) return false;
     await item.update({ delete_version: id });

@@ -9,6 +9,9 @@
  * 支持两种认证模式：
  * - JWT_ENABLED=true: 签发 JWT access_token + refresh_token
  * - JWT_ENABLED=false（默认）: 仅创建 Session（sid/sid_r Cookie）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';

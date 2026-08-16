@@ -196,7 +196,6 @@ class TemplateDao {
    * @returns {Promise<Template|null>}
    */
   async update(id, data) {
-    const model = this.getModel();
     const template = await this.findById(id);
     if (!template) return null;
     const updated = await template.update(data);
@@ -215,7 +214,6 @@ class TemplateDao {
    * @returns {Promise<boolean>}
    */
   async delete(id, userId) {
-    const model = this.getModel();
     const template = await this.findById(id);
     if (!template || template.user_id !== userId) return false;
     await template.update({ delete_version: id });

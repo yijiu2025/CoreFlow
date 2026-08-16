@@ -2,6 +2,9 @@
  * 循环队列单元测试
  *
  * 覆盖：push/自动覆盖/shift/toArray/满队列覆盖/clear
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { MapStore } from '../redis/map-store.js';

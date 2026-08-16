@@ -3,6 +3,9 @@
  *
  * 记录关键安全事件：登录/登出/权限变更/密码修改/踢出设备
  * 写入数据库（持久化）+ Redis（快速查询最近日志）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { getModel } from '../db/index.js';

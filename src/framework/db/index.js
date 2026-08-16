@@ -6,8 +6,6 @@
  * @since 2026-07-22
  */
 
-/* eslint-disable no-console */
-
 import { Sequelize } from 'sequelize';
 
 const C = { reset: '\x1b[0m', red: '\x1b[31m' };

@@ -1,5 +1,8 @@
 /**
  * 统一 API 异常基类
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 class ApiException extends Error {
   /**

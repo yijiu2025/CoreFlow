@@ -1,3 +1,9 @@
+/**
+ * 系统健康检查路由
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
+ */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 
 export default async function (fastify) {

@@ -5,6 +5,9 @@
  * GET /.well-known/jwks.json            — JWKS 公钥集
  *
  * 注意：用户信息端点 /userinfo 已迁移至 user/v1/user.js
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import config from '../../../app/oauth21/config/config.js';
@@ -85,7 +88,7 @@ export default async function (fastify) {
         // 可选 kid 查询参数：传入则只返回该 kid 的公钥，不传返回全部（标准 JWKS）
         const { kid } = request.query || {};
         return await getJWKS(kid);
-      } catch (err) {
+      } catch {
         return reply.code(500).send({
           code: 500,
           message: 'JWKS 获取失败',

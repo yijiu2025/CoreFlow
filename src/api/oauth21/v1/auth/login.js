@@ -6,6 +6,9 @@
  * POST /login/consent/confirm — 快捷登录确认授权
  *
  * 业务逻辑见 app/oauth21/services/login.service.js（directLogin / confirmDirectConsent）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerSecureRoute } from '../../../guard.js';
 import { directLogin, confirmDirectConsent } from '../../../../app/oauth21/services/login.service.js';

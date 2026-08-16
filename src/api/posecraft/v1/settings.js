@@ -6,6 +6,9 @@
  * PUT  /posecraft/v1/settings/:field   — 改单字段，value 由前端传入
  *
  * 字段不存在时：mergeUpdate 会把新字段一起写入，无需前端额外处理
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import settingsDao from '../../../app/posecraft/dao/settings.dao.js';

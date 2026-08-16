@@ -3,6 +3,9 @@
  *
  * 基于 IP 的速率限制，用于登录、注册、验证码等接口。
  * 使用 Redis Sorted Set 实现滑窗限频，Redis 不可用时降级到内存。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 const memoryStore = new Map();
 

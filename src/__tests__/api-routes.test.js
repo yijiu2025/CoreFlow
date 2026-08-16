@@ -2,6 +2,9 @@
  * API 路由完整测试
  *
  * 覆盖：所有 API 端点的数据结构验证
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

@@ -8,6 +8,9 @@
  *
  * 注意：group 不设 prefix，路由直接落在 oauth21 system 前缀 /oauth2.1 下，
  * 与 oidc 发现文档声明的 device_authorization_endpoint 一致（避免双重前缀）。
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { DeviceService } from '../../../app/oauth21/services/device.service.js';

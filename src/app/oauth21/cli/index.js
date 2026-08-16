@@ -5,6 +5,9 @@
  *   npm run cli -- oauth clients   # 查看 OAuth 客户端
  *   npm run cli -- oauth tokens    # 查看 Token 统计
  *   npm run cli -- oauth stats     # OAuth 统计
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';

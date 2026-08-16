@@ -1,6 +1,9 @@
 /**
  * 共享状态与工具函数
  * 各检测模块共用的内存 Map、Redis Key 前缀、Lua 脚本、配置缓存
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { getSecuritySettings } from '../dao/dao.js';
 

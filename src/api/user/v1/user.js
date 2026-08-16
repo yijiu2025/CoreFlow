@@ -5,6 +5,9 @@
  * GET /user/v1/permissions  — 获取当前用户的角色与权限列表
  * GET /user/v1/profile      — 获取当前用户基础资料（预留）
  * PUT /user/v1/update       — 更新当前用户信息（预留）
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';

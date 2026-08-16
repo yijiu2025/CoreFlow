@@ -5,6 +5,9 @@
  * 1. 服务端设置 CSRF Cookie（非 HttpOnly，前端可读取）
  * 2. 前端从 Cookie 读取 token，放入请求头 X-CSRF-Token
  * 3. 服务端校验 Cookie 和 Header 中的 token 是否一致
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import crypto from 'crypto';

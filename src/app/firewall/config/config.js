@@ -2,6 +2,9 @@
  * 防火墙核心配置文件
  * 定义持久化路径、外部解析 API、默认节点位置、安全防御策略矩阵
  * 阈值参数支持环境变量覆盖
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import path from 'path';
 import { fileURLToPath } from 'url';

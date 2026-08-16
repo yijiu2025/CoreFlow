@@ -2,6 +2,9 @@
  * 权限系统完整测试
  *
  * 覆盖：超管自动继承、按应用隔离、角色层次、权限合并
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 import { describe, it, expect } from '@jest/globals';
 

@@ -5,6 +5,9 @@
  * GET  /api/firewall/v1/export/whitelist   — 导出白名单
  * POST /api/firewall/v1/import/blocks      — 导入封禁列表
  * POST /api/firewall/v1/import/whitelist   — 导入白名单
+ *
+ * @author yijiu2025
+ * @since 2026-08-17
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
