@@ -37,7 +37,8 @@ export default async function (fastify) {
         userinfo_endpoint: `${iss}/user/v1/userinfo`,
         jwks_uri: `${iss}/.well-known/jwks.json`,
         revocation_endpoint: `${iss}/revoke`,
-        device_authorization_endpoint: `${iss}/device/code`,
+        device_authorization_endpoint: `${iss}/device_authorization`,
+        end_session_endpoint: `${iss}/logout`,
         response_types_supported: ['code'],
         grant_types_supported: [
           'authorization_code',
