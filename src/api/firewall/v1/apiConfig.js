@@ -1,8 +1,18 @@
+/**
+ * Guard 安全配置中心路由
+ *
+ * GET   /            — 查询全域安全矩阵
+ * PATCH /:system/:group — 热更新策略详情
+ * POST  /toggle/:system/:group — 模块/接口一键开关
+ * POST  /toggle-system/:system — 系统全局防御开关
+ *
+ * 业务逻辑见 app/guard/services/config.service.js（updateConfig/toggleConfig/toggleSystemConfig）。
+ */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { getAllGuardConfigs, setGuardConfig } from '../../guard-config.js';
+import { getAllGuardConfigs } from '../../guard-config.js';
+import { updateConfig, toggleConfig, toggleSystemConfig } from '../../../app/guard/services/config.service.js';
 
 export default async function (fastify) {
-  // 1. 模块级配置 (Level 2) - 统一定义前缀和系统上下文
   registerGroupMetadata({
     name: 'apiConfigs',
     alias: '安全配置中心',
@@ -14,12 +24,11 @@ export default async function (fastify) {
     allowRoles: []
   });
 
-  // 2. API 级配置 (Level 3) - 自动继承前缀和上下文
   registerSecureRoute(fastify, {
     name: 'getConfigs',
     alias: '查询全域安全矩阵',
     method: 'GET',
-    url: '/', // 自动拼接为 /api/firewall/v1/apiconfigs/
+    url: '/',
     handler: async (request, reply) => {
       return reply.result.success('操作成功', getAllGuardConfigs());
     }
@@ -29,7 +38,7 @@ export default async function (fastify) {
     name: 'updateConfig',
     alias: '热更新策略详情',
     method: 'PATCH',
-    url: '/:system/:group', // 自动拼接为 /api/v1/guard/configs/:system/:group
+    url: '/:system/:group',
     schema: {
       params: {
         type: 'object',
@@ -40,15 +49,11 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { system, group } = request.params;
       const { apiKey } = request.query;
-      const patch = request.body;
-      const operator = {
-        userId: request.state?.user?.uid,
-        ip: request.ip,
-        redis: request.server?.redis
-      };
-      const updated = setGuardConfig(system, patch, group, apiKey, operator);
-      if (!updated) return reply.result.fail('未找到指定配置路径', 404);
-      return reply.result.success('安全策略已更新', updated);
+      const result = updateConfig(system, group, apiKey, request.body, request);
+      if (!result.ok) {
+        return reply.result.fail(result.message, null, result.statusCode);
+      }
+      return reply.result.success('安全策略已更新', result.updated);
     }
   });
 
@@ -60,20 +65,11 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { system, group: groupKey } = request.params;
       const { apiKey } = request.query;
-      const configs = getAllGuardConfigs();
-      const sys = configs[system];
-      if (!sys) return reply.result.fail('系统不存在', 404);
-      const group = sys.groups[groupKey];
-      if (!group) return reply.result.fail('模块不存在', 404);
-      let current = apiKey ? (group.apis ? group.apis[apiKey] : null) : group;
-      if (!current) return reply.result.fail('接口不存在', 404);
-      const newState = !current.enabled;
-      setGuardConfig(system, { enabled: newState }, groupKey, apiKey, {
-        userId: request.state?.user?.uid,
-        ip: request.ip,
-        redis: request.server?.redis
-      });
-      return reply.result.success('操作成功', { enabled: newState });
+      const result = toggleConfig(system, groupKey, apiKey, request);
+      if (!result.ok) {
+        return reply.result.fail(result.message, null, result.statusCode);
+      }
+      return reply.result.success('操作成功', { enabled: result.enabled });
     }
   });
 
@@ -84,15 +80,11 @@ export default async function (fastify) {
     url: '/toggle-system/:system',
     handler: async (request, reply) => {
       const { system } = request.params;
-      const configs = getAllGuardConfigs();
-      if (!configs[system]) return reply.result.fail('系统不存在', 404);
-      const newState = !configs[system].enabled;
-      setGuardConfig(system, { enabled: newState }, null, null, {
-        userId: request.state?.user?.uid,
-        ip: request.ip,
-        redis: request.server?.redis
-      });
-      return reply.result.success('操作成功', { enabled: newState });
+      const result = toggleSystemConfig(system, request);
+      if (!result.ok) {
+        return reply.result.fail(result.message, null, result.statusCode);
+      }
+      return reply.result.success('操作成功', { enabled: result.enabled });
     }
   });
 }
