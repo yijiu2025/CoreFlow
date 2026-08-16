@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { getModel } from '../../../framework/db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -214,7 +215,8 @@ export {
   extractFabricData,
   generateImageThumbnail,
   generateSkeletonPreview,
-  composeTemplatePreview
+  composeTemplatePreview,
+  composeWorkPreview
 };
 
 /**
@@ -265,4 +267,35 @@ async function composeTemplatePreview(template) {
       .png()
       .toBuffer();
   }
+}
+
+/**
+ * 合成作品预览图：查关联模板 → 复用 composeTemplatePreview 合成
+ *
+ * 从 api/posecraft/v1/work.js 的 getWorkPreview handler 下沉。
+ * 无关联模板或合成失败均返回透明占位图（路由直接 send）。
+ * @param {object} work - 作品对象（含 template_id）
+ * @returns {Promise<Buffer>} PNG Buffer
+ */
+async function composeWorkPreview(work) {
+  try {
+    if (work?.template_id) {
+      const Template = getModel('Template');
+      const template = await Template.findOne({
+        where: { id: work.template_id, delete_version: 0 }
+      });
+      if (template) {
+        return await composeTemplatePreview(template);
+      }
+    }
+  } catch (err) {
+    const log = globalThis?.fastify?.log || console;
+    log.error?.(err, 'Compose work preview image failed');
+  }
+  // 兜底透明占位图
+  return sharp({
+    create: { width: 1, height: 1, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+  })
+    .png()
+    .toBuffer();
 }

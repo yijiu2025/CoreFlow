@@ -8,151 +8,9 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
 import templateDao from '../../../app/posecraft/dao/template.dao.js';
-import { getModel } from '../../../framework/db/index.js';
-import fs from 'fs';
-import path from 'path';
-import sharp from 'sharp';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads/posecraft');
-
-/**
- * 将 fabricData 骨骼数据序列化为 SVG buffer（透明背景，仅骨架线条）
- * @param {object} fabricData - pose_data.fabricData，包含 width/height/objects
- * @returns {Buffer} SVG buffer
- */
-function generateSvgFromFabric(fabricData) {
-  const width = fabricData.width || 800;
-  const height = fabricData.height || 600;
-  let svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
-
-  const objects = fabricData.objects || [];
-  for (const obj of objects) {
-    if (obj.type === 'line') {
-      const x1 = obj.x1;
-      const y1 = obj.y1;
-      const x2 = obj.x2;
-      const y2 = obj.y2;
-      const stroke = obj.stroke || '#6366f1';
-      const strokeWidth = obj.strokeWidth || 3;
-      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
-      svgContent += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" />`;
-    } else if (obj.type === 'circle') {
-      const radius = obj.radius || 8;
-      const originX = obj.originX || 'left';
-      const originY = obj.originY || 'top';
-      const cx = originX === 'center' ? obj.left : obj.left + radius;
-      const cy = originY === 'center' ? obj.top : obj.top + radius;
-      const fill = obj.fill || '#ffffff';
-      const stroke = obj.stroke || '#6366f1';
-      const strokeWidth = obj.strokeWidth || 3;
-      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
-      svgContent += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`;
-    } else if (obj.type === 'path') {
-      const stroke = obj.stroke || '#6366f1';
-      const strokeWidth = obj.strokeWidth || 3;
-      const fill = obj.fill || 'none';
-      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
-      let pathD = '';
-      if (Array.isArray(obj.path)) {
-        pathD = obj.path.map(cmd => cmd.join(' ')).join(' ');
-      } else if (typeof obj.path === 'string') {
-        pathD = obj.path;
-      }
-      if (pathD) {
-        svgContent += `<path d="${pathD}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" stroke-linejoin="round" />`;
-      }
-    }
-  }
-  svgContent += `</svg>`;
-  return Buffer.from(svgContent);
-}
-
-/**
- * 作品结构化输出：只返回前端需要的字段
- * 排除：user_id、analysis_data、delete_version、deleted_at、edit_data
- * @param {object} work - 作品 Sequelize 实例或普通对象
- * @returns {object|null} 格式化后的作品对象，null 时返回 null
- */
-/**
- * 作品公共序列化（列表/详情共用，不含 views_count）
- */
-function formatWork(work, isOwner = false) {
-  if (!work) return null;
-  const data = work.toJSON ? work.toJSON() : work;
-  return {
-    id: data.id,
-    template_id: data.template_id,
-    title: data.title,
-    description: data.description,
-    image_url: data.image_url,
-    thumbnail_url: data.thumbnail_url,
-    type: data.is_template_work ? 'template' : 'work',
-    status: data.status,
-    // 计数（集中管理）
-    count: {
-      likes: data.likes_count,
-      collects: data.collects_count || 0,
-      shares: data.shares_count || 0,
-      comments: data.comments_count || 0,
-      views: isOwner ? data.views_count : undefined // 仅作者可见
-    },
-    // 当前用户互动状态
-    userInteraction: {
-      liked: !!data.liked,
-      collected: !!data.collected,
-      shared: !!data.shared
-    },
-    address: {
-      publication: data.publication_address || null,
-      work: data.work_address || null
-    },
-    created_at: data.createdAt,
-    updated_at: data.updatedAt,
-    author: data.author
-      ? {
-          uid: data.author.uid,
-          username: data.author.username,
-          avatar: data.author.avatar
-        }
-      : undefined,
-    // 关联模板状态（null=正常/无模板, -1=已删除, 0=私密, -2=审核拒绝）
-    template_status: data.template?.status ?? null,
-    template_deleted: data.template ? data.template.delete_version !== 0 : false
-  };
-}
-
-/**
- * 作品详情序列化（含完整地址 + GPS）
- * @param {object} work
- * @param {boolean} isOwner 是否为作者本人
- */
-function formatWorkDetail(work, isOwner = false) {
-  const base = formatWork(work, isOwner);
-  const data = work.toJSON ? work.toJSON() : work;
-  // 地址详情（含 GPS）
-  base.address = {
-    publication: data.publication_address || null,
-    publication_lat: data.publication_lat ? Number(data.publication_lat) : null,
-    publication_lng: data.publication_lng ? Number(data.publication_lng) : null,
-    publication_source: data.publication_source || null,
-    work: data.work_address || null,
-    work_lat: data.work_lat ? Number(data.work_lat) : null,
-    work_lng: data.work_lng ? Number(data.work_lng) : null,
-    work_address_source: data.work_address_source || null
-  };
-  return base;
-}
-
-/**
- * 批量结构化输出
- * @param {Array<object>} workList - 作品实例数组
- * @returns {Array<object>} 格式化后的作品数组
- */
-function formatWorkList(list) {
-  return (list || []).map(formatWork);
-}
+import { composeWorkPreview, generateImageThumbnail } from '../../../app/posecraft/utils/preview.js';
+import { checkDataPermission } from '../../../app/posecraft/services/permission.service.js';
+import { formatWork, formatWorkDetail, formatWorkList } from '../../../app/posecraft/services/work-view.service.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -160,32 +18,6 @@ export default async function (fastify) {
     description: '作品管理',
     prefix: '/v1'
   });
-
-  /**
-   * 细粒度数据级权限校验通用助手
-   * 1. 资源创建者本人：允许对其自己创建的作品进行操作。
-   * 2. 管理员（包含 posecraft_admin 角色、全局 admin 角色或拥有 posecraft:work:audit 权限）：允许越权管理任何用户的作品。
-   * @param {object} item - 资源对象，需包含 user_id 字段
-   * @param {object} user - 当前登录用户（session 用户对象）
-   * @returns {boolean} 是否拥有数据级操作权限
-   */
-  const checkDataPermission = (item, user) => {
-    if (!item || !user) return false;
-
-    // 如果是创建者本人，通过
-    if (item.user_id === user.userId) return true;
-
-    // 如果是管理员/运营角色或拥有审核/删单权限，通过
-    const userRoles = user.roles || [];
-    const userPermissions = user.permissions?.allows || [];
-    return (
-      userRoles.includes('posecraft_admin') ||
-      userRoles.includes('posecraft_operator') ||
-      userRoles.includes('admin') ||
-      userPermissions.includes('posecraft:work:audit') ||
-      userPermissions.includes('posecraft:work:delete_any')
-    );
-  };
 
   // 获取作品列表（公开）
   registerSecureRoute(fastify, {
@@ -343,66 +175,10 @@ export default async function (fastify) {
         return reply.code(404).send('Work not found');
       }
 
-      // 1. 获取关联模板的骨骼数据来进行合成
-      if (work.template_id) {
-        const Template = getModel('Template');
-        const template = await Template.findOne({ where: { id: work.template_id, delete_version: 0 } });
-        if (template) {
-          let poseData = template.pose_data;
-          if (typeof poseData === 'string') {
-            try {
-              poseData = JSON.parse(poseData);
-            } catch (e) {}
-          }
-          let fabricData = poseData?.fabricData;
-          if (typeof fabricData === 'string') {
-            try {
-              fabricData = JSON.parse(fabricData);
-            } catch (e) {}
-          }
-
-          if (fabricData) {
-            const width = fabricData.width || 800;
-            const height = fabricData.height || 600;
-
-            // 创建透明画布
-            const bgImg = sharp({
-              create: {
-                width,
-                height,
-                channels: 4,
-                background: { r: 0, g: 0, b: 0, alpha: 0 } // 透明
-              }
-            });
-
-            const svgBuffer = generateSvgFromFabric(fabricData);
-            try {
-              const compositeBuffer = await bgImg
-                .composite([{ input: svgBuffer, top: 0, left: 0 }])
-                .png()
-                .toBuffer();
-              reply.type('image/png');
-              return reply.send(compositeBuffer);
-            } catch (err) {
-              fastify.log.error(err, 'Composite transparent work image failed');
-            }
-          }
-        }
-      }
-
-      // 兜底返回 1x1 透明图片
-      const fallback = await sharp({
-        create: {
-          width: 1,
-          height: 1,
-          channels: 4,
-          background: { r: 0, g: 0, b: 0, alpha: 0 }
-        }
-      })
-        .png()
-        .toBuffer();
+      // 委托 preview.js 合成（查关联模板 → 复用 composeTemplatePreview → 兜底占位图）
+      const buffer = await composeWorkPreview(work);
       reply.type('image/png');
-      return reply.send(fallback);
+      return reply.send(buffer);
     }
   });
 
@@ -435,7 +211,6 @@ export default async function (fastify) {
       const user = request.state.user;
 
       // 作品的 thumbnail_url = 底图原图压缩版（WebP 70%，尺寸不变，省带宽）
-      const { generateImageThumbnail } = await import('../../../app/posecraft/utils/preview.js');
       const thumbUrl = (image_url && (await generateImageThumbnail(image_url))) || image_url || '';
 
       const work = await workDao.create({
