@@ -248,10 +248,10 @@ src/db/
 迁移命令：
 
 ```bash
-npm run migrate                                          # 执行所有待运行迁移
-node --env-file=.env src/db/migrate.js --status          # 查看迁移状态
-node --env-file=.env src/db/migrate.js --down            # 回滚最近一次
-node --env-file=.env src/db/migrate.js --down-to <name>  # 回滚到指定版本
+npm run migrate                                                # 执行所有待运行迁移
+node --env-file=.env src/framework/db/migrate.js --status      # 查看迁移状态
+node --env-file=.env src/framework/db/migrate.js --down        # 回滚最近一次
+node --env-file=.env src/framework/db/migrate.js --down-to <name>  # 回滚到指定版本
 ```
 
 **禁止在生产环境使用 `DB_SYNC=true`**，必须通过迁移文件管理表结构变更。

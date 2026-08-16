@@ -94,7 +94,24 @@ const result = await app.db.transaction(async t => {
 
 ## 迁移系统
 
-基于 Umzug v3，迁移文件存储在 `migrations/` 目录，执行记录保存在数据库 `SequelizeMeta` 表中。
+基于 Umzug v3，迁移文件存储在 `migrations/` 目录，执行记录保存在数据库 `sequelize_meta` 表中。
+
+迁移文件按**模型命名空间**划分子目录，每个应用的表结构变更集中在自己的文件夹下：
+
+```
+migrations/
+├── 20260527000001-baseline-all-tables.js   # 全局基线标记（不执行操作）
+├── user/       # user_user, user_identity 等用户表
+├── iam/        # iam_role, iam_user_role, audit_logs 等 IAM 表
+├── oauth21/    # oauth_clients, oauth_codes, oauth_tokens 等
+├── key/        # oauth_key_pairs 密钥表
+├── notice/     # notice_email_codes, notice_configs
+├── session/    # session_user_session, session_tokens, session_logs
+├── posecraft/  # posecraft_work, posecraft_channel 等业务表
+└── guard/      # guard_configs 守卫配置表
+```
+
+运行器会递归扫描顶层与所有子目录，按文件名时间戳前缀排序执行。`sequelize_meta` 中的记录为纯 basename（无目录前缀），因此迁移文件在子目录间移动不会触发重复执行。
 
 ### 常用命令
 
@@ -103,22 +120,29 @@ const result = await app.db.transaction(async t => {
 npm run migrate
 
 # 查看迁移状态（已执行 / 待执行）
-node --env-file=.env src/db/migrate.js --status
+node --env-file=.env src/framework/db/migrate.js --status
 
 # 回滚最近一次迁移
-node --env-file=.env src/db/migrate.js --down
+node --env-file=.env src/framework/db/migrate.js --down
 
 # 回滚到指定版本（该版本也会被回滚）
-node --env-file=.env src/db/migrate.js --down-to 20260527000002-create-iam-tables
+node --env-file=.env src/framework/db/migrate.js --down-to 20260527000002-create-iam-tables
+```
 
-# 创建新迁移文件
-npx umzug migration:create --name add-xxx-column
+### 创建新迁移文件
+
+新建迁移时放入对应应用的子目录（基线迁移 `baseline-all-tables.js` 留在顶层）：
+
+```bash
+# 在对应应用子目录下创建迁移文件（文件名格式：YYYYMMDDHHMMSS-描述.js）
+# 例：为 posecraft 新增列
+#   migrations/posecraft/20260820000001-add-xxx-column.js
 ```
 
 ### 迁移文件规范
 
 ```js
-// migrations/20260527000002-create-iam-tables.js
+// migrations/iam/20260527000002-create-iam-tables.js
 export async function up({ queryInterface, Sequelize }) {
   await queryInterface.createTable('iam_role', {
     id: { type: Sequelize.BIGINT, primaryKey: true, autoIncrement: true },
@@ -145,17 +169,7 @@ export async function down({ queryInterface }) {
 }
 ```
 
-### 现有迁移文件
-
-| 文件                                           | 说明                                                                          |
-| ---------------------------------------------- | ----------------------------------------------------------------------------- |
-| `20260424000001-create-users-table.js`         | user_user 表                                                                  |
-| `20260424000002-create-user-identity-table.js` | user_identity 表                                                              |
-| `20260527000001-baseline-all-tables.js`        | 基线标记（不执行操作）                                                        |
-| `20260527000002-create-iam-tables.js`          | iam_role, iam_user_role, iam_inline_policy, permissions                       |
-| `20260527000003-create-notice-tables.js`       | notice_email_codes, notice_configs                                            |
-| `20260527000004-create-oauth21-tables.js`      | oauth_clients, oauth_codes, oauth_tokens, oauth_user_approval, oauth_consents |
-| `20260527000005-create-session-tables.js`      | session_user_session, session_tokens, session_logs                            |
+迁移文件按应用子目录组织，完整清单见 `migrations/` 目录及其子文件夹。
 
 ## 模型定义规范
 

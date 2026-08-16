@@ -297,22 +297,21 @@ await Role.findAll({ where: { app_id: 'admin' }, paranoid: false });
 npm run migrate
 
 # 查看迁移状态
-node --env-file=.env src/db/migrate.js --status
+node --env-file=.env src/framework/db/migrate.js --status
 
 # 回滚最近一次
-node --env-file=.env src/db/migrate.js --down
+node --env-file=.env src/framework/db/migrate.js --down
 
 # 回滚到指定版本
-node --env-file=.env src/db/migrate.js --down-to 20260527000002-create-iam-tables
-
-# 创建新迁移文件
-npx umzug migration:create --name add-xxx-column
+node --env-file=.env src/framework/db/migrate.js --down-to 20260527000002-create-iam-tables
 ```
+
+迁移文件按应用子目录组织（`migrations/user/`、`migrations/iam/`、`migrations/posecraft/` 等），全局基线 `baseline-all-tables.js` 留在顶层。新建迁移时放入对应应用子目录，运行器会递归扫描。`sequelize_meta` 记录为纯 basename，迁移文件在子目录间移动不会触发重复执行。
 
 ### 4.2 迁移文件规范
 
 ```js
-// migrations/YYYYMMDDHHMMSS-description.js
+// migrations/iam/YYYYMMDDHHMMSS-description.js
 export async function up({ queryInterface, Sequelize }) {
   await queryInterface.createTable('iam_role', {
     id: { type: Sequelize.BIGINT, primaryKey: true, autoIncrement: true },
@@ -334,15 +333,7 @@ export async function down({ queryInterface }) {
 
 ### 4.3 迁移文件列表
 
-| 文件 | 说明 |
-|------|------|
-| `20260424000001-create-users-table.js` | user_user 表 |
-| `20260424000002-create-user-identity-table.js` | user_identity 表 |
-| `20260527000001-baseline-all-tables.js` | 基线标记 |
-| `20260527000002-create-iam-tables.js` | iam_role, iam_user_role, iam_inline_policy, permissions |
-| `20260527000003-create-notice-tables.js` | notice_email_codes, notice_configs |
-| `20260527000004-create-oauth21-tables.js` | oauth_clients, oauth_codes, oauth_tokens, oauth_user_approval, oauth_consents |
-| `20260527000005-create-session-tables.js` | session_user_session, session_tokens, session_logs |
+迁移文件按应用子目录组织，完整清单见 `migrations/` 目录及其子文件夹（`user/`、`iam/`、`oauth21/`、`key/`、`notice/`、`session/`、`posecraft/`、`guard/`）。
 
 ---
 

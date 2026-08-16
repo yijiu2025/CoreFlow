@@ -209,4 +209,60 @@ async function generateSkeletonPreview(poseData) {
   }
 }
 
-export { generateSvgFromFabric, extractFabricData, generateImageThumbnail, generateSkeletonPreview };
+export {
+  generateSvgFromFabric,
+  extractFabricData,
+  generateImageThumbnail,
+  generateSkeletonPreview,
+  composeTemplatePreview
+};
+
+/**
+ * 后端实时合成模板预览图（透明背景 + 骨骼 SVG 合成），返回 PNG Buffer
+ *
+ * 从 api/posecraft/v1/template.js 的 getTemplatePreview handler 下沉。
+ * 路由层只需 `reply.type('image/png').send(buffer)`。
+ * @param {object} template - 模板对象（含 pose_data）
+ * @returns {Promise<Buffer>} PNG Buffer
+ */
+async function composeTemplatePreview(template) {
+  const fabricData = extractFabricData(template.pose_data);
+  // 兜底为有限正整数，防止 width/height 为 0/非数/Infinity/浮点时 sharp 报错
+  const rawW = Number(fabricData?.width);
+  const rawH = Number(fabricData?.height);
+  const width = Number.isFinite(rawW) && rawW > 0 && rawW < 100000 ? Math.floor(rawW) : 800;
+  const height = Number.isFinite(rawH) && rawH > 0 && rawH < 100000 ? Math.floor(rawH) : 600;
+
+  try {
+    // 1. 初始化透明背景图（预览图应为透明背景的纯模板/骨架数据）
+    const bgImg = sharp({
+      create: {
+        width,
+        height,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 }
+      }
+    });
+
+    // 2. 若有骨骼数据，生成 SVG 并合成（SVG 生成/合成失败均降级为透明空图）
+    if (fabricData) {
+      const svgBuffer = generateSvgFromFabric(fabricData);
+      return await bgImg
+        .composite([{ input: svgBuffer, top: 0, left: 0 }])
+        .png()
+        .toBuffer();
+    }
+
+    // 无骨骼数据 → 返回透明空图
+    return bgImg.png().toBuffer();
+  } catch (err) {
+    // 任意异常（SVG 尺寸不匹配、合成失败等）降级为透明占位图，预览端点不抛 500
+    const log = globalThis?.fastify?.log || console;
+    log.error?.(err, 'Compose transparent template image failed');
+    return sharp({
+      create: { width: 1, height: 1, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+    })
+      .png()
+      .toBuffer();
+  }
+}

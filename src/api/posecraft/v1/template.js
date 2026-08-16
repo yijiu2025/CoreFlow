@@ -7,14 +7,9 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import TemplateDao from '../../../app/posecraft/dao/template.dao.js';
-import { generateSvgFromFabric } from '../../../app/posecraft/utils/preview.js';
-import fs from 'fs';
-import path from 'path';
-import sharp from 'sharp';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads/posecraft');
+import { composeTemplatePreview, generateSkeletonPreview } from '../../../app/posecraft/utils/preview.js';
+import { checkDataPermission } from '../../../app/posecraft/services/permission.service.js';
+import { applyPoseDataVisibility } from '../../../app/posecraft/services/template-view.service.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -22,32 +17,6 @@ export default async function (fastify) {
     description: '模板管理',
     prefix: '/v1'
   });
-
-  /**
-   * 细粒度数据级权限校验通用助手
-   * 1. 资源创建者本人：允许对其自己创建的模板进行修改/删除。
-   * 2. 管理员（包含 posecraft_admin 角色、全局 admin 角色或拥有 posecraft:work:audit 权限）：允许越权管理任何用户的模板。
-   * @param {object} item - 资源对象，需包含 user_id 字段
-   * @param {object} user - 当前登录用户（session 用户对象）
-   * @returns {boolean} 是否拥有数据级操作权限
-   */
-  const checkDataPermission = (item, user) => {
-    if (!item || !user) return false;
-
-    // 如果是创建者本人，通过
-    if (item.user_id === user.userId) return true;
-
-    // 如果是管理员/运营角色或拥有审核/删单权限，通过
-    const userRoles = user.roles || [];
-    const userPermissions = user.permissions?.allows || [];
-    return (
-      userRoles.includes('posecraft_admin') ||
-      userRoles.includes('posecraft_operator') ||
-      userRoles.includes('admin') ||
-      userPermissions.includes('posecraft:work:audit') ||
-      userPermissions.includes('posecraft:work:delete_any')
-    );
-  };
 
   /**
    * GET /templates - 获取模板列表
@@ -152,7 +121,6 @@ export default async function (fastify) {
     url: '/templates/:id',
     handler: async (request, reply) => {
       const { id } = request.params;
-      const { camera } = request.query || {};
 
       const template = await TemplateDao.findById(id);
 
@@ -170,21 +138,9 @@ export default async function (fastify) {
         }
       }
 
-      // 机密信息保护：pose_data 只有在辅助拍照并且有权限时才返回，其它普通浏览情况一律剥离
-      const isCreator = template.user_id == user?.userId;
-      const hasPrivilege = user?.permissions?.allows?.some(p =>
-        ['posecraft:work:read', 'posecraft:vip:premium_templates', 'posecraft:template:purchase'].includes(p)
-      );
-      const isAuthorized = isCreator || isAdmin || hasPrivilege;
-
-      if ((camera === 'true' || camera === true) && isAuthorized) {
-        // 辅助拍照且有权限时，只返回 pose_data 纯模板数据，不需要返回底图
-        template.setDataValue('image_url', undefined);
-        template.setDataValue('thumbnail_url', undefined);
-      } else {
-        // 其它任何情况下，均不向前端返回 pose_data 骨骼明文数据，只能加载渲染图
-        template.setDataValue('pose_data', undefined);
-      }
+      // 机密信息保护：按 camera 参数与权限剥离 pose_data / 底图
+      const camera = request.query.camera === 'true' || request.query.camera === true;
+      applyPoseDataVisibility(template, user, isAdmin, camera);
 
       return reply.result.success('获取成功', template);
     }
@@ -205,51 +161,10 @@ export default async function (fastify) {
         return reply.code(404).send('Template not found');
       }
 
-      // 获取 pose_data 和 fabricData
-      let poseData = template.pose_data;
-      if (typeof poseData === 'string') {
-        try {
-          poseData = JSON.parse(poseData);
-        } catch (e) {}
-      }
-      let fabricData = poseData?.fabricData;
-      if (typeof fabricData === 'string') {
-        try {
-          fabricData = JSON.parse(fabricData);
-        } catch (e) {}
-      }
-
-      let width = fabricData?.width || 800;
-      let height = fabricData?.height || 600;
-
-      // 1. 初始化透明背景图 (预览图应为透明背景的纯模板/骨架数据)
-      const bgImg = sharp({
-        create: {
-          width,
-          height,
-          channels: 4,
-          background: { r: 0, g: 0, b: 0, alpha: 0 } // 透明背景
-        }
-      });
-
-      // 2. 如果存在骨骼数据，生成 SVG 并进行合成
-      if (fabricData) {
-        const svgBuffer = generateSvgFromFabric(fabricData);
-        try {
-          const compositeBuffer = await bgImg
-            .composite([{ input: svgBuffer, top: 0, left: 0 }])
-            .png()
-            .toBuffer();
-          reply.type('image/png');
-          return reply.send(compositeBuffer);
-        } catch (err) {
-          fastify.log.error(err, 'Composite transparent template image failed');
-        }
-      }
-
-      const finalBuffer = await bgImg.png().toBuffer();
+      // 委托 preview.js 合成透明背景 + 骨骼 SVG 的 PNG
+      const buffer = await composeTemplatePreview(template);
       reply.type('image/png');
-      return reply.send(finalBuffer);
+      return reply.send(buffer);
     }
   });
 
@@ -384,7 +299,6 @@ export default async function (fastify) {
 
       // 若 pose_data 发生变化，重新生成骨架预览图
       if (data.pose_data !== undefined) {
-        const { generateSkeletonPreview } = await import('../../../app/posecraft/utils/preview.js');
         const skeletonUrl = await generateSkeletonPreview(updated.pose_data);
         if (skeletonUrl) {
           await TemplateDao.update(id, { thumbnail_url: skeletonUrl });
