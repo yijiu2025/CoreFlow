@@ -453,20 +453,27 @@ async function getSession(params) {
 
   if (!token) return null;
 
-  // 检查 session 是否超过 TTL（短期 30min / 长期 30天）
-  // Redis 过期后 DB 降级不应复活已过期的 session
-  // sid_r 已收窄到刷新端点，普通请求拿不到，DB 回退一律按 SHORT 判定
-  // （rememberMe 长期会话若被 Redis 驱逐，由刷新端点 /auth/v1/refresh-session 携 sid_r 恢复）
-  const isRememberMe = false;
-  const sessionTtl = isRememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
-  const expiresAt = new Date(token.createdAt.getTime() + sessionTtl * 1000);
-  if (Date.now() > expiresAt.getTime()) {
-    _debug('❌ Session 已过期（创建于 %s，TTL=%ss），标记 revoked 并拒绝', token.createdAt.toISOString(), sessionTtl);
+  // TTL 判定：DB 不存 rememberMe，无法区分短/长期会话，按下方策略处理——
+  //   超 LONG（30d）→ 真过期，revoke（无论是否记住我都已失效）
+  //   超 SHORT 但未超 LONG → 不复活、不 revoke：可能是记住我会话被 Redis 驱逐，
+  //     交由 /auth/v1/refresh-session 携 sid_r 恢复（避免误 revoke 致 sid_r 刷新找不到）
+  //   未超 SHORT → 从 DB 恢复到 Redis（非记住我会话 Redis 短暂驱逐后复活）
+  const shortExpiresAt = new Date(token.createdAt.getTime() + SHORT_SESSION_TTL * 1000);
+  const longExpiresAt = new Date(token.createdAt.getTime() + LONG_SESSION_TTL * 1000);
+
+  if (Date.now() > longExpiresAt.getTime()) {
+    _debug('❌ Session 已超过长期 TTL（创建于 %s），标记 revoked 并拒绝', token.createdAt.toISOString());
     await token.update({ revoked: true });
     return null;
   }
 
-  // 4. 重建 Redis 缓存
+  if (Date.now() > shortExpiresAt.getTime()) {
+    // 短期已过、长期未过：不复活、不 revoke，让前端走 sid_r 刷新（记住我）或重登（非记住我）
+    _debug('⏭️ Redis 未命中且超短期 TTL（创建于 %s），交由 sid_r 刷新恢复', token.createdAt.toISOString());
+    return null;
+  }
+
+  // 短期 TTL 内：重建 Redis 缓存
   const user = token.user;
   const { roles, permissions } = await loadUserPermissions(user.id, token.app_id);
 
