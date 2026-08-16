@@ -73,8 +73,10 @@ async function kickByDeviceType(userId, appId, deviceType) {
       continue;
     }
     if (sd.appId === appId && (sd.deviceType || DEVICE_TYPE.BROWSER) === target) {
-      // 删 Redis session + DB 标记 revoked + 清索引
+      const familyId = sd.familyId || null;
+      // 删 Redis session + 失效 sid_r + DB 标记 revoked + 清索引
       await sessionStore.delete(sid);
+      await deleteRefreshTokensForSession(userId, sid, familyId);
       await SessionToken.update({ revoked: true }, { where: { token: sidHash(sid) } });
       await userSessionsStore.zRem(String(userId), [sid]);
       await SessionLog.create({
@@ -144,15 +146,29 @@ async function checkMaxSessions(userId, appId, maxSessions = 5) {
 
 /**
  * 踢掉指定会话
- * @param {string} sessionId 要踢掉的会话 ID
+ *
+ * 完整踢出（含记住我用户）：删 sid（立即失效）+ 失效 sid_r（阻止 sid_r 自动刷新恢复）
+ * + DB revoke（兜底，refreshSession DB 降级也找不到）+ 清用户会话索引。
+ * @param {string} sessionId 要踢掉的会话 ID（raw sid）
  * @param {number} userId 操作者用户 ID
  */
 async function kickSession(sessionId, userId) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
-  // sessionId 为 raw sid（来自 checkMaxSessions 返回列表）
+  // 先读 session 取 familyId（删 Redis 前读取），用于清理该 session 的 sid_r
+  const sd = await sessionStore.get(sessionId);
+  const familyId = sd?.familyId || null;
+
+  // 1. 删 sid（立即生效：下个请求 401）
   await sessionStore.delete(sessionId);
+
+  // 2. 失效 sid_r：删映射到本 session 的 refreshToken + 清 family 集合（防记住我用户靠 sid_r 自动恢复）
+  if (userId != null) {
+    await deleteRefreshTokensForSession(userId, sessionId, familyId);
+  }
+
+  // 3. DB revoke（兜底：refreshSession DB 降级也找不到未撤销 token）
   await SessionToken.update({ revoked: true }, { where: { token: sidHash(sessionId) } });
   if (userId != null) await userSessionsStore.zRem(String(userId), [sessionId]);
 
@@ -164,18 +180,22 @@ async function kickSession(sessionId, userId) {
 }
 
 /**
- * 踢掉用户所有会话
+ * 踢掉用户所有会话（含记住我：sid + sid_r + DB 全清）
  * @param {number} userId 用户 ID
  */
 async function kickAllSessions(userId) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
 
-  // 用逆索引遍历 raw sid，删 Redis session + DB revoke + 清索引（DB hash 无法反查 raw sid）
+  // 用逆索引遍历 raw sid：删 Redis session + 失效 sid_r + DB revoke + 清索引
   const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
   const hashes = [];
   for (const sid of sids) {
+    const sd = await sessionStore.get(sid);
+    const familyId = sd?.familyId || null;
     await sessionStore.delete(sid);
+    // 失效该 session 的 sid_r（防记住我用户靠 sid_r 自动恢复）
+    await deleteRefreshTokensForSession(userId, sid, familyId);
     hashes.push(sidHash(sid));
   }
   if (hashes.length) {
@@ -785,15 +805,18 @@ async function kickUser(userId, appId = null) {
   const hashes = [];
   let kicked = 0;
   for (const sid of sids) {
+    const sd = await sessionStore.get(sid);
     if (appId) {
-      const sd = await sessionStore.get(sid);
       if (!sd) {
         await userSessionsStore.zRem(String(userId), [sid]);
         continue;
       }
       if (sd.appId !== appId) continue;
     }
+    const familyId = sd?.familyId || null;
     await sessionStore.delete(sid);
+    // 失效该 session 的 sid_r（防记住我用户靠 sid_r 自动恢复）
+    await deleteRefreshTokensForSession(userId, sid, familyId);
     await userSessionsStore.zRem(String(userId), [sid]);
     hashes.push(sidHash(sid));
     kicked++;
