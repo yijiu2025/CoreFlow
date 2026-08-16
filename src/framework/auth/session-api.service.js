@@ -10,9 +10,27 @@
  */
 import { verify } from '../jwt/index.js';
 import { createSession, updateRememberMe } from './session.js';
-import { ensureDeviceCookie, recordAccount } from './device-accounts.js';
+import {
+  ensureDeviceCookie,
+  getAccountEntry,
+  getLiveSession,
+  removeAccount,
+  recordAccount
+} from './device-accounts.js';
 import { getStore } from '../redis/index.js';
-import { signCookie, COOKIE_OPTIONS, SHORT_SESSION_TTL, LONG_SESSION_TTL, REFRESH_TOKEN_TTL } from './cookie.js';
+import {
+  signCookie,
+  COOKIE_OPTIONS,
+  COOKIE_SID,
+  COOKIE_SID_R,
+  SHORT_SESSION_TTL,
+  LONG_SESSION_TTL,
+  REFRESH_TOKEN_TTL
+} from './cookie.js';
+import { generateToken } from '../../app/oauth21/crypto/tokens.js';
+
+/** 临时 session_token 存储（iframe SSO 父窗口 bind-session 用） */
+const sessionTokenStore = getStore('session_token');
 
 /** access_token Cookie 配置（JWT 模式，HttpOnly + sameSite lax） */
 const ACCESS_TOKEN_COOKIE_OPTS = maxAge => ({
@@ -193,4 +211,90 @@ export async function updateRememberMeCookies(userId, sessionId, accessCount, re
   }
 
   return { ok: true, rememberMe: !!rememberMe };
+}
+
+/**
+ * 免密切换到本机已登录的某账号（抖音式）
+ *
+ * 流程：
+ * 1. 注册表无此账号 → 需密码登录
+ * 2. session 已失效 → 从清单移除 + 回退密码（带存储的用户名/头像预填）
+ * 3. 免密切换：重发 sid 指向目标 session（+ sid_r 若长期登录）+ 生成 session_token 供 iframe SSO
+ *
+ * @param {object} request - Fastify request（取 device_id cookie / ip / user-agent）
+ * @param {object} reply - Fastify reply（设 cookie）
+ * @param {string} uid - 目标账号 uid
+ * @returns {Promise<{action:'switched', user:object, session_token:string} | {action:'need_password', uid:string, username?:string, avatar?:string}>}
+ */
+export async function switchAccount(request, reply, uid) {
+  const deviceId = ensureDeviceCookie(request, reply);
+  const entry = await getAccountEntry(deviceId, uid);
+  if (!entry) {
+    return { action: 'need_password', uid };
+  }
+
+  const sd = await getLiveSession(entry);
+  if (!sd) {
+    // session 已失效：从清单移除并回退密码（带存储的用户名/头像预填）
+    await removeAccount(deviceId, reply, uid);
+    return { action: 'need_password', uid, username: entry.username, avatar: entry.avatar };
+  }
+
+  // 免密切换：重发 sid 指向目标 session（+ sid_r 若长期登录）
+  const ttl = entry.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
+  reply.setCookie(COOKIE_SID, signCookie(entry.sessionId, 0), {
+    ...COOKIE_OPTIONS.SID,
+    maxAge: ttl
+  });
+  if (entry.rememberMe && entry.refreshToken) {
+    reply.setCookie(COOKIE_SID_R, signCookie(entry.refreshToken, 0), {
+      ...COOKIE_OPTIONS.SID_R,
+      maxAge: REFRESH_TOKEN_TTL
+    });
+  }
+
+  // 生成 session_token 供 iframe SSO 父窗口 /auth/v1/bind-session 换取 sid
+  const sessionToken = generateToken(32);
+  await sessionTokenStore.set(
+    sessionToken,
+    {
+      userId: sd.userId,
+      uid: sd.uid,
+      username: sd.username,
+      email: sd.email,
+      avatar: sd.avatar,
+      status: sd.status,
+      appId: sd.appId,
+      ip: request.ip,
+      deviceId: sd.deviceId,
+      deviceType: sd.deviceType,
+      userAgent: request.headers['user-agent'] || '',
+      rememberMe: !!entry.rememberMe
+    },
+    300
+  );
+
+  return {
+    action: 'switched',
+    user: {
+      id: sd.userId,
+      uid: sd.uid,
+      username: sd.username,
+      name: sd.username,
+      email: sd.email,
+      avatar: sd.avatar
+    },
+    session_token: sessionToken
+  };
+}
+
+/**
+ * 从本机账号清单移除某账号（注册表 + accounts cookie 同步删除）
+ * @param {object} request - Fastify request（取 device_id cookie）
+ * @param {object} reply - Fastify reply
+ * @param {string} uid - 目标账号 uid
+ */
+export async function removeSavedAccount(request, reply, uid) {
+  const deviceId = ensureDeviceCookie(request, reply);
+  await removeAccount(deviceId, reply, uid);
 }
