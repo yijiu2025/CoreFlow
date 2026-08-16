@@ -2,10 +2,10 @@
 /**
  * 数据库迁移脚本运行器 (基于 Umzug + Sequelize)
  * 运行方式：
- *   node --env-file=.env src/db/migrate.js           # 执行所有待运行迁移
- *   node --env-file=.env src/db/migrate.js --down     # 回滚最近一次迁移
- *   node --env-file=.env src/db/migrate.js --status   # 查看迁移状态
- *   node --env-file=.env src/db/migrate.js --down-to <name> # 回滚到指定版本
+ *   node --env-file=.env src/framework/db/migrate.js           # 执行所有待运行迁移
+ *   node --env-file=.env src/framework/db/migrate.js --down     # 回滚最近一次迁移
+ *   node --env-file=.env src/framework/db/migrate.js --status   # 查看迁移状态
+ *   node --env-file=.env src/framework/db/migrate.js --down-to <name> # 回滚到指定版本
  *
  * @author yijiu2025
  * @since 2026-07-22
@@ -18,23 +18,44 @@ import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// 手动扫描迁移文件（避免 glob 在 Windows 上的兼容性问题）
+/**
+ * 递归扫描迁移目录，收集顶层与所有子目录下的 .js 文件
+ * 按应用划分子目录（user/ oauth21/ posecraft/ ...），基线迁移留在顶层
+ *
+ * 关键兼容性：Umzug 用 name 匹配 sequelize_meta 表中的已执行记录，
+ * 而 DB 中历史记录均为纯 basename（无目录前缀），因此 name 必须取 basename。
+ * 跨目录迁移按 basename 时间戳前缀排序，保证全局执行顺序不变。
+ *
+ * @param {string} dir - 迁移根目录绝对路径
+ * @returns {Array<{name: string, path: string}>} 迁移项（name 为 basename，path 为文件 URL）
+ */
+function scanMigrations(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const collected = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collected.push(...scanMigrations(fullPath));
+    } else if (entry.name.endsWith('.js')) {
+      collected.push({ name: entry.name.replace('.js', ''), path: pathToFileURL(fullPath).href });
+    }
+  }
+  return collected.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 const migrationsDir = path.resolve(__dirname, '../../../migrations');
-const migrationFiles = fs
-  .readdirSync(migrationsDir)
-  .filter(f => f.endsWith('.js'))
-  .sort();
+const migrationItems = scanMigrations(migrationsDir);
 
 const umzug = new Umzug({
-  migrations: migrationFiles.map(file => ({
-    name: file.replace('.js', ''),
-    path: pathToFileURL(path.join(migrationsDir, file)).href,
+  migrations: migrationItems.map(item => ({
+    name: item.name,
+    path: item.path,
     up: async ({ context }) => {
-      const mod = await import(pathToFileURL(path.join(migrationsDir, file)).href);
+      const mod = await import(item.path);
       return mod.up({ queryInterface: context, Sequelize: sequelize.constructor });
     },
     down: async ({ context }) => {
-      const mod = await import(pathToFileURL(path.join(migrationsDir, file)).href);
+      const mod = await import(item.path);
       return mod.down({ queryInterface: context, Sequelize: sequelize.constructor });
     }
   })),

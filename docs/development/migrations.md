@@ -3,26 +3,40 @@
 ## 迁移命令
 
 ```bash
-npm run migrate                                          # 执行所有待运行迁移
-node --env-file=.env src/db/migrate.js --status          # 查看迁移状态
-node --env-file=.env src/db/migrate.js --down            # 回滚最近一次
-node --env-file=.env src/db/migrate.js --down-to <name>  # 回滚到指定版本
+npm run migrate                                                # 执行所有待运行迁移
+node --env-file=.env src/framework/db/migrate.js --status      # 查看迁移状态
+node --env-file=.env src/framework/db/migrate.js --down        # 回滚最近一次
+node --env-file=.env src/framework/db/migrate.js --down-to <name>  # 回滚到指定版本
 ```
 
 ::: warning 禁止在生产环境使用 `DB_SYNC=true`
 必须通过迁移文件管理表结构变更。
 :::
 
+## 目录组织
+
+迁移文件按模型命名空间划分子目录，每个应用的表结构变更集中在自己的文件夹下：
+
+```
+migrations/
+├── 20260527000001-baseline-all-tables.js   # 全局基线标记（留顶层）
+├── user/  iam/  oauth21/  key/  notice/  session/  posecraft/  guard/
+```
+
+运行器递归扫描顶层与所有子目录，按文件名时间戳前缀排序执行。`sequelize_meta` 记录为纯 basename，迁移文件在子目录间移动不会触发重复执行。
+
 ## 创建迁移文件
 
-```bash
-npx umzug migration:create --name create-myapp-tables
+新建迁移时放入对应应用的子目录，文件名格式 `YYYYMMDDHHMMSS-描述.js`：
+
+```
+migrations/posecraft/20260820000001-add-xxx-column.js
 ```
 
 ## 迁移文件模板
 
 ```js
-// migrations/20260601000001-create-myapp-tables.js
+// migrations/myapp/20260601000001-create-myapp-tables.js
 export async function up({ queryInterface, Sequelize }) {
   async function createTableIfNotExists(tableName, columns) {
     const [tables] = await queryInterface.sequelize.query('SHOW TABLES');

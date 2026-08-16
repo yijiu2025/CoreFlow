@@ -9,7 +9,7 @@
 
 /* eslint-disable no-console */
 
-import { sequelize } from '../../db/index.js';
+import { sequelize } from '../../../framework/db/index.js';
 import { C } from '../../../utils/colors.js';
 
 /** 数据库连接超时（毫秒） */

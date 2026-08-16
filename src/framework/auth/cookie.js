@@ -122,7 +122,6 @@ const COOKIE_OPTIONS = {
   }
 };
 
-
 export {
   signCookie,
   verifyCookie,

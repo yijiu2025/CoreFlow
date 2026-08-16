@@ -2,13 +2,34 @@
 
 本目录存放 Umzug 迁移文件，用于管理数据库表结构变更。
 
+## 目录组织
+
+迁移文件按**模型命名空间**划分子目录，每个应用的表结构变更集中在自己的文件夹下：
+
+```
+migrations/
+├── 20260527000001-baseline-all-tables.js   # 全局基线标记（不执行操作）
+├── user/       # user_user, user_identity 等用户表
+├── iam/        # iam_role, iam_user_role, audit_logs 等 IAM 表
+├── oauth21/    # oauth_clients, oauth_codes, oauth_tokens 等
+├── key/        # oauth_key_pairs 密钥表
+├── notice/     # notice_email_codes, notice_configs
+├── session/    # session_user_session, session_tokens, session_logs
+├── posecraft/  # posecraft_work, posecraft_channel 等业务表
+└── guard/      # guard_configs 守卫配置表
+```
+
+运行器（`src/framework/db/migrate.js`）递归扫描顶层与所有子目录，按文件名时间戳前缀排序执行。`sequelize_meta` 表中的执行记录为纯 basename（无目录前缀），因此迁移文件在子目录间移动不会触发重复执行。
+
 ## 命名规范
 
 ```
-YYYYMMDDHHMMSS-描述.js
+<应用子目录>/YYYYMMDDHHMMSS-描述.js
 ```
 
-示例：`20260530000001-create-payment-tables.js`
+示例：`posecraft/20260530000001-create-payment-tables.js`
+
+新建迁移时放入对应应用子目录；全局基线 `baseline-all-tables.js` 留在顶层。
 
 ## 文件模板
 
@@ -118,10 +139,10 @@ await addIndexIfNotExists(queryInterface, 'table_name', ['code', 'delete_version
 ## 常用命令
 
 ```bash
-npm run migrate                                          # 执行所有待运行迁移
-node --env-file=.env src/db/migrate.js --status          # 查看迁移状态
-node --env-file=.env src/db/migrate.js --down            # 回滚最近一次
-node --env-file=.env src/db/migrate.js --down-to <name>  # 回滚到指定版本
+npm run migrate                                                # 执行所有待运行迁移
+node --env-file=.env src/framework/db/migrate.js --status      # 查看迁移状态
+node --env-file=.env src/framework/db/migrate.js --down        # 回滚最近一次
+node --env-file=.env src/framework/db/migrate.js --down-to <name>  # 回滚到指定版本
 ```
 
 ## 注意事项
