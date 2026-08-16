@@ -11,19 +11,19 @@
  * - JWT_ENABLED=false（默认）: 仅创建 Session（sid/sid_r Cookie）
  */
 
-import { issueAccessToken, issueIdToken } from '../../../../app/oauth21/crypto/jwt.js';
-import { generateToken } from '../../../../app/oauth21/crypto/tokens.js';
-import ApprovalDao from '../../../../app/oauth21/dao/approval.dao.js';
-import TokenDao from '../../../../app/oauth21/dao/token.dao.js';
-import { TokenService } from '../../../../app/oauth21/services/token.service.js';
-import config from '../../../../app/oauth21/config/config.js';
-import { createSession } from '../../../../framework/auth/session.js';
-import { getDeviceId, detectDeviceType } from '../../../../framework/auth/device.js';
-import { loadUserPermissions } from '../../../../framework/auth/permission-loader.js';
-import { getStore } from '../../../../framework/redis/index.js';
-import { ensureDeviceCookie, recordAccount } from '../../../../framework/auth/device-accounts.js';
-import { setAuthCookies } from './cookies.js';
-import { FIRST_PARTY_APP, DEFAULT_SCOPE } from './constants.js';
+import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';
+import { generateToken } from '../crypto/tokens.js';
+import ApprovalDao from '../dao/approval.dao.js';
+import TokenDao from '../dao/token.dao.js';
+import { TokenService } from './token.service.js';
+import config from '../config/config.js';
+import { createSession } from '../../../framework/auth/session.js';
+import { getDeviceId, detectDeviceType } from '../../../framework/auth/device.js';
+import { loadUserPermissions } from '../../../framework/auth/permission-loader.js';
+import { getStore } from '../../../framework/redis/index.js';
+import { ensureDeviceCookie, recordAccount } from '../../../framework/auth/device-accounts.js';
+import { setAuthCookies } from './cookies.service.js';
+import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../config/constants.js';
 
 const tokenService = new TokenService();
 

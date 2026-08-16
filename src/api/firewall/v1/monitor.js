@@ -30,7 +30,7 @@ import {
   blacklistSchema,
   blocksSchema,
   whitelistSchema
-} from './schemas.js';
+} from './schemas/monitor.js';
 // 保存所有活跃的 WebSocket 客户端
 const clients = new Set();
 

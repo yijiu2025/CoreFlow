@@ -10,8 +10,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { registerSecureRoute } from '../../../guard.js';
 import UserDao from '../../../../app/oauth21/dao/user.dao.js';
-import { issueDirectTokens } from '../shared/token-issuer.js';
-import { buildTokenResponse } from '../shared/cookies.js';
+import { issueDirectTokens } from '../../../../app/oauth21/services/token-issuer.service.js';
+import { buildTokenResponse } from '../../../../app/oauth21/services/cookies.service.js';
 
 /**
  * 注册扫码登录路由

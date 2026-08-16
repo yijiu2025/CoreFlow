@@ -1,26 +1,27 @@
-import IamDao from '../../../app/admin/dao/iam.dao.js';
-import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { actionMetaRegistry } from '../../../utils/PbacRegistry.js';
-import { logAuditEvent } from '../../../framework/auth/audit-logger.js';
+import IamDao from '../../../../app/admin/dao/iam.dao.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
+import { actionMetaRegistry } from '../../../../utils/PbacRegistry.js';
+import { logAuditEvent } from '../../../../framework/auth/audit-logger.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
     name: 'iam',
     alias: '权限管理',
     description: '用户角色、权限管理',
-    prefix: '/v1',
+    prefix: '/iam/v1',
     enabled: true,
-    requireLogin: false
+    requireLogin: true,
+    allowRoles: ['admin']
   });
   /**
-   * GET /admin/v1/iam/roles
+   * GET /admin/iam/v1/roles
    * 获取管理员有权分配的角色列表 (级别 <= 当前管理员级别)
    */
   registerSecureRoute(fastify, {
     name: 'listAssignableRoles',
     alias: '获取可分配角色',
     method: 'GET',
-    url: '/iam/roles',
+    url: '/roles',
     handler: async (request, reply) => {
       const adminUid = request.user.uid;
       const { appId } = request.query || {};
@@ -35,14 +36,14 @@ export default async function (fastify) {
   });
 
   /**
-   * GET /admin/v1/iam/actions/dictionary
+   * GET /admin/iam/v1/actions/dictionary
    * 获取全量权限动作元数据 (供前端渲染复选框、权限树使用)
    */
   registerSecureRoute(fastify, {
     name: 'listPermissionDictionary',
     alias: '获取权限字典树',
     method: 'GET',
-    url: '/iam/actions/dictionary',
+    url: '/actions/dictionary',
     handler: async (request, reply) => {
       // actionMetaRegistry 是在各个业务模块加载时，通过 definePermissionMeta 压入内存的
       return reply.result.success('获取全量权限字典', actionMetaRegistry);
@@ -50,14 +51,14 @@ export default async function (fastify) {
   });
 
   /**
-   * GET /admin/v1/iam/users
+   * GET /admin/iam/v1/users
    * 获取管理员有权管理的用户列表 (同级或低级)
    */
   registerSecureRoute(fastify, {
     name: 'listManageableUsers',
     alias: '获取可管理用户列表',
     method: 'GET',
-    url: '/iam/users',
+    url: '/users',
     handler: async (request, reply) => {
       const adminUid = request.user.uid;
       const { keyword } = request.query || {};
@@ -72,14 +73,14 @@ export default async function (fastify) {
   });
 
   /**
-   * POST /admin/v1/iam/roles/assign
+   * POST /admin/iam/v1/roles/assign
    * 为用户分配角色 (需校验操作者权限)
    */
   registerSecureRoute(fastify, {
     name: 'assignIamRole',
     alias: '分配角色',
     method: 'POST',
-    url: '/iam/roles/assign',
+    url: '/roles/assign',
     handler: async (request, reply) => {
       // 从解析后的 JWT 中获取当前管理员 UID
       const adminUid = request.user.uid;
@@ -110,14 +111,14 @@ export default async function (fastify) {
   });
 
   /**
-   * POST /admin/v1/iam/policies
+   * POST /admin/iam/v1/policies
    * 下发/更新 JSON 内联策略
    */
   registerSecureRoute(fastify, {
     name: 'updateInlinePolicy',
     alias: '下发内联策略',
     method: 'POST',
-    url: '/iam/policies',
+    url: '/policies',
     handler: async (request, reply) => {
       const adminUid = request.user.uid;
       const { targetUid, appId, policy } = request.body;

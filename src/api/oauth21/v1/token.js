@@ -7,6 +7,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { TokenService, TokenError } from '../../../app/oauth21/services/token.service.js';
 import config from '../../../app/oauth21/config/config.js';
+import { tokenSchema, revokeSchema } from './schemas/token.js';
 
 const tokenService = new TokenService();
 
@@ -31,6 +32,7 @@ export default async function (fastify) {
     alias: '令牌签发',
     method: 'POST',
     url: '/token',
+    schema: tokenSchema,
     handler: async (request, reply) => {
       const { grant_type } = request.body;
 
@@ -127,6 +129,7 @@ export default async function (fastify) {
     alias: '令牌撤销',
     method: 'POST',
     url: '/revoke',
+    schema: revokeSchema,
     handler: async (request, reply) => {
       const client = await tokenService.authenticateClient(request);
       if (!client) {
