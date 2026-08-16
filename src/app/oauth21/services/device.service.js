@@ -142,6 +142,36 @@ class DeviceService {
 
     return { error: 'server_error', error_description: 'Unknown status' };
   }
+
+  /**
+   * 渲染设备验证页面 HTML
+   *
+   * 读取 device.html 模板，转义 user_code 后替换占位符（防 XSS）。
+   * @param {string} userCode - 原始 user_code（来自 query）
+   * @returns {Promise<string>} HTML 字符串
+   */
+  async renderDevicePage(userCode) {
+    // 转义 HTML 特殊字符，防止 XSS
+    const safe = (userCode ?? '').replace(
+      /[&<>"']/g,
+      c =>
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        })[c]
+    );
+
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const templatePath = path.join(__dirname, '../templates/device.html');
+    const html = fs.readFileSync(templatePath, 'utf-8');
+    return html.replace('{{USER_CODE}}', safe);
+  }
 }
 
 export { DeviceService };

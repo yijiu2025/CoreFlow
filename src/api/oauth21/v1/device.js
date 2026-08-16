@@ -99,29 +99,7 @@ export default async function (fastify) {
     method: 'GET',
     url: '/device',
     handler: async (request, reply) => {
-      // 转义 HTML 特殊字符，防止 XSS
-      const rawCode = request.query.user_code ?? '';
-      const userCode = rawCode.replace(
-        /[&<>"']/g,
-        c =>
-          ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
-          })[c]
-      );
-
-      // 读取模板文件并替换占位符
-      const fs = await import('node:fs');
-      const path = await import('node:path');
-      const { fileURLToPath } = await import('node:url');
-      const __dirname = path.dirname(fileURLToPath(import.meta.url));
-      const templatePath = path.join(__dirname, '../../../app/oauth21/templates/device.html');
-      let html = fs.readFileSync(templatePath, 'utf-8');
-      html = html.replace('{{USER_CODE}}', userCode);
-
+      const html = await deviceService.renderDevicePage(request.query.user_code);
       reply.type('text/html');
       return html;
     }

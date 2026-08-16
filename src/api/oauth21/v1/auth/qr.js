@@ -1,17 +1,15 @@
 /**
- * 扫码登录模块
+ * 扫码登录路由
  *
  * GET  /qr/generate — 生成登录二维码
  * POST /qr/scan     — 移动端标记二维码为已扫码
  * POST /qr/confirm  — 移动端确认登录
  * GET  /qr/status   — 轮询二维码状态（PC 端调用）
+ *
+ * 业务逻辑见 app/oauth21/services/qr.service.js。
  */
-
-import { v4 as uuidv4 } from 'uuid';
 import { registerSecureRoute } from '../../../guard.js';
-import UserDao from '../../../../app/oauth21/dao/user.dao.js';
-import { issueDirectTokens } from '../../../../app/oauth21/services/token-issuer.service.js';
-import { buildTokenResponse } from '../../../../app/oauth21/services/cookies.service.js';
+import { generateQrCode, scanQrCode, confirmQrCode, getQrStatus } from '../../../../app/oauth21/services/qr.service.js';
 
 /**
  * 注册扫码登录路由
@@ -24,14 +22,8 @@ export default function registerQrRoutes(fastify, qrStore) {
     method: 'GET',
     url: '/qr/generate',
     handler: async () => {
-      const qrKey = uuidv4();
-      const qrData = {
-        status: 'PENDING',
-        userId: null,
-        expiredAt: Date.now() + 120_000
-      };
-      await qrStore.set(qrKey, qrData, 120);
-      return { code: 200, message: 'ok', data: { qrKey, expires_in: 120 } };
+      const { qrKey, expires_in } = await generateQrCode(qrStore);
+      return { code: 200, message: 'ok', data: { qrKey, expires_in } };
     }
   });
 
@@ -43,18 +35,14 @@ export default function registerQrRoutes(fastify, qrStore) {
     url: '/qr/scan',
     handler: async (request, reply) => {
       const { qrKey } = request.body;
-      const data = await qrStore.get(qrKey);
-
-      if (!data || data.status === 'CONFIRMED') {
+      const success = await scanQrCode(qrStore, qrKey);
+      if (!success) {
         return reply.code(400).send({
           code: 400,
           message: '二维码不存在、已确认或已过期',
           data: null
         });
       }
-
-      data.status = 'SCANNED';
-      await qrStore.set(qrKey, data, 120);
       return { code: 200, message: 'ok', data: { success: true } };
     }
   });
@@ -78,18 +66,14 @@ export default function registerQrRoutes(fastify, qrStore) {
         });
       }
 
-      const data = await qrStore.get(qrKey);
-      if (!data) {
+      const success = await confirmQrCode(qrStore, qrKey, user.sub);
+      if (!success) {
         return reply.code(400).send({
           code: 400,
           message: '二维码无效或已过期',
           data: null
         });
       }
-
-      data.status = 'CONFIRMED';
-      data.userId = user.sub;
-      await qrStore.set(qrKey, data, 120);
       return { code: 200, message: 'ok', data: { success: true } };
     }
   });
@@ -100,33 +84,9 @@ export default function registerQrRoutes(fastify, qrStore) {
     alias: '检测二维码状态',
     method: 'GET',
     url: '/qr/status',
-    handler: async (request, reply) => {
+    handler: (request, reply) => {
       const { qrKey, client_id, scope, nonce: oidcNonce } = request.query;
-      const data = await qrStore.get(qrKey);
-
-      if (!data) {
-        return { code: 200, message: 'ok', data: { status: 'EXPIRED' } };
-      }
-
-      if (data.status === 'CONFIRMED') {
-        const user = await UserDao.findById(data.userId);
-        if (!user) {
-          return { code: 404, message: '用户不存在', data: { status: 'ERROR' } };
-        }
-
-        try {
-          const result = await issueDirectTokens(user, client_id, scope, oidcNonce, request, reply, fastify);
-          await qrStore.delete(qrKey);
-          return buildTokenResponse(result, '扫码登录成功');
-        } catch (err) {
-          if (err.message === 'invalid_client') {
-            return { code: 401, message: '客户端认证失败', data: { status: 'ERROR' } };
-          }
-          throw err;
-        }
-      }
-
-      return { code: 200, message: 'ok', data: { status: data.status } };
+      return getQrStatus(qrStore, { qrKey, client_id, scope, oidcNonce }, request, reply, fastify);
     }
   });
 }
