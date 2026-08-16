@@ -21,6 +21,7 @@ import { createSession } from '../../../../framework/auth/session.js';
 import { getDeviceId, detectDeviceType } from '../../../../framework/auth/device.js';
 import { loadUserPermissions } from '../../../../framework/auth/permission-loader.js';
 import { getStore } from '../../../../framework/redis/index.js';
+import { ensureDeviceCookie, recordAccount } from '../../../../framework/auth/device-accounts.js';
 import { setAuthCookies } from './cookies.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from './constants.js';
 
@@ -121,6 +122,21 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
     if (reply) {
       await setAuthCookies(reply, { accessToken, refreshToken, user: result.user }, fastify);
     }
+
+    // 记录到本机账号清单（JWT 模式：无 session，仅展示 + 免切时重新签发 JWT）
+    if (reply) {
+      const deviceId = ensureDeviceCookie(request, reply);
+      await recordAccount(deviceId, reply, {
+        uid: user.uid || String(user.id),
+        username: user.name || user.username,
+        avatar: user.avatar,
+        appId: client.client_id,
+        sessionId: null,
+        refreshToken: null,
+        rememberMe: false,
+        mode: 'jwt'
+      });
+    }
   } else {
     // ── 模式 B：Session（默认）──
     // appId：优先用请求中的 client_id（如 'firewall'），回退到 client.client_id
@@ -167,7 +183,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
         // 第一方直接登录：在本应用域直接创建 Session 并设 Cookie
         _debug('🔍 [token-issuer] 第一方登录：直接 createSession 设 sid cookie');
         try {
-          await createSession({
+          const sess = await createSession({
             userId: user.numericId || user.id,
             uid: user.uid || user.id,
             username: user.username,
@@ -181,6 +197,18 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
             userAgent: request.headers['user-agent'] || '',
             rememberMe: true,
             reply
+          });
+          // 记录到本机账号清单（免密切换凭据：sessionId + refreshToken）
+          const deviceId = ensureDeviceCookie(request, reply);
+          await recordAccount(deviceId, reply, {
+            uid: user.uid || String(user.id),
+            username: user.name || user.username,
+            avatar: user.avatar,
+            appId: sessionAppId,
+            sessionId: sess?.sessionId,
+            refreshToken: sess?.refreshToken,
+            rememberMe: true,
+            mode: 'session'
           });
         } catch (err) {
           if (err.code === 'MAX_SESSIONS_EXCEEDED') {

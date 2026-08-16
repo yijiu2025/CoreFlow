@@ -206,7 +206,7 @@ async function kickAllSessions(userId) {
  * @param {boolean} params.rememberMe 是否长期登录
  * @param {boolean} [params.multiDevice=false] 是否允许多设备登录，true=不踢旧会话，false=同设备类型只允许一个
  * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
- * @returns {string} sessionId
+ * @returns {Promise<{sessionId: string, refreshToken: string|null, familyId: string}>} 会话标识与刷新令牌
  */
 async function createSession(params) {
   const {
@@ -375,7 +375,7 @@ async function createSession(params) {
     });
   }
 
-  return sessionId;
+  return { sessionId, refreshToken, familyId };
 }
 
 /**
