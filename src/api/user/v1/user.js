@@ -7,39 +7,8 @@
  * PUT /user/v1/update       — 更新当前用户信息（预留）
  */
 
-import { getModel } from '../../../framework/db/index.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import UserDao from '../../../app/oauth21/dao/user.dao.js';
-
-/**
- * 生成唯一的 personal_id（格式 pose_craft_ + 8位字母数字）
- *
- * 碰撞时递归重试，最多 10 次，极端情况用时间戳后缀兜底。
- *
- * @param {number} [attempt=0] - 当前重试次数
- * @returns {Promise<string>} 唯一的 personal_id
- */
-async function generateUniquePersonalId(attempt = 0) {
-  if (attempt >= 10) {
-    // 极端情况：用时间戳后缀兜底
-    return `pose_craft_${Date.now().toString(36)}`;
-  }
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let suffix = '';
-  for (let i = 0; i < 8; i++) {
-    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  const candidate = `pose_craft_${suffix}`;
-  // 查重
-  const existing = await getModel('User').findOne({
-    where: { personal_id: candidate },
-    attributes: ['id']
-  });
-  if (existing) {
-    return generateUniquePersonalId(attempt + 1);
-  }
-  return candidate;
-}
+import UserDao from '../../../app/user/dao/user.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -203,46 +172,15 @@ export default async function (fastify) {
         });
       }
 
-      const User = getModel('User');
-      const user = await User.findOne({
-        where: { id: tokenUser.userId }
-      });
-
-      if (!user) {
+      const profile = await UserDao.getProfile(tokenUser.userId);
+      if (!profile) {
         return reply.code(404).send({
           error: 'user_not_found',
           error_description: '用户不存在'
         });
       }
 
-      // 如果是全新用户，在此初始化个人中心基础资料
-      if (!user.bio && !user.personal_id) {
-        await user.update({
-          gender: 1,
-          age: 27,
-          city: '甘肃 · 庆阳',
-          bio: '✈️已飞0个国家❗️\n梦想是环游世界🌍\n中国留子👧\n个人存款0.000000千万💵\n人生是干饭💤\n梦游国家40+ | 我命由我不由天🌚\n火锅品鉴师🍪 | 5G冲浪达人🏄\npdd资深买手🛍️ | 草莓🍓狂热粉丝\n雅思托福没考📚 清华北大没考📖\n国家级证件持有者(身份证)💳',
-          personal_id: await generateUniquePersonalId()
-        });
-        // 刷新 user 对象以获取更新后数据
-        await user.reload();
-      }
-
-      // 手机号脱敏：仅返回掩码格式（如 138****1234），明文不暴露
-      const { maskPhone } = await import('../../../utils/crypto.js');
-
-      return reply.result.success('获取成功', {
-        uid: user.uid,
-        username: user.username,
-        avatar: user.avatar,
-        email: user.email,
-        phone: user.phone ? maskPhone(user.phone) : null,
-        gender: user.gender,
-        age: user.age,
-        city: user.city,
-        bio: user.bio,
-        personal_id: user.personal_id
-      });
+      return reply.result.success('获取成功', profile);
     }
   });
 
@@ -266,39 +204,24 @@ export default async function (fastify) {
       }
 
       const { username, avatar, gender, age, city, bio, personal_id } = request.body || {};
-      const User = getModel('User');
-      const user = await User.findOne({
-        where: { id: tokenUser.userId }
+      const updated = await UserDao.updateProfile(tokenUser.userId, {
+        username,
+        avatar,
+        gender,
+        age,
+        city,
+        bio,
+        personal_id
       });
 
-      if (!user) {
+      if (!updated) {
         return reply.code(404).send({
           error: 'user_not_found',
           error_description: '用户不存在'
         });
       }
 
-      const updateData = {};
-      if (username !== undefined) updateData.username = username;
-      if (avatar !== undefined) updateData.avatar = avatar;
-      if (gender !== undefined) updateData.gender = gender;
-      if (age !== undefined) updateData.age = age;
-      if (city !== undefined) updateData.city = city;
-      if (bio !== undefined) updateData.bio = bio;
-      if (personal_id !== undefined) updateData.personal_id = personal_id;
-
-      await user.update(updateData);
-
-      return reply.result.success('更新资料成功', {
-        id: user.id,
-        username: user.username,
-        avatar: user.avatar,
-        gender: user.gender,
-        age: user.age,
-        city: user.city,
-        bio: user.bio,
-        personal_id: user.personal_id
-      });
+      return reply.result.success('更新资料成功', updated);
     }
   });
 }
