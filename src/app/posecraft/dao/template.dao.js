@@ -223,14 +223,8 @@ class TemplateDao {
   }
 
   /**
-   * 增加使用次数
-   * @param {number} id - 模板 ID
-   * @returns {Promise<void>}
+   * 增加使用次数（重复方法，保留带 delete_version 过滤的版本，见文件末尾）
    */
-  async incrementUses(id) {
-    const model = this.getModel();
-    await model.increment('uses_count', { where: { id } });
-  }
 
   /**
    * 增加点赞数
