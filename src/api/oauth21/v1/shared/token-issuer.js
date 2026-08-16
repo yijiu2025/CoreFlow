@@ -43,9 +43,12 @@ function _debug(...args) {
  * @param {object} request - Fastify request
  * @param {object} reply - Fastify reply（用于设置 Cookie）
  * @param {object} fastify - Fastify 实例（用于 H5 token）
+ * @param {object} [options]
+ * @param {boolean} [options.rememberMe=true] - 是否长期登录（控制 sid/sid_r TTL；来自前端 keepLogin）
  * @returns {object} 令牌结果
  */
-export async function issueDirectTokens(user, client_id, scope, oidcNonce, request, reply, fastify) {
+export async function issueDirectTokens(user, client_id, scope, oidcNonce, request, reply, fastify, options = {}) {
+  const { rememberMe = true } = options;
   const client = client_id ? await tokenService.authenticateClient(request) : { ...FIRST_PARTY_APP };
 
   if (client_id && !client) {
@@ -169,7 +172,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
             deviceId: getDeviceId(request),
             deviceType: detectDeviceType(request.headers['user-agent'] || ''),
             userAgent: request.headers['user-agent'] || '',
-            rememberMe: true
+            rememberMe
           },
           300
         );
@@ -195,7 +198,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
             deviceId: getDeviceId(request),
             deviceType: detectDeviceType(request.headers['user-agent'] || ''),
             userAgent: request.headers['user-agent'] || '',
-            rememberMe: true,
+            rememberMe,
             reply
           });
           // 记录到本机账号清单（免密切换凭据：sessionId + refreshToken）
@@ -207,7 +210,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
             appId: sessionAppId,
             sessionId: sess?.sessionId,
             refreshToken: sess?.refreshToken,
-            rememberMe: true,
+            rememberMe,
             mode: 'session'
           });
         } catch (err) {

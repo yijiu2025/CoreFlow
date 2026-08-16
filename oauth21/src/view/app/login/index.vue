@@ -43,6 +43,7 @@ const [username, usernameProps] = defineField('username');
 const [password, passwordProps] = defineField('password');
 
 const agreed = ref(false);
+const keepLogin = ref(true);
 const isCountingDown = ref(false);
 const countdown = ref(60);
 let timer: any = null;
@@ -104,7 +105,7 @@ const handleLogin = handleSubmit(async data => {
   }
 
   try {
-    const res = await authStore.login(data as any);
+    const res = await authStore.login({ ...data, keepLogin: keepLogin.value } as any);
     if (window.parent && window.parent !== window) {
       window.parent.postMessage({ type: 'SSO_SUCCESS', data: res }, '*');
     } else {
@@ -322,6 +323,20 @@ const handleLogin = handleSubmit(async data => {
               我已阅读并同意 <a href="#" class="text-primary font-medium">《服务协议》</a> 和
               <a href="#" class="text-primary font-medium">《隐私政策》</a>
             </span>
+          </label>
+
+          <!-- 记住我（keepLogin → 后端 rememberMe → sid_r 长期登录） -->
+          <label class="flex items-center gap-3 cursor-pointer mt-3 select-none">
+            <input type="checkbox" v-model="keepLogin" class="hidden" />
+            <div
+              class="w-4 h-4 rounded-full border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center transition-all"
+              :class="{ 'bg-primary border-primary': keepLogin }"
+            >
+              <svg v-if="keepLogin" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="white" stroke-width="4">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <span class="text-xs text-slate-400">记住登录状态（30 天免登录）</span>
           </label>
         </div>
       </div>

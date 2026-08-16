@@ -189,7 +189,7 @@
       </button>
 
       <!-- 投稿 -->
-      <button class="btn-upload" @click="$emit('handleStartCreate')">
+      <button class="btn-upload" @click="authStore.isLoggedIn ? $emit('handleStartCreate') : authStore.openLoginModal()">
         <svg
           class="upload-svg"
           width="16"
@@ -221,7 +221,7 @@
             (authStore.userProfile?.username || authStore.user?.username || 'U').charAt(0).toUpperCase()
           }}</span>
         </div>
-        <div class="user-avatar-btn guest" v-else @click="$emit('toggleProfileModal')">?</div>
+        <div class="user-avatar-btn guest" v-else @click="authStore.openLoginModal()">?</div>
 
         <!-- 悬浮卡片 (仅当 isLoggedIn 为 true 时显示) -->
         <AvatarHoverCard v-if="authStore.isLoggedIn" @show-toast="msg => $emit('showToast', msg)" />

@@ -40,7 +40,7 @@ async function handleDirectLogin(request, reply, fastify) {
     });
   }
 
-  const { username, password, type, email, code } = decryptResult.data;
+  const { username, password, type, email, code, keepLogin } = decryptResult.data;
 
   // 1.5. 异常登录检测（暴力破解锁定）
   const loginEmail = email || username;
@@ -187,7 +187,8 @@ async function handleDirectLogin(request, reply, fastify) {
       oidcNonce,
       request,
       reply,
-      fastify
+      fastify,
+      { rememberMe: keepLogin !== false }
     );
 
     // 审计日志：登录成功

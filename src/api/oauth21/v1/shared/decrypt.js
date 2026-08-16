@@ -66,6 +66,7 @@ export async function decryptLoginRequest(request, fastify) {
           type: payload.type,
           email: payload.email,
           code: payload.code,
+          keepLogin: payload.keepLogin !== false, // 默认 true（未传按记住我处理，保现行为）
           oidcNonce: request.body.oidcNonce
         }
       };

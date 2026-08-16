@@ -20,6 +20,15 @@ export const useAuthStore = defineStore('auth', () => {
   const permissions = ref<{ allows: string[]; denies: string[] }>({ allows: [], denies: [] });
   const initialized = ref(false);
 
+  // 全局登录弹窗开关（401 刷新失败 / 未登录点头像 → 内联弹窗，不跳页）
+  const showLoginModal = ref(false);
+  function openLoginModal() {
+    showLoginModal.value = true;
+  }
+  function closeLoginModal() {
+    showLoginModal.value = false;
+  }
+
   // ── 对外展示的个人统计（关注/粉丝/互关/获赞/作品/模板/收藏/推荐）──
   const followingCount = ref(0);
   const followersCount = ref(0);
@@ -432,6 +441,9 @@ export const useAuthStore = defineStore('auth', () => {
     toggleCollectAction,
     saveLoginInfo,
     updateSaveLoginInfo,
-    safeAvatar
+    safeAvatar,
+    showLoginModal,
+    openLoginModal,
+    closeLoginModal
   };
 });
