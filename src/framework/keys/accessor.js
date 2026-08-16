@@ -95,11 +95,16 @@ async function getPublicKeyByKid(kid) {
  * 暴露 active 密钥 + 退役宽限期内的密钥（旧 token 仍需验签）。
  * 超过宽限的退役密钥不再暴露，避免 JWKS 无限膨胀。
  *
+ * @param {string} [kid] - 可选密钥 ID；传入则只返回该 kid 的公钥（找不到返回空 keys），
+ *                         不传则返回所有可用公钥（标准 JWKS 行为）
  * @returns {Promise<{keys: object[]}>}
  */
-async function getJWKS() {
+async function getJWKS(kid) {
   const seen = new Set();
   const keys = [];
+
+  /** 若指定 kid，仅保留匹配的；否则全保留 */
+  const accept = jwk => !kid || jwk.kid === kid;
 
   // DB 全量（含退役），按 active 或宽限过滤
   const records = await findAll();
@@ -107,14 +112,14 @@ async function getJWKS() {
     if (!record.jwk) continue;
     if (!record.active && !withinGrace(record.updated_at)) continue; // 过宽限的退役密钥跳过
     const jwk = typeof record.jwk === 'string' ? JSON.parse(record.jwk) : record.jwk;
-    if (!jwk || seen.has(jwk.kid)) continue;
+    if (!jwk || seen.has(jwk.kid) || !accept(jwk)) continue;
     seen.add(jwk.kid);
     keys.push(jwk);
   }
 
   // 合并缓存（防御性：理论上 active 缓存 ⊆ DB）
   for (const [, keyData] of getAllCachedKeys()) {
-    if (!keyData.jwk || seen.has(keyData.jwk.kid)) continue;
+    if (!keyData.jwk || seen.has(keyData.jwk.kid) || !accept(keyData.jwk)) continue;
     seen.add(keyData.jwk.kid);
     keys.push(keyData.jwk);
   }
