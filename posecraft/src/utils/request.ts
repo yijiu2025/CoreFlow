@@ -10,17 +10,33 @@ const TOKEN_KEY = 'posecraft_token';
 let isRefreshing = false;
 let pendingQueue: Array<(token: string) => void> = [];
 
+/**
+ * 刷新会话专用实例
+ *
+ * 不经响应拦截器的 401 递归处理——否则未登录/无 sid_r 时 refreshToken 自身 401
+ * 会进 pendingQueue 死锁（isRefreshing 未释放 + 队列永不 resolve），导致 checkSession
+ * 永挂、路由跳转卡死、弹窗不弹。此处 401 直接抛，由 handle401 的 catch 兜底弹窗。
+ */
+const refreshClient = axios.create({
+  baseURL: '',
+  timeout: 15000,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' }
+});
+refreshClient.interceptors.response.use(
+  res => res.data,
+  error => Promise.reject(error)
+);
+
 async function handle401(config: AxiosRequestConfig): Promise<any> {
   if (!isRefreshing) {
     isRefreshing = true;
     try {
+      // 用独立实例刷新，避免 refreshToken 自身 401 触发递归 handle401 死锁
+      const newToken: any = await refreshClient.post('/auth/v1/refresh-session');
+
       const { useAuthStore } = await import('@/stores/auth');
       const authStore = useAuthStore();
-
-      // 尝试刷新 token
-      const { authApi } = await import('@/api/auth');
-      const newToken = (await authApi.refreshToken()) as any;
-
       authStore.setLoggedIn(true, authStore.user, newToken);
       pendingQueue.forEach(cb => cb(newToken));
       pendingQueue = [];
@@ -33,6 +49,10 @@ async function handle401(config: AxiosRequestConfig): Promise<any> {
       const authStore = useAuthStore();
       authStore.logout();
       authStore.openLoginModal();
+      // 通知排队请求放弃（否则它们永远 pending）
+      pendingQueue.forEach(cb => cb(''));
+      pendingQueue = [];
+      return Promise.reject(new Error('登录已过期，请重新登录'));
     } finally {
       isRefreshing = false;
     }
