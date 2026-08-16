@@ -7,9 +7,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import followDao from '../../../app/posecraft/dao/follow.dao.js';
-import sequelize from '../../../framework/db/index.js';
-import { getModel } from '../../../framework/db/index.js';
-import { Op } from 'sequelize';
+import { resolveInternalUserId, getProfileStats } from '../../../app/posecraft/services/profile.service.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -17,31 +15,6 @@ export default async function (fastify) {
     description: '用户关注管理',
     prefix: '/v1'
   });
-
-  /**
-   * 根据 id/uid/personal_id 获取数据库内部整型用户 ID
-   * @param {string|number} idOrUid - 用户整型 ID、uid 或 personal_id
-   * @returns {Promise<number|null>} 数据库整型用户 ID；纯数字直接返回，无效值返回 null
-   * @throws {Error} 非数字且数据库查不到时抛出 USER_NOT_FOUND
-   */
-  const getInternalUserId = async idOrUid => {
-    if (!idOrUid) return null;
-    // 如果是纯数字，直接返回数字
-    if (!isNaN(Number(idOrUid))) {
-      return Number(idOrUid);
-    }
-    // 否则去数据库中查找对应的用户
-    const User = getModel("User");
-    const user = await User.findOne({
-      where: {
-        [Op.or]: [{ uid: idOrUid }, { personal_id: idOrUid }]
-      }
-    });
-    if (!user) {
-      throw new Error('USER_NOT_FOUND');
-    }
-    return user.id;
-  };
 
   // 关注某人
   registerSecureRoute(fastify, {
@@ -56,7 +29,7 @@ export default async function (fastify) {
 
       let targetFollowingId;
       try {
-        targetFollowingId = await getInternalUserId(followingId);
+        targetFollowingId = await resolveInternalUserId(followingId);
       } catch (err) {
         return reply.code(404).send({ code: 404, message: '目标用户不存在' });
       }
@@ -84,7 +57,7 @@ export default async function (fastify) {
 
       let targetFollowingId;
       try {
-        targetFollowingId = await getInternalUserId(followingId);
+        targetFollowingId = await resolveInternalUserId(followingId);
       } catch (err) {
         return reply.code(404).send({ code: 404, message: '目标用户不存在' });
       }
@@ -108,7 +81,7 @@ export default async function (fastify) {
 
       let targetFollowingId;
       try {
-        targetFollowingId = await getInternalUserId(followingId);
+        targetFollowingId = await resolveInternalUserId(followingId);
       } catch (err) {
         return reply.code(404).send({ code: 404, message: '目标用户不存在' });
       }
@@ -132,7 +105,7 @@ export default async function (fastify) {
 
       let targetUserId;
       try {
-        targetUserId = await getInternalUserId(userId);
+        targetUserId = await resolveInternalUserId(userId);
       } catch (err) {
         return reply.code(404).send({ code: 404, message: '用户不存在' });
       }
@@ -153,7 +126,7 @@ export default async function (fastify) {
       const { userId } = request.params;
       let targetUserId;
       try {
-        targetUserId = await getInternalUserId(userId);
+        targetUserId = await resolveInternalUserId(userId);
       } catch (err) {
         return reply.code(404).send({ code: 404, message: '用户不存在' });
       }
@@ -172,7 +145,7 @@ export default async function (fastify) {
       const { userId } = request.params;
       let targetUserId;
       try {
-        targetUserId = await getInternalUserId(userId);
+        targetUserId = await resolveInternalUserId(userId);
       } catch (err) {
         return reply.code(404).send({ code: 404, message: '用户不存在' });
       }
@@ -211,7 +184,7 @@ export default async function (fastify) {
       const { userId } = request.params;
       let targetUserId;
       try {
-        targetUserId = await getInternalUserId(userId);
+        targetUserId = await resolveInternalUserId(userId);
       } catch (err) {
         return reply.code(404).send({ code: 404, message: '用户不存在' });
       }
@@ -219,44 +192,4 @@ export default async function (fastify) {
       return reply.result.success('查询成功', stats);
     }
   });
-}
-
-/**
- * 聚合个人完整统计（关注/粉丝/互关/获赞/作品/模板/收藏）
- * @param {number} userId - 数据库整型用户 ID
- * @returns {Promise<object>} 完整统计数据对象
- */
-async function getProfileStats(userId) {
-  const followStats = await followDao.getFollowStatsCount(userId);
-  const mutual = await followDao.getMutualCount(userId);
-  const workStats = await followDao.getWorkStatsCount(userId);
-
-  // 模板数量
-  const Template = getModel("Template");
-  const templatesCount = await Template.count({
-    where: { user_id: userId, delete_version: 0 }
-  });
-
-  // 收藏数量
-  const UserCollect = getModel("UserCollect");
-  const collectsCount = await UserCollect.count({
-    where: { user_id: userId, delete_version: 0 }
-  });
-
-  // 推荐数量
-  const Recommendation = getModel("Recommendation");
-  const recommendationsCount = await Recommendation.count({
-    where: { user_id: userId, delete_version: 0 }
-  });
-
-  return {
-    following: followStats.followingCount,
-    followers: followStats.followersCount,
-    mutual,
-    likes_received: workStats.likesCount,
-    works_count: workStats.worksCount,
-    templates_count: templatesCount,
-    collects_count: collectsCount,
-    recommendations_count: recommendationsCount
-  };
 }
