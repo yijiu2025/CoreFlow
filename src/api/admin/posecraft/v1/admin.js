@@ -5,17 +5,17 @@
  * @author Claude
  * @since 2026-07-13
  */
-import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import templateDao from '../../../app/posecraft/dao/template.dao.js';
-import workDao from '../../../app/posecraft/dao/work.dao.js';
-import bannerConfigDao from '../../../app/posecraft/dao/bannerConfig.dao.js';
-import channelDao from '../../../app/posecraft/dao/channel.dao.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
+import templateDao from '../../../../app/posecraft/dao/template.dao.js';
+import workDao from '../../../../app/posecraft/dao/work.dao.js';
+import bannerConfigDao from '../../../../app/posecraft/dao/bannerConfig.dao.js';
+import channelDao from '../../../../app/posecraft/dao/channel.dao.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
-    name: 'admin',
+    name: 'posecraft-admin',
     description: 'PoseCraft 管理端接口',
-    prefix: '/v1/admin'
+    prefix: '/posecraft/v1'
   });
 
   // 1. 分页查询所有待审核作品

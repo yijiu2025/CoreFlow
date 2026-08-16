@@ -2,7 +2,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { captchaDao } from '../../../framework/verify/captcha/index.js';
 import { emailDao } from '../../../framework/verify/email/index.js';
 import { getStore } from '../../../framework/redis/index.js';
-import { generateCaptchaSchema, verifyCaptchaSchema } from './schemas.js';
+import { generateCaptchaSchema, verifyCaptchaSchema } from './schemas/verify.js';
 
 export default async function (fastify, opts) {
   const captchaStore = getStore('captcha');

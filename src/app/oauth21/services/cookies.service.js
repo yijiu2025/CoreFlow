@@ -3,9 +3,9 @@
  * 统一管理所有认证相关 Cookie 的设置逻辑
  */
 
-import config from '../../../../app/oauth21/config/config.js';
-import { issueH5Token } from '../../../../framework/auth/signature.js';
-import { IS_PRODUCTION } from './constants.js';
+import config from '../config/config.js';
+import { issueH5Token } from '../../../framework/auth/signature.js';
+import { IS_PRODUCTION } from '../config/constants.js';
 
 /**
  * 设置认证 Cookie（access_token + refresh_token + 辅助 Cookie）

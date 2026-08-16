@@ -8,10 +8,11 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { registerSecureRoute } from '../../../guard.js';
-import { decryptLoginRequest, verifyEmailCode } from '../shared/decrypt.js';
-import { issueDirectTokens } from '../shared/token-issuer.js';
-import { buildTokenResponse } from '../shared/cookies.js';
-import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../shared/constants.js';
+import { decryptLoginRequest, verifyEmailCode } from '../../../../app/oauth21/services/decrypt.service.js';
+import { issueDirectTokens } from '../../../../app/oauth21/services/token-issuer.service.js';
+import { buildTokenResponse } from '../../../../app/oauth21/services/cookies.service.js';
+import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../../../../app/oauth21/config/constants.js';
+import { loginSchema, consentConfirmSchema } from '../schemas/login.js';
 import ApprovalDao from '../../../../app/oauth21/dao/approval.dao.js';
 import { logLogin } from '../../../../framework/auth/audit-logger.js';
 import { detectLoginAnomaly, DETECT_RESULT } from '../../../../framework/auth/anomaly-detector.js';
@@ -233,6 +234,7 @@ export default function registerLoginRoutes(fastify) {
     alias: '标准登录',
     method: 'POST',
     url: '/login',
+    schema: loginSchema,
     handler: (request, reply) => handleDirectLogin(request, reply, fastify)
   });
 
@@ -242,6 +244,7 @@ export default function registerLoginRoutes(fastify) {
     alias: '快捷登录',
     method: 'POST',
     url: '/mini-login',
+    schema: loginSchema,
     handler: (request, reply) => handleDirectLogin(request, reply, fastify)
   });
 
@@ -251,6 +254,7 @@ export default function registerLoginRoutes(fastify) {
     alias: '统一直接登录确认授权',
     method: 'POST',
     url: '/login/consent/confirm',
+    schema: consentConfirmSchema,
     handler: async (request, reply) => {
       const { consentKey } = request.body;
       if (!consentKey) {

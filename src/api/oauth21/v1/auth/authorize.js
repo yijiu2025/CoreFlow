@@ -8,6 +8,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { registerSecureRoute } from '../../../guard.js';
+import { authorizeLoginSchema, authorizeConsentSchema } from '../schemas/authorize.js';
 import { AuthorizationService, OAuthError } from '../../../../app/oauth21/services/authorization.service.js';
 import ApprovalDao from '../../../../app/oauth21/dao/approval.dao.js';
 import UserDao from '../../../../app/oauth21/dao/user.dao.js';
@@ -135,6 +136,7 @@ export default function registerAuthorizeRoutes(fastify, sessionStore) {
     alias: '授权登录验证',
     method: 'POST',
     url: '/authorize/login',
+    schema: authorizeLoginSchema,
     handler: async (request, reply) => {
       const { sessionId, username, password } = request.body;
       const session = await sessionStore.get(sessionId);
@@ -185,6 +187,7 @@ export default function registerAuthorizeRoutes(fastify, sessionStore) {
     alias: '授权确认',
     method: 'POST',
     url: '/authorize/consent',
+    schema: authorizeConsentSchema,
     handler: async (request, reply) => {
       const { sessionId, user_id, action } = request.body;
       const session = await sessionStore.get(sessionId);
