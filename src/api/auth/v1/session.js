@@ -11,6 +11,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { verify } from '../../../framework/jwt/index.js';
 import { createSession, refreshSession, updateRememberMe } from '../../../framework/auth/session.js';
+import { ensureDeviceCookie, recordAccount } from '../../../framework/auth/device-accounts.js';
 import { getStore } from '../../../framework/redis/index.js';
 import {
   signCookie,
@@ -136,7 +137,7 @@ export default async function (fastify) {
 
       // 创建正式 Session，设置 sid/sid_r Cookie
       try {
-        await createSession({
+        const sess = await createSession({
           userId: sessionData.userId,
           uid: sessionData.uid,
           username: sessionData.username,
@@ -150,6 +151,18 @@ export default async function (fastify) {
           userAgent: request.headers['user-agent'] || '',
           rememberMe: sessionData.rememberMe,
           reply
+        });
+        // 记录到本机账号清单（iframe SSO 绑定后才有 session，在此 record）
+        const deviceId = ensureDeviceCookie(request, reply);
+        await recordAccount(deviceId, reply, {
+          uid: sessionData.uid || String(sessionData.userId),
+          username: sessionData.username,
+          avatar: sessionData.avatar,
+          appId: sessionData.appId,
+          sessionId: sess?.sessionId,
+          refreshToken: sess?.refreshToken,
+          rememberMe: sessionData.rememberMe,
+          mode: 'session'
         });
       } catch (err) {
         // 并发会话超限：返回结构化 409，便于前端引导用户踢掉旧设备（不再抛 500）

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { ref, onMounted, computed } from 'vue';
 import { authApi } from '@/api/auth';
+import { readAccounts, switchAccount, removeSavedAccount, type SavedAccount } from '@/utils/accounts';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
@@ -101,6 +102,49 @@ const startCountdown = () => {
   }, 1000);
 };
 
+// 本机已登录账号（抖音式免密切换）
+const savedAccounts = ref<SavedAccount[]>([]);
+const refreshSavedAccounts = () => {
+  savedAccounts.value = readAccounts();
+};
+onMounted(refreshSavedAccounts);
+
+// 选中某账号：免密切换或回退密码预填
+const pickAccount = async (acct: SavedAccount) => {
+  try {
+    const res: any = await switchAccount(acct.uid);
+    if (res?.action === 'need_password') {
+      // 该账号本机 session 已失效：切密码模式并预填用户名
+      loginType.value = 'pwd';
+      values.username = res.username || acct.name || '';
+      return;
+    }
+    // 切换成功：复用登录成功的 SSO relay
+    const token = res.access_token || res.data?.accessToken;
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        { type: 'SSO_SUCCESS', token, id_token: res.id_token, data: res },
+        '*'
+      );
+    } else {
+      alert('已切换账号：' + (res.user?.username || acct.name));
+    }
+  } catch (err: any) {
+    alert(err.message || '切换失败');
+  }
+};
+
+// 从本机清单移除某账号
+const removeAccount = async (acct: SavedAccount, e: Event) => {
+  e.stopPropagation();
+  try {
+    await removeSavedAccount(acct.uid);
+    refreshSavedAccounts();
+  } catch (err: any) {
+    alert(err.message || '移除失败');
+  }
+};
+
 // 提交处理
 const handleLogin = handleSubmit(async data => {
   if (!agreed.value) {
@@ -174,6 +218,36 @@ const isEmbedded = computed(() => {
     >
       <!-- Left Panel: Form -->
       <div class="flex-1 p-12 flex flex-col relative">
+        <!-- 本机已登录账号（抖音式免密切换） -->
+        <div v-if="savedAccounts.length && authorizeState?.action !== 'consent'" class="mb-6">
+          <p class="text-xs text-slate-400 dark:text-slate-500 mb-2">本机已登录账号，点击免密切换</p>
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="acct in savedAccounts"
+              :key="acct.uid"
+              class="group relative flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition"
+              @click="pickAccount(acct)"
+            >
+              <div
+                class="w-7 h-7 rounded-full bg-gradient-to-tr from-primary to-fuchsia-500 flex items-center justify-center overflow-hidden text-white text-xs font-bold"
+              >
+                <img v-if="acct.avatar" :src="acct.avatar" class="w-full h-full object-cover" />
+                <span v-else>{{ acct.name?.charAt(0).toUpperCase() }}</span>
+              </div>
+              <span class="text-sm text-slate-700 dark:text-slate-200 max-w-[80px] truncate">{{
+                acct.name
+              }}</span>
+              <button
+                type="button"
+                class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-600 text-white text-[10px] leading-none flex items-center justify-center hover:bg-red-500"
+                aria-label="移除账号"
+                @click="removeAccount(acct, $event)"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
         <!-- Account Selection (If already logged in via Cookie) -->
         <template v-if="authorizeState?.action === 'consent'">
           <div class="flex-1 flex flex-col items-center justify-center text-center">

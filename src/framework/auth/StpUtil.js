@@ -116,7 +116,7 @@ export default class StpUtil {
     const deviceType = params.deviceType || detectDeviceType(userAgent);
     const ip = req.ip || req.socket?.remoteAddress || '';
 
-    const sessionId = await createSession({
+    const { sessionId } = await createSession({
       redis,
       userId: params.userId,
       uid: params.uid,
