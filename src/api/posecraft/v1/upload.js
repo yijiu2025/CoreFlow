@@ -1,23 +1,16 @@
 /**
- * PoseCraft 文件上传 API
- * 支持 multipart 文件上传和 Base64 图片上传，保存到本地公共目录。
+ * PoseCraft 文件上传路由
+ *
+ * POST /posecraft/v1/upload        — multipart 文件上传
+ * POST /posecraft/v1/upload/base64 — Base64 图片上传
+ *
+ * 业务逻辑见 app/posecraft/services/upload.service.js（saveUploadFile / saveBase64Image）。
  *
  * @author Claude
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads/posecraft');
-
-// 确保上传目录存在
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+import { saveUploadFile, saveBase64Image } from '../../../app/posecraft/services/upload.service.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -34,36 +27,13 @@ export default async function (fastify) {
     url: '/upload',
     requireLogin: true,
     handler: async (request, reply) => {
+      const file = await request.file();
+      if (!file) {
+        return reply.result.fail('请选择文件');
+      }
       try {
-        const data = await request.file();
-
-        if (!data) {
-          return reply.result.fail('请选择文件');
-        }
-
-        // 验证文件类型
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-        if (!allowedTypes.includes(data.mimetype)) {
-          return reply.result.fail('不支持的文件类型');
-        }
-
-        // 生成唯一文件名
-        const ext = path.extname(data.filename) || '.png';
-        const filename = `${crypto.randomUUID()}${ext}`;
-        const filepath = path.join(UPLOAD_DIR, filename);
-
-        // 保存文件
-        const buffer = await data.toBuffer();
-        fs.writeFileSync(filepath, buffer);
-
-        // 返回访问 URL
-        const url = `/uploads/posecraft/${filename}`;
-
-        return reply.result.success('上传成功', {
-          url,
-          filename,
-          size: buffer.length
-        });
+        const result = await saveUploadFile(file);
+        return reply.result.success('上传成功', result);
       } catch (err) {
         return reply.result.fail(`上传失败: ${err.message}`);
       }
@@ -78,41 +48,13 @@ export default async function (fastify) {
     url: '/upload/base64',
     requireLogin: true,
     handler: async (request, reply) => {
+      const { data, filename } = request.body;
+      if (!data) {
+        return reply.result.fail('缺少图片数据');
+      }
       try {
-        const { data, filename: reqFilename } = request.body;
-
-        if (!data) {
-          return reply.result.fail('缺少图片数据');
-        }
-
-        // 解析 Base64
-        const matches = data.match(/^data:image\/(\w+);base64,(.+)$/);
-        if (!matches) {
-          return reply.result.fail('无效的 Base64 格式');
-        }
-
-        const ext = matches[1] === 'jpeg' ? '.jpg' : `.${matches[1]}`;
-        const buffer = Buffer.from(matches[2], 'base64');
-
-        // 验证大小 (10MB)
-        if (buffer.length > 10 * 1024 * 1024) {
-          return reply.result.fail('文件大小超过限制 (10MB)');
-        }
-
-        // 生成文件名
-        const filename = reqFilename || `${crypto.randomUUID()}${ext}`;
-        const filepath = path.join(UPLOAD_DIR, filename);
-
-        // 保存文件
-        fs.writeFileSync(filepath, buffer);
-
-        const url = `/uploads/posecraft/${filename}`;
-
-        return reply.result.success('上传成功', {
-          url,
-          filename,
-          size: buffer.length
-        });
+        const result = await saveBase64Image(data, filename);
+        return reply.result.success('上传成功', result);
       } catch (err) {
         return reply.result.fail(`上传失败: ${err.message}`);
       }
