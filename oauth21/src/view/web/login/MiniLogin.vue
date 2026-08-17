@@ -527,7 +527,7 @@ onMounted(() => {
       <!-- Footer 插槽定制 -->
       <template #footer v-if="!showConsent">
         <div class="flex items-center justify-between">
-          <label class="flex items-center gap-2 cursor-pointer group" @click.prevent="keepLogin = !keepLogin">
+          <label class="flex items-center gap-2 cursor-pointer group">
             <input
               type="checkbox"
               v-model="keepLogin"

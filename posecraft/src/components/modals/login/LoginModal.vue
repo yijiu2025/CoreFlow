@@ -16,44 +16,67 @@
           <X class="w-5 h-5" />
         </button>
 
-        <!-- 已登录账号列表区（抖音式免切，有 savedAccounts 时展示） -->
-        <div v-if="accountList.length" class="px-8 pt-8 pb-4 border-b border-white/5">
-          <div class="text-xs text-slate-400 mb-3 font-medium">选择已登录账号</div>
-          <div class="flex gap-3 overflow-x-auto pb-1" style="scrollbar-width: thin">
+        <!-- 模式 A：账号列表（有 savedAccounts 且未切到登录） -->
+        <div v-if="mode === 'accounts' && accountList.length" class="p-10 flex flex-col" style="min-height: 484px">
+          <h2 class="text-xl font-semibold text-white mb-1">选择账号登录</h2>
+          <p class="text-sm text-slate-400 mb-6">点击已登录账号直接进入，或登录其他账号</p>
+
+          <div class="grid grid-cols-2 gap-3 mb-6">
             <button
               v-for="acct in accountList"
               :key="acct.encUid"
               @click="onSwitchAccount(acct)"
               :disabled="switching"
-              class="group flex items-center gap-3 pl-2 pr-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-cyan-400/40 transition-all whitespace-nowrap disabled:opacity-50"
+              class="group flex items-center gap-3 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-cyan-400/40 transition-all disabled:opacity-50"
             >
               <img
                 v-if="acct.avatar"
                 :src="acct.avatar"
-                class="w-8 h-8 rounded-full object-cover"
+                class="w-10 h-10 rounded-full object-cover"
                 :alt="acct.username"
               />
               <div
                 v-else
-                class="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white"
+                class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-sm font-bold text-white"
               >
                 {{ acct.username.charAt(0) }}
               </div>
-              <span class="text-sm text-slate-200 group-hover:text-white">{{ acct.username }}</span>
+              <div class="flex-1 text-left min-w-0">
+                <div class="text-sm text-slate-200 group-hover:text-white truncate">{{ acct.username }}</div>
+                <div class="text-xs text-slate-500">点击直接登录</div>
+              </div>
               <span
                 @click.stop="onRevoke(acct)"
-                class="p-0.5 rounded-full text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                class="p-1 rounded-full text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                 title="忘掉该账号"
               >
-                <X class="w-3.5 h-3.5" />
+                <X class="w-4 h-4" />
               </span>
             </button>
           </div>
+
+          <button
+            @click="mode = 'login'"
+            class="mt-auto flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-sm border border-white/5 transition-all"
+          >
+            <UserPlus class="w-4 h-4" />
+            登录其他账号
+          </button>
         </div>
 
-        <!-- iframe 登录区（登录新账号 / need_password 输密码） -->
-        <div class="w-full relative h-[484px]">
+        <!-- 模式 B：iframe 登录（无账号 / 点了"登录其他账号"） -->
+        <div v-else class="w-full relative h-[484px]">
           <iframe :src="loginUrl" class="w-full h-full border-none" allow="payment"></iframe>
+
+          <!-- 有账号时显示"返回账号列表" -->
+          <button
+            v-if="accountList.length"
+            @click="mode = 'accounts'"
+            class="absolute top-6 left-6 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs transition-all"
+          >
+            <ArrowLeft class="w-3.5 h-3.5" />
+            返回账号列表
+          </button>
 
           <!-- Loading State Overlay -->
           <div
@@ -69,9 +92,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
-import { X } from 'lucide-vue-next';
+import { X, UserPlus, ArrowLeft } from 'lucide-vue-next';
 import { buildSsoLoginUrl } from '@/config/services';
 import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
@@ -88,16 +111,33 @@ const { savedAccounts } = storeToRefs(authStore);
 const loading = ref(true);
 const switching = ref(false);
 const loginUrl = buildSsoLoginUrl();
+/** 'accounts'（账号列表）/ 'login'（iframe 登录），二选一 */
+const mode = ref<'accounts' | 'login'>('accounts');
 
 /** savedAccounts 对象 → 数组（便于 v-for） */
 const accountList = computed(() => Object.entries(savedAccounts.value).map(([encUid, acct]) => ({ encUid, ...acct })));
+
+/** 弹窗打开时：有账号默认显示列表，无账号直接 iframe 登录 */
+watch(
+  () => props.isOpen,
+  val => {
+    if (val) {
+      mode.value = accountList.value.length ? 'accounts' : 'login';
+      loading.value = true;
+      setTimeout(() => {
+        loading.value = false;
+      }, 1500);
+    }
+  }
+);
 
 function close() {
   emit('close');
 }
 
-/** 点击账号 chip 免密切换 */
+/** 点击账号卡片免密切换 */
 async function onSwitchAccount(acct: { encUid: string }) {
+  if (!acct.encUid) return;
   switching.value = true;
   try {
     const result = await authStore.switchAccount(acct.encUid);
@@ -105,7 +145,8 @@ async function onSwitchAccount(acct: { encUid: string }) {
       emit('login-success', { user: result.user, switched: true });
       close();
     }
-    // 失败（refreshToken 失效）：authStore 已删该项，列表自动更新，走 iframe 登录
+    // 失败（凭证失效）：authStore 已删该项；无账号则切到 iframe 登录
+    if (!accountList.value.length) mode.value = 'login';
   } finally {
     switching.value = false;
   }
@@ -113,7 +154,9 @@ async function onSwitchAccount(acct: { encUid: string }) {
 
 /** 点击 x 忘掉该账号 */
 async function onRevoke(acct: { encUid: string }) {
+  if (!acct.encUid) return;
   await authStore.revokeSavedAccount(acct.encUid);
+  if (!accountList.value.length) mode.value = 'login';
 }
 
 /**
@@ -125,7 +168,7 @@ const handleMessage = async (event: MessageEvent) => {
 
     let encUid: string | null = null;
 
-    // Session 模式：用临时 session_token 换取 sid/sid_r Cookie + refreshToken
+    // Session 模式：用临时 session_token 换取 sid/sid_r + 凭证 cookie（记住我才有）
     if (sessionToken) {
       try {
         const res: any = await authApi.bindSession(sessionToken);
@@ -144,7 +187,7 @@ const handleMessage = async (event: MessageEvent) => {
       }
     }
 
-    // 记录到已登录账号清单（refreshToken 存 localStorage 供下次免切）
+    // 记录到已登录账号清单（encUid 存 localStorage 作 key；临时登录 encUid=null 不记录）
     if (encUid) {
       authStore.addSavedAccount(user, encUid);
     }
@@ -165,9 +208,6 @@ const handleMessage = async (event: MessageEvent) => {
 
 onMounted(() => {
   window.addEventListener('message', handleMessage);
-  setTimeout(() => {
-    loading.value = false;
-  }, 1500);
 });
 
 onUnmounted(() => {
