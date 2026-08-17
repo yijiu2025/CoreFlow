@@ -189,7 +189,10 @@
       </button>
 
       <!-- 投稿 -->
-      <button class="btn-upload" @click="authStore.isLoggedIn ? $emit('handleStartCreate') : authStore.openLoginModal()">
+      <button
+        class="btn-upload"
+        @click="authStore.isLoggedIn ? $emit('handleStartCreate') : authStore.openLoginModal()"
+      >
         <svg
           class="upload-svg"
           width="16"

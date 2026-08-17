@@ -21,10 +21,9 @@ export const useAuthStore = defineStore('auth', () => {
   /** 控制登录弹窗显示（API 层 401 时自动设为 true） */
   const showLoginModal = ref(false);
 
-  /** 已登录账号清单（抖音式多账号免切）：{[uid]: {refreshToken, username, avatar, rememberMe}} */
-  const savedAccounts = ref<
-    Record<string, { refreshToken: string; username: string; avatar: string; rememberMe: boolean }>
-  >({});
+  /** 已登录账号清单（抖音式多账号免切）：{[encUid]: {username, avatar}}
+   *  key=encUid（AES(uid) 密文，后端解密读 HttpOnly cookie 的 refreshToken），不含凭证 */
+  const savedAccounts = ref<Record<string, { username: string; avatar: string }>>({});
 
   /** 从 localStorage 恢复已登录账号清单 */
   function loadSavedAccounts() {
@@ -42,46 +41,37 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * 登录/绑定成功后记录账号到清单（供下次免切）
    * @param user - {id, uid?, username, name?, avatar}
-   * @param refreshToken - 记住我凭证（非记住我为 null，不记录）
+   * @param encUid - AES(uid) 密文（记住我账号才有，临时登录为 null 不记录）
    */
-  function addSavedAccount(user: any, refreshToken: string | null | undefined) {
-    if (!refreshToken || !user) return;
-    const uid = user.uid || String(user.id);
-    if (!uid) return;
-    savedAccounts.value[uid] = {
-      refreshToken,
+  function addSavedAccount(user: any, encUid: string | null | undefined) {
+    if (!encUid || !user) return;
+    savedAccounts.value[encUid] = {
       username: user.username || user.name || '用户',
-      avatar: user.avatar || '',
-      rememberMe: true
+      avatar: user.avatar || ''
     };
     persistSavedAccounts();
   }
 
   /**
-   * 免密切换到指定账号
-   * @returns 成功返回 {ok:true, user}；失败（refreshToken 失效）返回 {ok:false}
+   * 免密切换到指定账号（发 encUid，后端解密读 HttpOnly cookie 的 refreshToken 验证轮转）
+   * @returns 成功 {ok:true, user}；失败（凭证失效）{ok:false}，自动删 localStorage 项
    */
-  async function switchAccount(refreshToken: string) {
+  async function switchAccount(encUid: string) {
     try {
-      const res: any = await firewallApi.switchAccount(refreshToken);
-      // 后端 switched 返回 {user, refreshToken(新)}；need_password 无 user
-      if (res?.user && res?.refreshToken) {
-        const uid = res.user.uid || String(res.user.id);
-        savedAccounts.value[uid] = {
-          refreshToken: res.refreshToken,
+      const res: any = await firewallApi.switchAccount(encUid);
+      if (res?.user) {
+        // 切换成功：更新 name/avatar（凭证在后端 HttpOnly cookie，前端不存）
+        savedAccounts.value[encUid] = {
           username: res.user.username || res.user.name || '用户',
-          avatar: res.user.avatar || '',
-          rememberMe: true
+          avatar: res.user.avatar || ''
         };
         persistSavedAccounts();
         setLoggedIn(true, res.user);
         await fetchPermissions();
         return { ok: true, user: res.user };
       }
-      // need_password：refreshToken 失效，按 rt 反查并移除该项
-      for (const [uid, acct] of Object.entries(savedAccounts.value)) {
-        if (acct.refreshToken === refreshToken) delete savedAccounts.value[uid];
-      }
+      // need_password：凭证失效，删该项
+      delete savedAccounts.value[encUid];
       persistSavedAccounts();
       return { ok: false };
     } catch (err) {
@@ -90,16 +80,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** 彻底撤销某账号记住我凭证（"忘掉该账号"） */
-  async function revokeSavedAccount(refreshToken: string) {
+  /** 彻底撤销某账号记住我凭证（"忘掉该账号"，发 encUid） */
+  async function revokeSavedAccount(encUid: string) {
     try {
-      await firewallApi.revokeSavedAccount(refreshToken);
+      await firewallApi.revokeSavedAccount(encUid);
     } catch (err) {
       console.warn('撤销账号凭证失败:', err);
     }
-    for (const [uid, acct] of Object.entries(savedAccounts.value)) {
-      if (acct.refreshToken === refreshToken) delete savedAccounts.value[uid];
-    }
+    delete savedAccounts.value[encUid];
     persistSavedAccounts();
   }
 

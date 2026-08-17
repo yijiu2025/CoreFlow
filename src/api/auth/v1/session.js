@@ -64,8 +64,8 @@ export default async function (fastify) {
       }
       return reply.result.success('Session 已绑定', {
         user: result.user,
-        // refreshToken 给前端存 localStorage（多账号免切凭证；非 rememberMe 为 null）
-        refreshToken: result.refreshToken || null
+        // encUid = AES(uid)，前端存 localStorage 作多账号 key（refreshToken 在 HttpOnly cookie）
+        encUid: result.encUid || null
       });
     }
   });

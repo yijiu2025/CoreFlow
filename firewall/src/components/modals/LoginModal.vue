@@ -22,7 +22,7 @@
           <div class="flex gap-3 overflow-x-auto pb-1" style="scrollbar-width: thin">
             <button
               v-for="acct in accountList"
-              :key="acct.uid"
+              :key="acct.encUid"
               @click="onSwitchAccount(acct)"
               :disabled="switching"
               class="group flex items-center gap-3 pl-2 pr-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-cyan-400/40 transition-all whitespace-nowrap disabled:opacity-50"
@@ -90,30 +90,32 @@ const switching = ref(false);
 const loginUrl = buildSsoLoginUrl();
 
 /** savedAccounts 对象 → 数组（便于 v-for，按最近无序） */
-const accountList = computed(() => Object.entries(savedAccounts.value).map(([uid, acct]) => ({ uid, ...acct })));
+const accountList = computed(() => Object.entries(savedAccounts.value).map(([encUid, acct]) => ({ encUid, ...acct })));
 
 function close() {
   emit('close');
 }
 
 /** 点击账号 chip 免密切换 */
-async function onSwitchAccount(acct: { uid: string; refreshToken: string }) {
+async function onSwitchAccount(acct: { encUid: string }) {
+  if (!acct.encUid) return;
   switching.value = true;
   try {
-    const result = await authStore.switchAccount(acct.refreshToken);
+    const result = await authStore.switchAccount(acct.encUid);
     if (result.ok) {
       emit('login-success', { user: result.user, switched: true });
       close();
     }
-    // 失败（refreshToken 失效）：authStore 已删该项，列表自动更新，用户走 iframe 登录
+    // 失败（凭证失效）：authStore 已删该项，列表自动更新，用户走 iframe 登录
   } finally {
     switching.value = false;
   }
 }
 
 /** 点击 x 忘掉该账号 */
-async function onRevoke(acct: { uid: string; refreshToken: string }) {
-  await authStore.revokeSavedAccount(acct.refreshToken);
+async function onRevoke(acct: { encUid: string }) {
+  if (!acct.encUid) return;
+  await authStore.revokeSavedAccount(acct.encUid);
 }
 
 // Handle message from iframe (e.g., login success)
@@ -121,13 +123,13 @@ const handleMessage = async (event: MessageEvent) => {
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
     const { token, sessionToken, user } = event.data;
 
-    let boundRefreshToken: string | null = null;
+    let encUid: string | null = null;
 
-    // Session 模式：用临时 token 换取 sid/sid_r Cookie + refreshToken
+    // Session 模式：用临时 session_token 换取 sid/sid_r + 凭证 cookie（记住我才有）
     if (sessionToken) {
       try {
         const res: any = await firewallApi.bindSession(sessionToken);
-        boundRefreshToken = res?.refreshToken || null;
+        encUid = res?.encUid || null;
       } catch (err) {
         console.warn('绑定 Session 失败:', err);
       }
@@ -142,9 +144,9 @@ const handleMessage = async (event: MessageEvent) => {
       }
     }
 
-    // 记录到已登录账号清单（refreshToken 存 localStorage 供下次免切）
-    if (boundRefreshToken) {
-      authStore.addSavedAccount(user, boundRefreshToken);
+    // 记录到已登录账号清单（encUid 存 localStorage 作 key；临时登录 encUid=null 不记录）
+    if (encUid) {
+      authStore.addSavedAccount(user, encUid);
     }
 
     emit('login-success', { user, token });
