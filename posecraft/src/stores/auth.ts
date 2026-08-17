@@ -37,6 +37,82 @@ export const useAuthStore = defineStore('auth', () => {
     return r;
   }
 
+  // ── 已登录账号清单（抖音式多账号免切）：{[uid]: {refreshToken, username, avatar, rememberMe}} ──
+  const savedAccounts = ref<
+    Record<string, { refreshToken: string; username: string; avatar: string; rememberMe: boolean }>
+  >({});
+
+  /** 从 localStorage 恢复已登录账号清单 */
+  function loadSavedAccounts() {
+    const saved = cache.get<any>('saved_accounts');
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      savedAccounts.value = saved;
+    }
+  }
+
+  /** 持久化已登录账号清单到 localStorage */
+  function persistSavedAccounts() {
+    cache.set('saved_accounts', savedAccounts.value);
+  }
+
+  /** 登录/绑定成功后记录账号到清单（供下次免切） */
+  function addSavedAccount(user: any, refreshToken: string | null | undefined) {
+    if (!refreshToken || !user) return;
+    const uid = user.uid || String(user.id);
+    if (!uid) return;
+    savedAccounts.value[uid] = {
+      refreshToken,
+      username: user.username || user.name || '用户',
+      avatar: user.avatar || '',
+      rememberMe: true
+    };
+    persistSavedAccounts();
+  }
+
+  /** 免密切换到指定账号 */
+  async function switchAccount(refreshToken: string) {
+    try {
+      const { authApi } = await import('@/api/auth');
+      const res: any = await authApi.switchAccount(refreshToken);
+      if (res?.user && res?.refreshToken) {
+        const uid = res.user.uid || String(res.user.id);
+        savedAccounts.value[uid] = {
+          refreshToken: res.refreshToken,
+          username: res.user.username || res.user.name || '用户',
+          avatar: res.user.avatar || '',
+          rememberMe: true
+        };
+        persistSavedAccounts();
+        setLoggedIn(true, res.user);
+        await fetchPermissions();
+        return { ok: true, user: res.user };
+      }
+      // need_password：refreshToken 失效，按 rt 反查并移除该项
+      for (const [uid, acct] of Object.entries(savedAccounts.value)) {
+        if (acct.refreshToken === refreshToken) delete savedAccounts.value[uid];
+      }
+      persistSavedAccounts();
+      return { ok: false };
+    } catch (err) {
+      console.warn('🔒 切换账号失败:', err);
+      return { ok: false };
+    }
+  }
+
+  /** 彻底撤销某账号记住我凭证（"忘掉该账号"） */
+  async function revokeSavedAccount(refreshToken: string) {
+    try {
+      const { authApi } = await import('@/api/auth');
+      await authApi.revokeSavedAccount(refreshToken);
+    } catch (err) {
+      console.warn('撤销账号凭证失败:', err);
+    }
+    for (const [uid, acct] of Object.entries(savedAccounts.value)) {
+      if (acct.refreshToken === refreshToken) delete savedAccounts.value[uid];
+    }
+    persistSavedAccounts();
+  }
+
   // ── 对外展示的个人统计（关注/粉丝/互关/获赞/作品/模板/收藏/推荐）──
   const followingCount = ref(0);
   const followersCount = ref(0);
@@ -399,6 +475,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 启动时从缓存恢复（快速显示 UI）
   restoreFromCache();
+  loadSavedAccounts();
 
   return {
     isLoggedIn,
@@ -408,12 +485,16 @@ export const useAuthStore = defineStore('auth', () => {
     permissions,
     isAdmin,
     initialized,
+    savedAccounts,
     setLoggedIn,
     checkSession,
     fetchPermissions,
     hasPermission,
     hasRole,
     logout,
+    addSavedAccount,
+    switchAccount,
+    revokeSavedAccount,
     followingCount,
     followersCount,
     worksCount,
