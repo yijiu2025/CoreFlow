@@ -24,7 +24,6 @@ import { createSession } from '../../../framework/auth/session.js';
 import { getDeviceId, detectDeviceType } from '../../../framework/auth/device.js';
 import { loadUserPermissions } from '../../../framework/auth/permission-loader.js';
 import { getStore } from '../../../framework/redis/index.js';
-import { ensureDeviceCookie, recordAccount } from '../../../framework/auth/device-accounts.js';
 import { setAuthCookies } from './cookies.service.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../config/constants.js';
 
@@ -129,20 +128,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
       await setAuthCookies(reply, { accessToken, refreshToken, user: result.user }, fastify);
     }
 
-    // 记录到本机账号清单（JWT 模式：无 session，仅展示 + 免切时重新签发 JWT）
-    if (reply) {
-      const deviceId = ensureDeviceCookie(request, reply);
-      await recordAccount(deviceId, reply, {
-        uid: user.uid || String(user.id),
-        username: user.name || user.username,
-        avatar: user.avatar,
-        appId: client.client_id,
-        sessionId: null,
-        refreshToken: null,
-        rememberMe: false,
-        mode: 'jwt'
-      });
-    }
+    // JWT 模式：access_token/refresh_token cookie 由 setAuthCookies 下发；账号多凭证管理在 JWT 模式不适用（短期）
   } else {
     // ── 模式 B：Session（默认）──
     // appId：优先用请求中的 client_id（如 'firewall'），回退到 client.client_id
@@ -204,18 +190,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
             rememberMe,
             reply
           });
-          // 记录到本机账号清单（免密切换凭据：sessionId + refreshToken）
-          const deviceId = ensureDeviceCookie(request, reply);
-          await recordAccount(deviceId, reply, {
-            uid: user.uid || String(user.id),
-            username: user.name || user.username,
-            avatar: user.avatar,
-            appId: sessionAppId,
-            sessionId: sess?.sessionId,
-            refreshToken: sess?.refreshToken,
-            rememberMe,
-            mode: 'session'
-          });
+          // sid/sid_r cookie 已由 createSession 下发；refreshToken 由父窗口 bind-session 响应返回前端
         } catch (err) {
           if (err.code === 'MAX_SESSIONS_EXCEEDED') {
             return {

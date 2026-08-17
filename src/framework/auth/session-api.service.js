@@ -2,7 +2,7 @@
  * Session API 编排服务
  *
  * 从 api/auth/v1/session.js 下沉：Token↔Cookie 互转、Cookie 生命周期管理。
- * 复用 framework/auth 的 createSession/refreshSession/updateRememberMe + cookie/device-accounts 工具。
+ * 复用 framework/auth 的 createSession/refreshSession/updateRememberMe/switchSessionByRefreshToken + cookie 工具。
  * 路由层只调本服务 + reply。
  *
  * @author yijiu
@@ -10,7 +10,6 @@
  */
 import { verify } from '../jwt/index.js';
 import { createSession, updateRememberMe, switchSessionByRefreshToken, revokeRememberMe } from './session.js';
-import { ensureDeviceCookie, getAccountEntry, removeAccount, recordAccount } from './device-accounts.js';
 import { getStore } from '../redis/index.js';
 import {
   signCookie,
@@ -20,7 +19,6 @@ import {
   LONG_SESSION_TTL,
   REFRESH_TOKEN_TTL
 } from './cookie.js';
-import { generateToken } from '../../app/oauth21/crypto/tokens.js';
 
 /** access_token Cookie 配置（JWT 模式，HttpOnly + sameSite lax） */
 const ACCESS_TOKEN_COOKIE_OPTS = maxAge => ({
@@ -88,7 +86,8 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
   // 删除临时 token（一次性使用）
   await sessionStore.delete(sessionToken);
 
-  // 创建正式 Session + 记录到本机账号清单
+  // 创建正式 Session，取 refreshToken 返回前端存 localStorage
+  let refreshToken;
   try {
     const sess = await createSession({
       userId: sessionData.userId,
@@ -105,19 +104,8 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
       rememberMe: sessionData.rememberMe,
       reply
     });
-
-    const deviceId = ensureDeviceCookie(request, reply);
-    await recordAccount(deviceId, reply, {
-      uid: sessionData.uid || String(sessionData.userId),
-      userId: sessionData.userId,
-      username: sessionData.username,
-      avatar: sessionData.avatar,
-      appId: sessionData.appId,
-      sessionId: sess?.sessionId,
-      refreshToken: sess?.refreshToken,
-      rememberMe: sessionData.rememberMe,
-      mode: 'session'
-    });
+    // sid/sid_r cookie 已由 createSession 下发；refreshToken 给前端存（多账号免切凭证）
+    refreshToken = sess?.refreshToken || null;
   } catch (err) {
     // 并发会话超限：结构化 409，供前端引导用户踢掉旧设备
     if (err.code === 'MAX_SESSIONS_EXCEEDED') {
@@ -142,7 +130,9 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
       name: sessionData.username,
       email: sessionData.email,
       avatar: sessionData.avatar
-    }
+    },
+    // refreshToken 给前端存 localStorage（多账号免密切换凭证；非 rememberMe 为 null）
+    refreshToken
   };
 }
 
@@ -205,101 +195,53 @@ export async function updateRememberMeCookies(userId, sessionId, accessCount, re
 }
 
 /**
- * 免密切换到本机已登录的某账号（抖音式）
+ * 用 refreshToken 免密切换账号（抖音式，前端 localStorage 多凭证模型）
  *
- * 仅"记住我"账号可免切：用注册表存的 refreshToken 走 refreshSessionCore 验证+轮转，
- * 下发新 sid/sid_r。非记住我（无 refreshToken）→ 回退密码登录（带用户名/头像预填）。
+ * 前端 localStorage 存多个账号的 refreshToken（登录时由 bind-session 响应返回）。
+ * 切换时前端把目标账号的 refreshToken 发来，后端用 refreshSessionCore 验证+轮转，
+ * 下发新 sid/sid_r 指向目标账号，并返回**新 refreshToken**（前端更新 localStorage——
+ * 旧 refreshToken 已标 rotated 失效，不更新会触发盗用检测）。
  *
- * 轮转后旧 refreshToken 失效，必须用返回的新值更新注册表，否则下次切换触发盗用检测。
+ * 非 rememberMe 账号无 refreshToken → 无法免切 → 前端走密码登录。
  *
- * 流程：
- * 1. 注册表无此账号 → 需密码登录
- * 2. 非记住我 / 无 refreshToken → 需密码（预填用户名/头像）
- * 3. refreshToken 验证失败（已轮转/被吊销/用户禁用）→ 移除账号 + 需密码
- * 4. 验证成功 → 下发新 sid/sid_r + 更新注册表（新 sessionId/refreshToken）+ 生成 session_token 供 iframe SSO
- *
- * @param {object} request - Fastify request（取 device_id cookie / ip / user-agent）
- * @param {object} reply - Fastify reply（设 cookie）
- * @param {string} uid - 目标账号 uid
- * @returns {Promise<{action:'switched', user:object, session_token:string} | {action:'need_password', uid:string, username?:string, avatar?:string}>}
+ * @param {object} request - Fastify request（ip / user-agent）
+ * @param {object} reply - Fastify reply（设 sid/sid_r cookie）
+ * @param {string} refreshToken - 前端持有的目标账号 refreshToken
+ * @returns {Promise<{action:'switched', user:object, refreshToken:string} | {action:'need_password'}>}
  */
-export async function switchAccount(request, reply, uid) {
-  const deviceId = ensureDeviceCookie(request, reply);
-  const entry = await getAccountEntry(deviceId, uid);
-  if (!entry) {
-    return { action: 'need_password', uid };
-  }
-
-  // 非记住我 / 无 refreshToken → 不能免密，回退密码（带预填）
-  if (!entry.rememberMe || !entry.refreshToken) {
-    return { action: 'need_password', uid, username: entry.username, avatar: entry.avatar };
+export async function switchAccount(request, reply, refreshToken) {
+  if (!refreshToken) {
+    return { action: 'need_password' };
   }
 
   // 用 refreshToken 走刷新轮转（复用 refreshSessionCore：验证 + 轮转新 sid/sid_r）
-  const result = await switchSessionByRefreshToken(entry.refreshToken, request, reply);
+  const result = await switchSessionByRefreshToken(refreshToken, request, reply);
   if (!result) {
-    // refreshToken 失效（revoked/过期/被盗用/用户禁用）→ 移除账号 + 回退密码
-    await removeAccount(deviceId, reply, uid);
-    return { action: 'need_password', uid, username: entry.username, avatar: entry.avatar };
+    // refreshToken 失效（已轮转/被吊销/用户禁用）→ 前端删 localStorage 项 + 走密码登录
+    return { action: 'need_password' };
   }
 
-  // 轮转后旧 refreshToken 已标 rotated 失效，更新注册表为新 sessionId/refreshToken
-  // （否则下次切换用旧 refreshToken 会触发盗用检测吊销整个 family）
-  await recordAccount(deviceId, reply, {
-    uid,
-    userId: result.user.id,
-    username: entry.username,
-    avatar: entry.avatar,
-    appId: entry.appId,
-    sessionId: result.sessionId,
-    refreshToken: result.refreshToken,
-    rememberMe: true,
-    mode: 'session'
-  });
-
-  // 生成 session_token 供 iframe SSO 父窗口 /auth/v1/bind-session 换取 sid（跨子域场景）
-  const sessionToken = generateToken(32);
-  const sessionTokenStore = getStore('session_token');
-  await sessionTokenStore.set(
-    sessionToken,
-    {
-      userId: result.user.id,
-      uid: result.user.uid,
-      username: result.user.username,
-      email: result.user.email,
-      avatar: result.user.avatar,
-      status: 1,
-      appId: entry.appId,
-      ip: request.ip,
-      deviceId: entry.deviceId,
-      deviceType: 'browser',
-      userAgent: request.headers['user-agent'] || '',
-      rememberMe: true
-    },
-    300
-  );
-
-  return { action: 'switched', user: result.user, session_token: sessionToken };
+  return {
+    action: 'switched',
+    user: result.user,
+    // 轮转后的新 refreshToken，前端必须用它替换 localStorage 旧值（否则下次切换触发盗用检测）
+    refreshToken: result.refreshToken
+  };
 }
 
 /**
- * 彻底忘记某账号（"移除账号"用，与"退出登录"的软退出相反）
+ * 彻底撤销某账号的记住我凭证（"移除账号"用，与"退出登录"的软退出相反）
  *
- * 撤销记住我凭证（refreshToken 映射 + family + DB token + session）+ 清 sid_r cookie +
- * 删注册表项。下次该账号需重新输密码登录（无法免密回来）。
+ * 前端把要移除账号的 refreshToken 发来，后端据此反查 sessionId/userId/familyId，
+ * 删 refreshToken 映射 + family + DB revoke token + session。前端同步删 localStorage 项。
+ * 下次该账号需重新输密码登录（无法免密回来）。
  *
- * @param {object} request - Fastify request（取 device_id cookie）
- * @param {object} reply - Fastify reply
- * @param {string} uid - 目标账号 uid
+ * @param {object} _request - Fastify request（未用，保留签名对称）
+ * @param {object} reply - Fastify reply（清 sid_r cookie）
+ * @param {string} refreshToken - 前端持有的目标账号 refreshToken
  */
-export async function removeSavedAccount(request, reply, uid) {
-  const deviceId = ensureDeviceCookie(request, reply);
-  const entry = await getAccountEntry(deviceId, uid);
-  if (entry) {
-    // 彻底撤销记住我凭证（refreshToken 映射 + DB token + session + family）
-    await revokeRememberMe(entry.userId, entry.sessionId, entry.refreshToken);
-  }
-  await removeAccount(deviceId, reply, uid); // 删注册表项 + 刷 accounts cookie
-  // 清 sid_r cookie（path 必须与设置时一致；若当前浏览器持有的是别的账号的 sid_r，清也无害）
+export async function removeSavedAccount(_request, reply, refreshToken) {
+  await revokeRememberMe(refreshToken);
+  // 清 sid_r cookie（若当前浏览器持有的正是该账号的 sid_r）
   reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
 }

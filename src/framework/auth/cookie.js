@@ -12,8 +12,8 @@
  * - COOKIE_SID: 短期/长期会话 Cookie 名称（默认 "sid"）
  * - COOKIE_SID_R: 长期登录刷新令牌 Cookie 名称（默认 "sid_r"）
  * - SHORT_SESSION_TTL: 30分钟（不勾选"记住我"）
- * - LONG_SESSION_TTL: 30天（勾选"记住我"）
- * - REFRESH_TOKEN_TTL: 30天（sid_r 有效期）
+ * - LONG_SESSION_TTL: 1个月/30天（勾选"记住我"，sid cookie maxAge）
+ * - REFRESH_TOKEN_TTL: 半年/180天（sid_r cookie maxAge，remember 凭证有效期）
  *
  * @author Claude
  * @since 2026-07-13
@@ -26,11 +26,11 @@ const REFRESH_COOKIE_PATH = '/auth/v1/refresh-session';
 /** 短期登录: sid cookie maxAge (秒) */
 const SHORT_SESSION_TTL = 1800; // 30分钟
 
-/** 长期登录: sid cookie maxAge (秒) */
+/** 长期登录: sid cookie maxAge (秒) — 1 个月（30 天） */
 const LONG_SESSION_TTL = 2592000; // 30天
 
-/** 长期登录: sid_r cookie maxAge (秒) */
-const REFRESH_TOKEN_TTL = 2592000; // 30天
+/** 长期登录: sid_r cookie maxAge (秒) — 半年（180 天），remember 凭证有效期 */
+const REFRESH_TOKEN_TTL = 15552000; // 180天
 
 /** 旧 sid_r 轮转后保留"已轮转"标记的时长（秒），用于复用盗用检测；默认 7 天 */
 const ROTATED_RETENTION = parseInt(process.env.ROTATED_RETENTION) || 604800;

@@ -688,7 +688,7 @@ async function refreshSession({ cookies, reply, request }) {
 /**
  * 用指定 refreshToken 免密切换账号（抖音式）
  *
- * refreshToken 来自本机账号注册表（device-accounts.js 的 entry.refreshToken），
+ * refreshToken 来自前端 localStorage（多账号免切凭证，登录时 bind-session 响应返回），
  * 非 cookie（单 sid cookie 模型下浏览器只存当前账号的 sid_r）。
  * 复用 refreshSessionCore：验证 refreshToken + 轮转新 sid/sid_r。
  *
@@ -862,35 +862,36 @@ async function destroySession(params) {
  * 彻底撤销某账号的记住我凭证（"忘掉该账号"用）
  *
  * 与 destroySession 的软退出相反：删 refreshToken 映射 + family + rotated 标记 + DB revoke token +
- * 清 Redis session。配合 device-accounts 的 removeAccount（删注册表）+ 清 sid_r cookie，
- * 实现彻底忘记该账号（下次必须重新输密码）。
+ * 清 Redis session。前端 localStorage 持有 refreshToken（多账号凭证），移除账号时前端把
+ * 对应 refreshToken 发来，后端据此反查 sessionId/userId/familyId 全套撤销。
  *
- * @param {number} userId 用户内部 ID
- * @param {string} sessionId 注册表存储的 sessionId
- * @param {string} [refreshToken] 注册表存储的 refreshToken
- * @param {string} [familyId] 会话家族 ID（无则从 session 读，读不到则 family 残留待 TTL 过期）
+ * @param {string} refreshToken - 前端持有的目标账号 refreshToken
  */
-async function revokeRememberMe(userId, sessionId, refreshToken, familyId = null) {
+async function revokeRememberMe(refreshToken) {
+  if (!refreshToken) return;
   const SessionToken = getModel('SessionToken');
 
-  // 1. 删 refreshToken 映射 + family 集合 + 轮转标记
-  if (refreshToken) {
-    await refreshStore.delete(refreshToken);
-    if (userId != null) await userRefreshStore.zRem(String(userId), [refreshToken]);
-    await rotatedStore.delete(refreshToken);
-    // familyId 未知时从 session 读（若已失效则 family 集合残留，TTL 过期自动清理）
-    let fam = familyId;
-    if (!fam && sessionId) {
-      fam = (await sessionStore.get(sessionId))?.familyId || null;
-    }
-    if (fam) await familyStore.zRem(fam, [refreshToken]);
+  // 1. refreshToken → oldSessionId → session data（userId/familyId）
+  const oldSessionId = await refreshStore.get(refreshToken);
+  let userId = null;
+  let familyId = null;
+  if (oldSessionId) {
+    const sd = await sessionStore.get(oldSessionId);
+    userId = sd?.userId ?? null;
+    familyId = sd?.familyId ?? null;
   }
 
-  // 2. 删 Redis session + 清用户会话索引
-  if (sessionId) {
-    await sessionStore.delete(sessionId);
-    if (userId != null) await userSessionsStore.zRem(String(userId), [sessionId]);
-    const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
+  // 2. 删 refreshToken 映射 + family 集合 + 轮转标记
+  await refreshStore.delete(refreshToken);
+  if (userId != null) await userRefreshStore.zRem(String(userId), [refreshToken]);
+  await rotatedStore.delete(refreshToken);
+  if (familyId) await familyStore.zRem(familyId, [refreshToken]);
+
+  // 3. 删 Redis session + 清用户会话索引 + DB revoke token
+  if (oldSessionId) {
+    await sessionStore.delete(oldSessionId);
+    if (userId != null) await userSessionsStore.zRem(String(userId), [oldSessionId]);
+    const tokenHash = crypto.createHash('sha256').update(oldSessionId).digest('hex');
     await SessionToken.update({ revoked: true }, { where: { token: tokenHash } });
   }
 }
