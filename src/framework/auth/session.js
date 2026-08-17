@@ -416,6 +416,8 @@ async function getSession(params) {
   const parsed = verifyCookie(sidCookie);
   if (!parsed) {
     _debug('❌ sid Cookie 签名验证失败');
+    // 清失效 sid cookie，防下次请求携带坏 cookie 反复 401
+    if (reply) reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
     return null;
   }
 
@@ -453,7 +455,11 @@ async function getSession(params) {
     include: [{ model: User, as: 'user', required: true }]
   });
 
-  if (!token) return null;
+  if (!token) {
+    // DB 无有效 token（已 revoked/删除）→ 清 sid cookie 防带失效 sid
+    if (reply) reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+    return null;
+  }
 
   // TTL 判定：DB 不存 rememberMe，无法区分短/长期会话，按下方策略处理——
   //   超 LONG（30d）→ 真过期，revoke（无论是否记住我都已失效）
@@ -466,12 +472,18 @@ async function getSession(params) {
   if (Date.now() > longExpiresAt.getTime()) {
     _debug('❌ Session 已超过长期 TTL（创建于 %s），标记 revoked 并拒绝', token.createdAt.toISOString());
     await token.update({ revoked: true });
+    if (reply) reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
     return null;
   }
 
   if (Date.now() > shortExpiresAt.getTime()) {
     // 短期已过、长期未过：不复活、不 revoke，让前端走 sid_r 刷新（记住我）或重登（非记住我）
-    _debug('⏭️ Redis 未命中且超短期 TTL（创建于 %s），交由 sid_r 刷新恢复', token.createdAt.toISOString());
+    // 清 sid cookie（已失效），下次请求无 sid → 前端直接走 refresh-session（sid_r 仍在）
+    _debug(
+      '⏭️ Redis 未命中且超短期 TTL（创建于 %s），清 sid cookie 交由 sid_r 刷新恢复',
+      token.createdAt.toISOString()
+    );
+    if (reply) reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
     return null;
   }
 
