@@ -293,7 +293,8 @@ export async function switchAccount(request, reply, encUid) {
   // 用 refreshToken 走刷新轮转（复用 refreshSessionCore：验证 + 轮转新 sid/sid_r）
   const result = await switchSessionByRefreshToken(refreshToken, request, reply);
   if (!result) {
-    // refreshToken 失效（已轮转/被吊销/用户禁用）→ 清该 user cookie + 走密码登录
+    // 目标账号 refreshToken 失效（已轮转/被吊销/用户禁用）→ 清目标 user cookie
+    // （当前账号 sid/sid_r 仍有效，未切换，不清；前端删 localStorage 目标项 + 走密码登录）
     reply.clearCookie(cookieName, USER_COOKIE_OPTS);
     return { action: 'need_password' };
   }
