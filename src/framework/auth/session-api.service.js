@@ -9,10 +9,17 @@
  * @since 2026-08-16
  */
 import { verify } from '../jwt/index.js';
-import { createSession, updateRememberMe, switchSessionByRefreshToken } from './session.js';
+import { createSession, updateRememberMe, switchSessionByRefreshToken, revokeRememberMe } from './session.js';
 import { ensureDeviceCookie, getAccountEntry, removeAccount, recordAccount } from './device-accounts.js';
 import { getStore } from '../redis/index.js';
-import { signCookie, COOKIE_OPTIONS, SHORT_SESSION_TTL, LONG_SESSION_TTL, REFRESH_TOKEN_TTL } from './cookie.js';
+import {
+  signCookie,
+  COOKIE_OPTIONS,
+  COOKIE_SID_R,
+  SHORT_SESSION_TTL,
+  LONG_SESSION_TTL,
+  REFRESH_TOKEN_TTL
+} from './cookie.js';
 import { generateToken } from '../../app/oauth21/crypto/tokens.js';
 
 /** access_token Cookie 配置（JWT 模式，HttpOnly + sameSite lax） */
@@ -102,6 +109,7 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
     const deviceId = ensureDeviceCookie(request, reply);
     await recordAccount(deviceId, reply, {
       uid: sessionData.uid || String(sessionData.userId),
+      userId: sessionData.userId,
       username: sessionData.username,
       avatar: sessionData.avatar,
       appId: sessionData.appId,
@@ -239,6 +247,7 @@ export async function switchAccount(request, reply, uid) {
   // （否则下次切换用旧 refreshToken 会触发盗用检测吊销整个 family）
   await recordAccount(deviceId, reply, {
     uid,
+    userId: result.user.id,
     username: entry.username,
     avatar: entry.avatar,
     appId: entry.appId,
@@ -274,12 +283,23 @@ export async function switchAccount(request, reply, uid) {
 }
 
 /**
- * 从本机账号清单移除某账号（注册表 + accounts cookie 同步删除）
+ * 彻底忘记某账号（"移除账号"用，与"退出登录"的软退出相反）
+ *
+ * 撤销记住我凭证（refreshToken 映射 + family + DB token + session）+ 清 sid_r cookie +
+ * 删注册表项。下次该账号需重新输密码登录（无法免密回来）。
+ *
  * @param {object} request - Fastify request（取 device_id cookie）
  * @param {object} reply - Fastify reply
  * @param {string} uid - 目标账号 uid
  */
 export async function removeSavedAccount(request, reply, uid) {
   const deviceId = ensureDeviceCookie(request, reply);
-  await removeAccount(deviceId, reply, uid);
+  const entry = await getAccountEntry(deviceId, uid);
+  if (entry) {
+    // 彻底撤销记住我凭证（refreshToken 映射 + DB token + session + family）
+    await revokeRememberMe(entry.userId, entry.sessionId, entry.refreshToken);
+  }
+  await removeAccount(deviceId, reply, uid); // 删注册表项 + 刷 accounts cookie
+  // 清 sid_r cookie（path 必须与设置时一致；若当前浏览器持有的是别的账号的 sid_r，清也无害）
+  reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
 }

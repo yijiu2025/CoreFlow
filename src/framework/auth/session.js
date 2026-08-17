@@ -814,40 +814,85 @@ async function updateRememberMe(userId, sessionId, rememberMe) {
 async function destroySession(params) {
   const { sessionId, userId, appId, ip, reply } = params;
 
-  // 1. 先读 session 取 familyId（删 Redis 前读取），用于清理该 session 的 refreshToken
+  // 1. 先读 session 取 familyId + rememberMe（删 Redis 前读取）
   let familyId = null;
+  let rememberMe = false;
   if (sessionId) {
     const old = await sessionStore.get(sessionId);
     familyId = old?.familyId || null;
+    rememberMe = !!old?.rememberMe;
     await sessionStore.delete(sessionId);
     // 清用户会话索引
     if (userId != null) await userSessionsStore.zRem(String(userId), [sessionId]);
   }
 
-  // 2. 删除该 session 对应的 refreshToken（取消长期登录能力）
-  if (userId != null && sessionId) {
-    await deleteRefreshTokensForSession(userId, sessionId, familyId);
+  if (rememberMe) {
+    // 软退出（抖音式"保存登录信息"）：仅结束当前 sid 会话，保留 sid_r + refreshToken 映射 + DB token，
+    // 用户下次凭 sid_r 静默刷新免密回来。非 rememberMe 走下方硬撤销。
+    // 注意：DB token 保留 → 旧 sid 值在 SHORT TTL(30min) 内理论上可经 DB 降级恢复，
+    // 但 sid 为 HttpOnly + 30min 短命，风险可接受；换取抗 Redis 重启的免密能力。
+  } else {
+    // 非记住我 / 短期会话：彻底撤销 refreshToken + DB token（无 sid_r 兜底）
+    if (userId != null && sessionId) {
+      await deleteRefreshTokensForSession(userId, sessionId, familyId);
+    }
+    if (sessionId) {
+      const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
+      const SessionToken = getModel('SessionToken');
+      await SessionToken.update({ revoked: true }, { where: { token: tokenHash } });
+    }
+    reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
   }
 
-  // 3. DB 标记 revoked
-  if (sessionId) {
-    const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
-    const SessionToken = getModel('SessionToken');
-    await SessionToken.update({ revoked: true }, { where: { token: tokenHash } });
-  }
-
-  // 4. 记录日志
+  // 2. 记录日志
   const SessionLog = getModel('SessionLog');
   await SessionLog.create({
     user_id: userId,
     event: 'LOGOUT',
     app_id: appId,
-    ip
+    ip,
+    details: { soft: rememberMe }
   });
 
-  // 5. 清除 Cookie（sid_r path 必须与设置时一致才能清掉）
+  // 3. sid cookie 总是清（当前会话结束）；rememberMe 时保留 sid_r
   reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
-  reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
+}
+
+/**
+ * 彻底撤销某账号的记住我凭证（"忘掉该账号"用）
+ *
+ * 与 destroySession 的软退出相反：删 refreshToken 映射 + family + rotated 标记 + DB revoke token +
+ * 清 Redis session。配合 device-accounts 的 removeAccount（删注册表）+ 清 sid_r cookie，
+ * 实现彻底忘记该账号（下次必须重新输密码）。
+ *
+ * @param {number} userId 用户内部 ID
+ * @param {string} sessionId 注册表存储的 sessionId
+ * @param {string} [refreshToken] 注册表存储的 refreshToken
+ * @param {string} [familyId] 会话家族 ID（无则从 session 读，读不到则 family 残留待 TTL 过期）
+ */
+async function revokeRememberMe(userId, sessionId, refreshToken, familyId = null) {
+  const SessionToken = getModel('SessionToken');
+
+  // 1. 删 refreshToken 映射 + family 集合 + 轮转标记
+  if (refreshToken) {
+    await refreshStore.delete(refreshToken);
+    if (userId != null) await userRefreshStore.zRem(String(userId), [refreshToken]);
+    await rotatedStore.delete(refreshToken);
+    // familyId 未知时从 session 读（若已失效则 family 集合残留，TTL 过期自动清理）
+    let fam = familyId;
+    if (!fam && sessionId) {
+      fam = (await sessionStore.get(sessionId))?.familyId || null;
+    }
+    if (fam) await familyStore.zRem(fam, [refreshToken]);
+  }
+
+  // 2. 删 Redis session + 清用户会话索引
+  if (sessionId) {
+    await sessionStore.delete(sessionId);
+    if (userId != null) await userSessionsStore.zRem(String(userId), [sessionId]);
+    const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
+    await SessionToken.update({ revoked: true }, { where: { token: tokenHash } });
+  }
 }
 
 /**
@@ -994,6 +1039,7 @@ export {
   refreshSessionCore,
   switchSessionByRefreshToken,
   destroySession,
+  revokeRememberMe,
   deleteRefreshTokensForSession,
   updateRememberMe,
   kickUser,

@@ -115,6 +115,7 @@ async function writeRegistry(deviceId, data) {
 export async function recordAccount(deviceId, reply, acct) {
   const data = await readRegistry(deviceId);
   data.accounts[acct.uid] = {
+    userId: acct.userId || null,
     uid: acct.uid,
     username: acct.username,
     avatar: acct.avatar,
