@@ -34,11 +34,11 @@ export const authApi = {
   /** 绑定 Session（iframe 登录场景，用 session_token 换取 sid/sid_r Cookie） */
   bindSession: (sessionToken: string) => service.post('/auth/v1/bind-session', { session_token: sessionToken }),
 
-  // 免密切换账号（前端 localStorage 持有 refreshToken，发后端验证轮转）
-  switchAccount: (refreshToken: string) => service.post('/auth/v1/switch-account', { refreshToken }),
+  // 免密切换账号（发 encUid，后端解密读 HttpOnly cookie 的 refreshToken）
+  switchAccount: (encUid: string) => service.post('/auth/v1/switch-account', { encUid }),
 
-  // 彻底撤销某账号记住我凭证（"忘掉该账号"）
-  revokeSavedAccount: (refreshToken: string) => service.post('/auth/v1/saved-accounts/revoke', { refreshToken }),
+  // 彻底撤销某账号记住我凭证（"忘掉该账号"，发 encUid）
+  revokeSavedAccount: (encUid: string) => service.post('/auth/v1/saved-accounts/revoke', { encUid }),
 
   /** 绑定 Token（JWT 模式，用 access_token 换取 Cookie） */
   bindToken: (token: string) => service.post('/auth/v1/bind-token', { token }),

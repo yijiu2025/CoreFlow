@@ -26,11 +26,10 @@ export default async function (fastify) {
   /**
    * POST /auth/v1/switch-account
    *
-   * body: { refreshToken }
+   * body: { encUid }（前端 localStorage 的账号 key，AES(uid) 密文）
    * 返回：
-   * - 成功：{ code:200, data: { action:'switched', user, refreshToken } }
-   *   refreshToken 为轮转后的新值，前端必须用它替换 localStorage 旧值
-   * - 需密码：{ code:200, data: { action:'need_password' } }（refreshToken 失效，前端删 localStorage + 走密码登录）
+   * - 成功：{ code:200, data: { action:'switched', user } }
+   * - 需密码：{ code:200, data: { action:'need_password' } }（凭证失效，前端删 localStorage + 走密码登录）
    */
   registerSecureRoute(fastify, {
     name: 'switchAccount',
@@ -39,19 +38,16 @@ export default async function (fastify) {
     url: '/switch-account',
     requireLogin: false,
     handler: async (request, reply) => {
-      const { refreshToken } = request.body || {};
-      if (!refreshToken) {
-        return reply.code(400).send({ code: 400, message: '缺少 refreshToken', data: null });
+      const { encUid } = request.body || {};
+      if (!encUid) {
+        return reply.code(400).send({ code: 400, message: '缺少 encUid', data: null });
       }
 
-      const result = await switchAccount(request, reply, refreshToken);
+      const result = await switchAccount(request, reply, encUid);
       if (result.action === 'switched') {
-        return reply.result.success('切换成功', {
-          user: result.user,
-          refreshToken: result.refreshToken
-        });
+        return reply.result.success('切换成功', { user: result.user });
       }
-      // need_password：refreshToken 失效，前端删 localStorage + 走密码登录
+      // need_password：凭证失效，前端删 localStorage + 走密码登录
       return reply.send({
         code: 200,
         message: '凭证已失效，请重新登录',
@@ -62,7 +58,7 @@ export default async function (fastify) {
 
   /**
    * POST /auth/v1/saved-accounts/revoke — 彻底撤销某账号记住我凭证
-   * body: { refreshToken }
+   * body: { encUid }
    */
   registerSecureRoute(fastify, {
     name: 'revokeSavedAccount',
@@ -71,11 +67,11 @@ export default async function (fastify) {
     url: '/saved-accounts/revoke',
     requireLogin: false,
     handler: async (request, reply) => {
-      const { refreshToken } = request.body || {};
-      if (!refreshToken) {
-        return reply.code(400).send({ code: 400, message: '缺少 refreshToken', data: null });
+      const { encUid } = request.body || {};
+      if (!encUid) {
+        return reply.code(400).send({ code: 400, message: '缺少 encUid', data: null });
       }
-      await removeSavedAccount(request, reply, refreshToken);
+      await removeSavedAccount(request, reply, encUid);
       return reply.result.success('已撤销');
     }
   });

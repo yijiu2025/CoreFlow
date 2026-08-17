@@ -21,6 +21,7 @@ import {
   SHORT_SESSION_TTL,
   LONG_SESSION_TTL,
   REFRESH_TOKEN_TTL,
+  USER_COOKIE_TTL,
   ROTATED_RETENTION
 } from './cookie.js';
 import { loadUserPermissions } from './permission-loader.js';
@@ -319,13 +320,13 @@ async function createSession(params) {
     }
 
     // 写入新的 refresh token
-    await refreshStore.set(refreshToken, sessionId, REFRESH_TOKEN_TTL);
+    await refreshStore.set(refreshToken, sessionId, USER_COOKIE_TTL);
     // 记录到用户的 refresh 索引（score = 当前时间戳）
     await userRefreshStore.zAdd(String(userId), Date.now(), refreshToken);
-    await userRefreshStore.expire(String(userId), REFRESH_TOKEN_TTL);
+    await userRefreshStore.expire(String(userId), USER_COOKIE_TTL);
     // 记录到 family 集合（供 sid_r 盗用检测后只吊销同 family）
     await familyStore.zAdd(familyId, Date.now(), refreshToken);
-    await familyStore.expire(familyId, REFRESH_TOKEN_TTL);
+    await familyStore.expire(familyId, USER_COOKIE_TTL);
   }
 
   // 5. DB 写入
@@ -615,11 +616,11 @@ async function refreshSessionCore(refreshToken, request, reply) {
 
   // 8. 新 refreshToken → newSessionId（滑动 30d）+ family/会话索引
   await sessionStore.set(newSessionId, sessionData, sessionTtl);
-  await refreshStore.set(newRefreshToken, newSessionId, REFRESH_TOKEN_TTL);
+  await refreshStore.set(newRefreshToken, newSessionId, USER_COOKIE_TTL);
   await userRefreshStore.zAdd(String(user.id), Date.now(), newRefreshToken);
-  await userRefreshStore.expire(String(user.id), REFRESH_TOKEN_TTL);
+  await userRefreshStore.expire(String(user.id), USER_COOKIE_TTL);
   await familyStore.zAdd(familyId, Date.now(), newRefreshToken);
-  await familyStore.expire(familyId, REFRESH_TOKEN_TTL);
+  await familyStore.expire(familyId, USER_COOKIE_TTL);
   // 新 session 入用户会话索引（供后续 kick 定位）
   await userSessionsStore.zAdd(String(user.id), Date.now(), newSessionId);
   await userSessionsStore.expire(String(user.id), LONG_SESSION_TTL);
@@ -788,11 +789,11 @@ async function updateRememberMe(userId, sessionId, rememberMe) {
     await sessionStore.set(sessionId, sessionData, LONG_SESSION_TTL);
     // 新增长期 refresh token（入 family）
     const refreshToken = crypto.randomBytes(32).toString('hex');
-    await refreshStore.set(refreshToken, sessionId, REFRESH_TOKEN_TTL);
+    await refreshStore.set(refreshToken, sessionId, USER_COOKIE_TTL);
     await userRefreshStore.zAdd(String(userId), Date.now(), refreshToken);
-    await userRefreshStore.expire(String(userId), REFRESH_TOKEN_TTL);
+    await userRefreshStore.expire(String(userId), USER_COOKIE_TTL);
     await familyStore.zAdd(familyId, Date.now(), refreshToken);
-    await familyStore.expire(familyId, REFRESH_TOKEN_TTL);
+    await familyStore.expire(familyId, USER_COOKIE_TTL);
     return { refreshToken };
   }
 
@@ -814,48 +815,26 @@ async function updateRememberMe(userId, sessionId, rememberMe) {
 async function destroySession(params) {
   const { sessionId, userId, appId, ip, reply } = params;
 
-  // 1. 先读 session 取 familyId + rememberMe（删 Redis 前读取）
-  let familyId = null;
-  let rememberMe = false;
+  // 1. 删 Redis session + 用户会话索引（当前会话立即失效）
   if (sessionId) {
-    const old = await sessionStore.get(sessionId);
-    familyId = old?.familyId || null;
-    rememberMe = !!old?.rememberMe;
     await sessionStore.delete(sessionId);
-    // 清用户会话索引
     if (userId != null) await userSessionsStore.zRem(String(userId), [sessionId]);
   }
 
-  if (rememberMe) {
-    // 软退出（抖音式"保存登录信息"）：仅结束当前 sid 会话，保留 sid_r + refreshToken 映射 + DB token，
-    // 用户下次凭 sid_r 静默刷新免密回来。非 rememberMe 走下方硬撤销。
-    // 注意：DB token 保留 → 旧 sid 值在 SHORT TTL(30min) 内理论上可经 DB 降级恢复，
-    // 但 sid 为 HttpOnly + 30min 短命，风险可接受；换取抗 Redis 重启的免密能力。
-  } else {
-    // 非记住我 / 短期会话：彻底撤销 refreshToken + DB token（无 sid_r 兜底）
-    if (userId != null && sessionId) {
-      await deleteRefreshTokensForSession(userId, sessionId, familyId);
-    }
-    if (sessionId) {
-      const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
-      const SessionToken = getModel('SessionToken');
-      await SessionToken.update({ revoked: true }, { where: { token: tokenHash } });
-    }
-    reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
-  }
+  // 2. 清 sid + sid_r cookie（彻底结束当前登录态，sid_r 没了 → 前端 401 无法自动 refresh-session 恢复）
+  //    注意：不删 refreshToken 映射、不 revoke DB token——保留供前端 localStorage 凭证
+  //    主动调 /switch-account 免密切换（refreshToken 是 localStorage 持有的，非 cookie）
+  reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+  reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
 
-  // 2. 记录日志
+  // 3. 记录日志
   const SessionLog = getModel('SessionLog');
   await SessionLog.create({
     user_id: userId,
     event: 'LOGOUT',
     app_id: appId,
-    ip,
-    details: { soft: rememberMe }
+    ip
   });
-
-  // 3. sid cookie 总是清（当前会话结束）；rememberMe 时保留 sid_r
-  reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
 }
 
 /**
