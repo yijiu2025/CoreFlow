@@ -6,7 +6,7 @@
 
       <!-- Modal Content -->
       <div
-        class="relative w-[856px] max-h-[90vh] glass-dark rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-300"
+        class="relative w-[856px] glass-dark rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-300"
       >
         <!-- Close Button -->
         <button
@@ -52,7 +52,7 @@
         </div>
 
         <!-- iframe 登录区（登录新账号 / need_password 输密码） -->
-        <div class="flex-1 w-full relative min-h-[420px]">
+        <div class="w-full relative h-[484px]">
           <iframe :src="loginUrl" class="w-full h-full border-none" allow="payment"></iframe>
 
           <!-- Loading State Overlay -->
