@@ -62,7 +62,11 @@ export default async function (fastify) {
       if (!result.ok) {
         return reply.code(result.statusCode).send(result.body);
       }
-      return reply.result.success('Session 已绑定', { user: result.user });
+      return reply.result.success('Session 已绑定', {
+        user: result.user,
+        // refreshToken 给前端存 localStorage（多账号免切凭证；非 rememberMe 为 null）
+        refreshToken: result.refreshToken || null
+      });
     }
   });
 

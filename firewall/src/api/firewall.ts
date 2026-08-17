@@ -241,6 +241,13 @@ export const firewallApi = {
   bindSession: (sessionToken: string): Promise<any> =>
     apiClient.post('/auth/v1/bind-session', { session_token: sessionToken }),
 
+  // 免密切换账号（前端 localStorage 持有 refreshToken，发后端验证轮转）
+  switchAccount: (refreshToken: string): Promise<any> => apiClient.post('/auth/v1/switch-account', { refreshToken }),
+
+  // 彻底撤销某账号记住我凭证（"忘掉该账号"）
+  revokeSavedAccount: (refreshToken: string): Promise<any> =>
+    apiClient.post('/auth/v1/saved-accounts/revoke', { refreshToken }),
+
   // 清除认证 Cookie（退出登录）
   clearCookie: (): Promise<any> => apiClient.post('/auth/v1/clear-cookie'),
 

@@ -21,6 +21,88 @@ export const useAuthStore = defineStore('auth', () => {
   /** 控制登录弹窗显示（API 层 401 时自动设为 true） */
   const showLoginModal = ref(false);
 
+  /** 已登录账号清单（抖音式多账号免切）：{[uid]: {refreshToken, username, avatar, rememberMe}} */
+  const savedAccounts = ref<
+    Record<string, { refreshToken: string; username: string; avatar: string; rememberMe: boolean }>
+  >({});
+
+  /** 从 localStorage 恢复已登录账号清单 */
+  function loadSavedAccounts() {
+    const saved = cache.get<any>('saved_accounts');
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      savedAccounts.value = saved;
+    }
+  }
+
+  /** 持久化已登录账号清单到 localStorage */
+  function persistSavedAccounts() {
+    cache.set('saved_accounts', savedAccounts.value);
+  }
+
+  /**
+   * 登录/绑定成功后记录账号到清单（供下次免切）
+   * @param user - {id, uid?, username, name?, avatar}
+   * @param refreshToken - 记住我凭证（非记住我为 null，不记录）
+   */
+  function addSavedAccount(user: any, refreshToken: string | null | undefined) {
+    if (!refreshToken || !user) return;
+    const uid = user.uid || String(user.id);
+    if (!uid) return;
+    savedAccounts.value[uid] = {
+      refreshToken,
+      username: user.username || user.name || '用户',
+      avatar: user.avatar || '',
+      rememberMe: true
+    };
+    persistSavedAccounts();
+  }
+
+  /**
+   * 免密切换到指定账号
+   * @returns 成功返回 {ok:true, user}；失败（refreshToken 失效）返回 {ok:false}
+   */
+  async function switchAccount(refreshToken: string) {
+    try {
+      const res: any = await firewallApi.switchAccount(refreshToken);
+      // 后端 switched 返回 {user, refreshToken(新)}；need_password 无 user
+      if (res?.user && res?.refreshToken) {
+        const uid = res.user.uid || String(res.user.id);
+        savedAccounts.value[uid] = {
+          refreshToken: res.refreshToken,
+          username: res.user.username || res.user.name || '用户',
+          avatar: res.user.avatar || '',
+          rememberMe: true
+        };
+        persistSavedAccounts();
+        setLoggedIn(true, res.user);
+        await fetchPermissions();
+        return { ok: true, user: res.user };
+      }
+      // need_password：refreshToken 失效，按 rt 反查并移除该项
+      for (const [uid, acct] of Object.entries(savedAccounts.value)) {
+        if (acct.refreshToken === refreshToken) delete savedAccounts.value[uid];
+      }
+      persistSavedAccounts();
+      return { ok: false };
+    } catch (err) {
+      console.warn('🔒 切换账号失败:', err);
+      return { ok: false };
+    }
+  }
+
+  /** 彻底撤销某账号记住我凭证（"忘掉该账号"） */
+  async function revokeSavedAccount(refreshToken: string) {
+    try {
+      await firewallApi.revokeSavedAccount(refreshToken);
+    } catch (err) {
+      console.warn('撤销账号凭证失败:', err);
+    }
+    for (const [uid, acct] of Object.entries(savedAccounts.value)) {
+      if (acct.refreshToken === refreshToken) delete savedAccounts.value[uid];
+    }
+    persistSavedAccounts();
+  }
+
   /** 是否为管理员（GLOBAL 或 firewall 超管） */
   const isAdmin = computed(
     () => roles.value.includes('admin') || roles.value.includes('superadmin') || roles.value.includes('fw_admin')
@@ -203,6 +285,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 初始化时恢复状态
   restore();
+  loadSavedAccounts();
 
   return {
     isLoggedIn,
@@ -213,6 +296,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     roleName,
     showLoginModal,
+    savedAccounts,
     setLoggedIn,
     checkSession,
     fetchPermissions,
@@ -220,6 +304,9 @@ export const useAuthStore = defineStore('auth', () => {
     hasPermission,
     hasRole,
     updateAvatar,
+    addSavedAccount,
+    switchAccount,
+    revokeSavedAccount,
     logout
   };
 });
