@@ -9,28 +9,11 @@
  * @since 2026-08-16
  */
 import { verify } from '../jwt/index.js';
-import { createSession, updateRememberMe } from './session.js';
-import {
-  ensureDeviceCookie,
-  getAccountEntry,
-  getLiveSession,
-  removeAccount,
-  recordAccount
-} from './device-accounts.js';
+import { createSession, updateRememberMe, switchSessionByRefreshToken } from './session.js';
+import { ensureDeviceCookie, getAccountEntry, removeAccount, recordAccount } from './device-accounts.js';
 import { getStore } from '../redis/index.js';
-import {
-  signCookie,
-  COOKIE_OPTIONS,
-  COOKIE_SID,
-  COOKIE_SID_R,
-  SHORT_SESSION_TTL,
-  LONG_SESSION_TTL,
-  REFRESH_TOKEN_TTL
-} from './cookie.js';
+import { signCookie, COOKIE_OPTIONS, SHORT_SESSION_TTL, LONG_SESSION_TTL, REFRESH_TOKEN_TTL } from './cookie.js';
 import { generateToken } from '../../app/oauth21/crypto/tokens.js';
-
-/** 临时 session_token 存储（iframe SSO 父窗口 bind-session 用） */
-const sessionTokenStore = getStore('session_token');
 
 /** access_token Cookie 配置（JWT 模式，HttpOnly + sameSite lax） */
 const ACCESS_TOKEN_COOKIE_OPTS = maxAge => ({
@@ -216,10 +199,16 @@ export async function updateRememberMeCookies(userId, sessionId, accessCount, re
 /**
  * 免密切换到本机已登录的某账号（抖音式）
  *
+ * 仅"记住我"账号可免切：用注册表存的 refreshToken 走 refreshSessionCore 验证+轮转，
+ * 下发新 sid/sid_r。非记住我（无 refreshToken）→ 回退密码登录（带用户名/头像预填）。
+ *
+ * 轮转后旧 refreshToken 失效，必须用返回的新值更新注册表，否则下次切换触发盗用检测。
+ *
  * 流程：
  * 1. 注册表无此账号 → 需密码登录
- * 2. session 已失效 → 从清单移除 + 回退密码（带存储的用户名/头像预填）
- * 3. 免密切换：重发 sid 指向目标 session（+ sid_r 若长期登录）+ 生成 session_token 供 iframe SSO
+ * 2. 非记住我 / 无 refreshToken → 需密码（预填用户名/头像）
+ * 3. refreshToken 验证失败（已轮转/被吊销/用户禁用）→ 移除账号 + 需密码
+ * 4. 验证成功 → 下发新 sid/sid_r + 更新注册表（新 sessionId/refreshToken）+ 生成 session_token 供 iframe SSO
  *
  * @param {object} request - Fastify request（取 device_id cookie / ip / user-agent）
  * @param {object} reply - Fastify reply（设 cookie）
@@ -233,59 +222,55 @@ export async function switchAccount(request, reply, uid) {
     return { action: 'need_password', uid };
   }
 
-  const sd = await getLiveSession(entry);
-  if (!sd) {
-    // session 已失效：从清单移除并回退密码（带存储的用户名/头像预填）
+  // 非记住我 / 无 refreshToken → 不能免密，回退密码（带预填）
+  if (!entry.rememberMe || !entry.refreshToken) {
+    return { action: 'need_password', uid, username: entry.username, avatar: entry.avatar };
+  }
+
+  // 用 refreshToken 走刷新轮转（复用 refreshSessionCore：验证 + 轮转新 sid/sid_r）
+  const result = await switchSessionByRefreshToken(entry.refreshToken, request, reply);
+  if (!result) {
+    // refreshToken 失效（revoked/过期/被盗用/用户禁用）→ 移除账号 + 回退密码
     await removeAccount(deviceId, reply, uid);
     return { action: 'need_password', uid, username: entry.username, avatar: entry.avatar };
   }
 
-  // 免密切换：重发 sid 指向目标 session（+ sid_r 若长期登录）
-  const ttl = entry.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
-  reply.setCookie(COOKIE_SID, signCookie(entry.sessionId, 0), {
-    ...COOKIE_OPTIONS.SID,
-    maxAge: ttl
+  // 轮转后旧 refreshToken 已标 rotated 失效，更新注册表为新 sessionId/refreshToken
+  // （否则下次切换用旧 refreshToken 会触发盗用检测吊销整个 family）
+  await recordAccount(deviceId, reply, {
+    uid,
+    username: entry.username,
+    avatar: entry.avatar,
+    appId: entry.appId,
+    sessionId: result.sessionId,
+    refreshToken: result.refreshToken,
+    rememberMe: true,
+    mode: 'session'
   });
-  if (entry.rememberMe && entry.refreshToken) {
-    reply.setCookie(COOKIE_SID_R, signCookie(entry.refreshToken, 0), {
-      ...COOKIE_OPTIONS.SID_R,
-      maxAge: REFRESH_TOKEN_TTL
-    });
-  }
 
-  // 生成 session_token 供 iframe SSO 父窗口 /auth/v1/bind-session 换取 sid
+  // 生成 session_token 供 iframe SSO 父窗口 /auth/v1/bind-session 换取 sid（跨子域场景）
   const sessionToken = generateToken(32);
+  const sessionTokenStore = getStore('session_token');
   await sessionTokenStore.set(
     sessionToken,
     {
-      userId: sd.userId,
-      uid: sd.uid,
-      username: sd.username,
-      email: sd.email,
-      avatar: sd.avatar,
-      status: sd.status,
-      appId: sd.appId,
+      userId: result.user.id,
+      uid: result.user.uid,
+      username: result.user.username,
+      email: result.user.email,
+      avatar: result.user.avatar,
+      status: 1,
+      appId: entry.appId,
       ip: request.ip,
-      deviceId: sd.deviceId,
-      deviceType: sd.deviceType,
+      deviceId: entry.deviceId,
+      deviceType: 'browser',
       userAgent: request.headers['user-agent'] || '',
-      rememberMe: !!entry.rememberMe
+      rememberMe: true
     },
     300
   );
 
-  return {
-    action: 'switched',
-    user: {
-      id: sd.userId,
-      uid: sd.uid,
-      username: sd.username,
-      name: sd.username,
-      email: sd.email,
-      avatar: sd.avatar
-    },
-    session_token: sessionToken
-  };
+  return { action: 'switched', user: result.user, session_token: sessionToken };
 }
 
 /**

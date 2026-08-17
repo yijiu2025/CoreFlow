@@ -511,25 +511,22 @@ async function getSession(params) {
 }
 
 /**
- * 刷新会话 (sid 过期时用 sid_r 自动续期)
- * @param {object} params
- * @param {object} params.cookies 请求的 cookies
- * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
- * @returns {object|null} 新的会话数据或 null
+ * 刷新会话核心：用 refreshToken 验证 + 轮转新 sid/sid_r
+ *
+ * 供 refreshSession（sid 过期自动续期）与 switchSessionByRefreshToken（账号免密切换）复用。
+ * refreshToken 来源不同（cookie / 注册表），核心一致：盗用检测 → DB 验证 →
+ * 轮转新 session + 新 refreshToken → 下发新 sid/sid_r cookie。
+ *
+ * 失败路径不清 cookie（由调用方决定：自动刷新清，切换不清）。
+ *
+ * @param {string} refreshToken - 原始 refreshToken
+ * @param {import('fastify').FastifyRequest} [request]
+ * @param {import('fastify').FastifyReply} reply
+ * @returns {Promise<{sessionData: object, newSessionId: string, newRefreshToken: string} | null>}
+ *   null=refreshToken 无效/被盗用/用户禁用
  */
-async function refreshSession(params) {
-  const { cookies, reply, request } = params;
-
-  // 1. 解析 sid_r cookie
-  const sidRCookie = cookies[COOKIE_SID_R];
-  if (!sidRCookie) return null;
-
-  const parsed = verifyCookie(sidRCookie);
-  if (!parsed) return null;
-
-  const refreshToken = parsed.sessionId; // sid_r cookie 中存储的 payload 是 refreshToken
-
-  // 2. 盗用检测：该 refreshToken 是否已被轮转（旧 sid_r 再用 = 盗用）
+async function refreshSessionCore(refreshToken, request, reply) {
+  // 1. 盗用检测：该 refreshToken 是否已被轮转（旧 sid_r 再用 = 盗用）
   const rotated = await rotatedStore.get(refreshToken);
   if (rotated) {
     request?.log?.warn(
@@ -537,60 +534,52 @@ async function refreshSession(params) {
       '🚨 [Session] sid_r 复用盗用，吊销同 family'
     );
     await revokeFamily(rotated.familyId, rotated.userId);
-    reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
-    reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
-    return null; // 强制重新登录
+    return null;
   }
 
-  // 3. Redis 查询 refreshToken 对应的旧 sessionId
+  // 2. Redis 查询 refreshToken 对应的旧 sessionId
   const oldSessionId = await refreshStore.get(refreshToken);
 
-  // 4. DB 查询会话记录（createSession 存储的是 sha256(sessionId)）
+  // 3. DB 查询会话记录（createSession 存储的是 sha256(sessionId)）
   const SessionToken = getModel('SessionToken');
   let record = null;
 
   if (oldSessionId) {
     // 优先用 Redis 中的 oldSessionId 精确查找
     const oldHash = crypto.createHash('sha256').update(oldSessionId).digest('hex');
-    record = await SessionToken.findOne({
-      where: { token: oldHash, revoked: false }
-    });
+    record = await SessionToken.findOne({ where: { token: oldHash, revoked: false } });
   }
 
   // Redis 未命中时，降级用 refreshToken 哈希查找（兼容旧数据）
   if (!record) {
     const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    record = await SessionToken.findOne({
-      where: { token: refreshTokenHash, revoked: false }
-    });
+    record = await SessionToken.findOne({ where: { token: refreshTokenHash, revoked: false } });
   }
 
   if (!record) return null;
 
-  // 5. 加载用户信息和权限
+  // 4. 加载用户信息和权限
   const User = getModel('User');
   const user = await User.findByPk(record.user_id);
   if (!user) return null;
 
   const { roles, permissions } = await loadUserPermissions(user.id, record.app_id);
 
-  // 6. 取 familyId（优先旧 Redis session，否则新建孤儿 family）
+  // 5. 取 familyId（优先旧 Redis session，否则新建孤儿 family）
   let familyId = null;
   if (oldSessionId) {
     familyId = (await sessionStore.get(oldSessionId))?.familyId;
   }
   if (!familyId) familyId = crypto.randomBytes(16).toString('hex');
 
-  // 6.1 用户已禁用：直接吊销整个 family，拒绝刷新（防止禁用后靠 sid_r 续期 30 天）
+  // 5.1 用户已禁用：吊销整个 family，拒绝刷新（防止禁用后靠 sid_r 续期 30 天）
   if (user.status === 0) {
     _debug('🚫 [Session] 用户已禁用，拒绝刷新并吊销 family: userId=%s', user.id);
     await revokeFamily(familyId, user.id);
-    reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
-    reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
     return null;
   }
 
-  // 7. 每次刷新轮转 sid_r：生成新 sessionId + 新 refreshToken
+  // 6. 每次刷新轮转 sid_r：生成新 sessionId + 新 refreshToken
   const newSessionId = crypto.randomBytes(32).toString('hex');
   const newRefreshToken = crypto.randomBytes(32).toString('hex');
   const sessionTtl = LONG_SESSION_TTL;
@@ -614,7 +603,7 @@ async function refreshSession(params) {
     rememberMe: true
   };
 
-  // 8. 失效旧 sid_r：标记已轮转（供盗用检测）+ 删活跃映射 + 删旧 session + 清索引/family
+  // 7. 失效旧 sid_r：标记已轮转（供盗用检测）+ 删活跃映射 + 删旧 session + 清索引/family
   await rotatedStore.set(refreshToken, { familyId, userId: user.id }, ROTATED_RETENTION);
   await refreshStore.delete(refreshToken);
   await userRefreshStore.zRem(String(user.id), [refreshToken]);
@@ -624,7 +613,7 @@ async function refreshSession(params) {
     await userSessionsStore.zRem(String(user.id), [oldSessionId]); // 清旧 sid 索引
   }
 
-  // 9. 新 refreshToken → newSessionId（滑动 30d）+ family/会话索引
+  // 8. 新 refreshToken → newSessionId（滑动 30d）+ family/会话索引
   await sessionStore.set(newSessionId, sessionData, sessionTtl);
   await refreshStore.set(newRefreshToken, newSessionId, REFRESH_TOKEN_TTL);
   await userRefreshStore.zAdd(String(user.id), Date.now(), newRefreshToken);
@@ -635,11 +624,11 @@ async function refreshSession(params) {
   await userSessionsStore.zAdd(String(user.id), Date.now(), newSessionId);
   await userSessionsStore.expire(String(user.id), LONG_SESSION_TTL);
 
-  // 10. DB 更新 token 哈希
+  // 9. DB 更新 token 哈希
   const newTokenHash = crypto.createHash('sha256').update(newSessionId).digest('hex');
   await record.update({ token: newTokenHash, last_active: new Date() });
 
-  // 11. 记录刷新日志（关联用户，操作留痕）
+  // 10. 记录刷新日志（关联用户，操作留痕）
   const SessionLog = getModel('SessionLog');
   await SessionLog.create({
     user_id: record.user_id,
@@ -655,7 +644,7 @@ async function refreshSession(params) {
     }
   });
 
-  // 12. 下发新 sid + 新 sid_r（每次轮转）
+  // 11. 下发新 sid + 新 sid_r（每次轮转）
   reply.setCookie(COOKIE_SID, signCookie(newSessionId, 0), {
     ...COOKIE_OPTIONS.SID,
     maxAge: sessionTtl
@@ -665,7 +654,69 @@ async function refreshSession(params) {
     maxAge: REFRESH_TOKEN_TTL
   });
 
-  return { ...sessionData, sessionId: newSessionId };
+  return { sessionData, newSessionId, newRefreshToken };
+}
+
+/**
+ * 刷新会话 (sid 过期时用 sid_r 自动续期)
+ * @param {object} params
+ * @param {object} params.cookies 请求的 cookies
+ * @param {import('fastify').FastifyReply} params.reply Fastify Reply 对象
+ * @param {import('fastify').FastifyRequest} [params.request]
+ * @returns {Promise<object|null>} 新的会话数据或 null
+ */
+async function refreshSession({ cookies, reply, request }) {
+  // 1. 解析 sid_r cookie
+  const sidRCookie = cookies[COOKIE_SID_R];
+  if (!sidRCookie) return null;
+
+  const parsed = verifyCookie(sidRCookie);
+  if (!parsed) return null;
+
+  const refreshToken = parsed.sessionId; // sid_r cookie 中存储的 payload 是 refreshToken
+
+  const result = await refreshSessionCore(refreshToken, request, reply);
+  if (!result) {
+    // 刷新失败：清 sid/sid_r cookie 强制重新登录
+    reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+    reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
+    return null;
+  }
+  return { ...result.sessionData, sessionId: result.newSessionId };
+}
+
+/**
+ * 用指定 refreshToken 免密切换账号（抖音式）
+ *
+ * refreshToken 来自本机账号注册表（device-accounts.js 的 entry.refreshToken），
+ * 非 cookie（单 sid cookie 模型下浏览器只存当前账号的 sid_r）。
+ * 复用 refreshSessionCore：验证 refreshToken + 轮转新 sid/sid_r。
+ *
+ * 成功后旧 refreshToken 标记 rotated 失效，调用方必须用返回的新 sessionId/newRefreshToken
+ * 更新注册表，否则下次切换会触发盗用检测吊销整个 family。
+ *
+ * @param {string} refreshToken - 注册表存储的目标账号 refreshToken
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} reply
+ * @returns {Promise<{sessionId: string, refreshToken: string, user: object} | null>}
+ *   null=refreshToken 已轮转/被吊销/用户禁用
+ */
+async function switchSessionByRefreshToken(refreshToken, request, reply) {
+  const result = await refreshSessionCore(refreshToken, request, reply);
+  if (!result) return null;
+  const { sessionData, newSessionId, newRefreshToken } = result;
+  return {
+    sessionId: newSessionId,
+    refreshToken: newRefreshToken,
+    user: {
+      id: sessionData.userId,
+      uid: sessionData.uid,
+      username: sessionData.username,
+      name: sessionData.username,
+      email: sessionData.email,
+      avatar: sessionData.avatar
+    }
+  };
 }
 
 /**
@@ -940,6 +991,8 @@ export {
   createSession,
   getSession,
   refreshSession,
+  refreshSessionCore,
+  switchSessionByRefreshToken,
   destroySession,
   deleteRefreshTokensForSession,
   updateRememberMe,
