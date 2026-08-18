@@ -66,7 +66,7 @@
 
         <!-- 模式 B：iframe 登录（无账号 / 点了"登录其他账号"） -->
         <div v-else class="w-full relative h-[484px]">
-          <iframe :src="loginUrl" class="w-full h-full border-none" allow="payment"></iframe>
+          <iframe ref="iframeRef" :src="loginUrl" class="w-full h-full border-none" allow="payment"></iframe>
 
           <!-- 有账号时显示"返回账号列表" -->
           <button
@@ -95,9 +95,18 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { X, UserPlus, ArrowLeft } from 'lucide-vue-next';
-import { buildSsoLoginUrl } from '@/config/services';
+import { buildSsoLoginUrl, SSO_URL } from '@/config/services';
 import { firewallApi } from '@/api/firewall';
 import { useAuthStore } from '@/stores/auth';
+
+/** 只接受 oauth21 SSO 域的 postMessage（防恶意页面伪造 LOGIN_SUCCESS） */
+const SSO_ORIGIN = (() => {
+  try {
+    return new URL(SSO_URL).origin;
+  } catch {
+    return '';
+  }
+})();
 
 const props = defineProps({
   isOpen: Boolean
@@ -111,6 +120,8 @@ const { savedAccounts } = storeToRefs(authStore);
 const loading = ref(true);
 const switching = ref(false);
 const loginUrl = buildSsoLoginUrl();
+/** SSO iframe 引用（用于校验 message 来源窗口） */
+const iframeRef = ref<HTMLIFrameElement | null>(null);
 /** 'accounts'（账号列表）/ 'login'（iframe 登录），二选一 */
 const mode = ref<'accounts' | 'login'>('accounts');
 
@@ -161,7 +172,16 @@ async function onRevoke(acct: { encUid: string }) {
 }
 
 // Handle message from iframe (e.g., login success)
+//
+// 安全校验：只接受来自 SSO iframe（origin 匹配 + source 匹配）的消息。
+// 否则恶意页面/第三方 iframe 可伪造 { type:'LOGIN_SUCCESS', sessionToken } 注入
+// 攻击者账号的 session_token，让本应用在自身域上绑定攻击者会话。
 const handleMessage = async (event: MessageEvent) => {
+  // 1. origin 必须是 SSO 登录服务的 origin
+  if (event.origin !== SSO_ORIGIN) return;
+  // 2. source 必须是当前 SSO iframe 窗口（排除其他 iframe 或父窗口冒泡）
+  if (!iframeRef.value || event.source !== iframeRef.value.contentWindow) return;
+
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
     const { token, sessionToken, user } = event.data;
 
