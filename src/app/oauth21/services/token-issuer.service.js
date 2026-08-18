@@ -50,7 +50,9 @@ function _debug(...args) {
  * @returns {object} 令牌结果
  */
 export async function issueDirectTokens(user, client_id, scope, oidcNonce, request, reply, fastify, options = {}) {
-  const { rememberMe = true } = options;
+  // 默认 false（短期登录）：未显式声明 rememberMe 的入口（扫码/授权确认）均不下发
+  // sid_r 长期凭证，降低公共设备残留半年期凭证的风险。登录页通过 keepLogin 显式开启。
+  const { rememberMe = false } = options;
   const client = client_id ? await tokenService.authenticateClient(request) : { ...FIRST_PARTY_APP };
 
   if (client_id && !client) {

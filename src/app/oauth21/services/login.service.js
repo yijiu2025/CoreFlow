@@ -195,7 +195,7 @@ export async function directLogin(request, reply, fastify) {
       request,
       reply,
       fastify,
-      { rememberMe: keepLogin !== false }
+      { rememberMe: keepLogin === true }
     );
 
     // 审计日志：登录成功

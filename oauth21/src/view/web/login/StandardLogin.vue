@@ -7,6 +7,7 @@ import { toTypedSchema } from '@vee-validate/zod';
 import { ref, onMounted, computed } from 'vue';
 import { authApi } from '@/api/auth';
 import { readAccounts, switchAccount, removeSavedAccount, type SavedAccount } from '@/utils/accounts';
+import { postToParent } from '@/utils/parent';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
@@ -79,7 +80,7 @@ const [username, usernameProps] = defineField('username');
 const [password, passwordProps] = defineField('password');
 
 const agreed = ref(false);
-const keepLogin = ref(true);
+const keepLogin = ref(false);
 
 // 倒计时逻辑
 const isCountingDown = ref(false);
@@ -123,10 +124,7 @@ const pickAccount = async (acct: SavedAccount) => {
     // 切换成功：复用登录成功的 SSO relay
     const token = res.access_token || res.data?.accessToken;
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage(
-        { type: 'SSO_SUCCESS', token, id_token: res.id_token, data: res },
-        '*'
-      );
+      postToParent({ type: 'SSO_SUCCESS', token, id_token: res.id_token, data: res });
     } else {
       alert('已切换账号：' + (res.user?.username || acct.name));
     }
@@ -160,15 +158,12 @@ const handleLogin = handleSubmit(async data => {
     const token = res.access_token || res.data?.accessToken;
     // SSO 消息推送
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage(
-        {
+      postToParent({
           type: 'SSO_SUCCESS',
           token: token,
           id_token: res.id_token,
           data: res
-        },
-        '*'
-      );
+        });
     } else {
       alert('登录成功！');
     }
@@ -179,7 +174,7 @@ const handleLogin = handleSubmit(async data => {
 
 const closeModal = () => {
   if (window.parent && window.parent !== window) {
-    window.parent.postMessage({ type: 'SSO_CLOSE' }, '*');
+    postToParent({ type: 'SSO_CLOSE' });
   }
 };
 
