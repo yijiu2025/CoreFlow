@@ -5,6 +5,7 @@ import { useForm } from 'vee-validate';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { readAccounts, switchAccount, removeSavedAccount, type SavedAccount } from '@/utils/accounts';
+import { postToParent } from '@/utils/parent';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
@@ -43,7 +44,7 @@ const [username, usernameProps] = defineField('username');
 const [password, passwordProps] = defineField('password');
 
 const agreed = ref(false);
-const keepLogin = ref(true);
+const keepLogin = ref(false);
 const isCountingDown = ref(false);
 const countdown = ref(60);
 let timer: any = null;
@@ -79,7 +80,7 @@ const pickAccount = async (acct: SavedAccount) => {
       return;
     }
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: 'SSO_SUCCESS', data: res }, '*');
+      postToParent({ type: 'SSO_SUCCESS', data: res });
     } else {
       alert('已切换账号：' + (res.user?.username || acct.name));
     }
@@ -107,7 +108,7 @@ const handleLogin = handleSubmit(async data => {
   try {
     const res = await authStore.login({ ...data, keepLogin: keepLogin.value } as any);
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: 'SSO_SUCCESS', data: res }, '*');
+      postToParent({ type: 'SSO_SUCCESS', data: res });
     } else {
       alert('登录成功！');
     }

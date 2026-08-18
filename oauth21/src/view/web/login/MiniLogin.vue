@@ -8,6 +8,7 @@ import { toTypedSchema } from '@vee-validate/zod';
 import { ref, onMounted, computed, watch } from 'vue';
 import { authApi } from '@/api/auth';
 import { readAccounts, switchAccount, removeSavedAccount, type SavedAccount } from '@/utils/accounts';
+import { postToParent } from '@/utils/parent';
 import AuthContainer from '@/components/common/AuthContainer.vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
@@ -34,7 +35,7 @@ const showQR = ref(false);
 const loginType = ref<'email' | 'pwd'>('email');
 const isCountingDown = ref(false);
 const countdown = ref(60);
-const keepLogin = ref(true);
+const keepLogin = ref(false);
 
 // 二维码状态
 const qrKey = ref('');
@@ -165,10 +166,7 @@ const denyConsent = () => {
   showConsent.value = false;
   consentState.value = null;
   if (window.parent && window.parent !== window) {
-    window.parent.postMessage(
-      { type: 'SSO_DENIED', error: 'user_denied', description: t('login.consent_denied') },
-      '*'
-    );
+    postToParent({ type: 'SSO_DENIED', error: 'user_denied', description: t('login.consent_denied') });
   }
 };
 
@@ -188,17 +186,15 @@ function notifyParentLoginSuccess(res: any) {
     resKeys: Object.keys(res || {}),
     isIframe: window.parent !== window
   });
-  window.parent.postMessage({ type: 'SSO_SUCCESS', token, sessionToken, data: res }, '*');
-  window.parent.postMessage(
+  postToParent({ type: 'SSO_SUCCESS', token, sessionToken, data: res });
+  postToParent(
     {
       type: 'LOGIN_SUCCESS',
       token,
       sessionToken,
       user: { id: user.id, username: user.username, name: user.name, email: user.email, avatar: user.avatar },
       data: res
-    },
-    '*'
-  );
+    });
 }
 
 const approveConsent = async () => {
@@ -231,14 +227,12 @@ const executeLogin = async () => {
     } else if (res && res.action === 'max_sessions') {
       // 设备数量超限，通知父窗口处理
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage(
+        postToParent(
           {
             type: 'MAX_SESSIONS',
             sessions: res.sessions,
             maxSessions: res.maxSessions
-          },
-          '*'
-        );
+          });
       }
     } else {
       notifyParentLoginSuccess(res);
@@ -286,7 +280,7 @@ onMounted(() => {
   keepLogin.value = !appConfig.value.notKeepLogin;
   if (showQR.value) generateQR();
   if (window.parent && window.parent !== window) {
-    window.parent.postMessage({ type: 'SSO_READY' }, '*');
+    postToParent({ type: 'SSO_READY' });
   }
 });
 </script>
