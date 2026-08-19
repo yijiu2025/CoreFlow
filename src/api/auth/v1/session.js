@@ -76,8 +76,8 @@ export default async function (fastify) {
       }
       return reply.result.success('Session 已绑定', {
         user: result.user,
-        // encUid = AES(uid)，前端存 localStorage 作多账号 key（refreshToken 在 HttpOnly cookie）
-        encUid: result.encUid || null
+        // accountKey = HMAC(uid)，前端存 localStorage 作多账号 key（refreshToken 在 HttpOnly cookie）
+        accountKey: result.accountKey || null
       });
     }
   });

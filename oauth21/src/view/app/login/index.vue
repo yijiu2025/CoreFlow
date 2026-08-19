@@ -4,7 +4,6 @@ import { useThemeStore } from '@/stores/theme';
 import { useForm } from 'vee-validate';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
-import { readAccounts, switchAccount, removeSavedAccount, type SavedAccount } from '@/utils/accounts';
 import { postToParent } from '@/utils/parent';
 
 const authStore = useAuthStore();
@@ -65,39 +64,8 @@ const startCountdown = () => {
   }, 1000);
 };
 
-// 本机已登录账号（抖音式免密切换）
-const savedAccounts = ref<SavedAccount[]>([]);
-onMounted(() => {
-  savedAccounts.value = readAccounts();
-});
-
-const pickAccount = async (acct: SavedAccount) => {
-  try {
-    const res: any = await switchAccount(acct.uid);
-    if (res?.action === 'need_password') {
-      loginType.value = 'pwd';
-      values.username = res.username || acct.name || '';
-      return;
-    }
-    if (window.parent && window.parent !== window) {
-      postToParent({ type: 'SSO_SUCCESS', data: res });
-    } else {
-      alert('已切换账号：' + (res.user?.username || acct.name));
-    }
-  } catch (err: any) {
-    alert(err.message || '切换失败');
-  }
-};
-
-const removeAccount = async (acct: SavedAccount, e: Event) => {
-  e.stopPropagation();
-  try {
-    await removeSavedAccount(acct.uid);
-    savedAccounts.value = readAccounts();
-  } catch (err: any) {
-    alert(err.message || '移除失败');
-  }
-};
+// 本机已登录账号的免密切换已移至各应用（posecraft/firewall）的登录弹窗，
+// oauth21 只负责登录本身，不再读取 accounts cookie 或提供切换入口。
 
 const handleLogin = handleSubmit(async data => {
   if (!agreed.value) {
@@ -106,9 +74,18 @@ const handleLogin = handleSubmit(async data => {
   }
 
   try {
-    const res = await authStore.login({ ...data, keepLogin: keepLogin.value } as any);
+    const res: any = await authStore.login({ ...data, keepLogin: keepLogin.value } as any);
+    const token = res?.access_token || res?.data?.accessToken;
+    const sessionToken = res?.session_token || res?.data?.session_token;
+    const user = res?.user || res?.data?.user || {};
     if (window.parent && window.parent !== window) {
-      postToParent({ type: 'SSO_SUCCESS', data: res });
+      postToParent({
+        type: 'LOGIN_SUCCESS',
+        token,
+        sessionToken,
+        user: { id: user.id, username: user.username, name: user.name, email: user.email, avatar: user.avatar },
+        data: res
+      });
     } else {
       alert('登录成功！');
     }
@@ -177,36 +154,6 @@ const handleLogin = handleSubmit(async data => {
 
         <!-- Inputs -->
         <form @submit.prevent="handleLogin" class="space-y-6">
-          <!-- 本机已登录账号（抖音式免密切换） -->
-          <div v-if="savedAccounts.length" class="space-y-2">
-            <p class="text-xs text-slate-400 dark:text-slate-500">本机已登录账号，点击免密切换</p>
-            <div class="flex flex-wrap gap-2">
-              <div
-                v-for="acct in savedAccounts"
-                :key="acct.uid"
-                class="group relative flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition"
-                @click="pickAccount(acct)"
-              >
-                <div
-                  class="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-fuchsia-500 flex items-center justify-center overflow-hidden text-white text-[10px] font-bold"
-                >
-                  <img v-if="acct.avatar" :src="acct.avatar" class="w-full h-full object-cover" />
-                  <span v-else>{{ acct.name?.charAt(0).toUpperCase() }}</span>
-                </div>
-                <span class="text-xs text-slate-700 dark:text-slate-200 max-w-[72px] truncate">{{
-                  acct.name
-                }}</span>
-                <button
-                  type="button"
-                  class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-600 text-white text-[10px] leading-none flex items-center justify-center hover:bg-red-500"
-                  aria-label="移除账号"
-                  @click="removeAccount(acct, $event)"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          </div>
           <transition name="mobile-fade" mode="out-in">
             <div v-if="loginType === 'sms'" key="sms" class="space-y-6">
               <div class="relative">

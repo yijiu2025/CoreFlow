@@ -7,7 +7,6 @@ import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { ref, onMounted, computed, watch } from 'vue';
 import { authApi } from '@/api/auth';
-import { readAccounts, switchAccount, removeSavedAccount, type SavedAccount } from '@/utils/accounts';
 import { postToParent } from '@/utils/parent';
 import AuthContainer from '@/components/common/AuthContainer.vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
@@ -127,36 +126,8 @@ const handleLogin = handleSubmit(async () => {
   }
 });
 
-// 本机已登录账号（抖音式免密切换）
-const savedAccounts = ref<SavedAccount[]>([]);
-const refreshSavedAccounts = () => {
-  savedAccounts.value = readAccounts();
-};
-onMounted(refreshSavedAccounts);
-
-const pickAccount = async (acct: SavedAccount) => {
-  try {
-    const res: any = await switchAccount(acct.uid);
-    if (res?.action === 'need_password') {
-      loginType.value = 'pwd';
-      values.username = res.username || acct.name || '';
-      return;
-    }
-    notifyParentLoginSuccess(res);
-  } catch (err: any) {
-    showError(err.message || t('login.login_failed'));
-  }
-};
-
-const removeAccount = async (acct: SavedAccount, e: Event) => {
-  e.stopPropagation();
-  try {
-    await removeSavedAccount(acct.uid);
-    refreshSavedAccounts();
-  } catch (err: any) {
-    showError(err.message || '移除失败');
-  }
-};
+// 本机已登录账号的免密切换已移至各应用（posecraft/firewall）的登录弹窗，
+// oauth21 只负责登录本身，不再读取 accounts cookie 或提供切换入口。
 
 const showConsent = ref(false);
 const consentState = ref<any>(null);
@@ -186,7 +157,6 @@ function notifyParentLoginSuccess(res: any) {
     resKeys: Object.keys(res || {}),
     isIframe: window.parent !== window
   });
-  postToParent({ type: 'SSO_SUCCESS', token, sessionToken, data: res });
   postToParent(
     {
       type: 'LOGIN_SUCCESS',
@@ -396,34 +366,6 @@ onMounted(() => {
 
       <!-- 默认插槽：登录表单 -->
       <form v-else @submit.prevent="handleLogin" class="form-container flex-1 flex flex-col justify-center">
-        <!-- 本机已登录账号（抖音式免密切换） -->
-        <div v-if="savedAccounts.length" class="mb-4">
-          <p class="text-xs text-slate-400 dark:text-slate-500 mb-2">本机已登录账号，点击免密切换</p>
-          <div class="flex flex-wrap gap-2">
-            <div
-              v-for="acct in savedAccounts"
-              :key="acct.uid"
-              class="group relative flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition"
-              @click="pickAccount(acct)"
-            >
-              <div
-                class="w-6 h-6 rounded-full bg-gradient-to-tr from-primary to-fuchsia-500 flex items-center justify-center overflow-hidden text-white text-[10px] font-bold"
-              >
-                <img v-if="acct.avatar" :src="acct.avatar" class="w-full h-full object-cover" />
-                <span v-else>{{ acct.name?.charAt(0).toUpperCase() }}</span>
-              </div>
-              <span class="text-xs text-slate-700 dark:text-slate-200 max-w-[72px] truncate">{{ acct.name }}</span>
-              <button
-                type="button"
-                class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-600 text-white text-[10px] leading-none flex items-center justify-center hover:bg-red-500"
-                aria-label="移除账号"
-                @click="removeAccount(acct, $event)"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        </div>
         <div
           class="flex bg-slate-50 dark:bg-slate-800/50 p-1 rounded-xl mb-6 border border-slate-100 dark:border-slate-800"
         >
