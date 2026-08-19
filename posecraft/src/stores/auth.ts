@@ -37,8 +37,8 @@ export const useAuthStore = defineStore('auth', () => {
     return r;
   }
 
-  // ── 已登录账号清单（抖音式多账号免切）：{[encUid]: {username, avatar}} ──
-  // key=encUid（AES(uid) 密文，后端解密读 HttpOnly cookie 的 refreshToken），不含凭证
+  // ── 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar}} ──
+  // key=accountKey（HMAC(uid)，后端以其作 HttpOnly cookie 名读 refreshToken），不含凭证
   const savedAccounts = ref<Record<string, { username: string; avatar: string }>>({});
 
   /** 从 localStorage 恢复已登录账号清单 */
@@ -55,22 +55,22 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /** 登录/绑定成功后记录账号到清单（供下次免切） */
-  function addSavedAccount(user: any, encUid: string | null | undefined) {
-    if (!encUid || !user) return;
-    savedAccounts.value[encUid] = {
+  function addSavedAccount(user: any, accountKey: string | null | undefined) {
+    if (!accountKey || !user) return;
+    savedAccounts.value[accountKey] = {
       username: user.username || user.name || '用户',
       avatar: user.avatar || ''
     };
     persistSavedAccounts();
   }
 
-  /** 免密切换到指定账号（发 encUid，后端解密读 HttpOnly cookie 的 refreshToken 验证轮转） */
-  async function switchAccount(encUid: string) {
+  /** 免密切换到指定账号（发 accountKey，后端以其作 cookie 名读 HttpOnly refreshToken 验证轮转） */
+  async function switchAccount(accountKey: string) {
     try {
       const { authApi } = await import('@/api/auth');
-      const res: any = await authApi.switchAccount(encUid);
+      const res: any = await authApi.switchAccount(accountKey);
       if (res?.user) {
-        savedAccounts.value[encUid] = {
+        savedAccounts.value[accountKey] = {
           username: res.user.username || res.user.name || '用户',
           avatar: res.user.avatar || ''
         };
@@ -80,7 +80,7 @@ export const useAuthStore = defineStore('auth', () => {
         return { ok: true, user: res.user };
       }
       // need_password：凭证失效，删该项
-      delete savedAccounts.value[encUid];
+      delete savedAccounts.value[accountKey];
       persistSavedAccounts();
       return { ok: false };
     } catch (err) {
@@ -89,15 +89,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** 彻底撤销某账号记住我凭证（"忘掉该账号"，发 encUid） */
-  async function revokeSavedAccount(encUid: string) {
+  /** 彻底撤销某账号记住我凭证（"忘掉该账号"，发 accountKey） */
+  async function revokeSavedAccount(accountKey: string) {
     try {
       const { authApi } = await import('@/api/auth');
-      await authApi.revokeSavedAccount(encUid);
+      await authApi.revokeSavedAccount(accountKey);
     } catch (err) {
       console.warn('撤销账号凭证失败:', err);
     }
-    delete savedAccounts.value[encUid];
+    delete savedAccounts.value[accountKey];
     persistSavedAccounts();
   }
 

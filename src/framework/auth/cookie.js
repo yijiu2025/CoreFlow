@@ -48,20 +48,6 @@ const ROTATED_RETENTION = parseInt(process.env.ROTATED_RETENTION) || 604800;
 /** Cookie 名称 */
 const COOKIE_SID = 'sid';
 const COOKIE_SID_R = 'sid_r';
-/** 登录过的账号列表 cookie（非 HttpOnly，前端登录页直读展示，非凭据） */
-const COOKIE_ACCOUNTS = 'accounts';
-/** accounts cookie 最大展示条数（cookie 体积控制） */
-const ACCOUNTS_MAX = 8;
-
-/** accounts cookie 选项（非 HttpOnly 供前端读；跨子域需配 COOKIE_DOMAIN） */
-const ACCOUNTS_COOKIE_OPTS = {
-  httpOnly: false,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
-  path: '/',
-  maxAge: 180 * 86400, // 180 天（与 sid_r 同步，展示用，登出不删）
-  ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
-};
 
 // 生产环境必须显式配置 SESSION_SECRET，否则 HMAC 签名可被伪造 sid，直接拒绝启动
 if (!process.env.SESSION_SECRET) {
@@ -72,47 +58,28 @@ if (!process.env.SESSION_SECRET) {
 }
 const SECRET = process.env.SESSION_SECRET || 'change-me-session-secret';
 
-// ── 多账号免切凭证 cookie（HttpOnly，cookie 名混淆 + 前端存加密值）──
+// ── 多账号免切凭证 cookie（HttpOnly，cookie 名 = HMAC(uid)）──
 //
-// 每账号一个 HttpOnly cookie 存其 refreshToken：cookie 名 = HMAC(uid, SECRET)
-// （形如 k_<hex>，混淆无语义，后端按 uid 算）；前端 localStorage 存 AES(uid) 密文
-// （encUid）+ name/avatar，切换发 encUid，后端解密 → uid → HMAC → cookie 名 → 读 rt。
-// JS 读不到 rt（HttpOnly），localStorage 只有密文 + 展示信息（防 XSS 窃凭证）。
+// 每账号一个 HttpOnly cookie 存其 refreshToken，cookie 名 = HMAC-SHA256(uid, SECRET)
+// 前 16 hex（形如 k_<hex>，不可逆，非明文 uid）。该 HMAC 值同时作为：
+//   1) cookie 名（后端按 accountKey 直接读 request.cookies[accountKey] 取 rt）
+//   2) 前端 localStorage 的 key（同 uid → 同 HMAC → 自动去重，不会因重复登录产生多条）
+//   3) 切账号时前端发送的 accountKey（后端无需解密，直接当 cookie 名读 rt）
+// JS 读不到 rt（HttpOnly），localStorage 只存 accountKey + name/avatar（防 XSS 窃凭证）。
+// 无明文 uid 暴露：HMAC 不可逆，换 SECRET 则所有 accountKey 失效（强制重新登录）。
 
-/** AES-256-GCM 密钥（由 SESSION_SECRET 派生，32 字节） */
-const ENC_KEY = crypto.createHash('sha256').update(SECRET).digest();
-
-/** 由 uid 生成混淆的 cookie 名（HMAC-SHA256(uid) 前 16 hex，确定性，后端可算） */
-function cookieNameForUid(uid) {
+/**
+ * 由 uid 生成账号 key（HMAC-SHA256(uid, SECRET) 前 16 hex）
+ * 用途：凭证 cookie 名 + 前端 localStorage key + 切账号发送值，三者统一。
+ * 确定性：同 uid 永远相同（自动去重）；不可逆（非明文）；随 SECRET 变化。
+ * @param {string} uid 用户 uid
+ * @returns {string} 形如 k_<16hex>
+ */
+function accountKeyForUid(uid) {
   return `k_${crypto.createHmac('sha256', SECRET).update(String(uid)).digest('hex').slice(0, 16)}`;
 }
 
-/** 加密 uid → encUid（AES-256-GCM，base64url，含 iv+tag，返回前端存 localStorage） */
-function encryptUid(uid) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
-  const enc = Buffer.concat([cipher.update(String(uid), 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([iv, tag, enc]).toString('base64url');
-}
-
-/** 解密 encUid → uid（失败返回 null） */
-function decryptUid(encUid) {
-  try {
-    const buf = Buffer.from(encUid, 'base64url');
-    if (buf.length < 28) return null;
-    const iv = buf.subarray(0, 12);
-    const tag = buf.subarray(12, 28);
-    const data = buf.subarray(28);
-    const decipher = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, iv);
-    decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
-  } catch {
-    return null;
-  }
-}
-
-/** user_<uid> 凭证 cookie 选项（HttpOnly，JS 不可读；半年有效期，使用即续期） */
+/** 凭证 cookie 选项（HttpOnly，JS 不可读；半年有效期，使用即续期） */
 const USER_COOKIE_OPTS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
@@ -207,12 +174,7 @@ export {
   ROTATED_RETENTION,
   COOKIE_SID,
   COOKIE_SID_R,
-  COOKIE_ACCOUNTS,
-  ACCOUNTS_MAX,
-  ACCOUNTS_COOKIE_OPTS,
   USER_COOKIE_OPTS,
   USER_COOKIE_TTL,
-  cookieNameForUid,
-  encryptUid,
-  decryptUid
+  accountKeyForUid
 };

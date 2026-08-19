@@ -15,13 +15,8 @@ import {
   signCookie,
   COOKIE_OPTIONS,
   COOKIE_SID_R,
-  COOKIE_ACCOUNTS,
-  ACCOUNTS_MAX,
-  ACCOUNTS_COOKIE_OPTS,
   USER_COOKIE_OPTS,
-  cookieNameForUid,
-  encryptUid,
-  decryptUid,
+  accountKeyForUid,
   SHORT_SESSION_TTL,
   LONG_SESSION_TTL,
   REFRESH_TOKEN_TTL
@@ -35,57 +30,8 @@ const ACCESS_TOKEN_COOKIE_OPTS = maxAge => ({
   sameSite: 'lax'
 });
 
-// ── accounts cookie（登录过的账号列表，非 HttpOnly 供前端展示，非凭据）──
-
-/** 读取请求中的 accounts cookie 列表 */
-function readAccountsCookie(request) {
-  const raw = request?.cookies?.[COOKIE_ACCOUNTS];
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(decodeURIComponent(raw));
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-}
-
-/** 写 accounts cookie（cap ACCOUNTS_MAX） */
-function writeAccountsCookie(reply, list) {
-  reply.setCookie(
-    COOKIE_ACCOUNTS,
-    encodeURIComponent(JSON.stringify(list.slice(0, ACCOUNTS_MAX))),
-    ACCOUNTS_COOKIE_OPTS
-  );
-}
-
-/**
- * 登录/切换成功后把账号写入 accounts cookie（uid 去重，最新在前）
- * @param {object} request - Fastify request（读现有 cookie）
- * @param {object} reply - Fastify reply（写 cookie）
- * @param {object} user - {id, uid?, username, name?, avatar}
- */
-export function upsertAccountsCookie(request, reply, user) {
-  if (!user) return;
-  const uid = user.uid || String(user.id);
-  if (!uid) return;
-  const list = readAccountsCookie(request).filter(a => a.uid !== uid);
-  list.unshift({ uid, name: user.username || user.name || '用户', avatar: user.avatar || '' });
-  writeAccountsCookie(reply, list);
-}
-
-/**
- * 从 accounts cookie 移除某账号（"忘掉该账号"时调）
- * @param {object} request - Fastify request
- * @param {object} reply - Fastify reply
- * @param {string} uid - 目标账号 uid
- */
-export function removeFromAccountsCookie(request, reply, uid) {
-  if (!uid) return;
-  writeAccountsCookie(
-    reply,
-    readAccountsCookie(request).filter(a => a.uid !== uid)
-  );
-}
+// ── accounts cookie 已废弃：明文 uid 暴露风险，改用 accountKey（HMAC(uid)）──
+// 账号列表不再下发 cookie，前端从 localStorage（key=accountKey）渲染切换界面。
 
 /**
  * 绑定 Bearer Token 为 HttpOnly access_token Cookie（JWT 模式）
@@ -145,8 +91,8 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
   // 删除临时 token（一次性使用）
   await sessionStore.delete(sessionToken);
 
-  // 创建正式 Session，refreshToken 写入 user_<uid> HttpOnly cookie（JS 读不到，防 XSS）
-  let encUid = null;
+  // 创建正式 Session，refreshToken 写入 accountKey HttpOnly cookie（JS 读不到，防 XSS）
+  let accountKey = null;
   try {
     const sess = await createSession({
       userId: sessionData.userId,
@@ -164,10 +110,10 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
       reply
     });
     // sid/sid_r cookie 由 createSession 下发；refreshToken 写入混淆名 HttpOnly cookie
-    // （cookie 名 = HMAC(uid)，JS 不可读；前端只拿 encUid 作 localStorage key）
+    // （cookie 名 = accountKeyForUid(uid) = HMAC(uid)，JS 不可读）
     if (sess?.refreshToken && sessionData.uid) {
-      reply.setCookie(cookieNameForUid(sessionData.uid), sess.refreshToken, USER_COOKIE_OPTS);
-      encUid = encryptUid(sessionData.uid);
+      accountKey = accountKeyForUid(sessionData.uid);
+      reply.setCookie(accountKey, sess.refreshToken, USER_COOKIE_OPTS);
     }
   } catch (err) {
     // 并发会话超限：结构化 409，供前端引导用户踢掉旧设备
@@ -185,9 +131,6 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
     throw err;
   }
 
-  // 写入 accounts cookie（登录过的账号列表，前端登录页展示用）
-  upsertAccountsCookie(request, reply, sessionData);
-
   return {
     ok: true,
     user: {
@@ -198,8 +141,8 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
       email: sessionData.email,
       avatar: sessionData.avatar
     },
-    // encUid = AES(uid)，前端存 localStorage 作多账号 key（不存 refreshToken，rt 在 HttpOnly cookie）
-    encUid
+    // accountKey = HMAC(uid)，前端存 localStorage 作多账号 key（不存 refreshToken，rt 在 HttpOnly cookie）
+    accountKey
   };
 }
 
@@ -262,28 +205,25 @@ export async function updateRememberMeCookies(userId, sessionId, accessCount, re
 }
 
 /**
- * 用 encUid 免密切换账号（HttpOnly user cookie 模型）
+ * 用 accountKey 免密切换账号（HttpOnly user cookie 模型）
  *
- * 前端 localStorage 存 {[encUid]: {name, avatar}}（encUid = AES(uid) 密文，不存 rt）。
- * 切换时前端发 encUid，后端 AES 解密 → uid → HMAC(uid) → cookie 名 → 读该 HttpOnly
- * cookie 的 refreshToken → refreshSessionCore 验证轮转 → 下发新 sid/sid_r + 更新该 cookie 的 rt。
+ * 前端 localStorage 存 {[accountKey]: {name, avatar}}（accountKey = HMAC(uid)，不存 rt）。
+ * 切换时前端发 accountKey，后端直接以其作 cookie 名读 HttpOnly cookie 的 refreshToken
+ * → refreshSessionCore 验证轮转 → 下发新 sid/sid_r + 更新该 cookie 的 rt。
  *
  * refreshToken 全程在 HttpOnly cookie（JS 读不到），防 XSS 窃凭证。
+ * accountKey 是 HMAC(uid)，不可逆（非明文 uid），无需后端解密。
  *
  * @param {object} request - Fastify request（读 cookie / ip / user-agent）
  * @param {object} reply - Fastify reply（设 sid/sid_r + 更新 user cookie）
- * @param {string} encUid - 前端 localStorage 的目标账号 encUid（AES(uid)）
+ * @param {string} accountKey - 前端 localStorage 的目标账号 key（HMAC(uid)，形如 k_<16hex>）
  * @returns {Promise<{action:'switched', user:object} | {action:'need_password'}>}
  */
-export async function switchAccount(request, reply, encUid) {
-  if (!encUid) return { action: 'need_password' };
+export async function switchAccount(request, reply, accountKey) {
+  if (!accountKey) return { action: 'need_password' };
 
-  // AES 解密 encUid → uid → cookie 名
-  const uid = decryptUid(encUid);
-  if (!uid) return { action: 'need_password' };
-  const cookieName = cookieNameForUid(uid);
-
-  // 从 HttpOnly cookie 读 refreshToken
+  // accountKey 即凭证 cookie 名，直接读取（无需 AES 解密）
+  const cookieName = accountKey;
   const refreshToken = request?.cookies?.[cookieName];
   if (!refreshToken) {
     // 该账号无凭证 cookie（非记住我 / 已登出撤销 / cookie 过期）→ 走密码登录
@@ -301,8 +241,6 @@ export async function switchAccount(request, reply, encUid) {
 
   // 轮转后旧 refreshToken 已标 rotated 失效，更新该 user cookie 为新 refreshToken
   reply.setCookie(cookieName, result.refreshToken, USER_COOKIE_OPTS);
-  // 更新 accounts cookie（name/avatar 可能变化，置顶）
-  upsertAccountsCookie(request, reply, result.user);
 
   return { action: 'switched', user: result.user };
 }
@@ -310,23 +248,21 @@ export async function switchAccount(request, reply, encUid) {
 /**
  * 彻底撤销某账号的记住我凭证（"忘掉该账号"用）
  *
- * 前端发 encUid，后端 AES 解密 → uid → cookie 名 → 读 rt cookie → revokeRememberMe
- * + 清该 user cookie + 删 accounts cookie 项。下次该账号需重新输密码登录。
+ * 前端发 accountKey，后端直接以其作 cookie 名读 rt cookie → revokeRememberMe
+ * + 清该 user cookie。下次该账号需重新输密码登录。
  *
  * @param {object} request - Fastify request
  * @param {object} reply - Fastify reply
- * @param {string} encUid - 前端 localStorage 的目标账号 encUid
+ * @param {string} accountKey - 前端 localStorage 的目标账号 key（HMAC(uid)）
  */
-export async function removeSavedAccount(request, reply, encUid) {
-  const uid = decryptUid(encUid);
-  if (!uid) return;
-  const cookieName = cookieNameForUid(uid);
+export async function removeSavedAccount(request, reply, accountKey) {
+  if (!accountKey) return;
+  const cookieName = accountKey;
   const refreshToken = request?.cookies?.[cookieName];
   if (refreshToken) {
     await revokeRememberMe(refreshToken);
   }
   reply.clearCookie(cookieName, USER_COOKIE_OPTS);
-  removeFromAccountsCookie(request, reply, uid);
   // 清 sid_r cookie（若当前浏览器持有的正是该账号的 sid_r）
   reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
 }

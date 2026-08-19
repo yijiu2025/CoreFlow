@@ -24,7 +24,7 @@
           <div class="grid grid-cols-2 gap-3 mb-6">
             <button
               v-for="acct in accountList"
-              :key="acct.encUid"
+              :key="acct.accountKey"
               @click="onSwitchAccount(acct)"
               :disabled="switching"
               class="group flex items-center gap-3 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-cyan-400/40 transition-all disabled:opacity-50"
@@ -125,7 +125,9 @@ const iframeRef = ref<HTMLIFrameElement | null>(null);
 const mode = ref<'accounts' | 'login'>('accounts');
 
 /** savedAccounts 对象 → 数组（便于 v-for） */
-const accountList = computed(() => Object.entries(savedAccounts.value).map(([encUid, acct]) => ({ encUid, ...acct })));
+const accountList = computed(() =>
+  Object.entries(savedAccounts.value).map(([accountKey, acct]) => ({ accountKey, ...acct }))
+);
 
 /** 弹窗打开时：有账号默认显示列表，无账号直接 iframe 登录 */
 watch(
@@ -146,11 +148,11 @@ function close() {
 }
 
 /** 点击账号卡片免密切换 */
-async function onSwitchAccount(acct: { encUid: string }) {
-  if (!acct.encUid) return;
+async function onSwitchAccount(acct: { accountKey: string }) {
+  if (!acct.accountKey) return;
   switching.value = true;
   try {
-    const result = await authStore.switchAccount(acct.encUid);
+    const result = await authStore.switchAccount(acct.accountKey);
     if (result.ok) {
       emit('login-success', { user: result.user, switched: true });
       close();
@@ -163,9 +165,9 @@ async function onSwitchAccount(acct: { encUid: string }) {
 }
 
 /** 点击 x 忘掉该账号 */
-async function onRevoke(acct: { encUid: string }) {
-  if (!acct.encUid) return;
-  await authStore.revokeSavedAccount(acct.encUid);
+async function onRevoke(acct: { accountKey: string }) {
+  if (!acct.accountKey) return;
+  await authStore.revokeSavedAccount(acct.accountKey);
   if (!accountList.value.length) mode.value = 'login';
 }
 
@@ -185,13 +187,13 @@ const handleMessage = async (event: MessageEvent) => {
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
     const { token, sessionToken, user } = event.data;
 
-    let encUid: string | null = null;
+    let accountKey: string | null = null;
 
     // Session 模式：用临时 session_token 换取 sid/sid_r + 凭证 cookie（记住我才有）
     if (sessionToken) {
       try {
         const res: any = await authApi.bindSession(sessionToken);
-        encUid = res?.encUid || null;
+        accountKey = res?.accountKey || null;
       } catch (err) {
         console.warn('绑定 Session 失败:', err);
       }
@@ -206,9 +208,9 @@ const handleMessage = async (event: MessageEvent) => {
       }
     }
 
-    // 记录到已登录账号清单（encUid 存 localStorage 作 key；临时登录 encUid=null 不记录）
-    if (encUid) {
-      authStore.addSavedAccount(user, encUid);
+    // 记录到已登录账号清单（accountKey 存 localStorage 作 key；临时登录 accountKey=null 不记录）
+    if (accountKey) {
+      authStore.addSavedAccount(user, accountKey);
     }
 
     emit('login-success', { user, token });

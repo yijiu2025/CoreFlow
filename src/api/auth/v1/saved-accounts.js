@@ -26,7 +26,7 @@ export default async function (fastify) {
   /**
    * POST /auth/v1/switch-account
    *
-   * body: { encUid }（前端 localStorage 的账号 key，AES(uid) 密文）
+   * body: { accountKey }（前端 localStorage 的账号 key，HMAC(uid)，形如 k_<16hex>）
    * 返回：
    * - 成功：{ code:200, data: { action:'switched', user } }
    * - 需密码：{ code:200, data: { action:'need_password' } }（凭证失效，前端删 localStorage + 走密码登录）
@@ -38,12 +38,12 @@ export default async function (fastify) {
     url: '/switch-account',
     requireLogin: false,
     handler: async (request, reply) => {
-      const { encUid } = request.body || {};
-      if (!encUid) {
-        return reply.code(400).send({ code: 400, message: '缺少 encUid', data: null });
+      const { accountKey } = request.body || {};
+      if (!accountKey) {
+        return reply.code(400).send({ code: 400, message: '缺少 accountKey', data: null });
       }
 
-      const result = await switchAccount(request, reply, encUid);
+      const result = await switchAccount(request, reply, accountKey);
       if (result.action === 'switched') {
         return reply.result.success('切换成功', { user: result.user });
       }
@@ -58,7 +58,7 @@ export default async function (fastify) {
 
   /**
    * POST /auth/v1/saved-accounts/revoke — 彻底撤销某账号记住我凭证
-   * body: { encUid }
+   * body: { accountKey }
    */
   registerSecureRoute(fastify, {
     name: 'revokeSavedAccount',
@@ -67,11 +67,11 @@ export default async function (fastify) {
     url: '/saved-accounts/revoke',
     requireLogin: false,
     handler: async (request, reply) => {
-      const { encUid } = request.body || {};
-      if (!encUid) {
-        return reply.code(400).send({ code: 400, message: '缺少 encUid', data: null });
+      const { accountKey } = request.body || {};
+      if (!accountKey) {
+        return reply.code(400).send({ code: 400, message: '缺少 accountKey', data: null });
       }
-      await removeSavedAccount(request, reply, encUid);
+      await removeSavedAccount(request, reply, accountKey);
       return reply.result.success('已撤销');
     }
   });

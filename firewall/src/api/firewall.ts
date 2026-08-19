@@ -241,11 +241,12 @@ export const firewallApi = {
   bindSession: (sessionToken: string): Promise<any> =>
     apiClient.post('/auth/v1/bind-session', { session_token: sessionToken }),
 
-  // 免密切换账号（发 encUid，后端解密读 HttpOnly cookie 的 refreshToken）
-  switchAccount: (encUid: string): Promise<any> => apiClient.post('/auth/v1/switch-account', { encUid }),
+  // 免密切换账号（发 accountKey，后端以其作 HttpOnly cookie 名读 refreshToken）
+  switchAccount: (accountKey: string): Promise<any> => apiClient.post('/auth/v1/switch-account', { accountKey }),
 
-  // 彻底撤销某账号记住我凭证（"忘掉该账号"，发 encUid）
-  revokeSavedAccount: (encUid: string): Promise<any> => apiClient.post('/auth/v1/saved-accounts/revoke', { encUid }),
+  // 彻底撤销某账号记住我凭证（"忘掉该账号"，发 accountKey）
+  revokeSavedAccount: (accountKey: string): Promise<any> =>
+    apiClient.post('/auth/v1/saved-accounts/revoke', { accountKey }),
 
   // 清除认证 Cookie（退出登录）
   clearCookie: (): Promise<any> => apiClient.post('/auth/v1/clear-cookie'),
