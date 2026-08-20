@@ -128,7 +128,8 @@ export const useAuthStore = defineStore('auth', () => {
   const likedWorksCount = ref(0);
   const watchLaterCount = ref(0);
   const historyText = ref('30天内');
-  const saveLoginInfo = ref(cache.get('save_login_info') !== false);
+  // 保持登录默认关闭（防公共设备残留长期凭证）；仅用户显式勾选过才开
+  const saveLoginInfo = ref(cache.get('save_login_info') === true);
 
   async function updateSaveLoginInfo(value: boolean) {
     saveLoginInfo.value = value;
