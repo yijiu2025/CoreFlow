@@ -27,14 +27,14 @@ export default async function (fastify) {
   /**
    * POST /auth/v1/switch-account
    *
-   * body: { accountKey }（前端 localStorage 的账号 key，HMAC(uid)，形如 k_<16hex>）
+   * body: { accountKey }（前端 localStorage 的账号 key，= uid 明文）
    * 返回：
    * - 成功：{ code:200, data: { action:'switched', user } }
    * - 需密码：{ code:200, data: { action:'need_password' } }（凭证失效，前端删 localStorage + 走密码登录）
    *
    * 来源校验：与 bind-session 同属"凭证→会话"转换端点，安全级别保持一致。
-   * switch-account 依赖 HttpOnly cookie（k_<accountKey>）里的 refreshToken，cookie 虽 JS 不可读，
-   * 但跨域 CSRF 请求会自动带 cookie，故用 origin-guard 白名单限制仅授权前端域可调用。
+   * switch-account 依赖 HttpOnly 凭证 cookie（cookie 名 = HMAC(uid)，JS 不可读）里的 refreshToken，
+   * 跨域 CSRF 请求会自动带 cookie，故用 origin-guard 白名单限制仅授权前端域可调用。
    */
   registerSecureRoute(fastify, {
     name: 'switchAccount',
@@ -66,7 +66,7 @@ export default async function (fastify) {
 
   /**
    * POST /auth/v1/saved-accounts/revoke — 彻底撤销某账号记住我凭证
-   * body: { accountKey }
+   * body: { accountKey }（= uid 明文）
    *
    * 来源校验：与 switch-account 同属凭证操作端点，安全级别保持一致。
    */

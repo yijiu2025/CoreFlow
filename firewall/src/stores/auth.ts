@@ -22,7 +22,7 @@ export const useAuthStore = defineStore('auth', () => {
   const showLoginModal = ref(false);
 
   /** 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar}}
-   *  key=accountKey（HMAC(uid)，后端以其作 HttpOnly cookie 名读 refreshToken），不含凭证 */
+   *  key=accountKey（= uid 明文，后端用 HMAC(uid) 派生 HttpOnly cookie 名读 refreshToken），不含凭证 */
   const savedAccounts = ref<Record<string, { username: string; avatar: string }>>({});
 
   /** 从 localStorage 恢复已登录账号清单 */
@@ -41,7 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * 登录/绑定成功后记录账号到清单（供下次免切）
    * @param user - {id, uid?, username, name?, avatar}
-   * @param accountKey - HMAC(uid)（记住我账号才有，临时登录为 null 不记录）
+   * @param accountKey - uid 明文（记住我账号才有，临时登录为 null 不记录）
    */
   function addSavedAccount(user: any, accountKey: string | null | undefined) {
     if (!accountKey || !user) return;
@@ -53,7 +53,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 免密切换到指定账号（发 accountKey，后端以其作 cookie 名读 HttpOnly refreshToken 验证轮转）
+   * 免密切换到指定账号（发 accountKey=uid，后端用 HMAC(uid) 派生 cookie 名读 HttpOnly refreshToken 验证轮转）
    * @returns 成功 {ok:true, user}；失败（凭证失效）{ok:false}，自动删 localStorage 项
    */
   async function switchAccount(accountKey: string) {
@@ -80,7 +80,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** 彻底撤销某账号记住我凭证（"忘掉该账号"，发 accountKey） */
+  /** 彻底撤销某账号记住我凭证（"忘掉该账号"，发 accountKey=uid） */
   async function revokeSavedAccount(accountKey: string) {
     try {
       await firewallApi.revokeSavedAccount(accountKey);

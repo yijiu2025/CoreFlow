@@ -91,7 +91,7 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
   // 删除临时 token（一次性使用）
   await sessionStore.delete(sessionToken);
 
-  // 创建正式 Session，refreshToken 写入 accountKey HttpOnly cookie（JS 读不到，防 XSS）
+  // 创建正式 Session，refreshToken 写入 HttpOnly 凭证 cookie（JS 读不到，防 XSS）
   let accountKey = null;
   try {
     const sess = await createSession({
@@ -109,11 +109,11 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
       rememberMe: sessionData.rememberMe,
       reply
     });
-    // sid/sid_r cookie 由 createSession 下发；refreshToken 写入混淆名 HttpOnly cookie
-    // （cookie 名 = accountKeyForUid(uid) = HMAC(uid)，JS 不可读）
+    // sid/sid_r cookie 由 createSession 下发；refreshToken 写入 HttpOnly 凭证 cookie
+    // （cookie 名 = HMAC(uid)，JS 不可读；accountKey = uid 明文返回前端，仅作 localStorage key）
     if (sess?.refreshToken && sessionData.uid) {
-      accountKey = accountKeyForUid(sessionData.uid);
-      reply.setCookie(accountKey, sess.refreshToken, USER_COOKIE_OPTS);
+      accountKey = sessionData.uid;
+      reply.setCookie(accountKeyForUid(sessionData.uid), sess.refreshToken, USER_COOKIE_OPTS);
     }
   } catch (err) {
     // 并发会话超限：结构化 409，供前端引导用户踢掉旧设备
@@ -141,7 +141,7 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
       email: sessionData.email,
       avatar: sessionData.avatar
     },
-    // accountKey = HMAC(uid)，前端存 localStorage 作多账号 key（不存 refreshToken，rt 在 HttpOnly cookie）
+    // accountKey = uid 明文，前端存 localStorage 作多账号 key（不存 refreshToken，rt 在 HttpOnly cookie）
     accountKey
   };
 }
@@ -205,25 +205,25 @@ export async function updateRememberMeCookies(userId, sessionId, accessCount, re
 }
 
 /**
- * 用 accountKey 免密切换账号（HttpOnly user cookie 模型）
+ * 用 accountKey 免密切换账号（HttpOnly 凭证 cookie 模型）
  *
- * 前端 localStorage 存 {[accountKey]: {name, avatar}}（accountKey = HMAC(uid)，不存 rt）。
- * 切换时前端发 accountKey，后端直接以其作 cookie 名读 HttpOnly cookie 的 refreshToken
- * → refreshSessionCore 验证轮转 → 下发新 sid/sid_r + 更新该 cookie 的 rt。
+ * 前端 localStorage 存 {[accountKey]: {name, avatar}}（accountKey = uid 明文，不存 rt）。
+ * 切换时前端发 accountKey(=uid)，后端用 accountKeyForUid(uid) = HMAC(uid) 派生 cookie 名
+ * → 读 HttpOnly cookie 的 refreshToken → refreshSessionCore 验证轮转 → 下发新 sid/sid_r + 更新该 cookie 的 rt。
  *
  * refreshToken 全程在 HttpOnly cookie（JS 读不到），防 XSS 窃凭证。
- * accountKey 是 HMAC(uid)，不可逆（非明文 uid），无需后端解密。
+ * accountKey 是 uid 明文（身份标识，非凭证）；cookie 名是 HMAC(uid)（不可逆），两者分离。
  *
  * @param {object} request - Fastify request（读 cookie / ip / user-agent）
  * @param {object} reply - Fastify reply（设 sid/sid_r + 更新 user cookie）
- * @param {string} accountKey - 前端 localStorage 的目标账号 key（HMAC(uid)，形如 k_<16hex>）
+ * @param {string} accountKey - 前端 localStorage 的目标账号 key（uid 明文）
  * @returns {Promise<{action:'switched', user:object} | {action:'need_password'}>}
  */
 export async function switchAccount(request, reply, accountKey) {
   if (!accountKey) return { action: 'need_password' };
 
-  // accountKey 即凭证 cookie 名，直接读取（无需 AES 解密）
-  const cookieName = accountKey;
+  // accountKey 即 uid，派生 HttpOnly 凭证 cookie 名 = HMAC(uid)
+  const cookieName = accountKeyForUid(accountKey);
   const refreshToken = request?.cookies?.[cookieName];
   if (!refreshToken) {
     // 该账号无凭证 cookie（非记住我 / 已登出撤销 / cookie 过期）→ 走密码登录
@@ -248,16 +248,16 @@ export async function switchAccount(request, reply, accountKey) {
 /**
  * 彻底撤销某账号的记住我凭证（"忘掉该账号"用）
  *
- * 前端发 accountKey，后端直接以其作 cookie 名读 rt cookie → revokeRememberMe
- * + 清该 user cookie。下次该账号需重新输密码登录。
+ * 前端发 accountKey(=uid)，后端用 accountKeyForUid(uid) 派生 cookie 名 → 读 rt cookie
+ * → revokeRememberMe + 清该凭证 cookie。下次该账号需重新输密码登录。
  *
  * @param {object} request - Fastify request
  * @param {object} reply - Fastify reply
- * @param {string} accountKey - 前端 localStorage 的目标账号 key（HMAC(uid)）
+ * @param {string} accountKey - 前端 localStorage 的目标账号 key（uid 明文）
  */
 export async function removeSavedAccount(request, reply, accountKey) {
   if (!accountKey) return;
-  const cookieName = accountKey;
+  const cookieName = accountKeyForUid(accountKey);
   const refreshToken = request?.cookies?.[cookieName];
   if (refreshToken) {
     await revokeRememberMe(refreshToken);
