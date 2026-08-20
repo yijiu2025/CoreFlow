@@ -37,9 +37,10 @@ export const useAuthStore = defineStore('auth', () => {
     return r;
   }
 
-  // ── 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar}} ──
-  // key=accountKey（= uid 明文，后端用 HMAC(uid) 派生 HttpOnly cookie 名读 refreshToken），不含凭证
-  const savedAccounts = ref<Record<string, { username: string; avatar: string }>>({});
+  // ── 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar, rememberMe}} ──
+  // key=accountKey（= uid 明文，后端用 HMAC(uid) 派生 HttpOnly cookie 名读 refreshToken）
+  // rememberMe=该账号是否保持登录（per-account，由 oauth21 登录勾选或 posecraft 开关写入）
+  const savedAccounts = ref<Record<string, { username: string; avatar: string; rememberMe: boolean }>>({});
 
   /** 从 localStorage 恢复已登录账号清单 */
   function loadSavedAccounts() {
@@ -55,11 +56,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /** 登录/绑定成功后记录账号到清单（供下次免切） */
-  function addSavedAccount(user: any, accountKey: string | null | undefined) {
+  function addSavedAccount(user: any, accountKey: string | null | undefined, rememberMe = false) {
     if (!accountKey || !user) return;
     savedAccounts.value[accountKey] = {
       username: user.username || user.name || '用户',
-      avatar: user.avatar || ''
+      avatar: user.avatar || '',
+      rememberMe: !!rememberMe
     };
     persistSavedAccounts();
   }
@@ -70,9 +72,12 @@ export const useAuthStore = defineStore('auth', () => {
       const { authApi } = await import('@/api/auth');
       const res: any = await authApi.switchAccount(accountKey);
       if (res?.user) {
+        // 切换成功：更新 name/avatar，保留原 rememberMe（凭证在后端 HttpOnly cookie，前端不存）
+        const prev = savedAccounts.value[accountKey];
         savedAccounts.value[accountKey] = {
           username: res.user.username || res.user.name || '用户',
-          avatar: res.user.avatar || ''
+          avatar: res.user.avatar || '',
+          rememberMe: prev?.rememberMe ?? true // 能免切说明有凭证 = rememberMe=true
         };
         persistSavedAccounts();
         setLoggedIn(true, res.user);
@@ -128,19 +133,28 @@ export const useAuthStore = defineStore('auth', () => {
   const likedWorksCount = ref(0);
   const watchLaterCount = ref(0);
   const historyText = ref('30天内');
-  // 保持登录默认关闭（防公共设备残留长期凭证）；仅用户显式勾选过才开
-  const saveLoginInfo = ref(cache.get('save_login_info') === true);
+  // 保持登录（per-account）：读当前登录账号的 rememberMe；未登录/无凭证时为 false
+  // oauth21 登录勾选 → bind-session 返回 accountKey（非空）→ addSavedAccount(rememberMe=true) → 此处同步
+  // posecraft 开关切换 → updateSaveLoginInfo 改当前账号 rememberMe + 后端凭证 cookie
+  const saveLoginInfo = computed(() => {
+    const uid = user.value?.uid;
+    return uid ? !!savedAccounts.value[uid]?.rememberMe : false;
+  });
 
+  /** 切换当前账号的"保存登录信息"（调后端写/删凭证 cookie + 更新 savedAccounts per-account） */
   async function updateSaveLoginInfo(value: boolean) {
-    saveLoginInfo.value = value;
-    cache.set('save_login_info', value);
-    if (isLoggedIn.value) {
-      try {
-        const { authApi } = await import('@/api/auth');
-        await authApi.updateRememberMe(value);
-      } catch (err) {
-        console.warn('同步保存登录信息状态失败:', err);
+    const uid = user.value?.uid;
+    if (!uid) return; // 未登录不允许切（UI 应灰显）
+    try {
+      const { authApi } = await import('@/api/auth');
+      await authApi.updateRememberMe(value);
+      // per-account 更新：保留账号在清单（B 方案），仅标记 rememberMe
+      if (savedAccounts.value[uid]) {
+        savedAccounts.value[uid].rememberMe = value;
+        persistSavedAccounts();
       }
+    } catch (err) {
+      console.warn('同步保存登录信息状态失败:', err);
     }
   }
 

@@ -98,6 +98,9 @@ export default async function (fastify) {
 
   /**
    * POST /auth/v1/update-remember-me — 动态更新当前会话的"记住我"状态
+   *
+   * 来源校验：能写/删凭证 cookie，属凭证操作端点，安全级别与 bind-session/switch-account 一致。
+   * 同步凭证 cookie k_<HMAC(uid)>：开启写入（供免切）、关闭清除。
    */
   registerSecureRoute(fastify, {
     name: 'updateRememberMe',
@@ -106,13 +109,27 @@ export default async function (fastify) {
     url: '/update-remember-me',
     requireLogin: true,
     handler: async (request, reply) => {
+      if (!isAllowedOrigin(request)) {
+        return reply.code(403).send({ code: 403, message: '来源不在允许列表', data: null });
+      }
       const { rememberMe } = request.body || {};
       const user = request.state.user;
-      const result = await updateRememberMeCookies(user.userId, user.sessionId, user.accessCount, rememberMe, reply);
+      const result = await updateRememberMeCookies(
+        user.userId,
+        user.uid,
+        user.sessionId,
+        user.accessCount,
+        rememberMe,
+        reply
+      );
       if (!result.ok) {
         return reply.code(result.statusCode).send(result.body);
       }
-      return reply.result.success('保存登录状态更新成功', { rememberMe: result.rememberMe });
+      // accountKey 非空（=uid）表示已写凭证 cookie，前端据此记录该账号 rememberMe=true
+      return reply.result.success('保存登录状态更新成功', {
+        rememberMe: result.rememberMe,
+        accountKey: result.accountKey || null
+      });
     }
   });
 

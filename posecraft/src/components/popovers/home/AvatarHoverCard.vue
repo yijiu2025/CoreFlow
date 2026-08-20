@@ -152,10 +152,15 @@
         </svg>
         <span>退出登录</span>
       </button>
-      <div class="card-save-login">
+      <div class="card-save-login" :class="{ 'is-disabled': !authStore.isLoggedIn }">
         <span>保存登录信息</span>
         <label class="card-switch">
-          <input type="checkbox" v-model="saveLoginState" @change="onSaveLoginChange" />
+          <input
+            type="checkbox"
+            v-model="saveLoginState"
+            :disabled="!authStore.isLoggedIn"
+            @change="onSaveLoginChange"
+          />
           <span class="card-slider"></span>
         </label>
       </div>
@@ -538,6 +543,13 @@ const handleLogout = () => {
 
 .dark-mode .card-save-login {
   color: #a1a1aa;
+}
+
+/* 未登录时灰显 */
+.card-save-login.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Switch 开关样式 */

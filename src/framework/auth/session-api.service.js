@@ -167,7 +167,26 @@ export function clearAuthCookies(reply) {
  * @param {object} reply - Fastify reply
  * @returns {Promise<{ok:true, rememberMe:boolean} | {ok:false, statusCode:number, body:object}>}
  */
-export async function updateRememberMeCookies(userId, sessionId, accessCount, rememberMe, reply) {
+/**
+ * 动态切换当前会话的"记住我"状态（update-remember-me 路由调用）
+ *
+ * Redis 侧（updateRememberMe）：session TTL + refreshToken 增删（family 由 session.js 管理）
+ * Cookie 侧（本函数）：sid TTL + sid_r 写删 + **凭证 cookie k_<HMAC(uid)> 写删**
+ *
+ * 凭证 cookie 实时同步：
+ * - 开启：updateRememberMe 返回新 refreshToken → 写入凭证 cookie（供免切读取）+ 下发 sid_r
+ * - 关闭：清凭证 cookie（旧 refreshToken 已在 Redis 删除）+ 清 sid_r（退回 30min 短期会话）
+ *
+ * @param {number} userId 用户 ID
+ * @param {string} uid 用户 uid（派生凭证 cookie 名 = HMAC(uid)）
+ * @param {string} sessionId 会话 ID
+ * @param {number} [accessCount=0] 访问次数（sid 签名）
+ * @param {boolean} rememberMe 是否长期登录
+ * @param {object} reply - Fastify reply（设/清 cookie）
+ * @returns {Promise<{ok:boolean, rememberMe:boolean, accountKey:string|null}>}
+ *   accountKey 非空（=uid）表示已写凭证 cookie，供前端记录该账号 rememberMe=true
+ */
+export async function updateRememberMeCookies(userId, uid, sessionId, accessCount, rememberMe, reply) {
   if (!sessionId) {
     return { ok: false, statusCode: 401, body: { code: 401, message: '未登录' } };
   }
@@ -183,25 +202,32 @@ export async function updateRememberMeCookies(userId, sessionId, accessCount, re
     throw err;
   }
 
-  // 2. 更新客户端 cookie
+  // 2. 更新 sid cookie（TTL 随 rememberMe 变长/短）
   const ttl = rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
   reply.setCookie('sid', signCookie(sessionId, accessCount || 0), {
     ...COOKIE_OPTIONS.SID,
     maxAge: ttl
   });
 
-  if (rememberMe && result.refreshToken) {
-    // 开启：下发 sid_r（path=刷新端点，maxAge 单位为秒，与 createSession 一致）
+  // 3. 凭证 cookie k_<HMAC(uid)> 实时写删（per-account 免切凭证）
+  const cookieName = uid ? accountKeyForUid(uid) : null;
+
+  if (rememberMe && result.refreshToken && cookieName) {
+    // 开启：下发 sid_r（path=刷新端点）+ 写凭证 cookie（供免切读取）
     reply.setCookie('sid_r', signCookie(result.refreshToken, 0), {
       ...COOKIE_OPTIONS.SID_R,
       maxAge: REFRESH_TOKEN_TTL
     });
-  } else {
-    // 关闭：清掉 sid_r（path 必须与设置时一致）
-    reply.clearCookie('sid_r', { ...COOKIE_OPTIONS.SID_R });
+    reply.setCookie(cookieName, result.refreshToken, USER_COOKIE_OPTS);
+    return { ok: true, rememberMe: true, accountKey: uid };
   }
 
-  return { ok: true, rememberMe: !!rememberMe };
+  // 关闭：清 sid_r + 清凭证 cookie（旧 refreshToken 已在 Redis 删除，cookie 残留无意义）
+  reply.clearCookie('sid_r', { ...COOKIE_OPTIONS.SID_R });
+  if (cookieName) {
+    reply.clearCookie(cookieName, USER_COOKIE_OPTS);
+  }
+  return { ok: true, rememberMe: false, accountKey: null };
 }
 
 /**

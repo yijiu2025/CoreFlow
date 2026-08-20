@@ -21,9 +21,10 @@ export const useAuthStore = defineStore('auth', () => {
   /** 控制登录弹窗显示（API 层 401 时自动设为 true） */
   const showLoginModal = ref(false);
 
-  /** 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar}}
-   *  key=accountKey（= uid 明文，后端用 HMAC(uid) 派生 HttpOnly cookie 名读 refreshToken），不含凭证 */
-  const savedAccounts = ref<Record<string, { username: string; avatar: string }>>({});
+  /** 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar, rememberMe}}
+   *  key=accountKey（= uid 明文，后端用 HMAC(uid) 派生 HttpOnly cookie 名读 refreshToken）
+   *  rememberMe=该账号是否保持登录（per-account，由 oauth21 登录勾选决定） */
+  const savedAccounts = ref<Record<string, { username: string; avatar: string; rememberMe: boolean }>>({});
 
   /** 从 localStorage 恢复已登录账号清单 */
   function loadSavedAccounts() {
@@ -42,12 +43,14 @@ export const useAuthStore = defineStore('auth', () => {
    * 登录/绑定成功后记录账号到清单（供下次免切）
    * @param user - {id, uid?, username, name?, avatar}
    * @param accountKey - uid 明文（记住我账号才有，临时登录为 null 不记录）
+   * @param rememberMe - 是否保持登录（oauth21 勾选 → accountKey 非空即 true）
    */
-  function addSavedAccount(user: any, accountKey: string | null | undefined) {
+  function addSavedAccount(user: any, accountKey: string | null | undefined, rememberMe = false) {
     if (!accountKey || !user) return;
     savedAccounts.value[accountKey] = {
       username: user.username || user.name || '用户',
-      avatar: user.avatar || ''
+      avatar: user.avatar || '',
+      rememberMe: !!rememberMe
     };
     persistSavedAccounts();
   }
@@ -60,10 +63,12 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res: any = await firewallApi.switchAccount(accountKey);
       if (res?.user) {
-        // 切换成功：更新 name/avatar（凭证在后端 HttpOnly cookie，前端不存）
+        // 切换成功：更新 name/avatar，保留原 rememberMe（能免切说明有凭证 = rememberMe=true）
+        const prev = savedAccounts.value[accountKey];
         savedAccounts.value[accountKey] = {
           username: res.user.username || res.user.name || '用户',
-          avatar: res.user.avatar || ''
+          avatar: res.user.avatar || '',
+          rememberMe: prev?.rememberMe ?? true
         };
         persistSavedAccounts();
         setLoggedIn(true, res.user);

@@ -208,9 +208,10 @@ const handleMessage = async (event: MessageEvent) => {
       }
     }
 
-    // 记录到已登录账号清单（accountKey 存 localStorage 作 key；临时登录 accountKey=null 不记录）
+    // 记录到已登录账号清单（accountKey=uid 存 localStorage 作 key；临时登录 accountKey=null 不记录）
+    // oauth21 是否勾选"保持登录" → accountKey 非空即保持（后端 rememberMe=true 才写凭证 cookie + 返回 accountKey）
     if (accountKey) {
-      authStore.addSavedAccount(user, accountKey);
+      authStore.addSavedAccount(user, accountKey, true);
     }
 
     emit('login-success', { user, token });
