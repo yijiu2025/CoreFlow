@@ -241,10 +241,10 @@ export const firewallApi = {
   bindSession: (sessionToken: string): Promise<any> =>
     apiClient.post('/auth/v1/bind-session', { session_token: sessionToken }),
 
-  // 免密切换账号（发 accountKey，后端以其作 HttpOnly cookie 名读 refreshToken）
+  // 免密切换账号（发 accountKey=uid，后端用 HMAC(uid) 派生 HttpOnly cookie 名读 refreshToken）
   switchAccount: (accountKey: string): Promise<any> => apiClient.post('/auth/v1/switch-account', { accountKey }),
 
-  // 彻底撤销某账号记住我凭证（"忘掉该账号"，发 accountKey）
+  // 彻底撤销某账号记住我凭证（"忘掉该账号"，发 accountKey=uid）
   revokeSavedAccount: (accountKey: string): Promise<any> =>
     apiClient.post('/auth/v1/saved-accounts/revoke', { accountKey }),
 

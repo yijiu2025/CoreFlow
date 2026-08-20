@@ -38,7 +38,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // ── 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar}} ──
-  // key=accountKey（HMAC(uid)，后端以其作 HttpOnly cookie 名读 refreshToken），不含凭证
+  // key=accountKey（= uid 明文，后端用 HMAC(uid) 派生 HttpOnly cookie 名读 refreshToken），不含凭证
   const savedAccounts = ref<Record<string, { username: string; avatar: string }>>({});
 
   /** 从 localStorage 恢复已登录账号清单 */
@@ -64,7 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
     persistSavedAccounts();
   }
 
-  /** 免密切换到指定账号（发 accountKey，后端以其作 cookie 名读 HttpOnly refreshToken 验证轮转） */
+  /** 免密切换到指定账号（发 accountKey=uid，后端用 HMAC(uid) 派生 cookie 名读 HttpOnly refreshToken 验证轮转） */
   async function switchAccount(accountKey: string) {
     try {
       const { authApi } = await import('@/api/auth');
@@ -89,7 +89,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** 彻底撤销某账号记住我凭证（"忘掉该账号"，发 accountKey） */
+  /** 彻底撤销某账号记住我凭证（"忘掉该账号"，发 accountKey=uid） */
   async function revokeSavedAccount(accountKey: string) {
     try {
       const { authApi } = await import('@/api/auth');

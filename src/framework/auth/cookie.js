@@ -61,16 +61,18 @@ const SECRET = process.env.SESSION_SECRET || 'change-me-session-secret';
 // ── 多账号免切凭证 cookie（HttpOnly，cookie 名 = HMAC(uid)）──
 //
 // 每账号一个 HttpOnly cookie 存其 refreshToken，cookie 名 = HMAC-SHA256(uid, SECRET)
-// 前 16 hex（形如 k_<hex>，不可逆，非明文 uid）。该 HMAC 值同时作为：
-//   1) cookie 名（后端按 accountKey 直接读 request.cookies[accountKey] 取 rt）
-//   2) 前端 localStorage 的 key（同 uid → 同 HMAC → 自动去重，不会因重复登录产生多条）
-//   3) 切账号时前端发送的 accountKey（后端无需解密，直接当 cookie 名读 rt）
-// JS 读不到 rt（HttpOnly），localStorage 只存 accountKey + name/avatar（防 XSS 窃凭证）。
-// 无明文 uid 暴露：HMAC 不可逆，换 SECRET 则所有 accountKey 失效（强制重新登录）。
+// 前 16 hex（形如 k_<hex>，不可逆，非明文 uid）。accountKey 与 cookie 名分离：
+//   - accountKey = uid 明文（前端 localStorage key + 切账号发送值，身份标识非凭证）
+//   - cookie 名  = HMAC(uid)（HttpOnly，JS 不可读；后端用 accountKey 派生，无需解密）
+// 同 uid → 同 HMAC → 同 cookie 名（确定性，自动去重）。
+// JS 读不到 rt（HttpOnly）；localStorage 只存 accountKey(=uid) + name/avatar，即使泄露也非凭证。
+// 无明文 uid 暴露风险：uid 本就是公开标识（= JWT sub），非凭证；换 SECRET 则 cookie 名全变
+// → 旧凭证 cookie 读不到 → 强制重新登录（换 SECRET 前可主动清旧 cookie，否则旧 cookie 残留至过期）。
 
 /**
- * 由 uid 生成账号 key（HMAC-SHA256(uid, SECRET) 前 16 hex）
- * 用途：凭证 cookie 名 + 前端 localStorage key + 切账号发送值，三者统一。
+ * 由 uid 生成凭证 cookie 名（HMAC-SHA256(uid, SECRET) 前 16 hex，带 k_ 前缀）
+ * 用途：HttpOnly 凭证 cookie 的名字（后端用 accountKey=uid 派生，读 request.cookies[cookieName] 取 rt）。
+ * 注意：此值不返回前端，前端 accountKey 直接用 uid 明文；二者分离。
  * 确定性：同 uid 永远相同（自动去重）；不可逆（非明文）；随 SECRET 变化。
  * @param {string} uid 用户 uid
  * @returns {string} 形如 k_<16hex>

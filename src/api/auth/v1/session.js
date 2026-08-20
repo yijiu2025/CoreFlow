@@ -76,7 +76,7 @@ export default async function (fastify) {
       }
       return reply.result.success('Session 已绑定', {
         user: result.user,
-        // accountKey = HMAC(uid)，前端存 localStorage 作多账号 key（refreshToken 在 HttpOnly cookie）
+        // accountKey = uid 明文，前端存 localStorage 作多账号 key（refreshToken 在 HttpOnly 凭证 cookie）
         accountKey: result.accountKey || null
       });
     }
