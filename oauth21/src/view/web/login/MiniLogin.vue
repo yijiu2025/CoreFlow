@@ -247,7 +247,9 @@ function startQRPolling() {
 
 onMounted(() => {
   showQR.value = appConfig.value.qrCodeFirst;
-  keepLogin.value = !appConfig.value.notKeepLogin;
+  // notKeepLogin=true（公共设备）时强制关；否则保持 ref(false) 默认，由用户在登录页手动勾选
+  // （调用方不传 notKeepLogin 即不干预，oauth21 影响 posecraft，posecraft 不影响 oauth21）
+  if (appConfig.value.notKeepLogin) keepLogin.value = false;
   if (showQR.value) generateQR();
   if (window.parent && window.parent !== window) {
     postToParent({ type: 'SSO_READY' });

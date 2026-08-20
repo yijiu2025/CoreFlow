@@ -66,12 +66,17 @@
           </div>
         </div>
 
-        <!-- 右上角保存登录信息 Switch -->
+        <!-- 右上角保存登录信息 Switch（未登录禁用） -->
         <div class="header-right-actions">
-          <div class="save-login-switch">
+          <div class="save-login-switch" :class="{ 'is-disabled': !authStore.isLoggedIn }">
             <span>保存登录信息</span>
             <label class="switch">
-              <input type="checkbox" v-model="showLoginSave" @change="onSaveLoginChange" />
+              <input
+                type="checkbox"
+                v-model="showLoginSave"
+                :disabled="!authStore.isLoggedIn"
+                @change="onSaveLoginChange"
+              />
               <span class="slider"></span>
             </label>
           </div>
@@ -1028,6 +1033,13 @@ const filteredItems = computed(() => {
   color: #cbd5e1;
   background: #18181b;
   border-color: #27272a;
+}
+
+/* 未登录时灰显（saveLoginInfo 针对 per-account 当前账号，未登录无意义） */
+.save-login-switch.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Switch 拨动开关 */

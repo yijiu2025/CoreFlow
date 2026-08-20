@@ -19,7 +19,8 @@ export const SSO_LOGIN_PARAMS = {
   styleType: 'horizontal',
   biz_params: '',
   notLoadSsoView: 'false',
-  notKeepLogin: 'false',
+  // 不传 notKeepLogin：posecraft 不干预 oauth21 登录页的"保持登录"勾选
+  // （oauth21 默认不勾，用户自己勾；勾选结果通过 bind-session 的 accountKey 反向同步 posecraft）
   isMobile: 'false',
   qrCodeFirst: 'false',
   site: '01'
