@@ -22,8 +22,8 @@
         <!-- 模式 A：账号列表（抖音式单列卡片，主题感知） -->
         <div
           v-if="mode === 'accounts' && accountList.length"
-          class="flex flex-col"
-          style="min-height: 400px; padding: 20px 20px 20px"
+          class="flex flex-col h-[484px]"
+          style="padding: 20px 20px 20px"
         >
           <!-- 顶部居中标题 -->
           <h2 class="text-center font-bold text-slate-900 dark:text-white mb-4" style="font-size: 18px">
