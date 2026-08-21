@@ -154,20 +154,20 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
  * @param {object} reply - Fastify reply
  */
 /**
- * 清除所有认证 Cookie（access_token + sid + sid_r + 当前账号凭证 cookie）
- * @param {object} [request] - Fastify request（有登录态时顺带清该账号凭证 cookie）
+ * 清除登录态 Cookie（临时退出：清 sid/sid_r，保留凭证 cookie 供下次免切）
+ *
+ * 临时退出语义：
+ * - 清 sid：立即登出，刷新不再恢复登录态
+ * - 清 sid_r：不能走自动刷新，必须重新认证（免切或密码）
+ * - 保留凭证 cookie k_<HMAC(uid)>：个人设备"记住我"的免切凭证仍在，
+ *   下次打开登录弹窗可免密切回（公共设备本就没该 cookie，无残留风险）
  * @param {object} reply - Fastify reply
  */
-export function clearAuthCookies(request, reply) {
+export function clearAuthCookies(reply) {
   reply.clearCookie('access_token', { path: '/' });
   reply.clearCookie('sid', { ...COOKIE_OPTIONS.SID });
   // sid_r 的 path 收窄到刷新端点，clear 时 path 必须一致才能清掉
   reply.clearCookie('sid_r', { ...COOKIE_OPTIONS.SID_R });
-  // 清当前账号凭证 cookie k_<HMAC(uid)>（退出即移除免切凭证，防止公共设备残留）
-  const uid = request?.state?.user?.uid;
-  if (uid) {
-    reply.clearCookie(accountKeyForUid(uid), USER_COOKIE_OPTS);
-  }
 }
 
 /**
