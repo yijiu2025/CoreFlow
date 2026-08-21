@@ -92,7 +92,9 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
   await sessionStore.delete(sessionToken);
 
   // 创建正式 Session，refreshToken 写入 HttpOnly 凭证 cookie（JS 读不到，防 XSS）
-  let accountKey = null;
+  // accountKey 始终返回 uid（前端据此记录账号到列表，无论是否保持登录）；
+  // rememberMe 标记是否可免切（true=已写凭证 cookie，false=临时登录，点它跳登录页）
+  const accountKey = sessionData.uid || null;
   try {
     const sess = await createSession({
       userId: sessionData.userId,
@@ -109,10 +111,9 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
       rememberMe: sessionData.rememberMe,
       reply
     });
-    // sid/sid_r cookie 由 createSession 下发；refreshToken 写入 HttpOnly 凭证 cookie
+    // sid/sid_r cookie 由 createSession 下发；仅 rememberMe=true 时写凭证 cookie 供免切
     // （cookie 名 = HMAC(uid)，JS 不可读；accountKey = uid 明文返回前端，仅作 localStorage key）
-    if (sess?.refreshToken && sessionData.uid) {
-      accountKey = sessionData.uid;
+    if (sess?.refreshToken && sessionData.uid && sessionData.rememberMe) {
       reply.setCookie(accountKeyForUid(sessionData.uid), sess.refreshToken, USER_COOKIE_OPTS);
     }
   } catch (err) {
@@ -142,7 +143,9 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
       avatar: sessionData.avatar
     },
     // accountKey = uid 明文，前端存 localStorage 作多账号 key（不存 refreshToken，rt 在 HttpOnly cookie）
-    accountKey
+    accountKey,
+    // rememberMe 信号：true=已写凭证 cookie 可免切；false=临时登录，点它应直接跳登录页
+    rememberMe: !!sessionData.rememberMe
   };
 }
 

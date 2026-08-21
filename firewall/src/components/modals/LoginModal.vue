@@ -91,13 +91,13 @@
 
                 <!-- 右侧操作 -->
                 <div class="flex items-center flex-shrink-0" style="gap: 8px">
-                  <!-- 非当前：一键登录按钮 -->
+                  <!-- 非当前：登录按钮（rememberMe=true=一键免切；false=去登录页） -->
                   <span
                     v-if="!isCurrentAccount(acct.accountKey)"
                     class="inline-flex items-center justify-center text-white font-semibold rounded-[6px] transition-colors group-hover:bg-red-600"
                     style="width: 88px; height: 32px; font-size: 12px; background-color: #ff4d4f"
                   >
-                    {{ switching ? '切换中…' : '一键登录' }}
+                    {{ switching ? '切换中…' : acct.rememberMe ? '一键登录' : '去登录' }}
                   </span>
                   <!-- 删除图标 -->
                   <button
@@ -235,9 +235,14 @@ function close() {
   emit('close');
 }
 
-/** 点击账号卡片免密切换 */
-async function onSwitchAccount(acct: { accountKey: string }) {
+/** 点击账号卡片：rememberMe=true 走免切；false（临时登录无凭证）直接跳 iframe 登录页 */
+async function onSwitchAccount(acct: { accountKey: string; rememberMe?: boolean }) {
   if (!acct.accountKey) return;
+  // 非保持登录账号：后端无凭证 cookie，免切必失败，直接跳 iframe 登录页
+  if (!acct.rememberMe) {
+    mode.value = 'login';
+    return;
+  }
   switching.value = true;
   try {
     const result = await authStore.switchAccount(acct.accountKey);
@@ -275,12 +280,15 @@ const handleMessage = async (event: MessageEvent) => {
     const { token, sessionToken, user } = event.data;
 
     let accountKey: string | null = null;
+    let rememberMe = false;
 
     // Session 模式：用临时 session_token 换取 sid/sid_r + 凭证 cookie（记住我才有）
+    // accountKey 始终返回 uid（无论是否保持登录），rememberMe 标记是否可免切
     if (sessionToken) {
       try {
         const res: any = await firewallApi.bindSession(sessionToken);
         accountKey = res?.accountKey || null;
+        rememberMe = !!res?.rememberMe;
       } catch (err) {
         console.warn('绑定 Session 失败:', err);
       }
@@ -295,10 +303,10 @@ const handleMessage = async (event: MessageEvent) => {
       }
     }
 
-    // 记录到已登录账号清单（accountKey=uid 存 localStorage 作 key；临时登录 accountKey=null 不记录）
-    // oauth21 是否勾选"保持登录" → accountKey 非空即保持（后端 rememberMe=true 才写凭证 cookie + 返回 accountKey）
+    // 记录到已登录账号清单：accountKey 非空即记录（无论 rememberMe，都显示在列表）
+    // rememberMe=true=可免切（后端已写凭证 cookie）；false=临时登录，点它跳登录页
     if (accountKey) {
-      authStore.addSavedAccount(user, accountKey, true);
+      authStore.addSavedAccount(user, accountKey, rememberMe);
     }
 
     emit('login-success', { user, token });
