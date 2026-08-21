@@ -203,9 +203,11 @@ const goToTab = (tabName: string) => {
 };
 
 const handleLogout = async () => {
+  // 先清后端 session + 前端用户数据（savedAccounts 保留，供弹窗显示可切账号）
   await authStore.logout();
-  // 退出后主动跳首页，避免停在受保护路由（/mine）触发路由守卫弹登录窗
+  // 跳首页（离开受保护路由避免守卫二次弹窗）+ 弹切换登录弹窗（显示已登录账号可免切回）
   router.push('/');
+  authStore.openLoginModal();
   emit('showToast', '已退出登录');
 };
 </script>

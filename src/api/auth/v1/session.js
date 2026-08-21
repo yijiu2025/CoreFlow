@@ -77,7 +77,9 @@ export default async function (fastify) {
       return reply.result.success('Session 已绑定', {
         user: result.user,
         // accountKey = uid 明文，前端存 localStorage 作多账号 key（refreshToken 在 HttpOnly 凭证 cookie）
-        accountKey: result.accountKey || null
+        accountKey: result.accountKey || null,
+        // rememberMe 信号：true=已写凭证 cookie 可免切；false=临时登录，点它跳登录页
+        rememberMe: !!result.rememberMe
       });
     }
   });
