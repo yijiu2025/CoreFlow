@@ -84,6 +84,7 @@ export default async function (fastify) {
 
   /**
    * POST /auth/v1/clear-cookie — 清除认证相关 Cookie（退出登录时调用）
+   * 清 sid/sid_r + 当前账号凭证 cookie k_<HMAC(uid)>（退出即移除免切凭证）
    */
   registerSecureRoute(fastify, {
     name: 'clearCookie',
@@ -91,7 +92,7 @@ export default async function (fastify) {
     method: 'POST',
     url: '/clear-cookie',
     handler: async (request, reply) => {
-      clearAuthCookies(reply);
+      clearAuthCookies(request, reply);
       return reply.result.success('Cookie 已清除');
     }
   });

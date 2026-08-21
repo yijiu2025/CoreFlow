@@ -13,8 +13,8 @@ export const authApi = {
   register: (data: { email: string; username: string; password: string; code: string }) =>
     service.post('/oauth21/v1/auth/register', data),
 
-  /** 登出 */
-  logout: () => service.post('/oauth21/v1/auth/logout'),
+  /** 登出（清 API 域 sid/sid_r + 凭证 cookie） */
+  clearCookie: () => service.post('/auth/v1/clear-cookie'),
 
   /** 获取当前用户信息 */
   getUserInfo: () => service.get('/user/v1/userinfo'),

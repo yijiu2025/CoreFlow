@@ -86,7 +86,9 @@ export const useAuthStore = defineStore('auth', () => {
         };
         persistSavedAccounts();
         setLoggedIn(true, res.user);
-        await fetchPermissions();
+        // 和 checkSession 对齐：拉权限 + 资料 + 统计，否则头像/关注/粉丝/作品数不刷新
+        await fetchPermissions().catch(() => {});
+        await fetchUserProfile().catch(() => {});
         return { ok: true, user: res.user };
       }
       // need_password：凭证失效，删该项
@@ -477,7 +479,14 @@ export const useAuthStore = defineStore('auth', () => {
     return false;
   }
 
-  function logout() {
+  /** 退出登录：调 API 域 clear-cookie 清 sid/sid_r（+凭证 cookie）+ 清前端状态 */
+  async function logout() {
+    try {
+      const { authApi } = await import('@/api/auth');
+      await authApi.clearCookie();
+    } catch (err) {
+      console.warn('退出登录请求失败:', err);
+    }
     setLoggedIn(false, null);
   }
 
