@@ -37,10 +37,13 @@ export const useAuthStore = defineStore('auth', () => {
     return r;
   }
 
-  // ── 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar, rememberMe}} ──
+  // ── 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar, rememberMe, lastLoginAt}} ──
   // key=accountKey（= uid 明文，后端用 HMAC(uid) 派生 HttpOnly cookie 名读 refreshToken）
   // rememberMe=该账号是否保持登录（per-account，由 oauth21 登录勾选或 posecraft 开关写入）
-  const savedAccounts = ref<Record<string, { username: string; avatar: string; rememberMe: boolean }>>({});
+  // lastLoginAt=上次登录时间戳（ms），用于账号列表"上次登录"显示
+  const savedAccounts = ref<
+    Record<string, { username: string; avatar: string; rememberMe: boolean; lastLoginAt?: number }>
+  >({});
 
   /** 从 localStorage 恢复已登录账号清单 */
   function loadSavedAccounts() {
@@ -61,7 +64,8 @@ export const useAuthStore = defineStore('auth', () => {
     savedAccounts.value[accountKey] = {
       username: user.username || user.name || '用户',
       avatar: user.avatar || '',
-      rememberMe: !!rememberMe
+      rememberMe: !!rememberMe,
+      lastLoginAt: Date.now()
     };
     persistSavedAccounts();
   }
@@ -72,12 +76,13 @@ export const useAuthStore = defineStore('auth', () => {
       const { authApi } = await import('@/api/auth');
       const res: any = await authApi.switchAccount(accountKey);
       if (res?.user) {
-        // 切换成功：更新 name/avatar，保留原 rememberMe（凭证在后端 HttpOnly cookie，前端不存）
+        // 切换成功：更新 name/avatar，保留原 rememberMe，刷新 lastLoginAt
         const prev = savedAccounts.value[accountKey];
         savedAccounts.value[accountKey] = {
           username: res.user.username || res.user.name || '用户',
           avatar: res.user.avatar || '',
-          rememberMe: prev?.rememberMe ?? true // 能免切说明有凭证 = rememberMe=true
+          rememberMe: prev?.rememberMe ?? true,
+          lastLoginAt: Date.now()
         };
         persistSavedAccounts();
         setLoggedIn(true, res.user);

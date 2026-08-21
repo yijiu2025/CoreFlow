@@ -16,52 +16,83 @@
           <X class="w-5 h-5" />
         </button>
 
-        <!-- 模式 A：账号列表（有 savedAccounts 且未切到登录） -->
-        <div v-if="mode === 'accounts' && accountList.length" class="p-10 flex flex-col" style="min-height: 484px">
-          <h2 class="text-xl font-semibold text-white mb-1">选择账号登录</h2>
-          <p class="text-sm text-slate-400 mb-6">点击已登录账号直接进入，或登录其他账号</p>
+        <!-- 模式 A：账号列表（抖音式单列卡片） -->
+        <div v-if="mode === 'accounts' && accountList.length" class="p-8 flex flex-col" style="min-height: 484px">
+          <!-- 顶部标题 -->
+          <div class="text-center mb-6">
+            <h2 class="text-lg font-semibold text-white">登录后免费畅享高清视频</h2>
+          </div>
 
-          <div class="grid grid-cols-2 gap-3 mb-6">
-            <button
+          <!-- 账号卡片列表（单列） -->
+          <div class="flex flex-col gap-3 mb-auto">
+            <div
               v-for="acct in accountList"
               :key="acct.accountKey"
-              @click="onSwitchAccount(acct)"
-              :disabled="switching"
-              class="group flex items-center gap-3 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-cyan-400/40 transition-all disabled:opacity-50"
+              class="account-card group flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/5 transition-all"
+              :class="{
+                'ring-1 ring-cyan-400/50 bg-cyan-500/5': isCurrentAccount(acct.accountKey),
+                'hover:bg-white/10': !isCurrentAccount(acct.accountKey)
+              }"
             >
+              <!-- 左侧头像 -->
               <img
                 v-if="acct.avatar"
                 :src="acct.avatar"
-                class="w-10 h-10 rounded-full object-cover"
+                class="w-12 h-12 rounded-full object-cover flex-shrink-0"
                 :alt="acct.username"
               />
               <div
                 v-else
-                class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-sm font-bold text-white"
+                class="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-base font-bold text-white flex-shrink-0"
               >
                 {{ acct.username.charAt(0) }}
               </div>
-              <div class="flex-1 text-left min-w-0">
-                <div class="text-sm text-slate-200 group-hover:text-white truncate">{{ acct.username }}</div>
-                <div class="text-xs text-slate-500">点击直接登录</div>
+
+              <!-- 中间用户名 + 上次登录 -->
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-white truncate">{{ acct.username }}</div>
+                <div class="text-xs text-red-400 mt-0.5">
+                  {{ isCurrentAccount(acct.accountKey) ? '当前账号' : '上次登录 ' + formatLastLogin(acct.lastLoginAt) }}
+                </div>
               </div>
+
+              <!-- 右侧一键登录 + 删除 -->
+              <button
+                v-if="!isCurrentAccount(acct.accountKey)"
+                @click="onSwitchAccount(acct)"
+                :disabled="switching"
+                class="px-4 py-1.5 rounded-full bg-red-500 hover:bg-red-600 text-white text-xs font-medium transition-colors disabled:opacity-50 flex-shrink-0"
+              >
+                {{ switching ? '切换中' : '一键登录' }}
+              </button>
               <span
-                @click.stop="onRevoke(acct)"
-                class="p-1 rounded-full text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                v-else
+                class="px-3 py-1.5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs font-medium flex-shrink-0"
+              >
+                当前
+              </span>
+
+              <button
+                @click="onRevoke(acct)"
+                class="p-1.5 rounded-full text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
                 title="忘掉该账号"
               >
-                <X class="w-4 h-4" />
-              </span>
-            </button>
+                <Trash2 class="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          <button
-            @click="mode = 'login'"
-            class="mt-auto flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-sm border border-white/5 transition-all"
-          >
-            <UserPlus class="w-4 h-4" />
-            登录其他账号
-          </button>
+          <!-- 底部协议 + 登录其他账号 -->
+          <div class="mt-6 text-center">
+            <p class="text-xs text-slate-500 mb-3">登录即同意 <span class="text-slate-400">用户协议</span> 和 <span class="text-slate-400">隐私政策</span></p>
+            <button
+              @click="mode = 'login'"
+              class="inline-flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+            >
+              登录其他账号
+              <ArrowRight class="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <!-- 模式 B：iframe 登录（无账号 / 点了"登录其他账号"） -->
@@ -94,7 +125,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
-import { X, UserPlus, ArrowLeft } from 'lucide-vue-next';
+import { X, UserPlus, ArrowLeft, ArrowRight, Trash2 } from 'lucide-vue-next';
 import { buildSsoLoginUrl, SSO_URL } from '@/config/services';
 import { firewallApi } from '@/api/firewall';
 import { useAuthStore } from '@/stores/auth';
@@ -129,6 +160,21 @@ const mode = ref<'accounts' | 'login'>('accounts');
 const accountList = computed(() =>
   Object.entries(savedAccounts.value).map(([accountKey, acct]) => ({ accountKey, ...acct }))
 );
+
+/** 判断某账号是否当前登录账号（用 uid 匹配 accountKey） */
+function isCurrentAccount(accountKey: string): boolean {
+  return !!authStore.user?.uid && authStore.user.uid === accountKey;
+}
+
+/** 格式化上次登录时间：刚刚 / N分钟前 / N小时前 / N天前 */
+function formatLastLogin(ts?: number): string {
+  if (!ts) return '';
+  const diff = Date.now() - ts;
+  if (diff < 60000) return '刚刚';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
+  return `${Math.floor(diff / 86400000)}天前`;
+}
 
 /** 弹窗打开时：有账号默认显示列表，无账号直接 iframe 登录 */
 watch(
