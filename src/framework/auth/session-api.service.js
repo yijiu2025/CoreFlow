@@ -153,11 +153,21 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
  * 清除所有认证 Cookie（access_token + sid + sid_r）
  * @param {object} reply - Fastify reply
  */
-export function clearAuthCookies(reply) {
+/**
+ * 清除所有认证 Cookie（access_token + sid + sid_r + 当前账号凭证 cookie）
+ * @param {object} [request] - Fastify request（有登录态时顺带清该账号凭证 cookie）
+ * @param {object} reply - Fastify reply
+ */
+export function clearAuthCookies(request, reply) {
   reply.clearCookie('access_token', { path: '/' });
   reply.clearCookie('sid', { ...COOKIE_OPTIONS.SID });
   // sid_r 的 path 收窄到刷新端点，clear 时 path 必须一致才能清掉
   reply.clearCookie('sid_r', { ...COOKIE_OPTIONS.SID_R });
+  // 清当前账号凭证 cookie k_<HMAC(uid)>（退出即移除免切凭证，防止公共设备残留）
+  const uid = request?.state?.user?.uid;
+  if (uid) {
+    reply.clearCookie(accountKeyForUid(uid), USER_COOKIE_OPTS);
+  }
 }
 
 /**

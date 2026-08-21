@@ -266,11 +266,14 @@ export const useAuthStore = defineStore('auth', () => {
     return false;
   }
 
+  /** 退出登录：先调后端清 session cookie，再清前端状态 */
   async function logout() {
-    setLoggedIn(false, null);
     try {
       await firewallApi.clearCookie();
-    } catch {}
+    } catch {
+      // 清后端失败仍清前端，避免卡在登录态
+    }
+    setLoggedIn(false, null);
   }
 
   /** 更新头像 URL */
