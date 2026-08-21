@@ -21,10 +21,13 @@ export const useAuthStore = defineStore('auth', () => {
   /** 控制登录弹窗显示（API 层 401 时自动设为 true） */
   const showLoginModal = ref(false);
 
-  /** 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar, rememberMe}}
+  /** 已登录账号清单（抖音式多账号免切）：{[accountKey]: {username, avatar, rememberMe, lastLoginAt}}
    *  key=accountKey（= uid 明文，后端用 HMAC(uid) 派生 HttpOnly cookie 名读 refreshToken）
-   *  rememberMe=该账号是否保持登录（per-account，由 oauth21 登录勾选决定） */
-  const savedAccounts = ref<Record<string, { username: string; avatar: string; rememberMe: boolean }>>({});
+   *  rememberMe=该账号是否保持登录（per-account，由 oauth21 登录勾选决定）
+   *  lastLoginAt=上次登录时间戳（ms），用于"上次登录"显示 */
+  const savedAccounts = ref<
+    Record<string, { username: string; avatar: string; rememberMe: boolean; lastLoginAt?: number }>
+  >({});
 
   /** 从 localStorage 恢复已登录账号清单 */
   function loadSavedAccounts() {
@@ -50,7 +53,8 @@ export const useAuthStore = defineStore('auth', () => {
     savedAccounts.value[accountKey] = {
       username: user.username || user.name || '用户',
       avatar: user.avatar || '',
-      rememberMe: !!rememberMe
+      rememberMe: !!rememberMe,
+      lastLoginAt: Date.now()
     };
     persistSavedAccounts();
   }
@@ -63,12 +67,13 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res: any = await firewallApi.switchAccount(accountKey);
       if (res?.user) {
-        // 切换成功：更新 name/avatar，保留原 rememberMe（能免切说明有凭证 = rememberMe=true）
+        // 切换成功：更新 name/avatar，保留原 rememberMe，刷新 lastLoginAt
         const prev = savedAccounts.value[accountKey];
         savedAccounts.value[accountKey] = {
           username: res.user.username || res.user.name || '用户',
           avatar: res.user.avatar || '',
-          rememberMe: prev?.rememberMe ?? true
+          rememberMe: prev?.rememberMe ?? true,
+          lastLoginAt: Date.now()
         };
         persistSavedAccounts();
         setLoggedIn(true, res.user);
