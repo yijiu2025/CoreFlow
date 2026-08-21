@@ -83,16 +83,16 @@ export default async function (fastify) {
   });
 
   /**
-   * POST /auth/v1/clear-cookie — 清除认证相关 Cookie（退出登录时调用）
-   * 清 sid/sid_r + 当前账号凭证 cookie k_<HMAC(uid)>（退出即移除免切凭证）
+   * POST /auth/v1/clear-cookie — 清除登录态 Cookie（临时退出，保留免切凭证）
+   * 清 sid/sid_r（立即登出 + 不能自动刷新），保留凭证 cookie 供下次免切回来。
    */
   registerSecureRoute(fastify, {
     name: 'clearCookie',
-    alias: '清除认证 Cookie',
+    alias: '清除登录态 Cookie',
     method: 'POST',
     url: '/clear-cookie',
     handler: async (request, reply) => {
-      clearAuthCookies(request, reply);
+      clearAuthCookies(reply);
       return reply.result.success('Cookie 已清除');
     }
   });
