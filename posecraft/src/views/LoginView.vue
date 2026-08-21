@@ -59,7 +59,9 @@ const showLoginModal = ref(false);
  */
 async function handleLoginSuccess(data: { user: any; token?: string }) {
   authStore.setLoggedIn(true, data.user, data.token);
-  await authStore.fetchPermissions();
+  // 和 checkSession 对齐：拉权限 + 资料（头像来自 profile），失败不影响登录态
+  await authStore.fetchPermissions().catch(() => {});
+  await authStore.fetchUserProfile().catch(() => {});
 
   const redirect = (route.query.redirect as string) || '/';
   router.push(redirect);

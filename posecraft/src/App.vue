@@ -26,10 +26,12 @@ const themeStore = useThemeStore();
 const authStore = useAuthStore();
 const router = useRouter();
 
-/** 全局弹窗登录成功：恢复登录态 + 拉权限 + 跳回原意图路由 */
+/** 全局弹窗登录成功：恢复登录态 + 拉权限 + 资料 + 跳回原意图路由 */
 async function handleLoginSuccess(data: { user: any; token?: string }) {
   authStore.setLoggedIn(true, data.user, data.token);
-  await authStore.fetchPermissions();
+  // 和 checkSession 对齐：拉权限 + 资料（头像来自 profile），失败不影响登录态
+  await authStore.fetchPermissions().catch(() => {});
+  await authStore.fetchUserProfile().catch(() => {});
   authStore.closeLoginModal();
   // 跳回受保护路由登录前的原意图（如 /mine、/editor）
   const redirect = authStore.consumePendingRedirect();

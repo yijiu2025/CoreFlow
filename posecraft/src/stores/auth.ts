@@ -86,9 +86,7 @@ export const useAuthStore = defineStore('auth', () => {
         };
         persistSavedAccounts();
         setLoggedIn(true, res.user);
-        // 和 checkSession 对齐：拉权限 + 资料 + 统计，否则头像/关注/粉丝/作品数不刷新
-        await fetchPermissions().catch(() => {});
-        await fetchUserProfile().catch(() => {});
+        // 权限由 handleLoginSuccess 统一拉取（fetchPermissions + fetchUserProfile），此处不重复
         return { ok: true, user: res.user };
       }
       // need_password：凭证失效，删该项
