@@ -22,84 +22,83 @@
         <!-- 模式 A：账号列表（抖音式单列卡片，主题感知） -->
         <div
           v-if="mode === 'accounts' && accountList.length"
-          class="flex flex-col h-[484px]"
-          style="padding: 20px 20px 20px"
+          class="flex flex-col h-[484px] px-6 py-5"
         >
           <!-- 顶部居中标题 -->
-          <h2 class="text-center font-bold text-slate-900 dark:text-white mb-4" style="font-size: 18px">
+          <h2 class="text-center font-bold text-slate-900 dark:text-white" style="font-size: 18px">
             登录后免费畅享高清视频
           </h2>
 
-          <!-- 账号卡片列表（单列，间距 15px） -->
-          <div class="flex flex-col" style="gap: 15px">
-            <div
-              v-for="acct in accountList"
-              :key="acct.accountKey"
-              class="flex items-center rounded-[8px] transition-all"
-              :style="{ padding: '10px 15px', minHeight: '60px' }"
-              :class="{
-                'bg-cyan-50 ring-1 ring-cyan-400 dark:bg-cyan-500/10 dark:ring-cyan-400/50':
-                  isCurrentAccount(acct.accountKey),
-                'bg-[#f8f8f8] hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750':
-                  !isCurrentAccount(acct.accountKey)
-              }"
-            >
-              <!-- 左侧头像 40px -->
-              <img
-                v-if="acct.avatar"
-                :src="acct.avatar"
-                class="rounded-full object-cover flex-shrink-0"
-                style="width: 40px; height: 40px"
-                :alt="acct.username"
-              />
+          <!-- 账号卡片列表区（上下左右居中，宽度收窄协调） -->
+          <div class="flex-1 flex flex-col items-center justify-center">
+            <div class="flex flex-col w-[340px] max-w-full" style="gap: 15px">
               <div
-                v-else
-                class="rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-white flex-shrink-0"
-                style="width: 40px; height: 40px; font-size: 16px"
+                v-for="acct in accountList"
+                :key="acct.accountKey"
+                class="flex items-center rounded-[8px] transition-all"
+                :style="{ padding: '10px 15px', minHeight: '60px' }"
+                :class="{
+                  'bg-cyan-50 ring-1 ring-cyan-400 dark:bg-cyan-500/10 dark:ring-cyan-400/50':
+                    isCurrentAccount(acct.accountKey),
+                  'bg-[#f8f8f8] hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750':
+                    !isCurrentAccount(acct.accountKey)
+                }"
               >
-                {{ acct.username.charAt(0) }}
-              </div>
-
-              <!-- 中间用户名 + 上次登录 -->
-              <div class="flex-1 min-w-0" style="margin-left: 10px">
-                <div class="font-medium text-slate-900 dark:text-white truncate" style="font-size: 14px">
-                  {{ acct.username }}
+                <!-- 左侧头像 40px -->
+                <img
+                  v-if="acct.avatar"
+                  :src="acct.avatar"
+                  class="rounded-full object-cover flex-shrink-0"
+                  style="width: 40px; height: 40px"
+                  :alt="acct.username"
+                />
+                <div
+                  v-else
+                  class="rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-white flex-shrink-0"
+                  style="width: 40px; height: 40px; font-size: 16px"
+                >
+                  {{ acct.username.charAt(0) }}
                 </div>
-                <div class="text-red-400" style="font-size: 10px; margin-top: 5px">
-                  {{ isCurrentAccount(acct.accountKey) ? '当前账号' : '上次登录 ' + formatLastLogin(acct.lastLoginAt) }}
+
+                <!-- 中间用户名 + 上次登录 -->
+                <div class="flex-1 min-w-0" style="margin-left: 10px">
+                  <div class="font-medium text-slate-900 dark:text-white truncate" style="font-size: 14px">
+                    {{ acct.username }}
+                  </div>
+                  <div class="text-red-400" style="font-size: 10px; margin-top: 5px">
+                    {{ isCurrentAccount(acct.accountKey) ? '当前账号' : '上次登录 ' + formatLastLogin(acct.lastLoginAt) }}
+                  </div>
                 </div>
+
+                <!-- 右侧一键登录按钮 80×30 + 删除图标 -->
+                <button
+                  v-if="!isCurrentAccount(acct.accountKey)"
+                  @click="onSwitchAccount(acct)"
+                  :disabled="switching"
+                  class="text-white font-bold rounded-[6px] transition-colors disabled:opacity-50 flex-shrink-0"
+                  style="width: 80px; height: 30px; font-size: 12px; background-color: #ff4d4f"
+                >
+                  {{ switching ? '切换中' : '一键登录' }}
+                </button>
+                <span
+                  v-else
+                  class="font-bold rounded-[6px] text-cyan-500 flex items-center justify-center flex-shrink-0"
+                  style="width: 80px; height: 30px; font-size: 12px; background-color: rgba(34, 211, 238, 0.15)"
+                >
+                  当前
+                </span>
+
+                <button
+                  @click="onRevoke(acct)"
+                  class="flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors flex-shrink-0"
+                  style="width: 16px; height: 16px; margin-left: 5px"
+                  title="忘掉该账号"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
               </div>
-
-              <!-- 右侧一键登录按钮 80×30 + 删除图标 -->
-              <button
-                v-if="!isCurrentAccount(acct.accountKey)"
-                @click="onSwitchAccount(acct)"
-                :disabled="switching"
-                class="text-white font-bold rounded-[6px] transition-colors disabled:opacity-50 flex-shrink-0"
-                style="width: 80px; height: 30px; font-size: 12px; background-color: #ff4d4f"
-              >
-                {{ switching ? '切换中' : '一键登录' }}
-              </button>
-              <span
-                v-else
-                class="font-bold rounded-[6px] text-cyan-500 flex items-center justify-center flex-shrink-0"
-                style="width: 80px; height: 30px; font-size: 12px; background-color: rgba(34, 211, 238, 0.15)"
-              >
-                当前
-              </span>
-
-              <button
-                @click="onRevoke(acct)"
-                class="flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors flex-shrink-0"
-                style="width: 16px; height: 16px; margin-left: 5px"
-                title="忘掉该账号"
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
             </div>
           </div>
-
-          <div class="flex-1"></div>
 
           <!-- 底部协议 + 登录其他账号 -->
           <div class="text-center" style="margin-top: 20px">
