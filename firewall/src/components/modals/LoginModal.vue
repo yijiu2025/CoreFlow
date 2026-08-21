@@ -1,80 +1,97 @@
 <template>
   <Transition name="modal-fade">
     <div v-if="isOpen" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-      <!-- Backdrop -->
-      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="close"></div>
-
-      <!-- Modal Content -->
+      <!-- Backdrop（主题感知遮罩） -->
       <div
-        class="relative w-[856px] glass-dark rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 flex flex-col animate-in zoom-in-95 duration-300"
+        class="absolute inset-0 bg-slate-950/60 dark:bg-black/70 backdrop-blur-sm"
+        @click="close"
+      ></div>
+
+      <!-- Modal Content（主题感知：白天白底，黑夜暗底） -->
+      <div
+        class="relative w-[856px] max-w-[90vw] rounded-[10px] overflow-hidden shadow-2xl border flex flex-col animate-in zoom-in-95 duration-300 bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-700"
       >
-        <!-- Close Button -->
+        <!-- Close Button（主题感知图标色） -->
         <button
           @click="close"
-          class="absolute top-6 right-6 z-10 p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+          class="absolute top-2.5 right-2.5 z-10 w-6 h-6 flex items-center justify-center text-slate-800 dark:text-slate-300 hover:text-slate-600 dark:hover:text-white transition-colors"
         >
           <X class="w-5 h-5" />
         </button>
 
-        <!-- 模式 A：账号列表（抖音式单列卡片） -->
-        <div v-if="mode === 'accounts' && accountList.length" class="p-8 flex flex-col" style="min-height: 484px">
-          <!-- 顶部标题 -->
-          <div class="text-center mb-6">
-            <h2 class="text-lg font-semibold text-white">登录后免费畅享高清视频</h2>
-          </div>
+        <!-- 模式 A：账号列表（抖音式单列卡片，主题感知） -->
+        <div
+          v-if="mode === 'accounts' && accountList.length"
+          class="flex flex-col"
+          style="min-height: 400px; padding: 20px 20px 20px"
+        >
+          <!-- 顶部居中标题 -->
+          <h2 class="text-center font-bold text-slate-900 dark:text-white mb-4" style="font-size: 18px">
+            登录后免费畅享高清视频
+          </h2>
 
-          <!-- 账号卡片列表（单列） -->
-          <div class="flex flex-col gap-3 mb-auto">
+          <!-- 账号卡片列表（单列，间距 15px） -->
+          <div class="flex flex-col" style="gap: 15px">
             <div
               v-for="acct in accountList"
               :key="acct.accountKey"
-              class="account-card group flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/5 transition-all"
+              class="flex items-center rounded-[8px] transition-all"
+              :style="{ padding: '10px 15px', minHeight: '60px' }"
               :class="{
-                'ring-1 ring-cyan-400/50 bg-cyan-500/5': isCurrentAccount(acct.accountKey),
-                'hover:bg-white/10': !isCurrentAccount(acct.accountKey)
+                'bg-cyan-50 ring-1 ring-cyan-400 dark:bg-cyan-500/10 dark:ring-cyan-400/50':
+                  isCurrentAccount(acct.accountKey),
+                'bg-[#f8f8f8] hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750':
+                  !isCurrentAccount(acct.accountKey)
               }"
             >
-              <!-- 左侧头像 -->
+              <!-- 左侧头像 40px -->
               <img
                 v-if="acct.avatar"
                 :src="acct.avatar"
-                class="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                class="rounded-full object-cover flex-shrink-0"
+                style="width: 40px; height: 40px"
                 :alt="acct.username"
               />
               <div
                 v-else
-                class="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-base font-bold text-white flex-shrink-0"
+                class="rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-white flex-shrink-0"
+                style="width: 40px; height: 40px; font-size: 16px"
               >
                 {{ acct.username.charAt(0) }}
               </div>
 
               <!-- 中间用户名 + 上次登录 -->
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-white truncate">{{ acct.username }}</div>
-                <div class="text-xs text-red-400 mt-0.5">
+              <div class="flex-1 min-w-0" style="margin-left: 10px">
+                <div class="font-medium text-slate-900 dark:text-white truncate" style="font-size: 14px">
+                  {{ acct.username }}
+                </div>
+                <div class="text-red-400" style="font-size: 10px; margin-top: 5px">
                   {{ isCurrentAccount(acct.accountKey) ? '当前账号' : '上次登录 ' + formatLastLogin(acct.lastLoginAt) }}
                 </div>
               </div>
 
-              <!-- 右侧一键登录 + 删除 -->
+              <!-- 右侧一键登录按钮 80×30 + 删除图标 -->
               <button
                 v-if="!isCurrentAccount(acct.accountKey)"
                 @click="onSwitchAccount(acct)"
                 :disabled="switching"
-                class="px-4 py-1.5 rounded-full bg-red-500 hover:bg-red-600 text-white text-xs font-medium transition-colors disabled:opacity-50 flex-shrink-0"
+                class="text-white font-bold rounded-[6px] transition-colors disabled:opacity-50 flex-shrink-0"
+                style="width: 80px; height: 30px; font-size: 12px; background-color: #ff4d4f"
               >
                 {{ switching ? '切换中' : '一键登录' }}
               </button>
               <span
                 v-else
-                class="px-3 py-1.5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs font-medium flex-shrink-0"
+                class="font-bold rounded-[6px] text-cyan-500 flex items-center justify-center flex-shrink-0"
+                style="width: 80px; height: 30px; font-size: 12px; background-color: rgba(34, 211, 238, 0.15)"
               >
                 当前
               </span>
 
               <button
                 @click="onRevoke(acct)"
-                class="p-1.5 rounded-full text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                class="flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors flex-shrink-0"
+                style="width: 16px; height: 16px; margin-left: 5px"
                 title="忘掉该账号"
               >
                 <Trash2 class="w-4 h-4" />
@@ -82,15 +99,21 @@
             </div>
           </div>
 
+          <div class="flex-1"></div>
+
           <!-- 底部协议 + 登录其他账号 -->
-          <div class="mt-6 text-center">
-            <p class="text-xs text-slate-500 mb-3">登录即同意 <span class="text-slate-400">用户协议</span> 和 <span class="text-slate-400">隐私政策</span></p>
+          <div class="text-center" style="margin-top: 20px">
+            <p class="text-slate-400 dark:text-slate-500" style="font-size: 10px">
+              登录即同意 <span class="text-slate-500 dark:text-slate-400">用户协议</span> 和
+              <span class="text-slate-500 dark:text-slate-400">隐私政策</span>
+            </p>
             <button
               @click="mode = 'login'"
-              class="inline-flex items-center gap-1 text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+              class="inline-flex items-center gap-1 transition-colors mt-2.5"
+              style="font-size: 12px; color: #1890ff"
             >
               登录其他账号
-              <ArrowRight class="w-4 h-4" />
+              <ArrowRight class="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -103,7 +126,7 @@
           <button
             v-if="accountList.length"
             @click="mode = 'accounts'"
-            class="absolute top-6 left-6 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs transition-all"
+            class="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs transition-all"
           >
             <ArrowLeft class="w-3.5 h-3.5" />
             返回账号列表
@@ -284,11 +307,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.glass-dark {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(20px);
-}
-
 .modal-fade-enter-active,
 .modal-fade-leave-active {
   transition: opacity 0.3s ease;
