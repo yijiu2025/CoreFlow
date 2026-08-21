@@ -20,6 +20,12 @@ export const USER_API_URL = import.meta.env.VITE_USER_API_URL || API_BASE_URL;
 /** SSO 登录页面路径 */
 export const SSO_LOGIN_PATH = '/mini-login';
 
+/** 登录弹窗展示文案（按应用配置，供 LoginModal 引用） */
+export const LOGIN_COPY = {
+  title: '登录防火墙管理控制台',
+  subtitle: '选择账号一键登录，或登录其他账号'
+};
+
 /** SSO 登录默认参数 */
 export const SSO_LOGIN_PARAMS = {
   lang: 'zh_cn',
