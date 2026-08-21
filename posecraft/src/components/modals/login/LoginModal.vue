@@ -140,11 +140,11 @@
         <div v-else class="w-full relative h-[484px]">
           <iframe ref="iframeRef" :src="loginUrl" class="w-full h-full border-none" allow="payment"></iframe>
 
-          <!-- 有账号时显示"返回账号列表" -->
+          <!-- 有账号时显示"返回账号列表"（实色不透明，避免 iframe 背景上 hover 看不清） -->
           <button
             v-if="accountList.length"
             @click="mode = 'accounts'"
-            class="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs transition-all"
+            class="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shadow-sm border transition-all bg-white/90 hover:bg-white text-slate-700 hover:text-slate-900 border-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-700 dark:text-slate-200 dark:hover:text-white dark:border-slate-600"
           >
             <ArrowLeft class="w-3.5 h-3.5" />
             返回账号列表
