@@ -202,8 +202,10 @@ const goToTab = (tabName: string) => {
   router.push({ path: '/mine', query: { tab: tabName } });
 };
 
-const handleLogout = () => {
-  authStore.logout();
+const handleLogout = async () => {
+  await authStore.logout();
+  // 退出后主动跳首页，避免停在受保护路由（/mine）触发路由守卫弹登录窗
+  router.push('/');
   emit('showToast', '已退出登录');
 };
 </script>
