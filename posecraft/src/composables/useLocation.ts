@@ -93,7 +93,8 @@ export function useLocation() {
    */
   const reverseGeocode = async (lat: number, lng: number): Promise<{ region: string; fullAddr: string }> => {
     try {
-      const res = await fetch(`https://photon.komoot.io/reverse/?lat=${lat}&lon=${lng}&limit=1&lang=zh`);
+      // photon 不支持 zh，用 default（返回该地区本地语言地名，对中国返回中文）
+      const res = await fetch(`https://photon.komoot.io/reverse/?lat=${lat}&lon=${lng}&limit=1&lang=default`);
       if (res.ok) {
         const data = await res.json();
         if (data.features?.length) {
