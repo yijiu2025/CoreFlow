@@ -338,22 +338,37 @@ watch(showQR, val => {
       <!-- QR 插槽定制 -->
       <template #qr v-if="!showConsent">
         <div class="qr-container flex flex-col items-center justify-center flex-1 py-4">
-          <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 relative group overflow-hidden">
-            <div class="absolute top-0 left-0 w-full h-[2px] bg-primary/60 blur-[2px] animate-scan z-10"></div>
+          <div
+            class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 relative group overflow-hidden cursor-pointer"
+            :class="{ 'border-rose-300': qrStatus === 'expired' }"
+            @click="qrStatus === 'expired' && generateQR()"
+          >
+            <div class="absolute top-0 left-0 w-full h-[2px] bg-primary/60 blur-[2px] animate-scan z-10" v-if="qrStatus !== 'expired'"></div>
             <img
               v-if="qrDataUrl"
               :src="qrDataUrl"
-              class="w-40 h-40 opacity-90 group-hover:opacity-100 transition-opacity"
+              class="w-40 h-40 transition-opacity"
+              :class="qrStatus === 'expired' ? 'opacity-30' : 'opacity-90 group-hover:opacity-100'"
             />
             <div v-else class="w-40 h-40 flex items-center justify-center">
               <div class="w-8 h-8 border-2 border-slate-200 border-t-primary rounded-full animate-spin"></div>
             </div>
+            <!-- 过期蒙层：点击刷新 -->
+            <div
+              v-if="qrStatus === 'expired'"
+              class="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-white/60 dark:bg-slate-900/60"
+            >
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-rose-500">
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+              <span class="text-xs font-medium text-rose-500">点击刷新</span>
+            </div>
           </div>
           <p class="mt-6 text-xs text-slate-500 text-center">
             {{ t('login.qr_scan_hint', { app: appConfig.appName }) }}
-          </p>
-          <p v-if="qrStatus === 'expired'" class="mt-2 text-xs text-rose-500 cursor-pointer" @click="generateQR">
-            {{ t('login.qr_click_refresh') }}
           </p>
         </div>
       </template>
