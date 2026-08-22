@@ -76,11 +76,9 @@ export default async function (fastify) {
           userId: user?.numericId || user?.id,
           success: true
         });
-        // 字段最小化：前端只需知道注册成功 + 基本标识，不返回 phone/personal_id/delete_version 等
+        // L5：字段最小化，注册只返回成功标识，uid/email 等登录后从 user 信息接口取
         return reply.result.success('注册成功', {
-          uid: user?.uid,
-          username: user?.username,
-          email: user?.email
+          username: user?.username
         });
       } catch (err) {
         await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });

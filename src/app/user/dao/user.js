@@ -178,32 +178,33 @@ class UserDao {
 
     const hashedPassword = bcrypt.hashSync(password, 10);
 
-    return await sequelize.transaction(async t => {
-      const user = await getModel('User').create({ username, email }, { transaction: t });
+    try {
+      return await sequelize.transaction(async t => {
+        const user = await getModel('User').create({ username, email }, { transaction: t });
 
-      await getModel('UserIdentity').create(
-        {
-          user_id: user.id,
-          identity_type: 'password',
-          identifier: email,
-          credential: hashedPassword
-        },
-        { transaction: t }
-      );
+        await getModel('UserIdentity').create(
+          {
+            user_id: user.id,
+            identity_type: 'password',
+            identifier: email,
+            credential: hashedPassword
+          },
+          { transaction: t }
+        );
 
-      const roleIds = role_ids || [];
-      if (roleIds.length > 0) {
-        for (const rid of roleIds) {
-          await getModel('UserRole').create(
-            {
-              user_id: user.id,
-              role_id: rid,
-              app_id: 'GLOBAL'
-            },
-            { transaction: t }
-          );
-        }
-      } else {
+        const roleIds = role_ids || [];
+        if (roleIds.length > 0) {
+          for (const rid of roleIds) {
+            await getModel('UserRole').create(
+              {
+                user_id: user.id,
+                role_id: rid,
+                app_id: 'GLOBAL'
+              },
+              { transaction: t }
+            );
+          }
+        } else {
         // 默认 guest 角色（rank_level=1, app_id=GLOBAL），找不到则抛错回滚，
         // 避免注册出"有用户无角色"的脏数据（权限为空无法正常使用）
         const guestRole = await getModel('Role').findOne({
@@ -225,6 +226,17 @@ class UserDao {
 
       return user;
     });
+    } catch (err) {
+      // L4：并发注册同 email，预检过了但事务内 create 撞唯一索引
+      // 转 400 业务错误，避免抛 500 + 暴露 DB 错误细节
+      const isUniqueViolation =
+        err?.name === 'SequelizeUniqueConstraintError' ||
+        err?.parent?.code === 'ER_DUP_ENTRY';
+      if (isUniqueViolation) {
+        throw new Error('REGISTER_FAILED:邮箱已存在');
+      }
+      throw err;
+    }
   }
 
   /**
