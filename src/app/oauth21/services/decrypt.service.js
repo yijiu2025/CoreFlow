@@ -102,14 +102,20 @@ export async function decryptLoginRequest(request, fastify) {
 /**
  * 验证邮箱验证码
  * @param {string} email - 邮箱
+/**
+ * 校验邮箱验证码（登录场景，绑定客户端指纹防异地冒用）
+ * @param {string} email - 邮箱
  * @param {string} code - 验证码
- * @param {object} fastify - Fastify 实例
+ * @param {object} request - Fastify request（用于校验 IP+UA 指纹一致性）
  * @returns {object} { success?, error? }
  */
-export async function verifyEmailCode(email, code, fastify) {
+export async function verifyEmailCode(email, code, request) {
   const emailCodeStore = getStore('email_code');
   try {
-    await emailDao.verifyCode(email, code, emailCodeStore);
+    await emailDao.verifyCode(email, code, emailCodeStore, {
+      ip: request?.ip,
+      ua: request?.headers?.['user-agent'] || ''
+    });
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message || '验证码错误或已过期' };

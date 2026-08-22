@@ -79,7 +79,7 @@ export async function directLogin(request, reply, fastify) {
   let user;
 
   if (type === 'email') {
-    const emailVerify = await verifyEmailCode(email, code, fastify);
+    const emailVerify = await verifyEmailCode(email, code, request);
     if (!emailVerify.success) {
       return reply.code(400).send({
         code: 400,
