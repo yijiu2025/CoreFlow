@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
 import { useRoute, useRouter } from 'vue-router';
@@ -17,7 +16,6 @@ onMounted(() => {
   if (recaptchaEnabled.value) loadRecaptcha();
 });
 
-const authStore = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 
@@ -36,7 +34,7 @@ const registerSchema = z
       .regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, '密码必须同时包含数字和字母'),
     confirmPassword: z.string({ required_error: '请确认密码' }).min(1, '请再次输入密码以确认')
   })
-  .refine(data => data.password === data.confirmPassword, {
+  .refine((data: any) => data.password === data.confirmPassword, {
     message: '两次输入的密码不一致',
     path: ['confirmPassword']
   });
@@ -481,7 +479,7 @@ const openDoc = (type: 'service' | 'privacy') => {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
-/* mini 模式（iframe 嵌入）撑满 */
+/* mini 模式（iframe 嵌入 posecraft LoginModal）：撑满 + 紧凑大气 */
 .registration-viewport.is-mini {
   padding: 0;
   background: transparent;
@@ -491,6 +489,17 @@ const openDoc = (type: 'service' | 'privacy') => {
   max-height: 100%;
   border-radius: 0;
   box-shadow: none;
+}
+/* iframe 里品牌栏窄一点 + 表单 padding 紧凑（484 高度内不溢出） */
+.registration-viewport.is-mini .registration-box > div:first-child {
+  width: 240px;
+  padding: 28px;
+}
+.registration-viewport.is-mini .registration-box > div:last-child {
+  padding: 28px 32px;
+}
+.registration-viewport.is-mini .registration-box h2 {
+  font-size: 20px;
 }
 
 .input-wrapper {
