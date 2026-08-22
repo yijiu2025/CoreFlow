@@ -144,6 +144,17 @@ const openDoc = (type: 'service' | 'privacy') => {
             <li><span class="reg-check"></span>随时撤销授权</li>
           </ul>
         </div>
+
+        <!-- 左下角：返回登录 -->
+        <router-link
+          :to="{ path: isMini ? '/mini-login' : '/', query: route.query }"
+          class="reg-brand-signin"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          已有账户？立即返回登录
+        </router-link>
       </div>
 
       <!-- 右表单栏 -->
@@ -234,11 +245,6 @@ const openDoc = (type: 'service' | 'privacy') => {
           </label>
         </form>
 
-        <!-- 返回登录 -->
-        <div class="reg-signin">
-          已有账户？
-          <router-link :to="{ path: isMini ? '/mini-login' : '/', query: route.query }" class="reg-link">立即返回登录</router-link>
-        </div>
       </div>
     </div>
 
@@ -295,13 +301,13 @@ const openDoc = (type: 'service' | 'privacy') => {
   50% { opacity: 0.6; }
 }
 
-/* === 卡片（学登录页 856×480 glass-effect rounded-[32px] 左右分栏） === */
+/* === 卡片（学登录页 glass-effect rounded-[32px] 左右分栏） === */
 .reg-card {
   position: relative;
   z-index: 1;
   width: 100%;
   max-width: 856px;
-  height: 484px;
+  min-height: 520px;
   max-height: calc(100vh - 48px);
   border-radius: 32px;
   overflow: hidden;
@@ -405,12 +411,13 @@ const openDoc = (type: 'service' | 'privacy') => {
 /* 右表单栏 */
 .reg-panel {
   flex: 1;
-  padding: 32px 36px;
+  padding: 36px 40px;
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
   min-width: 0;
+  justify-content: space-between;
 }
 
 /* 标题区 */
@@ -594,18 +601,23 @@ const openDoc = (type: 'service' | 'privacy') => {
   text-decoration: underline;
 }
 
-/* 返回登录 */
-.reg-signin {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(226, 232, 240, 0.8);
-  text-align: center;
-  font-size: 12px;
-  color: #64748b;
+/* 左下角返回登录（品牌栏底部，白色） */
+.reg-brand-signin {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  transition: color 0.2s;
 }
-:global(.dark) .reg-signin {
-  border-top-color: rgba(51, 65, 85, 0.5);
-  color: #94a3b8;
+.reg-brand-signin:hover {
+  color: #fff;
 }
 
 /* === mini 模式（iframe 嵌入弹窗，撑满） === */
