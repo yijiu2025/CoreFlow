@@ -70,6 +70,11 @@
   * {
     @apply border-border;
   }
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* 路由切换时避免滚动条闪现（登录↔注册等全屏页） */
+  }
   body {
     @apply bg-background text-foreground font-sans;
     font-feature-settings:
