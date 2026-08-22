@@ -43,7 +43,7 @@
                 type="button"
                 :disabled="switching || isCurrentAccount(acct.accountKey)"
                 @click="!isCurrentAccount(acct.accountKey) && onSwitchAccount(acct)"
-                class="account-card group relative flex items-center rounded-[12px] border transition-all text-left overflow-hidden disabled:cursor-default"
+                class="account-card group relative flex items-center rounded-[8px] border transition-all text-left overflow-hidden disabled:cursor-default"
                 :style="{ padding: '14px 16px', minHeight: '72px' }"
                 :class="{
                   'border-cyan-400/60 dark:border-cyan-400/50 bg-cyan-50/70 dark:bg-cyan-500/10':
