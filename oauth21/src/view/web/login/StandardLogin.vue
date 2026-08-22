@@ -362,7 +362,7 @@ const isEmbedded = computed(() => {
             <button
               type="submit"
               :disabled="authStore.loading"
-              class="w-full h-12 bg-gradient-to-r from-primary to-fuchsia-600 hover:from-primary/90 hover:to-fuchsia-600/90 text-white rounded-xl font-bold shadow-lg shadow-primary/25 active:scale-[0.98] transition-all disabled:opacity-70 disabled:active:scale-100 flex items-center justify-center gap-2 mt-8 mb-6"
+              class="auth-btn mt-8 mb-6"
             >
               <span
                 v-if="authStore.loading"

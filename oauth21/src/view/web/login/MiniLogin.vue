@@ -364,7 +364,7 @@ onMounted(() => {
             type="button"
             @click="approveConsent"
             :disabled="submittingConsent"
-            class="flex-1 h-11 bg-primary text-white rounded-xl font-bold text-xs shadow-lg shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            class="auth-btn flex-1 h-11 text-xs"
           >
             <span
               v-if="submittingConsent"
@@ -460,7 +460,7 @@ onMounted(() => {
           <button
             type="submit"
             :disabled="authStore.loading"
-            class="w-full h-12 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 active:scale-[0.98] transition-all mt-4 flex items-center justify-center gap-2"
+            class="auth-btn mt-4"
           >
             <span
               v-if="authStore.loading"
