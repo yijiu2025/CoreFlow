@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { authApi } from '@/api/auth';
 import { postToParent } from '@/utils/parent';
+import QRCode from 'qrcode';
 import AuthContainer from '@/components/common/AuthContainer.vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
@@ -41,6 +42,7 @@ const keepLogin = ref(false);
 
 // 二维码状态
 const qrKey = ref('');
+const qrDataUrl = ref('');
 const qrStatus = ref<'pending' | 'scanned' | 'confirmed' | 'expired'>('pending');
 let qrPollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -225,6 +227,8 @@ async function generateQR() {
     const res: any = await authApi.generateQR();
     qrKey.value = res.qrKey;
     qrStatus.value = 'pending';
+    // 本地生成二维码图片（data URL），不依赖外部 api.qrserver.com（国内访问慢/被墙）
+    qrDataUrl.value = await QRCode.toDataURL(res.qrKey, { width: 200, margin: 1 });
     startQRPolling();
   } catch {
     showError(t('login.qr_generate_failed'));
@@ -281,6 +285,17 @@ onUnmounted(() => {
     qrPollTimer = null;
   }
 });
+
+// 切换到扫码模式时自动生成二维码（点击"扫码登录"按钮触发，非 qrCodeFirst 场景）
+watch(showQR, val => {
+  if (val && !qrKey.value) {
+    generateQR();
+  } else if (!val && qrPollTimer) {
+    // 切回密码登录，停止轮询
+    clearInterval(qrPollTimer);
+    qrPollTimer = null;
+  }
+});
 </script>
 
 <template>
@@ -320,8 +335,8 @@ onUnmounted(() => {
           <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 relative group overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-[2px] bg-primary/60 blur-[2px] animate-scan z-10"></div>
             <img
-              v-if="qrKey"
-              :src="`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${qrKey}`"
+              v-if="qrDataUrl"
+              :src="qrDataUrl"
               class="w-40 h-40 opacity-90 group-hover:opacity-100 transition-opacity"
             />
             <div v-else class="w-40 h-40 flex items-center justify-center">
