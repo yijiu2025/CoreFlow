@@ -44,10 +44,13 @@ export default async function (fastify) {
       rateLimit: { max: 5, timeWindow: '1 minute' }
     },
     handler: async (request, reply) => {
-      // 验证邮件验证码
+      // 验证邮件验证码（绑定客户端指纹，防异地冒用）
       try {
         const { email, code } = request.body;
-        await emailDao.verifyCode(email, code, emailCodeStore);
+        await emailDao.verifyCode(email, code, emailCodeStore, {
+          ip: request.ip,
+          ua: request.headers['user-agent'] || ''
+        });
       } catch (err) {
         return reply.result.fail(err.message, null, 400);
       }

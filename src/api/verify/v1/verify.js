@@ -54,7 +54,12 @@ export default async function (fastify, opts) {
           request.body,
           captchaStore,
           emailCodeStore,
-          (email, sessionId, store) => emailDao.sendCode(email, sessionId, store)
+          // 发码时绑定客户端指纹（IP+UA），用码时回查一致性（防异地冒用）
+          (email, sessionId, store) =>
+            emailDao.sendCode(email, sessionId, store, {
+              ip: request.ip,
+              ua: request.headers['user-agent'] || ''
+            })
         );
         return reply.result.success(result.message, {
           emailSent: result.emailSent
@@ -76,7 +81,10 @@ export default async function (fastify, opts) {
     handler: async (request, reply) => {
       const { email, code } = request.body;
       try {
-        await emailDao.verifyCode(email, code, emailCodeStore);
+        await emailDao.verifyCode(email, code, emailCodeStore, {
+          ip: request.ip,
+          ua: request.headers['user-agent'] || ''
+        });
         return reply.result.success('验证码校验通过');
       } catch (err) {
         return reply.result.fail(err.message, null, 400);
