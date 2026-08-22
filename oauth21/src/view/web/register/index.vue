@@ -3,11 +3,19 @@ import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
 import { useRoute, useRouter } from 'vue-router';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
+import { useRecaptcha } from '@/composables/useRecaptcha';
+
+const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken } = useRecaptcha();
+
+// 预加载 hCaptcha SDK（启用时，提前 warm up 避免提交时才加载）
+onMounted(() => {
+  if (recaptchaEnabled.value) loadRecaptcha();
+});
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -136,11 +144,14 @@ const executeRegister = async () => {
   try {
     const { confirmPassword, ...submitData } = values;
     const encryptedPassword = await rsaEncrypt(submitData.password!);
+    // 人机验证（仅 RECAPTCHA_ENABLED=true 时取 token，后端校验）
+    const recaptchaToken = recaptchaEnabled.value ? await getRecaptchaToken() : null;
     await authApi.register({
       ...submitData,
       password: encryptedPassword,
       kid: getCachedKid(),
-      captchaKey: captchaKey.value // 回传 captchaKey，后端校验邮箱码 sessionId 一致性
+      captchaKey: captchaKey.value, // 回传 captchaKey，后端校验邮箱码 sessionId 一致性
+      ...(recaptchaToken ? { recaptchaToken } : {})
     });
     alert('注册成功！现在您可以返回登录了');
 

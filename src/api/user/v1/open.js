@@ -12,6 +12,8 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import userDao from '../../../app/user/dao/user.js';
 import { emailDao } from '../../../framework/verify/email/index.js';
+import { recaptchaDao } from '../../../framework/verify/recaptcha/index.js';
+import verifyConfig from '../../../framework/verify/config.js';
 import { getStore } from '../../../framework/redis/index.js';
 import { logRegister } from '../../../framework/auth/audit-logger.js';
 import '../../../app/user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
@@ -53,6 +55,16 @@ export default async function (fastify) {
         userAgent: request.headers['user-agent'] || '',
         appId: 'user'
       };
+
+      // 人机验证（仅 RECAPTCHA_ENABLED=true 时校验，防注册接口被脚本灌水）
+      if (verifyConfig.recaptcha.enabled) {
+        const { recaptchaToken } = request.body;
+        const valid = await recaptchaDao.isValid(recaptchaToken, request.ip);
+        if (!valid) {
+          await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: '人机验证失败' });
+          return reply.result.fail('人机验证失败，请重试', null, 400);
+        }
+      }
 
       // 验证邮件验证码（绑定客户端指纹 + sessionId 一致性，防异地冒用 + 跨流程复用）
       try {

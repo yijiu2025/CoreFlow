@@ -31,8 +31,11 @@ export default {
     rateLimit: parseInt(process.env.SMS_RATE_LIMIT || '60')
   },
 
-  // 人机验证
+  // 人机验证（hCaptcha / Google reCAPTCHA）
+  // ENABLED=false（默认）：不校验，注册流程不受影响（开发/未配密钥时）
+  // ENABLED=true：注册端点校验 recaptchaToken，需配置 SITE_KEY + SECRET_KEY
   recaptcha: {
+    enabled: process.env.RECAPTCHA_ENABLED === 'true',
     provider: process.env.RECAPTCHA_PROVIDER || 'google',
     secretKey: process.env.RECAPTCHA_SECRET_KEY || '',
     siteKey: process.env.RECAPTCHA_SITE_KEY || '',

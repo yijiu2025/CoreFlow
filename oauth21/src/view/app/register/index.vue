@@ -6,6 +6,13 @@ import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
+import { useRecaptcha } from '@/composables/useRecaptcha';
+import { onMounted } from 'vue';
+
+const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken } = useRecaptcha();
+onMounted(() => {
+  if (recaptchaEnabled.value) loadRecaptcha();
+});
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -69,11 +76,13 @@ const handleRegister = handleSubmit(async data => {
   try {
     const { confirmPassword, ...submitData } = data;
     const encryptedPassword = await rsaEncrypt(submitData.password);
+    const recaptchaToken = recaptchaEnabled.value ? await getRecaptchaToken() : null;
     await authApi.register({
       ...submitData,
       password: encryptedPassword,
       kid: getCachedKid(),
-      captchaKey: captchaKey.value // 回传 captchaKey，后端校验邮箱码 sessionId 一致性
+      captchaKey: captchaKey.value, // 回传 captchaKey，后端校验邮箱码 sessionId 一致性
+      ...(recaptchaToken ? { recaptchaToken } : {})
     });
     alert('注册成功！');
     router.push('/m/login');
