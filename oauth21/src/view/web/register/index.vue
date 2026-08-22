@@ -183,10 +183,10 @@ const openDoc = (type: 'service' | 'privacy') => {
       class="bg-blur absolute -bottom-40 -right-40 w-[400px] h-[400px] bg-indigo-500/20 rounded-full blur-[100px] animate-pulse delay-1000"
     ></div>
 
-    <div class="registration-box relative flex overflow-hidden transition-all duration-500 w-full h-full">
+    <div class="registration-box relative flex overflow-hidden transition-all duration-500">
       <!-- Left Branding Panel: High-end Gradient & Glass -->
       <div
-        class="w-[320px] relative bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-10 flex flex-col justify-between overflow-hidden shrink-0"
+        class="w-[280px] relative bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-8 flex flex-col justify-between overflow-hidden shrink-0"
       >
         <!-- Decoration -->
         <div class="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_50%_-20%,#ffffff,transparent)]"></div>
@@ -248,15 +248,15 @@ const openDoc = (type: 'service' | 'privacy') => {
       </div>
 
       <!-- Right Form Panel -->
-      <div class="flex-1 bg-white dark:bg-slate-900 p-12 flex flex-col relative overflow-y-auto">
-        <div class="max-w-[420px] mx-auto w-full my-auto">
-          <div class="mb-8">
-            <h3 class="text-2xl font-bold dark:text-white mb-2">创建新账户</h3>
+      <div class="flex-1 bg-white dark:bg-slate-900 p-8 flex flex-col relative overflow-y-auto">
+        <div class="max-w-[400px] mx-auto w-full my-auto">
+          <div class="mb-6">
+            <h3 class="text-xl font-bold dark:text-white mb-1.5">创建新账户</h3>
             <p class="text-slate-400 text-xs">填写以下信息，即刻开启全功能体验</p>
           </div>
 
           <form @submit.prevent="handleRegister">
-            <div class="space-y-4">
+            <div class="space-y-3">
               <!-- Row 1: Nickname & Email -->
               <div class="grid grid-cols-2 gap-4">
                 <div class="space-y-1.5">
@@ -452,17 +452,45 @@ const openDoc = (type: 'service' | 'privacy') => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: transparent;
+  background: radial-gradient(ellipse at top, rgba(99, 102, 241, 0.08), transparent 60%),
+              radial-gradient(ellipse at bottom right, rgba(59, 130, 246, 0.06), transparent 60%),
+              #f8fafc;
   font-family: 'Outfit', 'Inter', sans-serif;
+  padding: 24px;
+}
+
+:global(.dark) .registration-viewport {
+  background: radial-gradient(ellipse at top, rgba(99, 102, 241, 0.12), transparent 60%),
+              radial-gradient(ellipse at bottom right, rgba(59, 130, 246, 0.08), transparent 60%),
+              #020617;
 }
 
 .registration-box {
   background: white;
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 880px;
+  height: auto;
+  max-height: calc(100vh - 48px);
   transition: all 0.4s ease;
 }
 
 .dark .registration-box {
   background: #0f172a;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* mini 模式（iframe 嵌入）撑满 */
+.registration-viewport.is-mini {
+  padding: 0;
+  background: transparent;
+}
+.registration-viewport.is-mini .registration-box {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .input-wrapper {
@@ -472,7 +500,7 @@ const openDoc = (type: 'service' | 'privacy') => {
 
 .modern-input {
   width: 100%;
-  height: 44px;
+  height: 40px;
   padding: 0 16px;
   background: #f8fafc;
   border: 1px solid #f1f5f9;
