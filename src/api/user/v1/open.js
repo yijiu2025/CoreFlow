@@ -148,6 +148,7 @@ export default async function (fastify) {
   /**
    * POST /user/v1/reset-password — 验证码方式重置密码
    *
+   * 仅 PASSWORD_RESET_MODE=code 时启用（link 模式下返回 403，防绕过前端调后端）
    * 校验邮箱码（绑 sessionId + 指纹 + 一次性）后，RSA 解密新密码 + 复杂度 + bcrypt 更新。
    */
   registerSecureRoute(fastify, {
@@ -160,6 +161,9 @@ export default async function (fastify) {
       rateLimit: { max: 5, timeWindow: '1 minute' }
     },
     handler: async (request, reply) => {
+      if (verifyConfig.passwordReset.mode !== 'code') {
+        return reply.code(403).send({ code: 403, message: '该重置方式未启用', data: null });
+      }
       const { email, code, password: encryptedPassword, kid } = request.body;
       const auditCtx = { redis: request.server?.redis, email, ip: request.ip, userAgent: request.headers['user-agent'] || '' };
 
@@ -190,7 +194,8 @@ export default async function (fastify) {
    * POST /user/v1/send-reset-link — 发送密码重置链接到邮箱
    *
    * 安全：
-   * - 需先通过图形验证码（captchaKey + captchaValue，防自动化发链接）
+   * - 仅 PASSWORD_RESET_MODE=link 时启用（code 模式下返回 403）
+   * - 需先通过图形验证码（captchaKey 必须 verified + 一次性消费，防自动化）
    * - 邮箱未注册也提示"已发送"（防邮箱枚举）
    * - reset token 绑客户端指纹（防异地冒用）
    * - 限频 3次/分/IP
@@ -206,6 +211,9 @@ export default async function (fastify) {
       rateLimit: { max: 3, timeWindow: '1 minute' }
     },
     handler: async (request, reply) => {
+      if (verifyConfig.passwordReset.mode !== 'link') {
+        return reply.code(403).send({ code: 403, message: '该重置方式未启用', data: null });
+      }
       const { email, captchaKey } = request.body;
       if (!email || !captchaKey) {
         return reply.result.fail('邮箱和图形验证码不能为空', null, 400);
@@ -267,6 +275,7 @@ export default async function (fastify) {
   /**
    * POST /user/v1/reset-password-by-link — 通过链接 token 重置密码
    *
+   * 仅 PASSWORD_RESET_MODE=link 时启用（code 模式下返回 403）
    * 校验 reset token 有效性 + 指纹一致后，RSA 解密新密码 + 更新。
    */
   registerSecureRoute(fastify, {
@@ -279,6 +288,9 @@ export default async function (fastify) {
       rateLimit: { max: 5, timeWindow: '1 minute' }
     },
     handler: async (request, reply) => {
+      if (verifyConfig.passwordReset.mode !== 'link') {
+        return reply.code(403).send({ code: 403, message: '该重置方式未启用', data: null });
+      }
       const { token, password: encryptedPassword, kid } = request.body;
       if (!token || !encryptedPassword) {
         return reply.result.fail('token 和新密码不能为空', null, 400);

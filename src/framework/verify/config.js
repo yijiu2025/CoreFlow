@@ -68,5 +68,12 @@ export default {
   common: {
     rateLimit: parseInt(process.env.VERIFY_RATE_LIMIT || '60'),
     codeTtl: parseInt(process.env.VERIFY_CODE_TTL || '600')
+  },
+
+  // 密码重置方式开关：code（验证码重置）/ link（邮件链接重置）
+  // 决定 /user/v1/reset-password vs /user/v1/send-reset-link + reset-password-by-link 哪个启用
+  // 未启用方式的端点返回 403（防绕过前端直接调后端）
+  passwordReset: {
+    mode: process.env.PASSWORD_RESET_MODE || 'code' // 'code' | 'link'
   }
 };
