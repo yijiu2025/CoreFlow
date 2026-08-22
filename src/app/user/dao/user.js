@@ -258,11 +258,16 @@ class UserDao {
       throw new Error('RESET_FAILED:邮箱和新密码不能为空');
     }
 
+    // 关联 User 校验状态（禁用用户 status=0 不可重置密码）
     const identity = await getModel('UserIdentity').findOne({
-      where: { identifier: email, identity_type: 'password' }
+      where: { identifier: email, identity_type: 'password' },
+      include: [{ model: getModel('User'), as: 'user' }]
     });
-    if (!identity) {
+    if (!identity || !identity.user) {
       throw new Error('RESET_FAILED:该邮箱未注册或不可重置');
+    }
+    if (identity.user.status === 0 || identity.user.status === '0') {
+      throw new Error('RESET_FAILED:账号已被禁用，不可重置密码');
     }
 
     const password = await decrypt(encryptedPassword, kid);

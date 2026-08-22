@@ -173,10 +173,11 @@ export const authApi = {
 
   /**
    * 发送密码重置链接到邮箱
-   * 后端生成一次性 reset token + 发邮件（限频 + 统一响应防枚举）
+   * 需先通过图形验证码（captchaKey 由前端 GraphicCaptcha 校验后获得）
+   * 后端校验 captchaKey 已 verified + 一次性消费 + 绑指纹 + 发邮件
    */
-  async sendResetLink(email: string) {
-    return request.post('/user/v1/send-reset-link', { email });
+  async sendResetLink(email: string, captchaKey: string) {
+    return request.post('/user/v1/send-reset-link', { email, captchaKey });
   },
 
   /**
