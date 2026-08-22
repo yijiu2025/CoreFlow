@@ -112,10 +112,13 @@ export async function decryptLoginRequest(request, fastify) {
 export async function verifyEmailCode(email, code, request) {
   const emailCodeStore = getStore('email_code');
   try {
+    // captchaKey 作为 sessionId 回查一致性（发码时绑定的 captchaKey 必须与用码时一致）
+    const captchaKey = request?.body?.captchaKey;
     await emailDao.verifyCode(email, code, emailCodeStore, {
       ip: request?.ip,
       ua: request?.headers?.['user-agent'] || '',
-      deviceFp: request?.headers?.['x-device-fp'] || ''
+      deviceFp: request?.headers?.['x-device-fp'] || '',
+      sessionId: captchaKey
     });
     return { success: true };
   } catch (err) {

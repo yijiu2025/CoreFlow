@@ -37,6 +37,7 @@ const agreed = ref(false);
 const isCountingDown = ref(false);
 const countdown = ref(60);
 const showCaptcha = ref(false);
+const captchaKey = ref('');
 
 const sendCode = () => {
   if (!values.email || errors.value.email) {
@@ -47,6 +48,7 @@ const sendCode = () => {
 };
 
 const onCaptchaSuccess = async (data: { captchaKey: string }) => {
+  captchaKey.value = data.captchaKey; // 保留 captchaKey，注册提交时回传后端校验 sessionId 一致性
   showCaptcha.value = false;
   isCountingDown.value = true;
   countdown.value = 60;
@@ -70,7 +72,8 @@ const handleRegister = handleSubmit(async data => {
     await authApi.register({
       ...submitData,
       password: encryptedPassword,
-      kid: getCachedKid()
+      kid: getCachedKid(),
+      captchaKey: captchaKey.value // 回传 captchaKey，后端校验邮箱码 sessionId 一致性
     });
     alert('注册成功！');
     router.push('/m/login');

@@ -79,12 +79,13 @@ class EmailDao {
    *
    * 安全校验：
    * 1. 验证码正确性
-   * 2. 客户端指纹一致性（发码时绑定的 IP+UA 必须与用码时一致，防异地冒用）
+   * 2. sessionId 一致性（发码时绑定的 captchaKey 必须与用码时回传的一致）
+   * 3. 客户端指纹一致性（发码时绑定的 IP+UA 必须与用码时一致，防异地冒用）
    *
    * @param {string} email 邮箱地址
    * @param {string} code 验证码
    * @param {object} store 存储适配器
-   * @param {object} [ctx] 请求上下文 { ip, ua }，用于校验客户端指纹
+   * @param {object} [ctx] 请求上下文 { ip, ua, deviceFp, sessionId }
    * @returns {Promise<boolean>}
    */
   async verifyCode(email, code, store, ctx = {}) {
@@ -94,6 +95,12 @@ class EmailDao {
 
     const info = await store.get(email);
     if (!info || info.code !== code) {
+      throw new Error('VERIFY_FAILED:邮箱验证码错误或已过期');
+    }
+
+    // sessionId 一致性校验：发码时绑定的 captchaKey 必须与用码时回传的一致
+    // 防止 A 流程发的码被 B 流程复用（即使同 email+code 也要同 captchaKey）
+    if (ctx.sessionId && info.sessionId && ctx.sessionId !== info.sessionId) {
       throw new Error('VERIFY_FAILED:邮箱验证码错误或已过期');
     }
 

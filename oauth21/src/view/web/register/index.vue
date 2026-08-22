@@ -94,7 +94,9 @@ const sendCode = async () => {
 };
 
 const showCaptcha = ref(false);
+const captchaKey = ref('');
 const onCaptchaSuccess = async (data: { captchaKey: string }) => {
+  captchaKey.value = data.captchaKey; // 保留 captchaKey，注册提交时回传后端校验 sessionId 一致性
   showCaptcha.value = false;
   // 验证成功后，由于后台已同步发送邮件，前端直接开始倒计时
   isCountingDown.value = true;
@@ -137,7 +139,8 @@ const executeRegister = async () => {
     await authApi.register({
       ...submitData,
       password: encryptedPassword,
-      kid: getCachedKid()
+      kid: getCachedKid(),
+      captchaKey: captchaKey.value // 回传 captchaKey，后端校验邮箱码 sessionId 一致性
     });
     alert('注册成功！现在您可以返回登录了');
 
