@@ -114,7 +114,8 @@ export async function verifyEmailCode(email, code, request) {
   try {
     await emailDao.verifyCode(email, code, emailCodeStore, {
       ip: request?.ip,
-      ua: request?.headers?.['user-agent'] || ''
+      ua: request?.headers?.['user-agent'] || '',
+      deviceFp: request?.headers?.['x-device-fp'] || ''
     });
     return { success: true };
   } catch (err) {

@@ -36,6 +36,8 @@ class CaptchaDao {
 
     if (email && sendEmailFn) {
       await sendEmailFn(email, captchaKey, emailCodeStore);
+      // 发码成功后立即消费图形码（防同一图形码被复用发多次邮箱码）
+      await captchaService.consume(captchaKey, captchaStore);
       return { message: '验证成功，验证码已发送至邮箱', emailSent: true };
     }
 

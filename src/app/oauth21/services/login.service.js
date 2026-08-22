@@ -27,14 +27,20 @@ import { AuthorizationService } from './authorization.service.js';
 const authService = new AuthorizationService();
 
 /**
- * 客户端指纹（IP + UA hash）
+ * 客户端指纹（IP + UA hash，启用设备指纹时合并 canvas/WebGL）
  * consentKey 绑定此指纹：发起授权确认的客户端必须与换令牌的客户端一致，
  * 防 consentKey 泄露后被另一客户端冒用绕过二次确认。
  */
 function clientFingerprint(request) {
   const ip = request?.ip || '';
   const ua = request?.headers?.['user-agent'] || '';
-  return crypto.createHash('sha256').update(`${ip}|${ua}`).digest('hex').slice(0, 32);
+  let material = `${ip}|${ua}`;
+  // 设备指纹启用时合并（config.device.enabled），抵制代理池换 IP+UA 绕过
+  const deviceFp = request?.headers?.['x-device-fp'];
+  if (process.env.DEVICE_FINGERPRINT_ENABLED === 'true' && deviceFp) {
+    material += `|${deviceFp}`;
+  }
+  return crypto.createHash('sha256').update(material).digest('hex').slice(0, 32);
 }
 
 /**

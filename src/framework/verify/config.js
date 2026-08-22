@@ -51,6 +51,16 @@ export default {
     pollInterval: parseInt(process.env.QRCODE_POLL_INTERVAL || '2000')
   },
 
+  // 设备指纹（canvas + WebGL），增强验证码/consentKey 的客户端绑定
+  // 默认关闭：canvas/WebGL 指纹有隐私争议，且依赖浏览器环境
+  // 启用后：前端采集指纹随请求回传，后端与 IP+UA 一起参与指纹计算
+  device: {
+    enabled: process.env.DEVICE_FINGERPRINT_ENABLED === 'true',
+    // 指纹权重：IP+UA 基础指纹 + canvas/WebGL 增强指纹，启用时合并参与校验
+    // 不启用时仅用 IP+UA（向后兼容，现有 V4/V5 指纹逻辑不变）
+    fingerprintFields: process.env.DEVICE_FINGERPRINT_FIELDS || 'ip,ua'
+  },
+
   // 通用
   common: {
     rateLimit: parseInt(process.env.VERIFY_RATE_LIMIT || '60'),

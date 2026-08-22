@@ -12,10 +12,23 @@ const service = axios.create({
 
 /* ========== 请求拦截 ========== */
 import { sha256 } from './sha256';
+import { getDeviceFingerprint, isDeviceFingerprintEnabled } from './device-fingerprint';
 
 service.interceptors.request.use(
   async config => {
     // 纯 Cookie 鉴权模式，不需要手动往 Headers 注入 Authorization 头部
+
+    // 设备指纹注入（仅 DEVICE_FINGERPRINT_ENABLED=true 时，配合后端验证码/consent 指纹增强）
+    if (isDeviceFingerprintEnabled() && config.headers) {
+      try {
+        const deviceFp = await getDeviceFingerprint();
+        if (deviceFp) {
+          config.headers['X-Device-Fp'] = deviceFp;
+        }
+      } catch {
+        // 采集失败不影响主流程（后端未启用时此头被忽略）
+      }
+    }
 
     // 计算并注入动态签名（后端仅对 requireLogin 路由校验，公开接口自动跳过）
     const cookieMatch = document.cookie.match(/(^| )_m_h5_tk=([^;]*)(;|$)/);
