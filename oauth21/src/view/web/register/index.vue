@@ -317,7 +317,7 @@ const openDoc = (type: 'service' | 'privacy') => {
   box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.5);
 }
 
-/* 左品牌栏（学登录页渐变品牌） */
+/* 左品牌栏（白灰色调，对齐登录页，不用彩色渐变） */
 .reg-brand-panel {
   width: 300px;
   flex-shrink: 0;
@@ -326,16 +326,18 @@ const openDoc = (type: 'service' | 'privacy') => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  color: #fff;
+  color: #0f172a;
   overflow: hidden;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #d946ef 100%);
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
+}
+:global(.dark) .reg-brand-panel {
+  color: #f1f5f9;
+  background: #0f172a;
+  border-right-color: #1e293b;
 }
 .reg-brand-bg {
-  position: absolute;
-  inset: 0;
-  opacity: 0.1;
-  background: radial-gradient(circle at 50% -20%, #fff, transparent 60%);
-  pointer-events: none;
+  display: none;
 }
 .reg-brand-content {
   position: relative;
@@ -343,31 +345,39 @@ const openDoc = (type: 'service' | 'privacy') => {
   display: flex;
   flex-direction: column;
 }
+/* logo：对齐登录页渐变方块 from-primary to-fuchsia-500 */
 .reg-brand-logo {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, #4f46e5, #d946ef);
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
   margin-bottom: 24px;
 }
 .reg-brand-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
   margin: 0 0 12px;
+  color: #0f172a;
+}
+:global(.dark) .reg-brand-title {
+  color: #f1f5f9;
 }
 .reg-brand-desc {
   font-size: 12px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.75);
+  color: #64748b;
   margin: 0 0 24px;
   max-width: 200px;
+}
+:global(.dark) .reg-brand-desc {
+  color: #94a3b8;
 }
 .reg-brand-features {
   list-style: none;
@@ -381,27 +391,34 @@ const openDoc = (type: 'service' | 'privacy') => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  color: #475569;
+}
+:global(.dark) .reg-brand-features li {
+  color: #94a3b8;
 }
 .reg-check {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   position: relative;
 }
+:global(.dark) .reg-check {
+  background: #1e293b;
+  border-color: #334155;
+}
 .reg-check::after {
   content: '';
   width: 6px;
   height: 3px;
-  border-left: 1.5px solid #fff;
-  border-bottom: 1.5px solid #fff;
+  border-left: 1.5px solid #4f46e5;
+  border-bottom: 1.5px solid #4f46e5;
   transform: rotate(-45deg) translate(1px, -1px);
 }
 
@@ -626,15 +643,19 @@ const openDoc = (type: 'service' | 'privacy') => {
   align-items: center;
   gap: 8px;
   padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  border-top: 1px solid #e2e8f0;
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
+  color: #475569;
   text-decoration: none;
   transition: color 0.2s;
 }
+:global(.dark) .reg-brand-signin {
+  border-top-color: #1e293b;
+  color: #94a3b8;
+}
 .reg-brand-signin:hover {
-  color: rgba(255, 255, 255, 0.85);
+  color: #4f46e5;
 }
 
 /* === mini 模式（iframe 弹窗，from=mini）：保留品牌栏，紧凑撑满 856×484 === */
