@@ -44,13 +44,10 @@ const isCountingDown = ref(false);
 const countdown = ref(60);
 const showCaptcha = ref(false);
 const captchaKey = ref('');
-
-// 协议弹窗
 const docType = ref<'service' | 'privacy' | null>(null);
 
 const sendCode = () => {
   if (!values.email || errors.value.email) {
-    alert('请先输入有效的邮箱');
     return;
   }
   showCaptcha.value = true;
@@ -72,7 +69,6 @@ const onCaptchaSuccess = async (data: { captchaKey: string }) => {
 
 const handleRegister = handleSubmit(async data => {
   if (!agreed.value) {
-    alert('请同意协议');
     return;
   }
   try {
@@ -86,7 +82,6 @@ const handleRegister = handleSubmit(async data => {
       captchaKey: captchaKey.value,
       ...(recaptchaToken ? { recaptchaToken } : {})
     });
-    alert('注册成功！');
     router.push('/m/login');
   } catch (err: any) {
     alert(err.message);
@@ -95,215 +90,374 @@ const handleRegister = handleSubmit(async data => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col font-sans pb-safe">
-    <!-- Header -->
-    <div class="px-5 pt-6 pb-3">
-      <router-link to="/m/login" class="inline-flex items-center text-slate-400 mb-3 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+  <!-- iframe 弹窗场景：左右分栏，856×484 撑满 -->
+  <div class="mreg-viewport">
+    <!-- 左品牌栏 -->
+    <div class="mreg-brand">
+      <div class="mreg-brand-bg"></div>
+      <div class="mreg-brand-content">
+        <div class="mreg-logo">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+        </div>
+        <h2 class="mreg-title">开启您的<br />数字之旅</h2>
+        <p class="mreg-desc">加入万千企业的选择，即刻开启安全、高效的云端工作空间。</p>
+      </div>
+      <router-link to="/m/login" class="mreg-back">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
-        <span class="text-xs font-medium ml-1">返回登录</span>
+        已有账户？立即返回登录
       </router-link>
-      <h1 class="text-xl font-bold text-slate-900 dark:text-white">创建新账户</h1>
-      <p class="text-slate-400 text-xs mt-0.5">填写以下信息，即刻开启全功能体验</p>
     </div>
 
-    <!-- Form（紧凑 + 图标 + 密码并排） -->
-    <form @submit.prevent="handleRegister" class="flex-1 px-5 space-y-2.5">
-      <!-- 昵称 -->
-      <div class="relative">
-        <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
-        <input
-          v-model="nickname"
-          v-bind="nicknameProps"
-          type="text"
-          placeholder="设置用户昵称"
-          autocomplete="nickname"
-          class="auth-input pl-11"
-        />
-        <span v-if="errors.nickname" class="absolute -bottom-3.5 left-2 text-[10px] text-destructive">{{ errors.nickname }}</span>
+    <!-- 右表单栏 -->
+    <div class="mreg-panel">
+      <div class="mreg-head">
+        <h3 class="mreg-form-title">创建新账户</h3>
+        <p class="mreg-form-sub">填写信息，开启全功能体验</p>
       </div>
 
-      <!-- 邮箱 -->
-      <div class="relative">
-        <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="4" width="20" height="16" rx="2" />
-          <path d="M22 7l-10 5L2 7" />
-        </svg>
-        <input
-          v-model="email"
-          v-bind="emailProps"
-          type="email"
-          placeholder="输入邮箱地址"
-          autocomplete="email"
-          class="auth-input pl-11"
-        />
-        <span v-if="errors.email" class="absolute -bottom-3.5 left-2 text-[10px] text-destructive">{{ errors.email }}</span>
-      </div>
-
-      <!-- 验证码 + 获取按钮 -->
-      <div class="flex gap-2 items-start relative">
-        <div class="relative flex-1">
-          <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 12l2 2 4-4" />
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-          </svg>
-          <input
-            v-model="code"
-            v-bind="codeProps"
-            type="text"
-            placeholder="邮箱验证码"
-            autocomplete="one-time-code"
-            class="auth-input pl-11"
-          />
+      <form @submit.prevent="handleRegister" class="mreg-form">
+        <!-- 用户名 + 邮箱 并排 -->
+        <div class="mreg-row-2">
+          <div class="mreg-field" :class="{ 'is-error': errors.nickname }">
+            <input v-model="nickname" v-bind="nicknameProps" type="text" placeholder="用户名" class="mreg-input" />
+          </div>
+          <div class="mreg-field" :class="{ 'is-error': errors.email }">
+            <input v-model="email" v-bind="emailProps" type="email" placeholder="电子邮箱" class="mreg-input" />
+          </div>
         </div>
-        <button
-          type="button"
-          @click="sendCode"
-          :disabled="isCountingDown"
-          class="auth-input px-4 font-bold text-xs text-primary active:scale-95 transition-all disabled:text-slate-400 whitespace-nowrap"
-        >
-          {{ isCountingDown ? `${countdown}s` : '获取' }}
-        </button>
-        <span v-if="errors.code" class="absolute -bottom-3.5 left-2 text-[10px] text-destructive">{{ errors.code }}</span>
-      </div>
+        <p v-if="errors.nickname || errors.email" class="mreg-err">{{ errors.nickname || errors.email }}</p>
 
-      <!-- 密码 + 确认密码（并排，省高度） -->
-      <div class="grid grid-cols-2 gap-2">
-        <div class="relative">
-          <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          <input
-            v-model="password"
-            v-bind="passwordProps"
-            type="password"
-            placeholder="登录密码"
-            autocomplete="new-password"
-            class="auth-input pl-11"
-          />
+        <!-- 验证码 + 获取 -->
+        <div class="mreg-field" :class="{ 'is-error': errors.code }">
+          <input v-model="code" v-bind="codeProps" type="text" placeholder="邮箱验证码" class="mreg-input" />
+          <button type="button" @click="sendCode" :disabled="isCountingDown" class="mreg-code-btn">
+            {{ isCountingDown ? `${countdown}s` : '获取验证码' }}
+          </button>
         </div>
-        <div class="relative">
-          <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          <input
-            v-model="confirmPassword"
-            v-bind="confirmPasswordProps"
-            type="password"
-            placeholder="确认密码"
-            autocomplete="new-password"
-            class="auth-input pl-11"
-          />
+        <p v-if="errors.code" class="mreg-err">{{ errors.code }}</p>
+
+        <!-- 密码 + 确认 并排 -->
+        <div class="mreg-row-2">
+          <div class="mreg-field" :class="{ 'is-error': errors.password }">
+            <input v-model="password" v-bind="passwordProps" type="password" placeholder="登录密码" class="mreg-input" />
+          </div>
+          <div class="mreg-field" :class="{ 'is-error': errors.confirmPassword }">
+            <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" placeholder="确认密码" class="mreg-input" />
+          </div>
         </div>
-      </div>
-      <span v-if="errors.password || errors.confirmPassword" class="block text-[10px] text-destructive px-2 -mt-1">{{ errors.password || errors.confirmPassword }}</span>
+        <p v-if="errors.password || errors.confirmPassword" class="mreg-err">{{ errors.password || errors.confirmPassword }}</p>
 
-      <!-- 注册按钮 -->
-      <button
-        type="submit"
-        class="auth-btn mt-3"
-      >
-        立即注册
-      </button>
+        <!-- 提交 -->
+        <button type="submit" class="mreg-submit">创建账户</button>
 
-      <!-- 协议（点击打开弹窗） -->
-      <label class="flex items-start gap-2.5 cursor-pointer py-1">
-        <input type="checkbox" v-model="agreed" class="hidden" />
-        <div
-          class="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 flex items-center justify-center transition-all flex-shrink-0"
-          :class="{ 'bg-primary border-primary': agreed }"
-        >
-          <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="white" stroke-width="4">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </div>
-        <span class="text-[11px] text-slate-400 leading-tight">
-          已阅读并同意
-          <span @click.stop.prevent="docType = 'service'" class="text-primary hover:underline">《服务协议》</span>
-          与
-          <span @click.stop.prevent="docType = 'privacy'" class="text-primary hover:underline">《隐私政策》</span>
-        </span>
-      </label>
-    </form>
+        <!-- 协议 -->
+        <label class="mreg-agree">
+          <input type="checkbox" v-model="agreed" class="hidden" />
+          <span class="mreg-checkbox" :class="{ checked: agreed }">
+            <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </span>
+          <span class="mreg-agree-text">
+            已阅读并同意
+            <span @click.stop.prevent="docType = 'service'" class="mreg-link">《服务协议》</span>
+            与
+            <span @click.stop.prevent="docType = 'privacy'" class="mreg-link">《隐私政策》</span>
+          </span>
+        </label>
+      </form>
+    </div>
 
-    <GraphicCaptcha
-      :is-open="showCaptcha"
-      :email="values.email"
-      type="register"
-      @close="showCaptcha = false"
-      @success="onCaptchaSuccess"
-    />
+    <GraphicCaptcha :is-open="showCaptcha" :email="values.email" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
 
-    <!-- 服务协议弹窗 -->
-    <DocModal
-      :is-open="docType === 'service'"
-      title="服务协议"
-      @close="docType = null"
-    >
+    <DocModal :is-open="docType === 'service'" title="服务协议" @close="docType = null">
       <p class="text-xs text-slate-400">最后更新：2026年8月22日</p>
       <h3 class="font-bold text-slate-800 dark:text-slate-200 pt-2">一、服务说明</h3>
-      <p>CoreFlow（以下简称"本服务"）由 CoreFlow 团队运营，为用户提供身份认证、应用授权、协作管理等企业级服务。注册即代表您同意本协议各项条款。</p>
+      <p>CoreFlow 由 CoreFlow 团队运营，提供身份认证、应用授权、协作管理等企业级服务。注册即代表同意本协议。</p>
       <h3 class="font-bold text-slate-800 dark:text-slate-200">二、账户注册与使用</h3>
-      <p>1. 您需提供真实、准确的邮箱地址用于注册，并对账户密码保密负责。</p>
-      <p>2. 您不得将账户转让、出借给他人使用，因账户泄露造成的损失由您自行承担。</p>
-      <p>3. 如发现账户被盗用或异常登录，请立即修改密码并联系客服。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">三、用户行为规范</h3>
-      <p>您承诺不利用本服务从事以下行为：</p>
-      <p>· 发布违法、侵权或有害信息；</p>
-      <p>· 破坏系统安全、尝试未授权访问；</p>
-      <p>· 干扰其他用户正常使用；</p>
-      <p>· 其他违反法律法规的行为。</p>
+      <p>1. 需提供真实邮箱注册，对密码保密负责。</p>
+      <p>2. 不得转让、出借账户，泄露损失自负。</p>
+      <h3 class="font-bold text-slate-800 dark:text-slate-200">三、行为规范</h3>
+      <p>不得发布违法信息、破坏系统安全、干扰其他用户。</p>
       <h3 class="font-bold text-slate-800 dark:text-slate-200">四、知识产权</h3>
-      <p>本服务的界面、代码、标识等知识产权归 CoreFlow 团队所有，未经授权不得复制、传播或用于商业用途。您在本服务中产生的原创内容，知识产权归您所有。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">五、服务变更与终止</h3>
-      <p>1. 我们可随时变更或停止部分服务，并提前公告。</p>
-      <p>2. 您违反本协议时，我们有权限制或终止您的账户。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">六、免责声明</h3>
-      <p>因不可抗力、系统维护或第三方原因导致服务中断，我们不承担赔偿责任，但会尽快恢复。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">七、协议修改</h3>
-      <p>本协议可能不时更新，更新后我们将在服务内公告，继续使用即视为同意新协议。</p>
+      <p>服务界面、代码归 CoreFlow 所有，您的原创内容归您所有。</p>
+      <h3 class="font-bold text-slate-800 dark:text-slate-200">五、变更与终止</h3>
+      <p>我们可变更或停止服务并公告；您违约时我们可限制账户。</p>
     </DocModal>
 
-    <!-- 隐私政策弹窗 -->
-    <DocModal
-      :is-open="docType === 'privacy'"
-      title="隐私政策"
-      @close="docType = null"
-    >
+    <DocModal :is-open="docType === 'privacy'" title="隐私政策" @close="docType = null">
       <p class="text-xs text-slate-400">最后更新：2026年8月22日</p>
       <h3 class="font-bold text-slate-800 dark:text-slate-200 pt-2">一、信息收集</h3>
-      <p>我们收集以下信息用于提供服务：</p>
-      <p>· <strong>注册信息</strong>：邮箱地址、用户昵称；</p>
-      <p>· <strong>登录信息</strong>：登录时间、IP 地址、设备类型（用于安全审计）；</p>
-      <p>· <strong>使用数据</strong>：您主动创建的作品、配置等。</p>
+      <p>注册信息（邮箱、昵称）、登录信息（IP、设备）、使用数据。</p>
       <h3 class="font-bold text-slate-800 dark:text-slate-200">二、信息使用</h3>
-      <p>我们仅将您的信息用于：</p>
-      <p>· 提供身份认证与应用授权服务；</p>
-      <p>· 安全防护（异常登录检测、防暴力破解）；</p>
-      <p>· 改进服务体验（不用于出售给第三方）。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">三、信息存储与保护</h3>
-      <p>1. 密码采用 bcrypt 哈希存储，传输采用 RSA 加密，我们无法获取您的明文密码。</p>
-      <p>2. 敏感数据存储在受保护的服务器，访问受严格权限控制。</p>
-      <p>3. 会话凭证存储在 HttpOnly Cookie，防止 XSS 窃取。</p>
+      <p>仅用于提供服务、安全防护、改进体验，不售予第三方。</p>
+      <h3 class="font-bold text-slate-800 dark:text-slate-200">三、信息保护</h3>
+      <p>密码 bcrypt 哈希、RSA 传输、HttpOnly Cookie、严格权限控制。</p>
       <h3 class="font-bold text-slate-800 dark:text-slate-200">四、信息共享</h3>
-      <p>我们不会将您的个人信息出售给第三方。仅在以下情形共享：</p>
-      <p>· 经您明确授权；</p>
-      <p>· 法律法规要求或行政/司法机关要求；</p>
-      <p>· 为完成您授权的第三方应用对接（您可随时撤销）。</p>
+      <p>不售予第三方，仅经授权或法律要求时共享。</p>
       <h3 class="font-bold text-slate-800 dark:text-slate-200">五、您的权利</h3>
-      <p>您有权访问、更正、删除自己的个人信息，可随时在个人中心操作或联系客服。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">六、Cookie 使用</h3>
-      <p>我们使用 Cookie 维持登录状态，不用于跨站追踪。您可在浏览器设置中管理 Cookie。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">七、未成年人保护</h3>
-      <p>本服务不面向 14 岁以下未成年人，如发现未成年注册，我们将注销账户。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">八、政策更新</h3>
-      <p>本政策可能更新，更新后将在服务内公告。</p>
+      <p>可访问、更正、删除个人信息。</p>
     </DocModal>
   </div>
 </template>
+
+<style scoped>
+.mreg-viewport {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+  background: #fff;
+}
+:global(.dark) .mreg-viewport {
+  background: #0f172a;
+}
+
+/* === 左品牌栏 === */
+.mreg-brand {
+  width: 280px;
+  flex-shrink: 0;
+  position: relative;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #fff;
+  overflow: hidden;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #8b5cf6 100%);
+}
+.mreg-brand-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+  background: radial-gradient(circle at 50% -20%, #fff, transparent 60%);
+  pointer-events: none;
+}
+.mreg-brand-content {
+  position: relative;
+  z-index: 1;
+}
+.mreg-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.mreg-title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 10px;
+  letter-spacing: -0.02em;
+}
+.mreg-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0;
+  max-width: 200px;
+}
+.mreg-back {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.mreg-back:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* === 右表单栏 === */
+.mreg-panel {
+  flex: 1;
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+}
+.mreg-head {
+  margin-bottom: 18px;
+}
+.mreg-form-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+:global(.dark) .mreg-form-title {
+  color: #fff;
+}
+.mreg-form-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin: 4px 0 0;
+}
+:global(.dark) .mreg-form-sub {
+  color: #94a3b8;
+}
+
+/* === 表单 === */
+.mreg-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.mreg-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* 输入框（对齐登录页：h-12 实色白底 border focus-within:ring） */
+.mreg-field {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 14px;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+:global(.dark) .mreg-field {
+  background: #1e293b;
+  border-color: #334155;
+}
+.mreg-field:focus-within {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+}
+.mreg-field.is-error {
+  border-color: #ef4444;
+}
+.mreg-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: #0f172a;
+  height: 100%;
+  min-width: 0;
+}
+:global(.dark) .mreg-input {
+  color: #f1f5f9;
+}
+.mreg-input::placeholder {
+  color: #94a3b8;
+}
+
+/* 获取验证码按钮 */
+.mreg-code-btn {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4f46e5;
+  padding-left: 12px;
+  border-left: 1px solid #e2e8f0;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+:global(.dark) .mreg-code-btn {
+  border-left-color: #334155;
+}
+.mreg-code-btn:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* 错误提示 */
+.mreg-err {
+  margin: -8px 0 0;
+  padding: 0 4px;
+  font-size: 11px;
+  color: #ef4444;
+}
+
+/* 提交按钮 */
+.mreg-submit {
+  height: 44px;
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(to right, #4f46e5, #d946ef);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25);
+}
+.mreg-submit:hover {
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
+}
+.mreg-submit:active {
+  transform: scale(0.98);
+}
+
+/* 协议 */
+.mreg-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.mreg-checkbox {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 4px;
+  border: 1.5px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+:global(.dark) .mreg-checkbox {
+  border-color: #475569;
+}
+.mreg-checkbox.checked {
+  background: #4f46e5;
+  border-color: #4f46e5;
+}
+.mreg-agree-text {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.5;
+}
+:global(.dark) .mreg-agree-text {
+  color: #94a3b8;
+}
+.mreg-link {
+  color: #4f46e5;
+  cursor: pointer;
+}
+.mreg-link:hover {
+  text-decoration: underline;
+}
+</style>

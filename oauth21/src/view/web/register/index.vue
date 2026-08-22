@@ -159,6 +159,18 @@ const openDoc = (type: 'service' | 'privacy') => {
 
       <!-- 右表单栏 -->
       <div class="reg-panel">
+        <!-- iframe 模式：顶部返回登录（左品牌栏隐藏时用） -->
+        <router-link
+          v-if="isMini"
+          :to="{ path: '/mini-login', query: route.query }"
+          class="reg-back-mini"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          返回登录
+        </router-link>
+
         <!-- 标题 -->
         <div class="reg-head">
           <h2 class="reg-title">创建新账户</h2>
@@ -316,7 +328,7 @@ const openDoc = (type: 'service' | 'privacy') => {
   justify-content: space-between;
   color: #fff;
   overflow: hidden;
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #d946ef 100%);
 }
 .reg-brand-bg {
   position: absolute;
@@ -408,6 +420,25 @@ const openDoc = (type: 'service' | 'privacy') => {
 /* 标题区 */
 .reg-head {
   margin-bottom: 20px;
+}
+
+/* iframe 模式顶部返回 */
+.reg-back-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  text-decoration: none;
+  margin-bottom: 12px;
+  transition: color 0.2s;
+}
+:global(.dark) .reg-back-mini {
+  color: #94a3b8;
+}
+.reg-back-mini:hover {
+  color: #4f46e5;
 }
 .reg-title {
   font-size: 20px;
@@ -606,9 +637,10 @@ const openDoc = (type: 'service' | 'privacy') => {
   color: rgba(255, 255, 255, 0.85);
 }
 
-/* === mini 模式（iframe 嵌入弹窗，撑满） === */
+/* === mini 模式（iframe 弹窗，from=mini）：保留品牌栏，紧凑撑满 856×484 === */
 .reg-viewport.is-mini {
   padding: 0;
+  background: transparent;
 }
 .reg-viewport.is-mini .reg-blob {
   display: none;
@@ -617,27 +649,50 @@ const openDoc = (type: 'service' | 'privacy') => {
   max-width: 100%;
   max-height: 100%;
   height: 100%;
+  min-height: 0;
   border-radius: 0;
   border: none;
   box-shadow: none;
+  background: transparent;
 }
-/* iframe 里品牌栏窄一点（空间紧凑） */
+:global(.dark) .reg-viewport.is-mini .reg-card {
+  background: transparent;
+}
+/* iframe 里品牌栏窄一点（保留，对齐登录页配色） */
 .reg-viewport.is-mini .reg-brand-panel {
-  width: 260px;
+  width: 240px;
   padding: 24px 22px;
 }
 .reg-viewport.is-mini .reg-brand-title {
-  font-size: 22px;
+  font-size: 20px;
+}
+.reg-viewport.is-mini .reg-brand-desc {
+  font-size: 11px;
 }
 .reg-viewport.is-mini .reg-panel {
+  flex: 1;
   padding: 24px 28px;
   justify-content: center;
 }
-/* iframe 空间小，输入框紧凑 */
+/* iframe 紧凑：输入框矮一点 */
 .reg-viewport.is-mini .reg-field {
   height: 40px;
+  padding: 0 12px;
+}
+.reg-viewport.is-mini .reg-input {
+  font-size: 13px;
 }
 .reg-viewport.is-mini .reg-submit {
   height: 40px;
+}
+.reg-viewport.is-mini .reg-form {
+  gap: 14px;
+}
+.reg-viewport.is-mini .reg-row-2 {
+  gap: 10px;
+}
+/* iframe 模式不显示顶部返回（左品牌栏底部已有） */
+.reg-viewport.is-mini .reg-back-mini {
+  display: none;
 }
 </style>
