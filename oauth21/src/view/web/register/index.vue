@@ -479,7 +479,7 @@ const openDoc = (type: 'service' | 'privacy') => {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
-/* mini 模式（iframe 嵌入 posecraft LoginModal）：撑满 + 紧凑大气 */
+/* mini 模式（iframe 嵌入 posecraft LoginModal）：撑满 + 紧凑不滚动 */
 .registration-viewport.is-mini {
   padding: 0;
   background: transparent;
@@ -490,16 +490,27 @@ const openDoc = (type: 'service' | 'privacy') => {
   border-radius: 0;
   box-shadow: none;
 }
-/* iframe 里品牌栏窄一点 + 表单 padding 紧凑（484 高度内不溢出） */
+/* iframe 里品牌栏窄 + 表单区不滚动 + 间距压缩（484 高度内放下） */
 .registration-viewport.is-mini .registration-box > div:first-child {
   width: 240px;
-  padding: 28px;
+  padding: 24px;
 }
 .registration-viewport.is-mini .registration-box > div:last-child {
-  padding: 28px 32px;
+  padding: 24px 28px;
+  overflow: hidden; /* iframe 场景禁用滚动，靠内容压缩 */
+  justify-content: center;
 }
 .registration-viewport.is-mini .registration-box h2 {
   font-size: 20px;
+}
+.registration-viewport.is-mini .registration-box form > div {
+  gap: 10px; /* space-y 压缩 */
+}
+.registration-viewport.is-mini .registration-box .modern-input {
+  height: 38px; /* 输入框更矮 */
+}
+.registration-viewport.is-mini .registration-box .mb-6 {
+  margin-bottom: 12px; /* 标题区压缩 */
 }
 
 .input-wrapper {
