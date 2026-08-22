@@ -10,6 +10,7 @@
  * @since 2026-08-16
  */
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import { decryptLoginRequest, verifyEmailCode } from './decrypt.service.js';
 import { issueDirectTokens } from './token-issuer.service.js';
 import { buildTokenResponse } from './cookies.service.js';
@@ -24,6 +25,17 @@ import { getStore } from '../../../framework/redis/index.js';
 import { AuthorizationService } from './authorization.service.js';
 
 const authService = new AuthorizationService();
+
+/**
+ * 客户端指纹（IP + UA hash）
+ * consentKey 绑定此指纹：发起授权确认的客户端必须与换令牌的客户端一致，
+ * 防 consentKey 泄露后被另一客户端冒用绕过二次确认。
+ */
+function clientFingerprint(request) {
+  const ip = request?.ip || '';
+  const ua = request?.headers?.['user-agent'] || '';
+  return crypto.createHash('sha256').update(`${ip}|${ua}`).digest('hex').slice(0, 32);
+}
 
 /**
  * 统一直接登录
@@ -154,6 +166,7 @@ export async function directLogin(request, reply, fastify) {
     if (!approval) {
       const consentKey = uuidv4();
       const consentStore = getStore('consent_session');
+      // 绑定客户端指纹：confirmDirectConsent 时校验同一客户端，防 consentKey 泄露被冒用
       await consentStore.set(
         consentKey,
         {
@@ -161,7 +174,8 @@ export async function directLogin(request, reply, fastify) {
           clientId: client.client_id,
           scopes: finalScopes,
           scopeStr: scopeString,
-          oidcNonce
+          oidcNonce,
+          fingerprint: clientFingerprint(request)
         },
         300
       );
@@ -246,6 +260,18 @@ export async function confirmDirectConsent(request, reply, fastify) {
   const consentStore = getStore('consent_session');
   const session = await consentStore.get(consentKey);
   if (!session) {
+    return reply.code(400).send({
+      code: 400,
+      message: '授权会话已过期，请重新登录',
+      data: null
+    });
+  }
+
+  // 客户端指纹一致性校验：发起授权确认的客户端必须与换令牌的客户端一致
+  // 防 consentKey 泄露后被另一客户端冒用绕过二次确认
+  if (session.fingerprint && session.fingerprint !== clientFingerprint(request)) {
+    // 指纹不符：疑似冒用，静默拒绝（不暴露具体原因）
+    await consentStore.delete(consentKey);
     return reply.code(400).send({
       code: 400,
       message: '授权会话已过期，请重新登录',
