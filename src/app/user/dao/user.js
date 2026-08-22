@@ -240,6 +240,43 @@ class UserDao {
   }
 
   /**
+   * 重置用户密码（忘记密码/找回密码）
+   *
+   * 流程：
+   * 1. 按 email 查 UserIdentity（identity_type=password）
+   * 2. RSA 解密新密码 + 复杂度校验
+   * 3. bcrypt 重新哈希 + 更新 credential
+   *
+   * @param {string} email 邮箱
+   * @param {string} encryptedPassword RSA 加密的新密码密文
+   * @param {string} [kid] 密钥 ID
+   * @returns {Promise<boolean>} 是否重置成功
+   * @throws {Error} 用户不存在/复杂度不足时抛 RESET_FAILED
+   */
+  async updatePassword(email, encryptedPassword, kid) {
+    if (!email || !encryptedPassword) {
+      throw new Error('RESET_FAILED:邮箱和新密码不能为空');
+    }
+
+    const identity = await getModel('UserIdentity').findOne({
+      where: { identifier: email, identity_type: 'password' }
+    });
+    if (!identity) {
+      throw new Error('RESET_FAILED:该邮箱未注册或不可重置');
+    }
+
+    const password = await decrypt(encryptedPassword, kid);
+    const validation = validatePasswordStrength(password);
+    if (!validation.valid) {
+      throw new Error(`RESET_FAILED:${validation.errors[0]}`);
+    }
+
+    identity.credential = bcrypt.hashSync(password, 10);
+    await identity.save();
+    return true;
+  }
+
+  /**
    * 根据用户 UID 查找用户（适配后返回，sub 对应 uid）
    * @param {string} uid 用户唯一标识 (UUID)
    * @returns {Promise<object|null>} 适配后的用户数据或 null
