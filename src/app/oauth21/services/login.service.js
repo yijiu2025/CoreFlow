@@ -22,6 +22,7 @@ import { logLogin } from '../../../framework/auth/audit-logger.js';
 import { detectLoginAnomaly, DETECT_RESULT } from '../../../framework/auth/anomaly-detector.js';
 import { logLoginFailure } from '../../../framework/auth/session.js';
 import { getStore } from '../../../framework/redis/index.js';
+import captchaService from '../../../framework/verify/captcha/service.js';
 import { AuthorizationService } from './authorization.service.js';
 
 const authService = new AuthorizationService();
@@ -66,6 +67,20 @@ export async function directLogin(request, reply, fastify) {
   }
 
   const { username, password, type, email, code, keepLogin } = decryptResult.data;
+
+  // 1.2 图形验证码校验（按 type 分支）
+  // - 密码登录：captchaKey 对应图形码必须已 verify，校验通过后删除（一次性，防重放）
+  // - 邮箱码登录：图形码已在 verify-captcha 发邮箱码时消费，此处只校验邮箱码（阶段 2）
+  const { captchaKey } = request.body;
+  if (type !== 'email' && captchaKey) {
+    const captchaStore = getStore('captcha');
+    const info = await captchaStore.get(captchaKey);
+    if (!info || Date.now() > info.expired || info.verified !== true) {
+      return reply.code(400).send({ code: 400, message: '请先完成图形验证', data: null });
+    }
+    // 校验通过，删除图形码（一次性，防同一图形码被复用登录多次）
+    await captchaStore.delete(captchaKey);
+  }
 
   // 1.5. 异常登录检测（暴力破解锁定）
   const loginEmail = email || username;

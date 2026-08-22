@@ -33,22 +33,13 @@ function ensureNonceStore(request) {
  * @returns {object} { success, data?, error?, statusCode? }
  */
 export async function decryptLoginRequest(request, fastify) {
-  const { encrypted, timestamp, nonce, captchaKey, kid } = request.body;
+  const { encrypted, timestamp, nonce, kid } = request.body;
 
-  // 1. 验证码校验：captchaKey 对应图形码必须已 verify（verify-captcha 时标记）
-  //    校验通过后立即删除（一次性，防图形码被复用登录多次）
-  //    注意：发邮箱码场景（verifyAndSendEmail）不删图形码，登录在此消费
-  if (captchaKey) {
-    const captchaStore = getStore('captcha');
-    const info = await captchaStore.get(captchaKey);
-    if (!info || Date.now() > info.expired || info.verified !== true) {
-      return { success: false, error: '请先完成图形验证', statusCode: 400 };
-    }
-    // 校验通过，删除图形码（防重放：同一图形码不能用于多次登录）
-    await captchaStore.delete(captchaKey);
-  }
+  // 注意：图形验证码校验移至 login.service 按 type 分支处理
+  // - 密码登录：校验图形码（verify + consume 一次性）
+  // - 邮箱码登录：图形码已在发邮箱码时消费，此处只校验邮箱码（sessionId 一致性 + 一次性）
 
-  // 2. RSA 加密路径
+  // RSA 加密路径
   if (encrypted) {
     // 时间戳校验
     if (!validateTimestamp(timestamp)) {
