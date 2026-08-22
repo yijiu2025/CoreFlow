@@ -267,7 +267,8 @@ const handleRegister = handleSubmit(async () => {
   padding-left: 4px;
   font-size: 10px;
   color: #ef4444;
-  min-height: 0;
+  height: 14px; /* 固定高度预留错误位，错误出现不挤压下方内容 */
+  line-height: 14px;
 }
 .mreg-submit {
   height: 44px;
