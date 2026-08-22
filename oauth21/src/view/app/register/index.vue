@@ -95,99 +95,125 @@ const handleRegister = handleSubmit(async data => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans pb-safe">
-    <!-- Header（压缩间距，避免滚动） -->
+  <div class="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col font-sans pb-safe">
+    <!-- Header -->
     <div class="px-5 pt-6 pb-3">
-      <router-link to="/m/login" class="inline-flex items-center text-slate-400 mb-3">
+      <router-link to="/m/login" class="inline-flex items-center text-slate-400 mb-3 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
         <span class="text-xs font-medium ml-1">返回登录</span>
       </router-link>
-      <h1 class="text-xl font-bold text-slate-900 dark:text-white font-outfit">创建新账户</h1>
-      <p class="text-slate-400 text-xs mt-0.5">开启您的企业级协作之旅</p>
+      <h1 class="text-xl font-bold text-slate-900 dark:text-white">创建新账户</h1>
+      <p class="text-slate-400 text-xs mt-0.5">填写以下信息，即刻开启全功能体验</p>
     </div>
 
-    <!-- Form（紧凑：小间距 + 矮输入框） -->
-    <form @submit.prevent="handleRegister" class="flex-1 px-5 space-y-2">
+    <!-- Form（紧凑 + 图标 + 密码并排） -->
+    <form @submit.prevent="handleRegister" class="flex-1 px-5 space-y-2.5">
+      <!-- 昵称 -->
       <div class="relative">
+        <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
         <input
           v-model="nickname"
           v-bind="nicknameProps"
           type="text"
           placeholder="设置用户昵称"
           autocomplete="nickname"
-          class="w-full h-12 bg-white dark:bg-slate-900 rounded-xl px-5 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all text-sm"
+          class="auth-input pl-11"
         />
-        <span v-if="errors.nickname" class="absolute -bottom-4 left-2 text-[10px] text-destructive">{{ errors.nickname }}</span>
+        <span v-if="errors.nickname" class="absolute -bottom-3.5 left-2 text-[10px] text-destructive">{{ errors.nickname }}</span>
       </div>
 
+      <!-- 邮箱 -->
       <div class="relative">
+        <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <path d="M22 7l-10 5L2 7" />
+        </svg>
         <input
           v-model="email"
           v-bind="emailProps"
           type="email"
           placeholder="输入邮箱地址"
           autocomplete="email"
-          class="w-full h-12 bg-white dark:bg-slate-900 rounded-xl px-5 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all text-sm"
+          class="auth-input pl-11"
         />
-        <span v-if="errors.email" class="absolute -bottom-4 left-2 text-[10px] text-destructive">{{ errors.email }}</span>
+        <span v-if="errors.email" class="absolute -bottom-3.5 left-2 text-[10px] text-destructive">{{ errors.email }}</span>
       </div>
 
+      <!-- 验证码 + 获取按钮 -->
       <div class="flex gap-2 items-start relative">
-        <div class="flex-1">
+        <div class="relative flex-1">
+          <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12l2 2 4-4" />
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+          </svg>
           <input
             v-model="code"
             v-bind="codeProps"
             type="text"
             placeholder="邮箱验证码"
             autocomplete="one-time-code"
-            class="w-full h-12 bg-white dark:bg-slate-900 rounded-xl px-5 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all text-sm"
+            class="auth-input pl-11"
           />
         </div>
         <button
           type="button"
           @click="sendCode"
           :disabled="isCountingDown"
-          class="h-12 px-5 bg-white dark:bg-slate-900 rounded-xl font-bold text-xs text-primary shadow-sm active:scale-95 transition-all disabled:text-slate-400 whitespace-nowrap"
+          class="auth-input px-4 font-bold text-xs text-primary active:scale-95 transition-all disabled:text-slate-400 whitespace-nowrap"
         >
           {{ isCountingDown ? `${countdown}s` : '获取' }}
         </button>
-        <span v-if="errors.code" class="absolute -bottom-4 left-2 text-[10px] text-destructive">{{ errors.code }}</span>
+        <span v-if="errors.code" class="absolute -bottom-3.5 left-2 text-[10px] text-destructive">{{ errors.code }}</span>
       </div>
 
-      <div class="relative">
-        <input
-          v-model="password"
-          v-bind="passwordProps"
-          type="password"
-          placeholder="设置登录密码 (6位以上)"
-          autocomplete="new-password"
-          class="w-full h-12 bg-white dark:bg-slate-900 rounded-xl px-5 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all text-sm"
-        />
+      <!-- 密码 + 确认密码（并排，省高度） -->
+      <div class="grid grid-cols-2 gap-2">
+        <div class="relative">
+          <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <input
+            v-model="password"
+            v-bind="passwordProps"
+            type="password"
+            placeholder="登录密码"
+            autocomplete="new-password"
+            class="auth-input pl-11"
+          />
+        </div>
+        <div class="relative">
+          <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <input
+            v-model="confirmPassword"
+            v-bind="confirmPasswordProps"
+            type="password"
+            placeholder="确认密码"
+            autocomplete="new-password"
+            class="auth-input pl-11"
+          />
+        </div>
       </div>
+      <span v-if="errors.password || errors.confirmPassword" class="block text-[10px] text-destructive px-2 -mt-1">{{ errors.password || errors.confirmPassword }}</span>
 
-      <div class="relative">
-        <input
-          v-model="confirmPassword"
-          v-bind="confirmPasswordProps"
-          type="password"
-          placeholder="再次确认您的密码"
-          autocomplete="new-password"
-          class="w-full h-12 bg-white dark:bg-slate-900 rounded-xl px-5 border border-transparent focus:border-primary/30 outline-none shadow-sm transition-all text-sm"
-        />
-        <span v-if="errors.confirmPassword" class="absolute -bottom-4 left-2 text-[10px] text-destructive">{{ errors.confirmPassword }}</span>
-      </div>
-
+      <!-- 注册按钮 -->
       <button
         type="submit"
-        class="w-full h-12 bg-gradient-to-r from-primary to-fuchsia-600 text-white rounded-xl font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all text-sm mt-2"
+        class="auth-btn mt-3"
       >
         立即注册
       </button>
 
       <!-- 协议（点击打开弹窗） -->
-      <label class="flex items-start gap-2.5 cursor-pointer py-2">
+      <label class="flex items-start gap-2.5 cursor-pointer py-1">
         <input type="checkbox" v-model="agreed" class="hidden" />
         <div
           class="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 flex items-center justify-center transition-all flex-shrink-0"
