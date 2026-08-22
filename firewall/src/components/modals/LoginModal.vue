@@ -233,6 +233,8 @@ function formatLastLogin(ts?: number): string {
 watch(
   () => props.isOpen,
   val => {
+    // 锁背景滚动（弹窗打开禁用 body 滚动，关闭恢复）
+    document.body.style.overflow = val ? 'hidden' : '';
     if (val) {
       mode.value = accountList.value.length ? 'accounts' : 'login';
       // loading 由 iframe @load 事件真实触发关闭（不再用 setTimeout 假装）
@@ -348,6 +350,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('message', handleMessage);
+  document.body.style.overflow = ''; // 确保卸载时恢复 body 滚动
 });
 </script>
 
