@@ -172,6 +172,10 @@ export async function createApp() {
   const publicPath = path.join(__dirname, '../public');
 
   // 1. 注册 Fastify 生态插件（按依赖顺序：security → cors → file → ws → cookie）
+  // iframe 白名单 = CORS_ORIGINS（同一套受信应用域）：posecraft/firewall/admin 互相 iframe 嵌入 SSO
+  // frame-ancestors：允许本站被这些域 iframe 嵌入（oauth21 登录页被 posecraft 嵌入）
+  // frame-src：允许本站 iframe 嵌入这些域的页面（posecraft 嵌 oauth21 登录页）
+  const iframeWhitelist = CORS_ORIGINS.length ? CORS_ORIGINS : [];
   await app.register(helmet, {
     contentSecurityPolicy: !isProduction
       ? false // 开发环境禁用 CSP 避免 HMR 资源加载因内联脚本被拦截
@@ -186,13 +190,17 @@ export async function createApp() {
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", 'data:', 'blob:'],
             fontSrc: ["'self'", 'data:'],
-            connectSrc: ["'self'"],
-            frameSrc: ["'none'"],
+            connectSrc: ["'self'", ...iframeWhitelist],
+            // 允许 iframe 嵌入受信应用域（SSO 登录页 iframe 互嵌），白名单为空时禁用
+            frameSrc: iframeWhitelist.length ? ["'self'", ...iframeWhitelist] : ["'self'"],
+            frameAncestors: iframeWhitelist.length ? ["'self'", ...iframeWhitelist] : ["'none'"],
             objectSrc: ["'none'"],
             baseUri: ["'self'"],
             formAction: ["'self'"]
           }
         },
+    // frameguard：用 CSP frame-ancestors 统一控制（更现代），关闭 helmet 的 frameguard 避免冲突
+    frameguard: false,
     // Helmet 默认已包含 nosniff / frameguard / xssFilter / referrerPolicy
     // 生产环境额外启用 HSTS（开发环境不需要，避免 localhost 被强制 HTTPS）
     hsts: isProduction ? { maxAge: 31536000, includeSubDomains: true, preload: false } : false
