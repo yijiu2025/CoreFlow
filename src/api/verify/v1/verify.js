@@ -54,11 +54,12 @@ export default async function (fastify, opts) {
           request.body,
           captchaStore,
           emailCodeStore,
-          // 发码时绑定客户端指纹（IP+UA），用码时回查一致性（防异地冒用）
+          // 发码时绑定客户端指纹（IP+UA，启用时含 device 指纹），用码时回查一致性
           (email, sessionId, store) =>
             emailDao.sendCode(email, sessionId, store, {
               ip: request.ip,
-              ua: request.headers['user-agent'] || ''
+              ua: request.headers['user-agent'] || '',
+              deviceFp: request.headers['x-device-fp'] || ''
             })
         );
         return reply.result.success(result.message, {
@@ -83,7 +84,8 @@ export default async function (fastify, opts) {
       try {
         await emailDao.verifyCode(email, code, emailCodeStore, {
           ip: request.ip,
-          ua: request.headers['user-agent'] || ''
+          ua: request.headers['user-agent'] || '',
+          deviceFp: request.headers['x-device-fp'] || ''
         });
         return reply.result.success('验证码校验通过');
       } catch (err) {

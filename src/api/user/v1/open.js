@@ -59,7 +59,8 @@ export default async function (fastify) {
         const { code } = request.body;
         await emailDao.verifyCode(email, code, emailCodeStore, {
           ip: request.ip,
-          ua: request.headers['user-agent'] || ''
+          ua: request.headers['user-agent'] || '',
+          deviceFp: request.headers['x-device-fp'] || ''
         });
       } catch (err) {
         await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });
@@ -74,7 +75,12 @@ export default async function (fastify) {
           userId: user?.numericId || user?.id,
           success: true
         });
-        return reply.result.success('注册成功', user);
+        // 字段最小化：前端只需知道注册成功 + 基本标识，不返回 phone/personal_id/delete_version 等
+        return reply.result.success('注册成功', {
+          uid: user?.uid,
+          username: user?.username,
+          email: user?.email
+        });
       } catch (err) {
         await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });
         const isBizError = err.message?.startsWith('REGISTER_FAILED') || err.message?.startsWith('NOT_FOUND');

@@ -17,17 +17,27 @@ class EmailDao {
   constructor() {
     this.rateLimit = config.common.rateLimit;
     this.codeTtl = config.common.codeTtl;
+    this.deviceEnabled = config.device?.enabled === true;
   }
 
   /**
-   * 计算客户端指纹（IP + UA hash）
-   * 用于绑定验证码：发码时存指纹，用码时校验同一客户端
+   * 计算客户端指纹
+   *
+   * 基础：SHA-256(IP | UA)，防邮件被劫持后异地消费
+   * 增强（DEVICE_FINGERPRINT_ENABLED=true 时）：合并前端 canvas/WebGL 指纹，
+   *   抵制代理池换 IP+UA 绕过（正常环境不启用，隐私友好）
+   *
    * @param {string} ip 客户端 IP
    * @param {string} ua User-Agent
+   * @param {string} [deviceFp] 前端采集的 canvas/WebGL 指纹（启用时）
    * @returns {string} SHA-256 指纹 hex（前 32 位）
    */
-  fingerprint(ip, ua) {
-    return crypto.createHash('sha256').update(`${ip || ''}|${ua || ''}`).digest('hex').slice(0, 32);
+  fingerprint(ip, ua, deviceFp) {
+    let material = `${ip || ''}|${ua || ''}`;
+    if (this.deviceEnabled && deviceFp) {
+      material += `|${deviceFp}`;
+    }
+    return crypto.createHash('sha256').update(material).digest('hex').slice(0, 32);
   }
 
   /**
@@ -51,8 +61,8 @@ class EmailDao {
       }
     }
 
-    // 存储验证码 + 客户端指纹（IP+UA），用码时回查一致性
-    const fingerprint = this.fingerprint(ctx.ip, ctx.ua);
+    // 存储验证码 + 客户端指纹（IP+UA，启用时合并 device 指纹），用码时回查一致性
+    const fingerprint = this.fingerprint(ctx.ip, ctx.ua, ctx.deviceFp);
     await store.set(email, { code, sentAt: Date.now(), sessionId, fingerprint }, this.codeTtl);
 
     // 发送邮件
@@ -87,10 +97,10 @@ class EmailDao {
       throw new Error('VERIFY_FAILED:邮箱验证码错误或已过期');
     }
 
-    // 客户端指纹一致性校验：发码时绑定的 IP+UA 必须与用码时一致
+    // 客户端指纹一致性校验：发码时绑定的 IP+UA（启用时含 device 指纹）必须与用码时一致
     // 防止验证码被截获后在另一客户端冒用（邮件被劫持后异地消费）
     if (info.fingerprint) {
-      const currentFingerprint = this.fingerprint(ctx.ip, ctx.ua);
+      const currentFingerprint = this.fingerprint(ctx.ip, ctx.ua, ctx.deviceFp);
       if (info.fingerprint !== currentFingerprint) {
         // 指纹不符：疑似异地冒用，静默拒绝（不暴露具体原因给攻击者）
         throw new Error('VERIFY_FAILED:邮箱验证码错误或已过期');
