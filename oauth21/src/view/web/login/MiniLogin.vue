@@ -20,8 +20,11 @@ const { locale, t } = useI18n();
 const { error: showError } = useMessage();
 
 // 1. 解析所有标准化参数
+// appName 必传：用作 client_id 传给后端，缺失会登录提交时报"无效客户端"
+// 此处不再 fallback 到假值，而是标记缺失，模板显示错误提示（避免用户填完表单才报错）
+const hasAppName = computed(() => !!route.query.appName);
 const appConfig = computed(() => ({
-  appName: (route.query.appName as string) || 'Enterprise SSO',
+  appName: (route.query.appName as string) || '',
   lang: (route.query.lang as string) || 'zh_cn',
   styleType: ((route.query.styleType as string) || 'horizontal') as 'horizontal' | 'split' | 'vertical',
   qrCodeFirst: route.query.qrCodeFirst === 'true',
@@ -259,7 +262,13 @@ onMounted(() => {
 
 <template>
   <div class="mini-login-root w-full h-full">
+    <!-- 缺少 appName 参数：无法确定 client_id，显示错误提示而非登录表单（避免填完才报"无效客户端"） -->
+    <div v-if="!hasAppName" class="flex flex-col items-center justify-center w-full h-full p-8 text-center">
+      <div class="text-red-500 text-lg font-semibold mb-2">应用标识缺失</div>
+      <div class="text-slate-400 text-sm">缺少 appName 参数，无法登录。请通过应用入口访问。</div>
+    </div>
     <AuthContainer
+      v-else
       v-model:showQR="showQR"
       :appName="appConfig.appName"
       :styleType="appConfig.styleType"
