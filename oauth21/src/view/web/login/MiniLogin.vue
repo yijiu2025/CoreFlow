@@ -286,14 +286,18 @@ onUnmounted(() => {
   }
 });
 
-// 切换到扫码模式时自动生成二维码（点击"扫码登录"按钮触发，非 qrCodeFirst 场景）
+// 切换到扫码模式时自动生成新二维码（点击"扫码登录"按钮触发，非 qrCodeFirst 场景）
+// 每次进入都重新生成：旧 qrKey 已过期/失效，不复用
 watch(showQR, val => {
-  if (val && !qrKey.value) {
+  if (val) {
     generateQR();
   } else if (!val && qrPollTimer) {
-    // 切回密码登录，停止轮询
+    // 切回密码登录，停止轮询 + 清空旧二维码（下次进入重新生成）
     clearInterval(qrPollTimer);
     qrPollTimer = null;
+    qrKey.value = '';
+    qrDataUrl.value = '';
+    qrStatus.value = 'pending';
   }
 });
 </script>
