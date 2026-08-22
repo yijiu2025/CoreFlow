@@ -10,6 +10,7 @@ import { authApi } from '@/api/auth';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import Icons from '@/components/common/Icons.vue';
 import { useMessage } from '@/composables/useMessage';
+import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -56,7 +57,7 @@ async function onCaptchaSuccess(data: { captchaKey: string }) {
 
   if (captchaPurpose.value === 'send') {
     try {
-      await authApi.sendResetLink(email.value, captchaKey.value);
+      await authApi.sendResetLink(email.value);
       showSuccess(t('forgot.link_sent'));
       step.value = 'sent';
       startCountdown();
@@ -91,7 +92,8 @@ async function handleReset() {
 
   isSubmitting.value = true;
   try {
-    await authApi.resetPasswordByLink(resetToken.value, newPassword.value);
+    const encryptedPassword = await rsaEncrypt(newPassword.value);
+    await authApi.resetPasswordByLink(resetToken.value || '', encryptedPassword, getCachedKid());
     step.value = 'done';
     showSuccess(t('forgot.reset_success'));
   } catch (err: any) {

@@ -9,6 +9,7 @@ import { authApi } from '@/api/auth';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import Icons from '@/components/common/Icons.vue';
 import { useMessage } from '@/composables/useMessage';
+import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 
 const { t } = useI18n();
 const { error: showError, success: showSuccess } = useMessage();
@@ -34,17 +35,12 @@ function sendCode() {
 }
 
 async function onCaptchaSuccess(data: { captchaKey: string }) {
+  // GraphicCaptcha 的 verify-captcha 已同步发送邮箱码（传了 email + type）
   showCaptcha.value = false;
   captchaKey.value = data.captchaKey;
-
-  try {
-    await authApi.sendEmailCode(email.value, captchaKey.value);
-    showSuccess(t('forgot.code_sent'));
-    step.value = 'code';
-    startCountdown();
-  } catch (err: any) {
-    showError(err.message || t('forgot.send_failed'));
-  }
+  showSuccess(t('forgot.code_sent'));
+  step.value = 'code';
+  startCountdown();
 }
 
 function startCountdown() {
@@ -75,7 +71,8 @@ async function handleReset() {
 
   isSubmitting.value = true;
   try {
-    await authApi.resetPassword(email.value, code.value, newPassword.value);
+    const encryptedPassword = await rsaEncrypt(newPassword.value);
+    await authApi.resetPassword(email.value, code.value, encryptedPassword, captchaKey.value, getCachedKid());
     step.value = 'done';
     showSuccess(t('forgot.reset_success'));
   } catch (err: any) {

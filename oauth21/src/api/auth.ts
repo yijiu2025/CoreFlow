@@ -163,24 +163,27 @@ export const authApi = {
   },
 
   /**
-   * 重置密码（验证码方式）
+   * 验证码方式重置密码
+   * 校验邮箱码（绑 sessionId=captchaKey + 指纹）后改密码
+   * newPassword 为 RSA 加密密文，后端用 kid 解密
    */
-  async resetPassword(email: string, code: string, newPassword: string) {
-    return request.post('/user/v1/reset-password', { email, code, newPassword });
+  async resetPassword(email: string, code: string, encryptedPassword: string, captchaKey?: string, kid?: string | null) {
+    return request.post('/user/v1/reset-password', { email, code, password: encryptedPassword, captchaKey, kid: kid || undefined });
   },
 
   /**
    * 发送密码重置链接到邮箱
-   * 需要先通过图形验证码
+   * 后端生成一次性 reset token + 发邮件（限频 + 统一响应防枚举）
    */
-  async sendResetLink(email: string, captchaKey: string) {
-    return request.post('/user/v1/send-reset-link', { email, captchaKey });
+  async sendResetLink(email: string) {
+    return request.post('/user/v1/send-reset-link', { email });
   },
 
   /**
    * 通过链接 token 重置密码
+   * newPassword 为 RSA 加密密文，后端用 kid 解密
    */
-  async resetPasswordByLink(token: string, newPassword: string) {
-    return request.post('/user/v1/reset-password-by-link', { token, newPassword });
+  async resetPasswordByLink(token: string, encryptedPassword: string, kid?: string | null) {
+    return request.post('/user/v1/reset-password-by-link', { token, password: encryptedPassword, kid: kid || undefined });
   }
 };
