@@ -134,16 +134,18 @@ export const authApi = {
 
   /**
    * 检查授权状态 (获取当前 Cookie 登录用户信息)
+   * 返回 {action:'login'|'consent', client_name, scope, sessionId, user}
    */
   async checkAuthorize(params: Record<string, any>) {
-    return request.get('/authorize', { params });
+    return request.get('/oauth2.1/authorize', { params });
   },
 
   /**
-   * 提交授权 (针对已登录用户)
+   * 提交授权确认/拒绝 (针对已登录用户)
+   * 后端签发 authorization_code 并 302 重定向到 redirect_uri
    */
   async authorizeConsent(data: { sessionId: string; user_id: string; action: 'approve' | 'deny' }) {
-    return request.post('/authorize/consent', data);
+    return request.post('/oauth2.1/authorize/consent', data);
   },
 
   /**
