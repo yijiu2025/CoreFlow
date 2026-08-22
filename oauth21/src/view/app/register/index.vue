@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
 import { z } from 'zod';
@@ -15,7 +14,6 @@ onMounted(() => {
   if (recaptchaEnabled.value) loadRecaptcha();
 });
 
-const authStore = useAuthStore();
 const router = useRouter();
 
 const registerSchema = z
@@ -26,7 +24,7 @@ const registerSchema = z
     password: z.string().min(6, '密码至少6位'),
     confirmPassword: z.string().min(6, '请确认密码')
   })
-  .refine(data => data.password === data.confirmPassword, {
+  .refine((data: any) => data.password === data.confirmPassword, {
     message: '两次输入密码不一致',
     path: ['confirmPassword']
   });
@@ -99,19 +97,19 @@ const handleRegister = handleSubmit(async data => {
 <template>
   <div class="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans pb-safe">
     <!-- Header（压缩间距，避免滚动） -->
-    <div class="px-6 pt-8 pb-4">
-      <router-link to="/m/login" class="inline-flex items-center text-slate-400 mb-4">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+    <div class="px-5 pt-6 pb-3">
+      <router-link to="/m/login" class="inline-flex items-center text-slate-400 mb-3">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
-        <span class="text-sm font-medium ml-1">返回登录</span>
+        <span class="text-xs font-medium ml-1">返回登录</span>
       </router-link>
-      <h1 class="text-2xl font-bold text-slate-900 dark:text-white font-outfit">创建新账户</h1>
-      <p class="text-slate-400 text-xs mt-1">开启您的企业级协作之旅</p>
+      <h1 class="text-xl font-bold text-slate-900 dark:text-white font-outfit">创建新账户</h1>
+      <p class="text-slate-400 text-xs mt-0.5">开启您的企业级协作之旅</p>
     </div>
 
-    <!-- Form（压缩 space-y 和输入框高度） -->
-    <form @submit.prevent="handleRegister" class="flex-1 px-6 space-y-3">
+    <!-- Form（紧凑：小间距 + 矮输入框） -->
+    <form @submit.prevent="handleRegister" class="flex-1 px-5 space-y-2">
       <div class="relative">
         <input
           v-model="nickname"
