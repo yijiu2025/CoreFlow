@@ -54,13 +54,14 @@ export default async function (fastify) {
         appId: 'user'
       };
 
-      // 验证邮件验证码（绑定客户端指纹，防异地冒用）
+      // 验证邮件验证码（绑定客户端指纹 + sessionId 一致性，防异地冒用 + 跨流程复用）
       try {
-        const { code } = request.body;
+        const { code, captchaKey } = request.body;
         await emailDao.verifyCode(email, code, emailCodeStore, {
           ip: request.ip,
           ua: request.headers['user-agent'] || '',
-          deviceFp: request.headers['x-device-fp'] || ''
+          deviceFp: request.headers['x-device-fp'] || '',
+          sessionId: captchaKey
         });
       } catch (err) {
         await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });
