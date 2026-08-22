@@ -172,6 +172,11 @@ const handleRegister = handleSubmit(async () => {
             <span @click.stop.prevent="docType = 'privacy'" class="text-primary hover:underline">《隐私政策》</span>
           </span>
         </label>
+
+        <!-- 返回登录 -->
+        <p class="mreg-signin">
+          已有账户？<router-link :to="{ path: '/mini-login', query: route.query }" class="mreg-link">立即返回登录</router-link>
+        </p>
       </form>
     </AuthContainer>
 
@@ -257,11 +262,12 @@ const handleRegister = handleSubmit(async () => {
   cursor: not-allowed;
 }
 .mreg-err {
-  position: absolute;
-  bottom: -16px;
-  left: 4px;
+  display: block;
+  margin-top: 4px;
+  padding-left: 4px;
   font-size: 10px;
   color: #ef4444;
+  min-height: 0;
 }
 .mreg-submit {
   height: 44px;
@@ -305,5 +311,23 @@ const handleRegister = handleSubmit(async () => {
 .mreg-checkbox.checked {
   background: #4f46e5;
   border-color: #4f46e5;
+}
+
+/* 返回登录 */
+.mreg-signin {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
+}
+:global(.dark) .mreg-signin {
+  color: #94a3b8;
+}
+.mreg-link {
+  color: #4f46e5;
+  font-weight: 500;
+}
+.mreg-link:hover {
+  text-decoration: underline;
 }
 </style>
