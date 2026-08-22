@@ -138,7 +138,13 @@
 
         <!-- 模式 B：iframe 登录（无账号 / 点了"登录其他账号"） -->
         <div v-else class="w-full relative h-[484px]">
-          <iframe ref="iframeRef" :src="loginUrl" class="w-full h-full border-none" allow="payment"></iframe>
+          <iframe
+            ref="iframeRef"
+            :src="loginUrl"
+            class="w-full h-full border-none"
+            allow="payment"
+            @load="onIframeLoad"
+          ></iframe>
 
           <!-- 有账号时显示"返回账号列表"（实色不透明，避免 iframe 背景上 hover 看不清） -->
           <button
@@ -150,13 +156,19 @@
             返回账号列表
           </button>
 
-          <!-- Loading State Overlay -->
-          <div
-            v-if="loading"
-            class="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-md"
-          >
-            <div class="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-400 rounded-full animate-spin"></div>
-          </div>
+          <!-- 优雅加载指示器（iframe 加载中显示，加载完淡出；不全遮，主题感知） -->
+          <Transition name="fade">
+            <div
+              v-if="loading"
+              class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/85 dark:bg-slate-900/85 backdrop-blur-sm"
+            >
+              <div class="relative w-10 h-10">
+                <div class="absolute inset-0 rounded-full border-2 border-slate-200 dark:border-slate-700"></div>
+                <div class="absolute inset-0 rounded-full border-2 border-transparent border-t-red-500 animate-spin"></div>
+              </div>
+              <span class="text-xs text-slate-500 dark:text-slate-400">正在加载安全登录…</span>
+            </div>
+          </Transition>
         </div>
       </div>
     </div>
@@ -223,13 +235,18 @@ watch(
   val => {
     if (val) {
       mode.value = accountList.value.length ? 'accounts' : 'login';
-      loading.value = true;
-      setTimeout(() => {
-        loading.value = false;
-      }, 1500);
+      // loading 由 iframe @load 事件真实触发关闭（不再用 setTimeout 假装）
+      if (mode.value === 'login') {
+        loading.value = true;
+      }
     }
   }
 );
+
+/** iframe 加载完成（真实触发，替代 setTimeout） */
+function onIframeLoad() {
+  loading.value = false;
+}
 
 function close() {
   emit('close');
@@ -342,6 +359,16 @@ onUnmounted(() => {
 
 .modal-fade-enter-from,
 .modal-fade-leave-to {
+  opacity: 0;
+}
+
+/* 加载指示器淡入淡出 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
   opacity: 0;
 }
 </style>
