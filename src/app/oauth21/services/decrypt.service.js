@@ -35,13 +35,17 @@ function ensureNonceStore(request) {
 export async function decryptLoginRequest(request, fastify) {
   const { encrypted, timestamp, nonce, captchaKey, kid } = request.body;
 
-  // 1. 验证码校验
+  // 1. 验证码校验：captchaKey 对应图形码必须已 verify（verify-captcha 时标记）
+  //    校验通过后立即删除（一次性，防图形码被复用登录多次）
+  //    注意：发邮箱码场景（verifyAndSendEmail）不删图形码，登录在此消费
   if (captchaKey) {
     const captchaStore = getStore('captcha');
-    const isVerified = await captchaService.consume(captchaKey, captchaStore);
-    if (!isVerified) {
+    const info = await captchaStore.get(captchaKey);
+    if (!info || Date.now() > info.expired || info.verified !== true) {
       return { success: false, error: '请先完成图形验证', statusCode: 400 };
     }
+    // 校验通过，删除图形码（防重放：同一图形码不能用于多次登录）
+    await captchaStore.delete(captchaKey);
   }
 
   // 2. RSA 加密路径

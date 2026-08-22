@@ -35,9 +35,9 @@ class CaptchaDao {
     }
 
     if (email && sendEmailFn) {
+      // 发邮箱码：不消费图形码（登录时 decryptLoginRequest 会消费）
+      // 防同一邮箱被多次发码由 emailCode store 的邮箱维度限频兜底
       await sendEmailFn(email, captchaKey, emailCodeStore);
-      // 发码成功后立即消费图形码（防同一图形码被复用发多次邮箱码）
-      await captchaService.consume(captchaKey, captchaStore);
       return { message: '验证成功，验证码已发送至邮箱', emailSent: true };
     }
 
