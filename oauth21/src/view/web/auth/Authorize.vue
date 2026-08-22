@@ -1,43 +1,115 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { authApi } from '@/api/auth';
 
 const route = useRoute();
 const router = useRouter();
 
 const loading = ref(true);
+const errorMsg = ref('');
 const appInfo = ref({
-  name: (route.query.appName as string) || '外部应用',
+  name: '',
   icon: '',
   description: '该应用申请访问您的基础资料及权限。'
 });
 
-const scopes = ref([
-  { id: 'profile', name: '公开个人信息', desc: '包含您的用户名、头像、昵称等', required: true },
-  { id: 'email', name: '电子邮箱地址', desc: '用于向您发送系统通知' },
-  { id: 'groups', name: '所属组织与角色', desc: '读取您在系统中的部门及分组信息' }
-]);
+// scope 字符串 → 可读描述映射（标准 OIDC scope + 常见自定义）
+const SCOPE_META: Record<string, { name: string; desc: string; required?: boolean }> = {
+  openid: { name: '基础登录凭证', desc: '验证您的身份，维持登录状态', required: true },
+  profile: { name: '公开个人信息', desc: '包含您的用户名、头像、昵称等', required: true },
+  email: { name: '电子邮箱地址', desc: '用于向您发送系统通知' },
+  groups: { name: '所属组织与角色', desc: '读取您在系统中的部门及分组信息' },
+  phone: { name: '手机号码', desc: '用于身份验证与紧急联系' },
+  offline_access: { name: '离线访问', desc: '在您离线时持续访问数据（刷新令牌）' }
+};
 
-// 确认授权
+const scopes = ref<Array<{ id: string; name: string; desc: string; required: boolean }>>([]);
+const sessionId = ref('');
+const userId = ref('');
+
+// 将 scope 字符串解析为可读列表（未知 scope 兜底显示 id）
+function parseScopes(scopeStr: string) {
+  if (!scopeStr) return [];
+  return scopeStr.split(/\s+/).filter(Boolean).map(id => {
+    const meta = SCOPE_META[id] || { name: id, desc: '该应用申请的权限' };
+    return { id, name: meta.name, desc: meta.desc, required: !!meta.required };
+  });
+}
+
+// 确认授权：调后端 /oauth2.1/authorize/consent，后端签发 code 并 302 到 redirect_uri
 const handleApprove = async () => {
-  // TODO: 调用后端 API 记录授权关系并获取 Code
-  console.log('User approved the request');
-  // 模拟回调
-  const redirectUri = route.query.redirect_uri as string;
-  if (redirectUri) {
-    window.location.href = `${redirectUri}?code=mock_auth_code`;
+  try {
+    const res: any = await authApi.authorizeConsent({
+      sessionId: sessionId.value,
+      user_id: userId.value,
+      action: 'approve'
+    });
+    // 后端可能返回 302 重定向 URL（前端无法直接跟随），或返回 {redirect_url}
+    const redirectUrl = res?.redirect_url || res?.data?.redirect_url;
+    if (redirectUrl) {
+      window.location.href = redirectUrl;
+    } else {
+      errorMsg.value = '授权成功但未返回跳转地址';
+    }
+  } catch (err: any) {
+    errorMsg.value = err.message || '授权失败';
   }
 };
 
-// 拒绝授权
-const handleDeny = () => {
-  router.back();
+// 拒绝授权：调后端记录拒绝，跳回 redirect_uri 带 error=access_denied
+const handleDeny = async () => {
+  try {
+    await authApi.authorizeConsent({
+      sessionId: sessionId.value,
+      user_id: userId.value,
+      action: 'deny'
+    });
+  } catch {
+    // 忽略错误，仍跳回
+  }
+  const redirectUri = route.query.redirect_uri as string;
+  if (redirectUri) {
+    const sep = redirectUri.includes('?') ? '&' : '?';
+    window.location.href = `${redirectUri}${sep}error=access_denied`;
+  } else {
+    router.back();
+  }
 };
 
-onMounted(() => {
-  setTimeout(() => {
+onMounted(async () => {
+  try {
+    // 调后端 /oauth2.1/authorize 获取授权信息（应用名 + scope + 用户）
+    const res: any = await authApi.checkAuthorize({
+      client_id: route.query.client_id,
+      redirect_uri: route.query.redirect_uri,
+      response_type: route.query.response_type || 'code',
+      scope: route.query.scope,
+      state: route.query.state,
+      code_challenge: route.query.code_challenge,
+      code_challenge_method: route.query.code_challenge_method,
+      nonce: route.query.nonce
+    });
+
+    const data = res?.data || res;
+    if (data.action === 'login') {
+      // 未登录 → 跳登录页（带回参）
+      const loginQuery = new URLSearchParams(
+        Object.entries(route.query).map(([k, v]) => [k, String(v || '')])
+      ).toString();
+      router.replace(`/mini-login?${loginQuery}&from=authorize`);
+      return;
+    }
+
+    appInfo.value.name = data.client_name || '外部应用';
+    scopes.value = parseScopes(data.scope);
+    sessionId.value = data.sessionId;
+    userId.value = data.user_id;
+  } catch (err: any) {
+    errorMsg.value = err.message || '获取授权信息失败';
+  } finally {
     loading.value = false;
-  }, 800);
+  }
 });
 </script>
 
@@ -47,6 +119,11 @@ onMounted(() => {
       <div v-if="loading" class="flex flex-col items-center justify-center h-[400px]">
         <div class="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
         <p class="mt-4 text-sm text-slate-400">正在获取授权信息...</p>
+      </div>
+
+      <div v-else-if="errorMsg" class="flex flex-col items-center justify-center h-[400px]">
+        <div class="text-red-500 text-lg font-semibold mb-2">授权失败</div>
+        <p class="text-slate-400 text-sm">{{ errorMsg }}</p>
       </div>
 
       <div v-else class="p-10">

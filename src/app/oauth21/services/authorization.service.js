@@ -331,9 +331,10 @@ class AuthorizationService {
 
     if (action === 'deny') {
       const sep = session.query.redirect_uri.includes('?') ? '&' : '?';
-      return reply.redirect(
-        `${session.query.redirect_uri}${sep}error=access_denied&error_description=User denied the request`
-      );
+      const denyUrl = `${session.query.redirect_uri}${sep}error=access_denied&error_description=User denied the request`;
+      await sessionStore.delete(sessionId);
+      // 前端 XHR 无法跨域跟随 302 到三方 redirect_uri，返回 redirect_url 由前端跳转
+      return reply.send({ code: 200, message: '已拒绝授权', data: { redirect_url: denyUrl } });
     }
 
     await ApprovalDao.saveApproval({
@@ -341,7 +342,25 @@ class AuthorizationService {
       appId: session.client.client_id,
       scopes: session.scope.split(' ')
     });
-    return await this.issueCodeAndRedirect(reply, sessionId, user_id, sessionStore);
+
+    // 签发 code，返回 redirect_url（前端 window.location.href 跳转，绕过 XHR 跨域限制）
+    const code = await this.issueAuthorizationCode({
+      userId: user_id,
+      clientId: session.client.client_id,
+      scope: session.scope,
+      redirectUri: session.query.redirect_uri,
+      codeChallenge: session.code_challenge,
+      codeChallengeMethod: session.code_challenge_method,
+      nonce: session.query.nonce
+    });
+    await sessionStore.delete(sessionId);
+
+    const sep = session.query.redirect_uri.includes('?') ? '&' : '?';
+    let redirectUrl = `${session.query.redirect_uri}${sep}code=${code}`;
+    if (session.query.state) {
+      redirectUrl += `&state=${encodeURIComponent(session.query.state)}`;
+    }
+    return reply.send({ code: 200, message: '授权成功', data: { redirect_url: redirectUrl } });
   }
 }
 
