@@ -171,18 +171,12 @@ const openDoc = (type: 'service' | 'privacy') => {
           <div class="reg-row-2">
             <div class="group relative">
               <div class="reg-field" :class="{ 'is-error': errors.username }">
-                <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                </svg>
                 <input v-model="username" v-bind="usernameProps" type="text" placeholder="用户名" autocomplete="username" class="reg-input" />
               </div>
               <span v-if="errors.username" class="reg-err">{{ errors.username }}</span>
             </div>
             <div class="group relative">
               <div class="reg-field" :class="{ 'is-error': errors.email || isEmailDuplicate }">
-                <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M22 7l-10 5L2 7" />
-                </svg>
                 <input v-model="email" v-bind="emailProps" @blur="checkEmail" type="email" placeholder="电子邮箱" autocomplete="email" class="reg-input" />
               </div>
               <span v-if="errors.email || isEmailDuplicate" class="reg-err">{{ isEmailDuplicate ? '邮箱已注册' : errors.email }}</span>
@@ -192,9 +186,6 @@ const openDoc = (type: 'service' | 'privacy') => {
           <!-- 验证码 + 获取按钮 -->
           <div class="group relative">
             <div class="reg-field" :class="{ 'is-error': errors.code }">
-              <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 12l2 2 4-4" /><rect x="3" y="3" width="18" height="18" rx="2" />
-              </svg>
               <input v-model="code" v-bind="codeProps" type="text" placeholder="邮箱验证码" autocomplete="one-time-code" class="reg-input" />
               <button type="button" @click="sendCode" :disabled="isCountingDown" class="reg-code-btn">
                 {{ isCountingDown ? `${countdown}s` : '获取验证码' }}
@@ -207,18 +198,12 @@ const openDoc = (type: 'service' | 'privacy') => {
           <div class="reg-row-2">
             <div class="group relative">
               <div class="reg-field" :class="{ 'is-error': errors.password }">
-                <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
                 <input v-model="password" v-bind="passwordProps" type="password" placeholder="登录密码" autocomplete="new-password" class="reg-input" />
               </div>
               <span v-if="errors.password" class="reg-err">{{ errors.password }}</span>
             </div>
             <div class="group relative">
               <div class="reg-field" :class="{ 'is-error': errors.confirmPassword }">
-                <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
                 <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" placeholder="确认密码" autocomplete="new-password" class="reg-input" />
               </div>
               <span v-if="errors.confirmPassword" class="reg-err">{{ errors.confirmPassword }}</span>
@@ -443,43 +428,38 @@ const openDoc = (type: 'service' | 'privacy') => {
   color: #94a3b8;
 }
 
-/* === 表单（学登录页 space-y-5） === */
+/* === 表单（学登录页 space-y-5 + h-12 输入框） === */
 .reg-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
   flex: 1;
 }
 .reg-row-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
-/* 输入框（学登录页：外层 div + focus-within:ring） */
+/* 输入框（严格对齐登录页：h-12 实色白底 border-slate-200 focus-within:ring） */
 .reg-field {
   display: flex;
   align-items: center;
-  height: 44px;
-  padding: 0 14px;
-  gap: 10px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  height: 48px;
+  padding: 0 16px;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   transition: all 0.2s;
 }
 :global(.dark) .reg-field {
-  background: rgba(15, 23, 42, 0.6);
-  border-color: rgba(51, 65, 85, 0.5);
+  background: #0f172a;
+  border-color: #1e293b;
 }
 .reg-field:focus-within {
   border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-  background: #fff;
-}
-:global(.dark) .reg-field:focus-within {
-  background: rgba(15, 23, 42, 0.9);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
 }
 .reg-field.is-error {
   border-color: #ef4444;
@@ -488,12 +468,15 @@ const openDoc = (type: 'service' | 'privacy') => {
   color: #94a3b8;
   flex-shrink: 0;
 }
+:global(.dark) .reg-icon {
+  color: #64748b;
+}
 .reg-input {
   flex: 1;
   background: transparent;
   border: none;
   outline: none;
-  font-size: 13px;
+  font-size: 14px;
   color: #0f172a;
   height: 100%;
   min-width: 0;
@@ -505,39 +488,42 @@ const openDoc = (type: 'service' | 'privacy') => {
   color: #94a3b8;
 }
 
-/* 获取验证码按钮（学登录页：分隔线 + text-primary） */
+/* 获取验证码按钮（对齐登录页：text-xs font-bold text-primary border-l） */
 .reg-code-btn {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: #4f46e5;
-  padding-left: 12px;
-  border-left: 1px solid rgba(226, 232, 240, 0.9);
+  padding-left: 16px;
+  border-left: 1px solid #e2e8f0;
   white-space: nowrap;
   transition: color 0.2s;
 }
 :global(.dark) .reg-code-btn {
-  border-left-color: rgba(51, 65, 85, 0.5);
+  border-left-color: #1e293b;
 }
 .reg-code-btn:hover:not(:disabled) {
   color: #4338ca;
+}
+:global(.dark) .reg-code-btn:hover:not(:disabled) {
+  color: #818cf8;
 }
 .reg-code-btn:disabled {
   color: #94a3b8;
   cursor: not-allowed;
 }
 
-/* 错误提示（学登录页 absolute -bottom-5） */
+/* 错误提示（对齐登录页 absolute -bottom-5 text-[10px]） */
 .reg-err {
   position: absolute;
-  bottom: -16px;
+  bottom: -18px;
   left: 4px;
   font-size: 10px;
   color: #ef4444;
 }
 
-/* 提交按钮（学登录页渐变 from-primary to-fuchsia-600） */
+/* 提交按钮（对齐登录页 h-12 渐变 from-primary to-fuchsia-600） */
 .reg-submit {
-  height: 44px;
+  height: 48px;
   margin-top: 4px;
   font-size: 14px;
   font-weight: 600;
@@ -547,10 +533,10 @@ const openDoc = (type: 'service' | 'privacy') => {
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25);
 }
 .reg-submit:hover {
-  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
 }
 .reg-submit:active {
   transform: scale(0.98);
@@ -607,17 +593,17 @@ const openDoc = (type: 'service' | 'privacy') => {
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding-top: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.15);
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
   text-decoration: none;
   transition: color 0.2s;
 }
 .reg-brand-signin:hover {
-  color: #fff;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* === mini 模式（iframe 嵌入弹窗，撑满） === */
