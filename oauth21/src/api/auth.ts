@@ -150,18 +150,20 @@ export const authApi = {
 
   /**
    * 生成登录二维码
+   * client_id/scope 存入二维码，移动端扫描时能识别给哪个应用登录
+   * 后端返回 qrContent（二维码内容，含 client_id），前端用 QRCode 生成图片
    */
-  async generateQR() {
-    return request.get('/oauth2.1/qr/generate');
+  async generateQR(params?: { client_id?: string; scope?: string }) {
+    return request.get('/oauth2.1/qr/generate', { params });
   },
 
   /**
    * 查询二维码状态（PC 端轮询）
-   * confirmed 时后端返回 token 响应（access_token/session_token 等），含 status
-   * client_id/scope 透传给后端 issueDirectTokens（iframe SSO 场景必需）
+   * 只传 qrKey：client_id 从存储取（防 PC 端调包）
+   * confirmed 时后端返回 token 响应（access_token/session_token 等）
    */
-  async checkQRStatus(qrKey: string, params?: { client_id?: string; scope?: string }) {
-    return request.get('/oauth2.1/qr/status', { params: { qrKey, ...params } });
+  async checkQRStatus(qrKey: string) {
+    return request.get('/oauth2.1/qr/status', { params: { qrKey } });
   },
 
   /**

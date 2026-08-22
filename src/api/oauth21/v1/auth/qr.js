@@ -19,18 +19,25 @@ import { generateQrCode, scanQrCode, confirmQrCode, getQrStatus } from '../../..
  */
 export default function registerQrRoutes(fastify, qrStore) {
   // GET /qr/generate — 生成登录二维码
+  // client_id/scope/oidcNonce 存入二维码，签发时用存储值（防 PC 端调包）
   registerSecureRoute(fastify, {
     name: 'qrGenerate',
     alias: '生成登录二维码',
     method: 'GET',
     url: '/qr/generate',
-    handler: async () => {
-      const { qrKey, expires_in } = await generateQrCode(qrStore);
-      return { code: 200, message: 'ok', data: { qrKey, expires_in } };
+    handler: async request => {
+      const { client_id, scope, nonce } = request.query;
+      const { qrKey, expires_in, qrContent } = await generateQrCode(qrStore, {
+        clientId: client_id,
+        scope,
+        oidcNonce: nonce
+      });
+      // 返回 qrContent：二维码内容（含 client_id），前端用 QRCode.toDataURL 生成图片
+      return { code: 200, message: 'ok', data: { qrKey, expires_in, qrContent } };
     }
   });
 
-  // POST /qr/scan — 移动端标记二维码为已扫码
+  // POST /qr/scan — 移动端标记二维码为已扫码（记录移动端设备指纹）
   registerSecureRoute(fastify, {
     name: 'qrScan',
     alias: '扫描登录二维码',
@@ -38,7 +45,7 @@ export default function registerQrRoutes(fastify, qrStore) {
     url: '/qr/scan',
     handler: async (request, reply) => {
       const { qrKey } = request.body;
-      const success = await scanQrCode(qrStore, qrKey);
+      const success = await scanQrCode(qrStore, qrKey, request);
       if (!success) {
         return reply.code(400).send({
           code: 400,
@@ -50,7 +57,7 @@ export default function registerQrRoutes(fastify, qrStore) {
     }
   });
 
-  // POST /qr/confirm — 移动端确认登录
+  // POST /qr/confirm — 移动端确认登录（需已登录 + 校验 scan 时设备指纹一致）
   registerSecureRoute(fastify, {
     name: 'qrConfirm',
     alias: '确认扫码登录',
@@ -69,11 +76,11 @@ export default function registerQrRoutes(fastify, qrStore) {
         });
       }
 
-      const success = await confirmQrCode(qrStore, qrKey, user.sub);
+      const success = await confirmQrCode(qrStore, qrKey, user.sub, request);
       if (!success) {
         return reply.code(400).send({
           code: 400,
-          message: '二维码无效或已过期',
+          message: '二维码无效、已过期或设备不一致',
           data: null
         });
       }
@@ -82,14 +89,15 @@ export default function registerQrRoutes(fastify, qrStore) {
   });
 
   // GET /qr/status — 轮询二维码状态（PC 端调用）
+  // 仅传 qrKey：client_id/scope 从存储取（generateQR 时存），防 PC 端调包 client_id
   registerSecureRoute(fastify, {
     name: 'qrStatus',
     alias: '检测二维码状态',
     method: 'GET',
     url: '/qr/status',
     handler: (request, reply) => {
-      const { qrKey, client_id, scope, nonce: oidcNonce } = request.query;
-      return getQrStatus(qrStore, { qrKey, client_id, scope, oidcNonce }, request, reply, fastify);
+      const { qrKey } = request.query;
+      return getQrStatus(qrStore, { qrKey }, request, reply, fastify);
     }
   });
 }
