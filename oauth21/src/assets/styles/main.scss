@@ -86,3 +86,64 @@
 .transition-all-300 {
   @apply transition-all duration-300 ease-in-out;
 }
+
+/* === 现代卡片式认证样式（登录/注册/重置/授权共享）=== */
+
+/* 输入框：聚焦态、主题感知、统一圆角 */
+.input-field {
+  @apply w-full h-12 rounded-xl border bg-slate-50/50 dark:bg-slate-800/50
+         border-slate-200 dark:border-slate-700
+         text-sm text-slate-900 dark:text-slate-100
+         placeholder:text-slate-400 dark:placeholder:text-slate-500
+         transition-all duration-200 outline-none
+         focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white dark:focus:bg-slate-800;
+}
+
+/* 主按钮：阴影、按压动画 */
+.auth-btn {
+  @apply w-full h-12 rounded-xl font-bold text-sm text-white
+         bg-gradient-to-r from-primary to-indigo-600
+         shadow-lg shadow-primary/25
+         active:scale-[0.98] hover:shadow-primary/40
+         transition-all duration-200
+         flex items-center justify-center gap-2
+         disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100;
+}
+
+/* 次按钮/链接按钮 */
+.auth-btn-ghost {
+  @apply w-full h-12 rounded-xl font-bold text-sm
+         border border-slate-200 dark:border-slate-700
+         text-slate-600 dark:text-slate-300
+         bg-white dark:bg-slate-800/50
+         hover:bg-slate-50 dark:hover:bg-slate-800
+         transition-all duration-200;
+}
+
+/* 步骤指示器（1→2→3）*/
+.step-indicator {
+  @apply flex items-center justify-center gap-2 mb-6;
+}
+.step-dot {
+  @apply h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 transition-all duration-300;
+}
+.step-dot.active {
+  @apply w-8 bg-primary;
+}
+.step-dot.done {
+  @apply w-1.5 bg-emerald-400;
+}
+.step-dot:not(.active):not(.done) {
+  @apply w-1.5;
+}
+
+/* 密码强度条 */
+.strength-bar {
+  @apply h-1 rounded-full bg-slate-200 dark:bg-slate-700 transition-all duration-300;
+}
+
+/* 成功状态卡片 */
+.success-icon {
+  @apply w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center
+         ring-4 ring-emerald-500/10;
+}

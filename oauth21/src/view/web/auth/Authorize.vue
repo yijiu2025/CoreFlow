@@ -166,18 +166,8 @@ onMounted(async () => {
 
         <!-- 操作按钮 -->
         <div class="flex flex-col gap-3">
-          <button
-            @click="handleApprove"
-            class="w-full h-12 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/25 hover:scale-[1.02] active:scale-[0.98] transition-all"
-          >
-            允许授权并继续
-          </button>
-          <button
-            @click="handleDeny"
-            class="w-full h-12 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all text-sm"
-          >
-            取消
-          </button>
+          <button @click="handleApprove" class="auth-btn">允许授权并继续</button>
+          <button @click="handleDeny" class="auth-btn-ghost">取消</button>
         </div>
 
         <p class="mt-8 text-center text-[10px] text-slate-400">

@@ -389,7 +389,7 @@ const openDoc = (type: 'service' | 'privacy') => {
             <div class="mt-8">
               <button
                 type="submit"
-                class="w-full h-12 bg-primary text-white rounded-xl font-bold shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm flex items-center justify-center gap-3"
+                class="auth-btn"
               >
                 立即提交注册
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">

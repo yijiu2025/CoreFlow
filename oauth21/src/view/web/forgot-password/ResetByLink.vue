@@ -105,6 +105,14 @@ async function handleReset() {
 </script>
 
 <template>
+  <!-- 步骤指示器：verify→sent→reset→done -->
+  <div class="step-indicator">
+    <div class="step-dot" :class="{ active: step === 'verify', done: ['sent', 'reset', 'done'].includes(step) }"></div>
+    <div class="step-dot" :class="{ active: step === 'sent', done: ['reset', 'done'].includes(step) }"></div>
+    <div class="step-dot" :class="{ active: step === 'reset', done: step === 'done' }"></div>
+    <div class="step-dot" :class="{ active: step === 'done' }"></div>
+  </div>
+
   <!-- 步骤 1：验证身份 -->
   <div v-if="step === 'verify'" class="flex-1 flex flex-col justify-center space-y-4">
     <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
@@ -122,10 +130,7 @@ async function handleReset() {
         <Icons name="mail" :size="16" />
       </div>
     </div>
-    <button
-      @click="sendResetLink"
-      class="w-full h-12 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
-    >
+    <button @click="sendResetLink" class="auth-btn">
       {{ t('forgot.send_link') }}
     </button>
   </div>
@@ -174,15 +179,8 @@ async function handleReset() {
         <Icons name="lock" :size="16" />
       </div>
     </div>
-    <button
-      @click="handleReset"
-      :disabled="isSubmitting"
-      class="w-full h-12 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-    >
-      <span
-        v-if="isSubmitting"
-        class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
-      ></span>
+    <button @click="handleReset" :disabled="isSubmitting" class="auth-btn">
+      <span v-if="isSubmitting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
       {{ t('forgot.reset_password') }}
     </button>
   </div>

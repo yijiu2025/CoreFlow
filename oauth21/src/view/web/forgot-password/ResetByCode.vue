@@ -81,9 +81,30 @@ async function handleReset() {
     isSubmitting.value = false;
   }
 }
+
+// 密码强度（简单版：长度+字符种类）
+const strengthColor = ref('transparent');
+function checkStrength() {
+  const pwd = newPassword.value;
+  if (!pwd) { strengthColor.value = 'transparent'; return; }
+  let score = 0;
+  if (pwd.length >= 8) score++;
+  if (/[A-Z]/.test(pwd)) score++;
+  if (/[0-9]/.test(pwd)) score++;
+  if (/[^A-Za-z0-9]/.test(pwd)) score++;
+  const colors = ['#f43f5e', '#f59e0b', '#eab308', '#10b981'];
+  strengthColor.value = colors[Math.min(score - 1, 3)] || '#f43f5e';
+}
 </script>
 
 <template>
+  <!-- 步骤指示器 -->
+  <div class="step-indicator">
+    <div class="step-dot" :class="{ active: step === 'email', done: step !== 'email' }"></div>
+    <div class="step-dot" :class="{ active: step === 'code', done: step === 'done' }"></div>
+    <div class="step-dot" :class="{ active: step === 'done', done: step === 'done' }"></div>
+  </div>
+
   <!-- 步骤 1：输入邮箱 -->
   <div v-if="step === 'email'" class="flex-1 flex flex-col justify-center space-y-4">
     <div class="relative">
@@ -98,12 +119,7 @@ async function handleReset() {
         <Icons name="mail" :size="16" />
       </div>
     </div>
-    <button
-      @click="sendCode"
-      class="w-full h-12 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
-    >
-      {{ t('forgot.send_code') }}
-    </button>
+    <button @click="sendCode" class="auth-btn">{{ t('forgot.send_code') }}</button>
   </div>
 
   <!-- 步骤 2：输入验证码和新密码 -->
@@ -130,10 +146,14 @@ async function handleReset() {
     </div>
 
     <div class="relative">
-      <input v-model="newPassword" type="password" :placeholder="t('forgot.new_password')" class="input-field pl-11" />
+      <input v-model="newPassword" type="password" :placeholder="t('forgot.new_password')" class="input-field pl-11" @input="checkStrength" />
       <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
         <Icons name="lock" :size="16" />
       </div>
+    </div>
+    <!-- 密码强度条 -->
+    <div v-if="newPassword" class="flex gap-1">
+      <div class="strength-bar flex-1" :style="{ background: strengthColor }"></div>
     </div>
 
     <div class="relative">
@@ -149,22 +169,15 @@ async function handleReset() {
       </div>
     </div>
 
-    <button
-      @click="handleReset"
-      :disabled="isSubmitting"
-      class="w-full h-12 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-    >
-      <span
-        v-if="isSubmitting"
-        class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
-      ></span>
+    <button @click="handleReset" :disabled="isSubmitting" class="auth-btn">
+      <span v-if="isSubmitting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
       {{ t('forgot.reset_password') }}
     </button>
   </div>
 
   <!-- 步骤 3：成功 -->
   <div v-else class="flex-1 flex flex-col items-center justify-center space-y-6">
-    <div class="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
+    <div class="success-icon">
       <Icons name="check" :size="32" class="text-emerald-500" />
     </div>
     <p class="text-sm text-slate-500 dark:text-slate-400 text-center">
