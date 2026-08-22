@@ -11,7 +11,6 @@ import { useRecaptcha } from '@/composables/useRecaptcha';
 
 const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken } = useRecaptcha();
 
-// 预加载 hCaptcha SDK（启用时，提前 warm up 避免提交时才加载）
 onMounted(() => {
   if (recaptchaEnabled.value) loadRecaptcha();
 });
@@ -21,7 +20,6 @@ const route = useRoute();
 
 const isMini = computed(() => route.query.appName || route.path.includes('mini') || route.query.from === 'mini');
 
-// 校验架构
 const registerSchema = z
   .object({
     username: z.string({ required_error: '请输入用户名' }).min(2, '用户名至少2位'),
@@ -70,9 +68,7 @@ const checkEmail = async () => {
 };
 
 const sendCode = () => {
-  if (!values.email || errors.value.email || isEmailDuplicate.value) {
-    return;
-  }
+  if (!values.email || errors.value.email || isEmailDuplicate.value) return;
   showCaptcha.value = true;
 };
 
@@ -100,190 +96,183 @@ const handleRegister = handleSubmit(
       alert('邮箱已被注册');
       return;
     }
-
-    executeRegister();
-  },
-  err => {
-    console.log('Validation errors:', err);
-  }
-);
-
-const executeRegister = async () => {
-  try {
     const { confirmPassword, ...submitData } = values;
     const encryptedPassword = await rsaEncrypt(submitData.password!);
-    // 人机验证（仅 RECAPTCHA_ENABLED=true 时取 token，后端校验）
     const recaptchaToken = recaptchaEnabled.value ? await getRecaptchaToken() : null;
     await authApi.register({
       ...submitData,
       password: encryptedPassword,
       kid: getCachedKid(),
-      captchaKey: captchaKey.value, // 回传 captchaKey，后端校验邮箱码 sessionId 一致性
+      captchaKey: captchaKey.value,
       ...(recaptchaToken ? { recaptchaToken } : {})
     });
     alert('注册成功！现在您可以返回登录了');
-
     if (route.query.from === 'mini') {
-      // 注册成功后，直接回到登录界面
       router.push({ path: '/mini-login', query: route.query });
     } else {
       router.push('/');
     }
-  } catch (err: any) {
-    alert(err.message || '注册失败');
-  }
-};
+  },
+  err => console.log('Validation errors:', err)
+);
 
 const openDoc = (type: 'service' | 'privacy') => {
-  const url = `/docs/${type}.html`;
-  window.open(url, '_blank', 'width=800,height=600');
+  window.open(`/docs/${type}.html`, '_blank', 'width=800,height=600');
 };
 </script>
 
 <template>
   <div class="reg-viewport" :class="{ 'is-mini': isMini }">
-    <!-- 背景光晕 -->
     <div class="reg-glow reg-glow-1"></div>
     <div class="reg-glow reg-glow-2"></div>
 
-    <!-- 卡片 -->
-    <div class="reg-card">
-      <!-- 顶部返回 -->
-      <router-link
-        :to="{ path: isMini ? '/mini-login' : '/', query: route.query }"
-        class="reg-back"
-      >
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-        返回登录
-      </router-link>
-
-      <!-- 标题 -->
-      <div class="reg-header">
-        <h1 class="reg-title">创建新账户</h1>
-        <p class="reg-subtitle">填写以下信息，即刻开启全功能体验</p>
+    <!-- 玻璃卡片（与登录页一致风格） -->
+    <div class="reg-card glass-effect">
+      <!-- 品牌区（与登录页一致） -->
+      <div class="flex items-center gap-3.5 mb-6">
+        <div class="reg-brand-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white font-outfit">创建新账户</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">填写以下信息，即刻开启全功能体验</p>
+        </div>
       </div>
 
       <!-- 表单 -->
-      <form @submit.prevent="handleRegister" class="reg-form">
-        <!-- 用户名 + 邮箱 并排 -->
-        <div class="reg-row">
-          <div class="reg-field">
-            <input
-              v-model="username"
-              v-bind="usernameProps"
-              type="text"
-              placeholder="用户名"
-              autocomplete="username"
-              class="reg-input"
-              :class="{ 'is-error': errors.username }"
-            />
-            <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-            </svg>
+      <form @submit.prevent="handleRegister" class="flex flex-col flex-1">
+        <div class="flex-1 space-y-3">
+          <!-- 用户名 + 邮箱 并排 -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="group relative">
+              <div class="reg-input-wrap" :class="{ 'is-error': errors.username }">
+                <svg class="reg-field-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                </svg>
+                <input
+                  v-model="username"
+                  v-bind="usernameProps"
+                  type="text"
+                  placeholder="用户名"
+                  autocomplete="username"
+                  class="reg-field-input"
+                />
+              </div>
+              <span v-if="errors.username" class="reg-error">{{ errors.username }}</span>
+            </div>
+            <div class="group relative">
+              <div class="reg-input-wrap" :class="{ 'is-error': errors.email || isEmailDuplicate }">
+                <svg class="reg-field-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M22 7l-10 5L2 7" />
+                </svg>
+                <input
+                  v-model="email"
+                  v-bind="emailProps"
+                  @blur="checkEmail"
+                  type="email"
+                  placeholder="电子邮箱"
+                  autocomplete="email"
+                  class="reg-field-input"
+                />
+              </div>
+              <span v-if="errors.email || isEmailDuplicate" class="reg-error">{{ isEmailDuplicate ? '邮箱已被注册' : errors.email }}</span>
+            </div>
           </div>
-          <div class="reg-field">
-            <input
-              v-model="email"
-              v-bind="emailProps"
-              @blur="checkEmail"
-              type="email"
-              placeholder="电子邮箱"
-              autocomplete="email"
-              class="reg-input"
-              :class="{ 'is-error': errors.email || isEmailDuplicate }"
-            />
-            <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="4" width="20" height="16" rx="2" /><path d="M22 7l-10 5L2 7" />
-            </svg>
+
+          <!-- 验证码 + 获取按钮 -->
+          <div class="group relative">
+            <div class="reg-input-wrap" :class="{ 'is-error': errors.code }">
+              <svg class="reg-field-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 12l2 2 4-4" /><rect x="3" y="3" width="18" height="18" rx="2" />
+              </svg>
+              <input
+                v-model="code"
+                v-bind="codeProps"
+                type="text"
+                placeholder="邮箱验证码"
+                autocomplete="one-time-code"
+                class="reg-field-input"
+              />
+              <button
+                type="button"
+                @click="sendCode"
+                :disabled="isCountingDown"
+                class="reg-code-btn"
+              >
+                {{ isCountingDown ? `${countdown}s` : '获取验证码' }}
+              </button>
+            </div>
+            <span v-if="errors.code" class="reg-error">{{ errors.code }}</span>
           </div>
+
+          <!-- 密码 + 确认 并排 -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="group relative">
+              <div class="reg-input-wrap" :class="{ 'is-error': errors.password }">
+                <svg class="reg-field-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <input
+                  v-model="password"
+                  v-bind="passwordProps"
+                  type="password"
+                  placeholder="登录密码"
+                  autocomplete="new-password"
+                  class="reg-field-input"
+                />
+              </div>
+              <span v-if="errors.password" class="reg-error">{{ errors.password }}</span>
+            </div>
+            <div class="group relative">
+              <div class="reg-input-wrap" :class="{ 'is-error': errors.confirmPassword }">
+                <svg class="reg-field-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <input
+                  v-model="confirmPassword"
+                  v-bind="confirmPasswordProps"
+                  type="password"
+                  placeholder="确认密码"
+                  autocomplete="new-password"
+                  class="reg-field-input"
+                />
+              </div>
+              <span v-if="errors.confirmPassword" class="reg-error">{{ errors.confirmPassword }}</span>
+            </div>
+          </div>
+
+          <!-- 提交按钮 -->
+          <button type="submit" class="auth-btn mt-2">创建账户</button>
+
+          <!-- 协议 -->
+          <label class="flex items-start gap-2.5 cursor-pointer py-1.5">
+            <input type="checkbox" v-model="agreed" class="hidden" />
+            <div class="reg-checkbox" :class="{ 'is-checked': agreed }">
+              <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <span class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+              已阅读并同意
+              <span @click.stop.prevent="openDoc('service')" class="text-primary hover:underline">《服务协议》</span>
+              与
+              <span @click.stop.prevent="openDoc('privacy')" class="text-primary hover:underline">《隐私政策》</span>
+            </span>
+          </label>
         </div>
-
-        <!-- 验证码 + 获取按钮 -->
-        <div class="reg-row">
-          <div class="reg-field">
-            <input
-              v-model="code"
-              v-bind="codeProps"
-              type="text"
-              placeholder="验证码"
-              autocomplete="one-time-code"
-              class="reg-input"
-              :class="{ 'is-error': errors.code }"
-            />
-            <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 12l2 2 4-4" /><rect x="3" y="3" width="18" height="18" rx="2" />
-            </svg>
-          </div>
-          <button
-            type="button"
-            @click="sendCode"
-            :disabled="isCountingDown"
-            class="reg-code-btn"
-          >
-            {{ isCountingDown ? `${countdown}s` : '获取验证码' }}
-          </button>
-        </div>
-
-        <!-- 密码 + 确认 并排 -->
-        <div class="reg-row">
-          <div class="reg-field">
-            <input
-              v-model="password"
-              v-bind="passwordProps"
-              type="password"
-              placeholder="登录密码"
-              autocomplete="new-password"
-              class="reg-input"
-              :class="{ 'is-error': errors.password }"
-            />
-            <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </div>
-          <div class="reg-field">
-            <input
-              v-model="confirmPassword"
-              v-bind="confirmPasswordProps"
-              type="password"
-              placeholder="确认密码"
-              autocomplete="new-password"
-              class="reg-input"
-              :class="{ 'is-error': errors.confirmPassword }"
-            />
-            <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </div>
-        </div>
-
-        <!-- 错误提示（统一一行） -->
-        <p v-if="errors.username || errors.email || errors.code || errors.password || errors.confirmPassword || isEmailDuplicate" class="reg-errors">
-          {{ errors.username || (isEmailDuplicate ? '邮箱已被注册' : errors.email) || errors.code || errors.password || errors.confirmPassword }}
-        </p>
-
-        <!-- 提交按钮 -->
-        <button type="submit" class="reg-submit">
-          创建账户
-        </button>
-
-        <!-- 协议 -->
-        <label class="reg-agree">
-          <input type="checkbox" v-model="agreed" class="hidden" />
-          <span class="reg-checkbox" :class="{ 'is-checked': agreed }">
-            <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </span>
-          <span class="reg-agree-text">
-            已阅读并同意
-            <span @click.stop.prevent="openDoc('service')" class="reg-link">《服务协议》</span>
-            与
-            <span @click.stop.prevent="openDoc('privacy')" class="reg-link">《隐私政策》</span>
-          </span>
-        </label>
       </form>
+
+      <!-- 返回登录 -->
+      <div class="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
+        <router-link
+          :to="{ path: isMini ? '/mini-login' : '/', query: route.query }"
+          class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-primary transition-colors"
+        >
+          已有账号？立即返回登录 →
+        </router-link>
+      </div>
     </div>
 
     <GraphicCaptcha
@@ -297,7 +286,7 @@ const openDoc = (type: 'service' | 'privacy') => {
 </template>
 
 <style scoped>
-/* === 背景：深色渐变 + 光晕（主题感知） === */
+/* === 背景 + 光晕（主题感知） === */
 .reg-viewport {
   position: relative;
   width: 100vw;
@@ -306,17 +295,15 @@ const openDoc = (type: 'service' | 'privacy') => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: linear-gradient(140deg, #f8fafc 0%, #e0e7ff 50%, #f8fafc 100%);
   font-family: 'Outfit', 'Inter', sans-serif;
   padding: 24px;
   box-sizing: border-box;
+  background: linear-gradient(140deg, #f8fafc 0%, #e0e7ff 50%, #f8fafc 100%);
 }
-
 :global(.dark) .reg-viewport {
   background: linear-gradient(140deg, #020617 0%, #0f172a 50%, #1e1b4b 100%);
 }
 
-/* 光晕装饰 */
 .reg-glow {
   position: absolute;
   border-radius: 50%;
@@ -325,208 +312,133 @@ const openDoc = (type: 'service' | 'privacy') => {
   z-index: 0;
 }
 .reg-glow-1 {
-  top: -10%;
+  top: -8%;
   left: -5%;
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.25), transparent 70%);
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.22), transparent 70%);
 }
 .reg-glow-2 {
-  bottom: -10%;
+  bottom: -8%;
   right: -5%;
-  width: 350px;
-  height: 350px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.2), transparent 70%);
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle, rgba(217, 70, 239, 0.18), transparent 70%);
 }
 :global(.dark) .reg-glow-1 {
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.35), transparent 70%);
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.32), transparent 70%);
 }
 :global(.dark) .reg-glow-2 {
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.28), transparent 70%);
+  background: radial-gradient(circle, rgba(217, 70, 239, 0.26), transparent 70%);
 }
 
-/* === 卡片：居中玻璃质感 === */
+/* === 玻璃卡片（对齐登录页 glass-effect + rounded-[32px]） === */
 .reg-card {
   position: relative;
   z-index: 1;
   width: 100%;
   max-width: 440px;
   max-height: calc(100vh - 48px);
-  padding: 28px 32px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 20px 50px -10px rgba(15, 23, 42, 0.15);
+  padding: 32px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-:global(.dark) .reg-card {
-  background: rgba(15, 23, 42, 0.7);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
-}
 
-/* 返回 */
-.reg-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
-  text-decoration: none;
-  margin-bottom: 16px;
-  transition: color 0.2s;
-}
-.reg-back:hover {
-  color: #4f46e5;
-}
-:global(.dark) .reg-back {
-  color: #94a3b8;
-}
-
-/* 标题 */
-.reg-header {
-  margin-bottom: 20px;
-}
-.reg-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 4px;
-  letter-spacing: -0.02em;
-}
-:global(.dark) .reg-title {
-  color: #f1f5f9;
-}
-.reg-subtitle {
-  font-size: 12px;
-  color: #94a3b8;
-  margin: 0;
-}
-
-/* === 表单 === */
-.reg-form {
+/* 品牌图标（对齐登录页 from-primary to-fuchsia-500） */
+.reg-brand-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4f46e5, #d946ef);
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
 }
-.reg-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+
+/* === 输入框（对齐登录页：外层 div 包 input + focus-within:ring） === */
+.reg-input-wrap {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 12px;
   gap: 8px;
-}
-.reg-field {
-  position: relative;
-}
-.reg-input {
-  width: 100%;
-  height: 40px;
-  padding: 0 14px 0 38px;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
-  color: #0f172a;
-  outline: none;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 12px;
   transition: all 0.2s;
-  box-sizing: border-box;
 }
-:global(.dark) .reg-input {
+:global(.dark) .reg-input-wrap {
   background: rgba(15, 23, 42, 0.5);
-  border-color: rgba(148, 163, 184, 0.2);
-  color: #f1f5f9;
+  border-color: rgba(51, 65, 85, 0.5);
 }
-.reg-input::placeholder {
-  color: #94a3b8;
-}
-.reg-input:focus {
+.reg-input-wrap:focus-within {
   border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
   background: #fff;
 }
-:global(.dark) .reg-input:focus {
+:global(.dark) .reg-input-wrap:focus-within {
   background: rgba(15, 23, 42, 0.8);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
 }
-.reg-input.is-error {
+.reg-input-wrap.is-error {
   border-color: #ef4444;
 }
-.reg-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+
+.reg-field-icon {
   color: #94a3b8;
-  pointer-events: none;
+  flex-shrink: 0;
+}
+.reg-field-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: #0f172a;
+  height: 100%;
+}
+:global(.dark) .reg-field-input {
+  color: #f1f5f9;
+}
+.reg-field-input::placeholder {
+  color: #94a3b8;
 }
 
-/* 获取验证码按钮 */
+/* 获取验证码按钮（对齐登录页样式） */
 .reg-code-btn {
-  height: 40px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(79, 70, 229, 0.3);
-  background: rgba(79, 70, 229, 0.08);
-  color: #4f46e5;
   font-size: 11px;
   font-weight: 600;
-  cursor: pointer;
+  color: #4f46e5;
+  padding-left: 12px;
+  border-left: 1px solid rgba(226, 232, 240, 0.8);
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: color 0.2s;
+}
+:global(.dark) .reg-code-btn {
+  border-left-color: rgba(51, 65, 85, 0.5);
 }
 .reg-code-btn:hover:not(:disabled) {
-  background: rgba(79, 70, 229, 0.15);
+  color: #4338ca;
 }
 .reg-code-btn:disabled {
-  opacity: 0.5;
+  color: #94a3b8;
   cursor: not-allowed;
 }
 
 /* 错误提示 */
-.reg-errors {
-  margin: -2px 0 0;
-  padding: 0 4px;
-  font-size: 11px;
+.reg-error {
+  position: absolute;
+  bottom: -16px;
+  left: 4px;
+  font-size: 10px;
   color: #ef4444;
-  min-height: 14px;
 }
 
-/* 提交按钮 */
-.reg-submit {
-  height: 42px;
-  margin-top: 4px;
-  border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
-}
-.reg-submit:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
-}
-.reg-submit:active {
-  transform: translateY(0);
-}
-
-/* 协议 */
-.reg-agree {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-top: 8px;
-  cursor: pointer;
-  user-select: none;
-}
+/* 协议 checkbox */
 .reg-checkbox {
-  flex-shrink: 0;
   width: 16px;
   height: 16px;
   margin-top: 1px;
@@ -537,25 +449,17 @@ const openDoc = (type: 'service' | 'privacy') => {
   justify-content: center;
   color: #fff;
   transition: all 0.2s;
+  flex-shrink: 0;
+}
+:global(.dark) .reg-checkbox {
+  border-color: #475569;
 }
 .reg-checkbox.is-checked {
   background: #4f46e5;
   border-color: #4f46e5;
 }
-.reg-agree-text {
-  font-size: 11px;
-  color: #94a3b8;
-  line-height: 1.5;
-}
-.reg-link {
-  color: #4f46e5;
-  cursor: pointer;
-}
-.reg-link:hover {
-  text-decoration: underline;
-}
 
-/* === mini 模式（iframe 嵌入）：撑满 + 紧凑 === */
+/* === mini 模式（iframe 嵌入） === */
 .reg-viewport.is-mini {
   padding: 0;
   background: transparent;
@@ -571,16 +475,16 @@ const openDoc = (type: 'service' | 'privacy') => {
   backdrop-filter: none;
   border: none;
   box-shadow: none;
-  padding: 20px 24px;
+  padding: 24px 28px;
   justify-content: center;
 }
 :global(.dark) .reg-viewport.is-mini .reg-card {
   background: transparent;
 }
-.reg-viewport.is-mini .reg-input {
-  background: rgba(255, 255, 255, 0.8);
+.reg-viewport.is-mini .reg-input-wrap {
+  background: rgba(255, 255, 255, 0.85);
 }
-:global(.dark) .reg-viewport.is-mini .reg-input {
+:global(.dark) .reg-viewport.is-mini .reg-input-wrap {
   background: rgba(15, 23, 42, 0.6);
 }
 </style>
