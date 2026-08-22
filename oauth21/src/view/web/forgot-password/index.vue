@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import AuthContainer from '@/components/common/AuthContainer.vue';
@@ -9,7 +8,10 @@ import ResetByLink from './ResetByLink.vue';
 
 const { t } = useI18n();
 const router = useRouter();
-const activeTab = ref<'code' | 'link'>('code');
+
+// 密码重置方式由环境变量决定（与后端 PASSWORD_RESET_MODE 对应）
+// code：验证码重置 / link：邮件链接重置，只渲染对应组件
+const resetMode = (import.meta.env.VITE_PASSWORD_RESET_MODE || 'code') as 'code' | 'link';
 
 function goToLogin() {
   router.push({ path: '/mini-login', query: router.currentRoute.value.query });
@@ -24,32 +26,8 @@ function goToLogin() {
         <p class="text-xs text-slate-400 mt-1">{{ t('forgot.desc') }}</p>
       </template>
 
-      <!-- 方式切换 -->
-      <div
-        class="flex bg-slate-50 dark:bg-slate-800/50 p-1 rounded-xl mb-6 border border-slate-100 dark:border-slate-800"
-      >
-        <button
-          type="button"
-          @click="activeTab = 'code'"
-          :class="activeTab === 'code' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary' : 'text-slate-500'"
-          class="flex-1 py-2 text-xs font-bold rounded-lg transition-all"
-        >
-          {{ t('forgot.by_code') }}
-        </button>
-        <button
-          type="button"
-          @click="activeTab = 'link'"
-          :class="activeTab === 'link' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary' : 'text-slate-500'"
-          class="flex-1 py-2 text-xs font-bold rounded-lg transition-all"
-        >
-          {{ t('forgot.by_link') }}
-        </button>
-      </div>
-
-      <!-- 方式一：验证码重置 -->
-      <ResetByCode v-if="activeTab === 'code'" />
-
-      <!-- 方式二：邮件链接重置 -->
+      <!-- 重置方式由 PASSWORD_RESET_MODE 决定，只渲染一个（无 tab 切换） -->
+      <ResetByCode v-if="resetMode === 'code'" />
       <ResetByLink v-else />
 
       <template #footer>
