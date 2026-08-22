@@ -28,12 +28,21 @@ export default async function (fastify) {
 
   /**
    * POST /user/register — 注册新用户
+   *
+   * 安全：requireSignature=true（与登录接口安全级别一致，防绕过前端直接调用）
+   *      邮箱验证码 + 邮箱唯一约束兜底，H5 签名防自动化灌水
    */
   registerSecureRoute(fastify, {
     name: 'userRegister',
     alias: '注册新用户',
     method: 'POST',
     url: '/register',
+    // requireSignature 放 config 内（routeConfig = {...config} 展开，verifySignature 读 routeConfig.requireSignature）
+    config: {
+      requireSignature: true,
+      // 端点级限频：单 IP 5 次/分钟，防注册接口被高频刷
+      rateLimit: { max: 5, timeWindow: '1 minute' }
+    },
     handler: async (request, reply) => {
       // 验证邮件验证码
       try {
@@ -50,12 +59,19 @@ export default async function (fastify) {
 
   /**
    * GET /check-email — 校验邮箱是否重复
+   *
+   * 安全：requireSignature=true + 限频，防账号枚举（避免攻击者无限探测邮箱存在性）
    */
   registerSecureRoute(fastify, {
     name: 'checkEmail',
     alias: '校验邮箱是否重复',
     method: 'GET',
     url: '/check-email',
+    config: {
+      requireSignature: true,
+      // 端点级限频：单 IP 10 次/分钟，抑制自动化枚举
+      rateLimit: { max: 10, timeWindow: '1 minute' }
+    },
     handler: async (request, reply) => {
       const { email } = request.query;
       const isDuplicate = await userDao.checkEmailExist(email);
