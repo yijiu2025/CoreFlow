@@ -224,11 +224,15 @@ const qrScope = computed(() => (route.query.scope as string) || 'openid profile 
 
 async function generateQR() {
   try {
-    const res: any = await authApi.generateQR();
+    // 传 client_id/scope 存入二维码，移动端扫描时能识别给哪个应用登录
+    const res: any = await authApi.generateQR({
+      client_id: qrClientId.value,
+      scope: qrScope.value
+    });
     qrKey.value = res.qrKey;
     qrStatus.value = 'pending';
-    // 本地生成二维码图片（data URL），不依赖外部 api.qrserver.com（国内访问慢/被墙）
-    qrDataUrl.value = await QRCode.toDataURL(res.qrKey, { width: 200, margin: 1 });
+    // 二维码内容用后端返回的 qrContent（含 client_id），本地生成图片（不依赖外部服务）
+    qrDataUrl.value = await QRCode.toDataURL(res.qrContent || res.qrKey, { width: 200, margin: 1 });
     startQRPolling();
   } catch {
     showError(t('login.qr_generate_failed'));
@@ -241,10 +245,8 @@ function startQRPolling() {
   qrPollTimer = setInterval(async () => {
     if (!qrKey.value) return;
     try {
-      const res: any = await authApi.checkQRStatus(qrKey.value, {
-        client_id: qrClientId.value,
-        scope: qrScope.value
-      });
+      // 只传 qrKey：client_id 从存储取（防 PC 端调包）
+      const res: any = await authApi.checkQRStatus(qrKey.value);
       // confirmed：后端返回 token 响应（含 access_token/session_token），无 status 字段
       if (res?.access_token || res?.session_token || res?.status === 'CONFIRMED') {
         qrStatus.value = 'confirmed';
