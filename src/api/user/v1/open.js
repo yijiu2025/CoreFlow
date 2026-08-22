@@ -12,6 +12,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import userDao from '../../../app/user/dao/user.js';
 import { emailDao } from '../../../framework/verify/email/index.js';
+import { clientContext, sessionIdFromRequest } from '../../../framework/verify/context.js';
 import { recaptchaDao } from '../../../framework/verify/recaptcha/index.js';
 import verifyConfig from '../../../framework/verify/config.js';
 import { getStore } from '../../../framework/redis/index.js';
@@ -68,12 +69,10 @@ export default async function (fastify) {
 
       // 验证邮件验证码（绑定客户端指纹 + sessionId 一致性，防异地冒用 + 跨流程复用）
       try {
-        const { code, captchaKey } = request.body;
+        const { code } = request.body;
         await emailDao.verifyCode(email, code, emailCodeStore, {
-          ip: request.ip,
-          ua: request.headers['user-agent'] || '',
-          deviceFp: request.headers['x-device-fp'] || '',
-          sessionId: captchaKey
+          ...clientContext(request),
+          sessionId: sessionIdFromRequest(request)
         });
       } catch (err) {
         await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });

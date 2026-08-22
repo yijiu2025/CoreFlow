@@ -7,6 +7,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { captchaDao } from '../../../framework/verify/captcha/index.js';
 import { emailDao } from '../../../framework/verify/email/index.js';
+import { clientContext, sessionIdFromRequest } from '../../../framework/verify/context.js';
 import { getStore } from '../../../framework/redis/index.js';
 import { generateCaptchaSchema, verifyCaptchaSchema } from './schemas/verify.js';
 
@@ -56,11 +57,7 @@ export default async function (fastify, opts) {
           emailCodeStore,
           // 发码时绑定客户端指纹（IP+UA，启用时含 device 指纹），用码时回查一致性
           (email, sessionId, store) =>
-            emailDao.sendCode(email, sessionId, store, {
-              ip: request.ip,
-              ua: request.headers['user-agent'] || '',
-              deviceFp: request.headers['x-device-fp'] || ''
-            })
+            emailDao.sendCode(email, sessionId, store, clientContext(request))
         );
         return reply.result.success(result.message, {
           emailSent: result.emailSent
@@ -85,13 +82,11 @@ export default async function (fastify, opts) {
     method: 'POST',
     url: '/check-email-code',
     handler: async (request, reply) => {
-      const { email, code, captchaKey } = request.body;
+      const { email, code } = request.body;
       try {
         await emailDao.verifyCode(email, code, emailCodeStore, {
-          ip: request.ip,
-          ua: request.headers['user-agent'] || '',
-          deviceFp: request.headers['x-device-fp'] || '',
-          sessionId: captchaKey
+          ...clientContext(request),
+          sessionId: sessionIdFromRequest(request)
         });
         return reply.result.success('验证码校验通过');
       } catch (err) {

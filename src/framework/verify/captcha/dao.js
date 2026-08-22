@@ -36,9 +36,9 @@ class CaptchaDao {
 
     if (email && sendEmailFn) {
       // 发邮箱码后立即消费图形码（一次性：1 图形码只允许发 1 次邮箱码）
-      // 登录/注册时不再校验图形码（邮箱码的 sessionId 绑定了 captchaKey）
+      // 复用 captchaService.consume（校验 verified + 一次性删除），与 login.service 密码登录消费同逻辑
       await sendEmailFn(email, captchaKey, emailCodeStore);
-      await captchaStore.delete(captchaKey);
+      await captchaService.consume(captchaKey, captchaStore);
       return { message: '验证成功，验证码已发送至邮箱', emailSent: true };
     }
 
