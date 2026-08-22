@@ -152,14 +152,16 @@ export const authApi = {
    * 生成登录二维码
    */
   async generateQR() {
-    return request.get('/qr/generate');
+    return request.get('/oauth2.1/qr/generate');
   },
 
   /**
-   * 查询二维码状态
+   * 查询二维码状态（PC 端轮询）
+   * confirmed 时后端返回 token 响应（access_token/session_token 等），含 status
+   * client_id/scope 透传给后端 issueDirectTokens（iframe SSO 场景必需）
    */
-  async checkQRStatus(qrKey: string) {
-    return request.get('/qr/status', { params: { qrKey } });
+  async checkQRStatus(qrKey: string, params?: { client_id?: string; scope?: string }) {
+    return request.get('/oauth2.1/qr/status', { params: { qrKey, ...params } });
   },
 
   /**

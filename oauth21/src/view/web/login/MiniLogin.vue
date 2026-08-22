@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useForm } from 'vee-validate';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
-import { ref, onMounted, computed, watch } from 'vue';
 import { authApi } from '@/api/auth';
 import { postToParent } from '@/utils/parent';
 import AuthContainer from '@/components/common/AuthContainer.vue';
@@ -216,34 +216,49 @@ const executeLogin = async () => {
 };
 
 /** 生成真实二维码 */
+/** 二维码轮询透传的 client_id/scope（与 executeLogin 一致，confirmed 时后端签发令牌需要） */
+const qrClientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
+const qrScope = computed(() => (route.query.scope as string) || 'openid profile email');
+
 async function generateQR() {
   try {
     const res: any = await authApi.generateQR();
     qrKey.value = res.qrKey;
     qrStatus.value = 'pending';
     startQRPolling();
-  } catch (err) {
+  } catch {
     showError(t('login.qr_generate_failed'));
   }
 }
 
-/** 轮询二维码状态 */
+/** 轮询二维码状态；confirmed 时后端返回 token 响应（无 status 字段，有 access_token） */
 function startQRPolling() {
   if (qrPollTimer) clearInterval(qrPollTimer);
   qrPollTimer = setInterval(async () => {
     if (!qrKey.value) return;
     try {
-      const res: any = await authApi.checkQRStatus(qrKey.value);
-      qrStatus.value = res.status?.toLowerCase() || 'pending';
-      if (qrStatus.value === 'confirmed' || qrStatus.value === 'expired') {
+      const res: any = await authApi.checkQRStatus(qrKey.value, {
+        client_id: qrClientId.value,
+        scope: qrScope.value
+      });
+      // confirmed：后端返回 token 响应（含 access_token/session_token），无 status 字段
+      if (res?.access_token || res?.session_token || res?.status === 'CONFIRMED') {
+        qrStatus.value = 'confirmed';
         clearInterval(qrPollTimer!);
         qrPollTimer = null;
-        if (qrStatus.value === 'expired') {
-          showError(t('login.qr_expired'));
-        }
+        // 通知父窗口登录成功（同密码登录链路）
+        notifyParentLoginSuccess(res);
+      } else if (res?.status === 'EXPIRED' || res?.status === 'ERROR') {
+        qrStatus.value = 'expired';
+        clearInterval(qrPollTimer!);
+        qrPollTimer = null;
+        showError(t('login.qr_expired'));
+      } else {
+        // PENDING / SCANNED
+        qrStatus.value = (res?.status || 'PENDING').toLowerCase() as any;
       }
     } catch {
-      // 轮询失败静默处理
+      // 轮询失败静默处理（下轮重试）
     }
   }, 2000);
 }
@@ -256,6 +271,14 @@ onMounted(() => {
   if (showQR.value) generateQR();
   if (window.parent && window.parent !== window) {
     postToParent({ type: 'SSO_READY' });
+  }
+});
+
+// 组件卸载时清理二维码轮询定时器（防内存泄漏）
+onUnmounted(() => {
+  if (qrPollTimer) {
+    clearInterval(qrPollTimer);
+    qrPollTimer = null;
   }
 });
 </script>
