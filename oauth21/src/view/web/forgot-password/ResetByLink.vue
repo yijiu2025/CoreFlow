@@ -57,7 +57,7 @@ async function onCaptchaSuccess(data: { captchaKey: string }) {
 
   if (captchaPurpose.value === 'send') {
     try {
-      await authApi.sendResetLink(email.value);
+      await authApi.sendResetLink(email.value, captchaKey.value);
       showSuccess(t('forgot.link_sent'));
       step.value = 'sent';
       startCountdown();
@@ -199,7 +199,7 @@ async function handleReset() {
 
   <GraphicCaptcha
     :is-open="showCaptcha"
-    :email="email"
+    :email="''"
     type="reset_password"
     @close="showCaptcha = false"
     @success="onCaptchaSuccess"
