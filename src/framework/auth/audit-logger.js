@@ -126,4 +126,21 @@ async function logPasswordChange(redis, { userId, ip, userAgent }) {
   });
 }
 
-export { logAuditEvent, getAuditLogs, logLogin, logLogout, logKick, logPasswordChange };
+/**
+ * 便捷方法：记录注册事件（成功/失败）
+ * @param {object} redis - Redis 客户端（可选）
+ * @param {object} params - { userId, email, ip, userAgent, appId, success, reason }
+ */
+async function logRegister(redis, { userId, email, ip, userAgent, appId, success, reason }) {
+  await logAuditEvent(redis, {
+    type: success ? 'REGISTER_SUCCESS' : 'REGISTER_FAILED',
+    userId,
+    ip,
+    userAgent,
+    appId,
+    // 邮箱脱敏记录（含 email 字段，sanitizeForLog 不覆盖 email，这里手动截断）
+    details: { email: email ? `${email.slice(0, 2)}***@${email.split('@')[1] || ''}` : null, reason }
+  });
+}
+
+export { logAuditEvent, getAuditLogs, logLogin, logLogout, logKick, logPasswordChange, logRegister };

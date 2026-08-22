@@ -13,6 +13,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import userDao from '../../../app/user/dao/user.js';
 import { emailDao } from '../../../framework/verify/email/index.js';
 import { getStore } from '../../../framework/redis/index.js';
+import { logRegister } from '../../../framework/auth/audit-logger.js';
 import '../../../app/user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
 
 export default async function (fastify) {
@@ -44,19 +45,41 @@ export default async function (fastify) {
       rateLimit: { max: 5, timeWindow: '1 minute' }
     },
     handler: async (request, reply) => {
+      const { email } = request.body;
+      const auditCtx = {
+        redis: request.server?.redis,
+        email,
+        ip: request.ip,
+        userAgent: request.headers['user-agent'] || '',
+        appId: 'user'
+      };
+
       // 验证邮件验证码（绑定客户端指纹，防异地冒用）
       try {
-        const { email, code } = request.body;
+        const { code } = request.body;
         await emailDao.verifyCode(email, code, emailCodeStore, {
           ip: request.ip,
           ua: request.headers['user-agent'] || ''
         });
       } catch (err) {
+        await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });
         return reply.result.fail(err.message, null, 400);
       }
 
-      const user = await userDao.createUser(request);
-      return reply.result.success('注册成功', user);
+      // createUser 失败（邮箱已存在/复杂度不足/guest 缺失）抛错，审计失败 + 400
+      try {
+        const user = await userDao.createUser(request);
+        await logRegister(auditCtx.redis, {
+          ...auditCtx,
+          userId: user?.numericId || user?.id,
+          success: true
+        });
+        return reply.result.success('注册成功', user);
+      } catch (err) {
+        await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });
+        const isBizError = err.message?.startsWith('REGISTER_FAILED') || err.message?.startsWith('NOT_FOUND');
+        return reply.result.fail(err.message, null, isBizError ? 400 : 500);
+      }
     }
   });
 
