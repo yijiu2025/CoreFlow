@@ -56,8 +56,8 @@ export async function directLogin(request, reply, fastify) {
   const { client_id, scope } = request.body;
   const oidcNonce = request.body.oidcNonce;
 
-  // 1. 解密与验证（RSA + 时间戳 + Nonce + 验证码）
-  const decryptResult = await decryptLoginRequest(request, fastify);
+  // 1. 解密与验证（RSA + 时间戳 + Nonce）
+  const decryptResult = await decryptLoginRequest(request);
   if (!decryptResult.success) {
     return reply.code(decryptResult.statusCode || 400).send({
       code: decryptResult.statusCode || 400,
@@ -71,15 +71,14 @@ export async function directLogin(request, reply, fastify) {
   // 1.2 图形验证码校验（按 type 分支）
   // - 密码登录：captchaKey 对应图形码必须已 verify，校验通过后删除（一次性，防重放）
   // - 邮箱码登录：图形码已在 verify-captcha 发邮箱码时消费，此处只校验邮箱码（阶段 2）
+  // 复用 captchaService.consume（校验 verified + 一次性删除），与 verifyAndSendEmail 发码消费同逻辑
   const { captchaKey } = request.body;
   if (type !== 'email' && captchaKey) {
     const captchaStore = getStore('captcha');
-    const info = await captchaStore.get(captchaKey);
-    if (!info || Date.now() > info.expired || info.verified !== true) {
+    const consumed = await captchaService.consume(captchaKey, captchaStore);
+    if (!consumed) {
       return reply.code(400).send({ code: 400, message: '请先完成图形验证', data: null });
     }
-    // 校验通过，删除图形码（一次性，防同一图形码被复用登录多次）
-    await captchaStore.delete(captchaKey);
   }
 
   // 1.5. 异常登录检测（暴力破解锁定）

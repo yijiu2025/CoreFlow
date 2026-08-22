@@ -12,14 +12,13 @@
  */
 
 import { decrypt, validateTimestamp } from '../crypto/encryption.js';
-import { captchaService } from '../../../framework/verify/captcha/index.js';
 import { emailDao } from '../../../framework/verify/email/index.js';
 import { getStore, createNonceStore } from '../../../framework/redis/index.js';
 
 // nonce 去重存储（延迟初始化，通过 app 引用自动感知 failover 切换）
 let nonceStore = null;
 
-function ensureNonceStore(request) {
+function ensureNonceStore() {
   if (!nonceStore) {
     nonceStore = createNonceStore();
   }
@@ -29,10 +28,9 @@ function ensureNonceStore(request) {
 /**
  * 解密登录请求
  * @param {object} request - Fastify request
- * @param {object} fastify - Fastify 实例
  * @returns {object} { success, data?, error?, statusCode? }
  */
-export async function decryptLoginRequest(request, fastify) {
+export async function decryptLoginRequest(request) {
   const { encrypted, timestamp, nonce, kid } = request.body;
 
   // 注意：图形验证码校验移至 login.service 按 type 分支处理
@@ -107,13 +105,12 @@ export async function decryptLoginRequest(request, fastify) {
 export async function verifyEmailCode(email, code, request) {
   const emailCodeStore = getStore('email_code');
   try {
-    // captchaKey 作为 sessionId 回查一致性（发码时绑定的 captchaKey 必须与用码时一致）
-    const captchaKey = request?.body?.captchaKey;
+    // captchaKey 作为 sessionId 回查一致性 + 指纹 + 一次性消费
     await emailDao.verifyCode(email, code, emailCodeStore, {
       ip: request?.ip,
       ua: request?.headers?.['user-agent'] || '',
       deviceFp: request?.headers?.['x-device-fp'] || '',
-      sessionId: captchaKey
+      sessionId: request?.body?.captchaKey
     });
     return { success: true };
   } catch (err) {
