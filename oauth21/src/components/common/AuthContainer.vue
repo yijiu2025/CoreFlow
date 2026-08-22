@@ -82,7 +82,7 @@ const isEmbedded = computed(() => {
 
     <!-- Main Wrapper Box -->
     <div
-      class="auth-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-2xl overflow-hidden flex"
+      class="auth-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[10px] shadow-2xl overflow-hidden flex"
       :class="[styleType, { 'has-qr-switcher': showQrSwitcher }]"
     >
       <!-- Left Panel: Branding / Visual (Only for horizontal style) -->
