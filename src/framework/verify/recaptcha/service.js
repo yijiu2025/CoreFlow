@@ -103,6 +103,9 @@ class RecaptchaService {
         response: token
       });
       if (remoteIp) params.append('remoteip', remoteIp);
+      // sitekey 校验：防止 token 被挪用到其他 sitekey（同 secretKey 多站点场景）
+      const siteKey = recaptchaConfig.siteKey;
+      if (siteKey) params.append('sitekey', siteKey);
 
       const res = await fetch('https://api.hcaptcha.com/siteverify', {
         method: 'POST',
