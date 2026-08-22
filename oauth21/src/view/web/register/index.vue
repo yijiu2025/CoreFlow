@@ -125,21 +125,33 @@ const openDoc = (type: 'service' | 'privacy') => {
     <div class="reg-blob reg-blob-1"></div>
     <div class="reg-blob reg-blob-2"></div>
 
-    <!-- 玻璃卡片（学登录页：856×480 glass-effect rounded-[32px]） -->
+    <!-- 玻璃卡片（学登录页：856×480 glass-effect rounded-[32px] 左右分栏） -->
     <div class="reg-card glass-effect">
-      <!-- 左面板（学登录页 p-12 flex-1） -->
-      <div class="reg-panel">
-        <!-- 品牌区（学登录页 brand） -->
-        <div class="reg-brand">
-          <div class="reg-brand-icon">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <!-- 左品牌栏（学登录页渐变品牌区） -->
+      <div class="reg-brand-panel">
+        <div class="reg-brand-bg"></div>
+        <div class="reg-brand-content">
+          <div class="reg-brand-logo">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
           </div>
-          <div>
-            <h2 class="reg-brand-title">创建新账户</h2>
-            <p class="reg-brand-sub">填写信息，开启全功能体验</p>
-          </div>
+          <h2 class="reg-brand-title">开启您的<br />数字之旅</h2>
+          <p class="reg-brand-desc">加入万千企业的选择，即刻开启安全、高效的云端工作空间。</p>
+          <ul class="reg-brand-features">
+            <li><span class="reg-check"></span>企业级数据加密</li>
+            <li><span class="reg-check"></span>多应用统一身份</li>
+            <li><span class="reg-check"></span>随时撤销授权</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 右表单栏 -->
+      <div class="reg-panel">
+        <!-- 标题 -->
+        <div class="reg-head">
+          <h2 class="reg-title">创建新账户</h2>
+          <p class="reg-sub">填写信息，开启全功能体验</p>
         </div>
 
         <!-- 表单 -->
@@ -166,7 +178,7 @@ const openDoc = (type: 'service' | 'privacy') => {
             </div>
           </div>
 
-          <!-- 验证码 + 获取按钮（学登录页：分隔线 + 按钮） -->
+          <!-- 验证码 + 获取按钮 -->
           <div class="group relative">
             <div class="reg-field" :class="{ 'is-error': errors.code }">
               <svg class="reg-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -202,7 +214,7 @@ const openDoc = (type: 'service' | 'privacy') => {
             </div>
           </div>
 
-          <!-- 提交按钮（学登录页渐变） -->
+          <!-- 提交按钮 -->
           <button type="submit" class="reg-submit">创建账户</button>
 
           <!-- 协议 -->
@@ -283,15 +295,17 @@ const openDoc = (type: 'service' | 'privacy') => {
   50% { opacity: 0.6; }
 }
 
-/* === 卡片（学登录页 856×480 glass-effect rounded-[32px]） === */
+/* === 卡片（学登录页 856×480 glass-effect rounded-[32px] 左右分栏） === */
 .reg-card {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 440px;
+  max-width: 856px;
+  height: 484px;
   max-height: calc(100vh - 48px);
   border-radius: 32px;
   overflow: hidden;
+  display: flex;
   border: 1px solid rgba(255, 255, 255, 0.4);
   box-shadow: 0 20px 60px -10px rgba(15, 23, 42, 0.15);
 }
@@ -300,50 +314,125 @@ const openDoc = (type: 'service' | 'privacy') => {
   box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.5);
 }
 
-/* 左面板（学登录页 p-12 flex flex-col） */
+/* 左品牌栏（学登录页渐变品牌） */
+.reg-brand-panel {
+  width: 300px;
+  flex-shrink: 0;
+  position: relative;
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #fff;
+  overflow: hidden;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #8b5cf6 100%);
+}
+.reg-brand-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+  background: radial-gradient(circle at 50% -20%, #fff, transparent 60%);
+  pointer-events: none;
+}
+.reg-brand-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+.reg-brand-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.reg-brand-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 0 12px;
+}
+.reg-brand-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 24px;
+  max-width: 200px;
+}
+.reg-brand-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.reg-brand-features li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.9);
+}
+.reg-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+.reg-check::after {
+  content: '';
+  width: 6px;
+  height: 3px;
+  border-left: 1.5px solid #fff;
+  border-bottom: 1.5px solid #fff;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+/* 右表单栏 */
 .reg-panel {
+  flex: 1;
   padding: 32px 36px;
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  min-width: 0;
 }
 
-/* 品牌区（学登录页 brand mb-10） */
-.reg-brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 24px;
+/* 标题区 */
+.reg-head {
+  margin-bottom: 20px;
 }
-.reg-brand-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #4f46e5, #d946ef);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
-  flex-shrink: 0;
-}
-.reg-brand-title {
-  font-size: 22px;
+.reg-title {
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #0f172a;
   margin: 0;
 }
-:global(.dark) .reg-brand-title {
+:global(.dark) .reg-title {
   color: #fff;
 }
-.reg-brand-sub {
+.reg-sub {
   font-size: 12px;
   color: #64748b;
-  margin: 2px 0 0;
+  margin: 4px 0 0;
 }
-:global(.dark) .reg-brand-sub {
+:global(.dark) .reg-sub {
   color: #94a3b8;
 }
 
@@ -519,7 +608,7 @@ const openDoc = (type: 'service' | 'privacy') => {
   color: #94a3b8;
 }
 
-/* === mini 模式（iframe） === */
+/* === mini 模式（iframe 嵌入弹窗，撑满） === */
 .reg-viewport.is-mini {
   padding: 0;
 }
@@ -529,12 +618,28 @@ const openDoc = (type: 'service' | 'privacy') => {
 .reg-viewport.is-mini .reg-card {
   max-width: 100%;
   max-height: 100%;
+  height: 100%;
   border-radius: 0;
   border: none;
   box-shadow: none;
 }
+/* iframe 里品牌栏窄一点（空间紧凑） */
+.reg-viewport.is-mini .reg-brand-panel {
+  width: 260px;
+  padding: 24px 22px;
+}
+.reg-viewport.is-mini .reg-brand-title {
+  font-size: 22px;
+}
 .reg-viewport.is-mini .reg-panel {
   padding: 24px 28px;
   justify-content: center;
+}
+/* iframe 空间小，输入框紧凑 */
+.reg-viewport.is-mini .reg-field {
+  height: 40px;
+}
+.reg-viewport.is-mini .reg-submit {
+  height: 40px;
 }
 </style>
