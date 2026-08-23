@@ -133,3 +133,34 @@ JWT持有者授权 (JWT Bearer Grant)：适用于服务账户认证。客户端�
 │ ✅ 匹配 → 返回 access_token │
 │ ❌ 不匹配 → 拒绝 │
 │ ←───────────────────────────────────────── │
+
+---
+
+## 本系统登录模式（directLogin vs 授权码 + PKCE）
+
+本系统采用**混合模式**，按客户端类型分流：
+
+### 一方应用（FIRST_PARTY_APP）— directLogin 直接登录
+
+- **适用**：posecraft / firewall / admin 等本系统自有前端
+- **流程**：`POST /oauth21/v1/auth/login`（或 `/mini-login`）→ 用户名密码/邮箱码 → `directLogin` 直接签发令牌
+- **跳过 PKCE 和 redirect_uri 绑定**：一方应用可信，无需防授权码拦截
+- **跳过 consent 二次确认**：一方应用默认已授权
+- **安全**：H5 签名验证（requireSignature）+ 异常检测 + RSA 加密传输兜底
+
+### 三方应用 — 授权码 + PKCE + consent
+
+- **适用**：外部第三方客户端（client_id 非 FIRST_PARTY_APP）
+- **流程**：
+  1. `/oauth/authorize` 授权码 + PKCE（code_challenge 校验）
+  2. 用户登录后，若未授权该应用 → 返回 `consent` 确认流程（consentKey 绑定客户端指纹）
+  3. `/login/consent/confirm` 确认授权 → 写 Approval
+  4. `/oauth/token` 用授权码 + code_verifier 换令牌
+- **强制 PKCE**：公共客户端必须，防授权码拦截
+- **consent 二次确认**：consentKey 绑定发起客户端的 IP+UA 指纹，防泄露被冒用
+
+### 边界
+
+- `directLogin` 仅限 `FIRST_PARTY_APP`（代码 `client.client_id !== FIRST_PARTY_APP.client_id` 分支控制）
+- 三方应用无法走 directLogin，必须走授权码 + PKCE
+- 登录页 `/mini-login` 可被一方应用 iframe 嵌入，三方走标准 authorize 端点
