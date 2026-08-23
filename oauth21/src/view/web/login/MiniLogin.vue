@@ -20,9 +20,6 @@ const route = useRoute();
 const { locale, t } = useI18n();
 const { error: showError } = useMessage();
 
-// 1. 解析所有标准化参数
-// appName 必传：用作 client_id 传给后端，缺失会登录提交时报"无效客户端"
-// 此处不再 fallback 到假值，而是标记缺失，模板显示错误提示（避免用户填完表单才报错）
 const hasAppName = computed(() => !!route.query.appName);
 const appConfig = computed(() => ({
   appName: (route.query.appName as string) || '',
@@ -33,20 +30,17 @@ const appConfig = computed(() => ({
   notKeepLogin: route.query.notKeepLogin === 'true'
 }));
 
-// 根据参数切换状态
 const showQR = ref(false);
 const loginType = ref<'email' | 'pwd'>('email');
 const isCountingDown = ref(false);
 const countdown = ref(60);
 const keepLogin = ref(false);
 
-// 二维码状态
 const qrKey = ref('');
 const qrDataUrl = ref('');
 const qrStatus = ref<'pending' | 'scanned' | 'confirmed' | 'expired'>('pending');
 let qrPollTimer: ReturnType<typeof setInterval> | null = null;
 
-// 监听语言参数并切换 i18n
 watch(
   () => appConfig.value.lang,
   newLang => {
@@ -55,7 +49,6 @@ watch(
   { immediate: true }
 );
 
-// 校验 Schema
 const loginSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('email'),
@@ -74,7 +67,6 @@ const { values, handleSubmit, errors, defineField } = useForm({
   initialValues: { type: 'email', email: '', code: '', username: '', password: '' } as any
 });
 
-// 使用 defineField 对接 vee-validate，避免直接修改 readonly values 产生警告
 const [type] = defineField('type');
 const [email, emailProps] = defineField('email');
 const [code, codeProps] = defineField('code');
@@ -85,7 +77,6 @@ const captchaKey = ref('');
 const showCaptcha = ref(false);
 const captchaPurpose = ref<'code' | 'login'>('login');
 
-// 监听 loginType 切换，同步更新校验类型
 watch(loginType, newType => {
   type.value = newType;
 });
@@ -131,9 +122,6 @@ const handleLogin = handleSubmit(async () => {
   }
 });
 
-// 本机已登录账号的免密切换已移至各应用（posecraft/firewall）的登录弹窗，
-// oauth21 只负责登录本身，不再读取 accounts cookie 或提供切换入口。
-
 const showConsent = ref(false);
 const consentState = ref<any>(null);
 const submittingConsent = ref(false);
@@ -146,30 +134,18 @@ const denyConsent = () => {
   }
 };
 
-/**
- * 通知父窗口登录成功（提取共享逻辑）
- * session_token: 用于主页面换取 sid/sid_r Cookie（iframe 场景）
- */
 function notifyParentLoginSuccess(res: any) {
   if (!(window.parent && window.parent !== window)) return;
   const token = res.access_token || res.data?.accessToken;
   const sessionToken = res.session_token || res.data?.session_token;
   const user = res.user || res.data?.user || {};
-  // 🔍 调试：iframe 登录成功后向父窗口传递的凭证
-  console.log('[MiniLogin] 🔍 notifyParentLoginSuccess ->', {
-    token: token ? `${token.slice(0, 12)}...` : '❌ undefined',
-    sessionToken: sessionToken ? `${sessionToken.slice(0, 12)}...` : '❌ undefined',
-    resKeys: Object.keys(res || {}),
-    isIframe: window.parent !== window
+  postToParent({
+    type: 'LOGIN_SUCCESS',
+    token,
+    sessionToken,
+    user: { id: user.id, username: user.username, name: user.name, email: user.email, avatar: user.avatar },
+    data: res
   });
-  postToParent(
-    {
-      type: 'LOGIN_SUCCESS',
-      token,
-      sessionToken,
-      user: { id: user.id, username: user.username, name: user.name, email: user.email, avatar: user.avatar },
-      data: res
-    });
 }
 
 const approveConsent = async () => {
@@ -200,14 +176,12 @@ const executeLogin = async () => {
       consentState.value = res;
       showConsent.value = true;
     } else if (res && res.action === 'max_sessions') {
-      // 设备数量超限，通知父窗口处理
       if (window.parent && window.parent !== window) {
-        postToParent(
-          {
-            type: 'MAX_SESSIONS',
-            sessions: res.sessions,
-            maxSessions: res.maxSessions
-          });
+        postToParent({
+          type: 'MAX_SESSIONS',
+          sessions: res.sessions,
+          maxSessions: res.maxSessions
+        });
       }
     } else {
       notifyParentLoginSuccess(res);
@@ -217,21 +191,17 @@ const executeLogin = async () => {
   }
 };
 
-/** 生成真实二维码 */
-/** 二维码轮询透传的 client_id/scope（与 executeLogin 一致，confirmed 时后端签发令牌需要） */
 const qrClientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
 const qrScope = computed(() => (route.query.scope as string) || 'openid profile email');
 
 async function generateQR() {
   try {
-    // 传 client_id/scope 存入二维码，移动端扫描时能识别给哪个应用登录
     const res: any = await authApi.generateQR({
       client_id: qrClientId.value,
       scope: qrScope.value
     });
     qrKey.value = res.qrKey;
     qrStatus.value = 'pending';
-    // 二维码内容用后端返回的 qrContent（含 client_id），本地生成图片（不依赖外部服务）
     qrDataUrl.value = await QRCode.toDataURL(res.qrContent || res.qrKey, { width: 200, margin: 1 });
     startQRPolling();
   } catch {
@@ -239,20 +209,16 @@ async function generateQR() {
   }
 }
 
-/** 轮询二维码状态；confirmed 时后端返回 token 响应（无 status 字段，有 access_token） */
 function startQRPolling() {
   if (qrPollTimer) clearInterval(qrPollTimer);
   qrPollTimer = setInterval(async () => {
     if (!qrKey.value) return;
     try {
-      // 只传 qrKey：client_id 从存储取（防 PC 端调包）
       const res: any = await authApi.checkQRStatus(qrKey.value);
-      // confirmed：后端返回 token 响应（含 access_token/session_token），无 status 字段
       if (res?.access_token || res?.session_token || res?.status === 'CONFIRMED') {
         qrStatus.value = 'confirmed';
         clearInterval(qrPollTimer!);
         qrPollTimer = null;
-        // 通知父窗口登录成功（同密码登录链路）
         notifyParentLoginSuccess(res);
       } else if (res?.status === 'EXPIRED' || res?.status === 'ERROR') {
         qrStatus.value = 'expired';
@@ -260,19 +226,14 @@ function startQRPolling() {
         qrPollTimer = null;
         showError(t('login.qr_expired'));
       } else {
-        // PENDING / SCANNED
         qrStatus.value = (res?.status || 'PENDING').toLowerCase() as any;
       }
-    } catch {
-      // 轮询失败静默处理（下轮重试）
-    }
+    } catch {}
   }, 2000);
 }
 
 onMounted(() => {
   showQR.value = appConfig.value.qrCodeFirst;
-  // notKeepLogin=true（公共设备）时强制关；否则保持 ref(false) 默认，由用户在登录页手动勾选
-  // （调用方不传 notKeepLogin 即不干预，oauth21 影响 posecraft，posecraft 不影响 oauth21）
   if (appConfig.value.notKeepLogin) keepLogin.value = false;
   if (showQR.value) generateQR();
   if (window.parent && window.parent !== window) {
@@ -280,7 +241,6 @@ onMounted(() => {
   }
 });
 
-// 组件卸载时清理二维码轮询定时器（防内存泄漏）
 onUnmounted(() => {
   if (qrPollTimer) {
     clearInterval(qrPollTimer);
@@ -288,13 +248,10 @@ onUnmounted(() => {
   }
 });
 
-// 切换到扫码模式时自动生成新二维码（点击"扫码登录"按钮触发，非 qrCodeFirst 场景）
-// 每次进入都重新生成：旧 qrKey 已过期/失效，不复用
 watch(showQR, val => {
   if (val) {
     generateQR();
   } else if (!val && qrPollTimer) {
-    // 切回密码登录，停止轮询 + 清空旧二维码（下次进入重新生成）
     clearInterval(qrPollTimer);
     qrPollTimer = null;
     qrKey.value = '';
@@ -306,7 +263,6 @@ watch(showQR, val => {
 
 <template>
   <div class="mini-login-root w-full h-full">
-    <!-- 缺少 appName 参数：无法确定 client_id，显示错误提示而非登录表单（避免填完才报"无效客户端"） -->
     <div v-if="!hasAppName" class="flex flex-col items-center justify-center w-full h-full p-8 text-center">
       <div class="text-red-500 text-lg font-semibold mb-2">应用标识缺失</div>
       <div class="text-slate-400 text-sm">缺少 appName 参数，无法登录。请通过应用入口访问。</div>
@@ -319,9 +275,8 @@ watch(showQR, val => {
       :isMobile="appConfig.isMobile"
       :showQrSwitcher="!showConsent"
     >
-      <!-- Header 插槽定制 -->
       <template #header>
-        <h2 class="text-xl font-bold dark:text-white">
+        <h2 class="text-xl font-bold dark:text-white leading-tight">
           {{ showConsent ? t('login.consent_title') : showQR ? t('login.qr_title') : t('login.welcome') }}
         </h2>
         <p class="text-xs text-slate-400 mt-1">
@@ -335,15 +290,15 @@ watch(showQR, val => {
         </p>
       </template>
 
-      <!-- QR 插槽定制 -->
+      <!-- 二维码面板 -->
       <template #qr v-if="!showConsent">
         <div class="qr-container flex flex-col items-center justify-center flex-1 py-4">
           <div
-            class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 relative group overflow-hidden cursor-pointer"
+            class="p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative group overflow-hidden cursor-pointer"
             :class="{ 'border-rose-300': qrStatus === 'expired' }"
             @click="qrStatus === 'expired' && generateQR()"
           >
-            <div class="absolute top-0 left-0 w-full h-[2px] bg-primary/60 blur-[2px] animate-scan z-10" v-if="qrStatus !== 'expired'"></div>
+            <div class="absolute top-0 left-0 w-full h-[2px] bg-[#2563eb] blur-[2px] animate-scan z-10" v-if="qrStatus !== 'expired'"></div>
             <img
               v-if="qrDataUrl"
               :src="qrDataUrl"
@@ -351,14 +306,13 @@ watch(showQR, val => {
               :class="qrStatus === 'expired' ? 'opacity-30' : 'opacity-90 group-hover:opacity-100'"
             />
             <div v-else class="w-40 h-40 flex items-center justify-center">
-              <div class="w-8 h-8 border-2 border-slate-200 border-t-primary rounded-full animate-spin"></div>
+              <div class="w-8 h-8 border-2 border-slate-200 border-t-[#2563eb] rounded-full animate-spin"></div>
             </div>
-            <!-- 过期蒙层：点击刷新 -->
             <div
               v-if="qrStatus === 'expired'"
               class="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-white/60 dark:bg-slate-900/60"
             >
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-rose-500">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" class="text-rose-500">
                 <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
                 <path d="M21 3v5h-5" />
                 <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
@@ -375,13 +329,9 @@ watch(showQR, val => {
 
       <!-- 授权确认面板 -->
       <div v-if="showConsent" class="flex-1 flex flex-col justify-center py-2 space-y-5 w-full">
-        <div
-          class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3"
-        >
+        <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
           <div class="flex items-center gap-3">
-            <div
-              class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-lg"
-            >
+            <div class="w-10 h-10 rounded-xl bg-[#2563eb]/10 flex items-center justify-center text-[#2563eb] font-bold text-lg">
               {{ (consentState?.client_name || 'A')[0].toUpperCase() }}
             </div>
             <div>
@@ -403,9 +353,7 @@ watch(showQR, val => {
               </li>
               <li class="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
                 <Icons name="check" :size="16" class="text-green-500 shrink-0 mt-0.5" />
-                <span>{{
-                  t('login.perm_email', { email: consentState?.user?.email || t('login.confidential') })
-                }}</span>
+                <span>{{ t('login.perm_email', { email: consentState?.user?.email || t('login.confidential') }) }}</span>
               </li>
             </ul>
           </div>
@@ -423,42 +371,41 @@ watch(showQR, val => {
             type="button"
             @click="approveConsent"
             :disabled="submittingConsent"
-            class="auth-btn flex-1 h-11 text-xs"
+            class="mlogin-submit flex-1 h-11 text-xs"
           >
-            <span
-              v-if="submittingConsent"
-              class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"
-            ></span>
+            <span v-if="submittingConsent" class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
             {{ t('login.approve') }}
           </button>
         </div>
       </div>
 
-      <!-- 默认插槽：登录表单 -->
-      <form v-else @submit.prevent="handleLogin" class="form-container flex-1 flex flex-col justify-center">
-        <div
-          class="flex bg-slate-50 dark:bg-slate-800/50 p-1 rounded-xl mb-6 border border-slate-100 dark:border-slate-800"
-        >
+      <!-- 登录表单 -->
+      <form v-else @submit.prevent="handleLogin" class="form-container flex-1 flex flex-col justify-center mt-3">
+        <!-- 登录类型 Tab -->
+        <div class="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-4 border border-slate-200/60 dark:border-slate-700/60">
           <button
             type="button"
             @click="loginType = 'email'"
-            :class="loginType === 'email' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary' : 'text-slate-500'"
-            class="flex-1 py-2 text-xs font-bold rounded-lg transition-all"
+            :class="loginType === 'email' ? 'bg-white dark:bg-slate-700 text-[#2563eb] shadow-sm font-bold' : 'text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-slate-300'"
+            class="flex-1 py-2 text-sm rounded-lg transition-all"
           >
             {{ t('login.email_login') }}
           </button>
           <button
             type="button"
             @click="loginType = 'pwd'"
-            :class="loginType === 'pwd' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary' : 'text-slate-500'"
-            class="flex-1 py-2 text-xs font-bold rounded-lg transition-all"
+            :class="loginType === 'pwd' ? 'bg-white dark:bg-slate-700 text-[#2563eb] shadow-sm font-bold' : 'text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-slate-300'"
+            class="flex-1 py-2 text-sm rounded-lg transition-all"
           >
             {{ t('login.password_login') }}
           </button>
         </div>
 
-        <div class="space-y-4">
-          <div class="relative">
+        <!-- 字段 1：邮箱/账号 -->
+        <div class="mlogin-cell">
+          <div class="mlogin-field" :class="{ 'is-error': errors.email || errors.username }">
+            <Icons v-if="loginType === 'email'" name="mail" :size="18" class="mlogin-icon" />
+            <Icons v-else name="user" :size="18" class="mlogin-icon" />
             <input
               v-if="loginType === 'email'"
               v-model="email"
@@ -466,7 +413,7 @@ watch(showQR, val => {
               type="email"
               :placeholder="t('login.email_placeholder')"
               autocomplete="username"
-              class="input-field pl-11"
+              class="mlogin-input"
             />
             <input
               v-else
@@ -475,15 +422,16 @@ watch(showQR, val => {
               type="text"
               :placeholder="t('login.username_placeholder')"
               autocomplete="username"
-              class="input-field pl-11"
+              class="mlogin-input"
             />
-            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-              <Icons v-if="loginType === 'email'" name="mail" :size="16" />
-              <Icons v-else name="user" :size="16" />
-            </div>
           </div>
+          <div class="mlogin-err">{{ errors.email || errors.username }}</div>
+        </div>
 
-          <div class="flex gap-2 relative">
+        <!-- 字段 2：验证码/密码 -->
+        <div class="mlogin-cell">
+          <div class="mlogin-field" :class="{ 'is-error': errors.code || errors.password }">
+            <Icons name="lock" :size="18" class="mlogin-icon" />
             <input
               v-if="loginType === 'email'"
               v-model="code"
@@ -491,7 +439,7 @@ watch(showQR, val => {
               type="text"
               :placeholder="t('login.code_placeholder')"
               autocomplete="one-time-code"
-              class="input-field pl-11 flex-1"
+              class="mlogin-input"
             />
             <input
               v-else
@@ -500,57 +448,52 @@ watch(showQR, val => {
               type="password"
               :placeholder="t('login.password_placeholder')"
               autocomplete="current-password"
-              class="input-field pl-11 flex-1"
+              class="mlogin-input"
             />
-            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-              <Icons name="lock" :size="16" />
-            </div>
             <button
               type="button"
               v-if="loginType === 'email'"
               @click="sendEmailCode"
               :disabled="isCountingDown"
-              class="px-4 text-xs font-bold text-primary hover:bg-primary/5 rounded-xl transition-colors disabled:opacity-50"
+              class="mlogin-code-btn"
             >
               {{ isCountingDown ? `${countdown}s` : t('login.get_code') }}
             </button>
           </div>
-
-          <button
-            type="submit"
-            :disabled="authStore.loading"
-            class="auth-btn mt-4"
-          >
-            <span
-              v-if="authStore.loading"
-              class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
-            ></span>
-            {{ authStore.loading ? t('login.logging_in') : t('login.submit') }}
-          </button>
+          <div class="mlogin-err">{{ errors.code || errors.password }}</div>
         </div>
+
+        <!-- 提交按钮 -->
+        <button type="submit" :disabled="authStore.loading" class="mlogin-submit flex items-center justify-center gap-2 mt-1">
+          <span v-if="authStore.loading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+          {{ authStore.loading ? t('login.logging_in') : t('login.submit') }}
+        </button>
       </form>
 
-      <!-- Footer 插槽定制 -->
+      <!-- 底部控制与跳转插槽 -->
       <template #footer v-if="!showConsent">
-        <div class="flex items-center justify-between">
-          <label class="flex items-center gap-2 cursor-pointer group">
-            <input
-              type="checkbox"
-              v-model="keepLogin"
-              class="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary transition-all"
-            />
-            <span class="text-[11px] text-slate-400 group-hover:text-slate-500">{{ t('login.keep_login') }}</span>
+        <div class="flex items-center justify-between pt-1">
+          <label class="mlogin-checkbox-label">
+            <input type="checkbox" v-model="keepLogin" class="hidden" />
+            <span class="mlogin-checkbox" :class="{ checked: keepLogin }">
+              <svg v-if="keepLogin" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </span>
+            <span class="text-xs text-slate-400 hover:text-slate-500 transition-colors">{{ t('login.keep_login') }}</span>
           </label>
-          <div class="flex items-center gap-4">
+
+          <div class="flex items-center gap-3">
             <router-link
               :to="{ path: '/forgot-password', query: { ...$route.query } }"
-              class="text-[11px] text-slate-400 hover:text-primary transition-colors"
+              class="text-xs text-slate-400 hover:text-[#2563eb] transition-colors"
             >
               {{ t('login.forgot_password') }}
             </router-link>
+            <span class="text-slate-300 dark:text-slate-700">|</span>
             <router-link
               :to="{ path: '/register', query: { ...$route.query, from: 'mini' } }"
-              class="text-[11px] text-primary font-bold hover:underline underline-offset-4"
+              class="mlogin-highlight-link text-xs font-semibold"
             >
               {{ t('login.register_now') }}
             </router-link>
@@ -559,7 +502,6 @@ watch(showQR, val => {
       </template>
     </AuthContainer>
 
-    <!-- Captcha Component -->
     <GraphicCaptcha
       :is-open="showCaptcha"
       :email="email"
@@ -568,28 +510,180 @@ watch(showQR, val => {
       @success="onCaptchaSuccess"
     />
 
-    <!-- Toast 消息 -->
     <MessageToast />
   </div>
 </template>
 
 <style scoped>
-.input-field {
-  width: 100%;
-  height: 48px;
-  padding-left: 44px;
-  padding-right: 16px;
-  background: hsl(var(--background));
-  border: 1px solid hsl(var(--input));
-  border-radius: 12px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.2s;
-  color: hsl(var(--foreground));
+.mlogin-cell {
+  display: flex;
+  flex-direction: column;
 }
 
-.input-field:focus {
-  border-color: hsl(var(--primary));
-  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.1);
+.mlogin-field {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 14px;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+:global(.dark) .mlogin-field {
+  background: #0f172a;
+  border-color: #1e293b;
+}
+
+.mlogin-field:focus-within {
+  background: #fff;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+:global(.dark) .mlogin-field:focus-within {
+  background: #0f172a;
+}
+
+.mlogin-field.is-error {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+:global(.dark) .mlogin-field.is-error {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.mlogin-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.mlogin-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: #0f172a;
+  height: 100%;
+  min-width: 0;
+}
+
+:global(.dark) .mlogin-input {
+  color: #f1f5f9;
+}
+
+.mlogin-input::placeholder {
+  color: #94a3b8;
+}
+
+.mlogin-code-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding-left: 12px;
+  border-left: 1px solid #cbd5e1;
+  color: #2563eb;
+  white-space: nowrap;
+  background: transparent;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.mlogin-code-btn:hover {
+  color: #1d4ed8;
+}
+
+:global(.dark) .mlogin-code-btn {
+  border-left-color: #334155;
+}
+
+.mlogin-code-btn:disabled {
+  color: #94a3b8 !important;
+  cursor: not-allowed;
+}
+
+/* 错误提示固定占位（防晃动） */
+.mlogin-err {
+  height: 16px;
+  line-height: 16px;
+  margin-top: 2px;
+  padding-left: 4px;
+  font-size: 11px;
+  color: #ef4444;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 与注册页对齐的蓝紫渐变主按钮 */
+.mlogin-submit {
+  height: 44px;
+  width: 100%;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  border: none;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mlogin-submit:hover:not(:disabled) {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+}
+
+.mlogin-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.mlogin-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mlogin-checkbox {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 1.5px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+:global(.dark) .mlogin-checkbox {
+  border-color: #475569;
+}
+
+.mlogin-checkbox.checked {
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  border-color: #2563eb;
+}
+
+.mlogin-highlight-link {
+  color: #2563eb;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.mlogin-highlight-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
 }
 </style>

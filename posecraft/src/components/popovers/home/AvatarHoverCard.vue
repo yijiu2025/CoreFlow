@@ -389,6 +389,13 @@ const handleLogout = async () => {
   width: 100%;
 }
 
+.title-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
 .card-menu-count {
   display: flex;
   align-items: center;
