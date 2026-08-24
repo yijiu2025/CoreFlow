@@ -509,7 +509,8 @@ watch(showQR, val => {
 
     <GraphicCaptcha
       :is-open="showCaptcha"
-      :email="email"
+      :email="captchaPurpose === 'code' ? email : undefined"
+      :send-email="captchaPurpose === 'code'"
       type="login"
       @close="showCaptcha = false"
       @success="onCaptchaSuccess"

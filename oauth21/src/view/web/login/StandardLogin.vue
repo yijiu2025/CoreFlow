@@ -580,7 +580,8 @@ onUnmounted(() => {
   <!-- 图形验证码弹窗与全局 Toast -->
   <GraphicCaptcha
     :is-open="showCaptcha"
-    :email="email"
+    :email="captchaPurpose === 'code' ? email : undefined"
+    :send-email="captchaPurpose === 'code'"
     type="login"
     @close="showCaptcha = false"
     @success="onCaptchaSuccess"
