@@ -19,7 +19,6 @@ import { generateToken } from '../crypto/tokens.js';
 import ApprovalDao from '../dao/approval.dao.js';
 import TokenDao from '../dao/token.dao.js';
 import config from '../config/config.js';
-import { createSession } from '../../../framework/auth/session.js';
 import { detectDeviceType, generateDeviceCookie, detectPlatform } from '../../../framework/auth/device.js';
 import { loadUserPermissions } from '../../../framework/auth/permission-loader.js';
 import { getStore } from '../../../framework/redis/index.js';
@@ -186,78 +185,35 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
     const sessionAppId = client.client_id || 'GLOBAL';
 
     if (reply && fastify) {
-      // 跨应用 SSO 登录检测：
-      // 三方 client（client_secret 非空，需认证）通过 SSO iframe 登录时，sid Cookie 会被设到
-      // SSO/API 域，父应用（posecraft/firewall）拿不到，必须改走 session_token 流程——
-      // 由父应用调 /auth/v1/bind-session 在自身域上换取 sid/sid_r Cookie。
-      // 一方应用（client_secret=null，公共客户端）同域直接写 cookie，不走 session_token。
-      // 注意：Sec-Fetch-Dest 没有 'iframe' 值，sec-fetch 无法可靠检测 iframe 嵌入，故改用 client 类型判断。
-      const isSsoLogin = !!client.client_secret;
-      _debug('🔍 [token-issuer] SSO 检测: client_id=%s → isSsoLogin=%s', client.client_id, isSsoLogin);
+      // 所有登录都是跨域 iframe（oauth21 登录页被各 app 嵌入），sid cookie 设在 oauth21 域
+      // 父应用（posecraft/firewall）拿不到，必须返回 session_token，由父应用调
+      // /auth/v1/bind-session 在自身域换 sid/sid_r cookie。
+      const sessionToken = generateToken(32);
+      const sessionStore = getStore('session_token');
+      await sessionStore.set(
+        sessionToken,
+        {
+          userId: user.numericId || user.id,
+          uid: user.uid || user.id,
+          username: user.username,
+          email: user.email,
+          avatar: user.avatar,
+          status: user.status || 'active',
+          appId: sessionAppId,
+          ip: request.ip,
+          deviceId: resolveDeviceId(request), // 不下发 cookie（父应用 bind-session 时再写）
+          deviceType: detectDeviceType(request.headers['user-agent'] || ''),
+          userAgent: request.headers['user-agent'] || '',
+          rememberMe
+        },
+        300
+      );
 
-      if (isSsoLogin) {
-        // iframe 模式：生成临时 session token 存入 Redis
-        const sessionToken = generateToken(32);
-        const sessionStore = getStore('session_token');
-        await sessionStore.set(
-          sessionToken,
-          {
-            userId: user.numericId || user.id,
-            uid: user.uid || user.id,
-            username: user.username,
-            email: user.email,
-            avatar: user.avatar,
-            status: user.status || 'active',
-            appId: sessionAppId,
-            ip: request.ip,
-            deviceId: resolveDeviceId(request), // SSO 分支无 reply，不下发 cookie（父应用 bind-session 时再写）
-            deviceType: detectDeviceType(request.headers['user-agent'] || ''),
-            userAgent: request.headers['user-agent'] || '',
-            rememberMe
-          },
-          300
-        );
-
-        result.session_token = sessionToken;
-        _debug(
-          '🔍 [token-issuer] ✅ SSO 分支：已生成 session_token=%s...（供父窗口 bindSession）',
-          sessionToken.slice(0, 12)
-        );
-      } else {
-        // 第一方直接登录：在本应用域直接创建 Session 并设 Cookie
-        _debug('🔍 [token-issuer] 第一方登录：直接 createSession 设 sid cookie');
-        try {
-          const sess = await createSession({
-            userId: user.numericId || user.id,
-            uid: user.uid || user.id,
-            username: user.username,
-            email: user.email,
-            avatar: user.avatar,
-            status: user.status || 'active',
-            appId: sessionAppId,
-            ip: request.ip,
-            deviceId: resolveDeviceId(request, reply), // 第一方登录：解析稳定 deviceId + 首次写 cookie
-            deviceType: detectDeviceType(request.headers['user-agent'] || ''),
-            userAgent: request.headers['user-agent'] || '',
-            rememberMe,
-            reply
-          });
-          // sid/sid_r cookie 已由 createSession 下发；refreshToken 由父窗口 bind-session 响应返回前端
-        } catch (err) {
-          if (err.code === 'MAX_SESSIONS_EXCEEDED') {
-            return {
-              code: 409,
-              message: '设备数量已达上限',
-              data: {
-                action: 'max_sessions',
-                maxSessions: err.maxSessions,
-                sessions: err.sessions
-              }
-            };
-          }
-          throw err;
-        }
-      }
+      result.session_token = sessionToken;
+      _debug(
+        '🔍 [token-issuer] ✅ 已生成 session_token=%s...（供父窗口 bindSession 换 sid）',
+        sessionToken.slice(0, 12)
+      );
     }
   } // 结束 Session 模式 else
 
