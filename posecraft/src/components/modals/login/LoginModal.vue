@@ -128,9 +128,15 @@
               </button>
               <p class="text-slate-400 dark:text-slate-500" style="font-size: 11px">
                 登录即同意
-                <span class="text-slate-500 dark:text-slate-400 underline-offset-2 hover:underline cursor-pointer">用户协议</span>
+                <span
+                  class="text-slate-500 dark:text-slate-400 underline-offset-2 hover:underline cursor-pointer"
+                  @click.stop.prevent="docType = 'service'"
+                >用户协议</span>
                 和
-                <span class="text-slate-500 dark:text-slate-400 underline-offset-2 hover:underline cursor-pointer">隐私政策</span>
+                <span
+                  class="text-slate-500 dark:text-slate-400 underline-offset-2 hover:underline cursor-pointer"
+                  @click.stop.prevent="docType = 'privacy'"
+                >隐私政策</span>
               </p>
             </div>
           </div>
@@ -173,6 +179,9 @@
       </div>
     </div>
   </Transition>
+
+  <!-- 用户协议 / 隐私政策 弹窗（统一组件，正文懒加载） -->
+  <AgreementModals v-model:type="docType" />
 </template>
 
 <script setup lang="ts">
@@ -182,6 +191,7 @@ import { X, UserPlus, ArrowLeft, Trash2 } from 'lucide-vue-next';
 import { buildSsoLoginUrl, SSO_URL, LOGIN_COPY } from '@/config/services';
 import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
+import AgreementModals from '@/components/common/AgreementModals.vue';
 
 const props = defineProps({
   isOpen: Boolean
@@ -207,6 +217,8 @@ const ssoOrigin = (() => {
 const iframeRef = ref<HTMLIFrameElement | null>(null);
 /** 'accounts'（账号列表）/ 'login'（iframe 登录），二选一 */
 const mode = ref<'accounts' | 'login'>('accounts');
+/** 协议弹窗状态：null 关闭，'service' / 'privacy' 打开对应协议 */
+const docType = ref<'service' | 'privacy' | null>(null);
 
 /** savedAccounts 对象 → 数组（便于 v-for） */
 const accountList = computed(() =>

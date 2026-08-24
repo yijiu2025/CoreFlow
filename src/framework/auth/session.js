@@ -28,7 +28,7 @@ import { loadUserPermissions } from './permission-loader.js';
 
 const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
 // 设备类型常量与判定统一由 device.js 提供，此处导入为本地绑定并在文件末尾 re-export
-import { DEVICE_TYPE, detectDeviceType } from './device.js';
+import { DEVICE_TYPE, detectDeviceType, computeDeviceFingerprint } from './device.js';
 
 /** 认证调试开关 */
 const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';
@@ -273,6 +273,8 @@ async function createSession(params) {
   const familyId = crypto.randomBytes(16).toString('hex');
 
   // 3. 构造 session 数据
+  //    deviceFingerprint 作为访问时风险检测的基准（device_id + UA + uid 算出的复合指纹）
+  //    写入 Redis session，访问时 getSession 直接取，避免每次请求查 session_tokens 表
   const sessionData = {
     userId,
     uid,
@@ -285,6 +287,7 @@ async function createSession(params) {
     permissions,
     ip,
     deviceId,
+    deviceFingerprint, // 基准指纹，访问时比对当前请求算出的指纹
     deviceType: deviceType || DEVICE_TYPE.BROWSER,
     userAgent,
     familyId,
@@ -345,28 +348,70 @@ async function createSession(params) {
 
   // 记录设备 Token
   const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
+  // 复合设备指纹（device_id + UA + uid，绑定设备+账号，访问时比对检测风险）
+  const deviceFingerprint = computeDeviceFingerprint({
+    deviceId,
+    userAgent,
+    uid,
+    platformHint: '' // UA 已含足够信息，platformHint 可选
+  });
 
-  // 清理同用户同设备的旧 token，防止 SessionToken 表数据爆炸
-  // 同一设备重复登录时，只保留最新的一条（deviceId 为空时跳过，避免误删）
+  // 设备幂等：同一用户同一设备只保留一条 session_token（有就更新，无才新增）
+  // 防止 session_tokens 表按登录次数堆积。deviceId 为空时退化为 destroy+create。
   if (deviceId) {
     try {
-      await SessionToken.destroy({
-        where: { user_id: userId, device_id: deviceId, revoked: false }
+      // upsert 语义：同 user_id + device_id 命中则更新 token/ip/UA/fingerprint/时间/revoked=false
+      const [tokenRow, created] = await SessionToken.findOrCreate({
+        where: { user_id: userId, device_id: deviceId },
+        defaults: {
+          app_id: appId,
+          device_id: deviceId,
+          device_fingerprint: deviceFingerprint,
+          token: tokenHash,
+          ip,
+          user_agent: userAgent,
+          last_active: new Date(),
+          revoked: false
+        }
       });
+      if (!created) {
+        // 已存在：更新为最新登录信息（token 轮换 + 指纹刷新 + 复活 revoked）
+        await tokenRow.update({
+          app_id: appId,
+          device_fingerprint: deviceFingerprint,
+          token: tokenHash,
+          ip,
+          user_agent: userAgent,
+          last_active: new Date(),
+          revoked: false
+        });
+      }
     } catch (err) {
-      console.warn('[Session] 清理旧 token 失败:', err.message);
+      console.warn('[Session] upsert token 失败，回退 destroy+create:', err.message);
+      await SessionToken.destroy({ where: { user_id: userId, device_id: deviceId, revoked: false } });
+      await SessionToken.create({
+        user_id: userId,
+        app_id: appId,
+        device_id: deviceId,
+        device_fingerprint: deviceFingerprint,
+        token: tokenHash,
+        ip,
+        user_agent: userAgent,
+        last_active: new Date()
+      });
     }
+  } else {
+    await SessionToken.create({
+      user_id: userId,
+      app_id: appId,
+      device_id: deviceId,
+      device_fingerprint: deviceFingerprint,
+      token: tokenHash,
+      ip,
+      user_agent: userAgent,
+      last_active: new Date()
+    });
   }
-
-  await SessionToken.create({
-    user_id: userId,
-    app_id: appId,
-    device_id: deviceId,
-    token: tokenHash,
-    ip,
-    user_agent: userAgent,
-    last_active: new Date()
-  });
 
   // 记录登录日志
   await SessionLog.create({
@@ -1019,6 +1064,51 @@ async function getLoginTrend(days = 7) {
   }));
 }
 
+/**
+ * 更新会话基准（人机验证通过后调用）
+ *
+ * 用户在新环境（换设备/UA/IP）完成验证后，把当前请求的新基准写回 Redis session 数据 + DB session_tokens，
+ * 后续请求不再报"指纹变了"。
+ *
+ * @param {string} sessionId - 会话 ID（request.state.user.sessionId）
+ * @param {object} newBaseline - { deviceId, deviceFingerprint, ip, userAgent }
+ */
+async function updateSessionBaseline(sessionId, { deviceId, deviceFingerprint, ip, userAgent }) {
+  if (!sessionId) return false;
+  const sd = await sessionStore.get(sessionId);
+  if (!sd) return false;
+
+  // 更新基准字段
+  if (deviceId !== undefined) sd.deviceId = deviceId;
+  if (deviceFingerprint !== undefined) sd.deviceFingerprint = deviceFingerprint;
+  if (ip !== undefined) sd.ip = ip;
+  if (userAgent !== undefined) sd.userAgent = userAgent;
+  sd.lastActiveAt = Math.floor(Date.now() / 1000);
+
+  // 写回 Redis（保留原 TTL）
+  const sessionTtl = sd.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
+  await sessionStore.set(sessionId, sd, sessionTtl);
+
+  // 同步 DB session_tokens（按 device_id 定位，更新 fingerprint/ip/UA/last_active）
+  const SessionToken = getModel('session.SessionToken');
+  if (SessionToken && sd.userId && sd.deviceId) {
+    try {
+      await SessionToken.update(
+        {
+          device_fingerprint: deviceFingerprint,
+          ip,
+          user_agent: userAgent,
+          last_active: new Date()
+        },
+        { where: { user_id: sd.userId, device_id: sd.deviceId } }
+      );
+    } catch (err) {
+      console.warn('[Session] 更新 session_tokens 基准失败:', err.message);
+    }
+  }
+  return true;
+}
+
 export {
   DEVICE_TYPE,
   detectDeviceType,
@@ -1034,6 +1124,7 @@ export {
   revokeRememberMe,
   deleteRefreshTokensForSession,
   updateRememberMe,
+  updateSessionBaseline,
   kickUser,
   logLoginFailure,
   getSessionStats,

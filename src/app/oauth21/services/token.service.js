@@ -23,6 +23,7 @@ import { generateToken } from '../crypto/tokens.js';
 import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';
 import config from '../config/config.js';
 import { FIRST_PARTY_APP } from '../config/constants.js';
+import { checkScopeSubset } from '../config/scope-registry.js';
 
 /**
  * 令牌错误（RFC 6749 标准错误格式）
@@ -237,12 +238,19 @@ class TokenService {
     // 轮换：吊销旧刷新令牌
     await TokenDao.revoke(refresh_token);
 
+    // 刷新时 scope 收敛：请求 scope 必须是原 token scope 的子集（OAuth 2.1 要求刷新不得提升权限）
+    // 不传 scope 则沿用原 scope；传了但超出原范围则报 invalid_scope
     const newScope = scope || tokenData.scope;
+    const scopeNarrow = checkScopeSubset(newScope, tokenData.scope);
+    if (!scopeNarrow.valid) {
+      throw new TokenError('invalid_scope', `刷新不能提升 scope: ${scopeNarrow.exceeded.join(' ')}`);
+    }
 
     // 刷新时重新签发 access token（权限已嵌入 JWT，刷新即重新加载最新 scope）
     const { token: accessToken } = await issueAccessToken({
       sub: tokenData.sub,
-      aud: client.client_id
+      aud: client.client_id,
+      scope: newScope
     });
 
     const newRefreshToken = generateToken(48);

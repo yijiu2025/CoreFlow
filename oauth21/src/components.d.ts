@@ -11,14 +11,17 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AgreementModals: typeof import('./components/common/AgreementModals.vue')['default']
     AuthContainer: typeof import('./components/common/AuthContainer.vue')['default']
     DocModal: typeof import('./components/common/DocModal.vue')['default']
     GraphicCaptcha: typeof import('./components/common/GraphicCaptcha.vue')['default']
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
     Icons: typeof import('./components/common/Icons.vue')['default']
     MessageToast: typeof import('./components/common/MessageToast.vue')['default']
+    PrivacyPolicy: typeof import('./components/common/agreements/PrivacyPolicy.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ServiceAgreement: typeof import('./components/common/agreements/ServiceAgreement.vue')['default']
     SliderCaptcha: typeof import('./components/common/SliderCaptcha.vue')['default']
   }
 }

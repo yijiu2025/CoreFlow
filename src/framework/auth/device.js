@@ -60,8 +60,11 @@ export function detectPlatform(request) {
 /**
  * 生成设备标识：`{平台前缀}-{16位指纹hash}`
  *
- * 指纹输入：x-device-id 头 + User-Agent + sec-ch-ua-platform，
- * 同一浏览器/客户端稳定一致，便于同设备互踢与去重。
+ * 指纹输入优先级（保证同浏览器/同账号跨版本更新 device_id 稳定，避免 session_tokens 表堆积）：
+ *   1. x-device-id 头（前端主动传，最稳）
+ *   2. cookie 里的 device_id（首次登录后端写回，跨请求稳定）
+ *   3. User-Agent + sec-ch-ua-platform 计算（兜底，浏览器更新后可能变）
+ *
  * 前缀来自 detectPlatform，便于按 web/android/ios/miniapp 分辨。
  *
  * @param {import('fastify').FastifyRequest} request
@@ -69,9 +72,45 @@ export function detectPlatform(request) {
  */
 export function getDeviceId(request) {
   const platform = detectPlatform(request);
+  // 1. 优先用前端主动传的 x-device-id 头
   const header = request?.headers?.['x-device-id'] || '';
+  // 2. 其次读 cookie 里的 device_id（首次登录后端写入，后续请求自动带上）
+  const cookieDeviceId = request?.cookies?.device_id || '';
+  // 3. 兜底用 UA + platform 计算
   const ua = request?.headers?.['user-agent'] || '';
   const platformHint = request?.headers?.['sec-ch-ua-platform'] || '';
+
+  // 稳定来源优先：header > cookie
+  const stableId = header || cookieDeviceId;
+  if (stableId) {
+    // 带平台前缀，统一格式（前端传的可能无前缀）
+    return stableId.includes('-') ? stableId : `${platform}-${stableId}`;
+  }
   const hash = crypto.createHash('sha256').update(`${header}|${ua}|${platformHint}`).digest('hex').slice(0, 16);
   return `${platform}-${hash}`;
+}
+
+/**
+ * Cookie device_id 用的稳定随机值（无前缀，getDeviceId 会补前缀）
+ * 首次登录无 cookie 时生成，写回 cookie，后续请求稳定带上。
+ */
+export function generateDeviceCookie() {
+  return crypto.randomUUID();
+}
+
+/**
+ * 计算复合设备指纹（device_id + UA + uid 等哈希）
+ *
+ * 区别于 device_id（设备级稳定标识，跨账号共用）：
+ * device_fingerprint 绑定"设备 + 账号"，同设备换账号/同账号换设备都会变。
+ * 每次登录计算并记录到 session_tokens，访问时比对——突变则可能账号被盗/换设备。
+ *
+ * 输入：device_id + UA + uid + sec-ch-ua-platform（浏览器特征，防 UA 轻微变化误报）
+ *
+ * @param {object} opts - { deviceId, userAgent, uid, platformHint? }
+ * @returns {string} 32 位指纹
+ */
+export function computeDeviceFingerprint({ deviceId, userAgent, uid, platformHint }) {
+  const material = `${deviceId || ''}|${uid || ''}|${userAgent || ''}|${platformHint || ''}`;
+  return crypto.createHash('sha256').update(material).digest('hex').slice(0, 32);
 }

@@ -169,7 +169,8 @@ const executeLogin = async () => {
       ...values,
       keepLogin: keepLogin.value,
       captchaKey: captchaKey.value,
-      client_id: route.query.client_id || route.query.appName
+      client_id: route.query.client_id || route.query.appName,
+      scope: (route.query.scope as string) || 'openid profile email'
     };
     const res = await authStore.login(loginPayload as any);
     if (res && res.action === 'consent') {
@@ -347,13 +348,17 @@ watch(showQR, val => {
               {{ t('login.requesting_permissions') }}
             </p>
             <ul class="space-y-1.5">
-              <li class="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <li
+                v-for="s in (consentState?.scopeDetails || [])"
+                :key="s.id"
+                class="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300"
+              >
                 <Icons name="check" :size="16" class="text-green-500 shrink-0 mt-0.5" />
-                <span>{{ t('login.perm_profile') }}</span>
-              </li>
-              <li class="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
-                <Icons name="check" :size="16" class="text-green-500 shrink-0 mt-0.5" />
-                <span>{{ t('login.perm_email', { email: consentState?.user?.email || t('login.confidential') }) }}</span>
+                <span>
+                  <strong class="font-semibold">{{ s.name }}</strong>
+                  <span class="text-slate-400 dark:text-slate-500">— {{ s.desc }}</span>
+                  <span v-if="s.required" class="ml-1 text-[10px] text-slate-400">（必需）</span>
+                </span>
               </li>
             </ul>
           </div>
@@ -485,7 +490,7 @@ watch(showQR, val => {
 
           <div class="flex items-center gap-3">
             <router-link
-              :to="{ path: '/forgot-password', query: { ...$route.query } }"
+              :to="{ path: '/forgot-password', query: { ...$route.query, fromLogin: 'mini' } }"
               class="text-xs text-slate-400 hover:text-[#2563eb] transition-colors"
             >
               {{ t('login.forgot_password') }}

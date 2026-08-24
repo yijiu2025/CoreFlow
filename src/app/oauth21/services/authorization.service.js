@@ -23,6 +23,7 @@ import ApprovalDao from '../dao/approval.dao.js';
 import { v4 as uuidv4 } from 'uuid';
 import { generateAuthorizationCode } from '../crypto/tokens.js';
 import config from '../config/config.js';
+import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
 
 /**
  * OAuth 授权错误（RFC 6749 标准错误格式）
@@ -96,9 +97,16 @@ class AuthorizationService {
       }
     }
 
+    // 5. scope 边界校验：请求 scope 必须 ⊆ client 注册 scope
+    const resolvedScope = scope || client.scope;
+    const scopeCheck = checkScopeSubset(resolvedScope, client.scope);
+    if (!scopeCheck.valid) {
+      throw new OAuthError('invalid_scope', `请求了未授权的 scope: ${scopeCheck.exceeded.join(' ')}`);
+    }
+
     return {
       client,
-      scope: scope || client.scope,
+      scope: resolvedScope,
       state: query.state,
       nonce: query.nonce,
       code_challenge,
@@ -247,6 +255,7 @@ class AuthorizationService {
           sessionId,
           client_name: validated.client.client_name,
           scope: validated.scope,
+          scopeDetails: resolveScopeDetails(validated.scope, validated.client.scope_metadata || {}),
           user_id: userId,
           user: {
             username: userData.username,

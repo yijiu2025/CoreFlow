@@ -5,13 +5,16 @@ import { useRoute, useRouter } from 'vue-router';
 import { ref, onMounted } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import AuthContainer from '@/components/common/AuthContainer.vue';
-import DocModal from '@/components/common/DocModal.vue';
+import AgreementModals from '@/components/common/AgreementModals.vue';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useRecaptcha } from '@/composables/useRecaptcha';
+import MessageToast from '@/components/common/MessageToast.vue';
+import { useMessage } from '@/composables/useMessage';
 
 const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken } = useRecaptcha();
+const { error: showError, success: showSuccess } = useMessage();
 onMounted(() => {
   if (recaptchaEnabled.value) loadRecaptcha();
 });
@@ -30,8 +33,10 @@ const registerSchema = z
     password: z
       .string({ required_error: '请输入密码' })
       .min(8, '密码至少8位')
-      .max(20, '密码最多20位')
-      .regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, '需同时含数字和字母'),
+      .max(128, '密码最多128位')
+      .regex(/^(?=.*[a-z])/, '密码必须包含至少一个小写字母')
+      .regex(/^(?=.*[A-Z])/, '密码必须包含至少一个大写字母')
+      .regex(/^(?=.*\d)/, '密码必须包含至少一个数字'),
     confirmPassword: z.string({ required_error: '请确认密码' }).min(1, '请再次输入密码')
   })
   .refine((data: any) => data.password === data.confirmPassword, {
@@ -105,14 +110,19 @@ const handleRegister = handleSubmit(async () => {
   const { confirmPassword, ...submitData } = values;
   const encryptedPassword = await rsaEncrypt(submitData.password!);
   const recaptchaToken = recaptchaEnabled.value ? await getRecaptchaToken() : null;
-  await authApi.register({
-    ...submitData,
-    password: encryptedPassword,
-    kid: getCachedKid(),
-    captchaKey: captchaKey.value,
-    ...(recaptchaToken ? { recaptchaToken } : {})
-  });
-  router.push({ path: '/mini-login', query: route.query });
+  try {
+    await authApi.register({
+      ...submitData,
+      password: encryptedPassword,
+      kid: getCachedKid(),
+      captchaKey: captchaKey.value,
+      ...(recaptchaToken ? { recaptchaToken } : {})
+    });
+    showSuccess('注册成功，即将跳转登录');
+    router.push({ path: '/mini-login', query: route.query });
+  } catch (err: any) {
+    showError(err?.message || '注册失败，请稍后重试');
+  }
 });
 </script>
 
@@ -190,7 +200,7 @@ const handleRegister = handleSubmit(async () => {
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
-              <input v-model="password" v-bind="passwordProps" type="password" placeholder="设置登录密码（含字母+数字）" class="mreg-input" />
+              <input v-model="password" v-bind="passwordProps" type="password" placeholder="设置密码（大写+小写+数字，8位以上）" class="mreg-input" />
             </div>
             <div class="mreg-err">{{ errors.password }}</div>
           </div>
@@ -247,17 +257,11 @@ const handleRegister = handleSubmit(async () => {
 
     <GraphicCaptcha :is-open="showCaptcha" :email="values.email" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
 
-    <DocModal :is-open="docType === 'service'" title="服务协议" @close="docType = null">
-      <p class="text-xs text-slate-400">最后更新：2026年8月22日</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200 pt-2">一、服务说明</h3>
-      <p>CoreFlow 提供身份认证、应用授权、协作管理等企业级服务。注册即代表同意本协议。</p>
-    </DocModal>
+    <!-- 服务协议 / 隐私政策 弹窗（统一组件） -->
+    <AgreementModals v-model:type="docType" />
 
-    <DocModal :is-open="docType === 'privacy'" title="隐私政策" @close="docType = null">
-      <p class="text-xs text-slate-400">Last updated: August 22, 2026</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200 pt-2">一、信息收集</h3>
-      <p>注册信息（邮箱、昵称）、登录信息（IP、设备）、使用数据。</p>
-    </DocModal>
+    <!-- 错误/成功提示 toast -->
+    <MessageToast />
   </div>
 </template>
 

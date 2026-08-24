@@ -27,6 +27,11 @@ export default {
     response_types: ['code'],
     scope: 'openid profile email',
     token_endpoint_auth_method: 'none',
-    application_type: 'web'
+    application_type: 'web',
+    /** scope 描述覆盖（授权页展示用，字段映射走系统 scope-registry） */
+    scope_metadata: {
+      profile: { name: '公开资料', desc: '获取你的用户名、昵称、头像，用于防火墙控制台展示' },
+      email: { name: '邮箱', desc: '获取你的邮箱，用于安全告警与审计通知' }
+    }
   }
 };
