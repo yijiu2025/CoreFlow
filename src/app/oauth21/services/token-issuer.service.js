@@ -96,8 +96,13 @@ function _debug(...args) {
 export async function issueDirectTokens(user, client_id, scope, oidcNonce, request, reply, fastify, options = {}) {
   // 默认 false（短期登录）：未显式声明 rememberMe 的入口（扫码/授权确认）均不下发
   // sid_r 长期凭证，降低公共设备残留半年期凭证的风险。登录页通过 keepLogin 显式开启。
-  const { rememberMe = false } = options;
-  const client = client_id ? await tokenService.authenticateClient(request) : { ...FIRST_PARTY_APP };
+  const { rememberMe = false, client: preResolvedClient = null } = options;
+  // options.client 预传 client 对象（如邮箱二次验证已查过 client，跳过 authenticateClient 重复认证）
+  const client = preResolvedClient
+    ? preResolvedClient
+    : client_id
+      ? await tokenService.authenticateClient(request)
+      : { ...FIRST_PARTY_APP };
 
   if (client_id && !client) {
     throw new Error('invalid_client');
