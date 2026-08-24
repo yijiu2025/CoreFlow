@@ -143,8 +143,9 @@ async function detectLoginEnvironmentAnomaly({ userId, uid, deviceId, userAgent,
 
   // 强制开启开关（测试用）：LOGIN_EMAIL_VERIFY_FORCE=true 时无视基准直接 warn，
   // 每次密码登录都走邮箱二次验证。上线前务必关闭（或删除）。
+  // reason 文案保持中性，不暴露"强制模式"内部状态给用户。
   if (process.env.LOGIN_EMAIL_VERIFY_FORCE === 'true') {
-    return { status: 'warn', reason: '登录环境与上次不一致（强制测试模式）' };
+    return { status: 'warn', reason: '登录环境与上次不一致' };
   }
 
   // 查用户最近一条未吊销 session_token 作为基准

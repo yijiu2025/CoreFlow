@@ -189,7 +189,12 @@ export async function directLogin(request, reply, fastify) {
   // - info（IP 变梯子 / 无基准）→ 不拦，继续登录
   // - safe → 继续
   // 仅密码登录做（邮箱码登录已验证邮箱所有权，无需二次验证）
-  console.log('[directLogin] 环境检测入口: type=%s, numericId=%s, FORCE=%s', type, user.numericId, process.env.LOGIN_EMAIL_VERIFY_FORCE);
+  console.log(
+    '[directLogin] 环境检测入口: type=%s, numericId=%s, FORCE=%s',
+    type,
+    user.numericId,
+    process.env.LOGIN_EMAIL_VERIFY_FORCE
+  );
   if (type !== 'email' && user.numericId) {
     try {
       const deviceId = getDeviceId(request);
@@ -206,52 +211,52 @@ export async function directLogin(request, reply, fastify) {
       console.log('[directLogin] 环境检测结果: %s, reason=%s', envCheck.status, envCheck.reason);
 
       if (envCheck.status === 'warn') {
-      // 签发临时二次验证令牌存 Redis（5 分钟），前端带它调 /login/verify-email
-      const verifyToken = uuidv4();
-      const verifyStore = getStore('login_email_verify');
-      await verifyStore.set(
-        verifyToken,
-        {
-          userId: user.numericId,
-          uid: user.uid,
-          email: user.email,
-          clientId: client_id || FIRST_PARTY_APP.client_id,
-          scope: scope || '',
-          oidcNonce: oidcNonce || null,
-          keepLogin: keepLogin === true,
-          // 记录本次环境，二次验证通过后用此环境作为新基准
-          deviceId,
-          userAgent,
-          ip: request.ip,
-          platformHint,
-          fingerprint: computeDeviceFingerprint({ deviceId, userAgent, uid: user.uid, platformHint })
-        },
-        300
-      );
-
-      // 直接发一次邮箱码（二次验证不需图形码，用户已过登录图形码）
-      try {
-        const emailCodeStore = getStore('email_code');
-        await emailDao.sendCode(user.email, verifyToken, emailCodeStore, {
-          ip: request.ip,
-          ua: request.headers['user-agent'] || ''
-        });
-        console.log('[directLogin] 二次验证邮箱码已发送:', user.email);
-      } catch (sendErr) {
-        console.error('[directLogin] 二次验证邮箱码发送失败:', sendErr.message);
-        // 发码失败不阻断，前端可点重发
-      }
-
-      return reply.send({
-        code: 200,
-        message: '检测到登录环境变更，需邮箱二次验证',
-        data: {
-          action: 'needs_email_verify',
+        // 签发临时二次验证令牌存 Redis（5 分钟），前端带它调 /login/verify-email
+        const verifyToken = uuidv4();
+        const verifyStore = getStore('login_email_verify');
+        await verifyStore.set(
           verifyToken,
-          email: maskEmail(user.email),
-          reason: envCheck.reason
+          {
+            userId: user.numericId,
+            uid: user.uid,
+            email: user.email,
+            clientId: client_id || FIRST_PARTY_APP.client_id,
+            scope: scope || '',
+            oidcNonce: oidcNonce || null,
+            keepLogin: keepLogin === true,
+            // 记录本次环境，二次验证通过后用此环境作为新基准
+            deviceId,
+            userAgent,
+            ip: request.ip,
+            platformHint,
+            fingerprint: computeDeviceFingerprint({ deviceId, userAgent, uid: user.uid, platformHint })
+          },
+          300
+        );
+
+        // 直接发一次邮箱码（二次验证不需图形码，用户已过登录图形码）
+        try {
+          const emailCodeStore = getStore('email_code');
+          await emailDao.sendCode(user.email, verifyToken, emailCodeStore, {
+            ip: request.ip,
+            ua: request.headers['user-agent'] || ''
+          });
+          console.log('[directLogin] 二次验证邮箱码已发送:', user.email);
+        } catch (sendErr) {
+          console.error('[directLogin] 二次验证邮箱码发送失败:', sendErr.message);
+          // 发码失败不阻断，前端可点重发
         }
-      });
+
+        return reply.send({
+          code: 200,
+          message: '检测到登录环境变更，需邮箱二次验证',
+          data: {
+            action: 'needs_email_verify',
+            verifyToken,
+            email: maskEmail(user.email),
+            reason: envCheck.reason
+          }
+        });
       }
     } catch (err) {
       console.error('[directLogin] 环境检测异常:', err.message, err.stack);
@@ -530,15 +535,28 @@ export async function verifyEmailLogin(request, reply, fastify) {
   }
 
   // 签发令牌（环境已验证通过，createSession 会用本次 device/fingerprint 写新基准）
+  // 一方应用：client_id 传 null（issueDirectTokens 用 FIRST_PARTY_APP）
+  // 三方应用：先查 client 对象预传，跳过 authenticateClient（二次验证请求无 client_secret）
+  let resolvedClient = null;
+  const isThirdParty = data.clientId && data.clientId !== FIRST_PARTY_APP.client_id;
+  if (isThirdParty) {
+    resolvedClient = await ClientDao.findById(data.clientId);
+    if (!resolvedClient) {
+      return reply.code(400).send({ code: 400, message: '客户端不存在', data: null });
+    }
+  }
   const result = await issueDirectTokens(
     user,
-    data.clientId === FIRST_PARTY_APP.client_id ? null : data.clientId,
+    isThirdParty ? data.clientId : null,
     data.scope,
     data.oidcNonce,
     request,
     reply,
     fastify,
-    { rememberMe: data.keepLogin === true }
+    {
+      rememberMe: data.keepLogin === true,
+      client: resolvedClient
+    }
   );
 
   return reply.send({ code: 200, message: '登录成功', data: result });
