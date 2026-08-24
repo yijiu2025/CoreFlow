@@ -126,6 +126,60 @@ const showConsent = ref(false);
 const consentState = ref<any>(null);
 const submittingConsent = ref(false);
 
+// 邮箱二次验证（密码登录环境异常时触发）
+const showEmailVerify = ref(false);
+const emailVerifyState = ref<{ verifyToken: string; email: string; reason: string } | null>(null);
+const emailVerifyCode = ref('');
+const emailVerifyCountdown = ref(0);
+let emailVerifyTimer: ReturnType<typeof setInterval> | null = null;
+
+const startEmailVerifyCountdown = () => {
+  emailVerifyCountdown.value = 60;
+  if (emailVerifyTimer) clearInterval(emailVerifyTimer);
+  emailVerifyTimer = setInterval(() => {
+    emailVerifyCountdown.value--;
+    if (emailVerifyCountdown.value <= 0) {
+      clearInterval(emailVerifyTimer!);
+      emailVerifyTimer = null;
+    }
+  }, 1000);
+};
+
+// 发送邮箱二次验证码（复用 verify-captcha 端点发码逻辑）
+const sendEmailVerifyCode = async () => {
+  if (!emailVerifyState.value?.email) return;
+  if (emailVerifyCountdown.value > 0) return;
+  try {
+    // 二次验证不需要图形码（用户已通过登录图形码），用 sendEmailCode 接口
+    await authApi.sendEmailCode(emailVerifyState.value.email);
+    startEmailVerifyCountdown();
+    showError('验证码已发送至邮箱');
+  } catch (err: any) {
+    showError(err.message || '验证码发送失败');
+  }
+};
+
+// 提交邮箱二次验证码
+const submitEmailVerify = async () => {
+  if (!emailVerifyState.value || emailVerifyCode.value.length < 4) {
+    showError('请输入4位验证码');
+    return;
+  }
+  try {
+    const res: any = await authApi.verifyEmailLogin(
+      emailVerifyState.value.verifyToken,
+      emailVerifyCode.value
+    );
+    showEmailVerify.value = false;
+    emailVerifyState.value = null;
+    emailVerifyCode.value = '';
+    if (emailVerifyTimer) clearInterval(emailVerifyTimer);
+    notifyParentLoginSuccess(res);
+  } catch (err: any) {
+    showError(err.message || '验证码错误');
+  }
+};
+
 const denyConsent = () => {
   showConsent.value = false;
   consentState.value = null;
@@ -176,6 +230,17 @@ const executeLogin = async () => {
     if (res && res.action === 'consent') {
       consentState.value = res;
       showConsent.value = true;
+    } else if (res && res.action === 'needs_email_verify') {
+      // 密码登录环境异常 → 邮箱二次验证
+      emailVerifyState.value = {
+        verifyToken: res.verifyToken,
+        email: res.email,
+        reason: res.reason || '登录环境变更'
+      };
+      emailVerifyCode.value = '';
+      showEmailVerify.value = true;
+      // 自动发一次邮箱码
+      sendEmailVerifyCode();
     } else if (res && res.action === 'max_sessions') {
       if (window.parent && window.parent !== window) {
         postToParent({
@@ -382,6 +447,43 @@ watch(showQR, val => {
             {{ t('login.approve') }}
           </button>
         </div>
+      </div>
+
+      <!-- 邮箱二次验证（密码登录环境异常） -->
+      <div v-if="showEmailVerify" class="flex-1 flex flex-col justify-center py-2 space-y-4 w-full">
+        <div class="text-center space-y-2">
+          <div class="w-12 h-12 mx-auto rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#f59e0b" stroke-width="2">
+              <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            </svg>
+          </div>
+          <h3 class="text-sm font-bold dark:text-white">环境变更验证</h3>
+          <p class="text-xs text-slate-400">检测到{{ emailVerifyState?.reason }}，为保护账号安全，请验证邮箱</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400">验证码已发送至 <strong>{{ emailVerifyState?.email }}</strong></p>
+        </div>
+
+        <div class="mlogin-field">
+          <Icons name="mail" :size="18" class="mlogin-icon" />
+          <input
+            v-model="emailVerifyCode"
+            type="text"
+            maxlength="6"
+            placeholder="邮箱验证码"
+            class="mlogin-input"
+            @keyup.enter="submitEmailVerify"
+          />
+        </div>
+
+        <div class="flex items-center justify-between text-xs">
+          <button type="button" @click="sendEmailVerifyCode" :disabled="emailVerifyCountdown > 0"
+            class="text-[#2563eb] disabled:text-slate-400 disabled:cursor-not-allowed font-medium">
+            {{ emailVerifyCountdown > 0 ? `${emailVerifyCountdown}s 后重发` : '重新发送验证码' }}
+          </button>
+        </div>
+
+        <button type="button" @click="submitEmailVerify" class="mlogin-submit h-11 text-xs">
+          验证并登录
+        </button>
       </div>
 
       <!-- 登录表单 -->

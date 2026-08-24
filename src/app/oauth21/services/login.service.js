@@ -26,6 +26,8 @@ import captchaService from '../../../framework/verify/captcha/service.js';
 import { AuthorizationService } from './authorization.service.js';
 import deactivationService from '../../user/services/deactivation.service.js';
 import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
+import { detectLoginEnvironmentAnomaly } from '../../../framework/auth/anomaly-detector.js';
+import { getDeviceId, detectPlatform, computeDeviceFingerprint } from '../../../framework/auth/device.js';
 
 const authService = new AuthorizationService();
 
@@ -159,6 +161,61 @@ export async function directLogin(request, reply, fastify) {
         code: 401,
         message: '账号或密码错误',
         data: null
+      });
+    }
+  }
+
+  // 2.5 密码登录环境异常检测（密码验证通过后、签发令牌前）
+  // 比对本次 device_id/IP/UA 与用户最近 session_token 基准：
+  // - warn（指纹变，换设备/UA）→ 返回 needs_email_verify，前端弹邮箱码二次验证
+  // - info（IP 变梯子 / 无基准）→ 不拦，继续登录
+  // - safe → 继续
+  // 仅密码登录做（邮箱码登录已验证邮箱所有权，无需二次验证）
+  if (type !== 'email' && user.numericId) {
+    const deviceId = getDeviceId(request);
+    const platformHint = detectPlatform(request);
+    const userAgent = request.headers['user-agent'] || '';
+    const envCheck = await detectLoginEnvironmentAnomaly({
+      userId: user.numericId,
+      uid: user.uid,
+      deviceId,
+      userAgent,
+      ip: request.ip,
+      platformHint
+    });
+
+    if (envCheck.status === 'warn') {
+      // 签发临时二次验证令牌存 Redis（5 分钟），前端带它调 /login/verify-email
+      const verifyToken = uuidv4();
+      const verifyStore = getStore('login_email_verify');
+      await verifyStore.set(
+        verifyToken,
+        {
+          userId: user.numericId,
+          uid: user.uid,
+          email: user.email,
+          clientId: client_id || FIRST_PARTY_APP.client_id,
+          scope: scope || '',
+          oidcNonce: oidcNonce || null,
+          keepLogin: keepLogin === true,
+          // 记录本次环境，二次验证通过后用此环境作为新基准
+          deviceId,
+          userAgent,
+          ip: request.ip,
+          platformHint,
+          fingerprint: computeDeviceFingerprint({ deviceId, userAgent, uid: user.uid, platformHint })
+        },
+        300
+      );
+      return reply.send({
+        code: 200,
+        message: '检测到登录环境变更，需邮箱二次验证',
+        data: {
+          action: 'needs_email_verify',
+          verifyToken,
+          email: user.email,
+          reason: envCheck.reason
+        }
       });
     }
   }
@@ -382,4 +439,68 @@ export async function confirmDirectConsent(request, reply, fastify) {
     }
     throw err;
   }
+}
+
+/**
+ * 邮箱二次验证登录（环境异常后二次确认）
+ *
+ * 流程：directLogin 环境异常 → 返回 verifyToken（Redis 存用户信息+本次环境）
+ * → 前端发邮箱码 → 用户输码 + verifyToken → 本接口校验邮箱码 → 签发令牌
+ * 验证通过后用本次环境作为新基准（createSession 会写 session_tokens）
+ *
+ * @param {object} request
+ * @param {object} reply
+ * @param {object} fastify
+ */
+export async function verifyEmailLogin(request, reply, fastify) {
+  const { verifyToken, code } = request.body;
+
+  if (!verifyToken || !code) {
+    return reply.code(400).send({ code: 400, message: 'verifyToken 和验证码不能为空', data: null });
+  }
+
+  const verifyStore = getStore('login_email_verify');
+  const data = await verifyStore.get(verifyToken);
+  if (!data) {
+    return reply.code(400).send({ code: 400, message: '验证令牌已过期，请重新登录', data: null });
+  }
+
+  // 校验邮箱码（绑客户端指纹一致性，复用 verifyEmailCode）
+  const emailVerify = await verifyEmailCode(data.email, code, request);
+  if (!emailVerify.success) {
+    return reply.code(400).send({ code: 400, message: emailVerify.error, data: null });
+  }
+
+  // 验证通过，删除临时令牌（一次性）
+  await verifyStore.delete(verifyToken);
+
+  // 查回用户
+  const user = await UserDao.findByEmail(data.email);
+  if (!user) {
+    return reply.code(404).send({ code: 404, message: '用户不存在', data: null });
+  }
+
+  // 注销中拦截复用（二次验证也可能在注销期，保持一致）
+  const blocked = await deactivationService.checkLoginBlocked(user.numericId, data.clientId);
+  if (blocked) {
+    return reply.code(403).send({
+      code: 403,
+      message: '账号正在注销中，请先撤销注销申请',
+      data: { action: 'deactivation_pending', ...blocked }
+    });
+  }
+
+  // 签发令牌（环境已验证通过，createSession 会用本次 device/fingerprint 写新基准）
+  const result = await issueDirectTokens(
+    user,
+    data.clientId === FIRST_PARTY_APP.client_id ? null : data.clientId,
+    data.scope,
+    data.oidcNonce,
+    request,
+    reply,
+    fastify,
+    { rememberMe: data.keepLogin === true }
+  );
+
+  return reply.send({ code: 200, message: '登录成功', data: result });
 }
