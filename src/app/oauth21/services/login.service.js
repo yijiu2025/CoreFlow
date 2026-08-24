@@ -14,7 +14,7 @@ import crypto from 'crypto';
 import { decryptLoginRequest, verifyEmailCode } from './decrypt.service.js';
 import { issueDirectTokens } from './token-issuer.service.js';
 import { buildTokenResponse } from './cookies.service.js';
-import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../config/constants.js';
+import { DEFAULT_SCOPE } from '../config/constants.js';
 import ApprovalDao from '../dao/approval.dao.js';
 import UserDao from '../dao/user.dao.js';
 import ClientDao from '../dao/client.dao.js';
@@ -220,7 +220,7 @@ export async function directLogin(request, reply, fastify) {
             userId: user.numericId,
             uid: user.uid,
             email: user.email,
-            clientId: client_id || FIRST_PARTY_APP.client_id,
+            clientId: client_id,
             scope: scope || '',
             oidcNonce: oidcNonce || null,
             keepLogin: keepLogin === true,
@@ -265,19 +265,21 @@ export async function directLogin(request, reply, fastify) {
   }
 
   // 3. 检查客户端与授权状态
-  const finalClientId = client_id || FIRST_PARTY_APP.client_id;
-  let client;
-  if (finalClientId === FIRST_PARTY_APP.client_id) {
-    client = { ...FIRST_PARTY_APP };
-  } else {
-    client = await ClientDao.findById(finalClientId);
-    if (!client) {
-      return reply.code(400).send({
-        code: 400,
-        message: '无效的客户端 ID',
-        data: null
-      });
-    }
+  // client_id 必传：所有 app（一方/三方）都在 oauth_clients 表注册，有真实 client_id
+  if (!client_id) {
+    return reply.code(400).send({
+      code: 400,
+      message: 'client_id 不能为空',
+      data: null
+    });
+  }
+  const client = await ClientDao.findById(client_id);
+  if (!client) {
+    return reply.code(400).send({
+      code: 400,
+      message: '无效的客户端 ID',
+      data: null
+    });
   }
 
   // 3.5 注销申请拦截：用户若提交了注销申请（scope=all 拦截所有 app，scope=app 仅拦截该 app），
@@ -325,7 +327,9 @@ export async function directLogin(request, reply, fastify) {
   const scopeDetails = resolveScopeDetails(scopeString, client.scope_metadata || {});
 
   // 4. 检查用户是否已授权该应用
-  if (client.client_id !== FIRST_PARTY_APP.client_id) {
+  // 一方应用（client_secret=null，公共客户端）跳过 consent 直签发；
+  // 三方应用（有 client_secret）首次需 consent 确认
+  if (client.client_secret) {
     const approval = await ApprovalDao.getEffectiveApproval(user.id, client.client_id);
     if (!approval) {
       const consentKey = uuidv4();
@@ -366,16 +370,9 @@ export async function directLogin(request, reply, fastify) {
 
   // 5. 签发令牌
   try {
-    const result = await issueDirectTokens(
-      user,
-      client.client_id === FIRST_PARTY_APP.client_id ? null : client.client_id,
-      scopeString,
-      oidcNonce,
-      request,
-      reply,
-      fastify,
-      { rememberMe: keepLogin === true }
-    );
+    const result = await issueDirectTokens(user, client, scopeString, oidcNonce, request, reply, fastify, {
+      rememberMe: keepLogin === true
+    });
 
     // 审计日志：登录成功
     await logLogin(request.server.redis, {
@@ -535,29 +532,14 @@ export async function verifyEmailLogin(request, reply, fastify) {
   }
 
   // 签发令牌（环境已验证通过，createSession 会用本次 device/fingerprint 写新基准）
-  // 一方应用：client_id 传 null（issueDirectTokens 用 FIRST_PARTY_APP）
-  // 三方应用：先查 client 对象预传，跳过 authenticateClient（二次验证请求无 client_secret）
-  let resolvedClient = null;
-  const isThirdParty = data.clientId && data.clientId !== FIRST_PARTY_APP.client_id;
-  if (isThirdParty) {
-    resolvedClient = await ClientDao.findById(data.clientId);
-    if (!resolvedClient) {
-      return reply.code(400).send({ code: 400, message: '客户端不存在', data: null });
-    }
+  // 查真实 client 传入（所有 app 都在 oauth_clients 表注册）
+  const resolvedClient = await ClientDao.findById(data.clientId);
+  if (!resolvedClient) {
+    return reply.code(400).send({ code: 400, message: '客户端不存在', data: null });
   }
-  const result = await issueDirectTokens(
-    user,
-    isThirdParty ? data.clientId : null,
-    data.scope,
-    data.oidcNonce,
-    request,
-    reply,
-    fastify,
-    {
-      rememberMe: data.keepLogin === true,
-      client: resolvedClient
-    }
-  );
+  const result = await issueDirectTokens(user, resolvedClient, data.scope, data.oidcNonce, request, reply, fastify, {
+    rememberMe: data.keepLogin === true
+  });
 
   return reply.send({ code: 200, message: '登录成功', data: result });
 }

@@ -18,7 +18,6 @@ import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';
 import { generateToken } from '../crypto/tokens.js';
 import ApprovalDao from '../dao/approval.dao.js';
 import TokenDao from '../dao/token.dao.js';
-import { TokenService } from './token.service.js';
 import config from '../config/config.js';
 import { createSession } from '../../../framework/auth/session.js';
 import { detectDeviceType, generateDeviceCookie, detectPlatform } from '../../../framework/auth/device.js';
@@ -26,9 +25,7 @@ import { loadUserPermissions } from '../../../framework/auth/permission-loader.j
 import { getStore } from '../../../framework/redis/index.js';
 import { setAuthCookies } from './cookies.service.js';
 import { resolveFieldSet } from '../config/scope-registry.js';
-import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../config/constants.js';
-
-const tokenService = new TokenService();
+import { DEFAULT_SCOPE } from '../config/constants.js';
 
 /** device_id cookie 名（与 device.js getDeviceId 读的 cookie 名一致） */
 const DEVICE_COOKIE_NAME = 'device_id';
@@ -93,19 +90,15 @@ function _debug(...args) {
  * @param {boolean} [options.rememberMe=true] - 是否长期登录（控制 sid/sid_r TTL；来自前端 keepLogin）
  * @returns {object} 令牌结果
  */
-export async function issueDirectTokens(user, client_id, scope, oidcNonce, request, reply, fastify, options = {}) {
+export async function issueDirectTokens(user, client, scope, oidcNonce, request, reply, fastify, options = {}) {
   // 默认 false（短期登录）：未显式声明 rememberMe 的入口（扫码/授权确认）均不下发
   // sid_r 长期凭证，降低公共设备残留半年期凭证的风险。登录页通过 keepLogin 显式开启。
-  const { rememberMe = false, client: preResolvedClient = null } = options;
-  // options.client 预传 client 对象（如邮箱二次验证已查过 client，跳过 authenticateClient 重复认证）
-  const client = preResolvedClient
-    ? preResolvedClient
-    : client_id
-      ? await tokenService.authenticateClient(request)
-      : { ...FIRST_PARTY_APP };
+  const { rememberMe = false } = options;
 
-  if (client_id && !client) {
-    throw new Error('invalid_client');
+  // client 由调用方查好传入（ClientDao.findById），不再内部 authenticateClient。
+  // 所有 app（一方/三方）都在 oauth_clients 表注册，有真实 client_id。
+  if (!client) {
+    throw new Error('invalid_client: 客户端未提供');
   }
 
   const finalScopes = (scope || client.scope || DEFAULT_SCOPE).split(' ');
@@ -189,17 +182,18 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
     // JWT 模式：access_token/refresh_token cookie 由 setAuthCookies 下发；账号多凭证管理在 JWT 模式不适用（短期）
   } else {
     // ── 模式 B：Session（默认）──
-    // appId：优先用请求中的 client_id（如 'firewall'），回退到 client.client_id
-    const sessionAppId = client_id || client.client_id || 'GLOBAL';
+    // appId：用 client.client_id（所有 app 都有真实 client_id）
+    const sessionAppId = client.client_id || 'GLOBAL';
 
     if (reply && fastify) {
       // 跨应用 SSO 登录检测：
-      // 第三方 client（client_id 非空、非第一方）通过 SSO iframe 登录时，sid Cookie 会被设到
+      // 三方 client（client_secret 非空，需认证）通过 SSO iframe 登录时，sid Cookie 会被设到
       // SSO/API 域，父应用（posecraft/firewall）拿不到，必须改走 session_token 流程——
       // 由父应用调 /auth/v1/bind-session 在自身域上换取 sid/sid_r Cookie。
-      // 注意：Sec-Fetch-Dest 没有 'iframe' 值，sec-fetch 无法可靠检测 iframe 嵌入，故改用 client_id 判断。
-      const isSsoLogin = !!(client_id && client_id !== FIRST_PARTY_APP.client_id);
-      _debug('🔍 [token-issuer] SSO 检测: client_id=%s → isSsoLogin=%s', client_id || '(first-party)', isSsoLogin);
+      // 一方应用（client_secret=null，公共客户端）同域直接写 cookie，不走 session_token。
+      // 注意：Sec-Fetch-Dest 没有 'iframe' 值，sec-fetch 无法可靠检测 iframe 嵌入，故改用 client 类型判断。
+      const isSsoLogin = !!client.client_secret;
+      _debug('🔍 [token-issuer] SSO 检测: client_id=%s → isSsoLogin=%s', client.client_id, isSsoLogin);
 
       if (isSsoLogin) {
         // iframe 模式：生成临时 session token 存入 Redis
