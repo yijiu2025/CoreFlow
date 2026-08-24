@@ -94,4 +94,37 @@ export default async function (fastify, opts) {
       }
     }
   });
+
+  /**
+   * POST /send-login-verify-code — 密码登录二次验证专用发码
+   *
+   * 不需图形码（用户已过登录图形码）。凭 verifyToken 从 Redis 查 email 发码，
+   * verifyToken 由 directLogin 环境异常时签发（login_email_verify store，5min TTL）。
+   */
+  registerSecureRoute(fastify, {
+    name: 'sendLoginVerifyCode',
+    alias: '发送登录二次验证邮箱码',
+    method: 'POST',
+    url: '/send-login-verify-code',
+    handler: async (request, reply) => {
+      const { verifyToken } = request.body;
+      if (!verifyToken) {
+        return reply.result.fail('verifyToken 不能为空', null, 400);
+      }
+      const verifyStore = getStore('login_email_verify');
+      const data = await verifyStore.get(verifyToken);
+      if (!data || !data.email) {
+        return reply.result.fail('验证令牌已过期，请重新登录', null, 400);
+      }
+      try {
+        await emailDao.sendCode(data.email, verifyToken, emailCodeStore, {
+          ip: request.ip,
+          ua: request.headers['user-agent'] || ''
+        });
+        return reply.result.success('验证码已发送');
+      } catch (err) {
+        return reply.result.fail(err.message, null, 400);
+      }
+    }
+  });
 }
