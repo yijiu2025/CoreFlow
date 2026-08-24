@@ -56,18 +56,18 @@ export default async function (fastify) {
         });
       }
 
-      // 第一方应用直接返回完整信息，第三方应用按 scope 过滤
+      // 按 token 的 scope 过滤用户字段（scope claim 在签发时写入 JWT）
+      // 一方/三方一视同仁，请求了 profile 才返回 profile 字段，email 才返回 email
       const scopes = (tokenUser.scope || '').split(' ');
-      const isFirstParty = !tokenUser.scope || tokenUser.client_id === 'first-party-app';
 
       const info = { uid: userData.uid };
 
-      if (isFirstParty || scopes.includes('profile')) {
+      if (scopes.includes('profile')) {
         info.name = userData.name;
         info.preferred_username = userData.username;
         info.avatar = userData.avatar || null;
       }
-      if (isFirstParty || scopes.includes('email')) {
+      if (scopes.includes('email')) {
         info.email = userData.email;
       }
 

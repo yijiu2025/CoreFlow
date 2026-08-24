@@ -22,7 +22,6 @@ import { verifyPKCE, isValidCodeVerifier } from '../crypto/pkce.js';
 import { generateToken } from '../crypto/tokens.js';
 import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';
 import config from '../config/config.js';
-import { FIRST_PARTY_APP } from '../config/constants.js';
 import { checkScopeSubset } from '../config/scope-registry.js';
 
 /**
@@ -219,8 +218,11 @@ class TokenService {
       }
       throw new TokenError('invalid_grant', 'Invalid or revoked refresh token');
     }
-    // first-party-app 的 token 保存时 client_id 为 'first-party-app'，直接匹配
-    const tokenClientId = tokenData.client_id || 'first-party-app';
+    // token 的 client_id 必须与刷新请求的 client 一致（防跨客户端刷令牌）
+    const tokenClientId = tokenData.client_id;
+    if (!tokenClientId) {
+      throw new TokenError('invalid_grant', 'Refresh token 缺少 client_id');
+    }
     if (tokenClientId !== client.client_id) {
       throw new TokenError('invalid_grant', 'Refresh token does not belong to this client');
     }
@@ -292,11 +294,8 @@ class TokenService {
   async handleTokenGrant(request, reply) {
     const { grant_type } = request.body;
 
-    // refresh_token 允许 first-party-app 无 client_secret 刷新
-    let client = await this.authenticateClient(request);
-    if (!client && grant_type === 'refresh_token') {
-      client = FIRST_PARTY_APP;
-    }
+    // refresh_token：client_id 必传，authenticateClient 已支持公共客户端（auth_method='none' 无需 secret）
+    const client = await this.authenticateClient(request);
     if (!client) {
       return reply.code(401).send({
         error: 'invalid_client',
@@ -325,9 +324,8 @@ class TokenService {
         case 'refresh_token': {
           const { refresh_token, scope } = request.body;
           if (!refresh_token) throw new TokenError('invalid_request', 'refresh_token is required');
-          // first-party-app 刷新无需客户端认证（前端直接刷新）
-          const refreshClient = client || FIRST_PARTY_APP;
-          result = await this.handleRefreshToken({ refresh_token, scope, client: refreshClient });
+          // client 已由 authenticateClient 校验（公共客户端传 client_id 即可）
+          result = await this.handleRefreshToken({ refresh_token, scope, client });
           break;
         }
 
