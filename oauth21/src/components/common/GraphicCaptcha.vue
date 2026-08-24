@@ -6,6 +6,14 @@ const props = defineProps({
   isOpen: Boolean,
   email: String,
   type: String, // 业务类型：register/login/reset_password
+  /** 验证图形码后是否顺带发送邮箱码：
+   *  - true（邮箱码登录/注册）：verify-captcha 端点校验图形码 + 发邮箱码 + 消费图形码
+   *  - false（密码登录）：只校验图形码（标记 verified，不消费不发码），图形码由 directLogin 消费
+   */
+  sendEmail: {
+    type: Boolean,
+    default: false
+  },
   title: {
     type: String,
     default: '安全验证'
@@ -43,7 +51,10 @@ const handleVerify = async () => {
   error.value = '';
 
   try {
-    await authApi.verifyCaptcha(captchaKey.value, userInput.value, props.email, props.type);
+    // sendEmail=false（密码登录）：不传 email，verify-captcha 只校验图形码不消费不发码
+    // sendEmail=true（邮箱码登录/注册）：传 email，端点校验图形码 + 发邮箱码 + 消费图形码
+    const email = props.sendEmail ? props.email : undefined;
+    await authApi.verifyCaptcha(captchaKey.value, userInput.value, email, props.type);
     emit('success', { captchaKey: captchaKey.value });
   } catch (err: any) {
     const msg = err.message || '验证失败';
