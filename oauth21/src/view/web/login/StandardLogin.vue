@@ -307,7 +307,7 @@ onUnmounted(() => {
                   {{ t('login.consent_title') || '应用授权确认' }}
                 </h2>
                 <p class="text-xs text-slate-400 mt-1">
-                  {{ t('login.consent_desc', { app: consentState?.client_name || t('login.third_party') }) || '第三方应用申请获取您的账号权限' }}
+                  {{ t('login.consent_desc', { app: consentState?.client_name || t('login.third_party') }) }}
                 </p>
               </div>
             </div>
