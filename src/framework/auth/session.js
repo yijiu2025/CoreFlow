@@ -272,6 +272,15 @@ async function createSession(params) {
   const refreshToken = rememberMe ? crypto.randomBytes(32).toString('hex') : null;
   const familyId = crypto.randomBytes(16).toString('hex');
 
+  // 复合设备指纹（device_id + UA + uid，绑定设备+账号）
+  // 既写入 Redis session（访问风险检测基准，零 DB 查询），也写入 session_tokens 表（持久备份）
+  const deviceFingerprint = computeDeviceFingerprint({
+    deviceId,
+    userAgent,
+    uid,
+    platformHint: '' // UA 已含足够信息，platformHint 可选
+  });
+
   // 3. 构造 session 数据
   //    deviceFingerprint 作为访问时风险检测的基准（device_id + UA + uid 算出的复合指纹）
   //    写入 Redis session，访问时 getSession 直接取，避免每次请求查 session_tokens 表
@@ -348,13 +357,7 @@ async function createSession(params) {
 
   // 记录设备 Token
   const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
-  // 复合设备指纹（device_id + UA + uid，绑定设备+账号，访问时比对检测风险）
-  const deviceFingerprint = computeDeviceFingerprint({
-    deviceId,
-    userAgent,
-    uid,
-    platformHint: '' // UA 已含足够信息，platformHint 可选
-  });
+  // deviceFingerprint 已在上方 sessionData 构造前计算（复用同一值写 DB）
 
   // 设备幂等：同一用户同一设备只保留一条 session_token（有就更新，无才新增）
   // 防止 session_tokens 表按登录次数堆积。deviceId 为空时退化为 destroy+create。
