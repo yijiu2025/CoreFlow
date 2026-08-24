@@ -145,15 +145,13 @@ const startEmailVerifyCountdown = () => {
   }, 1000);
 };
 
-// 发送邮箱二次验证码（复用 verify-captcha 端点发码逻辑）
+// 重发登录二次验证邮箱码（后端 needs_email_verify 时已发一次，此处仅重发用）
 const sendEmailVerifyCode = async () => {
-  if (!emailVerifyState.value?.email) return;
-  if (emailVerifyCountdown.value > 0) return;
+  if (!emailVerifyState.value?.verifyToken || emailVerifyCountdown.value > 0) return;
   try {
-    // 二次验证不需要图形码（用户已通过登录图形码），用 sendEmailCode 接口
-    await authApi.sendEmailCode(emailVerifyState.value.email);
+    await authApi.sendLoginVerifyCode(emailVerifyState.value.verifyToken);
     startEmailVerifyCountdown();
-    showError('验证码已发送至邮箱');
+    showError('验证码已重新发送至邮箱');
   } catch (err: any) {
     showError(err.message || '验证码发送失败');
   }
@@ -227,11 +225,13 @@ const executeLogin = async () => {
       scope: (route.query.scope as string) || 'openid profile email'
     };
     const res = await authStore.login(loginPayload as any);
+    console.log('[login] response:', JSON.stringify(res));
     if (res && res.action === 'consent') {
       consentState.value = res;
       showConsent.value = true;
     } else if (res && res.action === 'needs_email_verify') {
-      // 密码登录环境异常 → 邮箱二次验证
+      // 密码登录环境异常 → 邮箱二次验证（后端已发一次邮箱码）
+      console.log('[login] needs_email_verify, opening dialog', res);
       emailVerifyState.value = {
         verifyToken: res.verifyToken,
         email: res.email,
@@ -239,8 +239,8 @@ const executeLogin = async () => {
       };
       emailVerifyCode.value = '';
       showEmailVerify.value = true;
-      // 自动发一次邮箱码
-      sendEmailVerifyCode();
+      // 后端已发码，启动 60s 倒计时（期间禁用重发按钮）
+      startEmailVerifyCountdown();
     } else if (res && res.action === 'max_sessions') {
       if (window.parent && window.parent !== window) {
         postToParent({

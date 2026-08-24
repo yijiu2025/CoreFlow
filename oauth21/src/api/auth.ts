@@ -66,6 +66,13 @@ export const authApi = {
   },
 
   /**
+   * 重发登录二次验证邮箱码（不需图形码，凭 verifyToken）
+   */
+  async sendLoginVerifyCode(verifyToken: string) {
+    return request.post('/verify/v1/send-login-verify-code', { verifyToken });
+  },
+
+  /**
    * 注册请求
    * @param data 注册信息
    */

@@ -23,6 +23,7 @@ import { detectLoginAnomaly, DETECT_RESULT } from '../../../framework/auth/anoma
 import { logLoginFailure } from '../../../framework/auth/session.js';
 import { getStore } from '../../../framework/redis/index.js';
 import captchaService from '../../../framework/verify/captcha/service.js';
+import { emailDao } from '../../../framework/verify/email/index.js';
 import { AuthorizationService } from './authorization.service.js';
 import deactivationService from '../../user/services/deactivation.service.js';
 import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
@@ -46,6 +47,23 @@ function clientFingerprint(request) {
     material += `|${deviceFp}`;
   }
   return crypto.createHash('sha256').update(material).digest('hex').slice(0, 32);
+}
+
+/**
+ * 邮箱打码：2270105975@qq.com → 227*****75@qq.com
+ * 本地/短名打码失败时返回星号占位
+ */
+function maskEmail(email) {
+  if (!email || typeof email !== 'string') return '***';
+  const atIndex = email.indexOf('@');
+  if (atIndex < 3) return '***' + email.slice(atIndex);
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex);
+  if (local.length <= 2) return '*'.repeat(local.length) + domain;
+  // 保留前 3 + 后 2，中间用 5 个星
+  const head = local.slice(0, 3);
+  const tail = local.slice(-2);
+  return `${head}*****${tail}${domain}`;
 }
 
 /**
@@ -171,20 +189,23 @@ export async function directLogin(request, reply, fastify) {
   // - info（IP 变梯子 / 无基准）→ 不拦，继续登录
   // - safe → 继续
   // 仅密码登录做（邮箱码登录已验证邮箱所有权，无需二次验证）
+  console.log('[directLogin] 环境检测入口: type=%s, numericId=%s, FORCE=%s', type, user.numericId, process.env.LOGIN_EMAIL_VERIFY_FORCE);
   if (type !== 'email' && user.numericId) {
-    const deviceId = getDeviceId(request);
-    const platformHint = detectPlatform(request);
-    const userAgent = request.headers['user-agent'] || '';
-    const envCheck = await detectLoginEnvironmentAnomaly({
-      userId: user.numericId,
-      uid: user.uid,
-      deviceId,
-      userAgent,
-      ip: request.ip,
-      platformHint
-    });
+    try {
+      const deviceId = getDeviceId(request);
+      const platformHint = detectPlatform(request);
+      const userAgent = request.headers['user-agent'] || '';
+      const envCheck = await detectLoginEnvironmentAnomaly({
+        userId: user.numericId,
+        uid: user.uid,
+        deviceId,
+        userAgent,
+        ip: request.ip,
+        platformHint
+      });
+      console.log('[directLogin] 环境检测结果: %s, reason=%s', envCheck.status, envCheck.reason);
 
-    if (envCheck.status === 'warn') {
+      if (envCheck.status === 'warn') {
       // 签发临时二次验证令牌存 Redis（5 分钟），前端带它调 /login/verify-email
       const verifyToken = uuidv4();
       const verifyStore = getStore('login_email_verify');
@@ -207,16 +228,34 @@ export async function directLogin(request, reply, fastify) {
         },
         300
       );
+
+      // 直接发一次邮箱码（二次验证不需图形码，用户已过登录图形码）
+      try {
+        const emailCodeStore = getStore('email_code');
+        await emailDao.sendCode(user.email, verifyToken, emailCodeStore, {
+          ip: request.ip,
+          ua: request.headers['user-agent'] || ''
+        });
+        console.log('[directLogin] 二次验证邮箱码已发送:', user.email);
+      } catch (sendErr) {
+        console.error('[directLogin] 二次验证邮箱码发送失败:', sendErr.message);
+        // 发码失败不阻断，前端可点重发
+      }
+
       return reply.send({
         code: 200,
         message: '检测到登录环境变更，需邮箱二次验证',
         data: {
           action: 'needs_email_verify',
           verifyToken,
-          email: user.email,
+          email: maskEmail(user.email),
           reason: envCheck.reason
         }
       });
+      }
+    } catch (err) {
+      console.error('[directLogin] 环境检测异常:', err.message, err.stack);
+      // 检测异常不阻断登录，继续走签发流程（降级放行）
     }
   }
 

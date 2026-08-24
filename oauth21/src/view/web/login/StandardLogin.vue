@@ -138,11 +138,11 @@ const startEmailVerifyCountdown = () => {
 };
 
 const sendEmailVerifyCode = async () => {
-  if (!emailVerifyState.value?.email || emailVerifyCountdown.value > 0) return;
+  if (!emailVerifyState.value?.verifyToken || emailVerifyCountdown.value > 0) return;
   try {
-    await authApi.sendEmailCode(emailVerifyState.value.email);
+    await authApi.sendLoginVerifyCode(emailVerifyState.value.verifyToken);
     startEmailVerifyCountdown();
-    showError('验证码已发送至邮箱');
+    showError('验证码已重新发送至邮箱');
   } catch (err: any) {
     showError(err.message || '验证码发送失败');
   }
@@ -216,7 +216,7 @@ const executeLogin = async () => {
       };
       emailVerifyCode.value = '';
       showEmailVerify.value = true;
-      sendEmailVerifyCode();
+      startEmailVerifyCountdown();
     } else if (res && res.action === 'max_sessions') {
       if (window.parent && window.parent !== window) {
         postToParent({
