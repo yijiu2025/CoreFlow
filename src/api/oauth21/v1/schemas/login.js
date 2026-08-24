@@ -45,3 +45,16 @@ export const consentConfirmSchema = {
     additionalProperties: false
   }
 };
+
+/** 邮箱二次验证登录（环境异常后二次确认） */
+export const verifyEmailLoginSchema = {
+  body: {
+    type: 'object',
+    required: ['verifyToken', 'code'],
+    properties: {
+      verifyToken: { type: 'string', minLength: 1 },
+      code: { type: 'string', minLength: 4 }
+    },
+    additionalProperties: false
+  }
+};

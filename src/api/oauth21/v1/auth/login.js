@@ -11,8 +11,8 @@
  * @since 2026-08-17
  */
 import { registerSecureRoute } from '../../../guard.js';
-import { directLogin, confirmDirectConsent } from '../../../../app/oauth21/services/login.service.js';
-import { loginSchema, consentConfirmSchema } from '../schemas/login.js';
+import { directLogin, confirmDirectConsent, verifyEmailLogin } from '../../../../app/oauth21/services/login.service.js';
+import { loginSchema, consentConfirmSchema, verifyEmailLoginSchema } from '../schemas/login.js';
 
 export default function registerLoginRoutes(fastify) {
   // POST /login — 标准直接登录
@@ -43,5 +43,15 @@ export default function registerLoginRoutes(fastify) {
     url: '/login/consent/confirm',
     schema: consentConfirmSchema,
     handler: (request, reply) => confirmDirectConsent(request, reply, fastify)
+  });
+
+  // POST /login/verify-email — 邮箱二次验证登录（环境异常后二次确认）
+  registerSecureRoute(fastify, {
+    name: 'verifyEmailLogin',
+    alias: '邮箱二次验证登录',
+    method: 'POST',
+    url: '/login/verify-email',
+    schema: verifyEmailLoginSchema,
+    handler: (request, reply) => verifyEmailLogin(request, reply, fastify)
   });
 }

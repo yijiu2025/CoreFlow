@@ -57,6 +57,15 @@ export const authApi = {
   },
 
   /**
+   * 邮箱二次验证登录（环境异常后二次确认）
+   * @param verifyToken directLogin 环境异常时返回的临时令牌
+   * @param code 用户输入的邮箱验证码
+   */
+  async verifyEmailLogin(verifyToken: string, code: string) {
+    return request.post('/oauth2.1/login/verify-email', { verifyToken, code });
+  },
+
+  /**
    * 注册请求
    * @param data 注册信息
    */

@@ -121,6 +121,65 @@ async function clearIpLock(redis, ip) {
   await redis.del(`lockout:ip:${ip}`);
 }
 
+/**
+ * 登录环境异常检测（密码登录通过后、签发令牌前）
+ *
+ * 基准：用户最近一条 session_tokens 记录的 device_fingerprint / ip / user_agent。
+ * - 指纹变（换设备/UA）→ warn（需要邮箱二次验证，防账号被盗）
+ * - IP 变指纹不变（梯子）→ info（不拦，避免误杀）
+ * - 无历史基准（首次登录/旧 session 无指纹）→ info（首次登录不拦）
+ *
+ * @param {object} params
+ * @param {number} params.userId 用户内部 ID
+ * @param {string} params.uid 用户 UUID（算指纹用）
+ * @param {string} params.deviceId 本次 device_id（cookie）
+ * @param {string} params.userAgent 本次 UA
+ * @param {string} params.ip 本次 IP
+ * @param {string} [params.platformHint] 平台提示
+ * @returns {Promise<{status: 'safe'|'warn'|'info', reason?: string, baseline?: object}>}
+ */
+async function detectLoginEnvironmentAnomaly({ userId, uid, deviceId, userAgent, ip, platformHint }) {
+  const SessionToken = getModel('SessionToken');
+
+  // 查用户最近一条未吊销 session_token 作为基准
+  const latest = await SessionToken.findOne({
+    where: { user_id: userId, revoked: false },
+    order: [['last_active', 'DESC']],
+    raw: true
+  });
+
+  // 无历史基准：首次登录或旧 session 无记录，不拦（避免新用户/老用户首次在多端登录被卡）
+  if (!latest) {
+    return { status: 'info', reason: '无历史基准，首次登录' };
+  }
+
+  // 计算本次指纹
+  const { computeDeviceFingerprint } = await import('./device.js');
+  const currentFp = computeDeviceFingerprint({ deviceId, userAgent, uid, platformHint });
+  const baselineFp = latest.device_fingerprint;
+
+  // 基准缺失（旧 session 没存指纹字段）：降级 info，不拦
+  if (!baselineFp) {
+    return { status: 'info', reason: '基准指纹缺失', baseline: latest };
+  }
+
+  // 指纹变 → warn（换设备/换 UA，账号被盗风险，需邮箱二次验证）
+  if (currentFp !== baselineFp) {
+    return {
+      status: 'warn',
+      reason: '登录设备/环境与上次不一致',
+      baseline: latest
+    };
+  }
+
+  // 指纹不变但 IP 变 → info（梯子，不拦，记录风险）
+  if (ip && latest.ip && ip !== latest.ip) {
+    return { status: 'info', reason: 'IP 变化（疑似代理/梯子）', baseline: latest };
+  }
+
+  return { status: 'safe', baseline: latest };
+}
+
 /** 已验证标记 TTL：通过人机验证后 30 分钟内不再弹（避免频繁打扰） */
 const VERIFIED_TTL = 30 * 60; // 秒
 /** 验证标记 Redis store（缓存实例避免重复创建） */
@@ -250,6 +309,7 @@ function isHighRiskRequest(request) {
 export {
   DETECT_RESULT,
   detectLoginAnomaly,
+  detectLoginEnvironmentAnomaly,
   detectSessionRisk,
   confirmVerifyToken,
   isHighRiskRequest,
