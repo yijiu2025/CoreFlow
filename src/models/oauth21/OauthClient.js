@@ -89,6 +89,13 @@ export default (sequelize, DataTypes) => {
         defaultValue: 'openid profile',
         comment: '允许的权限范围（空格分隔）'
       },
+      /** scope 元数据覆盖（各 scope 的自定义描述文案，JSON：{ scopeId: { name, desc } }） */
+      scope_metadata: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null,
+        comment: 'scope 描述覆盖（来自 app config，授权页展示用）'
+      },
       /** Token 端点认证方式：none（公共客户端）/ client_secret_basic / client_secret_post */
       token_endpoint_auth_method: {
         type: DataTypes.STRING(50),

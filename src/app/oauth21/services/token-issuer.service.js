@@ -21,13 +21,57 @@ import TokenDao from '../dao/token.dao.js';
 import { TokenService } from './token.service.js';
 import config from '../config/config.js';
 import { createSession } from '../../../framework/auth/session.js';
-import { getDeviceId, detectDeviceType } from '../../../framework/auth/device.js';
+import { detectDeviceType, generateDeviceCookie, detectPlatform } from '../../../framework/auth/device.js';
 import { loadUserPermissions } from '../../../framework/auth/permission-loader.js';
 import { getStore } from '../../../framework/redis/index.js';
 import { setAuthCookies } from './cookies.service.js';
+import { resolveFieldSet } from '../config/scope-registry.js';
 import { FIRST_PARTY_APP, DEFAULT_SCOPE } from '../config/constants.js';
 
 const tokenService = new TokenService();
+
+/** device_id cookie 名（与 device.js getDeviceId 读的 cookie 名一致） */
+const DEVICE_COOKIE_NAME = 'device_id';
+/** device_id cookie 有效期：10 年（设备标识长期稳定） */
+const DEVICE_COOKIE_MAX_AGE = 10 * 365 * 24 * 60 * 60;
+
+/**
+ * 解析稳定的设备标识并回写 cookie
+ *
+ * 流程（保证首次登录就拿到稳定 device_id，跨账号复用）：
+ * 1. cookie 有 device_id → 直接用（跨账号共用同一设备码）
+ * 2. x-device-id 头有 → 用头值（前端主动传）
+ * 3. 都没有（首次登录）→ 生成稳定 UUID，本次就用它（带平台前缀），同时写回 cookie
+ *    ——不用 getDeviceId 的 UA 兜底（不稳定，浏览器更新会变）
+ *
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} [reply] - 第一方登录时传入用于 setCookie；SSO iframe 分支可不传
+ * @returns {string} 稳定的 device_id（形如 web-xxxx）
+ */
+function resolveDeviceId(request, reply) {
+  const platform = detectPlatform(request);
+  const cookieVal = request?.cookies?.[DEVICE_COOKIE_NAME];
+  const headerVal = request?.headers?.['x-device-id'] || '';
+
+  // 1. 优先 cookie（跨账号共用）2. 其次 header（前端主动传）
+  const stableRaw = cookieVal || headerVal;
+  if (stableRaw) {
+    return stableRaw.includes('-') ? stableRaw : `${platform}-${stableRaw}`;
+  }
+
+  // 3. 首次登录：生成稳定 UUID，本次就用它，同时写回 cookie（后续请求自动带上）
+  const stable = generateDeviceCookie();
+  if (reply) {
+    reply.setCookie(DEVICE_COOKIE_NAME, stable, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: DEVICE_COOKIE_MAX_AGE
+    });
+  }
+  return `${platform}-${stable}`;
+}
 
 /** 认证调试开关（与 auth/index.js 一致，DEBUG_AUTH=true 时输出） */
 const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';
@@ -62,6 +106,16 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
   const finalScopes = (scope || client.scope || DEFAULT_SCOPE).split(' ');
   const scopeString = finalScopes.join(' ');
 
+  // 按 scope 裁剪返回给前端的 user 字段（phone 等敏感字段不下发）
+  // 字段映射见 scope-registry，请求 email scope 才返回 email，profile 才返回 username/name/avatar
+  const fieldSet = new Set(resolveFieldSet(scopeString));
+  const userPayload = { id: user.id };
+  if (fieldSet.has('username')) userPayload.username = user.username;
+  if (fieldSet.has('name')) userPayload.name = user.name || user.username;
+  if (fieldSet.has('avatar')) userPayload.avatar = user.avatar;
+  if (fieldSet.has('email')) userPayload.email = user.email;
+  // phone 等 sensitive 字段 resolveFieldSet 已排除，不下发
+
   // 保存授权记录
   await ApprovalDao.saveApproval({
     uid: user.id,
@@ -72,20 +126,15 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
   const result = {
     token_type: 'Bearer',
     scope: scopeString,
-    user: {
-      id: user.id,
-      username: user.username,
-      name: user.name || user.username,
-      email: user.email,
-      avatar: user.avatar
-    }
+    user: userPayload
   };
 
   // ── 模式 A：JWT 启用 ──
   if (config.jwt.enabled) {
     const { token: accessToken, kid: accessKid } = await issueAccessToken({
       sub: user.id,
-      aud: client.client_id
+      aud: client.client_id,
+      scope: scopeString
     });
     const refreshToken = generateToken(48);
     await TokenDao.save(refreshToken, {
@@ -111,15 +160,17 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
       console.warn('[Auth] 权限缓存预热失败:', err.message);
     }
 
-    // OIDC ID Token
+    // OIDC ID Token：按 scope 裁剪 claims（openid 只给 sub，profile 给 name，email 给 email）
     if (finalScopes.includes('openid')) {
+      const idClaims = {};
+      if (fieldSet.has('name')) idClaims.name = user.name || user.username;
+      if (fieldSet.has('email')) idClaims.email = user.email;
       const { token: idToken, kid: idKid } = await issueIdToken({
         sub: user.id,
         aud: client.client_id,
         nonce: oidcNonce,
         auth_time: Math.floor(Date.now() / 1000),
-        email: user.email,
-        name: user.name
+        ...idClaims
       });
       result.id_token = idToken;
       result.id_token_kid = idKid;
@@ -160,7 +211,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
             status: user.status || 'active',
             appId: sessionAppId,
             ip: request.ip,
-            deviceId: getDeviceId(request),
+            deviceId: resolveDeviceId(request), // SSO 分支无 reply，不下发 cookie（父应用 bind-session 时再写）
             deviceType: detectDeviceType(request.headers['user-agent'] || ''),
             userAgent: request.headers['user-agent'] || '',
             rememberMe
@@ -186,7 +237,7 @@ export async function issueDirectTokens(user, client_id, scope, oidcNonce, reque
             status: user.status || 'active',
             appId: sessionAppId,
             ip: request.ip,
-            deviceId: getDeviceId(request),
+            deviceId: resolveDeviceId(request, reply), // 第一方登录：解析稳定 deviceId + 首次写 cookie
             deviceType: detectDeviceType(request.headers['user-agent'] || ''),
             userAgent: request.headers['user-agent'] || '',
             rememberMe,

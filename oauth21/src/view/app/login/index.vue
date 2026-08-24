@@ -5,6 +5,7 @@ import { useForm } from 'vee-validate';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { postToParent } from '@/utils/parent';
+import AgreementModals from '@/components/common/AgreementModals.vue';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
@@ -44,6 +45,7 @@ const [password, passwordProps] = defineField('password');
 
 const agreed = ref(false);
 const keepLogin = ref(false);
+const docType = ref<'service' | 'privacy' | null>(null);
 const isCountingDown = ref(false);
 const countdown = ref(60);
 let timer: any = null;
@@ -268,8 +270,8 @@ const handleLogin = handleSubmit(async data => {
               </svg>
             </div>
             <span class="text-xs text-slate-400 leading-normal">
-              我已阅读并同意 <a href="#" class="text-primary font-medium">《服务协议》</a> 和
-              <a href="#" class="text-primary font-medium">《隐私政策》</a>
+              我已阅读并同意 <a href="#" class="text-primary font-medium" @click.stop.prevent="docType = 'service'">《服务协议》</a> 和
+              <a href="#" class="text-primary font-medium" @click.stop.prevent="docType = 'privacy'">《隐私政策》</a>
             </span>
           </label>
 
@@ -324,6 +326,8 @@ const handleLogin = handleSubmit(async data => {
         <button class="text-primary font-bold ml-2">立即注册</button>
       </div>
     </div>
+    <!-- 服务协议 / 隐私政策 弹窗（统一组件） -->
+    <AgreementModals v-model:type="docType" />
   </div>
 </template>
 

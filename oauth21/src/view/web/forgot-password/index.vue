@@ -14,7 +14,12 @@ const router = useRouter();
 const resetMode = (import.meta.env.VITE_PASSWORD_RESET_MODE || 'code') as 'code' | 'link';
 
 function goToLogin() {
-  router.push({ path: '/mini-login', query: router.currentRoute.value.query });
+  // 从哪来回哪去：标准登录页进入 → 回 /（分发器，标准页）；mini 登录页进入 → 回 /mini-login
+  // fromLogin 由各登录页的"忘记密码"链接注入；无标记时默认回标准登录页
+  const q = { ...router.currentRoute.value.query };
+  const fromLogin = q.fromLogin;
+  delete q.fromLogin;
+  router.push({ path: fromLogin === 'mini' ? '/mini-login' : '/', query: q });
 }
 </script>
 

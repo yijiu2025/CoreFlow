@@ -94,6 +94,7 @@ export default async app => {
               grant_types: client.grant_types,
               response_types: client.response_types,
               scope: client.scope,
+              scope_metadata: client.scope_metadata || null,
               token_endpoint_auth_method: client.token_endpoint_auth_method,
               application_type: client.application_type
             });

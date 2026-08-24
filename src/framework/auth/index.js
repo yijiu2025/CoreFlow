@@ -23,6 +23,8 @@ import { verify } from '../jwt/index.js';
 import { findUserById } from '../../shared/user-dao.js';
 import { loadUserPermissions } from './permission-loader.js';
 import StpUtil from './StpUtil.js';
+import { getDeviceId, computeDeviceFingerprint } from './device.js';
+import { detectSessionRisk, isHighRiskRequest } from './anomaly-detector.js';
 import { getStore } from '../redis/index.js';
 
 /** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
@@ -248,6 +250,51 @@ export default fp(async app => {
         permissions: sessionData.permissions,
         sessionId: sessionData.sessionId
       };
+
+      // 访问时风险检测：基准从 Redis sessionData 取（登录时写入），不查 DB
+      // warn（指纹变）+ 高风险操作（写操作）→ 直接 403 拦截，返回验证链接让前端弹框
+      // info（IP 变/无基准）→ 不拦，记 request.state.risk 供响应体带上验证信息（前端弹框但不阻断读）
+      try {
+        const deviceId = getDeviceId(request);
+        const fingerprint = computeDeviceFingerprint({
+          deviceId,
+          userAgent: request.headers['user-agent'] || '',
+          uid: sessionData.uid
+        });
+        const risk = await detectSessionRisk({
+          userId: sessionData.userId,
+          deviceId,
+          ip: request.ip,
+          fingerprint,
+          baselineFingerprint: sessionData.deviceFingerprint, // 基准：登录时写入 Redis 的指纹
+          baselineIp: sessionData.ip
+        });
+        if (risk.level !== 'safe') {
+          request.state.risk = risk;
+          _debug('⚠️ 会话风险: %s %j', risk.level, risk.reasons);
+
+          // 高风险操作（非 GET）+ warn → 拦截，要求先完成人机验证
+          // 豁免：带 x-verify-token 头的请求（用户正在调验证端点完成验证，不能拦自己）
+          const isVerifying = !!request.headers['x-verify-token'];
+          if (!isVerifying && risk.level === 'warn' && isHighRiskRequest(request) && risk.verify) {
+            return reply.code(403).send({
+              code: 403,
+              message: '检测到设备环境变更，请完成人机验证后再操作',
+              data: null,
+              __risk__: {
+                level: risk.level,
+                reasons: risk.reasons,
+                verifyUrl: risk.verify.url,
+                verifyHeader: risk.verify.header,
+                verifyToken: risk.verify.token
+              }
+            });
+          }
+        }
+      } catch {
+        // 风险检测失败不阻塞请求，仅记日志
+        _debug('会话风险检测异常');
+      }
     }
   });
 
@@ -256,6 +303,30 @@ export default fp(async app => {
     requestContext.run(request, () => {
       done();
     });
+  });
+
+  // onSend：info 级风险（IP 变但指纹不变，可能是梯子）不拦请求，但响应体加 __risk__
+  // 让前端弹验证框（不阻断读操作）；warn+高风险已在 onRequest 拦截 403，此处只处理 info
+  app.addHook('onSend', async (request, reply, payload) => {
+    const risk = request.state?.risk;
+    if (!risk || risk.level === 'safe' || !risk.verify) return payload;
+    // warn 已在高风险操作拦截，若到了 onSend 说明是 GET 读操作，仍带验证信息让前端弹（不阻断）
+    try {
+      const body = typeof payload === 'string' ? JSON.parse(payload) : null;
+      if (body && typeof body === 'object' && body.__risk__ === undefined) {
+        body.__risk__ = {
+          level: risk.level,
+          reasons: risk.reasons,
+          verifyUrl: risk.verify.url,
+          verifyHeader: risk.verify.header,
+          verifyToken: risk.verify.token
+        };
+        return JSON.stringify(body);
+      }
+    } catch {
+      // 非 JSON 响应不改，原样返回
+    }
+    return payload;
   });
 
   // 挂载 StpUtil 到 app

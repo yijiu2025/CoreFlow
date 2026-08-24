@@ -33,9 +33,10 @@ import { sign, verify } from '../../../framework/jwt/index.js';
  * @param {string} params.aud - 受众（接收令牌的客户端 ID）
  * @param {'access_token'|'id_token'|'refresh_token'|'client_token'} [params.token_type='access_token'] - 令牌类型
  * @param {number} [params.ttl] - 过期时间（秒），默认使用 config 对应配置
+ * @param {object} [params.extra] - 额外 claims（如 scope），合并进 payload
  * @returns {Promise<{token: string, kid: string}>} JWT 字符串与密钥 ID
  */
-async function issueToken({ sub, aud, token_type = 'access_token', ttl }) {
+async function issueToken({ sub, aud, token_type = 'access_token', ttl, extra }) {
   const now = Math.floor(Date.now() / 1000);
   const defaultTtl = {
     access_token: config.jwt.accessTokenTTL,
@@ -51,7 +52,8 @@ async function issueToken({ sub, aud, token_type = 'access_token', ttl }) {
     iat: now,
     exp: now + exp,
     jti: uuidv4(),
-    token_type
+    token_type,
+    ...(extra || {})
   };
   const { token, kid } = await sign(payload);
   return { token, kid };
@@ -62,10 +64,11 @@ async function issueToken({ sub, aud, token_type = 'access_token', ttl }) {
  * @param {object} params
  * @param {string} params.sub - 用户标识
  * @param {string} params.aud - 受众（客户端 ID）
+ * @param {string} [params.scope] - 授权范围（空格分隔），写入 scope claim 供资源服务器校验
  * @returns {Promise<{token: string, kid: string}>} JWT Access Token 与密钥 ID
  */
-async function issueAccessToken({ sub, aud }) {
-  return issueToken({ sub, aud, token_type: 'access_token' });
+async function issueAccessToken({ sub, aud, scope }) {
+  return issueToken({ sub, aud, token_type: 'access_token', extra: scope ? { scope } : {} });
 }
 
 /**

@@ -4,12 +4,15 @@ import { useForm } from 'vee-validate';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
-import DocModal from '@/components/common/DocModal.vue';
+import AgreementModals from '@/components/common/AgreementModals.vue';
+import MessageToast from '@/components/common/MessageToast.vue';
+import { useMessage } from '@/composables/useMessage';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useRecaptcha } from '@/composables/useRecaptcha';
 import { onMounted, ref } from 'vue';
 
 const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken } = useRecaptcha();
+const { error: showError, success: showSuccess } = useMessage();
 onMounted(() => {
   if (recaptchaEnabled.value) loadRecaptcha();
 });
@@ -21,8 +24,14 @@ const registerSchema = z
     nickname: z.string().min(2, '昵称至少2位'),
     email: z.string().email('邮箱格式不正确'),
     code: z.string().min(4, '验证码至少4位'),
-    password: z.string().min(6, '密码至少6位'),
-    confirmPassword: z.string().min(6, '请确认密码')
+    password: z
+      .string({ required_error: '请输入密码' })
+      .min(8, '密码至少8位')
+      .max(128, '密码最多128位')
+      .regex(/^(?=.*[a-z])/, '密码必须包含至少一个小写字母')
+      .regex(/^(?=.*[A-Z])/, '密码必须包含至少一个大写字母')
+      .regex(/^(?=.*\d)/, '密码必须包含至少一个数字'),
+    confirmPassword: z.string({ required_error: '请确认密码' }).min(1, '请再次输入密码')
   })
   .refine((data: any) => data.password === data.confirmPassword, {
     message: '两次输入密码不一致',
@@ -82,9 +91,10 @@ const handleRegister = handleSubmit(async data => {
       captchaKey: captchaKey.value,
       ...(recaptchaToken ? { recaptchaToken } : {})
     });
+    showSuccess('注册成功，即将跳转登录');
     router.push('/m/login');
   } catch (err: any) {
-    alert(err.message);
+    showError(err?.message || '注册失败，请稍后重试');
   }
 });
 </script>
@@ -143,7 +153,7 @@ const handleRegister = handleSubmit(async data => {
         <!-- 密码 + 确认 并排 -->
         <div class="mreg-row-2">
           <div class="mreg-field" :class="{ 'is-error': errors.password }">
-            <input v-model="password" v-bind="passwordProps" type="password" placeholder="登录密码" class="mreg-input" />
+            <input v-model="password" v-bind="passwordProps" type="password" placeholder="大写+小写+数字，8位以上" class="mreg-input" />
           </div>
           <div class="mreg-field" :class="{ 'is-error': errors.confirmPassword }">
             <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" placeholder="确认密码" class="mreg-input" />
@@ -174,34 +184,10 @@ const handleRegister = handleSubmit(async data => {
 
     <GraphicCaptcha :is-open="showCaptcha" :email="values.email" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
 
-    <DocModal :is-open="docType === 'service'" title="服务协议" @close="docType = null">
-      <p class="text-xs text-slate-400">最后更新：2026年8月22日</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200 pt-2">一、服务说明</h3>
-      <p>CoreFlow 由 CoreFlow 团队运营，提供身份认证、应用授权、协作管理等企业级服务。注册即代表同意本协议。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">二、账户注册与使用</h3>
-      <p>1. 需提供真实邮箱注册，对密码保密负责。</p>
-      <p>2. 不得转让、出借账户，泄露损失自负。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">三、行为规范</h3>
-      <p>不得发布违法信息、破坏系统安全、干扰其他用户。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">四、知识产权</h3>
-      <p>服务界面、代码归 CoreFlow 所有，您的原创内容归您所有。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">五、变更与终止</h3>
-      <p>我们可变更或停止服务并公告；您违约时我们可限制账户。</p>
-    </DocModal>
-
-    <DocModal :is-open="docType === 'privacy'" title="隐私政策" @close="docType = null">
-      <p class="text-xs text-slate-400">最后更新：2026年8月22日</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200 pt-2">一、信息收集</h3>
-      <p>注册信息（邮箱、昵称）、登录信息（IP、设备）、使用数据。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">二、信息使用</h3>
-      <p>仅用于提供服务、安全防护、改进体验，不售予第三方。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">三、信息保护</h3>
-      <p>密码 bcrypt 哈希、RSA 传输、HttpOnly Cookie、严格权限控制。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">四、信息共享</h3>
-      <p>不售予第三方，仅经授权或法律要求时共享。</p>
-      <h3 class="font-bold text-slate-800 dark:text-slate-200">五、您的权利</h3>
-      <p>可访问、更正、删除个人信息。</p>
-    </DocModal>
+    <!-- 服务协议 / 隐私政策 弹窗（统一组件） -->
+    <AgreementModals v-model:type="docType" />
+    <!-- 错误/成功提示 toast -->
+    <MessageToast />
   </div>
 </template>
 

@@ -19,7 +19,12 @@ export default (sequelize, DataTypes) => {
       },
       device_id: {
         type: DataTypes.STRING(100),
-        comment: '设备唯一标识 (用于多端互踢)'
+        comment: '设备唯一标识 (cookie 里的稳定设备码，跨账号共用)'
+      },
+      device_fingerprint: {
+        type: DataTypes.STRING(128),
+        allowNull: true,
+        comment: '复合设备指纹（device_id + UA + uid 等计算，访问时比对检测风险）'
       },
       /**
        * 凭证唯一标识符 (jti / SHA-256 哈希值)

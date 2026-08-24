@@ -22,8 +22,8 @@ export const authApi = {
    * @param payload 登录信息
    * 解密失败时自动清除公钥缓存并重试一次（应对服务器重启密钥轮换）
    */
-  async login(payload: LoginPayload & { captchaKey?: string; client_id?: string }) {
-    const { captchaKey, client_id, ...rest } = payload;
+  async login(payload: LoginPayload & { captchaKey?: string; client_id?: string; scope?: string }) {
+    const { captchaKey, client_id, scope, ...rest } = payload;
     const payloadStr = JSON.stringify(rest);
 
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -34,7 +34,7 @@ export const authApi = {
           kid: getCachedKid(),
           timestamp: Date.now(),
           nonce: generateNonce(),
-          scope: 'openid profile email',
+          scope: scope || 'openid profile email',
           captchaKey,
           client_id
         });

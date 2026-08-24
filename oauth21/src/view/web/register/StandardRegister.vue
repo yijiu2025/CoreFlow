@@ -2,12 +2,17 @@
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
 import { useRoute, useRouter } from 'vue-router';
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
+import AgreementModals from '@/components/common/AgreementModals.vue';
+import MessageToast from '@/components/common/MessageToast.vue';
+import { useMessage } from '@/composables/useMessage';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useRecaptcha } from '@/composables/useRecaptcha';
+
+const { error: showError, success: showSuccess } = useMessage();
 
 const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken } = useRecaptcha();
 onMounted(() => {
@@ -25,8 +30,10 @@ const registerSchema = z
     password: z
       .string({ required_error: '请输入密码' })
       .min(8, '密码至少8位')
-      .max(20, '密码最多20位')
-      .regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, '需同时含数字和字母'),
+      .max(128, '密码最多128位')
+      .regex(/^(?=.*[a-z])/, '密码必须包含至少一个小写字母')
+      .regex(/^(?=.*[A-Z])/, '密码必须包含至少一个大写字母')
+      .regex(/^(?=.*\d)/, '密码必须包含至少一个数字'),
     confirmPassword: z.string({ required_error: '请确认密码' }).min(1, '请再次输入密码')
   })
   .refine((data: any) => data.password === data.confirmPassword, {
@@ -45,6 +52,7 @@ const [password, passwordProps] = defineField('password');
 const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword');
 
 const agreed = ref(false);
+const docType = ref<'service' | 'privacy' | null>(null);
 const isEmailDuplicate = ref(false);
 const showCaptcha = ref(false);
 const captchaKey = ref('');
@@ -86,31 +94,35 @@ const onCaptchaSuccess = async (data: { captchaKey: string }) => {
 const handleRegister = handleSubmit(
   async () => {
     if (!agreed.value) {
-      alert('请阅读并同意协议');
+      showError('请阅读并同意协议');
       return;
     }
     if (isEmailDuplicate.value) {
-      alert('邮箱已被注册');
+      showError('邮箱已被注册');
       return;
     }
     const { confirmPassword, ...submitData } = values;
     const encryptedPassword = await rsaEncrypt(submitData.password!);
     const recaptchaToken = recaptchaEnabled.value ? await getRecaptchaToken() : null;
-    await authApi.register({
-      ...submitData,
-      password: encryptedPassword,
-      kid: getCachedKid(),
-      captchaKey: captchaKey.value,
-      ...(recaptchaToken ? { recaptchaToken } : {})
-    });
-    alert('注册成功！现在您可以返回登录了');
-    router.push('/');
+    try {
+      await authApi.register({
+        ...submitData,
+        password: encryptedPassword,
+        kid: getCachedKid(),
+        captchaKey: captchaKey.value,
+        ...(recaptchaToken ? { recaptchaToken } : {})
+      });
+      showSuccess('注册成功！现在您可以返回登录了');
+      router.push('/');
+    } catch (err: any) {
+      showError(err?.message || '注册失败，请稍后重试');
+    }
   },
   err => console.log('Validation errors:', err)
 );
 
 const openDoc = (type: 'service' | 'privacy') => {
-  window.open(`/docs/${type}.html`, '_blank', 'width=800,height=600');
+  docType.value = type;
 };
 </script>
 
@@ -193,7 +205,7 @@ const openDoc = (type: 'service' | 'privacy') => {
           <div class="reg-row-2">
             <div class="group relative">
               <div class="reg-field" :class="{ 'is-error': errors.password }">
-                <input v-model="password" v-bind="passwordProps" type="password" placeholder="登录密码" autocomplete="new-password" class="reg-input" />
+                <input v-model="password" v-bind="passwordProps" type="password" placeholder="大写+小写+数字，8位以上" autocomplete="new-password" class="reg-input" />
               </div>
               <span v-if="errors.password" class="reg-err">{{ errors.password }}</span>
             </div>
@@ -229,6 +241,10 @@ const openDoc = (type: 'service' | 'privacy') => {
     </div>
 
     <GraphicCaptcha :is-open="showCaptcha" :email="values.email" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
+    <!-- 服务协议 / 隐私政策 弹窗（统一组件） -->
+    <AgreementModals v-model:type="docType" />
+    <!-- 错误/成功提示 toast -->
+    <MessageToast />
   </div>
 </template>
 

@@ -55,6 +55,11 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/l
 onRequest[0]  →  @fastify/cookie     解析 cookies
 onRequest[1]  →  auth                Session 验证（sid cookie → Redis → request.state.user）
                                       sid 过期时自动用 sid_r 刷新
+                                      认证后跑风险检测（detectSessionRisk）：
+                                        基准从 Redis session 取（deviceFingerprint/ip），零 DB 查询
+                                        warn（指纹变）+ 高风险操作(POST/PUT/DELETE) → 403 拦截 + __risk__
+                                        info（IP 变指纹不变/梯子）→ 不拦，记 request.state.risk
+                                        带 x-verify-token 头豁免拦截（验证端点不能拦自己）
 onRequest[2]  →  @fastify/rateLimit  全局限频（所有请求）
 onRequest[3]  →  firewall            五层拦截管道（所有请求都过）
                                       已登录: 基础速率限制 + bot 检测
@@ -62,9 +67,17 @@ onRequest[3]  →  firewall            五层拦截管道（所有请求都过�
 preHandler    →  guard               三级权限守卫（检查 request.state.user）
 preHandler    →  verifySignature     H5 签名验证（仅 OAuth21 路由）
 handler       →  业务路由
-onSend        →  日志 + 连接释放
-onResponse    →  扫描陷阱（404/403 检测）
+onSend        →  日志 + 连接释放 + info 级风险注入响应体 __risk__
+onResponse    →  扫描陷阱（404/403 检测，异步采集无 reply）
 ```
+
+**风险检测核心**（`src/framework/auth/anomaly-detector.js` + `src/framework/auth/index.js`）：
+- 基准来源：登录时 createSession 写入 Redis session 的 `deviceFingerprint` + `ip`（访问时 getSession 直接取，不查 DB）
+- 风险判定：指纹变 → warn（拦写操作）；IP 变指纹不变 → info（梯子，不拦）；基准缺失 → info（旧 session 降级）
+- 已验证标记：`POST /auth/v1/verify-challenge` 验证通过后写 Redis `verified:<userId>:<deviceId>`（30min 免验），并调 `updateSessionBaseline` 把新环境基准同步到 Redis + DB
+- 响应注入：`__risk__{verifyUrl, verifyHeader, verifyToken}`，前端自动弹人机验证框
+
+详见 [docs/development/注册登录全链路流程图.md](docs/development/注册登录全链路流程图.md) 第五~八章。
 
 ## 认证系统 (`src/auth/`)
 

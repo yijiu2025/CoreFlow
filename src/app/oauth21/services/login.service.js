@@ -24,6 +24,8 @@ import { logLoginFailure } from '../../../framework/auth/session.js';
 import { getStore } from '../../../framework/redis/index.js';
 import captchaService from '../../../framework/verify/captcha/service.js';
 import { AuthorizationService } from './authorization.service.js';
+import deactivationService from '../../user/services/deactivation.service.js';
+import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
 
 const authService = new AuthorizationService();
 
@@ -177,8 +179,49 @@ export async function directLogin(request, reply, fastify) {
     }
   }
 
+  // 3.5 注销申请拦截：用户若提交了注销申请（scope=all 拦截所有 app，scope=app 仅拦截该 app），
+  //     不直接登录，返回 deactivation_pending 状态，前端弹"是否撤销"。
+  //     用户确认撤销 → 带 confirmRevoke: true 重新提交登录 → 此处先撤销再继续登录流程。
+  //     不撤销则前端不重发，登录被拒。撤销也可走 POST /user/v1/deactivation/revoke（已登录态）。
+  const pendingDeactivation = await deactivationService.checkLoginBlocked(user.numericId || user.id, client.client_id);
+  if (pendingDeactivation) {
+    // 用户在登录弹窗点了"撤销"：直接撤销该申请，继续走登录流程
+    if (request.body?.confirmRevoke) {
+      await deactivationService.forceRevokeForLogin(pendingDeactivation.id, user.numericId || user.id);
+      // 撤销后继续向下签发令牌（不 return）
+    } else {
+      return reply.code(403).send({
+        code: 403,
+        message:
+          pendingDeactivation.scope === 'all'
+            ? '您已提交全部数据注销申请，是否撤销？'
+            : `您已提交应用 ${client.client_id} 的注销申请，是否撤销？`,
+        data: {
+          action: 'deactivation_pending',
+          deactivationId: pendingDeactivation.id,
+          scope: pendingDeactivation.scope,
+          app_id: pendingDeactivation.app_id,
+          scheduled_at: pendingDeactivation.scheduled_at
+        }
+      });
+    }
+  }
+
   const finalScopes = (scope || client.scope || DEFAULT_SCOPE).split(' ');
   const scopeString = finalScopes.join(' ');
+
+  // scope 边界校验：请求 scope 必须 ⊆ client 注册 scope，防越权请求
+  const scopeCheck = checkScopeSubset(scopeString, client.scope);
+  if (!scopeCheck.valid) {
+    return reply.code(400).send({
+      code: 400,
+      message: `invalid_scope: 请求了未授权的 scope: ${scopeCheck.exceeded.join(' ')}`,
+      data: null
+    });
+  }
+
+  // scope 详情（带描述，供前端授权页渲染"人话"而非裸字符串）
+  const scopeDetails = resolveScopeDetails(scopeString, client.scope_metadata || {});
 
   // 4. 检查用户是否已授权该应用
   if (client.client_id !== FIRST_PARTY_APP.client_id) {
@@ -209,6 +252,7 @@ export async function directLogin(request, reply, fastify) {
           client_id: client.client_id,
           client_name: client.client_name,
           scope: scopeString,
+          scopeDetails,
           user: {
             username: user.username,
             name: user.name || user.username,

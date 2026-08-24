@@ -315,7 +315,12 @@ const fetchPhotonBackup = async (lat: number, lng: number) => {
 
 const updateSuggestions = (newItems: any[]) => {
   const combined = [...nearbyPlaces.value, ...newItems];
-  nearbyPlaces.value = [...new Map(combined.map(item => [item.name, item])).values()];
+  // 按 name 去重：后入项覆盖先入项（用普通对象，兼容性最好）
+  const deduped: Record<string, any> = {};
+  for (const item of combined) {
+    if (item?.name != null) deduped[item.name] = item;
+  }
+  nearbyPlaces.value = Object.values(deduped);
 };
 
 const selectNearby = (place: any) => {

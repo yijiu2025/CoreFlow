@@ -9,6 +9,7 @@
  */
 import bcrypt from 'bcryptjs';
 import sequelize from '../../../framework/db/index.js';
+import { validateScopes } from '../config/scope-registry.js';
 
 /** 获取 OauthClient 模型（延迟获取，确保模型已加载） */
 const getModel = () => sequelize.models.OauthClient;
@@ -35,9 +36,18 @@ const ClientDao = {
    * @param {string} [params.application_type] 应用类型
    * @returns {Promise<object>} 创建的客户端数据 (首次创建时，client_secret 为明文返回以便展示)
    */
-  async create({ client_name, redirect_uris, grant_types, scope, application_type }) {
+  async create({ client_name, redirect_uris, grant_types, scope, scope_metadata, application_type }) {
     const { v4: uuidv4 } = await import('uuid');
     const crypto = await import('node:crypto');
+
+    // scope 白名单校验：必须在系统 scope-registry 内，防注册未知 scope
+    const finalScope = scope ?? 'openid profile';
+    const scopeCheck = validateScopes(finalScope);
+    if (!scopeCheck.valid) {
+      const err = new Error(`invalid_scope: 未知 scope: ${scopeCheck.unknown.join(' ')}`);
+      err.code = 'INVALID_SCOPE';
+      throw err;
+    }
 
     const client_id = `client-${uuidv4().slice(0, 8)}`;
     // 生成原始明文 client_secret
@@ -54,7 +64,8 @@ const ClientDao = {
       redirect_uris: redirect_uris ?? [],
       grant_types: grant_types ?? ['authorization_code'],
       response_types: ['code'],
-      scope: scope ?? 'openid profile',
+      scope: finalScope,
+      scope_metadata: scope_metadata || null,
       token_endpoint_auth_method: rawSecret ? 'client_secret_basic' : 'none',
       application_type: application_type ?? 'web'
     });

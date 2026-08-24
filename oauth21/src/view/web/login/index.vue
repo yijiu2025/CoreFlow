@@ -48,13 +48,10 @@ const activeComponent = computed(() => {
     return MobileLogin;
   }
 
-  // 2. 如果是 mini 登录来源、或者是显式指定了横/纵向迷你版 styleType 或者是嵌入式 appName 登录
-  if (
-    route.query.from === 'mini' ||
-    styleType.value === 'vertical' ||
-    styleType.value === 'horizontal' ||
-    route.path.includes('mini')
-  ) {
+  // 2. mini 登录来源（iframe 嵌入弹窗场景）→ 紧凑版
+  //    仅当显式 from=mini 或路径含 mini 时走 MiniLogin；
+  //    styleType 的 vertical/horizontal/split 都是 StandardLogin 的布局变体，不应误判为 mini
+  if (route.query.from === 'mini' || route.path.includes('mini')) {
     return MiniLogin;
   }
 
