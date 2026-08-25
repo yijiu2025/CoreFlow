@@ -2,7 +2,7 @@
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
 import { useRoute, useRouter } from 'vue-router';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import AuthContainer from '@/components/common/AuthContainer.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
@@ -13,11 +13,12 @@ import { useRecaptcha } from '@/composables/useRecaptcha';
 import MessageToast from '@/components/common/MessageToast.vue';
 import { useMessage } from '@/composables/useMessage';
 
-const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken } = useRecaptcha();
+const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken, dispose } = useRecaptcha('register');
 const { error: showError, success: showSuccess } = useMessage();
 onMounted(() => {
-  if (recaptchaEnabled.value) loadRecaptcha();
+  if (recaptchaEnabled) loadRecaptcha();
 });
+onUnmounted(() => dispose());
 
 const router = useRouter();
 const route = useRoute();
@@ -109,7 +110,7 @@ const handleRegister = handleSubmit(async () => {
   if (!agreed.value || isEmailDuplicate.value) return;
   const { confirmPassword, ...submitData } = values;
   const encryptedPassword = await rsaEncrypt(submitData.password!);
-  const recaptchaToken = recaptchaEnabled.value ? await getRecaptchaToken() : null;
+  const recaptchaToken = recaptchaEnabled ? await getRecaptchaToken() : null;
   try {
     await authApi.register({
       ...submitData,
