@@ -197,7 +197,7 @@ const props = defineProps({
   isOpen: Boolean
 });
 
-const emit = defineEmits(['close', 'login-success', 'max-sessions']);
+const emit = defineEmits(['close', 'login-success', 'max-sessions', 'login-error']);
 
 const authStore = useAuthStore();
 const { savedAccounts } = storeToRefs(authStore);
@@ -320,14 +320,19 @@ const handleMessage = async (event: MessageEvent) => {
     // Session 模式：用临时 session_token 换取 sid/sid_r + 凭证 cookie（记住我才有）
     // accountKey 始终返回 uid（无论是否保持登录），rememberMe 标记是否可免切
     // bind-session 返回的 res.user 含 uid（postMessage 的 user 无 uid），优先用它
+    // 失败必须中断登录流程并提示，否则后端没换到 sid cookie，前端却"登录成功"关弹窗 → 假登录
+    // bind-session 失败时 HTTP 返回非 2xx，axios 走 catch（不会走 res 分支）
     if (sessionToken) {
       try {
         const res: any = await authApi.bindSession(sessionToken);
         accountKey = res?.accountKey || null;
         rememberMe = !!res?.rememberMe;
         if (res?.user?.uid) user = { ...user, ...res.user };
-      } catch (err) {
-        console.warn('绑定 Session 失败:', err);
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || err?.message || '登录会话绑定失败';
+        emit('login-error', new Error(msg));
+        close();
+        return;
       }
     }
 

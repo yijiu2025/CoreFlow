@@ -38,18 +38,17 @@ onMounted(async () => {
     statusMessage.value = '正在换取访问令牌...';
 
     // 用授权码换取 Token
+    // bind-session 失败时 HTTP 返回非 2xx，axios 走 catch；成功返回 { user, accountKey, rememberMe }
     const data = (await authApi.bindSession(code)) as any;
 
-    if (data) {
-      statusMessage.value = '登录成功，正在跳转...';
+    statusMessage.value = '登录成功，正在跳转...';
 
-      // 获取用户信息
-      const userInfo = await authApi.getUserInfo();
-      authStore.setLoggedIn(true, userInfo, data.token || data.access_token);
-      await authStore.fetchPermissions();
+    // 获取用户信息
+    const userInfo = await authApi.getUserInfo();
+    authStore.setLoggedIn(true, userInfo, data.token || data.access_token);
+    await authStore.fetchPermissions();
 
-      setTimeout(() => router.push('/'), 500);
-    }
+    setTimeout(() => router.push('/'), 500);
   } catch (err: any) {
     statusMessage.value = `登录失败: ${err.message}`;
     setTimeout(() => router.push('/login'), 3000);
