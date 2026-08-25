@@ -157,7 +157,7 @@
         <label class="card-switch">
           <input
             type="checkbox"
-            v-model="saveLoginState"
+            :checked="authStore.saveLoginInfo"
             :disabled="!authStore.isLoggedIn"
             @change="onSaveLoginChange"
           />
@@ -169,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { Heart, Star, Clock, Clapperboard, Play, Bell, FileText } from 'lucide-vue-next';
@@ -177,10 +177,6 @@ import { Heart, Star, Clock, Clapperboard, Play, Bell, FileText } from 'lucide-v
 const router = useRouter();
 const authStore = useAuthStore();
 
-const saveLoginState = computed({
-  get: () => authStore.saveLoginInfo,
-  set: val => authStore.updateSaveLoginInfo(val)
-});
 
 const historyList = ref<any[]>([]);
 
@@ -190,8 +186,15 @@ const emit = defineEmits<{
   (e: 'showToast', msg: string): void;
 }>();
 
-const onSaveLoginChange = () => {
-  emit('showToast', saveLoginState.value ? '已开启保存登录信息' : '已关闭保存登录信息');
+const onSaveLoginChange = async (e: Event) => {
+  if (!authStore.isLoggedIn) return;
+  const target = e.target as HTMLInputElement;
+  const want = target.checked;
+  const prev = authStore.saveLoginInfo;
+  await authStore.updateSaveLoginInfo(want);
+  if (authStore.saveLoginInfo !== prev) {
+    emit('showToast', authStore.saveLoginInfo ? '已开启保存登录信息' : '已关闭保存登录信息');
+  }
 };
 
 const goToMyWorks = () => {

@@ -146,10 +146,13 @@ export const useAuthStore = defineStore('auth', () => {
     return uid ? !!savedAccounts.value[uid]?.rememberMe : false;
   });
 
-  /** 切换当前账号的"保存登录信息"（调后端写/删凭证 cookie + 更新 savedAccounts per-account） */
+  /** 切换当前账号的"保存登录信息"（调后端写/删凭证 cookie + 更新 savedAccounts per-account）
+   *  失败必须回滚 UI 状态 + 提示，否则 Switch 已切换但后端没改 → 状态不一致
+   */
   async function updateSaveLoginInfo(value: boolean) {
     const uid = user.value?.uid;
     if (!uid) return; // 未登录不允许切（UI 应灰显）
+    const prev = saveLoginInfo.value; // 记录原值，失败回滚
     try {
       const { authApi } = await import('@/api/auth');
       await authApi.updateRememberMe(value);
@@ -158,7 +161,15 @@ export const useAuthStore = defineStore('auth', () => {
         savedAccounts.value[uid].rememberMe = value;
         persistSavedAccounts();
       }
-    } catch (err) {
+    } catch (err: any) {
+      // 回滚 UI 状态：saveLoginInfo 是只读 computed（派生自 savedAccounts[uid].rememberMe），
+      // 回滚改数据源即可，computed 自动重算，Switch 回到原位
+      if (savedAccounts.value[uid]) {
+        savedAccounts.value[uid].rememberMe = prev;
+        persistSavedAccounts();
+      }
+      const msg = err?.response?.data?.message || err?.message || '更新失败';
+      alert(msg);
       console.warn('同步保存登录信息状态失败:', err);
     }
   }
