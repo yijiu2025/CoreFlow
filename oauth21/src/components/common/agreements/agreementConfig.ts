@@ -9,7 +9,7 @@ export const agreementConfig = {
   /** 运营主体全称（落款处显示，也是法律主体名） */
   OPERATOR: '【平台运营主体】',
   /** 注册地址（隐私政策"我们是谁"与"联系我们"使用） */
-  CONTACT_ADDRESS: 'qq',
+  CONTACT_ADDRESS: '',
   /** 统一社会信用代码 */
   CREDIT_CODE: '【请填写】',
   /** 个人信息保护负责人（DPO）联系邮箱 */

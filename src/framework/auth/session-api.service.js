@@ -116,6 +116,12 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
     if (sess?.refreshToken && sessionData.uid && sessionData.rememberMe) {
       reply.setCookie(accountKeyForUid(sessionData.uid), sess.refreshToken, USER_COOKIE_OPTS);
     }
+    // 跨域 iframe：把登录时生成的稳定 device_id 写到当前域（posecraft/firewall），
+    // 供该域后续业务请求的 getDeviceId 风险检测读取基准。
+    // 用 sessionData.deviceId（登录时算好的稳定值），保证与 session_tokens 表基准一致。
+    if (sessionData.deviceId) {
+      reply.setCookie('device_id', sessionData.deviceId, COOKIE_OPTIONS.DEVICE);
+    }
   } catch (err) {
     // 并发会话超限：结构化 409，供前端引导用户踢掉旧设备
     if (err.code === 'MAX_SESSIONS_EXCEEDED') {
