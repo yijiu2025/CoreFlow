@@ -63,8 +63,9 @@ service.interceptors.request.use(
 let isRefreshing = false;
 let pendingQueue: Array<(token: string) => void> = [];
 
-// 风险拦截处理：403 + __risk__.warn → 弹人机验证弹窗，通过后重发原请求
-// 动态挂载 RiskVerifyModal，自包含，调用方无感
+// 风险拦截处理：403 + __risk__.warn → 弹滑块人机验证，通过后重发原请求
+// 动态挂载 SliderCaptcha，自包含，调用方无感
+// （滑块拖动比图形码输入对机器人更难，体验也更流畅）
 async function handleRiskBlock(res: any): Promise<any> {
   const risk = res.data?.__risk__ || res.data?.data?.__risk__;
   if (!risk || risk.level !== 'warn' || !risk.verifyToken) {
@@ -72,14 +73,14 @@ async function handleRiskBlock(res: any): Promise<any> {
   }
   // 动态导入 + 挂载弹窗（避免 request.ts 强依赖组件）
   const { createApp, ref } = await import('vue');
-  const RiskVerifyModal = (await import('@/components/common/RiskVerifyModal.vue')).default;
+  const SliderCaptcha = (await import('@/components/common/SliderCaptcha.vue')).default;
 
   return new Promise((resolve, reject) => {
     const container = document.createElement('div');
     document.body.appendChild(container);
 
     const isOpen = ref(true);
-    const app = createApp(RiskVerifyModal, {
+    const app = createApp(SliderCaptcha, {
       isOpen: isOpen.value,
       verifyToken: risk.verifyToken,
       reasons: risk.reasons || [],
