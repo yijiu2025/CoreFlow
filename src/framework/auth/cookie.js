@@ -164,6 +164,17 @@ const COOKIE_OPTIONS = {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: REFRESH_COOKIE_PATH
+  },
+  // device_id：稳定设备标识 cookie，供风险检测 getDeviceId 读取基准。
+  // 跨域 iframe 场景：oauth21 登录域写的 cookie posecraft 域带不过去，
+  // 故 bind-session 时在 posecraft 域也写一份（用登录时生成的稳定值）。
+  // HttpOnly（JS 不可读防泄露）+ 10 年长期 + lax + path='/' 全域可读。
+  DEVICE: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 10 * 365 * 24 * 60 * 60
   }
 };
 
