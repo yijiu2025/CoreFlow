@@ -19,6 +19,7 @@ declare module 'vue' {
     Icons: typeof import('./components/common/Icons.vue')['default']
     MessageToast: typeof import('./components/common/MessageToast.vue')['default']
     PrivacyPolicy: typeof import('./components/common/agreements/PrivacyPolicy.vue')['default']
+    RiskVerifyModal: typeof import('./components/common/RiskVerifyModal.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     ServiceAgreement: typeof import('./components/common/agreements/ServiceAgreement.vue')['default']

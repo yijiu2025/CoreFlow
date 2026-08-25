@@ -66,6 +66,18 @@ export const authApi = {
   },
 
   /**
+   * 风险人机验证（请求被 __risk__ 拦截后调用）
+   * 带上风险响应返回的 verifyToken，通过后 30 分钟免验。
+   * @param verifyToken 风险响应 __risk__.verifyToken
+   * @param captchaKey 图形验证码 key（可选，叠加图形码更严格）
+   */
+  async verifyChallenge(verifyToken: string, captchaKey?: string) {
+    return request.post('/auth/v1/verify-challenge', { captchaKey }, {
+      headers: { 'x-verify-token': verifyToken }
+    });
+  },
+
+  /**
    * 重发登录二次验证邮箱码（不需图形码，凭 verifyToken）
    */
   async sendLoginVerifyCode(verifyToken: string) {
