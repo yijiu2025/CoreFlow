@@ -43,6 +43,7 @@ declare module 'vue' {
     ShapesPanel: typeof import('./../components/panels/editor/ShapesPanel.vue')['default']
     Sidebar: typeof import('./../components/layouts/home/Sidebar.vue')['default']
     SkeletonCard: typeof import('./../components/cards/home/SkeletonCard.vue')['default']
+    SliderCaptcha: typeof import('./../components/common/SliderCaptcha.vue')['default']
     StyleFloatPanel: typeof import('./../components/panels/editor/StyleFloatPanel.vue')['default']
     TextPanel: typeof import('./../components/panels/editor/TextPanel.vue')['default']
     TopBar: typeof import('./../components/layouts/editor/TopBar.vue')['default']
