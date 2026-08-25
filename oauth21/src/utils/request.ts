@@ -63,12 +63,57 @@ service.interceptors.request.use(
 let isRefreshing = false;
 let pendingQueue: Array<(token: string) => void> = [];
 
+// 风险拦截处理：403 + __risk__.warn → 弹人机验证弹窗，通过后重发原请求
+// 动态挂载 RiskVerifyModal，自包含，调用方无感
+async function handleRiskBlock(res: any): Promise<any> {
+  const risk = res.data?.__risk__ || res.data?.data?.__risk__;
+  if (!risk || risk.level !== 'warn' || !risk.verifyToken) {
+    return Promise.reject(new Error(res.data?.message || '请求被拦截'));
+  }
+  // 动态导入 + 挂载弹窗（避免 request.ts 强依赖组件）
+  const { createApp, ref } = await import('vue');
+  const RiskVerifyModal = (await import('@/components/common/RiskVerifyModal.vue')).default;
+
+  return new Promise((resolve, reject) => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    const isOpen = ref(true);
+    const app = createApp(RiskVerifyModal, {
+      isOpen: isOpen.value,
+      verifyToken: risk.verifyToken,
+      reasons: risk.reasons || [],
+      onClose: () => {
+        cleanup();
+        reject(new Error('用户取消人机验证'));
+      },
+      onSuccess: () => {
+        cleanup();
+        // 验证通过，重发原请求（基准已更新，不再拦截）
+        resolve(service(res.config));
+      }
+    });
+    // 让 isOpen 响应式绑定到组件（Vue 3 createApp props 传 ref 不会自动解包）
+    app.mount(container);
+
+    function cleanup() {
+      app.unmount();
+      if (container.parentNode) container.parentNode.removeChild(container);
+    }
+  });
+}
+
 service.interceptors.response.use(
   res => {
     // 假设后端返回结构为 { code, message, data }
     const { code, message, data } = res.data;
     // 如果没有 code，则认为直接返回的是数据 (兼容普通 REST)
     if (code === undefined) return res.data;
+
+    // 风险拦截：403 + __risk__.warn → 弹人机验证弹窗
+    if (code === 403 && res.data?.__risk__) {
+      return handleRiskBlock(res);
+    }
 
     if (code !== 0 && code !== 200) {
       if (code === 401) {
@@ -82,6 +127,11 @@ service.interceptors.response.use(
   },
   error => {
     if (axios.isCancel(error)) return Promise.reject(error);
+
+    // 风险拦截（HTTP 403 响应走 error 分支，因为拦截器抛非 2xx）
+    if (error.response?.status === 403 && error.response?.data?.__risk__) {
+      return handleRiskBlock({ data: error.response.data, config: error.config });
+    }
 
     // 优先从后端返回的 JSON 数据中提取 message
     const backendMessage = error.response?.data?.message;

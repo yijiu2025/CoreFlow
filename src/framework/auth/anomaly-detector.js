@@ -308,9 +308,31 @@ async function confirmVerifyToken(token) {
  * 判断请求是否高风险操作（触发验证拦截的）
  * 默认：非 GET/HEAD/OPTIONS 方法即视为高风险（写操作）
  */
+/**
+ * 是否高风险写操作（需风险拦截）
+ *
+ * 豁免路径（退出/切换/验证类）必须放行，否则用户一旦触发指纹变会死锁：
+ * 退不出、切不了、连验证端点自己都被拦。这些操作要么不依赖 session 基准
+ * （退出/切换是销毁/轮转 cookie），要么本身就在完成验证（verify-challenge）。
+ */
+const RISK_EXEMPT_PATHS = [
+  '/auth/v1/clear-cookie', // 临时退出（清 cookie，不依赖基准）
+  '/auth/v1/logout', // 正式退出
+  '/auth/v1/switch-account', // 切换账号（轮转凭证 cookie）
+  '/auth/v1/bind-session', // iframe 登录后换 sid（此时基准可能还没更新）
+  '/auth/v1/verify-challenge', // 人机验证端点自身（不能拦自己）
+  '/auth/v1/saved-accounts', // 免切账号管理
+  '/auth/v1/deactivation' // 注销申请（登录流程内，已过认证）
+];
+
 function isHighRiskRequest(request) {
   const m = (request?.method || 'GET').toUpperCase();
-  return !['GET', 'HEAD', 'OPTIONS'].includes(m);
+  if (['GET', 'HEAD', 'OPTIONS'].includes(m)) return false;
+  // 豁免路径不拦（退出/切换/验证类，拦了会死锁）
+  const url = request?.url || '';
+  const path = url.split('?')[0];
+  if (RISK_EXEMPT_PATHS.some(p => path === p || path.startsWith(p + '/'))) return false;
+  return true;
 }
 
 export {
