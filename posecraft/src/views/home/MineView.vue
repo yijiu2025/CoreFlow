@@ -73,7 +73,7 @@
             <label class="switch">
               <input
                 type="checkbox"
-                v-model="showLoginSave"
+                :checked="authStore.saveLoginInfo"
                 :disabled="!authStore.isLoggedIn"
                 @change="onSaveLoginChange"
               />
@@ -416,10 +416,6 @@ watch(
   },
   { immediate: true }
 );
-const showLoginSave = computed({
-  get: () => authStore.saveLoginInfo,
-  set: val => authStore.updateSaveLoginInfo(val)
-});
 const searchQuery = ref('');
 
 // 日期筛选状态
@@ -487,8 +483,16 @@ const onBioTooltipLeave = () => {
   }
 };
 
-const onSaveLoginChange = () => {
-  showToast(showLoginSave.value ? '已开启保存登录信息' : '已关闭保存登录信息');
+const onSaveLoginChange = async (e: Event) => {
+  if (!authStore.isLoggedIn) return;
+  const target = e.target as HTMLInputElement;
+  const want = target.checked; // 用户点击后的目标状态
+  const prev = authStore.saveLoginInfo;
+  await authStore.updateSaveLoginInfo(want);
+  // 成功（值翻转了）才提示；失败 store 已回滚 Switch + alert
+  if (authStore.saveLoginInfo !== prev) {
+    showToast(authStore.saveLoginInfo ? '已开启保存登录信息' : '已关闭保存登录信息');
+  }
 };
 
 // 编辑资料弹窗
