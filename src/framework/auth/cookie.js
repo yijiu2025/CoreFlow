@@ -86,7 +86,9 @@ const USER_COOKIE_OPTS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax',
-  path: '/',
+  // path 收窄到 switch-account 端点：k_<HMAC(uid)> 凭证 cookie 只在切换账号时携带，
+  // 不随业务请求发送（减少凭证暴露面；其他端点不读此 cookie）
+  path: '/auth/v1/switch-account',
   maxAge: USER_COOKIE_TTL,
   ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
 };

@@ -11,6 +11,7 @@
       :is-open="authStore.showLoginModal"
       @close="authStore.closeLoginModal"
       @login-success="handleLoginSuccess"
+      @login-error="handleLoginError"
       @max-sessions="handleMaxSessions"
     />
   </div>
@@ -43,5 +44,10 @@ async function handleLoginSuccess(data: { user: any; token?: string }) {
 /** 设备数量超限 */
 function handleMaxSessions(data: { sessions: number; maxSessions: number }) {
   alert(`设备数量已达上限 (${data.sessions}/${data.maxSessions})，请先退出其他设备`);
+}
+
+/** 登录流程失败（如 bind-session 换 cookie 失败） */
+function handleLoginError(err: Error) {
+  alert(err.message || '登录失败，请重试');
 }
 </script>
