@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { authApi } from '@/api/auth';
-import { ref, watch, onMounted, nextTick } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 
 const props = defineProps({
   isOpen: Boolean,
@@ -27,7 +27,6 @@ const captchaKey = ref('');
 const userInput = ref('');
 const error = ref('');
 const isVerifying = ref(false);
-const sessionId = ref('');
 
 const generateCaptcha = async () => {
   try {
@@ -35,8 +34,10 @@ const generateCaptcha = async () => {
     captchaImage.value = res.captchaImage;
     captchaKey.value = res.captchaKey;
     userInput.value = '';
+    error.value = '';
   } catch (err) {
     console.error('Failed to get captcha', err);
+    error.value = '验证码加载失败，点击图片重试';
   }
 };
 
@@ -92,19 +93,19 @@ watch(
       error.value = '';
       generateCaptcha();
       nextTick(() => {
+        // 跨域 iframe 内访问 window.top 会抛 SecurityError，被 catch 吞掉是预期行为
+        // （iframe 内不抢父页面焦点，避免影响父应用滚动）
         try {
           if (window.self === window.top) {
             inputRef.value?.focus();
           }
-        } catch (e) {}
+        } catch (e) {
+          // 跨域 iframe：window.top 不可访问，跳过 focus
+        }
       });
     }
   }
 );
-
-onMounted(() => {
-  sessionId.value = crypto.randomUUID();
-});
 </script>
 
 <template>
