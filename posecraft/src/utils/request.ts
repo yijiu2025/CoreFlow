@@ -83,9 +83,53 @@ export function createHttp(baseURL?: string): AxiosInstance {
   });
 
   // 响应拦截
+// 风险拦截处理：403 + __risk__.warn → 弹人机验证弹窗，通过后重发原请求
+// 动态挂载 RiskVerifyModal，自包含，调用方无感
+async function handleRiskBlock(error: any): Promise<any> {
+  const risk = error?.response?.data?.__risk__;
+  if (!risk || risk.level !== 'warn' || !risk.verifyToken) {
+    // 非风险拦截的 403，原样抛出
+    const backendMessage = error?.response?.data?.message;
+    return Promise.reject(new Error(backendMessage || error?.message || '请求失败'));
+  }
+  // 动态导入 + 挂载弹窗（避免 request.ts 强依赖组件）
+  const { createApp } = await import('vue');
+  const RiskVerifyModal = (await import('@/components/common/RiskVerifyModal.vue')).default;
+
+  return new Promise((resolve, reject) => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    const app = createApp(RiskVerifyModal, {
+      isOpen: true,
+      verifyToken: risk.verifyToken,
+      reasons: risk.reasons || [],
+      onClose: () => {
+        cleanup();
+        reject(new Error('用户取消人机验证'));
+      },
+      onSuccess: () => {
+        cleanup();
+        // 验证通过，重发原请求（基准已更新，不再拦截）
+        resolve(instance(error.config));
+      }
+    });
+    app.mount(container);
+
+    function cleanup() {
+      app.unmount();
+      if (container.parentNode) container.parentNode.removeChild(container);
+    }
+  });
+}
+
   instance.interceptors.response.use(
     response => {
       const res = response.data;
+      // 风险拦截：403 + __risk__.warn → 弹人机验证弹窗（HTTP 403 走 response 分支需在此判断）
+      if (res?.code === 403 && res?.__risk__?.level === 'warn') {
+        return handleRiskBlock({ response, config: response.config });
+      }
       if (res.code === 200) {
         if (res.pagination) {
           return {
@@ -104,6 +148,10 @@ export function createHttp(baseURL?: string): AxiosInstance {
     },
     error => {
       if (error.response?.status === 401) return handle401(error.config);
+      // 风险拦截：HTTP 403 + __risk__ → 弹人机验证
+      if (error.response?.status === 403 && error.response?.data?.__risk__) {
+        return handleRiskBlock(error);
+      }
       return Promise.reject(error);
     }
   );

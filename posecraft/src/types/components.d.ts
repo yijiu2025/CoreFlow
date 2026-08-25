@@ -32,6 +32,7 @@ declare module 'vue' {
     PoseCard: typeof import('./../components/cards/home/PoseCard.vue')['default']
     PrivacyPolicy: typeof import('./../components/common/agreements/PrivacyPolicy.vue')['default']
     RightPanel: typeof import('./../components/layouts/editor/RightPanel.vue')['default']
+    RiskVerifyModal: typeof import('./../components/common/RiskVerifyModal.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SaveModal: typeof import('./../components/modals/editor/SaveModal.vue')['default']
