@@ -2,7 +2,7 @@
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
 import { useRoute, useRouter } from 'vue-router';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
@@ -14,10 +14,11 @@ import { useRecaptcha } from '@/composables/useRecaptcha';
 
 const { error: showError, success: showSuccess } = useMessage();
 
-const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken } = useRecaptcha();
+const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken, dispose } = useRecaptcha('register');
 onMounted(() => {
-  if (recaptchaEnabled.value) loadRecaptcha();
+  if (recaptchaEnabled) loadRecaptcha();
 });
+onUnmounted(() => dispose());
 
 const router = useRouter();
 const route = useRoute();
@@ -103,7 +104,7 @@ const handleRegister = handleSubmit(
     }
     const { confirmPassword, ...submitData } = values;
     const encryptedPassword = await rsaEncrypt(submitData.password!);
-    const recaptchaToken = recaptchaEnabled.value ? await getRecaptchaToken() : null;
+    const recaptchaToken = recaptchaEnabled ? await getRecaptchaToken() : null;
     try {
       await authApi.register({
         ...submitData,
