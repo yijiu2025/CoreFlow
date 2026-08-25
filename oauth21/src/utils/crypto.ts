@@ -84,3 +84,21 @@ export function generateNonce(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 }
+
+/**
+ * 组装加密登录请求的公共字段（kid + timestamp + nonce）
+ *
+ * 把 nonce/timestamp/kid 的拼装从 auth.ts API 层下沉到 crypto 工具层：
+ * - API 层（auth.ts）只做请求转发，不含业务逻辑
+ * - nonce 是 OIDC 防 replay 的随机值，由客户端生成是标准做法，后端原样回显
+ * - kid 来自 fetchPublicKey 缓存，标识本次加密用的公钥版本
+ *
+ * @returns { kid, timestamp, nonce } 供 login 请求体使用
+ */
+export function buildEncryptedLoginPayload() {
+  return {
+    kid: getCachedKid(),
+    timestamp: Date.now(),
+    nonce: generateNonce()
+  };
+}

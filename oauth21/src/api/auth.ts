@@ -1,5 +1,5 @@
 import request from '@/utils/request';
-import { rsaEncrypt, generateNonce, clearPublicKeyCache, getCachedKid } from '@/utils/crypto';
+import { rsaEncrypt, clearPublicKeyCache, buildEncryptedLoginPayload } from '@/utils/crypto';
 
 /**
  * 登录请求负载类型
@@ -15,26 +15,29 @@ export interface LoginPayload {
 
 /**
  * 认证相关接口
+ *
+ * scope 不由前端携带：scope 是 app 属性（oauth_clients 表已存），后端 directLogin
+ * 从 client.scope 兜底 + 做边界校验（请求 scope ⊆ client 注册 scope）。前端写死
+ * scope 既冗余又不安全（可篡改）。
+ *
+ * nonce + timestamp + 加密在 crypto.ts 的 buildEncryptedLoginPayload 里组装，
+ * 保持 API 层只做请求转发，不含业务逻辑。
  */
 export const authApi = {
   /**
    * 安全登录
-   * @param payload 登录信息
+   * @param payload 登录信息（不含 scope/nonce/timestamp，这些由 crypto 层组装）
    * 解密失败时自动清除公钥缓存并重试一次（应对服务器重启密钥轮换）
    */
-  async login(payload: LoginPayload & { captchaKey?: string; client_id?: string; scope?: string }) {
-    const { captchaKey, client_id, scope, ...rest } = payload;
-    const payloadStr = JSON.stringify(rest);
+  async login(payload: LoginPayload & { captchaKey?: string; client_id?: string }) {
+    const { captchaKey, client_id, ...rest } = payload;
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const encrypted = await rsaEncrypt(payloadStr);
+        const encrypted = await rsaEncrypt(JSON.stringify(rest));
         return await request.post('/oauth2.1/login', {
+          ...buildEncryptedLoginPayload(),
           encrypted,
-          kid: getCachedKid(),
-          timestamp: Date.now(),
-          nonce: generateNonce(),
-          scope: scope || 'openid profile email',
           captchaKey,
           client_id
         });

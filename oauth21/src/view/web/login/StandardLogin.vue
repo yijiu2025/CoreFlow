@@ -201,8 +201,7 @@ const executeLogin = async () => {
       ...values,
       keepLogin: keepLogin.value,
       captchaKey: captchaKey.value,
-      client_id: route.query.client_id || route.query.appName,
-      scope: (route.query.scope as string) || 'openid profile email'
+      client_id: route.query.client_id || route.query.appName
     };
     const res = await authStore.login(loginPayload as any);
     if (res && res.action === 'consent') {
