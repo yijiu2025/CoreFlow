@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { authApi } from '@/api/auth';
 import { postToParent } from '@/utils/parent';
-import QRCode from 'qrcode';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
@@ -17,6 +16,7 @@ import Icons from '@/components/common/Icons.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
+import { useQrLogin } from '@/composables/useQrLogin';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
@@ -230,52 +230,16 @@ const approveConsent = async () => {
 };
 
 // 6. 二维码生成与轮询
-const qrKey = ref('');
-const qrDataUrl = ref('');
-const qrStatus = ref<'pending' | 'scanned' | 'confirmed' | 'expired'>('pending');
-let qrPollTimer: ReturnType<typeof setInterval> | null = null;
-
 const qrClientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
 const qrScope = computed(() => (route.query.scope as string) || 'openid profile email');
 
-async function generateQR() {
-  try {
-    const res: any = await authApi.generateQR({
-      client_id: qrClientId.value,
-      scope: qrScope.value
-    });
-    qrKey.value = res.qrKey;
-    qrStatus.value = 'pending';
-    qrDataUrl.value = await QRCode.toDataURL(res.qrContent || res.qrKey, { width: 220, margin: 1 });
-    startQRPolling();
-  } catch {
-    showError(t('login.qr_generate_failed') || '二维码生成失败');
-  }
-}
-
-function startQRPolling() {
-  if (qrPollTimer) clearInterval(qrPollTimer);
-  qrPollTimer = setInterval(async () => {
-    if (!qrKey.value) return;
-    try {
-      const res: any = await authApi.checkQRStatus(qrKey.value);
-      // 兼容 JWT（accessToken）与 Session（session_token）两种模式 + 状态字段
-      if (res?.accessToken || res?.access_token || res?.session_token || res?.status === 'CONFIRMED') {
-        qrStatus.value = 'confirmed';
-        clearInterval(qrPollTimer!);
-        qrPollTimer = null;
-        notifyParentLoginSuccess(res);
-      } else if (res?.status === 'EXPIRED' || res?.status === 'ERROR') {
-        qrStatus.value = 'expired';
-        clearInterval(qrPollTimer!);
-        qrPollTimer = null;
-        showError(t('login.qr_expired') || '二维码已过期');
-      } else {
-        qrStatus.value = (res?.status || 'PENDING').toLowerCase() as any;
-      }
-    } catch {}
-  }, 2000);
-}
+// 二维码登录：生成 + 轮询 + 确认后通知父窗口（兼容 JWT/Session）
+const { qrDataUrl, qrStatus, generate: generateQR, reset: resetQR } = useQrLogin(
+  () => qrClientId.value,
+  () => qrScope.value,
+  (res: any) => notifyParentLoginSuccess(res),
+  () => showError(t('login.qr_expired') || '二维码已过期')
+);
 
 // 7. 生命周期与辅助计算
 const isEmbedded = computed(() => {
@@ -295,10 +259,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (qrPollTimer) {
-    clearInterval(qrPollTimer);
-    qrPollTimer = null;
-  }
+  resetQR();
 });
 </script>
 
