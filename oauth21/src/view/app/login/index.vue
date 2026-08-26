@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
-import { useThemeStore } from '@/stores/theme';
 import { useRoute } from 'vue-router';
 import { useForm } from 'vee-validate';
 import { z } from 'zod';
@@ -9,7 +8,6 @@ import { useLoginFlow } from '@/composables/useLoginFlow';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 
 const authStore = useAuthStore();
-const themeStore = useThemeStore();
 const route = useRoute();
 
 // 登录模式
