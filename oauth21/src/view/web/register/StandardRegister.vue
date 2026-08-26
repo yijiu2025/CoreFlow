@@ -8,6 +8,7 @@ import AgreementModals from '@/components/common/AgreementModals.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
+import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
@@ -56,9 +57,12 @@ const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword');
 const agreed = ref(false);
 const docType = ref<'service' | 'privacy' | null>(null);
 const isEmailDuplicate = ref(false);
-const showCaptcha = ref(false);
-const captchaKey = ref('');
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
+
+// 图形验证码流程：弹窗 → 通过 → 拿 captchaKey + 启动倒计时
+const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess } = useCaptchaFlow<'register'>(
+  () => startCountdown(60)
+);
 
 const checkEmail = async () => {
   if (!values.email || errors.value.email) {
@@ -75,13 +79,7 @@ const checkEmail = async () => {
 
 const sendCode = () => {
   if (!values.email || errors.value.email || isEmailDuplicate.value) return;
-  showCaptcha.value = true;
-};
-
-const onCaptchaSuccess = async (data: { captchaKey: string }) => {
-  captchaKey.value = data.captchaKey;
-  showCaptcha.value = false;
-  startCountdown(60);
+  openRegCaptcha('register');
 };
 
 const handleRegister = handleSubmit(

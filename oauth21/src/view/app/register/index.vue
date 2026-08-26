@@ -8,6 +8,7 @@ import AgreementModals from '@/components/common/AgreementModals.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
+import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useRecaptcha } from '@/composables/useRecaptcha';
 import { onMounted, onUnmounted, ref } from 'vue';
@@ -52,21 +53,17 @@ const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword');
 
 const agreed = ref(false);
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
-const showCaptcha = ref(false);
-const captchaKey = ref('');
+// 图形验证码流程：弹窗 → 通过 → 拿 captchaKey + 启动倒计时
+const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess } = useCaptchaFlow<'register'>(
+  () => startCountdown(60)
+);
 const docType = ref<'service' | 'privacy' | null>(null);
 
 const sendCode = () => {
   if (!values.email || errors.value.email) {
     return;
   }
-  showCaptcha.value = true;
-};
-
-const onCaptchaSuccess = async (data: { captchaKey: string }) => {
-  captchaKey.value = data.captchaKey;
-  showCaptcha.value = false;
-  startCountdown(60);
+  openRegCaptcha('register');
 };
 
 const handleRegister = handleSubmit(async data => {
