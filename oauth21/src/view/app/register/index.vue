@@ -9,13 +9,14 @@ import MessageToast from '@/components/common/MessageToast.vue';
 import { useMessage } from '@/composables/useMessage';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useRecaptcha } from '@/composables/useRecaptcha';
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 
-const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken } = useRecaptcha();
+const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken, dispose } = useRecaptcha('register');
 const { error: showError, success: showSuccess } = useMessage();
 onMounted(() => {
-  if (recaptchaEnabled.value) loadRecaptcha();
+  if (recaptchaEnabled) loadRecaptcha();
 });
+onUnmounted(() => dispose());
 
 const router = useRouter();
 
@@ -83,7 +84,7 @@ const handleRegister = handleSubmit(async data => {
   try {
     const { confirmPassword, ...submitData } = data;
     const encryptedPassword = await rsaEncrypt(submitData.password);
-    const recaptchaToken = recaptchaEnabled.value ? await getRecaptchaToken() : null;
+    const recaptchaToken = recaptchaEnabled ? await getRecaptchaToken() : null;
     await authApi.register({
       ...submitData,
       password: encryptedPassword,
