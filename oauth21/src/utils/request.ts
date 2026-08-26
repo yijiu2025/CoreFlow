@@ -2,7 +2,7 @@
  * HTTP 请求封装
  * 特性：请求/响应拦截、Token 自动注入、401 无感刷新队列、请求取消
  */
-import axios, { type AxiosRequestConfig } from 'axios';
+import axios from 'axios';
 
 const service = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
@@ -60,28 +60,97 @@ service.interceptors.request.use(
 );
 
 /* ========== 响应拦截 ========== */
-let isRefreshing = false;
-let pendingQueue: Array<(token: string) => void> = [];
 
-// 风险拦截处理：403 + __risk__.warn → 弹滑块人机验证，通过后重发原请求
-// 动态挂载 SliderCaptcha，自包含，调用方无感
-// （滑块拖动比图形码输入对机器人更难，体验也更流畅）
+service.interceptors.response.use(
+  res => {
+    // 假设后端返回结构为 { code, message, data }
+    const { code, message, data } = res.data;
+    // 如果没有 code，则认为直接返回的是数据 (兼容普通 REST)
+    if (code === undefined) return res.data;
+
+    // 风险拦截：403 + __risk__.warn → 弹人机验证弹窗
+    if (code === 403 && res.data?.__risk__) {
+      return handleRiskBlock(res);
+    }
+
+    if (code !== 0 && code !== 200) {
+      // 401：Session 模式无 token 刷新（sid 过期靠后端 sid_r 自动刷新在 onRequest 处理），
+      // 前端收到 401 说明 sid_r 也过期或未登录 → 跳登录页重新认证。
+      // 不重发（避免空 token 死循环），清残留凭证后跳转。
+      if (code === 401) {
+        redirectToLogin();
+        return Promise.reject(new Error(message || '登录已过期，请重新登录'));
+      }
+      console.error(message || '请求失败');
+      return Promise.reject(new Error(message || 'Error'));
+    }
+    return data;
+  },
+  error => {
+    if (axios.isCancel(error)) return Promise.reject(error);
+
+    // 风险拦截（HTTP 403 响应走 error 分支，因为拦截器抛非 2xx）
+    if (error.response?.status === 403 && error.response?.data?.__risk__) {
+      return handleRiskBlock({ data: error.response.data, config: error.config });
+    }
+
+    // 401（HTTP 状态码分支）：同上，跳登录页
+    if (error.response?.status === 401) {
+      redirectToLogin();
+      return Promise.reject(new Error('登录已过期，请重新登录'));
+    }
+
+    // 优先从后端返回的 JSON 数据中提取 message
+    const backendMessage = error.response?.data?.message;
+    if (backendMessage) {
+      console.error(`[API Error] ${backendMessage}`);
+      return Promise.reject(new Error(backendMessage));
+    }
+
+    console.error(error.message || '网络异常');
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * 跳转登录页（避免 401 死循环：Session 模式无 token 可刷新）
+ * 保留当前 URL 作 redirect 参数，登录后可回跳
+ */
+interface RedirectFn {
+  (): void;
+  _locked: boolean;
+}
+const redirectToLogin: RedirectFn = () => {
+  // 防抖：并发多个 401 时只跳一次
+  if (redirectToLogin._locked) return;
+  redirectToLogin._locked = true;
+  // 清残留凭证（sid/sid_r 由后端清，这里清前端侧 localStorage 等）
+  // 注意：不要清 device_id cookie（跨账号复用，设备标识需保留）
+  try {
+    const current = window.location.pathname + window.location.search;
+    const loginUrl = `/mini-login?from=mini&redirect=${encodeURIComponent(current)}`;
+    window.location.href = loginUrl;
+  } catch {
+    window.location.href = '/mini-login';
+  }
+};
+redirectToLogin._locked = false;
 async function handleRiskBlock(res: any): Promise<any> {
   const risk = res.data?.__risk__ || res.data?.data?.__risk__;
   if (!risk || risk.level !== 'warn' || !risk.verifyToken) {
     return Promise.reject(new Error(res.data?.message || '请求被拦截'));
   }
   // 动态导入 + 挂载弹窗（避免 request.ts 强依赖组件）
-  const { createApp, ref } = await import('vue');
+  const { createApp } = await import('vue');
   const SliderCaptcha = (await import('@/components/common/SliderCaptcha.vue')).default;
 
   return new Promise((resolve, reject) => {
     const container = document.createElement('div');
     document.body.appendChild(container);
 
-    const isOpen = ref(true);
+    // SliderCaptcha 内部自管开关，关闭靠 onClose 回调，无需外部 ref 绑定
     const app = createApp(SliderCaptcha, {
-      isOpen: isOpen.value,
+      isOpen: true,
       verifyToken: risk.verifyToken,
       reasons: risk.reasons || [],
       onClose: () => {
@@ -94,7 +163,6 @@ async function handleRiskBlock(res: any): Promise<any> {
         resolve(service(res.config));
       }
     });
-    // 让 isOpen 响应式绑定到组件（Vue 3 createApp props 传 ref 不会自动解包）
     app.mount(container);
 
     function cleanup() {
@@ -117,10 +185,12 @@ service.interceptors.response.use(
     }
 
     if (code !== 0 && code !== 200) {
+      // 401：Session 模式无 token 刷新（sid 过期靠后端 sid_r 自动刷新在 onRequest 处理），
+      // 前端收到 401 说明 sid_r 也过期或未登录 → 跳登录页重新认证，不重发避免死循环。
       if (code === 401) {
-        return handle401(res.config);
+        redirectToLogin();
+        return Promise.reject(new Error(message || '登录已过期，请重新登录'));
       }
-      // 这里可以集成全局 Message 提示
       console.error(message || '请求失败');
       return Promise.reject(new Error(message || 'Error'));
     }
@@ -145,35 +215,5 @@ service.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-/**
- * 401 处理：Token 刷新队列
- */
-async function handle401(config: AxiosRequestConfig) {
-  if (!isRefreshing) {
-    isRefreshing = true;
-    try {
-      // 这里应该调用 api/auth.ts 中的 refreshToken
-      // const newToken = await refreshToken()
-      const newToken = ''; // 占位
-      pendingQueue.forEach(cb => cb(newToken));
-      pendingQueue = [];
-      if (config.headers) config.headers.Authorization = `Bearer ${newToken}`;
-      return service(config);
-    } catch {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    } finally {
-      isRefreshing = false;
-    }
-  }
-
-  return new Promise(resolve => {
-    pendingQueue.push(token => {
-      if (config.headers) config.headers.Authorization = `Bearer ${token}`;
-      resolve(service(config));
-    });
-  });
-}
 
 export default service;
