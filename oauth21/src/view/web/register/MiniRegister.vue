@@ -13,6 +13,7 @@ import { useRecaptcha } from '@/composables/useRecaptcha';
 import MessageToast from '@/components/common/MessageToast.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
+import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 
 const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken, dispose } = useRecaptcha('register');
 const { error: showError, success: showSuccess } = useMessage();
@@ -58,9 +59,18 @@ const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword');
 
 const agreed = ref(false);
 const isEmailDuplicate = ref(false);
-const showCaptcha = ref(false);
-const captchaKey = ref('');
+// 倒计时：发送验证码后 60s 禁用按钮
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
+
+// 图形验证码流程：弹窗 → 通过 → 拿 captchaKey + 启动倒计时
+const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess } = useCaptchaFlow<'register'>(
+  () => startCountdown(60)
+);
+
+const sendCode = () => {
+  if (!values.email || errors.value.email || isEmailDuplicate.value) return;
+  openRegCaptcha('register');
+};
 const docType = ref<'service' | 'privacy' | null>(null);
 
 const checkEmail = async () => {
@@ -74,17 +84,6 @@ const checkEmail = async () => {
   } catch {
     isEmailDuplicate.value = false;
   }
-};
-
-const sendCode = () => {
-  if (!values.email || errors.value.email || isEmailDuplicate.value) return;
-  showCaptcha.value = true;
-};
-
-const onCaptchaSuccess = async (data: { captchaKey: string }) => {
-  captchaKey.value = data.captchaKey;
-  showCaptcha.value = false;
-  startCountdown(60);
 };
 
 // 步骤 1 校验并前往步骤 2

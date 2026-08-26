@@ -15,6 +15,7 @@ import MessageToast from '@/components/common/MessageToast.vue';
 import Icons from '@/components/common/Icons.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
+import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 
 const authStore = useAuthStore();
 const route = useRoute();
@@ -74,32 +75,25 @@ const [code, codeProps] = defineField('code');
 const [username, usernameProps] = defineField('username');
 const [password, passwordProps] = defineField('password');
 
-const captchaKey = ref('');
-const showCaptcha = ref(false);
-const captchaPurpose = ref<'code' | 'login'>('login');
-
+// 同步 loginType → zod discriminatedUnion 的 type 字段
 watch(loginType, newType => {
   type.value = newType;
 });
 
-const onCaptchaSuccess = (data: { captchaKey: string }) => {
-  showCaptcha.value = false;
-  captchaKey.value = data.captchaKey;
-
-  if (captchaPurpose.value === 'code') {
-    executeSendEmailCode();
-  } else {
-    executeLogin();
+// 图形验证码流程：弹窗 → 通过 → 按 purpose（code 发邮箱码 / login 登录）继续
+const { captchaKey, showCaptcha, captchaPurpose, openCaptcha, onCaptchaSuccess } = useCaptchaFlow<'code' | 'login'>(
+  purpose => {
+    if (purpose === 'code') executeSendEmailCode();
+    else executeLogin();
   }
-};
+);
 
 const sendEmailCode = () => {
   if (!email.value || (errors.value as any).email) {
     showError(t('login.input_email_first'));
     return;
   }
-  captchaPurpose.value = 'code';
-  showCaptcha.value = true;
+  openCaptcha('code');
 };
 
 const executeSendEmailCode = () => {
@@ -108,8 +102,7 @@ const executeSendEmailCode = () => {
 
 const handleLogin = handleSubmit(async () => {
   if (loginType.value === 'pwd') {
-    captchaPurpose.value = 'login';
-    showCaptcha.value = true;
+    openCaptcha('login');
   } else {
     executeLogin();
   }

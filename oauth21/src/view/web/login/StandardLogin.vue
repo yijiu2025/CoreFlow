@@ -16,6 +16,7 @@ import AgreementModals from '@/components/common/AgreementModals.vue';
 import Icons from '@/components/common/Icons.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
+import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
@@ -76,29 +77,22 @@ watch(loginType, newType => {
 });
 
 // 4. 图形验证码 & 邮箱验证码发送
-const captchaKey = ref('');
-const showCaptcha = ref(false);
-const captchaPurpose = ref<'code' | 'login'>('login');
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 
-const onCaptchaSuccess = (data: { captchaKey: string }) => {
-  showCaptcha.value = false;
-  captchaKey.value = data.captchaKey;
-
-  if (captchaPurpose.value === 'code') {
-    executeSendEmailCode();
-  } else {
-    executeLogin();
+// 图形验证码流程：弹窗 → 通过 → 按 purpose（code 发邮箱码 / login 登录）继续
+const { captchaKey, showCaptcha, captchaPurpose, openCaptcha, onCaptchaSuccess } = useCaptchaFlow<'code' | 'login'>(
+  purpose => {
+    if (purpose === 'code') executeSendEmailCode();
+    else executeLogin();
   }
-};
+);
 
 const sendEmailCode = () => {
   if (!email.value || (errors.value as any).email) {
     showError(t('login.input_email_first') || '请先输入有效的邮箱地址');
     return;
   }
-  captchaPurpose.value = 'code';
-  showCaptcha.value = true;
+  openCaptcha('code');
 };
 
 const executeSendEmailCode = () => {
@@ -153,8 +147,7 @@ const handleLogin = handleSubmit(async () => {
     return;
   }
   if (loginType.value === 'pwd') {
-    captchaPurpose.value = 'login';
-    showCaptcha.value = true;
+    openCaptcha('login');
   } else {
     executeLogin();
   }
