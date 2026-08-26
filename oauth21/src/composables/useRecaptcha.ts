@@ -111,11 +111,12 @@ function ensureWidget(inst: RecaptchaInstance, hcaptcha: any): string {
     document.body.appendChild(inst.container);
   }
   // invisible 模式：size=invisible，提交时手动 execute
-  inst.widgetId = hcaptcha.render(inst.container, {
+  const id = hcaptcha.render(inst.container, {
     sitekey: siteKey,
     size: 'invisible'
   });
-  return inst.widgetId;
+  inst.widgetId = id;
+  return id;
 }
 
 /** 清理实例：移除 container DOM + 重置状态（组件卸载时调） */
