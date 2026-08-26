@@ -188,9 +188,11 @@ const denyConsent = () => {
 
 function notifyParentLoginSuccess(res: any) {
   if (!(window.parent && window.parent !== window)) return;
-  const token = res.access_token || res.data?.accessToken;
-  const sessionToken = res.session_token || res.data?.session_token;
-  const user = res.user || res.data?.user || {};
+  // res 已由 request.ts 响应拦截器解包，直接读顶层字段
+  // 兼容 JWT（accessToken camelCase）与 Session（session_token snake_case）
+  const token = res?.accessToken || res?.access_token;
+  const sessionToken = res?.session_token;
+  const user = res?.user || {};
   postToParent({
     type: 'LOGIN_SUCCESS',
     token,
@@ -280,7 +282,7 @@ function startQRPolling() {
     if (!qrKey.value) return;
     try {
       const res: any = await authApi.checkQRStatus(qrKey.value);
-      if (res?.access_token || res?.session_token || res?.status === 'CONFIRMED') {
+      if (res?.accessToken || res?.access_token || res?.session_token || res?.status === 'CONFIRMED') {
         qrStatus.value = 'confirmed';
         clearInterval(qrPollTimer!);
         qrPollTimer = null;

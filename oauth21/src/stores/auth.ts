@@ -17,7 +17,8 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true;
     try {
       const data: any = await authApi.login(payload);
-      const accessToken = data.access_token || data.data?.accessToken;
+      // data 已由 request.ts 解包，兼容 JWT（accessToken）与 Session（无 token，用 session_token）
+      const accessToken = data?.accessToken || data?.access_token;
       if (accessToken) {
         token.value = accessToken;
       }
