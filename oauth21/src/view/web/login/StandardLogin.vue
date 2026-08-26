@@ -15,6 +15,7 @@ import MessageToast from '@/components/common/MessageToast.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import Icons from '@/components/common/Icons.vue';
 import { useMessage } from '@/composables/useMessage';
+import { useCountdown } from '@/composables/useCountdown';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
@@ -78,8 +79,7 @@ watch(loginType, newType => {
 const captchaKey = ref('');
 const showCaptcha = ref(false);
 const captchaPurpose = ref<'code' | 'login'>('login');
-const isCountingDown = ref(false);
-const countdown = ref(60);
+const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 
 const onCaptchaSuccess = (data: { captchaKey: string }) => {
   showCaptcha.value = false;
@@ -102,15 +102,7 @@ const sendEmailCode = () => {
 };
 
 const executeSendEmailCode = () => {
-  isCountingDown.value = true;
-  countdown.value = 60;
-  const timer = setInterval(() => {
-    countdown.value--;
-    if (countdown.value <= 0) {
-      clearInterval(timer);
-      isCountingDown.value = false;
-    }
-  }, 1000);
+  startCountdown(60);
 };
 
 // 5. 登录提交 & OAuth 同意逻辑
@@ -122,26 +114,13 @@ const submittingConsent = ref(false);
 const showEmailVerify = ref(false);
 const emailVerifyState = ref<{ verifyToken: string; email: string; reason: string } | null>(null);
 const emailVerifyCode = ref('');
-const emailVerifyCountdown = ref(0);
-let emailVerifyTimer: ReturnType<typeof setInterval> | null = null;
-
-const startEmailVerifyCountdown = () => {
-  emailVerifyCountdown.value = 60;
-  if (emailVerifyTimer) clearInterval(emailVerifyTimer);
-  emailVerifyTimer = setInterval(() => {
-    emailVerifyCountdown.value--;
-    if (emailVerifyCountdown.value <= 0) {
-      clearInterval(emailVerifyTimer!);
-      emailVerifyTimer = null;
-    }
-  }, 1000);
-};
+const emailVerifyCountdown = useCountdown(60);
 
 const sendEmailVerifyCode = async () => {
-  if (!emailVerifyState.value?.verifyToken || emailVerifyCountdown.value > 0) return;
+  if (!emailVerifyState.value?.verifyToken || emailVerifyCountdown.active.value) return;
   try {
     await authApi.sendLoginVerifyCode(emailVerifyState.value.verifyToken);
-    startEmailVerifyCountdown();
+    emailVerifyCountdown.start(60);
     showError('验证码已重新发送至邮箱');
   } catch (err: any) {
     showError(err.message || '验证码发送失败');
@@ -161,7 +140,7 @@ const submitEmailVerify = async () => {
     showEmailVerify.value = false;
     emailVerifyState.value = null;
     emailVerifyCode.value = '';
-    if (emailVerifyTimer) clearInterval(emailVerifyTimer);
+    emailVerifyCountdown.stop();
     notifyParentLoginSuccess(res);
   } catch (err: any) {
     showError(err.message || '验证码错误');
@@ -217,7 +196,7 @@ const executeLogin = async () => {
       };
       emailVerifyCode.value = '';
       showEmailVerify.value = true;
-      startEmailVerifyCountdown();
+      emailVerifyCountdown.start(60);
     } else if (res && res.action === 'max_sessions') {
       if (window.parent && window.parent !== window) {
         postToParent({
@@ -441,9 +420,9 @@ onUnmounted(() => {
             </div>
 
             <div class="w-full flex items-center justify-between text-xs">
-              <button type="button" @click="sendEmailVerifyCode" :disabled="emailVerifyCountdown > 0"
+              <button type="button" @click="sendEmailVerifyCode" :disabled="emailVerifyCountdown.active.value"
                 class="text-primary disabled:text-slate-400 disabled:cursor-not-allowed font-medium">
-                {{ emailVerifyCountdown > 0 ? `${emailVerifyCountdown}s 后重发` : '重新发送验证码' }}
+                {{ emailVerifyCountdown.active.value ? `${emailVerifyCountdown.remaining.value}s 后重发` : '重新发送验证码' }}
               </button>
             </div>
 
