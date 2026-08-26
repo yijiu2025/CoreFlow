@@ -7,7 +7,6 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
-import { authApi } from '@/api/auth';
 import { postToParent } from '@/utils/parent';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
@@ -17,6 +16,7 @@ import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { useQrLogin } from '@/composables/useQrLogin';
+import { useLoginFlow } from '@/composables/useLoginFlow';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
@@ -99,47 +99,18 @@ const executeSendEmailCode = () => {
   startCountdown(60);
 };
 
-// 5. 登录提交 & OAuth 同意逻辑
-const showConsent = ref(false);
-const consentState = ref<any>(null);
-const submittingConsent = ref(false);
-
-// 邮箱二次验证（密码登录环境异常时触发）
-const showEmailVerify = ref(false);
-const emailVerifyState = ref<{ verifyToken: string; email: string; reason: string } | null>(null);
-const emailVerifyCode = ref('');
-const emailVerifyCountdown = useCountdown(60);
-
-const sendEmailVerifyCode = async () => {
-  if (!emailVerifyState.value?.verifyToken || emailVerifyCountdown.active.value) return;
-  try {
-    await authApi.sendLoginVerifyCode(emailVerifyState.value.verifyToken);
-    emailVerifyCountdown.start(60);
-    showError('验证码已重新发送至邮箱');
-  } catch (err: any) {
-    showError(err.message || '验证码发送失败');
-  }
-};
-
-const submitEmailVerify = async () => {
-  if (!emailVerifyState.value || emailVerifyCode.value.length < 4) {
-    showError('请输入4位验证码');
-    return;
-  }
-  try {
-    const res: any = await authApi.verifyEmailLogin(
-      emailVerifyState.value.verifyToken,
-      emailVerifyCode.value
-    );
-    showEmailVerify.value = false;
-    emailVerifyState.value = null;
-    emailVerifyCode.value = '';
-    emailVerifyCountdown.stop();
-    notifyParentLoginSuccess(res);
-  } catch (err: any) {
-    showError(err.message || '验证码错误');
-  }
-};
+// 5. 登录流程：consent/email_verify/max_sessions/notifyParent 统一在 useLoginFlow
+const {
+  showConsent, consentState, submittingConsent, denyConsent, approveConsent,
+  showEmailVerify, emailVerifyState, emailVerifyCode, emailVerifyCountdown,
+  sendEmailVerifyCode, submitEmailVerify, executeLogin, notifyParentLoginSuccess
+} = useLoginFlow({
+  keepLogin: () => keepLogin.value,
+  values: () => values,
+  captchaKey: () => captchaKey.value,
+  clientId: () => (route.query.client_id as string) || (route.query.appName as string),
+  showError: (msg: string) => showError(msg)
+});
 
 const handleLogin = handleSubmit(async () => {
   if (!agreed.value) {
@@ -152,82 +123,6 @@ const handleLogin = handleSubmit(async () => {
     executeLogin();
   }
 });
-
-function notifyParentLoginSuccess(res: any) {
-  if (!(window.parent && window.parent !== window)) return;
-  // res 已由 request.ts 响应拦截器解包（是后端 data 对象），直接读顶层字段
-  // 兼容 JWT 模式（accessToken camelCase）与 Session 模式（session_token snake_case）
-  const token = res?.accessToken || res?.access_token;
-  const sessionToken = res?.session_token;
-  const user = res?.user || {};
-  postToParent({
-    type: 'LOGIN_SUCCESS',
-    token,
-    sessionToken,
-    user: { id: user.id, username: user.username, name: user.name, email: user.email, avatar: user.avatar },
-    data: res
-  });
-}
-
-const executeLogin = async () => {
-  try {
-    const loginPayload = {
-      ...values,
-      keepLogin: keepLogin.value,
-      captchaKey: captchaKey.value,
-      client_id: route.query.client_id || route.query.appName
-    };
-    const res = await authStore.login(loginPayload as any);
-    if (res && res.action === 'consent') {
-      consentState.value = res;
-      showConsent.value = true;
-    } else if (res && res.action === 'needs_email_verify') {
-      emailVerifyState.value = {
-        verifyToken: res.verifyToken,
-        email: res.email,
-        reason: res.reason || '登录环境变更'
-      };
-      emailVerifyCode.value = '';
-      showEmailVerify.value = true;
-      emailVerifyCountdown.start(60);
-    } else if (res && res.action === 'max_sessions') {
-      if (window.parent && window.parent !== window) {
-        postToParent({
-          type: 'MAX_SESSIONS',
-          sessions: res.sessions,
-          maxSessions: res.maxSessions
-        });
-      }
-    } else {
-      notifyParentLoginSuccess(res);
-    }
-  } catch (err: any) {
-    showError(err.message || t('login.login_failed') || '登录失败');
-  }
-};
-
-const denyConsent = () => {
-  showConsent.value = false;
-  consentState.value = null;
-  if (window.parent && window.parent !== window) {
-    postToParent({ type: 'SSO_DENIED', error: 'user_denied', description: t('login.consent_denied') });
-  }
-};
-
-const approveConsent = async () => {
-  if (!consentState.value) return;
-  submittingConsent.value = true;
-  try {
-    const res: any = await authApi.confirmConsent(consentState.value.consentKey);
-    showConsent.value = false;
-    consentState.value = null;
-    notifyParentLoginSuccess(res);
-  } catch (err: any) {
-    showError(err.message || t('login.consent_failed') || '授权确认失败');
-  } finally {
-    submittingConsent.value = false;
-  }
-};
 
 // 6. 二维码生成与轮询
 const qrClientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
