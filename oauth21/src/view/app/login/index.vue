@@ -77,9 +77,10 @@ const handleLogin = handleSubmit(async data => {
 
   try {
     const res: any = await authStore.login({ ...data, keepLogin: keepLogin.value } as any);
-    const token = res?.access_token || res?.data?.accessToken;
-    const sessionToken = res?.session_token || res?.data?.session_token;
-    const user = res?.user || res?.data?.user || {};
+    // res 已解包，兼容 JWT（accessToken）与 Session（session_token）
+    const token = res?.accessToken || res?.access_token;
+    const sessionToken = res?.session_token;
+    const user = res?.user || {};
     if (window.parent && window.parent !== window) {
       postToParent({
         type: 'LOGIN_SUCCESS',
