@@ -80,8 +80,10 @@ export async function getDeviceFingerprint(): Promise<string> {
   const material = `${canvas}|${webgl}`;
 
   const { sha256 } = await import('./sha256');
-  cachedFingerprint = sha256(material).slice(0, 32);
-  return cachedFingerprint;
+  const hash = await sha256(material);
+  const fp = hash.slice(0, 32);
+  cachedFingerprint = fp;
+  return fp;
 }
 
 /**
