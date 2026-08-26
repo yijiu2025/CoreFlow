@@ -19,6 +19,32 @@ import { useAuthStore } from '@/stores/auth';
 import { postToParent } from '@/utils/parent';
 import { useCountdown } from './useCountdown';
 
+/** 登录响应判别联合（按 action 区分四种分支） */
+export type LoginResponse =
+  | { action: 'consent'; consentKey: string; client_name: string; scope: string; user: LoginUser }
+  | { action: 'needs_email_verify'; verifyToken: string; email: string; reason?: string }
+  | { action: 'max_sessions'; sessions: any[]; maxSessions: number }
+  | LoginSuccessResponse;
+
+/** 登录成功响应（兼容 JWT 与 Session） */
+export interface LoginSuccessResponse {
+  accessToken?: string;      // JWT 模式
+  access_token?: string;     // JWT 模式（snake_case 兜底）
+  session_token?: string;    // Session 模式
+  refresh_token?: string;    // JWT 模式
+  expires_in?: number;
+  scope?: string;
+  user: LoginUser;
+}
+
+export interface LoginUser {
+  id: string | number;
+  username: string;
+  name?: string;
+  email?: string;
+  avatar?: string | null;
+}
+
 export interface EmailVerifyState {
   verifyToken: string;
   email: string;
@@ -54,11 +80,11 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
   const emailVerifyCountdown = useCountdown(60);
 
   /** 通知父窗口登录成功（兼容 JWT/Session） */
-  function notifyParentLoginSuccess(res: any) {
+  function notifyParentLoginSuccess(res: LoginSuccessResponse | any) {
     if (!(window.parent && window.parent !== window)) return;
     const token = res?.accessToken || res?.access_token;
     const sessionToken = res?.session_token;
-    const user = res?.user || {};
+    const user: LoginUser = res?.user || {};
     postToParent({
       type: 'LOGIN_SUCCESS',
       token,
@@ -77,7 +103,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
         captchaKey: captchaKey(),
         client_id: clientId()
       };
-      const res = await authStore.login(loginPayload as any);
+      const res: LoginResponse | any = await authStore.login(loginPayload as any);
       if (res && res.action === 'consent') {
         consentState.value = res;
         showConsent.value = true;
@@ -120,7 +146,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
     if (!consentState.value) return;
     submittingConsent.value = true;
     try {
-      const res: any = await authApi.confirmConsent(consentState.value.consentKey);
+      const res: LoginSuccessResponse | any = await authApi.confirmConsent(consentState.value.consentKey);
       showConsent.value = false;
       consentState.value = null;
       notifyParentLoginSuccess(res);
@@ -150,7 +176,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
       return;
     }
     try {
-      const res: any = await authApi.verifyEmailLogin(
+      const res: LoginSuccessResponse | any = await authApi.verifyEmailLogin(
         emailVerifyState.value.verifyToken,
         emailVerifyCode.value
       );
