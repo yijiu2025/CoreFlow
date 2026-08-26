@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
+import { useRoute } from 'vue-router';
 import { useForm } from 'vee-validate';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
-import { postToParent } from '@/utils/parent';
+import { useLoginFlow } from '@/composables/useLoginFlow';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
+const route = useRoute();
 
 // 登录模式
 const loginType = ref<'sms' | 'pwd'>('sms');
@@ -69,32 +71,21 @@ const startCountdown = () => {
 // 本机已登录账号的免密切换已移至各应用（posecraft/firewall）的登录弹窗，
 // oauth21 只负责登录本身，不再读取 accounts cookie 或提供切换入口。
 
-const handleLogin = handleSubmit(async data => {
+// 登录流程：consent/email_verify/max_sessions/notifyParent 统一在 useLoginFlow
+const { executeLogin } = useLoginFlow({
+  keepLogin: () => keepLogin.value,
+  values: () => values,
+  captchaKey: () => '',
+  clientId: () => (route.query.client_id as string) || (route.query.appName as string),
+  showError: (msg: string) => alert(msg)
+});
+
+const handleLogin = handleSubmit(async () => {
   if (!agreed.value) {
     alert('请先阅读并勾选同意相关协议');
     return;
   }
-
-  try {
-    const res: any = await authStore.login({ ...data, keepLogin: keepLogin.value } as any);
-    // res 已解包，兼容 JWT（accessToken）与 Session（session_token）
-    const token = res?.accessToken || res?.access_token;
-    const sessionToken = res?.session_token;
-    const user = res?.user || {};
-    if (window.parent && window.parent !== window) {
-      postToParent({
-        type: 'LOGIN_SUCCESS',
-        token,
-        sessionToken,
-        user: { id: user.id, username: user.username, name: user.name, email: user.email, avatar: user.avatar },
-        data: res
-      });
-    } else {
-      alert('登录成功！');
-    }
-  } catch (err: any) {
-    alert(err.message || '登录失败');
-  }
+  await executeLogin();
 });
 </script>
 
