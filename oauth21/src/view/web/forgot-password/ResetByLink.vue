@@ -20,7 +20,6 @@ const { error: showError, success: showSuccess } = useMessage();
 // 步骤：verify(验证身份) → sent(已发送) → reset(重置密码) → done(完成)
 const step = ref<'verify' | 'sent' | 'reset' | 'done'>('verify');
 const email = ref('');
-const code = ref('');
 const newPassword = ref('');
 const confirmPassword = ref('');
 const resetToken = ref('');

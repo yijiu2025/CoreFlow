@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { authApi, type LoginPayload } from '@/api/auth';
+import { authApi } from '@/api/auth';
 
 /**
  * 认证状态管理
