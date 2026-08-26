@@ -157,13 +157,6 @@ export const authApi = {
   },
 
   /**
-   * 刷新 Token (示例)
-   */
-  async refreshToken() {
-    return request.post('/auth/refresh');
-  },
-
-  /**
    * 检查授权状态 (获取当前 Cookie 登录用户信息)
    * 返回 {action:'login'|'consent', client_name, scope, sessionId, user}
    */
