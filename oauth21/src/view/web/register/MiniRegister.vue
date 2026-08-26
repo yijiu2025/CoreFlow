@@ -12,6 +12,7 @@ import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useRecaptcha } from '@/composables/useRecaptcha';
 import MessageToast from '@/components/common/MessageToast.vue';
 import { useMessage } from '@/composables/useMessage';
+import { useCountdown } from '@/composables/useCountdown';
 
 const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken, dispose } = useRecaptcha('register');
 const { error: showError, success: showSuccess } = useMessage();
@@ -59,8 +60,7 @@ const agreed = ref(false);
 const isEmailDuplicate = ref(false);
 const showCaptcha = ref(false);
 const captchaKey = ref('');
-const isCountingDown = ref(false);
-const countdown = ref(60);
+const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 const docType = ref<'service' | 'privacy' | null>(null);
 
 const checkEmail = async () => {
@@ -84,15 +84,7 @@ const sendCode = () => {
 const onCaptchaSuccess = async (data: { captchaKey: string }) => {
   captchaKey.value = data.captchaKey;
   showCaptcha.value = false;
-  isCountingDown.value = true;
-  countdown.value = 60;
-  const timer = setInterval(() => {
-    countdown.value--;
-    if (countdown.value <= 0) {
-      clearInterval(timer);
-      isCountingDown.value = false;
-    }
-  }, 1000);
+  startCountdown(60);
 };
 
 // 步骤 1 校验并前往步骤 2

@@ -7,6 +7,7 @@ import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import { useMessage } from '@/composables/useMessage';
+import { useCountdown } from '@/composables/useCountdown';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
@@ -57,8 +58,7 @@ const docType = ref<'service' | 'privacy' | null>(null);
 const isEmailDuplicate = ref(false);
 const showCaptcha = ref(false);
 const captchaKey = ref('');
-const isCountingDown = ref(false);
-const countdown = ref(60);
+const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 
 const checkEmail = async () => {
   if (!values.email || errors.value.email) {
@@ -81,15 +81,7 @@ const sendCode = () => {
 const onCaptchaSuccess = async (data: { captchaKey: string }) => {
   captchaKey.value = data.captchaKey;
   showCaptcha.value = false;
-  isCountingDown.value = true;
-  countdown.value = 60;
-  const timer = setInterval(() => {
-    countdown.value--;
-    if (countdown.value <= 0) {
-      clearInterval(timer);
-      isCountingDown.value = false;
-    }
-  }, 1000);
+  startCountdown(60);
 };
 
 const handleRegister = handleSubmit(

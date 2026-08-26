@@ -9,6 +9,7 @@ import { authApi } from '@/api/auth';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import Icons from '@/components/common/Icons.vue';
 import { useMessage } from '@/composables/useMessage';
+import { useCountdown } from '@/composables/useCountdown';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 
 const { t } = useI18n();
@@ -20,8 +21,7 @@ const newPassword = ref('');
 const confirmPassword = ref('');
 const step = ref<'email' | 'code' | 'done'>('email');
 const isSubmitting = ref(false);
-const isCountingDown = ref(false);
-const countdown = ref(60);
+const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 
 const showCaptcha = ref(false);
 const captchaKey = ref('');
@@ -40,19 +40,7 @@ async function onCaptchaSuccess(data: { captchaKey: string }) {
   captchaKey.value = data.captchaKey;
   showSuccess(t('forgot.code_sent'));
   step.value = 'code';
-  startCountdown();
-}
-
-function startCountdown() {
-  isCountingDown.value = true;
-  countdown.value = 60;
-  const timer = setInterval(() => {
-    countdown.value--;
-    if (countdown.value <= 0) {
-      clearInterval(timer);
-      isCountingDown.value = false;
-    }
-  }, 1000);
+  startCountdown(60);
 }
 
 async function handleReset() {
