@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useForm } from 'vee-validate';
 import { useRoute } from 'vue-router';
@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { authApi } from '@/api/auth';
 import { postToParent } from '@/utils/parent';
-import QRCode from 'qrcode';
 import AuthContainer from '@/components/common/AuthContainer.vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
@@ -16,6 +15,7 @@ import Icons from '@/components/common/Icons.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
+import { useQrLogin } from '@/composables/useQrLogin';
 
 const authStore = useAuthStore();
 const route = useRoute();
@@ -38,10 +38,7 @@ const loginType = ref<'email' | 'pwd'>('email');
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 const keepLogin = ref(false);
 
-const qrKey = ref('');
-const qrDataUrl = ref('');
-const qrStatus = ref<'pending' | 'scanned' | 'confirmed' | 'expired'>('pending');
-let qrPollTimer: ReturnType<typeof setInterval> | null = null;
+// qrKey/qrDataUrl/qrStatus/qrPollTimer 由 useQrLogin 管理（下方声明）
 
 watch(
   () => appConfig.value.lang,
@@ -234,69 +231,28 @@ const executeLogin = async () => {
 const qrClientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
 const qrScope = computed(() => (route.query.scope as string) || 'openid profile email');
 
-async function generateQR() {
-  try {
-    const res: any = await authApi.generateQR({
-      client_id: qrClientId.value,
-      scope: qrScope.value
-    });
-    qrKey.value = res.qrKey;
-    qrStatus.value = 'pending';
-    qrDataUrl.value = await QRCode.toDataURL(res.qrContent || res.qrKey, { width: 200, margin: 1 });
-    startQRPolling();
-  } catch {
-    showError(t('login.qr_generate_failed'));
-  }
-}
-
-function startQRPolling() {
-  if (qrPollTimer) clearInterval(qrPollTimer);
-  qrPollTimer = setInterval(async () => {
-    if (!qrKey.value) return;
-    try {
-      const res: any = await authApi.checkQRStatus(qrKey.value);
-      if (res?.accessToken || res?.access_token || res?.session_token || res?.status === 'CONFIRMED') {
-        qrStatus.value = 'confirmed';
-        clearInterval(qrPollTimer!);
-        qrPollTimer = null;
-        notifyParentLoginSuccess(res);
-      } else if (res?.status === 'EXPIRED' || res?.status === 'ERROR') {
-        qrStatus.value = 'expired';
-        clearInterval(qrPollTimer!);
-        qrPollTimer = null;
-        showError(t('login.qr_expired'));
-      } else {
-        qrStatus.value = (res?.status || 'PENDING').toLowerCase() as any;
-      }
-    } catch {}
-  }, 2000);
-}
+// 二维码登录：生成 + 轮询 + 确认后通知父窗口（兼容 JWT/Session）
+const { qrDataUrl, qrStatus, generate: generateQR, reset: resetQR } = useQrLogin(
+  () => qrClientId.value,
+  () => qrScope.value,
+  (res: any) => notifyParentLoginSuccess(res),
+  () => showError(t('login.qr_expired') || '二维码已过期')
+);
 
 onMounted(() => {
   showQR.value = appConfig.value.qrCodeFirst;
   if (appConfig.value.notKeepLogin) keepLogin.value = false;
-  if (showQR.value) generateQR();
+  if (showQR.value) generateQR(() => showError(t('login.qr_generate_failed') || '二维码生成失败'));
   if (window.parent && window.parent !== window) {
     postToParent({ type: 'SSO_READY' });
   }
 });
 
-onUnmounted(() => {
-  if (qrPollTimer) {
-    clearInterval(qrPollTimer);
-    qrPollTimer = null;
-  }
-});
-
 watch(showQR, val => {
   if (val) {
-    generateQR();
-  } else if (!val && qrPollTimer) {
-    clearInterval(qrPollTimer);
-    qrPollTimer = null;
-    qrKey.value = '';
-    qrDataUrl.value = '';
-    qrStatus.value = 'pending';
+    generateQR(() => showError(t('login.qr_generate_failed') || '二维码生成失败'));
+  } else {
+    resetQR();
   }
 });
 </script>
