@@ -14,6 +14,7 @@ const service = axios.create({
 import { sha256 } from './sha256';
 import { getDeviceFingerprint, isDeviceFingerprintEnabled } from './device-fingerprint';
 import { getStableDeviceId } from './device-id';
+import { generateNonce } from './crypto';
 
 service.interceptors.request.use(
   async config => {
@@ -45,7 +46,8 @@ service.interceptors.request.use(
 
       if (h5TokenMd5 && config.headers && config.url) {
         const timestamp = Date.now();
-        const nonce = Math.random().toString(36).substring(2, 15);
+        // nonce 用密码学安全随机（防重放，比 Math.random 强）
+        const nonce = generateNonce();
 
         const urlPath = config.url.split('?')[0];
         const bodyStr = config.data ? JSON.stringify(config.data) : '';
