@@ -38,7 +38,8 @@ service.interceptors.request.use(
       }
     }
 
-    // 计算并注入动态签名（后端仅对 requireLogin 路由校验，公开接口自动跳过）
+    // 计算并注入动态签名（头 + query 双带，兼容大厂 URL 签名方式）
+    // 后端 verifySignature 从头或 query 任一读取，两边都算同一签名值
     const cookieMatch = document.cookie.match(/(^| )_m_h5_tk=([^;]*)(;|$)/);
     if (cookieMatch) {
       const m5H5Tk = decodeURIComponent(cookieMatch[2]);
@@ -48,6 +49,8 @@ service.interceptors.request.use(
         const timestamp = Date.now();
         // nonce 用密码学安全随机（防重放，比 Math.random 强）
         const nonce = generateNonce();
+        // x-device-id 与签名一并注入 query（大厂风格：参数随 URL 走）
+        const deviceId = getStableDeviceId();
 
         const urlPath = config.url.split('?')[0];
         const bodyStr = config.data ? JSON.stringify(config.data) : '';
@@ -55,9 +58,14 @@ service.interceptors.request.use(
 
         const clientSign = await sha256(signString);
 
+        // 注入请求头
         config.headers['X-Sign'] = clientSign;
         config.headers['X-Timestamp'] = String(timestamp);
         config.headers['X-Nonce'] = nonce;
+
+        // 同步注入 query 参数（像抖音 x-signature 那样拼 URL 后面）
+        const sep = config.url.includes('?') ? '&' : '?';
+        config.url = `${config.url}${sep}x-sign=${clientSign}&x-timestamp=${timestamp}&x-nonce=${nonce}&x-device-id=${encodeURIComponent(deviceId)}`;
       }
     }
 
