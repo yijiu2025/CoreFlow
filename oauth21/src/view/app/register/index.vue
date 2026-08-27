@@ -144,7 +144,7 @@ const handleRegister = handleSubmit(async data => {
 </script>
 
 <template>
-  <!-- 移动端全屏注册（安卓风格：顶部渐变 header + 分步堆栈页面 + slide 切换动画） -->
+  <!-- 移动端全屏注册（白灰 header + 分步堆栈 + slide 切换） -->
   <div class="mreg-page">
     <!-- 顶部 Header（渐变 + 返回按钮 + 步骤指示） -->
     <header class="mreg-header">
@@ -390,20 +390,16 @@ const handleRegister = handleSubmit(async data => {
   background: #f1f5f9;
 }
 
-/* === 表单主体（卡片浮层） === */
+/* === 表单主体（全屏平铺，无卡片浮层） === */
 .mreg-body {
   flex: 1;
-  position: relative;
-  margin: -8px 16px 0;
-  padding: 24px 20px;
+  padding: 24px 20px 32px;
   background: #fff;
-  border-radius: 20px 20px 0 0;
-  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08);
   overflow: hidden;
 }
 :global(.dark) .mreg-body {
   background: #0f172a;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
 }
 .mreg-step {
   display: flex;

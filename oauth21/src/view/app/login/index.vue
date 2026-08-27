@@ -99,7 +99,7 @@ const goBack = () => {
 </script>
 
 <template>
-  <!-- 移动端登录（白灰高级色 + 安卓风格：header + 卡片浮层 + slide 切换） -->
+  <!-- 移动端登录（白灰高级色 + 全屏平铺 + slide 切换） -->
   <div class="mlogin-page">
     <!-- 顶部 Header（白灰，非彩色渐变） -->
     <header class="mlogin-header">
@@ -119,7 +119,7 @@ const goBack = () => {
       </div>
     </header>
 
-    <!-- 表单卡片浮层 -->
+    <!-- 表单主体（全屏平铺，无卡片浮层） -->
     <main class="mlogin-body">
       <!-- 模式切换 Tab -->
       <div class="mlogin-tabs">
@@ -322,22 +322,17 @@ const goBack = () => {
   letter-spacing: 0.05em;
 }
 
-/* === 表单主体（卡片浮层） === */
+/* === 表单主体（全屏平铺，无卡片浮层） === */
 .mlogin-body {
   flex: 1;
-  position: relative;
-  margin: -16px 16px 0;
-  padding: 24px 20px;
+  padding: 24px 20px 32px;
   background: #fff;
-  border-radius: 20px 20px 0 0;
-  box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.06);
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 :global(.dark) .mlogin-body {
   background: #0f172a;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
 }
 
 /* === 模式切换 Tab === */
