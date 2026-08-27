@@ -11,16 +11,17 @@ import { getStore } from '../redis/index.js';
  * 校验客户端请求签名，防爬防篡改防重放 (类似阿里巴巴 H5 Mtop 签名校验)
  */
 async function verifySignature(request, reply) {
-  // 1. 仅对 requireLogin 的路由校验签名，公开接口自动跳过
+  // 1. 仅对 requireSignature 的路由校验签名（requireLogin 自动开启，或公开端点显式配置）
   if (!request.routeConfig?.requireSignature) {
     return;
   }
 
-  const sign = request.headers['x-sign'];
-  const timestampStr = request.headers['x-timestamp'];
-  const nonce = request.headers['x-nonce'];
+  // 签名参数兼容头与 query（头为主，query 兼容大厂 URL 签名方式）
+  const sign = request.headers['x-sign'] || request.query?.['x-sign'];
+  const timestampStr = request.headers['x-timestamp'] || request.query?.['x-timestamp'];
+  const nonce = request.headers['x-nonce'] || request.query?.['x-nonce'];
 
-  // 2. 无签名头时自动下发 h5_token cookie，本次放行
+  // 2. 无签名时自动下发 h5_token cookie，本次放行（前端拿到 cookie 后续请求即可签名）
   if (!sign || !timestampStr || !nonce) {
     const existingCookie = request.cookies?._m_h5_tk;
     if (!existingCookie) {
@@ -40,7 +41,7 @@ async function verifySignature(request, reply) {
     });
   }
 
-  // 4. 获取 H5 临时 Token
+  // 4. 获取 H5 临时 Token（cookie 为准）
   let m5H5Tk = request.cookies?._m_h5_tk;
 
   // 无 cookie 时自动下发，本次放行（前端拿到 cookie 后后续请求即可签名）
