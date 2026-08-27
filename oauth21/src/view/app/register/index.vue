@@ -288,20 +288,22 @@ const handleRegister = handleSubmit(async data => {
   background: #020617;
 }
 
-/* === 顶部 Header（渐变 + 返回按钮 + 进度条） === */
+/* === 顶部 Header（白灰，非彩色渐变） === */
 .mreg-header {
   position: relative;
   padding: 48px 24px 20px;
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #7c3aed 100%);
-  color: #fff;
+  background: #fff;
+  border-bottom: 1px solid #f1f5f9;
+  color: #0f172a;
   overflow: hidden;
 }
+:global(.dark) .mreg-header {
+  background: #0f172a;
+  border-bottom-color: #1e293b;
+  color: #f1f5f9;
+}
 .mreg-header-bg {
-  position: absolute;
-  inset: 0;
-  opacity: 0.15;
-  background: radial-gradient(circle at 30% -20%, #fff, transparent 60%);
-  pointer-events: none;
+  display: none;
 }
 .mreg-back-btn {
   position: absolute;
@@ -313,15 +315,22 @@ const handleRegister = handleSubmit(async data => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
+  color: #475569;
+  background: #f1f5f9;
   border: none;
   border-radius: 50%;
   cursor: pointer;
   transition: background 0.2s;
 }
+:global(.dark) .mreg-back-btn {
+  color: #94a3b8;
+  background: #1e293b;
+}
 .mreg-back-btn:active {
-  background: rgba(255, 255, 255, 0.3);
+  background: #e2e8f0;
+}
+:global(.dark) .mreg-back-btn:active {
+  background: #334155;
 }
 .mreg-header-content {
   position: relative;
@@ -329,26 +338,33 @@ const handleRegister = handleSubmit(async data => {
   text-align: center;
 }
 .mreg-logo {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   margin: 0 auto 12px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: #1e293b;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #fff;
+}
+:global(.dark) .mreg-logo {
+  background: linear-gradient(135deg, #334155, #1e293b);
+  border: 1px solid #475569;
 }
 .mreg-title {
   font-size: 22px;
   font-weight: 700;
   margin: 0 0 4px;
   letter-spacing: -0.02em;
+  color: #0f172a;
+}
+:global(.dark) .mreg-title {
+  color: #f1f5f9;
 }
 .mreg-sub {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
+  color: #94a3b8;
   margin: 0;
 }
 /* 步骤进度条 */
@@ -357,15 +373,21 @@ const handleRegister = handleSubmit(async data => {
   z-index: 1;
   margin-top: 16px;
   height: 4px;
-  background: rgba(255, 255, 255, 0.2);
+  background: #f1f5f9;
   border-radius: 2px;
   overflow: hidden;
 }
+:global(.dark) .mreg-progress {
+  background: #1e293b;
+}
 .mreg-progress-bar {
   height: 100%;
-  background: #fff;
+  background: #1e293b;
   border-radius: 2px;
   transition: width 0.3s ease;
+}
+:global(.dark) .mreg-progress-bar {
+  background: #f1f5f9;
 }
 
 /* === 表单主体（卡片浮层） === */
@@ -414,11 +436,12 @@ const handleRegister = handleSubmit(async data => {
 }
 .mreg-field:focus-within {
   background: #fff;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  border-color: #475569;
+  box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.1);
 }
 :global(.dark) .mreg-field:focus-within {
   background: #0f172a;
+  border-color: #64748b;
 }
 .mreg-field.is-error {
   border-color: #ef4444;
@@ -451,7 +474,7 @@ const handleRegister = handleSubmit(async data => {
 .mreg-code-btn {
   font-size: 12px;
   font-weight: 700;
-  color: #2563eb;
+  color: #1e293b;
   padding-left: 12px;
   border-left: 1px solid #e2e8f0;
   white-space: nowrap;
@@ -463,6 +486,7 @@ const handleRegister = handleSubmit(async data => {
   transition: color 0.2s;
 }
 :global(.dark) .mreg-code-btn {
+  color: #e2e8f0;
   border-left-color: #334155;
 }
 .mreg-code-btn:disabled {
@@ -483,7 +507,7 @@ const handleRegister = handleSubmit(async data => {
   text-overflow: ellipsis;
 }
 
-/* 下一步 / 提交按钮（蓝紫渐变） */
+/* 下一步 / 提交按钮（深灰 CTA，非彩色渐变） */
 .mreg-next-btn,
 .mreg-submit {
   height: 48px;
@@ -492,12 +516,16 @@ const handleRegister = handleSubmit(async data => {
   font-size: 15px;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  background: #1e293b;
   border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+:global(.dark) .mreg-next-btn,
+:global(.dark) .mreg-submit {
+  background: #f1f5f9;
+  color: #0f172a;
 }
 .mreg-next-btn:active,
 .mreg-submit:active:not(:disabled) {
@@ -572,8 +600,13 @@ const handleRegister = handleSubmit(async data => {
   border-color: #475569;
 }
 .mreg-checkbox.checked {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-  border-color: #2563eb;
+  background: #1e293b;
+  border-color: #1e293b;
+}
+:global(.dark) .mreg-checkbox.checked {
+  background: #f1f5f9;
+  border-color: #f1f5f9;
+  color: #0f172a;
 }
 .mreg-agree-text {
   font-size: 12px;
@@ -584,8 +617,11 @@ const handleRegister = handleSubmit(async data => {
   color: #94a3b8;
 }
 .mreg-link {
-  color: #2563eb;
+  color: #1e293b;
   cursor: pointer;
+}
+:global(.dark) .mreg-link {
+  color: #e2e8f0;
 }
 .mreg-link:hover {
   text-decoration: underline;
