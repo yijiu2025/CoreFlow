@@ -400,7 +400,6 @@ const handleRegister = handleSubmit(async data => {
 :global(.dark) .mreg-body {
   background: #0f172a;
 }
-}
 .mreg-step {
   display: flex;
   flex-direction: column;
