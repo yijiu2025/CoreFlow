@@ -25,6 +25,9 @@ onUnmounted(() => dispose());
 const router = useRouter();
 const route = useRoute();
 
+// 分步状态：1 - 账号与验证码，2 - 密码与协议
+const step = ref<1 | 2>(1);
+
 const registerSchema = z
   .object({
     username: z.string({ required_error: '请输入用户名' }).min(2, '用户名至少2位'),
@@ -44,7 +47,7 @@ const registerSchema = z
     path: ['confirmPassword']
   });
 
-const { values, errors, defineField, handleSubmit } = useForm({
+const { values, errors, defineField, handleSubmit, validateField } = useForm({
   validationSchema: toTypedSchema(registerSchema)
 });
 
@@ -80,6 +83,16 @@ const checkEmail = async () => {
 const sendCode = () => {
   if (!values.email || errors.value.email || isEmailDuplicate.value) return;
   openRegCaptcha('register');
+};
+
+// 步骤 1 校验并前往步骤 2（用户名 + 邮箱 + 验证码 都通过且邮箱未重复）
+const handleNextStep = async () => {
+  const resUser = await validateField('username');
+  const resEmail = await validateField('email');
+  const resCode = await validateField('code');
+  if (resUser.valid && resEmail.valid && resCode.valid && !isEmailDuplicate.value) {
+    step.value = 2;
+  }
 };
 
 const handleRegister = handleSubmit(
@@ -157,75 +170,117 @@ const openDoc = (type: 'service' | 'privacy') => {
 
       <!-- 右表单栏 -->
       <div class="reg-panel">
-        <!-- 标题 -->
+        <!-- 标题 + 步骤指示 -->
         <div class="reg-head">
-          <h2 class="reg-title">创建新账户</h2>
-          <p class="reg-sub">填写信息，开启全功能体验</p>
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="reg-title">创建新账户</h2>
+              <p class="reg-sub">{{ step === 1 ? '步骤 1/2：填写账号与验证码' : '步骤 2/2：设置安全登录密码' }}</p>
+            </div>
+            <!-- 步骤指示小圆点（学 mini 注册页） -->
+            <div class="flex items-center gap-1.5">
+              <span class="reg-step-dot" :class="step === 1 ? 'reg-step-active' : ''"></span>
+              <span class="reg-step-dot" :class="step === 2 ? 'reg-step-active' : ''"></span>
+            </div>
+          </div>
         </div>
 
-        <!-- 表单 -->
-        <form @submit.prevent="handleRegister" class="reg-form">
-          <!-- 用户名 + 邮箱 并排 -->
-          <div class="reg-row-2">
-            <div class="group relative">
+        <!-- 表单（分步：1 账号+验证码 / 2 密码+协议） -->
+        <form @submit.prevent="step === 1 ? handleNextStep() : handleRegister()" class="reg-form">
+          <!-- 第一步：账号 + 验证码 -->
+          <div v-if="step === 1" class="reg-step-box">
+            <!-- 用户名 -->
+            <div class="reg-cell">
               <div class="reg-field" :class="{ 'is-error': errors.username }">
+                <svg class="reg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
                 <input v-model="username" v-bind="usernameProps" type="text" placeholder="用户名" autocomplete="username" class="reg-input" />
               </div>
-              <span v-if="errors.username" class="reg-err">{{ errors.username }}</span>
+              <div class="reg-err">{{ errors.username }}</div>
             </div>
-            <div class="group relative">
+
+            <!-- 邮箱 -->
+            <div class="reg-cell">
               <div class="reg-field" :class="{ 'is-error': errors.email || isEmailDuplicate }">
+                <svg class="reg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
                 <input v-model="email" v-bind="emailProps" @blur="checkEmail" type="email" placeholder="电子邮箱" autocomplete="email" class="reg-input" />
               </div>
-              <span v-if="errors.email || isEmailDuplicate" class="reg-err">{{ isEmailDuplicate ? '邮箱已注册' : errors.email }}</span>
+              <div class="reg-err">{{ isEmailDuplicate ? '邮箱已被注册' : errors.email }}</div>
             </div>
+
+            <!-- 验证码 -->
+            <div class="reg-cell">
+              <div class="reg-field" :class="{ 'is-error': errors.code }">
+                <svg class="reg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <input v-model="code" v-bind="codeProps" type="text" placeholder="邮箱验证码" autocomplete="one-time-code" class="reg-input" />
+                <button type="button" @click="sendCode" :disabled="isCountingDown" class="reg-code-btn">
+                  {{ isCountingDown ? `${countdown}s` : '获取验证码' }}
+                </button>
+              </div>
+              <div class="reg-err">{{ errors.code }}</div>
+            </div>
+
+            <!-- 下一步 -->
+            <button type="button" @click="handleNextStep" class="reg-submit">下一步</button>
           </div>
 
-          <!-- 验证码 + 获取按钮 -->
-          <div class="group relative">
-            <div class="reg-field" :class="{ 'is-error': errors.code }">
-              <input v-model="code" v-bind="codeProps" type="text" placeholder="邮箱验证码" autocomplete="one-time-code" class="reg-input" />
-              <button type="button" @click="sendCode" :disabled="isCountingDown" class="reg-code-btn">
-                {{ isCountingDown ? `${countdown}s` : '获取验证码' }}
+          <!-- 第二步：密码 + 协议 -->
+          <div v-else class="reg-step-box">
+            <!-- 登录密码 -->
+            <div class="reg-cell">
+              <div class="reg-field" :class="{ 'is-error': errors.password }">
+                <svg class="reg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <input v-model="password" v-bind="passwordProps" type="password" placeholder="设置密码（大写+小写+数字，8位以上）" autocomplete="new-password" class="reg-input" />
+              </div>
+              <div class="reg-err">{{ errors.password }}</div>
+            </div>
+
+            <!-- 确认密码 -->
+            <div class="reg-cell">
+              <div class="reg-field" :class="{ 'is-error': errors.confirmPassword }">
+                <svg class="reg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" placeholder="再次确认登录密码" autocomplete="new-password" class="reg-input" />
+              </div>
+              <div class="reg-err">{{ errors.confirmPassword }}</div>
+            </div>
+
+            <!-- 协议勾选 -->
+            <label class="reg-agree">
+              <input type="checkbox" v-model="agreed" class="hidden" />
+              <span class="reg-checkbox" :class="{ checked: agreed }">
+                <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </span>
+              <span class="reg-agree-text">
+                已阅读并同意
+                <span @click.stop.prevent="openDoc('service')" class="reg-link">《服务协议》</span>
+                与
+                <span @click.stop.prevent="openDoc('privacy')" class="reg-link">《隐私政策》</span>
+              </span>
+            </label>
+
+            <!-- 上一步 + 完成注册 -->
+            <div class="flex gap-3 mt-1">
+              <button type="button" @click="step = 1" class="reg-back-btn">上一步</button>
+              <button type="submit" class="reg-submit flex-1" :disabled="!agreed" :class="{ 'opacity-50 cursor-not-allowed': !agreed }">
+                完成注册
               </button>
             </div>
-            <span v-if="errors.code" class="reg-err">{{ errors.code }}</span>
           </div>
-
-          <!-- 密码 + 确认 并排 -->
-          <div class="reg-row-2">
-            <div class="group relative">
-              <div class="reg-field" :class="{ 'is-error': errors.password }">
-                <input v-model="password" v-bind="passwordProps" type="password" placeholder="大写+小写+数字，8位以上" autocomplete="new-password" class="reg-input" />
-              </div>
-              <span v-if="errors.password" class="reg-err">{{ errors.password }}</span>
-            </div>
-            <div class="group relative">
-              <div class="reg-field" :class="{ 'is-error': errors.confirmPassword }">
-                <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" placeholder="确认密码" autocomplete="new-password" class="reg-input" />
-              </div>
-              <span v-if="errors.confirmPassword" class="reg-err">{{ errors.confirmPassword }}</span>
-            </div>
-          </div>
-
-          <!-- 提交按钮 -->
-          <button type="submit" class="reg-submit">创建账户</button>
-
-          <!-- 协议 -->
-          <label class="reg-agree">
-            <input type="checkbox" v-model="agreed" class="hidden" />
-            <span class="reg-checkbox" :class="{ checked: agreed }">
-              <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </span>
-            <span class="reg-agree-text">
-              已阅读并同意
-              <span @click.stop.prevent="openDoc('service')" class="reg-link">《服务协议》</span>
-              与
-              <span @click.stop.prevent="openDoc('privacy')" class="reg-link">《隐私政策》</span>
-            </span>
-          </label>
         </form>
 
       </div>
@@ -448,17 +503,38 @@ const openDoc = (type: 'service' | 'privacy') => {
   color: #94a3b8;
 }
 
-/* === 表单（学登录页 space-y-5 + h-12 输入框） === */
+/* === 表单（分步：紧贴错误位，输入框位置不跳动） === */
 .reg-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
   flex: 1;
 }
-.reg-row-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+.reg-step-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* 字段单元：输入框 + 紧贴其下的错误位（固定高度，无错误也占位防抖动） */
+.reg-cell {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+}
+
+/* 步骤指示小圆点（学 mini 注册页） */
+.reg-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  transition: all 0.3s;
+}
+:global(.dark) .reg-step-dot {
+  background: #334155;
+}
+.reg-step-dot.reg-step-active {
+  width: 16px;
+  background: #2563eb;
 }
 
 /* 输入框（严格对齐登录页：h-12 实色白底 border-slate-200 focus-within:ring） */
@@ -478,8 +554,8 @@ const openDoc = (type: 'service' | 'privacy') => {
   border-color: #1e293b;
 }
 .reg-field:focus-within {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 .reg-field.is-error {
   border-color: #ef4444;
@@ -512,54 +588,90 @@ const openDoc = (type: 'service' | 'privacy') => {
 .reg-code-btn {
   font-size: 12px;
   font-weight: 700;
-  color: #4f46e5;
+  color: #2563eb;
   padding-left: 16px;
   border-left: 1px solid #e2e8f0;
   white-space: nowrap;
+  background: transparent;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  cursor: pointer;
   transition: color 0.2s;
 }
 :global(.dark) .reg-code-btn {
   border-left-color: #1e293b;
 }
 .reg-code-btn:hover:not(:disabled) {
-  color: #4338ca;
-}
-:global(.dark) .reg-code-btn:hover:not(:disabled) {
-  color: #818cf8;
+  color: #1d4ed8;
 }
 .reg-code-btn:disabled {
   color: #94a3b8;
   cursor: not-allowed;
 }
 
-/* 错误提示（对齐登录页 absolute -bottom-5 text-[10px]） */
+/* 错误位：紧贴输入框下方，固定高度始终预留（无错误也占位，输入框位置不跳动） */
 .reg-err {
-  position: absolute;
-  bottom: -18px;
-  left: 4px;
-  font-size: 10px;
+  height: 16px;
+  line-height: 16px;
+  margin-top: 4px;
+  padding-left: 4px;
+  font-size: 11px;
   color: #ef4444;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* 提交按钮（对齐登录页 h-12 渐变 from-primary to-fuchsia-600） */
+/* 提交按钮（蓝紫渐变，对齐 mini 注册页 #2563eb→#4f46e5） */
 .reg-submit {
   height: 48px;
+  width: 100%;
   margin-top: 4px;
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(to right, #4f46e5, #d946ef);
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
   border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
-.reg-submit:hover {
-  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
+.reg-submit:hover:not(:disabled) {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
 }
-.reg-submit:active {
-  transform: scale(0.98);
+.reg-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* 上一步按钮（次要，灰底） */
+.reg-back-btn {
+  height: 48px;
+  padding: 0 20px;
+  margin-top: 4px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+:global(.dark) .reg-back-btn {
+  color: #94a3b8;
+  background: #1e293b;
+}
+.reg-back-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+:global(.dark) .reg-back-btn:hover {
+  background: #334155;
+  color: #f1f5f9;
 }
 
 /* 协议 */
@@ -567,7 +679,7 @@ const openDoc = (type: 'service' | 'privacy') => {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin-top: 6px;
+  margin-bottom: 12px;
   cursor: pointer;
   user-select: none;
 }
@@ -587,12 +699,13 @@ const openDoc = (type: 'service' | 'privacy') => {
 :global(.dark) .reg-checkbox {
   border-color: #475569;
 }
+/* 复选框选中用蓝紫渐变（对齐 mini 注册页） */
 .reg-checkbox.checked {
-  background: #4f46e5;
-  border-color: #4f46e5;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  border-color: #2563eb;
 }
 .reg-agree-text {
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
   line-height: 1.5;
 }
@@ -600,10 +713,12 @@ const openDoc = (type: 'service' | 'privacy') => {
   color: #94a3b8;
 }
 .reg-link {
-  color: #4f46e5;
+  color: #2563eb;
   cursor: pointer;
+  transition: color 0.2s;
 }
 .reg-link:hover {
+  color: #1d4ed8;
   text-decoration: underline;
 }
 
