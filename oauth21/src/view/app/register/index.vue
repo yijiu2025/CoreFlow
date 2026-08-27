@@ -278,9 +278,10 @@ const handleRegister = handleSubmit(async data => {
 <style scoped>
 /* === 移动端全屏页面 === */
 .mreg-page {
+  width: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
   background: #f8fafc;
   overflow: hidden;
 }

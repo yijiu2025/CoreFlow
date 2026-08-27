@@ -238,6 +238,7 @@ const goBack = () => {
 <style scoped>
 /* === 移动端全屏（白灰高级色） === */
 .mlogin-page {
+  width: 100%;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
