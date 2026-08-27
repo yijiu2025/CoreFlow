@@ -22,7 +22,6 @@ export type QrStatus = 'pending' | 'scanned' | 'confirmed' | 'expired';
 
 export function useQrLogin(
   clientId: () => string,
-  scope: () => string,
   onSuccess: (res: any) => void,
   onExpired?: () => void
 ) {
@@ -33,9 +32,10 @@ export function useQrLogin(
 
   async function generate(onError?: (msg: string) => void) {
     try {
+      // scope 不前端传（app 属性，后端从 client_id 查）；
+      // H5 签名（timestamp/nonce/device_id/sign）由 request 拦截器自动注入
       const res: any = await authApi.generateQR({
-        client_id: clientId(),
-        scope: scope()
+        client_id: clientId()
       });
       qrKey.value = res.qrKey;
       qrStatus.value = 'pending';

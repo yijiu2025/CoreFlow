@@ -344,6 +344,7 @@ export function registerSecureRoute(fastify, options) {
     allowRoles = [],
     allowIps = [],
     requireLogin = false,
+    requireSignature = false,
     requirePermission = null,
     permission = null
   } = options;
@@ -401,9 +402,9 @@ export function registerSecureRoute(fastify, options) {
     requirePermission: perm
   });
 
-  // 需要登录的路由自动标记需要签名验证
+  // 需要登录的路由自动标记需要签名验证；requireSignature 可单独开启（公开端点防爬）
   const routeConfig = { ...config };
-  if (requireLogin) {
+  if (requireLogin || requireSignature) {
     routeConfig.requireSignature = true;
   }
 
