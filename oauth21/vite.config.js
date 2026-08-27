@@ -52,7 +52,9 @@ export default defineConfig({
     }
   },
   server: {
+    host: '0.0.0.0', // 允许内网 IP 访问（手机调试）
     port: 5174,
+    strictPort: true, // 端口被占直接报错，不自动换端口（避免手机连错端口）
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
