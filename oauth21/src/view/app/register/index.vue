@@ -52,6 +52,7 @@ const [password, passwordProps] = defineField('password');
 const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword');
 
 const agreed = ref(false);
+const isEmailDuplicate = ref(false);
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 // 图形验证码流程：弹窗 → 通过 → 拿 captchaKey + 启动倒计时
 const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess } = useCaptchaFlow<'register'>(
@@ -59,8 +60,26 @@ const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess }
 );
 const docType = ref<'service' | 'privacy' | null>(null);
 
-const sendCode = () => {
+// 邮箱查重：发码前校验，已注册则拦截
+const checkEmail = async () => {
   if (!values.email || errors.value.email) {
+    isEmailDuplicate.value = false;
+    return;
+  }
+  try {
+    const res: any = await authApi.checkEmail(values.email);
+    isEmailDuplicate.value = res?.isDuplicate;
+  } catch {
+    isEmailDuplicate.value = false;
+  }
+};
+
+// 发送验证码前先查重：邮箱已注册则拦截
+const sendCode = async () => {
+  if (!values.email || errors.value.email) return;
+  await checkEmail();
+  if (isEmailDuplicate.value) {
+    showError('该邮箱已被注册，请直接登录');
     return;
   }
   openRegCaptcha('register');
@@ -172,7 +191,7 @@ const handleRegister = handleSubmit(async data => {
       </form>
     </div>
 
-    <GraphicCaptcha :is-open="showCaptcha" :email="values.email" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
+    <GraphicCaptcha :is-open="showCaptcha" :email="values.email" :send-email="true" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
 
     <!-- 服务协议 / 隐私政策 弹窗（统一组件） -->
     <AgreementModals v-model:type="docType" />
