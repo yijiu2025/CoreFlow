@@ -91,15 +91,19 @@ export async function directLogin(request, reply, fastify) {
   const { username, password, type, email, code, keepLogin } = decryptResult.data;
 
   // 1.2 图形验证码校验（按 type 分支）
-  // - 密码登录：captchaKey 对应图形码必须已 verify，校验通过后删除（一次性，防重放）
+  // - 密码登录：必须传 captchaKey 且对应图形码已 verify，校验通过后删除（一次性，防重放）
+  //   未传 captchaKey 直接拒绝（防绕过图形验证暴力登录）
   // - 邮箱码登录：图形码已在 verify-captcha 发邮箱码时消费，此处只校验邮箱码（阶段 2）
   // 复用 captchaService.consume（校验 verified + 一次性删除），与 verifyAndSendEmail 发码消费同逻辑
   const { captchaKey } = request.body;
-  if (type !== 'email' && captchaKey) {
+  if (type !== 'email') {
+    if (!captchaKey) {
+      return reply.code(400).send({ code: 400, message: '请先完成图形验证', data: null });
+    }
     const captchaStore = getStore('captcha');
     const consumed = await captchaService.consume(captchaKey, captchaStore);
     if (!consumed) {
-      return reply.code(400).send({ code: 400, message: '请先完成图形验证', data: null });
+      return reply.code(400).send({ code: 400, message: '图形验证码错误或已过期，请重新验证', data: null });
     }
   }
 
