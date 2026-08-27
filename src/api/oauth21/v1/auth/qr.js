@@ -13,23 +13,34 @@
  */
 import { registerSecureRoute } from '../../../guard.js';
 import { generateQrCode, scanQrCode, confirmQrCode, getQrStatus } from '../../../../app/oauth21/services/qr.service.js';
+import ClientDao from '../../../../app/oauth21/dao/client.dao.js';
 
 /**
  * 注册扫码登录路由
  */
 export default function registerQrRoutes(fastify, qrStore) {
   // GET /qr/generate — 生成登录二维码
-  // client_id/scope/oidcNonce 存入二维码，签发时用存储值（防 PC 端调包）
+  // scope 从 client_id 查（不信任前端 scope），client_id/scope/oidcNonce 存二维码防调包
+  // requireSignature：公开端点加 H5 签名校验防爬/防滥用
   registerSecureRoute(fastify, {
     name: 'qrGenerate',
     alias: '生成登录二维码',
     method: 'GET',
     url: '/qr/generate',
+    requireSignature: true,
     handler: async request => {
-      const { client_id, scope, nonce } = request.query;
+      const { client_id, nonce } = request.query;
+      if (!client_id) {
+        return { code: 400, message: 'client_id 不能为空', data: null };
+      }
+      // 从 client 查 scope（前端不该传 scope，是 app 属性）
+      const client = await ClientDao.findById(client_id);
+      if (!client) {
+        return { code: 400, message: '无效的客户端', data: null };
+      }
       const { qrKey, expires_in, qrContent } = await generateQrCode(qrStore, {
         clientId: client_id,
-        scope,
+        scope: client.scope,
         oidcNonce: nonce
       });
       // 返回 qrContent：二维码内容（含 client_id），前端用 QRCode.toDataURL 生成图片

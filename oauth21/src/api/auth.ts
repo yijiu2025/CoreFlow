@@ -177,7 +177,7 @@ export const authApi = {
    * client_id/scope 存入二维码，移动端扫描时能识别给哪个应用登录
    * 后端返回 qrContent（二维码内容，含 client_id），前端用 QRCode 生成图片
    */
-  async generateQR(params?: { client_id?: string; scope?: string }) {
+  async generateQR(params?: { client_id?: string }) {
     return request.get('/oauth2.1/qr/generate', { params });
   },
 

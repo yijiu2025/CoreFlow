@@ -220,7 +220,18 @@ export async function createApp() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'token', 'X-Sign', 'X-Timestamp', 'X-Nonce'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'token',
+      'X-Sign',
+      'X-Timestamp',
+      'X-Nonce',
+      'x-device-id',
+      'X-Device-Fp',
+      'x-verify-token'
+    ],
     exposedHeaders: ['Content-Disposition', 'token', 'X-Request-Id'],
     maxAge: 86400
   });

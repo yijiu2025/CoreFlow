@@ -119,12 +119,10 @@ const {
 });
 
 const qrClientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
-const qrScope = computed(() => (route.query.scope as string) || 'openid profile email');
 
-// 二维码登录：生成 + 轮询 + 确认后通知父窗口（兼容 JWT/Session）
+// 二维码登录：生成（scope 后端从 client 查，不前端传）+ 轮询 + 确认后通知父窗口
 const { qrDataUrl, qrStatus, generate: generateQR, reset: resetQR } = useQrLogin(
   () => qrClientId.value,
-  () => qrScope.value,
   (res: any) => notifyParentLoginSuccess(res),
   () => showError(t('login.qr_expired') || '二维码已过期')
 );
