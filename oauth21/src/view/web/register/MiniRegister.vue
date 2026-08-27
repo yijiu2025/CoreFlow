@@ -67,8 +67,14 @@ const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess }
   () => startCountdown(60)
 );
 
-const sendCode = () => {
-  if (!values.email || errors.value.email || isEmailDuplicate.value) return;
+// 发送验证码前先查重：邮箱已注册则拦截，不允许发码（避免给已注册邮箱发垃圾邮件）
+const sendCode = async () => {
+  if (!values.email || errors.value.email) return;
+  await checkEmail(); // 强制查重（用户可能没 blur 就点按钮）
+  if (isEmailDuplicate.value) {
+    showError('该邮箱已被注册，请直接登录');
+    return;
+  }
   openRegCaptcha('register');
 };
 const docType = ref<'service' | 'privacy' | null>(null);
@@ -247,7 +253,7 @@ const handleRegister = handleSubmit(async () => {
       </template>
     </AuthContainer>
 
-    <GraphicCaptcha :is-open="showCaptcha" :email="values.email" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
+    <GraphicCaptcha :is-open="showCaptcha" :email="values.email" :send-email="true" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
 
     <!-- 服务协议 / 隐私政策 弹窗（统一组件） -->
     <AgreementModals v-model:type="docType" />
