@@ -22,6 +22,11 @@ onUnmounted(() => dispose());
 
 const router = useRouter();
 
+// 分步堆栈（安卓 Activity 风格：1 账号+验证码 → 2 密码 → 3 协议+提交）
+const step = ref<1 | 2 | 3>(1);
+// 页面切换方向：next 前进 slide-left / back 后退 slide-right
+const transitionName = ref('slide-next');
+
 const registerSchema = z
   .object({
     nickname: z.string().min(2, '昵称至少2位'),
@@ -41,7 +46,7 @@ const registerSchema = z
     path: ['confirmPassword']
   });
 
-const { values, errors, defineField, handleSubmit } = useForm({
+const { values, errors, defineField, handleSubmit, validateField } = useForm({
   validationSchema: toTypedSchema(registerSchema)
 });
 
@@ -85,8 +90,38 @@ const sendCode = async () => {
   openRegCaptcha('register');
 };
 
+// 前进到下一步（校验当前步骤字段通过）
+const handleNextStep = async (target: 2 | 3) => {
+  let ok = true;
+  if (target === 2) {
+    const r1 = await validateField('nickname');
+    const r2 = await validateField('email');
+    const r3 = await validateField('code');
+    ok = r1.valid && r2.valid && r3.valid && !isEmailDuplicate.value;
+  } else if (target === 3) {
+    const r4 = await validateField('password');
+    const r5 = await validateField('confirmPassword');
+    ok = r4.valid && r5.valid;
+  }
+  if (ok) {
+    transitionName.value = 'slide-next';
+    step.value = target;
+  }
+};
+
+// 后退到上一步（安卓返回键风格）
+const handleBack = () => {
+  if (step.value === 1) {
+    router.push('/m/login');
+    return;
+  }
+  transitionName.value = 'slide-prev';
+  step.value = (step.value - 1) as 1 | 2 | 3;
+};
+
 const handleRegister = handleSubmit(async data => {
   if (!agreed.value) {
+    showError('请阅读并同意协议');
     return;
   }
   try {
@@ -109,231 +144,268 @@ const handleRegister = handleSubmit(async data => {
 </script>
 
 <template>
-  <!-- iframe 弹窗场景：左右分栏，856×484 撑满 -->
-  <div class="mreg-viewport">
-    <!-- 左品牌栏 -->
-    <div class="mreg-brand">
-      <div class="mreg-brand-bg"></div>
-      <div class="mreg-brand-content">
+  <!-- 移动端全屏注册（安卓风格：顶部渐变 header + 分步堆栈页面 + slide 切换动画） -->
+  <div class="mreg-page">
+    <!-- 顶部 Header（渐变 + 返回按钮 + 步骤指示） -->
+    <header class="mreg-header">
+      <div class="mreg-header-bg"></div>
+      <button class="mreg-back-btn" @click="handleBack">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <div class="mreg-header-content">
         <div class="mreg-logo">
           <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
           </svg>
         </div>
-        <h2 class="mreg-title">开启您的<br />数字之旅</h2>
-        <p class="mreg-desc">加入万千企业的选择，即刻开启安全、高效的云端工作空间。</p>
+        <h1 class="mreg-title">创建账户</h1>
+        <p class="mreg-sub">步骤 {{ step }}/3：{{ step === 1 ? '填写账号与验证码' : step === 2 ? '设置安全密码' : '确认协议并完成' }}</p>
       </div>
-      <router-link to="/m/login" class="mreg-back">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-        已有账户？立即返回登录
-      </router-link>
-    </div>
-
-    <!-- 右表单栏 -->
-    <div class="mreg-panel">
-      <div class="mreg-head">
-        <h3 class="mreg-form-title">创建新账户</h3>
-        <p class="mreg-form-sub">填写信息，开启全功能体验</p>
+      <!-- 步骤进度条 -->
+      <div class="mreg-progress">
+        <div class="mreg-progress-bar" :style="{ width: `${(step / 3) * 100}%` }"></div>
       </div>
+    </header>
 
-      <form @submit.prevent="handleRegister" class="mreg-form">
-        <!-- 用户名 + 邮箱 并排 -->
-        <div class="mreg-row-2">
-          <div class="mreg-field" :class="{ 'is-error': errors.nickname }">
-            <input v-model="nickname" v-bind="nicknameProps" type="text" placeholder="用户名" class="mreg-input" />
+    <!-- 分步表单（堆栈进退，slide 动画） -->
+    <main class="mreg-body">
+      <transition :name="transitionName" mode="out-in">
+        <!-- 步骤 1：账号 + 验证码 -->
+        <section v-if="step === 1" key="1" class="mreg-step">
+          <div class="mreg-cell">
+            <div class="mreg-field" :class="{ 'is-error': errors.nickname }">
+              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <input v-model="nickname" v-bind="nicknameProps" type="text" placeholder="用户昵称" class="mreg-input" />
+            </div>
+            <div class="mreg-err">{{ errors.nickname }}</div>
           </div>
-          <div class="mreg-field" :class="{ 'is-error': errors.email }">
-            <input v-model="email" v-bind="emailProps" type="email" placeholder="电子邮箱" class="mreg-input" />
-          </div>
-        </div>
-        <p v-if="errors.nickname || errors.email" class="mreg-err">{{ errors.nickname || errors.email }}</p>
 
-        <!-- 验证码 + 获取 -->
-        <div class="mreg-field" :class="{ 'is-error': errors.code }">
-          <input v-model="code" v-bind="codeProps" type="text" placeholder="邮箱验证码" class="mreg-input" />
-          <button type="button" @click="sendCode" :disabled="isCountingDown" class="mreg-code-btn">
-            {{ isCountingDown ? `${countdown}s` : '获取验证码' }}
+          <div class="mreg-cell">
+            <div class="mreg-field" :class="{ 'is-error': errors.email || isEmailDuplicate }">
+              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+              </svg>
+              <input v-model="email" v-bind="emailProps" @blur="checkEmail" type="email" placeholder="电子邮箱" class="mreg-input" />
+            </div>
+            <div class="mreg-err">{{ isEmailDuplicate ? '邮箱已被注册' : errors.email }}</div>
+          </div>
+
+          <div class="mreg-cell">
+            <div class="mreg-field" :class="{ 'is-error': errors.code }">
+              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <input v-model="code" v-bind="codeProps" type="text" placeholder="邮箱验证码" class="mreg-input" />
+              <button type="button" @click="sendCode" :disabled="isCountingDown" class="mreg-code-btn">
+                {{ isCountingDown ? `${countdown}s` : '获取验证码' }}
+              </button>
+            </div>
+            <div class="mreg-err">{{ errors.code }}</div>
+          </div>
+
+          <button class="mreg-next-btn" @click="handleNextStep(2)">下一步</button>
+        </section>
+
+        <!-- 步骤 2：密码 -->
+        <section v-else-if="step === 2" key="2" class="mreg-step">
+          <div class="mreg-cell">
+            <div class="mreg-field" :class="{ 'is-error': errors.password }">
+              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <input v-model="password" v-bind="passwordProps" type="password" placeholder="设置密码（大写+小写+数字，8位以上）" class="mreg-input" />
+            </div>
+            <div class="mreg-err">{{ errors.password }}</div>
+          </div>
+
+          <div class="mreg-cell">
+            <div class="mreg-field" :class="{ 'is-error': errors.confirmPassword }">
+              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+              <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" placeholder="再次确认登录密码" class="mreg-input" />
+            </div>
+            <div class="mreg-err">{{ errors.confirmPassword }}</div>
+          </div>
+
+          <button class="mreg-next-btn" @click="handleNextStep(3)">下一步</button>
+        </section>
+
+        <!-- 步骤 3：协议 + 提交 -->
+        <section v-else key="3" class="mreg-step">
+          <div class="mreg-summary">
+            <div class="mreg-summary-row"><span>昵称</span><strong>{{ values.nickname }}</strong></div>
+            <div class="mreg-summary-row"><span>邮箱</span><strong>{{ values.email }}</strong></div>
+            <div class="mreg-summary-row"><span>密码</span><strong>已设置</strong></div>
+          </div>
+
+          <label class="mreg-agree">
+            <input type="checkbox" v-model="agreed" class="hidden" />
+            <span class="mreg-checkbox" :class="{ checked: agreed }">
+              <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </span>
+            <span class="mreg-agree-text">
+              已阅读并同意
+              <span @click.stop.prevent="docType = 'service'" class="mreg-link">《服务协议》</span>
+              与
+              <span @click.stop.prevent="docType = 'privacy'" class="mreg-link">《隐私政策》</span>
+            </span>
+          </label>
+
+          <button class="mreg-submit" :disabled="!agreed" :class="{ 'opacity-50': !agreed }" @click="handleRegister">
+            完成注册
           </button>
-        </div>
-        <p v-if="errors.code" class="mreg-err">{{ errors.code }}</p>
-
-        <!-- 密码 + 确认 并排 -->
-        <div class="mreg-row-2">
-          <div class="mreg-field" :class="{ 'is-error': errors.password }">
-            <input v-model="password" v-bind="passwordProps" type="password" placeholder="大写+小写+数字，8位以上" class="mreg-input" />
-          </div>
-          <div class="mreg-field" :class="{ 'is-error': errors.confirmPassword }">
-            <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" placeholder="确认密码" class="mreg-input" />
-          </div>
-        </div>
-        <p v-if="errors.password || errors.confirmPassword" class="mreg-err">{{ errors.password || errors.confirmPassword }}</p>
-
-        <!-- 提交 -->
-        <button type="submit" class="mreg-submit">创建账户</button>
-
-        <!-- 协议 -->
-        <label class="mreg-agree">
-          <input type="checkbox" v-model="agreed" class="hidden" />
-          <span class="mreg-checkbox" :class="{ checked: agreed }">
-            <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </span>
-          <span class="mreg-agree-text">
-            已阅读并同意
-            <span @click.stop.prevent="docType = 'service'" class="mreg-link">《服务协议》</span>
-            与
-            <span @click.stop.prevent="docType = 'privacy'" class="mreg-link">《隐私政策》</span>
-          </span>
-        </label>
-      </form>
-    </div>
+        </section>
+      </transition>
+    </main>
 
     <GraphicCaptcha :is-open="showCaptcha" :email="values.email" :send-email="true" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
-
-    <!-- 服务协议 / 隐私政策 弹窗（统一组件） -->
     <AgreementModals v-model:type="docType" />
-    <!-- 错误/成功提示 toast -->
     <MessageToast />
   </div>
 </template>
 
 <style scoped>
-.mreg-viewport {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  overflow: hidden;
-  background: #fff;
-}
-:global(.dark) .mreg-viewport {
-  background: #0f172a;
-}
-
-/* === 左品牌栏 === */
-.mreg-brand {
-  width: 280px;
-  flex-shrink: 0;
-  position: relative;
-  padding: 28px 24px;
+/* === 移动端全屏页面 === */
+.mreg-page {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  min-height: 100vh;
+  background: #f8fafc;
+  overflow: hidden;
+}
+:global(.dark) .mreg-page {
+  background: #020617;
+}
+
+/* === 顶部 Header（渐变 + 返回按钮 + 进度条） === */
+.mreg-header {
+  position: relative;
+  padding: 48px 24px 20px;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #7c3aed 100%);
   color: #fff;
   overflow: hidden;
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #8b5cf6 100%);
 }
-.mreg-brand-bg {
+.mreg-header-bg {
   position: absolute;
   inset: 0;
-  opacity: 0.1;
-  background: radial-gradient(circle at 50% -20%, #fff, transparent 60%);
+  opacity: 0.15;
+  background: radial-gradient(circle at 30% -20%, #fff, transparent 60%);
   pointer-events: none;
 }
-.mreg-brand-content {
-  position: relative;
-  z-index: 1;
-}
-.mreg-logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+.mreg-back-btn {
+  position: absolute;
+  top: 48px;
+  left: 16px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.mreg-back-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+}
+.mreg-header-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+.mreg-logo {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .mreg-title {
   font-size: 22px;
   font-weight: 700;
-  line-height: 1.25;
-  margin: 0 0 10px;
+  margin: 0 0 4px;
   letter-spacing: -0.02em;
 }
-.mreg-desc {
+.mreg-sub {
   font-size: 12px;
-  line-height: 1.6;
   color: rgba(255, 255, 255, 0.75);
   margin: 0;
-  max-width: 200px;
 }
-.mreg-back {
+/* 步骤进度条 */
+.mreg-progress {
   position: relative;
   z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  text-decoration: none;
-  transition: color 0.2s;
-}
-.mreg-back:hover {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-/* === 右表单栏 === */
-.mreg-panel {
-  flex: 1;
-  padding: 28px 32px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
+  margin-top: 16px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
   overflow: hidden;
 }
-.mreg-head {
-  margin-bottom: 18px;
-}
-.mreg-form-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-:global(.dark) .mreg-form-title {
-  color: #fff;
-}
-.mreg-form-sub {
-  font-size: 12px;
-  color: #64748b;
-  margin: 4px 0 0;
-}
-:global(.dark) .mreg-form-sub {
-  color: #94a3b8;
+.mreg-progress-bar {
+  height: 100%;
+  background: #fff;
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }
 
-/* === 表单 === */
-.mreg-form {
+/* === 表单主体（卡片浮层） === */
+.mreg-body {
+  flex: 1;
+  position: relative;
+  margin: -8px 16px 0;
+  padding: 24px 20px;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+:global(.dark) .mreg-body {
+  background: #0f172a;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
+.mreg-step {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-}
-.mreg-row-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 4px;
 }
 
-/* 输入框（对齐登录页：h-12 实色白底 border focus-within:ring） */
+/* 字段单元：输入框 + 紧贴错误位 */
+.mreg-cell {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 14px;
+}
+
+/* 输入框 */
 .mreg-field {
   display: flex;
   align-items: center;
-  height: 44px;
+  height: 48px;
   padding: 0 14px;
   gap: 10px;
-  background: #fff;
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 12px;
   transition: all 0.2s;
 }
 :global(.dark) .mreg-field {
@@ -341,18 +413,29 @@ const handleRegister = handleSubmit(async data => {
   border-color: #334155;
 }
 .mreg-field:focus-within {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+  background: #fff;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+:global(.dark) .mreg-field:focus-within {
+  background: #0f172a;
 }
 .mreg-field.is-error {
   border-color: #ef4444;
+}
+.mreg-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+:global(.dark) .mreg-icon {
+  color: #64748b;
 }
 .mreg-input {
   flex: 1;
   background: transparent;
   border: none;
   outline: none;
-  font-size: 13px;
+  font-size: 14px;
   color: #0f172a;
   height: 100%;
   min-width: 0;
@@ -366,12 +449,17 @@ const handleRegister = handleSubmit(async data => {
 
 /* 获取验证码按钮 */
 .mreg-code-btn {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: #4f46e5;
+  color: #2563eb;
   padding-left: 12px;
   border-left: 1px solid #e2e8f0;
   white-space: nowrap;
+  background: transparent;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  cursor: pointer;
   transition: color 0.2s;
 }
 :global(.dark) .mreg-code-btn {
@@ -382,47 +470,94 @@ const handleRegister = handleSubmit(async data => {
   cursor: not-allowed;
 }
 
-/* 错误提示 */
+/* 错误位（紧贴输入框，固定高度防抖动） */
 .mreg-err {
-  margin: -8px 0 0;
-  padding: 0 4px;
+  height: 16px;
+  line-height: 16px;
+  margin-top: 4px;
+  padding-left: 4px;
   font-size: 11px;
   color: #ef4444;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* 提交按钮 */
+/* 下一步 / 提交按钮（蓝紫渐变） */
+.mreg-next-btn,
 .mreg-submit {
-  height: 44px;
-  margin-top: 4px;
-  font-size: 14px;
+  height: 48px;
+  width: 100%;
+  margin-top: 8px;
+  font-size: 15px;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(to right, #4f46e5, #d946ef);
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
-.mreg-submit:hover {
-  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.35);
-}
-.mreg-submit:active {
+.mreg-next-btn:active,
+.mreg-submit:active:not(:disabled) {
   transform: scale(0.98);
 }
+.mreg-submit:disabled {
+  cursor: not-allowed;
+}
 
-/* 协议 */
+/* 步骤 3 信息汇总 */
+.mreg-summary {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+:global(.dark) .mreg-summary {
+  background: #1e293b;
+  border-color: #334155;
+}
+.mreg-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.mreg-summary-row + .mreg-summary-row {
+  border-top: 1px solid #e2e8f0;
+}
+:global(.dark) .mreg-summary-row + .mreg-summary-row {
+  border-top-color: #334155;
+}
+.mreg-summary-row span {
+  color: #64748b;
+}
+:global(.dark) .mreg-summary-row span {
+  color: #94a3b8;
+}
+.mreg-summary-row strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+:global(.dark) .mreg-summary-row strong {
+  color: #f1f5f9;
+}
+
+/* 协议勾选 */
 .mreg-agree {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin-top: 4px;
+  margin: 16px 0;
   cursor: pointer;
   user-select: none;
 }
 .mreg-checkbox {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   margin-top: 1px;
   border-radius: 4px;
   border: 1.5px solid #cbd5e1;
@@ -437,11 +572,11 @@ const handleRegister = handleSubmit(async data => {
   border-color: #475569;
 }
 .mreg-checkbox.checked {
-  background: #4f46e5;
-  border-color: #4f46e5;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  border-color: #2563eb;
 }
 .mreg-agree-text {
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
   line-height: 1.5;
 }
@@ -449,10 +584,36 @@ const handleRegister = handleSubmit(async data => {
   color: #94a3b8;
 }
 .mreg-link {
-  color: #4f46e5;
+  color: #2563eb;
   cursor: pointer;
 }
 .mreg-link:hover {
   text-decoration: underline;
+}
+
+/* === 安卓风格 slide 切换动画 === */
+/* 前进：新页从右滑入，旧页向左滑出 */
+.slide-next-enter-active,
+.slide-next-leave-active,
+.slide-prev-enter-active,
+.slide-prev-leave-active {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+.slide-next-enter-from {
+  transform: translateX(100%);
+  opacity: 0;
+}
+.slide-next-leave-to {
+  transform: translateX(-30%);
+  opacity: 0;
+}
+/* 后退：新页从左滑入，旧页向右滑出 */
+.slide-prev-enter-from {
+  transform: translateX(-30%);
+  opacity: 0;
+}
+.slide-prev-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
 }
 </style>
