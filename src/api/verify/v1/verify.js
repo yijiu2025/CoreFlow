@@ -35,7 +35,8 @@ export default async function (fastify, opts) {
     handler: async (request, reply) => {
       reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
-      const result = await captchaDao.generate(captchaStore);
+      // generate 时绑客户端指纹，verify/consume 时校验同一客户端（防 tag 盗用绕过）
+      const result = await captchaDao.generate(captchaStore, {}, clientContext(request));
       return reply.result.success('验证码生成成功', result);
     }
   });
@@ -57,7 +58,9 @@ export default async function (fastify, opts) {
           emailCodeStore,
           // 发码时绑定客户端指纹（IP+UA，启用时含 device 指纹），用码时回查一致性
           (email, sessionId, store) =>
-            emailDao.sendCode(email, sessionId, store, clientContext(request))
+            emailDao.sendCode(email, sessionId, store, clientContext(request)),
+          // captchaKey 指纹校验：必须与 generate 时同一客户端
+          clientContext(request)
         );
         return reply.result.success(result.message, {
           emailSent: result.emailSent

@@ -23,6 +23,7 @@ import { detectLoginAnomaly, DETECT_RESULT } from '../../../framework/auth/anoma
 import { logLoginFailure } from '../../../framework/auth/session.js';
 import { getStore } from '../../../framework/redis/index.js';
 import captchaService from '../../../framework/verify/captcha/service.js';
+import { clientContext } from '../../../framework/verify/context.js';
 import { emailDao } from '../../../framework/verify/email/index.js';
 import { AuthorizationService } from './authorization.service.js';
 import deactivationService from '../../user/services/deactivation.service.js';
@@ -101,7 +102,8 @@ export async function directLogin(request, reply, fastify) {
       return reply.code(400).send({ code: 400, message: '请先完成图形验证', data: null });
     }
     const captchaStore = getStore('captcha');
-    const consumed = await captchaService.consume(captchaKey, captchaStore);
+    // consume 时校验指纹：必须与 generate 时同一客户端（防 tag 盗用绕过）
+    const consumed = await captchaService.consume(captchaKey, captchaStore, clientContext(request));
     if (!consumed) {
       return reply.code(400).send({ code: 400, message: '图形验证码错误或已过期，请重新验证', data: null });
     }
