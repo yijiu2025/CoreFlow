@@ -248,17 +248,15 @@ const goBack = () => {
   background: #020617;
 }
 
-/* === 顶部 Header（白灰，非彩色渐变） === */
+/* === 顶部 Header（白灰，无分隔线，与 body 融为一体） === */
 .mlogin-header {
   position: relative;
   padding: 56px 24px 32px;
   background: #fff;
-  border-bottom: 1px solid #f1f5f9;
   overflow: hidden;
 }
 :global(.dark) .mlogin-header {
   background: #0f172a;
-  border-bottom-color: #1e293b;
 }
 .mlogin-back-btn {
   position: absolute;
@@ -335,15 +333,11 @@ const goBack = () => {
   background: #0f172a;
 }
 
-/* === 模式切换 Tab === */
+/* === 模式切换 Tab（无底部分隔线，用间距区分） === */
 .mlogin-tabs {
   position: relative;
   display: flex;
   margin-bottom: 24px;
-  border-bottom: 1px solid #f1f5f9;
-}
-:global(.dark) .mlogin-tabs {
-  border-bottom-color: #1e293b;
 }
 .mlogin-tab {
   position: relative;

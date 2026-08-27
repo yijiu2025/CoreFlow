@@ -288,18 +288,16 @@ const handleRegister = handleSubmit(async data => {
   background: #020617;
 }
 
-/* === 顶部 Header（白灰，非彩色渐变） === */
+/* === 顶部 Header（白灰，无分隔线，与 body 融为一体） === */
 .mreg-header {
   position: relative;
   padding: 48px 24px 20px;
   background: #fff;
-  border-bottom: 1px solid #f1f5f9;
   color: #0f172a;
   overflow: hidden;
 }
 :global(.dark) .mreg-header {
   background: #0f172a;
-  border-bottom-color: #1e293b;
   color: #f1f5f9;
 }
 .mreg-header-bg {
