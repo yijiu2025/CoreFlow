@@ -175,6 +175,65 @@ app.use(helmet({
 | `console.error(err)` 生产 | 堆栈泄露（用 `useErrorReporter` 上报） |
 | `MD5/SHA1/DES/RC4` 加密 | 已被攻破（用 SHA-256+ / bcrypt） |
 
+## 十二、密钥管理（Secrets Handling）
+
+> **最高优先级规则**：任何密钥（API Key / Secret / Token / DB 连接串）**绝不能**进 git、对话、文档、截图。
+
+### 反模式（这些操作会立即泄露）
+
+| ❌ 反模式 | 后果 |
+|---|---|
+| 把 Secret Key 贴到 IM/邮件/对话/issue | 攻击者可绕过所有验证、伪造请求 |
+| 把 Secret Key 提交到 git（即使是私有仓） | 历史记录永远存在，**轮换也救不了**（已 fork/clone/镜像） |
+| 把 Key 写在 `.env` 文件并提交（即使 `.env.example`） | 复制粘贴易混淆，PR review 也可能误提交 |
+| 把 Key 放在前端代码（即使 build 时混淆） | 浏览器端代码 = 公开，任何用户 F12 能看到 |
+| 把 Key 截图发到 IM/工单 | 图片 OCR + 截屏历史，难彻底删 |
+
+### 正确流程（人机验证/SaaS Key 标准做法）
+
+1. **前端 Key（site key / public key）**：
+   - 可公开（设计如此），但**仍不主动泄露**
+   - 放 `.env`，加 `.gitignore` 规则
+   - `.env.example` 写**占位符**（`0x4AAAAAAA...`）作为格式示例
+   - 部署时用部署平台 secret manager 注入（Vercel/Vercel env / Cloudflare Workers secret / K8s Secret / Vault）
+
+2. **后端 Key（secret key / private key）**：
+   - **绝不能**进前端代码、`.env`（前端环境）、git
+   - 放后端 `.env`，加 `.gitignore`
+   - 部署时用 secret manager 注入
+   - 定期（90 天）轮换，CI/CD 自动更新
+
+3. **如果不小心泄露了 Secret Key**：
+   - 立即到对应 SaaS Dashboard **轮换**（regenerate）
+   - 旧 key 立即失效
+   - 检查异常日志（看是否被滥用）
+   - 评估影响范围（是否影响鉴权/支付/数据）
+
+### oauth21 的实际配置
+
+```bash
+# oauth21/.env（这是前端 .env，**不能放后端 Secret Key**）
+# Turnstile Site Key（公开 key，可放前端 .env）
+VITE_TURNSTILE_ENABLED=true
+VITE_TURNSTILE_SITE_KEY=<从 Cloudflare Dashboard 复制 site key>
+
+# ⚠️ Turnstile Secret Key（**绝不放前端 .env！**）
+# 放后端 .env（src/ 同级的 server .env，不在 oauth21/ 目录）：
+# TURNSTILE_SECRET_KEY=<从 Cloudflare Dashboard 复制 secret key>
+# 后端用 secret key 调 https://challenges.cloudflare.com/turnstile/v0/siteverify 验证
+```
+
+### 检测机制（推荐 CI 加）
+
+- **git-secrets**（[git-secret-mirror](https://github.com/awslabs/git-secrets)）：commit hook 自动检测常见 key pattern（AKIA / 0x4AAAA / AIzaSy / sk- 等）
+- **TruffleHog / gitleaks**：扫描整个 git 历史，已泄露的 key 即使在历史 commit 也能发现
+
+### 历史教训（本项目）
+
+- 2026-08-29 开发者曾在对话中贴出 Cloudflare Turnstile site key + secret key
+- 立即建议轮换（因为 key 一旦公开，**唯一**补救是 Cloudflare Dashboard regenerate）
+- 当前 .env 仍是占位符，未把真实 key 写入仓库
+
 ## 十三、审计日志
 
 | 日期 | 审计人 | 范围 | 发现 | 修复 |
