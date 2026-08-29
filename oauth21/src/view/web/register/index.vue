@@ -26,18 +26,29 @@ const activeComponent = computed(() => {
   return StandardRegister;
 });
 
-// 透传 OAuth 注册上下文给子组件（appName 显示 + lang 切换 i18n + redirect 注册后回跳）
-// 子组件用 inject('registerContext') 获取
-// 最小原则：只传 OAuth 场景必需的 4 项。其他（deviceId/theme/timestamp 等）由各自的
-// 全局机制处理：deviceId 由 request.ts 拦截器自动注入 x-device-id 头，theme 从
-// useThemeStore 读，timestamp 用于防重放（H5 签名 X-Timestamp 头）。
-// 不透传闲鱼特有参数 stie/rnd（与 OAuth 框架无关，子组件不应知道）。
+// 透传 OAuth 注册上下文给子组件
+// iframe 父应用跳注册页时通常带：appName/client_id/redirect_uri/scope/state，
+// 注册后跳回 redirect_uri（同源白名单校验，防开放重定向）。
+// 子组件用 inject('registerContext') 获取。
+// 其他（deviceId/theme/timestamp 等）由各自的全局机制处理，不透传。
 import { provide, reactive } from 'vue';
+const q = route.query;
 const registerContext = reactive({
-  appName: String(route.query.appName || '') || 'Enterprise SSO',
-  lang: String(route.query.lang || '') || 'zh_cn',
-  redirect: String(route.query.redirect || ''),
-  invite: String(route.query.invite || '')
+  // 应用展示
+  appName: String(q.appName || '') || 'Enterprise SSO',
+  // 客户端（后端 OAuth 服务用）
+  clientId: String(q.client_id || q.appName || ''),
+  // OAuth 回跳（注册成功后跳此 URL，必须同源白名单校验）
+  redirectUri: String(q.redirect_uri || q.redirect || ''),
+  // 兼容旧字段名（dispatcher 之前是 redirect，新版统一用 redirect_uri 与 OAuth 规范对齐）
+  redirect: String(q.redirect || q.redirect_uri || ''),
+  // scope + state（OAuth 标准字段，注册成功后回跳 redirect_uri 时会带上）
+  scope: String(q.scope || ''),
+  state: String(q.state || ''),
+  // 邀请码（父应用邀请注册场景）
+  invite: String(q.invite || ''),
+  // 语言
+  lang: String(q.lang || '') || 'zh_cn'
 });
 provide('registerContext', registerContext);
 </script>
