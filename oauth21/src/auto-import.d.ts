@@ -157,6 +157,7 @@ declare global {
   const useBrowserLocation: typeof import('@vueuse/core').useBrowserLocation
   const useButtonLock: typeof import('./composables/useButtonLock').useButtonLock
   const useCached: typeof import('@vueuse/core').useCached
+  const useCaptcha: typeof import('./composables/useCaptcha').useCaptcha
   const useCaptchaFlow: typeof import('./composables/useCaptchaFlow').useCaptchaFlow
   const useClipboard: typeof import('@vueuse/core').useClipboard
   const useClipboardItems: typeof import('@vueuse/core').useClipboardItems
@@ -202,6 +203,7 @@ declare global {
   const useFullscreen: typeof import('@vueuse/core').useFullscreen
   const useGamepad: typeof import('@vueuse/core').useGamepad
   const useGeolocation: typeof import('@vueuse/core').useGeolocation
+  const useHCaptcha: typeof import('./composables/useHCaptcha').useHCaptcha
   const useI18n: typeof import('vue-i18n').useI18n
   const useId: typeof import('vue').useId
   const useIdle: typeof import('@vueuse/core').useIdle
@@ -252,7 +254,7 @@ declare global {
   const usePrevious: typeof import('@vueuse/core').usePrevious
   const useQrLogin: typeof import('./composables/useQrLogin').useQrLogin
   const useRafFn: typeof import('@vueuse/core').useRafFn
-  const useRecaptcha: typeof import('./composables/useRecaptcha').useRecaptcha
+  const useRecaptcha: typeof import('./composables/useHCaptcha').useRecaptcha
   const useRefHistory: typeof import('@vueuse/core').useRefHistory
   const useResizeObserver: typeof import('@vueuse/core').useResizeObserver
   const useRoute: typeof import('vue-router').useRoute
@@ -294,6 +296,7 @@ declare global {
   const useToString: typeof import('@vueuse/core').useToString
   const useToggle: typeof import('@vueuse/core').useToggle
   const useTransition: typeof import('@vueuse/core').useTransition
+  const useTurnstile: typeof import('./composables/useTurnstile').useTurnstile
   const useUrlSearchParams: typeof import('@vueuse/core').useUrlSearchParams
   const useUserMedia: typeof import('@vueuse/core').useUserMedia
   const useVModel: typeof import('@vueuse/core').useVModel
@@ -336,6 +339,9 @@ declare global {
   // @ts-ignore
   export type { ButtonLockOptions } from './composables/useButtonLock'
   import('./composables/useButtonLock')
+  // @ts-ignore
+  export type { CaptchaInstance } from './composables/useCaptcha'
+  import('./composables/useCaptcha')
   // @ts-ignore
   export type { CaptchaPurpose, CaptchaSuccessData } from './composables/useCaptchaFlow'
   import('./composables/useCaptchaFlow')
@@ -509,6 +515,7 @@ declare module 'vue' {
     readonly useBrowserLocation: UnwrapRef<typeof import('@vueuse/core')['useBrowserLocation']>
     readonly useButtonLock: UnwrapRef<typeof import('./composables/useButtonLock')['useButtonLock']>
     readonly useCached: UnwrapRef<typeof import('@vueuse/core')['useCached']>
+    readonly useCaptcha: UnwrapRef<typeof import('./composables/useCaptcha')['useCaptcha']>
     readonly useCaptchaFlow: UnwrapRef<typeof import('./composables/useCaptchaFlow')['useCaptchaFlow']>
     readonly useClipboard: UnwrapRef<typeof import('@vueuse/core')['useClipboard']>
     readonly useClipboardItems: UnwrapRef<typeof import('@vueuse/core')['useClipboardItems']>
@@ -554,6 +561,7 @@ declare module 'vue' {
     readonly useFullscreen: UnwrapRef<typeof import('@vueuse/core')['useFullscreen']>
     readonly useGamepad: UnwrapRef<typeof import('@vueuse/core')['useGamepad']>
     readonly useGeolocation: UnwrapRef<typeof import('@vueuse/core')['useGeolocation']>
+    readonly useHCaptcha: UnwrapRef<typeof import('./composables/useHCaptcha')['useHCaptcha']>
     readonly useI18n: UnwrapRef<typeof import('vue-i18n')['useI18n']>
     readonly useId: UnwrapRef<typeof import('vue')['useId']>
     readonly useIdle: UnwrapRef<typeof import('@vueuse/core')['useIdle']>
@@ -604,7 +612,7 @@ declare module 'vue' {
     readonly usePrevious: UnwrapRef<typeof import('@vueuse/core')['usePrevious']>
     readonly useQrLogin: UnwrapRef<typeof import('./composables/useQrLogin')['useQrLogin']>
     readonly useRafFn: UnwrapRef<typeof import('@vueuse/core')['useRafFn']>
-    readonly useRecaptcha: UnwrapRef<typeof import('./composables/useRecaptcha')['useRecaptcha']>
+    readonly useRecaptcha: UnwrapRef<typeof import('./composables/useHCaptcha')['useRecaptcha']>
     readonly useRefHistory: UnwrapRef<typeof import('@vueuse/core')['useRefHistory']>
     readonly useResizeObserver: UnwrapRef<typeof import('@vueuse/core')['useResizeObserver']>
     readonly useRoute: UnwrapRef<typeof import('vue-router')['useRoute']>
@@ -646,6 +654,7 @@ declare module 'vue' {
     readonly useToString: UnwrapRef<typeof import('@vueuse/core')['useToString']>
     readonly useToggle: UnwrapRef<typeof import('@vueuse/core')['useToggle']>
     readonly useTransition: UnwrapRef<typeof import('@vueuse/core')['useTransition']>
+    readonly useTurnstile: UnwrapRef<typeof import('./composables/useTurnstile')['useTurnstile']>
     readonly useUrlSearchParams: UnwrapRef<typeof import('@vueuse/core')['useUrlSearchParams']>
     readonly useUserMedia: UnwrapRef<typeof import('@vueuse/core')['useUserMedia']>
     readonly useVModel: UnwrapRef<typeof import('@vueuse/core')['useVModel']>
