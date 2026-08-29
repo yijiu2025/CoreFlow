@@ -100,6 +100,7 @@ declare global {
   const refDefault: typeof import('@vueuse/core').refDefault
   const refThrottled: typeof import('@vueuse/core').refThrottled
   const refWithControl: typeof import('@vueuse/core').refWithControl
+  const reportError: typeof import('./composables/useErrorReporter').reportError
   const resolveComponent: typeof import('vue').resolveComponent
   const resolveRef: typeof import('@vueuse/core').resolveRef
   const resolveUnref: typeof import('@vueuse/core').resolveUnref
@@ -152,6 +153,7 @@ declare global {
   const useBreakpoints: typeof import('@vueuse/core').useBreakpoints
   const useBroadcastChannel: typeof import('@vueuse/core').useBroadcastChannel
   const useBrowserLocation: typeof import('@vueuse/core').useBrowserLocation
+  const useButtonLock: typeof import('./composables/useButtonLock').useButtonLock
   const useCached: typeof import('@vueuse/core').useCached
   const useCaptchaFlow: typeof import('./composables/useCaptchaFlow').useCaptchaFlow
   const useClipboard: typeof import('@vueuse/core').useClipboard
@@ -326,6 +328,9 @@ declare global {
   export type { Component, Slot, Slots, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, ShallowRef, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
   // @ts-ignore
+  export type { ButtonLockOptions } from './composables/useButtonLock'
+  import('./composables/useButtonLock')
+  // @ts-ignore
   export type { CaptchaPurpose, CaptchaSuccessData } from './composables/useCaptchaFlow'
   import('./composables/useCaptchaFlow')
   // @ts-ignore
@@ -438,6 +443,7 @@ declare module 'vue' {
     readonly refDefault: UnwrapRef<typeof import('@vueuse/core')['refDefault']>
     readonly refThrottled: UnwrapRef<typeof import('@vueuse/core')['refThrottled']>
     readonly refWithControl: UnwrapRef<typeof import('@vueuse/core')['refWithControl']>
+    readonly reportError: UnwrapRef<typeof import('./composables/useErrorReporter')['reportError']>
     readonly resolveComponent: UnwrapRef<typeof import('vue')['resolveComponent']>
     readonly resolveRef: UnwrapRef<typeof import('@vueuse/core')['resolveRef']>
     readonly resolveUnref: UnwrapRef<typeof import('@vueuse/core')['resolveUnref']>
@@ -490,6 +496,7 @@ declare module 'vue' {
     readonly useBreakpoints: UnwrapRef<typeof import('@vueuse/core')['useBreakpoints']>
     readonly useBroadcastChannel: UnwrapRef<typeof import('@vueuse/core')['useBroadcastChannel']>
     readonly useBrowserLocation: UnwrapRef<typeof import('@vueuse/core')['useBrowserLocation']>
+    readonly useButtonLock: UnwrapRef<typeof import('./composables/useButtonLock')['useButtonLock']>
     readonly useCached: UnwrapRef<typeof import('@vueuse/core')['useCached']>
     readonly useCaptchaFlow: UnwrapRef<typeof import('./composables/useCaptchaFlow')['useCaptchaFlow']>
     readonly useClipboard: UnwrapRef<typeof import('@vueuse/core')['useClipboard']>

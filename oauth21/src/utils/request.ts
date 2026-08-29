@@ -15,6 +15,7 @@ import { getDeviceFingerprint, isDeviceFingerprintEnabled } from './device-finge
 import { getStableDeviceId } from './device-id';
 import { generateNonce } from './crypto';
 import { generateSignWithKey, serializeParamsForSign, getAppKey } from './sign';
+import { reportError } from '../composables/useErrorReporter';
 
 service.interceptors.request.use(
   async config => {
@@ -101,7 +102,8 @@ service.interceptors.response.use(
         redirectToLogin();
         return Promise.reject(new Error(message || '登录已过期，请重新登录'));
       }
-      console.error(message || '请求失败');
+      // 非 401 业务错误：上报到监控（生产 console 已被 drop），不影响主流程
+      reportError(new Error(message || '请求失败'), `[API Error] url=${res.config?.url || ''}`);
       return Promise.reject(new Error(message || 'Error'));
     }
     return data;
@@ -123,7 +125,7 @@ service.interceptors.response.use(
     // 优先从后端返回的 JSON 数据中提取 message
     const backendMessage = error.response?.data?.message;
     if (backendMessage) {
-      console.error(`[API Error] ${backendMessage}`);
+      reportError(new Error(backendMessage), `[API Error] status=${error.response?.status}`);
       return Promise.reject(new Error(backendMessage));
     }
 

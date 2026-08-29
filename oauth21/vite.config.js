@@ -81,5 +81,18 @@ export default defineConfig({
         additionalData: `@use "@/assets/styles/variables.scss" as *;`
       }
     }
+  },
+  build: {
+    // 生产构建删除所有 console 调用（防 Error 堆栈泄露到浏览器 DevTools）
+    // 关键错误通过 main.ts 的 useErrorReporter 上报到后端（/api/v1/client-error）
+    // 不依赖客户端 console 留痕
+    esbuild: {
+      drop: ['console']
+    },
+    // 生产不输出 .map 文件（防源码泄露到 dist）
+    // 需要调试时单独配 sourcemap: true 单独 build
+    sourcemap: false,
+    // chunk 大小警告阈值（Vite 默认 500KB，oauth21 较大组件略超）
+    chunkSizeWarningLimit: 1024
   }
 });
