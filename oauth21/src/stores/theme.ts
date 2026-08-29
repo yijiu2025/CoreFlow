@@ -31,8 +31,16 @@ export const useThemeStore = defineStore('theme', () => {
       isDark.value = e.matches;
     }
   };
-
   mediaQuery.addEventListener('change', handler);
 
-  return { isDark, toggleTheme };
+  /**
+   * 清理系统主题监听器（应用卸载或 HMR 时调）
+   * 导出 dispose 是为了遵循优雅关闭原则；正常 SPA 生命周期 store 与 app 同寿命不会调，
+   * 主要给 HMR / 单元测试场景用
+   */
+  function dispose() {
+    mediaQuery.removeEventListener('change', handler);
+  }
+
+  return { isDark, toggleTheme, dispose };
 });

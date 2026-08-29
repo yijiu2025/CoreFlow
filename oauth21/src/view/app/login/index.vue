@@ -8,6 +8,7 @@ import { useLoginFlow } from '@/composables/useLoginFlow';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
+import { postToParent } from '@/utils/parent';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
@@ -115,7 +116,8 @@ const handleLogin = handleSubmit(async () => {
 const goRegister = () => router.push('/m/register');
 const goBack = () => {
   if (window.parent && window.parent !== window) {
-    window.parent.postMessage({ type: 'SSO_CLOSE' }, '*');
+    // 用 postToParent 走白名单 origin 校验，禁用 '*' 避免恶意父窗口截获
+    postToParent({ type: 'SSO_CLOSE' });
   } else {
     router.back();
   }
