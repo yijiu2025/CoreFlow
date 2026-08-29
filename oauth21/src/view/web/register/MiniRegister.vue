@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { inject, ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
@@ -25,15 +25,25 @@ const { t, locale } = useI18n();
 // 父组件透传的注册上下文
 interface RegisterContext {
   appName: string;
-  lang: string;
+  clientId: string;
+  /** OAuth 标准字段，iframe 父应用跳注册时必传 */
+  redirectUri: string;
+  /** 兼容旧字段名 */
   redirect: string;
+  scope: string;
+  state: string;
   invite: string;
+  lang: string;
 }
 const ctx = inject<RegisterContext>('registerContext', {
   appName: 'Enterprise SSO',
-  lang: 'zh_cn',
+  clientId: '',
+  redirectUri: '',
   redirect: '',
-  invite: ''
+  scope: '',
+  state: '',
+  invite: '',
+  lang: 'zh_cn'
 });
 if (ctx.lang) locale.value = ctx.lang;
 
@@ -43,6 +53,7 @@ onMounted(() => {
 onUnmounted(() => dispose());
 
 const router = useRouter();
+const route = useRoute();
 
 // 分步状态：1 - 账号与验证码，2 - 密码与协议
 const step = ref<1 | 2>(1);
@@ -124,14 +135,35 @@ const handleNextStep = async () => {
   }
 };
 
-/** 同源白名单回跳（防开放重定向） */
+/**
+ * 注册后回跳（OAuth 同源白名单，防开放重定向）
+ * 优先用 ctx.redirectUri（OAuth 标准字段，iframe 父应用必传）
+ * fallback ctx.redirect（兼容旧字段名）
+ * 非法回跳降级到 /mini-login 并保留 OAuth 上下文（防"应用标识缺失"）
+ */
 function safeRedirect(): string {
-  const r = ctx.redirect;
-  if (!r) return '/mini-login';
-  if (r.startsWith('/') && !r.startsWith('//') && !r.includes('://')) {
-    return r;
+  const r = ctx.redirectUri || ctx.redirect;
+  if (r && r.startsWith('/') && !r.startsWith('//') && !r.includes('://')) {
+    return r; // 同源相对路径
   }
-  return '/mini-login';
+  // fallback：从当前 route 重新拼 OAuth 上下文跳 /mini-login（保 appName 不丢）
+  // router-link 也用此函数（line 298）
+  return buildMiniLoginUrl();
+}
+
+/**
+ * 拼 /mini-login URL，保留当前路由的 OAuth 上下文
+ * 给 safeRedirect 兜底 + footer 的"立即登录"链接复用
+ */
+function buildMiniLoginUrl(): string {
+  const preservedQuery: Record<string, string> = {};
+  for (const k of ['appName', 'client_id', 'scope', 'state', 'redirect_uri', 'lang']) {
+    const v = route.query[k];
+    if (typeof v === 'string') preservedQuery[k] = v;
+  }
+  preservedQuery.from = 'register';
+  const queryStr = new URLSearchParams(preservedQuery).toString();
+  return `/mini-login${queryStr ? '?' + queryStr : ''}`;
 }
 
 const handleRegister = handleSubmit(async () => {

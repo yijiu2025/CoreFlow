@@ -24,15 +24,25 @@ const { error: showError, success: showSuccess } = useMessage();
 // 父组件（view/web/register/index.vue）透传的注册上下文
 interface RegisterContext {
   appName: string;
-  lang: string;
+  clientId: string;
+  /** OAuth 标准字段，iframe 父应用跳注册时必传 */
+  redirectUri: string;
+  /** 兼容旧字段名 */
   redirect: string;
+  scope: string;
+  state: string;
   invite: string;
+  lang: string;
 }
 const ctx = inject<RegisterContext>('registerContext', {
   appName: 'Enterprise SSO',
-  lang: 'zh_cn',
+  clientId: '',
+  redirectUri: '',
   redirect: '',
-  invite: ''
+  scope: '',
+  state: '',
+  invite: '',
+  lang: 'zh_cn'
 });
 // 跟随父组件透传的 lang 切换 locale
 if (ctx.lang) locale.value = ctx.lang;
@@ -136,12 +146,22 @@ const handleNextStep = async () => {
  * - 排除 http://evil.com / javascript: 等（含 :// 的绝对 URL）
  */
 function safeRedirect(): string {
-  const r = ctx.redirect;
-  if (!r) return '/';
-  if (r.startsWith('/') && !r.startsWith('//') && !r.includes('://')) {
+  // 优先 redirectUri（OAuth 标准），fallback redirect（兼容旧字段）
+  const r = ctx.redirectUri || ctx.redirect;
+  if (r && r.startsWith('/') && !r.startsWith('//') && !r.includes('://')) {
     return r;
   }
-  return '/';
+  // 缺 redirectUri：iframe 场景下不能简单跳 /（会丢 appName 报"应用标识缺失"）
+  // 从当前 route.query 重新拼 OAuth 上下文（appName/client_id/redirect_uri/scope/state）
+  // 让父应用跳注册时即使没显式带 redirect_uri，也能链回登录页保留 OAuth 上下文
+  const preservedQuery: Record<string, string> = {};
+  for (const k of ['appName', 'client_id', 'scope', 'state', 'redirect_uri', 'lang', 'from']) {
+    const v = route.query[k];
+    if (typeof v === 'string') preservedQuery[k] = v;
+  }
+  preservedQuery.from = 'register';
+  const queryStr = new URLSearchParams(preservedQuery).toString();
+  return `/mini-login${queryStr ? '?' + queryStr : ''}`;
 }
 
 const handleRegister = handleSubmit(
@@ -210,7 +230,7 @@ const handleRegister = handleSubmit(
           </ul>
           <!-- 已有账号？立即登录（OAuth 注册场景跳转回原应用） -->
           <router-link
-            v-if="ctx.redirect"
+            v-if="ctx.redirectUri || ctx.redirect"
             :to="{ path: '/mini-login', query: { ...route.query, from: 'register' } }"
             class="reg-brand-signin"
           >
