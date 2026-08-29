@@ -73,12 +73,14 @@ async function verifySignature(request, reply) {
     });
   }
 
-  // 6. 重算签名：使用 h5TokenMd5（与前端保持一致）
+  // 6. 重算签名：h5TokenMd5（会话密钥）+ SIGN_APP_KEY（前后端共享常量）双因子
+  // 与前端 utils/sign.ts generateSignWithKey 保持一致
   const url = request.routerPath || request.url.split('?')[0];
   const bodyStr = request.body ? JSON.stringify(request.body) : '';
   // query 剔除签名自身字段后按 key 排序纳入验签（与前端 serializeParamsForSign 对齐）
   const paramsStr = serializeQueryForSign(request.query, ['x-sign', 'x-timestamp', 'x-nonce', 'x-device-id']);
-  const signString = `${h5TokenMd5}&${timestamp}&${nonce}&${url}&${paramsStr}&${bodyStr}`;
+  const appKey = process.env.SIGN_APP_KEY || '';
+  const signString = `${h5TokenMd5}&${appKey}&${timestamp}&${nonce}&${url}&${paramsStr}&${bodyStr}`;
 
   const serverSign = crypto.createHash('sha256').update(signString).digest('hex');
 
