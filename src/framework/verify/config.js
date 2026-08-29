@@ -31,15 +31,23 @@ export default {
     rateLimit: parseInt(process.env.SMS_RATE_LIMIT || '60')
   },
 
-  // 人机验证（hCaptcha / Google reCAPTCHA）
+  // 人机验证（hCaptcha / Google reCAPTCHA / Cloudflare Turnstile）
   // ENABLED=false（默认）：不校验，注册流程不受影响（开发/未配密钥时）
-  // ENABLED=true：注册端点校验 recaptchaToken，需配置 SITE_KEY + SECRET_KEY
+  // ENABLED=true：注册端点校验 captchaToken，需配置对应 provider 的 SECRET_KEY
+  // provider: 'google' | 'hcaptcha' | 'turnstile'
+  //   - 'google'    → 用 RECAPTCHA_SECRET_KEY + RECAPTCHA_SITE_KEY（Google reCAPTCHA v3）
+  //   - 'hcaptcha'  → 用 RECAPTCHA_SECRET_KEY + RECAPTCHA_SITE_KEY（hCaptcha）
+  //   - 'turnstile' → 用 TURNSTILE_SECRET_KEY + TURNSTILE_SITE_KEY（Cloudflare Turnstile，推荐国内）
   recaptcha: {
     enabled: process.env.RECAPTCHA_ENABLED === 'true',
     provider: process.env.RECAPTCHA_PROVIDER || 'google',
+    // google + hcaptcha 共用（API 兼容）
     secretKey: process.env.RECAPTCHA_SECRET_KEY || '',
     siteKey: process.env.RECAPTCHA_SITE_KEY || '',
-    minScore: parseFloat(process.env.RECAPTCHA_MIN_SCORE || '0.5')
+    minScore: parseFloat(process.env.RECAPTCHA_MIN_SCORE || '0.5'),
+    // turnstile 独立配置（API 与上面不兼容）
+    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',
+    turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || ''
   },
 
   // 滑块验证码

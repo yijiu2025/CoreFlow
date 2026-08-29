@@ -239,3 +239,49 @@ VITE_TURNSTILE_SITE_KEY=<从 Cloudflare Dashboard 复制 site key>
 | 日期 | 审计人 | 范围 | 发现 | 修复 |
 |---|---|---|---|---|
 | 2026-08-29 | AppSec 自动化 + 人工 | 47 文件全量 | 3 Medium（生产 console / 死代码 / 限流） | 全部修复（本次 commit） |
+| 2026-08-29 | AppSec 集成 | 人机验证 | hCaptcha 国内加载慢；新需求支持 Turnstile | 加 useTurnstile/useCaptcha（前端）；recaptcha service 加 _verifyTurnstile（后端） |
+
+## 十四、Turnstile 端到端集成清单
+
+### 启用顺序
+
+1. **Cloudflare Dashboard** 创 Invisible widget + 域名白名单
+2. **轮换** Secret Key（**必须**先轮换再填新值）
+3. **后端 .env**（部署时用 secret manager 注入，**不**提交 git）：
+   ```bash
+   RECAPTCHA_ENABLED=true
+   RECAPTCHA_PROVIDER=turnstile
+   TURNSTILE_SECRET_KEY=<新 secret key>     # ⚠️ 仅后端
+   TURNSTILE_SITE_KEY=<新 site key>          # 后端记录，前端用
+   ```
+4. **前端 .env**（**只**填 site key）：
+   ```bash
+   VITE_TURNSTILE_ENABLED=true
+   VITE_TURNSTILE_SITE_KEY=<同后端 SITE_KEY>  # 公开 key
+   ```
+5. **后端代码已就位**（[src/framework/verify/recaptcha/service.js](../../src/framework/verify/recaptcha/service.js#L133)）：
+   - `provider === 'turnstile'` 自动用 `_verifyTurnstile`
+   - 调 `https://challenges.cloudflare.com/turnstile/v0/siteverify`
+   - 失败返 400 `人机验证失败`
+6. **前端代码已就位**（[oauth21/src/composables/useCaptcha.ts](../../oauth21/src/composables/useCaptcha.ts)）：
+   - 3 个 register 组件用 `useCaptcha('register')` 自动选 Turnstile
+   - `getToken()` 拿 token 随 `authApi.register` 提交
+7. **测试端到端**：
+   - dev 打开 `/m/register`（移动端）或 `/register`（PC）
+   - 填邮箱 → 收图形码 → 发邮箱码 → 收邮箱码 → 提交
+   - 后端日志看 `[Turnstile] Cloudflare API 请求失败` 或 `success: true`
+   - Network 面板看 `challenges.cloudflare.com/turnstile/v0/siteverify` 200 OK
+8. **轮换后清理**：
+   - 检查 access log（Cloudflare Dashboard → Turnstile → Analytics）有无异常
+   - 旧 secret key 立即失效（轮换后）
+
+### dev 跳过验证的临时方案（仅 dev！）
+
+如果 Cloudflare 端配置未完成，**不**写真实 key 到 dev .env——加：
+
+```bash
+# 后端 .env（dev only）
+RECAPTCHA_ENABLED=false  # 完全跳过验证（注册流程不受影响）
+```
+
+生产前必设 `RECAPTCHA_ENABLED=true` + 真实 key。
