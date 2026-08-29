@@ -128,7 +128,7 @@ const handleRegister = handleSubmit(
       showError(err?.message || '注册失败，请稍后重试');
     }
   },
-  err => console.log('Validation errors:', err)
+  err => console.warn('[Register] 表单验证失败:', err)
 );
 
 const openDoc = (type: 'service' | 'privacy') => {

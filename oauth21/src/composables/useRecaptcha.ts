@@ -209,7 +209,7 @@ export function useRecaptcha(action = 'login') {
       const finish = (val: string | null) => {
         if (settled) return;
         settled = true;
-        timer && clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         removeChallengeStyle();
         resolve(val);
       };
