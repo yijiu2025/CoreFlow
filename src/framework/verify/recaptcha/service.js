@@ -1,9 +1,10 @@
 /**
  * 人机验证核心服务
- * 对接 Google reCAPTCHA / hCaptcha API
+ * 对接 Google reCAPTCHA / hCaptcha / Cloudflare Turnstile API
  *
  * @author yijiu2025
  * @since 2026-08-17
+ * @updated 2026-08-29 加 Turnstile 支持
  */
 import config from '../config.js';
 
@@ -35,6 +36,8 @@ class RecaptchaService {
         return await this._verifyGoogle(token, remoteIp);
       case 'hcaptcha':
         return await this._verifyHcaptcha(token, remoteIp);
+      case 'turnstile':
+        return await this._verifyTurnstile(token, remoteIp);
       default:
         console.warn(`[Recaptcha] 未知服务商: ${provider}，跳过验证`);
         return { success: true };
@@ -124,6 +127,49 @@ class RecaptchaService {
       return { success: true };
     } catch (err) {
       console.error('[Recaptcha] hCaptcha API 请求失败:', err.message);
+      return { success: false, error: 'api_error' };
+    }
+  }
+
+  /**
+   * Cloudflare Turnstile 验证
+   * @private
+   * 文档：https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
+   */
+  async _verifyTurnstile(token, remoteIp) {
+    // 独立 secret key（不与 hcaptcha/google 混用）
+    const secretKey = recaptchaConfig.turnstileSecretKey;
+    if (!secretKey) {
+      console.warn('[Turnstile] TURNSTILE_SECRET_KEY 未配置，跳过验证（生产环境必须配）');
+      return { success: true };
+    }
+
+    try {
+      const params = new URLSearchParams({
+        secret: secretKey,
+        response: token
+      });
+      if (remoteIp) params.append('remoteip', remoteIp);
+
+      const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST',
+        body: params
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        return {
+          success: false,
+          error: data['error-codes']?.join(', ') || 'verification_failed'
+        };
+      }
+
+      // Turnstile 返回 hostname（验证 token 是哪个域名发的，防止跨域 token 挪用）
+      // 生产环境可选：校验 hostname 与配置域名一致
+      return { success: true, hostname: data.hostname, action: data.action };
+    } catch (err) {
+      console.error('[Turnstile] Cloudflare API 请求失败:', err.message);
       return { success: false, error: 'api_error' };
     }
   }
