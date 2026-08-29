@@ -48,9 +48,20 @@ export function useAgreementVersion(): UseAgreementVersionReturn {
   };
 }
 
-/** 顶层函数（无需 composable 时直接用） */
-export const captureAgreementVersion = (): AgreementVersionSnapshot => ({
-  serviceVersion: agreementConfig.SERVICE_EFFECTIVE_DATE,
-  privacyVersion: agreementConfig.PRIVACY_VERSION,
-  acceptedAt: Date.now()
-});
+/** 顶层函数：接受 composable 返回值或 snapshot，取当前快照并打 acceptedAt */
+export const captureAgreementVersion = (
+  source?: UseAgreementVersionReturn | AgreementVersionSnapshot
+): AgreementVersionSnapshot => {
+  // source 是 composable 返回值 → 读 .current.value；source 是 snapshot → 直接用
+  if (source && 'current' in source && source.current) {
+    return { ...source.current.value, acceptedAt: Date.now() };
+  }
+  if (source && 'serviceVersion' in source) {
+    return { ...source, acceptedAt: Date.now() };
+  }
+  return {
+    serviceVersion: agreementConfig.SERVICE_EFFECTIVE_DATE,
+    privacyVersion: agreementConfig.PRIVACY_VERSION,
+    acceptedAt: Date.now()
+  };
+};

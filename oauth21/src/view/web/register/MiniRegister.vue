@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
-import { useRoute, useRouter } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { inject, ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
@@ -43,7 +43,6 @@ onMounted(() => {
 onUnmounted(() => dispose());
 
 const router = useRouter();
-const route = useRoute();
 
 // 分步状态：1 - 账号与验证码，2 - 密码与协议
 const step = ref<1 | 2>(1);
