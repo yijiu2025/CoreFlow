@@ -13,6 +13,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     AgreementModals: typeof import('./components/common/AgreementModals.vue')['default']
     AuthContainer: typeof import('./components/common/AuthContainer.vue')['default']
+    AuthField: typeof import('./components/common/AuthField.vue')['default']
     DocModal: typeof import('./components/common/DocModal.vue')['default']
     GraphicCaptcha: typeof import('./components/common/GraphicCaptcha.vue')['default']
     Icons: typeof import('./components/common/Icons.vue')['default']
