@@ -28,12 +28,16 @@ const activeComponent = computed(() => {
 
 // 透传 OAuth 注册上下文给子组件（appName 显示 + lang 切换 i18n + redirect 注册后回跳）
 // 子组件用 inject('registerContext') 获取
+// 最小原则：只传 OAuth 场景必需的 4 项。其他（deviceId/theme/timestamp 等）由各自的
+// 全局机制处理：deviceId 由 request.ts 拦截器自动注入 x-device-id 头，theme 从
+// useThemeStore 读，timestamp 用于防重放（H5 签名 X-Timestamp 头）。
+// 不透传闲鱼特有参数 stie/rnd（与 OAuth 框架无关，子组件不应知道）。
 import { provide, reactive } from 'vue';
 const registerContext = reactive({
-  appName: (route.query.appName as string) || 'Enterprise SSO',
-  lang: (route.query.lang as string) || 'zh_cn',
-  redirect: (route.query.redirect as string) || '',
-  invite: (route.query.invite as string) || ''
+  appName: String(route.query.appName || '') || 'Enterprise SSO',
+  lang: String(route.query.lang || '') || 'zh_cn',
+  redirect: String(route.query.redirect || ''),
+  invite: String(route.query.invite || '')
 });
 provide('registerContext', registerContext);
 </script>
