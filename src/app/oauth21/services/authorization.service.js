@@ -266,10 +266,9 @@ class AuthorizationService {
         }
       });
     } catch (err) {
-      if (err instanceof OAuthError && request.query.redirect_uri) {
-        const sep = request.query.redirect_uri.includes('?') ? '&' : '?';
-        return reply.redirect(`${request.query.redirect_uri}${sep}${err.toRedirectParams()}`);
-      }
+      // 不用 request.query.redirect_uri（未校验，开放重定向风险）
+      // redirect 只走已校验 session 的 deny/approve 分支（返回 redirect_url 由前端跳）
+      // catch 分支抛错由全局错误处理返回错误页
       throw err;
     }
   }
