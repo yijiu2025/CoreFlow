@@ -1,386 +1,431 @@
-# ǰ��ͳһ�淶�ĵ�
+# 前端统一规范文档
 
-> ������Ŀ��`oauth21`��`firewall`��`admin`  
-> Ŀ�꣺ͳһǰ�˹��̽ṹ�������񡢰�ȫʵ������ά�����뽻����׼��
+> 适用项目：`oauth21`（登录/注册 SSO 中心）、`firewall`（防火墙）、`admin`（管理后台）、`posecraft`（AI 姿势分析）
+> 目标：统一前端工程结构、组件、服务、安全实践，提升可维护性与交接效率
+> 配套文档：[PWA_GUIDE.md](./PWA_GUIDE.md)（PWA 接入规范）、[theme.md](./theme.md)（主题规范）、[coding-standard.md](./coding-standard.md)（编码风格）、[auth-integration.md](./auth-integration.md)（认证集成）、[overview.md](./overview.md)（架构总览）
 
----
-
-## 1. �����뷶Χ
-
-### 1.1 ��Ŀְ��
-
-- `oauth21`��OAuth 2.1 / SSO ��¼����Ȩ���һ����롢�ƶ��˵�¼ע��ҳ��
-- `firewall`������ǽ����̨����ء����ԡ���־��ϵͳ���á�
-- `admin`��������̨���û���Ȩ�޹�������������
-
-### 1.2 ͳһ����ջ
-
-| ����     | ͳһҪ��                                 |
-| -------- | ------------------------------------- |
-| ���      | Vue 3                                 |
-| ����     | TypeScript                            |
-| ����     | Vite                                  |
-| ·��      | Vue Router 4                          |
-| ״̬        | Pinia                                 |
-| UI ��ʽ   | Tailwind CSS                          |
-| У��      | Zod + vee-validate                    |
-| ����     | @vueuse/core��dayjs                   |
-| ����     | axios                                 |
-| ���ʻ�    | vue-i18n                              |
-| �������� | ESLint + Prettier + TypeScript ���ͼ�� |
-
-> �������ڶ�Ӧ��Ŀ README ��ȷ��¼ԭ�򣬲�������Ĭ����ڶ��׷�����
+> **历史说明**：旧版本文档（`FRONTEND_STANDARDS.md.corrupted`）因编辑工具双重编码损坏，已不可读但保留在 git 历史中可查。本文为重写版，按当前项目实际实践沉淀。
 
 ---
 
-## 2. Ŀ¼�ṹ�淶
+## 1. 适用范围
 
-### 2.1 �Ƽ��ṹ
+### 1.1 项目职责
 
-```text
-src/
-������ assets/                 # ��̬��Դ
-��   ������ images/
-��   ������ styles/
-��       ������ main.scss
-������ components/             # �������
-��   ������ common/
-��   ������ business/
-������ composables/            # ���ʽ����
-������ config/                 # ǰ������
-������ directives/             # �Զ���ָ��
-������ i18n/                   # ���ʻ�
-������ layouts/                # ����
-������ router/                 # ·��
-������ stores/                 # ״̬����
-������ types/                  # ���Ͷ���
-������ utils/                  # ���ߺ���
-������ views/                  # ҳ��
-������ App.vue
-������ main.ts
-������ style.css
+- `oauth21`：OAuth 2.1 / SSO 登录授权中心。一方应用嵌入登录页（iframe），三方应用走标准 authorize 流程
+- `firewall`：防火墙防御后台（人机验证、数据大盘）
+- `admin`：管理后台（用户/角色/权限/审计）
+- `posecraft`：AI 姿势分析 + 图片编辑（[PWA 启用](./PWA_GUIDE.md)）
+
+### 1.2 统一技术栈
+
+| 项 | 选型 |
+|---|---|
+| 框架 | Vue 3 + `<script setup>` + TypeScript |
+| 构建 | Vite 5 |
+| 路由 | vue-router 4 |
+| 状态 | Pinia |
+| UI | Tailwind CSS + daisyui 工具类 |
+| i18n | vue-i18n 9 |
+| HTTP | axios（统一封装在 `src/utils/request.ts`） |
+| 表单 | vee-validate + zod（[Zod discriminatedUnion](https://zod.dev/?id=discriminated-unions) 区分登录/注册模式） |
+| 图标 | lucide-vue-next + 内联 SVG |
+| 自动导入 | unplugin-auto-import / unplugin-vue-components |
+| PWA | [vite-plugin-pwa](./PWA_GUIDE.md)（posecraft 默认启用） |
+
+---
+
+## 2. 目录结构规范
+
+### 2.1 推荐结构
+
+```
+<app>/
+├── public/                  # 静态资源（favicon、图标、SW 资源）
+├── src/
+│   ├── api/                # 按域分文件夹的 API 路由
+│   ├── assets/             # 全局样式（main.scss）
+│   ├── components/         # 通用组件（common/、业务组件）
+│   │   ├── common/         # 跨页面通用（AuthContainer、GraphicCaptcha、SliderCaptcha）
+│   │   └── ...
+│   ├── composables/        # 组合式函数（use*，业务逻辑封装）
+│   ├── i18n/               # 多语言
+│   ├── layouts/            # 路由布局（BlankLayout 等）
+│   ├── router/             # 路由
+│   ├── stores/             # Pinia 状态
+│   ├── utils/              # 工具函数（request、crypto、sign、device）
+│   ├── view/               # 页面（按平台/功能分子目录）
+│   │   ├── web/            # PC 端页面
+│   │   ├── app/            # 移动端页面
+│   │   └── ...
+│   ├── App.vue
+│   └── main.ts
+├── .env / .env.example
+├── vite.config.ts
+└── package.json
 ```
 
-### 2.2 �ֲ�߽�
+### 2.2 分层边界
 
-- `views/`��ֻ��ҳ�漶�����ҵ����š�
-- `components/`���ɸ����������ͨ�ú�ҵ���֡�
-- `composables/`���� UI ������߼���ȡ��
-- `stores/`����ҳ�湲��״̬��
-- `utils/`����������ͨ��������
+- **components 职责单一**：一个组件只负责一个功能域（如 `SearchHero` 只管搜索框，不管 Tab）
+- **不内嵌其他模块**：组件 A 中不出现组件 B 的 UI/逻辑
+- **状态归属**：由消费方（父组件）管理状态，不内嵌数据
+- **跨模块通信**：通过 props / emit / v-model / 共享 composable，禁止反向依赖
 
 ---
 
-## 3. �����淶
+## 3. 命名规范
 
-### 3.1 �ļ�����
+### 3.1 文件命名
 
-- Ŀ¼��`kebab-case`
-- ����ļ���`PascalCase.vue`
-- ����/�߼��ļ���`camelCase.ts`
-- ��ʽ�ļ���`kebab-case.scss`
+- 组件：`PascalCase.vue`（`AuthContainer.vue`）
+- 页面：`PascalCase.vue`（`MiniLogin.vue`）或场景化（`forgot-password/index.vue`）
+- composable：`useCamelCase.ts`（`useLoginFlow.ts`）
+- 工具函数：`camelCase.ts`（`device-fingerprint.ts` 用 kebab-case 也可，保持项目一致）
+- 类型：`PascalCase.ts`（专门类型文件）
 
-### 3.2 ��������
+### 3.2 标识符命名
 
-- �������`PascalCase`
-- ����/������`camelCase`
-- ������`UPPER_SNAKE_CASE`
-- ����/�ӿڣ�`PascalCase`
-- ����ֵ��`is/has/should` ǰ׺
+- 组件名：`PascalCase`（多词组合，如 `GraphicCaptcha`）
+- 变量/函数：`camelCase`（`loginType`、`executeLogin`）
+- 常量：`UPPER_SNAKE_CASE`（`DEFAULT_SCOPE`、`MAX_SESSIONS`）
+- 类型/接口：`PascalCase`（`LoginPayload`、`UseLoginFlowOptions`）
+- 布尔：`is/has/can` 前缀（`isCountingDown`、`hasAppName`）
+- 事件：`update:xxx` 模式（`update:showQR`）
 
-### 3.3 ʾ��
+---
 
-```text
-components/common/AuthContainer.vue
-composables/useMessage.ts
-utils/request.ts
-stores/auth.ts
+## 4. TypeScript 规范
+
+### 4.1 严格模式
+
+`tsconfig.app.json` 必须开启：
+- `strict: true`
+- `noUnusedLocals: true`
+- `noUnusedParameters: true`
+- `noImplicitAny: true`
+- `noFallthroughCasesInSwitch: true`
+
+### 4.2 响应式变量
+
+- 原始类型：`const count = ref(0)`
+- 对象：`const user = ref<User | null>(null)`
+- 解构模板自动 unwrap：`const { active, remaining } = useCountdown()` 在 `<template>` 直接用，在 `<script>` 用 `.value`
+
+### 4.3 类型定义原则
+
+- **优先具体类型**：`ref<User | null>(null)` 优于 `ref<any>(null)`
+- **判别联合**替代 `any`：
+  ```ts
+  type LoginResponse =
+    | { action: 'consent'; consentKey: string }
+    | { action: 'needs_email_verify'; verifyToken: string }
+    | { action: 'max_sessions'; sessions: any[] }
+    | LoginSuccessResponse;
+  ```
+- **未知类型用 `unknown` + 类型守卫**，不用 `any`
+- **API 响应类型**：后端 DTO + zod 推导（[z.infer](https://zod.dev/?id=type-inference)），不写 `any`
+
+### 4.4 类型检查
+
+CI 必跑 `vue-tsc --noEmit`（零错误零警告），不通过禁止合并。
+
+---
+
+## 5. 组件规范
+
+### 5.1 单文件组件结构
+
+```vue
+<script setup lang="ts">
+// 1. imports
+// 2. composables / stores
+// 3. 响应式状态
+// 4. 计算属性
+// 5. 方法
+// 6. 生命周期
+</script>
+
+<template>
+  <!-- 单一根元素（避免 <Transition> 警告） -->
+</template>
+
+<style scoped>
+/* 局部样式 */
+</style>
 ```
 
----
-
-## 4. TypeScript �淶
-
-### 4.1 ���Ͷ���
-
-- ����ʹ�� `interface` ����������ͣ�`type` �����������͡��������͡�
-- ��ֹ `any`�����ݱ߽紦ʹ�� `unknown` ����ʽ��խ��
-- ��������ͳһ���� `types/`��
-
-### 4.2 ��Ӧʽ����
-
-- �Ƽ�����Լ��������API ��Ӧ����ҳ�ṹ��
-- ����ģ������ʽ `any`��
-
-### 4.3 ʾ��
+### 5.2 Props 与事件
 
 ```ts
-export interface LoginPayload {
-  username?: string;
-  password?: string;
-  type: 'sms' | 'pwd' | 'email';
+interface Props {
+  isOpen: boolean;
+  email?: string;
+  type: 'register' | 'login' | 'reset';
 }
+const props = withDefaults(defineProps<Props>(), {
+  email: '',
+  type: 'register'
+});
+
+const emit = defineEmits<{
+  'update:isOpen': [value: boolean];
+  success: [data: { captchaKey: string }];
+}>();
 ```
 
----
+### 5.3 composable 抽取时机
 
-## 5. ����淶
+满足任一条件，逻辑就抽到 `composables/`：
 
-### 5.1 ����ṹ
+- 在 2+ 个组件重复出现（如 `setInterval` 倒计时、图形码流程）
+- 单组件内状态机复杂（弹窗开关 + 异步回调 + 多状态切换）
+- 涉及定时器/资源需要 `onUnmounted` 清理
 
-- ���ļ����ͳһ˳��`<template>`��`<script setup lang="ts">`��`<style scoped>`��
-- ���������� `ChildPanel.vue` + `useXxx.ts`��
-- �����ļ����� 500 �б����֡�
-
-### 5.2 Props ���¼�
-
-- Props ���붨�����ͺͱ����ԡ�
-- �¼���ͳһ `kebab-case`������ DOM �¼���ͻ��
-- ��¶�ӿ�ʹ�� `defineExpose`��
-
-### 5.3 ģ��淶
-
-- ��ʹ�� `v-html`���������ݿɿ��Ҿ�����ȫ��顣
-- �����߼��³��� `composables` �򷽷���
-- �б���Ⱦ�������ȶ� `:key`��
+参考实现：
+- `useCountdown`（8 处倒计时统一）
+- `useCaptchaFlow`（5 处图形码统一）
+- `useQrLogin`（2 处二维码登录统一）
+- `useLoginFlow`（3 处登录流程统一 ~200 行×3 消除）
+- `useRecaptcha`（hCaptcha 实例隔离 + SDK 加载超时）
 
 ---
 
-## 6. ״̬�����淶
+## 6. 状态管理规范
 
-### 6.1 Store ְ��
+### 6.1 Store 职责
 
-- ÿ�� store ֻ����һ��ҵ����
-- ��ֹ�� UI ��ʱ״̬��ҵ��״̬��š�
-- �־û�״̬ͳһ�� `pinia-plugin-persistedstate` ��ͳһ���湤�ߡ�
+Pinia store 一个只管一块：
+- `useAuthStore` — 登录态、token、user
+- `useThemeStore` — 主题（dark/light）
+- 业务 store 按需（不滥用 Pinia，跨组件数据用 props/emits）
 
-### 6.2 ����
+### 6.2 跨域通信
 
-- store �ļ���`useXxxStore`
-- state/getter/action ���廯��������д��
+- 父子组件：`props` + `emit`
+- 跨层级：composable（`useXxx` 返回 ref）
+- 跨域（iframe）：`postMessage` + origin 白名单（`utils/parent.ts`）
 
-### 6.3 ʾ��
+---
+
+## 7. 错误处理规范
+
+### 7.1 异步错误
+
+- `try/catch` 必带 `err: any` 处理后通过 `useMessage().error()` 提示用户
+- 网络错误给友好提示，不抛技术细节
+- 关键操作失败要 console.error 留痕（便于排查）
+
+### 7.2 全局错误处理
+
+`main.ts` 注册 `app.config.errorHandler` 兜底未捕获错误。
+
+### 7.3 401 跳转
+
+Session 模式：401 → 跳登录页（sid_r 过期或未登录）。不重发请求（避免死循环）。
+JWT 模式：401 → 调 `/oauth2.1/token` 用 refresh_token 刷新，重发原请求。
+
+### 7.4 风险拦截（`__risk__`）
+
+后端响应 `403 + __risk__` → 前端弹人机验证（`SliderCaptcha.vue`）。
+- 带 `x-verify-token` 头的请求豁免（验证端点不能拦自己）
+- `info` 级不拦（IP 变指纹不变 = 梯子），但响应体注入 `__risk__` 提示前端
+
+---
+
+## 8. 性能与可维护性
+
+### 8.1 文件大小限制
+
+单 JS/Vue 文件不超过 1000 行（含空行注释）。接近 800 行时主动规划拆分。
+
+### 8.2 避免重复代码
+
+- 相似逻辑 ≥ 2 处 → 抽 composable
+- UI 相似 ≥ 3 处 → 抽通用组件
+- 字符串/常量散落多处 → 抽 config 文件
+
+### 8.3 死代码
+
+定期清理：
+- 零引用的组件/函数
+- 已废弃的 API 调用
+- 占位 TODO（确认无意义后删或转 issue）
+
+---
+
+## 9. 安全规范
+
+### 9.1 Token 存储
+
+- **oauth21 自身不落 token 到 localStorage**（防 XSS）
+- token 通过 postMessage 递给父应用
+- 父应用优先用 `httpOnly Cookie`（`bind-session`），不直接落 localStorage
+
+### 9.2 postMessage origin 校验
+
+`utils/parent.ts` 双向校验：
+- 白名单（`VITE_ALLOWED_PARENT_ORIGINS`）
+- `location.ancestorOrigins[0]`（不可伪造）
+- 拒绝非白名单（fail-closed）
+
+### 9.3 请求签名（防爬）
+
+[utils/sign.ts](../oauth21/src/utils/sign.ts)（学闲鱼 generateSign）：
+- `appKey` 前后端共享（`.env` 配置）
+- 签名串：sha256(`sessionKey & appKey & timestamp & nonce & url & params & body`)
+- params 按 key 排序序列化纳入签名（防 query 篡改）
+- nonce 用 `crypto.getRandomValues`（防重放）
+
+### 9.4 设备码
+
+- `device_id`（cookie）+ `device_fingerprint`（sha256 of device_id+UA+uid）
+- 跨账号复用 device_id（localStorage 持久）
+- 风险检测基准从 Redis 读（零 DB 查询）
+
+### 9.5 XSS 防护
+
+- **禁止**在模板用 `v-html` 渲染用户输入
+- 协议/帮助文档等富文本用专用 `DocModal` 组件，不直接渲染 HTML
+- emoji 不在 UI 用（CLAUDE.md 规范），但协议正文中按需保留
+
+---
+
+## 10. i18n 规范
+
+### 10.1 key 命名
+
+层级结构 + 业务域：
+- `login.welcome` / `login.consent_title` / `register.step1` / `forgot.code_sent`
+- 通用：`validation.email_invalid` / `common.cancel`
+
+### 10.2 使用方式
+
+```vue
+<template>
+  <button>{{ t('login.submit') }}</button>
+</template>
+
+<script setup>
+import { useI18n } from 'vue-i18n';
+const { t } = useI18n();
+</script>
+```
+
+### 10.3 兜底
 
 ```ts
-export const useAuthStore = defineStore('auth', () => {
-  const token = ref('')
-  const user = ref<User | null>(null)
-
-  async function login(payload: LoginPayload) { ... }
-  function logout() { ... }
-
-  return { token, user, login, logout }
-})
+t('login.perm_email', { email: '保密' }) || '获取您的电子邮箱地址'
 ```
 
----
-
-## 7. ��������淶
-
-### 7.1 ͳһ��װ
-
-- ������Ŀͳһʹ�� axios���������� `utils/request.ts` �� `api/xxx.ts`��
-- ͳһ������������`Authorization`��ͳһ�����롢401/403 ����������ȡ����
-
-### 7.2 �ӿڹ淶
-
-- ���ͳһ��Ӧ�ṹ��`{ code, message, data }`��
-- ͳһ�쳣ӳ��Ϊ `ApiError`������� `AxiosError` ֱ���׸�ҳ�档
-
-### 7.3 Token ˢ��
-
-- ������� 401 ֻ����һ��ˢ�¡�
-- ˢ��ʧ��ͳһ����״̬����ת��¼��
-
-### 7.4 ����Ŀ��״�������޸�Ҫ��
-
-| ��Ŀ        | ����                                         | �޸�Ҫ��                                |
-| ---------- | -------------------------------------------- | ------------------------------------- |
-| `oauth21`  | `utils/request.ts` 401 ʹ�ÿ� token ��������   | ���� `authApi.refreshToken`��ʧ������¼ |
-| `firewall` | 401 ������ Queue ����ʵ�֣���ȱ��ͳһ Error Class | ���� `ApiError`�����쳣����            |
-| `admin`    | 401 �߼�Ϊ TODO�����ڼ�ˢ��                      | ������ʵˢ�½ӿڲ�����ʧ�ܶ���               |
+中英文双语同步更新，避免漏译。
 
 ---
 
-## 8. ��ȫ�淶
+## 11. 测试规范
 
-### 8.1 ��֤��Ự
+### 11.1 单元测试
 
-- ����ʹ�ú�� Session + HttpOnly Cookie��
-- JWT �����ڶ��� API����ֹ���ش洢���� token��
+- 关键 composable（useLoginFlow、useCountdown）覆盖率 ≥ 80%
+- 工具函数（sign、device）覆盖率 ≥ 90%
 
-### 8.2 ����ǩ��
+### 11.2 集成测试
 
-- `oauth21` ��Ҫ�� H5 ǩ����`X-Sign`��`X-Timestamp`��`X-Nonce`��
-- ��ֹǰ�˱���˽Կ����Կ���������ġ�
+- 关键用户路径（登录、注册、二次验证）有 e2e 测试
+- 跨域 iframe SSO 流程有端到端验证
 
-### 8.3 ����
+### 11.3 手动验证
 
-- �����رղ���Ҫ `console.*`��ͳһ������־����
-- Σ�ղ����Ӷ���ȷ�ϣ�����/������������ͳһ��װ��
-- CSP �밲ȫ Header �ɺ��ͳһ���ã�ǰ�˱������������ű���
-
----
-
-## 9. ·�ɹ淶
-
-### 9.1 ����
-
-- ·��Ԫ��Ϣͳһ�ֶΣ�`title`��`requiresAuth`��`roles`��`permissions`��
-- ·��������ͳһʹ�� `() => import()`��
-
-### 9.2 ����
-
-- ȫ��·������ͳһ�� `router/index.ts`��
-- ��Ȩʧ��ͳһ��ת���������ɢ�� `window.location.href`��
+每次发版前手动验证：
+- 邮箱登录全流程
+- 密码登录 + 图形码 + 二次验证
+- 二维码登录
+- 多账号切换
+- 主题切换（深/浅）
+- PWA 安装（posecraft）
 
 ---
 
-## 10. ��ʽ�淶
+## 12. 构建与部署
 
-### 10.1 Tailwind
+### 12.1 构建命令
 
-- ����˳���飺`���� -> ��� -> ���� -> ��ɫ -> �߿� -> ����`��
-- ��ֹӲ������ɫֵ������ʹ�� `tailwind.config.js` ��չɫ�塣
-- ��ɫģʽͳһͨ�� `dark:` ������
-
-### 10.2 SCSS
-
-- ������������ɱ��� `scoped`����ֹȫ����Ⱦ��
-- ����ͳһ�� `assets/styles/variables.scss` ���塣
-
----
-
-## 11. ���ʻ��淶
-
-### 11.1 �ļ���֯
-
-- ͳһ���� `i18n/`�������Բ�� `zh-CN.ts`��`en-US.ts`��
-- ��ֹģ��Ӳ�������ġ�
-
-### 11.2 ����
-
-- key ͳһ `ҵ����.ҳ��.���.�İ�`��
-- ��̬��ֵͳһ����������ģ��ƴ�ӡ�
-
----
-
-## 12. ��־�������
-
-### 12.1 ͳһ�����ϱ�
-
-- ȫ�� `errorHandler` ֻ�ϱ�����ʾ�������쳣��
-- ��˴���ͳһ������ʾ����ֹ��ʾ���쳣��
-
-### 12.2 �û���ʾ
-
-- ͳһ Toast/Message ���ߣ�`useMessage.ts`��
-- ��ֹͬһ������������������ͬ��ʾ��
-
----
-
-## 13. �������������
-
-### 13.1 ͳһ����
-
-| ����                 | ����           |
-| -------------------- | -------------- |
-| `npm run dev`        | ���ؿ���        |
-| `npm run build`      | ��������       |
-| `npm run type-check` | TS ���ͼ��      |
-| `npm run lint`       | ESLint �޸�     |
-| `npm run format`     | Prettier ��ʽ�� |
-| `npm run preview`    | ������Ԥ��      |
-
-### 13.2 ���뿪��
-
-- `vue-tsc --noEmit`
-- ESLint��`vue/multi-word-component-names` ����Ŀͳһ����
-- Prettier�������š�β���š��޷ֺŰ���Ŀ�������
-
-### 13.3 �ύǰ���
-
-- ͳһ `lint-staged`��
-
-```json
-["eslint --fix", "prettier --write"]
+```bash
+npm run dev        # 开发（nodemon + .env）
+npm run build      # 生产构建
+npx vite build     # 纯构建
 ```
 
----
+### 12.2 关键检查
 
-## 14. ����Ŀ��״�����嵥
+- `npx vue-tsc --noEmit` 零错误零警告
+- 构建产物 `dist/` 包含（按需）：
+  - `index.html`
+  - `sw.js` + `workbox-*.js`（PWA）
+  - `manifest.webmanifest`（PWA）
+  - `assets/`（JS/CSS 哈希化）
 
-### 14.1 ���
+### 12.3 部署路径
 
-| ����                   | λ��                | Ӱ��         | �޸�����          |
-| ---------------------- | ------------------ | ----------- | ---------------- |
-| `guard.js` ����ע������ | `src/api/guard.js` | �ɶ��Բ�      | ͳһ UTF-8 ע��     |
-| `isIpMatch` �� IPv4    | `src/api/guard.js` | IPv6 ʧ��    | �滻Ϊ���� IP ƥ��� |
-| ȱ��ͳһ API �汾Ŀ¼����    | `src/api`          | �汾������   | ���� `v1/` �淶   |
-| ��ͳһ�쳣����            | ���·���ļ�          | ��������һ�� | ͳһ `AppError`    |
-
-### 14.2 `oauth21`
-
-| ����                 | λ��                                  | Ӱ��      | �޸�����                     |
-| -------------------- | ------------------------------------ | -------- | --------------------------- |
-| 401 ������ˢ��        | `src/utils/request.ts`               | ����ʧ��  | �� `authApi.refreshToken`   |
-| `MiniLogin.vue` ���� | `src/view/web/login/MiniLogin.vue`   | ά���ɱ��� | ��ֱ���/Э��/��ʽ              |
-| ��������ͼ���         | ���ҳ��                               | ���ò�    | ���� `composables/useLogin` |
-| ���¼��ͼ�ظ�           | `StandardLogin.vue`��`MiniLogin.vue` | �ظ��߼�   | ��ȡ�����������֤             |
-
-### 14.3 `firewall`
-
-| ����                                 | λ��                                             | Ӱ��          | �޸�����                  |
-| ------------------------------------ | ----------------------------------------------- | ------------ | ------------------------ |
-| `SystemSettingsModal.vue` ����       | `src/components/modals/SystemSettingsModal.vue` | ��ά��        | ���ģ�������              |
-| `i18n/index.ts` ����                 | `src/i18n/index.ts`                             | �������ά���� | ���������/ҵ��ģ��         |
-| Token ˢ���� `api/firewall.ts` �߼���� | `src/api/firewall.ts`                           | �ɲ����Բ�     | �� `composables/useAuth` |
-| ��ͼ�����ļ�����                       | `src/assets/maps/*.json`                        | ����         | ������/��̬�й�             |
-
-### 14.4 `admin`
-
-| ����        | λ��                        | Ӱ��         | �޸�����              |
-| ----------- | -------------------------- | ----------- | -------------------- |
-| 401 Ϊ TODO  | `src/utils/request.ts`     | ��֤ʧЧ       | ����ʵˢ���߼�          |
-| ·���޼�Ȩ���� | `src/router/index.ts`      | ��ȫ����     | ����ǰ������          |
-| ����⸴�õ�    | `src/view/users/index.vue` | ��ʽ���߼��ظ� | ���� `UserTable.vue` |
+- `posecraft`：build 产物到 `../public/posecraft/`（后端静态服务），base `/posecraft/`
+- `oauth21`/`firewall`/`admin`：同模式（base 对齐子路径）
 
 ---
 
-## 15. �������˳��
+## 13. 国际化与可访问性
 
-### ��һ�׶Σ��淶����
-
-1. ͳһ `request` ��װ�� 401 �߼���
-2. ͳһ Tailwind �� TypeScript ����
-3. ͳһ·�������ʹ�����ʾ��
-
-### �ڶ��׶Σ��ṹ����
-
-1. ��� `oauth21` ��¼ҳ�档
-2. ��� `firewall` �������� i18n��
-3. ���� `admin` ��Ȩ����������
-
-### �����׶Σ����̻�ǿ��
-
-1. ���� `vue-tsc` �ϸ��顣
-2. ��������빤�ߵ��⡣
-3. ������������������Ż���
+- 所有交互元素有 `aria-label`（图标按钮）
+- 表单 `<label>` 与 `<input>` 关联
+- 颜色对比度 ≥ 4.5:1（WCAG AA）
+- 键盘可导航（Tab/Enter/Esc）
 
 ---
 
-## 16. ���ձ�׼
+## 14. 协议与法律合规
 
-- ����Ŀ����ͨ�� `npm run lint`��`npm run type-check`��
-- �� `any`����Ӳ������Կ������ API Key��
-- ��¼̬���ں��Զ�ˢ�»�ص���¼ҳ��
-- ҳ�������İ�ȫ���� `i18n`��
-- ����������� 500 �С�
+参考 [components/common/agreements/](../oauth21/src/components/common/agreements/)：
+- 协议配置集中在 [agreementConfig.ts](../oauth21/src/components/common/agreements/agreementConfig.ts)
+- **上线前**必须填真实值（OPERATOR、注册地址、统一社会信用代码、DPO 邮箱、客服电话、版本号、响应时限、保存期限）
+- 网信办/工信部检查会逐项核对处理者身份，**留空或写占位符会被认定为"未公开收集使用规则"**
 
 ---
 
-## 17. ά��˵��
+## 15. 改造阶段参考
 
-- ���ĵ�����Ŀ�ݽ��������¡�
-- �½�ǰ����Ŀ����ֱ�����㱾�淶��
-- �κ�ƫ�뱾�淶�ļ������������¼ԭ���뵽��ʱ�䡣
+> 本节为新前端项目 / 老项目大改时的阶段性参考（基于 oauth21 9 批重构实践）
+
+### 第一阶段：基础补强
+
+1. 统一 Tailwind + TypeScript 配置
+2. 统一路由、状态、组件库
+
+### 第二阶段：结构清晰
+
+1. 抽登录页、注册页
+2. 抽 composables（useCountdown、useCaptchaFlow、useQrLogin、useLoginFlow）
+3. 抽通用组件（AgreementModals、SliderCaptcha、MessageToast）
+
+### 第三阶段：质量提升
+
+1. `vue-tsc` 严格校验
+2. 重复代码抽取
+3. 性能与无障碍优化
+
+---
+
+## 16. 验收标准
+
+- 项目必通过 `npm run lint` + `npm run type-check`
+- 禁止 `any`、硬编码敏感字段、API Key
+- 登录态失效自动刷新或跳转登录页
+- 页面文案必须走 `i18n`
+- 控制器方法不超过 500 行
+
+---
+
+## 17. 维护说明
+
+- 本文档随项目演进滚动更新
+- 新建前端项目直接套用本规范
+- 任何偏离规范的实现必须记录原因并加到临时备忘
+- 旧版损坏文件（`FRONTEND_STANDARDS.md.corrupted`）保留作历史参考
