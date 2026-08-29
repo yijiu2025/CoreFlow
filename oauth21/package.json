@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit",
+    "lint": "eslint . --ext .ts,.vue",
+    "lint:fix": "eslint . --ext .ts,.vue --fix",
+    "audit": "npm audit --audit-level=moderate",
+    "audit:fix": "npm audit --omit=dev --fix"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",

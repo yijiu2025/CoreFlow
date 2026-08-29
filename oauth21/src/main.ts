@@ -9,13 +9,15 @@ import router from './router';
 import i18n from './i18n'; // 如果有国际化配置
 import './assets/styles/main.scss';
 import request from './utils/request';
+import { reportError } from './composables/useErrorReporter';
 
 const app = createApp(App);
 const pinia = createPinia();
 
-// 1. 全局错误处理
+// 1. 全局错误处理：上报到后端监控，dev 环境 console.warn 留痕（不直接 console.error 防生产堆栈泄露）
 app.config.errorHandler = (err, _instance, info) => {
-  console.error('[Global Exception]', err, info);
+  // 异步上报不阻塞（fire-and-forget，fetch 失败静默）
+  reportError(err, String(info || ''));
 };
 
 // 2. 插件注册
@@ -28,7 +30,7 @@ app.use(i18n);
 // fire-and-forget：不阻塞挂载；失败时首个请求会被后端自动下发 cookie 并放行
 request.get('/auth/v1/h5-token').catch(err => {
   // 不阻塞主流程，但留痕便于排查（fire-and-forget 不上抛）
-  console.warn('[H5Token] 预取失败（首次请求会由后端自动下发）:', err.message);
+  reportError(err, '[H5Token] 预取失败（首次请求会由后端自动下发）');
 });
 
 // 4. 异步挂载 (确保路由就绪)
@@ -38,6 +40,6 @@ router.isReady()
   })
   .catch(err => {
     // 路由初始化失败（极少见：路由表循环、配置错误），降级直接挂载避免白屏
-    console.error('[Router] router.isReady 失败，降级挂载:', err);
+    reportError(err, '[Router] router.isReady 失败，降级挂载');
     app.mount('#app');
   });
