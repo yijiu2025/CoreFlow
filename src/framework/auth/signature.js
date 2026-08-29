@@ -76,7 +76,9 @@ async function verifySignature(request, reply) {
   // 6. 重算签名：使用 h5TokenMd5（与前端保持一致）
   const url = request.routerPath || request.url.split('?')[0];
   const bodyStr = request.body ? JSON.stringify(request.body) : '';
-  const signString = `${h5TokenMd5}&${timestamp}&${nonce}&${url}&${bodyStr}`;
+  // query 剔除签名自身字段后按 key 排序纳入验签（与前端 serializeParamsForSign 对齐）
+  const paramsStr = serializeQueryForSign(request.query, ['x-sign', 'x-timestamp', 'x-nonce', 'x-device-id']);
+  const signString = `${h5TokenMd5}&${timestamp}&${nonce}&${url}&${paramsStr}&${bodyStr}`;
 
   const serverSign = crypto.createHash('sha256').update(signString).digest('hex');
 
@@ -114,6 +116,21 @@ async function issueH5Token(fastify, reply) {
   });
 
   return rawH5Token;
+}
+
+/**
+ * 序列化 query 用于验签（按 key 字典序排序，key=value，value encodeURIComponent，& 连接）
+ * 与前端 request.ts serializeParamsForSign 必须完全一致。
+ * 排除签名自身字段（x-sign/x-timestamp/x-nonce/x-device-id），避免循环依赖。
+ * 只支持扁平 key-value；数组/嵌套对象不保证一致（当前所有调用都是扁平 params）。
+ */
+function serializeQueryForSign(query, excludeKeys) {
+  if (!query || typeof query !== 'object') return '';
+  const exclude = new Set(excludeKeys || []);
+  const keys = Object.keys(query).filter(k => !exclude.has(k) && query[k] !== undefined && query[k] !== null);
+  if (keys.length === 0) return '';
+  keys.sort();
+  return keys.map(k => `${encodeURIComponent(k)}=${encodeURIComponent(String(query[k]))}`).join('&');
 }
 
 export { verifySignature, issueH5Token };

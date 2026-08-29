@@ -43,19 +43,19 @@ const handleApprove = async () => {
 // 拒绝授权：调后端记录拒绝，跳回 redirect_uri 带 error=access_denied
 const handleDeny = async () => {
   try {
-    await authApi.authorizeConsent({
+    // 从服务端响应取校验过的 redirect_url（不直接用 route.query.redirect_uri，防开放重定向）
+    const res: any = await authApi.authorizeConsent({
       sessionId: sessionId.value,
       user_id: userId.value,
       action: 'deny'
     });
+    const redirectUrl = res?.redirect_url || res?.data?.redirect_url;
+    if (redirectUrl) {
+      window.location.href = redirectUrl;
+    } else {
+      router.back();
+    }
   } catch {
-    // 忽略错误，仍跳回
-  }
-  const redirectUri = route.query.redirect_uri as string;
-  if (redirectUri) {
-    const sep = redirectUri.includes('?') ? '&' : '?';
-    window.location.href = `${redirectUri}${sep}error=access_denied`;
-  } else {
     router.back();
   }
 };

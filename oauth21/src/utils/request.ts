@@ -54,7 +54,10 @@ service.interceptors.request.use(
 
         const urlPath = config.url.split('?')[0];
         const bodyStr = config.data ? JSON.stringify(config.data) : '';
-        const signString = `${h5TokenMd5}&${timestamp}&${nonce}&${urlPath}&${bodyStr}`;
+        // params 按 key 排序序列化纳入签名，防 query 篡改
+        // （axios config.params 在适配器阶段才拼 URL，拦截器签名时必须手动纳入）
+        const paramsStr = serializeParamsForSign(config.params);
+        const signString = `${h5TokenMd5}&${timestamp}&${nonce}&${urlPath}&${paramsStr}&${bodyStr}`;
 
         const clientSign = await sha256(signString);
 
@@ -187,6 +190,28 @@ async function handleRiskBlock(res: any): Promise<any> {
       if (container.parentNode) container.parentNode.removeChild(container);
     }
   });
+}
+
+/**
+ * 序列化 params 用于签名（按 key 字典序排序，key=value，value encodeURIComponent，& 连接）
+ * 与后端 signature.js serializeQueryForSign 必须完全一致。
+ * 只支持扁平 key-value（当前所有调用都是扁平 params）；数组/嵌套对象不保证一致。
+ */
+function serializeParamsForSign(params: any): string {
+  if (!params) return '';
+  // URLSearchParams：keys() 迭代器转数组后排序
+  if (params instanceof URLSearchParams) {
+    const pairs: [string, string][] = [];
+    params.forEach((v, k) => pairs.push([k, v]));
+    if (pairs.length === 0) return '';
+    pairs.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    return pairs.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+  }
+  if (typeof params !== 'object') return '';
+  const keys = Object.keys(params).filter(k => params[k] !== undefined && params[k] !== null);
+  if (keys.length === 0) return '';
+  keys.sort();
+  return keys.map(k => `${encodeURIComponent(k)}=${encodeURIComponent(String(params[k]))}`).join('&');
 }
 
 export default service;
