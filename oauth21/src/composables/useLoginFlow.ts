@@ -45,6 +45,24 @@ export interface LoginUser {
   avatar?: string | null;
 }
 
+/**
+ * 类型守卫函数（按 action 区分响应类型，分支内用 narrowing 自动收窄）
+ * 替代 `LoginResponse | any` —— 判别联合的 discriminant 在 `| any` 时彻底失效
+ */
+export function isConsentResponse(res: unknown): res is Extract<LoginResponse, { action: 'consent' }> {
+  return !!res && typeof res === 'object' && (res as any).action === 'consent';
+}
+export function isEmailVerifyResponse(res: unknown): res is Extract<LoginResponse, { action: 'needs_email_verify' }> {
+  return !!res && typeof res === 'object' && (res as any).action === 'needs_email_verify';
+}
+export function isMaxSessionsResponse(res: unknown): res is Extract<LoginResponse, { action: 'max_sessions' }> {
+  return !!res && typeof res === 'object' && (res as any).action === 'max_sessions';
+}
+export function isLoginSuccessResponse(res: unknown): res is LoginSuccessResponse {
+  return !!res && typeof res === 'object' && (res as any).action === undefined
+    && (('accessToken' in (res as any)) || ('access_token' in (res as any)) || ('session_token' in (res as any)));
+}
+
 export interface EmailVerifyState {
   verifyToken: string;
   email: string;
@@ -80,11 +98,14 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
   const emailVerifyCountdown = useCountdown(60);
 
   /** 通知父窗口登录成功（兼容 JWT/Session） */
-  function notifyParentLoginSuccess(res: LoginSuccessResponse | any) {
+  function notifyParentLoginSuccess(res: LoginSuccessResponse | unknown) {
     if (!(window.parent && window.parent !== window)) return;
-    const token = res?.accessToken || res?.access_token;
-    const sessionToken = res?.session_token;
-    const user: LoginUser = res?.user || {};
+    // narrow unknown → LoginSuccessResponse 才能读字段
+    const data = res as LoginSuccessResponse | undefined;
+    if (!data || typeof data !== 'object') return;
+    const token = (data as any).accessToken || (data as any).access_token;
+    const sessionToken = (data as any).session_token;
+    const user: LoginUser = (data as any).user || {};
     postToParent({
       type: 'LOGIN_SUCCESS',
       token,
@@ -103,11 +124,12 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
         captchaKey: captchaKey(),
         client_id: clientId()
       };
-      const res: LoginResponse | any = await authStore.login(loginPayload as any);
-      if (res && res.action === 'consent') {
+      // 响应类型未知（后端可能微调字段），用 unknown + 类型守卫 narrowing
+      const res: unknown = await authStore.login(loginPayload);
+      if (isConsentResponse(res)) {
         consentState.value = res;
         showConsent.value = true;
-      } else if (res && res.action === 'needs_email_verify') {
+      } else if (isEmailVerifyResponse(res)) {
         emailVerifyState.value = {
           verifyToken: res.verifyToken,
           email: res.email,
@@ -116,7 +138,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
         emailVerifyCode.value = '';
         showEmailVerify.value = true;
         emailVerifyCountdown.start(60);
-      } else if (res && res.action === 'max_sessions') {
+      } else if (isMaxSessionsResponse(res)) {
         if (window.parent && window.parent !== window) {
           postToParent({
             type: 'MAX_SESSIONS',
@@ -124,8 +146,11 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
             maxSessions: res.maxSessions
           });
         }
-      } else {
+      } else if (isLoginSuccessResponse(res)) {
         notifyParentLoginSuccess(res);
+      } else {
+        // 后端返回了未识别的响应（可能是新 action 或字段微调），按成功处理兜底
+        showError('登录响应格式异常，请重试');
       }
     } catch (err: any) {
       showError(err.message || '登录失败');
@@ -146,7 +171,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
     if (!consentState.value) return;
     submittingConsent.value = true;
     try {
-      const res: LoginSuccessResponse | any = await authApi.confirmConsent(consentState.value.consentKey);
+      const res: LoginSuccessResponse | unknown = await authApi.confirmConsent(consentState.value.consentKey);
       showConsent.value = false;
       consentState.value = null;
       notifyParentLoginSuccess(res);
@@ -176,7 +201,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
       return;
     }
     try {
-      const res: LoginSuccessResponse | any = await authApi.verifyEmailLogin(
+      const res: LoginSuccessResponse | unknown = await authApi.verifyEmailLogin(
         emailVerifyState.value.verifyToken,
         emailVerifyCode.value
       );
