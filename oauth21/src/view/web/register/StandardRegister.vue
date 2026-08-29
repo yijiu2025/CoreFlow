@@ -16,7 +16,7 @@ import { useAgreementVersion, captureAgreementVersion } from '@/composables/useA
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
-import { useRecaptcha } from '@/composables/useRecaptcha';
+import { useCaptcha } from '@/composables/useCaptcha';
 
 const { t, locale } = useI18n();
 const { error: showError, success: showSuccess } = useMessage();
@@ -37,9 +37,9 @@ const ctx = inject<RegisterContext>('registerContext', {
 // 跟随父组件透传的 lang 切换 locale
 if (ctx.lang) locale.value = ctx.lang;
 
-const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken, dispose } = useRecaptcha('register');
+const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToken, dispose } = useCaptcha('register');
 onMounted(() => {
-  if (recaptchaEnabled) loadRecaptcha();
+  if (recaptchaEnabled) loadCaptcha();
 });
 onUnmounted(() => dispose());
 
@@ -159,7 +159,7 @@ const handleRegister = handleSubmit(
     submitLock.lock();
     const { confirmPassword, ...submitData } = values;
     const encryptedPassword = await rsaEncrypt(submitData.password!);
-    const recaptchaToken = recaptchaEnabled ? await getRecaptchaToken() : null;
+    const recaptchaToken = recaptchaEnabled ? await getCaptchaToken() : null;
     try {
       await authApi.register({
         ...submitData,

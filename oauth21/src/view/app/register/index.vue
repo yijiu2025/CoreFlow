@@ -10,13 +10,13 @@ import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
-import { useRecaptcha } from '@/composables/useRecaptcha';
+import { useCaptcha } from '@/composables/useCaptcha';
 import { onMounted, onUnmounted, ref } from 'vue';
 
-const { isEnabled: recaptchaEnabled, loadRecaptcha, getRecaptchaToken, dispose } = useRecaptcha('register');
+const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToken, dispose } = useCaptcha('register');
 const { error: showError, success: showSuccess } = useMessage();
 onMounted(() => {
-  if (recaptchaEnabled) loadRecaptcha();
+  if (recaptchaEnabled) loadCaptcha();
 });
 onUnmounted(() => dispose());
 
@@ -127,7 +127,7 @@ const handleRegister = handleSubmit(async data => {
   try {
     const { confirmPassword, ...submitData } = data;
     const encryptedPassword = await rsaEncrypt(submitData.password);
-    const recaptchaToken = recaptchaEnabled ? await getRecaptchaToken() : null;
+    const recaptchaToken = recaptchaEnabled ? await getCaptchaToken() : null;
     await authApi.register({
       ...submitData,
       password: encryptedPassword,

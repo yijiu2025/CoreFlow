@@ -1,8 +1,16 @@
 /**
  * hCaptcha 人机验证 composable（invisible 模式，无感）
  *
+ * ⚠️ 性能警告：hCaptcha SDK 首次加载约 200-500KB（从 js.hcaptcha.com 拉取），
+ * 国内访问较慢（可能 1-3s），网络差时可能加载失败。生产环境如在中国大陆部署，
+ * 推荐用 Cloudflare Turnstile（轻量 ~50KB，更快、隐私友好、无 cookie 跟踪），
+ * 见 useTurnstile.ts / useCaptcha.ts。
+ *
  * 仅在 VITE_RECAPTCHA_ENABLED=true 时加载 hCaptcha SDK 并采集 token。
  * 默认不启用（隐私友好 + 避免无密钥时阻塞注册流程）。
+ *
+ * 调用方推荐用顶层 useCaptcha（自动按 env 选 hCaptcha 或 Turnstile），
+ * 仅在需要 hCaptcha 特定能力时直接 useHCaptcha。
  *
  * hCaptcha invisible 模式流程：
  * 1. 页面加载时 render 一个隐藏 widget（拿到 widgetId）
@@ -11,6 +19,7 @@
  *
  * @author yijiu2025
  * @since 2026-08-22
+ * @renamed 2026-08-29 重命名为 useHCaptcha（与 Turnstile 区分）
  */
 
 /** hCaptcha siteKey（从 meta 或环境变量注入） */
@@ -28,19 +37,19 @@ const isEnabled = import.meta.env.VITE_RECAPTCHA_ENABLED === 'true';
  * 导致多页面/多组件共用一个 widget、SPA 路由切换后 widgetId 失效等问题。
  * onUnmounted 调 cleanup 清理 DOM + 重置状态，防内存泄漏。
  */
-interface RecaptchaInstance {
+interface HCaptchaInstance {
   sdkLoaded: boolean;
   hcaptchaObj: any;
   widgetId: string | null;
   container: HTMLDivElement | null;
 }
 
-function createInstance(): RecaptchaInstance {
+function createInstance(): HCaptchaInstance {
   return { sdkLoaded: false, hcaptchaObj: null, widgetId: null, container: null };
 }
 
 /** 加载 hCaptcha SDK（仅一次，带 onerror 超时兜底，防永久 pending） */
-async function loadSdk(inst: RecaptchaInstance): Promise<any> {
+async function loadSdk(inst: HCaptchaInstance): Promise<any> {
   if (inst.sdkLoaded && inst.hcaptchaObj) return inst.hcaptchaObj;
 
   const siteKey = getSiteKey();
@@ -94,7 +103,7 @@ async function loadSdk(inst: RecaptchaInstance): Promise<any> {
 }
 
 /** render invisible widget（拿到 widgetId） */
-function ensureWidget(inst: RecaptchaInstance, hcaptcha: any): string {
+function ensureWidget(inst: HCaptchaInstance, hcaptcha: any): string {
   if (inst.widgetId !== null) return inst.widgetId;
   const siteKey = getSiteKey();
   // 隐藏容器：必须留在可视区域内（不能偏移到 -9999px 屏外，否则挑战弹窗跑到屏幕外），
@@ -120,7 +129,7 @@ function ensureWidget(inst: RecaptchaInstance, hcaptcha: any): string {
 }
 
 /** 清理实例：移除 container DOM + 重置状态（组件卸载时调） */
-function cleanup(inst: RecaptchaInstance) {
+function cleanup(inst: HCaptchaInstance) {
   if (inst.container && inst.container.parentNode) {
     inst.container.parentNode.removeChild(inst.container);
   }
@@ -179,11 +188,11 @@ function removeChallengeStyle() {
  * 创建 hCaptcha 人机验证实例（每组件独立）
  * @param action hCaptcha action 标识（如 'register'/'login'，用于后台分析区分）
  */
-export function useRecaptcha(action = 'login') {
+export function useHCaptcha(action = 'login') {
   const inst = createInstance();
 
   /** 预加载 SDK + render widget（页面加载时调，提前 warm up） */
-  async function loadRecaptcha(): Promise<void> {
+  async function loadHCaptcha(): Promise<void> {
     if (!isEnabled) return;
     const hcaptcha = await loadSdk(inst);
     if (hcaptcha) ensureWidget(inst, hcaptcha);
@@ -244,5 +253,8 @@ export function useRecaptcha(action = 'login') {
     cleanup(inst);
   }
 
-  return { isEnabled, loadRecaptcha, getRecaptchaToken, dispose };
+  return { isEnabled, loadHCaptcha, getRecaptchaToken, dispose };
 }
+
+/** 向后兼容别名（之前叫 useRecaptcha，重命名后旧代码仍可用） */
+export { useHCaptcha as useRecaptcha };
