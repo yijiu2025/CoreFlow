@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { useThemeStore } from '@/stores/theme';
+import { useParentThemeSync } from '@/composables/useParentThemeSync';
+
 const themeStore = useThemeStore();
+// iframe 嵌入时监听父应用主题同步（父切主题子跟着切）
+useParentThemeSync();
 </script>
 
 <template>
