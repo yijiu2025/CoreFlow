@@ -122,7 +122,7 @@ const showBrandPanel = computed(() => !props.isMobile && windowWidth.value >= 60
       <!-- 右栏：上中下三槽 -->
       <div class="flex-1 flex flex-col p-6 md:p-10 md:pr-14 relative min-w-0">
         <!-- 上：header（appName 展示 + 标题 + 右侧附加区如扫码切换按钮） -->
-        <header class="flex items-center justify-between mb-6">
+        <header class="auth-header flex items-center justify-between mb-6">
           <div class="min-w-0">
             <slot name="header">
               <!-- 默认 header：appName 标题 + 欢迎语（可 #header-app-name 覆盖 appName 展示） -->
@@ -210,6 +210,10 @@ const showBrandPanel = computed(() => !props.isMobile && windowWidth.value >= 60
   .auth-card {
     height: auto;
     min-height: 100vh;
+  }
+  /* 窄屏：header 留 40px 顶部安全区，避免和父页面某元素重叠 */
+  .auth-header {
+    margin-top: 40px;
   }
 }
 
