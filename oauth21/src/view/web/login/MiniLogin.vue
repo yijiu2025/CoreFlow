@@ -379,10 +379,8 @@ watch(showQR, val => {
 
         <!-- 字段 2：验证码/密码 -->
         <div class="mlogin-cell">
-          <div class="mlogin-field" :class="{ 'is-error': errors.code || errors.password }">
-            <Icons name="lock" :size="18" class="mlogin-icon" />
+          <div v-if="loginType === 'email'" class="mlogin-field" :class="{ 'is-error': errors.code }">
             <input
-              v-if="loginType === 'email'"
               v-model="code"
               v-bind="codeProps"
               type="text"
@@ -390,17 +388,8 @@ watch(showQR, val => {
               autocomplete="one-time-code"
               class="mlogin-input"
             />
-            <PasswordInput
-              v-else
-              v-model="password"
-              :has-error="!!errors.password"
-              wrapper-class="mlogin-field"
-              :placeholder="t('login.password_placeholder')"
-              autocomplete="current-password"
-            />
             <button
               type="button"
-              v-if="loginType === 'email'"
               @click="sendEmailCode"
               :disabled="isCountingDown"
               class="mlogin-code-btn"
@@ -408,6 +397,14 @@ watch(showQR, val => {
               {{ isCountingDown ? `${countdown}s` : t('login.get_code') }}
             </button>
           </div>
+          <PasswordInput
+            v-else
+            v-model="password"
+            :has-error="!!errors.password"
+            :placeholder="t('login.password_placeholder')"
+            autocomplete="current-password"
+            input-class="mlogin-input"
+          />
           <div class="mlogin-err">{{ errors.code || errors.password }}</div>
         </div>
 
