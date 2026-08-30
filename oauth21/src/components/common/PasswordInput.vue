@@ -20,12 +20,15 @@ const props = withDefaults(
     hasError?: boolean;
     /** 自动聚焦 */
     autofocus?: boolean;
+    /** 透传到根 wrapper 的 class（覆盖默认样式：bg/border/rounded/padding） */
+    wrapperClass?: string;
   }>(),
   {
     placeholder: '请输入密码',
     id: undefined,
     hasError: false,
-    autofocus: false
+    autofocus: false,
+    wrapperClass: ''
   }
 );
 
@@ -48,7 +51,7 @@ function onKeyup(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="relative">
+  <div class="relative" :class="wrapperClass">
     <!-- 左侧锁图标 -->
     <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

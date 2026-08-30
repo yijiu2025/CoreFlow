@@ -394,6 +394,7 @@ watch(showQR, val => {
               v-else
               v-model="password"
               :has-error="!!errors.password"
+              wrapper-class="mlogin-field"
               :placeholder="t('login.password_placeholder')"
               autocomplete="current-password"
             />
