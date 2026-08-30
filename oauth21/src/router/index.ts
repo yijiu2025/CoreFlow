@@ -15,6 +15,12 @@ const router = createRouter({
           meta: { title: '安全登录' }
         },
         {
+          path: 'login',
+          name: 'Login',
+          component: () => import('@/view/web/login/index.vue'),
+          meta: { title: '安全登录' }
+        },
+        {
           path: 'register',
           name: 'Register',
           component: () => import('@/view/web/register/index.vue'),
@@ -49,6 +55,14 @@ const router = createRouter({
           name: 'Authorize',
           component: () => import('@/view/web/auth/Authorize.vue'),
           meta: { title: '应用授权' }
+        },
+        // 404 catch-all：必须放 children 数组最末尾，未匹配的路径都进 NotFound
+        // 走 BlankLayout 布局（和登录/注册页风格统一），提供返回登录入口
+        {
+          path: ':pathMatch(.*)*',
+          name: 'NotFound',
+          component: () => import('@/view/web/NotFound.vue'),
+          meta: { title: '页面未找到' }
         }
       ]
     }
