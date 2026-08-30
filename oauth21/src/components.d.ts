@@ -19,6 +19,8 @@ declare module 'vue' {
     GraphicCaptcha: typeof import('./components/common/GraphicCaptcha.vue')['default']
     Icons: typeof import('./components/common/Icons.vue')['default']
     MessageToast: typeof import('./components/common/MessageToast.vue')['default']
+    PasswordInput: typeof import('./components/common/PasswordInput.vue')['default']
+    PasswordStrength: typeof import('./components/common/PasswordStrength.vue')['default']
     PrivacyPolicy: typeof import('./components/common/agreements/PrivacyPolicy.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
