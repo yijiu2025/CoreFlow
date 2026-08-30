@@ -12,6 +12,7 @@ import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import Icons from '@/components/common/Icons.vue';
+import AppNameMissing from '@/components/common/AppNameMissing.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
@@ -159,17 +160,7 @@ onUnmounted(() => {
 <template>
   <div class="standard-login-root">
     <!-- 错误场景：应用标识缺失 -->
-    <div v-if="!hasAppName" class="flex flex-col items-center justify-center text-center p-8 mt-20">
-      <div class="w-20 h-20 bg-red-100 dark:bg-red-900/30 text-red-500 rounded-[24px] flex items-center justify-center mb-6 shadow-sm">
-        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="8" x2="12" y2="12"></line>
-          <line x1="12" y1="16" x2="12.01" y2="16"></line>
-        </svg>
-      </div>
-      <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">应用标识缺失</h2>
-      <p class="text-sm text-slate-500 dark:text-slate-400">缺少 appName 参数，无法提供登录授权服务。</p>
-    </div>
+    <AppNameMissing v-if="!hasAppName" />
 
     <!-- 主登录容器 -->
     <div v-else class="relative group">
