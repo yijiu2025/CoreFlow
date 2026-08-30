@@ -119,8 +119,10 @@ const showBrandPanel = computed(() => !props.isMobile && windowWidth.value >= 60
         </slot>
       </aside>
 
-      <!-- 右栏：上中下三槽 -->
-      <div class="flex-1 flex flex-col p-6 md:p-10 md:pr-14 relative min-w-0">
+      <!-- 右栏：上中下三槽
+           pt-10 始终固定 40px 顶部间距（避免 600/768 断点跳变影响 header 位置），
+           左右底部 padding 用响应式（窄屏紧凑 p-4，宽屏宽松 md:p-10） -->
+      <div class="flex-1 flex flex-col pt-10 px-4 pb-4 md:p-10 md:pr-14 relative min-w-0">
         <!-- 上：header（appName 展示 + 标题 + 右侧附加区如扫码切换按钮） -->
         <header class="auth-header flex items-center justify-between mb-6">
           <div class="min-w-0">
@@ -211,10 +213,7 @@ const showBrandPanel = computed(() => !props.isMobile && windowWidth.value >= 60
     height: auto;
     min-height: 100vh;
   }
-  /* 窄屏：header 留 40px 顶部安全区，避免和父页面某元素重叠 */
-  .auth-header {
-    margin-top: 40px;
-  }
+  /* 窄屏：header 顶部间距由右栏 pt-10 统一控制（40px），不重复加 margin-top */
 }
 
 /* Mobile 强制全屏无卡片（prop isMobile=true 触发，覆盖响应式） */
