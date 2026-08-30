@@ -24,6 +24,7 @@
  */
 import { useThemeStore } from '@/stores/theme';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import ThemeToggle from './ThemeToggle.vue';
 
 interface Props {
@@ -42,6 +43,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const themeStore = useThemeStore();
+const { t } = useI18n();
 
 // 容器类名（响应式由 Tailwind 驱动，这里只挂 is-mobile/dark 状态）
 const containerClasses = computed(() => ({
@@ -99,7 +101,7 @@ const showBrandPanel = computed(() => !props.isMobile && windowWidth.value >= 60
               </div>
               <h1 class="text-3xl font-bold dark:text-white mb-4 tracking-tight">{{ appName }}</h1>
               <p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed max-w-[240px]">
-                安全、快速、统一的身份认证中心。 为您的企业应用提供坚实的防护屏障。
+                {{ t('login.brand_desc', '安全、快速、统一的身份认证中心。 为您的企业应用提供坚实的防护屏障。') }}
               </p>
             </slot>
           </div>
@@ -127,7 +129,7 @@ const showBrandPanel = computed(() => !props.isMobile && windowWidth.value >= 60
               <slot name="header-app-name">
                 <h2 class="text-xl font-bold dark:text-white">{{ appName }}</h2>
               </slot>
-              <p class="text-xs text-slate-400 mt-1">请填写您的安全认证凭据</p>
+              <p class="text-xs text-slate-400 mt-1">{{ t('login.fill_credentials', '请填写您的登录凭据') }}</p>
             </slot>
           </div>
           <!-- 右侧附加区：调用方按需注入（如扫码切换按钮），无注入则不占位 -->
