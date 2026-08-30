@@ -16,7 +16,8 @@ import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { useButtonLock } from '@/composables/useButtonLock';
-import { usePasswordStrength } from '@/composables/usePasswordStrength';
+import PasswordInput from '@/components/common/PasswordInput.vue';
+import PasswordStrength from '@/components/common/PasswordStrength.vue';
 import { useAgreementVersion, captureAgreementVersion } from '@/composables/useAgreementVersion';
 
 const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToken, dispose } = useCaptcha('register');
@@ -86,16 +87,14 @@ const { values, errors, defineField, handleSubmit, validateField } = useForm({
 const [username, usernameProps] = defineField('username');
 const [email, emailProps] = defineField('email');
 const [code, codeProps] = defineField('code');
-const [password, passwordProps] = defineField('password');
-const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword');
+const [password] = defineField('password');
+const [confirmPassword] = defineField('confirmPassword');
 
 const agreed = ref(false);
 const isEmailDuplicate = ref(false);
 const isEmailChecking = ref(false); // 邮箱去重检查中：防 blur 后未返回就点下一步的竞态
 const COUNTDOWN_SECONDS = 60;
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(COUNTDOWN_SECONDS);
-// 密码强度（实时检测，传入 t 让 label 走 i18n）
-const passwordStrength = usePasswordStrength(() => values.password, t);
 // 防双击
 const submitLock = useButtonLock();
 // 协议版本快照
@@ -290,31 +289,23 @@ const handleRegister = handleSubmit(async () => {
         <div v-else class="mreg-step-box">
           <!-- 登录密码 -->
           <div class="mreg-cell">
-            <div class="mreg-field" :class="{ 'is-error': errors.password }">
-              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              <input v-model="password" v-bind="passwordProps" type="password" :placeholder="t('register.password')" class="mreg-input" />
-            </div>
+            <PasswordInput
+              v-model="password"
+              :has-error="!!errors.password"
+              :placeholder="t('register.password')"
+            />
             <div class="mreg-err">{{ errors.password }}</div>
-            <!-- 密码强度可视化（输入时实时显示，未输入时隐藏） -->
-            <div v-if="values.password" class="mreg-strength">
-              <div class="mreg-strength-bar">
-                <div class="mreg-strength-bar-fill" :style="{ width: passwordStrength.percent + '%', background: passwordStrength.color }"></div>
-              </div>
-              <span class="mreg-strength-label" :style="{ color: passwordStrength.color }">{{ passwordStrength.label }}</span>
-            </div>
+            <!-- 密码强度条 + 悬浮窗规则列表 -->
+            <PasswordStrength :password="values.password" />
           </div>
 
           <!-- 确认密码 -->
           <div class="mreg-cell">
-            <div class="mreg-field" :class="{ 'is-error': errors.confirmPassword }">
-              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-              </svg>
-              <input v-model="confirmPassword" v-bind="confirmPasswordProps" type="password" :placeholder="t('register.confirm_password')" class="mreg-input" />
-            </div>
+            <PasswordInput
+              v-model="confirmPassword"
+              :has-error="!!errors.confirmPassword"
+              :placeholder="t('register.confirm_password')"
+            />
             <div class="mreg-err">{{ errors.confirmPassword }}</div>
           </div>
 

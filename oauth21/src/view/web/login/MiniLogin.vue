@@ -11,6 +11,7 @@ import { postToParent } from '@/utils/parent';
 import AuthContainer from '@/components/common/AuthContainer.vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
+import PasswordInput from '@/components/common/PasswordInput.vue';
 import Icons from '@/components/common/Icons.vue';
 import AppNameMissing from '@/components/common/AppNameMissing.vue';
 import { useMessage } from '@/composables/useMessage';
@@ -75,7 +76,7 @@ const [type] = defineField('type');
 const [email, emailProps] = defineField('email');
 const [code, codeProps] = defineField('code');
 const [username, usernameProps] = defineField('username');
-const [password, passwordProps] = defineField('password');
+const [password] = defineField('password');
 
 // 同步 loginType → zod discriminatedUnion 的 type 字段
 watch(loginType, newType => {
@@ -389,14 +390,12 @@ watch(showQR, val => {
               autocomplete="one-time-code"
               class="mlogin-input"
             />
-            <input
+            <PasswordInput
               v-else
               v-model="password"
-              v-bind="passwordProps"
-              type="password"
+              :has-error="!!errors.password"
               :placeholder="t('login.password_placeholder')"
               autocomplete="current-password"
-              class="mlogin-input"
             />
             <button
               type="button"
