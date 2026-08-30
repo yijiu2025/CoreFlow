@@ -223,7 +223,7 @@ const handleRegister = handleSubmit(async () => {
 
 <template>
   <div class="w-full h-full flex flex-col justify-center overflow-hidden">
-    <AuthContainer :appName="(route.query.appName as string) || 'Enterprise SSO'" :is-mobile="route.query.isMobile === 'true'" :showQrSwitcher="false">
+    <AuthContainer :appName="(route.query.appName as string) || 'Enterprise SSO'" :is-mobile="route.query.isMobile === 'true'">
       <template #header>
         <div class="flex items-center justify-between">
           <div>

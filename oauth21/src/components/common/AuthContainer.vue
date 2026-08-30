@@ -1,16 +1,24 @@
 <script setup lang="ts">
 /**
- * 认证容器组件（登录/注册/找回密码通用）
+ * 认证容器（纯框架，不含扫码业务）
  *
- * 单一自适应布局，取消 styleType 枚举（horizontal/vertical/split 死代码已删）：
- * - 宽屏（lg+，≥1024px）：左品牌栏 + 右表单栏，卡片 max-w-854px 居中
- * - 窄屏（<lg）：只显示表单栏，卡片 100% 宽，左栏自动隐藏（Tailwind hidden lg:flex）
- * - isMobile prop 保留（mobile 路由强制全屏无卡片），但响应式主要靠 CSS 不靠 prop
+ * 设计：左入口（品牌）+ 右入口（上中下三槽）
+ * - 宽屏（lg+）：左栏品牌 + 右栏（header 上 / form 中 / footer 下），卡片 max-854×484
+ * - 窄屏（<lg）：左栏隐藏，header（含 logo）上移顶部，footer 留底部，form 占中间
+ * - 宽度平滑压缩：max-width:854px + width:100%，到 lg 断点隐藏左栏
  *
- * 插槽：#branding（左栏品牌）/ #header（右栏标题）/ 默认（表单）/ #qr（扫码）/ #footer（底栏）
+ * 框架只提供骨架 + 品牌默认内容（appName）。扫码切换、扫码 UI 等业务内容
+ * 由调用方通过 slot 注入（#header-extra 放扫码按钮等），不耦合在本组件。
+ *
+ * Slot：
+ *   #branding      左栏品牌（默认显示 appName + 文案，可覆盖）
+ *   #header        右栏顶部（默认显示"欢迎回来"，可覆盖）
+ *   #header-extra  右栏顶部右侧附加区（如扫码切换按钮，按需注入）
+ *   默认 slot      右栏中部表单内容
+ *   #footer        右栏底部（协议/切换链接）
  *
  * @author yijiu2025
- * @since 2026-08-30 重构：删 styleType，改 Tailwind 响应式
+ * @since 2026-08-30 重构：纯框架化，删扫码业务，保留 appName + 默认品牌
  */
 import { useThemeStore } from '@/stores/theme';
 import { computed } from 'vue';
@@ -20,10 +28,6 @@ interface Props {
   appName?: string;
   /** 强制移动端模式（mobile 路由用，全屏无卡片；不传则靠 CSS 响应式） */
   isMobile?: boolean;
-  /** 显示扫码/表单切换按钮 */
-  showQrSwitcher?: boolean;
-  /** 当前是否扫码模式（v-model） */
-  showQR?: boolean;
   /** 显示主题切换浮按钮（iframe 嵌入时自动隐藏） */
   showThemeToggle?: boolean;
 }
@@ -31,25 +35,12 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   appName: 'Enterprise SSO',
   isMobile: false,
-  showQrSwitcher: true,
-  showQR: false,
   showThemeToggle: true
 });
 
-const emit = defineEmits<{
-  'update:showQR': [value: boolean];
-  'qr-click': [];
-}>();
-
 const themeStore = useThemeStore();
 
-// 切换扫码模式
-const toggleQR = () => {
-  emit('update:showQR', !props.showQR);
-  emit('qr-click');
-};
-
-// 容器类名（响应式由 Tailwind 类驱动，这里只挂 is-mobile/dark 状态）
+// 容器类名（响应式由 Tailwind 驱动，这里只挂 is-mobile/dark 状态）
 const containerClasses = computed(() => ({
   'is-mobile': props.isMobile,
   dark: themeStore.isDark
@@ -67,12 +58,11 @@ const isEmbedded = computed(() => {
 
 <template>
   <div class="auth-viewport" :class="containerClasses">
-    <!-- 自适应卡片：宽屏 max-w-854 居中，窄屏/isMobile 全屏 -->
+    <!-- 自适应卡片：宽屏 max-854 居中，窄屏 100% 宽平滑压缩 -->
     <div
       class="auth-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[10px] shadow-2xl overflow-hidden flex w-full"
-      :class="{ 'has-qr-switcher': showQrSwitcher }"
     >
-      <!-- 左栏：品牌（宽屏 lg+ 显示，窄屏隐藏；isMobile 强制隐藏） -->
+      <!-- 左栏：品牌入口（宽屏 lg+ 显示，窄屏隐藏；isMobile 强制隐藏） -->
       <aside
         v-if="!isMobile"
         class="auth-brand hidden lg:flex flex-col justify-center p-12 relative overflow-hidden bg-slate-50 dark:bg-slate-800/40 border-r border-slate-100 dark:border-slate-800/60"
@@ -106,80 +96,31 @@ const isEmbedded = computed(() => {
         </div>
       </aside>
 
-      <!-- 右栏：表单内容 -->
-      <div class="flex-1 flex flex-col p-6 md:p-10 md:pr-14 relative justify-between min-w-0">
-        <!-- Header -->
-        <div class="flex items-center justify-between mb-6">
+      <!-- 右栏：上中下三槽 -->
+      <div class="flex-1 flex flex-col p-6 md:p-10 md:pr-14 relative min-w-0">
+        <!-- 上：header（logo + 标题 + 右侧附加区如扫码切换按钮） -->
+        <header class="flex items-center justify-between mb-6">
           <div class="min-w-0">
             <slot name="header">
-              <h2 class="text-xl font-bold dark:text-white">
-                {{ showQR ? '扫码登录' : '欢迎回来' }}
-              </h2>
-              <p class="text-xs text-slate-400 mt-1">
-                {{ showQR ? '使用移动端 App 扫码登录' : '请填写您的安全认证凭据' }}
-              </p>
+              <h2 class="text-xl font-bold dark:text-white">欢迎回来</h2>
+              <p class="text-xs text-slate-400 mt-1">请填写您的安全认证凭据</p>
             </slot>
           </div>
+          <!-- 右侧附加区：调用方按需注入（如扫码切换按钮），无注入则不占位 -->
+          <div v-if="$slots['header-extra']" class="flex-shrink-0">
+            <slot name="header-extra" />
+          </div>
+        </header>
 
-          <!-- 扫码/表单切换按钮 -->
-          <button
-            v-if="showQrSwitcher"
-            @click="toggleQR"
-            class="qr-switcher-btn w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800/80 text-slate-400 hover:text-primary transition-all border border-slate-100 dark:border-slate-800 flex-shrink-0"
-            title="切换扫码/表单模式"
-          >
-            <svg
-              v-if="!showQR"
-              viewBox="0 0 24 24"
-              width="20"
-              height="20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <rect x="3" y="3" width="7" height="7"></rect>
-              <rect x="14" y="3" width="7" height="7"></rect>
-              <rect x="14" y="14" width="7" height="7"></rect>
-              <rect x="3" y="14" width="7" height="7"></rect>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-              <polyline points="9 22 9 12 15 12 15 22"></polyline>
-            </svg>
-          </button>
-        </div>
+        <!-- 中：表单内容 -->
+        <main class="flex-1 flex flex-col justify-center min-h-0">
+          <slot />
+        </main>
 
-        <!-- 内容主体（表单 / 扫码，fade-slide 切换） -->
-        <div class="flex-1 flex flex-col justify-center min-h-0">
-          <transition name="fade-slide" mode="out-in">
-            <div v-if="showQR" key="qr" class="qr-container-slot">
-              <slot name="qr">
-                <!-- 默认扫码占位（调用方 #qr 覆盖） -->
-                <div class="flex flex-col items-center justify-center py-4">
-                  <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 relative group overflow-hidden">
-                    <div class="absolute top-0 left-0 w-full h-[2px] bg-primary/60 blur-[2px] animate-scan z-10"></div>
-                    <img
-                      src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=sso-login"
-                      class="w-40 h-40 opacity-90 group-hover:opacity-100 transition-opacity"
-                    />
-                  </div>
-                  <p class="mt-6 text-xs text-slate-500 text-center">
-                    打开 <span class="font-medium text-slate-700 dark:text-slate-300">{{ appName }}</span> 扫一扫
-                  </p>
-                </div>
-              </slot>
-            </div>
-
-            <div v-else key="form" class="form-container-slot">
-              <slot></slot>
-            </div>
-          </transition>
-        </div>
-
-        <!-- Footer -->
-        <div class="mt-6">
-          <slot name="footer"></slot>
-        </div>
+        <!-- 下：footer（协议/切换链接，无 slot 则不占位） -->
+        <footer v-if="$slots.footer" class="mt-6">
+          <slot name="footer" />
+        </footer>
       </div>
     </div>
 
@@ -210,7 +151,7 @@ const isEmbedded = computed(() => {
   padding: 16px;
 }
 
-/* 卡片：宽屏限宽居中，窄屏占满 */
+/* 卡片：宽屏限宽居中（max-854），窄屏 100% 宽平滑压缩 */
 .auth-card {
   max-width: 854px;
   max-height: 100vh;
@@ -218,7 +159,7 @@ const isEmbedded = computed(() => {
   box-sizing: border-box;
 }
 
-/* 宽屏（lg+）：固定高度，左栏定宽 */
+/* 宽屏（lg+）：固定高度 484px，左栏定宽 400px */
 @media (min-width: 1024px) {
   .auth-card {
     height: 484px;
@@ -249,30 +190,5 @@ const isEmbedded = computed(() => {
   bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
-}
-
-/* 扫码动画 */
-@keyframes scan {
-  0% { top: 0; opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
-}
-.animate-scan {
-  animation: scan 2.5s linear infinite;
-}
-
-/* fade-slide 过渡（表单/扫码切换） */
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateX(12px);
-}
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateX(-12px);
 }
 </style>

@@ -152,10 +152,8 @@ watch(showQR, val => {
     </div>
     <AuthContainer
       v-else
-      v-model:showQR="showQR"
       :appName="appConfig.appName"
       :isMobile="appConfig.isMobile"
-      :showQrSwitcher="!showConsent"
     >
       <template #header>
         <h2 class="text-xl font-bold dark:text-white leading-tight">
@@ -172,9 +170,29 @@ watch(showQR, val => {
         </p>
       </template>
 
-      <!-- 二维码面板 -->
-      <template #qr v-if="!showConsent">
-        <div class="qr-container flex flex-col items-center justify-center flex-1 py-4">
+      <!-- 扫码/表单切换按钮（授权确认时不显示） -->
+      <template #header-extra v-if="!showConsent">
+        <button
+          type="button"
+          @click="showQR = !showQR"
+          class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800/80 text-slate-400 hover:text-[#2563eb] transition-all border border-slate-100 dark:border-slate-800"
+          :title="showQR ? t('login.qr_title') : t('login.welcome')"
+        >
+          <svg v-if="!showQR" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+        </button>
+      </template>
+
+      <!-- 二维码面板（showQR && !showConsent 时显示，否则走表单/consent） -->
+      <div v-if="showQR && !showConsent" class="qr-container flex flex-col items-center justify-center flex-1 py-4">
           <div
             class="p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative group overflow-hidden cursor-pointer"
             :class="{ 'border-rose-300': qrStatus === 'expired' }"
@@ -206,11 +224,10 @@ watch(showQR, val => {
           <p class="mt-6 text-xs text-slate-500 text-center">
             {{ t('login.qr_scan_hint', { app: appConfig.appName }) }}
           </p>
-        </div>
-      </template>
+      </div>
 
       <!-- 授权确认面板 -->
-      <div v-if="showConsent" class="flex-1 flex flex-col justify-center py-2 space-y-5 w-full">
+      <div v-else-if="showConsent" class="flex-1 flex flex-col justify-center py-2 space-y-5 w-full">
         <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-[#2563eb]/10 flex items-center justify-center text-[#2563eb] font-bold text-lg">
@@ -266,7 +283,7 @@ watch(showQR, val => {
       </div>
 
       <!-- 邮箱二次验证（密码登录环境异常） -->
-      <div v-if="showEmailVerify" class="flex-1 flex flex-col justify-center py-2 space-y-4 w-full">
+      <div v-else-if="showEmailVerify" class="flex-1 flex flex-col justify-center py-2 space-y-4 w-full">
         <div class="text-center space-y-2">
           <div class="w-12 h-12 mx-auto rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#f59e0b" stroke-width="2">
