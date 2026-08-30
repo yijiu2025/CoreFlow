@@ -11,17 +11,19 @@
  * 由调用方通过 slot 注入（#header-extra 放扫码按钮等），不耦合在本组件。
  *
  * Slot：
- *   #branding      左栏品牌（默认显示 appName + 文案，可覆盖）
- *   #header        右栏顶部（默认显示"欢迎回来"，可覆盖）
- *   #header-extra  右栏顶部右侧附加区（如扫码切换按钮，按需注入）
- *   默认 slot      右栏中部表单内容
- *   #footer        右栏底部（协议/切换链接）
+ *   #brand-panel     左栏整体外壳（背景+装饰+结构），可完全覆盖默认品牌外壳
+ *   #branding        左栏内容（默认 logo + appName + 文案，可覆盖）
+ *   #header          右栏顶部（默认 appName 标题 + 欢迎语，可整体覆盖）
+ *   #header-app-name 右栏顶部 appName 展示（默认 <h2>{{ appName }}</h2>，可自定义）
+ *   #header-extra    右栏顶部右侧附加区（如扫码切换按钮，按需注入）
+ *   默认 slot        右栏中部表单内容
+ *   #footer          右栏底部（协议/切换链接）
  *
  * @author yijiu2025
  * @since 2026-08-30 重构：纯框架化，删扫码业务，保留 appName + 默认品牌
  */
 import { useThemeStore } from '@/stores/theme';
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import ThemeToggle from './ThemeToggle.vue';
 
 interface Props {
@@ -55,6 +57,20 @@ const isEmbedded = computed(() => {
     return true;
   }
 });
+
+/** 响应式：窗口宽度（用于左栏断点判断） */
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200);
+function onResize() {
+  windowWidth.value = window.innerWidth;
+}
+onMounted(() => window.addEventListener('resize', onResize));
+onUnmounted(() => window.removeEventListener('resize', onResize));
+
+/**
+ * 左栏显示条件：非 isMobile AND 视口 >= 600px
+ * （isMobile prop 强制隐藏，< 600px 窄屏也强制隐藏——窄屏只显示右栏）
+ */
+const showBrandPanel = computed(() => !props.isMobile && windowWidth.value >= 600);
 </script>
 
 <template>
@@ -63,47 +79,54 @@ const isEmbedded = computed(() => {
     <div
       class="auth-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[10px] shadow-2xl overflow-hidden flex w-full"
     >
-      <!-- 左栏：品牌入口（>= 600px 显示，< 600px 隐藏；isMobile 强制隐藏） -->
+      <!-- 左栏：品牌入口
+           显示条件：!isMobile AND 视口 >= 600px（窄屏强制单栏）
+           默认品牌内容可 #branding 覆盖；整个左栏外壳（背景/装饰/结构）可 #brand-panel 完全覆盖 -->
       <aside
-        v-if="!isMobile"
+        v-if="showBrandPanel"
         class="auth-brand hidden min-[600px]:flex flex-col justify-center p-12 relative overflow-hidden bg-slate-50 dark:bg-slate-800/40 border-r border-slate-100 dark:border-slate-800/60"
       >
-        <div class="relative z-10">
-          <slot name="branding">
-            <!-- 默认品牌内容（调用方可 #branding 覆盖） -->
-            <div
-              class="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white mb-8 shadow-lg shadow-primary/20"
-            >
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="3">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <h1 class="text-3xl font-bold dark:text-white mb-4 tracking-tight">{{ appName }}</h1>
-            <p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed max-w-[240px]">
-              安全、快速、统一的身份认证中心。 为您的企业应用提供坚实的防护屏障。
-            </p>
-          </slot>
-        </div>
+        <slot name="brand-panel">
+          <div class="relative z-10">
+            <slot name="branding">
+              <!-- 默认品牌内容（调用方可 #branding 覆盖） -->
+              <div
+                class="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white mb-8 shadow-lg shadow-primary/20"
+              >
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="3">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              <h1 class="text-3xl font-bold dark:text-white mb-4 tracking-tight">{{ appName }}</h1>
+              <p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed max-w-[240px]">
+                安全、快速、统一的身份认证中心。 为您的企业应用提供坚实的防护屏障。
+              </p>
+            </slot>
+          </div>
 
-        <!-- 装饰光斑 -->
-        <div class="absolute -bottom-20 -left-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
-        <div class="absolute -top-20 -right-20 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl"></div>
+          <!-- 装饰光斑 -->
+          <div class="absolute -bottom-20 -left-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
+          <div class="absolute -top-20 -right-20 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl"></div>
 
-        <!-- 底部指示点 -->
-        <div class="absolute bottom-8 left-12 flex gap-4">
-          <div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700"></div>
-          <div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700"></div>
-          <div class="w-1.5 h-1.5 rounded-full bg-primary/40"></div>
-        </div>
+          <!-- 底部指示点 -->
+          <div class="absolute bottom-8 left-12 flex gap-4">
+            <div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+            <div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+            <div class="w-1.5 h-1.5 rounded-full bg-primary/40"></div>
+          </div>
+        </slot>
       </aside>
 
       <!-- 右栏：上中下三槽 -->
       <div class="flex-1 flex flex-col p-6 md:p-10 md:pr-14 relative min-w-0">
-        <!-- 上：header（logo + 标题 + 右侧附加区如扫码切换按钮） -->
+        <!-- 上：header（appName 展示 + 标题 + 右侧附加区如扫码切换按钮） -->
         <header class="flex items-center justify-between mb-6">
           <div class="min-w-0">
             <slot name="header">
-              <h2 class="text-xl font-bold dark:text-white">欢迎回来</h2>
+              <!-- 默认 header：appName 标题 + 欢迎语（可 #header-app-name 覆盖 appName 展示） -->
+              <slot name="header-app-name">
+                <h2 class="text-xl font-bold dark:text-white">{{ appName }}</h2>
+              </slot>
               <p class="text-xs text-slate-400 mt-1">请填写您的安全认证凭据</p>
             </slot>
           </div>
@@ -140,14 +163,12 @@ const isEmbedded = computed(() => {
   overflow: hidden;
   background: transparent;
   position: relative;
-  /* 视口级 padding：< 600px 用 8px（贴边，窄屏让表单占更多），>= 600px 用 16px */
-  padding: 16px;
 }
-@media (max-width: 600px) {
+/* @media (max-width: 600px) {
   .auth-viewport {
     padding: 8px;
   }
-}
+} */
 
 /* 卡片：宽屏限宽居中（max-854），中等屏以下宽度跟随视口压缩（双栏一起压），窄屏单栏 */
 .auth-card {
