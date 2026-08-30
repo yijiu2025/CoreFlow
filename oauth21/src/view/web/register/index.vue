@@ -54,21 +54,37 @@ provide('registerContext', registerContext);
 </script>
 
 <template>
-  <component :is="activeComponent" />
+  <div class="login-dispatcher-wrapper">
+    <transition name="fade-slide" mode="out-in">
+      <component :is="activeComponent" />
+    </transition>
+  </div>
 </template>
 
 <style scoped>
-/* 页面切换平滑淡入淡出（与 login 一致） */
+.login-dispatcher-wrapper {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* 页面切换平滑淡入淡出动画 */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .fade-slide-enter-from {
   opacity: 0;
   transform: translateY(12px) scale(0.98);
 }
+
 .fade-slide-leave-to {
   opacity: 0;
-  transform: translateY(-12px) scale(1.02);
+  transform: translateY(-12px) scale(0.98);
 }
 </style>

@@ -35,7 +35,7 @@ const router = createRouter({
         {
           path: 'mini-login',
           name: 'MiniLogin',
-          component: () => import('@/view/web/login/MiniLogin.vue'),
+          component: () => import('@/view/web/login/index.vue'),
           meta: { title: '快捷登录' }
         },
         {
