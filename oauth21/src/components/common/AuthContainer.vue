@@ -22,6 +22,7 @@
  */
 import { useThemeStore } from '@/stores/theme';
 import { computed } from 'vue';
+import ThemeToggle from './ThemeToggle.vue';
 
 interface Props {
   /** 应用名（左栏品牌 + 默认 header 显示） */
@@ -125,16 +126,7 @@ const isEmbedded = computed(() => {
     </div>
 
     <!-- 主题切换浮按钮（iframe 嵌入时隐藏） -->
-    <button
-      v-if="showThemeToggle && !isEmbedded"
-      @click="themeStore.toggleTheme"
-      class="theme-toggle-floating flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700 text-sm font-medium hover:scale-105 transition-all active:scale-95 z-50"
-    >
-      <Icons v-if="themeStore.isDark" name="moon" :size="16" />
-      <Icons v-else name="sun" :size="16" />
-      <span v-if="themeStore.isDark"> Dark Mode</span>
-      <span v-else> Light Mode</span>
-    </button>
+    <ThemeToggle v-if="showThemeToggle && !isEmbedded" />
   </div>
 </template>
 
