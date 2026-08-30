@@ -22,7 +22,6 @@ export const SSO_LOGIN_PARAMS = {
   lang: 'zh_cn',
   appName: 'posecraft',
   appEntrance: 'web',
-  styleType: 'horizontal',
   biz_params: '',
   notLoadSsoView: 'false',
   // 不传 notKeepLogin：posecraft 不干预 oauth21 登录页的"保持登录"勾选
@@ -32,11 +31,14 @@ export const SSO_LOGIN_PARAMS = {
   site: '01'
 };
 
-/** 构建 SSO 登录完整 URL */
-export function buildSsoLoginUrl(): string {
-  const params = new URLSearchParams({
-    ...SSO_LOGIN_PARAMS,
-    rnd: Math.random().toString()
-  });
+/**
+ * 构建 SSO 登录完整 URL
+ * @param theme 主题（'dark'/'light'），由调用方传 themeStore.isDark 转换；
+ *              不传则不带 theme 参数，oauth21 用自己的 localStorage/系统偏好兜底
+ */
+export function buildSsoLoginUrl(theme?: 'dark' | 'light'): string {
+  const base: Record<string, string> = { ...SSO_LOGIN_PARAMS, rnd: Math.random().toString() };
+  if (theme) base.theme = theme;
+  const params = new URLSearchParams(base);
   return `${SSO_URL}${SSO_LOGIN_PATH}?${params.toString()}`;
 }

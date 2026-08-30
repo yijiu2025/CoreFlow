@@ -206,7 +206,8 @@ const { savedAccounts } = storeToRefs(authStore);
 
 const loading = ref(true);
 const switching = ref(false);
-const loginUrl = buildSsoLoginUrl();
+/** iframe src URL：computed 让主题变化时 URL 重新生成（含 theme 参数，oauth21 iframe 首屏就带主题不闪白） */
+const loginUrl = computed(() => buildSsoLoginUrl(themeStore.isDark ? 'dark' : 'light'));
 /** SSO iframe 的 origin（postMessage 接收侧只信任此 origin，防恶意页面伪造登录消息） */
 const ssoOrigin = (() => {
   try {
