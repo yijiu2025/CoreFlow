@@ -6,31 +6,36 @@ const route = useRoute();
 
 // 1. 初始化响应式变量并定义默认值 (以支持缺省参数的情况)
 const lang = ref('zh_cn');
-const appName = ref('xianyu');
+const theme = ref('light');
+const appName = ref('posecraft');
 const appEntrance = ref('web');
-const bizParams = ref('');
+const bizParams = ref(''); // 业务透传占位（父应用用，未启用下游使用）
 const notLoadSsoView = ref(false);
 const notKeepLogin = ref(false);
 const isMobile = ref(false);
 const qrCodeFirst = ref(false);
-const stie = ref('77');
-const rnd = ref('0.7164508668310778');
+const stie = ref('02'); // 站点标识占位
+const rnd = ref('0.7164508668310778'); // 随机数占位（防缓存戳）
+const sign = ref(''); // 签名占位（当前未启用）
+// theme: 子组件（MiniLogin）自己用 useRoute().query.theme 读，
+//        dispatcher 和子组件共享 vue-router，query 自动可用，无需此处透传
 
 // 2. 监听路由 query 变化，动态同步到变量，同时保证类型安全与空值兜底
-//    注：styleType query 已废弃（AuthContainer 重构删了 styleType prop，改 Tailwind 响应式）
 watch(
   () => route.query,
   query => {
     lang.value = (query.lang as string) || 'zh_cn';
-    appName.value = (query.appName as string) || 'xianyu';
+    theme.value = (query.theme as string) || 'light';
+    appName.value = (query.appName as string) || 'posecraft';
     appEntrance.value = (query.appEntrance as string) || 'web';
     bizParams.value = (query.bizParams as string) || '';
     notLoadSsoView.value = query.notLoadSsoView === 'true';
     notKeepLogin.value = query.notKeepLogin === 'true';
     isMobile.value = query.isMobile === 'true';
     qrCodeFirst.value = query.qrCodeFirst === 'true';
-    stie.value = (query.stie as string) || '77';
+    stie.value = (query.stie as string) || '02';
     rnd.value = (query.rnd as string) || '0.7164508668310778';
+    sign.value = (query.rnd as string) || '';
   },
   { immediate: true, deep: true }
 );
@@ -48,8 +53,9 @@ const activeComponent = computed(() => {
   }
 
   // 2. mini 登录来源（iframe 嵌入弹窗场景）→ 紧凑版
-  //    精确匹配：/mini-login 路径（避免 /administrators 等含 "mini" 字符串的路径误判）
-  if (route.query.from === 'mini' || route.path.startsWith('/mini-login')) {
+  //    仅当显式 from=mini 或路径含 mini 时走 MiniLogin；
+  //    styleType 的 vertical/horizontal/split 都是 StandardLogin 的布局变体，不应误判为 mini
+  if (route.query.from === 'mini' || route.path.includes('/mini-login')) {
     return MiniLogin;
   }
 
