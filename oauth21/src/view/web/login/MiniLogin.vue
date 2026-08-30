@@ -12,6 +12,7 @@ import AuthContainer from '@/components/common/AuthContainer.vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import Icons from '@/components/common/Icons.vue';
+import AppNameMissing from '@/components/common/AppNameMissing.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
@@ -156,10 +157,7 @@ watch(showQR, val => {
 
 <template>
   <div class="mini-login-root w-full h-full">
-    <div v-if="hasAppName" class="flex flex-col items-center justify-center w-full h-full p-8 text-center">
-      <div class="text-red-500 text-lg font-semibold mb-2">应用标识缺失</div>
-      <div class="text-slate-400 text-sm">缺少 appName 参数，无法登录。请通过应用入口访问。</div>
-    </div>
+    <AppNameMissing v-if="!hasAppName" />
     <AuthContainer
       v-else
       :appName="appConfig.appName"

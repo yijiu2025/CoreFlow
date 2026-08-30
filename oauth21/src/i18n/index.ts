@@ -49,6 +49,10 @@ const i18n = createI18n({
         home: '返回登录',
         brand_desc: '您访问的页面不存在或已被移除。'
       },
+      app_missing: {
+        title: '应用标识缺失',
+        desc: '缺少 appName 参数，无法提供登录授权服务。'
+      },
       validation: {
         email_invalid: '请输入有效的邮箱',
         code_min: '请输入验证码',
@@ -172,6 +176,10 @@ const i18n = createI18n({
         back: 'Go Back',
         home: 'Back to Login',
         brand_desc: 'The page you visited does not exist or has been removed.'
+      },
+      app_missing: {
+        title: 'Application Identifier Missing',
+        desc: 'The appName parameter is required to provide login authorization service.'
       },
       validation: {
         email_invalid: 'Please enter a valid email',
