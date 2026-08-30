@@ -176,6 +176,7 @@ function checkStrength() {
   <GraphicCaptcha
     :is-open="showCaptcha"
     :email="email"
+    :send-email="true"
     type="reset_password"
     @close="showCaptcha = false"
     @success="onCaptchaSuccess"
