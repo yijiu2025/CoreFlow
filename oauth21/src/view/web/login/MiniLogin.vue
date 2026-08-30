@@ -26,7 +26,6 @@ const hasAppName = computed(() => !!route.query.appName);
 const appConfig = computed(() => ({
   appName: (route.query.appName as string) || '',
   lang: (route.query.lang as string) || 'zh_cn',
-  styleType: ((route.query.styleType as string) || 'horizontal') as 'horizontal' | 'split' | 'vertical',
   qrCodeFirst: route.query.qrCodeFirst === 'true',
   isMobile: route.query.isMobile === 'true',
   notKeepLogin: route.query.notKeepLogin === 'true'
@@ -155,7 +154,6 @@ watch(showQR, val => {
       v-else
       v-model:showQR="showQR"
       :appName="appConfig.appName"
-      :styleType="appConfig.styleType"
       :isMobile="appConfig.isMobile"
       :showQrSwitcher="!showConsent"
     >

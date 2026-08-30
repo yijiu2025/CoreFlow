@@ -1,19 +1,35 @@
 <script setup lang="ts">
+/**
+ * 认证容器组件（登录/注册/找回密码通用）
+ *
+ * 单一自适应布局，取消 styleType 枚举（horizontal/vertical/split 死代码已删）：
+ * - 宽屏（lg+，≥1024px）：左品牌栏 + 右表单栏，卡片 max-w-854px 居中
+ * - 窄屏（<lg）：只显示表单栏，卡片 100% 宽，左栏自动隐藏（Tailwind hidden lg:flex）
+ * - isMobile prop 保留（mobile 路由强制全屏无卡片），但响应式主要靠 CSS 不靠 prop
+ *
+ * 插槽：#branding（左栏品牌）/ #header（右栏标题）/ 默认（表单）/ #qr（扫码）/ #footer（底栏）
+ *
+ * @author yijiu2025
+ * @since 2026-08-30 重构：删 styleType，改 Tailwind 响应式
+ */
 import { useThemeStore } from '@/stores/theme';
 import { computed } from 'vue';
 
 interface Props {
+  /** 应用名（左栏品牌 + 默认 header 显示） */
   appName?: string;
-  styleType?: 'horizontal' | 'vertical' | 'split';
+  /** 强制移动端模式（mobile 路由用，全屏无卡片；不传则靠 CSS 响应式） */
   isMobile?: boolean;
+  /** 显示扫码/表单切换按钮 */
   showQrSwitcher?: boolean;
+  /** 当前是否扫码模式（v-model） */
   showQR?: boolean;
+  /** 显示主题切换浮按钮（iframe 嵌入时自动隐藏） */
   showThemeToggle?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   appName: 'Enterprise SSO',
-  styleType: 'horizontal',
   isMobile: false,
   showQrSwitcher: true,
   showQR: false,
@@ -33,20 +49,17 @@ const toggleQR = () => {
   emit('qr-click');
 };
 
-// 动态样式计算
-const containerClasses = computed(() => {
-  return {
-    'is-mobile': props.isMobile,
-    dark: themeStore.isDark,
-    [props.styleType]: true
-  };
-});
+// 容器类名（响应式由 Tailwind 类驱动，这里只挂 is-mobile/dark 状态）
+const containerClasses = computed(() => ({
+  'is-mobile': props.isMobile,
+  dark: themeStore.isDark
+}));
 
-// 检测是否处于 iframe 嵌入环境中
+// iframe 嵌入检测（嵌入时隐藏主题切换浮按钮，避免遮挡父页面）
 const isEmbedded = computed(() => {
   try {
     return window.self !== window.top;
-  } catch (e) {
+  } catch {
     return true;
   }
 });
@@ -54,44 +67,19 @@ const isEmbedded = computed(() => {
 
 <template>
   <div class="auth-viewport" :class="containerClasses">
-    <!-- Split Layout Backdrops -->
+    <!-- 自适应卡片：宽屏 max-w-854 居中，窄屏/isMobile 全屏 -->
     <div
-      v-if="styleType === 'split' && !isMobile"
-      class="split-backdrop-left bg-gradient-to-tr from-slate-900 via-slate-800 to-indigo-950 text-white"
+      class="auth-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[10px] shadow-2xl overflow-hidden flex w-full"
+      :class="{ 'has-qr-switcher': showQrSwitcher }"
     >
-      <div class="relative z-10 max-w-lg p-16">
-        <slot name="branding">
-          <!-- Fallback default branding for split/horizontal layouts -->
-          <div
-            class="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-white mb-8 shadow-xl shadow-primary/20"
-          >
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-          </div>
-          <h1 class="text-4xl font-extrabold mb-6 tracking-tight">{{ appName }}</h1>
-          <p class="text-slate-300 text-base leading-relaxed">
-            安全、快速、统一的身份认证中心。 为您的企业级应用生态提供最坚固的安全屏障与多维度审计防线。
-          </p>
-        </slot>
-      </div>
-      <!-- Premium Design Accents -->
-      <div class="absolute -bottom-20 -left-20 w-80 h-80 bg-primary/10 rounded-full blur-3xl"></div>
-      <div class="absolute -top-20 -right-20 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"></div>
-    </div>
-
-    <!-- Main Wrapper Box -->
-    <div
-      class="auth-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[10px] shadow-2xl overflow-hidden flex"
-      :class="[styleType, { 'has-qr-switcher': showQrSwitcher }]"
-    >
-      <!-- Left Panel: Branding / Visual (Only for horizontal style) -->
-      <div
-        v-if="styleType === 'horizontal' && !isMobile"
-        class="horizontal-left-branding bg-slate-50 dark:bg-slate-800/40 border-r border-slate-100 dark:border-slate-800/60 flex flex-col justify-center p-12 relative overflow-hidden"
+      <!-- 左栏：品牌（宽屏 lg+ 显示，窄屏隐藏；isMobile 强制隐藏） -->
+      <aside
+        v-if="!isMobile"
+        class="auth-brand hidden lg:flex flex-col justify-center p-12 relative overflow-hidden bg-slate-50 dark:bg-slate-800/40 border-r border-slate-100 dark:border-slate-800/60"
       >
         <div class="relative z-10">
           <slot name="branding">
+            <!-- 默认品牌内容（调用方可 #branding 覆盖） -->
             <div
               class="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white mb-8 shadow-lg shadow-primary/20"
             >
@@ -106,22 +94,23 @@ const isEmbedded = computed(() => {
           </slot>
         </div>
 
-        <!-- Decoration -->
+        <!-- 装饰光斑 -->
         <div class="absolute -bottom-20 -left-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
         <div class="absolute -top-20 -right-20 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl"></div>
 
+        <!-- 底部指示点 -->
         <div class="absolute bottom-8 left-12 flex gap-4">
           <div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700"></div>
           <div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700"></div>
           <div class="w-1.5 h-1.5 rounded-full bg-primary/40"></div>
         </div>
-      </div>
+      </aside>
 
-      <!-- Right Panel / Main Panel: Form Content -->
-      <div class="flex-1 flex flex-col p-10 pr-12 md:pr-14 relative justify-between">
-        <!-- Header Section -->
+      <!-- 右栏：表单内容 -->
+      <div class="flex-1 flex flex-col p-6 md:p-10 md:pr-14 relative justify-between min-w-0">
+        <!-- Header -->
         <div class="flex items-center justify-between mb-6">
-          <div>
+          <div class="min-w-0">
             <slot name="header">
               <h2 class="text-xl font-bold dark:text-white">
                 {{ showQR ? '扫码登录' : '欢迎回来' }}
@@ -132,11 +121,11 @@ const isEmbedded = computed(() => {
             </slot>
           </div>
 
-          <!-- QR Toggle Switcher Button -->
+          <!-- 扫码/表单切换按钮 -->
           <button
             v-if="showQrSwitcher"
             @click="toggleQR"
-            class="qr-switcher-btn w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800/80 text-slate-400 hover:text-primary transition-all border border-slate-100 dark:border-slate-800"
+            class="qr-switcher-btn w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800/80 text-slate-400 hover:text-primary transition-all border border-slate-100 dark:border-slate-800 flex-shrink-0"
             title="切换扫码/表单模式"
           >
             <svg
@@ -160,16 +149,14 @@ const isEmbedded = computed(() => {
           </button>
         </div>
 
-        <!-- Dynamic Content Body -->
-        <div class="flex-1 flex flex-col justify-center">
+        <!-- 内容主体（表单 / 扫码，fade-slide 切换） -->
+        <div class="flex-1 flex flex-col justify-center min-h-0">
           <transition name="fade-slide" mode="out-in">
             <div v-if="showQR" key="qr" class="qr-container-slot">
               <slot name="qr">
-                <!-- Fallback default QR rendering -->
+                <!-- 默认扫码占位（调用方 #qr 覆盖） -->
                 <div class="flex flex-col items-center justify-center py-4">
-                  <div
-                    class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 relative group overflow-hidden"
-                  >
+                  <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 relative group overflow-hidden">
                     <div class="absolute top-0 left-0 w-full h-[2px] bg-primary/60 blur-[2px] animate-scan z-10"></div>
                     <img
                       src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=sso-login"
@@ -189,14 +176,14 @@ const isEmbedded = computed(() => {
           </transition>
         </div>
 
-        <!-- Footer Section -->
+        <!-- Footer -->
         <div class="mt-6">
           <slot name="footer"></slot>
         </div>
       </div>
     </div>
 
-    <!-- Theme Toggle Floating Widget -->
+    <!-- 主题切换浮按钮（iframe 嵌入时隐藏） -->
     <button
       v-if="showThemeToggle && !isEmbedded"
       @click="themeStore.toggleTheme"
@@ -220,69 +207,43 @@ const isEmbedded = computed(() => {
   overflow: hidden;
   background: transparent;
   position: relative;
+  padding: 16px;
 }
 
-/* Card sizing configurations */
+/* 卡片：宽屏限宽居中，窄屏占满 */
 .auth-card {
+  max-width: 854px;
+  max-height: 100vh;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
 }
 
-/* Horizontal card size setup */
-.auth-card.horizontal {
-  width: 854px;
-  height: 484px;
+/* 宽屏（lg+）：固定高度，左栏定宽 */
+@media (min-width: 1024px) {
+  .auth-card {
+    height: 484px;
+  }
+  .auth-brand {
+    width: 400px;
+    flex-shrink: 0;
+  }
 }
 
-.horizontal-left-branding {
-  width: 400px;
-  flex-shrink: 0;
-}
-
-/* Vertical card size setup (Compact box) */
-.auth-card.vertical {
-  width: 400px;
-  height: auto;
-  min-height: 484px;
-}
-
-/* Split layout setup (Fullscreen side-by-side) */
-.auth-viewport.split {
-  display: flex;
-  flex-direction: row;
-}
-
-.split-backdrop-left {
-  flex: 1.2;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.auth-card.split {
-  flex: 1;
-  height: 100%;
-  border-radius: 0;
-  border: none;
-  box-shadow: none;
-}
-
-/* Mobile responsive override */
+/* Mobile 强制全屏无卡片 */
 .auth-viewport.is-mobile {
   padding: 0;
 }
-
 .auth-viewport.is-mobile .auth-card {
   width: 100vw !important;
+  max-width: 100vw !important;
   height: 100vh !important;
+  max-height: 100vh !important;
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
 }
 
+/* 主题切换浮按钮定位 */
 .theme-toggle-floating {
   position: absolute;
   bottom: 2rem;
@@ -290,11 +251,18 @@ const isEmbedded = computed(() => {
   transform: translateX(-50%);
 }
 
-.auth-viewport.split .theme-toggle-floating {
-  left: 75%;
+/* 扫码动画 */
+@keyframes scan {
+  0% { top: 0; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+.animate-scan {
+  animation: scan 2.5s linear infinite;
 }
 
-/* Transitions */
+/* fade-slide 过渡（表单/扫码切换） */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -306,26 +274,5 @@ const isEmbedded = computed(() => {
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateX(-12px);
-}
-
-@keyframes scan {
-  0% {
-    top: 0;
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    top: 100%;
-    opacity: 0;
-  }
-}
-
-.animate-scan {
-  animation: scan 2.5s linear infinite;
 }
 </style>

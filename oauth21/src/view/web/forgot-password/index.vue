@@ -25,7 +25,7 @@ function goToLogin() {
 
 <template>
   <div class="w-full h-full">
-    <AuthContainer :appName="'Enterprise SSO'" :styleType="'horizontal'" :showQrSwitcher="false">
+    <AuthContainer :appName="'Enterprise SSO'" :showQrSwitcher="false">
       <template #header>
         <h2 class="text-xl font-bold dark:text-white">{{ t('forgot.title') }}</h2>
         <p class="text-xs text-slate-400 mt-1">{{ t('forgot.desc') }}</p>
