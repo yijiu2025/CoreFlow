@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
+import { useThemeStore } from '@/stores/theme';
 import { useForm } from 'vee-validate';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
@@ -18,6 +19,7 @@ import { useQrLogin } from '@/composables/useQrLogin';
 import { useLoginFlow } from '@/composables/useLoginFlow';
 
 const authStore = useAuthStore();
+const themeStore = useThemeStore();
 const route = useRoute();
 const { locale, t } = useI18n();
 const { error: showError } = useMessage();
@@ -28,7 +30,10 @@ const appConfig = computed(() => ({
   lang: (route.query.lang as string) || 'zh_cn',
   qrCodeFirst: route.query.qrCodeFirst === 'true',
   isMobile: route.query.isMobile === 'true',
-  notKeepLogin: route.query.notKeepLogin === 'true'
+  notKeepLogin: route.query.notKeepLogin === 'true',
+  // 父应用通过 URL 指定初始主题（dark/light），iframe 首屏就带主题不闪白
+  // 优先级：URL theme > 父 postMessage 同步 > 本地 localStorage > 系统偏好
+  theme: (route.query.theme as string) || ''
 }));
 
 const showQR = ref(false);
@@ -127,6 +132,11 @@ const { qrDataUrl, qrStatus, generate: generateQR, reset: resetQR } = useQrLogin
 );
 
 onMounted(() => {
+  // 应用父应用通过 URL 指定的初始主题（dark/light），iframe 首屏就带主题不闪白
+  // 仅当 URL 带 theme 参数时覆盖；不带则走 theme store 默认（localStorage/系统偏好/父 postMessage）
+  if (appConfig.value.theme === 'dark' || appConfig.value.theme === 'light') {
+    themeStore.applyTheme(appConfig.value.theme === 'dark');
+  }
   showQR.value = appConfig.value.qrCodeFirst;
   if (appConfig.value.notKeepLogin) keepLogin.value = false;
   if (showQR.value) generateQR(() => showError(t('login.qr_generate_failed') || '二维码生成失败'));
