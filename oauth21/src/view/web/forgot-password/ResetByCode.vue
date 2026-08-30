@@ -3,7 +3,7 @@
  * 方式一：验证码重置密码
  * 流程：输入邮箱 → 图形验证码 → 邮箱验证码 → 设置新密码
  */
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { authApi } from '@/api/auth';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
@@ -72,19 +72,30 @@ async function handleReset() {
   }
 }
 
-// 密码强度（简单版：长度+字符种类）
-const strengthColor = ref('transparent');
-function checkStrength() {
-  const pwd = newPassword.value;
-  if (!pwd) { strengthColor.value = 'transparent'; return; }
-  let score = 0;
-  if (pwd.length >= 8) score++;
-  if (/[A-Z]/.test(pwd)) score++;
-  if (/[0-9]/.test(pwd)) score++;
-  if (/[^A-Za-z0-9]/.test(pwd)) score++;
-  const colors = ['#f43f5e', '#f59e0b', '#eab308', '#10b981'];
-  strengthColor.value = colors[Math.min(score - 1, 3)] || '#f43f5e';
-}
+// 密码强度规则（4 条，每条对应 score +1 触发，4 档颜色：红/橙/黄/绿）
+const STRENGTH_RULES = [
+  { label: '至少 8 位字符', test: (p: string) => p.length >= 8 },
+  { label: '包含大写字母 (A-Z)', test: (p: string) => /[A-Z]/.test(p) },
+  { label: '包含数字 (0-9)', test: (p: string) => /[0-9]/.test(p) },
+  { label: '包含特殊字符 (!@#$ 等)', test: (p: string) => /[^A-Za-z0-9]/.test(p) }
+] as const;
+
+/** 满足的规则数（0-4） */
+const strengthScore = computed(() => STRENGTH_RULES.filter(r => r.test(newPassword.value)).length);
+
+/** 强度文字 + 颜色（0=弱, 1/2=中, 3=强, 4=很强） */
+const STRENGTH_LEVELS = [
+  { label: '弱', color: '#f43f5e' },     // score=0
+  { label: '弱', color: '#f43f5e' },     // score=1
+  { label: '中', color: '#f59e0b' },     // score=2
+  { label: '强', color: '#eab308' },     // score=3
+  { label: '很强', color: '#10b981' }    // score=4
+] as const;
+const strengthColor = computed(() => STRENGTH_LEVELS[strengthScore.value].color);
+const strengthLabel = computed(() => STRENGTH_LEVELS[strengthScore.value].label);
+
+/** 悬浮窗显示状态（focus 或有内容时显示，blur 且内容空时隐藏） */
+const showStrengthTip = ref(false);
 </script>
 
 <template>
@@ -141,7 +152,6 @@ function checkStrength() {
         :type="showPassword ? 'text' : 'password'"
         :placeholder="t('forgot.new_password')"
         class="input-field pl-11 pr-11"
-        @input="checkStrength"
       />
       <div class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
         <Icons name="lock" :size="16" />
@@ -162,9 +172,52 @@ function checkStrength() {
         </svg>
       </button>
     </div>
-    <!-- 密码强度条 -->
-    <div v-if="newPassword" class="flex gap-1">
-      <div class="strength-bar flex-1" :style="{ background: strengthColor }"></div>
+    <!-- 密码强度条：4 段分段 + 文字标签 + 悬浮窗（? 提示） -->
+    <div v-if="newPassword" class="space-y-1.5">
+      <div class="flex gap-1">
+        <div
+          v-for="i in 4"
+          :key="i"
+          class="strength-bar flex-1 transition-colors"
+          :class="i <= strengthScore ? 'active' : ''"
+          :style="i <= strengthScore ? { background: strengthColor } : {}"
+        ></div>
+      </div>
+      <div class="flex items-center justify-between text-xs">
+        <span :style="{ color: strengthColor }" class="font-semibold">强度：{{ strengthLabel }}</span>
+        <div class="relative">
+          <button
+            type="button"
+            @mouseenter="showStrengthTip = true"
+            @mouseleave="showStrengthTip = false"
+            @focus="showStrengthTip = true"
+            @blur="showStrengthTip = false"
+            @click="showStrengthTip = !showStrengthTip"
+            class="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-bold flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+            title="查看强度要求"
+          >?</button>
+          <!-- 悬浮窗：列出每条规则，✓ 已满足（绿）/ ✗ 未满足（灰） -->
+          <div
+            v-if="showStrengthTip"
+            class="absolute right-0 top-6 z-10 w-64 p-3 rounded-lg bg-slate-800 dark:bg-slate-700 text-white text-xs shadow-xl"
+          >
+            <div class="font-semibold mb-2 text-slate-100">密码强度要求</div>
+            <ul class="space-y-1.5">
+              <li
+                v-for="rule in STRENGTH_RULES"
+                :key="rule.label"
+                class="flex items-start gap-2"
+                :class="rule.test(newPassword) ? 'text-emerald-400' : 'text-slate-400'"
+              >
+                <span class="inline-block w-3.5 flex-shrink-0 font-bold">
+                  {{ rule.test(newPassword) ? '✓' : '✗' }}
+                </span>
+                <span>{{ rule.label }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="relative">
