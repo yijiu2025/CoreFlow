@@ -42,6 +42,13 @@ const i18n = createI18n({
         qr_generate_failed: '二维码生成失败',
         qr_expired: '二维码已过期'
       },
+      not_found: {
+        title: '页面未找到',
+        desc: '抱歉，您访问的地址不存在。',
+        back: '返回上页',
+        home: '返回登录',
+        brand_desc: '您访问的页面不存在或已被移除。'
+      },
       validation: {
         email_invalid: '请输入有效的邮箱',
         code_min: '请输入验证码',
@@ -158,6 +165,13 @@ const i18n = createI18n({
         qr_click_refresh: 'QR code expired, click to refresh',
         qr_generate_failed: 'Failed to generate QR code',
         qr_expired: 'QR code expired'
+      },
+      not_found: {
+        title: 'Page Not Found',
+        desc: 'Sorry, the address you visited does not exist.',
+        back: 'Go Back',
+        home: 'Back to Login',
+        brand_desc: 'The page you visited does not exist or has been removed.'
       },
       validation: {
         email_invalid: 'Please enter a valid email',
