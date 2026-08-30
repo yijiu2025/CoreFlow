@@ -63,10 +63,10 @@ const isEmbedded = computed(() => {
     <div
       class="auth-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-[10px] shadow-2xl overflow-hidden flex w-full"
     >
-      <!-- 左栏：品牌入口（宽屏 lg+ 显示，窄屏隐藏；isMobile 强制隐藏） -->
+      <!-- 左栏：品牌入口（>= 600px 显示，< 600px 隐藏；isMobile 强制隐藏） -->
       <aside
         v-if="!isMobile"
-        class="auth-brand hidden lg:flex flex-col justify-center p-12 relative overflow-hidden bg-slate-50 dark:bg-slate-800/40 border-r border-slate-100 dark:border-slate-800/60"
+        class="auth-brand hidden min-[600px]:flex flex-col justify-center p-12 relative overflow-hidden bg-slate-50 dark:bg-slate-800/40 border-r border-slate-100 dark:border-slate-800/60"
       >
         <div class="relative z-10">
           <slot name="branding">
@@ -140,19 +140,26 @@ const isEmbedded = computed(() => {
   overflow: hidden;
   background: transparent;
   position: relative;
+  /* 视口级 padding：< 600px 用 8px（贴边，窄屏让表单占更多），>= 600px 用 16px */
   padding: 16px;
 }
+@media (max-width: 600px) {
+  .auth-viewport {
+    padding: 8px;
+  }
+}
 
-/* 卡片：宽屏限宽居中（max-854），窄屏 100% 宽平滑压缩 */
+/* 卡片：宽屏限宽居中（max-854），中等屏以下宽度跟随视口压缩（双栏一起压），窄屏单栏 */
 .auth-card {
   max-width: 854px;
   max-height: 100vh;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
+  width: 100%;
 }
 
-/* 宽屏（lg+）：固定高度 484px，左栏定宽 400px */
-@media (min-width: 1024px) {
+/* >= 854px：双栏 + 固定高度 484px + 左栏 400px */
+@media (min-width: 854px) {
   .auth-card {
     height: 484px;
   }
@@ -162,7 +169,28 @@ const isEmbedded = computed(() => {
   }
 }
 
-/* Mobile 强制全屏无卡片 */
+/* 600 ~ 854px：双栏压缩（卡片宽度跟随视口，左栏按比例缩小，仍显示） */
+@media (min-width: 600px) and (max-width: 853.98px) {
+  .auth-brand {
+    /* 左栏按比例缩：视口 - 32px padding = 可用宽，左栏约 47% */
+    width: calc((100vw - 32px) * 0.47);
+    flex-shrink: 0;
+  }
+  .auth-card {
+    height: auto;
+    min-height: 484px;
+  }
+}
+
+/* < 600px：单栏（左栏隐藏，header 上移，footer 留底，form 占中间） */
+@media (max-width: 599.98px) {
+  .auth-card {
+    height: auto;
+    min-height: 100vh;
+  }
+}
+
+/* Mobile 强制全屏无卡片（prop isMobile=true 触发，覆盖响应式） */
 .auth-viewport.is-mobile {
   padding: 0;
 }
@@ -174,13 +202,5 @@ const isEmbedded = computed(() => {
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
-}
-
-/* 主题切换浮按钮定位 */
-.theme-toggle-floating {
-  position: absolute;
-  bottom: 2rem;
-  left: 50%;
-  transform: translateX(-50%);
 }
 </style>
