@@ -191,6 +191,7 @@ import { X, UserPlus, ArrowLeft, Trash2 } from 'lucide-vue-next';
 import { buildSsoLoginUrl, SSO_URL, LOGIN_COPY } from '@/config/services';
 import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
+import { useThemeStore } from '@/stores/theme';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 
 const props = defineProps({
@@ -200,6 +201,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'login-success', 'max-sessions', 'login-error']);
 
 const authStore = useAuthStore();
+const themeStore = useThemeStore();
 const { savedAccounts } = storeToRefs(authStore);
 
 const loading = ref(true);
@@ -260,9 +262,11 @@ watch(
   }
 );
 
-/** iframe 加载完成（真实触发，替代 setTimeout） */
+/** iframe 加载完成（真实触发，替代 setTimeout）：同步当前主题给 oauth21 iframe */
 function onIframeLoad() {
   loading.value = false;
+  // 初始主题同步（iframe 加载后立即把父应用当前主题发给子应用，避免 iframe 首屏主题闪烁）
+  themeStore.syncThemeToIframes(themeStore.isDark);
 }
 
 function close() {
