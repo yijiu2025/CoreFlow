@@ -20,15 +20,18 @@ const props = withDefaults(
     hasError?: boolean;
     /** 自动聚焦 */
     autofocus?: boolean;
-    /** 透传到根 wrapper 的 class（覆盖默认样式：bg/border/rounded/padding） */
+    /** 透传到根 wrapper 的 class（覆盖默认 wrapper 样式） */
     wrapperClass?: string;
+    /** 透传到 input 的 class（覆盖默认 input 样式） */
+    inputClass?: string;
   }>(),
   {
     placeholder: '请输入密码',
     id: undefined,
     hasError: false,
     autofocus: false,
-    wrapperClass: ''
+    wrapperClass: '',
+    inputClass: ''
   }
 );
 
@@ -67,6 +70,7 @@ function onKeyup(e: KeyboardEvent) {
       :type="inputType"
       :placeholder="placeholder"
       :autofocus="autofocus"
+      :class="inputClass"
       class="w-full h-11 pl-11 pr-11 rounded-xl border bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-all"
       :class="hasError
         ? 'border-rose-400 dark:border-rose-500 bg-rose-50/30 dark:bg-rose-950/30 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
