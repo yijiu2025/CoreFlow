@@ -65,7 +65,9 @@ const showTip = ref(false);
           @click="showTip = !showTip"
           class="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-bold flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
           title="查看强度要求"
-        >?</button>
+        >
+?
+</button>
         <div
           v-if="showTip"
           class="absolute right-0 top-6 z-10 w-64 p-3 rounded-lg bg-slate-800 dark:bg-slate-700 text-white text-xs shadow-xl"

@@ -64,7 +64,7 @@ const loginSchema = z.discriminatedUnion('type', [
 
 const { values, handleSubmit, errors, defineField } = useForm({
   validationSchema: toTypedSchema(loginSchema),
-  initialValues: { type: 'email', email: '', code: '', username: '', password: '' } as any
+  initialValues: { type: 'email', email: '', code: '', username: '', password: '' } as Record<string, string>
 });
 
 const [type] = defineField('type');
@@ -89,7 +89,7 @@ const { captchaKey, showCaptcha, captchaPurpose, openCaptcha, onCaptchaSuccess }
 );
 
 const sendEmailCode = () => {
-  if (!email.value || (errors.value as any).email) {
+  if (!email.value || (errors.value as Record<string, string | undefined>).email) {
     showError(t('login.input_email_first') || '请先输入有效的邮箱地址');
     return;
   }
@@ -131,7 +131,7 @@ const qrClientId = computed(() => (route.query.client_id as string) || (route.qu
 // 二维码登录：生成（scope 后端从 client 查）+ 轮询 + 确认后通知父窗口
 const { qrDataUrl, qrStatus, generate: generateQR, reset: resetQR } = useQrLogin(
   () => qrClientId.value,
-  (res: any) => notifyParentLoginSuccess(res),
+  (res: unknown) => notifyParentLoginSuccess(res),
   () => showError(t('login.qr_expired') || '二维码已过期')
 );
 
@@ -169,11 +169,9 @@ onUnmounted(() => {
     <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl animate-pulse delay-700"></div>
 
     <div class="relative w-[856px] min-h-[480px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[32px] overflow-hidden flex shadow-2xl border border-white/40 dark:border-slate-800">
-      
-      <!-- 左侧面板：登录/授权表达面板 -->
+<!-- 左侧面板：登录/授权表达面板 -->
       <div class="flex-1 p-10 flex flex-col justify-between relative">
-        
-        <!-- OAuth 授权确认视图 -->
+<!-- OAuth 授权确认视图 -->
         <template v-if="showConsent">
           <div>
             <div class="flex items-center gap-3 mb-6">
@@ -479,8 +477,7 @@ onUnmounted(() => {
           {{ t('login.qr_scan_hint', { app: appConfig.appName }) || `打开手机客户端扫码登录 ${appConfig.appName}` }}
         </p>
       </div>
-
-    </div>
+</div>
 
     <!-- 暗黑模式切换按钮 (非嵌入场景下可用) -->
     <button

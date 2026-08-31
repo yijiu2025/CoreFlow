@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable @typescript-eslint/no-explicit-any -- 后端 OAuth 响应字段动态，any 合理 */
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { authApi } from '@/api/auth';
@@ -23,20 +24,20 @@ const userId = ref('');
 // 确认授权：调后端 /oauth2.1/authorize/consent，后端签发 code 并 302 到 redirect_uri
 const handleApprove = async () => {
   try {
-    const res: any = await authApi.authorizeConsent({
+    // request.ts 拦截器已解包 AxiosResponse.data，类型断言拿 redirect_url
+    const res = (await authApi.authorizeConsent({
       sessionId: sessionId.value,
       user_id: userId.value,
       action: 'approve'
-    });
-    // 后端可能返回 302 重定向 URL（前端无法直接跟随），或返回 {redirect_url}
+    })) as unknown as { redirect_url?: string; data?: { redirect_url?: string } };
     const redirectUrl = res?.redirect_url || res?.data?.redirect_url;
     if (redirectUrl) {
       window.location.href = redirectUrl;
     } else {
       errorMsg.value = '授权成功但未返回跳转地址';
     }
-  } catch (err: any) {
-    errorMsg.value = err.message || '授权失败';
+  } catch (err: unknown) {
+    errorMsg.value = err instanceof Error ? err.message : '授权失败';
   }
 };
 
@@ -44,11 +45,12 @@ const handleApprove = async () => {
 const handleDeny = async () => {
   try {
     // 从服务端响应取校验过的 redirect_url（不直接用 route.query.redirect_uri，防开放重定向）
-    const res: any = await authApi.authorizeConsent({
+    // request.ts 拦截器已解包 AxiosResponse.data，类型断言拿 redirect_url
+    const res = (await authApi.authorizeConsent({
       sessionId: sessionId.value,
       user_id: userId.value,
       action: 'deny'
-    });
+    })) as unknown as { redirect_url?: string; data?: { redirect_url?: string } };
     const redirectUrl = res?.redirect_url || res?.data?.redirect_url;
     if (redirectUrl) {
       window.location.href = redirectUrl;
@@ -62,8 +64,8 @@ const handleDeny = async () => {
 
 onMounted(async () => {
   try {
-    // 调后端 /oauth2.1/authorize 获取授权信息（应用名 + scope + 用户）
-    const res: any = await authApi.checkAuthorize({
+    // request.ts 拦截器已解包 AxiosResponse.data，类型断言拿后端字段
+    const res = (await authApi.checkAuthorize({
       client_id: route.query.client_id,
       redirect_uri: route.query.redirect_uri,
       response_type: route.query.response_type || 'code',
@@ -72,7 +74,12 @@ onMounted(async () => {
       code_challenge: route.query.code_challenge,
       code_challenge_method: route.query.code_challenge_method,
       nonce: route.query.nonce
-    });
+    })) as unknown as {
+      action?: 'login' | 'consent' | string;
+      client_name?: string;
+      scope?: string;
+      data?: { action?: string; client_name?: string; scope?: string };
+    };
 
     const data = res?.data || res;
     if (data.action === 'login') {
@@ -89,8 +96,8 @@ onMounted(async () => {
     scopes.value = Array.isArray(data.scopeDetails) ? data.scopeDetails : [];
     sessionId.value = data.sessionId;
     userId.value = data.user_id;
-  } catch (err: any) {
-    errorMsg.value = err.message || '获取授权信息失败';
+  } catch (err: unknown) {
+    errorMsg.value = err instanceof Error ? err.message : '获取授权信息失败';
   } finally {
     loading.value = false;
   }

@@ -29,9 +29,14 @@ const transitionName = ref('slide-next');
 
 const registerSchema = z
   .object({
-    nickname: z.string().min(2, '昵称至少2位'),
-    email: z.string().email('邮箱格式不正确'),
-    code: z.string().min(4, '验证码至少4位'),
+    nickname: z
+      .string({ required_error: '昵称至少5位' })
+      .min(5, '昵称至少5位（字母/数字/下划线）')
+      .regex(/^[A-Za-z0-9_]+$/, '昵称只能包含字母、数字、下划线'),
+    email: z.string({ required_error: '请输入邮箱' }).email('邮箱格式不正确'),
+    code: z
+      .string({ required_error: '请输入邮箱验证码' })
+      .regex(/^\d{6}$/, '请输入 6 位数字验证码'),
     password: z
       .string({ required_error: '请输入密码' })
       .min(8, '密码至少8位')
@@ -41,7 +46,7 @@ const registerSchema = z
       .regex(/^(?=.*\d)/, '密码必须包含至少一个数字'),
     confirmPassword: z.string({ required_error: '请确认密码' }).min(1, '请再次输入密码')
   })
-  .refine((data: any) => data.password === data.confirmPassword, {
+  .refine((data: { password: string; confirmPassword: string }) => data.password === data.confirmPassword, {
     message: '两次输入密码不一致',
     path: ['confirmPassword']
   });
@@ -72,8 +77,9 @@ const checkEmail = async () => {
     return;
   }
   try {
-    const res: any = await authApi.checkEmail(values.email);
-    isEmailDuplicate.value = res?.isDuplicate;
+    // request.ts 拦截器已解包 AxiosResponse.data，类型断言拿 isDuplicate 字段
+    const res = (await authApi.checkEmail(values.email)) as unknown as { isDuplicate?: boolean };
+    isEmailDuplicate.value = !!res?.isDuplicate;
   } catch {
     isEmailDuplicate.value = false;
   }
@@ -125,6 +131,7 @@ const handleRegister = handleSubmit(async data => {
     return;
   }
   try {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构排除 confirmPassword，rest 模式合法
     const { confirmPassword, ...submitData } = data;
     const encryptedPassword = await rsaEncrypt(submitData.password);
     const recaptchaToken = recaptchaEnabled ? await getCaptchaToken() : null;
@@ -137,8 +144,8 @@ const handleRegister = handleSubmit(async data => {
     });
     showSuccess('注册成功，即将跳转登录');
     router.push('/m/login');
-  } catch (err: any) {
-    showError(err?.message || '注册失败，请稍后重试');
+  } catch (err: unknown) {
+    showError(err instanceof Error ? err.message : '注册失败，请稍后重试');
   }
 });
 </script>

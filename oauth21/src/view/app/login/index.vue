@@ -69,7 +69,7 @@ const { captchaKey, showCaptcha, captchaPurpose, openCaptcha, onCaptchaSuccess }
 
 // 发送邮箱验证码（先弹图形码，通过后由 verify-captcha 端点发邮箱码 + 启动倒计时）
 const sendEmailCode = () => {
-  if (!email.value || (errors.value as any).email) {
+  if (!email.value || (errors.value as Record<string, string | undefined>).email) {
     showError('请先输入有效的邮箱地址');
     return;
   }
