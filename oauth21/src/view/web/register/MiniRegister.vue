@@ -36,6 +36,8 @@ interface RegisterContext {
   state: string;
   invite: string;
   lang: string;
+  isMobile?: boolean; // 添加 isMobile 字段
+  query?: Record<string, string>; // 添加 query 字段
 }
 const ctx = inject<RegisterContext>('registerContext', {
   appName: 'Enterprise SSO',
@@ -54,9 +56,18 @@ onMounted(() => {
 });
 onUnmounted(() => dispose());
 
-// 路由（template 中 :to / :appName / :is-mobile / buildMiniLoginUrl 都用 route，必须先声明）
+// 路由（buildMiniLoginUrl 用 route 提取 fallback，template 不用 route.query）
 const router = useRouter();
 const route = useRoute();
+
+// OAuth 注册上下文变量（从 inject 的 registerContext 提取，模板统一用，不直接读 route.query）
+const appName = ctx.appName;
+const isMobile = (ctx.isMobile === true) || (ctx.query?.isMobile === 'true');
+const oauthQuery = ctx.query as Record<string, string>; // router-link 透传给 /mini-login
+
+// 模板使用变量，不直接读取 route.query
+const templateAppName = appName || 'Enterprise SSO';
+const templateIsMobile = isMobile;
 
 // 分步状态：1 - 账号与验证码，2 - 密码与协议
 const step = ref<1 | 2>(1);
@@ -235,7 +246,7 @@ const handleRegister = handleSubmit(async () => {
 
 <template>
   <div class="w-full h-full flex flex-col justify-center overflow-hidden">
-    <AuthContainer :appName="(route.query.appName as string) || 'Enterprise SSO'" :is-mobile="route.query.isMobile === 'true'">
+    <AuthContainer :appName="templateAppName" :is-mobile="templateIsMobile">
       <template #header>
         <div class="flex items-center justify-between">
           <div>
@@ -367,7 +378,7 @@ const handleRegister = handleSubmit(async () => {
         <div class="flex items-center justify-between pt-1">
           <span class="text-xs text-slate-400">{{ t('register.signin_hint') }}</span>
           <p class="mreg-signin">
-            <router-link :to="{ path: '/mini-login', query: route.query }" class="mreg-highlight-link font-medium text-xs">
+            <router-link :to="{ path: '/mini-login', query: oauthQuery }" class="mreg-highlight-link font-medium text-xs">
               {{ t('register.signin_link') }}
             </router-link>
           </p>
