@@ -76,7 +76,7 @@ const router = createRouter({
  * 预留 requiresAuth 守卫：未来加内部管理页面（如 /admin/user）时，
  * 路由 meta 加 `requiresAuth: true` 即可，未登录自动跳 /mini-login 并保留 redirect。
  */
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to, _from) => {
   // 动态标题
   if (to.meta.title) {
     document.title = `${to.meta.title} | Enterprise SSO`;
@@ -85,9 +85,9 @@ router.beforeEach((to, _from, next) => {
     // 未来内部页面的鉴权点：检查 pinia auth store / cookie
     // 当前 oauth21 不需要（无内部页面），先放行；以后接 posecraft/firewall 的内部 SPA 时启用
     // const isAuthed = !!document.cookie.match(/(^| )sid=/);
-    // if (!isAuthed) return next({ path: '/mini-login', query: { redirect: to.fullPath, from: to.path } });
+    // if (!isAuthed) return { path: '/mini-login', query: { redirect: to.fullPath, from: to.path } };
   }
-  next();
+  // 允许导航
 });
 
 export default router;
