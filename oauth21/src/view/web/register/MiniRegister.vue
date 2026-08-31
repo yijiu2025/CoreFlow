@@ -2,7 +2,7 @@
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
 import { useRouter, useRoute } from 'vue-router';
-import { inject, ref, onMounted, onUnmounted } from 'vue';
+import { inject, ref, onMounted, onUnmounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
@@ -88,7 +88,31 @@ if (ctx.lang) locale.value = ctx.lang;
 // 模板使用的变量（不直接读取 route.query）
 const templateAppName = ctx.appName || 'Enterprise SSO';
 const templateIsMobile = (ctx.isMobile === true) || (ctx.query?.isMobile === 'true');
-const oauthQuery = ctx.query as Record<string, string>; // router-link 透传给 /mini-login
+
+// 构建 router-link 透传给 /mini-login 的 query 参数
+const oauthQuery = computed(() => {
+  const query: Record<string, string> = {};
+
+  // 优先从 ctx.query 获取（父组件注入的）
+  if (ctx.query) {
+    Object.assign(query, ctx.query);
+  }
+
+  // 兜底：从当前 route.query 提取 OAuth 相关参数
+  for (const key of ['appName', 'client_id', 'scope', 'state', 'redirect_uri', 'lang', 'isMobile', 'from']) {
+    const value = route.query[key];
+    if (typeof value === 'string' && !query[key]) {
+      query[key] = value;
+    }
+  }
+
+  // 标记来源为注册页
+  if (!query.from) {
+    query.from = 'register';
+  }
+
+  return query;
+});
 
 // ================================
 // 分步状态管理
