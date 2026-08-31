@@ -65,8 +65,8 @@ async function handleReset() {
     await authApi.resetPassword(email.value, code.value, encryptedPassword, captchaKey.value, getCachedKid());
     step.value = 'done';
     showSuccess(t('forgot.reset_success'));
-  } catch (err: any) {
-    showError(err.message || t('forgot.reset_failed'));
+  } catch (err: unknown) {
+    showError(err instanceof Error ? err.message : t('forgot.reset_failed'));
   } finally {
     isSubmitting.value = false;
   }

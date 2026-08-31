@@ -8,7 +8,7 @@
  */
 import { ref, computed } from 'vue';
 
-const props = withDefaults(
+const _props = withDefaults(
   defineProps<{
     /** v-model 双向绑定值 */
     modelValue: string;

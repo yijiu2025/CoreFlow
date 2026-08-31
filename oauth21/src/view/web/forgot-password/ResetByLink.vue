@@ -60,8 +60,8 @@ async function onCaptchaSuccess(data: { captchaKey: string }) {
       showSuccess(t('forgot.link_sent'));
       step.value = 'sent';
       startCountdown(60);
-    } catch (err: any) {
-      showError(err.message || t('forgot.send_failed'));
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : t('forgot.send_failed'));
     }
   }
 }
@@ -83,8 +83,8 @@ async function handleReset() {
     await authApi.resetPasswordByLink(resetToken.value || '', encryptedPassword, getCachedKid());
     step.value = 'done';
     showSuccess(t('forgot.reset_success'));
-  } catch (err: any) {
-    showError(err.message || t('forgot.reset_failed'));
+  } catch (err: unknown) {
+    showError(err instanceof Error ? err.message : t('forgot.reset_failed'));
   } finally {
     isSubmitting.value = false;
   }

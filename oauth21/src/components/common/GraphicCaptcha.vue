@@ -30,7 +30,9 @@ const isVerifying = ref(false);
 
 const generateCaptcha = async () => {
   try {
-    const res: any = await authApi.getCaptcha();
+    // request.ts 拦截器已解包 AxiosResponse.data，但 axios 类型签名仍是 AxiosResponse，
+    // 这里用类型断言拿到真实 data 形状（captchaImage + captchaKey）
+    const res = (await authApi.getCaptcha()) as unknown as { captchaImage: string; captchaKey: string };
     captchaImage.value = res.captchaImage;
     captchaKey.value = res.captchaKey;
     userInput.value = '';
@@ -57,8 +59,8 @@ const handleVerify = async () => {
     const email = props.sendEmail ? props.email : undefined;
     await authApi.verifyCaptcha(captchaKey.value, userInput.value, email, props.type);
     emit('success', { captchaKey: captchaKey.value });
-  } catch (err: any) {
-    const msg = err.message || '验证失败';
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : '验证失败';
     error.value = msg;
 
     // 验证失败自动清空并刷新
@@ -99,7 +101,7 @@ watch(
           if (window.self === window.top) {
             inputRef.value?.focus();
           }
-        } catch (e) {
+        } catch {
           // 跨域 iframe：window.top 不可访问，跳过 focus
         }
       });

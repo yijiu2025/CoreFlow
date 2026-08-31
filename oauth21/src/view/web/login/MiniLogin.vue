@@ -69,7 +69,7 @@ const loginSchema = z.discriminatedUnion('type', [
 
 const { values, handleSubmit, errors, defineField } = useForm({
   validationSchema: toTypedSchema(loginSchema),
-  initialValues: { type: 'email', email: '', code: '', username: '', password: '' } as any
+  initialValues: { type: 'email', email: '', code: '', username: '', password: '' } as Record<string, string>
 });
 
 const [type] = defineField('type');
@@ -92,7 +92,7 @@ const { captchaKey, showCaptcha, captchaPurpose, openCaptcha, onCaptchaSuccess }
 );
 
 const sendEmailCode = () => {
-  if (!email.value || (errors.value as any).email) {
+  if (!email.value || (errors.value as Record<string, string | undefined>).email) {
     showError(t('login.input_email_first'));
     return;
   }
@@ -129,7 +129,7 @@ const qrClientId = computed(() => (route.query.client_id as string) || (route.qu
 // 二维码登录：生成（scope 后端从 client 查，不前端传）+ 轮询 + 确认后通知父窗口
 const { qrDataUrl, qrStatus, generate: generateQR, reset: resetQR } = useQrLogin(
   () => qrClientId.value,
-  (res: any) => notifyParentLoginSuccess(res),
+  (res: unknown) => notifyParentLoginSuccess(res),
   () => showError(t('login.qr_expired') || '二维码已过期')
 );
 

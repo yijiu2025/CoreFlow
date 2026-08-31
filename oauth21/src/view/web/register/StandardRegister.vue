@@ -65,9 +65,14 @@ const agreementVersion = useAgreementVersion();
 
 const registerSchema = z
   .object({
-    username: z.string({ required_error: t('register.username_min') }).min(2, t('register.username_min')),
+    username: z
+      .string({ required_error: t('register.username_min') })
+      .min(5, t('register.username_min'))
+      .regex(/^[A-Za-z0-9_]+$/, t('register.username_pattern')),
     email: z.string({ required_error: t('register.email') }).email(t('register.email_invalid')),
-    code: z.string({ required_error: t('register.code') }).min(4, t('register.code_min')),
+    code: z
+      .string({ required_error: t('register.code') })
+      .regex(/^\d{6}$/, t('register.code_min')),
     password: z
       .string({ required_error: t('register.password_min') })
       .min(8, t('register.password_min'))
@@ -77,7 +82,7 @@ const registerSchema = z
       .regex(/^(?=.*\d)/, t('register.password_digit')),
     confirmPassword: z.string({ required_error: t('register.confirm_required') }).min(1, t('register.confirm_required'))
   })
-  .refine((data: any) => data.password === data.confirmPassword, {
+  .refine((data: { password: string; confirmPassword: string }) => data.password === data.confirmPassword, {
     message: t('register.password_mismatch'),
     path: ['confirmPassword']
   });
@@ -110,8 +115,9 @@ const checkEmail = async () => {
     return;
   }
   try {
-    const res: any = await authApi.checkEmail(values.email);
-    isEmailDuplicate.value = res?.isDuplicate;
+    // request.ts 拦截器已解包 AxiosResponse.data，类型断言拿 isDuplicate 字段
+    const res = (await authApi.checkEmail(values.email)) as unknown as { isDuplicate?: boolean };
+    isEmailDuplicate.value = !!res?.isDuplicate;
   } catch {
     isEmailDuplicate.value = false;
   }
@@ -176,6 +182,7 @@ const handleRegister = handleSubmit(
     // 防双击
     if (submitLock.locked.value) return;
     submitLock.lock();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构排除 confirmPassword，rest 模式合法
     const { confirmPassword, ...submitData } = values;
     const encryptedPassword = await rsaEncrypt(submitData.password!);
     const recaptchaToken = recaptchaEnabled ? await getCaptchaToken() : null;
@@ -195,8 +202,8 @@ const handleRegister = handleSubmit(
       showSuccess(t('register.success'));
       // OAuth 场景：跳回原应用（safeRedirect 白名单校验）；普通注册：跳首页
       router.push(safeRedirect());
-    } catch (err: any) {
-      showError(err?.message || t('register.register_failed'));
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : t('register.register_failed'));
     } finally {
       submitLock.unlock();
     }

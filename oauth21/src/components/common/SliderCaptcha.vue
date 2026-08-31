@@ -91,8 +91,8 @@ const handleVerify = async () => {
       emit('success');
       reset();
     }, 500);
-  } catch (err: any) {
-    errorMsg.value = err?.message || '验证失败，请重试';
+  } catch (err: unknown) {
+    errorMsg.value = err instanceof Error ? err.message : '验证失败，请重试';
     // 失败回弹滑块，用户可重试
     moveX.value = 0;
     isMoving.value = false;

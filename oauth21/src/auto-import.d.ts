@@ -239,6 +239,7 @@ declare global {
   const usePageLeave: typeof import('@vueuse/core').usePageLeave
   const useParallax: typeof import('@vueuse/core').useParallax
   const useParentElement: typeof import('@vueuse/core').useParentElement
+  const useParentThemeSync: typeof import('./composables/useParentThemeSync').useParentThemeSync
   const usePasswordStrength: typeof import('./composables/usePasswordStrength').usePasswordStrength
   const usePerformanceObserver: typeof import('@vueuse/core').usePerformanceObserver
   const usePermission: typeof import('@vueuse/core').usePermission
@@ -597,6 +598,7 @@ declare module 'vue' {
     readonly usePageLeave: UnwrapRef<typeof import('@vueuse/core')['usePageLeave']>
     readonly useParallax: UnwrapRef<typeof import('@vueuse/core')['useParallax']>
     readonly useParentElement: UnwrapRef<typeof import('@vueuse/core')['useParentElement']>
+    readonly useParentThemeSync: UnwrapRef<typeof import('./composables/useParentThemeSync')['useParentThemeSync']>
     readonly usePasswordStrength: UnwrapRef<typeof import('./composables/usePasswordStrength')['usePasswordStrength']>
     readonly usePerformanceObserver: UnwrapRef<typeof import('@vueuse/core')['usePerformanceObserver']>
     readonly usePermission: UnwrapRef<typeof import('@vueuse/core')['usePermission']>
