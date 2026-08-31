@@ -78,6 +78,9 @@ onMounted(async () => {
       action?: 'login' | 'consent' | string;
       client_name?: string;
       scope?: string;
+      scopeDetails?: Array<{ name?: string; desc?: string; required?: boolean }>;
+      sessionId?: string;
+      user_id?: string;
       data?: { action?: string; client_name?: string; scope?: string };
     };
 
