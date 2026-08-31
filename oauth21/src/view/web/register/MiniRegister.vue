@@ -4,26 +4,50 @@ import { useForm } from 'vee-validate';
 import { useRouter, useRoute } from 'vue-router';
 import { inject, ref, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
-import AgreementModals from '@/components/common/AgreementModals.vue';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
-import { useCaptcha } from '@/composables/useCaptcha';
+
+// ================================
+// 组件导入
+// ================================
+import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
+import AgreementModals from '@/components/common/AgreementModals.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import AuthContainer from '@/components/common/AuthContainer.vue';
+import PasswordInput from '@/components/common/PasswordInput.vue';
+import PasswordStrength from '@/components/common/PasswordStrength.vue';
+
+// ================================
+// Composables 导入
+// ================================
+import { useCaptcha } from '@/composables/useCaptcha';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { useButtonLock } from '@/composables/useButtonLock';
-import PasswordInput from '@/components/common/PasswordInput.vue';
-import PasswordStrength from '@/components/common/PasswordStrength.vue';
 import { useAgreementVersion, captureAgreementVersion } from '@/composables/useAgreementVersion';
 
+// ================================
+// 常量定义
+// ================================
+const COUNTDOWN_SECONDS = 60; // 验证码倒计时秒数
+const RECAPTCHA_TIMEOUT = 30_000; // 获取验证码超时时间（毫秒）
+const RSA_ENCRYPT_TIMEOUT = 30_000; // RSA 加密超时时间（毫秒）
+
+// ================================
+// Composables 初始化
+// ================================
 const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToken, dispose } = useCaptcha('register');
 const { error: showError, success: showSuccess } = useMessage();
 const { t, locale } = useI18n();
+const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(COUNTDOWN_SECONDS);
+const submitLock = useButtonLock();
+const agreementVersion = useAgreementVersion();
 
+// ================================
+// 类型定义
+// ================================
 // 父组件透传的注册上下文
 interface RegisterContext {
   appName: string;
@@ -36,9 +60,17 @@ interface RegisterContext {
   state: string;
   invite: string;
   lang: string;
-  isMobile?: boolean; // 添加 isMobile 字段
-  query?: Record<string, string>; // 添加 query 字段
+  isMobile?: boolean;
+  query?: Record<string, string>;
 }
+
+// ================================
+// 路由和上下文
+// ================================
+const router = useRouter();
+const route = useRoute();
+
+// 获取注册上下文
 const ctx = inject<RegisterContext>('registerContext', {
   appName: 'Enterprise SSO',
   clientId: '',
@@ -49,29 +81,23 @@ const ctx = inject<RegisterContext>('registerContext', {
   invite: '',
   lang: 'zh_cn'
 });
+
+// 设置语言
 if (ctx.lang) locale.value = ctx.lang;
 
-onMounted(() => {
-  if (recaptchaEnabled) loadCaptcha();
-});
-onUnmounted(() => dispose());
-
-// 路由（buildMiniLoginUrl 用 route 提取 fallback，template 不用 route.query）
-const router = useRouter();
-const route = useRoute();
-
-// OAuth 注册上下文变量（从 inject 的 registerContext 提取，模板统一用，不直接读 route.query）
-const appName = ctx.appName;
-const isMobile = (ctx.isMobile === true) || (ctx.query?.isMobile === 'true');
+// 模板使用的变量（不直接读取 route.query）
+const templateAppName = ctx.appName || 'Enterprise SSO';
+const templateIsMobile = (ctx.isMobile === true) || (ctx.query?.isMobile === 'true');
 const oauthQuery = ctx.query as Record<string, string>; // router-link 透传给 /mini-login
 
-// 模板使用变量，不直接读取 route.query
-const templateAppName = appName || 'Enterprise SSO';
-const templateIsMobile = isMobile;
-
-// 分步状态：1 - 账号与验证码，2 - 密码与协议
+// ================================
+// 分步状态管理
+// ================================
 const step = ref<1 | 2>(1);
 
+// ================================
+// 表单验证
+// ================================
 const registerSchema = z
   .object({
     username: z
@@ -106,20 +132,16 @@ const [code, codeProps] = defineField('code');
 const [password] = defineField('password');
 const [confirmPassword] = defineField('confirmPassword');
 
+// ================================
+// 验证码和状态管理
+// ================================
 const agreed = ref(false);
 const isEmailDuplicate = ref(false);
 const isEmailChecking = ref(false); // 邮箱去重检查中：防 blur 后未返回就点下一步的竞态
-const COUNTDOWN_SECONDS = 60;
-const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(COUNTDOWN_SECONDS);
-// 防双击
-const submitLock = useButtonLock();
-// 协议版本快照
-const agreementVersion = useAgreementVersion();
+const codeSent = ref(false); // 验证码是否已成功发送（前端拦截：未发码前 input 和下一步按钮都禁用）
+const docType = ref<'service' | 'privacy' | null>(null);
 
 // 图形验证码流程
-// 验证码是否已成功发送（前端拦截：未发码前 input 和下一步按钮都禁用）
-const codeSent = ref(false);
-
 const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess } = useCaptchaFlow<'register'>(
   () => {
     codeSent.value = true;
@@ -127,6 +149,9 @@ const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess }
   }
 );
 
+// ================================
+// 工具函数
+// ================================
 /**
  * 异步操作超时保护（CLAUDE.md 铁律：所有可能阻塞的异步操作设置超时兜底）
  * 超时统一抛带 op 名的 Error，便于上层 try/catch 区分。
@@ -137,47 +162,6 @@ function withTimeout<T>(p: Promise<T>, ms: number, op: string): Promise<T> {
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${op} timeout (${ms}ms)`)), ms))
   ]);
 }
-
-const checkEmail = async () => {
-  if (!values.email || errors.value.email) {
-    isEmailDuplicate.value = false;
-    return;
-  }
-  isEmailChecking.value = true;
-  try {
-    // request.ts 拦截器已解包 AxiosResponse.data，类型断言拿 isDuplicate 字段
-    const res = (await authApi.checkEmail(values.email)) as unknown as { isDuplicate?: boolean };
-    isEmailDuplicate.value = !!res?.isDuplicate;
-  } catch (err) {
-    // 网络/接口失败：保守按"未占用"处理避免阻塞流程，但记录日志便于排查
-    console.warn('[MiniRegister] checkEmail failed', err);
-    isEmailDuplicate.value = false;
-  } finally {
-    isEmailChecking.value = false;
-  }
-};
-
-const sendCode = async () => {
-  if (!values.email || errors.value.email) return;
-  await checkEmail();
-  if (isEmailDuplicate.value) {
-    showError(t('register.email_duplicate'));
-    return;
-  }
-  openRegCaptcha('register');
-};
-const docType = ref<'service' | 'privacy' | null>(null);
-
-const handleNextStep = async () => {
-  // 防竞态：邮箱去重检查未完成时点下一步，直接拒绝（避免检查返回后才知道邮箱被占）
-  if (isEmailChecking.value) return;
-  const resUser = await validateField('username');
-  const resEmail = await validateField('email');
-  const resCode = await validateField('code');
-  if (resUser.valid && resEmail.valid && resCode.valid && !isEmailDuplicate.value) {
-    step.value = 2;
-  }
-};
 
 /**
  * 注册后回跳（OAuth 同源白名单，防开放重定向）
@@ -190,8 +174,6 @@ function safeRedirect(): string {
   if (r && r.startsWith('/') && !r.startsWith('//') && !r.includes('://')) {
     return r; // 同源相对路径
   }
-  // fallback：从当前 route 重新拼 OAuth 上下文跳 /mini-login（保 appName 不丢）
-  // router-link 也用此函数（footer 模板，#footer slot）
   return buildMiniLoginUrl();
 }
 
@@ -210,31 +192,85 @@ function buildMiniLoginUrl(): string {
   return `/mini-login${queryStr ? '?' + queryStr : ''}`;
 }
 
+// ================================
+// 业务逻辑函数
+// ================================
+
+/**
+ * 检查邮箱是否已被注册
+ */
+const checkEmail = async () => {
+  if (!values.email || errors.value.email) {
+    isEmailDuplicate.value = false;
+    return;
+  }
+  isEmailChecking.value = true;
+  try {
+    const res = (await authApi.checkEmail(values.email)) as unknown as { isDuplicate?: boolean };
+    isEmailDuplicate.value = !!res?.isDuplicate;
+  } catch (err) {
+    console.warn('[MiniRegister] checkEmail failed', err);
+    isEmailDuplicate.value = false;
+  } finally {
+    isEmailChecking.value = false;
+  }
+};
+
+/**
+ * 发送验证码
+ */
+const sendCode = async () => {
+  if (!values.email || errors.value.email) return;
+  await checkEmail();
+  if (isEmailDuplicate.value) {
+    showError(t('register.email_duplicate'));
+    return;
+  }
+  openRegCaptcha('register');
+};
+
+/**
+ * 处理下一步按钮点击
+ */
+const handleNextStep = async () => {
+  if (isEmailChecking.value) return;
+  const resUser = await validateField('username');
+  const resEmail = await validateField('email');
+  const resCode = await validateField('code');
+  if (resUser.valid && resEmail.valid && resCode.valid && !isEmailDuplicate.value) {
+    step.value = 2;
+  }
+};
+
+/**
+ * 处理注册表单提交
+ */
 const handleRegister = handleSubmit(async () => {
   if (!agreed.value || isEmailDuplicate.value) return;
   if (submitLock.locked.value) return;
   submitLock.lock();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构排除 confirmPassword，rest 模式合法
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { confirmPassword, ...submitData } = values;
-  // rsaEncrypt / getCaptchaToken 非 axios 操作，单独加超时（CLAUDE.md 铁律）
-  const encryptedPassword = await withTimeout(rsaEncrypt(submitData.password!), 30_000, 'rsaEncrypt');
-  const recaptchaToken = recaptchaEnabled
-    ? await withTimeout(getCaptchaToken(), 30_000, 'getCaptchaToken')
-    : null;
+
   try {
+    const encryptedPassword = await withTimeout(rsaEncrypt(submitData.password!), RSA_ENCRYPT_TIMEOUT, 'rsaEncrypt');
+    const recaptchaToken = recaptchaEnabled
+      ? await withTimeout(getCaptchaToken(), RECAPTCHA_TIMEOUT, 'getCaptchaToken')
+      : null;
+
     await authApi.register({
       ...submitData,
       password: encryptedPassword,
       kid: getCachedKid(),
       captchaKey: captchaKey.value,
-      // 协议版本快照 + OAuth appName + invite
       agreementVersion: captureAgreementVersion(agreementVersion),
       invite: ctx.invite || undefined,
       appName: ctx.appName,
       ...(recaptchaToken ? { recaptchaToken } : {})
     });
+
     showSuccess(t('register.success'));
-    // OAuth 场景：跳回原应用；否则跳 mini-login
     router.push(safeRedirect());
   } catch (err: unknown) {
     showError(err instanceof Error ? err.message : t('register.register_failed'));
@@ -242,6 +278,15 @@ const handleRegister = handleSubmit(async () => {
     submitLock.unlock();
   }
 });
+
+// ================================
+// 生命周期钩子
+// ================================
+onMounted(() => {
+  if (recaptchaEnabled) loadCaptcha();
+});
+
+onUnmounted(() => dispose());
 </script>
 
 <template>
@@ -283,7 +328,7 @@ const handleRegister = handleSubmit(async () => {
             <div class="mreg-field" :class="{ 'is-error': errors.email || isEmailDuplicate }">
               <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                <polyline points="22,6 12,13 2,6"></polyline>
+                <polyline points="22,6 12 13 2 6"></polyline>
               </svg>
               <input v-model="email" v-bind="emailProps" @blur="checkEmail" type="email" :placeholder="t('register.email')" class="mreg-input" />
             </div>
@@ -372,8 +417,7 @@ const handleRegister = handleSubmit(async () => {
         </div>
       </form>
 
-      <!-- 底部返回登录（移至 #footer 插槽，与 mini-login 结构对齐：
-           按钮↔底栏间距由 AuthContainer 的 mt-6 + justify-between 统一控制） -->
+      <!-- 底部返回登录 -->
       <template #footer>
         <div class="flex items-center justify-between pt-1">
           <span class="text-xs text-slate-400">{{ t('register.signin_hint') }}</span>
@@ -386,9 +430,10 @@ const handleRegister = handleSubmit(async () => {
       </template>
     </AuthContainer>
 
+    <!-- 图形验证码弹窗 -->
     <GraphicCaptcha :is-open="showCaptcha" :email="values.email" :send-email="true" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
 
-    <!-- 服务协议 / 隐私政策 弹窗（统一组件） -->
+    <!-- 服务协议 / 隐私政策 弹窗 -->
     <AgreementModals v-model:type="docType" />
 
     <!-- 错误/成功提示 toast -->
@@ -397,6 +442,9 @@ const handleRegister = handleSubmit(async () => {
 </template>
 
 <style scoped>
+/* ================================
+   表单布局
+   ================================ */
 .mreg-form {
   display: flex;
   flex-direction: column;
@@ -414,7 +462,9 @@ const handleRegister = handleSubmit(async () => {
   flex-direction: column;
 }
 
-/* 完美匹配登录页输入框尺寸 (44px) 与极简边框 */
+/* ================================
+   输入框样式
+   ================================ */
 .mreg-field {
   display: flex;
   align-items: center;
@@ -432,7 +482,6 @@ const handleRegister = handleSubmit(async () => {
   border-color: #1e293b;
 }
 
-/* 聚焦颜色匹配主蓝 */
 .mreg-field:focus-within {
   background: #fff;
   border-color: #2563eb;
@@ -476,6 +525,9 @@ const handleRegister = handleSubmit(async () => {
   color: #94a3b8;
 }
 
+/* ================================
+   验证码按钮样式
+   ================================ */
 .mreg-code-btn {
   font-size: 12px;
   font-weight: 600;
@@ -504,7 +556,9 @@ const handleRegister = handleSubmit(async () => {
   cursor: not-allowed;
 }
 
-/* 错误占位，防止抖动 */
+/* ================================
+   错误提示样式
+   ================================ */
 .mreg-err {
   height: 16px;
   line-height: 16px;
@@ -517,43 +571,9 @@ const handleRegister = handleSubmit(async () => {
   text-overflow: ellipsis;
 }
 
-/* 密码强度条（输入时实时显示，3 级配色：红/黄/绿） */
-.mreg-strength {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 14px;
-  margin-top: 4px;
-  padding: 0 4px;
-}
-
-.mreg-strength-bar {
-  flex: 1;
-  height: 4px;
-  background: #e2e8f0;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-:global(.dark) .mreg-strength-bar {
-  background: #1e293b;
-}
-
-.mreg-strength-bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 0.25s ease, background 0.25s ease;
-}
-
-.mreg-strength-label {
-  font-size: 11px;
-  font-weight: 600;
-  min-width: 24px;
-  text-align: right;
-  transition: color 0.25s ease;
-}
-
-/* 重点修改：完全对齐图1登录页的蓝紫渐变大按钮 */
+/* ================================
+   按钮样式
+   ================================ */
 .mreg-submit {
   height: 44px;
   width: 100%;
@@ -598,6 +618,9 @@ const handleRegister = handleSubmit(async () => {
   color: #334155;
 }
 
+/* ================================
+   协议勾选样式
+   ================================ */
 .mreg-agree {
   display: flex;
   align-items: center;
@@ -623,7 +646,6 @@ const handleRegister = handleSubmit(async () => {
   border-color: #475569;
 }
 
-/* 复选框选中使用蓝紫渐变 */
 .mreg-checkbox.checked {
   background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
   border-color: #2563eb;
@@ -640,6 +662,9 @@ const handleRegister = handleSubmit(async () => {
   text-decoration: underline;
 }
 
+/* ================================
+   底部链接样式
+   ================================ */
 .mreg-signin {
   margin: 0;
   font-size: 12px;
