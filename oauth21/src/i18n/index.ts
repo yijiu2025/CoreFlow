@@ -109,8 +109,6 @@ const i18n = createI18n({
         code: '邮箱验证码',
         code_min: '请输入 6 位数字验证码',
         email_duplicate: '邮箱已被注册',
-        code: '邮箱验证码',
-        code_min: '验证码至少 4 位',
         get_code: '获取验证码',
         code_countdown: '{countdown}s',
         password: '设置密码（大写+小写+数字，8位以上）',
