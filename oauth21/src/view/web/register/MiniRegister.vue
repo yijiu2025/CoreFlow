@@ -106,8 +106,14 @@ const submitLock = useButtonLock();
 const agreementVersion = useAgreementVersion();
 
 // 图形验证码流程
+// 验证码是否已成功发送（前端拦截：未发码前 input 和下一步按钮都禁用）
+const codeSent = ref(false);
+
 const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess } = useCaptchaFlow<'register'>(
-  () => startCountdown(COUNTDOWN_SECONDS)
+  () => {
+    codeSent.value = true;
+    startCountdown(COUNTDOWN_SECONDS);
+  }
 );
 
 /**
@@ -280,7 +286,14 @@ const handleRegister = handleSubmit(async () => {
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
-              <input v-model="code" v-bind="codeProps" type="text" :placeholder="t('register.code')" class="mreg-input" />
+              <input
+                v-model="code"
+                v-bind="codeProps"
+                type="text"
+                :placeholder="t('register.code')"
+                :disabled="!codeSent"
+                class="mreg-input disabled:opacity-50 disabled:cursor-not-allowed"
+              />
               <button type="button" @click="sendCode" :disabled="isCountingDown" class="mreg-code-btn">
                 {{ isCountingDown ? t('register.code_countdown', { countdown }) : t('register.get_code') }}
               </button>
@@ -288,8 +301,15 @@ const handleRegister = handleSubmit(async () => {
             <div class="mreg-err">{{ errors.code }}</div>
           </div>
 
-          <!-- 下一步按钮 -->
-          <button type="button" @click="handleNextStep" class="mreg-submit">{{ t('register.next') }}</button>
+          <!-- 下一步按钮（未发验证码前禁用） -->
+          <button
+            type="button"
+            @click="handleNextStep"
+            :disabled="!codeSent"
+            class="mreg-submit disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {{ t('register.next') }}
+          </button>
         </div>
 
         <!-- 第二步：密码与协议 -->
