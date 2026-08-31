@@ -11,7 +11,7 @@ import { ref, computed } from 'vue';
 const _props = withDefaults(
   defineProps<{
     /** v-model 双向绑定值 */
-    modelValue: string;
+    modelValue?: string;
     /** input placeholder */
     placeholder?: string;
     /** input id（关联 label） */
@@ -26,6 +26,7 @@ const _props = withDefaults(
     inputClass?: string;
   }>(),
   {
+    modelValue: '',
     placeholder: '请输入密码',
     id: undefined,
     hasError: false,

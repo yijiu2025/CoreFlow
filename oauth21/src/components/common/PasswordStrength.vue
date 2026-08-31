@@ -15,7 +15,7 @@ import { computed, ref } from 'vue';
 
 const props = defineProps<{
   /** 密码值 */
-  password: string;
+  password?: string;
   /** 是否显示悬浮窗 ? 按钮（v2 弱密码场景不需要提示时传 false） */
   showTipButton?: boolean;
 }>();
@@ -35,7 +35,7 @@ const STRENGTH_LEVELS = [
   { label: '很强', color: '#10b981' }
 ] as const;
 
-const strengthScore = computed(() => STRENGTH_RULES.filter(r => r.test(props.password)).length);
+const strengthScore = computed(() => STRENGTH_RULES.filter(r => r.test(props.password || '')).length);
 const strengthColor = computed(() => STRENGTH_LEVELS[strengthScore.value].color);
 const strengthLabel = computed(() => STRENGTH_LEVELS[strengthScore.value].label);
 
@@ -78,10 +78,10 @@ const showTip = ref(false);
               v-for="rule in STRENGTH_RULES"
               :key="rule.label"
               class="flex items-start gap-2"
-              :class="rule.test(password) ? 'text-emerald-400' : 'text-slate-400'"
+              :class="rule.test(password || '') ? 'text-emerald-400' : 'text-slate-400'"
             >
               <span class="inline-block w-3.5 flex-shrink-0 font-bold">
-                {{ rule.test(password) ? '✓' : '✗' }}
+                {{ rule.test(password || '') ? '✓' : '✗' }}
               </span>
               <span>{{ rule.label }}</span>
             </li>
