@@ -28,7 +28,7 @@
         <!-- 个人信息详情 -->
         <div class="user-info-main">
           <div class="user-name-row">
-            <h1 class="username">{{ userProfile.username || '摄影小王' }}</h1>
+            <h1 class="username">{{ userProfile?.username || '摄影小王' }}</h1>
             <span class="edit-icon" @click="openEditModal"><Pen :size="16" /></span>
           </div>
 
@@ -52,12 +52,12 @@
           </div>
 
           <div class="meta-info-row">
-            <span>ID: {{ userProfile.personal_id || userProfile.id || '未知ID' }}</span>
-            <span v-if="userProfile.gender || userProfile.age">
-              {{ userProfile.gender === 1 ? '♂️' : userProfile.gender === 2 ? '♀️' : '' }}
-              {{ userProfile.age ? userProfile.age + '岁' : '' }}
+            <span>ID: {{ userProfile?.personal_id || userProfile?.id || '未知ID' }}</span>
+            <span v-if="userProfile?.gender || userProfile?.age">
+              {{ userProfile?.gender === 1 ? '♂️' : userProfile?.gender === 2 ? '♀️' : '' }}
+              {{ userProfile?.age ? userProfile?.age + '岁' : '' }}
             </span>
-            <span>{{ userProfile.city || '北京 · 朝阳' }}</span>
+            <span>{{ userProfile?.city || '北京 · 朝阳' }}</span>
           </div>
 
           <div class="bio-row" @mouseenter="onBioTooltipEnter" @mouseleave="onBioTooltipLeave">
@@ -527,7 +527,9 @@ const onAvatarFileChange = async (e: Event) => {
     if (newUrl) {
       editForm.value.avatar = newUrl;
       // 同步更新 userProfile 头像（头像区域实时变化）
-      userProfile.value = { ...userProfile.value, avatar: newUrl };
+      if (userProfile.value) {
+        userProfile.value = { ...userProfile.value, avatar: newUrl };
+      }
     }
     showToast('头像上传成功 🎉');
   } catch (err: any) {
@@ -543,9 +545,9 @@ const onAvatarFileChange = async (e: Event) => {
 const openEditModal = () => {
   avatarPreview.value = '';
   editForm.value = {
-    username: userProfile.value.username || '',
-    avatar: userProfile.value.avatar || '',
-    bio: userProfile.value.bio || ''
+    username: userProfile.value?.username || '',
+    avatar: userProfile.value?.avatar || '',
+    bio: userProfile.value?.bio || ''
   };
   showEditModal.value = true;
 };
@@ -567,11 +569,13 @@ const saveEditProfile = async () => {
     })) as any;
 
     // 更新本地 userProfile
-    userProfile.value = {
-      ...userProfile.value,
-      username: res?.username ?? editForm.value.username,
-      bio: res?.bio ?? editForm.value.bio
-    };
+    if (userProfile.value) {
+      userProfile.value = {
+        ...userProfile.value,
+        username: res?.username ?? editForm.value.username,
+        bio: res?.bio ?? editForm.value.bio
+      };
+    }
     showToast('个人资料已保存 ✅');
     showEditModal.value = false;
   } catch (err: any) {
