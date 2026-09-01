@@ -29,7 +29,7 @@ import { AuthorizationService } from './authorization.service.js';
 import deactivationService from '../../user/services/deactivation.service.js';
 import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
 import { detectLoginEnvironmentAnomaly } from '../../../framework/auth/anomaly-detector.js';
-import { getDeviceId, detectPlatform, computeDeviceFingerprint } from '../../../framework/auth/device.js';
+import { detectPlatform, computeDeviceFingerprint, getDeviceIdAndWrapResponse } from '../../../framework/auth/device.js';
 
 const authService = new AuthorizationService();
 
@@ -203,7 +203,7 @@ export async function directLogin(request, reply, fastify) {
   );
   if (type !== 'email' && user.numericId) {
     try {
-      const deviceId = getDeviceId(request);
+      const deviceId = await getDeviceIdAndWrapResponse(request, reply);
       const platformHint = detectPlatform(request);
       const userAgent = request.headers['user-agent'] || '';
       const envCheck = await detectLoginEnvironmentAnomaly({

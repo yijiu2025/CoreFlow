@@ -4,16 +4,18 @@
  * 统一管理设备类型判定与设备标识生成：
  * - detectDeviceType：返回设备类型语义值（存 session.deviceType 字段）
  * - detectPlatform：返回平台短前缀（web/android/ios/miniapp/desktop/api）
- * - getDeviceId：生成 `{平台前缀}-{指纹hash}` 格式的设备标识
+ * - getDeviceId：验证并规范化结构化设备 ID（WEB-a3K7mP9q-8s4T）
  *
- * device_id 采用带前缀格式（如 web-a1b2c3d4…），便于按前缀分辨
- * web / android / 小程序 / ios 等平台，也便于按平台做会话统计与排查。
+ * device_id 采用结构化格式（如 WEB-a3K7mP9q-8s4T），前端生成后端验证，
+ * 若无效则生成新 ID，确保唯一性和安全性。
  *
  * @author yijiu
  * @since 2026-08-14
+ * @since 2026-09-01 结构化设备 ID（加密时间戳 + 高唯一性）
  */
 
 import crypto from 'node:crypto';
+import { verifyAndNormalizeDeviceId, generateServerSideDeviceId } from './device-id-service.js';
 
 /**
  * 设备类型常量（语义值，存 session.deviceType）
@@ -58,41 +60,86 @@ export function detectPlatform(request) {
 }
 
 /**
- * 生成设备标识：`{平台前缀}-{16位指纹hash}`
+ * 验证并规范化设备标识
  *
- * 指纹输入优先级（保证同浏览器/同账号跨版本更新 device_id 稳定，避免 session_tokens 表堆积）：
- *   1. x-device-id 头（前端主动传，最稳）
- *   2. cookie 里的 device_id（首次登录后端写回，跨请求稳定）
- *   3. User-Agent + sec-ch-ua-platform 计算（兜底，浏览器更新后可能变）
+ * 混合方案：
+ * 1. 前端生成临时结构化 ID（WEB-a3K7mP9q-8s4T）
+ * 2. 后端验证格式、安全性、有效性
+ * 3. 无效则生成新 ID 并返回
  *
- * 前缀来自 detectPlatform，便于按 web/android/ios/miniapp 分辨。
+ * 指纹输入优先级：
+ *   1. x-device-id 头（前端主动传的结构化 ID）
+ *   2. cookie 里的 device_id（向后兼容旧版本）
+ *   3. 服务端生成（兜底）
  *
  * @param {import('fastify').FastifyRequest} request
- * @returns {string} 形如 `web-a1b2c3d4e5f6a7b8`
+ * @returns {string} 形如 `WEB-a3K7mP9q-8s4T`
  */
-export function getDeviceId(request) {
-  const platform = detectPlatform(request);
-  // 1. 优先用前端主动传的 x-device-id 头
+export async function getDeviceId(request) {
+  const userAgent = request?.headers?.['user-agent'] || '';
   const header = request?.headers?.['x-device-id'] || '';
-  // 2. 其次读 cookie 里的 device_id（首次登录后端写入，后续请求自动带上）
   const cookieDeviceId = request?.cookies?.device_id || '';
-  // 3. 兜底用 UA + platform 计算
-  const ua = request?.headers?.['user-agent'] || '';
-  const platformHint = request?.headers?.['sec-ch-ua-platform'] || '';
 
-  // 稳定来源优先：header > cookie
-  const stableId = header || cookieDeviceId;
-  if (stableId) {
-    // 带平台前缀，统一格式（前端传的可能无前缀）
-    return stableId.includes('-') ? stableId : `${platform}-${stableId}`;
+  // 1. 优先验证前端传的结构化 ID
+  const clientId = header || cookieDeviceId;
+  if (clientId) {
+    try {
+      const validation = await verifyAndNormalizeDeviceId(clientId, userAgent);
+
+      if (validation.valid) {
+        // 验证通过，使用规范化 ID
+        if (validation.shouldReplace) {
+          console.warn(`⚠️ [DeviceId] 前端 ID 无效，已替换：${clientId} → ${validation.normalizedId}`);
+        }
+        return validation.normalizedId;
+      }
+    } catch (error) {
+      console.warn(`⚠️ [DeviceId] 验证失败：${error.message}`);
+    }
   }
-  const hash = crypto.createHash('sha256').update(`${header}|${ua}|${platformHint}`).digest('hex').slice(0, 16);
-  return `${platform}-${hash}`;
+
+  // 2. 后端生成新 ID（兜底）
+  const serverId = generateServerSideDeviceId(userAgent);
+  console.log(`📱 [DeviceId] 服务端生成：${serverId}`);
+  return serverId;
 }
 
 /**
- * Cookie device_id 用的稳定随机值（无前缀，getDeviceId 会补前缀）
- * 首次登录无 cookie 时生成，写回 cookie，后续请求稳定带上。
+ * 获取设备 ID 并包装响应
+ * @param {import('fastify').FastifyRequest} request
+ * @param {import('fastify').FastifyReply} reply
+ * @returns {string} 设备 ID
+ */
+export async function getDeviceIdAndWrapResponse(request, reply) {
+  const deviceId = await getDeviceId(request);
+
+  // 1. 写入响应头（前端可以读取）
+  reply.header('X-Device-Id', deviceId);
+
+  // 2. 写入 Cookie（后续请求自动带上）
+  reply.setCookie('device_id', deviceId, {
+    maxAge: 365 * 24 * 60 * 60 * 1000, // 1 年
+    httpOnly: false, // 允许前端 JS 读取
+    path: '/',
+    sameSite: 'Lax',
+    secure: false // 开发环境不安全，生产环境应设为 true
+  });
+
+  // 3. 如果是首次生成（无效的 cookie），通过响应体通知前端更新
+  const cookieDeviceId = request?.cookies?.device_id || '';
+  if (!cookieDeviceId) {
+    reply.header('X-Device-Id-Updated', 'true');
+  }
+
+  return deviceId;
+}
+
+/**
+ * Cookie device_id 用的稳定随机值（向后兼容）
+ *
+ * 新版本使用结构化 ID，此函数仅用于向后兼容旧版本客户端。
+ *
+ * @returns {string} UUID v4
  */
 export function generateDeviceCookie() {
   return crypto.randomUUID();

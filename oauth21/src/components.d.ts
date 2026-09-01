@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AgreementModals: typeof import('./components/common/AgreementModals.vue')['default']
+    AntiCacheDebugPanel: typeof import('./components/common/AntiCacheDebugPanel.vue')['default']
     AppNameMissing: typeof import('./components/common/AppNameMissing.vue')['default']
     AuthContainer: typeof import('./components/common/AuthContainer.vue')['default']
     AuthField: typeof import('./components/common/AuthField.vue')['default']

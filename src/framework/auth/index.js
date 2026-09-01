@@ -255,7 +255,7 @@ export default fp(async app => {
       // warn（指纹变）+ 高风险操作（写操作）→ 直接 403 拦截，返回验证链接让前端弹框
       // info（IP 变/无基准）→ 不拦，记 request.state.risk 供响应体带上验证信息（前端弹框但不阻断读）
       try {
-        const deviceId = getDeviceId(request);
+        const deviceId = await getDeviceId(request);
         const fingerprint = computeDeviceFingerprint({
           deviceId,
           userAgent: request.headers['user-agent'] || '',

@@ -19,7 +19,7 @@ import { generateToken } from '../crypto/tokens.js';
 import ApprovalDao from '../dao/approval.dao.js';
 import TokenDao from '../dao/token.dao.js';
 import config from '../config/config.js';
-import { detectDeviceType, generateDeviceCookie, detectPlatform } from '../../../framework/auth/device.js';
+import { detectDeviceType, generateDeviceCookie, detectPlatform, getDeviceId } from '../../../framework/auth/device.js';
 import { loadUserPermissions } from '../../../framework/auth/permission-loader.js';
 import { getStore } from '../../../framework/redis/index.js';
 import { setAuthCookies } from './cookies.service.js';
@@ -94,6 +94,9 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
   // sid_r 长期凭证，降低公共设备残留半年期凭证的风险。登录页通过 keepLogin 显式开启。
   const { rememberMe = false } = options;
 
+  // 获取设备 ID（登录时已经通过 getDeviceIdAndWrapResponse 处理）
+  const deviceId = await getDeviceId(request);
+
   // client 由调用方查好传入（ClientDao.findById），不再内部 authenticateClient。
   // 所有 app（一方/三方）都在 oauth_clients 表注册，有真实 client_id。
   if (!client) {
@@ -131,7 +134,8 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
     const { token: accessToken, kid: accessKid } = await issueAccessToken({
       sub: user.id,
       aud: client.client_id,
-      scope: scopeString
+      scope: scopeString,
+      deviceId: deviceId // 将设备 ID 加入 JWT 声明
     });
     const refreshToken = generateToken(48);
     await TokenDao.save(refreshToken, {
@@ -201,7 +205,7 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
           status: user.status || 'active',
           appId: sessionAppId,
           ip: request.ip,
-          deviceId: resolveDeviceId(request), // 不下发 cookie（父应用 bind-session 时再写）
+          deviceId: deviceId, // 使用已验证的设备 ID
           deviceType: detectDeviceType(request.headers['user-agent'] || ''),
           userAgent: request.headers['user-agent'] || '',
           rememberMe
