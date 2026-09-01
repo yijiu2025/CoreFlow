@@ -26,6 +26,9 @@ const {
   enableDebug: true
 });
 
+// 调试面板显示状态
+const showDebugPanel = ref(true);
+
 const stie = ref('02'); // 站点标识占位
 const sign = ref(''); // 签名占位（当前未启用）
 // theme: 子组件（MiniLogin）自己用 useRoute().query.theme 读，
@@ -60,8 +63,7 @@ const MobileLogin = defineAsyncComponent(() => import('../../app/login/index.vue
 
 // 调试面板关闭事件处理
 const onDebugPanelClose = () => {
-  // 当调试面板关闭时，我们可以在这里添加额外的逻辑
-  // 比如停止防缓存的自定义刷新逻辑等
+  showDebugPanel.value = false;
   console.warn('防缓存调试面板已关闭');
 };
 
@@ -88,7 +90,7 @@ const activeComponent = computed(() => {
   <div class="login-dispatcher-wrapper">
     <!-- 调试信息面板 -->
     <AntiCacheDebugPanel
-      :visible="debugInfo !== undefined"
+      :visible="showDebugPanel"
       :refresh-interval="5 * 60 * 1000"
       @update:visible="onDebugPanelClose"
     />
