@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAntiCache } from '@/composables/useAntiCache';
 import AntiCacheDebugPanel from '@/components/common/AntiCacheDebugPanel.vue';
+import { postToParent } from '@/utils/parent';
 
 const route = useRoute();
 
@@ -61,6 +62,15 @@ const StandardLogin = defineAsyncComponent(() => import('./StandardLogin.vue'));
 const MiniLogin = defineAsyncComponent(() => import('./MiniLogin.vue'));
 const MobileLogin = defineAsyncComponent(() => import('../../app/login/index.vue'));
 
+// 组件挂载后执行
+onMounted(() => {
+  // 如果需要发送 SSO 消息且组件已加载，通知父窗口登录页面已准备就绪
+  if (shouldSendSSOMessage.value) {
+    postToParent({ type: 'SSO_READY' });
+    console.warn('[SSO] 发送 SSO_READY 消息到父窗口');
+  }
+});
+
 // 调试面板关闭事件处理
 const onDebugPanelClose = () => {
   showDebugPanel.value = false;
@@ -83,6 +93,11 @@ const activeComponent = computed(() => {
 
   // 3. 默认桌面版标准 SSO 登录
   return StandardLogin;
+});
+
+// 是否发送 SSO 消息给父窗口
+const shouldSendSSOMessage = computed(() => {
+  return !notLoadSsoView.value && window.parent && window.parent !== window;
 });
 </script>
 
