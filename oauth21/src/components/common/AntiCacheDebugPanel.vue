@@ -125,6 +125,12 @@ const refresh = () => {
 
 const togglePanel = () => {
   emit('update:visible', false);
+  // 同时停止自动刷新
+  if (autoRefresh.value) {
+    // 由于 Composable 的限制，我们这里只是发出警告
+    // 实际的停止需要在父组件中处理
+    console.warn('调试面板已关闭，自动刷新仍在运行');
+  }
 };
 
 const toggleAutoRefresh = () => {
@@ -145,6 +151,7 @@ const changeInterval = () => {
 
 const copyRnd = async (evt: MouseEvent) => {
   try {
+    // 首先尝试使用 Clipboard API
     await navigator.clipboard.writeText(rnd.value);
     // 这里可以添加一个提示
     const btn = evt.currentTarget as HTMLButtonElement;
@@ -157,7 +164,43 @@ const copyRnd = async (evt: MouseEvent) => {
       btn.classList.remove('copied');
     }, 2000);
   } catch (err) {
-    console.error('复制失败:', err);
+    console.error('Clipboard API 复制失败，尝试降级方案:', err);
+
+    // 降级方案：使用 createRange 和 execCommand
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = rnd.value;
+      textArea.style.position = 'fixed'; // 防止页面滚动
+      textArea.style.opacity = '0'; // 透明
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+
+      if (successful) {
+        const btn = evt.currentTarget as HTMLButtonElement;
+        const originalText = btn.textContent || '📋 复制';
+        btn.textContent = '✓ 已复制';
+        btn.classList.add('copied');
+
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.classList.remove('copied');
+        }, 2000);
+        console.warn('使用降级方案复制成功');
+      } else {
+        throw new Error('execCommand 复制失败');
+      }
+    } catch (fallbackErr) {
+      console.error('降级方案也失败:', fallbackErr);
+      // 最终降级：提示用户手动复制
+      alert('请手动复制以下值：' + rnd.value);
+    }
   }
 };
 
