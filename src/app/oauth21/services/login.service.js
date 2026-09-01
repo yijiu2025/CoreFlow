@@ -333,45 +333,44 @@ export async function directLogin(request, reply, fastify) {
   const scopeDetails = resolveScopeDetails(scopeString, client.scope_metadata || {});
 
   // 4. 检查用户是否已授权该应用
-  // 一方应用（client_secret=null，公共客户端）跳过 consent 直签发；
-  // 三方应用（有 client_secret）首次需 consent 确认
-  if (client.client_secret) {
-    const approval = await ApprovalDao.getEffectiveApproval(user.id, client.client_id);
-    if (!approval) {
-      const consentKey = uuidv4();
-      const consentStore = getStore('consent_session');
-      // 绑定客户端指纹：confirmDirectConsent 时校验同一客户端，防 consentKey 泄露被冒用
-      await consentStore.set(
-        consentKey,
-        {
-          userId: user.id,
-          clientId: client.client_id,
-          scopes: finalScopes,
-          scopeStr: scopeString,
-          oidcNonce,
-          fingerprint: clientFingerprint(request)
-        },
-        300
-      );
+  // 一方/三方应用统一：首次登录需 consent 确认（写 Approval + 授默认角色），已授权则静默签发。
+  // 一方应用（client_secret=null）原先跳过 consent 直签发，导致用户永远无 Approval 记录、
+  // 拿不到应用默认角色，且首次登录无授权确认。现统一走 consent 分支。
+  const approval = await ApprovalDao.getEffectiveApproval(user.id, client.client_id);
+  if (!approval) {
+    const consentKey = uuidv4();
+    const consentStore = getStore('consent_session');
+    // 绑定客户端指纹：confirmDirectConsent 时校验同一客户端，防 consentKey 泄露被冒用
+    await consentStore.set(
+      consentKey,
+      {
+        userId: user.id,
+        clientId: client.client_id,
+        scopes: finalScopes,
+        scopeStr: scopeString,
+        oidcNonce,
+        fingerprint: clientFingerprint(request)
+      },
+      300
+    );
 
-      return reply.send({
-        code: 200,
-        message: '需要授权确认',
-        data: {
-          action: 'consent',
-          consentKey,
-          client_id: client.client_id,
-          client_name: client.client_name,
-          scope: scopeString,
-          scopeDetails,
-          user: {
-            username: user.username,
-            name: user.name || user.username,
-            email: user.email
-          }
+    return reply.send({
+      code: 200,
+      message: '需要授权确认',
+      data: {
+        action: 'consent',
+        consentKey,
+        client_id: client.client_id,
+        client_name: client.client_name,
+        scope: scopeString,
+        scopeDetails,
+        user: {
+          username: user.username,
+          name: user.name || user.username,
+          email: user.email
         }
-      });
-    }
+      }
+    });
   }
 
   // 5. 签发令牌
