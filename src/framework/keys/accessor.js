@@ -29,7 +29,7 @@ async function loadKey(kid) {
   const record = await findByName(kid);
   if (!record) return null;
   // active 或在退役宽限期内才可用；过期退役密钥视为不存在
-  if (!record.active && !withinGrace(record.updated_at)) return null;
+  if (!record.active && !withinGrace(record.updatedAt)) return null;
   const keyData = {
     privateKey: record.private_key,
     publicKey: record.public_key,
@@ -110,7 +110,7 @@ async function getJWKS(kid) {
   const records = await findAll();
   for (const record of records) {
     if (!record.jwk) continue;
-    if (!record.active && !withinGrace(record.updated_at)) continue; // 过宽限的退役密钥跳过
+    if (!record.active && !withinGrace(record.updatedAt)) continue; // 过宽限的退役密钥跳过
     const jwk = typeof record.jwk === 'string' ? JSON.parse(record.jwk) : record.jwk;
     if (!jwk || seen.has(jwk.kid) || !accept(jwk)) continue;
     seen.add(jwk.kid);

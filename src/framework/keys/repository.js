@@ -63,7 +63,7 @@ async function findNewestActive() {
   if (!KeyPair) return null;
   return KeyPair.findOne({
     where: { active: true },
-    order: [['created_at', 'DESC']]
+    order: [['createdAt', 'DESC']]
   });
 }
 
@@ -76,7 +76,7 @@ async function findAllActive() {
   if (!KeyPair) return [];
   return KeyPair.findAll({
     where: { active: true },
-    order: [['created_at', 'DESC']]
+    order: [['createdAt', 'DESC']]
   });
 }
 
@@ -87,7 +87,7 @@ async function findAllActive() {
 async function findAll() {
   const KeyPair = getKeyPairModel();
   if (!KeyPair) return [];
-  return KeyPair.findAll({ order: [['created_at', 'DESC']] });
+  return KeyPair.findAll({ order: [['createdAt', 'DESC']] });
 }
 
 /**
