@@ -84,6 +84,11 @@ service.interceptors.request.use(
 
 service.interceptors.response.use(
   res => {
+    // 设备 ID 同步（从响应头同步）
+    import('./device-sync').then(({ handleDeviceSyncInResponse }) => {
+      handleDeviceSyncInResponse(res);
+    });
+
     // 假设后端返回结构为 { code, message, data }
     const { code, message, data } = res.data;
     // 如果没有 code，则认为直接返回的是数据 (兼容普通 REST)

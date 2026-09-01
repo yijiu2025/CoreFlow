@@ -51,7 +51,7 @@ export default async function (fastify) {
       const sessionId = user?.sessionId;
       if (sessionId) {
         try {
-          const deviceId = getDeviceId(request);
+          const deviceId = await getDeviceId(request);
           const fingerprint = computeDeviceFingerprint({
             deviceId,
             userAgent: request.headers['user-agent'] || '',
