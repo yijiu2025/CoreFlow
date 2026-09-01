@@ -13,7 +13,43 @@
  * @returns 随机数字符串，如 '0.7164508668310778'
  */
 export function generateRandomTimestamp(): string {
-  return Math.random().toString().substring(2, 18);
+  return '0.' + Math.random().toString().substring(2, 18);
+}
+
+/**
+ * 生成紧凑型随机数（8位）
+ * 格式: 纯8位随机数，如 'aB3xY9z'
+ * @returns 短随机数字符串
+ */
+export function generateCompactRandom(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
+ * 生成格式化随机数（带前缀）
+ * 格式: prefix-timestamp-random，如 'cache-1719876543123-456'
+ * @param prefix 前缀，默认为 'cache'
+ * @returns 格式化的随机数字符串
+ */
+export function generateFormattedRandom(prefix: string = 'cache'): string {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `${prefix}-${timestamp}-${random}`;
+}
+
+/**
+ * 生成高精度随机数（24位）
+ * 格式: 0. + 22位随机数，如 '0.123456789012345678901234'
+ * @returns 高精度随机数字符串
+ */
+export function generateHighPrecisionRandom(): string {
+  const random = Math.random().toString().substring(2, 24);
+  return `0.${random}`;
 }
 
 /**
