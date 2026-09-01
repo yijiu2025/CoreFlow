@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAntiCache } from '@/composables/useAntiCache';
+import AntiCacheDebugPanel from '@/components/common/AntiCacheDebugPanel.vue';
 
 const route = useRoute();
 
@@ -18,8 +19,6 @@ const qrCodeFirst = ref(false);
 // 使用防缓存功能
 const {
   rnd,
-  refresh: refreshRnd,
-  formattedLastRefreshed,
   debugInfo
 } = useAntiCache({
   autoRefresh: true,
@@ -29,9 +28,6 @@ const {
 
 const stie = ref('02'); // 站点标识占位
 const sign = ref(''); // 签名占位（当前未启用）
-
-// 刷新方法（供模板使用）
-const generateNewRandom = refreshRnd;
 // theme: 子组件（MiniLogin）自己用 useRoute().query.theme 读，
 //        dispatcher 和子组件共享 vue-router，query 自动可用，无需此处透传
 
@@ -83,28 +79,11 @@ const activeComponent = computed(() => {
 
 <template>
   <div class="login-dispatcher-wrapper">
-    <!-- 调试信息面板（仅在开发环境显示） -->
-    <div v-if="debugInfo" class="debug-panel">
-      <div class="debug-item">
-        <strong>防缓存戳:</strong>
-        <code>{{ rnd }}</code>
-        <button @click="generateNewRandom" class="refresh-btn">
-          刷新
-        </button>
-      </div>
-      <div class="debug-item">
-        <strong>最后刷新:</strong>
-        <code>{{ formattedLastRefreshed }}</code>
-      </div>
-      <div class="debug-item">
-        <strong>刷新次数:</strong>
-        <code>{{ debugInfo.refreshCount }}</code>
-      </div>
-      <div class="debug-item">
-        <strong>自动刷新:</strong>
-        <code>{{ debugInfo.autoRefresh ? '开启' : '关闭' }}</code>
-      </div>
-    </div>
+    <!-- 调试信息面板 -->
+    <AntiCacheDebugPanel
+      :visible="debugInfo !== undefined"
+      :refresh-interval="5 * 60 * 1000"
+    />
 
     <transition name="fade-slide" mode="out-in">
       <component :is="activeComponent" />
@@ -123,66 +102,6 @@ const activeComponent = computed(() => {
   background: transparent;
 }
 
-/* 调试面板样式 */
-.debug-panel {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 15px;
-  border-radius: 8px;
-  font-family: monospace;
-  font-size: 12px;
-  z-index: 9999;
-  max-width: 300px;
-}
-
-.debug-item {
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.debug-item:last-child {
-  margin-bottom: 0;
-}
-
-.debug-item strong {
-  margin-right: 10px;
-  color: #67c23a;
-}
-
-.debug-item code {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-  flex: 1;
-  margin-right: 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.refresh-btn {
-  background: #409eff;
-  color: white;
-  border: none;
-  padding: 2px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 11px;
-  transition: background-color 0.3s;
-}
-
-.refresh-btn:hover {
-  background: #66b1ff;
-}
-
-.refresh-btn:active {
-  background: #3a8ee6;
-}
 
 /* 页面切换平滑淡入淡出动画 */
 .fade-slide-enter-active,
