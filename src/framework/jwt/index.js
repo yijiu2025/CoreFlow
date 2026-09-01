@@ -2,7 +2,7 @@
  * JWT 签名与验证
  *
  * 封装 jsonwebtoken 的 sign/verify 操作，密钥从 src/framework/keys/ 获取。
- * kid 由 keys 子系统的"当前密钥"指针决定，不再使用固定 'default'。
+ * kid 由 keys 子系统的"当前密钥"指针决定。
  * @author yijiu
  * @since 2026-08-14
  */

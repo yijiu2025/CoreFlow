@@ -5,7 +5,7 @@
  * 读 API 见 accessor.js；DB 访问见 repository.js；缓存见 cache.js。
  *
  * kid 规则：每个密钥对的 name 即 kid，由 generateKid() 生成唯一字母数字串，
- * 便于在 DB/日志中检索；不再使用固定的 'default'。
+ * 便于在 DB/日志中检索。
  *
  * @author yijiu
  * @since 2026-08-15
@@ -201,7 +201,7 @@ async function pruneExpiredRetired() {
   let removed = 0;
   for (const record of all) {
     if (record.active) continue;
-    if (!withinGrace(record.updated_at)) {
+    if (!withinGrace(record.updatedAt)) {
       await removeByName(record.name);
       deleteCachedKey(record.name);
       removed++;

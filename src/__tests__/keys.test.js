@@ -37,7 +37,7 @@ const InMemKeyPair = {
   async findAll({ where }) {
     let arr = [...store.values()];
     if (where) arr = arr.filter(r => Object.entries(where).every(([k, v]) => r[k] === v));
-    return arr.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    return arr.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   },
   async create(data) {
     // 破坏：前 createSabotage 次抛唯一冲突，模拟并发/碰撞
@@ -48,7 +48,7 @@ const InMemKeyPair = {
     // 真实 DB 的唯一约束：name 重复则抛错
     if (store.has(data.name)) throw uniqueViolationError();
     const now = Date.now();
-    const rec = { id: idSeq++, created_at: now, updated_at: now, ...data };
+    const rec = { id: idSeq++, createdAt: now, updatedAt: now, ...data };
     store.set(rec.name, rec);
     return rec;
   },
@@ -56,7 +56,7 @@ const InMemKeyPair = {
     let n = 0;
     for (const r of store.values()) {
       if (Object.entries(where).every(([k, v]) => r[k] === v)) {
-        Object.assign(r, values, { updated_at: Date.now() });
+        Object.assign(r, values, { updatedAt: Date.now() });
         n++;
       }
     }
@@ -196,7 +196,7 @@ describe('keys 组件', () => {
     await rotateKey();
     // 手动把旧 key 的 updated_at 调到 31 天前（模拟过宽限）
     const rec = [...store.values()].find(r => r.name === oldKid);
-    rec.updated_at = new Date(Date.now() - 31 * 86400 * 1000);
+    rec.updatedAt = new Date(Date.now() - 31 * 86400 * 1000);
 
     // JWKS 不再含旧 key
     const { keys } = await getJWKS();
@@ -210,7 +210,7 @@ describe('keys 组件', () => {
     const oldKid = getCurrentKid();
     await rotateKey();
     const rec = [...store.values()].find(r => r.name === oldKid);
-    rec.updated_at = new Date(Date.now() - 31 * 86400 * 1000);
+    rec.updatedAt = new Date(Date.now() - 31 * 86400 * 1000);
 
     const removed = await pruneExpiredRetired();
     expect(removed).toBe(1);
