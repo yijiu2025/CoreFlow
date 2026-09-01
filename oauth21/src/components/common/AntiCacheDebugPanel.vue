@@ -81,10 +81,16 @@ interface Props {
   refreshInterval?: number;
 }
 
+interface Emits {
+  (e: 'update:visible', value: boolean): void;
+}
+
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
   refreshInterval: 5 * 60 * 1000
 });
+
+const emit = defineEmits<Emits>();
 
 // 防缓存功能
 const {
@@ -118,7 +124,7 @@ const refresh = () => {
 };
 
 const togglePanel = () => {
-  isPanelOpen.value = false;
+  emit('update:visible', false);
 };
 
 const toggleAutoRefresh = () => {

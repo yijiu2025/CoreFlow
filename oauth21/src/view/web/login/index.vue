@@ -58,6 +58,13 @@ const StandardLogin = defineAsyncComponent(() => import('./StandardLogin.vue'));
 const MiniLogin = defineAsyncComponent(() => import('./MiniLogin.vue'));
 const MobileLogin = defineAsyncComponent(() => import('../../app/login/index.vue'));
 
+// 调试面板关闭事件处理
+const onDebugPanelClose = () => {
+  // 当调试面板关闭时，我们可以在这里添加额外的逻辑
+  // 比如停止防缓存的自定义刷新逻辑等
+  console.warn('防缓存调试面板已关闭');
+};
+
 // 动态路由/参数分发逻辑
 const activeComponent = computed(() => {
   // 1. 如果指定为移动端，或者 isMobile 参数为 true
@@ -83,6 +90,7 @@ const activeComponent = computed(() => {
     <AntiCacheDebugPanel
       :visible="debugInfo !== undefined"
       :refresh-interval="5 * 60 * 1000"
+      @update:visible="onDebugPanelClose"
     />
 
     <transition name="fade-slide" mode="out-in">
