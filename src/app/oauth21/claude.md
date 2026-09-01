@@ -143,9 +143,9 @@ JWT持有者授权 (JWT Bearer Grant)：适用于服务账户认证。客户端�
 ### 一方应用（FIRST_PARTY_APP）— directLogin 直接登录
 
 - **适用**：posecraft / firewall / admin 等本系统自有前端
-- **流程**：`POST /oauth21/v1/auth/login`（或 `/mini-login`）→ 用户名密码/邮箱码 → `directLogin` 直接签发令牌
+- **流程**：`POST /oauth21/v1/auth/login`（或 `/mini-login`）→ 用户名密码/邮箱码 → `directLogin`
 - **跳过 PKCE 和 redirect_uri 绑定**：一方应用可信，无需防授权码拦截
-- **跳过 consent 二次确认**：一方应用默认已授权
+- **首次登录需 consent 确认**：一方应用首次登录也弹授权确认页，用户同意后写 Approval + 授予应用默认角色，后续登录静默签发（原先一方应用跳过 consent，导致用户无 Approval 记录、拿不到默认角色）
 - **安全**：H5 签名验证（requireSignature）+ 异常检测 + RSA 加密传输兜底
 
 ### 三方应用 — 授权码 + PKCE + consent
