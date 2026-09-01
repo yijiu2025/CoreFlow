@@ -19,6 +19,15 @@ export interface DeviceSyncOptions {
   onDeviceIdChange?: (oldId: string, newId: string) => void;
 }
 
+// 扩展 Window 接口以包含 deviceSync 属性
+declare global {
+  interface Window {
+    deviceSync?: {
+      onDeviceIdChange?: (oldId: string, newId: string) => void;
+    };
+  }
+}
+
 const STORAGE_KEY = 'cf_device_id';
 
 /**
