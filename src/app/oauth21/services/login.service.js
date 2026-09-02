@@ -333,44 +333,76 @@ export async function directLogin(request, reply, fastify) {
   const scopeDetails = resolveScopeDetails(scopeString, client.scope_metadata || {});
 
   // 4. 检查用户是否已授权该应用
-  // 一方/三方应用统一：首次登录需 consent 确认（写 Approval + 授默认角色），已授权则静默签发。
-  // 一方应用（client_secret=null）原先跳过 consent 直签发，导致用户永远无 Approval 记录、
-  // 拿不到应用默认角色，且首次登录无授权确认。现统一走 consent 分支。
+  // 首次登录（无 Approval）：
+  //   - 一方应用 skip_consent=true → 自动写 Approval + 默认权限，静默签发令牌
+  //   - 其他应用 → 返回 consent 确认页，用户同意后写 Approval + 默认权限再签发
+  // 已授权（有 Approval）→ 静默签发
   const approval = await ApprovalDao.getEffectiveApproval(user.id, client.client_id);
   if (!approval) {
-    const consentKey = uuidv4();
-    const consentStore = getStore('consent_session');
-    // 绑定客户端指纹：confirmDirectConsent 时校验同一客户端，防 consentKey 泄露被冒用
-    await consentStore.set(
-      consentKey,
-      {
+    // 一方应用配置了 skip_consent=true：自动写 Approval + 默认权限，静默签发令牌，不弹 consent 页。
+    // 三方应用保持 false，走 consent 确认页（OAuth 2.1 安全要求）。
+    // 自动授权失败时降级走 consent，不阻断登录。
+    if (client.skip_consent) {
+      try {
+        await ApprovalDao.saveApproval({
+          uid: user.id,
+          appId: client.client_id,
+          scopes: finalScopes
+        });
+        console.log('[directLogin] skip_consent 自动授权完成', {
+          userId: user.id,
+          clientId: client.client_id
+        });
+        // 落到下方第 5 步签发令牌（不 return consent）
+      } catch (err) {
+        console.error('[directLogin] 自动授权失败，降级走 consent:', err.message);
+      }
+    } else {
+      const consentKey = uuidv4();
+      const consentStore = getStore('consent_session');
+      const writeFp = clientFingerprint(request);
+      // 绑定客户端指纹：confirmDirectConsent 时校验同一客户端，防 consentKey 泄露被冒用
+      await consentStore.set(
+        consentKey,
+        {
+          userId: user.id,
+          clientId: client.client_id,
+          scopes: finalScopes,
+          scopeStr: scopeString,
+          oidcNonce,
+          fingerprint: writeFp
+        },
+        300
+      );
+      console.log('[directLogin] 写入 consentKey', {
+        consentKey,
         userId: user.id,
         clientId: client.client_id,
-        scopes: finalScopes,
-        scopeStr: scopeString,
-        oidcNonce,
-        fingerprint: clientFingerprint(request)
-      },
-      300
-    );
+        fingerprint: writeFp,
+        ip: request?.ip,
+        ua: request?.headers?.['user-agent'] || '',
+        deviceFp: request?.headers?.['x-device-fp'] || 'none',
+        envDeviceFp: process.env.DEVICE_FINGERPRINT_ENABLED
+      });
 
-    return reply.send({
-      code: 200,
-      message: '需要授权确认',
-      data: {
-        action: 'consent',
-        consentKey,
-        client_id: client.client_id,
-        client_name: client.client_name,
-        scope: scopeString,
-        scopeDetails,
-        user: {
-          username: user.username,
-          name: user.name || user.username,
-          email: user.email
+      return reply.send({
+        code: 200,
+        message: '需要授权确认',
+        data: {
+          action: 'consent',
+          consentKey,
+          client_id: client.client_id,
+          client_name: client.client_name,
+          scope: scopeString,
+          scopeDetails,
+          user: {
+            username: user.username,
+            name: user.name || user.username,
+            email: user.email
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   // 5. 签发令牌
@@ -427,6 +459,10 @@ export async function confirmDirectConsent(request, reply, fastify) {
   const consentStore = getStore('consent_session');
   const session = await consentStore.get(consentKey);
   if (!session) {
+    console.warn('[confirmConsent] consentKey 不存在', {
+      consentKey,
+      storeKeys: typeof consentStore.keys === 'function' ? 'has-keys-fn' : 'no-keys-fn'
+    });
     return reply.code(400).send({
       code: 400,
       message: '授权会话已过期，请重新登录',
@@ -436,7 +472,16 @@ export async function confirmDirectConsent(request, reply, fastify) {
 
   // 客户端指纹一致性校验：发起授权确认的客户端必须与换令牌的客户端一致
   // 防 consentKey 泄露后被另一客户端冒用绕过二次确认
-  if (session.fingerprint && session.fingerprint !== clientFingerprint(request)) {
+  const currentFp = clientFingerprint(request);
+  if (session.fingerprint && session.fingerprint !== currentFp) {
+    console.warn('[confirmConsent] 指纹不符', {
+      stored: session.fingerprint,
+      current: currentFp,
+      ip: request?.ip,
+      ua: request?.headers?.['user-agent'] || '',
+      deviceFp: request?.headers?.['x-device-fp'] || 'none',
+      envDeviceFp: process.env.DEVICE_FINGERPRINT_ENABLED
+    });
     // 指纹不符：疑似冒用，静默拒绝（不暴露具体原因）
     await consentStore.delete(consentKey);
     return reply.code(400).send({

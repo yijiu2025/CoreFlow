@@ -96,7 +96,8 @@ export default async app => {
               scope: client.scope,
               scope_metadata: client.scope_metadata || null,
               token_endpoint_auth_method: client.token_endpoint_auth_method,
-              application_type: client.application_type
+              application_type: client.application_type,
+              skip_consent: client.skip_consent ?? false
             });
             console.log(`🌱 [Seed] ${C.cyan}OAuth 同步更新客户端: ${client.client_id}${C.reset}`);
           }
