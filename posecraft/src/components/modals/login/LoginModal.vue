@@ -206,6 +206,8 @@ const { savedAccounts } = storeToRefs(authStore);
 
 const loading = ref(true);
 const switching = ref(false);
+/** SSO_READY 兜底超时句柄：@load 后若 N 秒内未收到 SSO_READY，强制关 loading（防握手丢失导致永久 loading） */
+let ssoReadyTimeout: number | null = null;
 /** iframe src URL：computed 让主题变化时 URL 重新生成（含 theme 参数，oauth21 iframe 首屏就带主题不闪白） */
 const loginUrl = computed(() => buildSsoLoginUrl(themeStore.isDark ? 'dark' : 'light'));
 /** SSO iframe 的 origin（postMessage 接收侧只信任此 origin，防恶意页面伪造登录消息） */
@@ -263,11 +265,22 @@ watch(
   }
 );
 
-/** iframe 加载完成（真实触发，替代 setTimeout）：同步当前主题给 oauth21 iframe */
+/**
+ * iframe HTML 加载完成：启动兜底超时，等待 SSO_READY（Vue 应用就绪握手）。
+ *
+ * @load 只保证 HTML 拉取完，不保证 Vue app 已 mount、message 监听器已就绪。
+ * 若此时立即同步主题，消息会在 iframe 监听器就绪前到达 → 丢失 → 首屏闪白。
+ * 改为：收到 SSO_READY 才关 loading + 同步主题；@load 仅启动超时兜底，
+ * 防止 SSO_READY 因异常丢失导致弹窗永久 loading。
+ */
 function onIframeLoad() {
-  loading.value = false;
-  // 初始主题同步（iframe 加载后立即把父应用当前主题发给子应用，避免 iframe 首屏主题闪烁）
-  themeStore.syncThemeToIframes(themeStore.isDark);
+  if (ssoReadyTimeout) clearTimeout(ssoReadyTimeout);
+  ssoReadyTimeout = window.setTimeout(() => {
+    // 兜底：3s 内未收到 SSO_READY，强制关 loading + 同步主题（按 @load 旧逻辑）
+    console.warn('[LoginModal] SSO_READY 超时，兜底关闭 loading');
+    loading.value = false;
+    themeStore.syncThemeToIframes(themeStore.isDark);
+  }, 3000);
 }
 
 function close() {
@@ -315,6 +328,18 @@ const handleMessage = async (event: MessageEvent) => {
   if (event.origin !== ssoOrigin) return;
   // 2. source 必须是当前 SSO iframe 窗口（排除其他 iframe 或父窗口冒泡）
   if (!iframeRef.value || event.source !== iframeRef.value.contentWindow) return;
+
+  // SSO_READY：iframe 内 Vue 应用已 mount、监听器已就绪的可靠握手信号
+  // 收到后关 loading + 同步主题（比 @load 可靠，消除首屏主题闪烁竞态）+ 清兜底超时
+  if (event.data && event.data.type === 'SSO_READY') {
+    if (ssoReadyTimeout) {
+      clearTimeout(ssoReadyTimeout);
+      ssoReadyTimeout = null;
+    }
+    loading.value = false;
+    themeStore.syncThemeToIframes(themeStore.isDark);
+    return;
+  }
 
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
     let { token, sessionToken, user } = event.data;
@@ -376,6 +401,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('message', handleMessage);
+  if (ssoReadyTimeout) {
+    clearTimeout(ssoReadyTimeout);
+    ssoReadyTimeout = null;
+  }
   document.body.style.overflow = ''; // 确保卸载时恢复 body 滚动
 });
 </script>
