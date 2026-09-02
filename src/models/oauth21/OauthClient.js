@@ -107,6 +107,16 @@ export default (sequelize, DataTypes) => {
         type: DataTypes.STRING(20),
         defaultValue: 'web',
         comment: '应用类型：web / service'
+      },
+      /**
+       * 首次登录是否跳过 consent 自动授权
+       * 一方应用设 true：directLogin 首次登录时自动写 Approval + 默认权限，静默签发令牌
+       * 三方应用保持 false：必须走 consent 确认页（OAuth 2.1 安全要求）
+       */
+      skip_consent: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        comment: '首次登录是否跳过 consent 自动授权（一方应用用，默认 false）'
       }
     },
     {
