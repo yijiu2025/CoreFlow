@@ -207,6 +207,20 @@ class DeactivationService {
     // 3. 软删 user_user（status=-1 已注销，配合 delete_version 软删除钩子）
     const User = getModel('User');
     if (User) {
+      // 先显式软删 user_identity：Sequelize 的 hasMany 关联级联软删（hooks:true）
+      // 只在 user.destroy 预加载 include 时才触发，此处未 include，级联不跑，
+      // user_identity 会遗留（deleted_at=null/delete_version=0），其唯一索引
+      // uk_identity_type_identifier=(identity_type,identifier,delete_version)
+      // 占着 (password,email,0) 坑 → 邮箱无法重新注册（ER_DUP_ENTRY 被翻译成"邮箱已存在"）。
+      // 逐条 instance.destroy 触发 beforeDestroy 钩子写 delete_version=id，释放唯一索引。
+      const UserIdentity = getModel('UserIdentity');
+      if (UserIdentity) {
+        const identities = await UserIdentity.findAll({ where: { user_id: userId }, transaction: undefined });
+        for (const id of identities) {
+          await id.destroy();
+        }
+      }
+
       const user = await User.findByPk(userId);
       if (user) {
         user.status = -1; // 标记已注销
