@@ -7,7 +7,6 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
-import { postToParent } from '@/utils/parent';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
@@ -147,10 +146,6 @@ const isEmbedded = computed(() => {
 onMounted(() => {
   if (appConfig.value.notKeepLogin) keepLogin.value = false;
   if (hasAppName.value) generateQR();
-  // 检查 notLoadSsoView 参数，如果为 false 且在 iframe 中，则发送 SSO_READY 消息
-  if (route.query.notLoadSsoView !== 'true' && window.parent && window.parent !== window) {
-    postToParent({ type: 'SSO_READY' });
-  }
 });
 
 onUnmounted(() => {
