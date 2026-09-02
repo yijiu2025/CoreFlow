@@ -50,12 +50,30 @@ export function registerDeleteVersionHooks(Model, options = {}) {
     }
   });
 
-  // 4. 批量删除保护：禁止无 where 条件的 destroy
-  Model.addHook('beforeBulkDestroy', opts => {
+  // 4. 批量删除保护：禁止无 where 条件的 destroy，并修复 paranoid bulk destroy 不触发 beforeDestroy 的缺陷
+  //
+  // 背景：Sequelize v6 的 paranoid bulk destroy（Model.destroy({ where })）走的是单条
+  //   `UPDATE ... SET deleted_at = ? WHERE deleted_at IS NULL AND <where>` 路径，
+  //   既不逐条触发 beforeDestroy 实例钩子，也不 set delete_version。
+  //   导致 delete_version 恒为 0 → 唯一索引 (email, 0) 不释放 →
+  //   "登录查不到（paranoid 过滤）+ 注册插不进（唯一索引占坑）" 的死锁态。
+  //
+  // 修复：在 beforeBulkDestroy 里先一次性 UPDATE 把 delete_version 设为各自 id，
+  //   再让 Sequelize 的 paranoid UPDATE 去写 deleted_at。两次 UPDATE 但同事务，可接受。
+  Model.addHook('beforeBulkDestroy', async opts => {
     if (!opts.where || Object.keys(opts.where).length === 0) {
       throw new Error(`[软删除] 禁止无 where 条件的批量 destroy。模型: ${Model.name}`);
     }
-    opts.individualHooks = true;
+    // 仅 paranoid 模型需要补 delete_version（非 paranoid 模型走硬删，beforeDestroy 会处理）
+    if (Model.options?.paranoid) {
+      const seq = Model.sequelize;
+      await Model.update(
+        { [field]: seq.literal('id') },
+        { where: { ...opts.where, [field]: 0 }, transaction: opts.transaction, hooks: false }
+      ).catch(err => {
+        throw new Error(`[软删除] 批量 destroy 补 ${field} 失败: ${err.message}`);
+      });
+    }
   });
 
   Model.addHook('beforeBulkRestore', opts => {
