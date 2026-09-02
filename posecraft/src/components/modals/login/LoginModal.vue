@@ -9,7 +9,7 @@
 
       <!-- Modal Content（主题感知：白天白底，黑夜暗底） -->
       <div
-        class="relative w-[856px] max-w-[90vw] rounded-[10px] overflow-hidden shadow-2xl border flex flex-col animate-in zoom-in-95 duration-300 bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-700"
+        class="modal-content relative w-[856px] max-w-[90vw] rounded-[10px] overflow-hidden shadow-2xl border flex flex-col bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-700"
       >
         <!-- Close Button（主题感知图标色） -->
         <button
@@ -410,29 +410,36 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 过渡同步渐变 opacity + backdrop-filter 的 blur：
-   避免 opacity 过渡时 backdrop-filter 在阈值后才激活，导致"先灰后模糊"不同步。
+/* 弹窗过渡：背景遮罩瞬间满 opacity+blur（不过渡，避免 opacity 渐变时
+   backdrop-filter 在合成层下延迟激活导致"先灰后模糊"不同步），
+   内容区做 opacity+scale 淡入缩放进场。
 
-   Vue Transition 的 enter/leave class 加在根元素，但 backdrop-blur 在子层（背景遮罩），
-   故用 :deep() 让过渡穿透到背景层，使其 blur 与 opacity 同曲线从 0 增长到 4px。 */
+   根元素不过渡 opacity（否则子层 backdrop-filter 被合成层合并而延迟渲染），
+   改为背景层与内容层各自独立过渡。 */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
-  transition: opacity 0.3s ease;
+  /* 根元素仅做最小过渡占位，实际过渡在子层 */
+  transition: opacity 0.01s;
 }
+/* 背景层：瞬间满（无过渡），灰与模糊同时出现，消除不同步 */
 .modal-fade-enter-active :deep(.modal-backdrop),
 .modal-fade-leave-active :deep(.modal-backdrop) {
-  transition: backdrop-filter 0.3s ease, -webkit-backdrop-filter 0.3s ease;
+  transition: none;
 }
-.modal-fade-enter-from :deep(.modal-backdrop),
-.modal-fade-leave-to :deep(.modal-backdrop) {
-  -webkit-backdrop-filter: blur(0);
-  backdrop-filter: blur(0);
+/* 内容区：opacity + scale 淡入缩放 */
+.modal-fade-enter-active :deep(.modal-content),
+.modal-fade-leave-active :deep(.modal-content) {
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
-
-.modal-fade-enter-from,
+.modal-fade-enter-from :deep(.modal-content),
+.modal-fade-leave-to :deep(.modal-content) {
+  opacity: 0;
+  transform: scale(0.96);
+}
 .modal-fade-leave-to {
   opacity: 0;
 }
+
 
 /* 加载指示器淡入淡出 */
 .fade-enter-active,
