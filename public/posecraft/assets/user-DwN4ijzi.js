@@ -1,0 +1,1 @@
+import{a as t}from"./index-BKy4maM1.js";const o={getProfile:()=>t.get("/user/v1/profile"),updateProfile:a=>t.put("/user/v1/update",a),uploadAvatar:a=>{const e=new FormData;return e.append("avatar",a),t.post("/user/v1/avatar",e,{headers:{"Content-Type":"multipart/form-data"}})}};export{o as userApi};

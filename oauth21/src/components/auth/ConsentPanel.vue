@@ -87,3 +87,85 @@ const { t } = useI18n();
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 授权确认面板按钮样式 */
+.mlogin-submit {
+  height: 44px;
+  width: 100%;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  border: none;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mlogin-submit:hover:not(:disabled) {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+}
+
+.mlogin-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.mlogin-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* 授权面板动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bg-slate-50 {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* 响应式调整 */
+@media (max-width: 480px) {
+  .flex-gaps-3 {
+    gap: 0.75rem;
+  }
+
+  .text-xs {
+    font-size: 0.75rem;
+  }
+}
+
+/* 加载动画兼容性 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* 确保按钮在不同主题下的一致性 */
+button {
+  font-family: inherit;
+}
+
+/* 优化移动端点击体验 */
+@media (hover: none) {
+  .mlogin-submit:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+}
+</style>
