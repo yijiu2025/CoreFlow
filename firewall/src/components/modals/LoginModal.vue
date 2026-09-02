@@ -203,6 +203,8 @@ const { savedAccounts } = storeToRefs(authStore);
 
 const loading = ref(true);
 const switching = ref(false);
+/** SSO_READY 兜底超时句柄：@load 后若 N 秒内未收到 SSO_READY，强制关 loading（防握手丢失导致永久 loading） */
+let ssoReadyTimeout: number | null = null;
 const loginUrl = buildSsoLoginUrl();
 /** SSO iframe 引用（用于校验 message 来源窗口） */
 const iframeRef = ref<HTMLIFrameElement | null>(null);
@@ -245,9 +247,17 @@ watch(
   }
 );
 
-/** iframe 加载完成（真实触发，替代 setTimeout） */
+/**
+ * iframe HTML 加载完成：启动兜底超时，等待 SSO_READY（Vue 应用就绪握手）。
+ * @load 只保证 HTML 拉取完，不保证 Vue app 已 mount、监听器就绪。
+ * 收到 SSO_READY 才关 loading；@load 仅启动超时兜底，防握手丢失致永久 loading。
+ */
 function onIframeLoad() {
-  loading.value = false;
+  if (ssoReadyTimeout) clearTimeout(ssoReadyTimeout);
+  ssoReadyTimeout = window.setTimeout(() => {
+    console.warn('[LoginModal] SSO_READY 超时，兜底关闭 loading');
+    loading.value = false;
+  }, 3000);
 }
 
 function close() {
@@ -294,6 +304,17 @@ const handleMessage = async (event: MessageEvent) => {
   if (event.origin !== SSO_ORIGIN) return;
   // 2. source 必须是当前 SSO iframe 窗口（排除其他 iframe 或父窗口冒泡）
   if (!iframeRef.value || event.source !== iframeRef.value.contentWindow) return;
+
+  // SSO_READY：iframe 内 Vue 应用已 mount、监听器已就绪的可靠握手信号
+  // 收到后关 loading（比 @load 可靠）+ 清兜底超时
+  if (event.data && event.data.type === 'SSO_READY') {
+    if (ssoReadyTimeout) {
+      clearTimeout(ssoReadyTimeout);
+      ssoReadyTimeout = null;
+    }
+    loading.value = false;
+    return;
+  }
 
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
     let { token, sessionToken, user } = event.data;
@@ -350,6 +371,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('message', handleMessage);
+  if (ssoReadyTimeout) {
+    clearTimeout(ssoReadyTimeout);
+    ssoReadyTimeout = null;
+  }
   document.body.style.overflow = ''; // 确保卸载时恢复 body 滚动
 });
 </script>
