@@ -133,6 +133,7 @@ declare global {
   const useActiveElement: typeof import('@vueuse/core').useActiveElement
   const useAgreementVersion: typeof import('./composables/useAgreementVersion').useAgreementVersion
   const useAnimate: typeof import('@vueuse/core').useAnimate
+  const useAntiCache: typeof import('./composables/useAntiCache').useAntiCache
   const useArrayDifference: typeof import('@vueuse/core').useArrayDifference
   const useArrayEvery: typeof import('@vueuse/core').useArrayEvery
   const useArrayFilter: typeof import('@vueuse/core').useArrayFilter
@@ -492,6 +493,7 @@ declare module 'vue' {
     readonly useActiveElement: UnwrapRef<typeof import('@vueuse/core')['useActiveElement']>
     readonly useAgreementVersion: UnwrapRef<typeof import('./composables/useAgreementVersion')['useAgreementVersion']>
     readonly useAnimate: UnwrapRef<typeof import('@vueuse/core')['useAnimate']>
+    readonly useAntiCache: UnwrapRef<typeof import('./composables/useAntiCache')['useAntiCache']>
     readonly useArrayDifference: UnwrapRef<typeof import('@vueuse/core')['useArrayDifference']>
     readonly useArrayEvery: UnwrapRef<typeof import('@vueuse/core')['useArrayEvery']>
     readonly useArrayFilter: UnwrapRef<typeof import('@vueuse/core')['useArrayFilter']>

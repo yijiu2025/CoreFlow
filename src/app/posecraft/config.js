@@ -25,7 +25,7 @@ export default {
     token_endpoint_auth_method: 'none', // 公共客户端不认证
     application_type: 'web',
     /** 一方应用首次登录自动授权，跳过 consent 确认页 */
-    skip_consent: true,
+    skip_consent: false,
     /** scope 描述覆盖（授权页展示用，字段映射走系统 scope-registry） */
     scope_metadata: {
       profile: { name: '公开资料', desc: '获取你的用户名、昵称、头像，用于展示个人主页' },
