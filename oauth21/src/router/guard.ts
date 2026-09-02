@@ -15,7 +15,7 @@ export function sanitizeRedirect(raw: unknown): string {
 
 /** 设置路由守卫 */
 export function setupAuthGuard(router: Router): void {
-  router.beforeEach((to, _from, next) => {
+  router.beforeEach(to => {
     // authorize 页面：已登录才能访问
     if (to.meta.requiresAuth || to.meta.guestOnly === false) {
       // 这里预留了未来接入 Pinia auth store 的位置
@@ -28,14 +28,14 @@ export function setupAuthGuard(router: Router): void {
       if (!isAuthed) {
         const redirect = to.fullPath;
         const sanitizedRedirect = sanitizeRedirect(redirect);
-        return next({
+        // 返回导航目标（重定向），而非调用 next(value)
+        return {
           path: DEFAULT_REDIRECT,
           query: { redirect: sanitizedRedirect }
-        });
+        };
       }
     }
 
-    // 允许导航
-    next();
+    // 放行：不返回（或返回 undefined）
   });
 }
