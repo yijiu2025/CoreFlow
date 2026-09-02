@@ -7,7 +7,6 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
-import { postToParent } from '@/utils/parent';
 import AuthContainer from '@/components/common/AuthContainer.vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
@@ -143,10 +142,6 @@ onMounted(() => {
   showQR.value = appConfig.value.qrCodeFirst;
   if (appConfig.value.notKeepLogin) keepLogin.value = false;
   if (showQR.value) generateQR(() => showError(t('login.qr_generate_failed') || '二维码生成失败'));
-  // 检查 notLoadSsoView 参数，如果为 false 且在 iframe 中，则发送 SSO_READY 消息
-  if (route.query.notLoadSsoView !== 'true' && window.parent && window.parent !== window) {
-    postToParent({ type: 'SSO_READY' });
-  }
 });
 
 watch(showQR, val => {

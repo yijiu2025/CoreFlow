@@ -64,7 +64,8 @@ const MobileLogin = defineAsyncComponent(() => import('../../app/login/index.vue
 
 // 组件挂载后执行
 onMounted(() => {
-  // 如果需要发送 SSO 消息且组件已加载，通知父窗口登录页面已准备就绪
+  // SSO_READY 统一在此发送（dispatcher 入口），子组件 StandardLogin/MiniLogin 不再重复发。
+  // 父窗口收到后关 loading + 同步主题（见 posecraft/firewall LoginModal handleMessage）。
   if (shouldSendSSOMessage.value) {
     postToParent({ type: 'SSO_READY' });
     console.warn('[SSO] 发送 SSO_READY 消息到父窗口');
