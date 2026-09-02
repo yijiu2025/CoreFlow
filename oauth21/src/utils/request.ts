@@ -11,8 +11,7 @@ const service = axios.create({
 });
 
 /* ========== 请求拦截 ========== */
-import { getDeviceFingerprint, isDeviceFingerprintEnabled } from './device-fingerprint';
-import { getStableDeviceId } from './device-id';
+import { getDeviceFingerprint, isDeviceFingerprintEnabled, getStableDeviceId, handleDeviceSyncInResponse } from '@nodeservers/shared-device';
 import { generateNonce } from './crypto';
 import { generateSignWithKey, serializeParamsForSign, getAppKey } from './sign';
 import { reportError } from '../composables/useErrorReporter';
@@ -85,8 +84,8 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   res => {
     // 设备 ID 同步（从响应头同步）
-    import('./device-sync').then(({ handleDeviceSyncInResponse }) => {
-      handleDeviceSyncInResponse(res);
+    import('@nodeservers/shared-device').then(({ handleDeviceSyncInResponse: sync }) => {
+      sync(res);
     });
 
     // 假设后端返回结构为 { code, message, data }

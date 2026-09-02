@@ -54,41 +54,83 @@ function sidHash(sessionId) {
 }
 
 /**
- * 踢掉同设备类型的旧会话（单设备单登录）
+ * 踢单条 session 的公共逻辑
+ *
+ * 删 Redis session + 失效 sid_r + DB 标记 revoked + 清 user_sessions 索引 + 写 SessionLog。
+ * 供 kickByDeviceType / kickByDeviceId / kickUser 等复用，保证踢出路径一致。
+ *
+ * @param {number} userId 用户 ID
+ * @param {string} sid raw sessionId（user_sessions 索引里的值）
+ * @param {object} sd 该 sid 的 Redis session 数据（含 familyId/deviceId/deviceType/appId）
+ * @param {string} appId 归属应用（写日志用）
+ * @param {object} logDetails SessionLog.details 额外字段
+ */
+async function _kickSession(userId, sid, sd, appId, logDetails) {
+  const SessionToken = getModel('SessionToken');
+  const SessionLog = getModel('SessionLog');
+  const familyId = sd?.familyId || null;
+  await sessionStore.delete(sid);
+  await deleteRefreshTokensForSession(userId, sid, familyId);
+  await SessionToken.update({ revoked: true }, { where: { token: sidHash(sid) } });
+  await userSessionsStore.zRem(String(userId), [sid]);
+  await SessionLog.create({
+    user_id: userId,
+    event: 'KICK',
+    app_id: appId,
+    details: { ...logDetails, kickedSessionId: sid }
+  });
+}
+
+/**
+ * 踢掉同设备类型的旧会话（单设备单登录，按 deviceType 粗粒度批量踢）
  * @param {number} userId 用户 ID
  * @param {string} appId 应用 ID
  * @param {string} deviceType 设备类型
  */
 async function kickByDeviceType(userId, appId, deviceType) {
-  const SessionToken = getModel('SessionToken');
-  const SessionLog = getModel('SessionLog');
   const target = deviceType || DEVICE_TYPE.BROWSER;
-
-  // 遍历用户会话索引（raw sid），逐个检查 Redis session 的 deviceType/appId
-  // 注意：DB 只存 sha256(sid) 无法反查 raw sid，必须用 user_sessions 逆索引定位
   const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
   for (const sid of sids) {
     const sd = await sessionStore.get(sid);
     if (!sd) {
-      // Redis 已过期，清理索引
       await userSessionsStore.zRem(String(userId), [sid]);
       continue;
     }
     if (sd.appId === appId && (sd.deviceType || DEVICE_TYPE.BROWSER) === target) {
-      const familyId = sd.familyId || null;
-      // 删 Redis session + 失效 sid_r + DB 标记 revoked + 清索引
-      await sessionStore.delete(sid);
-      await deleteRefreshTokensForSession(userId, sid, familyId);
-      await SessionToken.update({ revoked: true }, { where: { token: sidHash(sid) } });
-      await userSessionsStore.zRem(String(userId), [sid]);
-      await SessionLog.create({
-        user_id: userId,
-        event: 'KICK',
-        app_id: appId,
-        details: { reason: 'single_device_login', deviceType: target, kickedSessionId: sid }
-      });
+      await _kickSession(userId, sid, sd, appId, { reason: 'single_device_login', deviceType: target });
     }
   }
+}
+
+/**
+ * 按 device_id 精准踢单设备会话
+ *
+ * 区别于 kickByDeviceType（按设备类型批量踢，同类型多设备会误踢），
+ * 本函数只踢 user_id+device_id 指定的那台设备，用于"管理端远程踢单设备"等场景。
+ * session_tokens 有 device_id 索引，但 DB 只存 sha256(sid) 无法反查 raw sid，
+ * 故仍走 user_sessions 逆索引遍历，按 sd.deviceId 精确匹配。
+ *
+ * @param {number} userId 用户 ID
+ * @param {string} appId 应用 ID
+ * @param {string} deviceId 设备 ID（结构化 WEB-... 形式）
+ * @returns {number} 踢出的会话数
+ */
+async function kickByDeviceId(userId, appId, deviceId) {
+  if (!deviceId) return 0;
+  let kicked = 0;
+  const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
+  for (const sid of sids) {
+    const sd = await sessionStore.get(sid);
+    if (!sd) {
+      await userSessionsStore.zRem(String(userId), [sid]);
+      continue;
+    }
+    if (sd.appId === appId && sd.deviceId === deviceId) {
+      await _kickSession(userId, sid, sd, appId, { reason: 'kick_by_device_id', deviceId });
+      kicked++;
+    }
+  }
+  return kicked;
 }
 
 /**
@@ -539,6 +581,20 @@ async function getSession(params) {
   const user = token.user;
   const { roles, permissions } = await loadUserPermissions(user.id, token.app_id);
 
+  // 从 session_tokens 表补 device_fingerprint（DB 降级时 token 不含指纹，查最新一条补上，
+  // 否则 detectSessionRisk 走 no_baseline 降级 info 放行，风险检测形同虚设）
+  let deviceFingerprint = null;
+  if (token.device_id) {
+    const SessionToken = getModel('SessionToken');
+    const st = await SessionToken.findOne({
+      where: { device_id: token.device_id, user_id: user.id },
+      order: [['last_active', 'DESC']]
+    });
+    if (st?.device_fingerprint) {
+      deviceFingerprint = st.device_fingerprint;
+    }
+  }
+
   const sessionData = {
     userId: user.id,
     uid: user.uid,
@@ -551,6 +607,7 @@ async function getSession(params) {
     permissions,
     ip: token.ip,
     deviceId: token.device_id,
+    deviceFingerprint, // 降级补的指纹基准（查不到时为 null，detectSessionRisk 走 info 降级）
     userAgent: token.user_agent,
     loginAt: Math.floor(token.createdAt.getTime() / 1000),
     lastActiveAt: Math.floor(Date.now() / 1000),
@@ -1118,6 +1175,7 @@ export {
   checkMaxSessions,
   kickSession,
   kickAllSessions,
+  kickByDeviceId,
   createSession,
   getSession,
   refreshSession,
