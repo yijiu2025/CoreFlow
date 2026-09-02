@@ -3,7 +3,7 @@
     <div v-if="isOpen" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
       <!-- Backdrop（主题感知遮罩） -->
       <div
-        class="absolute inset-0 bg-slate-950/60 dark:bg-black/70 backdrop-blur-sm"
+        class="modal-backdrop absolute inset-0 bg-slate-950/60 dark:bg-black/70 backdrop-blur-sm"
         @click="close"
       ></div>
 
@@ -410,9 +410,23 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 过渡同步渐变 opacity + backdrop-filter 的 blur：
+   避免 opacity 过渡时 backdrop-filter 在阈值后才激活，导致"先灰后模糊"不同步。
+
+   Vue Transition 的 enter/leave class 加在根元素，但 backdrop-blur 在子层（背景遮罩），
+   故用 :deep() 让过渡穿透到背景层，使其 blur 与 opacity 同曲线从 0 增长到 4px。 */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
   transition: opacity 0.3s ease;
+}
+.modal-fade-enter-active :deep(.modal-backdrop),
+.modal-fade-leave-active :deep(.modal-backdrop) {
+  transition: backdrop-filter 0.3s ease, -webkit-backdrop-filter 0.3s ease;
+}
+.modal-fade-enter-from :deep(.modal-backdrop),
+.modal-fade-leave-to :deep(.modal-backdrop) {
+  -webkit-backdrop-filter: blur(0);
+  backdrop-filter: blur(0);
 }
 
 .modal-fade-enter-from,
