@@ -6,10 +6,10 @@
  * 通过 x-device-id 头主动发送。后端 getDeviceId 优先读头。
  *
  * ID 结构：{PLATFORM}-{ENCODED_TIMESTAMP}-{RANDOM_SUFFIX}
- * 示例：WEB-a3K7mP9q2R-8s4T
+ * 示例：WEB-DaBOSbNdSuc-8s4T（ENCODED_TIMESTAMP 为 11 字符 Base62）
  *
  * - PLATFORM: 设备平台（WEB/IOS/ANDROID）
- * - ENCODED_TIMESTAMP: Base62 编码的时间戳（毫秒级）+ 位混淆
+ * - ENCODED_TIMESTAMP: Base62 编码的时间戳（毫秒级）+ 64 位魔数位混淆，固定 11 字符
  * - RANDOM_SUFFIX: 6 字符 Base62 随机码（高熵值）
  *
  * 同设备跨账号复用：localStorage 不随账号退出清除，登录 A 再登录 B
@@ -21,13 +21,14 @@
  * @author yijiu2025
  * @since 2026-08-25
  * @since 2026-09-01 结构化方案（加密时间戳 + 高唯一性）
+ * @since 2026-09-03 长度注释对齐实际编码输出（11 字符，与后端校验一致）
  */
 
 const STORAGE_KEY = 'cf_device_id';
 
 let cachedId: string | null = null;
 const BASE62_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-const ENCODED_TS_LENGTH = 8; // 8 字符 Base62 时间戳（足够覆盖未来 100 年）
+const ENCODED_TS_LENGTH = 11; // 64 位魔数 XOR 后 Base62 固定产出 11 字符（padStart 补零不生效，8 字符从未实现）
 const RANDOM_SUFFIX_LENGTH = 6; // 6 字符 Base62 随机码
 
 /**
@@ -52,9 +53,9 @@ export function getStableDeviceId(): string {
 /**
  * 生成结构化设备 ID
  * 格式：{PLATFORM}-{ENCODED_TIMESTAMP}-{RANDOM_SUFFIX}
- * 示例：WEB-a3K7mP9q-8s4T
+ * 示例：WEB-DaBOSbNdSuc-8s4T
  *
- * @returns 20-22 字符的结构化设备 ID
+ * @returns 约 20-22 字符的结构化设备 ID
  */
 function generateStructuredDeviceId(): string {
   const platform = getPlatform();
@@ -85,7 +86,7 @@ function getPlatform(): string {
  * 3. Base62 编码
  *
  * @param timestamp 毫秒时间戳
- * @returns 8 字符 Base62 编码字符串
+ * @returns 11 字符 Base62 编码字符串
  */
 function encodeTimestamp(timestamp: number): string {
   const OFFSET = 1704067200000n; // 2024-01-01 的毫秒时间戳（BigInt）
@@ -101,7 +102,7 @@ function encodeTimestamp(timestamp: number): string {
 
 /**
  * 解码 Base62 字符串为时间戳（仅供调试使用）
- * @param encoded 8 字符 Base62 编码字符串
+ * @param encoded 11 字符 Base62 编码字符串
  * @returns 毫秒时间戳
  */
 export function decodeTimestamp(encoded: string): number {

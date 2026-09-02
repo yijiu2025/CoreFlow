@@ -4,17 +4,19 @@
  * 处理结构化设备 ID 的验证、规范化、安全校验
  *
  * ID 格式：{PLATFORM}-{ENCODED_TIMESTAMP}-{RANDOM_SUFFIX}
- * 示例：WEB-a3K7mP9q-8s4T
+ * 示例：WEB-DaBOSbNdSuc-8s4T（ENCODED_TIMESTAMP 为 11 字符 Base62）
  *
  * @author yijiu2025
  * @since 2026-09-01
+ * @since 2026-09-03 校验长度对齐实际编码输出（11 字符），移除不可达的熵值检查
  */
 
 import crypto from 'node:crypto';
 
 const BASE62_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-const PLATFORM_LENGTH = 3;
-const ENCODED_TS_LENGTH = 8;
+// 64 位魔数 XOR 后的值约 1.139e19，Base62 编码固定产出 11 字符（padStart 补零不生效），
+// 校验长度必须与编码输出一致，否则所有 ID（含服务端自生成）都过不了校验
+const ENCODED_TS_LENGTH = 11;
 const RANDOM_SUFFIX_LENGTH = 6;
 const MAX_AGE_DAYS = 365; // 设备 ID 最长有效期（1 年）
 
@@ -93,16 +95,8 @@ export async function validateDeviceId(deviceId) {
     result.platform = platform;
     result.createdAt = createdAt;
     result.ageDays = ageDays;
-
   } catch (error) {
     result.error = `时间戳解码失败：${error.message}`;
-    return result;
-  }
-
-  // 6. 可选：熵值校验（防止弱随机）
-  const entropyScore = calculateEntropy(randomSuffix);
-  if (entropyScore < 30) { // 低于 30 位熵视为弱随机
-    result.error = '随机后缀熵值过低（可能伪造）';
     return result;
   }
 
@@ -171,11 +165,11 @@ function detectPlatform(userAgent) {
 /**
  * 加密时间戳为 Base62 字符串
  * @param {number} timestamp - 毫秒时间戳
- * @returns {string} 8 字符 Base62 编码
+ * @returns {string} 11 字符 Base62 编码
  */
 function encodeTimestamp(timestamp) {
   const OFFSET = 1704067200000n; // 2024-01-01
-  const MAGIC = 0x9E3779B97F4A7C15n;
+  const MAGIC = 0x9e3779b97f4a7c15n;
 
   const adjusted = BigInt(timestamp) - OFFSET;
   const obfuscated = adjusted ^ MAGIC;
@@ -186,12 +180,12 @@ function encodeTimestamp(timestamp) {
 
 /**
  * 解码 Base62 字符串为时间戳
- * @param {string} encoded - 8 字符 Base62 编码
+ * @param {string} encoded - 11 字符 Base62 编码
  * @returns {number} 毫秒时间戳
  */
 function decodeTimestamp(encoded) {
   const OFFSET = 1704067200000n;
-  const MAGIC = 0x9E3779B97F4A7C15n;
+  const MAGIC = 0x9e3779b97f4a7c15n;
 
   const obfuscated = fromBase62(encoded);
   const adjusted = obfuscated ^ MAGIC;
@@ -262,33 +256,6 @@ function fromBase62(str) {
 function isBase62(str) {
   const pattern = /^[0-9A-Za-z]+$/;
   return pattern.test(str);
-}
-
-/**
- * 计算字符串的熵值（估计随机性质量）
- * @param {string} str - 字符串
- * @returns {number} 熵值（位）
- */
-function calculateEntropy(str) {
-  const freq = {};
-  const length = str.length;
-
-  // 统计字符频率
-  for (const char of str) {
-    freq[char] = (freq[char] || 0) + 1;
-  }
-
-  // 计算 Shannon 熵
-  let entropy = 0;
-  for (const count of Object.values(freq)) {
-    const probability = count / length;
-    if (probability > 0) {
-      entropy -= probability * Math.log2(probability);
-    }
-  }
-
-  // 乘以字符集大小（62）得到总位数
-  return entropy * Math.log2(BASE62_CHARS.length);
 }
 
 /**

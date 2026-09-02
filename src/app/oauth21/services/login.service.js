@@ -29,7 +29,11 @@ import { AuthorizationService } from './authorization.service.js';
 import deactivationService from '../../user/services/deactivation.service.js';
 import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
 import { detectLoginEnvironmentAnomaly } from '../../../framework/auth/anomaly-detector.js';
-import { detectPlatform, computeDeviceFingerprint, getDeviceIdAndWrapResponse } from '../../../framework/auth/device.js';
+import {
+  detectPlatform,
+  computeDeviceFingerprint,
+  getDeviceIdAndWrapResponse
+} from '../../../framework/auth/device.js';
 
 const authService = new AuthorizationService();
 
@@ -500,25 +504,28 @@ export async function confirmDirectConsent(request, reply, fastify) {
     });
   }
 
+  // 查真实 client 传入（issueDirectTokens 期望 client 对象，传 clientId 字符串会导致
+  // client.client_id 为 undefined，saveApproval 报 "app_id has invalid undefined value"）
+  const client = await ClientDao.findById(session.clientId);
+  if (!client) {
+    return reply.code(400).send({
+      code: 400,
+      message: '客户端不存在',
+      data: null
+    });
+  }
+
   await ApprovalDao.saveApproval({
     uid: user.id,
-    appId: session.clientId,
+    appId: client.client_id,
     scopes: session.scopes
   });
 
   await consentStore.delete(consentKey);
 
   try {
-    request.body.client_id = session.clientId;
-    const result = await issueDirectTokens(
-      user,
-      session.clientId,
-      session.scopeStr,
-      session.oidcNonce,
-      request,
-      reply,
-      fastify
-    );
+    request.body.client_id = client.client_id;
+    const result = await issueDirectTokens(user, client, session.scopeStr, session.oidcNonce, request, reply, fastify);
     return buildTokenResponse(result, '授权确认成功');
   } catch (err) {
     if (err.message === 'invalid_client') {

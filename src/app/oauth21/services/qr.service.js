@@ -17,6 +17,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import UserDao from '../dao/user.dao.js';
+import ClientDao from '../dao/client.dao.js';
 import { issueDirectTokens } from './token-issuer.service.js';
 import { buildTokenResponse } from './cookies.service.js';
 
@@ -140,15 +141,12 @@ export async function getQrStatus(qrStore, { qrKey }, request, reply, fastify) {
 
     try {
       // 用存储的 client_id/scope 签发（防 PC 端轮询时调包 client_id 给恶意应用）
-      const result = await issueDirectTokens(
-        user,
-        data.clientId,
-        data.scope,
-        data.oidcNonce,
-        request,
-        reply,
-        fastify
-      );
+      // issueDirectTokens 期望 client 对象，必须先按存储的 client_id 查库
+      const client = await ClientDao.findById(data.clientId);
+      if (!client) {
+        return { code: 400, message: '客户端不存在', data: { status: 'ERROR' } };
+      }
+      const result = await issueDirectTokens(user, client, data.scope, data.oidcNonce, request, reply, fastify);
       await qrStore.delete(qrKey);
       return buildTokenResponse(result, '扫码登录成功');
     } catch (err) {
