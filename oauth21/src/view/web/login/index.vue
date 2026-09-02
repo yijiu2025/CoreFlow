@@ -24,11 +24,11 @@ const {
 } = useAntiCache({
   autoRefresh: true,
   refreshInterval: 5 * 60 * 1000, // 5分钟刷新一次
-  enableDebug: true
+  enableDebug: false
 });
 
-// 调试面板显示状态
-const showDebugPanel = ref(true);
+// 调试面板显示状态：由 enableDebug 间接控制（debugInfo 为 undefined 时不显示）
+const showDebugPanel = ref(!!debugInfo);
 
 const stie = ref('02'); // 站点标识占位
 const sign = ref(''); // 签名占位（当前未启用）
