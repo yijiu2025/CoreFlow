@@ -19,55 +19,12 @@ import { generateToken } from '../crypto/tokens.js';
 import ApprovalDao from '../dao/approval.dao.js';
 import TokenDao from '../dao/token.dao.js';
 import config from '../config/config.js';
-import { detectDeviceType, generateDeviceCookie, detectPlatform, getDeviceId } from '../../../framework/auth/device.js';
+import { detectDeviceType, getDeviceId } from '../../../framework/auth/device.js';
 import { loadUserPermissions } from '../../../framework/auth/permission-loader.js';
 import { getStore } from '../../../framework/redis/index.js';
 import { setAuthCookies } from './cookies.service.js';
 import { resolveFieldSet } from '../config/scope-registry.js';
 import { DEFAULT_SCOPE } from '../config/constants.js';
-
-/** device_id cookie 名（与 device.js getDeviceId 读的 cookie 名一致） */
-const DEVICE_COOKIE_NAME = 'device_id';
-/** device_id cookie 有效期：10 年（设备标识长期稳定） */
-const DEVICE_COOKIE_MAX_AGE = 10 * 365 * 24 * 60 * 60;
-
-/**
- * 解析稳定的设备标识并回写 cookie
- *
- * 流程（保证首次登录就拿到稳定 device_id，跨账号复用）：
- * 1. cookie 有 device_id → 直接用（跨账号共用同一设备码）
- * 2. x-device-id 头有 → 用头值（前端主动传）
- * 3. 都没有（首次登录）→ 生成稳定 UUID，本次就用它（带平台前缀），同时写回 cookie
- *    ——不用 getDeviceId 的 UA 兜底（不稳定，浏览器更新会变）
- *
- * @param {import('fastify').FastifyRequest} request
- * @param {import('fastify').FastifyReply} [reply] - 第一方登录时传入用于 setCookie；SSO iframe 分支可不传
- * @returns {string} 稳定的 device_id（形如 web-xxxx）
- */
-function resolveDeviceId(request, reply) {
-  const platform = detectPlatform(request);
-  const cookieVal = request?.cookies?.[DEVICE_COOKIE_NAME];
-  const headerVal = request?.headers?.['x-device-id'] || '';
-
-  // 1. 优先 cookie（跨账号共用）2. 其次 header（前端主动传）
-  const stableRaw = cookieVal || headerVal;
-  if (stableRaw) {
-    return stableRaw.includes('-') ? stableRaw : `${platform}-${stableRaw}`;
-  }
-
-  // 3. 首次登录：生成稳定 UUID，本次就用它，同时写回 cookie（后续请求自动带上）
-  const stable = generateDeviceCookie();
-  if (reply) {
-    reply.setCookie(DEVICE_COOKIE_NAME, stable, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: DEVICE_COOKIE_MAX_AGE
-    });
-  }
-  return `${platform}-${stable}`;
-}
 
 /** 认证调试开关（与 auth/index.js 一致，DEBUG_AUTH=true 时输出） */
 const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';

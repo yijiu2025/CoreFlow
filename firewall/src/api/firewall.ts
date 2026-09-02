@@ -8,6 +8,7 @@
  * - createHttp() 工厂：可创建独立实例（刷新 token 时避免递归拦截）
  */
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import { getStableDeviceId, handleDeviceSyncInResponse, isDeviceFingerprintEnabled, getDeviceFingerprint } from '@nodeservers/shared-device';
 import type {
   MonitorSummary,
   SettingsResponse,
@@ -108,10 +109,23 @@ export function createHttp(baseURL?: string): AxiosInstance {
   });
 
   // 请求拦截：有 token 时带 Bearer header，否则依赖 Session Cookie
-  instance.interceptors.request.use(config => {
+  instance.interceptors.request.use(async config => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // 稳定设备标识注入（跨域 iframe cookie 不可靠，改用 x-device-id 头主动发送，与 oauth21 对齐）
+    if (config.headers) {
+      config.headers['x-device-id'] = getStableDeviceId();
+    }
+    // 设备指纹注入（仅 VITE_DEVICE_FINGERPRINT=true 时，配合后端验证码/consent 指纹增强）
+    if (isDeviceFingerprintEnabled() && config.headers) {
+      try {
+        const deviceFp = await getDeviceFingerprint();
+        if (deviceFp) config.headers['X-Device-Fp'] = deviceFp;
+      } catch {
+        // 采集失败不影响主流程
+      }
     }
     // withCredentials: true 确保 Session Cookie 自动携带
     return config;
@@ -120,6 +134,8 @@ export function createHttp(baseURL?: string): AxiosInstance {
   // 响应拦截
   instance.interceptors.response.use(
     (response: AxiosResponse) => {
+      // 设备 ID 同步（从响应头 X-Device-Id / X-Device-Id-Updated 同步到 localStorage）
+      handleDeviceSyncInResponse(response);
       const res = response.data;
       if (res.code === 200) return res.data;
       const error: ApiError = new Error(res.message || 'API Error');

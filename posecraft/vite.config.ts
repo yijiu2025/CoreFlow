@@ -51,7 +51,8 @@ export default defineConfig({
   base: '/posecraft/',
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@nodeservers/shared-device': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url))
     }
   },
   server: {

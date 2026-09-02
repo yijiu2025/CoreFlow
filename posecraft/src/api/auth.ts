@@ -3,6 +3,7 @@
  * 接入 CoreFlow OAuth21 授权
  */
 import service from '@/utils/request';
+import { getStableDeviceId } from '@nodeservers/shared-device';
 
 export const authApi = {
   /** 登录 */
@@ -56,6 +57,7 @@ export const authApi = {
   /** 风险人机验证（请求被 __risk__ 拦截后调用，带 x-verify-token 头） */
   verifyChallenge: (verifyToken: string, captchaKey?: string) =>
     service.post('/auth/v1/verify-challenge', { captchaKey }, {
-      headers: { 'x-verify-token': verifyToken }
+      // 显式带 x-device-id：与 verified:${userId}:${deviceId} 标记一致，防拦截器跳过
+      headers: { 'x-verify-token': verifyToken, 'x-device-id': getStableDeviceId() }
     } as any)
 };

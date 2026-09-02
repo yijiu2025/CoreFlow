@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import { getStableDeviceId } from '@nodeservers/shared-device';
 import { rsaEncrypt, clearPublicKeyCache, buildEncryptedLoginPayload } from '@/utils/crypto';
 
 /**
@@ -76,7 +77,8 @@ export const authApi = {
    */
   async verifyChallenge(verifyToken: string, captchaKey?: string) {
     return request.post('/auth/v1/verify-challenge', { captchaKey }, {
-      headers: { 'x-verify-token': verifyToken }
+      // 显式带 x-device-id：与 verified:${userId}:${deviceId} 标记一致，防拦截器跳过
+      headers: { 'x-verify-token': verifyToken, 'x-device-id': getStableDeviceId() }
     });
   },
 

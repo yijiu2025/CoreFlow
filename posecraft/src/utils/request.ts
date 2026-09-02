@@ -3,6 +3,7 @@
  * 接入 CoreFlow 认证
  */
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
+import { getStableDeviceId, handleDeviceSyncInResponse, isDeviceFingerprintEnabled, getDeviceFingerprint } from '@nodeservers/shared-device';
 
 const TOKEN_KEY = 'posecraft_token';
 
@@ -76,9 +77,22 @@ export function createHttp(baseURL?: string): AxiosInstance {
   });
 
   // 请求拦截
-  instance.interceptors.request.use(config => {
+  instance.interceptors.request.use(async config => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) config.headers.Authorization = `Bearer ${token}`;
+    // 稳定设备标识注入（跨域 iframe cookie 不可靠，改用 x-device-id 头主动发送，与 oauth21 对齐）
+    if (config.headers) {
+      config.headers['x-device-id'] = getStableDeviceId();
+    }
+    // 设备指纹注入（仅 VITE_DEVICE_FINGERPRINT=true 时，配合后端验证码/consent 指纹增强）
+    if (isDeviceFingerprintEnabled() && config.headers) {
+      try {
+        const deviceFp = await getDeviceFingerprint();
+        if (deviceFp) config.headers['X-Device-Fp'] = deviceFp;
+      } catch {
+        // 采集失败不影响主流程
+      }
+    }
     return config;
   });
 
@@ -126,6 +140,8 @@ async function handleRiskBlock(error: any): Promise<any> {
 
   instance.interceptors.response.use(
     response => {
+      // 设备 ID 同步（从响应头 X-Device-Id / X-Device-Id-Updated 同步到 localStorage）
+      handleDeviceSyncInResponse(response);
       const res = response.data;
       // 风险拦截：403 + __risk__.warn → 弹人机验证弹窗（HTTP 403 走 response 分支需在此判断）
       if (res?.code === 403 && res?.__risk__?.level === 'warn') {

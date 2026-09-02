@@ -25,7 +25,8 @@ export default defineConfig({
   base: '/firewall/',
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@nodeservers/shared-device': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url))
     }
   },
   server: {

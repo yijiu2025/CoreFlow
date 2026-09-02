@@ -12,10 +12,12 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@nodeservers/shared-device": ["../packages/shared-device/src/index.ts"],
+      "@nodeservers/shared-device/*": ["../packages/shared-device/src/*"]
     },
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "../packages/shared-device/src/**/*.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

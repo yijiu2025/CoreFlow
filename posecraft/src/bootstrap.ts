@@ -9,7 +9,11 @@ import router from './router';
 import i18n from './i18n';
 import { setupDirectives } from './directives';
 import { useUserSettings } from './stores/userSettings';
+import { initDeviceSync } from '@nodeservers/shared-device';
 import './assets/styles/main.css';
+
+// 设备 ID 全局同步初始化（跨标签页 storage 事件监听 + 变更回调注册）
+initDeviceSync();
 
 const app = createApp(App);
 const pinia = createPinia();

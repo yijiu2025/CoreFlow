@@ -16,6 +16,7 @@
 
 import crypto from 'node:crypto';
 import { verifyAndNormalizeDeviceId, generateServerSideDeviceId } from './device-id-service.js';
+import { COOKIE_OPTIONS } from './cookie.js';
 
 /**
  * 设备类型常量（语义值，存 session.deviceType）
@@ -106,6 +107,11 @@ export async function getDeviceId(request) {
 
 /**
  * 获取设备 ID 并包装响应
+ *
+ * Cookie 选项统一用 COOKIE_OPTIONS.DEVICE（httpOnly:true / secure:按生产 / 10年），
+ * 与 bind-session 写业务域 device_id cookie 一致，避免双套选项导致属性不一致。
+ * 前端改用 x-device-id 头 + localStorage 持久化后不依赖读 cookie，httpOnly 无副作用。
+ *
  * @param {import('fastify').FastifyRequest} request
  * @param {import('fastify').FastifyReply} reply
  * @returns {string} 设备 ID
@@ -116,14 +122,8 @@ export async function getDeviceIdAndWrapResponse(request, reply) {
   // 1. 写入响应头（前端可以读取）
   reply.header('X-Device-Id', deviceId);
 
-  // 2. 写入 Cookie（后续请求自动带上）
-  reply.setCookie('device_id', deviceId, {
-    maxAge: 365 * 24 * 60 * 60 * 1000, // 1 年
-    httpOnly: false, // 允许前端 JS 读取
-    path: '/',
-    sameSite: 'Lax',
-    secure: false // 开发环境不安全，生产环境应设为 true
-  });
+  // 2. 写入 Cookie（后续请求自动带上，统一选项与 bind-session 一致）
+  reply.setCookie('device_id', deviceId, COOKIE_OPTIONS.DEVICE);
 
   // 3. 如果是首次生成（无效的 cookie），通过响应体通知前端更新
   const cookieDeviceId = request?.cookies?.device_id || '';
@@ -132,17 +132,6 @@ export async function getDeviceIdAndWrapResponse(request, reply) {
   }
 
   return deviceId;
-}
-
-/**
- * Cookie device_id 用的稳定随机值（向后兼容）
- *
- * 新版本使用结构化 ID，此函数仅用于向后兼容旧版本客户端。
- *
- * @returns {string} UUID v4
- */
-export function generateDeviceCookie() {
-  return crypto.randomUUID();
 }
 
 /**
