@@ -18,7 +18,7 @@
 import fp from 'fastify-plugin';
 import { AsyncLocalStorage } from 'async_hooks';
 import { getSession } from './session.js';
-import { COOKIE_SID } from './cookie.js';
+import { COOKIE_SID, COOKIE_OPTIONS } from './cookie.js';
 import { verify } from '../jwt/index.js';
 import { findUserById } from '../../shared/user-dao.js';
 import { loadUserPermissions } from './permission-loader.js';
@@ -256,6 +256,14 @@ export default fp(async app => {
       // info（IP 变/无基准）→ 不拦，记 request.state.risk 供响应体带上验证信息（前端弹框但不阻断读）
       try {
         const deviceId = await getDeviceId(request);
+        // 设备 ID 与客户端上报不一致（旧格式 UUID / 无效 ID 被替换）→ 回写响应，
+        // 前端 device-sync 读取 X-Device-Id 同步 localStorage，否则客户端永远发旧 ID，
+        // 服务端每次换新随机 ID，指纹每请求都变，人机验证死循环
+        const clientDeviceId = request.headers['x-device-id'] || request.cookies?.device_id || '';
+        if (deviceId && deviceId !== clientDeviceId) {
+          reply.header('X-Device-Id', deviceId);
+          reply.setCookie('device_id', deviceId, COOKIE_OPTIONS.DEVICE);
+        }
         const fingerprint = computeDeviceFingerprint({
           deviceId,
           userAgent: request.headers['user-agent'] || '',

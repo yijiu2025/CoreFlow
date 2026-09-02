@@ -10,7 +10,7 @@
 
 | 名称 | 性质 | 绑定 | 格式 | 用途 |
 |---|---|---|---|---|
-| **device_id** | 设备级稳定标识 | 跨账号共用（同设备登录 A/B 用同一个） | 结构化 `WEB-a3K7mP9q-8s4T`（平台-加密时间戳-随机后缀） | 设备识别、session_tokens 幂等键、风险基准定位 |
+| **device_id** | 设备级稳定标识 | 跨账号共用（同设备登录 A/B 用同一个） | 结构化 `WEB-DaBOSbNdSuc-8s4T`（平台-11字符加密时间戳-随机后缀） | 设备识别、session_tokens 幂等键、风险基准定位 |
 | **deviceFingerprint** | 复合哈希 | 绑定"设备+账号"（换设备或换账号都会变） | `sha256(device_id｜uid｜UA｜platformHint)` 前 32 位 | 风险检测基准，突变 → 账号被盗/换设备 |
 | **x-device-fp**（前端 canvas/WebGL 指纹） | 浏览器特征哈希 | 绑定浏览器实例 | `sha256(canvas｜webgl)` 前 32 位 | 增强 consentKey/验证码的客户端绑定，**默认不启用**（`VITE_DEVICE_FINGERPRINT=true` 才开） |
 

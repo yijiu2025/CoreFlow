@@ -4,9 +4,9 @@
  * 统一管理设备类型判定与设备标识生成：
  * - detectDeviceType：返回设备类型语义值（存 session.deviceType 字段）
  * - detectPlatform：返回平台短前缀（web/android/ios/miniapp/desktop/api）
- * - getDeviceId：验证并规范化结构化设备 ID（WEB-a3K7mP9q-8s4T）
+ * - getDeviceId：验证并规范化结构化设备 ID（WEB-DaBOSbNdSuc-8s4T）
  *
- * device_id 采用结构化格式（如 WEB-a3K7mP9q-8s4T），前端生成后端验证，
+ * device_id 采用结构化格式（如 WEB-DaBOSbNdSuc-8s4T），前端生成后端验证，
  * 若无效则生成新 ID，确保唯一性和安全性。
  *
  * @author yijiu
@@ -64,7 +64,7 @@ export function detectPlatform(request) {
  * 验证并规范化设备标识
  *
  * 混合方案：
- * 1. 前端生成临时结构化 ID（WEB-a3K7mP9q-8s4T）
+ * 1. 前端生成临时结构化 ID（WEB-DaBOSbNdSuc-8s4T）
  * 2. 后端验证格式、安全性、有效性
  * 3. 无效则生成新 ID 并返回
  *
@@ -74,7 +74,7 @@ export function detectPlatform(request) {
  *   3. 服务端生成（兜底）
  *
  * @param {import('fastify').FastifyRequest} request
- * @returns {string} 形如 `WEB-a3K7mP9q-8s4T`
+ * @returns {string} 形如 `WEB-DaBOSbNdSuc-8s4T`
  */
 export async function getDeviceId(request) {
   const userAgent = request?.headers?.['user-agent'] || '';

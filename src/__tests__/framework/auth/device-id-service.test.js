@@ -7,19 +7,23 @@
  * @since 2026-09-01
  */
 
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect } from 'vitest';
 import {
   validateDeviceId,
   verifyAndNormalizeDeviceId,
   generateServerSideDeviceId,
   parseDeviceId
-} from '../../../src/framework/auth/device-id-service.js';
+} from '../../../framework/auth/device-id-service.js';
 
 describe('设备 ID 服务测试', () => {
   const validUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
 
+  // 用生成器产出合法的时间戳段/随机后缀（时间戳段为 11 字符 Base62），
+  // 保证测试数据与实现一致，避免手写示例再次和编码输出漂移
+  const [, VALID_TS, VALID_SUFFIX] = generateServerSideDeviceId(validUserAgent).split('-');
+  const validId = `WEB-${VALID_TS}-${VALID_SUFFIX}`;
+
   test('验证有效的设备 ID', async () => {
-    const validId = 'WEB-a3K7mP9q-8s4T';
     const result = await validateDeviceId(validId);
 
     expect(result.valid).toBe(true);
@@ -33,9 +37,9 @@ describe('设备 ID 服务测试', () => {
     const invalidIds = [
       'invalid-format',
       'WEB-12345',
-      'INVALID-a3K7mP9q-8s4T',
-      'WEB-a3K7mP9q', // 缺少随机后缀
-      'WEB-a3K7mP9q-8s4T-extra' // 过多部分
+      `INVALID-${VALID_TS}-${VALID_SUFFIX}`,
+      `WEB-${VALID_TS}`, // 缺少随机后缀
+      `WEB-${VALID_TS}-${VALID_SUFFIX}-extra` // 过多部分
     ];
 
     for (const invalidId of invalidIds) {
@@ -47,9 +51,9 @@ describe('设备 ID 服务测试', () => {
 
   test('拒绝非法字符', async () => {
     const invalidIds = [
-      'WEB-a3K7mP$#-8s4T',
-      'WEB-a3K7mP9q-8s4@',
-      'WEB-@#$%^&*-8s4T'
+      `WEB-${VALID_TS.slice(0, 10)}$-${VALID_SUFFIX}`,
+      `WEB-${VALID_TS}-${VALID_SUFFIX.slice(0, 5)}@`,
+      `WEB-${'$'.repeat(11)}-${VALID_SUFFIX}`
     ];
 
     for (const invalidId of invalidIds) {
@@ -61,9 +65,9 @@ describe('设备 ID 服务测试', () => {
 
   test('拒绝错误长度的部分', async () => {
     const invalidIds = [
-      'WEB-a3K7mP9q-8s4', // 随机后缀太短
-      'WEB-a3K7mP9-8s4T5', // 时间戳太短，随机后缀太长
-      'WEB-a3K7mP9q8-8s4T' // 时间戳太长
+      `WEB-${VALID_TS}-8s4`, // 随机后缀太短
+      `WEB-${VALID_TS.slice(0, 10)}-${VALID_SUFFIX}`, // 时间戳太短
+      `WEB-${VALID_TS}0-${VALID_SUFFIX}` // 时间戳太长
     ];
 
     for (const invalidId of invalidIds) {
@@ -84,17 +88,16 @@ describe('设备 ID 服务测试', () => {
     // 平台应该是 WEB（基于 User-Agent）
     expect(['WEB', 'IOS', 'ANDROID']).toContain(platform);
 
-    // 长度检查
-    expect(encodedTs.length).toBe(8);
+    // 长度检查（64 位魔数 XOR 后 Base62 固定产出 11 字符）
+    expect(encodedTs.length).toBe(11);
     expect(randomSuffix.length).toBe(6);
   });
 
   test('验证并规范化设备 ID - 有效 ID', async () => {
-    const validId = 'WEB-a3K7mP9q-8s4T';
     const result = await verifyAndNormalizeDeviceId(validId, validUserAgent);
 
     expect(result.valid).toBe(true);
-    expect(result.shouldReplace).toBe(false);
+    expect(result.shouldReplace).toBeFalsy(); // 有效 ID 不走替换路径，shouldReplace 不设置
     expect(result.normalizedId).toBe(validId);
   });
 
@@ -120,12 +123,12 @@ describe('设备 ID 服务测试', () => {
     expect(info).toHaveProperty('platform');
     expect(info).toHaveProperty('timestamp');
     expect(info).toHaveProperty('createdAt');
-    expect(info).toHaveProperty('age');
+    expect(info).toHaveProperty('ageDays');
 
     // 验证时间戳合理性
     const now = Date.now();
-    expect(info!.timestamp).toBeLessThanOrEqual(now);
-    expect(info!.timestamp).toBeGreaterThan(now - 60000); // 1 分钟内
+    expect(info.timestamp).toBeLessThanOrEqual(now);
+    expect(info.timestamp).toBeGreaterThan(now - 60000); // 1 分钟内
   });
 
   test('检测设备平台正确', () => {
