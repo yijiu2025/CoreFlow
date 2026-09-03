@@ -7,7 +7,7 @@
  * @since 2026-09-01
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from '@jest/globals';
 import {
   validateDeviceId,
   verifyAndNormalizeDeviceId,

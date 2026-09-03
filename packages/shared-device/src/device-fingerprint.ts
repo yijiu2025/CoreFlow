@@ -77,6 +77,14 @@ export async function getDeviceFingerprint(): Promise<string> {
   if (cachedFingerprint) return cachedFingerprint;
 
   const [canvas, webgl] = await Promise.all([canvasFingerprint(), webglFingerprint()]);
+
+  // 两者均失败（headless、反指纹浏览器等）时返回空串：
+  // 若退化为 hash("|") 常量，所有此类浏览器指纹相同，会造成误匹配
+  if (!canvas && !webgl) {
+    cachedFingerprint = '';
+    return cachedFingerprint;
+  }
+
   const material = `${canvas}|${webgl}`;
 
   const { sha256 } = await import('./sha256');

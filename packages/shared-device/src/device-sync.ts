@@ -6,11 +6,15 @@
  * 2. 后续请求：自动携带 localStorage 中的设备 ID
  * 3. 设备 ID 更新：检测响应头中的更新标记，同步更新
  *
+ * 所有 localStorage 操作均走安全封装（try/catch），隐私模式下不抛异常、
+ * 不中断调用方的响应处理链路。
+ *
  * @author yijiu2025
  * @since 2026-09-01
+ * @since 2026-09-03 localStorage 安全封装；AxiosHeaders 鸭子类型兼容；STORAGE_KEY 单一来源；initDeviceSync 防重复注册
  */
 
-import { parseDeviceId } from './device-id';
+import { parseDeviceId, STORAGE_KEY } from './device-id';
 
 export interface DeviceSyncOptions {
   /** 强制重新获取设备 ID */
@@ -28,13 +32,74 @@ declare global {
   }
 }
 
-const STORAGE_KEY = 'cf_device_id';
+/** initDeviceSync 是否已注册过全局监听（防止重复调用导致重复注册） */
+let storageListenerRegistered = false;
 
 /**
- * 获取当前设备 ID（优先从 localStorage 读取）
+ * 安全读取 localStorage（隐私模式/配额异常时返回 null，不抛异常）
+ */
+function safeGetItem(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 安全写入 localStorage（隐私模式下静默失败）
+ */
+function safeSetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* 隐私模式写入失败，保持内存态即可 */
+  }
+}
+
+/**
+ * 安全移除 localStorage 项
+ */
+function safeRemoveItem(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * 从各类响应头容器读取指定头（大小写不敏感）
+ *
+ * 兼容三种形态：
+ * - Headers 实例（fetch）
+ * - AxiosHeaders 实例（axios，也有 .get 方法且大小写不敏感，鸭子类型识别）
+ * - 普通对象（小写 / 原样键）
+ *
+ * @param headers 响应头容器
+ * @param lowerName 头名称（小写）
+ */
+function readHeader(headers: any, lowerName: string): string | null {
+  if (typeof headers !== 'object' || headers === null) return null;
+
+  if (typeof headers.get === 'function') {
+    const value = headers.get(lowerName);
+    return value === null || value === undefined ? null : String(value);
+  }
+
+  const pascalName = lowerName
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('-');
+  const value = headers[lowerName] ?? headers[pascalName];
+  return value === null || value === undefined ? null : String(value);
+}
+
+/**
+ * 获取当前设备 ID（优先从 localStorage 读取，隐私模式返回 null）
  */
 export function getCurrentDeviceId(): string | null {
-  return localStorage.getItem(STORAGE_KEY);
+  return safeGetItem(STORAGE_KEY);
 }
 
 /**
@@ -42,7 +107,7 @@ export function getCurrentDeviceId(): string | null {
  */
 export function setDeviceId(deviceId: string): void {
   const oldId = getCurrentDeviceId();
-  localStorage.setItem(STORAGE_KEY, deviceId);
+  safeSetItem(STORAGE_KEY, deviceId);
 
   // 通知设备 ID 变更
   if (oldId && oldId !== deviceId) {
@@ -54,26 +119,14 @@ export function setDeviceId(deviceId: string): void {
 
 /**
  * 从响应头同步设备 ID
- * @param headers - HTTP 响应头
+ * @param headers - HTTP 响应头（Headers / AxiosHeaders / 普通对象）
  * @param options - 同步选项
  * @returns 同步后的设备 ID
  */
-export function syncDeviceFromHeaders(headers: Headers, options?: DeviceSyncOptions): string | null {
-  // 1. 获取响应头中的设备 ID
-  let responseDeviceId: string | null = null;
-  let hasDeviceIdUpdated: string | null = null;
-
-  // 检查 headers 类型并安全获取
-  if (typeof headers === 'object' && headers !== null) {
-    if (headers instanceof Headers) {
-      responseDeviceId = headers.get('X-Device-Id');
-      hasDeviceIdUpdated = headers.get('X-Device-Id-Updated');
-    } else if (headers['x-device-id'] || headers['X-Device-Id']) {
-      // 处理普通对象格式的 headers
-      responseDeviceId = headers['x-device-id'] || headers['X-Device-Id'];
-      hasDeviceIdUpdated = headers['x-device-id-updated'] || headers['X-Device-Id-Updated'];
-    }
-  }
+export function syncDeviceFromHeaders(headers: any, options?: DeviceSyncOptions): string | null {
+  // 1. 获取响应头中的设备 ID 与更新标记
+  const responseDeviceId = readHeader(headers, 'x-device-id');
+  const hasDeviceIdUpdated = readHeader(headers, 'x-device-id-updated');
 
   if (!responseDeviceId) {
     return null;
@@ -104,8 +157,8 @@ export function syncDeviceFromHeaders(headers: Headers, options?: DeviceSyncOpti
 }
 
 /**
- * HTTP 请求拦截器集成
- * @param response - Axios/Fetch 响应对象
+ * HTTP 响应拦截器集成（axios 响应对象 / fetch Response 均可）
+ * @param response - 响应对象（需带 headers）
  * @param options - 同步选项
  */
 export function handleDeviceSyncInResponse(response: any, options?: DeviceSyncOptions): any {
@@ -114,13 +167,12 @@ export function handleDeviceSyncInResponse(response: any, options?: DeviceSyncOp
     return response;
   }
 
-  const headers = new Headers(response.headers);
-  syncDeviceFromHeaders(headers, options);
+  syncDeviceFromHeaders(response.headers, options);
   return response;
 }
 
 /**
- * 初始化设备 ID 全局配置
+ * 初始化设备 ID 全局配置（重复调用不会重复注册监听器）
  * @param options - 配置选项
  */
 export function initDeviceSync(options: DeviceSyncOptions = {}): void {
@@ -128,11 +180,14 @@ export function initDeviceSync(options: DeviceSyncOptions = {}): void {
     onDeviceIdChange: options.onDeviceIdChange
   };
 
-  // 监听本地存储变化（跨标签页同步）
-  window.addEventListener('storage', (event) => {
-    if (event.key === STORAGE_KEY && event.newValue) {
-      if (window.deviceSync?.onDeviceIdChange && event.oldValue) {
-        window.deviceSync.onDeviceIdChange(event.oldValue, event.newValue);
+  if (storageListenerRegistered) return;
+  storageListenerRegistered = true;
+
+  // 监听本地存储变化（跨标签页同步；oldValue 为 null 是另一标签页首次写入，同样通知）
+  window.addEventListener('storage', event => {
+    if (event.key === STORAGE_KEY && event.newValue && event.newValue !== event.oldValue) {
+      if (window.deviceSync?.onDeviceIdChange) {
+        window.deviceSync.onDeviceIdChange(event.oldValue ?? '', event.newValue);
       }
     }
   });
@@ -142,7 +197,7 @@ export function initDeviceSync(options: DeviceSyncOptions = {}): void {
  * 清除设备 ID（仅在需要时使用，通常保持持久化）
  */
 export function clearDeviceId(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  safeRemoveItem(STORAGE_KEY);
 }
 
 /**
@@ -150,16 +205,15 @@ export function clearDeviceId(): void {
  */
 export function getDeviceIdStats(): {
   id: string | null;
-  info: any;
-  source: 'localStorage' | 'header' | 'generated';
+  info: ReturnType<typeof parseDeviceId>;
+  source: 'localStorage' | 'none';
 } {
   const currentId = getCurrentDeviceId();
 
   if (currentId) {
-    const info = parseDeviceId(currentId);
     return {
       id: currentId,
-      info,
+      info: parseDeviceId(currentId),
       source: 'localStorage'
     };
   }
@@ -167,6 +221,6 @@ export function getDeviceIdStats(): {
   return {
     id: null,
     info: null,
-    source: 'generated'
+    source: 'none'
   };
 }
