@@ -245,6 +245,39 @@ async function pruneActiveDevices(userId) {
 }
 
 /**
+ * 清理 session_tokens 表的陈旧孤儿行
+ *
+ * 治理 device_id 重生/变更后的孤儿数据：
+ * - verifyAndNormalizeDeviceId 对超 365 天的老格式 ID 重生 → 旧 device_id 的行变孤儿
+ * - updateSessionBaseline 变更 device_id 后，理论上旧行已更新不 orphan，但历史脏数据可能残留
+ * - checkMaxSessions 已把超 30 天的标 revoked=true（保留审计），本函数只删 revoked 且再超
+ *   STALE_TOKEN_RETENTION 天的行，既防膨胀又留够审计窗口
+ *
+ * 硬删（SessionToken 无 paranoid）。返回删除行数。
+ *
+ * @param {number} [retentionDays=90] revoked 后保留天数
+ * @returns {Promise<number>} 删除的行数
+ */
+async function pruneStaleSessionTokens(retentionDays = 90) {
+  const SessionToken = getModel('SessionToken');
+  if (!SessionToken) return 0;
+
+  const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  // 删：已 revoked 且 last_active 早于阈值（即 revoked 超过 retentionDays 的）
+  // last_active 在 revoked 时不再更新，故以它为 revoked 时间近似
+  const destroyed = await SessionToken.destroy({
+    where: {
+      revoked: true,
+      last_active: { [Op.lt]: threshold }
+    }
+  });
+  if (destroyed > 0) {
+    _debug('🧹 [session] 清理陈旧 session_tokens: 删除 %s 行 (revoked 且超 %s 天)', destroyed, retentionDays);
+  }
+  return destroyed;
+}
+
+/**
  * 踢掉指定会话
  *
  * 完整踢出（含记住我用户）：删 sid（立即失效）+ 失效 sid_r（阻止 sid_r 自动刷新恢复）
@@ -1248,6 +1281,8 @@ export {
   kickSession,
   kickAllSessions,
   kickByDeviceId,
+  pruneActiveDevices,
+  pruneStaleSessionTokens,
   createSession,
   getSession,
   refreshSession,

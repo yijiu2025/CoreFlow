@@ -91,8 +91,7 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
     const { token: accessToken, kid: accessKid } = await issueAccessToken({
       sub: user.id,
       aud: client.client_id,
-      scope: scopeString,
-      deviceId: deviceId // 将设备 ID 加入 JWT 声明
+      scope: scopeString
     });
     const refreshToken = generateToken(48);
     await TokenDao.save(refreshToken, {
