@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import helmet from '@fastify/helmet';
 import { initLoader } from './framework/loader/index.js';
 import { flushGuardConfig } from './api/guard-config.js';
+import { startScheduler } from './framework/scheduler/index.js';
 import { ApiException } from './shared/exceptions.js';
 
 // 应用层不信任任意代理 IP，仅允许本地回环。
@@ -266,7 +267,6 @@ export async function createApp() {
 
   // 启动定时任务调度器（session_tokens 清理等，频率从 src/data/scheduler_config.json 读）
   // scheduler 内部注册 onClose 钩子清理定时器，不阻塞启动
-  const { startScheduler } = await import('./framework/scheduler/index.js');
   await startScheduler(app);
 
   // 注册优雅关闭钩子：确保防抖中的守卫配置在退出前写入数据库
