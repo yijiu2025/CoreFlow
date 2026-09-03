@@ -1198,6 +1198,9 @@ async function updateSessionBaseline(sessionId, { deviceId, deviceFingerprint, i
   const sd = await sessionStore.get(sessionId);
   if (!sd) return false;
 
+  // 记录旧 deviceId：判断是否变更用（变更时 DB 行 device_id 也要更新，避免 orphan）
+  const oldDeviceId = sd.deviceId;
+
   // 更新基准字段
   if (deviceId !== undefined) sd.deviceId = deviceId;
   if (deviceFingerprint !== undefined) sd.deviceFingerprint = deviceFingerprint;
@@ -1209,19 +1212,28 @@ async function updateSessionBaseline(sessionId, { deviceId, deviceFingerprint, i
   const sessionTtl = sd.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
   await sessionStore.set(sessionId, sd, sessionTtl);
 
-  // 同步 DB session_tokens（按 device_id 定位，更新 fingerprint/ip/UA/last_active）
+  // 同步 DB session_tokens：按 token(=sha256(sessionId)) 定位行，device_id 也一并更新
+  // 注意：必须按 token 定位而非 device_id —— 此刻 sd.deviceId 已被上方改成新值，
+  // 按 device_id 查会找不到旧行（旧行 device_id 是旧值）→ device_id 永不更新 → orphan。
+  // token 与 session 绑定（sid_r 刷新时 record.update({token:newHash}) 换 token 但行不变），
+  // 是同一设备链的稳定锚点。device_id 变更场景（用户清 localStorage 生新 ID，验证通过后）
+  // 由此把 DB 行 device_id 更新为新值，不新增行（符合"同一设备链更新不新增"语义）。
   const SessionToken = getModel('session.SessionToken');
-  if (SessionToken && sd.userId && sd.deviceId) {
+  if (SessionToken && sd.userId) {
     try {
-      await SessionToken.update(
-        {
-          device_fingerprint: deviceFingerprint,
-          ip,
-          user_agent: userAgent,
-          last_active: new Date()
-        },
-        { where: { user_id: sd.userId, device_id: sd.deviceId } }
-      );
+      const tokenHash = sidHash(sessionId);
+      const updateFields = { last_active: new Date() };
+      if (deviceFingerprint !== undefined) updateFields.device_fingerprint = deviceFingerprint;
+      if (ip !== undefined) updateFields.ip = ip;
+      if (userAgent !== undefined) updateFields.user_agent = userAgent;
+      if (deviceId !== undefined && deviceId && deviceId !== oldDeviceId) {
+        // deviceId 变更（用户清 localStorage 生新 ID，验证通过后）：旧行 device_id 更新为新值
+        // 同一 session 链（token 锚定），不新增行，避免旧 device_id orphan
+        updateFields.device_id = deviceId;
+      }
+      await SessionToken.update(updateFields, {
+        where: { user_id: sd.userId, token: tokenHash }
+      });
     } catch (err) {
       console.warn('[Session] 更新 session_tokens 基准失败:', err.message);
     }
