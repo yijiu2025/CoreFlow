@@ -194,16 +194,22 @@ function decodeTimestamp(encoded) {
 }
 
 /**
- * 生成指定长度的 Base62 随机字符串
+ * 生成指定长度的 Base62 随机字符串（拒绝采样，无模偏差）
  * @param {number} length - 长度
  * @returns {string} Base62 随机字符串
  */
 function generateBase62Random(length) {
-  const buffer = crypto.randomBytes(length);
+  // 256 % 62 = 8，直接取模会让前 8 个字符概率偏高，用拒绝采样消除
+  const maxUsable = Math.floor(256 / BASE62_CHARS.length) * BASE62_CHARS.length;
   let result = '';
 
-  for (let i = 0; i < length; i++) {
-    result += BASE62_CHARS[buffer[i] % BASE62_CHARS.length];
+  while (result.length < length) {
+    const buffer = crypto.randomBytes(length * 2);
+    for (let i = 0; i < buffer.length && result.length < length; i++) {
+      if (buffer[i] < maxUsable) {
+        result += BASE62_CHARS[buffer[i] % BASE62_CHARS.length];
+      }
+    }
   }
 
   return result;

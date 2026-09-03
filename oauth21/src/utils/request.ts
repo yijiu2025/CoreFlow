@@ -84,9 +84,7 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   res => {
     // 设备 ID 同步（从响应头同步）
-    import('@nodeservers/shared-device').then(({ handleDeviceSyncInResponse: sync }) => {
-      sync(res);
-    });
+    handleDeviceSyncInResponse(res);
 
     // 假设后端返回结构为 { code, message, data }
     const { code, message, data } = res.data;
