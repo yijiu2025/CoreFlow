@@ -264,6 +264,11 @@ export async function createApp() {
   // 启动加载器引擎，按顺序初始化 Redis → DB → Auth → Firewall → Models → API → Apps
   await initLoader(app);
 
+  // 启动定时任务调度器（session_tokens 清理等，频率从 src/data/scheduler_config.json 读）
+  // scheduler 内部注册 onClose 钩子清理定时器，不阻塞启动
+  const { startScheduler } = await import('./framework/scheduler/index.js');
+  await startScheduler(app);
+
   // 注册优雅关闭钩子：确保防抖中的守卫配置在退出前写入数据库
   app.addHook('onClose', async () => {
     try {
