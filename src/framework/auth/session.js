@@ -27,6 +27,15 @@ import {
 import { loadUserPermissions } from './permission-loader.js';
 
 const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
+/**
+ * 同一用户活跃设备行数上限（session_tokens 表 revoked=false 的行）。
+ *
+ * x-device-id 头客户端可控，同一用户每次传随机新 deviceId 会绕过
+ * findOrCreate(user_id+device_id) 的设备幂等键，无限新增 session_tokens 行 →
+ * 设备数统计失真 + DB 膨胀。此上限在 createSession 写 DB 前裁剪最旧行，
+ * 只保留最近 N 个活跃设备。默认 20 覆盖正常用户多端场景（手机/电脑/平板/多浏览器）。
+ */
+const MAX_ACTIVE_DEVICES = parseInt(process.env.MAX_ACTIVE_DEVICES) || 20;
 // 设备类型常量与判定统一由 device.js 提供，此处导入为本地绑定并在文件末尾 re-export
 import { DEVICE_TYPE, detectDeviceType, computeDeviceFingerprint } from './device.js';
 
@@ -186,6 +195,53 @@ async function checkMaxSessions(userId, appId, maxSessions = 5) {
   if (sessions.length < maxSessions) return null;
 
   return { maxSessions, current: sessions.length, sessions };
+}
+
+/**
+ * 裁剪同用户的活跃设备行数至上限以下
+ *
+ * 治理 x-device-id 客户端可控导致的 session_tokens 膨胀：同用户每次传随机新 deviceId
+ * 绕过 findOrCreate 幂等键，行数无限增长。此函数在 createSession 写新行前调用，
+ * 先删最旧的活跃行腾位，保证表内活跃设备行 ≤ MAX_ACTIVE_DEVICES。
+ *
+ * 删除策略：按 last_active 升序删 (count - MAX + 1) 条最旧的活跃行（revoked=false）。
+ * 不影响已被 checkMaxSessions 标记 revoked 的历史行（保留审计）。
+ * SessionToken 无 paranoid/软删钩子，destroy 为硬删除（膨胀治理应真删行不留壳）。
+ *
+ * @param {number} userId 用户 ID
+ * @returns {Promise<number>} 实际删除的行数
+ */
+async function pruneActiveDevices(userId) {
+  const SessionToken = getModel('SessionToken');
+  if (!SessionToken) return 0;
+
+  // 只数活跃行（revoked=false），超上限才清
+  const activeCount = await SessionToken.count({ where: { user_id: userId, revoked: false } });
+  if (activeCount < MAX_ACTIVE_DEVICES) return 0;
+
+  const removeCount = activeCount - MAX_ACTIVE_DEVICES + 1;
+  // 按 last_active 升序取最旧的 removeCount 条活跃行
+  const oldest = await SessionToken.findAll({
+    where: { user_id: userId, revoked: false },
+    order: [['last_active', 'ASC']],
+    limit: removeCount,
+    attributes: ['id']
+  });
+  if (!oldest.length) return 0;
+
+  // 批量软删除：触发 beforeBulkDestroy 钩子写 delete_version
+  // （SessionToken 注册了 registerDeleteVersionHooks，批量 destroy 走 paranoid 软删）
+  const destroyed = await SessionToken.destroy({
+    where: { id: oldest.map(r => r.id) }
+  });
+  _debug(
+    '🧹 [session] 裁剪活跃设备: userId=%s, 删除 %s 行 (原 %s, 上限 %s)',
+    userId,
+    destroyed,
+    activeCount,
+    MAX_ACTIVE_DEVICES
+  );
+  return destroyed;
 }
 
 /**
@@ -430,6 +486,10 @@ async function createSession(params) {
           last_active: new Date(),
           revoked: false
         });
+      } else {
+        // 新增设备行：裁剪同用户活跃设备至上限，防 x-device-id 可控导致 session_tokens 膨胀
+        // （刚插入的新行 last_active 最新，prune 按 last_active 升序删最旧，不会误删本行）
+        await pruneActiveDevices(userId);
       }
     } catch (err) {
       console.warn('[Session] upsert token 失败，回退 destroy+create:', err.message);
