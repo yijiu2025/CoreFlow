@@ -14,6 +14,7 @@ import {
   generateServerSideDeviceId,
   parseDeviceId
 } from '../../../framework/auth/device-id-service.js';
+import { encodeTimestamp as feEncode } from '../../../../packages/shared-device/src/base62-timestamp.js';
 
 describe('设备 ID 服务测试', () => {
   const validUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
@@ -179,5 +180,22 @@ describe('设备 ID 服务测试', () => {
     expect(webId.split('-')[0]).toBe('WEB');
     expect(iosId.split('-')[0]).toBe('IOS');
     expect(androidId.split('-')[0]).toBe('ANDROID');
+  });
+
+  test('时钟偏差容差：未来 2 分钟内的 ID 放行且 ageDays 钳为 0', async () => {
+    // 客户端时钟超前服务器 2 分钟：ID 时间戳对服务器是"轻微未来"
+    const nearFutureId = `WEB-${feEncode(Date.now() + 2 * 60 * 1000)}-Ab3dE9`;
+    const result = await validateDeviceId(nearFutureId);
+
+    expect(result.valid).toBe(true);
+    expect(result.ageDays).toBe(0);
+  });
+
+  test('时钟偏差容差：未来超过 5 分钟仍拒绝（防伪造）', async () => {
+    const farFutureId = `WEB-${feEncode(Date.now() + 6 * 60 * 1000)}-Ab3dE9`;
+    const result = await validateDeviceId(farFutureId);
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('未来时间');
   });
 });

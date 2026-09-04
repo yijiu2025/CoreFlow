@@ -2,7 +2,7 @@
 
 > 配套文档：[设备ID全链路梳理.md](./设备ID全链路梳理.md)（链路细节与已知问题清单）。
 > 本文聚焦一个问题：**device_id 是否足够稳定、什么情况下会变、如何进一步收敛变动**。
-> 评估基线：`12fa5a8`（共享包完整开发后）。
+> 评估基线：`12fa5a8`（共享包完整开发后）；1.3-①③ 已于 2026-09-05 实施。
 
 ## 一、稳定性评估结论
 
@@ -41,10 +41,14 @@
 - 请求头 `x-device-id` 携带新 ID，**优先级高于 cookie**（`device.js:85`）
 - 后端校验新 ID 合法 → 直接采纳 → cookie 被覆盖 → **旧设备身份永久丢失**
 
-cookie 兜底机制实际永远不会生效。**建议**：`getDeviceId` 中当 header ID 的
+cookie 兜底机制实际永远不会生效。~~**建议**：`getDeviceId` 中当 header ID 的
 `createdAt` 距今极近（如 < 10s，表明是刚生成的）且 cookie 中存在**合法**的
-不同 ID 时，优先采纳 cookie ID 并回写 `X-Device-Id` 让前端同步回 localStorage。
-一次小改可让 Safari 7 天清除、手动清缓存两种场景都保持身份连续。
+不同 ID 时，优先采纳 cookie ID 并回写 `X-Device-Id` 让前端同步回 localStorage。~~
+**✅ 已实施（2026-09-05）**：`device.js getDeviceId` 新增恢复分支——header ID 在
+`REBORN_WINDOW_MS`（10s）内生成或不可解析、且 cookie 存有合法的不同 ID 时，
+优先恢复 cookie 身份，由调用方回写 `X-Device-Id` 让前端同步回 localStorage。
+Safari 7 天清除、手动清缓存两种场景均保持身份连续。测试：
+`src/__tests__/framework/auth/device.test.js`（8 用例）。
 
 ② **S5：跨 origin 身份分裂（架构级，建议规划）**
 
@@ -55,11 +59,13 @@ device_id，后端把同一物理设备记为多个设备。现有 `SSO_READY` i
 注意需同时打通"子应用收到的 ID 要过 `validateDeviceIdFormat` + 平台段与自身 UA
 一致性"两道校验，防握手消息被伪造。
 
-③ **时钟偏差的替换轮次（低成本优化）**
+③ **时钟偏差的替换轮次（✅ 已实施 2026-09-05）**
 
 本机时钟超前服务器时，本地生成的 ID 对后端是"未来时间"被拒 → 服务端生成替换
-ID 回写，一轮收敛后稳定（12fa5a8 后前端对存量 ID 同规则自愈）。建议后端
-`validateDeviceId` 对未来时间给 ±5 分钟容差，消除微小偏差下的一次性替换往返。
+ID 回写，一轮收敛后稳定。**已实施**：后端 `validateDeviceId` 与前端
+`validateDeviceIdFormat` 均对未来时间给予 ±5 分钟容差（常量
+`CLOCK_SKEW_TOLERANCE_MS` 两端同值），消除微小偏差下的一次性替换往返；
+后端 `ageDays` 同步钳为非负。
 
 ④ **多标签页首访竞态（可不做）**
 

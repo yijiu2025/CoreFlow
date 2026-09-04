@@ -166,6 +166,18 @@ describe('validateDeviceIdFormat 校验规则', () => {
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(reasonPattern);
   });
+
+  test('未来时间在时钟偏差容差（±5 分钟）内放行（与后端同规则）', () => {
+    const nearFuture = `WEB-${encodeTimestamp(Date.now() + 2 * 60 * 1000)}-Ab3dE9`;
+    expect(validateDeviceIdFormat(nearFuture)).toEqual({ valid: true });
+  });
+
+  test('未来时间超过容差（5 分钟）被拒绝', () => {
+    const farFuture = `WEB-${encodeTimestamp(Date.now() + 6 * 60 * 1000)}-Ab3dE9`;
+    const result = validateDeviceIdFormat(farFuture);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/未来时间/);
+  });
 });
 
 describe('parseDeviceId 宽松解析', () => {
