@@ -182,6 +182,7 @@ import { X, UserPlus, ArrowLeft, Trash2 } from 'lucide-vue-next';
 import { buildSsoLoginUrl, SSO_URL, LOGIN_COPY } from '@/config/services';
 import { firewallApi } from '@/api/firewall';
 import { useAuthStore } from '@/stores/auth';
+import { adoptDeviceId } from '@nodeservers/shared-device';
 
 /** 只接受 oauth21 SSO 域的 postMessage（防恶意页面伪造 LOGIN_SUCCESS） */
 const SSO_ORIGIN = (() => {
@@ -318,6 +319,13 @@ const handleMessage = async (event: MessageEvent) => {
 
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
     let { token, sessionToken, user } = event.data;
+
+    // 跨 origin 设备身份归一：采纳 oauth21 权威域下发的 device_id（格式 + 平台段
+    // 双重校验，失败仅告警不阻断登录）。必须在 bindSession 之前执行——绑定请求
+    // 即携带统一 ID，登录基准指纹与后续请求一致，不会触发风险误报。
+    if (event.data.deviceId) {
+      adoptDeviceId(event.data.deviceId);
+    }
 
     let accountKey: string | null = null;
     let rememberMe = false;

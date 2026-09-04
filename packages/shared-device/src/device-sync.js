@@ -17,9 +17,16 @@
  * @since 2026-09-01
  * @since 2026-09-03 localStorage 安全封装；AxiosHeaders 鸭子类型兼容；STORAGE_KEY 单一来源；initDeviceSync 防重复注册
  * @since 2026-09-04 缓存一致性（写后失效 device-id 内存缓存）；setDeviceId 入口校验；头长度上限与日志截断
+ * @since 2026-09-05 新增 adoptDeviceId：SSO 握手（跨 origin）权威设备 ID 归一采纳
  */
 
-import { parseDeviceId, validateDeviceIdFormat, invalidateCachedDeviceId, STORAGE_KEY } from './device-id.js';
+import {
+  getPlatform,
+  parseDeviceId,
+  validateDeviceIdFormat,
+  invalidateCachedDeviceId,
+  STORAGE_KEY
+} from './device-id.js';
 import { safeGetItem, safeSetItem, safeRemoveItem } from './storage.js';
 
 /** 响应头单值长度上限，超过视为脏数据直接忽略（合法 ID 最长 22 字符） */
@@ -106,6 +113,41 @@ export function setDeviceId(deviceId) {
     window.deviceSync?.onDeviceIdChange?.(oldId, deviceId);
   }
   return true;
+}
+
+/**
+ * 采纳外部来源（SSO 握手）下发的权威设备 ID（跨 origin 身份归一）
+ *
+ * 场景：子应用（posecraft/firewall）通过 iframe 嵌入 oauth21 登录页，登录成功时
+ * oauth21 在 LOGIN_SUCCESS 消息中附带其权威域的 device_id，子应用采纳后
+ * 同一物理设备在各 origin 持有同一设备身份（后端设备统计/风险检测不再分裂）。
+ *
+ * 双重校验防握手消息伪造/损坏（父窗口侧已有 event.origin + event.source 校验）：
+ * 1. 格式校验（validateDeviceIdFormat，与后端 validateDeviceId 逐条对齐）
+ * 2. 平台段与本机 UA 检测一致（同一浏览器两端走同一检测代码，不一致即异常）
+ *
+ * 校验通过走 setDeviceId（持久化 + 内存缓存失效 + 变更回调），采纳后下一个
+ * 请求即携带统一 ID；调用方应在 bindSession/bindToken 之前调用，保证登录
+ * 基准指纹与后续请求一致。
+ *
+ * @param {string} deviceId 权威域（oauth21）下发的设备 ID
+ * @returns {boolean} 是否采纳成功（校验失败返回 false，不改变本地状态）
+ */
+export function adoptDeviceId(deviceId) {
+  const validation = validateDeviceIdFormat(deviceId);
+  if (!validation.valid) {
+    console.warn(`⚠️ [DeviceSync] 拒绝采纳非法设备 ID（${validation.reason}）: ${forLog(deviceId)}`);
+    return false;
+  }
+
+  const declaredPlatform = deviceId.split('-')[0];
+  const localPlatform = getPlatform();
+  if (declaredPlatform !== localPlatform) {
+    console.warn(`⚠️ [DeviceSync] 拒绝采纳平台不一致的设备 ID: ${forLog(declaredPlatform)} vs ${localPlatform}`);
+    return false;
+  }
+
+  return setDeviceId(deviceId);
 }
 
 /**

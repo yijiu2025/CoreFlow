@@ -28,6 +28,15 @@ export declare function getCurrentDeviceId(): string | null;
 export declare function setDeviceId(deviceId: string): boolean;
 
 /**
+ * 采纳外部来源（SSO 握手）下发的权威设备 ID（跨 origin 身份归一）
+ *
+ * 双重校验（格式与后端对齐 + 平台段与本机 UA 一致）通过后走 setDeviceId。
+ * 调用方应在 bindSession/bindToken 之前调用，保证登录基准指纹与后续请求一致。
+ * @returns 是否采纳成功（校验失败返回 false，不改变本地状态）
+ */
+export declare function adoptDeviceId(deviceId: string): boolean;
+
+/**
  * 从响应头同步设备 ID
  * @param headers HTTP 响应头（Headers / AxiosHeaders / 普通对象）
  * @param options 同步选项

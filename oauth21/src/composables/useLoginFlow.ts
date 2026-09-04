@@ -17,6 +17,7 @@ import { ref } from 'vue';
 import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { postToParent } from '@/utils/parent';
+import { getStableDeviceId } from '@nodeservers/shared-device';
 import { useCountdown } from './useCountdown';
 
 /** 登录响应判别联合（按 action 区分四种分支） */
@@ -111,6 +112,10 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
       token,
       sessionToken,
       user: { id: user.id, username: user.username, name: user.name, email: user.email, avatar: user.avatar },
+      // 权威设备 ID：父窗口采纳后同一物理设备跨 origin 归一为同一身份
+      // （父窗口在 bindSession 之前采纳，登录基准指纹与后续请求一致）。
+      // 仅发往白名单父 origin（postToParent 内校验），device_id 非机密可安全披露
+      deviceId: getStableDeviceId(),
       data: res
     });
   }

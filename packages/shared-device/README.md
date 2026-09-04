@@ -36,7 +36,7 @@ packages/shared-device/
 | 模块 | 导出 | 职责 |
 | --- | --- | --- |
 | `device-id` | `getStableDeviceId` / `validateDeviceIdFormat` / `invalidateCachedDeviceId` / `parseDeviceId` / `getPlatform` / `STORAGE_KEY` 等 | 从存储（key `cf_device_id`）取/生成结构化 ID；存量 ID 严格自查（格式/过期/未来时间，规则与后端 `validateDeviceId` 逐条对齐）；隐私模式降级为会话内临时 ID |
-| `device-sync` | `syncDeviceFromHeaders` / `handleDeviceSyncInResponse` / `initDeviceSync` / `getCurrentDeviceId` / `setDeviceId` / `clearDeviceId` / `getDeviceIdStats` | 从响应头 `X-Device-Id`/`X-Device-Id-Updated` 同步 device_id；兼容 Headers / AxiosHeaders / 普通对象；写后失效 device-id 内存缓存（服务端下发新 ID 下一请求即生效）；`setDeviceId` 入口校验拒绝脏值；跨标签页 storage 监听 |
+| `device-sync` | `syncDeviceFromHeaders` / `handleDeviceSyncInResponse` / `initDeviceSync` / `getCurrentDeviceId` / `setDeviceId` / `adoptDeviceId` / `clearDeviceId` / `getDeviceIdStats` | 从响应头 `X-Device-Id`/`X-Device-Id-Updated` 同步 device_id；兼容 Headers / AxiosHeaders / 普通对象；写后失效 device-id 内存缓存（服务端下发新 ID 下一请求即生效）；`setDeviceId` 入口校验拒绝脏值；`adoptDeviceId` 采纳 SSO 握手下发的权威 ID（跨 origin 身份归一，格式 + 平台段双校验）；跨标签页 storage 监听 |
 | `device-fingerprint` | `getDeviceFingerprint` / `isDeviceFingerprintEnabled` | canvas + WebGL 特征 SHA-256（前 32 位 hex）；Promise 缓存（并发去重、空结果也缓存）；meta 标签或 `VITE_DEVICE_FINGERPRINT=true` 才启用，默认关闭（隐私友好） |
 | `sha256` | `sha256` / `sha256Pure` | 优先 Web Crypto API，非安全上下文（HTTP）自动降级为内置纯 JS 实现（与 Node crypto 全量对拍测试守护） |
 | `base62-timestamp` | `encodeTimestamp` / `decodeTimestamp` / `toBase62` / `fromBase62` 等 | 时间戳混淆 + Base62 编解码，**前后端共享算法的唯一事实来源** |
