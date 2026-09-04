@@ -30,3 +30,5 @@ docs/.vitepress/dist
 
 架构文件/kx-lang-extension/
 架构文件/kx-lang/
+# Mimosa 安全扫描器临时产物
+.mimosa/
