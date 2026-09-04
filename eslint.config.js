@@ -61,6 +61,17 @@ export default [
     }
   },
 
+  // 6. 浏览器环境共享包：packages 下实现为纯 JS（供 Jest 直接测试），
+  //    运行在浏览器（window/document/localStorage/crypto 等），声明 browser globals
+  {
+    files: ['packages/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser
+      }
+    }
+  },
+
   // 7. 禁用所有与 Prettier 冲突的规则 (作为兜底，必须放在数组最后)
   prettierConfig
 ];
