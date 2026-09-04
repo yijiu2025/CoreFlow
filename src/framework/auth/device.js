@@ -12,10 +12,19 @@
  * @author yijiu
  * @since 2026-08-14
  * @since 2026-09-01 结构化设备 ID（加密时间戳 + 高唯一性）
+ * @since 2026-09-05 cookie 兜底恢复（localStorage 丢失时从 httpOnly cookie 恢复设备身份）
  */
 
 import crypto from 'node:crypto';
-import { verifyAndNormalizeDeviceId, generateServerSideDeviceId } from './device-id-service.js';
+
+/** header ID 视为"刚生成"（localStorage 丢失后新造）的判定窗口（毫秒） */
+const REBORN_WINDOW_MS = 10_000;
+import {
+  verifyAndNormalizeDeviceId,
+  generateServerSideDeviceId,
+  validateDeviceId,
+  parseDeviceId
+} from './device-id-service.js';
 import { COOKIE_OPTIONS } from './cookie.js';
 
 /**
@@ -80,6 +89,25 @@ export async function getDeviceId(request) {
   const userAgent = request?.headers?.['user-agent'] || '';
   const header = request?.headers?.['x-device-id'] || '';
   const cookieDeviceId = request?.cookies?.device_id || '';
+
+  // 0. cookie 兜底恢复：localStorage 被清（手动清除 / Safari ITP 7 天清除脚本存储）
+  //    时前端会立即生成"刚出生"的有效新 ID，且请求头优先级高于 cookie——若直接采纳，
+  //    httpOnly cookie 里的旧设备身份（不受 ITP 清除影响）将永久丢失，设备指纹突变。
+  //    当 header ID 刚生成（REBORN_WINDOW_MS 内）或不可解析，且 cookie 存有合法的
+  //    不同 ID 时，优先恢复 cookie 身份；调用方检测到与客户端上报不一致会回写
+  //    X-Device-Id，前端 device-sync 同步回 localStorage，身份收敛（无需刷新页面）。
+  //    cookie 由服务端 Set-Cookie 写入、httpOnly 不可伪造跨设备，恢复目标恒为同浏览器旧身份。
+  if (header && cookieDeviceId && header !== cookieDeviceId) {
+    const cookieValidation = await validateDeviceId(cookieDeviceId);
+    if (cookieValidation.valid) {
+      const headerInfo = parseDeviceId(header);
+      const headerJustBorn = headerInfo && Date.now() - headerInfo.timestamp < REBORN_WINDOW_MS;
+      if (!headerInfo || headerJustBorn) {
+        console.log(`🔄 [DeviceId] localStorage 丢失，从 httpOnly cookie 恢复设备身份: ${cookieDeviceId}`);
+        return cookieValidation.normalizedId;
+      }
+    }
+  }
 
   // 1. 优先验证前端传的结构化 ID
   const clientId = header || cookieDeviceId;

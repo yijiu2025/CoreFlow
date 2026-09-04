@@ -20,6 +20,10 @@ const ENCODED_TS_LENGTH = 11;
 const RANDOM_SUFFIX_LENGTH = 6;
 const MAX_AGE_DAYS = 365; // 设备 ID 最长有效期（1 年）
 
+/** 时钟偏差容差：客户端时钟超前服务器在此范围内不视为"未来时间"伪造，避免无谓的替换轮次。
+ *  与前端共享包 device-id.js 的 CLOCK_SKEW_TOLERANCE_MS 保持一致（前后端同规则）。 */
+const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
+
 /**
  * 设备 ID 验证结果
  * @typedef {Object} DeviceIdValidation
@@ -78,13 +82,14 @@ export async function validateDeviceId(deviceId) {
     const now = new Date();
     const ageDays = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
 
-    // 检查是否未来时间（防止伪造）
-    if (createdAt > now) {
+    // 检查是否未来时间（防止伪造；±时钟偏差容差内的"轻微未来"放行，
+    // 避免客户端时钟微小超前时每次生成都被拒、服务端反复换 ID）
+    if (createdAt.getTime() > now.getTime() + CLOCK_SKEW_TOLERANCE_MS) {
       result.error = '无效时间戳（未来时间）';
       return result;
     }
 
-    // 检查是否过期
+    // 检查是否过期（ageDays 钳为非负：容差内的轻微未来时间不应报负数天数）
     if (ageDays > MAX_AGE_DAYS) {
       result.error = `设备 ID 已过期（超过 ${MAX_AGE_DAYS} 天）`;
       return result;
@@ -94,7 +99,7 @@ export async function validateDeviceId(deviceId) {
     result.normalizedId = deviceId;
     result.platform = platform;
     result.createdAt = createdAt;
-    result.ageDays = ageDays;
+    result.ageDays = Math.max(0, ageDays);
   } catch (error) {
     result.error = `时间戳解码失败：${error.message}`;
     return result;

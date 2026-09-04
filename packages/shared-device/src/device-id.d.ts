@@ -14,6 +14,9 @@ export declare const DEVICE_PLATFORMS: readonly ['WEB', 'IOS', 'ANDROID'];
 /** 随机后缀长度（6 字符 Base62） */
 export declare const RANDOM_SUFFIX_LENGTH: number;
 
+/** 时钟偏差容差（毫秒，±5 分钟），与后端 CLOCK_SKEW_TOLERANCE_MS 一致 */
+export declare const CLOCK_SKEW_TOLERANCE_MS: number;
+
 /** 获取稳定 device_id（持久化 + 内存缓存，首次生成结构化 ID） */
 export declare function getStableDeviceId(): string;
 

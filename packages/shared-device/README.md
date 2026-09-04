@@ -56,7 +56,9 @@ packages/shared-device/
   crypto 不可用的极端环境降级 `Math.random` 并告警——设备 ID 非加密材料，仅求唯一性）
 
 与后端 `src/framework/auth/device-id-service.js` 的校验规则（长度 / 字符集 /
-平台枚举 / 拒绝未来时间 / 365 天有效期）严格对齐。**两端编码一致性由 jest 测试守护**：
+平台枚举 / 拒绝未来时间含 ±5 分钟时钟偏差容差 / 365 天有效期）严格对齐，
+容差常量 `CLOCK_SKEW_TOLERANCE_MS` 两端各持有一份、值必须一致。
+**两端编码一致性由 jest 测试守护**：
 `src/__tests__/framework/auth/device-id-parity.test.js`。修改 `base62-timestamp.js`
 或后端算法任意一端时该测试会失败，防止 81350f1 类长度漂移故障复发。
 

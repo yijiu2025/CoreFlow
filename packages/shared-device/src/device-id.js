@@ -48,6 +48,11 @@ export const DEVICE_PLATFORMS = ['WEB', 'IOS', 'ANDROID'];
 /** 随机后缀长度（6 字符 Base62），与后端 RANDOM_SUFFIX_LENGTH 保持一致 */
 export const RANDOM_SUFFIX_LENGTH = 6;
 
+/** 时钟偏差容差（毫秒）：本机时钟回拨在此范围内时，存量 ID 的"轻微未来"时间戳
+ *  不触发重生，避免用户校准时钟后设备身份无谓漂移。与后端 device-id-service.js
+ *  的 CLOCK_SKEW_TOLERANCE_MS 保持一致（前后端同规则）。 */
+export const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
+
 /** 内存缓存的当前设备 ID（getStableDeviceId 高频调用，避免每次读存储） */
 let cachedId = null;
 
@@ -136,7 +141,9 @@ export function validateDeviceIdFormat(deviceId) {
   }
 
   const now = Date.now();
-  if (timestamp > now) {
+  // 未来时间拒绝带时钟偏差容差（与后端一致）：容差内的轻微未来时间放行，
+  // 防止本机时钟回拨后存量 ID 被误判重生、或服务端（时钟稍快）下发的 ID 被拒写
+  if (timestamp > now + CLOCK_SKEW_TOLERANCE_MS) {
     return { valid: false, reason: '无效时间戳（未来时间）' };
   }
 

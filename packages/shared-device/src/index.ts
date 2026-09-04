@@ -26,7 +26,8 @@ export {
   STORAGE_KEY,
   MAX_AGE_DAYS,
   DEVICE_PLATFORMS,
-  RANDOM_SUFFIX_LENGTH
+  RANDOM_SUFFIX_LENGTH,
+  CLOCK_SKEW_TOLERANCE_MS
 } from './device-id.js';
 export type { DeviceIdInfo } from './device-id.js';
 export {
