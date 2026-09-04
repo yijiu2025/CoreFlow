@@ -57,6 +57,12 @@ alias: { '@nodeservers/shared-device': path.resolve(__dirname, '../packages/shar
 `handleDeviceSyncInResponse(res)` 完成服务端下发 ID 的同步。完整链路见
 [docs/development/设备ID全链路梳理.md](../../docs/development/设备ID全链路梳理.md)。
 
+## 类型声明
+
+包内 `src/env.d.ts` 引入 `/// <reference types="vite/client" />`，配合根目录
+`tsconfig.json`（`types: ["vite/client"]`），保证在 IDE 中直接打开本包源码时
+`import.meta.env` 有正确的 `ImportMeta` 类型（消费方项目自身也已声明 vite/client）。
+
 ## 已知限制
 
 - 隐私模式下 localStorage 不可用时降级为会话内临时 ID，每次刷新变化，会频繁触发
