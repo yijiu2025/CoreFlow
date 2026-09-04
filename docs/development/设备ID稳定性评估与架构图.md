@@ -2,11 +2,11 @@
 
 > 配套文档：[设备ID全链路梳理.md](./设备ID全链路梳理.md)（链路细节与已知问题清单）。
 > 本文聚焦一个问题：**device_id 是否足够稳定、什么情况下会变、如何进一步收敛变动**。
-> 评估基线：`12fa5a8`（共享包完整开发后）；1.3-①③ 已于 2026-09-05 实施。
+> 评估基线：`12fa5a8`（共享包完整开发后）；1.3-①②③ 均已于 2026-09-05 实施。
 
 ## 一、稳定性评估结论
 
-**结论：设计上"一次生成、终身复用"的稳定性目标基本达成，但存在 4 个会让 ID 变动的场景，其中 2 个可工程收敛。**
+**结论：设计上"一次生成、终身复用"的稳定性目标基本达成，可工程收敛的变动场景（cookie 兜底、时钟容差、跨 origin 归一）已全部实施，仅存隐私模式与设计性过期两类不可避免场景。**
 
 ### 1.1 稳定性达标的部分 ✅
 
@@ -30,9 +30,9 @@
 | S4 | 365 天有效期到期 | 设计使然 | 到期重生 = 换设备身份，旧设备行成孤儿（P2.7 清理任务覆盖中） |
 | S5 | 跨浏览器 / 跨设备 / 跨 origin | 设计使然 | 每 origin 一份独立 ID（见 1.3-②），同物理设备在系统内有 N 个身份 |
 
-### 1.3 可完善点（评估产出，未实施）
+### 1.3 可完善点（①③ 于 2026-09-05 实施，② 同日实施）
 
-① **S1/S2：cookie 兜底被"抢先重生"架空（建议优先做，纯后端小改）**
+① **S1/S2：cookie 兜底被"抢先重生"架空（✅ 已实施 2026-09-05，纯后端小改）**
 
 链路上 httpOnly `device_id` cookie 由服务端 Set-Cookie 写入（`device.js:126`），
 **不受 ITP 7 天清除影响**（ITP 只清脚本可写存储）。但当前时序是：
@@ -50,14 +50,19 @@ cookie 兜底机制实际永远不会生效。~~**建议**：`getDeviceId` 中�
 Safari 7 天清除、手动清缓存两种场景均保持身份连续。测试：
 `src/__tests__/framework/auth/device.test.js`（8 用例）。
 
-② **S5：跨 origin 身份分裂（架构级，建议规划）**
+② **S5：跨 origin 身份分裂（✅ 已实施 2026-09-05）**
 
-localStorage 按 origin 隔离：oauth21（顶层）、posecraft（iframe 内）各自持有一份
-device_id，后端把同一物理设备记为多个设备。现有 `SSO_READY` iframe 握手通道
-（全链路梳理 §2.3）是现成的归一载体：**登录成功后由 oauth21 域通过 postMessage
-下发权威 device_id，子应用收到后 `setDeviceId` 覆盖本地**，即可三端同 ID。
-注意需同时打通"子应用收到的 ID 要过 `validateDeviceIdFormat` + 平台段与自身 UA
-一致性"两道校验，防握手消息被伪造。
+localStorage 按 origin 隔离：oauth21（顶层）、posecraft/firewall（iframe 内）各自持有
+device_id，后端把同一物理设备记为多个设备。**已实施归一**：登录成功时 oauth21 在
+`LOGIN_SUCCESS` postMessage 中附带权威域 device_id（`useLoginFlow.notifyParentLoginSuccess`
+单点注入，覆盖直接登录 / Consent 授权 / 邮箱二次验证三条路径），父窗口在
+**bindSession 之前**调用共享包 `adoptDeviceId` 采纳——绑定请求即携带统一 ID，
+登录基准指纹与后续请求一致，无风险误报窗口。安全链路复用既有基建：
+oauth21 侧 `postToParent` 父 origin 白名单（`VITE_ALLOWED_PARENT_ORIGINS` +
+ancestorOrigins），父窗口侧 `event.origin + event.source` 双重校验，采纳前还有
+`validateDeviceIdFormat` + 平台段与本机 UA 一致性双校验（共享包内聚，伪造/损坏
+消息直接拒绝且不改变本地状态）。**注意**：归一发生在登录时；已登录会话的存量
+per-origin ID 保持到下次登录才归一。测试：`device-sync.test.js` adoptDeviceId 4 用例。
 
 ③ **时钟偏差的替换轮次（✅ 已实施 2026-09-05）**
 

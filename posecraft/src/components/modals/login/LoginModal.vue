@@ -193,6 +193,7 @@ import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 import AgreementModals from '@/components/common/AgreementModals.vue';
+import { adoptDeviceId } from '@nodeservers/shared-device';
 
 const props = defineProps({
   isOpen: Boolean
@@ -343,6 +344,13 @@ const handleMessage = async (event: MessageEvent) => {
 
   if (event.data && event.data.type === 'LOGIN_SUCCESS') {
     let { token, sessionToken, user } = event.data;
+
+    // 跨 origin 设备身份归一：采纳 oauth21 权威域下发的 device_id（格式 + 平台段
+    // 双重校验，失败仅告警不阻断登录）。必须在 bindSession 之前执行——绑定请求
+    // 即携带统一 ID，登录基准指纹与后续请求一致，不会触发风险误报。
+    if (event.data.deviceId) {
+      adoptDeviceId(event.data.deviceId);
+    }
 
     let accountKey: string | null = null;
     let rememberMe = false;

@@ -40,6 +40,7 @@ export {
   initDeviceSync,
   getCurrentDeviceId,
   setDeviceId,
+  adoptDeviceId,
   clearDeviceId,
   getDeviceIdStats
 } from './device-sync.js';

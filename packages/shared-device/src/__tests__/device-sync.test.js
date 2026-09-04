@@ -17,6 +17,7 @@ import {
   initDeviceSync,
   getCurrentDeviceId,
   setDeviceId,
+  adoptDeviceId,
   clearDeviceId,
   getDeviceIdStats
 } from '../device-sync.js';
@@ -218,6 +219,46 @@ describe('initDeviceSync 与跨标签页同步', () => {
     initDeviceSync();
     const storageListeners = windowStub.addedListeners.filter(l => l.type === 'storage');
     expect(storageListeners).toHaveLength(1);
+  });
+});
+
+describe('adoptDeviceId 跨 origin 归一采纳', () => {
+  test('合法同平台 ID 采纳成功，getStableDeviceId 立即返回统一 ID', () => {
+    const localId = getStableDeviceId(); // 本地已有旧身份
+    const ssoId = makeValidId(5); // oauth21 权威域下发的 ID
+
+    expect(adoptDeviceId(ssoId)).toBe(true);
+    expect(getCurrentDeviceId()).toBe(ssoId);
+    // 缓存失效回归：采纳后下一个请求立即携带统一 ID
+    expect(getStableDeviceId()).toBe(ssoId);
+    expect(localId).not.toBe(ssoId);
+  });
+
+  test('格式非法拒绝采纳且不改变本地状态', () => {
+    const before = makeValidId(1);
+    setDeviceId(before);
+
+    expect(adoptDeviceId('garbage!')).toBe(false);
+    expect(getCurrentDeviceId()).toBe(before);
+  });
+
+  test('平台段与本机 UA 不一致拒绝采纳（防握手消息伪造）', () => {
+    // 测试环境 UA 非 iOS，IOS 平台段应被拒
+    const iosId = `IOS-${encodeTimestamp(Date.now())}-Ab3dE9`;
+    expect(adoptDeviceId(iosId)).toBe(false);
+    expect(getCurrentDeviceId()).toBeNull();
+  });
+
+  test('采纳变更 ID 时触发 onDeviceIdChange 回调', () => {
+    const oldId = makeValidId(2);
+    setDeviceId(oldId);
+
+    const changes = [];
+    windowStub.deviceSync = { onDeviceIdChange: (o, n) => changes.push([o, n]) };
+
+    const ssoId = makeValidId(1);
+    expect(adoptDeviceId(ssoId)).toBe(true);
+    expect(changes).toEqual([[oldId, ssoId]]);
   });
 });
 
