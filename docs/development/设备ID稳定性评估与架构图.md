@@ -63,6 +63,9 @@ ancestorOrigins），父窗口侧 `event.origin + event.source` 双重校验，�
 `validateDeviceIdFormat` + 平台段与本机 UA 一致性双校验（共享包内聚，伪造/损坏
 消息直接拒绝且不改变本地状态）。**注意**：归一发生在登录时；已登录会话的存量
 per-origin ID 保持到下次登录才归一。测试：`device-sync.test.js` adoptDeviceId 4 用例。
+**账户关联扩展点**：管理端已提供 `GET /admin/user/v1/devices/accounts?deviceId=`
+（`device-account.service.js`），按 device_id 反查登录过的账户列表（uid 集合 +
+loginCount + 活跃会话标记），后续账户关联功能可直接基于该响应建立关联关系。
 
 ③ **时钟偏差的替换轮次（✅ 已实施 2026-09-05）**
 
