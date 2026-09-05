@@ -16,9 +16,6 @@
  */
 
 import crypto from 'node:crypto';
-
-/** header ID 视为"刚生成"（localStorage 丢失后新造）的判定窗口（毫秒） */
-const REBORN_WINDOW_MS = 10_000;
 import {
   verifyAndNormalizeDeviceId,
   generateServerSideDeviceId,
@@ -26,6 +23,22 @@ import {
   parseDeviceId
 } from './device-id-service.js';
 import { COOKIE_OPTIONS } from './cookie.js';
+
+/** header ID 视为"刚生成"（localStorage 丢失后新造）的判定窗口（毫秒） */
+const REBORN_WINDOW_MS = 10_000;
+
+/** 日志中外部输入的最大展示长度（防脏数据刷屏/日志注入） */
+const MAX_LOG_LENGTH = 48;
+
+/**
+ * 截断外部输入用于日志展示
+ * @param {string} value 原始值
+ * @returns {string} 截断后的安全展示值
+ */
+function forLog(value) {
+  const safe = String(value);
+  return safe.length > MAX_LOG_LENGTH ? `${safe.slice(0, MAX_LOG_LENGTH)}…` : safe;
+}
 
 /**
  * 设备类型常量（语义值，存 session.deviceType）
@@ -103,7 +116,7 @@ export async function getDeviceId(request) {
       const headerInfo = parseDeviceId(header);
       const headerJustBorn = headerInfo && Date.now() - headerInfo.timestamp < REBORN_WINDOW_MS;
       if (!headerInfo || headerJustBorn) {
-        console.log(`🔄 [DeviceId] localStorage 丢失，从 httpOnly cookie 恢复设备身份: ${cookieDeviceId}`);
+        console.log(`🔄 [DeviceId] localStorage 丢失，从 httpOnly cookie 恢复设备身份: ${forLog(cookieDeviceId)}`);
         return cookieValidation.normalizedId;
       }
     }
@@ -118,7 +131,7 @@ export async function getDeviceId(request) {
       if (validation.valid) {
         // 验证通过，使用规范化 ID
         if (validation.shouldReplace) {
-          console.warn(`⚠️ [DeviceId] 前端 ID 无效，已替换：${clientId} → ${validation.normalizedId}`);
+          console.warn(`⚠️ [DeviceId] 前端 ID 无效，已替换：${forLog(clientId)} → ${validation.normalizedId}`);
         }
         return validation.normalizedId;
       }

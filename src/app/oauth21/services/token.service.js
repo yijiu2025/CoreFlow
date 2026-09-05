@@ -21,6 +21,7 @@ import UserDao from '../dao/user.dao.js';
 import { verifyPKCE, isValidCodeVerifier } from '../crypto/pkce.js';
 import { generateToken } from '../crypto/tokens.js';
 import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';
+import { COOKIE_POLICY } from '../../../framework/auth/cookie.js';
 import config from '../config/config.js';
 import { checkScopeSubset } from '../config/scope-registry.js';
 
@@ -334,23 +335,24 @@ class TokenService {
       }
 
       // JWT 模式：access/refresh 写 Cookie（Session 模式 result 无 access_token，跳过）
-      const isProduction = process.env.NODE_ENV === 'production';
       if (result?.access_token) {
         reply.setCookie('access_token', result.access_token, {
           httpOnly: true,
-          secure: isProduction,
+          secure: COOKIE_POLICY.secure,
           maxAge: result.expires_in || 600,
           path: '/',
-          sameSite: 'lax'
+          sameSite: COOKIE_POLICY.sameSite,
+          ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
         });
       }
       if (result?.refresh_token) {
         reply.setCookie('refresh_token', result.refresh_token, {
           httpOnly: true,
-          secure: isProduction,
+          secure: COOKIE_POLICY.secure,
           maxAge: config.jwt.refreshTokenTTL || 604800,
           path: '/oauth2.1/token',
-          sameSite: 'strict'
+          sameSite: COOKIE_POLICY.refreshSameSite,
+          ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
         });
       }
 

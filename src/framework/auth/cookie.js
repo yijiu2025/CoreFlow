@@ -45,6 +45,48 @@ const USER_COOKIE_TTL = 15552000; // 180天
 /** 旧 sid_r 轮转后保留"已轮转"标记的时长（秒），用于复用盗用检测；默认 7 天 */
 const ROTATED_RETENTION = parseInt(process.env.ROTATED_RETENTION) || 604800;
 
+// ── 分离部署 Cookie 策略（环境变量统一出口，全仓 cookie 选项都引用这里）──
+//
+// 同域/同主域部署（默认，推荐）：sameSite=lax，CSRF 防御最佳，无需任何配置。
+// 前后端真跨站部署（不同站点域名直连 API）：浏览器不随跨站请求携带 lax/strict
+// cookie（session 认证与 device_id 兜底全部失效），必须配置：
+//   COOKIE_SAMESITE=none + COOKIE_SECURE=true（SameSite=None 强制要求 HTTPS）
+// 并在 CORS 放行前端 origin（app.js CORS_ORIGINS）。生产推荐同域反代而非跨站直连。
+
+/** cookie sameSite：COOKIE_SAMESITE（lax/none/strict），默认 lax */
+const COOKIE_SAMESITE = process.env.COOKIE_SAMESITE || 'lax';
+
+/** cookie secure：COOKIE_SECURE 显式指定；默认生产 true / 开发 false。
+ *  SameSite=None 时浏览器强制要求 Secure，http 下 cookie 直接被拒收，自动纠正并告警 */
+const COOKIE_SECURE =
+  process.env.COOKIE_SECURE === 'true'
+    ? true
+    : process.env.COOKIE_SECURE === 'false'
+      ? false
+      : process.env.NODE_ENV === 'production';
+const EFFECTIVE_SECURE = COOKIE_SAMESITE === 'none' ? true : COOKIE_SECURE;
+if (COOKIE_SAMESITE === 'none' && !COOKIE_SECURE) {
+  console.warn('⚠️ [Auth] COOKIE_SAMESITE=none 需要 COOKIE_SECURE=true（HTTPS），已自动纠正');
+}
+
+/** cookie domain：COOKIE_DOMAIN（跨子域共享时设主域如 .example.com），默认不设 */
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || '';
+
+/** 刷新类 cookie（sid_r / refresh_token）的 sameSite：默认维持 strict 加固
+ *  （path 收窄到刷新端点，暴露面小）；跨站部署时随 COOKIE_SAMESITE 切 none */
+const REFRESH_SAMESITE = process.env.COOKIE_SAMESITE || 'strict';
+
+/** 统一 Cookie 策略出口：cookie.js 内部与 oauth21 cookie 选项均引用此对象 */
+const COOKIE_POLICY = {
+  sameSite: COOKIE_SAMESITE,
+  secure: EFFECTIVE_SECURE,
+  domain: COOKIE_DOMAIN,
+  refreshSameSite: REFRESH_SAMESITE
+};
+
+/** domain 选项片段（COOKIE_DOMAIN 为空时不展开，避免覆盖 Fastify 默认） */
+const COOKIE_DOMAIN_OPTS = COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {};
+
 /** Cookie 名称 */
 const COOKIE_SID = 'sid';
 const COOKIE_SID_R = 'sid_r';
@@ -84,13 +126,13 @@ function accountKeyForUid(uid) {
 /** 凭证 cookie 选项（HttpOnly，JS 不可读；半年有效期，使用即续期） */
 const USER_COOKIE_OPTS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
+  secure: COOKIE_POLICY.secure,
+  sameSite: COOKIE_POLICY.sameSite,
   // path 收窄到 switch-account 端点：k_<HMAC(uid)> 凭证 cookie 只在切换账号时携带，
   // 不随业务请求发送（减少凭证暴露面；其他端点不读此 cookie）
   path: '/auth/v1/switch-account',
   maxAge: USER_COOKIE_TTL,
-  ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
+  ...COOKIE_DOMAIN_OPTS
 };
 
 /**
@@ -153,28 +195,32 @@ function verifyCookie(cookieValue) {
 const COOKIE_OPTIONS = {
   SID: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/'
+    secure: COOKIE_POLICY.secure,
+    sameSite: COOKIE_POLICY.sameSite,
+    path: '/',
+    ...COOKIE_DOMAIN_OPTS
   },
-  // sid_r 仅在刷新端点携带：path 收窄到 /auth/v1/refresh-session + sameSite=strict，
-  // 避免长期 refresh token 在每个业务请求暴露（与 JWT 模式 refresh_token 一致）
+  // sid_r 仅在刷新端点携带：path 收窄到 /auth/v1/refresh-session + sameSite=strict（默认），
+  // 避免长期 refresh token 在每个业务请求暴露（与 JWT 模式 refresh_token 一致）；
+  // 跨站分离部署时随 COOKIE_SAMESITE=none 切换
   SID_R: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    path: REFRESH_COOKIE_PATH
+    secure: COOKIE_POLICY.secure,
+    sameSite: COOKIE_POLICY.refreshSameSite,
+    path: REFRESH_COOKIE_PATH,
+    ...COOKIE_DOMAIN_OPTS
   },
   // device_id：稳定设备标识 cookie，供风险检测 getDeviceId 读取基准。
   // 跨域 iframe 场景：oauth21 登录域写的 cookie posecraft 域带不过去，
   // 故 bind-session 时在 posecraft 域也写一份（用登录时生成的稳定值）。
-  // HttpOnly（JS 不可读防泄露）+ 10 年长期 + lax + path='/' 全域可读。
+  // HttpOnly（JS 不可读防泄露）+ 10 年长期 + path='/' 全域可读。
   DEVICE: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: COOKIE_POLICY.secure,
+    sameSite: COOKIE_POLICY.sameSite,
     path: '/',
-    maxAge: 10 * 365 * 24 * 60 * 60
+    maxAge: 10 * 365 * 24 * 60 * 60,
+    ...COOKIE_DOMAIN_OPTS
   }
 };
 
@@ -182,6 +228,7 @@ export {
   signCookie,
   verifyCookie,
   COOKIE_OPTIONS,
+  COOKIE_POLICY,
   SHORT_SESSION_TTL,
   LONG_SESSION_TTL,
   REFRESH_TOKEN_TTL,

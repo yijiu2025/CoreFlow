@@ -6,23 +6,29 @@
  * ID 格式：{PLATFORM}-{ENCODED_TIMESTAMP}-{RANDOM_SUFFIX}
  * 示例：WEB-DaBOSbNdSuc-8s4T（ENCODED_TIMESTAMP 为 11 字符 Base62）
  *
+ * 时间戳混淆 + Base62 编解码算法以 npm 包 stable-deviceid/base62-timestamp
+ * 为唯一事实来源（前端浏览器与后端 Node 共用同一实现，物理上不可能漂移；
+ * device-id-parity.test.js 守护"后端校验规则 × 共享算法"的集成行为）。
+ * 依赖前后端分开部署安全：算法来自 npm registry，不依赖 monorepo 目录结构。
+ *
  * @author yijiu2025
  * @since 2026-09-01
  * @since 2026-09-03 校验长度对齐实际编码输出（11 字符），移除不可达的熵值检查
+ * @since 2026-09-05 时钟偏差容差 ±5 分钟；Base62 算法单源化至 stable-deviceid 包
  */
 
 import crypto from 'node:crypto';
+import { BASE62_CHARS, ENCODED_TS_LENGTH, encodeTimestamp, decodeTimestamp } from 'stable-deviceid/base62-timestamp';
 
-const BASE62_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-// 64 位魔数 XOR 后的值约 1.139e19，Base62 编码固定产出 11 字符（padStart 补零不生效），
-// 校验长度必须与编码输出一致，否则所有 ID（含服务端自生成）都过不了校验
-const ENCODED_TS_LENGTH = 11;
 const RANDOM_SUFFIX_LENGTH = 6;
 const MAX_AGE_DAYS = 365; // 设备 ID 最长有效期（1 年）
 
 /** 时钟偏差容差：客户端时钟超前服务器在此范围内不视为"未来时间"伪造，避免无谓的替换轮次。
- *  与前端共享包 device-id.js 的 CLOCK_SKEW_TOLERANCE_MS 保持一致（前后端同规则）。 */
+ *  与前端共享包 device-id 的 CLOCK_SKEW_TOLERANCE_MS 保持一致（前后端同规则）。 */
 const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
+
+/** 设备 ID 长度上限（合法 ID 最长 22 字符），防超长 x-device-id 头刷日志/浪费解析 */
+const MAX_DEVICE_ID_LENGTH = 128;
 
 /**
  * 设备 ID 验证结果
@@ -42,6 +48,12 @@ const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
  */
 export async function validateDeviceId(deviceId) {
   const result = { valid: false };
+
+  // 0. 长度防御：合法 ID 最长 22 字符，超长输入直接拒绝（防脏数据进解析与日志）
+  if (typeof deviceId !== 'string' || !deviceId || deviceId.length > MAX_DEVICE_ID_LENGTH) {
+    result.error = '格式错误：非法输入或超长';
+    return result;
+  }
 
   // 1. 格式校验
   const parts = deviceId.split('-');
@@ -160,42 +172,11 @@ export function generateServerSideDeviceId(userAgent) {
  * @param {string} userAgent - User-Agent 头
  * @returns {'WEB' | 'IOS' | 'ANDROID'}
  */
-function detectPlatform(userAgent) {
+export function detectPlatform(userAgent) {
   const ua = userAgent.toLowerCase();
   if (/ipad|iphone|ipod/.test(ua)) return 'IOS';
   if (/android/.test(ua)) return 'ANDROID';
   return 'WEB';
-}
-
-/**
- * 加密时间戳为 Base62 字符串
- * @param {number} timestamp - 毫秒时间戳
- * @returns {string} 11 字符 Base62 编码
- */
-function encodeTimestamp(timestamp) {
-  const OFFSET = 1704067200000n; // 2024-01-01
-  const MAGIC = 0x9e3779b97f4a7c15n;
-
-  const adjusted = BigInt(timestamp) - OFFSET;
-  const obfuscated = adjusted ^ MAGIC;
-  const encoded = toBase62(obfuscated);
-
-  return encoded.padStart(ENCODED_TS_LENGTH, '0');
-}
-
-/**
- * 解码 Base62 字符串为时间戳
- * @param {string} encoded - 11 字符 Base62 编码
- * @returns {number} 毫秒时间戳
- */
-function decodeTimestamp(encoded) {
-  const OFFSET = 1704067200000n;
-  const MAGIC = 0x9e3779b97f4a7c15n;
-
-  const obfuscated = fromBase62(encoded);
-  const adjusted = obfuscated ^ MAGIC;
-
-  return Number(adjusted + OFFSET);
 }
 
 /**
@@ -215,45 +196,6 @@ function generateBase62Random(length) {
         result += BASE62_CHARS[buffer[i] % BASE62_CHARS.length];
       }
     }
-  }
-
-  return result;
-}
-
-/**
- * 数字转 Base62 字符串（支持 BigInt）
- * @param {number|bigint} num - 正整数
- * @returns {string} Base62 字符串
- */
-function toBase62(num) {
-  const n = typeof num === 'bigint' ? num : BigInt(num);
-  if (n === 0n) return '0';
-
-  let result = '';
-  let remaining = n;
-
-  while (remaining > 0n) {
-    result = BASE62_CHARS[Number(remaining % 62n)] + result;
-    remaining = remaining / 62n;
-  }
-
-  return result;
-}
-
-/**
- * Base62 字符串转数字（返回 BigInt）
- * @param {string} str - Base62 字符串
- * @returns {bigint} BigInt
- */
-function fromBase62(str) {
-  let result = 0n;
-
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    const value = BASE62_CHARS.indexOf(char);
-    if (value === -1) throw new Error(`Invalid Base62 character: ${char}`);
-
-    result = result * 62n + BigInt(value);
   }
 
   return result;
@@ -295,3 +237,5 @@ export function parseDeviceId(deviceId) {
     return null;
   }
 }
+
+export { decodeTimestamp };
