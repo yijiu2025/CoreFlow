@@ -1,5 +1,5 @@
 import request from '@/utils/request';
-import { getStableDeviceId } from '@nodeservers/shared-device';
+import { getStableDeviceId } from 'deviceid';
 import { rsaEncrypt, clearPublicKeyCache, buildEncryptedLoginPayload } from '@/utils/crypto';
 
 /**

@@ -3,7 +3,7 @@
  * 接入 CoreFlow 认证
  */
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
-import { getStableDeviceId, handleDeviceSyncInResponse, isDeviceFingerprintEnabled, getDeviceFingerprint } from '@nodeservers/shared-device';
+import { getStableDeviceId, handleDeviceSyncInResponse, isDeviceFingerprintEnabled, getDeviceFingerprint } from 'deviceid';
 
 const TOKEN_KEY = 'posecraft_token';
 

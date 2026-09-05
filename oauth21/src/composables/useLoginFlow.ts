@@ -17,7 +17,7 @@ import { ref } from 'vue';
 import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { postToParent } from '@/utils/parent';
-import { getStableDeviceId } from '@nodeservers/shared-device';
+import { getStableDeviceId } from 'deviceid';
 import { useCountdown } from './useCountdown';
 
 /** 登录响应判别联合（按 action 区分四种分支） */

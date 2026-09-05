@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@nodeservers/shared-device": "*",
+    "deviceid": "*",
     "@vueuse/core": "^14.3.0",
     "axios": "^1.6.2",
     "echarts": "^5.4.3",

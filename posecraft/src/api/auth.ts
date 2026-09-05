@@ -3,7 +3,7 @@
  * 接入 CoreFlow OAuth21 授权
  */
 import service from '@/utils/request';
-import { getStableDeviceId } from '@nodeservers/shared-device';
+import { getStableDeviceId } from 'deviceid';
 
 export const authApi = {
   /** 登录 */

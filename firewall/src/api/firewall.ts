@@ -8,7 +8,7 @@
  * - createHttp() 工厂：可创建独立实例（刷新 token 时避免递归拦截）
  */
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
-import { getStableDeviceId, handleDeviceSyncInResponse, isDeviceFingerprintEnabled, getDeviceFingerprint } from '@nodeservers/shared-device';
+import { getStableDeviceId, handleDeviceSyncInResponse, isDeviceFingerprintEnabled, getDeviceFingerprint } from 'deviceid';
 import type {
   MonitorSummary,
   SettingsResponse,

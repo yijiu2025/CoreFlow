@@ -1,4 +1,4 @@
-# @nodeservers/shared-device
+# deviceid
 
 跨前端共享的设备 ID / 设备指纹工具包（npm workspace 包）。
 
@@ -81,19 +81,19 @@ packages/shared-device/
 
 ```json
 // package.json → dependencies
-"@nodeservers/shared-device": "*"
+"deviceid": "*"
 ```
 
 ```ts
 // vite.config.ts → resolve.alias
-'@nodeservers/shared-device': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url))
+'deviceid': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url))
 ```
 
 ```json
 // tsconfig.json → compilerOptions.paths + include
 "paths": {
-  "@nodeservers/shared-device": ["../packages/shared-device/src/index.ts"],
-  "@nodeservers/shared-device/*": ["../packages/shared-device/src/*"]
+  "deviceid": ["../packages/shared-device/src/index.ts"],
+  "deviceid/*": ["../packages/shared-device/src/*"]
 }
 // include 必须加 "../packages/shared-device/src/**/*.ts"，否则 vue-tsc 类型检查不过
 ```
@@ -103,7 +103,7 @@ packages/shared-device/
 
 ```ts
 import axios from 'axios';
-import { setupDeviceSync } from '@nodeservers/shared-device';
+import { setupDeviceSync } from 'deviceid';
 
 const http = axios.create({ baseURL: '/api', withCredentials: true });
 setupDeviceSync(http); // 建议在实例创建后立即调用（响应同步先于业务拦截器执行）
@@ -116,7 +116,7 @@ setupDeviceSync(http); // 建议在实例创建后立即调用（响应同步先
 原生 fetch / 显式带头场景（如 verifyChallenge 与后端验证标记对齐）：
 
 ```ts
-import { getDeviceHeaders } from '@nodeservers/shared-device';
+import { getDeviceHeaders } from 'deviceid';
 fetch(url, { headers: { ...getDeviceHeaders() } });
 ```
 
@@ -124,7 +124,7 @@ fetch(url, { headers: { ...getDeviceHeaders() } });
 postMessage 后、bindSession 之前采纳权威 ID（跨 origin 身份归一）：
 
 ```ts
-import { adoptDeviceId } from '@nodeservers/shared-device';
+import { adoptDeviceId } from 'deviceid';
 if (event.data.type === 'LOGIN_SUCCESS' && event.data.deviceId) {
   adoptDeviceId(event.data.deviceId); // 包内做格式 + 平台段双校验
 }
@@ -134,23 +134,23 @@ if (event.data.type === 'LOGIN_SUCCESS' && event.data.deviceId) {
 
 ## 接入方式（手动拦截器，旧方式——现有三前端现状）
 
-本包 `exports` 直接指向源码，**仅限 workspace 内通过 vite alias 消费**，
-不发布到 npm。接入步骤（以 oauth21 为例）：
+workspace 内三前端通过 vite alias 直连 `src` 源码消费（开发体验不变）。
+接入步骤（以 oauth21 为例）：
 
 ```js
 // vite.config.js
-alias: { '@nodeservers/shared-device': path.resolve(__dirname, '../packages/shared-device/src/index.ts') }
+alias: { 'deviceid': path.resolve(__dirname, '../packages/shared-device/src/index.ts') }
 ```
 
 ```json
 // tsconfig.app.json → paths
-"@nodeservers/shared-device": ["../packages/shared-device/src/index.ts"],
-"@nodeservers/shared-device/*": ["../packages/shared-device/src/*"]
+"deviceid": ["../packages/shared-device/src/index.ts"],
+"deviceid/*": ["../packages/shared-device/src/*"]
 ```
 
 ```json
 // package.json → dependencies
-"@nodeservers/shared-device": "*"
+"deviceid": "*"
 ```
 
 应用入口调用一次 `initDeviceSync()`；请求拦截器注入
@@ -176,3 +176,20 @@ localStorage / navigator / document）在 node 测试环境用桩对象模拟。
 - `isDeviceFingerprintEnabled` 依赖 `import.meta.env`（Vite）与 DOM，仅浏览器环境可用。
 - `crypto.getRandomValues` 不可用的极旧浏览器会以 `Math.random` 生成随机后缀
   （熵降低，仅影响唯一性不影响安全性），并 console.warn 告警。
+
+## 构建与发布（npm）
+
+包为标准 npm 结构：`src/` 源码（workspace 直连消费）+ `dist/` 构建产物（npm 消费）。
+
+```bash
+cd packages/shared-device
+npm run build            # esbuild 逐模块转换 + 复制 .d.ts + tsc 产出 dist/index.d.ts
+npm publish              # prepack 钩子自动重新构建；publishConfig 已配 access: public
+```
+
+- 发布形态：ESM-only（`exports["."].import`），`files: ["dist", "README.md", "LICENSE"]`，
+  `sideEffects: false`（tree-shaking 友好），engines `node >= 18`。
+- **非 Vite 消费方注意**：`import.meta.env` 是 Vite 注入的，其他构建器下为 undefined
+  （包内已做降级守卫，不会报错）。指纹开关可用页面 `<meta name="device-fp" content="true">`
+  控制，或调用方在拦截层自行决策后传 `setupDeviceSync(http, { fingerprint: true })` 强制开启。
+- 版本流程：改动后 `npm version patch|minor|major`，commit tag 后 publish。

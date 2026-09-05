@@ -13,8 +13,8 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@nodeservers/shared-device": ["../packages/shared-device/src/index.ts"],
-      "@nodeservers/shared-device/*": ["../packages/shared-device/src/*"]
+      "deviceid": ["../packages/shared-device/src/index.ts"],
+      "deviceid/*": ["../packages/shared-device/src/*"]
     },
     "types": ["vite/client"]
   },

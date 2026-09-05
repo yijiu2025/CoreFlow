@@ -9,7 +9,7 @@ import router from './router';
 import i18n from './i18n'; // 如果有国际化配置
 import './assets/styles/main.scss';
 import request from './utils/request';
-import { initDeviceSync } from '@nodeservers/shared-device';
+import { initDeviceSync } from 'deviceid';
 import { reportError } from './composables/useErrorReporter';
 
 // 设备 ID 全局同步初始化（跨标签页 storage 事件监听 + 变更回调注册）
