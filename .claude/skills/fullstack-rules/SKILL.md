@@ -1,6 +1,6 @@
 ---
 name: fullstack-rules
-version: 2.2.0
+version: 2.3.0
 description: 前后端全栈开发规范。涵盖：创建项目、新增App、写API、写页面、调外部接口、修复Bug、代码审查。每次触发时，必须按以下顺序执行：① 有外部 API 的先 curl 验证格式 ② 写后端路由 ③ curl 验证后端 ④ 写前端 ⑤ 验证全链路。禁止假数据，禁止半截功能。审查代码时执行企业级审查清单。代码审查模式：无需执行①-⑤，直接执行审查清单。
 type: prompt
 whenToUse: 用户涉及本仓库前后端代码操作时触发：创建新项目、新增业务模块、编写前后端代码、设计API接口、审查代码质量、修复Bug、开发新功能、调用外部API、对接第三方数据、创建Vue页面、编写Node.js后端、设计数据库模型、配置路由、测试接口。涉及 KX 架构文件 / .kx / 页面描述语言时，按需加载 references/kx.md。
@@ -24,9 +24,10 @@ whenToUse: 用户涉及本仓库前后端代码操作时触发：创建新项目
 5. 验证全链路（浏览器或 curl 确认数据正常展示）
 ```
 
-> 高频任务有**端到端剧本**（新增 API / 新增页面 / 对接外部 API / 修 Bug / 代码审查）：
+> 高频任务有**端到端剧本**（新增 API / 新增页面 / 对接外部 API / 修 Bug / 代码审查 / 安全审查）：
 > 按 [workflows.md](references/workflows.md) 剧本逐步执行，剧本内含各阶段验收清单。
 > 修 Bug 前先扫 [pitfalls.md](references/pitfalls.md) 事故复盘库——确认不是历史事故的同型问题。
+> 攻击面大的模块合入前，按 [orchestration.md](references/orchestration.md) 编排安全类专项 skill 做深度扫描。
 
 ## 开发规范
 
@@ -117,6 +118,7 @@ whenToUse: 用户涉及本仓库前后端代码操作时触发：创建新项目
 | 写 Vue 组件时            | [frontend/web/vue.md](references/frontend/web/vue.md) | TS 配置、Axios、认证、路由守卫、目录规范    |
 | 写测试时                 | [testing.md](references/testing.md)               | 测试命名、Jest/Vitest 模板、覆盖率阈值          |
 | 涉及安全/敏感数据时      | [security.md](references/security.md)             | 敏感信息、XSS、SQL 注入、权限校验、仓库防线一览 |
+| 需要专项深度执行时       | [orchestration.md](references/orchestration.md)   | 编排安全测试/UI 设计/Redis 等其他 skill（决策表） |
 | 跑检查/验证时            | [toolbox.md](references/toolbox.md)               | 检查金字塔、场景化命令矩阵、提交前清单          |
 | 新项目/新 App            | [requirement-intake.md](references/requirement-intake.md) → [kx.md](references/kx.md) | 需求确认流程 → KX 语法规范 |
 | 涉及 KX / .kx 文件       | [kx.md](references/kx.md) → [SPEC.md](assets/project-template/kt/kx-lang/SPEC.md) | 操作规范 → 完整语法与 AI 生成映射表 |
