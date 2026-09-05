@@ -16,11 +16,12 @@ packages/shared-device/
     ├── device-id.js/.d.ts        # 稳定设备 ID：生成 / 严格校验 / 存量自查
     ├── device-sync.js/.d.ts      # 响应头同步：X-Device-Id 写回 / 缓存一致性
     ├── device-fingerprint.js/.d.ts # canvas + WebGL 指纹（默认关闭）
+    ├── device-setup.js/.d.ts     # 一站式接入：axios 拦截器 + initDeviceSync（新前端 2 行接入）
     ├── sha256.js/.d.ts           # SHA-256：Web Crypto 优先，纯 JS 降级
     ├── base62-timestamp.js/.d.ts # 时间戳混淆 + Base62（前后端共享算法唯一事实来源）
     ├── storage.js/.d.ts          # localStorage 安全封装（隐私模式内存降级）
     ├── env.d.ts          # vite/client 类型引用
-    └── __tests__/        # 单元测试（根 Jest 直接运行，76 用例）
+    └── __tests__/        # 单元测试（根 Jest 直接运行，93 用例）
 ```
 
 ## 实现形态约定（.js + 手写 .d.ts）
@@ -37,6 +38,7 @@ packages/shared-device/
 | --- | --- | --- |
 | `device-id` | `getStableDeviceId` / `validateDeviceIdFormat` / `invalidateCachedDeviceId` / `parseDeviceId` / `getPlatform` / `STORAGE_KEY` 等 | 从存储（key `cf_device_id`）取/生成结构化 ID；存量 ID 严格自查（格式/过期/未来时间，规则与后端 `validateDeviceId` 逐条对齐）；隐私模式降级为会话内临时 ID |
 | `device-sync` | `syncDeviceFromHeaders` / `handleDeviceSyncInResponse` / `initDeviceSync` / `getCurrentDeviceId` / `setDeviceId` / `adoptDeviceId` / `clearDeviceId` / `getDeviceIdStats` | 从响应头 `X-Device-Id`/`X-Device-Id-Updated` 同步 device_id；兼容 Headers / AxiosHeaders / 普通对象；写后失效 device-id 内存缓存（服务端下发新 ID 下一请求即生效）；`setDeviceId` 入口校验拒绝脏值；`adoptDeviceId` 采纳 SSO 握手下发的权威 ID（跨 origin 身份归一，格式 + 平台段双校验）；跨标签页 storage 监听 |
+| `device-setup` | `setupDeviceSync` / `getDeviceHeaders` | **新前端推荐入口**：一站式注册 axios 请求/响应拦截器（x-device-id + 按需指纹头 + 响应头同步）并自动 initDeviceSync，返回 dispose 可卸载；`getDeviceHeaders` 供 fetch / 显式带头场景 |
 | `device-fingerprint` | `getDeviceFingerprint` / `isDeviceFingerprintEnabled` | canvas + WebGL 特征 SHA-256（前 32 位 hex）；Promise 缓存（并发去重、空结果也缓存）；meta 标签或 `VITE_DEVICE_FINGERPRINT=true` 才启用，默认关闭（隐私友好） |
 | `sha256` | `sha256` / `sha256Pure` | 优先 Web Crypto API，非安全上下文（HTTP）自动降级为内置纯 JS 实现（与 Node crypto 全量对拍测试守护） |
 | `base62-timestamp` | `encodeTimestamp` / `decodeTimestamp` / `toBase62` / `fromBase62` 等 | 时间戳混淆 + Base62 编解码，**前后端共享算法的唯一事实来源** |
@@ -73,7 +75,64 @@ packages/shared-device/
   静默降级不抛异常；指纹双失败（headless/反指纹浏览器）返回空串而非常量哈希，
   防止此类浏览器被误匹配。
 
-## 接入方式
+## 新前端快速接入（三步）
+
+**第 1 步：工程三件套**（新前端 posecraft-like 结构，三选一的 alias 写法见下方"接入方式"）
+
+```json
+// package.json → dependencies
+"@nodeservers/shared-device": "*"
+```
+
+```ts
+// vite.config.ts → resolve.alias
+'@nodeservers/shared-device': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url))
+```
+
+```json
+// tsconfig.json → compilerOptions.paths + include
+"paths": {
+  "@nodeservers/shared-device": ["../packages/shared-device/src/index.ts"],
+  "@nodeservers/shared-device/*": ["../packages/shared-device/src/*"]
+}
+// include 必须加 "../packages/shared-device/src/**/*.ts"，否则 vue-tsc 类型检查不过
+```
+
+**第 2 步：axios 实例创建后一行接入**（自动完成：x-device-id 头注入、指纹头按需注入、
+响应头同步、initDeviceSync 跨标签页监听）：
+
+```ts
+import axios from 'axios';
+import { setupDeviceSync } from '@nodeservers/shared-device';
+
+const http = axios.create({ baseURL: '/api', withCredentials: true });
+setupDeviceSync(http); // 建议在实例创建后立即调用（响应同步先于业务拦截器执行）
+
+// 可选项：{ fingerprint: true 强制开 / false 强制关（默认按环境判定）、
+//          onDeviceIdChange(oldId, newId) 变更回调 }
+// dispose：const dispose = setupDeviceSync(http)；dispose() 可卸载拦截器（HMR/单测用）
+```
+
+原生 fetch / 显式带头场景（如 verifyChallenge 与后端验证标记对齐）：
+
+```ts
+import { getDeviceHeaders } from '@nodeservers/shared-device';
+fetch(url, { headers: { ...getDeviceHeaders() } });
+```
+
+**第 3 步（SSO iframe 场景可选）**：登录弹窗收到 oauth21 `LOGIN_SUCCESS`
+postMessage 后、bindSession 之前采纳权威 ID（跨 origin 身份归一）：
+
+```ts
+import { adoptDeviceId } from '@nodeservers/shared-device';
+if (event.data.type === 'LOGIN_SUCCESS' && event.data.deviceId) {
+  adoptDeviceId(event.data.deviceId); // 包内做格式 + 平台段双校验
+}
+```
+
+环境变量开关：`VITE_DEVICE_FINGERPRINT=true` 启用设备指纹（默认关闭，隐私友好）。
+
+## 接入方式（手动拦截器，旧方式——现有三前端现状）
 
 本包 `exports` 直接指向源码，**仅限 workspace 内通过 vite alias 消费**，
 不发布到 npm。接入步骤（以 oauth21 为例）：

@@ -6,6 +6,7 @@
  * - device-id：稳定结构化设备 ID（localStorage 持久，跨账号复用）
  * - device-fingerprint：canvas + WebGL 浏览器特征指纹（默认不启用）
  * - device-sync：从响应头同步 device_id 到 localStorage
+ * - device-setup：一站式接入（axios 拦截器 + initDeviceSync，新前端 2 行接入）
  * - sha256：Web Crypto API 哈希（非安全上下文降级纯 JS）
  * - storage：localStorage 安全封装（隐私模式内存降级）
  *
@@ -15,6 +16,7 @@
  * @author yijiu2025
  * @since 2026-09-02
  * @since 2026-09-04 补齐常量/校验/类型导出；实现层迁移为 .js + .d.ts
+ * @since 2026-09-05 新增 adoptDeviceId（SSO 归一采纳）与 setupDeviceSync（一站式接入）
  */
 export {
   getStableDeviceId,
@@ -45,4 +47,6 @@ export {
   getDeviceIdStats
 } from './device-sync.js';
 export type { DeviceSyncOptions } from './device-sync.js';
+export { setupDeviceSync, getDeviceHeaders } from './device-setup.js';
+export type { AxiosLikeInstance, SetupDeviceSyncOptions } from './device-setup.js';
 export { sha256 } from './sha256.js';
