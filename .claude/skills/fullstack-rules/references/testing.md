@@ -60,14 +60,15 @@ test('登录失败时按钮恢复可用', () => { ... })
 ```
 src/
 ├── __tests__/
-│   ├── auth/           # 和 src/auth/ 对应
+│   ├── framework/auth/  # 和 src/framework/auth/ 对应
 │   │   └── session.test.js
 │   ├── api/            # 和 src/api/ 对应
 │   │   └── user.test.js
 │   └── helpers/        # 测试工具
 │       └── factory.js
-├── auth/
-│   └── session.js
+├── framework/
+│   └── auth/
+│       └── session.js
 └── api/
     └── user.js
 ```
@@ -79,12 +80,16 @@ src/
 ### 测试环境配置
 
 ```js
-// jest.config.js 或 package.json 中的 jest 配置
+// jest.config.js（仓库实际配置，ESM 模式）
+
+// 运行方式（ESM 需开启 vm-modules）：
+// node --experimental-vm-modules node_modules/jest/bin/jest.js
+// 单个测试：node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPatterns <pattern>
+export default {
 export default {
   testEnvironment: 'node',
   transform: {},
-  testMatch: ['**/__tests__/**/*.test.js'],
-  setupFilesAfterSetup: ['./src/__tests__/helpers/setup.js'],
+  testMatch: ['**/src/__tests__/**/*.test.js']
   coverageThreshold: {
     global: {
       branches: 30,

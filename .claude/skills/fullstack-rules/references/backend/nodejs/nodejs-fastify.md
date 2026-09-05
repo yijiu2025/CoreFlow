@@ -4,11 +4,12 @@
 
 ```
 src/
-├── db/            # Sequelize 实例 + 迁移 + 软删除钩子
-├── redis/         # Redis 连接 + 健康监控 + 各存储后端
-├── auth/          # Session + Cookie + ALS + StpUtil
-├── firewall/      # 五层拦截管道
-├── loader/        # 引擎扫描 registry/ 按数字前缀加载
+├── framework/     # 系统层基础设施
+│   ├── db/        #   Sequelize 实例 + 迁移 + 软删除钩子
+│   ├── redis/     #   Redis 连接 + 健康监控 + 各存储后端
+│   ├── auth/      #   Session + Cookie + ALS + StpUtil
+│   ├── firewall/  #   五层拦截管道
+│   └── loader/    #   引擎扫描 registry/ 按数字前缀加载
 ├── api/           # 路由（按应用分文件夹，含 guard.js）
 ├── app/<name>/    # 应用层（config + permission/ + dao/ + services/）
 ├── models/<name>/ # Sequelize 模型（按命名空间注册）
@@ -24,20 +25,22 @@ src/
 总路由由三个层级的前缀拼接而成，**写完 API 后必须逐级检查**：
 
 ```
-system.json 中 prefix: "/stick"          ← 系统级
-registerGroupMetadata 中 prefix: "/v1"   ← 分组级
-registerSecureRoute 中 url: "/analysis/:stockCode"  ← 路由级
+system.json 中 prefix: "/{appPrefix}"      ← 系统级
+registerGroupMetadata 中 prefix: "/v1"     ← 分组级
+registerSecureRoute 中 url: "/<resource>"  ← 路由级
 ────────────────────────────────────────────
-最终路由: /stick/v1/analysis/:stockCode
+最终路由: /{appPrefix}/v1/<resource>
 ```
 
 各层级配置示例：
 
-| 层级   | 配置位置                  | 示例                          | 说明                            |
-| ------ | ------------------------- | ----------------------------- | ------------------------------- |
-| System | `system.json`             | `"prefix": "/stick"`          | 功能域前缀，通常为 `/{appName}` |
-| Group  | `registerGroupMetadata()` | `prefix: '/v1'`               | 版本号前缀，通常为 `/v1`        |
-| Route  | `registerSecureRoute()`   | `url: '/analysis/:stockCode'` | 实际路径，不含前面的前缀        |
+| 层级   | 配置位置                  | 示例                        | 说明                            |
+| ------ | ------------------------- | --------------------------- | ------------------------------- |
+| System | `system.json`             | `"prefix": "/{appPrefix}"`  | 功能域前缀，通常为 `/{appName}` |
+| Group  | `registerGroupMetadata()` | `prefix: '/v1'`             | 版本号前缀，通常为 `/v1`        |
+| Route  | `registerSecureRoute()`   | `url: '/<resource>'`        | 实际路径，不含前面的前缀        |
+
+> 示例值来源：posecraft 系统使用 `/posecraft`（system prefix）+ `/v1`。
 
 > ⚠️ **常见错误**：`registerSecureRoute` 的 `url` 从 `/` 开始，但**不包含** system 和 group 的前缀。三个前缀由框架自动拼接，url 中不要重复写。
 
@@ -82,7 +85,7 @@ export default async function (fastify, opts) {
 ```json
 {
   "name": "<domain>",
-  "prefix": "/posecraft/v1",
+  "prefix": "/{appPrefix}/v1",
   "enabled": true,
   "requireLogin": false,
   "allowIps": []
@@ -96,11 +99,12 @@ export default async function (fastify, opts) {
 ## 二、DAO 模板 `src/app/<app>/dao/`
 
 ```js
-import sequelize from '../../../db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 
 class XxxDao {
+  /** 统一使用 getModel 获取模型（禁止动态 import 模型文件或 sequelize.models 直取） */
   getModel() {
-    return sequelize.models.Xxx;
+    return getModel('Xxx');
   }
 
   async findAll(options = {}) {
@@ -116,7 +120,7 @@ class XxxDao {
     const pageSize = options.pageSize || 20;
     const { count, rows } = await model.findAndCountAll({
       where,
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }],
+      include: [{ model: getModel('User'), as: 'author', attributes: ['uid', 'username', 'avatar'] }],
       order: [['created_at', 'DESC']],
       limit: pageSize,
       offset: (page - 1) * pageSize
@@ -128,7 +132,7 @@ class XxxDao {
     const model = this.getModel();
     return await model.findOne({
       where: { id, delete_version: 0 },
-      include: [{ model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] }]
+      include: [{ model: getModel('User'), as: 'author', attributes: ['uid', 'username', 'avatar'] }]
     });
   }
 
@@ -170,11 +174,11 @@ export default (sequelize, DataTypes) => {
       delete_version: { type: DataTypes.BIGINT, allowNull: false, defaultValue: 0 }
     },
     {
-      tableName: 'posecraft_xxx',
+      tableName: '{{app}}_xxx', // 示例取值：posecraft 应用的 posecraft_xxx
       timestamps: true,
       paranoid: false, // 使用自定义 delete_version 软删除，不启用 Sequelize 内置 paranoid
       indexes: [{ fields: ['user_id'] }, { fields: ['status'] }],
-      comment: 'PoseCraft Xxx 表'
+      comment: '{{App}} Xxx 表'
     }
   );
 
@@ -192,7 +196,7 @@ export default (sequelize, DataTypes) => {
 
 ```js
 export async function up(queryInterface, Sequelize) {
-  await queryInterface.createTable('posecraft_xxx', {
+  await queryInterface.createTable('{{app}}_xxx', {
     id: { type: Sequelize.BIGINT, primaryKey: true, autoIncrement: true },
     title: { type: Sequelize.STRING(200), allowNull: false },
     user_id: { type: Sequelize.BIGINT, allowNull: false },
@@ -204,7 +208,7 @@ export async function up(queryInterface, Sequelize) {
 }
 
 export async function down(queryInterface) {
-  await queryInterface.dropTable('posecraft_xxx');
+  await queryInterface.dropTable('{{app}}_xxx');
 }
 ```
 
@@ -239,8 +243,8 @@ function formatXxx(record, isOwner = false) {
 
 ```js
 include: [
-  { model: sequelize.models.User, as: 'author', attributes: ['uid', 'username', 'avatar'] },
-  { model: sequelize.models.Template, as: 'template', attributes: ['id', 'status', 'delete_version'], required: false }
+  { model: getModel('User'), as: 'author', attributes: ['uid', 'username', 'avatar'] },
+  { model: getModel('Template'), as: 'template', attributes: ['id', 'status', 'delete_version'], required: false }
 ];
 ```
 
@@ -274,9 +278,9 @@ export default async function (app) {
 
 | 方法                                                  | 状态码 | 说明           |
 | ----------------------------------------------------- | ------ | -------------- |
-| `reply.result.success(data)`                          | 200    | 成功响应       |
+| `reply.result.success(message, data)`                 | 200    | 成功响应       |
 | `reply.result.paginated(data, total, page, pageSize)` | 200    | 分页响应       |
-| `reply.result.created(data)`                          | 201    | 创建成功       |
+| `reply.result.created(data, message)`                 | 201    | 创建成功       |
 | `reply.result.noContent()`                            | 204    | 无内容         |
 | `reply.result.fail(message, data, httpCode, bizCode)` | 400    | 通用失败       |
 | `reply.result.badRequest(message)`                    | 400    | 请求参数错误   |
@@ -288,8 +292,8 @@ export default async function (app) {
 | `reply.result.internalError(message)`                 | 500    | 服务器内部错误 |
 
 ```js
-// ✅ 正确：使用统一响应方法
-return reply.result.success({ id: 1, name: 'test' });
+// ✅ 正确：使用统一响应方法（注意 success 第一个参数是 message）
+return reply.result.success('操作成功', { id: 1, name: 'test' });
 return reply.result.badRequest('参数缺失');
 return reply.result.notFound('用户不存在');
 
@@ -385,7 +389,7 @@ handler: async (request, reply) => {
 ### 路由检查
 
 - [ ] `system.json` 的 `prefix` + `registerGroupMetadata` 的 `prefix` + `registerSecureRoute` 的 `url` 拼接正确
-- [ ] 最终路由无重复前缀（如 `/stick/v1/stocks` 无误写为 `/stick/stocks` 或 `/stick/v1/v1/stocks`）
+- [ ] 最终路由无重复前缀（如 `/{appPrefix}/v1/stocks` 无误写为 `/{appPrefix}/stocks` 或 `/{appPrefix}/v1/v1/stocks`）
 - [ ] 路由注册无冲突（同名 `name` 或同 `method+url` 组合）
 - [ ] 前端 API 文件中 `baseURL` 或调用路径与后端路由一致
 

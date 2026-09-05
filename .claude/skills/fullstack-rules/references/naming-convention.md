@@ -55,23 +55,26 @@ const Model = sequelize.define(
 | 模型文件    | `PascalCase` | `User.js` — `src/models/user/`           | Sequelize 模型定义 |
 |             |              | `OauthClient.js` — `src/models/oauth21/` | OAuth 客户端模型   |
 |             |              | `UserSession.js` — `src/models/session/` | 用户会话模型       |
-| 工具文件    | `kebab-case` | `safe-redis.js` — `src/redis/`           | Redis 安全操作封装 |
-|             |              | `session-store.js` — `src/redis/`        | 会话存储适配器     |
-|             |              | `nonce-store.js` — `src/redis/`          | Nonce 去重存储     |
+| 工具文件    | `kebab-case` | `safe-redis.js` — `src/framework/redis/`           | Redis 安全操作封装 |
+|             |              | `session-store.js` — `src/framework/redis/`        | 会话存储适配器     |
+|             |              | `nonce-store.js` — `src/framework/redis/`          | Nonce 去重存储     |
 | Composables | `camelCase`  | `usePoseData.ts` — `hooks/`              | 姿态数据组合式函数 |
 |             |              | `useCanvas.ts` — `hooks/`                | 画布组合式函数     |
 
 > **hooks/composables 例外**：`hooks/` 目录下的文件用 `camelCase`（`useXxx.ts`），其他工具文件统一 `kebab-case`。
-> | 路由文件 | `kebab-case` | `auth.js` — `src/api/auth/v1/` | 认证路由 |
-> | | | `user-info.js` — `src/api/user/v1/` | 用户信息路由 |
-> | | | `traffic-stats.js` — `src/api/firewall/v1/` | 流量统计路由 |
-> | Vue 组件 | `PascalCase` | `EditorCanvas.vue` — 编辑器 | 编辑器画布组件 |
-> | | | `LoginForm.vue` — 登录页 | 登录表单组件 |
-> | | | `UserProfile.vue` — 用户中心 | 用户信息组件 |
-> | Hooks/Composables | `camelCase` | `usePoseData.ts` — 编辑器 | 姿态数据组合式函数 |
-> | | | `useCanvas.ts` — 编辑器 | 画布组合式函数 |
-> | 配置文件 | `kebab-case` | `system.json` — `src/api/<domain>/` | API 域系统配置 |
-> | | | `guard_config.json` — `src/data/` | 守卫持久化配置 |
+
+| 类型        | 规范         | 示例（来源）                             | 说明               |
+| ----------- | ------------ | ---------------------------------------- | ------------------ |
+| 路由文件    | `kebab-case` | `auth.js` — `src/api/auth/v1/`           | 认证路由           |
+|             |              | `user-info.js` — `src/api/user/v1/`      | 用户信息路由       |
+|             |              | `traffic-stats.js` — `src/api/firewall/v1/` | 流量统计路由    |
+| Vue 组件    | `PascalCase` | `EditorCanvas.vue` — 编辑器              | 编辑器画布组件     |
+|             |              | `LoginForm.vue` — 登录页                 | 登录表单组件       |
+|             |              | `UserProfile.vue` — 用户中心             | 用户信息组件       |
+| Hooks/Composables | `camelCase` | `usePoseData.ts` — 编辑器           | 姿态数据组合式函数 |
+|             |              | `useCanvas.ts` — 编辑器                  | 画布组合式函数     |
+| 配置文件    | `kebab-case` | `system.json` — `src/api/<domain>/`      | API 域系统配置     |
+|             |              | `guard_config.json` — `data/`            | 守卫持久化配置     |
 
 ---
 

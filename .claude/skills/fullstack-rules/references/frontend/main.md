@@ -29,7 +29,7 @@
 src/
 ├── api/          # API 请求封装层（按功能域分文件）
 ├── assets/       # 静态资源（images/ styles/）
-├── components/   # 组件（common/ 通用, business/ 业务）
+├── components/   # 组件（三层：功能分类/业务页面/组件文件，见 vue.md）
 ├── hooks/        # 组合式逻辑
 ├── config/       # 配置文件
 ├── layouts/      # 布局模板
