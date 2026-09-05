@@ -1,22 +1,49 @@
 {
-  "name": "@nodeservers/shared-device",
-  "version": "1.1.0",
-  "description": "跨前端共享的设备 ID / 设备指纹工具（结构化 device_id 生成、canvas/WebGL 指纹、响应头同步）",
+  "name": "deviceid",
+  "version": "1.0.0",
+  "description": "跨端一致的现代浏览器设备身份库：结构化稳定设备 ID（生成/校验/自愈）、canvas+WebGL 指纹（默认关闭）、响应头身份同步、SSO 跨 origin 归一、axios 一站式接入",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./device-id": "./src/device-id.js",
-    "./device-fingerprint": "./src/device-fingerprint.js",
-    "./device-sync": "./src/device-sync.js",
-    "./device-setup": "./src/device-setup.js",
-    "./sha256": "./src/sha256.js",
-    "./storage": "./src/storage.js",
-    "./base62-timestamp": "./src/base62-timestamp.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "files": ["src"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "sideEffects": false,
-  "private": true,
-  "license": "ISC"
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "device-id",
+    "device-fingerprint",
+    "device-identity",
+    "browser-fingerprint",
+    "fraud-prevention",
+    "risk-control",
+    "sso",
+    "axios"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs && tsc -p tsconfig.build.json",
+    "prepack": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yijiu2025/CoreFlow.git",
+    "directory": "packages/shared-device"
+  },
+  "author": "qirly",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

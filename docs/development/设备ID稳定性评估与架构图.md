@@ -93,7 +93,7 @@ flowchart TB
         A4["phonecopy（Capacitor 壳，间接接入）"]
     end
 
-    subgraph pkg["@nodeservers/shared-device（共享包）"]
+    subgraph pkg["deviceid（共享包）"]
         B1["device-id<br/>生成 / 严格校验 / 内存缓存"]
         B2["storage<br/>localStorage 安全封装<br/>隐私模式内存降级"]
         B3["device-sync<br/>响应头同步 / 缓存失效 / 跨标签页"]

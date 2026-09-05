@@ -7,7 +7,7 @@
  * - 自动 initDeviceSync（幂等，跨标签页 storage 监听 + 变更回调）
  *
  * 新前端接入仅需：
- *   import { setupDeviceSync } from '@nodeservers/shared-device';
+ *   import { setupDeviceSync } from 'deviceid';
  *   setupDeviceSync(axiosInstance);
  *
  * 与应用自带拦截器的共存约定：

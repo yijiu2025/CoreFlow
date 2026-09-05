@@ -182,7 +182,7 @@ import { X, UserPlus, ArrowLeft, Trash2 } from 'lucide-vue-next';
 import { buildSsoLoginUrl, SSO_URL, LOGIN_COPY } from '@/config/services';
 import { firewallApi } from '@/api/firewall';
 import { useAuthStore } from '@/stores/auth';
-import { adoptDeviceId } from '@nodeservers/shared-device';
+import { adoptDeviceId } from 'deviceid';
 
 /** 只接受 oauth21 SSO 域的 postMessage（防恶意页面伪造 LOGIN_SUCCESS） */
 const SSO_ORIGIN = (() => {
