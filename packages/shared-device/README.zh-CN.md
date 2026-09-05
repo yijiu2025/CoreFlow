@@ -185,6 +185,22 @@ npm run build     # esbuild 逐模块转换 → dist/ + tsc 产出 dist/index.d.
 npm publish       # prepack 自动构建；ESM-only，access: public
 ```
 
+## 前后端分离部署
+
+包本身只依赖 `x-device-id` / `X-Device-Fp` 请求头与响应头（CORS 需放行 `x-device-id`、
+`X-Device-Fp`、`credentials: true`），无 cookie 读写，天然支持前后端分离部署。
+但后端的 **session cookie 与 device_id 兜底 cookie 默认 `SameSite=Lax`**，跨站直连时浏览器不会携带。两种部署形态：
+
+| 形态 | 配置 | 说明 |
+| --- | --- | --- |
+| ① 同域反代（**推荐**） | 前端静态资源与 `/api` 同域（nginx 转发），无需任何额外配置 | `SameSite=Lax` 正常工作，CSRF 防御最佳 |
+| ② 跨子域（app.example.com ↔ api.example.com） | 后端设 `COOKIE_DOMAIN=.example.com` | 主域 cookie 全子域共享，`Lax` 对同站子域请求仍会携带 |
+| ③ 真跨站（完全不同域名） | 后端设 `COOKIE_SAMESITE=none` + `COOKIE_SECURE=true`（HTTPS 必需）+ CORS 放行 | 会扩大 CSRF 暴露面，务必配合 CSRF 防御措施 |
+
+后端环境变量（服务端 cookie 策略，与本包无关但影响设备身份兜底恢复）：
+`COOKIE_SAMESITE`（lax/none/strict，默认 lax）、`COOKIE_SECURE`（默认生产 true）、
+`COOKIE_DOMAIN`（默认不设）。
+
 ## 已知限制
 
 - 隐私模式下存储降级为会话内内存 ID，刷新即变（有 `console.warn` 告警）
