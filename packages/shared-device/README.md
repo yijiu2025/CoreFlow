@@ -185,6 +185,18 @@ npm run build     # esbuild per-module transform → dist/ + tsc emits dist/inde
 npm publish       # prepack rebuilds automatically; ESM-only, access: public
 ```
 
+## Split Backend/Frontend Deployment
+
+The package itself only relies on the `x-device-id` / `X-Device-Fp` request headers and response headers (CORS must allow `x-device-id`, `X-Device-Fp`, `credentials: true`). It never reads or writes cookies, so it works out of the box with split deployments. However, the backend **session and device-recovery cookies default to `SameSite=Lax`**, which browsers will not attach to cross-site requests. Three deployment shapes:
+
+| Shape | Configuration | Notes |
+| --- | --- | --- |
+| ① Same-origin reverse proxy (**recommended**) | Serve the frontend and `/api` on one origin (nginx), zero extra config | `SameSite=Lax` works as-is; best CSRF posture |
+| ② Sibling subdomains (app.example.com ↔ api.example.com) | Backend sets `COOKIE_DOMAIN=.example.com` | Host-scoped cookie shared across subdomains; `Lax` still attaches for same-site requests |
+| ③ Fully cross-site (different domains) | Backend sets `COOKIE_SAMESITE=none` + `COOKIE_SECURE=true` (HTTPS required) + CORS allow-list | Enlarges the CSRF surface; pair with CSRF defenses |
+
+Backend environment variables (server-side cookie policy; unrelated to this package but affects device-identity recovery): `COOKIE_SAMESITE` (lax/none/strict, default lax), `COOKIE_SECURE` (default true in production), `COOKIE_DOMAIN` (unset by default).
+
 ## Limitations
 
 - In private browsing, storage falls back to a per-session in-memory ID that changes on reload (a `console.warn` is emitted)
