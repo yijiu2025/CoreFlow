@@ -1,6 +1,6 @@
 ---
 name: fullstack-rules
-version: 2.4.0
+version: 2.5.0
 description: 前后端全栈开发规范。涵盖：创建项目、新增App、写API、写页面、调外部接口、修复Bug、代码审查。每次触发时，必须按以下顺序执行：① 有外部 API 的先 curl 验证格式 ② 写后端路由 ③ curl 验证后端 ④ 写前端 ⑤ 验证全链路。禁止假数据，禁止半截功能。审查代码时执行企业级审查清单。代码审查模式：无需执行①-⑤，直接执行审查清单。
 type: prompt
 whenToUse: 用户涉及本仓库前后端代码操作时触发：创建新项目、新增业务模块、编写前后端代码、设计API接口、审查代码质量、修复Bug、开发新功能、调用外部API、对接第三方数据、创建Vue页面、编写Node.js后端、设计数据库模型、配置路由、测试接口。涉及 KX 架构文件 / .kx / 页面描述语言时，按需加载 references/kx.md。
@@ -121,7 +121,7 @@ whenToUse: 用户涉及本仓库前后端代码操作时触发：创建新项目
 | 需要专项深度执行时       | [orchestration.md](references/orchestration.md)   | 编排安全测试/UI 设计/Redis 等其他 skill（决策表 + 推荐目录 + AI 自安装） |
 | 跑检查/验证时            | [toolbox.md](references/toolbox.md)               | 检查金字塔、场景化命令矩阵、提交前清单          |
 | 新项目/新 App            | [requirement-intake.md](references/requirement-intake.md) → [kx.md](references/kx.md) | 需求确认流程 → KX 语法规范 |
-| 涉及 KX / .kx 文件       | [kx.md](references/kx.md) → [SPEC.md](assets/project-template/kt/kx-lang/SPEC.md) | 操作规范 → 完整语法与 AI 生成映射表 |
+| 涉及 KX / .kx 文件       | [kx.md](references/kx.md) → [SPEC.md](assets/project-template/kt/kx-lang/SPEC.md) | 操作规范与静态校验器 → 完整语法与 AI 生成映射表 |
 | Git 操作                 | [git-patterns.md](references/git-patterns.md)     | 分支模型、提交信息、PR 模板、版本号             |
 | 修复 Bug / 防踩坑        | [pitfalls.md](references/pitfalls.md)             | 项目真实事故复盘库（现象→根因→规则→防回归）     |
 | 端到端任务执行           | [workflows.md](references/workflows.md)           | 六大任务剧本（API/页面/外部接口/Bug/审查/安全） |
