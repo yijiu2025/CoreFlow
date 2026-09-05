@@ -392,6 +392,17 @@ npm test -- --coverage      # 运行并生成覆盖率报告
   - 第一层（功能分类）：`modals/` `popovers/` `panels/` `layouts/` `cards/` `widgets/` `common/`
   - 第二层（业务页面）：`home/` `editor/` `login/` `mine/`
   - 示例：`src/components/modals/home/SettingsModal.vue`
+- **新前端设备身份接入（强制）**：本仓库所有前端应用（含新建）必须接入 `stable-deviceid` 设备身份体系（后端风控/人机验证/设备管理依赖）。创建新前端时按以下清单执行：
+
+  1. `package.json` dependencies 加 `"stable-deviceid": "*"`
+  2. vite alias：`'stable-deviceid': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url))`
+  3. tsconfig：paths 加 `"stable-deviceid": ["../packages/shared-device/src/index.ts"]` 与 `"stable-deviceid/*": ["../packages/shared-device/src/*"]`，并把 `"../packages/shared-device/src/**/*.ts"` 加进 include（否则 vue-tsc 类型检查不过）
+  4. 应用入口（`main.ts` / `bootstrap.ts`）在 `createApp` 前调用 `initDeviceSync()`
+  5. axios 实例创建后调用 `setupDeviceSync(http)`（自动注入 x-device-id 头、响应头同步、跨标签页监听；**不要手写拦截器**）
+  6. SSO iframe 登录场景：`LOGIN_SUCCESS` postMessage 分支里、`bindSession` **之前**调用 `adoptDeviceId(event.data.deviceId)`
+  7. 风险验证接口（`verify-challenge`）显式带 `x-device-id` 头（用 `getDeviceHeaders()`）
+
+  详细文档：[packages/shared-device/README.zh-CN.md](packages/shared-device/README.zh-CN.md)（英文版 README.md）；参考实现：`posecraft/src/utils/request.ts`、`posecraft/src/components/modals/login/LoginModal.vue`
 
 ### 文件大小限制
 
