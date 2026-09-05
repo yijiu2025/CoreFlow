@@ -70,3 +70,18 @@
 5. 输出审查报告：按严重度分级（🔴 必须修 / 🟡 建议修 / 🔵 打磨），每条带文件:行号与理由
 
 **验收**：所有 🔴 项修复后才允许合并/提交。
+
+## 剧本 F：安全审查（新增 API / 改认证 / 动 cookie 时）
+
+**涉及**：[security.md](security.md)（红线 + 仓库防线）、[toolbox.md](toolbox.md)（检查命令）
+
+1. 权限三件套：新路由的 `requireLogin` / `permission` / `allowIps` 是否按数据敏感度正确设置（开发期关闭的权限**是否已恢复**）
+2. 信任边界：客户端可控输入（`x-device-id`、header、query）是否被当作凭证/权限依据使用（只允许作标识）
+3. 输入防御：schema 校验齐全、数值有边界、字符串有 maxLength、外部输入进日志前已截断
+4. 注入面：SQL 参数化、无 `v-html`、无 eval、重定向 URL 白名单
+5. Cookie / 认证：新 cookie 引用 `COOKIE_POLICY`、SameSite 与部署形态匹配、HMAC 签名未绕过
+6. 一致性：相同功能的不同入口（HTTP/WS/内部端点）安全级别一致；豁免路径（RISK_EXEMPT_PATHS）未被滥用
+7. 依赖：新增第三方包是否必要（优先既有设施）、npm audit 无新增高危
+8. 工具箱：按 [toolbox.md](toolbox.md) 场景矩阵跑完整检查
+
+**验收**：security.md"安全自查清单"逐项打勾；防线一览表确认没有绕过既有设施造第二套。

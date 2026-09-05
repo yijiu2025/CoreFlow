@@ -108,6 +108,7 @@ const REQUIRED = [
   'references/anti-patterns.md',
   'references/pitfalls.md',
   'references/workflows.md',
+  'references/toolbox.md',
   'references/note.md',
   'references/naming-convention.md',
   'references/testing.md',

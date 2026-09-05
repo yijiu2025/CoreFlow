@@ -123,11 +123,13 @@ schema: {
 
 | 规则           | 说明                                            |
 | -------------- | ----------------------------------------------- |
-| Session 双令牌 | `sid`（2h）+ 可选 `sid_r`（30d 刷新）           |
-| Cookie 安全    | HttpOnly + Secure + SameSite 属性               |
+| Session 双令牌 | `sid`（2h）+ 可选 `sid_r`（30d 刷新，path 收窄到刷新端点） |
+| Cookie 安全    | HttpOnly + Secure + SameSite，**一律引用 `COOKIE_POLICY`**（cookie.js），禁止硬编码字面量 |
 | HMAC 签名      | Cookie 值必须经过 HMAC-SHA256 签名，防止篡改    |
 | 踢下线         | Redis 删除 session + DB 标记 revoked → 立即生效 |
 | 密码存储       | 用户密码必须使用 bcrypt 哈希，禁止明文存储      |
+| Cookie 策略环境变量化 | `COOKIE_SAMESITE` / `COOKIE_SECURE` / `COOKIE_DOMAIN`（分离部署适配，见 stable-deviceid README 部署矩阵） |
+| 设备身份       | `x-device-id` 头**仅作标识非凭证**（客户端可伪造），信任边界由风险检测兜底 |
 
 ---
 
@@ -146,34 +148,14 @@ CSRF（跨站请求伪造）利用用户已登录的身份，诱骗用户在不�
 | Origin/Referer 校验 | 检查请求头中的 Origin 或 Referer                     | API 接口    |
 | 双重提交 Cookie     | Cookie 和请求体中都携带 Token 并比对                 | 无状态 API  |
 
-### Fastify 配置
+### 本仓库实际防线（三层，勿重复引入）
 
-```js
-// 使用 @fastify/csrf-protection
-import csrf from '@fastify/csrf-protection';
+1. **SameSite Cookie 策略**：认证 cookie 默认 `Lax`（跨站 POST 不携带），跨站分离部署切 `None+Secure` 时是唯一需要额外 CSRF 防御的场景
+2. **origin-guard fail-closed**（`src/framework/auth/origin-guard.js`）：生产环境未配置 `CORS_ORIGINS` 时**拒绝所有敏感端点请求**；配置后来源不在白名单同样拒绝——这是本仓库对 CSRF 的主防御
+3. **JWT Bearer 模式**：Token 在 Authorization 头，天然不受 CSRF 影响
 
-await fastify.register(csrf, {
-  sessionPlugin: '@fastify/cookie', // 需要 session 支持
-  key: 'csrf-secret',
-  cookieOpts: { sameSite: 'lax', path: '/' }
-});
-```
-
-### 前端配合
-
-```vue
-<!-- 表单中携带 CSRF Token -->
-<form @submit.prevent="submit">
-  <input type="hidden" name="_csrf" :value="csrfToken" />
-  <!-- 其他表单字段 -->
-</form>
-```
-
-### 注意事项
-
-- SPA + API 模式下，如果 Cookie 设置了 `SameSite=Strict`，通常不需要 CSRF Token
-- 如果使用 JWT Token（放在 Authorization 头），不受 CSRF 攻击影响
-- OAuth21 回调接口需要特殊处理，建议验证 state 参数
+> ⚠️ `@fastify/csrf-protection` **当前未安装**。仅当出现"跨站 + SameSite=None + Cookie 认证 + 表单提交"组合时再按需引入，不要预防性安装。
+> OAuth21 授权回调必须验证 `state` 参数（防 CSRF），已在 oauth21 流程中实现。
 
 ---
 
@@ -226,6 +208,22 @@ id_rsa
 
 ---
 
+## 本仓库安全设施一览（写代码前了解已有防线，勿重复造轮子）
+
+| 设施 | 位置 | 说明 |
+| --- | --- | --- |
+| helmet 安全响应头 | `src/app.js` | 基础安全头 |
+| CORS + origin-guard | `src/app.js` + `src/framework/auth/origin-guard.js` | 白名单校验，生产 fail-closed |
+| 三级守卫 | `src/api/guard.js` | enabled / allowIps / allowRoles / requireLogin / permission 每级可拦 |
+| 防火墙五层管道 | `src/framework/firewall/` | 限频 → 封禁 → 挑战 → Bot → 地理围栏 |
+| 会话风险检测 | `src/framework/auth/anomaly-detector.js` | 指纹+IP 基准比对，warn 拦写操作，verify-challenge 一次性 token |
+| 设备身份信任边界 | `src/framework/auth/device.js` | `x-device-id` 仅标识非凭证；指纹含 uid，伪造自伤 |
+| H5 签名 | `src/framework/auth/signature.js` | 防爬防篡改（requireLogin 路由自动启用） |
+| 活跃设备数上限 | `session.js pruneActiveDevices` | 防 session_tokens 膨胀（MAX=20） |
+| 日志防注入 | device.js / device-sync.js `forLog` | 外部输入截断后入日志 |
+
+**新增安全相关代码前，先确认上面的防线是否已覆盖——优先接入既有设施，不要并行造第二套。**
+
 ## 十、安全自查清单
 
 提交代码前逐项检查：
@@ -239,6 +237,10 @@ id_rsa
 - [ ] 输入参数有 schema 校验
 - [ ] 重型库已懒加载
 - [ ] 新增环境变量已同步更新 `.env.example`
+- [ ] 新增 cookie 选项引用 `COOKIE_POLICY`，没有硬编码 sameSite/secure 字面量
+- [ ] 外部输入进日志前已截断（forLog），无未截断的 header/body 直接入日志
+- [ ] 客户端可控标识（x-device-id 等）未当作权限/身份凭证使用
+- [ ] 改动涉及限频/守卫路径时，HTTP 与 WebSocket/其他入口安全级别一致
 
 ---
 
