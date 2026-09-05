@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "deviceid": "*",
+    "stable-deviceid": "*",
     "@vueuse/core": "^14.3.0",
     "axios": "^1.6.2",
     "echarts": "^5.4.3",

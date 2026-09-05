@@ -11,7 +11,7 @@ const service = axios.create({
 });
 
 /* ========== 请求拦截 ========== */
-import { getDeviceFingerprint, isDeviceFingerprintEnabled, getStableDeviceId, handleDeviceSyncInResponse } from 'deviceid';
+import { getDeviceFingerprint, isDeviceFingerprintEnabled, getStableDeviceId, handleDeviceSyncInResponse } from 'stable-deviceid';
 import { generateNonce } from './crypto';
 import { generateSignWithKey, serializeParamsForSign, getAppKey } from './sign';
 import { reportError } from '../composables/useErrorReporter';

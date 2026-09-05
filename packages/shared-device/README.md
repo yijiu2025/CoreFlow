@@ -1,4 +1,4 @@
-# deviceid
+# stable-deviceid
 
 跨端一致的现代浏览器设备身份库。为 Web 应用提供**稳定、可自愈、隐私友好**的设备标识：
 结构化稳定设备 ID（生成 / 校验 / 自愈）、canvas + WebGL 设备指纹（默认关闭）、
@@ -21,7 +21,7 @@ HTTP 响应头身份同步、SSO 跨 origin 身份归一、axios 一站式接入
 ## 安装
 
 ```bash
-npm install deviceid
+npm install stable-deviceid
 ```
 
 要求 Node.js >= 18（仅构建环境；运行时为现代浏览器）。
@@ -32,7 +32,7 @@ npm install deviceid
 
 ```ts
 import axios from 'axios';
-import { setupDeviceSync } from 'deviceid';
+import { setupDeviceSync } from 'stable-deviceid';
 
 const http = axios.create({ baseURL: '/api', withCredentials: true });
 setupDeviceSync(http);
@@ -60,7 +60,7 @@ dispose();
 ### 原生 fetch / 显式带头
 
 ```ts
-import { getDeviceHeaders } from 'deviceid';
+import { getDeviceHeaders } from 'stable-deviceid';
 
 fetch('/api/profile', { headers: { ...getDeviceHeaders() } });
 ```
@@ -74,7 +74,7 @@ import {
   isDeviceFingerprintEnabled, // 指纹开关判定
   handleDeviceSyncInResponse, // 响应头同步（传 axios response）
   initDeviceSync              // 全局初始化（跨标签页监听，幂等）
-} from 'deviceid';
+} from 'stable-deviceid';
 
 http.interceptors.request.use(async config => {
   config.headers['x-device-id'] = getStableDeviceId();
@@ -161,16 +161,16 @@ workspace 内前端（oauth21 / firewall / posecraft）通过 vite alias 直连�
 
 ```ts
 // vite.config.ts
-resolve: { alias: { deviceid: fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url)) } }
+resolve: { alias: { stable-deviceid: fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url)) } }
 ```
 
 ```json
 // tsconfig.json
-"paths": { "deviceid": ["../packages/shared-device/src/index.ts"], "deviceid/*": ["../packages/shared-device/src/*"] },
+"paths": { "stable-deviceid": ["../packages/shared-device/src/index.ts"], "stable-deviceid/*": ["../packages/shared-device/src/*"] },
 "include": ["src/**/*.ts", "../packages/shared-device/src/**/*.ts"]
 ```
 
-`package.json` dependencies 中 `"deviceid": "*"` 供 workspace 链接。
+`package.json` dependencies 中 `"stable-deviceid": "*"` 供 workspace 链接。
 
 ## 构建与发布（维护者）
 

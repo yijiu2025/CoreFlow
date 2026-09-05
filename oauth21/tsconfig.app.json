@@ -26,8 +26,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "deviceid": ["../packages/shared-device/src/index.ts"],
-      "deviceid/*": ["../packages/shared-device/src/*"]
+      "stable-deviceid": ["../packages/shared-device/src/index.ts"],
+      "stable-deviceid/*": ["../packages/shared-device/src/*"]
     }
   },
   "include": ["src/**/*", "src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "src/auto-import.d.ts", "src/components.d.ts", "../packages/shared-device/src/**/*.ts"]

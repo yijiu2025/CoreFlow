@@ -8,7 +8,7 @@ import App from './App.vue';
 import router from './router';
 import i18n from './i18n';
 import { authDirective } from './directives/auth';
-import { initDeviceSync } from 'deviceid';
+import { initDeviceSync } from 'stable-deviceid';
 import './style.css';
 
 // 设备 ID 全局同步初始化（跨标签页 storage 事件监听 + 变更回调注册）
