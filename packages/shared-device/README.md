@@ -1,195 +1,192 @@
 # deviceid
 
-跨前端共享的设备 ID / 设备指纹工具包（npm workspace 包）。
+跨端一致的现代浏览器设备身份库。为 Web 应用提供**稳定、可自愈、隐私友好**的设备标识：
+结构化稳定设备 ID（生成 / 校验 / 自愈）、canvas + WebGL 设备指纹（默认关闭）、
+HTTP 响应头身份同步、SSO 跨 origin 身份归一、axios 一站式接入。
 
-主前端（`oauth21/`、`firewall/`，以及 posecraft）通过 vite alias + tsconfig paths
-引用本包源码，保证 device_id 生成、传递、响应头同步逻辑三端一致。
+> 设计目标：设备 ID 一经生成终身复用——用户清除缓存可自动恢复（httpOnly cookie 兜底）、
+> 时钟偏差不引起身份漂移（±5 分钟容差）、多标签页实时同步、同设备跨应用（SSO iframe）归一为同一身份。
 
-## 目录结构
+## 特性
 
-```
-packages/shared-device/
-├── package.json          # workspace 包定义（exports 直指源码，不发布 npm）
-├── tsconfig.json         # 包级类型检查配置（IDE 直接打开包内文件用）
-└── src/
-    ├── index.ts          # TS 桶文件出口（vite alias 唯一入口）
-    ├── device-id.js/.d.ts        # 稳定设备 ID：生成 / 严格校验 / 存量自查
-    ├── device-sync.js/.d.ts      # 响应头同步：X-Device-Id 写回 / 缓存一致性
-    ├── device-fingerprint.js/.d.ts # canvas + WebGL 指纹（默认关闭）
-    ├── device-setup.js/.d.ts     # 一站式接入：axios 拦截器 + initDeviceSync（新前端 2 行接入）
-    ├── sha256.js/.d.ts           # SHA-256：Web Crypto 优先，纯 JS 降级
-    ├── base62-timestamp.js/.d.ts # 时间戳混淆 + Base62（前后端共享算法唯一事实来源）
-    ├── storage.js/.d.ts          # localStorage 安全封装（隐私模式内存降级）
-    ├── env.d.ts          # vite/client 类型引用
-    └── __tests__/        # 单元测试（根 Jest 直接运行，93 用例）
-```
+- 🆔 **结构化设备 ID**：`{PLATFORM}-{ENCODED_TS}-{RANDOM}`（如 `WEB-DaBOSbNdSuc-8s4T`），
+  时间戳位混淆 + Base62 编码 + 高熵随机后缀（`crypto.getRandomValues` 拒绝采样）
+- 🔁 **自愈能力**：损坏 / 老格式 / 过期 / 未来时间的存量 ID 自动重生；服务端校验失败自动收敛（一轮往返）
+- 🔄 **响应头同步**：服务端可下发权威 ID（`X-Device-Id`），客户端写回后下一请求立即生效
+- 🧩 **SSO 跨 origin 归一**：oauth21 式 iframe 登录场景，子应用采纳权威域 ID，同物理设备全端同身份
+- 🛡 **安全内建**：与后端校验规则逐条对齐、脏值拒绝、超长头忽略、日志截断、SSO 消息双重校验
+- 🤫 **隐私友好**：设备指纹默认关闭，需显式启用；存储层静默降级，不抛异常
+- 📦 **零依赖**：ESM-only、tree-shaking 友好（`sideEffects: false`）、TypeScript 类型完备
 
-## 实现形态约定（.js + 手写 .d.ts）
+## 安装
 
-实现模块全部为**纯 JS + 手写 .d.ts**，仅 `index.ts` 桶文件为 TS。
-原因：根 Jest 配置 `transform: {}`（纯 ESM，不编译 TS），浏览器逻辑的
-单元测试需要直接 import 实现文件（node 环境下 mock 全局对象运行）。
-修改实现时**必须同步更新对应 .d.ts**，类型检查（`tsc -p packages/shared-device`）
-会校验 .d.ts 与桶文件导出的一致性。
-
-## 模块职责
-
-| 模块 | 导出 | 职责 |
-| --- | --- | --- |
-| `device-id` | `getStableDeviceId` / `validateDeviceIdFormat` / `invalidateCachedDeviceId` / `parseDeviceId` / `getPlatform` / `STORAGE_KEY` 等 | 从存储（key `cf_device_id`）取/生成结构化 ID；存量 ID 严格自查（格式/过期/未来时间，规则与后端 `validateDeviceId` 逐条对齐）；隐私模式降级为会话内临时 ID |
-| `device-sync` | `syncDeviceFromHeaders` / `handleDeviceSyncInResponse` / `initDeviceSync` / `getCurrentDeviceId` / `setDeviceId` / `adoptDeviceId` / `clearDeviceId` / `getDeviceIdStats` | 从响应头 `X-Device-Id`/`X-Device-Id-Updated` 同步 device_id；兼容 Headers / AxiosHeaders / 普通对象；写后失效 device-id 内存缓存（服务端下发新 ID 下一请求即生效）；`setDeviceId` 入口校验拒绝脏值；`adoptDeviceId` 采纳 SSO 握手下发的权威 ID（跨 origin 身份归一，格式 + 平台段双校验）；跨标签页 storage 监听 |
-| `device-setup` | `setupDeviceSync` / `getDeviceHeaders` | **新前端推荐入口**：一站式注册 axios 请求/响应拦截器（x-device-id + 按需指纹头 + 响应头同步）并自动 initDeviceSync，返回 dispose 可卸载；`getDeviceHeaders` 供 fetch / 显式带头场景 |
-| `device-fingerprint` | `getDeviceFingerprint` / `isDeviceFingerprintEnabled` | canvas + WebGL 特征 SHA-256（前 32 位 hex）；Promise 缓存（并发去重、空结果也缓存）；meta 标签或 `VITE_DEVICE_FINGERPRINT=true` 才启用，默认关闭（隐私友好） |
-| `sha256` | `sha256` / `sha256Pure` | 优先 Web Crypto API，非安全上下文（HTTP）自动降级为内置纯 JS 实现（与 Node crypto 全量对拍测试守护） |
-| `base62-timestamp` | `encodeTimestamp` / `decodeTimestamp` / `toBase62` / `fromBase62` 等 | 时间戳混淆 + Base62 编解码，**前后端共享算法的唯一事实来源** |
-| `storage` | `safeGetItem` / `safeSetItem` / `safeRemoveItem` | 包内唯一存储访问出口；隐私模式 / 配额异常静默降级内存 Map，不向调用方抛异常 |
-
-## 设备 ID 格式
-
-```
-{PLATFORM}-{ENCODED_TIMESTAMP}-{RANDOM_SUFFIX}
-示例：WEB-DaBOSbNdSuc-8s4T
+```bash
+npm install deviceid
 ```
 
-- `PLATFORM`：`WEB` / `IOS` / `ANDROID`（UA 检测，与后端 `detectPlatform` 同规则；
-  刻意不做 iPadOS 13+（UA 报 Macintosh）识别，避免两端平台判定不一致触发后端告警）
-- `ENCODED_TIMESTAMP`：毫秒时间戳减 2024-01-01 偏移 → 64 位魔数 XOR 混淆 → Base62，固定 11 字符
-- `RANDOM_SUFFIX`：6 字符 Base62 随机码（`crypto.getRandomValues` + 拒绝采样，无模偏差；
-  crypto 不可用的极端环境降级 `Math.random` 并告警——设备 ID 非加密材料，仅求唯一性）
+要求 Node.js >= 18（仅构建环境；运行时为现代浏览器）。
 
-与后端 `src/framework/auth/device-id-service.js` 的校验规则（长度 / 字符集 /
-平台枚举 / 拒绝未来时间含 ±5 分钟时钟偏差容差 / 365 天有效期）严格对齐，
-容差常量 `CLOCK_SKEW_TOLERANCE_MS` 两端各持有一份、值必须一致。
-**两端编码一致性由 jest 测试守护**：
-`src/__tests__/framework/auth/device-id-parity.test.js`。修改 `base62-timestamp.js`
-或后端算法任意一端时该测试会失败，防止 81350f1 类长度漂移故障复发。
+## 快速开始
 
-## 安全设计
-
-- **脏输入防御**：响应头值超过 128 字符直接忽略（合法 ID 最长 22 字符）；日志中的
-  外部输入截断到 48 字符，防刷屏与日志注入；`setDeviceId` 入口校验拒绝非法格式。
-- **前后端校验对齐**：本地校验规则与后端 `validateDeviceId` 逐条一致（含未来时间
-  拒绝、365 天有效期），存量非法 ID 本地即重生，避免"本地可用、后端全拒"的
-  每请求重生循环。
-- **隐私友好**：设备指纹默认关闭，需显式 meta 标签或环境变量启用；存储层
-  静默降级不抛异常；指纹双失败（headless/反指纹浏览器）返回空串而非常量哈希，
-  防止此类浏览器被误匹配。
-
-## 新前端快速接入（三步）
-
-**第 1 步：工程三件套**（新前端 posecraft-like 结构，三选一的 alias 写法见下方"接入方式"）
-
-```json
-// package.json → dependencies
-"deviceid": "*"
-```
-
-```ts
-// vite.config.ts → resolve.alias
-'deviceid': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url))
-```
-
-```json
-// tsconfig.json → compilerOptions.paths + include
-"paths": {
-  "deviceid": ["../packages/shared-device/src/index.ts"],
-  "deviceid/*": ["../packages/shared-device/src/*"]
-}
-// include 必须加 "../packages/shared-device/src/**/*.ts"，否则 vue-tsc 类型检查不过
-```
-
-**第 2 步：axios 实例创建后一行接入**（自动完成：x-device-id 头注入、指纹头按需注入、
-响应头同步、initDeviceSync 跨标签页监听）：
+### axios 一站式接入（推荐）
 
 ```ts
 import axios from 'axios';
 import { setupDeviceSync } from 'deviceid';
 
 const http = axios.create({ baseURL: '/api', withCredentials: true });
-setupDeviceSync(http); // 建议在实例创建后立即调用（响应同步先于业务拦截器执行）
-
-// 可选项：{ fingerprint: true 强制开 / false 强制关（默认按环境判定）、
-//          onDeviceIdChange(oldId, newId) 变更回调 }
-// dispose：const dispose = setupDeviceSync(http)；dispose() 可卸载拦截器（HMR/单测用）
+setupDeviceSync(http);
 ```
 
-原生 fetch / 显式带头场景（如 verifyChallenge 与后端验证标记对齐）：
+`setupDeviceSync` 自动完成：
+
+1. 请求拦截器注入 `x-device-id` 头（内存缓存直读，近乎零开销）
+2. 按需注入设备指纹头 `x-device-fp`（默认按环境判定，见下方指纹开关）
+3. 响应拦截器同步服务端下发的设备 ID（写回存储 + 失效内存缓存）
+4. 注册跨标签页 storage 监听（幂等）
+
+```ts
+// 可选配置
+setupDeviceSync(http, {
+  fingerprint: true,                    // 强制开启指纹（默认按 meta/env 判定）
+  onDeviceIdChange: (oldId, newId) => { /* 设备 ID 变更回调 */ }
+});
+
+// dispose：卸载拦截器（HMR / 单测场景）
+const dispose = setupDeviceSync(http);
+dispose();
+```
+
+### 原生 fetch / 显式带头
 
 ```ts
 import { getDeviceHeaders } from 'deviceid';
-fetch(url, { headers: { ...getDeviceHeaders() } });
+
+fetch('/api/profile', { headers: { ...getDeviceHeaders() } });
 ```
 
-**第 3 步（SSO iframe 场景可选）**：登录弹窗收到 oauth21 `LOGIN_SUCCESS`
-postMessage 后、bindSession 之前采纳权威 ID（跨 origin 身份归一）：
+### 手动拦截器（细粒度控制）
 
 ```ts
-import { adoptDeviceId } from 'deviceid';
-if (event.data.type === 'LOGIN_SUCCESS' && event.data.deviceId) {
-  adoptDeviceId(event.data.deviceId); // 包内做格式 + 平台段双校验
-}
+import {
+  getStableDeviceId,          // 稳定设备 ID（持久化 + 内存缓存）
+  getDeviceFingerprint,       // 设备指纹（异步，32 位 hex）
+  isDeviceFingerprintEnabled, // 指纹开关判定
+  handleDeviceSyncInResponse, // 响应头同步（传 axios response）
+  initDeviceSync              // 全局初始化（跨标签页监听，幂等）
+} from 'deviceid';
+
+http.interceptors.request.use(async config => {
+  config.headers['x-device-id'] = getStableDeviceId();
+  if (isDeviceFingerprintEnabled()) {
+    try {
+      config.headers['x-device-fp'] = await getDeviceFingerprint();
+    } catch { /* 采集失败不影响主流程 */ }
+  }
+  return config;
+});
+
+http.interceptors.response.use(response => {
+  handleDeviceSyncInResponse(response);
+  return response;
+});
 ```
 
-环境变量开关：`VITE_DEVICE_FINGERPRINT=true` 启用设备指纹（默认关闭，隐私友好）。
+## API 一览
 
-## 接入方式（手动拦截器，旧方式——现有三前端现状）
+| 导出 | 说明 |
+| --- | --- |
+| `setupDeviceSync(instance, options?)` | 一站式接入（axios），返回 dispose 函数 |
+| `getDeviceHeaders()` | 同步返回 `{ 'x-device-id': id }`，供 fetch / 显式带头 |
+| `getStableDeviceId()` | 稳定设备 ID（首次生成，之后持久复用） |
+| `getCurrentDeviceId()` / `setDeviceId(id)` / `clearDeviceId()` | 读取 / 校验写入 / 清除（均含格式校验） |
+| `adoptDeviceId(id)` | 采纳 SSO 权威域下发的 ID（格式 + 平台段双校验，跨 origin 归一） |
+| `validateDeviceIdFormat(id)` | 本地格式校验（返回 `{ valid, reason? }`） |
+| `parseDeviceId(id)` | 解析 ID 信息（platform / timestamp / age），非法返回 null |
+| `syncDeviceFromHeaders(headers, options?)` | 从响应头同步（兼容 Headers / AxiosHeaders / 普通对象） |
+| `handleDeviceSyncInResponse(response, options?)` | 响应拦截器集成（axios / fetch Response 均可） |
+| `initDeviceSync(options?)` | 全局初始化：跨标签页监听 + 变更回调（幂等） |
+| `getDeviceFingerprint()` / `isDeviceFingerprintEnabled()` | 指纹采集（Promise 缓存、并发去重）与开关判定 |
+| `sha256(message)` | SHA-256（Web Crypto 优先，非安全上下文自动降级纯 JS） |
+| `getDeviceIdStats()` | 调试统计（当前 ID / 解析信息 / 来源） |
 
-workspace 内三前端通过 vite alias 直连 `src` 源码消费（开发体验不变）。
-接入步骤（以 oauth21 为例）：
+常量：`STORAGE_KEY`、`MAX_AGE_DAYS`（365）、`CLOCK_SKEW_TOLERANCE_MS`（±5 分钟）、
+`DEVICE_PLATFORMS`、`RANDOM_SUFFIX_LENGTH`。
 
-```js
-// vite.config.js
-alias: { 'deviceid': path.resolve(__dirname, '../packages/shared-device/src/index.ts') }
+## SSO 跨 origin 身份归一
+
+iframe 嵌入 SSO 登录页（如 oauth21）时，登录成功消息中携带权威域设备 ID，
+子应用在 bindSession 之前采纳，同物理设备即归一为同一身份：
+
+```ts
+window.addEventListener('message', event => {
+  // 务必校验 event.origin 与 event.source（示例省略）
+  if (event.data?.type === 'LOGIN_SUCCESS' && event.data.deviceId) {
+    adoptDeviceId(event.data.deviceId); // 包内做格式 + 平台段双校验
+  }
+});
 ```
 
-```json
-// tsconfig.app.json → paths
-"deviceid": ["../packages/shared-device/src/index.ts"],
-"deviceid/*": ["../packages/shared-device/src/*"]
+## 设备指纹（默认关闭，隐私友好）
+
+```html
+<!-- 方式一：后端/模板注入 meta 开关 -->
+<meta name="device-fp" content="true" />
 ```
-
-```json
-// package.json → dependencies
-"deviceid": "*"
-```
-
-应用入口调用一次 `initDeviceSync()`；请求拦截器注入
-`config.headers['x-device-id'] = getStableDeviceId()`；响应拦截器调用
-`handleDeviceSyncInResponse(res)` 完成服务端下发 ID 的同步。完整链路见
-[docs/development/设备ID全链路梳理.md](../../docs/development/设备ID全链路梳理.md)。
-
-## 测试
 
 ```bash
-node --experimental-vm-modules npx jest --testPathPatterns "packages/shared-device"
+# 方式二：Vite 环境变量
+VITE_DEVICE_FINGERPRINT=true
 ```
 
-覆盖 76 个用例：SHA-256 纯 JS 实现与 Node crypto 全量对拍、Base62 编解码边界、
-设备 ID 生成/自查/校验规则、同步流与**缓存一致性回归**（服务端下发新 ID 后
-`getStableDeviceId` 立即生效）、指纹开关与双失败缓存。浏览器全局（window /
-localStorage / navigator / document）在 node 测试环境用桩对象模拟。
+```ts
+// 方式三：代码强制指定（非 Vite 构建器推荐）
+setupDeviceSync(http, { fingerprint: true });
+```
 
-## 已知限制
+采集维度：canvas 渲染差异 + WebGL renderer/vendor，SHA-256 取前 32 位 hex，
+进程内 Promise 缓存（并发去重、双失败返回空串而非常量哈希，防误匹配）。
 
-- 隐私模式下存储降级为会话内临时 ID，每次刷新变化，会频繁触发
-  人机验证（降级时 console.warn 告警）；放宽策略需产品决策。
-- `isDeviceFingerprintEnabled` 依赖 `import.meta.env`（Vite）与 DOM，仅浏览器环境可用。
-- `crypto.getRandomValues` 不可用的极旧浏览器会以 `Math.random` 生成随机后缀
-  （熵降低，仅影响唯一性不影响安全性），并 console.warn 告警。
+## 安全设计
 
-## 构建与发布（npm）
+- **前后端校验对齐**：格式校验与后端 `validateDeviceId` 逐条一致（平台枚举 /
+  长度 / Base62 字符集 / 拒绝超容差未来时间 / 365 天有效期），存量非法 ID 本地即重生
+- **脏输入防御**：响应头超 128 字符忽略、日志截断外部输入、`setDeviceId` 入口校验
+- **缓存一致性**：任何来源的 ID 写入后立即失效内存缓存，下一请求即生效
+- **隐私模式降级**：存储不可用时静默降级内存层（会话内稳定），不抛异常不中断请求链路
 
-包为标准 npm 结构：`src/` 源码（workspace 直连消费）+ `dist/` 构建产物（npm 消费）。
+## 在 nodeServers monorepo 内开发
+
+workspace 内前端（oauth21 / firewall / posecraft）通过 vite alias 直连源码消费：
+
+```ts
+// vite.config.ts
+resolve: { alias: { deviceid: fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url)) } }
+```
+
+```json
+// tsconfig.json
+"paths": { "deviceid": ["../packages/shared-device/src/index.ts"], "deviceid/*": ["../packages/shared-device/src/*"] },
+"include": ["src/**/*.ts", "../packages/shared-device/src/**/*.ts"]
+```
+
+`package.json` dependencies 中 `"deviceid": "*"` 供 workspace 链接。
+
+## 构建与发布（维护者）
 
 ```bash
 cd packages/shared-device
-npm run build            # esbuild 逐模块转换 + 复制 .d.ts + tsc 产出 dist/index.d.ts
-npm publish              # prepack 钩子自动重新构建；publishConfig 已配 access: public
+npm run build     # esbuild 逐模块转换 → dist/ + tsc 产出 index.d.ts
+npm publish       # prepack 自动构建；ESM-only，access: public
 ```
 
-- 发布形态：ESM-only（`exports["."].import`），`files: ["dist", "README.md", "LICENSE"]`，
-  `sideEffects: false`（tree-shaking 友好），engines `node >= 18`。
-- **非 Vite 消费方注意**：`import.meta.env` 是 Vite 注入的，其他构建器下为 undefined
-  （包内已做降级守卫，不会报错）。指纹开关可用页面 `<meta name="device-fp" content="true">`
-  控制，或调用方在拦截层自行决策后传 `setupDeviceSync(http, { fingerprint: true })` 强制开启。
-- 版本流程：改动后 `npm version patch|minor|major`，commit tag 后 publish。
+## 已知限制
+
+- 隐私模式下存储降级为会话内临时 ID，每次刷新变化（console.warn 告警）
+- `isDeviceFingerprintEnabled` 依赖 `import.meta.env`（Vite）与 DOM；非 Vite 消费方请用 meta 标签或 `fingerprint` 选项
+- `crypto.getRandomValues` 不可用的极旧浏览器以 `Math.random` 生成随机后缀（告警提示）
+- Safari ITP 会清除脚本可写存储，需配合服务端 httpOnly cookie 兜底恢复机制使用
+
+## License
+
+[MIT](./LICENSE) © 2026 qirly
