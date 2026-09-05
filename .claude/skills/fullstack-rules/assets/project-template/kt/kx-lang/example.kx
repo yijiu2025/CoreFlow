@@ -1,0 +1,346 @@
+# ==================== KX v1.2 完整示例 ====================
+# 本文件展示 KX 语言的全部核心特性，包含 4 个完整场景：
+#   1. 全局布局定义
+#   2. 精选首页（含搜索 + 瀑布流 + 互动）
+#   3. 作品详情页（含悬浮预览 + 评论）
+#   4. 我的空间（含 Tab 切换 + 批量管理）
+
+# ==================== 示例 1: 全局布局 ====================
+
+@layout AppLayout {
+  @slot top (role: header) {
+    @header 主导航 {
+      @button 会员功能
+      @button 通知
+      @button 私信
+      @button 投稿 {
+        @navigate click -> /editor
+        @permission posecraft:work:create
+        @login
+      }
+      @avatar 头像 {
+        @hover -> @popover 用户预览卡
+        @click -> /mine
+        @login
+      }
+    }
+  }
+
+  @slot left (role: aside) {
+    @sidebar 侧边栏 {
+      @logo Logo
+      @menu 精选 @navigate click -> /
+      @menu 推荐 @navigate click -> /recommend
+      @menu 附近 @navigate click -> /nearby
+      @menu 关注 {
+        @navigate click -> /following
+        @login
+      }
+      @menu 朋友 @navigate click -> /friends
+      @menu 我的 {
+        @navigate click -> /mine
+        @login
+      }
+    }
+  }
+
+  @slot main (role: main) {
+    // 由子页面填充
+  }
+}
+
+# ==================== 示例 2: 精选首页 ====================
+
+@page / (精选) extends AppLayout {
+  @icon HomeOutlined
+  @meta title="精选姿势" description="发现最新的 3D 角色作品"
+
+  @slot main {
+    @header 搜索栏 {
+      @input 搜索框 {
+        @api GET /posecraft/v1/works (query: keyword) -> filteredItems
+        @note 输入关键词实时搜索，失焦后触发
+      }
+      @tab 频道Tab {
+        @api GET /posecraft/v1/config/channels -> channels
+        @state activeChannel: string = 'recommend'
+      }
+    }
+
+    @banner 首页Banner {
+      @api GET /posecraft/v1/banner-configs/active -> banners
+      @render when: activeChannel === 'recommend' && !searchQuery && banners.length > 0
+      @note 点击跳转 link_url，无链接则 toast 提示
+    }
+
+    @list 作品瀑布流 {
+      @api GET /posecraft/v1/works (query: page, pageSize, channel: activeChannel) -> works
+
+      @loading { @skeleton 卡片骨架 (count: 8) }
+
+      @empty {
+        @empty 空状态 {
+          @note 新用户引导：去发布第一个作品
+          @button 立即投稿 {
+            @navigate click -> /editor
+            @permission posecraft:work:create
+          }
+        }
+      }
+
+      @error {
+        @toast "加载失败，点击重试" @event click -> @api retry
+      }
+
+      @card 作品卡片 (v-for: item in works) {
+        @prop item: Work
+
+        @media 封面图 (bind: item.cover_url) {
+          @note 图片懒加载，宽高比通过 naturalWidth/Height 计算
+        }
+
+        @text 标题 (bind: item.title) {
+          @note 2 行截断
+        }
+
+        @avatar 作者 (bind: item.author.avatar)
+        @text 作者名 (bind: item.author.username)
+
+        @badge 模板 { @render when: item.is_template_work }
+        @badge 视频 { @render when: item.video_url }
+        @badge 距离 (bind: item.distance) { @render when: item.distance }
+
+        @action 底部操作栏 {
+          @button 点赞 (bind: item.likes_count) {
+            @note 乐观更新：先改 UI，接口报错再回滚
+            @api POST /posecraft/v1/works/:id/like
+            @mutation set works.find(w => w.id === id).liked = true
+            @mutation set works.find(w => w.id === id).likes_count += 1
+            @login
+          }
+          @button 收藏 {
+            @api POST /posecraft/v1/interaction/collect
+            @mutation set works.find(w => w.id === id).collected = true
+            @login
+          }
+        }
+      }
+
+      @button 加载更多 {
+        @api GET /posecraft/v1/works (page: nextPage) -> works(append)
+        @render when: hasMore
+        @note 通过 IntersectionObserver 触发自动加载
+      }
+    }
+  }
+}
+
+# ==================== 示例 3: 作品详情页 ====================
+
+@page /work/:id (作品详情) extends AppLayout {
+  @icon EyeOutlined
+  @meta title="作品详情"
+
+  @param id: string { from: route }
+
+  @slot main {
+    @detail 作品详情 {
+      @api GET /posecraft/v1/works/:id (bind: id) -> work
+
+      @loading { @skeleton 全屏骨架 (count: 1) }
+
+      @media 主图 (bind: work.image_url) {
+        @note 支持鼠标滚轮缩放
+      }
+
+      @author 作者信息卡 {
+        @avatar 作者头像 (bind: work.author.avatar) {
+          @hover -> @popover 作者悬浮卡
+          @navigate click -> /user/:id
+        }
+        @text 作者名 (bind: work.author.username)
+        @button 关注 {
+          @api POST /posecraft/v1/follow/:userId (bind: work.author.id)
+          @login
+        }
+      }
+
+      @text 标题 (bind: work.title)
+      @text 描述 (bind: work.description) {
+        @note 超出折叠，显示"展开/收起"按钮
+      }
+
+      @badge 标签 (bind: work.tags) {
+        @note 每个 tag 显示为 #tag 药丸样式
+      }
+
+      @text 浏览数 (bind: work.views_count)
+      @text 发布时间 (bind: work.created_at)
+
+      @action 互动栏 {
+        @button 点赞 (bind: work.likes_count) {
+          @api POST /posecraft/v1/works/:id/like
+          @mutation set work.likes_count += 1
+          @login
+          @note 点赞时有脉冲动画 (pulse)
+        }
+        @button 收藏 (bind: work.collects_count) {
+          @api POST /posecraft/v1/interaction/collect
+          @login
+        }
+        @button 评论 (bind: work.comments_count) {
+          @note 滚动到评论区
+        }
+        @button 分享
+      }
+
+      @button 使用此姿势拍照 {
+        @render when: work.isTemplate || work.template_id
+        @navigate click -> /camera?template_id=:id
+      }
+
+      @list 评论列表 {
+        @input 评论输入框 {
+          @note 说点什么吧... 按 Enter 发送
+        }
+        @button 发送 {
+          @api POST /posecraft/v1/interaction/comment
+          @login
+        }
+
+        @card 评论项 (v-for: comment in comments) {
+          @prop comment: Comment
+          @avatar 评论者头像 (bind: comment.author)
+          @text 评论内容 (bind: comment.text)
+          @text 评论时间 (bind: comment.created_at)
+        }
+
+        @empty {
+          @note 还没有人评论，快来抢沙发
+        }
+      }
+    }
+  }
+}
+
+# ==================== 示例 4: 我的空间 ====================
+
+@page /mine (我的空间) extends AppLayout {
+  @icon UserOutlined
+  @meta title="我的空间"
+
+  @login
+  @note 未登录跳转登录页，登录后回跳
+
+  @slot main {
+    @header 个人资料 {
+      @api GET /posecraft/v1/profile/stats -> profileStats
+      @api GET /user/v1/profile -> userProfile
+
+      @avatar 头像 (bind: authStore.safeAvatar) {
+        @hover { @state showBigAvatar = true }
+        @popover 头像大图 {
+          @render when: showBigAvatar
+          @media 大图 (bind: authStore.safeAvatar)
+        }
+      }
+
+      @text 昵称 (bind: userProfile.username)
+      @text 简介 (bind: userProfile.bio)
+
+      @stat 关注 (bind: followingCount) { @navigate click -> /following }
+      @stat 粉丝 (bind: followersCount) { @navigate click -> /followers }
+      @stat 互关 (bind: mutualCount)
+      @stat 获赞 (bind: likesCount)
+
+      @button 编辑资料 {
+        @note 打开编辑弹窗：修改昵称、简介、上传头像
+        @permission self
+      }
+    }
+
+    @tab 内容分类 {
+      @state activeTab: string = 'works'
+
+      @menu 作品 { @sync = authStore.worksCount }
+      @menu 模板 { @sync = authStore.templatesCount }
+      @menu 推荐
+      @menu 喜欢
+      @menu 收藏
+      @menu 观看历史
+      @menu 稍后再看 { @render when: false @note 尚未开放 }
+    }
+
+    @list 作品列表 {
+      @render when: activeTab === 'works'
+      @api GET /posecraft/v1/works/mine -> myWorks
+
+      @loading { @skeleton 卡片骨架 (count: 8) }
+
+      @card 作品卡片 (v-for: item in myWorks) {
+        @prop item: Work
+
+        @state showDetail = false
+        @hover { @state showDetail = true @delay show: 300ms }
+        @leave { @delay hide: 200ms }
+
+        @media 封面 (bind: item.cover_url)
+        @text 标题 (bind: item.title)
+
+        @popover 作品详情预览 {
+          @render when: showDetail
+          @anchor @card 作品卡片
+          @position right-top
+
+          @api GET /posecraft/v1/works/:id/detail (bind: item.id) -> detail
+
+          @media 大图 (bind: detail.hd_image)
+          @text 描述 (bind: detail.description)
+          @stat 浏览 (bind: detail.views)
+
+          @button 快速点赞 {
+            @api POST /posecraft/v1/works/:id/like
+            @mutation set myWorks.find(w => w.id === id).likes_count += 1
+            @login
+          }
+        }
+
+        @button 删除 {
+          @api DELETE /posecraft/v1/works/:id
+          @mutation filter myWorks = myWorks.filter(w => w.id !== id)
+        }
+      }
+    }
+  }
+}
+
+# ==================== 全局共享浮窗 ====================
+
+@popover 用户预览卡 {
+  @prop user: User
+  @avatar 头像 (bind: user.avatar)
+  @text 用户名 (bind: user.username)
+  @stat 关注 (bind: user.followingCount)
+  @stat 粉丝 (bind: user.followersCount)
+  @menu 我的喜欢 (bind: user.likedWorksCount) {
+    @navigate click -> /mine?tab=likes
+  }
+  @menu 我的收藏 (bind: user.collectsCount) {
+    @navigate click -> /mine?tab=collect
+  }
+  @menu 退出登录 {
+    @api POST /oauth21/v1/auth/logout
+  }
+}
+
+@popover 作者悬浮卡 {
+  @prop author: User
+  @avatar 头像 (bind: author.avatar)
+  @text 用户名 (bind: author.name)
+  @text 签名 (bind: author.bio)
+  @stat 作品数 (bind: author.works_count)
+  @button 关注 {
+    @api POST /posecraft/v1/follow/:userId
+    @login
+  }
+}

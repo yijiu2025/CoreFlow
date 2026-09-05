@@ -39,7 +39,7 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/l
 | 00   | `00-globals.js`      | 装饰 `reply.result`（success/fail/unauth/forbidden）  |
 | 02   | `02-redis.js`        | Redis 连接 + 健康监控，失败注入 `null`                |
 | 03   | `03-db.js`           | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出 |
-| 04   | `04-auth.js`         | Session 验证 + ALS 初始化（`src/auth/`）              |
+| 04   | `04-auth.js`         | Session 验证 + ALS 初始化（`src/framework/auth/`）              |
 | 05   | `05-firewall.js`     | 五层拦截管道（限频/封禁/挑战/Bot/地理围栏）           |
 | 06   | `06-models.js`       | 自动加载 `src/models/`，按命名空间注册到 `app.db`     |
 | 07   | `07-api.js`          | 自动加载 `src/api/` 路由（读 `system.json`）          |
@@ -80,10 +80,10 @@ onResponse    →  扫描陷阱（404/403 检测，异步采集无 reply）
 
 详见 [docs/development/注册登录全链路流程图.md](docs/development/注册登录全链路流程图.md) 第五~八章。
 
-## 认证系统 (`src/auth/`)
+## 认证系统 (`src/framework/auth/`)
 
 ```
-src/auth/
+src/framework/auth/
 ├── index.js              # 独立 auth 插件：Session 验证 + ALS + app.auth 装饰
 ├── cookie.js             # Cookie HMAC-SHA256 签名/验证
 ├── session.js            # Session 管理：创建/验证/销毁/续期/刷新/踢下线
@@ -211,13 +211,15 @@ registerSecureRoute(app, {
 ```
 src/
 │── 系统层（基础设施 + 通用工具）
-├── db/                # 数据库连接 + 迁移
-├── redis/             # 缓存
-├── log/               # 日志
-├── auth/              # 认证框架（Session + Cookie + ALS）
+├── framework/         # 系统层基础设施
+│   ├── db/            #   数据库连接 + 迁移
+│   ├── redis/         #   缓存
+│   ├── log/           #   日志
+│   ├── auth/          #   认证框架（Session + Cookie + ALS）
 ├── firewall/          # 防火墙
-├── notice/            # 通知工具（邮件发送等通用服务）
-├── verify/            # 验证码工具（通用服务）
+│   ├── notice/        #   通知工具（邮件发送等通用服务）
+│   ├── verify/        #   验证码工具（通用服务）
+│   ├── scheduler/     #   定时任务调度器
 ├── models/session/    # 系统模型（UserSession, SessionToken, SessionLog）
 │
 │── 应用层
@@ -247,12 +249,12 @@ src/
 | `db.notice`  | EmailCode, NoticeConfig                                         | notice_email_codes, notice_configs                                            |
 | `db.session` | UserSession, SessionToken, SessionLog                           | session_user_session, session_tokens, session_logs                            |
 
-关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/db/softDeleteHooks.js`）。
+关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/framework/db/softDeleteHooks.js`）。
 
-## 数据库 (`src/db/`)
+## 数据库 (`src/framework/db/`)
 
 ```
-src/db/
+src/framework/db/
 ├── index.js           # Sequelize 实例 + 环境变量校验 + 连接池配置
 ├── migrate.js         # Umzug 迁移运行器（--up / --down / --down-to / --status）
 ├── softDeleteHooks.js # 软删除 delete_version 钩子
@@ -316,10 +318,10 @@ timestamps: true,
 paranoid: true,  // 错误！
 ```
 
-## Redis 系统 (`src/redis/`)
+## Redis 系统 (`src/framework/redis/`)
 
 ```
-src/redis/
+src/framework/redis/
 ├── index.js              # 统一出口，所有 API 从这里导出
 ├── plugin.js             # 连接管理：创建、主备切换、优雅关闭
 ├── health.js             # 事件驱动健康监控 + SLOWLOG 采集
@@ -371,7 +373,7 @@ const msg = queue.shift();
 
 **禁止直接操作 `request.server.redis` / `app.redis` 等原始客户端。**
 
-所有 Redis 操作必须通过 `src/redis/` 模块 API 执行（`getStore` / `RedisStore` / `getStore().call()` 等）。若模块缺少某个 Redis 命令，**不得绕过模块直接调用**，应在 `RedisStore` 中补充相应方法（走统一超时保护和错误包装）。完整规范见 `.claude/skills/fullstack-rules/references/backend/redis.md`。
+所有 Redis 操作必须通过 `src/framework/redis/` 模块 API 执行（`getStore` / `RedisStore` / `getStore().call()` 等）。若模块缺少某个 Redis 命令，**不得绕过模块直接调用**，应在 `RedisStore` 中补充相应方法（走统一超时保护和错误包装）。完整规范见 `.claude/skills/fullstack-rules/references/backend/redis.md`。
 
 ## 防火墙系统 (`src/firewall/`)
 

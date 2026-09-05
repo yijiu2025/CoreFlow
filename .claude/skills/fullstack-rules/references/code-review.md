@@ -347,7 +347,7 @@ if (isProduction && CORS_ORIGINS.length === 0) {
 [ ] 首次调用和后续调用的差异已文档化
 [ ] 模块级可变状态已审查并发安全
 [ ] 新增错误使用了错误码而非消息文本
-[ ] DAO/Service 层统一使用 getModel 获取模型<br>禁止动态 import 模型文件，必须使用 `import { getModel } from '../db/index.js'` + `getModel('ModelName')`
+[ ] DAO/Service 层统一使用 getModel 获取模型<br>禁止动态 import 模型文件，必须使用 `import { getModel } from '../../framework/db/index.js'` + `getModel('ModelName')`
 [ ] npx eslint 检查无警告（修改的文件 0 警告）<br>⚠️ 审查/修改单个文件时，文件内所有 ESLint 警告都必须修复（如 no-console 加 eslint-disable、未使用变量删除、prettier 格式），不留任何残留
 ```
 

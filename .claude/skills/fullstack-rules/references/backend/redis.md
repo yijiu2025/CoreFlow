@@ -61,7 +61,7 @@
 
 ### 连接管理
 
-- 必须使用连接池（本项目使用 `node-redis` 内置连接池）
+- 连接由框架统一管理（`node-redis` 单连接多路复用 + 主备切换，见 `src/framework/redis/plugin.js`）
 - 禁止每次操作创建/销毁连接
 - 连接池大小：`max: 10-50`，根据业务 QPS 调整
 
@@ -111,11 +111,11 @@
 
 **禁止直接操作 `request.server.redis` 或 `app.redis` 等原始客户端。**
 
-所有 Redis 操作必须通过 `src/redis/` 模块暴露的 API 执行：
+所有 Redis 操作必须通过 `src/framework/redis/` 模块暴露的 API 执行：
 
 ```js
 // ✅ 正确：通过 Redis 模块
-import { getStore } from './redis/index.js';
+import { getStore } from '../../framework/redis/index.js';
 const store = getStore('captcha');
 await store.get('key');
 
@@ -129,7 +129,7 @@ await redis.get('session:key');
 如果 Redis 模块缺少某个 Redis 命令，**不得绕过模块直接调用**，而应**在 `RedisStore` 中补充该方法**，走统一的超时保护和错误包装：
 
 ```js
-// 在 src/redis/redis-store.js 中添加新方法
+// 在 src/framework/redis/redis-store.js 中添加新方法
 async zAdd(prefix, key, score, value, timeout, useBackup) {
   _validateInput(prefix, key);
   const redis = _getRedis('zAdd', prefix, useBackup);
@@ -145,7 +145,7 @@ async zAdd(prefix, key, score, value, timeout, useBackup) {
 ### 存储选择
 
 ```js
-import { getStore } from './redis/index.js';
+import { getStore } from '../../framework/redis/index.js';
 
 // 自动选择 Redis 或 MapStore（根据环境变量）
 const store = getStore('captcha', { timeout: 3000 });
