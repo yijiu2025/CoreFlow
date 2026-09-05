@@ -10,6 +10,7 @@
     "./device-id": "./src/device-id.js",
     "./device-fingerprint": "./src/device-fingerprint.js",
     "./device-sync": "./src/device-sync.js",
+    "./device-setup": "./src/device-setup.js",
     "./sha256": "./src/sha256.js",
     "./storage": "./src/storage.js",
     "./base62-timestamp": "./src/base62-timestamp.js"
