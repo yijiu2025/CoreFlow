@@ -83,5 +83,8 @@
 6. 一致性：相同功能的不同入口（HTTP/WS/内部端点）安全级别一致；豁免路径（RISK_EXEMPT_PATHS）未被滥用
 7. 依赖：新增第三方包是否必要（优先既有设施）、npm audit 无新增高危
 8. 工具箱：按 [toolbox.md](toolbox.md) 场景矩阵跑完整检查
+9. **深度扫描编排**（攻击面大的新模块/重大版本合入前）：按 [orchestration.md](orchestration.md)
+   调度安全类专项 skill（如 `find-security-vulnerabilities-in-code`）做白盒深扫，
+   发现回填剧本 D 修复流程；技能不存在时降级为本文件人工清单并注明
 
 **验收**：security.md"安全自查清单"逐项打勾；防线一览表确认没有绕过既有设施造第二套。

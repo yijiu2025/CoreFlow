@@ -109,6 +109,7 @@ const REQUIRED = [
   'references/pitfalls.md',
   'references/workflows.md',
   'references/toolbox.md',
+  'references/orchestration.md',
   'references/note.md',
   'references/naming-convention.md',
   'references/testing.md',
