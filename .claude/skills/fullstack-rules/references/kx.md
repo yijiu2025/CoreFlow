@@ -46,7 +46,9 @@
 6. 写 `models/` → 定义数据模型和 API（`@model API` 统一命名）
 7. 写 `pages/` → 定义页面结构、数据流、交互（顶部 @ref 引用模型）
 8. 写 `components/` → 定义可复用组件接口（@prop 声明 props）
-9. 展示给用户确认 → 确认架构后开始生成代码
+9. 静态校验 → 运行 `node .claude/skills/fullstack-rules/scripts/kx-validate.mjs <目录>`
+   （未知指令 / @sync 常量赋值 / @empty 容器 / @model 命名 / @mutation 数组方法 /
+   @ref 目标存在 / 花括号配平），全部通过后再展示给用户确认
 
 ## KX 写作规范（避免常见错误）
 
@@ -80,6 +82,14 @@
 | `@login` / `@permission`       | 权限控制                | `@login` / `@permission work:create`       |
 | `@note`                        | 业务约束（AI 强制识别） | `@note 仅 VIP 可见`                        |
 | `@ref`                         | 跨文件引用              | `@ref ../models/user.kx`                   |
+
+## 静态校验与存量治理
+
+- 校验器：`scripts/kx-validate.mjs`，检查项对应上方写作规范表 + SPEC v1.3 指令白名单；
+  `@note` 行视为自由文本（其中 @token 是描述不是指令）
+- **存量治理**：`phonecopy/posecraft/*.kx` 存在 15 项待治理（12 处 @empty 未在
+  @list/@detail 容器内、@placeholder/@comment 为未收录指令）——属 v1.2 时代写法，
+  治理方案（修 .kx 还是扩 SPEC）需产品决策，AI 不得擅自改动存量架构文件
 
 ## 模块边界规则
 

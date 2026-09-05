@@ -118,6 +118,7 @@ const REQUIRED = [
   'references/orchestration.md',
   'scripts/doctor.mjs',
   'scripts/install-skill.mjs',
+  'scripts/kx-validate.mjs',
   'references/note.md',
   'references/naming-convention.md',
   'references/testing.md',
