@@ -181,7 +181,7 @@
    - 三主前端都注入 `X-Device-Fp`，但 `isDeviceFingerprintEnabled()` 默认 false（需 `VITE_DEVICE_FINGERPRINT=true`）。生产未启用时，consentKey/验证码只靠 IP+UA 指纹，抵制代理池换 IP+UA 绕过的能力弱。
    - **建议**：高安全场景（注册/登录并发码）考虑启用，需评估隐私合规。
 
-3. **`kickByDeviceId` 已实现但未接入管理端 API**
+3. **`kickByDeviceId` 已实现但未接入管理端 API**（✅ 已完成，2026-09-05 核对：`POST /admin/user/v1/sessions/kick-by-device` + `GET /sessions/list` 已上线，见 admin/user/v1/sessions.js）
    - [session.js:118](src/framework/auth/session.js#L118) 新增了按 device_id 精准踢单设备，提取了公共 `_kickSession`，但 `/auth/v1/sessions` 等端点还没暴露"按设备踢单点"的接口。
    - **建议**：在 session 管理 API 加端点 `POST /auth/v1/sessions/kick-by-device`，供前端"设备管理"页踢单设备。
 
@@ -190,18 +190,18 @@
    - poseadmin：裸 axios 直调 `/posecraft/v1/admin/*`，无 `x-device-id` 头。同源部署时靠 httpOnly `device_id` cookie 兜底问题不大；但若**跨域部署或 cookie 被清**，[device.js:78](src/framework/auth/device.js#L78) 每次都服务端随机生成新 ID → 设备指纹每请求都变 → `detectSessionRisk` 与 session 基准不匹配，**写操作会反复 403 要求人机验证**。
    - **建议**：admin 转正时接入 `stable-deviceid`；poseadmin 确定部署形态（同源/跨域）后决定是否接头注入，至少要保证 `device_id` cookie 稳定存在。
 
-5. **`x-device-id` 头客户端可控，可无限膨胀 session_tokens**
+5. **`x-device-id` 头客户端可控，可无限膨胀 session_tokens**（✅ 已完成，2026-09-05 核对：`pruneActiveDevices` MAX_ACTIVE_DEVICES=20，createSession 新增设备行后裁剪最旧；并有 off-by-one 修正——恰好等于上限不再多删一台）
    - 伪造**他人** deviceId 不可行（指纹含 uid，session 基准绑定 userId，伪造自伤触发人机验证）。
    - 但同一用户每次传**随机新 deviceId** 可绕过设备幂等（`user_id+device_id` upsert 键不同），无限新增 `session_tokens` 行 → 设备数统计失真、DB 膨胀。
    - **建议**：对同 user 的活跃 device 行数设上限（如 20），超限清理最旧或强制人机验证。
 
 ### 🟢 P2（可维护性）
 
-6. **JWT claims 中的 deviceId 是"死数据"**
+6. **JWT claims 中的 deviceId 是"死数据"**（✅ 已过时/不成立，2026-09-05 核对：当前 `issueAccessToken` claims 仅 sub/aud/token_type/scope，deviceId 经 session_token → bind-session 链消费于 session-api.service.js，无死数据）
    - [token-issuer.service.js:95](src/app/oauth21/services/token-issuer.service.js#L98) 把 deviceId 写入 access_token claims，但全仓（oauth21 crypto/middleware/services）**没有任何代码读 `claims.deviceId`**，子服务器拿到也没用它做校验。
    - **建议**：要么下游消费（资源服务器做设备绑定校验），要么从 claims 移除减小 token 体积、避免"以为有校验"的错觉。
 
-7. **deviceId 重生/过期后残留孤儿数据**
+7. **deviceId 重生/过期后残留孤儿数据**（✅ 基本完成，2026-09-05 核对：scheduler session-cleanup 任务已启用（24h/90 天）清理 revoked 陈旧行 + updateSessionBaseline 原地迁移 deviceId 不产生新 orphan；残 Redis 免验标记 30 分钟 TTL 自灭）
    - `verifyAndNormalizeDeviceId` 对老格式 UUID、时间戳段超 365 天的 ID 会重生。重生后：旧 `device_id` 的 `session_tokens` 行、`verified:${userId}:${旧ID}` 免验标记成为孤儿，无任何清理任务。
    - **建议**：定期清理长期不活跃的 session_tokens 行（如 90 天），或重生时迁移复用。
 

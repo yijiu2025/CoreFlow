@@ -215,11 +215,12 @@ async function pruneActiveDevices(userId) {
   const SessionToken = getModel('SessionToken');
   if (!SessionToken) return 0;
 
-  // 只数活跃行（revoked=false），超上限才清
+  // 只数活跃行（revoked=false），超过上限才清（等于上限不裁——本函数在新增设备行
+  // 之后调用，count 已含新设备，activeCount > MAX 才代表"旧设备 + 新设备"超限）
   const activeCount = await SessionToken.count({ where: { user_id: userId, revoked: false } });
-  if (activeCount < MAX_ACTIVE_DEVICES) return 0;
+  if (activeCount <= MAX_ACTIVE_DEVICES) return 0;
 
-  const removeCount = activeCount - MAX_ACTIVE_DEVICES + 1;
+  const removeCount = activeCount - MAX_ACTIVE_DEVICES;
   // 按 last_active 升序取最旧的 removeCount 条活跃行
   const oldest = await SessionToken.findAll({
     where: { user_id: userId, revoked: false },
@@ -229,8 +230,8 @@ async function pruneActiveDevices(userId) {
   });
   if (!oldest.length) return 0;
 
-  // 批量软删除：触发 beforeBulkDestroy 钩子写 delete_version
-  // （SessionToken 注册了 registerDeleteVersionHooks，批量 destroy 走 paranoid 软删）
+  // 批量硬删除：SessionToken 无 delete_version/paranoid（撤销语义由 revoked 字段表达），
+  // destroy 即物理 DELETE。被裁剪的都是 last_active 最旧的设备行，设备下次访问会重新 upsert。
   const destroyed = await SessionToken.destroy({
     where: { id: oldest.map(r => r.id) }
   });

@@ -8,7 +8,7 @@
 
 import config from '../config/config.js';
 import { issueH5Token } from '../../../framework/auth/signature.js';
-import { IS_PRODUCTION } from '../config/constants.js';
+import { COOKIE_POLICY } from '../../../framework/auth/cookie.js';
 
 /**
  * 设置认证 Cookie（access_token + refresh_token + 辅助 Cookie）
@@ -23,36 +23,40 @@ export async function setAuthCookies(reply, { accessToken, refreshToken, user },
   // Access Token Cookie
   reply.setCookie('access_token', accessToken, {
     httpOnly: true,
-    secure: IS_PRODUCTION,
+    secure: COOKIE_POLICY.secure,
     maxAge: config.jwt.accessTokenTTL * 1000,
     path: '/',
-    sameSite: 'lax'
+    sameSite: COOKIE_POLICY.sameSite,
+    ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
   });
 
   // Refresh Token Cookie（仅用于 token 端点）
   reply.setCookie('refresh_token', refreshToken, {
     httpOnly: true,
-    secure: IS_PRODUCTION,
+    secure: COOKIE_POLICY.secure,
     maxAge: config.jwt.refreshTokenTTL * 1000,
     path: '/oauth2.1/token',
-    sameSite: 'strict'
+    sameSite: COOKIE_POLICY.refreshSameSite,
+    ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
   });
 
   // 辅助 Cookie（非 HttpOnly，前端可读取用于显示）
   reply.setCookie('tracknick', encodeURIComponent(user.name || user.username), {
     path: '/',
     httpOnly: false,
-    secure: IS_PRODUCTION,
-    sameSite: 'lax',
-    maxAge: config.jwt.accessTokenTTL * 1000
+    secure: COOKIE_POLICY.secure,
+    sameSite: COOKIE_POLICY.sameSite,
+    maxAge: config.jwt.accessTokenTTL * 1000,
+    ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
   });
 
   reply.setCookie('user_avatar', encodeURIComponent(user.avatar || ''), {
     path: '/',
     httpOnly: false,
-    secure: IS_PRODUCTION,
-    sameSite: 'lax',
-    maxAge: config.jwt.accessTokenTTL * 1000
+    secure: COOKIE_POLICY.secure,
+    sameSite: COOKIE_POLICY.sameSite,
+    maxAge: config.jwt.accessTokenTTL * 1000,
+    ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
   });
 
   // H5 签名 Token
