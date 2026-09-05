@@ -49,7 +49,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      'deviceid': path.resolve(__dirname, '../packages/shared-device/src/index.ts')
+      'stable-deviceid': path.resolve(__dirname, '../packages/shared-device/src/index.ts')
     }
   },
   server: {

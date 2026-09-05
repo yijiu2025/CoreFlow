@@ -193,7 +193,7 @@ import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 import AgreementModals from '@/components/common/AgreementModals.vue';
-import { adoptDeviceId } from 'deviceid';
+import { adoptDeviceId } from 'stable-deviceid';
 
 const props = defineProps({
   isOpen: Boolean

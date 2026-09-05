@@ -1,5 +1,5 @@
 import request from '@/utils/request';
-import { getStableDeviceId } from 'deviceid';
+import { getStableDeviceId } from 'stable-deviceid';
 import { rsaEncrypt, clearPublicKeyCache, buildEncryptedLoginPayload } from '@/utils/crypto';
 
 /**

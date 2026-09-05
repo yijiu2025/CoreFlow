@@ -15,7 +15,7 @@
  * @author yijiu2025
  * @since 2026-08-27
  */
-import { sha256 } from 'deviceid';
+import { sha256 } from 'stable-deviceid';
 
 /** 前后端共享的 appKey（从 env 读，编译期定值） */
 const APP_KEY = import.meta.env.VITE_SIGN_APP_KEY || '';

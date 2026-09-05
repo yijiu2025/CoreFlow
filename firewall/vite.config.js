@@ -26,7 +26,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      'deviceid': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url))
+      'stable-deviceid': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url))
     }
   },
   server: {

@@ -102,7 +102,7 @@
 
 ### 2.1 共享包
 
-[packages/shared-device/](packages/shared-device/)（npm workspace 包，主前端 `package.json` 依赖 `"deviceid": "*"`，vite alias + tsconfig paths 解析）：
+[packages/shared-device/](packages/shared-device/)（npm workspace 包，主前端 `package.json` 依赖 `"stable-deviceid": "*"`，vite alias + tsconfig paths 解析）：
 
 | 文件 | 导出 | 说明 |
 |---|---|---|
@@ -188,7 +188,7 @@
 4. **admin / poseadmin 完全不在设备 ID 体系内**
    - [admin/src/utils/request.ts](admin/src/utils/request.ts)：localStorage Bearer token 模式，且 401 刷新是 `TODO_NEW_TOKEN` 占位（面板未完工），不走 session/bind-session，设备ID、风险检测、设备幂等全部不生效。
    - poseadmin：裸 axios 直调 `/posecraft/v1/admin/*`，无 `x-device-id` 头。同源部署时靠 httpOnly `device_id` cookie 兜底问题不大；但若**跨域部署或 cookie 被清**，[device.js:78](src/framework/auth/device.js#L78) 每次都服务端随机生成新 ID → 设备指纹每请求都变 → `detectSessionRisk` 与 session 基准不匹配，**写操作会反复 403 要求人机验证**。
-   - **建议**：admin 转正时接入 `deviceid`；poseadmin 确定部署形态（同源/跨域）后决定是否接头注入，至少要保证 `device_id` cookie 稳定存在。
+   - **建议**：admin 转正时接入 `stable-deviceid`；poseadmin 确定部署形态（同源/跨域）后决定是否接头注入，至少要保证 `device_id` cookie 稳定存在。
 
 5. **`x-device-id` 头客户端可控，可无限膨胀 session_tokens**
    - 伪造**他人** deviceId 不可行（指纹含 uid，session 基准绑定 userId，伪造自伤触发人机验证）。
@@ -210,7 +210,7 @@
    - **建议**：评估对该场景放宽（如仅 UA+IP 指纹比对）或前端提示用户退出隐私模式。
 
 9. **phonecopy 自有 web 源码未接入共享包**
-   - phonecopy 是 Hybrid（Capacitor + fetch，无 axios），web 源码（[utils/auth.js](phonecopy/src/utils/auth.js)）未接 `deviceid`。其 Android 壳因打包 posecraft 产物而**间接**带了设备ID逻辑（见 §2.2），但壳内跑的是 posecraft 的页面而非 phonecopy 自有页面时才生效。
+   - phonecopy 是 Hybrid（Capacitor + fetch，无 axios），web 源码（[utils/auth.js](phonecopy/src/utils/auth.js)）未接 `stable-deviceid`。其 Android 壳因打包 posecraft 产物而**间接**带了设备ID逻辑（见 §2.2），但壳内跑的是 posecraft 的页面而非 phonecopy 自有页面时才生效。
    - **建议**：phonecopy 自有页面若需要风险检测/设备幂等，用 capacitor 的 localStorage 存 device_id + fetch 拦截注入头。
 
 10. **`isEmbedded`（iframe 检测）与 `notLoadSsoView`（显式开关）语义重叠**
@@ -231,7 +231,7 @@
 | 踢下线只按 deviceType，粒度粗 | ✅ 已修复 | 新增 `kickByDeviceId`，公共 `_kickSession` 复用 |
 | 死代码 `resolveDeviceId` / `generateDeviceCookie` | ✅ 已清理 | 已删，全仓无引用 |
 | `secure:false` 硬编码 | ✅ 已修复 | 随 cookie 选项统一解决 |
-| 三主前端设备逻辑分散不共享 | ✅ 已修复 | 抽 `deviceid` npm workspace 包 |
+| 三主前端设备逻辑分散不共享 | ✅ 已修复 | 抽 `stable-deviceid` npm workspace 包 |
 | `initDeviceSync` 定义未调用 | ✅ 已修复 | 三主前端入口调 `initDeviceSync()` |
 | 风险验证 modal 不带头，cookie 缺失时免验标记不一致 | ✅ 已修复 | `verifyChallenge` 显式带 `x-device-id` |
 | SSO_READY 重复发送（dispatcher + 子组件） | ✅ 已修复 | 统一由 index.vue 发，子组件删 |
