@@ -70,6 +70,21 @@ const api = axios.create({
 });
 ```
 
+### 设备身份接入（stable-deviceid，强制）
+
+所有前端应用（含新建）必须接入 `stable-deviceid` 设备身份体系（后端风控/人机验证/设备管理依赖）。axios 实例创建后一行接入：
+
+```typescript
+import { setupDeviceSync } from 'stable-deviceid';
+
+const api = axios.create({ /* ... */ });
+setupDeviceSync(api); // 自动注入 x-device-id 头、响应头同步、跨标签页监听
+```
+
+完整接入清单（工程三件套 + SSO 场景 adoptDeviceId 等）见
+[packages/shared-device/README.zh-CN.md](../../../../../packages/shared-device/README.zh-CN.md)
+的"快速开始"与"SSO 跨 origin 身份归一"章节；参考实现见 `posecraft/src/utils/request.ts`。
+
 ### 开发环境代理
 
 开发时 Vite 代理将请求转发到后端，避免跨域问题（`vite.config.ts`）：
