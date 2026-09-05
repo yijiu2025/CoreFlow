@@ -247,5 +247,5 @@ id_rsa
 | 规范         | 文件                                  | 说明                                   |
 | ------------ | ------------------------------------- | -------------------------------------- |
 | Git 安全红线 | [git-patterns.md](git-patterns.md) | 敏感信息提交禁止、.gitignore 配置      |
-| Vue 安全规范 | [vue.md](../frontend/web/vue.md)      | XSS 防护、iframe 安全、懒加载          |
-| 后端权限校验 | [backend/main.md](../backend/main.md) | 三级守卫、registerSecureRoute 权限配置 |
+| Vue 安全规范 | [vue.md](frontend/web/vue.md)      | XSS 防护、iframe 安全、懒加载          |
+| 后端权限校验 | [backend/main.md](backend/main.md) | 三级守卫、registerSecureRoute 权限配置 |

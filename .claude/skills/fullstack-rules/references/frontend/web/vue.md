@@ -85,7 +85,7 @@ const api = axios.create({ /* ... */ });
 setupDeviceSync(api); // 自动注入 x-device-id 头、响应头同步、跨标签页监听
 ```
 
-详细文档见 [packages/shared-device/README.zh-CN.md](../../../../../../../packages/shared-device/README.zh-CN.md)
+详细文档见 [packages/shared-device/README.zh-CN.md](../../../../../../packages/shared-device/README.zh-CN.md)
 的"快速开始"与"SSO 跨 origin 身份归一"章节；参考实现见 `posecraft/src/utils/request.ts`。
 
 ### 开发环境代理
