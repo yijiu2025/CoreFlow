@@ -72,6 +72,16 @@ export default [
     }
   },
 
+  // 6.1 packages 下的 Node 构建脚本（*.mjs）使用 node globals
+  {
+    files: ['packages/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        ...globals.node
+      }
+    }
+  },
+
   // 7. 禁用所有与 Prettier 冲突的规则 (作为兜底，必须放在数组最后)
   prettierConfig
 ];
