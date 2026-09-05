@@ -14,7 +14,7 @@
  * @since 2026-09-05
  */
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SKILL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -37,6 +37,7 @@ function collectMarkdown(dir, out = []) {
 
 /* ── 1. 链接检查 ── */
 const mdFiles = collectMarkdown(SKILL_ROOT).filter(f => !f.includes(`${SKILL_ROOT}/assets/project-template/kt/kx-lang`));
+const scriptFiles = [join(SKILL_ROOT, 'scripts', 'doctor.mjs'), join(SKILL_ROOT, 'scripts', 'install-skill.mjs')];
 let linkCount = 0;
 const linkRe = /\[[^\]]*\]\(([^)\s]+)\)/g;
 for (const file of mdFiles) {
@@ -62,10 +63,15 @@ const FORBIDDEN = [
   { re: /product-designer/g, reason: '引用不存在的技能' }
 ];
 let scannedFiles = 0;
-for (const file of mdFiles) {
-  const rel = relative(SKILL_ROOT, file);
-  // kx-lang 内部文档不受本仓库路径规范约束
-  if (rel.includes('assets/project-template/kt/kx-lang')) continue;
+for (const file of [...mdFiles, ...scriptFiles]) {
+  const rel = relative(SKILL_ROOT, file).split(sep).join('/');
+  // kx-lang 内部文档不受本仓库路径规范约束；CHANGELOG 是历史记录，合法提及已移除的旧内容；
+  // doctor.mjs 自身的 FORBIDDEN 字面量是检测规则，跳过自指扫描（Windows 分隔符已归一为 /）
+  if (
+    rel.includes('assets/project-template/kt/kx-lang') ||
+    rel === 'CHANGELOG.md' ||
+    rel === 'scripts/doctor.mjs'
+  ) continue;
   const content = readFileSync(file, 'utf-8');
   scannedFiles++;
   for (const { re, reason } of FORBIDDEN) {
@@ -110,6 +116,8 @@ const REQUIRED = [
   'references/workflows.md',
   'references/toolbox.md',
   'references/orchestration.md',
+  'scripts/doctor.mjs',
+  'scripts/install-skill.mjs',
   'references/note.md',
   'references/naming-convention.md',
   'references/testing.md',
