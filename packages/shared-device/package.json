@@ -1,6 +1,6 @@
 {
   "name": "stable-deviceid",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "跨端一致的现代浏览器设备身份库：结构化稳定设备 ID（生成/校验/自愈）、canvas+WebGL 指纹（默认关闭）、响应头身份同步、SSO 跨 origin 归一、axios 一站式接入",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,8 +38,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yijiu2025/CoreFlow.git",
-    "directory": "packages/shared-device"
+    "url": "git+https://github.com/yijiu2025/deviceid.git"
   },
   "author": "qirly",
   "license": "MIT",
