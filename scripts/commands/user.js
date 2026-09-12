@@ -7,6 +7,9 @@ import { getModels } from '../lib/db.js';
 import { connectRedis, closeRedis, clearUserSessions } from '../lib/redis.js';
 import { createRl, ask, confirm, closeRl } from '../lib/input.js';
 import { printTable, printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
+import { createLogger } from '../../src/framework/log/index.js';
+
+const log = createLogger('scripts.commands.user');
 
 /**
  * 列出所有用户
@@ -23,7 +26,7 @@ export async function listUsers() {
     return;
   }
 
-  console.log('\n👥 用户列表：');
+  log.stdout('\n👥 用户列表：');
   printTable(
     ['ID', '用户名', '邮箱', '状态', '创建时间'],
     users.map(u => [
@@ -34,7 +37,7 @@ export async function listUsers() {
       new Date(u.created_at).toLocaleString('zh-CN')
     ])
   );
-  console.log(`\n共 ${users.length} 个用户`);
+  log.stdout(`\n共 ${users.length} 个用户`);
 }
 
 /**
@@ -109,7 +112,7 @@ export async function resetPassword() {
       return;
     }
 
-    console.log(`👤 目标用户: ${user.username} (${user.email})`);
+    log.stdout(`👤 目标用户: ${user.username} (${user.email})`);
 
     const password = await ask(rl, '🔑 新密码（至少6位）: ', true);
     if (!password || password.length < 6) {
@@ -256,22 +259,22 @@ export async function viewUser() {
       include: [{ model: Role, as: 'role' }]
     });
 
-    console.log('\n👤 用户详情：');
+    log.stdout('\n👤 用户详情：');
     printLine();
-    console.log(`  ID:       ${user.id}`);
-    console.log(`  UID:      ${user.uid}`);
-    console.log(`  用户名:   ${user.username}`);
-    console.log(`  邮箱:     ${user.email}`);
-    console.log(`  状态:     ${user.status === 1 ? '✅ 正常' : '❌ 禁用'}`);
-    console.log(`  创建时间: ${new Date(user.created_at).toLocaleString('zh-CN')}`);
+    log.stdout(`  ID:       ${user.id}`);
+    log.stdout(`  UID:      ${user.uid}`);
+    log.stdout(`  用户名:   ${user.username}`);
+    log.stdout(`  邮箱:     ${user.email}`);
+    log.stdout(`  状态:     ${user.status === 1 ? '✅ 正常' : '❌ 禁用'}`);
+    log.stdout(`  创建时间: ${new Date(user.created_at).toLocaleString('zh-CN')}`);
 
     if (userRoles.length > 0) {
-      console.log('\n  角色:');
+      log.stdout('\n  角色:');
       userRoles.forEach(ur => {
-        console.log(`    - ${ur.role.code} (${ur.role.name}, ${ur.role.app_id})`);
+        log.stdout(`    - ${ur.role.code} (${ur.role.name}, ${ur.role.app_id})`);
       });
     } else {
-      console.log('\n  角色: 无');
+      log.stdout('\n  角色: 无');
     }
 
     printLine();

@@ -1,3 +1,6 @@
+import { createLogger } from '../../src/framework/log/index.js';
+
+const log = createLogger('migrations.user.20260713000001-encrypt-phone');
 /**
  * 批量加密 user_user 表中现有的明文手机号
  * 加密后格式: base64(IV):base64(ciphertext)（含冒号分隔符）
@@ -9,7 +12,7 @@ export async function up({ queryInterface, Sequelize }) {
   );
 
   if (rows.length === 0) {
-    console.log('  ℹ️  无明文手机号需要加密');
+    log.stdout('  ℹ️  无明文手机号需要加密');
     return;
   }
 
@@ -27,14 +30,14 @@ export async function up({ queryInterface, Sequelize }) {
       });
       count++;
     } catch (err) {
-      console.warn(`  ⚠️  加密失败 id=${row.id}: ${err.message}`);
+      log.warn(`  ⚠️  加密失败 id=${row.id}: ${err.message}`);
     }
   }
 
-  console.log(`  ✅ 已加密 ${count}/${rows.length} 条手机号记录`);
+  log.stdout(`  ✅ 已加密 ${count}/${rows.length} 条手机号记录`);
 }
 
 export async function down({ queryInterface }) {
   // 注意：AES 加密不可逆，down 无法恢复明文，仅作占位
-  console.warn('  ⚠️  手机号加密不可逆，down 迁移无法恢复明文（需备份）');
+  log.warn('  ⚠️  手机号加密不可逆，down 迁移无法恢复明文（需备份）');
 }

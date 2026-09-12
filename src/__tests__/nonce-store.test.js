@@ -8,8 +8,8 @@
  * @since 2026-08-17
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { MapStore } from '../redis/map-store.js';
-import { _createMapNonceStore } from '../redis/nonce-store.js';
+import { MapStore } from '../framework/redis/map-store.js';
+import { _createMapNonceStore } from '../framework/redis/nonce-store.js';
 
 describe('Nonce 存储（MapStore 版）', () => {
   let store;

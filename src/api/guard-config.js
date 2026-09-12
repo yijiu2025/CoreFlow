@@ -11,6 +11,9 @@
 import { C } from '../utils/colors.js';
 import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
 import { logAuditEvent } from '../framework/auth/audit-logger.js';
+import { createLogger } from '../framework/log/index.js';
+
+const log = createLogger('api.guard-config');
 
 /**
  * 核心配置存储 - 仅存放与 API 加载、权限策略相关的配置
@@ -34,7 +37,7 @@ export async function loadGuardConfig() {
     data = await GuardConfigDao.loadFromDB();
   } catch (err) {
     // 数据库不可用时使用代码级配置，不阻止启动
-    console.warn(`⚠️ [Guard Config] ${C.yellow}数据库加载失败，使用代码级配置: ${err.message}${C.reset}`);
+    log.warn(`⚠️ [Guard Config] ${C.yellow}数据库加载失败，使用代码级配置: ${err.message}${C.reset}`);
     return;
   }
 
@@ -43,7 +46,7 @@ export async function loadGuardConfig() {
     mergeDbConfig(data.configs);
     currentVersion = data.version;
     _dbVersions = data.versions || {};
-    console.log(`💾 [Guard Config] ${C.dim}已加载持久化策略数据${C.reset}`);
+    log.info(`💾 [Guard Config] ${C.dim}已加载持久化策略数据${C.reset}`);
 
     // 将内存中的完整配置写回 DB，确保新增/删除的 API 路由同步到数据库
     // 新增的 API 路由在 runEngine 阶段已注册到内存，但 DB 中可能没有
@@ -53,20 +56,20 @@ export async function loadGuardConfig() {
       currentVersion = result.maxVersion;
       if (result.updated.length > 0) {
         const detail = result.updated.map(k => `${k}(v${result.versions[k]})`).join(', ');
-        console.log(`💾 [Guard Config] ${C.dim}已同步代码级配置 — 更新: ${detail}${C.reset}`);
+        log.info(`💾 [Guard Config] ${C.dim}已同步代码级配置 — 更新: ${detail}${C.reset}`);
       } else {
-        console.log(`💾 [Guard Config] ${C.dim}已同步代码级配置 — 无变更${C.reset}`);
+        log.info(`💾 [Guard Config] ${C.dim}已同步代码级配置 — 无变更${C.reset}`);
       }
     } catch (err) {
       // 同步失败不阻止启动，下次启动会重试
-      console.warn(`⚠️ [Guard Config] ${C.yellow}代码级配置同步失败: ${err.message}，下次启动将重试${C.reset}`);
+      log.warn(`⚠️ [Guard Config] ${C.yellow}代码级配置同步失败: ${err.message}，下次启动将重试${C.reset}`);
     }
   } else {
     // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
     // 写入失败向上冒泡，让 initLoader 感知并阻止启动
     const result = await saveWithTimeout();
     currentVersion = result.maxVersion;
-    console.log(
+    log.info(
       `💾 [Guard Config] ${C.dim}已写入初始策略数据 (${Object.keys(configs).length} 个系统, version=${currentVersion})${C.reset}`
     );
   }
@@ -79,7 +82,7 @@ export async function loadGuardConfig() {
 function mergeDbConfig(dbConfigs) {
   for (const [systemKey, dbSystem] of Object.entries(dbConfigs)) {
     if (!configs[systemKey]) {
-      console.warn(`⚠️ [Guard Config] DB 中存在已删除或未注册的系统配置: ${systemKey}，已忽略`);
+      log.warn(`⚠️ [Guard Config] DB 中存在已删除或未注册的系统配置: ${systemKey}，已忽略`);
       continue;
     }
     // 覆盖系统级运行时字段
@@ -87,14 +90,14 @@ function mergeDbConfig(dbConfigs) {
     // 覆盖模块级运行时字段
     for (const [groupKey, dbGroup] of Object.entries(dbSystem.groups || {})) {
       if (!configs[systemKey].groups[groupKey]) {
-        console.warn(`⚠️ [Guard Config] DB 中存在已删除的模块配置: ${systemKey}/${groupKey}，已忽略`);
+        log.warn(`⚠️ [Guard Config] DB 中存在已删除的模块配置: ${systemKey}/${groupKey}，已忽略`);
         continue;
       }
       overrideRuntimeFields(configs[systemKey].groups[groupKey], dbGroup);
       // 覆盖 API 级运行时字段
       for (const [apiKey, dbApi] of Object.entries(dbGroup.apis || {})) {
         if (!configs[systemKey].groups[groupKey].apis[apiKey]) {
-          console.warn(`⚠️ [Guard Config] DB 中存在已删除的 API 配置: ${systemKey}/${groupKey}/${apiKey}，已忽略`);
+          log.warn(`⚠️ [Guard Config] DB 中存在已删除的 API 配置: ${systemKey}/${groupKey}/${apiKey}，已忽略`);
           continue;
         }
         overrideRuntimeFields(configs[systemKey].groups[groupKey].apis[apiKey], dbApi);
@@ -119,11 +122,11 @@ let _previousSnapshot = null;
 function validateConfigs(configs) {
   for (const [systemKey, system] of Object.entries(configs)) {
     if (!system || typeof system !== 'object') {
-      console.warn(`⚠️ [Guard Config] 验证失败: 系统 ${systemKey} 配置无效`);
+      log.warn(`⚠️ [Guard Config] 验证失败: 系统 ${systemKey} 配置无效`);
       return false;
     }
     if (!system.groups || typeof system.groups !== 'object') {
-      console.warn(`⚠️ [Guard Config] 验证失败: 系统 ${systemKey} 缺少 groups`);
+      log.warn(`⚠️ [Guard Config] 验证失败: 系统 ${systemKey} 缺少 groups`);
       return false;
     }
   }
@@ -197,7 +200,7 @@ export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null,
 
   // patch 无效时直接返回，避免静默 no-op 让人困惑
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-    console.warn(`⚠️ [Guard Config] setGuardConfig: patch 参数无效，systemKey=${systemKey}`);
+    log.warn(`⚠️ [Guard Config] setGuardConfig: patch 参数无效，systemKey=${systemKey}`);
     return null;
   }
 
@@ -219,7 +222,7 @@ export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null,
   triggerSave(systemKey);
 
   // 审计日志：记录配置变更
-  logAuditEvent(operator.redis, {
+  logAuditEvent({
     type: 'PERMISSION_CHANGE',
     userId: operator.userId || null,
     ip: operator.ip || null,
@@ -303,7 +306,7 @@ function triggerSave(systemKey) {
         _dbVersions = { ..._previousSnapshot.versions };
         _previousSnapshot = null;
       }
-      console.error(`❌ [Guard Config] ${C.red}异步写入失败: ${err.message}${C.reset}`);
+      log.error(`❌ [Guard Config] ${C.red}异步写入失败: ${err.message}${C.reset}`);
     }
   }, 1000);
 }
@@ -313,7 +316,7 @@ function triggerSave(systemKey) {
  */
 export function registerSystemMetadata(systemKey, metadata) {
   if (!metadata || typeof metadata !== 'object') {
-    console.warn(`⚠️ [Guard Config] registerSystemMetadata: metadata 参数无效，systemKey=${systemKey}`);
+    log.warn(`⚠️ [Guard Config] registerSystemMetadata: metadata 参数无效，systemKey=${systemKey}`);
     return;
   }
 
@@ -339,7 +342,7 @@ export function registerSystemMetadata(systemKey, metadata) {
  */
 export function registerGroupMetadata(systemKey, groupKey, metadata) {
   if (!metadata || typeof metadata !== 'object') {
-    console.warn(
+    log.warn(
       `⚠️ [Guard Config] registerGroupMetadata: metadata 参数无效，systemKey=${systemKey}, groupKey=${groupKey}`
     );
     return;
@@ -381,7 +384,7 @@ export function registerGroupMetadata(systemKey, groupKey, metadata) {
  */
 export function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
   if (!metadata || typeof metadata !== 'object') {
-    console.warn(
+    log.warn(
       `⚠️ [Guard Config] registerApiMetadata: metadata 参数无效，systemKey=${systemKey}, groupKey=${groupKey}, apiKey=${apiKey}`
     );
     return;
@@ -443,9 +446,9 @@ export async function flushGuardConfig() {
   _dirtySystems.clear();
   try {
     currentVersion = await saveWithTimeout(keys);
-    console.log(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}`);
+    log.info(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}`);
   } catch (err) {
-    console.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败: ${err.message}${C.reset}`);
+    log.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败: ${err.message}${C.reset}`);
   }
 }
 
@@ -472,9 +475,9 @@ export async function saveGuardConfig() {
 
   try {
     currentVersion = await saveWithTimeout();
-    console.log(`✅ [Guard Config] ${C.green}数据库已同步 (version=${currentVersion})${C.reset}`);
+    log.info(`✅ [Guard Config] ${C.green}数据库已同步 (version=${currentVersion})${C.reset}`);
   } catch (err) {
-    console.error(`❌ [Guard Config] ${C.red}同步失败: ${err.message}${C.reset}`);
+    log.error(`❌ [Guard Config] ${C.red}同步失败: ${err.message}${C.reset}`);
     throw err;
   }
 }

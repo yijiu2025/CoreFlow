@@ -92,7 +92,7 @@ export function getCurrentDeviceId() {
 /**
  * 设置设备 ID 并持久化到存储（写入后使 device-id 内存缓存失效）
  *
- * 入口校验：非法格式（含超有效期/未来时间）拒绝写入，防止脏值污染
+ * 入口校验：非法格式（含未来时间）拒绝写入，防止脏值污染
  * 存储后引发"每请求重生"循环。
  * @param {string} deviceId 设备 ID
  * @returns {boolean} 是否写入成功

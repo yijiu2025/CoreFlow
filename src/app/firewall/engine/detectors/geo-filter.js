@@ -8,6 +8,9 @@
 import geoip from 'geoip-lite';
 import { getConfig } from '../../util/shared.js';
 import { checkRateLimit } from './rate-limiter.js';
+import { createLogger } from '../../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.engine.detectors.geo-filter');
 
 /**
  * 基于地理位置和网络类型的信誉检查
@@ -73,7 +76,7 @@ function resolveGeoInfo(ip) {
       };
     }
   } catch (err) {
-    console.error('[Firewall] GeoIP 解析异常:', err.message);
+    log.error('[Firewall] GeoIP 解析异常:', err.message);
   }
 
   return { region: '未知', city: '未知' };

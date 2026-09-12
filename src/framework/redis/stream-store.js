@@ -20,7 +20,7 @@
  * await stream.createGroup('email-sender', { start: '$' });
  * const msgs = await stream.readGroup('email-sender', 'consumer-1', { count: 10 });
  * for (const msg of msgs) {
- *   console.log(msg.data);
+ *   log.info(msg.data);
  *   await stream.ack('email-sender', msg.id);
  * }
  *

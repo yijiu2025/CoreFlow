@@ -16,6 +16,9 @@
 import 'dotenv/config';
 import readline from 'readline';
 import sequelize from '../src/db/index.js';
+import { createLogger } from '../src/framework/log/index.js';
+
+const log = createLogger('scripts.revoke-superadmin');
 
 const args = process.argv.slice(2);
 const emailArg = args.includes('--email') ? args[args.indexOf('--email') + 1] : null;
@@ -33,7 +36,7 @@ function ask(rl, question) {
 }
 
 async function main() {
-  console.log('🔧 撤销超级管理员脚本\n');
+  log.stdout('🔧 撤销超级管理员脚本\n');
 
   // 1. 加载模型
   await import('../src/models/user/User.js');
@@ -43,14 +46,14 @@ async function main() {
   const { User, Role, UserRole } = sequelize.models;
 
   if (!User || !Role || !UserRole) {
-    console.error('❌ 模型未加载，请先执行 npm run migrate');
+    log.error('❌ 模型未加载，请先执行 npm run migrate');
     process.exit(1);
   }
 
   // 2. 查找 superadmin 角色
   const role = await Role.findOne({ where: { code: 'superadmin', app_id: 'GLOBAL' } });
   if (!role) {
-    console.error('❌ superadmin 角色不存在，请先运行 npm run setup:admin');
+    log.error('❌ superadmin 角色不存在，请先运行 npm run setup:admin');
     process.exit(1);
   }
 
@@ -61,24 +64,24 @@ async function main() {
   });
 
   if (superadmins.length === 0) {
-    console.log('ℹ️  当前没有超级管理员，无需操作');
+    log.stdout('ℹ️  当前没有超级管理员，无需操作');
     process.exit(0);
   }
 
   // 4. 显示列表
-  console.log('📋 当前超级管理员列表：');
-  console.log('─'.repeat(60));
+  log.stdout('📋 当前超级管理员列表：');
+  log.stdout('─'.repeat(60));
   superadmins.forEach((ur, i) => {
     const user = ur.user;
-    console.log(`  ${i + 1}. ${user.username} (${user.email}) [ID: ${user.id}]`);
+    log.stdout(`  ${i + 1}. ${user.username} (${user.email}) [ID: ${user.id}]`);
   });
-  console.log('─'.repeat(60));
+  log.stdout('─'.repeat(60));
 
   // 5. 安全检查：最后一个管理员
   if (superadmins.length <= 1) {
-    console.error('\n⚠️  安全警告：这是系统中唯一的超级管理员！');
-    console.error('   撤销后将无法管理任何应用权限。');
-    console.error('   如需切换管理员，请先用 npm run setup:admin 添加新管理员。');
+    log.error('\n⚠️  安全警告：这是系统中唯一的超级管理员！');
+    log.error('   撤销后将无法管理任何应用权限。');
+    log.error('   如需切换管理员，请先用 npm run setup:admin 添加新管理员。');
     process.exit(1);
   }
 
@@ -116,19 +119,19 @@ async function main() {
   }
 
   if (!targetUser || !targetUserRole) {
-    console.error('❌ 未找到指定的超级管理员');
+    log.error('❌ 未找到指定的超级管理员');
     process.exit(1);
   }
 
   // 7. 确认操作
-  console.log(`\n👤 目标用户: ${targetUser.username} (${targetUser.email}) [ID: ${targetUser.id}]`);
+  log.stdout(`\n👤 目标用户: ${targetUser.username} (${targetUser.email}) [ID: ${targetUser.id}]`);
 
   if (!force) {
     const rl = createRl();
     try {
       const ok = await ask(rl, `确认撤销 ${targetUser.email} 的 superadmin 权限？(y/N): `);
       if (ok.toLowerCase() !== 'y') {
-        console.log('❌ 操作已取消');
+        log.stdout('❌ 操作已取消');
         process.exit(0);
       }
     } finally {
@@ -138,7 +141,7 @@ async function main() {
 
   // 8. 执行软删除
   await targetUserRole.update({ delete_version: targetUserRole.id });
-  console.log('✅ 已撤销 superadmin 角色');
+  log.stdout('✅ 已撤销 superadmin 角色');
 
   // 9. 清除 Redis session
   try {
@@ -171,21 +174,21 @@ async function main() {
       }
       await redis.quit();
       if (cleared > 0) {
-        console.log(`🗑️  已清除 ${cleared} 个旧 Session`);
+        log.stdout(`🗑️  已清除 ${cleared} 个旧 Session`);
       }
     }
   } catch (err) {
-    console.warn(`⚠️  清除 Session 失败（可忽略）: ${err.message}`);
+    log.warn(`⚠️  清除 Session 失败（可忽略）: ${err.message}`);
   }
 
-  console.log('\n🎉 操作完成！');
-  console.log(`   ${targetUser.email} 已不再拥有 superadmin 权限。`);
-  console.log('   该用户重新登录后，权限将立即生效。');
+  log.stdout('\n🎉 操作完成！');
+  log.stdout(`   ${targetUser.email} 已不再拥有 superadmin 权限。`);
+  log.stdout('   该用户重新登录后，权限将立即生效。');
 }
 
 main()
   .catch(err => {
-    console.error('❌ 操作失败:', err.message);
+    log.error('❌ 操作失败:', err.message);
     process.exit(1);
   })
   .finally(async () => {

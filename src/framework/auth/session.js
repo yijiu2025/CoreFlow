@@ -38,12 +38,9 @@ const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
 const MAX_ACTIVE_DEVICES = parseInt(process.env.MAX_ACTIVE_DEVICES) || 20;
 // 设备类型常量与判定统一由 device.js 提供，此处导入为本地绑定并在文件末尾 re-export
 import { DEVICE_TYPE, detectDeviceType, computeDeviceFingerprint } from './device.js';
+import { createLogger } from '../log/index.js';
 
-/** 认证调试开关 */
-const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';
-function _debug(...args) {
-  if (DEBUG_AUTH) console.log('[Auth Debug]', ...args);
-}
+const log = createLogger('framework.auth.session');
 
 // 统一存储实例（getStore 自动处理 Redis/MapStore、超时、序列化）
 const sessionStore = getStore('session');
@@ -168,7 +165,7 @@ async function checkMaxSessions(userId, appId, maxSessions = 5) {
     }
   );
   if (expiredCount?.[0] > 0) {
-    _debug('🔍 [session] 回收 %s 条过期会话: userId=%s, appId=%s', expiredCount[0], userId, appId);
+    log.debug('🔍 [session] 回收 %s 条过期会话: userId=%s, appId=%s', expiredCount[0], userId, appId);
   }
 
   // 按应用过滤：遍历 user_sessions 索引统计该应用的活跃会话（Redis 仍存活的才算）
@@ -235,7 +232,7 @@ async function pruneActiveDevices(userId) {
   const destroyed = await SessionToken.destroy({
     where: { id: oldest.map(r => r.id) }
   });
-  _debug(
+  log.debug(
     '🧹 [session] 裁剪活跃设备: userId=%s, 删除 %s 行 (原 %s, 上限 %s)',
     userId,
     destroyed,
@@ -273,7 +270,7 @@ async function pruneStaleSessionTokens(retentionDays = 90) {
     }
   });
   if (destroyed > 0) {
-    _debug('🧹 [session] 清理陈旧 session_tokens: 删除 %s 行 (revoked 且超 %s 天)', destroyed, retentionDays);
+    log.debug('🧹 [session] 清理陈旧 session_tokens: 删除 %s 行 (revoked 且超 %s 天)', destroyed, retentionDays);
   }
   return destroyed;
 }
@@ -491,34 +488,41 @@ async function createSession(params) {
   const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
   // deviceFingerprint 已在上方 sessionData 构造前计算（复用同一值写 DB）
 
-  // 设备幂等：同一用户同一设备只保留一条 session_token（有就更新，无才新增）
-  // 防止 session_tokens 表按登录次数堆积。deviceId 为空时退化为 destroy+create。
+  // 设备幂等：同一用户同一 app 同一设备只保留一条 session_token（有就更新，无才新增）
+  // 定位键必须含 app_id——同设备跨 app 的登录链相互独立（app_id 不在键里会导致
+  // app B 登录覆盖 app A 的行：token/family_id 被换，app A 的会话 Redis 丢失后
+  // DB 兜底恢复直接失败，revoke/审计也跨 app 串链）。deviceId 为空时退化为 create。
   if (deviceId) {
     try {
-      // upsert 语义：同 user_id + device_id 命中则更新 token/ip/UA/fingerprint/时间/revoked=false
+      // upsert 语义：同 user_id + app_id + device_id 命中则更新 token/ip/UA/fingerprint/时间/revoked=false
       const [tokenRow, created] = await SessionToken.findOrCreate({
-        where: { user_id: userId, device_id: deviceId },
+        where: { user_id: userId, app_id: appId, device_id: deviceId },
         defaults: {
           app_id: appId,
           device_id: deviceId,
+          device_id_original: deviceId, // 原始设备身份：仅创建时写入，永不更新
+          family_id: familyId, // 本次登录的新链标识（re-login 复用行时在下方 update 覆盖）
           device_fingerprint: deviceFingerprint,
           token: tokenHash,
           ip,
           user_agent: userAgent,
           last_active: new Date(),
-          revoked: false
+          revoked: false,
+          remember_me: rememberMe
         }
       });
       if (!created) {
-        // 已存在：更新为最新登录信息（token 轮换 + 指纹刷新 + 复活 revoked）
+        // 已存在：更新为最新登录信息（token 轮换 + 指纹刷新 + 复活 revoked + 同步 remember_me）
         await tokenRow.update({
           app_id: appId,
+          family_id: familyId, // re-login 是新链起点，行归属到新 family
           device_fingerprint: deviceFingerprint,
           token: tokenHash,
           ip,
           user_agent: userAgent,
           last_active: new Date(),
-          revoked: false
+          revoked: false,
+          remember_me: rememberMe
         });
       } else {
         // 新增设备行：裁剪同用户活跃设备至上限，防 x-device-id 可控导致 session_tokens 膨胀
@@ -526,30 +530,41 @@ async function createSession(params) {
         await pruneActiveDevices(userId);
       }
     } catch (err) {
-      console.warn('[Session] upsert token 失败，回退 destroy+create:', err.message);
-      await SessionToken.destroy({ where: { user_id: userId, device_id: deviceId, revoked: false } });
+      log.warn('[Session] upsert token 失败，回退 destroy+create:', err.message);
+      await SessionToken.destroy({
+        where: { user_id: userId, app_id: appId, device_id: deviceId, revoked: false }
+      });
       await SessionToken.create({
         user_id: userId,
         app_id: appId,
         device_id: deviceId,
+        device_id_original: deviceId, // 原始设备身份：仅创建时写入，永不更新
+        family_id: familyId,
         device_fingerprint: deviceFingerprint,
         token: tokenHash,
         ip,
         user_agent: userAgent,
-        last_active: new Date()
+        last_active: new Date(),
+        remember_me: rememberMe
       });
     }
   } else {
+    // 无 device_id：无法幂等定位旧行，每次登录新建（主登录流程经 getDeviceId
+    // 三级兜底几乎不会走到这里，主要是防御调用方不传 deviceId 的场景）
     await SessionToken.create({
       user_id: userId,
       app_id: appId,
       device_id: deviceId,
+      family_id: familyId,
       device_fingerprint: deviceFingerprint,
       token: tokenHash,
       ip,
       user_agent: userAgent,
-      last_active: new Date()
+      last_active: new Date(),
+      remember_me: rememberMe
     });
+    // 匿名行同样占活跃名额，一并裁剪防堆积
+    await pruneActiveDevices(userId);
   }
 
   // 记录登录日志
@@ -599,21 +614,21 @@ async function getSession(params) {
 
   const parsed = verifyCookie(sidCookie);
   if (!parsed) {
-    _debug('❌ sid Cookie 签名验证失败');
+    log.debug('❌ sid Cookie 签名验证失败');
     // 清失效 sid cookie，防下次请求携带坏 cookie 反复 401
     if (reply) reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
     return null;
   }
 
   const { sessionId, accessCount } = parsed;
-  _debug('📋 sid 解析成功: sessionId=%s, accessCount=%s', sessionId, accessCount);
+  log.debug('📋 sid 解析成功: sessionId=%s, accessCount=%s', sessionId, accessCount);
 
   // 3. Redis 查询
-  _debug('📋 Redis 查询 session: %s', sessionId);
+  log.debug('📋 Redis 查询 session: %s', sessionId);
   const raw = await sessionStore.get(sessionId);
-  _debug('📋 Redis 查询 raw: %s', raw);
+  log.debug('📋 Redis 查询 raw: %s', raw);
   if (raw) {
-    _debug('✅ Redis 命中: userId=%s, username=%s', raw.userId, raw.username);
+    log.debug('✅ Redis 命中: userId=%s, username=%s', raw.userId, raw.username);
     // 续期 + 重新签名 cookie（带 app 隔离的 path）
     const ttl = raw.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
     await sessionStore.expire(sessionId, ttl);
@@ -624,10 +639,10 @@ async function getSession(params) {
         maxAge: ttl
       });
     }
-    _debug('📋 Session 续期: TTL=%ss', ttl);
+    log.debug('📋 Session 续期: TTL=%ss', ttl);
     return { ...raw, sessionId, accessCount: accessCount + 1 };
   }
-  _debug('❌ Redis 未命中，降级到 DB');
+  log.debug('❌ Redis 未命中，降级到 DB');
 
   // 4. Redis 未命中，降级到 DB
   const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
@@ -645,49 +660,56 @@ async function getSession(params) {
     return null;
   }
 
-  // TTL 判定：DB 不存 rememberMe，无法区分短/长期会话，按下方策略处理——
+  // TTL 判定：用 DB 存的 remember_me 真值区分短/长期会话。
+  // 锚点必须用 last_active 而非 createdAt：session_tokens 行按 (user_id, device_id) 幂等复用，
+  // re-login 只更新 token/last_active/revoked，createdAt 保持首次建行时间——
+  // 若按 createdAt 判，行建行超 30min 后该设备所有降级请求都会被误判"超短期 TTL"：
+  // 刚发几分钟的 sid 被清、强制重登（非记住我）或强制走 sid_r（记住我），超 30d 直接误 revoke。
+  // last_active 在 re-login / updateSessionBaseline 时刷新，与 Redis 路径滚动续期语义对齐。
+  // （残差：Redis 滚动保活期间 DB last_active 不动，驱逐降级按 last_active 判偏保守，容灾宁严勿松）
   //   超 LONG（30d）→ 真过期，revoke（无论是否记住我都已失效）
-  //   超 SHORT 但未超 LONG → 不复活、不 revoke：可能是记住我会话被 Redis 驱逐，
-  //     交由 /auth/v1/refresh-session 携 sid_r 恢复（避免误 revoke 致 sid_r 刷新找不到）
-  //   未超 SHORT → 从 DB 恢复到 Redis（非记住我会话 Redis 短暂驱逐后复活）
-  const shortExpiresAt = new Date(token.createdAt.getTime() + SHORT_SESSION_TTL * 1000);
-  const longExpiresAt = new Date(token.createdAt.getTime() + LONG_SESSION_TTL * 1000);
+  //   记住我会话超 SHORT 未超 LONG → 不复活、不 revoke，清 sid 交 sid_r 刷新恢复
+  //   非记住我会话超 SHORT → 直接失效（无 sid_r 可恢复，清 sid 让前端重登）
+  //   未超 SHORT → 从 DB 重建 Redis（容灾：Redis 短暂驱逐后复活）
+  const isRemember = !!token.remember_me;
+  const lastActiveMs = token.last_active ? token.last_active.getTime() : token.createdAt.getTime();
+  const shortExpiresAt = lastActiveMs + SHORT_SESSION_TTL * 1000;
+  const longExpiresAt = lastActiveMs + LONG_SESSION_TTL * 1000;
 
-  if (Date.now() > longExpiresAt.getTime()) {
-    _debug('❌ Session 已超过长期 TTL（创建于 %s），标记 revoked 并拒绝', token.createdAt.toISOString());
+  if (Date.now() > longExpiresAt) {
+    log.debug('❌ Session 已超过长期 TTL（最近活跃 %s），标记 revoked 并拒绝', token.last_active?.toISOString());
     await token.update({ revoked: true });
     if (reply) reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
     return null;
   }
 
-  if (Date.now() > shortExpiresAt.getTime()) {
-    // 短期已过、长期未过：不复活、不 revoke，让前端走 sid_r 刷新（记住我）或重登（非记住我）
-    // 清 sid cookie（已失效），下次请求无 sid → 前端直接走 refresh-session（sid_r 仍在）
-    _debug(
-      '⏭️ Redis 未命中且超短期 TTL（创建于 %s），清 sid cookie 交由 sid_r 刷新恢复',
-      token.createdAt.toISOString()
-    );
+  if (Date.now() > shortExpiresAt) {
+    if (isRemember) {
+      // 记住我：短期过长期未过，清 sid 交 sid_r 刷新恢复（sid_r 仍在）
+      log.debug(
+        '⏭️ 记住我会话 Redis 未命中且超短期 TTL（最近活跃 %s），清 sid 交 sid_r 刷新恢复',
+        token.last_active?.toISOString()
+      );
+    } else {
+      // 非记住我：短期已过，sid 本就该过期，无 sid_r 可恢复，清 cookie 让前端重登
+      log.debug(
+        '⏹️ 非记住我会话超短期 TTL（最近活跃 %s），sid 已失效，清 cookie 让前端重登',
+        token.last_active?.toISOString()
+      );
+    }
     if (reply) reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
     return null;
   }
 
-  // 短期 TTL 内：重建 Redis 缓存
+  // 短期 TTL 内：重建 Redis 缓存（容灾：Redis 主动驱逐后从 DB 恢复）
   const user = token.user;
   const { roles, permissions } = await loadUserPermissions(user.id, token.app_id);
 
-  // 从 session_tokens 表补 device_fingerprint（DB 降级时 token 不含指纹，查最新一条补上，
-  // 否则 detectSessionRisk 走 no_baseline 降级 info 放行，风险检测形同虚设）
-  let deviceFingerprint = null;
-  if (token.device_id) {
-    const SessionToken = getModel('SessionToken');
-    const st = await SessionToken.findOne({
-      where: { device_id: token.device_id, user_id: user.id },
-      order: [['last_active', 'DESC']]
-    });
-    if (st?.device_fingerprint) {
-      deviceFingerprint = st.device_fingerprint;
-    }
-  }
+  // 指纹基准直接取本行 device_fingerprint（createSession 写入、updateSessionBaseline 维护）。
+  // 行按 (user_id, device_id) 幂等复用，这里命中的就是本会话自己的行，
+  // 不需要再按 device_id 查"最新一条"（多一次 DB 查询且可能命中 revoked 旧重复行）。
+  // 查不到（极老行）时为 null，detectSessionRisk 走 no_baseline 降级 info 放行。
+  const deviceFingerprint = token.device_fingerprint || null;
 
   const sessionData = {
     userId: user.id,
@@ -701,21 +723,24 @@ async function getSession(params) {
     permissions,
     ip: token.ip,
     deviceId: token.device_id,
+    familyId: token.family_id || null, // 从 DB 回读登录链标识（防孤儿化，见 refreshSessionCore）
     deviceFingerprint, // 降级补的指纹基准（查不到时为 null，detectSessionRisk 走 info 降级）
     userAgent: token.user_agent,
     loginAt: Math.floor(token.createdAt.getTime() / 1000),
     lastActiveAt: Math.floor(Date.now() / 1000),
-    rememberMe: false
+    rememberMe: isRemember // 用 DB 存的 remember_me 真值（而非硬编码 false）
   };
 
-  await sessionStore.set(sessionId, sessionData, SHORT_SESSION_TTL);
+  // 重建 TTL 用真值：记住我=长期，非记住我=短期
+  const rebuildTtl = isRemember ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
+  await sessionStore.set(sessionId, sessionData, rebuildTtl);
 
   // 重新签名 cookie（带 app 隔离的 path）
   if (reply) {
     const newSidValue = signCookie(sessionId, 0);
     reply.setCookie(COOKIE_SID, newSidValue, {
       ...COOKIE_OPTIONS.SID,
-      maxAge: SHORT_SESSION_TTL
+      maxAge: rebuildTtl
     });
   }
 
@@ -777,16 +802,22 @@ async function refreshSessionCore(refreshToken, request, reply) {
 
   const { roles, permissions } = await loadUserPermissions(user.id, record.app_id);
 
-  // 5. 取 familyId（优先旧 Redis session，否则新建孤儿 family）
+  // 5. 取 familyId（三级来源：旧 Redis session → DB 行 family_id → 新建）
+  //    DB 兜底覆盖"Redis session 驱逐后 getSession 重建"场景：重建的 sessionData
+  //    虽已回读 family_id，但若重建本身失败/丢失，这里还有 DB 锚点，避免孤儿化。
+  //    （孤儿 family 的实际损失：revokeFamily 吊销不到原 family 残留的活跃 rt）
   let familyId = null;
   if (oldSessionId) {
     familyId = (await sessionStore.get(oldSessionId))?.familyId;
+  }
+  if (!familyId && record.family_id) {
+    familyId = record.family_id;
   }
   if (!familyId) familyId = crypto.randomBytes(16).toString('hex');
 
   // 5.1 用户已禁用：吊销整个 family，拒绝刷新（防止禁用后靠 sid_r 续期 30 天）
   if (user.status === 0) {
-    _debug('🚫 [Session] 用户已禁用，拒绝刷新并吊销 family: userId=%s', user.id);
+    log.debug('🚫 [Session] 用户已禁用，拒绝刷新并吊销 family: userId=%s', user.id);
     await revokeFamily(familyId, user.id);
     return null;
   }
@@ -812,7 +843,7 @@ async function refreshSessionCore(refreshToken, request, reply) {
     familyId,
     loginAt: Math.floor(record.createdAt.getTime() / 1000),
     lastActiveAt: Math.floor(Date.now() / 1000),
-    rememberMe: true
+    rememberMe: !!record.remember_me // 从 DB record 读真值（sid_r 刷新时保持原登录类型）
   };
 
   // 7. 失效旧 sid_r：标记已轮转（供盗用检测）+ 删活跃映射 + 删旧 session + 清索引/family
@@ -836,9 +867,10 @@ async function refreshSessionCore(refreshToken, request, reply) {
   await userSessionsStore.zAdd(String(user.id), Date.now(), newSessionId);
   await userSessionsStore.expire(String(user.id), LONG_SESSION_TTL);
 
-  // 9. DB 更新 token 哈希
+  // 9. DB 更新 token 哈希 + family_id（每次轮转同步当前链标识：
+  //    新建 family 的孤儿场景由此落库，后续轮转/重建不再断链）
   const newTokenHash = crypto.createHash('sha256').update(newSessionId).digest('hex');
-  await record.update({ token: newTokenHash, last_active: new Date() });
+  await record.update({ token: newTokenHash, family_id: familyId, last_active: new Date() });
 
   // 10. 记录刷新日志（关联用户，操作留痕）
   const SessionLog = getModel('SessionLog');
@@ -952,6 +984,14 @@ async function revokeFamily(familyId, userId = null) {
     await rotatedStore.delete(rt);
     if (userId != null) await userRefreshStore.zRem(String(userId), [rt]);
   }
+  // DB 兜底：按 rt 链路吊销之外，再按 family_id 列吊销该链名下所有行——
+  // 覆盖 familyStore zset 条目丢失（Redis 故障）但行还在的场景。
+  // family_id 与登录链一一对应（每次 re-login 换新值），不会误伤其他链的行。
+  try {
+    await SessionToken.update({ revoked: true }, { where: { family_id: familyId } });
+  } catch (err) {
+    log.warn('[Session] revokeFamily 按 family_id 吊销失败:', err.message);
+  }
   if (hashes.length) {
     await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
   }
@@ -994,6 +1034,21 @@ async function updateRememberMe(userId, sessionId, rememberMe) {
   const familyId = sessionData.familyId || crypto.randomBytes(16).toString('hex');
   sessionData.familyId = familyId;
   sessionData.rememberMe = !!rememberMe;
+
+  // 同步 DB session_tokens 的 remember_me + family_id（按 token=sha256(sessionId) 定位行）
+  // 与 updateSessionBaseline 同模式：用 token 锚定，不按 device_id（防 device_id 变更后误定位）。
+  // family_id：sessionData 缺失时新建的链标识（DB 重建旧数据）也落库，后续轮转不再孤儿化
+  const SessionToken = getModel('SessionToken');
+  if (SessionToken) {
+    try {
+      await SessionToken.update(
+        { remember_me: !!rememberMe, family_id: familyId },
+        { where: { user_id: userId, token: sidHash(sessionId) } }
+      );
+    } catch (err) {
+      log.warn('[Session] 同步 DB remember_me/family_id 失败:', err.message);
+    }
+  }
 
   if (rememberMe) {
     // 缓存转长期
@@ -1263,16 +1318,52 @@ async function updateSessionBaseline(sessionId, { deviceId, deviceFingerprint, i
       if (deviceId !== undefined && deviceId && deviceId !== oldDeviceId) {
         // deviceId 变更（用户清 localStorage 生新 ID，验证通过后）：旧行 device_id 更新为新值
         // 同一 session 链（token 锚定），不新增行，避免旧 device_id orphan
+        // 注意：device_id_original（首次登录原始身份）永不更新，仅审计/恢复兜底用
         updateFields.device_id = deviceId;
       }
       await SessionToken.update(updateFields, {
         where: { user_id: sd.userId, token: tokenHash }
       });
     } catch (err) {
-      console.warn('[Session] 更新 session_tokens 基准失败:', err.message);
+      log.warn('[Session] 更新 session_tokens 基准失败:', err.message);
     }
   }
   return true;
+}
+
+/**
+ * 按当前会话查询 DB 中的设备身份（访问时恢复用）
+ *
+ * 仅在「header + cookie 都无法提供有效设备 ID」的罕见分支被调用
+ * （device_id cookie 被单独逐出/拒绝 + localStorage 被清，但 sid 会话还活着），
+ * 常规请求不产生额外 DB 查询。
+ *
+ * 恢复目标优先级：
+ *   1. device_id（当前值，与 Redis/DB 风险基准指纹同源——恢复它才能保证指纹比对不误报）
+ *   2. device_id_original（首次登录原始 ID，device_id 为空时的兜底锚点）
+ *
+ * @param {string} sessionId 原始会话 ID（request.state.user.sessionId）
+ * @returns {Promise<{deviceId: string, originalDeviceId: string, userAgent: string}|null>}
+ */
+async function getSessionTokenDevice(sessionId) {
+  if (!sessionId) return null;
+  const SessionToken = getModel('session.SessionToken');
+  if (!SessionToken) return null;
+  try {
+    const row = await SessionToken.findOne({
+      where: { token: sidHash(sessionId), revoked: false },
+      attributes: ['device_id', 'device_id_original', 'user_agent']
+    });
+    if (!row) return null;
+    return {
+      deviceId: row.device_id || '',
+      originalDeviceId: row.device_id_original || '',
+      userAgent: row.user_agent || ''
+    };
+  } catch (err) {
+    log.warn('[Session] 查询 session_tokens 设备身份失败:', err.message);
+    return null;
+  }
 }
 
 export {
@@ -1294,6 +1385,7 @@ export {
   deleteRefreshTokensForSession,
   updateRememberMe,
   updateSessionBaseline,
+  getSessionTokenDevice,
   kickUser,
   logLoginFailure,
   getSessionStats,

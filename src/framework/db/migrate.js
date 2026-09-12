@@ -14,6 +14,18 @@ import { sequelize } from './index.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.db.migrate');
+
+/** Umzug 事件对象/字符串统一转成日志消息 */
+const umzugMsg = m => (typeof m === 'string' ? m : JSON.stringify(m));
+const umzugLogger = {
+  debug: m => log.debug(umzugMsg(m)),
+  info: m => log.info(umzugMsg(m)),
+  warn: m => log.warn(umzugMsg(m)),
+  error: m => log.error(umzugMsg(m))
+};
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -60,7 +72,7 @@ const umzug = new Umzug({
   })),
   storage: new SequelizeStorage({ sequelize }),
   context: sequelize.getQueryInterface(),
-  logger: console
+  logger: umzugLogger
 });
 
 /**
@@ -69,10 +81,10 @@ const umzug = new Umzug({
 async function runUp() {
   const migrations = await umzug.up();
   if (migrations.length === 0) {
-    console.log('[Migrate] 没有需要执行的迁移，数据库已是最新状态。');
+    log.info('[Migrate] 没有需要执行的迁移，数据库已是最新状态。');
   } else {
-    console.log(`[Migrate] 成功执行了 ${migrations.length} 个迁移：`);
-    migrations.forEach(m => console.log(`  + ${m.name}`));
+    log.info(`[Migrate] 成功执行了 ${migrations.length} 个迁移：`);
+    migrations.forEach(m => log.info(`  + ${m.name}`));
   }
 }
 
@@ -82,10 +94,10 @@ async function runUp() {
 async function runDown() {
   const migrations = await umzug.down();
   if (migrations.length === 0) {
-    console.log('[Migrate] 没有可回滚的迁移。');
+    log.info('[Migrate] 没有可回滚的迁移。');
   } else {
-    console.log(`[Migrate] 已回滚 ${migrations.length} 个迁移：`);
-    migrations.forEach(m => console.log(`  - ${m.name}`));
+    log.info(`[Migrate] 已回滚 ${migrations.length} 个迁移：`);
+    migrations.forEach(m => log.info(`  - ${m.name}`));
   }
 }
 
@@ -97,15 +109,15 @@ async function runDownTo(targetName) {
   const executed = await umzug.executed();
   const target = executed.find(m => m.name === targetName || m.name.endsWith(targetName));
   if (!target) {
-    console.error(`[Migrate] 未找到已执行的迁移: ${targetName}`);
+    log.error(`[Migrate] 未找到已执行的迁移: ${targetName}`);
     setTimeout(() => process.exit(1), 100);
   }
   const migrations = await umzug.down({ to: target.name });
   if (migrations.length === 0) {
-    console.log('[Migrate] 没有可回滚的迁移。');
+    log.info('[Migrate] 没有可回滚的迁移。');
   } else {
-    console.log(`[Migrate] 已回滚 ${migrations.length} 个迁移至 ${target.name}：`);
-    migrations.forEach(m => console.log(`  - ${m.name}`));
+    log.info(`[Migrate] 已回滚 ${migrations.length} 个迁移至 ${target.name}：`);
+    migrations.forEach(m => log.info(`  - ${m.name}`));
   }
 }
 
@@ -116,20 +128,20 @@ async function runStatus() {
   const executed = await umzug.executed();
   const pending = await umzug.pending();
 
-  console.log('\n[Migrate] 已执行的迁移:');
+  log.info('\n[Migrate] 已执行的迁移:');
   if (executed.length === 0) {
-    console.log('  (无)');
+    log.info('  (无)');
   } else {
-    executed.forEach(m => console.log(`  * ${m.name}`));
+    executed.forEach(m => log.info(`  * ${m.name}`));
   }
 
-  console.log('\n[Migrate] 待执行的迁移:');
+  log.info('\n[Migrate] 待执行的迁移:');
   if (pending.length === 0) {
-    console.log('  (无，数据库已是最新状态)');
+    log.info('  (无，数据库已是最新状态)');
   } else {
-    pending.forEach(m => console.log(`  ! ${m.name}`));
+    pending.forEach(m => log.info(`  ! ${m.name}`));
   }
-  console.log();
+  log.info();
 }
 
 // 解析命令行参数
@@ -140,12 +152,12 @@ const downToTarget = args[1];
 async function main() {
   try {
     await sequelize.authenticate();
-    console.log('[Migrate] 数据库连接成功');
+    log.info('[Migrate] 数据库连接成功');
 
     switch (command) {
       case '--down-to':
         if (!downToTarget) {
-          console.error('[Migrate] 用法: node --env-file=.env src/db/migrate.js --down-to <迁移名称>');
+          log.error('[Migrate] 用法: node --env-file=.env src/db/migrate.js --down-to <迁移名称>');
           setTimeout(() => process.exit(1), 100);
         }
         await runDownTo(downToTarget);
@@ -165,7 +177,7 @@ async function main() {
         break;
     }
   } catch (err) {
-    console.error('[Migrate] 执行失败:', err.message);
+    log.error('[Migrate] 执行失败:', err.message);
     setTimeout(() => process.exit(1), 100);
   } finally {
     await sequelize.close();

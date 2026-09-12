@@ -6,6 +6,9 @@
  * @since 2026-08-17
  */
 import config from '../config.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.verify.voice.service');
 
 const smsConfig = config.sms;
 
@@ -25,8 +28,8 @@ class VoiceService {
       case 'tencent':
         return await this._sendTencent(phone, code);
       default:
-        console.warn(`[Voice] 未知服务商: ${provider}，使用模拟发送`);
-        console.log(`[Voice] 模拟语音播报: ${phone} -> ${code}`);
+        log.warn(`[Voice] 未知服务商: ${provider}，使用模拟发送`);
+        log.info(`[Voice] 模拟语音播报: ${phone} -> ${code}`);
         return true;
     }
   }
@@ -37,7 +40,7 @@ class VoiceService {
    */
   async _sendAliyun(phone, code) {
     // TODO: 对接阿里云语音 API
-    console.log(`[Voice] 阿里云语音: ${phone} -> ${code}`);
+    log.info(`[Voice] 阿里云语音: ${phone} -> ${code}`);
     return true;
   }
 
@@ -47,7 +50,7 @@ class VoiceService {
    */
   async _sendTencent(phone, code) {
     // TODO: 对接腾讯云语音 API
-    console.log(`[Voice] 腾讯云语音: ${phone} -> ${code}`);
+    log.info(`[Voice] 腾讯云语音: ${phone} -> ${code}`);
     return true;
   }
 

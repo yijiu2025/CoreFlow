@@ -11,6 +11,9 @@ import { createBoundStore } from '../../../../framework/redis/index.js';
 import { getSecuritySettings } from '../../dao/dao.js';
 import { resolveGeoInfo } from './geo-filter.js';
 import { pushRecord } from '../../data/store.js';
+import { createLogger } from '../../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.engine.detectors.first-ratelimit');
 
 /**
  * 注册速率限制插件
@@ -64,7 +67,7 @@ async function registerRateLimit(app) {
       }
     });
   } catch (err) {
-    console.warn('[Firewall] Rate Limit Plugin Failed:', err);
+    log.warn('[Firewall] Rate Limit Plugin Failed:', err);
   }
 }
 

@@ -57,8 +57,7 @@ export default async function (fastify, opts) {
           captchaStore,
           emailCodeStore,
           // 发码时绑定客户端指纹（IP+UA，启用时含 device 指纹），用码时回查一致性
-          (email, sessionId, store) =>
-            emailDao.sendCode(email, sessionId, store, clientContext(request)),
+          (email, sessionId, store) => emailDao.sendCode(email, sessionId, store, clientContext(request)),
           // captchaKey 指纹校验：必须与 generate 时同一客户端
           clientContext(request)
         );

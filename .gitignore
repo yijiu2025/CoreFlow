@@ -28,7 +28,15 @@ public/uploads/*
 docs/.vitepress/cache
 docs/.vitepress/dist
 
+# wb-log 已独立成库（https://github.com/yijiu2025/log），经 npm workspace 软链使用
+packages/log/
+packages/log-backup-*/
+
 架构文件/kx-lang-extension/
 架构文件/kx-lang/
+# 损坏的 .git 备份（本地修复仓库时留下，不提交）
+.git.broken/
+.git.broken
+
 # Mimosa 安全扫描器临时产物
 .mimosa/

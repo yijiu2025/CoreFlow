@@ -10,6 +10,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.data.store');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,10 +91,10 @@ function loadData() {
       (data.pathStats || []).forEach(([k, v]) => pathStats.set(k, v));
       (data.ipStats || []).forEach(([k, v]) => ipStats.set(k, v));
 
-      console.log(`[Firewall Store] 已从磁盘恢复 ${records.length} 条记录`);
+      log.info(`[Firewall Store] 已从磁盘恢复 ${records.length} 条记录`);
     }
   } catch (err) {
-    console.error('[Firewall Store] 加载持久化数据失败:', err.message);
+    log.error('[Firewall Store] 加载持久化数据失败:', err.message);
   }
 }
 
@@ -115,7 +118,7 @@ function persistData() {
       };
       await fs.promises.writeFile(DATA_FILE, JSON.stringify(data), 'utf-8');
     } catch (err) {
-      console.error('[Firewall Store] 持久化数据失败:', err.message);
+      log.error('[Firewall Store] 持久化数据失败:', err.message);
     } finally {
       isSaving = false;
     }
@@ -268,7 +271,7 @@ function clearAll() {
     ipStats: []
   };
   fs.promises.writeFile(DATA_FILE, JSON.stringify(data), 'utf-8').catch(err => {
-    console.error('[Firewall Store] 清空持久化数据失败:', err.message);
+    log.error('[Firewall Store] 清空持久化数据失败:', err.message);
   });
 }
 

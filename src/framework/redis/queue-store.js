@@ -21,6 +21,9 @@
 import { MapStore } from './map-store.js';
 import { getStore } from './get-store.js';
 import { isRedisConfigured } from './utils.js';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.redis.queue-store');
 
 /**
  * 创建 FIFO 消息队列
@@ -100,7 +103,7 @@ function _createMapQueue(prefix, maxSize, dataTtl) {
 
         if (item !== null) {
           if (skipped > 0) {
-            console.warn(`[Queue] ${prefix} shift 跳过 ${skipped} 个空洞索引`);
+            log.warn(`[Queue] ${prefix} shift 跳过 ${skipped} 个空洞索引`);
           }
           MapStore.set(prefix, 'meta', m);
           return item;
@@ -109,7 +112,7 @@ function _createMapQueue(prefix, maxSize, dataTtl) {
       }
 
       if (skipped > 0) {
-        console.warn(`[Queue] ${prefix} shift 全部跳过 ${skipped} 个空洞，重置指针`);
+        log.warn(`[Queue] ${prefix} shift 全部跳过 ${skipped} 个空洞，重置指针`);
       }
       m.head = 0;
       m.tail = 0;
@@ -234,7 +237,7 @@ function _createRedisQueue(prefix, maxSize, dataTtl, timeout) {
 
         if (item !== null) {
           if (skipped > 0) {
-            console.warn(`[Queue] ${prefix} shift 跳过 ${skipped} 个空洞索引`);
+            log.warn(`[Queue] ${prefix} shift 跳过 ${skipped} 个空洞索引`);
           }
           await store.set('meta', m);
           _saveMeta(m);
@@ -244,7 +247,7 @@ function _createRedisQueue(prefix, maxSize, dataTtl, timeout) {
       }
 
       if (skipped > 0) {
-        console.warn(`[Queue] ${prefix} shift 全部跳过 ${skipped} 个空洞，重置指针`);
+        log.warn(`[Queue] ${prefix} shift 全部跳过 ${skipped} 个空洞，重置指针`);
       }
       m.head = 0;
       m.tail = 0;

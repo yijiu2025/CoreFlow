@@ -7,6 +7,9 @@
  */
 import { getConfig, KEY, LUA_INCR_WITH_EXPIRE, memorySlidingWindow, getBlockStatus } from '../../util/shared.js';
 import { setBlock } from '../dao/block-manager.js';
+import { createLogger } from '../../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.engine.detectors.brute-force');
 
 const C = { reset: '\x1b[0m', yellow: '\x1b[33m' };
 
@@ -34,11 +37,11 @@ const checkLoginBruteForce = async (redisClient, ip, username, success) => {
   if (!redisClient) {
     let blocked = false;
     if (memorySlidingWindow(`brute:ip:${ip}`, ipLimit, bruteWindow)) {
-      console.warn(`⚠️ [Firewall] ${C.yellow}暴力破解 IP (mem): ${ip}${C.reset}`);
+      log.warn(`⚠️ [Firewall] ${C.yellow}暴力破解 IP (mem): ${ip}${C.reset}`);
       blocked = true;
     }
     if (username && memorySlidingWindow(`brute:user:${username}`, bruteLimit, bruteWindow)) {
-      console.warn(`⚠️ [Firewall] ${C.yellow}暴力破解账号 (mem): ${username}${C.reset}`);
+      log.warn(`⚠️ [Firewall] ${C.yellow}暴力破解账号 (mem): ${username}${C.reset}`);
       blocked = true;
     }
     if (blocked) {
@@ -65,7 +68,7 @@ const checkLoginBruteForce = async (redisClient, ip, username, success) => {
       createdAt: now,
       expiresAt: now + ipBlockTime * 1000
     });
-    console.warn(`⚠️ [Firewall] ${C.yellow}暴力破解(IP): ${ip} 失败 ${ipCount}次, 挑战 ${ipBlockTime}秒${C.reset}`);
+    log.warn(`⚠️ [Firewall] ${C.yellow}暴力破解(IP): ${ip} 失败 ${ipCount}次, 挑战 ${ipBlockTime}秒${C.reset}`);
     return;
   }
 
@@ -80,7 +83,7 @@ const checkLoginBruteForce = async (redisClient, ip, username, success) => {
       createdAt: now,
       expiresAt: now + ipBlockTime * 1000
     });
-    console.warn(
+    log.warn(
       `⚠️ [Firewall] ${C.yellow}暴力破解(账号): ${username} 失败 ${userCount}次, ` +
         `锁定 ${accountLockTime}秒, IP ${ip} 挑战 ${ipBlockTime}秒${C.reset}`
     );

@@ -7,6 +7,9 @@
  */
 
 import { Sequelize } from 'sequelize';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.db.index');
 
 const C = { reset: '\x1b[0m', red: '\x1b[31m' };
 
@@ -16,7 +19,7 @@ const { DB_TYPE, DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME } = process.env;
 const required = { DB_HOST, DB_NAME, DB_USER };
 const missing = Object.entries(required).filter(([, v]) => !v);
 if (missing.length > 0) {
-  console.error(`❌ [DB] ${C.red}缺少必要环境变量: ${missing.map(([k]) => k).join(', ')}${C.reset}`);
+  log.error(`❌ [DB] ${C.red}缺少必要环境变量: ${missing.map(([k]) => k).join(', ')}${C.reset}`);
   // 延迟退出，确保错误日志刷新
   setTimeout(() => process.exit(1), 100);
 }

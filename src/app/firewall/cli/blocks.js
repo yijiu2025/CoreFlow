@@ -7,6 +7,9 @@
 import { connectRedis, closeRedis } from '../../../../scripts/lib/redis.js';
 import { printTable, printSuccess, printInfo, printError, printWarning } from '../../../../scripts/lib/table.js';
 import { createRl, ask, confirm, closeRl } from '../../../../scripts/lib/input.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.cli.blocks');
 
 /**
  * 查看封禁列表
@@ -27,7 +30,7 @@ export async function listBlocks() {
       return;
     }
 
-    console.log('\n🚫 封禁列表：');
+    log.stdout('\n🚫 封禁列表：');
     printTable(
       ['IP', '封禁时间', '原因'],
       entries.map(([ip, data]) => {
@@ -39,7 +42,7 @@ export async function listBlocks() {
         }
       })
     );
-    console.log(`\n共 ${entries.length} 个封禁 IP`);
+    log.stdout(`\n共 ${entries.length} 个封禁 IP`);
   } finally {
     await closeRedis(redis);
   }
@@ -108,9 +111,9 @@ export async function removeBlock() {
       return;
     }
 
-    console.log('\n当前封禁的 IP：');
+    log.stdout('\n当前封禁的 IP：');
     ips.forEach((ip, i) => {
-      console.log(`  ${i + 1}. ${ip}`);
+      log.stdout(`  ${i + 1}. ${ip}`);
     });
 
     const input = await ask(rl, '\n请输入要解除的序号或 IP: ');

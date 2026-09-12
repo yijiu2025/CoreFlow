@@ -62,12 +62,13 @@ describe('getDeviceId：cookie 兜底恢复', () => {
     expect(deviceId).toBe(freshId);
   });
 
-  test('header 刚出生但 cookie 已过期（>365 天）→ 不恢复，采用 header', async () => {
+  test('header 刚出生但 cookie 为超 365 天的老 ID → 仍恢复 cookie（永久有效，过期重生反致指纹突变）', async () => {
     const freshId = makeId();
-    const expiredCookie = makeId(400 * DAY);
+    const oldCookie = makeId(400 * DAY); // 超 1 年的老 cookie ID
 
-    const deviceId = await getDeviceId(mockRequest({ header: freshId, cookie: expiredCookie }));
-    expect(deviceId).toBe(freshId);
+    const deviceId = await getDeviceId(mockRequest({ header: freshId, cookie: oldCookie }));
+    // device_id 永久有效：老 cookie 仍合法，优先恢复 cookie 身份防指纹突变
+    expect(deviceId).toBe(oldCookie);
   });
 
   test('header 与 cookie 一致（正常状态）→ 直接采用，不触发恢复', async () => {
@@ -88,5 +89,105 @@ describe('getDeviceId：cookie 兜底恢复', () => {
 
     const deviceId = await getDeviceId(mockRequest({ header: freshId, cookie: cookieId }));
     expect(deviceId).toBe(cookieId);
+  });
+});
+
+describe('getDeviceId：登录态恢复（session → DB 兜底）', () => {
+  test('无 header 无 cookie + sessionDeviceId 合法 → 从登录链恢复（不服务端生成）', async () => {
+    const loginId = makeId(90 * DAY); // 登录时写入的设备身份
+
+    const deviceId = await getDeviceId(mockRequest({}), {
+      sessionDeviceId: loginId,
+      sessionUserAgent: UA
+    });
+    expect(deviceId).toBe(loginId);
+  });
+
+  test('sessionDeviceId 缺失（旧会话）→ loadFromDb 兜底（device_id 优先）', async () => {
+    const dbCurrentId = makeId(80 * DAY);
+
+    const deviceId = await getDeviceId(mockRequest({}), {
+      sessionDeviceId: '',
+      sessionUserAgent: UA,
+      loadFromDb: async () => ({ deviceId: dbCurrentId, originalDeviceId: makeId(200 * DAY), userAgent: UA })
+    });
+    expect(deviceId).toBe(dbCurrentId);
+  });
+
+  test('DB device_id 为空 → 退回 device_id_original', async () => {
+    const originalId = makeId(200 * DAY);
+
+    const deviceId = await getDeviceId(mockRequest({}), {
+      loadFromDb: async () => ({ deviceId: '', originalDeviceId: originalId, userAgent: UA })
+    });
+    expect(deviceId).toBe(originalId);
+  });
+
+  test('sessionDeviceId 无效（老格式 UUID）→ 退回 DB 恢复', async () => {
+    const dbCurrentId = makeId(80 * DAY);
+
+    const deviceId = await getDeviceId(mockRequest({}), {
+      sessionDeviceId: '550e8400-e29b-41d4-a716-446655440000',
+      sessionUserAgent: UA,
+      loadFromDb: async () => ({ deviceId: dbCurrentId, originalDeviceId: '', userAgent: UA })
+    });
+    expect(deviceId).toBe(dbCurrentId);
+  });
+
+  test('UA 设备类型不兼容（登录是浏览器，当前是 App）→ 拒绝恢复，服务端生成', async () => {
+    const loginId = makeId(90 * DAY);
+
+    const req = {
+      headers: { 'user-agent': 'okhttp/4.9.0 Android' }, // App UA，与浏览器登录环境不同
+      cookies: {}
+    };
+    const deviceId = await getDeviceId(req, {
+      sessionDeviceId: loginId,
+      sessionUserAgent: UA
+    });
+    expect(deviceId).not.toBe(loginId);
+    expect(deviceId).toMatch(/^ANDROID-[0-9A-Za-z]{11}-[0-9A-Za-z]{6}$/);
+  });
+
+  test('UA 仅大版本变化（仍是浏览器）→ 正常恢复', async () => {
+    const loginId = makeId(90 * DAY);
+    const upgradedUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0';
+
+    const deviceId = await getDeviceId(mockRequest({}), {
+      sessionDeviceId: loginId,
+      sessionUserAgent: UA
+    });
+    // 直接用升级后的 UA 请求
+    const deviceId2 = await getDeviceId(
+      { headers: { 'user-agent': upgradedUa }, cookies: {} },
+      { sessionDeviceId: loginId, sessionUserAgent: UA }
+    );
+    expect(deviceId).toBe(loginId);
+    expect(deviceId2).toBe(loginId);
+  });
+
+  test('客户端有有效 header → 不进入恢复分支，采用 header', async () => {
+    const stableId = makeId(60 * 1000);
+    const loginId = makeId(90 * DAY);
+
+    const deviceId = await getDeviceId(mockRequest({ header: stableId }), {
+      sessionDeviceId: loginId,
+      sessionUserAgent: UA
+    });
+    expect(deviceId).toBe(stableId);
+  });
+
+  test('未登录（不传 opts）→ 行为不变，服务端生成', async () => {
+    const deviceId = await getDeviceId(mockRequest({}));
+    expect(deviceId).toMatch(/^(WEB|IOS|ANDROID)-[0-9A-Za-z]{11}-[0-9A-Za-z]{6}$/);
+  });
+
+  test('loadFromDb 抛异常 → 不影响主流程，服务端生成', async () => {
+    const deviceId = await getDeviceId(mockRequest({}), {
+      loadFromDb: async () => {
+        throw new Error('db down');
+      }
+    });
+    expect(deviceId).toMatch(/^(WEB|IOS|ANDROID)-[0-9A-Za-z]{11}-[0-9A-Za-z]{6}$/);
   });
 });

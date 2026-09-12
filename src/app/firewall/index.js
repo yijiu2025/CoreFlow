@@ -20,6 +20,9 @@ import {
 import { registerRateLimit } from './engine/detectors/first-ratelimit.js';
 import { checkNotFoundTrap } from './engine/detectors/scan-trap.js';
 import fp from 'fastify-plugin';
+import { createLogger } from '../../framework/log/index.js';
+
+const log = createLogger('app.firewall.index');
 
 /**
  * 初始化防火墙插件
@@ -108,7 +111,7 @@ export const initFirewall = fp(async function (app) {
       try {
         await checkNotFoundTrap(app.redis, request.ip, request.url, reply.statusCode);
       } catch (err) {
-        console.warn(`[Firewall] Trap Triggered: ${request.ip} -> ${err.rule}`);
+        log.warn(`[Firewall] Trap Triggered: ${request.ip} -> ${err.rule}`);
       }
     }
   });

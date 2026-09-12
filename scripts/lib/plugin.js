@@ -3,6 +3,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { createLogger } from '../../src/framework/log/index.js';
+
+const log = createLogger('scripts.lib.plugin');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appsDir = path.resolve(__dirname, '../../src/app');
@@ -115,7 +118,7 @@ export function mergeCommands(builtinCommands, appCommands) {
 
   for (const [command, config] of Object.entries(appCommands)) {
     if (merged[command]) {
-      console.warn(`命令 ${command} 与内置命令冲突，跳过应用 ${config._source} 的定义`);
+      log.warn(`命令 ${command} 与内置命令冲突，跳过应用 ${config._source} 的定义`);
       continue;
     }
     merged[command] = config;

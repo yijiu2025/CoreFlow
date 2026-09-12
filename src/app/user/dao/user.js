@@ -205,33 +205,31 @@ class UserDao {
             );
           }
         } else {
-        // 默认 guest 角色（rank_level=1, app_id=GLOBAL），找不到则抛错回滚，
-        // 避免注册出"有用户无角色"的脏数据（权限为空无法正常使用）
-        const guestRole = await getModel('Role').findOne({
-          where: { rank_level: 1, app_id: 'GLOBAL' },
-          transaction: t
-        });
-        if (!guestRole) {
-          throw new Error('REGISTER_FAILED:默认角色未初始化，请联系管理员运行角色同步');
+          // 默认 guest 角色（rank_level=1, app_id=GLOBAL），找不到则抛错回滚，
+          // 避免注册出"有用户无角色"的脏数据（权限为空无法正常使用）
+          const guestRole = await getModel('Role').findOne({
+            where: { rank_level: 1, app_id: 'GLOBAL' },
+            transaction: t
+          });
+          if (!guestRole) {
+            throw new Error('REGISTER_FAILED:默认角色未初始化，请联系管理员运行角色同步');
+          }
+          await getModel('UserRole').create(
+            {
+              user_id: user.id,
+              role_id: guestRole.id,
+              app_id: 'GLOBAL'
+            },
+            { transaction: t }
+          );
         }
-        await getModel('UserRole').create(
-          {
-            user_id: user.id,
-            role_id: guestRole.id,
-            app_id: 'GLOBAL'
-          },
-          { transaction: t }
-        );
-      }
 
-      return user;
-    });
+        return user;
+      });
     } catch (err) {
       // L4：并发注册同 email，预检过了但事务内 create 撞唯一索引
       // 转 400 业务错误，避免抛 500 + 暴露 DB 错误细节
-      const isUniqueViolation =
-        err?.name === 'SequelizeUniqueConstraintError' ||
-        err?.parent?.code === 'ER_DUP_ENTRY';
+      const isUniqueViolation = err?.name === 'SequelizeUniqueConstraintError' || err?.parent?.code === 'ER_DUP_ENTRY';
       if (isUniqueViolation) {
         throw new Error('REGISTER_FAILED:邮箱已存在');
       }

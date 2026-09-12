@@ -21,6 +21,9 @@ import {
   setWhitelist,
   removeWhitelist as removeWhitelistRedis
 } from '../dao/block-manager.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.services.monitor.service');
 
 // ==================== WebSocket 客户端管理 ====================
 
@@ -51,7 +54,7 @@ export function broadcastLog(record) {
   try {
     broadcast({ type: 'LOG', data: record });
   } catch (err) {
-    console.error('🚨 [Monitor WS] 广播序列化失败:', err.message);
+    log.error('🚨 [Monitor WS] 广播序列化失败:', err.message);
   }
 }
 
@@ -69,7 +72,7 @@ export function broadcastInit() {
  */
 export function registerMonitorClient(client) {
   if (!client || typeof client.on !== 'function') {
-    console.warn('⚠️  WebSocket 异常：未发现有效的 Socket 实例');
+    log.warn('⚠️  WebSocket 异常：未发现有效的 Socket 实例');
     return;
   }
 
@@ -151,7 +154,7 @@ export async function removeBlacklistEntry(redis, { type, value }) {
   try {
     await redis?.del(`fw:lock:${value}`);
   } catch (e) {
-    console.error('❌ [Monitor] 删除 Redis 封禁失败:', e);
+    log.error('❌ [Monitor] 删除 Redis 封禁失败:', e);
   }
   return { message: '已移出黑名单', defenseState };
 }

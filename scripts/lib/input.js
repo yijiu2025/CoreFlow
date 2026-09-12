@@ -5,6 +5,9 @@
  * @module scripts/lib/input
  */
 import readline from 'readline';
+import { createLogger } from '../../src/framework/log/index.js';
+
+const log = createLogger('scripts.lib.input');
 
 /**
  * 创建 readline 接口
@@ -117,16 +120,16 @@ export async function confirm(rl, message, defaultValue = false) {
  * @returns {Promise<any>} 选中的值，无效选择返回 null
  */
 export async function select(rl, title, items) {
-  console.log(`\n${title}`);
+  log.stdout(`\n${title}`);
   items.forEach((item, i) => {
-    console.log(`  ${i + 1}. ${item.label}`);
+    log.stdout(`  ${i + 1}. ${item.label}`);
   });
 
   const input = await ask(rl, '\n请输入序号: ');
   const index = parseInt(input, 10);
 
   if (isNaN(index) || index < 1 || index > items.length) {
-    console.error('❌ 无效的选择');
+    log.error('❌ 无效的选择');
     return null;
   }
 
@@ -141,10 +144,10 @@ export async function select(rl, title, items) {
  * @returns {Promise<any[]>} 选中的值数组
  */
 export async function multiSelect(rl, title, items) {
-  console.log(`\n${title}`);
-  console.log('  （输入序号，多个用逗号分隔，如: 1,3,5）\n');
+  log.stdout(`\n${title}`);
+  log.stdout('  （输入序号，多个用逗号分隔，如: 1,3,5）\n');
   items.forEach((item, i) => {
-    console.log(`  ${i + 1}. ${item.label}`);
+    log.stdout(`  ${i + 1}. ${item.label}`);
   });
 
   const input = await ask(rl, '\n请输入序号: ');

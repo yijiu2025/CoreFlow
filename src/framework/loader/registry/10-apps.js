@@ -18,6 +18,9 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { getModel } from '../../db/index.js';
 import { C } from '../../../utils/colors.js';
 import { roleRegistry } from '../../../utils/PbacRegistry.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.loader.registry.10-apps');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +28,7 @@ export default async app => {
   const appsDir = path.resolve(__dirname, '../../../app');
 
   if (!fs.existsSync(appsDir)) {
-    console.log(`ℹ️ [Apps] ${C.cyan}src/app/ 目录不存在，跳过应用加载${C.reset}`);
+    log.dev(`ℹ️ [Apps] ${C.cyan}src/app/ 目录不存在，跳过应用加载${C.reset}`);
     return;
   }
 
@@ -46,9 +49,9 @@ export default async app => {
         const fileUrl = pathToFileURL(configPath).href;
         const mod = await import(fileUrl);
         appConfig = mod.default || mod;
-        console.log(`📦 [Apps] ${C.cyan}加载应用: ${appConfig.name || dir.name}${C.reset}`);
+        log.dev(`📦 [Apps] ${C.cyan}加载应用: ${appConfig.name || dir.name}${C.reset}`);
       } catch (err) {
-        console.error(`❌ [Apps] ${C.red}加载配置失败 [${dir.name}]: ${err.message}${C.reset}`);
+        log.error(`❌ [Apps] ${C.red}加载配置失败 [${dir.name}]: ${err.message}${C.reset}`);
       }
     }
 
@@ -58,9 +61,9 @@ export default async app => {
       try {
         const fileUrl = pathToFileURL(permIndexPath).href;
         await import(fileUrl);
-        console.log(`📦 [Apps] ${C.cyan}权限定义已加载: ${dir.name}${C.reset}`);
+        log.dev(`📦 [Apps] ${C.cyan}权限定义已加载: ${dir.name}${C.reset}`);
       } catch (err) {
-        console.error(`❌ [Apps] ${C.red}加载权限失败 [${dir.name}]: ${err.message}${C.reset}`);
+        log.error(`❌ [Apps] ${C.red}加载权限失败 [${dir.name}]: ${err.message}${C.reset}`);
       }
     }
 
@@ -70,9 +73,9 @@ export default async app => {
       try {
         const fileUrl = pathToFileURL(permRolesPath).href;
         await import(fileUrl);
-        console.log(`📦 [Apps] ${C.cyan}角色定义已加载: ${dir.name}${C.reset}`);
+        log.dev(`📦 [Apps] ${C.cyan}角色定义已加载: ${dir.name}${C.reset}`);
       } catch (err) {
-        console.error(`❌ [Apps] ${C.red}加载角色失败 [${dir.name}]: ${err.message}${C.reset}`);
+        log.error(`❌ [Apps] ${C.red}加载角色失败 [${dir.name}]: ${err.message}${C.reset}`);
       }
     }
 
@@ -86,7 +89,7 @@ export default async app => {
 
           if (!exist) {
             await OauthClient.create(client);
-            console.log(`🌱 [Seed] ${C.cyan}OAuth 初始化客户端: ${client.client_id}${C.reset}`);
+            log.dev(`🌱 [Seed] ${C.cyan}OAuth 初始化客户端: ${client.client_id}${C.reset}`);
           } else {
             await exist.update({
               client_name: client.client_name,
@@ -99,10 +102,10 @@ export default async app => {
               application_type: client.application_type,
               skip_consent: client.skip_consent ?? false
             });
-            console.log(`🌱 [Seed] ${C.cyan}OAuth 同步更新客户端: ${client.client_id}${C.reset}`);
+            log.dev(`🌱 [Seed] ${C.cyan}OAuth 同步更新客户端: ${client.client_id}${C.reset}`);
           }
         } catch (err) {
-          console.error(`❌ [Seed] ${C.red}OAuth 客户端注册失败 [${dir.name}]: ${err.message}${C.reset}`);
+          log.error(`❌ [Seed] ${C.red}OAuth 客户端注册失败 [${dir.name}]: ${err.message}${C.reset}`);
         }
       }
     }
@@ -124,7 +127,7 @@ export default async app => {
     if (hasOAuth) parts.push('OAuth');
     if (hasInit) parts.push('插件');
     const detail = parts.length > 0 ? ` (${parts.join(' + ')})` : '';
-    console.log(`✅ [Apps] ${C.green}${appName} 加载完成${detail}${C.reset}`);
+    log.dev(`✅ [Apps] ${C.green}${appName} 加载完成${detail}${C.reset}`);
 
     loadedCount++;
   }
@@ -147,13 +150,13 @@ export default async app => {
         }
         successCount++;
       }
-      console.log(`✅ [PBAC] ${C.green}集中注册器已将内存中的 ${successCount} 个角色同步至数据库${C.reset}`);
+      log.always(`✅ [PBAC] ${C.green}集中注册器已将内存中的 ${successCount} 个角色同步至数据库${C.reset}`);
     } catch (error) {
-      console.error(`❌ [PBAC] ${C.red}集中同步数据库失败: ${error.message}${C.reset}`);
+      log.error(`❌ [PBAC] ${C.red}集中同步数据库失败: ${error.message}${C.reset}`);
     }
   } else {
-    console.log(`ℹ️ [PBAC] ${C.cyan}暂无通过 defineRoles 注册的基础角色${C.reset}`);
+    log.dev(`ℹ️ [PBAC] ${C.cyan}暂无通过 defineRoles 注册的基础角色${C.reset}`);
   }
 
-  console.log(`✅ [Apps] ${C.green}所有应用加载完毕 (${loadedCount} 个)${C.reset}`);
+  log.always(`✅ [Apps] ${C.green}所有应用加载完毕 (${loadedCount} 个)${C.reset}`);
 };

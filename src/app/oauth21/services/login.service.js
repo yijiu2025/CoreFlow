@@ -29,11 +29,10 @@ import { AuthorizationService } from './authorization.service.js';
 import deactivationService from '../../user/services/deactivation.service.js';
 import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
 import { detectLoginEnvironmentAnomaly } from '../../../framework/auth/anomaly-detector.js';
-import {
-  detectPlatform,
-  computeDeviceFingerprint,
-  getDeviceIdAndWrapResponse
-} from '../../../framework/auth/device.js';
+import { computeDeviceFingerprint, getDeviceIdAndWrapResponse } from '../../../framework/auth/device.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.oauth21.services.login.service');
 
 const authService = new AuthorizationService();
 
@@ -119,11 +118,10 @@ export async function directLogin(request, reply, fastify) {
     const anomaly = await detectLoginAnomaly({
       email: loginEmail,
       ip: request.ip,
-      userAgent: request.headers['user-agent'] || '',
-      redis: request.server.redis
+      userAgent: request.headers['user-agent'] || ''
     });
     if (anomaly.status === DETECT_RESULT.BLOCK) {
-      await logLogin(request.server.redis, {
+      await logLogin({
         userId: null,
         ip: request.ip,
         userAgent: request.headers['user-agent'] || '',
@@ -199,26 +197,19 @@ export async function directLogin(request, reply, fastify) {
   // - info（IP 变梯子 / 无基准）→ 不拦，继续登录
   // - safe → 继续
   // 仅密码登录做（邮箱码登录已验证邮箱所有权，无需二次验证）
-  console.log(
-    '[directLogin] 环境检测入口: type=%s, numericId=%s, FORCE=%s',
-    type,
-    user.numericId,
-    process.env.LOGIN_EMAIL_VERIFY_FORCE
-  );
+  log.info('[directLogin] 环境检测入口: type=%s, numericId=%s', type, user.numericId);
   if (type !== 'email' && user.numericId) {
     try {
       const deviceId = await getDeviceIdAndWrapResponse(request, reply);
-      const platformHint = detectPlatform(request);
       const userAgent = request.headers['user-agent'] || '';
       const envCheck = await detectLoginEnvironmentAnomaly({
         userId: user.numericId,
         uid: user.uid,
         deviceId,
         userAgent,
-        ip: request.ip,
-        platformHint
+        ip: request.ip
       });
-      console.log('[directLogin] 环境检测结果: %s, reason=%s', envCheck.status, envCheck.reason);
+      log.info('[directLogin] 环境检测结果: %s, reason=%s', envCheck.status, envCheck.reason);
 
       if (envCheck.status === 'warn') {
         // 签发临时二次验证令牌存 Redis（5 分钟），前端带它调 /login/verify-email
@@ -234,12 +225,11 @@ export async function directLogin(request, reply, fastify) {
             scope: scope || '',
             oidcNonce: oidcNonce || null,
             keepLogin: keepLogin === true,
-            // 记录本次环境，二次验证通过后用此环境作为新基准
+            // 记录本次环境（指纹材料与 createSession 基准一致：不掺 platformHint）
             deviceId,
             userAgent,
             ip: request.ip,
-            platformHint,
-            fingerprint: computeDeviceFingerprint({ deviceId, userAgent, uid: user.uid, platformHint })
+            fingerprint: computeDeviceFingerprint({ deviceId, userAgent, uid: user.uid })
           },
           300
         );
@@ -251,9 +241,9 @@ export async function directLogin(request, reply, fastify) {
             ip: request.ip,
             ua: request.headers['user-agent'] || ''
           });
-          console.log('[directLogin] 二次验证邮箱码已发送:', user.email);
+          log.info('[directLogin] 二次验证邮箱码已发送:', user.email);
         } catch (sendErr) {
-          console.error('[directLogin] 二次验证邮箱码发送失败:', sendErr.message);
+          log.error('[directLogin] 二次验证邮箱码发送失败:', sendErr.message);
           // 发码失败不阻断，前端可点重发
         }
 
@@ -269,7 +259,7 @@ export async function directLogin(request, reply, fastify) {
         });
       }
     } catch (err) {
-      console.error('[directLogin] 环境检测异常:', err.message, err.stack);
+      log.error('[directLogin] 环境检测异常:', err.message, err.stack);
       // 检测异常不阻断登录，继续走签发流程（降级放行）
     }
   }
@@ -353,13 +343,13 @@ export async function directLogin(request, reply, fastify) {
           appId: client.client_id,
           scopes: finalScopes
         });
-        console.log('[directLogin] skip_consent 自动授权完成', {
+        log.info('[directLogin] skip_consent 自动授权完成', {
           userId: user.id,
           clientId: client.client_id
         });
         // 落到下方第 5 步签发令牌（不 return consent）
       } catch (err) {
-        console.error('[directLogin] 自动授权失败，降级走 consent:', err.message);
+        log.error('[directLogin] 自动授权失败，降级走 consent:', err.message);
       }
     } else {
       const consentKey = uuidv4();
@@ -378,7 +368,7 @@ export async function directLogin(request, reply, fastify) {
         },
         300
       );
-      console.log('[directLogin] 写入 consentKey', {
+      log.info('[directLogin] 写入 consentKey', {
         consentKey,
         userId: user.id,
         clientId: client.client_id,
@@ -416,7 +406,7 @@ export async function directLogin(request, reply, fastify) {
     });
 
     // 审计日志：登录成功
-    await logLogin(request.server.redis, {
+    await logLogin({
       userId: user.numericId || user.id,
       ip: request.ip,
       userAgent: request.headers['user-agent'] || '',
@@ -427,7 +417,7 @@ export async function directLogin(request, reply, fastify) {
     return buildTokenResponse(result);
   } catch (err) {
     // 审计日志：登录失败
-    await logLogin(request.server.redis, {
+    await logLogin({
       userId: user.numericId || user.id,
       ip: request.ip,
       userAgent: request.headers['user-agent'] || '',
@@ -463,7 +453,7 @@ export async function confirmDirectConsent(request, reply, fastify) {
   const consentStore = getStore('consent_session');
   const session = await consentStore.get(consentKey);
   if (!session) {
-    console.warn('[confirmConsent] consentKey 不存在', {
+    log.warn('[confirmConsent] consentKey 不存在', {
       consentKey,
       storeKeys: typeof consentStore.keys === 'function' ? 'has-keys-fn' : 'no-keys-fn'
     });
@@ -478,7 +468,7 @@ export async function confirmDirectConsent(request, reply, fastify) {
   // 防 consentKey 泄露后被另一客户端冒用绕过二次确认
   const currentFp = clientFingerprint(request);
   if (session.fingerprint && session.fingerprint !== currentFp) {
-    console.warn('[confirmConsent] 指纹不符', {
+    log.warn('[confirmConsent] 指纹不符', {
       stored: session.fingerprint,
       current: currentFp,
       ip: request?.ip,

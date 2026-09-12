@@ -6,13 +6,14 @@
  * @since 2026-07-22
  */
 
-/* eslint-disable no-console */
-
 import { config as dotenvConfig } from 'dotenv';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { createApp } from './src/app.js';
+import { createLogger } from './src/framework/log/index.js';
+
+const log = createLogger('server');
 
 // ---------------------------------------------------------------------------
 // 1. 加载环境变量
@@ -43,7 +44,7 @@ if (process.platform === 'win32' && process.stdout.isTTY) {
     execSync('chcp 65001', { stdio: 'ignore' });
   } catch (e) {
     // 编码切换失败不影响服务启动，日志中可能显示乱码
-    console.warn(`⚠️ [Server] ${C.yellow}chcp 切换编码失败: ${e.message}${C.reset}`);
+    log.warn(`⚠️ [Server] ${C.yellow}chcp 切换编码失败: ${e.message}${C.reset}`);
   }
 }
 
@@ -66,17 +67,17 @@ const start = async () => {
 
   const color = IS_TTY ? C.cyan : '';
   const reset = IS_TTY ? C.reset : '';
-  console.log(`🚀 [Server] ${color}${addr}${reset}`);
+  log.always(`🚀 [Server] ${color}${addr}${reset}`);
 
   // ---------------------------------------------------------------------------
   // 3. 优雅关闭：处理系统信号
   // ---------------------------------------------------------------------------
   const shutdown = async signal => {
-    console.log(`\n📦 [Server] 收到 ${signal}，正在优雅关闭...`);
+    log.always(`\n📦 [Server] 收到 ${signal}，正在优雅关闭...`);
 
     // 超时兜底：30s 后强制退出，防止 onClose 钩子挂起
     const forceExit = setTimeout(() => {
-      console.error(`🚨 [Server] ${C.red}优雅关闭超时，强制退出${C.reset}`);
+      log.error(`🚨 [Server] ${C.red}优雅关闭超时，强制退出${C.reset}`);
       process.exit(1);
     }, SHUTDOWN_TIMEOUT);
     forceExit.unref();
@@ -84,11 +85,11 @@ const start = async () => {
     try {
       await app.close(); // 触发所有 onClose 钩子（DB/Redis/GuardConfig）
       clearTimeout(forceExit);
-      console.log(`✅ [Server] ${C.green}已安全关闭${C.reset}`);
+      log.always(`✅ [Server] ${C.green}已安全关闭${C.reset}`);
       process.exit(0);
     } catch (err) {
       clearTimeout(forceExit);
-      console.error(`❌ [Server] ${C.red}关闭异常: ${err.message}${C.reset}`);
+      log.error(`❌ [Server] ${C.red}关闭异常: ${err.message}${C.reset}`);
       process.exit(1);
     }
   };
@@ -100,6 +101,6 @@ const start = async () => {
 start().catch(err => {
   const color = IS_TTY ? C.red : '';
   const reset = IS_TTY ? C.reset : '';
-  console.error(`🚨 [Server] ${color}启动异常: ${err.message}${reset}`, err.stack);
+  log.error(`🚨 [Server] ${color}启动异常: ${err.message}${reset}`, err.stack);
   process.exit(1);
 });

@@ -1,96 +1,44 @@
 /**
- * 日志工具（统一日志出口）
+ * framework/log — 适配层
+ *
+ * 日志核心已抽到独立 npm 包 `packages/log`（包名 wb-log，Node/浏览器通用，
+ * 前端可直接复用）。本文件保持既有导入路径 `framework/log/index.js` 不变，
+ * 并追加服务器专属能力（全局异常钩子）。
+ *
+ * 快速上手：
+ *   import { createLogger } from '<相对路径>/framework/log/index.js';
+ *   const log = createLogger('auth.session');
+ *
+ *   log.info('用户登录', { userId });           // 常规日志
+ *   log.error('查询失败', err);                 // 错误（自动 stack）
+ *   log.debug('缓存未命中', key);               // 调试：需 LOG_DEBUG=auth 才输出
+ *   log.fatal('进程级故障', err);               // 同步落盘
+ *
+ *  输出控制矩阵（两个正交维度，任意级别任意组合，顺序无关）：
+ *   log.always.error('...')     必输（无视 LOG_LEVEL / LOG_DEBUG / 环境）
+ *   log.dev.info('...')         仅开发环境（NODE_ENV !== 'production'，LOG_DEV 可覆盖）
+ *   log.prod.error('...')       仅生产环境
+ *   log.dev.always.info('...')  组合：仅开发 + 必输
+ *   log.file.info('...')        只写文件、不刷控制台（留档）
+ *
+ *  实例级配置（优先级最高，详见 wb-log 包 logger.js）：
+ *   const log = createLogger('pay', { level: 'debug', file: { name: 'pay' } });
+ *   log.config({ level: 'warn' });             // 运行时更新
+ *
+ *  全局编程配置：
+ *   import { configureLog } from '.../framework/log/index.js';
+ *   configureLog({ level: 'warn', fileName: 'server', debugKeywords: ['auth'] });
+ *
+ *  模块级环境变量（无需改代码）：
+ *   LOG_LEVEL_AUTH=info         auth 模块最低级别
+ *   LOG_CONSOLE_REDIS=off       redis 模块只写文件不进控制台
+ *   LOG_FILE_CLI=false          cli 模块不写文件
+ *
+ * 禁止在业务代码出现任何 console.*（ESLint no-console: error 强制）。
  *
  * @author yijiu2025
- * @since 2026-08-17
+ * @since 2026-09-10
  */
-import { requestContext } from '../auth/index.js';
-
-/**
- * 日志系统：桥接到 Pino (Fastify 内置高性能日志引擎)
- *
- * 优先从 ALS 上下文中取 request.log (Pino 实例)，保证结构化输出。
- * 如果在请求生命周期外调用（如脚本、启动时），则优雅地降级为 console 输出。
- * 所有日志自动携带 requestId，便于链路追踪。
- */
-function getLoggerContext() {
-  try {
-    const request = requestContext.getStore();
-    if (request?.log) {
-      return { pino: request.log, requestId: request.id };
-    }
-  } catch {
-    // 非请求生命周期，正常降级
-  }
-  return { pino: null, requestId: null };
-}
-
-export class Logger {
-  /**
-   * 记录认证/授权事件
-   * @param {Object} ctx 兼容的请求上下文对象
-   * @param {Object} options 日志选项
-   */
-  static async auth(ctx, { event, uid, appId, details = {} }) {
-    const { ip, region, city } = ctx?.state?.clientInfo || {};
-    const location = region ? `${region}-${city}` : 'Unknown';
-    const requestId = ctx?.request?.id;
-
-    const logData = {
-      type: 'AUTH',
-      event,
-      uid: uid || 'Guest',
-      appId: appId || 'N/A',
-      requestId,
-      ip,
-      location,
-      details
-    };
-
-    const pino = getLoggerContext().pino ?? ctx?.request?.log;
-    if (pino) {
-      pino.info(logData, `[AuthLog] ${event}`);
-    } else {
-      console.log(JSON.stringify({ level: 'info', msg: `[AuthLog] ${event}`, ...logData }));
-    }
-  }
-
-  /**
-   * 普通业务日志
-   */
-  static info(message, data = {}) {
-    const { pino, requestId } = getLoggerContext();
-    if (pino) {
-      pino.info({ ...data, requestId }, message);
-    } else {
-      console.log(JSON.stringify({ level: 'info', msg: message, requestId, ...data }));
-    }
-  }
-
-  static error(message, err) {
-    const { pino, requestId } = getLoggerContext();
-    if (pino) {
-      pino.error({ err, requestId }, message);
-    } else {
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          msg: message,
-          requestId,
-          error: err?.message
-        })
-      );
-    }
-  }
-
-  static warn(message, data = {}) {
-    const { pino, requestId } = getLoggerContext();
-    if (pino) {
-      pino.warn({ ...data, requestId }, message);
-    } else {
-      console.warn(JSON.stringify({ level: 'warn', msg: message, requestId, ...data }));
-    }
-  }
-}
-
-export default Logger;
+export * from '@qirly/wb-log';
+export { default } from '@qirly/wb-log';
+export { initLogErrorTraps } from './traps.js';

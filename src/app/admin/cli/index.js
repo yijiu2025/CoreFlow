@@ -11,6 +11,9 @@
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.admin.cli.index');
 
 /**
  * 管理统计
@@ -24,11 +27,11 @@ async function adminStats() {
     UserRole.count({ where: { delete_version: 0 } })
   ]);
 
-  console.log('\n📊 管理后台统计：');
+  log.stdout('\n📊 管理后台统计：');
   printLine();
-  console.log(`  用户总数:     ${userCount}`);
-  console.log(`  角色总数:     ${roleCount}`);
-  console.log(`  角色分配数:   ${assignmentCount}`);
+  log.stdout(`  用户总数:     ${userCount}`);
+  log.stdout(`  角色总数:     ${roleCount}`);
+  log.stdout(`  角色分配数:   ${assignmentCount}`);
   printLine();
 }
 
@@ -44,11 +47,11 @@ async function userStats() {
     User.count({ where: { status: 0 } })
   ]);
 
-  console.log('\n👥 用户统计：');
+  log.stdout('\n👥 用户统计：');
   printLine();
-  console.log(`  总数:   ${total}`);
-  console.log(`  正常:   ${active}`);
-  console.log(`  禁用:   ${disabled}`);
+  log.stdout(`  总数:   ${total}`);
+  log.stdout(`  正常:   ${active}`);
+  log.stdout(`  禁用:   ${disabled}`);
   printLine();
 }
 
@@ -75,7 +78,7 @@ async function roleStats() {
     stats.push([role.id, role.code, role.app_id, role.name, role.rank_level, count]);
   }
 
-  console.log('\n🎭 角色统计：');
+  log.stdout('\n🎭 角色统计：');
   printTable(['ID', '编码', '应用', '名称', '权重', '用户数'], stats);
 }
 

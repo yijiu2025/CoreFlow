@@ -60,8 +60,15 @@ export default async function (fastify) {
     allowRoles: ['admin'],
     handler: async (request, reply) => {
       // 只允许指定字段，防止注入
-      const { client_name, redirect_uris, grant_types, scope, scope_metadata, token_endpoint_auth_method, application_type } =
-        request.body;
+      const {
+        client_name,
+        redirect_uris,
+        grant_types,
+        scope,
+        scope_metadata,
+        token_endpoint_auth_method,
+        application_type
+      } = request.body;
       try {
         const client = await ClientDao.create({
           client_name,

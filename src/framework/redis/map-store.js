@@ -1,3 +1,6 @@
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.redis.map-store');
 /**
  * 纯内存 Map 存储（单例模式）
  *
@@ -114,7 +117,7 @@ function _deleteKey(entry, key) {
     }
     // 场景 C：数据不一致，末尾是一个僵尸 key（在 keys 中但 store 中没有）
     else {
-      console.warn(`[MapStore] 发现并清理尾部僵尸 key: "${lastKey}"`);
+      log.warn(`[MapStore] 发现并清理尾部僵尸 key: "${lastKey}"`);
       entry.keys.pop(); // 直接丢弃僵尸元素
       // 循环继续，下一次会拿到倒数第二个元素作为新的 lastKey 进行判断
     }

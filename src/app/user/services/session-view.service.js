@@ -49,8 +49,7 @@ export function maskDeviceId(deviceId) {
   const timestamp = parts[1]; // 加密时间戳段
   const suffix = parts[2]; // 随机后缀
   // 时间戳段保前 4 后 0，中间星号
-  const maskedTs =
-    timestamp.length <= 4 ? timestamp : timestamp.slice(0, 4) + '***';
+  const maskedTs = timestamp.length <= 4 ? timestamp : timestamp.slice(0, 4) + '***';
   return `${platform}-${maskedTs}-${suffix}`;
 }
 
@@ -76,4 +75,3 @@ export function formatDeviceList(rows, currentTokenHash) {
     total: rows.length
   };
 }
-

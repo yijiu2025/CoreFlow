@@ -26,7 +26,6 @@ export {
   getPlatform,
   decodeTimestamp,
   STORAGE_KEY,
-  MAX_AGE_DAYS,
   DEVICE_PLATFORMS,
   RANDOM_SUFFIX_LENGTH,
   CLOCK_SKEW_TOLERANCE_MS

@@ -6,6 +6,9 @@
  * @since 2026-07-13
  */
 import net from 'net';
+import { createLogger } from '../framework/log/index.js';
+
+const log = createLogger('utils.ip');
 
 /**
  * 规范化 IP 地址，主要是处理并消除 IPv4-mapped IPv6 前缀 (例如 "::ffff:192.168.1.1" -> "192.168.1.1")
@@ -72,7 +75,7 @@ function isIpMatch(clientIp, rule) {
       blockList.addSubnet(cleanRange, bits, type);
       return blockList.check(cleanIp, type);
     } catch (err) {
-      console.error('IP CIDR 匹配规则错误:', err);
+      log.error('IP CIDR 匹配规则错误:', err);
       return false;
     }
   }

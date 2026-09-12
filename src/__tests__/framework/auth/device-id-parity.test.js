@@ -24,11 +24,11 @@ import { validateDeviceId, parseDeviceId } from '../../../framework/auth/device-
 
 describe('设备 ID 前后端一致性', () => {
   test('前端编码的时间戳段通过后端 validateDeviceId 校验', async () => {
-    // 取一批有代表性的时间戳（均在 365 天有效期内，过期/未来的样本
-    // 由后端年龄校验拒绝，属于预期行为，不用于编码一致性验证）
+    // 取一批有代表性的时间戳（device_id 永久有效，仅未来时间被拒，
+    // 故此处全部为过去/当前时间，用于编码一致性验证）
     const day = 24 * 60 * 60 * 1000;
     const samples = [
-      Date.now() - 365 * day + day, // 恰好未过期（356 天余量）
+      Date.now() - 365 * day - day, // 超 1 年的老 ID（永久有效，应放行）
       Date.now() - 180 * day, // 半年前
       Date.now(),
       Date.now() - 1000 // 刚刚
@@ -71,14 +71,13 @@ describe('设备 ID 前后端一致性', () => {
     expect(result.valid).toBe(true);
   });
 
-  test('过期（超 365 天）的时间戳段被后端正确拒绝', async () => {
+  test('超 365 天的老 ID 仍放行（device_id 永久有效，非凭证，过期重生反致指纹突变）', async () => {
     const tooOld = 1704067200000; // 2024-01-01，早于当前 365 天
     const encoded = feEncode(tooOld);
     const deviceId = `WEB-${encoded}-Ab3dE9`;
 
-    // 编码本身仍可解码一致（算法兼容），但被年龄校验拒绝
+    // device_id 永久有效——非安全凭证，过期重生会导致 device_id 变化 → 指纹突变 → 风控误报
     const result = await validateDeviceId(deviceId);
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('过期');
+    expect(result.valid).toBe(true);
   });
 });

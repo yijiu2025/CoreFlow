@@ -9,8 +9,11 @@
 
 import initAuth from '../../auth/index.js';
 import { C } from '../../../utils/colors.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.loader.registry.04-auth');
 
 export default async app => {
   await app.register(initAuth);
-  console.log(`✅ [Auth] ${C.green}认证系统初始化完成${C.reset}`);
+  log.always(`✅ [Auth] ${C.green}认证系统初始化完成${C.reset}`);
 };

@@ -8,8 +8,8 @@
  * @since 2026-08-17
  */
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-import { createLock } from '../redis/lock-store.js';
-import { isRedisConfigured } from '../redis/utils.js';
+import { createLock } from '../framework/redis/lock-store.js';
+import { isRedisConfigured } from '../framework/redis/utils.js';
 
 const describeOrSkip = isRedisConfigured() ? describe : describe.skip;
 

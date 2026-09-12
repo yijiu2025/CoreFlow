@@ -7,6 +7,9 @@
  */
 import { getConfig, KEY, memorySlidingWindow, ipRequestTimestamps, getBlockStatus } from '../../util/shared.js';
 import { setBlock } from '../dao/block-manager.js';
+import { createLogger } from '../../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.engine.detectors.rate-limiter');
 
 /**
  * 追踪 IP 请求次数（基于内存滑动窗口）
@@ -81,7 +84,7 @@ const checkRateLimit = async (redisClient, actorId, options = {}) => {
   const results = await pipeline.exec();
 
   if (!results || results.some(([err]) => err)) {
-    console.error('[Firewall] Redis pipeline 失败，降级放行');
+    log.error('[Firewall] Redis pipeline 失败，降级放行');
     return true;
   }
 

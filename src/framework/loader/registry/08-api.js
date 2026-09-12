@@ -17,11 +17,14 @@ import {
   restoreRegistrationContext
 } from '../../../api/guard.js';
 import { C } from '../../../utils/colors.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.loader.registry.08-api');
 
 export default async app => {
   const apiRoot = path.resolve(__dirname, '../../../api');
 
-  console.log(`📦 [Loader] ${C.cyan}启动 API 递归加载引擎...${C.reset}`);
+  log.dev(`📦 [Loader] ${C.cyan}启动 API 递归加载引擎...${C.reset}`);
 
   async function scanDir(currentPath, isSystemRoot = false) {
     try {
@@ -48,7 +51,7 @@ export default async app => {
         setRegistrationContext(systemKey);
 
         if (hasSystemJson) {
-          console.log(
+          log.dev(
             `🛡️ [Guard] ${C.cyan}自动注册系统: ${systemKey} [${config.alias || '未命名'}] -> ${config.prefix || '/'}${C.reset}`
           );
         }
@@ -73,7 +76,7 @@ export default async app => {
         }
       }
     } catch (err) {
-      console.warn(`⚠️ [Loader] ${C.yellow}读取目录失败: ${currentPath} ${err.message}${C.reset}`);
+      log.warn(`⚠️ [Loader] ${C.yellow}读取目录失败: ${currentPath} ${err.message}${C.reset}`);
     }
   }
 
@@ -95,7 +98,7 @@ export default async app => {
     }
 
     const relativePath = path.relative(apiRoot, filePath);
-    console.log(`✅ [API] ${C.green}已注册: /${relativePath.replace(/\\/g, '/')}${C.reset}`);
+    log.dev(`✅ [API] ${C.green}已注册: /${relativePath.replace(/\\/g, '/')}${C.reset}`);
   }
 
   const systemFolders = await fs.readdir(apiRoot, { withFileTypes: true });

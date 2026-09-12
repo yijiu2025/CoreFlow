@@ -11,6 +11,9 @@
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.posecraft.cli.index');
 
 /**
  * 统计信息
@@ -24,11 +27,11 @@ async function posecraftStats() {
     Analysis.count().catch(() => 0)
   ]);
 
-  console.log('\n📊 PoseCraft 统计：');
+  log.stdout('\n📊 PoseCraft 统计：');
   printLine();
-  console.log(`  模板数:   ${templateCount}`);
-  console.log(`  作品数:   ${workCount}`);
-  console.log(`  分析记录: ${analysisCount}`);
+  log.stdout(`  模板数:   ${templateCount}`);
+  log.stdout(`  作品数:   ${workCount}`);
+  log.stdout(`  分析记录: ${analysisCount}`);
   printLine();
 }
 
@@ -48,7 +51,7 @@ async function listTemplates() {
     return;
   }
 
-  console.log('\n📋 模板列表：');
+  log.stdout('\n📋 模板列表：');
   printTable(
     ['ID', '标题', '分类', '使用次数', '创建时间'],
     templates.map(t => [
@@ -77,7 +80,7 @@ async function listWorks() {
     return;
   }
 
-  console.log('\n🎨 作品列表：');
+  log.stdout('\n🎨 作品列表：');
   printTable(
     ['ID', '标题', '点赞', '浏览', '创建时间'],
     works.map(w => [

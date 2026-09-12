@@ -22,6 +22,12 @@ import { initLoader } from './framework/loader/index.js';
 import { flushGuardConfig } from './api/guard-config.js';
 import { startScheduler } from './framework/scheduler/index.js';
 import { ApiException } from './shared/exceptions.js';
+import { createLogger, initLogErrorTraps } from './framework/log/index.js';
+
+const log = createLogger('app');
+
+// 全局异常兜底：uncaughtException / unhandledRejection 统一走日志系统
+initLogErrorTraps();
 
 // 应用层不信任任意代理 IP，仅允许本地回环。
 // 生产环境若有反向代理（Nginx / Cloudflare / ALB），通过 PROXY_TRUST_CIDR 环境变量指定信任网段
@@ -55,7 +61,7 @@ function validateSecrets() {
   const secrets = [process.env.APP_SECRET, process.env.SESSION_SECRET, process.env.FIREWALL_SECRET];
   const weak = secrets.filter(s => !s || s.length < 32 || INSECURE_SECRETS.includes(s));
   if (weak.length > 0) {
-    console.error(
+    log.error(
       `❌ [App] 安全错误：检测到不安全的默认密钥或密钥长度不足 32 位，请在 .env 中设置强随机值：APP_SECRET / SESSION_SECRET / FIREWALL_SECRET`
     );
     // 给 stderr 100ms 刷新时间，确保 CI/Docker 环境下错误消息完整输出
@@ -126,7 +132,7 @@ export async function createApp() {
 
   // 生产环境未配置 CORS 白名单时记录警告，避免运维人员误以为跨域请求可以正常访问
   if (isProduction && CORS_ORIGINS.length === 0) {
-    console.warn('⚠️ [App] 生产环境未配置 CORS_ORIGINS，所有跨域请求将被拒绝。请在 .env 中设置允许的来源（逗号分隔）');
+    log.warn('⚠️ [App] 生产环境未配置 CORS_ORIGINS，所有跨域请求将被拒绝。请在 .env 中设置允许的来源（逗号分隔）');
   }
 
   // 创建 Fastify 实例，开发环境 pino-pretty 美化，生产环境 JSON 结构化供 ELK/Loki 解析
@@ -275,7 +281,7 @@ export async function createApp() {
       await flushGuardConfig();
     } catch (err) {
       // Fastify onClose 不暴露异步错误，必须在此捕获防止静默丢失
-      console.error(`❌ [App] 优雅关闭时保存守卫配置失败: ${err.message}`);
+      log.error(`❌ [App] 优雅关闭时保存守卫配置失败: ${err.message}`);
     }
   });
 

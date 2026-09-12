@@ -12,8 +12,11 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { confirmVerifyToken } from '../../../framework/auth/anomaly-detector.js';
-import { updateSessionBaseline } from '../../../framework/auth/session.js';
+import { updateSessionBaseline, getSessionTokenDevice } from '../../../framework/auth/session.js';
 import { getDeviceId, computeDeviceFingerprint } from '../../../framework/auth/device.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('api.auth.v1.verify-challenge');
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -51,7 +54,12 @@ export default async function (fastify) {
       const sessionId = user?.sessionId;
       if (sessionId) {
         try {
-          const deviceId = await getDeviceId(request);
+          // 必须与认证钩子同参恢复登录链身份：客户端 ID 丢失时（触发本次验证的典型场景）
+          // 若此处退化为服务端随机生成，基准会漂移到一次性随机 ID——免验标记按该 ID 记，
+          // 下次请求恢复回链上真实身份后标记必然失配 → 反复弹验证死循环
+          const deviceId = await getDeviceId(request, {
+            loadFromDb: () => getSessionTokenDevice(sessionId)
+          });
           const fingerprint = computeDeviceFingerprint({
             deviceId,
             userAgent: request.headers['user-agent'] || '',
@@ -65,7 +73,7 @@ export default async function (fastify) {
           });
         } catch (err) {
           // 基准更新失败不影响验证通过本身（已写免验标记 30 分钟）
-          console.warn('[verify-challenge] 更新基准失败:', err.message);
+          log.warn('[verify-challenge] 更新基准失败:', err.message);
         }
       }
 

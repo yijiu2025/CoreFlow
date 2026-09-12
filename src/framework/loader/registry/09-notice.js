@@ -5,6 +5,9 @@
  * @since 2026-08-17
  */
 import { getModel } from '../../db/index.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.loader.registry.09-notice');
 
 const C = { reset: '\x1b[0m', cyan: '\x1b[36m' };
 
@@ -50,7 +53,7 @@ export default async app => {
       // 数据库中不存在，使用环境变量或 fallback 作为初始值
       const value = process.env[item.env] || item.fallback;
       await NoticeConfig.create({ key: item.key, value, description: item.description, category: item.category });
-      console.log(`🌱 [Seed] ${C.cyan}初始化设置: ${item.key}${C.reset}`);
+      log.dev(`🌱 [Seed] ${C.cyan}初始化设置: ${item.key}${C.reset}`);
     }
     // 已存在则跳过，不覆盖用户通过管理后台配置的值
   }

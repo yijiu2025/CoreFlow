@@ -6,6 +6,9 @@
  * @since 2026-08-17
  */
 import config from '../config.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.verify.sms.service');
 
 const smsConfig = config.sms;
 
@@ -29,8 +32,8 @@ class SmsService {
       case 'tencent':
         return await this._sendTencent(phone, code);
       default:
-        console.warn(`[SMS] 未知服务商: ${provider}，使用模拟发送`);
-        console.log(`[SMS] 模拟发送: ${phone} -> ${code}`);
+        log.warn(`[SMS] 未知服务商: ${provider}，使用模拟发送`);
+        log.info(`[SMS] 模拟发送: ${phone} -> ${code}`);
         return true;
     }
   }
@@ -42,7 +45,7 @@ class SmsService {
   async _sendAliyun(phone, code) {
     // TODO: 对接阿里云短信 API
     // const Dysmsapi = require('@alicloud/dysmsapi20170525');
-    console.log(`[SMS] 阿里云发送: ${phone} -> ${code}`);
+    log.info(`[SMS] 阿里云发送: ${phone} -> ${code}`);
     return true;
   }
 
@@ -53,7 +56,7 @@ class SmsService {
   async _sendTencent(phone, code) {
     // TODO: 对接腾讯云短信 API
     // const tencentcloud = require('tencentcloud-sdk-nodejs');
-    console.log(`[SMS] 腾讯云发送: ${phone} -> ${code}`);
+    log.info(`[SMS] 腾讯云发送: ${phone} -> ${code}`);
     return true;
   }
 

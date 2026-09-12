@@ -5,9 +5,6 @@
 /** 设备 ID 在 localStorage 的存储键 */
 export declare const STORAGE_KEY: string;
 
-/** 设备 ID 最长有效期（天），与后端一致 */
-export declare const MAX_AGE_DAYS: number;
-
 /** 合法平台枚举 */
 export declare const DEVICE_PLATFORMS: readonly ['WEB', 'IOS', 'ANDROID'];
 

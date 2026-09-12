@@ -15,10 +15,23 @@
  * - LONG_SESSION_TTL: 1个月/30天（勾选"记住我"，sid cookie maxAge）
  * - REFRESH_TOKEN_TTL: 半年/180天（sid_r cookie maxAge，remember 凭证有效期）
  *
- * @author Claude
+ * 文件结构（自上而下）：
+ * 1. 原始常量（TTL / 路径 / Cookie 名）
+ * 2. SESSION_SECRET 校验（生产强校验，签名密钥来源）
+ * 3. 部署策略派生配置（sameSite/secure/domain，统一出口 COOKIE_POLICY）
+ * 4. Cookie 选项策略（COOKIE_OPTIONS / USER_COOKIE_OPTS）
+ * 5. 签名/验证/派生函数（signCookie / verifyCookie / accountKeyForUid）
+ *
+ * @author yijiu2025
  * @since 2026-07-13
+ * @since 2026-09-09 结构重排：原始常量→派生配置→函数；公共函数补 INVALID_PARAM 校验
  */
 import crypto from 'node:crypto';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.auth.cookie');
+
+// ── 1. 原始常量 ──
 
 /** sid_r 刷新端点路径（sid_r cookie 的 path，只在该端点携带） */
 const REFRESH_COOKIE_PATH = '/auth/v1/refresh-session';
@@ -42,10 +55,26 @@ const REFRESH_TOKEN_TTL = 2592000; // 30天
  */
 const USER_COOKIE_TTL = 15552000; // 180天
 
-/** 旧 sid_r 轮转后保留"已轮转"标记的时长（秒），用于复用盗用检测；默认 7 天 */
-const ROTATED_RETENTION = parseInt(process.env.ROTATED_RETENTION) || 604800;
+/** 旧 sid_r 轮转后保留"已轮转"标记的时长（秒），用于复用盗用检测；默认 7 天。
+ *  兜底最小 60 秒，防负数/0 导致 Redis TTL 异常（永不过期或立即失效）。 */
+const ROTATED_RETENTION = Math.max(60, parseInt(process.env.ROTATED_RETENTION, 10) || 604800);
 
-// ── 分离部署 Cookie 策略（环境变量统一出口，全仓 cookie 选项都引用这里）──
+/** Cookie 名称 */
+const COOKIE_SID = 'sid';
+const COOKIE_SID_R = 'sid_r';
+
+// ── 2. SESSION_SECRET 校验 ──
+
+// 生产环境必须显式配置 SESSION_SECRET，否则 HMAC 签名可被伪造 sid，直接拒绝启动
+if (!process.env.SESSION_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET 未配置：生产环境必须设置该环境变量（随机长字符串）');
+  }
+  log.warn('⚠️ [Auth] SESSION_SECRET 未配置，开发环境使用默认值，生产必须配置');
+}
+const SECRET = process.env.SESSION_SECRET || 'change-me-session-secret';
+
+// ── 3. 部署策略派生配置 ──
 //
 // 同域/同主域部署（默认，推荐）：sameSite=lax，CSRF 防御最佳，无需任何配置。
 // 前后端真跨站部署（不同站点域名直连 API）：浏览器不随跨站请求携带 lax/strict
@@ -66,7 +95,7 @@ const COOKIE_SECURE =
       : process.env.NODE_ENV === 'production';
 const EFFECTIVE_SECURE = COOKIE_SAMESITE === 'none' ? true : COOKIE_SECURE;
 if (COOKIE_SAMESITE === 'none' && !COOKIE_SECURE) {
-  console.warn('⚠️ [Auth] COOKIE_SAMESITE=none 需要 COOKIE_SECURE=true（HTTPS），已自动纠正');
+  log.warn('⚠️ [Auth] COOKIE_SAMESITE=none 需要 COOKIE_SECURE=true（HTTPS），已自动纠正');
 }
 
 /** cookie domain：COOKIE_DOMAIN（跨子域共享时设主域如 .example.com），默认不设 */
@@ -87,107 +116,7 @@ const COOKIE_POLICY = {
 /** domain 选项片段（COOKIE_DOMAIN 为空时不展开，避免覆盖 Fastify 默认） */
 const COOKIE_DOMAIN_OPTS = COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {};
 
-/** Cookie 名称 */
-const COOKIE_SID = 'sid';
-const COOKIE_SID_R = 'sid_r';
-
-// 生产环境必须显式配置 SESSION_SECRET，否则 HMAC 签名可被伪造 sid，直接拒绝启动
-if (!process.env.SESSION_SECRET) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('SESSION_SECRET 未配置：生产环境必须设置该环境变量（随机长字符串）');
-  }
-  console.warn('⚠️ [Auth] SESSION_SECRET 未配置，开发环境使用默认值，生产必须配置');
-}
-const SECRET = process.env.SESSION_SECRET || 'change-me-session-secret';
-
-// ── 多账号免切凭证 cookie（HttpOnly，cookie 名 = HMAC(uid)）──
-//
-// 每账号一个 HttpOnly cookie 存其 refreshToken，cookie 名 = HMAC-SHA256(uid, SECRET)
-// 前 16 hex（形如 k_<hex>，不可逆，非明文 uid）。accountKey 与 cookie 名分离：
-//   - accountKey = uid 明文（前端 localStorage key + 切账号发送值，身份标识非凭证）
-//   - cookie 名  = HMAC(uid)（HttpOnly，JS 不可读；后端用 accountKey 派生，无需解密）
-// 同 uid → 同 HMAC → 同 cookie 名（确定性，自动去重）。
-// JS 读不到 rt（HttpOnly）；localStorage 只存 accountKey(=uid) + name/avatar，即使泄露也非凭证。
-// 无明文 uid 暴露风险：uid 本就是公开标识（= JWT sub），非凭证；换 SECRET 则 cookie 名全变
-// → 旧凭证 cookie 读不到 → 强制重新登录（换 SECRET 前可主动清旧 cookie，否则旧 cookie 残留至过期）。
-
-/**
- * 由 uid 生成凭证 cookie 名（HMAC-SHA256(uid, SECRET) 前 16 hex，带 k_ 前缀）
- * 用途：HttpOnly 凭证 cookie 的名字（后端用 accountKey=uid 派生，读 request.cookies[cookieName] 取 rt）。
- * 注意：此值不返回前端，前端 accountKey 直接用 uid 明文；二者分离。
- * 确定性：同 uid 永远相同（自动去重）；不可逆（非明文）；随 SECRET 变化。
- * @param {string} uid 用户 uid
- * @returns {string} 形如 k_<16hex>
- */
-function accountKeyForUid(uid) {
-  return `k_${crypto.createHmac('sha256', SECRET).update(String(uid)).digest('hex').slice(0, 16)}`;
-}
-
-/** 凭证 cookie 选项（HttpOnly，JS 不可读；半年有效期，使用即续期） */
-const USER_COOKIE_OPTS = {
-  httpOnly: true,
-  secure: COOKIE_POLICY.secure,
-  sameSite: COOKIE_POLICY.sameSite,
-  // path 收窄到 switch-account 端点：k_<HMAC(uid)> 凭证 cookie 只在切换账号时携带，
-  // 不随业务请求发送（减少凭证暴露面；其他端点不读此 cookie）
-  path: '/auth/v1/switch-account',
-  maxAge: USER_COOKIE_TTL,
-  ...COOKIE_DOMAIN_OPTS
-};
-
-/**
- * 对 sessionId 签名，返回完整的 cookie 值
- * @param {string} sessionId 会话 ID
- * @param {number} [accessCount=0] 访问次数
- * @returns {string} 格式: payload.signature
- */
-function signCookie(sessionId, accessCount = 0) {
-  const payload = Buffer.from(`${sessionId}:${accessCount}`).toString('base64url');
-  const signature = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
-  return `${payload}.${signature}`;
-}
-
-/**
- * 验证 cookie 值，返回解析结果或 null
- * @param {string} cookieValue cookie 值 (格式: payload.signature)
- * @returns {{ sessionId: string, accessCount: number } | null}
- */
-function verifyCookie(cookieValue) {
-  if (!cookieValue || typeof cookieValue !== 'string') return null;
-
-  // 按 '.' 分割为 2 段: payload, signature
-  const dotIndex = cookieValue.indexOf('.');
-  if (dotIndex <= 0) return null;
-
-  const payload = cookieValue.substring(0, dotIndex);
-  const signature = cookieValue.substring(dotIndex + 1);
-
-  if (!payload || !signature) return null;
-
-  // 验证签名
-  const expected = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
-
-  if (signature.length !== expected.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) {
-    return null;
-  }
-
-  // 解码 payload
-  try {
-    const decoded = Buffer.from(payload, 'base64url').toString('utf-8');
-
-    const colonIndex = decoded.indexOf(':');
-    if (colonIndex <= 0) return null;
-
-    const sessionId = decoded.substring(0, colonIndex);
-    const accessCount = parseInt(decoded.substring(colonIndex + 1), 10);
-
-    if (!sessionId || isNaN(accessCount)) return null;
-    return { sessionId, accessCount };
-  } catch {
-    return null;
-  }
-}
+// ── 4. Cookie 选项策略 ──
 
 /**
  * Cookie 配置常量
@@ -223,6 +152,117 @@ const COOKIE_OPTIONS = {
     ...COOKIE_DOMAIN_OPTS
   }
 };
+
+// ── 多账号免切凭证 cookie（HttpOnly，cookie 名 = HMAC(uid)）──
+//
+// 每账号一个 HttpOnly cookie 存其 refreshToken，cookie 名 = HMAC-SHA256(uid, SECRET)
+// 前 16 hex（形如 k_<hex>，不可逆，非明文 uid）。accountKey 与 cookie 名分离：
+//   - accountKey = uid 明文（前端 localStorage key + 切账号发送值，身份标识非凭证）
+//   - cookie 名  = HMAC(uid)（HttpOnly，JS 不可读；后端用 accountKey 派生，无需解密）
+// 同 uid → 同 HMAC → 同 cookie 名（确定性，自动去重）。
+// JS 读不到 rt（HttpOnly）；localStorage 只存 accountKey(=uid) + name/avatar，即使泄露也非凭证。
+// 无明文 uid 暴露风险：uid 本就是公开标识（= JWT sub），非凭证；换 SECRET 则 cookie 名全变
+// → 旧凭证 cookie 读不到 → 强制重新登录（换 SECRET 前可主动清旧 cookie，否则旧 cookie 残留至过期）。
+
+/** 凭证 cookie 选项（HttpOnly，JS 不可读；半年有效期，使用即续期） */
+const USER_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: COOKIE_POLICY.secure,
+  sameSite: COOKIE_POLICY.sameSite,
+  // path 收窄到 switch-account 端点：k_<HMAC(uid)> 凭证 cookie 只在切换账号时携带，
+  // 不随业务请求发送（减少凭证暴露面；其他端点不读此 cookie）
+  path: '/auth/v1/switch-account',
+  maxAge: USER_COOKIE_TTL,
+  ...COOKIE_DOMAIN_OPTS
+};
+
+// ── 5. 签名/验证/派生函数 ──
+
+/**
+ * 对 sessionId 签名，返回完整的 cookie 值
+ * @param {string} sessionId 会话 ID
+ * @param {number} [accessCount=0] 访问次数
+ * @returns {string} 格式: payload.signature
+ * @throws {Error} code=INVALID_PARAM 当 sessionId 非字符串或空
+ */
+function signCookie(sessionId, accessCount = 0) {
+  if (!sessionId || typeof sessionId !== 'string') {
+    const err = new Error('sessionId 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+  const payload = Buffer.from(`${sessionId}:${accessCount}`).toString('base64url');
+  const signature = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+  return `${payload}.${signature}`;
+}
+
+/**
+ * 验证 cookie 值，返回解析结果或 null
+ *
+ * 校验失败（格式/签名/payload 非法 base64url）统一返回 null，不区分失败原因，
+ * 避免向调用方泄露校验细节。校验异常仅在 DEBUG_AUTH=true 时记日志，便于排障，
+ * 生产环境高频路径不刷屏。
+ *
+ * @param {string} cookieValue cookie 值 (格式: payload.signature)
+ * @returns {{ sessionId: string, accessCount: number } | null}
+ */
+function verifyCookie(cookieValue) {
+  if (!cookieValue || typeof cookieValue !== 'string') return null;
+
+  // 按 '.' 分割为 2 段: payload, signature
+  const dotIndex = cookieValue.indexOf('.');
+  if (dotIndex <= 0) return null;
+
+  const payload = cookieValue.substring(0, dotIndex);
+  const signature = cookieValue.substring(dotIndex + 1);
+
+  if (!payload || !signature) return null;
+
+  // 验证签名
+  const expected = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+
+  if (signature.length !== expected.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) {
+    return null;
+  }
+
+  // 解码 payload
+  try {
+    const decoded = Buffer.from(payload, 'base64url').toString('utf-8');
+
+    const colonIndex = decoded.indexOf(':');
+    if (colonIndex <= 0) return null;
+
+    const sessionId = decoded.substring(0, colonIndex);
+    const accessCount = parseInt(decoded.substring(colonIndex + 1), 10);
+
+    if (!sessionId || isNaN(accessCount)) return null;
+    return { sessionId, accessCount };
+  } catch (err) {
+    // base64url 解码或后续解析异常：正常用户的过期/损坏 cookie 会频繁触发，
+    // 全记日志会刷屏，仅 LOG_DEBUG 关键词命中时输出便于排障
+    log.debug(`⚠️ [Auth] verifyCookie 解析异常: ${err?.message}`);
+    return null;
+  }
+}
+
+/**
+ * 由 uid 生成凭证 cookie 名（HMAC-SHA256(uid, SECRET) 前 16 hex，带 k_ 前缀）
+ * 用途：HttpOnly 凭证 cookie 的名字（后端用 accountKey=uid 派生，读 request.cookies[cookieName] 取 rt）。
+ * 注意：此值不返回前端，前端 accountKey 直接用 uid 明文；二者分离。
+ * 确定性：同 uid 永远相同（自动去重）；不可逆（非明文）；随 SECRET 变化。
+ * @param {string} uid 用户 uid
+ * @returns {string} 形如 k_<16hex>
+ * @throws {Error} code=INVALID_PARAM 当 uid 非字符串或空（避免派生"undefined 用户"的凭证名）
+ */
+function accountKeyForUid(uid) {
+  if (!uid || typeof uid !== 'string') {
+    const err = new Error('uid 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
+  return `k_${crypto.createHmac('sha256', SECRET).update(uid).digest('hex').slice(0, 16)}`;
+}
 
 export {
   signCookie,

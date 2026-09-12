@@ -7,6 +7,8 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
+import { globalRedis } from '../../../framework/redis/plugin.js';
+
 const memoryStore = new Map();
 
 /** 内存降级上限保护，防止 DoS 耗尽内存 */
@@ -32,16 +34,19 @@ setInterval(() => {
 
 /**
  * 创建 IP 限频器
- * @param {object} redis - Redis 客户端
+ *
+ * Redis 客户端在每次调用时惰性解析（globalRedis）：插件启动时带重试异步连接，
+ * 若在注册时捕获 app.redis 快照，Redis 就绪前的请求会永久走内存降级直到重启。
  * @param {string} prefix - 限频 key 前缀
  * @param {number} maxRequests - 窗口内最大请求数
  * @param {number} windowSec - 窗口时间（秒）
  */
-function createIpRateLimiter(redis, prefix, maxRequests, windowSec) {
+function createIpRateLimiter(prefix, maxRequests, windowSec) {
   return async function checkRateLimit(ip) {
     const key = `rl:${prefix}:${ip}`;
     const now = Date.now();
     const windowMs = windowSec * 1000;
+    const redis = globalRedis;
 
     if (redis) {
       try {
@@ -81,17 +86,16 @@ function createIpRateLimiter(redis, prefix, maxRequests, windowSec) {
 /**
  * 注册敏感接口限频
  * @param {object} fastify - Fastify 实例
- * @param {object} redis - Redis 客户端
  */
-function registerSensitiveRateLimits(fastify, redis) {
+function registerSensitiveRateLimits(fastify) {
   // 登录接口：每 IP 每分钟 5 次
-  const loginLimiter = createIpRateLimiter(redis, 'login', 5, 60);
+  const loginLimiter = createIpRateLimiter('login', 5, 60);
 
   // 验证码接口：每 IP 每分钟 10 次
-  const captchaLimiter = createIpRateLimiter(redis, 'captcha', 10, 60);
+  const captchaLimiter = createIpRateLimiter('captcha', 10, 60);
 
   // 注册接口：每 IP 每小时 3 次
-  const registerLimiter = createIpRateLimiter(redis, 'register', 3, 3600);
+  const registerLimiter = createIpRateLimiter('register', 3, 3600);
 
   fastify.addHook('onRequest', async (request, reply) => {
     const url = request.url;
