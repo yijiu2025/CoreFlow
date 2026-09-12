@@ -10,12 +10,15 @@
 
 import { ensureCurrentKey } from '../../keys/index.js';
 import { C } from '../../../utils/colors.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.loader.registry.07-keys');
 
 export default async function (app) {
   try {
     await ensureCurrentKey();
-    console.log(`🔑 [Loader: Keys] ${C.cyan}密钥初始化完成${C.reset}`);
+    log.always(`🔑 [Loader: Keys] ${C.cyan}密钥初始化完成${C.reset}`);
   } catch (err) {
-    console.error(`❌ [Loader: Keys] ${C.red}密钥初始化失败: ${err.message}${C.reset}`);
+    log.error(`❌ [Loader: Keys] ${C.red}密钥初始化失败: ${err.message}${C.reset}`);
   }
 }

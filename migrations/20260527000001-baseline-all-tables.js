@@ -1,3 +1,6 @@
+import { createLogger } from '../src/framework/log/index.js';
+
+const log = createLogger('migrations.20260527000001-baseline-all-tables');
 /**
  * 基线迁移：记录当前所有表结构
  * 说明：此迁移为基线文件，标记已有表结构的起始点。
@@ -10,10 +13,10 @@ export async function up({ queryInterface }) {
   // 所有表结构已通过 sequelize.sync() 在开发环境建立
   // 后续变更请创建新的迁移文件，例如：
   //   npx umzug migration:create --name add-xxx-column
-  console.log('✅ [Migration] 基线迁移已记录，后续表结构变更请使用迁移文件管理');
+  log.stdout('✅ [Migration] 基线迁移已记录，后续表结构变更请使用迁移文件管理');
 }
 
 export async function down({ queryInterface }) {
   // 基线迁移不可回滚
-  console.log('⚠️ [Migration] 基线迁移不可回滚');
+  log.stdout('⚠️ [Migration] 基线迁移不可回滚');
 }

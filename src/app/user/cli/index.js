@@ -10,6 +10,9 @@
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.user.cli.index');
 
 /**
  * 用户统计
@@ -23,11 +26,11 @@ async function userStats() {
     User.count({ where: { status: 0 } })
   ]);
 
-  console.log('\n👥 用户统计：');
+  log.stdout('\n👥 用户统计：');
   printLine();
-  console.log(`  总数:   ${total}`);
-  console.log(`  正常:   ${active}`);
-  console.log(`  禁用:   ${disabled}`);
+  log.stdout(`  总数:   ${total}`);
+  log.stdout(`  正常:   ${active}`);
+  log.stdout(`  禁用:   ${disabled}`);
   printLine();
 }
 
@@ -47,7 +50,7 @@ async function recentUsers() {
     return;
   }
 
-  console.log('\n📋 最近注册用户：');
+  log.stdout('\n📋 最近注册用户：');
   printTable(
     ['ID', '用户名', '邮箱', '状态', '注册时间'],
     users.map(u => [

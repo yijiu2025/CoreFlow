@@ -13,6 +13,9 @@
  */
 import { pruneStaleSessionTokens } from '../../auth/session.js';
 import { C } from '../../../utils/colors.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.scheduler.tasks.session-cleanup');
 
 export default {
   /**
@@ -23,7 +26,9 @@ export default {
     const retentionDays = taskConfig?.retentionDays ?? 90;
     const deleted = await pruneStaleSessionTokens(retentionDays);
     if (deleted > 0) {
-      console.log(`🧹 [Scheduler:sessionCleanup] ${C.cyan}清理陈旧 session_tokens: ${deleted} 行 (revoked 且超 ${retentionDays} 天)${C.reset}`);
+      log.info(
+        `🧹 [Scheduler:sessionCleanup] ${C.cyan}清理陈旧 session_tokens: ${deleted} 行 (revoked 且超 ${retentionDays} 天)${C.reset}`
+      );
     }
   }
 };

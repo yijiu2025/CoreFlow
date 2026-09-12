@@ -17,6 +17,9 @@ import { getModel } from '../../../framework/db/index.js';
 import { Op } from 'sequelize';
 import deactivationDao from '../dao/deactivation.js';
 import { DEACTIVATION_SCOPE, DEACTIVATION_STATUS } from '../dao/deactivation.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.user.services.deactivation.service');
 
 class DeactivationService {
   /**
@@ -267,7 +270,7 @@ class DeactivationService {
         await kickAllSessions(userId);
       }
     } catch (e) {
-      console.warn(`⚠️ [Deactivation] Redis 踢所有 session 失败: ${e.message}`);
+      log.warn(`⚠️ [Deactivation] Redis 踢所有 session 失败: ${e.message}`);
     }
     return affected || 0;
   }
@@ -310,7 +313,7 @@ class DeactivationService {
         });
       }
     } catch (e) {
-      console.warn(`⚠️ [Deactivation] 踢 app=${appId} 的 Redis session 失败: ${e.message}`);
+      log.warn(`⚠️ [Deactivation] 踢 app=${appId} 的 Redis session 失败: ${e.message}`);
     }
   }
 }

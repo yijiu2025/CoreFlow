@@ -9,6 +9,9 @@
  * @since 2026-08-17
  */
 import { getConfig, activeConnections } from './shared.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.util.connection-tracker');
 
 /**
  * 追踪 IP 的当前并发连接数
@@ -72,7 +75,7 @@ function cleanupStaleConnections() {
   const limit = (settings.maxConn || settings.maxConnections || 100) * 2;
   for (const [ip, count] of activeConnections) {
     if (count > limit) {
-      console.warn(`[Firewall] Cleanup zombie: ${ip} (count=${count})`);
+      log.warn(`[Firewall] Cleanup zombie: ${ip} (count=${count})`);
       activeConnections.delete(ip);
     }
   }

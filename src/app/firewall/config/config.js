@@ -8,6 +8,9 @@
  */
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.config.config');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,9 +20,9 @@ export const FIREWALL_FILE = path.resolve(__dirname, '../../../data/firewall_con
 export const CHALLENGE_SECRET = process.env.FIREWALL_SECRET;
 
 if (!CHALLENGE_SECRET) {
-  console.error('[Firewall] FIREWALL_SECRET 环境变量未设置');
+  log.error('[Firewall] FIREWALL_SECRET 环境变量未设置');
   if (process.env.NODE_ENV === 'production') {
-    console.error('[Firewall] 生产环境必须设置 FIREWALL_SECRET，系统退出');
+    log.error('[Firewall] 生产环境必须设置 FIREWALL_SECRET，系统退出');
     process.exit(1);
   }
 }

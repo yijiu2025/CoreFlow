@@ -14,6 +14,9 @@ import {
   getBlockStatus
 } from '../../util/shared.js';
 import { setBlock } from '../dao/block-manager.js';
+import { createLogger } from '../../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.engine.detectors.scan-trap');
 
 /**
  * 记录登录失败（供 auth 模块调用）
@@ -46,7 +49,7 @@ async function recordLoginFailure(redisClient, ip) {
       createdAt: Date.now(),
       expiresAt: Date.now() + blockTime * 1000
     });
-    console.warn(`[Firewall] Brute force detected: ${ip} (${count} failures), blocked ${blockTime}s`);
+    log.warn(`[Firewall] Brute force detected: ${ip} (${count} failures), blocked ${blockTime}s`);
   }
 }
 
@@ -83,7 +86,7 @@ const checkNotFoundTrap = async (redisClient, ip, url, statusCode) => {
         createdAt: Date.now(),
         expiresAt: Date.now() + duration * 1000
       });
-      console.warn(`[Firewall] Scanner detected (mem): ${ip}, blocked ${duration}s`);
+      log.warn(`[Firewall] Scanner detected (mem): ${ip}, blocked ${duration}s`);
       const err = new Error('Scanner detected (memory fallback)');
       err.statusCode = 403;
       err.rule = 'scanner-trap';
@@ -104,7 +107,7 @@ const checkNotFoundTrap = async (redisClient, ip, url, statusCode) => {
       expiresAt: Date.now() + duration * 1000
     });
     await redisClient.del(trapKey);
-    console.warn(`[Firewall] Scanner detected: ${ip}, blocked ${duration}s`);
+    log.warn(`[Firewall] Scanner detected: ${ip}, blocked ${duration}s`);
 
     const err = new Error('Scanner detected');
     err.statusCode = 403;

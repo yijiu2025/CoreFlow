@@ -1,3 +1,6 @@
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.auth.origin-guard');
 /**
  * Origin 来源校验守卫
  *
@@ -24,7 +27,7 @@ const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 if (IS_PRODUCTION && ALLOWED_ORIGINS.length === 0) {
-  console.warn('⚠️ [Auth] 生产环境未配置 CORS_ORIGINS，origin-guard 将拒绝所有敏感端点请求（fail-closed）');
+  log.warn('⚠️ [Auth] 生产环境未配置 CORS_ORIGINS，origin-guard 将拒绝所有敏感端点请求（fail-closed）');
 }
 
 /**

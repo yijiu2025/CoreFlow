@@ -1,3 +1,6 @@
+import { createLogger } from '../../src/framework/log/index.js';
+
+const log = createLogger('migrations.oauth21.20260824000003-oauth-clients-add-scope-metadata');
 /**
  * oauth_clients 表新增 scope_metadata 列
  * 存储各 app 自定义的 scope 描述覆盖（来自 app config.js 的 oauth_client.scope_metadata），
@@ -14,7 +17,7 @@ export async function up({ queryInterface, Sequelize }) {
     `SHOW COLUMNS FROM oauth_clients WHERE Field = '${COLUMN_NAME}'`
   );
   if (columns.length > 0) {
-    console.log(`ℹ️  [Migrate] oauth_clients.${COLUMN_NAME} 已存在，跳过`);
+    log.stdout(`ℹ️  [Migrate] oauth_clients.${COLUMN_NAME} 已存在，跳过`);
     return;
   }
   await queryInterface.addColumn('oauth_clients', COLUMN_NAME, {
@@ -23,7 +26,7 @@ export async function up({ queryInterface, Sequelize }) {
     defaultValue: null,
     comment: 'scope 描述覆盖（来自 app config，授权页展示用）'
   });
-  console.log(`✅ [Migrate] oauth_clients.${COLUMN_NAME} 列已添加`);
+  log.stdout(`✅ [Migrate] oauth_clients.${COLUMN_NAME} 列已添加`);
 }
 
 export async function down({ queryInterface }) {

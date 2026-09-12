@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 /**
  * 迁移：创建守卫配置表 (guard_configs)
  * 替代 JSON 文件持久化，支持异步原子写入 + 乐观锁版本控制

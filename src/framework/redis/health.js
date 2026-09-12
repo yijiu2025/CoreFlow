@@ -1,3 +1,6 @@
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.redis.health');
 /**
  * Redis 全局健康监控器（单例式）
  * 事件驱动 + 按需探测：健康时零开销，不健康时定时 ping 检测恢复
@@ -64,7 +67,7 @@ function setupRedisHealthMonitor(app, options = {}) {
       try {
         cb(newState);
       } catch (err) {
-        console.warn('[Redis] 健康状态回调异常:', err.stack || err.message);
+        log.warn('[Redis] 健康状态回调异常:', err.stack || err.message);
       }
     }
   }

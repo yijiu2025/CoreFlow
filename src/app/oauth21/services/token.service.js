@@ -24,6 +24,9 @@ import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';
 import { COOKIE_POLICY } from '../../../framework/auth/cookie.js';
 import config from '../config/config.js';
 import { checkScopeSubset } from '../config/scope-registry.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.oauth21.services.token.service');
 
 /**
  * 令牌错误（RFC 6749 标准错误格式）
@@ -214,7 +217,7 @@ class TokenService {
       const revokedRecord = await TokenDao.findRevoked(refresh_token);
       if (revokedRecord && revokedRecord.sub) {
         // 旧 refresh_token 在轮转后被再次使用 = 盗用，吊销该用户全部 refresh token
-        console.warn(`🚨 [OAuth] refresh_token 复用盗用，吊销用户全部令牌: sub=${revokedRecord.sub}`);
+        log.warn(`🚨 [OAuth] refresh_token 复用盗用，吊销用户全部令牌: sub=${revokedRecord.sub}`);
         await TokenDao.revokeAllForUser(revokedRecord.sub);
       }
       throw new TokenError('invalid_grant', 'Invalid or revoked refresh token');

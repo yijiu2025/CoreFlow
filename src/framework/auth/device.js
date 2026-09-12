@@ -3,16 +3,29 @@
  *
  * 统一管理设备类型判定与设备标识生成：
  * - detectDeviceType：返回设备类型语义值（存 session.deviceType 字段）
- * - detectPlatform：返回平台短前缀（web/android/ios/miniapp/desktop/api）
  * - getDeviceId：验证并规范化结构化设备 ID（WEB-DaBOSbNdSuc-8s4T）
+ * - getDeviceIdAndWrapResponse：getDeviceId + 写响应头/cookie
+ * - computeDeviceFingerprint：计算复合设备指纹（device_id + UA + uid 哈希）
  *
  * device_id 采用结构化格式（如 WEB-DaBOSbNdSuc-8s4T），前端生成后端验证，
  * 若无效则生成新 ID，确保唯一性和安全性。
+ *
+ * 注意：平台短前缀 detectPlatform 已移至 device-id-service.js（接 UA 字符串，
+ * 返回大写 WEB/IOS/ANDROID，供 ID 生成用）。本模块只保留 detectDeviceType
+ * （粗粒度设备类型，接 UA，返回 browser/app/desktop/miniapp/api，session 用）。
+ *
+ * 文件结构（自上而下）：
+ * 1. 常量（REBORN_WINDOW_MS / MAX_LOG_LENGTH / DEVICE_TYPE）
+ * 2. 内部工具（forLog / deviceTypeCompatible）
+ * 3. 公共 API（detectDeviceType / getDeviceId / getDeviceIdAndWrapResponse /
+ *    computeDeviceFingerprint）— 入口处均做参数防御
+ * 4. 导出
  *
  * @author yijiu
  * @since 2026-08-14
  * @since 2026-09-01 结构化设备 ID（加密时间戳 + 高唯一性）
  * @since 2026-09-05 cookie 兜底恢复（localStorage 丢失时从 httpOnly cookie 恢复设备身份）
+ * @since 2026-09-10 结构重排 + export 集中末尾；删死导出 detectPlatform（与 device-id-service 同名冲突）；公共函数补 INVALID_PARAM 校验
  */
 
 import crypto from 'node:crypto';
@@ -23,6 +36,11 @@ import {
   parseDeviceId
 } from './device-id-service.js';
 import { COOKIE_OPTIONS } from './cookie.js';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.auth.device');
+
+// ── 1. 常量 ──
 
 /** header ID 视为"刚生成"（localStorage 丢失后新造）的判定窗口（毫秒） */
 const REBORN_WINDOW_MS = 10_000;
@@ -31,19 +49,9 @@ const REBORN_WINDOW_MS = 10_000;
 const MAX_LOG_LENGTH = 48;
 
 /**
- * 截断外部输入用于日志展示
- * @param {string} value 原始值
- * @returns {string} 截断后的安全展示值
- */
-function forLog(value) {
-  const safe = String(value);
-  return safe.length > MAX_LOG_LENGTH ? `${safe.slice(0, MAX_LOG_LENGTH)}…` : safe;
-}
-
-/**
  * 设备类型常量（语义值，存 session.deviceType）
  */
-export const DEVICE_TYPE = {
+const DEVICE_TYPE = {
   BROWSER: 'browser', // 浏览器（Chrome/Firefox/Safari 等）
   APP: 'app', // 移动端 App（Android/iOS）
   DESKTOP: 'desktop', // 桌面客户端（Electron 等）
@@ -51,35 +59,56 @@ export const DEVICE_TYPE = {
   API: 'api' // API 调用（服务间通信，无 UA）
 };
 
+// ── 2. 内部工具 ──
+
 /**
- * 从 User-Agent 推断设备类型（语义值）
+ * 截断外部输入用于日志展示
+ * @param {string} value 原始值
+ * @returns {string} 截断后的安全展示值
+ */
+function forLog(value) {
+  if (value == null) return '(empty)';
+  const safe = String(value);
+  return safe.length > MAX_LOG_LENGTH ? `${safe.slice(0, MAX_LOG_LENGTH)}…` : safe;
+}
+
+/**
+ * 恢复候选 UA 与登录时 UA 的设备类型是否兼容
+ *
+ * 浏览器大版本升级会导致 UA 字符串变化，严格比较会误伤正常恢复；
+ * 但 sid 被窃取后在完全不同环境（如 curl / 换手机）使用时应拒绝恢复
+ * 受害者设备身份。用粗粒度设备类型（browser/app/desktop/miniapp/api）判定。
+ *
+ * @param {string} currentUa 当前请求 UA
+ * @param {string} loginUa 登录时 UA（空视为兼容，兼容存量无 UA 记录）
+ * @returns {boolean}
+ */
+function deviceTypeCompatible(currentUa, loginUa) {
+  if (!loginUa) return true;
+  return detectDeviceType(currentUa) === detectDeviceType(loginUa);
+}
+
+// ── 3. 公共 API ──
+
+/**
+ * 从 User-Agent 推断设备类型（粗粒度语义值，存 session.deviceType）
+ *
+ * 与 device-id-service.js 的 detectPlatform 互补而非重复：
+ * - 本函数粗粒度（browser/app/desktop/miniapp/api 5 类），供 session 记录设备类型、
+ *   按设备类型踢下线（kickByDeviceType）用，能识别 miniapp/desktop/api 等 ID 前缀无法表达的类别
+ * - detectPlatform 细粒度（WEB/IOS/ANDROID 3 类），供 device_id 前缀用，受 ID 格式约束只能 3 类
+ * （device_id 平台段校验只接受 WEB/IOS/ANDROID，故 detectPlatform 不能返回 miniapp/desktop/api）
+ *
  * @param {string} ua User-Agent 字符串
  * @returns {string} DEVICE_TYPE 之一
  */
-export function detectDeviceType(ua) {
+function detectDeviceType(ua) {
   if (!ua) return DEVICE_TYPE.API;
   const lower = ua.toLowerCase();
   if (lower.includes('miniprogram') || lower.includes('micromessenger')) return DEVICE_TYPE.MINIAPP;
   if (lower.includes('android') || lower.includes('iphone') || lower.includes('mobile')) return DEVICE_TYPE.APP;
   if (lower.includes('electron') || lower.includes('desktop')) return DEVICE_TYPE.DESKTOP;
   return DEVICE_TYPE.BROWSER;
-}
-
-/**
- * 推断平台短前缀（用于 device_id 前缀，粒度比 detectDeviceType 更细，
- * 区分 android / ios，便于按平台分辨与统计）
- * @param {import('fastify').FastifyRequest} request
- * @returns {'web'|'android'|'ios'|'miniapp'|'desktop'|'api'}
- */
-export function detectPlatform(request) {
-  const ua = request?.headers?.['user-agent'] || '';
-  if (!ua) return 'api';
-  const lower = ua.toLowerCase();
-  if (lower.includes('miniprogram') || lower.includes('micromessage')) return 'miniapp';
-  if (lower.includes('android')) return 'android';
-  if (lower.includes('iphone') || lower.includes('ipad') || lower.includes('ipod')) return 'ios';
-  if (lower.includes('electron') || lower.includes('desktop')) return 'desktop';
-  return 'web';
 }
 
 /**
@@ -90,20 +119,35 @@ export function detectPlatform(request) {
  * 2. 后端验证格式、安全性、有效性
  * 3. 无效则生成新 ID 并返回
  *
- * 指纹输入优先级：
+ * ID 来源优先级：
  *   1. x-device-id 头（前端主动传的结构化 ID）
  *   2. cookie 里的 device_id（向后兼容旧版本）
- *   3. 服务端生成（兜底）
+ *   3. 登录态恢复（Redis session → DB session_tokens，仅已登录 + 客户端无有效 ID 时）
+ *   4. 服务端生成（兜底）
+ *
+ * 恢复目标必须与风险基准指纹同源（登录链上最新已知 ID），
+ * 否则 fingerprint 比对必然失配 → 风控误报死循环。
  *
  * @param {import('fastify').FastifyRequest} request
- * @returns {string} 形如 `WEB-DaBOSbNdSuc-8s4T`
+ * @param {object} [opts] 登录态恢复选项（未登录/登录路径可不传，向后兼容）
+ * @param {string} [opts.sessionDeviceId] Redis sessionData.deviceId（登录时写入，验证通过后随基准更新）
+ * @param {string} [opts.sessionUserAgent] Redis sessionData.userAgent（恢复时做设备类型兼容校验）
+ * @param {Function} [opts.loadFromDb] DB 兜底回调，返回 {deviceId, originalDeviceId, userAgent}|null
+ *   （session 里没有 deviceId 时才调用，如旧会话字段缺失；实现见 session.js getSessionTokenDevice）
+ * @returns {Promise<string>} 形如 `WEB-DaBOSbNdSuc-8s4T`
+ * @throws {Error} code=INVALID_PARAM 当 request 非对象
  */
-export async function getDeviceId(request) {
+async function getDeviceId(request, opts = {}) {
+  if (!request || typeof request !== 'object') {
+    const err = new Error('request 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
   const userAgent = request?.headers?.['user-agent'] || '';
   const header = request?.headers?.['x-device-id'] || '';
   const cookieDeviceId = request?.cookies?.device_id || '';
 
-  // 0. cookie 兜底恢复：localStorage 被清（手动清除 / Safari ITP 7 天清除脚本存储）
+  // 1. cookie 兜底恢复：localStorage 被清（手动清除 / Safari ITP 7 天清除脚本存储）
   //    时前端会立即生成"刚出生"的有效新 ID，且请求头优先级高于 cookie——若直接采纳，
   //    httpOnly cookie 里的旧设备身份（不受 ITP 清除影响）将永久丢失，设备指纹突变。
   //    当 header ID 刚生成（REBORN_WINDOW_MS 内）或不可解析，且 cookie 存有合法的
@@ -116,14 +160,50 @@ export async function getDeviceId(request) {
       const headerInfo = parseDeviceId(header);
       const headerJustBorn = headerInfo && Date.now() - headerInfo.timestamp < REBORN_WINDOW_MS;
       if (!headerInfo || headerJustBorn) {
-        console.log(`🔄 [DeviceId] localStorage 丢失，从 httpOnly cookie 恢复设备身份: ${forLog(cookieDeviceId)}`);
+        log.info(`🔄 [DeviceId] localStorage 丢失，从 httpOnly cookie 恢复设备身份: ${forLog(cookieDeviceId)}`);
         return cookieValidation.normalizedId;
       }
     }
   }
 
-  // 1. 优先验证前端传的结构化 ID
+  // 2. 登录态恢复：客户端（header + cookie）都无法提供有效 ID 时，
+  //    从登录链恢复设备身份，避免设备指纹突变。
+  //    覆盖场景：device_id cookie 被浏览器单独逐出/拒绝 + localStorage 被清，
+  //    但 sid 会话仍存活（sid/device_id 同 jar 但 TTL 相差悬殊：2h vs 10 年）。
+  //    优先 Redis sessionData.deviceId（与风险基准指纹同源、零 DB 查询）；
+  //    旧会话字段缺失时才触发 loadFromDb 查 session_tokens（device_id 优先，
+  //    device_id_original 兜底）。恢复后调用方检测到与客户端上报不一致会回写
+  //    X-Device-Id + Set-Cookie，前端 device-sync 同步 localStorage，身份收敛。
   const clientId = header || cookieDeviceId;
+  if (!clientId || !(await validateDeviceId(clientId)).valid) {
+    let recovered = '';
+    if (opts?.sessionDeviceId) {
+      const sv = await validateDeviceId(opts.sessionDeviceId);
+      if (sv.valid && deviceTypeCompatible(userAgent, opts.sessionUserAgent)) {
+        recovered = sv.normalizedId;
+      }
+    }
+    if (!recovered && typeof opts?.loadFromDb === 'function') {
+      try {
+        const rec = await opts.loadFromDb();
+        const dbId = rec?.deviceId || rec?.originalDeviceId || '';
+        if (dbId) {
+          const dv = await validateDeviceId(dbId);
+          if (dv.valid && deviceTypeCompatible(userAgent, rec.userAgent)) {
+            recovered = dv.normalizedId;
+          }
+        }
+      } catch (error) {
+        log.warn(`⚠️ [DeviceId] 登录态 DB 恢复失败：${error.message}`);
+      }
+    }
+    if (recovered) {
+      log.info(`🔄 [DeviceId] 客户端无有效 ID，从登录链恢复设备身份: ${forLog(recovered)}`);
+      return recovered;
+    }
+  }
+
+  // 3. 优先验证前端传的结构化 ID
   if (clientId) {
     try {
       const validation = await verifyAndNormalizeDeviceId(clientId, userAgent);
@@ -131,18 +211,18 @@ export async function getDeviceId(request) {
       if (validation.valid) {
         // 验证通过，使用规范化 ID
         if (validation.shouldReplace) {
-          console.warn(`⚠️ [DeviceId] 前端 ID 无效，已替换：${forLog(clientId)} → ${validation.normalizedId}`);
+          log.warn(`⚠️ [DeviceId] 前端 ID 无效，已替换：${forLog(clientId)} → ${validation.normalizedId}`);
         }
         return validation.normalizedId;
       }
     } catch (error) {
-      console.warn(`⚠️ [DeviceId] 验证失败：${error.message}`);
+      log.warn(`⚠️ [DeviceId] 验证失败：${error.message}`);
     }
   }
 
-  // 2. 后端生成新 ID（兜底）
+  // 4. 后端生成新 ID（兜底）
   const serverId = generateServerSideDeviceId(userAgent);
-  console.log(`📱 [DeviceId] 服务端生成：${serverId}`);
+  log.info(`📱 [DeviceId] 服务端生成：${serverId}`);
   return serverId;
 }
 
@@ -155,9 +235,15 @@ export async function getDeviceId(request) {
  *
  * @param {import('fastify').FastifyRequest} request
  * @param {import('fastify').FastifyReply} reply
- * @returns {string} 设备 ID
+ * @returns {Promise<string>} 设备 ID
+ * @throws {Error} code=INVALID_PARAM 当 request/reply 非对象
  */
-export async function getDeviceIdAndWrapResponse(request, reply) {
+async function getDeviceIdAndWrapResponse(request, reply) {
+  if (!request || typeof request !== 'object' || !reply || typeof reply !== 'object') {
+    const err = new Error('request/reply 参数无效');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
   const deviceId = await getDeviceId(request);
 
   // 1. 写入响应头（前端可以读取）
@@ -186,8 +272,26 @@ export async function getDeviceIdAndWrapResponse(request, reply) {
  *
  * @param {object} opts - { deviceId, userAgent, uid, platformHint? }
  * @returns {string} 32 位指纹
+ * @throws {Error} code=INVALID_PARAM 当 opts 非对象
  */
-export function computeDeviceFingerprint({ deviceId, userAgent, uid, platformHint }) {
+function computeDeviceFingerprint({ deviceId, userAgent, uid, platformHint }) {
+  if (arguments.length === 0 || typeof arguments[0] !== 'object') {
+    // 解构非对象会抛，这里显式校验给出清晰错误码
+    const err = new Error('opts 参数无效：需传对象 { deviceId, userAgent, uid }');
+    err.code = 'INVALID_PARAM';
+    throw err;
+  }
   const material = `${deviceId || ''}|${uid || ''}|${userAgent || ''}|${platformHint || ''}`;
   return crypto.createHash('sha256').update(material).digest('hex').slice(0, 32);
 }
+
+// ── 4. 导出 ──
+
+// prettier-ignore
+export {
+  DEVICE_TYPE,
+  detectDeviceType,
+  getDeviceId,
+  getDeviceIdAndWrapResponse,
+  computeDeviceFingerprint
+};

@@ -5,6 +5,9 @@
  * @since 2026-08-17
  */
 import Permission from '../../../models/iam/Permission.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.oauth21.dao.permission.dao');
 
 class PermissionDao {
   /**
@@ -13,7 +16,7 @@ class PermissionDao {
    * @param {Array} permissionList 权限定义列表
    */
   async syncAppPermissions(appId, permissionList) {
-    console.log(`[PBAC] 正在同步应用 [${appId}] 的权限, 共 ${permissionList.length} 项`);
+    log.info(`[PBAC] 正在同步应用 [${appId}] 的权限, 共 ${permissionList.length} 项`);
 
     for (const item of permissionList) {
       const { module, action, name } = item;

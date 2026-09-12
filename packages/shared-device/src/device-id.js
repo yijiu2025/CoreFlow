@@ -19,7 +19,7 @@
  * 混淆性：时间戳使用位混淆 + Base62 编码，不直接可读（公开常量混淆，非加密）
  *
  * 本地校验与后端 src/framework/auth/device-id-service.js 的 validateDeviceId
- * 逐条对齐（平台枚举 / 长度 / 字符集 / 未来时间 / 有效期）：存量非法 ID 在
+ * 逐条对齐（平台枚举 / 长度 / 字符集 / 未来时间）：存量非法 ID 在
  * 本地即重生，避免"本地可用、后端全拒"的每请求重生循环（81350f1 故障模式）。
  *
  * 实现为纯 JS（而非 TS）：根 Jest 配置 transform: {}（纯 ESM 不编译 TS），
@@ -38,9 +38,6 @@ import { safeGetItem, safeSetItem, safeRemoveItem } from './storage.js';
 
 /** 设备 ID 在 localStorage 的存储键（device-sync.ts 同步逻辑共用此常量） */
 export const STORAGE_KEY = 'cf_device_id';
-
-/** 设备 ID 最长有效期（天），与后端 device-id-service.js 的 MAX_AGE_DAYS 保持一致 */
-export const MAX_AGE_DAYS = 365;
 
 /** 合法平台枚举，与后端 detectPlatform / validateDeviceId 保持一致 */
 export const DEVICE_PLATFORMS = ['WEB', 'IOS', 'ANDROID'];
@@ -92,7 +89,7 @@ export function invalidateCachedDeviceId() {
  * 校验设备 ID 格式（与后端 validateDeviceId 逐条对齐，同步版）
  *
  * 校验项：3 段式结构、平台枚举、时间戳段 11 字符、随机后缀 6 字符、
- * 全段 Base62 字符集、时间戳可解码、非未来时间、未超 365 天有效期。
+ * 全段 Base62 字符集、时间戳可解码、非未来时间（device_id 永久有效）。
  * @param {string} deviceId 待校验的设备 ID
  * @returns {{valid: boolean, reason?: string}} 校验结果（失败时带原因）
  */
@@ -147,11 +144,7 @@ export function validateDeviceIdFormat(deviceId) {
     return { valid: false, reason: '无效时间戳（未来时间）' };
   }
 
-  const ageDays = Math.floor((now - timestamp) / (1000 * 60 * 60 * 24));
-  if (ageDays > MAX_AGE_DAYS) {
-    return { valid: false, reason: `设备 ID 已过期（超过 ${MAX_AGE_DAYS} 天）` };
-  }
-
+  // device_id 永久有效——非安全凭证，过期重生反致指纹突变触发风控误报
   return { valid: true };
 }
 

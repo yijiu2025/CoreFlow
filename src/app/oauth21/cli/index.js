@@ -11,6 +11,9 @@
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.oauth21.cli.index');
 
 /**
  * 查看 OAuth 客户端
@@ -27,7 +30,7 @@ async function listClients() {
     return;
   }
 
-  console.log('\n🔑 OAuth 客户端：');
+  log.stdout('\n🔑 OAuth 客户端：');
   printTable(
     ['Client ID', '名称', '类型', '创建时间'],
     clients.map(c => [
@@ -48,9 +51,9 @@ async function tokenStats() {
   try {
     const total = await OauthToken.count();
 
-    console.log('\n🎟️ Token 统计：');
+    log.stdout('\n🎟️ Token 统计：');
     printLine();
-    console.log(`  总数: ${total}`);
+    log.stdout(`  总数: ${total}`);
     printLine();
   } catch {
     printInfo('Token 统计暂不可用');
@@ -69,11 +72,11 @@ async function oauthStats() {
     OauthToken.count().catch(() => 0)
   ]);
 
-  console.log('\n📊 OAuth 统计：');
+  log.stdout('\n📊 OAuth 统计：');
   printLine();
-  console.log(`  客户端数:   ${clientCount}`);
-  console.log(`  授权记录:   ${approvalCount}`);
-  console.log(`  Token 数:   ${tokenCount}`);
+  log.stdout(`  客户端数:   ${clientCount}`);
+  log.stdout(`  授权记录:   ${approvalCount}`);
+  log.stdout(`  Token 数:   ${tokenCount}`);
   printLine();
 }
 

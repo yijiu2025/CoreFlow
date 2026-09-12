@@ -19,6 +19,9 @@ import {
   printLine
 } from '../../../../scripts/lib/table.js';
 import { createRl, ask, closeRl } from '../../../../scripts/lib/input.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.notice.cli.index');
 
 /**
  * 查看通知通道
@@ -31,10 +34,10 @@ async function listChannels() {
     { id: 'sms', name: '短信通知', icon: '📱' }
   ];
 
-  console.log('\n📮 通知通道：');
+  log.stdout('\n📮 通知通道：');
   printLine();
   channels.forEach(ch => {
-    console.log(`  ${ch.icon} ${ch.id.padEnd(12)} ${ch.name}`);
+    log.stdout(`  ${ch.icon} ${ch.id.padEnd(12)} ${ch.name}`);
   });
   printLine();
 }
@@ -55,7 +58,7 @@ async function showConfig() {
       return;
     }
 
-    console.log('\n⚙️ 通知通道配置：');
+    log.stdout('\n⚙️ 通知通道配置：');
     printTable(
       ['ID', '类型', '启用', '更新时间'],
       configs.map(c => [c.id, c.type, c.enabled ? '✅ 是' : '❌ 否', new Date(c.updated_at).toLocaleString('zh-CN')])

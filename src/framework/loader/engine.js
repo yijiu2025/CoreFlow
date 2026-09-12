@@ -11,6 +11,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { C } from '../../utils/colors.js';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.loader.engine');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -76,8 +79,8 @@ export async function runEngine(app) {
 
   // 非关键错误汇总报告
   if (loadErrors.length > 0) {
-    console.warn(`\n⚠️ [Loader] ${C.yellow}以下加载项出错（非致命）：${C.reset}`);
-    loadErrors.forEach(e => console.warn(`  • [${e.file}] ${e.message}`));
+    log.warn(`\n⚠️ [Loader] ${C.yellow}以下加载项出错（非致命）：${C.reset}`);
+    loadErrors.forEach(e => log.warn(`  • [${e.file}] ${e.message}`));
   }
 
   return {

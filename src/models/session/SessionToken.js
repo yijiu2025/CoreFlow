@@ -21,6 +21,16 @@ export default (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         comment: '设备唯一标识 (cookie 里的稳定设备码，跨账号共用)'
       },
+      device_id_original: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+        comment: '设备链首次登录的原始设备 ID（写入后永不更新，审计/恢复兜底用）'
+      },
+      family_id: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+        comment: '登录链（family）标识：同一次登录轮转产生的所有凭证同族，盗用后整链吊销'
+      },
       device_fingerprint: {
         type: DataTypes.STRING(128),
         allowNull: true,
@@ -53,6 +63,13 @@ export default (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
         comment: '是否已吊销'
+      },
+      /** 是否记住我（长期登录）：true=30d 长期会话，false=30min 短期会话 */
+      remember_me: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+        comment: '是否记住我（长期登录）：true=30d 长期会话，false=30min 短期会话'
       }
     },
     {
@@ -63,6 +80,7 @@ export default (sequelize, DataTypes) => {
         { fields: ['app_id'] },
         { fields: ['device_id'] },
         { fields: ['token'], name: 'idx_session_token_identifier' }, // 增加索引，以便黑名单/吊销查询时实现 O(1) 速度
+        { fields: ['family_id'], name: 'idx_session_token_family' }, // 登录链整链吊销（revokeFamily DB 兜底）
         { fields: ['user_id', 'app_id', 'device_id'], name: 'idx_user_app_device' } // 高频：多端互踢查询
       ]
     }

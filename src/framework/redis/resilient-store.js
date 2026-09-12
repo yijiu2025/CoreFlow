@@ -1,3 +1,6 @@
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.redis.resilient-store');
 /**
  * 弹性存储类
  * 用于速率限制，当 Redis 不可用时能够自动降级到内存存储。
@@ -90,15 +93,15 @@ class ResilientStore {
     this.getWindowMs = options.getWindowMs || (() => 60000);
     /** @type {Map<string, { count: number, expires: number }>} */
     this.memoryFallback = new Map();
-    /** @type {import('fastify').FastifyLogger|Console} */
-    this.log = app.log || console;
+    /** @type {import('fastify').FastifyLogger|import('../log/logger.js').AppLogger} */
+    this.log = app.log || log;
     /** 失败冷却截止时间戳（0 表示无冷却），单次命令超时后在该时间内不再尝试 Redis */
     this._cooldownUntil = 0;
 
     _instanceCount++;
     // 当限流路由较多时，记录实例数以辅助排查内存占用
     if (_instanceCount > 50 && _instanceCount % 10 === 0) {
-      console.warn(`[Redis] ResilientStore 实例数已达 ${_instanceCount}，请检查是否动态创建了过多路由`);
+      log.warn(`[Redis] ResilientStore 实例数已达 ${_instanceCount}，请检查是否动态创建了过多路由`);
     }
     _ensureCleanupTimer();
     _registeredMaps.add(this.memoryFallback);

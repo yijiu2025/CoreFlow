@@ -19,8 +19,9 @@ export default {
    * loader 扫描时自动调用，注册 CSRF 保护和敏感接口限频
    */
   async init(app) {
-    // 敏感接口限频（登录/验证码/注册）
-    registerSensitiveRateLimits(app, app.redis || null);
+    // 敏感接口限频（登录/验证码/注册）——Redis 客户端由限频器惰性解析，
+    // 不在此处捕获快照（init 时插件可能尚未完成连接重试，快照会永久为 null）
+    registerSensitiveRateLimits(app);
 
     // CSRF 保护（排除公开接口）
     registerCsrfProtection(app, { exclude: CSRF_EXCLUDE_PATHS });

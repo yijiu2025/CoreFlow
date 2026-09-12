@@ -4,7 +4,7 @@
  *
  * @example
  * import { C } from '../utils/colors.js';
- * console.log(`✅ [Redis] ${C.green}连接成功${C.reset}`);
+ * log.info(`✅ [Redis] ${C.green}连接成功${C.reset}`);
  *
  * @author Claude
  * @since 2026-07-13

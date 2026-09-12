@@ -17,6 +17,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { C } from '../../utils/colors.js';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.scheduler.index');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.resolve(__dirname, '../../../src/data/scheduler_config.json');
@@ -43,7 +46,7 @@ function loadConfig() {
     }
     return { ...DEFAULT_CONFIG, ...raw, tasks };
   } catch (err) {
-    console.error(`❌ [Scheduler] ${C.red}读取配置失败，用默认值: ${err.message}${C.reset}`);
+    log.error(`❌ [Scheduler] ${C.red}读取配置失败，用默认值: ${err.message}${C.reset}`);
     return DEFAULT_CONFIG;
   }
 }
@@ -55,13 +58,13 @@ function loadConfig() {
 export async function startScheduler(app) {
   const config = loadConfig();
   if (!config.enabled) {
-    console.log(`ℹ️ [Scheduler] ${C.cyan}调度器已禁用（config.enabled=false）${C.reset}`);
+    log.info(`ℹ️ [Scheduler] ${C.cyan}调度器已禁用（config.enabled=false）${C.reset}`);
     return;
   }
 
   const tasksDir = path.resolve(__dirname, 'tasks');
   if (!fs.existsSync(tasksDir)) {
-    console.log(`ℹ️ [Scheduler] ${C.cyan}tasks/ 目录不存在，跳过任务加载${C.reset}`);
+    log.info(`ℹ️ [Scheduler] ${C.cyan}tasks/ 目录不存在，跳过任务加载${C.reset}`);
     return;
   }
 
@@ -74,7 +77,7 @@ export async function startScheduler(app) {
 
     // 配置里没这个任务或 disabled → 跳过
     if (!taskConfig || taskConfig.enabled === false) {
-      console.log(`ℹ️ [Scheduler] ${C.cyan}任务 [${taskKey}] 已禁用，跳过${C.reset}`);
+      log.info(`ℹ️ [Scheduler] ${C.cyan}任务 [${taskKey}] 已禁用，跳过${C.reset}`);
       continue;
     }
 
@@ -82,14 +85,14 @@ export async function startScheduler(app) {
       const fileUrl = pathToFileURL(path.join(tasksDir, entry.name)).href;
       const { default: taskFactory } = await import(fileUrl);
       if (!taskFactory || typeof taskFactory.run !== 'function') {
-        console.warn(`⚠️ [Scheduler] ${C.yellow}任务 [${taskKey}] 未导出 run 函数，跳过${C.reset}`);
+        log.warn(`⚠️ [Scheduler] ${C.yellow}任务 [${taskKey}] 未导出 run 函数，跳过${C.reset}`);
         continue;
       }
 
       const intervalMs = (taskConfig.intervalHours || 24) * 60 * 60 * 1000;
       const run = () => {
         taskFactory.run(app, taskConfig).catch(err => {
-          console.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 执行失败: ${err.message}${C.reset}`);
+          log.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 执行失败: ${err.message}${C.reset}`);
         });
       };
 
@@ -97,15 +100,15 @@ export async function startScheduler(app) {
       run();
       const timer = setInterval(run, intervalMs);
       timers.push(timer);
-      console.log(`✅ [Scheduler] ${C.green}任务 [${taskKey}] 已启动，间隔 ${taskConfig.intervalHours}h${C.reset}`);
+      log.info(`✅ [Scheduler] ${C.green}任务 [${taskKey}] 已启动，间隔 ${taskConfig.intervalHours}h${C.reset}`);
     } catch (err) {
-      console.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 加载失败: ${err.message}${C.reset}`);
+      log.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 加载失败: ${err.message}${C.reset}`);
     }
   }
 
   // 优雅关闭：清所有定时器
   app.addHook('onClose', async () => {
     timers.forEach(t => clearInterval(t));
-    console.log(`🛑 [Scheduler] ${C.cyan}所有定时任务已停止${C.reset}`);
+    log.info(`🛑 [Scheduler] ${C.cyan}所有定时任务已停止${C.reset}`);
   });
 }

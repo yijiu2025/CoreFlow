@@ -25,12 +25,9 @@ import { getStore } from '../../../framework/redis/index.js';
 import { setAuthCookies } from './cookies.service.js';
 import { resolveFieldSet } from '../config/scope-registry.js';
 import { DEFAULT_SCOPE } from '../config/constants.js';
+import { createLogger } from '../../../framework/log/index.js';
 
-/** 认证调试开关（与 auth/index.js 一致，DEBUG_AUTH=true 时输出） */
-const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';
-function _debug(...args) {
-  if (DEBUG_AUTH) console.log('[Auth Debug]', ...args);
-}
+const log = createLogger('app.oauth21.services.token-issuer.service');
 
 /**
  * 签发直接令牌
@@ -114,7 +111,7 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
       const { roles, permissions } = await loadUserPermissions(user.id, client.client_id);
       await permStore.set(`${user.id}:${client.client_id}`, { roles, permissions }, 30);
     } catch (err) {
-      console.warn('[Auth] 权限缓存预热失败:', err.message);
+      log.warn('[Auth] 权限缓存预热失败:', err.message);
     }
 
     // OIDC ID Token：按 scope 裁剪 claims（openid 只给 sub，profile 给 name，email 给 email）
@@ -170,7 +167,7 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
       );
 
       result.session_token = sessionToken;
-      _debug(
+      log.debug(
         '🔍 [token-issuer] ✅ 已生成 session_token=%s...（供父窗口 bindSession 换 sid）',
         sessionToken.slice(0, 12)
       );
@@ -178,7 +175,7 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
   } // 结束 Session 模式 else
 
   // 🔍 调试：返回结果概览（session_token 是否存在是 iframe SSO 能否绑定的关键）
-  _debug(
+  log.debug(
     '🔍 [token-issuer] 返回 result: keys=%s, has session_token=%s, has access_token=%s',
     Object.keys(result).join(','),
     !!result.session_token,

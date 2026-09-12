@@ -10,6 +10,9 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { sequelize, getModel } from '../../db/index.js';
 import { C } from '../../../utils/colors.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.loader.registry.06-models');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,7 +57,7 @@ export default async app => {
           }
         } catch (error) {
           loadErrors.push({ file: entry.name, error: error.message });
-          console.error(`❌ [Loader: Models] ${C.red}模型 [${entry.name}] 加载失败: ${error.message}${C.reset}`);
+          log.error(`❌ [Loader: Models] ${C.red}模型 [${entry.name}] 加载失败: ${error.message}${C.reset}`);
         }
       }
     }
@@ -76,29 +79,29 @@ export default async app => {
   // 自动同步表结构（仅限首次开发环境建表，后续变更请使用迁移）
   if (process.env.DB_SYNC === 'true') {
     if (process.env.NODE_ENV === 'production') {
-      console.error(
+      log.error(
         `❌ [Loader: Models] ${C.red}拒绝在生产环境执行 DB_SYNC！请使用 npm run migrate 管理表结构变更。${C.reset}`
       );
       process.exit(1);
     } else {
       try {
-        console.warn(`⚠️ [Loader: Models] ${C.yellow}DB_SYNC=true: 正在 sync 建表（仅限首次开发环境）。${C.reset}`);
-        console.warn(
+        log.warn(`⚠️ [Loader: Models] ${C.yellow}DB_SYNC=true: 正在 sync 建表（仅限首次开发环境）。${C.reset}`);
+        log.warn(
           `⚠️ [Loader: Models] ${C.yellow}后续表结构变更请创建迁移文件: npx umzug migration:create --name <描述>${C.reset}`
         );
         await sequelize.sync({ alter: true });
-        console.log(`✅ [Loader: Models] ${C.green}表结构同步完成${C.reset}`);
+        log.always(`✅ [Loader: Models] ${C.green}表结构同步完成${C.reset}`);
       } catch (err) {
-        console.error(`❌ [Loader: Models] ${C.red}表结构同步失败: ${err.message}${C.reset}`);
+        log.error(`❌ [Loader: Models] ${C.red}表结构同步失败: ${err.message}${C.reset}`);
       }
     }
   }
 
-  console.log(`📦 [Loader: Models] ${C.cyan}所有模型加载完毕${C.reset}`);
+  log.always(`📦 [Loader: Models] ${C.cyan}所有模型加载完毕${C.reset}`);
 
   // 模型加载失败告警
   if (loadErrors.length > 0) {
-    console.error(`⚠️ [Loader: Models] ${C.yellow}${loadErrors.length} 个模型加载失败，请检查:${C.reset}`);
-    loadErrors.forEach(e => console.error(`  - ${e.file}: ${e.error}`));
+    log.error(`⚠️ [Loader: Models] ${C.yellow}${loadErrors.length} 个模型加载失败，请检查:${C.reset}`);
+    loadErrors.forEach(e => log.error(`  - ${e.file}: ${e.error}`));
   }
 };

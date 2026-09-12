@@ -17,6 +17,9 @@ import {
   registerGroupMetadata as rawRegisterGroupMetadata
 } from './guard-config.js';
 import { isIpMatch } from '../utils/ip.js';
+import { createLogger } from '../framework/log/index.js';
+
+const log = createLogger('api.guard');
 
 // =============================================================================
 // 2. 模块级状态
@@ -97,7 +100,7 @@ function checkPermission(required, user) {
   }
 
   // 非预期的权限格式（如 {}、{ invalid: [...] }），记录日志便于排查错误配置
-  console.warn(`⚠️ [Guard] 非预期的权限格式: ${JSON.stringify(required)}`);
+  log.warn(`⚠️ [Guard] 非预期的权限格式: ${JSON.stringify(required)}`);
   return false;
 }
 
@@ -284,7 +287,7 @@ export function getRegistrationContext() {
  */
 export function restoreRegistrationContext(ctx) {
   if (!ctx || typeof ctx !== 'object') {
-    console.warn('⚠️ [Guard] restoreRegistrationContext: ctx 参数无效');
+    log.warn('⚠️ [Guard] restoreRegistrationContext: ctx 参数无效');
     return;
   }
   currentSystem = ctx.currentSystem;
@@ -303,7 +306,7 @@ export function restoreRegistrationContext(ctx) {
  */
 export function registerGroupMetadata(metadata) {
   if (!metadata || typeof metadata !== 'object') {
-    console.warn('⚠️ [Guard] registerGroupMetadata: metadata 参数无效');
+    log.warn('⚠️ [Guard] registerGroupMetadata: metadata 参数无效');
     return;
   }
 

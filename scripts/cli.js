@@ -27,6 +27,9 @@ import { redisStatus, clearAllSessions, clearCacheByPattern, listRedisKeys } fro
 import { healthCheck, systemInfo, cleanupExpiredData } from './commands/system.js';
 
 import { listSuperadmins, setupSuperadmin, revokeSuperadmin } from './commands/admin.js';
+import { createLogger } from '../src/framework/log/index.js';
+
+const log = createLogger('scripts.cli');
 
 // ============== 内置命令注册 ==============
 
@@ -108,57 +111,57 @@ const builtinCommands = {
  * @param {object} commands - 所有可用命令
  */
 function showHelp(commands) {
-  console.log('');
-  console.log('╔════════════════════════════════════════════════════════════╗');
-  console.log('║           CoreFlow 命令行管理工具 v2.0                 ║');
-  console.log('╚════════════════════════════════════════════════════════════╝');
-  console.log('');
-  console.log('用法: npm run cli -- <command> [subcommand]');
-  console.log('');
+  log.stdout('');
+  log.stdout('╔════════════════════════════════════════════════════════════╗');
+  log.stdout('║           CoreFlow 命令行管理工具 v2.0                 ║');
+  log.stdout('╚════════════════════════════════════════════════════════════╝');
+  log.stdout('');
+  log.stdout('用法: npm run cli -- <command> [subcommand]');
+  log.stdout('');
 
   // 内置命令
-  console.log('内置命令:');
-  console.log('');
+  log.stdout('内置命令:');
+  log.stdout('');
   for (const [cmd, config] of Object.entries(builtinCommands)) {
-    console.log(`  ${cmd.padEnd(15)} ${config.description}`);
+    log.stdout(`  ${cmd.padEnd(15)} ${config.description}`);
     for (const [sub, subConfig] of Object.entries(config.subcommands)) {
-      console.log(`    ${sub.padEnd(20)} ${subConfig.desc}`);
+      log.stdout(`    ${sub.padEnd(20)} ${subConfig.desc}`);
     }
-    console.log('');
+    log.stdout('');
   }
 
   // 应用插件命令
   const appCommands = Object.entries(commands).filter(([key]) => !builtinCommands[key]);
   if (appCommands.length > 0) {
-    console.log('应用插件命令:');
-    console.log('');
+    log.stdout('应用插件命令:');
+    log.stdout('');
     for (const [cmd, config] of appCommands) {
-      console.log(`  ${cmd.padEnd(15)} ${config.description}`);
+      log.stdout(`  ${cmd.padEnd(15)} ${config.description}`);
       for (const [sub, subConfig] of Object.entries(config.subcommands)) {
-        console.log(`    ${sub.padEnd(20)} ${subConfig.description || subConfig.desc}`);
+        log.stdout(`    ${sub.padEnd(20)} ${subConfig.description || subConfig.desc}`);
       }
-      console.log('');
+      log.stdout('');
     }
   }
 
   // 快捷命令
-  console.log('快捷命令:');
-  console.log('');
-  console.log('  npm run cli -- health          系统健康检查');
-  console.log('  npm run cli -- user list        列出所有用户');
-  console.log('  npm run cli -- role list        列出所有角色');
-  console.log('  npm run cli -- admin list       列出超级管理员');
-  console.log('');
+  log.stdout('快捷命令:');
+  log.stdout('');
+  log.stdout('  npm run cli -- health          系统健康检查');
+  log.stdout('  npm run cli -- user list        列出所有用户');
+  log.stdout('  npm run cli -- role list        列出所有角色');
+  log.stdout('  npm run cli -- admin list       列出超级管理员');
+  log.stdout('');
 
   // 示例
-  console.log('示例:');
-  console.log('');
-  console.log('  npm run cli                     # 交互式菜单');
-  console.log('  npm run cli -- user create      # 创建用户');
-  console.log('  npm run cli -- role assign      # 分配角色');
-  console.log('  npm run cli -- db migrate       # 执行迁移');
-  console.log('  npm run cli -- redis clear      # 清除 session');
-  console.log('');
+  log.stdout('示例:');
+  log.stdout('');
+  log.stdout('  npm run cli                     # 交互式菜单');
+  log.stdout('  npm run cli -- user create      # 创建用户');
+  log.stdout('  npm run cli -- role assign      # 分配角色');
+  log.stdout('  npm run cli -- db migrate       # 执行迁移');
+  log.stdout('  npm run cli -- redis clear      # 清除 session');
+  log.stdout('');
 }
 
 // ============== 交互式菜单 ==============
@@ -168,11 +171,11 @@ function showHelp(commands) {
  * @param {object} commands - 所有可用命令
  */
 async function showMainMenu(commands) {
-  console.log('');
-  console.log('╔══════════════════════════════════════╗');
-  console.log('║    CoreFlow 命令行管理工具        ║');
-  console.log('╚══════════════════════════════════════╝');
-  console.log('');
+  log.stdout('');
+  log.stdout('╔══════════════════════════════════════╗');
+  log.stdout('║    CoreFlow 命令行管理工具        ║');
+  log.stdout('╚══════════════════════════════════════╝');
+  log.stdout('');
 
   // 构建菜单项
   const menuItems = [];
@@ -180,20 +183,20 @@ async function showMainMenu(commands) {
     menuItems.push({ label: `${cmd} - ${config.description}`, value: cmd });
   }
 
-  console.log('请选择模块：');
+  log.stdout('请选择模块：');
   menuItems.forEach((item, i) => {
-    console.log(`  ${i + 1}. ${item.label}`);
+    log.stdout(`  ${i + 1}. ${item.label}`);
   });
-  console.log('  h. 帮助');
-  console.log('  0. 退出');
-  console.log('');
+  log.stdout('  h. 帮助');
+  log.stdout('  0. 退出');
+  log.stdout('');
 
   const rl = createRl();
   try {
     const choice = await ask(rl, '请输入序号: ');
 
     if (choice === '0') {
-      console.log('再见！');
+      log.stdout('再见！');
       process.exit(0);
     }
 
@@ -207,7 +210,7 @@ async function showMainMenu(commands) {
       const cmd = menuItems[index].value;
       await showSubMenu(commands, cmd);
     } else {
-      console.log('无效的选择');
+      log.stdout('无效的选择');
     }
   } finally {
     closeRl(rl);
@@ -223,15 +226,15 @@ async function showSubMenu(commands, category) {
   const config = commands[category];
   if (!config) return;
 
-  console.log('');
-  console.log(`${config.description}：`);
+  log.stdout('');
+  log.stdout(`${config.description}：`);
 
   const subEntries = Object.entries(config.subcommands);
   subEntries.forEach(([sub, subConfig], i) => {
-    console.log(`  ${i + 1}. ${sub} - ${subConfig.description || subConfig.desc}`);
+    log.stdout(`  ${i + 1}. ${sub} - ${subConfig.description || subConfig.desc}`);
   });
-  console.log('  0. 返回');
-  console.log('');
+  log.stdout('  0. 返回');
+  log.stdout('');
 
   const rl = createRl();
   try {
@@ -244,7 +247,7 @@ async function showSubMenu(commands, category) {
       const [sub, subConfig] = subEntries[index];
       await subConfig.handler();
     } else {
-      console.log('无效的选择');
+      log.stdout('无效的选择');
     }
   } finally {
     closeRl(rl);
@@ -268,7 +271,7 @@ async function main() {
   const { commands: appCommands, errors, count } = await loadAppCommands();
 
   if (errors.length > 0) {
-    errors.forEach(err => console.warn(`警告: ${err}`));
+    errors.forEach(err => log.warn(`警告: ${err}`));
   }
 
   if (count > 0) {
@@ -301,26 +304,26 @@ async function main() {
 
   if (!subcommand) {
     // 没有子命令，显示该命令的子命令列表
-    console.log('');
-    console.log(`${cmdConfig.description} 可用命令：`);
-    console.log('');
+    log.stdout('');
+    log.stdout(`${cmdConfig.description} 可用命令：`);
+    log.stdout('');
     for (const [sub, subConfig] of Object.entries(cmdConfig.subcommands)) {
-      console.log(`  ${sub.padEnd(20)} ${subConfig.description || subConfig.desc}`);
+      log.stdout(`  ${sub.padEnd(20)} ${subConfig.description || subConfig.desc}`);
     }
-    console.log('');
+    log.stdout('');
     return;
   }
 
   const subConfig = cmdConfig.subcommands[subcommand];
   if (!subConfig) {
     printError(`未知子命令: ${command} ${subcommand}`);
-    console.log('');
-    console.log('可用子命令：');
-    console.log('');
+    log.stdout('');
+    log.stdout('可用子命令：');
+    log.stdout('');
     for (const [sub, config] of Object.entries(cmdConfig.subcommands)) {
-      console.log(`  ${sub.padEnd(20)} ${config.description || config.desc}`);
+      log.stdout(`  ${sub.padEnd(20)} ${config.description || config.desc}`);
     }
-    console.log('');
+    log.stdout('');
     return;
   }
 

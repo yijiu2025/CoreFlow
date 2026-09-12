@@ -109,7 +109,6 @@ export default class StpUtil {
    */
   static async login(params) {
     const req = StpUtil._getRequest();
-    const redis = req.server.redis;
 
     // 从请求中推断设备信息
     const userAgent = req.headers?.['user-agent'] || '';
@@ -117,7 +116,6 @@ export default class StpUtil {
     const ip = req.ip || req.socket?.remoteAddress || '';
 
     const { sessionId } = await createSession({
-      redis,
       userId: params.userId,
       uid: params.uid,
       username: params.username,

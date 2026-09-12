@@ -16,6 +16,9 @@ import { ALGORITHMS, MODULUS_LENGTH_2048, withinGrace } from './config.js';
 import { C } from '../../utils/colors.js';
 import { setCachedKey, deleteCachedKey, setCurrentKid, getCurrentKid, clearCache } from './cache.js';
 import { findNewestActive, findAll, insertKey, removeByName, setActive, existsByName } from './repository.js';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.keys.manager');
 
 /** 自动生成 kid 碰撞时的重试上限（64 bit 熵下几乎不可能触发） */
 const MAX_KID_RETRIES = 5;
@@ -87,7 +90,7 @@ async function persistKey(kid, { algorithm, modulusLength, remark }) {
   setCachedKey(kid, { privateKey, publicKey, jwk });
   setCurrentKid(kid); // 新密钥即当前签名密钥
 
-  console.log(`✅ [Keys] ${C.green}已生成密钥对: ${kid} (${algorithm})${C.reset}`);
+  log.info(`✅ [Keys] ${C.green}已生成密钥对: ${kid} (${algorithm})${C.reset}`);
   return { publicKey, privateKey, jwk, kid };
 }
 
@@ -162,7 +165,7 @@ async function deleteKey(kid) {
     setCurrentKid(newest ? newest.name : null);
   }
 
-  console.log(`✅ [Keys] ${C.green}已删除密钥对: ${kid}${C.reset}`);
+  log.info(`✅ [Keys] ${C.green}已删除密钥对: ${kid}${C.reset}`);
 }
 
 /**
@@ -208,7 +211,7 @@ async function pruneExpiredRetired() {
     }
   }
   if (removed > 0) {
-    console.log(`🧹 [Keys] ${C.dim}已清理 ${removed} 个过期退役密钥${C.reset}`);
+    log.info(`🧹 [Keys] ${C.dim}已清理 ${removed} 个过期退役密钥${C.reset}`);
   }
   return removed;
 }
@@ -247,7 +250,7 @@ async function ensureCurrentKey() {
       jwk: newest.jwk ? JSON.parse(newest.jwk) : null
     });
     setCurrentKid(newest.name);
-    console.log(`📦 [Keys] ${C.cyan}当前密钥: ${newest.name}${C.reset}`);
+    log.info(`📦 [Keys] ${C.cyan}当前密钥: ${newest.name}${C.reset}`);
     return newest.name;
   }
 

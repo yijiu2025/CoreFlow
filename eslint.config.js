@@ -35,7 +35,7 @@ export default [
         }
       ],
       'no-undef': 'error',
-      // 项目规范允许控制台日志（emoji + 彩色前缀，见 CLAUDE.md），no-console 不适用
+      // 后端禁止直接使用 console（统一走 framework/log），前端与测试目录暂不限制
       'no-console': 'off',
       camelcase: 'off',
       'no-unused-expressions': 'off',
@@ -58,6 +58,22 @@ export default [
       'jest/no-focused-tests': 'error',
       // expectCode 是项目自定义断言 helper（内部含 expect），识别为断言函数避免 expect-expect 误报
       'jest/expect-expect': ['warn', { assertFunctionNames: ['expect', 'expectCode'] }]
+    }
+  },
+
+  // 5. 后端代码强制统一日志出口：禁止 console.*，一律走 src/framework/log
+  {
+    files: ['index.js', 'src/**/*.js', 'migrations/**/*.js', 'scripts/**/*.js', '*.mjs'],
+    rules: {
+      'no-console': 'error'
+    }
+  },
+
+  // 5.1 日志框架自身是 console 的唯一合法使用点（底层输出通道）
+  {
+    files: ['src/framework/log/**/*.js'],
+    rules: {
+      'no-console': 'off'
     }
   },
 

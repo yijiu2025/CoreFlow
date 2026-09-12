@@ -1,7 +1,7 @@
 /**
  * 稳定设备 ID 单元测试
  *
- * 覆盖：生成/持久化/复用、存量 ID 自查（格式/过期/未来时间）、
+ * 覆盖：生成/持久化/复用、存量 ID 自查（格式/未来时间）、
  * 校验与后端规则对齐、平台检测、缓存失效、隐私模式降级、随机后缀质量。
  *
  * @author yijiu2025
@@ -123,15 +123,15 @@ describe('存量 ID 自查（与后端 validateDeviceId 规则对齐）', () => 
     expect(stub.map.get(STORAGE_KEY)).toBe(id);
   });
 
-  test('超有效期（>365 天）的存量 ID 被重生', () => {
+  test('超 365 天的存量 ID 仍保留（device_id 永久有效，非凭证，过期重生反致指纹突变）', () => {
     const stub = createLocalStorageStub();
-    const expiredId = makeValidId({ ageDays: 400 });
-    stub.map.set(STORAGE_KEY, expiredId);
+    const oldId = makeValidId({ ageDays: 400 });
+    stub.map.set(STORAGE_KEY, oldId);
     installBrowserStubs({ localStorageStub: stub, userAgent: 'Mozilla Chrome' });
 
     const id = getStableDeviceId();
-    expect(id).not.toBe(expiredId); // 已重生
-    expect(stub.map.get(STORAGE_KEY)).toBe(id); // 新 ID 已写回
+    expect(id).toBe(oldId); // 老 ID 永久有效，直接复用，不重生
+    expect(stub.map.get(STORAGE_KEY)).toBe(oldId);
   });
 
   test('未来时间戳的存量 ID 被重生（后端会拒绝，本地必须先行拦截）', () => {
@@ -157,7 +157,6 @@ describe('validateDeviceIdFormat 校验规则', () => {
     ['后缀长度错误', `WEB-${encodeTimestamp(Date.now())}-Ab3dE`, /随机后缀长度错误/],
     ['含非法字符', `WEB-${encodeTimestamp(Date.now())}-Ab3dE+`, /非法字符/],
     ['未来时间', makeValidId({ ageDays: -1 }), /未来时间/],
-    ['超有效期', makeValidId({ ageDays: 366 }), /过期/],
     ['超长输入', `WEB-${encodeTimestamp(Date.now())}-Ab3dE9${'x'.repeat(100)}`, /超长/]
   ];
 

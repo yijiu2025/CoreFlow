@@ -4,6 +4,9 @@
 import { connectRedis, closeRedis, getRedisInfo, clearKeysByPattern } from '../lib/redis.js';
 import { createRl, confirm, closeRl } from '../lib/input.js';
 import { printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
+import { createLogger } from '../../src/framework/log/index.js';
+
+const log = createLogger('scripts.commands.cache');
 
 /**
  * 查看 Redis 状态
@@ -18,14 +21,14 @@ export async function redisStatus() {
   try {
     const info = await getRedisInfo(redis);
 
-    console.log('\n🔴 Redis 状态：');
+    log.stdout('\n🔴 Redis 状态：');
     printLine();
-    console.log(`  版本:       ${info.version || '未知'}`);
-    console.log(`  运行时间:   ${formatUptime(info.uptime)}`);
-    console.log(`  连接数:     ${info.connectedClients || '未知'}`);
-    console.log(`  内存使用:   ${info.usedMemory || '未知'}`);
-    console.log(`  内存峰值:   ${info.usedMemoryPeak || '未知'}`);
-    console.log(`  总键数:     ${info.totalKeys}`);
+    log.stdout(`  版本:       ${info.version || '未知'}`);
+    log.stdout(`  运行时间:   ${formatUptime(info.uptime)}`);
+    log.stdout(`  连接数:     ${info.connectedClients || '未知'}`);
+    log.stdout(`  内存使用:   ${info.usedMemory || '未知'}`);
+    log.stdout(`  内存峰值:   ${info.usedMemoryPeak || '未知'}`);
+    log.stdout(`  总键数:     ${info.totalKeys}`);
     printLine();
   } finally {
     await closeRedis(redis);
@@ -81,12 +84,12 @@ export async function clearCacheByPattern() {
   try {
     const rl = createRl();
     try {
-      console.log('\n常用模式：');
-      console.log('  session:*    - 所有 session');
-      console.log('  perm:*       - 所有权限缓存');
-      console.log('  rate:*       - 所有限频计数');
-      console.log('  fw:*         - 所有防火墙数据');
-      console.log('  *            - 所有数据（危险！）');
+      log.stdout('\n常用模式：');
+      log.stdout('  session:*    - 所有 session');
+      log.stdout('  perm:*       - 所有权限缓存');
+      log.stdout('  rate:*       - 所有限频计数');
+      log.stdout('  fw:*         - 所有防火墙数据');
+      log.stdout('  *            - 所有数据（危险！）');
 
       const pattern = await rl.question('\n请输入要清除的 key 模式: ');
       if (!pattern) {
@@ -139,13 +142,13 @@ export async function listRedisKeys() {
         return;
       }
 
-      console.log(`\n🔑 Key 列表 (共 ${keys.length} 个):`);
+      log.stdout(`\n🔑 Key 列表 (共 ${keys.length} 个):`);
       printLine();
 
       // 只显示前 100 个
       const displayKeys = keys.slice(0, 100);
       displayKeys.forEach((key, i) => {
-        console.log(`  ${i + 1}. ${key}`);
+        log.stdout(`  ${i + 1}. ${key}`);
       });
 
       if (keys.length > 100) {

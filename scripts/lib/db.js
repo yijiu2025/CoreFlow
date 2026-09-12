@@ -9,6 +9,9 @@
  * const { User, Role } = getModels();
  */
 import sequelize from '../../src/db/index.js';
+import { createLogger } from '../../src/framework/log/index.js';
+
+const log = createLogger('scripts.lib.db');
 
 // ============== 模型加载 ==============
 
@@ -66,7 +69,7 @@ export async function loadAllModels() {
 
   if (errors.length > 0) {
     const failedModels = errors.map(e => e.model).join(', ');
-    console.warn(`⚠️  [DB] 部分模型加载失败: ${failedModels}`);
+    log.warn(`⚠️  [DB] 部分模型加载失败: ${failedModels}`);
   }
 }
 

@@ -7,6 +7,9 @@
  * @updated 2026-08-29 加 Turnstile 支持
  */
 import config from '../config.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.verify.recaptcha.service');
 
 const recaptchaConfig = config.recaptcha;
 
@@ -39,7 +42,7 @@ class RecaptchaService {
       case 'turnstile':
         return await this._verifyTurnstile(token, remoteIp);
       default:
-        console.warn(`[Recaptcha] 未知服务商: ${provider}，跳过验证`);
+        log.warn(`[Recaptcha] 未知服务商: ${provider}，跳过验证`);
         return { success: true };
     }
   }
@@ -51,7 +54,7 @@ class RecaptchaService {
   async _verifyGoogle(token, remoteIp) {
     const secretKey = recaptchaConfig.secretKey;
     if (!secretKey) {
-      console.warn('[Recaptcha] RECAPTCHA_SECRET_KEY 未配置，跳过验证');
+      log.warn('[Recaptcha] RECAPTCHA_SECRET_KEY 未配置，跳过验证');
       return { success: true };
     }
 
@@ -84,7 +87,7 @@ class RecaptchaService {
 
       return { success: true, score: data.score };
     } catch (err) {
-      console.error('[Recaptcha] Google API 请求失败:', err.message);
+      log.error('[Recaptcha] Google API 请求失败:', err.message);
       return { success: false, error: 'api_error' };
     }
   }
@@ -96,7 +99,7 @@ class RecaptchaService {
   async _verifyHcaptcha(token, remoteIp) {
     const secretKey = recaptchaConfig.secretKey;
     if (!secretKey) {
-      console.warn('[Recaptcha] RECAPTCHA_SECRET_KEY 未配置，跳过验证');
+      log.warn('[Recaptcha] RECAPTCHA_SECRET_KEY 未配置，跳过验证');
       return { success: true };
     }
 
@@ -126,7 +129,7 @@ class RecaptchaService {
 
       return { success: true };
     } catch (err) {
-      console.error('[Recaptcha] hCaptcha API 请求失败:', err.message);
+      log.error('[Recaptcha] hCaptcha API 请求失败:', err.message);
       return { success: false, error: 'api_error' };
     }
   }
@@ -140,7 +143,7 @@ class RecaptchaService {
     // 独立 secret key（不与 hcaptcha/google 混用）
     const secretKey = recaptchaConfig.turnstileSecretKey;
     if (!secretKey) {
-      console.warn('[Turnstile] TURNSTILE_SECRET_KEY 未配置，跳过验证（生产环境必须配）');
+      log.warn('[Turnstile] TURNSTILE_SECRET_KEY 未配置，跳过验证（生产环境必须配）');
       return { success: true };
     }
 
@@ -169,7 +172,7 @@ class RecaptchaService {
       // 生产环境可选：校验 hostname 与配置域名一致
       return { success: true, hostname: data.hostname, action: data.action };
     } catch (err) {
-      console.error('[Turnstile] Cloudflare API 请求失败:', err.message);
+      log.error('[Turnstile] Cloudflare API 请求失败:', err.message);
       return { success: false, error: 'api_error' };
     }
   }

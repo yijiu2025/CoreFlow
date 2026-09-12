@@ -100,7 +100,7 @@ export default async function (fastify) {
         const result = await IamDao.assignRole(adminUid, targetUid, roleId, appId);
 
         // 审计日志：角色分配
-        await logAuditEvent(request.server.redis, {
+        await logAuditEvent({
           type: 'ROLE_ASSIGNED',
           userId: adminUid,
           ip: request.ip,
@@ -137,7 +137,7 @@ export default async function (fastify) {
         const result = await IamDao.updateInlinePolicy(adminUid, targetUid, appId, policy);
 
         // 审计日志：权限变更
-        await logAuditEvent(request.server.redis, {
+        await logAuditEvent({
           type: 'PERMISSION_CHANGE',
           userId: adminUid,
           ip: request.ip,

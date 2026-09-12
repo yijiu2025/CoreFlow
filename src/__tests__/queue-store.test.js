@@ -7,8 +7,8 @@
  * @since 2026-08-17
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { MapStore } from '../redis/map-store.js';
-import { createQueue } from '../redis/queue-store.js';
+import { MapStore } from '../framework/redis/map-store.js';
+import { createQueue } from '../framework/redis/queue-store.js';
 
 describe('createQueue', () => {
   const PREFIX = 'test_queue';

@@ -21,6 +21,9 @@ import emailNoticeService from '../../../framework/notice/services/email.js';
 import { v4 as uuidv4 } from 'uuid';
 import { logRegister, logAuditEvent } from '../../../framework/auth/audit-logger.js';
 import '../../../app/user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('api.user.v1.open');
 
 /**
  * 计算客户端指纹（IP + UA hash，前 32 hex）
@@ -33,8 +36,8 @@ function clientFingerprint(request) {
 }
 
 /** 重置密码审计（复用 logAuditEvent，event=PASSWORD_RESET） */
-async function auditReset(redis, { email, ip, userAgent, success, reason }) {
-  await logAuditEvent(redis, {
+async function auditReset({ email, ip, userAgent, success, reason }) {
+  await logAuditEvent({
     type: success ? 'PASSWORD_RESET_SUCCESS' : 'PASSWORD_RESET_FAILED',
     ip,
     userAgent,
@@ -74,7 +77,6 @@ export default async function (fastify) {
     handler: async (request, reply) => {
       const { email } = request.body;
       const auditCtx = {
-        redis: request.server?.redis,
         email,
         ip: request.ip,
         userAgent: request.headers['user-agent'] || '',
@@ -86,7 +88,7 @@ export default async function (fastify) {
         const { recaptchaToken } = request.body;
         const valid = await recaptchaDao.isValid(recaptchaToken, request.ip);
         if (!valid) {
-          await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: '人机验证失败' });
+          await logRegister({ ...auditCtx, success: false, reason: '人机验证失败' });
           return reply.result.fail('人机验证失败，请重试', null, 400);
         }
       }
@@ -99,14 +101,14 @@ export default async function (fastify) {
           sessionId: sessionIdFromRequest(request)
         });
       } catch (err) {
-        await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });
+        await logRegister({ ...auditCtx, success: false, reason: err.message });
         return reply.result.fail(err.message, null, 400);
       }
 
       // createUser 失败（邮箱已存在/复杂度不足/guest 缺失）抛错，审计失败 + 400
       try {
         const user = await userDao.createUser(request);
-        await logRegister(auditCtx.redis, {
+        await logRegister({
           ...auditCtx,
           userId: user?.numericId || user?.id,
           success: true
@@ -116,7 +118,7 @@ export default async function (fastify) {
           username: user?.username
         });
       } catch (err) {
-        await logRegister(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });
+        await logRegister({ ...auditCtx, success: false, reason: err.message });
         const isBizError = err.message?.startsWith('REGISTER_FAILED') || err.message?.startsWith('NOT_FOUND');
         return reply.result.fail(err.message, null, isBizError ? 400 : 500);
       }
@@ -165,7 +167,7 @@ export default async function (fastify) {
         return reply.code(403).send({ code: 403, message: '该重置方式未启用', data: null });
       }
       const { email, code, password: encryptedPassword, kid } = request.body;
-      const auditCtx = { redis: request.server?.redis, email, ip: request.ip, userAgent: request.headers['user-agent'] || '' };
+      const auditCtx = { email, ip: request.ip, userAgent: request.headers['user-agent'] || '' };
 
       // 1. 校验邮箱码（sessionId=captchaKey + 指纹 + 一次性消费）
       try {
@@ -174,16 +176,16 @@ export default async function (fastify) {
           sessionId: sessionIdFromRequest(request)
         });
       } catch (err) {
-        await auditReset(auditCtx.redis, { ...auditCtx, success: false, reason: `验证码:${err.message}` });
+        await auditReset({ ...auditCtx, success: false, reason: `验证码:${err.message}` });
         return reply.result.fail(err.message, null, 400);
       }
       // 2. 更新密码
       try {
         await userDao.updatePassword(email, encryptedPassword, kid);
-        await auditReset(auditCtx.redis, { ...auditCtx, success: true, reason: 'by_code' });
+        await auditReset({ ...auditCtx, success: true, reason: 'by_code' });
         return reply.result.success('密码重置成功');
       } catch (err) {
-        await auditReset(auditCtx.redis, { ...auditCtx, success: false, reason: err.message });
+        await auditReset({ ...auditCtx, success: false, reason: err.message });
         const isBizError = err.message?.startsWith('RESET_FAILED');
         return reply.result.fail(err.message, null, isBizError ? 400 : 500);
       }
@@ -228,7 +230,7 @@ export default async function (fastify) {
       }
       await captchaStore.delete(captchaKey);
 
-      const auditCtx = { redis: request.server?.redis, email, ip: request.ip, userAgent: request.headers['user-agent'] || '' };
+      const auditCtx = { email, ip: request.ip, userAgent: request.headers['user-agent'] || '' };
 
       // 2. 校验邮箱是否注册 + 用户状态（不暴露存在性：未注册/禁用也提示"已发送"）
       const userExists = await userDao.checkEmailExist(email);
@@ -236,11 +238,7 @@ export default async function (fastify) {
         // 3. 生成一次性 reset token（存 Redis，绑 email + 客户端指纹，30min TTL）
         const resetToken = uuidv4();
         const resetStore = getStore('reset_token');
-        await resetStore.set(
-          resetToken,
-          { email, fingerprint: clientFingerprint(request) },
-          1800
-        );
+        await resetStore.set(resetToken, { email, fingerprint: clientFingerprint(request) }, 1800);
 
         // 4. 发送重置链接邮件（SSO_URL 兜底，避免链接无域名）
         const baseUrl = process.env.SSO_URL || process.env.API_BASE_URL || '';
@@ -258,14 +256,14 @@ export default async function (fastify) {
           </div>`;
         try {
           await emailNoticeService.send(email, '【CoreFlow】密码重置', content);
-          await auditReset(auditCtx.redis, { ...auditCtx, success: true, reason: 'link_sent' });
+          await auditReset({ ...auditCtx, success: true, reason: 'link_sent' });
         } catch (err) {
-          console.warn('[ResetLink] 邮件发送失败:', err.message);
-          await auditReset(auditCtx.redis, { ...auditCtx, success: false, reason: '邮件发送失败' });
+          log.warn('[ResetLink] 邮件发送失败:', err.message);
+          await auditReset({ ...auditCtx, success: false, reason: '邮件发送失败' });
         }
       } else {
         // 未注册：不生成 token，但记录审计（便于监控枚举尝试）
-        await auditReset(auditCtx.redis, { ...auditCtx, success: false, reason: '邮箱未注册' });
+        await auditReset({ ...auditCtx, success: false, reason: '邮箱未注册' });
       }
       // 无论是否注册都返回"已发送"（防邮箱枚举）
       return reply.result.success('重置链接已发送至邮箱（如该邮箱已注册）');
@@ -296,12 +294,12 @@ export default async function (fastify) {
         return reply.result.fail('token 和新密码不能为空', null, 400);
       }
 
-      const auditCtx = { redis: request.server?.redis, ip: request.ip, userAgent: request.headers['user-agent'] || '' };
+      const auditCtx = { ip: request.ip, userAgent: request.headers['user-agent'] || '' };
 
       const resetStore = getStore('reset_token');
       const data = await resetStore.get(token);
       if (!data) {
-        await auditReset(auditCtx.redis, { ...auditCtx, email: null, success: false, reason: 'token 无效或已过期' });
+        await auditReset({ ...auditCtx, email: null, success: false, reason: 'token 无效或已过期' });
         return reply.result.fail('重置链接已失效，请重新申请', null, 400);
       }
 
@@ -310,7 +308,7 @@ export default async function (fastify) {
       if (data.fingerprint && data.fingerprint !== currentFp) {
         // 指纹不符：疑似冒用，删除 token（一次性，防攻击者重试）+ 审计
         await resetStore.delete(token);
-        await auditReset(auditCtx.redis, { ...auditCtx, email: data.email, success: false, reason: '指纹不符（疑似异地冒用）' });
+        await auditReset({ ...auditCtx, email: data.email, success: false, reason: '指纹不符（疑似异地冒用）' });
         return reply.result.fail('重置链接已失效，请重新申请', null, 400);
       }
 
@@ -320,10 +318,10 @@ export default async function (fastify) {
       // 更新密码（含用户状态校验、复杂度、bcrypt 哈希）
       try {
         await userDao.updatePassword(data.email, encryptedPassword, kid);
-        await auditReset(auditCtx.redis, { ...auditCtx, email: data.email, success: true, reason: 'by_link' });
+        await auditReset({ ...auditCtx, email: data.email, success: true, reason: 'by_link' });
         return reply.result.success('密码重置成功');
       } catch (err) {
-        await auditReset(auditCtx.redis, { ...auditCtx, email: data.email, success: false, reason: err.message });
+        await auditReset({ ...auditCtx, email: data.email, success: false, reason: err.message });
         const isBizError = err.message?.startsWith('RESET_FAILED');
         return reply.result.fail(err.message, null, isBizError ? 400 : 500);
       }

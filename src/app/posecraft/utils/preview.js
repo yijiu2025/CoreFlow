@@ -18,6 +18,9 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getModel } from '../../../framework/db/index.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.posecraft.utils.preview');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -153,8 +156,7 @@ async function generateImageThumbnail(imageUrl) {
 
     return `${getPreviewUrlPrefix('work')}/${filename}`;
   } catch (err) {
-    const log = globalThis?.fastify?.log || console;
-    log.error?.(err, 'PoseCraft image thumbnail generation failed');
+    log.error('PoseCraft image thumbnail generation failed', err);
     return null;
   }
 }
@@ -204,8 +206,7 @@ async function generateSkeletonPreview(poseData) {
     return `${getPreviewUrlPrefix('template')}/${filename}`;
   } catch (err) {
     // 预览图生成失败不应阻塞主流程，仅记录日志
-    const log = globalThis?.fastify?.log || console;
-    log.error?.(err, 'PoseCraft skeleton preview generation failed');
+    log.error('PoseCraft skeleton preview generation failed', err);
     return null;
   }
 }
@@ -259,8 +260,7 @@ async function composeTemplatePreview(template) {
     return bgImg.png().toBuffer();
   } catch (err) {
     // 任意异常（SVG 尺寸不匹配、合成失败等）降级为透明占位图，预览端点不抛 500
-    const log = globalThis?.fastify?.log || console;
-    log.error?.(err, 'Compose transparent template image failed');
+    log.error('Compose transparent template image failed', err);
     return sharp({
       create: { width: 1, height: 1, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
     })
@@ -289,8 +289,7 @@ async function composeWorkPreview(work) {
       }
     }
   } catch (err) {
-    const log = globalThis?.fastify?.log || console;
-    log.error?.(err, 'Compose work preview image failed');
+    log.error('Compose work preview image failed', err);
   }
   // 兜底透明占位图
   return sharp({

@@ -7,8 +7,8 @@
  * @since 2026-08-17
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { MapStore } from '../redis/map-store.js';
-import { createRingQueue } from '../redis/ring-queue-store.js';
+import { MapStore } from '../framework/redis/map-store.js';
+import { createRingQueue } from '../framework/redis/ring-queue-store.js';
 
 describe('createRingQueue', () => {
   const PREFIX = 'test_ring';

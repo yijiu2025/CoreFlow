@@ -35,6 +35,9 @@ import {
   safeParse,
   serialize
 } from './utils.js';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.redis.redis-store');
 
 /** 单次 Redis 操作超时（毫秒） */
 const REDIS_OP_TIMEOUT = 3000;
@@ -88,7 +91,7 @@ function _log(...args) {
   if (_logger) {
     _logger.debug({ module: 'RedisStore' }, args.map(String).join(' '));
   } else if (DEBUG) {
-    console.log(...args);
+    log.info(...args);
   }
 }
 

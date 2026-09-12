@@ -11,6 +11,9 @@ import fs from 'fs';
 import path from 'path';
 import { C } from '../../../utils/colors.js';
 import { FIREWALL_FILE, DEFAULT_SERVER_NODE, DEFAULT_SECURITY_SETTINGS, DEFAULT_IP_APIS } from '../config/config.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.dao.dao');
 
 let serverNode = { ...DEFAULT_SERVER_NODE };
 let securitySettings = { ...DEFAULT_SECURITY_SETTINGS };
@@ -30,14 +33,14 @@ function initDao() {
       const raw = JSON.parse(fs.readFileSync(FIREWALL_FILE, 'utf-8'));
       if (raw.serverNode) serverNode = { ...serverNode, ...raw.serverNode };
       if (raw.securitySettings) securitySettings = deepMerge(securitySettings, raw.securitySettings);
-      console.log(`💾 [Firewall DAO] ${C.dim}已从文件恢复安全策略与节点数据${C.reset}`);
+      log.info(`💾 [Firewall DAO] ${C.dim}已从文件恢复安全策略与节点数据${C.reset}`);
     } else {
       refreshServerNodeAuto().catch(err => {
-        console.error(`❌ [Firewall DAO] ${C.red}节点初始化异常: ${err.message}${C.reset}`);
+        log.error(`❌ [Firewall DAO] ${C.red}节点初始化异常: ${err.message}${C.reset}`);
       });
     }
   } catch (err) {
-    console.error(`🚨 [Firewall DAO] ${C.red}加载持久化文件失败: ${err.message}${C.reset}`);
+    log.error(`🚨 [Firewall DAO] ${C.red}加载持久化文件失败: ${err.message}${C.reset}`);
   }
 }
 
@@ -62,7 +65,7 @@ function triggerSave() {
       fs.writeFileSync(tmpFile, JSON.stringify(dataToSave, null, 2), 'utf-8');
       fs.renameSync(tmpFile, FIREWALL_FILE);
     } catch (err) {
-      console.error(`🚨 [Firewall DAO] ${C.red}写入文件失败: ${err.message}${C.reset}`);
+      log.error(`🚨 [Firewall DAO] ${C.red}写入文件失败: ${err.message}${C.reset}`);
     }
   }, 1000);
 }
@@ -305,7 +308,7 @@ async function syncManualBlacklistToRedis(redisClient) {
     }
   } while (cursor !== '0');
 
-  console.log(`💾 [Firewall DAO] ${C.dim}已迁移现有封禁键到 hash 索引${C.reset}`);
+  log.info(`💾 [Firewall DAO] ${C.dim}已迁移现有封禁键到 hash 索引${C.reset}`);
 }
 
 /**
@@ -365,13 +368,13 @@ async function refreshServerNodeAuto() {
       lastUpdate: new Date().toISOString()
     };
     triggerSave();
-    console.log(
+    log.info(
       `✅ [Firewall DAO] ${C.green}节点定位成功 (${apiConfig.name}): ` +
         `${serverNode.ip} ${serverNode.country}/${serverNode.region}/${serverNode.city} ` +
         `[${serverNode.lat},${serverNode.lon}]${C.reset}`
     );
   } catch (err) {
-    console.warn(`⚠️ [Firewall DAO] ${C.yellow}${apiConfig.name} 定位失败: ${err.message}${C.reset}`);
+    log.warn(`⚠️ [Firewall DAO] ${C.yellow}${apiConfig.name} 定位失败: ${err.message}${C.reset}`);
   }
 }
 

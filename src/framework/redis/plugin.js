@@ -38,6 +38,9 @@ import fp from 'fastify-plugin';
 import { setupRedisHealthMonitor } from './health.js';
 import { setLogger, getCacheStats } from './redis-store.js';
 import { C } from '../../utils/colors.js';
+import { createLogger } from '../log/index.js';
+
+const log = createLogger('framework.redis.plugin');
 
 /** 全局主 Redis 客户端引用（推荐使用 app.redis） */
 let globalRedis = null;
@@ -78,7 +81,7 @@ function getTlsCaContent(caPath) {
   // 路径合法性校验：确保解析后是绝对路径，防止路径遍历
   const resolved = path.resolve(caPath);
   if (resolved !== caPath && !caPath.startsWith('.' + path.sep) && !caPath.startsWith('..' + path.sep)) {
-    console.warn(`⚠️ [Redis] ${C.yellow}TLS CA 路径不合法，已忽略: ${caPath}${C.reset}`);
+    log.warn(`⚠️ [Redis] ${C.yellow}TLS CA 路径不合法，已忽略: ${caPath}${C.reset}`);
     return undefined;
   }
   if (_caCache.has(caPath)) return _caCache.get(caPath);
@@ -88,7 +91,7 @@ function getTlsCaContent(caPath) {
     _capMap(_caCache, MAX_CA_CACHE);
     return content;
   } catch (err) {
-    console.warn(`⚠️ [Redis] ${C.yellow}读取 TLS CA 失败: ${caPath} — ${err.message}${C.reset}`);
+    log.warn(`⚠️ [Redis] ${C.yellow}读取 TLS CA 失败: ${caPath} — ${err.message}${C.reset}`);
     return undefined;
   }
 }
@@ -109,7 +112,7 @@ function parsePort(raw) {
  * 注意：仅影响主库，备用 Redis 不受影响
  */
 function degrade(app, reason) {
-  console.log(`ℹ️ [Redis] ${C.cyan}${reason}，主 Redis 降级为不可用${C.reset}`);
+  log.always(`ℹ️ [Redis] ${C.cyan}${reason}，主 Redis 降级为不可用${C.reset}`);
   globalRedis = null;
   redisHealthy = false;
   app.redis = null;
@@ -151,11 +154,11 @@ function createRedisConnection({ host, port, useTls, db = 0, label = '', connect
   // 超限后改为 30s 低频探测，不停止重连，确保 Redis 恢复后自动连回
   socket.reconnectStrategy = retries => {
     if (retries >= maxRetries) {
-      console.warn(`⚠️ [Redis] ${C.yellow}重连超限，进入慢速探测模式 ${tag}${C.reset}`);
+      log.warn(`⚠️ [Redis] ${C.yellow}重连超限，进入慢速探测模式 ${tag}${C.reset}`);
       return 30_000;
     }
     const delay = retries === 0 ? 500 : Math.min(1000 * Math.pow(2, retries - 1), 15_000);
-    console.warn(`⚠️ [Redis] ${C.yellow}第 ${retries + 1} 次重连 ${tag}，${delay / 1000}秒后重试...${C.reset}`);
+    log.warn(`⚠️ [Redis] ${C.yellow}第 ${retries + 1} 次重连 ${tag}，${delay / 1000}秒后重试...${C.reset}`);
     return delay;
   };
 
@@ -167,7 +170,7 @@ function createRedisConnection({ host, port, useTls, db = 0, label = '', connect
   });
 
   client.on('error', err => {
-    console.warn(`⚠️ [Redis] ${C.yellow}连接错误 ${tag}: ${err.message}${C.reset}`);
+    log.warn(`⚠️ [Redis] ${C.yellow}连接错误 ${tag}: ${err.message}${C.reset}`);
   });
 
   return client;
@@ -184,7 +187,7 @@ async function connectWithRetry(client, maxRetries = INITIAL_RETRY_MAX) {
     } catch (err) {
       if (i < maxRetries) {
         const delay = Math.min(1000 * Math.pow(2, i), 10_000);
-        console.warn(
+        log.warn(
           `⚠️ [Redis] ${C.yellow}第 ${i + 1} 次连接失败: ${err.message}，${Math.round(delay / 100) / 10}秒后重试...${C.reset}`
         );
         await new Promise(r => setTimeout(r, delay));
@@ -211,7 +214,7 @@ async function drainAndClose(client, label = '') {
     clearTimeout(timer);
   } catch {
     clearTimeout(timer);
-    console.warn(`⚠️ [Redis] ${C.yellow}${label}优雅关闭超时，强制断开${C.reset}`);
+    log.warn(`⚠️ [Redis] ${C.yellow}${label}优雅关闭超时，强制断开${C.reset}`);
     try {
       client.disconnect();
     } catch {
@@ -266,7 +269,7 @@ export default fp(
       return;
     }
     if (backupHost && backupPort === null && process.env.REDIS_BACKUP_PORT) {
-      console.warn(
+      log.warn(
         `⚠️ [Redis] ${C.yellow}REDIS_BACKUP_PORT 非法: ${process.env.REDIS_BACKUP_PORT}，跳过备用连接${C.reset}`
       );
     }
@@ -292,9 +295,9 @@ export default fp(
       app.redis = primaryClient;
       app.redisHealthy = true;
       healthMonitor.attach(primaryClient);
-      console.log(`✅ [Redis] ${C.green}主库连接成功: ${host}:${port} (db${defaultDb})${C.reset}`);
+      log.always(`✅ [Redis] ${C.green}主库连接成功: ${host}:${port} (db${defaultDb})${C.reset}`);
     } catch (err) {
-      console.warn(`⚠️ [Redis] ${C.yellow}主库连接失败: ${err.message}${C.reset}`);
+      log.warn(`⚠️ [Redis] ${C.yellow}主库连接失败: ${err.message}${C.reset}`);
       degrade(app, '主库连接失败');
     }
 
@@ -329,10 +332,10 @@ export default fp(
           backupRedisHealthy = true;
           app.backupRedis = backupClient;
           app.backupRedisHealthy = true;
-          console.log(`✅ [Redis] ${C.green}备用 Redis 连接成功: ${backupHost}:${backupPort}${C.reset}`);
+          log.always(`✅ [Redis] ${C.green}备用 Redis 连接成功: ${backupHost}:${backupPort}${C.reset}`);
         })
         .catch(err => {
-          console.warn(`⚠️ [Redis] ${C.yellow}备用 Redis 首次连接失败，后台重连中... ${err.message}${C.reset}`);
+          log.warn(`⚠️ [Redis] ${C.yellow}备用 Redis 首次连接失败，后台重连中... ${err.message}${C.reset}`);
           // 不设 backupRedis = null，让 reconnectStrategy 继续重连
           // ready 事件触发后会自动更新状态
           backupRedisHealthy = false;

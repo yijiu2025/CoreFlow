@@ -7,6 +7,9 @@
 import { connectRedis, closeRedis } from '../../../../scripts/lib/redis.js';
 import { printSuccess, printInfo, printError, printWarning } from '../../../../scripts/lib/table.js';
 import { createRl, ask, closeRl } from '../../../../scripts/lib/input.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.cli.whitelist');
 
 /**
  * 查看白名单
@@ -26,11 +29,11 @@ export async function listWhitelist() {
       return;
     }
 
-    console.log('\n✅ 白名单：');
+    log.stdout('\n✅ 白名单：');
     whitelist.forEach((ip, i) => {
-      console.log(`  ${i + 1}. ${ip}`);
+      log.stdout(`  ${i + 1}. ${ip}`);
     });
-    console.log(`\n共 ${whitelist.length} 个白名单 IP`);
+    log.stdout(`\n共 ${whitelist.length} 个白名单 IP`);
   } finally {
     await closeRedis(redis);
   }
