@@ -148,7 +148,7 @@ async function getUserFromToken(token) {
     try {
       userData = await userStore.get(String(payload.sub));
     } catch (err) {
-      log.warn('[Auth] 用户缓存读取失败，降级到数据库:', err.message);
+      log.warn('[Auth] 用户缓存读取失败，降级到数据库:', err);
     }
 
     if (!userData) {
@@ -159,7 +159,7 @@ async function getUserFromToken(token) {
       try {
         await userStore.set(String(payload.sub), userData, 30);
       } catch (err) {
-        log.warn('[Auth] 用户缓存写入失败:', err.message);
+        log.warn('[Auth] 用户缓存写入失败:', err);
       }
     } else {
       log.debug('📦 用户缓存命中: userId=%s, username=%s', userData.id, userData.username);
@@ -167,7 +167,8 @@ async function getUserFromToken(token) {
 
     // 2. 检查账号状态（禁用则拒绝）
     if (userData.status === 0) {
-      log.debug('🚫 账号已禁用: userId=%s', userData.id);
+      // warn：禁用账号的登录尝试是安全审计事件，生产环境需要可见
+      log.warn('🚫 账号已禁用: userId=%s', userData.id);
       return null;
     }
 
@@ -185,7 +186,7 @@ async function getUserFromToken(token) {
           permissions = permissions || cached.permissions;
         }
       } catch (err) {
-        log.warn('[Auth] 缓存读取失败，降级到数据库:', err.message);
+        log.warn('[Auth] 缓存读取失败，降级到数据库:', err);
       }
 
       // 缓存未命中，从数据库加载
@@ -198,7 +199,7 @@ async function getUserFromToken(token) {
         try {
           await permStore.set(cacheKey, { roles, permissions }, 300);
         } catch (err) {
-          log.warn('[Auth] 缓存写入失败:', err.message);
+          log.warn('[Auth] 缓存写入失败:', err);
         }
       }
     }
@@ -218,7 +219,7 @@ async function getUserFromToken(token) {
   } catch (err) {
     // JWT 解析全程异常（verify 失败 / findUserById 抛错 / loadUserPermissions 抛错）：
     // 返回 null 让调用方走"认证失败"分支，但记 warn 便于排障（原 catch {} 静默）
-    log.warn('[Auth] getUserFromToken 异常:', err?.message);
+    log.warn('[Auth] getUserFromToken 异常:', err);
     return null;
   }
 }
@@ -246,7 +247,8 @@ async function authenticateByJwt(cookies, headers) {
       log.debug('✅ JWT 认证成功: userId=%s, username=%s', tokenUser.userId, tokenUser.username);
       return tokenUser;
     }
-    log.debug('❌ JWT 认证失败（Token 无效或用户不存在）');
+    // warn：认证失败是安全审计事件（爆破/伪造 token 探测），生产环境需要可见
+    log.warn('❌ JWT 认证失败（Token 无效或用户不存在）');
   }
 
   // 2b. access_token Cookie
@@ -335,7 +337,7 @@ async function detectAndHandleRisk(request, reply, sessionData) {
     }
   } catch (err) {
     // 风险检测失败不阻塞请求，但记 warn 便于排障（安全相关路径，原仅 _debug 生产不可见）
-    log.warn('⚠️ [Auth] 会话风险检测异常:', err?.message);
+    log.warn('⚠️ [Auth] 会话风险检测异常:', err);
   }
 }
 

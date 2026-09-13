@@ -54,7 +54,7 @@ export function broadcastLog(record) {
   try {
     broadcast({ type: 'LOG', data: record });
   } catch (err) {
-    log.error('🚨 [Monitor WS] 广播序列化失败:', err.message);
+    log.error('🚨 [Monitor WS] 广播序列化失败:', err);
   }
 }
 

@@ -259,7 +259,7 @@ export async function directLogin(request, reply, fastify) {
         });
       }
     } catch (err) {
-      log.error('[directLogin] 环境检测异常:', err.message, err.stack);
+      log.error('[directLogin] 环境检测异常:', err);
       // 检测异常不阻断登录，继续走签发流程（降级放行）
     }
   }
@@ -349,7 +349,7 @@ export async function directLogin(request, reply, fastify) {
         });
         // 落到下方第 5 步签发令牌（不 return consent）
       } catch (err) {
-        log.error('[directLogin] 自动授权失败，降级走 consent:', err.message);
+        log.error('[directLogin] 自动授权失败，降级走 consent:', err);
       }
     } else {
       const consentKey = uuidv4();

@@ -19,6 +19,6 @@ export default async function (app) {
     await ensureCurrentKey();
     log.always(`🔑 [Loader: Keys] ${C.cyan}密钥初始化完成${C.reset}`);
   } catch (err) {
-    log.error(`❌ [Loader: Keys] ${C.red}密钥初始化失败: ${err.message}${C.reset}`);
+    log.error(`❌ [Loader: Keys] ${C.red}密钥初始化失败${C.reset}`, err);
   }
 }

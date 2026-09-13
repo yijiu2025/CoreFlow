@@ -252,11 +252,11 @@ export function createGuard(systemKey, groupKey, apiKey = null) {
     // 计算校验耗时
     const duration = (performance.now() - startTime).toFixed(3);
 
-    // 使用 Fastify 内置 Pino 日志打印统计信息
-    request.log.info(
-      { guard: { systemKey, groupKey, apiKey }, duration: `${duration}ms` },
-      `🛡️  [Guard] 安全校验通过 | 耗时: ${duration}ms`
-    );
+    // 统一日志出口（wb-logkit）：进入 logs/*.log 文件，参与脱敏/分级/错误文件机制
+    log.info(`🛡️ [Guard] 安全校验通过 | 耗时: ${duration}ms`, {
+      guard: { systemKey, groupKey, apiKey },
+      duration: `${duration}ms`
+    });
   };
 }
 

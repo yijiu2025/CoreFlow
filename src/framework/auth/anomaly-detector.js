@@ -311,7 +311,7 @@ async function detectSessionRisk({
     if (verified) return { level: 'safe', reasons: ['already_verified'] };
   } catch (err) {
     // 标记查询失败不阻塞，继续走检测（Redis 故障期间仍需做风险判定）
-    log.warn(`⚠️ [Anomaly] verified 标记查询失败，继续走风险检测: ${err?.message}`);
+    log.warn(`⚠️ [Anomaly] verified 标记查询失败，继续走风险检测`, err);
   }
 
   // 2. 基准缺失（旧 session 无指纹字段）→ 降级 info 放行，不误判
@@ -371,7 +371,7 @@ async function issueVerifyToken(userId, deviceId) {
     await store.set(`vtoken:${token}`, { userId, deviceId }, VERIFIED_TTL);
   } catch (err) {
     // 写失败则验证端点无法校验该 token，但不影响本次返回（前端会拿到 token，调验证端点时校验失败再重试）
-    log.warn(`⚠️ [Anomaly] verify token 写入失败，验证端点将无法校验: ${err?.message}`);
+    log.warn(`⚠️ [Anomaly] verify token 写入失败，验证端点将无法校验`, err);
   }
   return token;
 }
@@ -396,7 +396,7 @@ async function confirmVerifyToken(token) {
     return true;
   } catch (err) {
     // 校验流程异常不直接放行（返回 false 让前端重试），但记日志便于排障
-    log.warn(`⚠️ [Anomaly] confirmVerifyToken 异常: ${err?.message}`);
+    log.warn(`⚠️ [Anomaly] confirmVerifyToken 异常`, err);
     return false;
   }
 }

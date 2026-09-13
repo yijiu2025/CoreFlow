@@ -73,7 +73,7 @@ export default async function (fastify) {
           });
         } catch (err) {
           // 基准更新失败不影响验证通过本身（已写免验标记 30 分钟）
-          log.warn('[verify-challenge] 更新基准失败:', err.message);
+          log.warn('[verify-challenge] 更新基准失败:', err);
         }
       }
 

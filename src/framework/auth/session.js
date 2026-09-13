@@ -530,7 +530,7 @@ async function createSession(params) {
         await pruneActiveDevices(userId);
       }
     } catch (err) {
-      log.warn('[Session] upsert token 失败，回退 destroy+create:', err.message);
+      log.warn('[Session] upsert token 失败，回退 destroy+create:', err);
       await SessionToken.destroy({
         where: { user_id: userId, app_id: appId, device_id: deviceId, revoked: false }
       });
@@ -990,7 +990,7 @@ async function revokeFamily(familyId, userId = null) {
   try {
     await SessionToken.update({ revoked: true }, { where: { family_id: familyId } });
   } catch (err) {
-    log.warn('[Session] revokeFamily 按 family_id 吊销失败:', err.message);
+    log.warn('[Session] revokeFamily 按 family_id 吊销失败:', err);
   }
   if (hashes.length) {
     await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
@@ -1046,7 +1046,7 @@ async function updateRememberMe(userId, sessionId, rememberMe) {
         { where: { user_id: userId, token: sidHash(sessionId) } }
       );
     } catch (err) {
-      log.warn('[Session] 同步 DB remember_me/family_id 失败:', err.message);
+      log.warn('[Session] 同步 DB remember_me/family_id 失败:', err);
     }
   }
 
@@ -1325,7 +1325,7 @@ async function updateSessionBaseline(sessionId, { deviceId, deviceFingerprint, i
         where: { user_id: sd.userId, token: tokenHash }
       });
     } catch (err) {
-      log.warn('[Session] 更新 session_tokens 基准失败:', err.message);
+      log.warn('[Session] 更新 session_tokens 基准失败:', err);
     }
   }
   return true;
@@ -1361,7 +1361,7 @@ async function getSessionTokenDevice(sessionId) {
       userAgent: row.user_agent || ''
     };
   } catch (err) {
-    log.warn('[Session] 查询 session_tokens 设备身份失败:', err.message);
+    log.warn('[Session] 查询 session_tokens 设备身份失败:', err);
     return null;
   }
 }

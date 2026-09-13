@@ -19,7 +19,8 @@ const { DB_TYPE, DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME } = process.env;
 const required = { DB_HOST, DB_NAME, DB_USER };
 const missing = Object.entries(required).filter(([, v]) => !v);
 if (missing.length > 0) {
-  log.error(`❌ [DB] ${C.red}缺少必要环境变量: ${missing.map(([k]) => k).join(', ')}${C.reset}`);
+  // always.error：不受 LOG_LEVEL 门控，防止误配 LOG_LEVEL=fatal 时静默退出无任何提示
+  log.always.error(`❌ [DB] ${C.red}缺少必要环境变量: ${missing.map(([k]) => k).join(', ')}${C.reset}`);
   // 延迟退出，确保错误日志刷新
   setTimeout(() => process.exit(1), 100);
 }

@@ -37,7 +37,7 @@ export async function loadGuardConfig() {
     data = await GuardConfigDao.loadFromDB();
   } catch (err) {
     // 数据库不可用时使用代码级配置，不阻止启动
-    log.warn(`⚠️ [Guard Config] ${C.yellow}数据库加载失败，使用代码级配置: ${err.message}${C.reset}`);
+    log.warn(`⚠️ [Guard Config] ${C.yellow}数据库加载失败，使用代码级配置${C.reset}`, err);
     return;
   }
 
@@ -62,7 +62,7 @@ export async function loadGuardConfig() {
       }
     } catch (err) {
       // 同步失败不阻止启动，下次启动会重试
-      log.warn(`⚠️ [Guard Config] ${C.yellow}代码级配置同步失败: ${err.message}，下次启动将重试${C.reset}`);
+      log.warn(`⚠️ [Guard Config] ${C.yellow}代码级配置同步失败，下次启动将重试${C.reset}`, err);
     }
   } else {
     // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
@@ -306,7 +306,7 @@ function triggerSave(systemKey) {
         _dbVersions = { ..._previousSnapshot.versions };
         _previousSnapshot = null;
       }
-      log.error(`❌ [Guard Config] ${C.red}异步写入失败: ${err.message}${C.reset}`);
+      log.error(`❌ [Guard Config] ${C.red}异步写入失败${C.reset}`, err);
     }
   }, 1000);
 }
@@ -448,7 +448,7 @@ export async function flushGuardConfig() {
     currentVersion = await saveWithTimeout(keys);
     log.info(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}`);
   } catch (err) {
-    log.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败: ${err.message}${C.reset}`);
+    log.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败${C.reset}`, err);
   }
 }
 
@@ -477,7 +477,7 @@ export async function saveGuardConfig() {
     currentVersion = await saveWithTimeout();
     log.info(`✅ [Guard Config] ${C.green}数据库已同步 (version=${currentVersion})${C.reset}`);
   } catch (err) {
-    log.error(`❌ [Guard Config] ${C.red}同步失败: ${err.message}${C.reset}`);
+    log.error(`❌ [Guard Config] ${C.red}同步失败${C.reset}`, err);
     throw err;
   }
 }

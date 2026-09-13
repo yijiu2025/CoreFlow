@@ -111,7 +111,7 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
       const { roles, permissions } = await loadUserPermissions(user.id, client.client_id);
       await permStore.set(`${user.id}:${client.client_id}`, { roles, permissions }, 30);
     } catch (err) {
-      log.warn('[Auth] 权限缓存预热失败:', err.message);
+      log.warn('[Auth] 权限缓存预热失败:', err);
     }
 
     // OIDC ID Token：按 scope 裁剪 claims（openid 只给 sub，profile 给 name，email 给 email）

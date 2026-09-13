@@ -258,7 +258,7 @@ export default async function (fastify) {
           await emailNoticeService.send(email, '【CoreFlow】密码重置', content);
           await auditReset({ ...auditCtx, success: true, reason: 'link_sent' });
         } catch (err) {
-          log.warn('[ResetLink] 邮件发送失败:', err.message);
+          log.warn('[ResetLink] 邮件发送失败:', err);
           await auditReset({ ...auditCtx, success: false, reason: '邮件发送失败' });
         }
       } else {

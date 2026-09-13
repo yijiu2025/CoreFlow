@@ -37,7 +37,7 @@ export async function initLoader(app) {
     await loadGuardConfig();
     log.always(`✅ [Loader] ${C.green}所有子模块注册与配置加载完毕${C.reset}`);
   } catch (err) {
-    log.error(`❌ [Loader] ${C.red}初始化异常: ${err.message}${C.reset}`, err.stack);
+    log.error(`❌ [Loader] ${C.red}初始化异常${C.reset}`, err);
     // 向上冒泡，阻止服务在未完成初始化的状态下启动
     throw err;
   }

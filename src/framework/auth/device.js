@@ -194,7 +194,7 @@ async function getDeviceId(request, opts = {}) {
           }
         }
       } catch (error) {
-        log.warn(`⚠️ [DeviceId] 登录态 DB 恢复失败：${error.message}`);
+        log.warn(`⚠️ [DeviceId] 登录态 DB 恢复失败`, error);
       }
     }
     if (recovered) {
@@ -216,7 +216,7 @@ async function getDeviceId(request, opts = {}) {
         return validation.normalizedId;
       }
     } catch (error) {
-      log.warn(`⚠️ [DeviceId] 验证失败：${error.message}`);
+      log.warn(`⚠️ [DeviceId] 验证失败`, error);
     }
   }
 

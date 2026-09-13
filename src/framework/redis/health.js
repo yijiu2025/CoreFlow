@@ -67,7 +67,7 @@ function setupRedisHealthMonitor(app, options = {}) {
       try {
         cb(newState);
       } catch (err) {
-        log.warn('[Redis] 健康状态回调异常:', err.stack || err.message);
+        log.warn('[Redis] 健康状态回调异常:', err);
       }
     }
   }

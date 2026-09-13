@@ -76,7 +76,7 @@ function resolveGeoInfo(ip) {
       };
     }
   } catch (err) {
-    log.error('[Firewall] GeoIP 解析异常:', err.message);
+    log.error('[Firewall] GeoIP 解析异常:', err);
   }
 
   return { region: '未知', city: '未知' };
