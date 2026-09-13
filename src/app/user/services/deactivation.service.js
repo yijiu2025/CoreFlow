@@ -270,7 +270,8 @@ class DeactivationService {
         await kickAllSessions(userId);
       }
     } catch (e) {
-      log.warn(`⚠️ [Deactivation] Redis 踢所有 session 失败: ${e.message}`);
+      // error：踢下线失败意味着注销后用户仍持有有效会话，有安全后果
+      log.error('⚠️ [Deactivation] Redis 踢所有 session 失败', e);
     }
     return affected || 0;
   }
@@ -313,7 +314,8 @@ class DeactivationService {
         });
       }
     } catch (e) {
-      log.warn(`⚠️ [Deactivation] 踢 app=${appId} 的 Redis session 失败: ${e.message}`);
+      // error：同上，注销后对应 app 的会话仍在，有安全后果
+      log.error(`⚠️ [Deactivation] 踢 app=${appId} 的 Redis session 失败`, e);
     }
   }
 }

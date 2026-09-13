@@ -94,7 +94,7 @@ function loadData() {
       log.info(`[Firewall Store] 已从磁盘恢复 ${records.length} 条记录`);
     }
   } catch (err) {
-    log.error('[Firewall Store] 加载持久化数据失败:', err.message);
+    log.error('[Firewall Store] 加载持久化数据失败:', err);
   }
 }
 
@@ -118,7 +118,7 @@ function persistData() {
       };
       await fs.promises.writeFile(DATA_FILE, JSON.stringify(data), 'utf-8');
     } catch (err) {
-      log.error('[Firewall Store] 持久化数据失败:', err.message);
+      log.error('[Firewall Store] 持久化数据失败:', err);
     } finally {
       isSaving = false;
     }
@@ -271,7 +271,7 @@ function clearAll() {
     ipStats: []
   };
   fs.promises.writeFile(DATA_FILE, JSON.stringify(data), 'utf-8').catch(err => {
-    log.error('[Firewall Store] 清空持久化数据失败:', err.message);
+    log.error('[Firewall Store] 清空持久化数据失败:', err);
   });
 }
 

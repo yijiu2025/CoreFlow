@@ -57,7 +57,7 @@ export default async app => {
           }
         } catch (error) {
           loadErrors.push({ file: entry.name, error: error.message });
-          log.error(`❌ [Loader: Models] ${C.red}模型 [${entry.name}] 加载失败: ${error.message}${C.reset}`);
+          log.error(`❌ [Loader: Models] ${C.red}模型 [${entry.name}] 加载失败${C.reset}`, error);
         }
       }
     }
@@ -92,7 +92,7 @@ export default async app => {
         await sequelize.sync({ alter: true });
         log.always(`✅ [Loader: Models] ${C.green}表结构同步完成${C.reset}`);
       } catch (err) {
-        log.error(`❌ [Loader: Models] ${C.red}表结构同步失败: ${err.message}${C.reset}`);
+        log.error(`❌ [Loader: Models] ${C.red}表结构同步失败${C.reset}`, err);
       }
     }
   }

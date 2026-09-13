@@ -36,11 +36,11 @@ function initDao() {
       log.info(`💾 [Firewall DAO] ${C.dim}已从文件恢复安全策略与节点数据${C.reset}`);
     } else {
       refreshServerNodeAuto().catch(err => {
-        log.error(`❌ [Firewall DAO] ${C.red}节点初始化异常: ${err.message}${C.reset}`);
+        log.error(`❌ [Firewall DAO] ${C.red}节点初始化异常${C.reset}`, err);
       });
     }
   } catch (err) {
-    log.error(`🚨 [Firewall DAO] ${C.red}加载持久化文件失败: ${err.message}${C.reset}`);
+    log.error(`🚨 [Firewall DAO] ${C.red}加载持久化文件失败${C.reset}`, err);
   }
 }
 
@@ -65,7 +65,7 @@ function triggerSave() {
       fs.writeFileSync(tmpFile, JSON.stringify(dataToSave, null, 2), 'utf-8');
       fs.renameSync(tmpFile, FIREWALL_FILE);
     } catch (err) {
-      log.error(`🚨 [Firewall DAO] ${C.red}写入文件失败: ${err.message}${C.reset}`);
+      log.error(`🚨 [Firewall DAO] ${C.red}写入文件失败${C.reset}`, err);
     }
   }, 1000);
 }
@@ -374,7 +374,7 @@ async function refreshServerNodeAuto() {
         `[${serverNode.lat},${serverNode.lon}]${C.reset}`
     );
   } catch (err) {
-    log.warn(`⚠️ [Firewall DAO] ${C.yellow}${apiConfig.name} 定位失败: ${err.message}${C.reset}`);
+    log.warn(`⚠️ [Firewall DAO] ${C.yellow}${apiConfig.name} 定位失败${C.reset}`, err);
   }
 }
 

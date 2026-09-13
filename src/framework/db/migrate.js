@@ -177,7 +177,7 @@ async function main() {
         break;
     }
   } catch (err) {
-    log.error('[Migrate] 执行失败:', err.message);
+    log.error('[Migrate] 执行失败:', err);
     setTimeout(() => process.exit(1), 100);
   } finally {
     await sequelize.close();

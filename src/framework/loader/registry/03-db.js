@@ -42,7 +42,7 @@ export default async app => {
       log.always(`📦 [Loader: DB] ${C.cyan}数据库连接已关闭${C.reset}`);
     });
   } catch (err) {
-    log.error(`❌ [Loader: DB] ${C.red}数据库连接失败: ${err.message}${C.reset}`);
+    log.error(`❌ [Loader: DB] ${C.red}数据库连接失败${C.reset}`, err);
     // 连接失败不阻塞启动，降级为 null
     app.decorate('db', null);
   }

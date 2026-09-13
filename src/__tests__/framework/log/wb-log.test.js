@@ -334,6 +334,15 @@ describe('wb-logkit 核心行为', () => {
     expect(Object.isFrozen(cfg.file)).toBe(true);
   });
 
+  test('文件通道：剥离 msg 中的 ANSI 颜色码，文件保持纯文本', () => {
+    configureLog({ level: 'info' });
+    createLogger('ansi').info(`\x1b[33m⚠️ [X] 黄色消息\x1b[0m`, { k: '\x1b[31m红\x1b[0m' });
+    const [rec] = readMain();
+    expect(rec.msg).toContain('黄色消息');
+    expect(rec.msg).not.toContain('\x1b[');
+    expect(rec.k).toBe('红');
+  });
+
   test('pretty 模式：非 TTY（管道/重定向）不输出 ANSI 颜色码', () => {
     configureLog({ level: 'info', console: true, pretty: true });
     const captured = [];

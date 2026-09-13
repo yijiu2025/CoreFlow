@@ -22,7 +22,7 @@ function registerOAuthErrorHandler(fastify) {
 
     // OAuth 标准错误格式
     if (isOAuthError) {
-      request.log.error({ err }, `[OAuth] ${err.error}: ${err.error_description}`);
+      log.error(`[OAuth] ${err.error}: ${err.error_description}`, err);
       return reply.code(statusCode).send({
         code: statusCode,
         message: err.error_description,
@@ -31,7 +31,7 @@ function registerOAuthErrorHandler(fastify) {
     }
 
     // 通用错误格式
-    request.log.error({ err }, `[Auth] ${err.message}`);
+    log.error(`[Auth] ${err.message}`, err);
     return reply.code(statusCode).send({
       code: statusCode,
       message: err.message || 'Internal server error',
@@ -44,7 +44,7 @@ function registerOAuthErrorHandler(fastify) {
  * Express 错误处理中间件（向后兼容遗留代码）
  */
 function oauthErrorHandler(err, req, res, _next) {
-  log.error(`[Auth] ${err.error ?? 'server_error'}: ${err.message}`);
+  log.error(`[Auth] ${err.error ?? 'server_error'}`, err);
 
   const statusCode = err.statusCode ?? 500;
   res.status(statusCode).json({

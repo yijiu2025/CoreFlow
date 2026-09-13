@@ -9,6 +9,10 @@
  * @since 2026-07-24
  */
 
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.loader.monitor');
+
 const SLOW_THRESHOLD = parseInt(process.env.SLOW_REQUEST_THRESHOLD || '2000', 10) || 2000;
 
 export default async app => {
@@ -24,18 +28,15 @@ export default async app => {
     // 所有请求记录到响应头（方便调试）
     reply.header('X-Response-Time', `${ms}ms`);
 
-    // 慢请求告警
+    // 慢请求告警（统一日志出口，落 logs/*.log 文件）
     if (ms > SLOW_THRESHOLD) {
-      request.log.warn(
-        {
-          duration: `${ms}ms`,
-          method: request.method,
-          url: request.url,
-          statusCode: reply.statusCode,
-          userId: request.state?.user?.uid || '-'
-        },
-        `慢请求 (> ${SLOW_THRESHOLD}ms)`
-      );
+      log.warn(`慢请求 (> ${SLOW_THRESHOLD}ms)`, {
+        duration: `${ms}ms`,
+        method: request.method,
+        url: request.url,
+        statusCode: reply.statusCode,
+        userId: request.state?.user?.uid || '-'
+      });
     }
   });
 };

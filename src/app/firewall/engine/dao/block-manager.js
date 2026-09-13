@@ -76,7 +76,7 @@ async function setBlock(redisClient, ip, metadata) {
     await redisClient.hset(HASH_BLOCKED, ip, value);
   } catch (err) {
     // Redis 写入失败，降级到内存
-    log.error('[Firewall] setBlock Redis 失败，降级到内存:', err.message);
+    log.error('[Firewall] setBlock Redis 失败，降级到内存:', err);
     memoryBlocks.set(ip, {
       status: metadata.status,
       source: metadata.source || 'auto',
@@ -100,7 +100,7 @@ async function removeBlock(redisClient, ip) {
     await redisClient.del(KEY.block(ip));
     await redisClient.hdel(HASH_BLOCKED, ip);
   } catch (err) {
-    log.error('[Firewall] removeBlock Redis 失败:', err.message);
+    log.error('[Firewall] removeBlock Redis 失败:', err);
   }
 }
 
@@ -127,7 +127,7 @@ async function setWhitelist(redisClient, ip, durationSeconds) {
     await redisClient.set(KEY.whitelist(ip), '1', { EX: durationSeconds });
     await redisClient.hset(HASH_WHITELIST, ip, value);
   } catch (err) {
-    log.error('[Firewall] setWhitelist Redis 失败:', err.message);
+    log.error('[Firewall] setWhitelist Redis 失败:', err);
   }
 }
 
@@ -144,7 +144,7 @@ async function removeWhitelist(redisClient, ip) {
     await redisClient.del(KEY.whitelist(ip));
     await redisClient.hdel(HASH_WHITELIST, ip);
   } catch (err) {
-    log.error('[Firewall] removeWhitelist Redis 失败:', err.message);
+    log.error('[Firewall] removeWhitelist Redis 失败:', err);
   }
 }
 
@@ -180,7 +180,7 @@ async function setBlockFp(redisClient, fingerprint, metadata) {
     }
     await redisClient.hset(HASH_BLOCKED_FP, fingerprint, value);
   } catch (err) {
-    log.error('[Firewall] setBlockFp Redis 失败，降级到内存:', err.message);
+    log.error('[Firewall] setBlockFp Redis 失败，降级到内存:', err);
     memoryBlocksFp.set(fingerprint, {
       status: metadata.status,
       source: metadata.source || 'manual',
@@ -203,7 +203,7 @@ async function removeBlockFp(redisClient, fingerprint) {
     await redisClient.del(KEY.blockFp(fingerprint));
     await redisClient.hdel(HASH_BLOCKED_FP, fingerprint);
   } catch (err) {
-    log.error('[Firewall] removeBlockFp Redis 失败:', err.message);
+    log.error('[Firewall] removeBlockFp Redis 失败:', err);
   }
 }
 
@@ -226,7 +226,7 @@ async function setWhitelistFp(redisClient, fingerprint, durationSeconds) {
     await redisClient.set(KEY.whitelistFp(fingerprint), '1', { EX: durationSeconds });
     await redisClient.hset(HASH_WHITELIST_FP, fingerprint, value);
   } catch (err) {
-    log.error('[Firewall] setWhitelistFp Redis 失败:', err.message);
+    log.error('[Firewall] setWhitelistFp Redis 失败:', err);
   }
 }
 
@@ -243,7 +243,7 @@ async function removeWhitelistFp(redisClient, fingerprint) {
     await redisClient.del(KEY.whitelistFp(fingerprint));
     await redisClient.hdel(HASH_WHITELIST_FP, fingerprint);
   } catch (err) {
-    log.error('[Firewall] removeWhitelistFp Redis 失败:', err.message);
+    log.error('[Firewall] removeWhitelistFp Redis 失败:', err);
   }
 }
 
@@ -304,7 +304,7 @@ async function getActiveBlocks(redisClient) {
         }
       }
     } catch (err) {
-      log.error('[Firewall] getActiveBlocks Redis 失败:', err.message);
+      log.error('[Firewall] getActiveBlocks Redis 失败:', err);
     }
   }
 
@@ -380,7 +380,7 @@ async function getActiveWhitelist(redisClient) {
         }
       }
     } catch (err) {
-      log.error('[Firewall] getActiveWhitelist Redis 失败:', err.message);
+      log.error('[Firewall] getActiveWhitelist Redis 失败:', err);
     }
   }
 

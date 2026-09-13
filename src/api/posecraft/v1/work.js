@@ -6,11 +6,14 @@
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import { createLogger } from '../../../framework/log/index.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
 import templateDao from '../../../app/posecraft/dao/template.dao.js';
 import { composeWorkPreview, generateImageThumbnail } from '../../../app/posecraft/utils/preview.js';
 import { checkDataPermission } from '../../../app/posecraft/services/permission.service.js';
 import { formatWorkDetail, formatWorkList } from '../../../app/posecraft/services/work-view.service.js';
+
+const log = createLogger('api.posecraft.work');
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -240,7 +243,7 @@ export default async function (fastify) {
       // 若基于模板创建，异步递增模板使用次数（不阻塞响应）
       if (template_id) {
         templateDao.incrementUses(template_id).catch(err => {
-          fastify.log.warn({ err, template_id }, '[Work] 递增模板使用次数失败');
+          log.warn('[Work] 递增模板使用次数失败', err, { template_id });
         });
       }
 

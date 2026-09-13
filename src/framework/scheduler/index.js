@@ -46,7 +46,7 @@ function loadConfig() {
     }
     return { ...DEFAULT_CONFIG, ...raw, tasks };
   } catch (err) {
-    log.error(`❌ [Scheduler] ${C.red}读取配置失败，用默认值: ${err.message}${C.reset}`);
+    log.error(`❌ [Scheduler] ${C.red}读取配置失败，用默认值${C.reset}`, err);
     return DEFAULT_CONFIG;
   }
 }
@@ -92,7 +92,7 @@ export async function startScheduler(app) {
       const intervalMs = (taskConfig.intervalHours || 24) * 60 * 60 * 1000;
       const run = () => {
         taskFactory.run(app, taskConfig).catch(err => {
-          log.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 执行失败: ${err.message}${C.reset}`);
+          log.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 执行失败${C.reset}`, err);
         });
       };
 
@@ -102,7 +102,7 @@ export async function startScheduler(app) {
       timers.push(timer);
       log.info(`✅ [Scheduler] ${C.green}任务 [${taskKey}] 已启动，间隔 ${taskConfig.intervalHours}h${C.reset}`);
     } catch (err) {
-      log.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 加载失败: ${err.message}${C.reset}`);
+      log.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 加载失败${C.reset}`, err);
     }
   }
 

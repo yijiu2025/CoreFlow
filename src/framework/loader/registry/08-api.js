@@ -76,7 +76,7 @@ export default async app => {
         }
       }
     } catch (err) {
-      log.warn(`⚠️ [Loader] ${C.yellow}读取目录失败: ${currentPath} ${err.message}${C.reset}`);
+      log.warn(`⚠️ [Loader] ${C.yellow}读取目录失败: ${currentPath}${C.reset}`, err);
     }
   }
 

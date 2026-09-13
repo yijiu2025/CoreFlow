@@ -91,7 +91,7 @@ function getTlsCaContent(caPath) {
     _capMap(_caCache, MAX_CA_CACHE);
     return content;
   } catch (err) {
-    log.warn(`⚠️ [Redis] ${C.yellow}读取 TLS CA 失败: ${caPath} — ${err.message}${C.reset}`);
+    log.warn(`⚠️ [Redis] ${C.yellow}读取 TLS CA 失败: ${caPath}${C.reset}`, err);
     return undefined;
   }
 }
@@ -170,7 +170,7 @@ function createRedisConnection({ host, port, useTls, db = 0, label = '', connect
   });
 
   client.on('error', err => {
-    log.warn(`⚠️ [Redis] ${C.yellow}连接错误 ${tag}: ${err.message}${C.reset}`);
+    log.warn(`⚠️ [Redis] ${C.yellow}连接错误 ${tag}${C.reset}`, err);
   });
 
   return client;
@@ -297,7 +297,7 @@ export default fp(
       healthMonitor.attach(primaryClient);
       log.always(`✅ [Redis] ${C.green}主库连接成功: ${host}:${port} (db${defaultDb})${C.reset}`);
     } catch (err) {
-      log.warn(`⚠️ [Redis] ${C.yellow}主库连接失败: ${err.message}${C.reset}`);
+      log.warn(`⚠️ [Redis] ${C.yellow}主库连接失败${C.reset}`, err);
       degrade(app, '主库连接失败');
     }
 
@@ -335,7 +335,7 @@ export default fp(
           log.always(`✅ [Redis] ${C.green}备用 Redis 连接成功: ${backupHost}:${backupPort}${C.reset}`);
         })
         .catch(err => {
-          log.warn(`⚠️ [Redis] ${C.yellow}备用 Redis 首次连接失败，后台重连中... ${err.message}${C.reset}`);
+          log.warn(`⚠️ [Redis] ${C.yellow}备用 Redis 首次连接失败，后台重连中...${C.reset}`, err);
           // 不设 backupRedis = null，让 reconnectStrategy 继续重连
           // ready 事件触发后会自动更新状态
           backupRedisHealthy = false;

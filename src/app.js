@@ -95,11 +95,11 @@ function createErrorHandler(isProduction) {
       message = error.validation.map(v => v.message || v.instancePath).join('; ');
     }
 
-    // 500+ 记录完整错误栈，400 仅记录摘要
+    // 500+ 记录完整错误栈，400 仅记录摘要（统一日志出口，落 logs/*.log）
     if (statusCode >= 500) {
-      request.log.error({ err: error, statusCode }, '服务器内部错误');
+      log.error('服务器内部错误', error, { statusCode });
     } else {
-      request.log.warn({ statusCode, message }, '请求异常');
+      log.warn('请求异常', { statusCode, message });
     }
 
     reply.status(statusCode).send({
@@ -281,7 +281,7 @@ export async function createApp() {
       await flushGuardConfig();
     } catch (err) {
       // Fastify onClose 不暴露异步错误，必须在此捕获防止静默丢失
-      log.error(`❌ [App] 优雅关闭时保存守卫配置失败: ${err.message}`);
+      log.error(`❌ [App] 优雅关闭时保存守卫配置失败`, err);
     }
   });
 

@@ -51,7 +51,7 @@ export default async app => {
         appConfig = mod.default || mod;
         log.dev(`📦 [Apps] ${C.cyan}加载应用: ${appConfig.name || dir.name}${C.reset}`);
       } catch (err) {
-        log.error(`❌ [Apps] ${C.red}加载配置失败 [${dir.name}]: ${err.message}${C.reset}`);
+        log.error(`❌ [Apps] ${C.red}加载配置失败 [${dir.name}]${C.reset}`, err);
       }
     }
 
@@ -63,7 +63,7 @@ export default async app => {
         await import(fileUrl);
         log.dev(`📦 [Apps] ${C.cyan}权限定义已加载: ${dir.name}${C.reset}`);
       } catch (err) {
-        log.error(`❌ [Apps] ${C.red}加载权限失败 [${dir.name}]: ${err.message}${C.reset}`);
+        log.error(`❌ [Apps] ${C.red}加载权限失败 [${dir.name}]${C.reset}`, err);
       }
     }
 
@@ -75,7 +75,7 @@ export default async app => {
         await import(fileUrl);
         log.dev(`📦 [Apps] ${C.cyan}角色定义已加载: ${dir.name}${C.reset}`);
       } catch (err) {
-        log.error(`❌ [Apps] ${C.red}加载角色失败 [${dir.name}]: ${err.message}${C.reset}`);
+        log.error(`❌ [Apps] ${C.red}加载角色失败 [${dir.name}]${C.reset}`, err);
       }
     }
 
@@ -105,7 +105,7 @@ export default async app => {
             log.dev(`🌱 [Seed] ${C.cyan}OAuth 同步更新客户端: ${client.client_id}${C.reset}`);
           }
         } catch (err) {
-          log.error(`❌ [Seed] ${C.red}OAuth 客户端注册失败 [${dir.name}]: ${err.message}${C.reset}`);
+          log.error(`❌ [Seed] ${C.red}OAuth 客户端注册失败 [${dir.name}]${C.reset}`, err);
         }
       }
     }
@@ -152,7 +152,7 @@ export default async app => {
       }
       log.always(`✅ [PBAC] ${C.green}集中注册器已将内存中的 ${successCount} 个角色同步至数据库${C.reset}`);
     } catch (error) {
-      log.error(`❌ [PBAC] ${C.red}集中同步数据库失败: ${error.message}${C.reset}`);
+      log.error(`❌ [PBAC] ${C.red}集中同步数据库失败${C.reset}`, error);
     }
   } else {
     log.dev(`ℹ️ [PBAC] ${C.cyan}暂无通过 defineRoles 注册的基础角色${C.reset}`);

@@ -87,7 +87,7 @@ class RecaptchaService {
 
       return { success: true, score: data.score };
     } catch (err) {
-      log.error('[Recaptcha] Google API 请求失败:', err.message);
+      log.error('[Recaptcha] Google API 请求失败:', err);
       return { success: false, error: 'api_error' };
     }
   }
@@ -129,7 +129,7 @@ class RecaptchaService {
 
       return { success: true };
     } catch (err) {
-      log.error('[Recaptcha] hCaptcha API 请求失败:', err.message);
+      log.error('[Recaptcha] hCaptcha API 请求失败:', err);
       return { success: false, error: 'api_error' };
     }
   }
@@ -172,7 +172,7 @@ class RecaptchaService {
       // 生产环境可选：校验 hostname 与配置域名一致
       return { success: true, hostname: data.hostname, action: data.action };
     } catch (err) {
-      log.error('[Turnstile] Cloudflare API 请求失败:', err.message);
+      log.error('[Turnstile] Cloudflare API 请求失败:', err);
       return { success: false, error: 'api_error' };
     }
   }
