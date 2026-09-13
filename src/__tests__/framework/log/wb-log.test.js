@@ -257,6 +257,101 @@ describe('wb-logkit 核心行为', () => {
     expect(rec.nested.ok).toBe(1);
   });
 
+  test('脱敏：key 模式不误伤普通字段', async () => {
+    const { sanitizeForLog } = await import('wb-logkit');
+    const out = sanitizeForLog({ keyword: 'kw', keyboard: 'kb', apiKey: 'a', primaryKey: 'p' });
+    expect(out.keyword).toBe('kw');
+    expect(out.keyboard).toBe('kb');
+    expect(out.apiKey).toBe('***');
+    expect(out.primaryKey).toBe('***');
+  });
+
+  test('截断：超长字符串按 maxStr 截断加标记；0 关闭', () => {
+    const long = 'x'.repeat(100);
+    try {
+      configureLog({ level: 'info', maxStr: 20 });
+      // 裸字符串参数拼进 msg（'trunc-on ' + 100 个 x = 109 字符），对象参数进 data
+      createLogger('trunc').info('trunc-on', long, { s: long });
+      let [rec] = readMain();
+      expect(rec.msg).toMatch(/…\(len=109\)$/);
+      expect(rec.msg.length).toBeLessThanOrEqual(40);
+      expect(rec.s).toMatch(/…\(len=100\)$/);
+
+      configureLog({ level: 'info', maxStr: 0 });
+      createLogger('trunc').info('trunc-off', { s: long });
+      rec = readMain().at(-1);
+      expect(rec.s).toBe(long);
+    } finally {
+      configureLog({ maxStr: 2000 }); // 还原，避免污染后续用例（runtimeOverrides 累积合并）
+    }
+  });
+
+  test('时间基准：record.t 为本地时区 ISO（含偏移），与文件滚动日期一致', () => {
+    configureLog({ level: 'info' });
+    createLogger('tz').info('tz-msg');
+    const [rec] = readMain();
+    expect(rec.t).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
+    // t 的日期部分 == 文件名中的日期
+    const date = new Date().toLocaleDateString('sv-SE');
+    expect(rec.t.startsWith(date)).toBe(true);
+    expect(new Date(rec.t).getTime()).not.toBeNaN(); // 合法可解析
+  });
+
+  test('文件后缀：自定义字符串与 pid 模式', () => {
+    try {
+      configureLog({ level: 'info', fileSuffix: 'alpha', file: { name: 't', dir: tmpDir, ext: '.log', date: true } });
+      createLogger('sfx').info('suffix-alpha');
+      const date = new Date().toLocaleDateString('sv-SE');
+      expect(fs.existsSync(path.join(tmpDir, `t-alpha-${date}.log`))).toBe(true);
+
+      configureLog({ level: 'info', fileSuffix: 'pid', file: { name: 'p', dir: tmpDir, ext: '.log', date: true } });
+      createLogger('sfx').info('suffix-pid');
+      expect(fs.existsSync(path.join(tmpDir, `p-${process.pid}-${date}.log`))).toBe(true);
+    } finally {
+      configureLog({ fileSuffix: '', file: { name: 't' } }); // 还原，避免污染后续用例
+    }
+  });
+
+  test('ctx 注入保护：provider 返回核心字段时不覆盖记录', async () => {
+    const { setLogContextProvider } = await import('wb-logkit');
+    configureLog({ level: 'info' });
+    setLogContextProvider(() => ({ tag: 'evil', msg: 'evil', requestId: 'req-1', userId: 9 }));
+    try {
+      createLogger('safe').info('ctx-msg');
+    } finally {
+      setLogContextProvider(null);
+    }
+    const [rec] = readMain();
+    expect(rec.tag).toBe('safe');
+    expect(rec.msg).toBe('ctx-msg');
+    expect(rec.requestId).toBe('req-1');
+    expect(rec.userId).toBe(9);
+  });
+
+  test('配置深冻结：cfg 与 cfg.file 不可变', () => {
+    const cfg = configureLog({ level: 'info' });
+    expect(Object.isFrozen(cfg)).toBe(true);
+    expect(Object.isFrozen(cfg.file)).toBe(true);
+  });
+
+  test('pretty 模式：非 TTY（管道/重定向）不输出 ANSI 颜色码', () => {
+    configureLog({ level: 'info', console: true, pretty: true });
+    const captured = [];
+    const real = process.stderr.write;
+    // jest 环境下 stdout/stderr 均为管道（isTTY=undefined）→ 修复前 useColor 误判为 true
+    process.stderr.write = (...args) => {
+      captured.push(String(args[0]));
+      return true;
+    };
+    try {
+      createLogger('tty').error('no-ansi-please');
+    } finally {
+      process.stderr.write = real;
+    }
+    expect(captured.join('')).toContain('no-ansi-please');
+    expect(captured.join('')).not.toContain('\x1b[');
+  });
+
   test('脱敏：超过深度限制的部分返回占位符，不泄露未脱敏对象', () => {
     configureLog({ level: 'info' });
     // 测试夹具值动态拼接（仅验证掩码行为，非真实凭据）
