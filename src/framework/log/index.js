@@ -1,7 +1,7 @@
 /**
  * framework/log — 适配层
  *
- * 日志核心已抽到独立 npm 包 `packages/log`（包名 wb-log，Node/浏览器通用，
+ * 日志核心已抽到独立 npm 包 `packages/log`（包名 wb-logkit，Node/浏览器通用，
  * 前端可直接复用）。本文件保持既有导入路径 `framework/log/index.js` 不变，
  * 并追加服务器专属能力（全局异常钩子）。
  *
@@ -21,7 +21,7 @@
  *   log.dev.always.info('...')  组合：仅开发 + 必输
  *   log.file.info('...')        只写文件、不刷控制台（留档）
  *
- *  实例级配置（优先级最高，详见 wb-log 包 logger.js）：
+ *  实例级配置（优先级最高，详见 wb-logkit 包 logger.js）：
  *   const log = createLogger('pay', { level: 'debug', file: { name: 'pay' } });
  *   log.config({ level: 'warn' });             // 运行时更新
  *
@@ -39,6 +39,6 @@
  * @author yijiu2025
  * @since 2026-09-10
  */
-export * from '@qirly/wb-log';
-export { default } from '@qirly/wb-log';
+export * from 'wb-logkit';
+export { default } from 'wb-logkit';
 export { initLogErrorTraps } from './traps.js';

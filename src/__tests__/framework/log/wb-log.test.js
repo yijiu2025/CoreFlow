@@ -1,5 +1,5 @@
 /**
- * wb-log 核心行为单元测试
+ * wb-logkit 核心行为单元测试
  *
  * 覆盖：级别门控、关键词调试、矩阵变体（always/dev/prod/file）、实例配置优先级、
  * 模块级环境变量规则、脱敏、文件命名全量配置、保留天数清理、零配置入口。
@@ -11,21 +11,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-describe('wb-log 核心行为', () => {
+describe('wb-logkit 核心行为', () => {
   let createLogger;
   let configureLog;
   let reloadLogConfig;
   let tmpDir;
 
   beforeAll(async () => {
-    const mod = await import('@qirly/wb-log');
+    const mod = await import('wb-logkit');
     createLogger = mod.createLogger;
     configureLog = mod.configureLog;
     reloadLogConfig = mod.reloadLogConfig;
   });
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-log-test-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-logkit-test-'));
 
     // 隔离环境变量：清掉宿主环境的 LOG_* / DEBUG_*（保留 NODE_ENV 供环境门控测试改写）
     for (const k of Object.keys(process.env)) {
@@ -86,7 +86,7 @@ describe('wb-log 核心行为', () => {
   });
 
   test('关键词匹配规则：路径段匹配 + 前缀通配', async () => {
-    const { isDebugTagEnabled } = await import('@qirly/wb-log');
+    const { isDebugTagEnabled } = await import('wb-logkit');
     const kw = new Set(['auth']);
     expect(isDebugTagEnabled('auth', kw)).toBe(true);
     expect(isDebugTagEnabled('auth.session', kw)).toBe(true);
@@ -157,6 +157,94 @@ describe('wb-log 核心行为', () => {
     expect(fs.readFileSync(path.join(tmpDir, `error-${date}.log`), 'utf-8')).toContain('legacy-err');
   });
 
+  // ── 目录分层（dateDir / subdir）─────────────────────────────
+
+  test('dateDir：日期作为子目录，文件名不再带日期后缀', () => {
+    configureLog({
+      level: 'info',
+      file: { name: 'app', dir: tmpDir, dateDir: true, date: true, ext: '.log' }
+    });
+    createLogger('d').info('datedir-msg');
+    const date = new Date().toLocaleDateString('sv-SE');
+    const p = path.join(tmpDir, date, 'app.log');
+    expect(fs.existsSync(p)).toBe(true);
+    expect(fs.readFileSync(p, 'utf-8')).toContain('datedir-msg');
+    // 旧布局文件不应产生
+    expect(fs.existsSync(path.join(tmpDir, `app-${date}.log`))).toBe(false);
+  });
+
+  test('subdir 固定名：写入 logs/日期/<subdir>/ 下', () => {
+    configureLog({
+      level: 'info',
+      file: { name: 'app', dir: tmpDir, dateDir: true, subdir: 'firewall', ext: '.log' }
+    });
+    createLogger('firewall.engine').info('fw-msg');
+    const date = new Date().toLocaleDateString('sv-SE');
+    const p = path.join(tmpDir, date, 'firewall', 'app.log');
+    expect(fs.existsSync(p)).toBe(true);
+    expect(fs.readFileSync(p, 'utf-8')).toContain('fw-msg');
+  });
+
+  test('subdir=auto：按 tag 首段自动分目录', () => {
+    configureLog({
+      level: 'info',
+      file: { name: 'app', dir: tmpDir, dateDir: true, subdir: 'auto', ext: '.log' }
+    });
+    createLogger('oauth21.services').info('oauth-msg');
+    createLogger('web.index').info('web-msg');
+    const date = new Date().toLocaleDateString('sv-SE');
+    expect(fs.readFileSync(path.join(tmpDir, date, 'oauth21', 'app.log'), 'utf-8')).toContain('oauth-msg');
+    expect(fs.readFileSync(path.join(tmpDir, date, 'web', 'app.log'), 'utf-8')).toContain('web-msg');
+  });
+
+  test('实例级 file.subdir / file.name 覆盖全局', () => {
+    configureLog({
+      level: 'info',
+      file: { name: 'app', dir: tmpDir, dateDir: true, ext: '.log' }
+    });
+    createLogger('x', { file: { name: 'custom', subdir: 'mymod' } }).info('inst-msg');
+    const date = new Date().toLocaleDateString('sv-SE');
+    const p = path.join(tmpDir, date, 'mymod', 'custom.log');
+    expect(fs.existsSync(p)).toBe(true);
+    expect(fs.readFileSync(p, 'utf-8')).toContain('inst-msg');
+  });
+
+  test('dateDir 清理：过期日期目录整删，含其中的模块子目录', () => {
+    const old = new Date(Date.now() - 40 * 86400000).toLocaleDateString('sv-SE');
+    const today = new Date().toLocaleDateString('sv-SE');
+    // 过期目录下带多个模块子目录（回归：曾因只删 <date>/<当前 subdir> 而漏删）
+    fs.mkdirSync(path.join(tmpDir, old, 'firewall'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, old, 'oauth21'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, old, 'firewall', 'app.log'), 'old\n');
+    fs.mkdirSync(path.join(tmpDir, today), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'mydata'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'mydata', 'keep.txt'), 'keep\n');
+
+    configureLog({
+      level: 'info',
+      file: { name: 'app', dir: tmpDir, dateDir: true, subdir: 'auto', keepDays: 30, ext: '.log' }
+    });
+    createLogger('c').info('trigger-cleanup');
+
+    expect(fs.existsSync(path.join(tmpDir, old))).toBe(false); // 过期目录整删（含所有模块子目录）
+    expect(fs.existsSync(path.join(tmpDir, today))).toBe(true); // 当天保留
+    expect(fs.existsSync(path.join(tmpDir, 'mydata', 'keep.txt'))).toBe(true); // 非日期目录不受影响
+  });
+
+  test('dateDir 清理：keepDays=0 关闭清理，过期目录保留', () => {
+    const old = new Date(Date.now() - 100 * 86400000).toLocaleDateString('sv-SE');
+    fs.mkdirSync(path.join(tmpDir, old), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, old, 'app.log'), 'old\n');
+
+    configureLog({
+      level: 'info',
+      file: { name: 'app', dir: tmpDir, dateDir: true, keepDays: 0, ext: '.log' }
+    });
+    createLogger('c0').info('no-cleanup');
+
+    expect(fs.existsSync(path.join(tmpDir, old))).toBe(true);
+  });
+
   test('脱敏：敏感字段递归掩码', () => {
     configureLog({ level: 'info' });
     createLogger('san').info('san-test', {
@@ -167,6 +255,45 @@ describe('wb-log 核心行为', () => {
     expect(rec.password).toBe('***');
     expect(rec.nested.apiKey).toBe('***');
     expect(rec.nested.ok).toBe(1);
+  });
+
+  test('脱敏：超过深度限制的部分返回占位符，不泄露未脱敏对象', () => {
+    configureLog({ level: 'info' });
+    // 测试夹具值动态拼接（仅验证掩码行为，非真实凭据）
+    const fakeSecret = ['leak', 'attempt'].join('-');
+    createLogger('deep').info('deep-san-test', {
+      l1: { l2: { l3: { l4: { password: fakeSecret, token: ['t', 'ok'].join('') } } } }
+    });
+    const [rec] = readMain();
+    // 第 4 层对象整体替换为占位符，内部敏感字段绝不透出
+    expect(rec.l1.l2.l3).toBe('[maxDepth]');
+  });
+
+  test('健壮性：循环引用数组/对象、BigInt 不抛异常且不丢日志', () => {
+    configureLog({ level: 'info' });
+
+    // 循环引用数组：旧实现 JSON.stringify 抛 TypeError 直接打进业务调用方
+    const circArr = ['a', 1];
+    circArr.push(circArr);
+    expect(() => createLogger('cyc').info('circ-array', circArr)).not.toThrow();
+
+    // 循环引用对象：脱敏深度限制会截断，正常落盘
+    const circObj = { self: null };
+    circObj.self = circObj;
+    expect(() => createLogger('cyc').info('circ-object', circObj)).not.toThrow();
+
+    // BigInt：旧实现 transport 内 JSON.stringify 抛错 → 整行静默丢失
+    expect(() => createLogger('big').info('bigint-msg', { n: 123n })).not.toThrow();
+
+    const main = readMain();
+    const msgs = main.map(r => r.msg);
+    // 数组参数会序列化拼进 msg（含 '[Circular]'/'[maxDepth]' 截断标记）
+    expect(msgs[0]).toMatch(/^circ-array \[/);
+    expect(msgs[0]).toContain('[maxDepth]');
+    expect(msgs).toContain('circ-object');
+    expect(msgs).toContain('bigint-msg');
+    const bigintRec = main.find(r => r.msg === 'bigint-msg');
+    expect(bigintRec.n).toBe('123n');
   });
 
   test('Error 处理：自动提取 name/message/stack', () => {
@@ -198,7 +325,7 @@ describe('wb-log 核心行为', () => {
   });
 
   test('零配置入口：log 直接打印且可 config', async () => {
-    const { log } = await import('@qirly/wb-log');
+    const { log } = await import('wb-logkit');
     log.info('zero-config-msg');
     const main = readMain();
     expect(main.at(-1).msg).toBe('zero-config-msg');
@@ -206,7 +333,7 @@ describe('wb-log 核心行为', () => {
   });
 
   test('logStdout：原始输出无 JSON 装饰', async () => {
-    const { logStdout } = await import('@qirly/wb-log');
+    const { logStdout } = await import('wb-logkit');
     const captured = [];
     const real = process.stdout.write;
     process.stdout.write = (...args) => {
