@@ -169,6 +169,8 @@ LOG_FILE_NAME=server         # 主日志文件名前缀
 | `LOG_SUBDIR` | 空 | 模块子目录：`auto`/`true` = 按 tag 首段；或固定目录名 |
 | `LOG_ERROR_FILE` | `true` | 错误文件开关 |
 | `LOG_KEEP_DAYS` | `30` | 日志保留天数（`0` = 永久保留） |
+| `LOG_FILE_SUFFIX` | 空 | 文件名后缀：`pid` = 进程号（多进程部署防行交错）；或自定义字符串 |
+| `LOG_MAX_STR` | `2000` | 单字段字符串长度上限（字符数），超长截断加 `…(len=N)` 标记；`0` = 关闭 |
 | `LOG_CONSOLE` | `true` | 控制台开关 |
 | `LOG_FILE` | `true` | 文件开关 |
 | `LOG_PRETTY` | 非 prod 为 `true` | 控制台彩色可读 / JSON 行 |
@@ -179,10 +181,13 @@ LOG_FILE_NAME=server         # 主日志文件名前缀
 
 ## 内置能力
 
-- **自动脱敏**：`password` / `token` / `secret` / `key` / `cookie` 等字段输出为 `***`（递归 3 层，超深部分替换为 `[maxDepth]` 占位符）
-- **链路追踪**：auth 框架注册了上下文提供器，请求内日志自动携带 `requestId` / `userId`
+- **自动脱敏**：`password` / `token` / `secret` / `key` / `cookie` 等字段输出为 `***`（递归 3 层，超深部分替换为 `[maxDepth]` 占位符；仅对象/数组参数，msg 字符串不脱敏）
+- **链路追踪**：auth 框架注册了上下文提供器，请求内日志自动携带 `requestId` / `userId`（核心字段受保护不被覆盖）
 - **全局异常钩子**：`app.js` 已调用 `initLogErrorTraps()`，`uncaughtException` 记 fatal（同步落盘 + fd 2 同步兜底）后留 100ms 刷新窗口再退出（防管道场景丢最后一条控制台日志），`unhandledRejection` 记 always.error（不受 LOG_LEVEL 门控）
 - **永不抛异常**：日志调用自身绝不把错误抛进业务代码（循环引用 / BigInt 经 safeStringify 安全序列化）
+- **超长截断**：单字段默认 2000 字符上限（`LOG_MAX_STR` 可调），防大对象/大字符串撑爆日志文件
+- **时区一致**：`record.t` 为本地时区 ISO（含偏移），与日志文件名的滚动日期同基准
+- **多进程部署**：pm2 cluster 等多进程场景设 `LOG_FILE_SUFFIX=pid` 按进程分文件，防行交错
 - **文件同步落盘**：`appendFileSync` 写入，进程崩溃前最后几条日志不丢
 - **按天清理**：写文件时自动清理超过 `keepDays` 的过期日志（只删本框架命名规则的文件）
 - **计时器**：`const done = log.time('dbQuery'); ...; done();` 自动输出耗时
