@@ -26,6 +26,18 @@ const EXIT_FLUSH_MS = 100;
 
 let installed = false;
 
+/**
+ * 安装全局异常捕获钩子（幂等，重复调用只生效一次）。
+ * 在应用入口（app.js）调用一次即可。
+ *
+ * - uncaughtException → fatal（文件同步落盘 + fd 2 同步兜底）→ 100ms 刷新窗口后退出
+ * - unhandledRejection → always.error（不受 LOG_LEVEL 门控），进程继续运行
+ *
+ * 注意：安装 unhandledRejection 处理器会改变 Node ≥15 的默认崩溃语义
+ * （默认模式 throw 会 crash，安装后进程继续运行）。
+ *
+ * @returns {void}
+ */
 export function initLogErrorTraps() {
   if (installed) return;
   installed = true;
