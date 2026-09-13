@@ -34,7 +34,7 @@ export function initLogErrorTraps() {
     log.fatal('未捕获异常，进程即将退出', err);
     // fatal 已同步落盘；控制台通道可能是异步流，用同步 fd 写兜底防止最后一条丢失
     try {
-      fs.writeSync(2, `[process] FATAL 未捕获异常: ${err?.stack ?? err}\n`);
+      fs.writeSync(2, `❌ [process] FATAL 未捕获异常: ${err?.stack ?? err}\n`);
     } catch {
       // fd 2 不可写（如被关闭）：放弃
     }
