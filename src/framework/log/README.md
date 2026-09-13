@@ -2,7 +2,7 @@
 
 全项目**唯一**日志出口。业务代码中禁止出现任何 `console.*`（ESLint `no-console: error` 强制），所有打印与日志记录都从这里导出使用。
 
-> **架构说明**：日志核心已抽到独立 npm 包 `packages/log`（包名 `@qirly/wb-log`，Node/浏览器通用、零依赖、前端可直接复用——浏览器环境自动降级为仅控制台输出）。本目录只是薄适配层：`index.js` 转发包导出，`traps.js` 提供服务器专属的全局异常钩子。
+> **架构说明**：日志核心已抽到独立 npm 包 `packages/log`（包名 `wb-logkit`，Node/浏览器通用、零依赖、前端可直接复用——浏览器环境自动降级为仅控制台输出）。本目录只是薄适配层：`index.js` 转发包导出，`traps.js` 提供服务器专属的全局异常钩子。
 
 ## 10 秒上手
 
@@ -81,6 +81,8 @@ log.config({ level: 'warn' });   // 运行时热更新，返回自身可链式
 | `dir` | 跟随全局（`logs`） | 目录（不存在自动创建） |
 | `ext` | `.log` | 扩展名，如 `.txt` |
 | `date` | `true` | 文件名带日期后缀按天滚动；`false` = 单文件 |
+| `dateDir` | `false` | 日期作为子目录：`logs/2026-09-12/app.log`（文件名不再带日期后缀） |
+| `subdir` | 不启用 | 模块子目录：`'auto'`/`true` = 按 tag 首段分类；字符串 = 固定目录名 |
 | `error` | `true` | 错误文件开关；`false` 关闭；字符串 = 自定义前缀 |
 | `keepDays` | `30` | 按天清理过期日志；`0` = 永久保留 |
 
@@ -90,11 +92,36 @@ createLogger('pay', { file: { name: 'pay', ext: '.txt', date: false } });
 createLogger('audit', { file: { name: 'audit', date: false, error: 'myerr' } });
 ```
 
+### ④' 目录布局：让日志按日期 / 模块分文件夹
+
+默认是平铺（全部堆在同一层）。想要更整洁，可开启**日期目录**和/或**模块子目录**——两者都是**可选新增**，不改默认行为：
+
+| 模式 | 配置 | 产出 |
+| --- | --- | --- |
+| ① 平铺（默认） | — | `logs/app-2026-09-12.log` |
+| ② 日期目录 | `dateDir: true` | `logs/2026-09-12/app.log` |
+| ③ 模块子目录 | `subdir: 'auto'` | `logs/app-2026-09-12.log`、`logs/firewall/app-2026-09-12.log` |
+| ④ 日期 + 模块（二级） | `dateDir: true` + `subdir: 'auto'` | `logs/2026-09-12/app.log`、`logs/2026-09-12/firewall/app.log` |
+
+`subdir` 取值：不填/`false` = 不分目录；`'auto'`（或 `true`）= 自动取 tag 首段（`firewall.engine.rule` → `firewall/`）；固定字符串 = 该模块统一写入指定目录。
+
+```js
+// 推荐：日期做一级、模块做二级，目录清晰且逐天归档
+// 全局：configureLog({ file: { dateDir: true, subdir: 'auto' } })
+// 或按模块：createLogger('firewall.engine', { file: { subdir: 'auto' } });
+//          createLogger('oauth21.token',   { file: { name: 'oauth', subdir: 'auto' } });
+```
+
+也可用环境变量全局开启：`LOG_DATE_DIR=on`、`LOG_SUBDIR=auto`（或固定名如 `LOG_SUBDIR=firewall`）。
+
+> **清理安全**：日期目录模式下，过期清理**只整块删除 `YYYY-MM-DD` 命名的过期目录**；非日期命名的目录（如 `logs/mydata/`）和当天目录永不触碰。
+
 文件产出规则：
 
 | 文件 | 命名规则 | 内容 |
 | --- | --- | --- |
 | 主日志 | `<fileName>-YYYY-MM-DD.log`（默认 `app-2026-09-11.log`） | 全部级别，JSON 行，按天滚动 |
+| 日期目录模式 | `<dir>/YYYY-MM-DD/<fileName>.log` | 同上，日期在目录上 |
 | 错误日志 | `error-YYYY-MM-DD.log`（默认前缀时沿用旧命名） | warn 及以上 |
 | 自定义名 | `<name>-...` + `<name>-error-...` | 实例 `file: { name }` 指定 |
 
@@ -138,6 +165,8 @@ LOG_FILE_NAME=server         # 主日志文件名前缀
 | `LOG_FILE_NAME` | `app` | 主日志文件名前缀 |
 | `LOG_FILE_EXT` | `.log` | 文件扩展名 |
 | `LOG_FILE_DATE` | `true` | 文件名日期后缀（`off` = 单文件不滚动） |
+| `LOG_DATE_DIR` | `false` | 日期作为子目录（`on` = `logs/2026-09-12/app.log`） |
+| `LOG_SUBDIR` | 空 | 模块子目录：`auto`/`true` = 按 tag 首段；或固定目录名 |
 | `LOG_ERROR_FILE` | `true` | 错误文件开关 |
 | `LOG_KEEP_DAYS` | `30` | 日志保留天数（`0` = 永久保留） |
 | `LOG_CONSOLE` | `true` | 控制台开关 |
@@ -150,9 +179,10 @@ LOG_FILE_NAME=server         # 主日志文件名前缀
 
 ## 内置能力
 
-- **自动脱敏**：`password` / `token` / `secret` / `key` / `cookie` 等字段输出为 `***`（递归 3 层）
+- **自动脱敏**：`password` / `token` / `secret` / `key` / `cookie` 等字段输出为 `***`（递归 3 层，超深部分替换为 `[maxDepth]` 占位符）
 - **链路追踪**：auth 框架注册了上下文提供器，请求内日志自动携带 `requestId` / `userId`
-- **全局异常钩子**：`app.js` 已调用 `initLogErrorTraps()`，`uncaughtException` 记 fatal（同步落盘）后退出，`unhandledRejection` 记 error
+- **全局异常钩子**：`app.js` 已调用 `initLogErrorTraps()`，`uncaughtException` 记 fatal（同步落盘 + fd 2 同步兜底）后留 100ms 刷新窗口再退出（防管道场景丢最后一条控制台日志），`unhandledRejection` 记 always.error（不受 LOG_LEVEL 门控）
+- **永不抛异常**：日志调用自身绝不把错误抛进业务代码（循环引用 / BigInt 经 safeStringify 安全序列化）
 - **文件同步落盘**：`appendFileSync` 写入，进程崩溃前最后几条日志不丢
 - **按天清理**：写文件时自动清理超过 `keepDays` 的过期日志（只删本框架命名规则的文件）
 - **计时器**：`const done = log.time('dbQuery'); ...; done();` 自动输出耗时
@@ -169,11 +199,15 @@ stdout('✔ 完成');   // 原样输出到 stdout
 
 ## 前端 / 其他项目复用
 
-包位于 `packages/log`（包名 `@qirly/wb-log`），已在根 `package.json` 的 workspaces 中，经 npm workspace 软链到 `node_modules/wb-log`：
+**已发布 npm 包：`wb-logkit`**（源码位于 `packages/log`，仓库 https://github.com/yijiu2025/log）
 
-- **本仓库内**：统一用包名导入 `import { createLogger } from '@qirly/wb-log'`；`src/framework/log/index.js` 已转发 `export * from '@qirly/wb-log'`，因此既有 `framework/log/index.js` 路径导入同样有效（同一份实现）
-- **注意**：`@qirly/wb-log` 是本地 workspace 包，不要在 `dependencies` 中声明为外部依赖，否则 `npm install` 会用线上同名包覆盖软链
-- **发布/复制到前端项目**：直接使用 `packages/log` 目录，浏览器环境自动降级（无文件通道，`log.file.*` 变体安全变 no-op，控制台经 `console.*` 输出）
+```bash
+npm install wb-logkit
+```
+
+- **本仓库内**：统一用包名导入 `import { createLogger } from 'wb-logkit'`；`src/framework/log/index.js` 已转发 `export * from 'wb-logkit'`，因此既有 `framework/log/index.js` 路径导入同样有效（同一份实现）
+- **软链机制**：`packages/log` 已在根 `package.json` 的 workspaces 中，经 npm workspace 软链到 `node_modules/wb-logkit`；**不要**把它写进 `dependencies`（会被线上同名包覆盖软链）
+- **前端项目**：直接 `npm install wb-logkit`，浏览器环境自动降级（无文件通道，`log.file.*` 变体安全变 no-op，控制台经 `console.*` 输出）
 
 ## 兼容旧 API
 
@@ -188,5 +222,5 @@ stdout('✔ 完成');   // 原样输出到 stdout
 - `packages/log/src/file-transport.node.js` — Node 文件通道（同步落盘、按天滚动、按天清理）
 - `packages/log/src/sanitize.js` — 日志脱敏
 - `packages/log/src/index.js` / `index.node.js` / `index.d.ts` — 双出口（浏览器/Node）+ 类型定义
-- `src/framework/log/index.js` — 服务器适配层，`export * from '@qirly/wb-log'`（保持既有导入路径）
+- `src/framework/log/index.js` — 服务器适配层，`export * from 'wb-logkit'`（保持既有导入路径）
 - `src/framework/log/traps.js` — 全局异常捕获（Node 专属）

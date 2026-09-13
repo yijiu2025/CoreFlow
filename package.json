@@ -59,7 +59,8 @@
     "sharp": "^0.34.5",
     "stable-deviceid": "^1.0.3",
     "svg-captcha": "^1.4.0",
-    "umzug": "^3.8.2"
+    "umzug": "^3.8.2",
+    "wb-logkit": "^0.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
