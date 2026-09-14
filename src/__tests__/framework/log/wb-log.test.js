@@ -125,7 +125,7 @@ describe('wb-logkit 核心行为', () => {
     process.env.LOG_LEVEL_OTHERMOD = 'info';
     reloadLogConfig();
 
-    const inst = createLogger('inst.a', { level: 'debug', debug: true });
+    const inst = createLogger('inst.a').config({ level: 'debug', debug: true });
     inst.debug('inst-debug-keep');
 
     createLogger('othermod.x').info('module-rule-keep');
@@ -137,11 +137,11 @@ describe('wb-logkit 核心行为', () => {
 
   test('实例 file 配置：独立文件名/扩展名/无日期/关闭错误文件', () => {
     configureLog({ level: 'info' });
-    const a = createLogger('file.a', { file: { name: 'pay', ext: '.txt', date: false, dir: tmpDir } });
+    const a = createLogger('file.a').config({ file: { name: 'pay', ext: '.txt', date: false, dir: tmpDir } });
     a.info('pay-main');
     a.error('pay-error-file');
 
-    const b = createLogger('file.b', { file: { name: 'sec', date: false, error: false, dir: tmpDir } });
+    const b = createLogger('file.b').config({ file: { name: 'sec', date: false, error: false, dir: tmpDir } });
     b.error('sec-no-error-file');
 
     expect(fs.readFileSync(path.join(tmpDir, 'pay.txt'), 'utf-8')).toContain('pay-main');
@@ -202,7 +202,9 @@ describe('wb-logkit 核心行为', () => {
       level: 'info',
       file: { name: 'app', dir: tmpDir, dateDir: true, ext: '.log' }
     });
-    createLogger('x', { file: { name: 'custom', subdir: 'mymod' } }).info('inst-msg');
+    createLogger('x')
+      .config({ file: { name: 'custom', subdir: 'mymod' } })
+      .info('inst-msg');
     const date = new Date().toLocaleDateString('sv-SE');
     const p = path.join(tmpDir, date, 'mymod', 'custom.log');
     expect(fs.existsSync(p)).toBe(true);
@@ -450,5 +452,318 @@ describe('wb-logkit 核心行为', () => {
       process.stdout.write = real;
     }
     expect(captured.join('')).toBe('plain-out\n');
+  });
+
+  test('通道级级别：控制台只打 warn+，文件仍记全量', () => {
+    configureLog({
+      level: 'debug',
+      console: true,
+      consoleLevel: 'warn', // 控制台静音到 warn
+      file: { name: 'ch', dir: tmpDir, ext: '.log', date: true, level: 'debug' }, // 文件记全量
+      debugKeywords: ['ch']
+    });
+    const log = createLogger('ch');
+
+    log.debug('dbg-to-file');
+    log.info('info-to-file');
+    log.warn('warn-both');
+    log.error('err-both');
+
+    const msgs = readMain('ch').map(r => r.msg);
+    // 文件：全量（debug 起）
+    expect(msgs).toEqual(['dbg-to-file', 'info-to-file', 'warn-both', 'err-both']);
+  });
+
+  test('通道级级别：file.level 高于 level 时，文件只留 warn+', () => {
+    configureLog({
+      level: 'debug',
+      console: false,
+      file: { name: 'fl', dir: tmpDir, ext: '.log', date: true, level: 'warn' },
+      debugKeywords: ['fl']
+    });
+    const log = createLogger('fl');
+    log.debug('d');
+    log.info('i');
+    log.warn('w');
+    log.error('e');
+
+    expect(readMain('fl').map(r => r.msg)).toEqual(['w', 'e']);
+  });
+
+  test('通道级级别：file 对象存在即开启文件通道（无需 file: true）', () => {
+    configureLog({ level: 'info', console: false });
+    // 先显式关闭，确认基线
+    expect(configureLog({ file: false }).fileEnabled).toBe(false);
+    // 给对象即自动开启
+    const cfg = configureLog({ file: { name: 'auto-on', dir: tmpDir, date: true } });
+    expect(cfg.fileEnabled).toBe(true);
+    createLogger('ao').info('auto-on-msg');
+    expect(readMain('auto-on').map(r => r.msg)).toEqual(['auto-on-msg']);
+  });
+
+  test('通道级级别：file: false 显式关闭优先于对象配置', () => {
+    const cfg = configureLog({ file: { name: 'x', dir: tmpDir }, console: false });
+    expect(cfg.fileEnabled).toBe(true);
+    const cfg2 = configureLog({ file: false });
+    expect(cfg2.fileEnabled).toBe(false);
+  });
+
+  test('通道级级别：非法 consoleLevel/fileLevel 静默回退到全局 level', () => {
+    const cfg = configureLog({
+      level: 'info',
+      consoleLevel: 'not-a-level',
+      file: { name: 'bad', dir: tmpDir, level: 'nope' }
+    });
+    expect(cfg.consoleLevel).toBe(null);
+    expect(cfg.file.level).toBe(null);
+  });
+
+  test("通道级级别：file.level='all' 全量记录（含 debug/trace）", () => {
+    configureLog({
+      level: 'error', // 全局门槛很高
+      console: false,
+      file: { name: 'allfile', dir: tmpDir, date: true, level: 'all' },
+      debugKeywords: ['allmod']
+    });
+    const log = createLogger('allmod');
+    log.debug('d');
+    log.info('i');
+    log.warn('w');
+    log.error('e');
+
+    // file.level='all' 是显式配置，优先级高于全局门槛 → 全量写入，不看 LOG_LEVEL 脸色
+    expect(readMain('allfile').map(r => r.msg)).toEqual(['d', 'i', 'w', 'e']);
+  });
+
+  test("通道级级别：file.level='all' 越过全局门槛（无需关键词，回归）", () => {
+    // 回归：全局 level=info 时，实例 file.level='all' 必须让 debug 进文件——
+    // 显式通道配置优先级高于"默认门槛"，门槛不该否掉用户写下的配置
+    configureLog({ level: 'info', console: false, dir: tmpDir, debugKeywords: [] });
+    const log = createLogger('allmod2');
+    log.config({ file: { name: 'all2', dir: tmpDir, date: true, level: 'all' } });
+    log.debug('d-应进文件');
+    log.trace('t-应进文件');
+    log.info('i-应进文件');
+
+    expect(readMain('all2').map(r => r.msg)).toEqual(['d-应进文件', 't-应进文件', 'i-应进文件']);
+  });
+
+  test("通道级级别：consoleLevel='all' 越过全局门槛（无需关键词，回归）", () => {
+    // 全局门槛 warn + 控制台关闭时，显式 consoleLevel 仍应让低级别通过门控；
+    // 这里用文件通道做等价断言（测试环境控制台被关闭）
+    configureLog({
+      level: 'warn',
+      console: false,
+      file: { name: 'cl3', dir: tmpDir, date: true, level: 'all' },
+      debugKeywords: []
+    });
+    const log = createLogger('allmod3');
+    log.config({ consoleLevel: 'all' });
+    log.debug('d-应过门控');
+
+    expect(readMain('cl3').map(r => r.msg)).toEqual(['d-应过门控']);
+  });
+
+  test('通道级级别：数组白名单只记列出的级别', () => {
+    configureLog({
+      level: 'debug',
+      console: false,
+      file: { name: 'wl', dir: tmpDir, date: true, level: ['info', 'error'] },
+      debugKeywords: ['wlmod']
+    });
+    const log = createLogger('wlmod');
+    log.debug('d-不在白名单');
+    log.info('i-在白名单');
+    log.warn('w-不在白名单');
+    log.error('e-在白名单');
+    log.fatal('f-不在白名单');
+
+    expect(readMain('wl').map(r => r.msg)).toEqual(['i-在白名单', 'e-在白名单']);
+  });
+
+  test('通道级级别：consoleLevel 数组白名单（控制台只留 error/fatal）', () => {
+    const cfg = configureLog({ consoleLevel: ['error', 'fatal'] });
+    expect(cfg.consoleLevel).toEqual(['error', 'fatal']);
+  });
+
+  test('通道级级别：逗号分隔字符串等同数组', () => {
+    const cfg = configureLog({ consoleLevel: 'warn,error' });
+    expect(cfg.consoleLevel).toEqual(['warn', 'error']);
+  });
+
+  test('通道级级别：file.level 数组与全局 file 通道配合', () => {
+    const cfg = configureLog({ file: { name: 'arr', dir: tmpDir, level: ['warn'] } });
+    expect(cfg.file.level).toEqual(['warn']);
+    expect(cfg.fileEnabled).toBe(true);
+  });
+
+  test('默认不写文件：库初始配置 fileEnabled=false', async () => {
+    // 重置编程覆盖 + 清环境变量，回到纯出厂默认
+    const { resetLogConfig } = await import('wb-logkit');
+    const backup = {};
+    for (const k of Object.keys(process.env)) {
+      if (/^(LOG_|DEBUG_)/.test(k)) {
+        backup[k] = process.env[k];
+        delete process.env[k];
+      }
+    }
+    try {
+      const cfg = resetLogConfig();
+      expect(cfg.fileEnabled).toBe(false);
+      expect(cfg.consoleEnabled).toBe(true);
+    } finally {
+      for (const [k, v] of Object.entries(backup)) process.env[k] = v;
+    }
+  });
+});
+
+describe('全局 log 注册', () => {
+  test('createLogger(tag, true) 注册后，全局 log 使用该 tag', async () => {
+    const { createLogger, log, getGlobalLogger } = await import('wb-logkit');
+    createLogger('pay', true);
+    expect(log.tag).toBe('pay');
+    expect(getGlobalLogger().tag).toBe('pay');
+  });
+
+  test('注册后对实例 config() 会实时反映到全局 log', async () => {
+    const { createLogger, log } = await import('wb-logkit');
+    const pay = createLogger('billing', true);
+    pay.config({ level: 'warn' });
+    expect(log.options.level).toBe('warn');
+    expect(log.tag).toBe('billing');
+  });
+
+  test('对全局 log 调 config() 同步到底层实例', async () => {
+    const { createLogger, log } = await import('wb-logkit');
+    const svc = createLogger('svc', true);
+    svc.config({ level: 'info' });
+    log.config({ level: 'error' });
+    expect(svc.options.level).toBe('error');
+  });
+
+  test('全局 log 是稳定引用：注册前后同一对象，import 方无需重新获取', async () => {
+    const { createLogger, log } = await import('wb-logkit');
+    const before = log; // 模拟其他文件顶部已 import
+    createLogger('later', true);
+    expect(log).toBe(before); // Proxy 门面恒定
+    expect(log.tag).toBe('later'); // 内容已跟随
+  });
+
+  test('未注册时全局 log 为默认 app logger', async () => {
+    const { createLogger, log, getGlobalLogger } = await import('wb-logkit');
+    // 先注册一个，再用另一个模块实例覆盖，最终都应可读
+    createLogger('tmp-reg', true);
+    expect(getGlobalLogger().tag).toBe('tmp-reg');
+    expect(log.tag).toBe('tmp-reg');
+  });
+
+  test('全局 log 可正常输出并写文件', async () => {
+    const { createLogger, log } = await import('wb-logkit');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-logkit-global-'));
+    try {
+      const inst = createLogger('globaltest', true);
+      inst.config({ file: { name: 'g', dir, ext: '.log', date: true }, console: false });
+      log.info('via-global');
+      const date = new Date().toLocaleDateString('sv-SE');
+      const p = path.join(dir, `g-${date}.log`);
+      expect(fs.existsSync(p)).toBe(true);
+      expect(JSON.parse(fs.readFileSync(p, 'utf-8').trim()).msg).toBe('via-global');
+      expect(JSON.parse(fs.readFileSync(p, 'utf-8').trim()).tag).toBe('globaltest');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('API 契约：createLogger 只有两个参数，第二参非 true 时不注册全局', async () => {
+    // 回归防护：旧文档曾写 createLogger('pay', { level, file })，第二参传对象。
+    // 契约是「第二参必须是 boolean」，传对象应被当作 falsy → 不注册全局，
+    // 且对象里的配置被静默忽略（配置只能走 config()）。
+    const { createLogger, getGlobalLogger } = await import('wb-logkit');
+    createLogger('marker', true); // 先占用全局
+    const before = getGlobalLogger().tag;
+
+    const inst = createLogger('legacy-shape', { level: 'debug', file: { name: 'x' } });
+    expect(getGlobalLogger().tag).toBe(before); // 未被覆盖
+    expect(inst.tag).toBe('legacy-shape');
+    expect(inst.options).toBeNull(); // 对象被丢弃，未当作 options
+  });
+
+  describe('防静默消失（fullstack-rules 审查修复）', () => {
+    /** 捕获 process.stderr.write 的输出（降级告警走 stderr 裸写） */
+    function captureStderr(fn) {
+      const chunks = [];
+      const orig = process.stderr.write;
+      process.stderr.write = c => {
+        chunks.push(String(c));
+        return true;
+      };
+      try {
+        fn();
+      } finally {
+        process.stderr.write = orig;
+      }
+      return chunks.join('');
+    }
+
+    test('fatal 在控制台与文件双关闭时仍向 stderr 兜底（进程级故障不可丢失）', async () => {
+      const { createLogger, configureLog } = await import('wb-logkit');
+      configureLog({ level: 'info', console: false, file: false });
+      const log = createLogger('fatalfallback');
+      const out = captureStderr(() => log.fatal('致命故障必须可见'));
+      expect(out).toContain('FATAL');
+      expect(out).toContain('致命故障必须可见');
+    });
+
+    test('log.file.* 但文件通道关闭时向 stderr 告警（配置矛盾，非正常过滤）', async () => {
+      const { createLogger, configureLog } = await import('wb-logkit');
+      configureLog({ level: 'info', console: true, file: false });
+      const log = createLogger('fileonlywarn');
+      const out = captureStderr(() => log.file.error('两头都没有的日志'));
+      expect(out).toContain('文件通道未开启');
+      expect(out).toContain('fileonlywarn');
+    });
+
+    test('configureLog 非法级别名留痕（不静默，且指出当前生效值）', async () => {
+      const { configureLog } = await import('wb-logkit');
+      const out = captureStderr(() => configureLog({ level: 'inf' }));
+      expect(out).toContain('非法级别名');
+      expect(out).toContain('inf');
+    });
+
+    test('configureLog 非法通道级别名留痕并给出已处理结果', async () => {
+      const { configureLog } = await import('wb-logkit');
+      const out = captureStderr(() => configureLog({ consoleLevel: ['warn', 'erro'] }));
+      expect(out).toContain('无法识别的级别名');
+      expect(out).toContain('erro');
+    });
+
+    test('文件通道写入失败向 stderr 告警（不再全吞）', async () => {
+      const { createLogger, configureLog } = await import('wb-logkit');
+      // 用一个"指向普通文件而非目录"的 dir，使 mkdirSync/appendFileSync 必然失败
+      const localDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wb-logkit-fail-'));
+      const blocker = path.join(localDir, 'not-a-dir');
+      fs.writeFileSync(blocker, 'x');
+      try {
+        configureLog({
+          level: 'info',
+          console: false,
+          file: { name: 'app', dir: blocker, date: false, error: false, keepDays: 0 }
+        });
+        const log = createLogger('filefail');
+        const out = captureStderr(() => log.info('写不进去的日志'));
+        expect(out).toContain('文件通道写入失败');
+      } finally {
+        fs.rmSync(localDir, { recursive: true, force: true });
+      }
+    });
+
+    test('Object.keys(全局 log) 反映当前 active 实例（Proxy 反射一致性）', async () => {
+      const { createLogger, log } = await import('wb-logkit');
+      createLogger('reflect.marker', true);
+      const keys = Object.keys(log);
+      expect(keys).toContain('tag');
+      // 键集应来自 active 实例：注册新实例后 tag 值随之变化
+      expect(log.tag).toBe('reflect.marker');
+    });
   });
 });

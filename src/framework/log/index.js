@@ -21,17 +21,44 @@
  *   log.dev.always.info('...')  组合：仅开发 + 必输
  *   log.file.info('...')        只写文件、不刷控制台（留档）
  *
- *  实例级配置（优先级最高，详见 wb-logkit 包 logger.js）：
- *   const log = createLogger('pay', { level: 'debug', file: { name: 'pay' } });
- *   log.config({ level: 'warn' });             // 运行时更新
+ *  ════════ 三个核心约定（本项目） ════════
  *
- *  全局编程配置：
+ *  ① 全局配置只在 app.js 调一次 configureLog()：
+ *     configureLog({
+ *       level: 'info',
+ *       console: true,
+ *       consoleLevel: 'info',            // 控制台通道级别
+ *       file: {                          // ← 写文件必须显式开启（默认关闭）
+ *         name: 'app', dir: 'logs', date: true,
+ *         level: 'info'                  // 文件通道级别：'all' / ['info','error'] / 'info'
+ *       }
+ *     });
+ *
+ *  ② 注册全局 log（入口文件头部执行一次）：
+ *     createLogger('app', true);         // 第二个参数 true = 注册为全局
+ *     然后其他文件直接：import { log } from '.../framework/log/index.js';
+ *     ※ createLogger 只有两个参数；所有配置一律走 config()
+ *
+ *  ③ 模块自己的配置（运行时随时改）：
+ *     const log = createLogger('pay');
+ *     log.config({
+ *       level: 'info',                   // 本模块级别
+ *       file: { name: 'pay', level: 'all' }  // 本模块独立文件（覆盖全局文件配置，不重复写）
+ *     });
+ *     log.config({ file: false });       // 本模块不写文件（只打控制台）
+ *
+ *  实例级 file 配置与全局的关系：**覆盖**，不是叠加 ——
+ *  全局开了文件、模块又给了 file，则该模块只写自己那份（不会写两遍）
+ *
+ *  全局编程配置（app.js 一次性）：
  *   import { configureLog } from '.../framework/log/index.js';
- *   configureLog({ level: 'warn', fileName: 'server', debugKeywords: ['auth'] });
+ *   configureLog({ level: 'info', consoleLevel: 'warn' });
  *
  *  模块级环境变量（无需改代码）：
  *   LOG_LEVEL_AUTH=info         auth 模块最低级别
- *   LOG_CONSOLE_REDIS=off       redis 模块只写文件不进控制台
+ *   LOG_CONSOLE_LEVEL=warn      控制台只打 warn+（文件不受影响）
+ *   LOG_FILE=true               全局开启文件通道
+ *   LOG_FILE_LEVEL=all          文件通道记全量
  *   LOG_FILE_CLI=false          cli 模块不写文件
  *
  * 禁止在业务代码出现任何 console.*（ESLint no-console: error 强制）。

@@ -22,8 +22,14 @@ log.debug('缓存未命中', key);          // 调试：默认静默，见「场
 
 ```js
 import { log } from '.../framework/log/index.js';
-log.info('直接打印');   // 等价 createLogger('app')，跟随全局配置
+log.info('直接打印');   // 未注册全局时 = tag 'app' 的默认实例
 ```
+
+## 三条硬约定（务必遵守）
+
+1. **`configureLog` 全项目只在 `src/app.js` 调用一次**，文件通道默认**关闭**，要写文件就在那里给 `file: {…}`
+2. **入口注册全局 log**：`src/app.js` 里 `createLogger('app', true)`，其他文件 `import { log } from '.../framework/log/index.js'` 直接可用，不必再 `createLogger`
+3. **`createLogger` 只有两个参数**：`tag` + 是否注册为全局。其余一切配置走 `log.config({...})`
 
 ## 按场景查用
 
@@ -60,37 +66,52 @@ log.file.always.error('敏感堆栈留档');     // 组合任意维度
 
 ### ③ 给某个模块单独配置
 
-实例优先级最高，创建时传或运行时热改：
+实例优先级最高，一律通过 `config()` 热改（`createLogger` 只接受 tag 和是否注册全局）：
 
 ```js
-const log = createLogger('pay.charge', {
+const log = createLogger('pay.charge');
+
+log.config({
   level: 'debug',             // 本模块最低级别
   console: true,              // 本模块控制台开关
-  file: { name: 'pay' },      // 本模块独立文件：logs/pay-YYYY-MM-DD.log
+  consoleLevel: 'warn',       // 控制台通道级别：只打 warn+（写法同 file.level）
+  file: { name: 'pay' },      // 本模块独立文件：logs/pay-YYYY-MM-DD.log（给 file 即开启）
   debug: true                 // 本模块 debug 免关键词直接输出（false = 强制静默）
 });
 
 log.config({ level: 'warn' });   // 运行时热更新，返回自身可链式
 ```
 
-### ④ 日志文件命名（全字段可配）
+### ④ 日志文件命名（全字段可配，默认关闭）
 
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
-| `name` | 跟随全局（`app`） | 文件名前缀 |
+| `name` | 实例 = 自己的 tag；全局 = `app` | 文件名前缀 |
 | `dir` | 跟随全局（`logs`） | 目录（不存在自动创建） |
 | `ext` | `.log` | 扩展名，如 `.txt` |
+| `suffix` | 空 | 文件名后缀：`pid` = 进程号（多进程防行交错）；或自定义字符串 |
 | `date` | `true` | 文件名带日期后缀按天滚动；`false` = 单文件 |
 | `dateDir` | `false` | 日期作为子目录：`logs/2026-09-12/app.log`（文件名不再带日期后缀） |
 | `subdir` | 不启用 | 模块子目录：`'auto'`/`true` = 按 tag 首段分类；字符串 = 固定目录名 |
+| `level` | 跟随全局门槛 | 文件记录等级：`'info'`（及以上）/ `'all'` / `['info','error']` / `'warn,error'` / `'off'` |
 | `error` | `true` | 错误文件开关；`false` 关闭；字符串 = 自定义前缀 |
 | `keepDays` | `30` | 按天清理过期日志；`0` = 永久保留 |
 
+> **默认不写文件**：只有出现 `file: {…}` 对象（哪怕 `{}`）才开启文件通道，其余键全部走上面的默认值。显式关闭用 `file: false`。
+
+> **显式配置 > 全局门槛**：写了 `file.level`（如 `'all'`）就优先于全局 `level`，连 `debug`/`trace` 也会落盘，不必再配 `LOG_DEBUG`。全局 `level` 只管「没写通道级别时」的默认行为。
+
 ```js
 // 单文件 pay.txt；关闭错误文件 error:false；自定义错误前缀 error:'myerr'
-createLogger('pay', { file: { name: 'pay', ext: '.txt', date: false } });
-createLogger('audit', { file: { name: 'audit', date: false, error: 'myerr' } });
+createLogger('pay').config({ file: { name: 'pay', ext: '.txt', date: false } });
+createLogger('audit').config({ file: { name: 'audit', date: false, error: 'myerr' } });
+// 只记 info/error 两个级别到文件
+createLogger('pay').config({ file: { name: 'pay', level: ['info', 'error'] } });
+// 全量落盘（含 debug/trace），不看全局 level 脸色
+createLogger('pay').config({ file: { name: 'pay', level: 'all' } });
 ```
+
+> **不会重复记录**：实例 `file` 配置是**替换**全局而非叠加。全局开了 `file`、模块没给 → 用全局；模块给了 → 完全以模块为准；模块 `file: false` → 该模块不写。一个 logger 一次输出最多写一个文件。
 
 ### ④' 目录布局：让日志按日期 / 模块分文件夹
 
@@ -108,8 +129,8 @@ createLogger('audit', { file: { name: 'audit', date: false, error: 'myerr' } });
 ```js
 // 推荐：日期做一级、模块做二级，目录清晰且逐天归档
 // 全局：configureLog({ file: { dateDir: true, subdir: 'auto' } })
-// 或按模块：createLogger('firewall.engine', { file: { subdir: 'auto' } });
-//          createLogger('oauth21.token',   { file: { name: 'oauth', subdir: 'auto' } });
+// 或按模块：createLogger('firewall.engine').config({ file: { subdir: 'auto' } });
+//          createLogger('oauth21.token').config({ file: { name: 'oauth', subdir: 'auto' } });
 ```
 
 也可用环境变量全局开启：`LOG_DATE_DIR=on`、`LOG_SUBDIR=auto`（或固定名如 `LOG_SUBDIR=firewall`）。
@@ -125,19 +146,23 @@ createLogger('audit', { file: { name: 'audit', date: false, error: 'myerr' } });
 | 错误日志 | `error-YYYY-MM-DD.log`（默认前缀时沿用旧命名） | warn 及以上 |
 | 自定义名 | `<name>-...` + `<name>-error-...` | 实例 `file: { name }` 指定 |
 
-### ⑤ 全局编程配置（应用入口用一次）
+### ⑤ 全局编程配置（`src/app.js` 用一次）
 
 ```js
-import { configureLog } from '.../framework/log/index.js';
+import { configureLog, createLogger, initLogErrorTraps } from './framework/log/index.js';
 
 configureLog({
-  level: 'warn',              // 全局最低级别
-  file: { name: 'server', date: false },  // 文件总开关 + 命名配置
+  level: 'info',              // 全局最低级别
   console: true,              // 控制台总开关
-  pretty: true,               // 彩色可读 / JSON 行
-  showDev: true,              // dev 专属输出开关
-  debugKeywords: ['auth']     // debug/trace 白名单
+  consoleLevel: 'info',       // 控制台通道级别（可选）
+  debugKeywords: process.env.LOG_DEBUG || '',
+  // file 默认不写（注释掉即关闭）；给 file 对象即全局开启，键全都有默认值
+  // file: { name: 'app', dir: 'logs', ext: '.log', suffix: '', date: true, dateDir: false,
+  //         subdir: 'auto', level: 'info', error: true, keepDays: 30 }
 });
+
+createLogger('app', true);    // ② = 注册为全局 log，其他文件直接 import { log }
+initLogErrorTraps();
 ```
 
 ### ⑥ 部署时按模块配置（环境变量，无需改代码）
@@ -172,24 +197,27 @@ LOG_FILE_NAME=server         # 主日志文件名前缀
 | `LOG_FILE_SUFFIX` | 空 | 文件名后缀：`pid` = 进程号（多进程部署防行交错）；或自定义字符串 |
 | `LOG_MAX_STR` | `2000` | 单字段字符串长度上限（字符数），超长截断加 `…(len=N)` 标记；`0` = 关闭 |
 | `LOG_CONSOLE` | `true` | 控制台开关 |
-| `LOG_FILE` | `true` | 文件开关 |
+| `LOG_CONSOLE_LEVEL` | 空 | 控制台记录等级：`info` / `all` / `error,warn` / `debug` |
+| `LOG_FILE` | `false` | 文件开关（**默认关闭**，需显式开启） |
+| `LOG_FILE_LEVEL` | 空 | 文件记录等级：`info` / `all` / `error,warn` / `debug` |
 | `LOG_PRETTY` | 非 prod 为 `true` | 控制台彩色可读 / JSON 行 |
 | `LOG_DEV` | 随 `NODE_ENV` | dev 专属输出强制开关 |
 | `LOG_LEVEL_<NAME>` | — | 模块级最低级别覆盖 |
 | `LOG_CONSOLE_<NAME>` | 随 `LOG_CONSOLE` | 模块级控制台开关 |
-| `LOG_FILE_<NAME>` | 随 `LOG_FILE` | 模块级文件开关 |
+| `LOG_FILE_<NAME>` | 随 `LOG_FILE` | 模块级文件开关（`true` 同时开启该模块文件输出） |
 
 ## 内置能力
 
 - **自动脱敏**：`password` / `token` / `secret` / `key` / `cookie` 等字段输出为 `***`（递归 3 层，超深部分替换为 `[maxDepth]` 占位符；仅对象/数组参数，msg 字符串不脱敏）
 - **链路追踪**：auth 框架注册了上下文提供器，请求内日志自动携带 `requestId` / `userId`（核心字段受保护不被覆盖）
-- **全局异常钩子**：`app.js` 已调用 `initLogErrorTraps()`，`uncaughtException` 记 fatal（同步落盘 + fd 2 同步兜底）后留 100ms 刷新窗口再退出（防管道场景丢最后一条控制台日志），`unhandledRejection` 记 always.error（不受 LOG_LEVEL 门控）
+- **全局异常钩子**：`app.js` 已调用 `initLogErrorTraps()`，`uncaughtException` 记 fatal（同步落盘 + fd 2 同步兜底）后留 100ms 刷新窗口再退出（防管道场景丢最后一条控制台日志），`unhandledRejection` 记 always.error（不受 LOG_LEVEL 门控）。`traps.js` 内部对 `process` logger 强制 `.config({ file: { level: 'all' } })`，**崩溃留档不与全局 file 开关耦合**
 - **永不抛异常**：日志调用自身绝不把错误抛进业务代码（循环引用 / BigInt 经 safeStringify 安全序列化）
 - **超长截断**：单字段默认 2000 字符上限（`LOG_MAX_STR` 可调），防大对象/大字符串撑爆日志文件
 - **时区一致**：`record.t` 为本地时区 ISO（含偏移），与日志文件名的滚动日期同基准
 - **多进程部署**：pm2 cluster 等多进程场景设 `LOG_FILE_SUFFIX=pid` 按进程分文件，防行交错
 - **文件同步落盘**：`appendFileSync` 写入，进程崩溃前最后几条日志不丢
-- **按天清理**：写文件时自动清理超过 `keepDays` 的过期日志（只删本框架命名规则的文件）
+- **按天清理**：写文件时自动清理超过 `keepDays` 的过期日志（只删本框架命名规则的文件；日期目录模式整块删过期日期目录）
+- **等级白名单**：`consoleLevel` / `file.level` 支持 `'all'`、单级别（含以上）、数组 `['info','error']`、逗号串 `'warn,error'`，控制台安静但文件全量
 - **计时器**：`const done = log.time('dbQuery'); ...; done();` 自动输出耗时
 - **零依赖**：仅用 node 内置模块（前端复用时进一步降级为零 node 依赖）
 

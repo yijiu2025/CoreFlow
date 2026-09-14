@@ -22,9 +22,42 @@ import { initLoader } from './framework/loader/index.js';
 import { flushGuardConfig } from './api/guard-config.js';
 import { startScheduler } from './framework/scheduler/index.js';
 import { ApiException } from './shared/exceptions.js';
-import { createLogger, initLogErrorTraps } from './framework/log/index.js';
+import { configureLog, createLogger, initLogErrorTraps } from './framework/log/index.js';
 
-const log = createLogger('app');
+// ════════════════════════════════════════════════════════════════════
+// 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
+// ════════════════════════════════════════════════════════════════════
+// 设计约定：
+//   ① 文件通道默认关闭 —— 不写 file 就只输出控制台，不会产生任何日志文件
+//   ② 要落盘时把下面 file 的注释打开（或直接设 LOG_FILE=true 用环境变量兜底）
+//   ③ 控制台与文件级别互相独立：控制台可以安静，文件照样记全量
+//   ④ 模块如需自己的文件，在模块内 log.config({ file: {...} }) 覆盖（不会重复写）
+//
+// 环境变量可覆盖此处任意项：LOG_LEVEL / LOG_DEBUG / LOG_CONSOLE_LEVEL / LOG_FILE ...
+configureLog({
+  level: 'info', // 全局总门槛：info 及以上（trace/debug 另由 LOG_DEBUG 控制）
+  console: true, // 控制台始终开启
+  consoleLevel: 'info', // 控制台通道级别：'info' 及以上；也可用数组 ['warn','error','fatal']
+  debugKeywords: process.env.LOG_DEBUG || ''
+
+  // ── 文件通道（默认关闭；需要落盘时取消注释）──────────────────────
+  // file: {
+  //   name: 'app',        // 文件名（默认 app）→ app-2026-09-14.log
+  //   dir: 'logs',        // 目录（默认 logs）
+  //   ext: '.log',        // 扩展名
+  //   suffix: '',         // 文件名后缀；'pid' = 进程号（多进程部署防行交错）
+  //   date: true,         // 按天滚动；false = 单文件
+  //   dateDir: false,     // 日期做子目录 logs/2026-09-14/app.log
+  //   subdir: 'auto',     // 模块子目录：'auto' 按 tag 首段分类
+  //   level: 'info',      // 文件通道级别：'info'（及以上）/ 'all'（全量）/ ['info','error']（白名单）
+  //   error: true,        // warn+ 另写一份 error 文件
+  //   keepDays: 30        // 保留天数，过期自动清理；0 = 永久
+  // }
+});
+
+// 注册全局 log：其他文件可直接 `import { log } from './framework/log/index.js'` 使用，
+// 无需再 createLogger。必须在应用入口最先执行（本文件顶部即满足）。
+const log = createLogger('app', true);
 
 // 全局异常兜底：uncaughtException / unhandledRejection 统一走日志系统
 initLogErrorTraps();
