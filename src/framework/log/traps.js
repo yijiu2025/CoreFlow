@@ -12,14 +12,21 @@
  * 注意：安装 unhandledRejection 处理器会改变 Node ≥15 的默认行为
  * （默认模式 throw 会崩溃，安装处理器后进程继续运行）。
  *
+ * 落盘策略：进程级致命日志**必须留档**，因此本模块的 logger 显式开启文件通道
+ * （file.level: 'all'），不受全局 file 开关影响 —— 崩溃原因丢了对排查是灾难。
+ *
  * @author yijiu2025
  * @since 2026-09-10
  */
 import fs from 'node:fs';
 import process from 'node:process';
-import { AppLogger } from 'wb-logkit';
+// 经同目录适配层导入（而非直接 import 'wb-logkit'）：与全项目"统一走 framework/log"
+// 的约定一致，也避免独立部署时依赖 packages/log 的软链存在
+import { AppLogger } from './index.js';
 
 const log = new AppLogger('process');
+// 进程级异常强制留档：不与全局 file 开关耦合（全局默认关闭文件，但崩溃日志不能丢）
+log.config({ file: { name: 'process', level: 'all', error: true } });
 
 /** 退出前留给 stdout/stderr 异步流的刷新窗口（毫秒） */
 const EXIT_FLUSH_MS = 100;
