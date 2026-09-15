@@ -3,10 +3,19 @@
  */
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { getModels } from '../lib/db.js';
+import { getModels } from '../../src/framework/db/models.js';
 import { connectRedis, closeRedis, clearUserSessions } from '../lib/redis.js';
-import { createRl, ask, confirm, closeRl } from '../lib/input.js';
-import { printTable, printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
+import {
+  createRl,
+  ask,
+  confirm,
+  closeRl,
+  printTable,
+  printSuccess,
+  printInfo,
+  printWarning,
+  printError
+} from '../../src/framework/cli/index.js';
 import { logStdout } from '../../src/framework/log/index.js';
 
 /**

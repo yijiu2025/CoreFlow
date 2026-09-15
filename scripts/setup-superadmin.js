@@ -16,7 +16,7 @@
 import 'dotenv/config';
 import crypto from 'crypto';
 import readline from 'readline';
-import sequelize from '../src/db/index.js';
+import sequelize from '../src/framework/db/index.js';
 import { createLogger, logStdout } from '../src/framework/log/index.js';
 
 const log = createLogger('scripts.setup-superadmin');

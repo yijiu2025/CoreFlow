@@ -9,8 +9,8 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { getModels } from '../../../../scripts/lib/db.js';
-import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
+import { getModels } from '../../../framework/db/models.js';
+import { printTable, printInfo, printLine } from '../../../framework/cli/index.js';
 import { logStdout } from '../../../framework/log/index.js';
 
 /**

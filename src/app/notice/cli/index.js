@@ -9,16 +9,17 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { getModels } from '../../../../scripts/lib/db.js';
+import { getModels } from '../../../framework/db/models.js';
 import {
   printTable,
   printSuccess,
   printInfo,
-  printWarning,
   printError,
-  printLine
-} from '../../../../scripts/lib/table.js';
-import { createRl, ask, closeRl } from '../../../../scripts/lib/input.js';
+  printLine,
+  createRl,
+  ask,
+  closeRl
+} from '../../../framework/cli/index.js';
 import { logStdout } from '../../../framework/log/index.js';
 
 /**
@@ -41,14 +42,38 @@ async function listChannels() {
 }
 
 /**
+ * 值里可能含凭据的配置项（如 smtp_password）—— 打印前遮蔽，避免授权码进入终端回滚区与日志
+ */
+const SECRET_KEY_PATTERN = /(password|passwd|secret|token|credential|api[_-]?key)/i;
+
+/**
+ * 遮蔽敏感配置值
+ * @param {string} key - 配置项名
+ * @param {string} value - 配置值
+ * @returns {string} 可直接打印的值
+ */
+function maskValue(key, value) {
+  if (!SECRET_KEY_PATTERN.test(key)) return value;
+  const text = String(value ?? '');
+  if (!text) return '(空)';
+  return `${'*'.repeat(Math.min(text.length, 8))}（已遮蔽 ${text.length} 位）`;
+}
+
+/**
  * 查看通道配置
+ *
+ * NoticeConfig 是 key-value 配置表（key / value / description / category / updatedAt），
+ * 不是 {id, type, enabled} 结构。
  */
 async function showConfig() {
   const { NoticeConfig } = getModels();
 
   try {
     const configs = await NoticeConfig.findAll({
-      order: [['type', 'ASC']]
+      order: [
+        ['category', 'ASC'],
+        ['key', 'ASC']
+      ]
     });
 
     if (configs.length === 0) {
@@ -56,13 +81,14 @@ async function showConfig() {
       return;
     }
 
-    logStdout('\n⚙️ 通知通道配置：');
+    logStdout('\n⚙️ 通知配置：');
     printTable(
-      ['ID', '类型', '启用', '更新时间'],
-      configs.map(c => [c.id, c.type, c.enabled ? '✅ 是' : '❌ 否', new Date(c.updated_at).toLocaleString('zh-CN')])
+      ['分类', '配置项', '值', '说明'],
+      configs.map(c => [c.category, c.key, maskValue(c.key, c.value), c.description])
     );
-  } catch {
-    printWarning('NoticeConfig 模型未加载');
+  } catch (err) {
+    // 不要把真实错误伪装成「模型未加载」—— 两者排查方向完全不同
+    printError(`读取通知配置失败: ${err.message}`);
   }
 }
 

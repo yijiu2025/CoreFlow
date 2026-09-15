@@ -1,10 +1,13 @@
-import { logStdout } from '../../src/framework/log/index.js';
+import { logStdout } from '../log/index.js';
 
 /**
  * 终端输出格式化模块
  * 提供表格打印、彩色输出、进度显示等功能
  *
- * @module scripts/lib/table
+ * 定位：跨业务 CLI 基础设施，零业务语义 —— 供 `scripts/` 宿主与 `src/app/<app>/cli/` 共用。
+ * 注意：本模块位于 `src/` 内，**不得反向依赖 `scripts/`**（`scripts/` 是可选宿主，不一定随部署安装）。
+ *
+ * @module framework/cli/table
  */
 
 // ============== ANSI 颜色常量 ==============
@@ -13,7 +16,7 @@ import { logStdout } from '../../src/framework/log/index.js';
  * ANSI 颜色代码
  * @type {object}
  */
-export const colors = {
+const colors = {
   reset: '\x1b[0m',
   bold: '\x1b[1m',
   dim: '\x1b[2m',
@@ -57,7 +60,7 @@ export const colors = {
  *   { showIndex: true }
  * );
  */
-export function printTable(headers, rows, options = {}) {
+function printTable(headers, rows, options = {}) {
   const { padding = 2, maxWidth = 50, showIndex = false } = options;
 
   // 添加行号列
@@ -97,9 +100,22 @@ export function printTable(headers, rows, options = {}) {
  * @returns {number} 显示宽度
  * @private
  */
+/**
+ * ANSI 转义引导符 ESC (U+001B)。
+ * 用 `String.fromCharCode` 构造：正则字面量里直接写控制字符会触发 ESLint no-control-regex。
+ * @private
+ */
+const ANSI_ESC = String.fromCharCode(27);
+
+/**
+ * 匹配 ANSI SGR 颜色序列（如 ESC[1m），计算显示宽度时先剔除
+ * @private
+ */
+const ANSI_SGR_PATTERN = new RegExp(ANSI_ESC + '\\[[0-9;]*m', 'g');
+
 function getDisplayLength(str) {
   // 移除 ANSI 颜色代码
-  const cleanStr = str.replace(/\x1b\[[0-9;]*m/g, '');
+  const cleanStr = str.replace(ANSI_SGR_PATTERN, '');
   let length = 0;
   for (const char of cleanStr) {
     // 中文字符占 2 个宽度
@@ -128,7 +144,7 @@ function padRight(str, width) {
  * @param {string} color - 颜色名（colors 对象中的键）
  * @param {string} text - 文本内容
  */
-export function colorPrint(color, text) {
+function colorPrint(color, text) {
   const colorCode = colors[color] || '';
   logStdout(`${colorCode}${text}${colors.reset}`);
 }
@@ -137,7 +153,7 @@ export function colorPrint(color, text) {
  * 打印成功信息（绿色）
  * @param {string} text - 信息内容
  */
-export function printSuccess(text) {
+function printSuccess(text) {
   colorPrint('green', `✅ ${text}`);
 }
 
@@ -145,7 +161,7 @@ export function printSuccess(text) {
  * 打印信息（青色）
  * @param {string} text - 信息内容
  */
-export function printInfo(text) {
+function printInfo(text) {
   colorPrint('cyan', `ℹ️  ${text}`);
 }
 
@@ -153,7 +169,7 @@ export function printInfo(text) {
  * 打印警告（黄色）
  * @param {string} text - 警告内容
  */
-export function printWarning(text) {
+function printWarning(text) {
   colorPrint('yellow', `⚠️  ${text}`);
 }
 
@@ -161,7 +177,7 @@ export function printWarning(text) {
  * 打印错误（红色）
  * @param {string} text - 错误内容
  */
-export function printError(text) {
+function printError(text) {
   colorPrint('red', `❌ ${text}`);
 }
 
@@ -169,7 +185,7 @@ export function printError(text) {
  * 打印标题（加粗）
  * @param {string} text - 标题内容
  */
-export function printBold(text) {
+function printBold(text) {
   colorPrint('bold', text);
 }
 
@@ -180,7 +196,7 @@ export function printBold(text) {
  * @param {number} [length=60] - 线长度
  * @param {string} [char='─'] - 分隔字符
  */
-export function printLine(length = 60, char = '─') {
+function printLine(length = 60, char = '─') {
   logStdout(char.repeat(length));
 }
 
@@ -188,7 +204,7 @@ export function printLine(length = 60, char = '─') {
  * 打印标题框
  * @param {string} text - 标题文本
  */
-export function printTitle(text) {
+function printTitle(text) {
   const width = getDisplayLength(text) + 4;
   logStdout('');
   logStdout('╔' + '═'.repeat(width) + '╗');
@@ -201,7 +217,7 @@ export function printTitle(text) {
  * 打印小标题
  * @param {string} text - 标题文本
  */
-export function printSubtitle(text) {
+function printSubtitle(text) {
   logStdout('');
   logStdout(`  ${colors.bold}${text}${colors.reset}`);
   logStdout('  ' + '─'.repeat(text.length));
@@ -215,7 +231,7 @@ export function printSubtitle(text) {
  * @param {number} total - 总数
  * @param {number} [width=30] - 进度条宽度
  */
-export function printProgress(current, total, width = 30) {
+function printProgress(current, total, width = 30) {
   const percent = Math.round((current / total) * 100);
   const filled = Math.round((current / total) * width);
   const empty = width - filled;
@@ -233,7 +249,7 @@ export function printProgress(current, total, width = 30) {
  * @param {number} frame - 帧序号
  * @param {string} [message=''] - 附加消息
  */
-export function printSpinner(frame, message = '') {
+function printSpinner(frame, message = '') {
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   const char = frames[frame % frames.length];
   process.stdout.write(`\r  ${colors.cyan}${char}${colors.reset} ${message}`);
@@ -246,7 +262,7 @@ export function printSpinner(frame, message = '') {
  * @param {string[]} items - 列表项
  * @param {string} [bullet='•'] - 列表符号
  */
-export function printList(items, bullet = '•') {
+function printList(items, bullet = '•') {
   items.forEach(item => {
     logStdout(`  ${bullet} ${item}`);
   });
@@ -257,7 +273,7 @@ export function printList(items, bullet = '•') {
  * @param {Array<[string, string]>} pairs - 键值对数组
  * @param {number} [keyWidth=15] - 键名宽度
  */
-export function printKeyValue(pairs, keyWidth = 15) {
+function printKeyValue(pairs, keyWidth = 15) {
   pairs.forEach(([key, value]) => {
     logStdout(`  ${colors.dim}${key.padEnd(keyWidth)}${colors.reset} ${value}`);
   });
@@ -270,7 +286,7 @@ export function printKeyValue(pairs, keyWidth = 15) {
  * @param {object} obj - JSON 对象
  * @param {number} [indent=2] - 缩进空格数
  */
-export function printJson(obj, indent = 2) {
+function printJson(obj, indent = 2) {
   logStdout(JSON.stringify(obj, null, indent));
 }
 
@@ -281,7 +297,7 @@ export function printJson(obj, indent = 2) {
  * @param {Date|string|number} date - 日期对象、字符串或时间戳
  * @returns {string} 格式化后的日期字符串
  */
-export function formatDate(date) {
+function formatDate(date) {
   if (!date) return '未知';
   const d = new Date(date);
   return d.toLocaleString('zh-CN', {
@@ -299,7 +315,7 @@ export function formatDate(date) {
  * @param {number} bytes - 字节数
  * @returns {string} 格式化后的大小
  */
-export function formatBytes(bytes) {
+function formatBytes(bytes) {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let unitIndex = 0;
   let size = bytes;
@@ -317,7 +333,7 @@ export function formatBytes(bytes) {
  * @param {number} seconds - 秒数
  * @returns {string} 格式化后的时间
  */
-export function formatUptime(seconds) {
+function formatUptime(seconds) {
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -331,3 +347,25 @@ export function formatUptime(seconds) {
 
   return parts.join(' ');
 }
+
+export {
+  colors,
+  printTable,
+  colorPrint,
+  printSuccess,
+  printInfo,
+  printWarning,
+  printError,
+  printBold,
+  printLine,
+  printTitle,
+  printSubtitle,
+  printProgress,
+  printSpinner,
+  printList,
+  printKeyValue,
+  printJson,
+  formatDate,
+  formatBytes,
+  formatUptime
+};

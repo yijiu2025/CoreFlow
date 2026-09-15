@@ -94,16 +94,19 @@ export async function testRedisConnection() {
  * @returns {Promise<RedisInfo>}
  */
 export async function getRedisInfo(client) {
-  const [serverInfo, memoryInfo] = await Promise.all([client.info('server'), client.info('memory')]);
-
-  const [totalKeys] = await Promise.all([client.dbsize()]);
+  // 一次取全量 INFO（含 server / memory / clients 全部 section）。
+  // 之前是 info('server') + info('memory')，但 connected_clients 属于 clients section，
+  // 于是「连接数」永远解析不出来（界面显示「未知」）；顺带把 3 次往返收敛成 1 次。
+  // 另注意：node-redis v5 方法名是驼峰 —— dbSize 而不是 dbsize。
+  const info = await client.info();
+  const totalKeys = await client.dbSize();
 
   return {
-    version: parseInfo(serverInfo, 'redis_version'),
-    uptime: parseInfo(serverInfo, 'uptime_in_seconds'),
-    connectedClients: parseInfo(serverInfo, 'connected_clients'),
-    usedMemory: parseInfo(memoryInfo, 'used_memory_human'),
-    usedMemoryPeak: parseInfo(memoryInfo, 'used_memory_peak_human'),
+    version: parseInfo(info, 'redis_version'),
+    uptime: parseInfo(info, 'uptime_in_seconds'),
+    connectedClients: parseInfo(info, 'connected_clients'),
+    usedMemory: parseInfo(info, 'used_memory_human'),
+    usedMemoryPeak: parseInfo(info, 'used_memory_peak_human'),
     totalKeys
   };
 }
