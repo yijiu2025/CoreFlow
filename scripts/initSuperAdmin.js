@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import sequelize from '../src/db/index.js';
-import { User, Role, UserRole, UserIdentity } from './src/models/user/index.js';
+import sequelize from '../src/framework/db/index.js';
+import { User, Role, UserRole, UserIdentity } from '../src/models/user/index.js';
 import { QueryTypes } from 'sequelize';
 import { createLogger, logStdout } from '../src/framework/log/index.js';
 

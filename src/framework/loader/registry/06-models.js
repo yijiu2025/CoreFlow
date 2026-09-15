@@ -1,76 +1,45 @@
 /**
  * Loader：模型自动加载
  *
+ * 扫描与实例化逻辑统一在 `framework/db/models.js`，本步骤只负责：
+ * ① 把模型挂到 `app.db`（按子目录分命名空间）；② 建立关联；③ DB_SYNC 与日志。
+ * 这样 CLI（非 Fastify 进程）与应用启动走的是**同一套**模型加载实现，不会各改各的。
+ *
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { DataTypes } from 'sequelize';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
 import { sequelize, getModel } from '../../db/index.js';
+import { scanModels, associateModels, MODELS_DIR } from '../../db/models.js';
 import { C } from '../../../utils/colors.js';
 import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.loader.registry.06-models');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const modelsLoader = async app => {
   const db = app.db;
-  const modelsPath = path.resolve(__dirname, '../../../models');
-  const loadedModels = []; // 收集所有加载的模型，避免二次遍历
   const loadErrors = []; // 收集加载失败的模型，末尾统一告警
 
-  /**
-   * 递归扫描模型目录，按子目录自动创建命名空间
-   * 每个 .js 文件导出工厂函数 (sequelize, DataTypes) => Model
-   */
-  async function scanModels(dir, namespace = '') {
-    if (!fs.existsSync(dir)) return;
+  // 递归扫描模型目录，按子目录自动创建命名空间
+  // 每个 .js 文件导出工厂函数 (sequelize, DataTypes) => Model
+  const { entries, errors } = await scanModels(MODELS_DIR);
 
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-
-      if (entry.isDirectory()) {
-        const ns = namespace ? `${namespace}.${entry.name}` : entry.name;
-        if (!db[ns]) db[ns] = {};
-        await scanModels(fullPath, ns);
-      } else if (entry.name.endsWith('.js')) {
-        try {
-          const fileUrl = pathToFileURL(fullPath).href;
-          const { default: modelDefine } = await import(fileUrl);
-          const result = modelDefine(sequelize, DataTypes);
-
-          const models = result.name ? [result] : Object.values(result);
-
-          for (const model of models) {
-            if (!model || !model.name) continue;
-            if (namespace) {
-              db[namespace][model.name] = model;
-            } else {
-              db[model.name] = model;
-            }
-            loadedModels.push(model);
-          }
-        } catch (error) {
-          loadErrors.push({ file: entry.name, error: error.message });
-          log.error(`❌ [Loader: Models] ${C.red}模型 [${entry.name}] 加载失败${C.reset}`, error);
-        }
-      }
+  for (const { namespace, name, model } of entries) {
+    if (namespace) {
+      if (!db[namespace]) db[namespace] = {};
+      db[namespace][name] = model;
+    } else {
+      db[name] = model;
     }
   }
 
-  await scanModels(modelsPath);
+  for (const err of errors) {
+    loadErrors.push(err);
+    // 传原始异常（cause）而不是消息串，保留堆栈 —— 模型加载失败多为语法错误，没有堆栈很难定位到行
+    log.error(`❌ [Loader: Models] ${C.red}模型 [${err.file}] 加载失败${C.reset}`, err.cause || err.error);
+  }
 
-  // 执行模型关联 (associate)
-  loadedModels.forEach(model => {
-    if (model.associate) {
-      model.associate(sequelize.models);
-    }
-  });
+  // 执行模型关联 (associate) —— 必须在全部模型注册完毕后统一进行
+  associateModels(entries);
 
   // 注册模型获取方法：app.db.getModel 委托给独立 getModel
   // 支持 getModel('User') / getModel('user.User') / getModel('user', 'User')

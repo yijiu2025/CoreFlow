@@ -20,7 +20,7 @@
  * 故在该方法内**惰性导入**。这样 `import StpUtil` 本身零副作用，
  * 单测/脚本可安全引入而不触发建连。详见 AUDIT-REPORT-2026-09-12.md 🟡-1。
  *
- * @author Claude
+ * @author yijiu
  * @since 2026-07-13
  * @since 2026-09-14 改从 ./request-context.js 取 ALS 实例 + session.js 改惰性导入，
  *                    去掉对 index.js 的反向依赖（消除循环依赖与连带副作用）

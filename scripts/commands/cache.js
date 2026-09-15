@@ -1,9 +1,16 @@
 /**
  * 缓存管理命令模块
  */
-import { connectRedis, closeRedis, getRedisInfo, clearKeysByPattern } from '../lib/redis.js';
-import { createRl, confirm, closeRl } from '../lib/input.js';
-import { printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
+import { connectRedis, closeRedis, getRedisInfo } from '../lib/redis.js';
+import {
+  createRl,
+  confirm,
+  closeRl,
+  printSuccess,
+  printInfo,
+  printWarning,
+  printLine
+} from '../../src/framework/cli/index.js';
 import { logStdout } from '../../src/framework/log/index.js';
 
 /**

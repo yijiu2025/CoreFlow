@@ -1,10 +1,21 @@
 /**
  * 角色管理命令模块
  */
-import { getModels } from '../lib/db.js';
+import { getModels } from '../../src/framework/db/models.js';
 import { connectRedis, closeRedis, clearUserSessions } from '../lib/redis.js';
-import { createRl, ask, confirm, closeRl, select } from '../lib/input.js';
-import { printTable, printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
+import {
+  createRl,
+  ask,
+  confirm,
+  closeRl,
+  select,
+  printTable,
+  printSuccess,
+  printInfo,
+  printWarning,
+  printError,
+  printLine
+} from '../../src/framework/cli/index.js';
 import { logStdout } from '../../src/framework/log/index.js';
 
 /**
@@ -13,7 +24,7 @@ import { logStdout } from '../../src/framework/log/index.js';
 export async function listRoles() {
   const { Role } = getModels();
   const roles = await Role.findAll({
-    attributes: ['id', 'code', 'app_id', 'name', 'rank_level', 'created_at'],
+    attributes: ['id', 'code', 'app_id', 'name', 'rank_level', 'createdAt'],
     order: [['rank_level', 'DESC']]
   });
 
@@ -25,7 +36,7 @@ export async function listRoles() {
   logStdout('\n🎭 角色列表：');
   printTable(
     ['ID', '编码', '应用', '名称', '权重', '创建时间'],
-    roles.map(r => [r.id, r.code, r.app_id, r.name, r.rank_level, new Date(r.created_at).toLocaleString('zh-CN')])
+    roles.map(r => [r.id, r.code, r.app_id, r.name, r.rank_level, new Date(r.createdAt).toLocaleString('zh-CN')])
   );
   logStdout(`\n共 ${roles.length} 个角色`);
 }

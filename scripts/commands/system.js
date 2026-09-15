@@ -1,10 +1,9 @@
 /**
  * 系统管理命令模块
  */
-import { testConnection } from '../lib/db.js';
+import { testConnection, getModels } from '../../src/framework/db/models.js';
 import { connectRedis, closeRedis } from '../lib/redis.js';
-import { getModels } from '../lib/db.js';
-import { printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
+import { printSuccess, printInfo, printWarning, printError, printLine } from '../../src/framework/cli/index.js';
 import { logStdout } from '../../src/framework/log/index.js';
 
 /**

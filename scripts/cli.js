@@ -2,10 +2,9 @@
 // - 内置命令：用户、角色、数据库、Redis、管理员、系统
 // - 应用插件：自动加载 src/app/<app>/cli/index.js
 import 'dotenv/config';
-import { loadAllModels, closeDb } from './lib/db.js';
+import { loadAllModels, closeDb } from '../src/framework/db/models.js';
 import { loadAppCommands, mergeCommands } from './lib/plugin.js';
-import { printError, printInfo } from './lib/table.js';
-import { createRl, ask, closeRl } from './lib/input.js';
+import { printError, printInfo, createRl, ask, closeRl } from '../src/framework/cli/index.js';
 
 // 导入内置命令模块
 import {
@@ -244,7 +243,7 @@ async function showSubMenu(commands, category) {
 
     const index = parseInt(choice, 10) - 1;
     if (index >= 0 && index < subEntries.length) {
-      const [sub, subConfig] = subEntries[index];
+      const [, subConfig] = subEntries[index];
       await subConfig.handler();
     } else {
       logStdout('无效的选择');

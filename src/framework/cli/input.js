@@ -2,18 +2,21 @@
  * 输入工具模块
  * 封装 readline 交互式输入，支持密码隐藏、确认提示、列表选择
  *
- * @module scripts/lib/input
+ * 定位：跨业务 CLI 基础设施，零业务语义 —— 供 `scripts/` 宿主与 `src/app/<app>/cli/` 共用。
+ * 注意：本模块位于 `src/` 内，**不得反向依赖 `scripts/`**（`scripts/` 是可选宿主，不一定随部署安装）。
+ *
+ * @module framework/cli/input
  */
 import readline from 'readline';
-import { createLogger, logStdout } from '../../src/framework/log/index.js';
+import { createLogger, logStdout } from '../log/index.js';
 
-const log = createLogger('scripts.lib.input');
+const log = createLogger('framework.cli.input');
 
 /**
  * 创建 readline 接口
  * @returns {import('readline').Interface}
  */
-export function createRl() {
+function createRl() {
   return readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -24,7 +27,7 @@ export function createRl() {
  * 关闭 readline 接口
  * @param {import('readline').Interface} rl
  */
-export function closeRl(rl) {
+function closeRl(rl) {
   if (rl) {
     rl.close();
   }
@@ -37,7 +40,7 @@ export function closeRl(rl) {
  * @param {boolean} hidden - 是否隐藏输入（密码）
  * @returns {Promise<string>}
  */
-export function ask(rl, question, hidden = false) {
+function ask(rl, question, hidden = false) {
   if (hidden) {
     return askPassword(question);
   }
@@ -104,7 +107,7 @@ function askPassword(question) {
  * @param {boolean} defaultValue - 默认值（默认 false）
  * @returns {Promise<boolean>}
  */
-export async function confirm(rl, message, defaultValue = false) {
+async function confirm(rl, message, defaultValue = false) {
   const suffix = defaultValue ? '(Y/n)' : '(y/N)';
   const answer = await ask(rl, `${message} ${suffix}: `);
 
@@ -119,7 +122,7 @@ export async function confirm(rl, message, defaultValue = false) {
  * @param {Array<{label: string, value: any}>} items - 选项列表
  * @returns {Promise<any>} 选中的值，无效选择返回 null
  */
-export async function select(rl, title, items) {
+async function select(rl, title, items) {
   logStdout(`\n${title}`);
   items.forEach((item, i) => {
     logStdout(`  ${i + 1}. ${item.label}`);
@@ -143,7 +146,7 @@ export async function select(rl, title, items) {
  * @param {Array<{label: string, value: any}>} items - 选项列表
  * @returns {Promise<any[]>} 选中的值数组
  */
-export async function multiSelect(rl, title, items) {
+async function multiSelect(rl, title, items) {
   logStdout(`\n${title}`);
   logStdout('  （输入序号，多个用逗号分隔，如: 1,3,5）\n');
   items.forEach((item, i) => {
@@ -170,7 +173,9 @@ export async function multiSelect(rl, title, items) {
  * @param {string} defaultValue - 默认值
  * @returns {Promise<string>}
  */
-export async function askWithDefault(rl, question, defaultValue) {
+async function askWithDefault(rl, question, defaultValue) {
   const answer = await ask(rl, `${question} [${defaultValue}]: `);
   return answer || defaultValue;
 }
+
+export { createRl, closeRl, ask, confirm, select, multiSelect, askWithDefault };

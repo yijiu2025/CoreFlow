@@ -157,7 +157,7 @@ async function main() {
     switch (command) {
       case '--down-to':
         if (!downToTarget) {
-          log.error('[Migrate] 用法: node --env-file=.env src/db/migrate.js --down-to <迁移名称>');
+          log.error('[Migrate] 用法: node --env-file=.env src/framework/db/migrate.js --down-to <迁移名称>');
           setTimeout(() => process.exit(1), 100);
         }
         await runDownTo(downToTarget);

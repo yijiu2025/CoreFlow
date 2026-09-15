@@ -2,8 +2,8 @@
  * 数据库管理命令模块
  */
 import { execSync } from 'child_process';
-import { getSequelize, getTableNames, testConnection } from '../lib/db.js';
-import { printSuccess, printInfo, printError, printLine } from '../lib/table.js';
+import { getSequelize, getTableNames, testConnection } from '../../src/framework/db/models.js';
+import { printSuccess, printError, printLine } from '../../src/framework/cli/index.js';
 import { logStdout } from '../../src/framework/log/index.js';
 
 /**
@@ -34,7 +34,7 @@ export async function dbStatus() {
 export async function dbMigrate() {
   logStdout('🔄 执行数据库迁移...');
   try {
-    execSync('node --env-file=.env src/db/migrate.js', { stdio: 'inherit' });
+    execSync('node --env-file=.env src/framework/db/migrate.js', { stdio: 'inherit' });
     printSuccess('迁移完成');
   } catch (err) {
     printError(`迁移失败: ${err.message}`);
@@ -46,7 +46,7 @@ export async function dbMigrate() {
  */
 export async function dbMigrateStatus() {
   try {
-    execSync('node --env-file=.env src/db/migrate.js --status', { stdio: 'inherit' });
+    execSync('node --env-file=.env src/framework/db/migrate.js --status', { stdio: 'inherit' });
   } catch (err) {
     printError(`查询失败: ${err.message}`);
   }
@@ -57,7 +57,7 @@ export async function dbMigrateStatus() {
  */
 export async function dbRollback() {
   try {
-    execSync('node --env-file=.env src/db/migrate.js --down', { stdio: 'inherit' });
+    execSync('node --env-file=.env src/framework/db/migrate.js --down', { stdio: 'inherit' });
     printSuccess('回滚完成');
   } catch (err) {
     printError(`回滚失败: ${err.message}`);

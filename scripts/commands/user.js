@@ -3,10 +3,20 @@
  */
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { getModels } from '../lib/db.js';
+import { getModels } from '../../src/framework/db/models.js';
 import { connectRedis, closeRedis, clearUserSessions } from '../lib/redis.js';
-import { createRl, ask, confirm, closeRl } from '../lib/input.js';
-import { printTable, printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
+import {
+  createRl,
+  ask,
+  confirm,
+  closeRl,
+  printTable,
+  printSuccess,
+  printInfo,
+  printWarning,
+  printError,
+  printLine
+} from '../../src/framework/cli/index.js';
 import { logStdout } from '../../src/framework/log/index.js';
 
 /**
@@ -15,7 +25,7 @@ import { logStdout } from '../../src/framework/log/index.js';
 export async function listUsers() {
   const { User } = getModels();
   const users = await User.findAll({
-    attributes: ['id', 'uid', 'username', 'email', 'status', 'created_at'],
+    attributes: ['id', 'uid', 'username', 'email', 'status', 'createdAt'],
     order: [['id', 'ASC']]
   });
 
@@ -32,7 +42,7 @@ export async function listUsers() {
       u.username,
       u.email,
       u.status === 1 ? '✅ 正常' : '❌ 禁用',
-      new Date(u.created_at).toLocaleString('zh-CN')
+      new Date(u.createdAt).toLocaleString('zh-CN')
     ])
   );
   logStdout(`\n共 ${users.length} 个用户`);
@@ -264,7 +274,7 @@ export async function viewUser() {
     logStdout(`  用户名:   ${user.username}`);
     logStdout(`  邮箱:     ${user.email}`);
     logStdout(`  状态:     ${user.status === 1 ? '✅ 正常' : '❌ 禁用'}`);
-    logStdout(`  创建时间: ${new Date(user.created_at).toLocaleString('zh-CN')}`);
+    logStdout(`  创建时间: ${new Date(user.createdAt).toLocaleString('zh-CN')}`);
 
     if (userRoles.length > 0) {
       logStdout('\n  角色:');

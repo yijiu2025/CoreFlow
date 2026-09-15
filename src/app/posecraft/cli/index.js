@@ -9,8 +9,8 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { getModels } from '../../../../scripts/lib/db.js';
-import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
+import { getModels } from '../../../framework/db/models.js';
+import { printTable, printInfo, printLine } from '../../../framework/cli/index.js';
 import { logStdout } from '../../../framework/log/index.js';
 
 /**
@@ -57,7 +57,7 @@ async function listTemplates() {
       t.title?.substring(0, 20),
       t.category,
       t.uses_count,
-      new Date(t.created_at).toLocaleString('zh-CN')
+      new Date(t.createdAt).toLocaleString('zh-CN')
     ])
   );
 }
@@ -86,7 +86,7 @@ async function listWorks() {
       w.title?.substring(0, 20),
       w.likes_count,
       w.views_count,
-      new Date(w.created_at).toLocaleString('zh-CN')
+      new Date(w.createdAt).toLocaleString('zh-CN')
     ])
   );
 }
