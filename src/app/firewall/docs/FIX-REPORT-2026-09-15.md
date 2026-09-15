@@ -11,8 +11,8 @@
 | 等级 | 报告数 | 已修 | 未修 | 说明 |
 | --- | --- | --- | --- | --- |
 | 🔴 严重 | 4 | 4 | 0 | 全部闭环，含复验中发现的两个"修了也没用"的隐藏缺陷 |
-| 🟡 中危 | 15 | 14 | 1 | 未修项为 🟡-7（测试内联副本），见 §5 |
-| 🔵 低危 | 17 | 15 | 2 | 未修 🔵-7（同义重命名）、🔵-17（设计取舍） |
+| 🟡 中危 | 15 | 15 | 0 | 🟡-7（测试内联副本）已于第二轮改造完成，见 §六 |
+| 🔵 低危 | 17 | 16 | 1 | 🔵-17（匿名短路）已于第二轮完成；仅 🔵-7（同义重命名）仍留待独立提交 |
 
 **复验中新发现 3 个缺陷**（原报告没有，其中 2 个会让 🔴-4 / 🔴-3 的"修法"变成空操作）——见 §3。
 
@@ -143,7 +143,7 @@
 | 🟡-4 指纹四字段全客户端可控 | 更正文档表述（指纹含 IP，跨 IP 追踪不成立）；新增 `generateDeviceFingerprint`（去 IP、仅观测、不用于封禁） | `util/fingerprint.js`、`engine/dao/block-manager.js` |
 | 🟡-5 静默死开关 | `enableGeoFilter` / `enableConnLimit` 真正参与判定；`challengeDifficulty` 等补进默认配置 | `detectors/geo-filter.js`、`util/connection-tracker.js`、`config/config.js` |
 | 🟡-6 用 `err.message.includes('CHALLENGE')` 做控制流 | 删除该 fail-open 判断，改用 `err.isChallenge` | `engine/pipeline.js` |
-| 🟡-7 3 个测试是内联副本 | **未修**，仅加显著警示注记 | 见 §5 |
+| 🟡-7 3 个测试是内联副本 | 第一轮：加显著警示注记；**第二轮：3 个文件全部改写为真身契约测试**（+ 新增设备维度 API 契约测试），见 §六 | `__tests__/{firewall,bot-detector,redis-operations,firewall-device-api}.test.js` |
 | 🟡-8 `allowRoles:['admin']` 永不匹配 | export 组去掉写死角色，授权交给 `requirePermission` | `api/firewall/v1/export.js` |
 | 🟡-9 零 `requirePermission` | 15 个权限码按 `fw_viewer`/`fw_operator`/`fw_admin` 策略逐路由接线 | `api/firewall/v1/*.js` |
 | 🟡-10 `engine/index.js ↔ pipeline.js` 循环依赖 | `pipeline.js` 直接 import 实现模块，不再回头 import barrel | `engine/pipeline.js` |
@@ -157,7 +157,7 @@
 
 ## 五、🔵 低危项
 
-**已修（15）**
+**已修（16）**
 
 | 条目 | 修法 |
 | --- | --- |
@@ -176,26 +176,75 @@
 | 🔵-14 计时数组成员无界增长 | 随 Redis 化自然消除（限流窗口改由 `LUA_RATE_WINDOW` + TTL 承载） |
 | 🔵-15 深层导入 `framework/redis/utils.js` | `isRedisReady` 补进 barrel，调用方改走 `framework/redis/index.js` |
 | 🔵-16 `auto-responder.js` 游离文件 | 接线并纳入 `engine/index.js` barrel |
+| 🔵-17 未登录 401 也走完深度检测 | 第二轮：`willBeRejectedAsAnonymous` + `skipDeepCheckForAnonymous`（默认关闭），见 §6.2 |
 
-**未修（2）**
+**未修（1）**
 
 | 条目 | 原因 / 建议 |
 | --- | --- |
 | 🔵-7 `dao/block-manager.js` 纯 re-export 且与 engine 层同名 | 有 **7 个导入点**（`api/firewall/v1/export.js`、`monitor.js`，`cli/{blocks,stats,status,whitelist}.js`，`engine/detectors/bot-detector.js`）。改名需同步改 7 处 import，收益只是可读性；本次不动，避免把"修复提交"与纯重命名混在一起 |
-| 🔵-17 未登录 401 也会走完深度检测管道 | 原报告即判定"钩子顺序使然、无法提前"。真正的解法是编排层短路（`shouldSkipDeepCheck` 之外再加"必然被守卫拒绝"的开关），属性能优化，需单独设计 |
 
 ---
 
-## 六、遗留：🟡-7 三个测试文件仍是内联副本
+## 六、第二轮：测试真身化（🟡-7）+ 匿名短路（🔵-17）+ 设备维度
 
-`src/__tests__/firewall.test.js`、`bot-detector.test.js`、`redis-operations.test.js`
-不 `import` 真身，只测文件内的同名副本 —— **它们永远通过，因此无法发现真身缺陷**，
-这正是 4 个 🔴 长期漏过的根因。
+### 6.1 🟡-7 三个内联副本测试已改为真身契约测试
 
-本次仅加了显著警示注记（防止继续被当成真覆盖），**未改造**。改造要点：
-- `bot-detector.test.js` → 真身 `checkBotChallenge` 依赖 `getConfig` 与 `setBlock`(Redis)，需 mock 两者；
-- `redis-operations.test.js` → 应改为导入 `framework/redis` 真身（现已有 `src/__tests__/framework/redis/`）；
-- `firewall.test.js` → 内容大部分与 `firewall-redis-adapter.test.js` 重叠，建议直接删除并迁入真身测试。
+| 文件 | 改造方式 |
+| --- | --- |
+| `__tests__/bot-detector.test.js` | 直接 `import` 真身 `checkBotChallenge`；只把「配置来源」（`dao.js`）替换为 `DEFAULT_SECURITY_SETTINGS.defense` 的可写副本 —— 不复制任何策略逻辑，也不触发 `triggerSave` 写盘 |
+| `__tests__/firewall.test.js` | 重写为 5 条真实链路的契约测试：封禁状态机（4 状态 × 入口行为）、挑战链路端到端（下发→求解 PoW→校验→签发令牌→撤销挑战态放行）、名单三维度隔离、匿名短路、启动链路 |
+| `__tests__/redis-operations.test.js` | 原内容全是自造对象的同义反复；改为 `framework/redis` 真身契约：后端选择、**命名空间隔离**（`user_sessions` ≠ `userSessions`）、KV/一次性消费/TTL 语义、**能力边界**（MapStore 下 hash/zset 抛 `TypeError` 而非静默 `undefined`） |
+| `__tests__/firewall-device-api.test.js` | 新增：设备维度 4 条路由的注册面与鉴权要求 + 直接调用捕获到的真身 handler 验证真实写入 + 导入导出设备分支 |
+
+**改造即刻抓到的真实漂移**：旧副本把 `curl` 列为 bot 模式并断言「curl 超限触发挑战」，
+而真身默认配置里**只有 `libcurl`**（`config.js:249`）—— 裸 `curl/7.68.0` 既不匹配 bot
+也不匹配浏览器模式，请求多少次都只走 PASS。该断言若打向真身是**失败**的。现已用
+`libcurl 命中 / 裸 curl 不命中` 固化真身语义。
+
+### 6.2 🔵-17 匿名请求短路（默认关闭的配置开关）
+
+- `pipeline.js` 新增 `willBeRejectedAsAnonymous(request)`：路由 `config.requireLogin === true`
+  且**一个凭据都没带**（无 `sid` / `access_token` / `Authorization`）→ 可跳过深度检测。
+  刻意收紧为「一个凭据都没有」而不是「认证没成功」：带了失效/伪造凭据是更可疑的信号。
+- `api/guard.js` 的 `registerSecureRoute` 把 `requireLogin` 一并写进**路由 config**，
+  使下游 onRequest 可读（前提是 Fastify 在 onRequest 之前完成路由匹配 —— 已用真实
+  Fastify 用例钉死该前提，一旦顺序变化测试会失败而不是静默失效）。
+- 开关 `defense.skipDeepCheckForAnonymous`（`FW_SKIP_DEEP_CHECK_ANON`），**默认关闭**。
+
+### 6.3 设备维度封禁（唯一与 IP 无关的身份 / 跨 IP 有效）
+
+- `framework/auth/device.js` 新增 `getClientDeviceId()`：只取客户端**自报且校验通过**的
+  设备 ID，**不补发** —— 补发的 ID 每请求都可能不同，拿它当封禁维度等于永远封不住人。
+- 访问层新增 `block:dev:*` / `whitelist:dev:*` / `pass:dev:*` 与 `blocked:devices` 索引，
+  读写统一走 `DIMS` 分派表（不再散落 `isFp ? A : B` 三元）。
+- 自动封禁/挑战（bot-detector / scan-trap / brute-force）改为 `setBlockForSubject`，
+  **同时**写 IP 与设备两个维度：只封 IP 时攻击者换个出口就重来。
+- 挑战 PoW 载荷绑定 `deviceId`，使「已通过」也能跨 IP 延续。
+- 管理面新增 4 条路由：`/blocks/device`、`/blocks/device/:deviceId`、
+  `/whitelist/device`、`/whitelist/device/:deviceId`；导入导出的 `type` 枚举纳入 `device`。
+
+**强度边界（诚实标注）**：`device_id` 由客户端携带且**不是凭证**（清掉 localStorage 与
+httpOnly cookie 即可换新身份），因此这是**提高攻击成本**的措施，不是不可绕过的屏障；
+IP 维度仍然保留，两者是叠加而非替代。
+
+### 6.4 复验中新发现并修复的 3 个缺陷
+
+| # | 缺陷 | 影响 | 修法 |
+| --- | --- | --- | --- |
+| N-4 | `engine/index.js` barrel **漏 re-export** `willBeRejectedAsAnonymous`，而 `firewall/index.js` 从它导入 | ESM 链接期直接抛 `does not provide an export named ...`；**`initFirewall` 整个模块无法加载**，防火墙在服务端根本注册不上（单测不经过该入口，因此 812 项全绿也发现不了） | 补进 pipeline 的 re-export 块 |
+| N-5 | `framework/db/index.js` 在 import 阶段发现缺 DB 环境变量就 `setTimeout(() => process.exit(1), 100)` | jest 加载整个模块图且按设计不带 DB 变量 → 每个 worker 跑一半被强杀。表现为「用例总数每次都不一样」（847/850/858/861/862）而汇总**仍是 0 失败**；`--runInBand` 时整个进程中途死掉、拿不到任何汇总 | 增加 `!isTestEnv` 门槛（`JEST_WORKER_ID` / `NODE_ENV=test`）；**生产 fail-fast 行为完全不变** |
+| N-6 | `firewall_config.json` 缺失 `enableDeviceBlock` / `skipDeepCheckForAnonymous` | 新开关的默认值只能来自代码默认值，面板保存会把文件覆盖 | 由 `deepMerge` 的默认值兜底（已实测 `enableDeviceBlock` 生效）；面板 schema 已补两个字段 |
+
+**测试可信度对比（同一命令连续跑两次）**
+
+| | 用例总数 | 失败 | worker 强杀告警 |
+| --- | --- | --- | --- |
+| 修 N-5 前 | 847 / 850 / 851 / 858 / 861 / 862（**每次都不同**） | 0 | 每次都有 |
+| 修 N-5 后 | **861 / 861**（串行同值） | 0 | 消失 |
+
+> N-5 的教训：一个会 `process.exit` 的模块级副作用，能让「全绿」变成会伪装的假象 ——
+> 用例在消失，失败数却始终是 0。这类"绿色"比红色更危险。
 
 ---
 
@@ -214,3 +263,8 @@
 | `src/app/firewall/engine/detectors/first-ratelimit.js` | **N-2**：`errorResponseBuilder` 补 `statusCode` |
 | `src/framework/loader/registry/05-firewall.js` | **N-2 + 🟡-1**：限流唯一且最早的注册点 |
 | `scripts/sync-guard-config.js` | 新增：收敛 `guard_configs` 中被 DB 覆盖的运行时字段 |
+| `src/framework/auth/device.js` | 第二轮：新增 `getClientDeviceId`（只取自报且校验通过的 ID，不补发） |
+| `src/app/firewall/engine/dao/block-manager.js` | 第二轮：设备维度 CRUD + `setBlockForSubject`（自动封禁同时写 IP 与设备） |
+| `src/app/firewall/engine/index.js` | 第二轮（N-4）：补 `willBeRejectedAsAnonymous` re-export |
+| `src/framework/db/index.js` | 第二轮（N-5）：缺 DB 配置时测试环境不再 `process.exit(1)` |
+| `src/__tests__/firewall-device-api.test.js` | 第二轮：新增设备维度 API 契约测试 |
