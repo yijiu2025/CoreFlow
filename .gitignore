@@ -43,3 +43,6 @@ packages/log-backup-*/
 
 # oauth21 构建产物（tarball 分发包，不入库）
 oauth21/*.tar.gz
+
+# 临时探针 / 一次性脚本的落地目录（跑真库验证时生成，切勿入库）
+.tmp-probe/

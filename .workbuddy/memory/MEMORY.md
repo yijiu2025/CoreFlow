@@ -1,31 +1,29 @@
-# 项目长期约定
 
-## 目录分层（判断代码该放哪的准绳）
+## 依赖方向：src 不得 import scripts（2026-09-15 立，含守卫）
 
-- `src/framework/` = 跨业务基础设施，零业务语义：`log`/`db`/`redis`/`jwt`/`auth`/`verify`/`loader`。
-- `src/app/` = 业务应用：`oauth21`/`user`/`admin`/`firewall`/`posecraft`/`notice`/`guard`。
-- **`oauth21` 只是一个业务 app**（OIDC/OAuth 2.1 授权服务器），不是"认证层本身"。认证基础设施是
-  `framework/auth`，由 `registry/04-auth.js` 独立注册。**app 之间不应互相依赖。**
-- 归属三问：① 多 app 潜在共用 ② 零业务语义 ③ 零依赖纯逻辑 —— 三者全中才放 `framework/`。
-- `password-policy.js` 放 auth 合理，**不要迁 oauth21**（论证见 `framework/auth/docs/PLACEMENT-password-policy.md`）。
-- `framework/auth` 分工：`password-policy`(强度)/`totp`(2FA，全仓零引用但已 RFC 6238 6/6 验证正确)/
-  `signature`(请求签名)/`origin-guard`/`anomaly-detector`/`audit-logger`/`permission-loader`。
-  `audit-logger` 的 `logLogout`/`logKick`/`logPasswordChange`/`getAuditLogs` **4 个导出无生产调用方**（待决策）。
-- **会话子模块已拆 4 文件**（原 session.js 1409 行超限）。改动前先定位：`session-store.js`（底座：6 个
-  getStore / MAX_* / sidHash / revokeFamily，不 import 兄弟模块）→ `session-kick.js` / `session-governance.js`
-  → `session.js`（生命周期 10 函数，末尾 re-export 24 项保持兼容）。回归守卫
-  `__tests__/framework/auth/auth-contract.test.js`（行数硬限/无环/导出面/去重计数）+ `session-kick.test.js`。
-
-## 请求链路与数据库（2026-09-14 实测，Sequelize 查询日志）
-
-- **每个请求最少查 0 次库**。全局钩子链（monitor / auth onRequest / firewall / Guard preHandler）全走
-  Redis + 内存，只有 `framework/auth` 的 4 个条件落点会碰 MySQL：
-  ① `index.js:153 findUserById`（Bearer JWT + 用户缓存 30s 未命中）
-  ② `index.js:191 loadUserPermissions`（JWT 无 claim + 权限缓存 5min 未命中）
-  ③ `session.js:370 SessionToken.findOne({include User})` + `:424 loadUserPermissions`（sid 在 Redis 未命中降级）
-  ④ `session.js:894 SessionToken.findOne`（经 `device.js:186 loadFromDb`；**触发条件：客户端无有效
-  device id 且 Redis session.deviceId 非法/缺失**）
-- 实测：无 Cookie / 无效 Cookie / 未登录 401 / 404 → **0**；已登录 + 合法 `x-device-id` → **0**；
+- **只允许 `scripts/ → src/`**。`scripts/` 是可选宿主（CLI 入口/内置命令/发布脚本），不一定随部署安装；
+  `src/` 反向 import 会形成 `src → scripts → src` 环，且部署期路径直接解析失败。
+  守卫 `src/__tests__/conventions/no-scripts-import.test.js`（静态 + 动态 `import()` 都查，
+  已用植入违规文件验证「会红」）。
+- **CLI 工具库位置**：`src/framework/cli/{table,input}.js`（桶 `index.js`，共 26 个符号）；
+  模型加载与 DB 工具 `src/framework/db/models.js`。`scripts/lib/{table,input,db}.js` 已删除。
+  应用插件写 `'../../../framework/cli/index.js'` / `'../../../framework/db/models.js'`，
+  宿主写 `'../src/framework/...'`。`scripts/lib/redis.js` 保留（scripts 自有，src 不引用）。
+- **模型文件是工厂函数** `(sequelize, DataTypes) => Model`：`await import(path)` **不注册任何模型**。
+  旧 `scripts/lib/db.js` 的 17 条 import 全部「成功」却注册 **0** 个模型、关联 **0** 条，
+  于是 CLI 里一切依赖模型的命令都是坏的；那份手工清单还漏了 15/32 个模型。
+  现 `scanModels()` 扫 `src/models/` 供**应用 loader 与 CLI 共用**（06-models.js 也改用它），实测 32 模型 / 22 关联。
+- **`underscored: true` 的命名陷阱**：时间戳**属性名**是 `createdAt`/`updatedAt`（物理列才是 `created_at`）。
+  写进 `attributes: [..., 'created_at']` 会被 Sequelize **静默丢弃** → 读 `x.created_at` 得 undefined
+  → `new Date(undefined)` = `Invalid Date`（CLI 时间列全花）。但 `order`/`where` 用物理列名**可用**
+  （raw 透传，实测过滤生效），不必改。
+- **node-redis v5 再添两例**（并见「Redis 使用规范」节）：`dbSize` 不是 `dbsize`（`redis status` 整条命令炸）；
+  `client.info('server')` 取不到 `connected_clients`（属 clients section）→ 显示「未知」，
+  改 `client.info()` 一次取全量，顺带把 3 次往返收敛成 1 次。
+  守卫 `src/__tests__/conventions/node-redis-v5-commands.test.js`（裸客户端标识符 + 小写多词命令，
+  且不得误伤框架自己的 `store().hgetall` 这类小写 store API）。
+- `.tmp-probe/` 已加入 `.gitignore`（跑真库探针的落地目录，连续两次差点被误提交）。
+录 401 / 404 → **0**；已登录 + 合法 `x-device-id` → **0**；
   已登录 + 无 device id 但 session.deviceId 合法 → **0**；session.deviceId 非法 → **1**；
   Redis 会话丢失降级 → **1(含 JOIN User) + 3(loadUserPermissions) = 4**。业务 handler 自己的查询另算。
 - **`app.register(config.init)` 会新开封装作用域**：`oauth21/config.js` 的 `init()` 内注册的 CSRF 钩子、
@@ -65,6 +63,13 @@
   并把函数体包进 try 兜底到声明的失败返回值。
 - **测试里出现 `function 同名()` 而非 import 时高度警惕**：内联副本会与真身漂移（auth 曾 4 套
   `verifyCookie` 副本掩盖 🔴-1）。跨模块被解构的符号应加契约测试固化。
+- **Guard 的 `allowRoles` 只在 `length > 0` 时才校验**（`api/guard.js:189`）：写
+  `allowRoles: ['admin']` 而 `iam_role` 里并无 `code='admin'` 的角色（超管实为 `{appId}_admin`）→ **永不匹配**，
+  等于路由裸奔到"只要求登录"。`allowRoles: []` 是"不限制"而非"限制为零"，两者含义相反。
+- **插件"双重注册"会让整条钩子链翻倍**：同一个 `init` 既被 `loader/registry/NN-*.js` 显式注册、
+  又被 `10-apps.js` 通过 `appConfig.init`（`config.js` 里导出）注册一次 → 钩子跑两遍。
+  firewall 实例：`totalRequests` 每次请求 +2、404 扫描陷阱阈值 10 实际 5、Redis 命令数翻倍。
+  新 app 接入前先确认 `init` 只被一个位置注册。
 
 ## 大文件拆分 / 重构手法（1409 行一次成型验证有效）
 
@@ -107,6 +112,9 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern
   stderr 出现 `❌/⚠️ [wb-logkit] ...` 是**预期行为，不是 bug**。
 - **logger 实例上没有 `stdout` 方法**。CLI/脚本面向用户的裸输出用**顶层导出** `logStdout(text)`
   （别名 `stdout`），直写 `process.stdout`、无时间戳装饰，且**不受 LOG_LEVEL 门控**。
+  **它还完全不落盘**：`transports.js:160` 的 `stdout()` 只碰 `process.stdout`，从不经过
+  `fileTransport`（`setFileTransport` 注入的那个）——即 `LOG_FILE`/`file.level` 全开也不写文件，
+  不会被 `keepDays` 清理连带删除。实测 + 守卫用例 `wb-log.test.js`「logStdout：不写文件，也不受控制台/文件开关门控」。
   判定准则：输出给**人**看（表格、进度、结果）→ `logStdout`；给**排查留档**看 → `log.info/warn/error`。
   实测 `LOG_LEVEL=warn` 时 `log.info` 被**整条丢弃**而 `logStdout` 照常输出 —— 迁移/脚本的结果输出
   绝不能用 `log.info`，否则生产收敛后是**静默失败**（什么都没发生，而不是报错）。
@@ -139,3 +147,99 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern
   **同步状态一律以 `git ls-remote origin main` 为准**，不要信本地 ahead/behind。
 - 修法（已验证持久）：把 `.git/packed-refs` 中该行 SHA 改成真值（保 `# pack-refs with:` 头行）+ 手写松散
   ref 文件；之后 `git show-ref` 与 `git status` 均恢复正确。**下次 fetch/push 后可能再次失灵，复用此法。**
+
+## Redis 使用规范与 node-redis v5（2026-09-15 实测，动 redis 代码前必读）
+
+- **node-redis v5 只有驼峰命令**。全小写 `client.hset/hgetall/hdel/zadd/smembers/pttl/expire` 全是 `undefined`
+  → 调用即 `TypeError`（ioredis 写法移植过来必炸，且往往落在 `try` 里被静默吞掉）。
+  另有：**无 `pipeline()`**（只有 `multi()`）；`eval` 必须是 `client.eval(script, { keys, arguments })`
+  （旧签名 `eval(s, numKeys, k, a)` 报 "Lua redis lib command arguments must be strings or integers"）；
+  `scan(cursor)` 的 cursor **必须传字符串**（数字报 `"arguments[1]" must be of type "string | Buffer"`）。
+- **框架 store 语义**：`getStore(prefix)` 的 key 自动加 `prefix:`；`store().get()` 会 **safeParse**
+  （JSON 串→对象），需要**真正原始字符串**时必须 `store().call(c => c.get(full))`（曾因此让 `raw.startsWith('{')`
+  抛 TypeError）；`store().hexists` 返回 **1/0 而非布尔**（判真用 `Boolean()`）。
+- **`withTimeout` 的孤儿 promise（已修，缺陷类要记住）**：`result.finally(clear)` 会派生一个**被丢弃**的 promise，
+  主 promise reject 时孤儿也 reject 且无处理者 → 默认 `--unhandled-rejections=throw` **直接杀进程**。
+  表现：一次普通 Redis 命令错误（如对 hash 键 GET 的 WRONGTYPE）升级为**整个服务崩溃**，崩溃栈指向
+  node-redis 解码器、与本项目代码毫无关联，极难定位。修法 `result.then(clear, clear)`。
+  守卫 `src/__tests__/framework/redis/utils-timeout.test.js`（含「禁止 `x.finally(`」源码守卫）。
+- **非 Fastify 进程（CLI / 脚本）**：`globalRedis` 恒为 null（插件不执行）→ `getStore()` 抛 `RedisRequiredError`。
+  用 `connectStandalone()` / `disconnectStandalone()`（`src/framework/redis/index.js` 导出）引导；
+  **不释放 socket 会让一次性进程挂住**。注意 `globalRedis` **没**从 `index.js` 导出，要取裸客户端得 import `plugin.js`。
+- **firewall 的 Redis 访问已收敛**到 `src/app/firewall/util/redis.js`（语义化 API + Lua 单往返 + 内存降级）。
+  **不要再往调用点塞裸 redis 客户端 / 各调用点自己拼命令**，否则回退成「同一个存储层在 app 里能用、在 CLI 里全废」。
+  守卫 `src/__tests__/firewall-redis-adapter.test.js`（源码级 + 行为级）。**封禁必须同时写「键」与「索引 hash」**，
+  只写键 → 封禁生效但管理端列表永远空。
+- **对称缺陷类**：`pipeline.js` 有两个 `Security Policy Blocked` 回包点，只有一处透传 `err.headers`
+  → `Retry-After` 从未下发（全局封禁阶段漏了）。改这类「成对」代码必须两端一起改并各测一次。
+- **CLI 写配置前必须先 `initDao()`**（否则用 `DEFAULT_SECURITY_SETTINGS` 覆盖线上配置文件）；
+  管道一次喂入多行交互输入会**漏行**（`rl.question` 注册晚于已缓冲的 `line` 事件）→ 需在行之间加延迟。
+  另：CLI 运行本身**不启动 Fastify**，所以任何走 `req.server.redis` 的路径在 CLI 下都不存在。
+
+## Fastify 插件 / 钩子注册顺序（2026-09-15 实测，改 loader 前必读）
+
+- **`loader/registry/NN-*.js` 的数字前缀就是执行顺序**，而 Fastify 路由注册在 `08-api`。
+  钩子分两类，**回不回溯差别巨大**：
+  - `addHook('onRequest'|'onPreHandler'|...)`：**后加也生效**（即使路由注册在别的子作用域里、注册得更早）。
+    所以防火墙自己那套 onRequest 管道放在 `10-apps` 也能拦到 `08-api` 注册的路由。
+  - `addHook('onRoute', ...)`：**只对「钩子注册之后」注册的路由触发，不回溯**。
+    `@fastify/rate-limit` v10 的 `global: true` **正是靠 `onRoute`** 给每条路由挂限流配置。
+- **推论（踩过的坑）**：防火墙插件放在 `10-apps`（即 `08-api` 之后）时，全局限流"注册成功但永不触发"——
+  `printPlugins` 能看到 `@fastify/rate-limit`、`app.hasPlugin('@fastify/rate-limit')` 也是 true，
+  但 `max=2` 连打 6 次全部 200。最小复现确认：限流先注册 → 生效；路由先注册 → 无效。
+  **修法：`initFirewall` 的唯一注册点是 `loader/registry/05-firewall.js`（早于 08-api），
+  `app/firewall/config.js` 里不要再写 `init`**（同时消除 🟡-1 双注册）。
+- **`errorResponseBuilder` 必须带 `statusCode`**：插件是 `throw errorResponseBuilder(...)`，
+  Fastify 只认抛出的 Error/对象上的 `statusCode`。只返回 `{ code: 429, ... }` → **限流命中返回 500**。
+- **`app.register(x)` 的 body 在 `ready()` 才按队列执行**；只有 `await app.register(x)` 才会**当场**执行
+  （这也是"后加钩子"能否在路由注册前生效的关键）。
+
+## Guard / 授权（2026-09-15 修，勿回退）
+
+- **`api/guard-config.js` 的 `registerApiMetadata` 曾静默丢弃 `requirePermission`**（system/group/api 三级都漏），
+  而 `createGuard → applyGuardLogic` 恰恰**从配置对象读** `requirePermission` →
+  **全仓 HTTP 路由上 `registerSecureRoute({requirePermission})` 一直是空操作**。
+  三重教训：① 传了参数≠存下来了，配置类函数要回读断言；② 修 🔴 "把 allowRoles 换成 requirePermission"
+  时必须先确认后者真的生效，否则**把有效保护换成空操作**；③ `permission` 是 `requirePermission` 的短别名。
+- **`requirePermission` 属于代码级授权声明**（与 name/url/method 同类），**不入 `RUNTIME_FIELDS`**：
+  它必须由代码决定并每次启动刷新。若可被 DB / 热更新接口改写 = 运维改一次就能永久提权。
+  `RUNTIME_FIELDS` 仍只有 `['enabled','requireLogin','allowIps','allowRoles']`。
+- **守卫热更新接口（`PATCH /:system/:group`）必须有字段白名单**：`updateConfig` 曾把请求体原样
+  `Object.assign` 进配置 → 可把 `enabled` 置 false 或把 `requirePermission` 置 null。现为
+  `PATCHABLE_FIELDS`（enabled/requireLogin/allowIps/allowRoles/description），未知字段**显式 400** 而非静默丢弃。
+- 级联守卫是 **system → group → api，任一层为真即生效**。所以系统级 `requireLogin: true` 会让
+  组级声明的 `false` 形同虚设（挑战验证接口曾因此被 401 拦死）。防火墙系统级现为 `false`，由各组自声明。
+- `allowRoles: []` 的语义是**「不限角色」而不是「禁止」** —— 想收紧权限必须用 `requirePermission`。
+- `fw_admin` 的动作是 **`fw:*`**；`fw:admin:*` 这种写法只能匹配 `fw:admin:` 前缀，**覆盖不到任何有效权限码**。
+
+## 审计修复类任务的通用手法（本次验证有效）
+
+- **"读 + 跑"缺一不可**：本次 4 个 🔴 里有两个（`initDao` 未调用、`requirePermission` 被丢弃）
+  只看代码都像"已经修好了"，必须用 `app.inject()` 端到端 + 回读配置实体才能戳穿。
+- **`app.inject()` 上做"上限压低"决定性实验**：把 `rateLimitRequests` 临时设成 2 再连打 6 次，
+  比断言响应头更有说服力（头可能因版本/配置不同而缺失）。**结束必须还原**并 diff 配置文件确认没写脏。
+- **同一个缺陷在"死代码"里也存在**：`permission/seeder.js` 零调用但内含旧的坏值 `fw:admin:*`，
+  谁把它接线回来就会把角色权限改回坏的。**零调用的重复定义应删除，而不是留着**。
+- **内联副本测试是"假绿"**：`firewall.test.js`/`bot-detector.test.js`/`redis-operations.test.js`
+  只测文件内的同名副本 → 永远通过、无法发现真身缺陷（这是 4 个 🔴 长期漏过的根因）。
+  识别特征：文件里出现 `function 同名()` 且**没有任何 `import ... from '../app/...'`**。
+
+## firewall 审计修复落点（2026-09-15）
+
+- 报告 `src/app/firewall/docs/AUDIT-REPORT-2026-09-15.md`（4🔴/15🟡/17🔵）+
+  修复报告 `FIX-REPORT-2026-09-15.md`（含复验中新发现的 N-1/N-2/N-3 三个缺陷）。
+- 已修 4🔴 / 14🟡 / 15🔵。**遗留**：🟡-7（3 个测试仍是内联副本，已加警示注记）、
+  🔵-7（`dao/block-manager.js` 纯 re-export，改名需动 7 处 import）、🔵-17（401 也走完整检测管道，属性能取舍）。
+- 挑战机制已从「HMAC 明文内嵌」换成 **SHA-256 PoW**：`util/pow-sha256.js`（页面内联 `sha256Hex.toString()`
+  保证浏览器/服务端同一份算法）+ 服务端持有单次载荷（`LUA_TAKE_CHALLENGE` 原子 GET+DEL）。
+- `scripts/sync-guard-config.js`：剥离 `guard_configs` 里覆盖代码声明的运行时字段，默认 dry-run。
+
+## 维护本仓 memory 文件的坑（2026-09-15 实际踩到）
+
+- **不要用 shell 的 `cat >> file <<'EOF'` 追加 `.workbuddy/memory/*.md`**：本平台（Windows Git Bash）
+  实测把文件**从偏移 0 覆写**而不是追加 —— 新内容覆盖了开头 N 字节，`# 日期` 标题与最前面那章的
+  前半段被静默吃掉（文件仍能正常打开，极易不被发现）。
+  一律改用 **Write / Edit 工具**维护 memory 文件。
+- 万一被覆盖：用「`git show HEAD:<path>` 的全文 + 当前文件里按标题切出的后续章节」机械拼接恢复，
+  并先断言两侧重叠章节逐字一致（不一致就不拼，说明有别的改动，需人工介入）。
+  脚本样例见本仓库历史（`.tmp-probe/fix-memory.mjs` 思路：按 `## ` 标题定位切点 + 重叠区等值断言）。
