@@ -454,6 +454,40 @@ describe('wb-logkit 核心行为', () => {
     expect(captured.join('')).toBe('plain-out\n');
   });
 
+  /**
+   * logStdout 与 logger 的两条通道（控制台 / 文件）完全解耦：
+   *  - 控制台已关闭（beforeEach 的 console:false）时它照样输出 → 不受 LOG_CONSOLE 门控
+   *  - 文件通道开启时它一个字节都不落盘 → 不受 LOG_FILE 门控，也不进 logs/ 目录
+   * 固化的动机：CLI 结果输出既不能被 LOG_LEVEL/LOG_CONSOLE 静默吞掉（历史事故），
+   * 也不该混进日志文件被清理策略连带删除。若有人给它接上 fileTransport 本用例会失败。
+   */
+  test('logStdout：不写文件，也不受控制台/文件开关门控', async () => {
+    const { logStdout } = await import('wb-logkit');
+    const stdoutMarker = 'stdout-only-marker-7c1d';
+    const fileMarker = 'file-only-marker-7c1d';
+
+    const captured = [];
+    const real = process.stdout.write;
+    process.stdout.write = (...args) => {
+      captured.push(String(args[0]));
+      return true;
+    };
+    try {
+      logStdout(stdoutMarker);
+      createLogger('stdout.probe').info(fileMarker); // 同一时刻走文件通道的常规日志
+    } finally {
+      process.stdout.write = real;
+    }
+
+    expect(captured.join('')).toBe(`${stdoutMarker}\n`);
+
+    const files = fs.readdirSync(tmpDir).filter(f => f.endsWith('.log'));
+    expect(files.length).toBeGreaterThan(0); // 防止文件通道没生效导致的空断言假通过
+    const all = files.map(f => fs.readFileSync(path.join(tmpDir, f), 'utf-8')).join('');
+    expect(all).toContain(fileMarker);
+    expect(all).not.toContain(stdoutMarker);
+  });
+
   test('通道级级别：控制台只打 warn+，文件仍记全量', () => {
     configureLog({
       level: 'debug',
