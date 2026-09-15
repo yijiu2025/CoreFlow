@@ -1,6 +1,15 @@
 /**
- * 共享状态与工具函数
- * 各检测模块共用的内存 Map、Redis Key 前缀、Lua 脚本、配置缓存
+ * 防火墙共享状态
+ *
+ * 只保留「跨模块共用的纯内存状态」与配置读取入口：
+ *   - activeConnections / ipRequestTimestamps：进程内计数，无需跨实例共享
+ *   - getConfig()：读取当前安全配置（直接委托 dao，不做快照缓存）
+ *
+ * Redis key 构造、Lua 脚本、内存降级、封禁/白名单读写一律在 `util/redis.js`，
+ * 本文件不再持有这些内容（历史上散落在这里的 KEY / HASH_* / LUA_* / memoryBlocks* 已收敛）。
+ *
+ * 注意：注释里写 `HASH_*` 紧跟 `/`（即 `HASH_*` + `/LUA_*`）会拼出 `*` 加 `/` 序列，
+ * 那正是块注释的结束标记，会**提前闭合注释**并让整个文件语法错误。此处用空格隔开。
  *
  * @author yijiu2025
  * @since 2026-08-17
@@ -9,105 +18,34 @@ import { getSecuritySettings } from '../dao/dao.js';
 
 // ============== 内存状态 ==============
 
+/** IP → 当前活跃连接数（请求进入 +1，响应结束 -1） */
 const activeConnections = new Map();
-const memoryWindows = new Map();
+
+/** IP → 最近 60 秒的请求时间戳（Bot 检测的「短时高频」判据） */
 const ipRequestTimestamps = new Map();
-const memoryBlocks = new Map();
-const memoryWhitelist = new Map();
-const memoryBlocksFp = new Map();
-const memoryWhitelistFp = new Map();
 
-// ============== 配置缓存 ==============
-
-let _cachedSettings = null;
-let _cacheTime = 0;
-const CONFIG_TTL = 30000;
-
-function getConfig() {
-  if (Date.now() - _cacheTime > CONFIG_TTL) {
-    _cachedSettings = getSecuritySettings();
-    _cacheTime = Date.now();
-  }
-  return _cachedSettings;
-}
-
-// ============== Redis Key 前缀 ==============
-
-const KEY = {
-  block: id => `fw:block:${id}`,
-  rateLimit: id => `fw:rl:${id}`,
-  trap: ip => `fw:trap:${ip}`,
-  bruteIp: ip => `fw:brute:ip:${ip}`,
-  bruteUser: user => `fw:brute:user:${user}`,
-  accountLock: user => `fw:lock:${user}`,
-  whitelist: ip => `fw:whitelist:${ip}`,
-  blockFp: fp => `fw:block:fp:${fp}`,
-  whitelistFp: fp => `fw:whitelist:fp:${fp}`
-};
-
-const HASH_BLOCKED = 'fw:blocked:ips';
-const HASH_WHITELIST = 'fw:whitelisted:ips';
-const HASH_BLOCKED_FP = 'fw:blocked:fps';
-const HASH_WHITELIST_FP = 'fw:whitelisted:fps';
-
-const LUA_INCR_WITH_EXPIRE = `
-  local current = redis.call('incr', KEYS[1])
-  if current == 1 then
-    redis.call('expire', KEYS[1], ARGV[1])
-  end
-  return current
-`;
-
-// ============== 内存滑动窗口 ==============
-
-function memorySlidingWindow(key, limit, windowSec) {
-  const now = Date.now();
-  const windowMs = windowSec * 1000;
-  const start = now - windowMs;
-
-  if (!memoryWindows.has(key)) memoryWindows.set(key, []);
-  const timestamps = memoryWindows.get(key);
-
-  while (timestamps.length && timestamps[0] < start) timestamps.shift();
-  timestamps.push(now);
-
-  return timestamps.length > limit;
-}
-
-// ============== 封禁状态查询 ==============
+// ============== 配置读取 ==============
 
 /**
- * 获取封禁状态（兼容旧格式字符串 + 新格式 JSON）
+ * 读取安全配置
+ *
+ * 不再做 30 秒缓存：`getSecuritySettings()` 只是返回 dao 里那个对象的引用（O(1)），
+ * 而缓存版本的注释写着「避免每个请求都读文件快照」—— 那是早已不存在的实现。
+ * 缓存反而引入了一处真实缺陷：`updateSecuritySettings` 是**整体替换**对象，
+ * 缓存会继续持有旧对象最多 30 秒，于是「刚在面板上改的开关」在一段时间内
+ * 对一部分调用点（如封禁检查里的手动黑名单兜底）不可见，而另一些调用点
+ * （直接读 `getSecuritySettings()`）立刻可见 —— 同一个进程里两套视图。
+ *
+ * @returns {object} 安全配置对象（含 defense 段）
  */
-async function getBlockStatus(redisClient, blockKey) {
-  if (!redisClient) return null;
-  try {
-    const raw = await redisClient.get(blockKey);
-    if (!raw) return null;
-    if (raw.startsWith('{')) {
-      try {
-        const meta = JSON.parse(raw);
-        return meta.status || 'BLOCKED';
-      } catch {
-        return raw;
-      }
-    }
-    return raw;
-  } catch {
-    return null;
-  }
+function getConfig() {
+  return getSecuritySettings();
 }
 
 // ============== 定时清理 ==============
 
 setInterval(() => {
   const now = Date.now();
-  for (const [key, timestamps] of memoryWindows) {
-    const filtered = timestamps.filter(t => now - t < 300000);
-    if (filtered.length === 0) memoryWindows.delete(key);
-    else memoryWindows.set(key, filtered);
-  }
-
   for (const [ip, timestamps] of ipRequestTimestamps) {
     while (timestamps.length && timestamps[0] < now - 60_000) {
       timestamps.shift();
@@ -116,37 +54,6 @@ setInterval(() => {
       ipRequestTimestamps.delete(ip);
     }
   }
+}, 60000).unref();
 
-  for (const [ip, block] of memoryBlocks) {
-    if (!block.permanent && now > block.expiresAt) memoryBlocks.delete(ip);
-  }
-  for (const [fp, block] of memoryBlocksFp) {
-    if (!block.permanent && now > block.expiresAt) memoryBlocksFp.delete(fp);
-  }
-
-  for (const [ip, entry] of memoryWhitelist) {
-    if (now > entry.expiresAt) memoryWhitelist.delete(ip);
-  }
-  for (const [fp, entry] of memoryWhitelistFp) {
-    if (now > entry.expiresAt) memoryWhitelistFp.delete(fp);
-  }
-}, 60000);
-
-export {
-  activeConnections,
-  memoryWindows,
-  ipRequestTimestamps,
-  memoryBlocks,
-  memoryWhitelist,
-  memoryBlocksFp,
-  memoryWhitelistFp,
-  getConfig,
-  KEY,
-  HASH_BLOCKED,
-  HASH_WHITELIST,
-  HASH_BLOCKED_FP,
-  HASH_WHITELIST_FP,
-  LUA_INCR_WITH_EXPIRE,
-  memorySlidingWindow,
-  getBlockStatus
-};
+export { activeConnections, ipRequestTimestamps, getConfig };

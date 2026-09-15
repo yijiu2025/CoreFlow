@@ -23,10 +23,33 @@ function buildOperator(request) {
 }
 
 /**
+ * 允许经热更新接口改写的字段白名单。
+ *
+ * 语义必须与 `api/guard-config.js` 的 RUNTIME_FIELDS 保持一致：只放"运维可调"的运行时字段。
+ * 刻意排除：
+ * - 结构字段（id/name/url/method）：由代码注册决定，改了会让内存与代码不一致；
+ * - **requirePermission**：这是代码级授权声明。若允许 PATCH 改写，
+ *   任何拿到本接口权限的人都能把权限门槛设为 null 而自我提权（等于绕过 PBAC）。
+ */
+const PATCHABLE_FIELDS = new Set(['enabled', 'requireLogin', 'allowIps', 'allowRoles', 'description']);
+
+/**
  * 热更新指定 system/group(/apiKey) 配置
+ *
+ * 只接受白名单字段；出现未知字段时**显式报错**而非静默丢弃
+ * （静默丢弃正是本仓反复出现的缺陷类，会让调用方以为改成功了）。
+ *
  * @returns {{ok:true, updated:object} | {ok:false, statusCode:number, message:string}}
  */
 function updateConfig(system, group, apiKey, patch, request) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    return { ok: false, statusCode: 400, message: 'patch 必须是对象' };
+  }
+  const unknown = Object.keys(patch).filter(k => !PATCHABLE_FIELDS.has(k));
+  if (unknown.length > 0) {
+    return { ok: false, statusCode: 400, message: `不允许修改的字段: ${unknown.join(', ')}` };
+  }
+
   const operator = buildOperator(request);
   const updated = setGuardConfig(system, patch, group, apiKey, operator);
   if (!updated) {

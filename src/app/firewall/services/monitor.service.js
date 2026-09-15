@@ -13,14 +13,8 @@
 import { getSummary, getRecentRecords, clearAll, setBroadcastHandler } from '../data/store.js';
 import { addToBlacklist, removeFromBlacklist, addToWhitelist, removeFromWhitelist } from '../dao/dao.js';
 import { setBlock, removeBlock } from '../engine/index.js';
-import {
-  setBlockFp,
-  removeBlockFp,
-  setWhitelistFp,
-  removeWhitelistFp,
-  setWhitelist,
-  removeWhitelist as removeWhitelistRedis
-} from '../dao/block-manager.js';
+import { setBlockFp, removeBlockFp, setWhitelistFp, removeWhitelistFp } from '../dao/block-manager.js';
+import { removeKeys, rel } from '../util/redis.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.firewall.services.monitor.service');
@@ -121,7 +115,7 @@ function computeBlockMeta({ duration, permanent }) {
  * 添加 IP 黑名单（持久化 + Redis 封禁）
  * @returns {{ok:true, message:string, defenseState:object} | {ok:false, message:string}}
  */
-async function addBlacklistEntry(redis, { type, value, duration, permanent }) {
+async function addBlacklistEntry({ type, value, duration, permanent }) {
   if (!['ip', 'user'].includes(type) || !value) {
     return { ok: false, message: '参数错误' };
   }
@@ -131,7 +125,7 @@ async function addBlacklistEntry(redis, { type, value, duration, permanent }) {
   // IP 类型同步写入 Redis 封禁
   if (type === 'ip') {
     const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent });
-    await setBlock(redis, value, {
+    await setBlock(value, {
       status: 'BLOCKED',
       source: 'manual',
       permanent: isPermanent,
@@ -146,16 +140,12 @@ async function addBlacklistEntry(redis, { type, value, duration, permanent }) {
 /**
  * 移除黑名单（持久化 + Redis 封禁 + lock 清理）
  */
-async function removeBlacklistEntry(redis, { type, value }) {
+async function removeBlacklistEntry({ type, value }) {
   const defenseState = removeFromBlacklist(type, value);
   if (type === 'ip') {
-    await removeBlock(redis, value);
+    await removeBlock(value);
   }
-  try {
-    await redis?.del(`fw:lock:${value}`);
-  } catch (e) {
-    log.error('❌ [Monitor] 删除 Redis 封禁失败:', e);
-  }
+  await removeKeys([rel.accountLock(value)]);
   return { message: '已移出黑名单', defenseState };
 }
 
@@ -163,13 +153,13 @@ async function removeBlacklistEntry(redis, { type, value }) {
  * 添加 IP 封禁
  * @returns {{ok:true, message:string} | {ok:false, message:string}}
  */
-async function addIpBlock(redis, { ip, duration, permanent, status }) {
+async function addIpBlock({ ip, duration, permanent, status }) {
   if (!ip) return { ok: false, message: '缺少 IP 参数' };
 
   const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent });
   const blockStatus = status || 'BLOCKED';
 
-  await setBlock(redis, ip, {
+  await setBlock(ip, {
     status: blockStatus,
     source: 'manual',
     permanent: isPermanent,
@@ -182,20 +172,20 @@ async function addIpBlock(redis, { ip, duration, permanent, status }) {
 }
 
 /** 移除 IP 封禁 */
-async function removeIpBlock(redis, ip) {
+async function removeIpBlock(ip) {
   if (!ip) return { ok: false, message: '缺少 IP 参数' };
-  await removeBlock(redis, ip);
+  await removeBlock(ip);
   removeFromBlacklist('ip', ip);
   return { ok: true, message: '已解除封禁' };
 }
 
 /** 添加指纹封禁 */
-async function addFpBlock(redis, { fingerprint, duration, permanent, status }) {
+async function addFpBlock({ fingerprint, duration, permanent, status }) {
   if (!fingerprint) return { ok: false, message: '缺少指纹参数' };
   const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent });
   const blockStatus = status || 'BLOCKED';
 
-  await setBlockFp(redis, fingerprint, {
+  await setBlockFp(fingerprint, {
     status: blockStatus,
     source: 'manual',
     permanent: isPermanent,
@@ -206,41 +196,44 @@ async function addFpBlock(redis, { fingerprint, duration, permanent, status }) {
 }
 
 /** 移除指纹封禁 */
-async function removeFpBlock(redis, fingerprint) {
+async function removeFpBlock(fingerprint) {
   if (!fingerprint) return { ok: false, message: '缺少指纹参数' };
-  await removeBlockFp(redis, fingerprint);
+  await removeBlockFp(fingerprint);
   return { ok: true, message: '已解除指纹封禁' };
 }
 
 /** 添加 IP 白名单（默认 20 分钟） */
-async function addIpWhitelist(redis, { ip, duration }) {
+async function addIpWhitelist({ ip, duration }) {
   if (!ip) return { ok: false, message: '缺少 IP 参数' };
   const dur = duration || 1200;
-  await setWhitelist(redis, ip, dur);
-  addToWhitelist(ip, dur);
+  // addToWhitelist 内部已写 Redis（writeWhitelist）+ 配置文件，不要再单独调 setWhitelist，
+  // 否则同一条白名单会被写两遍（多一次 Lua 往返）。
+  // 必须 await：漏掉 await 会让「写库失败」变成一个游离的 rejected promise（unhandled
+  // rejection），而 HTTP 响应已经先回了「已添加白名单」—— 用户看到成功、实际没写进去。
+  await addToWhitelist(ip, dur);
   return { ok: true, message: `已添加白名单 ${dur} 秒` };
 }
 
 /** 移除 IP 白名单 */
-async function removeIpWhitelist(redis, ip) {
+async function removeIpWhitelist(ip) {
   if (!ip) return { ok: false, message: '缺少 IP 参数' };
-  await removeWhitelistRedis(redis, ip);
-  removeFromWhitelist(ip);
+  // 同理：removeFromWhitelist 已同时清 Redis 与配置文件
+  await removeFromWhitelist(ip);
   return { ok: true, message: '已移除白名单' };
 }
 
 /** 添加指纹白名单 */
-async function addFpWhitelist(redis, { fingerprint, duration }) {
+async function addFpWhitelist({ fingerprint, duration }) {
   if (!fingerprint) return { ok: false, message: '缺少指纹参数' };
   const dur = duration || 1200;
-  await setWhitelistFp(redis, fingerprint, dur);
+  await setWhitelistFp(fingerprint, dur);
   return { ok: true, message: `已添加指纹白名单 ${dur} 秒` };
 }
 
 /** 移除指纹白名单 */
-async function removeFpWhitelist(redis, fingerprint) {
+async function removeFpWhitelist(fingerprint) {
   if (!fingerprint) return { ok: false, message: '缺少指纹参数' };
-  await removeWhitelistFp(redis, fingerprint);
+  await removeWhitelistFp(fingerprint);
   return { ok: true, message: '已移除指纹白名单' };
 }
 

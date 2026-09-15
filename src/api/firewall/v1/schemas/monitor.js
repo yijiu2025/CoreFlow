@@ -18,6 +18,10 @@ const baseResponse = dataSchema => ({
 });
 
 // 1. 监控摘要响应
+// 注意：Fastify 会用 response schema 对响应做**序列化裁剪** —— schema 里没声明的字段
+// 会被直接丢掉（不是报错）。此前 schema 只声明了 totalRequests/totalBlocked/topRegions/topPaths，
+// 于是 getSummary() 实际返回的 bufferedCount / bufferCapacity / topIps 以及 topPaths[].apiName
+// 在 HTTP 响应里全部消失（前端拿不到，却以为后端没实现）。
 const summarySchema = {
   description: '获取防火墙监控摘要数据',
   response: {
@@ -26,6 +30,8 @@ const summarySchema = {
       properties: {
         totalRequests: { type: 'number' },
         totalBlocked: { type: 'number' },
+        bufferedCount: { type: 'number' },
+        bufferCapacity: { type: 'number' },
         topRegions: {
           type: 'array',
           items: {
@@ -42,6 +48,17 @@ const summarySchema = {
             type: 'object',
             properties: {
               path: { type: 'string' },
+              count: { type: 'number' },
+              apiName: { type: 'string' }
+            }
+          }
+        },
+        topIps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              ip: { type: 'string' },
               count: { type: 'number' }
             }
           }
@@ -73,6 +90,10 @@ const updateNodeSchema = {
 };
 
 // 3. 更新安全设置请求
+// 只列出**代码里真的会读**的键。`enableBotChallenge` 之前被列在这里，但
+// `DEFAULT_SECURITY_SETTINGS` 与任何 `settings.xxx` 读取点都不存在该键 ——
+// 面板上勾选它会往配置里写一个永远没人读的键（用户以为开/关了某个功能）。
+// （Bot 挑战的开关实际由 botChallenge*Limit 阈值控制。）
 const updateSettingsSchema = {
   description: '更新全局防御策略设置',
   body: {
@@ -85,20 +106,40 @@ const updateSettingsSchema = {
         properties: {
           enableAutoBlacklist: { type: 'boolean' },
           maxNotFoundAttempts: { type: 'number' },
+          notFoundWindow: { type: 'number' },
           blacklistDuration: { type: 'number' },
           enableRateLimit: { type: 'boolean' },
           rateLimitRequests: { type: 'number' },
           rateLimitWindow: { type: 'number' },
+          enableUserRateLimit: { type: 'boolean' },
+          userRateLimitRequests: { type: 'number' },
+          userRateLimitWindow: { type: 'number' },
           enableBruteForce: { type: 'boolean' },
           bruteLimit: { type: 'number' },
+          bruteWindow: { type: 'number' },
+          bruteIpLimit: { type: 'number' },
           accountLockTime: { type: 'number' },
+          ipBlockTime: { type: 'number' },
           enableConnLimit: { type: 'boolean' },
           maxConn: { type: 'number' },
           enableGeoFilter: { type: 'boolean' },
-          enableBotChallenge: { type: 'boolean' },
           internalIpPrefixes: { type: 'array', items: { type: 'string' } },
           idcIpPrefixes: { type: 'array', items: { type: 'string' } },
-          safePaths: { type: 'array', items: { type: 'string' } }
+          safePaths: { type: 'array', items: { type: 'string' } },
+          challengeDifficulty: { type: 'number', minimum: 1, maximum: 6 },
+          geoRules: { type: 'object' },
+          endpointRateLimits: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                limit: { type: 'number' },
+                window: { type: 'number' },
+                blockTime: { type: 'number' }
+              }
+            }
+          }
         }
       }
     }
@@ -119,6 +160,23 @@ const blacklistSchema = {
       value: { type: 'string', minLength: 1 },
       duration: { type: 'number', minimum: 60 },
       permanent: { type: 'boolean' }
+    }
+  },
+  response: {
+    200: baseResponse({ type: 'object' })
+  }
+};
+
+// 4b. 移除黑名单请求（DELETE 带 body）
+// handler 会直接读 `req.body.type` / `req.body.value`，缺 schema 时 body 为 undefined → 500。
+const removeBlacklistSchema = {
+  description: '移除黑名单',
+  body: {
+    type: 'object',
+    required: ['type', 'value'],
+    properties: {
+      type: { type: 'string', enum: ['ip', 'user'] },
+      value: { type: 'string', minLength: 1 }
     }
   },
   response: {
@@ -160,4 +218,12 @@ const whitelistSchema = {
   }
 };
 
-export { summarySchema, updateNodeSchema, updateSettingsSchema, blacklistSchema, blocksSchema, whitelistSchema };
+export {
+  summarySchema,
+  updateNodeSchema,
+  updateSettingsSchema,
+  blacklistSchema,
+  removeBlacklistSchema,
+  blocksSchema,
+  whitelistSchema
+};

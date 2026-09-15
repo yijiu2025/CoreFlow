@@ -2,6 +2,11 @@
  * Bot 检测器测试
  * 测试 UA 模式匹配 + 请求频率阈值判定逻辑
  *
+ * ⚠️ 本文件测试的是**本文件内的内联副本**（`classifyRequest`），不是
+ * `app/firewall/engine/detectors/bot-detector.js` 的真身 `checkBotChallenge`。
+ * 真身依赖 `getConfig` 与 `setBlock`（Redis），改造需先 mock 这两者。
+ * 待办见 AUDIT-REPORT-2026-09-15.md 🟡-7。
+ *
  * @author yijiu2025
  * @since 2026-08-17
  */

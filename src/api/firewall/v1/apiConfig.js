@@ -14,6 +14,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { getAllGuardConfigs } from '../../guard-config.js';
 import { updateConfig, toggleConfig, toggleSystemConfig } from '../../../app/guard/services/config.service.js';
+import { FIREWALL_PERMISSIONS } from '../../../app/firewall/permission/index.js';
 
 async function registerApiConfigRoutes(fastify) {
   registerGroupMetadata({
@@ -24,6 +25,9 @@ async function registerApiConfigRoutes(fastify) {
     enabled: true,
     requireLogin: true,
     allowIps: [],
+    // 这里**不能**靠 allowRoles 兜底：`allowRoles: []` 的语义是「不限制角色」，
+    // 于是任何登录用户（哪怕零角色）都能改全域 Guard 策略。
+    // 授权统一由 requirePermission 表达（见各路由），角色不限。
     allowRoles: []
   });
 
@@ -32,6 +36,8 @@ async function registerApiConfigRoutes(fastify) {
     alias: '查询全域安全矩阵',
     method: 'GET',
     url: '/',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.CONFIG.READ,
     handler: async (request, reply) => {
       return reply.result.success('操作成功', getAllGuardConfigs());
     }
@@ -42,6 +48,8 @@ async function registerApiConfigRoutes(fastify) {
     alias: '热更新策略详情',
     method: 'PATCH',
     url: '/:system/:group',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.CONFIG.WRITE,
     schema: {
       params: {
         type: 'object',
@@ -65,6 +73,8 @@ async function registerApiConfigRoutes(fastify) {
     alias: '策略一键开关 (模块/接口)',
     method: 'POST',
     url: '/toggle/:system/:group',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.CONFIG.TOGGLE,
     handler: async (request, reply) => {
       const { system, group: groupKey } = request.params;
       const { apiKey } = request.query;
@@ -81,6 +91,8 @@ async function registerApiConfigRoutes(fastify) {
     alias: '系统全局防御开关',
     method: 'POST',
     url: '/toggle-system/:system',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.CONFIG.TOGGLE,
     handler: async (request, reply) => {
       const { system } = request.params;
       const result = toggleSystemConfig(system, request);

@@ -264,7 +264,21 @@ const DEFAULT_SECURITY_SETTINGS = {
     browserPatterns: ['chrome', 'firefox', 'safari', 'edge', 'opera'],
     botChallengeNoUaLimit: parseInt(process.env.FW_BOT_NOUA_LIMIT || '10'),
     botChallengeBotLimit: parseInt(process.env.FW_BOT_LIMIT || '30'),
-    botChallengeBrowserLimit: parseInt(process.env.FW_BROWSER_LIMIT || '120')
+    botChallengeBrowserLimit: parseInt(process.env.FW_BROWSER_LIMIT || '120'),
+
+    // --- 人机挑战的 PoW 难度 ---
+    // 前导十六进制零个数：期望哈希次数 = 16^difficulty（3 → 约 4096 次，浏览器 <0.1s；
+    // 5 → 约 100 万次，约 1~2s）。代码侧夹取到 [1, 6] 上限，防止把低端机卡死。
+    challengeDifficulty: parseInt(process.env.FW_CHALLENGE_DIFFICULTY || '3'),
+
+    // --- 攻击告警（旁路能力） ---
+    // email / webhookUrl 为空时 auto-responder 不做任何外部请求，等价于关闭。
+    alert: {
+      enabled: true,
+      email: process.env.FW_ALERT_EMAIL || '',
+      webhookUrl: process.env.FW_ALERT_WEBHOOK || '',
+      cooldownMs: 300000
+    }
   }
 };
 

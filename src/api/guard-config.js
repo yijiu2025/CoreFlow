@@ -331,6 +331,7 @@ function registerSystemMetadata(systemKey, metadata) {
     prefix: metadata.prefix || '',
     enabled: metadata.enabled ?? true,
     requireLogin: metadata.requireLogin ?? false,
+    requirePermission: metadata.requirePermission ?? null,
     allowIps: metadata.allowIps || [],
     allowRoles: metadata.allowRoles || [],
     updatedAt: new Date().toISOString()
@@ -367,6 +368,7 @@ function registerGroupMetadata(systemKey, groupKey, metadata) {
     prefix: metadata.prefix || '',
     enabled: metadata.enabled ?? true,
     requireLogin: metadata.requireLogin ?? false,
+    requirePermission: metadata.requirePermission ?? null,
     allowIps: metadata.allowIps || [],
     allowRoles: metadata.allowRoles || [],
     updatedAt: new Date().toISOString()
@@ -378,9 +380,14 @@ function registerGroupMetadata(systemKey, groupKey, metadata) {
  *
  * 注意：首次注册和后续更新的行为不对称：
  * - 首次注册：创建完整条目，包含 enabled/requireLogin 等运行时字段（使用 metadata 参数值）
- * - 后续更新：仅更新 name/url/method 等结构字段，不覆盖运行时字段
+ * - 后续更新：仅更新 name/url/method/requirePermission 等**代码级**字段，不覆盖运行时字段
  *   运行时字段由 DB 持久化配置控制（loadGuardConfig 时覆盖），
  *   避免代码热更新意外重置运维配置
+ *
+ * ⚠️ requirePermission 属于**代码级授权声明**（与 name/url/method 同类），不入 RUNTIME_FIELDS：
+ * 它必须由代码决定并每次启动刷新，绝不能由 DB 覆盖 —— 否则运维改一次 DB 就能永久提权。
+ * 曾因本函数遗漏该字段，导致全仓 HTTP 路由上的 requirePermission **静默失效**
+ * （守卫从配置对象读，配置对象里根本没有这个键）。
  */
 function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
   if (!metadata || typeof metadata !== 'object') {
@@ -417,6 +424,7 @@ function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
       requireLogin: metadata.requireLogin ?? false,
       allowIps: metadata.allowIps || [],
       allowRoles: metadata.allowRoles || [],
+      requirePermission: metadata.requirePermission ?? null,
       url: metadata.url,
       method: metadata.method,
       updatedAt: new Date().toISOString()
@@ -426,6 +434,7 @@ function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
       name: metadata.alias || group.apis[apiKey].name,
       url: metadata.url,
       method: metadata.method,
+      requirePermission: metadata.requirePermission ?? null,
       updatedAt: new Date().toISOString()
     });
   }

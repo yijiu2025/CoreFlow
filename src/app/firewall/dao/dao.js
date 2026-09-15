@@ -2,7 +2,7 @@
  * 防火墙数据访问对象 (DAO)
  * 负责安全配置、节点信息以及黑白名单的持久化读写与管理。
  *
- * 系统级模块：日志使用 console（Pino 结构化日志用于请求生命周期）
+ * 日志统一走框架日志出口（`framework/log`），不使用 console。
  *
  * @author yijiu2025
  * @since 2026-08-17
@@ -11,6 +11,17 @@ import fs from 'fs';
 import path from 'path';
 import { C } from '../../../utils/colors.js';
 import { FIREWALL_FILE, DEFAULT_SERVER_NODE, DEFAULT_SECURITY_SETTINGS, DEFAULT_IP_APIS } from '../config/config.js';
+import {
+  HASH,
+  writeWhitelist,
+  removeWhitelist as removeWhitelistEntry,
+  writeBlock,
+  scanKeys,
+  getRaw,
+  ttlOf,
+  addBlockIndexEntry,
+  hasIndexField
+} from '../util/redis.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.firewall.dao.dao');
@@ -182,10 +193,9 @@ function removeFromBlacklist(type, value) {
  * 将 IP 添加到白名单（内存 + 文件 + Redis）
  * @param {string} ip IP 地址
  * @param {number} durationSeconds 有效期（秒）
- * @param {object|null} redisClient Redis 客户端（可选）
- * @returns {object} 当前防御配置
+ * @returns {Promise<object>} 当前防御配置
  */
-async function addToWhitelist(ip, durationSeconds, redisClient = null) {
+async function addToWhitelist(ip, durationSeconds) {
   if (!ip || typeof ip !== 'string') return securitySettings.defense;
 
   if (!securitySettings.defense.manualWhitelistIps) {
@@ -203,12 +213,8 @@ async function addToWhitelist(ip, durationSeconds, redisClient = null) {
     });
   }
 
-  // 同步 Redis
-  if (redisClient) {
-    const meta = { expiresAt: Date.now() + durationSeconds * 1000 };
-    await redisClient.set(`fw:whitelist:${ip}`, '1', { EX: durationSeconds });
-    await redisClient.hset(HASH_WHITELIST, ip, JSON.stringify(meta));
-  }
+  // 同步 Redis（key 布局与历史一致：fw:whitelist:{ip} + fw:whitelisted:ips）
+  await writeWhitelist({ ip }, durationSeconds);
 
   triggerSave();
   return securitySettings.defense;
@@ -217,20 +223,16 @@ async function addToWhitelist(ip, durationSeconds, redisClient = null) {
 /**
  * 从白名单移除 IP（内存 + 文件 + Redis）
  * @param {string} ip IP 地址
- * @param {object|null} redisClient Redis 客户端（可选）
- * @returns {object} 当前防御配置
+ * @returns {Promise<object>} 当前防御配置
  */
-async function removeFromWhitelist(ip, redisClient = null) {
+async function removeFromWhitelist(ip) {
   if (!securitySettings.defense.manualWhitelistIps) {
     securitySettings.defense.manualWhitelistIps = [];
   }
   securitySettings.defense.manualWhitelistIps = securitySettings.defense.manualWhitelistIps.filter(e => e.ip !== ip);
 
   // 同步 Redis
-  if (redisClient) {
-    await redisClient.del(`fw:whitelist:${ip}`);
-    await redisClient.hdel(HASH_WHITELIST, ip);
-  }
+  await removeWhitelistEntry({ ip });
 
   triggerSave();
   return securitySettings.defense;
@@ -238,28 +240,35 @@ async function removeFromWhitelist(ip, redisClient = null) {
 
 // ============== 启动时同步手动名单到 Redis ==============
 
-const HASH_BLOCKED = 'fw:blocked:ips';
-const HASH_WHITELIST = 'fw:whitelisted:ips';
-
 /**
  * 迁移单个旧格式封禁键到 hash 索引
- * @param {object} redisClient Redis 客户端
- * @param {string} key 旧格式键名
+ *
+ * @param {string} keyRel 相对 key（如 `block:1.2.3.4`、`block:fp:abcdef`）
+ * @returns {Promise<void>}
  */
-async function migrateBlockKey(redisClient, key) {
-  if (key === HASH_BLOCKED) return;
-  const ip = key.replace('fw:block:', '');
-  const raw = await redisClient.get(key);
+async function migrateBlockKey(keyRel) {
+  const isFp = keyRel.startsWith('block:fp:');
+  const field = keyRel.replace(isFp ? 'block:fp:' : 'block:', '');
+  const hashRel = isFp ? HASH.blockedFps : HASH.blockedIps;
+
+  const raw = await getRaw(keyRel);
   if (!raw) return;
+  if (await hasIndexField(hashRel, field)) return;
 
-  const inHash = await redisClient.hexists(HASH_BLOCKED, ip);
-  if (inHash) return;
+  // raw 是**原始字符串**：新格式为 JSON，旧格式为 '1'（封禁）或状态字面量。
+  // 旧数据可能写入过半截/非法 JSON，JSON.parse 失败只能退回按状态字面量处理，
+  // 绝不能让一条脏数据中断整个启动期迁移。
+  let meta = null;
+  if (typeof raw === 'string' && raw.trimStart().startsWith('{')) {
+    try {
+      meta = JSON.parse(raw);
+    } catch (err) {
+      log.warn(`⚠️  [Firewall DAO] 封禁键 ${keyRel} 的 JSON 非法，按旧格式迁移`, err);
+    }
+  }
 
-  let meta;
-  if (raw.startsWith('{')) {
-    meta = JSON.parse(raw);
-  } else {
-    const ttl = await redisClient.ttl(key);
+  if (!meta) {
+    const ttl = await ttlOf(keyRel);
     meta = {
       status: raw === '1' ? 'BLOCKED' : raw,
       source: 'auto',
@@ -268,63 +277,58 @@ async function migrateBlockKey(redisClient, key) {
       expiresAt: ttl > 0 ? Date.now() + ttl * 1000 : null
     };
   }
-  await redisClient.hset(HASH_BLOCKED, ip, JSON.stringify(meta));
+  await addBlockIndexEntry(field, JSON.stringify(meta), hashRel);
 }
 
 /**
  * 启动时将 manualBlacklistIps 同步为永久封禁到 Redis
  * 同时迁移已有的 fw:block:* 键到 fw:blocked:ips hash 索引
- * @param {object} redisClient Redis 客户端
+ *
+ * 注意：手动黑名单的语义就是「永久」，这里直接写永久封禁（不带 TTL）。
+ * 旧实现只在「键不存在」时才写，若该 IP 当时存在一条临时封禁，手动名单会被那条
+ * 临时封禁顶掉，等 TTL 到期后手动拉黑随之失效。
+ *
+ * @returns {Promise<void>}
  */
-async function syncManualBlacklistToRedis(redisClient) {
-  if (!redisClient) return;
-
+async function syncManualBlacklistToRedis() {
   // 同步手动封禁列表
   const ips = securitySettings.defense.manualBlacklistIps || [];
+  const now = Date.now();
   for (const ip of ips) {
-    const meta = {
-      status: 'BLOCKED',
-      source: 'manual',
-      permanent: true,
-      createdAt: Date.now(),
-      expiresAt: null
-    };
-    const value = JSON.stringify(meta);
-    const existing = await redisClient.get(`fw:block:${ip}`);
-    if (!existing) {
-      await redisClient.set(`fw:block:${ip}`, value);
-    }
-    await redisClient.hset(HASH_BLOCKED, ip, value);
+    await writeBlock(
+      { ip },
+      {
+        status: 'BLOCKED',
+        source: 'manual',
+        permanent: true,
+        createdAt: now,
+        expiresAt: null
+      }
+    );
   }
 
   // 扫描并迁移旧格式的 fw:block:* 键到 hash 索引
-  let cursor = '0';
-  do {
-    const result = await redisClient.scan(cursor, { MATCH: 'fw:block:*', COUNT: 100 });
-    if (!result) break;
-    cursor = result.cursor;
-    for (const key of result.keys || []) {
-      await migrateBlockKey(redisClient, key);
-    }
-  } while (cursor !== '0');
+  const existing = await scanKeys('block:*');
+  for (const keyRel of existing) {
+    await migrateBlockKey(keyRel);
+  }
 
-  log.info(`💾 [Firewall DAO] ${C.dim}已迁移现有封禁键到 hash 索引${C.reset}`);
+  if (existing.length) {
+    log.info(`💾 [Firewall DAO] ${C.dim}已迁移 ${existing.length} 个封禁键到 hash 索引${C.reset}`);
+  }
 }
 
 /**
  * 启动时同步白名单到 Redis
- * @param {object} redisClient Redis 客户端
+ *
+ * @returns {Promise<void>}
  */
-async function syncManualWhitelistToRedis(redisClient) {
-  if (!redisClient) return;
-
+async function syncManualWhitelistToRedis() {
   const entries = securitySettings.defense.manualWhitelistIps || [];
   for (const entry of entries) {
     const ip = typeof entry === 'string' ? entry : entry.ip;
     const duration = typeof entry === 'string' ? 86400 : entry.duration || 86400;
-    const meta = { expiresAt: Date.now() + duration * 1000 };
-    await redisClient.set(`fw:whitelist:${ip}`, '1', { EX: duration });
-    await redisClient.hset(HASH_WHITELIST, ip, JSON.stringify(meta));
+    await writeWhitelist({ ip }, duration);
   }
 }
 
