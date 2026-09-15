@@ -127,3 +127,15 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern
 - **超时 ≠ 失败**：`SENSITIVE_APPROVAL=TIMED_OUT` 别重试，先 `npm view wb-logkit version` 确认。
 - 发布后**从 npm 真实安装回归**（本地软链会掩盖问题）。`git push` 可能静默成功但本地 ref 残留旧值 →
   用 `git ls-remote origin main` 核对远端 SHA。
+
+## 本机 Git 环境异常（2026-09-15 实测，会误导 `git status`）
+
+- `.git/refs/remotes/origin/main` **无法由 git 自身写入**：`git update-ref` / `git fetch` / `git push` 都返回 0、
+  reflog 正常追加，但松散 ref 文件不落地（`GIT_TRACE_REFS` 显示 git 把旧值读成全 0，即"该 ref 原本不存在"；
+  trace2 无子进程、无 error）。bash 手写同一路径则正常，且 git 能读到。
+  已排除：定时清理（无 git 调用时文件稳定存活 40s+）、`core.fscache`/`fsmonitor`、`reference-transaction` 钩子。
+  当前 git 为 `C:/Program Files/Code/Git`（2.52.0.windows.1），`git push` 甚至**不输出任何内容**（仅退出码 0）。
+- 后果：解析回退到 **packed-refs 的旧值**（Sep 12 的 `8fe88e6`）→ `git status` 谎报 "ahead 12"。
+  **同步状态一律以 `git ls-remote origin main` 为准**，不要信本地 ahead/behind。
+- 修法（已验证持久）：把 `.git/packed-refs` 中该行 SHA 改成真值（保 `# pack-refs with:` 头行）+ 手写松散
+  ref 文件；之后 `git show-ref` 与 `git status` 均恢复正确。**下次 fetch/push 后可能再次失灵，复用此法。**
