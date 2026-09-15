@@ -141,12 +141,16 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern
 - `.git/refs/remotes/origin/main` **无法由 git 自身写入**：`git update-ref` / `git fetch` / `git push` 都返回 0、
   reflog 正常追加，但松散 ref 文件不落地（`GIT_TRACE_REFS` 显示 git 把旧值读成全 0，即"该 ref 原本不存在"；
   trace2 无子进程、无 error）。bash 手写同一路径则正常，且 git 能读到。
-  已排除：定时清理（无 git 调用时文件稳定存活 40s+）、`core.fscache`/`fsmonitor`、`reference-transaction` 钩子。
+  **根因（2026-09-15 再证）：父目录 `.git/refs/remotes/origin/` 本身缺失**，git 未能把它创建出来就静默放弃；
+  `mkdir -p` 补上目录后 git 立刻认得该 ref。已排除：定时清理（无 git 调用时文件稳定存活 40s+）、
+  `core.fscache`/`fsmonitor`、`reference-transaction` 钩子。
   当前 git 为 `C:/Program Files/Code/Git`（2.52.0.windows.1），`git push` 甚至**不输出任何内容**（仅退出码 0）。
 - 后果：解析回退到 **packed-refs 的旧值**（Sep 12 的 `8fe88e6`）→ `git status` 谎报 "ahead 12"。
-  **同步状态一律以 `git ls-remote origin main` 为准**，不要信本地 ahead/behind。
-- 修法（已验证持久）：把 `.git/packed-refs` 中该行 SHA 改成真值（保 `# pack-refs with:` 头行）+ 手写松散
-  ref 文件；之后 `git show-ref` 与 `git status` 均恢复正确。**下次 fetch/push 后可能再次失灵，复用此法。**
+  **同步状态一律以 `git ls-remote origin main` 为准**，不要信本地 ahead/behind。注意 `git fetch` 的
+  `a..b main -> origin/main` 那行是**谎报**（它按远端数据打印，不代表本地 ref 写成功）。
+- 修法（已验证持久，2026-09-15 推送时复用成功）：`mkdir -p .git/refs/remotes/origin` + 手写松散 ref 文件
+  即可（**松散 ref 优先于 packed-refs 旧值，不必改 packed-refs**）；旧法是把 `.git/packed-refs` 中该行
+  SHA 改成真值（保 `# pack-refs with:` 头行）。**下次 fetch/push 后可能再次失灵，复用此法。**
 
 ## Redis 使用规范与 node-redis v5（2026-09-15 实测，动 redis 代码前必读）
 
