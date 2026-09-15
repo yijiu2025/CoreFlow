@@ -245,8 +245,13 @@ await store.set('key', value, 60);
 
 ```js
 const store = getStore('fw');
-await store.hlen('hash'); // → client.hLen('fw:hash')
+await store.hlen('myhash'); // → client.hLen('myhash')  ⚠️ 裸透传：不加前缀、不带超时与错误包装
 ```
+
+> ⚠️ 转发是**裸逃生口**：参数原样透传给底层 client，**不会**加 `prefix:` 前缀，也不走
+> 超时保护 / 冷却 / `RedisRequiredError` 包装。需要前缀或容错请显式写
+> `store.call(client => client.hLen('fw:myhash'))`，或用已封装的方法（`hset`/`hgetall`/`zAdd` 等）。
+> MapStore 模式下列表外的命令一律不存在，hash / zset / exists / scan / call 会抛描述性 `TypeError`。
 
 **示例**:
 

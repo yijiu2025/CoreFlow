@@ -851,6 +851,18 @@ function getMapStore(prefix) {
     call: async () => {
       throw new TypeError('getStore(MapStore): 当前使用 MapStore，无 Redis 客户端');
     },
+    zAdd: async () => {
+      throw new TypeError('getStore(MapStore): 有序集合操作仅支持 Redis 模式');
+    },
+    zCard: async () => {
+      throw new TypeError('getStore(MapStore): 有序集合操作仅支持 Redis 模式');
+    },
+    zRangeByScore: async () => {
+      throw new TypeError('getStore(MapStore): 有序集合操作仅支持 Redis 模式');
+    },
+    zRem: async () => {
+      throw new TypeError('getStore(MapStore): 有序集合操作仅支持 Redis 模式');
+    },
     _backend: 'map'
   };
 }

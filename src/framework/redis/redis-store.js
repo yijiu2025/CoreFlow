@@ -649,12 +649,17 @@ const RedisStore = {
 
   /**
    * Redis SCAN 命令（底层游标扫描）
+   *
+   * 游标**归一化为字符串**再下发：node-redis v5 的编码器只接受 string | Buffer，
+   * 传数字会在发命令时抛 `"arguments[1]" must be of type "string | Buffer"`，
+   * 且抛错位置在 socket 编码层，堆栈与调用点无关，极难定位。
+   *
    * @param {string} prefix - 命名空间
-   * @param {number} cursor - 游标
+   * @param {number|string} cursor - 游标（数字或字符串均可）
    * @param {object} [opts] - SCAN 选项
    * @param {number} [timeout] - 超时毫秒
    * @param {boolean} [useBackup] - 是否使用备用 Redis
-   * @returns {Promise<[number, string[]]>} [nextCursor, keys]
+   * @returns {Promise<{cursor:number, keys:string[]}>} node-redis 原生返回（注意不是元组）
    * @throws {RedisRequiredError}
    */
   async scan(prefix, cursor, opts, timeout, useBackup) {
@@ -662,7 +667,7 @@ const RedisStore = {
     const redis = _getRedis('scan', prefix, useBackup);
     const match = opts?.MATCH ? makeKey(prefix, opts.MATCH) : undefined;
     try {
-      return await withTimeout(redis, r => r.scan(cursor, { ...opts, MATCH: match }), timeout);
+      return await withTimeout(redis, r => r.scan(String(cursor), { ...opts, MATCH: match }), timeout);
     } catch (err) {
       _wrapRedisError(err, 'scan', prefix);
     }

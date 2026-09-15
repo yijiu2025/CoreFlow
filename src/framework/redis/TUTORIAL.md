@@ -61,16 +61,33 @@ await blocks.set('ip:1.2.3.4', value);
 
 ```js
 const store = getStore('fw');
-await store.hlen('myhash'); // → client.hLen('fw:myhash')
-await store.zAdd('ranking', { score: 1, value: 'a' }); // Proxy 自动转发
+await store.hlen('myhash'); // → client.hLen('myhash')  ⚠️ 不自动加前缀
 ```
+
+> ⚠️ 转发分支是**裸逃生口**：它把参数原样透传给底层 client，**不会**加 `prefix:`
+> 前缀，**也不带**超时保护、冷却与错误包装（`RedisRequiredError`）。需要前缀或容错时，
+> 显式用 `store.call(client => client.hLen('fw:myhash'))`，或直接用 store 已封装的方法
+> （`hset`/`hgetall`/`zAdd` 等，这些才会自动加前缀）。
+>
+> MapStore 模式下列表外的命令一律不存在；hash / zset / exists / scan / call 在
+> MapStore 下会抛描述性 `TypeError`。
 
 ### 通用命令执行器
 
 ```js
 const store = getStore('captcha');
-await store.call(client => client.ping());
-await store.call(client => client.zRange('key', 0, -1));
+await store.call(client => client.ping()); // 自带前缀无关的裸客户端 + 超时保护
+await store.call(client => client.zRange('captcha:ranking', 0, -1)); // 多 key 命令自行拼前缀
+```
+
+### 有序集合（ZSet）
+
+```js
+const store = getStore('fw');
+await store.zAdd('ranking', 100, 'alice'); // (key, score, value)
+await store.zCard('ranking'); // 成员数
+await store.zRangeByScore('ranking', 0, 200, { LIMIT: { offset: 0, count: 10 } });
+await store.zRem('ranking', ['alice']); // 成员名或数组
 ```
 
 ---

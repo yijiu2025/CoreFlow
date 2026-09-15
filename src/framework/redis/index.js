@@ -8,6 +8,7 @@
  */
 
 export { default } from './plugin.js';
+export { connectStandalone, disconnectStandalone } from './plugin.js';
 export { ResilientStore, createBoundStore } from './resilient-store.js';
 export { RedisStore, setLogger, setTtlJitter } from './redis-store.js';
 export { getStore } from './get-store.js';
@@ -19,3 +20,6 @@ export { createLock } from './lock-store.js';
 export { createNonceStore } from './nonce-store.js';
 export { RedisRequiredError } from './errors.js';
 export { cacheThrough } from './cache.js';
+// 供调用方判断"Redis 是否可用"（用于内存降级决策）：外部必须走本 barrel，
+// 不要深层导入 `framework/redis/utils.js`。
+export { isRedisReady } from './utils.js';

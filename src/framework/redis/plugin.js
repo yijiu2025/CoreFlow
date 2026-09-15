@@ -223,6 +223,82 @@ async function drainAndClose(client, label = '') {
   }
 }
 
+/**
+ * 独立进程引导：为 CLI / 脚本建立与 Fastify 插件等价的主 Redis 连接。
+ *
+ * 背景：连接逻辑挂在 Fastify 插件里，只有 app 启动时才会执行。`npm run cli` 只加载模型、
+ * 不启动 app，因此模块级 `globalRedis` 恒为 null；此时 `getStore()` 仍会按
+ * `isRedisConfigured()`（只看环境变量）走 Redis 分支，却拿不到连接 → 一路抛
+ * `RedisRequiredError`，表现为「同一个存储层在 app 里能用、在 CLI 里全废」。
+ *
+ * 本函数复用插件内**同一套**连接参数与重试策略，把连接挂到 `globalRedis`，
+ * 使 `getStore()` / `RedisStore` 在非 Fastify 环境下同样可用。与之配套，
+ * 退出前必须调用 `disconnectStandalone()`，否则未关闭的 socket 会让进程无法自然退出。
+ *
+ * @returns {Promise<{ready: boolean, reason?: string}>} ready=false 表示未启用、配置非法或连接失败
+ */
+async function connectStandalone() {
+  if (process.env.REDIS_ENABLED !== 'true' || !process.env.REDIS_HOST) {
+    return { ready: false, reason: 'REDIS_ENABLED 未开启或 REDIS_HOST 未配置' };
+  }
+  // 幂等：已在 app/上次引导中连接成功则直接复用
+  if (globalRedis && globalRedis.isReady) return { ready: true };
+
+  const host = process.env.REDIS_HOST;
+  const port = parsePort(process.env.REDIS_PORT) ?? 6379;
+  const db = parseInt(process.env.REDIS_DB || '0', 10);
+  if (!isValidDb(db)) return { ready: false, reason: `REDIS_DB 非法（仅支持 0-15）: ${process.env.REDIS_DB}` };
+
+  const connectTimeoutRaw = parseInt(process.env.REDIS_CONNECT_TIMEOUT || '5000', 10);
+  const connectTimeout = Number.isFinite(connectTimeoutRaw) ? connectTimeoutRaw : 5000;
+  const maxRetriesRaw = parseInt(process.env.REDIS_MAX_RETRIES || '10', 10);
+  const maxRetries = Number.isFinite(maxRetriesRaw) ? maxRetriesRaw : 10;
+
+  const client = createRedisConnection({
+    host,
+    port,
+    useTls: process.env.REDIS_TLS === 'true',
+    db,
+    label: 'CLI',
+    connectTimeout,
+    maxRetries
+  });
+
+  try {
+    // CLI 场景不必久等：最多重试 1 次（首次 500ms + 退避）
+    await connectWithRetry(client, 1);
+  } catch (err) {
+    // 关键：createRedisConnection 内置 reconnectStrategy，连接失败后仍会后台重连，
+    // 不主动断开会让 CLI 进程永远退不出去。
+    try {
+      client.disconnect();
+    } catch {
+      /* 安全忽略 */
+    }
+    return { ready: false, reason: err.message };
+  }
+
+  globalRedis = client;
+  redisHealthy = true;
+  return { ready: true };
+}
+
+/**
+ * 关闭由 `connectStandalone()` 建立的主 Redis 连接（CLI / 脚本退出前调用）
+ *
+ * 只清理本函数建立的连接；若连接由 Fastify 插件建立（app 内调用），
+ * 仍应由插件的 onClose 钩子负责关闭。
+ *
+ * @returns {Promise<void>}
+ */
+async function disconnectStandalone() {
+  if (!globalRedis) return;
+  const client = globalRedis;
+  globalRedis = null;
+  redisHealthy = false;
+  await drainAndClose(client, 'CLI ');
+}
+
 const redisPlugin = fp(
   async app => {
     const enabled = process.env.REDIS_ENABLED === 'true';
@@ -405,5 +481,5 @@ const redisPlugin = fp(
   { name: 'redis-plugin' }
 );
 
-export { globalRedis, redisHealthy, backupRedis, backupRedisHealthy };
+export { globalRedis, redisHealthy, backupRedis, backupRedisHealthy, connectStandalone, disconnectStandalone };
 export default redisPlugin;

@@ -18,14 +18,25 @@ import { globalRedis, backupRedis } from './plugin.js';
  * @returns {Promise<any>} 原始 Promise 的返回值，超时则 reject
  */
 function withTimeout(promise, ms = 5000) {
+  // 【为什么不用 result.finally(cb)】finally 会派生出一个**被丢弃的** promise：
+  // 主 promise 一旦 reject，这个孤儿 promise 也以同一理由 reject，而它没有任何
+  // 处理者 —— 在 Node 默认的 --unhandled-rejections=throw 下会直接终止进程。
+  // 表现是「Redis 一次普通的命令错误（如对 hash 键 GET 的 WRONGTYPE）升级成整个服务崩溃」，
+  // 且崩溃栈指向 node-redis 解码器，极难定位。改用 then(onOk, onErr) 收尾：
+  // 派生的 promise 两个分支都不抛，恒为 fulfilled，因此不会产生未处理拒绝。
+  const delay = Number(ms);
+  const effective = Number.isFinite(delay) && delay > 0 ? delay : 5000;
+
   let timer;
-  const result = Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      timer = setTimeout(() => reject(Object.assign(new Error('Redis 操作超时'), { code: 'TIMEOUT' })), ms);
-    })
-  ]);
-  result.finally(() => clearTimeout(timer));
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error('Redis 操作超时'), { code: 'TIMEOUT' })), effective);
+  });
+
+  const result = Promise.race([promise, timeout]);
+  result.then(
+    () => clearTimeout(timer),
+    () => clearTimeout(timer)
+  );
   return result;
 }
 
