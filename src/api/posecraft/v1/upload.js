@@ -12,7 +12,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { saveUploadFile, saveBase64Image } from '../../../app/posecraft/services/upload.service.js';
 
-export default async function (fastify) {
+async function registerUploadRoutes(fastify) {
   registerGroupMetadata({
     name: 'upload',
     description: '文件上传',
@@ -61,3 +61,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerUploadRoutes;

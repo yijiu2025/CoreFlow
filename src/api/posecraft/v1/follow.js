@@ -9,7 +9,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import followDao from '../../../app/posecraft/dao/follow.dao.js';
 import { resolveInternalUserId, getProfileStats } from '../../../app/posecraft/services/profile.service.js';
 
-export default async function (fastify) {
+async function registerFollowRoutes(fastify) {
   registerGroupMetadata({
     name: 'follow',
     description: '用户关注管理',
@@ -193,3 +193,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerFollowRoutes;

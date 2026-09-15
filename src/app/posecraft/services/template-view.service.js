@@ -22,7 +22,7 @@ const POSE_DATA_PRIVILEGES = ['posecraft:work:read', 'posecraft:vip:premium_temp
  * @param {boolean} isAdmin - 是否管理员
  * @param {boolean} camera - 是否辅助拍照场景
  */
-export function applyPoseDataVisibility(template, user, isAdmin, camera) {
+function applyPoseDataVisibility(template, user, isAdmin, camera) {
   const isCreator = template.user_id === user?.userId;
   const hasPrivilege = user?.permissions?.allows?.some(p => POSE_DATA_PRIVILEGES.includes(p));
   const isAuthorized = isCreator || isAdmin || hasPrivilege;
@@ -36,3 +36,5 @@ export function applyPoseDataVisibility(template, user, isAdmin, camera) {
     template.setDataValue('pose_data', undefined);
   }
 }
+
+export { applyPoseDataVisibility };

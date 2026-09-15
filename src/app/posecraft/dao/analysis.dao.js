@@ -82,4 +82,6 @@ class AnalysisDao {
   }
 }
 
-export default new AnalysisDao();
+const analysisDao = new AnalysisDao();
+
+export default analysisDao;

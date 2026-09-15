@@ -31,7 +31,7 @@ if (!fs.existsSync(UPLOAD_DIR)) {
  * @returns {Promise<{url: string, filename: string, size: number}>}
  * @throws {Error} 类型不支持
  */
-export async function saveUploadFile(file) {
+async function saveUploadFile(file) {
   if (!ALLOWED_TYPES.includes(file.mimetype)) {
     throw new Error('不支持的文件类型');
   }
@@ -57,7 +57,7 @@ export async function saveUploadFile(file) {
  * @returns {Promise<{url: string, filename: string, size: number}>}
  * @throws {Error} 格式无效 / 超过大小限制
  */
-export async function saveBase64Image(dataUri, filename) {
+async function saveBase64Image(dataUri, filename) {
   const matches = dataUri.match(/^data:image\/(\w+);base64,(.+)$/);
   if (!matches) {
     throw new Error('无效的 Base64 格式');
@@ -80,3 +80,5 @@ export async function saveBase64Image(dataUri, filename) {
     size: buffer.length
   };
 }
+
+export { saveUploadFile, saveBase64Image };

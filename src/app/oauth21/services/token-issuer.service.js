@@ -43,7 +43,7 @@ const log = createLogger('app.oauth21.services.token-issuer.service');
  * @param {boolean} [options.rememberMe=true] - 是否长期登录（控制 sid/sid_r TTL；来自前端 keepLogin）
  * @returns {object} 令牌结果
  */
-export async function issueDirectTokens(user, client, scope, oidcNonce, request, reply, fastify, options = {}) {
+async function issueDirectTokens(user, client, scope, oidcNonce, request, reply, fastify, options = {}) {
   // 默认 false（短期登录）：未显式声明 rememberMe 的入口（扫码/授权确认）均不下发
   // sid_r 长期凭证，降低公共设备残留半年期凭证的风险。登录页通过 keepLogin 显式开启。
   const { rememberMe = false } = options;
@@ -183,3 +183,5 @@ export async function issueDirectTokens(user, client, scope, oidcNonce, request,
   );
   return result;
 }
+
+export { issueDirectTokens };

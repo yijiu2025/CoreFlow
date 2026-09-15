@@ -7,7 +7,7 @@
  */
 import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
 
-export const POSECRAFT_PERMISSIONS = createPermissionRegistry('posecraft', 'PoseCraft', {
+const POSECRAFT_PERMISSIONS = createPermissionRegistry('posecraft', 'PoseCraft', {
   // A. 基础作品与模板权限
   WORK: {
     READ: { code: 'posecraft:work:read', label: '查看作品与模板', type: 'read' },
@@ -55,4 +55,5 @@ export const POSECRAFT_PERMISSIONS = createPermissionRegistry('posecraft', 'Pose
   }
 });
 
+export { POSECRAFT_PERMISSIONS };
 export default POSECRAFT_PERMISSIONS;

@@ -5,7 +5,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const defineAuditLog = (sequelize, DataTypes) => {
   const AuditLog = sequelize.define(
     'AuditLog',
     {
@@ -53,3 +53,5 @@ export default (sequelize, DataTypes) => {
 
   return AuditLog;
 };
+
+export default defineAuditLog;

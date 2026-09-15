@@ -18,7 +18,7 @@ import {
   setWhitelist
 } from '../../../app/firewall/dao/block-manager.js';
 
-export default async function (fastify) {
+async function registerExportRoutes(fastify) {
   registerGroupMetadata({
     name: 'export',
     alias: '规则导入导出',
@@ -156,3 +156,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerExportRoutes;

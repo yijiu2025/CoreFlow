@@ -4,7 +4,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const defineSessionLog = (sequelize, DataTypes) => {
   const SessionLog = sequelize.define(
     'SessionLog',
     {
@@ -73,3 +73,5 @@ export default (sequelize, DataTypes) => {
 
   return SessionLog;
 };
+
+export default defineSessionLog;

@@ -13,7 +13,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import UserDao from '../../../app/user/dao/user.js';
 
-export default async function (fastify) {
+async function registerUserRoutes(fastify) {
   registerGroupMetadata({
     name: 'userProfile',
     alias: '用户资料',
@@ -249,3 +249,5 @@ function matchPermission(pattern, target) {
   }
   return false;
 }
+
+export default registerUserRoutes;

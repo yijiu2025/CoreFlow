@@ -66,4 +66,6 @@ class VoiceService {
   }
 }
 
-export default new VoiceService();
+const voiceService = new VoiceService();
+
+export default voiceService;

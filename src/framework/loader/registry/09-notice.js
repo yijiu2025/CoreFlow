@@ -16,7 +16,7 @@ const C = { reset: '\x1b[0m', cyan: '\x1b[36m' };
  * 仅当数据库中不存在记录时创建默认值，不覆盖用户已有的配置。
  * 环境变量仅用于首次初始化的默认值。
  */
-export default async app => {
+const noticeLoader = async app => {
   const NoticeConfig = getModel('NoticeConfig');
   if (!NoticeConfig) return;
 
@@ -58,3 +58,5 @@ export default async app => {
     // 已存在则跳过，不覆盖用户通过管理后台配置的值
   }
 };
+
+export default noticeLoader;

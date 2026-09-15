@@ -10,7 +10,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} Analysis 模型
  */
-export default (sequelize, DataTypes) => {
+const defineAnalysis = (sequelize, DataTypes) => {
   const Analysis = sequelize.define(
     'Analysis',
     {
@@ -74,3 +74,5 @@ export default (sequelize, DataTypes) => {
 
   return Analysis;
 };
+
+export default defineAnalysis;

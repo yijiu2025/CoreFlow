@@ -9,7 +9,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-export const C = {
+const C = {
   reset: '\x1b[0m',
   green: '\x1b[32m',
   yellow: '\x1b[33m',
@@ -17,3 +17,5 @@ export const C = {
   cyan: '\x1b[36m',
   dim: '\x1b[2m'
 };
+
+export { C };

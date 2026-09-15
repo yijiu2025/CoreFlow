@@ -4,7 +4,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const definePermission = (sequelize, DataTypes) => {
   const Permission = sequelize.define(
     'Permission',
     {
@@ -51,3 +51,5 @@ export default (sequelize, DataTypes) => {
 
   return Permission;
 };
+
+export default definePermission;

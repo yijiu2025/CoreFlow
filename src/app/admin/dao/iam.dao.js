@@ -185,4 +185,6 @@ class IamDao {
   }
 }
 
-export default new IamDao();
+const iamDao = new IamDao();
+
+export default iamDao;

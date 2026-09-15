@@ -9,7 +9,7 @@ import { registerCsrfProtection } from './middleware/csrf.middleware.js';
 import { CSRF_EXCLUDE_PATHS } from './config/csrf-exclude.js';
 import { registerSensitiveRateLimits } from './middleware/rate-limiter.js';
 
-export default {
+const oauth21Config = {
   app_id: 'oauth21',
   name: 'OAuth 2.1 授权中心',
   description: 'OAuth 2.1 / OIDC 授权服务器，负责客户端管理、授权码流程、令牌签发与撤销',
@@ -27,3 +27,5 @@ export default {
     registerCsrfProtection(app, { exclude: CSRF_EXCLUDE_PATHS });
   }
 };
+
+export default oauth21Config;

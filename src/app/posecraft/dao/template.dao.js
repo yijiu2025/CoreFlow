@@ -371,4 +371,6 @@ class TemplateDao {
   }
 }
 
-export default new TemplateDao();
+const templateDao = new TemplateDao();
+
+export default templateDao;

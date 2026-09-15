@@ -11,7 +11,7 @@
  */
 import { registerDeleteVersionHooks } from '../../framework/db/softDeleteHooks.js';
 
-export default (sequelize, DataTypes) => {
+const defineUserShare = (sequelize, DataTypes) => {
   const UserShare = sequelize.define(
     'UserShare',
     {
@@ -72,3 +72,5 @@ export default (sequelize, DataTypes) => {
 
   return UserShare;
 };
+
+export default defineUserShare;

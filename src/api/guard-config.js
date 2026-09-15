@@ -31,7 +31,7 @@ let _dirtySystems = new Set(); // 待保存的脏系统列表
  *
  * @returns {Promise<void>}
  */
-export async function loadGuardConfig() {
+async function loadGuardConfig() {
   let data;
   try {
     data = await GuardConfigDao.loadFromDB();
@@ -156,7 +156,7 @@ function overrideRuntimeFields(target, source) {
 /**
  * 获取指定层级的配置
  */
-export function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
+function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
   const system = configs[systemKey];
   if (!system) return null;
 
@@ -176,7 +176,7 @@ export function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
  * @param {string} systemKey - 系统标识
  * @returns {string} URL 前缀（如 /posecraft），未注册时返回 /${systemKey}
  */
-export function getSystemPrefix(systemKey) {
+function getSystemPrefix(systemKey) {
   const system = configs[systemKey];
   return system?.prefix || `/${systemKey}`;
 }
@@ -194,7 +194,7 @@ export function getSystemPrefix(systemKey) {
  * @param {object} [operator.redis] - Redis 实例（可选）
  * @returns {object|null} 更新后的系统配置，失败返回 null
  */
-export function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null, operator = {}) {
+function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null, operator = {}) {
   const system = configs[systemKey];
   if (!system) return null;
 
@@ -314,7 +314,7 @@ function triggerSave(systemKey) {
 /**
  * 1层注册：系统级元数据 (Level 1)
  */
-export function registerSystemMetadata(systemKey, metadata) {
+function registerSystemMetadata(systemKey, metadata) {
   if (!metadata || typeof metadata !== 'object') {
     log.warn(`⚠️ [Guard Config] registerSystemMetadata: metadata 参数无效，systemKey=${systemKey}`);
     return;
@@ -340,7 +340,7 @@ export function registerSystemMetadata(systemKey, metadata) {
 /**
  * 2层注册：模块/文件级元数据 (Level 2)
  */
-export function registerGroupMetadata(systemKey, groupKey, metadata) {
+function registerGroupMetadata(systemKey, groupKey, metadata) {
   if (!metadata || typeof metadata !== 'object') {
     log.warn(
       `⚠️ [Guard Config] registerGroupMetadata: metadata 参数无效，systemKey=${systemKey}, groupKey=${groupKey}`
@@ -382,7 +382,7 @@ export function registerGroupMetadata(systemKey, groupKey, metadata) {
  *   运行时字段由 DB 持久化配置控制（loadGuardConfig 时覆盖），
  *   避免代码热更新意外重置运维配置
  */
-export function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
+function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
   if (!metadata || typeof metadata !== 'object') {
     log.warn(
       `⚠️ [Guard Config] registerApiMetadata: metadata 参数无效，systemKey=${systemKey}, groupKey=${groupKey}, apiKey=${apiKey}`
@@ -437,7 +437,7 @@ export function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
  *
  * @returns {Promise<void>}
  */
-export async function flushGuardConfig() {
+async function flushGuardConfig() {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -456,7 +456,7 @@ export async function flushGuardConfig() {
  * 获取所有配置（深拷贝，防止外部篡改内部状态）
  * 注意：返回的数据量大时注意性能，当前配置规模在 KB 级别，深拷贝可接受
  */
-export function getAllGuardConfigs() {
+function getAllGuardConfigs() {
   return structuredClone(configs);
 }
 
@@ -467,7 +467,7 @@ export function getAllGuardConfigs() {
  * @returns {Promise<void>}
  * @throws {Error} 版本冲突或数据库写入失败时抛出
  */
-export async function saveGuardConfig() {
+async function saveGuardConfig() {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -481,3 +481,16 @@ export async function saveGuardConfig() {
     throw err;
   }
 }
+
+export {
+  loadGuardConfig,
+  getGuardConfig,
+  getSystemPrefix,
+  setGuardConfig,
+  registerSystemMetadata,
+  registerGroupMetadata,
+  registerApiMetadata,
+  flushGuardConfig,
+  getAllGuardConfigs,
+  saveGuardConfig
+};

@@ -19,7 +19,7 @@
  * 用户字段 → 取值方式（签发时按 fields 集合读取）
  * phone 特殊：AES 加密存储，scope=phone 当前只声明不下发解密手机号（预留）
  */
-export const SCOPE_REGISTRY = {
+const SCOPE_REGISTRY = {
   /** 基础登录凭证：仅用于身份认证，不下发任何用户字段 */
   openid: {
     fields: [],
@@ -56,10 +56,10 @@ export const SCOPE_REGISTRY = {
 };
 
 /** 所有合法 scope id 白名单（客户端注册校验用） */
-export const VALID_SCOPES = Object.keys(SCOPE_REGISTRY);
+const VALID_SCOPES = Object.keys(SCOPE_REGISTRY);
 
 /** 必选 scope 集合（授权页不可取消勾选） */
-export const REQUIRED_SCOPES = Object.entries(SCOPE_REGISTRY)
+const REQUIRED_SCOPES = Object.entries(SCOPE_REGISTRY)
   .filter(([, v]) => v.required)
   .map(([k]) => k);
 
@@ -69,7 +69,7 @@ export const REQUIRED_SCOPES = Object.entries(SCOPE_REGISTRY)
  * @param {object} [overrides] 各 scope 的描述覆盖（来自 oauth_clients.scope_metadata）
  * @returns {Array<{id, name, desc, fields, required, sensitive}>}
  */
-export function resolveScopeDetails(scopeStr, overrides = {}) {
+function resolveScopeDetails(scopeStr, overrides = {}) {
   if (!scopeStr) return [];
   const ids = scopeStr.split(/\s+/).filter(Boolean);
   return ids
@@ -94,7 +94,7 @@ export function resolveScopeDetails(scopeStr, overrides = {}) {
  * @param {string} scopeStr
  * @returns {string[]} 字段名集合
  */
-export function resolveFieldSet(scopeStr) {
+function resolveFieldSet(scopeStr) {
   if (!scopeStr) return [];
   const ids = scopeStr.split(/\s+/).filter(Boolean);
   const set = new Set();
@@ -112,7 +112,7 @@ export function resolveFieldSet(scopeStr) {
  * @param {string} scopeStr
  * @returns {{valid: boolean, unknown: string[]}}
  */
-export function validateScopes(scopeStr) {
+function validateScopes(scopeStr) {
   if (!scopeStr) return { valid: true, unknown: [] };
   const ids = scopeStr.split(/\s+/).filter(Boolean);
   const unknown = ids.filter(id => !SCOPE_REGISTRY[id]);
@@ -125,9 +125,19 @@ export function validateScopes(scopeStr) {
  * @param {string} allowed 客户端注册的 scope
  * @returns {{valid: boolean, exceeded: string[]}}
  */
-export function checkScopeSubset(requested, allowed) {
+function checkScopeSubset(requested, allowed) {
   const reqIds = (requested || '').split(/\s+/).filter(Boolean);
   const allowIds = (allowed || '').split(/\s+/).filter(Boolean);
   const exceeded = reqIds.filter(id => !allowIds.includes(id));
   return { valid: exceeded.length === 0, exceeded };
 }
+
+export {
+  SCOPE_REGISTRY,
+  VALID_SCOPES,
+  REQUIRED_SCOPES,
+  resolveScopeDetails,
+  resolveFieldSet,
+  validateScopes,
+  checkScopeSubset
+};

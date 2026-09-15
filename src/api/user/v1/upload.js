@@ -12,7 +12,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { processAndUploadAvatar, AvatarError } from '../../../app/user/services/avatar.service.js';
 
-export default async function (fastify) {
+async function registerUploadRoutes(fastify) {
   registerGroupMetadata({
     name: 'upload',
     alias: '文件上传',
@@ -71,3 +71,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerUploadRoutes;

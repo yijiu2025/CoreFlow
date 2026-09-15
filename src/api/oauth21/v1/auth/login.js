@@ -14,7 +14,7 @@ import { registerSecureRoute } from '../../../guard.js';
 import { directLogin, confirmDirectConsent, verifyEmailLogin } from '../../../../app/oauth21/services/login.service.js';
 import { loginSchema, consentConfirmSchema, verifyEmailLoginSchema } from '../schemas/login.js';
 
-export default function registerLoginRoutes(fastify) {
+function registerLoginRoutes(fastify) {
   // POST /login — 标准直接登录
   registerSecureRoute(fastify, {
     name: 'login',
@@ -55,3 +55,5 @@ export default function registerLoginRoutes(fastify) {
     handler: (request, reply) => verifyEmailLogin(request, reply, fastify)
   });
 }
+
+export default registerLoginRoutes;

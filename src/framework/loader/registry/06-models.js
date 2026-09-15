@@ -16,7 +16,7 @@ const log = createLogger('framework.loader.registry.06-models');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default async app => {
+const modelsLoader = async app => {
   const db = app.db;
   const modelsPath = path.resolve(__dirname, '../../../models');
   const loadedModels = []; // 收集所有加载的模型，避免二次遍历
@@ -105,3 +105,5 @@ export default async app => {
     loadErrors.forEach(e => log.error(`  - ${e.file}: ${e.error}`));
   }
 };
+
+export default modelsLoader;

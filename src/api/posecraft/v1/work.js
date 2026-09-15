@@ -15,7 +15,7 @@ import { formatWorkDetail, formatWorkList } from '../../../app/posecraft/service
 
 const log = createLogger('api.posecraft.work');
 
-export default async function (fastify) {
+async function registerWorkRoutes(fastify) {
   registerGroupMetadata({
     name: 'work',
     description: '作品管理',
@@ -380,3 +380,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerWorkRoutes;

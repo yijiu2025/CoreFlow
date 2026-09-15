@@ -20,7 +20,7 @@
  * @param {object} user - 当前登录用户（session 用户对象）
  * @returns {boolean} 是否拥有数据级操作权限
  */
-export function checkDataPermission(item, user) {
+function checkDataPermission(item, user) {
   if (!item || !user) return false;
 
   // 创建者本人
@@ -37,3 +37,5 @@ export function checkDataPermission(item, user) {
     userPermissions.includes('posecraft:work:delete_any')
   );
 }
+
+export { checkDataPermission };

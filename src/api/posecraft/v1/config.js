@@ -8,7 +8,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import channelDao from '../../../app/posecraft/dao/channel.dao.js';
 
-export default async function (fastify) {
+async function registerConfigRoutes(fastify) {
   registerGroupMetadata({
     name: 'config',
     description: 'PoseCraft 配置管理',
@@ -37,3 +37,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerConfigRoutes;

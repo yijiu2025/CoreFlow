@@ -6,8 +6,10 @@
  * @author yijiu2025
  * @since 2026-07-22
  */
-export default {
+const guardConfig = {
   app_id: 'guard',
   name: '守卫配置',
   description: '三级守卫系统配置的注册与持久化'
 };
+
+export default guardConfig;

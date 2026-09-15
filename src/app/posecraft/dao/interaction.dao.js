@@ -389,4 +389,6 @@ class InteractionDao {
   }
 }
 
-export default new InteractionDao();
+const interactionDao = new InteractionDao();
+
+export default interactionDao;

@@ -77,6 +77,36 @@ export default [
     }
   },
 
+  // 5.2 导出位置约定：所有 export 一律收拢到文件末尾，定义处不写 export 关键字。
+  //     正确：function foo() {}  ...  export { foo };  /  export default foo;
+  //     禁止：export function foo() {}  /  export default () => {}  /  export const x = 1
+  //     理由见 docs/development-standards.md「导出位置」：定义与导出分离，导出面一眼可见，
+  //     避免导出散落各处导致模块契约难以审计。
+  {
+    files: ['src/**/*.js'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ExportNamedDeclaration > FunctionDeclaration',
+          message: '导出须放在文件末尾：去掉定义处的 `export`，改为在文件末尾统一 `export { name };`'
+        },
+        {
+          selector: 'ExportNamedDeclaration > ClassDeclaration',
+          message: '导出须放在文件末尾：去掉定义处的 `export`，改为在文件末尾统一 `export { Name };`'
+        },
+        {
+          selector: 'ExportNamedDeclaration > VariableDeclaration',
+          message: '导出须放在文件末尾：去掉定义处的 `export`，改为在文件末尾统一 `export { name };`'
+        },
+        {
+          selector: 'ExportDefaultDeclaration:not(:has(> Identifier))',
+          message: '默认导出须放在文件末尾：先把值命名（`const x = ...`）或把函数具名化，再在末尾 `export default x;`'
+        }
+      ]
+    }
+  },
+
   // 6. 浏览器环境共享包：packages 下实现为纯 JS（供 Jest 直接测试），
   //    运行在浏览器（window/document/localStorage/crypto 等），声明 browser globals
   {

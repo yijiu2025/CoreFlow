@@ -18,7 +18,7 @@ import ClientDao from '../../../../app/oauth21/dao/client.dao.js';
 /**
  * 注册扫码登录路由
  */
-export default function registerQrRoutes(fastify, qrStore) {
+function registerQrRoutes(fastify, qrStore) {
   // GET /qr/generate — 生成登录二维码
   // scope 从 client_id 查（不信任前端 scope），client_id/scope/oidcNonce 存二维码防调包
   // requireSignature：公开端点加 H5 签名校验防爬/防滥用
@@ -112,3 +112,5 @@ export default function registerQrRoutes(fastify, qrStore) {
     }
   });
 }
+
+export default registerQrRoutes;

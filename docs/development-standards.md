@@ -105,7 +105,9 @@
  * @param {string} plain - 明文手机号，如 '13812345678'
  * @returns {string} 加密字符串，格式: base64(IV):base64(ciphertext)
  */
-export function encryptPhone(plain) { ... }
+function encryptPhone(plain) { ... }
+
+export { encryptPhone };
 ```
 
 ```ts
@@ -116,3 +118,34 @@ export function encryptPhone(plain) { ... }
  */
 const handleLike = async (item: any) => { ... }
 ```
+
+---
+
+## 导出位置
+
+**所有 `export` 一律收拢到文件末尾**，定义处不写 `export` 关键字。完整约定（含违约示例与默认导出改法对照表）见 [AGENTS.md](../AGENTS.md) 的「导出位置」一节，这里只给速查：
+
+```js
+// ✅ 正确
+function processOrder(order) { ... }
+const MAX_RETRY = 3;
+
+export { processOrder, MAX_RETRY };
+export default orderService;
+```
+
+```js
+// ❌ 禁止
+export function processOrder(order) { ... }
+export const MAX_RETRY = 3;
+export default new OrderService();
+```
+
+强制手段：
+
+| 手段                     | 位置                                                 | 作用                                          |
+| ------------------------ | ---------------------------------------------------- | --------------------------------------------- |
+| ESLint `no-restricted-syntax` | `eslint.config.js`（`files: src/**/*.js`）      | 拦截新写入的行内导出（编辑期即时报错）        |
+| 契约测试                 | `src/__tests__/conventions/export-placement.test.js` | 跨文件扫描全仓一致性（含 re-export 位置）     |
+
+改写方式：这条规则**没有 `eslint --fix` 自动修复**（需要 AST 精确定位 + 保证导出面不变），小范围按上表手工改即可。

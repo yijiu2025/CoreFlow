@@ -15,7 +15,7 @@ import { getActiveBlocks, getActiveWhitelist } from '../dao/block-manager.js';
  * @param {object} redis - Fastify redis 实例（查封禁/白名单）
  * @returns {Promise<object>} 指标视图（requests/blocks/whitelist/topRegions/topPaths）
  */
-export async function getMetricsView(redis) {
+async function getMetricsView(redis) {
   const summary = getSummary();
   const blocks = await getActiveBlocks(redis);
   const whitelist = await getActiveWhitelist(redis);
@@ -40,3 +40,5 @@ export async function getMetricsView(redis) {
     topPaths: (summary.topPaths || []).slice(0, 5)
   };
 }
+
+export { getMetricsView };

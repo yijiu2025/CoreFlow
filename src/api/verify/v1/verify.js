@@ -11,7 +11,7 @@ import { clientContext, sessionIdFromRequest } from '../../../framework/verify/c
 import { getStore } from '../../../framework/redis/index.js';
 import { generateCaptchaSchema, verifyCaptchaSchema } from './schemas/verify.js';
 
-export default async function (fastify, opts) {
+async function registerVerifyRoutes(fastify, opts) {
   const captchaStore = getStore('captcha');
   const emailCodeStore = getStore('email_code');
 
@@ -130,3 +130,5 @@ export default async function (fastify, opts) {
     }
   });
 }
+
+export default registerVerifyRoutes;

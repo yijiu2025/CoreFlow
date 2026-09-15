@@ -55,7 +55,7 @@ function loadConfig() {
  * 启动调度器：扫描 tasks/ 目录，按 config 启用并启动每个任务
  * @param {object} app Fastify 实例
  */
-export async function startScheduler(app) {
+async function startScheduler(app) {
   const config = loadConfig();
   if (!config.enabled) {
     log.info(`ℹ️ [Scheduler] ${C.cyan}调度器已禁用（config.enabled=false）${C.reset}`);
@@ -112,3 +112,5 @@ export async function startScheduler(app) {
     log.info(`🛑 [Scheduler] ${C.cyan}所有定时任务已停止${C.reset}`);
   });
 }
+
+export { startScheduler };

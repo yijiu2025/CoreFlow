@@ -11,7 +11,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { verifyChallenge } from '../../../app/firewall/services/challenge.service.js';
 
-export default async function (fastify) {
+async function registerChallengeRoutes(fastify) {
   registerGroupMetadata({
     name: 'challenge',
     alias: '人机验证模块',
@@ -40,3 +40,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerChallengeRoutes;

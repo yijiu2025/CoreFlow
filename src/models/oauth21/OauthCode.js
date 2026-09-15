@@ -7,7 +7,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const defineOauthCode = (sequelize, DataTypes) => {
   const OauthCode = sequelize.define(
     'OauthCode',
     {
@@ -101,3 +101,5 @@ export default (sequelize, DataTypes) => {
 
   return OauthCode;
 };
+
+export default defineOauthCode;

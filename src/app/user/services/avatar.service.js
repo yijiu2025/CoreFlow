@@ -21,7 +21,7 @@ const OUTPUT_SIZE = 256;
 /**
  * 头像上传错误（带 statusCode，供路由层转 HTTP 响应）
  */
-export class AvatarError extends Error {
+class AvatarError extends Error {
   constructor(statusCode, message) {
     super(message);
     this.statusCode = statusCode;
@@ -38,7 +38,7 @@ export class AvatarError extends Error {
  * @param {number} internalUserId - 用户内部 id（用于 DB 更新）
  * @returns {Promise<{avatar: string}>} 新头像 URL
  */
-export async function processAndUploadAvatar(mimetype, buffer, userId, internalUserId) {
+async function processAndUploadAvatar(mimetype, buffer, userId, internalUserId) {
   // 1. 校验类型
   if (!ALLOWED_TYPES.includes(mimetype)) {
     throw new AvatarError(400, '仅支持 JPG、PNG、WebP、GIF 格式');
@@ -74,3 +74,5 @@ export async function processAndUploadAvatar(mimetype, buffer, userId, internalU
 
   return { avatar: avatarUrl };
 }
+
+export { AvatarError, processAndUploadAvatar };

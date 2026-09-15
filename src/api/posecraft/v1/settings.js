@@ -13,7 +13,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import settingsDao from '../../../app/posecraft/dao/settings.dao.js';
 
-export default async function (fastify) {
+async function registerSettingsRoutes(fastify) {
   registerGroupMetadata({
     name: 'settings',
     description: 'PoseCraft 用户个性设置（UI 偏好）',
@@ -87,3 +87,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerSettingsRoutes;

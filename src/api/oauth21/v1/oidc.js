@@ -13,7 +13,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import config from '../../../app/oauth21/config/config.js';
 import { getJWKS } from '../../../framework/keys/index.js';
 
-export default async function (fastify) {
+async function registerOidcRoutes(fastify) {
   registerGroupMetadata({
     name: 'oidc',
     description: 'OpenID Connect 发现文档与 JWKS 公钥',
@@ -98,3 +98,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerOidcRoutes;

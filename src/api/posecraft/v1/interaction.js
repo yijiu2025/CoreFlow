@@ -8,7 +8,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import interactionDao from '../../../app/posecraft/dao/interaction.dao.js';
 
-export default async function (fastify) {
+async function registerInteractionRoutes(fastify) {
   registerGroupMetadata({
     name: 'interaction',
     description: '用户互动管理 (点赞、收藏、足迹记录)',
@@ -164,3 +164,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerInteractionRoutes;

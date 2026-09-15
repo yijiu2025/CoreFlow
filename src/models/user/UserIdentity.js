@@ -18,7 +18,7 @@ import { registerDeleteVersionHooks } from '../../framework/db/softDeleteHooks.j
 /**
  * 工业级用户安全凭证模型 (多源认证中心)
  */
-export default (sequelize, DataTypes) => {
+const defineUserIdentity = (sequelize, DataTypes) => {
   const UserIdentity = sequelize.define(
     'UserIdentity',
     {
@@ -107,3 +107,5 @@ export default (sequelize, DataTypes) => {
 
   return UserIdentity;
 };
+
+export default defineUserIdentity;

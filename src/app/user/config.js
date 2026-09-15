@@ -7,8 +7,10 @@
  * @author Claude
  * @since 2026-07-13
  */
-export default {
+const userConfig = {
   app_id: 'user',
   name: '用户中心',
   description: '用户注册、登录、信息管理'
 };
+
+export default userConfig;

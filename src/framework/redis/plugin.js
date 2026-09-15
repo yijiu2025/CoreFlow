@@ -223,7 +223,7 @@ async function drainAndClose(client, label = '') {
   }
 }
 
-export default fp(
+const redisPlugin = fp(
   async app => {
     const enabled = process.env.REDIS_ENABLED === 'true';
 
@@ -406,3 +406,4 @@ export default fp(
 );
 
 export { globalRedis, redisHealthy, backupRedis, backupRedisHealthy };
+export default redisPlugin;

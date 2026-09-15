@@ -10,7 +10,7 @@
  * @author yijiu2025
  * @since 2026-08-23
  */
-export default (sequelize, DataTypes) => {
+const defineUserDeactivation = (sequelize, DataTypes) => {
   const UserDeactivation = sequelize.define(
     'UserDeactivation',
     {
@@ -96,3 +96,5 @@ export default (sequelize, DataTypes) => {
 
   return UserDeactivation;
 };
+
+export default defineUserDeactivation;

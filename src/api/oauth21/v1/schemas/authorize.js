@@ -6,7 +6,7 @@
  */
 
 /** POST /authorize/login — 授权页登录 */
-export const authorizeLoginSchema = {
+const authorizeLoginSchema = {
   body: {
     type: 'object',
     required: ['sessionId', 'username', 'password'],
@@ -20,7 +20,7 @@ export const authorizeLoginSchema = {
 };
 
 /** POST /authorize/consent — 用户授权确认 */
-export const authorizeConsentSchema = {
+const authorizeConsentSchema = {
   body: {
     type: 'object',
     required: ['sessionId', 'action'],
@@ -32,3 +32,5 @@ export const authorizeConsentSchema = {
     additionalProperties: false
   }
 };
+
+export { authorizeLoginSchema, authorizeConsentSchema };

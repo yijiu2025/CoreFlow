@@ -28,7 +28,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * @returns {Promise<{total: number, failed: number, loadErrors: Array<{file: string, message: string}>}>} 加载摘要
  * @throws {Error} 注册表目录不存在时抛出；关键加载错误（如路由重复注册）时抛出
  */
-export async function runEngine(app) {
+async function runEngine(app) {
   const registryDir = path.resolve(__dirname, './registry');
 
   // 检查注册表目录是否存在，提供清晰的错误信息
@@ -89,3 +89,5 @@ export async function runEngine(app) {
     loadErrors
   };
 }
+
+export { runEngine };

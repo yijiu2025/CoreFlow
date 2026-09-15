@@ -211,15 +211,6 @@ async function generateSkeletonPreview(poseData) {
   }
 }
 
-export {
-  generateSvgFromFabric,
-  extractFabricData,
-  generateImageThumbnail,
-  generateSkeletonPreview,
-  composeTemplatePreview,
-  composeWorkPreview
-};
-
 /**
  * 后端实时合成模板预览图（透明背景 + 骨骼 SVG 合成），返回 PNG Buffer
  *
@@ -298,3 +289,12 @@ async function composeWorkPreview(work) {
     .png()
     .toBuffer();
 }
+
+export {
+  generateSvgFromFabric,
+  extractFabricData,
+  generateImageThumbnail,
+  generateSkeletonPreview,
+  composeTemplatePreview,
+  composeWorkPreview
+};

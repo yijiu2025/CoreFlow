@@ -8,7 +8,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import AnalysisDao from '../../../app/posecraft/dao/analysis.dao.js';
 
-export default async function (fastify) {
+async function registerAnalysisRoutes(fastify) {
   registerGroupMetadata({
     name: 'analysis',
     description: 'AI 分析',
@@ -83,3 +83,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerAnalysisRoutes;

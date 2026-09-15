@@ -46,7 +46,7 @@ async function auditReset({ email, ip, userAgent, success, reason }) {
   });
 }
 
-export default async function (fastify) {
+async function registerOpenRoutes(fastify) {
   const emailCodeStore = getStore('email_code');
 
   registerGroupMetadata({
@@ -328,3 +328,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerOpenRoutes;

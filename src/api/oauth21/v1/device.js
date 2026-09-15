@@ -17,7 +17,7 @@ import { DeviceService } from '../../../app/oauth21/services/device.service.js';
 
 const deviceService = new DeviceService();
 
-export default async function (fastify) {
+async function registerDeviceRoutes(fastify) {
   registerGroupMetadata({
     name: 'device',
     description: '设备授权流程（RFC 8628）',
@@ -132,3 +132,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerDeviceRoutes;

@@ -16,7 +16,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { getDeviceAccountSummary } from '../../../../app/admin/services/device-account.service.js';
 
-export default async function (fastify) {
+async function registerDeviceAccountsRoutes(fastify) {
   registerGroupMetadata({
     name: 'deviceAccountsAdmin',
     alias: '设备账户关联查询',
@@ -62,3 +62,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerDeviceAccountsRoutes;

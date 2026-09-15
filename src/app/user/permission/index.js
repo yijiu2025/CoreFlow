@@ -13,7 +13,7 @@ import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
  * 用户应用域 (User Domain) 权限字典常量
  * 使用工厂函数自动合并元数据注册与常量导出，遵循 DRY 原则。
  */
-export const USER_PERMISSIONS = createPermissionRegistry('user', '用户模块', {
+const USER_PERMISSIONS = createPermissionRegistry('user', '用户模块', {
   // 基础操作 (所有登录用户都应有)
   BASE: {
     READ: { code: 'user:base:read', label: '查看基础资料', type: 'read' },
@@ -37,4 +37,5 @@ export const USER_PERMISSIONS = createPermissionRegistry('user', '用户模块',
   }
 });
 
+export { USER_PERMISSIONS };
 export default USER_PERMISSIONS;

@@ -19,7 +19,7 @@ import { COOKIE_POLICY } from '../../../framework/auth/cookie.js';
  * @param {object} params.user - 用户信息 { id, username, name, email, avatar }
  * @param {object} fastify - Fastify 实例（用于 H5 token）
  */
-export async function setAuthCookies(reply, { accessToken, refreshToken, user }, fastify) {
+async function setAuthCookies(reply, { accessToken, refreshToken, user }, fastify) {
   // Access Token Cookie
   reply.setCookie('access_token', accessToken, {
     httpOnly: true,
@@ -69,7 +69,7 @@ export async function setAuthCookies(reply, { accessToken, refreshToken, user },
  * 清除所有认证 Cookie
  * @param {object} reply - Fastify reply 对象
  */
-export function clearAuthCookies(reply) {
+function clearAuthCookies(reply) {
   reply.clearCookie('access_token', { path: '/' });
   reply.clearCookie('refresh_token', { path: '/oauth2.1/token' });
   reply.clearCookie('tracknick', { path: '/' });
@@ -83,7 +83,7 @@ export function clearAuthCookies(reply) {
  * @param {string} message - 成功消息
  * @returns {object} 标准响应体
  */
-export function buildTokenResponse(result, message = '登录成功') {
+function buildTokenResponse(result, message = '登录成功') {
   return {
     code: 200,
     message,
@@ -101,3 +101,5 @@ export function buildTokenResponse(result, message = '登录成功') {
     }
   };
 }
+
+export { setAuthCookies, clearAuthCookies, buildTokenResponse };

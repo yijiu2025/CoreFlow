@@ -15,7 +15,7 @@ const log = createLogger('framework.loader.monitor');
 
 const SLOW_THRESHOLD = parseInt(process.env.SLOW_REQUEST_THRESHOLD || '2000', 10) || 2000;
 
-export default async app => {
+const monitorLoader = async app => {
   // 记录请求开始时间（使用高精度计时器）
   app.addHook('onRequest', async request => {
     request.startTime = performance.now();
@@ -40,3 +40,5 @@ export default async app => {
     }
   });
 };
+
+export default monitorLoader;

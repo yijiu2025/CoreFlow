@@ -5,7 +5,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default {
+const verifyConfig = {
   // 图形验证码
   captcha: {
     size: parseInt(process.env.CAPTCHA_SIZE || '4'),
@@ -85,3 +85,5 @@ export default {
     mode: process.env.PASSWORD_RESET_MODE || 'code' // 'code' | 'link'
   }
 };
+
+export default verifyConfig;

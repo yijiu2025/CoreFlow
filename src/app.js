@@ -155,7 +155,7 @@ function createErrorHandler(isProduction) {
  * @returns {Promise<import('fastify').FastifyInstance>} 配置完成的 Fastify 实例
  * @throws {Error} 密钥校验失败时退出进程，插件注册失败时抛出
  */
-export async function createApp() {
+async function createApp() {
   const isProduction = process.env.NODE_ENV === 'production';
 
   // 生产环境必须配置强密钥，防止使用默认值误部署到公网
@@ -320,3 +320,5 @@ export async function createApp() {
 
   return app;
 }
+
+export { createApp };

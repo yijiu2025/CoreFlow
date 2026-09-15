@@ -5,8 +5,10 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default {
+const noticeConfig = {
   app_id: 'notice',
   name: '通知中心',
   description: '统一通知服务中心，负责邮件、钉钉、微信等多种通道的配置与下发'
 };
+
+export default noticeConfig;

@@ -5,8 +5,10 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default {
+const adminConfig = {
   app_id: 'admin',
   name: '管理后台',
   description: 'IAM 权限管理、角色分配、用户管理'
 };
+
+export default adminConfig;

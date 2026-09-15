@@ -11,7 +11,7 @@ import { USER_PERMISSIONS } from './index.js';
 /**
  * 自动加载用户模块的基础角色配置 (Upsert)
  */
-export async function seedUserRoles() {
+async function seedUserRoles() {
   const Role = getModel('Role');
 
   // 如果数据库还没准备好（例如还没执行 initSuperAdmin），跳过
@@ -88,3 +88,5 @@ export async function seedUserRoles() {
     Logger.error('❌ [PBAC] 角色数据同步失败:', error);
   }
 }
+
+export { seedUserRoles };

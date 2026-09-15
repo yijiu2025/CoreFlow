@@ -18,7 +18,7 @@ import followDao from '../dao/follow.dao.js';
  * @returns {Promise<number|null>} 数据库整型用户 ID；纯数字直接返回，无效值返回 null
  * @throws {Error} 非数字且数据库查不到时抛出 USER_NOT_FOUND
  */
-export async function resolveInternalUserId(idOrUid) {
+async function resolveInternalUserId(idOrUid) {
   if (!idOrUid) return null;
   // 纯数字直接返回
   if (!isNaN(Number(idOrUid))) {
@@ -41,7 +41,7 @@ export async function resolveInternalUserId(idOrUid) {
  * @param {number} userId - 数据库整型用户 ID
  * @returns {Promise<object>} 完整统计数据对象
  */
-export async function getProfileStats(userId) {
+async function getProfileStats(userId) {
   const [followStats, mutual, workStats, templatesCount, collectsCount, recommendationsCount] = await Promise.all([
     followDao.getFollowStatsCount(userId),
     followDao.getMutualCount(userId),
@@ -62,3 +62,5 @@ export async function getProfileStats(userId) {
     recommendations_count: recommendationsCount
   };
 }
+
+export { resolveInternalUserId, getProfileStats };

@@ -14,7 +14,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} UserSettings 模型
  */
-export default (sequelize, DataTypes) => {
+const defineUserSettings = (sequelize, DataTypes) => {
   const UserSettings = sequelize.define(
     'UserSettings',
     {
@@ -56,3 +56,5 @@ export default (sequelize, DataTypes) => {
 
   return UserSettings;
 };
+
+export default defineUserSettings;

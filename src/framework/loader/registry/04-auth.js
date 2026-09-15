@@ -13,7 +13,9 @@ import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.loader.registry.04-auth');
 
-export default async app => {
+const authLoader = async app => {
   await app.register(initAuth);
   log.always(`✅ [Auth] ${C.green}认证系统初始化完成${C.reset}`);
 };
+
+export default authLoader;

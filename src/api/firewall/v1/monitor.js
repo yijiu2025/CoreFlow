@@ -42,7 +42,7 @@ import {
   removeFpWhitelist
 } from '../../../app/firewall/services/monitor.service.js';
 
-export default async function (fastify) {
+async function registerMonitorRoutes(fastify) {
   registerGroupMetadata({
     name: 'firewall-monitor',
     alias: '防火墙中控面板',
@@ -288,3 +288,5 @@ export default async function (fastify) {
     handler: (connection, req, client) => registerMonitorClient(client)
   });
 }
+
+export default registerMonitorRoutes;

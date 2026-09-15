@@ -21,7 +21,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { getModel } from '../../../../framework/db/index.js';
 import { kickByDeviceId } from '../../../../framework/auth/session.js';
 
-export default async function (fastify) {
+async function registerSessionsRoutes(fastify) {
   registerGroupMetadata({
     name: 'userSessionsAdmin',
     alias: '用户会话管理',
@@ -110,3 +110,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerSessionsRoutes;

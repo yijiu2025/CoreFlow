@@ -6,7 +6,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 
-export default async function (fastify) {
+async function registerHealthRoutes(fastify) {
   registerGroupMetadata({
     name: 'system',
     description: '系统端点',
@@ -32,3 +32,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerHealthRoutes;

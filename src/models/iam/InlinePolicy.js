@@ -4,7 +4,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const defineInlinePolicy = (sequelize, DataTypes) => {
   const InlinePolicy = sequelize.define(
     'InlinePolicy',
     {
@@ -49,3 +49,5 @@ export default (sequelize, DataTypes) => {
 
   return InlinePolicy;
 };
+
+export default defineInlinePolicy;

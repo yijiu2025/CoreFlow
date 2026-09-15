@@ -13,7 +13,7 @@ import crypto from 'crypto';
  * @param {import('fastify').FastifyRequest} request
  * @returns {string} 16 位十六进制指纹
  */
-export function generateFingerprint(request) {
+function generateFingerprint(request) {
   const ip = request.ip || '';
   const ua = request.headers['user-agent'] || '';
   const lang = request.headers['accept-language'] || '';
@@ -22,3 +22,5 @@ export function generateFingerprint(request) {
   const raw = `${ip}|${ua}|${lang}|${enc}`;
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16);
 }
+
+export { generateFingerprint };

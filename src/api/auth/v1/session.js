@@ -22,7 +22,7 @@ import {
 } from '../../../framework/auth/session-api.service.js';
 import { isAllowedOrigin } from '../../../framework/auth/origin-guard.js';
 
-export default async function (fastify) {
+async function registerSessionRoutes(fastify) {
   registerGroupMetadata({
     name: 'session',
     alias: '会话管理',
@@ -154,3 +154,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerSessionRoutes;

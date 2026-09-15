@@ -172,4 +172,6 @@ class RecommendationDao {
   }
 }
 
-export default new RecommendationDao();
+const recommendationDao = new RecommendationDao();
+
+export default recommendationDao;

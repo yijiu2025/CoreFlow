@@ -29,7 +29,7 @@ function generateToken() {
  * @param {object} opts - 选项
  * @param {string[]} opts.exclude - 排除的路径前缀（如公开接口）
  */
-export function registerCsrfProtection(fastify, opts = {}) {
+function registerCsrfProtection(fastify, opts = {}) {
   const exclude = opts.exclude || [];
 
   fastify.addHook('onRequest', async (request, reply) => {
@@ -67,3 +67,5 @@ export function registerCsrfProtection(fastify, opts = {}) {
     }
   });
 }
+
+export { registerCsrfProtection };

@@ -67,4 +67,6 @@ class VoiceDao {
   }
 }
 
-export default new VoiceDao();
+const voiceDao = new VoiceDao();
+
+export default voiceDao;

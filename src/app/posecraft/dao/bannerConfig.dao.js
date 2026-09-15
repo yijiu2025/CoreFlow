@@ -103,4 +103,6 @@ class BannerConfigDao {
   }
 }
 
-export default new BannerConfigDao();
+const bannerConfigDao = new BannerConfigDao();
+
+export default bannerConfigDao;

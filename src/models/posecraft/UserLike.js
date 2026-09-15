@@ -9,7 +9,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} UserLike 模型
  */
-export default (sequelize, DataTypes) => {
+const defineUserLike = (sequelize, DataTypes) => {
   const UserLike = sequelize.define(
     'UserLike',
     {
@@ -74,3 +74,5 @@ export default (sequelize, DataTypes) => {
 
   return UserLike;
 };
+
+export default defineUserLike;

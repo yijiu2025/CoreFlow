@@ -16,7 +16,7 @@ const log = createLogger('framework.loader.registry.03-db');
 /** 数据库连接超时（毫秒） */
 const DB_CONNECT_TIMEOUT = 30_000;
 
-export default async app => {
+const dbLoader = async app => {
   const { DB_HOST, DB_PORT, DB_NAME } = process.env;
   log.always(`📦 [Loader: DB] ${C.cyan}正在连接数据库: ${DB_HOST}:${DB_PORT}/${DB_NAME}...${C.reset}`);
 
@@ -47,3 +47,5 @@ export default async app => {
     app.decorate('db', null);
   }
 };
+
+export default dbLoader;

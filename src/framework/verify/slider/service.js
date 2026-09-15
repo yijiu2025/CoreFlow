@@ -122,4 +122,6 @@ class SliderService {
   }
 }
 
-export default new SliderService();
+const sliderService = new SliderService();
+
+export default sliderService;

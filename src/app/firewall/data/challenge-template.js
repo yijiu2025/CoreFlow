@@ -18,7 +18,7 @@ import { CHALLENGE_SECRET } from '../config/config.js';
  * @param {string} [fingerprint] 可选的设备指纹（指纹优先签名）
  * @returns {string} HTML 字符串
  */
-export function buildChallengePage(ip, fingerprint) {
+function buildChallengePage(ip, fingerprint) {
   const nonce = crypto.randomBytes(16).toString('hex');
   const timestamp = Date.now();
   // 指纹优先签名：指纹存在时用指纹签名，否则用 IP
@@ -92,3 +92,5 @@ export function buildChallengePage(ip, fingerprint) {
     </html>
   `;
 }
+
+export { buildChallengePage };

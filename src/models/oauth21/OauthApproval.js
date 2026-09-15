@@ -7,7 +7,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const defineOauthApproval = (sequelize, DataTypes) => {
   const OauthApproval = sequelize.define(
     'OauthApproval',
     {
@@ -80,3 +80,5 @@ export default (sequelize, DataTypes) => {
 
   return OauthApproval;
 };
+
+export default defineOauthApproval;

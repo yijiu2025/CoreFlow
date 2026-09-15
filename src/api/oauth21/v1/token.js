@@ -15,7 +15,7 @@ import { tokenSchema, revokeSchema } from './schemas/token.js';
 
 const tokenService = new TokenService();
 
-export default async function (fastify) {
+async function registerTokenRoutes(fastify) {
   registerGroupMetadata({
     name: 'token',
     description: '令牌签发与撤销',
@@ -47,3 +47,5 @@ export default async function (fastify) {
     handler: (request, reply) => tokenService.handleRevoke(request, reply)
   });
 }
+
+export default registerTokenRoutes;

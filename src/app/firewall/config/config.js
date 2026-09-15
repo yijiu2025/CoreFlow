@@ -15,9 +15,9 @@ const log = createLogger('app.firewall.config.config');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const FIREWALL_FILE = path.resolve(__dirname, '../../../data/firewall_config.json');
+const FIREWALL_FILE = path.resolve(__dirname, '../../../data/firewall_config.json');
 
-export const CHALLENGE_SECRET = process.env.FIREWALL_SECRET;
+const CHALLENGE_SECRET = process.env.FIREWALL_SECRET;
 
 if (!CHALLENGE_SECRET) {
   log.error('[Firewall] FIREWALL_SECRET 环境变量未设置');
@@ -27,7 +27,7 @@ if (!CHALLENGE_SECRET) {
   }
 }
 
-export const DEFAULT_SERVER_NODE = {
+const DEFAULT_SERVER_NODE = {
   name: '核心防御节点',
   country: '中国',
   region: '河南',
@@ -77,7 +77,7 @@ const COUNTRY_MAP = {
   AR: '阿根廷'
 };
 
-export const DEFAULT_IP_APIS = [
+const DEFAULT_IP_APIS = [
   {
     id: 'ipinfo',
     name: 'ipinfo.io',
@@ -155,13 +155,13 @@ export const DEFAULT_IP_APIS = [
   }
 ];
 
-export const DEFAULT_IP_API = DEFAULT_IP_APIS.find(api => api.id === 'sohu');
+const DEFAULT_IP_API = DEFAULT_IP_APIS.find(api => api.id === 'sohu');
 
 /**
  * 默认安全策略矩阵
  * 阈值参数支持环境变量覆盖，格式: FW_<大写参数名>
  */
-export const DEFAULT_SECURITY_SETTINGS = {
+const DEFAULT_SECURITY_SETTINGS = {
   activeIpApi: process.env.FW_ACTIVE_IP_API || 'sohu',
   showTrajectory: true,
 
@@ -266,4 +266,13 @@ export const DEFAULT_SECURITY_SETTINGS = {
     botChallengeBotLimit: parseInt(process.env.FW_BOT_LIMIT || '30'),
     botChallengeBrowserLimit: parseInt(process.env.FW_BROWSER_LIMIT || '120')
   }
+};
+
+export {
+  FIREWALL_FILE,
+  CHALLENGE_SECRET,
+  DEFAULT_SERVER_NODE,
+  DEFAULT_IP_APIS,
+  DEFAULT_IP_API,
+  DEFAULT_SECURITY_SETTINGS
 };

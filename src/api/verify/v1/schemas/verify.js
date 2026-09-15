@@ -17,7 +17,7 @@ const commonResponse = {
 };
 
 /** 生成验证码 Schema */
-export const generateCaptchaSchema = {
+const generateCaptchaSchema = {
   summary: '生成图形验证码',
   description: '生成 Base64 格式的验证码图片并返回标识符',
   querystring: {
@@ -45,7 +45,7 @@ export const generateCaptchaSchema = {
 };
 
 /** 验证验证码 Schema */
-export const verifyCaptchaSchema = {
+const verifyCaptchaSchema = {
   summary: '校验图形验证码',
   description: '校验用户输入的验证码是否正确，并可选发送邮箱验证码',
   body: {
@@ -83,3 +83,5 @@ export const verifyCaptchaSchema = {
     400: commonResponse
   }
 };
+
+export { generateCaptchaSchema, verifyCaptchaSchema };

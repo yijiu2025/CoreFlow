@@ -9,7 +9,7 @@ import { registerDeleteVersionHooks } from '../../framework/db/softDeleteHooks.j
 /**
  * 企业级 用户与角色关联表 (授权心脏表)
  */
-export default (sequelize, DataTypes) => {
+const defineUserRole = (sequelize, DataTypes) => {
   const UserRole = sequelize.define(
     'UserRole',
     {
@@ -104,3 +104,5 @@ export default (sequelize, DataTypes) => {
 
   return UserRole;
 };
+
+export default defineUserRole;

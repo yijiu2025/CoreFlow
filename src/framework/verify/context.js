@@ -14,7 +14,7 @@
  * @param {object} [extra] - 额外字段（如 { sessionId: captchaKey }）
  * @returns {{ip:string, ua:string, deviceFp:string, sessionId?:string}}
  */
-export function clientContext(request, extra = {}) {
+function clientContext(request, extra = {}) {
   return {
     ip: request?.ip || '',
     ua: request?.headers?.['user-agent'] || '',
@@ -28,6 +28,8 @@ export function clientContext(request, extra = {}) {
  * @param {object} request - Fastify request
  * @returns {string} captchaKey（可能为 undefined）
  */
-export function sessionIdFromRequest(request) {
+function sessionIdFromRequest(request) {
   return request?.body?.captchaKey || request?.body?.sessionId || '';
 }
+
+export { clientContext, sessionIdFromRequest };

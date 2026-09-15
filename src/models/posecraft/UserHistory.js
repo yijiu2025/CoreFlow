@@ -9,7 +9,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} UserHistory 模型
  */
-export default (sequelize, DataTypes) => {
+const defineUserHistory = (sequelize, DataTypes) => {
   const UserHistory = sequelize.define(
     'UserHistory',
     {
@@ -63,3 +63,5 @@ export default (sequelize, DataTypes) => {
 
   return UserHistory;
 };
+
+export default defineUserHistory;

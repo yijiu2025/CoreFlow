@@ -205,4 +205,6 @@ class NoticeDao {
   }
 }
 
-export default new NoticeDao();
+const noticeDao = new NoticeDao();
+
+export default noticeDao;

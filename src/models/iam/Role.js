@@ -9,7 +9,7 @@ import { registerDeleteVersionHooks } from '../../framework/db/softDeleteHooks.j
 /**
  * 工业级角色定义表 (PBAC 架构)
  */
-export default (sequelize, DataTypes) => {
+const defineRole = (sequelize, DataTypes) => {
   const Role = sequelize.define(
     'Role',
     {
@@ -103,3 +103,5 @@ export default (sequelize, DataTypes) => {
 
   return Role;
 };
+
+export default defineRole;

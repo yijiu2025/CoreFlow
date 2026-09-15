@@ -41,7 +41,7 @@ function deviceFingerprint(request) {
  * @returns {Promise<{qrKey: string, expires_in: number, qrContent: string}>}
  *   qrContent 是二维码内容（扫码 URL），移动端扫描后解析
  */
-export async function generateQrCode(qrStore, ctx = {}) {
+async function generateQrCode(qrStore, ctx = {}) {
   const qrKey = uuidv4();
   const { clientId = '', scope = '', oidcNonce = '' } = ctx;
   await qrStore.set(
@@ -69,7 +69,7 @@ export async function generateQrCode(qrStore, ctx = {}) {
  * 记录移动端设备指纹，confirm 时校验同一设备（防 scan 和 confirm 不同移动端）
  * @returns {Promise<boolean>} 成功返回 true，二维码无效返回 false
  */
-export async function scanQrCode(qrStore, qrKey, request) {
+async function scanQrCode(qrStore, qrKey, request) {
   const data = await qrStore.get(qrKey);
 
   if (!data || data.status === 'CONFIRMED') {
@@ -96,7 +96,7 @@ export async function scanQrCode(qrStore, qrKey, request) {
  * @param {object} request - Fastify request（校验设备指纹）
  * @returns {Promise<boolean>} 成功返回 true，二维码无效/设备不符返回 false
  */
-export async function confirmQrCode(qrStore, qrKey, userId, request) {
+async function confirmQrCode(qrStore, qrKey, userId, request) {
   const data = await qrStore.get(qrKey);
   if (!data) {
     return false;
@@ -126,7 +126,7 @@ export async function confirmQrCode(qrStore, qrKey, userId, request) {
  * @param {object} fastify - Fastify 实例
  * @returns {Promise<object>} 状态响应或令牌响应
  */
-export async function getQrStatus(qrStore, { qrKey }, request, reply, fastify) {
+async function getQrStatus(qrStore, { qrKey }, request, reply, fastify) {
   const data = await qrStore.get(qrKey);
 
   if (!data) {
@@ -159,3 +159,5 @@ export async function getQrStatus(qrStore, { qrKey }, request, reply, fastify) {
 
   return { code: 200, message: 'ok', data: { status: data.status } };
 }
+
+export { generateQrCode, scanQrCode, confirmQrCode, getQrStatus };

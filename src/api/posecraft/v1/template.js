@@ -11,7 +11,7 @@ import { composeTemplatePreview, generateSkeletonPreview } from '../../../app/po
 import { checkDataPermission } from '../../../app/posecraft/services/permission.service.js';
 import { applyPoseDataVisibility } from '../../../app/posecraft/services/template-view.service.js';
 
-export default async function (fastify) {
+async function registerTemplateRoutes(fastify) {
   registerGroupMetadata({
     name: 'template',
     description: '模板管理',
@@ -344,3 +344,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerTemplateRoutes;

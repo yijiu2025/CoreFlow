@@ -12,7 +12,7 @@ import { registerSecureRoute } from '../../../guard.js';
 /**
  * 注册注册路由
  */
-export default function registerRegisterRoutes(fastify) {
+function registerRegisterRoutes(fastify) {
   // POST /mini-register — 快捷注册
   registerSecureRoute(fastify, {
     name: 'miniRegister',
@@ -29,3 +29,5 @@ export default function registerRegisterRoutes(fastify) {
     }
   });
 }
+
+export default registerRegisterRoutes;

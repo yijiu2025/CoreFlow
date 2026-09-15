@@ -29,4 +29,6 @@ class RecaptchaDao {
   }
 }
 
-export default new RecaptchaDao();
+const recaptchaDao = new RecaptchaDao();
+
+export default recaptchaDao;

@@ -113,4 +113,6 @@ class ChannelDao {
   }
 }
 
-export default new ChannelDao();
+const channelDao = new ChannelDao();
+
+export default channelDao;
