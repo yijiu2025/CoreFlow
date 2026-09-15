@@ -18,11 +18,23 @@ const { DB_TYPE, DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME } = process.env;
 // 启动时校验必要配置
 const required = { DB_HOST, DB_NAME, DB_USER };
 const missing = Object.entries(required).filter(([, v]) => !v);
-if (missing.length > 0) {
+
+// 测试环境不硬退出（生产 fail-fast 行为完全不变）。
+//
+// 本文件是**模块级副作用**：任何 import 到它的代码都会触发这段校验。jest 会加载整个
+// 模块图，而测试环境按设计不带 DB 环境变量 —— 于是每个 worker 在 100ms 后被
+// `process.exit(1)` 强杀，表现为：`--runInBand` 时整个进程中途死掉（拿不到任何汇总），
+// 并行时「用例总数每次都不一样」（跑到一半的 worker 连同它剩下的用例一起消失，
+// 而汇总里仍然是 0 失败 —— 一个会伪装的绿色）。同一条 import 链上的
+// `jest.spyOn` 桩也救不了它，因为退出发生在模块求值阶段。
+const isTestEnv = Boolean(process.env.JEST_WORKER_ID) || process.env.NODE_ENV === 'test';
+if (missing.length > 0 && !isTestEnv) {
   // always.error：不受 LOG_LEVEL 门控，防止误配 LOG_LEVEL=fatal 时静默退出无任何提示
   log.always.error(`❌ [DB] ${C.red}缺少必要环境变量: ${missing.map(([k]) => k).join(', ')}${C.reset}`);
   // 延迟退出，确保错误日志刷新
   setTimeout(() => process.exit(1), 100);
+} else if (missing.length > 0) {
+  log.warn(`⚠️ [DB] 测试环境缺少 DB 配置（${missing.map(([k]) => k).join(', ')}），不退出进程`);
 }
 
 const dsn = `${DB_TYPE || 'mysql'}://${DB_USER}:${encodeURIComponent(DB_PASS || '')}@${DB_HOST}:${DB_PORT || 3306}/${DB_NAME}`;
