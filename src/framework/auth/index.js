@@ -13,8 +13,8 @@
  * 认证优先级：Bearer Token > access_token Cookie > Session Cookie (sid) > Refresh Token (sid_r)
  *
  * 文件结构（自上而下）：
- * 1. 依赖导入
- * 2. 常量与 ALS 上下文（jwtEnabled / DEBUG_AUTH / requestContext）
+ * 1. 依赖导入（ALS 实例来自 ./request-context.js，本文件只导入 + 末尾 re-export）
+ * 2. 常量与 ALS 日志上下文注册（jwtEnabled / DEBUG_AUTH / setLogContextProvider）
  * 3. ALS 上下文访问器（getCtx / getDb / getServerResource）
  * 4. JWT 解析（getUserFromToken）
  * 5. 认证与风险检测内部函数（authenticateByJwt / detectAndHandleRisk / injectRiskOnSend）
@@ -26,13 +26,13 @@
  * @since 2026-09-10 结构重排：onRequest 主流程拆函数；getCtx 改 err.code；reply.send 标记 sent；catch 补 warn
  */
 import fp from 'fastify-plugin';
-import { AsyncLocalStorage } from 'async_hooks';
+import { requestContext } from './request-context.js';
 import { getSession, getSessionTokenDevice } from './session.js';
 import { COOKIE_SID, COOKIE_OPTIONS } from './cookie.js';
 import { verify } from '../jwt/index.js';
 import { findUserById } from '../../shared/user-dao.js';
 import { loadUserPermissions } from './permission-loader.js';
-import StpUtil from './StpUtil.js';
+import StpUtil from './stp-util.js';
 import { getDeviceId, computeDeviceFingerprint } from './device.js';
 import { detectSessionRisk, isHighRiskRequest } from './anomaly-detector.js';
 import { getStore } from '../redis/index.js';
@@ -45,12 +45,9 @@ const log = createLogger('framework.auth.index');
 /** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
 const jwtEnabled = process.env.JWT_ENABLED === 'true';
 
-/**
- * 全局 AsyncLocalStorage 实例
- * 用于在 HTTP 请求生命周期内传递 request 对象，实现静态上下文穿透
- * @type {AsyncLocalStorage}
- */
-const requestContext = new AsyncLocalStorage();
+// requestContext 实例定义在 request-context.js（零依赖），此处只导入并在末尾 re-export。
+// 曾在本文件直接 new AsyncLocalStorage()，导致 StpUtil.js 必须反向 import 本文件 →
+// 循环依赖 + 连带拉起整条插件链（AUDIT-REPORT-2026-09-12.md 🟡-1）。
 
 // ── 2.1 日志上下文注册（framework/log 不反向依赖 auth，避免循环） ──
 
@@ -443,5 +440,5 @@ const authPlugin = fp(async app => {
 
 // ── 7. 导出 ──
 
-export default authPlugin;
 export { requestContext, getCtx, getDb, getServerResource };
+export default authPlugin;

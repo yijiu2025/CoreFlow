@@ -6,7 +6,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeAll } from '@jest/globals';
 import crypto from 'crypto';
 
 describe('加密模块', () => {
@@ -79,26 +79,15 @@ describe('加密模块', () => {
   });
 
   describe('Cookie 签名', () => {
-    const SECRET = 'test-secret';
+    // 使用 `framework/auth/cookie.js` 的真身实现，不再内联副本。
+    // 副本曾与真身算法漂移（真身用 hex 摘要 + 字节长度守卫，副本用 base64url 且无
+    // 长度守卫），导致测试全绿却掩盖了真身的 timingSafeEqual 崩溃缺陷
+    // （AUDIT-REPORT-2026-09-12.md 🔴-1 / 🟡-5）。
+    let signCookie, verifyCookie;
 
-    function signCookie(sessionId, accessCount) {
-      const payload = `${sessionId}:${accessCount}`;
-      const encoded = Buffer.from(payload).toString('base64url');
-      const signature = crypto.createHmac('sha256', SECRET).update(encoded).digest('base64url');
-      return `${encoded}.${signature}`;
-    }
-
-    function verifyCookie(cookieValue) {
-      if (!cookieValue) return null;
-      const parts = cookieValue.split('.');
-      if (parts.length !== 2) return null;
-      const [encoded, signature] = parts;
-      const expectedSig = crypto.createHmac('sha256', SECRET).update(encoded).digest('base64url');
-      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) return null;
-      const decoded = Buffer.from(encoded, 'base64url').toString();
-      const [sessionId, countStr] = decoded.split(':');
-      return { sessionId, accessCount: parseInt(countStr, 10) };
-    }
+    beforeAll(async () => {
+      ({ signCookie, verifyCookie } = await import('../framework/auth/cookie.js'));
+    });
 
     it('签名和验证正常工作', () => {
       const sessionId = crypto.randomBytes(32).toString('hex');
@@ -124,6 +113,30 @@ describe('加密模块', () => {
     it('格式错误返回 null', () => {
       expect(verifyCookie('no-dot')).toBeNull();
       expect(verifyCookie('a.b.c')).toBeNull();
+    });
+
+    it('签名段为 64 个非 hex 字符时不抛异常，返回 null（🔴-1 回归）', () => {
+      const payload = Buffer.from('sid:0').toString('base64url');
+      const evil = payload + '.' + 'z'.repeat(64);
+      expect(() => verifyCookie(evil)).not.toThrow();
+      expect(verifyCookie(evil)).toBeNull();
+    });
+
+    it('各类畸形输入一律返回 null 且不抛（🔴-1 回归）', () => {
+      const payload = Buffer.from('sid:0').toString('base64url');
+      const malformed = [
+        payload + '.' + 'z'.repeat(64), // 全非 hex
+        payload + '.' + 'g'.repeat(64),
+        payload + '.' + 'a'.repeat(63) + 'z', // 混合
+        payload + '.', // 空签名
+        '@@@@.' + 'a'.repeat(64), // 非法 base64url payload
+        'x'.repeat(10000) + '.' + 'y'.repeat(64), // 超长
+        Buffer.from('nocolon').toString('base64url') + '.' + '0'.repeat(64)
+      ];
+      for (const value of malformed) {
+        expect(() => verifyCookie(value)).not.toThrow();
+        expect(verifyCookie(value)).toBeNull();
+      }
     });
   });
 

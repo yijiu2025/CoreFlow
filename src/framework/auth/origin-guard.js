@@ -35,7 +35,7 @@ if (IS_PRODUCTION && ALLOWED_ORIGINS.length === 0) {
  * @param {import('fastify').FastifyRequest} request - Fastify 请求
  * @returns {boolean} 是否允许
  */
-export function isAllowedOrigin(request) {
+function isAllowedOrigin(request) {
   const origin = request?.headers?.origin;
 
   if (origin) {
@@ -60,3 +60,5 @@ export function isAllowedOrigin(request) {
   // 既无 Origin 又无 Referer：非浏览器请求（如 curl），开发放行生产拒绝
   return !IS_PRODUCTION;
 }
+
+export { isAllowedOrigin };

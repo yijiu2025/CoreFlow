@@ -40,7 +40,7 @@ const ACCESS_TOKEN_COOKIE_OPTS = maxAge => ({
  * @param {object} reply - Fastify reply
  * @returns {Promise<{ok:true, expiresAt:number} | {ok:false, statusCode:number, error:object}>}
  */
-export async function bindTokenToCookie(authHeader, reply) {
+async function bindTokenToCookie(authHeader, reply) {
   if (!authHeader?.startsWith('Bearer ')) {
     return {
       ok: false,
@@ -76,7 +76,7 @@ export async function bindTokenToCookie(authHeader, reply) {
  * @returns {Promise<{ok:true, user:object} | {ok:false, statusCode:number, body:object}>}
  *   失败含 statusCode=400(缺参)/401(无效)/409(并发超限)；409 时 body 含 sessions 供前端引导踢设备
  */
-export async function bindSessionToCookie(sessionToken, request, reply) {
+async function bindSessionToCookie(sessionToken, request, reply) {
   if (!sessionToken) {
     return { ok: false, statusCode: 400, body: { code: 400, message: '缺少 session_token', data: null } };
   }
@@ -169,7 +169,7 @@ export async function bindSessionToCookie(sessionToken, request, reply) {
  *   下次打开登录弹窗可免密切回（公共设备本就没该 cookie，无残留风险）
  * @param {object} reply - Fastify reply
  */
-export function clearAuthCookies(reply) {
+function clearAuthCookies(reply) {
   reply.clearCookie('access_token', { path: '/' });
   reply.clearCookie('sid', { ...COOKIE_OPTIONS.SID });
   // sid_r 的 path 收窄到刷新端点，clear 时 path 必须一致才能清掉
@@ -205,7 +205,7 @@ export function clearAuthCookies(reply) {
  * @returns {Promise<{ok:boolean, rememberMe:boolean, accountKey:string|null}>}
  *   accountKey 非空（=uid）表示已写凭证 cookie，供前端记录该账号 rememberMe=true
  */
-export async function updateRememberMeCookies(userId, uid, sessionId, accessCount, rememberMe, reply) {
+async function updateRememberMeCookies(userId, uid, sessionId, accessCount, rememberMe, reply) {
   if (!sessionId) {
     return { ok: false, statusCode: 401, body: { code: 401, message: '未登录' } };
   }
@@ -215,7 +215,8 @@ export async function updateRememberMeCookies(userId, uid, sessionId, accessCoun
   try {
     result = await updateRememberMe(userId, sessionId, !!rememberMe);
   } catch (err) {
-    if (err.message === 'SESSION_NOT_FOUND') {
+    // 判 err.code 而非 err.message（fullstack-rules：禁止用 message 做控制流）
+    if (err.code === 'SESSION_NOT_FOUND') {
       return { ok: false, statusCode: 401, body: { code: 401, message: '会话已失效，请重新登录' } };
     }
     throw err;
@@ -264,7 +265,7 @@ export async function updateRememberMeCookies(userId, uid, sessionId, accessCoun
  * @param {string} accountKey - 前端 localStorage 的目标账号 key（uid 明文）
  * @returns {Promise<{action:'switched', user:object} | {action:'need_password'}>}
  */
-export async function switchAccount(request, reply, accountKey) {
+async function switchAccount(request, reply, accountKey) {
   if (!accountKey) return { action: 'need_password' };
 
   // accountKey 即 uid，派生 HttpOnly 凭证 cookie 名 = HMAC(uid)
@@ -300,7 +301,7 @@ export async function switchAccount(request, reply, accountKey) {
  * @param {object} reply - Fastify reply
  * @param {string} accountKey - 前端 localStorage 的目标账号 key（uid 明文）
  */
-export async function removeSavedAccount(request, reply, accountKey) {
+async function removeSavedAccount(request, reply, accountKey) {
   if (!accountKey) return;
   const cookieName = accountKeyForUid(accountKey);
   const refreshToken = request?.cookies?.[cookieName];
@@ -311,3 +312,12 @@ export async function removeSavedAccount(request, reply, accountKey) {
   // 清 sid_r cookie（若当前浏览器持有的正是该账号的 sid_r）
   reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
 }
+
+export {
+  bindTokenToCookie,
+  bindSessionToCookie,
+  clearAuthCookies,
+  updateRememberMeCookies,
+  switchAccount,
+  removeSavedAccount
+};

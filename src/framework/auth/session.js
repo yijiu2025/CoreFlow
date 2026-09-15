@@ -1,17 +1,26 @@
 /**
- * Session 管理器
- * 负责会话的创建、验证、销毁、续期和自动刷新
- * 所有 Redis 操作统一通过 getStore 管理（自带超时、序列化、降级）
+ * Session 管理器（会话生命周期）
+ *
+ * 负责会话的创建、验证、刷新、切换、销毁与安全基准维护。
+ * 所有 Redis 操作统一通过 getStore 管理（自带超时、序列化、降级）。
+ *
+ * 2026-09-14 按职责拆分（AUDIT-REPORT-2026-09-12.md §2.3 批次 C），原 1409 行单文件拆为 4 份：
+ * - `session-store.js`      共享底座：6 个 Redis 实例 / 常量 / `sidHash` / 吊销原语
+ * - `session-kick.js`       踢出与吊销入口（本文件 createSession 反向依赖其 kickByDeviceType）
+ * - `session-governance.js` 设备裁剪 / 陈旧行清理 / 统计趋势 / 失败日志
+ * - `session.js`（本文件）  会话生命周期：建 / 取 / 刷新 / 切换 / 销毁 / 记住我 / 基准更新
+ *
+ * **兼容性**：本文件末尾 re-export 上述三个子模块的公开符号，故拆分前所有
+ * `./session.js` 为来源解构这些符号的调用方（11 处非测试引用 + 契约测试）**零感知**；
+ * 对外导出集合与拆分前逐字一致（24 项），未新增内部符号（store 实例 / MAX_* / _kickSession 不外泄）。
  *
  * @author yijiu2025
  * @since 2026-08-17
+ * @since 2026-09-14 按职责拆分为 4 文件，对外导出集合保持不变
  */
 
 import crypto from 'node:crypto';
-import { Op } from 'sequelize';
-import sequelize from '../db/index.js';
 import { getModel } from '../db/index.js';
-import { getStore } from '../redis/index.js';
 import {
   signCookie,
   verifyCookie,
@@ -25,320 +34,29 @@ import {
   ROTATED_RETENTION
 } from './cookie.js';
 import { loadUserPermissions } from './permission-loader.js';
-
-const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
-/**
- * 同一用户活跃设备行数上限（session_tokens 表 revoked=false 的行）。
- *
- * x-device-id 头客户端可控，同一用户每次传随机新 deviceId 会绕过
- * findOrCreate(user_id+device_id) 的设备幂等键，无限新增 session_tokens 行 →
- * 设备数统计失真 + DB 膨胀。此上限在 createSession 写 DB 前裁剪最旧行，
- * 只保留最近 N 个活跃设备。默认 20 覆盖正常用户多端场景（手机/电脑/平板/多浏览器）。
- */
-const MAX_ACTIVE_DEVICES = parseInt(process.env.MAX_ACTIVE_DEVICES) || 20;
 // 设备类型常量与判定统一由 device.js 提供，此处导入为本地绑定并在文件末尾 re-export
 import { DEVICE_TYPE, detectDeviceType, computeDeviceFingerprint } from './device.js';
 import { createLogger } from '../log/index.js';
+// 共享底座（Redis 实例 / 常量 / sidHash / 吊销原语）
+import {
+  sessionStore,
+  refreshStore,
+  userRefreshStore,
+  rotatedStore,
+  familyStore,
+  userSessionsStore,
+  MAX_REFRESH_TOKENS,
+  sidHash,
+  deleteRefreshTokensForSession,
+  revokeFamily
+} from './session-store.js';
+// 兄弟子模块：createSession 需查配额并踢旧会话
+import { checkMaxSessions, pruneActiveDevices } from './session-governance.js';
+import { kickByDeviceType } from './session-kick.js';
 
 const log = createLogger('framework.auth.session');
 
-// 统一存储实例（getStore 自动处理 Redis/MapStore、超时、序列化）
-const sessionStore = getStore('session');
-const refreshStore = getStore('refresh');
-const userRefreshStore = getStore('user_refresh');
-// sid_r 轮转后旧 refreshToken 的"已轮转"标记（供复用盗用检测），TTL=ROTATED_RETENTION
-const rotatedStore = getStore('refresh_rotated');
-// family 集合：familyId → zset[refreshToken]，用于盗用检测后只吊销同 family
-const familyStore = getStore('session_family');
-// 用户会话索引：userId → zset[raw sessionId]，供 kick/单设备互踢按 raw sid 定位 Redis session
-// （DB 仅存 sha256(sessionId) 无法反查 raw sid，故用 Redis 逆索引，不暴露 raw sid 到 DB）
-const userSessionsStore = getStore('user_sessions');
-
-/** sessionId → DB token 列存的哈希（sha256），集中一处避免散落 */
-function sidHash(sessionId) {
-  return crypto.createHash('sha256').update(sessionId).digest('hex');
-}
-
-/**
- * 踢单条 session 的公共逻辑
- *
- * 删 Redis session + 失效 sid_r + DB 标记 revoked + 清 user_sessions 索引 + 写 SessionLog。
- * 供 kickByDeviceType / kickByDeviceId / kickUser 等复用，保证踢出路径一致。
- *
- * @param {number} userId 用户 ID
- * @param {string} sid raw sessionId（user_sessions 索引里的值）
- * @param {object} sd 该 sid 的 Redis session 数据（含 familyId/deviceId/deviceType/appId）
- * @param {string} appId 归属应用（写日志用）
- * @param {object} logDetails SessionLog.details 额外字段
- */
-async function _kickSession(userId, sid, sd, appId, logDetails) {
-  const SessionToken = getModel('SessionToken');
-  const SessionLog = getModel('SessionLog');
-  const familyId = sd?.familyId || null;
-  await sessionStore.delete(sid);
-  await deleteRefreshTokensForSession(userId, sid, familyId);
-  await SessionToken.update({ revoked: true }, { where: { token: sidHash(sid) } });
-  await userSessionsStore.zRem(String(userId), [sid]);
-  await SessionLog.create({
-    user_id: userId,
-    event: 'KICK',
-    app_id: appId,
-    details: { ...logDetails, kickedSessionId: sid }
-  });
-}
-
-/**
- * 踢掉同设备类型的旧会话（单设备单登录，按 deviceType 粗粒度批量踢）
- * @param {number} userId 用户 ID
- * @param {string} appId 应用 ID
- * @param {string} deviceType 设备类型
- */
-async function kickByDeviceType(userId, appId, deviceType) {
-  const target = deviceType || DEVICE_TYPE.BROWSER;
-  const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
-  for (const sid of sids) {
-    const sd = await sessionStore.get(sid);
-    if (!sd) {
-      await userSessionsStore.zRem(String(userId), [sid]);
-      continue;
-    }
-    if (sd.appId === appId && (sd.deviceType || DEVICE_TYPE.BROWSER) === target) {
-      await _kickSession(userId, sid, sd, appId, { reason: 'single_device_login', deviceType: target });
-    }
-  }
-}
-
-/**
- * 按 device_id 精准踢单设备会话
- *
- * 区别于 kickByDeviceType（按设备类型批量踢，同类型多设备会误踢），
- * 本函数只踢 user_id+device_id 指定的那台设备，用于"管理端远程踢单设备"等场景。
- * session_tokens 有 device_id 索引，但 DB 只存 sha256(sid) 无法反查 raw sid，
- * 故仍走 user_sessions 逆索引遍历，按 sd.deviceId 精确匹配。
- *
- * @param {number} userId 用户 ID
- * @param {string} appId 应用 ID
- * @param {string} deviceId 设备 ID（结构化 WEB-... 形式）
- * @returns {number} 踢出的会话数
- */
-async function kickByDeviceId(userId, appId, deviceId) {
-  if (!deviceId) return 0;
-  let kicked = 0;
-  const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
-  for (const sid of sids) {
-    const sd = await sessionStore.get(sid);
-    if (!sd) {
-      await userSessionsStore.zRem(String(userId), [sid]);
-      continue;
-    }
-    if (sd.appId === appId && sd.deviceId === deviceId) {
-      await _kickSession(userId, sid, sd, appId, { reason: 'kick_by_device_id', deviceId });
-      kicked++;
-    }
-  }
-  return kicked;
-}
-
-/**
- * 检查并发会话数
- * @param {number} userId 用户 ID
- * @param {string} appId 应用 ID
- * @param {number} maxSessions 最大并发会话数（默认 5）
- * @returns {null|object} null=未超限，object=超限返回活跃会话列表
- */
-async function checkMaxSessions(userId, appId, maxSessions = 5) {
-  const SessionToken = getModel('SessionToken');
-
-  // 先回收已过期的会话：DB 行不会随 Redis TTL 自动消失，需在此标记 revoked，
-  // 否则过期会话堆积会占用并发名额，导致新登录被 MAX_SESSIONS 误拦。
-  // 以最长 TTL（长期登录 30 天）为回收阈值，超过即视为过期。
-  const expiryThreshold = new Date(Date.now() - LONG_SESSION_TTL * 1000);
-  const expiredCount = await SessionToken.update(
-    { revoked: true },
-    {
-      where: {
-        user_id: userId,
-        app_id: appId,
-        revoked: false,
-        last_active: { [Op.lt]: expiryThreshold }
-      }
-    }
-  );
-  if (expiredCount?.[0] > 0) {
-    log.debug('🔍 [session] 回收 %s 条过期会话: userId=%s, appId=%s', expiredCount[0], userId, appId);
-  }
-
-  // 按应用过滤：遍历 user_sessions 索引统计该应用的活跃会话（Redis 仍存活的才算）
-  // 顺带清理索引中 Redis 已过期的僵尸条目
-  const allSids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
-  const sessions = [];
-  for (const sid of allSids) {
-    const sd = await sessionStore.get(sid);
-    if (!sd) {
-      await userSessionsStore.zRem(String(userId), [sid]);
-      continue;
-    }
-    if (sd.appId !== appId) continue;
-    sessions.push({
-      sessionId: sid,
-      ip: sd.ip,
-      userAgent: sd.userAgent,
-      lastActive: sd.lastActiveAt,
-      deviceType: sd.deviceType || DEVICE_TYPE.BROWSER,
-      appId: sd.appId
-    });
-  }
-
-  if (sessions.length < maxSessions) return null;
-
-  return { maxSessions, current: sessions.length, sessions };
-}
-
-/**
- * 裁剪同用户的活跃设备行数至上限以下
- *
- * 治理 x-device-id 客户端可控导致的 session_tokens 膨胀：同用户每次传随机新 deviceId
- * 绕过 findOrCreate 幂等键，行数无限增长。此函数在 createSession 写新行前调用，
- * 先删最旧的活跃行腾位，保证表内活跃设备行 ≤ MAX_ACTIVE_DEVICES。
- *
- * 删除策略：按 last_active 升序删 (count - MAX + 1) 条最旧的活跃行（revoked=false）。
- * 不影响已被 checkMaxSessions 标记 revoked 的历史行（保留审计）。
- * SessionToken 无 paranoid/软删钩子，destroy 为硬删除（膨胀治理应真删行不留壳）。
- *
- * @param {number} userId 用户 ID
- * @returns {Promise<number>} 实际删除的行数
- */
-async function pruneActiveDevices(userId) {
-  const SessionToken = getModel('SessionToken');
-  if (!SessionToken) return 0;
-
-  // 只数活跃行（revoked=false），超过上限才清（等于上限不裁——本函数在新增设备行
-  // 之后调用，count 已含新设备，activeCount > MAX 才代表"旧设备 + 新设备"超限）
-  const activeCount = await SessionToken.count({ where: { user_id: userId, revoked: false } });
-  if (activeCount <= MAX_ACTIVE_DEVICES) return 0;
-
-  const removeCount = activeCount - MAX_ACTIVE_DEVICES;
-  // 按 last_active 升序取最旧的 removeCount 条活跃行
-  const oldest = await SessionToken.findAll({
-    where: { user_id: userId, revoked: false },
-    order: [['last_active', 'ASC']],
-    limit: removeCount,
-    attributes: ['id']
-  });
-  if (!oldest.length) return 0;
-
-  // 批量硬删除：SessionToken 无 delete_version/paranoid（撤销语义由 revoked 字段表达），
-  // destroy 即物理 DELETE。被裁剪的都是 last_active 最旧的设备行，设备下次访问会重新 upsert。
-  const destroyed = await SessionToken.destroy({
-    where: { id: oldest.map(r => r.id) }
-  });
-  log.debug(
-    '🧹 [session] 裁剪活跃设备: userId=%s, 删除 %s 行 (原 %s, 上限 %s)',
-    userId,
-    destroyed,
-    activeCount,
-    MAX_ACTIVE_DEVICES
-  );
-  return destroyed;
-}
-
-/**
- * 清理 session_tokens 表的陈旧孤儿行
- *
- * 治理 device_id 重生/变更后的孤儿数据：
- * - verifyAndNormalizeDeviceId 对超 365 天的老格式 ID 重生 → 旧 device_id 的行变孤儿
- * - updateSessionBaseline 变更 device_id 后，理论上旧行已更新不 orphan，但历史脏数据可能残留
- * - checkMaxSessions 已把超 30 天的标 revoked=true（保留审计），本函数只删 revoked 且再超
- *   STALE_TOKEN_RETENTION 天的行，既防膨胀又留够审计窗口
- *
- * 硬删（SessionToken 无 paranoid）。返回删除行数。
- *
- * @param {number} [retentionDays=90] revoked 后保留天数
- * @returns {Promise<number>} 删除的行数
- */
-async function pruneStaleSessionTokens(retentionDays = 90) {
-  const SessionToken = getModel('SessionToken');
-  if (!SessionToken) return 0;
-
-  const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-  // 删：已 revoked 且 last_active 早于阈值（即 revoked 超过 retentionDays 的）
-  // last_active 在 revoked 时不再更新，故以它为 revoked 时间近似
-  const destroyed = await SessionToken.destroy({
-    where: {
-      revoked: true,
-      last_active: { [Op.lt]: threshold }
-    }
-  });
-  if (destroyed > 0) {
-    log.debug('🧹 [session] 清理陈旧 session_tokens: 删除 %s 行 (revoked 且超 %s 天)', destroyed, retentionDays);
-  }
-  return destroyed;
-}
-
-/**
- * 踢掉指定会话
- *
- * 完整踢出（含记住我用户）：删 sid（立即失效）+ 失效 sid_r（阻止 sid_r 自动刷新恢复）
- * + DB revoke（兜底，refreshSession DB 降级也找不到）+ 清用户会话索引。
- * @param {string} sessionId 要踢掉的会话 ID（raw sid）
- * @param {number} userId 操作者用户 ID
- */
-async function kickSession(sessionId, userId) {
-  const SessionToken = getModel('SessionToken');
-  const SessionLog = getModel('SessionLog');
-
-  // 先读 session 取 familyId（删 Redis 前读取），用于清理该 session 的 sid_r
-  const sd = await sessionStore.get(sessionId);
-  const familyId = sd?.familyId || null;
-
-  // 1. 删 sid（立即生效：下个请求 401）
-  await sessionStore.delete(sessionId);
-
-  // 2. 失效 sid_r：删映射到本 session 的 refreshToken + 清 family 集合（防记住我用户靠 sid_r 自动恢复）
-  if (userId != null) {
-    await deleteRefreshTokensForSession(userId, sessionId, familyId);
-  }
-
-  // 3. DB revoke（兜底：refreshSession DB 降级也找不到未撤销 token）
-  await SessionToken.update({ revoked: true }, { where: { token: sidHash(sessionId) } });
-  if (userId != null) await userSessionsStore.zRem(String(userId), [sessionId]);
-
-  await SessionLog.create({
-    user_id: userId,
-    event: 'KICK',
-    details: { reason: 'user_kicked', kickedSessionId: sessionId }
-  });
-}
-
-/**
- * 踢掉用户所有会话（含记住我：sid + sid_r + DB 全清）
- * @param {number} userId 用户 ID
- */
-async function kickAllSessions(userId) {
-  const SessionToken = getModel('SessionToken');
-  const SessionLog = getModel('SessionLog');
-
-  // 用逆索引遍历 raw sid：删 Redis session + 失效 sid_r + DB revoke + 清索引
-  const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
-  const hashes = [];
-  for (const sid of sids) {
-    const sd = await sessionStore.get(sid);
-    const familyId = sd?.familyId || null;
-    await sessionStore.delete(sid);
-    // 失效该 session 的 sid_r（防记住我用户靠 sid_r 自动恢复）
-    await deleteRefreshTokensForSession(userId, sid, familyId);
-    hashes.push(sidHash(sid));
-  }
-  if (hashes.length) {
-    await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
-  }
-
-  await SessionLog.create({
-    user_id: userId,
-    event: 'KICK',
-    details: { reason: 'kick_all', count: sids.length }
-  });
-}
+// ── 会话生命周期 ──
 
 /**
  * 创建会话
@@ -964,59 +682,6 @@ async function switchSessionByRefreshToken(refreshToken, request, reply) {
 }
 
 /**
- * 吊销整个 family（sid_r 盗用检测命中时调用）
- * 删除该 family 下所有 session/refreshToken/轮转标记，并 revoke 对应 DB token
- * @param {string} familyId 会话家族 ID
- * @param {number|null} [userId] 用户 ID（用于清理 user_refresh 索引）
- */
-async function revokeFamily(familyId, userId = null) {
-  const rts = await familyStore.zRangeByScore(familyId, '-inf', '+inf');
-  const SessionToken = getModel('SessionToken');
-  const hashes = [];
-  for (const rt of rts) {
-    const sid = await refreshStore.get(rt);
-    if (sid) {
-      await sessionStore.delete(sid);
-      if (userId != null) await userSessionsStore.zRem(String(userId), [sid]); // 清会话索引
-      hashes.push(sidHash(sid));
-    }
-    await refreshStore.delete(rt);
-    await rotatedStore.delete(rt);
-    if (userId != null) await userRefreshStore.zRem(String(userId), [rt]);
-  }
-  // DB 兜底：按 rt 链路吊销之外，再按 family_id 列吊销该链名下所有行——
-  // 覆盖 familyStore zset 条目丢失（Redis 故障）但行还在的场景。
-  // family_id 与登录链一一对应（每次 re-login 换新值），不会误伤其他链的行。
-  try {
-    await SessionToken.update({ revoked: true }, { where: { family_id: familyId } });
-  } catch (err) {
-    log.warn('[Session] revokeFamily 按 family_id 吊销失败:', err);
-  }
-  if (hashes.length) {
-    await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
-  }
-  await familyStore.delete(familyId);
-}
-
-/**
- * 删除指定 session 对应的所有 refreshToken（取消"记住我"/登出时调用）
- * 遍历用户 refresh 索引，删除映射到本 sessionId 的 refreshToken + 清理 family 集合
- * @param {number} userId 用户 ID
- * @param {string} sessionId 会话 ID
- * @param {string|null} [familyId] 会话家族 ID（用于清理 family 集合）
- */
-async function deleteRefreshTokensForSession(userId, sessionId, familyId = null) {
-  const rts = await userRefreshStore.zRangeByScore(String(userId), '-inf', '+inf');
-  for (const rt of rts) {
-    if ((await refreshStore.get(rt)) === sessionId) {
-      await refreshStore.delete(rt);
-      await userRefreshStore.zRem(String(userId), [rt]);
-      if (familyId) await familyStore.zRem(familyId, [rt]);
-    }
-  }
-}
-
-/**
  * 动态切换当前会话的"记住我"状态（update-remember-me 路由调用）
  * - 开启：session TTL→长期，新增长期 refreshToken（入 family）
  * - 关闭：session TTL→30min，删除该 session 的所有 refreshToken
@@ -1029,7 +694,12 @@ async function deleteRefreshTokensForSession(userId, sessionId, familyId = null)
 async function updateRememberMe(userId, sessionId, rememberMe) {
   const sessionData = await sessionStore.get(sessionId);
   if (!sessionData) {
-    throw new Error('SESSION_NOT_FOUND');
+    // 控制流判据用 err.code 而非 message（调用方 session-api.service.js 判 code）——
+    // message 是给人看的文案，改文案不应影响分支判定（AUDIT-REPORT-2026-09-12.md 🟡-2；
+    // 批次 B 只改了 message 未落 code，导致 401 分支永不命中、退化成 500，本次补齐）
+    const err = new Error('会话已失效，请重新登录');
+    err.code = 'SESSION_NOT_FOUND';
+    throw err;
   }
   const familyId = sessionData.familyId || crypto.randomBytes(16).toString('hex');
   sessionData.familyId = familyId;
@@ -1142,138 +812,6 @@ async function revokeRememberMe(refreshToken) {
 }
 
 /**
- * 踢用户下线 (管理员操作)
- * @param {number} userId 用户 ID
- * @param {string|null} appId 指定应用 (null = 全部应用)
- */
-async function kickUser(userId, appId = null) {
-  const SessionToken = getModel('SessionToken');
-  const SessionLog = getModel('SessionLog');
-
-  // 用逆索引遍历 raw sid；按 appId 过滤（null=全部应用）
-  const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
-  const hashes = [];
-  let kicked = 0;
-  for (const sid of sids) {
-    const sd = await sessionStore.get(sid);
-    if (appId) {
-      if (!sd) {
-        await userSessionsStore.zRem(String(userId), [sid]);
-        continue;
-      }
-      if (sd.appId !== appId) continue;
-    }
-    const familyId = sd?.familyId || null;
-    await sessionStore.delete(sid);
-    // 失效该 session 的 sid_r（防记住我用户靠 sid_r 自动恢复）
-    await deleteRefreshTokensForSession(userId, sid, familyId);
-    await userSessionsStore.zRem(String(userId), [sid]);
-    hashes.push(sidHash(sid));
-    kicked++;
-  }
-  if (hashes.length) {
-    await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
-  }
-
-  await SessionLog.create({
-    user_id: userId,
-    event: 'KICK',
-    app_id: appId || 'ALL',
-    details: { kickedCount: kicked }
-  });
-}
-
-/**
- * 记录登录失败日志
- * @param {object} params
- * @param {string} params.email 尝试登录的邮箱
- * @param {string} params.appId 应用 ID
- * @param {string} params.ip 客户端 IP
- * @param {string} params.userAgent User-Agent
- * @param {string} params.reason 失败原因
- * @param {string} [params.deviceType] 设备类型
- */
-async function logLoginFailure(params) {
-  const { email, appId, ip, userAgent, reason, deviceType } = params;
-
-  const SessionLog = getModel('SessionLog');
-  await SessionLog.create({
-    user_id: null, // 登录失败时可能没有 userId
-    event: 'LOGIN_FAILED',
-    app_id: appId,
-    ip,
-    user_agent: userAgent,
-    details: {
-      email,
-      reason,
-      deviceType: deviceType || DEVICE_TYPE.BROWSER
-    }
-  });
-}
-
-/**
- * 获取会话统计信息
- * @returns {Promise<{onlineUsers: number, activeDevices: number, redisSessions: number}>}
- */
-async function getSessionStats() {
-  const SessionToken = getModel('SessionToken');
-  const UserSession = getModel('UserSession');
-
-  // 1. 在线用户数（最近 15 分钟有活跃记录）
-  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
-  const onlineUsers = await UserSession.count({
-    where: { last_active_at: { [Op.gte]: fifteenMinutesAgo } }
-  });
-
-  // 2. 活跃设备数（未撤销的会话）
-  const activeDevices = await SessionToken.count({
-    where: { revoked: false }
-  });
-
-  // 3. Redis 中的活跃 session 数（SCAN 遍历，避免 KEYS 阻塞）
-  let redisSessions = 0;
-  try {
-    redisSessions = await sessionStore.size();
-  } catch {
-    // Redis 故障时忽略
-  }
-
-  return { onlineUsers, activeDevices, redisSessions };
-}
-
-/**
- * 获取登录趋势（最近 N 天的登录次数）
- * @param {number} days 天数（默认 7）
- * @returns {Promise<Array<{date: string, count: number}>>}
- */
-async function getLoginTrend(days = 7) {
-  const SessionLog = getModel('SessionLog');
-
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  startDate.setHours(0, 0, 0, 0);
-
-  const logs = await SessionLog.findAll({
-    where: {
-      event: 'LOGIN',
-      created_at: { [Op.gte]: startDate }
-    },
-    attributes: [
-      [sequelize.fn('DATE', sequelize.col('created_at')), 'date'],
-      [sequelize.fn('COUNT', '*'), 'count']
-    ],
-    group: [sequelize.fn('DATE', sequelize.col('created_at'))],
-    order: [[sequelize.fn('DATE', sequelize.col('created_at')), 'ASC']],
-    raw: true
-  });
-
-  return logs.map(row => ({
-    date: row.date,
-    count: parseInt(row.count, 10)
-  }));
-}
-
-/**
  * 更新会话基准（人机验证通过后调用）
  *
  * 用户在新环境（换设备/UA/IP）完成验证后，把当前请求的新基准写回 Redis session 数据 + DB session_tokens，
@@ -1307,7 +845,8 @@ async function updateSessionBaseline(sessionId, { deviceId, deviceFingerprint, i
   // token 与 session 绑定（sid_r 刷新时 record.update({token:newHash}) 换 token 但行不变），
   // 是同一设备链的稳定锚点。device_id 变更场景（用户清 localStorage 生新 ID，验证通过后）
   // 由此把 DB 行 device_id 更新为新值，不新增行（符合"同一设备链更新不新增"语义）。
-  const SessionToken = getModel('session.SessionToken');
+  // 键名统一 'SessionToken'（点号写法的命名空间前缀不参与 getModel 查找，见 🔵-4）
+  const SessionToken = getModel('SessionToken');
   if (SessionToken && sd.userId) {
     try {
       const tokenHash = sidHash(sessionId);
@@ -1347,9 +886,11 @@ async function updateSessionBaseline(sessionId, { deviceId, deviceFingerprint, i
  */
 async function getSessionTokenDevice(sessionId) {
   if (!sessionId) return null;
-  const SessionToken = getModel('session.SessionToken');
-  if (!SessionToken) return null;
   try {
+    // getModel 必须在 try 内：未命中时它**抛 TypeError** 而非返回假值，
+    // 故不再写 `if (!SessionToken) return null` 这种永不触发的死守卫。
+    // （键名统一 'SessionToken'，点号写法的命名空间前缀不参与查找 —— 见 🔵-4）
+    const SessionToken = getModel('SessionToken');
     const row = await SessionToken.findOne({
       where: { token: sidHash(sessionId), revoked: false },
       attributes: ['device_id', 'device_id_original', 'user_agent']
@@ -1366,15 +907,12 @@ async function getSessionTokenDevice(sessionId) {
   }
 }
 
+// ── 对外导出 ──
+// 24 项，与拆分前逐字一致（契约测试 auth-contract.test.js 守护）。
+// 被拆出去的符号必须用**带来源子句**的跨模块 re-export 写法——裸 `export { x }`
+// 只能导出**本模块的本地绑定**，跨模块写会报 `Export 'x' is not defined in module`。
 export {
-  DEVICE_TYPE,
-  detectDeviceType,
-  checkMaxSessions,
-  kickSession,
-  kickAllSessions,
-  kickByDeviceId,
-  pruneActiveDevices,
-  pruneStaleSessionTokens,
+  // 生命周期（本文件定义）
   createSession,
   getSession,
   refreshSession,
@@ -1382,12 +920,26 @@ export {
   switchSessionByRefreshToken,
   destroySession,
   revokeRememberMe,
-  deleteRefreshTokensForSession,
   updateRememberMe,
   updateSessionBaseline,
   getSessionTokenDevice,
-  kickUser,
-  logLoginFailure,
-  getSessionStats,
-  getLoginTrend
+  // 设备类型透传（自 ./device.js 导入的本地绑定，原 session.js 即如此对外暴露）
+  DEVICE_TYPE,
+  detectDeviceType
 };
+
+// 共享底座（./session-store.js）
+export { sidHash, deleteRefreshTokensForSession } from './session-store.js';
+
+// 治理/统计（./session-governance.js）
+export {
+  checkMaxSessions,
+  pruneActiveDevices,
+  pruneStaleSessionTokens,
+  getSessionStats,
+  getLoginTrend,
+  logLoginFailure
+} from './session-governance.js';
+
+// 踢出/吊销（./session-kick.js）
+export { kickSession, kickAllSessions, kickByDeviceId, kickUser } from './session-kick.js';

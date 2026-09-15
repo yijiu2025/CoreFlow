@@ -199,9 +199,10 @@ function signCookie(sessionId, accessCount = 0) {
 /**
  * 验证 cookie 值，返回解析结果或 null
  *
- * 校验失败（格式/签名/payload 非法 base64url）统一返回 null，不区分失败原因，
- * 避免向调用方泄露校验细节。校验异常仅在 DEBUG_AUTH=true 时记日志，便于排障，
- * 生产环境高频路径不刷屏。
+ * 契约：**任何**校验失败（格式/签名/payload 非法 base64url/非法 hex）统一返回 null，
+ * 不区分失败原因（避免向调用方泄露校验细节），且**绝不抛异常**——签名比较与
+ * base64url 解码均由外层 try 兜底（畸形输入会频繁出现，不能让它打崩调用方）。
+ * 校验异常仅在 LOG_DEBUG 关键词命中时记日志，生产环境高频路径不刷屏。
  *
  * @param {string} cookieValue cookie 值 (格式: payload.signature)
  * @returns {{ sessionId: string, accessCount: number } | null}
@@ -218,16 +219,26 @@ function verifyCookie(cookieValue) {
 
   if (!payload || !signature) return null;
 
-  // 验证签名
-  const expected = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
-
-  if (signature.length !== expected.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) {
-    return null;
-  }
-
-  // 解码 payload
   try {
+    // 验证签名
+    const expected = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+
+    // 长度守卫必须比【字节】长度：timingSafeEqual 要求两 Buffer 字节数相等，否则抛
+    // RangeError(ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH)。而 Buffer.from(str,'hex') 遇到
+    // 非法 hex 会静默截断（如 64 个 'z' -> 空 Buffer），故「比字符串长度」挡不住——
+    // 攻击者提交 64 个非 hex 字符即可绕过字符串守卫并让本函数抛错，而调用链
+    // （getSession / onRequest）无 try-catch，会打崩认证钩子且坏 cookie 永不清除。
+    // 详见 docs/AUDIT-REPORT-2026-09-12.md 🔴-1。
+    if (signature.length !== expected.length) return null;
+
+    const expectedBuf = Buffer.from(expected, 'hex');
+    const signatureBuf = Buffer.from(signature, 'hex');
+    if (signatureBuf.length !== expectedBuf.length) return null;
+    if (!crypto.timingSafeEqual(signatureBuf, expectedBuf)) {
+      return null;
+    }
+
+    // 解码 payload
     const decoded = Buffer.from(payload, 'base64url').toString('utf-8');
 
     const colonIndex = decoded.indexOf(':');
@@ -239,8 +250,10 @@ function verifyCookie(cookieValue) {
     if (!sessionId || isNaN(accessCount)) return null;
     return { sessionId, accessCount };
   } catch (err) {
-    // base64url 解码或后续解析异常：正常用户的过期/损坏 cookie 会频繁触发，
-    // 全记日志会刷屏，仅 LOG_DEBUG 关键词命中时输出便于排障
+    // 本函数契约是「校验失败一律返回 null，绝不抛」：签名比较与 base64url 解码都
+    // 可能因畸形输入（非法 hex / 非法 base64url）抛错，统一在此兜底。
+    // 正常用户的过期/损坏 cookie 会频繁触发，全记日志会刷屏，
+    // 仅 LOG_DEBUG 关键词命中时输出便于排障
     log.debug(`⚠️ [Auth] verifyCookie 解析异常: ${err?.message}`);
     return null;
   }

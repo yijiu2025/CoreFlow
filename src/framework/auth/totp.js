@@ -23,7 +23,7 @@ const DEFAULT_CONFIG = {
  * @param {string} [account] 账号名称
  * @returns {{ secret: string, uri: string }} 密钥和 OTP Auth URI
  */
-export function generateSecret(issuer = 'App', account = '') {
+function generateSecret(issuer = 'App', account = '') {
   const secret = base32Encode(crypto.randomBytes(20));
   const uri = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 
@@ -37,7 +37,7 @@ export function generateSecret(issuer = 'App', account = '') {
  * @param {object} [config] 配置
  * @returns {string} 6 位验证码
  */
-export function generateTOTP(secret, time = Date.now(), config = DEFAULT_CONFIG) {
+function generateTOTP(secret, time = Date.now(), config = DEFAULT_CONFIG) {
   const epoch = Math.floor(time / 1000);
   const counter = Math.floor(epoch / config.period);
 
@@ -68,19 +68,35 @@ export function generateTOTP(secret, time = Date.now(), config = DEFAULT_CONFIG)
 
 /**
  * 验证 TOTP 验证码
+ *
+ * 失败一律返回 false，**不抛异常**（入参缺失/类型不对是客户端问题，不该 500）。
+ * 注意 secret 本身格式非法（非 Base32 字符）仍会抛 —— 那是服务端存储数据损坏，
+ * 应当响亮失败而非静默判为"验证失败"。
+ *
  * @param {string} secret Base32 编码的密钥
- * @param {string} code 用户输入的验证码
+ * @param {string|number} code 用户输入的验证码
  * @param {object} [config] 配置
  * @returns {boolean}
  */
-export function verifyTOTP(secret, code, config = DEFAULT_CONFIG) {
+function verifyTOTP(secret, code, config = DEFAULT_CONFIG) {
+  // 入参防御：code 可能缺失、是数字（JSON body 里客户端常传 number）、或带空格。
+  // 若直接透传给下方的 timingSafeEqual，会在读 `b.length` 时抛
+  // `TypeError: Cannot read properties of undefined` —— 2FA 校验端点会 500 而非
+  // "验证失败"（与 cookie.js 🔴-1 同一类"守卫未防御非预期输入"的缺陷）。
+  if (typeof secret !== 'string' || !secret) return false;
+  if (code === undefined || code === null) return false;
+
+  const digits = config?.digits || DEFAULT_CONFIG.digits;
+  const normalized = String(code).trim();
+  if (normalized.length !== digits || !/^\d+$/.test(normalized)) return false;
+
   const now = Date.now();
 
   // 检查当前时间步长和前后窗口
   for (let i = -config.window; i <= config.window; i++) {
     const time = now + i * config.period * 1000;
     const expected = generateTOTP(secret, time, config);
-    if (timingSafeEqual(expected, code)) {
+    if (timingSafeEqual(expected, normalized)) {
       return true;
     }
   }
@@ -146,4 +162,7 @@ function timingSafeEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-export default { generateSecret, generateTOTP, verifyTOTP };
+const totpApi = { generateSecret, generateTOTP, verifyTOTP };
+
+export { generateSecret, generateTOTP, verifyTOTP };
+export default totpApi;
