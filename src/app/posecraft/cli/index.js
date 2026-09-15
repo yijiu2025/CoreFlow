@@ -11,9 +11,7 @@
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
-import { createLogger } from '../../../framework/log/index.js';
-
-const log = createLogger('app.posecraft.cli.index');
+import { logStdout } from '../../../framework/log/index.js';
 
 /**
  * 统计信息
@@ -27,11 +25,11 @@ async function posecraftStats() {
     Analysis.count().catch(() => 0)
   ]);
 
-  log.stdout('\n📊 PoseCraft 统计：');
+  logStdout('\n📊 PoseCraft 统计：');
   printLine();
-  log.stdout(`  模板数:   ${templateCount}`);
-  log.stdout(`  作品数:   ${workCount}`);
-  log.stdout(`  分析记录: ${analysisCount}`);
+  logStdout(`  模板数:   ${templateCount}`);
+  logStdout(`  作品数:   ${workCount}`);
+  logStdout(`  分析记录: ${analysisCount}`);
   printLine();
 }
 
@@ -51,7 +49,7 @@ async function listTemplates() {
     return;
   }
 
-  log.stdout('\n📋 模板列表：');
+  logStdout('\n📋 模板列表：');
   printTable(
     ['ID', '标题', '分类', '使用次数', '创建时间'],
     templates.map(t => [
@@ -80,7 +78,7 @@ async function listWorks() {
     return;
   }
 
-  log.stdout('\n🎨 作品列表：');
+  logStdout('\n🎨 作品列表：');
   printTable(
     ['ID', '标题', '点赞', '浏览', '创建时间'],
     works.map(w => [
@@ -94,7 +92,7 @@ async function listWorks() {
 }
 
 // 导出 CLI 插件配置
-export default {
+const posecraftCliConfig = {
   command: 'posecraft',
   appName: 'posecraft',
   description: 'PoseCraft AI 姿势分析',
@@ -104,3 +102,5 @@ export default {
     works: { description: '作品列表', handler: listWorks }
   }
 };
+
+export default posecraftCliConfig;

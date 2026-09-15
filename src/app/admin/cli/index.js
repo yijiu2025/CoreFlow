@@ -11,9 +11,7 @@
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
-import { createLogger } from '../../../framework/log/index.js';
-
-const log = createLogger('app.admin.cli.index');
+import { logStdout } from '../../../framework/log/index.js';
 
 /**
  * 管理统计
@@ -27,11 +25,11 @@ async function adminStats() {
     UserRole.count({ where: { delete_version: 0 } })
   ]);
 
-  log.stdout('\n📊 管理后台统计：');
+  logStdout('\n📊 管理后台统计：');
   printLine();
-  log.stdout(`  用户总数:     ${userCount}`);
-  log.stdout(`  角色总数:     ${roleCount}`);
-  log.stdout(`  角色分配数:   ${assignmentCount}`);
+  logStdout(`  用户总数:     ${userCount}`);
+  logStdout(`  角色总数:     ${roleCount}`);
+  logStdout(`  角色分配数:   ${assignmentCount}`);
   printLine();
 }
 
@@ -47,11 +45,11 @@ async function userStats() {
     User.count({ where: { status: 0 } })
   ]);
 
-  log.stdout('\n👥 用户统计：');
+  logStdout('\n👥 用户统计：');
   printLine();
-  log.stdout(`  总数:   ${total}`);
-  log.stdout(`  正常:   ${active}`);
-  log.stdout(`  禁用:   ${disabled}`);
+  logStdout(`  总数:   ${total}`);
+  logStdout(`  正常:   ${active}`);
+  logStdout(`  禁用:   ${disabled}`);
   printLine();
 }
 
@@ -78,12 +76,12 @@ async function roleStats() {
     stats.push([role.id, role.code, role.app_id, role.name, role.rank_level, count]);
   }
 
-  log.stdout('\n🎭 角色统计：');
+  logStdout('\n🎭 角色统计：');
   printTable(['ID', '编码', '应用', '名称', '权重', '用户数'], stats);
 }
 
 // 导出 CLI 插件配置
-export default {
+const adminCliConfig = {
   command: 'iam',
   appName: 'admin',
   description: 'IAM 权限管理',
@@ -93,3 +91,5 @@ export default {
     roles: { description: '角色统计', handler: roleStats }
   }
 };
+
+export default adminCliConfig;

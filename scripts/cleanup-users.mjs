@@ -7,7 +7,7 @@
 import { createApp } from './src/app.js';
 import { Op } from 'sequelize';
 import { sequelize } from './src/framework/db/index.js';
-import { createLogger } from './src/framework/log/index.js';
+import { createLogger, logStdout } from './src/framework/log/index.js';
 
 const log = createLogger('cleanup-users');
 
@@ -38,14 +38,14 @@ async function main() {
   });
 
   if (victims.length === 0) {
-    log.stdout('没有需要清理的测试用户');
+    logStdout('没有需要清理的测试用户');
     await app.close();
     process.exit(0);
   }
 
   const uids = victims.map(u => u.uid);
   const numericIds = victims.map(u => u.id);
-  log.stdout(`\n将清理 ${victims.length} 个用户:`, victims.map(u => `${u.username}(${u.email})`).join(', '));
+  logStdout(`\n将清理 ${victims.length} 个用户:`, victims.map(u => `${u.username}(${u.email})`).join(', '));
 
   const t = await sequelize.transaction();
   try {
@@ -53,53 +53,53 @@ async function main() {
     // OauthApproval/OauthConsent（无软删除，直接 destroy）
     if (OauthApproval) {
       const n = await OauthApproval.destroy({ where: { sub: { [Op.in]: uids } }, transaction: t });
-      log.stdout(`  OauthApproval 删除 ${n} 条`);
+      logStdout(`  OauthApproval 删除 ${n} 条`);
     }
     if (OauthConsent) {
       const n = await OauthConsent.destroy({ where: { sub: { [Op.in]: uids } }, transaction: t });
-      log.stdout(`  OauthConsent 删除 ${n} 条`);
+      logStdout(`  OauthConsent 删除 ${n} 条`);
     }
     if (OauthCode) {
       const n = await OauthCode.destroy({ where: { sub: { [Op.in]: uids } }, transaction: t });
-      log.stdout(`  OauthCode 删除 ${n} 条`);
+      logStdout(`  OauthCode 删除 ${n} 条`);
     }
     if (OauthToken) {
       const n = await OauthToken.destroy({ where: { sub: { [Op.in]: uids } }, transaction: t });
-      log.stdout(`  OauthToken 删除 ${n} 条`);
+      logStdout(`  OauthToken 删除 ${n} 条`);
     }
     // Session 系列（无 delete_version，硬删）
     if (SessionToken) {
       const n = await SessionToken.destroy({ where: { user_id: { [Op.in]: numericIds } }, transaction: t });
-      log.stdout(`  SessionToken 删除 ${n} 条`);
+      logStdout(`  SessionToken 删除 ${n} 条`);
     }
     if (SessionLog) {
       const n = await SessionLog.destroy({ where: { user_id: { [Op.in]: numericIds } }, transaction: t });
-      log.stdout(`  SessionLog 删除 ${n} 条`);
+      logStdout(`  SessionLog 删除 ${n} 条`);
     }
     if (UserSession) {
       const n = await UserSession.destroy({ where: { user_id: { [Op.in]: numericIds } }, transaction: t });
-      log.stdout(`  UserSession 删除 ${n} 条`);
+      logStdout(`  UserSession 删除 ${n} 条`);
     }
     // IAM 表（注册了软删除钩子，禁止 force，走软删除）
     if (UserRole) {
       const n = await UserRole.destroy({ where: { user_id: { [Op.in]: numericIds } }, transaction: t });
-      log.stdout(`  UserRole 软删除 ${n} 条`);
+      logStdout(`  UserRole 软删除 ${n} 条`);
     }
     if (InlinePolicy) {
       const n = await InlinePolicy.destroy({ where: { user_id: { [Op.in]: numericIds } }, transaction: t });
-      log.stdout(`  InlinePolicy 软删除 ${n} 条`);
+      logStdout(`  InlinePolicy 软删除 ${n} 条`);
     }
     if (UserIdentity) {
       const n = await UserIdentity.destroy({ where: { user_id: { [Op.in]: numericIds } }, transaction: t });
-      log.stdout(`  UserIdentity 软删除 ${n} 条`);
+      logStdout(`  UserIdentity 软删除 ${n} 条`);
     }
 
     // 3. User 主表软删除（注册了软删除钩子，禁止 force）
     const n = await User.destroy({ where: { id: { [Op.in]: numericIds } }, transaction: t });
-    log.stdout(`  User 主表软删除 ${n} 条`);
+    logStdout(`  User 主表软删除 ${n} 条`);
 
     await t.commit();
-    log.stdout('\n✅ 清理完成');
+    logStdout('\n✅ 清理完成');
   } catch (err) {
     await t.rollback();
     log.error('\n❌ 清理失败:', err.message);
@@ -113,10 +113,10 @@ async function main() {
     attributes: ['id', 'username', 'email', 'status', 'delete_version'],
     paranoid: false
   });
-  log.stdout(`\n=== 剩余 ${remain.length} 条用户记录 ===`);
+  logStdout(`\n=== 剩余 ${remain.length} 条用户记录 ===`);
   for (const u of remain) {
     const active = u.delete_version === 0 ? '✅活跃' : '🗑️已删';
-    log.stdout(`  [${u.id}] ${active} ${u.username} <${u.email}> status=${u.status}`);
+    logStdout(`  [${u.id}] ${active} ${u.username} <${u.email}> status=${u.status}`);
   }
 
   await app.close();

@@ -16,7 +16,7 @@
 import 'dotenv/config';
 import readline from 'readline';
 import sequelize from '../src/db/index.js';
-import { createLogger } from '../src/framework/log/index.js';
+import { createLogger, logStdout } from '../src/framework/log/index.js';
 
 const log = createLogger('scripts.revoke-superadmin');
 
@@ -36,7 +36,7 @@ function ask(rl, question) {
 }
 
 async function main() {
-  log.stdout('🔧 撤销超级管理员脚本\n');
+  logStdout('🔧 撤销超级管理员脚本\n');
 
   // 1. 加载模型
   await import('../src/models/user/User.js');
@@ -64,18 +64,18 @@ async function main() {
   });
 
   if (superadmins.length === 0) {
-    log.stdout('ℹ️  当前没有超级管理员，无需操作');
+    logStdout('ℹ️  当前没有超级管理员，无需操作');
     process.exit(0);
   }
 
   // 4. 显示列表
-  log.stdout('📋 当前超级管理员列表：');
-  log.stdout('─'.repeat(60));
+  logStdout('📋 当前超级管理员列表：');
+  logStdout('─'.repeat(60));
   superadmins.forEach((ur, i) => {
     const user = ur.user;
-    log.stdout(`  ${i + 1}. ${user.username} (${user.email}) [ID: ${user.id}]`);
+    logStdout(`  ${i + 1}. ${user.username} (${user.email}) [ID: ${user.id}]`);
   });
-  log.stdout('─'.repeat(60));
+  logStdout('─'.repeat(60));
 
   // 5. 安全检查：最后一个管理员
   if (superadmins.length <= 1) {
@@ -124,14 +124,14 @@ async function main() {
   }
 
   // 7. 确认操作
-  log.stdout(`\n👤 目标用户: ${targetUser.username} (${targetUser.email}) [ID: ${targetUser.id}]`);
+  logStdout(`\n👤 目标用户: ${targetUser.username} (${targetUser.email}) [ID: ${targetUser.id}]`);
 
   if (!force) {
     const rl = createRl();
     try {
       const ok = await ask(rl, `确认撤销 ${targetUser.email} 的 superadmin 权限？(y/N): `);
       if (ok.toLowerCase() !== 'y') {
-        log.stdout('❌ 操作已取消');
+        logStdout('❌ 操作已取消');
         process.exit(0);
       }
     } finally {
@@ -141,7 +141,7 @@ async function main() {
 
   // 8. 执行软删除
   await targetUserRole.update({ delete_version: targetUserRole.id });
-  log.stdout('✅ 已撤销 superadmin 角色');
+  logStdout('✅ 已撤销 superadmin 角色');
 
   // 9. 清除 Redis session
   try {
@@ -174,16 +174,16 @@ async function main() {
       }
       await redis.quit();
       if (cleared > 0) {
-        log.stdout(`🗑️  已清除 ${cleared} 个旧 Session`);
+        logStdout(`🗑️  已清除 ${cleared} 个旧 Session`);
       }
     }
   } catch (err) {
     log.warn(`⚠️  清除 Session 失败（可忽略）: ${err.message}`);
   }
 
-  log.stdout('\n🎉 操作完成！');
-  log.stdout(`   ${targetUser.email} 已不再拥有 superadmin 权限。`);
-  log.stdout('   该用户重新登录后，权限将立即生效。');
+  logStdout('\n🎉 操作完成！');
+  logStdout(`   ${targetUser.email} 已不再拥有 superadmin 权限。`);
+  logStdout('   该用户重新登录后，权限将立即生效。');
 }
 
 main()

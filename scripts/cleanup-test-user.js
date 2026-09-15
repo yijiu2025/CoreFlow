@@ -19,7 +19,7 @@
 import 'dotenv/config';
 import sequelize, { getModel } from '../src/framework/db/index.js';
 import { createClient } from 'redis';
-import { createLogger } from '../src/framework/log/index.js';
+import { createLogger, logStdout } from '../src/framework/log/index.js';
 
 const log = createLogger('scripts.cleanup-test-user');
 
@@ -159,25 +159,25 @@ async function cleanupRedis(redis, emails, dryRun) {
   }
 
   if (found.length === 0) {
-    log.stdout(`${C.dim}🧹 Redis 无邮箱相关残留 key${C.reset}`);
+    logStdout(`${C.dim}🧹 Redis 无邮箱相关残留 key${C.reset}`);
     return 0;
   }
 
-  log.stdout(`${C.cyan}📦 Redis 发现 ${found.length} 个相关 key：${C.reset}`);
+  logStdout(`${C.cyan}📦 Redis 发现 ${found.length} 个相关 key：${C.reset}`);
   for (const k of found) {
     const display = k && k.toString ? k.toString() : String(k);
-    log.stdout(`   ${C.dim}-${C.reset} ${JSON.stringify(display)}`);
+    logStdout(`   ${C.dim}-${C.reset} ${JSON.stringify(display)}`);
   }
 
   if (dryRun) {
-    log.stdout(`${C.yellow}（dry-run 模式，不实际删除 Redis key）${C.reset}`);
+    logStdout(`${C.yellow}（dry-run 模式，不实际删除 Redis key）${C.reset}`);
     return found.length;
   }
 
   // 批量删除（key 可能含二进制，统一转字符串）
   const keysToDelete = found.map(k => (k && k.toString ? k.toString() : String(k)));
   await redis.del(keysToDelete);
-  log.stdout(`${C.green}✅ 已删除 ${keysToDelete.length} 个 Redis key${C.reset}`);
+  logStdout(`${C.green}✅ 已删除 ${keysToDelete.length} 个 Redis key${C.reset}`);
   return keysToDelete.length;
 }
 
@@ -188,44 +188,44 @@ async function main() {
   const { emails, dryRun } = parseArgs(process.argv);
 
   if (emails.length === 0) {
-    log.stdout(`${C.red}用法: node scripts/cleanup-test-user.js <email1> [email2 ...] [--dry-run]${C.reset}`);
-    log.stdout(`${C.dim}示例: node scripts/cleanup-test-user.js test@example.com --dry-run${C.reset}`);
+    logStdout(`${C.red}用法: node scripts/cleanup-test-user.js <email1> [email2 ...] [--dry-run]${C.reset}`);
+    logStdout(`${C.dim}示例: node scripts/cleanup-test-user.js test@example.com --dry-run${C.reset}`);
     process.exit(1);
   }
 
-  log.stdout(`${C.cyan}🧹 清理注册测试数据${C.reset} ${dryRun ? `${C.yellow}[dry-run 预览模式]${C.reset}` : ''}`);
-  log.stdout(`${C.dim}目标邮箱: ${emails.join(', ')}${C.reset}\n`);
+  logStdout(`${C.cyan}🧹 清理注册测试数据${C.reset} ${dryRun ? `${C.yellow}[dry-run 预览模式]${C.reset}` : ''}`);
+  logStdout(`${C.dim}目标邮箱: ${emails.join(', ')}${C.reset}\n`);
 
   // 1. 查用户
   const users = await findUsers(emails);
   if (users.length === 0) {
-    log.stdout(`${C.yellow}⚠️ user_user 表中未找到这些邮箱的用户（可能已删除或未注册成功）${C.reset}`);
+    logStdout(`${C.yellow}⚠️ user_user 表中未找到这些邮箱的用户（可能已删除或未注册成功）${C.reset}`);
   } else {
-    log.stdout(`${C.cyan}👥 找到 ${users.length} 个用户：${C.reset}`);
+    logStdout(`${C.cyan}👥 找到 ${users.length} 个用户：${C.reset}`);
     for (const u of users) {
-      log.stdout(`   ${C.green}-${C.reset} id=${u.id}  ${u.email}  (${u.username || '-'})  注册于 ${u.created_at}`);
+      logStdout(`   ${C.green}-${C.reset} id=${u.id}  ${u.email}  (${u.username || '-'})  注册于 ${u.created_at}`);
     }
   }
 
   // 2. 预览关联表行数
   if (users.length > 0) {
-    log.stdout(`\n${C.cyan}📊 关联数据预览：${C.reset}`);
+    logStdout(`\n${C.cyan}📊 关联数据预览：${C.reset}`);
     for (const u of users) {
       const counts = await countRelated(u.id);
-      log.stdout(`   ${C.green}-${C.reset} 用户 ${u.email} (id=${u.id}):`);
+      logStdout(`   ${C.green}-${C.reset} 用户 ${u.email} (id=${u.id}):`);
       for (const { table, label } of TABLES_BY_USER_ID) {
         const c = counts[table];
         const cStr = c < 0 ? `${C.red}表不存在${C.reset}` : `${c} 行`;
-        log.stdout(`      ${C.dim}${label} (${table}): ${cStr}${C.reset}`);
+        logStdout(`      ${C.dim}${label} (${table}): ${cStr}${C.reset}`);
       }
     }
   }
 
   if (dryRun) {
-    log.stdout(`\n${C.yellow}dry-run 模式：以上为待删数据预览，未实际删除。去掉 --dry-run 执行删除。${C.reset}`);
+    logStdout(`\n${C.yellow}dry-run 模式：以上为待删数据预览，未实际删除。去掉 --dry-run 执行删除。${C.reset}`);
   } else if (users.length > 0) {
     // 3. 实际删除
-    log.stdout(`\n${C.cyan}🗑️  开始删除...${C.reset}`);
+    logStdout(`\n${C.cyan}🗑️  开始删除...${C.reset}`);
     let totalDeleted = 0;
     for (const u of users) {
       const deleted = await deleteRelated(u.id);
@@ -233,33 +233,33 @@ async function main() {
       for (const { table, label } of TABLES_BY_USER_ID) {
         const d = deleted[table];
         if (typeof d === 'number') userTotal += d;
-        log.stdout(`   ${C.green}-${C.reset} ${u.email} → ${label} (${table}): 删除 ${d} 行`);
+        logStdout(`   ${C.green}-${C.reset} ${u.email} → ${label} (${table}): 删除 ${d} 行`);
       }
       // 删主表
       try {
         const cnt = await exec(`DELETE FROM ${MAIN_TABLE.table} WHERE id = ?`, [u.id]);
-        log.stdout(`   ${C.green}-${C.reset} ${u.email} → ${MAIN_TABLE.label} (${MAIN_TABLE.table}): 删除 ${cnt} 行`);
+        logStdout(`   ${C.green}-${C.reset} ${u.email} → ${MAIN_TABLE.label} (${MAIN_TABLE.table}): 删除 ${cnt} 行`);
         userTotal += cnt;
       } catch (e) {
-        log.stdout(`   ${C.red}-${C.reset} ${u.email} → ${MAIN_TABLE.table} 删除失败: ${e.message}`);
+        logStdout(`   ${C.red}-${C.reset} ${u.email} → ${MAIN_TABLE.table} 删除失败: ${e.message}`);
       }
       totalDeleted += userTotal;
-      log.stdout(`   ${C.dim}小计: ${userTotal} 行${C.reset}\n`);
+      logStdout(`   ${C.dim}小计: ${userTotal} 行${C.reset}\n`);
     }
-    log.stdout(`${C.green}✅ MySQL 共删除 ${totalDeleted} 行${C.reset}`);
+    logStdout(`${C.green}✅ MySQL 共删除 ${totalDeleted} 行${C.reset}`);
   }
 
   // 4. 清 Redis
   const redis = await getRedisClient();
   if (redis) {
-    log.stdout(`\n${C.cyan}🧹 清理 Redis 残留...${C.reset}`);
+    logStdout(`\n${C.cyan}🧹 清理 Redis 残留...${C.reset}`);
     await cleanupRedis(redis, emails, dryRun);
     await redis.quit();
   } else {
-    log.stdout(`\n${C.dim}🧹 REDIS_ENABLED 非 true，跳过 Redis 清理${C.reset}`);
+    logStdout(`\n${C.dim}🧹 REDIS_ENABLED 非 true，跳过 Redis 清理${C.reset}`);
   }
 
-  log.stdout(`\n${C.green}✅ 清理完成${C.reset}`);
+  logStdout(`\n${C.green}✅ 清理完成${C.reset}`);
 }
 
 main()

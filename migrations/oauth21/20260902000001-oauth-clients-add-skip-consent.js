@@ -1,6 +1,5 @@
-import { createLogger } from '../../src/framework/log/index.js';
+import { logStdout } from '../../src/framework/log/index.js';
 
-const log = createLogger('migrations.oauth21.20260902000001-oauth-clients-add-skip-consent');
 /**
  * oauth_clients 表新增 skip_consent 列
  * 一方应用首次登录 directLogin 时跳过 consent 确认页，自动写 Approval + 默认权限。
@@ -18,7 +17,7 @@ export async function up({ queryInterface, Sequelize }) {
     `SHOW COLUMNS FROM oauth_clients WHERE Field = '${COLUMN_NAME}'`
   );
   if (columns.length > 0) {
-    log.stdout(`ℹ️  [Migrate] oauth_clients.${COLUMN_NAME} 已存在，跳过`);
+    logStdout(`ℹ️  [Migrate] oauth_clients.${COLUMN_NAME} 已存在，跳过`);
     return;
   }
   await queryInterface.addColumn('oauth_clients', COLUMN_NAME, {
@@ -27,7 +26,7 @@ export async function up({ queryInterface, Sequelize }) {
     defaultValue: false,
     comment: '首次登录是否跳过 consent 自动授权（一方应用用，默认 false）'
   });
-  log.stdout(`✅ [Migrate] oauth_clients.${COLUMN_NAME} 列已添加`);
+  logStdout(`✅ [Migrate] oauth_clients.${COLUMN_NAME} 列已添加`);
 }
 
 export async function down({ queryInterface }) {

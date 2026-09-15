@@ -5,15 +5,13 @@ import { testConnection } from '../lib/db.js';
 import { connectRedis, closeRedis } from '../lib/redis.js';
 import { getModels } from '../lib/db.js';
 import { printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
-import { createLogger } from '../../src/framework/log/index.js';
-
-const log = createLogger('scripts.commands.system');
+import { logStdout } from '../../src/framework/log/index.js';
 
 /**
  * 系统健康检查
  */
 export async function healthCheck() {
-  log.stdout('🏥 系统健康检查\n');
+  logStdout('🏥 系统健康检查\n');
 
   // 数据库
   const dbOk = await testConnection();
@@ -73,40 +71,40 @@ export async function healthCheck() {
   const uptime = process.uptime();
   const memUsage = process.memoryUsage();
 
-  log.stdout('\n📊 进程信息：');
+  logStdout('\n📊 进程信息：');
   printLine();
-  log.stdout(`  运行时间:   ${formatUptime(uptime)}`);
-  log.stdout(`  内存使用:   ${formatBytes(memUsage.heapUsed)}`);
-  log.stdout(`  内存总量:   ${formatBytes(memUsage.heapTotal)}`);
-  log.stdout(`  Node 版本:  ${process.version}`);
-  log.stdout(`  平台:       ${process.platform} ${process.arch}`);
+  logStdout(`  运行时间:   ${formatUptime(uptime)}`);
+  logStdout(`  内存使用:   ${formatBytes(memUsage.heapUsed)}`);
+  logStdout(`  内存总量:   ${formatBytes(memUsage.heapTotal)}`);
+  logStdout(`  Node 版本:  ${process.version}`);
+  logStdout(`  平台:       ${process.platform} ${process.arch}`);
   printLine();
 
-  log.stdout('\n🎉 健康检查完成');
+  logStdout('\n🎉 健康检查完成');
 }
 
 /**
  * 查看系统信息
  */
 export async function systemInfo() {
-  log.stdout('ℹ️  系统信息\n');
+  logStdout('ℹ️  系统信息\n');
 
-  log.stdout('环境变量：');
+  logStdout('环境变量：');
   printLine();
-  log.stdout(`  NODE_ENV:        ${process.env.NODE_ENV || '未设置'}`);
-  log.stdout(`  PORT:            ${process.env.PORT || '3000'}`);
-  log.stdout(`  DB_HOST:         ${process.env.DB_HOST || '未设置'}`);
-  log.stdout(`  DB_NAME:         ${process.env.DB_NAME || '未设置'}`);
-  log.stdout(`  REDIS_ENABLED:   ${process.env.REDIS_ENABLED || 'false'}`);
-  log.stdout(`  JWT_ENABLED:     ${process.env.JWT_ENABLED || 'false'}`);
+  logStdout(`  NODE_ENV:        ${process.env.NODE_ENV || '未设置'}`);
+  logStdout(`  PORT:            ${process.env.PORT || '3000'}`);
+  logStdout(`  DB_HOST:         ${process.env.DB_HOST || '未设置'}`);
+  logStdout(`  DB_NAME:         ${process.env.DB_NAME || '未设置'}`);
+  logStdout(`  REDIS_ENABLED:   ${process.env.REDIS_ENABLED || 'false'}`);
+  logStdout(`  JWT_ENABLED:     ${process.env.JWT_ENABLED || 'false'}`);
   printLine();
 
-  log.stdout('\n功能开关：');
+  logStdout('\n功能开关：');
   printLine();
-  log.stdout(`  Redis:           ${process.env.REDIS_ENABLED === 'true' ? '✅ 启用' : '❌ 禁用'}`);
-  log.stdout(`  JWT 模式:        ${process.env.JWT_ENABLED === 'true' ? '✅ 启用' : '❌ 禁用'}`);
-  log.stdout(`  SMTP:            ${process.env.SMTP_SERVER ? '✅ 配置' : '❌ 未配置'}`);
-  log.stdout(`  OSS:             ${process.env.OSS_ACCESS_KEY_ID ? '✅ 配置' : '❌ 未配置'}`);
+  logStdout(`  Redis:           ${process.env.REDIS_ENABLED === 'true' ? '✅ 启用' : '❌ 禁用'}`);
+  logStdout(`  JWT 模式:        ${process.env.JWT_ENABLED === 'true' ? '✅ 启用' : '❌ 禁用'}`);
+  logStdout(`  SMTP:            ${process.env.SMTP_SERVER ? '✅ 配置' : '❌ 未配置'}`);
+  logStdout(`  OSS:             ${process.env.OSS_ACCESS_KEY_ID ? '✅ 配置' : '❌ 未配置'}`);
   printLine();
 }
 
@@ -117,7 +115,7 @@ export async function cleanupExpiredData() {
   const { SessionToken, SessionLog, OauthCode } = getModels();
   const { Op } = await import('sequelize');
 
-  log.stdout('🧹 清理过期数据...\n');
+  logStdout('🧹 清理过期数据...\n');
 
   // 清理过期的 session token
   try {
@@ -158,7 +156,7 @@ export async function cleanupExpiredData() {
     printError(`清理 Session 日志失败: ${err.message}`);
   }
 
-  log.stdout('\n🎉 清理完成');
+  logStdout('\n🎉 清理完成');
 }
 
 /**

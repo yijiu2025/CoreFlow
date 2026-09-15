@@ -6,17 +6,15 @@
  */
 import { connectRedis, closeRedis } from '../../../../scripts/lib/redis.js';
 import { printError, printWarning, printLine } from '../../../../scripts/lib/table.js';
-import { createLogger } from '../../../framework/log/index.js';
-
-const log = createLogger('app.firewall.cli.status');
+import { logStdout } from '../../../framework/log/index.js';
 
 /**
  * 查看防火墙状态
  */
-export async function status() {
+async function status() {
   const redis = await connectRedis();
 
-  log.stdout('\n🛡️ 防火墙状态：');
+  logStdout('\n🛡️ 防火墙状态：');
   printLine();
 
   if (redis) {
@@ -25,10 +23,10 @@ export async function status() {
       const blockedFps = await redis.hgetall('fw:blocked:fps');
       const whitelistIps = await redis.smembers('fw:whitelist:ips');
 
-      log.stdout(`  Redis 连接:   ✅ 正常`);
-      log.stdout(`  封禁 IP 数:   ${Object.keys(blockedIps).length}`);
-      log.stdout(`  封禁指纹数:   ${Object.keys(blockedFps).length}`);
-      log.stdout(`  白名单 IP 数: ${whitelistIps.length}`);
+      logStdout(`  Redis 连接:   ✅ 正常`);
+      logStdout(`  封禁 IP 数:   ${Object.keys(blockedIps).length}`);
+      logStdout(`  封禁指纹数:   ${Object.keys(blockedFps).length}`);
+      logStdout(`  白名单 IP 数: ${whitelistIps.length}`);
     } catch (err) {
       printError(`Redis 查询失败: ${err.message}`);
     } finally {
@@ -40,3 +38,5 @@ export async function status() {
 
   printLine();
 }
+
+export { status };
