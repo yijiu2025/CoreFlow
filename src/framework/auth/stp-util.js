@@ -13,11 +13,19 @@
  * StpUtil.checkPermission('user:write');          // 权限校验（不通过抛 403）
  * ```
  *
+ * 依赖方向：本文件只依赖 `./request-context.js`（零依赖）。
+ * **不依赖 `./index.js`**——否则会形成 `index.js ↔ StpUtil.js` 循环依赖，且让
+ * "仅使用权限工具类" 的调用方连带拉起整条 auth 插件链（DB/Redis 建连）。
+ * 也不静态依赖 `./session.js`（它同样会拉起 db/redis）：仅 `login()` 需要它，
+ * 故在该方法内**惰性导入**。这样 `import StpUtil` 本身零副作用，
+ * 单测/脚本可安全引入而不触发建连。详见 AUDIT-REPORT-2026-09-12.md 🟡-1。
+ *
  * @author Claude
  * @since 2026-07-13
+ * @since 2026-09-14 改从 ./request-context.js 取 ALS 实例 + session.js 改惰性导入，
+ *                    去掉对 index.js 的反向依赖（消除循环依赖与连带副作用）
  */
-import { requestContext } from './index.js';
-import { createSession, detectDeviceType } from './session.js';
+import { requestContext } from './request-context.js';
 
 /**
  * 权限不足异常
@@ -39,7 +47,7 @@ class NotPermissionException extends Error {
  * StpUtil.checkPermission('user:admin:*');
  * const user = StpUtil.check();
  */
-export default class StpUtil {
+class StpUtil {
   // ==================== 内部工具方法 ====================
 
   /**
@@ -109,6 +117,11 @@ export default class StpUtil {
    */
   static async login(params) {
     const req = StpUtil._getRequest();
+
+    // 惰性导入 session.js：只有真正登录才需要它。静态导入会让"只是想用权限工具类"
+    // 的调用方（单测、脚本）连带拉起 session.js → db/redis 建连与告警（🟡-1）。
+    // 模块首次加载后走 ESM 缓存，后续调用无额外开销。
+    const { createSession, detectDeviceType } = await import('./session.js');
 
     // 从请求中推断设备信息
     const userAgent = req.headers?.['user-agent'] || '';
@@ -219,3 +232,5 @@ export default class StpUtil {
     throw new NotPermissionException(permissions.join(' OR '));
   }
 }
+
+export default StpUtil;

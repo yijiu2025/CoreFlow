@@ -6,7 +6,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeAll } from '@jest/globals';
 import crypto from 'crypto';
 import { isIpMatch } from '../utils/ip.js';
 
@@ -89,26 +89,13 @@ describe('核心逻辑', () => {
   });
 
   describe('Cookie 签名验证', () => {
-    const SECRET = 'test-secret';
+    // 改用 framework/auth/cookie.js 真身，不再内联副本（副本与真身已漂移，
+    // 掩盖了 🔴-1 timingSafeEqual 崩溃，见 AUDIT-REPORT-2026-09-12.md）
+    let signCookie, verifyCookie;
 
-    function signCookie(sessionId, accessCount) {
-      const payload = `${sessionId}:${accessCount}`;
-      const encoded = Buffer.from(payload).toString('base64url');
-      const signature = crypto.createHmac('sha256', SECRET).update(encoded).digest('base64url');
-      return `${encoded}.${signature}`;
-    }
-
-    function verifyCookie(cookieValue) {
-      if (!cookieValue) return null;
-      const parts = cookieValue.split('.');
-      if (parts.length !== 2) return null;
-      const [encoded, signature] = parts;
-      const expectedSig = crypto.createHmac('sha256', SECRET).update(encoded).digest('base64url');
-      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) return null;
-      const decoded = Buffer.from(encoded, 'base64url').toString();
-      const [sessionId, countStr] = decoded.split(':');
-      return { sessionId, accessCount: parseInt(countStr, 10) };
-    }
+    beforeAll(async () => {
+      ({ signCookie, verifyCookie } = await import('../framework/auth/cookie.js'));
+    });
 
     it('签名后可验证', () => {
       const sessionId = crypto.randomBytes(32).toString('hex');
@@ -132,6 +119,13 @@ describe('核心逻辑', () => {
       expect(cookie0).not.toBe(cookie5);
       expect(verifyCookie(cookie0).accessCount).toBe(0);
       expect(verifyCookie(cookie5).accessCount).toBe(5);
+    });
+
+    it('畸形签名段返回 null 且不抛（🔴-1 回归）', () => {
+      const payload = Buffer.from('sid:0').toString('base64url');
+      const evil = payload + '.' + 'z'.repeat(64);
+      expect(() => verifyCookie(evil)).not.toThrow();
+      expect(verifyCookie(evil)).toBeNull();
     });
   });
 

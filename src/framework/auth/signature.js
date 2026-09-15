@@ -84,7 +84,14 @@ async function verifySignature(request, reply) {
 
   const serverSign = crypto.createHash('sha256').update(signString).digest('hex');
 
-  if (serverSign !== sign) {
+  // 恒定时间比较：`sign` 完全由客户端控制且长度任意，若直接 timingSafeEqual 会因
+  // 两 Buffer 字节长度不等而抛 RangeError（与 AUDIT-REPORT 🔴-1 同一个坑）。
+  // 故先比字节长度（`Buffer.from(非法hex,'hex')` 会静默截断，长度自然不等 → 拒绝），
+  // 长度相等时再恒定时间比对，避免逐字节短路带来的时序侧信道。
+  // 摘要固定 64 hex = 32 字节。
+  const serverBuf = Buffer.from(serverSign, 'hex');
+  const clientBuf = Buffer.from(String(sign), 'hex');
+  if (clientBuf.length !== serverBuf.length || !crypto.timingSafeEqual(clientBuf, serverBuf)) {
     return reply.code(403).send({
       code: 403,
       error: 'signature_mismatch',
