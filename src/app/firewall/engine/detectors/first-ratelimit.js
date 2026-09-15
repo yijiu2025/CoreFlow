@@ -59,7 +59,13 @@ async function registerRateLimit(app) {
           statusCode: 429,
           ...resolveGeoInfo(ip)
         });
+        // ⚠️ `statusCode` 是**必需**的：插件 v10 直接 `throw errorResponseBuilder(...)`，
+        // Fastify 只认抛出的 Error/对象上的 `statusCode` 来决定 HTTP 状态。
+        // 缺了它（旧实现只给 `code`）→ 限流命中会以 **500** 返回而不是 429，
+        // 客户端看到的是服务端错误、且拿不到正确的语义。`code` 保留是因为
+        // 本项目响应体契约用 `code`（前端与日志按此解析）。
         return {
+          statusCode: 429,
           code: 429,
           error: 'Too Many Requests',
           message: `Your IP [${ip}] is temporary rate limited. Try again in ${context.after}.`

@@ -5,6 +5,15 @@
  *
  * 业务逻辑见 app/firewall/services/monitor.service.js（WS 广播 + 封禁/白名单编排）。
  *
+ * 授权说明：
+ *   - 本组 metadata 原先写 `requireLogin: false`，而 system.json 是 `requireLogin: true`，
+ *     守卫是**级联**的（system → group → api），任一层的 requireLogin 为真即要求登录，
+ *     因此 group 上的 false 从来没有生效过（实测未登录一律 401）。system 级改为
+ *     `requireLogin: false` 之后，各组的声明才真正决定行为 —— 本组是中控面板，必须登录。
+ *   - 15 个权限码此前只注册、不校验（所有路由无 requirePermission）。现已按
+ *     `fw_viewer`（只读）/ `fw_operator`（可写名单与策略）/ `fw_admin`（含节点管理、重置）
+ *     三个角色的策略逐一接线。
+ *
  * @author yijiu2025
  * @since 2026-08-17
  */
@@ -24,9 +33,11 @@ import {
   updateNodeSchema,
   updateSettingsSchema,
   blacklistSchema,
+  removeBlacklistSchema,
   blocksSchema,
   whitelistSchema
 } from './schemas/monitor.js';
+import { FIREWALL_PERMISSIONS } from '../../../app/firewall/permission/index.js';
 import {
   registerMonitorClient,
   clearRecordsAndBroadcast,
@@ -49,7 +60,7 @@ async function registerMonitorRoutes(fastify) {
     description: '负责分析实时流量、地理位置分布及异常请求检测。',
     prefix: '/v1/monitor',
     enabled: true,
-    requireLogin: false,
+    requireLogin: true,
     allowIps: [],
     allowRoles: []
   });
@@ -60,6 +71,8 @@ async function registerMonitorRoutes(fastify) {
     alias: '全局统计摘要',
     method: 'GET',
     url: '/summary',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.MONITOR.SUMMARY,
     schema: summarySchema,
     handler: async (request, reply) => {
       return reply.result.success('操作成功', {
@@ -74,6 +87,8 @@ async function registerMonitorRoutes(fastify) {
     alias: '实时流量日志',
     method: 'GET',
     url: '/records',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.MONITOR.LOGS,
     handler: async (req, reply) => reply.result.success('操作成功', getRecentRecords())
   });
 
@@ -82,6 +97,8 @@ async function registerMonitorRoutes(fastify) {
     alias: '清空审计记录',
     method: 'POST',
     url: '/clear',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.ADMIN.RESET,
     handler: async (req, reply) => {
       clearRecordsAndBroadcast();
       return reply.result.success('审计记录已清空');
@@ -94,6 +111,8 @@ async function registerMonitorRoutes(fastify) {
     alias: '手动更新节点信息',
     method: 'PATCH',
     url: '/node/update',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.ADMIN.NODE,
     schema: updateNodeSchema,
     handler: async (req, reply) => reply.result.success('更新成功', updateServerNodeMetadata(req.body))
   });
@@ -103,6 +122,8 @@ async function registerMonitorRoutes(fastify) {
     alias: '触发自动定位',
     method: 'POST',
     url: '/node/refresh',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.ADMIN.NODE,
     handler: async (req, reply) => {
       await refreshServerNodeAuto();
       return reply.result.success('位置检测已执行', getServerNode());
@@ -115,6 +136,8 @@ async function registerMonitorRoutes(fastify) {
     alias: '获取全局安全设置',
     method: 'GET',
     url: '/settings',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.DEFENSE.READ,
     handler: async (req, reply) =>
       reply.result.success('操作成功', {
         settings: getSecuritySettings(),
@@ -127,6 +150,8 @@ async function registerMonitorRoutes(fastify) {
     alias: '更新安全设置 (支持局部更新)',
     method: 'PATCH',
     url: '/settings',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.DEFENSE.WRITE,
     schema: updateSettingsSchema,
     handler: async (req, reply) => reply.result.success('设置已更新', updateSecuritySettings(req.body))
   });
@@ -137,9 +162,11 @@ async function registerMonitorRoutes(fastify) {
     alias: '添加黑名单(IP/用户)',
     method: 'POST',
     url: '/blacklist',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.BLOCK.WRITE,
     schema: blacklistSchema,
     handler: async (req, reply) => {
-      const result = await addBlacklistEntry(req.server.redis, req.body);
+      const result = await addBlacklistEntry(req.body);
       if (!result.ok) return reply.result.badRequest(result.message);
       return reply.result.success(result.message, result.defenseState);
     }
@@ -150,8 +177,13 @@ async function registerMonitorRoutes(fastify) {
     alias: '移除黑名单',
     method: 'DELETE',
     url: '/blacklist',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.BLOCK.WRITE,
+    // DELETE 带 body 是合法的（Fastify 会解析），但原先没有 schema：body 缺失时
+    // handler 里读 req.body.type 直接抛 TypeError → 500。补 schema 让它稳定回 400。
+    schema: removeBlacklistSchema,
     handler: async (req, reply) => {
-      const result = await removeBlacklistEntry(req.server.redis, req.body);
+      const result = await removeBlacklistEntry(req.body);
       return reply.result.success(result.message, result.defenseState);
     }
   });
@@ -162,8 +194,10 @@ async function registerMonitorRoutes(fastify) {
     alias: '获取所有活跃封禁列表',
     method: 'GET',
     url: '/blocks',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.BLOCK.READ,
     handler: async (req, reply) => {
-      const blocks = await getActiveBlocks(req.server.redis);
+      const blocks = await getActiveBlocks();
       return reply.result.success('操作成功', blocks);
     }
   });
@@ -173,9 +207,11 @@ async function registerMonitorRoutes(fastify) {
     alias: '添加封禁(IP)',
     method: 'POST',
     url: '/blocks',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.BLOCK.WRITE,
     schema: blocksSchema,
     handler: async (req, reply) => {
-      const result = await addIpBlock(req.server.redis, req.body);
+      const result = await addIpBlock(req.body);
       if (!result.ok) return reply.result.badRequest(result.message);
       return reply.result.success(result.message);
     }
@@ -186,8 +222,10 @@ async function registerMonitorRoutes(fastify) {
     alias: '移除封禁',
     method: 'DELETE',
     url: '/blocks/:ip',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.BLOCK.WRITE,
     handler: async (req, reply) => {
-      const result = await removeIpBlock(req.server.redis, req.params.ip);
+      const result = await removeIpBlock(req.params.ip);
       if (!result.ok) return reply.result.badRequest(result.message);
       return reply.result.success(result.message);
     }
@@ -199,8 +237,10 @@ async function registerMonitorRoutes(fastify) {
     alias: '获取所有活跃白名单',
     method: 'GET',
     url: '/whitelist',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.WHITELIST.READ,
     handler: async (req, reply) => {
-      const list = await getActiveWhitelist(req.server.redis);
+      const list = await getActiveWhitelist();
       return reply.result.success('操作成功', list);
     }
   });
@@ -210,9 +250,11 @@ async function registerMonitorRoutes(fastify) {
     alias: '添加白名单',
     method: 'POST',
     url: '/whitelist',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.WHITELIST.WRITE,
     schema: whitelistSchema,
     handler: async (req, reply) => {
-      const result = await addIpWhitelist(req.server.redis, req.body);
+      const result = await addIpWhitelist(req.body);
       if (!result.ok) return reply.result.badRequest(result.message);
       return reply.result.success(result.message);
     }
@@ -223,8 +265,10 @@ async function registerMonitorRoutes(fastify) {
     alias: '移除白名单',
     method: 'DELETE',
     url: '/whitelist/:ip',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.WHITELIST.WRITE,
     handler: async (req, reply) => {
-      const result = await removeIpWhitelist(req.server.redis, req.params.ip);
+      const result = await removeIpWhitelist(req.params.ip);
       if (!result.ok) return reply.result.badRequest(result.message);
       return reply.result.success(result.message);
     }
@@ -236,8 +280,11 @@ async function registerMonitorRoutes(fastify) {
     alias: '添加指纹封禁',
     method: 'POST',
     url: '/blocks/fp',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.BLOCK.FINGERPRINT,
+    schema: fpSchema('fingerprint', true),
     handler: async (req, reply) => {
-      const result = await addFpBlock(req.server.redis, req.body);
+      const result = await addFpBlock(req.body);
       if (!result.ok) return reply.result.badRequest(result.message);
       return reply.result.success(result.message);
     }
@@ -248,8 +295,10 @@ async function registerMonitorRoutes(fastify) {
     alias: '移除指纹封禁',
     method: 'DELETE',
     url: '/blocks/fp/:fingerprint',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.BLOCK.FINGERPRINT,
     handler: async (req, reply) => {
-      const result = await removeFpBlock(req.server.redis, req.params.fingerprint);
+      const result = await removeFpBlock(req.params.fingerprint);
       if (!result.ok) return reply.result.badRequest(result.message);
       return reply.result.success(result.message);
     }
@@ -261,8 +310,11 @@ async function registerMonitorRoutes(fastify) {
     alias: '添加指纹白名单',
     method: 'POST',
     url: '/whitelist/fp',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.WHITELIST.WRITE,
+    schema: fpSchema('fingerprint', false),
     handler: async (req, reply) => {
-      const result = await addFpWhitelist(req.server.redis, req.body);
+      const result = await addFpWhitelist(req.body);
       if (!result.ok) return reply.result.badRequest(result.message);
       return reply.result.success(result.message);
     }
@@ -273,8 +325,10 @@ async function registerMonitorRoutes(fastify) {
     alias: '移除指纹白名单',
     method: 'DELETE',
     url: '/whitelist/fp/:fingerprint',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.WHITELIST.WRITE,
     handler: async (req, reply) => {
-      const result = await removeFpWhitelist(req.server.redis, req.params.fingerprint);
+      const result = await removeFpWhitelist(req.params.fingerprint);
       if (!result.ok) return reply.result.badRequest(result.message);
       return reply.result.success(result.message);
     }
@@ -285,8 +339,34 @@ async function registerMonitorRoutes(fastify) {
   registerSecureWebSocket(fastify, {
     url: wsUrl,
     requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.MONITOR.READ,
     handler: (connection, req, client) => registerMonitorClient(client)
   });
+}
+
+/**
+ * 指纹类接口的请求体 Schema（原先这两个接口完全没有 schema，`req.body` 缺失即 500）
+ *
+ * @param {string} field 指纹字段名
+ * @param {boolean} withBlockFields 是否带封禁相关字段（时长/永久/状态）
+ * @returns {object} JSON Schema
+ */
+function fpSchema(field, withBlockFields) {
+  const properties = {
+    [field]: { type: 'string', minLength: 8 },
+    duration: { type: 'number', minimum: 60 }
+  };
+  if (withBlockFields) {
+    properties.permanent = { type: 'boolean' };
+    properties.status = { type: 'string', enum: ['BLOCKED', 'SCANNER', 'CHALLENGE'] };
+  }
+  return {
+    body: {
+      type: 'object',
+      required: [field],
+      properties
+    }
+  };
 }
 
 export default registerMonitorRoutes;

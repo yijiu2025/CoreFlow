@@ -77,8 +77,14 @@ defineRoles([
       Version: '2026-06-06',
       Statement: [
         {
+          // 必须是 `fw:*` 而不是 `fw:admin:*`。
+          // guard 的通配符语义是「**同前缀**下的任意权限」（isPermissionMatch：
+          // pattern 以 `:*` 结尾时只比较 `pattern.slice(0,-1)` 这个前缀），
+          // 所以 `fw:admin:*` 只能覆盖 `fw:admin:node` / `fw:admin:reset`，
+          // 对 `fw:config:write`、`fw:block:write` 等**一律不匹配** ——
+          // 命名为「管理员」的角色实际几乎没有任何权限。
           Effect: 'Allow',
-          Action: ['fw:admin:*']
+          Action: ['fw:*']
         }
       ]
     }

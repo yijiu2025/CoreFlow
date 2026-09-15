@@ -3,6 +3,11 @@
  *
  * 覆盖：检测器、管道、告警、导入导出
  *
+ * ⚠️ 本文件测试的是**本文件内的内联副本**，不是 `src/app/firewall` 的真身实现。
+ * 因此它无法发现真身里的缺陷（审查报告 🟡-7：正是这一点让 4 个 🔴 长期漏过）。
+ * 真身覆盖在 `firewall-redis-adapter.test.js` 与端到端探针里。
+ * 待办：改为 `import` 真身并 mock Redis（见 AUDIT-REPORT-2026-09-15.md 🟡-7）。
+ *
  * @author yijiu2025
  * @since 2026-08-17
  */

@@ -10,6 +10,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { getMetricsView } from '../../../app/firewall/services/metrics.service.js';
+import { FIREWALL_PERMISSIONS } from '../../../app/firewall/permission/index.js';
 
 async function registerMetricsRoutes(fastify) {
   registerGroupMetadata({
@@ -30,8 +31,9 @@ async function registerMetricsRoutes(fastify) {
     method: 'GET',
     url: '/',
     requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.MONITOR.READ,
     handler: async (req, reply) => {
-      const view = await getMetricsView(req.server.redis);
+      const view = await getMetricsView();
       return reply.result.success('获取成功', view);
     }
   });

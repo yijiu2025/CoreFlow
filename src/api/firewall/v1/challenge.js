@@ -31,6 +31,20 @@ async function registerChallengeRoutes(fastify) {
     alias: '提交验证结果',
     method: 'POST',
     url: '/verify',
+    // 本组必须保持免登录：被挑战的请求正是**尚未通过验证**的请求，
+    // 若这里要求登录，挑战就永远解不开（见 docs/AUDIT-REPORT-2026-09-15.md 🔴-1）。
+    // system 级 requireLogin 已改为 false，本组的声明因此才真正生效。
+    requireLogin: false,
+    schema: {
+      body: {
+        type: 'object',
+        required: ['challengeId', 'answer'],
+        properties: {
+          challengeId: { type: 'string', pattern: '^[0-9a-f]{32}$' },
+          answer: { type: 'string', minLength: 1, maxLength: 10 }
+        }
+      }
+    },
     handler: async (request, reply) => {
       const result = await verifyChallenge(request, reply);
       if (!result.ok) {

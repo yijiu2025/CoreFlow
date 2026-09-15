@@ -12,13 +12,11 @@ import { getActiveBlocks, getActiveWhitelist } from '../dao/block-manager.js';
 
 /**
  * 聚合防火墙性能指标视图
- * @param {object} redis - Fastify redis 实例（查封禁/白名单）
  * @returns {Promise<object>} 指标视图（requests/blocks/whitelist/topRegions/topPaths）
  */
-async function getMetricsView(redis) {
+async function getMetricsView() {
   const summary = getSummary();
-  const blocks = await getActiveBlocks(redis);
-  const whitelist = await getActiveWhitelist(redis);
+  const [blocks, whitelist] = await Promise.all([getActiveBlocks(), getActiveWhitelist()]);
 
   return {
     requests: {

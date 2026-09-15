@@ -3,6 +3,10 @@
  *
  * 覆盖：Session Store、Nonce Store、Resilient Store
  *
+ * ⚠️ 本文件测试的是**本文件内的内联副本**，不是 `framework/redis` 的真身实现。
+ * 真身覆盖见 `src/__tests__/framework/redis/` 与 `firewall-redis-adapter.test.js`。
+ * 待办见 AUDIT-REPORT-2026-09-15.md 🟡-7。
+ *
  * @author yijiu2025
  * @since 2026-08-17
  */

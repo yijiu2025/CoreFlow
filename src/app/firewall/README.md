@@ -3,15 +3,15 @@
 ## 目录结构
 
 ```
-src/firewall/
+src/app/firewall/
 ├── index.js                          # Fastify 插件入口：注册限流、同步名单、挂载生命周期钩子
 │
 ├── config/                           # 配置文件
 │   └── config.js                     # 默认安全策略矩阵、IP 解析 API 列表、常量定义
 │
 ├── data/                             # 运行中数据
-│   ├── store.js                      # 内存环形缓冲区（10000 条）、统计汇总、磁盘持久化、WebSocket 广播
-│   └── challenge-template.js         # 人机挑战页面 HTML 模板（含 HMAC 签名 + 浏览器指纹采集）
+│   ├── store.js                      # 内存环形缓冲区（1000 条）、统计汇总、磁盘持久化、WebSocket 广播
+│   └── challenge-template.js         # 人机挑战页面 HTML 模板（内联 SHA-256 PoW 求解器，载荷由服务端持有）
 │
 ├── dao/                              # 数据交互层（firewall ↔ API/前端）
 │   ├── dao.js                        # 配置持久化（JSON 文件）、黑白名单管理、节点自动定位
@@ -98,8 +98,8 @@ firewall onResponse 钩子
 
 | 文件                  | 职责                                                   | 关键导出                                                                          |
 | --------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| store.js              | 10000 条环形缓冲区、地域/路径/IP 统计、10 秒节流持久化 | `pushRecord`, `getRecentRecords`, `getSummary`, `clearAll`, `setBroadcastHandler` |
-| challenge-template.js | 生成含 HMAC 签名的挑战 HTML 页面                       | `buildChallengePage`                                                              |
+| store.js              | 1000 条环形缓冲区、地域/路径/IP 统计、10 秒节流持久化  | `pushRecord`, `getRecentRecords`, `getSummary`, `clearAll`, `setBroadcastHandler` |
+| challenge-template.js | 生成含 SHA-256 PoW 的挑战 HTML 页面                    | `buildChallengePage`                                                              |
 
 ### dao/ — 数据交互层
 

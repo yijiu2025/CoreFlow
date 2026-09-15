@@ -25,6 +25,10 @@ const log = createLogger('app.firewall.util.connection-tracker');
  */
 const trackConnection = (ip, delta) => {
   const settings = getConfig().defense;
+
+  // 并发连接限制开关：此前没有任何读取点，运维关掉「并发连接限制」后限制照旧生效。
+  if (!settings.enableConnLimit) return 0;
+
   const maxConn = settings.maxConn || settings.maxConnections || 100;
 
   const current = (activeConnections.get(ip) || 0) + delta;
