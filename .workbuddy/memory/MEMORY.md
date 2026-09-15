@@ -45,6 +45,24 @@
   所以必须同时用"形式规则"（禁 `Export*Declaration > FunctionDeclaration` 等行内形式）兜住
 - 强制范围目前仅 `src/`；`migrations/`（Umzug 的 `export async function up/down`）、`scripts/` 未纳入
 
+## firewall 三维度封禁（ip / fingerprint / device）
+
+- `fingerprint = sha256(ip|ua|lang|enc)` 前 16 位 —— **输入含 IP → 换 IP 即变、改任一请求头也变**。
+  所以 README 那句"同一攻击者更换 IP 后仍可追踪"与实现**相反**；指纹只能表达
+  「这台机器 + 这个 IP + 这组请求头」。
+- **`deviceId` 是栈里唯一与 IP 无关的身份**（auth 结构化 ID `WEB-<Base62ts>-<6位>`）。
+  跨 IP 追踪只能靠它。取值用 `framework/auth/device.js` 的 **`getClientDeviceId()`**：
+  只认客户端自报且校验通过的值、**不补发**（补发的 ID 每请求都可能不同，拿它封禁等于没封）。
+- 自动封禁/挑战走 `block-manager.setBlockForSubject({ip, deviceId}, meta)` → **同时**写
+  IP 与设备两个维度；`enableDeviceBlock=false`（`FW_DEVICE_BLOCK`）退回纯 IP。
+- 访问层读写统一走 `util/redis.js` 的 `DIMS` 分派表 + `dimOf()` 优先级
+  （device > fingerprint > ip），**不要**再散落 `isFp ? A : B` 三元。
+- **强度边界（写代码/写宣称时都要守）**：`device_id` 由客户端携带且**不是凭证**，
+  清 localStorage + httpOnly cookie 即可换新身份 → 这是**提高攻击成本**，不是屏障。
+- 匿名短路 `defense.skipDeepCheckForAnonymous`（默认关闭）：路由 `config.requireLogin === true`
+  且**一个凭据都没带**才跳过深度检测。`requireLogin` 由 `registerSecureRoute` 写进路由 config ——
+  前提是「Fastify 在 onRequest 前完成路由匹配」（已用真实 Fastify 用例钉死，勿假定永久成立）。
+
 ## 框架层通用陷阱（实测确认，改代码前必读）
 
 - **`getModel(name)` 未命中抛 `TypeError`**（非返回 null，`db/index.js:77`）→ `if (!Model) return null` 是死代码；
@@ -58,6 +76,28 @@
 - **`crypto.timingSafeEqual` 要求两 Buffer 字节长度相等**，否则抛 `RangeError`；`Buffer.from(str,'hex')`
   遇非法 hex **静默截断成空 Buffer** → 「比字符串长度」不等于「比字节长度」（auth 审查 🔴-1 根因）。
 - **`bcryptjs` 只取前 72 字节**；密码长度上限按 `Buffer.byteLength` 判断，`maxLength:128`（字符）会漏掉尾巴。
+- **跨模块 re-export 漏一项 ⇒ 上层入口整个加载失败**：`engine/index.js` 漏了
+  `willBeRejectedAsAnonymous`，而 `app/firewall/index.js` 从它导入 → ESM **链接期**抛
+  `does not provide an export named ...`，`initFirewall` 根本注册不上。**单测不经过该入口
+  就全绿**。改完导出面后，除"跑一次真实 import"外，**必须 import 一次上层入口模块**。
+- **模块级 `process.exit` 是会伪装的绿色**：`framework/db/index.js` 缺 DB 环境变量时
+  `setTimeout(() => process.exit(1), 100)`，jest 加载整个模块图 → worker 跑一半被强杀。
+  症状：**用例总数每次都不一样**（847/850/851/858/861/862）而**汇总恒 0 失败**；
+  `--runInBand` 整个进程中途死掉。修法 `!isTestEnv`（`JEST_WORKER_ID`/`NODE_ENV=test`），
+  生产 fail-fast 不变。**看到"用例总数不稳定"先查模块级 exit，别当成 jest 抽风。**
+- **内联副本测试会固化与真身相反的结论**（不只是覆盖不到）：旧 `bot-detector.test.js` 副本
+  把 `curl` 当 bot 模式，真身默认只有 `libcurl` —— 裸 `curl` 请求 10 万次也只走 PASS。
+  子 Agent 产物/`__tests__` 里出现"无 import 的纯本地函数再断言"一律视为未覆盖。
+- **jest 里测真身的手法**：无 `.env` 时访问层自动走内存实现 → **不必 mock Redis**；
+  只替换"配置来源"（注入 `DEFAULT_SECURITY_SETTINGS.defense` 的可写副本），零策略复制，
+  且避开 `triggerSave` 1s 防抖覆写被 git 跟踪的配置文件；落盘副作用（`data/store.js`
+  10s 防抖写 `traffic_stats.json`）用 `unstable_mockModule` 整体换成可断言桩。
+- **`registerSecureRoute` 用 Fastify 对象形式**（handler 在 `opts.handler`，非第 3 个位置参数）；
+  用假 Fastify 捕获 `(url, opts)` 即可离线跑真身 handler。守卫的 `_routeRegistry` 有重复注册
+  检测 → **一个测试文件只能注册一组路由**，须模块顶层注册一次共享。测试里
+  `getGuardConfig().prefix` 为空，真实 URL 是 `/v1/monitor/...` 而非 `/api/firewall/v1/...`。
+- **`getMapStore(prefix)` 不做实例缓存**（每次返回新包装对象），底层静态存储按 prefix 共享
+  → 断言"数据共享"而非"对象同一"。
 - **「守卫未防御非预期输入」是本仓高频缺陷类**（cookie.js / totp.js / signature.js 各 1 例）：外部可控值
   直接进 `timingSafeEqual` / `.length` / `Buffer.from(x,'hex')` → 必须先做类型 + 长度归一化，
   并把函数体包进 try 兜底到声明的失败返回值。
