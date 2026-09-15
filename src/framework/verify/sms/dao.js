@@ -67,4 +67,6 @@ class SmsDao {
   }
 }
 
-export default new SmsDao();
+const smsDao = new SmsDao();
+
+export default smsDao;

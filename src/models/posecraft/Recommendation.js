@@ -11,7 +11,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} Recommendation 模型
  */
-export default (sequelize, DataTypes) => {
+const defineRecommendation = (sequelize, DataTypes) => {
   const Recommendation = sequelize.define(
     'Recommendation',
     {
@@ -69,3 +69,5 @@ export default (sequelize, DataTypes) => {
 
   return Recommendation;
 };
+
+export default defineRecommendation;

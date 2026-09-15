@@ -18,7 +18,7 @@ const baseResponse = dataSchema => ({
 });
 
 // 1. 监控摘要响应
-export const summarySchema = {
+const summarySchema = {
   description: '获取防火墙监控摘要数据',
   response: {
     200: baseResponse({
@@ -53,7 +53,7 @@ export const summarySchema = {
 };
 
 // 2. 更新节点信息请求
-export const updateNodeSchema = {
+const updateNodeSchema = {
   description: '更新服务器节点地理位置信息',
   body: {
     type: 'object',
@@ -73,7 +73,7 @@ export const updateNodeSchema = {
 };
 
 // 3. 更新安全设置请求
-export const updateSettingsSchema = {
+const updateSettingsSchema = {
   description: '更新全局防御策略设置',
   body: {
     type: 'object',
@@ -109,7 +109,7 @@ export const updateSettingsSchema = {
 };
 
 // 4. 黑名单操作请求
-export const blacklistSchema = {
+const blacklistSchema = {
   description: '添加/移除黑名单',
   body: {
     type: 'object',
@@ -127,7 +127,7 @@ export const blacklistSchema = {
 };
 
 // 5. 封禁管理请求
-export const blocksSchema = {
+const blocksSchema = {
   description: '添加封禁记录',
   body: {
     type: 'object',
@@ -145,7 +145,7 @@ export const blocksSchema = {
 };
 
 // 6. 白名单管理请求
-export const whitelistSchema = {
+const whitelistSchema = {
   description: '添加白名单记录',
   body: {
     type: 'object',
@@ -159,3 +159,5 @@ export const whitelistSchema = {
     200: baseResponse({ type: 'object' })
   }
 };
+
+export { summarySchema, updateNodeSchema, updateSettingsSchema, blacklistSchema, blocksSchema, whitelistSchema };

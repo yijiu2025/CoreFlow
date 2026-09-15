@@ -27,7 +27,7 @@ import { createLock } from './lock-store.js';
  * @param {number} [options.lockTtl=5000] - 锁超时（ms），默认 5s
  * @returns {Promise<any>} 缓存数据或 fetchFn 返回值
  */
-export async function cacheThrough(key, fetchFn, ttl, options = {}) {
+async function cacheThrough(key, fetchFn, ttl, options = {}) {
   const { prefix = 'cache', retryDelay = 50, lockTtl = 5000 } = options;
   const store = getStore(prefix);
 
@@ -73,7 +73,7 @@ export async function cacheThrough(key, fetchFn, ttl, options = {}) {
  * @param {string} [prefix='cache'] - 缓存前缀
  * @returns {Promise<any>} updateFn 的返回值
  */
-export async function cacheInvalidate(key, updateFn, prefix = 'cache') {
+async function cacheInvalidate(key, updateFn, prefix = 'cache') {
   const store = getStore(prefix);
   const result = await updateFn();
   // 先删缓存
@@ -88,3 +88,5 @@ export async function cacheInvalidate(key, updateFn, prefix = 'cache') {
   }, 500);
   return result;
 }
+
+export { cacheThrough, cacheInvalidate };

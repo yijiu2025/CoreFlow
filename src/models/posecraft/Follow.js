@@ -9,7 +9,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} Follow 模型
  */
-export default (sequelize, DataTypes) => {
+const defineFollow = (sequelize, DataTypes) => {
   const Follow = sequelize.define(
     'Follow',
     {
@@ -74,3 +74,5 @@ export default (sequelize, DataTypes) => {
 
   return Follow;
 };
+
+export default defineFollow;

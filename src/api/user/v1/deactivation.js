@@ -14,7 +14,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import deactivationService from '../../../app/user/services/deactivation.service.js';
 
-export default async function (fastify) {
+async function registerDeactivationRoutes(fastify) {
   registerGroupMetadata({
     name: 'userDeactivation',
     alias: '用户注销',
@@ -123,3 +123,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerDeactivationRoutes;

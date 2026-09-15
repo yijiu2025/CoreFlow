@@ -178,5 +178,7 @@ class RecaptchaService {
   }
 }
 
+const recaptchaService = new RecaptchaService();
+
 export { VERIFY_RESULT };
-export default new RecaptchaService();
+export default recaptchaService;

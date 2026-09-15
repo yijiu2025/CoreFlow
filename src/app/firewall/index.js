@@ -28,7 +28,7 @@ const log = createLogger('app.firewall.index');
  * 初始化防火墙插件
  * @param {import('fastify').FastifyInstance} app Fastify 实例
  */
-export const initFirewall = fp(async function (app) {
+const initFirewall = fp(async function (app) {
   // ============== 定时任务 ==============
   startCleanupTask(app);
 
@@ -116,3 +116,5 @@ export const initFirewall = fp(async function (app) {
     }
   });
 });
+
+export { initFirewall };

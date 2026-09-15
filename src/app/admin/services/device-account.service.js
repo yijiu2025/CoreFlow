@@ -76,7 +76,7 @@ function mergeAccountEntry(acc, row) {
  * @property {string|null} firstSeenAt 该设备最早出现时间
  * @property {string|null} lastActiveAt 该设备最后活跃时间
  */
-export async function getDeviceAccountSummary(deviceId) {
+async function getDeviceAccountSummary(deviceId) {
   if (typeof deviceId !== 'string' || !deviceId || deviceId.length > MAX_DEVICE_ID_LENGTH) {
     return null;
   }
@@ -125,3 +125,5 @@ export async function getDeviceAccountSummary(deviceId) {
     lastActiveAt: rows[0]?.last_active || null
   };
 }
+
+export { getDeviceAccountSummary };

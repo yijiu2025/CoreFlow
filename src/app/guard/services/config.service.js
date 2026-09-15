@@ -26,7 +26,7 @@ function buildOperator(request) {
  * 热更新指定 system/group(/apiKey) 配置
  * @returns {{ok:true, updated:object} | {ok:false, statusCode:number, message:string}}
  */
-export function updateConfig(system, group, apiKey, patch, request) {
+function updateConfig(system, group, apiKey, patch, request) {
   const operator = buildOperator(request);
   const updated = setGuardConfig(system, patch, group, apiKey, operator);
   if (!updated) {
@@ -41,7 +41,7 @@ export function updateConfig(system, group, apiKey, patch, request) {
  * 定位 system → group → (apiKey 指定时为接口级，否则模块级)，翻转 enabled。
  * @returns {{ok:true, enabled:boolean} | {ok:false, statusCode:number, message:string}}
  */
-export function toggleConfig(system, groupKey, apiKey, request) {
+function toggleConfig(system, groupKey, apiKey, request) {
   const configs = getAllGuardConfigs();
   const sys = configs[system];
   if (!sys) return { ok: false, statusCode: 404, message: '系统不存在' };
@@ -60,7 +60,7 @@ export function toggleConfig(system, groupKey, apiKey, request) {
  * 系统全局防御一键开关
  * @returns {{ok:true, enabled:boolean} | {ok:false, statusCode:number, message:string}}
  */
-export function toggleSystemConfig(system, request) {
+function toggleSystemConfig(system, request) {
   const configs = getAllGuardConfigs();
   if (!configs[system]) return { ok: false, statusCode: 404, message: '系统不存在' };
 
@@ -68,3 +68,5 @@ export function toggleSystemConfig(system, request) {
   setGuardConfig(system, { enabled: newState }, null, null, buildOperator(request));
   return { ok: true, enabled: newState };
 }
+
+export { updateConfig, toggleConfig, toggleSystemConfig };

@@ -120,4 +120,6 @@ class EmailDao {
   }
 }
 
-export default new EmailDao();
+const emailDao = new EmailDao();
+
+export default emailDao;

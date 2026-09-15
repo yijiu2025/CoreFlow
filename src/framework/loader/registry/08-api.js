@@ -21,7 +21,7 @@ import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.loader.registry.08-api');
 
-export default async app => {
+const apiLoader = async app => {
   const apiRoot = path.resolve(__dirname, '../../../api');
 
   log.dev(`📦 [Loader] ${C.cyan}启动 API 递归加载引擎...${C.reset}`);
@@ -108,3 +108,5 @@ export default async app => {
     }
   }
 };
+
+export default apiLoader;

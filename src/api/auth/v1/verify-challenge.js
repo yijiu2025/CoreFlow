@@ -18,7 +18,7 @@ import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('api.auth.v1.verify-challenge');
 
-export default async function (fastify) {
+async function registerVerifyChallengeRoutes(fastify) {
   registerGroupMetadata({
     name: 'authVerify',
     alias: '风险验证',
@@ -81,3 +81,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerVerifyChallengeRoutes;

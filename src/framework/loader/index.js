@@ -25,7 +25,7 @@ const log = createLogger('framework.loader.index');
  * @returns {Promise<void>}
  * @throws {Error} 引擎初始化失败时向上冒泡，阻止服务启动
  */
-export async function initLoader(app) {
+async function initLoader(app) {
   // 防御性校验：防止传入 undefined 时抛出难以定位的 TypeError
   if (!app) throw new Error('initLoader: 参数 app 不能为空');
 
@@ -42,3 +42,5 @@ export async function initLoader(app) {
     throw err;
   }
 }
+
+export { initLoader };

@@ -8,7 +8,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import noticeDao from '../../../app/notice/dao/notice.js';
 import emailService from '../../../framework/notice/services/email.js';
 
-export default async function (fastify, opts) {
+async function registerConfigRoutes(fastify, opts) {
   registerGroupMetadata({
     name: 'config',
     description: '通知配置管理',
@@ -88,3 +88,5 @@ export default async function (fastify, opts) {
     }
   });
 }
+
+export default registerConfigRoutes;

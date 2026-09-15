@@ -14,7 +14,7 @@
  * @param {string} [currentSid] - 当前请求的 sid cookie（用于标记 isCurrent）
  * @returns {{sessions: Array, total: number}}
  */
-export function formatSessionList(sessions, currentSid) {
+function formatSessionList(sessions, currentSid) {
   return {
     sessions: sessions.map(s => ({
       sessionId: s.sessionId?.substring(0, 16) + '...',
@@ -37,7 +37,7 @@ export function formatSessionList(sessions, currentSid) {
  * @param {string} deviceId 原始设备 ID
  * @returns {string} 打码后的设备 ID
  */
-export function maskDeviceId(deviceId) {
+function maskDeviceId(deviceId) {
   if (!deviceId || typeof deviceId !== 'string') return '';
   const parts = deviceId.split('-');
   // 非标准格式（无三段）：整体保首尾各 4 字符
@@ -60,7 +60,7 @@ export function maskDeviceId(deviceId) {
  * @param {string} [currentTokenHash] - 当前会话的 sha256(sid)（用于标记 isCurrent，比对 r.token）
  * @returns {{devices: Array, total: number}}
  */
-export function formatDeviceList(rows, currentTokenHash) {
+function formatDeviceList(rows, currentTokenHash) {
   return {
     devices: rows.map(r => ({
       id: r.id,
@@ -75,3 +75,5 @@ export function formatDeviceList(rows, currentTokenHash) {
     total: rows.length
   };
 }
+
+export { formatSessionList, maskDeviceId, formatDeviceList };

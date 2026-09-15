@@ -14,7 +14,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import ClientDao from '../../../../app/oauth21/dao/client.dao.js';
 import PermissionDao from '../../../../app/oauth21/dao/permission.dao.js';
 
-export default async function (fastify) {
+async function registerOauth21Routes(fastify) {
   registerGroupMetadata({
     name: 'oauth21-admin',
     alias: 'OAuth 客户端与权限管理',
@@ -89,3 +89,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerOauth21Routes;

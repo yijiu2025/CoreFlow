@@ -15,7 +15,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { getAllGuardConfigs } from '../../guard-config.js';
 import { updateConfig, toggleConfig, toggleSystemConfig } from '../../../app/guard/services/config.service.js';
 
-export default async function (fastify) {
+async function registerApiConfigRoutes(fastify) {
   registerGroupMetadata({
     name: 'apiConfigs',
     alias: '安全配置中心',
@@ -91,3 +91,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerApiConfigRoutes;

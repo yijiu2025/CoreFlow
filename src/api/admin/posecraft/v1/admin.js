@@ -11,7 +11,7 @@ import workDao from '../../../../app/posecraft/dao/work.dao.js';
 import bannerConfigDao from '../../../../app/posecraft/dao/bannerConfig.dao.js';
 import channelDao from '../../../../app/posecraft/dao/channel.dao.js';
 
-export default async function (fastify) {
+async function registerAdminRoutes(fastify) {
   registerGroupMetadata({
     name: 'posecraft-admin',
     description: 'PoseCraft 管理端接口',
@@ -300,3 +300,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerAdminRoutes;

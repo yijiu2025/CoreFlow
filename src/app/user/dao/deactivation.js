@@ -10,14 +10,14 @@ import { getModel } from '../../../framework/db/index.js';
 import { Op } from 'sequelize';
 
 /** 注销申请状态 */
-export const DEACTIVATION_STATUS = {
+const DEACTIVATION_STATUS = {
   PENDING: 1, // 注销中（待撤销）
   REVOKED: 2, // 已撤销
   EXECUTED: 3 // 已执行（正式注销完成）
 };
 
 /** 注销范围 */
-export const DEACTIVATION_SCOPE = {
+const DEACTIVATION_SCOPE = {
   APP: 'app', // 单个应用
   ALL: 'all' // 全部数据
 };
@@ -181,4 +181,7 @@ class UserDeactivationDao {
   }
 }
 
-export default new UserDeactivationDao();
+const userDeactivationDao = new UserDeactivationDao();
+
+export { DEACTIVATION_STATUS, DEACTIVATION_SCOPE };
+export default userDeactivationDao;

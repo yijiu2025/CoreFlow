@@ -40,3 +40,6 @@ packages/log-backup-*/
 
 # Mimosa 安全扫描器临时产物
 .mimosa/
+
+# oauth21 构建产物（tarball 分发包，不入库）
+oauth21/*.tar.gz

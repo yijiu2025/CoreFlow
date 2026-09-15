@@ -28,7 +28,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const defineOauthToken = (sequelize, DataTypes) => {
   const OauthToken = sequelize.define(
     'OauthToken',
     {
@@ -91,3 +91,5 @@ export default (sequelize, DataTypes) => {
 
   return OauthToken;
 };
+
+export default defineOauthToken;

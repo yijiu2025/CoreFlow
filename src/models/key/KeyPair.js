@@ -11,7 +11,7 @@
 
 import { Model } from 'sequelize';
 
-export default function (sequelize, DataTypes) {
+function defineKeyPair(sequelize, DataTypes) {
   class KeyPair extends Model {
     static associate(models) {
       // 无关联
@@ -40,3 +40,5 @@ export default function (sequelize, DataTypes) {
 
   return KeyPair;
 }
+
+export default defineKeyPair;

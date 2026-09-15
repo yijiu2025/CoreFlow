@@ -14,7 +14,7 @@
  * @param {boolean} [isOwner=false] - 是否作者本人（作者可见 views_count）
  * @returns {object|null} 格式化后的作品对象
  */
-export function formatWork(work, isOwner = false) {
+function formatWork(work, isOwner = false) {
   if (!work) return null;
   const data = work.toJSON ? work.toJSON() : work;
   return {
@@ -65,7 +65,7 @@ export function formatWork(work, isOwner = false) {
  * @param {boolean} [isOwner=false] 是否作者本人
  * @returns {object|null}
  */
-export function formatWorkDetail(work, isOwner = false) {
+function formatWorkDetail(work, isOwner = false) {
   const base = formatWork(work, isOwner);
   if (!base) return null;
   const data = work.toJSON ? work.toJSON() : work;
@@ -88,6 +88,8 @@ export function formatWorkDetail(work, isOwner = false) {
  * @param {Array<object>} workList - 作品实例数组
  * @returns {Array<object>}
  */
-export function formatWorkList(list) {
+function formatWorkList(list) {
   return (list || []).map(w => formatWork(w));
 }
+
+export { formatWork, formatWorkDetail, formatWorkList };

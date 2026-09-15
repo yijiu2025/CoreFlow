@@ -78,7 +78,7 @@ function maskEmail(email) {
  * @param {object} fastify - Fastify 实例（H5 token 等用）
  * @returns {Promise<object>} reply 结果
  */
-export async function directLogin(request, reply, fastify) {
+async function directLogin(request, reply, fastify) {
   const { client_id, scope } = request.body;
   const oidcNonce = request.body.oidcNonce;
 
@@ -440,7 +440,7 @@ export async function directLogin(request, reply, fastify) {
 /**
  * 快捷登录确认授权（consentKey 换令牌）
  */
-export async function confirmDirectConsent(request, reply, fastify) {
+async function confirmDirectConsent(request, reply, fastify) {
   const { consentKey } = request.body;
   if (!consentKey) {
     return reply.code(400).send({
@@ -540,7 +540,7 @@ export async function confirmDirectConsent(request, reply, fastify) {
  * @param {object} reply
  * @param {object} fastify
  */
-export async function verifyEmailLogin(request, reply, fastify) {
+async function verifyEmailLogin(request, reply, fastify) {
   const { verifyToken, code } = request.body;
 
   if (!verifyToken || !code) {
@@ -590,3 +590,5 @@ export async function verifyEmailLogin(request, reply, fastify) {
 
   return reply.send({ code: 200, message: '登录成功', data: result });
 }
+
+export { directLogin, confirmDirectConsent, verifyEmailLogin };

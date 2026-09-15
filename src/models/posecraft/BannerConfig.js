@@ -10,7 +10,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} BannerConfig 模型
  */
-export default (sequelize, DataTypes) => {
+const defineBannerConfig = (sequelize, DataTypes) => {
   const BannerConfig = sequelize.define(
     'BannerConfig',
     {
@@ -89,3 +89,5 @@ export default (sequelize, DataTypes) => {
 
   return BannerConfig;
 };
+
+export default defineBannerConfig;

@@ -406,6 +406,47 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 
   详细文档：[packages/shared-device/README.zh-CN.md](packages/shared-device/README.zh-CN.md)（英文版 README.md）；参考实现：`posecraft/src/utils/request.ts`、`posecraft/src/components/modals/login/LoginModal.vue`
 
+### 导出位置（强制）
+
+**所有 `export` 一律收拢到文件末尾**，定义处不写 `export` 关键字。
+
+```js
+// ✅ 正确：定义与导出分离
+function foo() {}
+const BAR = 1;
+
+export { foo, BAR };
+export default mainExport;
+```
+
+```js
+// ❌ 禁止：定义处行内导出
+export function foo() {}
+export const BAR = 1;
+export default () => {};
+```
+
+**理由**：模块的公开面集中在文件末尾，一眼可见、便于审计；新增导出时不会漏改、导出散落各处导致的「模块到底暴露了什么」需要通读全文。
+
+**默认导出的写法**（先把值命名 / 把函数具名化，再在末尾导出）：
+
+| 原写法                                     | 改为                                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------------------- |
+| `export default (a, b) => {...}`           | `const defineX = (a, b) => {...};` + 末尾 `export default defineX;`                |
+| `export default new XxxDao()`              | `const xxxDao = new XxxDao();` + 末尾 `export default xxxDao;`                     |
+| `export default {...}`                     | `const xxxConfig = {...};` + 末尾 `export default xxxConfig;`                      |
+| `export default async function (fastify)`  | `async function registerXxxRoutes(fastify) {...}` + 末尾 `export default registerXxxRoutes;` |
+| `export default Foo;`                      | 原样移到文件末尾                                                                   |
+
+**re-export 同样属于导出**，也放末尾：`export * from 'x'`、`export { a } from 'y'`（含 `export { default as x } from './y.js'`）。
+
+**双保险**：
+
+- `eslint.config.js` 的 `no-restricted-syntax`（`files: src/**/*.js`）拦截新写的行内导出；
+- `src/__tests__/conventions/export-placement.test.js` 跨文件扫描全仓一致性。
+
+> 当前强制范围为 `src/`（含测试目录）。`migrations/`、`scripts/` 暂未纳入 —— Umzug 的 `export async function up/down` 是否改写需另行评估。
+
 ### 文件大小限制
 
 **单个 JS/VUE 文件不超过 1000 行**（含空行和注释）。超过时分析是否是同一个功能，按功能拆分：

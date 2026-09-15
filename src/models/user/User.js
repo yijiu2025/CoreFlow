@@ -17,7 +17,7 @@ import { encryptPhone, decryptPhone, isEncrypted } from '../../utils/crypto.js';
 /**
  * 工业级用户基础信息模型 (User Profile)
  */
-export default (sequelize, DataTypes) => {
+const defineUser = (sequelize, DataTypes) => {
   const User = sequelize.define(
     'User',
     {
@@ -214,3 +214,5 @@ export default (sequelize, DataTypes) => {
 
   return User;
 };
+
+export default defineUser;

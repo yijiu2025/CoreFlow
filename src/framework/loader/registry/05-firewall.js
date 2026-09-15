@@ -6,6 +6,8 @@
  */
 import { initFirewall } from '../../../app/firewall/index.js';
 
-export default async app => {
+const firewallLoader = async app => {
   await app.register(initFirewall);
 };
+
+export default firewallLoader;

@@ -5,7 +5,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-export default {
+const posecraftConfig = {
   app_id: 'posecraft',
   name: 'PoseCraft',
   description: 'AI 姿势分析 + 图片编辑平台',
@@ -33,3 +33,5 @@ export default {
     }
   }
 };
+
+export default posecraftConfig;

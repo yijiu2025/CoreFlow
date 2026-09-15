@@ -23,7 +23,7 @@ const PASS_TOKEN_TTL = 1800;
  * @param {object} reply - Fastify reply（设 Cookie）
  * @returns {Promise<{ok:true} | {ok:false, statusCode:number, reason:string}>}
  */
-export async function verifyChallenge(request, reply) {
+async function verifyChallenge(request, reply) {
   const { nonce, timestamp, signature, webgl, webdriver, plugins } = request.body;
   const fingerprint = generateFingerprint(request);
 
@@ -71,3 +71,5 @@ export async function verifyChallenge(request, reply) {
 
   return { ok: true };
 }
+
+export { verifyChallenge };

@@ -1,4 +1,4 @@
-export default (sequelize, DataTypes) => {
+const defineSessionToken = (sequelize, DataTypes) => {
   const SessionToken = sequelize.define(
     'SessionToken',
     {
@@ -107,3 +107,5 @@ export default (sequelize, DataTypes) => {
 
   return SessionToken;
 };
+
+export default defineSessionToken;

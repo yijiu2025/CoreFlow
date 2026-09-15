@@ -71,4 +71,6 @@ class CaptchaDao {
   }
 }
 
-export default new CaptchaDao();
+const captchaDao = new CaptchaDao();
+
+export default captchaDao;

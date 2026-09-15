@@ -10,7 +10,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} Template 模型
  */
-export default (sequelize, DataTypes) => {
+const defineTemplate = (sequelize, DataTypes) => {
   const Template = sequelize.define(
     'Template',
     {
@@ -172,3 +172,5 @@ export default (sequelize, DataTypes) => {
 
   return Template;
 };
+
+export default defineTemplate;

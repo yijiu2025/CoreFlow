@@ -11,7 +11,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export const CSRF_EXCLUDE_PATHS = [
+const CSRF_EXCLUDE_PATHS = [
   // 登录/注册
   '/oauth2.1/login',
   '/oauth2.1/mini-login',
@@ -37,3 +37,5 @@ export const CSRF_EXCLUDE_PATHS = [
   // WebSocket
   '/api/firewall/v1/monitor/ws'
 ];
+
+export { CSRF_EXCLUDE_PATHS };

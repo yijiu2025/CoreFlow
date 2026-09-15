@@ -8,7 +8,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import BannerConfigDao from '../../../app/posecraft/dao/bannerConfig.dao.js';
 
-export default async function (fastify) {
+async function registerBannerConfigRoutes(fastify) {
   registerGroupMetadata({
     name: 'bannerConfig',
     description: 'Banner 配置',
@@ -31,3 +31,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerBannerConfigRoutes;

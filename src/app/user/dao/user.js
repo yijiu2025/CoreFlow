@@ -415,4 +415,6 @@ class UserDao {
   }
 }
 
-export default new UserDao();
+const userDao = new UserDao();
+
+export default userDao;

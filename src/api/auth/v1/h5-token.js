@@ -14,7 +14,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { issueH5Token } from '../../../framework/auth/signature.js';
 
-export default async function (fastify) {
+async function registerH5TokenRoutes(fastify) {
   registerGroupMetadata({
     name: 'h5token',
     alias: 'H5签名Token',
@@ -42,3 +42,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerH5TokenRoutes;

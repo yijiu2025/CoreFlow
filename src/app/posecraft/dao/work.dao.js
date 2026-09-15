@@ -519,4 +519,6 @@ class WorkDao {
   }
 }
 
-export default new WorkDao();
+const workDao = new WorkDao();
+
+export default workDao;

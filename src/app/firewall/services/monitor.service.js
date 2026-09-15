@@ -50,7 +50,7 @@ function broadcast(msg) {
 }
 
 /** 广播单条日志记录 */
-export function broadcastLog(record) {
+function broadcastLog(record) {
   try {
     broadcast({ type: 'LOG', data: record });
   } catch (err) {
@@ -59,7 +59,7 @@ export function broadcastLog(record) {
 }
 
 /** 广播 INIT 消息（清空后重置 / 新客户端连接） */
-export function broadcastInit() {
+function broadcastInit() {
   broadcast({
     type: 'INIT',
     data: { summary: getSummary(), records: [] }
@@ -70,7 +70,7 @@ export function broadcastInit() {
  * 注册新的 WebSocket 客户端：PING/PONG + 加入广播集合 + 首发 INIT
  * @param {object} client - WebSocket 客户端实例
  */
-export function registerMonitorClient(client) {
+function registerMonitorClient(client) {
   if (!client || typeof client.on !== 'function') {
     log.warn('⚠️  WebSocket 异常：未发现有效的 Socket 实例');
     return;
@@ -100,7 +100,7 @@ export function registerMonitorClient(client) {
 }
 
 /** 清空审计记录并广播 INIT 重置 */
-export function clearRecordsAndBroadcast() {
+function clearRecordsAndBroadcast() {
   clearAll();
   broadcastInit();
 }
@@ -121,7 +121,7 @@ function computeBlockMeta({ duration, permanent }) {
  * 添加 IP 黑名单（持久化 + Redis 封禁）
  * @returns {{ok:true, message:string, defenseState:object} | {ok:false, message:string}}
  */
-export async function addBlacklistEntry(redis, { type, value, duration, permanent }) {
+async function addBlacklistEntry(redis, { type, value, duration, permanent }) {
   if (!['ip', 'user'].includes(type) || !value) {
     return { ok: false, message: '参数错误' };
   }
@@ -146,7 +146,7 @@ export async function addBlacklistEntry(redis, { type, value, duration, permanen
 /**
  * 移除黑名单（持久化 + Redis 封禁 + lock 清理）
  */
-export async function removeBlacklistEntry(redis, { type, value }) {
+async function removeBlacklistEntry(redis, { type, value }) {
   const defenseState = removeFromBlacklist(type, value);
   if (type === 'ip') {
     await removeBlock(redis, value);
@@ -163,7 +163,7 @@ export async function removeBlacklistEntry(redis, { type, value }) {
  * 添加 IP 封禁
  * @returns {{ok:true, message:string} | {ok:false, message:string}}
  */
-export async function addIpBlock(redis, { ip, duration, permanent, status }) {
+async function addIpBlock(redis, { ip, duration, permanent, status }) {
   if (!ip) return { ok: false, message: '缺少 IP 参数' };
 
   const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent });
@@ -182,7 +182,7 @@ export async function addIpBlock(redis, { ip, duration, permanent, status }) {
 }
 
 /** 移除 IP 封禁 */
-export async function removeIpBlock(redis, ip) {
+async function removeIpBlock(redis, ip) {
   if (!ip) return { ok: false, message: '缺少 IP 参数' };
   await removeBlock(redis, ip);
   removeFromBlacklist('ip', ip);
@@ -190,7 +190,7 @@ export async function removeIpBlock(redis, ip) {
 }
 
 /** 添加指纹封禁 */
-export async function addFpBlock(redis, { fingerprint, duration, permanent, status }) {
+async function addFpBlock(redis, { fingerprint, duration, permanent, status }) {
   if (!fingerprint) return { ok: false, message: '缺少指纹参数' };
   const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent });
   const blockStatus = status || 'BLOCKED';
@@ -206,14 +206,14 @@ export async function addFpBlock(redis, { fingerprint, duration, permanent, stat
 }
 
 /** 移除指纹封禁 */
-export async function removeFpBlock(redis, fingerprint) {
+async function removeFpBlock(redis, fingerprint) {
   if (!fingerprint) return { ok: false, message: '缺少指纹参数' };
   await removeBlockFp(redis, fingerprint);
   return { ok: true, message: '已解除指纹封禁' };
 }
 
 /** 添加 IP 白名单（默认 20 分钟） */
-export async function addIpWhitelist(redis, { ip, duration }) {
+async function addIpWhitelist(redis, { ip, duration }) {
   if (!ip) return { ok: false, message: '缺少 IP 参数' };
   const dur = duration || 1200;
   await setWhitelist(redis, ip, dur);
@@ -222,7 +222,7 @@ export async function addIpWhitelist(redis, { ip, duration }) {
 }
 
 /** 移除 IP 白名单 */
-export async function removeIpWhitelist(redis, ip) {
+async function removeIpWhitelist(redis, ip) {
   if (!ip) return { ok: false, message: '缺少 IP 参数' };
   await removeWhitelistRedis(redis, ip);
   removeFromWhitelist(ip);
@@ -230,7 +230,7 @@ export async function removeIpWhitelist(redis, ip) {
 }
 
 /** 添加指纹白名单 */
-export async function addFpWhitelist(redis, { fingerprint, duration }) {
+async function addFpWhitelist(redis, { fingerprint, duration }) {
   if (!fingerprint) return { ok: false, message: '缺少指纹参数' };
   const dur = duration || 1200;
   await setWhitelistFp(redis, fingerprint, dur);
@@ -238,8 +238,25 @@ export async function addFpWhitelist(redis, { fingerprint, duration }) {
 }
 
 /** 移除指纹白名单 */
-export async function removeFpWhitelist(redis, fingerprint) {
+async function removeFpWhitelist(redis, fingerprint) {
   if (!fingerprint) return { ok: false, message: '缺少指纹参数' };
   await removeWhitelistFp(redis, fingerprint);
   return { ok: true, message: '已移除指纹白名单' };
 }
+
+export {
+  broadcastLog,
+  broadcastInit,
+  registerMonitorClient,
+  clearRecordsAndBroadcast,
+  addBlacklistEntry,
+  removeBlacklistEntry,
+  addIpBlock,
+  removeIpBlock,
+  addFpBlock,
+  removeFpBlock,
+  addIpWhitelist,
+  removeIpWhitelist,
+  addFpWhitelist,
+  removeFpWhitelist
+};

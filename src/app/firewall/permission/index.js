@@ -10,7 +10,7 @@ import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
  * 防火墙应用域 (Firewall Domain) 权限字典常量
  * 使用工厂函数自动合并元数据注册与常量导出，遵循 DRY 原则。
  */
-export const FIREWALL_PERMISSIONS = createPermissionRegistry('firewall', '防火墙模块', {
+const FIREWALL_PERMISSIONS = createPermissionRegistry('firewall', '防火墙模块', {
   // 监控查看（所有登录用户）
   MONITOR: {
     READ: { code: 'fw:monitor:read', label: '查看监控数据', type: 'read' },
@@ -52,4 +52,5 @@ export const FIREWALL_PERMISSIONS = createPermissionRegistry('firewall', '防火
   }
 });
 
+export { FIREWALL_PERMISSIONS };
 export default FIREWALL_PERMISSIONS;

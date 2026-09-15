@@ -145,4 +145,6 @@ class CaptchaService {
   }
 }
 
-export default new CaptchaService();
+const captchaService = new CaptchaService();
+
+export default captchaService;

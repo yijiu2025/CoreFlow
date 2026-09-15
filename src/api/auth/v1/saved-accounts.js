@@ -14,7 +14,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { switchAccount, removeSavedAccount } from '../../../framework/auth/session-api.service.js';
 import { isAllowedOrigin } from '../../../framework/auth/origin-guard.js';
 
-export default async function (fastify) {
+async function registerSavedAccountsRoutes(fastify) {
   registerGroupMetadata({
     name: 'saved-accounts',
     alias: '已登录账号',
@@ -89,3 +89,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerSavedAccountsRoutes;

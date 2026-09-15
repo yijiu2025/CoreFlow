@@ -11,7 +11,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { getMetricsView } from '../../../app/firewall/services/metrics.service.js';
 
-export default async function (fastify) {
+async function registerMetricsRoutes(fastify) {
   registerGroupMetadata({
     name: 'metrics',
     alias: '性能指标',
@@ -36,3 +36,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerMetricsRoutes;

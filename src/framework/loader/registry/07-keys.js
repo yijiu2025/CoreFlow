@@ -14,7 +14,7 @@ import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.loader.registry.07-keys');
 
-export default async function (app) {
+async function keysLoader(app) {
   try {
     await ensureCurrentKey();
     log.always(`🔑 [Loader: Keys] ${C.cyan}密钥初始化完成${C.reset}`);
@@ -22,3 +22,5 @@ export default async function (app) {
     log.error(`❌ [Loader: Keys] ${C.red}密钥初始化失败${C.reset}`, err);
   }
 }
+
+export default keysLoader;

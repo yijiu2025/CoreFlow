@@ -18,7 +18,7 @@ import registerLoginRoutes from './login.js';
 import registerQrRoutes from './qr.js';
 import registerRegisterRoutes from './register.js';
 
-export default async function (fastify) {
+async function registerAuthRoutes(fastify) {
   const sessionStore = getStore('session');
   const qrStore = getStore('qr');
 
@@ -46,3 +46,5 @@ export default async function (fastify) {
   registerQrRoutes(fastify, qrStore);
   registerRegisterRoutes(fastify);
 }
+
+export default registerAuthRoutes;

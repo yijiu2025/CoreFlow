@@ -46,4 +46,6 @@ class PermissionDao {
   }
 }
 
-export default new PermissionDao();
+const permissionDao = new PermissionDao();
+
+export default permissionDao;

@@ -7,7 +7,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const defineOauthConsent = (sequelize, DataTypes) => {
   const OauthConsent = sequelize.define(
     'OauthConsent',
     {
@@ -67,3 +67,5 @@ export default (sequelize, DataTypes) => {
 
   return OauthConsent;
 };
+
+export default defineOauthConsent;

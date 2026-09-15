@@ -28,4 +28,6 @@ class QrCodeDao {
   }
 }
 
-export default new QrCodeDao();
+const qrCodeDao = new QrCodeDao();
+
+export default qrCodeDao;

@@ -196,4 +196,6 @@ class FollowDao {
   }
 }
 
-export default new FollowDao();
+const followDao = new FollowDao();
+
+export default followDao;

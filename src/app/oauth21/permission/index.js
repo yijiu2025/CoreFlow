@@ -11,7 +11,7 @@ import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
  * OAuth 2.1 权限定义
  * 三段式格式: oauth:资源:动作
  */
-export const OAUTH_PERMISSIONS = createPermissionRegistry('oauth21', 'OAuth 2.1 授权中心', {
+const OAUTH_PERMISSIONS = createPermissionRegistry('oauth21', 'OAuth 2.1 授权中心', {
   // 客户端管理
   CLIENT: {
     READ: { code: 'oauth:client:read', label: '查看客户端', type: 'read' },
@@ -49,4 +49,5 @@ export const OAUTH_PERMISSIONS = createPermissionRegistry('oauth21', 'OAuth 2.1 
   }
 });
 
+export { OAUTH_PERMISSIONS };
 export default OAUTH_PERMISSIONS;

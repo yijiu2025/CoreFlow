@@ -6,7 +6,7 @@
  */
 import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
 
-export const GUARD_PERMISSIONS = createPermissionRegistry('guard', '守卫配置', {
+const GUARD_PERMISSIONS = createPermissionRegistry('guard', '守卫配置', {
   CONFIG: {
     READ: { code: 'guard:config:read', label: '查看守卫配置', type: 'read' },
     WRITE: { code: 'guard:config:write', label: '修改守卫配置', type: 'write' },
@@ -14,4 +14,5 @@ export const GUARD_PERMISSIONS = createPermissionRegistry('guard', '守卫配置
   }
 });
 
+export { GUARD_PERMISSIONS };
 export default GUARD_PERMISSIONS;

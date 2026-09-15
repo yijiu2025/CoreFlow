@@ -43,7 +43,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const defineOauthClient = (sequelize, DataTypes) => {
   const OauthClient = sequelize.define(
     'OauthClient',
     {
@@ -128,3 +128,5 @@ export default (sequelize, DataTypes) => {
 
   return OauthClient;
 };
+
+export default defineOauthClient;

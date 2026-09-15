@@ -104,4 +104,6 @@ class ApprovalDao {
   }
 }
 
-export default new ApprovalDao();
+const approvalDao = new ApprovalDao();
+
+export default approvalDao;

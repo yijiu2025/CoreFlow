@@ -5,7 +5,7 @@
  * @author Claude
  * @since 2026-07-16
  */
-export default (sequelize, DataTypes) => {
+const defineChannel = (sequelize, DataTypes) => {
   const Channel = sequelize.define(
     'Channel',
     {
@@ -89,3 +89,5 @@ export default (sequelize, DataTypes) => {
 
   return Channel;
 };
+
+export default defineChannel;

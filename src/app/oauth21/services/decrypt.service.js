@@ -30,7 +30,7 @@ function ensureNonceStore() {
  * @param {object} request - Fastify request
  * @returns {object} { success, data?, error?, statusCode? }
  */
-export async function decryptLoginRequest(request) {
+async function decryptLoginRequest(request) {
   const { encrypted, timestamp, nonce, kid } = request.body;
 
   // 注意：图形验证码校验移至 login.service 按 type 分支处理
@@ -102,7 +102,7 @@ export async function decryptLoginRequest(request) {
  * @param {object} request - Fastify request（用于校验 IP+UA 指纹一致性）
  * @returns {object} { success?, error? }
  */
-export async function verifyEmailCode(email, code, request) {
+async function verifyEmailCode(email, code, request) {
   const emailCodeStore = getStore('email_code');
   try {
     // captchaKey 作为 sessionId 回查一致性 + 指纹 + 一次性消费
@@ -117,3 +117,5 @@ export async function verifyEmailCode(email, code, request) {
     return { success: false, error: err.message || '验证码错误或已过期' };
   }
 }
+
+export { decryptLoginRequest, verifyEmailCode };

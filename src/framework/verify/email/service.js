@@ -35,4 +35,6 @@ class EmailService {
   }
 }
 
-export default new EmailService();
+const emailServiceInstance = new EmailService();
+
+export default emailServiceInstance;

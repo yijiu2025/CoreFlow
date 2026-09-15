@@ -4,7 +4,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-export default (sequelize, DataTypes) => {
+const defineEmailCode = (sequelize, DataTypes) => {
   const EmailCode = sequelize.define(
     'EmailCode',
     {
@@ -76,3 +76,5 @@ export default (sequelize, DataTypes) => {
 
   return EmailCode;
 };
+
+export default defineEmailCode;

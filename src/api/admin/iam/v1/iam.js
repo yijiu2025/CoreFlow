@@ -9,7 +9,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { actionMetaRegistry } from '../../../../utils/PbacRegistry.js';
 import { logAuditEvent } from '../../../../framework/auth/audit-logger.js';
 
-export default async function (fastify) {
+async function registerIamRoutes(fastify) {
   registerGroupMetadata({
     name: 'iam',
     alias: '权限管理',
@@ -153,3 +153,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerIamRoutes;

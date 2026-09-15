@@ -8,7 +8,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import RecommendationDao from '../../../app/posecraft/dao/recommendation.dao.js';
 
-export default async function (fastify) {
+async function registerRecommendationRoutes(fastify) {
   registerGroupMetadata({
     name: 'recommendation',
     description: '推荐管理',
@@ -156,3 +156,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerRecommendationRoutes;

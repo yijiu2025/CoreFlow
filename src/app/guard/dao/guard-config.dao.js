@@ -158,4 +158,6 @@ class GuardConfigDao {
   }
 }
 
-export default new GuardConfigDao();
+const guardConfigDao = new GuardConfigDao();
+
+export default guardConfigDao;

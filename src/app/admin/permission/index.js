@@ -11,7 +11,7 @@ import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
  * 管理后台权限定义
  * 三段式格式: admin:资源:动作
  */
-export const ADMIN_PERMISSIONS = createPermissionRegistry('admin', '管理后台', {
+const ADMIN_PERMISSIONS = createPermissionRegistry('admin', '管理后台', {
   // 用户管理
   USER: {
     READ: { code: 'admin:user:read', label: '查看用户', type: 'read' },
@@ -53,4 +53,5 @@ export const ADMIN_PERMISSIONS = createPermissionRegistry('admin', '管理后台
   }
 });
 
+export { ADMIN_PERMISSIONS };
 export default ADMIN_PERMISSIONS;

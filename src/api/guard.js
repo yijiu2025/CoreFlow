@@ -213,7 +213,7 @@ async function applyGuardLogic(opts = {}, request, reply) {
 /**
  * 创建级联守卫 (1 > 2 > 3 权重模型)
  */
-export function createGuard(systemKey, groupKey, apiKey = null) {
+function createGuard(systemKey, groupKey, apiKey = null) {
   return async function (request, reply) {
     const startTime = performance.now();
 
@@ -267,7 +267,7 @@ export function createGuard(systemKey, groupKey, apiKey = null) {
 /**
  * 【Loader 调用】设置当前扫描的系统上下文
  */
-export function setRegistrationContext(systemKey) {
+function setRegistrationContext(systemKey) {
   // 空字符串、null、undefined 均使用固定默认值，避免随机数导致路由注册到不可预期的系统
   currentSystem =
     systemKey && typeof systemKey === 'string' && systemKey.trim().length > 0 ? systemKey.trim() : 'system-default';
@@ -278,14 +278,14 @@ export function setRegistrationContext(systemKey) {
 /**
  * 【Loader 调用】获取当前注册上下文（供 07-api.js 保存/恢复）
  */
-export function getRegistrationContext() {
+function getRegistrationContext() {
   return { currentSystem, currentGroup, currentPrefix };
 }
 
 /**
  * 【Loader 调用】恢复注册上下文（供 07-api.js 在 loadRouteFile 后还原）
  */
-export function restoreRegistrationContext(ctx) {
+function restoreRegistrationContext(ctx) {
   if (!ctx || typeof ctx !== 'object') {
     log.warn('⚠️ [Guard] restoreRegistrationContext: ctx 参数无效');
     return;
@@ -304,7 +304,7 @@ export function restoreRegistrationContext(ctx) {
  * 支持单对象签名：registerGroupMetadata({ name: 'key', ... })
  * 无需手动指定 System，Loader 会根据文件夹自动设置上下文
  */
-export function registerGroupMetadata(metadata) {
+function registerGroupMetadata(metadata) {
   if (!metadata || typeof metadata !== 'object') {
     log.warn('⚠️ [Guard] registerGroupMetadata: metadata 参数无效');
     return;
@@ -323,7 +323,7 @@ export function registerGroupMetadata(metadata) {
 /**
  * 【Level 3】高层级安全路由注册
  */
-export function registerSecureRoute(fastify, options) {
+function registerSecureRoute(fastify, options) {
   // 参数防御性校验
   if (!options || typeof options !== 'object') {
     const err = new Error('registerSecureRoute: options 参数无效');
@@ -439,7 +439,7 @@ export function registerSecureRoute(fastify, options) {
  * @param {string|object} [options.requirePermission=null] - 权限校验
  * @param {Function} options.handler - WebSocket 处理函数 (connection, req, client) => void
  */
-export function registerSecureWebSocket(fastify, options) {
+function registerSecureWebSocket(fastify, options) {
   if (!fastify || typeof fastify !== 'object') {
     const err = new Error('registerSecureWebSocket: fastify 参数无效');
     err.code = 'INVALID_PARAM';
@@ -566,7 +566,7 @@ export function registerSecureWebSocket(fastify, options) {
 /**
  * 外部辅助：获取当前上下文下的完整 URL (用于 WebSockets 等手动注册场景)
  */
-export function getFullUrl(url) {
+function getFullUrl(url) {
   if (!url || typeof url !== 'string') {
     const err = new Error('getFullUrl: url 参数无效');
     err.code = 'INVALID_PARAM';
@@ -582,4 +582,14 @@ export function getFullUrl(url) {
 // 8. 导出
 // =============================================================================
 
-export { registerSystemMetadata };
+export {
+  createGuard,
+  setRegistrationContext,
+  getRegistrationContext,
+  restoreRegistrationContext,
+  registerGroupMetadata,
+  registerSecureRoute,
+  registerSecureWebSocket,
+  getFullUrl,
+  registerSystemMetadata
+};

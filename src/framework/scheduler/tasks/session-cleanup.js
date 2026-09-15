@@ -17,7 +17,7 @@ import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.scheduler.tasks.session-cleanup');
 
-export default {
+const sessionCleanupTask = {
   /**
    * @param {object} app Fastify 实例（本任务不强依赖，保留参数供未来任务用）
    * @param {object} taskConfig 任务配置 { enabled, intervalHours, retentionDays }
@@ -32,3 +32,5 @@ export default {
     }
   }
 };
+
+export default sessionCleanupTask;

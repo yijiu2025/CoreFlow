@@ -10,7 +10,7 @@
  */
 
 /** POST /login、/mini-login */
-export const loginSchema = {
+const loginSchema = {
   body: {
     type: 'object',
     properties: {
@@ -35,7 +35,7 @@ export const loginSchema = {
 };
 
 /** POST /login/consent/confirm — 快捷登录确认授权 */
-export const consentConfirmSchema = {
+const consentConfirmSchema = {
   body: {
     type: 'object',
     required: ['consentKey'],
@@ -47,7 +47,7 @@ export const consentConfirmSchema = {
 };
 
 /** 邮箱二次验证登录（环境异常后二次确认） */
-export const verifyEmailLoginSchema = {
+const verifyEmailLoginSchema = {
   body: {
     type: 'object',
     required: ['verifyToken', 'code'],
@@ -58,3 +58,5 @@ export const verifyEmailLoginSchema = {
     additionalProperties: false
   }
 };
+
+export { loginSchema, consentConfirmSchema, verifyEmailLoginSchema };

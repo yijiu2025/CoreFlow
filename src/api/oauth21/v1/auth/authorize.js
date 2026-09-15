@@ -20,7 +20,7 @@ const authService = new AuthorizationService();
 /**
  * 注册授权路由
  */
-export default function registerAuthorizeRoutes(fastify, sessionStore) {
+function registerAuthorizeRoutes(fastify, sessionStore) {
   // GET /authorize — 授权请求入口
   registerSecureRoute(fastify, {
     name: 'authorize',
@@ -50,3 +50,5 @@ export default function registerAuthorizeRoutes(fastify, sessionStore) {
     handler: (request, reply) => authService.handleAuthorizeConsent(request, reply, sessionStore)
   });
 }
+
+export default registerAuthorizeRoutes;

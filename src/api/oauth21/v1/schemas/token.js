@@ -6,7 +6,7 @@
  */
 
 /** POST /token — 授权码/客户端凭证/刷新令牌 */
-export const tokenSchema = {
+const tokenSchema = {
   body: {
     type: 'object',
     required: ['grant_type'],
@@ -31,7 +31,7 @@ export const tokenSchema = {
 };
 
 /** POST /revoke — 令牌撤销（RFC 7009） */
-export const revokeSchema = {
+const revokeSchema = {
   body: {
     type: 'object',
     required: ['token'],
@@ -42,3 +42,5 @@ export const revokeSchema = {
     additionalProperties: false
   }
 };
+
+export { tokenSchema, revokeSchema };

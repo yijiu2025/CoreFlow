@@ -1,4 +1,4 @@
-export default (sequelize, DataTypes) => {
+const defineUserSession = (sequelize, DataTypes) => {
   const UserSession = sequelize.define(
     'UserSession',
     {
@@ -57,3 +57,5 @@ export default (sequelize, DataTypes) => {
 
   return UserSession;
 };
+
+export default defineUserSession;

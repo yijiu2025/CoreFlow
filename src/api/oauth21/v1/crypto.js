@@ -9,7 +9,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { getEncryptionPublicKey } from '../../../app/oauth21/crypto/encryption.js';
 
-export default async function (fastify) {
+async function registerCryptoRoutes(fastify) {
   registerGroupMetadata({
     name: 'crypto',
     description: '加密工具端点',
@@ -43,3 +43,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerCryptoRoutes;

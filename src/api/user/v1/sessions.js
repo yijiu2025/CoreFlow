@@ -15,7 +15,7 @@ import { formatSessionList, formatDeviceList } from '../../../app/user/services/
 import { getModel } from '../../../framework/db/index.js';
 import crypto from 'crypto';
 
-export default async function (fastify) {
+async function registerSessionsRoutes(fastify) {
   registerGroupMetadata({
     name: 'userSessions',
     alias: '会话管理',
@@ -143,3 +143,5 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerSessionsRoutes;

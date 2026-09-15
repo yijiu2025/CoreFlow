@@ -138,5 +138,7 @@ class QrCodeService {
   }
 }
 
+const qrCodeService = new QrCodeService();
+
 export { QR_STATUS };
-export default new QrCodeService();
+export default qrCodeService;

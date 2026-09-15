@@ -9,7 +9,7 @@ import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
 /**
  * 通知应用权限字典常量
  */
-export const NOTICE_PERMISSIONS = createPermissionRegistry('notice', '通知模块', {
+const NOTICE_PERMISSIONS = createPermissionRegistry('notice', '通知模块', {
   CONFIG: {
     READ: { code: 'notice:config:read', label: '查看通知配置', type: 'read' },
     WRITE: {
@@ -24,4 +24,5 @@ export const NOTICE_PERMISSIONS = createPermissionRegistry('notice', '通知模�
   }
 });
 
+export { NOTICE_PERMISSIONS };
 export default NOTICE_PERMISSIONS;

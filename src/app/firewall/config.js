@@ -7,7 +7,7 @@
  */
 import { initFirewall } from './index.js';
 
-export default {
+const firewallConfig = {
   app_id: 'firewall',
   name: '防火墙防御系统',
   description: '五层拦截管道：连接追踪→封禁→挑战→Bot→地理围栏',
@@ -37,3 +37,5 @@ export default {
     }
   }
 };
+
+export default firewallConfig;

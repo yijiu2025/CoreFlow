@@ -11,7 +11,7 @@ import { FIREWALL_PERMISSIONS } from './index.js';
 /**
  * 自动加载防火墙模块的基础角色配置 (Upsert)
  */
-export async function seedFirewallRoles() {
+async function seedFirewallRoles() {
   const Role = getModel('Role');
 
   if (!Role) return;
@@ -102,3 +102,5 @@ export async function seedFirewallRoles() {
     Logger.error('❌ [PBAC] 防火墙角色数据同步失败:', error);
   }
 }
+
+export { seedFirewallRoles };

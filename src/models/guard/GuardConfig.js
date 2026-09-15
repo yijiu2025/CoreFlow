@@ -7,7 +7,7 @@
  * @since 2026-07-22
  */
 
-export default (sequelize, DataTypes) => {
+const defineGuardConfig = (sequelize, DataTypes) => {
   const GuardConfig = sequelize.define(
     'GuardConfig',
     {
@@ -43,3 +43,5 @@ export default (sequelize, DataTypes) => {
 
   return GuardConfig;
 };
+
+export default defineGuardConfig;

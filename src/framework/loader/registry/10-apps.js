@@ -24,7 +24,7 @@ const log = createLogger('framework.loader.registry.10-apps');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default async app => {
+const appsLoader = async app => {
   const appsDir = path.resolve(__dirname, '../../../app');
 
   if (!fs.existsSync(appsDir)) {
@@ -160,3 +160,5 @@ export default async app => {
 
   log.always(`✅ [Apps] ${C.green}所有应用加载完毕 (${loadedCount} 个)${C.reset}`);
 };
+
+export default appsLoader;

@@ -10,7 +10,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} Work 模型
  */
-export default (sequelize, DataTypes) => {
+const defineWork = (sequelize, DataTypes) => {
   const Work = sequelize.define(
     'Work',
     {
@@ -180,3 +180,5 @@ export default (sequelize, DataTypes) => {
 
   return Work;
 };
+
+export default defineWork;

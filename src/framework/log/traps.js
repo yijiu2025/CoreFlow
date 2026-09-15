@@ -45,7 +45,7 @@ let installed = false;
  *
  * @returns {void}
  */
-export function initLogErrorTraps() {
+function initLogErrorTraps() {
   if (installed) return;
   installed = true;
 
@@ -64,3 +64,5 @@ export function initLogErrorTraps() {
     log.always.error('未处理的 Promise 拒绝', reason instanceof Error ? reason : new Error(String(reason)));
   });
 }
+
+export { initLogErrorTraps };

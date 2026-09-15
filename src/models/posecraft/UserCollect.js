@@ -9,7 +9,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} UserCollect 模型
  */
-export default (sequelize, DataTypes) => {
+const defineUserCollect = (sequelize, DataTypes) => {
   const UserCollect = sequelize.define(
     'UserCollect',
     {
@@ -74,3 +74,5 @@ export default (sequelize, DataTypes) => {
 
   return UserCollect;
 };
+
+export default defineUserCollect;

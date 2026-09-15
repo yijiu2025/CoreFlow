@@ -13,7 +13,7 @@
  * @author yijiu2025
  * @since 2026-07-22
  */
-export function registerDeleteVersionHooks(Model, options = {}) {
+function registerDeleteVersionHooks(Model, options = {}) {
   const { field = 'delete_version', checkConflict = false } = options;
 
   // 1. 硬删除保护：禁止 force: true 绕过软删除
@@ -128,3 +128,5 @@ async function _findConflict(Model, instance, field) {
   }
   return null;
 }
+
+export { registerDeleteVersionHooks };

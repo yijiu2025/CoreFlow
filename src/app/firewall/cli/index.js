@@ -20,7 +20,7 @@ import { listWhitelist, addWhitelist } from './whitelist.js';
 import { trafficStats } from './stats.js';
 
 // 导出 CLI 插件配置
-export default {
+const firewallCliConfig = {
   command: 'firewall',
   appName: 'firewall',
   description: '防火墙管理',
@@ -34,3 +34,5 @@ export default {
     stats: { description: '流量统计', handler: trafficStats }
   }
 };
+
+export default firewallCliConfig;

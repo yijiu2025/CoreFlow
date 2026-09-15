@@ -41,4 +41,6 @@ class SliderDao {
   }
 }
 
-export default new SliderDao();
+const sliderDao = new SliderDao();
+
+export default sliderDao;

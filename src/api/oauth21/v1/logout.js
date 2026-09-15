@@ -15,7 +15,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { destroySession } from '../../../framework/auth/session.js';
 
-export default async function (fastify) {
+async function registerLogoutRoutes(fastify) {
   registerGroupMetadata({
     name: 'logout',
     alias: '登出',
@@ -65,3 +65,5 @@ export default async function (fastify) {
     handler: doLogout
   });
 }
+
+export default registerLogoutRoutes;
