@@ -123,6 +123,10 @@ const updateSettingsSchema = {
           enableConnLimit: { type: 'boolean' },
           maxConn: { type: 'number' },
           enableGeoFilter: { type: 'boolean' },
+          // 设备维度封禁开关（跨 IP）：自动封禁/挑战命中时是否同时记到设备 ID 上
+          enableDeviceBlock: { type: 'boolean' },
+          // 匿名请求深度检测短路开关：默认关闭，取舍见 config.js 注释
+          skipDeepCheckForAnonymous: { type: 'boolean' },
           internalIpPrefixes: { type: 'array', items: { type: 'string' } },
           idcIpPrefixes: { type: 'array', items: { type: 'string' } },
           safePaths: { type: 'array', items: { type: 'string' } },

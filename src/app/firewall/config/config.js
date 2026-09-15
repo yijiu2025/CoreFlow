@@ -271,6 +271,19 @@ const DEFAULT_SECURITY_SETTINGS = {
     // 5 → 约 100 万次，约 1~2s）。代码侧夹取到 [1, 6] 上限，防止把低端机卡死。
     challengeDifficulty: parseInt(process.env.FW_CHALLENGE_DIFFICULTY || '3'),
 
+    // --- 设备维度封禁（跨 IP） ---
+    // 自动封禁/挑战命中时，除 IP 外**同时**记到设备 ID 上（设备 ID 来自 auth 的结构化
+    // 设备 ID 流程，与 IP 无关）。这是唯一能拦住「换个 IP 重来」的维度。
+    // 关掉它则退回纯 IP 维度（历史上只有 IP 一个维度）。
+    enableDeviceBlock: process.env.FW_DEVICE_BLOCK !== 'false',
+
+    // --- 匿名请求的深度检测短路 ---
+    // 打开后：路由声明 requireLogin 且请求**一个凭据都没带**时，跳过 Bot/地理/端点限频
+    // 这三个深度检测（这些请求必被守卫 401，检测结果用不上）。
+    // 取舍：端点枚举的阻力会下降（第一层全局限流与封禁/白名单阶段仍然生效）。
+    // 默认关闭 —— 省下的只是 CPU 与 Redis 往返，而损失的是探测可见性。
+    skipDeepCheckForAnonymous: process.env.FW_SKIP_DEEP_CHECK_ANON === 'true',
+
     // --- 攻击告警（旁路能力） ---
     // email / webhookUrl 为空时 auto-responder 不做任何外部请求，等价于关闭。
     alert: {

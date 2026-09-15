@@ -12,7 +12,7 @@
  */
 import { getConfig } from '../../util/shared.js';
 import { readAccessState, bumpCounter, removeKeys, rel } from '../../util/redis.js';
-import { setBlock } from '../dao/block-manager.js';
+import { setBlockForSubject } from '../dao/block-manager.js';
 import { notifyAttack } from '../auto-responder.js';
 import { createLogger } from '../../../../framework/log/index.js';
 
@@ -21,13 +21,17 @@ const log = createLogger('app.firewall.engine.detectors.scan-trap');
 /**
  * 检测 404/403 扫描陷阱
  *
+ * 命中后写「IP + 设备」两个维度（`setBlockForSubject`）：扫描器最典型的规避手段就是
+ * 换 IP 继续扫，只封 IP 等于给它留了后门。
+ *
  * @param {string} ip 客户端 IP
  * @param {string} url 请求路径
  * @param {number} statusCode 响应状态码
+ * @param {string|null} [deviceId] 设备 ID（客户端未携带合法值时传 null）
  * @returns {Promise<void>}
  * @throws {Error} 命中陷阱时抛出（statusCode 403，rule='scanner-trap'）
  */
-const checkNotFoundTrap = async (ip, url, statusCode) => {
+const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null) => {
   const settings = getConfig().defense;
   if (!settings.enableAutoBlacklist) return;
 
@@ -35,9 +39,11 @@ const checkNotFoundTrap = async (ip, url, statusCode) => {
   if (safePaths.some(p => url.startsWith(p))) return;
   if (![404, 403, 405].includes(statusCode)) return;
 
+  const subject = { ip, deviceId: settings.enableDeviceBlock === false ? null : deviceId };
+
   // 已封禁则不再累计
-  const state = await readAccessState({ ip, fingerprint: null });
-  if (state.ipBlock || state.fpBlock) return;
+  const state = await readAccessState({ ip, fingerprint: null, deviceId: subject.deviceId });
+  if (state.ipBlock || state.devBlock) return;
 
   const limit = settings.maxNotFoundAttempts || 15;
   const window = settings.notFoundWindow || 60;
@@ -47,7 +53,7 @@ const checkNotFoundTrap = async (ip, url, statusCode) => {
   const count = await bumpCounter(trapKey, window);
 
   if (count >= limit) {
-    await setBlock(ip, {
+    await setBlockForSubject(subject, {
       status: 'SCANNER',
       source: 'auto',
       permanent: false,

@@ -3,17 +3,27 @@
  *
  * 从 api/firewall/v1/monitor.js 下沉：
  * - WebSocket 客户端管理 + 日志/初始化广播
- * - 封禁/白名单（IP/指纹）的 isPermanent 决策 + Redis 写入 + 持久化同步
+ * - 封禁/白名单（IP / 指纹 / 设备）的 isPermanent 决策 + Redis 写入 + 持久化同步
  *
  * 路由层只调本服务 + reply。
  *
  * @author yijiu
  * @since 2026-08-17
+ * @since 2026-09-15 新增设备维度（跨 IP 生效）
  */
 import { getSummary, getRecentRecords, clearAll, setBroadcastHandler } from '../data/store.js';
 import { addToBlacklist, removeFromBlacklist, addToWhitelist, removeFromWhitelist } from '../dao/dao.js';
 import { setBlock, removeBlock } from '../engine/index.js';
-import { setBlockFp, removeBlockFp, setWhitelistFp, removeWhitelistFp } from '../dao/block-manager.js';
+import {
+  setBlockFp,
+  removeBlockFp,
+  setWhitelistFp,
+  removeWhitelistFp,
+  setBlockDevice,
+  removeBlockDevice,
+  setWhitelistDevice,
+  removeWhitelistDevice
+} from '../dao/block-manager.js';
 import { removeKeys, rel } from '../util/redis.js';
 import { createLogger } from '../../../framework/log/index.js';
 
@@ -237,6 +247,58 @@ async function removeFpWhitelist(fingerprint) {
   return { ok: true, message: '已移除指纹白名单' };
 }
 
+// ==================== 设备维度（跨 IP） ====================
+
+/**
+ * 添加设备封禁
+ *
+ * 与 IP/指纹封禁的区别：设备 ID 与 IP 无关，因此这条封禁**换 IP 也仍然生效**。
+ * 设备 ID 必须是 auth 结构化设备 ID（形如 WEB-DaBOSbNdSuc-8s4T），这里只做存在性校验，
+ * 格式合法性由 auth 的校验流程保证（控制台展示的值本来就来自请求日志）。
+ *
+ * @param {object} params
+ * @param {string} params.deviceId 设备 ID
+ * @param {number} [params.duration] 封禁时长（秒）
+ * @param {boolean} [params.permanent] 是否永久
+ * @param {string} [params.status] 封禁状态（BLOCKED/SCANNER/CHALLENGE）
+ * @returns {Promise<{ok:true, message:string} | {ok:false, message:string}>}
+ */
+async function addDeviceBlock({ deviceId, duration, permanent, status }) {
+  if (!deviceId) return { ok: false, message: '缺少设备 ID 参数' };
+  const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent });
+
+  await setBlockDevice(deviceId, {
+    status: status || 'BLOCKED',
+    source: 'manual',
+    permanent: isPermanent,
+    createdAt: Date.now(),
+    expiresAt
+  });
+  return { ok: true, message: isPermanent ? '已永久封禁该设备' : `已封禁设备 ${duration || 86400} 秒` };
+}
+
+/** 移除设备封禁 */
+async function removeDeviceBlock(deviceId) {
+  if (!deviceId) return { ok: false, message: '缺少设备 ID 参数' };
+  await removeBlockDevice(deviceId);
+  return { ok: true, message: '已解除设备封禁' };
+}
+
+/** 添加设备白名单 */
+async function addDeviceWhitelist({ deviceId, duration }) {
+  if (!deviceId) return { ok: false, message: '缺少设备 ID 参数' };
+  const dur = duration || 1200;
+  await setWhitelistDevice(deviceId, dur);
+  return { ok: true, message: `已添加设备白名单 ${dur} 秒` };
+}
+
+/** 移除设备白名单 */
+async function removeDeviceWhitelist(deviceId) {
+  if (!deviceId) return { ok: false, message: '缺少设备 ID 参数' };
+  await removeWhitelistDevice(deviceId);
+  return { ok: true, message: '已移除设备白名单' };
+}
+
 export {
   broadcastLog,
   broadcastInit,
@@ -251,5 +313,9 @@ export {
   addIpWhitelist,
   removeIpWhitelist,
   addFpWhitelist,
-  removeFpWhitelist
+  removeFpWhitelist,
+  addDeviceBlock,
+  removeDeviceBlock,
+  addDeviceWhitelist,
+  removeDeviceWhitelist
 };

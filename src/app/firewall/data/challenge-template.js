@@ -43,10 +43,11 @@ function currentDifficulty() {
  * 构建高强度浏览器挑战页面（含工作量证明）
  *
  * @param {string} ip 客户端 IP
- * @param {string} [fingerprint] 可选的设备指纹（一并绑定到挑战载荷）
+ * @param {string} [fingerprint] 可选的请求指纹（一并绑定到挑战载荷）
+ * @param {string|null} [deviceId] 可选的设备 ID（一并绑定；它让「通过」跨 IP 有效）
  * @returns {Promise<string>} HTML 字符串
  */
-async function buildChallengePage(ip, fingerprint) {
+async function buildChallengePage(ip, fingerprint, deviceId = null) {
   const challengeId = crypto.randomBytes(16).toString('hex');
   const salt = crypto.randomBytes(8).toString('hex');
   const difficulty = currentDifficulty();
@@ -54,7 +55,7 @@ async function buildChallengePage(ip, fingerprint) {
   // 载荷只在服务端保存；页面拿到的 challengeId 本身不含任何可直接回放的凭据
   await writeChallenge(
     challengeId,
-    { ip, fingerprint: fingerprint || null, salt, difficulty, issuedAt: Date.now() },
+    { ip, fingerprint: fingerprint || null, deviceId: deviceId || null, salt, difficulty, issuedAt: Date.now() },
     CHALLENGE_TTL_SEC
   );
 

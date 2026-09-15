@@ -6,12 +6,16 @@
  * POST /api/firewall/v1/export/blocks      — 导入封禁列表
  * POST /api/firewall/v1/export/whitelist   — 导入白名单
  *
+ * 支持三个身份维度：`ip` / `fingerprint` / `device`（设备 ID，与 IP 无关、跨 IP 生效）。
+ * 维度由条目的 `type` 字段区分，写入口按维度分派（`BLOCK_WRITERS` / `WHITELIST_WRITERS`）。
+ *
  * 授权：本组原先写 `allowRoles: ['admin']`，而仓库里**不存在** `code='admin'` 的角色
  * （admin 应用用的是 `admin_admin`，firewall 用 `fw_viewer/fw_operator/fw_admin`），
  * 该配置对所有人都不匹配 —— 导出/导入接口对任何人都 403。现改为按防火墙权限码校验。
  *
  * @author yijiu2025
  * @since 2026-08-17
+ * @since 2026-09-15 支持设备维度
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
@@ -20,8 +24,10 @@ import {
   getActiveWhitelist,
   setBlock,
   setBlockFp,
+  setBlockDevice,
   setWhitelist,
-  setWhitelistFp
+  setWhitelistFp,
+  setWhitelistDevice
 } from '../../../app/firewall/dao/block-manager.js';
 import { FIREWALL_PERMISSIONS } from '../../../app/firewall/permission/index.js';
 
@@ -29,6 +35,14 @@ import { FIREWALL_PERMISSIONS } from '../../../app/firewall/permission/index.js'
 const MAX_IMPORT_ITEMS = 1000;
 /** 导入时未给出 duration 的兜底 TTL（秒） */
 const DEFAULT_IMPORT_TTL = 86400;
+
+/** 维度 → 封禁写入函数 */
+const BLOCK_WRITERS = { ip: setBlock, fingerprint: setBlockFp, device: setBlockDevice };
+/** 维度 → 白名单写入函数 */
+const WHITELIST_WRITERS = { ip: setWhitelist, fingerprint: setWhitelistFp, device: setWhitelistDevice };
+
+/** 各维度对应的标识字段名 */
+const ID_FIELD = { ip: 'ip', fingerprint: 'fingerprint', device: 'deviceId' };
 
 /**
  * 导入请求体 Schema
@@ -54,7 +68,8 @@ function importSchema(key) {
             properties: {
               ip: { type: 'string' },
               fingerprint: { type: 'string' },
-              type: { type: 'string', enum: ['ip', 'fingerprint'] },
+              deviceId: { type: 'string' },
+              type: { type: 'string', enum: ['ip', 'fingerprint', 'device'] },
               reason: { type: 'string' },
               status: { type: 'string' },
               permanent: { type: 'boolean' },
@@ -68,16 +83,67 @@ function importSchema(key) {
 }
 
 /**
- * 从导入条目解析出「目标 + TTL」
+ * 从导入条目解析出「维度 + 标识 + TTL」
+ *
+ * `type` 缺省按 `ip` 处理（与历史导出数据兼容）；给出 type 但对应标识字段为空时
+ * 才回退到另一个字段，避免「导出 block:dev:xxx 却被当成 IP 导入」这类静默错配。
  *
  * @param {object} item 导入条目
- * @returns {{isFp:boolean, target:string|undefined, ttlSec:number}} 解析结果
+ * @returns {{dim:'ip'|'fingerprint'|'device', target:string|undefined, ttlSec:number}} 解析结果
  */
 function resolveImportTarget(item) {
-  const isFp = (item.type || 'ip') === 'fingerprint';
-  const target = (isFp ? item.fingerprint : item.ip) || item.ip || item.fingerprint;
+  const type = item.type || 'ip';
+  const dim = Object.prototype.hasOwnProperty.call(ID_FIELD, type) ? type : 'ip';
+  const own = item[ID_FIELD[dim]];
+  // 兼容早期只有 ip/fingerprint 两个字段的条目：两者都填时以 type 指定的为准
+  const fallback = dim === 'ip' ? item.fingerprint : item.ip;
+  const target = own || fallback;
   const ttlSec = Number(item.duration) > 0 ? Math.ceil(Number(item.duration)) : DEFAULT_IMPORT_TTL;
-  return { isFp, target, ttlSec };
+  return { dim, target, ttlSec };
+}
+
+/**
+ * 把活跃**封禁**条目映射成导出结构（三个维度共用）
+ *
+ * @param {object} entry 活跃封禁条目
+ * @returns {object} 导出条目
+ */
+function toExportEntry(entry) {
+  return {
+    ip: entry.ip,
+    fingerprint: entry.fingerprint,
+    deviceId: entry.deviceId,
+    type: entry.type || 'ip',
+    reason: entry.reason || '',
+    status: entry.status || 'BLOCKED',
+    permanent: entry.permanent || false,
+    // 必须把「剩余有效期」导出成导入端认识的 `duration`：
+    // 旧实现不导出该字段，导入端便一律回落到兜底 TTL(86400)，
+    // 「导出 → 导入」会把一条还剩 5 分钟的临时封禁放大成 24 小时。
+    duration: entry.permanent ? null : entry.remainingSeconds,
+    remainingSeconds: entry.remainingSeconds,
+    expiresAt: entry.expiresAt ?? null,
+    createdAt: entry.createdAt
+  };
+}
+
+/**
+ * 把活跃**白名单**条目映射成导出结构（白名单无 status/permanent 语义，不导出这两项）
+ *
+ * @param {object} entry 活跃白名单条目
+ * @returns {object} 导出条目
+ */
+function toWhitelistExportEntry(entry) {
+  return {
+    ip: entry.ip,
+    fingerprint: entry.fingerprint,
+    deviceId: entry.deviceId,
+    type: entry.type || 'ip',
+    reason: entry.reason || '',
+    duration: entry.remainingSeconds,
+    remainingSeconds: entry.remainingSeconds,
+    createdAt: entry.createdAt
+  };
 }
 
 async function registerExportRoutes(fastify) {
@@ -105,21 +171,7 @@ async function registerExportRoutes(fastify) {
     requirePermission: FIREWALL_PERMISSIONS.BLOCK.READ,
     handler: async (req, reply) => {
       const blocks = await getActiveBlocks();
-      const exported = blocks.map(b => ({
-        ip: b.ip,
-        fingerprint: b.fingerprint,
-        type: b.type || 'ip',
-        reason: b.reason || '',
-        status: b.status || 'BLOCKED',
-        permanent: b.permanent || false,
-        // 必须把「剩余有效期」导出成导入端认识的 `duration`：
-        // 旧实现不导出该字段，导入端便一律回落到兜底 TTL(86400)，
-        // 「导出 → 导入」会把一条还剩 5 分钟的临时封禁放大成 24 小时。
-        duration: b.permanent ? null : b.remainingSeconds,
-        remainingSeconds: b.remainingSeconds,
-        expiresAt: b.expiresAt ?? null,
-        createdAt: b.createdAt
-      }));
+      const exported = blocks.map(toExportEntry);
       return reply.result.success('导出成功', { count: exported.length, blocks: exported });
     }
   });
@@ -137,15 +189,7 @@ async function registerExportRoutes(fastify) {
     requirePermission: FIREWALL_PERMISSIONS.WHITELIST.READ,
     handler: async (req, reply) => {
       const whitelist = await getActiveWhitelist();
-      const exported = whitelist.map(w => ({
-        ip: w.ip,
-        fingerprint: w.fingerprint,
-        type: w.type || 'ip',
-        reason: w.reason || '',
-        duration: w.remainingSeconds,
-        remainingSeconds: w.remainingSeconds,
-        createdAt: w.createdAt
-      }));
+      const exported = whitelist.map(toWhitelistExportEntry);
       return reply.result.success('导出成功', { count: exported.length, whitelist: exported });
     }
   });
@@ -176,8 +220,8 @@ async function registerExportRoutes(fastify) {
       const failures = [];
       for (const block of blocks) {
         try {
-          const { isFp, target, ttlSec } = resolveImportTarget(block);
-          if (!target) throw new Error('缺少 ip/fingerprint');
+          const { dim, target, ttlSec } = resolveImportTarget(block);
+          if (!target) throw new Error('缺少 ip / fingerprint / deviceId');
           const permanent = block.permanent !== false;
           const now = Date.now();
           const meta = {
@@ -190,14 +234,14 @@ async function registerExportRoutes(fastify) {
             expiresAt: permanent ? null : now + ttlSec * 1000,
             reason: block.reason || '批量导入'
           };
-          await (isFp ? setBlockFp(target, meta) : setBlock(target, meta));
+          await BLOCK_WRITERS[dim](target, meta);
           imported++;
         } catch (err) {
           // 逐条失败要留痕：旧实现只 catch{} 累加 skipped，运维无法知道是哪几条、
           // 为什么失败，只能整批重来。这里保留前 20 条原因。
           skipped++;
           if (failures.length < 20) {
-            failures.push({ target: block.ip || block.fingerprint || null, message: err.message });
+            failures.push({ target: block.ip || block.fingerprint || block.deviceId || null, message: err.message });
           }
         }
       }
@@ -232,14 +276,14 @@ async function registerExportRoutes(fastify) {
       const failures = [];
       for (const item of whitelist) {
         try {
-          const { isFp, target, ttlSec } = resolveImportTarget(item);
-          if (!target) throw new Error('缺少 ip/fingerprint');
-          await (isFp ? setWhitelistFp(target, ttlSec) : setWhitelist(target, ttlSec));
+          const { dim, target, ttlSec } = resolveImportTarget(item);
+          if (!target) throw new Error('缺少 ip / fingerprint / deviceId');
+          await WHITELIST_WRITERS[dim](target, ttlSec);
           imported++;
         } catch (err) {
           skipped++;
           if (failures.length < 20) {
-            failures.push({ target: item.ip || item.fingerprint || null, message: err.message });
+            failures.push({ target: item.ip || item.fingerprint || item.deviceId || null, message: err.message });
           }
         }
       }

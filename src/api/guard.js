@@ -410,6 +410,11 @@ function registerSecureRoute(fastify, options) {
   if (requireLogin || requireSignature) {
     routeConfig.requireSignature = true;
   }
+  // 把 requireLogin 也放进路由 config：Fastify 的 onRequest 在**路由匹配之后**执行，
+  // 因此下游（如防火墙的 onRequest 钩子）能读到 `request.routeOptions.config`，
+  // 在不跨 app 依赖 guard 配置表的前提下判断「这个请求注定会被守卫 401」。
+  // 只读元数据，不参与鉴权决策 —— 鉴权仍然完全由 preHandler 的级联守卫负责。
+  if (requireLogin) routeConfig.requireLogin = true;
 
   // 注入级联 Guard 并注册 Fastify 路由
   fastify[method.toLowerCase()](fullUrl, {
