@@ -3,8 +3,9 @@
  *
  * 统一管理设备类型判定与设备标识生成：
  * - detectDeviceType：返回设备类型语义值（存 session.deviceType 字段）
- * - getDeviceId：验证并规范化结构化设备 ID（WEB-DaBOSbNdSuc-8s4T）
+ * - getDeviceId：验证并规范化结构化设备 ID（WEB-DaBOSbNdSuc-8s4T），**校验失败会补发新 ID**
  * - getDeviceIdAndWrapResponse：getDeviceId + 写响应头/cookie
+ * - getClientDeviceId：只取客户端**自报且校验通过**的 ID（不补发），供「把 ID 当稳定身份」的用途
  * - computeDeviceFingerprint：计算复合设备指纹（device_id + UA + uid 哈希）
  *
  * device_id 采用结构化格式（如 WEB-DaBOSbNdSuc-8s4T），前端生成后端验证，
@@ -18,7 +19,7 @@
  * 1. 常量（REBORN_WINDOW_MS / MAX_LOG_LENGTH / DEVICE_TYPE）
  * 2. 内部工具（forLog / deviceTypeCompatible）
  * 3. 公共 API（detectDeviceType / getDeviceId / getDeviceIdAndWrapResponse /
- *    computeDeviceFingerprint）— 入口处均做参数防御
+ *    getClientDeviceId / computeDeviceFingerprint）— 入口处均做参数防御
  * 4. 导出
  *
  * @author yijiu
@@ -285,6 +286,37 @@ function computeDeviceFingerprint({ deviceId, userAgent, uid, platformHint }) {
   return crypto.createHash('sha256').update(material).digest('hex').slice(0, 32);
 }
 
+/**
+ * 读取**客户端自报且校验通过**的设备 ID；未上报或校验不通过时返回 null
+ *
+ * 与 `getDeviceId` 的关键区别：**不补发**。`getDeviceId` 在校验失败时会生成一个全新的
+ * 服务端 ID（可用性优先），那个值每次请求都可能不同 —— 拿它当身份维度做封禁/限流，
+ * 等于把所有人当成同一个人再分开，规则永远不会命中。
+ *
+ * 因此凡是「把这个 ID 当作稳定身份」的用途（防火墙封禁、跨 IP 追踪、设备白名单），
+ * 都必须用本函数：它只承认客户端真正携带、且符合结构化格式（平台-时间戳-随机后缀）
+ * 的值，拿不到就返回 null，由调用方退回其它维度（IP / 请求指纹）。
+ *
+ * ⚠️ 强度边界：device_id **不是凭证**（见 device-id-service.js 的说明），它由客户端携带，
+ * 清掉 localStorage 与 httpOnly cookie 即可换一个新身份。它提高的是攻击成本与追踪能力，
+ * 不是不可绕过的屏障 —— 依赖它的安全决策要按这个强度来设计。
+ *
+ * @param {import('fastify').FastifyRequest} request 请求对象
+ * @returns {Promise<string|null>} 规范化后的设备 ID，或 null
+ */
+async function getClientDeviceId(request) {
+  if (!request || typeof request !== 'object') return null;
+  const raw = request.headers?.['x-device-id'] || request.cookies?.device_id || '';
+  if (typeof raw !== 'string' || !raw) return null;
+  try {
+    const validation = await validateDeviceId(raw);
+    return validation.valid ? validation.normalizedId : null;
+  } catch (error) {
+    log.warn('⚠️ [DeviceId] 客户端设备 ID 校验异常', error);
+    return null;
+  }
+}
+
 // ── 4. 导出 ──
 
 // prettier-ignore
@@ -293,5 +325,6 @@ export {
   detectDeviceType,
   getDeviceId,
   getDeviceIdAndWrapResponse,
+  getClientDeviceId,
   computeDeviceFingerprint
 };

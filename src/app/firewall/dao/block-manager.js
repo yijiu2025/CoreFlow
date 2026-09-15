@@ -20,5 +20,9 @@ export {
   setWhitelist,
   removeWhitelist,
   setWhitelistFp,
-  removeWhitelistFp
+  removeWhitelistFp,
+  setBlockDevice,
+  removeBlockDevice,
+  setWhitelistDevice,
+  removeWhitelistDevice
 } from '../engine/dao/block-manager.js';

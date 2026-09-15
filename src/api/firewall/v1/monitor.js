@@ -50,7 +50,11 @@ import {
   addIpWhitelist,
   removeIpWhitelist,
   addFpWhitelist,
-  removeFpWhitelist
+  removeFpWhitelist,
+  addDeviceBlock,
+  removeDeviceBlock,
+  addDeviceWhitelist,
+  removeDeviceWhitelist
 } from '../../../app/firewall/services/monitor.service.js';
 
 async function registerMonitorRoutes(fastify) {
@@ -334,6 +338,67 @@ async function registerMonitorRoutes(fastify) {
     }
   });
 
+  // ==================== 设备封禁管理 API（跨 IP 生效） ====================
+  // 设备 ID 是唯一与 IP 无关的身份维度：攻击者换 IP 重来时，只有这一维度还能拦住它。
+  registerSecureRoute(fastify, {
+    name: 'addBlockDevice',
+    alias: '添加设备封禁',
+    method: 'POST',
+    url: '/blocks/device',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.BLOCK.FINGERPRINT,
+    schema: fpSchema('deviceId', true),
+    handler: async (req, reply) => {
+      const result = await addDeviceBlock(req.body);
+      if (!result.ok) return reply.result.badRequest(result.message);
+      return reply.result.success(result.message);
+    }
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'removeBlockDevice',
+    alias: '移除设备封禁',
+    method: 'DELETE',
+    url: '/blocks/device/:deviceId',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.BLOCK.FINGERPRINT,
+    handler: async (req, reply) => {
+      const result = await removeDeviceBlock(req.params.deviceId);
+      if (!result.ok) return reply.result.badRequest(result.message);
+      return reply.result.success(result.message);
+    }
+  });
+
+  // ==================== 设备白名单管理 API ====================
+  registerSecureRoute(fastify, {
+    name: 'addWhitelistDevice',
+    alias: '添加设备白名单',
+    method: 'POST',
+    url: '/whitelist/device',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.WHITELIST.WRITE,
+    schema: fpSchema('deviceId', false),
+    handler: async (req, reply) => {
+      const result = await addDeviceWhitelist(req.body);
+      if (!result.ok) return reply.result.badRequest(result.message);
+      return reply.result.success(result.message);
+    }
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'removeWhitelistDevice',
+    alias: '移除设备白名单',
+    method: 'DELETE',
+    url: '/whitelist/device/:deviceId',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.WHITELIST.WRITE,
+    handler: async (req, reply) => {
+      const result = await removeDeviceWhitelist(req.params.deviceId);
+      if (!result.ok) return reply.result.badRequest(result.message);
+      return reply.result.success(result.message);
+    }
+  });
+
   // ==================== WebSocket ====================
   const wsUrl = getFullUrl('/ws');
   registerSecureWebSocket(fastify, {
@@ -345,9 +410,12 @@ async function registerMonitorRoutes(fastify) {
 }
 
 /**
- * 指纹类接口的请求体 Schema（原先这两个接口完全没有 schema，`req.body` 缺失即 500）
+ * 「单标识维度」接口的请求体 Schema（原先这些接口完全没有 schema，`req.body` 缺失即 500）
  *
- * @param {string} field 指纹字段名
+ * 对 `fingerprint` 与 `deviceId` 通用：两者都只是「某个字符串标识」，
+ * 差别仅在字段名与是否带封禁字段。
+ *
+ * @param {string} field 标识字段名（'fingerprint' | 'deviceId'）
  * @param {boolean} withBlockFields 是否带封禁相关字段（时长/永久/状态）
  * @returns {object} JSON Schema
  */

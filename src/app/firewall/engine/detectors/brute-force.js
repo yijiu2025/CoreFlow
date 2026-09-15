@@ -12,7 +12,7 @@
  */
 import { getConfig } from '../../util/shared.js';
 import { readAccessState, bumpCounter, removeCounters, setFlag, hasFlag, rel } from '../../util/redis.js';
-import { setBlock } from '../dao/block-manager.js';
+import { setBlockForSubject } from '../dao/block-manager.js';
 import { notifyAttack } from '../auto-responder.js';
 import { createLogger } from '../../../../framework/log/index.js';
 
@@ -24,12 +24,16 @@ const log = createLogger('app.firewall.engine.detectors.brute-force');
 /**
  * 登录暴力破解检测
  *
+ * 命中后写的是「IP + 设备」两个维度（`setBlockForSubject`）：只封 IP 时攻击者换个出口
+ * 就重来，而爆破是典型的自动化攻击 —— 它会带着同一个设备 ID 换 IP 继续。
+ *
  * @param {string} ip 客户端 IP
  * @param {string} [username] 尝试登录的账号
  * @param {boolean} success 本次登录是否成功（成功则清零失败计数）
+ * @param {string|null} [deviceId] 设备 ID（客户端未携带合法值时传 null）
  * @returns {Promise<void>}
  */
-const checkLoginBruteForce = async (ip, username, success) => {
+const checkLoginBruteForce = async (ip, username, success, deviceId = null) => {
   const settings = getConfig().defense;
   if (!settings.enableBruteForce) return;
 
@@ -44,9 +48,11 @@ const checkLoginBruteForce = async (ip, username, success) => {
     return;
   }
 
+  const subject = { ip, deviceId: settings.enableDeviceBlock === false ? null : deviceId };
+
   // 已被封禁则不再累计（避免被封禁期间继续刷新计数）
-  const state = await readAccessState({ ip, fingerprint: null });
-  if (state.ipBlock) return;
+  const state = await readAccessState({ ip, fingerprint: null, deviceId: subject.deviceId });
+  if (state.ipBlock || state.devBlock) return;
 
   const [ipCount, userCount] = await Promise.all([
     bumpCounter(rel.bruteIp(ip), bruteWindow),
@@ -56,7 +62,7 @@ const checkLoginBruteForce = async (ip, username, success) => {
   const now = Date.now();
 
   if (ipCount >= ipLimit) {
-    await setBlock(ip, {
+    await setBlockForSubject(subject, {
       status: 'CHALLENGE',
       source: 'auto',
       permanent: false,
@@ -74,7 +80,7 @@ const checkLoginBruteForce = async (ip, username, success) => {
     // 攻击者每发一次失败请求都会重新 setFlag → 锁定被无限续期，
     // 一个已知账号可以被低成本地永久锁死（DoS）。清空后必须重新攒够 bruteLimit 次。
     await removeCounters([rel.bruteUser(username)]);
-    await setBlock(ip, {
+    await setBlockForSubject(subject, {
       status: 'CHALLENGE',
       source: 'auto',
       permanent: false,

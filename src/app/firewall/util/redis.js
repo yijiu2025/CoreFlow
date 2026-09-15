@@ -15,12 +15,19 @@
  * 调用方不再需要 `if (!redisClient)` 分支。
  *
  * Redis key 布局保持不变（与历史数据兼容）：
- *   fw:block:{ip} / fw:block:fp:{fp}            → JSON 元数据（临时封禁带 TTL，永久封禁无 TTL）
- *   fw:whitelist:{ip} / fw:whitelist:fp:{fp}    → '1'（带 TTL）
- *   fw:blocked:ips / fw:blocked:fps             → Hash 索引（field → JSON）
- *   fw:whitelisted:ips / fw:whitelisted:fps     → Hash 索引（field → JSON）
+ *   fw:block:{ip} / fw:block:fp:{fp} / fw:block:dev:{dev}          → JSON 元数据（临时封禁带 TTL，永久无 TTL）
+ *   fw:whitelist:{ip} / fw:whitelist:fp:{fp} / fw:whitelist:dev:{dev} → '1'（带 TTL）
+ *   fw:blocked:ips / fw:blocked:fps / fw:blocked:devices           → Hash 索引（field → JSON）
+ *   fw:whitelisted:ips / fw:whitelisted:fps / fw:whitelisted:devices → Hash 索引（field → JSON）
  *   fw:rl:{actor} / fw:trap:{ip} / fw:brute:ip:{ip} / fw:brute:user:{u} / fw:lock:{u}
- *   fw:pass:{ip}:{token} / fw:pass:fp:{fp}:{token}
+ *   fw:pass:{ip}:{token} / fw:pass:fp:{fp}:{token} / fw:pass:dev:{dev}:{token}
+ *
+ * 三个维度（`ip` / `fingerprint` / `deviceId`）共用同一套语义操作，靠 `DIMS` 描述表
+ * 分派；新增维度只需在 `DIMS` 与 `rel`/`HASH` 各加一条，业务分支不必再分三份写。
+ *
+ * 为什么要有 `deviceId` 维度：`fingerprint` 的输入含 IP（换 IP 即变），而 deviceId 由
+ * auth 的结构化设备 ID 流程签发、与 IP 无关 —— 它是本模块唯一能跨 IP 追踪的身份。
+ * 强度边界见 `engine/dao/block-manager.js` 的 `setBlockForSubject` 注释（客户端可弃用换新）。
  *
  * @author yijiu2025
  * @since 2026-09-15
@@ -65,31 +72,42 @@ function redisAvailable() {
 // ============== Lua 脚本 ==============
 
 /**
- * 一次往返读取全部访问控制状态。
- * KEYS: [1] 指纹白名单 [2] IP 白名单 [3] 指纹封禁 [4] IP 封禁
- * ARGV: [1] '1'/'0' 是否带指纹
- * 返回: { 指纹白名单命中, IP白名单命中, 指纹封禁原文, 指纹封禁PTTL, IP封禁原文, IP封禁PTTL }
+ * 一次往返读取全部访问控制状态（三个维度：设备 / 指纹 / IP）。
+ * KEYS: [1] 设备白名单 [2] 指纹白名单 [3] IP 白名单 [4] 设备封禁 [5] 指纹封禁 [6] IP 封禁
+ * ARGV: [1] '1'/'0' 是否带指纹 [2] '1'/'0' 是否带设备 ID
+ * 返回: { 设备白名单, 指纹白名单, IP白名单, 设备封禁原文, 设备PTTL, 指纹封禁原文, 指纹PTTL, IP封禁原文, IPPTTL }
  *
  * 白名单命中即短路（与旧逻辑一致：白名单优先级最高，命中后不再查封禁）。
+ * 设备维度排在指纹之前：它比「IP+请求头」更精确，命中信息更能说明问题。
  */
 const LUA_READ_ACCESS_STATE = `
 local hasFp = ARGV[1] == '1'
-if hasFp and redis.call('EXISTS', KEYS[1]) == 1 then
-  return { 1, 0, false, -2, false, -2 }
+local hasDev = ARGV[2] == '1'
+if hasDev and redis.call('EXISTS', KEYS[1]) == 1 then
+  return { 1, 0, 0, false, -2, false, -2, false, -2 }
 end
-if redis.call('EXISTS', KEYS[2]) == 1 then
-  return { 0, 1, false, -2, false, -2 }
+if hasFp and redis.call('EXISTS', KEYS[2]) == 1 then
+  return { 0, 1, 0, false, -2, false, -2, false, -2 }
+end
+if redis.call('EXISTS', KEYS[3]) == 1 then
+  return { 0, 0, 1, false, -2, false, -2, false, -2 }
+end
+local devVal = false
+local devTtl = -2
+if hasDev then
+  devVal = redis.call('GET', KEYS[4])
+  if devVal then devTtl = redis.call('PTTL', KEYS[4]) end
 end
 local fpVal = false
 local fpTtl = -2
 if hasFp then
-  fpVal = redis.call('GET', KEYS[3])
-  if fpVal then fpTtl = redis.call('PTTL', KEYS[3]) end
+  fpVal = redis.call('GET', KEYS[5])
+  if fpVal then fpTtl = redis.call('PTTL', KEYS[5]) end
 end
-local ipVal = redis.call('GET', KEYS[4])
+local ipVal = redis.call('GET', KEYS[6])
 local ipTtl = -2
-if ipVal then ipTtl = redis.call('PTTL', KEYS[4]) end
-return { 0, 0, fpVal or false, fpTtl, ipVal or false, ipTtl }
+if ipVal then ipTtl = redis.call('PTTL', KEYS[6]) end
+return { 0, 0, 0, devVal or false, devTtl, fpVal or false, fpTtl, ipVal or false, ipTtl }
 `;
 
 /**
@@ -158,24 +176,26 @@ return current
 `;
 
 /**
- * 签发挑战通过令牌：同时写指纹维度与 IP 维度两个键。
- * KEYS: [1] 指纹键（无指纹时传哨兵键）[2] IP 键
- * ARGV: [1] TTL 秒 [2] '1'/'0' 是否带指纹
+ * 签发挑战通过令牌：按「设备 / 指纹 / IP」同时写最多三个键（一次往返）。
+ * KEYS: [1] 设备键 [2] 指纹键（无该维度时传哨兵键）[3] IP 键
+ * ARGV: [1] '1'/'0' 是否带设备 ID [2] '1'/'0' 是否带指纹 [3] TTL 秒
  */
 const LUA_GRANT_PASS = `
-if ARGV[2] == '1' then redis.call('SET', KEYS[1], '1', 'EX', tonumber(ARGV[1])) end
-redis.call('SET', KEYS[2], '1', 'EX', tonumber(ARGV[1]))
+if ARGV[1] == '1' then redis.call('SET', KEYS[1], '1', 'EX', tonumber(ARGV[3])) end
+if ARGV[2] == '1' then redis.call('SET', KEYS[2], '1', 'EX', tonumber(ARGV[3])) end
+redis.call('SET', KEYS[3], '1', 'EX', tonumber(ARGV[3]))
 return 1
 `;
 
 /**
- * 校验挑战通过令牌：两个键任一存在即通过，一次往返。
- * KEYS: [1] 指纹键（无指纹时传哨兵键）[2] IP 键
- * ARGV: [1] '1'/'0' 是否带指纹
+ * 校验挑战通过令牌：三个键任一存在即通过，一次往返。
+ * KEYS: [1] 设备键 [2] 指纹键（无该维度时传哨兵键）[3] IP 键
+ * ARGV: [1] '1'/'0' 是否带设备 ID [2] '1'/'0' 是否带指纹
  */
 const LUA_HAS_PASS = `
 if ARGV[1] == '1' and redis.call('EXISTS', KEYS[1]) == 1 then return 1 end
-if redis.call('EXISTS', KEYS[2]) == 1 then return 1 end
+if ARGV[2] == '1' and redis.call('EXISTS', KEYS[2]) == 1 then return 1 end
+if redis.call('EXISTS', KEYS[3]) == 1 then return 1 end
 return 0
 `;
 
@@ -199,8 +219,10 @@ const KEY_SENTINEL = '_none';
 const rel = {
   block: id => `block:${id}`,
   blockFp: fp => `block:fp:${fp}`,
+  blockDevice: dev => `block:dev:${dev}`,
   whitelist: id => `whitelist:${id}`,
   whitelistFp: fp => `whitelist:fp:${fp}`,
+  whitelistDevice: dev => `whitelist:dev:${dev}`,
   rateLimit: actor => `rl:${actor}`,
   trap: ip => `trap:${ip}`,
   bruteIp: ip => `brute:ip:${ip}`,
@@ -208,16 +230,71 @@ const rel = {
   accountLock: user => `lock:${user}`,
   passIp: (ip, token) => `pass:${ip}:${token}`,
   passFp: (fp, token) => `pass:fp:${fp}:${token}`,
-  // 挑战载荷（服务端持有）：{ip, fingerprint, salt, difficulty}，一次性消费
+  passDevice: (dev, token) => `pass:dev:${dev}:${token}`,
+  // 挑战载荷（服务端持有）：{ip, fingerprint, deviceId, salt, difficulty}，一次性消费
   challenge: id => `chal:${id}`
 };
 
 const HASH = {
   blockedIps: 'blocked:ips',
   blockedFps: 'blocked:fps',
+  blockedDevices: 'blocked:devices',
   whitelistedIps: 'whitelisted:ips',
-  whitelistedFps: 'whitelisted:fps'
+  whitelistedFps: 'whitelisted:fps',
+  whitelistedDevices: 'whitelisted:devices'
 };
+
+/**
+ * 维度分派表：把某个身份维度在 Redis 与内存两条路径上要用到的名字集中到一处。
+ *
+ * 为什么需要它：三个维度的读写逻辑完全同构，差别只在 key 名、索引名与内存表。
+ * 旧版把 `isFp ? A : B` 的三元表达式散在 6 个函数里，加第三个维度时每处都要改，
+ * 漏一处就退化成「写得进去但读不出来」——本仓出现过同款事故（索引没写导致列表永远为空）。
+ *
+ * @type {Record<'device'|'fingerprint'|'ip', object>}
+ */
+const DIMS = {
+  device: {
+    id: t => t.deviceId,
+    keyRel: rel.blockDevice,
+    hashRel: HASH.blockedDevices,
+    wlKeyRel: rel.whitelistDevice,
+    wlHashRel: HASH.whitelistedDevices,
+    // 内存表用 thunk 取：DIMS 在 mem 之前定义，直接取值会拿到 undefined
+    blockMem: () => mem.blocksDev,
+    wlMem: () => mem.whitelistDev
+  },
+  fingerprint: {
+    id: t => t.fingerprint,
+    keyRel: rel.blockFp,
+    hashRel: HASH.blockedFps,
+    wlKeyRel: rel.whitelistFp,
+    wlHashRel: HASH.whitelistedFps,
+    blockMem: () => mem.blocksFp,
+    wlMem: () => mem.whitelistFp
+  },
+  ip: {
+    id: t => t.ip,
+    keyRel: rel.block,
+    hashRel: HASH.blockedIps,
+    wlKeyRel: rel.whitelist,
+    wlHashRel: HASH.whitelistedIps,
+    blockMem: () => mem.blocks,
+    wlMem: () => mem.whitelist
+  }
+};
+
+/**
+ * 解析目标身份属于哪个维度（优先级：设备 > 指纹 > IP，最精确者胜）
+ *
+ * @param {{ip?:string, fingerprint?:string, deviceId?:string}} target 目标
+ * @returns {'device'|'fingerprint'|'ip'} 维度名
+ */
+function dimOf(target) {
+  if (target?.deviceId) return 'device';
+  if (target?.fingerprint) return 'fingerprint';
+  return 'ip';
+}
 
 // ============== 内存降级实现 ==============
 
@@ -228,8 +305,10 @@ const HASH = {
 const mem = {
   blocks: new Map(),
   blocksFp: new Map(),
+  blocksDev: new Map(),
   whitelist: new Map(),
   whitelistFp: new Map(),
+  whitelistDev: new Map(),
   counters: new Map(),
   windows: new Map(),
   passes: new Map(),
@@ -245,12 +324,12 @@ function sweepMemory() {
   const now = Date.now();
   if (now - lastSweep < SWEEP_INTERVAL_MS) return;
   lastSweep = now;
-  for (const map of [mem.blocks, mem.blocksFp]) {
+  for (const map of [mem.blocks, mem.blocksFp, mem.blocksDev]) {
     for (const [k, v] of map) {
       if (!v.permanent && v.expiresAt && now > v.expiresAt) map.delete(k);
     }
   }
-  for (const map of [mem.whitelist, mem.whitelistFp, mem.passes, mem.flags, mem.challenges]) {
+  for (const map of [mem.whitelist, mem.whitelistFp, mem.whitelistDev, mem.passes, mem.flags, mem.challenges]) {
     for (const [k, v] of map) {
       if (v.expiresAt && now > v.expiresAt) map.delete(k);
     }
@@ -268,34 +347,61 @@ function sweepMemory() {
 /**
  * 读取访问控制状态（白名单优先，命中即短路）
  *
+ * 三个维度都参与判定：设备 / 指纹 / IP。缺少某个维度时给 Lua 传哨兵键
+ * （Lua 里按 ARGV 的 '1'/'0' 决定是否去看它），仍是一次往返。
+ *
  * @param {object} params
  * @param {string} params.ip 客户端 IP
- * @param {string} [params.fingerprint] 设备指纹
- * @returns {Promise<{fpWhitelisted:boolean, ipWhitelisted:boolean,
- *   fpBlock:{status:string,ttlSec:number}|null, ipBlock:{status:string,ttlSec:number}|null}>}
+ * @param {string} [params.fingerprint] 请求指纹
+ * @param {string} [params.deviceId] 设备 ID（auth 结构化设备 ID，与 IP 无关）
+ * @returns {Promise<{devWhitelisted:boolean, fpWhitelisted:boolean, ipWhitelisted:boolean,
+ *   devBlock:{status:string,ttlSec:number}|null, fpBlock:{status:string,ttlSec:number}|null,
+ *   ipBlock:{status:string,ttlSec:number}|null}>}
  */
-async function readAccessState({ ip, fingerprint }) {
-  if (!redisAvailable()) return readAccessStateFromMemory({ ip, fingerprint });
+async function readAccessState({ ip, fingerprint, deviceId }) {
+  if (!redisAvailable()) return readAccessStateFromMemory({ ip, fingerprint, deviceId });
   try {
     const hasFp = fingerprint ? '1' : '0';
+    const hasDev = deviceId ? '1' : '0';
     const keys = [
+      full(deviceId ? rel.whitelistDevice(deviceId) : KEY_SENTINEL),
       full(fingerprint ? rel.whitelistFp(fingerprint) : KEY_SENTINEL),
       full(rel.whitelist(ip)),
+      full(deviceId ? rel.blockDevice(deviceId) : KEY_SENTINEL),
       full(fingerprint ? rel.blockFp(fingerprint) : KEY_SENTINEL),
       full(rel.block(ip))
     ];
-    const res = await store().call(client => client.eval(LUA_READ_ACCESS_STATE, { keys, arguments: [hasFp] }));
+    const res = await store().call(client => client.eval(LUA_READ_ACCESS_STATE, { keys, arguments: [hasFp, hasDev] }));
     return {
-      fpWhitelisted: Number(res[0]) === 1,
-      ipWhitelisted: Number(res[1]) === 1,
-      fpBlock: decodeBlockEntry(res[2], res[3]),
-      ipBlock: decodeBlockEntry(res[4], res[5])
+      devWhitelisted: Number(res[0]) === 1,
+      fpWhitelisted: Number(res[1]) === 1,
+      ipWhitelisted: Number(res[2]) === 1,
+      devBlock: decodeBlockEntry(res[3], res[4]),
+      fpBlock: decodeBlockEntry(res[5], res[6]),
+      ipBlock: decodeBlockEntry(res[7], res[8])
     };
   } catch (err) {
     // 失败即当作「无任何状态」，保持历史 fail-open 语义（不可因 Redis 抖动把所有人拦死）
     log.warn('readAccessState Redis 失败，按无状态处理', err);
-    return { fpWhitelisted: false, ipWhitelisted: false, fpBlock: null, ipBlock: null };
+    return emptyAccessState();
   }
+}
+
+/**
+ * 空访问状态（Redis 失败时的 fail-open 返回值；只有一处定义，避免两个调用点漂移）
+ *
+ * @returns {{devWhitelisted:boolean, fpWhitelisted:boolean, ipWhitelisted:boolean,
+ *   devBlock:null, fpBlock:null, ipBlock:null}}
+ */
+function emptyAccessState() {
+  return {
+    devWhitelisted: false,
+    fpWhitelisted: false,
+    ipWhitelisted: false,
+    devBlock: null,
+    fpBlock: null,
+    ipBlock: null
+  };
 }
 
 /**
@@ -329,27 +435,57 @@ function decodeStatus(raw) {
   }
 }
 
-/** 内存版访问控制状态读取 */
-function readAccessStateFromMemory({ ip, fingerprint }) {
+/**
+ * 内存版访问控制状态读取（维度与优先级同 Redis 版：设备 > 指纹 > IP）
+ *
+ * @param {{ip:string, fingerprint?:string, deviceId?:string}} params 目标
+ * @returns {object} 与 readAccessState 同构的状态对象
+ */
+function readAccessStateFromMemory({ ip, fingerprint, deviceId }) {
   const now = Date.now();
-  if (fingerprint) {
-    const fpWl = mem.whitelistFp.get(fingerprint);
-    if (fpWl) {
-      if (now <= fpWl.expiresAt) return { fpWhitelisted: true, ipWhitelisted: false, fpBlock: null, ipBlock: null };
-      mem.whitelistFp.delete(fingerprint);
-    }
-  }
-  const ipWl = mem.whitelist.get(ip);
-  if (ipWl) {
-    if (now <= ipWl.expiresAt) return { fpWhitelisted: false, ipWhitelisted: true, fpBlock: null, ipBlock: null };
-    mem.whitelist.delete(ip);
-  }
+
+  // 白名单：任一维度命中即短路
+  if (takeLiveWhitelist('device', deviceId, now)) return { ...emptyAccessState(), devWhitelisted: true };
+  if (takeLiveWhitelist('fingerprint', fingerprint, now)) return { ...emptyAccessState(), fpWhitelisted: true };
+  if (takeLiveWhitelist('ip', ip, now)) return { ...emptyAccessState(), ipWhitelisted: true };
+
   return {
-    fpWhitelisted: false,
-    ipWhitelisted: false,
-    fpBlock: fingerprint ? memoryBlockEntry(mem.blocksFp.get(fingerprint), now) : null,
-    ipBlock: memoryBlockEntry(mem.blocks.get(ip), now)
+    ...emptyAccessState(),
+    devBlock: blockEntryOf('device', deviceId, now),
+    fpBlock: blockEntryOf('fingerprint', fingerprint, now),
+    ipBlock: blockEntryOf('ip', ip, now)
   };
+}
+
+/**
+ * 内存白名单条目是否有效；已过期的顺手删掉（与其它读取路径一致的惰性清理）
+ *
+ * @param {'device'|'fingerprint'|'ip'} dim 维度
+ * @param {string} [id] 该维度的标识
+ * @param {number} now 当前毫秒时间戳
+ * @returns {boolean} 是否命中有效白名单
+ */
+function takeLiveWhitelist(dim, id, now) {
+  if (!id) return false;
+  const table = DIMS[dim].wlMem();
+  const entry = table.get(id);
+  if (!entry) return false;
+  if (now <= entry.expiresAt) return true;
+  table.delete(id);
+  return false;
+}
+
+/**
+ * 读内存封禁条目并转成统一结构
+ *
+ * @param {'device'|'fingerprint'|'ip'} dim 维度
+ * @param {string} [id] 该维度的标识
+ * @param {number} now 当前毫秒时间戳
+ * @returns {{status:string, ttlSec:number}|null} 无该维度或无条目时为 null
+ */
+function blockEntryOf(dim, id, now) {
+  if (!id) return null;
+  return memoryBlockEntry(DIMS[dim].blockMem().get(id), now);
 }
 
 /**
@@ -369,26 +505,29 @@ function memoryBlockEntry(entry, now) {
 /**
  * 写入封禁（Redis：SET + HSET 原子双写；内存：写内存表）
  *
- * @param {{ip?:string, fingerprint?:string}} target 封禁目标
+ * `target` 的三选一由 `dimOf` 决定（设备 > 指纹 > IP），这里不重复判断。
+ *
+ * @param {{ip?:string, fingerprint?:string, deviceId?:string}} target 封禁目标
  * @param {object} metadata 封禁元数据（status/source/permanent/createdAt/expiresAt）
  * @returns {Promise<void>}
  */
 async function writeBlock(target, metadata) {
   const value = JSON.stringify(metadata);
-  const isFp = Boolean(target.fingerprint);
-  const id = isFp ? target.fingerprint : target.ip;
+  const dim = dimOf(target);
+  const id = DIMS[dim].id(target);
   // TTL 先归一化，Redis 与内存两条路径共用，避免两边对非法 expiresAt 的解释不一致
-  const ttlSec = resolveBlockTtl(metadata, isFp ? 'fingerprint' : 'ip', id);
+  const ttlSec = resolveBlockTtl(metadata, dim, id);
 
   if (!redisAvailable()) {
     writeBlockToMemory(target, metadata, ttlSec);
     return;
   }
-  const key = isFp ? rel.blockFp(id) : rel.block(id);
-  const hash = isFp ? HASH.blockedFps : HASH.blockedIps;
   try {
     await store().call(client =>
-      client.eval(LUA_WRITE_BLOCK, { keys: [full(key), full(hash)], arguments: [value, String(ttlSec), id] })
+      client.eval(LUA_WRITE_BLOCK, {
+        keys: [full(DIMS[dim].keyRel(id)), full(DIMS[dim].hashRel)],
+        arguments: [value, String(ttlSec), id]
+      })
     );
   } catch (err) {
     log.warn('writeBlock Redis 失败，降级到内存', err);
@@ -407,7 +546,7 @@ const FALLBACK_BLOCK_TTL = 60;
  * 一旦忽略错误直接不带 TTL 写，临时封禁就变成**永久封禁**。这里显式兜底到 60 秒并告警。
  *
  * @param {object} metadata 封禁元数据
- * @param {string} kind 目标类型（日志用）：'ip' | 'fingerprint'
+ * @param {string} kind 目标维度（日志用）：'device' | 'fingerprint' | 'ip'
  * @param {string} id 目标值
  * @returns {number} TTL 秒（0 = 永久）
  */
@@ -425,19 +564,18 @@ function resolveBlockTtl(metadata, kind, id) {
 /**
  * 写内存封禁表
  *
- * @param {{ip?:string, fingerprint?:string}} target 目标
+ * @param {{ip?:string, fingerprint?:string, deviceId?:string}} target 目标
  * @param {object} metadata 封禁元数据
  * @param {number} ttlSec 已归一化的 TTL 秒（0 = 永久）
  * @returns {void}
  */
 function writeBlockToMemory(target, metadata, ttlSec) {
   sweepMemory();
-  const isFp = Boolean(target.fingerprint);
-  const table = isFp ? mem.blocksFp : mem.blocks;
-  const id = isFp ? target.fingerprint : target.ip;
-  table.set(id, {
+  const dim = dimOf(target);
+  DIMS[dim].blockMem().set(DIMS[dim].id(target), {
     status: metadata.status,
-    source: metadata.source || (isFp ? 'manual' : 'auto'),
+    // 自动封禁只发生在 IP 维度；设备/指纹维度由运维手动指定，缺省记为 manual
+    source: metadata.source || (dim === 'ip' ? 'auto' : 'manual'),
     permanent: ttlSec === 0,
     expiresAt: ttlSec === 0 ? null : Date.now() + ttlSec * 1000
   });
@@ -446,19 +584,21 @@ function writeBlockToMemory(target, metadata, ttlSec) {
 /**
  * 移除封禁（Redis：DEL + HDEL 原子；内存：删表）
  *
- * @param {{ip?:string, fingerprint?:string}} target 目标
+ * @param {{ip?:string, fingerprint?:string, deviceId?:string}} target 目标
  * @returns {Promise<void>}
  */
 async function removeBlock(target) {
-  const isFp = Boolean(target.fingerprint);
-  const id = isFp ? target.fingerprint : target.ip;
-  if (isFp) mem.blocksFp.delete(id);
-  else mem.blocks.delete(id);
+  const dim = dimOf(target);
+  const id = DIMS[dim].id(target);
+  DIMS[dim].blockMem().delete(id);
   if (!redisAvailable()) return;
-  const key = isFp ? rel.blockFp(id) : rel.block(id);
-  const hash = isFp ? HASH.blockedFps : HASH.blockedIps;
   try {
-    await store().call(client => client.eval(LUA_REMOVE_ENTRY, { keys: [full(key), full(hash)], arguments: [id] }));
+    await store().call(client =>
+      client.eval(LUA_REMOVE_ENTRY, {
+        keys: [full(DIMS[dim].keyRel(id)), full(DIMS[dim].hashRel)],
+        arguments: [id]
+      })
+    );
   } catch (err) {
     log.warn('removeBlock Redis 失败', err);
   }
@@ -488,28 +628,26 @@ function normalizeDuration(value) {
 /**
  * 写入白名单
  *
- * @param {{ip?:string, fingerprint?:string}} target 目标
+ * @param {{ip?:string, fingerprint?:string, deviceId?:string}} target 目标
  * @param {number|string|object} durationSeconds 有效期（秒），非法值自动兜底
  * @returns {Promise<void>}
  */
 async function writeWhitelist(target, durationSeconds) {
-  const isFp = Boolean(target.fingerprint);
-  const id = isFp ? target.fingerprint : target.ip;
+  const dim = dimOf(target);
+  const id = DIMS[dim].id(target);
   const ttlSec = normalizeDuration(durationSeconds);
   const expiresAt = Date.now() + ttlSec * 1000;
   const value = JSON.stringify({ expiresAt });
 
   if (!redisAvailable()) {
     sweepMemory();
-    (isFp ? mem.whitelistFp : mem.whitelist).set(id, { expiresAt });
+    DIMS[dim].wlMem().set(id, { expiresAt });
     return;
   }
-  const key = isFp ? rel.whitelistFp(id) : rel.whitelist(id);
-  const hash = isFp ? HASH.whitelistedFps : HASH.whitelistedIps;
   try {
     await store().call(client =>
       client.eval(LUA_WRITE_WHITELIST, {
-        keys: [full(key), full(hash)],
+        keys: [full(DIMS[dim].wlKeyRel(id)), full(DIMS[dim].wlHashRel)],
         arguments: [value, String(ttlSec), id]
       })
     );
@@ -521,19 +659,21 @@ async function writeWhitelist(target, durationSeconds) {
 /**
  * 移除白名单
  *
- * @param {{ip?:string, fingerprint?:string}} target 目标
+ * @param {{ip?:string, fingerprint?:string, deviceId?:string}} target 目标
  * @returns {Promise<void>}
  */
 async function removeWhitelist(target) {
-  const isFp = Boolean(target.fingerprint);
-  const id = isFp ? target.fingerprint : target.ip;
-  if (isFp) mem.whitelistFp.delete(id);
-  else mem.whitelist.delete(id);
+  const dim = dimOf(target);
+  const id = DIMS[dim].id(target);
+  DIMS[dim].wlMem().delete(id);
   if (!redisAvailable()) return;
-  const key = isFp ? rel.whitelistFp(id) : rel.whitelist(id);
-  const hash = isFp ? HASH.whitelistedFps : HASH.whitelistedIps;
   try {
-    await store().call(client => client.eval(LUA_REMOVE_ENTRY, { keys: [full(key), full(hash)], arguments: [id] }));
+    await store().call(client =>
+      client.eval(LUA_REMOVE_ENTRY, {
+        keys: [full(DIMS[dim].wlKeyRel(id)), full(DIMS[dim].wlHashRel)],
+        arguments: [id]
+      })
+    );
   } catch (err) {
     log.warn('removeWhitelist Redis 失败', err);
   }
@@ -545,22 +685,23 @@ async function removeWhitelist(target) {
  * 优化点：旧实现是「HGETALL + 对每个过期条目一次 HDEL」——读一次列表会发出 N 次写。
  * 现在读只发一次 HGETALL，清理合并成一次 HDEL，且只在确实存在过期项时才发。
  *
+ * 三个维度各一个索引 Hash，三次 HGETALL 并发发出。
+ *
  * @param {'block'|'whitelist'} kind 类型
- * @returns {Promise<{ip:Array<object>, fp:Array<object>}>} 未过期的条目（meta 原样返回）
+ * @returns {Promise<{ip:Array<object>, fp:Array<object>, dev:Array<object>}>} 未过期的条目（meta 原样返回）
  */
 async function listActive(kind) {
   const isBlock = kind === 'block';
-  const ipHashRel = isBlock ? HASH.blockedIps : HASH.whitelistedIps;
-  const fpHahRel = isBlock ? HASH.blockedFps : HASH.whitelistedFps;
 
   if (!redisAvailable()) return listActiveFromMemory(kind);
 
   try {
-    const [ipEntries, fpEntries] = await Promise.all([
-      readHashEntries(ipHashRel, isBlock),
-      readHashEntries(fpHahRel, isBlock)
+    const [ipEntries, fpEntries, devEntries] = await Promise.all([
+      readHashEntries(isBlock ? HASH.blockedIps : HASH.whitelistedIps, isBlock),
+      readHashEntries(isBlock ? HASH.blockedFps : HASH.whitelistedFps, isBlock),
+      readHashEntries(isBlock ? HASH.blockedDevices : HASH.whitelistedDevices, isBlock)
     ]);
-    return { ip: ipEntries, fp: fpEntries };
+    return { ip: ipEntries, fp: fpEntries, dev: devEntries };
   } catch (err) {
     log.warn('listActive Redis 失败，仅返回内存条目', err);
     return listActiveFromMemory(kind);
@@ -609,20 +750,26 @@ function listActiveFromMemory(kind) {
   sweepMemory();
   const now = Date.now();
   const isBlock = kind === 'block';
-  const ipTable = isBlock ? mem.blocks : mem.whitelist;
-  const fpTable = isBlock ? mem.blocksFp : mem.whitelistFp;
-  const toEntry = (field, entry) => ({
-    field,
-    meta: {
-      status: entry.status,
-      source: entry.source,
-      permanent: Boolean(entry.permanent),
-      expiresAt: entry.permanent ? null : entry.expiresAt
+  const toEntries = table => {
+    const out = [];
+    for (const [field, entry] of table) {
+      if (!entry.permanent && !(entry.expiresAt > now)) continue;
+      out.push({
+        field,
+        meta: {
+          status: entry.status,
+          source: entry.source,
+          permanent: Boolean(entry.permanent),
+          expiresAt: entry.permanent ? null : entry.expiresAt
+        }
+      });
     }
-  });
+    return out;
+  };
   return {
-    ip: [...ipTable.entries()].filter(([, v]) => v.permanent || v.expiresAt > now).map(([k, v]) => toEntry(k, v)),
-    fp: [...fpTable.entries()].filter(([, v]) => v.permanent || v.expiresAt > now).map(([k, v]) => toEntry(k, v))
+    ip: toEntries(isBlock ? mem.blocks : mem.whitelist),
+    fp: toEntries(isBlock ? mem.blocksFp : mem.whitelistFp),
+    dev: toEntries(isBlock ? mem.blocksDev : mem.whitelistDev)
   };
 }
 
@@ -739,19 +886,40 @@ function consumeRateWindowInMemory(keyRel, windowMs, now) {
 // ============== 挑战通过令牌 ==============
 
 /**
- * 签发挑战通过令牌（指纹维度 + IP 维度，一次往返）
+ * 由三个维度拼出通过令牌的键（缺哪个维度就给哨兵键）
+ *
+ * @param {{ip:string, fingerprint?:string, deviceId?:string}} params 目标
+ * @param {string} token 令牌
+ * @returns {string[]} [设备键, 指纹键, IP 键]
+ */
+function passKeys({ ip, fingerprint, deviceId }, token) {
+  return [
+    full(deviceId ? rel.passDevice(deviceId, token) : KEY_SENTINEL),
+    full(fingerprint ? rel.passFp(fingerprint, token) : KEY_SENTINEL),
+    full(rel.passIp(ip, token))
+  ];
+}
+
+/**
+ * 签发挑战通过令牌（设备 / 指纹 / IP 三个维度，一次往返）
+ *
+ * 三个维度都写：任一维度在后续请求里仍能对上即可放行。设备维度最有价值 ——
+ * 用户换网络（Wi-Fi ↔ 蜂窝）后 IP 变了，指纹也跟着变（指纹含 IP），
+ * 只有设备 ID 不变，不必再做一次人机验证。
  *
  * @param {object} params
  * @param {string} params.ip 客户端 IP
- * @param {string} [params.fingerprint] 设备指纹
+ * @param {string} [params.fingerprint] 请求指纹
+ * @param {string} [params.deviceId] 设备 ID
  * @param {string} params.token 令牌
  * @param {number} params.ttlSec 有效期（秒）
  * @returns {Promise<void>}
  */
-async function grantPass({ ip, fingerprint, token, ttlSec }) {
+async function grantPass({ ip, fingerprint, deviceId, token, ttlSec }) {
   if (!redisAvailable()) {
     sweepMemory();
     const expiresAt = Date.now() + ttlSec * 1000;
+    if (deviceId) mem.passes.set(rel.passDevice(deviceId, token), { expiresAt });
     if (fingerprint) mem.passes.set(rel.passFp(fingerprint, token), { expiresAt });
     mem.passes.set(rel.passIp(ip, token), { expiresAt });
     return;
@@ -759,8 +927,8 @@ async function grantPass({ ip, fingerprint, token, ttlSec }) {
   try {
     await store().call(client =>
       client.eval(LUA_GRANT_PASS, {
-        keys: [full(fingerprint ? rel.passFp(fingerprint, token) : KEY_SENTINEL), full(rel.passIp(ip, token))],
-        arguments: [String(ttlSec), fingerprint ? '1' : '0']
+        keys: passKeys({ ip, fingerprint, deviceId }, token),
+        arguments: [deviceId ? '1' : '0', fingerprint ? '1' : '0', String(ttlSec)]
       })
     );
   } catch (err) {
@@ -769,15 +937,16 @@ async function grantPass({ ip, fingerprint, token, ttlSec }) {
 }
 
 /**
- * 校验挑战通过令牌（指纹或 IP 任一命中即通过，一次往返）
+ * 校验挑战通过令牌（三个维度任一命中即通过，一次往返）
  *
  * @param {object} params
  * @param {string} params.ip 客户端 IP
- * @param {string} [params.fingerprint] 设备指纹
+ * @param {string} [params.fingerprint] 请求指纹
+ * @param {string} [params.deviceId] 设备 ID
  * @param {string} params.token 令牌
  * @returns {Promise<boolean>} 是否已通过挑战
  */
-async function hasPass({ ip, fingerprint, token }) {
+async function hasPass({ ip, fingerprint, deviceId, token }) {
   if (!redisAvailable()) {
     sweepMemory();
     const now = Date.now();
@@ -785,13 +954,17 @@ async function hasPass({ ip, fingerprint, token }) {
       const v = mem.passes.get(k);
       return Boolean(v && v.expiresAt > now);
     };
-    return hit(rel.passIp(ip, token)) || (fingerprint ? hit(rel.passFp(fingerprint, token)) : false);
+    return (
+      (deviceId ? hit(rel.passDevice(deviceId, token)) : false) ||
+      (fingerprint ? hit(rel.passFp(fingerprint, token)) : false) ||
+      hit(rel.passIp(ip, token))
+    );
   }
   try {
     const res = await store().call(client =>
       client.eval(LUA_HAS_PASS, {
-        keys: [full(fingerprint ? rel.passFp(fingerprint, token) : KEY_SENTINEL), full(rel.passIp(ip, token))],
-        arguments: [fingerprint ? '1' : '0']
+        keys: passKeys({ ip, fingerprint, deviceId }, token),
+        arguments: [deviceId ? '1' : '0', fingerprint ? '1' : '0']
       })
     );
     return Number(res) === 1;

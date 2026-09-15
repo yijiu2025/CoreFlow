@@ -2,12 +2,12 @@
  * 人机挑战验证服务
  *
  * 从 api/firewall/v1/challenge.js 下沉：浏览器挑战结果验证 + 签发通过令牌。
- * 复用 firewall 的 PoW 原语 / generateFingerprint / 访问层挑战载荷。
+ * 复用 firewall 的 PoW 原语 / generateFingerprint / 访问层挑战载荷 / auth 的设备 ID 流程。
  *
  * 校验三要素（缺一不可）：
  *   1. **服务端持有**：challengeId 必须能回查到载荷（旧实现把凭据内嵌进页面，无需回查即通过）；
  *   2. **单次有效**：载荷是原子 GET+DEL 取走的，重放同一个 challengeId 必然失败；
- *   3. **绑定上下文 + 工作量证明**：载荷里记录的 IP/指纹必须与本次一致，且答案必须满足难度。
+ *   3. **绑定上下文 + 工作量证明**：载荷里记录的 IP/指纹/设备 ID 必须与本次一致，且答案必须满足难度。
  *
  * @author yijiu
  * @since 2026-08-17
@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import { generateFingerprint } from '../util/fingerprint.js';
 import { verifyPow } from '../util/pow-sha256.js';
 import { grantPass, takeChallenge } from '../util/redis.js';
+import { getClientDeviceId } from '../../../framework/auth/device.js';
 
 /** 通过令牌有效期（30 分钟） */
 const PASS_TOKEN_TTL = 1800;
@@ -38,7 +39,7 @@ function safeEqual(a, b) {
 /**
  * 验证浏览器提交的挑战结果，通过则签发 fw_verified 令牌（Cookie + Redis）
  *
- * @param {object} request - Fastify request（取 body / ip / 指纹）
+ * @param {object} request - Fastify request（取 body / ip / 指纹 / 设备 ID）
  * @param {object} reply - Fastify reply（设 Cookie）
  * @returns {Promise<{ok:true} | {ok:false, statusCode:number, reason:string}>}
  */
@@ -57,12 +58,18 @@ async function verifyChallenge(request, reply) {
   }
 
   const fingerprint = generateFingerprint(request);
+  const deviceId = await getClientDeviceId(request);
 
-  // 2. 绑定校验：挑战是在某个 IP/指纹上下发的，换一个上下文不能复用
+  // 2. 绑定校验：挑战是在某个 IP/指纹/设备上下发的，换一个上下文不能复用。
+  //    设备维度只有在下发时确实绑定了、且本次仍能取到时才校验 —— 反过来（下发时没有、
+  //    本次有）不算绕过，因为它本来就只是「额外多一个维度」而不是必要条件。
   if (!safeEqual(payload.ip || '', request.ip || '')) {
     return { ok: false, statusCode: 403, reason: 'Challenge Mismatch' };
   }
   if (payload.fingerprint && !safeEqual(payload.fingerprint, fingerprint)) {
+    return { ok: false, statusCode: 403, reason: 'Challenge Mismatch' };
+  }
+  if (payload.deviceId && !safeEqual(payload.deviceId, deviceId || '')) {
     return { ok: false, statusCode: 403, reason: 'Challenge Mismatch' };
   }
 
@@ -71,9 +78,9 @@ async function verifyChallenge(request, reply) {
     return { ok: false, statusCode: 403, reason: 'Invalid Proof' };
   }
 
-  // 4. 签发验证令牌（同时绑定指纹和 IP）
+  // 4. 签发验证令牌（绑定设备 / 指纹 / IP 三个维度）
   const token = crypto.randomBytes(32).toString('hex');
-  await grantPass({ ip: request.ip, fingerprint, token, ttlSec: PASS_TOKEN_TTL });
+  await grantPass({ ip: request.ip, fingerprint, deviceId, token, ttlSec: PASS_TOKEN_TTL });
 
   // 5. 设置 HttpOnly Cookie
   reply.setCookie('fw_verified', token, {

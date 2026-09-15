@@ -8,7 +8,7 @@
  * @since 2026-08-17
  */
 import { getConfig } from '../../util/shared.js';
-import { setBlock } from '../dao/block-manager.js';
+import { setBlockForSubject } from '../dao/block-manager.js';
 
 /** 预编译的正则缓存（启动时填充，运行时只读） */
 let compiledBotPatterns = [];
@@ -54,24 +54,49 @@ function compilePatterns(patterns) {
     .filter(Boolean);
 }
 
+/** 挑战态 TTL（秒）：与历史行为一致 */
+const CHALLENGE_TTL_SEC = 1800;
+
+/**
+ * 对触发者下发挑战（IP + 设备两个维度）
+ *
+ * 三个触发分支（无 UA / Bot UA / 浏览器超频）此前各抄一份同样的 setBlock 调用，
+ * 参数还都是同一组常量 —— 合成一处后，改「挑战时长」只需改这里。
+ * 设备维度让挑战跨 IP 生效：机器人换 IP 也还是要过验证。
+ *
+ * @param {{ip:string, deviceId:string|null}} subject 触发者
+ * @returns {Promise<void>}
+ */
+async function challengeSubject(subject) {
+  const now = Date.now();
+  await setBlockForSubject(subject, {
+    status: 'CHALLENGE',
+    source: 'auto',
+    permanent: false,
+    createdAt: now,
+    expiresAt: now + CHALLENGE_TTL_SEC * 1000
+  });
+}
+
 /**
  * 僵尸网络/机器人挑战检查
+ *
+ * @param {string} ip 客户端 IP
+ * @param {string} ua User-Agent
+ * @param {number} requestCount 当前窗口内请求数
+ * @param {string|null} [deviceId] 设备 ID（客户端未携带合法值时传 null）
+ * @returns {Promise<boolean>} true 表示已触发挑战
  */
-const checkBotChallenge = async (ip, ua, requestCount) => {
+const checkBotChallenge = async (ip, ua, requestCount, deviceId = null) => {
   ensurePatternsCompiled();
 
   const settings = getConfig().defense;
-  const now = Date.now();
+  // enableDeviceBlock=false 时退回纯 IP 维度（运维可一键关掉跨 IP 的设备封禁）
+  const subject = { ip, deviceId: settings.enableDeviceBlock === false ? null : deviceId };
 
   if (!ua) {
     if (requestCount > (settings.botChallengeNoUaLimit || 10)) {
-      await setBlock(ip, {
-        status: 'CHALLENGE',
-        source: 'auto',
-        permanent: false,
-        createdAt: now,
-        expiresAt: now + 1800 * 1000
-      });
+      await challengeSubject(subject);
       return true;
     }
     return false;
@@ -81,24 +106,12 @@ const checkBotChallenge = async (ip, ua, requestCount) => {
   const isBrowserUA = compiledBrowserPatterns.some(p => p.test(ua));
 
   if (isBotUA && requestCount > (settings.botChallengeBotLimit || 30)) {
-    await setBlock(ip, {
-      status: 'CHALLENGE',
-      source: 'auto',
-      permanent: false,
-      createdAt: now,
-      expiresAt: now + 1800 * 1000
-    });
+    await challengeSubject(subject);
     return true;
   }
 
   if (isBrowserUA && requestCount > (settings.botChallengeBrowserLimit || 120)) {
-    await setBlock(ip, {
-      status: 'CHALLENGE',
-      source: 'auto',
-      permanent: false,
-      createdAt: now,
-      expiresAt: now + 1800 * 1000
-    });
+    await challengeSubject(subject);
     return true;
   }
 

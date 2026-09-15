@@ -6,11 +6,18 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { initDao, syncManualBlacklistToRedis, syncManualWhitelistToRedis, cleanupSaveTimer } from './dao/dao.js';
+import {
+  initDao,
+  syncManualBlacklistToRedis,
+  syncManualWhitelistToRedis,
+  cleanupSaveTimer,
+  getSecuritySettings
+} from './dao/dao.js';
 import {
   startCleanupTask,
   trackConnection,
   shouldSkipDeepCheck,
+  willBeRejectedAsAnonymous,
   buildRequestContext,
   checkGlobalBlockPhase,
   checkChallengeCookie,
@@ -51,7 +58,7 @@ const initFirewall = fp(async function (app) {
   // ============== onRequest：安全检查管道 ==============
 
   app.addHook('onRequest', async (request, reply) => {
-    const { ip, ua, fingerprint } = buildRequestContext(request);
+    const { ip, ua, fingerprint, deviceId } = await buildRequestContext(request);
 
     // 第 1 阶段：全局封禁检查（连接数 + 黑名单 + 挑战态）
     const blocked = await checkGlobalBlockPhase(request, reply);
@@ -63,12 +70,24 @@ const initFirewall = fp(async function (app) {
     // 跳过静态资源和挑战验证接口
     if (shouldSkipDeepCheck(request.url)) return;
 
+    // 已知会被守卫拒绝的匿名请求：连挑战 Cookie 校验与深度检测一起跳过
+    // （配置开关 skipDeepCheckForAnonymous，默认关闭；取舍见 willBeRejectedAsAnonymous 注释）
+    if (getSecuritySettings().defense?.skipDeepCheckForAnonymous && willBeRejectedAsAnonymous(request)) return;
+
     // 第 2 阶段：挑战 Cookie 验证（已通过的直接放行）
     const passed = await checkChallengeCookie(request, ip, fingerprint);
     if (passed) return;
 
     // 第 3 阶段：深度检测管道（Bot / 地理信誉 / 端点限频）
-    const intercepted = await runDetectionPipeline(ip, ua, request.url, request._firewallLog, fingerprint, reply);
+    const intercepted = await runDetectionPipeline(
+      ip,
+      ua,
+      request.url,
+      request._firewallLog,
+      fingerprint,
+      reply,
+      deviceId
+    );
     if (intercepted) {
       request._firewallLogged = true;
     }
@@ -111,7 +130,7 @@ const initFirewall = fp(async function (app) {
 
     if ([404, 403].includes(reply.statusCode)) {
       try {
-        await checkNotFoundTrap(request.ip, request.url, reply.statusCode);
+        await checkNotFoundTrap(request.ip, request.url, reply.statusCode, request._deviceId || null);
       } catch (err) {
         log.warn(`[Firewall] Trap Triggered: ${request.ip} -> ${err.rule}`);
       }

@@ -18,7 +18,16 @@ export { checkGeoReputation, resolveGeoInfo } from './detectors/geo-filter.js';
 export { checkBotChallenge } from './detectors/bot-detector.js';
 
 // --- 封禁核心 ---
-export { setBlock, removeBlock, checkGlobalBlock } from './dao/block-manager.js';
+export {
+  setBlock,
+  removeBlock,
+  setBlockFp,
+  removeBlockFp,
+  setBlockDevice,
+  removeBlockDevice,
+  setBlockForSubject,
+  checkGlobalBlock
+} from './dao/block-manager.js';
 
 // --- 攻击告警 / 自动响应 ---
 export { handleAttackEvent, notifyAttack, sendAlert } from './auto-responder.js';
@@ -37,6 +46,7 @@ export {
   CHALLENGE_VERIFY_PATH,
   isChallengeVerifyUrl,
   shouldSkipDeepCheck,
+  willBeRejectedAsAnonymous,
   buildRequestContext,
   checkGlobalBlockPhase,
   checkChallengeCookie,
