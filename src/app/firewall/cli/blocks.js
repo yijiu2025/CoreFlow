@@ -7,14 +7,12 @@
 import { connectRedis, closeRedis } from '../../../../scripts/lib/redis.js';
 import { printTable, printSuccess, printInfo, printError, printWarning } from '../../../../scripts/lib/table.js';
 import { createRl, ask, confirm, closeRl } from '../../../../scripts/lib/input.js';
-import { createLogger } from '../../../framework/log/index.js';
-
-const log = createLogger('app.firewall.cli.blocks');
+import { logStdout } from '../../../framework/log/index.js';
 
 /**
  * 查看封禁列表
  */
-export async function listBlocks() {
+async function listBlocks() {
   const redis = await connectRedis();
   if (!redis) {
     printWarning('Redis 未启用');
@@ -30,7 +28,7 @@ export async function listBlocks() {
       return;
     }
 
-    log.stdout('\n🚫 封禁列表：');
+    logStdout('\n🚫 封禁列表：');
     printTable(
       ['IP', '封禁时间', '原因'],
       entries.map(([ip, data]) => {
@@ -42,7 +40,7 @@ export async function listBlocks() {
         }
       })
     );
-    log.stdout(`\n共 ${entries.length} 个封禁 IP`);
+    logStdout(`\n共 ${entries.length} 个封禁 IP`);
   } finally {
     await closeRedis(redis);
   }
@@ -51,7 +49,7 @@ export async function listBlocks() {
 /**
  * 添加封禁
  */
-export async function addBlock() {
+async function addBlock() {
   const redis = await connectRedis();
   if (!redis) {
     printWarning('Redis 未启用');
@@ -94,7 +92,7 @@ export async function addBlock() {
 /**
  * 解除封禁
  */
-export async function removeBlock() {
+async function removeBlock() {
   const redis = await connectRedis();
   if (!redis) {
     printWarning('Redis 未启用');
@@ -111,9 +109,9 @@ export async function removeBlock() {
       return;
     }
 
-    log.stdout('\n当前封禁的 IP：');
+    logStdout('\n当前封禁的 IP：');
     ips.forEach((ip, i) => {
-      log.stdout(`  ${i + 1}. ${ip}`);
+      logStdout(`  ${i + 1}. ${ip}`);
     });
 
     const input = await ask(rl, '\n请输入要解除的序号或 IP: ');
@@ -144,3 +142,5 @@ export async function removeBlock() {
     await closeRedis(redis);
   }
 }
+
+export { listBlocks, addBlock, removeBlock };

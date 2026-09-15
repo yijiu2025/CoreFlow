@@ -1,6 +1,5 @@
-import { createLogger } from '../../src/framework/log/index.js';
+import { logStdout } from '../../src/framework/log/index.js';
 
-const log = createLogger('scripts.lib.table');
 /**
  * 终端输出格式化模块
  * 提供表格打印、彩色输出、进度显示等功能
@@ -80,16 +79,16 @@ export function printTable(headers, rows, options = {}) {
   const line = '─'.repeat(widths.reduce((a, b) => a + b, 0) + headers.length - 1);
 
   // 打印表头
-  log.stdout(line);
-  log.stdout(headers.map((h, i) => padRight(h, widths[i])).join('│'));
-  log.stdout(line);
+  logStdout(line);
+  logStdout(headers.map((h, i) => padRight(h, widths[i])).join('│'));
+  logStdout(line);
 
   // 打印数据行
   rows.forEach(row => {
-    log.stdout(row.map((cell, i) => padRight(String(cell || ''), widths[i])).join('│'));
+    logStdout(row.map((cell, i) => padRight(String(cell || ''), widths[i])).join('│'));
   });
 
-  log.stdout(line);
+  logStdout(line);
 }
 
 /**
@@ -131,7 +130,7 @@ function padRight(str, width) {
  */
 export function colorPrint(color, text) {
   const colorCode = colors[color] || '';
-  log.stdout(`${colorCode}${text}${colors.reset}`);
+  logStdout(`${colorCode}${text}${colors.reset}`);
 }
 
 /**
@@ -182,7 +181,7 @@ export function printBold(text) {
  * @param {string} [char='─'] - 分隔字符
  */
 export function printLine(length = 60, char = '─') {
-  log.stdout(char.repeat(length));
+  logStdout(char.repeat(length));
 }
 
 /**
@@ -191,11 +190,11 @@ export function printLine(length = 60, char = '─') {
  */
 export function printTitle(text) {
   const width = getDisplayLength(text) + 4;
-  log.stdout('');
-  log.stdout('╔' + '═'.repeat(width) + '╗');
-  log.stdout('║  ' + text + '  ║');
-  log.stdout('╚' + '═'.repeat(width) + '╝');
-  log.stdout('');
+  logStdout('');
+  logStdout('╔' + '═'.repeat(width) + '╗');
+  logStdout('║  ' + text + '  ║');
+  logStdout('╚' + '═'.repeat(width) + '╝');
+  logStdout('');
 }
 
 /**
@@ -203,9 +202,9 @@ export function printTitle(text) {
  * @param {string} text - 标题文本
  */
 export function printSubtitle(text) {
-  log.stdout('');
-  log.stdout(`  ${colors.bold}${text}${colors.reset}`);
-  log.stdout('  ' + '─'.repeat(text.length));
+  logStdout('');
+  logStdout(`  ${colors.bold}${text}${colors.reset}`);
+  logStdout('  ' + '─'.repeat(text.length));
 }
 
 // ============== 进度显示 ==============
@@ -249,7 +248,7 @@ export function printSpinner(frame, message = '') {
  */
 export function printList(items, bullet = '•') {
   items.forEach(item => {
-    log.stdout(`  ${bullet} ${item}`);
+    logStdout(`  ${bullet} ${item}`);
   });
 }
 
@@ -260,7 +259,7 @@ export function printList(items, bullet = '•') {
  */
 export function printKeyValue(pairs, keyWidth = 15) {
   pairs.forEach(([key, value]) => {
-    log.stdout(`  ${colors.dim}${key.padEnd(keyWidth)}${colors.reset} ${value}`);
+    logStdout(`  ${colors.dim}${key.padEnd(keyWidth)}${colors.reset} ${value}`);
   });
 }
 
@@ -272,7 +271,7 @@ export function printKeyValue(pairs, keyWidth = 15) {
  * @param {number} [indent=2] - 缩进空格数
  */
 export function printJson(obj, indent = 2) {
-  log.stdout(JSON.stringify(obj, null, indent));
+  logStdout(JSON.stringify(obj, null, indent));
 }
 
 // ============== 日期格式化 ==============

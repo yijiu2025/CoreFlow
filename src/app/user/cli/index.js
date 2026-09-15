@@ -10,9 +10,7 @@
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
-import { createLogger } from '../../../framework/log/index.js';
-
-const log = createLogger('app.user.cli.index');
+import { logStdout } from '../../../framework/log/index.js';
 
 /**
  * 用户统计
@@ -26,11 +24,11 @@ async function userStats() {
     User.count({ where: { status: 0 } })
   ]);
 
-  log.stdout('\n👥 用户统计：');
+  logStdout('\n👥 用户统计：');
   printLine();
-  log.stdout(`  总数:   ${total}`);
-  log.stdout(`  正常:   ${active}`);
-  log.stdout(`  禁用:   ${disabled}`);
+  logStdout(`  总数:   ${total}`);
+  logStdout(`  正常:   ${active}`);
+  logStdout(`  禁用:   ${disabled}`);
   printLine();
 }
 
@@ -50,7 +48,7 @@ async function recentUsers() {
     return;
   }
 
-  log.stdout('\n📋 最近注册用户：');
+  logStdout('\n📋 最近注册用户：');
   printTable(
     ['ID', '用户名', '邮箱', '状态', '注册时间'],
     users.map(u => [
@@ -64,7 +62,7 @@ async function recentUsers() {
 }
 
 // 导出 CLI 插件配置
-export default {
+const userCliConfig = {
   command: 'usercenter',
   appName: 'user',
   description: '用户中心',
@@ -73,3 +71,5 @@ export default {
     recent: { description: '最近注册', handler: recentUsers }
   }
 };
+
+export default userCliConfig;

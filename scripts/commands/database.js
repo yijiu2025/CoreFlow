@@ -4,9 +4,7 @@
 import { execSync } from 'child_process';
 import { getSequelize, getTableNames, testConnection } from '../lib/db.js';
 import { printSuccess, printInfo, printError, printLine } from '../lib/table.js';
-import { createLogger } from '../../src/framework/log/index.js';
-
-const log = createLogger('scripts.commands.database');
+import { logStdout } from '../../src/framework/log/index.js';
 
 /**
  * 查看数据库状态
@@ -22,11 +20,11 @@ export async function dbStatus() {
   printSuccess('数据库连接正常');
 
   const tables = await getTableNames();
-  log.stdout(`📊 共 ${tables.length} 张表`);
+  logStdout(`📊 共 ${tables.length} 张表`);
 
-  log.stdout('\n表列表：');
+  logStdout('\n表列表：');
   tables.forEach((table, i) => {
-    log.stdout(`  ${i + 1}. ${table}`);
+    logStdout(`  ${i + 1}. ${table}`);
   });
 }
 
@@ -34,7 +32,7 @@ export async function dbStatus() {
  * 执行数据库迁移
  */
 export async function dbMigrate() {
-  log.stdout('🔄 执行数据库迁移...');
+  logStdout('🔄 执行数据库迁移...');
   try {
     execSync('node --env-file=.env src/db/migrate.js', { stdio: 'inherit' });
     printSuccess('迁移完成');
@@ -73,24 +71,22 @@ export async function dbTableInfo() {
   const tables = await getTableNames();
   const sequelize = getSequelize();
 
-  log.stdout('\n📋 表结构详情：\n');
+  logStdout('\n📋 表结构详情：\n');
 
   for (const table of tables) {
     const [columns] = await sequelize.query(`DESCRIBE ${table}`);
 
-    log.stdout(`表名: ${table}`);
+    logStdout(`表名: ${table}`);
     printLine(80);
-    log.stdout('  列名'.padEnd(25) + '类型'.padEnd(25) + '允许空'.padEnd(10) + '键');
+    logStdout('  列名'.padEnd(25) + '类型'.padEnd(25) + '允许空'.padEnd(10) + '键');
     printLine(80);
 
     columns.forEach(col => {
       const key = col.Key === 'PRI' ? '🔑 主键' : col.Key === 'MUL' ? '🔗 索引' : col.Key === 'UNI' ? '✨ 唯一' : '';
-      log.stdout(
-        `  ${col.Field.padEnd(23)}${col.Type.padEnd(23)}${(col.Null === 'YES' ? '是' : '否').padEnd(8)}${key}`
-      );
+      logStdout(`  ${col.Field.padEnd(23)}${col.Type.padEnd(23)}${(col.Null === 'YES' ? '是' : '否').padEnd(8)}${key}`);
     });
 
-    log.stdout('');
+    logStdout('');
   }
 }
 
@@ -101,7 +97,7 @@ export async function dbOptimize() {
   const tables = await getTableNames();
   const sequelize = getSequelize();
 
-  log.stdout('🔧 优化数据库表...\n');
+  logStdout('🔧 优化数据库表...\n');
 
   for (const table of tables) {
     try {

@@ -5,9 +5,7 @@ import { getModels } from '../lib/db.js';
 import { connectRedis, closeRedis, clearUserSessions } from '../lib/redis.js';
 import { createRl, ask, confirm, closeRl, select } from '../lib/input.js';
 import { printTable, printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
-import { createLogger } from '../../src/framework/log/index.js';
-
-const log = createLogger('scripts.commands.role');
+import { logStdout } from '../../src/framework/log/index.js';
 
 /**
  * 列出所有角色
@@ -24,12 +22,12 @@ export async function listRoles() {
     return;
   }
 
-  log.stdout('\n🎭 角色列表：');
+  logStdout('\n🎭 角色列表：');
   printTable(
     ['ID', '编码', '应用', '名称', '权重', '创建时间'],
     roles.map(r => [r.id, r.code, r.app_id, r.name, r.rank_level, new Date(r.created_at).toLocaleString('zh-CN')])
   );
-  log.stdout(`\n共 ${roles.length} 个角色`);
+  logStdout(`\n共 ${roles.length} 个角色`);
 }
 
 /**
@@ -63,22 +61,22 @@ export async function viewRole() {
       include: [{ model: User, as: 'user', attributes: ['id', 'username', 'email'] }]
     });
 
-    log.stdout('\n🎭 角色详情：');
+    logStdout('\n🎭 角色详情：');
     printLine();
-    log.stdout(`  ID:     ${role.id}`);
-    log.stdout(`  编码:   ${role.code}`);
-    log.stdout(`  应用:   ${role.app_id}`);
-    log.stdout(`  名称:   ${role.name}`);
-    log.stdout(`  权重:   ${role.rank_level}`);
-    log.stdout(`  描述:   ${role.description || '无'}`);
+    logStdout(`  ID:     ${role.id}`);
+    logStdout(`  编码:   ${role.code}`);
+    logStdout(`  应用:   ${role.app_id}`);
+    logStdout(`  名称:   ${role.name}`);
+    logStdout(`  权重:   ${role.rank_level}`);
+    logStdout(`  描述:   ${role.description || '无'}`);
 
     if (userRoles.length > 0) {
-      log.stdout(`\n  拥有此角色的用户 (${userRoles.length}):`);
+      logStdout(`\n  拥有此角色的用户 (${userRoles.length}):`);
       userRoles.forEach(ur => {
-        log.stdout(`    - ${ur.user.username} (${ur.user.email})`);
+        logStdout(`    - ${ur.user.username} (${ur.user.email})`);
       });
     } else {
-      log.stdout('\n  拥有此角色的用户: 无');
+      logStdout('\n  拥有此角色的用户: 无');
     }
 
     printLine();
@@ -236,6 +234,6 @@ export async function roleStats() {
     stats.push([role.id, role.code, role.app_id, role.name, role.rank_level, count]);
   }
 
-  log.stdout('\n📊 角色统计：');
+  logStdout('\n📊 角色统计：');
   printTable(['ID', '编码', '应用', '名称', '权重', '用户数'], stats);
 }

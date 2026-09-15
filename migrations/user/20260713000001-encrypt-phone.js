@@ -1,4 +1,4 @@
-import { createLogger } from '../../src/framework/log/index.js';
+import { createLogger, logStdout } from '../../src/framework/log/index.js';
 
 const log = createLogger('migrations.user.20260713000001-encrypt-phone');
 /**
@@ -12,7 +12,7 @@ export async function up({ queryInterface, Sequelize }) {
   );
 
   if (rows.length === 0) {
-    log.stdout('  ℹ️  无明文手机号需要加密');
+    logStdout('  ℹ️  无明文手机号需要加密');
     return;
   }
 
@@ -34,7 +34,7 @@ export async function up({ queryInterface, Sequelize }) {
     }
   }
 
-  log.stdout(`  ✅ 已加密 ${count}/${rows.length} 条手机号记录`);
+  logStdout(`  ✅ 已加密 ${count}/${rows.length} 条手机号记录`);
 }
 
 export async function down({ queryInterface }) {

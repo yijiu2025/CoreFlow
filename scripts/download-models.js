@@ -14,7 +14,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createLogger } from '../src/framework/log/index.js';
+import { createLogger, logStdout } from '../src/framework/log/index.js';
 
 const log = createLogger('scripts.download-models');
 
@@ -72,7 +72,7 @@ async function downloadFile(url, dest) {
  * 主函数
  */
 async function main() {
-  log.stdout('📦 开始下载 AI 模型...\n');
+  logStdout('📦 开始下载 AI 模型...\n');
 
   // 确保目录存在
   if (!fs.existsSync(MODELS_DIR)) {
@@ -90,22 +90,22 @@ async function main() {
 
     // 检查是否已存在
     if (fs.existsSync(modelFile)) {
-      log.stdout(`  ⏭️  ${model.name}: 已存在，跳过`);
+      logStdout(`  ⏭️  ${model.name}: 已存在，跳过`);
       continue;
     }
 
     // 下载
-    log.stdout(`  ⬇️  ${model.name}...`);
+    logStdout(`  ⬇️  ${model.name}...`);
     try {
       await downloadFile(model.url, modelFile);
-      log.stdout(`  ✅ ${model.name}: 下载完成`);
+      logStdout(`  ✅ ${model.name}: 下载完成`);
     } catch (err) {
       log.error(`  ❌ ${model.name}: ${err.message}`);
     }
   }
 
-  log.stdout('\n✅ 模型下载完成！');
-  log.stdout(`📁 模型位置: ${MODELS_DIR}/`);
+  logStdout('\n✅ 模型下载完成！');
+  logStdout(`📁 模型位置: ${MODELS_DIR}/`);
 }
 
 main().catch(log.error);

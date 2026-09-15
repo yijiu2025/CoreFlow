@@ -7,9 +7,7 @@ import { getModels } from '../lib/db.js';
 import { connectRedis, closeRedis, clearUserSessions } from '../lib/redis.js';
 import { createRl, ask, confirm, closeRl } from '../lib/input.js';
 import { printTable, printSuccess, printInfo, printWarning, printError, printLine } from '../lib/table.js';
-import { createLogger } from '../../src/framework/log/index.js';
-
-const log = createLogger('scripts.commands.admin');
+import { logStdout } from '../../src/framework/log/index.js';
 
 /**
  * 列出所有超级管理员
@@ -33,12 +31,12 @@ export async function listSuperadmins() {
     return;
   }
 
-  log.stdout('\n👑 超级管理员列表：');
+  logStdout('\n👑 超级管理员列表：');
   printTable(
     ['ID', '用户名', '邮箱'],
     superadmins.map(ur => [ur.user.id, ur.user.username, ur.user.email])
   );
-  log.stdout(`\n共 ${superadmins.length} 个超级管理员`);
+  logStdout(`\n共 ${superadmins.length} 个超级管理员`);
 }
 
 /**
@@ -74,9 +72,9 @@ export async function setupSuperadmin() {
   });
 
   if (currentAdmins.length > 0) {
-    log.stdout('\n当前超级管理员：');
+    logStdout('\n当前超级管理员：');
     currentAdmins.forEach((ur, i) => {
-      log.stdout(`  ${i + 1}. ${ur.user.username} (${ur.user.email})`);
+      logStdout(`  ${i + 1}. ${ur.user.username} (${ur.user.email})`);
     });
   }
 
@@ -189,9 +187,9 @@ export async function revokeSuperadmin() {
   }
 
   // 显示列表
-  log.stdout('\n当前超级管理员：');
+  logStdout('\n当前超级管理员：');
   superadmins.forEach((ur, i) => {
-    log.stdout(`  ${i + 1}. ${ur.user.username} (${ur.user.email}) [ID: ${ur.user.id}]`);
+    logStdout(`  ${i + 1}. ${ur.user.username} (${ur.user.email}) [ID: ${ur.user.id}]`);
   });
 
   const rl = createRl();

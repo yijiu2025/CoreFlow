@@ -8,8 +8,9 @@
  * - 非 CLI 代码：console.log/info → log.info，warn → log.warn，error → log.error，
  *   debug → log.debug（由 LOG_DEBUG 关键词门控），trace → log.trace
  * - CLI 类代码（cli/ 目录、scripts/、migrations/、根目录 *.mjs）：
- *   console.log/info → log.stdout（面向用户的结果输出），warn/error/debug/trace 同上
- * - 自动补 import { createLogger } 与 const log = createLogger('<tag>')
+ *   console.log/info → logStdout(...)（顶层导出的裸输出出口：无时间戳装饰、不受 LOG_LEVEL 门控），
+ *   warn → log.warn，error → log.error，debug → log.debug，trace → log.trace
+ * - 自动补 import：用到 logStdout 就导入它；用到 log.* 再补 createLogger('<tag>') 与 const log
  * - tag 由文件路径推导：src/app/firewall/cli/status.js → app.firewall.cli.status
  *
  * 幂等：重复运行不会重复插入 import/const。
@@ -59,9 +60,12 @@ function collectTargets() {
 
 /* ------------------------------ 核心替换 ------------------------------ */
 
+/* 注意：logStdout 是**顶层导出**（不是 logger 实例方法），因此不带 binding 前缀，
+   也无需 createLogger。历史上这里误写成 'log.stdout'，该 API 从不存在，导致全仓
+   CLI/scripts 约 324 处调用在运行到输出语句时抛 TypeError。 */
 const REPLACEMENTS_CLI = {
-  log: 'log.stdout',
-  info: 'log.stdout',
+  log: 'logStdout',
+  info: 'logStdout',
   warn: 'log.warn',
   error: 'log.error',
   debug: 'log.debug',
@@ -156,21 +160,31 @@ function processFile(file) {
   });
   let content = out.join('\n');
 
-  // 注入 import + const（幂等：已有 createLogger 引用则跳过）
-  const hasCreateLogger = /from\s+['"][^'"]*framework\/log\/index\.js['"]/.test(content);
-  if (!hasCreateLogger) {
+  // 注入 import（+ 必要时的 const）（幂等：已引本模块则跳过）
+  const hasImport = /from\s+['"][^'"]*framework\/log\/index\.js['"]/.test(content);
+  if (!hasImport) {
     const binding = freeBindingName(content);
     const tag = computeTag(relPath);
-    const importLine = `import { createLogger } from '${computeImportPath(file)}';`;
-    const declLine = `const ${binding} = createLogger('${tag}');`;
-    // 全文重绑定：若绑定名不是 log，需要把 log.xxx 调用改成 binding.xxx
-    const insertAt = findLastImportEnd(content.split('\n')) + 1;
-    const lines2 = content.split('\n');
-    lines2.splice(insertAt, 0, importLine, '', declLine);
-    content = lines2.join('\n');
+    // 全文重绑定：若绑定名不是 log，需把 log.xxx 改成 binding.xxx。
+    // 注意 logStdout 是顶层符号、不带前缀，不参与重绑定。
     if (binding !== 'log') {
-      content = content.replace(/\blog\.(stdout|info|debug|trace|warn|error)\b/g, `${binding}.$1`);
+      content = content.replace(/\blog\.(info|debug|trace|warn|error)\b/g, `${binding}.$1`);
     }
+    // 按实际用到的符号决定导入内容：只用裸输出则不必引 createLogger/const
+    const usesBinding = new RegExp(`\\b${binding}\\.(info|debug|trace|warn|error)\\b`).test(content);
+    const usesStdout = /\blogStdout\(/.test(content);
+    const names = [];
+    if (usesBinding) names.push('createLogger');
+    if (usesStdout) names.push('logStdout');
+    if (!names.length) names.push('logStdout');
+    const importLine = `import { ${names.join(', ')} } from '${computeImportPath(file)}';`;
+    const insertAt = findLastImportEnd(content.split('\n')) + 1;
+    const block = usesBinding ? [importLine, '', `const ${binding} = createLogger('${tag}');`] : [importLine];
+    // 文件原本没有 import 时插入点在首行，补一个空行避免 import 紧贴代码
+    if (insertAt === 0) block.push('');
+    const lines2 = content.split('\n');
+    lines2.splice(insertAt, 0, ...block);
+    content = lines2.join('\n');
     replaced = replaced || 1;
   }
 

@@ -11,9 +11,7 @@
  */
 import { getModels } from '../../../../scripts/lib/db.js';
 import { printTable, printInfo, printLine } from '../../../../scripts/lib/table.js';
-import { createLogger } from '../../../framework/log/index.js';
-
-const log = createLogger('app.oauth21.cli.index');
+import { logStdout } from '../../../framework/log/index.js';
 
 /**
  * 查看 OAuth 客户端
@@ -30,7 +28,7 @@ async function listClients() {
     return;
   }
 
-  log.stdout('\n🔑 OAuth 客户端：');
+  logStdout('\n🔑 OAuth 客户端：');
   printTable(
     ['Client ID', '名称', '类型', '创建时间'],
     clients.map(c => [
@@ -51,9 +49,9 @@ async function tokenStats() {
   try {
     const total = await OauthToken.count();
 
-    log.stdout('\n🎟️ Token 统计：');
+    logStdout('\n🎟️ Token 统计：');
     printLine();
-    log.stdout(`  总数: ${total}`);
+    logStdout(`  总数: ${total}`);
     printLine();
   } catch {
     printInfo('Token 统计暂不可用');
@@ -72,16 +70,16 @@ async function oauthStats() {
     OauthToken.count().catch(() => 0)
   ]);
 
-  log.stdout('\n📊 OAuth 统计：');
+  logStdout('\n📊 OAuth 统计：');
   printLine();
-  log.stdout(`  客户端数:   ${clientCount}`);
-  log.stdout(`  授权记录:   ${approvalCount}`);
-  log.stdout(`  Token 数:   ${tokenCount}`);
+  logStdout(`  客户端数:   ${clientCount}`);
+  logStdout(`  授权记录:   ${approvalCount}`);
+  logStdout(`  Token 数:   ${tokenCount}`);
   printLine();
 }
 
 // 导出 CLI 插件配置
-export default {
+const oauth21CliConfig = {
   command: 'oauth',
   appName: 'oauth21',
   description: 'OAuth 2.1 授权中心',
@@ -91,3 +89,5 @@ export default {
     stats: { description: 'OAuth 统计', handler: oauthStats }
   }
 };
+
+export default oauth21CliConfig;

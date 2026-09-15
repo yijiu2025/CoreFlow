@@ -7,14 +7,12 @@
 import { connectRedis, closeRedis } from '../../../../scripts/lib/redis.js';
 import { printSuccess, printInfo, printError, printWarning } from '../../../../scripts/lib/table.js';
 import { createRl, ask, closeRl } from '../../../../scripts/lib/input.js';
-import { createLogger } from '../../../framework/log/index.js';
-
-const log = createLogger('app.firewall.cli.whitelist');
+import { logStdout } from '../../../framework/log/index.js';
 
 /**
  * 查看白名单
  */
-export async function listWhitelist() {
+async function listWhitelist() {
   const redis = await connectRedis();
   if (!redis) {
     printWarning('Redis 未启用');
@@ -29,11 +27,11 @@ export async function listWhitelist() {
       return;
     }
 
-    log.stdout('\n✅ 白名单：');
+    logStdout('\n✅ 白名单：');
     whitelist.forEach((ip, i) => {
-      log.stdout(`  ${i + 1}. ${ip}`);
+      logStdout(`  ${i + 1}. ${ip}`);
     });
-    log.stdout(`\n共 ${whitelist.length} 个白名单 IP`);
+    logStdout(`\n共 ${whitelist.length} 个白名单 IP`);
   } finally {
     await closeRedis(redis);
   }
@@ -42,7 +40,7 @@ export async function listWhitelist() {
 /**
  * 添加白名单
  */
-export async function addWhitelist() {
+async function addWhitelist() {
   const redis = await connectRedis();
   if (!redis) {
     printWarning('Redis 未启用');
@@ -64,3 +62,5 @@ export async function addWhitelist() {
     await closeRedis(redis);
   }
 }
+
+export { listWhitelist, addWhitelist };

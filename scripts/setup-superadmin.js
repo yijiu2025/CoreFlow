@@ -17,7 +17,7 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import readline from 'readline';
 import sequelize from '../src/db/index.js';
-import { createLogger } from '../src/framework/log/index.js';
+import { createLogger, logStdout } from '../src/framework/log/index.js';
 
 const log = createLogger('scripts.setup-superadmin');
 
@@ -70,7 +70,7 @@ function ask(rl, question, hidden = false) {
 }
 
 async function main() {
-  log.stdout('🔧 超级管理员初始化脚本\n');
+  logStdout('🔧 超级管理员初始化脚本\n');
 
   // 1. 加载所有模型
   await import('../src/models/user/User.js');
@@ -87,7 +87,7 @@ async function main() {
 
   // 2. 同步模型
   await sequelize.sync();
-  log.stdout('✅ 数据库连接成功\n');
+  logStdout('✅ 数据库连接成功\n');
 
   // 3. 创建 superadmin 角色
   const [role, roleCreated] = await Role.findOrCreate({
@@ -106,9 +106,9 @@ async function main() {
   });
 
   if (roleCreated) {
-    log.stdout(`✅ 创建 superadmin 角色 (ID: ${role.id})`);
+    logStdout(`✅ 创建 superadmin 角色 (ID: ${role.id})`);
   } else {
-    log.stdout(`ℹ️  superadmin 角色已存在 (ID: ${role.id})`);
+    logStdout(`ℹ️  superadmin 角色已存在 (ID: ${role.id})`);
   }
 
   // 4. 显示当前所有 superadmin
@@ -118,16 +118,16 @@ async function main() {
   });
 
   if (currentAdmins.length > 0) {
-    log.stdout('\n📋 当前超级管理员列表：');
-    log.stdout('─'.repeat(60));
+    logStdout('\n📋 当前超级管理员列表：');
+    logStdout('─'.repeat(60));
     currentAdmins.forEach((ur, i) => {
       const user = ur.user;
-      log.stdout(`  ${i + 1}. ${user.username} (${user.email}) [ID: ${user.id}]`);
+      logStdout(`  ${i + 1}. ${user.username} (${user.email}) [ID: ${user.id}]`);
     });
-    log.stdout('─'.repeat(60));
-    log.stdout('');
+    logStdout('─'.repeat(60));
+    logStdout('');
   } else {
-    log.stdout('\n📋 当前没有超级管理员\n');
+    logStdout('\n📋 当前没有超级管理员\n');
   }
 
   // 5. 获取目标用户信息
@@ -172,7 +172,7 @@ async function main() {
       user = await User.findOne({ where: { email } });
 
       if (!user && password) {
-        log.stdout(`\n👤 用户 ${email} 不存在，正在自动创建...`);
+        logStdout(`\n👤 用户 ${email} 不存在，正在自动创建...`);
 
         // 加密密码
         let hashedPassword;
@@ -199,7 +199,7 @@ async function main() {
           credential: hashedPassword
         });
 
-        log.stdout(`✅ 已创建用户: ${user.username} (${user.email}) [ID: ${user.id}]`);
+        logStdout(`✅ 已创建用户: ${user.username} (${user.email}) [ID: ${user.id}]`);
       }
     }
 
@@ -208,7 +208,7 @@ async function main() {
       process.exit(1);
     }
 
-    log.stdout(`\n👤 目标用户: ${user.username} (${user.email}) [ID: ${user.id}]`);
+    logStdout(`\n👤 目标用户: ${user.username} (${user.email}) [ID: ${user.id}]`);
 
     // 7. 检查是否已是 superadmin
     const existingRole = await UserRole.findOne({
@@ -216,7 +216,7 @@ async function main() {
     });
 
     if (existingRole) {
-      log.stdout('ℹ️  该用户已是 superadmin，无需重复操作');
+      logStdout('ℹ️  该用户已是 superadmin，无需重复操作');
       process.exit(0);
     }
 
@@ -226,7 +226,7 @@ async function main() {
       app_id: 'GLOBAL',
       role_id: role.id
     });
-    log.stdout('✅ 已授予 superadmin 角色');
+    logStdout('✅ 已授予 superadmin 角色');
 
     // 9. 清除 Redis session
     try {
@@ -259,16 +259,16 @@ async function main() {
         }
         await redis.quit();
         if (cleared > 0) {
-          log.stdout(`🗑️  已清除 ${cleared} 个旧 Session`);
+          logStdout(`🗑️  已清除 ${cleared} 个旧 Session`);
         }
       }
     } catch (err) {
       log.warn(`⚠️  清除 Session 失败（可忽略）: ${err.message}`);
     }
 
-    log.stdout('\n🎉 初始化完成！');
-    log.stdout('   该用户现在拥有系统全部权限。');
-    log.stdout('   重新登录后，访问任意应用将自动获得该应用的管理员权限。');
+    logStdout('\n🎉 初始化完成！');
+    logStdout('   该用户现在拥有系统全部权限。');
+    logStdout('   重新登录后，访问任意应用将自动获得该应用的管理员权限。');
   } finally {
     rl.close();
   }

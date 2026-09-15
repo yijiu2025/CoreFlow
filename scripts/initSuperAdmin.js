@@ -2,7 +2,7 @@ import 'dotenv/config';
 import sequelize from '../src/db/index.js';
 import { User, Role, UserRole, UserIdentity } from './src/models/user/index.js';
 import { QueryTypes } from 'sequelize';
-import { createLogger } from '../src/framework/log/index.js';
+import { createLogger, logStdout } from '../src/framework/log/index.js';
 
 const log = createLogger('scripts.initSuperAdmin');
 
@@ -10,10 +10,10 @@ async function initSuperAdmin() {
   const adminEmail = '241849626@qq.com';
 
   try {
-    log.stdout('🔄 正在同步数据库表结构 (PBAC 极客版)...');
+    logStdout('🔄 正在同步数据库表结构 (PBAC 极客版)...');
     await sequelize.sync({ alter: true });
 
-    log.stdout(`🔍 正在为 ${adminEmail} 执行提权与数据迁移...`);
+    logStdout(`🔍 正在为 ${adminEmail} 执行提权与数据迁移...`);
 
     // 1. 迁移旧数据 (兼容逻辑)
     let oldUsers = [];
@@ -29,7 +29,7 @@ async function initSuperAdmin() {
     }
 
     if (oldUsers.length === 0) {
-      log.stdout('❌ 找不到用户，请先在前端注册。');
+      logStdout('❌ 找不到用户，请先在前端注册。');
       return;
     }
 
@@ -99,11 +99,11 @@ async function initSuperAdmin() {
       }
     });
 
-    log.stdout('✅ 极客版 PBAC 提权成功！');
-    log.stdout(`- 用户 ID: ${user.id}`);
-    log.stdout(`- 公开 UID: ${user.uid}`);
-    log.stdout('- 角色: 超级管理员 (rank_level: 99)');
-    log.stdout('- 策略: 通配符 Allow ALL');
+    logStdout('✅ 极客版 PBAC 提权成功！');
+    logStdout(`- 用户 ID: ${user.id}`);
+    logStdout(`- 公开 UID: ${user.uid}`);
+    logStdout('- 角色: 超级管理员 (rank_level: 99)');
+    logStdout('- 策略: 通配符 Allow ALL');
   } catch (error) {
     log.error('❌ 提权失败:', error);
   } finally {
