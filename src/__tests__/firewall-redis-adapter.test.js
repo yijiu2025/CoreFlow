@@ -97,9 +97,16 @@ describe('firewall Redis 访问层：运行环境前提', () => {
 });
 
 describe('firewall Redis 访问层：访问控制状态读取', () => {
-  it('无任何记录时四项状态均为空', async () => {
+  it('无任何记录时六个状态字段均为空', async () => {
     const st = await adapter.readAccessState({ ip: IP, fingerprint: FP });
-    expect(st).toEqual({ fpWhitelisted: false, ipWhitelisted: false, fpBlock: null, ipBlock: null });
+    expect(st).toEqual({
+      devWhitelisted: false,
+      fpWhitelisted: false,
+      ipWhitelisted: false,
+      devBlock: null,
+      fpBlock: null,
+      ipBlock: null
+    });
   });
 
   it('IP 封禁可被读到，并带剩余秒数', async () => {
@@ -148,6 +155,76 @@ describe('firewall Redis 访问层：访问控制状态读取', () => {
     expect(adapter.decodeStatus('{"status":"SCANNER"}')).toBe('SCANNER');
     expect(adapter.decodeStatus('{"noStatus":1}')).toBe('BLOCKED');
     expect(adapter.decodeStatus('not-json')).toBe('not-json');
+  });
+});
+
+// 设备维度是唯一**与 IP 无关**的身份（指纹的输入含 IP，换 IP 即变），
+// 因此它能做的唯一一件事、也是它存在的全部理由：换 IP 后封禁仍然命中。
+describe('firewall Redis 访问层：设备维度（跨 IP）', () => {
+  const DEV = 'WEB-DaBOSbNdSuc-8s4T';
+  const OTHER_IP = '198.51.100.77';
+
+  it('设备封禁与 IP 封禁互不干扰', async () => {
+    await adapter.writeBlock({ deviceId: DEV }, { status: 'BLOCKED', source: 'manual', permanent: true });
+    const st = await adapter.readAccessState({ ip: IP, deviceId: DEV });
+    expect(st.devBlock.status).toBe('BLOCKED');
+    expect(st.ipBlock).toBeNull();
+  });
+
+  it('换 IP 后设备封禁仍然命中（IP 维度已失效，设备维度撑住）', async () => {
+    await adapter.writeBlock({ deviceId: DEV }, { status: 'SCANNER', source: 'auto', permanent: true });
+
+    const newIpState = await adapter.readAccessState({ ip: OTHER_IP, deviceId: DEV });
+    expect(newIpState.devBlock.status).toBe('SCANNER');
+
+    // 对照组：不携带设备 ID 时，同一新 IP 上什么都读不到 —— 证明命中确实来自设备维度
+    const anon = await adapter.readAccessState({ ip: OTHER_IP });
+    expect(anon.devBlock).toBeNull();
+    expect(anon.ipBlock).toBeNull();
+  });
+
+  it('设备白名单短路设备封禁', async () => {
+    await adapter.writeBlock({ deviceId: DEV }, { status: 'BLOCKED', source: 'manual', permanent: true });
+    await adapter.writeWhitelist({ deviceId: DEV }, 60);
+    const st = await adapter.readAccessState({ ip: IP, deviceId: DEV });
+    expect(st.devWhitelisted).toBe(true);
+    expect(st.devBlock).toBeNull();
+  });
+
+  it('设备条目进入设备索引，不污染 IP / 指纹索引', async () => {
+    await adapter.writeBlock({ deviceId: DEV }, { status: 'BLOCKED', source: 'manual', permanent: true });
+    const { ip, fp, dev } = await adapter.listActive('block');
+    expect(dev.map(e => e.field)).toEqual([DEV]);
+    expect(ip).toHaveLength(0);
+    expect(fp).toHaveLength(0);
+  });
+
+  it('解封设备后列表与状态同时清空（键与索引都不残留）', async () => {
+    await adapter.writeBlock({ deviceId: DEV }, { status: 'BLOCKED', source: 'manual', permanent: true });
+    await adapter.removeBlock({ deviceId: DEV });
+    expect((await adapter.listActive('block')).dev).toHaveLength(0);
+    expect((await adapter.readAccessState({ ip: IP, deviceId: DEV })).devBlock).toBeNull();
+  });
+
+  it('挑战通过令牌绑定设备：换 IP 后凭同一个令牌仍算已通过', async () => {
+    const token = 'tok-dev-1';
+    await adapter.grantPass({ ip: IP, fingerprint: FP, deviceId: DEV, token, ttlSec: 300 });
+
+    expect(await adapter.hasPass({ ip: IP, deviceId: DEV, token })).toBe(true);
+    // 换 IP + 换 UA（指纹变），设备维度仍能对上 —— 这正是三个维度取「或」的意义
+    expect(await adapter.hasPass({ ip: OTHER_IP, fingerprint: 'ffffffffffffffff', deviceId: DEV, token })).toBe(true);
+    // 反例一：换 IP 且不带设备 ID → 不该通过（否则令牌等于全局有效）
+    expect(await adapter.hasPass({ ip: OTHER_IP, token })).toBe(false);
+    // 反例二：换 IP 且换一个设备 ID → 三个维度全不匹配，不该通过
+    expect(await adapter.hasPass({ ip: OTHER_IP, deviceId: 'WEB-ZZZZZZZZZZZ-aaaaaa', token })).toBe(false);
+  });
+
+  it('设备维度的 key / 索引名与设计一致（新增维度不能与既有前缀撞车）', () => {
+    expect(adapter.rel.blockDevice(DEV)).toBe(`block:dev:${DEV}`);
+    expect(adapter.rel.whitelistDevice(DEV)).toBe(`whitelist:dev:${DEV}`);
+    expect(adapter.rel.passDevice(DEV, 'tok')).toBe(`pass:dev:${DEV}:tok`);
+    expect(adapter.HASH.blockedDevices).toBe('blocked:devices');
+    expect(adapter.HASH.whitelistedDevices).toBe('whitelisted:devices');
   });
 });
 
