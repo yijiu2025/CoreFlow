@@ -273,6 +273,13 @@ git 为 `C:/Program Files/Code/Git`（2.52.0.windows.1），`git push` 甚至不
   `console.log/info` 映射成不存在的 `'log.stdout'`，导致全仓 **324 处 / 30 文件**运行到输出即抛 `TypeError`。
   修正后按**实际用到的符号**注入 import。守卫 `src/__tests__/framework/log/log-usage-contract.test.js`
   全仓禁 `log.stdout`。正确范例 `src/__tests__/test-db.js:7`：`import { logStdout as stdout }`。
+- **⚠️ 终端颜色只有一处出处：`src/utils/colors.js`**（2026-09-16 立，有守卫）。
+  日志库**只给自己生成的「前缀」上色**（时间/级别/标签）；`transports.js:85` 的 `record.msg`
+  是**原样拼接**的 → 消息体颜色码由调用方负责。故 `colors.js` 的 `C` 按 TTY 求值
+  （非交互式终端返回**空串**），调用方直接插值即可。
+  **不得自建颜色表、不得自行判断 `isTTY`**。守卫 `conventions/terminal-colors.test.js`（8 项含反例）。
+  例外 `src/framework/cli/table.js`（更强调色板，CLI 本就跑在终端）。
+  落盘 JSONL 不受影响（`file-transport.node.js:133` 的 `stripAnsiDeep` 会剥掉）。
 - `packages/log/docs/` 三份审计报告基线 0.4.1，包已 0.5.0，属**过期历史快照**（已向用户提示，未动）。
 
 ### 发布速查
