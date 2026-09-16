@@ -410,7 +410,7 @@ C. 连续 404 观察（配置阈值 10）：
 | 🔵-4 | `auto-responder.js:11`、`permission/seeder.js:8` | `import Logger from` 默认导出 → tag 退化为 `app`，模块级日志配置失效 | 改为 `createLogger('app.firewall.…')` |
 | 🔵-5 | `permission/roles.js` vs `permission/seeder.js` | 同一份 3 角色定义**逐字重复**，其中 `seeder.js` 零调用 | 删除 `seeder.js` |
 | 🔵-6 | `permission/seeder.js:17` | `if (!Role) return;` 是死代码——`getModel` 未命中**抛 TypeError**（实测：`getModel: 模型 "__NOPE__" 不存在`） | 去掉该判断或包进 try |
-| 🔵-7 | `dao/block-manager.js` | 24 行纯 re-export，与 `engine/dao/block-manager.js` 同名，易误改错文件 | 合并为 `dao/index.js` 或直接引用 engine 层 |
+| 🔵-7 | `dao/block-manager.js` | 24 行纯 re-export，与 `engine/dao/block-manager.js` 同名，易误改错文件 | ✅ **已修（2026-09-16）**：真身迁到 `dao/block-manager.js`，`engine/dao/` 整目录撤销；`engine/index.js` 同时移出封禁与 util 的转发；新增 `firewall-layering.test.js` 守卫生效 |
 | 🔵-8 | `engine/detectors/geo-filter.js:40` | `geoRules.internalPrefixes` 存的是 URL 路径（`['/internal/']`）却与"IP 前缀"命名混用（同文件 `:21` 的 `settings.internalIpPrefixes` 才是 IP） | 改名 `internalPaths` |
 | 🔵-9 | `engine/detectors/geo-filter.js:65` | `resolveGeoInfo` 硬编码 `'172.'`（实测把 `172.217.160.78`(Google)、`172.64.155.1`(Cloudflare) 判为"内部网络/局域网"），与配置 `internalIpPrefixes`（172.16–172.31）两份真相 | 复用配置，删硬编码 |
 | 🔵-10 | `cli/stats.js:37-38` | `scanKeys('pass:*')` 已包含 `pass:fp:*` → 展示上"挑战令牌 N（指纹维度 M）"里 N 重复计入 M | 明确拆分或改文案 |

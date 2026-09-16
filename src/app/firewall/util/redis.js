@@ -27,7 +27,7 @@
  *
  * 为什么要有 `deviceId` 维度：`fingerprint` 的输入含 IP（换 IP 即变），而 deviceId 由
  * auth 的结构化设备 ID 流程签发、与 IP 无关 —— 它是本模块唯一能跨 IP 追踪的身份。
- * 强度边界见 `engine/dao/block-manager.js` 的 `setBlockForSubject` 注释（客户端可弃用换新）。
+ * 强度边界见 `dao/block-manager.js` 的 `setBlockForSubject` 注释（客户端可弃用换新）。
  *
  * @author yijiu2025
  * @since 2026-09-15

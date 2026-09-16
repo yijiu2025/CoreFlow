@@ -17,12 +17,20 @@
  * @author yijiu2025
  * @since 2026-08-17
  * @since 2026-09-15 重写为真身契约测试（🟡-7），并固化 curl/libcurl 漂移
+ * @since 2026-09-16 配置来源改为 mock interface 层（真身读配置的路径已改为依赖倒置）
  */
 import { describe, test, expect, jest } from '@jest/globals';
 
 // ── 只替换配置来源，不替换被测逻辑 ────────────────────────────────────────────
 // 用真身默认值做一份**可写副本**：dao.js 不再被 initDao 触碰，也就不会在测试结束时
 // 把防火墙配置文件写回磁盘（triggerSave 是 1s 防抖，jest 进程必然活过 1s）。
+//
+// mock 目标（2026-09-16 变更）：真身经 `util/shared.js` 的 `getConfig()` 读配置，
+// 而 getConfig 现在委托 `interface/config-access.js` 的 `readSecuritySettings()` ——
+// 不再 import dao。所以 mock 必须打在**接口层**上：
+//   旧写法 mock dao.js 已经无效（真身根本不加载它），且接口层会因「读取器未注册」抛错。
+// 这正是接口层刻意设计的失败模式：未注册就炸，而不是静默返回 undefined 让
+// `settings.defense` 变成 TypeError、把失败点推得离根因很远。
 const { DEFAULT_SECURITY_SETTINGS } = await import('../app/firewall/config/config.js');
 
 const settings = {
@@ -33,14 +41,14 @@ const settings = {
   }
 };
 
-jest.unstable_mockModule('../app/firewall/dao/dao.js', () => ({
-  getSecuritySettings: () => settings,
-  initDao: () => {},
-  getServerNode: () => ({})
+jest.unstable_mockModule('../app/firewall/interface/config-access.js', () => ({
+  readSecuritySettings: () => settings,
+  registerSettingsReader: () => {},
+  hasSettingsReader: () => true
 }));
 
 const { checkBotChallenge } = await import('../app/firewall/engine/detectors/bot-detector.js');
-const { checkGlobalBlock, getActiveBlocks } = await import('../app/firewall/engine/dao/block-manager.js');
+const { checkGlobalBlock, getActiveBlocks } = await import('../app/firewall/dao/block-manager.js');
 const { generateServerSideDeviceId } = await import('../framework/auth/device-id-service.js');
 
 const CHROME_UA =

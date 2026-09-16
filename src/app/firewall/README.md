@@ -13,29 +13,54 @@ src/app/firewall/
 │   ├── store.js                      # 内存环形缓冲区（1000 条）、统计汇总、磁盘持久化、WebSocket 广播
 │   └── challenge-template.js         # 人机挑战页面 HTML 模板（内联 SHA-256 PoW 求解器，载荷由服务端持有）
 │
-├── dao/                              # 数据交互层（firewall ↔ API/前端）
+├── interface/                        # 依赖倒置接口层（零 import，依赖图最底层）
+│   └── config-access.js              # 配置读取器注册点：dao 注册、util 消费，以此断开 util ↔ dao 环
+│
+├── dao/                              # 数据访问层
 │   ├── dao.js                        # 配置持久化（JSON 文件）、黑白名单管理、节点自动定位
-│   └── block-manager.js              # 封禁/白名单查询接口 + API 操作封装
+│   └── block-manager.js              # 封禁/白名单**真身**：三维度 CRUD + checkGlobalBlock
 │
 ├── util/                             # 公共工具函数
-│   ├── shared.js                     # 共享状态（activeConnections Map、getConfig 回调、Redis Key 常量）
+│   ├── shared.js                     # 共享状态（activeConnections Map、getConfig、ipRequestTimestamps）
+│   ├── redis.js                      # Redis 访问层（key 构造、Lua、内存降级）
 │   ├── connection-tracker.js         # 并发连接追踪 + 僵尸清理定时任务
 │   └── fingerprint.js                # 请求指纹生成（IP+UA+Lang+Enc → SHA256 前 16 位）
 │
-└── engine/                           # 防火墙核心逻辑
-    ├── index.js                      # barrel 导出：统一暴露引擎子模块
+└── engine/                           # 防火墙核心逻辑（只做检测与响应，不含存储实现）
+    ├── index.js                      # barrel 导出：只暴露检测器 / 自动响应 / 请求管道
     ├── pipeline.js                   # onRequest 五层拦截管道 + 日志记录
+    ├── auto-responder.js             # 攻击告警与自动响应
     │
-    ├── detectors/                    # 检测器模块
-    │   ├── rate-limiter.js           # 滑窗限频（Redis sorted-set + 内存降级）
-    │   ├── scan-trap.js              # 404/403 扫描陷阱检测
-    │   ├── brute-force.js            # 登录暴力破解防护
-    │   ├── geo-filter.js             # 地理围栏 + GeoIP 解析
-    │   └── bot-detector.js           # Bot/僵尸网络检测 + 挑战触发
-    │
-    └── dao/                          # 引擎内部数据操作
-        └── block-manager.js          # IP/指纹封禁核心（checkGlobalBlock + CRUD）
+    └── detectors/                    # 检测器模块
+        ├── rate-limiter.js           # 滑窗限频（Redis sorted-set + 内存降级）
+        ├── scan-trap.js              # 404/403 扫描陷阱检测
+        ├── brute-force.js            # 登录暴力破解防护
+        ├── geo-filter.js             # 地理围栏 + GeoIP 解析
+        └── bot-detector.js           # Bot/僵尸网络检测 + 挑战触发
 ```
+
+### 分层约定（有契约测试守卫）
+
+依赖方向**必须单向**，越靠下越底层：
+
+```
+interface/  →  config/ util/  →  dao/  →  engine/  →  services/ cli/ data/  →  index.js
+  零依赖          只能向下           数据访问     检测响应        应用编排          入口
+```
+
+三条硬约束，由 `src/__tests__/conventions/firewall-layering.test.js` 用 DFS 三色法守着：
+
+1. **无循环依赖**。ESM 下循环依赖不报错，只让某些模块拿到半初始化的绑定。
+   历史上出现过 `engine/index.js ↔ engine/pipeline.js`，以及更隐蔽的跨 3 文件环
+   `util/shared.js → dao/dao.js → util/redis.js`。
+2. **`interface/` 零内部依赖**。它是依赖倒置点：`dao` 把自己的 `getSecuritySettings`
+   注册进来，`util/shared.js` 从它读取 —— 这样 util 不必 import dao，环自然断开，
+   且**没有快照副本**（注册的是函数引用）。一旦它开始 import 别人，环立刻回来。
+3. **`engine/` 不持有存储实现**，也不转发 dao/util 的符号。
+   封禁能力请直接 `import from '../dao/block-manager.js'`。
+
+> 配置读取器未注册时 `readSecuritySettings()` 会**抛错**，而不是返回 `undefined`。
+> 这是刻意的：后者会让 `settings.defense` 变成 `TypeError`，把失败点推得离根因很远。
 
 ## 请求处理流程
 
@@ -58,7 +83,7 @@ firewall onRequest（五层拦截管道） ← engine/pipeline.js
   │   └── trackConnection(+1)              ← util/connection-tracker.js
   │
   ├── 第 2 层：全局封禁
-  │   └── checkGlobalBlock()               ← engine/dao/block-manager.js
+  │   └── checkGlobalBlock()               ← dao/block-manager.js
   │
   ├── 第 3 层：挑战 Cookie
   │   └── checkChallengeCookie()           ← engine/pipeline.js
@@ -126,7 +151,7 @@ firewall onResponse 钩子
 | detectors/brute-force.js  | 登录暴力破解防护                                                  | `checkLoginBruteForce`, `isAccountLocked`                                                                                          |
 | detectors/geo-filter.js   | 地理围栏 + GeoIP 解析                                             | `checkGeoReputation`, `resolveGeoInfo`                                                                                             |
 | detectors/bot-detector.js | Bot/僵尸网络检测                                                  | `checkBotChallenge`                                                                                                                |
-| dao/block-manager.js      | IP/指纹封禁核心（checkGlobalBlock + CRUD，Redis 双写 + 内存缓存） | `setBlock`, `removeBlock`, `checkGlobalBlock`                                                                                      |
+| dao/block-manager.js      | IP/指纹/设备三维度封禁核心（checkGlobalBlock + CRUD，Redis 双写 + 内存缓存） | `setBlock`, `removeBlock`, `setBlockForSubject`, `checkGlobalBlock`                                                                |
 
 ## 外部依赖
 
