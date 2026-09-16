@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { createApp } from './src/app.js';
 import { createLogger } from './src/framework/log/index.js';
+import { C } from './src/utils/colors.js';
 
 const log = createLogger('server');
 
@@ -26,20 +27,20 @@ dotenvConfig({ path: resolve(__dirname, envFile) });
 // 2. 环境适配
 // ---------------------------------------------------------------------------
 
-// 是否支持 ANSI 颜色输出（非 TTY 环境如日志文件/Docker 中去掉颜色码）
-const IS_TTY = process.stdout.isTTY;
-
-const C = {
-  reset: '\x1b[0m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  cyan: '\x1b[36m',
-  dim: '\x1b[2m'
-};
+/**
+ * 是否支持 ANSI 颜色输出
+ *
+ * 为什么需要它：日志库只给自己生成的**前缀**（时间/级别/标签）上色，
+ * 消息体里的颜色码由调用方负责（`transports.js` 的 `record.msg` 是原样拼接的）。
+ * 所以在 TTY 上，本文件的消息体需要自己上色；非 TTY（docker / pm2 / 重定向）下
+ * 必须自己降级 —— 否则控制台与采集端会拿到转义序列。
+ *
+ * 注：落盘的 JSONL 不受影响，文件通道会 `stripAnsiDeep` 剥掉颜色码。
+ */
+const IS_TTY = process.stdout.isTTY === true;
 
 // Windows 终端默认 GBK 编码，强制切换 UTF-8 避免中文乱码
-if (process.platform === 'win32' && process.stdout.isTTY) {
+if (process.platform === 'win32' && IS_TTY) {
   try {
     execSync('chcp 65001', { stdio: 'ignore' });
   } catch (e) {
@@ -65,9 +66,7 @@ const start = async () => {
   const PORT = rawPort > 0 && rawPort <= 65535 ? rawPort : 3000;
   const addr = await app.listen({ port: PORT, host: '0.0.0.0' });
 
-  const color = IS_TTY ? C.cyan : '';
-  const reset = IS_TTY ? C.reset : '';
-  log.always(`🚀 [Server] ${color}${addr}${reset}`);
+  log.always(`🚀 [Server] ${C.cyan}${addr}${C.reset}`);
 
   // ---------------------------------------------------------------------------
   // 3. 优雅关闭：处理系统信号
@@ -99,8 +98,6 @@ const start = async () => {
 };
 
 start().catch(err => {
-  const color = IS_TTY ? C.red : '';
-  const reset = IS_TTY ? C.reset : '';
-  log.error(`🚨 [Server] ${color}启动异常: ${err.message}${reset}`, err.stack);
+  log.error(`🚨 [Server] ${C.red}启动异常: ${err.message}${C.reset}`, err.stack);
   process.exit(1);
 });

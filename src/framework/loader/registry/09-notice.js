@@ -6,10 +6,9 @@
  */
 import { getModel } from '../../db/index.js';
 import { createLogger } from '../../log/index.js';
+import { C } from '../../../utils/colors.js';
 
 const log = createLogger('framework.loader.registry.09-notice');
-
-const C = { reset: '\x1b[0m', cyan: '\x1b[36m' };
 
 /**
  * 初始化系统基础设置 (Seed Data)

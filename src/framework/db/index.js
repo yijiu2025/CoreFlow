@@ -8,10 +8,9 @@
 
 import { Sequelize } from 'sequelize';
 import { createLogger } from '../log/index.js';
+import { C } from '../../utils/colors.js';
 
 const log = createLogger('framework.db.index');
-
-const C = { reset: '\x1b[0m', red: '\x1b[31m' };
 
 const { DB_TYPE, DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME } = process.env;
 
