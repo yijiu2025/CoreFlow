@@ -277,7 +277,10 @@ git 为 `C:/Program Files/Code/Git`（2.52.0.windows.1），`git push` 甚至不
   日志库**只给自己生成的「前缀」上色**（时间/级别/标签）；`transports.js:85` 的 `record.msg`
   是**原样拼接**的 → 消息体颜色码由调用方负责。故 `colors.js` 的 `C` 按 TTY 求值
   （非交互式终端返回**空串**），调用方直接插值即可。
-  **不得自建颜色表、不得自行判断 `isTTY`**。守卫 `conventions/terminal-colors.test.js`（8 项含反例）。
+  **不得自建颜色表、不得自行判断 `isTTY`**。**全仓 `process.stdout.isTTY` 读取点只允许 1 处**
+  （`colors.js` 内部）；非颜色类的终端能力判断（如入口 `index.js` 决定要不要跑 `chcp`）
+  须 `import { IS_TTY }` 复用。守卫 `conventions/terminal-colors.test.js`
+  （10 项含 4 项反例；覆盖 `src/` + 项目根 `index.js`）。
   例外 `src/framework/cli/table.js`（更强调色板，CLI 本就跑在终端）。
   落盘 JSONL 不受影响（`file-transport.node.js:133` 的 `stripAnsiDeep` 会剥掉）。
 - `packages/log/docs/` 三份审计报告基线 0.4.1，包已 0.5.0，属**过期历史快照**（已向用户提示，未动）。
