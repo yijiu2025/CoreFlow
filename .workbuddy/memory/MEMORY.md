@@ -45,6 +45,31 @@
   所以必须同时用"形式规则"（禁 `Export*Declaration > FunctionDeclaration` 等行内形式）兜住
 - 强制范围目前仅 `src/`；`migrations/`（Umzug 的 `export async function up/down`）、`scripts/` 未纳入
 
+## firewall 分层与无环（2026-09-16 立，含守卫）
+
+**层级（越靠下越底层，必须单向）**：
+`interface/` → `config/ util/` → `dao/` → `engine/` → `services/ cli/ data/` → `index.js`
+
+- ⚠️ **`engine/dao` 已撤销**（2026-09-16）。真身是 **`src/app/firewall/dao/block-manager.js`**。
+  `engine/` 语义是"检测与响应"，存储 CRUD 属于持久化层。放错位置的直接后果是
+  `engine/index.js` 被迫 re-export 一整组封禁函数当后门 —— 现已移出「封禁核心」与「util 工具」
+  两段转发，只留检测器/自动响应/请求管道。**封禁能力请直接 `import '../dao/block-manager.js'`**。
+- ⚠️ **同目录同名文件搬迁 = 必须先写新文件校验一致，再删旧文件**。用带断言的 Node 脚本
+  （源 md5 → 确认目标当前确是纯 shim 才允许覆盖 → 替换数守恒 → 落盘后归一化比对），
+  否则中途失败即丢失几百行真身。本次 392 行真身搬迁即如此。
+- **环的形态（跨 3 文件，肉眼看不出来）**：`util/shared.js → dao/dao.js → util/redis.js`。
+  根因是 dao 没有独立层级位置，要读配置只能反向够到 util。**修法用依赖倒置，不是搬代码**：
+  `interface/config-access.js` 零 import，持有可注入的**函数引用**（不是配置对象 → 无快照无缓存），
+  dao 加载时 `registerSettingsReader(() => securitySettings)` 注册，util 的 `getConfig()` 从它读。
+  未注册时**抛错**而非返回 undefined —— 后者会让 `settings.defense` 变 TypeError 且失败点离根因很远。
+- **改动配置读取路径时，mock 目标必须跟着换**。真身改从 interface 读配置后，
+  `bot-detector.test.js` 原先对 `dao/dao.js` 的 mock 立刻完全失效（真身根本不加载 dao），
+  10 项用例因「读取器未注册」全红。这是「接口层未注册就抛错」设计**没有骗过测试**的直接证据。
+- 守卫 `src/__tests__/conventions/firewall-layering.test.js`（12 项）：DFS 三色法查环 +
+  **自带反例验证**（内存构造 3 节点环确认检测器真会红，无环图报 0 防误报）。
+  ⚠️ "无环"这个结论**不能来自可能写坏了的检测器** —— 所以每条结构性断言都要自带反例。
+  分层方向：interface 零依赖 / util 不得依赖上层 / config 不得依赖 dao / engine 不得依赖 services。
+
 ## firewall 三维度封禁（ip / fingerprint / device）
 
 - `fingerprint = sha256(ip|ua|lang|enc)` 前 16 位 —— **输入含 IP → 换 IP 即变、改任一请求头也变**。
