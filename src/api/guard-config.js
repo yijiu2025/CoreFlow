@@ -425,16 +425,21 @@ function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
       allowIps: metadata.allowIps || [],
       allowRoles: metadata.allowRoles || [],
       requirePermission: metadata.requirePermission ?? null,
+      freshPermission: metadata.freshPermission === true,
       url: metadata.url,
       method: metadata.method,
       updatedAt: new Date().toISOString()
     };
   } else {
+    // freshPermission 与 requirePermission 同为**代码级授权声明**（见上方注释）：
+    // 每次启动由代码刷新，绝不入 RUNTIME_FIELDS —— 否则运维改一次 DB
+    // 就能把敏感操作的"回源校验"关掉，等于给第 4 层留了个后门开关。
     Object.assign(group.apis[apiKey], {
       name: metadata.alias || group.apis[apiKey].name,
       url: metadata.url,
       method: metadata.method,
       requirePermission: metadata.requirePermission ?? null,
+      freshPermission: metadata.freshPermission === true,
       updatedAt: new Date().toISOString()
     });
   }

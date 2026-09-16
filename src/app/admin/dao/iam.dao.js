@@ -7,6 +7,29 @@
 import sequelize from '../../../framework/db/index.js';
 import { getModel } from '../../../framework/db/index.js';
 import { QueryTypes } from 'sequelize';
+import { invalidatePermCache } from '../../../framework/auth/perm-cache.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.admin.dao.iam');
+
+/**
+ * 权限变更后作废目标用户的权限缓存
+ *
+ * 指纹机制（perm-cache.js）已保证"下次请求时"能发现变更；主动删除只是把生效时机
+ * 提前到变更瞬间。两者互补，故这里失败**不抛错** —— 变更本身已提交，不能因缓存层
+ * 故障回滚，指纹仍会兜底。
+ *
+ * @param {object} targetUser User 实例（须含 id）
+ * @param {string} appId 变更涉及的应用
+ */
+async function invalidateTargetPerm(targetUser, appId) {
+  if (!targetUser?.id) return;
+  try {
+    await invalidatePermCache(targetUser.id, appId);
+  } catch (err) {
+    log.warn('[Iam] 权限缓存主动失效失败（指纹将兜底）: userId=%s, appId=%s', targetUser.id, appId, err);
+  }
+}
 
 class IamDao {
   /**
@@ -96,7 +119,12 @@ class IamDao {
       where: { uid: adminUid }
     });
 
-    return await getModel('UserRole').findOrCreate({
+    // 权限已变更 → 作废缓存。
+    // ⚠️ created=false 表示幂等重复分配（行未变），此时无需失效；
+    //    但**返回值必须保持 `[实例, created]` 原样** —— 调用方
+    //    `api/admin/iam/v1/iam.js:100` 把 result 直接塞进响应体，
+    //    擅自改成单个实例会静默改变 API 响应结构。
+    const [userRole, created] = await getModel('UserRole').findOrCreate({
       where: { user_id: targetUser.id, app_id: appId, role_id: targetRoleId },
       defaults: {
         user_id: targetUser.id,
@@ -105,6 +133,10 @@ class IamDao {
         granted_by: grantor?.id
       }
     });
+
+    if (created) await invalidateTargetPerm(targetUser, appId);
+
+    return [userRole, created];
   }
 
   /**
@@ -134,6 +166,9 @@ class IamDao {
       policy.policy = policyDoc;
       await policy.save();
     }
+
+    // 内联策略已变更 → 作废缓存
+    await invalidateTargetPerm(targetUser, appId);
 
     return policy;
   }

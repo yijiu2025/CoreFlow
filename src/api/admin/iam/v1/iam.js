@@ -80,13 +80,22 @@ async function registerIamRoutes(fastify) {
 
   /**
    * POST /admin/iam/v1/roles/assign
-   * 为用户分配角色 (需校验操作者权限)
+   * 给用户分配角色
+   *
+   * 授权：requirePermission + **freshPermission**（第 4 层）。
+   * 这是"改权限"的接口，用它自己护住自己 —— 若调用方的权限刚被撤销而缓存未失效，
+   * 回源校验会拦住"被撤权者继续给别人发权限"这条提权链。
    */
   registerSecureRoute(fastify, {
     name: 'assignIamRole',
     alias: '分配角色',
     method: 'POST',
     url: '/roles/assign',
+    group: 'iam',
+    requireLogin: true,
+    requirePermission: 'iam:role:assign',
+    // 不可逆 / 高影响：权限授予立即生效，故强制回源校验
+    freshPermission: true,
     handler: async (request, reply) => {
       // 从解析后的 JWT 中获取当前管理员 UID
       const adminUid = request.user.uid;
@@ -119,12 +128,19 @@ async function registerIamRoutes(fastify) {
   /**
    * POST /admin/iam/v1/policies
    * 下发/更新 JSON 内联策略
+   *
+   * 授权同 assignIamRole：requirePermission + freshPermission（第 4 层）。
+   * 内联策略可任意改写目标用户的能力集，破坏力不低于角色分配。
    */
   registerSecureRoute(fastify, {
     name: 'updateInlinePolicy',
     alias: '下发内联策略',
     method: 'POST',
     url: '/policies',
+    group: 'iam',
+    requireLogin: true,
+    requirePermission: 'iam:policy:update',
+    freshPermission: true,
     handler: async (request, reply) => {
       const adminUid = request.user.uid;
       const { targetUid, appId, policy } = request.body;
