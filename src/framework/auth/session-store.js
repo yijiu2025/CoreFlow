@@ -3,13 +3,16 @@
  *
  * 由 session.js 拆分而来（AUDIT-REPORT-2026-09-12.md §2.3 批次 C）。承载**被兄弟模块共享**的
  * 低层资产，使 session.js / session-kick.js / session-governance.js 不必各自重复获取 Redis 实例：
- * - 6 个 `getStore(...)` 实例（session / refresh / user_refresh / refresh_rotated / session_family / user_sessions）
+ * - 7 个 `getStore(...)` 实例（session / refresh / user_refresh / refresh_rotated / session_family / user_sessions / auth:perm）
  * - 环境变量常量 `MAX_REFRESH_TOKENS` / `MAX_ACTIVE_DEVICES`
  * - `sidHash`：sessionId → DB token 列哈希，全模块唯一真源（🔴-2 即因它未导出而炸）
  * - `deleteRefreshTokensForSession` / `revokeFamily`：生命周期与踢出两条路径共用的吊销原语
  *
  * 依赖方向：只依赖 cookie/db/redis 等基础设施，**不 import 任何兄弟子模块**，
  * 因此处于子模块依赖图最底层（谁都可以 import 它，它不 import 谁）→ 无环。
+ * ⚠️ 这条约束意味着**不能** `import { PERM_NAMESPACE } from './perm-cache.js'`
+ * （perm-cache 依赖 permission-loader，会把底座抬到非底层）。故这里把字面量**独立声明一次**，
+ * 并有契约测试钉死它与 perm-cache.js 的 `PERM_NAMESPACE` 逐字一致。
  *
  * 日志 tag 沿用 `framework.auth.session`：本次拆分是纯代码组织调整，不改变日志行为。
  *
@@ -49,6 +52,13 @@ const familyStore = getStore('session_family');
 // 用户会话索引：userId → zset[raw sessionId]，供 kick/单设备互踢按 raw sid 定位 Redis session
 // （DB 仅存 sha256(sessionId) 无法反查 raw sid，故用 Redis 逆索引，不暴露 raw sid 到 DB）
 const userSessionsStore = getStore('user_sessions');
+// 权限缓存的命名空间：与 perm-cache.js 的 PERM_NAMESPACE 必须逐字一致（契约测试钉死）。
+// 这里重复声明而非 import，是为了守住本文件的"零兄弟模块依赖"约束（见文件头）。
+const PERM_NAMESPACE = 'auth:perm';
+// 权限缓存实例（键 = sha256(userId+appId)）：读路径在 perm-cache.js 走"指纹校验 + 回源"，
+// **唯一写入方**是 perm-cache.js 自身。此处实例化仅为让本文件保持"认证相关 Redis
+// 命名空间全景"的单一出处 —— 命名空间字符串散落就是下一个 'user_sessions' 事故。
+const permStore = getStore(PERM_NAMESPACE);
 
 /**
  * sessionId → DB token 列存的哈希（sha256），集中一处避免散落
@@ -125,6 +135,8 @@ export {
   rotatedStore,
   familyStore,
   userSessionsStore,
+  PERM_NAMESPACE,
+  permStore,
   sidHash,
   deleteRefreshTokensForSession,
   revokeFamily
