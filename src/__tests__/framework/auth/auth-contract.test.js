@@ -126,7 +126,15 @@ describe('auth 公共契约（🔴-2 回归）', () => {
   });
 
   describe('session 子模块拆分回归（批次 C）', () => {
-    const SESSION_FILES = ['session.js', 'session-store.js', 'session-kick.js', 'session-governance.js'];
+    // 2026-09-16 追加 session-perm.js：权限指纹改造使 session.js 触及 1000 行硬限，
+    // 把"会话恢复时怎么解析权限"拆为独立子模块。它同样受本组行数与无环约束。
+    const SESSION_FILES = [
+      'session.js',
+      'session-store.js',
+      'session-kick.js',
+      'session-governance.js',
+      'session-perm.js'
+    ];
     const readAuth = async f => {
       const { readFileSync } = await import('node:fs');
       const root = new URL('../../../', import.meta.url);
