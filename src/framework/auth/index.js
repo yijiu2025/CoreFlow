@@ -31,7 +31,7 @@ import { getSession, getSessionTokenDevice } from './session.js';
 import { COOKIE_SID, COOKIE_OPTIONS } from './cookie.js';
 import { verify } from '../jwt/index.js';
 import { findUserById } from '../../shared/user-dao.js';
-import { loadUserPermissions } from './permission-loader.js';
+import { getPermissions } from './perm-cache.js';
 import StpUtil from './stp-util.js';
 import { getDeviceId, computeDeviceFingerprint } from './device.js';
 import { detectSessionRisk, isHighRiskRequest } from './anomaly-detector.js';
@@ -169,36 +169,16 @@ async function getUserFromToken(token) {
       return null;
     }
 
-    // 3. 优先从 JWT 读取权限，无则从缓存/数据库加载
+    // 3. 优先从 JWT 读取权限；Claims 未携带时走带指纹校验的缓存（auth/perm-cache.js）
+    //
+    //    注意：JWT Claims 里**嵌了** permissions 时直接用（签发时的快照，token 自校验语义），
+    //    这是 OAuth 的无状态约定；不嵌则走缓存 + 指纹，权限变更可即时生效。
     let roles = payload.roles;
     let permissions = payload.permissions;
     if (!roles || !permissions) {
-      const permStore = getStore('perm', { timeout: 3000 });
-      const cacheKey = `${userData.id}:${payload.aud || 'GLOBAL'}`;
-
-      try {
-        const cached = await permStore.get(cacheKey);
-        if (cached) {
-          roles = roles || cached.roles;
-          permissions = permissions || cached.permissions;
-        }
-      } catch (err) {
-        log.warn('[Auth] 缓存读取失败，降级到数据库:', err);
-      }
-
-      // 缓存未命中，从数据库加载
-      if (!roles || !permissions) {
-        const loaded = await loadUserPermissions(userData.id, payload.aud || 'GLOBAL');
-        roles = roles || loaded.roles;
-        permissions = permissions || loaded.permissions;
-
-        // 写入缓存（5 分钟），getStore 自带超时和序列化
-        try {
-          await permStore.set(cacheKey, { roles, permissions }, 300);
-        } catch (err) {
-          log.warn('[Auth] 缓存写入失败:', err);
-        }
-      }
+      const loaded = await getPermissions(userData.id, payload.aud || 'GLOBAL');
+      roles = roles || loaded.roles;
+      permissions = permissions || loaded.permissions;
     }
 
     return {

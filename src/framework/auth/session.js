@@ -5,14 +5,19 @@
  * 所有 Redis 操作统一通过 getStore 管理（自带超时、序列化、降级）。
  *
  * 2026-09-14 按职责拆分（AUDIT-REPORT-2026-09-12.md §2.3 批次 C），原 1409 行单文件拆为 4 份：
- * - `session-store.js`      共享底座：6 个 Redis 实例 / 常量 / `sidHash` / 吊销原语
+ * - `session-store.js`      共享底座：Redis 实例 / 常量 / `sidHash` / 吊销原语
  * - `session-kick.js`       踢出与吊销入口（本文件 createSession 反向依赖其 kickByDeviceType）
  * - `session-governance.js` 设备裁剪 / 陈旧行清理 / 统计趋势 / 失败日志
  * - `session.js`（本文件）  会话生命周期：建 / 取 / 刷新 / 切换 / 销毁 / 记住我 / 基准更新
  *
- * **兼容性**：本文件末尾 re-export 上述三个子模块的公开符号，故拆分前所有
+ * 2026-09-16 追加拆分（权限指纹改造使本文件触及 1000 行硬限）：
+ * - `session-perm.js`       会话恢复时的权限解析（第 3 层权限指纹在会话路径的落地点）
+ *
+ * **兼容性**：本文件末尾 re-export 上述子模块的公开符号，故拆分前所有
  * `./session.js` 为来源解构这些符号的调用方（11 处非测试引用 + 契约测试）**零感知**；
  * 对外导出集合与拆分前逐字一致（24 项），未新增内部符号（store 实例 / MAX_* / _kickSession 不外泄）。
+ * ⚠️ `session-perm.js` 的 `resolveSessionPermissions` 是**内部符号**，**刻意不 re-export** ——
+ * 它是"会话怎么解析权限"的实现细节，对外开放等于邀请外部绕过指纹直接改权限语义。
  *
  * @author yijiu2025
  * @since 2026-08-17
@@ -33,7 +38,11 @@ import {
   USER_COOKIE_TTL,
   ROTATED_RETENTION
 } from './cookie.js';
-import { loadUserPermissions } from './permission-loader.js';
+// 权限读取统一走带指纹校验的缓存入口（见 perm-cache.js 头部说明），
+// 不再直接调 loadUserPermissions —— 后者无失效机制，会让会话长 TTL 掩盖权限变更。
+import { getPermissions, computePermFingerprint } from './perm-cache.js';
+// 会话恢复时的权限解析（第 3 层指纹在会话路径的落地点），已拆为独立子模块
+import { resolveSessionPermissions } from './session-perm.js';
 // 设备类型常量与判定统一由 device.js 提供，此处导入为本地绑定并在文件末尾 re-export
 import { DEVICE_TYPE, detectDeviceType, computeDeviceFingerprint } from './device.js';
 import { createLogger } from '../log/index.js';
@@ -111,7 +120,12 @@ async function createSession(params) {
   }
 
   // 2. 加载该用户在该应用的角色和权限
-  const { roles, permissions } = await loadUserPermissions(userId, appId);
+  //
+  //    同时取回 permFingerprint 随会话一起落库（Redis session / DB）。
+  //    会话恢复（Redis 驱逐重建 / sid_r 刷新）时用它做**增量回源判断**：
+  //    指纹未变则沿用会话里的权限，避免每次恢复都打 3 张权限表。
+  const { roles, permissions } = await getPermissions(userId, appId);
+  const permFingerprint = await computePermFingerprint(userId, appId);
 
   // 2. 生成 sessionId、refreshToken、familyId
   // familyId 标识同一登录链，供 sid_r 轮转盗用检测后只吊销同 family（不影响该用户其他设备）
@@ -141,6 +155,8 @@ async function createSession(params) {
     appId,
     roles,
     permissions,
+    // 权限指纹：会话恢复时比对，不一致即丢会话权限走回源（见 resolveSessionPermissions）
+    permFingerprint,
     ip,
     deviceId,
     deviceFingerprint, // 基准指纹，访问时比对当前请求算出的指纹
@@ -347,8 +363,27 @@ async function getSession(params) {
   log.debug('📋 Redis 查询 raw: %s', raw);
   if (raw) {
     log.debug('✅ Redis 命中: userId=%s, username=%s', raw.userId, raw.username);
+
+    // ⚠️ 这里是权限失效的**最后一公里**：会话 TTL 最长 30 天（记住我），
+    //    Redis session 里那份 permissions 原先在整个 TTL 内无人校验 ——
+    //    管理员撤销权限后，用户仍可拿着旧权限继续访问，直到会话自然过期。
+    //    先做指纹比对，变更过则把新权限写回会话，再返回。
+    let session = raw;
+    try {
+      const resolved = await resolveSessionPermissions(raw.userId, raw.appId, raw);
+      if (resolved.permFingerprint !== raw.permFingerprint) {
+        session = { ...raw, ...resolved };
+        // TTL 沿用会话自身剩余时长（expire 在下方按 rememberMe 续期，此处不覆盖）
+        await sessionStore.set(sessionId, session, raw.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL);
+        log.info('♻️ [Session] 已就地刷新会话权限: userId=%s, appId=%s', raw.userId, raw.appId);
+      }
+    } catch (err) {
+      // 权限校验失败不应中断认证：保留旧会话数据（行为等同改动前），仅记录告警
+      log.warn('[Session] 会话权限指纹校验失败，沿用会话内权限: userId=%s', raw.userId, err);
+    }
+
     // 续期 + 重新签名 cookie（带 app 隔离的 path）
-    const ttl = raw.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
+    const ttl = session.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL;
     await sessionStore.expire(sessionId, ttl);
     if (reply) {
       const newSidValue = signCookie(sessionId, accessCount + 1);
@@ -358,7 +393,7 @@ async function getSession(params) {
       });
     }
     log.debug('📋 Session 续期: TTL=%ss', ttl);
-    return { ...raw, sessionId, accessCount: accessCount + 1 };
+    return { ...session, sessionId, accessCount: accessCount + 1 };
   }
   log.debug('❌ Redis 未命中，降级到 DB');
 
@@ -421,7 +456,12 @@ async function getSession(params) {
 
   // 短期 TTL 内：重建 Redis 缓存（容灾：Redis 主动驱逐后从 DB 恢复）
   const user = token.user;
-  const { roles, permissions } = await loadUserPermissions(user.id, token.app_id);
+  // 权限走指纹校验：会话里若存过指纹且仍一致则沿用，变更过则回源重载
+  const { roles, permissions, permFingerprint } = await resolveSessionPermissions(user.id, token.app_id, {
+    roles: token.sessionRoles,
+    permissions: token.sessionPermissions,
+    permFingerprint: token.sessionPermFingerprint
+  });
 
   // 指纹基准直接取本行 device_fingerprint（createSession 写入、updateSessionBaseline 维护）。
   // 行按 (user_id, device_id) 幂等复用，这里命中的就是本会话自己的行，
@@ -439,6 +479,7 @@ async function getSession(params) {
     appId: token.app_id,
     roles,
     permissions,
+    permFingerprint,
     ip: token.ip,
     deviceId: token.device_id,
     familyId: token.family_id || null, // 从 DB 回读登录链标识（防孤儿化，见 refreshSessionCore）
@@ -492,8 +533,11 @@ async function refreshSessionCore(refreshToken, request, reply) {
     return null;
   }
 
-  // 2. Redis 查询 refreshToken 对应的旧 sessionId
+  // 4. Redis 查询 refreshToken 对应的旧 sessionId
   const oldSessionId = await refreshStore.get(refreshToken);
+
+  // 旧会话副本：供 resolveSessionPermissions 判断权限是否已变更
+  const oldSessionData = oldSessionId ? await sessionStore.get(oldSessionId) : null;
 
   // 3. DB 查询会话记录（createSession 存储的是 sha256(sessionId)）
   const SessionToken = getModel('SessionToken');
@@ -518,7 +562,11 @@ async function refreshSessionCore(refreshToken, request, reply) {
   const user = await User.findByPk(record.user_id);
   if (!user) return null;
 
-  const { roles, permissions } = await loadUserPermissions(user.id, record.app_id);
+  const { roles, permissions, permFingerprint } = await resolveSessionPermissions(user.id, record.app_id, {
+    roles: oldSessionData?.roles,
+    permissions: oldSessionData?.permissions,
+    permFingerprint: oldSessionData?.permFingerprint
+  });
 
   // 5. 取 familyId（三级来源：旧 Redis session → DB 行 family_id → 新建）
   //    DB 兜底覆盖"Redis session 驱逐后 getSession 重建"场景：重建的 sessionData
@@ -526,7 +574,7 @@ async function refreshSessionCore(refreshToken, request, reply) {
   //    （孤儿 family 的实际损失：revokeFamily 吊销不到原 family 残留的活跃 rt）
   let familyId = null;
   if (oldSessionId) {
-    familyId = (await sessionStore.get(oldSessionId))?.familyId;
+    familyId = oldSessionData?.familyId;
   }
   if (!familyId && record.family_id) {
     familyId = record.family_id;
@@ -555,6 +603,7 @@ async function refreshSessionCore(refreshToken, request, reply) {
     appId: record.app_id,
     roles,
     permissions,
+    permFingerprint,
     ip: request?.ip || record.ip,
     deviceId: record.device_id,
     userAgent: request?.headers?.['user-agent'] || record.user_agent,
