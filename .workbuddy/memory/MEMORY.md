@@ -1,4 +1,21 @@
 
+## ⚠️ 嵌套 git 仓库：packages/log 不归主仓管（2026-09-16 踩到）
+
+**`packages/log/` 是独立的 git 仓库**（remote `github.com/yijiu2025/log.git`），
+`.gitignore:32` 排除它，主仓零跟踪。改它下面的**任何**文件都要去那个仓库提交：
+
+```bash
+cd packages/log && git add -A && git commit && git push origin HEAD
+```
+
+- `git add packages/log/...` 在主仓**静默不生效**（报 gitignore 警告但 **Exit Code = 0**）
+  → **add 阶段出现 gitignore 警告必须停下来查，不能只看退出码**
+- `.gitignore:31` 注释已写明「wb-log 已独立成库，经 npm workspace 软链使用」
+- 它**没有**主仓那个 packed-refs 失灵问题，push 后 ref 正常
+- 对照：`packages/shared-device` **不是**独立仓库，由主仓跟踪
+- 连带影响：框架侧文档用 `../../../packages/log/README.md#锚点` 链接包侧章节，
+  改包侧**标题**会打断这些锚点 → 改完必须跑锚点校验（扫包侧标题生成 slug 比对）
+
 ## 依赖方向：src 不得 import scripts（2026-09-15 立，含守卫）
 
 - **只允许 `scripts/ → src/`**。`scripts/` 是可选宿主（CLI 入口/内置命令/发布脚本），不一定随部署安装；
@@ -167,6 +184,11 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern
 - **唯一日志出口** `src/framework/log/index.js`（`export * from 'wb-logkit'`）；业务代码禁 `console.*`。
   **禁止深层路径导入 `packages/log/src/*`**。`packages/log` 是本地 workspace 包（内嵌独立 git 仓库），
   靠软链生效，**不要写进 `dependencies`**。
+  ⚠️ **改它下面的文件要去该仓库提交**，主仓 `git add` 会静默失败 —— 详见开头
+  「嵌套 git 仓库：packages/log 不归主仓管」一节。
+- **两份文档已分工**（2026-09-16）：`packages/log/README.md` = 环境变量/配置/API/文件规则的**权威源**；
+  `src/framework/log/README.md` = **宿主接入约定**（app.js 调用时机、全局 log 注册、ESLint 约束、
+  `initLogErrorTraps`），**不复制**包的配置细节。改环境变量或 `config()` 行为 → 只改包侧 README。
 - 已开源：https://github.com/yijiu2025/log ；npm 包名 **`wb-logkit`**，最新 **0.5.0**（另有 scoped 备份
   `@qirly/wb-log@0.1.0`）。`createLogger(tag, asGlobal)` 只有两个参数，其余配置走 `log.config({...})`。
 - **文件输出默认关闭**：给 `file: {…}` 即开启，`file: false` 关闭；`configureLog` 全项目只在 `src/app.js` 调一次。
