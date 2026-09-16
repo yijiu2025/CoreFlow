@@ -17,7 +17,7 @@
  */
 import { getConfig, ipRequestTimestamps } from '../../util/shared.js';
 import { readAccessState, consumeRateWindow, rel } from '../../util/redis.js';
-import { setBlock } from '../dao/block-manager.js';
+import { setBlock } from '../../dao/block-manager.js';
 
 /**
  * 追踪 IP 请求次数（基于内存滑动窗口，供 Bot 检测的「短时高频」判断使用）

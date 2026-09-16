@@ -15,7 +15,7 @@ import { checkRateLimit, trackRequestCount } from './detectors/rate-limiter.js';
 import { checkGeoReputation, resolveGeoInfo } from './detectors/geo-filter.js';
 import { checkBotChallenge } from './detectors/bot-detector.js';
 import { checkLoginBruteForce } from './detectors/brute-force.js';
-import { checkGlobalBlock, removeBlock, removeBlockFp, removeBlockDevice } from './dao/block-manager.js';
+import { checkGlobalBlock, removeBlock, removeBlockFp, removeBlockDevice } from '../dao/block-manager.js';
 import { trackConnection } from '../util/connection-tracker.js';
 import { generateFingerprint } from '../util/fingerprint.js';
 import { pushRecord } from '../data/store.js';

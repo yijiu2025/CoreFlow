@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 import * as adapter from '../app/firewall/util/redis.js';
-import * as blockManager from '../app/firewall/engine/dao/block-manager.js';
+import * as blockManager from '../app/firewall/dao/block-manager.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '..');

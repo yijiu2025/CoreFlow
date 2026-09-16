@@ -61,7 +61,7 @@ const { generateFingerprint } = await import('../app/firewall/util/fingerprint.j
 const { hasPass } = await import('../app/firewall/util/redis.js');
 const { ipRequestTimestamps } = await import('../app/firewall/util/shared.js');
 const { setBlock, setBlockDevice, setWhitelistDevice, getActiveBlocks, getActiveWhitelist, checkGlobalBlock } =
-  await import('../app/firewall/engine/dao/block-manager.js');
+  await import('../app/firewall/dao/block-manager.js');
 const { buildRequestContext, checkGlobalBlockPhase, willBeRejectedAsAnonymous } =
   await import('../app/firewall/engine/pipeline.js');
 const { generateServerSideDeviceId } = await import('../framework/auth/device-id-service.js');
@@ -200,7 +200,7 @@ describe('封禁状态机：四种状态 × 请求入口行为', () => {
     await setBlock(ipWhitelisted, { status: 'SCANNER', source: 'auto', permanent: true });
     expect((await catchBlock(ipWhitelisted)).statusCode).toBe(403); // 先确认封禁确实生效
 
-    const { setWhitelist } = await import('../app/firewall/engine/dao/block-manager.js');
+    const { setWhitelist } = await import('../app/firewall/dao/block-manager.js');
     await setWhitelist(ipWhitelisted, 60);
     expect(await catchBlock(ipWhitelisted)).toBeNull();
   });
