@@ -57,6 +57,25 @@ function collectTargets() {
 
 const TARGETS = collectTargets();
 
+/**
+ * TTY 判断的唯一合法出处。
+ * `isTTY` 全仓应只出现在 `src/utils/colors.js`（以及入口 `index.js` 的注释里），
+ * 其它文件需要判断终端能力时必须 `import { IS_TTY }`，不得自己再读一遍
+ * `process.stdout.isTTY` —— 那正是"两处各自判断、其中一处忘了降级"的温床。
+ */
+const IS_TTY_OWNER = 'src/utils/colors.js';
+
+/** 项目根下所有第一方 JS（含根目录 index.js，但不含 node_modules / 测试） */
+function collectRootScope() {
+  const out = [];
+  for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith('.js')) out.push(path.join(ROOT, entry.name));
+  }
+  return out.map(f => ({ file: f, rel: rel(f), src: fs.readFileSync(f, 'utf8') }));
+}
+
+const ROOT_SCOPE = collectRootScope();
+
 describe('终端颜色契约', () => {
   it('样本非空：确实扫描到了源码文件（否则下面的断言可能空跑）', () => {
     expect(TARGETS.length).toBeGreaterThan(100);
@@ -89,6 +108,24 @@ describe('终端颜色契约', () => {
     const IMPORTS_C = /import\s*\{[^}]*\bC\b[^}]*\}\s*from\s*['"][^'"]*utils\/colors\.js['"]/;
 
     const offenders = TARGETS.filter(t => USES_C.test(t.src) && !IMPORTS_C.test(t.src)).map(t => t.rel);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('TTY 判断只允许出现在 utils/colors.js，其它处须复用导出的 IS_TTY', () => {
+    // 匹配 process.stdout.isTTY 的实际读取（注释里的提及不算：先剥注释）
+    const READS_IS_TTY = /process\.stdout\??\.isTTY/;
+
+    // 剥掉块注释与行注释，避免把"说明文字里提到 isTTY"误判成真实读取
+    const stripComments = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+    const all = [...TARGETS, ...ROOT_SCOPE].filter(t => t.rel !== IS_TTY_OWNER);
+
+    const offenders = all
+      .filter(t => READS_IS_TTY.test(stripComments(t.src)))
+      .map(t => t.rel)
+      // 去重（TARGETS 与 ROOT_SCOPE 可能重叠）
+      .filter((v, i, a) => a.indexOf(v) === i);
 
     expect(offenders).toEqual([]);
   });
@@ -146,6 +183,26 @@ describe('终端颜色契约', () => {
       // 从别处导入同名 C 不算合规
       const wrongSource = "import { C } from './my-colors.js';\nlog.info(`${C.red}x${C.reset}`);";
       expect(IMPORTS_C.test(wrongSource)).toBe(false);
+    });
+
+    it('TTY 判断唯一性规则：能命中植入的违规，且不误伤注释中的提及', () => {
+      const READS_IS_TTY = /process\.stdout\??\.isTTY/;
+      const stripComments = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+      // 真实读取 → 命中
+      expect(READS_IS_TTY.test(stripComments('const IS_TTY = process.stdout.isTTY === true;'))).toBe(true);
+      expect(READS_IS_TTY.test(stripComments('if (process.stdout?.isTTY) {}'))).toBe(true);
+
+      // 注释里提到 isTTY → 不命中（本测试文件的说明文字就属此类）
+      const commentOnly =
+        '// 复用 colors.js 的判断，不要读 process.stdout.isTTY\nimport { IS_TTY } from "./colors.js";';
+      expect(READS_IS_TTY.test(stripComments(commentOnly))).toBe(false);
+
+      const blockComment = '/* 见 process.stdout.isTTY 的说明 */\nconst x = 1;';
+      expect(READS_IS_TTY.test(stripComments(blockComment))).toBe(false);
+
+      // 合规的复用写法 → 不命中
+      expect(READS_IS_TTY.test(stripComments("import { IS_TTY } from './src/utils/colors.js';"))).toBe(false);
     });
   });
 });
