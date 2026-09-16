@@ -23,11 +23,24 @@ import {
   hasIndexField
 } from '../util/redis.js';
 import { createLogger } from '../../../framework/log/index.js';
+import { registerSettingsReader } from '../interface/config-access.js';
 
 const log = createLogger('app.firewall.dao.dao');
 
 let serverNode = { ...DEFAULT_SERVER_NODE };
 let securitySettings = { ...DEFAULT_SECURITY_SETTINGS };
+
+// ============== 配置读取器注册（拆环，2026-09-16） ==============
+
+/**
+ * 把配置读取能力注册到 `interface/config-access.js`
+ *
+ * 这是 `util ↔ dao` 环断开的关键一步：`util/shared.js` 的 `getConfig()`
+ * 改为调用接口层的 `readSecuritySettings()`，因此 util 不再需要 import 本模块。
+ * 注册的是**函数引用**而非配置对象 —— 每次调用都读当前 `securitySettings` 绑定，
+ * 所以 `updateSecuritySettings` 换掉对象后所有调用点立刻可见。
+ */
+registerSettingsReader(() => securitySettings);
 
 // ============== 初始化与文件加载 ==============
 
