@@ -142,9 +142,10 @@ git 为 `C:/Program Files/Code/Git`（2.52.0.windows.1），`git push` 甚至不
 - **`crypto.timingSafeEqual` 要求两 Buffer 字节长度相等**，否则抛 `RangeError`；`Buffer.from(str,'hex')`
   遇非法 hex **静默截断成空 Buffer** → 「比字符串长度」≠「比字节长度」。
 - **`bcryptjs` 只取前 72 字节**；密码长度上限按 `Buffer.byteLength` 判断，`maxLength:128`（字符）会漏尾巴。
-- **⚠️ 高频缺陷类「守卫未防御非预期输入」**（cookie.js / totp.js / signature.js 各 1 例）：外部可控值
-  直接进 `timingSafeEqual` / `.length` / `Buffer.from(x,'hex')` → 必须先做类型 + 长度归一化，
-  并把函数体包进 try 兜底到声明的失败返回值。
+- **⚠️ 高频缺陷类「守卫未防御非预期输入」**（cookie.js / totp.js / signature.js / perm-cache.js 各 1 例）：
+  外部可控值直接进 `timingSafeEqual` / `.length` / `Buffer.from(x,'hex')` / **`new Date(x)`** →
+  必须先做类型 + 长度归一化，并把函数体包进 try 兜底到声明的失败返回值。
+  注意 **`new Date(Symbol())` / `new Date(1n)` 都会抛 TypeError**，只有 string/number/Date 能进。
 - **⚠️ 改完导出面必须 `import` 一次上层入口模块**（单测跑不到那里）。ESM **链接期**抛
   `does not provide an export named ...`，整个入口注册失败。两次实战：`willBeRejectedAsAnonymous`
   （engine/index.js → app/firewall/index.js）、`startCleanupTask`（撤销 engine/dao 时）。
@@ -241,6 +242,39 @@ git 为 `C:/Program Files/Code/Git`（2.52.0.windows.1），`git push` 甚至不
   `iam_role` 里并无 `code='admin'` 的角色（超管实为 `{appId}_admin`）→ **永不匹配**，等于路由裸奔到
   "只要求登录"。`allowRoles: []` 的语义是**「不限角色」而不是「禁止」** —— 想收紧必须用 `requirePermission`。
 - `fw_admin` 的动作是 **`fw:*`**；`fw:admin:*` 这种写法只能匹配 `fw:admin:` 前缀，**覆盖不到任何有效权限码**。
+- **敏感操作回源校验（第 4 层）**：路由声明 `freshPermission: true` → `applyGuardLogic` 以
+  `getPermissions(..., {fresh: true})` 强制回源，并用结果覆盖 `request.state.user`。
+  已用于 `POST /admin/iam/v1/roles/assign`、`POST /admin/iam/v1/policies`。
+  **回源失败必须 fail-closed（403）而不是放行** —— 敏感操作的默认答案是"不执行"。
+  该标志与 `requirePermission` 同为代码级声明，**不得进 `RUNTIME_FIELDS`**（否则运维改 DB 即可关掉）。
+  `applyGuardLogic` 经 `__test__applyGuardLogic` 导出供测试直接驱动（明示非公开 API）。
+
+---
+
+## 7.5 权限缓存（四层防御，2026-09-16 立）
+
+**唯一读入口** `framework/auth/perm-cache.js` 的 `getPermissions(userId, appId, {fresh})`。
+**任何地方不要再自行 `getStore('perm')` 或直调 `loadUserPermissions`** —— 后者无失效机制，
+会让会话长 TTL（记住我 30 天）掩盖权限变更。命名空间 `auth:perm` + sha256 截 16 位键
+（`buildPermKey`，`\u0000` 分隔防 `('1','23')`/`('12','3')` 撞键）。
+
+- **第 3 层指纹是核心，零 schema 改动**：`sha256(UserRole[id,updatedAt,deletedAt] + Role[...] +
+  InlinePolicy[...])`。`Role` 行必须纳入——角色策略变更影响该角色下**所有**用户。行按 id **排序后**
+  拼接（SQL 不保证返回顺序，依赖顺序会让指纹无谓抖动→缓存每次都判失效）。
+  不用 `users.perm_version` 的原因：绕开 DAO 的写入不记得递增，必然漏；且要批量 UPDATE。
+- **会话路径统一走 `session-perm.js` 的 `resolveSessionPermissions`**（从 session.js 拆出，
+  因指纹改造使 session.js 触及 1000 行硬限）：指纹一致用会话副本，否则回源。
+  **降级方向永远是"保守回源"**，指纹算错不得导致"沿用可能过期的权限"。
+- **`PERM_NAMESPACE` 字面量在两处声明**（`perm-cache.js` 与 `session-store.js`）：后者受
+  "零兄弟模块依赖"约束不能 import 前者（会把底座抬高），故重复声明 + 契约测试钉死逐字一致。
+- **主动失效** `invalidatePermCache(userId, appId)`，已接 `iam.dao.js` 的 `assignRole` /
+  `updateInlinePolicy`。**失效失败不抛错**（变更已提交，不能因缓存层故障回滚，指纹兜底）。
+- **`token-issuer.service.js` 的预热曾是长期无效写**：写侧裸 `getStore('perm')` + 明文键，
+  与读侧命名空间/键都对不上 → 丢黑洞。现统一走 `warmPermissions`。
+- **强度边界（写宣称时必守）**：hash 键 + 命名空间提高的是**误写/枚举成本**，不是屏障。
+  能连 Redis 仍可直接写缓存——但**指纹会在下次请求时自动覆盖它（自愈）**；能读 Redis 就能读指纹，
+  指纹的作用是**检测数据变化**而非防篡改。
+- 详见 `src/framework/auth/docs/PERM-CACHE-HARDENING.md`（含 4 个守卫测试文件清单）。
 
 ---
 
