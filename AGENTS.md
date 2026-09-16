@@ -379,6 +379,31 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 
 测试文件在 `src/__tests__/` 下，使用 Fastify inject 进行集成测试。完整测试规范见 [.claude/skills/fullstack-rules/references/testing.md](.claude/skills/fullstack-rules/references/testing.md)。
 
+### 测试有效性（强制）
+
+**测试文件必须真实加载被测代码**（相对 `import` / `await import()` / `wb-*` 工作区包）。
+禁止「手写一个响应常量，再断言该常量有某字段」——这类测试不 import 任何生产代码，
+**删除被测模块后仍会全绿**，属于虚假覆盖。
+
+- 守卫：`src/__tests__/conventions/test-effectiveness.test.js`（零相对 import 且无动态 import 即报错）
+- 例外：**结构守卫**类测试（读文件系统做静态断言，如 `export-placement.test.js`）
+  可登记进守卫的 `STRUCTURAL_GUARD_WHITELIST` 并写明理由
+- 存量遗留：16 个纯常量自测已冻结在守卫的 `KNOWN_INEFFECTIVE_TESTS` 中，**只减不增**；
+  改造完一个就从清单删一条（守卫会校验清单条目的真实性）
+- **禁止内联复制被测逻辑**：副本会与真身各自演化，且测试断言的是副本行为 ——
+  「测试通过」不代表「真身正确」。已核对的 3 份副本全部与真身存在实质差异，
+  详见 [docs/development/test-inline-copy-drift-report.md](docs/development/test-inline-copy-drift-report.md)
+- 在测试里模拟已登录态时，`reply.result` 请 `import` 真实装饰器
+  （`framework/loader/registry/00-globals.js`），不要手写副本
+- **一个测试文件只能注册一组路由**：`registerSecureRoute` 的 `_routeRegistry` 是模块级
+  全局状态且无重置入口，重复注册同一 URL 会抛错。故注册集中在顶层 `beforeAll` 一次
+
+### 测试改造范例
+
+`src/__tests__/api-routes.test.js`（2026-09-16 改造）
+- 改造前：18 项手写常量断言，零 import，毒丸实验（把被测文件覆写成 `throw`）下**全绿**
+- 改造后：17 项真实 Fastify + 真实插件 + `inject()` 驱动，毒丸实验下**必红**（已实测）
+
 ## 开发规范
 
 - 注释和文档使用简体中文
