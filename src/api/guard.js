@@ -17,6 +17,7 @@ import {
   registerGroupMetadata as rawRegisterGroupMetadata
 } from './guard-config.js';
 import { isIpMatch } from '../utils/ip.js';
+import { getPermissions } from '../framework/auth/perm-cache.js';
 import { createLogger } from '../framework/log/index.js';
 
 const log = createLogger('api.guard');
@@ -151,7 +152,14 @@ function checkGuardBase(opts, user, clientIp) {
  * 核心校验逻辑：执行 IP、登录态及角色检查
  */
 async function applyGuardLogic(opts = {}, request, reply) {
-  const { enabled = true, allowIps = [], allowRoles = [], requireLogin = false, requirePermission = null } = opts;
+  const {
+    enabled = true,
+    allowIps = [],
+    allowRoles = [],
+    requireLogin = false,
+    requirePermission = null,
+    freshPermission = false
+  } = opts;
 
   // 1. 开关检查
   if (!enabled) {
@@ -165,6 +173,37 @@ async function applyGuardLogic(opts = {}, request, reply) {
     if (!isAllowed) {
       return reply.result.forbidden(`IP [${clientIp}] 无权访问此受保护区域`);
     }
+  }
+
+  // 2.5 敏感操作回源校验（第 4 层：freshPermission）
+  //
+  // 前面的会话/JWT 路径在权限上都已带指纹校验（perm-cache.js），但指纹依赖
+  // 「三张权限表的 updatedAt」这一**数据侧可观测面**。以下情况仍可能让陈旧权限蒙混过关：
+  //   - 直接 UPDATE 表但绕过 ORM（未刷新 updatedAt，如 `UPDATE ... SET policy=?` 后补写时间戳）
+  //   - 指纹计算本身抛错走了"保守回源失败 → 沿用会话副本"的降级分支
+  //   - 权限字段被外部写进缓存、且指纹恰好被同步伪造
+  // 对"改权限本身""注销账号""导出全量数据"这类**不可逆/高影响**操作，
+  // 多一次全量 DB 查询换一次"决策基于当前真实权限"的确定性，是划算的。
+  //
+  // 仅在路由显式声明 freshPermission=true 时启用：普通读接口不应付出这次查询。
+  if (freshPermission) {
+    const user = request.state?.user;
+    if (!user) {
+      return reply.result.unauth('身份验证失败，请先登录');
+    }
+    // appId 取认证时写入的登录应用；缺省 'GLOBAL' 与 perm-cache 的全局语义一致
+    const appId = user.appId || request.state?.session?.appId || 'GLOBAL';
+    let fresh;
+    try {
+      fresh = await getPermissions(user.sub, appId, { fresh: true });
+    } catch (err) {
+      // 回源失败 → **拒绝**（fail-closed）。这与"权限读取失败降级放行"不同：
+      // 敏感操作的默认答案必须是"不执行"。
+      log.error(`🚫 [Guard] 敏感操作权限回源失败，拒绝请求: userId=${user.sub}, appId=${appId}`, err);
+      return reply.result.forbidden('权限校验服务不可用，请稍后重试');
+    }
+    // 用回源结果覆盖 request.state.user 的权限，后续 handler 内 allOf/anyOf 读到的也是最新值
+    request.state.user = { ...user, roles: fresh.roles, permissions: fresh.permissions };
   }
 
   // 3. 身份与角色校验
@@ -349,7 +388,10 @@ function registerSecureRoute(fastify, options) {
     requireLogin = false,
     requireSignature = false,
     requirePermission = null,
-    permission = null
+    permission = null,
+    // 敏感操作回源校验（第 4 层）：见 applyGuardLogic 中 2.5 节的说明。
+    // 默认关闭 —— 每开一个就多一次 3 表查询，只给不可逆/高影响操作开。
+    freshPermission = false
   } = options;
 
   // 参数防御性校验
@@ -402,7 +444,8 @@ function registerSecureRoute(fastify, options) {
     allowRoles,
     allowIps,
     requireLogin,
-    requirePermission: perm
+    requirePermission: perm,
+    freshPermission
   });
 
   // 需要登录的路由自动标记需要签名验证；requireSignature 可单独开启（公开端点防爬）
@@ -596,5 +639,8 @@ export {
   registerSecureRoute,
   registerSecureWebSocket,
   getFullUrl,
-  registerSystemMetadata
+  registerSystemMetadata,
+  // 仅供测试直接驱动守卫核心逻辑。前缀 `__test__` 明示"非公开 API"，
+  // 生产代码不应调用 —— 正常路径是经 createGuard 生成的 preHandler。
+  applyGuardLogic as __test__applyGuardLogic
 };

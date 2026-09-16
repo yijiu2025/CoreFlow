@@ -20,7 +20,9 @@ import ApprovalDao from '../dao/approval.dao.js';
 import TokenDao from '../dao/token.dao.js';
 import config from '../config/config.js';
 import { detectDeviceType, getDeviceId } from '../../../framework/auth/device.js';
-import { loadUserPermissions } from '../../../framework/auth/permission-loader.js';
+// 权限缓存读写统一走 perm-cache.js（命名空间 `auth:perm` + 指纹校验），
+// **不要**再自行 getStore('perm') —— 命名空间/键不一致会导致静默失效。
+import { warmPermissions } from '../../../framework/auth/perm-cache.js';
 import { getStore } from '../../../framework/redis/index.js';
 import { setAuthCookies } from './cookies.service.js';
 import { resolveFieldSet } from '../config/scope-registry.js';
@@ -103,13 +105,17 @@ async function issueDirectTokens(user, client, scope, oidcNonce, request, reply,
     result.refresh_token = refreshToken;
     result.expires_in = config.jwt.accessTokenTTL;
 
-    // 预热权限缓存：签发时查好 roles/permissions 写入 perm store（30s TTL），
-    // 验证侧 getUserFromToken 优先读缓存，避免每次请求都查 DB。
-    // 不影响 JWT 本体（不嵌入权限），权限变更最多 30s 生效。
-    const permStore = getStore('perm', { timeout: 3000 });
+    // 预热权限缓存：签发时查好 roles/permissions 写入 `auth:perm` 命名空间，
+    // 验证侧 getUserFromToken / getSession 都从同一入口读（perm-cache.js），
+    // 避免每次请求都查 DB。
+    //
+    // ⚠️ 这里原本写的是 `getStore('perm')` + 明文键 `${user.id}:${client.client_id}`，
+    //    与读侧的 `auth:perm` + sha256 键**完全对不上** —— 写入等于丢进黑洞，
+    //    预热一直静默无效（且明文键可被任意 `getStore('perm')` 读写）。
+    //    现统一走 `warmPermissions`，读写键由同一函数构造。
+    // 不影响 JWT 本体（不嵌入权限），权限变更经指纹即时生效。
     try {
-      const { roles, permissions } = await loadUserPermissions(user.id, client.client_id);
-      await permStore.set(`${user.id}:${client.client_id}`, { roles, permissions }, 30);
+      await warmPermissions(user.id, client.client_id);
     } catch (err) {
       log.warn('[Auth] 权限缓存预热失败:', err);
     }
