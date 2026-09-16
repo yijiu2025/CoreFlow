@@ -8,7 +8,7 @@
  * @since 2026-08-17
  */
 import { getConfig } from '../../util/shared.js';
-import { setBlockForSubject } from '../dao/block-manager.js';
+import { setBlockForSubject } from '../../dao/block-manager.js';
 
 /** 预编译的正则缓存（启动时填充，运行时只读） */
 let compiledBotPatterns = [];

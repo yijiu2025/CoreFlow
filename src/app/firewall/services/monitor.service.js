@@ -13,8 +13,9 @@
  */
 import { getSummary, getRecentRecords, clearAll, setBroadcastHandler } from '../data/store.js';
 import { addToBlacklist, removeFromBlacklist, addToWhitelist, removeFromWhitelist } from '../dao/dao.js';
-import { setBlock, removeBlock } from '../engine/index.js';
 import {
+  setBlock,
+  removeBlock,
   setBlockFp,
   removeBlockFp,
   setWhitelistFp,

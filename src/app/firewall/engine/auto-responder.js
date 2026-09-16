@@ -20,7 +20,7 @@
  * @since 2026-08-17
  */
 import { createLogger } from '../../../framework/log/index.js';
-import { setBlock } from './dao/block-manager.js';
+import { setBlock } from '../dao/block-manager.js';
 import { pushRecord } from '../data/store.js';
 import { getConfig } from '../util/shared.js';
 

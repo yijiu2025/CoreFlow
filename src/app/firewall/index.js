@@ -14,8 +14,6 @@ import {
   getSecuritySettings
 } from './dao/dao.js';
 import {
-  startCleanupTask,
-  trackConnection,
   shouldSkipDeepCheck,
   willBeRejectedAsAnonymous,
   buildRequestContext,
@@ -27,6 +25,7 @@ import {
 } from './engine/index.js';
 import { registerRateLimit } from './engine/detectors/first-ratelimit.js';
 import { checkNotFoundTrap } from './engine/detectors/scan-trap.js';
+import { startCleanupTask, trackConnection } from './util/connection-tracker.js';
 import fp from 'fastify-plugin';
 import { createLogger } from '../../framework/log/index.js';
 
@@ -106,7 +105,7 @@ const initFirewall = fp(async function (app) {
     // WebSocket 升级请求也经过基本安全检查
     if (request.headers.upgrade === 'websocket') {
       const ip = request.ip;
-      const { checkGlobalBlock } = await import('./engine/dao/block-manager.js');
+      const { checkGlobalBlock } = await import('./dao/block-manager.js');
 
       // 检查 IP 是否被封禁
       try {
