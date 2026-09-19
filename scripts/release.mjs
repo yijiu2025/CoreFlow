@@ -78,8 +78,8 @@ function latestTag() {
   return r.ok ? r.out.split('\n').pop().trim() : null;
 }
 
-function collectCommits(from) {
-  const range = from ? `${from}..HEAD` : 'HEAD';
+function collectCommitsBetween(from, to = 'HEAD') {
+  const range = from ? `${from}..${to}` : to;
   return git('log', range, '--format=%s%x00%b%x01')
     .split('\x01')
     .map(chunk => chunk.trim())
@@ -88,6 +88,18 @@ function collectCommits(from) {
       const [subject, body = ''] = chunk.split('\x00');
       return { subject: subject.trim(), body };
     });
+}
+
+/** 上一个 tag（按创建时间取相邻），补建 Release 时用它划定变更区间 */
+function previousTag(tag) {
+  const r = gitTry('tag', '--sort=-creatordate');
+  if (!r.ok) return null;
+  const tags = r.out
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+  const i = tags.indexOf(tag);
+  return i >= 0 && i + 1 < tags.length ? tags[i + 1] : null;
 }
 
 function remoteSlug() {
@@ -134,21 +146,50 @@ function ghHeaders(token) {
   };
 }
 
+/** 本机网络对 GitHub 不稳定（git push 都常耗时数分钟），网络类错误要重试而不是直接失败 */
+async function fetchWithRetry(url, options, { attempts = 3 } = {}) {
+  let lastErr;
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      return await fetch(url, options);
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts) {
+        const waitMs = 1000 * 2 ** (i - 1);
+        log(
+          `  ⚠ 网络请求失败（第 ${i}/${attempts} 次）：${err.cause?.code || err.message}，${waitMs / 1000}s 后重试`
+        );
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 async function apiGetRelease({ owner, repo, tag, token }) {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`, {
-    headers: ghHeaders(token)
-  });
-  if (!res.ok) return null;
-  return res.json().catch(() => null);
+  try {
+    const res = await fetchWithRetry(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`, {
+      headers: ghHeaders(token)
+    });
+    if (!res.ok) return null;
+    return await res.json().catch(() => null);
+  } catch {
+    return null; // 查不到就按"没有"处理，由后续创建步骤决定
+  }
 }
 
 async function apiCreateRelease({ owner, repo, tag, body, token }) {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
-    method: 'POST',
-    headers: ghHeaders(token),
-    body: JSON.stringify({ tag_name: tag, name: tag, body, draft: false, prerelease: false })
-  });
-  return { status: res.status, json: await res.json().catch(() => null) };
+  try {
+    const res = await fetchWithRetry(`https://api.github.com/repos/${owner}/${repo}/releases`, {
+      method: 'POST',
+      headers: ghHeaders(token),
+      body: JSON.stringify({ tag_name: tag, name: tag, body, draft: false, prerelease: false })
+    });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  } catch (err) {
+    // 网络层失败不抛：tag 可能已推送成功，此处崩溃会让"已完成的部分"也被当成失败
+    return { status: 0, error: err.cause?.code || err.message };
+  }
 }
 
 /* ---------- npm 通道（packages/log，独立 git 仓库） ---------- */
@@ -174,6 +215,33 @@ async function npmState() {
   const remote = await latestPublished(pkg.name);
   const dirty = tryRun('git', ['status', '--porcelain'], { cwd: LOG_PKG_DIR }).out;
   return { name: pkg.name, local: pkg.version, remote, dirty };
+}
+
+/* ---------- 补齐：修复 tag 与 Release 的漂移 ---------- */
+
+/**
+ * tag 已推送但 Release 没建成（网络中断、token 失效等）会让两者永久漂移。
+ * 重跑脚本时若只判断"有无新提交"就会直接返回，再也补不上 —— 所以这里单独兜一次。
+ */
+async function syncReleaseIfMissing({ tag, slug, token }) {
+  if (!tag || !slug || !token) return;
+  if (await apiGetRelease({ owner: slug.owner, repo: slug.repo, tag, token })) return;
+
+  const prev = previousTag(tag);
+  const between = collectCommitsBetween(prev, tag);
+  const { buckets } = classify(between);
+  const notes = buildNotes({ from: prev, to: tag, buckets, count: between.length });
+
+  log('');
+  log(`→ ${tag} 缺 Release（tag 已推、Release 未建）`);
+  if (!APPLY) {
+    log('   （预览模式）加 --apply 可补建');
+    return;
+  }
+
+  const res = await apiCreateRelease({ owner: slug.owner, repo: slug.repo, tag, body: notes, token });
+  if (res.status === 201) log(`  ✓ Release 已补建：${res.json.html_url}`);
+  else log(`  ✗ 补建失败（${res.status === 0 ? `网络错误 ${res.error}` : `HTTP ${res.status}`}）`);
 }
 
 /* ---------- 主流程 ---------- */
@@ -217,9 +285,13 @@ async function main() {
     return;
   }
 
-  const commits = collectCommits(from);
+  const slug = remoteSlug();
+  const token = readGithubToken();
+
+  const commits = collectCommitsBetween(from);
   if (!commits.length) {
     log(`✓ 自 ${from ?? '初始'} 以来无新提交 → 无需发版`);
+    await syncReleaseIfMissing({ tag: from, slug, token });
     return;
   }
 
@@ -249,8 +321,6 @@ async function main() {
     log(`⚠ tag ${tag} 已存在 —— 预览仍继续，执行时会被拒绝`);
   }
 
-  const slug = remoteSlug();
-  const token = readGithubToken();
   const notes = buildNotes({ from, to: tag, buckets, count: commits.length });
   // 先查后建：422 只说明"校验没过"，原因可能是别的字段，不能拿它当"已存在"的判据
   const existingRelease =
@@ -327,6 +397,7 @@ async function main() {
   if (slug && token && !existingRelease) {
     const res = await apiCreateRelease({ owner: slug.owner, repo: slug.repo, tag, body: notes, token });
     if (res.status === 201) log(`  ✓ Release 已创建：${res.json.html_url}`);
+    else if (res.status === 0) log(`  ✗ Release 创建失败（网络错误 ${res.error}）→ 重跑本脚本可补建`);
     else log(`  ✗ Release 创建失败（HTTP ${res.status}）：${res.json?.message ?? ''}`);
   } else if (existingRelease) {
     log(`  · Release ${tag} 已存在，跳过`);
