@@ -119,8 +119,13 @@
   <h2><span class="num">01</span>总体结论</h2>
   <div class="verdict">
     <span class="vtag">核心判断</span>
-    <p><strong>横向扩展的 4 个阻断项中，3 项（E1 / E2 / E4）已修复并复验；另加新发现的 1 个事件循环阻塞点（S1）与 2 项可观测性改进（S4 / B-3），本轮共 6 项完成。</strong>
+    <p><strong>横向扩展的 4 个阻断项中，3 项（E1 / E2 / E4）已修复；此后又完成了两处主线程阻塞的清理
+    （RSA 密钥生成、设备页模板读取）。合计 8 项落地。</strong>
     第 4 个阻断项 <strong>E3（遥测与 WS 广播外置）仍未做</strong> —— 它需要双实例 + 可用 Redis 才能验证，详见 §04。</p>
+    <p><strong>最关键的一条进展：E1 / E2 已完成真实双实例复验。</strong>
+    在<strong>真实 Redis + 真实 MySQL + 多个真实独立进程</strong>下验证：5 个进程同时抢调度锁
+    <strong>恰好 1 个成功</strong>；一个进程改库后，另一个进程的内存配置在 <strong>400~800ms</strong> 内跟上。
+    此前报告里那句"扩容前唯一必做的一步"已经做到了。</p>
     <p>修复方式沿用现有基础设施（复用此前零引用的 <code>redis/lock-store.js</code>），未引入新依赖、未改动分层结构。</p>
     <p>其中<strong>最关键的一条</strong>：密码哈希已从主线程移出。此前 10 个并发登录会冻结整个进程
     <strong>约 650–780ms</strong>，与 <code>/v1/health/ready</code> 的 3s 探针超时同一量级 ——
@@ -133,8 +138,12 @@
 
   <div class="kpis">
     <div class="kpi ok">
-      <div class="k">6</div>
-      <div class="l">本轮修复项<br>S1·E1·E2·E4·S4·B-3</div>
+      <div class="k">8</div>
+      <div class="l">本轮修复项<br>S1·E1·E2·E4·S4·B-3 + 2 处阻塞清理</div>
+    </div>
+    <div class="kpi ok">
+      <div class="k">5<span style="font-size:15px">进程</span></div>
+      <div class="l">并发抢同一把锁<br><strong>恰好 1 个成功</strong></div>
     </div>
     <div class="kpi ok">
       <div class="k">1009</div>
@@ -211,6 +220,20 @@
         <td><strong>配置校验散落各处</strong><br><span style="color:var(--ink3);font-size:12.5px">配错值静默失效</span></td>
         <td>新增 <code>framework/config/env.js</code>（零 import 纯函数）统一 22 个环境变量 + 弱密钥黑名单 + 跨字段校验；<code>app.js</code> 用其取代 <code>validateSecrets</code></td>
         <td><code>config-validation.test.js</code> 19 项（<strong>由虚假覆盖改造</strong>）</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">K1</td>
+        <td><strong>RSA 密钥生成占住主线程</strong><br><span style="color:var(--ink3);font-size:12.5px">全仓阻塞普查发现</span></td>
+        <td><code>keys/manager.js</code> 用 <code>generateKeyPairSync('rsa', 2048)</code> → 改为异步 <code>crypto.generateKeyPair</code>（线程池）。调用链本就全 async</td>
+        <td>实测墙钟 53ms、冻结 53~62ms；<code>keygen-nonblocking.test.js</code> 6 项（毒丸已复验）</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">K2</td>
+        <td><strong>设备授权页每次请求同步读模板</strong><br><span style="color:var(--ink3);font-size:12.5px">且就地做 3 次动态 import</span></td>
+        <td><code>device.service.js</code> 改为模块级解析路径 + async 读 + 生产缓存（非生产每次重读，改模板即时可见）</td>
+        <td><code>device-page.test.js</code> 5 项（毒丸已复验）；顺带补上此前完全缺失的 XSS 覆盖</td>
         <td><span class="st done">已修复</span></td>
       </tr>
       <tr>
@@ -378,8 +401,9 @@
       </tr>
       <tr>
         <td class="num">E4′</td>
-        <td>连接计数外置 Redis 同上；本轮只修了泄漏，<strong>没有改变"进程内"这一性质</strong></td>
-        <td>同上。注意：单实例部署下当前实现是正确的，不构成缺陷</td>
+        <td>连接计数外置 Redis —— 本轮只修了泄漏，<strong>没有改变"进程内"这一性质</strong>。
+        <strong>评估后建议不做</strong>，见下方说明</td>
+        <td>不适用：这是<strong>有意的、已文档化的取舍</strong>，不是待修缺陷</td>
       </tr>
     </tbody>
   </table>
@@ -389,6 +413,17 @@
     <p>上一轮评审批评过"文档声明完成但代码跑不通"。本轮刻意拒绝提交<strong>无法在本机验证</strong>的制品 ——
     未经验证的 Dockerfile 比没有 Dockerfile 更危险，因为它会让"能扩容"变成一个看似成立的假设。</p>
   </div>
+
+  <div class="note warn">
+    <span class="nt">E4′ 为什么建议不做（这是一条工程判断，不是遗漏）</span>
+    <p>把每 IP 连接计数外置到 Redis，意味着<strong>每个请求都要多一次网络往返</strong>，而它是一条
+    <strong>安全控制</strong>路径。随之而来的两个失败模式都不好收场：Redis 抖动时要么
+    <strong>fail-open</strong>（限流静默失效），要么 <strong>fail-closed</strong>（正常流量全部被拒）；
+    此外进程崩溃会留下膨胀的计数，还得再引入 TTL 与漂移修正 —— 而那正是"新 bug 换旧 bug"。</p>
+    <p>代码里早已写明正确的缓解方式：<strong>实际放行上限 = <code>maxConn</code> × 实例数</strong>，
+    因此按 <code>maxConn ÷ 实例数</code> 配值，或<strong>把连接限制前移到边缘（Nginx / ALB）</strong>。
+    后者是这类问题的标准答案，且不把安全控制绑在 Redis 可用性上。</p>
+  </div>
 </section>
 
 <!-- ══════════════ 05 验证方法与基线 ══════════════ -->
@@ -397,11 +432,72 @@
 
   <h3>本轮实际执行的验证</h3>
   <ul class="plain">
-    <li><strong>全量回归</strong>：75 suites / <strong>1009 passed</strong> / 0 failed / 11 skipped。</li>
+    <li><strong>全量回归</strong>：77 suites / <strong>1020 passed</strong> / 0 failed / 11 skipped。</li>
     <li><strong>Lint</strong>：全部改动文件 0 error 0 warning（含 prettier 格式化）。</li>
     <li><strong>对照实测</strong>：哈希阻塞三组对照，见 §03；结论有反例支撑，不是"能跑就行"。</li>
-    <li><strong>测试有效性</strong>：新增测试均<strong>真实加载被测代码</strong>，可被毒丸实验证伪。</li>
+    <li><strong>毒丸复验</strong>：两组新的「同步调用守卫」测试都做过破坏性验证（把实现改回同步版 →
+    用例全红，且报错来自替身本身），确认不是假绿。</li>
+    <li><strong>真实双实例复验</strong>：见下节 —— 本报告最重要的一块证据。</li>
   </ul>
+
+  <h3>⭐ 真实双实例复验（扩容前的那一步）</h3>
+  <p class="lead">
+    此前所有关于 E1 / E2 的结论都建立在"逻辑有测试覆盖"上。本节把它换成
+    <strong>真实 Redis + 真实 MySQL + 多个真实独立进程</strong>下观测到的行为。
+  </p>
+
+  <div class="fix">
+    <div class="fhead">
+      <span class="fid">E1</span>
+      <span class="ftitle">调度器分布式锁：5 个进程同抢，恰好 1 个成功</span>
+    </div>
+    <div class="body">
+      <p>5 个独立进程连同一台真实 Redis（隔离在 db15），在<strong>同一绝对时刻</strong>抢同一把任务锁：</p>
+      <table>
+        <thead><tr><th>轮次</th><th>场景</th><th>预期</th><th>实测</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>5 进程同时抢（TTL 3000ms）</td><td>恰好 1 个成功</td><td><span class="st done">1 成功 / 4 失败</span></td></tr>
+          <tr><td class="num">2</td><td>TTL 内再由第 6 个进程抢</td><td>抢不到</td><td><span class="st done">抢不到</span></td></tr>
+          <tr><td class="num">3</td><td>等 TTL 过期后再抢</td><td>能抢到</td><td><span class="st done">抢到</span></td></tr>
+        </tbody>
+      </table>
+      <p>第 2 轮排除"锁被提前释放"，第 3 轮排除"锁永不释放"。两轮一起才能说明
+      <strong>TTL 语义是对的</strong> —— 只跑第 1 轮会漏掉其中任一种失败。</p>
+    </div>
+  </div>
+
+  <div class="fix">
+    <div class="fhead">
+      <span class="fid">E2</span>
+      <span class="ftitle">守卫配置同步：一个进程改库，另一个进程的内存跟上</span>
+    </div>
+    <div class="body">
+      <p>父进程负责改库，子进程是<strong>独立进程</strong>、只做观测且<strong>从不写库</strong>：</p>
+      <table>
+        <thead><tr><th>阶段</th><th>父进程动作</th><th>子进程观测结果</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>只 bump <code>version</code>，内容逐字节不动</td><td><span class="st done">≈400ms 内 updated=[Notice]</span></td></tr>
+          <tr><td class="num">2</td><td>bump version + 修改 <code>allowIps</code></td><td><span class="st done">≈800ms 内内存出现新值</span></td></tr>
+          <tr><td class="num">3</td><td>（不再改动）</td><td><span class="st done">连续空轮询，不重复合并</span></td></tr>
+        </tbody>
+      </table>
+      <p><strong>为什么阶段 1 只改版本号</strong>：同步由版本号驱动，因此"只 bump 版本、内容不变"
+      是<strong>零行为影响</strong>的观测点 —— 能在不触碰任何鉴权语义的前提下证明跨进程拉取生效。
+      阶段 2 才引入一次 fail-closed 的内容变更（把 <code>allowIps</code> 指向不可路由的
+      TEST-NET-3 地址），用来证明<strong>内容真的被合并进另一个进程</strong>，而不只是版本号被看到了。</p>
+      <p><strong>数据安全</strong>：动手前先 <code>Dao.backup()</code> 取全量快照，结束后
+      <strong>无条件 <code>Dao.restore()</code></strong>，并回读核对 4 项：系统集合一致、版本号已还原、
+      allowIps 已还原为空、快照本身未被污染 —— <strong>实测 4 项全 ✅</strong>。</p>
+    </div>
+  </div>
+
+  <div class="note ok">
+    <span class="nt">这一节改变了什么结论</span>
+    <p>E1 / E2 从"逻辑正确、未经真实多实例检验"升级为<strong>"已在真实多实例下观测到预期行为"</strong>。
+    上一版报告里"扩容前唯一必做的一步"至此完成。仍建议在预发环境做一次同样的验收 ——
+    但那已经是<strong>复核</strong>，不是发现问题的窗口。</p>
+  </div>
+
 
   <h3>测试基线的一处变化</h3>
   <p>
@@ -428,8 +524,8 @@
 <section>
   <h2><span class="num">06</span>后续建议</h2>
   <ul class="clean">
-    <li><strong>先在双实例环境复验 E1/E2</strong>：本机是单实例，分布式锁与配置同步的正确性只做到"逻辑有测试覆盖"，
-    尚未在真实双实例下观测到互斥行为。<strong>这是扩容前唯一必做的一步。</strong></li>
+    <li><strong>E1/E2 的双实例复验已完成</strong>（见 §05）。建议把这次的验收脚本固化成
+    <code>scripts/verify/</code> 下的可重跑入口，作为每次扩容前的固定关卡 —— 一次性验证会随时间失效。</li>
     <li><strong>建立压测基线</strong>：本报告的哈希数据是单机微基准。真正确认扩容收益需要一份压测基线
     （P95 延迟 / 吞吐 / 池等待），否则"修好了"仍只是推断。</li>
     <li><strong>补 CI 的 lint + test 两段</strong>：这两段不依赖 Docker，本机即可验证，能先拿到"每次提交都跑测试"的主要收益。</li>
@@ -439,16 +535,20 @@
 
   <div class="note warn">
     <span class="nt">扩容前的判定</span>
-    <p>4 个扩展阻断项的火已扑灭，但<strong>"可以加机器了"仍需要一次真实的双实例验收</strong>，
-    而不是由本报告代为宣布。本报告能证明的是：那些会让多实例行为不可预测的代码缺陷，已经不在了。</p>
+    <p>那些会让多实例行为不可预测的代码缺陷已经不在了，E1/E2 也已在真实多进程下观测到预期行为。
+    但<strong>"可以加机器了"仍然不该由本报告宣布</strong> —— 剩下两个变量报告无法覆盖：
+    <strong>①</strong> E3（遥测与 WS 广播）在多实例下仍然语义失真，扩容前需要决定是否接受；
+    <strong>②</strong> 没有压测基线，就无法用数据说明扩容到底带来多少收益。
+    <strong>建议的顺序是：补压测基线 → 决定 E3 的处置 → 再扩容。</strong></p>
   </div>
 </section>
 
 <footer>
-  <p>验证环境：Windows · Node 22.22.2 · 单实例，无 Docker、无可用 Redis。
-  因此涉及多实例与容器化的结论均标注为"未验证"。</p>
-  <p>相关提交：<code>7796844</code>（S1 / E1 / S4）、<code>d73f159</code>（E2 / E4 / B-3）。
-  版本 <code>v2.7.2</code>。完整评审见 <code>reports/backend-architecture-review-2026-09-19.html</code>。</p>
+  <p>验证环境：Windows · Node 22.22.2 · Redis 8.0.5（192.168.31.19）· MySQL（192.168.31.19）。
+  <strong>本机仍无 Docker</strong>，因此容器化相关结论标注为"未验证"；多实例相关结论已用真实多进程验证。</p>
+  <p>相关提交：<code>7796844</code>（S1 / E1 / S4）、<code>d73f159</code>（E2 / E4 / B-3）、
+  <code>07a9706</code>（K1 / K2 阻塞清理 + 双实例复验）。版本 <code>v2.7.2</code>。
+  完整评审见 <code>reports/backend-architecture-review-2026-09-19.html</code>。</p>
 </footer>
 
 </div>

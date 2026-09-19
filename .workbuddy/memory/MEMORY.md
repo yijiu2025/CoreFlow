@@ -73,6 +73,7 @@
 | `getModel(name)` 未命中 | **抛 `TypeError` 不是返回 null** → 调用点放 `try`；点号写法 `'a.B'` 与 `'B'` 等价 |
 | `getStore(prefix)` | 按 prefix 隔离命名空间，**字符串全仓逐字一致**（`user_sessions` ≠ `userSessions`）；无 Redis 时走 MapStore（**不支持 zAdd/zRangeByScore**） |
 | 密码哈希 | **绝不能用 `bcryptjs`**（纯 JS 跑主线程）：实测 10 并发冻结 **774ms**，其 **async 版同样冻结 649ms**（"异步就不阻塞"是错的）。统一走 `framework/auth/password-hash.js`（`crypto.scrypt`，libuv 线程池，冻结 **22ms**） |
+| 请求路径禁止 `*Sync(` | 同步 CPU/IO 一律换异步版。**审计手法**：`grep -E '\b\w+Sync\s*\(' src --glob '!**/__tests__/**'`，逐个判定是否在请求路径上（启动/CLI 可放行）。已修：`scrypt`(S1)、`generateKeyPairSync`→异步（keys/manager.js）、设备页 `readFileSync`→模块级路径+cache。守卫测试用"一调用就抛错"的替身锁死（见 §3） |
 | `underscored: true` | 属性名是 `createdAt`；写 `attributes: ['created_at']` 会被**静默丢弃** → `Invalid Date` |
 | 模块级 `process.exit` | 会伪装成绿色（jest 用例总数每次不同而汇总恒 0 失败）→ 修法 `!isTestEnv` |
 | 改完导出面 | 必须真实 `import` 一次上层入口（ESM 链接期抛错）；**并同步所有 `unstable_mockModule` 替身** |
@@ -118,6 +119,23 @@
   最大间隔** —— 阻塞多久空隙就是多久，无法取巧。
   ⚠️ **不要用 `monitorEventLoopDelay`**：它按固定 resolution 采样，实测把 `bcrypt.hashSync` 造成的
   **774ms 冻结报成 17ms**（漏采一次性长阻塞）。据此会得出"没问题"的相反结论。
+  ⚠️ **噪声下限 ≈20ms**：无阻塞的异步实现也测到 19~25ms，所以**低于该量级的"差异"不要当结论**。
+- **"同步调用必须换成异步"的守卫写法**：用 `jest.unstable_mockModule` 把 `crypto`/`fs` 的
+  **同步方法替换成「一调用就抛错」**，其余成员 spread 真身。改回同步实现 → 立刻变红。
+  **必须做毒丸复验**：只断言"返回 Promise"/"能跑通"是假绿的（实现退化成同步也照样通过）。
+  ⚠️ 毒丸要写成**语法合法**的版本，否则整个 suite 加载失败 → `Tests: 0 total`，
+  那是"加载失败"不是"断言失败"，不算有效证据。
+- ⚠️ **`cmd | tail` 之后的 `$?` 是 `tail` 的退出码，不是 `cmd` 的** —— 本会话据此误读过多次
+  "成功"。要真实退出码：重定向到文件再单独读 `$?`，或 `set -o pipefail`。
+- ⚠️ **git-bash 的 `/dev/tcp` 在 Windows 上给假阴性**：对**真实可连通**的 Redis 报"不可连接"
+  （MSYS 不支持该重定向）。判连通性一律用 `node:net` 真实 connect（顺带能发 PING 验证对面是 Redis）。
+- **CLI 脚本引导顺序**（`scripts/sync-guard-config.js` 是范式）：`await loadAllModels()` 之后
+  `getModel('X')` 才可用，否则抛「模型不存在」。
+  ⚠️ 两个会**静默**吃掉问题的坑：`framework/db/index.js` 在非测试环境缺 DB 配置会**直接退进程**；
+  `loadGuardConfig()` 会**吞掉**模型不存在/DB 不可用的错误并退回代码级配置 ——
+  表现为"看起来正常启动，实际同步永远失败"。
+  ⚠️ 另：`loadGuardConfig()` 末尾会把内存配置**写回 DB**，用**部分结构**的夹具调它 =
+  用最小结构覆盖线上完整配置（与防火墙 DAO 的 `initDao()` 坑同源）。
 - **"修复有效"要给反例对照**：同时跑一条不做修复的同场景用例（只证明"现在能过"不算数）。
 - ⚠️ **同一条消息里对同一文件发多个 Edit 会静默丢失**（工具仍报成功）→ 同文件多处改动必须串行或合并。
 - **结构性断言要自带反例**："无环/无违规"不能来自可能写坏的检测器。
