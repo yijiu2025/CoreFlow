@@ -113,6 +113,12 @@ reflog 正常追加，但松散 ref 不落地（`GIT_TRACE_REFS` 显示旧值读
 "守卫配置持久化到 `data/guard_config.json`"，实际已迁 **DB**（`GuardConfigDao.loadFromDB()`）
 → 文档在**主动教人改废弃文件**。
 
+另：`npm run docs:build` 因 **10 条历史死链**长期失败（全部指向 docs **之外**的源码/根文档，
+vitepress 只能解析 docs 内路由）—— **文档站此前从未构建成功过**。2026-09-19 在 `config.ts` 用
+**按前缀精确的** `ignoreDeadLinks`（`./{,../}(AGENTS|oauth21|posecraft|packages)`）放行后首次构建成功。
+⚠️ 不要写成 `ignoreDeadLinks: true` 一刀切：同一轮里正是死链检查拦下了我写错的报告链接
+（漏了文件名日期后缀）。**长期亮红灯的检查等于没有检查。**
+
 **另一处陷阱**：根 `data/` 是 7 月遗留（428KB 死文件），生效文件在 **`src/data/`**
 （`app/firewall/config/config.js:18` 的 `../../../data/` 从 `src/app/firewall/config/` 上溯三层 = `src/`，
 不是仓库根 —— 算路径时别数错）。
