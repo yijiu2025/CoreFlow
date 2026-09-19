@@ -47,7 +47,8 @@ export default defineConfig({
           { text: '请求处理流水线', link: '/core/request-pipeline' },
           { text: '认证系统', link: '/core/auth' },
           { text: '权限系统 (PBAC)', link: '/core/permission' },
-          { text: '三级守卫', link: '/core/guard' }
+          { text: '三级守卫', link: '/core/guard' },
+          { text: '架构评估（扩展性/稳定性）', link: '/core/architecture-review-2026-09-19' }
         ]
       },
       {
