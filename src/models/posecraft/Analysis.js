@@ -56,7 +56,7 @@ const defineAnalysis = (sequelize, DataTypes) => {
       tableName: 'posecraft_analysis',
       timestamps: true,
       indexes: [
-        { fields: ['user_id'], name: 'idx_analysis_user' },
+        { fields: ['user_id', 'created_at'], name: 'idx_analysis_user_created' },
         { fields: ['analysis_type'], name: 'idx_analysis_type' },
         { fields: ['created_at'], name: 'idx_analysis_created' }
       ],

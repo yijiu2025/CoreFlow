@@ -16,6 +16,26 @@ import { createLogger } from '../../../../framework/log/index.js';
 const log = createLogger('app.firewall.engine.detectors.first-ratelimit');
 
 /**
+ * 解析生效的限流阈值（配置值 + 环境变量旁路取较大者）
+ *
+ * `FW_RATE_LIMIT_OVERRIDE` 是**纯放宽**旁路：压测基线需要绕开持久化限流
+ * （三个压测场景共用 127.0.0.1，默认 100/60s 的持久化限流会把压测打成 429），
+ * 但绝不能让它变成收紧旁路 —— 所以只取 max(base, override)，且 override
+ * 必须是严格正整数（0 / 负数 / 非数字 / 空串一律忽略，退回配置值）。
+ *
+ * @param {number|undefined} rateLimitRequests 安全设置里的 rateLimitRequests
+ * @returns {number} 生效的 max
+ */
+function resolveRateLimitMax(rateLimitRequests) {
+  const base = rateLimitRequests || 300;
+  const override = Number.parseInt(process.env.FW_RATE_LIMIT_OVERRIDE, 10);
+  if (Number.isInteger(override) && override > 0) {
+    return Math.max(base, override);
+  }
+  return base;
+}
+
+/**
  * 注册速率限制插件
  * enableRateLimit 为 false 时跳过注册，不消耗任何资源。
  *
@@ -42,7 +62,7 @@ async function registerRateLimit(app) {
         return `rate:ip:${req.ip}`;
       },
 
-      max: () => getSecuritySettings().defense.rateLimitRequests || 300,
+      max: () => resolveRateLimitMax(getSecuritySettings().defense.rateLimitRequests),
       timeWindow: () => (getSecuritySettings().defense.rateLimitWindow || 60) * 1000,
 
       errorResponseBuilder: (request, context) => {
@@ -77,4 +97,4 @@ async function registerRateLimit(app) {
   }
 }
 
-export { registerRateLimit };
+export { registerRateLimit, resolveRateLimitMax };

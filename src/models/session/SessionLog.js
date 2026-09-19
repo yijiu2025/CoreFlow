@@ -65,6 +65,11 @@ const defineSessionLog = (sequelize, DataTypes) => {
           fields: ['user_id', 'event', 'created_at'],
           name: 'idx_session_log_audit',
           comment: '高频场景：根据用户、事件和时间段检索审计日志'
+        },
+        {
+          fields: ['event', 'created_at'],
+          name: 'idx_session_log_event_created',
+          comment: '高频场景：按事件等值 + 时间范围统计（登录失败计数 / 登录趋势），与迁移 20260919000001 对应'
         }
       ],
       comment: '系统会话/审计日志表 (支持按月物理分区)'

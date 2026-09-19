@@ -25,6 +25,7 @@ import { ApiException } from './shared/exceptions.js';
 import { configureLog, createLogger, initLogErrorTraps } from './framework/log/index.js';
 import { createWsPreClose, DEFAULT_WS_SHUTDOWN_GRACE_MS } from './framework/websocket/preclose.js';
 import { validateEnv } from './framework/config/env.js';
+import { closePubSub } from './framework/redis/index.js';
 
 // ════════════════════════════════════════════════════════════════════
 // 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
@@ -384,6 +385,13 @@ async function createApp() {
     } catch (err) {
       // Fastify onClose 不暴露异步错误，必须在此捕获防止静默丢失
       log.error(`❌ [App] 优雅关闭时保存守卫配置失败`, err);
+    }
+
+    // 关闭 Redis Pub/Sub 派生的订阅连接：不显式 quit 进程无法自然退出
+    try {
+      await closePubSub();
+    } catch (err) {
+      log.error(`❌ [App] 优雅关闭时关闭 Pub/Sub 失败`, err);
     }
   });
 

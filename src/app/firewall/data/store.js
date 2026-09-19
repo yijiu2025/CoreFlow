@@ -4,13 +4,22 @@
  *
  * 使用环形缓冲区存储最近的访问记录，固定内存占用，O(1) 写入。
  *
+ * 跨实例汇聚（E3b）：单实例的统计只在内存里，多实例部署时每个实例只看到
+ * 自己的流量。本模块在本地同步累加的同时维护一份「未刷写增量」，周期性
+ * 批量写入 Redis（`util/redis.js` 的 `flushStatsDelta`，MULTI 一次往返）；
+ * 读取侧 `getSummaryAggregated` / `getRecentRecordsAggregated` 用
+ * 「Redis 全量 + 本实例未刷写增量」合并出全局视图。Redis 不可用时全部
+ * 退回本实例视图，功能降级不报错。
+ *
  * @author yijiu2025
  * @since 2026-08-17
+ * @since 2026-09-19 新增跨实例统计汇聚（增量刷写 + 聚合读取）
  */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createLogger } from '../../../framework/log/index.js';
+import { flushStatsDelta, readAggregatedStats, resetAggregatedStats, redisAvailable } from '../util/redis.js';
 
 const log = createLogger('app.firewall.data.store');
 
@@ -25,6 +34,9 @@ const __dirname = path.dirname(__filename);
 const DATA_FILE = process.env.FW_TRAFFIC_STATS_FILE || path.join(__dirname, '../../../data/traffic_stats.json');
 
 const MAX_RECORDS = 1000; // 环形缓冲区容量（前端最多显示 100 条，1000 足够）
+
+/** Redis 增量刷写周期（ms）。太短会把周期刷写变成压测，太长聚合视图滞后明显 */
+const STATS_FLUSH_INTERVAL = 3000;
 
 /**
  * 环形缓冲区
@@ -74,6 +86,155 @@ const pathStats = new Map();
 const ipStats = new Map();
 
 let broadcastHandler = null;
+
+// ============== 跨实例统计汇聚（Redis 增量） ==============
+
+/**
+ * 本实例「尚未刷写到 Redis」的统计增量
+ *
+ * 只有 Redis 可用时才会累加（`pushRecord` 里以 `redisAvailable()` 门控），
+ * 聚合读取 = Redis 全量 + 这份增量；刷写成功后即清空。刷写失败时原样
+ * 放回，下个周期重试 —— 保证增量不丢、也不重复计。
+ */
+const pendingDelta = {
+  requests: 0,
+  blocked: 0,
+  regions: new Map(),
+  /** key = apiIdentifier（apiKey 或路径基名），value = { path, count, apiName } */
+  paths: new Map(),
+  ips: new Map(),
+  /** 按时间正序追加 */
+  records: []
+};
+
+let statsFlushTimer = null;
+let statsFlushing = false;
+
+function hasPendingStats() {
+  return (
+    pendingDelta.requests > 0 ||
+    pendingDelta.blocked > 0 ||
+    pendingDelta.regions.size > 0 ||
+    pendingDelta.paths.size > 0 ||
+    pendingDelta.ips.size > 0 ||
+    pendingDelta.records.length > 0
+  );
+}
+
+function clearPendingDelta() {
+  pendingDelta.requests = 0;
+  pendingDelta.blocked = 0;
+  pendingDelta.regions.clear();
+  pendingDelta.paths.clear();
+  pendingDelta.ips.clear();
+  pendingDelta.records.length = 0;
+}
+
+/** 取走当前增量（刷写前快照），失败时用 `restoreDelta` 放回 */
+function takeDelta() {
+  const delta = {
+    requests: pendingDelta.requests,
+    blocked: pendingDelta.blocked,
+    regions: new Map(pendingDelta.regions),
+    paths: new Map(pendingDelta.paths),
+    ips: new Map(pendingDelta.ips),
+    records: [...pendingDelta.records]
+  };
+  clearPendingDelta();
+  return delta;
+}
+
+function restoreDelta(delta) {
+  pendingDelta.requests += delta.requests;
+  pendingDelta.blocked += delta.blocked;
+  for (const [k, v] of delta.regions) pendingDelta.regions.set(k, (pendingDelta.regions.get(k) || 0) + v);
+  for (const [k, stat] of delta.paths) {
+    const cur = pendingDelta.paths.get(k) || { path: stat.path, count: 0, apiName: stat.apiName };
+    cur.count += stat.count;
+    if (!cur.apiName && stat.apiName) cur.apiName = stat.apiName;
+    pendingDelta.paths.set(k, cur);
+  }
+  for (const [k, v] of delta.ips) pendingDelta.ips.set(k, (pendingDelta.ips.get(k) || 0) + v);
+  pendingDelta.records.unshift(...delta.records);
+}
+
+/**
+ * 把一条记录累加进未刷写增量（调用方已确认 Redis 可用）
+ * @param {object} record 访问记录
+ * @param {string} pathBase 去掉查询串的路径
+ */
+function trackDelta(record, pathBase) {
+  pendingDelta.requests++;
+  if (record.blocked) pendingDelta.blocked++;
+
+  const regionKey = `${record.region || '未知'}-${record.city || '未知'}`;
+  pendingDelta.regions.set(regionKey, (pendingDelta.regions.get(regionKey) || 0) + 1);
+
+  // 与本地统计同键：优先 apiKey，其次已在 pathStats 里登记过 apiName 的路径键，
+  // 否则用路径基名 —— 保证本地视图与聚合视图对同一路径落在同一个 hash field 上
+  let apiIdentifier = record.apiKey || pathBase;
+  if (!record.apiKey) {
+    for (const [key, stat] of pathStats.entries()) {
+      if (stat.path === pathBase && stat.apiName) {
+        apiIdentifier = key;
+        break;
+      }
+    }
+  }
+  const pStat = pendingDelta.paths.get(apiIdentifier) || {
+    path: pathBase,
+    count: 0,
+    apiName: record.apiKey || null
+  };
+  pStat.count++;
+  if (!pStat.apiName && record.apiKey) pStat.apiName = record.apiName || record.apiKey;
+  pendingDelta.paths.set(apiIdentifier, pStat);
+
+  if (record.ip) {
+    pendingDelta.ips.set(record.ip, (pendingDelta.ips.get(record.ip) || 0) + 1);
+  }
+
+  pendingDelta.records.push(record);
+}
+
+/**
+ * 把未刷写增量批量写入 Redis（失败原样放回，下个周期重试）
+ * @returns {Promise<void>}
+ */
+async function flushPendingStats() {
+  if (statsFlushing) return;
+  statsFlushing = true;
+  try {
+    while (hasPendingStats()) {
+      const delta = takeDelta();
+      const ok = await flushStatsDelta(delta);
+      if (!ok) {
+        restoreDelta(delta);
+        break;
+      }
+    }
+  } finally {
+    statsFlushing = false;
+  }
+}
+
+function scheduleStatsFlush() {
+  if (statsFlushTimer) return;
+  statsFlushTimer = setTimeout(() => {
+    statsFlushTimer = null;
+    flushPendingStats().catch(err => {
+      log.error('[Firewall Store] 统计增量刷写 Redis 失败:', err);
+    });
+  }, STATS_FLUSH_INTERVAL);
+}
+
+/** 停止统计刷写计时器（关闭流程用；未刷写增量由 flushPendingStats 兜底） */
+function stopStatsFlushTimer() {
+  if (statsFlushTimer) {
+    clearTimeout(statsFlushTimer);
+    statsFlushTimer = null;
+  }
+}
 
 // ============== 持久化 ==============
 
@@ -179,11 +340,21 @@ function stopPersistTimer() {
  * 全零（`src/data/traffic_stats.json` 是被 git 跟踪的文件，无意义写入会留下脏改动）。
  * 写盘失败只记日志：关闭流程不能被遥测写盘拖住。
  *
+ * 同时把未刷写的 Redis 增量冲一次：滚动发布时新实例能立刻看到旧实例的尾部统计。
+ *
  * @returns {Promise<void>}
  */
 async function flushPersist() {
   const hasPendingChanges = saveTimer !== null;
   stopPersistTimer();
+  stopStatsFlushTimer();
+
+  try {
+    await flushPendingStats();
+  } catch (err) {
+    log.error('[Firewall Store] 关闭前刷写 Redis 增量失败:', err);
+  }
+
   if (!hasPendingChanges) return;
 
   try {
@@ -208,7 +379,7 @@ function setBroadcastHandler(handler) {
 
 /**
  * 记录新的访问请求
- * @param {Object} record
+ * @param {object} record
  */
 function pushRecord(record) {
   records.push(record);
@@ -272,11 +443,17 @@ function pushRecord(record) {
 
   if (record.blocked) totalBlocked++;
 
+  // 跨实例汇聚：只在 Redis 可用时维护增量（聚合是 Redis 增强能力）
+  if (redisAvailable()) {
+    trackDelta(record, pathBase);
+    scheduleStatsFlush();
+  }
+
   persistData();
 }
 
 /**
- * 获取最近 N 条记录
+ * 获取最近 N 条记录（本实例视图）
  * @param {number} limit
  * @returns {Array}
  */
@@ -285,7 +462,7 @@ function getRecentRecords(limit = 100) {
 }
 
 /**
- * 获取统计摘要
+ * 获取统计摘要（本实例视图）
  * @returns {Object}
  */
 function getSummary() {
@@ -320,15 +497,119 @@ function getSummary() {
 }
 
 /**
- * 清空所有数据
+ * 合并 Redis 全量与本实例未刷写增量
+ *
+ * 键对齐：Redis 侧 paths 的 key 是 hash 的原始 field（apiIdentifier），
+ * 增量侧用同一套键规则累加（见 `trackDelta`），同一路径不会算成两条。
+ *
+ * @param {object} remote `readAggregatedStats` 的返回
+ * @param {object} pending 未刷写增量（即 `pendingDelta` 的形状）
+ * @returns {{totals: object, regions: Map, ips: Map, paths: Map}}
  */
-function clearAll() {
+function mergeAggregated(remote, pending) {
+  const totals = {
+    requests: (remote.totals?.requests || 0) + (pending.requests || 0),
+    blocked: (remote.totals?.blocked || 0) + (pending.blocked || 0)
+  };
+
+  const regions = new Map((remote.regions || []).map(r => [r.region, r.count]));
+  for (const [k, v] of pending.regions) regions.set(k, (regions.get(k) || 0) + v);
+
+  const ips = new Map((remote.ips || []).map(r => [r.ip, r.count]));
+  for (const [k, v] of pending.ips) ips.set(k, (ips.get(k) || 0) + v);
+
+  const paths = new Map(
+    (remote.paths || []).map(p => [p.key, { path: p.path, count: p.count, apiName: p.apiName }])
+  );
+  for (const [k, stat] of pending.paths) {
+    const cur = paths.get(k) || { path: stat.path, count: 0, apiName: stat.apiName };
+    cur.count += stat.count;
+    if (!cur.apiName && stat.apiName) cur.apiName = stat.apiName;
+    paths.set(k, cur);
+  }
+
+  return { totals, regions, ips, paths };
+}
+
+/**
+ * 获取跨实例聚合的统计摘要
+ *
+ * Redis 不可用或读取失败时退回本实例视图（降级不报错）。
+ *
+ * @returns {Promise<Object>}
+ */
+async function getSummaryAggregated() {
+  const local = getSummary();
+  if (!redisAvailable()) return local;
+
+  const remote = await readAggregatedStats({ recordLimit: 0 });
+  if (!remote) return local;
+
+  const merged = mergeAggregated(remote, pendingDelta);
+
+  const topRegions = [...merged.regions.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)
+    .map(([region, count]) => ({ region, count }));
+
+  const topPaths = [...merged.paths.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 20)
+    .map(([, stat]) => ({ path: stat.path, count: stat.count, apiName: stat.apiName }));
+
+  const topIps = [...merged.ips.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)
+    .map(([ip, count]) => ({ ip, count }));
+
+  return {
+    totalRequests: merged.totals.requests,
+    totalBlocked: merged.totals.blocked,
+    bufferedCount: records.length,
+    bufferCapacity: MAX_RECORDS,
+    topRegions,
+    topPaths,
+    topIps
+  };
+}
+
+/**
+ * 获取跨实例聚合的最近记录
+ *
+ * 未刷写增量（pendingDelta.records，时间正序）比 Redis 里已刷写的都新，
+ * 反转后拼在前面即全局「最新优先」。Redis 不可用时退回本实例视图。
+ *
+ * @param {number} limit
+ * @returns {Promise<Array>}
+ */
+async function getRecentRecordsAggregated(limit = 100) {
+  if (!redisAvailable()) return getRecentRecords(limit);
+
+  const remote = await readAggregatedStats({ recordLimit: limit });
+  if (!remote) return getRecentRecords(limit);
+
+  const pendingNewestFirst = [...pendingDelta.records].reverse();
+  return [...pendingNewestFirst, ...remote.records].slice(0, limit);
+}
+
+/**
+ * 清空所有数据（本地 + Redis 汇聚）
+ */
+async function clearAll() {
   records.clear();
   regionStats.clear();
   pathStats.clear();
   ipStats.clear();
   totalRequests = 0;
   totalBlocked = 0;
+  clearPendingDelta();
+
+  // 清 Redis 聚合键：失败只记日志（可能是单实例降级场景，本地已清干净）
+  try {
+    await resetAggregatedStats();
+  } catch (err) {
+    log.error('[Firewall Store] 清空 Redis 聚合统计失败:', err);
+  }
 
   const data = {
     records: [],
@@ -348,6 +629,8 @@ export {
   pushRecord,
   getRecentRecords,
   getSummary,
+  getSummaryAggregated,
+  getRecentRecordsAggregated,
   clearAll,
   stopPersistTimer,
   flushPersist,

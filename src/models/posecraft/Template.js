@@ -153,7 +153,7 @@ const defineTemplate = (sequelize, DataTypes) => {
       indexes: [
         { fields: ['user_id'], name: 'idx_template_user' },
         { fields: ['category'], name: 'idx_template_category' },
-        { fields: ['status'], name: 'idx_template_status' },
+        { fields: ['status', 'created_at'], name: 'idx_template_status_created' },
         { fields: ['work_id'], name: 'idx_template_work' }
       ],
       comment: 'PoseCraft 模板表'

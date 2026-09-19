@@ -157,9 +157,9 @@ const defineWork = (sequelize, DataTypes) => {
       timestamps: true,
       paranoid: true,
       indexes: [
-        { fields: ['user_id'], name: 'idx_work_user' },
+        { fields: ['user_id', 'created_at'], name: 'idx_work_user_created' },
         { fields: ['template_id'], name: 'idx_work_template' },
-        { fields: ['status'], name: 'idx_work_status' },
+        { fields: ['status', 'created_at'], name: 'idx_work_status_created' },
         { fields: ['created_at'], name: 'idx_work_created' },
         { fields: ['is_template_work'], name: 'idx_work_is_template' }
       ],
