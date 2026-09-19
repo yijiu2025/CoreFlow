@@ -23,6 +23,8 @@ const ENV_FILE = process.env.VERIFY_ENV_FILE || '.env';
 /** 关卡清单：顺序即输出顺序。先跑不写库的，把风险高的放后面。 */
 const GATES = [
   { name: 'E1 跨进程互斥（调度器锁）', file: 'lock-mutex.mjs' },
+  { name: 'E3 跨实例 WS 广播', file: 'ws-fanout.mjs' },
+  { name: 'E3 遥测统计跨实例汇聚', file: 'stats-aggregation.mjs' },
   { name: 'E2 守卫配置跨实例同步', file: 'guard-sync.mjs' }
 ];
 

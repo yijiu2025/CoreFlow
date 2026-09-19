@@ -1,0 +1,92 @@
+{
+  "meta": {
+    "generatedAt": "2026-09-19T14:55:11.362Z",
+    "quickMode": false,
+    "node": "v22.22.2",
+    "platform": "win32 10.0.26200",
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13400F × 16",
+    "port": 3177,
+    "rateLimitOverridden": "FW_RATE_LIMIT_OVERRIDE=1000000",
+    "notes": "事件循环冻结分两段留档：boot 为模块加载/模型同步阶段（不代表请求路径），load 为就绪后的压测期。Fastify logger 固定 level=info（dev 模式 pino-pretty），其成本计入管线地板，前后对比口径一致。"
+  },
+  "eventLoop": {
+    "maxGapMs": 32.8,
+    "avgGapMs": 11.92,
+    "samples": 2594,
+    "phase": "load"
+  },
+  "eventLoopBoot": {
+    "maxGapMs": 1237.4,
+    "avgGapMs": 60.45,
+    "samples": 37,
+    "phase": "boot"
+  },
+  "scenarios": [
+    {
+      "scenario": "S1-live",
+      "method": "GET",
+      "url": "/v1/health/live",
+      "concurrency": 50,
+      "durationSec": 8,
+      "requests": 13002,
+      "rps": 1620,
+      "completed": 13002,
+      "serverErrors": 0,
+      "connectionErrors": 0,
+      "statusCodes": {
+        "200": 13002
+      },
+      "latencyMs": {
+        "p50": 29.8,
+        "p90": 40.5,
+        "p95": 43.7,
+        "p99": 54.1,
+        "max": 119.8
+      }
+    },
+    {
+      "scenario": "S2-ready",
+      "method": "GET",
+      "url": "/v1/health/ready",
+      "concurrency": 20,
+      "durationSec": 8,
+      "requests": 4958,
+      "rps": 619,
+      "completed": 4958,
+      "serverErrors": 0,
+      "connectionErrors": 0,
+      "statusCodes": {
+        "200": 4958
+      },
+      "latencyMs": {
+        "p50": 31.5,
+        "p90": 39.9,
+        "p95": 42.3,
+        "p99": 50.1,
+        "max": 89.4
+      }
+    },
+    {
+      "scenario": "S3-challenge",
+      "method": "POST",
+      "url": "/api/firewall/v1/challenge/verify",
+      "concurrency": 20,
+      "durationSec": 8,
+      "requests": 6114,
+      "rps": 762,
+      "completed": 6114,
+      "serverErrors": 0,
+      "connectionErrors": 0,
+      "statusCodes": {
+        "403": 6114
+      },
+      "latencyMs": {
+        "p50": 25.3,
+        "p90": 31.1,
+        "p95": 34.1,
+        "p99": 39.5,
+        "max": 97.8
+      }
+    }
+  ]
+}

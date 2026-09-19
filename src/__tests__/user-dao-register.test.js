@@ -41,7 +41,7 @@ jest.unstable_mockModule('../framework/db/index.js', () => ({
   getModel: name => models[name]
 }));
 
-jest.unstable_mockModule('../app/oauth21/crypto/encryption.js', () => ({
+jest.unstable_mockModule('../framework/keys/encryption.js', () => ({
   decrypt: async () => 'Passw0rdOk'
 }));
 
