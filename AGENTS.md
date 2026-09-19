@@ -17,32 +17,45 @@ npm test             # Jest 测试 (ESM 模式)
 
 ## Git 提交与发版
 
-提交并推送后，**按情况顺手发版，不必每次询问**。
-
-**判据**（看本次推送包含哪些提交：`git log <最新tag>..HEAD --oneline`）
-
-| 提交类型                     | 是否发版 | 版本递增（以最新 tag 为基线）      |
-| ---------------------------- | -------- | ---------------------------------- |
-| 含 `feat`                    | 发       | minor：`v2.5.0` → `v2.6.0`        |
-| 仅 `fix` / `perf`            | 发       | patch：`v2.5.0` → `v2.5.1`        |
-| 破坏性变更（`!:` / `BREAKING CHANGE:`） | 发 | major                              |
-| 仅 `chore` `docs` `test` `style` `ci` `refactor` | **不发** | —                |
-
-**发版动作**
+提交并推送后，**按情况顺手发布，不必每次询问**。三条通道（git tag / GitHub Release / npm）的判断
+与执行已固化成脚本，**默认只预览、不写任何东西**：
 
 ```bash
-git log $(git describe --tags --abbrev=0)..HEAD --oneline   # 先核对待发内容
-git tag -a v2.6.0 -m "v2.6.0: <一句话主题>"
-git push origin v2.6.0
-git ls-remote --tags origin                                  # 必须验证
+node scripts/release.mjs                        # 预览三条通道各自的决策
+node scripts/release.mjs --apply                # 执行
+node scripts/release.mjs --from v2.5.0          # 指定起算点（复盘/补发用，默认取最近 tag）
+node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改动时放行
 ```
 
-**四条边界**
+决策逻辑在 `src/framework/release/index.js`（有独立测试覆盖），脚本本身只做宿主职责。
 
-- **只推 git tag，不创建 GitHub Release 页面**（本机无 `gh` CLI、无 `GITHUB_TOKEN`、无 `.github/`）。GitHub 会自动把 tag 列在 Tags / Releases 区，效果已足够。
-- tag 推送复用同一通道，同样可能极慢或零输出 → 判定一律用 `git ls-remote --tags origin`，**不信退出码**；超时不等于失败，重试是安全的。（实测：`main` push 曾 5m27s 零输出；`git push origin main v2.6.0` 25s 完成）
-- **版本源是 git tag，不是 `package.json`** —— 后者只跟随 tag 单向同步，**不要反过来拿它的 `version` 推版本号**（它曾长期停留在 `1.0.0`，与 tag 体系脱节）。每次发版顺手把它改到新 tag。
-- `packages/log/` 是独立嵌套仓库（`yijiu2025/log.git`），它的发版走 `npm publish` 流程，**不适用**本规则。
+**判据**（按本次推送包含的提交类型）
+
+| 提交类型                                          | 是否发布 | 版本递增（以最新 tag 为基线） |
+| ------------------------------------------------- | -------- | ----------------------------- |
+| 破坏性变更（`!:` 或 footer 形式的 BREAKING CHANGE） | 发       | major                         |
+| 含 `feat`                                         | 发       | minor：`v2.5.0` → `v2.6.0`    |
+| 仅 `fix` / `perf`                                 | 发       | patch：`v2.5.0` → `v2.5.1`    |
+| 仅 `chore` `docs` `test` `style` `ci` `refactor`  | **不发** | —                             |
+
+> 破坏性变更**只认 footer 形式**（行首且带冒号）。不可退化成子串匹配 —— commit 正文里"提到"
+> 这个关键词（例如写本条规则自身）会让 minor 被误升成 major，这在真实仓库上发生过。
+
+**三条通道各自按情况发布**
+
+| 通道               | 何时发                              | 要点                                                                                     |
+| ------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| git tag            | 判定发版即打                        | annotated tag，随 `main` 一起推                                                          |
+| GitHub Release     | 与 tag 一一对应                     | 调 REST API 创建，说明按提交类型分中文组自动生成。凭据取自 **git credential manager**，本机无 `gh` CLI 也能用 |
+| npm（`packages/log`） | 该包本地 `version` 已 bump 到高于线上 | 独立嵌套仓库，走 `npm publish --access public`                                           |
+
+**几条边界**
+
+- **版本源是 git tag**，`package.json` 单向跟随 —— **不要反过来拿它的 `version` 推版本号**。每次发版顺手对齐。
+- tag 推送同样可能极慢或零输出 → 判定一律用 `git ls-remote --tags origin`，**不信退出码**；超时不等于失败，重试是安全的。（实测：`main` push 曾 5m27s 零输出；`git push origin main v2.6.0` 25s 完成）
+- 脚本 push 后会自动调 `~/.workbuddy/tools/fix-packed-refs.mjs` 同步本机 ref —— 本机 git 不写松散 ref，不修则 `git status` 长期谎报 ahead。
+- **Release 说明对公网可见**：脚本会列出标题含敏感表述（漏洞 / 密钥 / token 等）的提交，发之前先确认是否适合原文外发。
+- `packages/log/` 是独立嵌套仓库（`yijiu2025/log.git`），它的改动要去那个仓库提交。
 
 ## 技术栈
 

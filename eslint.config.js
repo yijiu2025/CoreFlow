@@ -61,6 +61,18 @@ export default [
     }
   },
 
+  // 2.1 ESLint flat config 的 `**/*.js` 不匹配 `.mjs`，ESM 脚本因此拿不到 Node globals，
+  //     process / fetch 等一律报 no-undef。此处单独补齐（仅补 globals，不扩大规则面）。
+  {
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        fetch: 'readonly' // Node 18+ 全局，部分 globals 版本未收录
+      }
+    }
+  },
+
   // 5. 后端代码强制统一日志出口：禁止 console.*，一律走 src/framework/log
   {
     files: ['index.js', 'src/**/*.js', 'migrations/**/*.js', 'scripts/**/*.js', '*.mjs'],
