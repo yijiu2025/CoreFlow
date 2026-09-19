@@ -29,7 +29,9 @@
 **只有 `chore`/`docs`/`test`/`style`/`ci`/`refactor` → 不发**。
 - **版本源是 git tag，不是 `package.json`**（其 `version` 长期是 `1.0.0`，与 `v2.5.0` 脱节）→ 发版时顺手对齐 package.json。
 - **只推 tag，不建 GitHub Release 页面**（本机无 `gh` CLI、无 `GITHUB_TOKEN`、无 `.github/`）。
-- tag 推送同样**极慢且零输出** → 一律用 `git ls-remote --tags origin` 判定，**不信退出码**。
+- tag 推送复用同一通道，**极慢/零输出是可能的而非必然** → 一律用 `git ls-remote --tags origin` 判定。
+  ✅ 实测（2026-09-19 `v2.6.0`）：`git push origin main v2.6.0`（合并成一条）**25s 完成且输出完整**；
+  tag 推的是**远端新建 ref**，不涉及 `refs/remotes/origin/main`，**不受本机 ref 失灵影响**。
 - `packages/log/` 是独立仓库，发版走 `npm publish`，**不适用**本规则。
 
 ---
