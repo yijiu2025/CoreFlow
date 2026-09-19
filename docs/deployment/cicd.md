@@ -8,7 +8,7 @@
 > eslint --fix 与 prettier）。也就是说：**没有 lint/测试的强制门禁**，
 > 全量测试只靠开发者本地自觉执行。
 >
-> 背景见 [`架构评估报告`](/core/architecture-review) 阶段 1。
+> 背景见 [`架构评估报告`](/core/architecture-review-2026-09-19) 阶段 1。
 
 ## GitHub Actions
 

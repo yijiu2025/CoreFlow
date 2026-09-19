@@ -9,7 +9,7 @@
 > - 与之配套的 Docker 制品（`Dockerfile` / `docker-compose.yml`）同样不存在（见 `docs/roadmap/index.md` 1.4）。
 >
 > **请勿据此规划部署。** 落地的前置条件是先解除
-> [`架构评估报告`](/core/architecture-review) 阶段 2 列出的横向扩展阻断项
+> [`架构评估报告`](/core/architecture-review-2026-09-19) 阶段 2 列出的横向扩展阻断项
 > （遥测进程内状态、调度器无分布式锁、守卫配置模块级单例）。
 >
 > 本页保留作**设计参考**，不代表现状。
