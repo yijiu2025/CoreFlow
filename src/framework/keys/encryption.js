@@ -11,7 +11,7 @@
  * @since 2026-07-13
  */
 import crypto from 'node:crypto';
-import { getPrivateKey, getPublicKey } from '../../../framework/keys/index.js';
+import { getPrivateKey, getPublicKey } from './index.js';
 
 const ENCRYPT_ALGO = 'RSA-OAEP';
 const HASH = 'sha256';
