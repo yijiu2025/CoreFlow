@@ -18,10 +18,15 @@
  * @since 2026-09-19
  */
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import globalsLoader from '../../framework/loader/registry/00-globals.js';
 import registerHealthRoutes from '../../api/system/v1/health.js';
+import { runEngine } from '../../framework/loader/engine.js';
 import { shouldSkipDeepCheck, PROBE_PATHS } from '../../app/firewall/engine/pipeline.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('fastify').FastifyInstance} */
 let app;
@@ -131,6 +136,29 @@ describe('健康探针分级', () => {
 
     app.redisHealthy = true;
     expect((await probe('/v1/health/ready?probe=kube')).statusCode).toBe(200);
+  });
+
+  it('/health/ready 暴露加载器明细；无降级时 status 为 ok', async () => {
+    const res = await probe('/v1/health/ready');
+    const body = res.json();
+
+    expect(res.statusCode).toBe(200);
+    expect(body.data.status).toBe('ok');
+    expect(body.data.loaders).toMatchObject({ failed: 0, completed: false, errors: [] });
+  });
+
+  it('可降级加载器失败：仍 200（不摘流），但 status 记为 degraded 并列出文件', async () => {
+    // 真实跑一遍引擎，让进程级摘要进入"有降级失败"的状态
+    await runEngine({}, { registryDir: path.resolve(__dirname, '../__fixtures__/loader-ok') });
+
+    const res = await probe('/v1/health/ready');
+    const body = res.json();
+
+    // 关键点：加载器降级不等于不可服务，不该让编排系统摘掉这个实例
+    expect(res.statusCode).toBe(200);
+    expect(body.data.status).toBe('degraded');
+    expect(body.data.loaders.failed).toBe(1);
+    expect(body.data.loaders.errors[0].file).toBe('01-monitor.js');
   });
 });
 
