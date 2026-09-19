@@ -28,9 +28,14 @@ const log = createLogger('app.firewall.engine.detectors.first-ratelimit');
  */
 function resolveRateLimitMax(rateLimitRequests) {
   const base = rateLimitRequests || 300;
-  const override = Number.parseInt(process.env.FW_RATE_LIMIT_OVERRIDE, 10);
-  if (Number.isInteger(override) && override > 0) {
-    return Math.max(base, override);
+  const raw = process.env.FW_RATE_LIMIT_OVERRIDE;
+  if (raw !== undefined && String(raw).trim() !== '') {
+    // Number 而非 parseInt：'10.5' / '12abc' 这类输入必须被拒收，
+    // 静默截断会让「看起来配了 10.5」实际生效成 10
+    const override = Number(raw);
+    if (Number.isInteger(override) && override > 0) {
+      return Math.max(base, override);
+    }
   }
   return base;
 }
