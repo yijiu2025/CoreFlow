@@ -96,11 +96,18 @@
 - **只有驼峰命令**：`client.hset/hgetall/zadd/...` 全 undefined，调用即 `TypeError`（常被 try 吞掉）。
 - `store().get()` 会 safeParse；要原始串用 `store().call(c => c.get(k))`；`hexists` 返 **1/0 非布尔**。
 - `withTimeout` 的 `.finally()` 曾派生孤儿 promise → 一次 Redis 报错**升级为整个进程崩溃**（已修，禁用 `.finally`）。
+- ⚠️ **`connectStandalone()` 在 Redis 不可达时约 90s 才返回**（`plugin.js` 注释写"最多重试 1 次"，
+  但真正决定次数的是 client 的 `reconnectStrategy`，取 `REDIS_MAX_RETRIES` 默认 10；
+  `connectWithRetry(client, 1)` 只是外层循环 → **注释与实现不符**）。CLI 调用它前必须自带超时
+  （`Promise.race`），否则"环境不可用"表现为一次 90 秒挂起。
 
 **Guard / 授权（细节见 details §7）**
 - `requirePermission` / `freshPermission` 是**代码级声明，不得进 `RUNTIME_FIELDS`**（否则改一次 DB 即永久提权）。
 - `allowRoles: []` 语义是**「不限角色」**，不是「禁止」；写不存在的角色码 = **永不匹配**（路由裸奔）。
 - 守卫热更新接口必须有**字段白名单**（未知字段显式 400）。
+- ⚠️ **`guard/dao/guard-config.dao.js` 的 `restore(snapshot)` = `truncate` 全表 + 按快照回填**
+  → **空快照会把 `guard_configs` 清空**。任何"备份 → 改库 → 回滚"的脚本都必须**先断言快照非空**
+  再动第一笔写（一次性实验里不会发生，可复跑脚本里必须挡住）。
 
 **日志（细节见 details §8）**
 - 唯一出口 `src/framework/log/index.js`；业务代码禁 `console.*`；**`packages/log/README.md` 才是权威源**。
@@ -136,6 +143,13 @@
   表现为"看起来正常启动，实际同步永远失败"。
   ⚠️ 另：`loadGuardConfig()` 末尾会把内存配置**写回 DB**，用**部分结构**的夹具调它 =
   用最小结构覆盖线上完整配置（与防火墙 DAO 的 `initDao()` 坑同源）。
+- ⚠️ **`npm run` 会丢掉命令行环境变量**：实测 `PROBE_PROCS=3 npm run x` → 脚本仍取默认值。
+  同时 `node --env-file=.env` 的取值**不能被命令行变量覆盖**（进程环境变量优先）。
+  两者叠加 ⇒ **经 npm 启动的脚本无法被指向另一套环境**。脚本若要支持环境切换，就自己
+  `process.loadEnvFile(process.env.X || '.env')`，并在文档里写明"覆盖须**直接跑 node**"。
+- **跨进程验收关卡**：`scripts/verify/`（`npm run verify:all`）—— E1 锁互斥 / E2 配置跨实例同步。
+  退出码 **0 通过 / 1 断言失败 / 2 回滚不完整 / 3 环境不可用**，**刻意区分环境与回归**
+  （环境问题也让关卡变红 → 长期红灯的检查等于没有检查）。换环境：`VERIFY_ENV_FILE=<f> node ...`。
 - **"修复有效"要给反例对照**：同时跑一条不做修复的同场景用例（只证明"现在能过"不算数）。
 - ⚠️ **同一条消息里对同一文件发多个 Edit 会静默丢失**（工具仍报成功）→ 同文件多处改动必须串行或合并。
 - **结构性断言要自带反例**："无环/无违规"不能来自可能写坏的检测器。
@@ -154,6 +168,9 @@
 
 ## 4. 待办（跨会话）
 
-- **单实例假定的三处阻断点**（加实例前必须修）：遥测进程内状态 / 调度器无分布式锁 / guard 配置模块级单例。
-  详见 `docs/core/architecture-review-2026-09-19.md`。
-- 部署文档里的 Docker、多服务器方案**代码不存在**，不要照着做。
+- **单实例假定只剩 1 处未修**：遥测统计 / WS 广播仍在进程内累加（多实例下聚合值偏小、
+  封禁通知送不到其他实例上的客户端）→ 即 **E3**。**E1（调度器锁）/ E2（守卫配置）已修**，
+  并有可复跑关卡 `npm run verify:all`（见 §3）。详见 `docs/core/architecture-review-2026-09-19.md`。
+- **`connectStandalone()` 的重试次数与注释不符**（Redis 不可达时挂 ~90s，见 §2）：源码未改，
+  仅在验收关卡里用有界前置检查绕开；是否修正由代码所有者决定。
+- 部署文档里的 Docker、多服务器方案**代码不存在**，不要照着做；未经验证的 Dockerfile/CI 也刻意未提交。
