@@ -26,9 +26,10 @@ reflog 正常追加，但松散 ref 不落地（`GIT_TRACE_REFS` 显示旧值读
 `C:/Program Files/Code/Git`（2.52.0.windows.1），`git push` 甚至不输出任何内容。
 
 - 手写松散 ref **当场有效，下一次 push 会连同目录一起删掉** → 只能改 **`.git/packed-refs`** 中该行 SHA，
-  **每次 push 后都要重做**。修正脚本须带 4 条断言：① 头行
-  `'# pack-refs with: peeled fully-peeled sorted '` **含尾空格**原样；② 待替换行命中且恰好一处；
-  ③ 变化行数 = 1；④ 保持纯 LF（无 `\r`）。
+  **每次 push 后都要重做**。✅ **现成脚本：`~/.workbuddy/tools/fix-packed-refs.mjs <远端SHA>`**
+  （用户级工具，不属于本仓库；带 4 条断言：① 头行含尾空格原样；② 待替换行命中且恰好一处；
+  ③ 变化行数 = 1；④ 保持纯 LF）。流程：`git push` → `git ls-remote origin main` 取 SHA →
+  跑脚本 → `git status -sb` 应显示 `## main...origin/main`（无 ahead/behind）。
 - ⚠️ **`git push` 可能耗时数分钟且全程零输出**（2026-09-19 实测 5m27s 后才返回）→ **超时不代表失败**，
   重试是安全的（第二次即时成功）。并发两个 push 时后到的会被 `cannot lock ref` 拒绝（`is at X but
   expected Y`），说明前一个其实已成功 —— 别把这当成真失败。判定一律用 `git ls-remote origin main`。
