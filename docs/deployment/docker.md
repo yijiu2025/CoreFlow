@@ -8,7 +8,7 @@
 > 真要使用请先落地，并对齐当前实际：Node 版本、`node --env-file` 启动方式、
 > 以及 `packages/log` 这个 workspace 软链包在镜像构建时的处理。
 >
-> 背景与前置条件见 [`架构评估报告`](/core/architecture-review) 阶段 1 的 1.4 项。
+> 背景与前置条件见 [`架构评估报告`](/core/architecture-review-2026-09-19) 阶段 1 的 1.4 项。
 
 ## Dockerfile
 

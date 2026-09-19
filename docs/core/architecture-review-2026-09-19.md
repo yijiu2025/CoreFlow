@@ -290,6 +290,26 @@ Redis 配成"已配置但不可用"时 `/health/ready` 返回 503 且 `/health/l
 启动时一次性校验并**输出来源与缺省值**。注意：`config-validation.test.js` 目前在
 `KNOWN_INEFFECTIVE_TESTS`（虚假覆盖）清单里 —— 也就是说**配置校验从未被真正测试过**。
 
+#### B-4 `docs:build` 长期失败，文档站无法构建（2026-09-19 新发现）
+
+**证据**：`npm run docs:build` 报 `10 dead link(s) found` 并终止（vitepress 死链检查默认开启）。
+
+10 条**全部指向 `docs/` 之外**：前端源码（`oauth21/src/**/*.vue`、`posecraft/src/**/*.vue`）、
+workspace 包（`packages/shared-device/`）、仓库根 `AGENTS.md`。逐条核实后确认：**目标文件绝大多数
+真实存在** —— 问题不在链接写错，而在于 vitepress 只能解析 docs 内的文档路由，
+这类"给开发者指路到源码"的相对引用它本来就无法校验。
+
+**后果**：**文档站从来没有成功构建过**（`docs/.vitepress/dist/` 里是历史遗留产物）。
+任何依赖 docs 构建的流程（静态托管 / GitHub Pages）都跑不通。
+
+**处置**：✅ **已完成 2026-09-19** —— `docs/.vitepress/config.ts` 增加 `ignoreDeadLinks`，
+按前缀精确放行 `./{,../}(AGENTS|oauth21|posecraft|packages)`，**不覆盖 docs 内部链接**
+（站内真死链依旧会拦住 build）。修后 `build complete in 22.15s`。
+
+> 佐证这项检查值得保留：本次给部署文档加实现状态块时，第一版把报告链接写成
+> `/core/architecture-review`（漏了日期后缀 `-2026-09-19`），**正是死链检查把它拦下来的**。
+> 所以放行名单必须精确，不能图省事写 `ignoreDeadLinks: true`。
+
 ---
 
 ### 🟡 C 类：稳定性隐患
@@ -686,6 +706,7 @@ for (const rid of roleIds) {
 | P1 | 启动失败分级（1.2） | 🟡 C-1 | 小 | 消除"服务在跑但功能缺失" | ✅ 2026-09-19 |
 | P1 | 部署制品补齐（1.4） | 🟡 B-2 | 中 | 扩容的前置条件 | |
 | P1 | 文档实现状态标注（0.6 / B-1 / D-4） | 🟡 B | 极小 | 防止基于错误前提做决策；含修正 4 处 `data/guard_config.json` 误导描述 | ✅ 2026-09-19 |
+| P1 | 修复 `docs:build` 死链（B-4，本次新发现） | 🟡 B | 极小 | 文档站此前从未成功构建过 | ✅ 2026-09-19 |
 | P2 | 遥测状态外置（2.3） | 🔴 A-1 | 中 | 解除扩容阻断 #3 | |
 | P2 | 依赖方向收敛（2.5 / 2.2 守卫） | 🟢 D-1/D-2/D-3 | 中 | 可裁剪性（多服务器方案前置） | |
 | P2 | 配置集中校验（1.3） | 🟡 B-3 | 中 | 消除静默失效类故障 | |

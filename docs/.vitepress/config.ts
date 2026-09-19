@@ -5,6 +5,18 @@ export default defineConfig({
   title: 'CoreFlow',
   description: '企业级 Node.js 全栈框架',
 
+  /**
+   * 死链检查放行名单
+   *
+   * 这些目标都在 **docs/ 之外**（前端源码 `.vue`、workspace 包 `packages/*`、仓库根 `AGENTS.md`）——
+   * 文档里用相对路径指过去是**有意为之**：给开发者指路到真实源码。
+   * 但 vitepress 只能解析 docs 内的文档路由，本来就无法校验这类目标，
+   * 于是 `docs:build` 长期因这 10 条报错而失败（文档站无法构建）。
+   *
+   * 这里按前缀精确放行，**不覆盖 docs 内部的链接** —— 站内真死链依旧会拦住 build。
+   */
+  ignoreDeadLinks: [/^\.\.?\/(\.\.\/)?(AGENTS|oauth21|posecraft|packages)(\/|$)/],
+
   head: [['link', { rel: 'icon', href: '/logo.svg' }]],
 
   themeConfig: {
