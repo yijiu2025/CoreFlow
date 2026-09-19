@@ -174,6 +174,15 @@ reflog 正常追加，但松散 ref 不落地（`GIT_TRACE_REFS` 显示旧值读
   判 not-ready 会误摘流）；**探测必须带超时（3s）**（否则 `sequelize.authenticate()` 等 pool.acquire
   30s，会被编排探针自身 1~5s 超时掐断、掩盖根因）。
 - **连接超时 + WS 优雅关闭**：见 §6。
+- **启动失败分级**（`framework/loader/engine.js`，2026-09-19）：`OPTIONAL_LOADERS` 显式声明 4 个
+  可降级加载器（`01-monitor` / `02-redis` / `03-db` / `09-notice`），**未声明者默认关键 → fail-fast**
+  （默认严格：新增加载器忘声明时会拦住启动，而不是被静默放过）。失败错误带
+  `loaderFile` / `loaderCritical` 上下文；`getLoaderStatus()` 供 `/health/ready` 暴露明细，
+  有降级时 `status: 'degraded'` 但**仍 200**（降级 ≠ 不可服务，不该被摘流）。
+  测试经 `runEngine(app, { registryDir })` + `__tests__/__fixtures__/` 驱动。
+- **`/health/ready` 错误脱敏**（2026-09-19）：该端点是公开端点，原先把 `sequelize` 的原始报错
+  回显出去（含 `ECONNREFUSED 10.0.0.5:3306` 这类内网拓扑）。现 `detail` 只给
+  `err.code || err.name`，完整错误进日志。**新增任何进 body 的字段前先问"给未登录的人看合适吗"。**
 
 ---
 
@@ -381,6 +390,14 @@ reflog 正常追加，但松散 ref 不落地（`GIT_TRACE_REFS` 显示旧值读
   → 断言 `fs.statSync(f).ino` 发生变化。比"写完能读回来"强得多（后者对非原子写同样成立）。
 - **"修复有效"要给反例对照**：只证明"现在能过"不足以证明是对修复起效 —— 同时跑一条**不做修复**的同场景
   对照（2026-09-19 WS：挂 `preClose` 的 1.2s 内 close() 返回；注释掉后同场景 1.2s 内不返回）。
+- **测「动态 `import()`」类代码 → 用 fixture 目录，别用 mock**：`unstable_mockModule` 对
+  `await import(pathToFileURL(file))` **无效**（mock 注册的是模块说明符，不是运行时拼出的 URL）。
+  给被测函数开一个 `options.registryDir` 这类参数，测试用 fixture 目录喂进去 →
+  走的是与生产**完全相同**的「读目录 → 排序 → 逐个 import → 调 register」路径，只是内容可控；
+  比 mock 更接近真实，还顺带覆盖了排序与目录扫描逻辑。
+  ⚠️ fixtures 必须放在 `src/__tests__/` **里面**（jest 的 `testMatch` 只匹配 `.test.js`，
+  fixtures 不会被当测试文件）；放到 `os.tmpdir()` 会因不在项目 `"type": "module"` 作用域内
+  被当 CommonJS 解析，`export default` 直接语法报错。
 - **同一条消息里对同一文件发多个 Edit 会静默丢失**（工具仍报成功）→ 同文件多处改动必须串行或合并一次
   Edit；改完 import/export 后跑一次真实 `import` 比读 diff 可靠。
 - **成对改动必须两端都验证**（`throw err` 与 `err.code === ...`）：只改一端会让分支永不命中。
