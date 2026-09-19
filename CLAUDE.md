@@ -46,7 +46,7 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 | 通道               | 何时发                              | 要点                                                                                     |
 | ------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------- |
 | git tag            | 判定发版即打                        | annotated tag，随 `main` 一起推                                                          |
-| GitHub Release     | 与 tag 一一对应                     | 调 REST API 创建，说明按提交类型分中文组自动生成。凭据取自 **git credential manager**，本机无 `gh` CLI 也能用 |
+| GitHub Release     | 与 tag 一一对应                     | 调 REST API 创建，说明按提交类型分中文组自动生成。凭据取自 **git credential manager**，本机无 `gh` CLI 也能用；**tag 已推而 Release 缺失时，重跑脚本会自动补建** |
 | npm（`packages/log`） | 该包本地 `version` 已 bump 到高于线上 | 独立嵌套仓库，走 `npm publish --access public`                                           |
 
 **几条边界**
