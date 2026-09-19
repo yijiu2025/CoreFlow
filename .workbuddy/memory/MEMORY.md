@@ -72,6 +72,7 @@
 | --- | --- |
 | `getModel(name)` 未命中 | **抛 `TypeError` 不是返回 null** → 调用点放 `try`；点号写法 `'a.B'` 与 `'B'` 等价 |
 | `getStore(prefix)` | 按 prefix 隔离命名空间，**字符串全仓逐字一致**（`user_sessions` ≠ `userSessions`）；无 Redis 时走 MapStore（**不支持 zAdd/zRangeByScore**） |
+| 密码哈希 | **绝不能用 `bcryptjs`**（纯 JS 跑主线程）：实测 10 并发冻结 **774ms**，其 **async 版同样冻结 649ms**（"异步就不阻塞"是错的）。统一走 `framework/auth/password-hash.js`（`crypto.scrypt`，libuv 线程池，冻结 **22ms**） |
 | `underscored: true` | 属性名是 `createdAt`；写 `attributes: ['created_at']` 会被**静默丢弃** → `Invalid Date` |
 | 模块级 `process.exit` | 会伪装成绿色（jest 用例总数每次不同而汇总恒 0 失败）→ 修法 `!isTestEnv` |
 | 改完导出面 | 必须真实 `import` 一次上层入口（ESM 链接期抛错）；**并同步所有 `unstable_mockModule` 替身** |
@@ -113,6 +114,10 @@
 - **毒丸实验**（验证测试真有效）：把被测文件覆写成 `throw new Error('__QUARANTINE__')` 再跑 ——
   **变红 = 真加载了；照绿 = 测试完全失效**。实验后必须恢复 + 全量复验。
 - **inode 断言法**：`fs.statSync(f).ino` 变化 = 真的走了 `rename`（原子写），比"能读回来"强得多。
+- **量"事件循环被冻结多久"只能用 tick 间隔法**：跑一个 10ms `setInterval` 心跳，取**相邻 tick 的
+  最大间隔** —— 阻塞多久空隙就是多久，无法取巧。
+  ⚠️ **不要用 `monitorEventLoopDelay`**：它按固定 resolution 采样，实测把 `bcrypt.hashSync` 造成的
+  **774ms 冻结报成 17ms**（漏采一次性长阻塞）。据此会得出"没问题"的相反结论。
 - **"修复有效"要给反例对照**：同时跑一条不做修复的同场景用例（只证明"现在能过"不算数）。
 - ⚠️ **同一条消息里对同一文件发多个 Edit 会静默丢失**（工具仍报成功）→ 同文件多处改动必须串行或合并。
 - **结构性断言要自带反例**："无环/无违规"不能来自可能写坏的检测器。
