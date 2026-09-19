@@ -1,5 +1,15 @@
 # Docker 部署 {#docker}
 
+> ## 📐 实现状态：示例配置 · 未落地
+>
+> **2026-09-19 核实：仓库内没有 `Dockerfile`、`docker-compose.yml`、`.dockerignore`。**
+>
+> 本页代码块是**可直接照抄的示例**，但既没有进仓库，也没有被任何脚本或 CI 引用。
+> 真要使用请先落地，并对齐当前实际：Node 版本、`node --env-file` 启动方式、
+> 以及 `packages/log` 这个 workspace 软链包在镜像构建时的处理。
+>
+> 背景与前置条件见 [`架构评估报告`](/core/architecture-review) 阶段 1 的 1.4 项。
+
 ## Dockerfile
 
 ```dockerfile

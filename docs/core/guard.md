@@ -147,4 +147,8 @@ registerSecureRoute(fastify, { url: '/posts', ... });
 
 ## 配置持久化
 
-Guard 配置持久化到 `data/guard_config.json`，支持运行时动态修改。
+Guard 配置持久化到**数据库** `guard_configs` 表（`src/app/guard/dao/guard-config.dao.js` 的
+`loadFromDB()` / `saveToDB()`，由 `src/api/guard-config.js` 在启动后调度），支持运行时动态修改。
+
+> ⚠️ `data/guard_config.json` 是迁移到数据库**之前**的本地文件方案，**已废弃** ——
+> 直接编辑它不会生效，服务也不会再读写该文件。

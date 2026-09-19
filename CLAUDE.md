@@ -204,7 +204,12 @@ registerSecureRoute(app, {
 
 `permission` 是 `requirePermission` 的短别名。
 
-配置持久化到 `data/guard_config.json`。
+配置持久化到**数据库** `guard_configs` 表（`src/app/guard/dao/guard-config.dao.js` 的
+`loadFromDB()` / `saveToDB()`，由 `src/api/guard-config.js` 在启动后调度）。
+
+> ⚠️ `data/guard_config.json` 是迁移到 DB **之前**的本地文件方案，**已废弃** ——
+> 直接编辑它不会生效，服务也不会再读写该文件。配置项里**代码级声明**（`requirePermission`、
+> `freshPermission` 等）不得持久化，只允许 `enabled`/`requireLogin`/`allowIps`/`allowRoles` 进 DB。
 
 ## 目录结构（系统层 / 应用层）
 

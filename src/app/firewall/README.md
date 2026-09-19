@@ -161,8 +161,13 @@ firewall onResponse 钩子
 
 ## 数据持久化
 
+> ⚠️ 下表路径均相对 **`src/`**：`app/firewall/config/config.js` 与 `data/store.js` 用的是
+> `path.resolve(__dirname, '../../../data/...')`，从各自文件上溯三层都落在 `src/`——
+> **不是仓库根**。仓库根的 `data/` 是 7 月遗留的死文件（零代码引用），已于 2026-09-19 删除。
+> ⚠️ 第三行已迁移：守卫配置现在存**数据库** `guard_configs` 表，`data/guard_config.json` 已废弃。
+
 | 文件                        | 内容                                          | 更新频率        |
 | --------------------------- | --------------------------------------------- | --------------- |
 | `data/firewall_config.json` | 服务器节点信息 + 安全策略配置                 | 防抖 1 秒       |
 | `data/traffic_stats.json`   | 流量记录 + 统计数据                           | 节流 10 秒      |
-| `data/guard_config.json`    | 3 级 Guard 配置（由 `src/api/guard.js` 管理） | 启动时 + 变更时 |
+| **（已迁 DB）** `guard_configs` 表 | 3 级 Guard 配置（由 `src/api/guard-config.js` 管理） | 启动时 + 变更时 |
