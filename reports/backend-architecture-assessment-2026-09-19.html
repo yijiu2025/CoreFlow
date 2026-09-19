@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>后端架构现状评估与提升路线 · nodeServers</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#101828; --ink2:#475467; --ink3:#667085;
+    --line:#e4e7ec; --line2:#d0d5dd;
+    --crit:#b42318; --crit-bg:#fef3f2; --crit-line:#fecdca;
+    --warn:#b54708; --warn-bg:#fffaeb; --warn-line:#fedf89;
+    --ok:#067647;  --ok-bg:#ecfdf3;  --ok-line:#abefc6;
+    --info:#175cd3; --info-bg:#eff8ff; --info-line:#b2ddff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 80px}
+
+  header{padding:56px 0 32px;border-bottom:2px solid var(--ink)}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:16px}
+  h1{margin:0 0 14px;font-size:34px;line-height:1.25;letter-spacing:-.02em;font-weight:700}
+  .sub{color:var(--ink2);font-size:16px;max-width:74ch;margin:0 0 24px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px}
+  .tag{font:500 12px/1 var(--mono);padding:7px 11px;border-radius:6px;background:#f2f4f7;color:var(--ink2);border:1px solid var(--line)}
+
+  section{padding-top:44px}
+  h2{font-size:22px;margin:0 0 6px;letter-spacing:-.01em;font-weight:700;display:flex;align-items:baseline;gap:12px}
+  h2 .num{font:600 13px/1 var(--mono);color:#fff;background:var(--ink);padding:5px 8px;border-radius:5px;position:relative;top:-2px}
+  h3{font-size:16px;margin:28px 0 10px;font-weight:650}
+  .lead{color:var(--ink2);margin:0 0 20px;max-width:78ch}
+  p{margin:0 0 12px}
+  code{font:13px/1.5 var(--mono);background:#f2f4f7;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:#344054}
+  .path{font:12px/1.5 var(--mono);color:var(--ink2);background:#f9fafb;border:1px solid var(--line);border-radius:5px;padding:2px 7px;display:inline-block}
+
+  .verdict{background:var(--panel);border:1px solid var(--line2);border-left:4px solid var(--info);border-radius:10px;padding:22px 24px;margin:0 0 8px}
+  .verdict .vtag{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.1em;color:var(--info);background:var(--info-bg);border:1px solid var(--info-line);padding:5px 9px;border-radius:5px;margin-bottom:12px}
+  .verdict p{margin:0 0 8px}
+  .verdict p:last-child{margin-bottom:0}
+  .verdict strong{color:var(--ink)}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:20px 0 4px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .kpi .k{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:6px}
+  .kpi .l{font-size:12.5px;color:var(--ink3);line-height:1.45}
+  .kpi.crit .k{color:var(--crit)} .kpi.warn .k{color:var(--warn)} .kpi.ok .k{color:var(--ok)}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;background:var(--panel)}
+  th{text-align:left;font:650 11.5px/1.4 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);
+     padding:10px 12px;border-bottom:2px solid var(--line2);white-space:nowrap}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fcfcfd}
+  td.num{font:13px/1.5 var(--mono);white-space:nowrap;font-weight:600}
+  .st{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:4px;white-space:nowrap;display:inline-block}
+  .st.open{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line)}
+  .st.done{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line)}
+  .st.part{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line)}
+
+  .note{border-radius:9px;padding:14px 17px;margin:14px 0;font-size:14px;border:1px solid}
+  .note.crit{background:var(--crit-bg);border-color:var(--crit-line)}
+  .note.warn{background:var(--warn-bg);border-color:var(--warn-line)}
+  .note.info{background:var(--info-bg);border-color:var(--info-line)}
+  .note.ok{background:var(--ok-bg);border-color:var(--ok-line)}
+  .note .nt{font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono);display:block;margin-bottom:7px}
+  .note.crit .nt{color:var(--crit)} .note.warn .nt{color:var(--warn)}
+  .note.info .nt{color:var(--info)} .note.ok .nt{color:var(--ok)}
+  .note p:last-child{margin-bottom:0}
+
+  .fix{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin:0 0 14px;border-left:4px solid var(--ink2)}
+  .fix.p0{border-left-color:var(--crit)} .fix.p1{border-left-color:var(--warn)} .fix.p2{border-left-color:var(--info)}
+  .fix .fhead{display:flex;align-items:flex-start;gap:11px;margin-bottom:10px;flex-wrap:wrap}
+  .fid{font:700 12px/1 var(--mono);padding:5px 8px;border-radius:5px;flex:none;margin-top:2px;color:#fff;background:var(--ink2)}
+  .fix.p0 .fid{background:var(--crit)} .fix.p1 .fid{background:var(--warn)} .fix.p2 .fid{background:var(--info)}
+  .ftitle{font-size:16px;font-weight:660;line-height:1.4;flex:1;min-width:200px}
+  .fix .body{color:var(--ink2);font-size:14px}
+  .fix .body strong{color:var(--ink)}
+  .fix .body p:last-child{margin-bottom:0}
+
+  .bar{height:26px;border-radius:5px;display:flex;align-items:center;padding:0 9px;font:600 11.5px/1 var(--mono);color:#fff;white-space:nowrap;overflow:hidden}
+  .barwrap{margin:6px 0 2px}
+  .barlabel{display:flex;justify-content:space-between;font:12px/1.6 var(--mono);color:var(--ink2)}
+
+  .chain{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0 4px}
+  .chain .n{font:12px/1.4 var(--mono);background:var(--panel);border:1px solid var(--line2);border-radius:6px;padding:7px 10px}
+  .chain .n b{color:var(--ink)}
+  .chain .a{color:var(--ink3);font:12px/1 var(--mono)}
+
+  ul.clean{margin:10px 0;padding-left:20px} ul.clean li{margin-bottom:7px}
+  ul.plain{list-style:none;padding:0;margin:10px 0}
+  ul.plain li{position:relative;padding-left:22px;margin-bottom:9px;color:var(--ink2);font-size:14px}
+  ul.plain li::before{content:"—";position:absolute;left:0;color:var(--ink3)}
+
+  footer{margin-top:52px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink3);font-size:12.5px}
+  footer code{font-size:12px}
+  @media print{body{background:#fff}.fix,.verdict,.kpi{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Backend Architecture · Current-State Assessment</div>
+  <h1>后端架构现状评估与提升路线</h1>
+  <p class="sub">
+    回答一个问题：<strong>现在这套后端，要提升扩展性与稳定性，下一步该改什么。</strong><br>
+    所有结论都来自对本仓库当前代码的实测，不引用设计文档的承诺。
+    与首轮评审的差别在于：那份报告是<strong>修复前</strong>的快照，这一份反映<strong>修复后</strong>的现状与剩余缺口。
+  </p>
+  <div class="meta">
+    <span class="tag">评估日期 2026-09-19</span>
+    <span class="tag">基线提交 7936221</span>
+    <span class="tag">版本 v2.7.3</span>
+    <span class="tag">77 suites / 1020 tests 全绿</span>
+    <span class="tag">证据均为本机实测</span>
+  </div>
+</header>
+
+<!-- ══════════════ 01 ══════════════ -->
+<section>
+  <h2><span class="num">01</span>总体判断</h2>
+  <div class="verdict">
+    <span class="vtag">核心结论</span>
+    <p><strong>这套架构不需要重构，需要的是补齐三件具体的、可验证的事。</strong>
+    选型上它是「模块化单体 + 严格分层 + 单向依赖守卫」，对当前的业务形态（后台管理 + 风控/防火墙）
+    是合适且克制的选择 —— 换成微服务只会把现在的确定性问题换成一堆分布式不确定性问题。</p>
+    <p>真正拖住扩展性与稳定性的，从来不是分层方式，而是<strong>三类不体现在任何架构图里的缺陷</strong>：
+    ① 单线程事件循环上的同步调用；② 把「进程内状态」当成「全局状态」；③ 关键路径不可观测。</p>
+    <p>其中 ② 是最危险的一类 —— 它<strong>在单实例下完全正确</strong>，代码审查看不出来，测试也全绿，
+    只有当副本数从 1 变成 2 的瞬间才以「重复执行 / 策略不一致 / 通知丢失」的形式暴露。
+    原有 4 处此类假定，现已消除 3 处，剩 1 处（详见 §04）。</p>
+    <p><strong>但此刻最该做的不是继续修，而是建立压测基线</strong>：没有 P95 / 吞吐 / 池等待 / 事件循环延迟的对照数据，
+    「已经修好了」只是局部证据，「可以扩容了」只是推断。这是本报告排序第一的建议（§05 P0）。</p>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="k">294</div><div class="l">生产源码文件<br>42,989 行（不含测试）</div></div>
+    <div class="kpi ok"><div class="k">3<span style="font-size:15px">/4</span></div><div class="l">单实例假定<br>已消除并留有可复跑关卡</div></div>
+    <div class="kpi warn"><div class="k">1</div><div class="l">剩余横向扩展阻断<br>E3 遥测统计与 WS 广播</div></div>
+    <div class="kpi crit"><div class="k">0</div><div class="l">压测基线<br>扩容收益无法量化</div></div>
+  </div>
+</section>
+
+<!-- ══════════════ 02 ══════════════ -->
+<section>
+  <h2><span class="num">02</span>架构现状（实测）</h2>
+  <p class="lead">形态：单体单进程、Fastify v5 + Sequelize v6 + MySQL + Redis v5，Node ESM。
+  依赖的外部状态只有两个 —— MySQL 与 Redis；Redis 不可用时降级为进程内实现（这正是 ② 类问题的温床）。</p>
+
+  <h3>分层与规模</h3>
+  <div class="barwrap">
+    <div class="barlabel"><span>src/app · 业务应用层（7 个应用域）</span><span>109</span></div>
+    <div class="bar" style="width:100%;background:#344054">109 个文件</div>
+  </div>
+  <div class="barwrap">
+    <div class="barlabel"><span>src/framework · 框架能力层（15 个子系统）</span><span>94</span></div>
+    <div class="bar" style="width:86%;background:#475467">94</div>
+  </div>
+  <div class="barwrap">
+    <div class="barlabel"><span>src/api · 路由层（9 个域 + 守卫）</span><span>51</span></div>
+    <div class="bar" style="width:47%;background:#175cd3">51</div>
+  </div>
+  <div class="barwrap">
+    <div class="barlabel"><span>src/models · 数据模型（8 个域，32 个模型）</span><span>32</span></div>
+    <div class="bar" style="width:29%;background:#175cd3">32</div>
+  </div>
+  <div class="barwrap">
+    <div class="barlabel"><span>src/utils 5 · src/shared 2 · src/app.js 1</span><span>8</span></div>
+    <div class="bar" style="width:8%;background:#98a2b3">8</div>
+  </div>
+
+  <h3>请求处理链路</h3>
+  <div class="chain">
+    <span class="n"><b>cookie</b></span><span class="a">→</span>
+    <span class="n"><b>auth</b> Session</span><span class="a">→</span>
+    <span class="n"><b>rateLimit</b></span><span class="a">→</span>
+    <span class="n"><b>firewall</b> 五层管道</span><span class="a">→</span>
+    <span class="n"><b>guard</b> 三级守卫</span><span class="a">→</span>
+    <span class="n"><b>handler</b></span><span class="a">→</span>
+    <span class="n"><b>onSend</b> 日志/连接释放</span>
+  </div>
+  <p><strong>关键结构事实</strong>：防火墙五层拦截（限频 / 封禁 / 挑战 / Bot / 地理围栏）作用在<strong>全部请求</strong>上，
+  每层都在同一个单线程事件循环里。这决定了本系统的稳定性特征是
+  <strong>「一个慢调用会拖慢所有请求」</strong>——包括健康探针，而探针被拖慢会进一步触发编排层摘流，
+  放大成整体不可用。§03 的 S1 就是这个机理的实例。</p>
+  <p>分层约束已有守卫（firewall 层间单向无环、<code>src</code> 不得反向依赖 <code>scripts</code>、
+  导出位置、测试有效性），且守卫<strong>自带反例</strong>——「无违规」的结论不是来自一个可能写坏的检测器。
+  这在本仓是少见的成熟度，它让后续改造不必担心悄悄破坏依赖方向。</p>
+  <div class="note warn">
+    <span class="nt">一处结构性欠账</span>
+    <p>框架层已有守卫，但<strong>应用层之间仍存在双向依赖</strong>（<code>oauth21</code> ⇄ <code>user</code>）。
+    它不构成当前故障，但会让「把某个应用域拆出去」这件事在未来变得昂贵。属 §05 P2 的持续项。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 03 ══════════════ -->
+<section>
+  <h2><span class="num">03</span>稳定性：三类已被实测揭穿的缺陷</h2>
+  <p class="lead">这三类都不在架构图上，共同特征是<strong>「读代码看不出来、测试全绿、但真实流量下会出事」</strong>。
+  下表每一项都给出机理与实测数据；数字是修前对修后的对照，不是单侧结论。</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:92px">编号</th><th>缺陷与机理</th><th style="width:300px">实测</th><th style="width:96px">状态</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="num">S1</td>
+        <td><strong>密码哈希阻塞事件循环</strong><br>
+        使用 <code>bcryptjs</code>（纯 JS 实现，无原生绑定）。哈希是 CPU 密集操作，
+        在单线程上执行会把<strong>所有</strong>并发请求（含健康探针）排到队尾。</td>
+        <td>10 并发冻结 <strong>774ms → 22ms</strong>（改用 <code>crypto.scrypt</code>，走 libuv 线程池）<br>
+        ⚠️ 反例：<code>bcryptjs</code> 的 <em>async 版同样冻结 649ms</em> ——
+        「改用异步 API 就不阻塞」是错的，只有移出主线程才有效。</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">K1</td>
+        <td><strong>RSA 密钥生成占用主线程</strong><br>
+        <code>generateKeyPairSync('rsa', 2048)</code>，且开销随模数<strong>超线性增长</strong>。</td>
+        <td>冻结 53~62ms。<br>
+        <strong>严重度如实说明</strong>：只发生在启动与冷路径，无任何路由/脚本调用密钥轮转，
+        属 hardening <em>而非紧急缺陷</em>。修它的价值是让「请求路径不留同步 CPU 调用」可被整体 grep 验证。</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">K2</td>
+        <td><strong>请求路径上的同步磁盘 IO</strong><br>
+        设备授权页每次请求都 <code>readFileSync</code> 读模板，并在函数体内做三次动态 <code>import</code>。</td>
+        <td>同步 IO + 模块解析都在请求路径上 → 改为模块级路径解析 + 异步读 + 生产缓存（非生产每次重读，模板改动即时可见）。</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note crit">
+    <span class="nt">这一节最值得记住的教训 — 测量方法本身会骗人</span>
+    <p><code>monitorEventLoopDelay</code> 按固定分辨率采样，实测<strong>把 774ms 的冻结报成 17ms</strong>。
+    据此会得出「bcrypt 没有问题」的<strong>相反结论</strong>。正确测法是跑一个 10ms 心跳、
+    取相邻 tick 的<strong>最大间隔</strong>——阻塞多久，空隙就是多久，无法取巧。
+    另外该方法的<strong>噪声下限约 20ms</strong>：无阻塞的异步实现也测到 19~25ms，
+    所以低于该量级的「差异」不能当结论用。</p>
+    <p>这条之所以单列，是因为它决定了<strong>整份评估的可信度</strong>：
+    用错误的仪器，会把最严重的缺陷判为无问题。</p>
+  </div>
+
+  <h3>补齐的可观测性</h3>
+  <p>与 S1 同源的问题是「看不到」：Sequelize 连接池状态原本无处可查，配置校验散落在各处。
+  现在 <code>/v1/health/ready</code> 会带上池快照（<code>maxSize / size / available / using / waiting</code>），
+  配置校验收敛为单一真相源（22 个关键环境变量 + 弱密钥黑名单 + 跨字段校验）。
+  两者都刻意<strong>不参与</strong>就绪判定——池饱和不该成为摘掉一个正在扛量的实例的理由。
+  探针是<strong>公开端点</strong>，因此只放诊断字段，不放任何内部细节。</p>
+</section>
+
+<!-- ══════════════ 04 ══════════════ -->
+<section>
+  <h2><span class="num">04</span>扩展性：剩余的一处单实例假定</h2>
+  <p class="lead">横向扩展的判定标准很直接：<strong>把副本数从 1 改成 2，行为是否仍然正确。</strong>
+  原有 4 处不满足，现在 3 处已修并有可复跑关卡，剩 1 处。</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:92px">编号</th><th>单实例假定</th><th style="width:330px">加第二个副本会发生什么</th><th style="width:96px">状态</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="num">E1</td>
+        <td>调度器<strong>没有分布式锁</strong> —— 每个进程各自按周期跑任务</td>
+        <td>所有定时任务被重复执行 N 次（对账、清理、种子类任务会互相打架）</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">E2</td>
+        <td>守卫配置是<strong>模块级单例</strong>，改一次只改本进程</td>
+        <td>各实例鉴权策略不一致 → <strong>同一个用户在不同副本上权限不同</strong></td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">E4</td>
+        <td>连接计数的回收依赖进程内状态，僵尸记录永不释放</td>
+        <td>计数虚高 → 正常的客户端被误判为超限（改按「最后活跃时间」回收，阈值刻意大于请求超时，避免误删长请求）</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">E3</td>
+        <td><strong>遥测统计与 WebSocket 广播在进程内</strong><br>
+        <code>monitor.service.js</code> 里 <code>const clients = new Set()</code> 是模块级变量；
+        统计值在进程内累加。</td>
+        <td>① 监控面板看到的统计<strong>偏小</strong>（每个实例只报自己那一份切片）；<br>
+        ② <strong>封禁/告警通知送不到其他实例上的浏览器</strong>——运维在 A 副本上看到拦截日志，B 副本上的告警静默丢失。</td>
+        <td><span class="st open">未做</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>为什么 E3 与前三处不同</h3>
+  <p>E1/E2/E4 修的是「加实例前的正确性前提」，改法清晰、代价低。
+  E3 的难点不在技术，而在<strong>它是实时的、高频的</strong>：</p>
+  <ul class="plain">
+    <li><strong>统计外置</strong>需要为每个计数点引入一次 Redis 往返，而防火墙的计数在<strong>每请求路径</strong>上——
+    直接照搬会把一个纯内存操作变成网络调用，用吞吐换准确性，得不偿失。需要先做<strong>本地聚合 + 周期刷写</strong>，
+    而不是逐请求写。</li>
+    <li><strong>广播外置</strong>要引入 Redis pub/sub：每个实例订阅同一频道、收到后仅投递给<strong>本机</strong>客户端。
+    这部分设计是直接的，但要注意「实例既发又收」的<strong>重复投递</strong>，必须带来源标识去重。</li>
+    <li><strong>可观测性会变</strong>：外置后统计的时效性从「即时」变成「一个刷写周期」，
+    面板的语义随之改变，需要同步告知使用方——否则会被当成 bug。</li>
+  </ul>
+  <div class="note info">
+    <span class="nt">关于 E3 的建议</span>
+    <p>优先级高，但<strong>不建议在建立压测基线之前动手</strong>（§05：P0 优先）。
+    理由：E3 的改法涉及热路径，它的收益需要用容器化 + 双实例环境来验证，
+    而当前压测与容器化载体都还不存在。先有尺子，再改热路径。</p>
+  </div>
+
+  <h3>一个刻意不做的决定</h3>
+  <p>「把每 IP 连接计数也外置到 Redis」曾被列为候选（E4′），<strong>本轮评估结论是建议不做</strong>，
+  这是判断而非遗漏：该计数位于每请求路径，而它是<strong>安全控制</strong>——
+  Redis 抖动时要么 fail-open（限流静默失效，安全洞），要么 fail-closed（正常流量被拒，可用性事故）；
+  进程崩溃还会残留膨胀计数，得再引入 TTL 与漂移修正——那是用新 bug 换旧 bug。
+  代码里已写明正确缓解方式：按 <code>maxConn ÷ 实例数</code> 配值，或把连接限制<strong>前移到边缘</strong>（Nginx / ALB）。
+  后者是标准答案，且不把安全控制绑在 Redis 可用性上。</p>
+</section>
+
+<!-- ══════════════ 05 ══════════════ -->
+<section>
+  <h2><span class="num">05</span>提升路线</h2>
+  <p class="lead">按「不做会卡住后面一切」的顺序排列，不按工作量排列。</p>
+
+  <div class="fix p0">
+    <div class="fhead"><span class="fid">P0</span><span class="ftitle">建立压测基线 —— 没有它，后面每一步都无法判断得失</span></div>
+    <div class="body">
+      <p>目前所有性能结论都是<strong>单机微基准</strong>（哈希冻结多少毫秒）。它能证明「某处阻塞被消除」，
+      但<strong>回答不了</strong>「现在能扛多少 QPS」「扩容一倍收益是多少」「数据库先耗尽还是应用先耗尽」。</p>
+      <p><strong>要采集的最小集合</strong>：P50/P95/P99 延迟、吞吐、连接池 <code>waiting</code> 峰值、
+      事件循环最大延迟、Redis 往返数、以及<strong>错误率随并发上升的拐点</strong>。
+      探针已就绪（池快照在 <code>/ready</code>），缺的是一套可重复的压测脚本与一份留档结果。</p>
+      <p><strong>为什么排第一</strong>：E3 属于热路径改造，没有基线就无法证明它是收益还是回退；
+      容器化载体也需要基线来定资源规格。</p>
+    </div>
+  </div>
+
+  <div class="fix p1">
+    <div class="fhead"><span class="fid">P1</span><span class="ftitle">消除最后一处单实例假定（E3）</span></div>
+    <div class="body">
+      <p>做法见 §04：统计走「本地聚合 + 周期刷写」，广播走 pub/sub 并按来源去重，
+      同时在文档里同步统计时效性的变化。</p>
+      <p><strong>验收方式要说清</strong>：必须<strong>两个真实进程</strong>观测——
+      一个实例封禁 → 另一个实例上的客户端收到通知；两个实例的统计汇总后与总量一致。
+      单进程模拟不算数（这类缺陷恰恰只在多进程下暴露，这正是它此前一直没被发现的原因）。</p>
+      <p><strong>替代方案</strong>：如果短期内不打算扩容，可<strong>只用边缘限流 + 明确记录该假定</strong>，
+      把 E3 降级为「扩容前置项」。可以接受，但必须在文档里写成「已知限制」而不是「已支持多实例」。</p>
+    </div>
+  </div>
+
+  <div class="fix p2">
+    <div class="fhead"><span class="fid">P2</span><span class="ftitle">数据层与耦合度（持续项，随迭代做）</span></div>
+    <div class="body">
+      <p>这三项都不会立刻出事，但都会随时间变贵：</p>
+      <ul class="clean">
+        <li><strong>索引与查询计划取证</strong>：为高频查询补索引前，先用 <code>EXPLAIN</code> 确认真实执行计划——
+        「按直觉加索引」在本仓的高频陷阱里已记为一类错误。</li>
+        <li><strong>拆分 <code>session.js</code></strong>（994 行）：它同时承担创建/验证/销毁/续期/刷新/踢下线，
+        是安全敏感路径上最容易改出问题的文件。<strong>拆的时候用按行号切片的脚本 + 四条断言</strong>，不要手工复制。</li>
+        <li><strong>收敛应用层双向依赖</strong>（<code>oauth21</code> ⇄ <code>user</code>）：当前不痛，
+        但它是「未来想把某个域拆出去」的主要成本来源。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="fix p2">
+    <div class="fhead"><span class="fid">P3</span><span class="ftitle">容器化与 CI 载体 —— 先有能验证的环境，再产出制品</span></div>
+    <div class="body">
+      <p>部署文档里描述的 Docker 与多服务器方案，<strong>代码里并不存在</strong>。
+      本仓刻意<strong>没有提交</strong>未经验证的 Dockerfile / CI 配置——
+      未经验证的制品比没有制品更危险，因为它会让「能扩容」变成一个看起来成立的假设。</p>
+      <p><strong>正确顺序</strong>：先有可用的验证环境（能起双实例、能跑压测），再产出容器化与 CI。
+      这也是 P0 排在最前的原因之一。</p>
+    </div>
+  </div>
+
+  <div class="note ok">
+    <span class="nt">不建议做的</span>
+    <p><strong>不要微服务化。</strong>当前瓶颈是单进程内的同步调用与进程内状态，不是「服务边界不清」。
+    在这个阶段拆服务，只会把确定的局部问题换成一堆分布式问题（网络不确定性、分布式事务、跨服务追踪），
+    而当前团队尚无压测基线与容器化载体——那会是一次净损失。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 06 ══════════════ -->
+<section>
+  <h2><span class="num">06</span>本报告的结论是怎么来的</h2>
+  <p class="lead">对一份评估报告来说，「怎么得到结论」比结论本身更值得审查——
+  §03 那条测量陷阱已经说明，用错仪器会把最严重的问题判为无问题。</p>
+  <table>
+    <thead><tr><th style="width:210px">手法</th><th>解决的信任问题</th></tr></thead>
+    <tbody>
+      <tr><td><strong>毒丸实验</strong></td>
+        <td>把被测文件换成 <code>throw</code> 再跑测试：<strong>变红 = 测试真的加载了被测代码；
+        照绿 = 测试完全失效</strong>。用于排除「测试全绿但其实什么都没测」。</td></tr>
+      <tr><td><strong>反例对照</strong></td>
+        <td>证明「现在能过」不等于证明是对该修复起效。每条修复都同时跑一条<strong>不做修复</strong>的同场景用例
+        （如 S1 里 bcrypt 的 async 版本同样冻结）。</td></tr>
+      <tr><td><strong>真实多进程</strong></td>
+        <td>E1 用 5 个真实进程抢同一把锁，验证「恰好 1 个成功 / TTL 内抢不到 / 过期后能抢到」三轮——
+        缺任一轮都会漏掉一种失败（如「拿到就不放」与「永远拿不到」在只验第一轮时表现相同）。</td></tr>
+      <tr><td><strong>可复跑关卡</strong></td>
+        <td>把一次性验证固定成 <code>npm run verify:all</code>，退出码区分
+        <strong>0 通过 / 1 断言失败 / 2 回滚不完整 / 3 环境不可用</strong>。
+        刻意把「环境不可用」与「回归」分开——环境问题也让检查变红，会让它变成长期红灯的检查，
+        而<strong>长期亮红灯的检查等于没有检查</strong>。</td></tr>
+      <tr><td><strong>危险操作护栏</strong></td>
+        <td>会写真实库的验收关卡：先取全量快照、<strong>空快照时在任何写入之前退出</strong>
+        （回滚实现是清空全表 + 回填，空快照会把配置表清空）、拒绝在生产环境运行、结束无条件回滚并回读核对。</td></tr>
+    </tbody>
+  </table>
+  <p><strong>基线</strong>：77 个测试套件 / 1020 个用例全部通过；改动文件 lint 0 error 0 warning；
+  「虚假覆盖测试」的冻结清单<strong>只减不增</strong>（本轮已减至 14），防止新增虚假覆盖。</p>
+</section>
+
+<!-- ══════════════ 07 ══════════════ -->
+<section>
+  <h2><span class="num">07</span>尚未验证的事情</h2>
+  <p class="lead">以下都不是「大概没问题」，而是<strong>当前没有证据</strong>。列出来是为了让它们不被当成已完成。</p>
+  <ul class="plain">
+    <li><strong>真实负载下的行为</strong>：所有性能数字都是单机微基准，无压测基线。
+    「修复有效」有证据，「足以支撑扩容」没有。</li>
+    <li><strong>E3 未做</strong>：遥测统计与 WS 广播仍在进程内，多实例下统计偏小、跨实例通知丢失。
+    这是目前<strong>唯一剩余的横向扩展阻断</strong>。</li>
+    <li><strong>连接池容量在上限处的表现</strong>：<code>max=10</code>/实例，MySQL 默认 <code>max_connections=151</code>，
+    因此理论上约 15 个副本就会耗尽连接。该约束已写成代码注释，但<strong>没有在接近饱和时实测过</strong>。</li>
+    <li><strong><code>connectStandalone()</code> 的重试语义与注释不符</strong>：注释写「CLI 场景最多重试 1 次」，
+    实际由客户端 <code>reconnectStrategy</code> 决定（默认 10 次，Redis 不可达时约 90 秒才返回）。
+    已在验收关卡里用有界前置检查绕开，<strong>源码本身未改</strong>——是否修正应由代码所有者决定。</li>
+    <li><strong>容器化与 CI 载体不存在</strong>：未提交任何未经验证的制品。</li>
+  </ul>
+  <div class="note warn">
+    <span class="nt">一句话</span>
+    <p>前三轮修复清掉的是「会让多实例行为不可预测的代码缺陷」。
+    <strong>「因此现在可以加机器了」这句话，需要一次真实的双实例压测来宣布，而不是由本报告代为宣布。</strong></p>
+  </div>
+</section>
+
+<footer>
+  <p>评估环境：Windows · Node 22.22.2 · MySQL 与 Redis 均可达（本报告的多进程结论在真实 Redis/MySQL 上取得）。
+  所有数据均为本机实测，方法见 §06；未验证项已单列于 §07，不计入已完成。</p>
+  <p>配套文档：
+  <code>reports/backend-architecture-review-2026-09-19.html</code>（首轮完整评审 · 修复前基线）、
+  <code>reports/backend-architecture-remediation-2026-09-19.html</code>（逐项修复验收 · 含改动位置与证据）、
+  <code>scripts/verify/README.md</code>（可复跑关卡的用法与退出码约定）。</p>
+</footer>
+
+</div>
+</body>
+</html>
