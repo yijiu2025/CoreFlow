@@ -13,7 +13,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import bcrypt from 'bcryptjs';
+import { verifyPassword } from '../../../framework/auth/password-hash.js';
 import CodeDao from '../dao/code.dao.js';
 import TokenDao from '../dao/token.dao.js';
 import ClientDao from '../dao/client.dao.js';
@@ -84,12 +84,12 @@ class TokenService {
       return client;
     }
 
-    // 机密客户端验证 secret (使用 bcrypt 安全比对)
+    // 机密客户端验证 secret（scrypt，兼容历史 bcrypt 哈希）
     if (!clientSecret || !client.client_secret) {
       return null;
     }
 
-    const match = await bcrypt.compare(clientSecret, client.client_secret);
+    const match = await verifyPassword(clientSecret, client.client_secret);
     if (!match) {
       return null;
     }

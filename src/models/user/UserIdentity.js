@@ -45,7 +45,7 @@ const defineUserIdentity = (sequelize, DataTypes) => {
       credential: {
         type: DataTypes.STRING(255),
         allowNull: true,
-        comment: '安全凭证: 密码 bcrypt Hash 值 / 三方 Token'
+        comment: '安全凭证: 密码 scrypt Hash 值（历史数据为 bcrypt）/ 三方 Token'
       },
       failed_attempts: {
         type: DataTypes.INTEGER,

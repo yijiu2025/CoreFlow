@@ -7,7 +7,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../../../framework/auth/password-hash.js';
 import sequelize from '../../../framework/db/index.js';
 import { validateScopes } from '../config/scope-registry.js';
 
@@ -53,8 +53,8 @@ const ClientDao = {
     // 生成原始明文 client_secret
     const rawSecret = application_type === 'service' ? crypto.randomBytes(32).toString('base64url') : null;
 
-    // 对 client_secret 进行安全哈希存储 (bcrypt)
-    const hashedSecret = rawSecret ? bcrypt.hashSync(rawSecret, 10) : null;
+    // 对 client_secret 进行安全哈希存储（scrypt，异步不阻塞事件循环）
+    const hashedSecret = rawSecret ? await hashPassword(rawSecret) : null;
 
     const model = getModel();
     const client = await model.create({

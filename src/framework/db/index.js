@@ -48,8 +48,15 @@ const sequelize = new Sequelize(dsn, {
     connectTimeout: 10000
   },
   pool: {
+    // ⚠️ 容量天花板：本池是**每实例**的。MySQL 默认 max_connections = 151，
+    // 按默认 max=10 计算，约 15 个实例就会耗尽数据库连接。
+    // 扩容时按此式取值：DB_POOL_MAX ≈ (MySQL_max_connections − 运维保留) ÷ 预期实例数
+    // （例如 151 − 11 保留 = 140，跑 4 个实例 → 每实例 35，可设 30 留余量）
     max: parseInt(process.env.DB_POOL_MAX || '10'),
     min: parseInt(process.env.DB_POOL_MIN || '2'),
+    // acquire 是"等不到连接就放弃"的上限。注意它（默认 30s）远大于健康探针的 3s 超时 ——
+    // 池枯竭时探针会先被自己的超时掐断，表现为"探针不稳定"而非"连接池耗尽"。
+    // 因此池状态必须单独可观测，见 getPoolStats()。
     acquire: parseInt(process.env.DB_POOL_ACQUIRE || '30000'),
     idle: parseInt(process.env.DB_POOL_IDLE || '10000')
   }
@@ -92,5 +99,40 @@ function getModel(namespaceOrName, modelName) {
   return model;
 }
 
-export { sequelize, Sequelize, getModel };
+/**
+ * 读取数据库连接池的实时占用情况
+ *
+ * ⚠️ 字段名以 `sequelize-pool` 的**实际 API** 为准，不是直觉命名：
+ *   `maxSize`（不是 `max`）、`waiting`（不是 `pending`）。
+ *   实测来源：node_modules/sequelize-pool/lib/Pool.js 的 getter。
+ *   按直觉写会拿到 `undefined` —— 而 `undefined` 在 JSON 里会整个键消失，
+ *   表现为"指标端点是空的"却不报错。
+ *
+ * 为什么需要它：连接池枯竭是本系统最难排查的一类故障 ——
+ * `pool.acquire` 默认等 30s，而健康探针 3s 就超时，于是探针只报"超时"，
+ * 真正的原因（连接池耗尽）不出现在任何日志里。暴露这几个数字才能恢复可归因性。
+ *
+ * 其中 `waiting > 0` 是**饱和信号**：有请求在排队等连接。
+ *
+ * 防御式读取：Sequelize 启用读写分离时 `connectionManager.pool` 是另一种形状
+ * （`{ read, write }` 两个子池），此处返回 null 而不是抛错或给出假的 0。
+ *
+ * @returns {{maxSize: number, minSize: number, size: number, available: number, using: number, waiting: number}|null}
+ *          未初始化（如无 DB 的测试环境）或形态不符时返回 null
+ */
+function getPoolStats() {
+  const pool = sequelize?.connectionManager?.pool;
+  // 只有 sequelize-pool 的 Pool 实例才有数值型 size；读写分离形态是普通对象 → 判否
+  if (!pool || typeof pool.size !== 'number') return null;
+  return {
+    maxSize: pool.maxSize,
+    minSize: pool.minSize,
+    size: pool.size,
+    available: pool.available,
+    using: pool.using,
+    waiting: pool.waiting
+  };
+}
+
+export { sequelize, Sequelize, getModel, getPoolStats };
 export default sequelize;

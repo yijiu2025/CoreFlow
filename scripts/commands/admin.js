@@ -2,7 +2,7 @@
  * 管理员管理命令模块
  */
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../../src/framework/auth/password-hash.js';
 import { getModels } from '../../src/framework/db/models.js';
 import { connectRedis, closeRedis, clearUserSessions } from '../lib/redis.js';
 import {
@@ -112,7 +112,7 @@ export async function setupSuperadmin() {
         return;
       }
 
-      const hashedPassword = await bcrypt.hash(password, 12);
+      const hashedPassword = await hashPassword(password);
 
       user = await User.create({
         uid: crypto.randomUUID(),
