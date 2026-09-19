@@ -36,8 +36,9 @@
   守卫 = eslint `no-restricted-syntax` + `conventions/export-placement.test.js`。盲区：全文件只有一个 export 时天然"在末尾"。
 - **`src` 不得 import `scripts`**（只允许 `scripts/ → src/`）。守卫 `conventions/no-scripts-import.test.js`。
 - **测试有效性**：必须**真实加载被测代码**，禁止「手写常量再断言该常量」、禁止**内联复制被测逻辑**。
-  守卫 `conventions/test-effectiveness.test.js`；`KNOWN_INEFFECTIVE_TESTS` **只减不增，当前 14**（改动后同步 `FROZEN_SIZE`）。
-  ⚠️ 读文件做静态断言的**结构守卫**零 import 是正当的。**一个测试文件只能注册一组路由**（`_routeRegistry` 是模块级状态，无重置入口）。
+  守卫 `conventions/test-effectiveness.test.js`；`KNOWN_INEFFECTIVE_TESTS` 已清零（2026-09-20），`FROZEN_SIZE = 0` **禁止新增**。
+  ⚠️ 读文件做静态断言的**结构守卫**零 import 是正当的（登记 `STRUCTURAL_GUARD_WHITELIST`）。**一个测试文件只能注册一组路由**（`_routeRegistry` 是模块级状态，无重置入口）。
+- **跨应用隔离**：`src/app/<A>` 不得 import `src/app/<B>`，例外走 `conventions/app-isolation.test.js` 的单向边白名单（含幽灵豁免校验）。
 - **firewall 分层（单向）**：`interface/` → `config/ util/` → `dao/` → `engine/` → `services/ cli/ data/` → `index.js`。
   ⚠️ **`engine/dao` 已撤销**，封禁能力直接 import `src/app/firewall/dao/block-manager.js`。守卫 `conventions/firewall-layering.test.js`。
 - **📐 文档 ≠ 实现**：`docs/` 的设计稿与"已完成"标记**大量失真**。评估/扩容前先核**文档 vs 代码**
@@ -85,6 +86,11 @@ CLI 调用前必须自带超时（`Promise.race`）。
 
 ## 3. 手法 / 命令速查
 
+- 🔴 **本仓禁用 `git rm`**：三次 src/ 大规模删除（404 文件全删，~12s 渐进）**全部紧跟 git rm**，元凶进程未定
+  （监视器抓到删除期间常驻 git.exe）。**删文件用 POSIX `rm` + `git add -A`**。恢复：
+  `git status --porcelain -z | tr '\0' '\n' | grep "^ D " | cut -c4- | xargs -d '\n' git checkout --`
+  （-z 必须，中文路径会转义；只恢复工作区删除、不碰未提交修改）。监视器 `.tmp-probe/watch-src.mjs` 可复用。
+- **大块改动立刻检查点提交**（本会话三次靠它兜底）。
 - **毒丸实验**：把被测文件覆写成 `throw new Error('__QUARANTINE__')` 再跑 —— **变红 = 真加载了；照绿 = 测试失效**。实验后必须恢复 + 全量复验。
 - **量"事件循环被冻结多久"只能用 tick 间隔法**：10ms 心跳取相邻 tick 最大间隔。
   ⚠️ **不要用 `monitorEventLoopDelay`**：实测把 774ms 冻结报成 17ms（据此会得出相反结论）。
@@ -112,7 +118,9 @@ CLI 调用前必须自带超时（`Promise.race`）。
 
 ## 4. 待办（跨会话）
 
-- **单实例假定只剩 1 处未修**：遥测统计 / WS 广播仍在进程内累加（多实例下聚合值偏小、封禁通知送不到其他实例的客户端）→ **E3**。
-  E1（调度器锁）/ E2（守卫配置）**已修**，并有可复跑关卡 `npm run verify:all`。详见 `docs/core/architecture-review-2026-09-19.md`。
+- ~~E3~~ **已完成（2026-09-20）**：遥测外置（store.js 增量刷写 + 聚合读取）与 WS 广播扇出（pubsub.js）已落地，
+  全量回归 882 用例绿。**E3 跨进程关卡（stats-aggregation/ws-fanout）尚未复跑确认**。
+- **`git rm` 大规模删除根因未查明**（进程已锁定触发模式，未定是谁）。
 - **`connectStandalone()` 重试次数与注释不符**（Redis 不可达挂 ~90s）：源码未改，仅在关卡里用有界前置检查绕开；是否修正由代码所有者决定。
 - 部署文档里的 Docker、多服务器方案**代码不存在**，不要照着做；未经验证的 Dockerfile/CI 也刻意未提交。
+- P2 session.js 拆分评估、P3 容器化/CI 未开始（见 `docs/core/architecture-review-2026-09-19.md`）。
