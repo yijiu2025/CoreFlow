@@ -19,9 +19,9 @@
 ⚠️ `git push` 还可能**耗时数分钟且全程零输出**（实测 5m27s）——**超时不代表失败**，重试是安全的
 （第二次即时成功）。判定一律用 `git ls-remote origin main`。
 - **同步状态一律以 `git ls-remote origin main` 为准**，不信退出码、不信 `git status`。
-- 只能改 **`.git/packed-refs`** 中该行 SHA，**每次 push 后都要重做**；脚本须带 4 条断言：
-  ① 头行 `'# pack-refs with: peeled fully-peeled sorted '`（**含尾空格**）原样；② 待替换行恰好命中一处；
-  ③ 变化行数 = 1；④ 保持纯 LF。
+- 只能改 **`.git/packed-refs`** 中该行 SHA，**每次 push 后都要重做**。
+  ✅ 现成脚本：**`node ~/.workbuddy/tools/fix-packed-refs.mjs <远端SHA>`**
+  （流程：`git push` → `git ls-remote origin main` 取 SHA → 跑脚本 → `git status -sb` 应为 `## main...origin/main`）。
 
 ---
 
