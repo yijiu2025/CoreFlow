@@ -39,11 +39,31 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
 /**
  * 存量遗留清单（**冻结**，只减不增）。
  *
- * 2026-09-20 清零：原 14 个「纯常量自测」类虚假测试已全部删除
- * （7 个直接删除 + 7 个改造后随灾难丢失、按同一策略删除）。
- * 守卫保留原断言结构，清单为空即「虚假覆盖为零」的长期钉子 —— 禁止新增。
+ * 这些文件已被确认为「纯常量自测」类虚假覆盖（毒丸实验证实：被测模块损坏后仍全绿）。
+ * 处置策略为「冻结存量 + 禁止新增」：
+ *   - 存量保持现状，不阻塞 CI（逐个改造需逐个读生产代码，工作量独立评估）；
+ *   - **不允许**向本清单新增条目 —— 新写的测试必须真实加载被测代码；
+ *   - 每改造完一个文件，从本清单删除对应行（本测试会校验清单条目的真实性）。
+ *
+ * 2026-09-20 曾短暂清零（直接删除 14 个文件），应用户要求已恢复文件，
+ * 清单同步回填 —— 改造完成后逐个摘除。
  */
-const KNOWN_INEFFECTIVE_TESTS = new Set();
+const KNOWN_INEFFECTIVE_TESTS = new Set([
+  'api-integration.test.js',
+  'database-models.test.js',
+  'edge-cases.test.js',
+  'email-notification.test.js',
+  'error-handling.test.js',
+  'integration/app.test.js',
+  'integration-flow.test.js',
+  'jwt.test.js',
+  'oauth-flow.test.js',
+  'performance.test.js',
+  'permission-loader.test.js',
+  'permission-system.test.js',
+  'rate-limiter.test.js',
+  'security.test.js'
+]);
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -151,8 +171,8 @@ describe('测试有效性守卫', () => {
   it('存量清单规模不得扩张（防绕过：把新违规偷塞进冻结清单）', () => {
     // 该断言把「清单长度」钉在当前值上。新增违规想混过检查，
     // 必须同时改这里 —— 那是一次可见的、需要理由的修改，而非静默绕过。
-    // 2026-09-20 虚假测试清零：原 14 → 0，清单从此保持为空。
-    const FROZEN_SIZE = 0;
+    // 2026-09-20 恢复 14 个存量伪测试文件，清单同步回填，冻结值回到 14。
+    const FROZEN_SIZE = 14;
     expect(KNOWN_INEFFECTIVE_TESTS.size).toBeLessThanOrEqual(FROZEN_SIZE);
   });
 
