@@ -1,5 +1,15 @@
 # CI/CD {#cicd}
 
+> ## 📐 实现状态：示例配置 · 未落地
+>
+> **2026-09-19 核实：仓库内没有 `.github/` 目录** —— 本页的 workflow 文件不存在，从未运行过。
+>
+> 当前真实存在的自动化只有 `.husky/pre-commit` + lint-staged（提交时对 `src/**` 跑
+> eslint --fix 与 prettier）。也就是说：**没有 lint/测试的强制门禁**，
+> 全量测试只靠开发者本地自觉执行。
+>
+> 背景见 [`架构评估报告`](/core/architecture-review) 阶段 1。
+
 ## GitHub Actions
 
 ```yaml
