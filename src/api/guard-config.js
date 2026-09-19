@@ -496,6 +496,105 @@ async function saveGuardConfig() {
   }
 }
 
+/**
+ * 跨实例配置同步：比对 DB 版本号，把其他实例的改动拉回本实例内存
+ *
+ * ── 为什么必须有这个函数 ──
+ * 本模块是**模块级单例**（`let configs`），运行期改配置只更新**本进程**的内存。
+ * 于是多实例下会出现：运维在面板上关掉某个路由的鉴权 → 只有处理这次写请求的实例生效，
+ * 其余实例直到重启都不知道。同一个请求打到 A 和 B 会得到**不同的鉴权结果** ——
+ * 这是安全语义错误，不是可用性问题，因此不能只在文档里标注"单实例假定"了事。
+ *
+ * ── 三个必须守住的约束 ──
+ * 1. **不回写 DB**：启动时那次 `saveWithTimeout()` 是为了把新增路由补进 DB；
+ *    这里若也写，会与对端互相覆盖，形成写放大甚至配置震荡。
+ * 2. **跳过本地未落盘的改动**（`_dirtySystems`）：本地刚改完还在防抖窗口里，
+ *    此时若被 DB 的旧版本覆盖，运维的修改会"自己消失"——比不同步更难排查。
+ * 3. **只在版本真的变大时合并**：避免每次轮询都做一遍 structuredClone 与深合并。
+ *
+ * @returns {Promise<{updated: string[]}>} 本次实际重载的系统列表
+ */
+async function syncGuardConfigFromDb() {
+  let data;
+  try {
+    data = await GuardConfigDao.loadFromDB();
+  } catch (err) {
+    // 单次轮询失败不影响服务，也不清空现有内存配置
+    log.warn(`⚠️ [Guard Config] ${C.yellow}跨实例同步读取失败，保留现有配置${C.reset}`, err);
+    return { updated: [] };
+  }
+
+  const dbVersions = data.versions || {};
+  const changed = [];
+
+  for (const [systemKey, dbVersion] of Object.entries(dbVersions)) {
+    if (!configs[systemKey]) continue; // DB 里有、本实例已删除的系统 → 忽略
+    if (_dirtySystems.has(systemKey)) continue; // 本地有未落盘改动 → 本地优先
+    const localVersion = _dbVersions[systemKey] || 0;
+    if (dbVersion > localVersion) changed.push(systemKey);
+  }
+
+  if (changed.length === 0) return { updated: [] };
+
+  // 只合并真正变化的系统，避免整棵树重算
+  mergeDbConfig(Object.fromEntries(changed.map(k => [k, data.configs[k]])));
+  for (const key of changed) {
+    _dbVersions[key] = dbVersions[key];
+  }
+  currentVersion = Math.max(currentVersion, ...changed.map(k => dbVersions[k] || 0));
+
+  return { updated: changed };
+}
+
+/** 跨实例同步的轮询间隔（毫秒）。设为 0 可关闭（单实例部署不需要）。 */
+const SYNC_INTERVAL_MS = (() => {
+  const raw = process.env.GUARD_CONFIG_SYNC_MS;
+  if (raw === undefined || raw === '') return 30_000;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 30_000;
+})();
+
+/** 同步定时器句柄（模块级，保证幂等启动与可停止） */
+let _syncTimer = null;
+
+/**
+ * 启动跨实例配置同步轮询
+ *
+ * 幂等：重复调用不会产生多个定时器。
+ *
+ * @returns {boolean} true = 本轮已启动；false = 已关闭（间隔为 0）或已在运行
+ */
+function startGuardConfigSync() {
+  if (_syncTimer) return false;
+  if (SYNC_INTERVAL_MS === 0) {
+    log.info(`ℹ️ [Guard Config] ${C.dim}跨实例同步已关闭（GUARD_CONFIG_SYNC_MS=0）${C.reset}`);
+    return false;
+  }
+
+  _syncTimer = setInterval(() => {
+    syncGuardConfigFromDb()
+      .then(res => {
+        if (res.updated.length > 0) {
+          log.info(`🔄 [Guard Config] ${C.cyan}已同步其他实例的配置变更: ${res.updated.join(', ')}${C.reset}`);
+        }
+      })
+      .catch(err => log.warn(`⚠️ [Guard Config] 跨实例同步异常`, err));
+  }, SYNC_INTERVAL_MS);
+
+  // 不阻塞进程退出（真正的清理在 stopGuardConfigSync / onClose 里）
+  if (_syncTimer.unref) _syncTimer.unref();
+  log.info(`🔁 [Guard Config] ${C.dim}跨实例同步已启动，间隔 ${SYNC_INTERVAL_MS}ms${C.reset}`);
+  return true;
+}
+
+/** 停止跨实例配置同步（应用关闭时调用） */
+function stopGuardConfigSync() {
+  if (_syncTimer) {
+    clearInterval(_syncTimer);
+    _syncTimer = null;
+  }
+}
+
 export {
   loadGuardConfig,
   getGuardConfig,
@@ -506,5 +605,8 @@ export {
   registerApiMetadata,
   flushGuardConfig,
   getAllGuardConfigs,
-  saveGuardConfig
+  saveGuardConfig,
+  syncGuardConfigFromDb,
+  startGuardConfigSync,
+  stopGuardConfigSync
 };
