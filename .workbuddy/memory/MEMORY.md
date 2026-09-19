@@ -103,6 +103,10 @@
   不可用：`grep -P`、`sort -u`、`wc -l *.js | sort -rn`（用 Node 脚本替代）。
 - **CLI 写配置前必须先 `initDao()`**（否则用默认值覆盖线上配置）；CLI 下 `globalRedis` 恒 null，
   需 `connectStandalone()`/`disconnectStandalone()`，**不释放 socket 会挂住进程**。
+- **改 `docs/` 里的链接后要跑一次 `npm run docs:build`**：vitepress 的死链检查默认开启，
+  站内链接写错会让 build 直接失败（`config.ts` 的 `ignoreDeadLinks` 只放行指向 docs **之外**源码的引用）。
+  ⚠️ 这项检查曾在"红灯"状态下躺了很久（10 条历史死链，2026-09-19 才修）——
+  **长期亮红灯的检查等于没有检查**，失败会被当成"正常现象"。
 
 ---
 
