@@ -36,6 +36,23 @@ const log = createLogger('app.firewall.engine.pipeline');
  */
 const CHALLENGE_VERIFY_PATH = '/api/firewall/v1/challenge/verify';
 
+/**
+ * 健康探针路径（编排系统的存活 / 就绪探测）。
+ *
+ * 与挑战验证接口同一性质：**必须保持无条件可达**，否则探针会被本系统自己的防护判成异常。
+ * 具体故障链：探针通常**不带 User-Agent**（部分 Docker HEALTHCHECK、自研监控），
+ * 会命中 Bot 检测的 `requestCount > botChallengeNoUaLimit`（默认 10）分支 ——
+ * 按 60s 窗口、5s 一次的常规探测频率即 12 次 → 返回**挑战页 HTML 且状态码 200**，
+ * 于是探针"看起来通过"却完全失效；若改判成 429，编排系统又会把健康实例摘掉，形成自伤。
+ *
+ * 这不是放宽安全：全局封禁 / 连接数限制阶段**照常执行**，跳过的只是 Bot / 地理 /
+ * 端点限频这些启发式判定。
+ *
+ * ⚠️ 与 `CHALLENGE_VERIFY_PATH` 一样是**字面量路径**：若改动 `api/system/system.json`
+ * 的 prefix（当前为空）或 `health.js` 里的 group prefix（当前 `/v1`），此处必须同步。
+ */
+const PROBE_PATHS = ['/v1/health', '/v1/health/live', '/v1/health/ready'];
+
 /** 静态资源后缀：不经过深度检测 */
 const SKIP_PATTERN = /\.(js|css|png|jpg|ico|svg|woff2?)$/i;
 
@@ -62,12 +79,22 @@ function isChallengeVerifyUrl(url) {
 }
 
 /**
+ * 是否为健康探针路径
+ *
+ * @param {string} url 请求路径
+ * @returns {boolean} true 表示是编排系统的健康探测
+ */
+function isProbeUrl(url) {
+  return PROBE_PATHS.includes(pathOf(url));
+}
+
+/**
  * 判断请求是否应跳过深度检测
  * @param {string} url 请求路径
  * @returns {boolean} true 表示跳过
  */
 function shouldSkipDeepCheck(url) {
-  return isChallengeVerifyUrl(url) || SKIP_PATTERN.test(pathOf(url));
+  return isChallengeVerifyUrl(url) || isProbeUrl(url) || SKIP_PATTERN.test(pathOf(url));
 }
 
 /**
@@ -404,7 +431,9 @@ function recordLog(firewallLog, statusCode, alreadyLogged = false) {
 
 export {
   CHALLENGE_VERIFY_PATH,
+  PROBE_PATHS,
   isChallengeVerifyUrl,
+  isProbeUrl,
   shouldSkipDeepCheck,
   willBeRejectedAsAnonymous,
   buildRequestContext,

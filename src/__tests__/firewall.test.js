@@ -51,7 +51,13 @@ jest.unstable_mockModule('../app/firewall/data/store.js', () => ({
   clearAll: () => {
     pushedRecords.length = 0;
   },
-  setBroadcastHandler: () => {}
+  setBroadcastHandler: () => {},
+  // ⚠️ 模块替身必须**镜像真身的导出面**：ESM 是静态链接的，真身新增一个导出而替身没有，
+  // 整条 import 链会以 `does not provide an export named '...'` 直接崩掉整个套件
+  // （不是某一项失败，是 "Test suite failed to run"）。
+  // 真身在 2026-09-19 新增了这两个生命周期函数供 onClose 落盘使用。
+  stopPersistTimer: () => {},
+  flushPersist: async () => {}
 }));
 
 const { buildChallengePage } = await import('../app/firewall/data/challenge-template.js');

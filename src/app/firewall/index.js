@@ -26,6 +26,7 @@ import {
 import { registerRateLimit } from './engine/detectors/first-ratelimit.js';
 import { checkNotFoundTrap } from './engine/detectors/scan-trap.js';
 import { startCleanupTask, trackConnection } from './util/connection-tracker.js';
+import { flushPersist } from './data/store.js';
 import fp from 'fastify-plugin';
 import { createLogger } from '../../framework/log/index.js';
 
@@ -116,9 +117,11 @@ const initFirewall = fp(async function (app) {
     }
   });
 
-  // ============== onClose：清理定时器 ==============
-  app.addHook('onClose', () => {
+  // ============== onClose：清理定时器 + 落盘遥测 ==============
+  app.addHook('onClose', async () => {
     cleanupSaveTimer();
+    // 遥测只在内存里，滚动发布 / 重启时不落盘就会丢掉最近的统计
+    await flushPersist();
   });
 
   // ============== onResponse：登录结果观测 + 扫描陷阱 ==============
