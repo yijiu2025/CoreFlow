@@ -65,6 +65,11 @@
   `keepAliveTimeout: 72000` 本就是默认值、`forceCloseConnections` **对已 upgrade 的 WS 完全无效**。
 - **WS 优雅停机必须自定义 `preClose`**（`src/framework/websocket/preclose.js`）：广播 `1001` →
   宽限期后 `terminate()` → `done()` 立即返回。**只有 `socket.destroy()`/`ws.terminate()` 能解卡。**
+- **加载器失败分级**：`framework/loader/engine.js` 的 `OPTIONAL_LOADERS` 是"允许带伤启动"的**白名单**，
+  未列入者一律按关键 → **失败即 fail-fast**。新增 registry 加载器时要主动想清归哪一类 ——
+  默认（不声明）取"关键"是**有意的安全缺省**（漏声明会拦住启动，而不是被静默放过）。
+- **探针的公开性**：`/health/*` 是 `requireLogin: false` 的**公开**端点 → **新增任何进 body 的字段前
+  先问"给未登录的人看合适吗"**（曾把 `sequelize` 报错里的内网 `IP:port` 直接回显出去）。
 
 **Redis / node-redis v5（细节见 details §5）**
 - **只有驼峰命令**：`client.hset/hgetall/zadd/...` 全 undefined，调用即 `TypeError`（常被 try 吞掉）。
