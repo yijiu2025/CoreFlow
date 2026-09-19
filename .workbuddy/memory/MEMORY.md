@@ -53,7 +53,7 @@
   CLI 工具库在 `src/framework/cli/index.js`，模型加载在 `src/framework/db/models.js`。
 - **测试有效性**：测试必须**真实加载被测代码**，禁止「手写常量再断言该常量」（毒丸实验证实那类测试
   删掉被测模块仍全绿）；**禁止内联复制被测逻辑**（副本与真身会各自演化，比零覆盖更危险）。
-  守卫 `conventions/test-effectiveness.test.js`；`KNOWN_INEFFECTIVE_TESTS` **只减不增，当前 15**
+  守卫 `conventions/test-effectiveness.test.js`；`KNOWN_INEFFECTIVE_TESTS` **只减不增，当前 14**
   （改动后须同步 `FROZEN_SIZE`）。⚠️ 读文件做静态断言的**结构守卫**零 import 是正当的。
   **一个测试文件只能注册一组路由**（`_routeRegistry` 是模块级状态且无重置入口）。
 - **firewall 分层（单向）**：`interface/` → `config/ util/` → `dao/` → `engine/` → `services/ cli/ data/` → `index.js`。
