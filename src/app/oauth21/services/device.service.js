@@ -15,8 +15,40 @@ import ClientDao from '../dao/client.dao.js';
 import { generateToken } from '../crypto/tokens.js';
 import config from '../config/config.js';
 import { getStore } from '../../../framework/redis/index.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const EXPIRES_IN = config.device.expiresIn; // 秒
+
+/** 设备授权页模板路径（模块级解析一次，不放进请求路径） */
+const DEVICE_TEMPLATE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../templates/device.html');
+
+/**
+ * 模板缓存
+ *
+ * 模板是静态资源。原实现在**每次请求**里 `readFileSync` + 三次动态 `import()`，
+ * 等于把一次同步磁盘 I/O 放进请求路径 —— 同步 I/O 会占住事件循环，
+ * 与 `framework/auth/password-hash.js` 处理哈希时遵循的是同一条原则。
+ *
+ * 生产环境缓存（模板不会在运行期变化）；非生产环境每次重读，改模板即时可见。
+ * @type {string|null}
+ */
+let templateCache = null;
+
+/**
+ * 读取设备授权页模板
+ * @returns {Promise<string>} 模板 HTML
+ */
+async function loadDeviceTemplate() {
+  if (process.env.NODE_ENV !== 'production') {
+    return fs.promises.readFile(DEVICE_TEMPLATE_PATH, 'utf-8');
+  }
+  if (templateCache === null) {
+    templateCache = await fs.promises.readFile(DEVICE_TEMPLATE_PATH, 'utf-8');
+  }
+  return templateCache;
+}
 
 class DeviceService {
   constructor(fastify) {
@@ -167,12 +199,7 @@ class DeviceService {
         })[c]
     );
 
-    const fs = await import('node:fs');
-    const path = await import('node:path');
-    const { fileURLToPath } = await import('node:url');
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const templatePath = path.join(__dirname, '../templates/device.html');
-    const html = fs.readFileSync(templatePath, 'utf-8');
+    const html = await loadDeviceTemplate();
     return html.replace('{{USER_CODE}}', safe);
   }
 }

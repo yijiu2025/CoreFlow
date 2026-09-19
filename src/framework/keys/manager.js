@@ -12,6 +12,7 @@
  */
 
 import crypto from 'node:crypto';
+import { promisify } from 'node:util';
 import { ALGORITHMS, MODULUS_LENGTH_2048, withinGrace } from './config.js';
 import { C } from '../../utils/colors.js';
 import { setCachedKey, deleteCachedKey, setCurrentKid, getCurrentKid, clearCache } from './cache.js';
@@ -45,16 +46,26 @@ function generateKid() {
   return `k${crypto.randomBytes(8).toString('hex')}`;
 }
 
+/** 异步密钥生成（跑在 libuv 线程池）—— 见 generateKeyPair 的说明 */
+const generateKeyPairAsync = promisify(crypto.generateKeyPair);
+
 /**
  * 在内存中生成 RSA 密钥对（不写 DB）
+ *
+ * ⚠️ 必须使用**异步**版本（`crypto.generateKeyPair`，跑在 libuv 线程池）。
+ * RSA 密钥生成是纯 CPU 计算，`generateKeyPairSync` 会占住主线程：
+ * 本机实测 2048 位约 53ms，且开销随 modulusLength **超线性增长**
+ * （4096 位即达数百毫秒量级）。调用链 persistKey ← createKey ← ensureCurrentKey
+ * 本就全是 async，用异步版不引入任何额外复杂度。
+ *
  * @param {object} [options]
  * @param {number} [options.modulusLength=MODULUS_LENGTH_2048]
  * @param {string} [options.algorithm=ALGORITHMS.RS256]
  * @param {string} [options.kid] - 写入 jwk 的 kid，未提供则由调用方补
- * @returns {{ privateKey: string, publicKey: string, jwk: object }}
+ * @returns {Promise<{ privateKey: string, publicKey: string, jwk: object }>}
  */
-function generateKeyPair({ modulusLength = MODULUS_LENGTH_2048, algorithm = ALGORITHMS.RS256, kid = '' } = {}) {
-  const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
+async function generateKeyPair({ modulusLength = MODULUS_LENGTH_2048, algorithm = ALGORITHMS.RS256, kid = '' } = {}) {
+  const { publicKey, privateKey } = await generateKeyPairAsync('rsa', {
     modulusLength,
     publicKeyEncoding: { type: 'spki', format: 'pem' },
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
@@ -75,7 +86,7 @@ function generateKeyPair({ modulusLength = MODULUS_LENGTH_2048, algorithm = ALGO
  * @returns {Promise<{publicKey: string, privateKey: string, jwk: object, kid: string}>}
  */
 async function persistKey(kid, { algorithm, modulusLength, remark }) {
-  const { privateKey, publicKey, jwk } = generateKeyPair({ modulusLength, algorithm, kid });
+  const { privateKey, publicKey, jwk } = await generateKeyPair({ modulusLength, algorithm, kid });
 
   await insertKey({
     name: kid,
