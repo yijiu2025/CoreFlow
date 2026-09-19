@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>后端架构评估：扩展性与稳定性 · nodeServers</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#101828; --ink2:#475467; --ink3:#667085;
+    --line:#e4e7ec; --line2:#d0d5dd;
+    --crit:#b42318; --crit-bg:#fef3f2; --crit-line:#fecdca;
+    --warn:#b54708; --warn-bg:#fffaeb; --warn-line:#fedf89;
+    --ok:#067647;  --ok-bg:#ecfdf3;  --ok-line:#abefc6;
+    --info:#175cd3; --info-bg:#eff8ff; --info-line:#b2ddff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 80px}
+
+  /* ── Header ── */
+  header{padding:56px 0 32px;border-bottom:2px solid var(--ink)}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:16px}
+  h1{margin:0 0 14px;font-size:34px;line-height:1.25;letter-spacing:-.02em;font-weight:700}
+  .sub{color:var(--ink2);font-size:16px;max-width:74ch;margin:0 0 24px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px}
+  .tag{font:500 12px/1 var(--mono);padding:7px 11px;border-radius:6px;background:#f2f4f7;color:var(--ink2);border:1px solid var(--line)}
+
+  /* ── Sections ── */
+  section{padding-top:44px}
+  h2{font-size:22px;margin:0 0 6px;letter-spacing:-.01em;font-weight:700;display:flex;align-items:baseline;gap:12px}
+  h2 .num{font:600 13px/1 var(--mono);color:#fff;background:var(--ink);padding:5px 8px;border-radius:5px;position:relative;top:-2px}
+  h3{font-size:16px;margin:28px 0 10px;font-weight:650}
+  .lead{color:var(--ink2);margin:0 0 20px;max-width:78ch}
+  p{margin:0 0 12px}
+  code{font:13px/1.5 var(--mono);background:#f2f4f7;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:#344054;white-space:nowrap}
+  .path{font:12px/1.5 var(--mono);color:var(--ink2);background:#f9fafb;border:1px solid var(--line);border-radius:5px;padding:2px 7px;display:inline-block;white-space:nowrap}
+
+  /* ── Verdict banner ── */
+  .verdict{background:var(--panel);border:1px solid var(--line2);border-left:4px solid var(--ok);border-radius:10px;padding:22px 24px;margin:0 0 8px}
+  .verdict .vtag{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.1em;color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line);padding:5px 9px;border-radius:5px;margin-bottom:12px}
+  .verdict p{margin:0 0 8px}
+  .verdict p:last-child{margin-bottom:0}
+  .verdict strong{color:var(--ink)}
+
+  /* ── KPI ── */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:20px 0 4px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .kpi .k{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:6px}
+  .kpi .l{font-size:12.5px;color:var(--ink3);line-height:1.45}
+  .kpi.crit .k{color:var(--crit)} .kpi.warn .k{color:var(--warn)} .kpi.ok .k{color:var(--ok)}
+
+  /* ── Findings ── */
+  .finding{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin:0 0 14px}
+  .finding.crit{border-left:4px solid var(--crit)}
+  .finding.warn{border-left:4px solid var(--warn)}
+  .finding.new{border:1px solid var(--warn-line);border-left:4px solid var(--warn);background:linear-gradient(0deg,var(--warn-bg),var(--warn-bg)) padding-box,var(--panel)}
+  .fhead{display:flex;align-items:flex-start;gap:11px;margin-bottom:12px;flex-wrap:wrap}
+  .fid{font:700 12px/1 var(--mono);padding:5px 8px;border-radius:5px;flex:none;margin-top:2px}
+  .fid.crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line)}
+  .fid.warn{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line)}
+  .fid.ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line)}
+  .ftitle{font-size:16px;font-weight:660;line-height:1.4;flex:1;min-width:200px}
+  .chip{font:700 10.5px/1 var(--mono);letter-spacing:.07em;padding:5px 8px;border-radius:5px;flex:none;margin-top:3px}
+  .chip.new{color:#fff;background:var(--warn)}
+  .chip.open{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line)}
+
+  /* ── Tables ── */
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;background:var(--panel)}
+  th{text-align:left;font:650 11.5px/1.4 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);
+     padding:10px 12px;border-bottom:2px solid var(--line2);white-space:nowrap}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fcfcfd}
+  td.num{font:13px/1.5 var(--mono);white-space:nowrap;font-weight:600}
+  .st{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:4px;white-space:nowrap;display:inline-block}
+  .st.open{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line)}
+  .st.done{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line)}
+  .st.part{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line)}
+
+  /* ── Callout ── */
+  .note{border-radius:9px;padding:14px 17px;margin:14px 0;font-size:14px;border:1px solid}
+  .note.crit{background:var(--crit-bg);border-color:var(--crit-line)}
+  .note.warn{background:var(--warn-bg);border-color:var(--warn-line)}
+  .note.info{background:var(--info-bg);border-color:var(--info-line)}
+  .note.ok{background:var(--ok-bg);border-color:var(--ok-line)}
+  .note .nt{font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono);display:block;margin-bottom:7px}
+  .note.crit .nt{color:var(--crit)} .note.warn .nt{color:var(--warn)}
+  .note.info .nt{color:var(--info)} .note.ok .nt{color:var(--ok)}
+  .note p:last-child{margin-bottom:0}
+
+  /* ── Diagram ── */
+  .fig{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px;margin:18px 0;overflow-x:auto}
+  .figcap{font-size:12.5px;color:var(--ink3);margin-top:14px;text-align:center}
+
+  /* ── Lists ── */
+  ul.clean{margin:10px 0;padding-left:20px} ul.clean li{margin-bottom:7px}
+  ul.no{list-style:none;padding:0;margin:12px 0}
+  ul.no li{position:relative;padding-left:30px;margin-bottom:11px}
+  ul.no li::before{content:"✕";position:absolute;left:0;top:0;color:var(--crit);font-weight:700}
+
+  footer{margin-top:52px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink3);font-size:12.5px}
+  footer code{font-size:12px}
+
+  @media print{body{background:#fff}.finding,.verdict,.fig,.kpi{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Backend Architecture Review</div>
+  <h1>后端架构评估：扩展性与稳定性</h1>
+  <p class="sub">
+    评估对象 <strong>nodeServers</strong> —— 模块化单体（Fastify v5 · Sequelize v6 · Redis v5 · MySQL）。
+    本报告基于<strong>代码级独立取证</strong>，所有结论附可复核证据；与今日已有的架构评审报告互补，
+    并新增 3 条此前未识别的风险。
+  </p>
+  <div class="meta">
+    <span class="tag">评估日期 2026-09-19</span>
+    <span class="tag">方法：全仓静态取证 + 本机实测</span>
+    <span class="tag">291 文件 / 41,963 行</span>
+    <span class="tag">175 路由 / 32 模型</span>
+  </div>
+</header>
+
+<!-- ══════════════ 结论 ══════════════ -->
+<section>
+  <h2><span class="num">01</span>总体结论</h2>
+  <div class="verdict">
+    <span class="vtag">核心判断</span>
+    <p><strong>分层设计是健康的，不需要推倒重来。</strong>系统层 / 应用层 / 路由层边界清晰，依赖方向有测试守卫，
+    会话层已经完全 Redis 化 —— 这是最关键的资产，意味着<strong>认证层本身已具备横向扩展能力</strong>。</p>
+    <p>真正阻碍扩容的不是"架构选型错"，而是 <strong>4 个进程内状态散落在子系统里</strong>，
+    外加 <strong>1 个此前未被发现的事件循环阻塞点</strong>。这些都是<strong>定点可修</strong>的，不需要架构手术。</p>
+    <p><strong>最关键的一条决策建议：在上述阻断项修完之前，增加机器不会提升容量</strong> ——
+    反而会让定时任务重复执行、守卫配置实例间不一致、遥测统计互相覆写，
+    使系统从"慢"变成"行为不可预测"。</p>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi crit">
+      <div class="k">4</div>
+      <div class="l">横向扩展阻断项<br>（进程内状态，全部未修）</div>
+    </div>
+    <div class="kpi warn">
+      <div class="k">60<span style="font-size:16px">ms</span></div>
+      <div class="l">单次同步哈希阻塞<br>事件循环（实测）</div>
+    </div>
+    <div class="kpi warn">
+      <div class="k">+105<span style="font-size:16px">MB</span></div>
+      <div class="l">每实例额外常驻内存<br>（geoip-lite）</div>
+    </div>
+    <div class="kpi crit">
+      <div class="k">0</div>
+      <div class="l">Dockerfile / CI<br>扩容无可复现载体</div>
+    </div>
+    <div class="kpi ok">
+      <div class="k">Redis</div>
+      <div class="l">会话层已完整外置<br>无需改造</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 现状 ══════════════ -->
+<section>
+  <h2><span class="num">02</span>现状架构（实测）</h2>
+  <p class="lead">分层本身符合预期，请求链路有明确的顺序语义。以下规模数据由脚本实测，非文档引用。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 680 430" width="100%" style="max-width:680px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#98a2b3"/>
+        </marker>
+      </defs>
+
+      <!-- 请求管道 -->
+      <rect x="16" y="14" width="648" height="86" rx="9" fill="#f9fafb" stroke="#e4e7ec"/>
+      <text x="32" y="34" font-size="11" font-weight="700" fill="#667085" letter-spacing="1">REQUEST PIPELINE</text>
+      <g font-size="10.5">
+        <rect x="30" y="46" width="86" height="34" rx="5" fill="#fff" stroke="#d0d5dd"/><text x="73" y="67" text-anchor="middle" fill="#344054">cookie</text>
+        <rect x="126" y="46" width="86" height="34" rx="5" fill="#ecfdf3" stroke="#abefc6"/><text x="169" y="67" text-anchor="middle" fill="#067647">auth · session</text>
+        <rect x="222" y="46" width="86" height="34" rx="5" fill="#fff" stroke="#d0d5dd"/><text x="265" y="67" text-anchor="middle" fill="#344054">rate-limit</text>
+        <rect x="318" y="46" width="98" height="34" rx="5" fill="#fef3f2" stroke="#fecdca"/><text x="367" y="67" text-anchor="middle" fill="#b42318">firewall ×5</text>
+        <rect x="426" y="46" width="86" height="34" rx="5" fill="#fff" stroke="#d0d5dd"/><text x="469" y="67" text-anchor="middle" fill="#344054">guard ×3</text>
+        <rect x="522" y="46" width="126" height="34" rx="5" fill="#fff" stroke="#d0d5dd"/><text x="585" y="67" text-anchor="middle" fill="#344054">handler → onSend</text>
+      </g>
+      <path d="M116,63 L124,63" stroke="#98a2b3" stroke-width="1.4" marker-end="url(#ar)"/>
+      <path d="M212,63 L220,63" stroke="#98a2b3" stroke-width="1.4" marker-end="url(#ar)"/>
+      <path d="M308,63 L316,63" stroke="#98a2b3" stroke-width="1.4" marker-end="url(#ar)"/>
+      <path d="M416,63 L424,63" stroke="#98a2b3" stroke-width="1.4" marker-end="url(#ar)"/>
+      <path d="M512,63 L520,63" stroke="#98a2b3" stroke-width="1.4" marker-end="url(#ar)"/>
+
+      <path d="M340,100 L340,124" stroke="#98a2b3" stroke-width="1.4" marker-end="url(#ar)"/>
+
+      <!-- 应用层 -->
+      <rect x="16" y="124" width="648" height="74" rx="9" fill="#fff" stroke="#d0d5dd"/>
+      <text x="32" y="143" font-size="11" font-weight="700" fill="#667085" letter-spacing="1">APPLICATION LAYER · 7 apps</text>
+      <g font-size="10.5" fill="#344054">
+        <rect x="30" y="152" width="88" height="32" rx="5" fill="#f2f4f7" stroke="#e4e7ec"/><text x="74" y="172" text-anchor="middle">oauth21</text>
+        <rect x="126" y="152" width="88" height="32" rx="5" fill="#f2f4f7" stroke="#e4e7ec"/><text x="170" y="172" text-anchor="middle">user</text>
+        <rect x="222" y="152" width="88" height="32" rx="5" fill="#f2f4f7" stroke="#e4e7ec"/><text x="266" y="172" text-anchor="middle">admin</text>
+        <rect x="318" y="152" width="88" height="32" rx="5" fill="#f2f4f7" stroke="#e4e7ec"/><text x="362" y="172" text-anchor="middle">firewall</text>
+        <rect x="414" y="152" width="88" height="32" rx="5" fill="#f2f4f7" stroke="#e4e7ec"/><text x="458" y="172" text-anchor="middle">notice</text>
+        <rect x="510" y="152" width="138" height="32" rx="5" fill="#f2f4f7" stroke="#e4e7ec"/><text x="579" y="172" text-anchor="middle">guard · posecraft</text>
+      </g>
+
+      <path d="M340,198 L340,222" stroke="#98a2b3" stroke-width="1.4" marker-end="url(#ar)"/>
+
+      <!-- 系统层 -->
+      <rect x="16" y="222" width="648" height="74" rx="9" fill="#fff" stroke="#d0d5dd"/>
+      <text x="32" y="241" font-size="11" font-weight="700" fill="#667085" letter-spacing="1">FRAMEWORK LAYER · 13 modules</text>
+      <g font-size="10.5" fill="#344054">
+        <rect x="30" y="250" width="88" height="32" rx="5" fill="#eff8ff" stroke="#b2ddff"/><text x="74" y="270" text-anchor="middle">db · pool</text>
+        <rect x="126" y="250" width="88" height="32" rx="5" fill="#ecfdf3" stroke="#abefc6"/><text x="170" y="270" text-anchor="middle">redis</text>
+        <rect x="222" y="250" width="88" height="32" rx="5" fill="#ecfdf3" stroke="#abefc6"/><text x="266" y="270" text-anchor="middle">auth</text>
+        <rect x="318" y="250" width="88" height="32" rx="5" fill="#fff" stroke="#d0d5dd"/><text x="362" y="270" text-anchor="middle">loader</text>
+        <rect x="414" y="250" width="88" height="32" rx="5" fill="#fffaeb" stroke="#fedf89"/><text x="458" y="270" text-anchor="middle">scheduler</text>
+        <rect x="510" y="250" width="138" height="32" rx="5" fill="#fff" stroke="#d0d5dd"/><text x="579" y="270" text-anchor="middle">log · keys · verify</text>
+      </g>
+
+      <path d="M340,296 L340,320" stroke="#98a2b3" stroke-width="1.4" marker-end="url(#ar)"/>
+
+      <!-- 存储 -->
+      <rect x="16" y="320" width="316" height="56" rx="9" fill="#eff8ff" stroke="#b2ddff"/>
+      <text x="174" y="345" text-anchor="middle" font-size="13" font-weight="600" fill="#175cd3">MySQL 8.0</text>
+      <text x="174" y="363" text-anchor="middle" font-size="10.5" fill="#475467">连接池 max=10 / 实例</text>
+
+      <rect x="348" y="320" width="316" height="56" rx="9" fill="#ecfdf3" stroke="#abefc6"/>
+      <text x="506" y="345" text-anchor="middle" font-size="13" font-weight="600" fill="#067647">Redis 7</text>
+      <text x="506" y="363" text-anchor="middle" font-size="10.5" fill="#475467">7 个会话命名空间 · 已横向就绪</text>
+
+      <!-- 进程外状态标注 -->
+      <rect x="16" y="390" width="648" height="30" rx="7" fill="#fef3f2" stroke="#fecdca" stroke-dasharray="4 3"/>
+      <text x="340" y="409" text-anchor="middle" font-size="11" fill="#b42318">
+        进程内状态（阻断扩容）：遥测缓冲 · WS 广播 · 每 IP 连接计数 · 守卫配置单例 · 调度器计时
+      </text>
+    </svg>
+    <div class="figcap">图 1 · 实测架构分层。绿色 = 已横向就绪；红色虚线 = 仍留在进程内的状态</div>
+  </div>
+
+  <h3>规模与资产实测</h3>
+  <table>
+    <thead><tr><th>维度</th><th>实测值</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>生产代码</td><td class="num">291 文件 / 41,963 行</td><td>不含测试目录</td></tr>
+      <tr><td>路由</td><td class="num">175 条</td><td>全部经 <code>registerSecureRoute</code> 声明式注册</td></tr>
+      <tr><td>数据模型</td><td class="num">32 个</td><td>按命名空间注册到 <code>app.db.*</code></td></tr>
+      <tr><td>应用 / 框架模块</td><td class="num">7 / 13</td><td>边界清晰，有分层守卫测试</td></tr>
+      <tr><td>会话存储</td><td class="num">7 个 Redis 命名空间</td><td>无进程内 Map 缓存 → <strong>已横向就绪</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok">
+    <span class="nt">必须保护的资产</span>
+    <p><strong>会话层完全 Redis 化</strong>是这套系统最有价值的架构决策 —— 它让"踢用户下线""强制重新登录"
+    这类能力在多实例下依然成立。若有人提议"改成无状态 JWT"，那是<strong>能力倒退</strong>：会直接废掉
+    <span class="path">session-kick.js</span> 与 <span class="path">session-governance.js</span>。
+    同理，<strong>健康探针分级</strong>与<strong>启动失败分级</strong>已在今日落地，是后续一切扩容动作的判据基础，不要动。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 扩展性阻断 ══════════════ -->
+<section>
+  <h2><span class="num">03</span>扩展性阻断项</h2>
+  <p class="lead">
+    这 4 项的共同特征是：<strong>状态存在单个进程的内存里</strong>。多跑一个实例，状态就分裂成两份，
+    而且不会有任何报错 —— 只会表现为行为怪异。我把每一项都回到代码里确认过当前状态。
+  </p>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <span class="fid crit">E1</span>
+      <span class="ftitle">定时任务无分布式锁：每个实例都会重复执行</span>
+      <span class="chip open">未修</span>
+    </div>
+    <p>调度器用 <code>setInterval</code> 本地计时，且<strong>启动时立即执行一次</strong>：</p>
+    <p><span class="path">src/framework/scheduler/index.js:93-101</span></p>
+    <pre style="background:#f9fafb;border:1px solid var(--line);border-radius:7px;padding:13px 15px;overflow-x:auto;font:12.5px/1.6 var(--mono);color:#344054;margin:10px 0">const run = () =&gt; { taskFactory.run(app, taskConfig).catch(...) };
+run();                                    // ← 启动即跑
+const timer = setInterval(run, intervalMs);</pre>
+    <p><strong>多实例后果</strong>：N 个实例 = 每个周期执行 N 次清理。当前任务量小，问题被掩盖；
+    一旦加入"发通知""对账"这类有副作用的任务，就会出现 N 份重复。这类故障<strong>不报错</strong>，
+    只表现为"数据库负载莫名变高"。</p>
+    <div class="note warn">
+      <span class="nt">关键发现</span>
+      <p><strong>修复成本几乎为零</strong>：<span class="path">src/framework/redis/lock-store.js</span> 已经存在（4.7 KB，含 <code>SET NX PX</code> 语义），
+      但全仓<strong>零引用</strong> —— 调度器、业务代码都没有用过它。这是一个"能力已备好、只差接线"的状态，
+      属于典型的低垂果实。</p>
+    </div>
+  </div>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <span class="fid crit">E2</span>
+      <span class="ftitle">守卫配置是模块级单例，多实例下会造成鉴权结果不一致</span>
+      <span class="chip open">未修</span>
+    </div>
+    <p><span class="path">src/api/guard-config.js:22</span> 持有 <code>let configs = {}</code>，
+    而 <code>loadGuardConfig()</code> <strong>只在启动时被调用一次</strong>（全仓仅 <span class="path">:37</span> 一处
+    <code>GuardConfigDao.loadFromDB()</code>）。运行期修改走"防抖 + 异步写 DB"，
+    <strong>只更新写操作所在实例自己的内存</strong>。</p>
+    <div class="note crit">
+      <span class="nt">这是安全语义问题，不只是可用性问题</span>
+      <p>运维在管理面板上"关闭某个路由的鉴权"或"收紧 IP 白名单"，只有部分实例生效。
+      同一个请求打到 A 实例和 B 实例，会得到<strong>不同的鉴权结果</strong> ——
+      这在安全审计里是无法解释的。而且<strong>没有版本号轮询</strong>，B 实例直到重启前都不会自愈。</p>
+    </div>
+    <p><strong>修法</strong>：DB 里已有 <code>version</code> 字段与乐观锁实现，直接复用即可 ——
+    (1) 短期：每实例定期比对 <code>version</code>，变化即重载；
+    (2) 中期：运行时读取改走 <code>getStore('guard')</code>，DB 只负责持久化，天然一致。</p>
+  </div>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <span class="fid crit">E3</span>
+      <span class="ftitle">遥测统计与 WebSocket 广播全在进程内</span>
+      <span class="chip open">未修</span>
+    </div>
+    <p>模块级可变状态实测位置：</p>
+    <table>
+      <thead><tr><th>状态</th><th>位置</th><th>多实例后果</th></tr></thead>
+      <tbody>
+        <tr><td>地域 / 路径 / IP 统计</td><td><span class="path">app/firewall/data/store.js:72-74</span></td><td>各持一份视图，面板数字随机跳变</td></tr>
+        <tr><td>访问记录环形缓冲（1000 条）</td><td><span class="path">app/firewall/data/store.js</span></td><td>看到的是"某实例的部分流量"</td></tr>
+        <tr><td>WebSocket 客户端集合</td><td><span class="path">app/firewall/services/monitor.service.js:36</span></td><td>广播只能触达本实例的连接</td></tr>
+        <tr><td>告警冷却表</td><td><span class="path">app/firewall/engine/auto-responder.js:46</span></td><td>告警风暴抑制失效，重复告警 ×N</td></tr>
+      </tbody>
+    </table>
+    <div class="note ok">
+      <span class="nt">已确认修复的部分</span>
+      <p>落盘写入的<strong>原子性已解决</strong>（tmp + rename，临时文件名带 pid），且补了优雅关闭落盘。
+      所以在<strong>单实例</strong>下这条不再是数据丢失风险。剩下的纯粹是"多实例视图分裂"问题。</p>
+    </div>
+    <p><strong>修法</strong>：统计改 Redis Hash + <code>HINCRBY</code>；WS 广播改 Redis Pub/Sub。
+    若判断成本过高，退而求其次的<strong>诚实做法</strong>是：在管理面板明确标注"统计为单实例视角"，
+    而不是让运维误以为那是全局数字。</p>
+  </div>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <span class="fid crit">E4</span>
+      <span class="ftitle">每 IP 并发连接计数在进程内，限流语义被实例数放大</span>
+      <span class="chip open">未修</span>
+    </div>
+    <p><code>activeConnections</code> 是模块级 Map（<span class="path">app/firewall/util/shared.js:28</span>）。
+    多实例下每个 IP 的实际可用连接数变成 <strong><code>maxConn × N</code></strong> ——
+    配置写的是 10，实际放行了 N×10。这是一个<strong>安全配置被静默放大</strong>的问题。</p>
+    <p>另有清理逻辑缺陷：<code>cleanupStaleConnections()</code> 只删除计数超过阈值 2 倍的记录，
+    且每 5 分钟才跑一次。若某 IP 因异常路径（未走到 <code>onSend</code>）泄漏了 1~2 个计数，
+    <strong>永远不会被回收</strong>，该 IP 会被持续额外扣减配额。</p>
+    <p><strong>修法</strong>：计数改 Redis <code>INCR</code>/<code>DECR</code> + TTL；清理判据从"计数阈值"
+    改为"最后活跃时间"，这才是与泄漏正交的判据。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 稳定性 ══════════════ -->
+<section>
+  <h2><span class="num">04</span>稳定性风险</h2>
+  <p class="lead">
+    这一组问题<strong>在单实例下也会发生</strong>，因此优先级不低于上面的扩容阻断项。
+    其中 S1 是本轮新发现，也是本次评估里性价比最高的一个修复点。
+  </p>
+
+  <div class="finding new">
+    <div class="fhead">
+      <span class="fid warn">S1</span>
+      <span class="ftitle">同步密码哈希阻塞事件循环 60ms —— 并发登录会拖垮整个进程</span>
+      <span class="chip new">本轮新发现</span>
+    </div>
+    <p>项目用的是 <code>bcryptjs</code>（<strong>纯 JavaScript 实现</strong>，无原生绑定）。
+    它的 <code>hashSync</code> / <code>compareSync</code> 会<strong>完全占住主线程</strong> ——
+    Node 单线程模型下，这 60ms 内所有其他请求（含健康探针）全部排队。</p>
+    <p><strong>本机实测（cost=10）</strong>：</p>
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin:14px 0">
+      <div class="kpi crit"><div class="k">59.8<span style="font-size:15px">ms</span></div><div class="l"><code>hashSync</code> 单次耗时</div></div>
+      <div class="kpi crit"><div class="k">61.4<span style="font-size:15px">ms</span></div><div class="l"><code>compareSync</code> 单次耗时</div></div>
+      <div class="kpi crit"><div class="k">16<span style="font-size:15px">次/秒</span></div><div class="l">单核理论上限</div></div>
+    </div>
+    <p><strong>生产代码中的 4 个同步调用点</strong>：</p>
+    <table>
+      <thead><tr><th>位置</th><th>场景</th><th>触发频率</th></tr></thead>
+      <tbody>
+        <tr><td><span class="path">app/user/dao/user.js:100</span></td><td><code>compareSync</code> 登录校验</td><td class="num" style="color:var(--crit)">高 · 公网可触发</td></tr>
+        <tr><td><span class="path">app/user/dao/user.js:179</span></td><td><code>hashSync</code> 注册</td><td class="num" style="color:var(--crit)">高 · 公网可触发</td></tr>
+        <tr><td><span class="path">app/user/dao/user.js:280</span></td><td><code>hashSync</code> 重置密码</td><td class="num">中</td></tr>
+        <tr><td><span class="path">app/oauth21/dao/client.dao.js:57</span></td><td><code>hashSync</code> 客户端密钥</td><td class="num">低（管理操作）</td></tr>
+      </tbody>
+    </table>
+    <div class="note crit">
+      <span class="nt">为什么这是 DoS 放大面而非单纯性能问题</span>
+      <p>登录接口<strong>公开且无需认证</strong>。约 <strong>50 个并发登录请求</strong>即可造成约 3 秒的完全停顿 ——
+      而 <code>/v1/health/ready</code> 的探测超时恰好是 3 秒。
+      于是：一次登录流量突发 → 探针超时 → <strong>编排系统判定实例不健康并摘流</strong> →
+      流量涌向剩余实例 → 雪崩。防火墙的每 IP 限流对此<strong>无效</strong>，因为攻击可以分布式发起。</p>
+    </div>
+    <div class="note ok">
+      <span class="nt">作者做对的一点（应予肯定）</span>
+      <p><code>hashSync</code> 在 <span class="path">user.js:179</span> 被放在事务<strong>之前</strong>（事务从 :182 开始）。
+      这避免了"数据库连接被 CPU 密集操作占用 60ms"的复合反模式 —— 顺序是对的，不要改动这个结构。</p>
+    </div>
+    <p><strong>修法（按推荐度）</strong>：</p>
+    <ul class="clean">
+      <li><strong>换原生 <code>bcrypt</code>（N-API）</strong>：异步版本跑在 libuv 线程池，<strong>完全不阻塞事件循环</strong>，
+        哈希格式兼容、可直接复用现有数据。代价：需要编译工具链或预编译二进制。</li>
+      <li><strong>改用 Node 内置 <code>crypto.scrypt</code></strong>：异步、在线程池执行、零第三方原生依赖，是 Node 官方推荐方案。
+        代价：格式不同，需要"下次登录成功时透明重哈希"的迁移策略。</li>
+      <li><strong>最低成本兜底</strong>：保留 bcryptjs 但改用 <code>bcrypt.hash</code> / <code>bcrypt.compare</code>（异步版），
+        配合<strong>并发信号量</strong>限制同时在算的哈希数。比 sync 好，但仍是主线程 CPU 消耗，
+        只是把长阻塞切成短让步。</li>
+      <li>另建议把 cost 因子做成环境变量 —— 现在硬编码 <code>10</code>，无法在压测时调优。</li>
+    </ul>
+  </div>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <span class="fid crit">S2</span>
+      <span class="ftitle">没有任何部署制品与 CI —— 扩容缺少可复现载体</span>
+      <span class="chip open">未修</span>
+    </div>
+    <p>实测 <code>Dockerfile</code>、<code>docker-compose.yml</code>、<code>.github/</code> <strong>三者均不存在</strong>
+    （今日已把文档里的"已完成"标记改正为"设计稿 · 未实现"，这一点值得肯定）。</p>
+    <p><strong>为什么这是扩容的前置条件</strong>：没有可复现的构建产物，"加实例"就只能靠手工在机器上
+    <code>git pull &amp;&amp; npm install</code> —— 这会导致实例间依赖版本漂移、环境变量不一致，
+    而多实例架构恰恰最怕"实例之间不一样"。<strong>先把构建固化成镜像，扩容才有讨论基础。</strong></p>
+  </div>
+
+  <div class="finding warn">
+    <div class="fhead">
+      <span class="fid warn">S3</span>
+      <span class="ftitle">每实例额外 105MB 常驻内存（geoip-lite 全量加载）</span>
+      <span class="chip new">本轮新发现</span>
+    </div>
+    <p><code>geoip-lite</code> 在 <code>require</code> 时把整个 IP 库<strong>全部加载进内存</strong>，
+    且数据存在 JS 堆之外（<code>heapUsed</code> 只涨 0.4MB，全在 RSS 里）。实测：</p>
+    <table>
+      <thead><tr><th>场景</th><th>RSS</th><th>增量</th></tr></thead>
+      <tbody>
+        <tr><td>裸 Node 进程</td><td class="num">42.7 MB</td><td>—</td></tr>
+        <tr><td>加载 <code>geoip-lite</code> 后</td><td class="num">148.0 MB</td><td class="num" style="color:var(--warn)">+105.3 MB</td></tr>
+      </tbody>
+    </table>
+    <p><strong>影响</strong>：扩容时每实例内存基线是 ~150MB 起步（还没算连接池与请求负载）。
+    若容器内存上限设成 256MB，<strong>会在压测中 OOM</strong>，且 OOM 现场看不出与 IP 库有关。
+    使用点：<span class="path">app/firewall/engine/detectors/geo-filter.js:8,29,85</span>。</p>
+    <p><strong>处置</strong>：容器内存下限按 <strong>512MB</strong> 规划并写入部署文档；
+    若要压缩，可改用 MaxMind mmdb + LRU 缓存的按需查询，或把地理判定拆成独立小服务
+    （但这会引入网络跳转，需权衡）。<strong>本项不紧急，但必须在定容量规格之前知道这个数字。</strong></p>
+  </div>
+
+  <div class="finding warn">
+    <div class="fhead">
+      <span class="fid warn">S4</span>
+      <span class="ftitle">连接池默认 10，与实例数无协调；池状态无法观测</span>
+      <span class="chip new">本轮新发现</span>
+    </div>
+    <p><span class="path">src/framework/db/index.js:50-55</span>：</p>
+    <pre style="background:#f9fafb;border:1px solid var(--line);border-radius:7px;padding:13px 15px;overflow-x:auto;font:12.5px/1.6 var(--mono);color:#344054;margin:10px 0">pool: {
+  max:     parseInt(process.env.DB_POOL_MAX     || '10'),   // 每实例 10
+  min:     parseInt(process.env.DB_POOL_MIN     || '2'),
+  acquire: parseInt(process.env.DB_POOL_ACQUIRE || '30000'), // 等 30s
+  idle:    parseInt(process.env.DB_POOL_IDLE    || '10000')
+}</pre>
+    <p><strong>两个具体风险</strong>：</p>
+    <ul class="clean">
+      <li><strong>容量天花板被写死</strong>：MySQL 默认 <code>max_connections = 151</code>。
+        按每实例 max=10 计算，<strong>约 15 个实例就会耗尽数据库连接</strong>。
+        正确做法是让池大小成为实例数的函数：<code>max ≈ (DB_max_connections − 保留) ÷ 预期实例数</code>，
+        并把该算式写进部署清单。</li>
+      <li><strong>故障根因被掩盖</strong>：<code>acquire</code> 是 30 秒，而探针超时是 3 秒。
+        池枯竭时，探针会在自己的 3 秒超时里被掐断，对外表现为"探针不稳定"，
+        而<strong>真实原因（连接池耗尽）根本不会出现在任何日志或指标里</strong>。这正是最难排查的一类故障。</li>
+    </ul>
+    <p><strong>修法</strong>：把 <code>sequelize.connectionManager.pool</code> 的
+    <code>size / available / pending / using</code> 暴露到 <code>/v1/health/ready</code> 的响应体（注意脱敏，该端点是公开的）
+    或独立的内部指标端点。有了这个数，"变慢"才能被归因。</p>
+  </div>
+
+  <div class="finding warn">
+    <div class="fhead">
+      <span class="fid warn">S5</span>
+      <span class="ftitle">15 个"虚假覆盖"测试仍在冻结清单中</span>
+      <span class="chip open">存量</span>
+    </div>
+    <p><span class="path">src/__tests__/conventions/test-effectiveness.test.js:49-65</span> 的
+    <code>KNOWN_INEFFECTIVE_TESTS</code> 当前冻结了 <strong>15 个测试文件</strong>。这些文件的特征是
+    <strong>不加载被测代码</strong> —— 把被测模块整个删掉，它们依然全绿。</p>
+    <p>其中包括 <code>config-validation.test.js</code>、<code>permission-loader.test.js</code>、
+    <code>rate-limiter.test.js</code>、<code>security.test.js</code> —— 覆盖的恰好都是
+    <strong>配置校验、权限加载、限流</strong>这些与本报告主题直接相关的领域。</p>
+    <div class="note info">
+      <span class="nt">必须说清的一点</span>
+      <p>有守卫测试把清单冻结为"只减不增"，这本身是<strong>成熟做法</strong>（说明团队知道问题存在，且防止恶化）。
+      但要注意：<strong>这些领域的"绿灯"目前不能作为稳定性证据</strong>。
+      在评估扩容风险时，不能把它们的通过计入安全边际。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 不建议 ══════════════ -->
+<section>
+  <h2><span class="num">05</span>明确不建议做的事</h2>
+  <p class="lead">架构评审的一半价值在于说清"不该做什么"。以下动作在现阶段属于过度设计，会消耗资源且掩盖真问题。</p>
+  <ul class="no">
+    <li><strong>现在就拆微服务。</strong>四个阻断项全是"进程内状态"问题 —— 拆成服务只会让它们更难定位，
+      而且当前没有镜像、没有 CI、没有就绪探针，拆完根本无法运维。</li>
+    <li><strong>引入 Kubernetes。</strong>K8s 的收益（滚动发布、自愈）完全建立在就绪探针之上。
+      探针已就位，但<strong>调度器锁与配置同步没做之前上 K8s，只会让实例间的行为差异被自动放大</strong>。</li>
+    <li><strong>引入消息队列（Kafka / RabbitMQ）。</strong>全仓只有 1 个定时任务，没有异步任务队列需求。
+      现有 <span class="path">framework/redis/queue-store.js</span> 已覆盖轻量场景。</li>
+    <li><strong>把 Session 改成无状态 JWT。</strong>当前"Redis 会话 + JWT 对外 API"是正确混合。
+      改成纯 JWT 会<strong>丧失主动踢下线能力</strong>，是明确的能力倒退。</li>
+    <li><strong>全面迁移 TypeScript。</strong>与扩展性、稳定性无关。41K 行无构建步骤的代码库迁移本身
+      会引入大量风险，收益却滞后。</li>
+    <li><strong>在阻断项修完之前加机器。</strong>这是本报告最重要的一条。
+      加实例得到的不是容量，而是<strong>行为不可预测</strong> —— 统计错乱、任务重复、鉴权不一致。</li>
+  </ul>
+</section>
+
+<!-- ══════════════ 路线图 ══════════════ -->
+<section>
+  <h2><span class="num">06</span>分阶段路线图</h2>
+  <p class="lead">
+    原则：<strong>每一步都独立可交付、可回滚、不改动外部契约</strong>。
+    顺序有讲究 —— 先消除"单实例下的隐性故障"，再解除"扩容阻断"，最后才谈容量。
+  </p>
+
+  <h3>阶段 0 · 止血（每项都在 1 天内可完成）</h3>
+  <table>
+    <thead><tr><th>#</th><th>动作</th><th>位置</th><th>为什么排最前</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="num">0.1</td>
+        <td>密码哈希异步化</td>
+        <td><span class="path">user/dao/user.js</span> · <span class="path">oauth21/dao/client.dao.js</span></td>
+        <td><strong>性价比最高</strong>：消除 60ms 事件循环阻塞，同时关掉一条 DoS 放大路径</td>
+      </tr>
+      <tr>
+        <td class="num">0.2</td>
+        <td>调度器接入分布式锁</td>
+        <td><span class="path">framework/scheduler/index.js</span></td>
+        <td><code>lock-store.js</code> 已存在，属"只差接线"，改动面极小</td>
+      </tr>
+      <tr>
+        <td class="num">0.3</td>
+        <td>暴露连接池指标</td>
+        <td><span class="path">api/system/v1/health.js</span></td>
+        <td>没有这个数，后续所有"变慢"都无法归因</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>阶段 1 · 建可运维的扩容载体（1~2 周）</h3>
+  <table>
+    <thead><tr><th>#</th><th>动作</th><th>验收标准</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1.1</td><td>补齐 Dockerfile（多阶段构建、非 root 用户、健康检查指令）+ docker-compose（app + mysql + redis）</td><td><code>docker compose up</code> 一条命令起完整环境</td></tr>
+      <tr><td class="num">1.2</td><td>连接池大小改为实例数的函数，写入部署清单</td><td>给出算式与取值表，而不是"默认 10"</td></tr>
+      <tr><td class="num">1.3</td><td>容器内存规格按各组件实测确定（含 geoip 的 +105MB）</td><td>压测下无 OOM</td></tr>
+      <tr><td class="num">1.4</td><td>配置集中校验（104 个环境变量收敛到一处 schema）</td><td>故意配错一个变量 → 启动失败并给出可读原因</td></tr>
+      <tr><td class="num">1.5</td><td>补齐 CI（lint + test + 构建镜像）</td><td>PR 必过</td></tr>
+    </tbody>
+  </table>
+
+  <h3>阶段 2 · 解除横向扩展阻断（2~3 周）</h3>
+  <div class="note info">
+    <span class="nt">这一阶段结束后才能谈"加机器"</span>
+    <p>前置条件：阶段 1 的就绪探针与镜像已就位 —— 否则扩容后无法判断实例是否健康，也无法保证实例一致。</p>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>动作</th><th>验收标准</th></tr></thead>
+    <tbody>
+      <tr><td class="num">2.1</td><td><strong>E2</strong> 守卫配置跨实例一致（版本轮询 → Redis 运行时读取）</td><td>A 实例改配置，B 实例<strong>不重启</strong>即生效</td></tr>
+      <tr><td class="num">2.2</td><td><strong>E3</strong> 遥测统计改 Redis Hash；WS 广播改 Pub/Sub</td><td>两实例统计不互相覆写，广播触达全部连接</td></tr>
+      <tr><td class="num">2.3</td><td><strong>E4</strong> 连接计数改 Redis + TTL；清理改按最后活跃时间</td><td>两实例下每 IP 限制语义与配置一致</td></tr>
+      <tr><td class="num">2.4</td><td>双实例验证 —— 逐条复核本报告 §3 的"多实例后果"推断</td><td>推断变成实测数据；未复现的推论应被删除或更正</td></tr>
+      <tr><td class="num">2.5</td><td>压测基线</td><td>给出单实例吞吐 / P95 延迟 / 连接池饱和点三个数</td></tr>
+    </tbody>
+  </table>
+
+  <h3>阶段 3 · 契约化（持续）</h3>
+  <table>
+    <thead><tr><th>#</th><th>动作</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td class="num">3.1</td><td>清零虚假覆盖测试（15 → 0）</td><td>改完一个删一条，守卫会强制校验；<strong>优先 <code>security.test.js</code> / <code>rate-limiter.test.js</code> / <code>config-validation.test.js</code></strong></td></tr>
+      <tr><td class="num">3.2</td><td>应用层双向依赖收敛（<code>oauth21</code> ⇄ <code>user</code>）</td><td>这是未来按模块裁剪实例的前置条件</td></tr>
+      <tr><td class="num">3.3</td><td>拆分 <code>session.js</code>（995 行，距硬限 1000 仅剩 5 行）</td><td>按会话生命周期阶段主动预拆，避免触限后被压力驱动</td></tr>
+      <tr><td class="num">3.4</td><td>补 <code>UserSession</code> 等 4 个模型的索引，并用 <code>EXPLAIN</code> 实证</td><td>注意 <code>underscored: true</code> 陷阱：物理列名会被静默丢弃</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════ 优先级总表 ══════════════ -->
+<section>
+  <h2><span class="num">07</span>优先级总表</h2>
+  <table>
+    <thead><tr><th>优先级</th><th>项</th><th>类别</th><th>工作量</th><th>收益</th></tr></thead>
+    <tbody>
+      <tr><td><span class="st open">P0</span></td><td>密码哈希异步化（S1）</td><td>稳定性 + 安全</td><td>小</td><td>解除 60ms 事件循环阻塞，关闭 DoS 放大面</td></tr>
+      <tr><td><span class="st open">P0</span></td><td>调度器分布式锁（E1）</td><td>扩展性</td><td>极小</td><td>解除扩容阻断；能力已备好只差接线</td></tr>
+      <tr><td><span class="st open">P0</span></td><td>连接池指标暴露（S4）</td><td>可观测性</td><td>小</td><td>让性能问题可归因</td></tr>
+      <tr><td><span class="st part">P1</span></td><td>Dockerfile + compose + CI（S2）</td><td>部署载体</td><td>中</td><td>扩容的前置条件</td></tr>
+      <tr><td><span class="st part">P1</span></td><td>守卫配置跨实例一致（E2）</td><td>扩展性 + 安全</td><td>中</td><td>消除"同请求不同鉴权结果"</td></tr>
+      <tr><td><span class="st part">P1</span></td><td>连接池与实例数协调（S4）</td><td>容量规划</td><td>小</td><td>避开数据库连接天花板</td></tr>
+      <tr><td><span class="st part">P1</span></td><td>配置集中校验</td><td>稳定性</td><td>中</td><td>消除"静默失效"类故障</td></tr>
+      <tr><td><span class="st open">P2</span></td><td>遥测 / WS 广播外置（E3）</td><td>扩展性</td><td>中</td><td>解除扩容阻断</td></tr>
+      <tr><td><span class="st open">P2</span></td><td>连接计数外置（E4）</td><td>扩展性 + 安全</td><td>中</td><td>恢复限流语义正确性</td></tr>
+      <tr><td><span class="st open">P2</span></td><td>双实例验证 + 压测基线</td><td>决策依据</td><td>中</td><td>把推断变成数据</td></tr>
+      <tr><td><span class="st open">P3</span></td><td>测试有效性清零 / 依赖收敛 / 索引补齐</td><td>长期健康度</td><td>持续</td><td>让"绿灯"重新可信</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════ 方法 ══════════════ -->
+<section>
+  <h2><span class="num">08</span>证据复核方法与报告边界</h2>
+  <p class="lead">所有结论均可复现。建议在动手前先自行跑一遍下面几条，确认结论与你的认知一致。</p>
+  <pre style="background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:16px 18px;overflow-x:auto;font:12.5px/1.75 var(--mono);color:#344054"># S1 · 实测同步哈希对事件循环的阻塞成本
+node -e "const b=require('bcryptjs');const p='a'.repeat(24);b.hashSync(p,10);
+  let t=Date.now();for(let i=0;i&lt;5;i++)b.hashSync(p,10);
+  console.log('hashSync 平均', (Date.now()-t)/5, 'ms')"
+grep -rn "bcrypt\.\(hash\|compare\)Sync" src/ --include=*.js | grep -v __tests__
+
+# S3 · 实测 geoip-lite 常驻内存增量
+node -e "console.log('基线', (process.memoryUsage().rss/1048576).toFixed(1),'MB');
+  require('geoip-lite');
+  console.log('加载后', (process.memoryUsage().rss/1048576).toFixed(1),'MB')"
+
+# E1 · 调度器是否引用了分布式锁（预期：0）
+grep -rn "lock" src/framework/scheduler/index.js</pre>
+
+  <div class="note warn">
+    <span class="nt">报告边界 · 请如实看待</span>
+    <p><strong>本次评估为静态取证 + 本机单进程实测，未进行双实例环境验证与压力测试。</strong>
+    §3 中所有"多实例后果"是基于代码语义的<strong>推断</strong>，逻辑链条清晰但尚未在真实多实例环境下实测。
+    S1 / S3 / S4 的数值来自本机实测（Node 24 / 单机），与生产硬件会有差异，但量级与结论方向是可靠的。</p>
+    <p>建议在阶段 2.4 用一个双实例环境<strong>逐条验证</strong>这些推断 ——
+    届时它们会变成实测数据，<strong>未被复现的推论应当被删除或更正，而不是留在文档里</strong>。</p>
+  </div>
+
+  <div class="note ok">
+    <span class="nt">对团队的一点肯定</span>
+    <p>这套代码库在<strong>工程纪律</strong>上明显高于同类项目：分层有带反例的守卫测试、导出位置有强制约定、
+    测试有效性有冻结清单、配置文件写入是原子的、优雅关闭有超时兜底、密钥强度在启动时校验。
+    这些约束让"重构"这件事的风险大幅降低 —— 也正因如此，<strong>本报告建议的是定点修复，而不是重写</strong>。</p>
+  </div>
+</section>
+
+<footer>
+  <p><strong>后端架构评估 · 扩展性与稳定性</strong> · nodeServers · 2026-09-19</p>
+  <p>方法：全仓静态取证（291 个生产 JS 文件 / 41,963 行 / 175 条路由 / 32 个模型）+ 本机运行时实测。
+  所有证据路径均可在仓库中直接定位复核。本报告与 <code>docs/core/architecture-review-2026-09-19.md</code> 互补 ——
+  后者覆盖了依赖方向、文档一致性等卫生问题，本报告聚焦扩展性与稳定性的可量化风险。</p>
+</footer>
+
+</div>
+</body>
+</html>

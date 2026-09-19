@@ -9,7 +9,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import bcrypt from 'bcryptjs';
+import { verifyPassword as verifyPasswordHash } from '../../../framework/auth/password-hash.js';
 import { getModel } from '../../../framework/db/index.js';
 
 const UserDao = {
@@ -108,7 +108,8 @@ const UserDao = {
    */
   async verifyPassword(user, password) {
     if (!user || !user.credential) return false;
-    return bcrypt.compare(password, user.credential);
+    // 别名调用：本方法名与之同名，不别名会被读成递归
+    return verifyPasswordHash(password, user.credential);
   },
 
   /**

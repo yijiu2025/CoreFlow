@@ -17,6 +17,7 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import readline from 'readline';
 import sequelize from '../src/framework/db/index.js';
+import { hashPassword } from '../src/framework/auth/password-hash.js';
 import { createLogger, logStdout } from '../src/framework/log/index.js';
 
 const log = createLogger('scripts.setup-superadmin');
@@ -174,15 +175,11 @@ async function main() {
       if (!user && password) {
         logStdout(`\n👤 用户 ${email} 不存在，正在自动创建...`);
 
-        // 加密密码
-        let hashedPassword;
-        try {
-          const bcrypt = await import('bcryptjs');
-          hashedPassword = await bcrypt.default.hash(password, 12);
-        } catch {
-          hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
-          log.warn('⚠️  bcryptjs 未安装，使用 SHA256 哈希（生产环境请安装 bcryptjs）');
-        }
+        // 加密密码。
+        // 改用内置 crypto.scrypt：无第三方依赖，因此原先"bcryptjs 不可用 →
+        // 降级为无盐 SHA256"的兜底分支已删除 —— 那个降级本身是不安全的
+        // （SHA256 无盐、可被彩虹表直接反查），宁可直接失败也不要写进去。
+        const hashedPassword = await hashPassword(password);
 
         user = await User.create({
           uid: crypto.randomUUID(),

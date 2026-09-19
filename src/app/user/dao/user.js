@@ -2,7 +2,8 @@
  * 用户应用数据访问层
  *
  * 提供用户注册、登录认证、信息查询等数据操作能力。
- * 使用 RSA 解密前端传输的密码，通过 bcrypt 进行密码哈希存储与验证。
+ * 使用 RSA 解密前端传输的密码，通过 scrypt 进行密码哈希存储与验证
+ * （历史 bcrypt 哈希继续可校验，并在登录成功时透明升级，见 password-hash.js）。
  * 登录成功后通过 PBAC 计算用户策略并签发 JWT Token。
  *
  * @author Claude
@@ -12,7 +13,8 @@ import jwt from 'jsonwebtoken';
 import sequelize from '../../../framework/db/index.js';
 import { getModel } from '../../../framework/db/index.js';
 import { decrypt } from '../../oauth21/crypto/encryption.js';
-import bcrypt from 'bcryptjs';
+import { hashPassword, verifyPassword, isLegacyHash } from '../../../framework/auth/password-hash.js';
+import { log } from '../../../framework/log/index.js';
 import IamDao from '../../admin/dao/iam.dao.js';
 import { validatePasswordStrength } from '../../../framework/auth/password-policy.js';
 import { maskPhone } from '../../../utils/crypto.js';
@@ -75,7 +77,7 @@ class UserDao {
    *
    * 流程：
    * 1. 解密前端 RSA 加密的密码
-   * 2. 通过 UserIdentity 查找凭证并 bcrypt 验证密码
+   * 2. 通过 UserIdentity 查找凭证并校验密码（scrypt，兼容历史 bcrypt）
    * 3. PBAC 计算当前应用下的有效策略
    * 4. 更新全局会话和身份表的登录时间
    * 5. 签发 Access Token（嵌入权限策略）和 Refresh Token
@@ -97,11 +99,22 @@ class UserDao {
       include: [{ model: getModel('User'), as: 'user' }]
     });
 
-    if (!identity || !bcrypt.compareSync(password, identity.credential)) {
+    if (!identity || !(await verifyPassword(password, identity.credential))) {
       throw new Error('AUTH_FAILED:邮箱或密码错误');
     }
 
     const user = identity.user;
+
+    // 历史 bcrypt 哈希透明升级为 scrypt。
+    // 复用本函数后面已有的 identity.save()，因此**不产生额外写库**；
+    // 升级失败不影响本次登录（旧哈希依然可校验），失败的原因只记日志，下一次登录会自动重试。
+    if (isLegacyHash(identity.credential)) {
+      try {
+        identity.credential = await hashPassword(password);
+      } catch (err) {
+        log.warn(`⚠️ [UserDao] 密码哈希升级失败（不影响本次登录，下次登录重试）: ${err.message}`);
+      }
+    }
 
     // [PBAC 核心]：计算当前应用下的有效策略
     const { allows, denies } = await IamDao.buildUserEffectivePolicy(user.uid, appId || 'GLOBAL');
@@ -176,7 +189,9 @@ class UserDao {
       throw new Error(`REGISTER_FAILED:${validation.errors[0]}`);
     }
 
-    const hashedPassword = bcrypt.hashSync(password, 10);
+    // ⚠️ 哈希必须在事务**之前**算完：scrypt 是 CPU/内存密集型操作，
+    // 放进事务里会白占数据库连接。换线程池后不再阻塞事件循环，但"不长占连接"这点不变。
+    const hashedPassword = await hashPassword(password);
 
     try {
       return await sequelize.transaction(async t => {
@@ -246,7 +261,7 @@ class UserDao {
    * 流程：
    * 1. 按 email 查 UserIdentity（identity_type=password）
    * 2. RSA 解密新密码 + 复杂度校验
-   * 3. bcrypt 重新哈希 + 更新 credential
+   * 3. scrypt 重新哈希 + 更新 credential
    *
    * @param {string} email 邮箱
    * @param {string} encryptedPassword RSA 加密的新密码密文
@@ -277,7 +292,7 @@ class UserDao {
       throw new Error(`RESET_FAILED:${validation.errors[0]}`);
     }
 
-    identity.credential = bcrypt.hashSync(password, 10);
+    identity.credential = await hashPassword(password);
     await identity.save();
     return true;
   }

@@ -28,12 +28,20 @@
  * 所以这里能看到的一定是可降级加载器的失败明细 —— 服务可正常处理请求，但有一项附加
  * 能力缺失，`status` 记为 `degraded`（仍 200，不摘流）。
  *
+ * 【连接池指标】
+ * `dependencies.database.pool` 给出连接池的实时候选：`size / available / using / waiting /
+ * maxSize / minSize`（字段名取自 sequelize-pool 实际 getter，见 framework/db 的 getPoolStats）。
+ * 其中 **`waiting > 0` 即饱和** —— 有请求在排队等连接，是"变慢"最直接的归因线索。
+ * 它**只作诊断，不影响就绪判定**：池满在高负载下是正常现象，据此返回 503 会让负载均衡
+ * 摘掉正在扛量的实例，把局部拥塞放大成整体不可用。
+ * 这组数字不含地址/库名等拓扑信息，因此符合本端点的"只给标签不给原文"脱敏口径。
+ *
  * @author yijiu2025
  * @since 2026-08-17
  * @since 2026-09-19 拆分 live / ready 两级探针，补依赖探测超时、错误脱敏与加载器明细
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { sequelize } from '../../../framework/db/index.js';
+import { sequelize, getPoolStats } from '../../../framework/db/index.js';
 import { isRedisConfigured } from '../../../framework/redis/utils.js';
 import { getLoaderStatus } from '../../../framework/loader/engine.js';
 import { createLogger } from '../../../framework/log/index.js';
@@ -112,7 +120,15 @@ async function checkDatabase() {
   }
   try {
     await raceTimeout(sequelize.authenticate(), READY_CHECK_TIMEOUT_MS);
-    return { status: 'up' };
+    const result = { status: 'up' };
+    // 连接池占用只作**诊断信息，不参与就绪判定**：
+    // 池满（waiting > 0）在高负载下是正常现象，若因此返回 503，
+    // 负载均衡会把正在扛流量的实例全部摘掉，反而把局部拥塞放大成整体不可用。
+    // 它的价值在于让"变慢"可归因 —— 池枯竭时 acquire 要等 30s，
+    // 而本探针 3s 就超时，没有这组数字就只能看到"超时"。
+    const pool = getPoolStats();
+    if (pool) result.pool = pool;
+    return result;
   } catch (err) {
     // 完整错误进日志（含地址/库名，供运维排障），响应只给标签
     log.error('❌ [Health] 数据库探测失败', err);

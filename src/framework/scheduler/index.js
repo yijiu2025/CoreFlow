@@ -10,6 +10,19 @@
  * - 优雅关闭：onClose 清所有定时器，防进程退出时悬挂
  * - 任务异常不互不影响：单个任务失败只记日志，不影响其他任务
  *
+ * ── 多实例语义（2026-09-19 新增）──
+ * 原实现只有进程内 setInterval，**无任何互斥** → N 个实例每个周期执行 N 次。
+ * 这类问题不报错，只表现为"数据库负载莫名变高"，且任务一旦带副作用（发通知/对账）
+ * 就会产生 N 份重复数据。
+ *
+ * 现改为：执行前抢一把**周期锁**（分布式锁，TTL = 任务周期）。
+ * - TTL = 周期，意味着锁覆盖整个周期 → 一个周期内全集群只有抢到锁的实例执行；
+ * - 锁**故意不主动释放** —— 若在任务结束后释放，下一个实例的定时器会立刻抢到并重复执行，
+ *   等于没加锁。让它按 TTL 自然过期，正好对应"下一个周期"。
+ * - 未配置 Redis（单实例部署）→ 保持原有行为，每次都执行；
+ * - Redis 已配置但**不可达** → 跳过本轮并告警，**不回退到本地执行**：
+ *   回退会在多实例下造成重复执行，而重复执行的危害大于"某一轮不执行"。
+ *
  * @author yijiu2025
  * @since 2026-09-03
  */
@@ -18,6 +31,8 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { C } from '../../utils/colors.js';
 import { createLogger } from '../log/index.js';
+import { createLock } from '../redis/lock-store.js';
+import { isRedisConfigured } from '../redis/utils.js';
 
 const log = createLogger('framework.scheduler.index');
 
@@ -49,6 +64,48 @@ function loadConfig() {
     log.error(`❌ [Scheduler] ${C.red}读取配置失败，用默认值${C.reset}`, err);
     return DEFAULT_CONFIG;
   }
+}
+
+/**
+ * 抢本轮的周期锁
+ *
+ * @param {string} taskKey - 任务名（锁粒度）
+ * @param {number} intervalMs - 任务周期（毫秒），同时作为锁的 TTL
+ * @returns {Promise<boolean>} true = 本实例获得本周期执行权
+ */
+async function acquirePeriodLock(taskKey, intervalMs) {
+  if (!isRedisConfigured()) return true; // 单实例部署：不引入锁语义
+
+  try {
+    const lock = createLock(`scheduler:${taskKey}`, { ttl: intervalMs });
+    return await lock.tryAcquire(intervalMs);
+  } catch (err) {
+    // 已配置但不可达 → 跳过，不回退。回退执行在多实例下会重复跑任务。
+    log.warn(
+      `⚠️ [Scheduler] ${C.yellow}任务 [${taskKey}] 获取分布式锁失败，跳过本轮（不重复执行）${C.reset}: ${err.message}`
+    );
+    return false;
+  }
+}
+
+/**
+ * 执行单个任务：先抢周期锁，抢到才跑
+ *
+ * @param {object} params
+ * @param {string} params.taskKey - 任务名
+ * @param {object} params.taskFactory - 任务工厂（需含 run 方法）
+ * @param {object} params.taskConfig - 任务配置
+ * @param {number} params.intervalMs - 任务周期
+ * @param {object} params.app - Fastify 实例
+ * @returns {Promise<void>}
+ */
+async function executeTask({ taskKey, taskFactory, taskConfig, intervalMs, app }) {
+  const acquired = await acquirePeriodLock(taskKey, intervalMs);
+  if (!acquired) {
+    log.info(`ℹ️ [Scheduler] ${C.dim}任务 [${taskKey}] 本周期已由其他实例执行，跳过${C.reset}`);
+    return;
+  }
+  await taskFactory.run(app, taskConfig);
 }
 
 /**
@@ -90,13 +147,15 @@ async function startScheduler(app) {
       }
 
       const intervalMs = (taskConfig.intervalHours || 24) * 60 * 60 * 1000;
+      // 锁的获取与释放都在 executeTask 内部完成，这里只负责"不要让异常逃逸成 unhandledRejection"
       const run = () => {
-        taskFactory.run(app, taskConfig).catch(err => {
+        executeTask({ taskKey, taskFactory, taskConfig, intervalMs, app }).catch(err => {
           log.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 执行失败${C.reset}`, err);
         });
       };
 
-      // 启动后立即跑一次（清理积累的孤儿），再按间隔跑
+      // 启动后立即跑一次（清理积累的孤儿），再按间隔跑。
+      // 多实例下这次"立即跑"同样受周期锁保护 —— 滚动发布时只有第一个实例会执行。
       run();
       const timer = setInterval(run, intervalMs);
       timers.push(timer);
@@ -106,11 +165,15 @@ async function startScheduler(app) {
     }
   }
 
-  // 优雅关闭：清所有定时器
+  // 优雅关闭：清所有定时器（分布式锁不释放，按 TTL 自然过期）
   app.addHook('onClose', async () => {
     timers.forEach(t => clearInterval(t));
     log.info(`🛑 [Scheduler] ${C.cyan}所有定时任务已停止${C.reset}`);
   });
 }
 
-export { startScheduler };
+// ── 导出 ──
+// acquirePeriodLock / executeTask 一并导出：它们是"多实例下是否重复执行"的**全部决策逻辑**，
+// 必须能被独立测试。若只导出 startScheduler，验证这一点就得去驱动真实定时器 + 真实 Redis，
+// 那类测试要么被跳过、要么慢到没人跑，最终等于没有覆盖。
+export { startScheduler, acquirePeriodLock, executeTask };

@@ -151,7 +151,7 @@ async function registerOpenRoutes(fastify) {
    * POST /user/v1/reset-password — 验证码方式重置密码
    *
    * 仅 PASSWORD_RESET_MODE=code 时启用（link 模式下返回 403，防绕过前端调后端）
-   * 校验邮箱码（绑 sessionId + 指纹 + 一次性）后，RSA 解密新密码 + 复杂度 + bcrypt 更新。
+   * 校验邮箱码（绑 sessionId + 指纹 + 一次性）后，RSA 解密新密码 + 复杂度 + scrypt 更新。
    */
   registerSecureRoute(fastify, {
     name: 'resetPassword',
@@ -315,7 +315,7 @@ async function registerOpenRoutes(fastify) {
       // 一次性消费（先删 token 再改密码，防并发重复使用）
       await resetStore.delete(token);
 
-      // 更新密码（含用户状态校验、复杂度、bcrypt 哈希）
+      // 更新密码（含用户状态校验、复杂度、scrypt 哈希）
       try {
         await userDao.updatePassword(data.email, encryptedPassword, kid);
         await auditReset({ ...auditCtx, email: data.email, success: true, reason: 'by_link' });
