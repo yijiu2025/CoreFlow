@@ -19,11 +19,12 @@ import { fileURLToPath } from 'node:url';
 
 import helmet from '@fastify/helmet';
 import { initLoader } from './framework/loader/index.js';
-import { flushGuardConfig } from './api/guard-config.js';
+import { flushGuardConfig, startGuardConfigSync, stopGuardConfigSync } from './api/guard-config.js';
 import { startScheduler } from './framework/scheduler/index.js';
 import { ApiException } from './shared/exceptions.js';
 import { configureLog, createLogger, initLogErrorTraps } from './framework/log/index.js';
 import { createWsPreClose, DEFAULT_WS_SHUTDOWN_GRACE_MS } from './framework/websocket/preclose.js';
+import { validateEnv } from './framework/config/env.js';
 
 // ════════════════════════════════════════════════════════════════════
 // 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
@@ -115,31 +116,42 @@ const HTTP_REQUEST_TIMEOUT_MS = resolveTimeoutMs(process.env.HTTP_REQUEST_TIMEOU
 /** WebSocket 关闭宽限期（毫秒）：广播关闭帧后，等这么久再强制断开残留连接 */
 const WS_SHUTDOWN_GRACE_MS = resolveTimeoutMs(process.env.WS_SHUTDOWN_GRACE_MS, DEFAULT_WS_SHUTDOWN_GRACE_MS);
 
-// 不安全的默认密钥列表（启动时校验，防止误部署）
-const INSECURE_SECRETS = [
-  'your_super_secret_key_2026',
-  'change-this-in-production-secret-key-2024',
-  'secret',
-  'password',
-  '123456'
-];
-
 /**
- * 校验生产环境密钥安全性
- * 检测到不安全的默认密钥时输出错误信息并退出进程
+ * 校验环境变量
  *
- * @throws {never} 校验失败时调用 process.exit(1) 终止进程
+ * 判据已统一收敛到 `framework/config/env.js` 的 schema —— 包括密钥强度与
+ * 已知弱值黑名单（原先的 validateSecrets 就是这里的一部分）。
+ *
+ * 分两级处置：
+ *   · **错误**（配错、或生产环境缺必需项）→ 打印全部问题后终止进程。
+ *     静默启动一个配置错误的服务，比启动失败更难排查。
+ *   · **警告**（非生产环境缺必需项）→ 只提示，不拦启动。本地开发不该被拦住。
+ *
+ * ⚠️ 返回 false 表示已安排退出，调用方必须立刻停止后续初始化。
+ *
+ * @param {boolean} isProduction - 是否生产环境
+ * @returns {boolean} true = 校验通过可以继续启动
  */
-function validateSecrets() {
-  const secrets = [process.env.APP_SECRET, process.env.SESSION_SECRET, process.env.FIREWALL_SECRET];
-  const weak = secrets.filter(s => !s || s.length < 32 || INSECURE_SECRETS.includes(s));
-  if (weak.length > 0) {
-    log.error(
-      `❌ [App] 安全错误：检测到不安全的默认密钥或密钥长度不足 32 位，请在 .env 中设置强随机值：APP_SECRET / SESSION_SECRET / FIREWALL_SECRET`
-    );
-    // 给 stderr 100ms 刷新时间，确保 CI/Docker 环境下错误消息完整输出
-    setTimeout(() => process.exit(1), 100);
+function validateEnvironment(isProduction) {
+  const result = validateEnv(process.env, { isProduction });
+
+  for (const w of result.warnings) {
+    log.warn(`⚠️ [Config] ${w.key}: ${w.message}`);
   }
+  for (const n of result.notes) {
+    log.info(`ℹ️ [Config] ${n}`);
+  }
+
+  if (result.ok) return true;
+
+  // 统一出口打印，避免问题多时被其他日志穿插
+  log.always.error(`❌ [Config] 环境变量校验失败（${result.errors.length} 项），拒绝启动：`);
+  for (const e of result.errors) {
+    log.always.error(`   • ${e.key}: ${e.message}`);
+  }
+  // 给 stderr 100ms 刷新时间，确保 CI/Docker 环境下错误消息完整输出
+  setTimeout(() => process.exit(1), 100);
+  return false;
 }
 
 /**
@@ -198,9 +210,13 @@ function createErrorHandler(isProduction) {
 async function createApp() {
   const isProduction = process.env.NODE_ENV === 'production';
 
-  // 生产环境必须配置强密钥，防止使用默认值误部署到公网
-  if (isProduction) {
-    validateSecrets();
+  // 环境变量集中校验（含密钥强度与弱值黑名单）。
+  // 放在最前面：配置错误应当**在建立任何连接之前**就暴露，
+  // 而不是等到某个功能在运行期静默失效。
+  if (!validateEnvironment(isProduction)) {
+    // 已安排 process.exit；抛出是为了立刻中断启动流程，
+    // 避免在等待退出的 100ms 里又去连数据库、注册路由
+    throw new Error('环境变量校验失败，启动已中止');
   }
 
   // 生产环境未配置 CORS 白名单时记录警告，避免运维人员误以为跨域请求可以正常访问
@@ -354,8 +370,15 @@ async function createApp() {
   // scheduler 内部注册 onClose 钩子清理定时器，不阻塞启动
   await startScheduler(app);
 
+  // 启动跨实例守卫配置同步。
+  // 守卫配置是**模块级单例**，运行期修改只影响处理该请求的实例 ——
+  // 不同步的话，同一路由打到不同实例会得到不同鉴权结果（安全语义错误，而非可用性问题）。
+  // 必须在 initLoader（内部已调用 loadGuardConfig 完成首次加载）之后启动。
+  startGuardConfigSync();
+
   // 注册优雅关闭钩子：确保防抖中的守卫配置在退出前写入数据库
   app.addHook('onClose', async () => {
+    stopGuardConfigSync();
     try {
       await flushGuardConfig();
     } catch (err) {

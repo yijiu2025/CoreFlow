@@ -48,7 +48,6 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
  */
 const KNOWN_INEFFECTIVE_TESTS = new Set([
   'api-integration.test.js',
-  'config-validation.test.js',
   'database-models.test.js',
   'edge-cases.test.js',
   'email-notification.test.js',
@@ -171,7 +170,7 @@ describe('测试有效性守卫', () => {
     // 该断言把「清单长度」钉在当前值上。新增违规想混过检查，
     // 必须同时改这里 —— 那是一次可见的、需要理由的修改，而非静默绕过。
     // 15：原 16，`websocket.test.js` 于 2026-09-19 改造为真实驱动后移出。
-    const FROZEN_SIZE = 15;
+    const FROZEN_SIZE = 14;
     expect(KNOWN_INEFFECTIVE_TESTS.size).toBeLessThanOrEqual(FROZEN_SIZE);
   });
 
