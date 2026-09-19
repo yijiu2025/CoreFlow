@@ -18,7 +18,7 @@
  * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute, registerSecureWebSocket, getFullUrl } from '../../guard.js';
-import { getRecentRecords, getSummary } from '../../../app/firewall/data/store.js';
+import { getRecentRecordsAggregated, getSummaryAggregated } from '../../../app/firewall/data/store.js';
 import {
   getServerNode,
   updateServerNodeMetadata,
@@ -80,7 +80,8 @@ async function registerMonitorRoutes(fastify) {
     schema: summarySchema,
     handler: async (request, reply) => {
       return reply.result.success('操作成功', {
-        ...getSummary(),
+        // 跨实例聚合视图（Redis 全量 + 本实例未刷写增量；Redis 不可用退回本实例）
+        ...(await getSummaryAggregated()),
         serverNode: getServerNode()
       });
     }
@@ -93,7 +94,8 @@ async function registerMonitorRoutes(fastify) {
     url: '/records',
     requireLogin: true,
     requirePermission: FIREWALL_PERMISSIONS.MONITOR.LOGS,
-    handler: async (req, reply) => reply.result.success('操作成功', getRecentRecords())
+    handler: async (req, reply) =>
+      reply.result.success('操作成功', await getRecentRecordsAggregated())
   });
 
   registerSecureRoute(fastify, {
@@ -104,7 +106,7 @@ async function registerMonitorRoutes(fastify) {
     requireLogin: true,
     requirePermission: FIREWALL_PERMISSIONS.ADMIN.RESET,
     handler: async (req, reply) => {
-      clearRecordsAndBroadcast();
+      await clearRecordsAndBroadcast();
       return reply.result.success('审计记录已清空');
     }
   });

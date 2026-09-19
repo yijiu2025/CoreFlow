@@ -23,3 +23,4 @@ export { cacheThrough } from './cache.js';
 // 供调用方判断"Redis 是否可用"（用于内存降级决策）：外部必须走本 barrel，
 // 不要深层导入 `framework/redis/utils.js`。
 export { isRedisReady } from './utils.js';
+export { getInstanceId, isPubSubReady, subscribe, publish, closePubSub, resetPubSub } from './pubsub.js';
