@@ -119,20 +119,22 @@
   <h2><span class="num">01</span>总体结论</h2>
   <div class="verdict">
     <span class="vtag">核心判断</span>
-    <p><strong>全部 4 个横向扩展阻断项 + 1 个事件循环阻塞点已完成修复并复验通过。</strong>
-    修复方式沿用现有基础设施（如复用此前零引用的 <code>redis/lock-store.js</code>），未引入新依赖、未改动分层结构。</p>
+    <p><strong>横向扩展的 4 个阻断项中，3 项（E1 / E2 / E4）已修复并复验；另加新发现的 1 个事件循环阻塞点（S1）与 2 项可观测性改进（S4 / B-3），本轮共 6 项完成。</strong>
+    第 4 个阻断项 <strong>E3（遥测与 WS 广播外置）仍未做</strong> —— 它需要双实例 + 可用 Redis 才能验证，详见 §04。</p>
+    <p>修复方式沿用现有基础设施（复用此前零引用的 <code>redis/lock-store.js</code>），未引入新依赖、未改动分层结构。</p>
     <p>其中<strong>最关键的一条</strong>：密码哈希已从主线程移出。此前 10 个并发登录会冻结整个进程
     <strong>约 650–780ms</strong>，与 <code>/v1/health/ready</code> 的 3s 探针超时同一量级 ——
     登录突发足以触发"探针超时 → 实例被摘流 → 流量压向剩余实例"的雪崩。修复后冻结降至 <strong>22ms</strong>。</p>
-    <p><strong>需要明确的一点：仍有 2 项未做</strong>（Docker/CI 载体、遥测与 WS 广播外置 Redis）。
+    <p><strong>需要明确的一点：仍有 3 项未做或仅部分完成</strong>
+    （E3 遥测与 WS 广播外置、S2 Docker/CI 载体、E4′ 计数外置 Redis）。
     原因是本机<strong>无 Docker、Redis 全部不可达</strong>，无法验证。
     本报告不对未验证的制品声称完成 —— 这恰恰是上一轮评审批评过的问题。</p>
   </div>
 
   <div class="kpis">
     <div class="kpi ok">
-      <div class="k">5<span style="font-size:15px">/5</span></div>
-      <div class="l">P0 阻断项<br>已修复并复验</div>
+      <div class="k">6</div>
+      <div class="l">本轮修复项<br>S1·E1·E2·E4·S4·B-3</div>
     </div>
     <div class="kpi ok">
       <div class="k">1009</div>
@@ -143,8 +145,8 @@
       <div class="l">10 并发哈希冻结<br>修复前 774ms</div>
     </div>
     <div class="kpi warn">
-      <div class="k">2</div>
-      <div class="l">未完成项<br>环境受限，未验证</div>
+      <div class="k">3</div>
+      <div class="l">未做 / 部分完成<br>E3 · S2 · E4′</div>
     </div>
     <div class="kpi ok">
       <div class="k">0</div>
