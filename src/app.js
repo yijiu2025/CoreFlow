@@ -23,6 +23,7 @@ import { flushGuardConfig } from './api/guard-config.js';
 import { startScheduler } from './framework/scheduler/index.js';
 import { ApiException } from './shared/exceptions.js';
 import { configureLog, createLogger, initLogErrorTraps } from './framework/log/index.js';
+import { createWsPreClose, DEFAULT_WS_SHUTDOWN_GRACE_MS } from './framework/websocket/preclose.js';
 
 // ════════════════════════════════════════════════════════════════════
 // 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
@@ -74,6 +75,45 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
   .filter(Boolean);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * 解析毫秒级超时配置
+ * 非数字 / 负数一律回退默认值 —— 静默退化成 0 会**关掉保护**，比配错更危险
+ *
+ * @param {string|undefined} raw - 环境变量原始值
+ * @param {number} fallback - 默认值（毫秒）
+ * @returns {number} 有效毫秒数（0 表示交给 Fastify 内置默认值）
+ */
+function resolveTimeoutMs(raw, fallback) {
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// HTTP 连接层超时
+// ════════════════════════════════════════════════════════════════════
+// 这些值决定"坏连接能占住资源多久"与"停机能有多快"，因此显式声明而非依赖 Fastify 的
+// 隐式默认，并允许按反代 / 网关的 keepalive 设置对齐。
+//
+// ⚠️ Fastify 的选项校验会**静默丢弃**不在其 schema 内的键 —— 实测传入 `headersTimeout`
+// 或 `timeout` 既不报错也不生效（`app.server.headersTimeout` 仍是 Node 默认 60000）。
+// 只有下面几个键是 Fastify 5 认识并真正透传到 http server 的（已实测确认）。
+// 慢 header 攻击由 Node 内建的 headersTimeout（60s）兜底，Fastify 未透出该选项。
+//
+// keepAliveTimeout：默认 72s（与 Fastify 内置默认一致，故零行为变更）。
+//   必须大于前置反代的 keepalive，否则会出现"反代刚复用连接而应用已关闭"的
+//   间歇性 502 —— 若上游是 Nginx(75s) / ALB(60s)，按需调大或调小。
+// requestTimeout：单请求（含请求体）接收总时长上限，默认 300s = Node 自身默认值。
+//   Fastify 把它默认关掉了（0），显式打开是为了封住"慢速发 body"（RUDY 类）攻击 ——
+//   防火墙的 6 个检测器里**没有**慢连接检测，这一层是唯一防线。
+//   300s 是留给 200MB multipart 上传的余量（约 0.67MB/s 即达标）；若上游都是高速
+//   网络可下调，若面向弱网移动端则调大，不要下调到低于最慢的真实上传耗时。
+const HTTP_KEEP_ALIVE_TIMEOUT_MS = resolveTimeoutMs(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS, 72_000);
+const HTTP_REQUEST_TIMEOUT_MS = resolveTimeoutMs(process.env.HTTP_REQUEST_TIMEOUT_MS, 300_000);
+
+/** WebSocket 关闭宽限期（毫秒）：广播关闭帧后，等这么久再强制断开残留连接 */
+const WS_SHUTDOWN_GRACE_MS = resolveTimeoutMs(process.env.WS_SHUTDOWN_GRACE_MS, DEFAULT_WS_SHUTDOWN_GRACE_MS);
 
 // 不安全的默认密钥列表（启动时校验，防止误部署）
 const INSECURE_SECRETS = [
@@ -171,6 +211,11 @@ async function createApp() {
   // 创建 Fastify 实例，开发环境 pino-pretty 美化，生产环境 JSON 结构化供 ELK/Loki 解析
   const app = Fastify({
     bodyLimit: 5242880, // 5MB JSON 请求体限制
+    // 停机时不等长连接：普通 keep-alive 连接会被立即关闭（实测 close 由"等超时"变为 1ms）。
+    // ⚠️ 它对**已 upgrade 的 WebSocket 连接无效**，那部分由下面的 wsPreClose 负责。
+    forceCloseConnections: true,
+    keepAliveTimeout: HTTP_KEEP_ALIVE_TIMEOUT_MS,
+    requestTimeout: HTTP_REQUEST_TIMEOUT_MS,
     logger: {
       level: 'info',
       ...(!isProduction
@@ -294,7 +339,8 @@ async function createApp() {
     }
   });
 
-  await app.register(websocket);
+  // 自定义 preClose：广播关闭帧 + 宽限期后强制断开，避免半开 WS 连接拖住 app.close()
+  await app.register(websocket, { preClose: createWsPreClose(WS_SHUTDOWN_GRACE_MS) });
 
   await app.register(cookie);
 

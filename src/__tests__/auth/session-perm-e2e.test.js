@@ -47,7 +47,10 @@ describe('会话权限随指纹失效（第 3 层端到端）', () => {
 
   test('老会话没存指纹 → 必须回源（不能沿用）', async () => {
     fpStore.value = 'FP_X';
-    const r = await resolveSessionPermissions(1, 'app', { roles: ['r_cached'], permissions: { allows: [], denies: [] } });
+    const r = await resolveSessionPermissions(1, 'app', {
+      roles: ['r_cached'],
+      permissions: { allows: [], denies: [] }
+    });
     expect(r.roles).toEqual(['r_old']);
   });
 

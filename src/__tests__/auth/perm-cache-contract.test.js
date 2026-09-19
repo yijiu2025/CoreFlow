@@ -26,7 +26,7 @@ describe('权限缓存命名空间契约（第 2 层）', () => {
     expect(NS_IN_STORE).toBe(PERM_NAMESPACE);
   });
 
-  test('全仓不得再出现裸 getStore(\'perm\')（旧业务 store 名）', () => {
+  test("全仓不得再出现裸 getStore('perm')（旧业务 store 名）", () => {
     const offenders = [];
     const walk = dir => {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -139,7 +139,7 @@ describe('敏感操作回源校验契约（第 4 层）', () => {
 });
 
 describe('防复发：反例验证（确认检测器真的会红）', () => {
-  test('检测器能识别裸 getStore(\'perm\') 写法', () => {
+  test("检测器能识别裸 getStore('perm') 写法", () => {
     const RE = /getStore\(\s*['"]perm['"]/;
     expect(RE.test(stripComments(`const s = getStore('perm');`))).toBe(true);
     expect(RE.test(stripComments(`const s = getStore("perm", { timeout: 1 });`))).toBe(true);

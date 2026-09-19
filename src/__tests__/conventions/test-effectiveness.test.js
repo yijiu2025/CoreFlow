@@ -31,14 +31,8 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '__snapshots__']);
  * 不代表它们失效。新增条目必须写明理由 —— 不允许把「纯常量自测」塞进来。
  */
 const STRUCTURAL_GUARD_WHITELIST = new Map([
-  [
-    'conventions/export-placement.test.js',
-    '读源文件 AST 校验 export 位置/形式，天然不 import 被测模块'
-  ],
-  [
-    'conventions/node-redis-v5-commands.test.js',
-    '扫描源码文本校验 node-redis v5 命令名，天然不 import 被测模块'
-  ]
+  ['conventions/export-placement.test.js', '读源文件 AST 校验 export 位置/形式，天然不 import 被测模块'],
+  ['conventions/node-redis-v5-commands.test.js', '扫描源码文本校验 node-redis v5 命令名，天然不 import 被测模块']
 ]);
 
 /**
@@ -67,8 +61,7 @@ const KNOWN_INEFFECTIVE_TESTS = new Set([
   'permission-loader.test.js',
   'permission-system.test.js',
   'rate-limiter.test.js',
-  'security.test.js',
-  'websocket.test.js'
+  'security.test.js'
 ]);
 
 function walk(dir, out = []) {
@@ -156,6 +149,8 @@ describe('测试有效性守卫', () => {
         `以下文件已能加载被测代码（已改造完成），请从 KNOWN_INEFFECTIVE_TESTS 中删除对应条目：\n${lines}`
       );
     }
+
+    expect(stillIneffective).toEqual([]);
   });
 
   it('存量清单中的文件必须真实存在或已被删除（防止条目失效后无人清理）', () => {
@@ -166,16 +161,17 @@ describe('测试有效性守卫', () => {
 
     if (missing.length > 0) {
       const lines = missing.map(k => `  - src/__tests__/${k}`).join('\n');
-      throw new Error(
-        `以下文件已不存在，请从 KNOWN_INEFFECTIVE_TESTS 中删除对应条目：\n${lines}`
-      );
+      throw new Error(`以下文件已不存在，请从 KNOWN_INEFFECTIVE_TESTS 中删除对应条目：\n${lines}`);
     }
+
+    expect(missing).toEqual([]);
   });
 
   it('存量清单规模不得扩张（防绕过：把新违规偷塞进冻结清单）', () => {
     // 该断言把「清单长度」钉在当前值上。新增违规想混过检查，
     // 必须同时改这里 —— 那是一次可见的、需要理由的修改，而非静默绕过。
-    const FROZEN_SIZE = 16;
+    // 15：原 16，`websocket.test.js` 于 2026-09-19 改造为真实驱动后移出。
+    const FROZEN_SIZE = 15;
     expect(KNOWN_INEFFECTIVE_TESTS.size).toBeLessThanOrEqual(FROZEN_SIZE);
   });
 
@@ -189,16 +185,21 @@ describe('测试有效性守卫', () => {
   it('白名单不得包含明显是「纯常量自测」的文件（含大量手写字面量断言）', () => {
     // 启发式：结构守卫读文件系统 → 必有 fs/path import；
     // 若无，则它既没 import 被测代码也不读文件，不可能是正当的结构守卫。
+    const notGuards = [];
+
     for (const [key, reason] of STRUCTURAL_GUARD_WHITELIST) {
       const src = fs.readFileSync(path.join(TESTS, key), 'utf8');
       const readsFs = /from\s+['"]node:fs['"]|from\s+['"]fs['"]/.test(src);
-      if (!readsFs) {
-        throw new Error(
-          `白名单条目「${key}」既未 import 被测代码，也不读文件系统，不可能是结构守卫。\n` +
-            `登记理由：${reason}\n` +
-            `请移除该条目并修复该测试。`
-        );
-      }
+      if (!readsFs) notGuards.push({ key, reason });
     }
+
+    if (notGuards.length > 0) {
+      const detail = notGuards.map(g => `  - ${g.key}（登记理由：${g.reason}）`).join('\n');
+      throw new Error(
+        `以下白名单条目既未 import 被测代码，也不读文件系统，不可能是结构守卫，请移除并修复该测试：\n${detail}`
+      );
+    }
+
+    expect(notGuards).toEqual([]);
   });
 });
