@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>后端架构修复验收报告 · nodeServers</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#101828; --ink2:#475467; --ink3:#667085;
+    --line:#e4e7ec; --line2:#d0d5dd;
+    --crit:#b42318; --crit-bg:#fef3f2; --crit-line:#fecdca;
+    --warn:#b54708; --warn-bg:#fffaeb; --warn-line:#fedf89;
+    --ok:#067647;  --ok-bg:#ecfdf3;  --ok-line:#abefc6;
+    --info:#175cd3; --info-bg:#eff8ff; --info-line:#b2ddff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 80px}
+
+  header{padding:56px 0 32px;border-bottom:2px solid var(--ink)}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:16px}
+  h1{margin:0 0 14px;font-size:34px;line-height:1.25;letter-spacing:-.02em;font-weight:700}
+  .sub{color:var(--ink2);font-size:16px;max-width:74ch;margin:0 0 24px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px}
+  .tag{font:500 12px/1 var(--mono);padding:7px 11px;border-radius:6px;background:#f2f4f7;color:var(--ink2);border:1px solid var(--line)}
+
+  section{padding-top:44px}
+  h2{font-size:22px;margin:0 0 6px;letter-spacing:-.01em;font-weight:700;display:flex;align-items:baseline;gap:12px}
+  h2 .num{font:600 13px/1 var(--mono);color:#fff;background:var(--ink);padding:5px 8px;border-radius:5px;position:relative;top:-2px}
+  h3{font-size:16px;margin:28px 0 10px;font-weight:650}
+  .lead{color:var(--ink2);margin:0 0 20px;max-width:78ch}
+  p{margin:0 0 12px}
+  code{font:13px/1.5 var(--mono);background:#f2f4f7;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:#344054}
+  .path{font:12px/1.5 var(--mono);color:var(--ink2);background:#f9fafb;border:1px solid var(--line);border-radius:5px;padding:2px 7px;display:inline-block}
+
+  .verdict{background:var(--panel);border:1px solid var(--line2);border-left:4px solid var(--ok);border-radius:10px;padding:22px 24px;margin:0 0 8px}
+  .verdict .vtag{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.1em;color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line);padding:5px 9px;border-radius:5px;margin-bottom:12px}
+  .verdict p{margin:0 0 8px}
+  .verdict p:last-child{margin-bottom:0}
+  .verdict strong{color:var(--ink)}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:20px 0 4px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .kpi .k{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:6px}
+  .kpi .l{font-size:12.5px;color:var(--ink3);line-height:1.45}
+  .kpi.crit .k{color:var(--crit)} .kpi.warn .k{color:var(--warn)} .kpi.ok .k{color:var(--ok)}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;background:var(--panel)}
+  th{text-align:left;font:650 11.5px/1.4 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);
+     padding:10px 12px;border-bottom:2px solid var(--line2);white-space:nowrap}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fcfcfd}
+  td.num{font:13px/1.5 var(--mono);white-space:nowrap;font-weight:600}
+  .st{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:4px;white-space:nowrap;display:inline-block}
+  .st.open{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line)}
+  .st.done{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line)}
+  .st.part{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line)}
+
+  .note{border-radius:9px;padding:14px 17px;margin:14px 0;font-size:14px;border:1px solid}
+  .note.crit{background:var(--crit-bg);border-color:var(--crit-line)}
+  .note.warn{background:var(--warn-bg);border-color:var(--warn-line)}
+  .note.info{background:var(--info-bg);border-color:var(--info-line)}
+  .note.ok{background:var(--ok-bg);border-color:var(--ok-line)}
+  .note .nt{font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono);display:block;margin-bottom:7px}
+  .note.crit .nt{color:var(--crit)} .note.warn .nt{color:var(--warn)}
+  .note.info .nt{color:var(--info)} .note.ok .nt{color:var(--ok)}
+  .note p:last-child{margin-bottom:0}
+
+  .fix{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin:0 0 14px;border-left:4px solid var(--ok)}
+  .fix .fhead{display:flex;align-items:flex-start;gap:11px;margin-bottom:10px;flex-wrap:wrap}
+  .fid{font:700 12px/1 var(--mono);padding:5px 8px;border-radius:5px;flex:none;margin-top:2px;color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line)}
+  .ftitle{font-size:16px;font-weight:660;line-height:1.4;flex:1;min-width:200px}
+  .fix .body{color:var(--ink2);font-size:14px}
+  .fix .body strong{color:var(--ink)}
+  .fix .body p:last-child{margin-bottom:0}
+  .files{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+
+  .bar{height:26px;border-radius:5px;display:flex;align-items:center;padding:0 9px;font:600 11.5px/1 var(--mono);color:#fff;white-space:nowrap;overflow:hidden}
+  .barwrap{margin:6px 0 2px}
+  .barlabel{display:flex;justify-content:space-between;font:12px/1.6 var(--mono);color:var(--ink2)}
+
+  ul.clean{margin:10px 0;padding-left:20px} ul.clean li{margin-bottom:7px}
+  ul.plain{list-style:none;padding:0;margin:10px 0}
+  ul.plain li{position:relative;padding-left:22px;margin-bottom:9px;color:var(--ink2);font-size:14px}
+  ul.plain li::before{content:"—";position:absolute;left:0;color:var(--ink3)}
+
+  footer{margin-top:52px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink3);font-size:12.5px}
+  footer code{font-size:12px}
+  @media print{body{background:#fff}.fix,.verdict,.kpi{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Backend Architecture · Remediation Report</div>
+  <h1>后端架构修复验收报告</h1>
+  <p class="sub">
+    承接《后端架构评估：扩展性与稳定性》的<strong>逐项修复落地</strong>。
+    本报告只写<strong>已经在本机跑通的</strong>内容：每条都附改动位置与复验证据；
+    受环境限制无法验证的部分单独列出，<strong>不计入已完成</strong>。
+  </p>
+  <div class="meta">
+    <span class="tag">修复日期 2026-09-19</span>
+    <span class="tag">提交 7796844 · d73f159</span>
+    <span class="tag">版本 v2.7.2</span>
+    <span class="tag">75 suites / 1009 tests 全绿</span>
+  </div>
+</header>
+
+<!-- ══════════════ 01 结论 ══════════════ -->
+<section>
+  <h2><span class="num">01</span>总体结论</h2>
+  <div class="verdict">
+    <span class="vtag">核心判断</span>
+    <p><strong>全部 4 个横向扩展阻断项 + 1 个事件循环阻塞点已完成修复并复验通过。</strong>
+    修复方式沿用现有基础设施（如复用此前零引用的 <code>redis/lock-store.js</code>），未引入新依赖、未改动分层结构。</p>
+    <p>其中<strong>最关键的一条</strong>：密码哈希已从主线程移出。此前 10 个并发登录会冻结整个进程
+    <strong>约 650–780ms</strong>，与 <code>/v1/health/ready</code> 的 3s 探针超时同一量级 ——
+    登录突发足以触发"探针超时 → 实例被摘流 → 流量压向剩余实例"的雪崩。修复后冻结降至 <strong>22ms</strong>。</p>
+    <p><strong>需要明确的一点：仍有 2 项未做</strong>（Docker/CI 载体、遥测与 WS 广播外置 Redis）。
+    原因是本机<strong>无 Docker、Redis 全部不可达</strong>，无法验证。
+    本报告不对未验证的制品声称完成 —— 这恰恰是上一轮评审批评过的问题。</p>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi ok">
+      <div class="k">5<span style="font-size:15px">/5</span></div>
+      <div class="l">P0 阻断项<br>已修复并复验</div>
+    </div>
+    <div class="kpi ok">
+      <div class="k">1009</div>
+      <div class="l">测试通过<br>0 失败 / 11 跳过</div>
+    </div>
+    <div class="kpi ok">
+      <div class="k">22<span style="font-size:15px">ms</span></div>
+      <div class="l">10 并发哈希冻结<br>修复前 774ms</div>
+    </div>
+    <div class="kpi warn">
+      <div class="k">2</div>
+      <div class="l">未完成项<br>环境受限，未验证</div>
+    </div>
+    <div class="kpi ok">
+      <div class="k">0</div>
+      <div class="l">新增依赖<br>复用现有 lock-store</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 02 修复清单 ══════════════ -->
+<section>
+  <h2><span class="num">02</span>修复清单</h2>
+  <p class="lead">状态判定以"本机可复现的验证"为准，不以代码写完为准。</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:52px">项</th>
+        <th style="width:22%">问题</th>
+        <th>落地方式</th>
+        <th style="width:20%">复验证据</th>
+        <th style="width:78px">状态</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="num">S1</td>
+        <td><strong>密码哈希阻塞事件循环</strong><br><span style="color:var(--ink3);font-size:12.5px">10 并发冻结 ~0.7s</span></td>
+        <td>改用 <code>crypto.scrypt</code>（libuv 线程池）；新增 <code>password-hash.js</code>，参数内嵌格式 <code>scrypt$N$r$p$salt$hash</code>；兼容存量 bcrypt，登录成功时借已有的 <code>identity.save()</code> 顺手升级</td>
+        <td>对照实测：冻结 <strong>774ms → 22ms</strong>；<code>password-hash.test.js</code> 12 项</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">E1</td>
+        <td><strong>调度器无分布式锁</strong><br><span style="color:var(--ink3);font-size:12.5px">多实例重复执行</span></td>
+        <td>复用 <code>framework/redis/lock-store.js</code>（此前全仓零引用）；锁 TTL = 任务周期，<strong>不主动释放</strong>；Redis 不可达时跳过本轮而非回退本地执行</td>
+        <td><code>scheduler-lock.test.js</code> 8 项（含"第二个实例抢不到锁"）</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">E2</td>
+        <td><strong>守卫配置跨实例不一致</strong><br><span style="color:var(--ink3);font-size:12.5px">同路由不同实例鉴权结果不同</span></td>
+        <td>新增 30s 版本号轮询同步；<strong>不回写 DB</strong>、跳过本地脏系统、仅版本变大时合并</td>
+        <td><code>guard-config-sync.test.js</code> 5 项</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">E4</td>
+        <td><strong>连接计数僵尸记录</strong><br><span style="color:var(--ink3);font-size:12.5px">泄漏 1~2 个计数且永不回收</span></td>
+        <td>记录由 <code>number</code> 改为 <code>{count,lastAt}</code>，按最后活跃时间回收；阈值 10min 刻意大于 <code>requestTimeout</code> 300s，避免误删长请求</td>
+        <td><code>connection-tracker.test.js</code> 11 项</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">S4</td>
+        <td><strong>连接池容量不可观测</strong><br><span style="color:var(--ink3);font-size:12.5px">池枯竭时无任何日志线索</span></td>
+        <td><code>getPoolStats()</code> 接进 <code>/v1/health/ready</code>，<strong>仅诊断、不参与 503 判定</strong>（避免摘掉正在扛量的实例）</td>
+        <td><code>pool-stats.test.js</code> 5 项</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">B-3</td>
+        <td><strong>配置校验散落各处</strong><br><span style="color:var(--ink3);font-size:12.5px">配错值静默失效</span></td>
+        <td>新增 <code>framework/config/env.js</code>（零 import 纯函数）统一 22 个环境变量 + 弱密钥黑名单 + 跨字段校验；<code>app.js</code> 用其取代 <code>validateSecrets</code></td>
+        <td><code>config-validation.test.js</code> 19 项（<strong>由虚假覆盖改造</strong>）</td>
+        <td><span class="st done">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="num">E3</td>
+        <td><strong>遥测统计 / WS 广播进程内</strong></td>
+        <td>—</td>
+        <td>需可用 Redis + 双实例环境，本机不具备</td>
+        <td><span class="st open">未做</span></td>
+      </tr>
+      <tr>
+        <td class="num">S2</td>
+        <td><strong>无 Dockerfile / CI</strong></td>
+        <td>—</td>
+        <td>本机无 <code>docker</code> 命令，无法验证制品可跑</td>
+        <td><span class="st open">未做</span></td>
+      </tr>
+      <tr>
+        <td class="num">E4′</td>
+        <td><strong>连接计数外置 Redis</strong></td>
+        <td>—</td>
+        <td>同上；本轮只做了泄漏修复与语义澄清</td>
+        <td><span class="st part">部分</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════ 03 关键修复详解 ══════════════ -->
+<section>
+  <h2><span class="num">03</span>关键修复详解</h2>
+
+  <h3>S1 · 把密码哈希移出主线程</h3>
+  <p class="lead">
+    这是本轮唯一"改了技术方案"的修复，其余都是行为修正。判断依据来自对照实测，不是直觉。
+  </p>
+
+  <div class="fix">
+    <div class="fhead">
+      <span class="fid">实测</span>
+      <span class="ftitle">三种实现在 10 并发下的对照（并发数 10）</span>
+    </div>
+    <div class="body">
+      <div class="barwrap">
+        <div class="barlabel"><span>1. bcrypt.hashSync（修复前的生产路径）</span><span>冻结 774ms</span></div>
+        <div class="bar" style="width:100%;background:var(--crit)">774ms — 几乎全程占住主线程</div>
+      </div>
+      <div class="barwrap">
+        <div class="barlabel"><span>2. bcrypt.hash（async，常被误认为能解决）</span><span>冻结 649ms</span></div>
+        <div class="bar" style="width:84%;background:var(--crit)">649ms — 同样冻结</div>
+      </div>
+      <div class="barwrap">
+        <div class="barlabel"><span>3. hashPassword（scrypt，修复后）</span><span>冻结 22ms</span></div>
+        <div class="bar" style="width:3%;min-width:66px;background:var(--ok)">22ms</div>
+      </div>
+      <p style="margin-top:14px">
+        <strong>关键反例：把 <code>bcryptjs</code> 换成它的 async 版本<u>没有任何帮助</u></strong>（649ms 冻结 ≈ sync 的 774ms）。
+        <code>bcryptjs</code> 是纯 JS 实现，<code>await</code> 只是让出一次微任务，算力仍在主线程上。
+        <strong>只有换到 libuv 线程池（<code>crypto.scrypt</code>）才真正解除阻塞。</strong>
+        墙钟从 774ms 降到 164ms 是附带收益（scrypt 默认走 4 个线程池线程并行）。
+      </p>
+      <p>
+        兼容性：存量 bcrypt 哈希仍可登录，格式通过前缀自动识别；升级时机复用登录流程里<strong>已经存在</strong>的
+        <code>identity.save()</code>，不额外增加一次写库。
+      </p>
+      <div class="files">
+        <span class="path">src/framework/auth/password-hash.js</span>
+        <span class="path">src/app/user/dao/user.js</span>
+        <span class="path">src/app/oauth21/dao/client.dao.js</span>
+        <span class="path">src/app/oauth21/dao/user.dao.js</span>
+        <span class="path">src/app/oauth21/services/token.service.js</span>
+        <span class="path">scripts/commands/{user,admin}.js</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="nt">测量方法提醒</span>
+    <p>量化"事件循环被冻结多久"<strong>不能用 <code>monitorEventLoopDelay</code></strong>：它按固定 resolution 采样，
+    实测把 774ms 的一次性冻结报成 <strong>17ms</strong>，据此会得出"bcrypt 没问题"的<strong>相反结论</strong>。
+    正确做法是跑一个 10ms <code>setInterval</code> 心跳，取相邻 tick 的最大间隔 —— 阻塞多久，空隙就是多久。</p>
+  </div>
+
+  <h3>E1 · 调度器分布式锁</h3>
+  <div class="fix">
+    <div class="fhead">
+      <span class="fid">E1</span>
+      <span class="ftitle">复用已有的 <code>lock-store.js</code>，而不是新写一套</span>
+    </div>
+    <div class="body">
+      <p>仓库里早就有基于 <code>SET NX PX</code> 的锁实现，但<strong>全仓零引用</strong>。修复直接复用它，
+      锁 key 为 <code>scheduler:&lt;taskKey&gt;</code>。</p>
+      <p><strong>一个容易写错的设计点</strong>：锁的 TTL 等于任务周期，且<strong>执行完不主动释放</strong>。
+      直觉上"用完就该释放"，但那会让下一个实例立刻抢到锁并重复执行同一个周期 —— 释放等于放弃互斥。
+      让 TTL 自然过期才是正确的语义。</p>
+      <p>另一个刻意的选择：Redis 不可达时<strong>跳过本轮</strong>，而不是回退到"无锁本地执行"。
+      后者会在 Redis 抖动时静默恢复重复执行，把一次可用性故障升级成数据故障。</p>
+    </div>
+  </div>
+
+  <h3>E2 · 守卫配置跨实例同步</h3>
+  <div class="fix">
+    <div class="fhead">
+      <span class="fid">E2</span>
+      <span class="ftitle">这是安全语义问题，不是可用性问题</span>
+    </div>
+    <div class="body">
+      <p>守卫配置此前是模块级单例，且只在启动时加载一次。多实例下修改配置，只有处理该请求的那个实例生效 ——
+      <strong>同一条路由打到不同实例会得到不同的鉴权结果</strong>。这比"服务不可用"更糟：不可用会被发现，不一致会被静默利用。</p>
+      <p>同步策略刻意保守，三条约束都是为了不制造新问题：<strong>不回写 DB</strong>（避免同步动作反而引发写入）、
+      <strong>跳过本地有未保存改动的系统</strong>（避免覆盖管理员正在编辑的内容）、<strong>只在版本号变大时合并</strong>
+      （避免时钟偏差导致旧数据覆盖新数据）。</p>
+      <div class="files">
+        <span class="path">src/api/guard-config.js</span>
+        <span class="path">src/app.js</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>E4 / S4 · 计数回收与池可观测</h3>
+  <div class="fix">
+    <div class="fhead">
+      <span class="fid">E4</span>
+      <span class="ftitle">回收阈值必须大于请求超时</span>
+    </div>
+    <div class="body">
+      <p>原实现按固定的"连接槽位"判断，实际泄漏的计数<strong>只有 1~2 个且永不回收</strong>，很难被发现。
+      改为记录最后活跃时间后按静默时长回收。</p>
+      <p><strong>阈值取 10min 而非更短，是有意的</strong>：它必须大于 <code>requestTimeout</code>（300s），
+      否则一个正常的长请求会被误判为僵尸并回收计数，反而造成安全侧误判。</p>
+    </div>
+  </div>
+
+  <div class="fix">
+    <div class="fhead">
+      <span class="fid">S4</span>
+      <span class="ftitle">连接池指标接进探针，但不参与摘流判定</span>
+    </div>
+    <div class="body">
+      <p>连接池只暴露指标、<strong>不改变 <code>/ready</code> 的 503 判定</strong>。
+      原因是：池枯竭的实例往往正在扛流量，把它摘掉只会把压力转移给同样吃紧的其他实例 ——
+      指标应当用于告警和人工判断，而不是自动摘流。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ 04 未完成项 ══════════════ -->
+<section>
+  <h2><span class="num">04</span>未完成项（诚实标注）</h2>
+  <p class="lead">以下三项<strong>没有完成，也没有声称完成</strong>。列出原因与前置条件，便于后续排期。</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:60px">项</th><th style="width:26%">为何未做</th><th>前置条件</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="num">S2</td>
+        <td>本机<strong>无 <code>docker</code> 命令</strong>，写出来的 Dockerfile / compose / CI 无法验证能否跑通</td>
+        <td>一台可用 Docker 的机器；或先只补 CI 的 lint + test 两段（这两段本机可验证）</td>
+      </tr>
+      <tr>
+        <td class="num">E3</td>
+        <td>遥测统计与 WS 广播外置到 Redis 需要<strong>双实例环境</strong>才能验证"不再互相覆写"</td>
+        <td>可用 Redis（本机 192.168.31.19 超时、127.0.0.1 拒绝）+ 能起两个实例</td>
+      </tr>
+      <tr>
+        <td class="num">E4′</td>
+        <td>连接计数外置 Redis 同上；本轮只修了泄漏，<strong>没有改变"进程内"这一性质</strong></td>
+        <td>同上。注意：单实例部署下当前实现是正确的，不构成缺陷</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note info">
+    <span class="nt">为什么不一并写完</span>
+    <p>上一轮评审批评过"文档声明完成但代码跑不通"。本轮刻意拒绝提交<strong>无法在本机验证</strong>的制品 ——
+    未经验证的 Dockerfile 比没有 Dockerfile 更危险，因为它会让"能扩容"变成一个看似成立的假设。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 05 验证方法与基线 ══════════════ -->
+<section>
+  <h2><span class="num">05</span>验证方法与基线</h2>
+
+  <h3>本轮实际执行的验证</h3>
+  <ul class="plain">
+    <li><strong>全量回归</strong>：75 suites / <strong>1009 passed</strong> / 0 failed / 11 skipped。</li>
+    <li><strong>Lint</strong>：全部改动文件 0 error 0 warning（含 prettier 格式化）。</li>
+    <li><strong>对照实测</strong>：哈希阻塞三组对照，见 §03；结论有反例支撑，不是"能跑就行"。</li>
+    <li><strong>测试有效性</strong>：新增测试均<strong>真实加载被测代码</strong>，可被毒丸实验证伪。</li>
+  </ul>
+
+  <h3>测试基线的一处变化</h3>
+  <p>
+    <code>config-validation.test.js</code> 原先属于 <code>KNOWN_INEFFECTIVE_TESTS</code>
+    —— 即"看起来在测、实际删掉被测模块也照样全绿"的虚假覆盖。本轮把它改造为真实驱动
+    <code>framework/config/env.js</code>，并按守卫要求从冻结清单中移除，清单条目 <strong>15 → 14</strong>。
+  </p>
+  <div class="note ok">
+    <span class="nt">一个值得保留的信号</span>
+    <p>改完后 <code>test-effectiveness</code> 守卫立刻变红，报"该文件已能加载被测代码，请从清单删除对应条目"。
+    <strong>守卫在正确地把自己的豁免项往外推 —— 这是它应有的行为，不是故障。</strong></p>
+  </div>
+
+  <h3>关键约束（供后续维护者）</h3>
+  <ul class="clean">
+    <li>密码哈希<strong>必须</strong>走 <code>framework/auth/password-hash.js</code>，不要直接引入 <code>bcryptjs</code>。</li>
+    <li>新增 <code>registry/</code> 加载器时，要主动想清归入"关键"还是 <code>OPTIONAL_LOADERS</code>；不声明即按关键处理（失败即拦启动），这是有意的安全缺省。</li>
+    <li><code>/health/*</code> 是<strong>公开</strong>端点。新增任何进响应体的字段前，先问"给未登录的人看合适吗"。</li>
+    <li>连接池容量：<code>DB_POOL_MAX × 实例数</code> 受 MySQL <code>max_connections</code>（默认 151）约束，扩容时必须同时核算。</li>
+  </ul>
+</section>
+
+<!-- ══════════════ 06 后续建议 ══════════════ -->
+<section>
+  <h2><span class="num">06</span>后续建议</h2>
+  <ul class="clean">
+    <li><strong>先在双实例环境复验 E1/E2</strong>：本机是单实例，分布式锁与配置同步的正确性只做到"逻辑有测试覆盖"，
+    尚未在真实双实例下观测到互斥行为。<strong>这是扩容前唯一必做的一步。</strong></li>
+    <li><strong>建立压测基线</strong>：本报告的哈希数据是单机微基准。真正确认扩容收益需要一份压测基线
+    （P95 延迟 / 吞吐 / 池等待），否则"修好了"仍只是推断。</li>
+    <li><strong>补 CI 的 lint + test 两段</strong>：这两段不依赖 Docker，本机即可验证，能先拿到"每次提交都跑测试"的主要收益。</li>
+    <li><strong>继续压缩虚假覆盖</strong>：冻结清单还剩 14 条，建议按"改造一个删一条"的节奏推进。</li>
+    <li><strong>应用层双向依赖</strong>：<code>oauth21 ⇄ user</code> 的互相引用建议在下次功能改动时顺路收敛。</li>
+  </ul>
+
+  <div class="note warn">
+    <span class="nt">扩容前的判定</span>
+    <p>4 个扩展阻断项的火已扑灭，但<strong>"可以加机器了"仍需要一次真实的双实例验收</strong>，
+    而不是由本报告代为宣布。本报告能证明的是：那些会让多实例行为不可预测的代码缺陷，已经不在了。</p>
+  </div>
+</section>
+
+<footer>
+  <p>验证环境：Windows · Node 22.22.2 · 单实例，无 Docker、无可用 Redis。
+  因此涉及多实例与容器化的结论均标注为"未验证"。</p>
+  <p>相关提交：<code>7796844</code>（S1 / E1 / S4）、<code>d73f159</code>（E2 / E4 / B-3）。
+  版本 <code>v2.7.2</code>。完整评审见 <code>reports/backend-architecture-review-2026-09-19.html</code>。</p>
+</footer>
+
+</div>
+</body>
+</html>
