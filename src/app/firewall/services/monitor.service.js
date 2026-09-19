@@ -11,7 +11,12 @@
  * @since 2026-08-17
  * @since 2026-09-15 新增设备维度（跨 IP 生效）
  */
-import { getSummary, getRecentRecords, clearAll, setBroadcastHandler } from '../data/store.js';
+import {
+  getSummaryAggregated,
+  getRecentRecordsAggregated,
+  clearAll,
+  setBroadcastHandler
+} from '../data/store.js';
 import { addToBlacklist, removeFromBlacklist, addToWhitelist, removeFromWhitelist } from '../dao/dao.js';
 import {
   setBlock,
@@ -26,6 +31,7 @@ import {
   removeWhitelistDevice
 } from '../dao/block-manager.js';
 import { removeKeys, rel } from '../util/redis.js';
+import { publish, subscribe } from '../../../framework/redis/index.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.firewall.services.monitor.service');
@@ -35,11 +41,14 @@ const log = createLogger('app.firewall.services.monitor.service');
 /** 所有活跃的 WebSocket 客户端 */
 const clients = new Set();
 
+/** 跨实例广播 channel：本实例产生的消息经 Redis Pub/Sub 扇出到所有实例 */
+const BROADCAST_CHANNEL = 'firewall:monitor';
+
 /**
- * 向所有活跃 WS 客户端广播一条消息
+ * 向本实例所有活跃 WS 客户端投递一条消息（不做跨实例扇出）
  * @param {object} msg - 消息对象
  */
-function broadcast(msg) {
+function deliverLocal(msg) {
   const data = JSON.stringify(msg);
   for (const client of clients) {
     try {
@@ -54,6 +63,21 @@ function broadcast(msg) {
   }
 }
 
+/**
+ * 广播一条消息：本地直投 + Redis Pub/Sub 跨实例扇出
+ *
+ * 多实例部署时 WS 客户端集合是进程内的：只直投的话，A 实例产生的告警
+ * 送不到连在 B 实例上的浏览器。publish 内部按 origin 过滤，发布者不会
+ * 自发自收（否则本地会重复两条）。publish 自吞错误、永不 reject，
+ * 未 await 也不会产生 unhandled rejection。
+ *
+ * @param {object} msg - 消息对象
+ */
+function broadcast(msg) {
+  deliverLocal(msg);
+  publish(BROADCAST_CHANNEL, msg);
+}
+
 /** 广播单条日志记录 */
 function broadcastLog(record) {
   try {
@@ -64,18 +88,32 @@ function broadcastLog(record) {
 }
 
 /** 广播 INIT 消息（清空后重置 / 新客户端连接） */
-function broadcastInit() {
-  broadcast({
-    type: 'INIT',
-    data: { summary: getSummary(), records: [] }
-  });
+async function broadcastInit() {
+  broadcast({ type: 'INIT', data: await buildInitSnapshot() });
+}
+
+/**
+ * 构造 INIT 快照（聚合视图：Redis 全量 + 本实例未刷写增量）
+ *
+ * 多实例下新客户端连到任一实例都应看到全局视图，而不是只有本实例的统计。
+ *
+ * @returns {Promise<{summary: object, records: object[]}>}
+ */
+async function buildInitSnapshot() {
+  const [summary, records] = await Promise.all([getSummaryAggregated(), getRecentRecordsAggregated(100)]);
+  return { summary, records };
 }
 
 /**
  * 注册新的 WebSocket 客户端：PING/PONG + 加入广播集合 + 首发 INIT
+ *
+ * 先绑定消息/close 处理器再加入广播集合，最后才异步取 INIT 快照：
+ * 取快照期间客户端可能已断开（readyState 变化或已从集合移除），
+ * 发送前必须复查，否则快照会发给一个死连接。
+ *
  * @param {object} client - WebSocket 客户端实例
  */
-function registerMonitorClient(client) {
+async function registerMonitorClient(client) {
   if (!client || typeof client.on !== 'function') {
     log.warn('⚠️  WebSocket 异常：未发现有效的 Socket 实例');
     return;
@@ -92,26 +130,25 @@ function registerMonitorClient(client) {
   });
 
   if (client.readyState === 1) {
-    client.send(
-      JSON.stringify({
-        type: 'INIT',
-        data: {
-          summary: { ...getSummary() },
-          records: getRecentRecords()
-        }
-      })
-    );
+    const snapshot = await buildInitSnapshot();
+    if (clients.has(client) && client.readyState === 1) {
+      client.send(JSON.stringify({ type: 'INIT', data: snapshot }));
+    }
   }
 }
 
-/** 清空审计记录并广播 INIT 重置 */
-function clearRecordsAndBroadcast() {
-  clearAll();
-  broadcastInit();
+/** 清空审计记录（本地 + Redis 聚合）并广播 INIT 重置 */
+async function clearRecordsAndBroadcast() {
+  await clearAll();
+  await broadcastInit();
 }
 
 // 订阅 store 的广播钩子（日志写入时触发 broadcastLog）
 setBroadcastHandler(broadcastLog);
+
+// 订阅跨实例扇出：其他实例产生的消息投给本实例的 WS 客户端
+// （本实例自己的消息由 publish 的 origin 过滤丢弃，不会重复投递）
+subscribe(BROADCAST_CHANNEL, payload => deliverLocal(payload));
 
 // ==================== 封禁/白名单编排 ====================
 

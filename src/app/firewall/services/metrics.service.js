@@ -7,16 +7,22 @@
  * @author yijiu
  * @since 2026-08-16
  */
-import { getSummary } from '../data/store.js';
+import { getSummaryAggregated } from '../data/store.js';
 import { getActiveBlocks, getActiveWhitelist } from '../dao/block-manager.js';
 
 /**
  * 聚合防火墙性能指标视图
+ *
+ * 统计部分用跨实例聚合视图（多实例部署时单实例视图会漏掉其他实例的流量）。
+ *
  * @returns {Promise<object>} 指标视图（requests/blocks/whitelist/topRegions/topPaths）
  */
 async function getMetricsView() {
-  const summary = getSummary();
-  const [blocks, whitelist] = await Promise.all([getActiveBlocks(), getActiveWhitelist()]);
+  const [summary, blocks, whitelist] = await Promise.all([
+    getSummaryAggregated(),
+    getActiveBlocks(),
+    getActiveWhitelist()
+  ]);
 
   return {
     requests: {

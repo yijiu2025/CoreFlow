@@ -12,7 +12,7 @@
 import jwt from 'jsonwebtoken';
 import sequelize from '../../../framework/db/index.js';
 import { getModel } from '../../../framework/db/index.js';
-import { decrypt } from '../../oauth21/crypto/encryption.js';
+import { decrypt } from '../../../framework/keys/encryption.js';
 import { hashPassword, verifyPassword, isLegacyHash } from '../../../framework/auth/password-hash.js';
 import { log } from '../../../framework/log/index.js';
 import IamDao from '../../admin/dao/iam.dao.js';

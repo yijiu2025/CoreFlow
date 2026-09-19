@@ -46,7 +46,14 @@ const defineAuditLog = (sequelize, DataTypes) => {
     {
       tableName: 'audit_logs',
       timestamps: true,
-      indexes: [{ fields: ['user_id'] }, { fields: ['event'] }, { fields: ['created_at'] }, { fields: ['ip'] }],
+      // 复合索引替换两个单列索引（全部查询场景都带 created_at 排序/过滤），
+      // 与迁移 20260919000001 对应，索引总数不增
+      indexes: [
+        { fields: ['ip'] },
+        { fields: ['created_at'] },
+        { fields: ['event', 'created_at'], name: 'audit_logs_event_created' },
+        { fields: ['user_id', 'created_at'], name: 'audit_logs_user_id_created' }
+      ],
       comment: '安全审计日志表'
     }
   );

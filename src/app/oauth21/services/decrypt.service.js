@@ -11,7 +11,7 @@
  * @since 2026-08-17
  */
 
-import { decrypt, validateTimestamp } from '../crypto/encryption.js';
+import { decrypt, validateTimestamp } from '../../../framework/keys/encryption.js';
 import { emailDao } from '../../../framework/verify/email/index.js';
 import { getStore, createNonceStore } from '../../../framework/redis/index.js';
 
