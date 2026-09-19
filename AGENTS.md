@@ -15,6 +15,35 @@ npm test             # Jest 测试 (ESM 模式)
 
 单个测试：`node --experimental-vm-modules npx jest --testPathPattern <pattern>`
 
+## Git 提交与发版
+
+提交并推送后，**按情况顺手发版，不必每次询问**。
+
+**判据**（看本次推送包含哪些提交：`git log <最新tag>..HEAD --oneline`）
+
+| 提交类型                     | 是否发版 | 版本递增（以最新 tag 为基线）      |
+| ---------------------------- | -------- | ---------------------------------- |
+| 含 `feat`                    | 发       | minor：`v2.5.0` → `v2.6.0`        |
+| 仅 `fix` / `perf`            | 发       | patch：`v2.5.0` → `v2.5.1`        |
+| 破坏性变更（`!:` / `BREAKING CHANGE:`） | 发 | major                              |
+| 仅 `chore` `docs` `test` `style` `ci` `refactor` | **不发** | —                |
+
+**发版动作**
+
+```bash
+git log $(git describe --tags --abbrev=0)..HEAD --oneline   # 先核对待发内容
+git tag -a v2.6.0 -m "v2.6.0: <一句话主题>"
+git push origin v2.6.0
+git ls-remote --tags origin                                  # 必须验证
+```
+
+**四条边界**
+
+- **只推 git tag，不创建 GitHub Release 页面**（本机无 `gh` CLI、无 `GITHUB_TOKEN`、无 `.github/`）。GitHub 会自动把 tag 列在 Tags / Releases 区，效果已足够。
+- tag 推送与本仓库普通 push 一样存在**超时极长且全程零输出**的现象 → 判定一律用 `git ls-remote --tags origin`，**不信退出码**；超时不等于失败，重试是安全的。
+- **版本源是 git tag，不是 `package.json`**（其 `version` 当前为 `1.0.0`，与 `v2.5.0` 脱节已久）。发版时顺手把 `package.json` 的 `version` 对齐到新 tag。
+- `packages/log/` 是独立嵌套仓库（`yijiu2025/log.git`），它的发版走 `npm publish` 流程，**不适用**本规则。
+
 ## 技术栈
 
 - **运行时**: Node.js ESM (`"type": "module"`)

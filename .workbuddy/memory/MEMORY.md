@@ -23,6 +23,15 @@
   ✅ 现成脚本：**`node ~/.workbuddy/tools/fix-packed-refs.mjs <远端SHA>`**
   （流程：`git push` → `git ls-remote origin main` 取 SHA → 跑脚本 → `git status -sb` 应为 `## main...origin/main`）。
 
+**发版约定**（2026-09-19 立，完整规则见 `AGENTS.md` / `CLAUDE.md` 的「Git 提交与发版」）：
+提交推送后**按情况顺手发版，不必询问**。判据 = 本次推送包含的提交类型：
+含 `feat` → minor；仅 `fix`/`perf` → patch；破坏性变更（`!:`）→ major；
+**只有 `chore`/`docs`/`test`/`style`/`ci`/`refactor` → 不发**。
+- **版本源是 git tag，不是 `package.json`**（其 `version` 长期是 `1.0.0`，与 `v2.5.0` 脱节）→ 发版时顺手对齐 package.json。
+- **只推 tag，不建 GitHub Release 页面**（本机无 `gh` CLI、无 `GITHUB_TOKEN`、无 `.github/`）。
+- tag 推送同样**极慢且零输出** → 一律用 `git ls-remote --tags origin` 判定，**不信退出码**。
+- `packages/log/` 是独立仓库，发版走 `npm publish`，**不适用**本规则。
+
 ---
 
 ## 1. 强制约定（有守卫，违反会红）
