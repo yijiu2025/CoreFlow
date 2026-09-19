@@ -194,16 +194,17 @@ class UserDao {
 
         const roleIds = role_ids || [];
         if (roleIds.length > 0) {
-          for (const rid of roleIds) {
-            await getModel('UserRole').create(
-              {
-                user_id: user.id,
-                role_id: rid,
-                app_id: 'GLOBAL'
-              },
-              { transaction: t }
-            );
-          }
+          // 批量写入：单条 INSERT ... VALUES (...),(...) 取代循环单条 create（原为 N 次往返）
+          // UserRole 的软删除钩子只挂在 destroy/restore/update 上，不含 create 类钩子，
+          // 故 bulkCreate 与逐条 create 的行为一致（delete_version 走 defaultValue）
+          await getModel('UserRole').bulkCreate(
+            roleIds.map(rid => ({
+              user_id: user.id,
+              role_id: rid,
+              app_id: 'GLOBAL'
+            })),
+            { transaction: t }
+          );
         } else {
           // 默认 guest 角色（rank_level=1, app_id=GLOBAL），找不到则抛错回滚，
           // 避免注册出"有用户无角色"的脏数据（权限为空无法正常使用）
@@ -231,7 +232,9 @@ class UserDao {
       // 转 400 业务错误，避免抛 500 + 暴露 DB 错误细节
       const isUniqueViolation = err?.name === 'SequelizeUniqueConstraintError' || err?.parent?.code === 'ER_DUP_ENTRY';
       if (isUniqueViolation) {
-        throw new Error('REGISTER_FAILED:邮箱已存在');
+        // 保留原始错误为 cause：对外只暴露业务语义（不把 DB 错误细节透给调用方），
+        // 但日志里仍需能看到真实的唯一索引冲突细节
+        throw new Error('REGISTER_FAILED:邮箱已存在', { cause: err });
       }
       throw err;
     }

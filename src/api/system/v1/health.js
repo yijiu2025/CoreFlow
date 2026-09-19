@@ -18,13 +18,27 @@
  * 生产环境 DB 变量缺失时 `framework/db/index.js` 会在启动阶段直接终止进程，
  * 所以 DB 的 `skipped` 只可能出现在测试 / 本地环境。
  *
+ * 【为什么不回显原始错误消息】
+ * 本端点是 `requireLogin: false` 的**公开**端点，而 `sequelize.authenticate()` 的
+ * 错误文本里常带 `ECONNREFUSED 10.0.0.5:3306` 这类内网拓扑信息，直接回显等于对外
+ * 提供一张内网地图。因此 detail 只保留错误**代码/类型**，完整错误进日志。
+ *
+ * 【加载器状态】
+ * body 里带 `loaders`：关键加载器失败会直接终止启动（进程根本起不来，探针无机会响应），
+ * 所以这里能看到的一定是可降级加载器的失败明细 —— 服务可正常处理请求，但有一项附加
+ * 能力缺失，`status` 记为 `degraded`（仍 200，不摘流）。
+ *
  * @author yijiu2025
  * @since 2026-08-17
- * @since 2026-09-19 拆分 live / ready 两级探针，补依赖探测超时
+ * @since 2026-09-19 拆分 live / ready 两级探针，补依赖探测超时、错误脱敏与加载器明细
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { sequelize } from '../../../framework/db/index.js';
 import { isRedisConfigured } from '../../../framework/redis/utils.js';
+import { getLoaderStatus } from '../../../framework/loader/engine.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('api.system.health');
 
 /**
  * 单个依赖的探测超时（毫秒）
@@ -34,6 +48,9 @@ import { isRedisConfigured } from '../../../framework/redis/utils.js';
  * 探针会被自身超时掐断，表现为"探针不稳定"而不是"依赖不可用"，根因被掩盖。
  */
 const READY_CHECK_TIMEOUT_MS = 3_000;
+
+/** 加载器失败原因在响应里的最大长度（公开端点，避免整段堆栈外泄） */
+const LOAD_ERROR_DETAIL_MAX = 200;
 
 /**
  * 给 Promise 加上超时上限
@@ -63,6 +80,19 @@ function raceTimeout(promise, ms) {
 }
 
 /**
+ * 把错误压成可对外暴露的短标签
+ *
+ * 只取错误代码/类型（如 `ECONNREFUSED` / `SequelizeConnectionRefusedError`），
+ * 原始 message 里可能含内网地址、库名、SQL，不进响应体。
+ *
+ * @param {any} err - 捕获到的错误
+ * @returns {string} 可公开的错误标签
+ */
+function errorLabel(err) {
+  return err?.code || err?.name || 'unavailable';
+}
+
+/**
  * 判断 DB 是否已配置（与 `framework/db/index.js` 的启动校验同一组键）
  *
  * @returns {boolean} true 表示三个必要变量齐全
@@ -84,7 +114,9 @@ async function checkDatabase() {
     await raceTimeout(sequelize.authenticate(), READY_CHECK_TIMEOUT_MS);
     return { status: 'up' };
   } catch (err) {
-    return { status: 'down', detail: err.message };
+    // 完整错误进日志（含地址/库名，供运维排障），响应只给标签
+    log.error('❌ [Health] 数据库探测失败', err);
+    return { status: 'down', detail: errorLabel(err) };
   }
 }
 
@@ -102,16 +134,36 @@ function checkRedis(app) {
 }
 
 /**
- * 汇总所有关键依赖的探测结果
+ * 汇总加载器状态（只含可降级加载器的失败明细，见文件头说明）
+ *
+ * @returns {{total: number, failed: number, completed: boolean, errors: Array<{file: string, reason: string}>}} 加载器摘要
+ */
+function collectLoaderStatus() {
+  const summary = getLoaderStatus();
+  return {
+    total: summary.total,
+    failed: summary.failed,
+    completed: summary.completed,
+    errors: summary.loadErrors.map(e => ({
+      file: e.file,
+      reason: String(e.message || '').slice(0, LOAD_ERROR_DETAIL_MAX)
+    }))
+  };
+}
+
+/**
+ * 汇总所有关键依赖与加载器的探测结果
  *
  * @param {import('fastify').FastifyInstance} app - Fastify 实例
- * @returns {Promise<{dependencies: Record<string, object>, ready: boolean}>} 依赖明细与总判定
+ * @returns {Promise<{dependencies: Record<string, object>, loaders: object, ready: boolean}>} 依赖与加载器明细
  */
 async function probeDependencies(app) {
   const [database, redis] = await Promise.all([checkDatabase(), Promise.resolve(checkRedis(app))]);
   const dependencies = { database, redis };
+  const loaders = collectLoaderStatus();
+  // 就绪只看依赖：可降级加载器失败意味着功能降级，但仍能处理核心请求，不摘流
   const ready = Object.values(dependencies).every(dep => dep.status !== 'down');
-  return { dependencies, ready };
+  return { dependencies, loaders, ready };
 }
 
 /**
@@ -150,6 +202,7 @@ async function registerHealthRoutes(fastify) {
   /**
    * GET /health/ready — 就绪探针
    * 关键依赖（DB / Redis）任一不可用即 503，编排系统应把实例摘出负载均衡池。
+   * 可降级加载器失败不导致 503，只把总状态记为 degraded 并列出明细。
    */
   registerSecureRoute(fastify, {
     name: 'health-ready',
@@ -158,7 +211,7 @@ async function registerHealthRoutes(fastify) {
     url: '/health/ready',
     requireLogin: false,
     handler: async (request, reply) => {
-      const { dependencies, ready } = await probeDependencies(fastify);
+      const { dependencies, loaders, ready } = await probeDependencies(fastify);
 
       if (!ready) {
         // 503 而非 200：这是本端点存在的意义 —— 让编排系统能真正摘掉坏实例
@@ -167,16 +220,19 @@ async function registerHealthRoutes(fastify) {
           {
             status: 'unavailable',
             uptime: Math.floor(process.uptime()),
-            dependencies
+            dependencies,
+            loaders
           },
           503
         );
       }
 
       return reply.result.success('ok', {
-        status: 'ok',
+        // 依赖全通但有加载器降级 → degraded，让监控能区分"完全健康"与"带伤运行"
+        status: loaders.failed > 0 ? 'degraded' : 'ok',
         uptime: Math.floor(process.uptime()),
-        dependencies
+        dependencies,
+        loaders
       });
     }
   });
