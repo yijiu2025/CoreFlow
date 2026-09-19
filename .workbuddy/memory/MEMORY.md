@@ -24,15 +24,23 @@
   （流程：`git push` → `git ls-remote origin main` 取 SHA → 跑脚本 → `git status -sb` 应为 `## main...origin/main`）。
 
 **发版约定**（2026-09-19 立，完整规则见 `AGENTS.md` / `CLAUDE.md` 的「Git 提交与发版」）：
-提交推送后**按情况顺手发版，不必询问**。判据 = 本次推送包含的提交类型：
-含 `feat` → minor；仅 `fix`/`perf` → patch；破坏性变更（`!:`）→ major；
-**只有 `chore`/`docs`/`test`/`style`/`ci`/`refactor` → 不发**。
-- **版本源是 git tag，不是 `package.json`**（其 `version` 长期是 `1.0.0`，与 `v2.5.0` 脱节）→ 发版时顺手对齐 package.json。
-- **只推 tag，不建 GitHub Release 页面**（本机无 `gh` CLI、无 `GITHUB_TOKEN`、无 `.github/`）。
-- tag 推送复用同一通道，**极慢/零输出是可能的而非必然** → 一律用 `git ls-remote --tags origin` 判定。
-  ✅ 实测（2026-09-19 `v2.6.0`）：`git push origin main v2.6.0`（合并成一条）**25s 完成且输出完整**；
-  tag 推的是**远端新建 ref**，不涉及 `refs/remotes/origin/main`，**不受本机 ref 失灵影响**。
-- `packages/log/` 是独立仓库，发版走 `npm publish`，**不适用**本规则。
+提交推送后**按情况顺手发布，不必询问**。三条通道已固化成脚本，**用脚本而不是手敲命令**：
+✅ **`node scripts/release.mjs`**（默认只预览）→ 加 **`--apply`** 执行；
+`--from <ref>` 复盘/补发；`--allow-dirty` 供并行任务占用工作区时用。
+决策逻辑在 `src/framework/release/index.js`（有测试）——**纯逻辑必须放 `src/`**，
+放 `scripts/` 下会因"禁止 src import scripts + jest 只收 src/__tests__"而**无法被覆盖**。
+- **判据**：含 `feat` → minor；仅 `fix`/`perf` → patch；破坏性变更 → major；
+  **只有 `chore`/`docs`/`test`/`style`/`ci`/`refactor` → 不发**。
+  ⚠️ 破坏性变更**只认 footer 形式**（行首 + 冒号），**不能退化成子串匹配** —— commit 正文里
+  "提到"该关键词会把 minor 误升成 major，本仓库真实发生过（一度算出 `v3.0.0`）。
+- **三条通道**：git tag（判定发版即打）／**GitHub Release**（与 tag 一一对应；凭据取自
+  **git credential manager** 的 OAuth token，**无需 gh CLI** —— 此前"没有 gh 所以不建 Release"
+  的结论只对了一半）／npm `packages/log`（**本地 version 已 bump 到高于线上**才发，version 相等
+  即视为无发布意图）。
+  **tag 已推而 Release 缺失时，重跑脚本会自动补建**（否则两者永久漂移）。
+- **版本源是 git tag**，`package.json` 单向跟随（不要反过来拿它的 `version` 推版本号）。
+- 推送后**一律不信退出码**，用 `git ls-remote` 核对；脚本会自动调 `fix-packed-refs.mjs`。
+- `packages/log/` 是独立仓库，改它要去那个仓库提交。
 
 ---
 
