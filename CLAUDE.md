@@ -41,7 +41,7 @@ git ls-remote --tags origin                                  # 必须验证
 
 - **只推 git tag，不创建 GitHub Release 页面**（本机无 `gh` CLI、无 `GITHUB_TOKEN`、无 `.github/`）。GitHub 会自动把 tag 列在 Tags / Releases 区，效果已足够。
 - tag 推送复用同一通道，同样可能极慢或零输出 → 判定一律用 `git ls-remote --tags origin`，**不信退出码**；超时不等于失败，重试是安全的。（实测：`main` push 曾 5m27s 零输出；`git push origin main v2.6.0` 25s 完成）
-- **版本源是 git tag，不是 `package.json`**（其 `version` 当前为 `1.0.0`，与 `v2.5.0` 脱节已久）。发版时顺手把 `package.json` 的 `version` 对齐到新 tag。
+- **版本源是 git tag，不是 `package.json`** —— 后者只跟随 tag 单向同步，**不要反过来拿它的 `version` 推版本号**（它曾长期停留在 `1.0.0`，与 tag 体系脱节）。每次发版顺手把它改到新 tag。
 - `packages/log/` 是独立嵌套仓库（`yijiu2025/log.git`），它的发版走 `npm publish` 流程，**不适用**本规则。
 
 ## 技术栈
