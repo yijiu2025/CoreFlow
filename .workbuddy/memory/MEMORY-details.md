@@ -29,6 +29,9 @@ reflog 正常追加，但松散 ref 不落地（`GIT_TRACE_REFS` 显示旧值读
   **每次 push 后都要重做**。修正脚本须带 4 条断言：① 头行
   `'# pack-refs with: peeled fully-peeled sorted '` **含尾空格**原样；② 待替换行命中且恰好一处；
   ③ 变化行数 = 1；④ 保持纯 LF（无 `\r`）。
+- ⚠️ **`git push` 可能耗时数分钟且全程零输出**（2026-09-19 实测 5m27s 后才返回）→ **超时不代表失败**，
+  重试是安全的（第二次即时成功）。并发两个 push 时后到的会被 `cannot lock ref` 拒绝（`is at X but
+  expected Y`），说明前一个其实已成功 —— 别把这当成真失败。判定一律用 `git ls-remote origin main`。
 - 已排除诱因：定时清理、`core.fscache`/`fsmonitor`、`reference-transaction` 钩子。
 - 后果：`git status` 谎报 ahead。**同步状态一律以 `git ls-remote origin main` 为准**
   （`git fetch` 打印的 `a..b main -> origin/main` 是按远端数据谎报，不代表本地 ref 写成功）。

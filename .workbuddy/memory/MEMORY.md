@@ -16,6 +16,8 @@
 
 **本机 git ref 失灵**：`.git/refs/remotes/origin/main` 无法由 git 自身写入（`update-ref`/`fetch`/`push`
 都返回 0，但松散 ref 不落地）→ `git status` 谎报 ahead，`git push` 甚至零输出。
+⚠️ `git push` 还可能**耗时数分钟且全程零输出**（实测 5m27s）——**超时不代表失败**，重试是安全的
+（第二次即时成功）。判定一律用 `git ls-remote origin main`。
 - **同步状态一律以 `git ls-remote origin main` 为准**，不信退出码、不信 `git status`。
 - 只能改 **`.git/packed-refs`** 中该行 SHA，**每次 push 后都要重做**；脚本须带 4 条断言：
   ① 头行 `'# pack-refs with: peeled fully-peeled sorted '`（**含尾空格**）原样；② 待替换行恰好命中一处；
