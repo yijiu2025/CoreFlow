@@ -1,0 +1,141 @@
+# ============================================================================
+# CD —— 构建镜像、推送到 GHCR，并在真实 MySQL + Redis 上做端到端冒烟
+#
+# 为什么"构建成功"不算交付成功：
+#   这个镜像有四个只有真跑起来才暴露的失败点 ——
+#     · `npm install --workspaces=false` 漏装某个生产依赖 → 启动即崩溃；
+#     · entrypoint 的依赖等待逻辑写错 → 容器永远卡在"等待数据库"；
+#     · 迁移没跑 → 表不存在，探针 503；
+#     · 探针路径写错（`/health/live` vs 真实的 `/v1/health/live`）→ 健康检查恒失败。
+#   所以最后一步用仓库里的 docker-compose.yml **真的把全栈拉起来**，
+#   等 `/v1/health/ready` 返回 200 才算通过 —— 这也是唯一能验证 compose /
+#   entrypoint / 健康探针三者彼此对齐的方式。
+# ============================================================================
+
+name: Publish Image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    name: 构建并推送镜像
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 标签策略：分支名 / 提交 sha / 语义化版本（打 tag 时）一次生成
+      - name: 生成镜像标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,format=long
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 构建并推送
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 跨流水线复用层缓存：依赖层只在 package.json/lock 变化时重建
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  smoke:
+    name: 端到端冒烟（compose 全栈）
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 CI 环境变量
+        run: |
+          # 从模板生成，替换掉所有占位密钥（CI 专用，非真实凭据）
+          sed -e 's/^DB_PASS=.*/DB_PASS=ci-db-pass/' \
+              -e 's/^DB_ROOT_PASS=.*/DB_ROOT_PASS=ci-root-pass/' \
+              -e 's/^APP_SECRET=.*/APP_SECRET=ci-app-secret-not-for-production/' \
+              -e 's/^SESSION_SECRET=.*/SESSION_SECRET=ci-session-secret-not-for-prod/' \
+              -e 's/^FIREWALL_SECRET=.*/FIREWALL_SECRET=ci-firewall-secret/' \
+              -e 's/^SIGN_APP_KEY=.*/SIGN_APP_KEY=ci-sign-key/' \
+              -e 's/^CORS_ORIGINS=.*/CORS_ORIGINS=http:\/\/localhost:3000/' \
+              -e 's/^LOG_FILE_SUFFIX=.*/LOG_FILE_SUFFIX=/' \
+              .env.docker.example > .env.docker
+
+      - name: 构建镜像（复用 buildx 缓存）
+        run: docker compose --env-file .env.docker build
+
+      - name: 起 MySQL / Redis
+        run: docker compose --env-file .env.docker up -d mysql redis
+
+      - name: 执行迁移
+        run: docker compose --env-file .env.docker run --rm migrate
+
+      - name: 启动应用
+        run: docker compose --env-file .env.docker up -d app
+
+      # 就绪探针（不是存活探针）：它会真的去连 DB 与 Redis，
+      # 依赖没通就返回 503 —— 只有它 200 才说明"能对外服务"。
+      - name: 等待 /v1/health/ready 返回 200
+        run: |
+          set -e
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /tmp/health.json -w '%{http_code}' http://127.0.0.1:3000/v1/health/ready || true)
+            echo "第 ${i} 次探测：HTTP ${code}"
+            if [ "$code" = "200" ]; then
+              cat /tmp/health.json
+              echo "✅ 就绪探针通过"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "⛔ 就绪探针在预算内未通过"
+          echo "--- app 日志 ---"
+          docker compose --env-file .env.docker logs --tail=120 app
+          echo "--- mysql 日志 ---"
+          docker compose --env-file .env.docker logs --tail=40 mysql
+          exit 1
+
+      - name: 收集日志（失败时）
+        if: failure()
+        run: docker compose --env-file .env.docker logs --tail=200 || true
+
+      - name: 清理
+        if: always()
+        run: docker compose --env-file .env.docker down -v

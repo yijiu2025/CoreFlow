@@ -1,0 +1,76 @@
+# ============================================================================
+# Docker 构建上下文裁剪
+#
+# 这个仓库的根目录同时住着后端、四个前端 workspace 和一个 8 万文件的
+# 第三方快照目录（phonecopy/）。默认上下文会把它们全部传给 daemon
+# ——构建慢到不可用，镜像也会被无关文件撑大。
+#
+# 原则：**镜像只装运行后端所需的东西**。
+# 需要新增"运行期必需"的目录时，记得同步放行（末尾有放行清单）。
+# ============================================================================
+
+# --- 依赖与缓存：容器内自己装，绝不从宿主机带（Windows 装的 sharp 是
+#     win32 二进制，进 Linux 容器后加载即失败）---
+node_modules
+**/node_modules
+npm-debug.log*
+yarn-error.log
+
+# --- 版本控制与 CI ---
+.git
+.gitignore
+.github
+.husky
+.gitattributes
+
+# --- 密钥与本地环境：绝不能进镜像层（镜像层可被任何拿到镜像的人读取）---
+# 模板文件也一并排除：镜像靠编排层注入的环境变量运行，不需要任何 .env 文件
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+tokens.json
+
+# --- 前端 workspace：各自独立构建后静态托管，与后端镜像无关 ---
+admin
+firewall
+oauth21
+posecraft
+poseadmin
+
+# --- 被 .gitignore 排除的独立嵌套仓库（wb-logkit 在镜像里从 npm 取已发布版）---
+packages/log
+
+# --- 大体积 / 无关资料 ---
+phonecopy
+架构文件
+mermaid
+createDocs
+reports
+docs
+public/uploads/*
+!public/uploads/.gitkeep
+
+# --- 运行时产物：容器内重新生成，体积大且无意义 ---
+logs
+coverage
+.tmp-probe
+*.log
+src.zip
+run
+suspect
+.DS_Store
+
+# --- 编辑器 / AI 工具配置 ---
+.vscode
+.idea
+.claude
+.codebuddy
+.codegraph
+.mimocode
+.mimosa
+.v2c
+.video_agent
+.zcode
+lefthook.yml

@@ -1,0 +1,165 @@
+# ============================================================================
+# nodeServers 本地 / 单机生产编排（app + MySQL + Redis）
+#
+# 启动：
+#   cp .env.docker.example .env.docker     # 改成真实密钥
+#   docker compose --env-file .env.docker up -d --build
+#
+# ⚠️ **必须带 `--env-file .env.docker`**
+#   不加的话 compose 会去读仓库根目录的 `.env`（那是**开发机**的配置，含本地
+#   DB_PASS 与 192.168.x.x 的 Redis 地址），于是容器会带着一套错的凭据起来。
+#   下面的 `${DB_PASS:?...}` 写法就是为此：宁可启动时明确报错，
+#   也不要静默读到不该读的文件。
+#
+# 首次建表（迁移与应用启动解耦，见 docs/deploy/docker.md「迁移怎么跑」）：
+#   docker compose --env-file .env.docker run --rm migrate
+# ============================================================================
+
+name: nodeservers
+
+services:
+  # ---------------------------------------------------------------------------
+  # 应用
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: nodeservers:local
+    env_file:
+      - .env.docker
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # 覆盖成容器网络内的服务名（.env.docker 里写的是宿主机视角的值）
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # 容器内不做"等不到就重启"的激进策略，由 entrypoint 有界等待并说明原因
+      WAIT_FOR_DEPS: "true"
+      DEP_WAIT_TIMEOUT_MS: "90000"
+      # 多副本时保持 false，迁移走独立的 migrate 服务
+      RUN_MIGRATIONS: "false"
+      # 多副本部署时用它区分日志文件名，避免滚动日志互相交错
+      LOG_FILE_SUFFIX: pid
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # 运行期需要跨重启保留的三处状态
+      - app-logs:/app/logs
+      - app-data:/app/src/data
+      - app-uploads:/app/public/uploads
+    # 应用自身优雅关闭上限 30s（index.js 的 SHUTDOWN_TIMEOUT），
+    # 编排层必须给得比它宽，否则容器会被更早 SIGKILL，优雅关闭等于没写。
+    stop_grace_period: 35s
+    restart: unless-stopped
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ---------------------------------------------------------------------------
+  # 数据库
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.4
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max-connections=200
+    environment:
+      # 用 :? 强制报错：漏了 --env-file 时立刻失败，而不是把库建成默认密码
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:?缺少 DB_ROOT_PASS，请用 --env-file .env.docker 启动}
+      MYSQL_DATABASE: ${DB_NAME:?缺少 DB_NAME}
+      MYSQL_USER: ${DB_USER:?缺少 DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS:?缺少 DB_PASS}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # $$ 转义：让容器内的 shell 展开变量，而不是 compose 在解析阶段展开
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      # MySQL 首次初始化要建表+写系统库，20~60s 属于正常，别让它一开始就判不健康
+      start_period: 60s
+    restart: unless-stopped
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ---------------------------------------------------------------------------
+  # 缓存 / 会话 / 限流
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    # appendonly：会话与限流计数重启后仍在；关掉 RDB 快照避免两套持久化互相干扰
+    command: ["redis-server", "--appendonly", "yes", "--save", ""]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # 一次性迁移任务（不随 up 启动，手动触发）
+  #
+  #   docker compose --env-file .env.docker run --rm migrate
+  #
+  # 为什么不做成 app 启动的一部分：多副本同时启动时会并发跑迁移，
+  # 两个进程同时改写同一批表结构，轻则报错重则半途状态。
+  # ---------------------------------------------------------------------------
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: nodeservers:local
+    env_file:
+      - .env.docker
+    environment:
+      NODE_ENV: production
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    command: ["node", "src/framework/db/migrate.js"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [backend]
+
+volumes:
+  mysql-data:
+  redis-data:
+  app-logs:
+  app-data:
+  app-uploads:
+
+networks:
+  backend:
+    driver: bridge
