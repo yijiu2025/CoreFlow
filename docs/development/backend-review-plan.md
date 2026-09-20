@@ -2,6 +2,16 @@
 
 本文档基于当前 `src/`、`migrations/`、`scripts/` 后端代码检查结果整理，目标是把后端书写规范、业务逻辑、接口契约和前端规划对齐，作为后续重构和评审依据。
 
+::: warning 勘误（2026-09-20 复核）
+本文件记录的是**当时**的检查结果，其中部分内容已随代码演进失效。复核结论如下，阅读时请以下列为准：
+
+| 本文件中的写法 | 现状 |
+| --- | --- |
+| `src/auth/`、`src/db/`、`src/redis/`、`src/loader/` | **这些目录已不存在**。系统层基础设施已统一收拢到 `src/framework/` 下，即 `src/framework/auth/`、`src/framework/db/`、`src/framework/redis/`、`src/framework/loader/` |
+| 下面「P0：编码乱码」一节 | **已完成**。全量扫描 `src/` 已无乱码字符（`鍓`/`鎼`/`闁` 等异常区段均无命中） |
+| 「Review 清单」 | 仍然有效，但已并入 [代码审查标准与流程](./code-review) 作为清单来源之一；请以该文为准 |
+:::
+
 ## 检查范围
 
 - 启动入口：`src/app.js`、`index.js`
@@ -27,7 +37,7 @@
 
 ## 已确认问题
 
-### P0：编码乱码
+### ~~P0：编码乱码~~ ✅ 已完成（2026-09-20 复核，`src/` 已无乱码命中）
 
 `src/app.js`、`src/api/guard.js`、`src/loader/registry/00-globals.js`、PoseCraft API/DAO/Model 等文件存在大量乱码注释和乱码中文响应。
 

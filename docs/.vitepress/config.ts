@@ -70,6 +70,7 @@ export default defineConfig({
           { text: '数据模型', link: '/development/models' },
           { text: 'API 路由', link: '/development/api-routes' },
           { text: '命名规范', link: '/development/naming' },
+          { text: '代码审查标准与流程', link: '/development/code-review' },
           { text: '后端检查规划', link: '/development/backend-review-plan' },
           { text: '数据库迁移', link: '/development/migrations' }
         ]

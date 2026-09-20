@@ -70,24 +70,28 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 ## 启动流程
 
 ```
-index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/loader/engine.js)
+index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/framework/loader/engine.js)
 ```
 
-引擎扫描 `src/loader/registry/` 目录，按文件名数字前缀顺序加载：
+引擎扫描 `src/framework/loader/registry/` 目录，按文件名数字前缀顺序加载：
 
-| 顺序 | 文件                 | 职责                                                  |
-| ---- | -------------------- | ----------------------------------------------------- |
-| 00   | `00-globals.js`      | 装饰 `reply.result`（success/fail/unauth/forbidden）  |
-| 02   | `02-redis.js`        | Redis 连接 + 健康监控，失败注入 `null`                |
-| 03   | `03-db.js`           | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出 |
-| 04   | `04-auth.js`         | Session 验证 + ALS 初始化（`src/framework/auth/`）              |
-| 05   | `05-firewall.js`     | 五层拦截管道（限频/封禁/挑战/Bot/地理围栏）           |
-| 06   | `06-models.js`       | 自动加载 `src/models/`，按命名空间注册到 `app.db`     |
-| 07   | `07-api.js`          | 自动加载 `src/api/` 路由（读 `system.json`）          |
-| 08   | `08-notice.js`       | SMTP 配置种子数据                                     |
-| 09   | `09-pbac.js`         | PBAC 角色同步到数据库                                 |
-| 10   | `10-seed-clients.js` | OAuth 客户端种子数据                                  |
-| 11   | `11-apps.js`         | 扫描 `src/app/` 加载应用权限和配置                    |
+> 下表已于 2026-09-20 对 `src/framework/loader/registry/` 的实际文件名逐一核对。
+> 此前的版本遗漏了 `01-monitor`、`07-keys`，并把已合并的 `09-pbac` / `10-seed-clients` / `11-apps`
+> 当成三个独立步骤 —— 请勿再按旧表理解启动顺序。
+
+| 顺序 | 文件            | 职责                                                                   |
+| ---- | --------------- | ---------------------------------------------------------------------- |
+| 00   | `00-globals.js` | 装饰 `reply.result`（success/fail/unauth/forbidden）                   |
+| 01   | `01-monitor.js` | 请求耗时记录 + `X-Response-Time` 响应头 + 慢请求告警                    |
+| 02   | `02-redis.js`   | Redis 连接 + 健康监控，失败注入 `null`                                 |
+| 03   | `03-db.js`      | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出                  |
+| 04   | `04-auth.js`    | Session 验证 + ALS 初始化（`src/framework/auth/`）                     |
+| 05   | `05-firewall.js`| 五层拦截管道（限频/封禁/挑战/Bot/地理围栏）—— ⚠️ **序号是功能性的，不可挪** |
+| 06   | `06-models.js`  | 自动加载 `src/models/`，按命名空间注册到 `app.db`（实现住 `framework/db/models.js`） |
+| 07   | `07-keys.js`    | 密钥初始化（补齐默认密钥对，依赖模型已加载）                            |
+| 08   | `08-api.js`     | 自动加载 `src/api/` 路由（读 `system.json`）                           |
+| 09   | `09-notice.js`  | 通知配置种子数据（SMTP）                                               |
+| 10   | `10-apps.js`    | 扫描 `src/app/` 加载应用权限和配置（**合并原 09-pbac + 10-seed-clients + 11-apps**） |
 
 每个 loader 导出默认函数接收 `app` 实例，错误被捕获并记录，不阻塞其他模块。
 

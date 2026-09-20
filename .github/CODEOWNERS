@@ -1,0 +1,56 @@
+# 代码审查归属
+
+# 语法：<路径模式> <owner>...
+# 规则自下而上匹配，最后匹配到的一条生效（即越靠后的规则优先级越高）。
+# owner 用 GitHub 用户名（@user）或团队名（@org/team）。
+#
+# ⚠️ 本文件只规定「谁来审」，审查标准见 docs/development/code-review.md。
+# 团队扩大后请按第五节的「必须第二人」清单细化 —— 高危面应由领域 owner 共同署名。
+
+# ── 兜底 ─────────────────────────────────────────────
+*                                       @yijiu2025
+
+# ── L0 高危面：权限、认证、密码学 ──────────────────────
+# 这些目录的缺陷会直接导致越权或凭据泄露，任何改动都需要 owner 明确批准。
+/src/api/guard.js                       @yijiu2025
+/src/api/guard-config.js                @yijiu2025
+/src/app/guard/                         @yijiu2025
+/src/framework/auth/                    @yijiu2025
+/src/oauth21/                           @yijiu2025
+/src/app/oauth21/                       @yijiu2025
+/src/api/oauth21/                       @yijiu2025
+/src/app/user/                          @yijiu2025
+/src/models/oauth21/                    @yijiu2025
+/src/models/iam/                        @yijiu2025
+
+# ── L0/L1 高危面：数据与持久化 ────────────────────────
+# 迁移不可回滚、软删除机制被绕过、连接耗尽是这里的典型事故。
+/migrations/                            @yijiu2025
+/src/framework/db/                      @yijiu2025
+/src/models/                            @yijiu2025
+
+# ── L1 高危面：缓存、降级、并发 ───────────────────────
+# MapStore 降级语义与有界超时是这一层的必查项。
+/src/framework/redis/                   @yijiu2025
+/src/framework/websocket/               @yijiu2025
+
+# ── L1 高危面：应用与启动编排 ─────────────────────────
+/src/framework/loader/                  @yijiu2025
+/src/framework/ops/                     @yijiu2025
+/src/app/                               @yijiu2025
+
+# ── L1 质量基建：改这里等于改所有后续提交的行为 ────────
+/eslint.config.js                       @yijiu2025
+/src/__tests__/conventions/             @yijiu2025
+/jest.config.js                         @yijiu2025
+/.husky/                                @yijiu2025
+
+# ── CI/CD 与部署制品 ─────────────────────────────────
+/.github/                               @yijiu2025
+/docker/                                @yijiu2025
+/Dockerfile                             @yijiu2025
+/docker-compose.yml                     @yijiu2025
+
+# ── 文档：链接可达性与「文档≠实现」失真是主要风险 ────
+/docs/                                  @yijiu2025
+/AGENTS.md                              @yijiu2025

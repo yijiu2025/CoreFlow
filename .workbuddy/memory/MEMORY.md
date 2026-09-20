@@ -31,6 +31,15 @@
 - **firewall 分层（单向）**：interface → config/util → dao → engine → services/cli/data → index.js。
   `engine/dao` 已撤销，封禁直接 import `app/firewall/dao/block-manager.js`。守卫 `firewall-layering.test.js`。
 - **📐 文档 ≠ 实现**：docs/ 设计稿大量失真。核法：拿文档承诺的环境变量名 grep 代码，命中 0 = 未实现。
+  实测已失真的典型：`src/loader`/`src/auth`/`src/db`/`src/redis` **均不存在**（全在 `src/framework/` 下）；
+  `backend-review-plan.md` 的 P0 乱码**早已修完**；同一份 loader 表还漏了 `01-monitor`/`07-keys`。
+- **🔗 文档站链接**（违反 → `docs:build` 直接失败）：`docs/.vitepress/config.ts` 的 `ignoreDeadLinks`
+  **只放行** `AGENTS|oauth21|posecraft|packages` 前缀。指向 `docs/` 之外的其他路径（`../src/...`、`.github/...`）
+  一律 build 失败 → **指源码用反引号，不要用链接**。⚠️ `docs/development-standards.md` 在 `docs/` **根**，
+  不在 `docs/development/` 下（写成 `./development-standards` 必死链）。
+- **代码审查**：唯一入口 `docs/development/code-review.md`（分级 L0–L3 / 机器与人工分工 / 五道闸）；
+  PR 模板 `.github/PULL_REQUEST_TEMPLATE.md`；归属 `.github/CODEOWNERS`。
+  **L3（格式类）明令禁止人工提出**——工具已覆盖，提了纯属浪费注意力预算。
 
 ---
 
