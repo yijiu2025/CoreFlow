@@ -1,0 +1,149 @@
+# ============================================================================
+# CI —— 提交门禁
+#
+# 三条作业，对应三类"本可以拦住"的回归：
+#   lint   → 风格与约定（导出位置、禁 console、prettier）
+#   test   → 单元 / 契约 / 结构守卫（Jest）
+#   verify → 跨进程不变量（分布式锁、WS 扇出、遥测聚合）—— 只能多进程验证
+#
+# 关于依赖安装：**不用 `npm ci`**。
+#   `package-lock.json` 把 `wb-logkit` 记为 `link: packages/log`，那是个被
+#   .gitignore 排除的独立嵌套仓库，CI 检出主仓后并不存在 → `npm ci` 直接失败。
+#   改用 `npm install --workspaces=false --ignore-scripts`：
+#     - `--workspaces=false`：不装三个前端工程（含 tensorflow）的依赖，CI 从十几分钟降回两分钟级；
+#       `wb-logkit` / `stable-deviceid` 改从 registry 取已发布版本（CI 本就不该依赖开发机软链）；
+#     - `--ignore-scripts`：根 `prepare` 是 husky，CI 不需要 git hooks，且能挡掉 postinstall 供应链面。
+#
+# 关于数据库：**测试作业不需要 MySQL/Redis**。
+#   这不是省事，是实测结论 —— `framework/db` 在测试环境检测到缺配置会跳过而非退出，
+#   访问层则降级到进程内 MapStore，本机无 DB/Redis 时 1066 个用例全绿。
+#   给 CI 硬塞 services 只会让流水线更慢、更脆。
+#   （需要真实 Redis 的检查在 verify 作业里，那里才起 service。）
+# ============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支连续推送时取消上一次：让人只看得到最新一次结果
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # --------------------------------------------------------------------------
+  # 1. 风格与约定
+  # --------------------------------------------------------------------------
+  lint:
+    name: Lint（约定守卫）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: 安装依赖
+        run: npm install --workspaces=false --ignore-scripts --no-audit --no-fund
+
+      # 只扫"我们维护的代码"：
+      #   src/ 是产品代码，scripts/ migrations/ docker/ 是交付的一部分；
+      #   仓库里还住着 phonecopy 等 8 万文件的第三方快照与三个独立前端工程，
+      #   它们各有自己的构建，扫进来只会让这条流水线常年红灯。
+      - name: ESLint
+        run: npx eslint src scripts migrations docker index.js
+
+  # --------------------------------------------------------------------------
+  # 2. 单元 / 契约 / 结构守卫
+  # --------------------------------------------------------------------------
+  test:
+    name: Test（Jest）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: 安装依赖
+        run: npm install --workspaces=false --ignore-scripts --no-audit --no-fund
+
+      # 必须带 --experimental-vm-modules：项目是 ESM 且测试大量使用
+      # jest.unstable_mockModule，直接 npx jest 会丢掉这个标志而大面积失败。
+      - name: 运行测试
+        run: node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci
+
+  # --------------------------------------------------------------------------
+  # 3. 跨进程不变量（E1 分布式锁 / E3 遥测聚合 / E3 WS 扇出）
+  #
+  # 为什么值得单独一条作业：这三种行为在单进程里都能被单例状态"伪装成正确"，
+  # 只有真实多进程 + 真实 Redis 才能证伪。它们此前只靠人记得手动跑 ——
+  # 结果就是长期没人跑。放进 CI 才算真正有了门禁。
+  # --------------------------------------------------------------------------
+  verify:
+    name: Verify（跨进程关卡）
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: 安装依赖
+        run: npm install --workspaces=false --ignore-scripts --no-audit --no-fund
+
+      # 关卡用 process.loadEnvFile() 自己读 env 文件（因为 npm run 会丢命令行变量），
+      # 而 CI 里没有被 gitignore 的 .env。用 VERIFY_ENV_FILE 指向临时文件即可，
+      # 无需迁就默认路径 —— 这条通道是关卡刻意留出来的。
+      - name: 准备关卡环境
+        run: |
+          cat > ci-verify.env <<'EOF'
+          REDIS_ENABLED=true
+          REDIS_HOST=127.0.0.1
+          REDIS_PORT=6379
+          EOF
+
+      # 退出码语义（刻意区分环境与回归，见 scripts/verify/README.md）：
+      #   0 通过 / 1 断言失败 / 2 回滚不完整 / 3 环境不可用
+      # 在 CI 里 3 也必须失败 —— service 是我们自己声明的，取不到只可能是流水线坏了，
+      # 而不是"环境问题可以放过"。区别在于给出不同的排障提示。
+      - name: 运行跨进程关卡
+        env:
+          VERIFY_ENV_FILE: ci-verify.env
+        run: |
+          set +e
+          failed=0
+          for k in lock-mutex ws-fanout stats-aggregation; do
+            echo "=== $k ==="
+            node "scripts/verify/$k.mjs"
+            code=$?
+            case $code in
+              0) echo "✅ $k 通过" ;;
+              1) echo "❌ $k 断言失败（真回归，查代码）"; failed=1 ;;
+              2) echo "🚨 $k 回滚不完整，需人工检查数据"; failed=1 ;;
+              3) echo "⛔ $k 环境不可用（CI 的 service 没起来？）"; failed=1 ;;
+              *) echo "❓ $k 异常退出码 $code"; failed=1 ;;
+            esac
+          done
+          exit $failed
