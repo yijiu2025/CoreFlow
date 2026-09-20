@@ -135,10 +135,12 @@ function subscribe(channel, handler) {
 
   subscribed.add(channel);
   // node-redis v5：连接未就绪时命令会自动缓冲，无需等 ready
-  sub.subscribe(channel, (channel2, raw) => dispatch(channel2, raw)).catch(err => {
-    log.warn(`⚠️  [PubSub] 订阅 channel=${channel} 失败：${err.message}`);
-    subscribed.delete(channel); // 允许下次重试
-  });
+  sub
+    .subscribe(channel, (channel2, raw) => dispatch(channel2, raw))
+    .catch(err => {
+      log.warn(`⚠️  [PubSub] 订阅 channel=${channel} 失败：${err.message}`);
+      subscribed.delete(channel); // 允许下次重试
+    });
 }
 
 /**

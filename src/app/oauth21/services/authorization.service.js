@@ -198,79 +198,77 @@ class AuthorizationService {
    * @param {object} sessionStore - getStore('session') 实例
    */
   async handleAuthorize(request, reply, sessionStore) {
-    try {
-      const validated = await this.validateAuthorizeRequest(request.query);
-      const sessionId = uuidv4();
-      await sessionStore.set(sessionId, {
-        ...validated,
-        query: request.query,
-        createdAt: Date.now()
-      });
+    // 【为什么不捕获错误、也不在这里做重定向】
+    // `request.query.redirect_uri` 尚未校验，直接跳转等于开放重定向；
+    // deny / approve 分支的跳转只走**已校验 session** 里的 redirect_url（由前端执行）。
+    // 因此异常一律向上抛，交给全局错误处理返回错误页 ——
+    // 这也正是原先那个只写了 `throw err` 的空 try/catch 被移除的原因。
+    const validated = await this.validateAuthorizeRequest(request.query);
+    const sessionId = uuidv4();
+    await sessionStore.set(sessionId, {
+      ...validated,
+      query: request.query,
+      createdAt: Date.now()
+    });
 
-      // 使用 session 验证用户身份（非 Cookie 直接信任）
-      const user = request.state?.user;
-      const userId = user?.sub;
+    // 使用 session 验证用户身份（非 Cookie 直接信任）
+    const user = request.state?.user;
+    const userId = user?.sub;
 
-      if (!userId) {
-        return reply.send({
-          code: 200,
-          message: '需要登录',
-          data: {
-            action: 'login',
-            sessionId,
-            client_name: validated.client.client_name,
-            scope: validated.scope
-          }
-        });
-      }
-
-      const userData = await UserDao.findById(userId);
-      if (!userData) {
-        return reply.send({
-          code: 200,
-          message: '用户不存在，需要重新登录',
-          data: {
-            action: 'login',
-            sessionId,
-            client_name: validated.client.client_name,
-            scope: validated.scope
-          }
-        });
-      }
-
-      const approval = await ApprovalDao.getEffectiveApproval(userId, validated.client.client_id);
-      const hasConsent = approval !== null;
-
-      // 已授权且非强制 consent → 静默跳转
-      if (hasConsent && request.query.prompt !== 'consent') {
-        return await this.issueCodeAndRedirect(reply, sessionId, userId, sessionStore);
-      }
-
-      // 返回 consent 界面
+    if (!userId) {
       return reply.send({
         code: 200,
-        message: '需要授权确认',
+        message: '需要登录',
         data: {
-          action: 'consent',
+          action: 'login',
           sessionId,
           client_name: validated.client.client_name,
-          scope: validated.scope,
-          scopeDetails: resolveScopeDetails(validated.scope, validated.client.scope_metadata || {}),
-          user_id: userId,
-          user: {
-            username: userData.username,
-            name: userData.name || userData.username,
-            email: userData.email,
-            avatar: userData.avatar
-          }
+          scope: validated.scope
         }
       });
-    } catch (err) {
-      // 不用 request.query.redirect_uri（未校验，开放重定向风险）
-      // redirect 只走已校验 session 的 deny/approve 分支（返回 redirect_url 由前端跳）
-      // catch 分支抛错由全局错误处理返回错误页
-      throw err;
     }
+
+    const userData = await UserDao.findById(userId);
+    if (!userData) {
+      return reply.send({
+        code: 200,
+        message: '用户不存在，需要重新登录',
+        data: {
+          action: 'login',
+          sessionId,
+          client_name: validated.client.client_name,
+          scope: validated.scope
+        }
+      });
+    }
+
+    const approval = await ApprovalDao.getEffectiveApproval(userId, validated.client.client_id);
+    const hasConsent = approval !== null;
+
+    // 已授权且非强制 consent → 静默跳转
+    if (hasConsent && request.query.prompt !== 'consent') {
+      return await this.issueCodeAndRedirect(reply, sessionId, userId, sessionStore);
+    }
+
+    // 返回 consent 界面
+    return reply.send({
+      code: 200,
+      message: '需要授权确认',
+      data: {
+        action: 'consent',
+        sessionId,
+        client_name: validated.client.client_name,
+        scope: validated.scope,
+        scopeDetails: resolveScopeDetails(validated.scope, validated.client.scope_metadata || {}),
+        user_id: userId,
+        user: {
+          username: userData.username,
+          name: userData.name || userData.username,
+          email: userData.email,
+          avatar: userData.avatar
+        }
+      }
+    });
   }
 
   /**
