@@ -37,6 +37,7 @@ import path from 'node:path';
 import fp from 'fastify-plugin';
 import { setupRedisHealthMonitor } from './health.js';
 import { setLogger, getCacheStats } from './redis-store.js';
+import { probeTcp, DEFAULT_PROBE_TIMEOUT } from './probe.js';
 import { C } from '../../utils/colors.js';
 import { createLogger } from '../log/index.js';
 
@@ -59,6 +60,34 @@ const INITIAL_RETRY_MAX = 3;
 
 /** 旧客户端 drain 超时（毫秒），超时强制断开 */
 const DRAIN_TIMEOUT = 10_000;
+
+/** `connectStandalone()` 连接阶段默认上限（毫秒） */
+const STANDALONE_TIMEOUT_MS = 10_000;
+
+/**
+ * 本地有界等待：超时即 reject，并清理定时器
+ *
+ * 不复用 `utils.js` 的 `withTimeout` —— `utils.js` 反向 import 本模块的
+ * `globalRedis`，在此处引用会形成循环依赖。实现同样避免 `.finally()`
+ * （会派生孤儿 promise，把一次普通超时升级为未处理拒绝）。
+ *
+ * @param {Promise<any>} promise - 被等待的 promise
+ * @param {number} ms - 超时毫秒
+ * @param {string} message - 超时错误文案
+ * @returns {Promise<any>}
+ */
+function withLocalTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  const result = Promise.race([promise, timeout]);
+  result.then(
+    () => clearTimeout(timer),
+    () => clearTimeout(timer)
+  );
+  return result;
+}
 
 /** TLS CA 文件内容缓存（上限 10 条，避免路径注入导致内存泄漏） */
 const _caCache = new Map();
@@ -119,6 +148,43 @@ function degrade(app, reason) {
   app.redisHealthy = false;
 }
 
+/** 首次重连延迟（毫秒）：给瞬时抖动一个快恢复的机会 */
+const FIRST_RETRY_DELAY = 500;
+
+/** 单次退避上限（毫秒）：避免退避无节制增长 */
+const MAX_BACKOFF_DELAY = 15_000;
+
+/** `forever` 策略在重试超限后的低频探测间隔（毫秒） */
+const SLOW_PROBE_DELAY = 30_000;
+
+/**
+ * 重连退避决策（纯函数，无副作用、无 IO）
+ *
+ * 抽出来的理由是可测性：`reconnectStrategy` 的返回语义有两种截然不同的结果
+ * （数字 = 继续等；`Error` = 彻底放弃），而这两种结果决定了调用方是「永远连下去」
+ * 还是「在有界时间内拿到失败结论」。这段决策直接内联在客户端回调里时
+ * 只能靠真实网络场景间接覆盖，抽成纯函数后可以被逐条钉死。
+ *
+ * @param {object} opts
+ * @param {number} opts.retries - 已重试次数（node-redis 传入，从 0 开始计数）
+ * @param {number} [opts.maxRetries=10] - 超过该次数即视为超限
+ * @param {'forever'|'bounded'} [opts.policy='forever']
+ * @returns {{delay: number, slowProbe?: boolean, giveUp?: boolean, message?: string}}
+ *   - `delay`：下次重连前等待的毫秒数（`giveUp` 时无意义）
+ *   - `slowProbe`：处于超限后的低频探测阶段
+ *   - `giveUp`：调用方应返回 `Error`，让 node-redis 停止重连并使 `connect()` reject
+ */
+function resolveReconnectDelay({ retries, maxRetries = 10, policy = 'forever' }) {
+  if (retries >= maxRetries) {
+    if (policy === 'bounded') {
+      return { delay: 0, giveUp: true, message: `Redis 重连超限（已重试 ${maxRetries} 次）` };
+    }
+    return { delay: SLOW_PROBE_DELAY, slowProbe: true };
+  }
+  const delay = retries === 0 ? FIRST_RETRY_DELAY : Math.min(1000 * Math.pow(2, retries - 1), MAX_BACKOFF_DELAY);
+  return { delay };
+}
+
 /**
  * 创建 Redis 连接
  * @param {object} opts
@@ -129,9 +195,24 @@ function degrade(app, reason) {
  * @param {string} [opts.label] - 连接标签
  * @param {number} [opts.connectTimeout=5000]
  * @param {number} [opts.maxRetries=10]
+ * @param {'forever'|'bounded'} [opts.retryPolicy='forever'] 重连超限后的行为：
+ *   - `forever`（默认，常驻服务用）：转入 30s 低频探测，**永不停止**，
+ *     保证 Redis 恢复后自动连回。代价是 `connect()` 永不 reject。
+ *   - `bounded`（CLI / 脚本 / 验收关卡用）：返回 `Error` 让 node-redis 停止重连，
+ *     `connect()` 随之 reject —— 这是「调用方自己设超时」之外的第二道保险，
+ *     只靠外层 `Promise.race` 的话，客户端仍会在后台持续重连。
  * @returns {import('redis').RedisClientType}
  */
-function createRedisConnection({ host, port, useTls, db = 0, label = '', connectTimeout = 5000, maxRetries = 10 }) {
+function createRedisConnection({
+  host,
+  port,
+  useTls,
+  db = 0,
+  label = '',
+  connectTimeout = 5000,
+  maxRetries = 10,
+  retryPolicy = 'forever'
+}) {
   const tag = label ? `[${label}]` : `[db${db}]`;
   const username = process.env.REDIS_USERNAME || undefined;
   const caPath = process.env.REDIS_TLS_CA;
@@ -150,16 +231,20 @@ function createRedisConnection({ host, port, useTls, db = 0, label = '', connect
     if (ca) socket.ca = ca;
   }
 
-  // 重连策略：首次 500ms 快速恢复，然后指数退避
-  // 超限后改为 30s 低频探测，不停止重连，确保 Redis 恢复后自动连回
+  // 重连策略：决策交给纯函数 resolveReconnectDelay（可单测），此处只做日志与返回值转换
+  // 超限后：forever 模式改为 30s 低频探测（不停止重连）；bounded 模式直接放弃
   socket.reconnectStrategy = retries => {
-    if (retries >= maxRetries) {
-      log.warn(`⚠️ [Redis] ${C.yellow}重连超限，进入慢速探测模式 ${tag}${C.reset}`);
-      return 30_000;
+    const decision = resolveReconnectDelay({ retries, maxRetries, policy: retryPolicy });
+    if (decision.giveUp) {
+      log.warn(`⚠️ [Redis] ${C.yellow}重连超限（${maxRetries} 次），放弃连接 ${tag}${C.reset}`);
+      return new Error(`${decision.message}${tag}`);
     }
-    const delay = retries === 0 ? 500 : Math.min(1000 * Math.pow(2, retries - 1), 15_000);
-    log.warn(`⚠️ [Redis] ${C.yellow}第 ${retries + 1} 次重连 ${tag}，${delay / 1000}秒后重试...${C.reset}`);
-    return delay;
+    if (decision.slowProbe) {
+      log.warn(`⚠️ [Redis] ${C.yellow}重连超限，进入慢速探测模式 ${tag}${C.reset}`);
+    } else {
+      log.warn(`⚠️ [Redis] ${C.yellow}第 ${retries + 1} 次重连 ${tag}，${decision.delay / 1000}秒后重试...${C.reset}`);
+    }
+    return decision.delay;
   };
 
   const client = createClient({
@@ -235,11 +320,26 @@ async function drainAndClose(client, label = '') {
  * 使 `getStore()` / `RedisStore` 在非 Fastify 环境下同样可用。与之配套，
  * 退出前必须调用 `disconnectStandalone()`，否则未关闭的 socket 会让进程无法自然退出。
  *
- * @returns {Promise<{ready: boolean, reason?: string}>} ready=false 表示未启用、配置非法或连接失败
+ * === 有界返回（2026-09-20 修正） ===
+ * 旧注释称「最多重试 1 次」，但真正决定重试次数的是客户端内的 `reconnectStrategy`
+ * （取 `REDIS_MAX_RETRIES`，默认 10），`connectWithRetry(client, 1)` 只是外层循环。
+ * 更糟的是该策略超限后**永不返回 Error**，`client.connect()` 因此**永不 reject** ——
+ * 实测 Redis 不可达时 verify 关卡挂到 3 分钟以上仍无结论，而不是文档所说的 90s。
+ *
+ * 现在分两道保险，使「环境不可用」必定在有界时间内以 `ready:false` 返回：
+ *   ① `probeTcp()` 先做有界 TCP 预检 —— 端口不通时毫秒级给出结论，不进客户端退避；
+ *   ② 连接阶段改用 `retryPolicy:'bounded'` + 外层超时兜底 —— 策略超限即放弃。
+ * 常驻服务（Fastify 插件）不受影响，仍用 `forever` 策略保证自动重连。
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.timeoutMs=10000] 整体连接上限（毫秒），仅约束连接阶段
+ * @returns {Promise<{ready: boolean, reason?: string, code?: string}>}
+ *          ready=false 表示未启用、配置非法或连接失败；`code` 便于调用方分流
+ *          （'NOT_CONFIGURED' | 'BAD_DB' | 'TCP_UNREACHABLE' | 'CONNECT_FAILED'）
  */
-async function connectStandalone() {
+async function connectStandalone(opts = {}) {
   if (process.env.REDIS_ENABLED !== 'true' || !process.env.REDIS_HOST) {
-    return { ready: false, reason: 'REDIS_ENABLED 未开启或 REDIS_HOST 未配置' };
+    return { ready: false, code: 'NOT_CONFIGURED', reason: 'REDIS_ENABLED 未开启或 REDIS_HOST 未配置' };
   }
   // 幂等：已在 app/上次引导中连接成功则直接复用
   if (globalRedis && globalRedis.isReady) return { ready: true };
@@ -247,12 +347,30 @@ async function connectStandalone() {
   const host = process.env.REDIS_HOST;
   const port = parsePort(process.env.REDIS_PORT) ?? 6379;
   const db = parseInt(process.env.REDIS_DB || '0', 10);
-  if (!isValidDb(db)) return { ready: false, reason: `REDIS_DB 非法（仅支持 0-15）: ${process.env.REDIS_DB}` };
+  if (!isValidDb(db)) {
+    return { ready: false, code: 'BAD_DB', reason: `REDIS_DB 非法（仅支持 0-15）: ${process.env.REDIS_DB}` };
+  }
+
+  const timeoutRaw = Number(opts.timeoutMs);
+  const timeoutMs = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? timeoutRaw : STANDALONE_TIMEOUT_MS;
+  // 预检预算取整体上限的三分之一，并夹在 [500ms, DEFAULT_PROBE_TIMEOUT] —— 保证
+  // 「预检 + 连接」两段之和不会超过调用方给的预算数量级。
+  const probeBudget = Math.min(Math.max(Math.floor(timeoutMs / 3), 500), DEFAULT_PROBE_TIMEOUT);
 
   const connectTimeoutRaw = parseInt(process.env.REDIS_CONNECT_TIMEOUT || '5000', 10);
   const connectTimeout = Number.isFinite(connectTimeoutRaw) ? connectTimeoutRaw : 5000;
   const maxRetriesRaw = parseInt(process.env.REDIS_MAX_RETRIES || '10', 10);
   const maxRetries = Number.isFinite(maxRetriesRaw) ? maxRetriesRaw : 10;
+
+  // ① 有界 TCP 预检：不通就地返回，不进入客户端的指数退避
+  const probe = await probeTcp(host, port, probeBudget);
+  if (!probe.ok) {
+    return {
+      ready: false,
+      code: 'TCP_UNREACHABLE',
+      reason: `TCP ${host}:${port} 不可达（${probe.code}，${probe.ms}ms）`
+    };
+  }
 
   const client = createRedisConnection({
     host,
@@ -261,21 +379,21 @@ async function connectStandalone() {
     db,
     label: 'CLI',
     connectTimeout,
-    maxRetries
+    maxRetries,
+    retryPolicy: 'bounded'
   });
 
   try {
-    // CLI 场景不必久等：最多重试 1 次（首次 500ms + 退避）
-    await connectWithRetry(client, 1);
+    // ② 外层超时兜底：即使策略因故未放弃，也在预算内给调用方一个确定的结论
+    await withLocalTimeout(connectWithRetry(client, 1), timeoutMs, `Redis 连接超时（${timeoutMs}ms）`);
   } catch (err) {
-    // 关键：createRedisConnection 内置 reconnectStrategy，连接失败后仍会后台重连，
-    // 不主动断开会让 CLI 进程永远退不出去。
+    // 关键：连接失败后客户端可能仍在后台重连，不主动断开会让 CLI 进程退不出去。
     try {
       client.disconnect();
     } catch {
       /* 安全忽略 */
     }
-    return { ready: false, reason: err.message };
+    return { ready: false, code: 'CONNECT_FAILED', reason: err.message };
   }
 
   globalRedis = client;
@@ -481,5 +599,13 @@ const redisPlugin = fp(
   { name: 'redis-plugin' }
 );
 
-export { globalRedis, redisHealthy, backupRedis, backupRedisHealthy, connectStandalone, disconnectStandalone };
+export {
+  globalRedis,
+  redisHealthy,
+  backupRedis,
+  backupRedisHealthy,
+  connectStandalone,
+  disconnectStandalone,
+  resolveReconnectDelay
+};
 export default redisPlugin;

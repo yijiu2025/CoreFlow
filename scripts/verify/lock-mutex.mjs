@@ -64,13 +64,14 @@ try {
 {
   const { connectStandalone, disconnectStandalone } = await import('../../src/framework/redis/index.js');
 
-  // 必须**自己加超时**：connectStandalone 内部只把重试交给了 client 的
-  // `reconnectStrategy`，而它按 `REDIS_MAX_RETRIES`（默认 10）退避重连 ——
-  // Redis 不可达时实测要 90 秒以上才返回（0.5/1/2/4/8/15×5 ≈ 90s）。
-  // 关卡不能挂在那里：环境问题应当在几秒内说清楚。
+  // 有界前置检查（2026-09-20 起由 connectStandalone 自身保证）：
+  // 它先做有界 TCP 预检、再以 'bounded' 重连策略 + 外层超时连接，
+  // 环境不可用时数秒内返回 ready:false，不再挂进客户端永不放弃的重连循环。
+  // 这里额外保留一层 Promise.race 作为兜底：即便将来连接实现回退，
+  // 「环境问题应在数秒内说清楚」这条不变量也不会破。
   const conn = await Promise.race([
-    connectStandalone(),
-    sleep(PREFLIGHT_MS).then(() => ({ ready: false, reason: `连接超时（${PREFLIGHT_MS}ms 内未就绪）` }))
+    connectStandalone({ timeoutMs: PREFLIGHT_MS }),
+    sleep(PREFLIGHT_MS + 2000).then(() => ({ ready: false, reason: `连接超时（${PREFLIGHT_MS}ms 内未就绪）` }))
   ]);
 
   if (!conn.ready) {

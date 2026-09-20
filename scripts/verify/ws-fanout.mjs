@@ -57,7 +57,8 @@ const { connectStandalone, disconnectStandalone, isPubSubReady } = await import(
   '../../src/framework/redis/index.js'
 );
 
-const conn = await connectStandalone();
+// 有界前置检查：见 stats-aggregation.mjs 同名注释
+const conn = await connectStandalone({ timeoutMs: 8000 });
 if (!conn.ready) {
   console.error(`⛔ 环境不可用：Redis 连接失败 —— ${conn.reason}`);
   console.error('   本关卡验证的是代码语义，不是给你排查环境问题的。退出码 3。');

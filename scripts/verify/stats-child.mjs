@@ -16,7 +16,7 @@ process.env.FW_TRAFFIC_STATS_FILE = process.env.PROBE_CHILD_STATS_FILE || '.tmp-
 
 const { connectStandalone, disconnectStandalone } = await import('../../src/framework/redis/index.js');
 
-const conn = await connectStandalone();
+const conn = await connectStandalone({ timeoutMs: 8000 });
 if (!conn.ready) {
   console.log(`ENV_UNAVAILABLE ${conn.reason}`);
   process.exit(3);
