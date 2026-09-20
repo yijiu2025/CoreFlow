@@ -72,11 +72,13 @@ describe('密钥生成不阻塞主线程', () => {
     expect(ok).toBe(true);
   });
 
+  // RSA-4096 生成在**满载并发**下会超出 jest 默认 5s（实测全量回归偶发超时、
+  // 单独跑必过）。放宽的是等待上限，不是断言：`syncCalls` 为空才是不阻塞的证据。
   test('更高的密钥长度同样不触发同步生成', async () => {
     const { privateKey } = await generateKeyPair({ kid: 'm4096', modulusLength: 4096 });
     expect(privateKey.length).toBeGreaterThan(1000); // 4096 位的 PEM 明显更长
     expect(syncCalls).toEqual([]);
-  });
+  }, 30_000);
 
   test('generateKid 产出唯一且可检索的 kid（回归：kid 规则不应被改动）', () => {
     const ids = new Set(Array.from({ length: 50 }, () => generateKid()));

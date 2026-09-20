@@ -29,7 +29,7 @@ if (!TASK_KEY || !Number.isFinite(TTL_MS) || !Number.isFinite(AT_EPOCH)) {
 const { connectStandalone, disconnectStandalone } = await import('../../src/framework/redis/index.js');
 const { acquirePeriodLock } = await import('../../src/framework/scheduler/index.js');
 
-const conn = await connectStandalone();
+const conn = await connectStandalone({ timeoutMs: 8000 });
 if (!conn.ready) {
   console.log(`RESULT ${LABEL} ERROR connect_failed:${conn.reason}`);
   process.exit(3);

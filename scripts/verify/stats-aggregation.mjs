@@ -61,7 +61,9 @@ console.log('（两个真实进程 + 真实 Redis）\n');
 
 const { connectStandalone, disconnectStandalone } = await import('../../src/framework/redis/index.js');
 
-const conn = await connectStandalone();
+// 有界前置检查：timeoutMs 让「环境不可用」在数秒内以 ready:false 返回，
+// 而不是挂进客户端永不放弃的重连循环（见 plugin.js connectStandalone 注释）
+const conn = await connectStandalone({ timeoutMs: 8000 });
 if (!conn.ready) {
   console.error(`⛔ 环境不可用：Redis 连接失败 —— ${conn.reason}`);
   console.error('   本关卡验证的是代码语义，不是给你排查环境问题的。退出码 3。');
