@@ -17,6 +17,7 @@ import { ref } from 'vue';
 import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { postToParent } from '@/utils/parent';
+import { sanitizeLocalRedirect } from '@/utils/redirect';
 import { getStableDeviceId } from 'stable-deviceid';
 import { useCountdown } from './useCountdown';
 
@@ -81,10 +82,18 @@ export interface UseLoginFlowOptions {
   clientId: () => string | undefined;
   /** 错误提示函数 */
   showError: (msg: string) => void;
+  /**
+   * 全屏直连场景：登录成功后的回跳目标，通常是路由守卫带上的 ?redirect=
+   * （例如未登录直接访问 /authorize，登录后应回到授权页继续授权）
+   *
+   * - 仅在最顶层窗口生效；iframe 内由父窗口接管，不做跳转（避免打断父应用流程）
+   * - 内部走 sanitizeLocalRedirect 白名单，非站内相对路径一律忽略（防开放重定向）
+   */
+  redirectTo?: () => string | null | undefined;
 }
 
 export function useLoginFlow(opts: UseLoginFlowOptions) {
-  const { keepLogin, values, captchaKey, clientId, showError } = opts;
+  const { keepLogin, values, captchaKey, clientId, showError, redirectTo } = opts;
   const authStore = useAuthStore();
 
   // 授权确认状态
@@ -120,6 +129,26 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
     });
   }
 
+  /**
+   * 登录成功统一收尾：通知父窗口（iframe 场景）+ 全屏直连回跳
+   *
+   * 三条成功路径（登录成功 / 同意授权 / 邮箱二次验证通过）共用，
+   * 避免只在其中一条上漏掉回跳 —— 历史上就没有任何一条处理 redirect，
+   * 导致"守卫把未登录访问者送去 /login?redirect=/authorize，登录后再没人送回来"。
+   */
+  function finishLogin(res: unknown) {
+    notifyParentLoginSuccess(res);
+
+    // iframe 内：父窗口按 LOGIN_SUCCESS 消息自行处理，这里不跳转
+    if (window.parent && window.parent !== window) return;
+
+    const target = sanitizeLocalRedirect(redirectTo?.());
+    if (target) {
+      // replace 而非 assign：登录页不留历史，返回键不会退回登录页
+      window.location.replace(target);
+    }
+  }
+
   /** 执行登录（提交后端 + 处理四种响应分支） */
   async function executeLogin() {
     try {
@@ -152,7 +181,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
           });
         }
       } else if (isLoginSuccessResponse(res)) {
-        notifyParentLoginSuccess(res);
+        finishLogin(res);
       } else {
         // 后端返回了未识别的响应（可能是新 action 或字段微调），按成功处理兜底
         showError('登录响应格式异常，请重试');
@@ -179,7 +208,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
       const res: LoginSuccessResponse | unknown = await authApi.confirmConsent(consentState.value.consentKey);
       showConsent.value = false;
       consentState.value = null;
-      notifyParentLoginSuccess(res);
+      finishLogin(res);
     } catch (err: any) {
       showError(err.message || '授权确认失败');
     } finally {
@@ -214,7 +243,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
       emailVerifyState.value = null;
       emailVerifyCode.value = '';
       emailVerifyCountdown.stop();
-      notifyParentLoginSuccess(res);
+      finishLogin(res);
     } catch (err: any) {
       showError(err.message || '验证码错误');
     }

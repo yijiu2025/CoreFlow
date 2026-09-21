@@ -1,37 +1,39 @@
 import type { Router } from 'vue-router';
 import { isAuthenticated } from './auth-checker';
+import { sanitizeLocalRedirect } from '@/utils/redirect';
+import { isMobileViewport } from '@/utils/device';
 
-const DEFAULT_REDIRECT = '/login';
+/** 桌面端未登录跳转目标 */
+const DESKTOP_LOGIN = '/login';
+/** 移动端未登录跳转目标（全屏移动端页面，而不是把桌面页塞进手机屏幕） */
+const MOBILE_LOGIN = '/m/login';
 
-/** 校验重定向目标，防止开放重定向漏洞 */
+/**
+ * 校验重定向目标，防止开放重定向漏洞
+ * 具体规则收敛在 @/utils/redirect（与 OAuth 回跳等场景共用一套白名单）
+ */
 export function sanitizeRedirect(raw: unknown): string {
-  if (typeof raw !== 'string' || !raw) return DEFAULT_REDIRECT;
-  // 只允许站内相对路径：必须以 / 开头，且不能以 // 或 /\ 开头（协议相对 URL）
-  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) {
-    return DEFAULT_REDIRECT;
-  }
-  return raw;
+  return sanitizeLocalRedirect(raw) || DESKTOP_LOGIN;
 }
 
 /** 设置路由守卫 */
 export function setupAuthGuard(router: Router): void {
   router.beforeEach(to => {
-    // authorize 页面：已登录才能访问
+    // authorize / consent 等页面：已登录才能访问
     if (to.meta.requiresAuth || to.meta.guestOnly === false) {
-      // 这里预留了未来接入 Pinia auth store 的位置
-      // const auth = useAuthStore();
-      // const isAuthed = auth.isAuthenticated;
-
-      // 使用认证检查器
       const isAuthed = isAuthenticated();
 
       if (!isAuthed) {
-        const redirect = to.fullPath;
-        const sanitizedRedirect = sanitizeRedirect(redirect);
-        // 返回导航目标（重定向），而非调用 next(value)
+        const sanitizedRedirect = sanitizeRedirect(to.fullPath);
+        // 按设备形态选登录页：手机上直接进移动端全屏登录页，
+        // 避免"桌面登录页塞进手机屏"再靠 CSS 兜底
+        //
+        // 同时透传原 query（client_id / redirect_uri / scope / state ...）：
+        // 只给 redirect 的话登录页拿不到应用上下文，会显示"应用标识缺失"而无法登录，
+        // 授权流在这里就断了。redirect 只负责"登录后回哪去"。
         return {
-          path: DEFAULT_REDIRECT,
-          query: { redirect: sanitizedRedirect }
+          path: isMobileViewport() ? MOBILE_LOGIN : DESKTOP_LOGIN,
+          query: { ...to.query, redirect: sanitizedRedirect }
         };
       }
     }
