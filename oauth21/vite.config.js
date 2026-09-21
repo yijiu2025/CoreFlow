@@ -11,7 +11,9 @@ export default defineConfig({
   plugins: [
     vue(),
     AutoImport({
-      imports: ['vue', 'vue-router', 'pinia', '@vueuse/core', 'vue-i18n'],
+      // 注意：不放 '@vueuse/core' —— 本仓零使用，且其 useCountdown 与本地
+      // src/composables/useCountdown.ts 重名，会触发 Duplicated imports 警告
+      imports: ['vue', 'vue-router', 'pinia', 'vue-i18n'],
       dts: 'src/auto-import.d.ts',
       dirs: ['src/composables', 'src/stores'],
       vueTemplate: true
@@ -22,7 +24,7 @@ export default defineConfig({
       dts: 'src/components.d.ts'
     }),
     createSvgIconsPlugin({
-      iconDirs: [path.resolve(process.cwd(), 'src/assets/icons')],
+      iconDirs: [path.resolve(import.meta.dirname, 'src/assets/icons')],
       symbolId: 'icon-[dir]-[name]'
     }),
     VitePWA({
@@ -48,8 +50,9 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-      'stable-deviceid': path.resolve(__dirname, '../packages/shared-device/src/index.ts')
+      // Vite 原生 configLoader（未来默认）不支持 CJS 的 __dirname，用 ESM 的 import.meta.dirname
+      '@': path.resolve(import.meta.dirname, './src'),
+      'stable-deviceid': path.resolve(import.meta.dirname, '../packages/shared-device/src/index.ts')
     }
   },
   server: {
