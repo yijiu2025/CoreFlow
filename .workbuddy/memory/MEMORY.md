@@ -11,6 +11,9 @@
   同步状态**一律以 `git ls-remote origin main` 为准**；超时≠失败，重试安全。
   push 后修 packed-refs：`node "C:/Users/22701/.workbuddy/tools/fix-packed-refs.mjs" "$(git rev-parse HEAD)"`
   ⚠️ 必须 `C:/...` 绝对路径 + **完整 40 位 SHA**（截短 → `bad object origin main`，GUI 历史全灭）。
+- **`git credential fill` 会永久挂住**（credential.helper 首项是 `helper-selector`）：用 git 凭据查 GitHub API
+  的脚本会一起卡死、易误判成"API 挂了"。绕法 = 直接调 GCM 本体
+  `.../mingw64/bin/git-credential-manager.exe get`。详见 details §10.10。
 - **发版**：提交推送后**顺手发不必问**：`node scripts/release.mjs` → `--apply`（`--from <ref>` 复盘 / `--allow-dirty` 并行用）。
   判据：`feat`→minor；仅 `fix|perf`→patch；破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` →不发。
   通道：git tag / GitHub Release / npm `packages/log`。**版本源是 git tag**，package.json 单向跟随；决策逻辑必须在 `src/`。
@@ -91,8 +94,15 @@
 - **response schema 必须覆盖信封全字段** `code/message/data/timestamp/requestId` —— Fastify 对未声明字段**静默裁剪**。
 - **无 lockfile 树暴露幽灵依赖**（`uuid` 曾靠 sequelize 提升侥幸可用）→ 必须显式声明。
 - **关卡要驱动正确链路**：`__test__persistNow()` 写本地 JSON（对跨进程可见性零贡献）；刷 Redis 汇聚用 `__test__flushStats()`。
+- **WS 跨实例扇出有两个坑，外部现象都是「订阅没生效」**（详见 details §10.6）：
+  ① `duplicate()` 只复制配置**不建连** → 必须先 `connect()`；② 订阅回调签名是 **`(message, channel)`**，
+  写反 → `JSON.parse(频道名)` 抛错被 dispatch 静默吞掉（"接收端 READY 但收 0 条"）。
+  两者都只在**真 Redis + 跨进程**时现形，单进程里完全正常。
+- **`NODE_ENV=production` 下三个 SECRET 必须 ≥32 位**（`MIN_SECRET_LENGTH`：`APP_SECRET` / `SESSION_SECRET` /
+  `FIREWALL_SECRET`，`SIGN_APP_KEY` 无此校验）→ 不达标即「拒绝启动」，现象是容器反复重启、就绪探针等不到 200。
+  **先 `docker compose logs app` 看应用自己怎么说，别先怀疑探针路径或 entrypoint。**
 - **复刻树验收**：`git archive HEAD | tar -x` 到**仓库外**（Temp 下）。🔴 切勿在主仓内造树（会向上借 node_modules 误判）。
-  基线：install 0 → dist 8 模块 → jest 86 套件/1081 用例绿 → ESLint 0 错。jest 需忽略 `.tmp-probe`。
+  基线：install 0 → dist 8 模块 → jest 86 套件/1084 用例绿 → ESLint 0 错（18 警告）。jest 需忽略 `.tmp-probe`。
 
 ## 5. 待办（跨会话）
 
