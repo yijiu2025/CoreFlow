@@ -52,6 +52,17 @@ export const authFlowRoutes: RouteRecordRaw[] = [
       guestOnly: false, // 需要登录才能访问
       requiresAuth: true
     }
+  },
+  {
+    // 独立授权确认页（全屏可达）：authorize 流带 session_id、login 流带 consent_key
+    path: 'consent',
+    name: 'Consent',
+    component: () => import('@/view/web/auth/Consent.vue'),
+    meta: {
+      title: '授权确认',
+      guestOnly: false,
+      requiresAuth: true
+    }
   }
 ];
 

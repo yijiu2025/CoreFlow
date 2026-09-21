@@ -14,6 +14,7 @@ const service = axios.create({
 import { getDeviceFingerprint, isDeviceFingerprintEnabled, getStableDeviceId, handleDeviceSyncInResponse } from 'stable-deviceid';
 import { generateNonce } from './crypto';
 import { generateSignWithKey, serializeParamsForSign, getAppKey } from './sign';
+import { isMobileViewport } from './device';
 import { reportError } from '../composables/useErrorReporter';
 
 service.interceptors.request.use(
@@ -152,10 +153,13 @@ const redirectToLogin: RedirectFn = () => {
   // 注意：不要清 device_id cookie（跨账号复用，设备标识需保留）
   try {
     const current = window.location.pathname + window.location.search;
-    const loginUrl = `/mini-login?from=mini&redirect=${encodeURIComponent(current)}`;
+    // 按设备形态选登录页：手机上进移动端全屏页，避免桌面紧凑页在手机上体验差
+    const loginUrl = isMobileViewport()
+      ? `/m/login?redirect=${encodeURIComponent(current)}`
+      : `/mini-login?from=mini&redirect=${encodeURIComponent(current)}`;
     window.location.href = loginUrl;
   } catch {
-    window.location.href = '/mini-login';
+    window.location.href = isMobileViewport() ? '/m/login' : '/mini-login';
   }
 };
 redirectToLogin._locked = false;
