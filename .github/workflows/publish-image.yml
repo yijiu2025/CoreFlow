@@ -87,12 +87,24 @@ jobs:
 
       - name: 准备 CI 环境变量
         run: |
-          # 从模板生成，替换掉所有占位密钥（CI 专用，非真实凭据）
+          # 从模板生成，替换掉所有占位密钥（CI 专用，非真实凭据）。
+          #
+          # ⚠️ 三个 SECRET 必须是 **≥32 位**的强随机值，不能写死短串：
+          #    `src/framework/config/env.js` 的 MIN_SECRET_LENGTH = 32，生产模式下
+          #    不达标会让应用**拒绝启动**（❌ 环境变量校验失败，启动已中止）——
+          #    现象是容器反复重启、就绪探针永远等不到 200，与"部署配置问题"混在一起，
+          #    很难一眼看出是 CI 的模板替换写短了。
+          #    实测 2026-09-21：SESSION_SECRET 30 位、FIREWALL_SECRET 18 位，双双失败。
+          #    改用随机值后，长度约束不再靠人眼去数。
+          SECRET_APP=$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")
+          SECRET_SESSION=$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")
+          SECRET_FIREWALL=$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")
+
           sed -e 's/^DB_PASS=.*/DB_PASS=ci-db-pass/' \
               -e 's/^DB_ROOT_PASS=.*/DB_ROOT_PASS=ci-root-pass/' \
-              -e 's/^APP_SECRET=.*/APP_SECRET=ci-app-secret-not-for-production/' \
-              -e 's/^SESSION_SECRET=.*/SESSION_SECRET=ci-session-secret-not-for-prod/' \
-              -e 's/^FIREWALL_SECRET=.*/FIREWALL_SECRET=ci-firewall-secret/' \
+              -e "s|^APP_SECRET=.*|APP_SECRET=${SECRET_APP}|" \
+              -e "s|^SESSION_SECRET=.*|SESSION_SECRET=${SECRET_SESSION}|" \
+              -e "s|^FIREWALL_SECRET=.*|FIREWALL_SECRET=${SECRET_FIREWALL}|" \
               -e 's/^SIGN_APP_KEY=.*/SIGN_APP_KEY=ci-sign-key/' \
               -e 's/^CORS_ORIGINS=.*/CORS_ORIGINS=http:\/\/localhost:3000/' \
               -e 's/^LOG_FILE_SUFFIX=.*/LOG_FILE_SUFFIX=/' \
