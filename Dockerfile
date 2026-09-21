@@ -32,6 +32,14 @@
 #    应用自己监听 SIGTERM 做优雅关闭（先广播 WS 关闭帧、再关 DB/Redis）。
 #    没有 init 进程时，PID 1 的信号语义与默认处理不同，`docker stop` 可能
 #    退化成"等 10 秒再 SIGKILL"——这正是把手写优雅关闭白写掉的经典方式。
+#    ⚠️ **tini 的路径不要写死发行版默认值**：Debian / Ubuntu 装的是
+#       `/usr/bin/tini`，`/usr/sbin/tini` 在两者上都不存在。写错的后果不是
+#       构建失败，而是容器**启动时**才炸：
+#         OCI runtime create failed: exec: "/usr/sbin/tini":
+#         stat /usr/sbin/tini: no such file or directory
+#       实测 2026-09-21（Publish Image 的 compose 冒烟 `run --rm migrate`
+#       起不来，而 `docker build` 一路绿灯 —— 只查构建根本发现不了）。
+#       下面按实际安装位置建一个固定软链，并在构建期就 `--version` 自证一次。
 # ============================================================================
 
 ARG NODE_VERSION=22
@@ -68,8 +76,12 @@ LABEL org.opencontainers.image.title="nodeServers" \
       org.opencontainers.image.licenses="MIT"
 
 # tini：PID 1 信号转发（见文件头第 5 条）
+# 软链而非硬写路径：无论 base image 把 tini 装到 /usr/bin 还是 /usr/sbin，
+# ENTRYPOINT 认的 /usr/sbin/tini 都存在；`--version` 让构建期就暴露问题。
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tini \
+ && ln -sf "$(command -v tini)" /usr/sbin/tini \
+ && /usr/sbin/tini --version \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
