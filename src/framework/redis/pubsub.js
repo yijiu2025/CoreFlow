@@ -17,6 +17,11 @@
  * ④ **重连自动恢复**：node-redis 重连后会自动恢复既有订阅（实测确认），
  *    因此**不做** 'ready' 兜底重订阅 —— 那个兜底反而会造成二次订阅（重复投递）。
  * ⑤ **生命周期**：应用关闭时必须 `closePubSub()`，否则派生连接挂着进程退不出去。
+ * ⑥ **订阅回调签名是 (message, channel)**：node-redis v5 的 `PubSubListener`
+ *    定义为 `(message, channel)`（`@redis/client/dist/lib/client/pub-sub.d.ts:11`），
+ *    实现同样是 `listener(message, channel)`（`pub-sub.js:336/346`）。写反不会报错：
+ *    `JSON.parse(频道名)` 抛出的 SyntaxError 被 dispatch 的 catch 静默吞掉，
+ *    外部现象与"订阅根本没生效"完全一致。2026-09-21 的 ws-fanout 关卡首跑抓到。
  *
  * === 降级 ===
  * Redis 未配置 / 主连接未就绪时：publish 返回 `{ok:false}`，subscribe 的
@@ -148,7 +153,14 @@ function subscribe(channel, handler) {
   //    连接就绪后自动发出。
   const connected = sub.isOpen ? Promise.resolve() : sub.connect();
   connected
-    .then(() => sub.subscribe(channel, (channel2, raw) => dispatch(channel2, raw)))
+    // ⚠️ 回调顺序是 node-redis 的 **(message, channel)**，不是 (channel, message)。
+    //    见 `@redis/client/dist/lib/client/pub-sub.d.ts:11` 的 PubSubListener 定义
+    //    与 `pub-sub.js:336/346` 的 `listener(message, channel)` 实现。写反了会让
+    //    dispatch 拿到 (消息体, 频道名) 而按 (频道名, 消息体) 去解析 —— 于是
+    //    `JSON.parse('firewall:monitor')` 抛错、被 dispatch 的 catch 静默吞掉，
+    //    现象与"订阅根本没生效"一模一样。实测 2026-09-21（CI ws-fanout 关卡：
+    //    接收端 READY、父进程本地 1 条，子进程收到 0 条）。
+    .then(() => sub.subscribe(channel, (message, channelName) => dispatch(channelName, message)))
     .catch(err => {
       log.warn(`⚠️  [PubSub] 订阅 channel=${channel} 失败：${err.message}`);
       subscribed.delete(channel); // 允许下次重试
