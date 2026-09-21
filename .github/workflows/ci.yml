@@ -14,6 +14,13 @@
 #       `wb-logkit` / `stable-deviceid` 改从 registry 取已发布版本（CI 本就不该依赖开发机软链）；
 #     - `--ignore-scripts`：根 `prepare` 是 husky，CI 不需要 git hooks，且能挡掉 postinstall 供应链面。
 #
+# ⚠️ 因此 setup-node **不能开 `cache: npm`**（别再顺手加回去）。
+#   缓存功能会去找 package-lock.json 算缓存 key，而 lockfile 被 .gitignore 排除、CI 检出后
+#   并不存在 → 该步骤在「安装依赖」之前就以
+#     ##[error]Dependencies lock file is not found ... Supported file patterns: package-lock.json
+#   失败，三个作业会一起红，且看不到任何代码层面的信息。这与上面"不用 npm ci"是同一条约束的
+#   两个面：**本仓库的依赖安装路径刻意不依赖 lockfile**。实测 2026-09-21。
+#
 # 关于数据库：**测试作业不需要 MySQL/Redis**。
 #   这不是省事，是实测结论 —— `framework/db` 在测试环境检测到缺配置会跳过而非退出，
 #   访问层则降级到进程内 MapStore，本机无 DB/Redis 时 1066 个用例全绿。
@@ -49,7 +56,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
       - name: 安装依赖
         run: npm install --workspaces=false --ignore-scripts --no-audit --no-fund
@@ -73,7 +79,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
       - name: 安装依赖
         run: npm install --workspaces=false --ignore-scripts --no-audit --no-fund
@@ -108,7 +113,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
 
       - name: 安装依赖
         run: npm install --workspaces=false --ignore-scripts --no-audit --no-fund
