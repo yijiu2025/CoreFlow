@@ -53,6 +53,64 @@
 
 - **oauth21 移动端认证页样式单一来源** = `oauth21/src/assets/styles/mobile-auth.scss`（前缀 `mauth-*`，main.ts 全局引入）。
   `/m/login`、`/m/register` **不得再自带 `<style>`**；改样式只改那一个文件。安全区依赖 `index.html` 的 `viewport-fit=cover`。
+- **oauth21 设备判定单一来源** = `oauth21/src/utils/device.ts`（`isMobileViewport()` 被 `router/guard.ts`、`utils/request.ts`、
+  `web/auth/Authorize.vue` 共用；`useDeviceDetect` 只做响应式包装）。
+  判定顺序 **宽视口(≥`DESKTOP_MIN_WIDTH`=1024) ＞ 窄视口(<768) ＞ UA** —— UA **不再等于"恒定移动端"**；
+  `/m/*` 宽屏跳电脑版：**`beforeEnter` 只在导航时跑一次** → 视口变化须另挂 matchMedia（`router/index.ts`），
+  两处共用 `resolveDesktopRedirectTarget`；显式 `?isMobile=true` 一律不迁；**query 原样透传**（丢 `client_id` 会静默断授权流）。
+  ⚠️ `/m/*` 与窄屏 `/register` 渲染**同一组件**（分发器 `web/*/index.vue` 的 MobileXxx 分支）→ 其价值只在"显式寻址"（守卫/拦截器/WebView）。
+  ⚠️ 移动端版式**刻意不限宽**：加 `max-width` 会在两侧露出底色，用户明确要求保持满宽拉伸。
+- **oauth21 主题机制**：三层 token（`mobile-auth.scss` 的 0 节）——全局语义 `--mauth-<角色>` →
+  组件级 `--mauth-<组件>-<属性>`（默认引用①）→ 组件规则只引用 token（规则体内 0 裸色值）。
+  ⚠️ **主题内容全部外置**到 `oauth21/src/themes/<id>/`（每主题一文件夹，`import.meta.glob` 自动扫描；
+  加/删主题**不动**共享样式表、不动 store、不动组件）。
+  `index.ts` = meta+tokens（**同步预载**，只有几百字节 —— `?theme=` 合法性校验与首帧
+  `data-mauth-theme` 写入都必须同步，懒加载会导致先渲染默认色再跳变）；
+  `theme.scss` = token 表达不了的（背景图/webfont/伪元素装饰，**惰性 `?inline`**，构建切成独立 chunk）。
+  主题 CSS 选择器**必须**带 `html[data-mauth-theme='<id>']` 前缀（附加而非替换，切走自动失效）。
+  `tokens.light` = 两档打底（**深色下也生效**）、`dark` = 仅深色追加 → **颜色必须成对给**。
+  选中优先级：URL `?theme=`（`?skin=` 为别名）> 后端 `{theme,mode,tokens}` > localStorage > default；
+  URL/后端命中**不写 localStorage**（那是"这一侧的默认"，不是用户选择），URL 命中的项**锁定**不被后端覆盖。
+  明暗三态 `system|light|dark`（旧版布尔 + `theme-manual` 一旦手动切过就永久回不去跟随系统）。
+  代码位置：机制 `src/theme/{mode,runtime,remote}.ts`，包 `src/themes/`，状态 `src/stores/theme.ts`。
+  ⚠️ **外部输入必过白名单**（`src/theme/runtime.ts`）：CSS 变量是能直接改渲染的输入，未校验就
+  `setProperty` = 把注入口子交给后端/父页面。token 名限 `--mauth-`；取值只放行
+  hex/rgb/hsl/长度/`var()`/关键字（`--mauth-font-family` 额外放行字体栈，字符集不含括号故写不出函数）。
+  **刻意拒 `url()` 与 CSS 颜色名**（`red` 会被拒）→ 背景图只能走主题包 theme.scss（受信构建期代码）。
+  注入分两层写 inline style：theme 在前、external 在后（同名后者胜）；每次按当前明暗重算 + 差集清理旧变量。
+- **移动端页必须自己当滚动容器**：`main.scss` 的 `html,body{overflow:hidden}` 锁死根滚动 →
+  `.mauth-page` 若用 `min-height` 会被内容撑高、溢出部分被 body 裁掉**且无处可滚**
+  （实测 iPhone 横屏 844×390 内容 624px、**手势位移 0px**、登录按钮永远不可见 = 无法登录）。
+  改为 `height:100dvh + overflow-y:auto`；`.mauth-body` 须 `flex:1 0 auto`（用 `flex:1` 矮屏会被压缩）。
+  矮屏/横屏只调间距 token（`--mauth-pad-*`/`--mauth-gap-*`/`--mauth-field-h`），横屏 header 用 grid 压成一行。
+- **主题包能改多深**（`oauth21/src/themes/`）：`ocean` 只改取值；**`sky`（天青）改到结构层** ——
+  `--mauth-header-bg/--mauth-body-bg: transparent` 让页面底色透上来，`theme.scss` 用 `background-image`
+  多值叠「渐变 + 贴底剪影」，再按横屏写媒体查询（sky 已把「冷蓝工具风」这份设计稿落地）。
+  🔴 **`tokens` 是写在 `html` 上的 inline style，优先级高于媒体查询里的 `:root`** →
+  **绝不能覆写断点里会变的 token**（`--mauth-pad-*`/`--mauth-gap-*`/`--mauth-logo-size`/
+  `--mauth-title-size`/`--mauth-field-h`/`--mauth-control-h`/`--mauth-err-h`/
+  `--mauth-social-size`/`--mauth-social-gap`），写死一处就把
+  矮屏 + 横屏适配整体废掉；主题要调字号/间距只能写 `theme.scss` 里的具体规则。
+  挂 `.mauth-page` 背景前必须让 `.mauth-header`/`.mauth-body` 透明，否则被不透明表面整块盖住。
+  ⚠️ `assets/` 的 SVG **必须带 `width`/`height`**：只给 `viewBox` 时 `background-size: … auto`
+  的 `auto` 推不出高度 → 图被撑满容器（实测剪影占掉 800px 视口）。
+- **oauth21 第三方登录行**（`MauthSocialRow` + `useSocialLogin`）：**providers 为空 → 零 DOM**
+  （默认外观不变，此前的像素回归结论继续成立）。来源优先级：URL `?social=` >
+  父应用注入 `window.__MAUTH_SOCIAL_PROVIDERS__` > env `VITE_SOCIAL_PROVIDERS`；
+  三个来源都只做**精确白名单匹配**（`__evil__` / `wx` / `qq/../x` 一律丢，ID 会被拼进跳转 URL）。
+  「上次登录」= URL `?lastLogin=` > localStorage 兜底（点一下**不算**登录成功，故点击时不写入）。
+  🔴 **授权端点只放行站内相对路径**（`/` 开头且非 `//`）：`//evil.com` 是协议相对地址，浏览器会
+  当外域绝对地址用 → 端点一旦能由外部指定，"把用户送去任意外域"就从漏洞变成**配置问题**。
+  未配端点**不静默**（明确提示"尚未配置授权地址"），否则会被用户当成"按钮坏了"。
+  ⚠️ 「上次登录」徽标**只能向上溢出**：`.mauth-page` 是 `overflow-y:auto`，按规范另一轴会被
+  计算成 auto → 徽标横向出界就会给整页加出横向滚动条（实测该溢出必须为 0）。
+  图标是 stroke 风格**符号**，不是各家品牌 logo 的复刻（品牌素材有授权问题），换图不动样式。
+- **🔴 视觉回归比对先稳定化、再归因**（details §10.13）：截图不禁过渡/动画、不等 `fonts.ready`、不预热
+  → 同代码连拍可报 **17.8% 假差异**。冻结样式须 `page.addStyleTag` **加载后**注入并**断言生效**
+  （`addInitScript` 往 `head||documentElement` 塞 `<style>` 会被解析器丢弃 → 归因实验静默失效）。
+  稳定后噪声下限 = **0（逐像素全等）**。
+- **⚠️ 比对前先 `md5sum` 验两侧是否同一状态**：实测 `shots-base` 与 `shots-after-run1` 同状态，
+  等于拿同一份代码自比，「重构前后 8/8 一致」这类结论**不成立**，必须重做。
 - **Fastify**：`NN-*.js` 数字前缀=顺序；`addHook('onRoute')` 不回溯（全局限流唯一注册点 `loader/registry/05-firewall.js`）；
   **WS 优雅停机必须自定义 preClose**（`framework/websocket/preclose.js`）；`loader/engine.js` 的 OPTIONAL_LOADERS 是带伤启动白名单，未列入者 fail-fast；
   `/health/*` 未登录可见 → 新增 body 字段先想"给外人看合适吗"。
@@ -77,7 +135,10 @@
 - ⚠️ `cmd | tail` 后 `$?` 是 tail 的 → 真实码重定向到文件再读。
 - ⚠️ git-bash `/dev/tcp` 在 Windows 假阴性 → 判连通用 node:net。
 - ⚠️ `npm run` 丢命令行环境变量；`node --env-file` 不可被命令行覆盖 → 脚本自己 `process.loadEnvFile(...)`（相关 import 改动态）。
-- ⚠️ 同一条消息对同一文件多个 Edit 会静默丢失 → 串行或合并。
+- ⚠️ 同一条消息对同一文件多个 Edit 会**静默丢失**（本会话第 3 次复现：两条 Edit 只有后者落盘，
+  前者报 success 却没写）→ 同文件多改一律**串行**，改完必须 grep 复核。
+- ⚠️ `npm run build` 偶发**卡死**在压缩阶段（输出停在 `✓ N modules transformed.`、>5 分钟无新行，
+  是挂不是慢）；重试或改跑 `npx vite build` 即过（`vue-tsc` 单独跑稳定通过）。
 - **跨进程关卡退出码**：0 通过 / 1 断言失败 / 2 回滚不完整 / 3 环境不可用。
 - **CLI 引导**：`loadAllModels()` 后 `getModel` 才可用；`framework/db` 非测试缺 DB 配置直接退进程；
   `loadGuardConfig()` 吞错且**回写 DB**；CLI 写配置先 `initDao()`；CLI 下 globalRedis 恒 null，用 connectStandalone/disconnectStandalone。

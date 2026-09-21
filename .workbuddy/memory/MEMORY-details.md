@@ -633,3 +633,64 @@ printf 'protocol=https\nhost=github.com\n\n' | \
 → 改为 CI 里 `node -e "crypto.randomBytes(32).toString('hex')"` 生成，长度不再靠人眼数。
 ⚠️ 排查这类"探针等不到 200"时，**先 `docker compose logs app` 看应用自己怎么说**，
 不要一上来就怀疑健康探针路径或 entrypoint 等待逻辑。
+
+### 10.12 iframe 验收用 `about:blank` 当父页面，会把「store 建不出来」伪装成「嵌入行为正确」
+
+`@vue/devtools-kit`（被 vue-router / pinia 的 devtools 集成在 **dev** 下打进依赖包）
+在**模块顶层**跑 `initStateFactory()` → `getTimelineLayersStateFromStorage()` → 读
+`localStorage`，**没有 try/catch**（`node_modules/.vite/deps/dist-*.js` 约 2519–2535 行）。
+
+于是：宿主页若是 `page.setContent(...)`（Playwright 给的是 `about:blank`，顶层 origin 为
+opaque），Chrome 把 iframe 判为第三方 → `window.localStorage` **读属性即抛 SecurityError**
+→ devtools-kit 抛在模块顶层 → 整个 `stores/theme.ts` 模块求值失败 → theme store 根本建不出来。
+
+**为什么会误判成"验收通过"**：embed 场景的断言通常只查「切换按钮不渲染」。而按钮不渲染的
+**真实原因**变成了「`MauthThemeSwitch` 的 setup 抛错、组件渲染为空」，与「`isEmbedded` 为真
+所以 v-if 掉」在断言层面**完全不可区分**。本次是靠新增一条「嵌入时 URL 主题参数仍然生效」
+才把 `attr=null` 逼出来。
+
+**正确做法**：验收 iframe 必须用**真实 HTTP 页**当宿主，且宿主与内嵌页**同站**
+（同 scheme+host；site 不含端口，所以 5175 嵌 5174 是一方上下文）。
+本次用 `http.createServer` 在 `127.0.0.1:5175` 吐一个只含 iframe 的小页面解决。
+
+**生产是否受影响**：不受 —— devtools-kit 只在 dev 依赖图里（生产构建会被 `__DEV__` 剪掉，
+可用 `grep -c __VUE_DEVTOOLS_KIT_GLOBAL_STATE__ dist/assets/*.js` 复核），且真实嵌入方
+（posecraft/firewall）与 oauth21 同站。但它解释了「dev 下用 about:blank 宿主嵌 oauth21
+会整块白」这类现象，别再当成本应用的 bug 去查。
+
+### 10.13 视觉回归比对：先稳定化，再归因；先验基准，再下结论
+
+**两个独立的坑，都会产出"看起来很专业其实错误"的结论。**
+
+**坑一：不稳的截图工具会报 17.8% 假差异。**
+直接截图受三类噪声污染：
+  ① 过渡/入场动画未落定（`.mauth-cell` 有 transition，tab 切换后尤甚）
+  ② Web 字体未就绪 → 文字命中回退字体，字宽与抗锯齿全变
+  ③ 冷启动首帧合成差异（同代码连拍偶尔得到两态结果）
+实测 `login-light-email` 在未稳定化时同代码连拍差异 **17.84%（234885 px）**，且是两态来回跳。
+对策（`.tmp-probe/shot-stable.mjs`）：禁用过渡/动画 + 等 `document.fonts.ready` + 先做一次预热截图。
+稳定后 **8/8 场景逐像素全等，噪声下限 = 0**。
+
+⚠️ 冻结样式必须用 `page.addStyleTag` 在**页面加载后**注入，并**断言已生效**。
+早期版本走 `addInitScript` 往 `document.head || documentElement` 塞 `<style>`：脚本执行时
+`head` 还不存在，元素被挂到 `<html>` 下随后被解析器重排丢弃 →
+「隐藏某元素做归因」的实验**静默失效**，拿到的还是没隐藏的结果，结论直接是错的。
+**注入后不校验，等于没做实验。**
+
+**坑二：基准与结果可能是同一状态，自比出来的"零变化"毫无意义。**
+`md5sum` 实测 `shots-base` 与 `shots-after-run1` **多个场景逐字节相同** →
+说明当时那句「重构前后 8/8 一致」其实是**拿同一份代码自比**，结论不成立。
+比对前先 `md5sum` 抽样，确认两侧确实来自不同状态。
+
+**正确姿势 = 连拍测噪声下限 + 关掉待归因元素再比一次**：
+
+| 比对 | 结果 | 解读 |
+| --- | --- | --- |
+| stable1 vs stable2（同代码两次） | 8/8 **0 px** | 工具可信 |
+| base vs 当前（含主题按钮） | 6 场景 **4152 px / 0.315%** | 恰为新增主题按钮 |
+| base vs 当前（`HIDE_THEME_BTN=1`） | 同上 6 场景 **0 px 逐像素全等** | token 重构 + 主题包外置**视觉零影响** |
+| base vs 当前 · SE 375×667 | 38.9% | 矮屏断点留白收紧（刻意） |
+| base vs 当前 · 横屏 844×390 | 文档高 624→390 CSS px | 滚动容器 bug 修复（刻意） |
+
+归因结论：**所有差异都能指到一次有意为之的改动上**，没有说不清的偏移 —— 这才是有意义的
+"视觉验证"结论；只报一个总差异百分比是没有信息量的。
