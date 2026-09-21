@@ -93,6 +93,9 @@ function dispatch(channel, raw) {
  *
  * 主连接不存在（Redis 未配置 / 尚未连接）时直接返回 —— 下次 subscribe/publish
  * 会再试。绝不抛错：Pub/Sub 是增强能力，不能因为它拖垮调用方。
+ *
+ * ⚠️ 这里只负责**派生**（`duplicate()` 复制的是配置，**不会建立连接**），
+ *    真正的 `connect()` 在 subscribe() 里、发 SUBSCRIBE 之前完成 —— 见那里的注释。
  */
 function ensureSubscriber() {
   if (subscriber) return subscriber;
@@ -134,9 +137,18 @@ function subscribe(channel, handler) {
   if (!sub) return; // 主连接未就绪：只登记，等下次调用补订阅
 
   subscribed.add(channel);
-  // node-redis v5：连接未就绪时命令会自动缓冲，无需等 ready
-  sub
-    .subscribe(channel, (channel2, raw) => dispatch(channel2, raw))
+  // ⚠️ **必须先 connect，再 subscribe。**
+  //    node-redis 的 `duplicate()` 只复制配置，返回的是**未连接**的客户端；未连接
+  //    就发 SUBSCRIBE 会被 `sendCommand` 直接拒绝（`ClientClosedError`），而这个
+  //    拒绝只落在下面的 catch 日志里 —— 外部表现是「订阅永远不就绪」，
+  //    非常难查：WS 跨实例扇出等于从未生效。
+  //    实测 2026-09-21（CI 的 ws-fanout 关卡在真 Redis 上卡在
+  //    「本进程订阅连接未在 10s 内就绪」并退出码 3）。
+  //    已经发起过连接的场景（isOpen 为真）直接订阅即可：命令会进离线队列，
+  //    连接就绪后自动发出。
+  const connected = sub.isOpen ? Promise.resolve() : sub.connect();
+  connected
+    .then(() => sub.subscribe(channel, (channel2, raw) => dispatch(channel2, raw)))
     .catch(err => {
       log.warn(`⚠️  [PubSub] 订阅 channel=${channel} 失败：${err.message}`);
       subscribed.delete(channel); // 允许下次重试

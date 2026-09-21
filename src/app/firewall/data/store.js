@@ -636,5 +636,11 @@ export {
   flushPersist,
   // 仅供测试直接驱动持久化写入语义（生产路径是 persistData 的 10s 防抖）。
   // 前缀 `__test__` 明示"非公开 API"，生产代码不应调用。
-  persistNow as __test__persistNow
+  persistNow as __test__persistNow,
+  // 同上，但驱动的是**跨实例汇聚**那条链路（写 Redis），与上一个不是一回事：
+  // `persistNow` 写的是本地 JSON 文件，对"别的进程能不能看到"毫无贡献。
+  // 生产路径是 pushRecord → scheduleStatsFlush 的 3s 周期；验证关卡需要在
+  // 子进程退出前把增量真正刷进 Redis，否则跨实例可见性根本无从验证。
+  flushPendingStats as __test__flushStats,
+  stopStatsFlushTimer as __test__stopStatsFlushTimer
 };
