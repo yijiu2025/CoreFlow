@@ -55,6 +55,14 @@
 | 模块级 `process.exit` | 伪装绿色（汇总恒 0 失败）→ `!isTestEnv` |
 | 改导出面 | 必须真实 import 上层入口一次；同步所有 `unstable_mockModule` 替身 |
 | 守卫外部输入 | 进 `timingSafeEqual`/`.length`/`Buffer.from(x,'hex')`/`new Date(x)` 必先归一化 |
+| **vue-tsc 拦不住模板里的未定义标识符** | `@click="fn"` / `{{ fn() }}` 中 `fn` 在 `<script setup>` 里**根本没定义**时，`vue-tsc --noEmit` 与 `npm run build` 仍全绿 → 运行时才炸。模板事件处理器必须靠真实渲染/点击验证 |
+| `/user/v1/register` 只认 `username` | 后端 `userDao.createUser` 只读 `body.username`，拿不到**静默回退成 email**（`src/app/user/dao/user.js:55`）→ 前端传 `nickname` 会"注册成功但用户名=邮箱" |
+
+- **oauth21 移动端认证页样式单一来源** = `oauth21/src/assets/styles/mobile-auth.scss`（类前缀 `mauth-*`，main.ts 全局引入）。
+  `/m/login`（`view/app/login/index.vue`）与 `/m/register`（`view/app/register/index.vue`）**不得再自带 `<style>` 块**——
+  历史上两套 scoped 样式（`mlog-*`/`mreg-*`）漂移成底色不同、输入框 14px vs 16px、有无安全区。改样式只改那一个文件。
+  安全区依赖 `index.html` 的 `viewport-fit=cover`（缺了则 `env(safe-area-inset-*)` 恒为 0）。
+  一致性验收手法：playwright-core + 系统 Edge，两页逐元素比对 computed style（比看截图硬）。
 
 - **Fastify**：`NN-*.js` 数字前缀=顺序；`addHook('onRoute')` 不回溯（全局限流唯一注册点 `loader/registry/05-firewall.js`）。
   已排除空旋钮：connectionTimeout / headersTimeout / keepAliveTimeout:72000 / forceCloseConnections（对已 upgrade WS 无效）。

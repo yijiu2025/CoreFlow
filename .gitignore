@@ -46,3 +46,14 @@ oauth21/*.tar.gz
 
 # 临时探针 / 一次性脚本的落地目录（跑真库验证时生成，切勿入库）
 .tmp-probe/
+
+
+# --- 编辑器 / AI 工具配置 ---
+.claude
+.codebuddy
+.codegraph
+.mimocode
+.v2c
+.video_agent
+.zcode
+lefthook.yml
