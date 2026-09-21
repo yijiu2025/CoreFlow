@@ -36,8 +36,17 @@ for (let i = 0; i < COUNT; i++) {
   });
 }
 
-// 立即刷写，不等 10s 防抖
-await store.__test__persistNow();
+// 立即刷写，不等 3s 的统计刷写周期（STATS_FLUSH_INTERVAL）
+//
+// ⚠️ 这里必须驱动的是**跨实例汇聚**（写 Redis），不是本地 JSON 持久化。
+//    此前误用了 `__test__persistNow()`：它写的是 FW_TRAFFIC_STATS_FILE 那个文件，
+//    对"父进程能不能看到"毫无贡献，而本关卡的全部意义就在于跨进程可见性。
+//    更隐蔽的是子进程紧随其后就 exit，3s 刷写周期永远等不到 ——
+//    父进程读到的自然只有它自己那 2 条。
+//    本机无 Redis 时关卡以退出码 3 提前结束，所以这个错一直没被暴露，
+//    直到第一次在真 Redis 上跑（2026-09-21 CI）。
+await store.__test__flushStats();
+store.__test__stopStatsFlushTimer();
 store.stopPersistTimer();
 
 console.log(`PUSHED ${COUNT}`);

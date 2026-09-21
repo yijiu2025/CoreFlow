@@ -123,6 +123,10 @@ try {
     }
     await store.__test__persistNow();
     store.stopPersistTimer();
+    // 父进程自己的 2 条**刻意留在未刷写增量里**：本关卡的 ③④ 断言依赖
+    // 「Redis 全量 + 本实例增量」这条合并路径（若提前刷写，就只验证了 Redis 全量，
+    // 少验一半）。同时停掉 3s 刷写周期，避免它在 agg1 / agg2 之间插进来导致漂移。
+    store.__test__stopStatsFlushTimer();
 
     // ── 读聚合值 ──
     const agg1 = await store.getSummaryAggregated();
