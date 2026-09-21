@@ -218,6 +218,7 @@ declare global {
   const useInterval: typeof import('@vueuse/core').useInterval
   const useIntervalFn: typeof import('@vueuse/core').useIntervalFn
   const useKeyModifier: typeof import('@vueuse/core').useKeyModifier
+  const useKeyboardAvoid: typeof import('./composables/useKeyboardAvoid').useKeyboardAvoid
   const useLastChanged: typeof import('@vueuse/core').useLastChanged
   const useLink: typeof import('vue-router').useLink
   const useLocalStorage: typeof import('@vueuse/core').useLocalStorage
@@ -274,6 +275,7 @@ declare global {
   const useSessionStorage: typeof import('@vueuse/core').useSessionStorage
   const useShare: typeof import('@vueuse/core').useShare
   const useSlots: typeof import('vue').useSlots
+  const useSocialLogin: typeof import('./composables/useSocialLogin').useSocialLogin
   const useSorted: typeof import('@vueuse/core').useSorted
   const useSpeechRecognition: typeof import('@vueuse/core').useSpeechRecognition
   const useSpeechSynthesis: typeof import('@vueuse/core').useSpeechSynthesis
@@ -363,6 +365,9 @@ declare global {
   // @ts-ignore
   export type { QrStatus } from './composables/useQrLogin'
   import('./composables/useQrLogin')
+  // @ts-ignore
+  export type { SocialProviderId } from './composables/useSocialLogin'
+  import('./composables/useSocialLogin')
 }
 
 // for vue template auto import
@@ -451,6 +456,7 @@ declare module 'vue' {
     readonly useHCaptcha: UnwrapRef<typeof import('./composables/useHCaptcha')['useHCaptcha']>
     readonly useI18n: UnwrapRef<typeof import('vue-i18n')['useI18n']>
     readonly useId: UnwrapRef<typeof import('vue')['useId']>
+    readonly useKeyboardAvoid: UnwrapRef<typeof import('./composables/useKeyboardAvoid')['useKeyboardAvoid']>
     readonly useLink: UnwrapRef<typeof import('vue-router')['useLink']>
     readonly useLoginFlow: UnwrapRef<typeof import('./composables/useLoginFlow')['useLoginFlow']>
     readonly useMessage: UnwrapRef<typeof import('./composables/useMessage')['useMessage']>
@@ -462,6 +468,7 @@ declare module 'vue' {
     readonly useRoute: UnwrapRef<typeof import('vue-router')['useRoute']>
     readonly useRouter: UnwrapRef<typeof import('vue-router')['useRouter']>
     readonly useSlots: UnwrapRef<typeof import('vue')['useSlots']>
+    readonly useSocialLogin: UnwrapRef<typeof import('./composables/useSocialLogin')['useSocialLogin']>
     readonly useTemplateRef: UnwrapRef<typeof import('vue')['useTemplateRef']>
     readonly useThemeStore: UnwrapRef<typeof import('./stores/theme')['useThemeStore']>
     readonly useTurnstile: UnwrapRef<typeof import('./composables/useTurnstile')['useTurnstile']>

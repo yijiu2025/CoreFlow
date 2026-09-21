@@ -17,8 +17,384 @@
  *
  * 使用方式：main.ts 全局引入，页面直接用 class，不要在自己组件里再定义同名样式。
  *
+ * ============================================================================
+ * 主题架构（2026-09-21 重构）
+ * ============================================================================
+ *
+ * 重构前：99 处裸色值（仅 16 个颜色反复写）直接散在组件规则里，靠 30 个
+ *   `.dark xxx` 手工镜像块做深色适配。后果是——加第 3 套配色要把这 30 块再抄
+ *   一遍，加 N 套就抄 30×N 遍；而且与桌面版的 HSL 语义变量体系双轨并行，
+ *   改桌面主色不会联动到移动端。
+ *
+ * 重构后分三层：
+ *
+ *   ① 全局语义 token    --mauth-<角色>            ← 明暗档与换肤都在这一层覆写
+ *   ② 组件级 token      --mauth-<组件>-<属性>     ← 默认引用 ①，可按组件单独覆写
+ *   ③ 组件规则          .mauth-xxx { ... }        ← 只引用 token，不再出现裸色值
+ *
+ * 四个注入来源，优先级由低到高：
+ *
+ *   1. `:root`                        浅色默认值
+ *   2. `html.dark`                    深色覆写（与 Tailwind `darkMode:'class'` 同一开关）
+ *   3. 主题包 tokens                    src/themes/<id>/index.ts（见该目录 README）
+ *   4. 外部覆写 tokens                  后端下发 / 父应用 postMessage
+ *   第 3、4 层都由运行时写成挂在 html 上的 inline style —— 优先级高于任何选择器，
+ *   因此能盖过本文件的全部主题块。层间顺序由**写入顺序**保证：先主题包、后外部覆写，
+ *   同名后者胜，也就是「后端配色永远压过主题自带配色」。
+ *
+ * 由此 N 套主题 × 2 种明暗只需 N×2 组 token 值，而且**本文件里不出现任何主题专属声明**：
+ * 主题只覆写「个性子集」（品牌色、圆角、字体、描边），本文件只提供「基线子集」
+ * （表面/文字/边框/间距）与明暗两档。
+ *
+ * 加一套主题（全部在 src/themes/ 内完成，不动本文件、不动 store、不动组件）：
+ *   ① 建目录 `src/themes/<id>/`
+ *   ② 写 `index.ts`：meta + tokens.light / tokens.dark
+ *   ③ 需要背景图 / webfont / 伪元素装饰时，再加一个 `theme.scss`
+ *   详见 `src/themes/README.md`。运行时会做白名单校验后再注入（防 CSS 注入）。
+ *
+ * 「对每个组件做 UI 定制」= 覆写 ② 层的组件级 token，例如只把登录按钮改成方形：
+ *   tokens: { light: { '--mauth-submit-radius': '0px', '--mauth-submit-bg': '#7c3aed' } }
+ * 组件级 token 默认都指向全局语义，所以改一个组件不会波及其他组件。
+ *
+ * ⚠️ 明暗档之间「值相同」的属性：原实现里部分属性只有浅色声明、深色未覆写，
+ *   因而在深色下沿用浅色值（如 --mauth-forgot-fg-press）。重构严格保留了这一行为，
+ *   这类 token 只写在 `:root` 里、不在 `html.dark` 里重复，以免悄悄改变深色外观。
+ *
  * @author yijiu2025
  */
+
+/* ==========================================================================
+   0. 主题 token 层（唯一出现具体色值的地方）
+   ========================================================================== */
+
+/* --- 0.1 全局语义：浅色默认值 --- */
+
+:root {
+  /* 表面：从页面底 → 常规面 → 次级面 → 三级面 → 按压态，逐级抬升 */
+  --mauth-bg: #f8fafc;
+  --mauth-surface: #fff;
+  --mauth-surface-2: #f8fafc;
+  --mauth-surface-3: #f1f5f9;
+  --mauth-surface-press: #e2e8f0;
+
+  /* 文字：strong(标题/激活) > body(次级控件) > mid(说明) > faint(最弱) */
+  --mauth-text: #0f172a;
+  --mauth-text-strong: #0f172a;
+  --mauth-text-body: #475569;
+  --mauth-text-mid: #64748b;
+  --mauth-text-faint: #94a3b8;
+  --mauth-icon: #94a3b8;
+
+  /* 边框：常规 / 强（复选框、logo 描边）/ 聚焦 / 聚焦光晕 */
+  --mauth-border: #e2e8f0;
+  --mauth-border-strong: #cbd5e1;
+  --mauth-border-focus: #475569;
+  --mauth-focus-ring: rgba(71, 85, 105, 0.1);
+
+  /* 主色：CTA 底 / CTA 上的文字 / 链接强调 / 强调文字（可点文本） */
+  --mauth-primary: #1e293b;
+  --mauth-primary-fg: #fff;
+  --mauth-accent: #2563eb;
+  --mauth-emphasis-fg: #1e293b;
+
+  /* 状态：错误 / 警告 / 警告底 */
+  --mauth-danger: #ef4444;
+  --mauth-warn: #f59e0b;
+  --mauth-warn-bg: rgba(245, 158, 11, 0.12);
+
+  /* 形状 */
+  --mauth-radius: 12px;
+  --mauth-logo-radius: 14px;
+
+  /* 间距节奏：统一在此调整整体留白；矮屏断点会整体下调（见 0.5 节） */
+  --mauth-pad-header-x: 24px;
+  --mauth-pad-header-t: 24px;
+  --mauth-pad-header-b: 28px;
+  --mauth-pad-body-x: 20px;
+  --mauth-pad-body-t: 24px;
+  --mauth-pad-body-b: 32px;
+  --mauth-gap-cell: 14px;
+  --mauth-gap-tabs-bottom: 24px;
+  --mauth-gap-footer: 24px;
+  /* 控件尺寸：矮屏下会下调，但下限保持在 44px（移动端最小触摸目标） */
+  --mauth-field-h: 48px;
+  --mauth-control-h: 48px;
+  --mauth-err-h: 16px;
+  --mauth-logo-size: 52px;
+  --mauth-title-size: 22px;
+
+  /* 「深色下沿用浅色值」的按压态：只在此处定义，深色档不覆写（见文件头 ⚠️） */
+  --mauth-pwd-toggle-fg-press: #475569;
+  --mauth-forgot-fg-press: #1e293b;
+}
+
+/* --- 0.2 深色档：只列真正变化的（未列出的自动继承 :root，即深色沿用浅色值） --- */
+
+html.dark {
+  --mauth-bg: #020617;
+  --mauth-surface: #0f172a;
+  --mauth-surface-2: #1e293b;
+  --mauth-surface-3: #1e293b;
+  --mauth-surface-press: #334155;
+
+  --mauth-text: #f1f5f9;
+  --mauth-text-strong: #f1f5f9;
+  --mauth-text-body: #94a3b8;
+  --mauth-text-mid: #94a3b8;
+  --mauth-text-faint: #94a3b8; /* 深色下与浅色同值，保留声明是为了让「改深色弱文字」有落点 */
+  --mauth-icon: #64748b;
+
+  --mauth-border: #334155;
+  --mauth-border-strong: #475569;
+  --mauth-border-focus: #64748b;
+
+  --mauth-primary: #f1f5f9;
+  --mauth-primary-fg: #0f172a;
+  --mauth-emphasis-fg: #e2e8f0;
+}
+
+/* --- 0.3 组件级 token：默认全部指向全局语义 ---
+   想「只改某个组件」时覆写这一层即可，不必动全局，也不会波及其他组件。 */
+
+:root {
+  --mauth-header-bg: var(--mauth-surface);
+  --mauth-body-bg: var(--mauth-surface);
+
+  --mauth-field-bg: var(--mauth-surface-2);
+  --mauth-field-bg-focus: var(--mauth-surface);
+  --mauth-field-border: var(--mauth-border);
+  --mauth-field-border-focus: var(--mauth-border-focus);
+  /* 描边宽度也是 token：主题想加粗输入框描边只改这一个值，
+     不必去写 `html[data-mauth-theme=…] .mauth-field { border-width: … }` */
+  --mauth-field-border-width: 1px;
+  --mauth-field-ring: var(--mauth-focus-ring);
+  --mauth-field-radius: var(--mauth-radius);
+  --mauth-icon-fg: var(--mauth-icon);
+  --mauth-input-fg: var(--mauth-text);
+  --mauth-placeholder-fg: var(--mauth-text-faint);
+
+  --mauth-back-btn-bg: var(--mauth-surface-3);
+  --mauth-back-btn-bg-press: var(--mauth-surface-press);
+  --mauth-back-btn-fg: var(--mauth-text-body);
+
+  /* 主题切换按钮：与返回按钮同款圆形图标按钮，但留独立 token ——
+     皮肤可以只改这两个按钮中的一个，不必连带另一个 */
+  --mauth-theme-btn-bg: var(--mauth-surface-3);
+  --mauth-theme-btn-bg-press: var(--mauth-surface-press);
+  --mauth-theme-btn-fg: var(--mauth-text-body);
+
+  --mauth-logo-bg: var(--mauth-primary);
+  --mauth-logo-fg: #fff;
+  --mauth-logo-border: transparent;
+  --mauth-logo-border-width: 0px;
+
+  --mauth-title-fg: var(--mauth-text-strong);
+  --mauth-sub-fg: var(--mauth-text-faint);
+
+  --mauth-progress-bg: var(--mauth-surface-3);
+  --mauth-progress-fill: var(--mauth-primary);
+
+  --mauth-tab-fg: var(--mauth-text-faint);
+  --mauth-tab-fg-active: var(--mauth-text-strong);
+
+  --mauth-code-btn-fg: var(--mauth-emphasis-fg);
+  --mauth-code-btn-fg-disabled: var(--mauth-text-faint);
+  --mauth-code-btn-border: var(--mauth-border);
+  --mauth-pwd-toggle-fg: var(--mauth-text-faint);
+
+  --mauth-err-fg: var(--mauth-danger);
+
+  --mauth-checkbox-border: var(--mauth-border-strong);
+  --mauth-checkbox-fg: #fff;
+  --mauth-checkbox-fg-checked: var(--mauth-primary-fg);
+  --mauth-checkbox-bg-checked: var(--mauth-primary);
+  --mauth-option-fg: var(--mauth-text-mid);
+  --mauth-link-fg: var(--mauth-emphasis-fg);
+
+  --mauth-submit-bg: var(--mauth-primary);
+  --mauth-submit-fg: var(--mauth-primary-fg);
+  --mauth-submit-radius: var(--mauth-radius);
+  --mauth-spinner-track: rgba(255, 255, 255, 0.3);
+  --mauth-spinner-head: #fff;
+
+  --mauth-forgot-fg: var(--mauth-text-mid);
+  --mauth-footer-fg: var(--mauth-text-faint);
+  --mauth-register-btn-fg: var(--mauth-primary);
+
+  --mauth-panel-icon-warn-bg: var(--mauth-warn-bg);
+  --mauth-panel-icon-warn-fg: var(--mauth-warn);
+  --mauth-panel-text-fg: var(--mauth-text-mid);
+  --mauth-panel-sub-fg: var(--mauth-text-faint);
+  --mauth-resend-fg: var(--mauth-accent);
+  --mauth-resend-fg-disabled: var(--mauth-text-faint);
+
+  --mauth-summary-bg: var(--mauth-surface-2);
+  --mauth-summary-border: var(--mauth-border);
+  --mauth-summary-divider: var(--mauth-border);
+  --mauth-summary-label-fg: var(--mauth-text-mid);
+  --mauth-summary-value-fg: var(--mauth-text-strong);
+
+  /* 第三方登录行：分割线 + 圆形图标 + 品牌名 + 「上次登录」徽标。
+     ⚠️ 这里的 --mauth-social-size / gap 会被 0.5 节的矮屏、横屏断点覆写，
+     所以本块必须留在断点区**之前**（媒体查询不提升特异性，靠先定义后被覆写生效）。
+     也正因如此，主题的 tokens 绝不能去覆写它们 —— tokens 是挂在 html 上的
+     inline style，优先级高于媒体查询里的 :root，写死一个就把矮屏适配整体废掉。 */
+  --mauth-social-gap-top: 22px;
+  --mauth-social-divider: var(--mauth-border);
+  --mauth-social-divider-fg: var(--mauth-text-faint);
+  --mauth-social-divider-gap: 18px;
+  --mauth-social-size: 44px;
+  --mauth-social-gap: 16px;
+  --mauth-social-btn-bg: var(--mauth-surface-2);
+  --mauth-social-btn-bg-press: var(--mauth-surface-press);
+  --mauth-social-btn-border: var(--mauth-border);
+  --mauth-social-name-fg: var(--mauth-text-mid);
+  --mauth-social-name-size: 11px;
+  --mauth-social-badge-bg: var(--mauth-danger);
+  --mauth-social-badge-fg: #fff;
+  --mauth-social-badge-size: 9px;
+
+  /* 品牌墨色：第三方登录的辨识度就靠这个颜色，不该跟着主题乱变。
+     微信绿 / 支付宝蓝 / 微博红在深浅底上对比度都够，保持品牌原色；
+     近黑的 GitHub / Apple 在深色下必须提亮，见下方 html.dark。 */
+  --mauth-social-ink-wechat: #07c160;
+  --mauth-social-ink-alipay: #1677ff;
+  --mauth-social-ink-qq: #12b7f5;
+  --mauth-social-ink-weibo: #e6162d;
+  --mauth-social-ink-github: #24292f;
+  --mauth-social-ink-apple: #111827;
+}
+
+/* 组件级 token 在深色下需要不同值的三处（其余自动跟随全局语义，无需重列） */
+html.dark {
+  /* logo 在深色下改用渐变 + 描边，浅色下是纯色无描边 */
+  --mauth-logo-bg: linear-gradient(135deg, #334155, #1e293b);
+  --mauth-logo-border: #475569;
+  --mauth-logo-border-width: 1px;
+
+  /* 加载指示器要跟 CTA 底色反色：浅色 CTA 是深底 → 白 spinner；深色 CTA 是浅底 → 深 spinner */
+  --mauth-spinner-track: rgba(15, 23, 42, 0.3);
+  --mauth-spinner-head: #0f172a;
+
+  /* 第三方品牌墨色：只有近黑的这两个在深底上看不清，提亮为浅灰。
+     微信绿 / 支付宝蓝 / QQ 蓝 / 微博红在深色下对比度依然够，保持品牌原色。 */
+  --mauth-social-ink-github: #e6edf3;
+  --mauth-social-ink-apple: #f3f4f6;
+}
+
+/* --- 0.4 换肤挂载点（已外置）---
+
+   主题不再写在本文件里，而是每个主题一个文件夹：`src/themes/<id>/`。
+   原先这里的 `html[data-mauth-skin='ocean']` 两个块已迁到
+   `src/themes/ocean/index.ts` 的 tokens（值逐条照搬，渲染结果不变），
+   背景图等额外样式在 `src/themes/ocean/theme.scss`。
+
+   为什么搬走：主题声明留在共享样式表里，每个主题都会在这份文件里留下痕迹，
+   加主题要改共享文件、删主题不敢删，最后没人说得清哪块属于谁。
+   现在加/删主题只动 src/themes/ 下的一个文件夹，本文件保持「基线」单一职责。
+
+   「皮肤」与「明暗」仍然是正交的两个维度：换肤只改个性子集（品牌色/圆角/字体/描边），
+   明暗档只改表面/文字/边框，四组组合都成立。 */
+
+/* --- 0.5 屏幕断点：只调间距 token，不动任何组件规则 ---
+   矮屏收紧节奏比在每个组件规则里写媒体查询干净得多，也更容易统一调参。 */
+
+/* 矮屏：手机横屏、分屏窗口、iPhone SE 一类小屏 */
+@media (max-height: 700px) {
+  :root {
+    --mauth-pad-header-t: 16px;
+    --mauth-pad-header-b: 18px;
+    --mauth-pad-body-t: 16px;
+    --mauth-pad-body-b: 20px;
+    --mauth-gap-cell: 10px;
+    --mauth-gap-tabs-bottom: 16px;
+    --mauth-gap-footer: 16px;
+    --mauth-logo-size: 44px;
+    --mauth-title-size: 19px;
+    --mauth-social-gap-top: 16px;
+    --mauth-social-size: 40px;
+    --mauth-social-gap: 14px;
+    --mauth-social-divider-gap: 14px;
+  }
+}
+
+/* 极矮横屏（可用高度不足 560px）：把 header 从「纵向堆叠」压成「一行两列」。
+   原来 logo/title/sub 纵向叠放要吃掉约 164px，在 390px 高的横屏里超过四成，
+   导致提交按钮被挤出首屏。改成 grid 一行后降到约 70px。
+   用 grid 而非 flex 是因为 DOM 里 logo / title / sub 是同级的三个兄弟节点，
+   grid-template-areas 能在不改模板结构的前提下把 logo 放到标题左侧。 */
+@media (orientation: landscape) and (max-height: 560px) {
+  /* 横屏可用高度常常只有 320–400px，比矮屏断点再收一档。
+     目标不是「零滚动」—— 390px 高物理上放不下「tabs + 两个字段 + 选项 + 按钮 +
+     底部入口 + header」这一整套；目标是让两个输入框都落在首屏，并把滚动量
+     从修复前的 234px（且完全滚不动）降到 60px 量级。
+     字段/按钮高度降到 44px 即停，不再往下压：44px 是移动端最小触摸目标。 */
+  :root {
+    --mauth-pad-header-t: 10px;
+    --mauth-pad-header-b: 12px;
+    --mauth-pad-body-t: 12px;
+    --mauth-pad-body-b: 10px;
+    --mauth-gap-cell: 8px;
+    --mauth-gap-tabs-bottom: 10px;
+    --mauth-gap-footer: 12px;
+    --mauth-logo-size: 34px;
+    --mauth-title-size: 16px;
+    --mauth-field-h: 44px;
+    --mauth-control-h: 44px;
+    --mauth-err-h: 14px;
+    /* 社交行也压一档。图标降到 36px 是视觉尺寸，热区由
+       .mauth-social-btn::after 的 -4px 补回 44px（移动端最小触摸目标）。
+       品牌名保留：横屏宽度充裕，去掉文字反而不利于辨认平台。 */
+    --mauth-social-gap-top: 12px;
+    --mauth-social-size: 36px;
+    --mauth-social-gap: 12px;
+    --mauth-social-divider-gap: 12px;
+    --mauth-social-name-size: 10px;
+  }
+
+  .mauth-header {
+    /* 左右各留 60px：横排后居中内容不会与返回按钮、主题切换按钮重叠 */
+    padding-left: 60px;
+    padding-right: 60px;
+  }
+
+  .mauth-header-content {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas:
+      'logo title'
+      'logo sub';
+    align-items: center;
+    justify-content: center;
+    column-gap: 12px;
+    text-align: left;
+  }
+
+  .mauth-logo {
+    grid-area: logo;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+    border-radius: 10px;
+  }
+
+  /* logo 内的 svg 是内联尺寸（26px），横排后要缩小才不会撑破 36px 容器 */
+  .mauth-logo svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mauth-title {
+    grid-area: title;
+    font-size: 17px;
+    margin: 0;
+  }
+
+  .mauth-sub {
+    grid-area: sub;
+    font-size: 11px;
+  }
+}
 
 /* ==========================================================================
    1. 页面骨架
@@ -28,16 +404,28 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  /* dvh：移动端地址栏收放不会把底部内容顶出屏幕；100vh 兜底老浏览器 */
-  min-height: 100vh;
-  min-height: 100dvh;
-  background: #f8fafc;
-  /* overflow-x 收住横向溢出；纵向保持可滚（授权面板 / 二次验证变高时能滚到，不被裁掉） */
+  /* 用固定高而非 min-height，让自身成为滚动容器（移动端内容可达性的关键）
+     ── 成因：main.scss 里 `html, body { overflow: hidden }` 锁死了根滚动。
+     若这里写成 min-height，内容高于视口时元素会被撑高（实测 iPhone 横屏
+     844×390 下内容 624px），溢出部分被 body 裁掉，而页面自身不溢出也就
+     无从滚动 —— 手势位移实测 0px，提交按钮永远不可见，横屏等于无法登录。
+     改成 height + overflow-y:auto 后，超出部分在页面内可滚。 */
+  height: 100vh;
+  height: 100dvh;
+  background: var(--mauth-bg);
+  /* 字体族走 token：主题可以从后端下发字体栈，也可以在自己的 theme.scss 里
+     用 @font-face 加载 webfont。默认值用 var() 的 fallback 而不是在 :root 里
+     给一个具体字体栈 —— fallback 不命中时等价于没写这条声明（font-family 本身
+     就是继承属性），因此「不启用主题」与「没有这条规则」渲染完全一致。 */
+  font-family: var(--mauth-font-family, inherit);
   overflow-x: hidden;
-}
-
-.dark .mauth-page {
-  background: #020617;
+  overflow-y: auto;
+  /* 滚到底不把滚动链传给父页面（App WebView 内嵌时不带动外层列表） */
+  overscroll-behavior-y: contain;
+  /* 移动端去掉灰色点击高亮块，改用各控件自己的 :active 反馈 */
+  -webkit-tap-highlight-color: transparent;
+  /* iOS 惯性滚动 */
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 缺 appName / client_id 时的居中占位容器 */
@@ -49,24 +437,32 @@
   padding: 24px;
 }
 
+/* 所有可交互控件统一声明：消除移动端 300ms 点击延迟与双击缩放判定。
+   输入框不在此列（要保持系统默认的文本选择与光标行为）。 */
+.mauth-page button,
+.mauth-option,
+.mauth-agree,
+.mauth-link {
+  touch-action: manipulation;
+}
+
 /* ==========================================================================
    2. 顶部 Header（与主体同色，靠留白分隔，不用分隔线）
    ========================================================================== */
 
 .mauth-header {
   position: relative;
+  /* 不参与 flex 收缩：矮屏下 header 被压缩会导致内容重叠 */
+  flex-shrink: 0;
   /* 先给无安全区浏览器的兜底值，再叠加安全区（刘海屏不被状态栏遮住标题） */
-  padding: 24px 24px 28px;
-  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px 28px;
-  background: #fff;
+  padding: var(--mauth-pad-header-t) var(--mauth-pad-header-x) var(--mauth-pad-header-b);
+  padding: calc(var(--mauth-pad-header-t) + env(safe-area-inset-top, 0px)) var(--mauth-pad-header-x)
+    var(--mauth-pad-header-b);
+  background: var(--mauth-header-bg);
   overflow: hidden;
 }
 
-.dark .mauth-header {
-  background: #0f172a;
-}
-
-/* 圆形返回按钮（仅图标，移动端点击热区 36px） */
+/* 圆形返回按钮（仅图标，视觉直径 36px；热区由 ::after 扩到 44px） */
 .mauth-back-btn {
   position: absolute;
   top: 16px;
@@ -78,25 +474,59 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #475569;
-  background: #f1f5f9;
+  color: var(--mauth-back-btn-fg);
+  background: var(--mauth-back-btn-bg);
   border: none;
   border-radius: 50%;
   cursor: pointer;
   transition: background 0.2s;
+  /* 消除移动端 300ms 点击延迟与双击缩放判定 */
+  touch-action: manipulation;
 }
 
-.dark .mauth-back-btn {
-  color: #94a3b8;
-  background: #1e293b;
+/* 把可点热区扩到 44px（移动端推荐最小值），圆点视觉直径仍为 36px —— 
+   用伪元素而不是撑大元素本身，是为了不动任何布局 */
+.mauth-back-btn::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 .mauth-back-btn:active {
-  background: #e2e8f0;
+  background: var(--mauth-back-btn-bg-press);
 }
 
-.dark .mauth-back-btn:active {
-  background: #334155;
+/* 主题切换按钮：与返回按钮左右对称（左上 ↔ 右上），点击在三态间循环。
+   同样用 ::after 把热区扩到 44px，视觉直径保持 36px。
+   ⚠️ 横屏断点里 header 的左右 padding 特意留了 60px，就是为了给这两个按钮让位。 */
+.mauth-theme-btn {
+  position: absolute;
+  top: 16px;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  right: 16px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mauth-theme-btn-fg);
+  background: var(--mauth-theme-btn-bg);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+  touch-action: manipulation;
+}
+
+.mauth-theme-btn::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.mauth-theme-btn:active {
+  background: var(--mauth-theme-btn-bg-press);
 }
 
 .mauth-header-content {
@@ -106,37 +536,30 @@
 }
 
 .mauth-logo {
-  width: 52px;
-  height: 52px;
+  width: var(--mauth-logo-size);
+  height: var(--mauth-logo-size);
   margin: 0 auto 12px;
-  border-radius: 14px;
-  background: #1e293b;
+  border-radius: var(--mauth-logo-radius);
+  background: var(--mauth-logo-bg);
+  /* 浅色档 border-width 为 0 → 不渲染，与重构前「无 border 声明」等价 */
+  border: var(--mauth-logo-border-width) solid var(--mauth-logo-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-}
-
-.dark .mauth-logo {
-  background: linear-gradient(135deg, #334155, #1e293b);
-  border: 1px solid #475569;
+  color: var(--mauth-logo-fg);
 }
 
 .mauth-title {
-  font-size: 22px;
+  font-size: var(--mauth-title-size);
   font-weight: 700;
   margin: 0 0 4px;
-  color: #0f172a;
+  color: var(--mauth-title-fg);
   letter-spacing: -0.02em;
-}
-
-.dark .mauth-title {
-  color: #f1f5f9;
 }
 
 .mauth-sub {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--mauth-sub-fg);
   margin: 0;
   letter-spacing: 0.05em;
 }
@@ -147,24 +570,16 @@
   z-index: 1;
   margin-top: 16px;
   height: 4px;
-  background: #f1f5f9;
+  background: var(--mauth-progress-bg);
   border-radius: 2px;
   overflow: hidden;
 }
 
-.dark .mauth-progress {
-  background: #1e293b;
-}
-
 .mauth-progress-bar {
   height: 100%;
-  background: #1e293b;
+  background: var(--mauth-progress-fill);
   border-radius: 2px;
   transition: width 0.3s ease;
-}
-
-.dark .mauth-progress-bar {
-  background: #f1f5f9;
 }
 
 /* ==========================================================================
@@ -172,16 +587,15 @@
    ========================================================================== */
 
 .mauth-body {
-  flex: 1;
-  padding: 24px 20px 32px;
-  padding: 24px 20px calc(32px + env(safe-area-inset-bottom, 0px));
-  background: #fff;
+  /* flex-basis:auto + grow:1：内容不足时撑满剩余空间（footer 靠 margin-top:auto 贴底），
+     内容超出时按内容高度而不被压缩（否则矮屏下会与外层滚动容器互相挤压） */
+  flex: 1 0 auto;
+  padding: var(--mauth-pad-body-t) var(--mauth-pad-body-x) var(--mauth-pad-body-b);
+  padding: var(--mauth-pad-body-t) var(--mauth-pad-body-x)
+    calc(var(--mauth-pad-body-b) + env(safe-area-inset-bottom, 0px));
+  background: var(--mauth-body-bg);
   display: flex;
   flex-direction: column;
-}
-
-.dark .mauth-body {
-  background: #0f172a;
 }
 
 .mauth-form {
@@ -203,52 +617,38 @@
 .mauth-cell {
   display: flex;
   flex-direction: column;
-  margin-bottom: 14px;
+  margin-bottom: var(--mauth-gap-cell);
+  /* 键盘弹出时 scrollIntoView 要留的余量：上方避开 header，下方避开键盘。
+     下方给 320px 是因为 iOS 键盘只覆盖、不缩放视口，需要把输入框滚到键盘之上 */
+  scroll-margin-top: 88px;
+  scroll-margin-bottom: 320px;
 }
 
 .mauth-field {
   display: flex;
   align-items: center;
-  height: 48px;
+  height: var(--mauth-field-h);
   padding: 0 14px;
   gap: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  background: var(--mauth-field-bg);
+  border: var(--mauth-field-border-width) solid var(--mauth-field-border);
+  border-radius: var(--mauth-field-radius);
   transition: all 0.2s;
 }
 
-.dark .mauth-field {
-  background: #1e293b;
-  border-color: #334155;
-}
-
 .mauth-field:focus-within {
-  background: #fff;
-  border-color: #475569;
-  box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.1);
-}
-
-.dark .mauth-field:focus-within {
-  background: #0f172a;
-  border-color: #64748b;
+  background: var(--mauth-field-bg-focus);
+  border-color: var(--mauth-field-border-focus);
+  box-shadow: 0 0 0 3px var(--mauth-field-ring);
 }
 
 .mauth-field.is-error {
-  border-color: #ef4444;
-}
-
-.dark .mauth-field.is-error {
-  border-color: #ef4444;
+  border-color: var(--mauth-danger);
 }
 
 .mauth-icon {
-  color: #94a3b8;
+  color: var(--mauth-icon-fg);
   flex-shrink: 0;
-}
-
-.dark .mauth-icon {
-  color: #64748b;
 }
 
 .mauth-input {
@@ -258,17 +658,13 @@
   outline: none;
   /* 16px：iOS Safari 聚焦时不会因为 <16px 自动放大整个页面 */
   font-size: 16px;
-  color: #0f172a;
+  color: var(--mauth-input-fg);
   height: 100%;
   min-width: 0;
 }
 
-.dark .mauth-input {
-  color: #f1f5f9;
-}
-
 .mauth-input::placeholder {
-  color: #94a3b8;
+  color: var(--mauth-placeholder-fg);
 }
 
 .mauth-input:disabled {
@@ -280,9 +676,9 @@
 .mauth-code-btn {
   font-size: 12px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--mauth-code-btn-fg);
   padding-left: 12px;
-  border-left: 1px solid #e2e8f0;
+  border-left: 1px solid var(--mauth-code-btn-border);
   white-space: nowrap;
   background: transparent;
   border-top: none;
@@ -292,13 +688,8 @@
   transition: color 0.2s;
 }
 
-.dark .mauth-code-btn {
-  color: #e2e8f0;
-  border-left-color: #334155;
-}
-
 .mauth-code-btn:disabled {
-  color: #94a3b8;
+  color: var(--mauth-code-btn-fg-disabled);
   cursor: not-allowed;
 }
 
@@ -307,7 +698,7 @@
   align-items: center;
   justify-content: center;
   padding: 6px;
-  color: #94a3b8;
+  color: var(--mauth-pwd-toggle-fg);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -315,17 +706,17 @@
 }
 
 .mauth-pwd-toggle:active {
-  color: #475569;
+  color: var(--mauth-pwd-toggle-fg-press);
 }
 
 /* 错误位：固定高度，避免提示出现/消失时表单跳动 */
 .mauth-err {
-  height: 16px;
-  line-height: 16px;
+  height: var(--mauth-err-h);
+  line-height: var(--mauth-err-h);
   margin-top: 4px;
   padding-left: 4px;
   font-size: 11px;
-  color: #ef4444;
+  color: var(--mauth-err-fg);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -338,7 +729,7 @@
 .mauth-tabs {
   position: relative;
   display: flex;
-  margin-bottom: 24px;
+  margin-bottom: var(--mauth-gap-tabs-bottom);
 }
 
 .mauth-tab {
@@ -347,19 +738,24 @@
   padding: 10px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--mauth-tab-fg);
   background: transparent;
   border: none;
   cursor: pointer;
   transition: color 0.2s;
+  touch-action: manipulation;
+}
+
+/* 两个 Tab 各占一半宽度，热区只向上下扩（左右扩会与相邻 Tab 重叠、
+   导致点击落到错的 Tab 上）。视觉高度不变 */
+.mauth-tab::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
 }
 
 .mauth-tab.active {
-  color: #0f172a;
-}
-
-.dark .mauth-tab.active {
-  color: #f1f5f9;
+  color: var(--mauth-tab-fg-active);
 }
 
 /* ==========================================================================
@@ -392,53 +788,47 @@
 }
 
 .mauth-checkbox {
+  position: relative;
   width: 18px;
   height: 18px;
   margin-top: 1px;
   border-radius: 4px;
-  border: 1.5px solid #cbd5e1;
+  border: 1.5px solid var(--mauth-checkbox-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--mauth-checkbox-fg);
   flex-shrink: 0;
   transition: all 0.2s;
 }
 
-.dark .mauth-checkbox {
-  border-color: #475569;
+/* 勾选框热区 18px → 26px（上下各扩 4px）。
+   没有硬撑到推荐的 44px：行间距只有 10px（.mauth-options 的 gap），
+   再往上下扩会让相邻两行的热区互相重叠、点击落到错误的选项上。
+   主要交互由外层 <label> 承担（点整行文字都能切换），这里只补齐方框附近的手感。 */
+.mauth-checkbox::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 .mauth-checkbox.checked {
-  background: #1e293b;
-  border-color: #1e293b;
-}
-
-.dark .mauth-checkbox.checked {
-  background: #f1f5f9;
-  border-color: #f1f5f9;
-  color: #0f172a;
+  background: var(--mauth-checkbox-bg-checked);
+  border-color: var(--mauth-checkbox-bg-checked);
+  color: var(--mauth-checkbox-fg-checked);
 }
 
 .mauth-option-text {
   font-size: 12px;
-  color: #64748b;
+  color: var(--mauth-option-fg);
   line-height: 1.5;
-}
-
-.dark .mauth-option-text {
-  color: #94a3b8;
 }
 
 /* 文案里的行内链接（协议、注册入口等） */
 .mauth-link {
-  color: #1e293b;
+  color: var(--mauth-link-fg);
   font-weight: 500;
   cursor: pointer;
-}
-
-.dark .mauth-link {
-  color: #e2e8f0;
 }
 
 .mauth-link:hover {
@@ -451,14 +841,14 @@
 
 .mauth-submit,
 .mauth-next-btn {
-  height: 48px;
+  height: var(--mauth-control-h);
   width: 100%;
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
-  background: #1e293b;
+  color: var(--mauth-submit-fg);
+  background: var(--mauth-submit-bg);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--mauth-submit-radius);
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -469,12 +859,6 @@
 
 .mauth-next-btn {
   margin-top: 8px;
-}
-
-.dark .mauth-submit,
-.dark .mauth-next-btn {
-  background: #f1f5f9;
-  color: #0f172a;
 }
 
 .mauth-submit:active:not(:disabled),
@@ -492,15 +876,10 @@
 .mauth-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border: 2px solid var(--mauth-spinner-track);
+  border-top-color: var(--mauth-spinner-head);
   border-radius: 50%;
   animation: mauth-spin 0.6s linear infinite;
-}
-
-.dark .mauth-spinner {
-  border-color: rgba(15, 23, 42, 0.3);
-  border-top-color: #0f172a;
 }
 
 @keyframes mauth-spin {
@@ -514,18 +893,14 @@
   margin: -6px 0 8px;
   font-size: 12px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--mauth-forgot-fg);
   background: transparent;
   border: none;
   cursor: pointer;
 }
 
-.dark .mauth-forgot {
-  color: #94a3b8;
-}
-
 .mauth-forgot:active {
-  color: #1e293b;
+  color: var(--mauth-forgot-fg-press);
 }
 
 /* ==========================================================================
@@ -534,24 +909,20 @@
 
 .mauth-footer {
   margin-top: auto;
-  padding-top: 24px;
+  padding-top: var(--mauth-gap-footer);
   text-align: center;
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--mauth-footer-fg);
 }
 
 .mauth-register-btn {
   margin-left: 4px;
   font-size: 13px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--mauth-register-btn-fg);
   background: transparent;
   border: none;
   cursor: pointer;
-}
-
-.dark .mauth-register-btn {
-  color: #f1f5f9;
 }
 
 .mauth-register-btn:hover {
@@ -578,25 +949,21 @@
 }
 
 .mauth-panel-icon-warn {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
+  background: var(--mauth-panel-icon-warn-bg);
+  color: var(--mauth-panel-icon-warn-fg);
 }
 
 .mauth-panel-text {
   font-size: 13px;
-  color: #64748b;
+  color: var(--mauth-panel-text-fg);
   text-align: center;
   line-height: 1.6;
   margin: 0;
 }
 
-.dark .mauth-panel-text {
-  color: #94a3b8;
-}
-
 .mauth-panel-sub {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--mauth-panel-sub-fg);
   text-align: center;
   margin: 6px 0 0;
   word-break: break-all;
@@ -607,14 +974,14 @@
   margin: 4px 0 16px;
   font-size: 12px;
   font-weight: 600;
-  color: #2563eb;
+  color: var(--mauth-resend-fg);
   background: transparent;
   border: none;
   cursor: pointer;
 }
 
 .mauth-resend:disabled {
-  color: #94a3b8;
+  color: var(--mauth-resend-fg-disabled);
   cursor: not-allowed;
 }
 
@@ -625,14 +992,9 @@
 .mauth-summary {
   margin-bottom: 16px;
   padding: 16px;
-  background: #f8fafc;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-}
-
-.dark .mauth-summary {
-  background: #1e293b;
-  border-color: #334155;
+  background: var(--mauth-summary-bg);
+  border-radius: var(--mauth-radius);
+  border: 1px solid var(--mauth-summary-border);
 }
 
 .mauth-summary-row {
@@ -644,28 +1006,16 @@
 }
 
 .mauth-summary-row + .mauth-summary-row {
-  border-top: 1px solid #e2e8f0;
-}
-
-.dark .mauth-summary-row + .mauth-summary-row {
-  border-top-color: #334155;
+  border-top: 1px solid var(--mauth-summary-divider);
 }
 
 .mauth-summary-row span {
-  color: #64748b;
-}
-
-.dark .mauth-summary-row span {
-  color: #94a3b8;
+  color: var(--mauth-summary-label-fg);
 }
 
 .mauth-summary-row strong {
-  color: #0f172a;
+  color: var(--mauth-summary-value-fg);
   font-weight: 600;
-}
-
-.dark .mauth-summary-row strong {
-  color: #f1f5f9;
 }
 
 /* ==========================================================================
@@ -707,4 +1057,135 @@
   .mauth-slide-prev-leave-active {
     transition: none;
   }
+}
+
+/* ==========================================================================
+   12. 第三方登录行（分割线 + 圆形图标 + 品牌名 + 「上次登录」徽标）
+   ========================================================================== */
+
+.mauth-social {
+  margin-top: var(--mauth-social-gap-top);
+}
+
+.mauth-social-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--mauth-social-divider-gap);
+  font-size: 12px;
+  color: var(--mauth-social-divider-fg);
+}
+
+.mauth-social-divider::before,
+.mauth-social-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--mauth-social-divider);
+}
+
+.mauth-social-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--mauth-social-gap);
+  /* 给「上次登录」徽标留上溢空间（徽标绝对定位在图标上方 -13px）。
+     不留的话徽标会压到分割线上。 */
+  padding-top: 20px;
+}
+
+.mauth-social-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--mauth-social-name-fg);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.mauth-social-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 热区兜底：横屏把图标视觉尺寸压到 36px，热区靠这里补回 44px（移动端最小触摸目标）。
+   相邻 gap 最小 12px，两边各外扩 4px = 8px < 12px，不会与邻居重叠。 */
+.mauth-social-btn::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+/* 圆形图标本体。品牌色不写在这里，见下方按 id 的规则 */
+.mauth-social-icon {
+  position: relative;
+  width: var(--mauth-social-size);
+  height: var(--mauth-social-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--mauth-social-btn-bg);
+  border: 1px solid var(--mauth-social-btn-border);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.mauth-social-btn:active:not(:disabled) .mauth-social-icon {
+  background: var(--mauth-social-btn-bg-press);
+  transform: scale(0.94);
+}
+
+/* 品牌名要显式回到中性色：按钮上的 color 是留给 svg 的品牌墨色（stroke:currentColor） */
+.mauth-social-name {
+  font-size: var(--mauth-social-name-size);
+  line-height: 1.2;
+  color: var(--mauth-social-name-fg);
+  white-space: nowrap;
+}
+
+/* 「上次登录」弱提示：贴图标正上方居中。
+   ⚠️ 只向上溢出、不向右偏 —— .mauth-page 是 overflow-y:auto，
+   按 CSS 规范另一轴会被计算成 auto，徽标横向出界会给整页加出横向滚动条。 */
+.mauth-social-badge {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: var(--mauth-social-badge-size);
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--mauth-social-badge-fg);
+  background: var(--mauth-social-badge-bg);
+}
+
+/* 品牌墨色：只按 id 挂色，换品牌色不必碰规则体 */
+.mauth-social-btn--wechat .mauth-social-icon {
+  color: var(--mauth-social-ink-wechat);
+}
+
+.mauth-social-btn--alipay .mauth-social-icon {
+  color: var(--mauth-social-ink-alipay);
+}
+
+.mauth-social-btn--qq .mauth-social-icon {
+  color: var(--mauth-social-ink-qq);
+}
+
+.mauth-social-btn--weibo .mauth-social-icon {
+  color: var(--mauth-social-ink-weibo);
+}
+
+.mauth-social-btn--github .mauth-social-icon {
+  color: var(--mauth-social-ink-github);
+}
+
+.mauth-social-btn--apple .mauth-social-icon {
+  color: var(--mauth-social-ink-apple);
 }

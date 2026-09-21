@@ -38,12 +38,27 @@ import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import AppNameMissing from '@/components/common/AppNameMissing.vue';
 import ConsentPanel from '@/components/auth/ConsentPanel.vue';
+import MauthThemeSwitch from '@/components/auth/MauthThemeSwitch.vue';
+import MauthSocialRow from '@/components/auth/MauthSocialRow.vue';
+import { useKeyboardAvoid } from '@/composables/useKeyboardAvoid';
+import { useSocialLogin } from '@/composables/useSocialLogin';
+import type { SocialProviderId } from '@/composables/useSocialLogin';
 
 const authStore = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const { t, locale } = useI18n();
 const { error: showError } = useMessage();
+
+// 键盘弹出时把聚焦的输入框滚进可视区（iOS 键盘只覆盖视口、不缩视口高度）
+useKeyboardAvoid();
+
+// 第三方登录：providers 解析不出来时整行不渲染，默认外观零变化
+const {
+  providers: socialProviders,
+  lastProvider: socialLastProvider,
+  startLogin: startSocialLogin
+} = useSocialLogin();
 
 // 应用配置：缺 appName/client_id 时无法开展登录（与桌面版一致给明确提示）
 const clientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
@@ -148,6 +163,17 @@ const {
   redirectTo: () => (route.query.redirect as string) || null
 });
 
+/**
+ * 第三方登录：去哪儿交给 useSocialLogin 决定（授权端点 / 父应用）
+ *
+ * 没配授权端点时明确提示，而不是让用户点了没反应 —— 静默失败会被当成「按钮坏了」。
+ */
+const onSocialSelect = (id: SocialProviderId) => {
+  if (startSocialLogin(id) === 'unconfigured') {
+    showError(t('login.social_unconfigured', '该登录方式尚未配置授权地址'));
+  }
+};
+
 const handleLogin = handleSubmit(async () => {
   if (!agreed.value) {
     showError(t('login.agree_required') || '请先阅读并勾选同意相关协议');
@@ -214,6 +240,8 @@ const goBack = () => {
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
         </button>
+        <!-- 右上角主题切换（跟随系统 / 浅色 / 深色 三态）；被 iframe 嵌入时自动隐藏 -->
+        <MauthThemeSwitch />
         <div class="mauth-header-content">
           <div class="mauth-logo">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -403,6 +431,15 @@ const goBack = () => {
               {{ authStore.loading ? t('login.logging_in') : t('login.submit') }}
             </button>
           </form>
+
+          <!-- 第三方登录：未配置 providers 时整行不渲染任何 DOM。
+               插在 CTA 之后，表单内的「保持登录 / 阅读同意」两行位置与行为都不受影响。 -->
+          <MauthSocialRow
+            :providers="socialProviders"
+            :last-provider="socialLastProvider"
+            :disabled="authStore.loading"
+            @select="onSocialSelect"
+          />
 
           <!-- 底部注册入口 -->
           <div class="mauth-footer">

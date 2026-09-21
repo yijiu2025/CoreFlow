@@ -55,7 +55,17 @@ const i18n = createI18n({
         agree_required: '请先阅读并勾选同意相关协议',
         show_password: '显示密码',
         hide_password: '隐藏密码',
-        back: '返回'
+        back: '返回',
+        // 第三方登录（providers 未配置时整行不渲染）
+        social_divider: '其他登录方式',
+        social_last: '上次登录',
+        social_wechat: '微信',
+        social_alipay: '支付宝',
+        social_qq: 'QQ',
+        social_weibo: '微博',
+        social_github: 'GitHub',
+        social_apple: 'Apple',
+        social_unconfigured: '该登录方式尚未配置授权地址'
       },
       not_found: {
         title: '页面未找到',
@@ -226,7 +236,17 @@ const i18n = createI18n({
         agree_required: 'Please read and accept the agreements first',
         show_password: 'Show password',
         hide_password: 'Hide password',
-        back: 'Back'
+        back: 'Back',
+        // Third-party sign-in (the whole row stays hidden until providers are configured)
+        social_divider: 'Or continue with',
+        social_last: 'Last used',
+        social_wechat: 'WeChat',
+        social_alipay: 'Alipay',
+        social_qq: 'QQ',
+        social_weibo: 'Weibo',
+        social_github: 'GitHub',
+        social_apple: 'Apple',
+        social_unconfigured: 'This sign-in method has no authorization endpoint configured yet'
       },
       not_found: {
         title: 'Page Not Found',
