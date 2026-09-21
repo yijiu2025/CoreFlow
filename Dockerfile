@@ -47,8 +47,12 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false \
     NPM_CONFIG_AUDIT=false
 
-# 只拷清单：这一层的缓存由 package.json / lock 决定，改源码不会触发重装
-COPY package.json package-lock.json ./
+# 只拷清单：这一层的缓存由 package.json（以及存在时的 lock）决定，改源码不会触发重装。
+# ⚠️ 用通配符而不是逐个列举：`package-lock.json` **不在仓库里**（被 .gitignore 排除，
+#    原因见文件头第 1 条），写死 `COPY package-lock.json` 会让构建在解析 COPY 时就失败：
+#      ERROR: ... "/package-lock.json": not found
+#    通配符的语义是"有就拷、没有就跳过"，与"刻意不依赖 lockfile 安装"的设计一致。
+COPY package*.json ./
 
 RUN npm install --omit=dev --workspaces=false --ignore-scripts \
  && npm cache clean --force \
@@ -75,7 +79,8 @@ ENV NODE_ENV=production \
     NPM_CONFIG_UPDATE_NOTIFIER=false
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json package-lock.json index.js ./
+# 同上：lockfile 不在仓库里，用通配符避免 "not found"
+COPY package*.json index.js ./
 COPY src ./src
 COPY migrations ./migrations
 COPY scripts ./scripts
