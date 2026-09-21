@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAntiCache } from '@/composables/useAntiCache';
+import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import AntiCacheDebugPanel from '@/components/common/AntiCacheDebugPanel.vue';
 import { postToParent } from '@/utils/parent';
 
@@ -57,6 +58,10 @@ watch(
 
 // 组件生命周期管理
 
+// 自动识别设备形态：窄视口 / 真机 UA → 手机端登录页
+// URL 显式 ?isMobile=true 优先级最高，这里只在未显式指定时生效
+const { isMobileDevice } = useDeviceDetect();
+
 // 异步按需加载不同形态的登录组件
 const StandardLogin = defineAsyncComponent(() => import('./StandardLogin.vue'));
 const MiniLogin = defineAsyncComponent(() => import('./MiniLogin.vue'));
@@ -80,7 +85,7 @@ const onDebugPanelClose = () => {
 
 // 动态路由/参数分发逻辑
 const activeComponent = computed(() => {
-  // 1. 如果指定为移动端，或者 isMobile 参数为 true
+  // 1. 如果指定为移动端，或者 isMobile 参数为 true（显式优先，不走自动识别）
   if (isMobile.value) {
     return MobileLogin;
   }
@@ -92,7 +97,13 @@ const activeComponent = computed(() => {
     return MiniLogin;
   }
 
-  // 3. 默认桌面版标准 SSO 登录
+  // 3. 自动识别：视口宽度 < 768px 或真机 UA → 手机端登录页
+  //    手机直接打开 /login 不再挤在桌面布局里
+  if (isMobileDevice.value) {
+    return MobileLogin;
+  }
+
+  // 4. 默认桌面版标准 SSO 登录
   return StandardLogin;
 });
 
@@ -111,9 +122,10 @@ const shouldSendSSOMessage = computed(() => {
       @update:visible="onDebugPanelClose"
     />
 
-    <transition name="fade-slide" mode="out-in">
-      <component :is="activeComponent" />
-    </transition>
+    <!-- 注意：不要用 <transition mode="out-in"> 包 <component :is>。
+         自动识别窄屏会在页面挂载后中途切换异步组件，out-in 与异步组件/多根节点
+         组合会导致 leave 后新组件不挂载（白屏）。设备切换不需要动画，直接渲染。 -->
+    <component :is="activeComponent" />
   </div>
 </template>
 
@@ -124,24 +136,9 @@ const shouldSendSSOMessage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  /* 纵向允许滚动：窄窗口/短屏下子内容超出视口时可滚到，不再被裁切 */
+  overflow-y: auto;
+  overflow-x: hidden;
   background: transparent;
-}
-
-
-/* 页面切换平滑淡入淡出动画 */
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateY(12px) scale(0.98);
-}
-
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-12px) scale(0.98);
 }
 </style>
