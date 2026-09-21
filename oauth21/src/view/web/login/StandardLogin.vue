@@ -109,7 +109,9 @@ const {
   values: () => values,
   captchaKey: () => captchaKey.value,
   clientId: () => (route.query.client_id as string) || (route.query.appName as string),
-  showError: (msg: string) => showError(msg)
+  showError: (msg: string) => showError(msg),
+  // 全屏直连：守卫带的 ?redirect=（如 /authorize?...）登录后原路返回；iframe 内不生效
+  redirectTo: () => (route.query.redirect as string) || null
 });
 
 const handleLogin = handleSubmit(async () => {
@@ -159,12 +161,13 @@ onUnmounted(() => {
     <AppNameMissing v-if="!hasAppName" />
 
     <!-- 主登录容器 -->
-    <div v-else class="relative group">
+    <div v-else class="relative group w-full">
     <!-- 背景流光动画装饰 -->
     <div class="absolute -top-24 -left-24 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
     <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl animate-pulse delay-700"></div>
 
-    <div class="relative w-[856px] min-h-[480px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[32px] overflow-hidden flex shadow-2xl border border-white/40 dark:border-slate-800">
+    <!-- max-w 限宽 + w-full：窄于 856px 的窗口跟随视口收缩，不再溢出被裁切 -->
+    <div class="relative w-full max-w-[856px] mx-auto min-h-[480px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[32px] overflow-hidden flex shadow-2xl border border-white/40 dark:border-slate-800">
 <!-- 左侧面板：登录/授权表达面板 -->
       <div class="flex-1 p-10 flex flex-col justify-between relative">
 <!-- OAuth 授权确认视图 -->
@@ -504,6 +507,11 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* 根节点撑满分发器 wrapper 宽度，让卡片 max-w 能跟随视口收缩 */
+.standard-login-root {
+  width: 100%;
+}
+
 /* ==========================================================================
    1. 头部 Brand Header 精准垂直居中样式
    ========================================================================== */
