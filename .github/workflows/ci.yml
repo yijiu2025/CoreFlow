@@ -6,32 +6,46 @@
 #   test   → 单元 / 契约 / 结构守卫（Jest）
 #   verify → 跨进程不变量（分布式锁、WS 扇出、遥测聚合）—— 只能多进程验证
 #
-# 关于依赖安装：**不用 `npm ci`，且必须带 `--legacy-peer-deps`**。
+# 关于依赖安装：**不用 `npm ci`**，且必须带 `--legacy-peer-deps`。
 #   `package-lock.json` 把 `wb-logkit` 记为 `link: packages/log`，那是个被
 #   .gitignore 排除的独立嵌套仓库，CI 检出主仓后并不存在 → `npm ci` 直接失败。
-#   改用 `npm install --workspaces=false --ignore-scripts --legacy-peer-deps`：
-#     - `--workspaces=false`：不装三个前端工程（含 vue/vite）的依赖，CI 从十几分钟降回两分钟级；
-#       `wb-logkit` / `stable-deviceid` 改从 registry 取已发布版本（CI 本就不该依赖开发机软链）；
-#     - `--ignore-scripts`：根 `prepare` 是 husky，CI 不需要 git hooks，且能挡掉 postinstall 供应链面。
-#     - `--legacy-peer-deps`：**没有它这一步必崩**，见下。
 #
-# ⚠️ `--legacy-peer-deps` 不是"顺手加的宽容开关"，是绕开 npm 10 的一个崩溃：
-#      npm error Cannot read properties of null (reading 'edgesOut')
-#    成因链（2026-09-21 逐条实测）：
-#      1. 本仓库刻意不入库 lockfile → CI 上 npm 必须从 registry **现算整棵理想树**；
-#      2. CI 的安装不 omit dev，三个前端 workspace 的 devDependencies 于是进入了图
-#         （崩溃日志的最后两条正是 `fetch manifest vitest@4.1.11` 与其 peer `@types/node`）；
-#      3. vitest 的 peer 集合让 @npmcli/arborist 走到 `#loadPeerSet`
-#         （build-ideal-tree.js:1289）里的 `node.parent.edgesOut`，而该处 node.parent 为 null
-#         → TypeError 抛出，安装以退出码 1 结束。
-#    为什么 `--legacy-peer-deps` 能治：它让 arborist **根本不创建 peer 边**
-#      （arborist/lib/node.js:881 用 `!this.legacyPeerDeps` 门禁了整段 peerDependencies 装载），
-#      于是 #loadPeerSet 里待遍历的 peerEdges 恒为空，那行 null 解引用不可达。
-#    已实测排除的替代方案：去掉 `--workspaces=false`（默认全量装）同样崩；
-#      只加 `--no-package-lock` 无效。加 `--legacy-peer-deps` 后 686 个包 2 分钟内装完，
-#      ESLint 与 Jest 两个作业都能在装上依赖的树上真实跑起来。
-#    Dockerfile 那边不需要这个标志：它 `--omit=dev`，vitest 这类 devDependency
-#      压根不进入图，所以构建一直是通的（这也解释了为什么"镜像能构建"却"CI 装不上"）。
+#   安装范围 = `--workspace=packages/shared-device --include-workspace-root`：
+#     只把「根工程 + shared-device 这一个 workspace」纳入安装，
+#     oauth21 / posecraft / firewall 三个前端工程（vue / vite / vitest…）不进图。
+#   ⚠️ 不要改回 `--workspaces=false`（踩过）：那个值会让 npm 对
+#     「既由某个 workspace 提供、又是根依赖」的包名两头落空 —— 既不建软链，
+#     也不去 registry 取。`stable-deviceid` 恰好就是这种情况（提供者是
+#     `packages/shared-device`，而 checkout 里它确实存在），后果是
+#       Cannot find module 'stable-deviceid/base62-timestamp'
+#     让 14 个套件 failed to run。实测 2026-09-21。
+#
+#   装完还要构建一次 shared-device 的 dist：
+#     `dist/` 是构建产物、不入库，而 `src/framework/auth/device-id-service.js`
+#     要 import `stable-deviceid/base62-timestamp`，包的 exports 指向
+#     `./dist/base62-timestamp.js`。只跑 build.mjs 即可（esbuild 由根依赖
+#     vitepress→vite 带进来，能从根 node_modules 解析到）；同一条命令里链的
+#     tsc 只产出 .d.ts，CI 不需要它。
+#
+#   `--ignore-scripts`：根 `prepare` 是 husky，CI 不需要 git hooks，且能挡掉 postinstall 供应链面。
+#
+#   `--legacy-peer-deps`：没有它这一步必崩 —— 它不是在"放宽校验"，是在绕开
+#     npm 10 / @npmcli/arborist 的一个崩溃：
+#       npm error Cannot read properties of null (reading 'edgesOut')
+#     成因链（2026-09-21 逐条实测）：
+#       1. 本仓库刻意不入库 lockfile → CI 上 npm 必须从 registry 现算整棵理想树；
+#       2. 三个前端 workspace 的 devDependencies 也在这个图里
+#          （崩溃日志最后两条正是 `fetch manifest vitest@4.1.11` 与其 peer `@types/node`）；
+#       3. vitest 的 peer 集合让 arborist 走到 `#loadPeerSet`
+#          （build-ideal-tree.js:1289）里的 `node.parent.edgesOut`，而该处 parent 为 null
+#          → TypeError，安装以退出码 1 结束。
+#     为什么它有效：`legacyPeerDeps` 让 arborist **根本不创建 peer 边**
+#       （arborist/lib/node.js:881 用 `!this.legacyPeerDeps` 门禁了整段 peerDependencies
+#       装载），于是 #loadPeerSet 里待遍历的 peerEdges 恒为空，那行 null 解引用不可达。
+#     已实测：`--workspaces=false` 单用崩、去掉 workspace 相关标志也崩、
+#       `--workspace=…` 定向安装**不带**这个标志同样崩；带上后 687 个包 3 分钟内装完。
+#     Dockerfile 那边不需要它：`--omit=dev` 让 vitest 这类 devDependency 不进图，
+#       所以镜像一直是能构建的（这也解释了为什么"镜像能构建"却"CI 装不上"）。
 #
 # ⚠️ 因此 setup-node **不能开 `cache: npm`**（别再顺手加回去）。
 #   缓存功能会去找 package-lock.json 算缓存 key，而 lockfile 被 .gitignore 排除、CI 检出后
@@ -77,7 +91,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: 安装依赖
-        run: npm install --workspaces=false --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+        run: |
+          npm install --workspace=packages/shared-device --include-workspace-root \
+            --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          node packages/shared-device/scripts/build.mjs
 
       # 只扫"我们维护的代码"：
       #   src/ 是产品代码，scripts/ migrations/ docker/ 是交付的一部分；
@@ -100,7 +117,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: 安装依赖
-        run: npm install --workspaces=false --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+        run: |
+          npm install --workspace=packages/shared-device --include-workspace-root \
+            --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          node packages/shared-device/scripts/build.mjs
 
       # 必须带 --experimental-vm-modules：项目是 ESM 且测试大量使用
       # jest.unstable_mockModule，直接 npx jest 会丢掉这个标志而大面积失败。
@@ -134,7 +154,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: 安装依赖
-        run: npm install --workspaces=false --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+        run: |
+          npm install --workspace=packages/shared-device --include-workspace-root \
+            --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          node packages/shared-device/scripts/build.mjs
 
       # 关卡用 process.loadEnvFile() 自己读 env 文件（因为 npm run 会丢命令行变量），
       # 而 CI 里没有被 gitignore 的 .env。用 VERIFY_ENV_FILE 指向临时文件即可，
