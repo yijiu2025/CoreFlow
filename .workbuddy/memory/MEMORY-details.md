@@ -527,15 +527,33 @@ OCI runtime create failed: exec: "/usr/sbin/tini": stat /usr/sbin/tini: no such 
 → 抽 `envelope({...})` 助手统一覆盖 `code/message/data/timestamp/requestId`；
   `firewall` 侧 `baseResponse` 曾漏 `requestId`。
 
-### 10.6 node-redis v5：`duplicate()` 不建连 → 订阅必须先 `connect()`
+### 10.6 WS 跨实例扇出的两个坑（都表现为「订阅没生效」）
 
-`duplicate()` **只复制配置，返回未连接客户端**；未连接就发 SUBSCRIBE 会被
+`src/framework/redis/pubsub.js`。两个 bug 都只在**真 Redis + 跨进程**时才现形，
+且外部现象几乎一样（子进程收不到消息），单进程里完全正常 —— 所以长期没被发现，
+直到 CI 的 ws-fanout 关卡第一次在真 Redis 上跑（2026-09-21）。
+
+**① `duplicate()` 不建连，订阅必须先 `connect()`**
+
+`duplicate()` 只复制配置、返回**未连接**客户端；未连接就发 SUBSCRIBE 会被
 `sendCommand` 以 `ClientClosedError` 拒绝，而该拒绝**只落在 catch 日志里**。
-外部现象仅为「订阅永远不就绪」——单进程一切正常，所以没人发现。
-实锤：CI 的 ws-fanout 关卡在**真 Redis** 上卡在「本进程订阅连接未在 10s 内就绪」退出码 3。
+现象：「本进程订阅连接未在 10s 内就绪」→ 关卡退出码 3。
 → `subscribe()` 内先 `connect()` 再 `subscribe()`（`isOpen` 为真则直接订阅）。
-回归测试 `src/__tests__/framework/redis/pubsub-subscribe.test.js` 用替身锁**调用顺序契约**
-（真 Redis 反而验不了"未连接不许订阅"这条），已反向验证旧代码下变红。
+
+**② 订阅回调签名是 `(message, channel)`，不是 `(channel, message)`**
+
+node-redis v5 的 `PubSubListener` 定义
+（`@redis/client/dist/lib/client/pub-sub.d.ts:11`）与实现
+（`pub-sub.js:336/346` 的 `listener(message, channel)`）都确认第一个参数是**消息体**。
+写反**不报任何错**：`JSON.parse('firewall:monitor')` 抛出的 SyntaxError 被 dispatch
+的 catch 静默吞掉。现象：接收端 READY、父进程本地恰好 1 条、**子进程收到 0 条**。
+→ 回调写成 `(message, channelName) => dispatch(channelName, message)`。
+
+回归测试 `src/__tests__/framework/redis/pubsub-subscribe.test.js`（替身锁**调用契约**：
+真 Redis 反而验不了「未连接不许订阅」，也难构造「只喂一条报文」的确定性场景）：
+共 7 例 —— connect 先于 subscribe、同 channel 只订一次、已连接不重连、isPubSubReady 语义、
+**回调参数顺序**、`__origin` 自过滤、非 JSON 静默忽略。
+**已反向验证**：把回调顺序改回旧写法，其中 2 例立刻变红。
 
 ### 10.7 跨进程关卡：刷写要驱动**正确的那条链路**
 
@@ -569,4 +587,49 @@ npx eslint src scripts migrations docker index.js
   jest 向上借到主仓 `node_modules` 把 `stable-deviceid` 解析成功，
   **误判为"已修好"**，白跑一轮。本机 `WorkBuddy` 沙箱会让子目录向上借 `node_modules`。
 - 验收基线（2026-09-21 复刻树）：install 退出码 0 → dist 出 8 个模块 →
-  jest `86 passed / 1081 passed`（2 套件 11 用例 skip，与主仓一致）→ ESLint 0 错（18 警告）。
+  jest `86 passed / 1084 passed`（2 套件 11 用例 skip，与主仓一致）→ ESLint 0 错（18 警告）。
+  补 pubsub 契约测试后总用例从 1081 → 1084。
+
+### 10.10 本机 `git credential fill` 会挂住（写查 CI 日志的脚本前必读）
+
+`.git/credential.helper` 有**两个**值，第一个是 `helper-selector`：
+
+```
+credential.helper=helper-selector
+!...git-credential-manager.exe
+```
+
+`printf 'protocol=https\nhost=github.com\n\n' | git credential fill` 会**永久挂住**
+（实测 25s 无输出、`timeout` 杀掉时退出码 124、无 password 行）。
+后果：所有"用 git 凭据查 GitHub API"的探测脚本（ci-log / ci-runs / ci-wait）
+一起卡死，很容易误判成"API 挂了"。
+
+诊断顺序（别再从头猜）：先单独测 `git credential fill`，再测
+`fetch('https://api.github.com/rate_limit')`。本次实测 API 侧正常
+（`remaining: 57`）、**卡点只在凭据**。
+
+✅ 绕开方式：**直接调 GCM 本体**，不经过 selector：
+
+```bash
+printf 'protocol=https\nhost=github.com\n\n' | \
+  "C:/Users/22701/.workbuddy/binaries/PortableGit/versions/1.2.0/mingw64/bin/git-credential-manager.exe" get
+# Exit=0，返回 password=...（缓存凭据）
+```
+
+这也可能是"`git push` 偶发数分钟零输出"的同源诱因 —— 重试一次通常就好（GCM 缓存已填）。
+
+### 10.11 compose 冒烟的密钥必须 ≥32 位
+
+`publish-image.yml` 的「准备 CI 环境变量」曾经用 sed 写死三个密钥，其中两个
+**短于门槛**：`SESSION_SECRET=ci-session-secret-not-for-prod`（30 位）、
+`FIREWALL_SECRET=ci-firewall-secret`（18 位）。
+
+而 `src/framework/config/env.js` 有 `MIN_SECRET_LENGTH = 32`，`APP_SECRET` /
+`SESSION_SECRET` / `FIREWALL_SECRET` 三个（**且仅这三个**；`SIGN_APP_KEY` 无长度校验）
+在 `NODE_ENV=production` 下不达标即「❌ 环境变量校验失败，启动已中止」。
+现象：容器反复重启、日志刷 `拒绝启动`、就绪探针永远等不到 200 ——
+看起来像"部署/编排问题"，实际是 CI 模板替换写短了。
+
+→ 改为 CI 里 `node -e "crypto.randomBytes(32).toString('hex')"` 生成，长度不再靠人眼数。
+⚠️ 排查这类"探针等不到 200"时，**先 `docker compose logs app` 看应用自己怎么说**，
+不要一上来就怀疑健康探针路径或 entrypoint 等待逻辑。
