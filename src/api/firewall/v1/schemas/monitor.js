@@ -7,12 +7,15 @@
  */
 
 // 基础响应结构 (Standard Response Wrapper)
+// ⚠️ 必须与 globals 里 reply.result 的 build() 字段**一一对应**：schema 未声明的字段
+//    会被序列化静默裁掉。此前漏了 requestId（信封里一直有，只是发不出去）。
 const baseResponse = dataSchema => ({
   type: 'object',
   properties: {
     code: { type: 'number', example: 200 },
     message: { type: 'string', example: '操作成功' },
     timestamp: { type: 'number', example: Date.now() },
+    requestId: { type: 'string', description: '请求 ID' },
     data: dataSchema
   }
 });
