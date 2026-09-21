@@ -1,28 +1,54 @@
 <script setup lang="ts">
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
-import { useRoute, useRouter } from 'vue-router';
-import { inject, ref, onMounted, onUnmounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { inject, ref, onMounted, onUnmounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { z } from 'zod';
+import { toTypedSchema } from '@vee-validate/zod';
+import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
+
+// ================================
+// 组件导入（与 MiniRegister 同一套 UI 体系）
+// ================================
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
+import AuthContainer from '@/components/common/AuthContainer.vue';
+import PasswordInput from '@/components/common/PasswordInput.vue';
+import PasswordStrength from '@/components/common/PasswordStrength.vue';
+
+// ================================
+// Composables 导入
+// ================================
+import { useCaptcha } from '@/composables/useCaptcha';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { useButtonLock } from '@/composables/useButtonLock';
 import { useAgreementVersion, captureAgreementVersion } from '@/composables/useAgreementVersion';
-import PasswordInput from '@/components/common/PasswordInput.vue';
-import PasswordStrength from '@/components/common/PasswordStrength.vue';
-import { z } from 'zod';
-import { toTypedSchema } from '@vee-validate/zod';
-import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
-import { useCaptcha } from '@/composables/useCaptcha';
 
-const { t, locale } = useI18n();
+// ================================
+// 常量定义
+// ================================
+const COUNTDOWN_SECONDS = 60; // 验证码倒计时秒数
+const RECAPTCHA_TIMEOUT = 30_000; // 获取验证码超时时间（毫秒）
+const RSA_ENCRYPT_TIMEOUT = 30_000; // RSA 加密超时时间（毫秒）
+
+// ================================
+// Composables 初始化
+// ================================
+const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToken, dispose } = useCaptcha('register');
 const { error: showError, success: showSuccess } = useMessage();
+const { t, locale } = useI18n();
+const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(COUNTDOWN_SECONDS);
+const submitLock = useButtonLock();
+const agreementVersion = useAgreementVersion();
 
-// 父组件（view/web/register/index.vue）透传的注册上下文
+// ================================
+// 类型定义
+// ================================
+// 父组件透传的注册上下文
 interface RegisterContext {
   appName: string;
   clientId: string;
@@ -35,6 +61,13 @@ interface RegisterContext {
   invite: string;
   lang: string;
 }
+
+// ================================
+// 路由和上下文
+// ================================
+const router = useRouter();
+const route = useRoute();
+
 const ctx = inject<RegisterContext>('registerContext', {
   appName: 'Enterprise SSO',
   clientId: '',
@@ -45,24 +78,40 @@ const ctx = inject<RegisterContext>('registerContext', {
   invite: '',
   lang: 'zh_cn'
 });
+
 // 跟随父组件透传的 lang 切换 locale
 if (ctx.lang) locale.value = ctx.lang;
 
-const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToken, dispose } = useCaptcha('register');
-onMounted(() => {
-  if (recaptchaEnabled) loadCaptcha();
+// AuthContainer 品牌/默认标题展示用
+const templateAppName = ctx.appName || 'Enterprise SSO';
+
+/**
+ * 构建 router-link 透传给 /mini-login 的 query 参数（与 MiniRegister 同逻辑）
+ * 保留 OAuth 上下文（appName/client_id/scope/state/redirect_uri/lang），
+ * 跳回登录页时不丢"在哪个应用注册"的信息
+ */
+const oauthQuery = computed(() => {
+  const query: Record<string, string> = {};
+  for (const key of ['appName', 'client_id', 'scope', 'state', 'redirect_uri', 'lang', 'from']) {
+    const value = route.query[key];
+    if (typeof value === 'string') {
+      query[key] = value;
+    }
+  }
+  if (!query.from) {
+    query.from = 'register';
+  }
+  return query;
 });
-onUnmounted(() => dispose());
 
-const router = useRouter();
-const route = useRoute();
-
-// 分步状态：1 - 账号与验证码，2 - 密码与协议
+// ================================
+// 分步状态管理
+// ================================
 const step = ref<1 | 2>(1);
 
-// 协议版本快照：用户勾选时记录当时协议版本 + 时间戳
-const agreementVersion = useAgreementVersion();
-
+// ================================
+// 表单验证
+// ================================
 const registerSchema = z
   .object({
     username: z
@@ -97,33 +146,93 @@ const [code, codeProps] = defineField('code');
 const [password] = defineField('password');
 const [confirmPassword] = defineField('confirmPassword');
 
+// ================================
+// 验证码和状态管理
+// ================================
 const agreed = ref(false);
-const docType = ref<'service' | 'privacy' | null>(null);
 const isEmailDuplicate = ref(false);
-const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
-// 防双击：handleSubmit 提交期间禁用按钮
-const submitLock = useButtonLock();
+const isEmailChecking = ref(false); // 邮箱去重检查中：防 blur 后未返回就点下一步的竞态
+const codeSent = ref(false); // 验证码是否已成功发送（前端拦截：未发码前 input 和下一步按钮都禁用）
+const docType = ref<'service' | 'privacy' | null>(null);
 
-// 图形验证码流程：弹窗 → 通过 → 拿 captchaKey + 启动倒计时
+// 图形验证码流程：弹窗 → 通过 → 拿 captchaKey + 标记已发码 + 启动倒计时
 const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess } = useCaptchaFlow<'register'>(
-  () => startCountdown(60)
+  () => {
+    codeSent.value = true;
+    startCountdown(COUNTDOWN_SECONDS);
+  }
 );
 
+// ================================
+// 工具函数
+// ================================
+/**
+ * 异步操作超时保护（与 MiniRegister 对齐：所有可能阻塞的异步操作设置超时兜底）
+ * 超时统一抛带 op 名的 Error，便于上层 try/catch 区分。
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, op: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${op} timeout (${ms}ms)`)), ms))
+  ]);
+}
+
+/**
+ * 注册后回跳（OAuth 同源白名单，防开放重定向）
+ * 优先用 ctx.redirectUri（OAuth 标准字段，iframe 父应用必传）
+ * fallback ctx.redirect（兼容旧字段名）
+ * 非法回跳降级到 /mini-login 并保留 OAuth 上下文（防"应用标识缺失"）
+ */
+function safeRedirect(): string {
+  const r = ctx.redirectUri || ctx.redirect;
+  if (r && r.startsWith('/') && !r.startsWith('//') && !r.includes('://')) {
+    return r; // 同源相对路径
+  }
+  return buildMiniLoginUrl();
+}
+
+/**
+ * 拼 /mini-login URL，保留当前路由的 OAuth 上下文
+ * 给 safeRedirect 兜底 + footer 的"立即登录"链接复用
+ */
+function buildMiniLoginUrl(): string {
+  const preservedQuery: Record<string, string> = {};
+  for (const k of ['appName', 'client_id', 'scope', 'state', 'redirect_uri', 'lang']) {
+    const v = route.query[k];
+    if (typeof v === 'string') preservedQuery[k] = v;
+  }
+  preservedQuery.from = 'register';
+  const queryStr = new URLSearchParams(preservedQuery).toString();
+  return `/mini-login${queryStr ? '?' + queryStr : ''}`;
+}
+
+// ================================
+// 业务逻辑函数
+// ================================
+
+/**
+ * 检查邮箱是否已被注册
+ */
 const checkEmail = async () => {
   if (!values.email || errors.value.email) {
     isEmailDuplicate.value = false;
     return;
   }
+  isEmailChecking.value = true;
   try {
-    // request.ts 拦截器已解包 AxiosResponse.data，类型断言拿 isDuplicate 字段
     const res = (await authApi.checkEmail(values.email)) as unknown as { isDuplicate?: boolean };
     isEmailDuplicate.value = !!res?.isDuplicate;
-  } catch {
+  } catch (err) {
+    console.warn('[StandardRegister] checkEmail failed', err);
     isEmailDuplicate.value = false;
+  } finally {
+    isEmailChecking.value = false;
   }
 };
 
-// 发送验证码前先查重：邮箱已注册则拦截，不允许发码
+/**
+ * 发送验证码：先查重（已注册拦截），再走图形验证码弹窗
+ */
 const sendCode = async () => {
   if (!values.email || errors.value.email) return;
   await checkEmail();
@@ -134,8 +243,11 @@ const sendCode = async () => {
   openRegCaptcha('register');
 };
 
-// 步骤 1 校验并前往步骤 2
+/**
+ * 处理下一步按钮点击（邮箱查重进行中时拦截，防竞态）
+ */
 const handleNextStep = async () => {
+  if (isEmailChecking.value) return;
   const resUser = await validateField('username');
   const resEmail = await validateField('email');
   const resCode = await validateField('code');
@@ -145,469 +257,316 @@ const handleNextStep = async () => {
 };
 
 /**
- * 注册后回跳（同源白名单，防开放重定向）
- * - 必须以 / 开头（相对路径）
- * - 排除 //evil.com（协议相对 URL）
- * - 排除 http://evil.com / javascript: 等（含 :// 的绝对 URL）
+ * 处理注册表单提交
  */
-function safeRedirect(): string {
-  // 优先 redirectUri（OAuth 标准），fallback redirect（兼容旧字段）
-  const r = ctx.redirectUri || ctx.redirect;
-  if (r && r.startsWith('/') && !r.startsWith('//') && !r.includes('://')) {
-    return r;
-  }
-  // 缺 redirectUri：iframe 场景下不能简单跳 /（会丢 appName 报"应用标识缺失"）
-  // 从当前 route.query 重新拼 OAuth 上下文（appName/client_id/redirect_uri/scope/state）
-  // 让父应用跳注册时即使没显式带 redirect_uri，也能链回登录页保留 OAuth 上下文
-  const preservedQuery: Record<string, string> = {};
-  for (const k of ['appName', 'client_id', 'scope', 'state', 'redirect_uri', 'lang', 'from']) {
-    const v = route.query[k];
-    if (typeof v === 'string') preservedQuery[k] = v;
-  }
-  preservedQuery.from = 'register';
-  const queryStr = new URLSearchParams(preservedQuery).toString();
-  return `/mini-login${queryStr ? '?' + queryStr : ''}`;
-}
+const handleRegister = handleSubmit(async () => {
+  if (!agreed.value || isEmailDuplicate.value) return;
+  if (submitLock.locked.value) return;
+  submitLock.lock();
 
-const handleRegister = handleSubmit(
-  async () => {
-    if (!agreed.value) {
-      showError(t('forgot.code_required'));
-      return;
-    }
-    if (isEmailDuplicate.value) {
-      showError(t('register.email_duplicate'));
-      return;
-    }
-    // 防双击
-    if (submitLock.locked.value) return;
-    submitLock.lock();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构排除 confirmPassword，rest 模式合法
-    const { confirmPassword, ...submitData } = values;
-    const encryptedPassword = await rsaEncrypt(submitData.password!);
-    const recaptchaToken = recaptchaEnabled ? await getCaptchaToken() : null;
-    try {
-      await authApi.register({
-        ...submitData,
-        password: encryptedPassword,
-        kid: getCachedKid(),
-        captchaKey: captchaKey.value,
-        // 协议版本快照：注册时记录用户同意的协议版本
-        agreementVersion: captureAgreementVersion(agreementVersion),
-        // 邀请码 + OAuth appName（父应用注册场景）
-        invite: ctx.invite || undefined,
-        appName: ctx.appName,
-        ...(recaptchaToken ? { recaptchaToken } : {})
-      });
-      showSuccess(t('register.success'));
-      // OAuth 场景：跳回原应用（safeRedirect 白名单校验）；普通注册：跳首页
-      router.push(safeRedirect());
-    } catch (err: unknown) {
-      showError(err instanceof Error ? err.message : t('register.register_failed'));
-    } finally {
-      submitLock.unlock();
-    }
-  },
-  err => console.warn('[Register] 表单验证失败:', err)
-);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构排除 confirmPassword，rest 模式合法
+  const { confirmPassword, ...submitData } = values;
+
+  try {
+    const encryptedPassword = await withTimeout(rsaEncrypt(submitData.password!), RSA_ENCRYPT_TIMEOUT, 'rsaEncrypt');
+    const recaptchaToken = recaptchaEnabled
+      ? await withTimeout(getCaptchaToken(), RECAPTCHA_TIMEOUT, 'getCaptchaToken')
+      : null;
+
+    await authApi.register({
+      ...submitData,
+      password: encryptedPassword,
+      kid: getCachedKid(),
+      captchaKey: captchaKey.value,
+      // 协议版本快照：注册时记录用户同意的协议版本
+      agreementVersion: captureAgreementVersion(agreementVersion),
+      // 邀请码 + OAuth appName（父应用注册场景）
+      invite: ctx.invite || undefined,
+      appName: ctx.appName,
+      ...(recaptchaToken ? { recaptchaToken } : {})
+    });
+
+    showSuccess(t('register.success'));
+    // OAuth 场景：跳回原应用（safeRedirect 白名单校验）；普通注册：跳登录页
+    router.push(safeRedirect());
+  } catch (err: unknown) {
+    showError(err instanceof Error ? err.message : t('register.register_failed'));
+  } finally {
+    submitLock.unlock();
+  }
+});
+
+// ================================
+// 生命周期钩子
+// ================================
+onMounted(() => {
+  if (recaptchaEnabled) loadCaptcha();
+});
+
+onUnmounted(() => dispose());
 </script>
 
 <template>
-  <div class="reg-viewport">
-    <div class="reg-blob reg-blob-1"></div>
-    <div class="reg-blob reg-blob-2"></div>
-    <div class="reg-card glass-effect">
-      <div class="reg-brand-panel">
-        <div class="reg-brand-bg"></div>
-        <div class="reg-brand-content">
-          <div class="reg-brand-logo">
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
+  <!-- 单根节点：AuthContainer 全屏框架 + 弹窗类组件挂在外层 -->
+  <div class="stdreg-root w-full">
+    <AuthContainer :app-name="templateAppName">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-bold dark:text-white leading-tight">{{ t('register.title') }}</h2>
+            <p class="text-xs text-slate-400 mt-1">
+              {{ step === 1 ? t('register.sub_step1') : t('register.sub_step2') }}
+            </p>
           </div>
-          <h2 class="reg-brand-title">
-            {{ t('register.brand_title') }}<br />{{ t('register.brand_title_br') }}
-          </h2>
-          <p class="reg-brand-desc">{{ t('register.brand_desc') }}</p>
-          <ul class="reg-brand-features">
-            <li><span class="reg-check"></span>{{ t('register.brand_feature_1') }}</li>
-            <li><span class="reg-check"></span>{{ t('register.brand_feature_2') }}</li>
-            <li><span class="reg-check"></span>{{ t('register.brand_feature_3') }}</li>
-          </ul>
-          <!-- 已有账号？立即登录（OAuth 注册场景跳转回原应用） -->
-          <router-link
-            v-if="ctx.redirectUri || ctx.redirect"
-            :to="{ path: '/mini-login', query: { ...route.query, from: 'register' } }"
-            class="reg-brand-signin"
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
-            {{ t('register.signin_link') }}
-          </router-link>
-          <router-link v-else to="/mini-login" class="reg-brand-signin">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
-            {{ t('register.signin_link') }}
-          </router-link>
-        </div>
-      </div>
-
-      <div class="reg-panel">
-        <div class="reg-head">
-          <div class="flex items-center justify-between">
-            <div>
-              <!-- OAuth 场景：标题带 appName（告知用户在哪个应用注册） -->
-              <h2 class="reg-title">{{ ctx.appName !== 'Enterprise SSO' ? `${ctx.appName} · ` : '' }}{{ t('register.title') }}</h2>
-              <p class="reg-sub">{{ step === 1 ? t('register.sub_step1') : t('register.sub_step2') }}</p>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <span class="reg-step-dot" :class="step === 1 ? 'reg-step-active' : ''"></span>
-              <span class="reg-step-dot" :class="step === 2 ? 'reg-step-active' : ''"></span>
-            </div>
+          <!-- 步骤指示小圆点 -->
+          <div class="flex items-center gap-1.5 mr-2">
+            <span class="h-2 rounded-full transition-all duration-300" :class="step === 1 ? 'bg-[#2563eb] w-4' : 'w-2 bg-slate-200 dark:bg-slate-700'"></span>
+            <span class="h-2 rounded-full transition-all duration-300" :class="step === 2 ? 'bg-[#2563eb] w-4' : 'w-2 bg-slate-200 dark:bg-slate-700'"></span>
           </div>
         </div>
+      </template>
 
-        <form @submit.prevent="step === 1 ? handleNextStep() : handleRegister()" class="reg-form">
-          <div v-if="step === 1" class="reg-step-box">
-            <div class="reg-cell">
-              <div class="reg-field" :class="{ 'is-error': errors.username }">
-                <svg class="reg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <input v-model="username" v-bind="usernameProps" type="text" :placeholder="t('register.username')" autocomplete="username" class="reg-input" />
-              </div>
-              <div class="reg-err">{{ errors.username }}</div>
+      <form @submit.prevent="step === 1 ? handleNextStep() : handleRegister()" class="mreg-form">
+        <!-- 第一步：基本账号信息 -->
+        <div v-if="step === 1" class="mreg-step-box">
+          <!-- 用户名 -->
+          <div class="mreg-cell">
+            <div class="mreg-field" :class="{ 'is-error': errors.username }">
+              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <input v-model="username" v-bind="usernameProps" type="text" :placeholder="t('register.username')" autocomplete="username" class="mreg-input" />
             </div>
-
-            <div class="reg-cell">
-              <div class="reg-field" :class="{ 'is-error': errors.email || isEmailDuplicate }">
-                <svg class="reg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                  <polyline points="22,6 12,13 2,6"></polyline>
-                </svg>
-                <input v-model="email" v-bind="emailProps" @blur="checkEmail" type="email" :placeholder="t('register.email')" autocomplete="email" class="reg-input" />
-              </div>
-              <div class="reg-err">{{ isEmailDuplicate ? t('register.email_duplicate') : errors.email }}</div>
-            </div>
-
-            <div class="reg-cell">
-              <div class="reg-field" :class="{ 'is-error': errors.code }">
-                <svg class="reg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-                <input v-model="code" v-bind="codeProps" type="text" :placeholder="t('register.code')" autocomplete="one-time-code" class="reg-input" />
-                <button type="button" @click="sendCode" :disabled="isCountingDown || submitLock.locked.value" class="reg-code-btn">
-                  {{ isCountingDown ? `${countdown}s` : t('register.get_code') }}
-                </button>
-              </div>
-              <div class="reg-err">{{ errors.code }}</div>
-            </div>
-
-            <button type="button" @click="handleNextStep" :disabled="submitLock.locked.value" class="reg-next-btn">
-              {{ t('register.next') }}
-            </button>
+            <div class="mreg-err">{{ errors.username }}</div>
           </div>
 
-          <div v-else class="reg-step-box">
-            <div class="reg-cell">
-              <PasswordInput
-                v-model="password"
-                :has-error="!!errors.password"
-                :placeholder="t('register.password')"
+          <!-- 邮箱 -->
+          <div class="mreg-cell">
+            <div class="mreg-field" :class="{ 'is-error': errors.email || isEmailDuplicate }">
+              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+              </svg>
+              <input v-model="email" v-bind="emailProps" @blur="checkEmail" type="email" :placeholder="t('register.email')" autocomplete="email" class="mreg-input" />
+            </div>
+            <div class="mreg-err">{{ isEmailDuplicate ? t('register.email_duplicate') : errors.email }}</div>
+          </div>
+
+          <!-- 验证码 -->
+          <div class="mreg-cell">
+            <div class="mreg-field" :class="{ 'is-error': errors.code }">
+              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <input
+                v-model="code"
+                v-bind="codeProps"
+                type="text"
+                :placeholder="t('register.code')"
+                autocomplete="one-time-code"
+                :disabled="!codeSent"
+                class="mreg-input disabled:opacity-50 disabled:cursor-not-allowed"
               />
-              <div class="reg-err">{{ errors.password }}</div>
+              <button type="button" @click="sendCode" :disabled="isCountingDown || submitLock.locked.value" class="mreg-code-btn">
+                {{ isCountingDown ? t('register.code_countdown', { countdown }) : t('register.get_code') }}
+              </button>
             </div>
+            <div class="mreg-err">{{ errors.code }}</div>
+          </div>
 
+          <!-- 下一步按钮（未发验证码前禁用） -->
+          <button
+            type="button"
+            @click="handleNextStep"
+            :disabled="!codeSent"
+            class="mreg-submit disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {{ t('register.next') }}
+          </button>
+        </div>
+
+        <!-- 第二步：密码与协议 -->
+        <div v-else class="mreg-step-box">
+          <!-- 登录密码 -->
+          <div class="mreg-cell">
+            <PasswordInput
+              v-model="password"
+              :has-error="!!errors.password"
+              :placeholder="t('register.password')"
+            />
+            <div class="mreg-err">{{ errors.password }}</div>
             <!-- 密码强度条 + 悬浮窗规则列表 -->
             <PasswordStrength :password="values.password" />
+          </div>
 
-            <div class="reg-cell">
-              <PasswordInput
-                v-model="confirmPassword"
-                :has-error="!!errors.confirmPassword"
-                :placeholder="t('register.confirm_password')"
-              />
-              <div class="reg-err">{{ errors.confirmPassword }}</div>
-            </div>
+          <!-- 确认密码 -->
+          <div class="mreg-cell">
+            <PasswordInput
+              v-model="confirmPassword"
+              :has-error="!!errors.confirmPassword"
+              :placeholder="t('register.confirm_password')"
+            />
+            <div class="mreg-err">{{ errors.confirmPassword }}</div>
+          </div>
 
-            <label class="reg-agree">
+          <!-- 协议勾选 -->
+          <div class="mreg-cell pt-1">
+            <label class="mreg-agree">
               <input type="checkbox" v-model="agreed" class="hidden" />
-              <span class="reg-checkbox" :class="{ checked: agreed }">
+              <span class="mreg-checkbox" :class="{ checked: agreed }">
                 <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
               </span>
-              <span class="reg-agree-text">
-                {{ t('register.agree_prefix') }}
-                <span @click.stop.prevent="docType = 'service'" class="reg-link">{{ t('register.agree_link_service') }}</span>
-                {{ t('register.agree_and') }}
-                <span @click.stop.prevent="docType = 'privacy'" class="reg-link">{{ t('register.agree_link_privacy') }}</span>
+              <span class="text-xs text-slate-500 dark:text-slate-400">
+                {{ t('register.agree_prefix') }}<span @click.stop.prevent="docType = 'service'" class="mreg-highlight-link">{{ t('register.agree_link_service') }}</span>{{ t('register.agree_and') }}<span @click.stop.prevent="docType = 'privacy'" class="mreg-highlight-link">{{ t('register.agree_link_privacy') }}</span>
               </span>
             </label>
-
-            <div class="flex gap-2.5 mt-2">
-              <button type="button" @click="step = 1" :disabled="submitLock.locked.value" class="reg-back-btn">
-                {{ t('register.prev') }}
-              </button>
-              <button type="submit" :disabled="!agreed || submitLock.locked.value" :class="{ 'reg-disabled': !agreed || submitLock.locked.value }" class="reg-submit flex-1">
-                {{ t('register.submit') }}
-              </button>
-            </div>
           </div>
-        </form>
-      </div>
-    </div>
+
+          <!-- 提交/上一步按钮组 -->
+          <div class="flex gap-2.5 mt-2">
+            <button type="button" @click="step = 1" class="mreg-back-btn">{{ t('register.prev') }}</button>
+            <button type="submit" class="mreg-submit flex-1" :disabled="!agreed || submitLock.locked.value" :class="{ 'opacity-50 cursor-not-allowed': !agreed || submitLock.locked.value }">
+              {{ t('register.submit') }}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <!-- 底部返回登录 -->
+      <template #footer>
+        <div class="flex items-center justify-between pt-1">
+          <span class="text-xs text-slate-400">{{ t('register.signin_hint') }}</span>
+          <p class="mreg-signin">
+            <!--
+              指向标准登录页 /login，不要指 /mini-login：
+              本页是**桌面全屏**标准注册页，登录入口自然应对应桌面标准登录页；
+              原来指 /mini-login 会跳到 iframe 用的紧凑卡片版登录页，与整页风格不一致。
+              （窄屏下本组件不会被渲染——分发器会换成移动端注册页，其页脚指向 /m/login）
+            -->
+            <router-link :to="{ path: '/login', query: oauthQuery }" class="mreg-highlight-link font-medium text-xs">
+              {{ t('register.signin_link') }}
+            </router-link>
+          </p>
+        </div>
+      </template>
+    </AuthContainer>
+
+    <!-- 图形验证码弹窗（注册 = 校验图形码 + 发邮箱码，必须带 send-email） -->
+    <GraphicCaptcha :is-open="showCaptcha" :email="values.email" :send-email="true" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
+
+    <!-- 服务协议 / 隐私政策 弹窗 -->
+    <AgreementModals v-model:type="docType" />
+
+    <!-- 错误/成功提示 toast -->
+    <MessageToast />
   </div>
-
-  <GraphicCaptcha
-    :is-open="showCaptcha"
-    :email="values.email"
-    type="register"
-    @close="showCaptcha = false"
-    @success="onCaptchaSuccess"
-  />
-
-  <!-- 服务协议 / 隐私政策 弹窗（统一组件） -->
-  <AgreementModals v-model:type="docType" />
-
-  <!-- 错误/成功提示 toast -->
-  <MessageToast />
 </template>
 
 <style scoped>
-.reg-viewport {
-  width: 100%;
+/* ================================
+   页面根：AuthContainer 自带 100vw/100vh 视口框架，
+   这里只做弹窗类组件的挂载外壳
+   ================================ */
+.stdreg-root {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
-  position: relative;
-  overflow: hidden;
-  padding: 24px;
 }
-:global(.dark) .reg-viewport {
-  background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e293b 100%);
-}
-.reg-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.4;
-  z-index: 0;
-  pointer-events: none;
-}
-.reg-blob-1 { width: 480px; height: 480px; background: #4f46e5; top: -120px; left: -120px; }
-.reg-blob-2 { width: 420px; height: 420px; background: #d946ef; bottom: -120px; right: -120px; }
-.reg-card {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 1100px;
-  min-height: 600px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  border-radius: 32px;
-  box-shadow: 0 25px 60px -12px rgba(79, 70, 229, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  display: grid;
-  grid-template-columns: 1.1fr 1.4fr;
-  overflow: hidden;
-}
-:global(.dark) .reg-card {
-  background: rgba(15, 23, 42, 0.9);
-  border-color: rgba(71, 85, 105, 0.3);
-  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.5);
-}
-.reg-brand-panel {
-  position: relative;
-  padding: 56px 48px;
-  background: linear-gradient(135deg, #4f46e5 0%, #d946ef 100%);
-  color: #fff;
+
+/* ================================
+   表单布局（与 MiniRegister 同款）
+   ================================ */
+.mreg-form {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  overflow: hidden;
+  margin-top: 16px;
 }
-.reg-brand-bg {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 20% 20%, rgba(255,255,255,0.2) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(255,255,255,0.15) 0%, transparent 50%);
-  z-index: 0;
-}
-.reg-brand-content {
-  position: relative;
-  z-index: 1;
+
+.mreg-step-box {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  gap: 2px;
 }
-.reg-brand-logo {
-  width: 64px;
-  height: 64px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 28px;
-}
-.reg-brand-title {
-  font-size: 36px;
-  font-weight: 800;
-  line-height: 1.2;
-  margin: 0 0 16px;
-  letter-spacing: -0.02em;
-}
-.reg-brand-desc {
-  font-size: 14px;
-  line-height: 1.6;
-  opacity: 0.9;
-  margin: 0 0 32px;
-  max-width: 320px;
-}
-.reg-brand-features {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 auto;
+
+.mreg-cell {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
-.reg-brand-features li {
+
+/* ================================
+   输入框样式
+   ================================ */
+.mreg-field {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 500;
-}
-.reg-check {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.reg-check::after {
-  content: '✓';
-  font-size: 11px;
-  font-weight: bold;
-}
-.reg-brand-signin {
-  margin-top: 32px;
-  padding: 10px 18px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  text-decoration: none;
-  transition: background 0.2s;
-}
-.reg-brand-signin:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-.reg-panel {
-  padding: 48px 56px;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-}
-:global(.dark) .reg-panel {
-  background: #0f172a;
-}
-.reg-head { margin-bottom: 32px; }
-.reg-title {
-  font-size: 24px;
-  font-weight: 800;
-  margin: 0 0 8px;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-}
-:global(.dark) .reg-title { color: #f1f5f9; }
-.reg-sub { font-size: 13px; color: #94a3b8; margin: 0; }
-.reg-step-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #e2e8f0;
-  transition: all 0.3s;
-}
-:global(.dark) .reg-step-dot { background: #334155; }
-.reg-step-active {
-  background: #4f46e5;
-  width: 24px;
-  border-radius: 4px;
-}
-.reg-form { display: flex; flex-direction: column; }
-.reg-step-box { display: flex; flex-direction: column; gap: 4px; }
-.reg-cell { display: flex; flex-direction: column; }
-.reg-field {
-  display: flex;
-  align-items: center;
-  height: 48px;
+  height: 44px;
   padding: 0 14px;
   gap: 10px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  transition: all 0.2s;
+  border-radius: 12px;
+  transition: all 0.2s ease;
 }
-:global(.dark) .reg-field {
+
+:global(.dark) .mreg-field {
   background: #0f172a;
   border-color: #1e293b;
 }
-.reg-field:focus-within {
+
+.mreg-field:focus-within {
   background: #fff;
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
-:global(.dark) .reg-field:focus-within {
+
+:global(.dark) .mreg-field:focus-within {
   background: #0f172a;
-  border-color: #818cf8;
 }
-.reg-field.is-error {
+
+.mreg-field.is-error {
   border-color: #ef4444;
   background: #fef2f2;
 }
-:global(.dark) .reg-field.is-error {
+
+:global(.dark) .mreg-field.is-error {
   background: rgba(239, 68, 68, 0.1);
 }
-.reg-icon { color: #94a3b8; flex-shrink: 0; }
-:global(.dark) .reg-icon { color: #64748b; }
-.reg-input {
+
+.mreg-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.mreg-input {
   flex: 1;
   background: transparent;
   border: none;
   outline: none;
-  font-size: 14px;
+  font-size: 13px;
   color: #0f172a;
   height: 100%;
   min-width: 0;
 }
-:global(.dark) .reg-input { color: #f1f5f9; }
-.reg-input::placeholder { color: #94a3b8; }
-.reg-code-btn {
-  font-size: 13px;
+
+:global(.dark) .mreg-input {
+  color: #f1f5f9;
+}
+
+.mreg-input::placeholder {
+  color: #94a3b8;
+}
+
+/* ================================
+   验证码按钮样式
+   ================================ */
+.mreg-code-btn {
+  font-size: 12px;
   font-weight: 600;
-  color: #4f46e5;
   padding-left: 12px;
-  border-left: 1px solid #e2e8f0;
+  border-left: 1px solid #cbd5e1;
+  color: #2563eb;
   white-space: nowrap;
   background: transparent;
   border-top: none;
@@ -616,13 +575,27 @@ const handleRegister = handleSubmit(
   cursor: pointer;
   transition: color 0.2s;
 }
-:global(.dark) .reg-code-btn { color: #818cf8; border-left-color: #334155; }
-.reg-code-btn:hover:not(:disabled) { color: #4338ca; }
-.reg-code-btn:disabled { color: #94a3b8; cursor: not-allowed; }
-.reg-err {
-  height: 18px;
-  line-height: 18px;
-  margin-top: 4px;
+
+.mreg-code-btn:hover {
+  color: #1d4ed8;
+}
+
+:global(.dark) .mreg-code-btn {
+  border-left-color: #334155;
+}
+
+.mreg-code-btn:disabled {
+  color: #94a3b8 !important;
+  cursor: not-allowed;
+}
+
+/* ================================
+   错误提示样式
+   ================================ */
+.mreg-err {
+  height: 16px;
+  line-height: 16px;
+  margin-top: 2px;
   padding-left: 4px;
   font-size: 11px;
   color: #ef4444;
@@ -630,55 +603,73 @@ const handleRegister = handleSubmit(
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.reg-next-btn {
-  height: 50px;
+
+/* ================================
+   按钮样式
+   ================================ */
+.mreg-submit {
+  height: 44px;
   width: 100%;
-  margin-top: 16px;
-  border-radius: 14px;
-  font-size: 15px;
+  margin-top: 4px;
+  border-radius: 12px;
+  font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: #ffffff;
   border: none;
-  background: linear-gradient(135deg, #4f46e5, #d946ef);
-  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mreg-submit:hover:not(:disabled) {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+}
+
+.mreg-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.mreg-back-btn {
+  height: 44px;
+  padding: 0 16px;
+  margin-top: 4px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  border: none;
   cursor: pointer;
   transition: all 0.2s;
 }
-.reg-next-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 24px rgba(79, 70, 229, 0.3); }
-.reg-next-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* 密码强度条 */
-.reg-pwd-strength {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 18px;
-  margin-top: 4px;
-  padding-left: 4px;
-}
-.reg-pwd-bar {
-  height: 4px;
-  flex: 1;
-  border-radius: 2px;
-  transition: width 0.3s, background 0.3s;
-}
-.reg-pwd-text {
-  font-size: 11px;
-  font-weight: 600;
-  flex-shrink: 0;
+:global(.dark) .mreg-back-btn {
+  background: #1e293b;
+  color: #94a3b8;
 }
 
-.reg-agree {
+.mreg-back-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+/* ================================
+   协议勾选样式
+   ================================ */
+.mreg-agree {
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
   user-select: none;
-  margin-top: 12px;
 }
-.reg-checkbox {
-  width: 18px;
-  height: 18px;
+
+.mreg-checkbox {
+  width: 16px;
+  height: 16px;
   border-radius: 4px;
   border: 1.5px solid #cbd5e1;
   display: flex;
@@ -688,47 +679,32 @@ const handleRegister = handleSubmit(
   flex-shrink: 0;
   transition: all 0.2s;
 }
-:global(.dark) .reg-checkbox { border-color: #475569; }
-.reg-checkbox.checked { background: #4f46e5; border-color: #4f46e5; }
-.reg-link { color: #4f46e5; font-weight: 500; cursor: pointer; }
-.reg-link:hover { text-decoration: underline; }
 
-.reg-back-btn {
-  height: 50px;
-  padding: 0 20px;
-  border-radius: 14px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #64748b;
-  background: #f1f5f9;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
+:global(.dark) .mreg-checkbox {
+  border-color: #475569;
 }
-:global(.dark) .reg-back-btn { background: #1e293b; color: #94a3b8; }
-.reg-back-btn:hover:not(:disabled) { background: #e2e8f0; }
-.reg-back-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.reg-submit {
-  height: 50px;
-  border-radius: 14px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-  border: none;
-  background: linear-gradient(135deg, #4f46e5, #d946ef);
-  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
-  cursor: pointer;
-  transition: all 0.2s;
+.mreg-checkbox.checked {
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  border-color: #2563eb;
 }
-.reg-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 24px rgba(79, 70, 229, 0.3); }
-.reg-submit:disabled, .reg-disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-/* 响应式 */
-@media (max-width: 900px) {
-  .reg-card { grid-template-columns: 1fr; max-width: 480px; }
-  .reg-brand-panel { padding: 32px; }
-  .reg-brand-title { font-size: 28px; }
-  .reg-panel { padding: 32px 24px; }
+.mreg-highlight-link {
+  color: #2563eb;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.mreg-highlight-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+/* ================================
+   底部链接样式
+   ================================ */
+.mreg-signin {
+  margin: 0;
+  font-size: 12px;
 }
 </style>

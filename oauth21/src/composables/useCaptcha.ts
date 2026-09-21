@@ -93,5 +93,6 @@ export function useCaptcha(action: string = 'login'): CaptchaInstance {
   };
 }
 
-// 显式导出两个具体实现（高级用户/调试用）
-export { useHCaptcha, useTurnstile };
+// 注意：不要从这里转手导出 useHCaptcha / useTurnstile ——
+// unplugin-auto-import 扫描 src/composables 目录时会与各自源文件同名导出冲突，
+// 触发 "Duplicated imports" 警告。需要具体实现时直接从 './useHCaptcha' / './useTurnstile' 引入。
