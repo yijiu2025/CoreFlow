@@ -451,3 +451,122 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern
   比断言响应头更有说服力。**结束必须还原**并 diff 配置文件确认没写脏。
 - **同一个缺陷在"死代码"里也存在**：`permission/seeder.js` 零调用但内含旧的坏值 `fw:admin:*`，
   谁把它接线回来就会把角色权限改回坏的。**零调用的重复定义应删除，而不是留着。**
+
+---
+
+## 10. 部署 / CI（2026-09-21 CI 首次真跑后定案）
+
+### 10.1 CI 依赖安装三件套（改 `.github/workflows/ci.yml` 前必读）
+
+三条作业安装步骤**完全一致**，任一条改错三个作业会一起红：
+
+```bash
+npm install --workspace=packages/shared-device --include-workspace-root \
+  --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+node packages/shared-device/scripts/build.mjs
+```
+
+四件事，每件都有踩坑史：
+
+1. **不能用 `npm ci`**：`package-lock.json` 把 `wb-logkit` 记为 `link: packages/log`，
+   而那是个被 `.gitignore` 排除的独立嵌套仓 → CI 检出后不存在 → `npm ci` 直接失败。
+   本仓**刻意不入库 lockfile**，依赖安装路径全程不依赖它。
+2. **必须 `--legacy-peer-deps`**：它在**绕开 npm 10 / arborist 崩溃**，不是在放宽校验：
+   ```
+   npm error Cannot read properties of null (reading 'edgesOut')
+   ```
+   成因链：无 lockfile → 现算整棵理想树 → 三个前端 workspace 的 devDeps 也进图
+   （崩溃日志末两条正是 `vitest@4.1.11` 与其 peer `@types/node`）→ vitest 的 peer 集合
+   让 arborist 走到 `build-ideal-tree.js:1289` 的 `node.parent.edgesOut`，parent 为 null → TypeError。
+   为何有效：`legacyPeerDeps` 让 arborist **根本不创建 peer 边**
+   （`arborist/lib/node.js:881` 用 `!this.legacyPeerDeps` 门禁整段 peerDependencies 装载），
+   `#loadPeerSet` 待遍历的 peerEdges 恒空，那行解引用不可达。
+   已实测：`--workspaces=false` 单用崩、去掉 workspace 标志也崩、`--workspace=…` 定向**不带**它也崩。
+   Dockerfile 不需要它：`--omit=dev` 让 vitest 不进图（这解释了"镜像能构建"却"CI 装不上"）。
+3. **不能用 `--workspaces=false`**：它让 npm 对「既由某 workspace 提供、又是根依赖」的包名
+   **两头落空**（既不建软链也不去 registry 取）。`stable-deviceid` 正是这种：
+   提供者是 `packages/shared-device`，而 `src/framework/auth/device-id-service.js` 顶层就 import 它
+   → `Cannot find module 'stable-deviceid/base62-timestamp'`，**14 个套件 failed to run**。
+   正确写法是定向包含：`--workspace=packages/shared-device --include-workspace-root`
+   （三个前端工程 vue/vite/vitest 不进图）。
+4. **装完必须 `node packages/shared-device/scripts/build.mjs`**：`dist/` 是构建产物、**不入库**，
+   而包的 `exports` 指向 `./dist/base62-timestamp.js`。只跑 build.mjs 即可（esbuild 由
+   根依赖 vitepress→vite 带进来，能从根 node_modules 解析）；链上的 tsc 只产 `.d.ts`，CI 不需要。
+
+另：`--ignore-scripts` 挡掉 husky `prepare` 与 postinstall 供应链面。
+
+### 10.2 setup-node **不能**开 `cache: npm`
+
+缓存功能要去找 `package-lock.json` 算 key，而 lockfile 被 gitignore、CI 检出后不存在 →
+该步骤在「安装依赖」**之前**就以
+`##[error]Dependencies lock file is not found ... Supported file patterns: package-lock.json`
+失败，三作业一起红且看不到任何代码信息。与 10.1 是同一条约束的两面。
+
+### 10.3 Dockerfile：tini 必须按实际路径建软链
+
+Debian/Ubuntu 的 apt 把 tini 装在 **`/usr/bin/tini`**。entrypoint 里写死 `/usr/sbin/tini`
+**构建期不报错**（RUN 阶段该路径未被触碰），**容器启动才炸**：
+```
+OCI runtime create failed: exec: "/usr/sbin/tini": stat /usr/sbin/tini: no such file or directory
+```
+修法：`ln -sf "$(command -v tini)" /usr/sbin/tini && /usr/sbin/tini --version`
+（构建期自证，别再靠"镜像构建成功"推断运行时可用）。
+
+### 10.4 无 lockfile 树下会暴露的幽灵依赖
+
+`uuid` 曾被 8 处 `import { v4 as uuidv4 } from 'uuid'` 使用但**从未声明**，
+靠 sequelize 提升侥幸可用；无 lockfile 的树上直接 `Cannot find module 'uuid'`。
+→ `package.json` 显式加 `"uuid": "^11.1.1"`。
+**教训：凡"能跑但没声明"的依赖，在没有 lockfile 的环境里都是定时炸弹。**
+
+### 10.5 响应信封 schema 必须覆盖 envelope 全部字段
+
+统一响应信封 `reply.result.build()` 会注入 `timestamp` / `requestId`，
+而 Fastify response schema 对**未声明字段静默裁剪**（不报错）。
+表现：本地看不出问题，线上响应里字段凭空消失。
+→ 抽 `envelope({...})` 助手统一覆盖 `code/message/data/timestamp/requestId`；
+  `firewall` 侧 `baseResponse` 曾漏 `requestId`。
+
+### 10.6 node-redis v5：`duplicate()` 不建连 → 订阅必须先 `connect()`
+
+`duplicate()` **只复制配置，返回未连接客户端**；未连接就发 SUBSCRIBE 会被
+`sendCommand` 以 `ClientClosedError` 拒绝，而该拒绝**只落在 catch 日志里**。
+外部现象仅为「订阅永远不就绪」——单进程一切正常，所以没人发现。
+实锤：CI 的 ws-fanout 关卡在**真 Redis** 上卡在「本进程订阅连接未在 10s 内就绪」退出码 3。
+→ `subscribe()` 内先 `connect()` 再 `subscribe()`（`isOpen` 为真则直接订阅）。
+回归测试 `src/__tests__/framework/redis/pubsub-subscribe.test.js` 用替身锁**调用顺序契约**
+（真 Redis 反而验不了"未连接不许订阅"这条），已反向验证旧代码下变红。
+
+### 10.7 跨进程关卡：刷写要驱动**正确的那条链路**
+
+`store.__test__persistNow()` 写的是**本地 JSON 文件**，对"别的进程能否看到"毫无贡献。
+E3 统计汇聚关卡的全部意义是跨进程可见性，却误用了它；且子进程随即 exit，
+3s 的 `STATS_FLUSH_INTERVAL` 永远等不到 → 父进程只读到自己那 2 条。
+本机无 Redis 时关卡以退出码 3 提前结束，所以这个错一直藏着，直到真 Redis 首跑。
+→ 新增 `__test__flushStats()` / `__test__stopStatsFlushTimer()`（驱动 Redis 汇聚）；
+  子进程退出前刷写，父进程侧**保留增量**以覆盖「Redis 全量 + 本实例增量」合并路径断言。
+
+### 10.8 jest 必须忽略探测副本
+
+`testPathIgnorePatterns` / `modulePathIgnorePatterns` 都要加 `.tmp-probe`：
+否则 `**/src/__tests__/**` 会匹配到探测副本，触发 haste map 命名冲突，整次测试打断。
+
+### 10.9 复刻树验证手法（验 CI 行为的标准动作）
+
+> 目的：造一棵**精确等于 CI 检出**的树（无 lockfile、无 node_modules、无被 gitignore 的东西）。
+
+```bash
+mkdir -p /c/Users/22701/AppData/Local/Temp/ci-repro && cd $_
+git -C /c/Users/22701/Desktop/nodeServers archive HEAD | tar -x
+npm install --workspace=packages/shared-device --include-workspace-root \
+  --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+node packages/shared-device/scripts/build.mjs
+node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci
+npx eslint src scripts migrations docker index.js
+```
+
+- 🔴 **必须在仓库外（Temp 下）造树**。曾在主仓内 `.tmp-probe/v1` 造过一次，
+  jest 向上借到主仓 `node_modules` 把 `stable-deviceid` 解析成功，
+  **误判为"已修好"**，白跑一轮。本机 `WorkBuddy` 沙箱会让子目录向上借 `node_modules`。
+- 验收基线（2026-09-21 复刻树）：install 退出码 0 → dist 出 8 个模块 →
+  jest `86 passed / 1081 passed`（2 套件 11 用例 skip，与主仓一致）→ ESLint 0 错（18 警告）。
