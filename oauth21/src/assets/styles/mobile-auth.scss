@@ -1,0 +1,710 @@
+/**
+ * 移动端认证页共享样式（全屏登录 /m/login、全屏注册 /m/register）
+ *
+ * 为什么要单独抽这一份：
+ *   手机端登录页与注册页此前各自带一套 scoped 样式（mlog-* / mreg-*），取值已经漂移：
+ *   背景 #fafafa vs #f8fafc、输入框 14px vs 16px、头部有无安全区、页面能否纵向滚动……
+ *   结果是两页风格不一致，且改一处要改两遍。这里收敛成单一来源 mauth-*，两页共用同一套视觉。
+ *
+ * 设计基线（白灰高级色，刻意不用彩色渐变）：
+ *   - 页面底色 #f8fafc / 深色 #020617；头部与主体 #fff / 深色 #0f172a
+ *   - 主色 #1e293b（深灰）用于 CTA、选中态、进度条；辅助文字 #64748b / #94a3b8
+ *   - 输入框 48px 高 / 12px 圆角 / **16px 字号**——16px 是硬要求，iOS Safari 聚焦 <16px 的输入框会整页放大
+ *   - 头部与主体留安全区（刘海屏 + 底部指示条），依赖 index.html 的 viewport-fit=cover
+ *
+ * 命名约定：mauth- = mobile auth。页面级通用件（头部/表单/按钮）与移动端特有的复合件
+ *   （tabs / 授权面板 / 进度条 / 信息汇总）都放这里，只有一处需维护。
+ *
+ * 使用方式：main.ts 全局引入，页面直接用 class，不要在自己组件里再定义同名样式。
+ *
+ * @author yijiu2025
+ */
+
+/* ==========================================================================
+   1. 页面骨架
+   ========================================================================== */
+
+.mauth-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  /* dvh：移动端地址栏收放不会把底部内容顶出屏幕；100vh 兜底老浏览器 */
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #f8fafc;
+  /* overflow-x 收住横向溢出；纵向保持可滚（授权面板 / 二次验证变高时能滚到，不被裁掉） */
+  overflow-x: hidden;
+}
+
+.dark .mauth-page {
+  background: #020617;
+}
+
+/* 缺 appName / client_id 时的居中占位容器 */
+.mauth-missing {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ==========================================================================
+   2. 顶部 Header（与主体同色，靠留白分隔，不用分隔线）
+   ========================================================================== */
+
+.mauth-header {
+  position: relative;
+  /* 先给无安全区浏览器的兜底值，再叠加安全区（刘海屏不被状态栏遮住标题） */
+  padding: 24px 24px 28px;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px 28px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.dark .mauth-header {
+  background: #0f172a;
+}
+
+/* 圆形返回按钮（仅图标，移动端点击热区 36px） */
+.mauth-back-btn {
+  position: absolute;
+  top: 16px;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: 16px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dark .mauth-back-btn {
+  color: #94a3b8;
+  background: #1e293b;
+}
+
+.mauth-back-btn:active {
+  background: #e2e8f0;
+}
+
+.dark .mauth-back-btn:active {
+  background: #334155;
+}
+
+.mauth-header-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.mauth-logo {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
+  background: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.dark .mauth-logo {
+  background: linear-gradient(135deg, #334155, #1e293b);
+  border: 1px solid #475569;
+}
+
+.mauth-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.dark .mauth-title {
+  color: #f1f5f9;
+}
+
+.mauth-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+/* 分步进度条（注册三步流） */
+.mauth-progress {
+  position: relative;
+  z-index: 1;
+  margin-top: 16px;
+  height: 4px;
+  background: #f1f5f9;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.dark .mauth-progress {
+  background: #1e293b;
+}
+
+.mauth-progress-bar {
+  height: 100%;
+  background: #1e293b;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.dark .mauth-progress-bar {
+  background: #f1f5f9;
+}
+
+/* ==========================================================================
+   3. 主体（全屏平铺，无卡片浮层）
+   ========================================================================== */
+
+.mauth-body {
+  flex: 1;
+  padding: 24px 20px 32px;
+  padding: 24px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.dark .mauth-body {
+  background: #0f172a;
+}
+
+.mauth-form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 一步表单的容器（slide 切换的动画单元） */
+.mauth-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ==========================================================================
+   4. 字段：外壳 / 图标 / 输入框 / 错误位
+   ========================================================================== */
+
+.mauth-cell {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 14px;
+}
+
+.mauth-field {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 14px;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.dark .mauth-field {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.mauth-field:focus-within {
+  background: #fff;
+  border-color: #475569;
+  box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.1);
+}
+
+.dark .mauth-field:focus-within {
+  background: #0f172a;
+  border-color: #64748b;
+}
+
+.mauth-field.is-error {
+  border-color: #ef4444;
+}
+
+.dark .mauth-field.is-error {
+  border-color: #ef4444;
+}
+
+.mauth-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.dark .mauth-icon {
+  color: #64748b;
+}
+
+.mauth-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  /* 16px：iOS Safari 聚焦时不会因为 <16px 自动放大整个页面 */
+  font-size: 16px;
+  color: #0f172a;
+  height: 100%;
+  min-width: 0;
+}
+
+.dark .mauth-input {
+  color: #f1f5f9;
+}
+
+.mauth-input::placeholder {
+  color: #94a3b8;
+}
+
+.mauth-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 输入框内的行内按钮：获取验证码 / 密码可见性 */
+.mauth-code-btn {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  padding-left: 12px;
+  border-left: 1px solid #e2e8f0;
+  white-space: nowrap;
+  background: transparent;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.dark .mauth-code-btn {
+  color: #e2e8f0;
+  border-left-color: #334155;
+}
+
+.mauth-code-btn:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.mauth-pwd-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mauth-pwd-toggle:active {
+  color: #475569;
+}
+
+/* 错误位：固定高度，避免提示出现/消失时表单跳动 */
+.mauth-err {
+  height: 16px;
+  line-height: 16px;
+  margin-top: 4px;
+  padding-left: 4px;
+  font-size: 11px;
+  color: #ef4444;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   5. 模式切换 Tab（登录页：邮箱码 / 密码）
+   ========================================================================== */
+
+.mauth-tabs {
+  position: relative;
+  display: flex;
+  margin-bottom: 24px;
+}
+
+.mauth-tab {
+  position: relative;
+  flex: 1;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.mauth-tab.active {
+  color: #0f172a;
+}
+
+.dark .mauth-tab.active {
+  color: #f1f5f9;
+}
+
+/* ==========================================================================
+   6. 选项行 / 协议勾选 / 复选框
+   ========================================================================== */
+
+.mauth-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 20px;
+}
+
+.mauth-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 独立成段的协议勾选（注册第三步） */
+.mauth-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mauth-checkbox {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 4px;
+  border: 1.5px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.dark .mauth-checkbox {
+  border-color: #475569;
+}
+
+.mauth-checkbox.checked {
+  background: #1e293b;
+  border-color: #1e293b;
+}
+
+.dark .mauth-checkbox.checked {
+  background: #f1f5f9;
+  border-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.mauth-option-text {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.dark .mauth-option-text {
+  color: #94a3b8;
+}
+
+/* 文案里的行内链接（协议、注册入口等） */
+.mauth-link {
+  color: #1e293b;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dark .mauth-link {
+  color: #e2e8f0;
+}
+
+.mauth-link:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   7. CTA 按钮 / 次要操作
+   ========================================================================== */
+
+.mauth-submit,
+.mauth-next-btn {
+  height: 48px;
+  width: 100%;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: #1e293b;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mauth-next-btn {
+  margin-top: 8px;
+}
+
+.dark .mauth-submit,
+.dark .mauth-next-btn {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.mauth-submit:active:not(:disabled),
+.mauth-next-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.mauth-submit:disabled,
+.mauth-next-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 提交中的加载指示 */
+.mauth-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: mauth-spin 0.6s linear infinite;
+}
+
+.dark .mauth-spinner {
+  border-color: rgba(15, 23, 42, 0.3);
+  border-top-color: #0f172a;
+}
+
+@keyframes mauth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mauth-forgot {
+  align-self: flex-end;
+  margin: -6px 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.dark .mauth-forgot {
+  color: #94a3b8;
+}
+
+.mauth-forgot:active {
+  color: #1e293b;
+}
+
+/* ==========================================================================
+   8. 底部入口（还没有账号 → 注册 / 已有账户 → 登录）
+   ========================================================================== */
+
+.mauth-footer {
+  margin-top: auto;
+  padding-top: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.mauth-register-btn {
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.dark .mauth-register-btn {
+  color: #f1f5f9;
+}
+
+.mauth-register-btn:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   9. 授权确认 / 邮箱二次验证面板
+   ========================================================================== */
+
+.mauth-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.mauth-panel-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mauth-panel-icon-warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.mauth-panel-text {
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.dark .mauth-panel-text {
+  color: #94a3b8;
+}
+
+.mauth-panel-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+  margin: 6px 0 0;
+  word-break: break-all;
+}
+
+.mauth-resend {
+  align-self: center;
+  margin: 4px 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.mauth-resend:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   10. 信息汇总卡（注册第三步回看填入内容）
+   ========================================================================== */
+
+.mauth-summary {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.dark .mauth-summary {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.mauth-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.mauth-summary-row + .mauth-summary-row {
+  border-top: 1px solid #e2e8f0;
+}
+
+.dark .mauth-summary-row + .mauth-summary-row {
+  border-top-color: #334155;
+}
+
+.mauth-summary-row span {
+  color: #64748b;
+}
+
+.dark .mauth-summary-row span {
+  color: #94a3b8;
+}
+
+.mauth-summary-row strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.dark .mauth-summary-row strong {
+  color: #f1f5f9;
+}
+
+/* ==========================================================================
+   11. 安卓风格 slide 切换（前进/后退方向相反）
+   ========================================================================== */
+
+.mauth-slide-next-enter-active,
+.mauth-slide-next-leave-active,
+.mauth-slide-prev-enter-active,
+.mauth-slide-prev-leave-active {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.mauth-slide-next-enter-from {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.mauth-slide-next-leave-to {
+  transform: translateX(-30%);
+  opacity: 0;
+}
+
+.mauth-slide-prev-enter-from {
+  transform: translateX(-30%);
+  opacity: 0;
+}
+
+.mauth-slide-prev-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+/* 尊重系统「减弱动效」设置 */
+@media (prefers-reduced-motion: reduce) {
+  .mauth-slide-next-enter-active,
+  .mauth-slide-next-leave-active,
+  .mauth-slide-prev-enter-active,
+  .mauth-slide-prev-leave-active {
+    transition: none;
+  }
+}
