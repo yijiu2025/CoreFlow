@@ -1,6 +1,30 @@
 <script setup lang="ts">
-import { useAuthStore } from '@/stores/auth';
+/**
+ * 移动端登录页（全屏平铺，白灰高级色 + slide 切换）
+ *
+ * 路由：/m/login（mobileRoutes，全屏直达）
+ * 也作为 /login 分发器在窄屏 / 真机下的自动形态（见 view/web/login/index.vue）
+ *
+ * 与桌面版对齐的能力（历史上缺失 → 授权/二次验证时静默失败）：
+ * - ConsentPanel：后端返回 action=consent 时展示授权确认
+ * - 邮箱二次验证面板：action=needs_email_verify 时输入邮箱码继续登录
+ * - AppNameMissing：缺 appName/client_id 时给明确提示，而不是提交后报错
+ *
+ * 移动端专项：
+ * - 100dvh + 安全区留白（iPhone 地址栏 / 底部指示条）
+ * - 输入框 16px 字号（iOS Safari 聚焦时不再自动放大页面）
+ * - 可用纵向滚动（授权面板/二次验证变高时不会被裁掉）
+ *
+ * 视觉：与手机端注册页（view/app/register/index.vue）共用同一套样式体系
+ * —— assets/styles/mobile-auth.scss 的 mauth-* 类，本组件**不再自带样式块**，
+ * 两页的头部/字段/按钮/复选框只有一处定义，不会各自漂移。
+ *
+ * @author yijiu2025
+ */
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { useAuthStore } from '@/stores/auth';
 import { useForm } from 'vee-validate';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
@@ -12,27 +36,45 @@ import { postToParent } from '@/utils/parent';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
+import AppNameMissing from '@/components/common/AppNameMissing.vue';
+import ConsentPanel from '@/components/auth/ConsentPanel.vue';
 
 const authStore = useAuthStore();
 const route = useRoute();
 const router = useRouter();
+const { t, locale } = useI18n();
 const { error: showError } = useMessage();
+
+// 应用配置：缺 appName/client_id 时无法开展登录（与桌面版一致给明确提示）
+const clientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
+const hasAppName = computed(() => !!clientId.value);
+
+// 语言跟随父应用透传
+watch(
+  () => route.query.lang as string,
+  newLang => {
+    if (newLang) locale.value = newLang;
+  },
+  { immediate: true }
+);
 
 // 登录模式 + 切换动画方向（邮箱登录 / 密码登录）
 const loginType = ref<'email' | 'pwd'>('email');
-const transitionName = ref('slide-next');
+const transitionName = ref('mauth-slide-next');
+// 密码可见性（移动端无鼠标，必须给显式开关）
+const showPwd = ref(false);
 
 // 表单校验架构 (Zod discriminatedUnion，学 web 端 MiniLogin)
 const loginSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('email'),
-    email: z.string().email('请输入有效的邮箱'),
-    code: z.string().min(4, '验证码至少4位')
+    email: z.string().email(t('validation.email_invalid') || '请输入有效的邮箱'),
+    code: z.string().min(4, t('validation.code_min') || '验证码至少4位')
   }),
   z.object({
     type: z.literal('pwd'),
-    username: z.string().min(2, '账号至少2位'),
-    password: z.string().min(6, '密码至少6位')
+    username: z.string().min(2, t('validation.username_min') || '账号至少2位'),
+    password: z.string().min(6, t('validation.password_min') || '密码至少6位')
   })
 ]);
 
@@ -70,7 +112,7 @@ const { captchaKey, showCaptcha, captchaPurpose, openCaptcha, onCaptchaSuccess }
 // 发送邮箱验证码（先弹图形码，通过后由 verify-captcha 端点发邮箱码 + 启动倒计时）
 const sendEmailCode = () => {
   if (!email.value || (errors.value as Record<string, string | undefined>).email) {
-    showError('请先输入有效的邮箱地址');
+    showError(t('login.input_email_first') || '请先输入有效的邮箱地址');
     return;
   }
   openCaptcha('code');
@@ -82,27 +124,33 @@ const executeSendEmailCode = () => {
 };
 
 // 切换登录模式（带 slide 动画方向 + 同步 discriminatedUnion 的 type 字段）
-const switchType = (t: 'email' | 'pwd') => {
-  if (t === loginType.value) return;
-  transitionName.value = t === 'pwd' ? 'slide-next' : 'slide-prev';
-  loginType.value = t;
+const switchType = (next: 'email' | 'pwd') => {
+  if (next === loginType.value) return;
+  transitionName.value = next === 'pwd' ? 'mauth-slide-next' : 'mauth-slide-prev';
+  loginType.value = next;
 };
 watch(loginType, newType => {
   type.value = newType;
 });
 
 // 登录流程：consent/email_verify/max_sessions/notifyParent 统一在 useLoginFlow
-const { executeLogin } = useLoginFlow({
+const {
+  showConsent, consentState, submittingConsent, denyConsent, approveConsent,
+  showEmailVerify, emailVerifyState, emailVerifyCode, emailVerifyCountdown,
+  sendEmailVerifyCode, submitEmailVerify, executeLogin
+} = useLoginFlow({
   keepLogin: () => keepLogin.value,
   values: () => values,
   captchaKey: () => captchaKey.value,
-  clientId: () => (route.query.client_id as string) || (route.query.appName as string),
-  showError: (msg: string) => showError(msg)
+  clientId: () => clientId.value,
+  showError: (msg: string) => showError(msg),
+  // 全屏直连：守卫带的 ?redirect=（如 /authorize?...）登录后原路返回；iframe 内不生效
+  redirectTo: () => (route.query.redirect as string) || null
 });
 
 const handleLogin = handleSubmit(async () => {
   if (!agreed.value) {
-    showError('请先阅读并勾选同意相关协议');
+    showError(t('login.agree_required') || '请先阅读并勾选同意相关协议');
     return;
   }
   // 密码登录需先过图形验证码，邮箱登录直接执行
@@ -113,147 +161,257 @@ const handleLogin = handleSubmit(async () => {
   }
 });
 
-const goRegister = () => router.push('/m/register');
+/** 当前应展示的表单形态（授权 > 邮箱二次验证 > 登录表单） */
+const headerTitle = computed(() => {
+  if (showConsent.value) return t('login.consent_title');
+  if (showEmailVerify.value) return t('login.email_verify_title');
+  return t('login.welcome');
+});
+
+const goRegister = () => {
+  const query: Record<string, string> = {};
+  for (const key of ['appName', 'client_id', 'redirect_uri', 'scope', 'state', 'lang']) {
+    const v = route.query[key];
+    if (typeof v === 'string') query[key] = v;
+  }
+  router.push({ path: '/m/register', query });
+};
+
+const goForgot = () => {
+  const query: Record<string, string> = {};
+  for (const key of ['appName', 'client_id', 'redirect_uri', 'scope', 'state', 'lang', 'redirect']) {
+    const v = route.query[key];
+    if (typeof v === 'string') query[key] = v;
+  }
+  router.push({ path: '/forgot-password', query });
+};
+
 const goBack = () => {
   if (window.parent && window.parent !== window) {
     // 用 postToParent 走白名单 origin 校验，禁用 '*' 避免恶意父窗口截获
     postToParent({ type: 'SSO_CLOSE' });
-  } else {
-    router.back();
+    return;
   }
+  // 直接打开（无站内历史）时 back() 会离开站点甚至白屏，退化为回登录首页
+  if (window.history.length > 1) router.back();
+  else router.replace('/login');
 };
 </script>
 
 <template>
   <!-- 移动端登录（白灰高级色 + 全屏平铺 + slide 切换） -->
-  <div class="mlog-page">
-    <!-- 顶部 Header（白灰，与 body 融为一体） -->
-    <header class="mlog-header">
-      <button class="mlog-back-btn" @click="goBack">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
-      <div class="mlog-header-content">
-        <div class="mlog-logo">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+  <div class="mauth-page">
+    <!-- 应用标识缺失：直接打开 /m/login 无 appName 时给明确提示 -->
+    <div v-if="!hasAppName" class="mauth-missing">
+      <AppNameMissing />
+    </div>
+
+    <template v-else>
+      <!-- 顶部 Header（白灰，与 body 融为一体） -->
+      <header class="mauth-header">
+        <button class="mauth-back-btn" @click="goBack" :aria-label="t('login.back', '返回')">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
+        </button>
+        <div class="mauth-header-content">
+          <div class="mauth-logo">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+          </div>
+          <h1 class="mauth-title">{{ headerTitle }}</h1>
+          <p class="mauth-sub">{{ t('login.mobile_sub', '统一身份认证') }}</p>
         </div>
-        <h1 class="mlog-title">欢迎登录</h1>
-        <p class="mlog-sub">Enterprise SSO Identity</p>
-      </div>
-    </header>
+      </header>
 
-    <!-- 表单主体（全屏平铺，无卡片浮层） -->
-    <main class="mlog-body">
-      <!-- 模式切换 Tab -->
-      <div class="mlog-tabs">
-        <button class="mlog-tab" :class="{ active: loginType === 'email' }" @click="switchType('email')">
-          邮箱登录
-        </button>
-        <button class="mlog-tab" :class="{ active: loginType === 'pwd' }" @click="switchType('pwd')">
-          密码登录
-        </button>
-      </div>
+      <!-- 表单主体（全屏平铺，无卡片浮层） -->
+      <main class="mauth-body">
+        <!-- ① 授权确认（后端返回 action=consent 时）：与桌面版同一面板组件 -->
+        <template v-if="showConsent">
+          <ConsentPanel
+            :consent-state="consentState"
+            :submitting="submittingConsent"
+            :on-deny="denyConsent"
+            :on-approve="approveConsent"
+          />
+        </template>
 
-      <!-- 表单（slide 切换动画） -->
-      <form @submit.prevent="handleLogin" class="mlog-form">
-        <transition :name="transitionName" mode="out-in">
-          <!-- 邮箱验证码登录 -->
-          <div v-if="loginType === 'email'" key="email" class="mlog-step">
-            <div class="mlog-cell">
-              <div class="mlog-field" :class="{ 'is-error': errors.email }">
-                <svg class="mlog-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                  <polyline points="22,6 12,13 2,6"></polyline>
-                </svg>
-                <input v-model="email" v-bind="emailProps" type="email" placeholder="电子邮箱" autocomplete="email" class="mlog-input" />
-              </div>
-              <div class="mlog-err">{{ errors.email }}</div>
+        <!-- ② 邮箱二次验证（登录环境变更） -->
+        <template v-else-if="showEmailVerify">
+          <div class="mauth-panel">
+            <div class="mauth-panel-icon mauth-panel-icon-warn">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              </svg>
             </div>
+            <p class="mauth-panel-text">{{ t('login.email_verify_hint', { reason: emailVerifyState?.reason || '' }) }}</p>
+            <p class="mauth-panel-sub">
+              {{ t('login.code_sent_to', '验证码已发送至') }} <strong>{{ emailVerifyState?.email }}</strong>
+            </p>
 
-            <div class="mlog-cell">
-              <div class="mlog-field" :class="{ 'is-error': errors.code }">
-                <svg class="mlog-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <div class="mauth-cell mt-4">
+              <div class="mauth-field">
+                <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                   <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                 </svg>
-                <input v-model="code" v-bind="codeProps" type="text" placeholder="邮箱验证码" autocomplete="one-time-code" class="mlog-input" />
-                <button type="button" @click="sendEmailCode" :disabled="isCountingDown" class="mlog-code-btn">
-                  {{ isCountingDown ? `${countdown}s` : '获取验证码' }}
-                </button>
+                <input
+                  v-model="emailVerifyCode"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="6"
+                  :placeholder="t('login.email_verify_code', '邮箱验证码')"
+                  class="mauth-input"
+                  @keyup.enter="submitEmailVerify"
+                />
               </div>
-              <div class="mlog-err">{{ errors.code }}</div>
             </div>
+
+            <button
+              type="button"
+              class="mauth-resend"
+              :disabled="emailVerifyCountdown.active.value"
+              @click="sendEmailVerifyCode"
+            >
+              {{ emailVerifyCountdown.active.value
+                ? t('login.code_countdown', { countdown: emailVerifyCountdown.remaining.value })
+                : t('login.resend_code', '重新发送验证码') }}
+            </button>
+
+            <button type="button" class="mauth-submit" @click="submitEmailVerify">
+              {{ t('login.verify_and_login', '验证并登录') }}
+            </button>
+          </div>
+        </template>
+
+        <!-- ③ 登录表单 -->
+        <template v-else>
+          <!-- 模式切换 Tab -->
+          <div class="mauth-tabs">
+            <button class="mauth-tab" :class="{ active: loginType === 'email' }" @click="switchType('email')">
+              {{ t('login.email_login') }}
+            </button>
+            <button class="mauth-tab" :class="{ active: loginType === 'pwd' }" @click="switchType('pwd')">
+              {{ t('login.password_login') }}
+            </button>
           </div>
 
-          <!-- 密码登录 -->
-          <div v-else key="pwd" class="mlog-step">
-            <div class="mlog-cell">
-              <div class="mlog-field" :class="{ 'is-error': errors.username }">
-                <svg class="mlog-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <input v-model="username" v-bind="usernameProps" type="text" placeholder="账号 / 邮箱" autocomplete="username" class="mlog-input" />
+          <!-- 表单（slide 切换动画） -->
+          <form @submit.prevent="handleLogin" class="mauth-form">
+            <transition :name="transitionName" mode="out-in">
+              <!-- 邮箱验证码登录 -->
+              <div v-if="loginType === 'email'" key="email" class="mauth-step">
+                <div class="mauth-cell">
+                  <div class="mauth-field" :class="{ 'is-error': errors.email }">
+                    <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                      <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                    <input v-model="email" v-bind="emailProps" type="email" inputmode="email" :placeholder="t('login.email_placeholder')" autocomplete="email" class="mauth-input" />
+                  </div>
+                  <div class="mauth-err">{{ errors.email }}</div>
+                </div>
+
+                <div class="mauth-cell">
+                  <div class="mauth-field" :class="{ 'is-error': errors.code }">
+                    <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <input v-model="code" v-bind="codeProps" type="text" inputmode="numeric" :placeholder="t('login.code_placeholder')" autocomplete="one-time-code" class="mauth-input" />
+                    <button type="button" @click="sendEmailCode" :disabled="isCountingDown" class="mauth-code-btn">
+                      {{ isCountingDown ? t('login.code_countdown', { countdown }) : t('login.get_code') }}
+                    </button>
+                  </div>
+                  <div class="mauth-err">{{ errors.code }}</div>
+                </div>
               </div>
-              <div class="mlog-err">{{ errors.username }}</div>
+
+              <!-- 密码登录 -->
+              <div v-else key="pwd" class="mauth-step">
+                <div class="mauth-cell">
+                  <div class="mauth-field" :class="{ 'is-error': errors.username }">
+                    <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <input v-model="username" v-bind="usernameProps" type="text" :placeholder="t('login.username_placeholder')" autocomplete="username" class="mauth-input" />
+                  </div>
+                  <div class="mauth-err">{{ errors.username }}</div>
+                </div>
+
+                <div class="mauth-cell">
+                  <div class="mauth-field" :class="{ 'is-error': errors.password }">
+                    <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <input v-model="password" v-bind="passwordProps" :type="showPwd ? 'text' : 'password'" :placeholder="t('login.password_placeholder')" autocomplete="current-password" class="mauth-input" />
+                    <!-- 密码可见性开关：移动端无 hover，必须显式可点 -->
+                    <button
+                      type="button"
+                      class="mauth-pwd-toggle"
+                      :aria-label="showPwd ? t('login.hide_password', '隐藏密码') : t('login.show_password', '显示密码')"
+                      @click="showPwd = !showPwd"
+                    >
+                      <svg v-if="showPwd" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="mauth-err">{{ errors.password }}</div>
+                </div>
+
+                <!-- 忘记密码（与桌面版对齐） -->
+                <button type="button" class="mauth-forgot" @click="goForgot">{{ t('login.forgot_password') }}</button>
+              </div>
+            </transition>
+
+            <!-- 记住登录 + 已读协议（合并到一处，提交按钮上方） -->
+            <div class="mauth-options">
+              <label class="mauth-option">
+                <input type="checkbox" v-model="keepLogin" class="hidden" />
+                <span class="mauth-checkbox" :class="{ checked: keepLogin }">
+                  <svg v-if="keepLogin" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </span>
+                <span class="mauth-option-text">{{ t('login.keep_login') }}</span>
+              </label>
+              <label class="mauth-option">
+                <input type="checkbox" v-model="agreed" class="hidden" />
+                <span class="mauth-checkbox" :class="{ checked: agreed }">
+                  <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </span>
+                <span class="mauth-option-text">
+                  {{ t('register.agree_prefix') }}<span @click.stop.prevent="docType = 'service'" class="mauth-link">{{ t('register.agree_link_service') }}</span>{{ t('register.agree_and') }}<span @click.stop.prevent="docType = 'privacy'" class="mauth-link">{{ t('register.agree_link_privacy') }}</span>
+                </span>
+              </label>
             </div>
 
-            <div class="mlog-cell">
-              <div class="mlog-field" :class="{ 'is-error': errors.password }">
-                <svg class="mlog-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-                <input v-model="password" v-bind="passwordProps" type="password" placeholder="登录密码" autocomplete="current-password" class="mlog-input" />
-              </div>
-              <div class="mlog-err">{{ errors.password }}</div>
-            </div>
+            <!-- 登录按钮 -->
+            <button type="submit" :disabled="authStore.loading" class="mauth-submit">
+              <span v-if="authStore.loading" class="mauth-spinner"></span>
+              {{ authStore.loading ? t('login.logging_in') : t('login.submit') }}
+            </button>
+          </form>
+
+          <!-- 底部注册入口 -->
+          <div class="mauth-footer">
+            <span>{{ t('login.no_account', '还没有账号？') }}</span>
+            <button class="mauth-register-btn" @click="goRegister">{{ t('login.register_now') }}</button>
           </div>
-        </transition>
-
-        <!-- 记住登录 + 已读协议（合并到一处，提交按钮上方） -->
-        <div class="mlog-options">
-          <label class="mlog-option">
-            <input type="checkbox" v-model="keepLogin" class="hidden" />
-            <span class="mlog-checkbox" :class="{ checked: keepLogin }">
-              <svg v-if="keepLogin" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </span>
-            <span class="mlog-option-text">记住登录</span>
-          </label>
-          <label class="mlog-option">
-            <input type="checkbox" v-model="agreed" class="hidden" />
-            <span class="mlog-checkbox" :class="{ checked: agreed }">
-              <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </span>
-            <span class="mlog-option-text">
-              已同意
-              <span @click.stop.prevent="docType = 'service'" class="mlog-link">《服务协议》</span>
-              与
-              <span @click.stop.prevent="docType = 'privacy'" class="mlog-link">《隐私政策》</span>
-            </span>
-          </label>
-        </div>
-
-        <!-- 登录按钮 -->
-        <button type="submit" :disabled="authStore.loading" class="mlog-submit">
-          <span v-if="authStore.loading" class="mlog-spinner"></span>
-          立即登录
-        </button>
-      </form>
-
-      <!-- 底部注册入口 -->
-      <div class="mlog-footer">
-        <span>还没有账号？</span>
-        <button class="mlog-register-btn" @click="goRegister">立即注册</button>
-      </div>
-    </main>
+        </template>
+      </main>
+    </template>
 
     <!-- 图形验证码弹窗（send-email=true 时 verify-captcha 一次完成校验图形码 + 发邮箱码） -->
     <GraphicCaptcha :is-open="showCaptcha" :email="values.email" :send-email="captchaPurpose === 'code'" type="login" @close="showCaptcha = false" @success="onCaptchaSuccess" />
@@ -262,415 +420,3 @@ const goBack = () => {
     <MessageToast />
   </div>
 </template>
-
-<style scoped>
-/* === 移动端全屏（白灰高级色） === */
-.mlog-page {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background: #fafafa;
-  overflow: hidden;
-}
-:global(.dark) .mlog-page {
-  background: #020617;
-}
-
-/* === 顶部 Header（白灰，无分隔线，与 body 融为一体） === */
-.mlog-header {
-  position: relative;
-  padding: 56px 24px 32px;
-  background: #fff;
-  overflow: hidden;
-}
-:global(.dark) .mlog-header {
-  background: #0f172a;
-}
-.mlog-back-btn {
-  position: absolute;
-  top: 48px;
-  left: 16px;
-  z-index: 2;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #475569;
-  background: #f1f5f9;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-:global(.dark) .mlog-back-btn {
-  color: #94a3b8;
-  background: #1e293b;
-}
-.mlog-back-btn:active {
-  background: #e2e8f0;
-}
-:global(.dark) .mlog-back-btn:active {
-  background: #334155;
-}
-.mlog-header-content {
-  text-align: center;
-}
-.mlog-logo {
-  width: 52px;
-  height: 52px;
-  margin: 0 auto 12px;
-  border-radius: 14px;
-  background: #1e293b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-}
-:global(.dark) .mlog-logo {
-  background: linear-gradient(135deg, #334155, #1e293b);
-  border: 1px solid #475569;
-}
-.mlog-title {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 4px;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-}
-:global(.dark) .mlog-title {
-  color: #f1f5f9;
-}
-.mlog-sub {
-  font-size: 12px;
-  color: #94a3b8;
-  margin: 0;
-  letter-spacing: 0.05em;
-}
-
-/* === 表单主体（全屏平铺，无卡片浮层） === */
-.mlog-body {
-  flex: 1;
-  padding: 24px 20px 32px;
-  background: #fff;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-:global(.dark) .mlog-body {
-  background: #0f172a;
-}
-
-/* === 模式切换 Tab（无底部分隔线，用间距区分） === */
-.mlog-tabs {
-  position: relative;
-  display: flex;
-  margin-bottom: 24px;
-}
-.mlog-tab {
-  position: relative;
-  flex: 1;
-  padding: 10px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #94a3b8;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-.mlog-tab.active {
-  color: #0f172a;
-}
-:global(.dark) .mlog-tab.active {
-  color: #f1f5f9;
-}
-.mlog-tab-indicator {
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 50%;
-  height: 2px;
-  background: #1e293b;
-  transition: transform 0.3s ease;
-}
-:global(.dark) .mlog-tab-indicator {
-  background: #f1f5f9;
-}
-.mlog-tab-indicator.is-pwd {
-  transform: translateX(100%);
-}
-
-/* === 表单 === */
-.mlog-form {
-  display: flex;
-  flex-direction: column;
-}
-.mlog-step {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.mlog-cell {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 14px;
-}
-
-/* 输入框（白灰） */
-.mlog-field {
-  display: flex;
-  align-items: center;
-  height: 48px;
-  padding: 0 14px;
-  gap: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  transition: all 0.2s;
-}
-:global(.dark) .mlog-field {
-  background: #1e293b;
-  border-color: #334155;
-}
-.mlog-field:focus-within {
-  background: #fff;
-  border-color: #475569;
-  box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.1);
-}
-:global(.dark) .mlog-field:focus-within {
-  background: #0f172a;
-  border-color: #64748b;
-}
-.mlog-field.is-error {
-  border-color: #ef4444;
-}
-.mlog-icon {
-  color: #94a3b8;
-  flex-shrink: 0;
-}
-:global(.dark) .mlog-icon {
-  color: #64748b;
-}
-.mlog-prefix {
-  font-size: 14px;
-  font-weight: 600;
-  color: #0f172a;
-  padding-right: 10px;
-  border-right: 1px solid #e2e8f0;
-}
-:global(.dark) .mlog-prefix {
-  color: #f1f5f9;
-  border-right-color: #334155;
-}
-.mlog-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-size: 14px;
-  color: #0f172a;
-  height: 100%;
-  min-width: 0;
-}
-:global(.dark) .mlog-input {
-  color: #f1f5f9;
-}
-.mlog-input::placeholder {
-  color: #94a3b8;
-}
-
-/* 获取验证码按钮 */
-.mlog-code-btn {
-  font-size: 12px;
-  font-weight: 700;
-  color: #1e293b;
-  padding-left: 12px;
-  border-left: 1px solid #e2e8f0;
-  white-space: nowrap;
-  background: transparent;
-  border-top: none;
-  border-right: none;
-  border-bottom: none;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-:global(.dark) .mlog-code-btn {
-  color: #e2e8f0;
-  border-left-color: #334155;
-}
-.mlog-code-btn:disabled {
-  color: #94a3b8;
-  cursor: not-allowed;
-}
-
-/* 错误位（紧贴输入框，固定高度防抖动） */
-.mlog-err {
-  height: 16px;
-  line-height: 16px;
-  margin-top: 4px;
-  padding-left: 4px;
-  font-size: 11px;
-  color: #ef4444;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* 记住登录 + 已读协议（合并一处，提交按钮上方） */
-.mlog-options {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 4px 0 20px;
-}
-.mlog-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  user-select: none;
-}
-.mlog-option-text {
-  font-size: 12px;
-  color: #64748b;
-  line-height: 1.5;
-}
-:global(.dark) .mlog-option-text {
-  color: #94a3b8;
-}
-
-/* 复选框（白灰选中态） */
-.mlog-checkbox {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  border: 1.5px solid #cbd5e1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  flex-shrink: 0;
-  transition: all 0.2s;
-}
-:global(.dark) .mlog-checkbox {
-  border-color: #475569;
-}
-.mlog-checkbox.checked {
-  background: #1e293b;
-  border-color: #1e293b;
-}
-:global(.dark) .mlog-checkbox.checked {
-  background: #f1f5f9;
-  border-color: #f1f5f9;
-  color: #0f172a;
-}
-
-/* 登录按钮（深灰 CTA，非彩色渐变） */
-.mlog-submit {
-  height: 48px;
-  width: 100%;
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-  background: #1e293b;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-:global(.dark) .mlog-submit {
-  background: #f1f5f9;
-  color: #0f172a;
-}
-.mlog-submit:active:not(:disabled) {
-  transform: scale(0.98);
-}
-.mlog-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.mlog-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: mlog-spin 0.6s linear infinite;
-}
-:global(.dark) .mlog-spinner {
-  border-color: rgba(15, 23, 42, 0.3);
-  border-top-color: #0f172a;
-}
-@keyframes mlog-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* 协议链接（在 mlog-option-text 内） */
-.mlog-link {
-  color: #1e293b;
-  font-weight: 500;
-  cursor: pointer;
-}
-:global(.dark) .mlog-link {
-  color: #e2e8f0;
-}
-.mlog-link:hover {
-  text-decoration: underline;
-}
-
-/* 底部注册入口 */
-.mlog-footer {
-  margin-top: auto;
-  padding-top: 24px;
-  text-align: center;
-  font-size: 13px;
-  color: #94a3b8;
-}
-.mlog-register-btn {
-  margin-left: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1e293b;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-:global(.dark) .mlog-register-btn {
-  color: #f1f5f9;
-}
-.mlog-register-btn:hover {
-  text-decoration: underline;
-}
-
-/* === 安卓风格 slide 切换动画 === */
-.slide-next-enter-active,
-.slide-next-leave-active,
-.slide-prev-enter-active,
-.slide-prev-leave-active {
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-.slide-next-enter-from {
-  transform: translateX(100%);
-  opacity: 0;
-}
-.slide-next-leave-to {
-  transform: translateX(-30%);
-  opacity: 0;
-}
-.slide-prev-enter-from {
-  transform: translateX(-30%);
-  opacity: 0;
-}
-.slide-prev-leave-to {
-  transform: translateX(100%);
-  opacity: 0;
-}
-</style>

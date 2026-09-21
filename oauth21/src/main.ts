@@ -8,6 +8,8 @@ import App from './App.vue';
 import router from './router';
 import i18n from './i18n'; // 如果有国际化配置
 import './assets/styles/main.scss';
+// 移动端认证页（/m/login、/m/register）共享样式：两页视觉的单一来源
+import './assets/styles/mobile-auth.scss';
 import request from './utils/request';
 import { initDeviceSync } from 'stable-deviceid';
 import { reportError } from './composables/useErrorReporter';
