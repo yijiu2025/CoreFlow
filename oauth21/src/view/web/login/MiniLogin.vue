@@ -121,7 +121,9 @@ const {
   values: () => values,
   captchaKey: () => captchaKey.value,
   clientId: () => (route.query.client_id as string) || (route.query.appName as string),
-  showError: (msg: string) => showError(msg)
+  showError: (msg: string) => showError(msg),
+  // 全屏直连：守卫带的 ?redirect=（如 /authorize?...）登录后原路返回；iframe 内不生效
+  redirectTo: () => (route.query.redirect as string) || null
 });
 
 const qrClientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
