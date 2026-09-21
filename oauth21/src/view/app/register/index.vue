@@ -24,16 +24,21 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
+import MauthThemeSwitch from '@/components/auth/MauthThemeSwitch.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { useButtonLock } from '@/composables/useButtonLock';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useCaptcha } from '@/composables/useCaptcha';
+import { useKeyboardAvoid } from '@/composables/useKeyboardAvoid';
 
 const { t, locale } = useI18n();
 const route = useRoute();
 const router = useRouter();
+
+// 键盘弹出时把聚焦的输入框滚进可视区（iOS 键盘只覆盖视口、不缩视口高度）
+useKeyboardAvoid();
 
 // 语言跟随父应用透传（与手机端登录页同一口径）
 watch(
@@ -234,6 +239,8 @@ const handleRegister = handleSubmit(async data => {
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
       </button>
+      <!-- 右上角主题切换（跟随系统 / 浅色 / 深色 三态）；被 iframe 嵌入时自动隐藏 -->
+      <MauthThemeSwitch />
       <div class="mauth-header-content">
         <div class="mauth-logo">
           <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5">

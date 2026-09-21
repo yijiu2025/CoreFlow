@@ -20,6 +20,8 @@ declare module 'vue' {
     DocModal: typeof import('./components/common/DocModal.vue')['default']
     GraphicCaptcha: typeof import('./components/common/GraphicCaptcha.vue')['default']
     Icons: typeof import('./components/common/Icons.vue')['default']
+    MauthSocialRow: typeof import('./components/auth/MauthSocialRow.vue')['default']
+    MauthThemeSwitch: typeof import('./components/auth/MauthThemeSwitch.vue')['default']
     MessageToast: typeof import('./components/common/MessageToast.vue')['default']
     PasswordInput: typeof import('./components/common/PasswordInput.vue')['default']
     PasswordStrength: typeof import('./components/common/PasswordStrength.vue')['default']

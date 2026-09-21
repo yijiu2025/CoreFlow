@@ -1,0 +1,70 @@
+/* ==========================================================================
+   天青主题 · 附加样式
+
+   参考稿是「浅蓝渐变 + 城市天际线 + 白底圆角字段 + 蓝色胶囊按钮」的克制工具风。
+
+   这里只放 token 表达不了的三件事：渐变的结构、剪影图片、横屏适配。
+   颜色 / 圆角 / 描边 / 字体全部走 tokens（见 index.ts）—— 那样部署方能从后端改，
+   写死在这里就失去了可配置性。
+
+   选择器一律带 `html[data-mauth-theme='sky']` 前缀：切走主题后 DOM 属性消失、
+   规则自动失效，无需运行时卸载样式表，也不会污染别的主题。
+
+   本文件由 src/themes/index.ts 以 `?inline` 动态加载，切到本主题时才请求，
+   assets/ 下的图片同理 —— 不会进首屏包。
+   ========================================================================== */
+
+/* 两条背景叠加：剪影在下（no-repeat 贴底居中）、渐变在上（铺满）。
+   各自独立控制 background-repeat / -position / -size，所以两个属性都要写双值。
+
+   ⚠️ 必须配合 tokens 里 `--mauth-header-bg / --mauth-body-bg: transparent`：
+   `.mauth-header` 与 `.mauth-body` 默认是不透明表面，会把这层渐变整块盖住
+   （ocean 主题先在 `.mauth-page` 上挂波浪时就踩过这个坑，截图上完全看不到）。
+
+   三个色标来自 token，部署方换渐变配色不必改本文件。 */
+html[data-mauth-theme='sky'] .mauth-page {
+  background-image: url('./assets/skyline.svg'),
+    linear-gradient(
+      180deg,
+      var(--mauth-sky-top) 0%,
+      var(--mauth-sky-mid) 38%,
+      var(--mauth-sky-bot) 100%
+    );
+  background-repeat: no-repeat, no-repeat;
+  background-position: bottom center, center;
+  background-size: 100% auto, 100% 100%;
+}
+
+/* 深色档只换剪影文件：三个色标已经在 tokens.dark 里改过，
+   同一条 linear-gradient 会重新求值，无需重写。 */
+html.dark[data-mauth-theme='sky'] .mauth-page {
+  background-image: url('./assets/skyline-dark.svg'),
+    linear-gradient(
+      180deg,
+      var(--mauth-sky-top) 0%,
+      var(--mauth-sky-mid) 38%,
+      var(--mauth-sky-bot) 100%
+    );
+}
+
+/* 主按钮做竖向渐变（参考稿的按钮不是纯色）。
+   两个色标仍取 token，本文件只负责「怎么渐变」—— 所以后端改 --mauth-submit-bg
+   依然能生效。用 background-image 而非 background 简写，是为了不动 background-color，
+   这样 `:disabled { opacity: .6 }` 之类的既有规则不受影响。 */
+html[data-mauth-theme='sky'] .mauth-submit,
+html[data-mauth-theme='sky'] .mauth-next-btn {
+  background-image: linear-gradient(180deg, var(--mauth-submit-bg-top), var(--mauth-submit-bg));
+}
+
+/* 横屏：视口变宽后 `100% auto` 会把剪影等比放大到约 260px 高（844px 宽），
+   占 390px 视高的三分之二，装饰压过内容。这里改成固定高，只压装饰、不动内容尺寸。
+
+   ⚠️ assets/ 下的 SVG 必须带 width/height 属性，不能只给 viewBox：
+   背景图没有固有尺寸时，`background-size: … auto` 里的 auto 推不出高度，
+   剪影会被撑满整个容器 —— 实测占掉 800px 视口，整屏都是建筑。
+   竖屏那条 `100% auto` 能算出 120px，靠的就是这两个属性。 */
+@media (max-height: 560px) {
+  html[data-mauth-theme='sky'] .mauth-page {
+    background-size: 100% 88px, 100% 100%;
+  }
+}

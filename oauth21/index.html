@@ -4,7 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <!-- viewport-fit=cover：让页面铺满刘海屏，env(safe-area-inset-*) 才拿得到真实值（否则恒为 0） -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content：虚拟键盘弹出时缩小视口而不是覆盖内容。
+         Android Chrome 生效、iOS Safari 忽略（无害）。配合 .mauth-page 的 100dvh 滚动容器，
+         键盘顶起后底部按钮仍可达；iOS 那侧由 useKeyboardAvoid 补 focus 时滚动。 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <title>Enterprise SSO Login</title>
     <!-- Preconnect to Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
