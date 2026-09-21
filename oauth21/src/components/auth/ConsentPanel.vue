@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Icons from '@/components/common/Icons.vue';
 
@@ -59,8 +58,9 @@ const { t } = useI18n();
             <Icons name="check" :size="16" class="text-green-500 shrink-0 mt-0.5" />
             <span>
               <strong class="font-semibold">{{ s.name }}</strong>
-              <span class="text-slate-400 dark:text-slate-500">— {{ s.desc }}</span>
-              <span v-if="s.required" class="ml-1 text-[10px] text-slate-400">（必需）</span>
+              <!-- desc 可能为空（父应用未透传描述）：此时不渲染破折号，避免出现悬空的"—" -->
+              <span v-if="s.desc" class="text-slate-400 dark:text-slate-500">— {{ s.desc }}</span>
+              <span v-if="s.required" class="ml-1 text-[10px] text-slate-400">（{{ t('auth.required') }}）</span>
             </span>
           </li>
         </ul>
