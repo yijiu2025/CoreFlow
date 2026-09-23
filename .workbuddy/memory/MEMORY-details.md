@@ -209,6 +209,12 @@ vitepress 只能解析 docs 内路由）—— **文档站此前从未构建成�
 - **`crypto.timingSafeEqual` 要求两 Buffer 字节长度相等**，否则抛 `RangeError`；`Buffer.from(str,'hex')`
   遇非法 hex **静默截断成空 Buffer** → 「比字符串长度」≠「比字节长度」。
 - **`bcryptjs` 只取前 72 字节**；密码长度上限按 `Buffer.byteLength` 判断，`maxLength:128`（字符）会漏尾巴。
+- **⚠️ 密码哈希禁用 `bcryptjs`**（性能，2026-09-16 实测）：10 并发下事件循环**冻结 774ms**（tick 间隔法测），
+  且是纯 JS 实现、无法靠调 cost 缓解。统一用 `framework/auth/password-hash.js`（`scrypt`，同场景 22ms）。
+  换实现时注意**已存量哈希的兼容**（前缀/参数不同不能直接比）。
+- **⚠️ `/user/v1/register` 后端只读 `body.username`**（`src/app/user/dao/user.js:55`）→ 传 `{ email }` 时
+  `username` 取不到，会**静默回退成 email 当用户名**（不报错、不校验）。前端注册页因此必须显式传 `username`；
+  排查"用户名怎么变成邮箱了"先看这里。
 - **⚠️ 高频缺陷类「守卫未防御非预期输入」**（cookie.js / totp.js / signature.js / perm-cache.js 各 1 例）：
   外部可控值直接进 `timingSafeEqual` / `.length` / `Buffer.from(x,'hex')` / **`new Date(x)`** →
   必须先做类型 + 长度归一化，并把函数体包进 try 兜底到声明的失败返回值。
@@ -225,6 +231,11 @@ vitepress 只能解析 docs 内路由）—— **文档站此前从未构建成�
 - **⚠️ 插件"双重注册"会让整条钩子链翻倍**：同一个 `init` 既被 `loader/registry/NN-*.js` 注册、
   又被 `10-apps.js` 通过 `appConfig.init` 注册一次。**新 app 接入前先确认 `init` 只被一个位置注册。**
 - **注释里不要写 `from './xxx.js'` 字面量**：依赖图脚本正则会误判成真实依赖，造出假环。
+- **⚠️ 请求路径禁止同步调用**（`*Sync(`）——Fastify 是单线程事件循环，一次 `readFileSync`/`execSync`
+  就把**全部并发连接**一起卡住（与 bcryptjs 同一类问题：表现为"平时很快、压测就整站假死"）。
+  审计命令（排除测试目录）：`grep -E '\b\w+Sync\s*\(' src --glob '!**/__tests__/**'`；
+  脚本/CLI 与启动期（load 阶段）的同步 IO 不算违规，**判据是"是否在请求链路上"**。
+  需要同步读配置的正确做法：启动时读一次并缓存，而不是每次请求读。
 
 ---
 
@@ -411,6 +422,11 @@ vitepress 只能解析 docs 内路由）—— **文档站此前从未构建成�
 - **验证要"读 + 跑"**：光读代码会漏真 bug。可用 `app.inject()` + `sequelize.options.logging` 统计真实查询次数。
 - **结构性断言要自带反例**："无环/无违规"这类结论不能来自可能写坏了的检测器 —— 内存构造一个反面样本
   确认它真会红，再报正常结果。
+- **⚠️ `vue-tsc` 拦不住模板里的未定义标识符**：`<button @click="fn">` 中 `fn` 根本没定义时，
+  `vue-tsc --noEmit` 与 `vite build` **双双全绿**（模板表达式不进类型检查），只在**运行时点击**才炸
+  `ReferenceError`。⇒ 凡是「模板里引用的函数/变量」都不能靠静态检查兜底，必须**真实渲染 + 真点一下**
+  （本仓做法：Playwright 关卡里实际 `click()` 并断言效果，而不是只断言 DOM 存在）。
+  副作用：重构把逻辑挪进/挪出 `setup` 时，**构建通过 ≠ 页面能跑**。
 
 ### 测试（本仓约定）
 
@@ -1027,3 +1043,109 @@ code 模式要进第 2 步必须先过图形验证码，而后端不在线 → �
 `/reset-password` 重定向保留 token / 宽视口跳电脑版 / 登录页入口落到移动端 / 横屏可滚 + 44px 热区）；
 `verify-mobile-forgot-link.mjs` **28/28**（4 步流程 / 强度条三档取色与文案 / 一致性校验拦截 / 密码可见性开关）；
 `verify-mobile-forgot-code-flow.mjs` **22/22**（三步全流程 + 请求体 + 完成页）。既有 8 个关卡无回归。
+
+### 11.10 「业务容器 + 可换版式」架构（2026-09-23，注册页落地；必读）
+
+#### 一、分层与目录
+
+```
+view/app/register/index.vue           业务容器：状态 / 校验 / 请求 / 路由 / 验证码 / 倒计时
+themes/app/registry.ts                ← 版式注册表工厂（通用机制，别的页照抄一行调用）
+themes/app/register/types.ts          契约（纯类型 RegisterViewContext，**唯一接口**）
+themes/app/register/registry.ts       本页注册表 + 选择优先级 + 预取
+themes/app/register/base/index.vue    基础版式（容器**静态引入**）
+themes/app/register/compact/index.vue 变体（`import.meta.glob` → 独立惰性 chunk）
+```
+
+与「皮肤」（`themes/<id>/`，同一套 DOM 只换 token/CSS）**正交**：`?theme=ocean&view=compact`
+可任意组合。
+
+#### 二、四个刻意的设计决定（都是踩过的坑）
+
+1. **base 不进变体表**：glob 写 `['./*/index.vue', '!./base/index.vue']` 负模式排除，
+   base 由容器静态 `import` —— 默认路径是绝大多数访问，不该多等一个网络往返；
+   代价是"变体目录要重启 dev server"（glob 启动时静态扫描）。
+2. **浮层由容器渲染，不交给版式**：`GraphicCaptcha` / `AgreementModals` / `MessageToast`
+   三者都是 `position: fixed`（Toast 还 Teleport 到 body），渲染位置对呈现零影响
+   （已核 `.mauth-page` 无 `position/z-index/transform` ⇒ 既不是包含块也不是层叠上下文，
+   实测把三者从 `.mauth-page` 内部移到兄弟节点后**逐像素零差异**）；
+   反过来用 slot 交给版式，则"版式忘了放挂载点"会让功能静默消失。
+3. **显式非法 `?view=` 不回退**：`?view=typo` 直接落 base，而不是被"主题包声明 / 环境变量"接管 ——
+   参数写错时静默换另一套 UI，比看到默认版式更难排查（与主题 id 的校验口径一致：
+   白名单 `[a-z0-9-]` + 已登记，不做模糊匹配）。
+4. **版式选择是 computed + watch（带 epoch）**，不是 setup 里取一次：
+   后端下发的换肤配置在 `App.vue` 的 `onMounted` 之后才到、可能晚于本页 setup；
+   epoch 用于丢弃过期结果（版式 A→B→A 时先发的 A 可能后返回，与主题样式加载同一类坑）。
+
+#### 三、契约的强制力（这是"文档不腐烂"的关键）
+
+`types.ts` 只声明；容器侧 `assertRegisterContract(reactive({...}))` —— 函数参数类型即**编译期
+结构自检**：少字段、类型不符，`vue-tsc` 当场报错。
+`reactive` + 嵌套 ref 让契约里写**标量**（`step: number`、`fields.x.value: string`），
+版式里直接 `v-model="ctx.fields.email.value"`、`v-bind="ctx.fields.email.attrs"`，不必到处 `.value`；
+`attrs` 走 `markRaw` 保证与改造前 `v-bind="emailProps"` 行为逐字一致。
+每字段的 `invalid` / `error` 由**容器**算好（邮箱的口径含"查重命中"），版式不做判断。
+
+#### 四、验收数据
+
+- **视觉零变化**：改动前后各拍 10 个场景（空表单 / 已填 / 错误态 / 密码步 / 核对步 / 勾选 /
+  深色 / sky / 横屏 / 矮屏，390×844@2x），加载后注入冻结样式并**断言生效** + 等 `fonts.ready`，
+  倒计时按钮按矩形挖掉 → **逐像素差异合计 0 px**（脚本 `.tmp-probe/shots-register.mjs` +
+  `diff-reg-shots.py`，两侧 meta.json 记录挖掉区域）。⚠️ 先拍基线、后重构，顺序反了就没法证明。
+- `verify-register-view.mjs` **36/36**：默认 → base、`?view=base`、`?view=compact` 真加载、
+  5 种非法 id 回退 base；**变体下走通三步**（未发码禁用 → 图形码弹窗 → 空码报错 → 进第二步 →
+  两次密码不一致被拦 → 勾选协议后才可提交）；请求体含 `username/email/code` + `password`
+  344 字符密文 + `kid` + `captchaKey`，成功后跳 `/m/login`；静态体检（`themes/app/**` 无任何
+  业务依赖、容器业务齐备、base 无 `<style>`、变体样式无裸色值）；变体与基础版式字段计算样式全等。
+- `verify-view-priority.mjs` **6/6**：临时服务（`VITE_REGISTER_VIEW=compact npx vite --port 5177`）
+  + 临时给 `sky/index.ts` 加 `views: { register: 'compact' }`，验完撤销并确认该文件 `git diff` 为空：
+  env 生效 / URL 覆盖 env / 主题声明生效 / URL 覆盖主题 / 主题未声明时 env 兜底 / 非法 → base。
+- 既有 11 个关卡无回归、`vue-tsc` 0。
+
+#### 五、顺带修掉的同源 bug
+
+注册页第 2 步「两次密码一致」也踩了 §11.9 那个坑（`validateField` 不跑 zod 的 object 级 `refine`）：
+不一致会一路走到第 3 步，点「完成注册」才被 `handleSubmit` 拦下，而错误标在第 2 步字段上 →
+用户看到的是"点了没反应"。修法与 §11.9 一致：显式比对 + `setFieldError`。
+
+#### 六、改版式的检查清单
+
+新增 `themes/app/<page>/<id>/index.vue` → **重启 dev server** → 访问 `?view=<id>`。
+版式内禁止出现 `@/api/*` / `vee-validate` / `zod` / `vue-router` / `@/stores/*` / `@/utils/crypto`
+（验收脚本按正则静态扫全部 `.vue|.ts`，**先剥注释**再判 —— 注释里举反例不算违规）。
+样式可自带 `<style scoped>`，但取值必须走 `--mauth-*` token（验收里也扫裸色值）。
+
+### 11.11 主索引（MEMORY.md）体积与注入上限
+
+**实测阈值**（2026-09-23，用被截断的那一版反推）：`1466ec6` 的 MEMORY.md = **18371 B / 11686 字符**，
+注入时在**第 17302 字节（第 11008 字符）处被切断**，尾部约 1KB（SECRET 32 位、待办）整段消失。
+⇒ 安全线取 **约 16KB / 10000 字符**以下留余量；截断是**静默的**，症状是"明明写过却想不起来"。
+
+压缩轮次：18371 B → 13283 B（`8d31806`）→ **11473 B / 7171 字符**（2026-09-23 第三轮：把原 §2
+「后端陷阱速查」整节迁到本文件 **§12**，主索引只留一行指针 + 14 个关键词，可检索性不丢）。
+下次再逼近上限，优先迁 **§3（oauth21）**——它已是主索引最大单节，且细则全在 §11。
+⚠️ 维护一律用 Write/Edit（`cat >>` 会从偏移 0 覆写）。
+
+---
+
+## 12. 后端陷阱速查（原 MEMORY.md §2，2026-09-23 迁入）
+
+> 细则见本文件对应章节；此表是"开工前扫一眼"的清单。
+
+| 主题 | 一句话 | 细则 |
+| --- | --- | --- |
+| `getModel(name)` | 未命中**抛 TypeError 非 null** → 调用点放 try | §3 |
+| `getStore(prefix)` | prefix 全仓逐字一致；无 Redis 走 MapStore（不支持 `zAdd`/`zRangeByScore`） | §5 |
+| 密码哈希 | **禁 `bcryptjs`**（10 并发冻结 774ms）→ `framework/auth/password-hash.js`（scrypt 22ms） | §3 |
+| 请求路径 | 禁 `*Sync(`（一次同步 IO 卡住整站并发） | §3 |
+| `underscored: true` | 属性名 `createdAt`；`attributes:['created_at']` **静默丢弃** → Invalid Date | §3 |
+| 模块级 `process.exit` | **伪装绿色**（汇总恒 0 失败、用例数不稳）→ `!isTestEnv` 守卫 | §3 |
+| 改导出面 | 真实 import 上层入口一次 + 同步所有 `unstable_mockModule` 替身 | §3 |
+| 外部输入 | 进 `timingSafeEqual`/`.length`/`Buffer.from(x,'hex')`/`new Date(x)` 前必先归一化 | §3 |
+| `vue-tsc` | **拦不住模板未定义标识符** → 必须真实渲染/点击验证 | §9 |
+| `/user/v1/register` | 只读 `body.username` → 传 email 时**静默回退成 email**（`user/dao/user.js:55`） | §3 |
+| Fastify | `NN-*.js` 数字前缀=顺序；`onRoute` 不回溯（限流唯一注册点 `registry/05-firewall.js`）；WS 停机须自定义 `preClose`；`OPTIONAL_LOADERS`=带伤启动白名单；`/health/*` 未登录可见 → 新增字段先想"给外人看合适吗" | §6 |
+| Redis v5 | 只有驼峰命令（`hset`/`hgetall` 为 undefined，常被 try 吞）；原始串用 `store().call(c=>c.get(k))`；`hexists` 返 1/0；`withTimeout` 禁 `.finally`；两档重连 `forever`（**永不 reject**）/`bounded`；⚠️ **`duplicate()` 只复制配置不建连** → 订阅须先 `connect()` | §5 |
+| Guard | `requirePermission`/`freshPermission` 不得进 RUNTIME_FIELDS；`allowRoles:[]`=不限角色；⚠️ `guard-config.dao.js` 的 `restore()`=truncate 全表+回填 → **空快照会清空 guard_configs** | §7 |
+| 日志 | 唯一出口 `framework/log/index.js`；业务禁 `console.*`；`logStdout` 不落盘、`log.info` 会被丢 | §8 |
+
