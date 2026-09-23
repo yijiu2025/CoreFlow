@@ -81,7 +81,10 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 - 🔴 **视觉回归先稳定化、再归因**：不禁过渡/动画、不等 `fonts.ready` → 同代码连拍可报 **17.8% 假差异**；
   冻结样式须 `page.addStyleTag` **加载后**注入并**断言生效**。稳定后噪声下限 **0**；⚠️ 比对前先 `md5sum` 验两侧同一状态（§10.13）。
 - ⚠️ 同一条消息对同一文件多个 Edit 会**静默丢失** → 同文件多改一律**串行**，改完 grep 复核。
-- ⚠️ `cmd | tail` 后 `$?` 是 tail 的；git-bash `/dev/tcp` 在 Windows 假阴性（用 node:net）。
+- ⚠️ **本机 node 的同步 spawn（管道 IO）恒抛 `EBUSY`** → 依赖 `execFileSync` 的脚本（含 `scripts/release.mjs`）**本机跑不了**；
+  异步 `spawn` / `stdio:'inherit'` / 文件 fd 都正常；**禁用 `Atomics.wait` 桥接（必死锁）**、预加载 patch 也无效。
+  ⚠️ `cmd | tail` 后 `$?` 是 tail 的 → 真实码重定向到文件再读（**push 静默失败过一次**，判据一律用 `git ls-remote`）。
+- ⚠️ git-bash `/dev/tcp` 在 Windows 假阴性（判连通用 node:net）。§9
 - ⚠️ `npm run` 丢命令行环境变量；`node --env-file` 不可被命令行覆盖 → 脚本自己 `process.loadEnvFile(...)`。
 - ⚠️ bash heredoc 里的 `${...}` 可能被插值 → 含模板字符串的脚本用 Write 落盘再跑。
 - ⚠️ **沙箱拦两类删除**（都不是代码错）：① `vite build` 在 **`prepare-out-dir`** 被 safe-delete 守卫拒
