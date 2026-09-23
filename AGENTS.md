@@ -495,6 +495,15 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 
   规则全文（机制、禁止项、验收方法）：[docs/frontend/browser-baseline.md](docs/frontend/browser-baseline.md)
 
+- **前端类型闸门必须"真检查"（强制）**：方案式 tsconfig（`"files": []` + `references`）下**裸 `vue-tsc` 恒 exit 0** —— 它不编译任何文件，往里写类型错误也不报，而因为是"绿的"没人会察觉。本仓 `oauth21` 曾长期如此，攒下 9 个真实错误（2026-09-23 修复）。规则：
+
+  1. **有 `references` 的前端用 `vue-tsc -b`**，不用裸 `vue-tsc` / `vue-tsc --noEmit`（它们不跟随 references）。被引用的子项目需 `composite: true`；子项目 `include` 里是 `.js` 时必须开 `allowJs`，否则 `-b` 以 `TS18003`「No inputs were found」整体失败 —— **去掉 `-b` 就不再报错，只是静默失去检查**，这是最容易被误当成"修好了"的形态
+  2. `build` 写成 `npm run type-check && vite build`：口径**只在一处定义**，避免两处各自漂移
+  3. **改完口径必须毒丸验证**：`src/` 临时写 `export const __p: number = 'x';` → `npm run type-check` 必须报错且退出码非 0；撤销后恢复绿。**恒绿的闸门等于没有闸门**
+  4. `TS5101`（如 `baseUrl` 弃用）这类**配置级错误**会让 TS **中止全部语义检查** —— 看着只剩一条无关报错，实际一个类型都没查，比空转更难识别，必须立刻修
+
+  现状：`oauth21` / `admin` / `poseadmin` = `vue-tsc -b` ✅；`posecraft` = `vue-tsc --noEmit`（tsconfig 非方案式，有效）✅；`firewall` 无类型检查 ❌（另有 121 个存量错误待修）。细则见 [docs/frontend/coding-standard.md](docs/frontend/coding-standard.md) 的「类型闸门必须是"真检查"」。
+
 ### 导出位置（强制）
 
 **所有 `export` 一律收拢到文件末尾**，定义处不写 `export` 关键字。

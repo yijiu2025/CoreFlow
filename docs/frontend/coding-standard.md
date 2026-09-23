@@ -342,6 +342,33 @@ npm test
 - [ ] 页面覆盖 loading、empty、error、disabled 状态。
 - [ ] 构建产物未手写修改，`public/` 只由构建生成。
 
+### 类型闸门必须是"真检查"（强制）
+
+上面第一道门禁是 `npm run build`，但它**只有在该工程的类型检查口径是"真检查"时才成立**。
+
+方案式 tsconfig（`"files": []` + `references`）下，裸 `vue-tsc` 不编译任何文件、**恒 exit 0** ——
+往里写 `const x: number = 'a'` 也不报。等于没有闸门，且因为是"绿的"，没人会察觉。
+
+各前端现状（新增前端照此选择）：
+
+| 前端 | 类型检查口径 | 是否真检查 |
+| --- | --- | --- |
+| `oauth21` | `vue-tsc -b` | ✅（2026-09-23 修复；此前是裸 `vue-tsc`，长期空转） |
+| `admin` / `poseadmin` | `vue-tsc -b` | ✅ |
+| `posecraft` | `vue-tsc --noEmit`（tsconfig 非方案式，有效） | ✅ |
+| `firewall` | **无**（`build` 只有 `vite build`） | ❌ 待补 |
+
+三条约束：
+
+1. **有 `references` 的 tsconfig 必须用 `vue-tsc -b`**，不能用裸 `vue-tsc` / `vue-tsc --noEmit`（它们不跟随 references）。
+   被引用的子项目要 `composite: true`；子项目 `include` 里若是 `.js` 文件，还必须开 `allowJs`，
+   否则 `-b` 会以 `TS18003`「No inputs were found」整体失败 —— **这正是有人把 `-b` 去掉的来路**：
+   去掉后不再报错，只是静默失去检查。
+2. **改口径后必须用毒丸验证一次**：在 `src/` 临时写一行 `export const __p: number = 'x';`，跑 `npm run type-check`，
+   **必须报错且退出码非 0**；撤掉后恢复绿。**恒绿的闸门等于没有闸门。**
+3. 遇到 `TS5101`（如 `baseUrl` 弃用）这类**配置级错误**要立刻修：TS 会**中止全部语义检查**，
+   表面上只剩那一条无关报错，实际一个类型都没查（比空转更难识别）。
+
 ## 现有项目整改优先级
 
 ### P0：立即处理
