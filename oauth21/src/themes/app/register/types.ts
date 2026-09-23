@@ -40,10 +40,17 @@ export type RegisterField = 'username' | 'email' | 'code' | 'password' | 'confir
 export type RegisterAgreementDoc = 'service' | 'privacy';
 
 /**
- * 翻译函数：契约里刻意只暴露「key + 命名参数」这一子集，
+ * 翻译函数：契约里刻意只暴露「key + （命名参数 | 缺键兜底文案）」这一子集，
  * 版式因此不依赖 vue-i18n 的内部类型；文案键仍在 `src/i18n/index.ts` 统一维护。
+ *
+ * 第二个参数两种形态都来自 vue-i18n 自己的重载，不是我们发明的：
+ *   `t('register.username_min')`                  —— 只用 key
+ *   `t('login.show_password', '显示密码')`         —— 缺键时兜底成这句中文
+ *   `t('xxx', { n: 3 })`                          —— 命名参数插值
+ * 其余重载（locale / plural / list）**不开放**：需要时请在容器里补一个语义化字段
+ * （例如 `subtitle`），而不是把 i18n 的形状透给版式。
  */
-export type RegisterTranslate = (key: string, params?: Record<string, unknown>) => string;
+export type RegisterTranslate = (key: string, params?: Record<string, unknown> | string) => string;
 
 /**
  * 单个输入框交给版式的绑定三件套

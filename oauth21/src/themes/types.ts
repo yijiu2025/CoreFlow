@@ -55,7 +55,7 @@ export interface MauthThemePackage {
    *
    * 皮肤（颜色/圆角/背景图）与版式（DOM 结构）是两个正交维度：这里让主题包可以
    * 「成对下发」——例如 sky 皮肤配一套更轻的版式。写错/未登记一律回退基础版式
-   * （由 `themes/app/*/registry.ts` 判定，不会因为主题包写错而白屏）。
+   * （由 `themes/app/<page>/registry.ts` 判定，不会因为主题包写错而白屏）。
    *
    * ⚠️ URL `?view=` 优先级更高：版本声明不会挡住联调时的单次覆盖。
    */
