@@ -80,6 +80,7 @@ export default defineConfig({
         items: [
           { text: '前端架构', link: '/frontend/overview' },
           { text: '前端统一规范', link: '/frontend/coding-standard' },
+          { text: '跨内核渲染基线', link: '/frontend/browser-baseline' },
           { text: '认证集成', link: '/frontend/auth-integration' },
           { text: '主题系统', link: '/frontend/theme' }
         ]
