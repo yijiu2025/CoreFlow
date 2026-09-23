@@ -24,12 +24,15 @@
 - **🔗 文档站链接**：`ignoreDeadLinks` 只放行 `AGENTS|oauth21|posecraft|packages` 前缀 → 指 `docs/` 之外必 `docs:build` 失败，**指源码用反引号**；
   ⚠️ `development-standards.md` 在 `docs/` **根**。
 - **代码审查**：唯一入口 `docs/development/code-review.md`（L0–L3/五道闸）；**L3（格式类）禁止人工提出**。
-- 🔴 **`vue-tsc` 在本仓是空转的**：`build`/`type-check` 用的裸 `vue-tsc --noEmit` **恒 exit 0**（`tsconfig.json`
-  是 `files:[]` 的方案式配置）→ 往里写类型错误也不报。真检查：**`.tmp-probe/tsconfig.check.json`（已备好）**
-  `cd oauth21 && node_modules/.bin/vue-tsc -p ../.tmp-probe/tsconfig.check.json --noEmit`
-  （当前基线 **9 错**，全在 login/Authorize/未使用导入；姿势与成因 → details §11.12）。⚠️ 两点反直觉：
-  **TS 遇配置级错误（TS5101）会中止全部语义分析**；**一次调用只报第一个失败实参**（会掩盖后面的错，
-  "修好一处又冒两处"是揭盖子不是修坏）。
+- 🔴 **前端类型闸门（2026-09-23 已修）**：方案式 `tsconfig`（`files:[]` + `references`）下**裸 `vue-tsc` 恒 exit 0**
+  —— 不编译任何文件，往里写类型错误也不报，而因为是"绿的"没人察觉 → 曾攒下 **9 个真错误**。
+  现口径 **`vue-tsc -b`**：`type-check` = 它，`build` = `npm run type-check && vite build`（口径只在一处定义，
+  与 `admin`/`poseadmin` 一致）。⚠️ 三个坑：① 子项目 `include` 里是 `.js` 时必须开 **`allowJs`**，否则
+  `-b` 报 `TS18003`「No inputs were found」——**去掉 `-b` 就不再报错、只是静默失去检查**（最易被当成"修好了"）；
+  ② **配置级错误（TS5101，如 `baseUrl` 弃用）会让 TS 中止全部语义分析**，只剩一条无关报错，比空转更难识别；
+  ③ `tsc` **一次只报第一个失败实参**（"修好一处又冒两处"是揭盖子不是修坏）。**改口径后必须毒丸验证**
+  （临时写 `export const __p: number = 'x'`，必须报错才算数）。成因链与 9 个错误的修法 → details §11.12。
+  现状：`firewall` 仍无类型检查（`build` 只有 `vite build`，存量 **121 错**）——独立任务未做。
 - **跨内核渲染基线（新前端强制）**：规则 `docs/frontend/browser-baseline.md`（AGENTS.md 有 8 步清单），
   自检 `npm run check:baseline [目录]` —— 零依赖静态断言 13 项，**毒丸样本验证过会报红**（不是恒绿）。
   核心一句：**规范留白处不显式声明 = 把渲染交给内核**（`color-scheme` 初始 `normal`；根元素背景
