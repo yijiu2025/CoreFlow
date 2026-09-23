@@ -662,6 +662,14 @@ printf 'protocol=https\nhost=github.com\n\n' | \
 
 这也可能是"`git push` 偶发数分钟零输出"的同源诱因 —— 重试一次通常就好（GCM 缓存已填）。
 
+⚠️ **2026-09-23 补充：给 `git credential fill` 设超时是对的，但别设太紧。**
+`scripts/release.mjs` 的 `readGithubToken()` 用 30s 超时兜底"永久挂住"，结果首轮发版预览
+**偶发命中超时**（同一份代码重跑一次就正常，单独跑探针实测 status 0 / 3.7s）——
+后果是 **GitHub Release 通道被静默跳过**：tag 照打、Release 不建。这种"半个发版"极难发现，
+因为 tag 存在会让人以为流程完整。
+⇒ 超时放宽到 **90s**；且「取不到凭据」的提示必须写明**后果**（"Release 不会建，可重跑一次"），
+不能只说"跳过"。诊断姿势：单独跑探针读凭据（同步 spawn + 文件型 stdio，见 §9）。
+
 ### 10.11 compose 冒烟的密钥必须 ≥32 位
 
 `publish-image.yml` 的「准备 CI 环境变量」曾经用 sed 写死三个密钥，其中两个
