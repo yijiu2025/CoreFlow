@@ -17,8 +17,9 @@
  * 一律先预览再执行。
  */
 
-import { execFileSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -48,15 +49,86 @@ const FROM_OVERRIDE = (() => {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : null;
 })();
 
+/* ---------- 同步执行子进程 ---------- */
+
+/**
+ * 取回子进程输出的中转文件
+ *
+ * 本机环境下「同步 + 管道」这条路径恒定失败（见 run 的说明），输出只能经文件取回。
+ * 调用是单线程串行的，所以复用同一组文件；进程退出时清理，清不掉也无所谓（系统临时目录会回收）。
+ */
+const TMP_DIR = mkdtempSync(path.join(os.tmpdir(), 'coreflow-release-'));
+const STDOUT_FILE = path.join(TMP_DIR, 'stdout.log');
+const STDERR_FILE = path.join(TMP_DIR, 'stderr.log');
+const STDIN_FILE = path.join(TMP_DIR, 'stdin.txt');
+
+process.on('exit', () => {
+  try {
+    rmSync(TMP_DIR, { recursive: true, force: true });
+  } catch {
+    /* 临时目录清不掉不是错误 */
+  }
+});
+
+/**
+ * 同步执行子进程并取回输出
+ *
+ * ⚠️ **刻意不用 `execFileSync` / `execSync`**：本机环境下「同步 + 管道」这条路径恒定失败 ——
+ * 对任何可执行文件（含 `git`、`node`、`cmd.exe`）都抛 `EBUSY`（errno -4082），
+ * 换 node 版本、加 `shell: true`、脱离沙箱都一样；而**异步 spawn 与 `stdio: 'inherit'` 正常**，
+ * 说明不是脚本本身的问题。实测可靠的是 `spawnSync` 配**文件型 stdio**：
+ * 把 stdout / stderr 落到临时文件再读回，语义与管道等价。
+ *
+ * 失败（spawn 报错或退出码非 0）时抛异常，并把输出挂在 `err.stdout` / `err.stderr` 上
+ * —— `tryRun` 依赖这个约定判断成败。
+ *
+ * @param {string} cmd 可执行文件
+ * @param {string[]} args 参数列表
+ * @param {{ cwd?: string, timeout?: number, shell?: boolean, input?: string }} [opts]
+ *        `input` 经临时文件作为 stdin 传入（`git credential fill` 需要）
+ * @returns {string} stdout（已 trim）
+ */
 function run(cmd, args, opts = {}) {
-  return execFileSync(cmd, args, {
-    cwd: opts.cwd || ROOT,
-    encoding: 'utf8',
-    timeout: opts.timeout ?? 600000,
-    // Windows 上 npm 实为 npm.cmd：shell:false 会 ENOENT、直接指定 npm.cmd 会 EINVAL
-    shell: opts.shell ?? false,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
-  }).trim();
+  const outFd = openSync(STDOUT_FILE, 'w');
+  const errFd = openSync(STDERR_FILE, 'w');
+  let inFd = 'ignore';
+  if (opts.input !== undefined) {
+    writeFileSync(STDIN_FILE, opts.input);
+    inFd = openSync(STDIN_FILE, 'r');
+  }
+
+  let result;
+  try {
+    result = spawnSync(cmd, args, {
+      cwd: opts.cwd || ROOT,
+      timeout: opts.timeout ?? 600000,
+      // Windows 上 npm 实为 npm.cmd：shell:false 会 ENOENT、直接指定 npm.cmd 会 EINVAL
+      shell: opts.shell ?? false,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      stdio: [inFd, outFd, errFd]
+    });
+  } finally {
+    closeSync(outFd);
+    closeSync(errFd);
+    if (typeof inFd === 'number') closeSync(inFd);
+  }
+
+  const stdout = readFileSync(STDOUT_FILE, 'utf8');
+  const stderr = readFileSync(STDERR_FILE, 'utf8');
+
+  if (result.error) {
+    result.error.stdout = stdout;
+    result.error.stderr = stderr;
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    const err = new Error(`命令失败（退出码 ${result.status}）：${cmd} ${args.join(' ')}`);
+    err.stdout = stdout;
+    err.stderr = stderr;
+    err.status = result.status;
+    throw err;
+  }
+  return stdout.trim();
 }
 
 function tryRun(cmd, args, opts = {}) {
@@ -115,10 +187,11 @@ function remoteSlug() {
 function readGithubToken() {
   if (process.env.GITHUB_TOKEN || process.env.GH_TOKEN) return process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   try {
-    const out = execFileSync('git', ['credential', 'fill'], {
+    const out = run('git', ['credential', 'fill'], {
       input: 'protocol=https\nhost=github.com\n\n',
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      encoding: 'utf8',
+      // ⚠️ 超时不能省：本机 `git credential fill` 有永久挂住的历史（credential.helper 首项是
+      // helper-selector），没有超时会让整个发版卡死在这里。
+      timeout: 30000,
       cwd: ROOT
     });
     return (
