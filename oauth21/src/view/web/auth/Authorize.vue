@@ -39,6 +39,35 @@ const submitting = ref(false);
 const hasOAuthParams = () =>
   typeof route.query.client_id === 'string' && !!route.query.client_id;
 
+/**
+ * 后端授权校验结果
+ *
+ * ⚠️ 内层 `data` 必须与顶层**同构**：下面用 `res?.data || res` 兼容"拦截器解包层级不一"的两种情况，
+ * 若把内层写成缩水的窄类型，TS 会把 `data` 推断成联合类型，于是只在某一支上存在的字段
+ * （`scopeDetails` / `sessionId` / `user_id`）一律被判为"属性不存在"——运行时代码没错，类型却在报警。
+ */
+interface AuthorizeCheckResult {
+  action?: 'login' | 'consent' | string;
+  client_name?: string;
+  scope?: string;
+  /**
+   * 后端 `resolveScopeDetails()` 的返回：`id` 用于列表 key，`fields` 是签发 token 时裁剪用户字段的依据。
+   * ⚠️ 别照抄成 `{ name, desc, required }` —— 漏掉 `id` 会让赋值给 `scopes` 时整片报错。
+   */
+  scopeDetails?: Array<{
+    id: string;
+    name: string;
+    desc: string;
+    fields?: string[];
+    required: boolean;
+    sensitive?: boolean;
+  }>;
+  /** 授权会话标识：后端 consent 分支才返回（`action === 'login'` 时已提前 return），提交 consent 时原样带回 */
+  sessionId?: string;
+  user_id?: string;
+  data?: AuthorizeCheckResult;
+}
+
 /** 从响应里取后端校验过的跳转地址（不直接用 query.redirect_uri，防开放重定向） */
 function pickRedirectUrl(res: any): string | undefined {
   return res?.redirect_url || res?.data?.redirect_url;
@@ -125,15 +154,7 @@ onMounted(async () => {
       code_challenge: route.query.code_challenge,
       code_challenge_method: route.query.code_challenge_method,
       nonce: route.query.nonce
-    })) as unknown as {
-      action?: 'login' | 'consent' | string;
-      client_name?: string;
-      scope?: string;
-      scopeDetails?: Array<{ name?: string; desc?: string; required?: boolean }>;
-      sessionId?: string;
-      user_id?: string;
-      data?: { action?: string; client_name?: string; scope?: string };
-    };
+    })) as unknown as AuthorizeCheckResult;
 
     const data = res?.data || res;
     if (data.action === 'login') {
@@ -145,8 +166,11 @@ onMounted(async () => {
     appInfo.value.description = t('auth.app_desc', { app: appInfo.value.name });
     // 优先用后端返回的 scopeDetails（带人话描述）；无则空数组
     scopes.value = Array.isArray(data.scopeDetails) ? data.scopeDetails : [];
-    sessionId.value = data.sessionId;
-    userId.value = data.user_id;
+    // 归一化成空串：`ref('')` 的既有语义就是"空串 = 无"，而这两个字段后端只有 consent 分支返回
+    // （走到这里时通常是 consent，但 action 可能是别的值）—— 不归一化会把 undefined 写进 ref、
+    // 与初始值语义不一致，也会把 undefined 传给 consent 提交接口
+    sessionId.value = data.sessionId ?? '';
+    userId.value = data.user_id ?? '';
   } catch (err: unknown) {
     errorMsg.value = err instanceof Error ? err.message : t('auth.load_failed');
   } finally {

@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
-import { generateRandomTimestamp, generateTimestampRandom } from '@/utils/anti-cache';
+import { generateRandomTimestamp } from '@/utils/anti-cache';
 
 /**
  * 防缓存 Composable

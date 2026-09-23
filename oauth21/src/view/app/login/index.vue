@@ -93,7 +93,22 @@ const loginSchema = z.discriminatedUnion('type', [
   })
 ]);
 
-const { values, errors, defineField, handleSubmit } = useForm({
+/**
+ * 表单字段类型：schema 是 `z.discriminatedUnion`，`z.infer` 因此推出的是**联合**；
+ * 但表单实例自始至终持有全部字段（切换登录模式不重建表单、已填值也不清空），
+ * 所以这里显式给 `useForm` 一个"并集"类型。不传的话 vee-validate 只认第一个分支 ——
+ * `initialValues` 里的 `username`/`password` 会被判为多余属性，`values.email` 也会被判为不存在。
+ * ⚠️ 只影响编译期，运行时行为与不传泛型完全一致（schema 仍是那个判别联合）。
+ */
+type LoginFormValues = {
+  type: 'email' | 'pwd';
+  email?: string;
+  code?: string;
+  username?: string;
+  password?: string;
+};
+
+const { values, errors, defineField, handleSubmit } = useForm<LoginFormValues>({
   validationSchema: toTypedSchema(loginSchema),
   initialValues: {
     type: 'email' as const,

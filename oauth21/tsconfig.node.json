@@ -7,7 +7,10 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    /* include 的是 .js 配置文件（本工程用 js 不用 ts），不开 allowJs 时 TS 不把 .js 当输入
+       → `vue-tsc -b` 会以 TS18003「No inputs were found」直接失败。 */
+    "allowJs": true
   },
   "include": ["vite.config.js", "tailwind.config.js"]
 }
