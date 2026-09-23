@@ -30,6 +30,11 @@
   （当前基线 **9 错**，全在 login/Authorize/未使用导入；姿势与成因 → details §11.12）。⚠️ 两点反直觉：
   **TS 遇配置级错误（TS5101）会中止全部语义分析**；**一次调用只报第一个失败实参**（会掩盖后面的错，
   "修好一处又冒两处"是揭盖子不是修坏）。
+- **跨内核渲染基线（新前端强制）**：规则 `docs/frontend/browser-baseline.md`（AGENTS.md 有 8 步清单），
+  自检 `npm run check:baseline [目录]` —— 零依赖静态断言 13 项，**毒丸样本验证过会报红**（不是恒绿）。
+  核心一句：**规范留白处不显式声明 = 把渲染交给内核**（`color-scheme` 初始 `normal`；根元素背景
+  `transparent` 时规范说「渲染是未定义的」；`vh ≡ lvh`；`-webkit-text-size-adjust` 默认 `auto`）。
+  ⚠️ viewport meta **跨行书写或加实验键会让整条被内核丢弃**（小米 / 夸克实测）→ 退化成 980px 桌面布局。
 
 ## 2. 后端陷阱速查 → **details §12**（整表已迁出）
 
@@ -89,8 +94,11 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 - ⚠️ 同一条消息对同一文件多个 Edit 会**静默丢失** → 同文件多改一律**串行**，改完 grep 复核。
 - ⚠️ **块注释里别让 `*` 和 `/` 相邻**：`/** 由 themes/app/*/registry.ts 判定 */` 里的 `*/` 会**提前闭合注释**，
   后半截当代码解析 → TS1131/TS1160（报错行≠根因行）。glob 改写成 `themes/app/<page>/registry.ts`。
-- ⚠️ **本机 node 的同步 spawn（管道 IO）恒抛 `EBUSY`** → 依赖 `execFileSync` 的脚本（含 `scripts/release.mjs`）**本机跑不了**；
-  异步 `spawn` / `stdio:'inherit'` / 文件 fd 都正常；**禁用 `Atomics.wait` 桥接（必死锁）**、预加载 patch 也无效。
+- ⚠️ **本机 node 的同步 spawn（管道 IO）恒抛 `EBUSY`(-4082)**：任何 exe（git/node/cmd）都一样，换 node 版本 /
+  `shell:true` / 脱离沙箱均无效；异步 `spawn` / `stdio:'inherit'` / **文件 fd 都正常** ⇒ 需同步取输出的脚本
+  一律 `spawnSync` + **文件型 stdio**（`scripts/release.mjs` 已如此改造：故障隔离在 `run()` 内、调用点零改动；
+  `spawnSync` **不抛**，须自判 `result.status` 并自造 `err.stdout/stderr` 供 `tryRun` 用）。
+  取 stdin 的（如 `git credential fill`）**必须带超时**（本机有永久挂住的历史）。**禁 `Atomics.wait` 桥接（必死锁）**、`--import` patch 无效。
   ⚠️ `cmd | tail` 后 `$?` 是 tail 的 → 真实码重定向到文件再读（**push 静默失败过一次**，判据一律用 `git ls-remote`）。
 - ⚠️ git-bash `/dev/tcp` 在 Windows 假阴性（判连通用 node:net）。§9
 - ⚠️ `npm run` 丢命令行环境变量；`node --env-file` 不可被命令行覆盖 → 脚本自己 `process.loadEnvFile(...)`。
