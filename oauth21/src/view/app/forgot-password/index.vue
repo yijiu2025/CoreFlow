@@ -150,7 +150,7 @@ const isSubmitting = ref(false);
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 
 // 图形验证码流程：两种模式共用（code 模式通过后发邮箱码，link 模式通过后发重置链接）
-const { captchaKey, showCaptcha, captchaPurpose, openCaptcha, onCaptchaSuccess, closeCaptcha } =
+const { captchaKey, showCaptcha, openCaptcha, onCaptchaSuccess, closeCaptcha } =
   useCaptchaFlow<'send' | 'resend'>(purpose => {
     if (isLinkMode) {
       executeSendLink();

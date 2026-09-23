@@ -46,7 +46,7 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior(to, from, savedPosition) {
+  scrollBehavior(to, _from, savedPosition) {
     if (savedPosition) return savedPosition;          // 浏览器前进/后退
     if (to.hash) return { el: to.hash, behavior: 'smooth' };
     return { top: 0 };                                 // 新导航回顶部
