@@ -59,6 +59,10 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
   🔴 `tokens` 是 `html` 上的 inline style、**优先级高于媒体查询** → 绝不能覆写断点里会变的 token
   （`--mauth-pad-*`/`--mauth-gap-*`/`--mauth-logo-size`/`--mauth-title-size`/`--mauth-field-h`/`--mauth-control-h`/`--mauth-err-h`/`--mauth-social-*`）；
   ⚠️ `assets/` 的 SVG **必须带 `width`/`height`**（只给 `viewBox` → `background-size:auto` 撑满容器）。§11.3
+  分包两档：`*/index.ts` **eager 进主包**（tokens，首帧前要用于 URL 校验）、`*/theme.scss` **惰性 chunk**（切到才请求）；
+  来源优先级 `?theme=`（`?skin=` 别名）> 后端下发 > localStorage > default；
+  切换入口 = `?debug=theme` 调试面板（`components/dev/ThemeDebugPanel.vue`，惰性 chunk）：
+  皮肤（`setTheme` **落盘**）/ 明暗三态 / 当前页版式（改 URL，**一次性**）；`MauthThemeSwitch` 只管明暗。
 - **业务容器 + 可换版式**（§11.10）：`view/app/register/index.vue` 只留业务（状态/校验/请求/路由），UI 外置到
   `themes/app/<page>/<id>/`；`base/` 由容器**静态引入**（默认路径零请求），变体走 `import.meta.glob` 惰性 chunk；
   优先级 `?view=` > 主题包 `views.<page>` > `VITE_<PAGE>_VIEW` > base，⚠️ **URL 显式非法值不回退**（直接 base）；
@@ -90,7 +94,9 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 - **手机端调试**：CDP `Emulation.setSafeAreaInsetsOverride` 可在桌面 Chrome 注入刘海（top=47 → `env()` 真返回 47px）；
   ⚠️ `setAutoDarkModeOverride` **不等价** MIUI "智能反色" → 不能据此排除"浏览器强制深色"；手机侧用 `.tmp-probe/diag-overlay.js`。
 - 🔴 **视觉回归先稳定化、再归因**：不禁过渡/动画、不等 `fonts.ready` → 同代码连拍可报 **17.8% 假差异**；
-  冻结样式须 `page.addStyleTag` **加载后**注入并**断言生效**。稳定后噪声下限 **0**；⚠️ 比对前先 `md5sum` 验两侧同一状态（§10.13）。
+  冻结样式须 `page.addStyleTag` **加载后**注入并**断言生效**；⚠️ 比对前先 `md5sum` 验两侧同一状态（§10.13）。
+  ⚠️ **「噪声下限 0」只对纯色场景成立**：sky 渐变场景有**间歇**噪声（同代码连拍亦得 343px、通道差 2、
+  首个差异点坐标相同、颜色互换）→ **先连拍自比定噪声下限，再归因到改动**（§11.15）。
 - ⚠️ 同一条消息对同一文件多个 Edit 会**静默丢失** → 同文件多改一律**串行**，改完 grep 复核。
 - ⚠️ **块注释里别让 `*` 和 `/` 相邻**：`/** 由 themes/app/*/registry.ts 判定 */` 里的 `*/` 会**提前闭合注释**，
   后半截当代码解析 → TS1131/TS1160（报错行≠根因行）。glob 改写成 `themes/app/<page>/registry.ts`。

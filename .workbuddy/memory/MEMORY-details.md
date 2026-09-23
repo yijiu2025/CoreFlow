@@ -715,6 +715,12 @@ opaque），Chrome 把 iframe 判为第三方 → `window.localStorage` **读属
 对策（`.tmp-probe/shot-stable.mjs`）：禁用过渡/动画 + 等 `document.fonts.ready` + 先做一次预热截图。
 稳定后 **8/8 场景逐像素全等，噪声下限 = 0**。
 
+⚠️ **2026-09-23 修正：这个「下限 0」只对纯色场景成立**。sky 渐变场景有**间歇**噪声 —— 同一份代码
+连拍两次，`08-sky-step1` 照样出现 **343 px / 最大通道差 2**，且首个差异点坐标完全相同（230, 970）、
+颜色刚好互换（(142,187,235) vs (142,189,235)）。**同一天最终比对时 sky 又是 0**，说明它不是每次都出现。
+⇒ 归因前**先连拍自比**（同代码两次之间的差异＝噪声下限），再拿它当阈值判断"改动是否真的动了像素"；
+别一看到差异就先怀疑自己的改动。详见 §11.15。
+
 ⚠️ 冻结样式必须用 `page.addStyleTag` 在**页面加载后**注入，并**断言已生效**。
 早期版本走 `addInitScript` 往 `document.head || documentElement` 塞 `<style>`：脚本执行时
 `head` 还不存在，元素被挂到 `<html>` 下随后被解析器重排丢弃 →
@@ -1241,6 +1247,45 @@ defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
   ⇒ 写**正则 / glob / 路径**时条件反射检查 `*` 与 `/` 是否相邻。`grep -n '\*/'` 是最快的自查。
 - 文档里写**尖括号占位符**（如 `npm run check:baseline <目录>`）必须包在反引号内，否则 Markdown 会当 HTML 标签解析。
   `npm run docs:build` 已实测通过（exit 0，无死链）。
+
+### 11.15 主题/版式调试面板（`?debug=theme`，2026-09-23）
+
+**动机**：`listThemes()`（`themes/index.ts`）导出后**零消费者**、`MauthThemeSwitch` 只循环明暗 ⇒
+"换个主题看看"只能手改 URL 或等后端下发；真机上又没有 DevTools（正是 §11.6 记的那个痛点）。
+
+**三个文件**：
+
+| 文件 | 作用 |
+| --- | --- |
+| `components/dev/ThemeDebugPanel.vue` | 面板本体：皮肤（中文名 + 色卡 + 描述）/ 明暗三态 / 当前页版式 |
+| `themes/app/pages.ts` | glob 汇总各页版式注册表，供面板查出"当前页有哪些版式" |
+| `App.vue` | `defineAsyncComponent` + `v-if="showDebugPanel"` 挂载 |
+
+**四条设计约定（改面板前先看）**：
+1. **两层控制**：App 层 `v-if` 管"要不要**下载**"、组件内 `visible` 管"要不要**渲染**"。
+   静态 import 会让面板连带 Tailwind 类一起并进主包（实测原本没有独立 chunk）→ 必须异步，
+   改后切成 `ThemeDebugPanel-*.js`（4984 B）且不在首屏预载里。
+2. **皮肤落盘、版式不落盘**：皮肤走 `setTheme`（写 localStorage，刷新还在）；版式走
+   `router.replace({ query })`（一次性，浏览器后退即回原样）。语义是"想留着"vs"只想看一眼"。
+3. **版式只能改 URL**：容器判定读的是 `route.query.view`，改 store 它读不到。
+4. **样式固定深色、不复用 `mauth-*` 类**：面板是用来**对比**主题的，跟着主题变就没法当参照物；
+   而 `mauth-*` 是移动端认证页的样式单一来源，不该被开发工具污染。
+
+**`themes/app/pages.ts` 的三个坑**：
+- ⚠️ **刻意不叫 `index.ts`**：`themes/index.ts` 的主题注册表扫「一层子目录 + index.ts」，
+  `themes/app/index.ts` 会被它扫到 —— 现在靠"没有 default export"被侥幸跳过，谁哪天加一句
+  `export default` 就会冒出一个 id 为 `app` 的**假主题**。
+- 识别注册表实例用**鸭子类型**（`baseId`/`list`/`resolve`/`load` 齐备即认），**不认固定导出名**
+  （各页叫 `registerViews` / `loginViews`…）—— 否则每加一页都要回来改这个文件。
+- `pageFromPath()` 用「path 末段 + 该页确实已接入版式」双重判定：`/m/register` 与 `/register`
+  页面名同为 `register` 但路由名不同（`MobileRegister` / `Register`），末段匹配最省事；
+  未接入版式的页面会自动不显示版式区。
+
+**验收脚本 `.tmp-probe/verify-theme-panel.mjs`（37 项，可复用）**：定位靠
+`[data-mauth-debug="theme"]` / `[data-theme-id]` / `[data-mode]` / `[data-view-id]` 四个属性 ——
+**别用文案定位**：主题描述里就含"深色"二字，会误命中明暗按钮。
+强断言示例（值得照抄）：点 ocean 后 `--mauth-primary` 由 `#1e293b` → `#0e7490`、`<style>` 内容是
+**替换**而非叠加（3074B → 3775B，节点数恒 1）、切版式后 query 里的 `client_id` 不能丢。
 
 ---
 
