@@ -191,7 +191,9 @@ function readGithubToken() {
       input: 'protocol=https\nhost=github.com\n\n',
       // ⚠️ 超时不能省：本机 `git credential fill` 有永久挂住的历史（credential.helper 首项是
       // helper-selector），没有超时会让整个发版卡死在这里。
-      timeout: 30000,
+      // ⚠️ 但也不能太紧：实测 GCM 冷启动偶尔越 30s（2026-09-23 首次预览即命中），
+      //    而超时的后果是**这条通道被静默跳过** —— 只打 tag、不建 Release，事后极难发现。
+      timeout: 90000,
       cwd: ROOT
     });
     return (
@@ -406,7 +408,8 @@ async function main() {
 
   log('── 通道 2/3：GitHub Release ────────');
   if (!slug) log('   ✗ 无法从 origin 解析 GitHub 仓库 → 跳过');
-  else if (!token) log('   ✗ 无可用 GitHub 凭据 → 跳过（先执行一次 git push 让 GCM 缓存凭据即可）');
+  else if (!token)
+    log('   ✗ 未取到 GitHub 凭据 → 跳过（⚠️ tag 仍会打，但不会建 Release；GCM 冷启动偶发超时，可重跑一次）');
   else if (existingRelease) log(`   ✓ ${tag} 已有 Release → 跳过（${existingRelease.html_url}）`);
   else log(`   ${APPLY ? '创建' : '将创建'} ${slug.owner}/${slug.repo} 的 Release（说明 ${notes.split('\n').length} 行）`);
 
