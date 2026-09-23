@@ -39,6 +39,10 @@ export interface MauthThemeMeta {
  *   • `dark`  —— 仅在深色下追加覆盖
  * ⚠️ 因此 `light` 里的颜色类 token 若不写 `dark` 变体，深色下会沿用浅色值，
  *    可能造成深底浅字。**颜色请成对给**：品牌色在深色下通常需要提亮。
+ *
+ * ⚠️ 若主题把 `--mauth-header-bg` 设为 `transparent`（把底色交还给页面），
+ *    必须同时声明 `--mauth-canvas`（页面最上沿的颜色），否则"页面之外的画布色"
+ *    会退回给浏览器内核自己决定 → 真机与电脑不一致。参考 sky/theme.scss。
  */
 export interface MauthThemePackage {
   meta: MauthThemeMeta;

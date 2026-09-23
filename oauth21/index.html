@@ -3,14 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <!-- viewport-fit=cover：让页面铺满刘海屏，env(safe-area-inset-*) 才拿得到真实值（否则恒为 0） -->
-    <!-- interactive-widget=resizes-content：虚拟键盘弹出时缩小视口而不是覆盖内容。
-         Android Chrome 生效、iOS Safari 忽略（无害）。配合 .mauth-page 的 100dvh 滚动容器，
-         键盘顶起后底部按钮仍可达；iOS 那侧由 useKeyboardAvoid 补 focus 时滚动。 -->
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
-    />
+    <!-- viewport：**单行 + 只留最通用的键** —— 写的键越"先进"，被整条丢弃的概率越高。
+         两次真机实测的教训：
+           ① 跨 4 行书写            → 小米浏览器整条丢弃；
+           ② 带实验键 interactive-widget=resizes-content → 夸克浏览器整条丢弃。
+         两者都退化成「桌面站点式」渲染：布局视口 980px，再把整页等比缩放到屏幕宽度
+         （缩放比 = 物理宽 / 980，夸克实测 1.2245 倍）。症状**不是**"多一条色带"，
+         而是**比例整个错掉**：字与控件被缩到 1/2.45（字段高 144 → 58.8 物理 px）、
+         字段却横向拉满 → 又扁又小。
+         键盘避让不再依赖那个实验键：focus 时由 useKeyboardAvoid 把字段滚进可视区。
+         viewport-fit=cover：页面铺满刘海屏，env(safe-area-inset-*) 才拿得到真实值。
+         万一某个内核连这条最简写法也丢，由 src/utils/viewport-fix.ts 兜住整页比例。 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Enterprise SSO Login</title>
     <!-- Preconnect to Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

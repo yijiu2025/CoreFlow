@@ -7,7 +7,8 @@ import { isDesktopViewport } from '@/utils/device';
  */
 export const MOBILE_TO_DESKTOP_ROUTE: Record<string, string> = {
   MobileLogin: 'login',
-  MobileRegister: 'Register'
+  MobileRegister: 'Register',
+  MobileForgotPassword: 'ForgotPassword'
 };
 
 /**
@@ -76,6 +77,17 @@ export const authRoutes: RouteRecordRaw[] = [
     meta: { title: '忘记密码' }
   },
   {
+    /*
+     * 邮件里的重置链接指向 `/reset-password?token=…`（后端 src/api/user/v1/open.js
+     * 的 send-reset-link 就是这么拼的），而前端页面是 `/forgot-password`。
+     * 两边不一致 → 用户点邮件链接会落到 NotFound，且这个断点在桌面版同样存在。
+     * 这里做一次兼容重定向：不改后端（在途邮件里的旧链接继续有效），
+     * query 原样透传（token 丢了整条流程就废了）。
+     */
+    path: 'reset-password',
+    redirect: to => ({ path: '/forgot-password', query: to.query, hash: to.hash })
+  },
+  {
     path: 'mini-login',
     name: 'MiniLogin',
     component: () => import('@/view/web/login/index.vue'),
@@ -96,6 +108,13 @@ export const mobileRoutes: RouteRecordRaw[] = [
     name: 'MobileRegister',
     component: () => import('@/view/app/register/index.vue'),
     meta: { title: '移动端注册', device: 'mobile' },
+    beforeEnter: desktopWhenWide
+  },
+  {
+    path: 'm/forgot-password',
+    name: 'MobileForgotPassword',
+    component: () => import('@/view/app/forgot-password/index.vue'),
+    meta: { title: '移动端重置密码', device: 'mobile' },
     beforeEnter: desktopWhenWide
   }
 ];

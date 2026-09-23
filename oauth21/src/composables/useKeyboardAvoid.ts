@@ -4,9 +4,12 @@
  * === 解决什么问题 ===
  * iOS Safari 的虚拟键盘**只覆盖、不改变视口高度**，浏览器也不会自动把聚焦的输入框
  * 滚到键盘之上 —— 当输入框位于页面下半部（注册第二步的确认密码、或键盘较高时），
- * 用户看到的是「正在输入的框被键盘盖住」。Android Chrome 在 viewport 配了
- * `interactive-widget=resizes-content` 后视口会真的缩小，浏览器能自行处理，
- * 所以这个 composable 主要救 iOS，对 Android 是无害的兜底。
+ * 用户看到的是「正在输入的框被键盘盖住」。Android Chrome 默认会缩小 visual viewport
+ * 并自行把聚焦控件带进可视区，所以这个 composable 主要救 iOS，对 Android 是无害的兜底。
+ *
+ * ⚠️ 曾经靠 viewport meta 的 `interactive-widget=resizes-content` 来缩小布局视口，
+ *    但该实验键会让部分国产内核（实测夸克）把整条 viewport meta 丢掉 → 整页退化成
+ *    980px 桌面布局，代价远大于收益，已移除（见 index.html 与 utils/viewport-fix.ts）。
  *
  * === 为什么用 focusin 而不是 focus ===
  * focus 不冒泡，要在每个输入框上单独绑定；focusin 会冒泡到 document，

@@ -75,6 +75,29 @@ export default {
 ⚠️ 往 `.mauth-page` 上挂背景时，必须先让 `.mauth-header` / `.mauth-body` 透明 ——
 这两块默认是不透明表面，会把页面底色整块盖住（`ocean` 与 `sky` 都踩过）。
 
+### ⚠️ 让表面透明后，必须同时声明画布色 `--mauth-canvas`
+
+`.mauth-page` **之外**的区域（地址栏收起/展开、回弹、安全区）露出的是**根画布**，
+它的颜色由 `html` 的背景决定（CSS 2.2 §14.2：根元素的背景会向上传播成画布背景；
+若根元素最终仍是 `transparent`，规范原文是"**渲染是未定义的**"）。
+
+移动端页默认把 `--mauth-canvas` 取成"页面最上沿的颜色"= `--mauth-header-bg`。
+但主题一旦把 `--mauth-header-bg` 设为 `transparent`（如 `sky`），画布色也跟着变透明
+→ **退回给浏览器内核自己发挥**（浅色下多半是白、深色下看内核心情），
+于是"页面之外露出来的颜色"在手机上就和电脑上不一样 —— 这正是"同一条边，
+换个浏览器就多一条色带"的典型来源。
+
+→ 这类主题要在 `theme.scss` 里补一条，取值 = 页面最上沿的颜色：
+
+```scss
+html[data-mauth-theme='<id>'] {
+  --mauth-canvas: <页面最上沿的颜色>;
+}
+```
+
+参考 `sky/theme.scss`（直接取渐变的第一个色标 `var(--mauth-sky-top)`）。
+⚠️ 必须落在 `html` 上：画布色由**根元素**的背景决定，挂在 `.mauth-page` 上不起作用。
+
 ### ⚠️ 不要用 `tokens` 覆写「断点里会变的 token」
 
 `--mauth-pad-*` · `--mauth-gap-*` · `--mauth-logo-size` · `--mauth-title-size` ·
