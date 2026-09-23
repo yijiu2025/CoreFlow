@@ -63,6 +63,8 @@ function buildRegistry(): Map<string, MauthThemeRecord> {
       // id 以目录名为准（防止包内 meta.id 与目录名不一致时属性选择器对不上）
       meta: { ...pkg.meta, id },
       tokens: pkg.tokens,
+      // 版式声明原样带上：合法性由各页的版式注册表判定（themes/app/<page>/registry.ts）
+      views: pkg.views,
       loadStyle: undefined
     });
   }
@@ -84,6 +86,7 @@ const registry = buildRegistry();
 const EMPTY_RECORD: MauthThemeRecord = {
   meta: { id: DEFAULT_THEME_ID, name: '默认' },
   tokens: undefined,
+  views: undefined,
   loadStyle: undefined
 };
 

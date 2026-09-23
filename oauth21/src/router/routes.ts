@@ -1,5 +1,6 @@
 import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
 import { isDesktopViewport } from '@/utils/device';
+import { preloadRegisterView } from '@/themes/app/register/registry';
 
 /**
  * 移动端路由 → 宽视口下应迁移到的电脑版路由名
@@ -108,7 +109,20 @@ export const mobileRoutes: RouteRecordRaw[] = [
     name: 'MobileRegister',
     component: () => import('@/view/app/register/index.vue'),
     meta: { title: '移动端注册', device: 'mobile' },
-    beforeEnter: desktopWhenWide
+    /*
+     * 宽视口跳电脑版；不跳时顺手把「变体版式」的 chunk 预取下来（**不 await**）。
+     *
+     * 注册页的 UI 是动态加载的（见 view/app/register/index.vue）：容器首帧先渲染
+     * 静态引入的基础版式，变体 chunk 到了再接管。在本页导航阶段就把请求发出去
+     * （与路由组件自身的 chunk 并行），容器挂载时通常已在模块缓存里 ——
+     * 用户看不到切换。预取失败无所谓：容器自己还会再拉一次，拉不到就回退基础版式。
+     */
+    beforeEnter: to => {
+      const target = desktopWhenWide(to);
+      if (target) return target;
+      preloadRegisterView({ url: to.query.view });
+      return undefined;
+    }
   },
   {
     path: 'm/forgot-password',

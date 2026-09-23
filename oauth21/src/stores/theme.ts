@@ -237,6 +237,22 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   /**
+   * 取当前主题为某页面声明的版式 id（`themes/<id>/index.ts` 的 `views[page]`）
+   *
+   * 只做取值，**不校验**：合法性由各页的版式注册表判定（`themes/app/<page>/registry.ts`），
+   * 于是"主题包写错版式名"的后果是回退基础版式，而不是页面打不开。
+   *
+   * 读的是 `themeId`，因此本函数在 computed / watch 里调用会跟着主题变化 ——
+   * 这一点是必须的：后端下发的主题配置在 `App.vue` 的 onMounted 才到，
+   * 可能晚于页面 setup，声明式版式要能在之后才生效。
+   *
+   * @param page 页面名，与 `themes/app/<page>/` 目录名一致（如 'register'）
+   */
+  function viewFor(page: string): string | undefined {
+    return getThemeRecord(themeId.value).views?.[page];
+  }
+
+  /**
    * 设置主题（开发者/部署方调用 → 落盘）
    *
    * @param id 主题 id，须已在 src/themes/ 登记；未登记时返回 false 且不改动现状
@@ -309,6 +325,7 @@ export const useThemeStore = defineStore('theme', () => {
     cycleMode,
     toggleTheme,
     setTheme,
+    viewFor,
     applyThemeConfig,
     applyTheme,
     dispose

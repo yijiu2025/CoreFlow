@@ -47,6 +47,19 @@ export interface MauthThemeMeta {
 export interface MauthThemePackage {
   meta: MauthThemeMeta;
   tokens?: ThemeTokenOverrides;
+  /**
+   * 该主题默认给各页面用的**版式**（可选）
+   *
+   *   key   = 页面名，与 `themes/app/<page>/` 的目录名一致（如 `register`）
+   *   value = 版式 id，即 `themes/app/<page>/<id>/`
+   *
+   * 皮肤（颜色/圆角/背景图）与版式（DOM 结构）是两个正交维度：这里让主题包可以
+   * 「成对下发」——例如 sky 皮肤配一套更轻的版式。写错/未登记一律回退基础版式
+   * （由 `themes/app/*/registry.ts` 判定，不会因为主题包写错而白屏）。
+   *
+   * ⚠️ URL `?view=` 优先级更高：版本声明不会挡住联调时的单次覆盖。
+   */
+  views?: Record<string, string>;
 }
 
 /** 注册表里一条已解析好的主题记录 */
@@ -54,6 +67,8 @@ export interface MauthThemeRecord {
   meta: MauthThemeMeta;
   /** 该主题的 token（已从包内取出，未做安全校验——校验在注入时统一做） */
   tokens: ThemeTokenOverrides | undefined;
+  /** 该主题的版式声明（页面名 → 版式 id）；未声明为 undefined */
+  views: Record<string, string> | undefined;
   /** 该主题附加样式的惰性加载器；无 theme.scss 时为 undefined */
   loadStyle: (() => Promise<string>) | undefined;
 }
