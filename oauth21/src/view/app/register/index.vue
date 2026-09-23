@@ -54,8 +54,11 @@ import { useKeyboardAvoid } from '@/composables/useKeyboardAvoid';
 import { useThemeStore } from '@/stores/theme';
 import BaseRegisterView from '@/themes/app/register/base/index.vue';
 import { pickRegisterViewId, registerViews } from '@/themes/app/register/registry';
-import type { RegisterDirection, RegisterFieldBinding, RegisterTranslate, RegisterViewContext } from '@/themes/app/register/types';
+import type { RegisterDirection, RegisterTranslate, RegisterViewContext } from '@/themes/app/register/types';
 import type { Component, Ref } from 'vue';
+
+/** 步骤总数。契约里的 `totalSteps` 与进度百分比都算它，别在两处各写一个 3 */
+const TOTAL_STEPS = 3;
 
 const { t, locale } = useI18n();
 const route = useRoute();
@@ -73,6 +76,7 @@ watch(
   { immediate: true }
 );
 
+// 人机验证（reCAPTCHA）：开关由后端配置决定，开启才按需加载 SDK
 const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToken, dispose } = useCaptcha('register');
 const { error: showError, success: showSuccess } = useMessage();
 onMounted(() => {
@@ -129,6 +133,7 @@ const { values, errors, defineField, handleSubmit, validateField, setFieldError 
   validationSchema: toTypedSchema(registerSchema)
 });
 
+// 五个字段的 vee-validate 绑定：值 ref + 原生事件绑定（顺序与视觉顺序一致）
 const [username, usernameProps] = defineField('username');
 const [email, emailProps] = defineField('email');
 const [code, codeProps] = defineField('code');
@@ -180,16 +185,17 @@ const sendCode = async () => {
   openRegCaptcha('register');
 };
 
-// 前进到下一步（校验当前步骤字段通过）
+// 前进到下一步（先校验当前步骤的字段，不通过就停在原地）
 const handleNextStep = async (target: 2 | 3) => {
-  let ok = true;
+  let ok: boolean;
   if (target === 2) {
     if (isEmailChecking.value) return; // 查重未返回，先不放行（否则重复邮箱能溜过去）
+    // 逐字段校验：顺序与视觉顺序一致，用户先看到最上面那个错
     const r1 = await validateField('username');
     const r2 = await validateField('email');
     const r3 = await validateField('code');
     ok = r1.valid && r2.valid && r3.valid && !isEmailDuplicate.value;
-  } else if (target === 3) {
+  } else {
     const r4 = await validateField('password');
     const r5 = await validateField('confirmPassword');
     ok = r4.valid && r5.valid;
@@ -237,8 +243,8 @@ const handleRegister = handleSubmit(async data => {
   if (submitLock.locked.value) return; // 防双击
   submitLock.lock();
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构排除 confirmPassword，rest 模式合法
-    const { confirmPassword, ...submitData } = data;
+    // 排除 confirmPassword（`_` 前缀 = 有意不使用）：它只用于本地一致性校验，不发往后端
+    const { confirmPassword: _confirmPassword, ...submitData } = data;
     const encryptedPassword = await rsaEncrypt(submitData.password);
     const recaptchaToken = recaptchaEnabled ? await getCaptchaToken() : null;
     await authApi.register({
@@ -300,22 +306,41 @@ watch(
   { immediate: true }
 );
 
-/** 契约里字段绑定的**内部构造形态**：值是 ref，交给 reactive 自动解包成契约里的标量 */
+/** 契约里字段绑定的**内部构造形态**：值与错误都是 ref，交给 reactive 自动解包成契约里的标量 */
 interface FieldSource {
   value: Ref<string>;
-  attrs: Record<string, unknown>;
+  attrs: Ref<Record<string, unknown>>;
   invalid: Ref<boolean>;
   error: Ref<string | undefined>;
 }
 
 /**
- * 把一个字段打成"绑定三件套"
+ * 把一个字段打成交给版式的"绑定三件套"
  *
- * `attrs` 走 `markRaw`：它是 vee-validate 给的原生事件绑定，原样交给 `v-bind`
- * 最稳（不进 reactive 代理，行为与改造前 `v-bind="usernameProps"` 完全一致）。
+ * - `value` 包一层可写 computed：vee-validate 给的值 ref 是 `string | undefined`
+ *   （一次都没填过就是 undefined），而契约承诺版式拿到的一定是字符串 —— 读时兜底成
+ *   `''`，写时原样回填进表单（`v-model` 仍写回同一个 ref，校验/取值链路不变）。
+ * - `attrs` **整个 ref 原样存下来**，不提前取 `.value`：vee-validate 里它是 `computed`，
+ *   取值时可能产出新对象，提前取会拿到过期快照。交给 reactive 在读取时自动解包，
+ *   版式侧 `v-bind="ctx.fields.x.attrs"` 拿到的就是当前那副原生事件绑定。
  */
-function bindField(value: Ref<string>, attrs: Record<string, unknown>, invalid: Ref<boolean>, error: Ref<string | undefined>): FieldSource {
-  return { value, attrs: markRaw(attrs), invalid, error };
+function bindField(
+  value: Ref<string | undefined>,
+  attrs: Ref<Record<string, unknown>>,
+  invalid: Ref<boolean>,
+  error: Ref<string | undefined>
+): FieldSource {
+  return {
+    value: computed({
+      get: () => value.value ?? '',
+      set: next => {
+        value.value = next;
+      }
+    }),
+    attrs,
+    invalid,
+    error
+  };
 }
 
 /**
@@ -329,8 +354,11 @@ function assertRegisterContract(ctx: RegisterViewContext): RegisterViewContext {
   return ctx;
 }
 
-/** 翻译函数：只把「key + 命名参数」这一子集交给版式（版式因此不依赖 i18n 内部类型） */
-const translate: RegisterTranslate = (key, params) => (params ? t(key, params as never) : t(key));
+/** 翻译函数：只把「key + （命名参数 | 兜底文案）」这一子集交给版式（版式因此不依赖 i18n 内部类型） */
+const translate: RegisterTranslate = (key, params) => {
+  if (params === undefined) return t(key);
+  return typeof params === 'string' ? t(key, params) : t(key, params as never);
+};
 
 /**
  * 交给版式的上下文
@@ -345,10 +373,10 @@ const ctx = assertRegisterContract(
     appName: computed(() => String(route.query.appName ?? '')),
 
     step: computed(() => step.value),
-    totalSteps: 3,
+    totalSteps: TOTAL_STEPS,
     direction: computed(() => direction.value),
     subtitle: computed(() => stepSub.value),
-    progress: computed(() => (step.value / 3) * 100),
+    progress: computed(() => (step.value / TOTAL_STEPS) * 100),
 
     fields: {
       username: bindField(
@@ -364,12 +392,7 @@ const ctx = assertRegisterContract(
         computed(() => !!errors.value.email || isEmailDuplicate.value),
         computed(() => (isEmailDuplicate.value ? t('register.email_duplicate') : errors.value.email))
       ),
-      code: bindField(
-        code,
-        codeProps,
-        computed(() => !!errors.value.code),
-        computed(() => errors.value.code)
-      ),
+      code: bindField(code, codeProps, computed(() => !!errors.value.code), computed(() => errors.value.code)),
       password: bindField(
         password,
         passwordProps,
