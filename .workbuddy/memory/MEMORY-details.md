@@ -468,6 +468,27 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern
 - **同一个缺陷在"死代码"里也存在**：`permission/seeder.js` 零调用但内含旧的坏值 `fw:admin:*`，
   谁把它接线回来就会把角色权限改回坏的。**零调用的重复定义应删除，而不是留着。**
 
+### ⚠️ 本机环境：node 的「同步 spawn」管道路径坏掉（2026-09-23 实测）
+
+- **症状**：`execFileSync(cmd,args,{encoding:'utf8'})` 与 `execSync(...)` 对**任何**可执行文件都抛
+  `spawnSync <cmd> EBUSY (errno -4082)` —— node / git / cmd.exe / where.exe / **绝对路径 git.exe** 全中，
+  两个 node 版本（22.22.2 托管 / 24.12.0 系统）都一样。`spawnSync` **不抛**但 `result.error` 同样是 EBUSY
+  （**静默失败**：只看 `.stdout` 会拿到 `undefined`，容易误判成"命令没输出"）。
+- **排除项**：不是沙箱（脱离沙箱一样失败）、不是 git（异步 `spawn('git',...)` 正常、Playwright 起 Chrome 正常）。
+- **精确定位（决定修法的关键实验）**：
+  - `execFileSync(..., {stdio:'inherit'})` **正常**（子进程真的跑了，`git --version` 有输出）；
+  - `spawnSync(..., {stdio:['ignore',fd,fd]})` 用**文件描述符**也**正常**（status 0、能读回输出）。
+  - ⇒ **坏的只有「同步 + 管道」这一条路径**（libuv 同步读管道），spawn 本身没问题。
+- **影响**：`scripts/release.mjs` 的 `run()` 正是 `execFileSync` + `encoding` ⇒ **本机跑不了发版脚本**；
+  其他依赖同步子进程的脚本同理。bash 里直接跑 git/npm 不受影响。
+- ⚠️ **不要用 `Atomics.wait` 做"同步包异步"桥接**：主线程一阻塞，事件循环停摆，子进程的 `close`
+  永远不会派发 → **必死锁**（只能靠超时返回）。这是设计错误，不是调参问题。
+- ⚠️ **也不要指望预加载 monkey-patch**：Node 对内置模块的命名导出在**链接期**就固定了，
+  `node --import shim.mjs` 里改 `cp.execFileSync` 对
+  `import { execFileSync } from 'node:child_process'` 的绑定**无效**（实测仍 EBUSY）。
+- **可行修法（需改代码，二选一）**：① 把 `run()` 改成异步（`spawn` + Promise，`await` 串到调用点，最正统）；
+  ② 保留同步语义但把 stdio 换成**临时文件 fd**（写完读完再删，最小改动但看着 hack）。
+
 ---
 
 ## 10. 部署 / CI（2026-09-21 CI 首次真跑后定案）
