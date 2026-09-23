@@ -266,6 +266,7 @@ declare module 'vue-router' {
 4. 交互控件必须有 hover、active、disabled、loading、empty、error 状态。
 5. 后台、控制台类页面以信息密度和可扫描性为优先，不做营销式大 Hero。
 6. 移动端页面必须检查 360px 到 430px 宽度下的文本换行和按钮溢出。
+7. **跨内核渲染基线（新建前端强制）**：必须实现[跨内核渲染基线](/frontend/browser-baseline)的全部必做项 —— 单行 viewport meta、`color-scheme` 双条、根元素画布底色、`-webkit-text-size-adjust`、全屏页贴顶、视口兜底。规范**留白**的初始值（`color-scheme` 初始 `normal`、根元素背景 `transparent` 时渲染未定义、`vh` 等于大视口）不显式声明，就等于把渲染结果交给内核，这正是「电脑正常、手机多出一条色带」的成因。自检：`npm run check:baseline <前端目录>`。
 
 ## 国际化和文案
 

@@ -482,6 +482,19 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 
   详细文档：[packages/shared-device/README.zh-CN.md](packages/shared-device/README.zh-CN.md)（英文版 README.md）；参考实现：`posecraft/src/utils/request.ts`、`posecraft/src/components/modals/login/LoginModal.vue`
 
+- **新前端跨内核渲染基线（强制）**：各浏览器内核对「规范**留白**的初始值」解释不同 —— `color-scheme` 初始值是 `normal`、根元素背景为 `transparent` 时渲染「未定义」、`vh` 等于大视口、`-webkit-text-size-adjust` 默认 `auto`。**不显式声明，就等于把渲染结果交给内核**，「电脑上正常、手机上多一条色带/比例错掉」基本都是这么来的。本仓库所有前端应用（含新建）必须实现基线，创建新前端时按以下清单执行：
+
+  1. `<meta name="viewport">` **单行**书写，只留 `width=device-width, initial-scale=1, viewport-fit=cover`；**不加实验键**（跨行书写 → 小米丢整条；`interactive-widget` → 夸克丢整条，两者都会退化成 980px 桌面布局）
+  2. 全局样式声明 `color-scheme`，**不带 `only` 与带 `only` 各一条**（带 `only` 的禁 Chrome Auto Dark，不支持 `only` 的引擎会丢整条声明），明暗两档都写
+  3. 根元素显式 `background-color`，取自**画布 token**（如 `--app-canvas`），兜底值与页面底色同源 —— 根元素背景会向上传播成整个画布
+  4. 根元素 `-webkit-text-size-adjust: 100%`
+  5. 全屏页容器用 `align-self: flex-start` 贴顶，不依赖父级居中（消掉 `vh > dvh` 时居中留缝露出的底色）
+  6. 任何让页面上沿**透明**的主题，必须自己声明画布 token（写进主题契约与主题 README）
+  7. 内核丢弃 meta 的兜底：入口在 `createApp` **之前**调用视口自救；样式侧配套 `calc(<n>dvh / var(--k))` 并限定 `[data-*]` 作用域
+  8. 提交前跑 `npm run check:baseline <前端目录>`，**全绿**才算完成
+
+  规则全文（机制、禁止项、验收方法）：[docs/frontend/browser-baseline.md](docs/frontend/browser-baseline.md)
+
 ### 导出位置（强制）
 
 **所有 `export` 一律收拢到文件末尾**，定义处不写 `export` 关键字。
