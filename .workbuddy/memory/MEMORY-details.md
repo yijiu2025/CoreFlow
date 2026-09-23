@@ -1147,6 +1147,59 @@ themes/app/register/compact/index.vue 变体（`import.meta.glob` → 独立惰�
 下次再逼近上限，优先迁 **§3（oauth21）**——它已是主索引最大单节，且细则全在 §11。
 ⚠️ 维护一律用 Write/Edit（`cat >>` 会从偏移 0 覆写）。
 
+### 11.12 🔴 `vue-tsc` 在本仓**空转**（2026-09-23 实测，必读）
+
+**症状**：`vue-tsc --noEmit`（项目 `build` 与 `type-check` 用的都是它）**恒 exit 0**。
+往任意 `.vue` 里写 `const x: number = 'not a number';` 也照样绿 —— 没有任何守卫拦得住。
+
+**成因链（三层，缺一不可）**：
+1. `oauth21/tsconfig.json` 是**方案式配置**：`{"files": [], "references": [...]}`。裸 `tsc`/`vue-tsc`
+   不编译任何文件 ⇒ 自然 0 错。真检查要 `-p tsconfig.app.json` 或 `-b`。
+2. `tsconfig.app.json` 的 `baseUrl` 在 TS 6 已弃用 ⇒ 报 **TS5101（配置级错误）**；而 TS 遇到配置级
+   错误会**直接中止语义分析**，最终只剩这一条"看起来无关"的报错 —— 极具迷惑性。
+3. `tsconfig.app.json` 还是 `composite: true`（与 `--noEmit` 冲突）；`tsconfig.node.json` 的
+   `include` 指向不存在的 `vite.config.js` / `tailwind.config.js` ⇒ `-b` 报 TS18003。
+
+**可用的检查姿势**（配置已备好，在 gitignore 的探测目录里，**不要提交进仓库**）：
+```bash
+# .tmp-probe/tsconfig.check.json = { extends:"../oauth21/tsconfig.app.json",
+#                                   compilerOptions:{ ignoreDeprecations:"6.0", composite:false, noEmit:true } }
+cd oauth21 && node_modules/.bin/vue-tsc -p ../.tmp-probe/tsconfig.check.json --noEmit
+```
+（`extends` 里的相对路径按**基配置所在目录**解析，所以放在 `.tmp-probe/` 也能正确解析
+`include` / `baseUrl` / `paths`；实测与放在 `oauth21/` 根一致。）
+首次跑出来的真实结果是 **25 个错误**（register 6 + base/compact 4 + login 2 + Authorize 4 +
+未使用导入 3 + …）；2026-09-23 修完 register 后为 **9 个**（全在 login / Authorize / 未使用导入）。
+**别急着把 gate 改成这个口径**：那要先修掉这 9 个，属于独立任务。
+
+**⚠️ 排查时的反直觉点：`tsc` 对一次调用只报第一个失败的实参。**
+所以 `bindField(username, usernameProps, …)` 第一个实参类型错时，第二个实参的错被**掩盖** ——
+"修好一处又冒出两处"不是修坏了，是揭开了盖子。
+判据：要确认某错误是不是自己引入的，把改动前的版本丢进同一个检查里对照：
+`git show HEAD:<path> > src/probe-head.tmp.vue` → 跑检查 → 比对错误条数与行号 → 删掉探针。
+
+**⚠️ 另一个坑：块注释里 `*` 和 `/` 相邻会提前闭合注释。**
+`/** 由 themes/app/*/registry.ts 判定 */` 里的 `*/` 让注释在第 58 行就结束，后半截被当代码解析
+⇒ `TS1131 Property or signature expected` + `TS1160 Unterminated template literal`（错在第 75 行，
+但**根因在第 58 行**）。写 glob 路径改用 `themes/app/<page>/registry.ts` 这类不含 `*/` 的写法。
+
+### 11.13 vee-validate `defineField` 的返回类型（写字段绑定时必读）
+
+声明（`node_modules/vee-validate/dist/vee-validate.d.ts`）：
+```ts
+defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
+```
+三个反直觉点：
+1. **第二个返回值是 ref，不是普通对象。** `v-bind="xProps"` 能用，是因为 `reactive` 的 get 拦截器
+   对 ref 属性会**自动解包**（返回 `res.value`）—— 模板里拿到的是 props 对象，类型上却不是。
+2. **它是 `computed`**（运行时 `const props = computed(() => ({ … }))`）⇒ 每次求值可能产出**新对象**，
+   **绝不能提前取 `.value` 存起来**（会绑到过期快照）。要把整个 ref 放进 reactive 容器。
+   ⚠️ 用 `markRaw(attrs)` 包装会得到 `Raw<Ref<…>>`，而 `UnwrapRefSimple` 对含 `[RawSymbol]` 的类型
+   **不解包** ⇒ 容器内类型与契约对不上（**运行时没事，纯类型问题**）。直存 ref 即可，行为等价。
+3. `TValue` 通常是 `string | undefined`（字段一次没填过就是 undefined）。契约若承诺 `string`，
+   容器侧要用**可写 computed** 兜住：读 `value ?? ''`、写回原 ref（`v-model` 仍走同一个 ref，
+   校验/取值链路不变；Vue 对 `:value="undefined"` 本来就渲染成 `''`，所以外观零变化）。
+
 ---
 
 ## 12. 后端陷阱速查（原 MEMORY.md §2，2026-09-23 迁入）

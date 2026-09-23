@@ -24,6 +24,12 @@
 - **🔗 文档站链接**：`ignoreDeadLinks` 只放行 `AGENTS|oauth21|posecraft|packages` 前缀 → 指 `docs/` 之外必 `docs:build` 失败，**指源码用反引号**；
   ⚠️ `development-standards.md` 在 `docs/` **根**。
 - **代码审查**：唯一入口 `docs/development/code-review.md`（L0–L3/五道闸）；**L3（格式类）禁止人工提出**。
+- 🔴 **`vue-tsc` 在本仓是空转的**：`build`/`type-check` 用的裸 `vue-tsc --noEmit` **恒 exit 0**（`tsconfig.json`
+  是 `files:[]` 的方案式配置）→ 往里写类型错误也不报。真检查：**`.tmp-probe/tsconfig.check.json`（已备好）**
+  `cd oauth21 && node_modules/.bin/vue-tsc -p ../.tmp-probe/tsconfig.check.json --noEmit`
+  （当前基线 **9 错**，全在 login/Authorize/未使用导入；姿势与成因 → details §11.12）。⚠️ 两点反直觉：
+  **TS 遇配置级错误（TS5101）会中止全部语义分析**；**一次调用只报第一个失败实参**（会掩盖后面的错，
+  "修好一处又冒两处"是揭盖子不是修坏）。
 
 ## 2. 后端陷阱速查 → **details §12**（整表已迁出）
 
@@ -81,6 +87,8 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 - 🔴 **视觉回归先稳定化、再归因**：不禁过渡/动画、不等 `fonts.ready` → 同代码连拍可报 **17.8% 假差异**；
   冻结样式须 `page.addStyleTag` **加载后**注入并**断言生效**。稳定后噪声下限 **0**；⚠️ 比对前先 `md5sum` 验两侧同一状态（§10.13）。
 - ⚠️ 同一条消息对同一文件多个 Edit 会**静默丢失** → 同文件多改一律**串行**，改完 grep 复核。
+- ⚠️ **块注释里别让 `*` 和 `/` 相邻**：`/** 由 themes/app/*/registry.ts 判定 */` 里的 `*/` 会**提前闭合注释**，
+  后半截当代码解析 → TS1131/TS1160（报错行≠根因行）。glob 改写成 `themes/app/<page>/registry.ts`。
 - ⚠️ **本机 node 的同步 spawn（管道 IO）恒抛 `EBUSY`** → 依赖 `execFileSync` 的脚本（含 `scripts/release.mjs`）**本机跑不了**；
   异步 `spawn` / `stdio:'inherit'` / 文件 fd 都正常；**禁用 `Atomics.wait` 桥接（必死锁）**、预加载 patch 也无效。
   ⚠️ `cmd | tail` 后 `$?` 是 tail 的 → 真实码重定向到文件再读（**push 静默失败过一次**，判据一律用 `git ls-remote`）。
