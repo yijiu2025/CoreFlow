@@ -30,6 +30,7 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     ServiceAgreement: typeof import('./components/common/agreements/ServiceAgreement.vue')['default']
     SliderCaptcha: typeof import('./components/common/SliderCaptcha.vue')['default']
+    ThemeDebugPanel: typeof import('./components/dev/ThemeDebugPanel.vue')['default']
     ThemeToggle: typeof import('./components/common/ThemeToggle.vue')['default']
   }
 }
