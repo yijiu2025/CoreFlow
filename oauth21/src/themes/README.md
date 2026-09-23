@@ -2,9 +2,13 @@
 
 一个子文件夹 = 一个主题。注册表由 `import.meta.glob` 扫描，**加主题不用改任何其他文件**。
 
+> ⚠️ `app/` 不是主题，是**页面版式（UI）目录**（换 DOM 结构，与换皮肤正交）。
+> 它的约定见 `app/README.md`。`import.meta.glob('./*/index.ts')` 只扫一层，
+> 不会把 `app/` 当成主题。
+
 ```
 src/themes/
-├── index.ts            注册表 + 惰性样式加载（机制，一般不用动）
+├── index.ts            主题（皮肤）注册表 + 惰性样式加载（机制，一般不用动）
 ├── types.ts            主题包契约
 ├── default/            默认主题：石墨（不设 token，直接用基线配色）
 │   └── index.ts
@@ -12,10 +16,13 @@ src/themes/
 │   ├── index.ts
 │   ├── theme.scss
 │   └── assets/{wave.svg, wave-dark.svg}
-└── sky/                天青 —— 改取值 + 改结构（表面透明、渐变叠图、横屏断点）
-    ├── index.ts
-    ├── theme.scss
-    └── assets/{skyline.svg, skyline-dark.svg}
+├── sky/                天青 —— 改取值 + 改结构（表面透明、渐变叠图、横屏断点）
+│   ├── index.ts
+│   ├── theme.scss
+│   └── assets/{skyline.svg, skyline-dark.svg}
+└── app/                页面版式（UI）：业务容器 + 可换 UI，见 app/README.md
+    ├── registry.ts
+    └── register/{types.ts, registry.ts, base/, compact/}
 ```
 
 ## 加一个主题
@@ -123,3 +130,20 @@ html[data-mauth-theme='<id>'] {
 
 明暗 `mode` 同理：`?mode=light|dark|system` > 后端下发 > localStorage > 跟随系统。
 明暗与主题是两个正交维度，四组组合都成立。
+
+## 让主题声明页面版式（`views`，可选）
+
+主题包（皮肤）可以顺带指定「各页面默认用哪套 UI」，让皮肤与版式成对下发：
+
+```ts
+export default {
+  meta: { id: 'sky', name: '天青' },
+  tokens: { /* … */ },
+  // 页面名 → 版式 id（themes/app/<页面>/<版式>/）
+  views: { register: 'compact' }
+} satisfies MauthThemePackage;
+```
+
+优先级：`?view=`（最高）> `views` > `VITE_<PAGE>_VIEW` > `base`。
+写错 / 未登记的版式名一律**回退基础版式**，不会因为主题包写错而白屏
+（合法性由 `app/<page>/registry.ts` 判定）。详见 `app/README.md`。

@@ -1,14 +1,34 @@
 <script setup lang="ts">
 /**
- * 移动端全屏注册（/m/register）
+ * 移动端全屏注册（/m/register）—— **业务容器**
  *
  * 路由：mobileRoutes 全屏直达；同时是 /register 在窄屏 / 真机下的自动形态
  * （分发逻辑见 view/web/register/index.vue）
  *
- * 视觉：与手机端登录页（view/app/login/index.vue）共用同一套样式体系
- * —— assets/styles/mobile-auth.scss 的 mauth-* 类。本组件**不再自带样式块**，
- * 避免两套 scoped 样式各自漂移（历史上：页面底色 #fafafa vs #f8fafc、输入框 14px vs 16px、
- * 头部有无安全区、页面能否纵向滚动 —— 都是"两页看起来不一样"的来源）。
+ * === 分层（2026-09-23 架构调整）===
+ * 本文件只负责"注册这件事"：状态、表单校验、接口调用、验证码流程、倒计时、路由跳转。
+ * **页面长什么样不在这里**，而在版式组件里：
+ *
+ *    本容器 ──传 ctx──▶ themes/app/register/<版式>/index.vue
+ *                 ▲
+ *                 └── 契约定在 themes/app/register/types.ts（版式只读它）
+ *
+ * 于是「换一套 UI」= 加一个版式目录，本文件零改动。选择优先级见
+ * `themes/app/register/registry.ts`（`?view=` > 主题包声明 > 环境变量 > 基础版式）。
+ * 默认版式（base）由本文件**静态引入**：正常访问不产生额外请求，首帧即正确。
+ *
+ * === 什么该留在这里 ===
+ * 任何"点了会发生什么"：校验规则、请求、成功/失败处理、去哪一页。
+ * 判断标准：把它挪进版式后，会不会出现第二份规则？会 —— 就留在这里。
+ * 反向的：密码明文开关、折叠展开这类纯展示状态，留在版式里（各版式各管各的）。
+ *
+ * === 浮层 ===
+ * 图形验证码 / 协议文档 / 全局提示都由本容器渲染（它们由业务状态驱动，
+ * 且都是 `position: fixed`，渲染位置不影响呈现）—— 版式因此完全不必知道
+ * "有验证码弹窗这回事"，也不会因为某个版式忘了放挂载点而丢功能。
+ *
+ * 视觉：基础版式与手机端登录页共用同一套样式体系（assets/styles/mobile-auth.scss
+ * 的 mauth-* 类），样式只有那一处来源。
  *
  * 表单：三步堆栈（1 用户名+邮箱码 → 2 密码 → 3 协议+提交），安卓 Activity 式 slide 切换
  *
@@ -20,11 +40,10 @@ import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, markRaw, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
-import MauthThemeSwitch from '@/components/auth/MauthThemeSwitch.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
@@ -32,6 +51,11 @@ import { useButtonLock } from '@/composables/useButtonLock';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useCaptcha } from '@/composables/useCaptcha';
 import { useKeyboardAvoid } from '@/composables/useKeyboardAvoid';
+import { useThemeStore } from '@/stores/theme';
+import BaseRegisterView from '@/themes/app/register/base/index.vue';
+import { pickRegisterViewId, registerViews } from '@/themes/app/register/registry';
+import type { RegisterDirection, RegisterFieldBinding, RegisterTranslate, RegisterViewContext } from '@/themes/app/register/types';
+import type { Component, Ref } from 'vue';
 
 const { t, locale } = useI18n();
 const route = useRoute();
@@ -58,8 +82,8 @@ onUnmounted(() => dispose());
 
 // 分步堆栈（安卓 Activity 风格：1 账号+验证码 → 2 密码 → 3 协议+提交）
 const step = ref<1 | 2 | 3>(1);
-// 页面切换方向：next 前进 slide-left / back 后退 slide-right
-const transitionName = ref('mauth-slide-next');
+// 页面切换方向：next 前进 / prev 后退 —— 由版式翻译成具体的转场动画名
+const direction = ref<RegisterDirection>('next');
 
 // 分步副标题（显式映射，避免动态拼 key 漏键时把 key 名显示给用户）
 const stepSub = computed(() => {
@@ -101,7 +125,7 @@ const registerSchema = z
     path: ['confirmPassword']
   });
 
-const { values, errors, defineField, handleSubmit, validateField } = useForm({
+const { values, errors, defineField, handleSubmit, validateField, setFieldError } = useForm({
   validationSchema: toTypedSchema(registerSchema)
 });
 
@@ -115,9 +139,6 @@ const agreed = ref(false);
 const isEmailDuplicate = ref(false);
 const isEmailChecking = ref(false); // 邮箱查重请求进行中：防 blur 后未返回就点下一步的竞态
 const codeSent = ref(false); // 邮箱码是否已发出：未发出前验证码框与"下一步"都禁用
-// 密码可见性（移动端无 hover，必须给显式开关，与手机端登录页一致）
-const showPwd = ref(false);
-const showConfirmPwd = ref(false);
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 // 防双击：提交期间禁用按钮（避免重复注册请求）
 const submitLock = useButtonLock();
@@ -172,9 +193,17 @@ const handleNextStep = async (target: 2 | 3) => {
     const r4 = await validateField('password');
     const r5 = await validateField('confirmPassword');
     ok = r4.valid && r5.valid;
+    /* ⚠️ 「两次密码一致」是 schema 的 **object 级 refine**，而 validateField 只跑字段级
+       规则，refine 不参与 —— 不补这一句，两次不一致会一路走到第 3 步：点「完成注册」时
+       handleSubmit 才拦下，而错误标在第 2 步的字段上、用户根本看不到，表现为"点了没反应"。
+       用 setFieldError 把错误标回确认框（与移动端重置密码页同一处坑、同一修法）。 */
+    if (ok && values.password !== values.confirmPassword) {
+      setFieldError('confirmPassword', t('register.password_mismatch'));
+      ok = false;
+    }
   }
   if (ok) {
-    transitionName.value = 'mauth-slide-next';
+    direction.value = 'next';
     step.value = target;
   }
 };
@@ -195,7 +224,7 @@ const handleBack = () => {
     goLogin();
     return;
   }
-  transitionName.value = 'mauth-slide-prev';
+  direction.value = 'prev';
   step.value = (step.value - 1) as 1 | 2 | 3;
 };
 
@@ -227,214 +256,173 @@ const handleRegister = handleSubmit(async data => {
     submitLock.unlock();
   }
 });
+
+/* ============================================================================
+   版式（UI）加载 + 契约组装
+   ========================================================================== */
+
+const themeStore = useThemeStore();
+/**
+ * 用哪套版式：`?view=` > 主题包声明（themes/<id>/index.ts 的 views.register）
+ * > VITE_REGISTER_VIEW > base。解析细节与安全边界见 registry.ts。
+ *
+ * 做成 computed 而不是 setup 里取一次，是因为主题是**运行时**才定的：
+ * 后端下发的换肤配置在 App.vue 的 onMounted 之后才到（可能晚于本页 setup），
+ * 取一次就会漏掉"主题包声明了版式"这种情况。
+ */
+const viewId = computed(() => pickRegisterViewId({ url: route.query.view, theme: themeStore.viewFor('register') }));
+
+/**
+ * 当前渲染的版式组件
+ *
+ * 默认就是基础版式：它是静态引入的，首帧直接正确（不会先白屏再闪一下）。
+ * 变体是动态 chunk，加载完成后接管；路由守卫已提前预热（preloadRegisterView），
+ * 因此绝大多数情况下这一步在同一 tick 内完成 —— 用户看不到切换。
+ * `markRaw`：组件对象不该被 reactive 代理（无谓的深层代理开销）。
+ *
+ * `viewEpoch` 用于丢弃过期结果：版式 A→B→A 连续变化时，先发出的 A 可能后返回，
+ * 不加序号会用过期组件覆盖当前（与主题附加样式同一类坑）。
+ */
+const activeView = shallowRef<Component>(BaseRegisterView);
+let viewEpoch = 0;
+watch(
+  viewId,
+  id => {
+    const epoch = ++viewEpoch;
+    if (id === registerViews.baseId) {
+      activeView.value = BaseRegisterView;
+      return;
+    }
+    void registerViews.load(id).then(loaded => {
+      if (loaded && epoch === viewEpoch) activeView.value = markRaw(loaded);
+    });
+  },
+  { immediate: true }
+);
+
+/** 契约里字段绑定的**内部构造形态**：值是 ref，交给 reactive 自动解包成契约里的标量 */
+interface FieldSource {
+  value: Ref<string>;
+  attrs: Record<string, unknown>;
+  invalid: Ref<boolean>;
+  error: Ref<string | undefined>;
+}
+
+/**
+ * 把一个字段打成"绑定三件套"
+ *
+ * `attrs` 走 `markRaw`：它是 vee-validate 给的原生事件绑定，原样交给 `v-bind`
+ * 最稳（不进 reactive 代理，行为与改造前 `v-bind="usernameProps"` 完全一致）。
+ */
+function bindField(value: Ref<string>, attrs: Record<string, unknown>, invalid: Ref<boolean>, error: Ref<string | undefined>): FieldSource {
+  return { value, attrs: markRaw(attrs), invalid, error };
+}
+
+/**
+ * 编译期契约自检
+ *
+ * 容器组装的 ctx 必须**结构上满足** `themes/app/register/types.ts` 声明的契约：
+ * 少一个字段、类型对不上，都会在这行报错。这样"版式契约"才是真的有约束力，
+ * 而不是一份会过期的文档。
+ */
+function assertRegisterContract(ctx: RegisterViewContext): RegisterViewContext {
+  return ctx;
+}
+
+/** 翻译函数：只把「key + 命名参数」这一子集交给版式（版式因此不依赖 i18n 内部类型） */
+const translate: RegisterTranslate = (key, params) => (params ? t(key, params as never) : t(key));
+
+/**
+ * 交给版式的上下文
+ *
+ * reactive + 嵌套 ref：契约里声明的是**标量**（`step: number`、`fields.x.value: string`），
+ * 而这些标量在容器里都是 ref —— `reactive` 会自动解包，版式侧写 `ctx.step`、
+ * `v-model="ctx.fields.email.value"` 即可，不必到处 `.value`。
+ */
+const ctx = assertRegisterContract(
+  reactive({
+    t: translate,
+    appName: computed(() => String(route.query.appName ?? '')),
+
+    step: computed(() => step.value),
+    totalSteps: 3,
+    direction: computed(() => direction.value),
+    subtitle: computed(() => stepSub.value),
+    progress: computed(() => (step.value / 3) * 100),
+
+    fields: {
+      username: bindField(
+        username,
+        usernameProps,
+        computed(() => !!errors.value.username),
+        computed(() => errors.value.username)
+      ),
+      // 邮箱的错误口径与其它字段不同：查重命中也要算错误态（改造前的模板就是这么写的）
+      email: bindField(
+        email,
+        emailProps,
+        computed(() => !!errors.value.email || isEmailDuplicate.value),
+        computed(() => (isEmailDuplicate.value ? t('register.email_duplicate') : errors.value.email))
+      ),
+      code: bindField(
+        code,
+        codeProps,
+        computed(() => !!errors.value.code),
+        computed(() => errors.value.code)
+      ),
+      password: bindField(
+        password,
+        passwordProps,
+        computed(() => !!errors.value.password),
+        computed(() => errors.value.password)
+      ),
+      confirmPassword: bindField(
+        confirmPassword,
+        confirmPasswordProps,
+        computed(() => !!errors.value.confirmPassword),
+        computed(() => errors.value.confirmPassword)
+      )
+    } satisfies Record<string, FieldSource>,
+
+    agreed,
+    emailDuplicate: computed(() => isEmailDuplicate.value),
+    codeSent: computed(() => codeSent.value),
+    countingDown: computed(() => isCountingDown.value),
+    countdown: computed(() => countdown.value),
+    submitting: computed(() => submitting.value),
+    // 改造前按钮写的是 `:disabled="!agreed || submitting"`，这里把口径收进容器，
+    // 版式直接用 —— 免得每套 UI 各写一遍、写漏一处就能提交未勾协议的注册
+    canSubmit: computed(() => agreed.value && !submitting.value),
+
+    actions: {
+      nextStep: handleNextStep,
+      back: handleBack,
+      goLogin,
+      sendCode,
+      checkEmail,
+      submit: handleRegister,
+      openAgreement: (doc: 'service' | 'privacy') => {
+        docType.value = doc;
+      }
+    }
+  })
+);
 </script>
 
 <template>
-  <!-- 移动端全屏注册（与手机端登录页共用 mauth-* 样式体系） -->
-  <div class="mauth-page">
-    <!-- 顶部 Header：返回 + 标题 + 步骤副标题 + 进度条 -->
-    <header class="mauth-header">
-      <button class="mauth-back-btn" :aria-label="t('register.prev')" @click="handleBack">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
-      <!-- 右上角主题切换（跟随系统 / 浅色 / 深色 三态）；被 iframe 嵌入时自动隐藏 -->
-      <MauthThemeSwitch />
-      <div class="mauth-header-content">
-        <div class="mauth-logo">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
-        </div>
-        <h1 class="mauth-title">{{ t('register.title') }}</h1>
-        <p class="mauth-sub">{{ stepSub }}</p>
-      </div>
-      <!-- 步骤进度条 -->
-      <div class="mauth-progress">
-        <div class="mauth-progress-bar" :style="{ width: `${(step / 3) * 100}%` }"></div>
-      </div>
-    </header>
+  <!-- 业务容器只做两件事：把 ctx 交给当前版式；渲染与版式无关的业务浮层 -->
+  <component :is="activeView" :ctx="ctx" />
 
-    <!-- 分步表单（堆栈进退，slide 动画） -->
-    <main class="mauth-body">
-      <transition :name="transitionName" mode="out-in">
-        <!-- 步骤 1：用户名 + 邮箱 + 验证码 -->
-        <section v-if="step === 1" key="1" class="mauth-step">
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.username }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-              </svg>
-              <input
-                v-model="username"
-                v-bind="usernameProps"
-                type="text"
-                autocomplete="username"
-                :placeholder="t('register.username')"
-                class="mauth-input"
-              />
-            </div>
-            <div class="mauth-err">{{ errors.username }}</div>
-          </div>
-
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.email || isEmailDuplicate }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                <polyline points="22,6 12,13 2,6"></polyline>
-              </svg>
-              <input
-                v-model="email"
-                v-bind="emailProps"
-                type="email"
-                inputmode="email"
-                autocomplete="email"
-                :placeholder="t('register.email')"
-                class="mauth-input"
-                @blur="checkEmail"
-              />
-            </div>
-            <div class="mauth-err">{{ isEmailDuplicate ? t('register.email_duplicate') : errors.email }}</div>
-          </div>
-
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.code }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              <input
-                v-model="code"
-                v-bind="codeProps"
-                type="text"
-                inputmode="numeric"
-                maxlength="6"
-                autocomplete="one-time-code"
-                :placeholder="t('register.code')"
-                :disabled="!codeSent"
-                class="mauth-input"
-              />
-              <button type="button" @click="sendCode" :disabled="isCountingDown" class="mauth-code-btn">
-                {{ isCountingDown ? t('register.code_countdown', { countdown }) : t('register.get_code') }}
-              </button>
-            </div>
-            <div class="mauth-err">{{ errors.code }}</div>
-          </div>
-
-          <!-- 未发码前禁用：避免没收到码就往下走 -->
-          <button type="button" class="mauth-next-btn" :disabled="!codeSent" @click="handleNextStep(2)">
-            {{ t('register.next') }}
-          </button>
-        </section>
-
-        <!-- 步骤 2：密码 -->
-        <section v-else-if="step === 2" key="2" class="mauth-step">
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.password }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              <input
-                v-model="password"
-                v-bind="passwordProps"
-                :type="showPwd ? 'text' : 'password'"
-                autocomplete="new-password"
-                :placeholder="t('register.password')"
-                class="mauth-input"
-              />
-              <button
-                type="button"
-                class="mauth-pwd-toggle"
-                :aria-label="showPwd ? t('login.hide_password', '隐藏密码') : t('login.show_password', '显示密码')"
-                @click="showPwd = !showPwd"
-              >
-                <svg v-if="showPwd" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </div>
-            <div class="mauth-err">{{ errors.password }}</div>
-          </div>
-
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.confirmPassword }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-              </svg>
-              <input
-                v-model="confirmPassword"
-                v-bind="confirmPasswordProps"
-                :type="showConfirmPwd ? 'text' : 'password'"
-                autocomplete="new-password"
-                :placeholder="t('register.confirm_password')"
-                class="mauth-input"
-              />
-              <button
-                type="button"
-                class="mauth-pwd-toggle"
-                :aria-label="showConfirmPwd ? t('login.hide_password', '隐藏密码') : t('login.show_password', '显示密码')"
-                @click="showConfirmPwd = !showConfirmPwd"
-              >
-                <svg v-if="showConfirmPwd" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </div>
-            <div class="mauth-err">{{ errors.confirmPassword }}</div>
-          </div>
-
-          <button type="button" class="mauth-next-btn" @click="handleNextStep(3)">{{ t('register.next') }}</button>
-        </section>
-
-        <!-- 步骤 3：核对信息 + 协议 + 提交 -->
-        <section v-else key="3" class="mauth-step">
-          <div class="mauth-summary">
-            <div class="mauth-summary-row"><span>{{ t('register.username') }}</span><strong>{{ values.username }}</strong></div>
-            <div class="mauth-summary-row"><span>{{ t('register.email') }}</span><strong>{{ values.email }}</strong></div>
-            <div class="mauth-summary-row"><span>{{ t('register.password_label') }}</span><strong>{{ t('register.summary_password_set') }}</strong></div>
-          </div>
-
-          <label class="mauth-agree">
-            <input type="checkbox" v-model="agreed" class="hidden" />
-            <span class="mauth-checkbox" :class="{ checked: agreed }">
-              <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </span>
-            <span class="mauth-option-text">
-              {{ t('register.agree_prefix') }}<span @click.stop.prevent="docType = 'service'" class="mauth-link">{{ t('register.agree_link_service') }}</span>{{ t('register.agree_and') }}<span @click.stop.prevent="docType = 'privacy'" class="mauth-link">{{ t('register.agree_link_privacy') }}</span>
-            </span>
-          </label>
-
-          <button type="button" class="mauth-submit" :disabled="!agreed || submitting" @click="handleRegister">
-            <span v-if="submitting" class="mauth-spinner"></span>
-            {{ submitting ? t('register.submitting') : t('register.submit') }}
-          </button>
-        </section>
-      </transition>
-
-      <!-- 已有账号 → 回登录（透传 OAuth 上下文，登录后才能回到授权页） -->
-      <div class="mauth-footer">
-        <span>{{ t('register.signin_hint') }}</span>
-        <button class="mauth-register-btn" @click="goLogin">{{ t('register.signin_link') }}</button>
-      </div>
-    </main>
-
-    <GraphicCaptcha :is-open="showCaptcha" :email="values.email" :send-email="true" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
-    <AgreementModals v-model:type="docType" />
-    <MessageToast />
-  </div>
+  <!-- 业务浮层：三者都是 `position: fixed`（Toast 还 Teleport 到 body），
+       渲染位置不影响呈现，故统一由容器渲染。 -->
+  <GraphicCaptcha
+    :is-open="showCaptcha"
+    :email="values.email"
+    :send-email="true"
+    type="register"
+    @close="showCaptcha = false"
+    @success="onCaptchaSuccess"
+  />
+  <AgreementModals v-model:type="docType" />
+  <MessageToast />
 </template>
