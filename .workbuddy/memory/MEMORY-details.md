@@ -479,15 +479,22 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern
   - `execFileSync(..., {stdio:'inherit'})` **正常**（子进程真的跑了，`git --version` 有输出）；
   - `spawnSync(..., {stdio:['ignore',fd,fd]})` 用**文件描述符**也**正常**（status 0、能读回输出）。
   - ⇒ **坏的只有「同步 + 管道」这一条路径**（libuv 同步读管道），spawn 本身没问题。
-- **影响**：`scripts/release.mjs` 的 `run()` 正是 `execFileSync` + `encoding` ⇒ **本机跑不了发版脚本**；
-  其他依赖同步子进程的脚本同理。bash 里直接跑 git/npm 不受影响。
+- **影响**：`scripts/release.mjs` 的 `run()` 原本正是 `execFileSync` + `encoding` ⇒ 本机跑不了发版脚本
+  （**2026-09-23 已修**，见下）。其他依赖同步子进程的脚本同理；bash 里直接跑 git/npm 不受影响。
 - ⚠️ **不要用 `Atomics.wait` 做"同步包异步"桥接**：主线程一阻塞，事件循环停摆，子进程的 `close`
   永远不会派发 → **必死锁**（只能靠超时返回）。这是设计错误，不是调参问题。
 - ⚠️ **也不要指望预加载 monkey-patch**：Node 对内置模块的命名导出在**链接期**就固定了，
   `node --import shim.mjs` 里改 `cp.execFileSync` 对
   `import { execFileSync } from 'node:child_process'` 的绑定**无效**（实测仍 EBUSY）。
-- **可行修法（需改代码，二选一）**：① 把 `run()` 改成异步（`spawn` + Promise，`await` 串到调用点，最正统）；
-  ② 保留同步语义但把 stdio 换成**临时文件 fd**（写完读完再删，最小改动但看着 hack）。
+- **已采用的修法**：`scripts/release.mjs` 的 `run()` 改成 `spawnSync` + **文件型 stdio** ——
+  模块级 `mkdtempSync` 出一组中转文件（stdout / stderr / stdin），写完读完，进程退出时清理。
+  选它而非「全异步化」的理由：`run()` 有 10 余处调用点且散在各同步函数里，异步化要一路改到
+  `main()`；文件型 stdio 把故障**隔离在 `run()` 一个函数内，调用点零改动**，语义与管道等价。
+  两个必须保留的约定：① 失败时抛异常并把输出挂到 `err.stdout` / `err.stderr`（`tryRun` 靠它判成败，
+  `spawnSync` 本身**不抛**，必须自己判 `result.status`）；② `input` 经临时文件作 stdin，
+  **且必须给超时** —— `git credential fill` 在本机有永久挂住的历史（credential.helper 首项是
+  `helper-selector`），没有超时会卡死整个发版，且表现是「查 GitHub API 的步骤没反应」，易误判成 API 故障。
+  实测：`node scripts/release.mjs --apply` 一次跑通，发出 `v2.12.0`（tag + Release + 远端同步全绿）。
 
 ---
 
@@ -1145,6 +1152,7 @@ themes/app/register/compact/index.vue 变体（`import.meta.glob` → 独立惰�
 压缩轮次：18371 B → 13283 B（`8d31806`）→ **11473 B / 7171 字符**（2026-09-23 第三轮：把原 §2
 「后端陷阱速查」整节迁到本文件 **§12**，主索引只留一行指针 + 14 个关键词，可检索性不丢）。
 下次再逼近上限，优先迁 **§3（oauth21）**——它已是主索引最大单节，且细则全在 §11。
+当前余量（2026-09-23 末）：**13908 B / 8643 字符**（占安全线 86%）；再攒几批约定就该迁 §3 了。
 ⚠️ 维护一律用 Write/Edit（`cat >>` 会从偏移 0 覆写）。
 
 ### 11.12 🔴 `vue-tsc` 在本仓**空转**（2026-09-23 实测，必读）
@@ -1199,6 +1207,40 @@ defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
 3. `TValue` 通常是 `string | undefined`（字段一次没填过就是 undefined）。契约若承诺 `string`，
    容器侧要用**可写 computed** 兜住：读 `value ?? ''`、写回原 ref（`v-model` 仍走同一个 ref，
    校验/取值链路不变；Vue 对 `:value="undefined"` 本来就渲染成 `''`，所以外观零变化）。
+
+### 11.14 把「跨内核初始值」从做法沉淀成规则 + 可执行自检（2026-09-23）
+
+**动机**：§11.6/§11.7/§11.8 那套做法原本散落在三处**代码注释**里（`index.html` 的 meta 注释、
+`main.scss` 的「跨内核初始值同步」段、`viewport-fix.ts` 的文件头）。老前端能读到，**新前端没有抄写来源**
+——而这几条恰恰是"不写就会在真机上炸"的类型。所以把它提到规范层。
+
+**产出两件，缺一不可**：
+1. `docs/frontend/browser-baseline.md` —— 规则文档。结构：**留白清单表**（值 → 规范初始值 → 受它支配的东西 → 不声明的后果）
+   → 必做项 B1–B7（每条给规则 / 机制 / 代码 / 验证方式）→ **禁止项表**（全是踩过的）→ **验收方法论** → 新前端接入清单 → 参考实现落点。
+2. `scripts/check-browser-baseline.mjs`（`npm run check:baseline [目录]`）—— 零依赖静态断言。
+   规则只写在文档里会慢慢失守；静态检查能在提交前把「漏写某个初始值」拦下来。
+
+**检查脚本的设计要点（下次写同类脚本可照搬）**：
+
+- **入口文件从 `index.html` 的 `<script src>` 反查**，不要猜 `main.ts`：名为 `index.ts` 的同名文件太多，
+  `files.find(/index\.ts$/)` 会命中 `src/i18n/index.ts`（首次实现就踩到，报错信息指向完全无关的模块）。
+- **断言必须能被"毒丸样本"打红**，否则是假检查。做法：造一个残缺目录（meta 跨行 + 带实验键、
+  无 `color-scheme`、无画布色、`text-size-adjust` 非 100%、兜底在 `createApp` 之后且无样式配套）→
+  实测 **8 项报红 + 2 条提醒 + exit 1**，确认不是恒绿。这一步同时验证了「传目录检查其它前端」的用法。
+- **分三级，别一刀切**：硬性项（FAIL）＝任何前端都必须有；条件项＝**只在该前端引入了对应机制时才校验**
+  （检测到 `viewport-fix.*` 才查入口顺序与样式配套），否则会把"还没做兜底"误判成错误；
+  提醒项（WARN，不阻断）＝存在性建议。
+- 提醒项容易全场静默（都通过就不打印）→ 输出里要显式给计数，否则看不出机制有没有被跑到。
+
+**挂载点（四处都要动，否则规则等于没落地）**：`AGENTS.md`（照「新前端设备身份接入（强制）」的 8 步清单体例）
++ `docs/frontend/coding-standard.md` 样式节 + `docs/.vitepress/config.ts` 侧边栏 + `package.json` 的 `check:baseline`。
+
+**两个踩坑记录**：
+- 🔴 **又在注释里写了 `src/**/index.ts`，`*/` 再次提前闭合块注释**（同 §11.12 的坑，**第二次踩**）——
+  报错是一堆 `Unexpected identifier '$'`（指向模板字符串里的 `${`），根因在几十行前的注释。
+  ⇒ 写**正则 / glob / 路径**时条件反射检查 `*` 与 `/` 是否相邻。`grep -n '\*/'` 是最快的自查。
+- 文档里写**尖括号占位符**（如 `npm run check:baseline <目录>`）必须包在反引号内，否则 Markdown 会当 HTML 标签解析。
+  `npm run docs:build` 已实测通过（exit 0，无死链）。
 
 ---
 
