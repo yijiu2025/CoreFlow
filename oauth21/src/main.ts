@@ -13,6 +13,12 @@ import './assets/styles/mobile-auth.scss';
 import request from './utils/request';
 import { initDeviceSync } from 'stable-deviceid';
 import { reportError } from './composables/useErrorReporter';
+import { setupViewportFix } from './utils/viewport-fix';
+
+// 布局视口自救：必须在 Vue 挂载前执行 —— 内核丢弃 viewport meta 时（实测夸克），
+// 整页会被当成 980px 桌面布局等比缩小，这里用 zoom 把比例拉回设备宽度。
+// 详见 src/utils/viewport-fix.ts 与 mobile-auth.scss §13。
+setupViewportFix();
 
 // 设备 ID 全局同步初始化（跨标签页 storage 事件监听 + 变更回调注册）
 initDeviceSync();

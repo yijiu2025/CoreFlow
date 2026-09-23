@@ -132,7 +132,18 @@ const i18n = createI18n({
         link_sent_to: '重置链接已发送至',
         link_hint: '请查看您的邮箱，点击链接完成密码重置。链接 30 分钟内有效。',
         send_link: '发送重置链接',
-        reset_desc: '请设置您的新密码'
+        reset_desc: '请设置您的新密码',
+        /* 移动端（/m/forgot-password）专用：分步副标题 + 占位文案 */
+        mobile_sub_code_1: '步骤 1/3：验证邮箱',
+        mobile_sub_code_2: '步骤 2/3：输入验证码并设置新密码',
+        mobile_sub_code_3: '步骤 3/3：重置完成',
+        mobile_sub_link_1: '步骤 1/4：验证邮箱',
+        mobile_sub_link_2: '步骤 2/4：查收重置邮件',
+        mobile_sub_link_3: '步骤 3/4：设置新密码',
+        mobile_sub_link_4: '步骤 4/4：重置完成',
+        new_password_rule: '新密码（8位以上，含大小写字母与数字）',
+        remembered: '已想起密码？',
+        captcha_title: '安全验证'
       },
       register: {
         brand_title: '开启您的',
@@ -183,7 +194,8 @@ const i18n = createI18n({
         register_failed: '注册失败，请稍后重试',
         password_strength_weak: '弱',
         password_strength_medium: '中',
-        password_strength_strong: '强'
+        password_strength_strong: '强',
+        password_strength_label: '强度：{level}'
       }
     },
     en: {
@@ -313,7 +325,18 @@ const i18n = createI18n({
         link_sent_to: 'Reset link sent to',
         link_hint: 'Check your inbox and click the link to reset your password. The link expires in 30 minutes.',
         send_link: 'Send Reset Link',
-        reset_desc: 'Please set your new password'
+        reset_desc: 'Please set your new password',
+        /* Mobile-only (/m/forgot-password): step subtitles + placeholders */
+        mobile_sub_code_1: 'Step 1/3: Verify your email',
+        mobile_sub_code_2: 'Step 2/3: Enter the code and set a new password',
+        mobile_sub_code_3: 'Step 3/3: Done',
+        mobile_sub_link_1: 'Step 1/4: Verify your email',
+        mobile_sub_link_2: 'Step 2/4: Check your inbox',
+        mobile_sub_link_3: 'Step 3/4: Set a new password',
+        mobile_sub_link_4: 'Step 4/4: Done',
+        new_password_rule: 'New password (8+ chars, upper & lower case and digits)',
+        remembered: 'Remembered your password?',
+        captcha_title: 'Security check'
       },
       register: {
         brand_title: 'Start your',
@@ -364,7 +387,8 @@ const i18n = createI18n({
         register_failed: 'Registration failed, please try again later',
         password_strength_weak: 'Weak',
         password_strength_medium: 'Medium',
-        password_strength_strong: 'Strong'
+        password_strength_strong: 'Strong',
+        password_strength_label: 'Strength: {level}'
       }
     }
   }

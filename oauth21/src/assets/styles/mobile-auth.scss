@@ -221,8 +221,13 @@ html.dark {
   --mauth-footer-fg: var(--mauth-text-faint);
   --mauth-register-btn-fg: var(--mauth-primary);
 
+  /* 面板图标三态：警告（登录二次验证）/ 成功（重置完成）/ 信息（重置邮件已发送） */
   --mauth-panel-icon-warn-bg: var(--mauth-warn-bg);
   --mauth-panel-icon-warn-fg: var(--mauth-warn);
+  --mauth-panel-icon-ok-bg: rgba(16, 185, 129, 0.12);
+  --mauth-panel-icon-ok-fg: #10b981;
+  --mauth-panel-icon-info-bg: rgba(37, 99, 235, 0.12);
+  --mauth-panel-icon-info-fg: var(--mauth-accent);
   --mauth-panel-text-fg: var(--mauth-text-mid);
   --mauth-panel-sub-fg: var(--mauth-text-faint);
   --mauth-resend-fg: var(--mauth-accent);
@@ -233,6 +238,13 @@ html.dark {
   --mauth-summary-divider: var(--mauth-border);
   --mauth-summary-label-fg: var(--mauth-text-mid);
   --mauth-summary-value-fg: var(--mauth-text-strong);
+
+  /* 密码强度条（重置密码 / 注册）：三档取色与桌面 PasswordStrength 一致，
+     深浅色下对比度都够，因此不在 html.dark 里重复声明 */
+  --mauth-strength-track: var(--mauth-surface-3);
+  --mauth-strength-weak: #f43f5e;
+  --mauth-strength-medium: #eab308;
+  --mauth-strength-strong: #10b981;
 
   /* 第三方登录行：分割线 + 圆形图标 + 品牌名 + 「上次登录」徽标。
      ⚠️ 这里的 --mauth-social-size / gap 会被 0.5 节的矮屏、横屏断点覆写，
@@ -400,10 +412,62 @@ html.dark {
    1. 页面骨架
    ========================================================================== */
 
+/* --- 1.0 兜底色 / 画布色（只在移动端页面激活时生效）-------------------------
+   「页面之外」露出来的颜色由三处决定，三者不同色时，任何 1px 的"没铺到"
+   （地址栏收起展开、回弹、安全区、`vh` 与 `dvh` 不等）都会变成**一条带子**：
+
+     · 根画布 —— `html` 的背景会向上传播成整个画布（见 main.scss 的 baseline sync）
+     · 祖先容器 —— App.vue / BlankLayout 的 `.min-h-screen`，Tailwind `bg-slate-50`
+     · 页面自身 —— `.mauth-page` = `--mauth-bg`
+
+   这里把它们统一到唯一出口 `--mauth-canvas`，取值规则 = **"页面最上沿是什么颜色"**：
+
+     · 有 header（正常态）→ 跟 `--mauth-header-bg`
+       历史成因：实测夸克真机顶部那条高约 12 CSS px、色值 rgb(249,250,252) 的浅灰，
+       正是祖先容器 `bg-slate-50` 本身，紧挨着的是白色 header —— 只差 7 阶也看得见。
+     · 没有 header（缺 appName 的占位态）→ 跟页面底色 `--mauth-bg`
+       占位态整页都是 `#f8fafc`，画布若还是白的，就是"白底之上压一条白"。
+
+   用 `:has()` 限定作用域：桌面版式里没有 `.mauth-page`，规则完全不生效，桌面外观零影响。
+   ⚠️ 关键兜底**不能依赖 `:has()`**（不支持时整条规则会被丢弃）—— 贴顶规则见 1.1；
+   此处退化行为 = "画布跟表面色"，正常态依然正确，不会比改之前更差。 */
+html:has(.mauth-page) {
+  --mauth-canvas: var(--mauth-header-bg);
+}
+
+html:has(.mauth-page):not(:has(.mauth-header)) {
+  --mauth-canvas: var(--mauth-bg);
+}
+
+html:has(.mauth-page),
+html:has(.mauth-page) body,
+html:has(.mauth-page) .min-h-screen {
+  background: var(--mauth-canvas);
+}
+
 .mauth-page {
   width: 100%;
   display: flex;
   flex-direction: column;
+  /* --- 1.1 贴住容器顶部（必须，1.0 的"缝"就是从这儿来的）--------------------
+     App.vue 与 BlankLayout 都把内容包在 `min-h-screen flex items-center
+     justify-center` 里（桌面版靠它把小卡片居中），而本页高度是 `100dvh`。
+     **`vh` 与 `dvh` 在有地址栏的真机上并不相等**：Blink 的 `vh` 是"大视口"、
+     `dvh` 是"动态视口"，差值就是一个地址栏的高度。于是容器比页面高，
+     `items-center` 把页面**垂直居中** → 上下各留 (100vh - 100dvh) / 2 的缝。
+
+     实测（390×844，用「容器加高 120px」等价模拟 vh-dvh=120）：
+     页面 top=60 / 高 844 / 容器 964 → 60px 的缝落在可见区域内，
+     露出的正是祖先兜底色 → 就是用户看到的"小白条"（改色前是 `bg-slate-50`，
+     与页面同色所以看不出来；上一版把祖先染成 header 白之后才变成可见的白条）。
+     桌面 Chrome 没有地址栏、`vh === dvh`，缝恒为 0 —— 这正是"电脑上看不到"的原因。
+
+     修法：让本页永远贴容器顶部。页高 = 当前可视高，可见区域即被铺满；
+     容器多出来的部分在页面**下方**（屏幕外），而 `html,body{overflow:hidden}`
+     本来就滚不到那里。用 `align-self` 而非 `position:fixed`：不需要新的包含块，
+     也就不受入场过渡 `.fade-scale-enter-active` 的 transform 影响。 */
+  align-self: flex-start;
+
   /* 用固定高而非 min-height，让自身成为滚动容器（移动端内容可达性的关键）
      ── 成因：main.scss 里 `html, body { overflow: hidden }` 锁死了根滚动。
      若这里写成 min-height，内容高于视口时元素会被撑高（实测 iPhone 横屏
@@ -722,6 +786,57 @@ html.dark {
   text-overflow: ellipsis;
 }
 
+/* --- 4.1 密码强度提示（重置密码 / 注册）---
+   桌面版是 hover 触发的悬浮规则窗，移动端没有 hover —— 改成常显的 4 段条 + 文字。
+   颜色三档全部取自 token，主题可覆写，组件规则里不出现裸色值。 */
+.mauth-strength {
+  margin-top: 8px;
+  padding: 0 4px;
+}
+
+.mauth-strength-bars {
+  display: flex;
+  gap: 4px;
+}
+
+.mauth-strength-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--mauth-strength-track);
+  transition: background 0.2s;
+}
+
+.mauth-strength-bar.is-weak {
+  background: var(--mauth-strength-weak);
+}
+
+.mauth-strength-bar.is-medium {
+  background: var(--mauth-strength-medium);
+}
+
+.mauth-strength-bar.is-strong {
+  background: var(--mauth-strength-strong);
+}
+
+.mauth-strength-text {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--mauth-text-mid);
+}
+
+.mauth-strength-text.is-weak {
+  color: var(--mauth-strength-weak);
+}
+
+.mauth-strength-text.is-medium {
+  color: var(--mauth-strength-medium);
+}
+
+.mauth-strength-text.is-strong {
+  color: var(--mauth-strength-strong);
+}
+
 /* ==========================================================================
    5. 模式切换 Tab（登录页：邮箱码 / 密码）
    ========================================================================== */
@@ -951,6 +1066,23 @@ html.dark {
 .mauth-panel-icon-warn {
   background: var(--mauth-panel-icon-warn-bg);
   color: var(--mauth-panel-icon-warn-fg);
+}
+
+/* 成功（密码重置完成）与信息（重置邮件已发送）——同一图标容器，只换配色 */
+.mauth-panel-icon-ok {
+  background: var(--mauth-panel-icon-ok-bg);
+  color: var(--mauth-panel-icon-ok-fg);
+}
+
+.mauth-panel-icon-info {
+  background: var(--mauth-panel-icon-info-bg);
+  color: var(--mauth-panel-icon-info-fg);
+}
+
+/* 步骤内的引导语（邮件链接模式的说明段落）：复用 panel-text 字号，只补下边距与居中 */
+.mauth-step-desc {
+  margin: 0 0 var(--mauth-gap-cell);
+  text-align: center;
 }
 
 .mauth-panel-text {
@@ -1188,4 +1320,30 @@ html.dark {
 
 .mauth-social-btn--apple .mauth-social-icon {
   color: var(--mauth-social-ink-apple);
+}
+
+/* ==========================================================================
+   13. 布局视口自救（兜底；只在"内核不认 viewport meta"时挂上）
+   ==========================================================================
+   触发与判据全在 `src/utils/viewport-fix.ts`，这里只负责"挂上之后长什么样"。
+
+   背景（2026-09-23 夸克真机实测）：夸克把本页当桌面站点渲染 —— 布局视口 980px，
+   再把整页等比缩放到屏幕宽度（1200 物理 px / 980 = 1.2245 倍）。
+   症状**不是**"多一条色带"，而是**比例整个错掉**：字与控件缩到 1/2.45
+   （字段高 144 → 58.8 物理 px），字段却横向拉满 1134 —— 又扁又小。
+
+   做法：既然内核已经替我们缩过一次，就把缩掉的倍数乘回来（`zoom: 1 / scale`）。
+   `zoom` 的行为实测（Chromium，980 视口）：
+     · 百分比宽度按「容器宽 / zoom」解析 → 页面自动变回"设备宽度"的逻辑宽度 ✅
+     · 长度（padding / height / font-size）整体乘 zoom ✅
+     · **viewport 单位不会被除** → `100dvh` 会被多乘一次（页高 2640 → 6468）❌
+   所以下面必须显式除掉它。修订后与 400×880@dpr3 的正常渲染逐像素一致。
+
+   ⚠️ 只在 `html[data-mauth-vpfix]` 下生效：正常手机（scale = 1）与桌面都匹配不到
+      → 对正常路径**零影响**。
+   ⚠️ 媒体查询按**真实视口**求值、不受 zoom 影响：竖屏自救场景下两者一致；
+      横屏天然不触发自救（980 ≈ 横屏设备宽度），见 viewport-fix.ts 的 sync。 */
+html[data-mauth-vpfix] .mauth-page {
+  zoom: var(--mauth-vpfix-k);
+  height: calc(100dvh / var(--mauth-vpfix-k));
 }

@@ -35,6 +35,20 @@ html[data-mauth-theme='sky'] .mauth-page {
   background-size: 100% auto, 100% 100%;
 }
 
+/* 兜底色（画布色）：本主题把 header / body 交还给了页面底色（tokens 里设为
+   transparent），所以"页面最上沿的颜色"不再是表面色，而是这层渐变的第一个色标。
+
+   不声明会怎样：mobile-auth.scss 的兜底规则把 `--mauth-canvas` 取成
+   `var(--mauth-header-bg)` = `transparent` → 根元素背景变透明 → 画布色**退回给
+   UA 决定**（浅色下多半是白、深色下看内核心情），于是"页面之外露出来的颜色"
+   在手机上会跟电脑上不一样。这里显式钉住即可，切走主题后属性选择器失效、自动还原。
+
+   ⚠️ 必须落在 `html` 上：画布色由**根元素**的背景向上传播决定（CSS 2.2 §14.2），
+   挂在 `.mauth-page` 上不起作用。 */
+html[data-mauth-theme='sky'] {
+  --mauth-canvas: var(--mauth-sky-top);
+}
+
 /* 深色档只换剪影文件：三个色标已经在 tokens.dark 里改过，
    同一条 linear-gradient 会重新求值，无需重写。 */
 html.dark[data-mauth-theme='sky'] .mauth-page {
