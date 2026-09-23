@@ -1182,17 +1182,44 @@ themes/app/register/compact/index.vue 变体（`import.meta.glob` → 独立惰�
 3. `tsconfig.app.json` 还是 `composite: true`（与 `--noEmit` 冲突）；`tsconfig.node.json` 的
    `include` 指向不存在的 `vite.config.js` / `tailwind.config.js` ⇒ `-b` 报 TS18003。
 
-**可用的检查姿势**（配置已备好，在 gitignore 的探测目录里，**不要提交进仓库**）：
-```bash
-# .tmp-probe/tsconfig.check.json = { extends:"../oauth21/tsconfig.app.json",
-#                                   compilerOptions:{ ignoreDeprecations:"6.0", composite:false, noEmit:true } }
-cd oauth21 && node_modules/.bin/vue-tsc -p ../.tmp-probe/tsconfig.check.json --noEmit
-```
-（`extends` 里的相对路径按**基配置所在目录**解析，所以放在 `.tmp-probe/` 也能正确解析
-`include` / `baseUrl` / `paths`；实测与放在 `oauth21/` 根一致。）
-首次跑出来的真实结果是 **25 个错误**（register 6 + base/compact 4 + login 2 + Authorize 4 +
-未使用导入 3 + …）；2026-09-23 修完 register 后为 **9 个**（全在 login / Authorize / 未使用导入）。
-**别急着把 gate 改成这个口径**：那要先修掉这 9 个，属于独立任务。
+**✅ 已修复（2026-09-23）—— 正式口径 `vue-tsc -b`**
+
+`oauth21/package.json`：`type-check` = `vue-tsc -b`，`build` = `npm run type-check && vite build`
+（与 `admin` / `poseadmin` 同口径；**只在一处定义**，避免两处漂移）。修复动作三件：
+
+1. **删掉 `tsconfig.app.json` 的 `baseUrl`** —— TS5101 的根因。无 `baseUrl` 时 `paths` 按 **tsconfig 所在目录**
+   解析，`./src/*` 与 `../packages/...` 语义不变（`posecraft` 本来就这么写，可对照）。
+   `ignoreDeprecations: "6.0"` 只是掩盖症状，不是修法。
+2. **`tsconfig.node.json` 加 `allowJs: true`** —— 它的 `include` 是 `vite.config.js` / `tailwind.config.js`
+   （文件**确实存在**，但没 `allowJs` 时 TS 不把 `.js` 当输入）→ `-b` 报 `TS18003 No inputs were found`。
+   **这极可能就是原作者去掉 `-b` 的原因**：去掉后不再报错，却变成静默空转。
+3. **修掉 9 个存量错误**（见下表）。
+
+**要不要用 `-p ... --noEmit` 代替**：实测 `vue-tsc -p tsconfig.app.json --noEmit` 同样真检查、0 错，可用；
+但它只覆盖 app 一个项目、不跟随 `references`。既然仓库另两个前端都是 `-b`，统一到 `-b`。
+
+**毒丸验证（每次改口径都必须做）**：`src/` 下临时写 `export const __p: number = 'x';` → `npm run type-check`
+**必须报 TS2322 且 exit≠0**，撤掉后恢复 exit=0。实测数据：清缓存首跑 `-b` = exit 0/0 错 → 加毒丸 = exit 1/1 错
+（精确命中行号）→ 撤毒丸 = exit 0。**闸门恒绿与闸门不存在等价**，不做毒丸就无法区分。
+
+**9 个存量错误的修法**（三类，都不是运行时 bug，是类型层失真）：
+
+| 位置 | 病因 | 修法 |
+| --- | --- | --- |
+| `useAntiCache.ts` · `router/index.ts` · `forgot-password`（3 处） | 未使用导入 / 参数 / 解构项 | 删导入；`from` → `_from`（`_` 前缀对 `noUnusedParameters` 豁免）；去掉解构项 |
+| `login/index.vue`（2 处） | `z.discriminatedUnion` + `toTypedSchema` 使 `useForm` 推断出**联合**：`initialValues` 只认第一分支（`username`/`password` 被判多余属性）、`values.email` 被判不存在 | 显式 `useForm<LoginFormValues>()`，类型取"两模式字段并集"（表单实例本就持有全部字段，切模式不重建）。**只影响编译期** |
+| `Authorize.vue`（4 处） | 断言里内层 `data?: {action,client_name,scope}` 是**手工缩水的窄类型**，与顶层不同构 → `res?.data \|\| res` 推断成联合，`scopeDetails`/`sessionId`/`user_id` 被判"属性不存在" | 抽具名 `AuthorizeCheckResult`（内层 `data?: AuthorizeCheckResult` 自引用）。字段照后端实证：`resolveScopeDetails()` 返回 `{id,name,desc,fields,required,sensitive}` —— **模板正用 `id` 当 v-for key，别漏** |
+
+修完又冒出 3 个（赋值不匹配）：`scopeDetails` 缺 `id` → 补进断言类型即消；`sessionId`/`user_id` 后端**只有
+consent 分支返回** → `data.sessionId ?? ''` 归一化（`ref('')` 的既有语义就是"空串 = 无"，
+不归一化会把 undefined 写进 ref 并传给提交接口）。
+⚠️ 这正是上面第 ③ 条的活例子：**9 → 6 → 3 → 0，每一轮都是揭盖子**，不是修坏。
+
+**其余前端口径盘点**（2026-09-23）：`admin` / `poseadmin` = `vue-tsc -b` ✅；`posecraft` = `vue-tsc --noEmit`
+（tsconfig 非方案式，真检查）✅；**`firewall` 完全无类型检查**（`build` 只有 `vite build`），实测
+**121 个存量错误** —— 属独立任务，未做。CI 里**没有前端作业**（注释明确写"三个前端工程刻意不进图"，
+为绕开 arborist 崩溃），且根 `devDependencies` 只有 `vue`（无 vue-tsc/typescript）→ **前端类型闸门只能在本地跑**，
+别指望 CI 兜。
 
 **⚠️ 排查时的反直觉点：`tsc` 对一次调用只报第一个失败的实参。**
 所以 `bindField(username, usernameProps, …)` 第一个实参类型错时，第二个实参的错被**掩盖** ——
