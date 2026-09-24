@@ -1,11 +1,11 @@
 /**
  * 天青配色（冷蓝工具风）—— 属于 `themes/default/` 主题包
  *
- * === 它在两级结构里的位置 ===
- * `themes/default/colors/sky/` 是**配色**：只换颜色 / 圆角 / 背景图，**不动 DOM**
+ * === 它在三级结构里的位置 ===
+ * `themes/default/mobile/colors/sky/` 是**配色**：只换颜色 / 圆角 / 背景图，**不动 DOM**
  * （本套的装饰走同目录的 `theme.scss` + `assets/skyline.svg`）。
- * 它的上一级 `themes/default/` 才是**主题包**（一套完整设计），版式在包根放着
- * （见 `theme/views/registry.ts` 的「版式跟随主题包」）。
+ * 它的上位 `themes/default/` 才是**主题包**（一套完整设计），本目录同级的 `mobile/`
+ * 是这套设计在**移动端**的版式（见 `theme/views/registry.ts` 的「版式跟随主题包」）。
  * 配色 id 以**目录名**为准（`sky`），URL `?theme=sky` 用的就是它。
  *
  * 参考稿：浅蓝渐变底 + 城市天际线剪影 + 白底圆角字段 + 蓝色胶囊主按钮。
@@ -27,7 +27,7 @@
  *
  * @author yijiu2025
  */
-import type { MauthThemePackage } from '@/theme/types';
+import type { MauthThemeColor } from '@/theme/types';
 
 export default {
   meta: {
@@ -137,4 +137,4 @@ export default {
       '--mauth-submit-bg-top': '#6fb4f3'
     }
   }
-} satisfies MauthThemePackage;
+} satisfies MauthThemeColor;

@@ -1,11 +1,24 @@
 /**
  * 主题状态管理
  *
- * === 两个正交维度 ===
+ * === 三个维度（正交） + 一个作用域 ===
  *   mode（明暗）—— 用户可控：'system' | 'light' | 'dark'（见 @/theme/mode）
- *   theme（配色）—— 部署方决定：一个**配色 id**，对应 `src/theme/themes/<包>/` 的包根
- *                   或包内 `colors/<配色>/`；配色再反查出**主题包**（版式就在那个包里找）
- * 两者组合出 `配色数 × 2` 种外观，互不干扰：切黑白不影响品牌色，换配色不影响明暗偏好。
+ *   theme（配色）—— 部署方决定：一个**配色 id**，对应
+ *                   `theme/themes/<包>/<设备>/colors/<配色>/`；
+ *                   配色再反查出**主题包**与**设备**（版式就在那个包、那个设备下找）
+ *   view（版式） —— 版式 id（`?view=` / 包声明 / 环境变量），在"包 × 设备"内查找
+ *   **设备**（'mobile' | 'web'）—— 不是偏好，而是**页面身份**：本 store 存的
+ *               `themeId` 是"当前这套配色"，但**能不能用**要按调用方所在设备判：
+ *               电脑端页面拿手机端的配色来渲染会得到一套尺寸/圆角都对不上的东西，
+ *               所以按设备取值、设备不匹配就回落到**该设备的默认配色**。
+ * 组合出 `配色数 × 2(明暗)` 种外观，互不干扰：切黑白不影响品牌色，换配色不影响明暗偏好。
+ *
+ * === 为什么设备不放进 store、而是由调用方传 ===
+ * 同一个 SPA 里可以既有 `/m/login`（移动端页面）又有 `/login`（电脑端分发器），
+ * 它们是**同时存在**的两类页面，不存在"整个应用当前是哪种设备"这件事。
+ * 若把设备做成 store 里一个全局值，两个页面就会互相覆盖它。
+ * 因此设备是**每个调用点自己的身份**（移动端容器写常量 'mobile'），store 只负责
+ * "按你所在的设备，把配色解析成一个可用的值"。
  *
  * === 相比旧实现修掉的问题 ===
  * 旧版本只有布尔 isDark + 一个 `theme-manual` 标记：用户点过一次切换按钮，
@@ -14,7 +27,7 @@
  * 'system' 就是显式地跟随系统，随时可回。
  *
  * === 主题来源与优先级（高 → 低）===
- *   theme：URL `?theme=` / `?skin=`  >  后端下发  >  localStorage  >  默认主题
+ *   theme：URL `?theme=` / `?skin=`  >  后端下发  >  localStorage  >  设备默认配色
  *   mode ：URL `?mode=`           >  后端下发  >  localStorage  >  跟随系统
  *
  * 为什么 URL 最高：入口链接是**本次访问的显式意图**（部署方给不同租户发不同链接），
@@ -31,7 +44,14 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { MODE_CYCLE, normalizeMode, type ThemeMode } from '@/theme/mode';
 import { applyThemeLayers, type ThemeTokenOverrides } from '@/theme/runtime';
-import { DEFAULT_THEME_ID, getThemePackage, getThemeRecord, listThemes, resolveThemeId } from '@/theme';
+import {
+  DEFAULT_THEME_DEVICE,
+  getDefaultThemeId,
+  getThemeRecord,
+  listThemes,
+  resolveThemeId,
+  type ThemeDevice
+} from '@/theme';
 
 /** localStorage 键名（沿用旧键，让老用户的手动选择可以平滑迁移） */
 const STORAGE_MODE = 'theme';
@@ -79,9 +99,19 @@ function readInitialMode(): ThemeMode {
   return 'system';
 }
 
-/** 初始化主题：旧键 `theme-skin` 兜底，未登记/非法一律回默认主题 */
+/**
+ * 初始化主题：旧键 `theme-skin` 兜底
+ *
+ * 未登记 / 非法一律回**默认设备的默认配色**（通常是黑白 mono）。
+ * 这里不按具体设备判：落盘的只是一个"用户/部署方选过的配色"，它在哪端可用
+ * 由各调用点按自己的设备解析（见 `themeRecordFor`）。
+ */
 function readInitialTheme(): string {
-  return resolveThemeId(safeGet(STORAGE_THEME) ?? safeGet(LEGACY_STORAGE_SKIN)) ?? DEFAULT_THEME_ID;
+  return (
+    resolveThemeId(safeGet(STORAGE_THEME) ?? safeGet(LEGACY_STORAGE_SKIN)) ??
+    getDefaultThemeId(DEFAULT_THEME_DEVICE) ??
+    DEFAULT_THEME_DEVICE
+  );
 }
 
 /**
@@ -89,6 +119,9 @@ function readInitialTheme(): string {
  *
  * `skin` 作为 `theme` 的兼容别名继续支持（已发出的历史链接不能失效）。
  * 非法值一律折成 null —— 不抛错、不锁项，让后端配置与本地存储照常参与。
+ *
+ * ⚠️ 这里**不限定设备**：URL 可能来自部署方给电脑端的链接，也可能给手机端。
+ *    设备匹配留到各调用点（`themeRecordFor`）判 —— 在那里才知道"我是什么设备"。
  */
 function readUrlIntent(): { theme: string | null; mode: ThemeMode | null } {
   try {
@@ -128,8 +161,35 @@ export const useThemeStore = defineStore('theme', () => {
   /** 最终是否深色：mode 为 system 时取自系统偏好 */
   const isDark = computed(() => (mode.value === 'system' ? systemDark.value : mode.value === 'dark'));
 
-  /** 主题包自带 token（换主题时从注册表同步取，见 @/theme） */
-  const themeTokens = ref<ThemeTokenOverrides | null>(getThemeRecord(themeId.value).tokens ?? null);
+  /**
+   * 当前**生效设备** —— 决定把哪一套配色的 token 注入 `html`
+   *
+   * 由路由在每次导航后告知（`setActiveDevice`），默认移动端（本应用的默认入口
+   * `/m/login` 是移动端；纯电脑端应用可把默认值改成 `'web'`）。
+   *
+   * ⚠️ 它不是"用户在用什么设备"这种全局状态，而是"**当前这条路由**属于哪种设备"。
+   *    做成响应式是为了让"从 /login 跳到 /m/login"时 token 能跟着重算。
+   */
+  const activeDevice = ref<ThemeDevice>(DEFAULT_THEME_DEVICE);
+
+  /** 路由告知当前设备（由 `router/index.ts` 的 `setupThemeDeviceSync` 在应用启动时接管） */
+  function setActiveDevice(device: ThemeDevice): void {
+    if (activeDevice.value !== device) activeDevice.value = device;
+  }
+
+  /**
+   * 按设备解析出**实际生效**的配色记录
+   *
+   * 这是本 store 里唯一一处"把 themeId 变成可渲染的配色"的地方，其余访问器都由它派生，
+   * 避免"有的地方判设备、有的地方不判"导致同一个 id 在不同组件里表现不一致。
+   * 设备不匹配（如电脑端页面遇上手机端的配色）时由 `getThemeRecord` 回落到该设备默认配色。
+   */
+  function themeRecordFor(device: ThemeDevice = activeDevice.value) {
+    return getThemeRecord(themeId.value, device);
+  }
+
+  /** 主题包自带 token（按**当前生效设备**解析；设备变化时由 watch 重算） */
+  const themeTokens = ref<ThemeTokenOverrides | null>(themeRecordFor().tokens ?? null);
   /** 外部覆写 token（后端下发 / 父应用 postMessage）；优先级高于主题包 */
   const externalTokens = ref<ThemeTokenOverrides | null>(null);
 
@@ -137,14 +197,21 @@ export const useThemeStore = defineStore('theme', () => {
   const themes = listThemes();
 
   /**
-   * 统一的注入入口：明暗、主题 token、外部覆写任一变化都重算
+   * 统一注入入口：明暗、配色 token、外部覆写任一变化都重算
    *
-   * 必须三合一：inline style 会盖过 `html.dark` 这一整块基线深色值，
-   * 所以「改明暗」也必须重新决定注入哪些 token，否则深色下品牌色不会跟着换。
-   * immediate 保证首帧前就写好 class 与变量，不会闪一下默认色。
+   * ⚠️ 注入的是 `html` 上的 inline style，而 `html` 是**整份文档唯一**的 ——
+   * 所以此处只能用**一个**设备的 token。取 `activeDevice`（由当前路由决定，
+   * 见下方 `setActiveDevice`）：`/m/*` 用移动端配色，其余用电脑端配色。
+   *
+   * 这在实践中不会出问题：一个页面要么是移动端要么是电脑端，切换页面时会重算
+   * （`activeDevice` 变化本身就是这个 watch 的依赖）。真正需要避免的是"两端配色
+   * 同时生效"——那在单文档模型下不可能，也不是本机制要解决的问题。
+   *
+   * 之所以不在这里重新跑视口判定：那是路由分发的职责（`utils/device.ts`），
+   * 重复实现会出现"路由说电脑版、注入说移动端"的分裂。由路由把结论告诉 store。
    */
   watch(
-    [isDark, themeTokens, externalTokens],
+    [isDark, themeTokens, externalTokens, activeDevice],
     ([dark]) => {
       document.documentElement.classList.toggle('dark', dark);
       const rejected = applyThemeLayers(
@@ -175,9 +242,9 @@ export const useThemeStore = defineStore('theme', () => {
    *    极难从表象定位。
    */
   let styleEpoch = 0;
-  async function loadThemeStyle(id: string): Promise<void> {
+  async function loadThemeStyle(id: string, device: ThemeDevice): Promise<void> {
     const epoch = ++styleEpoch;
-    const loader = getThemeRecord(id).loadStyle;
+    const loader = getThemeRecord(id, device).loadStyle;
 
     if (!loader) {
       document.getElementById(STYLE_ELEMENT_ID)?.remove();
@@ -199,19 +266,40 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   /**
-   * 承载主题标识：`data-mauth-theme="<id>"` 既是主题 theme.scss 的选择器钩子
-   * （`html[data-mauth-theme='ocean'] …`），也让排查线上问题时一眼看出当前主题。
-   * 默认主题不设属性，避免 DOM 上出现无意义的 data-mauth-theme="default"。
+   * 承载配色标识 + 同步 token / 附加样式
+   *
+   * `data-mauth-theme="<id>"` 既是配色 theme.scss 的选择器钩子
+   * （`html[data-mauth-theme='ocean'] …`），也让排查线上问题时一眼看出当前配色。
+   *
+   * === 什么时候**不**写这个属性 ===
+   * 仅当"该设备下没有这套配色、用了回落档"时（`record.meta.id !== id`）才 delete。
+   * 此时若照写，`theme.scss` 的选择器会挂到一套**并未生效**的配色上 ——
+   * 背景图、字体都来自别处，而 DOM 却宣称用的是它，排查时极难归因。
+   *
+   * === 为什么 mono 会（并且应当）写出属性 ===
+   * `mono` 是**具名基线配色**（`<设备>/colors/mono/`，零 token）：它的色值就是
+   * 样式表基线本身，所以"写不写属性"在**当前**不影响任何像素 —— 基线规则不带
+   * 属性选择器。写出来的好处有两条：
+   *   ① 语义诚实：配置层面用户确实选了 `mono`（`?theme=mono`），DOM 应当如实反映；
+   *   ② 前向兼容：将来若给 mono 加 `theme.scss`（例如换个中性灰底纹），
+   *      选择器立刻可用，不必回头改这里。
+   * "零配色 → 渲染路径与没有主题机制时一致"这条不变量由 **mono 零 token** 保证，
+   * 而不是靠不写属性 —— 少写一个属性省不下任何渲染代价，却让排查少一个线索。
+   *
+   * ⚠️ 必须同时依赖 `activeDevice`：同一个 `themeId` 在两端解析出的记录可能不同
+   *    （设备不匹配时会回落），只盯 themeId 会漏掉"从 /login 跳到 /m/login"这一整类切换。
    */
   watch(
-    themeId,
-    id => {
+    [themeId, activeDevice],
+    ([id, device]) => {
+      const record = getThemeRecord(id, device);
       const root = document.documentElement;
-      if (id === DEFAULT_THEME_ID) delete root.dataset.mauthTheme;
-      else root.dataset.mauthTheme = id;
+      // 解析出的 id 与请求的 id 不一致 = 该设备下没有这套配色，用了回落档
+      if (record.meta.id === id) root.dataset.mauthTheme = id;
+      else delete root.dataset.mauthTheme;
 
-      themeTokens.value = getThemeRecord(id).tokens ?? null;
-      void loadThemeStyle(id);
+      themeTokens.value = record.tokens ?? null;
+      void loadThemeStyle(id, device);
     },
     { immediate: true }
   );
@@ -238,34 +326,52 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   /**
-   * 取当前主题为某页面声明的版式 id（`theme/themes/<包>/index.ts` 的 `views[page]`）
+   * 取当前配色为某页面声明的版式 id
    *
    * 只做取值，**不校验**：合法性由各页的版式注册表判定（`theme/views/<page>.ts`），
    * 于是"主题包写错版式名"的后果是回退基础版式，而不是页面打不开。
    *
-   * 读的是 `themeId`，因此本函数在 computed / watch 里调用会跟着主题变化 ——
-   * 这一点是必须的：后端下发的主题配置在 `App.vue` 的 onMounted 才到，
+   * ⚠️ 声明来自**配色记录**（包定义或配色自带），而记录要按设备解析 ——
+   *    所以在电脑端页面上取到的可能是电脑端那套配色的声明。
+   *
+   * 读的是 `themeId` + `activeDevice`，因此本函数在 computed / watch 里调用会跟着变化
+   * —— 这一点是必须的：后端下发的配色配置在 `App.vue` 的 onMounted 才到，
    * 可能晚于页面 setup，声明式版式要能在之后才生效。
    *
-   * @param page 页面名，与 `theme/views/<page>.ts` 目录名一致（如 'register'）
+   * @param page   页面名，与 `theme/views/<page>.ts` 的文件名一致（如 'register'）
+   * @param device 哪个设备下的声明；默认当前生效设备
    */
-  function viewFor(page: string): string | undefined {
-    return getThemeRecord(themeId.value).views?.[page];
+  function viewFor(page: string, device: ThemeDevice = activeDevice.value): string | undefined {
+    return themeRecordFor(device).views?.[page];
   }
 
   /**
-   * 当前配色所属的**主题包** —— 版式的查找范围（版式跟随主题包）
+   * 当前配色所属的**主题包** —— 版式查找范围的包那一段（版式跟随主题包）
    *
    * 做成 computed 而不是函数：容器的 watch 要把它当响应源 —— 包变了，即使解析出的
    * 版式 id 字符串没变（例如都是 `base`），渲染的组件也可能换了一套，必须重新取。
-   * 未登记 / 非法配色由 `getThemePackage` 回退到内置包，调用方不必判空。
+   * 未登记 / 非法配色由 `getThemeRecord` 回落到该设备默认配色，调用方不必判空。
    */
-  const packageId = computed(() => getThemePackage(themeId.value));
+  const packageId = computed(() => themeRecordFor().pkg);
 
   /**
-   * 设置主题（开发者/部署方调用 → 落盘）
+   * 当前**生效设备** —— 版式查找范围的设备那一段
    *
-   * @param id 主题 id，须已在 src/theme/themes/ 登记；未登记时返回 false 且不改动现状
+   * 容器侧一般用自己的常量（移动端容器写 `'mobile'`）而不是这个值：设备是页面身份，
+   * 由文件位置决定，比"全局状态"可靠。本值供确实需要"当前是哪端"的场景用
+   * （调试面板、路由分发）。
+   */
+  const device = computed(() => activeDevice.value);
+
+  /**
+   * 设置配色（开发者/部署方调用 → 落盘）
+   *
+   * @param id 配色 id，须已在 `src/theme/themes/<包>/<设备>/colors/` 登记；
+   *           未登记时返回 false 且不改动现状。
+   *
+   * ⚠️ 这里**不按设备过滤**：用户/部署方可能先设一个"手机端配色"，随后又访问电脑端页面
+   *    —— 后者会因设备不匹配而回落（见 `themeRecordFor`），但选择本身仍被记住。
+   *    若在这里判设备拒绝，就会出现"在手机端能设、在电脑端设了无声失败"的怪现象。
    */
   function setTheme(id: string): boolean {
     const resolved = resolveThemeId(id);
@@ -276,10 +382,10 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   /**
-   * 应用外部主题配置（后端下发 / 父应用同步）
+   * 应用外部配色配置（后端下发 / 父应用同步）
    *
-   * @param config theme/skin 为主题 id；mode 为明暗；tokens 为按明暗分组的变量覆写表。
-   *               传 null 表示撤销外部覆写（回到主题包 + SCSS 基线）。
+   * @param config theme/skin 为配色 id；mode 为明暗；tokens 为按明暗分组的变量覆写表。
+   *               传 null 表示撤销外部覆写（回到配色 + SCSS 基线）。
    *               传入的项若已被 URL 参数锁定则跳过，其余照常生效。
    *
    * 注意本方法**不写 localStorage**：后端默认值不应覆盖用户自己的明暗偏好。
@@ -300,6 +406,8 @@ export const useThemeStore = defineStore('theme', () => {
 
     const wanted = config.theme ?? config.skin;
     if (wanted !== undefined && !urlLockedTheme) {
+      // 不按设备过滤：后端可能只配了一套配色给某一端，落库后由各端自行回落。
+      // 若这里按当前设备拒绝，会把"下次访问另一端的正确配置"也一起丢掉。
       const resolved = resolveThemeId(wanted);
       if (resolved) themeId.value = resolved;
     }
@@ -328,10 +436,14 @@ export const useThemeStore = defineStore('theme', () => {
     isDark,
     themeId,
     packageId,
+    device,
+    activeDevice,
     themes,
     systemDark,
     themeTokens,
     externalTokens,
+    themeRecordFor,
+    setActiveDevice,
     setMode,
     cycleMode,
     toggleTheme,

@@ -27,6 +27,8 @@ public/uploads/*
 # VitePress 构建缓存
 docs/.vitepress/cache
 docs/.vitepress/dist
+docs/.vitepress/.temp
+docs/.vitepress/config.ts.timestamp-*.mjs
 
 # wb-log 已独立成库（https://github.com/yijiu2025/log），经 npm workspace 软链使用
 packages/log/

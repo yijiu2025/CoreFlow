@@ -1,4 +1,5 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { createRouter, createWebHistory, type RouteRecordRaw, type Router } from 'vue-router';
+import { watch } from 'vue';
 import BlankLayout from '@/layouts/BlankLayout.vue';
 import { setupAuthGuard } from './guard';
 import {
@@ -9,6 +10,7 @@ import {
   resolveDesktopRedirectTarget
 } from './routes';
 import { DESKTOP_MIN_WIDTH } from '@/utils/device';
+import { useThemeStore } from '@/stores/theme';
 
 // 扩展 RouteMeta 类型
 declare module 'vue-router' {
@@ -106,5 +108,39 @@ router.afterEach((to, failure) => {
     document.title = `${to.meta.title} | Enterprise SSO`;
   }
 });
+
+/**
+ * 把「当前路由属于哪种设备」同步给主题 store
+ *
+ * 判定依据是**路由元信息**而不是视口：`/m/*` 上的 `meta.device` 明确写着 `'mobile'`，
+ * 其余路由按电脑端处理。用视口判会出现"分发器把 `/login` 渲染成移动端组件、
+ * 但路由说它是电脑端"的分裂 —— 展示哪种形态是分发器的决定，路由只负责回答
+ * "这条 URL 是哪一端"，后者才是主题要的答案。
+ *
+ * === 为什么是"在 app setup 里 watch 路由"，而不是写在 afterEach 里 ===
+ * 早先的实现把 `setActiveDevice` 放在 `router.afterEach` 里，结果是**首次导航静默失效**：
+ * `main.ts` 的顺序是 `app.use(pinia)` → `app.use(router)`，而**首次导航由
+ * `app.use(router)` 触发**、且 `afterEach` 是在导航流程结束处同步调用的 ——
+ * 那一刻 Pinia 的 activeInstance 还没建立（或正在建立），`useThemeStore()` 抛错，
+ * 被 `try/catch` 吞掉 → 设备永远停在默认的 `'mobile'`。
+ * 症状是"电脑端页面上，面板/注入全部按手机端走"，且**没有任何报错**。
+ *
+ * 改成 `watch(router.currentRoute)` 后：
+ *   • **首次**导航也覆盖得到 —— watch 带 `immediate`，在 app setup 时读一次当前路由；
+ *   • 后续每一次导航（含重定向、replace）都由路由对象自身的变化驱动，不必依赖钩子时序；
+ *   • 不依赖"调用时 Pinia 已就绪"这个脆弱前提（此时 app 已 use(pinia) 且 store 已实例化）。
+ *
+ * @param router 应用路由实例（调用方保证已 `use(pinia)`）
+ */
+export function setupThemeDeviceSync(router: Router): void {
+  const themeStore = useThemeStore();
+  watch(
+    () => router.currentRoute.value,
+    route => {
+      themeStore.setActiveDevice(route.meta.device === 'mobile' ? 'mobile' : 'web');
+    },
+    { immediate: true }
+  );
+}
 
 export default router;
