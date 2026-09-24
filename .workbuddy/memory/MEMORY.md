@@ -56,6 +56,9 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
   否则 `vh(≡lvh)>dvh` 时外层 `items-center` 留缝（**DevTools 不模拟动态工具栏 ⇒ 电脑上永远看不到**）。"给祖先改底色"只是把问题转移。
 - 🔴 **跨内核差异先分类再修**：① `color-scheme` 初始 `normal` → 显式写 `light` 与 `light only` 两条（只带 `only` 会被不支持的引擎**整条丢弃**）；
   ② 视口被丢成 980 ⇒ 整页等比缩小 → meta **单行 + 只留最通用键**；判据**只能用 `visualViewport.scale`**（`clientWidth` 恒 980）；兜底 `utils/viewport-fix.ts`。
+- 🔴 **父 origin 白名单单一来源 `utils/parent-origins.ts`**（发 `parent.ts` / 收 `useParentThemeSync` 共用；改白名单只改这里 + 各 `.env` 的 `VITE_ALLOWED_PARENT_ORIGINS`）。
+  ⚠️ **漏配的症状是「弹窗 loading 慢」而非报错**：`SSO_READY` 被拒发 → 宿主等满 3s 兜底超时（实测 3608ms → 补对后 719ms）。
+  排查任何 iframe 握手类「慢」，**第一件事 grep 控制台 `[SSO] 拒绝 postMessage：父 origin 未授权`**。**别把 oauth21 自己的端口（5174/5175）写进白名单**（它是被嵌方）。
 - **登录行**：providers 为空 → **零 DOM**；🔴 授权端点**只放行站内相对路径**（`/` 开头且非 `//`）；未配端点**不静默**。
 - **重置密码**：邮件链接指向 `/reset-password?token=…` 而前端无此路由 → 已加 redirect（query 原样带）；🔴 **`validateField` 不跑 zod 的 object 级 `refine`**
   → 两次密码一致须**显式比对** + `setFieldError`（注册页同坑）。
