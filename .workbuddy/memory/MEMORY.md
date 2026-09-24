@@ -1,134 +1,96 @@
 # nodeServers 项目笔记（主索引）
 
-> 只放"违反就出事"的约定；成因/实测数据→`MEMORY-details.md`（§号即引用），过程→`YYYY-MM-DD.md`。
-> 维护用 Write/Edit（勿 `cat >>`，会从偏移 0 覆写）。oauth21 移动端认证页完整版 → details **§11**。
+> 只放"违反就出事"的约定；成因/实测数据/全过程 → `MEMORY-details.md`（§号即引用）与 `YYYY-MM-DD.md`。
+> 维护用 Write/Edit（勿 `cat >>`）。本文件**每轮注入且超 ~12KB 会被静默截断** → 宁缺勿长。
 
 ## 0. 仓库形态 / 发版
 
-- **`packages/log/` 是独立嵌套 git 仓**（主仓 gitignore 排除）→ 去那个仓提交。
-  ⚠️ 在主仓 `git add packages/log/...` **静默不生效**（有警告但 Exit=0）→ 见警告停下查。
-- **本机 git ref 失灵** → status 谎报 ahead、push 可能数分钟零输出。**一律以 `git ls-remote origin main` 为准**，超时≠失败。
-  push 后修：`node "C:/Users/22701/.workbuddy/tools/fix-packed-refs.mjs" "<完整 40 位 SHA>"`（必须绝对路径；截短→GUI 历史全灭）。
-- **`git credential fill` 永久挂住** → 用它查 GitHub API 的脚本会一起卡死。绕法见 §10.10。
-- **发版**：提交推送后**顺手发不必问**：`node scripts/release.mjs` → `--apply`（`--from <ref>`/`--allow-dirty`）。
-  `feat`→minor；仅 `fix|perf`→patch；破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` 不发。
-  **版本源是 git tag**，package.json 单向跟随；决策逻辑须在 `src/`。
+- **`packages/log/` 是独立嵌套 git 仓**（主仓 gitignore）→ 去那个仓提交；主仓 `git add packages/log/...` **静默不生效**（Exit=0 但有警告）→ 见警告停下查。
+- **本机 git ref 失灵**：status 谎报 ahead、push 可能数分钟零输出 → **一律以 `git ls-remote origin main` 为准**，超时≠失败。
+  push 后修：`node "C:/Users/22701/.workbuddy/tools/fix-packed-refs.mjs" "<完整 40 位 SHA>"`（绝对路径；截短→GUI 历史全灭）。
+  ⚠️ `git credential fill` **永久挂住**（credential.helper 首项 `helper-selector`）→ 绕法见 §10.10。
+- **发版**：提交推送后**顺手发不必问**：`node scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；
+  破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` 不发。版本源是 git tag。
 
-## 1. 强制约定（有守卫）
+## 1. 强制约定（有守卫 / 有规则文档，违反会红）
 
 - export 收拢文件末尾（仅 src/）· `src` 不得 import `scripts` · `src/app/<A>` 不得 import `src/app/<B>`（白名单在各自守卫测试里）。
-- **测试有效性**：真实加载被测代码；禁「手写常量自测」「内联复制被测逻辑」。`KNOWN_INEFFECTIVE_TESTS` 只减不增（14）+ 同步 `FROZEN_SIZE`；
+- **测试有效性**：真实加载被测代码，禁「手写常量自测」「内联复制被测逻辑」；`KNOWN_INEFFECTIVE_TESTS` 只减不增（14）+ 同步 `FROZEN_SIZE`；
   **一个测试文件只能注册一组路由**（`_routeRegistry` 模块级无重置）。
 - **firewall 分层（单向）**：interface → config/util → dao → engine → services/cli/data → index.js；禁直接 import `app/firewall/dao/block-manager.js`。
-- **📐 文档 ≠ 实现**：核法=文档承诺的环境变量名 grep 代码，命中 0=未实现（`src/loader|auth|db|redis` **均不存在**，全在 `src/framework/`）。
-- **🔗 文档站链接**：`ignoreDeadLinks` 只放行 `AGENTS|oauth21|posecraft|packages` 前缀 → 指 `docs/` 之外必 `docs:build` 失败，**指源码用反引号**；
-  ⚠️ `development-standards.md` 在 `docs/` **根**。
+- **📐 文档 ≠ 实现**：核法 = 文档承诺的环境变量名 grep 代码，命中 0 = 未实现（`src/loader|auth|db|redis` **均不存在**，全在 `src/framework/`）。
+- **🔗 文档站**：`ignoreDeadLinks` 只放行 `AGENTS|oauth21|posecraft|packages` 前缀 → 指 `docs/` 之外必 `docs:build` 失败，**指源码用反引号**；
+  ⚠️ `development-standards.md` 在 `docs/` **根**；新增文档页要**同时**注册进 `docs/.vitepress/config.ts` sidebar（否则是孤岛）。
 - **代码审查**：唯一入口 `docs/development/code-review.md`（L0–L3/五道闸）；**L3（格式类）禁止人工提出**。
-- 🔴 **前端类型闸门（2026-09-23 已修）**：方案式 `tsconfig`（`files:[]` + `references`）下**裸 `vue-tsc` 恒 exit 0**
-  —— 不编译任何文件，往里写类型错误也不报，而因为是"绿的"没人察觉 → 曾攒下 **9 个真错误**。
-  现口径 **`vue-tsc -b`**：`type-check` = 它，`build` = `npm run type-check && vite build`（口径只在一处定义，
-  与 `admin`/`poseadmin` 一致）。⚠️ 三个坑：① 子项目 `include` 里是 `.js` 时必须开 **`allowJs`**，否则
-  `-b` 报 `TS18003`「No inputs were found」——**去掉 `-b` 就不再报错、只是静默失去检查**（最易被当成"修好了"）；
-  ② **配置级错误（TS5101，如 `baseUrl` 弃用）会让 TS 中止全部语义分析**，只剩一条无关报错，比空转更难识别；
-  ③ `tsc` **一次只报第一个失败实参**（"修好一处又冒两处"是揭盖子不是修坏）。**改口径后必须毒丸验证**
-  （临时写 `export const __p: number = 'x'`，必须报错才算数）。成因链与 9 个错误的修法 → details §11.12。
-  现状：`firewall` 仍无类型检查（`build` 只有 `vite build`，存量 **121 错**）——独立任务未做。
-- **跨内核渲染基线（新前端强制）**：规则 `docs/frontend/browser-baseline.md`（AGENTS.md 有 8 步清单），
-  自检 `npm run check:baseline [目录]` —— 零依赖静态断言 13 项，**毒丸样本验证过会报红**（不是恒绿）。
-  核心一句：**规范留白处不显式声明 = 把渲染交给内核**（`color-scheme` 初始 `normal`；根元素背景
-  `transparent` 时规范说「渲染是未定义的」；`vh ≡ lvh`；`-webkit-text-size-adjust` 默认 `auto`）。
-  ⚠️ viewport meta **跨行书写或加实验键会让整条被内核丢弃**（小米 / 夸克实测）→ 退化成 980px 桌面布局。
+- 🔴 **前端类型闸门必须是"真检查"**（规则全文在 `docs/frontend/coding-standard.md`）：方案式 tsconfig（`files:[]`+`references`）下**裸 `vue-tsc` 恒 exit 0**
+  → 曾攒下 9 个真错。口径 **`vue-tsc -b`**。口诀：**改完口径必须毒丸验证**（写 `export const __p: number = 'x'` 必须报错）。
+  两个最容易"看起来修好了"的坑：子项目 `include` 是 `.js` 未开 `allowJs` → `-b` 报 `TS18003`，**去掉 `-b` 就不报错、只是静默失去检查**；
+  配置级错误（`TS5101` 如 `baseUrl` 弃用）会让 TS **中止全部语义分析**，只剩一条无关报错。`firewall` 仍无类型检查（121 错）。
+- **跨内核渲染基线（新前端强制）**（`docs/frontend/browser-baseline.md`，自检 `npm run check:baseline [目录]`，13 项）：
+  核心一句 = **规范留白处不显式声明 = 把渲染交给内核**（`color-scheme` 初始 `normal`；根元素背景 `transparent` 时"渲染未定义"；`vh ≡ lvh`）。
+  ⚠️ viewport meta **跨行或加实验键会让整条被内核丢弃**（小米/夸克实测）→ 退化成 980px 桌面布局。
+- 🔴 **多主题 / 多版式开发模式（强制）**（`docs/frontend/multi-theme.md`）：三个正交维度 = **token 基线 → 皮肤 `themes/<id>/` → 版式 `themes/app/<page>/<id>/`**；
+  **业务只在容器**（`view/app/<page>/index.vue`），版式只读 `ctx`、只调 `ctx.actions`；样式单一来源 `assets/styles/mobile-auth.scss`；
+  外部输入**一律过白名单**。oauth21 三页（login / register / forgot-password）已全部接入。
 
-## 2. 后端陷阱速查 → **details §12**（整表已迁出）
+## 2. 后端陷阱速查 → **details §12**（14 条整表已迁出）
 
-改后端代码前先扫一眼 **details §12**，共 14 条：`getModel(name)` 抛 TypeError · `getStore(prefix)` 命名空间/MapStore ·
-密码哈希禁 `bcryptjs` · 请求路径禁 `*Sync(` · `underscored:true` 时间戳 · 模块级 `process.exit` 伪装绿色 ·
-改导出面要真实 import · 外部输入归一化 · `vue-tsc` 拦不住模板标识符 · `/user/v1/register` 只认 `username` ·
-Fastify（顺序/`onRoute`/`preClose`/`OPTIONAL_LOADERS`/`/health/*`）· Redis v5（驼峰命令/`duplicate()` 不建连）·
-Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）。
+`getModel(name)` 抛 TypeError · `getStore(prefix)` 命名空间/MapStore · 密码哈希禁 `bcryptjs` · 请求路径禁 `*Sync(` ·
+`underscored:true` 时间戳 · 模块级 `process.exit` 伪装绿色 · 改导出面要真实 import · 外部输入归一化 ·
+`vue-tsc` 拦不住模板标识符 · `/user/v1/register` 只认 `username` · Fastify（顺序/`onRoute`/`preClose`/`OPTIONAL_LOADERS`/`/health/*`）·
+Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）。
 
-> 迁出原因：主索引是**每轮注入**的，超过约 18KB 会被**静默截断**（尾部整段消失）。§12 与本文件同目录，读一次即可。
+## 3. oauth21 移动端认证页 → **details §11**（细则/实测数据全在那里）
 
-## 3. oauth21 移动端认证页（细则全在 details §11）
-
-- **样式单一来源** = `assets/styles/mobile-auth.scss`（`mauth-*`，main.ts 全局引入）；**基础版式与 `/m/*` 页不得自带 `<style>`**；
+- **样式单一来源** = `assets/styles/mobile-auth.scss`（`mauth-*`）。**基础版式与 `/m/*` 页不得自带 `<style>`**（变体可以，取值只许 `--mauth-*`）。
   ⚠️ 移动端版式**刻意不限宽**（加 `max-width` 两侧露底色，用户明确要求满宽）。
-- 🔴 **调试前先造窄视口并刷新**：判定 `宽视口(≥1024) ＞ 窄视口(<768) ＞ UA`；宽视口开 `/m/register` 会**跳电脑版**；
-  UA 伪装压不过宽视口；分发只在**导航时**执行 → 只拖 DevTools 不刷新看到的还是旧版式（§11.1）。
-- **设备判定单一来源** = `utils/device.ts` 的 `isMobileViewport()`；`/m/*` 宽屏回跳的 `beforeEnter` 只跑一次 →
-  视口变化须另挂 matchMedia，两处共用 `resolveDesktopRedirectTarget`；`?isMobile=true` 一律不迁；**query 原样透传**。
-- **主题**：三层 token（全局语义 → 组件级 → 组件规则零裸色值）；明暗与皮肤**正交**；外置到 `src/themes/<id>/`；
-  ⚠️ 外部输入（后端/postMessage）**必过白名单**（`theme/runtime.ts`，刻意拒 `url()` 与 CSS 颜色名）；
-  🔴 `tokens` 是 `html` 上的 inline style、**优先级高于媒体查询** → 绝不能覆写断点里会变的 token
-  （`--mauth-pad-*`/`--mauth-gap-*`/`--mauth-logo-size`/`--mauth-title-size`/`--mauth-field-h`/`--mauth-control-h`/`--mauth-err-h`/`--mauth-social-*`）；
-  ⚠️ `assets/` 的 SVG **必须带 `width`/`height`**（只给 `viewBox` → `background-size:auto` 撑满容器）。§11.3
-  分包两档：`*/index.ts` **eager 进主包**（tokens，首帧前要用于 URL 校验）、`*/theme.scss` **惰性 chunk**（切到才请求）；
-  来源优先级 `?theme=`（`?skin=` 别名）> 后端下发 > localStorage > default；
-  切换入口 = `?debug=theme` 调试面板（`components/dev/ThemeDebugPanel.vue`，惰性 chunk）：
-  皮肤（`setTheme` **落盘**）/ 明暗三态 / 当前页版式（改 URL，**一次性**）；`MauthThemeSwitch` 只管明暗。
-- **业务容器 + 可换版式**（§11.10）：`view/app/register/index.vue` 只留业务（状态/校验/请求/路由），UI 外置到
-  `themes/app/<page>/<id>/`；`base/` 由容器**静态引入**（默认路径零请求），变体走 `import.meta.glob` 惰性 chunk；
-  优先级 `?view=` > 主题包 `views.<page>` > `VITE_<PAGE>_VIEW` > base，⚠️ **URL 显式非法值不回退**（直接 base）；
-  契约 `themes/app/register/types.ts`（纯类型）+ 容器侧 `assertRegisterContract` **编译期自检**；
-  浮层（图形码/协议/Toast）由**容器**渲染（都是 `fixed`，与版式无关）；**新增变体目录要重启 dev server**。
-- **移动端页必须自己当滚动容器**：`html,body{overflow:hidden}` 锁死根滚动 → `.mauth-page` 须 `height:100dvh + overflow-y:auto`，
-  `.mauth-body` 须 `flex:1 0 auto`（否则横屏内容不可达）。§11.4
-- 🔴 **"白条/色条"先定位到层再谈修色**（§11.7）：色由 ①**根画布**（`html` 背景向上传播）②祖先容器 ③页面自身 决定 →
-  统一到唯一出口 **`--mauth-canvas`**（= 页面最上沿的颜色）；页面**必须贴顶**（`align-self:flex-start`）——
-  否则 `vh(≡lvh)>dvh` 时外层 `items-center` 会留缝（**DevTools 不模拟动态工具栏 ⇒ 缝恒 0 ⇒ 电脑上永远看不到**）。
-  ⚠️ **"给某个祖先改底色"是打补丁**，只会把问题转移。
-- 🔴 **跨内核差异先分类再修**：① 初始值（§11.6）`color-scheme` 初始 `normal` ⇒ 画布/控件/滚动条色由 UA 自由决定 →
-  显式写 `light` 与 `light only` 两条（只带 `only` 会被不支持的引擎**整条丢弃**）；⚠️ 拦不住合成器层 `filter: invert()`。
-  ② 布局（§11.8）**视口被丢成 980** ⇒ 整页等比缩小"比例不对" → meta 写**单行 + 只留最通用键**；
-  判据**只能用 `visualViewport.scale`**（`clientWidth` 解析期**恒为 980、连正常页也是**）；
-  兜底 `utils/viewport-fix.ts`（`zoom=1/scale`，**必须配 `height: calc(100dvh / k)`**）。
-- ⚠️ 主题把 `--mauth-header-bg` 设为 `transparent` 时**必须同时声明 `--mauth-canvas`**（落 `html`），否则画布色退回给 UA。
-- **第三方登录行**：**providers 为空 → 零 DOM**；🔴 授权端点**只放行站内相对路径**（`/` 开头且非 `//`）；未配端点**不静默**。§11.5
-- **移动端第 3 页 = 重置密码**：`/m/forgot-password`；"没漂移"证据 = **逐项比对同名元素计算样式**（login↔forgot 57 项全等）；
-  🔴 邮件链接指向 `/reset-password?token=…` 而前端**无此路由** → 加 redirect（**query 原样带**）+ `/forgot-password` 改分发器；
-  🔴 **`validateField` 不跑 zod 的 object 级 `refine`** → 两次密码一致须**显式比对** + `setFieldError`。§11.9
+- **「业务容器 + 可换版式」**：`themes/app/<page>/{types.ts,registry.ts,base/,<变体>/}`；base 容器**静态引入**、变体 `import.meta.glob` 惰性 chunk；
+  优先级 `?view=` > 主题包 `views.<page>` > `VITE_<PAGE>_VIEW` > base，⚠️ **URL 显式非法值不回退**；契约 = `types.ts` 纯类型 + 容器 `assertXxxContract` 编译期自检；
+  浮层由**容器**渲染；**新增变体目录要重启 dev server**。
+- **皮肤**：三层 token（全局语义 → 组件级 → 组件规则零裸色值）；明暗与皮肤**正交**；来源 `?theme=`（`?skin=` 别名）> 后端 > localStorage > default；
+  🔴 外部输入**必过白名单**（`theme/runtime.ts`，刻意拒 `url()` 与 CSS 颜色名）；`*/index.ts` eager、`*/theme.scss` 惰性；入口 `?debug=theme` 面板。
+  🔴 `tokens` 是 `html` 上的 inline style、**优先级高于媒体查询** → 绝不能覆写断点里会变的 token（`--mauth-pad-*`/`gap-*`/`logo-size`/`title-size`/`field-h`/`control-h`/`err-h`/`social-*`）；
+  ⚠️ 把 `--mauth-header-bg` 设 `transparent` → **必须同时声明 `--mauth-canvas`**；⚠️ `assets/` 的 SVG **必须带 `width`/`height`**。
+- 🔴 **调试移动端页前必须先造窄视口并刷新**：判定 `宽视口(≥1024) ＞ 窄视口(<768) ＞ UA`；宽视口开 `/m/*` 会**跳电脑版**，**UA 伪装压不过宽视口**，
+  分发只在**导航时**执行（§11.1）。设备判定单一来源 `utils/device.ts` 的 `isMobileViewport()`。
+- 🔴 **移动端页必须自己当滚动容器**：`html,body{overflow:hidden}` → `.mauth-page` 须 `height:100dvh + overflow-y:auto`，`.mauth-body` 须 `flex:1 0 auto`。
+- 🔴 **"白条/色条"先定位到层再谈修色**（§11.7）：色由 ①根画布 ②祖先容器 ③页面自身 决定 → 统一出口 **`--mauth-canvas`**；页面须**贴顶**（`align-self:flex-start`），
+  否则 `vh(≡lvh)>dvh` 时外层 `items-center` 留缝（**DevTools 不模拟动态工具栏 ⇒ 电脑上永远看不到**）。"给祖先改底色"只是把问题转移。
+- 🔴 **跨内核差异先分类再修**：① `color-scheme` 初始 `normal` → 显式写 `light` 与 `light only` 两条（只带 `only` 会被不支持的引擎**整条丢弃**）；
+  ② 视口被丢成 980 ⇒ 整页等比缩小 → meta **单行 + 只留最通用键**；判据**只能用 `visualViewport.scale`**（`clientWidth` 恒 980）；兜底 `utils/viewport-fix.ts`。
+- **登录行**：providers 为空 → **零 DOM**；🔴 授权端点**只放行站内相对路径**（`/` 开头且非 `//`）；未配端点**不静默**。
+- **重置密码**：邮件链接指向 `/reset-password?token=…` 而前端无此路由 → 已加 redirect（query 原样带）；🔴 **`validateField` 不跑 zod 的 object 级 `refine`**
+  → 两次密码一致须**显式比对** + `setFieldError`（注册页同坑）。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
-- 🔴 **禁止在 Bash 工具里 `git rm` src/ 下任何路径**（2026-09-20 定案）：执行者是 **tsbx 沙箱执行层本身**，会**递归清空整个 src/**。
-  `git rm` 根部文件 / `git rm migrations/…` / POSIX `rm src/…` 安全；**删 src 文件一律 `rm <path> && git add -A`**；恢复 `git checkout HEAD -- src`。
+- 🔴 **禁止在 Bash 工具里 `git rm` src/ 下任何路径**：执行者是 **tsbx 沙箱执行层本身**，会**递归清空整个 src/**。
+  删 src 文件一律 `rm <path> && git add -A`；恢复 `git checkout HEAD -- src`。
 - **大块改动立刻检查点提交**；**毒丸实验**验测试有效性（覆写 `throw new Error('__QUARANTINE__')`，变红=真加载）。
-- **测事件循环冻结用 tick 间隔法**（10ms 心跳相邻最大间隔）；**禁 monitorEventLoopDelay**（774ms 报成 17ms）；噪声下限 ≈20ms。
-- **手机端调试**：CDP `Emulation.setSafeAreaInsetsOverride` 可在桌面 Chrome 注入刘海（top=47 → `env()` 真返回 47px）；
-  ⚠️ `setAutoDarkModeOverride` **不等价** MIUI "智能反色" → 不能据此排除"浏览器强制深色"；手机侧用 `.tmp-probe/diag-overlay.js`。
-- 🔴 **视觉回归先稳定化、再归因**：不禁过渡/动画、不等 `fonts.ready` → 同代码连拍可报 **17.8% 假差异**；
-  冻结样式须 `page.addStyleTag` **加载后**注入并**断言生效**；⚠️ 比对前先 `md5sum` 验两侧同一状态（§10.13）。
-  ⚠️ **「噪声下限 0」只对纯色场景成立**：sky 渐变场景有**间歇**噪声（同代码连拍亦得 343px、通道差 2、
-  首个差异点坐标相同、颜色互换）→ **先连拍自比定噪声下限，再归因到改动**（§11.15）。
-- ⚠️ 同一条消息对同一文件多个 Edit 会**静默丢失** → 同文件多改一律**串行**，改完 grep 复核。
-- ⚠️ **块注释里别让 `*` 和 `/` 相邻**：`/** 由 themes/app/*/registry.ts 判定 */` 里的 `*/` 会**提前闭合注释**，
-  后半截当代码解析 → TS1131/TS1160（报错行≠根因行）。glob 改写成 `themes/app/<page>/registry.ts`。
-- ⚠️ **本机 node 的同步 spawn（管道 IO）恒抛 `EBUSY`(-4082)**：任何 exe（git/node/cmd）都一样，换 node 版本 /
-  `shell:true` / 脱离沙箱均无效；异步 `spawn` / `stdio:'inherit'` / **文件 fd 都正常** ⇒ 需同步取输出的脚本
-  一律 `spawnSync` + **文件型 stdio**（`scripts/release.mjs` 已如此改造：故障隔离在 `run()` 内、调用点零改动；
-  `spawnSync` **不抛**，须自判 `result.status` 并自造 `err.stdout/stderr` 供 `tryRun` 用）。
-  取 stdin 的（如 `git credential fill`）**必须带超时**（本机有永久挂住的历史）。**禁 `Atomics.wait` 桥接（必死锁）**、`--import` patch 无效。
-  ⚠️ `cmd | tail` 后 `$?` 是 tail 的 → 真实码重定向到文件再读（**push 静默失败过一次**，判据一律用 `git ls-remote`）。
-- ⚠️ git-bash `/dev/tcp` 在 Windows 假阴性（判连通用 node:net）。§9
-- ⚠️ `npm run` 丢命令行环境变量；`node --env-file` 不可被命令行覆盖 → 脚本自己 `process.loadEnvFile(...)`。
-- ⚠️ bash heredoc 里的 `${...}` 可能被插值 → 含模板字符串的脚本用 Write 落盘再跑。
-- ⚠️ **沙箱拦两类删除**（都不是代码错）：① `vite build` 在 **`prepare-out-dir`** 被 safe-delete 守卫拒
-  （阈值 50 项）→ 用 `npx vite build --outDir <全新目录>`；② `rm -rf <dir>` 大目录 fail-closed → **每批 ≤25 个 `rm -f`**。
-- **跨进程关卡退出码**：0 通过 / 1 断言失败 / 2 回滚不完整 / 3 环境不可用。
-- **CLI 引导**：`loadAllModels()` 后 `getModel` 才可用；`framework/db` 非测试缺 DB 配置直接退进程；`loadGuardConfig()` 吞错且**回写 DB**；
-  CLI 写配置先 `initDao()`；CLI 下 globalRedis 恒 null，用 connectStandalone。
+- 🔴 **视觉回归先稳定化、再归因**（§10.13）：不禁过渡/动画、不等 `fonts.ready` → 同代码连拍可报 **17.8% 假差异**；冻结样式须 `addStyleTag`
+  **加载后**注入并**断言生效**；⚠️ 比对前先 `md5sum` 验两侧同一状态；⚠️ 「噪声下限 0」只对纯色场景成立（§11.15）。
+- ⚠️ 同一文件**多个 Edit 放同一条消息会静默丢失** → 多改**串行**并 grep 复核。⚠️ 块注释里别让星号与斜杠相邻（写 glob 通配会**提前闭合注释**：TS1131 报错行≠根因行）。
+- ⚠️ **本机 node 同步 spawn（管道 IO）恒抛 `EBUSY`(-4082)**：换版本/`shell:true`/脱离沙箱均无效；异步 `spawn`/`stdio:'inherit'`/**文件 fd 正常**
+  ⇒ 需同步取输出一律 `spawnSync` + **文件型 stdio**（它**不抛**，须自判 `result.status`）；取 stdin 的**必须带超时**；**禁 `Atomics.wait`**（细则 §9）。
+  ⚠️ `cmd | tail` 后 `$?` 是 tail 的 → 真实码重定向到文件再读。⚠️ git-bash `/dev/tcp` 在 Windows 假阴性（用 node:net）。
+- ⚠️ **沙箱拦两类删除**（非代码错）：`vite build` 在 **`prepare-out-dir`** 被 safe-delete 守卫拒（阈值 50）→ `--outDir <全新目录>`；`rm -rf <dir>` → **每批 ≤25 个 `rm -f`**。
+- ⚠️ `npm run` 丢命令行环境变量；`node --env-file` 不可被命令行覆盖 → 脚本自己 `process.loadEnvFile(...)`；含模板字符串的脚本用 Write 落盘再跑。
+- 事件循环冻结用 **tick 间隔法**（禁 `monitorEventLoopDelay`，774ms 报成 17ms）；手机端注入刘海用 CDP `setSafeAreaInsetsOverride`。
+- **关卡退出码** 0 通过 / 1 断言失败 / 2 回滚不完整 / 3 环境不可用。**CLI**：`loadAllModels()` 后 `getModel` 才可用；`loadGuardConfig()` 吞错且**回写 DB**；CLI 下 globalRedis 恒 null。
 - 测试命令：`node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPatterns "<p>"`（npx jest 丢 ESM 标志）。
-- 临时脚本放 `.tmp-probe/`（唯一 gitignore 项），跑完删。
+- 临时脚本放 `.tmp-probe/`（唯一 gitignore 项）。**oauth21 的 Playwright 验收关卡长期留在 `.tmp-probe/verify-*.mjs`**，改前先跑一遍当基线。
+- 🔴 **起 dev server 必须让服务本身当后台命令**（`run_in_background` + 直接 `exec node node_modules/vite/bin/vite.js --port N`）。
+  用 `nohup … &` 会在后台任务结束时被回收（探活 502，但 `dev-*.log` 里明明写着 ready，极具误导）。
+  三档端口：5174 = code 模式 · 5175 = `VITE_PASSWORD_RESET_MODE=link` · 5177 = `VITE_REGISTER_VIEW=compact`。
 
 ## 5. 部署 / CI（细则全在 details §10，2026-09-21 定案）
 
-- **CI 安装三件套**（改 `ci.yml` 前必读）：`npm install --workspace=packages/shared-device --include-workspace-root --ignore-scripts
-  --legacy-peer-deps --no-audit --no-fund` **+ `node packages/shared-device/scripts/build.mjs`**；四个"别改回去"见 §10.1/§10.2。
-- **另四条高频**：Dockerfile 的 tini 按**实际路径**建软链（§10.3）；response schema 必须覆盖信封全字段（§10.5）；
-  生产三 secret **≥32 位**否则拒绝启动（§10.11）；复刻树验收 `git archive HEAD | tar -x` 到**仓库外**（§10.9）。
+改 `ci.yml` / Dockerfile 前先读 **details §10**：CI 安装三件套（`--legacy-peer-deps` 是绕 arborist 崩溃、必须构建 `shared-device` dist）·
+Dockerfile 的 tini 按**实际路径**建软链 · response schema 必须覆盖信封全字段 · 生产三 secret **≥32 位**否则拒绝启动 ·
+复刻树验收 `git archive HEAD | tar -x` 到**仓库外**。
 
 ## 6. 待办
 
-- ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**，代码不存在。
-- P2 session.js 拆分评估**未开始**；P3 容器化/CI 已实质完成。
-- oauth21 其余页面（**登录 / 重置密码**）尚未接入「业务容器 + 可换版式」——注册页已落地（§11.10），机制可直接照抄。
+- ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**，代码不存在。P2 session.js 拆分评估**未开始**。
+- `firewall` 前端无类型检查（121 错）；CI 无前端作业（三个前端刻意不进 CI 图，为绕开 arborist 崩溃）—— 均待定夺。
+- ⚠️ `oauth21` **eslint 存量 39 错**（`__tests__/notLoadSsoView.test.js` 38 个 jest 全局 `no-undef` + `AntiCacheDebugPanel.vue` 1 个 `preserve-caught-error`）—— 与多主题改动无关，待定夺（配 eslint env 或 ignore `__tests__`）。

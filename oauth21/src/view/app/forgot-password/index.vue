@@ -1,14 +1,21 @@
 <script setup lang="ts">
 /**
- * 移动端重置密码（/m/forgot-password）
+ * 移动端重置密码（/m/forgot-password）—— **业务容器**
  *
  * 路由：mobileRoutes 全屏直达；同时是 /forgot-password 在窄屏 / 真机下的自动形态
  * （分发逻辑见 view/web/forgot-password/index.vue）。
  * 邮件里的重置链接指向 `/reset-password?token=…`，该路径重定向到这里（见 router/routes.ts）。
  *
- * 视觉：与手机端登录页（view/app/login/index.vue）、注册页（view/app/register/index.vue）
- * 共用同一套样式体系 —— assets/styles/mobile-auth.scss 的 mauth-* 类。本组件**不自带样式块**，
- * 三页的头部/字段/按钮/进度条只有一处定义。
+ * === 分层（2026-09-24 架构调整，与注册/登录页同一套机制）===
+ * 本文件只负责"重置密码这件事"：校验、发码 / 发链接、RSA 加密提交、步骤流转、路由。
+ * **页面长什么样不在这里**，而在版式组件里：
+ *
+ *    本容器 ──传 ctx──▶ themes/app/forgot-password/<版式>/index.vue
+ *                 ▲
+ *                 └── 契约定在 themes/app/forgot-password/types.ts（版式只读它）
+ *
+ * 选择优先级见 `themes/app/forgot-password/registry.ts`
+ * （`?view=` > 主题包声明 > 环境变量 > 基础版式）。
  *
  * 两种重置方式（由 VITE_PASSWORD_RESET_MODE 决定，与后端 PASSWORD_RESET_MODE 对应，
  * 与桌面版读同一个环境变量）：
@@ -23,7 +30,7 @@
  *
  * @author yijiu2025
  */
-import { computed, ref, watch } from 'vue';
+import { computed, markRaw, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useForm } from 'vee-validate';
@@ -32,13 +39,21 @@ import { toTypedSchema } from '@vee-validate/zod';
 import { authApi } from '@/api/auth';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
-import MauthThemeSwitch from '@/components/auth/MauthThemeSwitch.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { useKeyboardAvoid } from '@/composables/useKeyboardAvoid';
 import { usePasswordStrength } from '@/composables/usePasswordStrength';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
+import { useThemeStore } from '@/stores/theme';
+import BaseForgotPasswordView from '@/themes/app/forgot-password/base/index.vue';
+import { forgotPasswordViews, pickForgotPasswordViewId } from '@/themes/app/forgot-password/registry';
+import type {
+  ForgotPasswordStage,
+  ForgotPasswordTranslate,
+  ForgotPasswordViewContext
+} from '@/themes/app/forgot-password/types';
+import type { Component, Ref } from 'vue';
 
 const { t, locale } = useI18n();
 const route = useRoute();
@@ -77,6 +92,14 @@ const currentStep = computed(() => {
   }
   return { email: 1, code: 2, done: 3 }[codeStep.value];
 });
+
+/**
+ * 当前界面状态（契约字段）
+ *
+ * 两种模式各有一套步骤变量，"当前是哪个状态"只在容器里判定一次；
+ * 版式拿到的是单值，不必自己判"该不该跳过某步"（例如带 token 进来时 linkStep 已是 reset）。
+ */
+const stage = computed<ForgotPasswordStage>(() => (isLinkMode ? linkStep.value : codeStep.value));
 
 /**
  * 分步副标题
@@ -140,11 +163,7 @@ const [password, passwordProps] = defineField('password');
 const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword');
 
 // 密码强度（与注册页同一 composable，颜色/文案走 i18n）
-const strength = usePasswordStrength(() => values.password || '', key => String(t(key)));
-
-// 密码可见性（移动端无 hover，必须给显式开关）
-const showPwd = ref(false);
-const showConfirmPwd = ref(false);
+const pwdStrength = usePasswordStrength(() => values.password || '', key => String(t(key)));
 
 const isSubmitting = ref(false);
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
@@ -256,359 +275,161 @@ const goBack = () => {
   }
   codeStep.value = codeStep.value === 'code' ? 'email' : 'code';
 };
+
+/* ============================================================================
+   版式（UI）加载 + 契约组装
+   ========================================================================== */
+
+const themeStore = useThemeStore();
+/**
+ * 用哪套版式：`?view=` > 主题包声明（themes/<id>/index.ts 的 views['forgot-password']）
+ * > VITE_FORGOT_PASSWORD_VIEW > base。
+ *
+ * 做成 computed 而不是 setup 里取一次：后端下发的换肤配置可能晚于本页 setup 到达。
+ */
+const viewId = computed(() =>
+  pickForgotPasswordViewId({ url: route.query.view, theme: themeStore.viewFor('forgot-password') })
+);
+
+/** 当前渲染的版式组件（默认基础版式是静态引入的，首帧直接正确） */
+const activeView = shallowRef<Component>(BaseForgotPasswordView);
+let viewEpoch = 0;
+watch(
+  viewId,
+  id => {
+    const epoch = ++viewEpoch;
+    if (id === forgotPasswordViews.baseId) {
+      activeView.value = BaseForgotPasswordView;
+      return;
+    }
+    void forgotPasswordViews.load(id).then(loaded => {
+      if (loaded && epoch === viewEpoch) activeView.value = markRaw(loaded);
+    });
+  },
+  { immediate: true }
+);
+
+/** 契约里字段绑定的**内部构造形态**：值与错误都是 ref，交给 reactive 自动解包成契约里的标量 */
+interface FieldSource {
+  value: Ref<string>;
+  attrs: Ref<Record<string, unknown>>;
+  invalid: Ref<boolean>;
+  error: Ref<string | undefined>;
+}
+
+/**
+ * 把一个字段打成交给版式的"绑定三件套"
+ *
+ * - `value` 包一层可写 computed：vee-validate 给的值 ref 是 `string | undefined`
+ *   （一次都没填过就是 undefined），而契约承诺版式拿到的一定是字符串 —— 读时兜底成 `''`。
+ * - `attrs` **整个 ref 原样存下来**，不提前取 `.value`（它内部是 computed，提前取会拿过期快照）。
+ */
+function bindField(
+  value: Ref<string | undefined>,
+  attrs: Ref<Record<string, unknown>>,
+  invalid: Ref<boolean>,
+  error: Ref<string | undefined>
+): FieldSource {
+  return {
+    value: computed({
+      get: () => value.value ?? '',
+      set: next => {
+        value.value = next;
+      }
+    }),
+    attrs,
+    invalid,
+    error
+  };
+}
+
+/**
+ * 编译期契约自检
+ *
+ * 容器组装的 ctx 必须**结构上满足** `themes/app/forgot-password/types.ts` 声明的契约：
+ * 少一个字段、类型对不上，都会在这行报错 —— 契约才是真有约束力的，而不是一份会过期的文档。
+ */
+function assertForgotPasswordContract(ctx: ForgotPasswordViewContext): ForgotPasswordViewContext {
+  return ctx;
+}
+
+/** 翻译函数：只把「key + （命名参数 | 兜底文案）」这一子集交给版式 */
+const translate: ForgotPasswordTranslate = (key, params) => {
+  if (params === undefined) return t(key);
+  return typeof params === 'string' ? t(key, params) : t(key, params as never);
+};
+
+/** 交给版式的上下文（reactive + 嵌套 ref：契约里声明的是标量，reactive 自动解包） */
+const ctx = assertForgotPasswordContract(
+  reactive({
+    t: translate,
+
+    mode: resetMode,
+    stage,
+    step: currentStep,
+    totalSteps,
+    progress: computed(() => (currentStep.value / totalSteps.value) * 100),
+    title: headerTitle,
+    subtitle: stepSub,
+
+    fields: {
+      email: bindField(email, emailProps, computed(() => !!errors.value.email), computed(() => errors.value.email)),
+      code: bindField(code, codeProps, computed(() => !!errors.value.code), computed(() => errors.value.code)),
+      password: bindField(
+        password,
+        passwordProps,
+        computed(() => !!errors.value.password),
+        computed(() => errors.value.password)
+      ),
+      confirmPassword: bindField(
+        confirmPassword,
+        confirmPasswordProps,
+        computed(() => !!errors.value.confirmPassword),
+        computed(() => errors.value.confirmPassword)
+      )
+    } satisfies Record<string, FieldSource>,
+
+    // 只把版式要画的三项交出去（`color` 留在容器侧：颜色属于呈现，走 is-<level> 类）
+    strength: computed(() => ({
+      level: pwdStrength.value.level,
+      score: pwdStrength.value.score,
+      label: pwdStrength.value.label
+    })),
+
+    submitting: computed(() => isSubmitting.value),
+    countingDown: computed(() => isCountingDown.value),
+    countdown: computed(() => countdown.value),
+
+    actions: {
+      submitEmail: () => {
+        void requestEmailAction('send');
+      },
+      resendEmail: () => {
+        void requestEmailAction('resend');
+      },
+      submit: () => {
+        void submitReset();
+      },
+      goLogin,
+      back: goBack
+    }
+  })
+);
 </script>
 
 <template>
-  <!-- 移动端全屏重置密码（与手机端登录/注册页共用 mauth-* 样式体系） -->
-  <div class="mauth-page">
-    <!-- 顶部 Header：返回 + 主题切换 + 标题 + 步骤副标题 + 进度条 -->
-    <header class="mauth-header">
-      <button class="mauth-back-btn" :aria-label="t('forgot.back_to_login')" @click="goBack">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
-      <!-- 右上角主题切换（跟随系统 / 浅色 / 深色 三态）；被 iframe 嵌入时自动隐藏 -->
-      <MauthThemeSwitch />
-      <div class="mauth-header-content">
-        <div class="mauth-logo">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </svg>
-        </div>
-        <h1 class="mauth-title">{{ headerTitle }}</h1>
-        <p class="mauth-sub">{{ stepSub }}</p>
-      </div>
-      <!-- 步骤进度条 -->
-      <div class="mauth-progress">
-        <div class="mauth-progress-bar" :style="{ width: `${(currentStep / totalSteps) * 100}%` }"></div>
-      </div>
-    </header>
+  <!-- 业务容器只做两件事：把 ctx 交给当前版式；渲染与版式无关的业务浮层 -->
+  <component :is="activeView" :ctx="ctx" />
 
-    <main class="mauth-body">
-      <!-- ===== 方式一：验证码重置（3 步） ===== -->
-      <template v-if="!isLinkMode">
-        <!-- 步骤 1：输入邮箱 -->
-        <section v-if="codeStep === 'email'" class="mauth-step">
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.email }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                <polyline points="22,6 12,13 2,6"></polyline>
-              </svg>
-              <input
-                v-model="email"
-                v-bind="emailProps"
-                type="email"
-                inputmode="email"
-                autocomplete="email"
-                :placeholder="t('login.email_placeholder')"
-                class="mauth-input"
-                @keyup.enter="requestEmailAction('send')"
-              />
-            </div>
-            <div class="mauth-err">{{ errors.email }}</div>
-          </div>
-
-          <button type="button" class="mauth-submit" @click="requestEmailAction('send')">
-            {{ t('forgot.send_code') }}
-          </button>
-        </section>
-
-        <!-- 步骤 2：邮箱验证码 + 新密码 -->
-        <section v-else-if="codeStep === 'code'" class="mauth-step">
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.code }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              <input
-                v-model="code"
-                v-bind="codeProps"
-                type="text"
-                inputmode="numeric"
-                maxlength="6"
-                autocomplete="one-time-code"
-                :placeholder="t('login.code_placeholder')"
-                class="mauth-input"
-              />
-              <button type="button" :disabled="isCountingDown" class="mauth-code-btn" @click="requestEmailAction('resend')">
-                {{ isCountingDown ? t('login.code_countdown', { countdown }) : t('forgot.resend') }}
-              </button>
-            </div>
-            <div class="mauth-err">{{ errors.code }}</div>
-          </div>
-
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.password }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              <input
-                v-model="password"
-                v-bind="passwordProps"
-                :type="showPwd ? 'text' : 'password'"
-                autocomplete="new-password"
-                :placeholder="t('forgot.new_password_rule')"
-                class="mauth-input"
-              />
-              <button
-                type="button"
-                class="mauth-pwd-toggle"
-                :aria-label="showPwd ? t('login.hide_password', '隐藏密码') : t('login.show_password', '显示密码')"
-                @click="showPwd = !showPwd"
-              >
-                <svg v-if="showPwd" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </div>
-            <!-- 密码强度：4 段条 + 文字（移动端无 hover，不做桌面版那种悬浮规则窗） -->
-            <div v-if="password" class="mauth-strength">
-              <div class="mauth-strength-bars">
-                <span
-                  v-for="i in 4"
-                  :key="i"
-                  class="mauth-strength-bar"
-                  :class="i <= strength.score ? `is-${strength.level}` : ''"
-                ></span>
-              </div>
-              <p class="mauth-strength-text" :class="`is-${strength.level}`">
-                {{ t('register.password_strength_label', { level: strength.label }) }}
-              </p>
-            </div>
-            <div class="mauth-err">{{ errors.password }}</div>
-          </div>
-
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.confirmPassword }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-              </svg>
-              <input
-                v-model="confirmPassword"
-                v-bind="confirmPasswordProps"
-                :type="showConfirmPwd ? 'text' : 'password'"
-                autocomplete="new-password"
-                :placeholder="t('forgot.confirm_password')"
-                class="mauth-input"
-                @keyup.enter="submitReset"
-              />
-              <button
-                type="button"
-                class="mauth-pwd-toggle"
-                :aria-label="showConfirmPwd ? t('login.hide_password', '隐藏密码') : t('login.show_password', '显示密码')"
-                @click="showConfirmPwd = !showConfirmPwd"
-              >
-                <svg v-if="showConfirmPwd" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </div>
-            <div class="mauth-err">{{ errors.confirmPassword }}</div>
-          </div>
-
-          <button type="button" class="mauth-submit" :disabled="isSubmitting" @click="submitReset">
-            <span v-if="isSubmitting" class="mauth-spinner"></span>
-            {{ t('forgot.reset_password') }}
-          </button>
-        </section>
-
-        <!-- 步骤 3：完成 -->
-        <section v-else class="mauth-step">
-          <div class="mauth-panel">
-            <div class="mauth-panel-icon mauth-panel-icon-ok">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </div>
-            <p class="mauth-panel-text">{{ t('forgot.success_desc') }}</p>
-          </div>
-          <button type="button" class="mauth-submit" @click="goLogin">{{ t('forgot.back_to_login') }}</button>
-        </section>
-      </template>
-
-      <!-- ===== 方式二：邮件链接重置（4 步） ===== -->
-      <template v-else>
-        <!-- 步骤 1：验证身份（输入邮箱） -->
-        <section v-if="linkStep === 'verify'" class="mauth-step">
-          <p class="mauth-panel-text mauth-step-desc">{{ t('forgot.link_desc') }}</p>
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.email }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                <polyline points="22,6 12,13 2,6"></polyline>
-              </svg>
-              <input
-                v-model="email"
-                v-bind="emailProps"
-                type="email"
-                inputmode="email"
-                autocomplete="email"
-                :placeholder="t('login.email_placeholder')"
-                class="mauth-input"
-                @keyup.enter="requestEmailAction('send')"
-              />
-            </div>
-            <div class="mauth-err">{{ errors.email }}</div>
-          </div>
-
-          <button type="button" class="mauth-submit" @click="requestEmailAction('send')">
-            {{ t('forgot.send_link') }}
-          </button>
-        </section>
-
-        <!-- 步骤 2：已发送 -->
-        <section v-else-if="linkStep === 'sent'" class="mauth-step">
-          <div class="mauth-panel">
-            <div class="mauth-panel-icon mauth-panel-icon-info">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                <polyline points="22,6 12,13 2,6"></polyline>
-              </svg>
-            </div>
-            <p class="mauth-panel-text">{{ t('forgot.link_sent_to') }}</p>
-            <p class="mauth-panel-sub"><strong>{{ values.email }}</strong></p>
-            <p class="mauth-panel-sub">{{ t('forgot.link_hint') }}</p>
-          </div>
-
-          <button type="button" class="mauth-resend" :disabled="isCountingDown" @click="requestEmailAction('resend')">
-            {{ isCountingDown ? `${t('forgot.resend')} (${countdown}s)` : t('forgot.resend') }}
-          </button>
-          <button type="button" class="mauth-submit" @click="goLogin">{{ t('forgot.back_to_login') }}</button>
-        </section>
-
-        <!-- 步骤 3：设置新密码（从邮件链接带 token 进入） -->
-        <section v-else-if="linkStep === 'reset'" class="mauth-step">
-          <p class="mauth-panel-text mauth-step-desc">{{ t('forgot.reset_desc') }}</p>
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.password }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              <input
-                v-model="password"
-                v-bind="passwordProps"
-                :type="showPwd ? 'text' : 'password'"
-                autocomplete="new-password"
-                :placeholder="t('forgot.new_password_rule')"
-                class="mauth-input"
-              />
-              <button
-                type="button"
-                class="mauth-pwd-toggle"
-                :aria-label="showPwd ? t('login.hide_password', '隐藏密码') : t('login.show_password', '显示密码')"
-                @click="showPwd = !showPwd"
-              >
-                <svg v-if="showPwd" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </div>
-            <div v-if="password" class="mauth-strength">
-              <div class="mauth-strength-bars">
-                <span
-                  v-for="i in 4"
-                  :key="i"
-                  class="mauth-strength-bar"
-                  :class="i <= strength.score ? `is-${strength.level}` : ''"
-                ></span>
-              </div>
-              <p class="mauth-strength-text" :class="`is-${strength.level}`">
-                {{ t('register.password_strength_label', { level: strength.label }) }}
-              </p>
-            </div>
-            <div class="mauth-err">{{ errors.password }}</div>
-          </div>
-
-          <div class="mauth-cell">
-            <div class="mauth-field" :class="{ 'is-error': errors.confirmPassword }">
-              <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-              </svg>
-              <input
-                v-model="confirmPassword"
-                v-bind="confirmPasswordProps"
-                :type="showConfirmPwd ? 'text' : 'password'"
-                autocomplete="new-password"
-                :placeholder="t('forgot.confirm_password')"
-                class="mauth-input"
-                @keyup.enter="submitReset"
-              />
-              <button
-                type="button"
-                class="mauth-pwd-toggle"
-                :aria-label="showConfirmPwd ? t('login.hide_password', '隐藏密码') : t('login.show_password', '显示密码')"
-                @click="showConfirmPwd = !showConfirmPwd"
-              >
-                <svg v-if="showConfirmPwd" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-            </div>
-            <div class="mauth-err">{{ errors.confirmPassword }}</div>
-          </div>
-
-          <button type="button" class="mauth-submit" :disabled="isSubmitting" @click="submitReset">
-            <span v-if="isSubmitting" class="mauth-spinner"></span>
-            {{ t('forgot.reset_password') }}
-          </button>
-        </section>
-
-        <!-- 步骤 4：完成 -->
-        <section v-else class="mauth-step">
-          <div class="mauth-panel">
-            <div class="mauth-panel-icon mauth-panel-icon-ok">
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </div>
-            <p class="mauth-panel-text">{{ t('forgot.success_desc') }}</p>
-          </div>
-          <button type="button" class="mauth-submit" @click="goLogin">{{ t('forgot.back_to_login') }}</button>
-        </section>
-      </template>
-
-      <!-- 底部返回登录入口（与手机端登录/注册页同款 footer） -->
-      <div v-if="currentStep < totalSteps" class="mauth-footer">
-        <span>{{ t('forgot.remembered') }}</span>
-        <button class="mauth-register-btn" @click="goLogin">{{ t('forgot.back_to_login') }}</button>
-      </div>
-    </main>
-
-    <!-- 图形验证码：code 模式通过后由 verify-captcha 顺带发邮箱码；link 模式通过后才发重置链接 -->
-    <GraphicCaptcha
-      :is-open="showCaptcha"
-      :email="values.email"
-      :send-email="!isLinkMode"
-      type="reset_password"
-      :title="t('forgot.captcha_title', '安全验证')"
-      @close="closeCaptcha"
-      @success="onCaptchaSuccess"
-    />
-    <MessageToast />
-  </div>
+  <!-- 图形验证码：code 模式通过后由 verify-captcha 顺带发邮箱码；link 模式通过后才发重置链接 -->
+  <GraphicCaptcha
+    :is-open="showCaptcha"
+    :email="values.email"
+    :send-email="!isLinkMode"
+    type="reset_password"
+    :title="t('forgot.captcha_title', '安全验证')"
+    @close="closeCaptcha"
+    @success="onCaptchaSuccess"
+  />
+  <MessageToast />
 </template>

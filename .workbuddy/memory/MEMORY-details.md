@@ -1345,3 +1345,60 @@ defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
 | Guard | `requirePermission`/`freshPermission` 不得进 RUNTIME_FIELDS；`allowRoles:[]`=不限角色；⚠️ `guard-config.dao.js` 的 `restore()`=truncate 全表+回填 → **空快照会清空 guard_configs** | §7 |
 | 日志 | 唯一出口 `framework/log/index.js`；业务禁 `console.*`；`logStdout` 不落盘、`log.info` 会被丢 | §8 |
 
+## 13. 「多主题 / 多版式」规则化 + 三页接入（2026-09-24）
+
+> 规则全文 = **`docs/frontend/multi-theme.md`**（强制，已注册进 sidebar）；本节只留"为什么这么定"与踩坑经过。
+
+### 13.1 三个正交维度（一句话版）
+
+① **token 基线** `assets/styles/mobile-auth.scss` 的 `mauth-*` 类 + `--mauth-*` 变量 = 所有呈现取值的**唯一出口**；
+② **皮肤** `src/themes/<id>/`（`index.ts` 出 token、`theme.scss` 出背景图/媒体查询）= 换取值、**同一套 DOM**；
+③ **版式** `src/themes/app/<page>/<id>/` = 换 DOM 与交互组织、**同一套业务**。可组合：`?theme=ocean&view=compact`。
+
+判据：**换颜色 → ②；换 DOM/流程组织 → ③；两者都不许动业务。** 一旦"要改业务才能换 UI"就说明分层破了。
+
+### 13.2 为什么 `base` 不进 `import.meta.glob`
+
+base 是绝大多数访问的默认路径 → 由容器**静态引入**，默认路径零额外请求、首帧直接正确；
+变体才惰性成独立 chunk（build 实测有 `compact-DU62GEoH.js` 独立 chunk 为证）。
+导航阶段 `preload<Page>View()`（`beforeEnter` 里调、**不 await**）把变体请求与路由 chunk 并行发出。
+
+### 13.3 契约的"有约束力"靠编译期自检，不靠文档
+
+`types.ts` 是纯类型；容器侧 `assert<Page>Contract(ctx: XxxViewContext): XxxViewContext { return ctx; }` 是一个恒等函数，
+但**它让"少字段/类型不符"在容器这一行就报错**。改契约 → 容器 + 所有版式一起红。
+⚠️ 类型闸门本身可能是空转（见 §frontend 类型闸门），所以**改完 `types.ts` 要毒丸验证**。
+
+### 13.4 职责红线里最容易破的两条
+
+- **基础版式不得自带 `<style>`**：三页共用 `mobile-auth.scss`，自带样式块 → 各页外观漂移（历史上"两页看起来不一样"都源于此）。
+  变体可以写，但取值只许 `--mauth-*`（裸色值换皮肤/切深色时漏色）。
+- **浮层由容器渲染**（`GraphicCaptcha` / `AgreementModals` / `MessageToast` 都是 fixed 或 Teleport 到 body）→
+  放容器里所有版式共享，不必各写一遍。本次关卡 F7 就是拿这条做静态断言的。
+
+### 13.5 新增页面的关键细节
+
+- 目录名含连字符时，主题包 `views` 的键名必须**逐字一致**：`views['forgot-password']`。
+- **新增变体目录必须重启 dev server**（glob 启动时静态扫描，热更新发现不了）。
+- 调试面板 `?debug=theme` 靠 `themes/app/pages.ts` 的 glob 汇总各页 `*/registry.ts`（鸭子类型识别注册表实例），
+  **新增页面不用回来登记**；⚠️ 该文件刻意不叫 `index.ts`（会被 `themes/index.ts` 的 glob 扫到，靠"没有 default export"隐式跳过，太脆）。
+
+### 13.6 验收：`verify-forgot-view.mjs` 的两个自造 bug（照抄时别重复）
+
+1. `page.goto("undefined/m/forgot-password")` → 抛 invalid URL：`toCodeStep(page)` 忘了传 base 参数。
+2. **E6「密码太弱」测错了分支**：容器 `submitReset` 的校验顺序是
+   `code 非空 → validateField(password) + validateField(confirmPassword) → 显式比对两次密码`；
+   只把 confirmPassword 改成 `'abc'` 会落到**"两次不一致"**分支、报错在 **confirmPassword 单元格**。
+   → 想让 password 字段自己报错，**两个框都要填弱密码**。
+   这条同时是对"`validateField` 不跑 zod object 级 `refine`"的再次印证（refine 只能靠容器显式比对补）。
+
+### 13.7 本次新增的坑（主索引 §4 / §6 已各收一句）
+
+- **dev server 起法**：`nohup ... &` 起的进程会随后台任务结束被回收（探活 502，但 `dev-*.log` 里明明写着 ready）
+  → 必须让**服务本身作为后台命令**（`run_in_background` + 直接 `exec node node_modules/vite/bin/vite.js --port N`）。
+- **分发是单向的**：只有 `/m/*` 在宽视口跳电脑版；**桌面版 `/forgot-password` 不会**按窄视口自动去 `/m/forgot-password`。
+  手机上的入口是登录页的按钮。别按"双向分发"理解。
+- **`oauth21` eslint 存量 39 错**（`__tests__/notLoadSsoView.test.js` 38 个 jest 全局 no-undef +
+  `AntiCacheDebugPanel.vue` 1 个 `preserve-caught-error`），**与本次改动无关**，待定夺（配 eslint env 或 ignore `__tests__`）。
+
+
