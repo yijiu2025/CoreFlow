@@ -1,6 +1,6 @@
 /**
  * 主题运行时：把主题包 token 与外部来源（后端下发 / 父应用 postMessage）的 token
- * 校验后注入为 CSS 变量，实现「不改前端代码即可换肤」与「组件级 UI 定制」。
+ * 校验后注入为 CSS 变量，实现「不改前端代码即可换配色」与「组件级 UI 定制」。
  *
  * === 为什么必须校验 ===
  * CSS 自定义属性是能直接改变渲染的输入。未校验就 `setProperty` 等于把 CSS 注入的
@@ -64,7 +64,7 @@ const FONT_VALUE_RE = /^[a-zA-Z0-9 ,'"_-]{1,120}$/;
 /** 明确拒绝的危险片段（白名单之外的兜底，双保险） */
 const FORBIDDEN_RE = /[;{}<>\\]|url\s*\(|expression\s*\(|\/\*|\*\/|@import/i;
 
-/** 上一次注入到 inline style 的变量名，用于下次注入前清理，避免换肤后残留旧值 */
+/** 上一次注入到 inline style 的变量名，用于下次注入前清理，避免换配色后残留旧值 */
 let injectedNames: string[] = [];
 
 /** 校验 token 名：必须是 --mauth- 前缀的小写短横线命名 */
@@ -112,7 +112,7 @@ export interface SanitizeResult {
 
 /** 参与注入的分层：主题包在前，外部覆写在后（后者同名覆盖前者） */
 export interface ThemeTokenLayers {
-  /** 主题包自带 token（来自 src/themes/<id>） */
+  /** 主题包自带 token（来自 src/theme/themes/<包>） */
   theme?: ThemeTokenOverrides | null;
   /** 外部覆写 token（后端下发 / 父应用同步） */
   external?: ThemeTokenOverrides | null;
@@ -122,7 +122,7 @@ export interface ThemeTokenLayers {
  * 逐条校验覆写表，丢弃不安全的条目
  *
  * 不采用「有一条非法就整体拒绝」的策略：配置里混入一条写错的色值时，
- * 其余合法配色仍应生效，否则改一个字就整站退回默认皮肤，排查成本很高。
+ * 其余合法配色仍应生效，否则改一个字就整站退回默认配色，排查成本很高。
  * 被拒绝的条目会返回给调用方，便于上报告警。
  */
 export function sanitizeOverrides(input: ThemeTokenOverrides | null | undefined): SanitizeResult {
@@ -159,7 +159,7 @@ export function clearThemeTokens(): void {
  * 应用分层 token（主题包 + 外部覆写）
  *
  * 每次调用都是「按当前明暗把两层重算一遍，再与上一轮的变量名做差集清理」：
- *   • 换肤/切明暗时不会残留上一轮的值（差集里被移除的会被 removeProperty）
+ *   • 换配色/切明暗时不会残留上一轮的值（差集里被移除的会被 removeProperty）
  *   • 只动自己写过的变量名，不碰别人留在 html 上的 inline style
  *
  * 层内顺序：先 theme 后 external，同名后者胜 —— 这就是「后端覆写压过主题默认」。

@@ -5,17 +5,18 @@
  * 路由：mobileRoutes 全屏直达；同时是 /register 在窄屏 / 真机下的自动形态
  * （分发逻辑见 view/web/register/index.vue）
  *
- * === 分层（2026-09-23 架构调整）===
+ * === 分层（2026-09-23 架构调整；2026-09-24 版式改随主题包走）===
  * 本文件只负责"注册这件事"：状态、表单校验、接口调用、验证码流程、倒计时、路由跳转。
- * **页面长什么样不在这里**，而在版式组件里：
+ * **页面长什么样不在这里**，而在**当前主题包**里的版式组件里：
  *
- *    本容器 ──传 ctx──▶ themes/app/register/<版式>/index.vue
+ *    本容器 ──传 ctx──▶ theme/themes/<包>/register/<版式>/index.vue
  *                 ▲
- *                 └── 契约定在 themes/app/register/types.ts（版式只读它）
+ *                 └── 契约定在 theme/views/register.ts（各包共用这一份，版式只读它）
  *
- * 于是「换一套 UI」= 加一个版式目录，本文件零改动。选择优先级见
- * `themes/app/register/registry.ts`（`?view=` > 主题包声明 > 环境变量 > 基础版式）。
- * 默认版式（base）由本文件**静态引入**：正常访问不产生额外请求，首帧即正确。
+ * 于是「换一套 UI」= 在包里加一个版式目录，本文件零改动。选择优先级见
+ * `theme/views/register.ts`（`?view=` > 主题包声明 > 环境变量 > 基础版式）。
+ * **内置包**（`default`）的 base 由本文件**静态引入**：正常访问不产生额外请求，首帧即正确；
+ * 其它包 / 其它版式都是惰性 chunk，由路由守卫提前预热。
  *
  * === 什么该留在这里 ===
  * 任何"点了会发生什么"：校验规则、请求、成功/失败处理、去哪一页。
@@ -52,9 +53,17 @@ import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useCaptcha } from '@/composables/useCaptcha';
 import { useKeyboardAvoid } from '@/composables/useKeyboardAvoid';
 import { useThemeStore } from '@/stores/theme';
-import BaseRegisterView from '@/themes/app/register/base/index.vue';
-import { pickRegisterViewId, registerViews } from '@/themes/app/register/registry';
-import type { RegisterDirection, RegisterTranslate, RegisterViewContext } from '@/themes/app/register/types';
+/**
+ * 静态引入**内置包**的基础版式 —— 首屏零请求的那条路径
+ *
+ * 路径里的 `default` 必须写死：静态 import 在编译期就要定下来，而"当前是哪个包"
+ * 是运行时才知道的（URL / 后端下发 / localStorage）。运行时的那份判定在
+ * `registerViews.builtinPackage`，两者必须是同一个包 —— 改了 `theme/index.ts` 的
+ * `DEFAULT_THEME_PACKAGE` 就要同步改这里，守卫会盯住这一点。
+ */
+import BaseRegisterView from '@/theme/themes/default/register/index.vue';
+import { pickRegisterViewId, registerViews } from '@/theme/views/register';
+import type { RegisterDirection, RegisterTranslate, RegisterViewContext } from '@/theme/views/register';
 import type { Component, Ref } from 'vue';
 
 /** 步骤总数。契约里的 `totalSteps` 与进度百分比都算它，别在两处各写一个 3 */
@@ -269,38 +278,48 @@ const handleRegister = handleSubmit(async data => {
 
 const themeStore = useThemeStore();
 /**
- * 用哪套版式：`?view=` > 主题包声明（themes/<id>/index.ts 的 views.register）
+ * 用哪套版式：`?view=` > 主题包声明（theme/themes/<包>/index.ts 的 views.register）
  * > VITE_REGISTER_VIEW > base。解析细节与安全边界见 registry.ts。
  *
  * 做成 computed 而不是 setup 里取一次，是因为主题是**运行时**才定的：
- * 后端下发的换肤配置在 App.vue 的 onMounted 之后才到（可能晚于本页 setup），
+ * 后端下发的换配色配置在 App.vue 的 onMounted 之后才到（可能晚于本页 setup），
  * 取一次就会漏掉"主题包声明了版式"这种情况。
+ *
+ * `pkg` 决定**在哪个包里找**：版式跟随主题包，同一个 `?view=compact` 在不同包里
+ * 指向不同实现，所以包变了就要重新解析（依赖 `packageId` 让 computed 自动重算）。
  */
-const viewId = computed(() => pickRegisterViewId({ url: route.query.view, theme: themeStore.viewFor('register') }));
+const viewId = computed(() =>
+  pickRegisterViewId({
+    url: route.query.view,
+    theme: themeStore.viewFor('register'),
+    pkg: themeStore.packageId
+  })
+);
 
 /**
  * 当前渲染的版式组件
  *
- * 默认就是基础版式：它是静态引入的，首帧直接正确（不会先白屏再闪一下）。
- * 变体是动态 chunk，加载完成后接管；路由守卫已提前预热（preloadRegisterView），
- * 因此绝大多数情况下这一步在同一 tick 内完成 —— 用户看不到切换。
+ * 默认是**内置包的基础版式**：它由本文件静态引入，首帧直接正确（不会先白屏再闪一下）。
+ * 变体、以及非内置包的版式都是动态 chunk，加载完成后接管；路由守卫已提前预热
+ * （preloadRegisterView），因此绝大多数情况下这一步在同一 tick 内完成 —— 用户看不到切换。
  * `markRaw`：组件对象不该被 reactive 代理（无谓的深层代理开销）。
  *
  * `viewEpoch` 用于丢弃过期结果：版式 A→B→A 连续变化时，先发出的 A 可能后返回，
  * 不加序号会用过期组件覆盖当前（与主题附加样式同一类坑）。
+ *
+ * ⚠️ 必须**同时**盯住主题包：版式只在当前包内查找，换了包但解析出的 id 字符串没变
+ *    （两边都是 `base`）时，渲染的组件其实换了一整套 —— 只盯 id 会漏掉这一整类切换。
  */
 const activeView = shallowRef<Component>(BaseRegisterView);
 let viewEpoch = 0;
 watch(
-  viewId,
-  id => {
+  [viewId, () => themeStore.packageId],
+  ([id, pkg]) => {
     const epoch = ++viewEpoch;
-    if (id === registerViews.baseId) {
-      activeView.value = BaseRegisterView;
-      return;
-    }
-    void registerViews.load(id).then(loaded => {
-      if (loaded && epoch === viewEpoch) activeView.value = markRaw(loaded);
+    void registerViews.load(id, pkg).then(loaded => {
+      if (epoch !== viewEpoch) return;
+      // null = 用静态引入的内置包基础版式（首屏零请求那条路径）
+      activeView.value = loaded ? markRaw(loaded) : BaseRegisterView;
     });
   },
   { immediate: true }
@@ -346,7 +365,7 @@ function bindField(
 /**
  * 编译期契约自检
  *
- * 容器组装的 ctx 必须**结构上满足** `themes/app/register/types.ts` 声明的契约：
+ * 容器组装的 ctx 必须**结构上满足** `theme/views/register.ts` 声明的契约：
  * 少一个字段、类型对不上，都会在这行报错。这样"版式契约"才是真的有约束力，
  * 而不是一份会过期的文档。
  */

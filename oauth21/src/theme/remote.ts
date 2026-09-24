@@ -1,8 +1,8 @@
 /**
- * 后端下发的主题配置（换肤 + 组件级 UI 定制）
+ * 后端下发的主题配置（换配色 + 组件级 UI 定制）
  *
  * === 解决的问题 ===
- * 换肤不该要求改前端代码重新发版。部署方在服务端按 client_id 配一套品牌配色，
+ * 换配色不该要求改前端代码重新发版。部署方在服务端按 client_id 配一套品牌配色，
  * 前端拉下来注入即可 —— 同一份构建产物可以服务多个品牌/租户。
  *
  * 来源不止后端一个：URL 参数 `?theme=` 也能指定（见 stores/theme.ts），
@@ -13,7 +13,7 @@
  *
  *   200 OK
  *   {
- *     "theme": "ocean",                       // 可选。src/themes/ 下已登记的主题 id
+ *     "theme": "ocean",                       // 可选。src/theme/themes/ 下已登记的主题 id
  *     "skin": "ocean",                        // 可选。theme 的旧字段名，二选一即可
  *     "mode": "dark",                         // 可选。'light' | 'dark' | 'system'
  *     "tokens": {                             // 可选。按明暗分组的 CSS 变量覆写
@@ -51,7 +51,7 @@ const ENDPOINT = (import.meta as any).env?.VITE_THEME_ENDPOINT as string | undef
 const TIMEOUT_MS = 3000;
 
 export interface RemoteThemeConfig {
-  /** 主题 id（src/themes/ 下已登记）；旧字段名 skin 也接受 */
+  /** 主题 id（src/theme/themes/ 下已登记）；旧字段名 skin 也接受 */
   theme?: string;
   /** 明暗三态 */
   mode?: ThemeMode;
@@ -60,7 +60,7 @@ export interface RemoteThemeConfig {
   tokens?: { light?: Record<string, string>; dark?: Record<string, string> };
 }
 
-/** 后端换肤是否启用（env 配了端点） */
+/** 后端换配色是否启用（env 配了端点） */
 export function isRemoteThemeEnabled(): boolean {
   return typeof ENDPOINT === 'string' && ENDPOINT.trim().length > 0;
 }

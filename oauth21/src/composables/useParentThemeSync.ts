@@ -8,7 +8,7 @@
  *   { type: 'THEME_CHANGE', isDark: boolean }                       // 旧版：只同步明暗
  *   { type: 'THEME_CHANGE', isDark?, theme?, skin?, tokens? }       // 新版：可同时换主题
  *
- * theme  主题 id（须在 src/themes/ 下登记过；skin 是它的旧字段名，两者等价）
+ * theme  主题 id（须在 src/theme/themes/ 下登记过；skin 是它的旧字段名，两者等价）
  * tokens 按明暗分组的 CSS 变量覆写表，实现「父应用给子页面定制每个组件的 UI」：
  *          { light: { '--mauth-primary': '#0e7490' }, dark: { '--mauth-primary': '#67e8f9' } }
  *

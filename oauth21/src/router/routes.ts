@@ -1,8 +1,9 @@
 import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
 import { isDesktopViewport } from '@/utils/device';
-import { preloadRegisterView } from '@/themes/app/register/registry';
-import { preloadLoginView } from '@/themes/app/login/registry';
-import { preloadForgotPasswordView } from '@/themes/app/forgot-password/registry';
+import { preloadRegisterView } from '@/theme/views/register';
+import { preloadLoginView } from '@/theme/views/login';
+import { preloadForgotPasswordView } from '@/theme/views/forgot-password';
+import { useThemeStore } from '@/stores/theme';
 
 /**
  * 移动端路由 → 宽视口下应迁移到的电脑版路由名
@@ -61,23 +62,39 @@ function desktopWhenWide(to: RouteLocationNormalized) {
 }
 
 /**
- * 组装一个 `beforeEnter`：先做宽视口跳电脑版，不跳时顺手预取该页**变体版式**的 chunk
+ * 组装一个 `beforeEnter`：先做宽视口跳电脑版，不跳时顺手预取该页**版式**的 chunk
  *
  * 三个移动端页面（登录 / 注册 / 重置密码）的 UI 都是动态加载的（见各页容器）：
- * 容器首帧先渲染静态引入的基础版式，变体 chunk 到了再接管。在本页导航阶段就把请求
+ * 容器首帧先渲染静态引入的内置包基础版式，chunk 到了再接管。在本页导航阶段就把请求
  * 发出去（与路由组件自身的 chunk 并行），容器挂载时通常已在模块缓存里 ——
  * 用户看不到切换。预取失败无所谓：容器自己还会再拉一次，拉不到就回退基础版式。
+ *
+ * ⚠️ 预取必须知道**当前主题包**：版式只在包内查找（见 `theme/views/registry.ts`），
+ *    包不同则同一个 `?view=` 指向的 chunk 也不同。这里读一次 theme store —— 用
+ *    `try/catch` 包住：预取是"提前把请求发出去"的优化，拿不到上下文宁可不发，
+ *    绝不能因为预取而挡住导航。
  *
  * 抽成工厂函数而不是把这段写在三个路由里：三处各抄一遍，迟早有一处忘了同时做
  * 「宽视口跳转」或忘了预取，而这两种疏漏都只在真机/特定视口下才现形。
  */
-function withViewPreload(preload: (source: { url?: unknown }) => void) {
+function withViewPreload(
+  preload: (source: { url?: unknown; theme?: unknown; pkg?: unknown }) => void
+) {
   return (to: RouteLocationNormalized) => {
     const target = desktopWhenWide(to);
     if (target) return target;
-    preload({ url: to.query.view });
+    preload({ url: to.query.view, pkg: readPackageId() });
     return undefined;
   };
+}
+
+/** 读当前主题包；拿不到（Pinia 尚未安装 / store 初始化异常）返回 undefined，由预取函数落内置包 */
+function readPackageId(): string | undefined {
+  try {
+    return useThemeStore().packageId;
+  } catch {
+    return undefined;
+  }
 }
 
 export const authRoutes: RouteRecordRaw[] = [

@@ -215,7 +215,7 @@ html[data-vpfix] .full-screen-page {
 | B1 | `oauth21/index.html`（注释里记了两次真机教训） |
 | B2 / B3 / B4 | `oauth21/src/assets/styles/main.scss` 的「跨内核初始值同步」段 |
 | B5 / B6 / B7② | `oauth21/src/assets/styles/mobile-auth.scss`（画布 token 与兜底样式段） |
-| B6 契约 | `oauth21/src/themes/README.md`、`oauth21/src/themes/types.ts`（主题包声明画布色的要求）；参考主题 `oauth21/src/themes/sky/theme.scss` |
+| B6 契约 | `oauth21/src/theme/README.md`、`oauth21/src/theme/types.ts`（主题包声明画布色的要求）；参考配色 `oauth21/src/theme/themes/default/colors/sky/theme.scss` |
 | B7① | `oauth21/src/utils/viewport-fix.ts`，在 `oauth21/src/main.ts` 顶部调用 |
 
 > 相关但不同的主题机制（皮肤 / 版式）见[多主题 / 多版式开发模式](/frontend/multi-theme)与[主题系统](/frontend/theme)；前端整体约定见[前端统一规范](/frontend/coding-standard)。

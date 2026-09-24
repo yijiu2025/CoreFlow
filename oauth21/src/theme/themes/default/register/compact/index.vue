@@ -1,70 +1,72 @@
 <script setup lang="ts">
 /**
- * 注册页 · 基础版式（`themes/app/register/base/`）
+ * 注册页 · 轻版式（`theme/themes/default/register/compact/`）—— **参考实现 / 变体模板**
  *
- * 这是**默认版式**：没有任何 `?view=` / 主题包声明 / 环境变量指定时用它。
- * 由容器**静态引入**（不在 registry 的惰性表里），所以默认路径上零额外请求、零闪烁。
+ * 存在的意义有两个：
+ *   1. 证明机制跑得通：`?view=compact` 或主题包声明 `views.register: 'compact'` 时，
+ *      这个 chunk 才会被动态加载（基础版式不在其中）。
+ *   2. 给后续版式一个可照抄的骨架 —— 复制这个目录、改结构即可，业务一行都不用碰。
  *
- * === 这个文件里应该有什么 / 不该有什么 ===
- * 有：DOM 结构、`mauth-*` 类名、转场动画、纯展示用的局部状态（密码明文开关）。
- * 没有：任何业务逻辑 —— 校验、请求、路由、倒计时全在容器里，这里只读 `ctx`、
- * 只调 `ctx.actions`。契约见 `../types.ts`。
+ * === 与基础版式的差别（仅版式层面）===
+ *   • 顶部不再是大 logo + 进度条，改成「返回 + 主题开关」一行 + 步骤点（dots）
+ *   • 标题区下移到表单上方，并展示 `ctx.appName`（基础版式不展示）
+ *   • 表单收进一张卡片，间距更紧
+ * 功能面**完全一致**：字段、验证码、错误态、密码明文开关、核对摘要、协议勾选、
+ * 加载态、返回、去登录 —— 一个不少（数据与动作全部来自 `ctx`）。
  *
- * === 样式 ===
- * 本组件**不自带 `<style>`**：移动端认证页的样式单一来源是
- * `assets/styles/mobile-auth.scss`（`mauth-*` 体系，登录/注册/重置密码三页共用），
- * 自带样式块会让三页各自漂移 —— 历史上"两页看起来不一样"都源于此。
- * 特殊版式（`themes/app/register/<变体>/`）需要自己那套结构样式时可以写 `<style scoped>`，
- * 但取值一律引用 `--mauth-*` token，别写裸色值，否则换皮肤/换明暗时会漏。
+ * === 版式作者的约束（详见 ../types.ts）===
+ * 只读 `ctx`、只调 `ctx.actions`；**不写**任何请求 / 校验 / 路由 / store。
+ * 样式可以自带 `<style scoped>`，但取值一律用 `--mauth-*` token（裸色值会在
+ * 换配色或切深色时漏色）。
  *
  * @author yijiu2025
+ * @since 2026-09-23
  */
 import { ref, toRef } from 'vue';
 import MauthThemeSwitch from '@/components/auth/MauthThemeSwitch.vue';
-import type { RegisterViewProps } from '../types';
+import type { RegisterViewProps } from '@/theme/views/register';
 
 const props = defineProps<RegisterViewProps>();
-/** 契约对象由容器创建一次（reactive），这里用 toRef 保证即使被替换也能跟着更新 */
 const ctx = toRef(props, 'ctx');
 
-// 密码明文显示：纯展示状态，不参与业务 → 留在版式内（换版式各管各的）
+// 纯展示状态（与基础版式各自独立，互不影响）
 const showPwd = ref(false);
 const showConfirmPwd = ref(false);
 </script>
 
 <template>
-  <!-- 移动端全屏注册（与手机端登录页共用 mauth-* 样式体系）
-       data-mauth-view：版式自己声明身份，排查"现在到底是哪套 UI"时一眼可见 -->
-  <div class="mauth-page" data-mauth-view="base">
-    <!-- 顶部 Header：返回 + 标题 + 步骤副标题 + 进度条 -->
-    <header class="mauth-header">
+  <!-- data-mauth-view：版式自己声明身份，便于排查"现在到底是哪套 UI"（基础版式同样带） -->
+  <div class="mauth-page mreg" data-mauth-view="compact">
+    <!-- 顶部工具行：返回 + 主题开关（嵌 iframe 时自动隐藏） -->
+    <header class="mreg-top">
       <button class="mauth-back-btn" :aria-label="ctx.t('register.prev')" @click="ctx.actions.back()">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
       </button>
-      <!-- 右上角主题切换（跟随系统 / 浅色 / 深色 三态）；被 iframe 嵌入时自动隐藏 -->
       <MauthThemeSwitch />
-      <div class="mauth-header-content">
-        <div class="mauth-logo">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
-        </div>
-        <h1 class="mauth-title">{{ ctx.t('register.title') }}</h1>
-        <p class="mauth-sub">{{ ctx.subtitle }}</p>
-      </div>
-      <!-- 步骤进度条 -->
-      <div class="mauth-progress">
-        <div class="mauth-progress-bar" :style="{ width: `${ctx.progress}%` }"></div>
-      </div>
     </header>
 
-    <!-- 分步表单（堆栈进退，slide 动画） -->
     <main class="mauth-body">
+      <!-- 标题区：应用名 + 标题 + 步骤副标题 + 步骤点 -->
+      <div class="mreg-head">
+        <p v-if="ctx.appName" class="mreg-app">{{ ctx.appName }}</p>
+        <h1 class="mreg-title">{{ ctx.t('register.title') }}</h1>
+        <p class="mreg-sub">{{ ctx.subtitle }}</p>
+        <div
+          class="mreg-dots"
+          role="progressbar"
+          :aria-valuenow="ctx.step"
+          aria-valuemin="1"
+          :aria-valuemax="ctx.totalSteps"
+        >
+          <span v-for="n in ctx.totalSteps" :key="n" class="mreg-dot" :class="{ 'is-on': n <= ctx.step }"></span>
+        </div>
+      </div>
+
       <transition :name="ctx.direction === 'next' ? 'mauth-slide-next' : 'mauth-slide-prev'" mode="out-in">
         <!-- 步骤 1：用户名 + 邮箱 + 验证码 -->
-        <section v-if="ctx.step === 1" key="1" class="mauth-step">
+        <section v-if="ctx.step === 1" key="1" class="mreg-card">
           <div class="mauth-cell">
             <div class="mauth-field" :class="{ 'is-error': ctx.fields.username.invalid }">
               <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -127,14 +129,13 @@ const showConfirmPwd = ref(false);
             <div class="mauth-err">{{ ctx.fields.code.error }}</div>
           </div>
 
-          <!-- 未发码前禁用：避免没收到码就往下走 -->
-          <button type="button" class="mauth-next-btn" :disabled="!ctx.codeSent" @click="ctx.actions.nextStep(2)">
+          <button type="button" class="mauth-submit mreg-cta" :disabled="!ctx.codeSent" @click="ctx.actions.nextStep(2)">
             {{ ctx.t('register.next') }}
           </button>
         </section>
 
         <!-- 步骤 2：密码 -->
-        <section v-else-if="ctx.step === 2" key="2" class="mauth-step">
+        <section v-else-if="ctx.step === 2" key="2" class="mreg-card">
           <div class="mauth-cell">
             <div class="mauth-field" :class="{ 'is-error': ctx.fields.password.invalid }">
               <svg class="mauth-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -200,11 +201,11 @@ const showConfirmPwd = ref(false);
             <div class="mauth-err">{{ ctx.fields.confirmPassword.error }}</div>
           </div>
 
-          <button type="button" class="mauth-next-btn" @click="ctx.actions.nextStep(3)">{{ ctx.t('register.next') }}</button>
+          <button type="button" class="mauth-submit mreg-cta" @click="ctx.actions.nextStep(3)">{{ ctx.t('register.next') }}</button>
         </section>
 
         <!-- 步骤 3：核对信息 + 协议 + 提交 -->
-        <section v-else key="3" class="mauth-step">
+        <section v-else key="3" class="mreg-card">
           <div class="mauth-summary">
             <div class="mauth-summary-row"><span>{{ ctx.t('register.username') }}</span><strong>{{ ctx.fields.username.value }}</strong></div>
             <div class="mauth-summary-row"><span>{{ ctx.t('register.email') }}</span><strong>{{ ctx.fields.email.value }}</strong></div>
@@ -223,14 +224,14 @@ const showConfirmPwd = ref(false);
             </span>
           </label>
 
-          <button type="button" class="mauth-submit" :disabled="!ctx.canSubmit" @click="ctx.actions.submit()">
+          <button type="button" class="mauth-submit mreg-cta" :disabled="!ctx.canSubmit" @click="ctx.actions.submit()">
             <span v-if="ctx.submitting" class="mauth-spinner"></span>
             {{ ctx.submitting ? ctx.t('register.submitting') : ctx.t('register.submit') }}
           </button>
         </section>
       </transition>
 
-      <!-- 已有账号 → 回登录（透传 OAuth 上下文，登录后才能回到授权页） -->
+      <!-- 已有账号 → 回登录 -->
       <div class="mauth-footer">
         <span>{{ ctx.t('register.signin_hint') }}</span>
         <button class="mauth-register-btn" @click="ctx.actions.goLogin()">{{ ctx.t('register.signin_link') }}</button>
@@ -238,3 +239,101 @@ const showConfirmPwd = ref(false);
     </main>
   </div>
 </template>
+
+<style lang="scss" scoped>
+/* 本版式独有的结构样式；**取值一律用 --mauth-* token**（裸色值会在换配色/切深色时漏色）。
+   需要全局共享的（字段、按钮、摘要、协议、页脚）直接复用 mobile-auth.scss 的 mauth-* 类。 */
+.mreg-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--mauth-pad-header-t) var(--mauth-pad-header-x) 0;
+}
+
+.mreg-head {
+  margin-bottom: var(--mauth-gap-cell);
+}
+
+.mreg-app {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mauth-text-faint);
+}
+
+.mreg-title {
+  margin: 0;
+  font-size: var(--mauth-title-size);
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--mauth-title-fg);
+}
+
+.mreg-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--mauth-sub-fg);
+}
+
+/* 步骤点：取代基础版式的整条进度条 */
+.mreg-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.mreg-dot {
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--mauth-progress-bg);
+  transition: background 0.2s;
+}
+
+.mreg-dot.is-on {
+  background: var(--mauth-progress-fill);
+}
+
+/* 表单收进一张卡（基础版式是三段平铺） */
+.mreg-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--mauth-pad-body-x);
+  background: var(--mauth-surface);
+  border: 1px solid var(--mauth-border);
+  border-radius: calc(var(--mauth-radius) + 4px);
+}
+
+.mreg-cta {
+  margin-top: 12px;
+}
+
+/* 矮屏 / 横屏：把标题区压扁，保证按钮可见（与基础版式的断点口径一致） */
+@media (max-height: 700px) {
+  .mreg-title {
+    font-size: 18px;
+  }
+
+  .mreg-sub,
+  .mreg-dots {
+    display: none;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) {
+  .mreg-top {
+    padding-top: 12px;
+  }
+
+  .mreg-head {
+    margin-bottom: 10px;
+  }
+
+  .mreg-app {
+    display: none;
+  }
+}
+</style>

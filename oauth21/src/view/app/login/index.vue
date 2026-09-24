@@ -6,18 +6,19 @@
  * （分发逻辑见 view/web/login/index.vue —— 它按 `isMobile` / `from=mini` / 设备判定
  * 挑组件，挑到本容器时下面这套 UI 机制同样生效）。
  *
- * === 分层（2026-09-24 架构调整，与注册页同一套机制）===
+ * === 分层（2026-09-24 架构调整；版式改随主题包走）===
  * 本文件只负责"登录这件事"：表单校验、登录流程（授权确认 / 邮箱二次验证 / 最大会话数）、
  * 图形验证码、第三方登录、协议勾选、路由跳转。
- * **页面长什么样不在这里**，而在版式组件里：
+ * **页面长什么样不在这里**，而在**当前主题包**里的版式组件里：
  *
- *    本容器 ──传 ctx──▶ themes/app/login/<版式>/index.vue
+ *    本容器 ──传 ctx──▶ theme/themes/<包>/login/<版式>/index.vue
  *                 ▲
- *                 └── 契约定在 themes/app/login/types.ts（版式只读它）
+ *                 └── 契约定在 theme/views/login.ts（各包共用这一份，版式只读它）
  *
- * 于是「换一套 UI」= 加一个版式目录，本文件零改动。选择优先级见
- * `themes/app/login/registry.ts`（`?view=` > 主题包声明 > 环境变量 > 基础版式）。
- * 默认版式（base）由本文件**静态引入**：正常访问不产生额外请求，首帧即正确。
+ * 于是「换一套 UI」= 在包里加一个版式目录，本文件零改动。选择优先级见
+ * `theme/views/login.ts`（`?view=` > 主题包声明 > 环境变量 > 基础版式）。
+ * **内置包**（`default`）的 base 由本文件**静态引入**：正常访问不产生额外请求，首帧即正确；
+ * 其它包 / 其它版式都是惰性 chunk，由路由守卫提前预热。
  *
  * === 与桌面版对齐的能力（历史上缺失 → 授权/二次验证时静默失败）===
  *   - ConsentPanel：后端返回 action=consent 时展示授权确认
@@ -53,9 +54,16 @@ import MessageToast from '@/components/common/MessageToast.vue';
 import { useKeyboardAvoid } from '@/composables/useKeyboardAvoid';
 import { useSocialLogin } from '@/composables/useSocialLogin';
 import { useThemeStore } from '@/stores/theme';
-import BaseLoginView from '@/themes/app/login/base/index.vue';
-import { loginViews, pickLoginViewId } from '@/themes/app/login/registry';
-import type { LoginDirection, LoginPanel, LoginTranslate, LoginViewContext } from '@/themes/app/login/types';
+/**
+ * 静态引入**内置包**的基础版式 —— 首屏零请求的那条路径
+ *
+ * 路径里的 `default` 必须写死：静态 import 在编译期就要定下来，而"当前是哪个包"
+ * 是运行时才知道的（URL / 后端下发 / localStorage）。运行时的那份判定在
+ * `loginViews.builtinPackage`，两者必须是同一个包。
+ */
+import BaseLoginView from '@/theme/themes/default/login/index.vue';
+import { loginViews, pickLoginViewId } from '@/theme/views/login';
+import type { LoginDirection, LoginPanel, LoginTranslate, LoginViewContext } from '@/theme/views/login';
 import type { SocialProviderId } from '@/composables/useSocialLogin';
 import type { Component, Ref } from 'vue';
 
@@ -271,36 +279,46 @@ const goBack = () => {
 
 const themeStore = useThemeStore();
 /**
- * 用哪套版式：`?view=` > 主题包声明（themes/<id>/index.ts 的 views.login）
+ * 用哪套版式：`?view=` > 主题包声明（theme/themes/<包>/index.ts 的 views.login）
  * > VITE_LOGIN_VIEW > base。解析细节与安全边界见 registry.ts。
  *
  * 做成 computed 而不是 setup 里取一次，是因为主题是**运行时**才定的：
- * 后端下发的换肤配置在 App.vue 的 onMounted 之后才到（可能晚于本页 setup），
+ * 后端下发的换配色配置在 App.vue 的 onMounted 之后才到（可能晚于本页 setup），
  * 取一次就会漏掉"主题包声明了版式"这种情况。
+ *
+ * `pkg` 决定**在哪个包里找**：版式跟随主题包，同一个 `?view=compact` 在不同包里
+ * 指向不同实现，所以包变了就要重新解析（依赖 `packageId` 让 computed 自动重算）。
  */
-const viewId = computed(() => pickLoginViewId({ url: route.query.view, theme: themeStore.viewFor('login') }));
+const viewId = computed(() =>
+  pickLoginViewId({
+    url: route.query.view,
+    theme: themeStore.viewFor('login'),
+    pkg: themeStore.packageId
+  })
+);
 
 /**
  * 当前渲染的版式组件
  *
- * 默认就是基础版式：它是静态引入的，首帧直接正确（不会先白屏再闪一下）。
- * 变体是动态 chunk，加载完成后接管；路由守卫已提前预热（preloadLoginView），
- * 因此绝大多数情况下这一步在同一 tick 内完成 —— 用户看不到切换。
+ * 默认是**内置包的基础版式**：它由本文件静态引入，首帧直接正确（不会先白屏再闪一下）。
+ * 变体、以及非内置包的版式都是动态 chunk，加载完成后接管；路由守卫已提前预热
+ * （preloadLoginView），因此绝大多数情况下这一步在同一 tick 内完成 —— 用户看不到切换。
  *
  * `viewEpoch` 用于丢弃过期结果（版式 A→B→A 连续变化时先发出的 A 可能后返回）。
+ *
+ * ⚠️ 必须**同时**盯住主题包：版式只在当前包内查找，换了包但解析出的 id 字符串没变
+ *    （两边都是 `base`）时，渲染的组件其实换了一整套 —— 只盯 id 会漏掉这一整类切换。
  */
 const activeView = shallowRef<Component>(BaseLoginView);
 let viewEpoch = 0;
 watch(
-  viewId,
-  id => {
+  [viewId, () => themeStore.packageId],
+  ([id, pkg]) => {
     const epoch = ++viewEpoch;
-    if (id === loginViews.baseId) {
-      activeView.value = BaseLoginView;
-      return;
-    }
-    void loginViews.load(id).then(loaded => {
-      if (loaded && epoch === viewEpoch) activeView.value = markRaw(loaded);
+    void loginViews.load(id, pkg).then(loaded => {
+      if (epoch !== viewEpoch) return;
+      // null = 用静态引入的内置包基础版式（首屏零请求那条路径）
+      activeView.value = loaded ? markRaw(loaded) : BaseLoginView;
     });
   },
   { immediate: true }
@@ -345,7 +363,7 @@ function bindField(
 /**
  * 编译期契约自检
  *
- * 容器组装的 ctx 必须**结构上满足** `themes/app/login/types.ts` 声明的契约：
+ * 容器组装的 ctx 必须**结构上满足** `theme/views/login.ts` 声明的契约：
  * 少一个字段、类型对不上，都会在这行报错。这样"版式契约"才是真的有约束力，
  * 而不是一份会过期的文档。改契约后容器与所有版式会一起报错，不会悄悄跑偏。
  */
