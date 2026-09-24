@@ -5,7 +5,7 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
-import router from './router';
+import router, { setupThemeDeviceSync } from './router';
 import i18n from './i18n'; // 如果有国际化配置
 import './assets/styles/main.scss';
 // 移动端认证页（/m/login、/m/register）共享样式：两页视觉的单一来源
@@ -36,6 +36,15 @@ app.config.errorHandler = (err, _instance, info) => {
 app.use(pinia);
 app.use(router);
 app.use(i18n);
+
+// 把「当前路由属于哪种设备」同步给主题 store（决定注入哪一套配色的 token、
+// 版式在 `<包>/mobile/` 还是 `<包>/web/` 下查找）。
+//
+// ⚠️ 必须在 `app.use(pinia)` **之后**调用：本函数内部会 `useThemeStore()`，
+//    而 Pinia 的 activeInstance 由 `use()` 建立。早先把这件事写在
+//    `router.afterEach` 里，首次导航时 Pinia 尚未就绪、异常被 try/catch 吞掉，
+//    导致电脑端页面静默按手机端配色渲染（详见 `router/index.ts` 的实现注释）。
+setupThemeDeviceSync(router);
 
 // 3. 预发 H5 签名 Token（拿 _m_h5_tk cookie，后续请求拦截器才能算签名）
 // 未登录场景（QR 生成等公开端点）也需要签名防爬，cookie 预取后所有请求都能签名

@@ -55,7 +55,7 @@ import { useThemeStore } from '@/stores/theme';
  * 是运行时才知道的（URL / 后端下发 / localStorage）。运行时的那份判定在
  * `forgotPasswordViews.builtinPackage`，两者必须是同一个包。
  */
-import BaseForgotPasswordView from '@/theme/themes/default/forgot-password/index.vue';
+import BaseForgotPasswordView from '@/theme/themes/default/mobile/forgot-password/index.vue';
 import { forgotPasswordViews, pickForgotPasswordViewId } from '@/theme/views/forgot-password';
 import type {
   ForgotPasswordStage,
@@ -290,6 +290,16 @@ const goBack = () => {
    ========================================================================== */
 
 const themeStore = useThemeStore();
+
+/**
+ * 本容器的**设备身份**：文件位置即身份（`view/app/` 下都是移动端）。
+ *
+ * 取常量而不是运行时判定，是为了让"这个页面属于哪种设备"只有一个答案 ——
+ * 再跑一次视口判定就会出现"URL 说是移动端路由、视口却已变宽"这类自相矛盾的状态。
+ * 视口判定的口径仍然只在 `utils/device.ts` 有一份（路由分发用它）。
+ */
+const THEME_DEVICE = 'mobile' as const;
+
 /**
  * 用哪套版式：`?view=` > 主题包声明（theme/themes/<包>/index.ts 的 views['forgot-password']）
  * > VITE_FORGOT_PASSWORD_VIEW > base。
@@ -301,7 +311,8 @@ const viewId = computed(() =>
   pickForgotPasswordViewId({
     url: route.query.view,
     theme: themeStore.viewFor('forgot-password'),
-    pkg: themeStore.packageId
+    pkg: themeStore.packageId,
+    device: THEME_DEVICE
   })
 );
 
@@ -317,7 +328,7 @@ watch(
   [viewId, () => themeStore.packageId],
   ([id, pkg]) => {
     const epoch = ++viewEpoch;
-    void forgotPasswordViews.load(id, pkg).then(loaded => {
+    void forgotPasswordViews.load(id, pkg, THEME_DEVICE).then(loaded => {
       if (epoch !== viewEpoch) return;
       // null = 用静态引入的内置包基础版式（首屏零请求那条路径）
       activeView.value = loaded ? markRaw(loaded) : BaseForgotPasswordView;

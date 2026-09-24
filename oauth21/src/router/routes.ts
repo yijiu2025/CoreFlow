@@ -78,12 +78,12 @@ function desktopWhenWide(to: RouteLocationNormalized) {
  * 「宽视口跳转」或忘了预取，而这两种疏漏都只在真机/特定视口下才现形。
  */
 function withViewPreload(
-  preload: (source: { url?: unknown; theme?: unknown; pkg?: unknown }) => void
+  preload: (source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown }) => void
 ) {
   return (to: RouteLocationNormalized) => {
     const target = desktopWhenWide(to);
     if (target) return target;
-    preload({ url: to.query.view, pkg: readPackageId() });
+    preload({ url: to.query.view, pkg: readPackageId(), device: 'mobile' });
     return undefined;
   };
 }

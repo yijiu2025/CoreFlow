@@ -165,6 +165,7 @@ export interface ForgotPasswordViewProps {
  */
 import type { Component } from 'vue';
 import { createViewRegistry } from './registry';
+import { DEFAULT_THEME_DEVICE, THEME_DEVICES, type ThemeDevice } from '../index';
 
 /**
  * 各主题包里本页的版式实现
@@ -175,8 +176,12 @@ import { createViewRegistry } from './registry';
  * 一层目录，一个通配模式盖不住两种形态）。
  */
 const viewLoaders = {
-  ...import.meta.glob<{ default: Component }>('/src/theme/themes/*/forgot-password/index.vue'),
-  ...import.meta.glob<{ default: Component }>('/src/theme/themes/*/forgot-password/*/index.vue')
+  ...import.meta.glob<{ default: Component }>(
+    '/src/theme/themes/*/*/forgot-password/index.vue'
+  ),
+  ...import.meta.glob<{ default: Component }>(
+    '/src/theme/themes/*/*/forgot-password/*/index.vue'
+  )
 };
 
 /** 本页版式注册表 */
@@ -196,23 +201,38 @@ function asPackage(value: unknown): string {
 }
 
 /**
+ * 取当前**设备**；未传 / 传了不认识的取值都落默认设备。
+ *
+ * 这是第三段查找范围（包 × 设备 × 版式 id）。设备判定在容器侧完成
+ * （`utils/device.ts`），这里只负责"拿到一个合法值"，判断口径不重复实现。
+ */
+function asDevice(value: unknown): ThemeDevice {
+  return typeof value === 'string' && (THEME_DEVICES as readonly string[]).includes(value)
+    ? (value as ThemeDevice)
+    : DEFAULT_THEME_DEVICE;
+}
+
+/**
  * 按优先级挑出版式 id（永远返回可用 id：最差也是 `forgotPasswordViews.baseId`）
  *
  * @param source.url   `?view=` 的原始值（未校验，可以是数组/undefined 等任意形态）
  * @param source.theme 主题包声明的版式 id（见 `theme/themes/<包>/index.ts` 的 `views['forgot-password']`）
- * @param source.pkg   当前主题包 id（`getThemePackage(配色)`）——**决定查找范围**
+ * @param source.pkg   当前主题包 id（`getThemePackage(配色)`）——查找范围的包那一段
+ * @param source.device 当前设备（`'mobile' | 'web'`）——查找范围的设备那一段
+ *                     两者合起来决定"在哪个包里、哪种设备下"找版式
  */
 export function pickForgotPasswordViewId(
-  source: { url?: unknown; theme?: unknown; pkg?: unknown } = {}
+  source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown } = {}
 ): string {
   const pkg = asPackage(source.pkg);
+  const device = asDevice(source.device);
   const url = asText(source.url);
-  if (url) return forgotPasswordViews.resolve(url, pkg) ?? forgotPasswordViews.baseId;
+  if (url) return forgotPasswordViews.resolve(url, pkg, device) ?? forgotPasswordViews.baseId;
 
   const env = asText(ENV_VIEW);
   return (
-    forgotPasswordViews.resolve(source.theme, pkg) ??
-    (env ? forgotPasswordViews.resolve(env, pkg) : null) ??
+    forgotPasswordViews.resolve(source.theme, pkg, device) ??
+    (env ? forgotPasswordViews.resolve(env, pkg, device) : null) ??
     forgotPasswordViews.baseId
   );
 }
@@ -227,10 +247,13 @@ export function pickForgotPasswordViewId(
  * 「内置包 + base」是唯一无需预热的组合：那是容器静态引入的，零请求。
  */
 export function preloadForgotPasswordView(
-  source: { url?: unknown; theme?: unknown; pkg?: unknown } = {}
+  source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown } = {}
 ): void {
   const pkg = asPackage(source.pkg);
+  const device = asDevice(source.device);
   const id = pickForgotPasswordViewId(source);
-  if (id === forgotPasswordViews.baseId && pkg === forgotPasswordViews.builtinPackage) return;
-  void forgotPasswordViews.load(id, pkg);
+  // 内置包 + 默认设备 + base 是唯一零请求组合：容器静态引入的那份
+  if (id === forgotPasswordViews.baseId && pkg === forgotPasswordViews.builtinPackage && device === DEFAULT_THEME_DEVICE)
+    return;
+  void forgotPasswordViews.load(id, pkg, device);
 }

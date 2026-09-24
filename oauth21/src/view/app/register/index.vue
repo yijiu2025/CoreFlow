@@ -61,7 +61,7 @@ import { useThemeStore } from '@/stores/theme';
  * `registerViews.builtinPackage`，两者必须是同一个包 —— 改了 `theme/index.ts` 的
  * `DEFAULT_THEME_PACKAGE` 就要同步改这里，守卫会盯住这一点。
  */
-import BaseRegisterView from '@/theme/themes/default/register/index.vue';
+import BaseRegisterView from '@/theme/themes/default/mobile/register/index.vue';
 import { pickRegisterViewId, registerViews } from '@/theme/views/register';
 import type { RegisterDirection, RegisterTranslate, RegisterViewContext } from '@/theme/views/register';
 import type { Component, Ref } from 'vue';
@@ -277,6 +277,16 @@ const handleRegister = handleSubmit(async data => {
    ========================================================================== */
 
 const themeStore = useThemeStore();
+
+/**
+ * 本容器的**设备身份**：文件位置即身份（`view/app/` 下都是移动端）。
+ *
+ * 取常量而不是运行时判定，是为了让"这个页面属于哪种设备"只有一个答案 ——
+ * 再跑一次视口判定就会出现"URL 说是移动端路由、视口却已变宽"这类自相矛盾的状态。
+ * 视口判定的口径仍然只在 `utils/device.ts` 有一份（路由分发用它）。
+ */
+const THEME_DEVICE = 'mobile' as const;
+
 /**
  * 用哪套版式：`?view=` > 主题包声明（theme/themes/<包>/index.ts 的 views.register）
  * > VITE_REGISTER_VIEW > base。解析细节与安全边界见 registry.ts。
@@ -292,7 +302,8 @@ const viewId = computed(() =>
   pickRegisterViewId({
     url: route.query.view,
     theme: themeStore.viewFor('register'),
-    pkg: themeStore.packageId
+    pkg: themeStore.packageId,
+    device: THEME_DEVICE
   })
 );
 
@@ -316,7 +327,7 @@ watch(
   [viewId, () => themeStore.packageId],
   ([id, pkg]) => {
     const epoch = ++viewEpoch;
-    void registerViews.load(id, pkg).then(loaded => {
+    void registerViews.load(id, pkg, THEME_DEVICE).then(loaded => {
       if (epoch !== viewEpoch) return;
       // null = 用静态引入的内置包基础版式（首屏零请求那条路径）
       activeView.value = loaded ? markRaw(loaded) : BaseRegisterView;
