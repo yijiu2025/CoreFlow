@@ -3,7 +3,8 @@
  * 主题 / 版式调试面板
  *
  * 触发：URL 带 `?debug=theme`。不带该参数时**整体不渲染** —— 零外观影响、零额外请求，
- * 等同于这段代码不存在。
+ * 等同于这段代码不存在。宿主（posecraft）在拼 iframe URL 时会透传这个参数
+ * （只放行 `theme` 这一个白名单值），所以弹窗里也能开。
  *
  * === 为什么不限定只在开发构建里出现 ===
  * 真机上没有 DevTools（本项目的反复痛点）。线上排查「某个租户看到的颜色不对」时，
@@ -11,21 +12,44 @@
  * 色值 —— 它们本来就在前端产物里，不构成信息泄露。
  *
  * === 样式刻意不跟随主题 ===
- * 面板是拿来做**对比**的，如果自己也跟着换色，就没法当参照物。所以固定用深色外观，
+ * 面板是拿来做**对比**的，如果自己也跟着换色，就没法当参照物。所以固定用深色外观、
+ * 且**完全不透明**（半透明会让页面文字透上来叠字，实测很难读），
  * 也不复用 `mauth-*` 类（那是移动端认证页的样式单一来源，不该被开发工具污染）。
  *
- * === 配色区为什么是「一格一色卡」而不是列表 ===
- * 「黑白」在实现上只是一套普通配色（`colors/mono/`），不是"默认档"——
- * 早先的列表式布局容易让人把它读成"默认 + 可选皮肤"两层结构。改成并列色卡后，
- * 黑白 / 海蓝 / 天青 在视觉上就是**同一层的三个互斥选项**，点哪个切哪个，
- * 与 `?theme=<id>` 的语义一一对应。色卡用 `preview.primary/accent` 上色，
- * 与真实渲染取的是同一份 meta（不是另写一套色值）。
+ * === 只控制**当前页面**（2026-09-24 重构）===
+ * 面板**只管当前这一页**的两件事：
+ *   • 版式 —— 当前页可选哪几套（`?view=`）
+ *   • 配色 —— **当前生效的那套版式**支持哪几种颜色（`?theme=`）
  *
- * === 为什么明暗挂在色卡上 ===
- * 明暗（mode）与配色是**正交**的两个维度，但界面上分成两块时，
- * 用户看不到"这套配色在深色下是什么样"这个信息 —— 而它恰恰是挑配色时最需要的。
- * 所以每张色卡画两格采样（浅 / 深），点格子直接切到那个组合。
- * 「跟随系统」不属于任何一套配色，单独放在下面一行。
+ * 早先的版本把所有页面 × 所有版式 × 所有配色全列出来，还能跨页跳转 —— 那是**调试器**
+ * 的思路，不是使用者的。实际要的只有"我现在这一页，换个版式看看 / 换个颜色看看"。
+ * 跨页跳转尤其有害：它会带着授权 query（`client_id` 等）跳到另一条路由，在宿主弹窗里
+ * 把用户从登录流程中带跑。
+ *
+ * === 结构 ===
+ * ```
+ * ┌ 版式 ────────────────────┐   ← 当前页的可选版式，点即切
+ * ├ 颜色 ────────────────────┤   ← **当前版式**支持的颜色（切版式后这份清单会变）
+ * ├ 明暗 ────────────────────┤   ← 浅色 / 深色 / 跟随系统（与颜色正交）
+ * └ 恢复默认 ────────────────┘
+ * ```
+ *
+ * === 🔴 颜色与明暗是**两个正交维度**（2026-09-25 改）===
+ * 早先这里有一张 `COLOR_MODE` 映射：点「黑」顺带把明暗设成 dark、点「白」设 light
+ * —— 因为当时黑白是零 token 的，只能靠明暗档呈现深浅底。那造成两个问题
+ * （用户实测后指出）：
+ *   • **不等权**：黑白能改明暗、蓝青不能 →「先点黑再点蓝」拿到的是 blue 的**深色档**，
+ *     用户看到"选了蓝但底色还是黑的"；
+ *   • **命名会崩**：将来按"色彩搭配"给颜色命名时，明暗开关语义塞不进颜色里。
+ *
+ * 现在**每套配色自带底色**（各 `colors/<色>/index.ts` 里声明 `--mauth-canvas` 等），
+ * 所以：
+ *   • 点颜色 = 纯换一套配色，**不碰明暗**；
+ *   • 明暗只由「明暗」那一行控制；
+ *   • 黑 / 白 / 蓝 / 青 / 彩 是**完全并列的五个选项**，谁也不兼职开关。
+ *
+ * 直接的收益：`先黑后蓝` ≡ `先白后蓝` ≡ `直接点蓝`（三者底色完全一致），
+ * 「蓝色」也就没有"白蓝 / 黑蓝"之分 —— 底色由蓝色自己决定。
  *
  * @author yijiu2025
  * @since 2026-09-23
@@ -34,15 +58,15 @@ import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useThemeStore } from '@/stores/theme';
 import {
-  DEFAULT_THEME_DEVICE,
-  getDefaultThemeId,
-  listThemeGroups,
+  BASE_VIEW_ID,
+  listColorsOf,
+  listColorViews,
   THEME_DEVICES,
   type ThemeDevice
 } from '@/theme';
-import { pageFromPath, listPageViews, viewsForPage } from '@/theme/views/pages';
-import type { ViewRegistry } from '@/theme/views/registry';
-import { MODE_CYCLE, MODE_LABELS } from '@/theme/mode';
+import type { MauthThemeMeta } from '@/theme/types';
+import { pageFromPath, viewsForPage } from '@/theme/views/pages';
+import { MODE_LABELS } from '@/theme/mode';
 
 const route = useRoute();
 const router = useRouter();
@@ -77,6 +101,10 @@ const visible = computed(() => !dismissed.value && asText(route.query.debug) ===
 /** 设备中文名（面板上要让人一眼分清两端） */
 const DEVICE_LABELS: Record<ThemeDevice, string> = { mobile: '手机端', web: '电脑端' };
 
+/* ============================================================================
+   当前页 / 当前设备 / 当前版式
+   ========================================================================== */
+
 /** 当前路由对应的页面名（该页未接入版式机制时为 undefined） */
 const page = computed(() => pageFromPath(route.path));
 const pageViews = computed(() => viewsForPage(page.value));
@@ -93,64 +121,23 @@ const deviceOverride = ref<ThemeDevice | null>(null);
 /** 当前生效设备：面板覆盖优先，否则用路由判定的 */
 const device = computed(() => deviceOverride.value ?? themeStore.activeDevice);
 
-/** 配色按「主题包 + 当前设备」分组展示 —— 面板要能看出"包 → 设备 → 配色"这三段 */
-const themeGroups = computed(() => listThemeGroups(device.value));
-
-/** 当前设备下的默认配色 id（"恢复默认"与"该端没这套配色时回落"都是它） */
-const deviceDefaultThemeId = computed(
-  () => getDefaultThemeId(device.value) ?? getDefaultThemeId(DEFAULT_THEME_DEVICE) ?? themeStore.themeId
-);
+/** 当前生效页面 */
+const activePage = computed(() => page.value ?? themeStore.activePage);
 
 /**
- * 当前**生效**的配色 id（按当前设备校正过的）
- *
- * 不能直接用 `themeStore.themeId`：它是"上次选的那套"，可能属于另一端
- * （在手机端选了 ocean 再切到电脑端看，themeId 仍是 ocean，但实际渲染已回落到 mono）。
- * 色卡高亮必须跟"真正在渲染的那套"走，否则面板会指着一套没生效的配色说"当前"。
- */
-const activeThemeId = computed(() => themeStore.themeRecordFor(device.value).meta.id);
-
-/** 当前配色所属的主题包 —— 版式只在包内查找，所以版式列表要跟着它走 */
-const activePkg = computed(() => themeStore.packageId);
-
-/**
- * 全部已接入版式机制的页面，各自在「当前包 × 当前设备」下的版式清单
- *
- * 版式是**每页一套**的（登录页只有 base，注册页才有 compact），所以面板要按页列出
- * 全部可选值 —— 只列当前页的话，想对比就得手动跳路由，而弹窗里的路由不由使用者控制。
- * 当前页用 `isCurrent` 标出来，第一次看到面板的人才知道"这堆按钮里哪些是这一页的"。
- *
- * 保留 `registry` 与 `page`：切版式时要拿 `registry.baseId` 判断"是不是基础版式"
- * （是的话把 `view` 参数删掉而不是写成 `view=base`），只传个 id 数组是不够的。
- */
-interface LayoutGroup {
-  page: string;
-  isCurrent: boolean;
-  ids: string[];
-  registry: ViewRegistry;
-}
-
-const layoutGroups = computed<LayoutGroup[]>(() =>
-  listPageViews().map(item => ({
-    page: item.page,
-    isCurrent: item.page === page.value,
-    ids: [item.registry.baseId, ...item.registry.list(activePkg.value, device.value)],
-    registry: item.registry
-  }))
-);
-
-/**
- * 当前生效的版式 id（近似值）
+ * 当前生效的版式 id
  *
  * 与容器里的 `pick*ViewId` 同优先级：URL 显式值 > 声明 > base。
  * ⚠️ 只做展示不做决策（真正的判定在各页的 `pick*ViewId` 里），但**查找范围必须与容器一致**：
- *    版式跟随主题包与设备，所以要在"当前包 × 当前设备"内解析 —— 否则高亮会指向一个
- *    这里根本不存在的 id，`?view=typo` 时容器其实渲染的是 base，面板却高亮 typo。
+ *    版式跟随主题包与设备，所以要在"当前包 × 当前设备"内解析。
+ *
+ * ⚠️ 必须定义在 `viewOptions` **之前**：后者在它的求值里读本值，
+ *    顺序颠倒会在 computed 首次求值时踩 TDZ（现象是面板整个不渲染）。
  */
-const activeView = computed(() => {
+const activeViewId = computed(() => {
   const registry = pageViews.value?.registry;
-  if (!registry) return 'base';
-  const pkg = activePkg.value;
+  if (!registry) return BASE_VIEW_ID;
+  const pkg = themeStore.packageId;
   const dev = device.value;
   const fromUrl = asText(route.query.view);
   if (fromUrl) return registry.resolve(fromUrl, pkg, dev) ?? registry.baseId;
@@ -159,15 +146,41 @@ const activeView = computed(() => {
 });
 
 /**
- * 色卡里「浅色 / 深色」两格的底色
+ * 当前页的**可选版式**（当前包 × 当前设备内，基础版式在最前）
  *
- * 用 `preview` 的主色**混出**一个浅底与深底，而不是去读每套配色的真实 token：
- *   • 真实 token 要等 `theme.scss` 惰性 chunk 到货才有，面板不该为画预览去拉它；
- *   • `preview` 本来就是这个用途（见 `MauthThemeMeta.preview` 注释）。
- *
- * 混白/混黑的系数是手调的：保证 4 套配色下"浅格看得清、深格也看得清"，
- * 同时两格对比明显到一眼能分辨。取不到 `preview` 时给中性灰兜底。
+ * 该页没接入版式机制时返回空数组 —— 面板上只显示颜色区，不显示空的版式行。
  */
+const viewOptions = computed<string[]>(() => {
+  const registry = pageViews.value?.registry;
+  const p = page.value;
+  if (!registry || !p) return [];
+  const variants = registry.list(themeStore.packageId, device.value);
+  const ids = [registry.baseId, ...variants];
+  // 当前生效的版式也一定列出来（即使该范围内没扫到它，例如写了个未知 id）
+  if (!ids.includes(activeViewId.value)) ids.push(activeViewId.value);
+  return ids;
+});
+
+/**
+ * **当前版式**支持的颜色（这是面板主体）
+ *
+ * 直接问注册表「这个页面的这个版式下挂了哪几套配色」，所以**切版式后这份清单会变**
+ * —— 这正是"每个版式各自可选的颜色不同"的落点。
+ */
+const colors = computed<MauthThemeMeta[]>(() => {
+  const p = activePage.value;
+  if (!p) return [];
+  return listColorsOf(device.value, p, activeViewId.value);
+});
+
+/** 该页在该设备下挂了配色的版式清单（用于提示"这页还有哪些版式有颜色"） */
+const viewsWithColors = computed<string[]>(() =>
+  activePage.value ? listColorViews(device.value, activePage.value) : []
+);
+
+/* ============================================================================
+   色卡渲染
+   ========================================================================== */
 
 /** 把 #rrggbb 解析成三元组；非法值返回 null */
 function parseHex(hex: string): [number, number, number] | null {
@@ -177,104 +190,97 @@ function parseHex(hex: string): [number, number, number] | null {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-/** 与 target(0~255) 按 ratio(0~1) 混合 */
-function mix(rgb: [number, number, number], target: number, ratio: number): string {
-  const ch = rgb.map(v => Math.round(v + (target - v) * ratio));
-  return `rgb(${ch[0]} ${ch[1]} ${ch[2]})`;
+/** 色卡底色：直接取 `preview.primary`；取不到时给中性灰兜底（不透明，避免穿帮） */
+function swatchBg(item: MauthThemeMeta): string {
+  return item.preview?.primary ?? 'rgb(51 65 85)';
 }
 
-/** 浅色档底色：主色混大量白 */
-function lightSurfaceOf(item: { preview?: { primary: string } }): string {
+/** 色块上的文字色：按底色亮度选黑/白，保证任何色卡上都读得清 */
+function swatchFg(item: MauthThemeMeta): string {
   const rgb = item.preview ? parseHex(item.preview.primary) : null;
-  return rgb ? mix(rgb, 255, 0.88) : 'rgb(241 245 249)';
+  if (!rgb) return 'rgb(226 232 240)';
+  // 相对亮度（sRGB 感知近似：0.299R + 0.587G + 0.114B）
+  const lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+  return lum > 150 ? 'rgb(15 23 42)' : 'rgb(248 250 252)';
 }
 
-/** 深色档底色：主色混大量黑 */
-function darkSurfaceOf(item: { preview?: { primary: string } }): string {
-  const rgb = item.preview ? parseHex(item.preview.primary) : null;
-  return rgb ? mix(rgb, 0, 0.72) : 'rgb(30 41 59)';
-}
+/* ============================================================================
+   当前状态
+   ========================================================================== */
 
-/** 头部展示的当前配色名（列表里查不到时退回 id） */
-const currentThemeName = computed(
-  () => themeStore.themes.find(item => item.id === activeThemeId.value)?.name ?? activeThemeId.value
+/** 当前**生效**的配色 id（按当前设备/页面/版式校正过的） */
+const activeThemeId = computed(
+  () => themeStore.themeRecordFor(device.value, activePage.value, activeViewId.value).meta.id
 );
 
-/** 是否跟随系统（明暗）—— 色卡高亮时要留出"未指定具体档"的状态 */
-const isSystemMode = computed(() => themeStore.mode === 'system');
+/** 头部展示的当前配色名（查不到时退回 id） */
+const currentColorName = computed(
+  () => colors.value.find(c => c.id === activeThemeId.value)?.name ?? activeThemeId.value
+);
+
+/** 面板头部状态串 */
+const headerState = computed(
+  () => `${currentColorName.value} · ${MODE_LABELS[themeStore.mode]}`
+);
+
+/* ============================================================================
+   动作（**只动当前页**，不跨页跳转）
+   ========================================================================== */
 
 /**
- * 选配色
+ * 把当前 query 复制一份（保留 `client_id` 等授权上下文）
  *
- * 点色卡 = 选一套配色。若当前是「跟随系统」，这里**只换配色、不动明暗**：
- * 用户是在挑颜色，不该顺手把他的明暗偏好从"跟随系统"改成写死的某一档。
+ * 丢了 `client_id` 会断授权流，所以任何 URL 改动都只增删目标那一项。
  */
-function pickTheme(id: string): void {
-  themeStore.setTheme(id);
+function cloneQuery(): Record<string, string | string[]> {
+  const query: Record<string, string | string[]> = {};
+  for (const [k, v] of Object.entries(route.query)) {
+    if (typeof v === 'string') query[k] = v;
+    else if (Array.isArray(v)) query[k] = v.filter((x): x is string => typeof x === 'string');
+  }
+  return query;
 }
 
 /**
- * 选「配色 + 明暗」的具体组合（点色卡里的浅/深格子）
+ * 切换版式（**只改 URL 的 `view`，path 不动**）
  *
- * 先设配色再设明暗：两个 store action 各自落盘，顺序不影响最终结果，
- * 但先配色能保证中途重渲染时看到的是新配色的浅色/深色，不会闪一下旧色。
- */
-function pickThemeWithMode(id: string, mode: 'light' | 'dark'): void {
-  themeStore.setTheme(id);
-  themeStore.setMode(mode);
-}
-
-/**
- * 切换**当前页**的版式：改 URL 的 `?view=`，其余 query 原样保留
- *
- * 丢了 `client_id` 会断授权流，所以只增删 `view` 一项。
- * 选中的是基础版式时把参数**删掉**而不是写成 `view=base`：URL 干净，
+ * 选基本版式时把参数**删掉**而不是写成 `view=base`：URL 干净，
  * 也与容器「无参数即基础版式」的判定一致。
  */
 function pickView(id: string): void {
-  const query = { ...route.query };
-  if (id === pageViews.value?.registry.baseId) delete query.view;
+  const query = cloneQuery();
+  if (id === (pageViews.value?.registry.baseId ?? BASE_VIEW_ID)) delete query.view;
   else query.view = id;
   void router.replace({ query });
 }
 
 /**
- * 从任意页面的版式清单里挑一个 —— 支持**跨页面**切换
+ * 选颜色
  *
- * 为什么要允许切到别的页面：版式是「每个页面各自一套」的，登录页只有 base、
- * 注册页才有 compact。只列当前页的话，想对比两页的版式就得先在宿主里手动跳路由，
- * 而弹窗场景下路由不在我们手里（分发器按设备判定）。
+ * **只换色，不碰明暗**（2026-09-25 改）。
  *
- * 做法：沿用当前 query（保住 client_id / appName 等授权上下文），只把 path 换成
- * 目标页面对应的路由，并带上 `view`。目标 path 由「当前是不是移动端路由」决定：
- * 面板在 `/m/*` 上就继续用 `/m/*`，否则用桌面分发器那一套 —— 保持设备语义不变。
+ * 早先这里还有一套 `COLOR_MODE`：点「黑」顺带把明暗设成 dark、点「白」设成 light，
+ * 因为当时黑白是**零 token** 的、只能靠明暗档来呈现深浅底。那条联动有两个毛病
+ * （用户实测后指出）：
+ *   ① **不等权** —— 黑白能改明暗、蓝青不能，于是「先点黑再点蓝」会拿到 blue 的
+ *      **深色档**，用户看到的是"选了蓝但底色还是黑的"；
+ *   ② **命名会崩** —— 将来按"色彩搭配"给颜色命名时，明暗开关语义塞不进颜色里。
+ *
+ * 现在每套配色**自带底色**（见各 `colors/<色>/index.ts` 的 `--mauth-canvas` 等），
+ * 所以选颜色是纯粹的"换一套配色"；明暗由下面那一行单独控制 —— 两者正交。
+ *
+ * **不改 URL**：配色是运行时状态（store + localStorage），与 `?theme=` 是两套入口，
+ * 面板改的是当前会话的观感，不该往 URL 上写。
  */
-function pickViewOnPage(target: LayoutGroup, id: string): void {
-  const query: Record<string, string | string[]> = {};
-  for (const [k, v] of Object.entries(route.query)) {
-    // 只搬字符串 / 字符串数组：query 里理论上也可能是 null，丢掉而不是硬塞给 router
-    if (typeof v === 'string') query[k] = v;
-    else if (Array.isArray(v)) query[k] = v.filter((x): x is string => typeof x === 'string');
-  }
-  if (id === target.registry.baseId) delete query.view;
-  else query.view = id;
-
-  // 当前在 /m/xxx 上 → 目标也用 /m/xxx；否则用桌面路由（分发器会按设备再决定渲染谁）
-  const onMobileRoute = /^\/m\//.test(route.path);
-  const path = onMobileRoute ? `/m/${target.page}` : `/${target.page}`;
-
-  void router.replace({ path, query });
+function pickColor(id: string): void {
+  themeStore.setTheme(id);
 }
 
-/**
- * 一键回默认：清掉落盘的配色与明暗偏好
- *
- * 配色回到**当前设备的默认档**（通常是 mono 黑白）而不是某个写死的 id ——
- * 每端的默认配色由目录顺序决定，面板不该替它做主。
- */
+/** 一键回默认：清掉落盘的配色与明暗偏好 */
 function resetAll(): void {
-  themeStore.setTheme(deviceDefaultThemeId.value);
   themeStore.setMode('system');
+  const first = colors.value[0];
+  if (first) themeStore.setTheme(first.id);
 }
 </script>
 
@@ -282,19 +288,18 @@ function resetAll(): void {
   <div
     v-if="visible"
     data-mauth-debug="theme"
-    class="fixed bottom-3 right-3 z-[9999] flex max-h-[calc(100vh-24px)] w-[268px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900/95 text-slate-200 shadow-xl"
+    class="fixed bottom-3 right-3 z-[9999] flex max-h-[calc(100vh-24px)] w-[264px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 text-slate-200 shadow-2xl ring-1 ring-black/50"
   >
-    <div class="flex items-center gap-1 border-b border-slate-700/70 px-3 py-2">
+    <!-- 头部：标题 + 当前状态 + 折叠/关闭 -->
+    <div class="flex items-center gap-1 border-b border-slate-700/70 px-2.5 py-2">
       <button
         type="button"
-        class="flex min-w-0 flex-1 items-center gap-2 text-left"
+        class="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         @click="collapsed = !collapsed"
       >
         <span class="shrink-0 text-slate-400">{{ collapsed ? '▸' : '▾' }}</span>
         <span class="shrink-0 text-[12px] font-medium text-slate-100">主题调试</span>
-        <span class="truncate text-[11px] text-slate-400">
-          {{ currentThemeName }} · {{ MODE_LABELS[themeStore.mode] }}
-        </span>
+        <span class="truncate text-[11px] text-slate-400">{{ headerState }}</span>
       </button>
       <button
         type="button"
@@ -306,20 +311,15 @@ function resetAll(): void {
       </button>
     </div>
 
-    <div v-if="!collapsed" class="flex-1 overflow-y-auto px-3 pb-3">
-      <!-- 配色：一格一张色卡，黑白与其它配色并列 -->
-      <div class="mt-3 mb-2 flex items-baseline justify-between">
-        <p class="text-[11px] font-medium text-slate-400">配色</p>
-        <!-- 设备切换：在同一个屏幕上预览另一端的配色（不必真去开移动端路由） -->
+    <div v-if="!collapsed" class="flex-1 overflow-y-auto px-2.5 pb-2.5">
+      <!-- 设备：同一台电脑上预览另一端（不必真去开移动端路由） -->
+      <div class="mt-2.5 mb-1.5 flex items-center justify-between">
+        <span class="text-[11px] text-slate-500">设备</span>
         <div class="flex items-center gap-0.5">
           <button
             type="button"
             class="rounded px-1.5 py-0.5 text-[10px] transition-colors"
-            :class="
-              deviceOverride === null
-                ? 'bg-sky-400/20 text-slate-100'
-                : 'text-slate-500 hover:text-slate-300'
-            "
+            :class="deviceOverride === null ? 'bg-sky-400/20 text-slate-100' : 'text-slate-500 hover:text-slate-300'"
             data-device="auto"
             :title="`跟随路由（当前 ${DEVICE_LABELS[themeStore.activeDevice]}）`"
             @click="deviceOverride = null"
@@ -331,11 +331,7 @@ function resetAll(): void {
             :key="d"
             type="button"
             class="rounded px-1.5 py-0.5 text-[10px] transition-colors"
-            :class="
-              deviceOverride === d
-                ? 'bg-sky-400/20 text-slate-100'
-                : 'text-slate-500 hover:text-slate-300'
-            "
+            :class="deviceOverride === d ? 'bg-sky-400/20 text-slate-100' : 'text-slate-500 hover:text-slate-300'"
             :data-device="d"
             @click="deviceOverride = d"
           >
@@ -344,138 +340,98 @@ function resetAll(): void {
         </div>
       </div>
 
-      <template v-for="group in themeGroups" :key="group.pkg">
-        <!-- 只有一个包时不必显示分组标题（当前就是这种情况），多包才需要区分 -->
-        <p v-if="themeGroups.length > 1" class="mt-2 mb-1 text-[11px] text-slate-500" :data-pkg="group.pkg">
-          包 · {{ group.pkg }}{{ group.pkg === activePkg ? '（当前）' : '' }}
-        </p>
-        <ul class="space-y-1.5">
-          <li v-for="item in group.themes" :key="item.id">
-            <div
-              class="rounded-lg border p-1.5 transition-colors"
-              :class="
-                activeThemeId === item.id
-                  ? 'border-sky-400/70 bg-sky-400/10'
-                  : 'border-slate-700/60 bg-slate-100/5 hover:bg-slate-100/10'
-              "
-              :data-theme-id="item.id"
-            >
-              <!-- 第一行：点名字 = 套用这套配色（保持当前明暗档） -->
-              <button
-                type="button"
-                class="flex w-full items-center gap-2 text-left"
-                :data-theme-pick="item.id"
-                @click="pickTheme(item.id)"
-              >
-                <span class="min-w-0 flex-1 truncate text-[12px] text-slate-100">{{ item.name }}</span>
-                <code class="shrink-0 text-[10px] text-slate-500">{{ item.id }}</code>
-                <span
-                  v-if="activeThemeId === item.id"
-                  class="shrink-0 text-[10px] text-sky-300"
-                  :data-theme-active="item.id"
-                >
-                  使用中
-                </span>
-              </button>
-
-              <!-- 第二行：两格明暗采样，点哪格切到「该配色 + 该明暗」 -->
-              <div class="mt-1.5 grid grid-cols-2 gap-1">
-                <button
-                  v-for="m in (['light', 'dark'] as const)"
-                  :key="m"
-                  type="button"
-                  class="flex items-center gap-1.5 rounded-md border px-1.5 py-1 text-[10px] transition-colors"
-                  :class="[
-                    m === 'light' ? 'border-slate-600/70' : 'border-slate-600/70',
-                    item.id === activeThemeId && themeStore.mode === m
-                      ? 'ring-1 ring-sky-400/80'
-                      : 'hover:border-slate-400/70'
-                  ]"
-                  :style="{ background: m === 'light' ? lightSurfaceOf(item) : darkSurfaceOf(item) }"
-                  :data-theme-mode="`${item.id}:${m}`"
-                  :title="`切到「${item.name} · ${MODE_LABELS[m]}」`"
-                  @click="pickThemeWithMode(item.id, m)"
-                >
-                  <span
-                    class="h-2.5 w-2.5 shrink-0 rounded-full border"
-                    :style="{
-                      background: item.preview?.primary ?? 'transparent',
-                      borderColor: item.preview?.accent ?? 'transparent'
-                    }"
-                  />
-                  <span :class="m === 'light' ? 'text-slate-800' : 'text-slate-100'">
-                    {{ MODE_LABELS[m] }}
-                  </span>
-                </button>
-              </div>
-            </div>
-          </li>
-        </ul>
-      </template>
-
-      <!-- 跟随系统：不属于任何一套配色，单独一行 -->
-      <div class="mt-2 flex items-center justify-between rounded-lg border border-slate-700/60 px-1.5 py-1">
-        <span class="text-[11px] text-slate-400">明暗跟随系统</span>
-        <button
-          type="button"
-          class="rounded-md border px-2 py-0.5 text-[10px] transition-colors"
-          :class="
-            isSystemMode
-              ? 'border-sky-400/70 bg-sky-400/15 text-slate-100'
-              : 'border-slate-600 text-slate-400 hover:bg-slate-100/10'
-          "
-          data-mode="system"
-          @click="themeStore.setMode(MODE_CYCLE[0])"
+      <!-- ① 版式（当前页） -->
+      <div v-if="viewOptions.length" class="mt-2">
+        <div class="mb-1 flex items-baseline justify-between">
+          <span class="text-[11px] text-slate-400">版式</span>
+          <span class="truncate pl-2 text-[10px] text-slate-500">
+            {{ activePage }}{{ viewOptions.length > 1 ? '' : '（暂无变体）' }}
+          </span>
+        </div>
+        <div class="flex flex-wrap gap-1">
+          <button
+            v-for="id in viewOptions"
+            :key="id"
+            type="button"
+            class="rounded-full border px-2 py-0.5 text-[11px] transition-colors"
+            :class="
+              activeViewId === id
+                ? 'border-sky-400/70 bg-sky-400/15 text-slate-100'
+                : 'border-slate-700 text-slate-400 hover:bg-slate-100/10'
+            "
+            :data-view-id="id"
+            :title="`切到版式 ${id}`"
+            @click="pickView(id)"
+          >
+            {{ id }}
+          </button>
+        </div>
+        <!-- 提示：这页还有别的版式挂了颜色（切过去颜色清单会变） -->
+        <p
+          v-if="viewsWithColors.length && !viewsWithColors.includes(activeViewId)"
+          class="mt-1 text-[10px] leading-snug text-slate-500"
         >
-          {{ isSystemMode ? '已启用' : '启用' }}
-        </button>
+          另有版式 {{ viewsWithColors.filter(v => v !== activeViewId).join('、') }} 可选
+        </p>
       </div>
 
-      <!-- 版式：按页面并列列出，点即切换（含跨页跳转） -->
-      <div v-if="layoutGroups.length" class="mt-3">
-        <div class="mb-1.5 flex items-baseline justify-between">
-          <p class="text-[11px] font-medium text-slate-400">版式</p>
-          <p class="text-[11px] text-slate-500">包 {{ activePkg }} × {{ DEVICE_LABELS[device] }}</p>
+      <!-- ② 颜色（**当前版式**支持的那几种） -->
+      <div class="mt-2.5">
+        <div class="mb-1 flex items-baseline justify-between">
+          <span class="text-[11px] text-slate-400">颜色</span>
+          <span class="text-[10px] text-slate-500">
+            版式 {{ activeViewId }} · {{ colors.length }} 种
+          </span>
         </div>
-        <div
-          v-for="group in layoutGroups"
-          :key="group.page"
-          class="mb-1.5 rounded-lg border px-1.5 py-1.5"
-          :class="group.isCurrent ? 'border-sky-400/50 bg-sky-400/5' : 'border-slate-700/50 bg-slate-100/5'"
-          :data-view-page="group.page"
-        >
-          <div class="mb-1 flex items-center gap-1.5">
-            <span class="text-[11px] text-slate-300">{{ group.page }}</span>
-            <span v-if="group.isCurrent" class="text-[10px] text-sky-300" data-view-current="1">
-              当前页
+        <div v-if="colors.length" class="flex flex-wrap gap-1">
+          <button
+            v-for="c in colors"
+            :key="c.id"
+            type="button"
+            class="flex w-[46px] flex-col items-center gap-0.5 rounded-md border py-0.5 transition-colors"
+            :class="
+              activeThemeId === c.id
+                ? 'border-sky-400/80 ring-1 ring-sky-400/60'
+                : 'border-slate-700 hover:border-slate-500'
+            "
+            :data-color-pick="c.id"
+            :data-color-active="activeThemeId === c.id ? c.id : undefined"
+            :title="`${c.name}（${c.id}）`"
+            @click="pickColor(c.id)"
+          >
+            <span
+              class="flex h-[26px] w-[38px] items-center justify-center rounded text-[11px] font-medium"
+              :style="{ background: swatchBg(c), color: swatchFg(c) }"
+            >
+              {{ c.name }}
             </span>
-            <span v-if="group.ids.length === 1" class="text-[10px] text-slate-500">（暂无变体）</span>
-          </div>
-          <div class="flex flex-wrap gap-1">
-            <button
-              v-for="id in group.ids"
-              :key="id"
-              type="button"
-              class="rounded-full border px-2 py-0.5 text-[11px] transition-colors"
-              :class="
-                group.isCurrent && activeView === id
-                  ? 'border-sky-400/70 bg-sky-400/15 text-slate-100'
-                  : 'border-slate-700 text-slate-400 hover:bg-slate-100/10'
-              "
-              :data-view-id="`${group.page}:${id}`"
-              :title="group.isCurrent ? `切到版式 ${id}` : `跳到 ${group.page} 并用版式 ${id}`"
-              @click="group.isCurrent ? pickView(id) : pickViewOnPage(group, id)"
-            >
-              {{ id }}
-            </button>
-          </div>
+            <span class="max-w-[42px] truncate text-[9px] leading-none text-slate-500">{{ c.id }}</span>
+          </button>
         </div>
-        <p class="mt-1 text-[11px] leading-snug text-slate-500">
-          点其它页面的版式会连页面一起切过去（query 原样保留）
+        <p v-else class="text-[10px] leading-snug text-slate-500">
+          这个版式还没有配色目录（`themes/…/{{ activePage }}/…/colors/`）
         </p>
       </div>
 
-      <div class="mt-3 flex items-center justify-between border-t border-slate-700/70 pt-2">
+      <!-- ③ 明暗（黑/白会自动带档，这里管其余颜色） -->
+      <div class="mt-2.5 flex items-center justify-between rounded-lg border border-slate-700/60 px-2 py-1">
+        <span class="text-[11px] text-slate-400">明暗</span>
+        <div class="flex items-center gap-0.5">
+          <button
+            v-for="m in (['system', 'light', 'dark'] as const)"
+            :key="m"
+            type="button"
+            class="rounded px-1.5 py-0.5 text-[10px] transition-colors"
+            :class="themeStore.mode === m ? 'bg-sky-400/20 text-slate-100' : 'text-slate-500 hover:text-slate-300'"
+            :data-mode="m"
+            @click="themeStore.setMode(m)"
+          >
+            {{ MODE_LABELS[m] }}
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-2.5 flex items-center justify-between border-t border-slate-700/70 pt-2">
         <button
           type="button"
           class="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-400 hover:bg-slate-100/10"

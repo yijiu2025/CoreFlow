@@ -40,7 +40,7 @@ import { useForm } from 'vee-validate';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { useI18n } from 'vue-i18n';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { computed, markRaw, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
@@ -306,6 +306,18 @@ const viewId = computed(() =>
     device: THEME_DEVICE
   })
 );
+
+/**
+ * 告诉 store「当前是哪一页、哪套版式」
+ *
+ * 🔴 配色挂在**版式**下（`themes/<包>/<设备>/<页面>/[<版式>/]colors/<颜色>/`），
+ *    所以"该注入哪套颜色的 token"必须知道这两个值 —— 不知道就会落到
+ *    `DEFAULT_THEME_PAGE` + `base`，表现为「页面里选的颜色不生效」。
+ *
+ * watch 而不是 setup 里取一次：版式可能在运行时变（`?view=` 或主题包声明），
+ * 变了就要让 store 重算 token。`immediate` 保证首帧之前就把值交出去。
+ */
+watch(viewId, id => themeStore.setActivePageView('register', id), { immediate: true });
 
 /**
  * 当前渲染的版式组件

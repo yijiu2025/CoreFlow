@@ -14,14 +14,23 @@
  *
  * === 分层与优先级（低 → 高）===
  *   1. SCSS 基线          :root / html.dark / 断点块
- *   2. 主题包 tokens      getThemeRecord(id).tokens
+ *   2. 主题包 tokens      getThemeRecord(...).tokens
  *   3. 外部覆写 tokens    后端下发 / 父应用同步
  * 第 2、3 层都写在 `documentElement` 的 inline style 上（优先级高于任何选择器），
  * 层间顺序靠**写入顺序**保证：先写主题包，再写外部覆写，同名后者胜。
  *
- * === 为什么注入要跟着明暗重算 ===
- * inline style 会盖过 `html.dark` 这一整块基线深色值，所以注入表必须按当前明暗
- * 取用：浅色只注入 light 档，深色注入 light ∪ dark。否则明暗切换后颜色不会变。
+ * === tokens 是**一组扁平值**，不分明暗档（2026-09-25 改）===
+ * 早先 `tokens` 是 `{ light, dark }` 两档，注入时按明暗取「light」或「light ∪ dark」。
+ * 用户 2026-09-25 明确要求取消这个分档：
+ *
+ *   > 没有深浅两档了，深和浅就是两种颜色配置。
+ *   > 蓝色没有白蓝和黑蓝之分，底色由蓝色自己选择设置。
+ *
+ * 于是 `tokens` 就是 `Record<string, string>` 一张表，**与明暗偏好完全无关**：
+ *   • 每套配色**自带完整底色**，选谁就是谁 —— 不会出现「选了黑再选蓝，底色还是黑」;
+ *   • 需要深色版品牌色？**另加一个颜色目录**（如 `navy`），而不是做"某配色的深色档";
+ *   • 明暗偏好仍然存在（`mode.ts`），但它只在**基线 SCSS** 那层生效，
+ *     不再参与配色 token 的选档 —— 两者彻底正交。
  *
  * @author yijiu2025
  */
@@ -97,16 +106,17 @@ export function isSafeTokenEntry(name: unknown, value: unknown): boolean {
   return VALUE_PATTERNS.some(re => re.test(v));
 }
 
-/** 按明暗分组的 token 覆写表（主题包与后端下发共用的数据形态） */
-export interface ThemeTokenOverrides {
-  light?: Record<string, string>;
-  dark?: Record<string, string>;
-}
+/**
+ * 一组扁平 token 覆写表（主题包与后端下发共用的数据形态）
+ *
+ * ⚠️ 不再分 `light` / `dark` 两档（2026-09-25 改）—— 见文件头说明。
+ *    键是 `--mauth-<角色>`，值是白名单内的取值。
+ */
+export type ThemeTokenOverrides = Record<string, string>;
 
 /** 校验结果：通过白名单的项 + 被拒绝的项（后者供调用方上报，便于发现配置写错） */
 export interface SanitizeResult {
-  light: Record<string, string>;
-  dark: Record<string, string>;
+  tokens: Record<string, string>;
   rejected: string[];
 }
 
@@ -126,26 +136,17 @@ export interface ThemeTokenLayers {
  * 被拒绝的条目会返回给调用方，便于上报告警。
  */
 export function sanitizeOverrides(input: ThemeTokenOverrides | null | undefined): SanitizeResult {
-  const result: SanitizeResult = { light: {}, dark: {}, rejected: [] };
+  const result: SanitizeResult = { tokens: {}, rejected: [] };
   if (!input || typeof input !== 'object') return result;
 
-  for (const level of ['light', 'dark'] as const) {
-    const table = input[level];
-    if (!table || typeof table !== 'object') continue;
-    for (const [name, value] of Object.entries(table)) {
-      if (!isSafeTokenEntry(name, value)) {
-        result.rejected.push(`${name}=${String(value).slice(0, 40)}`);
-        continue;
-      }
-      result[level][name] = value.trim();
+  for (const [name, value] of Object.entries(input)) {
+    if (!isSafeTokenEntry(name, value)) {
+      result.rejected.push(`${name}=${String(value).slice(0, 40)}`);
+      continue;
     }
+    result.tokens[name] = value.trim();
   }
   return result;
-}
-
-/** 按当前明暗取出一层实际生效的 token：浅色只取 light，深色取 light ∪ dark */
-function activeOf(sanitized: SanitizeResult, isDark: boolean): Record<string, string> {
-  return isDark ? { ...sanitized.light, ...sanitized.dark } : sanitized.light;
 }
 
 /** 清掉上一次注入的所有主题变量 */
@@ -158,35 +159,35 @@ export function clearThemeTokens(): void {
 /**
  * 应用分层 token（主题包 + 外部覆写）
  *
- * 每次调用都是「按当前明暗把两层重算一遍，再与上一轮的变量名做差集清理」：
- *   • 换配色/切明暗时不会残留上一轮的值（差集里被移除的会被 removeProperty）
+ * 每次调用都是「把两层重算一遍，再与上一轮的变量名做差集清理」：
+ *   • 换配色时不会残留上一轮的值（差集里被移除的会被 removeProperty）
  *   • 只动自己写过的变量名，不碰别人留在 html 上的 inline style
  *
  * 层内顺序：先 theme 后 external，同名后者胜 —— 这就是「后端覆写压过主题默认」。
  *
+ * ⚠️ 不再接收 `isDark` 参数（2026-09-25 改）：tokens 已是一组扁平值，
+ *    与明暗偏好无关。明暗只影响 SCSS 基线那层（`html.dark` 选择器），
+ *    由样式表自己处理，不需要经过这里。
+ *
  * @param layers  分层 token；两层都可以为 null（表示只用 SCSS 基线）
- * @param isDark  当前是否深色，决定各层取哪一档
  * @returns 被拒绝的条目（空数组表示全部合法）
  */
-export function applyThemeLayers(layers: ThemeTokenLayers, isDark: boolean): string[] {
+export function applyThemeLayers(layers: ThemeTokenLayers): string[] {
   const theme = sanitizeOverrides(layers.theme);
   const external = sanitizeOverrides(layers.external);
 
-  const themeActive = activeOf(theme, isDark);
-  const externalActive = activeOf(external, isDark);
-
   const root = document.documentElement;
-  const nextNames = new Set([...Object.keys(themeActive), ...Object.keys(externalActive)]);
+  const nextNames = new Set([...Object.keys(theme.tokens), ...Object.keys(external.tokens)]);
   for (const name of injectedNames) {
     if (!nextNames.has(name)) root.style.removeProperty(name);
   }
 
   const applied: string[] = [];
-  for (const [name, value] of Object.entries(themeActive)) {
+  for (const [name, value] of Object.entries(theme.tokens)) {
     root.style.setProperty(name, value);
     applied.push(name);
   }
-  for (const [name, value] of Object.entries(externalActive)) {
+  for (const [name, value] of Object.entries(external.tokens)) {
     root.style.setProperty(name, value);
     applied.push(name);
   }
@@ -199,11 +200,10 @@ export function applyThemeLayers(layers: ThemeTokenLayers, isDark: boolean): str
  * 只应用外部覆写（等价于 applyThemeLayers({ external })，保留给单层调用点）
  *
  * @param overrides 覆写表；传 null 表示撤销（回到主题包 / SCSS 基线）
- * @param isDark    当前是否深色，决定写哪一档
  * @returns 被拒绝的条目（空数组表示全部合法）
  */
-export function applyThemeTokens(overrides: ThemeTokenOverrides | null, isDark: boolean): string[] {
-  return applyThemeLayers({ external: overrides }, isDark);
+export function applyThemeTokens(overrides: ThemeTokenOverrides | null): string[] {
+  return applyThemeLayers({ external: overrides });
 }
 
 /** 当前已注入的变量名（供验收脚本与单测断言注入是否真的发生） */
