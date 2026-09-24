@@ -30,8 +30,8 @@
   核心一句 = **规范留白处不显式声明 = 把渲染交给内核**（`color-scheme` 初始 `normal`；根元素背景 `transparent` 时"渲染未定义"；`vh ≡ lvh`）。
   ⚠️ viewport meta **跨行或加实验键会让整条被内核丢弃**（小米/夸克实测）→ 退化成 980px 桌面布局。
 - 🔴 **多主题 / 多版式开发模式（强制）**（`docs/frontend/multi-theme.md`）：三个正交维度 = **token 基线 → 皮肤 `themes/<id>/` → 版式 `themes/app/<page>/<id>/`**；
-  **业务只在容器**（`view/app/<page>/index.vue`），版式只读 `ctx`、只调 `ctx.actions`；样式单一来源 `assets/styles/mobile-auth.scss`；
-  外部输入**一律过白名单**。oauth21 三页（login / register / forgot-password）已全部接入。
+  **目录名即 id**（覆盖包内 `meta.id`；坏目录**静默跳过**；`themes/app/` 为保留名、禁加 `index.ts`）；
+  🔴 **业务只在容器**（`view/app/<page>/index.vue`），版式只读 `ctx`、只调 `ctx.actions`；外部输入**一律过白名单**。oauth21 三页已全部接入。
 
 ## 2. 后端陷阱速查 → **details §12**（14 条整表已迁出）
 
@@ -42,15 +42,13 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
 
 ## 3. oauth21 移动端认证页 → **details §11**（细则/实测数据全在那里）
 
-- **样式单一来源** = `assets/styles/mobile-auth.scss`（`mauth-*`）。**基础版式与 `/m/*` 页不得自带 `<style>`**（变体可以，取值只许 `--mauth-*`）。
-  ⚠️ 移动端版式**刻意不限宽**（加 `max-width` 两侧露底色，用户明确要求满宽）。
-- **「业务容器 + 可换版式」**：`themes/app/<page>/{types.ts,registry.ts,base/,<变体>/}`；base 容器**静态引入**、变体 `import.meta.glob` 惰性 chunk；
-  优先级 `?view=` > 主题包 `views.<page>` > `VITE_<PAGE>_VIEW` > base，⚠️ **URL 显式非法值不回退**；契约 = `types.ts` 纯类型 + 容器 `assertXxxContract` 编译期自检；
-  浮层由**容器**渲染；**新增变体目录要重启 dev server**。
+- **样式单一来源** = `assets/styles/mobile-auth.scss`（`mauth-*`）。**基础版式与 `/m/*` 页不得自带 `<style>`**（变体可以，取值只许 `--mauth-*`）；⚠️ 移动端版式**刻意不限宽**（用户明确要求满宽）。
+- **版式优先级** `?view=` > 主题包 `views.<page>` > `VITE_<PAGE>_VIEW` > base，⚠️ **URL 显式非法值不回退**；base 容器**静态引入**、变体 `glob` 惰性 chunk；
+  契约 = `types.ts` 纯类型 + 容器 `assertXxxContract` 编译期自检；浮层由**容器**渲染；**新增变体目录要重启 dev server**。
 - **皮肤**：三层 token（全局语义 → 组件级 → 组件规则零裸色值）；明暗与皮肤**正交**；来源 `?theme=`（`?skin=` 别名）> 后端 > localStorage > default；
-  🔴 外部输入**必过白名单**（`theme/runtime.ts`，刻意拒 `url()` 与 CSS 颜色名）；`*/index.ts` eager、`*/theme.scss` 惰性；入口 `?debug=theme` 面板。
+  🔴 外部输入**必过白名单**（`theme/runtime.ts` 拒 `url()` 与 CSS 颜色名）；`*/index.ts` eager、`*/theme.scss` 惰性；入口 `?debug=theme` 面板。
   🔴 `tokens` 是 `html` 上的 inline style、**优先级高于媒体查询** → 绝不能覆写断点里会变的 token（`--mauth-pad-*`/`gap-*`/`logo-size`/`title-size`/`field-h`/`control-h`/`err-h`/`social-*`）；
-  ⚠️ 把 `--mauth-header-bg` 设 `transparent` → **必须同时声明 `--mauth-canvas`**；⚠️ `assets/` 的 SVG **必须带 `width`/`height`**。
+  ⚠️ `--mauth-header-bg` 设 `transparent` → **必须同时声明 `--mauth-canvas`**；⚠️ `assets/` 的 SVG **必须带 `width`/`height`**。
 - 🔴 **调试移动端页前必须先造窄视口并刷新**：判定 `宽视口(≥1024) ＞ 窄视口(<768) ＞ UA`；宽视口开 `/m/*` 会**跳电脑版**，**UA 伪装压不过宽视口**，
   分发只在**导航时**执行（§11.1）。设备判定单一来源 `utils/device.ts` 的 `isMobileViewport()`。
 - 🔴 **移动端页必须自己当滚动容器**：`html,body{overflow:hidden}` → `.mauth-page` 须 `height:100dvh + overflow-y:auto`，`.mauth-body` 须 `flex:1 0 auto`。
@@ -67,8 +65,8 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
 - 🔴 **禁止在 Bash 工具里 `git rm` src/ 下任何路径**：执行者是 **tsbx 沙箱执行层本身**，会**递归清空整个 src/**。
   删 src 文件一律 `rm <path> && git add -A`；恢复 `git checkout HEAD -- src`。
 - **大块改动立刻检查点提交**；**毒丸实验**验测试有效性（覆写 `throw new Error('__QUARANTINE__')`，变红=真加载）。
-- 🔴 **视觉回归先稳定化、再归因**（§10.13）：不禁过渡/动画、不等 `fonts.ready` → 同代码连拍可报 **17.8% 假差异**；冻结样式须 `addStyleTag`
-  **加载后**注入并**断言生效**；⚠️ 比对前先 `md5sum` 验两侧同一状态；⚠️ 「噪声下限 0」只对纯色场景成立（§11.15）。
+- 🔴 **视觉回归先稳定化、再归因**（§10.13）：不禁过渡/动画、不等 `fonts.ready` → 同代码连拍可报 **17.8% 假差异**；冻结样式须**加载后** `addStyleTag` 并**断言生效**；
+  比对前 `md5sum` 验两侧同一状态；「噪声下限 0」只对纯色场景成立（§11.15）。
 - ⚠️ 同一文件**多个 Edit 放同一条消息会静默丢失** → 多改**串行**并 grep 复核。⚠️ 块注释里别让星号与斜杠相邻（写 glob 通配会**提前闭合注释**：TS1131 报错行≠根因行）。
 - ⚠️ **本机 node 同步 spawn（管道 IO）恒抛 `EBUSY`(-4082)**：换版本/`shell:true`/脱离沙箱均无效；异步 `spawn`/`stdio:'inherit'`/**文件 fd 正常**
   ⇒ 需同步取输出一律 `spawnSync` + **文件型 stdio**（它**不抛**，须自判 `result.status`）；取 stdin 的**必须带超时**；**禁 `Atomics.wait`**（细则 §9）。

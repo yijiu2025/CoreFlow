@@ -64,6 +64,38 @@ src/
 - `<page>` 与 `<id>` 都只允许 `[a-z0-9-]`（`<id>` 会成为 `data-mauth-view` 的属性值）。
 - 各页的 `registry.ts` 彼此独立、互不感知；**加页面不必改公共工厂**。
 
+### 主题包 = 一个目录，目录名即 id
+
+`themes/` 下**只按主题包分文件夹**，不再多套一层（`./*/index.ts` 只扫一层）：
+
+| 目录 | 是什么 | id 从哪来 |
+| --- | --- | --- |
+| `themes/<id>/` | ② 皮肤包（本仓 `default` / `ocean` / `sky`） | **目录名就是 id** |
+| `themes/app/` | ③ 版式维度的**保留目录名** | 不是主题，**不得用作主题 id** |
+
+🔴 **不要往 `themes/app/` 下加 `index.ts`**：主题注册表扫的就是「一层子目录 + `index.ts`」，
+`themes/app/index.ts` 会被它扫到。现在之所以没事，是因为该目录**刻意没有** `index.ts`
+（版式侧的汇总文件叫 `pages.ts`）—— 这是个**隐式条件**，一旦有人给它加一句 `export default`，
+就会凭空冒出一个 id 为 `app` 的假主题。同理：不要建名为 `app` 的主题目录。
+
+口径以 `themes/index.ts` 的 `buildRegistry()` 为准（实现即真源）：
+
+| 情形 | 结果 |
+| --- | --- |
+| 目录名不合 `^[a-z0-9-]+$` | **跳过**，不注册 |
+| 缺 `index.ts` / 没有 `default` 导出 / 包内没有 `meta` | **跳过**，不注册 |
+| 包内 `meta.id` 与目录名不一致 | **以目录名为准**（`meta: { ...pkg.meta, id }`） |
+| 只有 `theme.scss`、没有 `index.ts` | 视为残缺，**该目录的样式被忽略** |
+
+两点意图：
+
+1. **目录名是唯一真源**：`theme.scss` 的选择器必须写 `html[data-mauth-theme='<id>']`，
+   属性值来自目录名 —— 包内再写一个别的 `meta.id` 只会让选择器对不上，所以直接由目录名覆盖。
+2. **跳过而不是抛错**：一个写坏的主题不该让整个认证页起不来。
+   **但"跳过"就是静默失效** —— 加完主题没生效时，先查目录名是否合规、有没有漏 `export default`、`meta` 有没有写错字段名。
+
+所以「加一个主题」= **加一个目录**：不改 `themes/index.ts`、不改 `mobile-auth.scss`、不改 store（步骤见第八节）。
+
 ## 三、职责红线（容器 vs 版式）
 
 ```text
@@ -215,13 +247,17 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
 1. **业务关卡**：`.tmp-probe/verify-<page>-view.mjs`（Playwright）。断言面至少覆盖：
    版式选择（含**非法 id 落 base**）、业务完整性（未勾协议不发请求 / 加密信封 / 拦截图形的分支）、
    各面板可达、浮层与分发路径、静态分层体检。
-2. **门禁**：`npm run type-check`（= `vue-tsc -b`）必须绿，且按第六节做**毒丸验证**。
-3. **视觉回归**：遵循[视觉回归归因三铁律](/frontend/coding-standard) ——
+2. **目录口径关卡**：`.tmp-probe/verify-theme-dirs.mjs`（22 项静态断言，纯文件系统、**不需要浏览器**）。
+   守的就是本节「主题包 = 一个目录」那张表：目录名合法性、必备文件、`theme.scss` 选择器必须用目录名、
+   `themes/app/` 保留名不被占用，外加**实现 ↔ 文档口径一致性**（glob 仍只扫一层、仍由目录名覆盖 `meta.id`）。
+   改主题目录结构或 `themes/index.ts` 的扫描逻辑后跑它。
+3. **门禁**：`npm run type-check`（= `vue-tsc -b`）必须绿，且按第六节做**毒丸验证**。
+4. **视觉回归**：遵循[视觉回归归因三铁律](/frontend/coding-standard) ——
    ① 先稳定化（冻结过渡/动画 + 等 `fonts.ready`，冻结样式须在**加载后**注入并**断言生效**）；
    ② 比对前先确认基准与结果**来自不同状态**（否则同一份代码自比恒等，"重构前后一致"这类结论不成立）；
    ③ 报**逐场景归因表**，不报一个总百分比。
    ⚠️ 连拍两次不一致的项是非确定性的（如 3s 自动关闭的提示条），**不能作断言目标**。
-4. **调试面板**：`?debug=theme` 会自动列出版式
+5. **调试面板**：`?debug=theme` 会自动列出版式
    （`/m/login → 版式·login [base]`、`/m/forgot-password → 版式·forgot-password [base]`、`/m/register → [base, compact]`）——
    这是 `themes/app/pages.ts` 汇总出来的，**新增页面不用回来改**。
 
@@ -229,6 +265,9 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
 
 | 坑 | 症状 | 处置 |
 | --- | --- | --- |
+| 加了主题目录但"没生效" | 主题不出现，**且没有任何报错** | 注册表对坏目录是**静默跳过**：逐一核 ① 目录名是否 `[a-z0-9-]` ② 有没有 `index.ts` ③ 有没有 `export default` ④ 包里有没有 `meta` |
+| 往 `themes/app/` 里加了 `index.ts` | 凭空多出一个 id 为 `app` 的"主题"，`?theme=app` 居然能用 | 删掉它；版式侧的汇总文件叫 `pages.ts` 就是为了避开主题扫描器 |
+| `meta.id` 与目录名不一致 | 主题能选中但 `theme.scss` 完全不生效 | 以**目录名**为准（会被覆盖）；把 `theme.scss` 的选择器改成目录名 |
 | 新增变体目录后没重启 dev server | `?view=<新id>` 落回 base，注册表 `list()` 里没有它 | 重启（`import.meta.glob` 启动时静态扫描） |
 | 基础版式自带 `<style>` | 三页外观各自漂移 | 抽到 `mobile-auth.scss`，版式只消费 `mauth-*` |
 | token 里覆写断点会变的项 | 矮屏 / 横屏适配整体失效 | `tokens` 是 `html` 上的 inline style，**优先级高于媒体查询** → 绝不在 token 里写 `--mauth-pad-*` / `gap-*` / `logo-size` / `title-size` / `field-h` / `control-h` / `err-h` / `social-*`，这些交给 `theme.scss` 的媒体查询 |
