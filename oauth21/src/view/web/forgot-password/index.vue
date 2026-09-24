@@ -4,7 +4,7 @@
  *
  * 路由：authRoutes。窄视口 / 真机 / 显式 `?isMobile=true` → 渲染移动端全屏页，
  * 否则渲染桌面卡片版。分发规则与 login / register 两个分发器保持一致
- * （显式参数 ＞ 自动识别 ＞ 桌面默认）。
+ * （显式参数 ＞ mini 来源 ＞ 自动识别 ＞ 桌面默认）。
  *
  * 为什么要分发：「忘记密码」的入口在三处都能点到 —— 电脑版登录页、手机端登录页、
  * 以及用户邮箱里的重置链接。手机端登录页的按钮已直连 `/m/forgot-password`；
@@ -33,12 +33,27 @@ const activeComponent = computed(() => {
     return MobileForgot;
   }
 
-  // 2. 自动识别：视口宽度 < 768px 或真机 UA
+  // 2. mini 来源（iframe 嵌入弹窗场景）→ 保持桌面卡片版，**不按宽度自动切移动端**
+  //
+  //    🔴 2026-09-24 修复：此前漏了这条分支，导致 iframe 场景下重置密码页会"自己跳成手机端"。
+  //    成因：mini 登录页（/mini-login）被嵌在宿主弹窗里，弹窗内列宽很窄（实测宿主 1440px 时
+  //    iframe 宽 854px，宿主收窄到 ≤800px 时 iframe 内宽度就掉到 768px 以下）→ 自动识别判定为
+  //    移动端 → 渲染 MobileForgot（全屏手机版），而同一 iframe 里的 mini 登录页却仍是桌面卡片，
+  //    两页视觉因此割裂。
+  //    mini 登录页的"忘记密码"链接已带上 `fromLogin=mini`（见 MiniLogin.vue），语义就是
+  //    "从 iframe 紧凑版点进来的" —— 与登录/注册分发器的 `from=mini` / `mini-login` 分支对齐：
+  //    只要有这个显式来源信号，就一律保持桌面/紧凑版式，宽度不再说话。
+  //    （对比：注册分发器是 `route.query.from === 'mini'`；本页复用既有参数名 fromLogin。）
+  if (route.query.fromLogin === 'mini') {
+    return DesktopForgot;
+  }
+
+  // 3. 自动识别：视口宽度 < 768px 或真机 UA
   if (isMobileDevice.value) {
     return MobileForgot;
   }
 
-  // 3. 默认桌面版
+  // 4. 默认桌面版
   return DesktopForgot;
 });
 </script>
