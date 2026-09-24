@@ -1,10 +1,27 @@
 # 主题包目录
 
-一个子文件夹 = 一个主题。注册表由 `import.meta.glob` 扫描，**加主题不用改任何其他文件**。
+**`themes/` 下按主题包分文件夹，文件夹名就是主题 id**（即 `src/themes/<id>/`）。
+注册表由 `import.meta.glob('./*/index.ts')` 扫描，**加主题不用改任何其他文件**。
 
 > ⚠️ `app/` 不是主题，是**页面版式（UI）目录**（换 DOM 结构，与换皮肤正交）。
 > 它的约定见 `app/README.md`。`import.meta.glob('./*/index.ts')` 只扫一层，
-> 不会把 `app/` 当成主题。
+> 不会把 `app/` 当成主题 —— **所以 `app` 是保留目录名，不得再拿来做主题 id**；
+> 也**不要往 `themes/app/` 里加 `index.ts`**（版式侧的汇总文件刻意叫 `pages.ts`，
+> 就是为了不被主题扫描到）：加了会凭空多出一个 id 为 `app` 的假主题。
+
+目录名的口径（以 `index.ts` 的 `buildRegistry()` 为准，实现即真源）：
+
+| 情形 | 结果 |
+| --- | --- |
+| 目录名不合 `^[a-z0-9-]+$` | 跳过，不注册 |
+| 缺 `index.ts` / 没有 `default` 导出 / 包内没有 `meta` | 跳过，不注册 |
+| 包内 `meta.id` 与目录名不一致 | **以目录名为准**（被目录名覆盖） |
+| 只有 `theme.scss`、没有 `index.ts` | 残缺，该目录的样式被忽略 |
+
+⚠️ 以上都是**静默跳过**：写错不报错，只是主题不出现。加完主题没反应时，先核这四项。
+
+`meta.id` 以目录名为准的原因：`theme.scss` 的选择器必须写
+`html[data-mauth-theme='<id>']`，而属性值由目录名生成 —— 两者不一致时选择器直接落空。
 
 ```
 src/themes/
@@ -21,8 +38,11 @@ src/themes/
 │   ├── theme.scss
 │   └── assets/{skyline.svg, skyline-dark.svg}
 └── app/                页面版式（UI）：业务容器 + 可换 UI，见 app/README.md
-    ├── registry.ts
-    └── register/{types.ts, registry.ts, base/, compact/}
+    ├── registry.ts     版式注册表工厂（机制）
+    ├── pages.ts        汇总各页注册表（供 ?debug=theme 面板列出）
+    ├── register/{types.ts, registry.ts, base/, compact/}
+    ├── login/{types.ts, registry.ts, base/}
+    └── forgot-password/{types.ts, registry.ts, base/}
 ```
 
 ## 加一个主题
