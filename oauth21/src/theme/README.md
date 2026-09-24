@@ -342,7 +342,7 @@ store（`main.ts` → `setupThemeDeviceSync(router)`）。store 用这个值决�
 参考实现照抄 `themes/default/mobile/register/compact/`（目前唯一落地的变体）；
 三页的 `index.vue` 是"忠实搬运原模板、不带 `<style>`"的范例。
 
-## 四条容易踩的线
+## 五条容易踩的线
 
 - **移动端基础版式不要自带 `<style>`**：它是三页（登录 / 注册 / 重置密码）共用样式
   `assets/styles/mobile-auth.scss` 的消费方，自带样式块会让各页各自漂移 ——
@@ -357,6 +357,13 @@ store（`main.ts` → `setupThemeDeviceSync(router)`）。store 用这个值决�
   漏掉这条的症状极具欺骗性：**只有漏的那一页**在窄 iframe 下跳成全屏手机端，其余页正常，
   且**桌面浏览器直接开该路由不会复现**。2026-09-24 `forgot-password` 漏过此分支（已修，
   关卡见 `verify-forgot-view.mjs` 的 I 段）。
+- 🔴 **父 origin 白名单漏配 = 弹窗 loading 慢，而不是报错**：`SSO_READY` 握手走
+  `utils/parent-origins.ts`（**单一来源**，`utils/parent.ts` 发、`useParentThemeSync` 收共用）。
+  白名单里漏了宿主 origin 时 `postToParent` **拒发**，宿主收不到握手 → 等满自己的 **3s 兜底超时**
+  → 用户看到的是"loading 转了很久"（实测 3608ms；补对后 719ms）。
+  **症状像性能问题，实际是配置错误** → 排查任何 iframe 握手类「慢」，
+  **第一件事 grep 控制台 `[SSO] 拒绝 postMessage：父 origin 未授权`**。
+  ⚠️ 只写"嵌 oauth21 的父应用"的 origin，**别把 oauth21 自己的 5174 / 5175 写进去**（它是被嵌方）。
 - **改契约要同步两边**：容器组装 `ctx` 时有编译期自检（`assertRegisterContract` /
   `assertLoginContract` / `assertForgotPasswordContract`，各页一枚，在容器 `index.vue` 里），
   改 `views/<page>.ts` 后容器与**所有包所有设备**的版式都会在类型检查时报错，不会悄悄跑偏。

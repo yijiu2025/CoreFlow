@@ -39,12 +39,7 @@
 import { onMounted, onUnmounted } from 'vue';
 import { useThemeStore } from '@/stores/theme';
 import type { ThemeTokenOverrides } from '@/theme/runtime';
-
-/** 受信父应用 origin 白名单（与 parent.ts 共享，env 配置逗号分隔） */
-const ALLOWED_PARENT_ORIGINS = (
-  (import.meta as any).env?.VITE_ALLOWED_PARENT_ORIGINS ||
-  'http://aaa.localhost:5176,http://localhost:5175'
-).split(',');
+import { isAllowedParentOrigin } from '@/utils/parent-origins';
 
 /**
  * 监听父应用主题同步消息
@@ -58,7 +53,7 @@ export function useParentThemeSync() {
     if (!(window.parent && window.parent !== window)) return;
 
     // origin 校验：只接受白名单父应用的消息（防恶意嵌入伪造主题切换）
-    if (!event.origin || !ALLOWED_PARENT_ORIGINS.includes(event.origin)) return;
+    if (!isAllowedParentOrigin(event.origin)) return;
 
     const { type, isDark, theme, skin, tokens } = event.data || {};
     if (type !== 'THEME_CHANGE') return;

@@ -331,10 +331,60 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
 且用 `iframe 内容页的 window.innerWidth`（不是宿主的）来判断。
 关卡 `verify-forgot-view.mjs` 的 I 段就是这么测的（窄 iframe + `fromLogin=mini` → 必须桌面版）。
 
-## 十二、常见坑
+## 十二、iframe 嵌入：握手与父 origin 白名单
+
+oauth21 被别的 app（如 posecraft）用 iframe 嵌进弹窗时，靠一条 **`SSO_READY` 握手**告诉宿主"我加载好了"：
+
+```
+oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
+宿主收到          → 关掉「正在加载安全登录」遮罩
+宿主 `@load`      → 只启动 3s 兜底超时（收不到握手就硬关）
+```
+
+🔴 **白名单是单一来源**：`oauth21/src/utils/parent-origins.ts`，
+由 `utils/parent.ts`（发消息）与 `composables/useParentThemeSync.ts`（收消息）共用。
+改白名单只需改这一处 + 各 `.env` 的 `VITE_ALLOWED_PARENT_ORIGINS`（逗号分隔，自动 trim）。
+此前这两处**各抄了一份**，fallback 默认值也各写各的 —— 漂移会导致"发得出去、收不回来"或反之。
+
+⚠️ **只写「嵌 oauth21 的父应用」的 origin。**
+**别把 oauth21 自己的端口（5174 / 5175）写进去** —— 它是被嵌方，不是父应用。
+
+### 🔴 漏配的症状是「loading 慢」，不是报错
+
+这是最容易误判的地方。白名单漏了宿主 origin 时：
+
+1. `postToParent` 拒绝发送，控制台出现
+   `[SSO] 拒绝 postMessage：父 origin 未授权 <origin>`；
+2. 宿主收不到 `SSO_READY` → 等满自己的 **3s 兜底超时**；
+3. 用户看到的是「**弹窗打开后 loading 转了很久**」，表现完全像一个性能问题。
+
+实测（`localhost:5176` 的 posecraft 弹窗，`.env` 漏了 `http://localhost:5176`）：
+**停留 3608ms**；补对白名单后 **719ms**（多轮 790~830ms）。
+
+**排查任何 iframe 握手类「慢」，第一件事 grep 控制台有没有那条拒绝日志。**
+
+### 余下的 ~800ms 是什么
+
+补对白名单后的剩余耗时**不是 bug**，拆解如下（弹窗点击 = 0）：
+
+| 段 | 耗时 | 归因 |
+| --- | --- | --- |
+| 弹窗点击 → iframe HTML | ~150ms | 宿主渲染 + iframe 首块 HTML（含 Vue 等 deps） |
+| → `SSO_READY` 发出 | ~350ms | **dev 冷启动**模块瀑布：`domInteractive=29ms` 后仍需拉 ~65 个模块 |
+| → loading 消失 | **~280ms** | 宿主收握手后**自己**的收尾（卸遮罩 + 回发主题），**不在 oauth21 可控范围** |
+
+- **不是模块转换慢**：热服务单模块 1~5ms，最大的 `deps/dist-*.js`（535KB）也只 47ms。
+- `SSO_READY` 已挂在 dispatcher 的 `onMounted`（首屏异步 chunk 之前）。
+  **不要再提前到 app mount**：`useParentThemeSync` 的消息监听器在 `App.vue` setup 注册、
+  `onMounted` 才 `addEventListener`，比 dispatcher 更深 —— 提前发会有"宿主回发的主题消息
+  到达时监听器还没就绪"的风险，收益却很小。
+- 这是 **dev 模式冷启动特征，生产构建下显著更短**。
+
+## 十三、常见坑
 
 | 坑 | 症状 | 处置 |
 | --- | --- | --- |
+| **`.env` 白名单漏了宿主 origin** | 弹窗「正在加载安全登录」转很久（等满宿主 3s 兜底），看起来像性能问题 | 控制台必有 `[SSO] 拒绝 postMessage：父 origin 未授权 …` → 补 `VITE_ALLOWED_PARENT_ORIGINS`。**别把 oauth21 自己的 5174/5175 写进去** |
 | **某分发器漏了「mini 来源」分支** | 嵌在宿主弹窗 iframe 里时，**只有这一页**跳成全屏手机端，同 iframe 的登录/注册仍是桌面卡片 | 在自动识别**之前**加一条：`fromLogin === 'mini'`（本页参数名）/ `from === 'mini'` / 路径含 `mini-login` → 直接返回桌面版。三个分发器都要有 |
 | 加了配色/主题目录但"没生效" | 主题不出现，**且没有任何报错** | 注册表对坏目录是**静默跳过**：逐一核 ① 目录名是否 `[a-z0-9-]` ② 设备段是否 `mobile`/`web` ③ 有没有 `index.ts` ④ 有没有 `export default` ⑤ 包里有没有 `meta` |
 | **配色 id 用单键登记（漏了设备段）** | 后扫描到的一端（如 web 的 `mono`）被当成重名**静默丢弃** | 注册表键必须是 `包/设备/配色` 三段复合键；取值用 `getThemeRecord(id, device)`。加完新设备若发现"少了一套配色"，先看控制台有没有重名告警 |
