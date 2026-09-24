@@ -342,13 +342,21 @@ store（`main.ts` → `setupThemeDeviceSync(router)`）。store 用这个值决�
 参考实现照抄 `themes/default/mobile/register/compact/`（目前唯一落地的变体）；
 三页的 `index.vue` 是"忠实搬运原模板、不带 `<style>`"的范例。
 
-## 三条容易踩的线
+## 四条容易踩的线
 
 - **移动端基础版式不要自带 `<style>`**：它是三页（登录 / 注册 / 重置密码）共用样式
   `assets/styles/mobile-auth.scss` 的消费方，自带样式块会让各页各自漂移 ——
   历史上"两页看起来不一样"都源于此。变体不受这条约束（它本来就是"另一套 UI"），
   但要遵守上面的 token 规则。电脑端骨架目前自带极简 `<style>`（它还没有共享样式表可复用，
   且将来整体会被替换）。
+- 🔴 **分发器必须认「mini 来源」**：`view/web/<page>/index.vue` 三个分发器的判定顺序是
+  **显式 `?isMobile=true` ＞ mini 来源（`from=mini` / 路径含 `mini-login` / `fromLogin=mini`）
+  ＞ 自动识别 ＞ 桌面默认**。mini 来源意味着"本页正嵌在宿主 app 的弹窗 iframe 里"，此时
+  的「窄」（实测宿主弹窗列宽 480px、宿主 1440px 时 iframe 内 854px、宿主 ≤800px 时掉到 718px）
+  来自弹窗而非真机 → **必须保持桌面/紧凑版式**，与同一 iframe 里的 mini 登录页一致。
+  漏掉这条的症状极具欺骗性：**只有漏的那一页**在窄 iframe 下跳成全屏手机端，其余页正常，
+  且**桌面浏览器直接开该路由不会复现**。2026-09-24 `forgot-password` 漏过此分支（已修，
+  关卡见 `verify-forgot-view.mjs` 的 I 段）。
 - **改契约要同步两边**：容器组装 `ctx` 时有编译期自检（`assertRegisterContract` /
   `assertLoginContract` / `assertForgotPasswordContract`，各页一枚，在容器 `index.vue` 里），
   改 `views/<page>.ts` 后容器与**所有包所有设备**的版式都会在类型检查时报错，不会悄悄跑偏。
@@ -361,7 +369,9 @@ store（`main.ts` → `setupThemeDeviceSync(router)`）。store 用这个值决�
 ```bash
 node .tmp-probe/verify-theme-dirs.mjs     # 三级结构 + 目录口径 + store/路由接线（132 条）
 node .tmp-probe/verify-glob-device.mjs    # glob 真的扫到设备段（15 条，需能起 Vite）
+node .tmp-probe/verify-forgot-view.mjs    # 重置密码页版式 + 分发一致性（56 条，需 dev server）
 ```
 
-两个关卡都用**毒丸验证**过有效性：故意放一个 `meta.id` 与目录名不符的配色、或放一个
-跨设备同名配色，关卡必须变红。
+前两个关卡用**毒丸验证**过有效性：故意放一个 `meta.id` 与目录名不符的配色、或放一个
+跨设备同名配色，关卡必须变红。`verify-forgot-view.mjs` 的 **I 段**用毒丸验证过：
+删掉分发器里的 `fromLogin === 'mini'` 分支后，I1 必须从"保持桌面版"变成"切成移动端"。

@@ -510,8 +510,9 @@ npm test -- --coverage      # 运行并生成覆盖率报告
   2. **业务只在容器**：状态 / 校验 / 请求 / 路由跳转 / 浮层 / 倒计时全部在 `view/app/<page>/index.vue`，**只有一份**；版式只读 `ctx`、只调 `ctx.actions.*`，**禁止**任何请求、校验、`router.push`、store 读写。**基础版式不得自带 `<style>`**（共用样式只在 `mobile-auth.scss`，否则各页各自漂移）；变体可写，但取值只许 `--mauth-*`。契约 = 该页 `types.ts`（纯类型）+ 容器侧 `assertXxxContract` 编译期自检，**改契约两边一起报错**。⚠️ 新增变体目录要**重启 dev server**（`import.meta.glob` 启动时静态扫描）；目录迁移后还要 `--force` 清 optimize-deps 缓存（否则 504 Outdated Optimize Dep）。⚠️ `tokens` 是 `html` 上的 inline style、**优先级高于媒体查询** → 绝不能在 token 里覆写断点会变的项（`--mauth-pad-*` / `gap-*` / `logo-size` / `title-size` / `field-h` / `control-h` / `err-h` / `social-*`）
   3. **外部输入一律过白名单**：版式 id / 皮肤 id 只认 `[a-z0-9-]` 且**已登记**（未登记落 `base`，不拼路径、不做模糊匹配），且 **URL 显式非法值不回退**（`?view=typo` 直接落 base，不静默换用另一套 UI）；主题 token 走 `src/theme/runtime.ts`，**刻意拒绝 `url()` 与 CSS 颜色名**（前者是外发请求的唯一入口，后者上百个易漏）
   4. **改这一层必须跑静态关卡**：`.tmp-probe/verify-theme-dirs.mjs`（132 项，目录口径 + 实现↔文档一致性）、`.tmp-probe/verify-glob-device.mjs`（15 项，读回 `import.meta.glob` 编译产物）+ `npm run type-check`；**关卡改动后要做毒丸验证**（造 `colors/mobile/mono-base/`、退回单键登记、把设备同步改回 `afterEach` —— 三者都必须报错），否则关卡可能只是恒绿的摆设
+  5. **分发器必须认「mini 来源」**（`oauth21` 的 `view/web/<page>/index.vue`）：优先级 = 显式 `?isMobile=true` ＞ mini 来源（`from=mini` / 路径含 `mini-login` / `fromLogin=mini`）＞ 自动识别（宽视口>窄视口>UA）＞ 桌面默认。**mini 来源 = 页面正被嵌在宿主 app 的弹窗 iframe 里**，此时的「窄」来自弹窗列宽而非真机 → 必须保持桌面/紧凑版式。🔴 漏掉这条的症状极具欺骗性：iframe 宽 <768px 时**只有这一页**（如重置密码）跳成全屏手机端，同 iframe 的登录/注册仍是桌面卡片；且**桌面直接开该路由不复现**，必须真放进 iframe 看 `iframe 内容页的 innerWidth`。2026-09-24 真实踩过（`forgot-password` 分发器漏了此分支）
 
-  规则全文（目录约定、选择优先级、接入新页面清单、安全边界、验收要求、常见坑）：[docs/frontend/multi-theme.md](docs/frontend/multi-theme.md)；主题包 / 配色 / 版式的目录约定另见 `oauth21/src/theme/README.md`。
+  规则全文（目录约定、选择优先级、接入新页面清单、安全边界、验收要求、常见坑、设备分发一致性）：[docs/frontend/multi-theme.md](docs/frontend/multi-theme.md)；主题包 / 配色 / 版式的目录约定另见 `oauth21/src/theme/README.md`。
 
 ### 导出位置（强制）
 

@@ -274,6 +274,8 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
 1. **业务关卡**：`.tmp-probe/verify-<page>-view.mjs`（Playwright）。断言面至少覆盖：
    版式选择（含**非法 id 落 base**）、业务完整性（未勾协议不发请求 / 加密信封 / 拦截图形的分支）、
    各面板可达、浮层与分发路径、静态分层体检。
+   分发逻辑还要单测 **iframe 内宽度**的情形（`verify-forgot-view.mjs` 的 I 段：把页面放进
+   指定宽度的 iframe，断言 `fromLogin=mini` 时窄 iframe 也保持桌面版 —— 见第十一节）。
 2. **目录口径关卡**：`.tmp-probe/verify-theme-dirs.mjs`（**132 项**静态断言，纯文件系统、**不需要浏览器**）。
    守的就是本节「主题包 = 一个目录」那张表：**三级结构**（包 / 设备 / 配色）、目录名合法性、必备文件、
    `theme.scss` 选择器必须用目录名、配色目录叫 `colors/`、版式按设备分区、版式去 `base/` 层、
@@ -306,10 +308,34 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
 
 毒丸变绿就说明关卡没真在检查。这三条正是 2026-09-24 那轮**真实踩到并修掉**的坑。
 
-## 十一、常见坑
+## 十一、设备分发的一致性（分发器）
+
+「桌面路由渲染桌面版还是手机版」由一个**分发器**决定（`view/web/<page>/index.vue`）。
+判定优先级（三条，缺一条就会出线上问题）：
+
+```
+显式 ?isMobile=true  ＞  显式来源信号（mini）  ＞  自动识别(宽视口>窄视口>UA)  ＞  桌面默认
+```
+
+🔴 **三个分发器必须都认「mini 来源」**（`from=mini` / 路径含 `mini-login` / `fromLogin=mini`）。
+**mini 来源 = 这个页面正被嵌在宿主 app 的弹窗 iframe 里**，此时的「窄」是弹窗列宽造成的，
+不代表用户在用手机 —— 必须保持桌面/紧凑版式，和同一 iframe 里的 mini 登录页一致。
+
+⚠️ **漏掉这条分支的症状极具欺骗性**：iframe 宽度落在 `<768px` 时，该页会**自己跳成全屏手机版**，
+而同一 iframe 的登录/注册页仍是桌面卡片 —— 表现为「就这一个页面变成了手机端」。
+宿主弹窗本身有宽度上限（如 `w-[856px] max-w-[90vw]`，内部列宽 `480px`），
+所以**宿主窗口一收窄，iframe 内宽度就掉到 768 以下**（实测宿主 1440px → iframe 854px；
+宿主 ≤800px → iframe 718px 触发切换）。
+
+**判定方式**：桌面浏览器直接开 `/forgot-password` 是**不会**复现的 —— 必须真的放进 iframe，
+且用 `iframe 内容页的 window.innerWidth`（不是宿主的）来判断。
+关卡 `verify-forgot-view.mjs` 的 I 段就是这么测的（窄 iframe + `fromLogin=mini` → 必须桌面版）。
+
+## 十二、常见坑
 
 | 坑 | 症状 | 处置 |
 | --- | --- | --- |
+| **某分发器漏了「mini 来源」分支** | 嵌在宿主弹窗 iframe 里时，**只有这一页**跳成全屏手机端，同 iframe 的登录/注册仍是桌面卡片 | 在自动识别**之前**加一条：`fromLogin === 'mini'`（本页参数名）/ `from === 'mini'` / 路径含 `mini-login` → 直接返回桌面版。三个分发器都要有 |
 | 加了配色/主题目录但"没生效" | 主题不出现，**且没有任何报错** | 注册表对坏目录是**静默跳过**：逐一核 ① 目录名是否 `[a-z0-9-]` ② 设备段是否 `mobile`/`web` ③ 有没有 `index.ts` ④ 有没有 `export default` ⑤ 包里有没有 `meta` |
 | **配色 id 用单键登记（漏了设备段）** | 后扫描到的一端（如 web 的 `mono`）被当成重名**静默丢弃** | 注册表键必须是 `包/设备/配色` 三段复合键；取值用 `getThemeRecord(id, device)`。加完新设备若发现"少了一套配色"，先看控制台有没有重名告警 |
 | 设备同步写在 `router.afterEach` 里 | 电脑端页面被当成手机端，列出手机端配色 | `afterEach` 首次触发时 Pinia `activeInstance` 尚未建立，`useThemeStore()` 抛错**被 try/catch 吞掉** → 设备永远停在默认值。改用 `watch(router.currentRoute, { immediate: true })`，并在 `main.ts` 的 `app.use(pinia)` **之后**调 `setupThemeDeviceSync(router)` |
