@@ -59,6 +59,11 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
 - **登录行**：providers 为空 → **零 DOM**；🔴 授权端点**只放行站内相对路径**（`/` 开头且非 `//`）；未配端点**不静默**。
 - **重置密码**：邮件链接指向 `/reset-password?token=…` 而前端无此路由 → 已加 redirect（query 原样带）；🔴 **`validateField` 不跑 zod 的 object 级 `refine`**
   → 两次密码一致须**显式比对** + `setFieldError`（注册页同坑）。
+- 🔴 **三个分发器（`view/web/<page>/index.vue`）必须都认「mini 来源」**，判定顺序
+  = 显式 `?isMobile=true` ＞ mini（login/register 用 `from=mini`·路径含 `mini-login`/`mini-register`；forgot 用 **`fromLogin=mini`**）＞ 自动识别 ＞ 桌面默认。
+  **mini 来源 = 正嵌在宿主弹窗 iframe 里**，窄是弹窗列宽造成的（宿主 1440px→iframe 854px；宿主 ≤800px→iframe 718px<768）⇒ 必须保持桌面/紧凑版。
+  漏掉分支的症状：**只有漏的那一页**跳手机端、同 iframe 其余页正常，且**桌面直接开不复现**（必须真放进 iframe 读**内容页**的 `innerWidth`）。
+  桌面卡片根 class 是 **`.auth-viewport`**。关卡 `verify-forgot-view.mjs` I 段（毒丸：删分支→I1 变红）。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
