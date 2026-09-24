@@ -504,6 +504,14 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 
   现状：`oauth21` / `admin` / `poseadmin` = `vue-tsc -b` ✅；`posecraft` = `vue-tsc --noEmit`（tsconfig 非方案式，有效）✅；`firewall` 无类型检查 ❌（另有 121 个存量错误待修）。细则见 [docs/frontend/coding-standard.md](docs/frontend/coding-standard.md) 的「类型闸门必须是"真检查"」。
 
+- **多主题 / 多版式开发模式（强制）**：改「页面长什么样」必须走既有机制，不得复制业务。`oauth21` 的移动端认证页（登录 / 注册 / 重置密码）已全部接入。三条铁律：
+
+  1. **三个正交维度**：① token 基线 —— `assets/styles/mobile-auth.scss` 的 `mauth-*` 类与 `--mauth-*` 变量，是**所有呈现取值的唯一出口**；② 皮肤 `themes/<id>/` —— 换颜色 / 圆角 / 背景图 / 字体，**同一套 DOM**（`?theme=` / 后端下发 / localStorage）；③ 版式 `themes/app/<page>/<id>/` —— 换 **DOM 结构与交互组织**，**同一套业务**（`?view=` / 主题包 `views.<page>` / `VITE_<PAGE>_VIEW` / `base`）。三者可任意组合：`?theme=ocean&view=compact`
+  2. **业务只在容器**：状态 / 校验 / 请求 / 路由跳转 / 浮层 / 倒计时全部在 `view/app/<page>/index.vue`，**只有一份**；版式只读 `ctx`、只调 `ctx.actions.*`，**禁止**任何请求、校验、`router.push`、store 读写。**基础版式不得自带 `<style>`**（共用样式只在 `mobile-auth.scss`，否则各页各自漂移）；变体可写，但取值只许 `--mauth-*`。契约 = 该页 `types.ts`（纯类型）+ 容器侧 `assertXxxContract` 编译期自检，**改契约两边一起报错**。⚠️ 新增变体目录要**重启 dev server**（`import.meta.glob` 启动时静态扫描）。⚠️ `tokens` 是 `html` 上的 inline style、**优先级高于媒体查询** → 绝不能在 token 里覆写断点会变的项（`--mauth-pad-*` / `gap-*` / `logo-size` / `title-size` / `field-h` / `control-h` / `err-h` / `social-*`）
+  3. **外部输入一律过白名单**：版式 id / 皮肤 id 只认 `[a-z0-9-]` 且**已登记**（未登记落 `base`，不拼路径、不做模糊匹配），且 **URL 显式非法值不回退**（`?view=typo` 直接落 base，不静默换用另一套 UI）；主题 token 走 `src/theme/runtime.ts`，**刻意拒绝 `url()` 与 CSS 颜色名**（前者是外发请求的唯一入口，后者上百个易漏）
+
+  规则全文（目录约定、选择优先级、接入新页面清单、安全边界、验收要求、常见坑）：[docs/frontend/multi-theme.md](docs/frontend/multi-theme.md)；皮肤与版式的目录约定另见 `oauth21/src/themes/README.md` 与 `oauth21/src/themes/app/README.md`。
+
 ### 导出位置（强制）
 
 **所有 `export` 一律收拢到文件末尾**，定义处不写 `export` 关键字。

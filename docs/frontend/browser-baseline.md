@@ -218,4 +218,4 @@ html[data-vpfix] .full-screen-page {
 | B6 契约 | `oauth21/src/themes/README.md`、`oauth21/src/themes/types.ts`（主题包声明画布色的要求）；参考主题 `oauth21/src/themes/sky/theme.scss` |
 | B7① | `oauth21/src/utils/viewport-fix.ts`，在 `oauth21/src/main.ts` 顶部调用 |
 
-> 相关但不同的主题机制（皮肤 / 版式）见[主题系统](/frontend/theme)；前端整体约定见[前端统一规范](/frontend/coding-standard)。
+> 相关但不同的主题机制（皮肤 / 版式）见[多主题 / 多版式开发模式](/frontend/multi-theme)与[主题系统](/frontend/theme)；前端整体约定见[前端统一规范](/frontend/coding-standard)。

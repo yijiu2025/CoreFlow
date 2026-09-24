@@ -267,6 +267,7 @@ declare module 'vue-router' {
 5. 后台、控制台类页面以信息密度和可扫描性为优先，不做营销式大 Hero。
 6. 移动端页面必须检查 360px 到 430px 宽度下的文本换行和按钮溢出。
 7. **跨内核渲染基线（新建前端强制）**：必须实现[跨内核渲染基线](/frontend/browser-baseline)的全部必做项 —— 单行 viewport meta、`color-scheme` 双条、根元素画布底色、`-webkit-text-size-adjust`、全屏页贴顶、视口兜底。规范**留白**的初始值（`color-scheme` 初始 `normal`、根元素背景 `transparent` 时渲染未定义、`vh` 等于大视口）不显式声明，就等于把渲染结果交给内核，这正是「电脑正常、手机多出一条色带」的成因。自检：`npm run check:baseline <前端目录>`。
+8. **多主题 / 多版式（强制）**：呈现必须拆成**三个正交维度** —— ① token 基线（`mauth-*` 类 + `--mauth-*` 变量的**唯一取值出口**）、② 皮肤 `themes/<id>/`（换取值，同一套 DOM）、③ 版式 `themes/app/<page>/<id>/`（换 DOM 与交互组织，同一套业务）。铁律两条：**业务只有一份**（状态 / 校验 / 请求 / 路由 / 浮层全在容器 `view/app/<page>/index.vue`，版式只读 `ctx`、只调 `ctx.actions`）；**外部输入一律过白名单**（版式 id 限 `[a-z0-9-]` 且已登记，未登记落 `base`；主题 token 走 `theme/runtime.ts`，刻意拒 `url()` 与 CSS 颜色名）。契约写在该页 `types.ts`（纯类型）+ 容器侧 `assert<Page>Contract` 编译期自检。规则全文：[多主题 / 多版式开发模式](/frontend/multi-theme)。
 
 ## 国际化和文案
 

@@ -1,6 +1,8 @@
 import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
 import { isDesktopViewport } from '@/utils/device';
 import { preloadRegisterView } from '@/themes/app/register/registry';
+import { preloadLoginView } from '@/themes/app/login/registry';
+import { preloadForgotPasswordView } from '@/themes/app/forgot-password/registry';
 
 /**
  * 移动端路由 → 宽视口下应迁移到的电脑版路由名
@@ -58,6 +60,26 @@ function desktopWhenWide(to: RouteLocationNormalized) {
   return target ? { name: target, query: to.query, hash: to.hash } : undefined;
 }
 
+/**
+ * 组装一个 `beforeEnter`：先做宽视口跳电脑版，不跳时顺手预取该页**变体版式**的 chunk
+ *
+ * 三个移动端页面（登录 / 注册 / 重置密码）的 UI 都是动态加载的（见各页容器）：
+ * 容器首帧先渲染静态引入的基础版式，变体 chunk 到了再接管。在本页导航阶段就把请求
+ * 发出去（与路由组件自身的 chunk 并行），容器挂载时通常已在模块缓存里 ——
+ * 用户看不到切换。预取失败无所谓：容器自己还会再拉一次，拉不到就回退基础版式。
+ *
+ * 抽成工厂函数而不是把这段写在三个路由里：三处各抄一遍，迟早有一处忘了同时做
+ * 「宽视口跳转」或忘了预取，而这两种疏漏都只在真机/特定视口下才现形。
+ */
+function withViewPreload(preload: (source: { url?: unknown }) => void) {
+  return (to: RouteLocationNormalized) => {
+    const target = desktopWhenWide(to);
+    if (target) return target;
+    preload({ url: to.query.view });
+    return undefined;
+  };
+}
+
 export const authRoutes: RouteRecordRaw[] = [
   {
     path: 'login',
@@ -102,34 +124,22 @@ export const mobileRoutes: RouteRecordRaw[] = [
     name: 'MobileLogin',
     component: () => import('@/view/app/login/index.vue'),
     meta: { title: '移动端登录', device: 'mobile' },
-    beforeEnter: desktopWhenWide
+    beforeEnter: withViewPreload(preloadLoginView)
   },
   {
     path: 'm/register',
     name: 'MobileRegister',
     component: () => import('@/view/app/register/index.vue'),
     meta: { title: '移动端注册', device: 'mobile' },
-    /*
-     * 宽视口跳电脑版；不跳时顺手把「变体版式」的 chunk 预取下来（**不 await**）。
-     *
-     * 注册页的 UI 是动态加载的（见 view/app/register/index.vue）：容器首帧先渲染
-     * 静态引入的基础版式，变体 chunk 到了再接管。在本页导航阶段就把请求发出去
-     * （与路由组件自身的 chunk 并行），容器挂载时通常已在模块缓存里 ——
-     * 用户看不到切换。预取失败无所谓：容器自己还会再拉一次，拉不到就回退基础版式。
-     */
-    beforeEnter: to => {
-      const target = desktopWhenWide(to);
-      if (target) return target;
-      preloadRegisterView({ url: to.query.view });
-      return undefined;
-    }
+    // 宽视口跳电脑版；不跳时顺手把「变体版式」的 chunk 预取下来（**不 await**）
+    beforeEnter: withViewPreload(preloadRegisterView)
   },
   {
     path: 'm/forgot-password',
     name: 'MobileForgotPassword',
     component: () => import('@/view/app/forgot-password/index.vue'),
     meta: { title: '移动端重置密码', device: 'mobile' },
-    beforeEnter: desktopWhenWide
+    beforeEnter: withViewPreload(preloadForgotPasswordView)
   }
 ];
 
