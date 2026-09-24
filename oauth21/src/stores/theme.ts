@@ -3,15 +3,19 @@
  *
  * === 三个维度（正交） + 一个作用域 ===
  *   mode（明暗）—— 用户可控：'system' | 'light' | 'dark'（见 @/theme/mode）
+ *                   只决定 `<html>` 是否带 `dark` 类（基线 SCSS 切深色底），
+ *                   **不再参与配色 token 的选档**（2026-09-25 取消 tokens 明暗两档）
  *   theme（配色）—— 部署方决定：一个**配色 id**，对应
- *                   `theme/themes/<包>/<设备>/colors/<配色>/`；
- *                   配色再反查出**主题包**与**设备**（版式就在那个包、那个设备下找）
+ *                   `theme/themes/<包>/<设备>/<页面>/[<版式>/]colors/<配色>/`；
+ *                   配色再反查出**主题包**（版式就在那个包下找）
  *   view（版式） —— 版式 id（`?view=` / 包声明 / 环境变量），在"包 × 设备"内查找
  *   **设备**（'mobile' | 'web'）—— 不是偏好，而是**页面身份**：本 store 存的
  *               `themeId` 是"当前这套配色"，但**能不能用**要按调用方所在设备判：
  *               电脑端页面拿手机端的配色来渲染会得到一套尺寸/圆角都对不上的东西，
- *               所以按设备取值、设备不匹配就回落到**该设备的默认配色**。
- * 组合出 `配色数 × 2(明暗)` 种外观，互不干扰：切黑白不影响品牌色，换配色不影响明暗偏好。
+ *               所以按设备取值、设备不匹配就回落到**该范围的默认配色**。
+ * 配色与版式各自独立成维度：换配色不影响版式，反之亦然。
+ * ⚠️ mode（明暗）与配色**彻底正交**：配色自带完整底色，选黑就是黑、选蓝就是蓝，
+ *    与当前明暗偏好无关 —— 所以不再有"配色数 × 2(明暗)"这个组合数。
  *
  * === 为什么设备不放进 store、而是由调用方传 ===
  * 同一个 SPA 里可以既有 `/m/login`（移动端页面）又有 `/login`（电脑端分发器），
@@ -27,7 +31,7 @@
  * 'system' 就是显式地跟随系统，随时可回。
  *
  * === 主题来源与优先级（高 → 低）===
- *   theme：URL `?theme=` / `?skin=`  >  后端下发  >  localStorage  >  设备默认配色
+ *   theme：URL `?theme=` / `?skin=`  >  后端下发  >  localStorage  >  该范围默认配色
  *   mode ：URL `?mode=`           >  后端下发  >  localStorage  >  跟随系统
  *
  * 为什么 URL 最高：入口链接是**本次访问的显式意图**（部署方给不同租户发不同链接），
@@ -45,7 +49,9 @@ import { computed, ref, watch } from 'vue';
 import { MODE_CYCLE, normalizeMode, type ThemeMode } from '@/theme/mode';
 import { applyThemeLayers, type ThemeTokenOverrides } from '@/theme/runtime';
 import {
+  BASE_VIEW_ID,
   DEFAULT_THEME_DEVICE,
+  DEFAULT_THEME_PAGE,
   getDefaultThemeId,
   getThemeRecord,
   listThemes,
@@ -178,17 +184,45 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   /**
-   * 按设备解析出**实际生效**的配色记录
+   * 当前**生效页面**与**生效版式** —— 配色的归属从 2026-09-24 起是「包 × 设备 × 页面 × 版式」
    *
-   * 这是本 store 里唯一一处"把 themeId 变成可渲染的配色"的地方，其余访问器都由它派生，
-   * 避免"有的地方判设备、有的地方不判"导致同一个 id 在不同组件里表现不一致。
-   * 设备不匹配（如电脑端页面遇上手机端的配色）时由 `getThemeRecord` 回落到该设备默认配色。
+   * 🔴 配色挂在**版式**下（`themes/<包>/<设备>/<页面>/[<版式>/]colors/<颜色>/`），
+   *    所以"当前用哪套配色"必须先知道"当前是哪一页、哪套版式"。
+   *    这两个值由容器（`view/app/<page>/index.vue`）在 setup 里告知。
+   *
+   * ⚠️ 与 `activeDevice` 同一思路：**不是**全局用户状态，而是"当前这条路由 + 当前版式"。
+   *    做成响应式是为了让"从 /login 跳到 /register"或"切成 compact 版式"时 token 能重算。
    */
-  function themeRecordFor(device: ThemeDevice = activeDevice.value) {
-    return getThemeRecord(themeId.value, device);
+  const activePage = ref<string>(DEFAULT_THEME_PAGE);
+  const activeView = ref<string>(BASE_VIEW_ID);
+
+  /** 容器告知当前页面 / 版式（同一页面切换版式时会再次调用） */
+  function setActivePageView(page: string, view: string): void {
+    if (page && activePage.value !== page) activePage.value = page;
+    const next = view || BASE_VIEW_ID;
+    if (activeView.value !== next) activeView.value = next;
   }
 
-  /** 主题包自带 token（按**当前生效设备**解析；设备变化时由 watch 重算） */
+  /**
+   * 按设备 + 页面 + 版式解析出**实际生效**的配色记录
+   *
+   * 这是本 store 里唯一一处"把 themeId 变成可渲染的配色"的地方，其余访问器都由它派生，
+   * 避免"有的地方判维度、有的地方不判"导致同一个 id 在不同组件里表现不一致。
+   * 不匹配（如电脑端页面遇上手机端的配色）时由 `getThemeRecord` 回落到该版式默认配色。
+   */
+  function themeRecordFor(
+    device: ThemeDevice = activeDevice.value,
+    page: string = activePage.value,
+    view: string = activeView.value
+  ) {
+    return getThemeRecord(themeId.value, device, page, view);
+  }
+
+  /**
+   * 主题包自带 token（按**当前生效作用域**解析；设备/页面/版式变化时由 watch 重算）
+   *
+   * ⚠️ 是一组**扁平值**，不分明暗档（2026-09-25 改）：配色自带完整底色。
+   */
   const themeTokens = ref<ThemeTokenOverrides | null>(themeRecordFor().tokens ?? null);
   /** 外部覆写 token（后端下发 / 父应用 postMessage）；优先级高于主题包 */
   const externalTokens = ref<ThemeTokenOverrides | null>(null);
@@ -197,7 +231,7 @@ export const useThemeStore = defineStore('theme', () => {
   const themes = listThemes();
 
   /**
-   * 统一注入入口：明暗、配色 token、外部覆写任一变化都重算
+   * 统一注入入口：配色 token、外部覆写、生效范围任一变化都重算
    *
    * ⚠️ 注入的是 `html` 上的 inline style，而 `html` 是**整份文档唯一**的 ——
    * 所以此处只能用**一个**设备的 token。取 `activeDevice`（由当前路由决定，
@@ -209,15 +243,19 @@ export const useThemeStore = defineStore('theme', () => {
    *
    * 之所以不在这里重新跑视口判定：那是路由分发的职责（`utils/device.ts`），
    * 重复实现会出现"路由说电脑版、注入说移动端"的分裂。由路由把结论告诉 store。
+   *
+   * ⚠️ tokens 已是一组扁平值、不再分明暗档（2026-09-25 改），所以**不再依赖 `isDark`**：
+   * 配色外观由"选了哪套颜色"完全决定。`isDark` 只负责给 `<html>` 挂/摘 `dark` 类
+   * （基线 SCSS 用它切深色底），挂在同一个 watch 里只是因为两者都在同一个"重算"时机。
    */
   watch(
-    [isDark, themeTokens, externalTokens, activeDevice],
-    ([dark]) => {
+    [themeTokens, externalTokens, activeDevice, isDark],
+    ([, , , dark]) => {
       document.documentElement.classList.toggle('dark', dark);
-      const rejected = applyThemeLayers(
-        { theme: themeTokens.value, external: externalTokens.value },
-        dark
-      );
+      const rejected = applyThemeLayers({
+        theme: themeTokens.value,
+        external: externalTokens.value
+      });
       if (rejected.length > 0) {
         // 被拒绝的条目多为后端配色表写错（值不在白名单内），留痕便于排查。
         // 生产构建会 drop console，不会泄露到用户侧。
@@ -242,9 +280,9 @@ export const useThemeStore = defineStore('theme', () => {
    *    极难从表象定位。
    */
   let styleEpoch = 0;
-  async function loadThemeStyle(id: string, device: ThemeDevice): Promise<void> {
+  async function loadThemeStyle(id: string, device: ThemeDevice, page: string, view: string): Promise<void> {
     const epoch = ++styleEpoch;
-    const loader = getThemeRecord(id, device).loadStyle;
+    const loader = getThemeRecord(id, device, page, view).loadStyle;
 
     if (!loader) {
       document.getElementById(STYLE_ELEMENT_ID)?.remove();
@@ -286,20 +324,21 @@ export const useThemeStore = defineStore('theme', () => {
    * "零配色 → 渲染路径与没有主题机制时一致"这条不变量由 **mono 零 token** 保证，
    * 而不是靠不写属性 —— 少写一个属性省不下任何渲染代价，却让排查少一个线索。
    *
-   * ⚠️ 必须同时依赖 `activeDevice`：同一个 `themeId` 在两端解析出的记录可能不同
-   *    （设备不匹配时会回落），只盯 themeId 会漏掉"从 /login 跳到 /m/login"这一整类切换。
+   * ⚠️ 必须同时依赖 `activeDevice` / `activePage` / `activeView`：同一个 `themeId`
+   *    在四段归属不同的地方解析出的记录可能不同（不匹配时会回落），只盯 themeId
+   *    会漏掉"从 /login 跳到 /register""切成 compact 版式"这一整类切换。
    */
   watch(
-    [themeId, activeDevice],
-    ([id, device]) => {
-      const record = getThemeRecord(id, device);
+    [themeId, activeDevice, activePage, activeView],
+    ([id, device, page, view]) => {
+      const record = getThemeRecord(id, device, page, view);
       const root = document.documentElement;
-      // 解析出的 id 与请求的 id 不一致 = 该设备下没有这套配色，用了回落档
+      // 解析出的 id 与请求的 id 不一致 = 该版式下没有这套配色，用了回落档
       if (record.meta.id === id) root.dataset.mauthTheme = id;
       else delete root.dataset.mauthTheme;
 
       themeTokens.value = record.tokens ?? null;
-      void loadThemeStyle(id, device);
+      void loadThemeStyle(id, device, page, view);
     },
     { immediate: true }
   );
@@ -340,9 +379,13 @@ export const useThemeStore = defineStore('theme', () => {
    *
    * @param page   页面名，与 `theme/views/<page>.ts` 的文件名一致（如 'register'）
    * @param device 哪个设备下的声明；默认当前生效设备
+   *
+   * ⚠️ 这里查的是**基础版式**（`activeView` 用不了：本函数正是用来决定"该用哪套版式"的，
+   *    拿它当查找条件会自指）。配色的 `views` 声明写在哪个版式下都能被读到 ——
+   *    实践中部署方把它写在基础版式的那份配色里即可。
    */
   function viewFor(page: string, device: ThemeDevice = activeDevice.value): string | undefined {
-    return themeRecordFor(device).views?.[page];
+    return themeRecordFor(device, page, BASE_VIEW_ID).views?.[page];
   }
 
   /**
@@ -384,7 +427,7 @@ export const useThemeStore = defineStore('theme', () => {
   /**
    * 应用外部配色配置（后端下发 / 父应用同步）
    *
-   * @param config theme/skin 为配色 id；mode 为明暗；tokens 为按明暗分组的变量覆写表。
+   * @param config theme/skin 为配色 id；mode 为明暗；tokens 为一组扁平的变量覆写表。
    *               传 null 表示撤销外部覆写（回到配色 + SCSS 基线）。
    *               传入的项若已被 URL 参数锁定则跳过，其余照常生效。
    *
@@ -438,12 +481,15 @@ export const useThemeStore = defineStore('theme', () => {
     packageId,
     device,
     activeDevice,
+    activePage,
+    activeView,
     themes,
     systemDark,
     themeTokens,
     externalTokens,
     themeRecordFor,
     setActiveDevice,
+    setActivePageView,
     setMode,
     cycleMode,
     toggleTheme,

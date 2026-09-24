@@ -22,29 +22,32 @@
 | 维度 | 目录 / 载体 | 换的是什么 | 换的来源（优先级高 → 低） |
 | --- | --- | --- | --- |
 | ① token 基线 | `src/assets/styles/mobile-auth.scss` 的 `--mauth-*` | 不换。所有呈现取值的**唯一出口** | — |
-| ② 配色 | `src/theme/themes/<包>/<设备>/colors/<配色>/` | 颜色 / 圆角 / 描边 / 背景图 / 字体，**同一套 DOM** | `?theme=`（别名 `?skin=`）→ 后端下发 → localStorage → **该设备兜底配色** |
-| ③ 版式 | `src/theme/themes/<包>/<设备>/<page>/` | **DOM 结构与交互组织**，**同一套业务** | `?view=` → 主题包 `views.<page>` → `VITE_<PAGE>_VIEW` → `base` |
+| ② 版式 | `src/theme/themes/<包>/<设备>/<页面>/` | **DOM 结构与交互组织**，**同一套业务** | `?view=` → 主题包 `views.<page>` → `VITE_<PAGE>_VIEW` → `base` |
+| ③ 配色 | `src/theme/themes/<包>/<设备>/<页面>/[<版式>/]colors/<配色>/` | 颜色 / 圆角 / 描边 / 背景图 / 字体，**同一套 DOM** | `?theme=`（别名 `?skin=`）→ 后端下发 → localStorage → **该范围的兜底配色** |
 
 「**设备**」不是一个独立的换装维度，而是**页面身份**：手机端页面与电脑端页面各住各的子树，
 各自有配色与版式（`<设备>` 段取 `mobile` / `web`，白名单）。同一份设计语言（同一个包）下，
-两端可以给出不同的配色与版式，也可以给出同名的配色（`mono` 两端各一份，这是正常的）。
-详见 `oauth21/src/theme/README.md` 的「三级结构」「设备是页面身份」。
+两端可以给出不同的配色与版式，也可以给出同名的配色（如 `black` 两端各一份，这是正常的）。
+详见 `oauth21/src/theme/README.md` 的「四级结构」「设备是页面身份」。
 
-三者**正交**，可任意组合：`?theme=ocean&view=compact` = 海蓝配色 + 轻版式。
+「**配色住在版式下**」（2026-09-24 定案）是 ③ 的关键：同一页的 `base` 与 `compact` 是两套 DOM，
+可覆写的 token 集合不同，所以「一个版式有几种颜色」是**独立的一件事**。
+
+三者**正交**，可任意组合：`?theme=cyan&view=compact` = 青配色 + 轻版式。
 
 ### 想改 X 该去哪儿
 
 | 想改的东西 | 动哪一层 | 参考 |
 | --- | --- | --- |
-| 品牌色 / 圆角 / 描边宽 / 字体栈 | ② 配色 `tokens` | `themes/default/mobile/colors/ocean/` |
-| 背景图 / webfont / 伪元素装饰 | ② 配色 `theme.scss` | `themes/default/mobile/colors/ocean/` |
-| 表面分层（让 header / body 透明，底色交还页面） | ② 配色 `tokens` + 画布 token | `themes/default/mobile/colors/sky/` |
-| 按屏幕形态给不同值（横屏 / 矮屏） | ② 配色 `theme.scss` 的媒体查询 | `themes/default/mobile/colors/sky/` |
-| **DOM 顺序、分步流程、面板组织** | ③ 版式（按设备分区） | `themes/default/mobile/register/compact/` |
+| 品牌色 / 圆角 / 描边宽 / 字体栈 | ③ 配色 `tokens` | `themes/default/mobile/login/colors/blue/` |
+| 背景图 / webfont / 伪元素装饰 | ③ 配色 `theme.scss` | `themes/default/mobile/login/colors/blue/` |
+| 表面分层（让 header / body 透明，底色交还页面） | ③ 配色 `tokens` + 画布 token | `themes/default/mobile/login/colors/cyan/` |
+| 按屏幕形态给不同值（横屏 / 矮屏） | ③ 配色 `theme.scss` 的媒体查询 | `themes/default/mobile/login/colors/cyan/` |
+| **DOM 顺序、分步流程、面板组织** | ② 版式（按设备分区） | `themes/default/mobile/register/compact/` |
 | 校验规则、请求、跳转、拦截条件 | **容器**（不是主题也不是版式） | `view/app/register/index.vue` |
 | 三页共用的字段 / 按钮 / 页脚外观 | ① 基线 `mobile-auth.scss` 的 `mauth-*` 类 | 该文件第 1、2 层 token |
 
-**判断线**：换颜色 → ②；换 DOM 或流程组织 → ③；**两者都不该动业务**。一旦发现"要改业务才能换 UI"，说明分层破了。
+**判断线**：换颜色 → ③；换 DOM 或流程组织 → ②；**两者都不该动业务**。一旦发现"要改业务才能换 UI"，说明分层破了。
 
 ## 二、目录约定
 
@@ -62,7 +65,8 @@ src/theme/
         │   ├── <page>/index.vue     #   该端该页的基础版式（直接落在页面目录下，无 base/ 层）
         │   ├── <page>/<变体>/       #   变体：`import.meta.glob` **惰性**加载
         │   │   └── index.vue
-        │   └── colors/<配色>/       #   该端该包的配色（index.ts + theme.scss + assets/）
+        │   ├── <page>/colors/<配色>/        # ← 基础版式的配色（每页每版式各一套）
+        │   └── <page>/<变体>/colors/<配色>/  # ← 变体版式自己的配色（与 base 互相独立）
         └── <另一设备>/              #   同上，两端各一套
 ```
 
@@ -78,7 +82,8 @@ src/theme/
 | --- | --- | --- |
 | `themes/<包>/` | 主题包（本仓 `default`） | **目录名就是 id** |
 | `themes/<包>/<设备>/` | 该包在某设备上的呈现（`mobile` / `web`） | 目录名，且必须是这两个值之一 |
-| `themes/<包>/<设备>/colors/<配色>/` | 该端该包的**配色**（`mono` / `ocean` / `sky` / …） | **目录名就是 id** |
+| `themes/<包>/<设备>/<页面>/` | 该页在该端的**版式集合**（`index.vue` = base + 变体子目录） | 目录名 |
+| `themes/<包>/<设备>/<页面>/[<版式>/]colors/<配色>/` | 某个**版式**下的**配色**（`black` / `white` / `blue` / `cyan` / …） | **目录名就是 id** |
 
 🔴 **不要往 `themes/` 下放任何不是主题包的目录**：主题注册表扫的就是「一层子目录 + `index.ts`」。
 历史上版式契约塞在 `themes/app/` 里，只能靠「刻意不放 `index.ts`」躲过扫描器 —— 那是个**隐式条件**。
@@ -92,10 +97,10 @@ src/theme/
 | 目录名不合 `^[a-z0-9-]+$` | **跳过**，不注册 |
 | 设备段不是 `mobile` / `web` | 整个目录**跳过**（不会被当成某个配色） |
 | 缺 `index.ts` / 没有 `default` 导出 / 包内没有 `meta` | **跳过**，不注册 |
-| 包内 `meta.id` 与目录名不一致 | **以目录名为准**（`meta: { ...def.meta, id: colorId }`） |
+| 包内 `meta.id` 与目录名不一致 | **以目录名为准**（`meta: { ...def.meta, id: parsed.colorId }`） |
 | 只有 `theme.scss`、没有 `index.ts` | 视为残缺，**该目录的样式被忽略** |
 | 包根（`themes/<包>/index.ts`）坏了 | 该包**及旗下所有设备的配色**全部不注册 |
-| 同包同设备内有同名配色 | 后到的**告警并忽略**（按路径排序先到先得） |
+| 同一版式内有同名配色 | 后到的**告警并忽略**（按路径排序先到先得） |
 
 两点意图：
 
@@ -104,10 +109,11 @@ src/theme/
 2. **跳过而不是抛错**：一个写坏的主题不该让整个认证页起不来。
    **但"跳过"就是静默失效** —— 加完主题没生效时，先查目录名是否合规、有没有漏 `export default`、`meta` 有没有写错字段名。
 
-🔴 **配色 id 的唯一性作用域是「设备内」，不是全局**：
-同包同设备下不能重名，但**跨设备可以同名**（`mono` 两端各配一份）。原因是取值时**必须同时给出设备**
-（`getThemeRecord(id, device)`），歧义在入口就被设备消解 —— 注册表的键是 `包/设备/配色` 三段复合键。
-写扫描器时这点很要命：以配色 id 单键登记会让后来者（web 的 `mono`）被当成重名丢掉。
+🔴 **配色 id 的唯一性作用域是「同包 × 同设备 × 同页 × 同版式」，不是全局**：
+该范围内不能重名，但**跨版式 / 跨页 / 跨设备都可以同名**（`black` 在每个作用域下各配一份是正常且必要的）。
+原因是取值时**必须同时给出这四段**（`getThemeRecord(id, device, page, view)`），歧义在入口就被消解
+—— 注册表的键是 `包/设备/页面/版式/配色` **五段复合键**。
+写扫描器时这点很要命：以配色 id 单键登记会让后来者（同名的另一版式 / 另一端）被当成重名丢掉。
 
 所以「加一个主题包 / 加一套配色」= **加一个目录**：不改 `theme/index.ts`、不改 `mobile-auth.scss`、不改 store（步骤见第八节）。
 
@@ -222,19 +228,50 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
 
 ## 八、加一套配色 / 加一套版式
 
-### 加一套配色（在已有主题包的某个设备下）
+### 加一套配色（在已有主题包的某个页面某个版式下）
 
-1. 建目录 `src/theme/themes/<包>/<设备>/colors/<配色>/`（`<配色>` 只允许 `[a-z0-9-]`；`<设备>` 是 `mobile` / `web`）。
-2. 写 `index.ts`，默认导出 `MauthThemeColor`：`meta` + `tokens: { light, dark }`。
+1. 建目录 `src/theme/themes/<包>/<设备>/<页面>/colors/<配色>/`
+   （变体版式则建在 `<页面>/<版式>/colors/<配色>/`；`<配色>` 只允许 `[a-z0-9-]`；`<设备>` 是 `mobile` / `web`）。
+2. 写 `index.ts`，默认导出 `MauthThemeColor`：`meta` + `tokens`（**一组扁平值** `{ '--mauth-*': '值' }`）。
 3. （可选）`theme.scss` 放背景图 / `@font-face` / 伪元素装饰 / 媒体查询。
-4. **重启 dev server**。
+4. 🔴 **同一页面的每个版式都要各加一份** —— 配色是按版式查的，只给 base 加了、compact 没加，
+   切到 compact 时该配色就不在列表里（静默回落）。
+5. **重启 dev server**。
 
 ⚠️ **配色 `meta.id` 与目录名必须字面一致**（以目录名为准，但不对齐会让维护者困惑），
-且**同包同设备内不得重名**。跨设备同名是允许的（两端各配各的 `mono`）。
+且**同一版式内不得重名**。跨版式 / 跨页 / 跨设备同名是允许的（`black` 在每个作用域各配一份）。
 
-⚠️ **颜色类 token 必须成对给 `light` 与 `dark`**：`light` 在深色下**也生效**（打底），
-`dark` 只是追加覆盖 —— 只写 `light` 的品牌主色会在深色下沿用，深底上发闷。
-不分明暗的（圆角、间距、字体族名）只写 `light` 即可。
+⚠️ **`tokens` 只有一组扁平值，不分明暗档**（2026-09-25 取消）：
+
+```ts
+tokens: {
+  '--mauth-primary': '#0e7490',
+  '--mauth-primary-fg': '#fff',
+  /* 不分明暗的（圆角、间距、字体族名）同样直接写在里面 */
+  '--mauth-radius': '16px'
+}
+```
+
+以前要求「颜色类 token 必须成对给 `light` 与 `dark`」，那是**配色兼职明暗**时代的产物；
+现在明暗完全正交、配色自带底色，**再写成两档就是无意义的重复**（两边永远同值）。
+类型 `ThemeTokenOverrides` 已收窄为 `Record<string, string>`，写 `light:` / `dark:` 会直接编译报错。
+
+### 🔴 明暗（`mode`）与配色正交，「深浅」不是配色的一部分
+
+- **`mode`**（`mode.ts`：浅色 / 深色 / 跟随系统）是**系统级偏好**，全局一个值，只决定 `html.dark` 这个 class 是否挂上（基线 SCSS 的地基色）。
+- **配色**是**具体的一套外观**，自带底色（`--mauth-canvas` 等），选谁就是谁 —— **完全不参与明暗**。
+
+**所以：**
+
+- 需要一套深色的品牌色？**加一个新颜色目录**（如 `navy`），而不是把它做成"某配色的深色档"。
+- `black` 与 `white` 不是"同一配色的明暗两档"，而是**两个完全并列的颜色**（各有自己 id、各自出现在面板里）。
+  选 `black` 就是黑底，选 `white` 就是白底，**与当前 `mode` 偏好无关**。
+- 调试面板**不提供**「点颜色顺带改明暗」这种行为（曾有过 `COLOR_MODE` 映射，2026-09-25 已删除）。
+
+用户 2026-09-25 的原话：
+
+> 没有深浅两档了，深和浅就是两种颜色配置。
+> 黑和白和蓝青等应该是并列关系…蓝色没有白蓝和黑蓝之分，底色由蓝色自己选择设置。
 
 ⚠️ 把 `--mauth-header-bg` / `--mauth-body-bg` 设为 `transparent` 时，**必须同时声明画布 token**
 （见[跨内核渲染基线](/frontend/browser-baseline)的「表面透明必须同时声明画布色」）。
@@ -256,7 +293,7 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
 | 输入 | 校验位置 | 口径 |
 | --- | --- | --- |
 | 版式 id | `theme/views/registry.ts` 的 `resolve()` | 只认 `^[a-z0-9-]+$` 且**当前包内已登记**；未登记返回 `null`，**不拼路径、不做模糊匹配** |
-| 配色 id | `theme/index.ts` 注册表 | 同上；未登记回退**该设备的兜底配色**（`defaultColorIdOf(device)`） |
+| 配色 id | `theme/index.ts` 注册表 | 同上；未登记回退**该范围的兜底配色**（`defaultColorIdOf(device, page, view)`，按 id 字母序取最前） |
 | token 名 / 取值 | `src/theme/runtime.ts` | token 名必须 `--mauth-` 前缀；取值只接受 `#hex` / `rgb()` / `hsl()` / 长度 / `var(--mauth-*)` / 少量关键字 |
 
 🔴 **`runtime.ts` 刻意拒 `url()` 与 CSS 颜色名**：
@@ -276,12 +313,14 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
    各面板可达、浮层与分发路径、静态分层体检。
    分发逻辑还要单测 **iframe 内宽度**的情形（`verify-forgot-view.mjs` 的 I 段：把页面放进
    指定宽度的 iframe，断言 `fromLogin=mini` 时窄 iframe 也保持桌面版 —— 见第十一节）。
-2. **目录口径关卡**：`.tmp-probe/verify-theme-dirs.mjs`（**132 项**静态断言，纯文件系统、**不需要浏览器**）。
-   守的就是本节「主题包 = 一个目录」那张表：**三级结构**（包 / 设备 / 配色）、目录名合法性、必备文件、
-   `theme.scss` 选择器必须用目录名、配色目录叫 `colors/`、版式按设备分区、版式去 `base/` 层、
-   契约收在 `theme/views/` 下、**配色 id 唯一性按「设备内」判**（复合键 `包/设备/配色`）、
-   目录名与 `meta.id` 字面一致（6b 节，按目录名判而非 `meta.id`，防"不同目录写同一个 id"逃检），
-   外加**实现 ↔ 文档口径一致性**（glob 仍只扫三层、仍由目录名覆盖 `meta.id`、
+2. **目录口径关卡**：`.tmp-probe/verify-theme-dirs.mjs`（**301 项**静态断言，纯文件系统、**不需要浏览器**）。
+   守的就是本节「主题包 = 一个目录」那张表：**四级结构**（包 / 设备 / 页面 / 版式 / 配色）、目录名合法性、必备文件、
+   `theme.scss` 选择器必须用目录名、配色住在版式下（不在设备下）、版式按设备分区、版式去 `base/` 层、
+   **黑白是与蓝青并列的实体颜色**（每个「包×设备×页面×版式」作用域下都要同时有 `black` 与 `white` 且自带 token）、
+   契约收在 `theme/views/` 下、**配色 id 唯一性按「同包同设备同页同版式」判**（五段复合键）、
+   目录名与 `meta.id` 字面一致（6b 节，按目录名判而非 `meta.id`，防"不同目录写同一个 id"逃检）、
+   外加**实现 ↔ 文档口径一致性**（两套 glob 仍扫到版式段、仍由目录名覆盖 `meta.id`、
+   `listColorsOf` 只按 id 字母序不给黑白特权、
    `setupThemeDeviceSync` 用 `watch(router.currentRoute)` 且接在 `app.use(pinia)` 之后）。
    改主题目录结构或 `theme/index.ts` 的扫描逻辑后跑它。
 3. **glob 编译产物关卡**：`.tmp-probe/verify-glob-device.mjs`（**15 项**）。
@@ -296,17 +335,18 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
 6. **调试面板**：`?debug=theme` 会自动列出版式
    （`/m/login → 版式·login [base]`、`/m/forgot-password → 版式·forgot-password [base]`、`/m/register → [base, compact]`）——
    这是 `theme/views/pages.ts` 汇总出来的，**新增页面不用回来改**。
-   面板带**设备切换**（跟随路由 / 手机端 / 电脑端）：电脑端当前只列出 `mono` 一套配色。
+   面板带**设备切换**（跟随路由 / 手机端 / 电脑端）：电脑端当前只列出 `black` / `white` 两套配色。
+   ⚠️ 面板**只控制当前页面的版式与配色**，不展示路由、不跨页跳转（2026-09-25 改）。
 
 ### 关卡必须自己"会红"（毒丸验证）
 
 静态关卡靠"读文件 + 断言文本"过活，**很容易写成恒绿的摆设**。改完关卡后必须做一次毒丸：
 
-- 造一个 **`colors/mobile/mono-base/`**（目录名合法但未登记）→ 若关卡不报错，说明它没真在核对；
-- 把注册表退回**以配色 id 单键**登记（还原旧实现）→ web 的 `mono` 与 mobile 的 `mono` 撞键，关卡必须报错；
+- 把某个页面某个版式下的 **`white/` 临时改名**（如 `__poison`）→ 关卡必须报「有 colors/white/」与「目录名合法」两条红；
+- 把注册表退回**以配色 id 单键**登记（还原旧实现）→ 两个版式的 `black` 撞键，关卡必须报错；
 - 把 `setupThemeDeviceSync` 改回 `router.afterEach` → 关卡必须报错。
 
-毒丸变绿就说明关卡没真在检查。这三条正是 2026-09-24 那轮**真实踩到并修掉**的坑。
+毒丸变绿就说明关卡没真在检查。
 
 ## 十一、设备分发的一致性（分发器）
 
@@ -386,8 +426,9 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 | --- | --- | --- |
 | **`.env` 白名单漏了宿主 origin** | 弹窗「正在加载安全登录」转很久（等满宿主 3s 兜底），看起来像性能问题 | 控制台必有 `[SSO] 拒绝 postMessage：父 origin 未授权 …` → 补 `VITE_ALLOWED_PARENT_ORIGINS`。**别把 oauth21 自己的 5174/5175 写进去** |
 | **某分发器漏了「mini 来源」分支** | 嵌在宿主弹窗 iframe 里时，**只有这一页**跳成全屏手机端，同 iframe 的登录/注册仍是桌面卡片 | 在自动识别**之前**加一条：`fromLogin === 'mini'`（本页参数名）/ `from === 'mini'` / 路径含 `mini-login` → 直接返回桌面版。三个分发器都要有 |
-| 加了配色/主题目录但"没生效" | 主题不出现，**且没有任何报错** | 注册表对坏目录是**静默跳过**：逐一核 ① 目录名是否 `[a-z0-9-]` ② 设备段是否 `mobile`/`web` ③ 有没有 `index.ts` ④ 有没有 `export default` ⑤ 包里有没有 `meta` |
-| **配色 id 用单键登记（漏了设备段）** | 后扫描到的一端（如 web 的 `mono`）被当成重名**静默丢弃** | 注册表键必须是 `包/设备/配色` 三段复合键；取值用 `getThemeRecord(id, device)`。加完新设备若发现"少了一套配色"，先看控制台有没有重名告警 |
+| 加了配色/主题目录但"没生效" | 主题不出现，**且没有任何报错** | 注册表对坏目录是**静默跳过**：逐一核 ① 目录名是否 `[a-z0-9-]` ② 设备段是否 `mobile`/`web` ③ 有没有 `index.ts` ④ 有没有 `export default` ⑤ 包里有没有 `meta` ⑥ **是否漏了某个版式**（配色按版式查，只加 base 加不到 compact） |
+| **配色 id 用单键登记（漏了版式段）** | 同一份配色在不同版式间互相覆盖，或后扫描到的被当成重名**静默丢弃** | 注册表键必须是 `包/设备/页面/版式/配色` 五段复合键；取值用 `getThemeRecord(id, device, page, view)`。加完版式若发现"少了一套配色"，先看控制台有没有重名告警 |
+| **让某个颜色去兼职明暗开关** | 选了黑再选蓝，底色还是黑的（或反之） | `mode` 与配色**正交**；每套配色自带底色，选谁就是谁。需要深色品牌色就**另加一个颜色目录**（如 `navy`）—— 见「明暗与配色正交」 |
 | 设备同步写在 `router.afterEach` 里 | 电脑端页面被当成手机端，列出手机端配色 | `afterEach` 首次触发时 Pinia `activeInstance` 尚未建立，`useThemeStore()` 抛错**被 try/catch 吞掉** → 设备永远停在默认值。改用 `watch(router.currentRoute, { immediate: true })`，并在 `main.ts` 的 `app.use(pinia)` **之后**调 `setupThemeDeviceSync(router)` |
 | 往 `themes/` 下塞回一个 `views/` 目录 | 契约被主题扫描器当配色扫到 | 契约与注册表在 `theme/views/`（与 themes 平级），别塞回 `themes/` 里 |
 | `meta.id` 与目录名不一致 | 主题能选中但 `theme.scss` 完全不生效 | 以**目录名**为准（会被覆盖）；把 `theme.scss` 的选择器改成目录名 |
@@ -409,8 +450,10 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 | 登录 | `view/app/login/index.vue` | `themes/default/mobile/login/` | `base` | ✅ |
 | 重置密码 | `view/app/forgot-password/index.vue` | `themes/default/mobile/forgot-password/` | `base` | ✅ |
 
-手机端配色：`mono`（黑白基线，**零 token**，写 `data-mauth-theme="mono"`）、
-`ocean`（只改取值）、`sky`（改取值 + 改结构 + 横屏断点）。
+手机端配色（每页每版式各一份）：`black`（深色底 + 浅色字，自带底色）、
+`white`（浅色底 + 深色字，自带底色）、`blue`（只改取值 + 贴底剪影）、
+`cyan`（改取值 + 改结构 + 横屏断点）、`rainbow`（多彩装饰，仅 login 页）。
+**五色完全并列**：同一个列表、同一套选中逻辑、同一优先级，黑白不兼职明暗开关。
 
 ### 电脑端（2026-09-24 骨架）
 
@@ -418,8 +461,8 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 | --- | --- | --- |
 | 登录 / 注册 / 重置密码 | `themes/default/web/<page>/index.vue` | **最小占位**（只渲染一行提示 + 契约 props） |
 
-电脑端配色：**仅 `mono` 一套**（黑白基线，零 token，骨架）。
-其余配色留给后续 —— 口径是「手机端用 `ocean` / `sky`，电脑端若要自己的品牌色则叫 `web-ocean` / `web-sky`」
+电脑端配色：**每页 `black` / `white` 各一份**（自带底色，骨架）。
+其余配色留给后续 —— 口径是「手机端用 `blue` / `cyan`，电脑端若要自己的品牌色则叫 `web-blue` / `web-cyan`」
 （跨设备同名虽被允许，但两端要**不同**色时仍须不同名）。
 
 ⚠️ 电脑端的**核心组件（`StandardLogin.vue` / `StandardRegister.vue` 等）目前仍是业务与 UI 揉在一起

@@ -6,7 +6,7 @@
    token 才能被后端下发与父应用覆写，写死在这里就失去了可配置性。
 
    === 选择器约定（重要）===
-   一律带 `html[data-mauth-theme='ocean']` 前缀，理由有二：
+   一律带 `html[data-mauth-theme='cyan']` 前缀，理由有二：
      ① 主题样式是「附加」而非「替换」：切走主题后 DOM 属性消失，规则自动失效，
         不需要运行时卸载样式表，也不会污染别的主题
      ② 提高特异性（多一个元素 + 一个属性），稳定压过基线同类规则，
@@ -23,20 +23,20 @@
    `.mauth-page` 的背景画在所有后代**之下**，而 `.mauth-body` 是不透明表面
    （`--mauth-body-bg`，浅深两档都不透明）且 `flex:1 0 auto` 基本铺满可视区 ——
    图挂在外层会被它整块盖住，截图上完全看不到。挂到内容层才真的可见。 */
-html[data-mauth-theme='ocean'] .mauth-body {
+html[data-mauth-theme='cyan'] .mauth-body {
   background-image: url('./assets/wave.svg');
   background-repeat: no-repeat;
   background-position: bottom center;
   background-size: 100% auto;
 }
 
-html.dark[data-mauth-theme='ocean'] .mauth-body {
+html.dark[data-mauth-theme='cyan'] .mauth-body {
   background-image: url('./assets/wave-dark.svg');
 }
 
 /* 顶部品牌色装饰条：绝对定位，不占布局空间，因此不改变任何元素尺寸。
    ::before 是主题自己加的伪元素，基线样式里没有，切走主题即消失。 */
-html[data-mauth-theme='ocean'] .mauth-header::before {
+html[data-mauth-theme='cyan'] .mauth-header::before {
   content: '';
   position: absolute;
   top: 0;

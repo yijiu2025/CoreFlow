@@ -7,7 +7,7 @@
    颜色 / 圆角 / 描边 / 字体全部走 tokens（见 index.ts）—— 那样部署方能从后端改，
    写死在这里就失去了可配置性。
 
-   选择器一律带 `html[data-mauth-theme='sky']` 前缀：切走主题后 DOM 属性消失、
+   选择器一律带 `html[data-mauth-theme='blue']` 前缀：切走主题后 DOM 属性消失、
    规则自动失效，无需运行时卸载样式表，也不会污染别的主题。
 
    本文件由 src/theme/themes/index.ts 以 `?inline` 动态加载，切到本主题时才请求，
@@ -22,7 +22,7 @@
    （ocean 主题先在 `.mauth-page` 上挂波浪时就踩过这个坑，截图上完全看不到）。
 
    三个色标来自 token，部署方换渐变配色不必改本文件。 */
-html[data-mauth-theme='sky'] .mauth-page {
+html[data-mauth-theme='blue'] .mauth-page {
   background-image: url('./assets/skyline.svg'),
     linear-gradient(
       180deg,
@@ -45,13 +45,13 @@ html[data-mauth-theme='sky'] .mauth-page {
 
    ⚠️ 必须落在 `html` 上：画布色由**根元素**的背景向上传播决定（CSS 2.2 §14.2），
    挂在 `.mauth-page` 上不起作用。 */
-html[data-mauth-theme='sky'] {
+html[data-mauth-theme='blue'] {
   --mauth-canvas: var(--mauth-sky-top);
 }
 
 /* 深色档只换剪影文件：三个色标已经在 tokens.dark 里改过，
    同一条 linear-gradient 会重新求值，无需重写。 */
-html.dark[data-mauth-theme='sky'] .mauth-page {
+html.dark[data-mauth-theme='blue'] .mauth-page {
   background-image: url('./assets/skyline-dark.svg'),
     linear-gradient(
       180deg,
@@ -65,8 +65,8 @@ html.dark[data-mauth-theme='sky'] .mauth-page {
    两个色标仍取 token，本文件只负责「怎么渐变」—— 所以后端改 --mauth-submit-bg
    依然能生效。用 background-image 而非 background 简写，是为了不动 background-color，
    这样 `:disabled { opacity: .6 }` 之类的既有规则不受影响。 */
-html[data-mauth-theme='sky'] .mauth-submit,
-html[data-mauth-theme='sky'] .mauth-next-btn {
+html[data-mauth-theme='blue'] .mauth-submit,
+html[data-mauth-theme='blue'] .mauth-next-btn {
   background-image: linear-gradient(180deg, var(--mauth-submit-bg-top), var(--mauth-submit-bg));
 }
 
@@ -78,7 +78,7 @@ html[data-mauth-theme='sky'] .mauth-next-btn {
    剪影会被撑满整个容器 —— 实测占掉 800px 视口，整屏都是建筑。
    竖屏那条 `100% auto` 能算出 120px，靠的就是这两个属性。 */
 @media (max-height: 560px) {
-  html[data-mauth-theme='sky'] .mauth-page {
+  html[data-mauth-theme='blue'] .mauth-page {
     background-size: 100% 88px, 100% 100%;
   }
 }

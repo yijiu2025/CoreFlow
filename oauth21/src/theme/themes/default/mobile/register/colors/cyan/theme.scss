@@ -1,0 +1,67 @@
+/* ==========================================================================
+   海蓝主题 · 附加样式
+
+   token 表达不了的部分放这里：背景图片、webfont、伪元素装饰、结构级差异。
+   能用 token 表达的（颜色/圆角/间距/字体族名/描边色）**不要写在这里** ——
+   token 才能被后端下发与父应用覆写，写死在这里就失去了可配置性。
+
+   === 选择器约定（重要）===
+   一律带 `html[data-mauth-theme='cyan']` 前缀，理由有二：
+     ① 主题样式是「附加」而非「替换」：切走主题后 DOM 属性消失，规则自动失效，
+        不需要运行时卸载样式表，也不会污染别的主题
+     ② 提高特异性（多一个元素 + 一个属性），稳定压过基线同类规则，
+        不必依赖「本文件后加载所以后者胜」这种脆弱的顺序假设
+
+   文件由 `src/theme/themes/index.ts` 以 `?inline` 动态加载，切到本主题时才请求，
+   assets/ 下的图片同理 —— 不会进首屏包。
+   ========================================================================== */
+
+/* 背景图片：底部波浪。assets/ 里放浅深两版，因为外部 SVG 无法继承 currentColor，
+   靠 CSS 透明度调不亮也调不暗，只能按明暗各给一份。
+
+   ⚠️ 挂在 `.mauth-body` 而不是 `.mauth-page` 上：
+   `.mauth-page` 的背景画在所有后代**之下**，而 `.mauth-body` 是不透明表面
+   （`--mauth-body-bg`，浅深两档都不透明）且 `flex:1 0 auto` 基本铺满可视区 ——
+   图挂在外层会被它整块盖住，截图上完全看不到。挂到内容层才真的可见。 */
+html[data-mauth-theme='cyan'] .mauth-body {
+  background-image: url('./assets/wave.svg');
+  background-repeat: no-repeat;
+  background-position: bottom center;
+  background-size: 100% auto;
+}
+
+html.dark[data-mauth-theme='cyan'] .mauth-body {
+  background-image: url('./assets/wave-dark.svg');
+}
+
+/* 顶部品牌色装饰条：绝对定位，不占布局空间，因此不改变任何元素尺寸。
+   ::before 是主题自己加的伪元素，基线样式里没有，切走主题即消失。 */
+html[data-mauth-theme='cyan'] .mauth-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--mauth-accent);
+  opacity: 0.6;
+}
+
+/* --------------------------------------------------------------------------
+   换 webfont 的做法（本主题没有带字体文件，故仅示范，不启用）
+   --------------------------------------------------------------------------
+   1. 把字体文件放进 assets/，例如 assets/BrandSans.woff2
+   2. 在本文件取消下面注释并按需改路径：
+
+      @font-face {
+        font-family: 'BrandSans';
+        src: url('./assets/BrandSans.woff2') format('woff2');
+        font-display: swap;
+      }
+
+   3. 在 ../ocean/index.ts 的 tokens.light 里把字体栈改成
+      `'--mauth-font-family': "'BrandSans', 'PingFang SC', system-ui, sans-serif"`
+
+   Vite 会处理 @font-face 里的相对 url：构建时把文件输出成带 hash 的静态资源，
+   这里无需手写绝对路径或 CDN 地址。
+   -------------------------------------------------------------------------- */

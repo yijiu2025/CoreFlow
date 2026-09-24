@@ -13,20 +13,23 @@
  *
  *   200 OK
  *   {
- *     "theme": "ocean",                       // 可选。src/theme/themes/ 下已登记的主题 id
- *     "skin": "ocean",                        // 可选。theme 的旧字段名，二选一即可
+ *     "theme": "blue",                        // 可选。src/theme/themes/ 下已登记的配色 id
+ *     "skin": "blue",                         // 可选。theme 的旧字段名，二选一即可
  *     "mode": "dark",                         // 可选。'light' | 'dark' | 'system'
- *     "tokens": {                             // 可选。按明暗分组的 CSS 变量覆写
- *       "light": { "--mauth-primary": "#0e7490", "--mauth-radius": "16px" },
- *       "dark":  { "--mauth-primary": "#67e8f9" }
+ *     "tokens": {                             // 可选。一组扁平的 CSS 变量覆写
+ *       "--mauth-primary": "#0e7490",
+ *       "--mauth-radius": "16px"
  *     }
  *   }
  *
  *   token 名必须以 `--mauth-` 开头，取值必须是颜色/长度/关键字/Var 引用之一；
  *   不合规的条目会被逐条丢弃并告警（见 src/theme/runtime.ts）。
- *   深色档未给出的变量沿用浅色档的值。
  *
- *   ⚠️ `theme` 只能指定**已登记**的主题 id，后端不能下发 CSS 正文；
+ *   ⚠️ tokens 是**一组扁平值**，不分明暗档（2026-09-25 改）：配色自带完整底色，
+ *      与明暗偏好无关。想让深色偏好下换一套品牌色，请**另配一个配色 id**，
+ *      而不是下发两档 token。
+ *
+ *   ⚠️ `theme` 只能指定**已登记**的配色 id，后端不能下发 CSS 正文；
  *      需要自由度更高的定制（背景图、字体文件）请走 tokens + 前端主题包。
  *
  *   ⚠️ 后端下发的 mode/theme **不写入 localStorage**：它们是「本次访问的部署方默认」，
@@ -43,6 +46,7 @@
  * @author yijiu2025
  */
 import { normalizeMode, type ThemeMode } from './mode';
+import type { ThemeTokenOverrides } from './runtime';
 
 /** 配置在 .env 里；未配置则整个机制不生效 */
 const ENDPOINT = (import.meta as any).env?.VITE_THEME_ENDPOINT as string | undefined;
@@ -51,13 +55,14 @@ const ENDPOINT = (import.meta as any).env?.VITE_THEME_ENDPOINT as string | undef
 const TIMEOUT_MS = 3000;
 
 export interface RemoteThemeConfig {
-  /** 主题 id（src/theme/themes/ 下已登记）；旧字段名 skin 也接受 */
+  /** 配色 id（src/theme/themes/ 下已登记）；旧字段名 skin 也接受 */
   theme?: string;
   /** 明暗三态 */
   mode?: ThemeMode;
   /** @deprecated 旧字段名，等价于 theme。保留以兼容已上线的后端实现 */
   skin?: string;
-  tokens?: { light?: Record<string, string>; dark?: Record<string, string> };
+  /** 一组扁平的 token 覆写（⚠️ 旧结构 `{light, dark}` 已不再接受，见文件头） */
+  tokens?: ThemeTokenOverrides;
 }
 
 /** 后端换配色是否启用（env 配了端点） */
@@ -85,14 +90,10 @@ function normalize(data: unknown): RemoteThemeConfig | null {
   if (mode) out.mode = mode;
 
   if (raw.tokens && typeof raw.tokens === 'object' && !Array.isArray(raw.tokens)) {
-    const tokens: RemoteThemeConfig['tokens'] = {};
-    for (const level of ['light', 'dark'] as const) {
-      const table = (raw.tokens as Record<string, unknown>)[level];
-      if (table && typeof table === 'object' && !Array.isArray(table)) {
-        tokens[level] = table as Record<string, string>;
-      }
-    }
-    if (tokens.light || tokens.dark) out.tokens = tokens;
+    // ⚠️ 只接受**扁平**结构（`{ "--mauth-x": "…" }`）。旧的 `{ light, dark }` 两档结构
+    //    已随 2026-09-25 的取消明暗档一并废弃：这里若还认它，等于让"两档"这条
+    //    已经删掉的语义从后门回来。逐条取值校验交给 runtime.ts 的 sanitize。
+    out.tokens = raw.tokens as ThemeTokenOverrides;
   }
 
   return out.theme || out.skin || out.mode || out.tokens ? out : null;

@@ -8,9 +8,12 @@
  *   { type: 'THEME_CHANGE', isDark: boolean }                       // 旧版：只同步明暗
  *   { type: 'THEME_CHANGE', isDark?, theme?, skin?, tokens? }       // 新版：可同时换主题
  *
- * theme  主题 id（须在 src/theme/themes/ 下登记过；skin 是它的旧字段名，两者等价）
- * tokens 按明暗分组的 CSS 变量覆写表，实现「父应用给子页面定制每个组件的 UI」：
- *          { light: { '--mauth-primary': '#0e7490' }, dark: { '--mauth-primary': '#67e8f9' } }
+ * theme  配色 id（须在 src/theme/themes/ 下登记过；skin 是它的旧字段名，两者等价）
+ * tokens 一组**扁平**的 CSS 变量覆写表，实现「父应用给子页面定制每个组件的 UI」：
+ *          { '--mauth-primary': '#0e7490', '--mauth-radius': '16px' }
+ *        ⚠️ 不再接受旧的两档结构 `{ light, dark }`（2026-09-25 取消明暗档）——
+ *           配色自带完整底色，与明暗偏好无关。父应用想让深色下换一套色，
+ *           请换一个**配色 id**（对应前端已登记的颜色目录）。
  *
  * ⚠️ tokens 的每一项都会过 src/theme/runtime.ts 的白名单校验（token 名 + 取值形态），
  *    不合规的条目被丢弃并告警。父页面虽然是受信来源，但 postMessage 的载荷

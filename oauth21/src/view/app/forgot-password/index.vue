@@ -317,6 +317,15 @@ const viewId = computed(() =>
 );
 
 /**
+ * 告诉 store「当前是哪一页、哪套版式」
+ *
+ * 🔴 配色挂在**版式**下（`themes/<包>/<设备>/<页面>/[<版式>/]colors/<颜色>/`），
+ *    所以"该注入哪套颜色的 token"必须知道这两个值 —— 不知道就会落到
+ *    `DEFAULT_THEME_PAGE` + `base`，表现为「页面里选的颜色不生效」。
+ */
+watch(viewId, id => themeStore.setActivePageView('forgot-password', id), { immediate: true });
+
+/**
  * 当前渲染的版式组件（默认是静态引入的内置包基础版式，首帧直接正确）
  *
  * ⚠️ 必须**同时**盯住主题包：版式只在当前包内查找，换了包但解析出的 id 字符串没变

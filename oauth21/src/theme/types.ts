@@ -97,18 +97,21 @@ export interface MauthThemePackage {
 /**
  * 一套**配色**的定义（`<设备>/colors/<配色>/index.ts` 的默认导出）
  *
- * `tokens` 的语义（与 SCSS 层叠规则严格一致，见 `runtime.sanitizeOverrides`）：
- *   • `light` —— **两档打底**：浅色生效，深色下也生效
- *   • `dark`  —— 仅在深色下追加覆盖
- * ⚠️ 因此 `light` 里的颜色类 token 若不写 `dark` 变体，深色下会沿用浅色值，
- *    可能造成深底浅字。**颜色请成对给**：品牌色在深色下通常需要提亮。
+ * `tokens` 的语义（2026-09-25 改）：
+ *   • 是**一组扁平值**（`Record<string, string>`），**不分明暗档**
+ *   • 每套配色**自带完整底色**，选谁就是谁 —— 与当前明暗偏好无关
+ *   • 明暗（`mode`）仍存在，但只在**基线 SCSS** 那层生效（`html.dark` 选择器）
+ *
+ * ⚠️ 因此**不要**再写 `{ light, dark }` 两档，也**不要**为"深色版"单开一份 token：
+ *    需要深色品牌色就**另加一个颜色目录**（如 `navy`）。用户 2026-09-25 原话：
+ *    「没有深浅两档了，深和浅就是两种颜色配置。」
  *
  * ⚠️ 若配色把 `--mauth-header-bg` 设为 `transparent`（把底色交还给页面），
  *    必须同时声明 `--mauth-canvas`（页面最上沿的颜色），否则"页面之外的画布色"
- *    会退回给浏览器内核自己决定 → 真机与电脑不一致。参考 sky/theme.scss。
+ *    会退回给浏览器内核自己决定 → 真机与电脑不一致。参考 cyan 配色的 theme.scss。
  *
- * ⚠️ 黑白（mono）这类"基线配色"刻意**不给 tokens**：它的色值就是样式表的基线本身，
- *    保住"零配色时渲染路径与没有主题机制时完全一致"这条不变量。
+ * ⚠️ 黑白（`black` / `white`）是与 `blue` / `cyan` **完全并列**的普通颜色，
+ *    各自写全 token（自带底色），不再是"零 token 的基线配色"。见 README「五色并列」。
  */
 export interface MauthThemeColor {
   meta: MauthThemeMeta;
@@ -133,6 +136,21 @@ export interface MauthThemeRecord {
    * （版式 = 当前包 × 当前设备）。
    */
   device: ThemeDevice;
+  /**
+   * 该配色所属的**页面**（= `themes/<包>/<设备>/<页面>/` 的目录名，如 `register`）
+   *
+   * 🔴 配色自 2026-09-24 起挂在**版式**下（`<页面>/[<版式>/]colors/<颜色>/`），
+   *    所以"这套颜色给哪一页用"是它归属的一部分 —— 同一个颜色 id 在不同页面下
+   *    各有一份（那是正常且必要的，两页的尺寸/间距本就不必一致）。
+   */
+  page: string;
+  /**
+   * 该配色所属的**版式**（基础版式为 `base`，变体为 `<页面>/<版式>/` 的目录名）
+   *
+   * 🔴 这就是"一个版式有几种颜色"的落点：取某版式的可选颜色 = 在本版式名下筛记录。
+   *    基础版式的配色目录少一层（`<页面>/colors/<颜色>/`），注册表里统一记作 `base`。
+   */
+  view: string;
   meta: MauthThemeMeta;
   /** 该主题的 token（已从配色里取出，未做安全校验——校验在注入时统一做） */
   tokens: ThemeTokenOverrides | undefined;
