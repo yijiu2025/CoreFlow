@@ -45,8 +45,13 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
 - **样式单一来源** = `assets/styles/mobile-auth.scss`（`mauth-*`）。**基础版式与 `/m/*` 页不得自带 `<style>`**（变体可以，取值只许 `--mauth-*`）；⚠️ 移动端版式**刻意不限宽**（用户明确要求满宽）。
 - **版式优先级** `?view=` > 主题包 `views.<page>` > `VITE_<PAGE>_VIEW` > base，⚠️ **URL 显式非法值不回退**；base 容器**静态引入**、变体 `glob` 惰性 chunk；
   契约 = `types.ts` 纯类型 + 容器 `assertXxxContract` 编译期自检；浮层由**容器**渲染；**新增变体目录要重启 dev server**。
+  ⚠️ **毒丸验证永远不要截断输出**（`| head -N` 会让"是否真变红"不可判）—— 2026-09-25 踩过。
 - **皮肤**：三层 token（全局语义 → 组件级 → 组件规则零裸色值）；明暗与皮肤**正交**；来源 `?theme=`（`?skin=` 别名）> 后端 > localStorage > default；
   🔴 外部输入**必过白名单**（`theme/runtime.ts` 拒 `url()` 与 CSS 颜色名）；`*/index.ts` eager、`*/theme.scss` 惰性；入口 `?debug=theme` 面板。
+  🔴 **`tokens` 是扁平值 `Record<string,string>`，无 light/dark 两档（2026-09-25 定，提交 f9897cc）**：`applyThemeLayers(layers)` 不接受 `isDark`；
+  `isDark` 只负责给 `<html>` 挂 `dark` 类（基线 SCSS 切深色底），**完全不参与 token 选档**。要深色品牌色就**另加颜色目录**，别做"某配色的深色档"。
+  ⚠️ 注册表键是**五段复合键** `包/设备/页面/版式/配色`（base 版式用 `BASE_VIEW_ID='base'`）；配色**每个版式各一份**，漏了静默回落。
+  ⚠️ 写 glob 通配（`themes/*/*/*/colors/*/index.ts`）落进**块注释**会因含 `*/` 提前闭合 → `SyntaxError`，报错行 ≠ 根因行。
   🔴 `tokens` 是 `html` 上的 inline style、**优先级高于媒体查询** → 绝不能覆写断点里会变的 token（`--mauth-pad-*`/`gap-*`/`logo-size`/`title-size`/`field-h`/`control-h`/`err-h`/`social-*`）；
   ⚠️ `--mauth-header-bg` 设 `transparent` → **必须同时声明 `--mauth-canvas`**；⚠️ `assets/` 的 SVG **必须带 `width`/`height`**。
 - 🔴 **调试移动端页前必须先造窄视口并刷新**：判定 `宽视口(≥1024) ＞ 窄视口(<768) ＞ UA`；宽视口开 `/m/*` 会**跳电脑版**，**UA 伪装压不过宽视口**，
