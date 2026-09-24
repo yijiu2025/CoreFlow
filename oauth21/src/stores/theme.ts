@@ -3,8 +3,9 @@
  *
  * === 两个正交维度 ===
  *   mode（明暗）—— 用户可控：'system' | 'light' | 'dark'（见 @/theme/mode）
- *   theme（主题）—— 部署方决定：一个主题包 id，对应 src/themes/<id>/
- * 两者组合出 `主题数 × 2` 种外观，互不干扰：切黑白不影响品牌色，换主题不影响明暗偏好。
+ *   theme（配色）—— 部署方决定：一个**配色 id**，对应 `src/theme/themes/<包>/` 的包根
+ *                   或包内 `colors/<配色>/`；配色再反查出**主题包**（版式就在那个包里找）
+ * 两者组合出 `配色数 × 2` 种外观，互不干扰：切黑白不影响品牌色，换配色不影响明暗偏好。
  *
  * === 相比旧实现修掉的问题 ===
  * 旧版本只有布尔 isDark + 一个 `theme-manual` 标记：用户点过一次切换按钮，
@@ -30,12 +31,12 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { MODE_CYCLE, normalizeMode, type ThemeMode } from '@/theme/mode';
 import { applyThemeLayers, type ThemeTokenOverrides } from '@/theme/runtime';
-import { DEFAULT_THEME_ID, getThemeRecord, listThemes, resolveThemeId } from '@/themes';
+import { DEFAULT_THEME_ID, getThemePackage, getThemeRecord, listThemes, resolveThemeId } from '@/theme';
 
 /** localStorage 键名（沿用旧键，让老用户的手动选择可以平滑迁移） */
 const STORAGE_MODE = 'theme';
 const STORAGE_THEME = 'theme-id';
-/** 旧版本存皮肤 id 的键，只读不写（迁移用） */
+/** 旧版本存配色 id 的键，只读不写（迁移用） */
 const LEGACY_STORAGE_SKIN = 'theme-skin';
 /** 旧版本用于标记「用户手动选过明暗」的键，只读不写（迁移用） */
 const LEGACY_MANUAL = 'theme-manual';
@@ -127,7 +128,7 @@ export const useThemeStore = defineStore('theme', () => {
   /** 最终是否深色：mode 为 system 时取自系统偏好 */
   const isDark = computed(() => (mode.value === 'system' ? systemDark.value : mode.value === 'dark'));
 
-  /** 主题包自带 token（换主题时从注册表同步取，见 @/themes） */
+  /** 主题包自带 token（换主题时从注册表同步取，见 @/theme） */
   const themeTokens = ref<ThemeTokenOverrides | null>(getThemeRecord(themeId.value).tokens ?? null);
   /** 外部覆写 token（后端下发 / 父应用 postMessage）；优先级高于主题包 */
   const externalTokens = ref<ThemeTokenOverrides | null>(null);
@@ -237,25 +238,34 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   /**
-   * 取当前主题为某页面声明的版式 id（`themes/<id>/index.ts` 的 `views[page]`）
+   * 取当前主题为某页面声明的版式 id（`theme/themes/<包>/index.ts` 的 `views[page]`）
    *
-   * 只做取值，**不校验**：合法性由各页的版式注册表判定（`themes/app/<page>/registry.ts`），
+   * 只做取值，**不校验**：合法性由各页的版式注册表判定（`theme/views/<page>.ts`），
    * 于是"主题包写错版式名"的后果是回退基础版式，而不是页面打不开。
    *
    * 读的是 `themeId`，因此本函数在 computed / watch 里调用会跟着主题变化 ——
    * 这一点是必须的：后端下发的主题配置在 `App.vue` 的 onMounted 才到，
    * 可能晚于页面 setup，声明式版式要能在之后才生效。
    *
-   * @param page 页面名，与 `themes/app/<page>/` 目录名一致（如 'register'）
+   * @param page 页面名，与 `theme/views/<page>.ts` 目录名一致（如 'register'）
    */
   function viewFor(page: string): string | undefined {
     return getThemeRecord(themeId.value).views?.[page];
   }
 
   /**
+   * 当前配色所属的**主题包** —— 版式的查找范围（版式跟随主题包）
+   *
+   * 做成 computed 而不是函数：容器的 watch 要把它当响应源 —— 包变了，即使解析出的
+   * 版式 id 字符串没变（例如都是 `base`），渲染的组件也可能换了一套，必须重新取。
+   * 未登记 / 非法配色由 `getThemePackage` 回退到内置包，调用方不必判空。
+   */
+  const packageId = computed(() => getThemePackage(themeId.value));
+
+  /**
    * 设置主题（开发者/部署方调用 → 落盘）
    *
-   * @param id 主题 id，须已在 src/themes/ 登记；未登记时返回 false 且不改动现状
+   * @param id 主题 id，须已在 src/theme/themes/ 登记；未登记时返回 false 且不改动现状
    */
   function setTheme(id: string): boolean {
     const resolved = resolveThemeId(id);
@@ -317,6 +327,7 @@ export const useThemeStore = defineStore('theme', () => {
     mode,
     isDark,
     themeId,
+    packageId,
     themes,
     systemDark,
     themeTokens,

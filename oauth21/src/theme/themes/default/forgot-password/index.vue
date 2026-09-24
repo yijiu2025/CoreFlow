@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 重置密码页 · 基础版式（`themes/app/forgot-password/base/`）
+ * 重置密码页 · 基础版式（`theme/themes/default/forgot-password/`）
  *
  * 这是**默认版式**：没有任何 `?view=` / 主题包声明 / 环境变量指定时用它。
  * 由容器**静态引入**（不在 registry 的惰性表里），所以默认路径上零额外请求、零闪烁。
@@ -26,7 +26,7 @@
  */
 import { ref, toRef } from 'vue';
 import MauthThemeSwitch from '@/components/auth/MauthThemeSwitch.vue';
-import type { ForgotPasswordViewProps } from '../types';
+import type { ForgotPasswordViewProps } from '@/theme/views/forgot-password';
 
 const props = defineProps<ForgotPasswordViewProps>();
 /** 契约对象由容器创建一次（reactive），这里用 toRef 保证即使被替换也能跟着更新 */

@@ -28,7 +28,7 @@
  *
  * 重构后分三层：
  *
- *   ① 全局语义 token    --mauth-<角色>            ← 明暗档与换肤都在这一层覆写
+ *   ① 全局语义 token    --mauth-<角色>            ← 明暗档与换配色都在这一层覆写
  *   ② 组件级 token      --mauth-<组件>-<属性>     ← 默认引用 ①，可按组件单独覆写
  *   ③ 组件规则          .mauth-xxx { ... }        ← 只引用 token，不再出现裸色值
  *
@@ -36,7 +36,7 @@
  *
  *   1. `:root`                        浅色默认值
  *   2. `html.dark`                    深色覆写（与 Tailwind `darkMode:'class'` 同一开关）
- *   3. 主题包 tokens                    src/themes/<id>/index.ts（见该目录 README）
+ *   3. 主题包 tokens                    src/theme/themes/<包>/index.ts（见该目录 README）
  *   4. 外部覆写 tokens                  后端下发 / 父应用 postMessage
  *   第 3、4 层都由运行时写成挂在 html 上的 inline style —— 优先级高于任何选择器，
  *   因此能盖过本文件的全部主题块。层间顺序由**写入顺序**保证：先主题包、后外部覆写，
@@ -46,11 +46,12 @@
  * 主题只覆写「个性子集」（品牌色、圆角、字体、描边），本文件只提供「基线子集」
  * （表面/文字/边框/间距）与明暗两档。
  *
- * 加一套主题（全部在 src/themes/ 内完成，不动本文件、不动 store、不动组件）：
- *   ① 建目录 `src/themes/<id>/`
- *   ② 写 `index.ts`：meta + tokens.light / tokens.dark
+ * 加一个主题包 / 加一套配色（全部在 src/theme/themes/ 内完成，不动本文件、不动 store、不动组件）：
+ *   ① 建包目录 `src/theme/themes/<包>/`，写根 `index.ts`：meta + tokens.light / tokens.dark
+ *      （包根既是包定义，也是该包的默认配色；版式实现也放这个包根下）
+ *   ② 只想给已有包再加一套颜色：建 `src/theme/themes/<包>/colors/<配色>/index.ts`
  *   ③ 需要背景图 / webfont / 伪元素装饰时，再加一个 `theme.scss`
- *   详见 `src/themes/README.md`。运行时会做白名单校验后再注入（防 CSS 注入）。
+ *   详见 `src/theme/README.md`。运行时会做白名单校验后再注入（防 CSS 注入）。
  *
  * 「对每个组件做 UI 定制」= 覆写 ② 层的组件级 token，例如只把登录按钮改成方形：
  *   tokens: { light: { '--mauth-submit-radius': '0px', '--mauth-submit-bg': '#7c3aed' } }
@@ -178,7 +179,7 @@ html.dark {
   --mauth-back-btn-fg: var(--mauth-text-body);
 
   /* 主题切换按钮：与返回按钮同款圆形图标按钮，但留独立 token ——
-     皮肤可以只改这两个按钮中的一个，不必连带另一个 */
+     配色可以只改这两个按钮中的一个，不必连带另一个 */
   --mauth-theme-btn-bg: var(--mauth-surface-3);
   --mauth-theme-btn-bg-press: var(--mauth-surface-press);
   --mauth-theme-btn-fg: var(--mauth-text-body);
@@ -294,18 +295,19 @@ html.dark {
   --mauth-social-ink-apple: #f3f4f6;
 }
 
-/* --- 0.4 换肤挂载点（已外置）---
+/* --- 0.4 换配色挂载点（已外置）---
 
-   主题不再写在本文件里，而是每个主题一个文件夹：`src/themes/<id>/`。
+   配色不再写在本文件里，而是每套一个文件夹：`src/theme/themes/<包>/` 的包根
+   （该包默认配色）或包内 `src/theme/themes/<包>/colors/<配色>/`。
    原先这里的 `html[data-mauth-skin='ocean']` 两个块已迁到
-   `src/themes/ocean/index.ts` 的 tokens（值逐条照搬，渲染结果不变），
-   背景图等额外样式在 `src/themes/ocean/theme.scss`。
+   `src/theme/themes/default/colors/ocean/index.ts` 的 tokens（值逐条照搬，渲染结果不变），
+   背景图等额外样式在 `src/theme/themes/default/colors/ocean/theme.scss`。
 
-   为什么搬走：主题声明留在共享样式表里，每个主题都会在这份文件里留下痕迹，
-   加主题要改共享文件、删主题不敢删，最后没人说得清哪块属于谁。
-   现在加/删主题只动 src/themes/ 下的一个文件夹，本文件保持「基线」单一职责。
+   为什么搬走：配色声明留在共享样式表里，每套配色都会在这份文件里留下痕迹，
+   加配色要改共享文件、删配色不敢删，最后没人说得清哪块属于谁。
+   现在加/删配色只动 src/theme/themes/ 下的一个文件夹，本文件保持「基线」单一职责。
 
-   「皮肤」与「明暗」仍然是正交的两个维度：换肤只改个性子集（品牌色/圆角/字体/描边），
+   「配色」与「明暗」仍然是正交的两个维度：换配色只改个性子集（品牌色/圆角/字体/描边），
    明暗档只改表面/文字/边框，四组组合都成立。 */
 
 /* --- 0.5 屏幕断点：只调间距 token，不动任何组件规则 ---

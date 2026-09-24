@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 登录页 · 基础版式（`themes/app/login/base/`）
+ * 登录页 · 基础版式（`theme/themes/default/login/`）
  *
  * 这是**默认版式**：没有任何 `?view=` / 主题包声明 / 环境变量指定时用它。
  * 由容器**静态引入**（不在 registry 的惰性表里），所以默认路径上零额外请求、零闪烁。
@@ -14,8 +14,8 @@
  * 本组件**不自带 `<style>`**：移动端认证页的样式单一来源是
  * `assets/styles/mobile-auth.scss`（`mauth-*` 体系，登录/注册/重置密码三页共用），
  * 自带样式块会让三页各自漂移 —— 历史上"两页看起来不一样"都源于此。
- * 特殊版式（`themes/app/login/<变体>/`）需要自己那套结构样式时可以写 `<style scoped>`，
- * 但取值一律引用 `--mauth-*` token，别写裸色值，否则换皮肤/换明暗时会漏。
+ * 特殊版式（`theme/themes/default/login/<变体>/`）需要自己那套结构样式时可以写 `<style scoped>`，
+ * 但取值一律引用 `--mauth-*` token，别写裸色值，否则换配色/换明暗时会漏。
  *
  * === 三块面板 ===
  * 授权确认 / 邮箱二次验证 / 登录表单由容器用 `ctx.panel` 选择，本版式只负责把选中的
@@ -29,7 +29,7 @@ import AppNameMissing from '@/components/common/AppNameMissing.vue';
 import ConsentPanel from '@/components/auth/ConsentPanel.vue';
 import MauthThemeSwitch from '@/components/auth/MauthThemeSwitch.vue';
 import MauthSocialRow from '@/components/auth/MauthSocialRow.vue';
-import type { LoginViewProps } from '../types';
+import type { LoginViewProps } from '@/theme/views/login';
 
 const props = defineProps<LoginViewProps>();
 /** 契约对象由容器创建一次（reactive），这里用 toRef 保证即使被替换也能跟着更新 */

@@ -30,7 +30,7 @@ const showDebugPanel = computed(() => {
 });
 
 /**
- * 后端换肤配置
+ * 后端换配色配置
  *
  * 放在 onMounted 里而不是 setup 顶层：主题请求是网络 IO，不能挡住首屏渲染。
  * 未配置 VITE_THEME_ENDPOINT 时 fetchRemoteThemeConfig 直接返回 null、不发请求，

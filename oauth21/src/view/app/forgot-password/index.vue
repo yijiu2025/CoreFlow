@@ -6,16 +6,18 @@
  * （分发逻辑见 view/web/forgot-password/index.vue）。
  * 邮件里的重置链接指向 `/reset-password?token=…`，该路径重定向到这里（见 router/routes.ts）。
  *
- * === 分层（2026-09-24 架构调整，与注册/登录页同一套机制）===
+ * === 分层（2026-09-24 架构调整；版式改随主题包走）===
  * 本文件只负责"重置密码这件事"：校验、发码 / 发链接、RSA 加密提交、步骤流转、路由。
- * **页面长什么样不在这里**，而在版式组件里：
+ * **页面长什么样不在这里**，而在**当前主题包**里的版式组件里：
  *
- *    本容器 ──传 ctx──▶ themes/app/forgot-password/<版式>/index.vue
+ *    本容器 ──传 ctx──▶ theme/themes/<包>/forgot-password/<版式>/index.vue
  *                 ▲
- *                 └── 契约定在 themes/app/forgot-password/types.ts（版式只读它）
+ *                 └── 契约定在 theme/views/forgot-password.ts（各包共用这一份）
  *
- * 选择优先级见 `themes/app/forgot-password/registry.ts`
+ * 选择优先级见 `theme/views/forgot-password.ts`
  * （`?view=` > 主题包声明 > 环境变量 > 基础版式）。
+ * **内置包**（`default`）的 base 由本文件**静态引入**：正常访问不产生额外请求，首帧即正确；
+ * 其它包 / 其它版式都是惰性 chunk，由路由守卫提前预热。
  *
  * 两种重置方式（由 VITE_PASSWORD_RESET_MODE 决定，与后端 PASSWORD_RESET_MODE 对应，
  * 与桌面版读同一个环境变量）：
@@ -46,13 +48,20 @@ import { useKeyboardAvoid } from '@/composables/useKeyboardAvoid';
 import { usePasswordStrength } from '@/composables/usePasswordStrength';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useThemeStore } from '@/stores/theme';
-import BaseForgotPasswordView from '@/themes/app/forgot-password/base/index.vue';
-import { forgotPasswordViews, pickForgotPasswordViewId } from '@/themes/app/forgot-password/registry';
+/**
+ * 静态引入**内置包**的基础版式 —— 首屏零请求的那条路径
+ *
+ * 路径里的 `default` 必须写死：静态 import 在编译期就要定下来，而"当前是哪个包"
+ * 是运行时才知道的（URL / 后端下发 / localStorage）。运行时的那份判定在
+ * `forgotPasswordViews.builtinPackage`，两者必须是同一个包。
+ */
+import BaseForgotPasswordView from '@/theme/themes/default/forgot-password/index.vue';
+import { forgotPasswordViews, pickForgotPasswordViewId } from '@/theme/views/forgot-password';
 import type {
   ForgotPasswordStage,
   ForgotPasswordTranslate,
   ForgotPasswordViewContext
-} from '@/themes/app/forgot-password/types';
+} from '@/theme/views/forgot-password';
 import type { Component, Ref } from 'vue';
 
 const { t, locale } = useI18n();
@@ -282,28 +291,36 @@ const goBack = () => {
 
 const themeStore = useThemeStore();
 /**
- * 用哪套版式：`?view=` > 主题包声明（themes/<id>/index.ts 的 views['forgot-password']）
+ * 用哪套版式：`?view=` > 主题包声明（theme/themes/<包>/index.ts 的 views['forgot-password']）
  * > VITE_FORGOT_PASSWORD_VIEW > base。
  *
- * 做成 computed 而不是 setup 里取一次：后端下发的换肤配置可能晚于本页 setup 到达。
+ * 做成 computed 而不是 setup 里取一次：后端下发的换配色配置可能晚于本页 setup 到达。
+ * `pkg` 决定**在哪个包里找**（版式跟随主题包），所以包变了要重新解析。
  */
 const viewId = computed(() =>
-  pickForgotPasswordViewId({ url: route.query.view, theme: themeStore.viewFor('forgot-password') })
+  pickForgotPasswordViewId({
+    url: route.query.view,
+    theme: themeStore.viewFor('forgot-password'),
+    pkg: themeStore.packageId
+  })
 );
 
-/** 当前渲染的版式组件（默认基础版式是静态引入的，首帧直接正确） */
+/**
+ * 当前渲染的版式组件（默认是静态引入的内置包基础版式，首帧直接正确）
+ *
+ * ⚠️ 必须**同时**盯住主题包：版式只在当前包内查找，换了包但解析出的 id 字符串没变
+ *    （两边都是 `base`）时，渲染的组件其实换了一整套 —— 只盯 id 会漏掉这一整类切换。
+ */
 const activeView = shallowRef<Component>(BaseForgotPasswordView);
 let viewEpoch = 0;
 watch(
-  viewId,
-  id => {
+  [viewId, () => themeStore.packageId],
+  ([id, pkg]) => {
     const epoch = ++viewEpoch;
-    if (id === forgotPasswordViews.baseId) {
-      activeView.value = BaseForgotPasswordView;
-      return;
-    }
-    void forgotPasswordViews.load(id).then(loaded => {
-      if (loaded && epoch === viewEpoch) activeView.value = markRaw(loaded);
+    void forgotPasswordViews.load(id, pkg).then(loaded => {
+      if (epoch !== viewEpoch) return;
+      // null = 用静态引入的内置包基础版式（首屏零请求那条路径）
+      activeView.value = loaded ? markRaw(loaded) : BaseForgotPasswordView;
     });
   },
   { immediate: true }
@@ -346,7 +363,7 @@ function bindField(
 /**
  * 编译期契约自检
  *
- * 容器组装的 ctx 必须**结构上满足** `themes/app/forgot-password/types.ts` 声明的契约：
+ * 容器组装的 ctx 必须**结构上满足** `theme/views/forgot-password.ts` 声明的契约：
  * 少一个字段、类型对不上，都会在这行报错 —— 契约才是真有约束力的，而不是一份会过期的文档。
  */
 function assertForgotPasswordContract(ctx: ForgotPasswordViewContext): ForgotPasswordViewContext {
