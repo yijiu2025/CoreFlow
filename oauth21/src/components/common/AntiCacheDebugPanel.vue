@@ -194,7 +194,7 @@ const copyRnd = async (evt: MouseEvent) => {
         }, 2000);
         console.warn('使用降级方案复制成功');
       } else {
-        throw new Error('execCommand 复制失败');
+        throw new Error('execCommand 复制失败', { cause: err });
       }
     } catch (fallbackErr) {
       console.error('降级方案也失败:', fallbackErr);
