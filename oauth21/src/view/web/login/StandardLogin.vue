@@ -576,7 +576,7 @@ onUnmounted(() => {
 .std-field {
   display: flex;
   align-items: center;
-  height: 46px;
+  height: 44px; /* 与标准版注册页（.mreg-field 44px）统一 —— 用户要求以注册页为准 */
   padding: 0 14px;
   gap: 10px;
   background: #f8fafc;
@@ -672,7 +672,7 @@ onUnmounted(() => {
 }
 
 .std-submit-btn {
-  height: 46px;
+  height: 44px; /* 与标准版注册页（.mreg-submit 44px）统一 —— 用户要求以注册页为准 */
   width: 100%;
   border-radius: 12px;
   font-size: 14px;

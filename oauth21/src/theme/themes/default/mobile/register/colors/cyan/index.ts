@@ -41,7 +41,6 @@ export default {
     '--mauth-primary-fg': '#fff',
     '--mauth-accent': '#0891b2',
     '--mauth-emphasis-fg': '#0e7490',
-    '--mauth-radius': '16px',
     /* 品牌字体栈：主题只给字体名，字体文件（若有）走 theme.scss 的 @font-face */
     '--mauth-font-family': "'Avenir Next', 'PingFang SC', system-ui, sans-serif",
     /* 边框类：logo 描边宽度是独立 token，改它不会波及输入框 */
