@@ -1,88 +1,36 @@
 import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
-import { isDesktopViewport } from '@/utils/device';
 import { preloadRegisterView } from '@/theme/views/register';
 import { preloadLoginView } from '@/theme/views/login';
 import { preloadForgotPasswordView } from '@/theme/views/forgot-password';
 import { useThemeStore } from '@/stores/theme';
 
 /**
- * 移动端路由 → 宽视口下应迁移到的电脑版路由名
- * 新增移动端路由时在此登记一行即可。
- */
-export const MOBILE_TO_DESKTOP_ROUTE: Record<string, string> = {
-  MobileLogin: 'login',
-  MobileRegister: 'Register',
-  MobileForgotPassword: 'ForgotPassword'
-};
-
-/**
- * 判定"当前这条路由 + 当前视口"是否应当迁到电脑版，命中则返回目标路由名
+ * 组装一个 `beforeEnter`：顺手预取该页**移动端版式**的 chunk
  *
- * 单一判定来源，被两处共用，避免"守卫一跳、视口监听另一跳"产生两套标准：
- *   1. 进入 `/m/*` 时的 beforeEnter（desktopWhenWide）
- *   2. 已停留在 `/m/*` 上、视口随后变宽（router/index.ts 的视口监听）
- *
- * 两个条件缺一不可：
- *   • 路由名登记在 MOBILE_TO_DESKTOP_ROUTE 里 —— 否则不是移动端页面，忽略
- *   • 视口已宽到 DESKTOP_MIN_WIDTH
- *
- * 并且**显式 `?isMobile=true` 时一律不迁**：这是调用方（App 内 WebView、分享链接）
- * 明确要求移动端版式的信号，优先级高于宽度自动判定 —— 与 useDeviceDetect
- * 文档中"显式 isMobile ＞ 自动识别 ＞ 桌面默认"的约定保持一致。
- */
-export function resolveDesktopRedirectTarget(
-  to: Pick<RouteLocationNormalized, 'name' | 'query'>
-): string | undefined {
-  if (String(to.query.isMobile) === 'true') return undefined;
-  const target = MOBILE_TO_DESKTOP_ROUTE[String(to.name)];
-  if (!target) return undefined;
-  return isDesktopViewport() ? target : undefined;
-}
-
-/**
- * `/m/*` 宽屏跳电脑版（进入路由时的那一跳）
- *
- * "移动端入口"不等于"必须用移动端版式"：平板横屏、折叠屏展开、桌面浏览器
- * 直接打开这些地址时视口已有 1024px+，再把移动端页面铺满整屏只会得到被拉宽的
- * 输入框和按钮（2026-09-21 线上问题）。
- *
- * → 宽视口下改跳电脑版同名路由。**query 必须原样透传**：
- *   client_id / appName / redirect_uri / scope / state / lang / theme 一个都不能丢，
- *   否则登录页拿不到应用上下文（授权流会显示"应用标识缺失"而直接断掉）。
- *
- * ⚠️ 守卫只在**导航发生时**执行一次。用户已经打开 `/m/login` 再手动拉宽窗口时
- *    没有任何导航，本函数不会被调用 —— 那一跳由 router/index.ts 的视口监听补齐。
- *
- * 注意：这里刻意不做窄屏反向跳转 —— 窄屏下 `/login` 由分发器直接渲染移动端组件
- * （见 view/web/login/index.vue），不产生路由跳转，因此不存在 "login ⇄ m/login" 循环。
- */
-function desktopWhenWide(to: RouteLocationNormalized) {
-  const target = resolveDesktopRedirectTarget(to);
-  return target ? { name: target, query: to.query, hash: to.hash } : undefined;
-}
-
-/**
- * 组装一个 `beforeEnter`：先做宽视口跳电脑版，不跳时顺手预取该页**版式**的 chunk
- *
- * 三个移动端页面（登录 / 注册 / 重置密码）的 UI 都是动态加载的（见各页容器）：
- * 容器首帧先渲染静态引入的内置包基础版式，chunk 到了再接管。在本页导航阶段就把请求
- * 发出去（与路由组件自身的 chunk 并行），容器挂载时通常已在模块缓存里 ——
- * 用户看不到切换。预取失败无所谓：容器自己还会再拉一次，拉不到就回退基础版式。
+ * `/m/*` 现在挂的是**电脑端分发器**（view/web/<page>/index.vue）—— 窄视口下它
+ * 渲染手机端容器（view/app/<page>/index.vue），宽视口下渲染桌面卡片。窄视口那条
+ * 路径才需要版式 chunk，宽视口用不到，但提前发一次请求是无害的优化：容器挂载时
+ * chunk 通常已在模块缓存里，用户看不到切换。预取失败也无所谓，容器自己还会再拉。
  *
  * ⚠️ 预取必须知道**当前主题包**：版式只在包内查找（见 `theme/views/registry.ts`），
  *    包不同则同一个 `?view=` 指向的 chunk 也不同。这里读一次 theme store —— 用
  *    `try/catch` 包住：预取是"提前把请求发出去"的优化，拿不到上下文宁可不发，
  *    绝不能因为预取而挡住导航。
  *
- * 抽成工厂函数而不是把这段写在三个路由里：三处各抄一遍，迟早有一处忘了同时做
- * 「宽视口跳转」或忘了预取，而这两种疏漏都只在真机/特定视口下才现形。
+ * === 为什么不再做"宽视口跳电脑版"重定向（2026-09-25 移除）===
+ * 早先 `/m/*` 挂的是移动端容器，宽视口下它会被拉满整屏（输入框/按钮被拉伸），
+ * 于是加了一道重定向把 `/m/login` 改写成 `/login`。这带来两个问题：
+ *   ① URL 不稳定 —— 用户停在 `/m/login` 拉宽窗口就被改写 URL，刷新 `/login`
+ *      窄屏又被改写回 `/m/login`，来回跳；
+ *   ② "切不回电脑路由" —— 一旦落到 `/m/login`，宽屏重定向把它推到 `/login`，
+ *      但用户其实想停在 `/m/login`。
+ * 现在 `/m/*` 与 `/login` 共用同一套分发器：**视图自适应视口，URL 永远不变**。
+ * 窄屏渲染手机端容器、宽屏渲染桌面卡片，两种 URL 都成立、都对。
  */
 function withViewPreload(
   preload: (source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown }) => void
 ) {
   return (to: RouteLocationNormalized) => {
-    const target = desktopWhenWide(to);
-    if (target) return target;
     preload({ url: to.query.view, pkg: readPackageId(), device: 'mobile' });
     return undefined;
   };
@@ -137,24 +85,26 @@ export const authRoutes: RouteRecordRaw[] = [
 
 export const mobileRoutes: RouteRecordRaw[] = [
   {
+    // `/m/*` 与 `/<page>` 共用同一套分发器（view/web/<page>/index.vue）：
+    // 窄视口渲染手机端容器、宽视口渲染桌面卡片，**URL 不被视口改写**（2026-09-25）。
+    // `meta.device='mobile'` 只是给主题 store 的基线，分发器会按实际渲染形态纠正。
     path: 'm/login',
     name: 'MobileLogin',
-    component: () => import('@/view/app/login/index.vue'),
+    component: () => import('@/view/web/login/index.vue'),
     meta: { title: '移动端登录', device: 'mobile' },
     beforeEnter: withViewPreload(preloadLoginView)
   },
   {
     path: 'm/register',
     name: 'MobileRegister',
-    component: () => import('@/view/app/register/index.vue'),
+    component: () => import('@/view/web/register/index.vue'),
     meta: { title: '移动端注册', device: 'mobile' },
-    // 宽视口跳电脑版；不跳时顺手把「变体版式」的 chunk 预取下来（**不 await**）
     beforeEnter: withViewPreload(preloadRegisterView)
   },
   {
     path: 'm/forgot-password',
     name: 'MobileForgotPassword',
-    component: () => import('@/view/app/forgot-password/index.vue'),
+    component: () => import('@/view/web/forgot-password/index.vue'),
     meta: { title: '移动端重置密码', device: 'mobile' },
     beforeEnter: withViewPreload(preloadForgotPasswordView)
   }

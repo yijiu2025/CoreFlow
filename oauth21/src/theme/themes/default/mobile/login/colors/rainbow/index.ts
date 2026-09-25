@@ -33,6 +33,7 @@ export default {
     preview: { primary: '#7c3aed', accent: '#2563eb' },
     author: 'oauth21'
   },
+  tone: 'light',
   tokens: {
     /* ---- 主按钮：紫 ---- */
     '--mauth-submit-bg': '#7c3aed',

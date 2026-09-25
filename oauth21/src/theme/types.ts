@@ -48,6 +48,7 @@
  */
 import type { ThemeDevice } from '@/theme';
 import type { ThemeTokenOverrides } from '@/theme/runtime';
+import type { ThemeTone } from '@/theme/tone';
 
 /**
  * 配色的元信息（用于列表展示与日志，不参与渲染）
@@ -115,6 +116,19 @@ export interface MauthThemePackage {
  */
 export interface MauthThemeColor {
   meta: MauthThemeMeta;
+  /**
+   * 这套配色自带的**明暗系别** —— 决定切换夜间模式时如何联动（见 `@/theme/tone`）
+   *
+   *   `'light'` 白系：浅底深字（`white` / `blue` / `cyan` / `rainbow`）
+   *   `'dark'`  黑系：深底浅字（`black`）
+   *
+   * 🔴 **必填**：漏写直接编译报错。系别判错会让"开夜间自动变黑"整个失效，
+   *    而且现象隐蔽（只是不联动、不报错），所以宁可让它构建期就变红。
+   *
+   * ⚠️ 它描述的是**配色之间**的关系，不是"一套配色内部的明暗两档"
+   *    （那个概念已于 2026-09-25 取消，见 `tokens` 说明）。
+   */
+  tone: ThemeTone;
   tokens?: ThemeTokenOverrides;
   /** 该套配色专属的版式声明（覆盖包级声明）；一般不必写，见 `MauthThemePackage.views` */
   views?: Record<string, string>;
@@ -152,6 +166,13 @@ export interface MauthThemeRecord {
    */
   view: string;
   meta: MauthThemeMeta;
+  /**
+   * 该配色的**明暗系别**（从配色定义原样带出）—— 供 store 做明暗联动判定
+   *
+   * ⚠️ 与 `meta` 不同，它**参与逻辑**（决定"开夜间该切到哪套配色"），
+   *    因此不塞进 `meta` 这个"只用于展示、不参与渲染"的口袋。
+   */
+  tone: ThemeTone;
   /** 该主题的 token（已从配色里取出，未做安全校验——校验在注入时统一做） */
   tokens: ThemeTokenOverrides | undefined;
   /** 该主题的版式声明（页面名 → 版式 id）；未声明为 undefined */

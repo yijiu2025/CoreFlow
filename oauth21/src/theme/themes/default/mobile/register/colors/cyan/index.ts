@@ -35,6 +35,7 @@ export default {
     preview: { primary: '#0e7490', accent: '#0891b2' },
     author: 'oauth21'
   },
+  tone: 'light',
   tokens: {
     '--mauth-primary': '#0e7490',
     '--mauth-primary-fg': '#fff',
