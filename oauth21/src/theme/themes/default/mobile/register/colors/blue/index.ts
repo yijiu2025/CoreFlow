@@ -58,10 +58,6 @@ export default {
     '--mauth-border-strong': '#bcd5ea',
     '--mauth-border-focus': '#2f7fd6',
     '--mauth-focus-ring': 'rgba(47, 127, 214, 0.14)',
-    /* 形状：字段 10px 圆角；主按钮改胶囊（参考稿两屏都是胶囊按钮） */
-    '--mauth-radius': '12px',
-    '--mauth-field-radius': '10px',
-    '--mauth-submit-radius': '999px',
     '--mauth-field-bg': '#ffffff',
     '--mauth-field-bg-focus': '#ffffff',
     '--mauth-field-border': '#dae7f4',
