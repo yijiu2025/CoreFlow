@@ -52,7 +52,7 @@ import { MODE_CYCLE, normalizeMode, type ThemeMode } from '@/theme/mode';
 import { applyThemeLayers, type ThemeTokenOverrides } from '@/theme/runtime';
 import { type ThemeTone } from '@/theme/tone';
 import {
-  BASE_VIEW_ID,
+  DEFAULT_THEME_PACKAGE,
   DEFAULT_THEME_DEVICE,
   DEFAULT_THEME_PAGE,
   getDefaultThemeId,
@@ -217,14 +217,30 @@ export const useThemeStore = defineStore('theme', () => {
    *    做成响应式是为了让"从 /login 跳到 /register"或"切成 compact 版式"时 token 能重算。
    */
   const activePage = ref<string>(DEFAULT_THEME_PAGE);
-  const activeView = ref<string>(BASE_VIEW_ID);
+  // 新版式下 view ≡ pkg —— 默认主题包是 `default`，所以默认 view 是包名而不是
+  // 已废弃的 `BASE_VIEW_ID='base'`。容器会在 setup 里通过 `setActivePageView` 立即覆盖。
+  const activeView = ref<string>(DEFAULT_THEME_PACKAGE);
 
   /** 容器告知当前页面 / 版式（同一页面切换版式时会再次调用） */
   function setActivePageView(page: string, view: string): void {
     if (page && activePage.value !== page) activePage.value = page;
-    const next = view || BASE_VIEW_ID;
+    // 空 view 兜底成默认包名（新版式下默认 view = 包名）；不再用 BASE_VIEW_ID='base'
+    const next = view || DEFAULT_THEME_PACKAGE;
     if (activeView.value !== next) activeView.value = next;
   }
+
+  /**
+   * 当前**生效配色**的系别（light=白系 / dark=黑系）
+   *
+   * 由 `themeRecordFor()` 派生 —— 跨设备回落后取的是**生效**那套的 tone，
+   * 不是 `themeId` 字面上的那套（如 mobile 选 blue、web 无 blue 回落 white 时，
+   * tone 取 white 的 light，不是 blue 的 light —— 此例恰好一致，但语义不同）。
+   *
+   * 桌面卡片根容器靠它决定是否挂局部 `.dark` class（见 StandardLogin 等），
+   * 让 Tailwind `dark:` 变体在"选了黑系配色但 mode 仍是 light"时也能触发深色样式 ——
+   * 否则点黑色色卡只改 token（html 背景变黑），卡片仍白，视觉割裂。
+   */
+  const activeTone = computed(() => themeRecordFor().tone ?? 'light');
 
   /**
    * 按设备 + 页面 + 版式解析出**实际生效**的配色记录
@@ -232,13 +248,20 @@ export const useThemeStore = defineStore('theme', () => {
    * 这是本 store 里唯一一处"把 themeId 变成可渲染的配色"的地方，其余访问器都由它派生，
    * 避免"有的地方判维度、有的地方不判"导致同一个 id 在不同组件里表现不一致。
    * 不匹配（如电脑端页面遇上手机端的配色）时由 `getThemeRecord` 回落到该版式默认配色。
+   *
+   * 🔴 接收 `pkg` 参数（2026-09-25 起）：新版式下 view ≡ pkg，**配色查找必须按当前包**，
+   *    否则 `findRecord` 会以 `DEFAULT_THEME_PACKAGE` 兜底（修前曾 hardcode），导致
+   *    切到 compact 包点 blue 永远命中 default 包 —— 用户反馈「切换版式后蓝青颜色切换无效」。
+   *    缺省值仍是 `DEFAULT_THEME_PACKAGE`，保留旧调用点的语义（`getThemeRecord` 内部
+   *    会在 pkg ≠ default 时把 view 兜底成 pkg，避免 view='base' 这种非法名）。
    */
   function themeRecordFor(
+    pkg: string = DEFAULT_THEME_PACKAGE,
     device: ThemeDevice = activeDevice.value,
     page: string = activePage.value,
     view: string = activeView.value
   ) {
-    return getThemeRecord(themeId.value, device, page, view);
+    return getThemeRecord(themeId.value, pkg, device, page, view);
   }
 
   /* ==========================================================================
@@ -430,9 +453,11 @@ export const useThemeStore = defineStore('theme', () => {
    *    极难从表象定位。
    */
   let styleEpoch = 0;
-  async function loadThemeStyle(id: string, device: ThemeDevice, page: string, view: string): Promise<void> {
+  async function loadThemeStyle(id: string, pkg: string, device: ThemeDevice, page: string, view: string): Promise<void> {
     const epoch = ++styleEpoch;
-    const loader = getThemeRecord(id, device, page, view).loadStyle;
+    // 新版式下 view ≡ pkg，但外部传 view 仍可能是 'base'（旧机制） —— getThemeRecord
+    // 内部会把 `view === 'base' && pkg !== 'default'` 的情况兜底成 `pkg`，所以这里直传即可。
+    const loader = getThemeRecord(id, pkg, device, page, view).loadStyle;
 
     if (!loader) {
       document.getElementById(STYLE_ELEMENT_ID)?.remove();
@@ -481,14 +506,17 @@ export const useThemeStore = defineStore('theme', () => {
   watch(
     [themeId, activeDevice, activePage, activeView],
     ([id, device, page, view]) => {
-      const record = getThemeRecord(id, device, page, view);
+      // 新版式下 view ≡ pkg —— 主动用 activeView 同时充当 view 和 pkg：
+      //   • view 给 findRecord 的视图段（精确匹配当前生效配色）
+      //   • pkg 给 findRecord 的包段（避免被 DEFAULT_THEME_PACKAGE 兜底抢走）
+      const record = getThemeRecord(id, view, device, page, view);
       const root = document.documentElement;
       // 解析出的 id 与请求的 id 不一致 = 该版式下没有这套配色，用了回落档
       if (record.meta.id === id) root.dataset.mauthTheme = id;
       else delete root.dataset.mauthTheme;
 
       themeTokens.value = record.tokens ?? null;
-      void loadThemeStyle(id, device, page, view);
+      void loadThemeStyle(id, view, device, page, view);
     },
     { immediate: true }
   );
@@ -531,12 +559,13 @@ export const useThemeStore = defineStore('theme', () => {
    * @param page   页面名，与 `theme/views/<page>.ts` 的文件名一致（如 'register'）
    * @param device 哪个设备下的声明；默认当前生效设备
    *
-   * ⚠️ 这里查的是**基础版式**（`activeView` 用不了：本函数正是用来决定"该用哪套版式"的，
-   *    拿它当查找条件会自指）。配色的 `views` 声明写在哪个版式下都能被读到 ——
-   *    实践中部署方把它写在基础版式的那份配色里即可。
+   * 🔴 **新版式下用 activeView 作 view 段**（2026-09-25）：`BASE_VIEW_ID='base'` 在新版式
+   *    下不再是合法 view 名（见 `theme/index.ts` 的 `colorFromKey` 注释）。改用
+   *    `activeView` 让查找范围与"当前渲染的版式"一致。views 字段通常为空（包定义里
+   *    没声明），本函数绝大多数调用点会拿到 undefined —— 调用方按包名兜底即可。
    */
   function viewFor(page: string, device: ThemeDevice = activeDevice.value): string | undefined {
-    return themeRecordFor(device, page, BASE_VIEW_ID).views?.[page];
+    return themeRecordFor(DEFAULT_THEME_PACKAGE, device, page, activeView.value).views?.[page];
   }
 
   /**
@@ -556,19 +585,6 @@ export const useThemeStore = defineStore('theme', () => {
    * （调试面板、路由分发）。
    */
   const device = computed(() => activeDevice.value);
-
-  /**
-   * 当前**生效配色**的系别（light=白系 / dark=黑系）
-   *
-   * 由 `themeRecordFor()` 派生 —— 跨设备回落后取的是**生效**那套的 tone，
-   * 不是 `themeId` 字面上的那套（如 mobile 选 blue、web 无 blue 回落 white 时，
-   * tone 取 white 的 light，不是 blue 的 light —— 此例恰好一致，但语义不同）。
-   *
-   * 桌面卡片根容器靠它决定是否挂局部 `.dark` class（见 StandardLogin 等），
-   * 让 Tailwind `dark:` 变体在"选了黑系配色但 mode 仍是 light"时也能触发深色样式 ——
-   * 否则点黑色色卡只改 token（html 背景变黑），卡片仍白，视觉割裂。
-   */
-  const activeTone = computed(() => themeRecordFor().tone ?? 'light');
 
   /**
    * 设置配色（开发者/部署方调用 → 落盘）

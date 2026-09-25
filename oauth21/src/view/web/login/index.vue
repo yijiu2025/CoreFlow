@@ -6,7 +6,7 @@ import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import AntiCacheDebugPanel from '@/components/common/AntiCacheDebugPanel.vue';
 import { postToParent } from '@/utils/parent';
 import { useThemeStore } from '@/stores/theme';
-import { BASE_VIEW_ID, type ThemeDevice } from '@/theme';
+import { DEFAULT_THEME_PACKAGE, type ThemeDevice } from '@/theme';
 
 const route = useRoute();
 
@@ -133,9 +133,10 @@ watch(
   device => {
     themeStore.setActiveDevice(device);
     // 桌面形态没有容器来声明 page/view（那是 view/app/<page>/ 容器的职责），
-    // 这里把版式归位到基础版式，避免上一形态（如手机端 compact）残留影响电脑端作用域。
+    // 这里把版式归位到当前包（web 端走默认包），避免上一形态（如手机端 compact）残留
+    // 影响电脑端作用域 —— 新版式下 view ≡ pkg，归位到 DEFAULT_THEME_PACKAGE 即可。
     // 手机形态下随后挂载的容器会自己声明并覆盖，两方不冲突。
-    if (device === 'web') themeStore.setActivePageView('login', BASE_VIEW_ID);
+    if (device === 'web') themeStore.setActivePageView('login', DEFAULT_THEME_PACKAGE);
   },
   { immediate: true }
 );

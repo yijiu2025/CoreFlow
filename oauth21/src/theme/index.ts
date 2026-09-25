@@ -155,12 +155,16 @@ function packageFromKey(key: string): string | null {
   return id && THEME_ID_RE.test(id) ? id : null;
 }
 
-/** 从配色键里取出的归属四段（基础版式时 view 为 `base`） */
+/** 从配色键里取出的归属五段（基础版式时 view = 包名） */
 interface ColorKeyInfo {
   pkg: string;
   device: ThemeDevice;
   page: string;
-  /** 版式 id；基础版式（配色的前三层直接落在 `<页面>/colors/` 下）时为 `base` */
+  /**
+   * 版式 id；基础版式（配色的三层直接落在 `<页面>/colors/` 下）时为**包名**（2026-09-25 起
+   * register 等新版式页面约定：「一个主题包 = 一种版式」，故基础版式的 view 段填包名）。
+   * 变体版式（`colors/` 在 `<页面>/<变体>/` 下）时为显式变体名。
+   */
   view: string;
   colorId: string;
 }
@@ -171,7 +175,18 @@ interface ColorKeyInfo {
  * 两种形态（见 `colorModules` 的说明）：
  *   • 基础版式：`./themes/<包>/<设备>/<页面>/colors/<颜色>/index.ts`（5 段目录 + 文件名）
  *   • 变体版式：`./themes/<包>/<设备>/<页面>/<版式>/colors/<颜色>/index.ts`（6 段）
- * 设备段与版式段都必须命中白名单，否则整个目录跳过。
+ * 设备段必须命中白名单，否则整个目录跳过。
+ *
+ * 🔴 **基础版式的 view = 包名**（2026-09-25 起 register 等新版式页面约定）：
+ *    一个主题包 = 一种版式（架构约定）。`themes/<包>/<设备>/<页面>/index.vue` 是该
+ *    包在该设备的"基础版式"，其下 `colors/<色>/` 与该版式配套 —— 因此该套配色登记
+ *    时 `view` 段填**包名**，而不是 `base`。
+ *    例：`themes/compact/mobile/register/colors/blue/` → `view='compact'`。
+ *    这样 `findRecord(id, 'compact', ..., view='compact')` 就能精确命中，
+ *    切到 compact 包点 blue 不会再被 `view='base'` 的 default 配色抢走（issue：用户
+ *    反馈"切换版式后蓝青颜色切换无效"，根因就是 view 段错把基础版式都打成 'base'）。
+ *    `BASE_VIEW_ID='base'` 仍保留作为注册表里的逻辑 baseId（`createViewRegistry`），
+ *    不再作为本注册表里的 view 值出现 —— `base` 在新版式下**不是合法 view 名**。
  */
 function colorFromKey(key: string, suffix: string): ColorKeyInfo | null {
   const file = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -185,7 +200,8 @@ function colorFromKey(key: string, suffix: string): ColorKeyInfo | null {
   const variant = variantRe.exec(key);
   const m = variant ?? baseRe.exec(key);
   if (!m) return null;
-  const view = variant ? m[4] : BASE_VIEW_ID;
+  // 基础版式形态 → view = 包名（新版式约定）；变体形态 → view = 显式变体名
+  const view = variant ? m[4] : m[1];
   const colorId = variant ? m[5] : m[4];
   const pkg = m[1];
   const device = asDevice(m[2]);
@@ -288,26 +304,37 @@ const registry = buildRegistry();
 /**
  * 查找一条配色记录
  *
- * **四段都必须给**（包 / 设备 / 页面 / 版式）：配色的归属就是这四段，
- * 少给任何一段都可能命中同一 id 的另一份（`black` 在每个版式下各有一份）。
+ * **五段都必须给**（包 / 设备 / 页面 / 版式 / 配色）：配色的归属就是这五段，
+ * 少给任何一段都可能命中同一 id 的另一份（`black` 在每个版式 / 每个包下各有一份）。
  *
- * @param view 版式 id；`base` 表示基础版式（配色的目录少一层）
+ * 🔴 **新版式架构下 view ≡ pkg**：基础版式的 view 段是包名（见 `colorFromKey`），
+ *    所以「当前包 = 当前 view」是常态。给定精确包（含视图段），**第一行**就能
+ *    直接命中；找不到再走回退链。
+ *
+ * @param pkg  主题包 id（`DEFAULT_THEME_PACKAGE` = 'default' 表示默认包）
+ * @param view 版式 id；新版式下 = pkg 名；旧机制下 'base' 或变体名
  */
 function findRecord(
   id: string,
+  pkg: string,
   device: ThemeDevice,
   page: string,
   view: string
 ): MauthThemeRecord | undefined {
-  // 优先精确匹配 view；命中失败回退到 base 配色（兼容主题包粒度版式）。
-  // 同一个 `id` 在跨包时可能登记到 view='base'（主题包粒度版式），需要兜底。
-  return registry.get(`${DEFAULT_THEME_PACKAGE}/${device}/${page}/${view}/${id}`) ??
+  // ① 精确匹配：当前包 × 当前设备 × 当前页面 × 当前 view（新版式下 = 包名）
+  // 🔴 旧实现这里 hardcode 了 `DEFAULT_THEME_PACKAGE`，导致切到 compact 包后点
+  //    blue 永远命中 default 包 —— 因为 compact/mobile/register/compact/blue
+  //    这个键根本不存在（全打成了 view='base'）。改为按调用方传入的 pkg 查。
+  return registry.get(`${pkg}/${device}/${page}/${view}/${id}`) ??
+    // ② 兜底扫描：任意包 × 同 view（极少见，正常不该走到）
     [...registry.values()].find(
       r => r.meta.id === id && r.device === device && r.page === page && r.view === view
     ) ??
-    (view !== BASE_VIEW_ID
+    // ③ 跨 view 兜底：旧机制下 'base' 是回退目标；新版式下 'DEFAULT_THEME_PACKAGE' 是
+    //    兜底（兼容主题包粒度版式：切到 compact 后想看 blue，找不到时退回 default 包 view='default'）
+    ((view !== BASE_VIEW_ID && view !== DEFAULT_THEME_PACKAGE)
       ? [...registry.values()].find(
-          r => r.meta.id === id && r.device === device && r.page === page && r.view === BASE_VIEW_ID
+          r => r.meta.id === id && r.device === device && r.page === page && r.view === DEFAULT_THEME_PACKAGE
         )
       : undefined);
 }
@@ -318,6 +345,9 @@ function findRecord(
  * 取该版式下**排在最前**的配色（按 id 排序 → `black` 这类基础档通常在前）。
  * 之所以不写死 `black`：允许某个版式只提供一套配色而不必强行命名。
  * 该版式下一套配色都没有时返回 null，由调用方退回"什么都不注入"的基线路径。
+ *
+ * ⚠️ 新版式下 view = pkg；若该版式下没配色，本函数返回 null —— 调用方应当别
+ *    跨 view 借配色（拿别处版式的 token 渲染当前版式尺寸/圆角会错位）。
  */
 function defaultColorIdOf(device: ThemeDevice, page: string, view: string): string | null {
   const ids = [...registry.values()]
@@ -402,12 +432,21 @@ export function listThemeGroups(
  *    曾经想过给黑白加"基线优先"的特权排序，但那与「五色完全并列」的语义相悖
  *    （用户 2026-09-25 明确："黑白色和蓝青色应当同等，他们只是一个选项而已"）——
  *    排序上的任何特权都是"黑白更特殊"的暗示。面板的换行位置不值得为它破例。
+ *
+ * 🔴 **新版式下 view ≡ pkg**，所以默认情况下应只列「当前 view」下的配色。
+ *    跨包兜底：切到 compact 后该包若无某色，**不该**默默收进 default 包那套同名色
+ *    （否则"切版式后蓝青颜色切换无效"又会发生 —— 调试面板看着有 blue，点完渲的是
+ *    default 包的 token）。这里只在 view 与 DEFAULT_THEME_PACKAGE 同名（即用户在看
+ *    default 包的版式）时允许 BASE_VIEW_ID 作为兼容回退（兼容旧机制下 'base' 是 view）。
+ *
+ * @param view 当前生效的 view id（新版式下 = pkg）
  */
 export function listColorsOf(device: ThemeDevice, page: string, view: string): MauthThemeMeta[] {
   const seen = new Map<string, MauthThemeMeta>();
   for (const record of registry.values()) {
     if (record.device !== device || record.page !== page) continue;
-    // 视图配色范围：精确匹配 view，或回退到 base 配色（兼容主题包粒度版式）
+    // 精确匹配 view；新版式下 view 即包名，所以这一行就能精确命中。
+    // `BASE_VIEW_ID` 兼容旧机制（login 等页面 view 仍可能为 'base'）。
     if (record.view !== view && record.view !== BASE_VIEW_ID) continue;
     if (!seen.has(record.meta.id)) seen.set(record.meta.id, record.meta);
   }
@@ -420,6 +459,9 @@ export function listColorsOf(device: ThemeDevice, page: string, view: string): M
  * 🔴 用 `findRecord`（要求该 id 真的在这一段登记过），**不是** `getThemeRecord` ——
  *    后者会回落到该版式的默认配色，于是"一个本版式不存在的 id"会拿到**别的配色**
  *    的系别，store 据此判断"要不要联动"就会判错。
+ *
+ * 新版式下 `findRecord` 需要 pkg（见 `findRecord` 注释）。该函数不知道当前包，
+ * 只能先按 DEFAULT_THEME_PACKAGE 查；新版式下这通常够用（同名 id 跨包系别一致）。
  */
 export function toneOfColor(
   id: string,
@@ -427,7 +469,7 @@ export function toneOfColor(
   page: string,
   view: string
 ): ThemeTone | null {
-  return findRecord(id, device, page, view)?.tone ?? null;
+  return findRecord(id, DEFAULT_THEME_PACKAGE, device, page, view)?.tone ?? null;
 }
 
 /**
@@ -503,7 +545,7 @@ export function resolveThemeId(
  * 取配色记录
  *
  * 回退链（2026-09-25 加了"系别一致"这一层）：
- *   指定 id（且四段都匹配）→ **同系别**的首套配色 → 该版式的兜底配色 → 空记录。
+ *   指定 id（且五段都匹配）→ **同系别**的首套配色 → 该版式的兜底配色 → 空记录。
  *
  * === 为什么回退要保持系别一致 ===
  * 一个 id 并非在每个作用域都有登记（如 `blue` 只在手机端有）。
@@ -515,27 +557,35 @@ export function resolveThemeId(
  * 版式 / 设备不匹配时**仍不跨版式借用**：拿紧凑版式的配色去渲染基础版式会得到一套
  * 尺寸/圆角都对不上的东西，不如老实用基线。
  *
+ * @param pkg  主题包 id（`DEFAULT_THEME_PACKAGE` = 'default' 表示默认包）；
+ *             新版式架构下应**显式传当前包**（即 `packageId`），否则会按 default 查，
+ *             与「切到 compact 包」后的版式/UI 不一致。
  * @param page 页面名（`theme/views/<page>.ts` 的文件名，如 `register`）
- * @param view 版式 id（`base` 表示基础版式）
+ * @param view 版式 id（新版式下 = pkg 名；旧机制下 'base' 或变体名）
  */
 export function getThemeRecord(
   id: string,
+  pkg: string = DEFAULT_THEME_PACKAGE,
   device: ThemeDevice = DEFAULT_THEME_DEVICE,
   page: string = DEFAULT_THEME_PAGE,
   view: string = BASE_VIEW_ID
 ): MauthThemeRecord {
-  const record = findRecord(id, device, page, view);
+  // 新版式下「未指定 view」语义模糊 —— 默认行为：取 pkg 名作为 view（与
+  // pickRegisterViewId 的兜底一致）。调用方显式传 view 时仍以调用方为准。
+  const effectiveView = view === BASE_VIEW_ID && pkg !== DEFAULT_THEME_PACKAGE ? pkg : view;
+  const record = findRecord(id, pkg, device, page, effectiveView);
   if (record) return record;
   // 同系别回落：请求的 id 没登记在当前作用域时，取它的系别在本作用域的首套
   //（该作用域没有这个系别时走下面的原始兜底，不跨系别硬凑）
   const tone = toneOfAnyScope(id);
   if (tone) {
-    const sameTone = listColorIdsOfTone(device, page, view, tone)[0];
-    const sameToneHit = sameTone ? findRecord(sameTone, device, page, view) : undefined;
+    const sameTone = listColorIdsOfTone(device, page, effectiveView, tone)[0];
+    const sameToneHit = sameTone ? findRecord(sameTone, pkg, device, page, effectiveView) : undefined;
     if (sameToneHit) return sameToneHit;
   }
-  const fallback = defaultColorIdOf(device, page, view);
-  return (fallback && findRecord(fallback, device, page, view)) || emptyRecord(device, page, view);
+  const fallback = defaultColorIdOf(device, page, effectiveView);
+  return (fallback && findRecord(fallback, pkg, device, page, effectiveView)) ||
+    emptyRecord(device, page, effectiveView);
 }
 
 /**
@@ -543,14 +593,17 @@ export function getThemeRecord(
  *
  * 未知 / 非法配色返回 `DEFAULT_THEME_PACKAGE`：与 `getThemeRecord` 的回退口径一致，
  * 调用方不必先判空再取。
+ *
+ * @param pkg 主题包 id（`DEFAULT_THEME_PACKAGE` = 'default' 表示默认包）
  */
 export function getThemePackage(
   id: string,
+  pkg: string = DEFAULT_THEME_PACKAGE,
   device: ThemeDevice = DEFAULT_THEME_DEVICE,
   page: string = DEFAULT_THEME_PAGE,
   view: string = BASE_VIEW_ID
 ): string {
-  return getThemeRecord(id, device, page, view).pkg;
+  return getThemeRecord(id, pkg, device, page, view).pkg;
 }
 
 /**
