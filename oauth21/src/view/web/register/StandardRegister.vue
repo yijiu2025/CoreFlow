@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
+import { useThemeStore } from '@/stores/theme';
 
 // ================================
 // 组件导入（与 MiniRegister 同一套 UI 体系）
@@ -32,6 +33,8 @@ import { useAgreementVersion, captureAgreementVersion } from '@/composables/useA
 // 常量定义
 // ================================
 const COUNTDOWN_SECONDS = 60; // 验证码倒计时秒数
+
+const themeStore = useThemeStore();
 const RECAPTCHA_TIMEOUT = 30_000; // 获取验证码超时时间（毫秒）
 const RSA_ENCRYPT_TIMEOUT = 30_000; // RSA 加密超时时间（毫秒）
 
@@ -308,7 +311,7 @@ onUnmounted(() => dispose());
 
 <template>
   <!-- 单根节点：AuthContainer 全屏框架 + 弹窗类组件挂在外层 -->
-  <div class="stdreg-root w-full">
+  <div class="stdreg-root w-full" :class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }">
     <AuthContainer :app-name="templateAppName">
       <template #header>
         <div class="flex items-center justify-between">

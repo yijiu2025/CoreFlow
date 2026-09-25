@@ -551,6 +551,19 @@ export const useThemeStore = defineStore('theme', () => {
   const device = computed(() => activeDevice.value);
 
   /**
+   * 当前**生效配色**的系别（light=白系 / dark=黑系）
+   *
+   * 由 `themeRecordFor()` 派生 —— 跨设备回落后取的是**生效**那套的 tone，
+   * 不是 `themeId` 字面上的那套（如 mobile 选 blue、web 无 blue 回落 white 时，
+   * tone 取 white 的 light，不是 blue 的 light —— 此例恰好一致，但语义不同）。
+   *
+   * 桌面卡片根容器靠它决定是否挂局部 `.dark` class（见 StandardLogin 等），
+   * 让 Tailwind `dark:` 变体在"选了黑系配色但 mode 仍是 light"时也能触发深色样式 ——
+   * 否则点黑色色卡只改 token（html 背景变黑），卡片仍白，视觉割裂。
+   */
+  const activeTone = computed(() => themeRecordFor().tone ?? 'light');
+
+  /**
    * 设置配色（开发者/部署方调用 → 落盘）
    *
    * @param id 配色 id，须已在 `src/theme/themes/<包>/<设备>/colors/` 登记；
@@ -630,6 +643,7 @@ export const useThemeStore = defineStore('theme', () => {
     activeDevice,
     activePage,
     activeView,
+    activeTone,
     themes,
     systemDark,
     themeTokens,

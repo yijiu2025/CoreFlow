@@ -156,7 +156,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="standard-login-root">
+  <div class="standard-login-root" :class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }">
     <!-- 错误场景：应用标识缺失 -->
     <AppNameMissing v-if="!hasAppName" />
 
@@ -819,42 +819,42 @@ onUnmounted(() => {
 
 <style>
 /* 非 scoped 作用域 - 深色模式覆盖 */
-html.dark .standard-login-root .std-field {
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-field {
   background: #0f172a;
   border-color: #1e293b;
 }
-html.dark .standard-login-root .std-field:focus-within {
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-field:focus-within {
   background: #0f172a;
 }
-html.dark .standard-login-root .std-field.is-error {
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-field.is-error {
   background: rgba(239, 68, 68, 0.1);
 }
-html.dark .standard-login-root .std-input {
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-input {
   color: #f1f5f9;
 }
 
-html.dark .standard-login-root .std-agreement-card {
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-agreement-card {
   background: rgba(15, 23, 42, 0.6);
 }
 
-html.dark .standard-login-root .std-agreement-card:hover {
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-agreement-card:hover {
   background: rgba(30, 41, 59, 0.8);
 }
 
-html.dark .standard-login-root .std-checkbox {
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-checkbox {
   background: #0f172a;
   border-color: #475569;
 }
 
-html.dark .standard-login-root .std-sub-text,
-html.dark .standard-login-root .std-forgot-link {
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-sub-text,
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-forgot-link {
   color: #94a3b8;
   margin-right: 10px;
 }
 
-html.dark .standard-login-root .std-forgot-link:hover,
-html.dark .standard-login-root .std-link-primary,
-html.dark .standard-login-root .std-register-link {
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-forgot-link:hover,
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-link-primary,
+:is(html.dark .standard-login-root, .standard-login-root.dark) .std-register-link {
   color: #60a5fa;
 }
 </style>

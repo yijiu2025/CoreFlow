@@ -156,7 +156,7 @@ watch(showQR, val => {
 </script>
 
 <template>
-  <div class="mini-login-root w-full h-full">
+  <div class="mini-login-root w-full h-full" :class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }">
     <AppNameMissing v-if="!hasAppName" />
     <AuthContainer
       v-else

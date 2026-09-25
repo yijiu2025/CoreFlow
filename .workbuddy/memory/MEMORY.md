@@ -81,6 +81,11 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
 - 🔴 **跨设备系别一致**：`theme/index.ts` 的 `getThemeRecord` 在请求 id 不在当前作用域时，按该 id 系别（`toneOfAnyScope`）取同系别首套 ——
   mobile 选 `blue`(light) 拉宽到 web(无 blue)→回落 `white`(light)；`black` 两端都有→不变。`themeId` **不随设备变**（保持用户选择），只渲染层回落。关卡 `verify-color-peer.mjs` F 段守这条。
 - 🔴 **主题设备跟随实际渲染的视图，不是路由**：三个桌面分发器各 watch `activeForm`→`setActiveDevice`；`/login` 窄屏渲染手机端容器时主题作用域=mobile（否则面板切手机端主题无效）。`router/index.ts` 的 `setupThemeDeviceSync` 只给基线（`/m/*`=mobile），分发器按渲染形态纠正。
+- 🔴 **桌面卡片局部 `.dark` 上下文（2026-09-25）**：桌面卡片（StandardLogin/MiniLogin/StandardRegister/MiniRegister/DesktopForgot）根容器挂
+  `:class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }"`。Tailwind `darkMode:'class'` 允许 `.dark` 在**任意祖先** ——
+  点色卡（不改 mode）选中 dark 系配色时根 .dark 挂上，`dark:` 变体全触发，卡片跟着变深色。否则点 black 色卡 token 注入 html 但卡片仍白（"切换无效"）。
+  `StandardLogin` SCSS 的 `html.dark .standard-login-root .std-*` 改成 `:is(html.dark .standard-login-root, .standard-login-root.dark) .std-*`。
+  store 暴露 `activeTone` computed（`themeRecordFor().tone`）。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
