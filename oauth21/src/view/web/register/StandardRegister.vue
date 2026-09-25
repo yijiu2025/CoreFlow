@@ -1,63 +1,75 @@
 <script setup lang="ts">
+/**
+ * 桌面端标准注册 —— **业务容器**
+ *
+ * === 分层（2026-09-25 起，与移动端 `app/register/index.vue` 对齐）===
+ * 本文件只负责「注册这件事」：状态、表单校验、接口调用、验证码流程、倒计时、路由跳转。
+ * **页面长什么样不在这里**，而在**当前主题包**里的版式组件里：
+ *
+ *    本容器 ──传 ctx──▶ theme/themes/<包>/standard/register/index.vue
+ *                 ▲
+ *                 └── 契约定在 theme/views/register.ts（各包共用这一份，版式只读它）
+ *
+ * 于是「换一套 UI」= 在包里加一个版式目录，本文件零改动。
+ * **内置包**（`default`）的 base 由本文件**静态引入**：正常访问不产生额外请求，首帧即正确；
+ * 其它包 / 其它版式都是惰性 chunk，由路由守卫提前预热。
+ *
+ * 与 MiniRegister（紧凑版）的区别：两者是 dispatcher 的**两种设备形态分支**，
+ * 业务逻辑 95% 相同，但 UI 差异大（标准版是左右双栏卡片，紧凑版是单栏卡片）。
+ * 二者各自成为独立容器，各自加载自己的版式。
+ *
+ * === 分步 ===
+ * web 端注册是**两步**（1 用户名+邮箱+验证码 → 2 密码+协议），与移动端三步不同。
+ * 契约里的 `nextStep(2)` 即「进到第 2 步提交」，`totalSteps = 2` 由本容器自定。
+ *
+ * @author yijiu2025
+ */
 import { authApi } from '@/api/auth';
 import { useForm } from 'vee-validate';
-import { useRouter, useRoute } from 'vue-router';
-import { inject, ref, onMounted, onUnmounted, computed } from 'vue';
-import { useI18n } from 'vue-i18n';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
-import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
-import { useThemeStore } from '@/stores/theme';
-
-// ================================
-// 组件导入（与 MiniRegister 同一套 UI 体系）
-// ================================
+import { useI18n } from 'vue-i18n';
+import { useRoute, useRouter } from 'vue-router';
+import { computed, inject, markRaw, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
-import AuthContainer from '@/components/common/AuthContainer.vue';
-import PasswordInput from '@/components/common/PasswordInput.vue';
-import PasswordStrength from '@/components/common/PasswordStrength.vue';
-
-// ================================
-// Composables 导入
-// ================================
-import { useCaptcha } from '@/composables/useCaptcha';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { useButtonLock } from '@/composables/useButtonLock';
+import { useCaptcha } from '@/composables/useCaptcha';
 import { useAgreementVersion, captureAgreementVersion } from '@/composables/useAgreementVersion';
+import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
+import { useThemeStore } from '@/stores/theme';
+import BaseRegisterView from '@/theme/themes/default/standard/register/index.vue';
+import { pickRegisterViewId, registerViews } from '@/theme/views/register';
+import type { RegisterDirection, RegisterTranslate, RegisterViewContext } from '@/theme/views/register';
+import type { Component, Ref } from 'vue';
+
+/** 步骤总数：web 端两步（账号+验证码 → 密码+协议） */
+const TOTAL_STEPS = 2;
 
 // ================================
 // 常量定义
 // ================================
 const COUNTDOWN_SECONDS = 60; // 验证码倒计时秒数
-
-const themeStore = useThemeStore();
 const RECAPTCHA_TIMEOUT = 30_000; // 获取验证码超时时间（毫秒）
 const RSA_ENCRYPT_TIMEOUT = 30_000; // RSA 加密超时时间（毫秒）
 
 // ================================
-// Composables 初始化
+// 路由和上下文
 // ================================
-const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToken, dispose } = useCaptcha('register');
-const { error: showError, success: showSuccess } = useMessage();
+const router = useRouter();
+const route = useRoute();
 const { t, locale } = useI18n();
-const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(COUNTDOWN_SECONDS);
-const submitLock = useButtonLock();
-const agreementVersion = useAgreementVersion();
+const themeStore = useThemeStore();
 
-// ================================
-// 类型定义
-// ================================
-// 父组件透传的注册上下文
+// 父组件透传的注册上下文（dispatcher provide）
 interface RegisterContext {
   appName: string;
   clientId: string;
-  /** OAuth 标准字段，iframe 父应用跳注册时必传 */
   redirectUri: string;
-  /** 兼容旧字段名 */
   redirect: string;
   scope: string;
   state: string;
@@ -65,13 +77,7 @@ interface RegisterContext {
   lang: string;
 }
 
-// ================================
-// 路由和上下文
-// ================================
-const router = useRouter();
-const route = useRoute();
-
-const ctx = inject<RegisterContext>('registerContext', {
+const registerContext = inject<RegisterContext>('registerContext', {
   appName: 'Enterprise SSO',
   clientId: '',
   redirectUri: '',
@@ -83,34 +89,19 @@ const ctx = inject<RegisterContext>('registerContext', {
 });
 
 // 跟随父组件透传的 lang 切换 locale
-if (ctx.lang) locale.value = ctx.lang;
-
-// AuthContainer 品牌/默认标题展示用
-const templateAppName = ctx.appName || 'Enterprise SSO';
-
-/**
- * 构建 router-link 透传给 /mini-login 的 query 参数（与 MiniRegister 同逻辑）
- * 保留 OAuth 上下文（appName/client_id/scope/state/redirect_uri/lang），
- * 跳回登录页时不丢"在哪个应用注册"的信息
- */
-const oauthQuery = computed(() => {
-  const query: Record<string, string> = {};
-  for (const key of ['appName', 'client_id', 'scope', 'state', 'redirect_uri', 'lang', 'from']) {
-    const value = route.query[key];
-    if (typeof value === 'string') {
-      query[key] = value;
-    }
-  }
-  if (!query.from) {
-    query.from = 'register';
-  }
-  return query;
-});
+if (registerContext.lang) locale.value = registerContext.lang;
 
 // ================================
 // 分步状态管理
 // ================================
 const step = ref<1 | 2>(1);
+const direction = ref<RegisterDirection>('next');
+
+// 分步副标题（显式映射，避免动态拼 key 漏键时把 key 名显示给用户）
+const stepSub = computed(() => {
+  if (step.value === 1) return t('register.sub_step1');
+  return t('register.sub_step2');
+});
 
 // ================================
 // 表单验证
@@ -146,8 +137,8 @@ const { values, errors, defineField, handleSubmit, validateField } = useForm({
 const [username, usernameProps] = defineField('username');
 const [email, emailProps] = defineField('email');
 const [code, codeProps] = defineField('code');
-const [password] = defineField('password');
-const [confirmPassword] = defineField('confirmPassword');
+const [password, passwordProps] = defineField('password');
+const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword');
 
 // ================================
 // 验证码和状态管理
@@ -158,20 +149,26 @@ const isEmailChecking = ref(false); // 邮箱去重检查中：防 blur 后未�
 const codeSent = ref(false); // 验证码是否已成功发送（前端拦截：未发码前 input 和下一步按钮都禁用）
 const docType = ref<'service' | 'privacy' | null>(null);
 
+const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(COUNTDOWN_SECONDS);
+const submitLock = useButtonLock();
+const agreementVersion = useAgreementVersion();
+const submitting = computed(() => submitLock.locked.value);
+
+// 人机验证（reCAPTCHA）
+const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToken, dispose } = useCaptcha('register');
+const { error: showError, success: showSuccess } = useMessage();
+
 // 图形验证码流程：弹窗 → 通过 → 拿 captchaKey + 标记已发码 + 启动倒计时
-const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess } = useCaptchaFlow<'register'>(
-  () => {
-    codeSent.value = true;
-    startCountdown(COUNTDOWN_SECONDS);
-  }
-);
+const { captchaKey, showCaptcha, openCaptcha: openRegCaptcha, onCaptchaSuccess } = useCaptchaFlow<'register'>(() => {
+  codeSent.value = true;
+  startCountdown(COUNTDOWN_SECONDS);
+});
 
 // ================================
 // 工具函数
 // ================================
 /**
- * 异步操作超时保护（与 MiniRegister 对齐：所有可能阻塞的异步操作设置超时兜底）
- * 超时统一抛带 op 名的 Error，便于上层 try/catch 区分。
+ * 异步操作超时保护（CLAUDE.md 铁律：所有可能阻塞的异步操作设置超时兜底）
  */
 function withTimeout<T>(p: Promise<T>, ms: number, op: string): Promise<T> {
   return Promise.race([
@@ -182,31 +179,13 @@ function withTimeout<T>(p: Promise<T>, ms: number, op: string): Promise<T> {
 
 /**
  * 注册后回跳（OAuth 同源白名单，防开放重定向）
- * 优先用 ctx.redirectUri（OAuth 标准字段，iframe 父应用必传）
- * fallback ctx.redirect（兼容旧字段名）
- * 非法回跳降级到 /mini-login 并保留 OAuth 上下文（防"应用标识缺失"）
  */
 function safeRedirect(): string {
-  const r = ctx.redirectUri || ctx.redirect;
+  const r = registerContext.redirectUri || registerContext.redirect;
   if (r && r.startsWith('/') && !r.startsWith('//') && !r.includes('://')) {
     return r; // 同源相对路径
   }
-  return buildMiniLoginUrl();
-}
-
-/**
- * 拼 /mini-login URL，保留当前路由的 OAuth 上下文
- * 给 safeRedirect 兜底 + footer 的"立即登录"链接复用
- */
-function buildMiniLoginUrl(): string {
-  const preservedQuery: Record<string, string> = {};
-  for (const k of ['appName', 'client_id', 'scope', 'state', 'redirect_uri', 'lang']) {
-    const v = route.query[k];
-    if (typeof v === 'string') preservedQuery[k] = v;
-  }
-  preservedQuery.from = 'register';
-  const queryStr = new URLSearchParams(preservedQuery).toString();
-  return `/mini-login${queryStr ? '?' + queryStr : ''}`;
+  return '/login';
 }
 
 // ================================
@@ -247,16 +226,39 @@ const sendCode = async () => {
 };
 
 /**
- * 处理下一步按钮点击（邮箱查重进行中时拦截，防竞态）
+ * 前进到第 2 步（先校验第 1 步字段，不通过就停在原地）
  */
-const handleNextStep = async () => {
-  if (isEmailChecking.value) return;
-  const resUser = await validateField('username');
-  const resEmail = await validateField('email');
-  const resCode = await validateField('code');
-  if (resUser.valid && resEmail.valid && resCode.valid && !isEmailDuplicate.value) {
-    step.value = 2;
+const handleNextStep = async (target: 2) => {
+  if (isEmailChecking.value) return; // 查重未返回，先不放行
+  const r1 = await validateField('username');
+  const r2 = await validateField('email');
+  const r3 = await validateField('code');
+  const ok = r1.valid && r2.valid && r3.valid && !isEmailDuplicate.value;
+  if (ok) {
+    direction.value = 'next';
+    step.value = target;
   }
+};
+
+/**
+ * 后退到第 1 步
+ */
+const handleBack = () => {
+  direction.value = 'prev';
+  step.value = 1;
+};
+
+/**
+ * 去登录页（透传 OAuth 上下文）
+ */
+const goLogin = () => {
+  const query: Record<string, string> = {};
+  for (const key of ['appName', 'client_id', 'scope', 'state', 'redirect_uri', 'lang', 'redirect']) {
+    const v = route.query[key];
+    if (typeof v === 'string') query[key] = v;
+  }
+  void import('@/view/web/login/index.vue').catch(() => {});
+  router.push({ path: '/login', query });
 };
 
 /**
@@ -267,8 +269,8 @@ const handleRegister = handleSubmit(async () => {
   if (submitLock.locked.value) return;
   submitLock.lock();
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 解构排除 confirmPassword，rest 模式合法
-  const { confirmPassword, ...submitData } = values;
+  // 解构排除 confirmPassword（`_` 前缀 = 有意不使用）：它只用于本地一致性校验，不发往后端
+  const { confirmPassword: _confirmPassword, ...submitData } = values;
 
   try {
     const encryptedPassword = await withTimeout(rsaEncrypt(submitData.password!), RSA_ENCRYPT_TIMEOUT, 'rsaEncrypt');
@@ -281,16 +283,13 @@ const handleRegister = handleSubmit(async () => {
       password: encryptedPassword,
       kid: getCachedKid(),
       captchaKey: captchaKey.value,
-      // 协议版本快照：注册时记录用户同意的协议版本
       agreementVersion: captureAgreementVersion(agreementVersion),
-      // 邀请码 + OAuth appName（父应用注册场景）
-      invite: ctx.invite || undefined,
-      appName: ctx.appName,
+      invite: registerContext.invite || undefined,
+      appName: registerContext.appName,
       ...(recaptchaToken ? { recaptchaToken } : {})
     });
 
     showSuccess(t('register.success'));
-    // OAuth 场景：跳回原应用（safeRedirect 白名单校验）；普通注册：跳登录页
     router.push(safeRedirect());
   } catch (err: unknown) {
     showError(err instanceof Error ? err.message : t('register.register_failed'));
@@ -307,412 +306,149 @@ onMounted(() => {
 });
 
 onUnmounted(() => dispose());
+
+/* ============================================================================
+   版式（UI）加载 + 契约组装
+   ========================================================================== */
+
+/**
+ * 本容器的**设备身份**：文件位置即身份（`view/web/` 下都是电脑端）。
+ * 取常量而不是运行时判定，让「这个页面属于哪种设备」只有一个答案。
+ */
+const THEME_DEVICE = 'standard' as const;
+
+const viewId = computed(() =>
+  pickRegisterViewId({
+    url: route.query.view,
+    pkg: themeStore.packageId,
+    device: THEME_DEVICE
+  })
+);
+
+watch(viewId, id => themeStore.setActivePageView('register', id), { immediate: true });
+
+const activeView = shallowRef<Component>(BaseRegisterView);
+let viewEpoch = 0;
+watch(
+  [viewId, () => themeStore.packageId],
+  ([id, pkg]) => {
+    const epoch = ++viewEpoch;
+    void registerViews.load(id, pkg, THEME_DEVICE).then(loaded => {
+      if (epoch !== viewEpoch) return;
+      activeView.value = loaded ? markRaw(loaded) : BaseRegisterView;
+    });
+  },
+  { immediate: true }
+);
+
+/** 契约里字段绑定的内部构造形态 */
+interface FieldSource {
+  value: Ref<string>;
+  attrs: Ref<Record<string, unknown>>;
+  invalid: Ref<boolean>;
+  error: Ref<string | undefined>;
+}
+
+function bindField(
+  value: Ref<string | undefined>,
+  attrs: Ref<Record<string, unknown>>,
+  invalid: Ref<boolean>,
+  error: Ref<string | undefined>
+): FieldSource {
+  return {
+    value: computed({
+      get: () => value.value ?? '',
+      set: next => {
+        value.value = next;
+      }
+    }),
+    attrs,
+    invalid,
+    error
+  };
+}
+
+function assertRegisterContract(ctx: RegisterViewContext): RegisterViewContext {
+  return ctx;
+}
+
+const translate: RegisterTranslate = (key, params) => {
+  if (params === undefined) return t(key);
+  return typeof params === 'string' ? t(key, params) : t(key, params as never);
+};
+
+const ctx = assertRegisterContract(
+  reactive({
+    t: translate,
+    appName: computed(() => registerContext.appName),
+
+    step: computed(() => step.value),
+    totalSteps: TOTAL_STEPS,
+    direction: computed(() => direction.value),
+    subtitle: computed(() => stepSub.value),
+    progress: computed(() => (step.value / TOTAL_STEPS) * 100),
+
+    fields: {
+      username: bindField(
+        username,
+        usernameProps,
+        computed(() => !!errors.value.username),
+        computed(() => errors.value.username)
+      ),
+      email: bindField(
+        email,
+        emailProps,
+        computed(() => !!errors.value.email || isEmailDuplicate.value),
+        computed(() => (isEmailDuplicate.value ? t('register.email_duplicate') : errors.value.email))
+      ),
+      code: bindField(code, codeProps, computed(() => !!errors.value.code), computed(() => errors.value.code)),
+      password: bindField(
+        password,
+        passwordProps,
+        computed(() => !!errors.value.password),
+        computed(() => errors.value.password)
+      ),
+      confirmPassword: bindField(
+        confirmPassword,
+        confirmPasswordProps,
+        computed(() => !!errors.value.confirmPassword),
+        computed(() => errors.value.confirmPassword)
+      )
+    } satisfies Record<string, FieldSource>,
+
+    agreed,
+    emailDuplicate: computed(() => isEmailDuplicate.value),
+    codeSent: computed(() => codeSent.value),
+    countingDown: computed(() => isCountingDown.value),
+    countdown: computed(() => countdown.value),
+    submitting: computed(() => submitting.value),
+    canSubmit: computed(() => agreed.value && !submitting.value),
+
+    actions: {
+      nextStep: handleNextStep,
+      back: handleBack,
+      goLogin,
+      sendCode,
+      checkEmail,
+      submit: handleRegister,
+      openAgreement: (doc: 'service' | 'privacy') => {
+        docType.value = doc;
+      }
+    }
+  })
+);
 </script>
 
 <template>
-  <!-- 单根节点：AuthContainer 全屏框架 + 弹窗类组件挂在外层 -->
-  <div class="stdreg-root w-full" :class="{ dark: themeStore.activeTone === 'dark' }">
-    <AuthContainer :app-name="templateAppName">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-xl font-bold dark:text-white leading-tight">{{ t('register.title') }}</h2>
-            <p class="text-xs text-slate-400 mt-1">
-              {{ step === 1 ? t('register.sub_step1') : t('register.sub_step2') }}
-            </p>
-          </div>
-          <!-- 步骤指示小圆点（v2.21.0 token 化：激活点用 --mauth-primary） -->
-          <div class="flex items-center gap-1.5 mr-2">
-            <span class="mreg-step-dot" :class="{ 'mreg-step-dot--active': step === 1 }"></span>
-            <span class="mreg-step-dot" :class="{ 'mreg-step-dot--active': step === 2 }"></span>
-          </div>
-        </div>
-      </template>
+  <!-- 业务容器只做两件事：把 ctx 交给当前版式；渲染与版式无关的业务浮层 -->
+  <component :is="activeView" :ctx="ctx" />
 
-      <form @submit.prevent="step === 1 ? handleNextStep() : handleRegister()" class="mreg-form">
-        <!-- 第一步：基本账号信息 -->
-        <div v-if="step === 1" class="mreg-step-box">
-          <!-- 用户名 -->
-          <div class="mreg-cell">
-            <div class="mreg-field" :class="{ 'is-error': errors.username }">
-              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-              </svg>
-              <input v-model="username" v-bind="usernameProps" type="text" :placeholder="t('register.username')" autocomplete="username" class="mreg-input" />
-            </div>
-            <div class="mreg-err">{{ errors.username }}</div>
-          </div>
+  <!-- 图形验证码弹窗（注册 = 校验图形码 + 发邮箱码，必须带 send-email） -->
+  <GraphicCaptcha :is-open="showCaptcha" :email="values.email" :send-email="true" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
 
-          <!-- 邮箱 -->
-          <div class="mreg-cell">
-            <div class="mreg-field" :class="{ 'is-error': errors.email || isEmailDuplicate }">
-              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                <polyline points="22,6 12,13 2,6"></polyline>
-              </svg>
-              <input v-model="email" v-bind="emailProps" @blur="checkEmail" type="email" :placeholder="t('register.email')" autocomplete="email" class="mreg-input" />
-            </div>
-            <div class="mreg-err">{{ isEmailDuplicate ? t('register.email_duplicate') : errors.email }}</div>
-          </div>
+  <!-- 服务协议 / 隐私政策 弹窗 -->
+  <AgreementModals v-model:type="docType" />
 
-          <!-- 验证码 -->
-          <div class="mreg-cell">
-            <div class="mreg-field" :class="{ 'is-error': errors.code }">
-              <svg class="mreg-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              <input
-                v-model="code"
-                v-bind="codeProps"
-                type="text"
-                :placeholder="t('register.code')"
-                autocomplete="one-time-code"
-                :disabled="!codeSent"
-                class="mreg-input disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <button type="button" @click="sendCode" :disabled="isCountingDown || submitLock.locked.value" class="mreg-code-btn">
-                {{ isCountingDown ? t('register.code_countdown', { countdown }) : t('register.get_code') }}
-              </button>
-            </div>
-            <div class="mreg-err">{{ errors.code }}</div>
-          </div>
-
-          <!-- 下一步按钮（未发验证码前禁用） -->
-          <button
-            type="button"
-            @click="handleNextStep"
-            :disabled="!codeSent"
-            class="mreg-submit disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ t('register.next') }}
-          </button>
-        </div>
-
-        <!-- 第二步：密码与协议 -->
-        <div v-else class="mreg-step-box">
-          <!-- 登录密码 -->
-          <div class="mreg-cell">
-            <PasswordInput
-              v-model="password"
-              :has-error="!!errors.password"
-              :placeholder="t('register.password')"
-            />
-            <div class="mreg-err">{{ errors.password }}</div>
-            <!-- 密码强度条 + 悬浮窗规则列表 -->
-            <PasswordStrength :password="values.password" />
-          </div>
-
-          <!-- 确认密码 -->
-          <div class="mreg-cell">
-            <PasswordInput
-              v-model="confirmPassword"
-              :has-error="!!errors.confirmPassword"
-              :placeholder="t('register.confirm_password')"
-            />
-            <div class="mreg-err">{{ errors.confirmPassword }}</div>
-          </div>
-
-          <!-- 协议勾选 -->
-          <div class="mreg-cell pt-1">
-            <label class="mreg-agree">
-              <input type="checkbox" v-model="agreed" class="hidden" />
-              <span class="mreg-checkbox" :class="{ checked: agreed }">
-                <svg v-if="agreed" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="4">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              </span>
-              <span class="text-xs text-slate-500 dark:text-slate-400">
-                {{ t('register.agree_prefix') }}<span @click.stop.prevent="docType = 'service'" class="mreg-highlight-link">{{ t('register.agree_link_service') }}</span>{{ t('register.agree_and') }}<span @click.stop.prevent="docType = 'privacy'" class="mreg-highlight-link">{{ t('register.agree_link_privacy') }}</span>
-              </span>
-            </label>
-          </div>
-
-          <!-- 提交/上一步按钮组 -->
-          <div class="flex gap-2.5 mt-2">
-            <button type="button" @click="step = 1" class="mreg-back-btn">{{ t('register.prev') }}</button>
-            <button type="submit" class="mreg-submit flex-1" :disabled="!agreed || submitLock.locked.value" :class="{ 'opacity-50 cursor-not-allowed': !agreed || submitLock.locked.value }">
-              {{ t('register.submit') }}
-            </button>
-          </div>
-        </div>
-      </form>
-
-      <!-- 底部返回登录 -->
-      <template #footer>
-        <div class="flex items-center justify-between pt-1">
-          <span class="text-xs text-slate-400">{{ t('register.signin_hint') }}</span>
-          <p class="mreg-signin">
-            <!--
-              指向标准登录页 /login，不要指 /mini-login：
-              本页是**桌面全屏**标准注册页，登录入口自然应对应桌面标准登录页；
-              原来指 /mini-login 会跳到 iframe 用的紧凑卡片版登录页，与整页风格不一致。
-              （窄屏下本组件不会被渲染——分发器会换成移动端注册页，其页脚指向 /m/login）
-            -->
-            <router-link :to="{ path: '/login', query: oauthQuery }" class="mreg-highlight-link font-medium text-xs">
-              {{ t('register.signin_link') }}
-            </router-link>
-          </p>
-        </div>
-      </template>
-    </AuthContainer>
-
-    <!-- 图形验证码弹窗（注册 = 校验图形码 + 发邮箱码，必须带 send-email） -->
-    <GraphicCaptcha :is-open="showCaptcha" :email="values.email" :send-email="true" type="register" @close="showCaptcha = false" @success="onCaptchaSuccess" />
-
-    <!-- 服务协议 / 隐私政策 弹窗 -->
-    <AgreementModals v-model:type="docType" />
-
-    <!-- 错误/成功提示 toast -->
-    <MessageToast />
-  </div>
+  <!-- 错误/成功提示 toast -->
+  <MessageToast />
 </template>
-
-<style scoped>
-/* ================================
-   页面根：AuthContainer 自带 100vw/100vh 视口框架，
-   这里只做弹窗类组件的挂载外壳
-   ================================ */
-.stdreg-root {
-  min-height: 100vh;
-}
-
-/* ================================
-   表单布局（与 MiniRegister 同款）
-   ================================ */
-.mreg-form {
-  display: flex;
-  flex-direction: column;
-  margin-top: 16px;
-}
-
-.mreg-step-box {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mreg-cell {
-  display: flex;
-  flex-direction: column;
-}
-
-/* ================================
-   输入框样式（v2.21.0 全 token 化 —— 与 StandardLogin 同款）
-   ================================ */
-.mreg-field {
-  display: flex;
-  align-items: center;
-  height: 44px;
-  padding: 0 14px;
-  gap: 10px;
-  background: var(--mauth-field-bg);
-  border: 1px solid var(--mauth-field-border);
-  border-radius: 12px;
-  transition: all 0.2s ease;
-}
-
-.mreg-field:focus-within {
-  background: var(--mauth-field-bg-focus);
-  border-color: var(--mauth-field-border-focus);
-  box-shadow: 0 0 0 3px var(--mauth-focus-ring);
-}
-
-.mreg-field.is-error {
-  border-color: var(--mauth-danger);
-  background: var(--mauth-danger-bg);
-}
-
-.mreg-icon {
-  color: var(--mauth-icon);
-  flex-shrink: 0;
-  transition: color 0.2s;
-}
-
-/* focus 时图标联动：与 mobile 一致 */
-.mreg-field:focus-within .mreg-icon {
-  color: var(--mauth-text);
-}
-
-.mreg-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-size: 13px;
-  color: var(--mauth-text);
-  height: 100%;
-  min-width: 0;
-}
-
-.mreg-input::placeholder {
-  color: var(--mauth-text-faint);
-}
-
-/* ================================
-   验证码按钮样式
-   ================================ */
-.mreg-code-btn {
-  font-size: 12px;
-  font-weight: 600;
-  padding-left: 12px;
-  border-left: 1px solid var(--mauth-field-border);
-  color: var(--mauth-accent);
-  white-space: nowrap;
-  background: transparent;
-  border-top: none;
-  border-right: none;
-  border-bottom: none;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.mreg-code-btn:hover:not(:disabled) {
-  color: var(--mauth-emphasis-fg);
-}
-
-.mreg-code-btn:disabled {
-  color: var(--mauth-text-faint) !important;
-  cursor: not-allowed;
-}
-
-/* ================================
-   错误提示样式
-   ================================ */
-.mreg-err {
-  height: 16px;
-  line-height: 16px;
-  margin-top: 2px;
-  padding-left: 4px;
-  font-size: 11px;
-  color: var(--mauth-danger);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* ================================
-   按钮样式（v2.21.0 去 gradient 单色，与 mobile 一致）
-   ================================ */
-.mreg-submit {
-  height: 44px;
-  width: 100%;
-  margin-top: 4px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--mauth-primary-fg);
-  border: none;
-  background: var(--mauth-primary);
-  box-shadow: var(--mauth-focus-ring);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.mreg-submit:hover:not(:disabled) {
-  opacity: 0.92;
-  transform: translateY(-1px);
-}
-
-.mreg-submit:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-/* disabled：与 mobile 一致，强化"未激活"灰态（v2.21.0） */
-.mreg-submit:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  filter: saturate(0);
-}
-
-.mreg-back-btn {
-  height: 44px;
-  padding: 0 16px;
-  margin-top: 4px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--mauth-text-faint);
-  background: var(--mauth-surface-2);
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.mreg-back-btn:hover:not(:disabled) {
-  background: var(--mauth-surface-3);
-  color: var(--mauth-text);
-}
-
-/* ================================
-   协议勾选样式
-   ================================ */
-.mreg-agree {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  user-select: none;
-}
-
-/* checkbox：去 gradient，单色与 mobile 一致 */
-.mreg-checkbox {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 1.5px solid var(--mauth-border-strong);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--mauth-primary-fg);
-  flex-shrink: 0;
-  background: var(--mauth-bg);
-  transition: all 0.2s;
-}
-
-.mreg-checkbox:hover {
-  border-color: var(--mauth-accent);
-}
-
-.mreg-checkbox.checked {
-  background: var(--mauth-primary);
-  border-color: var(--mauth-primary);
-}
-
-.mreg-highlight-link {
-  color: var(--mauth-accent);
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.mreg-highlight-link:hover {
-  color: var(--mauth-emphasis-fg);
-  text-decoration: underline;
-}
-
-/* ================================
-   底部链接样式
-   ================================ */
-.mreg-signin {
-  margin: 0;
-  font-size: 12px;
-}
-
-/* ================================
-   步骤指示小圆点（v2.21.0 token 化）
-   ================================ */
-.mreg-step-dot {
-  display: inline-block;
-  height: 0.5rem;
-  width: 0.5rem;
-  border-radius: 9999px;
-  background: var(--mauth-border);
-  transition: all 0.3s;
-}
-
-.mreg-step-dot--active {
-  width: 1rem;
-  background: var(--mauth-primary);
-}
-</style>
