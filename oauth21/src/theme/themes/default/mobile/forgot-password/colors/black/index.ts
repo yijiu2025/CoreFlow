@@ -49,41 +49,57 @@ export default {
     /* 画布色 = 页面最上沿。black 色卡语义 = 纯黑底（2026-09-25 用户定夺：
        "黑色背景就要使用纯黑"），不再借 slate-950 那套深蓝灰 —— 选黑就是 #000000 */
     '--mauth-canvas': '#000000',
-    /* 表面：背景纯黑；surface 系列用极暗灰保留「卡片 vs 页面」的层次
-       （#0a0a0a 比 #020617 slate-950 更贴近纯黑，但仍能看到卡片轮廓） */
+    /* 表面：背景纯黑；surface 系列上提一档到 #121212（Material 推荐深色
+       surface 起点），让卡片从背景"浮起"出来 —— 旧 #0a0a0a 与 #000000
+       仅差 10/255 灰阶，肉眼几乎看不见卡片轮廓；改后差 18/255，
+       卡片有微浮感但不破坏纯黑观感（2026-09-25 美观性再提升）。 */
     '--mauth-bg': '#000000',
     /* 🔴 body 背景 = bg（= #000000），不再借 surface —— 用户原话：
        "黑色背景就要使用纯黑"。mobile-auth.scss 默认
        --mauth-body-bg = var(--mauth-surface)，会让页面主体显示 surface 色
        (#0a0a0a)，不是纯黑。覆盖一下，body 与 bg 融合 → 整片 #000000，
-       卡片仍用 surface (#0a0a0a) 露出轮廓。 */
+       卡片仍用 surface (#121212) 露出轮廓。 */
     '--mauth-body-bg': '#000000',
-    '--mauth-surface': '#0a0a0a',
-    '--mauth-surface-2': '#141414',
-    '--mauth-surface-3': '#1f1f1f',
-    '--mauth-surface-press': '#262626',
-    /* 文字：纯黑底下用近白仍能看清，整体偏中性（black 是无品牌色方案） */
+    /* header 默认借 surface（旧 #0a0a0a），纯黑下会形成顶部"色条"。
+       覆盖为 var(--mauth-bg) (= #000000)，让 header 与 body 完全融合。
+       ⚠️ 不能用 transparent —— mobile-auth.scss 把 --mauth-canvas 串到
+       --mauth-header-bg，transparent 会让 canvas 透明破坏页面层级。 */
+    '--mauth-header-bg': 'var(--mauth-bg)',
+    '--mauth-surface': '#121212',
+    '--mauth-surface-2': '#1c1c1c',
+    '--mauth-surface-3': '#262626',
+    '--mauth-surface-press': '#2e2e2e',
+    /* 文字：text-body / text-mid / icon 同步从 #a3a3a3 提到 #b3b3b3，
+       拉开与 text-faint #737373 的层次（差 +64 灰阶），让"次级文字"
+       与"辅助说明"肉眼可分；不破坏与 text #f5f5f5 的层级。 */
     '--mauth-text': '#f5f5f5',
     '--mauth-text-strong': '#f5f5f5',
-    '--mauth-text-body': '#a3a3a3',
-    '--mauth-text-mid': '#a3a3a3',
+    '--mauth-text-body': '#b3b3b3',
+    '--mauth-text-mid': '#b3b3b3',
     '--mauth-text-faint': '#737373',
-    '--mauth-icon': '#a3a3a3',
-    /* 边框：纯黑下原 #334155 几乎隐形，提亮一档；field-* 同理 */
+    '--mauth-icon': '#b3b3b3',
+    /* 边框：默认 #262626 不动；border-strong 从 #525252 压到 #404040，
+       在纯黑底上不至于过亮打断暗黑一致性；focus 边框带冷调
+       (#94a3b8)，与默认 #262626 形成明确对比，focus 反馈更明显。 */
     '--mauth-border': '#262626',
-    '--mauth-border-strong': '#525252',
-    '--mauth-border-focus': '#737373',
-    '--mauth-focus-ring': 'rgba(115, 115, 115, 0.3)',
+    '--mauth-border-strong': '#404040',
+    '--mauth-border-focus': '#94a3b8',
+    '--mauth-focus-ring': 'rgba(148, 163, 184, 0.45)',
     /* 主色：black 是无品牌色方案 —— CTA 用近白，对比度压满 */
     '--mauth-primary': '#f5f5f5',
     '--mauth-primary-fg': '#0a0a0a',
-    '--mauth-accent': '#93c5fd',
+    /* accent：去掉原先的蓝调 (#93c5fd)，它与"无品牌色"语义冲突，
+       在纯黑底上扎眼。改用与 emphasis-fg 同色系的中性银 (#e5e5e5)，
+       整体配色更克制统一。 */
+    '--mauth-accent': '#e5e5e5',
     '--mauth-emphasis-fg': '#e5e5e5',
-    /* 表单：纯黑底上 6% 白覆盖仍偏暗，提到 8%；focus 同步提 */
-    '--mauth-field-bg': 'rgba(255, 255, 255, 0.08)',
-    '--mauth-field-bg-focus': 'rgba(255, 255, 255, 0.12)',
-    '--mauth-field-border': 'rgba(255, 255, 255, 0.16)',
-    '--mauth-field-border-focus': '#a3a3a3',
+    /* 表单：field-bg 0.08 在新 surface #121212 之上叠加太抢戏，
+       压到 0.06（实际 ≈ #181818，仍比 #121212 略浅，输入框可见）；
+       focus 同步降到 0.10。field-border-focus 也切到冷调蓝灰。 */
+    '--mauth-field-bg': 'rgba(255, 255, 255, 0.06)',
+    '--mauth-field-bg-focus': 'rgba(255, 255, 255, 0.10)',
+    '--mauth-field-border': 'rgba(255, 255, 255, 0.14)',
+    '--mauth-field-border-focus': '#94a3b8',
     /* 第三方渠道品牌色提亮（沿用基线，避免在纯黑底上消失） */
     '--mauth-social-ink-github': '#e5e7eb',
     '--mauth-social-ink-apple': '#f9fafb'
