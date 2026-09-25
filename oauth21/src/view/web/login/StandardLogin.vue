@@ -706,7 +706,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px; /* 核心：12px Padding 让 Checkbox X轴完全对齐 */
+  padding: 0 9px 0 0; /* 核心：12px Padding 让 Checkbox X轴完全对齐 */
 }
 
 /* 2) 协议卡片行：左 Padding 为 12px */
@@ -715,7 +715,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px; /* 核心：12px Padding */
+  padding: 0px 0px; /* 核心：12px Padding */
   /* background: #f8fafc; */
   border-radius: 12px;
   transition: all 0.2s ease;
