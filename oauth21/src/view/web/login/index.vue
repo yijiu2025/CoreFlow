@@ -77,6 +77,10 @@ onMounted(() => {
     postToParent({ type: 'SSO_READY' });
     console.warn('[SSO] 发送 SSO_READY 消息到父窗口');
   }
+  // v2.20.1：dispatcher 挂载后立即预热三个形态的登录组件，避免「切换闪屏」
+  void import('./StandardLogin.vue').catch(() => {});
+  void import('./MiniLogin.vue').catch(() => {});
+  void import('../../app/login/index.vue').catch(() => {});
 });
 
 // 调试面板关闭事件处理

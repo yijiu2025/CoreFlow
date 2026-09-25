@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import { useThemeStore } from '@/stores/theme';
@@ -95,6 +95,19 @@ const registerContext = reactive({
   lang: String(q.lang || '') || 'zh_cn'
 });
 provide('registerContext', registerContext);
+
+/**
+ * v2.20.1：dispatcher 挂载后立即 import() 三个形态的注册组件 —— activeForm
+ * 在运行时才能确定（视口/UA/iframe 来源），dispatcher 自身 prefetch 之后，
+ * 它内部 defineAsyncComponent 还要再走一次 chunk 下载。这是「注册页切换
+ * 42ms 空白窗口」的根因（dispatcher 自身已 cached，但子组件还要下载）。
+ * 三个形态全部预热：chunk 总量 < 30KB，并行下载几乎瞬时；用户切换任意形态都不闪。
+ */
+onMounted(() => {
+  void import('./StandardRegister.vue').catch(() => {});
+  void import('./MiniRegister.vue').catch(() => {});
+  void import('../../app/register/index.vue').catch(() => {});
+});
 </script>
 
 <template>

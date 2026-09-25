@@ -13,7 +13,7 @@
  *
  * @author yijiu2025
  */
-import { computed, defineAsyncComponent, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import { useThemeStore } from '@/stores/theme';
@@ -86,6 +86,12 @@ watch(
   },
   { immediate: true }
 );
+
+// v2.20.1：dispatcher 挂载后预热桌面/手机两套组件，避免「回到登录」切换闪屏
+onMounted(() => {
+  void import('./DesktopForgot.vue').catch(() => {});
+  void import('../../app/forgot-password/index.vue').catch(() => {});
+});
 </script>
 
 <template>
