@@ -75,8 +75,18 @@
     padding: 0;
     overflow: hidden; /* 路由切换时避免滚动条闪现（登录↔注册等全屏页） */
   }
+  /* body 走 token（v2.21.0）：
+   * 之前 `bg-background text-foreground` 是 Tailwind HSL（深色档 = slate-950 #020617），
+   *   而 desktop 页面没有 `.mauth-page`，mobile-auth.scss 的 `:has(.mauth-page)` 覆写规则
+   *   不生效 → web 端 body 在黑主题下永远是 slate-950 而不是 #000000。
+   * 改成与 `html { background-color: var(--mauth-canvas, hsl(var(--background))) }` 同源：
+   *   token 文件命中走 token（black = #000000），没命中退回 Tailwind 兜底（与改动前一致）。
+   * 改 body color 而非 html：html 已在 `color-scheme` 一节控制明暗文档色调，body 控制
+   *   用户实际看到的内容色，二者各司其职。 */
   body {
-    @apply bg-background text-foreground font-sans;
+    background: var(--mauth-canvas, hsl(var(--background)));
+    color: var(--mauth-text, hsl(var(--foreground)));
+    @apply font-sans;
     font-feature-settings:
       'rlig' 1,
       'calt' 1;

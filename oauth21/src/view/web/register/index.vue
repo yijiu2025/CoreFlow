@@ -56,16 +56,16 @@ const activeComponent = computed(() =>
  */
 const themeStore = useThemeStore();
 const renderedDevice = computed<ThemeDevice>(() =>
-  activeForm.value === 'mobile' ? 'mobile' : 'web'
+  activeForm.value === 'mobile' ? 'mobile' : activeForm.value === 'mini' ? 'mini' : 'standard'
 );
 watch(
   renderedDevice,
   device => {
     themeStore.setActiveDevice(device);
     // 桌面形态没有容器声明 page/view（那是 view/app/<page>/ 容器的职责），
-    // 归位到当前包（web 端走默认包 = DEFAULT_THEME_PACKAGE）—— 新版式下 view ≡ pkg，
+    // 归位到当前包（standard/mini 端走默认包 = DEFAULT_THEME_PACKAGE）—— 新版式下 view ≡ pkg，
     // 用包名作 view 段能让 findRecord 命中默认包对应配色；手机形态由随后挂载的容器覆盖。
-    if (device === 'web') themeStore.setActivePageView('register', DEFAULT_THEME_PACKAGE);
+    if (device !== 'mobile') themeStore.setActivePageView('register', DEFAULT_THEME_PACKAGE);
   },
   { immediate: true }
 );

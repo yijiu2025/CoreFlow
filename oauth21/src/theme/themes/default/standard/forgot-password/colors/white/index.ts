@@ -1,10 +1,10 @@
 /**
  * 「白」配色（white）—— 与「黑」「蓝」「青」等**并列的一个颜色选项**
  *
- * 注册页（紧凑版式） · 手机端。
+ * 重置密码页 · 电脑端。
  *
  * === 它在四级结构里的位置 ===
- * `themes/default/<设备>/<页面>/<版式>/colors/white/` 是**配色**：
+ * `themes/default/<设备>/<页面>/colors/white/` 是**配色**：
  * 只换颜色 / 圆角 / 背景图，**不动 DOM**（DOM 由同级的版式决定）。
  *
  * 🔴 配色自 2026-09-24 起挂在**版式**下，而不是设备下：
@@ -78,6 +78,11 @@ export default {
     '--mauth-field-border-focus': '#475569',
     /* 状态色（v2.21.0 错误底：浅底上的红用极淡红） */
     '--mauth-danger': '#ef4444',
-    '--mauth-danger-bg': '#fef2f2'
+    '--mauth-danger-bg': '#fef2f2',
+    /* v2.21.0 警告：浮层 MessageToast + GraphicCaptcha 的 warn 类用 */
+    '--mauth-warn': '#f59e0b',
+    '--mauth-warn-bg': 'rgba(245, 158, 11, 0.12)',
+    /* v2.21.0 body bg：--mauth-canvas 已声明在上方；这里只补 body bg */
+    '--mauth-body-bg': '#ffffff'
   }
 } satisfies MauthThemeColor;

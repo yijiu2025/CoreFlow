@@ -76,7 +76,7 @@ router.afterEach((to, failure) => {
  * 视觉上窄视口切个 `?view=` 时视图没换、设备却被刷成 web，随后**不再纠正回来**
  * （mobile 容器的 watch 不会重跑 —— `renderedDevice` 由视口派生、没变化），
  * 表现为"切换版式后版式只剩 1 个 / 蓝青色卡切换无效"。
- * 现在 watch 的是「meta.device 解析出来的取值」（'mobile' / 'web'），只在真实跨
+ * 现在 watch 的是「meta.device 解析出来的取值」（'mobile' / 'standard'），只在真实跨
  * 设备路由（`/login` ↔ `/m/login`）时触发；同路由 query / hash 变化跳过。
  *
  * === 为什么是"在 app setup 里 watch 路由"，而不是写在 afterEach 里 ===
@@ -97,7 +97,7 @@ router.afterEach((to, failure) => {
 export function setupThemeDeviceSync(router: Router): void {
   const themeStore = useThemeStore();
   watch(
-    () => (router.currentRoute.value.meta.device === 'mobile' ? 'mobile' : 'web'),
+    () => (router.currentRoute.value.meta.device === 'mobile' ? 'mobile' : 'standard'),
     device => {
       themeStore.setActiveDevice(device);
     },

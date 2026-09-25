@@ -102,6 +102,13 @@ export default {
     '--mauth-field-bg-focus': 'rgba(255, 255, 255, 0.14)',
     '--mauth-field-border': 'rgba(255, 255, 255, 0.18)',
     '--mauth-field-border-focus': '#94a3b8',
+    /* 状态色（v2.21.0 错误底：纯黑底上的红用红色半透 rgba，与基线一致） */
+    '--mauth-danger': '#ef4444',
+    '--mauth-danger-bg': 'rgba(239, 68, 68, 0.1)',
+    /* v2.21.0 警告：浮层 MessageToast + GraphicCaptcha 的 warn 类用；
+       纯黑底上琥珀色 #f59e0b 足够亮，无需提亮；背景保持半透黄 */
+    '--mauth-warn': '#f59e0b',
+    '--mauth-warn-bg': 'rgba(245, 158, 11, 0.12)',
     /* 第三方渠道品牌色提亮（沿用基线，避免在纯黑底上消失） */
     '--mauth-social-ink-github': '#e5e7eb',
     '--mauth-social-ink-apple': '#f9fafb'

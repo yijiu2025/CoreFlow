@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { authApi } from '@/api/auth';
 import { ref, watch, nextTick } from 'vue';
+import { useThemeStore } from '@/stores/theme';
 
 const props = defineProps({
   isOpen: Boolean,
@@ -21,6 +22,17 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'success']);
+
+/**
+ * 主题 store（v2.21.0）：用于在浮层根挂 .dark 类，
+ * 让 scoped 内的 `.dark .xxx[data-v-hash]` 选择器命中（黑主题下的兜底样式）。
+ *
+ * ⚠️ 禁止写 `:deep(.dark) X` —— 会被 @vue/compiler-sfc 编译成裸 `.dark`，整条规则被丢弃，
+ * 命中 html.dark 时 html 挂 dark 类，全局裸 `.dark` 会污染所有后代；详见全仓 c207187 教训。
+ * 正确写法：组件根挂 `:class="{ dark: themeStore.activeTone === 'dark' }"`，
+ *          然后在 scoped 内写 `.dark .xxx { ... }`（产物 `.dark .xxx[data-v-hash]`，作用域精确）。
+ */
+const themeStore = useThemeStore();
 
 const captchaImage = ref('');
 const captchaKey = ref('');
@@ -112,21 +124,29 @@ watch(
 
 <template>
   <Transition name="minimal-fade">
-    <div v-if="isOpen" class="fixed inset-0 z-[200] flex items-center justify-center p-6">
-      <!-- Backdrop -->
-      <div class="absolute inset-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl" @click="emit('close')"></div>
+    <!--
+      v2.21.0 token 化：根节点挂 .dark（与 StandardLogin/StandardRegister 一致），
+      让 scoped 内 `.dark .xxx` 选择器在黑主题下命中；颜色全部走 --mauth-* token，
+      主题切换由 token 自动驱动，.dark 类是兜底（token 未命中时的备用样式）。
+
+      之前 Tailwind 硬编码 `bg-white dark:bg-slate-950/90` `bg-white dark:bg-slate-900`
+      等 —— 切到 black 主题后浮层卡片显示深色但输入框/按钮等还是 slate 系，整张浮层
+      "深一块浅一块"；现在统一 token，主题切换自然一致。
+    -->
+    <div
+      v-if="isOpen"
+      class="mauth-captcha-root fixed inset-0 z-[200] flex items-center justify-center p-6"
+      :class="{ dark: themeStore.activeTone === 'dark' }"
+    >
+      <!-- Backdrop：与桌面 main.scss 同款 --mauth-canvas（v2.21.0） -->
+      <div class="mauth-captcha-backdrop absolute inset-0" @click="emit('close')"></div>
 
       <!-- Captcha Card -->
-      <div
-        class="relative w-full max-w-[360px] bg-white dark:bg-slate-900 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-slate-100 dark:border-slate-800 animate-minimal-in"
-      >
+      <div class="mauth-captcha-card relative w-full max-w-[360px] rounded-[24px] overflow-hidden animate-minimal-in">
         <div class="p-10">
           <div class="flex items-center justify-between mb-10">
-            <h4 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">{{ title }}</h4>
-            <button
-              @click="emit('close')"
-              class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-all"
-            >
+            <h4 class="mauth-captcha-title text-xs font-bold uppercase tracking-[0.2em]">{{ title }}</h4>
+            <button @click="emit('close')" class="mauth-captcha-close-btn w-8 h-8 flex items-center justify-center rounded-full transition-all">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
@@ -138,7 +158,7 @@ watch(
             <div class="relative group">
               <div
                 @click="generateCaptcha"
-                class="h-24 bg-slate-50 dark:bg-slate-950 rounded-2xl flex items-center justify-center cursor-pointer overflow-hidden border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 transition-all active:scale-[0.98]"
+                class="mauth-captcha-image-frame h-24 rounded-2xl flex items-center justify-center cursor-pointer overflow-hidden transition-all active:scale-[0.98]"
               >
                 <img
                   v-if="captchaImage"
@@ -147,14 +167,14 @@ watch(
                 />
                 <div
                   v-else
-                  class="w-6 h-6 border-2 border-slate-200 border-t-slate-400 rounded-full animate-spin"
+                  class="mauth-captcha-spinner w-6 h-6 border-2 rounded-full animate-spin"
                 ></div>
 
                 <!-- Large Refresh Overlay -->
                 <div
-                  class="absolute inset-0 flex items-center justify-center bg-white/40 dark:bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity"
+                  class="mauth-captcha-refresh-overlay absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                  <div class="bg-white dark:bg-slate-800 p-3 rounded-full shadow-xl">
+                  <div class="mauth-captcha-refresh-btn p-3 rounded-full shadow-xl">
                     <svg
                       viewBox="0 0 24 24"
                       width="20"
@@ -162,7 +182,7 @@ watch(
                       fill="none"
                       stroke="currentColor"
                       stroke-width="2.5"
-                      class="text-slate-900 dark:text-white"
+                      class="mauth-captcha-refresh-icon"
                     >
                       <path
                         d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
@@ -171,7 +191,7 @@ watch(
                   </div>
                 </div>
               </div>
-              <p class="text-[10px] text-center text-slate-400 mt-2 font-medium tracking-wide">看不清？点击图片更换</p>
+              <p class="mauth-captcha-hint text-[10px] text-center mt-2 font-medium tracking-wide">看不清？点击图片更换</p>
             </div>
 
             <!-- Large Input Area -->
@@ -185,11 +205,11 @@ watch(
                   type="text"
                   maxlength="4"
                   placeholder="验证码"
-                  class="minimal-input-large"
-                  :class="{ 'has-error': error }"
+                  class="mauth-captcha-input"
+                  :class="{ 'mauth-captcha-input--error': error }"
                 />
                 <Transition name="fade">
-                  <p v-if="error" class="text-center text-[11px] text-rose-500 font-bold mt-3 tracking-wide uppercase">
+                  <p v-if="error" class="text-center text-[11px] text-mauth-danger font-bold mt-3 tracking-wide uppercase">
                     {{ error }}
                   </p>
                 </Transition>
@@ -198,7 +218,7 @@ watch(
               <button
                 @click="handleVerify"
                 :disabled="isVerifying"
-                class="w-full h-14 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold text-sm tracking-[0.1em] transition-all hover:translate-y-[-2px] active:translate-y-[1px] disabled:opacity-50 flex items-center justify-center gap-3"
+                class="mauth-captcha-submit w-full h-14 rounded-2xl font-bold text-sm tracking-[0.1em] transition-all hover:translate-y-[-2px] active:translate-y-[1px] disabled:opacity-50 flex items-center justify-center gap-3"
               >
                 <span
                   v-if="isVerifying"
@@ -215,45 +235,135 @@ watch(
 </template>
 
 <style scoped>
-.minimal-input-large {
+/* ============================================================================
+   v2.21.0 token 化：所有色值走 var(--mauth-*)，主题切换由 token 自动驱动
+   ============================================================================ */
+
+/* 浮层根：让内部 scoped 子元素的 `.dark .xxx` 选择器命中（黑主题兜底） */
+.mauth-captcha-root {
+  /* 不写任何 color，让 children 自然继承 html / body 的 color */
+}
+
+/* Backdrop：使用 --mauth-canvas（与桌面 main.scss 同源 —— v2.21.0 body 改 token 化后） */
+.mauth-captcha-backdrop {
+  background: var(--mauth-canvas);
+  opacity: 0.9;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* 卡片：surface 底 + 浅描边 + 文字色 */
+.mauth-captcha-card {
+  background: var(--mauth-surface);
+  color: var(--mauth-text);
+  border: 1px solid var(--mauth-border);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.05);
+}
+
+/* 标题：弱色文字（v2.21.0 token 化） */
+.mauth-captcha-title {
+  color: var(--mauth-text-faint);
+}
+
+/* 关闭按钮：默认弱色，hover 时上提到主体色 */
+.mauth-captcha-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--mauth-text-faint);
+  cursor: pointer;
+}
+.mauth-captcha-close-btn:hover {
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text);
+}
+
+/* 图片框：surface-2 底（与卡片 surface 形成层次），描边 + hover 强描边 */
+.mauth-captcha-image-frame {
+  background: var(--mauth-surface-2);
+  border: 1px solid var(--mauth-border);
+}
+.mauth-captcha-image-frame:hover {
+  border-color: var(--mauth-border-strong);
+}
+
+/* Hover 时的刷新按钮遮罩：半透 surface */
+.mauth-captcha-refresh-overlay {
+  background: color-mix(in srgb, var(--mauth-surface) 40%, transparent);
+}
+
+/* 刷新按钮：surface 底 + 圆点阴影 */
+.mauth-captcha-refresh-btn {
+  background: var(--mauth-surface);
+}
+.mauth-captcha-refresh-icon {
+  color: var(--mauth-text);
+}
+
+/* 加载中 spinner：border 默认色 + 顶部高亮 */
+.mauth-captcha-spinner {
+  border-color: var(--mauth-border-strong);
+  border-top-color: var(--mauth-text-mid);
+}
+
+/* 提示文字：弱色 */
+.mauth-captcha-hint {
+  color: var(--mauth-text-faint);
+}
+
+/* 输入框：field 体系 token（v2.21.0） */
+.mauth-captcha-input {
   width: 100%;
   height: 70px;
   background: transparent;
-  border: 2px solid #f1f5f9;
+  border: 2px solid var(--mauth-field-border);
   border-radius: 20px;
   text-align: center;
   font-size: 28px;
   font-weight: 800;
   letter-spacing: 0.5em;
   padding-left: 0.5em;
-  color: #0f172a;
+  color: var(--mauth-text);
   outline: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.dark .minimal-input-large {
-  border-color: #1e293b;
-  color: white;
-}
-
-.minimal-input-large:focus {
-  border-color: #0f172a;
-  background: #f8fafc;
+.mauth-captcha-input:focus {
+  border-color: var(--mauth-field-border-focus);
+  background: var(--mauth-field-bg-focus);
   transform: translateY(-2px);
 }
 
-.dark .minimal-input-large:focus {
-  border-color: white;
-  background: #0f172a;
+/* 错误态：红边 + 红底（v2.21.0 token 化） */
+.mauth-captcha-input--error {
+  border-color: var(--mauth-danger) !important;
+  background: var(--mauth-danger-bg) !important;
 }
 
-.minimal-input-large.has-error {
-  border-color: #f43f5e !important;
-  background: #fff1f2 !important;
+/* 提交按钮：primary 单色（与 mobile 一致，去掉渐变） */
+.mauth-captcha-submit {
+  background: var(--mauth-primary);
+  color: var(--mauth-primary-fg);
+  border: none;
+  cursor: pointer;
+}
+.mauth-captcha-submit:disabled {
+  cursor: not-allowed;
 }
 
-.dark .minimal-input-large.has-error {
-  background: #450a0a !important;
+/* ============================================================================
+   黑主题兜底（v2.21.0）：组件根挂 .dark 时这些选择器命中
+   token 文件理论上已自动给出黑主题样式（surface #121212、text #f5f5f5），
+   此处只覆盖 token 未命中的边角（如 backdrop-filter 在纯黑上可能略偏亮）。
+   ============================================================================ */
+.dark .mauth-captcha-backdrop {
+  /* 黑主题下 backdrop 用纯黑，避免浅色 backdrop 在纯黑页面突兀 */
+  background: #000000;
+  opacity: 0.92;
+}
+
+.dark .mauth-captcha-image {
+  /* 黑主题下图片用 normal blend，避免 multiply 把图染成黑块 */
+  mix-blend-mode: normal;
 }
 
 /* Animations */

@@ -473,6 +473,14 @@ const ctx = assertLoginContract(
     emailVerifyCountingDown: computed(() => emailVerifyTimer.active.value),
     emailVerifyCountdown: computed(() => emailVerifyTimer.remaining.value),
 
+    // 二维码 / 暗黑切换是 web 端版式的能力，移动端容器不渲染扫码面板，
+    // 这里给占位值满足契约（版式不会用到）。暗黑切换走 MauthThemeSwitch 组件。
+    qrDataUrl: '',
+    qrStatus: 'pending',
+    showQr: false,
+    isEmbedded: false,
+    isDark: computed(() => themeStore.isDark),
+
     actions: {
       switchMode: switchType,
       submit: handleLogin,
@@ -487,7 +495,11 @@ const ctx = assertLoginContract(
       approveConsent,
       denyConsent,
       sendEmailVerifyCode,
-      submitEmailVerify
+      submitEmailVerify,
+      generateQr: () => {},
+      resetQr: () => {},
+      toggleQr: () => {},
+      toggleTheme: () => themeStore.toggleTheme()
     }
   })
 );

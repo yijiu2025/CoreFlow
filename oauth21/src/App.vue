@@ -46,8 +46,22 @@ onMounted(async () => {
 
 <template>
   <div :class="{ dark: themeStore.isDark }">
+    <!--
+      v2.21.0：body 容器 bg/text 改用 token 化（与组件 scoped token 同源）。
+      之前用 Tailwind `bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50`，
+      与 `--mauth-bg` / `--mauth-text` 双重轨道：选 black 主题时 Tailwind 给出 slate-950，
+      token 给出 #000000，结果 body 背景仍是 slate-950 而不是纯黑 —— "选了黑但页面底不是黑的"。
+
+      现在统一到 token：黑/白配色文件的 `--mauth-bg` / `--mauth-text` 完全决定底色和文字色。
+      html.dark 类仍保留 —— Tailwind 的 `dark:bg-slate-xxx` 类（如 ResetByCode、DesktopForgot 等）
+      仍依赖这个开关，不能删。
+
+      过渡（transition-colors duration-300）：保留 —— Tailwind dark 切换的瞬间仍可能抖动，
+      300ms 让其平滑（与 oauth21 token 切换同步）。
+    -->
     <div
-      class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-300 font-sans selection:bg-primary/30"
+      class="min-h-screen bg-mauth text-mauth font-sans"
+      style="background-color: var(--mauth-bg); color: var(--mauth-text); transition: background-color 0.3s, color 0.3s;"
     >
       <!--
         路由级淡入淡出过渡（v2.20.1 修复手机端「立即注册/立即登录」切换闪屏）

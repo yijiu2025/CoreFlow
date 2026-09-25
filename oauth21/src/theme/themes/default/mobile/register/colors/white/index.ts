@@ -75,6 +75,9 @@ export default {
     '--mauth-field-bg': '#f8fafc',
     '--mauth-field-bg-focus': '#ffffff',
     '--mauth-field-border': '#e2e8f0',
-    '--mauth-field-border-focus': '#475569'
+    '--mauth-field-border-focus': '#475569',
+    /* 状态色（v2.21.0 错误底：浅底上的红用极淡红） */
+    '--mauth-danger': '#ef4444',
+    '--mauth-danger-bg': '#fef2f2'
   }
 } satisfies MauthThemeColor;

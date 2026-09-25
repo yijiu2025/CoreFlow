@@ -9,13 +9,16 @@
  * │   ├── <page>/index.vue           版式实现：基础版式（在页面目录下）
  * │   ├── <page>/<变体>/index.vue     版式实现：变体
  * │   └── colors/<配色>/             手机端配色：index.ts + theme.scss + assets/
- * └── web/                           该设计的**电脑端**呈现（结构同上）
+ * ├── standard/                      该设计的**桌面主窗口**呈现（结构同上）
+ * │   ├── <page>/index.vue
+ * │   └── colors/<配色>/
+ * └── mini/                          该设计的**iframe 紧凑版**呈现（结构同上）
  *     ├── <page>/index.vue
  *     └── colors/<配色>/
  * ```
  * 两个 glob 决定注册表：包定义的 `index.ts`（给出 meta 与 views）与
  * **设备段之后**那层的 `colors/<配色>/index.ts`（id = 配色目录名）。
- * 设备段只认 `mobile` / `web` 两个值，写错则整个目录跳过。
+ * 设备段只认 `mobile` / `standard` / `mini` 三个值，写错则整个目录跳过。
  * **加一个包、加一种设备的配色，都不需要改任何其它文件。**
  *
  * ⚠️ 描述 glob 模式时别写出「星号紧跟斜杠」的字符组合：它会**提前闭合本段块注释**，
@@ -146,8 +149,8 @@ export interface MauthThemeRecord {
   /**
    * 该配色所属的**设备**（= `themes/<包>/<设备>/` 的目录名）
    *
-   * 决定版式在 `mobile/` 还是 `web/` 下查找。与 `pkg` 一起构成版式的查找范围
-   * （版式 = 当前包 × 当前设备）。
+   * 决定版式在 `mobile/` / `standard/` / `mini/` 下查找。与 `pkg` 一起构成版式的
+   * 查找范围（版式 = 当前包 × 当前设备）。
    */
   device: ThemeDevice;
   /**

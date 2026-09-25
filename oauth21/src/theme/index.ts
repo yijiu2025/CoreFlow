@@ -7,8 +7,11 @@
  * ├── index.ts                          包定义（只有 meta / views，不再是"默认配色"）
  * ├── mobile/                           该设计的**手机端**呈现
  * │   ├── <page>/index.vue              版式实现（基础版式；变体为 <page>/<变体>/index.vue）
- * │   └── colors/<配色>/                手机端可用的配色（互不共享，两端各配各的）
- * └── web/                              该设计的**电脑端**呈现（结构同上）
+ * │   └── colors/<配色>/                手机端可用的配色（互不共享，各端各配各的）
+ * ├── standard/                         该设计的**桌面主窗口**呈现（结构同上）
+ * │   ├── <page>/index.vue
+ * │   └── colors/<配色>/
+ * └── mini/                             该设计的**iframe 紧凑版**呈现（结构同上）
  *     ├── <page>/index.vue
  *     └── colors/<配色>/
  * ```
@@ -21,7 +24,7 @@
  *
  * === 为什么配色在设备内独立配置 ===
  * 同一套设计，手机端用黑白、电脑端用海蓝是完全合理的诉求（场景不同、品牌侧重不同）。
- * 所以 `mobile/colors/` 与 `web/colors/` 是**两个互不影响的配色集合**，
+ * 所以 `mobile/colors/` 与 `standard/colors/` 是**两个互不影响的配色集合**，
  * 虽然目录名可以相同 —— 这正是「手机端、电脑端分别配置主题」的落点。
  *
  * === 为什么配色 id 的唯一性作用域是「设备内」 ===
@@ -29,10 +32,10 @@
  *   （`getThemeRecord(id, device)`），歧义在入口就被设备消解掉了。
  *   于是：
  *     • 同一个包、同一个设备下，配色 id 必须唯一（该端只有一个答案）
- *     • **跨设备可以同名**：`mobile/colors/mono/` 与 `web/colors/mono/` 是**正常且必要**的
+ *     • **跨设备可以同名**：`mobile/colors/mono/` 与 `standard/colors/mono/` 是**正常且必要**的
  *       —— 黑白这套设计在两端本来就该各配各的尺寸/圆角。
  *   ⚠️ 若"同一套设计想要两端各一套**不同**的品牌色"，仍需给它们不同名
- *     （如 `ocean` 与 `web-ocean`）—— 不是被唯一性逼的，而是因为它们是两套配色：
+ *     （如 `ocean` 与 `standard-ocean`）—— 不是被唯一性逼的，而是因为它们是两套配色：
  *     同名会让"两端都要海蓝"与"两端各要一套色"在配置上无法区分。
  *   同包同设备内重名按路径排序**先到先得**并告警，不静默覆盖
  *   （否则哪套生效取决于文件系统顺序）。
@@ -72,8 +75,19 @@ export const DEFAULT_THEME_ID = 'default';
  */
 export const DEFAULT_THEME_PACKAGE = 'default';
 
-/** 设备维度：主题包内的一级目录，决定"这套配色/版式给哪种设备用" */
-export const THEME_DEVICES = ['mobile', 'web'] as const;
+/**
+ * 设备维度：主题包内的一级目录，决定"这套配色/版式给哪种设备用"
+ *
+ * 三值（2026-09-25 起）：`mobile` / `standard` / `mini` 是三种**平级**的设备形态，
+ * 与桌面分发器 `view/web/<page>/index.vue` 的 `activeForm`（mobile/mini/standard）
+ * 一一对应：
+ *   • `mobile`   —— 手机端（窄视口 / 真机 UA）
+ *   • `standard` —— 桌面主窗口（宽视口，双栏卡片）
+ *   • `mini`     —— iframe 紧凑版（`?from=mini` / `/mini-login` 路由）
+ * `mini` 不是 `standard` 下的「变体子目录」，而是独立设备：它有自己的配色
+ * 目录（`mini/<page>/colors/`），与 `standard` 完全并列。
+ */
+export const THEME_DEVICES = ['mobile', 'standard', 'mini'] as const;
 export type ThemeDevice = (typeof THEME_DEVICES)[number];
 
 /** 兜底设备：设备无法判定时按手机端处理（与 `utils/device.ts` 的口径一致） */
