@@ -92,6 +92,21 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
   彻底剥离 = black = `#000000`、html.dark 基线保持 slate-950（**明暗档 ≠ 配色系别**）。
   边框/字段/文字在 black 下提亮一档：`--mauth-border #262626`、`--mauth-field-bg 8% 白`。
   7 个 black 配色文件同步更新（compact + default × mobile + web × register/login/forgot-password）。
+- 🔴 **`--mauth-header-bg` 不能设 `transparent`**（v2.19.0 修）：
+  `mobile-auth.scss` 把 `--mauth-canvas` 链到 `--mauth-header-bg`（有 header 时），
+  transparent 会让 canvas 透明破坏页面层级。**要 header 与 body 同色，显式
+  `var(--mauth-bg)`**（让 var 链串到底色 #000000），不要用 transparent。
+  任何区域容器要"融入背景"都必须显式 `background: var(--mauth-bg)` /
+  `var(--mauth-body-bg)`，不能依赖"看起来差不多"。
+- 🔴 **纯黑 ≠ 一切 #000000**（v2.19.0 优化）：卡片必须浮起（差异 ≥18/255 灰阶肉眼
+  才看得见），又不能亮（破坏纯黑观感）。Material 推荐深色 surface 起点 `#121212`，
+  black 色卡 surface 系列：`#121212`/`#1c1c1c`/`#262626`/`#2e2e2e`（各档差 10 灰阶）。
+- 🔴 **"无品牌色"配色的 accent 必须是中性色**（v2.19.0 修）：black 是无品牌色方案，
+  accent 用 `#93c5fd` 蓝调与语义冲突且在纯黑底上扎眼；统一改 `#e5e5e5`
+  （与 `--mauth-emphasis-fg` 同色系）。
+- 🔴 **focus 反馈在纯黑底下必须用冷调蓝灰**（v2.19.0）：默认灰阶（`#737373` 等）
+  在纯黑底反馈不够，border-focus 改 `#94a3b8`、focus-ring 改 `rgba(148,163,184,0.45)`，
+  让焦点视觉锚点更明确。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
