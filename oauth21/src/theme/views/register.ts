@@ -6,7 +6,7 @@
  * view/app/register/index.vue        业务容器：状态 / 校验 / 请求 / 路由 / 验证码 / 倒计时
  *        │  传 ctx（= 本文件定义的 RegisterViewContext）
  *        ▼
- * theme/themes/<包>/register/index.vue 或 theme/themes/<包>/register/<变体>/index.vue
+ * theme/themes/<包>/<设备>/register/index.vue
  *                                       版式：只渲染 ctx、只调 ctx.actions
  * ```
  *
@@ -23,7 +23,15 @@
  *   主题包（`theme/themes/<包>/`）= **一整套设计**，版式与配色都在包里，一起开发
  *   配色（包内 `colors/<配色>/`）= 只换颜色/圆角/背景图，**同一套 DOM**（靠 CSS 变量）
  *   版式（本文件定义的就是它的契约）= 换 DOM 结构与交互组织方式
- * 因此 `?view=` 只在**当前主题包内**查找：换包就换版式，两者不再是各自独立的两个维度。
+ *
+ * === 主题包粒度的版式（2026-09-25 起，register 页面）===
+ *   **一个主题包 = 一种 register 版式**（架构约定）：
+ *     • 路径形态**唯一**：`themes/<包>/<设备>/register/index.vue`（无变体子目录）
+ *     • 切换版式 = 切换主题包：`?pkg=compact` ≈ `?view=compact`
+ *     • `pickRegisterViewId` 把 `?view=` 解析到版式 id，找不到时**回退为包名**，
+ *       所以"想看 compact 版式"用 `?view=compact` 也能命中 compact 包
+ *     • 默认主题包里 register 就是默认版式；compact 主题包里 register 是紧凑版式
+ *   login / forgot-password 不在本次约定内，仍沿用「同包多版式」机制（变体子目录）。
  *
  * @author yijiu2025
  * @since 2026-09-23
@@ -142,16 +150,16 @@ export interface RegisterViewProps {
  * 注册页版式注册表 —— 谁来决定"用哪套 UI"
  *
  * === 选择优先级（高 → 低）===
- *   1. URL `?view=<id>`      —— 本次访问的显式意图（联调 / 灰度 / 单页预览都用它）
- *   2. 主题包声明             —— `theme/themes/<包>/index.ts` 的 `views.register`
- *                               （写在包根则该包所有配色共用；写在 colors 里只覆盖那套配色）
+ *   1. URL `?view=<id>`      —— 本次访问的显式意图（命中版式 → 用它；命中其它包 → 切包）
+ *   2. URL `?pkg=<id>`       —— 直接切主题包（让 `themeStore.packageId` 接管）
  *   3. `VITE_REGISTER_VIEW`  —— 部署级默认（整站换 UI，不动代码）
  *   4. `base`                —— 基础版式（缺省）
  *
- * ⚠️ 前两档都在**当前主题包内**查找（版式跟随主题包，见 `../registry.ts`）：
- *    某个包没登记这套版式时，回退的是**该包自己的**基础版式，不会去借别的包。
- * ⚠️ 第 1 档里**非法值不回退**：`?view=typo` 直接落基础版式，而不是被第 2/3 档接管。
- *    显式参数写错时静默换用另一套 UI，比看到默认版式更难排查。
+ * === 注册表的实际行为（2026-09-25 起 register 专属）===
+ *   • 一个主题包 = 一种 register 版式（无变体子目录）—— 见本文件顶部"主题包粒度的版式"
+ *   • glob 扫的是「themes 下所有包所有设备里的 register/index.vue」（路径写法见下方代码块）
+ *   • `createViewRegistry` 把每个匹配识别为该包该设备的 base 版式
+ *   • `pickRegisterViewId` 找不到时**回退为包名**，让 `?view=compact` 切到 compact 包
  *
  * ⚠️ 变体是**惰性加载**的（`import.meta.glob` → 独立 chunk）；内置包的基础版式由容器
  *    静态引入（首屏零请求）。新增包或版式目录后要**重启 dev server**
@@ -166,24 +174,22 @@ import { DEFAULT_THEME_DEVICE, THEME_DEVICES, type ThemeDevice } from '../index'
 /**
  * 各主题包里本页的版式实现
  *
- * 基础版式在 `<page>/index.vue`，变体在 `<page>/<变体>/index.vue`。两种都扫进来：
- * 内置包的基础版式由容器静态引入、用不上它，但其它包的基础版式只能靠这里惰性拿到
- * —— 包是运行时才定的，静态 import 钉不住。glob 用两个模式合并（`index.vue` 少了
- * 一层目录，一个通配模式盖不住两种形态）。
+ * 主题包粒度的版式（2026-09-25 起）：
+ *   • 每个主题包只包含一种 register 版式（架构约定）—— 详见 `theme/themes/README.md`
+ *   • 路径形态：**唯一**一种 `themes/<包>/<设备>/register/index.vue`
+ *   • 版式跟随主题包，换包 = 换版式；URL `?pkg=compact` 等价于"切到 compact 版式"
+ *
+ * 容器静态引入内置包的基础版式（`default` + `mobile` + `register/index.vue`）；
+ * 其它主题包（包括 compact）的版式靠 glob 惰性加载。
  *
  * ⚠️ 用 **`/src/...` 根绝对路径**，不要用 `../` 相对路径：本文件在 `views/` 下一层，
  *    相对路径（`../../themes/...`）在当前 Vite 版本下**扫不到任何文件且不报错**
  *    —— 表现为「变体永远加载不出来、`list()` 恒为空」，极难排查。绝对路径不受
  *    当前文件所在层级影响（也不会再犯「数错 `../` 层数」的错）。
  */
-const viewLoaders = {
-  ...import.meta.glob<{ default: Component }>(
-    '/src/theme/themes/*/*/register/index.vue'
-  ),
-  ...import.meta.glob<{ default: Component }>(
-    '/src/theme/themes/*/*/register/*/index.vue'
-  )
-};
+const viewLoaders = import.meta.glob<{ default: Component }>(
+  '/src/theme/themes/*/*/register/index.vue'
+);
 
 /** 本页版式注册表 */
 export const registerViews = createViewRegistry(viewLoaders, { page: 'register' });
@@ -216,23 +222,41 @@ function asDevice(value: unknown): ThemeDevice {
 /**
  * 按优先级挑出版式 id（永远返回可用 id：最差也是 `registerViews.baseId`）
  *
- * @param source.url   `?view=` 的原始值（未校验，可以是数组/undefined 等任意形态）
- * @param source.theme 主题包声明的版式 id（见 `theme/themes/<包>/index.ts` 的 `views.register`）
- * @param source.pkg   当前主题包 id（`getThemePackage(配色)`）——查找范围的包那一段
+ * === 主题包粒度的版式（2026-09-25 起）===
+ *   • 一个主题包只包含一种 register 版式（架构约定）
+ *   • 因此 `viewId` ≡ `packageId`：选哪套版式 = 选哪个主题包
+ *   • 解析优先级：
+ *       1. URL `?view=<id>`  —— 本次访问的显式意图
+ *          命中当前包内某版式 → 用它；命中其它包 → 同步切到那个包（视作包别名）
+ *       2. URL `?pkg=<id>`  —— 直接切主题包
+ *       3. 主题包声明       —— `theme/themes/<包>/index.ts` 的 `views.register`
+ *       4. `VITE_REGISTER_VIEW` —— 部署级默认
+ *       5. `base` —— 内置包的默认版式
+ *
+ * @param source.url    `?view=` 的原始值（未校验，可以是数组/undefined 等任意形态）
+ * @param source.pkg    当前主题包 id（`getThemePackage(配色)`）——查找范围的包那一段
  * @param source.device 当前设备（`'mobile' | 'web'`）——查找范围的设备那一段
- *                     两者合起来决定"在哪个包里、哪种设备下"找版式
+ *                      两者合起来决定"在哪个包里、哪种设备下"找版式
  */
 export function pickRegisterViewId(
-  source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown } = {}
+  source: { url?: unknown; pkg?: unknown; device?: unknown } = {}
 ): string {
   const pkg = asPackage(source.pkg);
   const device = asDevice(source.device);
   const url = asText(source.url);
-  if (url) return registerViews.resolve(url, pkg, device) ?? registerViews.baseId;
+  if (url) {
+    // 1. 在当前包内找该版式
+    const resolved = registerViews.resolve(url, pkg, device);
+    if (resolved) return resolved;
+    // 2. 当前包没有 → 把 url 当**包名**试（兼容 `?view=compact` ≈ `?pkg=compact`）
+    if (registerViews.has(url, url, device)) return url;
+    // 3. 都不是 → 兜底
+    return registerViews.baseId;
+  }
 
   const env = asText(ENV_VIEW);
   return (
-    registerViews.resolve(source.theme, pkg, device) ??
+    registerViews.resolve(pkg, pkg, device) ??
     (env ? registerViews.resolve(env, pkg, device) : null) ??
     registerViews.baseId
   );
@@ -248,7 +272,7 @@ export function pickRegisterViewId(
  * 「内置包 + base」是唯一无需预热的组合：那是容器静态引入的，零请求。
  */
 export function preloadRegisterView(
-  source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown } = {}
+  source: { url?: unknown; pkg?: unknown; device?: unknown } = {}
 ): void {
   const pkg = asPackage(source.pkg);
   const device = asDevice(source.device);

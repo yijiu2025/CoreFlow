@@ -299,10 +299,17 @@ function findRecord(
   page: string,
   view: string
 ): MauthThemeRecord | undefined {
+  // 优先精确匹配 view；命中失败回退到 base 配色（兼容主题包粒度版式）。
+  // 同一个 `id` 在跨包时可能登记到 view='base'（主题包粒度版式），需要兜底。
   return registry.get(`${DEFAULT_THEME_PACKAGE}/${device}/${page}/${view}/${id}`) ??
     [...registry.values()].find(
       r => r.meta.id === id && r.device === device && r.page === page && r.view === view
-    );
+    ) ??
+    (view !== BASE_VIEW_ID
+      ? [...registry.values()].find(
+          r => r.meta.id === id && r.device === device && r.page === page && r.view === BASE_VIEW_ID
+        )
+      : undefined);
 }
 
 /**
@@ -399,7 +406,9 @@ export function listThemeGroups(
 export function listColorsOf(device: ThemeDevice, page: string, view: string): MauthThemeMeta[] {
   const seen = new Map<string, MauthThemeMeta>();
   for (const record of registry.values()) {
-    if (record.device !== device || record.page !== page || record.view !== view) continue;
+    if (record.device !== device || record.page !== page) continue;
+    // 视图配色范围：精确匹配 view，或回退到 base 配色（兼容主题包粒度版式）
+    if (record.view !== view && record.view !== BASE_VIEW_ID) continue;
     if (!seen.has(record.meta.id)) seen.set(record.meta.id, record.meta);
   }
   return [...seen.values()].sort((a, b) => a.id.localeCompare(b.id));

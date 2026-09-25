@@ -301,7 +301,6 @@ const THEME_DEVICE = 'mobile' as const;
 const viewId = computed(() =>
   pickRegisterViewId({
     url: route.query.view,
-    theme: themeStore.viewFor('register'),
     pkg: themeStore.packageId,
     device: THEME_DEVICE
   })
