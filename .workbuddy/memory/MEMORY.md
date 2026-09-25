@@ -71,6 +71,17 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
   store.activeView 默认 = `DEFAULT_THEME_PACKAGE`；`pickRegisterViewId` 默认返回 pkg；URL `?view=base` 按"未指定"处理。
   旧机制 login/forgot（仍有变体）下 `activeViewId === registry.baseId` 仍是合法 path，ThemeDebugPanel 据此判别是否列 baseId。
   关卡 `.tmp-probe/verify-color-by-pkg.mjs`：切包 + 切色 + 联动 mode 全覆盖。
+- 🔴 **`setupThemeDeviceSync` 只听 `route.meta.device`，别听整个 currentRoute**（v2.18.7 修）：
+  URL `?view=compact` 这种 query 变化会让 currentRoute 整体变 → setActiveDevice('web')（`/register` 没
+  `meta.device='mobile'`）→ mobile 容器 watch `renderedDevice` 不重跑（视图没真换）→ activeDevice 卡 web
+  → 调试面板跟随后 device=web → viewOptions 只剩 web 下的 1 个包。**正确 source**：
+  `() => (route.meta.device === 'mobile' ? 'mobile' : 'web')`，同路由 query/hash 噪声完全跳过。
+  验证：`.tmp-probe/verify-view-options-v2.18.7.mjs`。
+- 🔴 **新 watch 取「旧值」一定要显式传，default 参数会丢掉**（v2.18.7 修）：
+  `watch(activeView, (newView, oldView) => {...})` 里若写 `currentPkg = themeRecordFor().pkg`（用默认
+  view=activeView），触发时 activeView 已变 → findRecord 扫全命中**新**包 → currentPkg=newView → 永远
+  相等 → 整段逻辑提前 return。**正确**：显式 `themeRecordFor(DEFAULT_THEME_PACKAGE, ..., oldView)`，
+  把 watch callback 第二参用足。第一参 newView/oldVal 是金价，不传就丢判别条件。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
