@@ -115,6 +115,17 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
   灰态与"半亮"明显区分。
 - 🔴 **focus 时 input 内部图标要联动**（v2.19.1）：`.mauth-field:focus-within .mauth-icon
   { color: var(--mauth-text) }` —— 只改 border 不够，焦点视觉锚点要全区域反馈。
+- 🔴 **路由级淡入淡出 + 多级 prefetch**（v2.20.1）：`<router-view v-slot>` 包 `<Transition>` 解决
+  路由切换闪屏（之前 37ms 完全空白）。**默认模式**（leave+enter 重叠）而非 out-in —— out-in
+  在异步组件 chunk 加载延迟时会出现 leave 完成后的黑屏。`.route-stage` 绝对定位全屏
+  让新旧组件在同一画面里重叠渲染，否则两组件在文档流堆叠导致父容器高度跳动。
+  三层 prefetch 必须配合：① dispatcher onMounted import 另两个 dispatcher ②
+  dispatcher onMounted import 子组件 ③ goRegister/goLogin/goForgot push 前 import
+  目标 dispatcher（不 await，与 push 并行）。**不在 dispatcher 内层加
+  `<transition mode="out-in">` 包 `<component :is>`**：分发器自身要切换窄/宽屏
+  异步组件，out-in + 异步组件 + 多根节点 = 组件挂不上
+  （view/web/login/index.vue L159 已有注释保护）。关卡 `verify-route-transition.mjs`
+  9 段全过（minOp ~0.09, 0 空白窗口）。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
