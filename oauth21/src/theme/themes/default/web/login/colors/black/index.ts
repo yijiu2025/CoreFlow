@@ -93,12 +93,14 @@ export default {
        整体配色更克制统一。 */
     '--mauth-accent': '#e5e5e5',
     '--mauth-emphasis-fg': '#e5e5e5',
-    /* 表单：field-bg 0.08 在新 surface #121212 之上叠加太抢戏，
-       压到 0.06（实际 ≈ #181818，仍比 #121212 略浅，输入框可见）；
-       focus 同步降到 0.10。field-border-focus 也切到冷调蓝灰。 */
-    '--mauth-field-bg': 'rgba(255, 255, 255, 0.06)',
-    '--mauth-field-bg-focus': 'rgba(255, 255, 255, 0.10)',
-    '--mauth-field-border': 'rgba(255, 255, 255, 0.14)',
+    /* 表单：input 与外层卡片（surface-2 #1c1c1c）的色差要够大，
+       让"卡片套 input"的层次看得见。0.06 叠 #1c1c1c ≈ #2c2c2c（差 16/255
+       灰阶几乎融在一起），提到 0.10 → 实际 ≈ #333333（差 30/255），
+       focus 0.10 → 0.14；field-border 也同步 0.14 → 0.18 让边界线清晰。
+       field-border-focus 保持冷调蓝灰 #94a3b8。 */
+    '--mauth-field-bg': 'rgba(255, 255, 255, 0.10)',
+    '--mauth-field-bg-focus': 'rgba(255, 255, 255, 0.14)',
+    '--mauth-field-border': 'rgba(255, 255, 255, 0.18)',
     '--mauth-field-border-focus': '#94a3b8',
     /* 第三方渠道品牌色提亮（沿用基线，避免在纯黑底上消失） */
     '--mauth-social-ink-github': '#e5e7eb',

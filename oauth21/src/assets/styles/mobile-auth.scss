@@ -706,6 +706,12 @@ html:has(.mauth-page) .min-h-screen {
   background: var(--mauth-field-bg-focus);
   border-color: var(--mauth-field-border-focus);
   box-shadow: 0 0 0 3px var(--mauth-field-ring);
+  /* focus 时把内部图标由默认 --mauth-icon 提到 --mauth-text（v2.19.1），
+     让用户感知"输入区被聚焦"——视觉锚点从图标亮度反馈，比单纯
+     border 颜色变化更明显 */
+  .mauth-icon {
+    color: var(--mauth-text);
+  }
 }
 
 .mauth-field.is-error {
@@ -985,8 +991,11 @@ html:has(.mauth-page) .min-h-screen {
 
 .mauth-submit:disabled,
 .mauth-next-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.4;
   cursor: not-allowed;
+  /* 去色饱和度 —— 让 disabled 状态不再像"半亮按钮"，
+     而明显呈现为"未激活"灰态（v2.19.1 强化，纯黑底上区分度更高） */
+  filter: saturate(0);
 }
 
 /* 提交中的加载指示 */
