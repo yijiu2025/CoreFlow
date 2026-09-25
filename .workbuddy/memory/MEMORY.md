@@ -8,7 +8,7 @@
 - **`packages/log/` 是独立嵌套 git 仓**（主仓 gitignore）→ 去那个仓提交；主仓 `git add packages/log/...` **静默不生效**（Exit=0 但有警告）→ 见警告停下查。
 - **本机 git ref 失灵**：status 谎报 ahead、push 可能数分钟零输出 → **一律以 `git ls-remote origin main` 为准**，超时≠失败。
   push 后修：`node "C:/Users/22701/.workbuddy/tools/fix-packed-refs.mjs" "<完整 40 位 SHA>"`（绝对路径；截短→GUI 历史全灭）。
-  ⚠️ `git credential fill` **永久挂住**（credential.helper 首项 `helper-selector`）→ 绕法见 §10.10。
+  ✅ **`git credential fill` 挂住已根治**（2026-09-25）：根因 = system 级 gitconfig（`~/.workbuddy/binaries/PortableGit/versions/1.2.0/etc/gitconfig:20`）的 `credential.helper = helper-selector`（GUI 选择器，每次认证弹窗）；已注释禁用（备份 `/tmp/gitconfig.backup-20260925`），现在只剩 GCM 静默认证 → `credential fill` / push 不再弹窗不再挂。
 - **发版**：提交推送后**顺手发不必问**：`node scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；
   破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` 不发。版本源是 git tag。
 
