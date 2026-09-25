@@ -70,6 +70,15 @@ router.afterEach((to, failure) => {
  *   • 非 `/m/*` 且非三页分发器的路由（如 authorize / consent / 404）没有分发器纠正，
  *     设备身份就由路由 meta 给定。
  *
+ * === 关键：只听 meta.device 变化，不听整个路由对象 ===
+ * 早期实现 watch `router.currentRoute.value` 整个对象 —— 任何 query / hash 变化
+ * 都会触发 `setActiveDevice`（`/register` 没设 `meta.device='mobile'` → 误判成 web）。
+ * 视觉上窄视口切个 `?view=` 时视图没换、设备却被刷成 web，随后**不再纠正回来**
+ * （mobile 容器的 watch 不会重跑 —— `renderedDevice` 由视口派生、没变化），
+ * 表现为"切换版式后版式只剩 1 个 / 蓝青色卡切换无效"。
+ * 现在 watch 的是「meta.device 解析出来的取值」（'mobile' / 'web'），只在真实跨
+ * 设备路由（`/login` ↔ `/m/login`）时触发；同路由 query / hash 变化跳过。
+ *
  * === 为什么是"在 app setup 里 watch 路由"，而不是写在 afterEach 里 ===
  * 早先的实现把 `setActiveDevice` 放在 `router.afterEach` 里，结果是**首次导航静默失效**：
  * `main.ts` 的顺序是 `app.use(pinia)` → `app.use(router)`，而**首次导航由
@@ -88,9 +97,9 @@ router.afterEach((to, failure) => {
 export function setupThemeDeviceSync(router: Router): void {
   const themeStore = useThemeStore();
   watch(
-    () => router.currentRoute.value,
-    route => {
-      themeStore.setActiveDevice(route.meta.device === 'mobile' ? 'mobile' : 'web');
+    () => (router.currentRoute.value.meta.device === 'mobile' ? 'mobile' : 'web'),
+    device => {
+      themeStore.setActiveDevice(device);
     },
     { immediate: true }
   );

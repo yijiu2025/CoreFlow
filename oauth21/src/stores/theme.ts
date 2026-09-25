@@ -532,9 +532,13 @@ export const useThemeStore = defineStore('theme', () => {
    *    让用户首帧就看到新版的颜色基调。
    *
    * 守门（每个都要有，写在前头防止后人手贱删）：
-   *   • 仅**新版式**触发：判别 `themeRecordFor().pkg === activeView.value`，
-   *     旧机制（login 等）下 activeView 是变体名（'mini'），pkg 仍为 default → 不动。
-   *     （同一个 watcher 兼顾两个机制，比各 page 自己监听更不易漏。）
+   *   • 仅**新版式**触发：用 `oldView` 查 themeId 当前解析到的包（**不是**当前 view）——
+   *     当前 view 已是 newView，用它查 `themeRecordFor()` 会扫全命中**新**包 → currentPkg
+   *     永远等于 newView → 整段逻辑失效。换成「用旧 view 看 themeId 在哪」：
+   *       • 同包切变体（旧机制 login 'base' → 'mini'）→ currentPkg='default'、newView='mini'
+   *         **都是 default**（mini 是 default 包下的变体）→ 不动 ✓
+   *       • 切到另一主题包（新版式 register 'default' → 'compact'）→ currentPkg='default'
+   *         ≠ newView='compact' → 重置 ✓
    *   • 仅 activeView **真的变了**（`newView !== oldView`）—— 重复设同值、setup 时
    *     初次赋值等情况都不应触发重置（后者由 `urlLockedTheme` 兜底，但少一次副作用更好）。
    *   • URL 锁定的 theme 不动：部署方/用户的显式意图必须压过联动
@@ -546,9 +550,14 @@ export const useThemeStore = defineStore('theme', () => {
    */
   watch(activeView, (newView, oldView) => {
     if (!newView || newView === oldView) return;
-    // 旧机制（login/forgot 变体版式）下 activeView 是变体名（'mini' 等），
-    // 不是主题包 → 不重置。判别：当前 activeView 是不是当前主题包（= 包名）？
-    if (themeRecordFor().pkg !== activeView.value) return;
+    // 用**旧 view**查 themeId 当前解析到的包（activeView 已变 → 用它查会落到新包 → currentPkg=newView → 永远相等 = 整段失效）
+    const currentPkg = themeRecordFor(
+      DEFAULT_THEME_PACKAGE,
+      activeDevice.value,
+      activePage.value,
+      oldView
+    ).pkg;
+    if (currentPkg === newView) return;
     // URL 锁定 theme（如 `?theme=blue&view=compact`）→ 部署方的显式意图，不被切版式覆盖
     if (urlLockedTheme) return;
     const fallback = getDefaultThemeId(activeDevice.value, activePage.value, newView);
@@ -711,6 +720,19 @@ export const useThemeStore = defineStore('theme', () => {
    */
   function dispose(): void {
     mediaQuery?.removeEventListener('change', onSystemChange);
+  }
+
+  // 便于 dev 调试面板 / Playwright 关卡探针读到 store 状态（仅 dev + ?debug=theme 时挂，
+  // 生产构建不会启用，import.meta.env.DEV 由 Vite 注入 false）
+  if (import.meta.env.DEV && typeof window !== 'undefined' && new URLSearchParams(location.search).get('debug') === 'theme') {
+    (window as unknown as Record<string, unknown>).__MAUTH_STORE__ = {
+      get themeId() { return themeId.value; },
+      get mode() { return mode.value; },
+      get packageId() { return packageId.value; },
+      get activeDevice() { return activeDevice.value; },
+      get activePage() { return activePage.value; },
+      get activeView() { return activeView.value; }
+    };
   }
 
   return {

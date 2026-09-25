@@ -156,7 +156,14 @@ const activeViewId = computed(() => {
   const fromUrl = asText(route.query.view);
   // `?view=base` 在新版式下不再是合法 view —— 按"未指定"处理，落到当前包。
   if (fromUrl && fromUrl !== 'base') {
-    return registry.resolve(fromUrl, pkg, dev) ?? pkg;
+    // 与 `pickRegisterViewId` 同款：当前包内找 → 把 url 当**包名**试 → 兜底
+    // （后者是关键：用户点 `?view=compact` 实际是把视图切到 compact 包，
+    //  面板的"当前版式"必须反映这一点 —— 否则面板高亮还停在 default，
+    //  用户看到的视图是 compact 面板说是 default → 觉得"切版式没生效"）。
+    const inCurrent = registry.resolve(fromUrl, pkg, dev);
+    if (inCurrent) return inCurrent;
+    if (registry.has(fromUrl, fromUrl, dev)) return fromUrl;
+    return pkg;
   }
   const declared = page.value ? themeStore.viewFor(page.value, dev) : undefined;
   return (declared ? registry.resolve(declared, pkg, dev) : null) ?? pkg;
