@@ -179,6 +179,9 @@ export function createViewRegistry(
     const id = raw.trim().toLowerCase();
     if (!id || !VIEW_ID_RE.test(id)) return null;
     if (id === baseId) return baseId;
+    // 跨包引用（2026-09-25 register 起）：id 与 pkg 不同时，id 也可能是目标包名。
+    // 该目标包在当前设备有基础版式登记 → 把 id 视作目标包名，命中即返回。
+    if (id !== pkg && bases.has(scopeKey(id, device))) return id;
     return variants.has(`${pkg}/${device}/${id}`) ? id : null;
   };
 
@@ -205,6 +208,19 @@ export function createViewRegistry(
       if (!id || !VIEW_ID_RE.test(pkg)) return null;
       // 内置包 + 基础设备 + base：容器已经静态引入，这里直接说"用它"，一个请求都不发
       if (pkg === builtinPackage && device === DEFAULT_THEME_DEVICE && id === baseId) return null;
+      // 跨包加载（2026-09-25 register 起）：id 是另一主题包的名字（≠ 当前 pkg）。
+      // 把 id 当目标包名找该包的基础版式。
+      if (id !== baseId && id !== pkg) {
+        const cross = bases.get(scopeKey(id, device));
+        if (cross) {
+          try {
+            return (await cross()).default ?? null;
+          } catch (err) {
+            console.warn(`[view] 主题包「${id}」${device} 端版式加载失败，已回退`, err);
+            return null;
+          }
+        }
+      }
       // 该范围内连基础版式都没有 → 交回容器的静态兜底
       if (!bases.has(scopeKey(pkg, device)) && !variants.has(`${pkg}/${device}/${id}`)) return null;
 
