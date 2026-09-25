@@ -17,7 +17,7 @@ import { computed, defineAsyncComponent, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import { useThemeStore } from '@/stores/theme';
-import { BASE_VIEW_ID, type ThemeDevice } from '@/theme';
+import { DEFAULT_THEME_PACKAGE, type ThemeDevice } from '@/theme';
 
 const route = useRoute();
 
@@ -80,8 +80,9 @@ watch(
   device => {
     themeStore.setActiveDevice(device);
     // 桌面形态没有容器声明 page/view（那是 view/app/<page>/ 容器的职责），
-    // 归位到基础版式，避免上一形态残留；手机形态由随后挂载的容器覆盖。
-    if (device === 'web') themeStore.setActivePageView('forgot-password', BASE_VIEW_ID);
+    // 归位到当前包（web 端走默认包 = DEFAULT_THEME_PACKAGE）—— 新版式下 view ≡ pkg，
+    // 用包名作 view 段能让 findRecord 命中默认包对应配色；手机形态由随后挂载的容器覆盖。
+    if (device === 'web') themeStore.setActivePageView('forgot-password', DEFAULT_THEME_PACKAGE);
   },
   { immediate: true }
 );

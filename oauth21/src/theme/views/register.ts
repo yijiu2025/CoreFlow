@@ -220,18 +220,23 @@ function asDevice(value: unknown): ThemeDevice {
 }
 
 /**
- * 按优先级挑出版式 id（永远返回可用 id：最差也是 `registerViews.baseId`）
+ * 按优先级挑出版式 id（永远返回可用 id：最差也是当前 pkg 的包名）
  *
  * === 主题包粒度的版式（2026-09-25 起）===
  *   • 一个主题包只包含一种 register 版式（架构约定）
  *   • 因此 `viewId` ≡ `packageId`：选哪套版式 = 选哪个主题包
  *   • 解析优先级：
- *       1. URL `?view=<id>`  —— 本次访问的显式意图
- *          命中当前包内某版式 → 用它；命中其它包 → 同步切到那个包（视作包别名）
+ *       1. URL `?view=<id>`  —— 本次访问的显式意图（命中当前包内某版式 → 用它；命中其它包 → 同步切到那个包）
  *       2. URL `?pkg=<id>`  —— 直接切主题包
  *       3. 主题包声明       —— `theme/themes/<包>/index.ts` 的 `views.register`
  *       4. `VITE_REGISTER_VIEW` —— 部署级默认
- *       5. `base` —— 内置包的默认版式
+ *       5. 当前 `pkg`       —— **包名本身**（不再是 `BASE_VIEW_ID='base'`）。
+ *
+ * 🔴 `?view=base` / URL 未指定 / 部署级默认均回退到 `pkg`（2026-09-25 改）：
+ *    `BASE_VIEW_ID='base'` 在新版式下已不再是合法 view 名（见 `theme/index.ts` 的
+ *    `colorFromKey` 注释 —— 基础版式形态登记 view = 包名）。继续把它当 view 返回会
+ *    让 store 拿 `view='base'` 去 findRecord，结果必然回落到 default 包那条线，
+ *    「切换版式后蓝青颜色切换无效」的根因之一就是这里。
  *
  * @param source.url    `?view=` 的原始值（未校验，可以是数组/undefined 等任意形态）
  * @param source.pkg    当前主题包 id（`getThemePackage(配色)`）——查找范围的包那一段
@@ -250,16 +255,18 @@ export function pickRegisterViewId(
     if (resolved) return resolved;
     // 2. 当前包没有 → 把 url 当**包名**试（兼容 `?view=compact` ≈ `?pkg=compact`）
     if (registerViews.has(url, url, device)) return url;
-    // 3. 都不是 → 兜底
-    return registerViews.baseId;
+    // 3. 都不是 → 兜底到当前包
+    return pkg;
   }
 
   const env = asText(ENV_VIEW);
-  return (
-    registerViews.resolve(pkg, pkg, device) ??
-    (env ? registerViews.resolve(env, pkg, device) : null) ??
-    registerViews.baseId
-  );
+  if (env) {
+    const envResolved = registerViews.resolve(env, pkg, device);
+    if (envResolved) return envResolved;
+    if (registerViews.has(env, env, device)) return env;
+  }
+  // 无 url、无有效 env → 当前包
+  return pkg;
 }
 
 /**
@@ -269,7 +276,8 @@ export function pickRegisterViewId(
  * 在导航阶段就把请求发出去（与路由组件自身的 chunk 并行），绝大多数情况下
  * 容器挂载时已在模块缓存里 → 赋值发生在同一 tick 内，用户看不到切换。
  *
- * 「内置包 + base」是唯一无需预热的组合：那是容器静态引入的，零请求。
+ * 「内置包 + 该包名版式」是零请求组合：那是容器静态引入的，
+ * 默认 view = pkg = builtinPackage 时直接 return。
  */
 export function preloadRegisterView(
   source: { url?: unknown; pkg?: unknown; device?: unknown } = {}
@@ -277,8 +285,8 @@ export function preloadRegisterView(
   const pkg = asPackage(source.pkg);
   const device = asDevice(source.device);
   const id = pickRegisterViewId(source);
-  // 内置包 + 默认设备 + base 是唯一零请求组合：容器静态引入的那份
-  if (id === registerViews.baseId && pkg === registerViews.builtinPackage && device === DEFAULT_THEME_DEVICE)
+  // 内置包 + 默认设备 + 包名版式 = 唯一零请求组合：容器静态引入的那份
+  if (id === pkg && pkg === registerViews.builtinPackage && device === DEFAULT_THEME_DEVICE)
     return;
   void registerViews.load(id, pkg, device);
 }

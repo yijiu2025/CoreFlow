@@ -136,9 +136,14 @@ const activePage = computed(() => page.value ?? themeStore.activePage);
 /**
  * 当前生效的版式 id
  *
- * 与容器里的 `pick*ViewId` 同优先级：URL 显式值 > 声明 > base。
+ * 与容器里的 `pick*ViewId` 同优先级：URL 显式值 > 声明 > 当前包（默认）。
  * ⚠️ 只做展示不做决策（真正的判定在各页的 `pick*ViewId` 里），但**查找范围必须与容器一致**：
  *    版式跟随主题包与设备，所以要在"当前包 × 当前设备"内解析。
+ *
+ * 🔴 **默认 fallback 改成 `themeStore.packageId` 而不是 `BASE_VIEW_ID='base'`**
+ *    （2026-09-25）：新版式架构下 view ≡ pkg，`'base'` 已不再是合法 view 名
+ *    （见 `theme/index.ts` `colorFromKey`）。把 fallback 设为 pkg 让面板与容器
+ *    在未指定 view 时落到同一个包，URL `?view=base` 也按"未指定"处理（return pkg）。
  *
  * ⚠️ 必须定义在 `viewOptions` **之前**：后者在它的求值里读本值，
  *    顺序颠倒会在 computed 首次求值时踩 TDZ（现象是面板整个不渲染）。
@@ -149,25 +154,50 @@ const activeViewId = computed(() => {
   const pkg = themeStore.packageId;
   const dev = device.value;
   const fromUrl = asText(route.query.view);
-  if (fromUrl) return registry.resolve(fromUrl, pkg, dev) ?? registry.baseId;
+  // `?view=base` 在新版式下不再是合法 view —— 按"未指定"处理，落到当前包。
+  if (fromUrl && fromUrl !== 'base') {
+    return registry.resolve(fromUrl, pkg, dev) ?? pkg;
+  }
   const declared = page.value ? themeStore.viewFor(page.value, dev) : undefined;
-  return (declared ? registry.resolve(declared, pkg, dev) : null) ?? registry.baseId;
+  return (declared ? registry.resolve(declared, pkg, dev) : null) ?? pkg;
 });
 
 /**
- * 当前页的**可选版式**（当前包 × 当前设备内，基础版式在最前）
+ * 当前页的**可选版式**（跨主题包 = 跨基础版式）
  *
  * 该页没接入版式机制时返回空数组 —— 面板上只显示颜色区，不显示空的版式行。
+ *
+ * === 跨主题包版式（2026-09-25 起 register）===
+ * register 页面采用「一个主题包 = 一种版式」架构：`?view=compact` 会切到 compact 包，
+ * 但面板只按当前包 + 当前设备找变体时**漏列**。这里同时枚举其它主题包里
+ * 同一 page 的基础版式，让面板能切换跨包版式（注册表已经在 `packages()` 里汇总）。
+ *
+ * 🔴 新版式下 view ≡ pkg；不再单独列 `BASE_VIEW_ID='base'`（新版式下非法 view）：
+ *    新版式下 activeViewId === packageId（≠ registry.baseId='base'），所以这一行跳过；
+ *    旧机制下 activeViewId === registry.baseId（login 默认 'base'），仍把 baseId 加进去。
+ *    旧机制下当前包内的 `variants` 也兼容（login 页面有 'mini' 等变体）。
  */
 const viewOptions = computed<string[]>(() => {
   const registry = pageViews.value?.registry;
   const p = page.value;
   if (!registry || !p) return [];
-  const variants = registry.list(themeStore.packageId, device.value);
-  const ids = [registry.baseId, ...variants];
-  // 当前生效的版式也一定列出来（即使该范围内没扫到它，例如写了个未知 id）
-  if (!ids.includes(activeViewId.value)) ids.push(activeViewId.value);
-  return ids;
+  const seen = new Set<string>();
+  // 跨主题包：每个主题包的基础版式 = 该包的包名（新版式架构）
+  for (const { pkg, device: pkgDevice } of registry.packages()) {
+    if (pkgDevice !== device.value) continue;
+    seen.add(pkg);
+  }
+  // 当前包内的变体（兼容旧机制：login 页面有 'mini' 等变体；新版式下 list 恒空）
+  for (const v of registry.list(themeStore.packageId, device.value)) {
+    seen.add(v);
+  }
+  // 旧机制兼容：activeViewId === registry.baseId（login 默认 'base'）时把 baseId 也列上；
+  // 新版式下 activeViewId === packageId（≠ 'base'），跳过 —— 'base' 不是合法 view，
+  // 列了只会让点 'base' 产生无效的 URL '?view=base'。
+  if (activeViewId.value === registry.baseId) seen.add(registry.baseId);
+  // 当前生效 view 一定在列（即使该范围内没扫到它，例如外部强制写了未知 id）
+  if (!seen.has(activeViewId.value)) seen.add(activeViewId.value);
+  return [...seen].sort();
 });
 
 /**
@@ -227,9 +257,15 @@ function toneOfCard(id: string): ThemeTone {
    当前状态
    ========================================================================== */
 
-/** 当前**生效**的配色 id（按当前设备/页面/版式校正过的） */
+/** 当前**生效**的配色 id（按当前设备/页面/版式校正过的）
+ *
+ * 🔴 传 `activeViewId.value` 作为 pkg（2026-09-25）：新版式下 view ≡ pkg，让 findRecord
+ *    按当前包查（避免硬 encode DEFAULT_THEME_PACKAGE 把 compact 包点 blue 又落到 default）；
+ *    旧机制下 activeViewId 是 'base' 或变体名，`themeRecordFor('base', ..., view='base')`
+ *    会走 DEFAULT_THEME_PACKAGE 兜底查 base 版式下的配色（兼容旧机制）。
+ */
 const activeThemeId = computed(
-  () => themeStore.themeRecordFor(device.value, activePage.value, activeViewId.value).meta.id
+  () => themeStore.themeRecordFor(activeViewId.value, device.value, activePage.value, activeViewId.value).meta.id
 );
 
 /** 头部展示的当前配色名（查不到时退回 id） */
@@ -275,12 +311,17 @@ function cloneQuery(): Record<string, string | string[]> {
 /**
  * 切换版式（**只改 URL 的 `view`，path 不动**）
  *
- * 选基本版式时把参数**删掉**而不是写成 `view=base`：URL 干净，
- * 也与容器「无参数即基础版式」的判定一致。
+ * 选当前生效的版式时把参数**删掉**而不是写成 `view=<id>`：URL 干净，
+ * 也与容器「无参数即默认 view」的判定一致。
+ *
+ * 🔴 用 `activeViewId.value` 而不是 `registry.baseId` 做"是否默认"判断
+ *    （2026-09-25）：新版式下默认 view = 当前包（= pkg），不同页面/设备的
+ *    默认值不同（旧机制下 login 默认 'base'、新版式下 register 默认 'default'/'compact'）；
+ *    用面板上的"当前生效版式"当默认更准。
  */
 function pickView(id: string): void {
   const query = cloneQuery();
-  if (id === (pageViews.value?.registry.baseId ?? BASE_VIEW_ID)) delete query.view;
+  if (id === activeViewId.value) delete query.view;
   else query.view = id;
   void router.replace({ query });
 }

@@ -206,11 +206,12 @@ export function createViewRegistry(
     resolve,
     async load(id, pkg, device) {
       if (!id || !VIEW_ID_RE.test(pkg)) return null;
-      // 内置包 + 基础设备 + base：容器已经静态引入，这里直接说"用它"，一个请求都不发
-      if (pkg === builtinPackage && device === DEFAULT_THEME_DEVICE && id === baseId) return null;
+      // 内置包 + 基础设备 + 包名版式：容器已经静态引入，这里直接说"用它"，一个请求都不发
+      // （新版式下 view ≡ pkg；'base' 不再是合法 view 名 —— 见文件头「主题包粒度的版式」）
+      if (pkg === builtinPackage && device === DEFAULT_THEME_DEVICE && id === pkg) return null;
       // 跨包加载（2026-09-25 register 起）：id 是另一主题包的名字（≠ 当前 pkg）。
       // 把 id 当目标包名找该包的基础版式。
-      if (id !== baseId && id !== pkg) {
+      if (id !== pkg) {
         const cross = bases.get(scopeKey(id, device));
         if (cross) {
           try {
@@ -227,15 +228,19 @@ export function createViewRegistry(
       let target = id;
       if (!variants.has(`${pkg}/${device}/${target}`)) {
         // 该范围内没有这套变体 → 退到**同包同设备**的基础版式
-        // （不跨包、不跨设备：拿别处的版式就不是"版式跟随主题/设备"了）
-        target = baseId;
+        // （新版式下基础版式 id = 包名）
+        target = pkg;
         if (pkg === builtinPackage && device === DEFAULT_THEME_DEVICE) return null;
       }
 
+      // 新版式下「基础版式」总是落在 bases（路径形态：themes/<包>/<设备>/<页面>/index.vue，
+      // 被 baseKeyRe 捕获并登记到 bases）。变体形态才会落到 variants —— 但新版式架构
+      // （一个主题包 = 一种版式）下没有变体子目录，所以 variants 始终为空，旧 path 仍兼容
+      // 旧机制（login 等页面）。这里 loader 优先看 variants（兼容旧机制），否则取 bases。
       const loader =
-        target === baseId
-          ? bases.get(scopeKey(pkg, device))
-          : variants.get(`${pkg}/${device}/${target}`);
+        variants.has(`${pkg}/${device}/${target}`)
+          ? variants.get(`${pkg}/${device}/${target}`)
+          : bases.get(scopeKey(pkg, device));
       if (!loader) return null;
       try {
         return (await loader()).default ?? null;
