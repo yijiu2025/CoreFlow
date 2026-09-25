@@ -107,6 +107,14 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
 - 🔴 **focus 反馈在纯黑底下必须用冷调蓝灰**（v2.19.0）：默认灰阶（`#737373` 等）
   在纯黑底反馈不够，border-focus 改 `#94a3b8`、focus-ring 改 `rgba(148,163,184,0.45)`，
   让焦点视觉锚点更明确。
+- 🔴 **input 与外层卡片的色差要够大**（v2.19.1/v2.20.0）：0.06 白叠 surface-2 #1c1c1c
+  实际 ≈ #2c2c2c，差 16/255 灰阶肉眼几乎看不出层次；提到 0.10 → 实际 ≈ #333333，
+  差 30/255 才"卡片套 input"看得见。
+- 🔴 **disabled 状态在纯黑底要更激进**（v2.19.1）：`opacity: 0.6` 在浅色底足够，
+  纯黑底区分不足。加 `filter: saturate(0)` 去色饱和度 + opacity 降到 0.4，让"未激活"
+  灰态与"半亮"明显区分。
+- 🔴 **focus 时 input 内部图标要联动**（v2.19.1）：`.mauth-field:focus-within .mauth-icon
+  { color: var(--mauth-text) }` —— 只改 border 不够，焦点视觉锚点要全区域反馈。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
