@@ -11,7 +11,7 @@
  * - 3 分：强
  * - 4 分：极强
  *
- * 与 forgot-password/ResetByCode.vue 的内联实现对齐抽取
+ * 与 forgot-password 容器的内联实现对齐抽取
  * （之前会话审查标记该处独立实现可抽）
  *
  * @author yijiu2025

@@ -87,18 +87,18 @@ themes/<包>/<设备>/<页面>/<版式>/colors/<配色>/        ← 变体版式
 | --- | --- | --- |
 | login | `StandardLogin.vue` / `MiniLogin.vue`（已拆） | `standard/login/index.vue` / `mini/login/index.vue`（已拆） |
 | register | `StandardRegister.vue` / `MiniRegister.vue`（已拆） | `standard/register/index.vue` / `mini/register/index.vue`（已拆） |
-| forgot-password | `StandardForgot.vue` / `MiniForgot.vue`（**未拆**） | `standard/forgot-password/index.vue`（**占位骨架**） |
+| forgot-password | `StandardForgot.vue` / `MiniForgot.vue`（已拆） | `standard/forgot-password/index.vue` / `mini/forgot-password/index.vue`（已拆） |
 
 | 能力 | 手机端 | 电脑端（standard / mini） |
 | --- | --- | --- |
-| 配色注册 / 列表 / `?theme=` 解析 | ✅ | ✅（`black` / `white`，standard 三页 + mini login/register 各一套） |
-| 配色**实际生效**（token 注入 → 像素） | ✅ | ✅（login + register 三设备打通，body/canvas 已 token 化） |
-| 版式切换（`?view=`） | ✅ | ✅（login + register 容器 + 版式已拆分；forgot 后续跟进） |
+| 配色注册 / 列表 / `?theme=` 解析 | ✅ | ✅（`black` / `white`，standard/mini 三页各一套） |
+| 配色**实际生效**（token 注入 → 像素） | ✅ | ✅（三页三设备全部打通，body/canvas 已 token 化） |
+| 版式切换（`?view=`） | ✅ | ✅（三页容器 + 版式全部拆分） |
 | 调试面板按设备分区 | ✅ | ✅（设备区含 手机端 / 桌面端 / 紧凑版 三档） |
 
-`standard/` 与 `mini/` 下的 login / register 已是**真正的版式**（2026-09-25 容器 + 版式拆分落地，
-业务在 `view/web/<page>/Standard*.vue` / `Mini*.vue` 容器里，UI 在此渲染 ctx）。
-forgot-password 仍是占位骨架，容器重构落地后用真正的版式替换，机制侧不需要任何改动。
+`standard/` 与 `mini/` 下的三页（login / register / forgot-password）已是**真正的版式**
+（2026-09-25 容器 + 版式拆分全部落地，业务在 `view/web/<page>/Standard*.vue` / `Mini*.vue` 容器里，
+UI 在此渲染 ctx）。
 
 ## 目录名的口径（真源：`index.ts` 的 `buildRegistry()`）
 
@@ -329,7 +329,7 @@ theme/themes/default/mobile/<page>/index.vue   基础版式（内置包，容器
 theme/themes/<包>/<设备>/<page>/<变体>/index.vue 变体（`import.meta.glob` **惰性**加载）
 
 已接入：register（default/mobile：base + compact）· login（base）· forgot-password（base）
-        电脑端三个页面的基础版式为**骨架占位**（见上文「电脑端现状」）
+        电脑端三个页面的基础版式已全部落地为**真版式**（见上文「电脑端现状」）
 ```
 
 - **业务只有一份**，永远在容器里；版式只读 `ctx`、只调 `ctx.actions`。
@@ -417,8 +417,8 @@ store（`main.ts` → `setupThemeDeviceSync(router)`）。store 用这个值决�
 - **移动端基础版式不要自带 `<style>`**：它是三页（登录 / 注册 / 重置密码）共用样式
   `assets/styles/mobile-auth.scss` 的消费方，自带样式块会让各页各自漂移 ——
   历史上"两页看起来不一样"都源于此。变体不受这条约束（它本来就是"另一套 UI"），
-  但要遵守上面的 token 规则。电脑端骨架目前自带极简 `<style>`（它还没有共享样式表可复用，
-  且将来整体会被替换）。
+  但要遵守上面的 token 规则。电脑端（standard / mini）版式**自带 `<style scoped>`**
+  （`std*-*` / `m*-*` 体系，已 token 化），与移动端 `mauth-*` 是两套样式体系。
 - 🔴 **分发器必须认「mini 来源」**：`view/web/<page>/index.vue` 三个分发器的判定顺序是
   **显式 `?isMobile=true` ＞ mini 来源（`from=mini` / 路径含 `mini-login` / `fromLogin=mini`）
   ＞ 自动识别 ＞ 桌面默认**。mini 来源意味着"本页正嵌在宿主 app 的弹窗 iframe 里"，此时
