@@ -317,7 +317,7 @@ onUnmounted(() => dispose());
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col justify-center overflow-hidden" :class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }">
+  <div class="w-full h-full flex flex-col justify-center overflow-hidden" :class="{ dark: themeStore.activeTone === 'dark' }">
     <AuthContainer :appName="templateAppName" :is-mobile="templateIsMobile">
       <template #header>
         <div class="flex items-center justify-between">

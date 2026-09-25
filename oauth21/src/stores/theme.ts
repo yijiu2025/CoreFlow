@@ -2,22 +2,22 @@
  * 主题状态管理
  *
  * === 三个维度 + 一个作用域 ===
- *   mode（明暗）—— 用户可控：'system' | 'light' | 'dark'（见 @/theme/mode）
- *                   决定 `<html>` 是否带 `dark` 类（基线 SCSS 切深色底），
- *                   并**驱动配色系别联动**（切夜间 → 换黑系配色，见下文「双侧记忆槽」）
- *   theme（配色）—— 部署方决定：一个**配色 id**，对应
+ *   mode（明暗意图）—— 用户可控：'system' | 'light' | 'dark'（见 @/theme/mode）
+ *                       🔴 明暗 ≡ 色系（2026-09-25 定）：light=白系、dark=黑系、
+ *                       system=跟随系统偏好。它不是独立于配色的第二个维度，而是
+ *                       「切到哪一系别」的意图；最终明暗由**当前配色的 tone** 决定。
+ *   theme（配色）—— 一个**配色 id**，对应
  *                   `theme/themes/<包>/<设备>/<页面>/[<版式>/]colors/<配色>/`；
- *                   配色再反查出**主题包**（版式就在那个包下找）
+ *                   每套配色自带 `tone`（白系/黑系）与完整底色。
  *   view（版式） —— 版式 id（`?view=` / 包声明 / 环境变量），在"包 × 设备"内查找
  *   **设备**（'mobile' | 'web'）—— 不是偏好，而是**页面身份**：本 store 存的
  *               `themeId` 是"当前这套配色"，但**能不能用**要按调用方所在设备判：
  *               电脑端页面拿手机端的配色来渲染会得到一套尺寸/圆角都对不上的东西，
  *               所以按设备取值、设备不匹配就回落到**该范围的默认配色**。
  * 配色与版式各自独立成维度：换配色不影响版式，反之亦然。
- * ⚠️ mode 与配色**各自独立**：一套配色自带完整底色，选黑就是黑、选蓝就是蓝，
- *    不存在"配色数 × 2(明暗)"这个组合数（tokens 早已不分档）。
- *    但两者之间有一条**单向联动**：切明暗会把配色换到匹配的**系别**（tone），
- *    而点颜色**不改**明暗 —— 见下文「明暗 ↔ 配色系别联动」。
+ * ⚠️ 明暗与配色**是同一个东西**：`isDark = 当前配色的系别`；`mode` 是系别意图，
+ *    二者通过 `setTheme`（点色卡同步 mode）/`setMode`（切 mode 联动配色）保持**永远一致**。
+ *    点黑卡即暗、点白卡即明；切「暗」落到黑系、切「明」落到白系（两侧各自记住上次选的配色）。
  *
  * === 为什么设备不放进 store、而是由调用方传 ===
  * 同一个 SPA 里可以既有 `/m/login`（移动端页面）又有 `/login`（电脑端分发器），
@@ -188,8 +188,20 @@ export const useThemeStore = defineStore('theme', () => {
   };
   mediaQuery?.addEventListener('change', onSystemChange);
 
-  /** 最终是否深色：mode 为 system 时取自系统偏好 */
-  const isDark = computed(() => (mode.value === 'system' ? systemDark.value : mode.value === 'dark'));
+  /**
+   * 最终是否深色 = 当前**生效配色**的系别（明暗 ≡ 色系，不是独立维度）
+   *
+   * 用户（2026-09-25）定：「明暗切换就是切换白色和黑色这个色系，不是另一套规则」。
+   * 因此 `isDark` 不再由 `mode` 三态单独决定，而是**直接等于当前配色的 tone**：
+   * 选黑系配色（black/red…）即暗、选白系配色（white/blue…）即明。
+   * `mode` 退化为「系别意图」（明=白系 / 暗=黑系 / 跟随系统），由它驱动配色、
+   * 由配色决定明暗 —— 两者通过 `setTheme`/`setMode` 的互相同步保持**永远一致**。
+   *
+   * ⚠️ 这里用 `themeRecordFor()`（函数声明、自动提升，computed 惰性求值在
+   *    所有 ref 初始化之后才首次触发），取**生效**那套配色的 tone —— 跨设备
+   *     回落后 tone 跟着实际渲染的那套走（如 mobile 选 blue、web 回落 white → light）。
+   */
+  const isDark = computed(() => themeRecordFor().tone === 'dark');
 
   /**
    * 当前**生效设备** —— 决定把哪一套配色的 token 注入 `html`
@@ -248,26 +260,27 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   /* ==========================================================================
-     明暗 ↔ 配色系别联动（双侧记忆槽）
+     明暗 ≡ 配色系别（双侧记忆槽）
      ==========================================================================
-     需求（用户 2026-09-25）：给每套配色标一个**系别**（tone），切夜间模式时
-     自动切到黑系配色，再切回来恢复**原来那套**；黑系起手则反之。
+     需求（用户 2026-09-25）：「明暗切换就是切换白色和黑色这个色系，不是另一套规则」。
+     每套配色标一个**系别**（tone），明暗即系别：暗=黑系、明=白系、跟随系统=按系统偏好。
+     切「暗」→ 落到黑系配色、切「明」→ 落到白系配色，各自记住上次选的那套。
 
      === 为什么需要"两个槽" ===
-     只记一个 `themeId` 的话，第二次切换就无从来处 —— 切到夜间时，
-     "白天用的是哪套"这个信息已经被覆盖掉了。所以两侧各记一个：
-       lightColor —— 浅色模式下用户用的那套
-       darkColor  —— 深色模式下用户用的那套
+     只记一个 `themeId` 的话，切系别就无从来处 —— 切到黑系时，"白系用的是哪套"
+     这个信息已经被覆盖掉了。所以两侧各记一个：
+       lightColor —— 白系下用户用的那套（默认 white）
+       darkColor  —— 黑系下用户用的那套（默认 black）
      不变式：`槽[当前配色的系别] === 当前配色`，由 `rememberColor` 维护。
 
-     === 单向性（很重要）===
-     联动只允许 **明暗 → 配色**；手动点颜色**不改**明暗。用户明确要求
-     "黑白和蓝青是并列选项"，若点个白底就被强制切成浅色模式，那条诉求就废了。
-     因此这里没有任何改 `mode` 的代码，`setTheme` 也不碰 mode。
+     === 一致性（很重要）===
+     明暗与配色**是同一个东西**，必须永远一致：`setTheme`（点色卡）同步把 `mode`
+     设成该配色的系别；`setMode`（切明暗）联动把配色切到目标系别。
+     两条路径互相咬合，杜绝「明暗是明、配色却是黑系」的撕裂态。
 
      === 与"配色自带底色"的关系 ===
      配色仍是一套扁平 token、自带底色（2026-09-25 定）。这里做的是**换一套配色**，
-     不是给同一套配色挑明暗档 —— 与上一条决策不冲突，也不该被理解成"两档回来了"。
+     不是给同一套配色挑明暗档 —— 明暗档不存在，"明暗"就是"黑系/白系"。
      ========================================================================== */
 
   /** 浅色模式下用户用的那套配色 id（明暗切回浅色时恢复它） */
@@ -320,8 +333,12 @@ export const useThemeStore = defineStore('theme', () => {
     // 优先取该系别槽里那套；它在当前版式下不存在时（如 rainbow 只有 login 有）弃用
     const slot = dark ? darkColor.value : lightColor.value;
     const fromSlot = slot && isKnownTheme(slot, device, page, view) ? slot : null;
-    // 槽不可用 → 该版式下这个系别的第一套（按 id 排序，不给黑白特权）
-    const next = fromSlot ?? listColorIdsOfTone(device, page, view, target)[0] ?? null;
+    // 明暗切换的目标系别配色：优先该系别的「标配」（白系=white / 黑系=black），
+    // 没有标配时退回该系别第一套。白/黑是默认搭配的两套（用户 2026-09-25 定），
+    // 不能因为字母序让「切到明」落到 blue 上（"切到明"就该是白、"切到暗"就该是黑）。
+    const standard = target === 'dark' ? 'black' : 'white';
+    const ids = listColorIdsOfTone(device, page, view, target);
+    const next = fromSlot ?? (ids.includes(standard) ? standard : ids[0]) ?? null;
 
     // ② / ③
     if (!next || next === themeId.value) return;
@@ -342,20 +359,30 @@ export const useThemeStore = defineStore('theme', () => {
    *    全新用户什么都没选过时，"默认长什么样"必须保持既有事实
    *    （该范围的默认配色），不能因为一次系别对齐被换到意料之外的色上。
    */
-  const hasStoredColor =
-    safeGet(STORAGE_THEME) !== null ||
-    safeGet(LEGACY_STORAGE_SKIN) !== null ||
-    safeGet(STORAGE_COLOR_LIGHT) !== null ||
-    safeGet(STORAGE_COLOR_DARK) !== null;
-  if (!urlLockedTheme && hasStoredColor) syncColorToTone(isDark.value);
+  /**
+   * 首屏对齐：按当前「系别意图」把配色校正到匹配的系别
+   *
+   * 明 = 白系、暗 = 黑系、跟随系统 = 按系统偏好。全新用户也走这里：默认配色
+   * 字母序是 black（黑系），若系统是亮色就该首屏落到白系，否则「跟随系统」形同虚设
+   * 且出现 html 深色 / 页面浅色的撕裂。
+   *
+   * ⚠️ URL 显式给了 `?theme=` 时不干预：那是部署方/用户的明确意图
+   *    （部署方可能故意发一条"永远用蓝"的链接），链接必须压过联动。
+   */
+  if (!urlLockedTheme) {
+    syncColorToTone(mode.value === 'system' ? systemDark.value : mode.value === 'dark');
+  }
 
   /**
-   * 明暗变化 → 联动切配色（唯一运行时入口）
+   * 明暗意图变化 → 联动切配色（唯一运行时入口）
    *
-   * `mode` 从浅变深（或用 `system` 时系统入夜）配色就跟着换系别。首屏那一次
-   * 不走这里（watch 是"变化"语义、且需要 URL 豁免），已由上面的显式调用处理。
+   * 明=白系、暗=黑系、跟随系统=按系统偏好。首屏那一次不走这里（watch 是"变化"语义），
+   * 已由上面的显式调用处理。系统偏好变化（跟随系统模式）也在这里联动。
    */
-  watch(isDark, dark => syncColorToTone(dark));
+  watch(mode, m => syncColorToTone(m === 'system' ? systemDark.value : m === 'dark'));
+  watch(systemDark, dark => {
+    if (mode.value === 'system') syncColorToTone(dark);
+  });
 
   /**
    * 主题包自带 token（按**当前生效作用域**解析；设备/页面/版式变化时由 watch 重算）
@@ -487,22 +514,23 @@ export const useThemeStore = defineStore('theme', () => {
     { immediate: true }
   );
 
-  /** 设置明暗模式（用户显式选择 → 落盘） */
+  /** 设置明暗意图（明=白系 / 暗=黑系 / 跟随系统；用户显式选择 → 落盘，联动切配色由 watch(mode) 驱动） */
   function setMode(next: ThemeMode): void {
     mode.value = next;
     safeSet(STORAGE_MODE, next);
   }
 
-  /** 循环切换明暗（跟随系统 → 浅色 → 深色 → 跟随系统） */
+  /** 循环切换明暗意图（跟随系统 → 明 → 暗 → 跟随系统） */
   function cycleMode(): void {
     const idx = MODE_CYCLE.indexOf(mode.value);
     setMode(MODE_CYCLE[(idx + 1) % MODE_CYCLE.length]);
   }
 
   /**
-   * 在浅色/深色之间切换（桌面版浮按钮沿用此语义，保持二态手感）
+   * 在明/暗之间切换（= 白系 ↔ 黑系；桌面版浮按钮沿用此语义，保持二态手感）
    *
    * 与 cycleMode 的区别：这个不进入 'system'，纯做反色切换。
+   * 现在 `isDark` = 当前配色的系别，所以"切到相反明暗"即"切到相反系别的配色"。
    */
   function toggleTheme(): void {
     setMode(isDark.value ? 'light' : 'dark');
@@ -581,6 +609,17 @@ export const useThemeStore = defineStore('theme', () => {
     // 用户显式选择 → 立刻记进对应系别的槽（不依赖 watch 的异步 flush，
     // 让"选完就落盘"这件事在同步语义上成立）
     rememberColor(resolved);
+    // 明暗 = 色系：点色卡同步把「明暗意图」设为该配色的系别（点黑卡→暗、点白卡→明、
+    // 点红卡（黑系）→暗、点蓝卡（白系）→明），并脱离「跟随系统」—— 用户显式选了
+    // 一套配色，即显式定下了系别。这样明暗与配色永远一致，不会出现"明暗是明、配色却是黑系"的撕裂。
+    const tone = toneOfAnyScope(resolved);
+    if (tone) {
+      const next: ThemeMode = tone === 'dark' ? 'dark' : 'light';
+      if (mode.value !== next) {
+        mode.value = next;
+        safeSet(STORAGE_MODE, next);
+      }
+    }
     return true;
   }
 
@@ -612,7 +651,15 @@ export const useThemeStore = defineStore('theme', () => {
       // 不按设备过滤：后端可能只配了一套配色给某一端，落库后由各端自行回落。
       // 若这里按当前设备拒绝，会把"下次访问另一端的正确配置"也一起丢掉。
       const resolved = resolveThemeId(wanted);
-      if (resolved) themeId.value = resolved;
+      if (resolved) {
+        themeId.value = resolved;
+        // 明暗 = 色系：后端下发配色也同步系别意图（除非 mode 被 URL 锁定）
+        const tone = toneOfAnyScope(resolved);
+        if (tone && !urlLockedMode) {
+          const next: ThemeMode = tone === 'dark' ? 'dark' : 'light';
+          if (mode.value !== next) mode.value = next;
+        }
+      }
     }
     if (config.mode && !urlLockedMode) mode.value = config.mode;
     if (config.tokens) externalTokens.value = config.tokens;
@@ -620,10 +667,10 @@ export const useThemeStore = defineStore('theme', () => {
 
   /**
    * 应用外部明暗（父应用旧协议兼容）
-   * @param dark 是否深色
+   * @param dark 是否深色 —— 即切到黑系（dark）/ 白系（light）
    */
   function applyTheme(dark: boolean): void {
-    mode.value = dark ? 'dark' : 'light';
+    setMode(dark ? 'dark' : 'light');
   }
 
   /**

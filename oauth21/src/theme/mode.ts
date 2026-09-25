@@ -1,10 +1,13 @@
 /**
- * 明暗模式（mode）的取值、循环顺序与展示文案
+ * 明暗意图（mode）的取值、循环顺序与展示文案
  *
- * 与「主题（theme）」是两个正交维度：
- *   mode  —— 用户自己的偏好，可在界面上切换（三态，含「跟随系统」）
- *   theme —— 部署方/后端决定的品牌外观，用户通常改不动
- * 两者组合出 `主题数 × 2` 种外观，互不干扰。
+ * 🔴 明暗 ≡ 色系（2026-09-25 定）：「明暗切换就是切换白色和黑色这个色系，不是另一套规则」。
+ *   mode 不是独立于配色的第二个维度，而是「切到哪一系别」的意图：
+ *     light  —— 明 = 白系
+ *     dark   —— 暗 = 黑系
+ *     system —— 跟随系统偏好（系统暗→黑系、亮→白系）
+ *   最终明暗由**当前配色的 tone** 决定（见 `stores/theme.ts` 的 `isDark`）。
+ *   点色卡同步 mode（点黑卡=dark、点白卡=light），切 mode 联动配色 —— 永远一致。
  *
  * @author yijiu2025
  */
@@ -15,11 +18,11 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 /** 切换按钮的循环顺序：跟随系统 → 浅色 → 深色 → 跟随系统 */
 export const MODE_CYCLE: readonly ThemeMode[] = ['system', 'light', 'dark'];
 
-/** 界面与无障碍标签用的中文文案 */
+/** 界面与无障碍标签用的中文文案（明=白系 / 暗=黑系 / 跟随系统） */
 export const MODE_LABELS: Record<ThemeMode, string> = {
   system: '跟随系统',
-  light: '浅色',
-  dark: '深色'
+  light: '明',
+  dark: '暗'
 };
 
 /** 是否是合法的明暗取值（用于校验 URL 参数、后端下发这类不可信输入） */

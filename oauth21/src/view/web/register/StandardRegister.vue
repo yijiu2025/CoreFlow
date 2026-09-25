@@ -311,7 +311,7 @@ onUnmounted(() => dispose());
 
 <template>
   <!-- 单根节点：AuthContainer 全屏框架 + 弹窗类组件挂在外层 -->
-  <div class="stdreg-root w-full" :class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }">
+  <div class="stdreg-root w-full" :class="{ dark: themeStore.activeTone === 'dark' }">
     <AuthContainer :app-name="templateAppName">
       <template #header>
         <div class="flex items-center justify-between">

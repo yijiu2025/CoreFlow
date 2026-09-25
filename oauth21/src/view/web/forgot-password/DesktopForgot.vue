@@ -36,7 +36,7 @@ function goToLogin() {
 </script>
 
 <template>
-  <div class="w-full h-full" :class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }">
+  <div class="w-full h-full" :class="{ dark: themeStore.activeTone === 'dark' }">
     <AuthContainer :appName="'Enterprise SSO'">
       <template #header>
         <h2 class="text-xl font-bold dark:text-white">{{ t('forgot.title') }}</h2>
