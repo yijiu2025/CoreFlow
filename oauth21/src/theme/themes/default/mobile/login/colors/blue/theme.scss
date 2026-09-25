@@ -82,3 +82,12 @@ html[data-mauth-theme='blue'] .mauth-next-btn {
     background-size: 100% 88px, 100% 100%;
   }
 }
+
+/* 底部安全区：天际线剪影贴 .mauth-page 底部（竖屏约 110px 高），与页脚
+   「还没有账号？立即注册」同处底部区域，深色建筑形状会盖住页脚文字。
+   给 .mauth-body 额外留出剪影高度的 padding-bottom，把页脚推到剪影上方。
+   只在本主题生效（切走后 html[data-mauth-theme] 属性消失、规则自动失效），
+   不影响其他主题的底部布局。 */
+html[data-mauth-theme='blue'] .mauth-body {
+  padding-bottom: calc(var(--mauth-pad-body-b, 0px) + env(safe-area-inset-bottom, 0px) + 110px);
+}

@@ -1,5 +1,10 @@
 {
   "enabledPlugins": {
     "modern-webapp@cb_teams_marketplace": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git:*)"
+    ]
   }
 }
