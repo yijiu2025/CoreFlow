@@ -64,6 +64,13 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
   StandardLogin SCSS 用 `:is(html.dark .standard-login-root, .standard-login-root.dark) .std-*`。store 暴露 `activeTone`。
 - 🔴 **scoped 样式禁写 `:global(.dark) X`**（2026-09-25 实锤）：会被 @vue/compiler-sfc 编译成**裸 `.dark`**（后续选择器被丢弃），html 挂 dark 类时命中 html
   → 夜间背景变红。正确写法 **`.dark X`**（产物 `.dark .xxx[data-v]`）。全仓 34 处已修（c207187）；红色回归断言并入 `verify-tone-unified.mjs`。
+- 🔴 **新版式下 view ≡ pkg**（v2.18.5 修，2026-09-25）：register 等新版式页面（一个主题包 = 一种版式）下，
+  `BASE_VIEW_ID='base'` 不再是合法 view 名 —— 仅作 registry 逻辑 baseId 用。**基础版式形态登记 view = 包名**，
+  不要再 hardcode BASE_VIEW_ID。`colorFromKey` 必须 `view = m[1]`；`findRecord` / `getThemeRecord` 必须**接收 pkg**
+  （旧版 hardcode DEFAULT_THEME_PACKAGE 第一行 = 切到 compact 点 blue 永远命中 default 包的隐藏坑，症状「切换版式后蓝青无效」）；
+  store.activeView 默认 = `DEFAULT_THEME_PACKAGE`；`pickRegisterViewId` 默认返回 pkg；URL `?view=base` 按"未指定"处理。
+  旧机制 login/forgot（仍有变体）下 `activeViewId === registry.baseId` 仍是合法 path，ThemeDebugPanel 据此判别是否列 baseId。
+  关卡 `.tmp-probe/verify-color-by-pkg.mjs`：切包 + 切色 + 联动 mode 全覆盖。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
