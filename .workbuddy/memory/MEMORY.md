@@ -5,12 +5,12 @@
 
 ## 0. 仓库形态 / 发版
 
-- **`packages/log/` 是独立嵌套 git 仓**（主仓 gitignore）→ 去那个仓提交；主仓 `git add packages/log/...` **静默不生效**（Exit=0 但有警告）→ 见警告停下查。
-- **本机 git ref 失灵**：status 谎报 ahead、push 可能数分钟零输出 → **一律以 `git ls-remote origin main` 为准**，超时≠失败。
-  push 后修：`node "C:/Users/22701/.workbuddy/tools/fix-packed-refs.mjs" "<完整 40 位 SHA>"`（绝对路径；截短→GUI 历史全灭）。
-  ✅ **`git credential fill` 挂住已根治**（2026-09-25）：根因 = system 级 gitconfig（`~/.workbuddy/binaries/PortableGit/versions/1.2.0/etc/gitconfig:20`）的 `credential.helper = helper-selector`（GUI 选择器，每次认证弹窗）；已注释禁用（备份 `/tmp/gitconfig.backup-20260925`），现在只剩 GCM 静默认证 → `credential fill` / push 不再弹窗不再挂。
+- **`packages/log/` 是独立嵌套 git 仓**（主仓 gitignore）→ 去那个仓提交；主仓 `git add packages/log/...` 静默不生效。
+- **本机 git ref 失灵**：status 谎报 ahead、push 可能数分钟零输出 → **以 `git ls-remote origin main` 为准**，超时≠失败。
+  push 后异常：`node "C:/Users/22701/.workbuddy/tools/fix-packed-refs.mjs" "<完整40位SHA>"`（截短→GUI 历史全灭）。
+- ✅ `git credential fill` 挂住/凭据选择器弹窗已根治（2026-09-25）：system gitconfig 的 `helper-selector` 已注释禁用，只剩 GCM 静默认证。
 - **发版**：提交推送后**顺手发不必问**：`node scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；
-  破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` 不发。版本源是 git tag。
+  破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` 不发。版本源是 git tag；工作区脏（含子模块）会拒。
 
 ## 1. 强制约定（有守卫 / 有规则文档，违反会红）
 
@@ -22,102 +22,76 @@
 - **🔗 文档站**：`ignoreDeadLinks` 只放行 `AGENTS|oauth21|posecraft|packages` 前缀 → 指 `docs/` 之外必 `docs:build` 失败，**指源码用反引号**；
   ⚠️ `development-standards.md` 在 `docs/` **根**；新增文档页要**同时**注册进 `docs/.vitepress/config.ts` sidebar（否则是孤岛）。
 - **代码审查**：唯一入口 `docs/development/code-review.md`（L0–L3/五道闸）；**L3（格式类）禁止人工提出**。
-- 🔴 **前端类型闸门必须是"真检查"**（规则全文在 `docs/frontend/coding-standard.md`）：方案式 tsconfig（`files:[]`+`references`）下**裸 `vue-tsc` 恒 exit 0**
-  → 曾攒下 9 个真错。口径 **`vue-tsc -b`**。口诀：**改完口径必须毒丸验证**（写 `export const __p: number = 'x'` 必须报错）。
-  两个最容易"看起来修好了"的坑：子项目 `include` 是 `.js` 未开 `allowJs` → `-b` 报 `TS18003`，**去掉 `-b` 就不报错、只是静默失去检查**；
-  配置级错误（`TS5101` 如 `baseUrl` 弃用）会让 TS **中止全部语义分析**，只剩一条无关报错。`firewall` 仍无类型检查（121 错）。
-- **跨内核渲染基线（新前端强制）**（`docs/frontend/browser-baseline.md`，自检 `npm run check:baseline [目录]`，13 项）：
-  核心一句 = **规范留白处不显式声明 = 把渲染交给内核**（`color-scheme` 初始 `normal`；根元素背景 `transparent` 时"渲染未定义"；`vh ≡ lvh`）。
-  ⚠️ viewport meta **跨行或加实验键会让整条被内核丢弃**（小米/夸克实测）→ 退化成 980px 桌面布局。
+- 🔴 **前端类型闸门必须是"真检查"**（规则全文 `docs/frontend/coding-standard.md`）：方案式 tsconfig 下**裸 `vue-tsc` 恒 exit 0** → 口径 **`vue-tsc -b`**；
+  **改完口径必须毒丸验证**。子项目 `include` 是 `.js` 未开 `allowJs` → 去掉 `-b` 报错消失=静默失去检查；配置级错误（TS5101）会中止全部语义分析。`firewall` 仍无类型检查（121 错）。
+- **跨内核渲染基线（新前端强制）**（`docs/frontend/browser-baseline.md`，自检 `npm run check:baseline [目录]`）：
+  核心一句 = **规范留白处不显式声明 = 把渲染交给内核**；⚠️ viewport meta 跨行或加实验键会被内核整条丢弃（小米/夸克实测）。
 - 🔴 **多主题 / 多版式开发模式（强制）**（`docs/frontend/multi-theme.md`）：三个正交维度 = **token 基线 → 皮肤 `themes/<id>/` → 版式 `themes/app/<page>/<id>/`**；
-  **目录名即 id**（覆盖包内 `meta.id`；坏目录**静默跳过**；`themes/app/` 为保留名、禁加 `index.ts`）；
+  **目录名即 id**（坏目录静默跳过；`themes/app/` 为保留名、禁加 `index.ts`）；
   🔴 **业务只在容器**（`view/app/<page>/index.vue`），版式只读 `ctx`、只调 `ctx.actions`；外部输入**一律过白名单**。oauth21 三页已全部接入。
 
-## 2. 后端陷阱速查 → **details §12**（14 条整表已迁出）
+## 2. 后端陷阱速查 → **details §12**（14 条整表在那里）
 
 `getModel(name)` 抛 TypeError · `getStore(prefix)` 命名空间/MapStore · 密码哈希禁 `bcryptjs` · 请求路径禁 `*Sync(` ·
 `underscored:true` 时间戳 · 模块级 `process.exit` 伪装绿色 · 改导出面要真实 import · 外部输入归一化 ·
 `vue-tsc` 拦不住模板标识符 · `/user/v1/register` 只认 `username` · Fastify（顺序/`onRoute`/`preClose`/`OPTIONAL_LOADERS`/`/health/*`）·
 Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）。
 
-## 3. oauth21 移动端认证页 → **details §11**（细则/实测数据全在那里）
+## 3. oauth21 → **details §11**（细则/实测数据全在那里）
 
-- **样式单一来源** = `assets/styles/mobile-auth.scss`（`mauth-*`）。**基础版式与 `/m/*` 页不得自带 `<style>`**（变体可以，取值只许 `--mauth-*`）；⚠️ 移动端版式**刻意不限宽**（用户明确要求满宽）。
-- **版式优先级** `?view=` > 主题包 `views.<page>` > `VITE_<PAGE>_VIEW` > base，⚠️ **URL 显式非法值不回退**；base 容器**静态引入**、变体 `glob` 惰性 chunk；
-  契约 = `types.ts` 纯类型 + 容器 `assertXxxContract` 编译期自检；浮层由**容器**渲染；**新增变体目录要重启 dev server**。
-  ⚠️ **毒丸验证永远不要截断输出**（`| head -N` 会让"是否真变红"不可判）—— 2026-09-25 踩过。
-- **皮肤**：三层 token（全局语义 → 组件级 → 组件规则零裸色值）；明暗与皮肤**正交**；来源 `?theme=`（`?skin=` 别名）> 后端 > localStorage > default；
-  🔴 外部输入**必过白名单**（`theme/runtime.ts` 拒 `url()` 与 CSS 颜色名）；`*/index.ts` eager、`*/theme.scss` 惰性；入口 `?debug=theme` 面板。
-  🔴 **`tokens` 是扁平值 `Record<string,string>`，无 light/dark 两档（2026-09-25 定，提交 f9897cc）**：`applyThemeLayers(layers)` 不接受 `isDark`；
-  `isDark` 只负责给 `<html>` 挂 `dark` 类（基线 SCSS 切深色底），**完全不参与 token 选档**。要深色品牌色就**另加颜色目录**，别做"某配色的深色档"。
-  ⚠️ 注册表键是**五段复合键** `包/设备/页面/版式/配色`（base 版式用 `BASE_VIEW_ID='base'`）；配色**每个版式各一份**，漏了静默回落。
-  ⚠️ 写 glob 通配（`themes/*/*/*/colors/*/index.ts`）落进**块注释**会因含 `*/` 提前闭合 → `SyntaxError`，报错行 ≠ 根因行。
-  🔴 `tokens` 是 `html` 上的 inline style、**优先级高于媒体查询** → 绝不能覆写断点里会变的 token（`--mauth-pad-*`/`gap-*`/`logo-size`/`title-size`/`field-h`/`control-h`/`err-h`/`social-*`）；
-  ⚠️ `--mauth-header-bg` 设 `transparent` → **必须同时声明 `--mauth-canvas`**；⚠️ `assets/` 的 SVG **必须带 `width`/`height`**。
-- 🔴 **调试移动端页前必须先造窄视口并刷新**：判定 `宽视口(≥1024) ＞ 窄视口(<768) ＞ UA`；宽视口开 `/m/*` 会**跳电脑版**，**UA 伪装压不过宽视口**，
-  分发只在**导航时**执行（§11.1）。设备判定单一来源 `utils/device.ts` 的 `isMobileViewport()`。
-- 🔴 **移动端页必须自己当滚动容器**：`html,body{overflow:hidden}` → `.mauth-page` 须 `height:100dvh + overflow-y:auto`，`.mauth-body` 须 `flex:1 0 auto`。
-- 🔴 **"白条/色条"先定位到层再谈修色**（§11.7）：色由 ①根画布 ②祖先容器 ③页面自身 决定 → 统一出口 **`--mauth-canvas`**；页面须**贴顶**（`align-self:flex-start`），
-  否则 `vh(≡lvh)>dvh` 时外层 `items-center` 留缝（**DevTools 不模拟动态工具栏 ⇒ 电脑上永远看不到**）。"给祖先改底色"只是把问题转移。
-- 🔴 **跨内核差异先分类再修**：① `color-scheme` 初始 `normal` → 显式写 `light` 与 `light only` 两条（只带 `only` 会被不支持的引擎**整条丢弃**）；
-  ② 视口被丢成 980 ⇒ 整页等比缩小 → meta **单行 + 只留最通用键**；判据**只能用 `visualViewport.scale`**（`clientWidth` 恒 980）；兜底 `utils/viewport-fix.ts`。
-- 🔴 **父 origin 白名单单一来源 `utils/parent-origins.ts`**（发 `parent.ts` / 收 `useParentThemeSync` 共用；改白名单只改这里 + 各 `.env` 的 `VITE_ALLOWED_PARENT_ORIGINS`）。
-  ⚠️ **漏配的症状是「弹窗 loading 慢」而非报错**：`SSO_READY` 被拒发 → 宿主等满 3s 兜底超时（实测 3608ms → 补对后 719ms）。
-  排查任何 iframe 握手类「慢」，**第一件事 grep 控制台 `[SSO] 拒绝 postMessage：父 origin 未授权`**。**别把 oauth21 自己的端口（5174/5175）写进白名单**（它是被嵌方）。
-- **登录行**：providers 为空 → **零 DOM**；🔴 授权端点**只放行站内相对路径**（`/` 开头且非 `//`）；未配端点**不静默**。
-- **重置密码**：邮件链接指向 `/reset-password?token=…` 而前端无此路由 → 已加 redirect（query 原样带）；🔴 **`validateField` 不跑 zod 的 object 级 `refine`**
-  → 两次密码一致须**显式比对** + `setFieldError`（注册页同坑）。
-- 🔴 **三个分发器（`view/web/<page>/index.vue`）必须都认「mini 来源」**，判定顺序
-  = 显式 `?isMobile=true` ＞ mini（login/register 用 `from=mini`·路径含 `mini-login`/`mini-register`；forgot 用 **`fromLogin=mini`**）＞ 自动识别 ＞ 桌面默认。
-  **mini 来源 = 正嵌在宿主弹窗 iframe 里**，窄是弹窗列宽造成的（宿主 1440px→iframe 854px；宿主 ≤800px→iframe 718px<768）⇒ 必须保持桌面/紧凑版。
-  漏掉分支的症状：**只有漏的那一页**跳手机端、同 iframe 其余页正常，且**桌面直接开不复现**（必须真放进 iframe 读**内容页**的 `innerWidth`）。
-  桌面卡片根 class 是 **`.auth-viewport`**。关卡 `verify-forgot-view.mjs` I 段（毒丸：删分支→I1 变红）。
-- 🔴 **URL 不被视口改写（2026-09-25）**：`/m/*` 与 `/<page>` **共用同一套分发器**（`view/web/<page>/index.vue`）—— 窄屏渲染手机端容器、宽屏渲染桌面卡片，**URL 永远不变**。
-  早先 `/m/*` 挂移动端容器 + 宽屏重定向到 `/<page>`（`desktopWhenWide` + matchMedia 监听）→ 刷新窄屏 `/login` 被改写成 `/m/login`、拉宽又被改写回、"切不回电脑路由"。现全删了（`routes.ts` 的 `MOBILE_TO_DESKTOP_ROUTE`/`resolveDesktopRedirectTarget`/`desktopWhenWide`、`router/index.ts` 的视口监听都不存在）。
-  关卡 `verify-mobile-forgot.mjs` ③「保持路由」+ `verify-color-peer.mjs` F 段守这条（毒丸：加回重定向→保持路由变红）。
-- 🔴 **明暗 ↔ 配色系别联动（tone，2026-09-25）**：每套配色声明 `tone: 'light'|'dark'`（`theme/tone.ts`，**必填**，漏写 `vue-tsc` 报错）；`black`=dark，`white/blue/cyan/rainbow`=light。
-  `stores/theme.ts` 双侧记忆槽 `lightColor`/`darkColor`：切明暗时 `watch(isDark)→syncColorToTone` 跨系别跳（白系+夜间→黑系，再切回→恢复原白系槽）；**单向**——手动点颜色**不改**明暗。
-  首屏对齐只在**有落盘偏好**时生效（全新用户不被字母序换色）；URL `?theme=` 显式指定时豁免。关卡 `verify-color-peer.mjs` B/C 段守联动。
-- 🔴 **跨设备系别一致**：`theme/index.ts` 的 `getThemeRecord` 在请求 id 不在当前作用域时，按该 id 系别（`toneOfAnyScope`）取同系别首套 ——
-  mobile 选 `blue`(light) 拉宽到 web(无 blue)→回落 `white`(light)；`black` 两端都有→不变。`themeId` **不随设备变**（保持用户选择），只渲染层回落。关卡 `verify-color-peer.mjs` F 段守这条。
-- 🔴 **主题设备跟随实际渲染的视图，不是路由**：三个桌面分发器各 watch `activeForm`→`setActiveDevice`；`/login` 窄屏渲染手机端容器时主题作用域=mobile（否则面板切手机端主题无效）。`router/index.ts` 的 `setupThemeDeviceSync` 只给基线（`/m/*`=mobile），分发器按渲染形态纠正。
-- 🔴 **桌面卡片局部 `.dark` 上下文（2026-09-25）**：桌面卡片（StandardLogin/MiniLogin/StandardRegister/MiniRegister/DesktopForgot）根容器挂
-  `:class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }"`。Tailwind `darkMode:'class'` 允许 `.dark` 在**任意祖先** ——
-  点色卡（不改 mode）选中 dark 系配色时根 .dark 挂上，`dark:` 变体全触发，卡片跟着变深色。否则点 black 色卡 token 注入 html 但卡片仍白（"切换无效"）。
-  `StandardLogin` SCSS 的 `html.dark .standard-login-root .std-*` 改成 `:is(html.dark .standard-login-root, .standard-login-root.dark) .std-*`。
-  store 暴露 `activeTone` computed（`themeRecordFor().tone`）。
+- **样式单一来源** = `assets/styles/mobile-auth.scss`（`mauth-*`）。基础版式与 `/m/*` 页**不得自带 `<style>`**；移动端版式**刻意不限宽**（用户要求满宽）。
+- **版式优先级** `?view=` > 主题包 `views.<page>` > `VITE_<PAGE>_VIEW` > base；⚠️ URL 显式非法值**不回退**；变体 `glob` 惰性 chunk；**新增变体目录要重启 dev server**。
+  ⚠️ 毒丸验证**永远不要截断输出**（`| head` 让"是否真变红"不可判）。
+- **皮肤**：明暗与配色**正交**；来源 `?theme=`（`?skin=` 别名）> 后端 > localStorage > default；外部输入**必过白名单**（拒 `url()` 与 CSS 颜色名）。
+  🔴 **tokens 是扁平值 `Record<string,string>` 无 light/dark 两档**；`isDark` 只挂 `html.dark` 类**不参与 token 选档**；要深色品牌色**另加颜色目录**。
+  ⚠️ 注册表键 = **五段复合键** `包/设备/页面/版式/配色`；配色**每版式各一份**漏了静默回落；tokens 是 html inline style**优先级高于媒体查询**禁覆写断点 token；
+  ⚠️ `--mauth-header-bg` 设 transparent **必须同时声明 `--mauth-canvas`**。
+- 🔴 **调试移动端页前先造窄视口并刷新**：判定 `宽(≥1024) ＞ 窄(<768) ＞ UA`；UA 伪装压不过宽视口；单一来源 `utils/device.ts`。
+- 🔴 移动端页自己当滚动容器（`.mauth-page` `100dvh+overflow-y:auto`、`.mauth-body` `flex:1 0 auto`）；"白条/色条"先定位到层，统一出口 `--mauth-canvas`，页面贴顶。
+- 🔴 **跨内核差异先分类**：① `color-scheme` 显式写 `light` 与 `light only` 两条；② 视口被丢成 980 → meta 单行+最通用键，判据只用 `visualViewport.scale`；兜底 `utils/viewport-fix.ts`。
+- 🔴 **父 origin 白名单单一来源 `utils/parent-origins.ts`**。漏配症状=「弹窗 loading 慢」非报错（`SSO_READY` 被拒发→宿主等满 3s）；排查 iframe 握手类「慢」先 grep `拒绝 postMessage`。**别把 oauth21 自己端口（5174/5175）写进白名单**。
+- **登录行**：providers 空 → 零 DOM；🔴 授权端点**只放行站内相对路径**；未配端点**不静默**。
+- 🔴 **`validateField` 不跑 zod object 级 `refine`** → 两次密码一致须**显式比对** + `setFieldError`（注册页同坑）。
+- 🔴 **三个分发器必须都认「mini 来源」**（判定序：显式 `?isMobile=true` ＞ `from=mini`/`fromLogin=mini`/路径 ＞ 自动 ＞ 桌面默认）。
+  mini=嵌在宿主弹窗 iframe（宿主 1440→iframe 854px）⇒ 保持桌面版。漏掉的症状：只有漏的那页跳手机端。关卡 `verify-forgot-view.mjs` I 段。
+- 🔴 **URL 不被视口改写**：`/m/*` 与 `/<page>` **共用同一套分发器**（`view/web/<page>/index.vue`），URL 永远不变；旧重定向三件套已全删。关卡 `verify-mobile-forgot.mjs` ③ + `verify-color-peer.mjs` F 段。
+- 🔴 **明暗 = 配色系别（不是独立维度，2026-09-25 定）**：`isDark = 当前配色的 tone`；`mode`（明/暗/跟随系统）只是「切到哪一系别」的意图。
+  每套配色必填 `tone: 'light'|'dark'`（漏写 vue-tsc 报错）。双侧记忆槽 `lightColor`/`darkColor`（默认 white/black）；**点色卡同步 mode、切 mode 联动配色**（永远一致，杜绝撕裂）；
+  跟随系统按系统偏好选系别，全新用户首屏也按系统系别对齐（默认 black 字母序 → 系统亮则落 white）。关卡 `verify-tone-unified.mjs`（18，含毒丸）+ `verify-color-peer.mjs` B/C/D 段。
+- 🔴 **跨设备系别一致**：`getThemeRecord` 回落先按 `toneOfAnyScope` 取同系别首套（mobile blue 拉宽→web 回落 white）；`themeId` 不随设备变。关卡 F 段。
+- 🔴 **主题设备跟随实际渲染的视图**：三个分发器 watch `activeForm`→`setActiveDevice`；`setupThemeDeviceSync` 只给基线。
+- 🔴 **桌面卡片局部 `.dark` 上下文**：五个桌面卡片根容器挂 `:class="{ dark: activeTone === 'dark' }"`（Tailwind darkMode:'class' 允许任意祖先）。
+  StandardLogin SCSS 用 `:is(html.dark .standard-login-root, .standard-login-root.dark) .std-*`。store 暴露 `activeTone`。
+- 🔴 **scoped 样式禁写 `:global(.dark) X`**（2026-09-25 实锤）：会被 @vue/compiler-sfc 编译成**裸 `.dark`**（后续选择器被丢弃），html 挂 dark 类时命中 html
+  → 夜间背景变红。正确写法 **`.dark X`**（产物 `.dark .xxx[data-v]`）。全仓 34 处已修（c207187）；红色回归断言并入 `verify-tone-unified.mjs`。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
-- 🔴 **禁止在 Bash 工具里 `git rm` src/ 下任何路径**：执行者是 **tsbx 沙箱执行层本身**，会**递归清空整个 src/**。
-  删 src 文件一律 `rm <path> && git add -A`；恢复 `git checkout HEAD -- src`。
-- **大块改动立刻检查点提交**；**毒丸实验**验测试有效性（覆写 `throw new Error('__QUARANTINE__')`，变红=真加载）。
-- **git 命令已放行**（2026-09-25，提交 c158a9e）：`.codebuddy/settings.local.json` 的 `permissions.allow: ["Bash(git:*)"]` → git add/commit/push **不再弹窗确认**；要放行其他命令同格式加 `Bash(npm:*)` 等。注意 `.codebuddy/` 在 gitignore 但该文件被强制跟踪过，改动照样进提交。
-- **沙箱命令规则**（双层）：`~/.workbuddy/settings.json` 的 `sandbox.orderedRules.command.rules` 已加 `{id:"command-user-git", prefix:["git"], action:"allow", source:"user"}`（`customized:true`）。schema = `{id 唯一, prefix 字符串数组, action: allow|ask, source, reason?}`（app.asar `migrateCommandRules` 实锤）；匹配在 sandbox-cli 二进制里。**改此文件前必须备份**（解析器对坏配置直接 throw）；权限弹窗的「总是允许」按钮会自己写正确格式，是最稳的扩展方式。
-- 🔴 **视觉回归先稳定化、再归因**（§10.13）：不禁过渡/动画、不等 `fonts.ready` → 同代码连拍可报 **17.8% 假差异**；冻结样式须**加载后** `addStyleTag` 并**断言生效**；
-  比对前 `md5sum` 验两侧同一状态；「噪声下限 0」只对纯色场景成立（§11.15）。
-- ⚠️ 同一文件**多个 Edit 放同一条消息会静默丢失** → 多改**串行**并 grep 复核。⚠️ 块注释里别让星号与斜杠相邻（写 glob 通配会**提前闭合注释**：TS1131 报错行≠根因行）。
-- ⚠️ **本机 node 同步 spawn（管道 IO）恒抛 `EBUSY`(-4082)**：换版本/`shell:true`/脱离沙箱均无效；异步 `spawn`/`stdio:'inherit'`/**文件 fd 正常**
-  ⇒ 需同步取输出一律 `spawnSync` + **文件型 stdio**（它**不抛**，须自判 `result.status`）；取 stdin 的**必须带超时**；**禁 `Atomics.wait`**（细则 §9）。
-  ⚠️ `cmd | tail` 后 `$?` 是 tail 的 → 真实码重定向到文件再读。⚠️ git-bash `/dev/tcp` 在 Windows 假阴性（用 node:net）。
-- ⚠️ **沙箱拦两类删除**（非代码错）：`vite build` 在 **`prepare-out-dir`** 被 safe-delete 守卫拒（阈值 50）→ `--outDir <全新目录>`；`rm -rf <dir>` → **每批 ≤25 个 `rm -f`**。
-- ⚠️ `npm run` 丢命令行环境变量；`node --env-file` 不可被命令行覆盖 → 脚本自己 `process.loadEnvFile(...)`；含模板字符串的脚本用 Write 落盘再跑。
-- 事件循环冻结用 **tick 间隔法**（禁 `monitorEventLoopDelay`，774ms 报成 17ms）；手机端注入刘海用 CDP `setSafeAreaInsetsOverride`。
-- **关卡退出码** 0 通过 / 1 断言失败 / 2 回滚不完整 / 3 环境不可用。**CLI**：`loadAllModels()` 后 `getModel` 才可用；`loadGuardConfig()` 吞错且**回写 DB**；CLI 下 globalRedis 恒 null。
-- 测试命令：`node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPatterns "<p>"`（npx jest 丢 ESM 标志）。
-- 临时脚本放 `.tmp-probe/`（唯一 gitignore 项）。**oauth21 的 Playwright 验收关卡长期留在 `.tmp-probe/verify-*.mjs`**，改前先跑一遍当基线。
-- 🔴 **起 dev server 必须让服务本身当后台命令**（`run_in_background` + 直接 `exec node node_modules/vite/bin/vite.js --port N`）。
-  用 `nohup … &` 会在后台任务结束时被回收（探活 502，但 `dev-*.log` 里明明写着 ready，极具误导）。
-  三档端口：5174 = code 模式 · 5175 = `VITE_PASSWORD_RESET_MODE=link` · 5177 = `VITE_REGISTER_VIEW=compact`。
+- 🔴 **禁止在 Bash 工具里 `git rm` src/ 下任何路径**：会**递归清空整个 src/**。删 src 文件一律 `rm <path> && git add -A`。
+- **大块改动立刻检查点提交**；**毒丸实验**验测试有效性。⚠️ 同一文件**多个 Edit 同条消息会静默丢失** → 串行并 grep 复核；
+  ⚠️ 全量替换后必须 grep 复核形态（本次 `.dark ` 丢空格变成同元素双类，靠二次替换补回）。
+  ⚠️ 块注释里别让星号与斜杠相邻（glob 通配提前闭合注释，TS1131 报错行≠根因行）。
+- **git 已放行**（提交 c158a9e）：`.codebuddy/settings.local.json` `permissions.allow: ["Bash(git:*)"]`；另有 WorkBuddy 沙箱 `~/.workbuddy/settings.json` 的 `{prefix:["git"],action:"allow"}` 规则（schema 见日志 2026-09-25；**改前必须备份**）。
+- 🔴 **视觉回归先稳定化、再归因**（§10.13）：禁过渡/动画、等 `fonts.ready`，冻结样式须加载后 `addStyleTag` 并断言生效。
+- ⚠️ **本机 node 同步 spawn（管道 IO）恒抛 `EBUSY`**：同步取输出一律 `spawnSync` + **文件型 stdio**（自判 `result.status`）；取 stdin 必带超时；禁 `Atomics.wait`。
+  ⚠️ `cmd | tail` 后 `$?` 是 tail 的 → 真实码重定向到文件再读；git-bash `/dev/tcp` 假阴性（用 node:net）。
+- ⚠️ **沙箱拦两类删除**（非代码错）：`vite build` 出目录 → `--outDir <全新目录>`；`rm -rf` → 每批 ≤25 个 `rm -f`。
+- ⚠️ `npm run` 丢命令行环境变量；`node --env-file` 不可被命令行覆盖 → 脚本自己 `process.loadEnvFile(...)`。
+- 事件循环冻结用 **tick 间隔法**；手机端注入刘海用 CDP `setSafeAreaInsetsOverride`。
+- **关卡退出码** 0/1/2/3。**CLI**：`loadAllModels()` 后 `getModel` 才可用；`loadGuardConfig()` 吞错且回写 DB；CLI 下 globalRedis 恒 null。
+- 测试命令：`node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPatterns "<p>"`。
+- 临时脚本放 `.tmp-probe/`（唯一 gitignore 项）。**oauth21 的 Playwright 关卡长期留在 `.tmp-probe/verify-*.mjs`**，改前先跑当基线。
+- 🔴 **起 dev server 必须让服务本身当后台命令**（`run_in_background` + 直接 `node node_modules/vite/bin/vite.js --port N`）；`nohup … &` 会被回收。
+  端口：5174=code · 5175=link 模式 · 5177=compact · **5197=color-peer 关卡用 · 5184=panel-v3/colors-in-views 关卡用**（跑前先探活）。
 
-## 5. 部署 / CI（细则全在 details §10，2026-09-21 定案）
+## 5. 部署 / CI（细则全在 details §10）
 
-改 `ci.yml` / Dockerfile 前先读 **details §10**：CI 安装三件套（`--legacy-peer-deps` 是绕 arborist 崩溃、必须构建 `shared-device` dist）·
-Dockerfile 的 tini 按**实际路径**建软链 · response schema 必须覆盖信封全字段 · 生产三 secret **≥32 位**否则拒绝启动 ·
+改 `ci.yml` / Dockerfile 前先读 details §10：CI 安装三件套（`--legacy-peer-deps` 绕 arborist 崩溃、必须构建 `shared-device` dist）·
+Dockerfile tini 按**实际路径**建软链 · response schema 覆盖信封全字段 · 生产三 secret **≥32 位** ·
 复刻树验收 `git archive HEAD | tar -x` 到**仓库外**。
 
 ## 6. 待办
 
-- ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**，代码不存在。P2 session.js 拆分评估**未开始**。
-- `firewall` 前端无类型检查（121 错）；CI 无前端作业（三个前端刻意不进 CI 图，为绕开 arborist 崩溃）—— 均待定夺。
-- ⚠️ `oauth21` **eslint 存量 39 错**（`__tests__/notLoadSsoView.test.js` 38 个 jest 全局 `no-undef` + `AntiCacheDebugPanel.vue` 1 个 `preserve-caught-error`）—— 与多主题改动无关，待定夺（配 eslint env 或 ignore `__tests__`）。
+- ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**。P2 session.js 拆分评估**未开始**。
+- `firewall` 前端无类型检查（121 错）；CI 无前端作业——均待定夺。
+- ⚠️ `oauth21` eslint 存量 39 错（jest 全局 `no-undef` 38 + `AntiCacheDebugPanel.vue` 1）——待定夺（配 eslint env 或 ignore `__tests__`）。
