@@ -15,9 +15,11 @@ import AuthContainer from '@/components/common/AuthContainer.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import ResetByCode from './ResetByCode.vue';
 import ResetByLink from './ResetByLink.vue';
+import { useThemeStore } from '@/stores/theme';
 
 const { t } = useI18n();
 const router = useRouter();
+const themeStore = useThemeStore();
 
 // 密码重置方式由环境变量决定（与后端 PASSWORD_RESET_MODE 对应）
 // code：验证码重置 / link：邮件链接重置，只渲染对应组件
@@ -34,7 +36,7 @@ function goToLogin() {
 </script>
 
 <template>
-  <div class="w-full h-full">
+  <div class="w-full h-full" :class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }">
     <AuthContainer :appName="'Enterprise SSO'">
       <template #header>
         <h2 class="text-xl font-bold dark:text-white">{{ t('forgot.title') }}</h2>

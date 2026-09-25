@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
+import { useThemeStore } from '@/stores/theme';
 
 // ================================
 // 组件导入
@@ -33,7 +34,9 @@ import { useAgreementVersion, captureAgreementVersion } from '@/composables/useA
 // ================================
 const COUNTDOWN_SECONDS = 60; // 验证码倒计时秒数
 const RECAPTCHA_TIMEOUT = 30_000; // 获取验证码超时时间（毫秒）
-const RSA_ENCRYPT_TIMEOUT = 30_000; // RSA 加密超时时间（毫秒）
+const RSA_ENCRYPT_TIMEOUT = 30_000; // RSA 加密超时（毫秒）
+
+const themeStore = useThemeStore();
 
 // ================================
 // Composables 初始化
@@ -314,7 +317,7 @@ onUnmounted(() => dispose());
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col justify-center overflow-hidden">
+  <div class="w-full h-full flex flex-col justify-center overflow-hidden" :class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }">
     <AuthContainer :appName="templateAppName" :is-mobile="templateIsMobile">
       <template #header>
         <div class="flex items-center justify-between">

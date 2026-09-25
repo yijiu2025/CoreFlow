@@ -447,6 +447,7 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 | 版式里提前取 `attrs.value` | 字段属性过期、校验态不同步 | 存整个 ref |
 | 视口 / UA 判定不对就调试移动端页 | "电脑上看不到、手机上能看到" | 判定顺序是**宽视口(≥1024) ＞ 窄视口(<768) ＞ UA** → 先造窄视口并**刷新**；UA 伪装压不过宽视口。🔴 **URL 不被视口改写**：`/m/*` 与 `/<page>` 共用同一套分发器，窄屏渲染手机端、宽屏渲染桌面卡片，URL 永远不变（`desktopWhenWide` 已删，别加回） |
 | **给 `/m/*` 加回"宽屏跳电脑版"重定向** | 刷新窄屏 `/login` 被改写成 `/m/login`、拉宽又被改写回，"切不回电脑路由" | 🔴 `/m/*` 与 `/<page>` **共用同一套分发器**（`view/web/<page>/index.vue`），URL **不被视口改写**（2026-09-25）。`desktopWhenWide` / `redirectMobileRouteOnWideViewport` 已删。关卡 `verify-mobile-forgot.mjs` ③ 守这条（毒丸：加回重定向→「保持路由」变红） |
+| **桌面卡片点色卡无效**（黑白色切换无反应） | 点 black 色卡，token 注入 `html`（背景变黑）但卡片仍白；只有点 dark 明暗才变深灰 | 🔴 桌面卡片根容器挂局部 `.dark` class：`:class="{ dark: themeStore.isDark \|\| themeStore.activeTone === 'dark' }"`。Tailwind `darkMode:'class'` 允许 `.dark` 在**任意祖先**——点色卡（不改 mode）选中 dark 系配色时根 .dark 挂上，`dark:` 变体全触发。`StandardLogin` 的 SCSS `html.dark .std-*` 改成 `:is(html.dark .standard-login-root, .standard-login-root.dark) .std-*`。涉及 5 个桌面卡片（StandardLogin/MiniLogin/StandardRegister/MiniRegister/DesktopForgot） |
 | 注释里写出"星号紧跟斜杠"的两个字符 | 块注释提前闭合，后续正文被当代码解析 | 描述 glob 模式时改用文字表述（已踩过两次） |
 
 ## 本仓现状
