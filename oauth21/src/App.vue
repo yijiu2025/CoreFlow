@@ -53,7 +53,7 @@ onMounted(async () => {
       token 给出 #000000，结果 body 背景仍是 slate-950 而不是纯黑 —— "选了黑但页面底不是黑的"。
 
       现在统一到 token：黑/白配色文件的 `--mauth-bg` / `--mauth-text` 完全决定底色和文字色。
-      html.dark 类仍保留 —— Tailwind 的 `dark:bg-slate-xxx` 类（如 ResetByCode、DesktopForgot 等）
+      html.dark 类仍保留 —— Tailwind 的 `dark:bg-slate-xxx` 类（如 StandardForgot、MiniForgot 等）
       仍依赖这个开关，不能删。
 
       过渡（transition-colors duration-300）：保留 —— Tailwind dark 切换的瞬间仍可能抖动，
