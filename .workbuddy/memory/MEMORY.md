@@ -82,6 +82,16 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
   view=activeView），触发时 activeView 已变 → findRecord 扫全命中**新**包 → currentPkg=newView → 永远
   相等 → 整段逻辑提前 return。**正确**：显式 `themeRecordFor(DEFAULT_THEME_PACKAGE, ..., oldView)`，
   把 watch callback 第二参用足。第一参 newView/oldVal 是金价，不传就丢判别条件。
+- 🔴 **「整片纯黑」必须同时改 `--mauth-bg` + `--mauth-body-bg`**（v2.18.8 修）：
+  `mobile-auth.scss` 里 `.mauth-body` background = `var(--mauth-body-bg)`（默认 = `--mauth-surface`），
+  改 `--mauth-bg = #000000` 改不动 body —— body 仍显示 surface 色。**black 色卡要纯黑，必须
+  `--mauth-bg: #000000; --mauth-body-bg: #000000;`**（body 与 bg 融合 → 整片黑），`--mauth-surface`
+  留 `#0a0a0a` 极暗灰保留卡片轮廓。**任何新加的区域容器都须显式与 body 走同色**（`background: var(--mauth-body-bg)`），
+  不能依赖默认包"无意中的同色"。
+- 🔴 **「黑色」色卡语义 = #000000**（v2.18.8 定）：black 不再借 slate-950 深蓝灰，
+  彻底剥离 = black = `#000000`、html.dark 基线保持 slate-950（**明暗档 ≠ 配色系别**）。
+  边框/字段/文字在 black 下提亮一档：`--mauth-border #262626`、`--mauth-field-bg 8% 白`。
+  7 个 black 配色文件同步更新（compact + default × mobile + web × register/login/forgot-password）。
 
 ## 4. 手法 / 命令（细则 → details §9）
 
