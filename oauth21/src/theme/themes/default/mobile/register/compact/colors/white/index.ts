@@ -44,6 +44,7 @@ export default {
     preview: { primary: '#f8fafc', accent: '#cbd5e1' },
     author: 'oauth21'
   },
+  tone: 'light',
   tokens: {
     /* 画布色 = 页面最上沿。白底页面的画布也是白的（否则顶部/底部会露深色条） */
     '--mauth-canvas': '#ffffff',

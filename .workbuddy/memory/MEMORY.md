@@ -72,6 +72,15 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
   **mini 来源 = 正嵌在宿主弹窗 iframe 里**，窄是弹窗列宽造成的（宿主 1440px→iframe 854px；宿主 ≤800px→iframe 718px<768）⇒ 必须保持桌面/紧凑版。
   漏掉分支的症状：**只有漏的那一页**跳手机端、同 iframe 其余页正常，且**桌面直接开不复现**（必须真放进 iframe 读**内容页**的 `innerWidth`）。
   桌面卡片根 class 是 **`.auth-viewport`**。关卡 `verify-forgot-view.mjs` I 段（毒丸：删分支→I1 变红）。
+- 🔴 **URL 不被视口改写（2026-09-25）**：`/m/*` 与 `/<page>` **共用同一套分发器**（`view/web/<page>/index.vue`）—— 窄屏渲染手机端容器、宽屏渲染桌面卡片，**URL 永远不变**。
+  早先 `/m/*` 挂移动端容器 + 宽屏重定向到 `/<page>`（`desktopWhenWide` + matchMedia 监听）→ 刷新窄屏 `/login` 被改写成 `/m/login`、拉宽又被改写回、"切不回电脑路由"。现全删了（`routes.ts` 的 `MOBILE_TO_DESKTOP_ROUTE`/`resolveDesktopRedirectTarget`/`desktopWhenWide`、`router/index.ts` 的视口监听都不存在）。
+  关卡 `verify-mobile-forgot.mjs` ③「保持路由」+ `verify-color-peer.mjs` F 段守这条（毒丸：加回重定向→保持路由变红）。
+- 🔴 **明暗 ↔ 配色系别联动（tone，2026-09-25）**：每套配色声明 `tone: 'light'|'dark'`（`theme/tone.ts`，**必填**，漏写 `vue-tsc` 报错）；`black`=dark，`white/blue/cyan/rainbow`=light。
+  `stores/theme.ts` 双侧记忆槽 `lightColor`/`darkColor`：切明暗时 `watch(isDark)→syncColorToTone` 跨系别跳（白系+夜间→黑系，再切回→恢复原白系槽）；**单向**——手动点颜色**不改**明暗。
+  首屏对齐只在**有落盘偏好**时生效（全新用户不被字母序换色）；URL `?theme=` 显式指定时豁免。关卡 `verify-color-peer.mjs` B/C 段守联动。
+- 🔴 **跨设备系别一致**：`theme/index.ts` 的 `getThemeRecord` 在请求 id 不在当前作用域时，按该 id 系别（`toneOfAnyScope`）取同系别首套 ——
+  mobile 选 `blue`(light) 拉宽到 web(无 blue)→回落 `white`(light)；`black` 两端都有→不变。`themeId` **不随设备变**（保持用户选择），只渲染层回落。关卡 `verify-color-peer.mjs` F 段守这条。
+- 🔴 **主题设备跟随实际渲染的视图，不是路由**：三个桌面分发器各 watch `activeForm`→`setActiveDevice`；`/login` 窄屏渲染手机端容器时主题作用域=mobile（否则面板切手机端主题无效）。`router/index.ts` 的 `setupThemeDeviceSync` 只给基线（`/m/*`=mobile），分发器按渲染形态纠正。
 
 ## 4. 手法 / 命令（细则 → details §9）
 

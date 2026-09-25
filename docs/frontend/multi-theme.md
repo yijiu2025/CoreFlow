@@ -221,8 +221,7 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
    加 `data-mauth-view="base"`，**不写 `<style>`**。
 4. **容器改造**：静态引入 `Base<Page>View`、`ctx = assert<Page>Contract(reactive({...}))`、
    `activeView` 按 `pick<Page>ViewId` 惰性加载、`viewEpoch` 防过期。
-5. **路由预取**：在 `router/routes.ts` 给该页的 `beforeEnter` 接上 `preload<Page>View`。
-   若该页有"宽屏跳电脑版"逻辑，预取要放在**跳转判定之后**（否则会为一次不发生的渲染白拉 chunk）。
+5. **路由预取**：在 `router/routes.ts` 给该页的 `beforeEnter` 接上 `preload<Page>View`（预取是无条件优化，不再有"宽屏跳转"分支——见下文「URL 不被视口改写」）。
 6. **重启 dev server**，访问 `?view=<id>` 看效果。
 7. **补验收关卡**（见第十节），并跑一遍既有基线。
 
@@ -253,19 +252,28 @@ tokens: {
 ```
 
 以前要求「颜色类 token 必须成对给 `light` 与 `dark`」，那是**配色兼职明暗**时代的产物；
-现在明暗完全正交、配色自带底色，**再写成两档就是无意义的重复**（两边永远同值）。
+现在明暗不再兼职配色选档、配色自带底色，**再写成两档就是无意义的重复**（两边永远同值）。
 类型 `ThemeTokenOverrides` 已收窄为 `Record<string, string>`，写 `light:` / `dark:` 会直接编译报错。
 
-### 🔴 明暗（`mode`）与配色正交，「深浅」不是配色的一部分
+### 🔴 明暗（`mode`）与配色独立，但明暗会**单向联动**配色系别（tone）
 
 - **`mode`**（`mode.ts`：浅色 / 深色 / 跟随系统）是**系统级偏好**，全局一个值，只决定 `html.dark` 这个 class 是否挂上（基线 SCSS 的地基色）。
-- **配色**是**具体的一套外观**，自带底色（`--mauth-canvas` 等），选谁就是谁 —— **完全不参与明暗**。
+- **配色**是**具体的一套外观**，自带底色（`--mauth-canvas` 等），选谁就是谁 —— **不分明暗档**。
+- **每套配色声明一个系别 `tone: 'light' | 'dark'`**（`theme/tone.ts`，必填，漏写 `vue-tsc` 报错）：`black`=dark，`white/blue/cyan/rainbow`=light。
+
+**明暗 → 配色系别 单向联动**（用户 2026-09-25 要求「白系在用时切夜间就切黑色主题，再切回恢复原来那套」）：
+
+- 白系配色在用时切夜间 → 自动跳到黑系配色；再切回 → 恢复**原来那套**白系（双侧记忆槽 `lightColor`/`darkColor` 落盘保存）。
+- 黑系起手则反之。实现见 `stores/theme.ts` 的 `watch(isDark) → syncColorToTone`。
+- **单向**：手动点颜色**不改**明暗（黑白蓝青是并列选项，不该被强制切明暗）；`setTheme` 不碰 `mode`。
+- 首屏对齐只在**有落盘偏好**时生效（全新用户不被字母序换色）；URL `?theme=` 显式指定时豁免（部署方"永远用蓝"的链接要压过联动）。
+- **跨设备系别一致**：`theme/index.ts` 的 `getThemeRecord` 在请求 id 不在当前作用域时，按该 id 系别（`toneOfAnyScope`）取同系别首套 —— mobile 选 `blue`(light) 拉宽到 web(无 blue) → 回落 `white`(light)；`themeId` 不随设备变，只渲染层回落。
 
 **所以：**
 
-- 需要一套深色的品牌色？**加一个新颜色目录**（如 `navy`），而不是把它做成"某配色的深色档"。
-- `black` 与 `white` 不是"同一配色的明暗两档"，而是**两个完全并列的颜色**（各有自己 id、各自出现在面板里）。
-  选 `black` 就是黑底，选 `white` 就是白底，**与当前 `mode` 偏好无关**。
+- 需要一套深色的品牌色？**加一个新颜色目录**（如 `navy`，标 `tone: 'dark'`），而不是把它做成"某配色的深色档"。
+- `black` 与 `white` 是**两个完全并列的颜色**（各有 id、各自出现在面板里），不是一个配色的两档。
+  选 `black` 就是黑底，选 `white` 就是白底。
 - 调试面板**不提供**「点颜色顺带改明暗」这种行为（曾有过 `COLOR_MODE` 映射，2026-09-25 已删除）。
 
 用户 2026-09-25 的原话：
@@ -428,7 +436,7 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 | **某分发器漏了「mini 来源」分支** | 嵌在宿主弹窗 iframe 里时，**只有这一页**跳成全屏手机端，同 iframe 的登录/注册仍是桌面卡片 | 在自动识别**之前**加一条：`fromLogin === 'mini'`（本页参数名）/ `from === 'mini'` / 路径含 `mini-login` → 直接返回桌面版。三个分发器都要有 |
 | 加了配色/主题目录但"没生效" | 主题不出现，**且没有任何报错** | 注册表对坏目录是**静默跳过**：逐一核 ① 目录名是否 `[a-z0-9-]` ② 设备段是否 `mobile`/`web` ③ 有没有 `index.ts` ④ 有没有 `export default` ⑤ 包里有没有 `meta` ⑥ **是否漏了某个版式**（配色按版式查，只加 base 加不到 compact） |
 | **配色 id 用单键登记（漏了版式段）** | 同一份配色在不同版式间互相覆盖，或后扫描到的被当成重名**静默丢弃** | 注册表键必须是 `包/设备/页面/版式/配色` 五段复合键；取值用 `getThemeRecord(id, device, page, view)`。加完版式若发现"少了一套配色"，先看控制台有没有重名告警 |
-| **让某个颜色去兼职明暗开关** | 选了黑再选蓝，底色还是黑的（或反之） | `mode` 与配色**正交**；每套配色自带底色，选谁就是谁。需要深色品牌色就**另加一个颜色目录**（如 `navy`）—— 见「明暗与配色正交」 |
+| **让某个颜色去兼职明暗开关** | 选了黑再选蓝，底色还是黑的（或反之） | `mode` 与配色**独立**（明暗不兼职选档），但**单向联动**系别（切夜间→黑系，见「明暗与配色独立」）；每套配色自带底色，选谁就是谁。需要深色品牌色就**另加一个颜色目录**（如 `navy`，标 `tone: 'dark'`） |
 | 设备同步写在 `router.afterEach` 里 | 电脑端页面被当成手机端，列出手机端配色 | `afterEach` 首次触发时 Pinia `activeInstance` 尚未建立，`useThemeStore()` 抛错**被 try/catch 吞掉** → 设备永远停在默认值。改用 `watch(router.currentRoute, { immediate: true })`，并在 `main.ts` 的 `app.use(pinia)` **之后**调 `setupThemeDeviceSync(router)` |
 | 往 `themes/` 下塞回一个 `views/` 目录 | 契约被主题扫描器当配色扫到 | 契约与注册表在 `theme/views/`（与 themes 平级），别塞回 `themes/` 里 |
 | `meta.id` 与目录名不一致 | 主题能选中但 `theme.scss` 完全不生效 | 以**目录名**为准（会被覆盖）；把 `theme.scss` 的选择器改成目录名 |
@@ -437,7 +445,8 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 | token 里覆写断点会变的项 | 矮屏 / 横屏适配整体失效 | `tokens` 是 `html` 上的 inline style，**优先级高于媒体查询** → 绝不在 token 里写 `--mauth-pad-*` / `gap-*` / `logo-size` / `title-size` / `field-h` / `control-h` / `err-h` / `social-*`，这些交给 `theme.scss` 的媒体查询 |
 | `assets/` 的 SVG 只给 `viewBox` | 背景图撑满容器 | **必须带 `width`/`height`**（`background-size: …auto` 推不出高度） |
 | 版式里提前取 `attrs.value` | 字段属性过期、校验态不同步 | 存整个 ref |
-| 视口 / UA 判定不对就调试移动端页 | "电脑上看不到、手机上能看到" | 判定顺序是**宽视口(≥1024) ＞ 窄视口(<768) ＞ UA**，且**只在导航时执行** → 先造窄视口并**刷新**；UA 伪装压不过宽视口 |
+| 视口 / UA 判定不对就调试移动端页 | "电脑上看不到、手机上能看到" | 判定顺序是**宽视口(≥1024) ＞ 窄视口(<768) ＞ UA** → 先造窄视口并**刷新**；UA 伪装压不过宽视口。🔴 **URL 不被视口改写**：`/m/*` 与 `/<page>` 共用同一套分发器，窄屏渲染手机端、宽屏渲染桌面卡片，URL 永远不变（`desktopWhenWide` 已删，别加回） |
+| **给 `/m/*` 加回"宽屏跳电脑版"重定向** | 刷新窄屏 `/login` 被改写成 `/m/login`、拉宽又被改写回，"切不回电脑路由" | 🔴 `/m/*` 与 `/<page>` **共用同一套分发器**（`view/web/<page>/index.vue`），URL **不被视口改写**（2026-09-25）。`desktopWhenWide` / `redirectMobileRouteOnWideViewport` 已删。关卡 `verify-mobile-forgot.mjs` ③ 守这条（毒丸：加回重定向→「保持路由」变红） |
 | 注释里写出"星号紧跟斜杠"的两个字符 | 块注释提前闭合，后续正文被当代码解析 | 描述 glob 模式时改用文字表述（已踩过两次） |
 
 ## 本仓现状

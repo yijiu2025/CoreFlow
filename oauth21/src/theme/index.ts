@@ -54,6 +54,7 @@
  * @author yijiu2025
  */
 import type { MauthThemeColor, MauthThemePackage, MauthThemeMeta, MauthThemeRecord } from './types';
+import { normalizeTone, type ThemeTone } from './tone';
 
 /**
  * 空记录（registered 目录尚未产出任何记录）的占位配色 id
@@ -246,12 +247,23 @@ function buildRegistry(): Map<string, MauthThemeRecord> {
       );
       continue;
     }
+    // 系别：类型上必填（漏写会编译报错），但 dev server 不做类型检查，
+    // 所以运行时再兜一次 —— 漏写不该让页面崩，但也不该静默：
+    // 系别判错的后果是"开夜间不联动"，没有任何报错，极难归因。
+    const tone = normalizeTone(def.tone);
+    if (!tone) {
+      console.warn(
+        `[theme] 配色「${parsed.colorId}」未声明合法的 tone（light/dark），` +
+          `已按 'light' 兜底：${key}`
+      );
+    }
     registry.set(keyOf(parsed), {
       pkg: parsed.pkg,
       device: parsed.device,
       page: parsed.page,
       view: parsed.view,
       meta: { ...def.meta, id: parsed.colorId },
+      tone: tone ?? 'light',
       tokens: def.tokens,
       // 配色自己声明了就用自己的，否则继承包定义 —— 包根写一次，全包配色共用
       views: def.views ?? packageViews.get(parsed.pkg),
@@ -316,6 +328,9 @@ function emptyRecord(device: ThemeDevice, page: string, view: string): MauthThem
     page,
     view,
     meta: { id: DEFAULT_THEME_ID, name: '默认' },
+    // 没有配色时外观完全由 SCSS 基线决定，而基线 `:root` 是浅底（深色要 `html.dark` 才成立），
+    // 所以兜底记 'light' —— 语义上如实描述"当前呈现是浅底"。
+    tone: 'light',
     tokens: undefined,
     views: undefined,
     loadStyle: undefined
@@ -391,6 +406,60 @@ export function listColorsOf(device: ThemeDevice, page: string, view: string): M
 }
 
 /**
+ * 某配色在指定归属下的**明暗系别**；未登记返回 null（由调用方决定怎么回退）
+ *
+ * 🔴 用 `findRecord`（要求该 id 真的在这一段登记过），**不是** `getThemeRecord` ——
+ *    后者会回落到该版式的默认配色，于是"一个本版式不存在的 id"会拿到**别的配色**
+ *    的系别，store 据此判断"要不要联动"就会判错。
+ */
+export function toneOfColor(
+  id: string,
+  device: ThemeDevice,
+  page: string,
+  view: string
+): ThemeTone | null {
+  return findRecord(id, device, page, view)?.tone ?? null;
+}
+
+/**
+ * 某配色的系别（**任意**登记处）—— 给"槽归位"这类没有明确范围的场景用
+ *
+ * ⚠️ 同一个 id 在多个页面/版式下各有一份配置，系别**应当处处一致**；
+ *    这里取注册表里**第一处**（按路径排序，注册顺序稳定）。
+ *    真的配得不一致属于配置错误，本函数不负责纠正（由目录口径关卡守卫）。
+ */
+export function toneOfAnyScope(id: string): ThemeTone | null {
+  for (const record of registry.values()) {
+    if (record.meta.id === id) return record.tone;
+  }
+  return null;
+}
+
+/**
+ * 某个版式下、指定**系别**的全部配色 id（按目录名排序）
+ *
+ * 明暗联动取"另一侧配色"时用它：槽里没记过就取这里的第一套兜底。
+ * 排序只按 id 字母序（与 `listColorsOf` 同一口径，不给黑白特权）。
+ *
+ * ⚠️ 返回空数组 = 该版式下**没有**这个系别的配色 —— 调用方应当**什么都不做**，
+ *    而不是回落到别的系别（否则"开夜间"会拿到一套浅底，看起来像没生效）。
+ */
+export function listColorIdsOfTone(
+  device: ThemeDevice,
+  page: string,
+  view: string,
+  tone: ThemeTone
+): string[] {
+  const seen = new Set<string>();
+  for (const record of registry.values()) {
+    if (record.device !== device || record.page !== page || record.view !== view) continue;
+    if (record.tone !== tone) continue;
+    seen.add(record.meta.id);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
+/**
  * 归一化并校验外部传入的配色 id
  *
  * 用于 URL 参数 / 后端下发这类不可信输入：非法字符、未登记 id 一律返回 null，
@@ -424,8 +493,17 @@ export function resolveThemeId(
 /**
  * 取配色记录
  *
- * 回退链：指定 id（且四段都匹配）→ 该版式的兜底配色 → 空记录（吃 SCSS 基线）。
- * 版式 / 设备不匹配时**不跨版式借用**：拿紧凑版式的配色去渲染基础版式会得到一套
+ * 回退链（2026-09-25 加了"系别一致"这一层）：
+ *   指定 id（且四段都匹配）→ **同系别**的首套配色 → 该版式的兜底配色 → 空记录。
+ *
+ * === 为什么回退要保持系别一致 ===
+ * 一个 id 并非在每个作用域都有登记（如 `blue` 只在手机端有）。
+ * 若直接回落到该版式的兜底配色（按 id 排序，电脑端通常落到 `black`），
+ * "把窗口拉宽"这类作用域切换就会让页面在黑白之间翻转 —— 用户看到的
+ * 是"同一条路由、不同宽度、两个主题"。按**请求配色的系别**取同系别的
+ * 首套（浅底选浅底、深底选深底），观感才连续。
+ *
+ * 版式 / 设备不匹配时**仍不跨版式借用**：拿紧凑版式的配色去渲染基础版式会得到一套
  * 尺寸/圆角都对不上的东西，不如老实用基线。
  *
  * @param page 页面名（`theme/views/<page>.ts` 的文件名，如 `register`）
@@ -439,6 +517,14 @@ export function getThemeRecord(
 ): MauthThemeRecord {
   const record = findRecord(id, device, page, view);
   if (record) return record;
+  // 同系别回落：请求的 id 没登记在当前作用域时，取它的系别在本作用域的首套
+  //（该作用域没有这个系别时走下面的原始兜底，不跨系别硬凑）
+  const tone = toneOfAnyScope(id);
+  if (tone) {
+    const sameTone = listColorIdsOfTone(device, page, view, tone)[0];
+    const sameToneHit = sameTone ? findRecord(sameTone, device, page, view) : undefined;
+    if (sameToneHit) return sameToneHit;
+  }
   const fallback = defaultColorIdOf(device, page, view);
   return (fallback && findRecord(fallback, device, page, view)) || emptyRecord(device, page, view);
 }

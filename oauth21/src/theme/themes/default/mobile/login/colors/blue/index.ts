@@ -35,6 +35,7 @@ export default {
     preview: { primary: '#2f7fd6', accent: '#3b8fe0' },
     author: 'oauth21'
   },
+  tone: 'light',
   tokens: {
     /* 品牌色：CTA / logo / 选中态 / 链接强调 */
     '--mauth-primary': '#2f7fd6',

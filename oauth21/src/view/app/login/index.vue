@@ -257,8 +257,8 @@ const goForgot = () => {
     const v = route.query[key];
     if (typeof v === 'string') query[key] = v;
   }
-  // 直连移动端路由：宽视口下它自己会跳电脑版（desktopWhenWide，query 原样透传），
-  // 不在这里做设备判断，避免"两个地方各判一次"产生两套标准
+  // 直连移动端路由：`/m/forgot-password` 现在挂的是分发器，窄屏渲染手机端、
+  // 宽屏渲染桌面卡片（URL 不被视口改写，见 router/routes.ts）。不在这里做设备判断。
   router.push({ path: '/m/forgot-password', query });
 };
 

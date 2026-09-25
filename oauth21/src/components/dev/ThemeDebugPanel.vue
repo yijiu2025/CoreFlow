@@ -51,6 +51,12 @@
  * 直接的收益：`先黑后蓝` ≡ `先白后蓝` ≡ `直接点蓝`（三者底色完全一致），
  * 「蓝色」也就没有"白蓝 / 黑蓝"之分 —— 底色由蓝色自己决定。
  *
+ * === 🔴 但有一条**单向联动**：明暗 → 配色系别（2026-09-25 又改）===
+ * 用户诉求：「切换夜间模式时就切换黑色主题，再切换就切换回原来的这个主题」。
+ * 每套配色因此带一个 `tone` 声明（白系 / 黑系，见 `theme/tone.ts`），store 两侧
+ * 各记一个记忆槽：切明暗 → 换到目标系别的配色；切回来 → 恢复原色。
+ * 方向刻意只有一条：点颜色**不改**明暗（上面"正交"的那一半仍然成立）。
+ *
  * @author yijiu2025
  * @since 2026-09-23
  */
@@ -62,11 +68,13 @@ import {
   listColorsOf,
   listColorViews,
   THEME_DEVICES,
+  toneOfColor,
   type ThemeDevice
 } from '@/theme';
 import type { MauthThemeMeta } from '@/theme/types';
 import { pageFromPath, viewsForPage } from '@/theme/views/pages';
 import { MODE_LABELS } from '@/theme/mode';
+import { TONE_LABELS, type ThemeTone } from '@/theme/tone';
 
 const route = useRoute();
 const router = useRouter();
@@ -110,15 +118,16 @@ const page = computed(() => pageFromPath(route.path));
 const pageViews = computed(() => viewsForPage(page.value));
 
 /**
- * 面板上手动指定的设备（覆盖路由判定）
+ * 面板上手动指定的设备（覆盖页面判定）
  *
  * 用途：在**同一台电脑上**预览"这套配色在手机端长什么样"。不做这个覆盖的话，
  * 要看手机端配色就必须真的去开移动端路由，联调很低效。
- * 传 null 表示"跟随路由"（默认）。
+ * 传 null 表示"跟随页面"（默认）—— 页面渲染的是哪种形态就按哪端（2026-09-25 起
+ * 设备跟随实际渲染的视图而非路由，见 view/web/<page>/index.vue 的 renderedDevice）。
  */
 const deviceOverride = ref<ThemeDevice | null>(null);
 
-/** 当前生效设备：面板覆盖优先，否则用路由判定的 */
+/** 当前生效设备：面板覆盖优先，否则用页面判定的 */
 const device = computed(() => deviceOverride.value ?? themeStore.activeDevice);
 
 /** 当前生效页面 */
@@ -204,6 +213,16 @@ function swatchFg(item: MauthThemeMeta): string {
   return lum > 150 ? 'rgb(15 23 42)' : 'rgb(248 250 252)';
 }
 
+/**
+ * 色卡的**系别**（light=白系 / dark=黑系）
+ *
+ * 配色自 2026-09-25 起都带 `tone` 声明；清单里的颜色必在当前作用域登记过，
+ * 查不到（理论不可能）按白系兜底 —— 只影响标签文案，不影响任何渲染。
+ */
+function toneOfCard(id: string): ThemeTone {
+  return toneOfColor(id, device.value, activePage.value, activeViewId.value) ?? 'light';
+}
+
 /* ============================================================================
    当前状态
    ========================================================================== */
@@ -218,10 +237,22 @@ const currentColorName = computed(
   () => colors.value.find(c => c.id === activeThemeId.value)?.name ?? activeThemeId.value
 );
 
-/** 面板头部状态串 */
-const headerState = computed(
-  () => `${currentColorName.value} · ${MODE_LABELS[themeStore.mode]}`
-);
+/** 面板头部状态串（配色 · 系别 · 明暗，联调时一眼确认联动是否生效） */
+const headerState = computed(() => {
+  const parts = [
+    currentColorName.value,
+    TONE_LABELS[toneOfCard(activeThemeId.value)],
+    MODE_LABELS[themeStore.mode]
+  ];
+  // 用户选了某配色但当前作用域没有它（如 mobile 选 blue、web 无 blue 回落 white）时，
+  // 头部多挂一条「选择 → 生效」，避免误以为"切换没生效"或"颜色没保住"。
+  const selected = themeStore.themeId;
+  if (selected && selected !== activeThemeId.value) {
+    const selName = colors.value.find(c => c.id === selected)?.name ?? selected;
+    parts.push(`选择 ${selName} → 生效 ${currentColorName.value}`);
+  }
+  return parts.join(' · ');
+});
 
 /* ============================================================================
    动作（**只动当前页**，不跨页跳转）
@@ -321,7 +352,7 @@ function resetAll(): void {
             class="rounded px-1.5 py-0.5 text-[10px] transition-colors"
             :class="deviceOverride === null ? 'bg-sky-400/20 text-slate-100' : 'text-slate-500 hover:text-slate-300'"
             data-device="auto"
-            :title="`跟随路由（当前 ${DEVICE_LABELS[themeStore.activeDevice]}）`"
+            :title="`跟随页面（当前 ${DEVICE_LABELS[themeStore.activeDevice]}）`"
             @click="deviceOverride = null"
           >
             跟随
@@ -396,7 +427,8 @@ function resetAll(): void {
             "
             :data-color-pick="c.id"
             :data-color-active="activeThemeId === c.id ? c.id : undefined"
-            :title="`${c.name}（${c.id}）`"
+            :data-tone="toneOfCard(c.id)"
+            :title="`${c.name}（${c.id} · ${TONE_LABELS[toneOfCard(c.id)]}）`"
             @click="pickColor(c.id)"
           >
             <span
@@ -405,7 +437,9 @@ function resetAll(): void {
             >
               {{ c.name }}
             </span>
-            <span class="max-w-[42px] truncate text-[9px] leading-none text-slate-500">{{ c.id }}</span>
+            <span class="max-w-[42px] truncate text-[9px] leading-none text-slate-500">
+              {{ c.id }}·{{ TONE_LABELS[toneOfCard(c.id)] }}
+            </span>
           </button>
         </div>
         <p v-else class="text-[10px] leading-snug text-slate-500">
@@ -413,7 +447,7 @@ function resetAll(): void {
         </p>
       </div>
 
-      <!-- ③ 明暗（黑/白会自动带档，这里管其余颜色） -->
+      <!-- ③ 明暗（切明暗会**单向**联动配色系别：开夜间 → 换黑系，关 → 恢复原色；点颜色不改明暗） -->
       <div class="mt-2.5 flex items-center justify-between rounded-lg border border-slate-700/60 px-2 py-1">
         <span class="text-[11px] text-slate-400">明暗</span>
         <div class="flex items-center gap-0.5">

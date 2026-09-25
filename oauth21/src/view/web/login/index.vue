@@ -5,6 +5,8 @@ import { useAntiCache } from '@/composables/useAntiCache';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import AntiCacheDebugPanel from '@/components/common/AntiCacheDebugPanel.vue';
 import { postToParent } from '@/utils/parent';
+import { useThemeStore } from '@/stores/theme';
+import { BASE_VIEW_ID, type ThemeDevice } from '@/theme';
 
 const route = useRoute();
 
@@ -84,28 +86,59 @@ const onDebugPanelClose = () => {
 };
 
 // 动态路由/参数分发逻辑
-const activeComponent = computed(() => {
+// 🔴 形态判定**单一来源**：activeForm 既决定渲染哪个组件，也决定主题的设备作用域
+//    —— 两件事必须同源，否则会出现"渲染的是手机端、主题却是电脑端那套"。
+const activeForm = computed(() => {
   // 1. 如果指定为移动端，或者 isMobile 参数为 true（显式优先，不走自动识别）
   if (isMobile.value) {
-    return MobileLogin;
+    return 'mobile' as const;
   }
 
   // 2. mini 登录来源（iframe 嵌入弹窗场景）→ 紧凑版
   //    仅当显式 from=mini 或路径含 mini 时走 MiniLogin；
   //    styleType 的 vertical/horizontal/split 都是 StandardLogin 的布局变体，不应误判为 mini
   if (route.query.from === 'mini' || route.path.includes('/mini-login')) {
-    return MiniLogin;
+    return 'mini' as const;
   }
 
   // 3. 自动识别：视口宽度 < 768px 或真机 UA → 手机端登录页
   //    手机直接打开 /login 不再挤在桌面布局里
   if (isMobileDevice.value) {
-    return MobileLogin;
+    return 'mobile' as const;
   }
 
   // 4. 默认桌面版标准 SSO 登录
-  return StandardLogin;
+  return 'standard' as const;
 });
+
+const activeComponent = computed(() =>
+  activeForm.value === 'mobile' ? MobileLogin : activeForm.value === 'mini' ? MiniLogin : StandardLogin
+);
+
+/**
+ * 🔴 主题作用域跟随**实际渲染的形态**，而不是路由（2026-09-25 用户定夺）
+ *
+ * `/login` 是电脑端路由，但窄视口下本分发器渲染的是手机端容器 —— 此时 token
+ * 注入与调试面板的颜色清单都必须按 mobile 作用域走，否则：
+ *   • 手机端页面吃到电脑端那套配色（电脑端只有黑/白两种）；
+ *   • 调试面板切手机端主题"无效"（themeId 改了，渲染却按电脑端作用域回落）。
+ * mini 来源恒为 web：iframe 列宽造成的"窄"不是手机（见 activeForm 分支 2）。
+ */
+const themeStore = useThemeStore();
+const renderedDevice = computed<ThemeDevice>(() =>
+  activeForm.value === 'mobile' ? 'mobile' : 'web'
+);
+watch(
+  renderedDevice,
+  device => {
+    themeStore.setActiveDevice(device);
+    // 桌面形态没有容器来声明 page/view（那是 view/app/<page>/ 容器的职责），
+    // 这里把版式归位到基础版式，避免上一形态（如手机端 compact）残留影响电脑端作用域。
+    // 手机形态下随后挂载的容器会自己声明并覆盖，两方不冲突。
+    if (device === 'web') themeStore.setActivePageView('login', BASE_VIEW_ID);
+  },
+  { immediate: true }
+);
 
 // 是否发送 SSO 消息给父窗口
 const shouldSendSSOMessage = computed(() => {

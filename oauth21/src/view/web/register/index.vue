@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue';
+import { computed, defineAsyncComponent, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
+import { useThemeStore } from '@/stores/theme';
+import { BASE_VIEW_ID, type ThemeDevice } from '@/theme';
 
 const route = useRoute();
 
@@ -15,27 +17,57 @@ const MiniRegister = defineAsyncComponent(() => import('./MiniRegister.vue'));
 const MobileRegister = defineAsyncComponent(() => import('../../app/register/index.vue'));
 
 // 动态路由/参数分发逻辑
-const activeComponent = computed(() => {
+// 🔴 形态判定**单一来源**：activeForm 既决定渲染哪个组件，也决定主题的设备作用域
+//    —— 两件事必须同源，否则会出现"渲染的是手机端、主题却是电脑端那套"。
+const activeForm = computed(() => {
   // 1. 移动端（显式 isMobile=true 优先，不走自动识别）
   if (route.query.isMobile === 'true') {
-    return MobileRegister;
+    return 'mobile' as const;
   }
 
   // 2. mini 来源（iframe 嵌入弹窗场景）→ 紧凑版
   // 精确匹配：/mini-register 路径（避免 /administrators 等含 "mini" 字符串的路径误判）
   if (route.query.from === 'mini' || route.path.startsWith('/mini-register')) {
-    return MiniRegister;
+    return 'mini' as const;
   }
 
   // 3. 自动识别：视口宽度 < 768px 或真机 UA → 手机端注册页
   // 手机直接打开 /register 不再挤在桌面双栏布局里
   if (isMobileDevice.value) {
-    return MobileRegister;
+    return 'mobile' as const;
   }
 
   // 4. 默认桌面版标准注册
-  return StandardRegister;
+  return 'standard' as const;
 });
+
+const activeComponent = computed(() =>
+  activeForm.value === 'mobile' ? MobileRegister
+  : activeForm.value === 'mini' ? MiniRegister
+  : StandardRegister
+);
+
+/**
+ * 🔴 主题作用域跟随**实际渲染的形态**，而不是路由（2026-09-25 用户定夺）
+ *
+ * `/register` 是电脑端路由，但窄视口下本分发器渲染的是手机端容器 —— token 注入、
+ * 调试面板的颜色清单都必须按 mobile 作用域走，否则手机端页面吃到电脑端那套配色、
+ * 面板切手机端主题"无效"。mini 来源恒为 web：iframe 列宽造成的"窄"不是手机。
+ */
+const themeStore = useThemeStore();
+const renderedDevice = computed<ThemeDevice>(() =>
+  activeForm.value === 'mobile' ? 'mobile' : 'web'
+);
+watch(
+  renderedDevice,
+  device => {
+    themeStore.setActiveDevice(device);
+    // 桌面形态没有容器声明 page/view（那是 view/app/<page>/ 容器的职责），
+    // 归位到基础版式，避免上一形态残留；手机形态由随后挂载的容器覆盖。
+    if (device === 'web') themeStore.setActivePageView('register', BASE_VIEW_ID);
+  },
+  { immediate: true }
+);
 
 // 透传 OAuth 注册上下文给子组件
 // iframe 父应用跳注册页时通常带：appName/client_id/redirect_uri/scope/state，

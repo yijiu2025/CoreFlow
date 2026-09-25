@@ -1,10 +1,10 @@
 /**
  * 主题状态管理
  *
- * === 三个维度（正交） + 一个作用域 ===
+ * === 三个维度 + 一个作用域 ===
  *   mode（明暗）—— 用户可控：'system' | 'light' | 'dark'（见 @/theme/mode）
- *                   只决定 `<html>` 是否带 `dark` 类（基线 SCSS 切深色底），
- *                   **不再参与配色 token 的选档**（2026-09-25 取消 tokens 明暗两档）
+ *                   决定 `<html>` 是否带 `dark` 类（基线 SCSS 切深色底），
+ *                   并**驱动配色系别联动**（切夜间 → 换黑系配色，见下文「双侧记忆槽」）
  *   theme（配色）—— 部署方决定：一个**配色 id**，对应
  *                   `theme/themes/<包>/<设备>/<页面>/[<版式>/]colors/<配色>/`；
  *                   配色再反查出**主题包**（版式就在那个包下找）
@@ -14,8 +14,10 @@
  *               电脑端页面拿手机端的配色来渲染会得到一套尺寸/圆角都对不上的东西，
  *               所以按设备取值、设备不匹配就回落到**该范围的默认配色**。
  * 配色与版式各自独立成维度：换配色不影响版式，反之亦然。
- * ⚠️ mode（明暗）与配色**彻底正交**：配色自带完整底色，选黑就是黑、选蓝就是蓝，
- *    与当前明暗偏好无关 —— 所以不再有"配色数 × 2(明暗)"这个组合数。
+ * ⚠️ mode 与配色**各自独立**：一套配色自带完整底色，选黑就是黑、选蓝就是蓝，
+ *    不存在"配色数 × 2(明暗)"这个组合数（tokens 早已不分档）。
+ *    但两者之间有一条**单向联动**：切明暗会把配色换到匹配的**系别**（tone），
+ *    而点颜色**不改**明暗 —— 见下文「明暗 ↔ 配色系别联动」。
  *
  * === 为什么设备不放进 store、而是由调用方传 ===
  * 同一个 SPA 里可以既有 `/m/login`（移动端页面）又有 `/login`（电脑端分发器），
@@ -48,20 +50,32 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { MODE_CYCLE, normalizeMode, type ThemeMode } from '@/theme/mode';
 import { applyThemeLayers, type ThemeTokenOverrides } from '@/theme/runtime';
+import { type ThemeTone } from '@/theme/tone';
 import {
   BASE_VIEW_ID,
   DEFAULT_THEME_DEVICE,
   DEFAULT_THEME_PAGE,
   getDefaultThemeId,
   getThemeRecord,
+  isKnownTheme,
+  listColorIdsOfTone,
   listThemes,
   resolveThemeId,
+  toneOfAnyScope,
   type ThemeDevice
 } from '@/theme';
 
 /** localStorage 键名（沿用旧键，让老用户的手动选择可以平滑迁移） */
 const STORAGE_MODE = 'theme';
 const STORAGE_THEME = 'theme-id';
+/**
+ * 白系 / 黑系两侧**各自**记住的配色 id（明暗联动互切时用来恢复）
+ *
+ * 为什么需要两个键：切到夜间要能回到"白天那套"，切回白天要能回到"夜间那套"，
+ * 只存一个 themeId 的话，第二次切换就无从来处。见下方「双侧记忆槽」。
+ */
+const STORAGE_COLOR_LIGHT = 'theme-color-light';
+const STORAGE_COLOR_DARK = 'theme-color-dark';
 /** 旧版本存配色 id 的键，只读不写（迁移用） */
 const LEGACY_STORAGE_SKIN = 'theme-skin';
 /** 旧版本用于标记「用户手动选过明暗」的键，只读不写（迁移用） */
@@ -121,6 +135,16 @@ function readInitialTheme(): string {
 }
 
 /**
+ * 初始化一侧的记忆槽：未登记 / 非法一律返回 null
+ *
+ * 槽为空是**安全值**：联动会退而取"该版式下这个系别的第一套"（见 `syncColorToTone`），
+ * 所以这里不需要猜一个默认配色填进去 —— 猜错反而会让首次切换落到意料之外的色上。
+ */
+function readInitialSlot(key: string): string | null {
+  return resolveThemeId(safeGet(key));
+}
+
+/**
  * 读取 URL 上的主题意图
  *
  * `skin` 作为 `theme` 的兼容别名继续支持（已发出的历史链接不能失效）。
@@ -170,11 +194,16 @@ export const useThemeStore = defineStore('theme', () => {
   /**
    * 当前**生效设备** —— 决定把哪一套配色的 token 注入 `html`
    *
-   * 由路由在每次导航后告知（`setActiveDevice`），默认移动端（本应用的默认入口
-   * `/m/login` 是移动端；纯电脑端应用可把默认值改成 `'web'`）。
+   * 两个写入方，后者覆盖前者（2026-09-25 起，用户：「主题应跟随视图，而不是路由」）：
+   *   ① **路由基线**：`router/index.ts` 的 `setupThemeDeviceSync` 按路由 meta 告知
+   *      —— `/m/*` 恒为移动端，其余按电脑端；默认移动端（本应用的默认入口是 `/m/login`）。
+   *   ② **桌面分发器纠正**：`view/web/<page>/index.vue` 按**实际渲染的形态**告知
+   *      —— `/login` 在窄视口下渲染的是手机端容器，主题作用域就必须是 mobile，
+   *      否则"页面是手机端、token 却是电脑端那套"，调试面板切手机端主题也不生效。
    *
-   * ⚠️ 它不是"用户在用什么设备"这种全局状态，而是"**当前这条路由**属于哪种设备"。
-   *    做成响应式是为了让"从 /login 跳到 /m/login"时 token 能跟着重算。
+   * ⚠️ 它不是"用户在用什么设备"这种全局状态，而是"**当前渲染的视图**属于哪种设备"。
+   *    做成响应式是为了让"拉宽窗口把手机端组件换回桌面版"这类**无导航**的形态切换
+   *    也能让 token 跟着重算。
    */
   const activeDevice = ref<ThemeDevice>(DEFAULT_THEME_DEVICE);
 
@@ -218,6 +247,116 @@ export const useThemeStore = defineStore('theme', () => {
     return getThemeRecord(themeId.value, device, page, view);
   }
 
+  /* ==========================================================================
+     明暗 ↔ 配色系别联动（双侧记忆槽）
+     ==========================================================================
+     需求（用户 2026-09-25）：给每套配色标一个**系别**（tone），切夜间模式时
+     自动切到黑系配色，再切回来恢复**原来那套**；黑系起手则反之。
+
+     === 为什么需要"两个槽" ===
+     只记一个 `themeId` 的话，第二次切换就无从来处 —— 切到夜间时，
+     "白天用的是哪套"这个信息已经被覆盖掉了。所以两侧各记一个：
+       lightColor —— 浅色模式下用户用的那套
+       darkColor  —— 深色模式下用户用的那套
+     不变式：`槽[当前配色的系别] === 当前配色`，由 `rememberColor` 维护。
+
+     === 单向性（很重要）===
+     联动只允许 **明暗 → 配色**；手动点颜色**不改**明暗。用户明确要求
+     "黑白和蓝青是并列选项"，若点个白底就被强制切成浅色模式，那条诉求就废了。
+     因此这里没有任何改 `mode` 的代码，`setTheme` 也不碰 mode。
+
+     === 与"配色自带底色"的关系 ===
+     配色仍是一套扁平 token、自带底色（2026-09-25 定）。这里做的是**换一套配色**，
+     不是给同一套配色挑明暗档 —— 与上一条决策不冲突，也不该被理解成"两档回来了"。
+     ========================================================================== */
+
+  /** 浅色模式下用户用的那套配色 id（明暗切回浅色时恢复它） */
+  const lightColor = ref<string | null>(readInitialSlot(STORAGE_COLOR_LIGHT));
+  /** 深色模式下用户用的那套配色 id（明暗切到深色时恢复它） */
+  const darkColor = ref<string | null>(readInitialSlot(STORAGE_COLOR_DARK));
+
+  /**
+   * 维护不变式：把"当前这套配色"记进它自己系别的槽
+   *
+   * 系别用 `toneOfAnyScope`（不看设备/页面/版式）：槽属于"用户偏好"层面，
+   * 不该因为换了页面就判不出系别 —— 同一个 id 在各页的系别本就应当一致。
+   */
+  function rememberColor(id: string): void {
+    const tone = toneOfAnyScope(id);
+    if (tone === 'light') {
+      lightColor.value = id;
+      safeSet(STORAGE_COLOR_LIGHT, id);
+    } else if (tone === 'dark') {
+      darkColor.value = id;
+      safeSet(STORAGE_COLOR_DARK, id);
+    }
+  }
+
+  /**
+   * 把配色切到与目标明暗匹配的系别（**明暗 → 配色**，单向）
+   *
+   * 三种情况**什么都不做**，都是刻意的：
+   *   ① 当前配色已同系别 —— 最常见，用户手选的颜色被尊重（夜间下选白系也照用）；
+   *   ② 该版式下没有这个系别的配色 —— **绝不**跨系别回落，否则"开夜间"会拿到
+   *      一套浅底，看起来像联动没生效，比不切更难排查；
+   *   ③ 算出的目标与当前相同 —— 避免无谓触发下游 watch。
+   *
+   * ⚠️ 本函数**不落盘 `themeId`**：联动是"系统推导"，不是用户选择。
+   *    用户的真实选择由两侧的槽落盘保存（`rememberColor`），不会丢。
+   *    若在这里落盘，则"点开过一次带 mode=dark 的链接"就会把用户的配色偏好
+   *    永久改写 —— 与文件头「URL 与后端都不落盘」的理由同源。
+   */
+  function syncColorToTone(dark: boolean): void {
+    const target: ThemeTone = dark ? 'dark' : 'light';
+    const device = activeDevice.value;
+    const page = activePage.value;
+    const view = activeView.value;
+
+    // ① 已经同系别 —— 按**任意登记处**查系别，而不是只看当前作用域：
+    //    "当前作用域没有这套配色"（如 blue 只在手机端有）时，渲染层已经按同系别
+    //    回落（见 theme/index.ts 的 getThemeRecord），选择本身不该被这里改写。
+    if (toneOfAnyScope(themeId.value) === target) return;
+
+    // 优先取该系别槽里那套；它在当前版式下不存在时（如 rainbow 只有 login 有）弃用
+    const slot = dark ? darkColor.value : lightColor.value;
+    const fromSlot = slot && isKnownTheme(slot, device, page, view) ? slot : null;
+    // 槽不可用 → 该版式下这个系别的第一套（按 id 排序，不给黑白特权）
+    const next = fromSlot ?? listColorIdsOfTone(device, page, view, target)[0] ?? null;
+
+    // ② / ③
+    if (!next || next === themeId.value) return;
+
+    themeId.value = next;
+  }
+
+  /**
+   * 首屏对齐：打开页面时按**当前明暗**把配色校正到匹配的系别
+   *
+   * 场景：用户上次在浅色的 `blue` 下关掉页面，这次系统已是深色 —— 首屏就该是黑系。
+   *
+   * ⚠️ URL 显式给了 `?theme=` 时**不干预**：那是部署方/用户的明确意图
+   *    （部署方可能故意发一条"永远用蓝"的链接），链接必须压过联动。
+   *    与既有优先级「URL > 后端 > localStorage」同一口径。
+   *
+   * ⚠️ 只在**有落盘偏好**时对齐（theme-id / 旧键 / 任一记忆槽任一存在）：
+   *    全新用户什么都没选过时，"默认长什么样"必须保持既有事实
+   *    （该范围的默认配色），不能因为一次系别对齐被换到意料之外的色上。
+   */
+  const hasStoredColor =
+    safeGet(STORAGE_THEME) !== null ||
+    safeGet(LEGACY_STORAGE_SKIN) !== null ||
+    safeGet(STORAGE_COLOR_LIGHT) !== null ||
+    safeGet(STORAGE_COLOR_DARK) !== null;
+  if (!urlLockedTheme && hasStoredColor) syncColorToTone(isDark.value);
+
+  /**
+   * 明暗变化 → 联动切配色（唯一运行时入口）
+   *
+   * `mode` 从浅变深（或用 `system` 时系统入夜）配色就跟着换系别。首屏那一次
+   * 不走这里（watch 是"变化"语义、且需要 URL 豁免），已由上面的显式调用处理。
+   */
+  watch(isDark, dark => syncColorToTone(dark));
+
   /**
    * 主题包自带 token（按**当前生效作用域**解析；设备/页面/版式变化时由 watch 重算）
    *
@@ -234,15 +373,17 @@ export const useThemeStore = defineStore('theme', () => {
    * 统一注入入口：配色 token、外部覆写、生效范围任一变化都重算
    *
    * ⚠️ 注入的是 `html` 上的 inline style，而 `html` 是**整份文档唯一**的 ——
-   * 所以此处只能用**一个**设备的 token。取 `activeDevice`（由当前路由决定，
-   * 见下方 `setActiveDevice`）：`/m/*` 用移动端配色，其余用电脑端配色。
+   * 所以此处只能用**一个**设备的 token。取 `activeDevice`（路由基线 + 桌面分发器
+   * 按实际渲染形态纠正，见上方 `setActiveDevice`）：渲染的是手机端视图就用移动端配色，
+   * 是电脑端视图就用电脑端配色。
    *
-   * 这在实践中不会出问题：一个页面要么是移动端要么是电脑端，切换页面时会重算
-   * （`activeDevice` 变化本身就是这个 watch 的依赖）。真正需要避免的是"两端配色
-   * 同时生效"——那在单文档模型下不可能，也不是本机制要解决的问题。
+   * 这在实践中不会出问题：一个页面要么是移动端要么是电脑端，切换形态（含拉宽窗口这类
+   * 无导航的切换）时会重算（`activeDevice` 变化本身就是这个 watch 的依赖）。
+   * 真正需要避免的是"两端配色同时生效"——那在单文档模型下不可能，也不是本机制要解决的问题。
    *
-   * 之所以不在这里重新跑视口判定：那是路由分发的职责（`utils/device.ts`），
-   * 重复实现会出现"路由说电脑版、注入说移动端"的分裂。由路由把结论告诉 store。
+   * 之所以不在这里重新跑视口判定：那是分发器的职责（`utils/device.ts` +
+   * `useDeviceDetect`），重复实现会出现"分发器说电脑版、注入说移动端"的分裂。
+   * 由**渲染方**把结论告诉 store —— 谁渲染，主题就跟谁。
    *
    * ⚠️ tokens 已是一组扁平值、不再分明暗档（2026-09-25 改），所以**不再依赖 `isDark`**：
    * 配色外观由"选了哪套颜色"完全决定。`isDark` 只负责给 `<html>` 挂/摘 `dark` 类
@@ -339,6 +480,9 @@ export const useThemeStore = defineStore('theme', () => {
 
       themeTokens.value = record.tokens ?? null;
       void loadThemeStyle(id, device, page, view);
+      // 维护双侧记忆槽的不变式（`槽[当前配色的系别] === 当前配色`）。
+      // `immediate` 那一跑同时完成了"首次把初始配色归位到对应槽"。
+      rememberColor(id);
     },
     { immediate: true }
   );
@@ -421,6 +565,9 @@ export const useThemeStore = defineStore('theme', () => {
     if (!resolved) return false;
     themeId.value = resolved;
     safeSet(STORAGE_THEME, resolved);
+    // 用户显式选择 → 立刻记进对应系别的槽（不依赖 watch 的异步 flush，
+    // 让"选完就落盘"这件事在同步语义上成立）
+    rememberColor(resolved);
     return true;
   }
 
@@ -487,6 +634,8 @@ export const useThemeStore = defineStore('theme', () => {
     systemDark,
     themeTokens,
     externalTokens,
+    lightColor,
+    darkColor,
     themeRecordFor,
     setActiveDevice,
     setActivePageView,
