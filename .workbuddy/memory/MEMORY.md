@@ -92,6 +92,8 @@ Redis v5（驼峰命令/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`res
 - 🔴 **禁止在 Bash 工具里 `git rm` src/ 下任何路径**：执行者是 **tsbx 沙箱执行层本身**，会**递归清空整个 src/**。
   删 src 文件一律 `rm <path> && git add -A`；恢复 `git checkout HEAD -- src`。
 - **大块改动立刻检查点提交**；**毒丸实验**验测试有效性（覆写 `throw new Error('__QUARANTINE__')`，变红=真加载）。
+- **git 命令已放行**（2026-09-25，提交 c158a9e）：`.codebuddy/settings.local.json` 的 `permissions.allow: ["Bash(git:*)"]` → git add/commit/push **不再弹窗确认**；要放行其他命令同格式加 `Bash(npm:*)` 等。注意 `.codebuddy/` 在 gitignore 但该文件被强制跟踪过，改动照样进提交。
+- **沙箱命令规则**（双层）：`~/.workbuddy/settings.json` 的 `sandbox.orderedRules.command.rules` 已加 `{id:"command-user-git", prefix:["git"], action:"allow", source:"user"}`（`customized:true`）。schema = `{id 唯一, prefix 字符串数组, action: allow|ask, source, reason?}`（app.asar `migrateCommandRules` 实锤）；匹配在 sandbox-cli 二进制里。**改此文件前必须备份**（解析器对坏配置直接 throw）；权限弹窗的「总是允许」按钮会自己写正确格式，是最稳的扩展方式。
 - 🔴 **视觉回归先稳定化、再归因**（§10.13）：不禁过渡/动画、不等 `fonts.ready` → 同代码连拍可报 **17.8% 假差异**；冻结样式须**加载后** `addStyleTag` 并**断言生效**；
   比对前 `md5sum` 验两侧同一状态；「噪声下限 0」只对纯色场景成立（§11.15）。
 - ⚠️ 同一文件**多个 Edit 放同一条消息会静默丢失** → 多改**串行**并 grep 复核。⚠️ 块注释里别让星号与斜杠相邻（写 glob 通配会**提前闭合注释**：TS1131 报错行≠根因行）。
