@@ -78,23 +78,27 @@ themes/<包>/<设备>/<页面>/<版式>/colors/<配色>/        ← 变体版式
 - **版式跟随「主题包 × 设备」**：换一套设计 = 换一个包；手机端与电脑端各看各的。
   机制与红线见下文「版式」一节与 `views/registry.ts` 的文件头。
 
-## 电脑端现状（2026-09-24）
+## 电脑端现状（2026-09-25）
 
-电脑端已建好**目录骨架**（`themes/default/web/`：三个页面的基础版式 + 各页 `colors/{black,white}/`），
-但核心组件（`StandardLogin.vue` 859 行、`MiniLogin.vue` 586 行、`StandardRegister.vue` 710 行、
-`MiniRegister.vue` 695 行）目前仍是**业务与 UI 揉在同一个文件里**的单体，尚未拆成
-「业务容器 + 版式」。因此：
+电脑端已建好**目录骨架**（`themes/default/standard/`、`themes/default/mini/`：各页面的基础版式 +
+各页 `colors/{black,white}/`）。核心组件已拆成「业务容器 + 版式」：
+
+| 页面 | 业务容器（`view/web/<page>/`） | 版式（`themes/default/<设备>/<page>/`） |
+| --- | --- | --- |
+| login | `StandardLogin.vue` / `MiniLogin.vue`（已拆） | `standard/login/index.vue` / `mini/login/index.vue`（已拆） |
+| register | `StandardRegister.vue` / `MiniRegister.vue`（已拆） | `standard/register/index.vue` / `mini/register/index.vue`（已拆） |
+| forgot-password | `StandardForgot.vue` / `MiniForgot.vue`（**未拆**） | `standard/forgot-password/index.vue`（**占位骨架**） |
 
 | 能力 | 手机端 | 电脑端（standard / mini） |
 | --- | --- | --- |
-| 配色注册 / 列表 / `?theme=` 解析 | ✅ | ✅（`black` / `white`，standard 三页 + mini login 各一套） |
-| 配色**实际生效**（token 注入 → 像素） | ✅ | ✅（2026-09-25 起 login 三设备打通，body/canvas 已 token 化） |
-| 版式切换（`?view=`） | ✅ | ✅（login 容器 + 版式已拆分；register/forgot 后续跟进） |
+| 配色注册 / 列表 / `?theme=` 解析 | ✅ | ✅（`black` / `white`，standard 三页 + mini login/register 各一套） |
+| 配色**实际生效**（token 注入 → 像素） | ✅ | ✅（login + register 三设备打通，body/canvas 已 token 化） |
+| 版式切换（`?view=`） | ✅ | ✅（login + register 容器 + 版式已拆分；forgot 后续跟进） |
 | 调试面板按设备分区 | ✅ | ✅（设备区含 手机端 / 桌面端 / 紧凑版 三档） |
 
-`standard/` 下的 `login/index.vue` 已是**真正的版式**（2026-09-25 容器 + 版式拆分落地，
-业务在 `view/web/login/StandardLogin.vue` / `MiniLogin.vue` 容器里，UI 在此渲染 ctx）。
-register / forgot-password 仍是占位骨架，容器重构落地后用真正的版式替换，机制侧不需要任何改动。
+`standard/` 与 `mini/` 下的 login / register 已是**真正的版式**（2026-09-25 容器 + 版式拆分落地，
+业务在 `view/web/<page>/Standard*.vue` / `Mini*.vue` 容器里，UI 在此渲染 ctx）。
+forgot-password 仍是占位骨架，容器重构落地后用真正的版式替换，机制侧不需要任何改动。
 
 ## 目录名的口径（真源：`index.ts` 的 `buildRegistry()`）
 
@@ -133,10 +137,14 @@ register / forgot-password 仍是占位骨架，容器重构落地后用真正�
 import type { MauthThemeColor } from '@/theme/types';
 
 export default {
-  meta: { id: 'brand', name: '品牌红', description: '一句话说明' },
+  meta: { id: 'brand', name: '品牌红', description: '一句话说明', preview: { primary: '#b91c1c', accent: '#dc2626' }, author: 'oauth21' },
+  tone: 'light',
   tokens: {
-    light: { '--mauth-primary': '#b91c1c', '--mauth-primary-fg': '#fff', '--mauth-accent': '#dc2626' },
-    dark:  { '--mauth-primary': '#b91c1c', '--mauth-primary-fg': '#fff', '--mauth-accent': '#dc2626' }
+    // 🔴 tokens 是**扁平值**（Record<string,string>），无 light/dark 两档（2026-09-25 取消明暗档）。
+    // 配色自带底色：选这套配色就是这套底，与系统明暗偏好无关。
+    '--mauth-primary': '#b91c1c',
+    '--mauth-primary-fg': '#fff',
+    '--mauth-accent': '#dc2626'
   }
 } satisfies MauthThemeColor;
 ```
