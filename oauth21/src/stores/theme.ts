@@ -68,14 +68,6 @@ import {
 /** localStorage 键名（沿用旧键，让老用户的手动选择可以平滑迁移） */
 const STORAGE_MODE = 'theme';
 const STORAGE_THEME = 'theme-id';
-/**
- * 白系 / 黑系两侧**各自**记住的配色 id（明暗联动互切时用来恢复）
- *
- * 为什么需要两个键：切到夜间要能回到"白天那套"，切回白天要能回到"夜间那套"，
- * 只存一个 themeId 的话，第二次切换就无从来处。见下方「双侧记忆槽」。
- */
-const STORAGE_COLOR_LIGHT = 'theme-color-light';
-const STORAGE_COLOR_DARK = 'theme-color-dark';
 /** 旧版本存配色 id 的键，只读不写（迁移用） */
 const LEGACY_STORAGE_SKIN = 'theme-skin';
 /** 旧版本用于标记「用户手动选过明暗」的键，只读不写（迁移用） */
@@ -132,16 +124,6 @@ function readInitialTheme(): string {
     getDefaultThemeId(DEFAULT_THEME_DEVICE) ??
     DEFAULT_THEME_DEVICE
   );
-}
-
-/**
- * 初始化一侧的记忆槽：未登记 / 非法一律返回 null
- *
- * 槽为空是**安全值**：联动会退而取"该版式下这个系别的第一套"（见 `syncColorToTone`），
- * 所以这里不需要猜一个默认配色填进去 —— 猜错反而会让首次切换落到意料之外的色上。
- */
-function readInitialSlot(key: string): string | null {
-  return resolveThemeId(safeGet(key));
 }
 
 /**
@@ -260,18 +242,22 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   /* ==========================================================================
-     明暗 ≡ 配色系别（双侧记忆槽）
+     明暗 ≡ 配色系别（会话级记忆槽）
      ==========================================================================
      需求（用户 2026-09-25）：「明暗切换就是切换白色和黑色这个色系，不是另一套规则」。
      每套配色标一个**系别**（tone），明暗即系别：暗=黑系、明=白系、跟随系统=按系统偏好。
-     切「暗」→ 落到黑系配色、切「明」→ 落到白系配色，各自记住上次选的那套。
+     切「暗」→ 落到黑系配色、切「明」→ 落到白系配色。
 
      === 为什么需要"两个槽" ===
      只记一个 `themeId` 的话，切系别就无从来处 —— 切到黑系时，"白系用的是哪套"
      这个信息已经被覆盖掉了。所以两侧各记一个：
-       lightColor —— 白系下用户用的那套（默认 white）
-       darkColor  —— 黑系下用户用的那套（默认 black）
-     不变式：`槽[当前配色的系别] === 当前配色`，由 `rememberColor` 维护。
+       lightColor —— 切暗前正在用的白系配色（下次切明恢复它）
+       darkColor  —— 切明前正在用的黑系配色（下次切暗恢复它）
+
+     === 🔴 槽是「会话级 + 只记切走前」===
+     用户（2026-09-25）：「黑色主题点明 → 白（不是蓝）；只有用蓝色时切黑再切回才保持蓝」。
+     因此槽**不持久化**、**不在点色卡时写**，只在 `syncColorToTone` 这个「明暗切换」动作里
+     记下「切走前正在用的那套」。这样"历史选过 blue"不会残留，黑色主题点明落到标配 white。
 
      === 一致性（很重要）===
      明暗与配色**是同一个东西**，必须永远一致：`setTheme`（点色卡）同步把 `mode`
@@ -283,27 +269,16 @@ export const useThemeStore = defineStore('theme', () => {
      不是给同一套配色挑明暗档 —— 明暗档不存在，"明暗"就是"黑系/白系"。
      ========================================================================== */
 
-  /** 浅色模式下用户用的那套配色 id（明暗切回浅色时恢复它） */
-  const lightColor = ref<string | null>(readInitialSlot(STORAGE_COLOR_LIGHT));
-  /** 深色模式下用户用的那套配色 id（明暗切到深色时恢复它） */
-  const darkColor = ref<string | null>(readInitialSlot(STORAGE_COLOR_DARK));
-
   /**
-   * 维护不变式：把"当前这套配色"记进它自己系别的槽
+   * 白系 / 黑系两侧的**会话级**记忆槽：只记「切走前正在用的那套」，不持久化。
    *
-   * 系别用 `toneOfAnyScope`（不看设备/页面/版式）：槽属于"用户偏好"层面，
-   * 不该因为换了页面就判不出系别 —— 同一个 id 在各页的系别本就应当一致。
+   * 用户（2026-09-25）定：「黑色主题点『明』应该切到白色而不是蓝色；只有在用蓝色
+   * 主题时切黑再切回才继续保持蓝色」。所以槽**不能**是「历史选过哪套」的持久化记录
+   * （否则历史选过 blue 后，任何时候切明都会误恢复 blue），而必须只在「明暗切换」
+   * 这个动作里记下「切走前的那一套」——会话内存、初始为空、点色卡不写槽。
    */
-  function rememberColor(id: string): void {
-    const tone = toneOfAnyScope(id);
-    if (tone === 'light') {
-      lightColor.value = id;
-      safeSet(STORAGE_COLOR_LIGHT, id);
-    } else if (tone === 'dark') {
-      darkColor.value = id;
-      safeSet(STORAGE_COLOR_DARK, id);
-    }
-  }
+  const lightColor = ref<string | null>(null);
+  const darkColor = ref<string | null>(null);
 
   /**
    * 把配色切到与目标明暗匹配的系别（**明暗 → 配色**，单向）
@@ -315,9 +290,8 @@ export const useThemeStore = defineStore('theme', () => {
    *   ③ 算出的目标与当前相同 —— 避免无谓触发下游 watch。
    *
    * ⚠️ 本函数**不落盘 `themeId`**：联动是"系统推导"，不是用户选择。
-   *    用户的真实选择由两侧的槽落盘保存（`rememberColor`），不会丢。
-   *    若在这里落盘，则"点开过一次带 mode=dark 的链接"就会把用户的配色偏好
-   *    永久改写 —— 与文件头「URL 与后端都不落盘」的理由同源。
+   *    槽也只记「切走前」的会话级值（见上方「会话级记忆槽」），不落盘 ——
+   *    点开一次带 mode=dark 的链接不会永久改写用户的配色偏好。
    */
   function syncColorToTone(dark: boolean): void {
     const target: ThemeTone = dark ? 'dark' : 'light';
@@ -329,6 +303,14 @@ export const useThemeStore = defineStore('theme', () => {
     //    "当前作用域没有这套配色"（如 blue 只在手机端有）时，渲染层已经按同系别
     //    回落（见 theme/index.ts 的 getThemeRecord），选择本身不该被这里改写。
     if (toneOfAnyScope(themeId.value) === target) return;
+
+    // 记住「切走前」当前系别正在用的那套：从白系切暗 → 记下白系配色（切回明时恢复它），
+    // 从黑系切明 → 记下黑系配色。⚠️ 只有「明暗切换」这个动作才写槽；点色卡（setTheme）
+    // 不写 —— 于是「黑色主题点明」时若没有刚从白系切过来的上下文，槽为空 → 落到标配 white，
+    // 只有「当前在用蓝色、切黑再切回」才会恢复 blue（用户 2026-09-25 定）。
+    const curTone = toneOfAnyScope(themeId.value);
+    if (curTone === 'light') lightColor.value = themeId.value;
+    else if (curTone === 'dark') darkColor.value = themeId.value;
 
     // 优先取该系别槽里那套；它在当前版式下不存在时（如 rainbow 只有 login 有）弃用
     const slot = dark ? darkColor.value : lightColor.value;
@@ -507,9 +489,6 @@ export const useThemeStore = defineStore('theme', () => {
 
       themeTokens.value = record.tokens ?? null;
       void loadThemeStyle(id, device, page, view);
-      // 维护双侧记忆槽的不变式（`槽[当前配色的系别] === 当前配色`）。
-      // `immediate` 那一跑同时完成了"首次把初始配色归位到对应槽"。
-      rememberColor(id);
     },
     { immediate: true }
   );
@@ -606,13 +585,14 @@ export const useThemeStore = defineStore('theme', () => {
     if (!resolved) return false;
     themeId.value = resolved;
     safeSet(STORAGE_THEME, resolved);
-    // 用户显式选择 → 立刻记进对应系别的槽（不依赖 watch 的异步 flush，
-    // 让"选完就落盘"这件事在同步语义上成立）
-    rememberColor(resolved);
     // 明暗 = 色系：点色卡同步把「明暗意图」设为该配色的系别（点黑卡→暗、点白卡→明、
     // 点红卡（黑系）→暗、点蓝卡（白系）→明），并脱离「跟随系统」—— 用户显式选了
     // 一套配色，即显式定下了系别。这样明暗与配色永远一致，不会出现"明暗是明、配色却是黑系"的撕裂。
     const tone = toneOfAnyScope(resolved);
+    // 点色卡 = 显式选配色，**打断「切走前」记忆链**：清空对侧槽，让下次明暗切换落到标配。
+    // 否则「白色/青色下手动点黑卡 → 点明」会误恢复历史白系残留（如 cyan）而非 white。
+    if (tone === 'dark') lightColor.value = null;
+    else if (tone === 'light') darkColor.value = null;
     if (tone) {
       const next: ThemeMode = tone === 'dark' ? 'dark' : 'light';
       if (mode.value !== next) {
