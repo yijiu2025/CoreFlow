@@ -94,6 +94,7 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 
 - ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**。P2 session.js 拆分评估**未开始**。
 - `firewall` 前端无类型检查（121 错）；CI 无前端作业——均待定夺。
-- ⚠️ `oauth21` eslint 存量 39 错（jest 全局 `no-undef` 38 + `AntiCacheDebugPanel.vue` 1）——待定夺。
+- ✅ `oauth21` eslint 存量已清零（`no-undef` 已在 eslint.config.js 置 off 由 TS 处理；`AntiCacheDebugPanel.vue` 的
+  `preserve-caught-error` 已补 `{ cause: err }` 修复）。
 - ✅ oauth21 三页（login/register/forgot-password）的 **standard/mini 容器+版式拆分已全部完成**（v2.21.0–v2.23.0），
   设备三值化（mobile/standard/mini）+ mini 独立设备目录均已落地。
