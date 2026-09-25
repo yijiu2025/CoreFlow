@@ -167,7 +167,7 @@ onUnmounted(() => {
     <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl animate-pulse delay-700"></div>
 
     <!-- max-w 限宽 + w-full：窄于 856px 的窗口跟随视口收缩，不再溢出被裁切 -->
-    <div class="relative w-full max-w-[856px] mx-auto min-h-[480px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[32px] overflow-hidden flex shadow-2xl border border-white/40 dark:border-slate-800">
+    <div class="relative w-full max-w-[856px] mx-auto min-h-[480px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[10px] overflow-hidden flex shadow-2xl border border-white/40 dark:border-slate-800">
 <!-- 左侧面板：登录/授权表达面板 -->
       <div class="flex-1 p-10 flex flex-col justify-between relative">
 <!-- OAuth 授权确认视图 -->
