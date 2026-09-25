@@ -254,7 +254,7 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
-:global(.dark) .consent-viewport {
+.dark .consent-viewport {
   background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #020617 100%);
 }
 
@@ -270,7 +270,7 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
-:global(.dark) .consent-card {
+.dark .consent-card {
   background: #1e293b;
   border-color: #334155;
 }
@@ -309,7 +309,7 @@ onMounted(() => {
   letter-spacing: -0.01em;
 }
 
-:global(.dark) .consent-title {
+.dark .consent-title {
   color: #f1f5f9;
 }
 
@@ -364,7 +364,7 @@ onMounted(() => {
   margin: 0 0 8px;
 }
 
-:global(.dark) .state-title {
+.dark .state-title {
   color: #f1f5f9;
 }
 

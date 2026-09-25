@@ -430,7 +430,7 @@ watch(showQR, val => {
   transition: all 0.2s ease;
 }
 
-:global(.dark) .mlogin-field {
+.dark .mlogin-field {
   background: #0f172a;
   border-color: #1e293b;
 }
@@ -441,7 +441,7 @@ watch(showQR, val => {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-:global(.dark) .mlogin-field:focus-within {
+.dark .mlogin-field:focus-within {
   background: #0f172a;
 }
 
@@ -450,7 +450,7 @@ watch(showQR, val => {
   background: #fef2f2;
 }
 
-:global(.dark) .mlogin-field.is-error {
+.dark .mlogin-field.is-error {
   background: rgba(239, 68, 68, 0.1);
 }
 
@@ -470,7 +470,7 @@ watch(showQR, val => {
   min-width: 0;
 }
 
-:global(.dark) .mlogin-input {
+.dark .mlogin-input {
   color: #f1f5f9;
 }
 
@@ -497,7 +497,7 @@ watch(showQR, val => {
   color: #1d4ed8;
 }
 
-:global(.dark) .mlogin-code-btn {
+.dark .mlogin-code-btn {
   border-left-color: #334155;
 }
 
@@ -565,7 +565,7 @@ watch(showQR, val => {
   transition: all 0.2s;
 }
 
-:global(.dark) .mlogin-checkbox {
+.dark .mlogin-checkbox {
   border-color: #475569;
 }
 
