@@ -90,6 +90,8 @@ const { isEnabled: recaptchaEnabled, load: loadCaptcha, getToken: getCaptchaToke
 const { error: showError, success: showSuccess } = useMessage();
 onMounted(() => {
   if (recaptchaEnabled) loadCaptcha();
+  // v2.20.1：注册页挂载后预热 login dispatcher chunk，避免「立即登录」切换闪屏
+  void import('@/view/web/login/index.vue').catch(() => {});
 });
 onUnmounted(() => dispose());
 
@@ -224,12 +226,14 @@ const handleNextStep = async (target: 2 | 3) => {
 };
 
 // 去登录页（透传 OAuth 上下文，登录后才能回到授权页）
+// v2.20.1: import() 目标 dispatcher chunk 与 push 并行，避开切换闪屏（见 App.vue 同名注释）
 const goLogin = () => {
   const query: Record<string, string> = {};
   for (const key of ['appName', 'client_id', 'redirect_uri', 'scope', 'state', 'lang', 'redirect']) {
     const v = route.query[key];
     if (typeof v === 'string') query[key] = v;
   }
+  void import('@/view/web/login/index.vue').catch(() => {});
   router.push({ path: '/m/login', query });
 };
 

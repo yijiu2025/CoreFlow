@@ -49,7 +49,38 @@ onMounted(async () => {
     <div
       class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-300 font-sans selection:bg-primary/30"
     >
-      <router-view />
+      <!--
+        路由级淡入淡出过渡（v2.20.1 修复手机端「立即注册/立即登录」切换闪屏）
+
+        之前 `<router-view />` 裸渲染：路由切换瞬间旧组件 unmount + 新组件异步 chunk
+        还没下载好 → body 背景透出（black 配色下闪黑），用户感知为「闪一下屏幕」。
+        给 router-view 套 Transition，配合各 dispatcher 的预取（goRegister/goLogin
+        在 push 前先 import 目标 dispatcher chunk），切换就是连贯淡入淡出。
+
+        不在 view/web/login/index.vue 等分发器内层用 <Transition mode="out-in"> 包
+        <component :is>：分发器自己要做窄/宽屏异步组件切换，out-in 与异步组件组合
+        会导致 leave 后新组件不挂载（白屏）—— 已有注释保护这条不变量。
+      -->
+      <router-view v-slot="{ Component }">
+        <!--
+          默认模式（同时 enter/leave）而非 out-in：
+            leave 阶段旧组件淡出，同时 enter 阶段新组件淡入 —— 两层透明度叠加，
+            wrapper 始终可见，消除「leave 完成后 enter 起始的 ~40ms 黑屏」。
+            out-in 模式下 chunk 加载有延迟时会出现一个全黑窗口，看着像「闪」。
+            用默认模式后即使 enter 阶段被异步组件 chunk 加载阻塞，leave 也已经在进行，
+            视觉上旧组件淡出后立刻能看到新组件淡入（即使 enter 起点稍晚）。
+            dispatcher 子组件已 prefetch（见 view/web/<page>/index.vue 的 onMounted），
+            实际 chunk 加载延迟 ≈ 0，正常路径看不到任何空白。
+          .route-stage 用 absolute 让 leave/enter 重叠渲染（旧组件脱离文档流，
+            新组件覆盖在原位），避免「默认模式」下两个组件在文档流里堆叠导致
+            wrapper 高度跳动 / 滚动条突现。
+        -->
+        <Transition name="page">
+          <div class="route-stage" :key="$route.fullPath">
+            <component :is="Component" />
+          </div>
+        </Transition>
+      </router-view>
     </div>
     <!--
       与上面的 min-h-screen 容器**平级**：避免被它的布局与层叠上下文影响（面板是 fixed 浮层）。
@@ -64,5 +95,37 @@ onMounted(async () => {
 body {
   margin: 0;
   padding: 0;
+}
+
+/* 路由级淡入淡出（v2.20.1）
+ * - leave 180ms / enter 220ms（旧出慢、新进快 —— 让人感觉响应即时）
+ * - 不用 out-in：用默认模式让 leave/enter 重叠，避免 chunk 加载延迟时出现黑屏窗口
+ * - 6px 上移（新组件从下方滑入）：暗示「内容轮换」但不抢眼
+ * - ease-out（enter 更急促，响应快）/ ease-in（leave 更轻柔，给旧组件收尾空间）
+ *
+ * .route-stage 让 leave 期间旧组件绝对定位脱离文档流，与新组件重叠渲染 —
+ * — 不影响父容器 .min-h-screen 的高度，也不会让两个组件堆叠导致页面跳动。
+ * route-stage 的父容器（router-view）已 min-h-screen 全屏，子元素 absolute inset:0
+ * 自然撑满到父级尺寸。
+ */
+.route-stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+}
+
+.page-enter-active {
+  transition: opacity 0.22s ease-out, transform 0.22s ease-out;
+}
+.page-leave-active {
+  transition: opacity 0.18s ease-in, transform 0.18s ease-in;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

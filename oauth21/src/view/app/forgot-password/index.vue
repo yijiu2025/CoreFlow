@@ -32,7 +32,7 @@
  *
  * @author yijiu2025
  */
-import { computed, markRaw, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, markRaw, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useForm } from 'vee-validate';
@@ -171,6 +171,11 @@ const [code, codeProps] = defineField('code');
 const [password, passwordProps] = defineField('password');
 const [confirmPassword, confirmPasswordProps] = defineField('confirmPassword');
 
+// v2.20.1：忘记密码页挂载后预热 login dispatcher chunk，避免「回到登录」切换闪屏
+onMounted(() => {
+  void import('@/view/web/login/index.vue').catch(() => {});
+});
+
 // 密码强度（与注册页同一 composable，颜色/文案走 i18n）
 const pwdStrength = usePasswordStrength(() => values.password || '', key => String(t(key)));
 
@@ -257,13 +262,15 @@ const submitReset = async () => {
   }
 };
 
-/** 去登录页（透传 OAuth 上下文，登录后才能回到授权页；token 不外传） */
+/** 去登录页（透传 OAuth 上下文，登录后才能回到授权页；token 不外传）
+ *  v2.20.1: import() 目标 dispatcher chunk 与 push 并行，避开切换闪屏（见 App.vue 同名注释） */
 const goLogin = () => {
   const query: Record<string, string> = {};
   for (const key of ['appName', 'client_id', 'redirect_uri', 'scope', 'state', 'lang', 'redirect']) {
     const v = route.query[key];
     if (typeof v === 'string') query[key] = v;
   }
+  void import('@/view/web/login/index.vue').catch(() => {});
   router.push({ path: '/m/login', query });
 };
 

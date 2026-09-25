@@ -36,7 +36,7 @@
  *
  * @author yijiu2025
  */
-import { computed, markRaw, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, markRaw, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
@@ -242,12 +242,19 @@ const headerTitle = computed(() => {
   return t('login.welcome');
 });
 
+// 「立即注册 / 忘记密码」跳转（v2.20.1）
+//
+// 切换前先 import() 目标 dispatcher chunk，与 router.push 并行下载 ——
+// 路由切换瞬间旧组件 unmount 完成后，新组件 chunk 已在浏览器 cache，立刻挂载。
+// 配合 App.vue 的路由级 <Transition>，切换就是连贯的淡入淡出，不再闪屏。
+// 不 await：用户点击到看到反馈保持即时；download 在浏览器后台跑。
 const goRegister = () => {
   const query: Record<string, string> = {};
   for (const key of ['appName', 'client_id', 'redirect_uri', 'scope', 'state', 'lang']) {
     const v = route.query[key];
     if (typeof v === 'string') query[key] = v;
   }
+  void import('@/view/web/register/index.vue').catch(() => { /* 预取失败不阻塞导航 */ });
   router.push({ path: '/m/register', query });
 };
 
@@ -259,6 +266,7 @@ const goForgot = () => {
   }
   // 直连移动端路由：`/m/forgot-password` 现在挂的是分发器，窄屏渲染手机端、
   // 宽屏渲染桌面卡片（URL 不被视口改写，见 router/routes.ts）。不在这里做设备判断。
+  void import('@/view/web/forgot-password/index.vue').catch(() => {});
   router.push({ path: '/m/forgot-password', query });
 };
 
@@ -343,6 +351,18 @@ watch(
   },
   { immediate: true }
 );
+
+/**
+ * v2.20.1：登录页挂载后预热另外两个 dispatcher 的 chunk
+ *
+ * 用户点击「立即注册 / 忘记密码」时，目标 dispatcher 已在浏览器 cache，
+ * 配合 App.vue 的路由级 <Transition>，切换就是连贯的淡入淡出，零延迟。
+ * 失败不影响功能（goRegister/goForgot 自己也会再 import() 一次兜底）。
+ */
+onMounted(() => {
+  void import('@/view/web/register/index.vue').catch(() => {});
+  void import('@/view/web/forgot-password/index.vue').catch(() => {});
+});
 
 /** 契约里字段绑定的**内部构造形态**：值与错误都是 ref，交给 reactive 自动解包成契约里的标量 */
 interface FieldSource {
