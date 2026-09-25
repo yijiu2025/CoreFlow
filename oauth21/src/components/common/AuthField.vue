@@ -58,7 +58,7 @@ defineProps<{
   border-radius: 10px;
   transition: all 0.2s;
 }
-:global(.dark) .auth-field-row {
+.dark .auth-field-row {
   background: #0f172a;
   border-color: #1e293b;
 }
@@ -67,7 +67,7 @@ defineProps<{
   border-color: #4f46e5;
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
-:global(.dark) .auth-field-row:focus-within {
+.dark .auth-field-row:focus-within {
   background: #0f172a;
   border-color: #818cf8;
 }
@@ -77,7 +77,7 @@ defineProps<{
   border-color: #ef4444;
   background: #fef2f2;
 }
-:global(.dark) .auth-field-row.is-error {
+.dark .auth-field-row.is-error {
   background: rgba(239, 68, 68, 0.1);
 }
 .auth-field-icon {
@@ -87,7 +87,7 @@ defineProps<{
   color: #94a3b8;
   flex-shrink: 0;
 }
-:global(.dark) .auth-field-icon { color: #64748b; }
+.dark .auth-field-icon { color: #64748b; }
 .auth-field-input-wrap {
   flex: 1;
   display: flex;

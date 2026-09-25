@@ -513,7 +513,7 @@ onUnmounted(() => dispose());
   transition: all 0.2s ease;
 }
 
-:global(.dark) .mreg-field {
+.dark .mreg-field {
   background: #0f172a;
   border-color: #1e293b;
 }
@@ -524,7 +524,7 @@ onUnmounted(() => dispose());
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-:global(.dark) .mreg-field:focus-within {
+.dark .mreg-field:focus-within {
   background: #0f172a;
 }
 
@@ -533,7 +533,7 @@ onUnmounted(() => dispose());
   background: #fef2f2;
 }
 
-:global(.dark) .mreg-field.is-error {
+.dark .mreg-field.is-error {
   background: rgba(239, 68, 68, 0.1);
 }
 
@@ -553,7 +553,7 @@ onUnmounted(() => dispose());
   min-width: 0;
 }
 
-:global(.dark) .mreg-input {
+.dark .mreg-input {
   color: #f1f5f9;
 }
 
@@ -583,7 +583,7 @@ onUnmounted(() => dispose());
   color: #1d4ed8;
 }
 
-:global(.dark) .mreg-code-btn {
+.dark .mreg-code-btn {
   border-left-color: #334155;
 }
 
@@ -649,7 +649,7 @@ onUnmounted(() => dispose());
   transition: all 0.2s;
 }
 
-:global(.dark) .mreg-back-btn {
+.dark .mreg-back-btn {
   background: #1e293b;
   color: #94a3b8;
 }
@@ -683,7 +683,7 @@ onUnmounted(() => dispose());
   transition: all 0.2s;
 }
 
-:global(.dark) .mreg-checkbox {
+.dark .mreg-checkbox {
   border-color: #475569;
 }
 
