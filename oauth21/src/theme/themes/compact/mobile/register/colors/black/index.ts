@@ -46,37 +46,45 @@ export default {
   },
   tone: 'dark',
   tokens: {
-    /* 画布色 = 页面最上沿。黑底页面的画布也是黑的（否则顶部/底部会露白条） */
-    '--mauth-canvas': '#020617',
-    /* 表面：页面底 → 常规面 → 次级面 → 三级面 → 按压态 */
-    '--mauth-bg': '#020617',
-    '--mauth-surface': '#0f172a',
-    '--mauth-surface-2': '#1e293b',
-    '--mauth-surface-3': '#1e293b',
-    '--mauth-surface-press': '#334155',
-    /* 文字：黑底上必须是浅字，否则整页不可读 */
-    '--mauth-text': '#f1f5f9',
-    '--mauth-text-strong': '#f1f5f9',
-    '--mauth-text-body': '#94a3b8',
-    '--mauth-text-mid': '#94a3b8',
-    '--mauth-text-faint': '#94a3b8',
-    '--mauth-icon': '#64748b',
-    /* 边框 */
-    '--mauth-border': '#334155',
-    '--mauth-border-strong': '#475569',
-    '--mauth-border-focus': '#64748b',
-    '--mauth-focus-ring': 'rgba(100, 116, 139, 0.18)',
-    /* 主色：黑套是无品牌色的中性方案 —— CTA 用近白，压在深底上最清楚 */
-    '--mauth-primary': '#f1f5f9',
-    '--mauth-primary-fg': '#0f172a',
+    /* 画布色 = 页面最上沿。black 色卡语义 = 纯黑底（2026-09-25 用户定夺：
+       "黑色背景就要使用纯黑"），不再借 slate-950 那套深蓝灰 —— 选黑就是 #000000 */
+    '--mauth-canvas': '#000000',
+    /* 表面：背景纯黑；surface 系列用极暗灰保留「卡片 vs 页面」的层次
+       （#0a0a0a 比 #020617 slate-950 更贴近纯黑，但仍能看到卡片轮廓） */
+    '--mauth-bg': '#000000',
+    /* 🔴 body 背景 = bg（= #000000），不再借 surface —— 用户原话：
+       "黑色背景就要使用纯黑"。mobile-auth.scss 默认
+       --mauth-body-bg = var(--mauth-surface)，会让页面主体显示 surface 色
+       (#0a0a0a)，不是纯黑。覆盖一下，body 与 bg 融合 → 整片 #000000，
+       卡片仍用 surface (#0a0a0a) 露出轮廓。 */
+    '--mauth-body-bg': '#000000',
+    '--mauth-surface': '#0a0a0a',
+    '--mauth-surface-2': '#141414',
+    '--mauth-surface-3': '#1f1f1f',
+    '--mauth-surface-press': '#262626',
+    /* 文字：纯黑底下用近白仍能看清，整体偏中性（black 是无品牌色方案） */
+    '--mauth-text': '#f5f5f5',
+    '--mauth-text-strong': '#f5f5f5',
+    '--mauth-text-body': '#a3a3a3',
+    '--mauth-text-mid': '#a3a3a3',
+    '--mauth-text-faint': '#737373',
+    '--mauth-icon': '#a3a3a3',
+    /* 边框：纯黑下原 #334155 几乎隐形，提亮一档；field-* 同理 */
+    '--mauth-border': '#262626',
+    '--mauth-border-strong': '#525252',
+    '--mauth-border-focus': '#737373',
+    '--mauth-focus-ring': 'rgba(115, 115, 115, 0.3)',
+    /* 主色：black 是无品牌色方案 —— CTA 用近白，对比度压满 */
+    '--mauth-primary': '#f5f5f5',
+    '--mauth-primary-fg': '#0a0a0a',
     '--mauth-accent': '#93c5fd',
-    '--mauth-emphasis-fg': '#e2e8f0',
-    /* 表单：深底上用"白 6% 覆盖"才有层次（与基线深色档同口径） */
-    '--mauth-field-bg': 'rgba(255, 255, 255, 0.06)',
-    '--mauth-field-bg-focus': 'rgba(255, 255, 255, 0.1)',
-    '--mauth-field-border': 'rgba(255, 255, 255, 0.14)',
-    '--mauth-field-border-focus': '#94a3b8',
-    /* 深色下把第三方渠道里"近黑"的品牌色提亮，否则压在深底上看不见 */
+    '--mauth-emphasis-fg': '#e5e5e5',
+    /* 表单：纯黑底上 6% 白覆盖仍偏暗，提到 8%；focus 同步提 */
+    '--mauth-field-bg': 'rgba(255, 255, 255, 0.08)',
+    '--mauth-field-bg-focus': 'rgba(255, 255, 255, 0.12)',
+    '--mauth-field-border': 'rgba(255, 255, 255, 0.16)',
+    '--mauth-field-border-focus': '#a3a3a3',
+    /* 第三方渠道品牌色提亮（沿用基线，避免在纯黑底上消失） */
     '--mauth-social-ink-github': '#e5e7eb',
     '--mauth-social-ink-apple': '#f9fafb'
   }
