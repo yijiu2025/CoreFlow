@@ -248,6 +248,15 @@ const showConfirmPwd = ref(false);
   align-items: center;
   justify-content: space-between;
   padding: var(--mauth-pad-header-t) var(--mauth-pad-header-x) 0;
+  /* 🔴 必须与 mauth-body 同色（默认包用 .mauth-header background=--mauth-header-bg
+     = --mauth-surface 也跟 body 同色 → 整片连续，看不出分界）。
+     不写 background 时这里是透明的 → 透出 .mauth-page 的 --mauth-bg（更深），
+     跟 body 的 --mauth-surface 之间出现一道色阶线（实测黑色主题下 60px 高度处
+     #020617 → #0f172a 的色差非常明显，default 包下不存在）。
+     用 --mauth-body-bg 而非 --mauth-surface：blue 主题 tokens 把两个都设成
+     transparent（让渐变透上来），同走 --mauth-body-bg 才能保持「两个区域一起
+     透明 → 渐变整片覆盖」的对称。 */
+  background: var(--mauth-body-bg);
 }
 
 .mreg-head {
