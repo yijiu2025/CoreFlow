@@ -156,7 +156,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="standard-login-root" :class="{ dark: themeStore.isDark || themeStore.activeTone === 'dark' }">
+  <div class="standard-login-root" :class="{ dark: themeStore.activeTone === 'dark' }">
     <!-- 错误场景：应用标识缺失 -->
     <AppNameMissing v-if="!hasAppName" />
 
