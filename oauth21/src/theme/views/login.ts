@@ -104,6 +104,14 @@ export interface LoginEmailVerifyState {
   reason: string;
 }
 
+/**
+ * 二维码登录状态（web 端版式用；移动端不渲染扫码面板，可忽略）
+ *
+ * 与 `useQrLogin` 的返回对齐：版式只读 `dataUrl` 与 `status`，
+ * 触发刷新 / 停止轮询都走 `ctx.actions`。
+ */
+export type LoginQrStatus = 'pending' | 'scanned' | 'confirmed' | 'expired';
+
 /** 版式可触发的行为。都是"通知容器去做"，版式自己不实现任何逻辑 */
 export interface LoginViewActions {
   /** 切换登录方式（容器同步表单的 `type` 字段与切换方向，版式不必知道这件事） */
@@ -130,6 +138,14 @@ export interface LoginViewActions {
   sendEmailVerifyCode(): void;
   /** 提交邮箱二次验证码 */
   submitEmailVerify(): void;
+  /** 生成 / 刷新二维码（web 端扫码登录；失败时由容器弹错误提示） */
+  generateQr(): void;
+  /** 停止二维码轮询（web 端切回表单模式时；移动端无扫码面板，不调用） */
+  resetQr(): void;
+  /** 切换扫码面板显隐（web 端 mini 版式顶部按钮；mobile 无扫码，不调用） */
+  toggleQr(): void;
+  /** 切换明暗（web 端底部浮按钮；mobile 用 MauthThemeSwitch 组件，不调用） */
+  toggleTheme(): void;
 }
 
 /** 版式拿到的全部上下文 */
@@ -186,6 +202,18 @@ export interface LoginViewContext {
   emailVerifyCountingDown: boolean;
   /** 二次验证码剩余秒数 */
   emailVerifyCountdown: number;
+
+  // ---- 二维码登录（web 端专用；移动端版式可忽略）----
+  /** 二维码图片 dataURL；空串表示尚未生成 */
+  qrDataUrl: string;
+  /** 二维码状态（pending/scanned/confirmed/expired） */
+  qrStatus: LoginQrStatus;
+  /** 是否展示扫码面板（web 端 mini 版式顶部的扫码/表单切换状态） */
+  showQr: boolean;
+  /** 是否嵌入 iframe（决定底部暗黑切换浮按钮显隐） */
+  isEmbedded: boolean;
+  /** 当前是否深色（web 端暗黑切换按钮的图标态） */
+  isDark: boolean;
 
   /** 可触发的行为 */
   actions: LoginViewActions;
@@ -278,7 +306,7 @@ function asDevice(value: unknown): ThemeDevice {
  * @param source.url   `?view=` 的原始值（未校验，可以是数组/undefined 等任意形态）
  * @param source.theme 主题包声明的版式 id（见 `theme/themes/<包>/index.ts` 的 `views.login`）
  * @param source.pkg   当前主题包 id（`getThemePackage(配色)`）——查找范围的包那一段
- * @param source.device 当前设备（`'mobile' | 'web'`）——查找范围的设备那一段
+ * @param source.device 当前设备（`'mobile' | 'standard' | 'mini'`）——查找范围的设备那一段
  *                     两者合起来决定"在哪个包里、哪种设备下"找版式
  */
 export function pickLoginViewId(

@@ -1,26 +1,51 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+/**
+ * 桌面端标准登录 —— **业务容器**
+ *
+ * === 分层（2026-09-25 起，与移动端 `app/login/index.vue` 对齐）===
+ * 本文件只负责「登录这件事」：表单校验、登录流程（授权确认 / 邮箱二次验证 / 最大会话数）、
+ * 图形验证码、二维码登录、协议勾选、路由跳转。
+ * **页面长什么样不在这里**，而在**当前主题包**里的版式组件里：
+ *
+ *    本容器 ──传 ctx──▶ theme/themes/<包>/standard/login/index.vue
+ *                 ▲
+ *                 └── 契约定在 theme/views/login.ts（各包共用这一份，版式只读它）
+ *
+ * 于是「换一套 UI」= 在包里加一个版式目录，本文件零改动。
+ * **内置包**（`default`）的 base 由本文件**静态引入**：正常访问不产生额外请求，首帧即正确；
+ * 其它包 / 其它版式都是惰性 chunk，由路由守卫提前预热。
+ *
+ * 与 MiniLogin（紧凑版）的区别：两者是 dispatcher 的**两种设备形态分支**，
+ * 业务逻辑 90% 相同，但 UI 差异大（标准版是左右双栏 + 扫码面板，紧凑版是单栏卡片）。
+ * 二者各自成为独立容器，各自加载自己的版式。
+ *
+ * @author yijiu2025
+ */
+import { computed, markRaw, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 import { useForm } from 'vee-validate';
-import { useRoute } from 'vue-router';
-import { useI18n } from 'vue-i18n';
 import { z } from 'zod';
 import { toTypedSchema } from '@vee-validate/zod';
 import GraphicCaptcha from '@/components/common/GraphicCaptcha.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 import AgreementModals from '@/components/common/AgreementModals.vue';
-import Icons from '@/components/common/Icons.vue';
-import AppNameMissing from '@/components/common/AppNameMissing.vue';
 import { useMessage } from '@/composables/useMessage';
 import { useCountdown } from '@/composables/useCountdown';
 import { useCaptchaFlow } from '@/composables/useCaptchaFlow';
 import { useQrLogin } from '@/composables/useQrLogin';
 import { useLoginFlow } from '@/composables/useLoginFlow';
+import BaseLoginView from '@/theme/themes/default/standard/login/index.vue';
+import { loginViews, pickLoginViewId } from '@/theme/views/login';
+import type { LoginTranslate, LoginViewContext } from '@/theme/views/login';
+import type { Component, Ref } from 'vue';
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
 const route = useRoute();
+const router = useRouter();
 const { locale, t } = useI18n();
 const { error: showError } = useMessage();
 
@@ -79,7 +104,6 @@ watch(loginType, newType => {
 // 4. 图形验证码 & 邮箱验证码发送
 const { active: isCountingDown, remaining: countdown, start: startCountdown } = useCountdown(60);
 
-// 图形验证码流程：弹窗 → 通过 → 按 purpose（code 发邮箱码 / login 登录）继续
 const { captchaKey, showCaptcha, captchaPurpose, openCaptcha, onCaptchaSuccess } = useCaptchaFlow<'code' | 'login'>(
   purpose => {
     if (purpose === 'code') executeSendEmailCode();
@@ -110,7 +134,6 @@ const {
   captchaKey: () => captchaKey.value,
   clientId: () => (route.query.client_id as string) || (route.query.appName as string),
   showError: (msg: string) => showError(msg),
-  // 全屏直连：守卫带的 ?redirect=（如 /authorize?...）登录后原路返回；iframe 内不生效
   redirectTo: () => (route.query.redirect as string) || null
 });
 
@@ -129,7 +152,6 @@ const handleLogin = handleSubmit(async () => {
 // 6. 二维码生成与轮询
 const qrClientId = computed(() => (route.query.client_id as string) || (route.query.appName as string) || '');
 
-// 二维码登录：生成（scope 后端从 client 查）+ 轮询 + 确认后通知父窗口
 const { qrDataUrl, qrStatus, generate: generateQR, reset: resetQR } = useQrLogin(
   () => qrClientId.value,
   (res: unknown) => notifyParentLoginSuccess(res),
@@ -153,342 +175,187 @@ onMounted(() => {
 onUnmounted(() => {
   resetQR();
 });
+
+/* ============================================================================
+   版式（UI）加载 + 契约组装
+   ========================================================================== */
+
+/** 本容器的设备身份：文件位置即身份（`view/web/` 下都是电脑端） */
+const THEME_DEVICE = 'standard' as const;
+
+const viewId = computed(() =>
+  pickLoginViewId({
+    url: route.query.view,
+    theme: themeStore.viewFor('login'),
+    pkg: themeStore.packageId,
+    device: THEME_DEVICE
+  })
+);
+
+watch(viewId, id => themeStore.setActivePageView('login', id), { immediate: true });
+
+/**
+ * 当前渲染的版式组件（同 `app/login/index.vue` 的机制）
+ * 默认是内置包的基础版式（静态引入）；变体/其它包惰性加载。
+ * `viewEpoch` 丢弃过期结果，`markRaw` 避免无谓 reactive 代理。
+ */
+const activeView = shallowRef<Component>(BaseLoginView);
+let viewEpoch = 0;
+watch(
+  [viewId, () => themeStore.packageId],
+  ([id, pkg]) => {
+    const epoch = ++viewEpoch;
+    void loginViews.load(id, pkg, THEME_DEVICE).then(loaded => {
+      if (epoch !== viewEpoch) return;
+      activeView.value = loaded ? markRaw(loaded) : BaseLoginView;
+    });
+  },
+  { immediate: true }
+);
+
+/** 契约里字段绑定的内部构造形态 */
+interface FieldSource {
+  value: Ref<string>;
+  attrs: Ref<Record<string, unknown>>;
+  invalid: Ref<boolean>;
+  error: Ref<string | undefined>;
+}
+
+function bindField(
+  value: Ref<string | undefined>,
+  attrs: Ref<Record<string, unknown>>,
+  invalid: Ref<boolean>,
+  error: Ref<string | undefined>
+): FieldSource {
+  return {
+    value: computed({
+      get: () => value.value ?? '',
+      set: next => {
+        value.value = next;
+      }
+    }),
+    attrs,
+    invalid,
+    error
+  };
+}
+
+function assertLoginContract(ctx: LoginViewContext): LoginViewContext {
+  return ctx;
+}
+
+const translate: LoginTranslate = (key, params) => {
+  if (params === undefined) return t(key);
+  return typeof params === 'string' ? t(key, params) : t(key, params as never);
+};
+
+const ctx = assertLoginContract(
+  reactive({
+    t: translate,
+    appName: computed(() => appConfig.value.appName),
+    hasAppName,
+
+    panel: computed(() => {
+      if (showConsent.value) return 'consent';
+      if (showEmailVerify.value) return 'emailVerify';
+      return 'form';
+    }),
+    title: computed(() => {
+      if (showConsent.value) return t('login.consent_title');
+      if (showEmailVerify.value) return t('login.email_verify_title');
+      return t('login.welcome');
+    }),
+    subtitle: computed(() => t('login.fill_credentials', '请填写您的登录凭据')),
+
+    mode: computed(() => loginType.value),
+    direction: computed(() => (loginType.value === 'pwd' ? 'next' : 'prev') as 'next' | 'prev'),
+    fields: {
+      email: bindField(email, emailProps, computed(() => !!errors.value.email), computed(() => errors.value.email)),
+      code: bindField(code, codeProps, computed(() => !!errors.value.code), computed(() => errors.value.code)),
+      username: bindField(
+        username,
+        usernameProps,
+        computed(() => !!errors.value.username),
+        computed(() => errors.value.username)
+      ),
+      password: bindField(
+        password,
+        passwordProps,
+        computed(() => !!errors.value.password),
+        computed(() => errors.value.password)
+      )
+    } satisfies Record<string, FieldSource>,
+    keepLogin,
+    agreed,
+    countingDown: computed(() => isCountingDown.value),
+    countdown: computed(() => countdown.value),
+    submitting: computed(() => authStore.loading),
+
+    socialProviders: computed(() => [] as never[]),
+    socialLastProvider: null,
+
+    consentState: computed(() => consentState.value as LoginViewContext['consentState']),
+    consentSubmitting: computed(() => submittingConsent.value),
+
+    emailVerifyState: computed(() => {
+      const s = emailVerifyState.value;
+      return s ? { email: s.email, reason: s.reason } : null;
+    }),
+    emailVerifyCode,
+    emailVerifyCountingDown: computed(() => emailVerifyCountdown.active.value),
+    emailVerifyCountdown: computed(() => emailVerifyCountdown.remaining.value),
+
+    qrDataUrl: computed(() => qrDataUrl.value),
+    qrStatus: computed(() => qrStatus.value),
+    showQr: computed(() => appConfig.value.qrCodeFirst),
+    isEmbedded,
+    isDark: computed(() => themeStore.isDark),
+
+    actions: {
+      switchMode: (mode: 'email' | 'pwd') => {
+        loginType.value = mode;
+      },
+      submit: handleLogin,
+      sendCode: sendEmailCode,
+      goRegister: () => {
+        const query: Record<string, string> = {};
+        for (const key of ['appName', 'client_id', 'redirect_uri', 'scope', 'state', 'lang']) {
+          const v = route.query[key];
+          if (typeof v === 'string') query[key] = v;
+        }
+        void import('@/view/web/register/index.vue').catch(() => {});
+        router.push({ path: '/register', query });
+      },
+      goForgot: () => {
+        const query: Record<string, string> = {};
+        for (const key of ['appName', 'client_id', 'redirect_uri', 'scope', 'state', 'lang', 'redirect']) {
+          const v = route.query[key];
+          if (typeof v === 'string') query[key] = v;
+        }
+        void import('@/view/web/forgot-password/index.vue').catch(() => {});
+        router.push({ path: '/forgot-password', query });
+      },
+      back: () => {},
+      openAgreement: (doc: 'service' | 'privacy') => {
+        docType.value = doc;
+      },
+      selectSocial: () => {},
+      approveConsent,
+      denyConsent,
+      sendEmailVerifyCode,
+      submitEmailVerify,
+      generateQr: () => generateQR(),
+      resetQr: () => resetQR(),
+      toggleQr: () => {},
+      toggleTheme: () => themeStore.toggleTheme()
+    }
+  })
+);
 </script>
 
 <template>
-  <div class="standard-login-root" :class="{ dark: themeStore.activeTone === 'dark' }">
-    <!-- 错误场景：应用标识缺失 -->
-    <AppNameMissing v-if="!hasAppName" />
-
-    <!-- 主登录容器 -->
-    <div v-else class="relative group w-full">
-    <!-- 背景流光动画装饰 -->
-    <div class="absolute -top-24 -left-24 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
-    <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl animate-pulse delay-700"></div>
-
-    <!-- max-w 限宽 + w-full：窄于 856px 的窗口跟随视口收缩，不再溢出被裁切 -->
-    <div class="relative w-full max-w-[856px] mx-auto min-h-[480px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[10px] overflow-hidden flex shadow-2xl border border-white/40 dark:border-slate-800">
-<!-- 左侧面板：登录/授权表达面板 -->
-      <div class="flex-1 p-10 flex flex-col justify-between relative">
-<!-- OAuth 授权确认视图 -->
-        <template v-if="showConsent">
-          <div>
-            <div class="flex items-center gap-3 mb-6">
-              <div class="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-600 font-bold text-xl">
-                {{ (consentState?.client_name || 'A')[0].toUpperCase() }}
-              </div>
-              <div>
-                <h2 class="text-xl font-bold dark:text-white leading-tight">
-                  {{ t('login.consent_title') || '应用授权确认' }}
-                </h2>
-                <p class="text-xs text-slate-400 mt-1">
-                  {{ t('login.consent_desc', { app: consentState?.client_name || t('login.third_party') }) }}
-                </p>
-              </div>
-            </div>
-
-            <div class="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
-              <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                {{ t('login.requesting_permissions') || '该应用将获取以下权限：' }}
-              </p>
-              <ul class="space-y-2.5">
-                <li
-                  v-for="s in (consentState?.scopeDetails || [])"
-                  :key="s.id"
-                  class="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300"
-                >
-                  <Icons name="check" :size="16" class="text-green-500 shrink-0 mt-0.5" />
-                  <span>
-                    <strong class="font-semibold">{{ s.name }}</strong>
-                    <span class="text-slate-400 dark:text-slate-500">— {{ s.desc }}</span>
-                    <span v-if="s.required" class="ml-1 text-[10px] text-slate-400">（必需）</span>
-                  </span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="flex gap-4 mt-8">
-            <button
-              type="button"
-              @click="denyConsent"
-              class="flex-1 h-12 border border-slate-200 dark:border-slate-700 dark:text-slate-300 rounded-xl font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
-            >
-              {{ t('login.deny') || '拒绝' }}
-            </button>
-            <button
-              type="button"
-              @click="approveConsent"
-              :disabled="submittingConsent"
-              class="flex-1 h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-95 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all"
-            >
-              <span v-if="submittingConsent" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-              {{ t('login.approve') || '同意并授权' }}
-            </button>
-          </div>
-        </template>
-
-        <!-- 邮箱二次验证（密码登录环境异常） -->
-        <template v-else-if="showEmailVerify">
-          <div class="flex flex-col items-center justify-center py-8 space-y-5">
-            <div class="w-14 h-14 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#f59e0b" stroke-width="2">
-                <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              </svg>
-            </div>
-            <div class="text-center space-y-1">
-              <h3 class="text-lg font-bold dark:text-white">环境变更验证</h3>
-              <p class="text-xs text-slate-400">检测到{{ emailVerifyState?.reason }}，为保护账号安全，请验证邮箱</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400">验证码已发送至 <strong>{{ emailVerifyState?.email }}</strong></p>
-            </div>
-
-            <div class="w-full std-field" :class="{ 'is-error': false }">
-              <Icons name="mail" :size="18" class="std-icon" />
-              <input
-                v-model="emailVerifyCode"
-                type="text"
-                maxlength="6"
-                placeholder="邮箱验证码"
-                class="std-input"
-                @keyup.enter="submitEmailVerify"
-              />
-            </div>
-
-            <div class="w-full flex items-center justify-between text-xs">
-              <button type="button" @click="sendEmailVerifyCode" :disabled="emailVerifyCountdown.active.value"
-                class="text-primary disabled:text-slate-400 disabled:cursor-not-allowed font-medium">
-                {{ emailVerifyCountdown.active.value ? `${emailVerifyCountdown.remaining.value}s 后重发` : '重新发送验证码' }}
-              </button>
-            </div>
-
-            <button type="button" @click="submitEmailVerify" class="auth-btn w-full">
-              验证并登录
-            </button>
-          </div>
-        </template>
-
-        <!-- 标准登录表单视图 -->
-        <template v-else>
-          <div>
-            <!-- 品牌 Header（优化对齐与比例） -->
-            <div class="flex items-center gap-3.5 mb-6">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1 7-2 2.5 1 5 2 7 2a1 1 0 0 1 1 1z" />
-                  <path d="m9 12 2 2 4-4" />
-                </svg>
-              </div>
-              <div class="flex flex-col justify-center">
-                <h2 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white leading-none">
-                  {{ t('login.welcome') || '欢迎登录' }}
-                </h2>
-                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1.5 leading-none">Enterprise Identity System</p>
-              </div>
-            </div>
-
-            <!-- Tab 切换 -->
-            <div class="relative flex p-1 bg-slate-100 dark:bg-slate-800/60 rounded-xl mb-6">
-              <button
-                type="button"
-                @click="loginType = 'email'"
-                :class="loginType === 'email' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm font-bold' : 'text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700'"
-                class="flex-1 py-2 text-xs rounded-lg transition-all"
-              >
-                {{ t('login.email_login') || '邮箱验证码登录' }}
-              </button>
-              <button
-                type="button"
-                @click="loginType = 'pwd'"
-                :class="loginType === 'pwd' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm font-bold' : 'text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700'"
-                class="flex-1 py-2 text-xs rounded-lg transition-all"
-              >
-                {{ t('login.password_login') || '账号密码登录' }}
-              </button>
-            </div>
-
-            <!-- 表单输入区域 -->
-            <form @submit.prevent="handleLogin" class="space-y-4">
-              <!-- 字段 1：邮箱 / 账号 -->
-              <div class="std-cell">
-                <div class="std-field" :class="{ 'is-error': errors.email || errors.username }">
-                  <Icons v-if="loginType === 'email'" name="mail" :size="18" class="std-icon" />
-                  <Icons v-else name="user" :size="18" class="std-icon" />
-                  <input
-                    v-if="loginType === 'email'"
-                    v-model="email"
-                    v-bind="emailProps"
-                    type="email"
-                    :placeholder="t('login.email_placeholder') || '请输入电子邮箱'"
-                    autocomplete="username"
-                    class="std-input"
-                  />
-                  <input
-                    v-else
-                    v-model="username"
-                    v-bind="usernameProps"
-                    type="text"
-                    :placeholder="t('login.username_placeholder') || '账号 / 邮箱 / 手机号'"
-                    autocomplete="username"
-                    class="std-input"
-                  />
-                </div>
-                <div class="std-err">{{ errors.email || errors.username }}</div>
-              </div>
-
-              <!-- 字段 2：验证码 / 密码 -->
-              <div class="std-cell">
-                <div class="std-field" :class="{ 'is-error': errors.code || errors.password }">
-                  <Icons name="lock" :size="18" class="std-icon" />
-                  <input
-                    v-if="loginType === 'email'"
-                    v-model="code"
-                    v-bind="codeProps"
-                    type="text"
-                    :placeholder="t('login.code_placeholder') || '请输入验证码'"
-                    autocomplete="one-time-code"
-                    class="std-input"
-                  />
-                  <input
-                    v-else
-                    v-model="password"
-                    v-bind="passwordProps"
-                    type="password"
-                    :placeholder="t('login.password_placeholder') || '请输入密码'"
-                    autocomplete="current-password"
-                    class="std-input"
-                  />
-                  <button
-                    type="button"
-                    v-if="loginType === 'email'"
-                    @click="sendEmailCode"
-                    :disabled="isCountingDown"
-                    class="std-code-btn"
-                  >
-                    {{ isCountingDown ? `${countdown}s` : t('login.get_code') || '获取验证码' }}
-                  </button>
-                </div>
-                <div class="std-err">{{ errors.code || errors.password }}</div>
-              </div>
-
-              <!-- 登录提交按钮 -->
-              <button
-                type="submit"
-                :disabled="authStore.loading"
-                class="std-submit-btn flex items-center justify-center gap-2"
-              >
-                <span v-if="authStore.loading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                {{ authStore.loading ? (t('login.logging_in') || '登录中...') : (t('login.submit') || '安全登录') }}
-              </button>
-            </form>
-          </div>
-          <!-- 底部控制与服务协议 -->
-          <div class="std-bottom">
-            <!-- 行 1：记住登录 + 忘记密码 -->
-            <div class="std-row">
-              <label class="std-check-label">
-                <input type="checkbox" v-model="keepLogin" class="hidden" />
-                <span class="std-checkbox" :class="{ checked: keepLogin }">
-                  <Icons v-if="keepLogin" name="check" :size="10" />
-                </span>
-                <span class="std-sub-text">{{ t('login.keep_login') || '保持登录' }}</span>
-              </label>
-
-              <router-link
-                :to="{ path: '/forgot-password', query: { ...$route.query, fromLogin: 'standard' } }"
-                class="std-forgot-link"
-              >
-                {{ t('login.forgot_password') || '忘记密码？' }}
-              </router-link>
-            </div>
-
-            <!-- 行 2：协议卡片 + 立即注册（保持左侧复选框完美对齐） -->
-            <div class="std-agreement-card">
-              <label class="std-check-label flex-1 min-w-0">
-                <input type="checkbox" v-model="agreed" class="hidden" />
-                <span class="std-checkbox" :class="{ checked: agreed }">
-                  <Icons v-if="agreed" name="check" :size="10" />
-                </span>
-                <span class="std-sub-text truncate">
-                  同意 <a href="#" class="std-link-primary" @click.stop.prevent="docType = 'service'">《服务协议》</a> 与 <a href="#" class="std-link-primary" @click.stop.prevent="docType = 'privacy'">《隐私政策》</a>
-                </span>
-              </label>
-
-              <router-link
-                :to="{ path: '/register', query: { ...$route.query } }"
-                class="std-register-link"
-              >
-                {{ t('login.register_now') || '立即注册' }}
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="9 18 15 12 9 6"></polyline>
-                </svg>
-              </router-link>
-            </div>
-          </div>
-        </template>
-      </div>
-
-      <!-- 右侧面板：扫码登录面板 (对齐 MiniLogin 逻辑) -->
-      <div class="w-[340px] bg-slate-50/70 dark:bg-slate-800/40 border-l border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center p-8">
-        <div class="text-center mb-6">
-          <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-1">
-            {{ t('login.qr_title') || '扫码快捷登录' }}
-          </h3>
-          <p class="text-xs text-slate-400">
-            {{ t('login.qr_desc') || '使用移动客户端扫描二维码' }}
-          </p>
-        </div>
-
-        <!-- 二维码显示区 -->
-        <div
-          class="relative p-3.5 bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-black/20 border border-slate-100 dark:border-slate-700 cursor-pointer overflow-hidden group"
-          :class="{ 'border-rose-300': qrStatus === 'expired' }"
-          @click="qrStatus === 'expired' && generateQR()"
-        >
-          <!-- 动态扫描线 -->
-          <div v-if="qrStatus !== 'expired'" class="absolute top-0 left-0 w-full h-[2px] bg-blue-600 blur-[2px] animate-scan z-10"></div>
-
-          <img
-            v-if="qrDataUrl"
-            :src="qrDataUrl"
-            class="w-44 h-44 transition-opacity"
-            :class="qrStatus === 'expired' ? 'opacity-20' : 'opacity-95 group-hover:opacity-100'"
-          />
-          <div v-else class="w-44 h-44 flex items-center justify-center">
-            <div class="w-8 h-8 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
-          </div>
-
-          <!-- 过期刷新遮罩 -->
-          <div
-            v-if="qrStatus === 'expired'"
-            class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs"
-          >
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-rose-500 animate-bounce">
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-              <path d="M21 3v5h-5" />
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-              <path d="M3 21v-5h5" />
-            </svg>
-            <span class="text-xs font-semibold text-rose-500">二维码已失效，点击刷新</span>
-          </div>
-        </div>
-
-        <p class="mt-6 text-xs text-slate-400 text-center leading-relaxed">
-          {{ t('login.qr_scan_hint', { app: appConfig.appName }) || `打开手机客户端扫码登录 ${appConfig.appName}` }}
-        </p>
-      </div>
-</div>
-
-    <!-- 暗黑模式切换按钮 (非嵌入场景下可用) -->
-    <button
-      v-if="!isEmbedded"
-      @click="themeStore.toggleTheme"
-      class="absolute -bottom-14 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 text-xs font-medium hover:scale-105 transition-all"
-    >
-      <Icons v-if="themeStore.isDark" name="moon" :size="14" />
-      <Icons v-else name="sun" :size="14" />
-      <span>{{ themeStore.isDark ? 'Dark Mode' : 'Light Mode' }}</span>
-    </button>
-  </div>
+  <!-- 业务容器只做两件事：把 ctx 交给当前版式；渲染与版式无关的业务浮层 -->
+  <component :is="activeView" :ctx="ctx" />
 
   <!-- 图形验证码弹窗与全局 Toast -->
   <GraphicCaptcha
@@ -500,361 +367,5 @@ onUnmounted(() => {
     @success="onCaptchaSuccess"
   />
   <MessageToast />
-
-  <!-- 服务协议 / 隐私政策 弹窗（统一组件，正文在 AgreementModals 单一维护） -->
   <AgreementModals v-model:type="docType" />
-  </div>
 </template>
-
-<style scoped>
-/* 根节点撑满分发器 wrapper 宽度，让卡片 max-w 能跟随视口收缩 */
-.standard-login-root {
-  width: 100%;
-}
-
-/* ==========================================================================
-   1. 头部 Brand Header 精准垂直居中样式
-   ========================================================================== */
-.brand-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 24px;
-}
-
-.brand-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-  flex-shrink: 0;
-}
-
-.brand-text {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.brand-title {
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  color: #0f172a;
-  margin: 0;
-}
-
-.dark .brand-title {
-  color: #ffffff;
-}
-
-.brand-sub {
-  font-size: 12px;
-  line-height: 1.2;
-  color: #64748b;
-  margin-top: 4px;
-}
-
-.dark .brand-sub {
-  color: #94a3b8;
-}
-
-/* ==========================================================================
-   2. 输入框 & 按钮通用样式
-   ========================================================================== */
-.std-cell {
-  display: flex;
-  flex-direction: column;
-}
-
-.std-field {
-  display: flex;
-  align-items: center;
-  height: 44px; /* 与标准版注册页（.mreg-field 44px）统一 —— 用户要求以注册页为准 */
-  padding: 0 14px;
-  gap: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  transition: all 0.2s ease;
-}
-
-.dark .std-field {
-  background: #0f172a;
-  border-color: #1e293b;
-}
-
-.std-field:focus-within {
-  background: #ffffff;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-
-.dark .std-field:focus-within {
-  background: #0f172a;
-}
-
-.std-field.is-error {
-  border-color: #ef4444;
-  background: #fef2f2;
-}
-
-.dark .std-field.is-error {
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.std-icon {
-  color: #94a3b8;
-  flex-shrink: 0;
-}
-
-.std-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-size: 13px;
-  color: #0f172a;
-  height: 100%;
-  min-width: 0;
-}
-
-.dark .std-input {
-  color: #f1f5f9;
-}
-
-.std-input::placeholder {
-  color: #94a3b8;
-}
-
-.std-code-btn {
-  font-size: 12px;
-  font-weight: 600;
-  padding-left: 12px;
-  border-left: 1px solid #cbd5e1;
-  color: #2563eb;
-  white-space: nowrap;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.std-code-btn:hover {
-  color: #1d4ed8;
-}
-
-.dark .std-code-btn {
-  border-left-color: #334155;
-}
-
-.std-code-btn:disabled {
-  color: #94a3b8 !important;
-  cursor: not-allowed;
-}
-
-.std-err {
-  height: 16px;
-  line-height: 16px;
-  margin-top: 2px;
-  padding-left: 4px;
-  font-size: 11px;
-  color: #ef4444;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.std-submit-btn {
-  height: 44px; /* 与标准版注册页（.mreg-submit 44px）统一 —— 用户要求以注册页为准 */
-  width: 100%;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #ffffff;
-  border: none;
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.std-submit-btn:hover:not(:disabled) {
-  opacity: 0.95;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
-}
-
-/* ==========================================================================
-   3. 底部完美左对齐（解决“保持登录”与“同意协议”对不齐问题）
-   ========================================================================== */
-.std-bottom {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-/* 1) 记住登录行：添加与下方卡片完全一致的 12px 边距 */
-.std-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 9px 0 0; /* 核心：12px Padding 让 Checkbox X轴完全对齐 */
-}
-
-/* 2) 协议卡片行：左 Padding 为 12px */
-.std-agreement-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0px 0px; /* 核心：12px Padding */
-  /* background: #f8fafc; */
-  border-radius: 12px;
-  transition: all 0.2s ease;
-}
-
-.std-agreement-card:hover {
-  background: #f1f5f9;
-}
-
-/* Checkbox Label 结构 */
-.std-check-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  user-select: none;
-  line-height: 1;
-}
-
-.std-checkbox {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 1.5px solid #cbd5e1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  flex-shrink: 0;
-  background: #ffffff;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.std-checkbox:hover {
-  border-color: #2563eb;
-}
-
-.std-checkbox.checked {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-  border-color: #2563eb;
-}
-
-/* 底部链接与文本 */
-.std-sub-text {
-  font-size: 12px;
-  color: #64748b;
-  line-height: 1; /* 保证垂直对齐不偏移 */
-}
-
-.std-forgot-link {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: color 0.2s ease;
-}
-
-.std-forgot-link:hover {
-  color: #2563eb;
-}
-
-.std-link-primary {
-  color: #2563eb;
-  font-weight: 500;
-  text-decoration: none;
-}
-
-.std-link-primary:hover {
-  text-decoration: underline;
-}
-
-.std-register-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #2563eb;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-}
-
-.std-register-link:hover {
-  color: #1d4ed8;
-  transform: translateX(2px);
-}
-
-/* 二维码扫描动画 */
-@keyframes scan {
-  0% { top: 0; opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
-}
-
-.animate-scan {
-  animation: scan 2.5s linear infinite;
-}
-</style>
-
-<style>
-/* 非 scoped 作用域 - 深色模式覆盖 */
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-field {
-  background: #0f172a;
-  border-color: #1e293b;
-}
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-field:focus-within {
-  background: #0f172a;
-}
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-field.is-error {
-  background: rgba(239, 68, 68, 0.1);
-}
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-input {
-  color: #f1f5f9;
-}
-
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-agreement-card {
-  background: rgba(15, 23, 42, 0.6);
-}
-
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-agreement-card:hover {
-  background: rgba(30, 41, 59, 0.8);
-}
-
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-checkbox {
-  background: #0f172a;
-  border-color: #475569;
-}
-
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-sub-text,
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-forgot-link {
-  color: #94a3b8;
-  margin-right: 10px;
-}
-
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-forgot-link:hover,
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-link-primary,
-:is(html.dark .standard-login-root, .standard-login-root.dark) .std-register-link {
-  color: #60a5fa;
-}
-</style>

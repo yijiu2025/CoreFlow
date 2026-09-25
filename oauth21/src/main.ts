@@ -38,7 +38,7 @@ app.use(router);
 app.use(i18n);
 
 // 把「当前路由属于哪种设备」同步给主题 store（决定注入哪一套配色的 token、
-// 版式在 `<包>/mobile/` 还是 `<包>/web/` 下查找）。
+// 版式在 `<包>/mobile/` / `<包>/standard/` / `<包>/mini/` 下查找）。
 //
 // ⚠️ 必须在 `app.use(pinia)` **之后**调用：本函数内部会 `useThemeStore()`，
 //    而 Pinia 的 activeInstance 由 `use()` 建立。早先把这件事写在

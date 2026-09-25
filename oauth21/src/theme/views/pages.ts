@@ -119,6 +119,10 @@ export function viewsForPage(page: string | undefined): PageViews | undefined {
  * 不做完整路由表匹配：`/m/register` 与 `/register` 都要落到 `register`，而路由名
  * （`MobileRegister`）与页面名并不同名。「末段 + 该页面确实已接入版式」双重判定
  * 足够准，且新增页面无需登记。
+ *
+ * 🔴 `mini-` 前缀路由（2026-09-25 起 mini 是独立设备）：`/mini-login` 这类独立路由
+ *    的页面仍是 `login`（同一条页面的 mini 设备形态）。不剥前缀的话，调试面板在
+ *    /mini-login 上推断不出页面 → 版式/颜色区全部回落 base + 0 种。
  */
 export function pageFromPath(path: string): string | undefined {
   const segment = path
@@ -126,5 +130,8 @@ export function pageFromPath(path: string): string | undefined {
     .split('/')
     .filter(Boolean)
     .pop();
-  return segment && pages.has(segment) ? segment : undefined;
+  if (!segment) return undefined;
+  if (pages.has(segment)) return segment;
+  const stripped = segment.replace(/^mini-/, '');
+  return stripped && pages.has(stripped) ? stripped : undefined;
 }

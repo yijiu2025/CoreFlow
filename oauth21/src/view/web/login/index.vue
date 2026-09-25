@@ -126,21 +126,26 @@ const activeComponent = computed(() =>
  * 注入与调试面板的颜色清单都必须按 mobile 作用域走，否则：
  *   • 手机端页面吃到电脑端那套配色（电脑端只有黑/白两种）；
  *   • 调试面板切手机端主题"无效"（themeId 改了，渲染却按电脑端作用域回落）。
- * mini 来源恒为 web：iframe 列宽造成的"窄"不是手机（见 activeForm 分支 2）。
+ * 三种形态各自映射到独立设备（2026-09-25 三值化）：
+ *   • mobile   → 'mobile'（手机端）
+ *   • mini     → 'mini'（iframe 紧凑版，独立设备）
+ *   • standard → 'standard'（桌面主窗口）
+ * mini 不再是 web 的子变体：iframe 列宽造成的"窄"不是手机（见 activeForm 分支 2），
+ * 但它与 standard 是**并列**的设备形态，各有各的配色目录。
  */
 const themeStore = useThemeStore();
 const renderedDevice = computed<ThemeDevice>(() =>
-  activeForm.value === 'mobile' ? 'mobile' : 'web'
+  activeForm.value === 'mobile' ? 'mobile' : activeForm.value === 'mini' ? 'mini' : 'standard'
 );
 watch(
   renderedDevice,
   device => {
     themeStore.setActiveDevice(device);
     // 桌面形态没有容器来声明 page/view（那是 view/app/<page>/ 容器的职责），
-    // 这里把版式归位到当前包（web 端走默认包），避免上一形态（如手机端 compact）残留
-    // 影响电脑端作用域 —— 新版式下 view ≡ pkg，归位到 DEFAULT_THEME_PACKAGE 即可。
+    // 这里把版式归位到当前包（standard/mini 端走默认包），避免上一形态（如手机端
+    // compact）残留影响桌面作用域 —— 新版式下 view ≡ pkg，归位到 DEFAULT_THEME_PACKAGE 即可。
     // 手机形态下随后挂载的容器会自己声明并覆盖，两方不冲突。
-    if (device === 'web') themeStore.setActivePageView('login', DEFAULT_THEME_PACKAGE);
+    if (device !== 'mobile') themeStore.setActivePageView('login', DEFAULT_THEME_PACKAGE);
   },
   { immediate: true }
 );

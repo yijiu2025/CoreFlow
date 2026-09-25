@@ -240,7 +240,7 @@ function asDevice(value: unknown): ThemeDevice {
  *
  * @param source.url    `?view=` 的原始值（未校验，可以是数组/undefined 等任意形态）
  * @param source.pkg    当前主题包 id（`getThemePackage(配色)`）——查找范围的包那一段
- * @param source.device 当前设备（`'mobile' | 'web'`）——查找范围的设备那一段
+ * @param source.device 当前设备（`'mobile' | 'standard' | 'mini'`）——查找范围的设备那一段
  *                      两者合起来决定"在哪个包里、哪种设备下"找版式
  */
 export function pickRegisterViewId(

@@ -106,8 +106,12 @@ function asText(value: unknown): string {
 
 const visible = computed(() => !dismissed.value && asText(route.query.debug) === 'theme');
 
-/** 设备中文名（面板上要让人一眼分清两端） */
-const DEVICE_LABELS: Record<ThemeDevice, string> = { mobile: '手机端', web: '电脑端' };
+/** 设备中文名（面板上要让人一眼分清三端） */
+const DEVICE_LABELS: Record<ThemeDevice, string> = {
+  mobile: '手机端',
+  standard: '桌面端',
+  mini: '紧凑版'
+};
 
 /* ============================================================================
    当前页 / 当前设备 / 当前版式
@@ -182,7 +186,7 @@ const activeViewId = computed(() => {
  * 🔴 新版式下 view ≡ pkg；不再单独列 `BASE_VIEW_ID='base'`（新版式下非法 view）：
  *    新版式下 activeViewId === packageId（≠ registry.baseId='base'），所以这一行跳过；
  *    旧机制下 activeViewId === registry.baseId（login 默认 'base'），仍把 baseId 加进去。
- *    旧机制下当前包内的 `variants` 也兼容（login 页面有 'mini' 等变体）。
+ *    旧机制下当前包内的 `variants` 也兼容（login 等页面仍可能登记变体）。
  */
 const viewOptions = computed<string[]>(() => {
   const registry = pageViews.value?.registry;
@@ -194,7 +198,7 @@ const viewOptions = computed<string[]>(() => {
     if (pkgDevice !== device.value) continue;
     seen.add(pkg);
   }
-  // 当前包内的变体（兼容旧机制：login 页面有 'mini' 等变体；新版式下 list 恒空）
+  // 当前包内的变体（兼容旧机制：login 等页面仍可能有变体；新版式下 list 恒空）
   for (const v of registry.list(themeStore.packageId, device.value)) {
     seen.add(v);
   }

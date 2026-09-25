@@ -71,18 +71,28 @@ const activeComponent = computed(() => (activeForm.value === 'mobile' ? MobileFo
  * 面板切手机端主题"无效"。mini 来源恒为 web：iframe 列宽造成的"窄"不是手机
  *（正是上面分支 2 修掉的那类问题，主题侧同样不能说话）。
  */
+/**
+ * 🔴 主题作用域跟随**实际渲染的形态**，而不是路由（2026-09-25 用户定夺）
+ *
+ * `/forgot-password` 是电脑端路由，但窄视口下本分发器渲染的是手机端容器 —— token 注入、
+ * 调试面板的颜色清单都必须按 mobile 作用域走，否则手机端页面吃到电脑端那套配色、
+ * 面板切手机端主题"无效"。mini 来源恒为 standard：iframe 列宽造成的"窄"不是手机
+ *（正是上面分支 2 修掉的那类问题，主题侧同样不能说话）。
+ * 本页只有 mobile / desktop 两种形态（没有独立 MiniForgot 组件），mini 来源复用
+ * desktop 卡片，所以设备映射只有 mobile / standard 两档。
+ */
 const themeStore = useThemeStore();
 const renderedDevice = computed<ThemeDevice>(() =>
-  activeForm.value === 'mobile' ? 'mobile' : 'web'
+  activeForm.value === 'mobile' ? 'mobile' : 'standard'
 );
 watch(
   renderedDevice,
   device => {
     themeStore.setActiveDevice(device);
     // 桌面形态没有容器声明 page/view（那是 view/app/<page>/ 容器的职责），
-    // 归位到当前包（web 端走默认包 = DEFAULT_THEME_PACKAGE）—— 新版式下 view ≡ pkg，
+    // 归位到当前包（standard/mini 端走默认包 = DEFAULT_THEME_PACKAGE）—— 新版式下 view ≡ pkg，
     // 用包名作 view 段能让 findRecord 命中默认包对应配色；手机形态由随后挂载的容器覆盖。
-    if (device === 'web') themeStore.setActivePageView('forgot-password', DEFAULT_THEME_PACKAGE);
+    if (device !== 'mobile') themeStore.setActivePageView('forgot-password', DEFAULT_THEME_PACKAGE);
   },
   { immediate: true }
 );

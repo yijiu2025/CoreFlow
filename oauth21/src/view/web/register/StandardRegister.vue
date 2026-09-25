@@ -321,10 +321,10 @@ onUnmounted(() => dispose());
               {{ step === 1 ? t('register.sub_step1') : t('register.sub_step2') }}
             </p>
           </div>
-          <!-- 步骤指示小圆点 -->
+          <!-- 步骤指示小圆点（v2.21.0 token 化：激活点用 --mauth-primary） -->
           <div class="flex items-center gap-1.5 mr-2">
-            <span class="h-2 rounded-full transition-all duration-300" :class="step === 1 ? 'bg-[#2563eb] w-4' : 'w-2 bg-slate-200 dark:bg-slate-700'"></span>
-            <span class="h-2 rounded-full transition-all duration-300" :class="step === 2 ? 'bg-[#2563eb] w-4' : 'w-2 bg-slate-200 dark:bg-slate-700'"></span>
+            <span class="mreg-step-dot" :class="{ 'mreg-step-dot--active': step === 1 }"></span>
+            <span class="mreg-step-dot" :class="{ 'mreg-step-dot--active': step === 2 }"></span>
           </div>
         </div>
       </template>
@@ -499,7 +499,7 @@ onUnmounted(() => dispose());
 }
 
 /* ================================
-   输入框样式
+   输入框样式（v2.21.0 全 token 化 —— 与 StandardLogin 同款）
    ================================ */
 .mreg-field {
   display: flex;
@@ -507,39 +507,32 @@ onUnmounted(() => dispose());
   height: 44px;
   padding: 0 14px;
   gap: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--mauth-field-bg);
+  border: 1px solid var(--mauth-field-border);
   border-radius: 12px;
   transition: all 0.2s ease;
 }
 
-.dark .mreg-field {
-  background: #0f172a;
-  border-color: #1e293b;
-}
-
 .mreg-field:focus-within {
-  background: #fff;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-
-.dark .mreg-field:focus-within {
-  background: #0f172a;
+  background: var(--mauth-field-bg-focus);
+  border-color: var(--mauth-field-border-focus);
+  box-shadow: 0 0 0 3px var(--mauth-focus-ring);
 }
 
 .mreg-field.is-error {
-  border-color: #ef4444;
-  background: #fef2f2;
-}
-
-.dark .mreg-field.is-error {
-  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--mauth-danger);
+  background: var(--mauth-danger-bg);
 }
 
 .mreg-icon {
-  color: #94a3b8;
+  color: var(--mauth-icon);
   flex-shrink: 0;
+  transition: color 0.2s;
+}
+
+/* focus 时图标联动：与 mobile 一致 */
+.mreg-field:focus-within .mreg-icon {
+  color: var(--mauth-text);
 }
 
 .mreg-input {
@@ -548,17 +541,13 @@ onUnmounted(() => dispose());
   border: none;
   outline: none;
   font-size: 13px;
-  color: #0f172a;
+  color: var(--mauth-text);
   height: 100%;
   min-width: 0;
 }
 
-.dark .mreg-input {
-  color: #f1f5f9;
-}
-
 .mreg-input::placeholder {
-  color: #94a3b8;
+  color: var(--mauth-text-faint);
 }
 
 /* ================================
@@ -568,8 +557,8 @@ onUnmounted(() => dispose());
   font-size: 12px;
   font-weight: 600;
   padding-left: 12px;
-  border-left: 1px solid #cbd5e1;
-  color: #2563eb;
+  border-left: 1px solid var(--mauth-field-border);
+  color: var(--mauth-accent);
   white-space: nowrap;
   background: transparent;
   border-top: none;
@@ -579,16 +568,12 @@ onUnmounted(() => dispose());
   transition: color 0.2s;
 }
 
-.mreg-code-btn:hover {
-  color: #1d4ed8;
-}
-
-.dark .mreg-code-btn {
-  border-left-color: #334155;
+.mreg-code-btn:hover:not(:disabled) {
+  color: var(--mauth-emphasis-fg);
 }
 
 .mreg-code-btn:disabled {
-  color: #94a3b8 !important;
+  color: var(--mauth-text-faint) !important;
   cursor: not-allowed;
 }
 
@@ -601,14 +586,14 @@ onUnmounted(() => dispose());
   margin-top: 2px;
   padding-left: 4px;
   font-size: 11px;
-  color: #ef4444;
+  color: var(--mauth-danger);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 /* ================================
-   按钮样式
+   按钮样式（v2.21.0 去 gradient 单色，与 mobile 一致）
    ================================ */
 .mreg-submit {
   height: 44px;
@@ -617,22 +602,28 @@ onUnmounted(() => dispose());
   border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--mauth-primary-fg);
   border: none;
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  background: var(--mauth-primary);
+  box-shadow: var(--mauth-focus-ring);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .mreg-submit:hover:not(:disabled) {
-  opacity: 0.95;
+  opacity: 0.92;
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
 }
 
 .mreg-submit:active:not(:disabled) {
   transform: translateY(0);
+}
+
+/* disabled：与 mobile 一致，强化"未激活"灰态（v2.21.0） */
+.mreg-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: saturate(0);
 }
 
 .mreg-back-btn {
@@ -642,21 +633,16 @@ onUnmounted(() => dispose());
   border-radius: 12px;
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
-  background: #f1f5f9;
+  color: var(--mauth-text-faint);
+  background: var(--mauth-surface-2);
   border: none;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.dark .mreg-back-btn {
-  background: #1e293b;
-  color: #94a3b8;
-}
-
-.mreg-back-btn:hover {
-  background: #e2e8f0;
-  color: #334155;
+.mreg-back-btn:hover:not(:disabled) {
+  background: var(--mauth-surface-3);
+  color: var(--mauth-text);
 }
 
 /* ================================
@@ -670,36 +656,38 @@ onUnmounted(() => dispose());
   user-select: none;
 }
 
+/* checkbox：去 gradient，单色与 mobile 一致 */
 .mreg-checkbox {
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  border: 1.5px solid #cbd5e1;
+  border: 1.5px solid var(--mauth-border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--mauth-primary-fg);
   flex-shrink: 0;
+  background: var(--mauth-bg);
   transition: all 0.2s;
 }
 
-.dark .mreg-checkbox {
-  border-color: #475569;
+.mreg-checkbox:hover {
+  border-color: var(--mauth-accent);
 }
 
 .mreg-checkbox.checked {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-  border-color: #2563eb;
+  background: var(--mauth-primary);
+  border-color: var(--mauth-primary);
 }
 
 .mreg-highlight-link {
-  color: #2563eb;
+  color: var(--mauth-accent);
   cursor: pointer;
   transition: color 0.2s;
 }
 
 .mreg-highlight-link:hover {
-  color: #1d4ed8;
+  color: var(--mauth-emphasis-fg);
   text-decoration: underline;
 }
 
@@ -709,5 +697,22 @@ onUnmounted(() => dispose());
 .mreg-signin {
   margin: 0;
   font-size: 12px;
+}
+
+/* ================================
+   步骤指示小圆点（v2.21.0 token 化）
+   ================================ */
+.mreg-step-dot {
+  display: inline-block;
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 9999px;
+  background: var(--mauth-border);
+  transition: all 0.3s;
+}
+
+.mreg-step-dot--active {
+  width: 1rem;
+  background: var(--mauth-primary);
 }
 </style>

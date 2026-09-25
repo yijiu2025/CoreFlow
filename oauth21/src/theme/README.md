@@ -30,11 +30,13 @@ src/theme/
         │   │       ├── cyan/{index.ts, theme.scss, assets/}
         │   │       └── rainbow/{index.ts, theme.scss, assets/}
         │   └── colors/                        ← （base 版式的配色，与上面同构）
-        └── web/        该设计的**电脑端**呈现（结构同上）
-            ├── login/index.vue                 ← 骨架（占位，见下文「电脑端现状」）
-            ├── register/index.vue
-            ├── forgot-password/index.vue
-            └── <页面>/colors/{black,white}/index.ts  ← 骨架：黑 / 白
+        ├── standard/   该设计的**桌面主窗口**呈现（结构同上；原 `web/` 更名，2026-09-25）
+        │   ├── login/index.vue                 ← 容器 + 版式已拆分（StandardLogin 容器 + 本版式）
+        │   ├── register/index.vue
+        │   ├── forgot-password/index.vue
+        │   └── <页面>/colors/{black,white}/index.ts  ← 黑 / 白
+        └── mini/       该设计的**iframe 紧凑版**呈现（2026-09-25 起独立设备，与 standard 并列）
+            └── login/index.vue + colors/{black,white}/
 ```
 
 ⚠️ 配色**住在版式下**（`<页面>/[<版式>/]colors/<配色>/`），不是直接挂在设备下 ——
@@ -61,8 +63,8 @@ themes/<包>/<设备>/<页面>/<版式>/colors/<配色>/        ← 变体版式
 
 | 层级 | 是什么 | 目录 | id |
 | --- | --- | --- | --- |
-| **主题包** | 一套完整设计（两端都住这里） | `themes/<包>/` | 目录名 |
-| **设备** | 这套设计在哪种设备上的呈现 | `themes/<包>/<设备>/` | `mobile` / `web`（白名单） |
+| **主题包** | 一套完整设计（各端都住这里） | `themes/<包>/` | 目录名 |
+| **设备** | 这套设计在哪种设备上的呈现 | `themes/<包>/<设备>/` | `mobile` / `standard` / `mini`（白名单；2026-09-25 三值化，mini 从 web 的变体升为独立设备） |
 | **版式** | 换 DOM 结构与交互组织，**同一套业务** | `<设备>/<页面>/index.vue`（基础）与 `<设备>/<页面>/<变体>/index.vue` | 目录名 |
 | **配色** | 只换颜色 / 圆角 / 背景图，**同一套 DOM** | `<页面>/[<版式>/]colors/<配色>/` | 目录名 |
 
@@ -83,23 +85,23 @@ themes/<包>/<设备>/<页面>/<版式>/colors/<配色>/        ← 变体版式
 `MiniRegister.vue` 695 行）目前仍是**业务与 UI 揉在同一个文件里**的单体，尚未拆成
 「业务容器 + 版式」。因此：
 
-| 能力 | 手机端 | 电脑端（现状） |
+| 能力 | 手机端 | 电脑端（standard / mini） |
 | --- | --- | --- |
-| 配色注册 / 列表 / `?theme=` 解析 | ✅ | ✅（已注册 `black` / `white` 两条骨架） |
-| 配色**实际生效**（token 注入 → 像素） | ✅ | ❌ 尚无消费方，等容器重构 |
-| 版式切换（`?view=`） | ✅ | ❌ 同上 |
-| 调试面板按设备分区 | ✅ | ✅（见 `ThemeDebugPanel` 的设备切换区） |
+| 配色注册 / 列表 / `?theme=` 解析 | ✅ | ✅（`black` / `white`，standard 三页 + mini login 各一套） |
+| 配色**实际生效**（token 注入 → 像素） | ✅ | ✅（2026-09-25 起 login 三设备打通，body/canvas 已 token 化） |
+| 版式切换（`?view=`） | ✅ | ✅（login 容器 + 版式已拆分；register/forgot 后续跟进） |
+| 调试面板按设备分区 | ✅ | ✅（设备区含 手机端 / 桌面端 / 紧凑版 三档） |
 
-`web/` 下的 `<page>/index.vue` 是**最小占位**（只渲染一行提示 + 契约 props），刻意不照搬
-单体 UI —— 照搬会立刻产生第二份无人渲染、无人测试的 UI 副本，必然漂移。容器重构落地后
-用真正的版式替换它，机制侧不需要任何改动。
+`standard/` 下的 `login/index.vue` 已是**真正的版式**（2026-09-25 容器 + 版式拆分落地，
+业务在 `view/web/login/StandardLogin.vue` / `MiniLogin.vue` 容器里，UI 在此渲染 ctx）。
+register / forgot-password 仍是占位骨架，容器重构落地后用真正的版式替换，机制侧不需要任何改动。
 
 ## 目录名的口径（真源：`index.ts` 的 `buildRegistry()`）
 
 | 情形 | 结果 |
 | --- | --- |
 | 目录名不合 `^[a-z0-9-]+$` | 跳过，不注册 |
-| 设备段不是 `mobile` / `web` | 整个目录跳过（不会被当成某个配色） |
+| 设备段不是 `mobile` / `standard` / `mini` | 整个目录跳过（不会被当成某个配色） |
 | 缺 `index.ts` / 没有 `default` 导出 / 里面没有 `meta` | 跳过，不注册 |
 | 配色 `meta.id` 与目录名不一致 | **以目录名为准**（被目录名覆盖） |
 | 只有 `theme.scss`、没有 `index.ts` | 残缺，该目录的样式被忽略 |
@@ -116,8 +118,8 @@ themes/<包>/<设备>/<页面>/<版式>/colors/<配色>/        ← 变体版式
 **加一个包**（一整套新设计，两端版式自己写）：
 
 1. 建 `src/theme/themes/<包>/index.ts`，默认导出 `MauthThemePackage`（**只有 meta / 可选 views**）。
-2. 建 `<包>/mobile/` 与 `<包>/web/` 两个设备目录，各放该端的基础版式：
-   `<设备>/<页面>/index.vue`（**基础版式必须有**，它是该端该页的兜底）。
+2. 建 `<包>/mobile/`、`<包>/standard/`、`<包>/mini/` 设备目录（**按需**：某端暂无版式可先不建），
+   各放该端的基础版式：`<设备>/<页面>/index.vue`（**基础版式必须有**，它是该端该页的兜底）。
 3. 各页面下建 `colors/<配色>/index.ts`（**每页每版式至少一套**，否则该范围没有任何配色可注入）。
 4. （可选）加 `theme.scss` 放背景图 / `@font-face` / 伪元素装饰。
 5. 访问 `?theme=<配色 id>` 看效果。

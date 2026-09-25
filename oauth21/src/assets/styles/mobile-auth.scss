@@ -98,10 +98,18 @@
   --mauth-accent: #2563eb;
   --mauth-emphasis-fg: #1e293b;
 
-  /* 状态：错误 / 警告 / 警告底 */
+  /* 状态：错误 / 警告 / 警告底 / 错误底（v2.21.0 加 danger-bg 与 web 端同步）
+     错误底默认走淡红半透，与 html.dark 下的 is-error 一致；light 主题由配色文件覆盖为 #fef2f2 */
   --mauth-danger: #ef4444;
+  --mauth-danger-bg: rgba(239, 68, 68, 0.1);
   --mauth-warn: #f59e0b;
   --mauth-warn-bg: rgba(245, 158, 11, 0.12);
+  /* v2.21.0 成功：浮层 MessageToast success 类与 GraphicCaptcha 成功态用；
+     与现有 --mauth-panel-icon-ok-fg (#10b981) 同色，确保整仓"成功色"一致。
+     success-fg 默认白底—— 在 success 上要醒目，前景色与背景色对比度压满 */
+  --mauth-success: #10b981;
+  --mauth-success-bg: rgba(16, 185, 129, 0.12);
+  --mauth-success-fg: #ffffff;
 
   /* 形状 */
   --mauth-radius: 12px;
