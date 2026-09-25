@@ -95,4 +95,5 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 - ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**。P2 session.js 拆分评估**未开始**。
 - `firewall` 前端无类型检查（121 错）；CI 无前端作业——均待定夺。
 - ⚠️ `oauth21` eslint 存量 39 错（jest 全局 `no-undef` 38 + `AntiCacheDebugPanel.vue` 1）——待定夺。
-- oauth21：register/forgot 的 **standard/mini 容器+版式拆分**未做（login 已完成范式）；mini 设备的 register/forgot 版式未建。
+- oauth21：**forgot-password** 的 standard/mini 容器+版式拆分未做（login、register 已完成范式）；
+  mini 设备的 forgot-password 版式与配色未建。
