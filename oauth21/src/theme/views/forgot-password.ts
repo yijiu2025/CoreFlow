@@ -229,11 +229,15 @@ export function pickForgotPasswordViewId(
   const url = asText(source.url);
   if (url) return forgotPasswordViews.resolve(url, pkg, device) ?? forgotPasswordViews.baseId;
 
+  // 默认落到**当前主题包**（2026-09-25 改）：与新版式架构一致（`colorFromKey` 把基础
+  // 版式形态登记为 `view=包名`，旧 BASE_VIEW_ID='base' 在新版式下不是合法 view）。
+  // forgot-password 仍可能有变体版式，但基础版式按包走；
+  // 旧 `forgotPasswordViews.baseId='base'` 仅在「该主题包未声明 forgot-password 基础版式」时由 registry.load 兜底使用。
   const env = asText(ENV_VIEW);
   return (
     forgotPasswordViews.resolve(source.theme, pkg, device) ??
     (env ? forgotPasswordViews.resolve(env, pkg, device) : null) ??
-    forgotPasswordViews.baseId
+    pkg
   );
 }
 

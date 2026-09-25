@@ -24,7 +24,10 @@ export default [
       'public/**',
       // md5.ts 是 222 行死代码（零引用），但保留作历史参考
       // 不纳入 lint 范围（避免无关错误）
-      'src/utils/md5.ts'
+      'src/utils/md5.ts',
+      // .tmp-probe 是 Playwright 关卡脚本（不在 git 跟踪）；里面用 process/console/document
+      // 等浏览器/node 全局，不该让 eslint 把它当成 src 当作正经代码扫
+      '.tmp-probe/**'
     ]
   },
   js.configs.recommended,

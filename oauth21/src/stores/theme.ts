@@ -521,6 +521,42 @@ export const useThemeStore = defineStore('theme', () => {
     { immediate: true }
   );
 
+  /**
+   * 切版式 → 自动重置配色（让用户**立刻**感受到新版的视觉特征）
+   *
+   * 新版式（register 等）下 `activeView ≡ pkg`：切版式 = 切主题包。
+   * 当前 themeId 仍指向**旧包**的同名配色（如 blue），新包下的同名 tokens
+   * 通常一致（紧凑版式不该改色）→ 视觉零差异 → 用户感觉「颜色没刷新」。
+   *
+   * 修：切到新包时把 themeId 重置到该包/页/设备的默认色（字母序最前者），
+   *    让用户首帧就看到新版的颜色基调。
+   *
+   * 守门（每个都要有，写在前头防止后人手贱删）：
+   *   • 仅**新版式**触发：判别 `themeRecordFor().pkg === activeView.value`，
+   *     旧机制（login 等）下 activeView 是变体名（'mini'），pkg 仍为 default → 不动。
+   *     （同一个 watcher 兼顾两个机制，比各 page 自己监听更不易漏。）
+   *   • 仅 activeView **真的变了**（`newView !== oldView`）—— 重复设同值、setup 时
+   *     初次赋值等情况都不应触发重置（后者由 `urlLockedTheme` 兜底，但少一次副作用更好）。
+   *   • URL 锁定的 theme 不动：部署方/用户的显式意图必须压过联动
+   *     （如 `?view=compact&theme=blue`）。
+   *   • **不写 STORAGE_THEME**：切版式 ≠ 用户选色 —— 用户切回旧版式应恢复上次自选色。
+   *   • **不联动 mode / 不动记忆槽**：同理，切版式 ≠ 用户定系别。
+   *
+   * ⚠️ 默认不 immediate：避免初次加载把 URL/后端下发的有效 themeId 覆盖。
+   */
+  watch(activeView, (newView, oldView) => {
+    if (!newView || newView === oldView) return;
+    // 旧机制（login/forgot 变体版式）下 activeView 是变体名（'mini' 等），
+    // 不是主题包 → 不重置。判别：当前 activeView 是不是当前主题包（= 包名）？
+    if (themeRecordFor().pkg !== activeView.value) return;
+    // URL 锁定 theme（如 `?theme=blue&view=compact`）→ 部署方的显式意图，不被切版式覆盖
+    if (urlLockedTheme) return;
+    const fallback = getDefaultThemeId(activeDevice.value, activePage.value, newView);
+    if (!fallback || fallback === themeId.value) return;
+    // 仅 in-memory 重置 —— 切回旧版式时能恢复 STORAGE_THEME 里的「上次自选色」
+    themeId.value = fallback;
+  });
+
   /** 设置明暗意图（明=白系 / 暗=黑系 / 跟随系统；用户显式选择 → 落盘，联动切配色由 watch(mode) 驱动） */
   function setMode(next: ThemeMode): void {
     mode.value = next;
