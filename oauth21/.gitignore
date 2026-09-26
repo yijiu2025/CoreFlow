@@ -24,3 +24,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vite 转译配置文件时留下的临时产物（冷启一次就生成一个，别提交）
+vite.config.js.timestamp-*.mjs

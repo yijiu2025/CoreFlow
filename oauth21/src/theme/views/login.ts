@@ -240,9 +240,9 @@ export interface LoginViewProps {
  *    显式参数写错时静默换用另一套 UI，比看到默认版式更难排查。
  *
  * ⚠️ glob 用 **`/src/...` 根绝对路径**，不要用 `../` 相对路径：本文件在 `views/` 下一层，
- *    相对路径在当前 Vite 版本下**扫不到任何文件且不报错**（变体永远加载不出来）。
- * ⚠️ 变体是**惰性加载**的（`import.meta.glob` → 独立 chunk）；内置包的基础版式由容器
- *    静态引入（首屏零请求）。新增包或版式目录后要**重启 dev server**
+ *    相对路径在当前 Vite 版本下**扫不到任何文件且不报错**（非内置包的版式永远加载不出来）。
+ * ⚠️ 非内置包的版式是**惰性加载**的（`import.meta.glob` → 独立 chunk）；内置包的版式由
+ *    容器静态引入（首屏零请求）。新增包或版式目录后要**重启 dev server**
  *    （glob 在启动时静态扫描，热更新发现不了新目录）。
  *
  * 与注册页 `theme/views/register.ts` 是同一个机制的两份实例：
@@ -256,21 +256,18 @@ import { createViewRegistry } from './registry';
 import { DEFAULT_THEME_DEVICE, THEME_DEVICES, type ThemeDevice } from '../index';
 
 /**
- * 各主题包里本页的版式实现
+ * 各主题包里本页的版式实现 —— **一个主题包一种版式**（2026-09-26 收窄）
  *
- * 基础版式在 `<page>/index.vue`，变体在 `<page>/<变体>/index.vue`。两种都扫进来：
- * 内置包的基础版式由容器静态引入、用不上它，但其它包的基础版式只能靠这里惰性拿到
- * —— 包是运行时才定的，静态 import 钉不住。glob 用两个模式合并（`index.vue` 少了
- * 一层目录，一个通配模式盖不住两种形态）。
+ * 只有一种目录形态：`themes/<包>/<设备>/login/index.vue`。
+ * 内置包的那份由容器静态引入、用不上它，但其它包（如 compact）只能靠这里惰性拿到
+ * —— 包是运行时才定的，静态 import 钉不住。
+ *
+ * ⚠️ 曾有第二个模式 `themes/<包>/<设备>/login/<版式>/index.vue`（变体子目录），
+ *    已随「变体版式使用新包」删除：一个通配模式现在盖得住全部情形。
  */
-const viewLoaders = {
-  ...import.meta.glob<{ default: Component }>(
-    '/src/theme/themes/*/*/login/index.vue'
-  ),
-  ...import.meta.glob<{ default: Component }>(
-    '/src/theme/themes/*/*/login/*/index.vue'
-  )
-};
+const viewLoaders = import.meta.glob<{ default: Component }>(
+  '/src/theme/themes/*/*/login/index.vue'
+);
 
 /** 本页版式注册表 */
 export const loginViews = createViewRegistry(viewLoaders, { page: 'login' });
@@ -315,12 +312,15 @@ export function pickLoginViewId(
   const pkg = asPackage(source.pkg);
   const device = asDevice(source.device);
   const url = asText(source.url);
-  if (url) return loginViews.resolve(url, pkg, device) ?? loginViews.baseId;
+  // 🔴 URL 非法时回退**当前包**，而不是 `loginViews.baseId`（2026-09-26 修）：
+  //    配色注册表里的 view 段恒等于包名，`'base'` 不是合法 view —— 返回它会让 store
+  //    以 `view='base'` 查配色，全链落空 → **tokens 静默全丢、只剩余 SCSS 基线**
+  //    （症状：`?view=typo` 下页面配色无声变回基线，没有任何报错）。
+  //    回退 pkg 的语义也是对的：URL 显式非法值**不回退到别的版式**（第 2/3 档不接管），
+  //    即"用当前包自己的版式"。
+  if (url) return loginViews.resolve(url, pkg, device) ?? pkg;
 
-  // 默认落到**当前主题包**（2026-09-25 改）：与新版式架构一致（`colorFromKey` 把基础
-  // 版式形态登记为 `view=包名`，旧 BASE_VIEW_ID='base' 在新版式下不是合法 view）。
-  // login/forgot 仍可能有变体版式（如 'mini'），但基础版式按包走；
-  // 旧 `loginViews.baseId='base'` 仅在「该主题包未声明 login 基础版式」时由 registry.load 兜底使用。
+  // 默认落到**当前主题包**：一个主题包 = 一种版式 ⇒ 版式 id ≡ 包名。
   const env = asText(ENV_VIEW);
   return (
     loginViews.resolve(source.theme, pkg, device) ??
@@ -336,7 +336,7 @@ export function pickLoginViewId(
  * 在导航阶段就把请求发出去（与路由组件自身的 chunk 并行），绝大多数情况下
  * 容器挂载时已在模块缓存里 → 赋值发生在同一 tick 内，用户看不到切换。
  *
- * 「内置包 + base」是唯一无需预热的组合：那是容器静态引入的，零请求。
+ * 「内置包 + 该包名版式」是唯一无需预热的组合：那是容器静态引入的，零请求。
  */
 export function preloadLoginView(
   source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown } = {}
@@ -344,8 +344,7 @@ export function preloadLoginView(
   const pkg = asPackage(source.pkg);
   const device = asDevice(source.device);
   const id = pickLoginViewId(source);
-  // 内置包 + 默认设备 + base 是唯一零请求组合：容器静态引入的那份
-  if (id === loginViews.baseId && pkg === loginViews.builtinPackage && device === DEFAULT_THEME_DEVICE)
-    return;
+  // 内置包的版式由容器静态引入 → 零请求，不必预热
+  if (id === pkg && pkg === loginViews.builtinPackage) return;
   void loginViews.load(id, pkg, device);
 }

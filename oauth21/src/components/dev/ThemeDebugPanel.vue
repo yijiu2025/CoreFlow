@@ -64,7 +64,6 @@ import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useThemeStore } from '@/stores/theme';
 import {
-  BASE_VIEW_ID,
   listColorsOf,
   listColorViews,
   THEME_DEVICES,
@@ -73,6 +72,7 @@ import {
 } from '@/theme';
 import type { MauthThemeMeta } from '@/theme/types';
 import { pageFromPath, viewsForPage } from '@/theme/views/pages';
+import { readDeviceParam } from '@/theme/views/params';
 import { MODE_LABELS } from '@/theme/mode';
 import { TONE_LABELS, type ThemeTone } from '@/theme/tone';
 
@@ -154,13 +154,16 @@ const activePage = computed(() => page.value ?? themeStore.activePage);
  */
 const activeViewId = computed(() => {
   const registry = pageViews.value?.registry;
-  if (!registry) return BASE_VIEW_ID;
+  // 该页没接版式机制时无从解析 —— 落当前包名（不是 `'base'`：配色键里的 view 段恒等于
+  // 包名，`'base'` 查不到任何记录）
+  if (!registry) return themeStore.packageId;
   const pkg = themeStore.packageId;
   const dev = device.value;
-  const fromUrl = asText(route.query.view);
+  // 设备维度参数：`view.<设备>` 优先于 `view`（与容器 `pick*ViewId` 同一套读取规则）
+  const fromUrl = asText(readDeviceParam(route.query, 'view', dev));
   // `?view=base` 在新版式下不再是合法 view —— 按"未指定"处理，落到当前包。
   if (fromUrl && fromUrl !== 'base') {
-    // 与 `pickRegisterViewId` 同款：当前包内找 → 把 url 当**包名**试 → 兜底
+    // 与 `pickRegisterViewId` 同款：当前包内找 → 把 url 当**包名**试 → 兜底当前包
     // （后者是关键：用户点 `?view=compact` 实际是把视图切到 compact 包，
     //  面板的"当前版式"必须反映这一点 —— 否则面板高亮还停在 default，
     //  用户看到的视图是 compact 面板说是 default → 觉得"切版式没生效"）。
@@ -174,38 +177,25 @@ const activeViewId = computed(() => {
 });
 
 /**
- * 当前页的**可选版式**（跨主题包 = 跨基础版式）
+ * 当前页的**可选版式**（= 可选主题包）
  *
  * 该页没接入版式机制时返回空数组 —— 面板上只显示颜色区，不显示空的版式行。
  *
- * === 跨主题包版式（2026-09-25 起 register）===
- * register 页面采用「一个主题包 = 一种版式」架构：`?view=compact` 会切到 compact 包，
- * 但面板只按当前包 + 当前设备找变体时**漏列**。这里同时枚举其它主题包里
- * 同一 page 的基础版式，让面板能切换跨包版式（注册表已经在 `packages()` 里汇总）。
- *
- * 🔴 新版式下 view ≡ pkg；不再单独列 `BASE_VIEW_ID='base'`（新版式下非法 view）：
- *    新版式下 activeViewId === packageId（≠ registry.baseId='base'），所以这一行跳过；
- *    旧机制下 activeViewId === registry.baseId（login 默认 'base'），仍把 baseId 加进去。
- *    旧机制下当前包内的 `variants` 也兼容（login 等页面仍可能登记变体）。
+ * 🔴 一个主题包 = 一种版式（2026-09-26）⇒ 版式清单**就是**主题包清单：
+ *    枚举 `registry.packages()` 里当前设备的每个包，包名即版式 id
+ *    （`?view=compact` = 切到 compact 包，见 `registry.resolve`）。
+ *    曾有 `registry.list()`（包内变体）与 `registry.baseId` 两条兼容分支，
+ *    随变体子目录机制的删除一并移除。
  */
 const viewOptions = computed<string[]>(() => {
   const registry = pageViews.value?.registry;
   const p = page.value;
   if (!registry || !p) return [];
   const seen = new Set<string>();
-  // 跨主题包：每个主题包的基础版式 = 该包的包名（新版式架构）
   for (const { pkg, device: pkgDevice } of registry.packages()) {
     if (pkgDevice !== device.value) continue;
     seen.add(pkg);
   }
-  // 当前包内的变体（兼容旧机制：login 等页面仍可能有变体；新版式下 list 恒空）
-  for (const v of registry.list(themeStore.packageId, device.value)) {
-    seen.add(v);
-  }
-  // 旧机制兼容：activeViewId === registry.baseId（login 默认 'base'）时把 baseId 也列上；
-  // 新版式下 activeViewId === packageId（≠ 'base'），跳过 —— 'base' 不是合法 view，
-  // 列了只会让点 'base' 产生无效的 URL '?view=base'。
-  if (activeViewId.value === registry.baseId) seen.add(registry.baseId);
   // 当前生效 view 一定在列（即使该范围内没扫到它，例如外部强制写了未知 id）
   if (!seen.has(activeViewId.value)) seen.add(activeViewId.value);
   return [...seen].sort();
@@ -270,10 +260,8 @@ function toneOfCard(id: string): ThemeTone {
 
 /** 当前**生效**的配色 id（按当前设备/页面/版式校正过的）
  *
- * 🔴 传 `activeViewId.value` 作为 pkg（2026-09-25）：新版式下 view ≡ pkg，让 findRecord
- *    按当前包查（避免硬 encode DEFAULT_THEME_PACKAGE 把 compact 包点 blue 又落到 default）；
- *    旧机制下 activeViewId 是 'base' 或变体名，`themeRecordFor('base', ..., view='base')`
- *    会走 DEFAULT_THEME_PACKAGE 兜底查 base 版式下的配色（兼容旧机制）。
+ * 🔴 传 `activeViewId.value` 作为 pkg：view ≡ pkg（一个主题包 = 一种版式），
+ *    这样 `findRecord` 按**当前包**查 —— 否则会把 compact 包点的 blue 又落回 default 包。
  */
 const activeThemeId = computed(
   () => themeStore.themeRecordFor(activeViewId.value, device.value, activePage.value, activeViewId.value).meta.id
@@ -320,20 +308,26 @@ function cloneQuery(): Record<string, string | string[]> {
 }
 
 /**
- * 切换版式（**只改 URL 的 `view`，path 不动**）
+ * 切换版式（**只改 URL 的版式键，path 不动**）
+ *
+ * 🔴 **设备维度参数**（2026-09-26）：版式键可能是 `view` 也可能是 `view.<设备>`
+ *    （设备专属优先）。必须改**当前设备实际由哪条键决定**的那一条，否则
+ *    带 `?view.standard=compact` 时点面板会写 `view=xxx` 而被设备专属键盖住 ——
+ *    表现是"点了没反应"，和没修的那个 bug 一个症状。
  *
  * 选当前生效的版式时把参数**删掉**而不是写成 `view=<id>`：URL 干净，
  * 也与容器「无参数即默认 view」的判定一致。
  *
- * 🔴 用 `activeViewId.value` 而不是 `registry.baseId` 做"是否默认"判断
- *    （2026-09-25）：新版式下默认 view = 当前包（= pkg），不同页面/设备的
- *    默认值不同（旧机制下 login 默认 'base'、新版式下 register 默认 'default'/'compact'）；
+ * 🔴 用 `activeViewId.value` 而不是 `registry.baseId` 做"是否默认"判断：
+ *    版式 id ≡ 包名，默认 view = 当前包，不同页面/设备的默认值不同；
  *    用面板上的"当前生效版式"当默认更准。
  */
 function pickView(id: string): void {
   const query = cloneQuery();
-  if (id === activeViewId.value) delete query.view;
-  else query.view = id;
+  const scopedKey = `view.${device.value}`;
+  const key = scopedKey in query ? scopedKey : 'view';
+  if (id === activeViewId.value) delete query[key];
+  else query[key] = id;
   void router.replace({ query });
 }
 
@@ -428,7 +422,7 @@ function resetAll(): void {
         <div class="mb-1 flex items-baseline justify-between">
           <span class="text-[11px] text-slate-400">版式</span>
           <span class="truncate pl-2 text-[10px] text-slate-500">
-            {{ activePage }}{{ viewOptions.length > 1 ? '' : '（暂无变体）' }}
+            {{ activePage }}{{ viewOptions.length > 1 ? '' : '（仅此一种版式）' }}
           </span>
         </div>
         <div class="flex flex-wrap gap-1">

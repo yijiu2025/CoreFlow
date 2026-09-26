@@ -39,8 +39,8 @@ const showConfirmPwd = ref(false);
 
 <template>
   <!-- 移动端全屏重置密码（与手机端登录/注册页共用 mauth-* 样式体系）
-       data-mauth-view：版式自己声明身份，排查"现在到底是哪套 UI"时一眼可见 -->
-  <div class="mauth-page" data-mauth-view="base">
+       data-mauth-view：版式自己声明身份，值 = **主题包名**（一个主题包 = 一种版式） -->
+  <div class="mauth-page" data-mauth-view="default">
     <!-- 顶部 Header：返回 + 主题切换 + 标题 + 步骤副标题 + 进度条 -->
     <header class="mauth-header">
       <button class="mauth-back-btn" :aria-label="ctx.t('forgot.back_to_login')" @click="ctx.actions.back()">

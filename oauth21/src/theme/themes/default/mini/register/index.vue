@@ -22,7 +22,7 @@ const isStep1 = computed(() => ctx.value.step === 1);
 </script>
 
 <template>
-  <div class="mini-reg-root w-full h-full">
+  <div class="mini-reg-root w-full h-full" data-mauth-view="default">
     <AuthContainer :app-name="ctx.appName">
       <template #header>
         <div class="flex items-center justify-between">

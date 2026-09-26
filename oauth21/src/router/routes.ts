@@ -3,6 +3,7 @@ import { preloadRegisterView } from '@/theme/views/register';
 import { preloadLoginView } from '@/theme/views/login';
 import { preloadForgotPasswordView } from '@/theme/views/forgot-password';
 import { useThemeStore } from '@/stores/theme';
+import { readDeviceParam } from '@/theme/views/params';
 
 /**
  * 组装一个 `beforeEnter`：顺手预取该页**移动端版式**的 chunk
@@ -27,11 +28,25 @@ import { useThemeStore } from '@/stores/theme';
  * 现在 `/m/*` 与 `/login` 共用同一套分发器：**视图自适应视口，URL 永远不变**。
  * 窄屏渲染手机端容器、宽屏渲染桌面卡片，两种 URL 都成立、都对。
  */
+/**
+ * 版式预取的设备身份
+ *
+ * 这些 `beforeEnter` 只挂在 `/m/*` 上（`mobileRoutes`，都带 `meta.device='mobile'`），
+ * 所以设备固定是 mobile —— 预取该读的键是 `?view.mobile=`，不是通用的 `?view=`
+ * （设备维度参数：`?view.mobile=default&view.standard=compact` 时，这里预取的必须是
+ * 手机端那一套，否则会白拉一个用不上的 chunk）。
+ */
+const PRELOAD_DEVICE = 'mobile' as const;
+
 function withViewPreload(
   preload: (source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown }) => void
 ) {
   return (to: RouteLocationNormalized) => {
-    preload({ url: to.query.view, pkg: readPackageId(), device: 'mobile' });
+    preload({
+      url: readDeviceParam(to.query, 'view', PRELOAD_DEVICE),
+      pkg: readPackageId(),
+      device: PRELOAD_DEVICE
+    });
     return undefined;
   };
 }

@@ -44,6 +44,7 @@ import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useThemeStore } from '@/stores/theme';
 import BaseRegisterView from '@/theme/themes/default/standard/register/index.vue';
 import { pickRegisterViewId, registerViews } from '@/theme/views/register';
+import { readDeviceParam } from '@/theme/views/params';
 import type { RegisterDirection, RegisterTranslate, RegisterViewContext } from '@/theme/views/register';
 import type { Component, Ref } from 'vue';
 
@@ -319,7 +320,7 @@ const THEME_DEVICE = 'standard' as const;
 
 const viewId = computed(() =>
   pickRegisterViewId({
-    url: route.query.view,
+    url: readDeviceParam(route.query, 'view', THEME_DEVICE),
     pkg: themeStore.packageId,
     device: THEME_DEVICE
   })

@@ -25,6 +25,7 @@ import { useQrLogin } from '@/composables/useQrLogin';
 import { useLoginFlow } from '@/composables/useLoginFlow';
 import BaseMiniLoginView from '@/theme/themes/default/mini/login/index.vue';
 import { loginViews, pickLoginViewId } from '@/theme/views/login';
+import { readDeviceParam } from '@/theme/views/params';
 import type { LoginTranslate, LoginViewContext } from '@/theme/views/login';
 import type { Component, Ref } from 'vue';
 
@@ -161,7 +162,7 @@ const THEME_DEVICE = 'mini' as const;
 
 const viewId = computed(() =>
   pickLoginViewId({
-    url: route.query.view,
+    url: readDeviceParam(route.query, 'view', THEME_DEVICE),
     theme: themeStore.viewFor('login'),
     pkg: themeStore.packageId,
     device: THEME_DEVICE

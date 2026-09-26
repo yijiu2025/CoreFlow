@@ -25,6 +25,7 @@ import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useThemeStore } from '@/stores/theme';
 import BaseMiniForgotPasswordView from '@/theme/themes/default/mini/forgot-password/index.vue';
 import { forgotPasswordViews, pickForgotPasswordViewId } from '@/theme/views/forgot-password';
+import { readDeviceParam } from '@/theme/views/params';
 import type {
   ForgotPasswordStage,
   ForgotPasswordTranslate,
@@ -242,7 +243,7 @@ const THEME_DEVICE = 'mini' as const;
 
 const viewId = computed(() =>
   pickForgotPasswordViewId({
-    url: route.query.view,
+    url: readDeviceParam(route.query, 'view', THEME_DEVICE),
     theme: themeStore.viewFor('forgot-password'),
     pkg: themeStore.packageId,
     device: THEME_DEVICE

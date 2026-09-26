@@ -1,20 +1,25 @@
 /**
- * 主题（配色）注册表 —— 三级结构：**主题包 → 设备 → 配色**
+ * 主题（配色）注册表 —— 四级结构：**主题包 → 设备 → 页面 → 配色**
  *
  * === 目录骨架 ===
  * ```
  * theme/themes/<包>/                    主题包：一套完整设计，手机端与电脑端都住这里
  * ├── index.ts                          包定义（只有 meta / views，不再是"默认配色"）
  * ├── mobile/                           该设计的**手机端**呈现
- * │   ├── <page>/index.vue              版式实现（基础版式；变体为 <page>/<变体>/index.vue）
- * │   └── colors/<配色>/                手机端可用的配色（互不共享，各端各配各的）
+ * │   └── <页面>/
+ * │       ├── index.vue                 该包在该设备该页的**唯一**版式
+ * │       └── colors/<配色>/            该页的配色（配色只挂在页面下，与版式同级）
  * ├── standard/                         该设计的**桌面主窗口**呈现（结构同上）
- * │   ├── <page>/index.vue
- * │   └── colors/<配色>/
+ * │   └── <页面>/{index.vue, colors/<配色>/}
  * └── mini/                             该设计的**iframe 紧凑版**呈现（结构同上）
- *     ├── <page>/index.vue
- *     └── colors/<配色>/
+ *     └── <页面>/{index.vue, colors/<配色>/}
  * ```
+ *
+ * 🔴 **一个主题包 = 一种版式**（2026-09-26 定案，用户：「变体版式使用新包」）：
+ *    `<页面>` 下**只有** `index.vue` 与 `colors/`，**没有**「版式」这一层目录。
+ *    要另一种版式 → 新建包（`theme/themes/compact/<设备>/<页面>/`），不要建
+ *    `<页面>/<版式>/`。曾支持过的 6 段形态已删除，原因是它要求换版式时复制整套配色，
+ *    两套必然漂移。守卫见 `.tmp-probe/verify-theme-dirs.mjs`。
  *
  * === 为什么设备是主题包内的一层，而不是另一个顶层目录 ===
  * 一个主题包 = 一套**设计语言**。手机端与电脑端是这套语言在两种设备上的呈现，
@@ -27,24 +32,30 @@
  * 所以 `mobile/colors/` 与 `standard/colors/` 是**两个互不影响的配色集合**，
  * 虽然目录名可以相同 —— 这正是「手机端、电脑端分别配置主题」的落点。
  *
- * === 为什么配色 id 的唯一性作用域是「设备内」 ===
- *   URL `?theme=ocean` 只给一个 id —— 但**取值时必须同时给出设备**
- *   （`getThemeRecord(id, device)`），歧义在入口就被设备消解掉了。
+ * === 为什么配色 id 的唯一性作用域是「同包同设备同页」 ===
+ *   URL `?theme=ocean` 只给一个 id —— 但**取值时必须同时给出归属**
+ *   （`getThemeRecord(id, pkg, device, page, view)`），歧义在入口就被消解掉了。
  *   于是：
- *     • 同一个包、同一个设备下，配色 id 必须唯一（该端只有一个答案）
- *     • **跨设备可以同名**：`mobile/colors/mono/` 与 `standard/colors/mono/` 是**正常且必要**的
+ *     • 同一个包、同一个设备、同一个页面下，配色 id 必须唯一（该范围只有一个答案）
+ *     • **跨设备可以同名**：`default/mobile/login/colors/black` 与
+ *       `default/standard/login/colors/black` 并存是**正常且必要**的
  *       —— 黑白这套设计在两端本来就该各配各的尺寸/圆角。
  *   ⚠️ 同名 ⇒ **同一个颜色概念、两端各配一份**：手机端海洋蓝、电脑端深墨蓝可以都叫
  *     `ocean`，各写各的 tokens，仍是两套独立配色（这正是"两端分别配置"的落点）。
  *     若两端要的是**两个不同的 id**（手机 `blue`、电脑 `black`），那不是"重名"问题，
- *     而是 URL 需要按设备分别给 id —— 当前只支持一个 `?theme=`，尚未提供设备维度参数。
- *   同包同设备内重名按路径排序**先到先得**并告警，不静默覆盖
+ *     而是 URL 需要按设备分别给 id —— 用**设备维度参数**：
+ *     `?theme.mobile=blue&theme.standard=black`（见 `stores/theme.ts` 的 `readUrlIntent`）。
+ *   同包同设备同页内重名按路径排序**先到先得**并告警，不静默覆盖
  *   （否则哪套生效取决于文件系统顺序）。
  *
- * === 黑白（mono）不是"没有配色" ===
- *   它是各设备下的一套**具名配色**（`<设备>/colors/mono/`），与其它配色平级，
- *   可以显式选中、出现在列表里。它刻意不带 token —— 黑白档的色值就是
- *   `mobile-auth.scss` / 电脑端样式表的基线本身，保住"零配色时零回归"这条不变量。
+ * === 黑白不是"没有配色" ===
+ *   它们是**两个具名配色目录**（`<页面>/colors/{black,white}/`），与 blue/cyan/rainbow
+ *   平级，可以显式选中、出现在列表里。黑白**也带自己的 tokens 与 tone**
+ *   （`black.tone='dark'` / `white.tone='light'`）—— 它们不是"零 token 的隐式兜底"。
+ *   真正保住"零配色时零回归"的是**注册表为空/该范围无配色**时走的 `emptyRecord`
+ *   路径（tokens 为 undefined，外观完全由 SCSS 基线决定）。
+ *   ⚠️ 早期注释里的 `mono`（`colors/mono/`，零 token）**已改名且加上了 tokens**，
+ *     现为 `black` / `white` 两个目录，`colors/mono/` 不存在。
  *
  * === 加载策略（为什么分两档）===
  *   • `index.ts`（元信息 + tokens）**同步预载**：体积只有几百字节，且 URL 参数
@@ -63,8 +74,9 @@ import { normalizeTone, type ThemeTone } from './tone';
 /**
  * 空记录（registered 目录尚未产出任何记录）的占位配色 id
  *
- * ⚠️ 它**不再**表示"默认配色"：自 2026-09-24 起，黑白基线是各设备下**具名的正式配色**
- * （`<设备>/colors/mono/`），由 `defaultColorIdOf(device)` 按设备取。这里只用于空记录占位。
+ * ⚠️ 它**不再**表示"默认配色"：自 2026-09-24 起黑白是各设备下**具名的正式配色**
+ * （`<页面>/colors/{black,white}/`），由 `defaultColorIdOf(device, page, view)` 按范围取。
+ * 这里只用于空记录占位。
  */
 export const DEFAULT_THEME_ID = 'default';
 
@@ -103,10 +115,15 @@ export const DEFAULT_THEME_DEVICE: ThemeDevice = 'mobile';
 export const DEFAULT_THEME_PAGE = 'login';
 
 /**
- * 基础版式的逻辑 id（与 `theme/views/registry.ts` 的 `BASE_VIEW_ID` 同一约定值）
+ * 基础版式的**逻辑** id（与 `theme/views/registry.ts` 的 `BASE_VIEW_ID` 同一约定值）
  *
- * 配色的目录在基础版式下少一层（`<页面>/colors/<颜色>/`），本常量是那条捷径的
- * 逻辑名字 —— 注册表里基础版式的配色统一登记在这个 view 名下。
+ * ⚠️ 它只是「版本注册表」里的逻辑 baseId，**不是配色注册表里的 view 值**：
+ *    配色记录里的 view 段恒等于包名（一个主题包 = 一种版式），`'base'` 永远不会
+ *    出现在配色键里。外部 `?view=base` 由各页 `pick*ViewId` 归一化到当前包名
+ *    （见 `views/register.ts` 的注释），到不了本注册表。
+ *
+ * 保留本常量是为了 `createViewRegistry` 的默认值与旧调用点的兼容；
+ * 新增代码不要用它当作配色查找的 view 参数。
  */
 export const BASE_VIEW_ID = 'base';
 
@@ -116,35 +133,27 @@ const packageModules = import.meta.glob<{ default: MauthThemePackage }>('./theme
 });
 
 /**
- * 各**版式**下的配色（同步预载，理由见文件头「加载策略」）
+ * 配色的元信息 + tokens（同步预载，理由见文件头「加载策略」）
  *
- * 两个 glob 合并，因为基础版式的配色少一层目录：
- *   • 基础版式：`themes/<包>/<设备>/<页面>/colors/<颜色>/index.ts`
- *   • 变体版式：`themes/<包>/<设备>/<页面>/<版式>/colors/<颜色>/index.ts`
- * 前者命中的键里「配色」段的位置与后者不同，所以解析函数分两个正则。
+ * 🔴 **只有一种目录形态**（2026-09-26 收窄）：
+ *    `themes/<包>/<设备>/<页面>/colors/<颜色>/index.ts`
+ *    配色与版式**同级** ——「版式」不再是一层目录。变体版式请**新建主题包**
+ *    （`themes/compact/<设备>/<页面>/`），不要建 `<页面>/<版式>/`。
+ *
+ * 曾支持过 6 段的变体形态（`<页面>/<版式>/colors/`），本次已删除：它要求换版式时
+ * 复制整套配色，两套必然漂移；而「一个主题包 = 一种版式」让换版式 = 换包，
+ * 配色跟着包走，天然只有一份。守卫断言见 `.tmp-probe/verify-theme-dirs.mjs`。
  */
-const colorModules = {
-  ...import.meta.glob<{ default: MauthThemeColor }>(
-    './themes/*/*/*/colors/*/index.ts',
-    { eager: true }
-  ),
-  ...import.meta.glob<{ default: MauthThemeColor }>(
-    './themes/*/*/*/*/colors/*/index.ts',
-    { eager: true }
-  )
-};
+const colorModules = import.meta.glob<{ default: MauthThemeColor }>(
+  './themes/*/*/*/colors/*/index.ts',
+  { eager: true }
+);
 
-/** 版式内配色各自的附加样式（惰性，`?inline` 取编译后 CSS 字符串） */
-const colorStyles = {
-  ...import.meta.glob<string>('./themes/*/*/*/colors/*/theme.scss', {
-    query: '?inline',
-    import: 'default'
-  }),
-  ...import.meta.glob<string>('./themes/*/*/*/*/colors/*/theme.scss', {
-    query: '?inline',
-    import: 'default'
-  })
-};
+/** 配色的附加样式（惰性，`?inline` 取编译后 CSS 字符串） */
+const colorStyles = import.meta.glob<string>('./themes/*/*/*/colors/*/theme.scss', {
+  query: '?inline',
+  import: 'default'
+});
 
 /** 目录名只允许小写字母/数字/短横线：既约束了主题作者，也避免奇怪目录名进入属性选择器 */
 const THEME_ID_RE = /^[a-z0-9-]+$/;
@@ -170,15 +179,19 @@ function packageFromKey(key: string): string | null {
   return id && THEME_ID_RE.test(id) ? id : null;
 }
 
-/** 从配色键里取出的归属五段（基础版式时 view = 包名） */
+/** 从配色键里取出的归属四段（包 / 设备 / 页面 / 配色）+ 派生的 view 段 */
 interface ColorKeyInfo {
   pkg: string;
   device: ThemeDevice;
   page: string;
   /**
-   * 版式 id；基础版式（配色的三层直接落在 `<页面>/colors/` 下）时为**包名**（2026-09-25 起
-   * register 等新版式页面约定：「一个主题包 = 一种版式」，故基础版式的 view 段填包名）。
-   * 变体版式（`colors/` 在 `<页面>/<变体>/` 下）时为显式变体名。
+   * 版式 id —— **恒等于包名**（2026-09-26 起）
+   *
+   * 「一个主题包 = 一种版式」是架构约定，所以配色的归属里 version 段没有独立取值：
+   * `themes/<包>/<设备>/<页面>/index.vue` 是该包在该设备的唯一版式，其下
+   * `colors/<色>/` 与该版式配套，登记时 `view` 就填**包名**。
+   * 保留这个字段是为了让注册表键仍是「包/设备/页面/版式/配色」五段，
+   * 调用方（store / 面板）不必改签名；但它的值只能由 `pkg` 派生，不可来自目录。
    */
   view: string;
   colorId: string;
@@ -187,64 +200,55 @@ interface ColorKeyInfo {
 /**
  * 从配色键里取出归属；不合法返回 null
  *
- * 两种形态（见 `colorModules` 的说明）：
- *   • 基础版式：`./themes/<包>/<设备>/<页面>/colors/<颜色>/index.ts`（5 段目录 + 文件名）
- *   • 变体版式：`./themes/<包>/<设备>/<页面>/<版式>/colors/<颜色>/index.ts`（6 段）
+ * 目录只有**一种**形态（见 `colorModules` 的说明）：
+ *   `./themes/<包>/<设备>/<页面>/colors/<颜色>/index.ts`
  * 设备段必须命中白名单，否则整个目录跳过。
  *
- * 🔴 **基础版式的 view = 包名**（2026-09-25 起 register 等新版式页面约定）：
- *    一个主题包 = 一种版式（架构约定）。`themes/<包>/<设备>/<页面>/index.vue` 是该
- *    包在该设备的"基础版式"，其下 `colors/<色>/` 与该版式配套 —— 因此该套配色登记
- *    时 `view` 段填**包名**，而不是 `base`。
+ * 🔴 **view 段 = 包名**（一个主题包 = 一种版式）：
  *    例：`themes/compact/mobile/register/colors/blue/` → `view='compact'`。
- *    这样 `findRecord(id, 'compact', ..., view='compact')` 就能精确命中，
- *    切到 compact 包点 blue 不会再被 `view='base'` 的 default 配色抢走（issue：用户
- *    反馈"切换版式后蓝青颜色切换无效"，根因就是 view 段错把基础版式都打成 'base'）。
- *    `BASE_VIEW_ID='base'` 仍保留作为注册表里的逻辑 baseId（`createViewRegistry`），
- *    不再作为本注册表里的 view 值出现 —— `base` 在新版式下**不是合法 view 名**。
+ *    这样 `findRecord(id, 'compact', …, view='compact')` 就能精确命中，
+ *    切到 compact 包点 blue 不再被 default 包的配色抢走（issue：用户反馈
+ *    "切换版式后蓝青颜色切换无效"，根因就是 view 段错把基础版式都打成 `'base'`）。
+ *
+ * 🔴 **6 段的变体形态已删除**（2026-09-26）：曾支持
+ *    `themes/<包>/<设备>/<页面>/<版式>/colors/<色>/`。它要求换版式时复制整套配色，
+ *    两套必然漂移 —— 现在换版式 = **新建主题包**。守卫断言见
+ *    `.tmp-probe/verify-theme-dirs.mjs`（断言「不存在变体目录」与「glob 只有一套」）。
+ *    `BASE_VIEW_ID='base'` 仍作为注册表逻辑值保留（`createViewRegistry` 用），
+ *    但**不作为 view 值出现在本注册表的键里**。
  */
 function colorFromKey(key: string, suffix: string): ColorKeyInfo | null {
   const file = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const baseRe = new RegExp(
-    `^\\./themes/([^/]+)/([^/]+)/([^/]+)/colors/([^/]+)/${file}$`
-  );
-  const variantRe = new RegExp(
-    `^\\./themes/([^/]+)/([^/]+)/([^/]+)/([^/]+)/colors/([^/]+)/${file}$`
-  );
-
-  const variant = variantRe.exec(key);
-  const m = variant ?? baseRe.exec(key);
+  const re = new RegExp(`^\\./themes/([^/]+)/([^/]+)/([^/]+)/colors/([^/]+)/${file}$`);
+  const m = re.exec(key);
   if (!m) return null;
-  // 基础版式形态 → view = 包名（新版式约定）；变体形态 → view = 显式变体名
-  const view = variant ? m[4] : m[1];
-  const colorId = variant ? m[5] : m[4];
   const pkg = m[1];
   const device = asDevice(m[2]);
   const page = m[3];
+  const colorId = m[4];
   if (!pkg || !device || !page || !colorId) return null;
   if (!THEME_ID_RE.test(pkg) || !THEME_ID_RE.test(page) || !THEME_ID_RE.test(colorId)) return null;
-  if (view !== BASE_VIEW_ID && !THEME_ID_RE.test(view)) return null;
-  return { pkg, device, page, view, colorId };
+  // 一个主题包 = 一种版式 ⇒ view 段就是包名（不由目录派生，没有第二种形态）
+  return { pkg, device, page, view: pkg, colorId };
 }
 
 function buildRegistry(): Map<string, MauthThemeRecord> {
   /*
    * 键是「包 / 设备 / 页面 / 版式 / 配色」五段复合键。
    *
-   * === 为什么配色挂在**版式**下 ===
-   * "一个版式有几种颜色" —— 颜色清单跟着版式走：同一页的 `base` 与 `compact`
-   * 各自可以有不同的可选颜色。所以配色的目录位置在 `<页面>/[<版式>/]colors/<颜色>/`，
-   * 键里必须把「页面」与「版式」两段都带上，否则同名颜色（如 `black`）在
-   * 同一设备的不同版式间会互相覆盖。
+   * 🔴 **「版式」段恒等于「包」段**（2026-09-26 收窄后）：一个主题包 = 一种版式，
+   *    所以 `view === pkg` 永远成立（见 `colorFromKey`）。保留这一段是为了让
+   *    `findRecord` / store / 面板的签名不必改；不要试图从目录里读它的值 ——
+   *    `<页面>/<版式>/colors/` 那种 6 段形态**已删除**。
    *
    * === 为什么不是单纯用配色 id 作键（早期实现）===
-   * `black` 这样的配色在**每个版式下**各有一份是**正常且必要**的 —— 同一个版本
-   * 在基础版式与紧凑版式下本来就该各自可配（基线的尺寸/圆角不同）。
-   * 把它判成"重名冲突"会让其余版式静默失去配色。
+   * 同一个 `black` 在**每个包、每个设备、每个页面**下各有一份是**正常且必要**的
+   * （各端各配各的尺寸/圆角）。把它判成"重名冲突"会让其余范围静默失去配色。
    *
-   * 那"配色 id 在同一版式内唯一"这条规则还成立吗？成立，作用域是「同包同设备同页同版式」：
-   *   • 同一个版式下两个同名配色才是真冲突（取值时只给一个 id，必须有唯一答案）
-   *   • 跨版式、跨设备、跨包都可以同名，因为取值时必然同时给出这几段
+   * 那"配色 id 唯一"这条规则还成立吗？成立，作用域收窄到「同包同设备同页」：
+   *   • 同一范围内两个同名配色才是真冲突（取值时只给一个 id，必须有唯一答案）
+   *   • 跨设备、跨页面、跨包都可以同名，因为取值时必然同时给出这几段
+   *     （铁证：`default/{mobile,standard,mini}/login/colors/{black,white}` 三份并存）
    */
   const registry = new Map<string, MauthThemeRecord>();
   /** 包名 → 包定义的版式声明（配色未自带声明时继承它；跨设备共用一份） */
@@ -320,14 +324,13 @@ const registry = buildRegistry();
  * 查找一条配色记录
  *
  * **五段都必须给**（包 / 设备 / 页面 / 版式 / 配色）：配色的归属就是这五段，
- * 少给任何一段都可能命中同一 id 的另一份（`black` 在每个版式 / 每个包下各有一份）。
+ * 少给任何一段都可能命中同一 id 的另一份（`black` 在每个包 / 每个设备下各有一份）。
  *
- * 🔴 **新版式架构下 view ≡ pkg**：基础版式的 view 段是包名（见 `colorFromKey`），
- *    所以「当前包 = 当前 view」是常态。给定精确包（含视图段），**第一行**就能
- *    直接命中；找不到再走回退链。
+ * 🔴 **view ≡ pkg**（一个主题包 = 一种版式，见 `colorFromKey`）：所以「当前包 = 当前
+ *    view」是常态。给定精确包（含视图段），**第一行**就能直接命中；找不到再走回退链。
  *
  * @param pkg  主题包 id（`DEFAULT_THEME_PACKAGE` = 'default' 表示默认包）
- * @param view 版式 id；新版式下 = pkg 名；旧机制下 'base' 或变体名
+ * @param view 版式 id —— **恒等于包名**（2026-09-26 收窄后不再有别的取值）
  */
 function findRecord(
   id: string,
@@ -336,18 +339,18 @@ function findRecord(
   page: string,
   view: string
 ): MauthThemeRecord | undefined {
-  // ① 精确匹配：当前包 × 当前设备 × 当前页面 × 当前 view（新版式下 = 包名）
+  // ① 精确匹配：当前包 × 当前设备 × 当前页面 × 当前 view（= 包名）
   // 🔴 旧实现这里 hardcode 了 `DEFAULT_THEME_PACKAGE`，导致切到 compact 包后点
-  //    blue 永远命中 default 包 —— 因为 compact/mobile/register/compact/blue
-  //    这个键根本不存在（全打成了 view='base'）。改为按调用方传入的 pkg 查。
+  //    blue 永远命中 default 包 —— 因为 compact 包的配色键根本命中不了。改为按
+  //    调用方传入的 pkg 查。
   return registry.get(`${pkg}/${device}/${page}/${view}/${id}`) ??
-    // ② 兜底扫描：任意包 × 同 view（极少见，正常不该走到）
+    // ② 兜底扫描：任意包 × 同 view（切包后 pkg 还没跟上的那一帧，极少见）
     [...registry.values()].find(
       r => r.meta.id === id && r.device === device && r.page === page && r.view === view
     ) ??
-    // ③ 跨 view 兜底：旧机制下 'base' 是回退目标；新版式下 'DEFAULT_THEME_PACKAGE' 是
-    //    兜底（兼容主题包粒度版式：切到 compact 后想看 blue，找不到时退回 default 包 view='default'）
-    ((view !== BASE_VIEW_ID && view !== DEFAULT_THEME_PACKAGE)
+    // ③ 跨包兜底：当前包没有这个 id 时退回**默认包**（如切到 compact 后想看 blue，
+    //    该包没这套色 → 用 default 包的同名色）。`view ≡ pkg` 使这段无需再判 'base'。
+    (view !== DEFAULT_THEME_PACKAGE
       ? [...registry.values()].find(
           r => r.meta.id === id && r.device === device && r.page === page && r.view === DEFAULT_THEME_PACKAGE
         )
@@ -361,8 +364,8 @@ function findRecord(
  * 之所以不写死 `black`：允许某个版式只提供一套配色而不必强行命名。
  * 该版式下一套配色都没有时返回 null，由调用方退回"什么都不注入"的基线路径。
  *
- * ⚠️ 新版式下 view = pkg；若该版式下没配色，本函数返回 null —— 调用方应当别
- *    跨 view 借配色（拿别处版式的 token 渲染当前版式尺寸/圆角会错位）。
+ * ⚠️ view = 包名（一个主题包 = 一种版式）；若该范围内没配色，本函数返回 null ——
+ *    调用方应当别跨范围借配色（拿别包的 token 渲染当前版式尺寸/圆角会错位）。
  */
 function defaultColorIdOf(device: ThemeDevice, page: string, view: string): string | null {
   const ids = [...registry.values()]
@@ -448,21 +451,23 @@ export function listThemeGroups(
  *    （用户 2026-09-25 明确："黑白色和蓝青色应当同等，他们只是一个选项而已"）——
  *    排序上的任何特权都是"黑白更特殊"的暗示。面板的换行位置不值得为它破例。
  *
- * 🔴 **新版式下 view ≡ pkg**，所以默认情况下应只列「当前 view」下的配色。
+ * 🔴 **view ≡ pkg**，所以本函数只列「当前 view（= 当前包）」下的配色。
  *    跨包兜底：切到 compact 后该包若无某色，**不该**默默收进 default 包那套同名色
  *    （否则"切版式后蓝青颜色切换无效"又会发生 —— 调试面板看着有 blue，点完渲的是
- *    default 包的 token）。这里只在 view 与 DEFAULT_THEME_PACKAGE 同名（即用户在看
- *    default 包的版式）时允许 BASE_VIEW_ID 作为兼容回退（兼容旧机制下 'base' 是 view）。
+ *    default 包的 token）。
  *
- * @param view 当前生效的 view id（新版式下 = pkg）
+ * ⚠️ 这里**没有** `BASE_VIEW_ID` 兼容分支（2026-09-26 删除）：记录里的 view 恒等于
+ *    包名，`'base'` 永远不会出现在键里，旧分支写 `record.view !== BASE_VIEW_ID` 只会
+ *    让「以 view='base' 查询」时把**所有**记录都跳过 —— 兼容语义反了，反而是坑。
+ *
+ * @param view 当前生效的 view id（= 包名）
  */
 export function listColorsOf(device: ThemeDevice, page: string, view: string): MauthThemeMeta[] {
   const seen = new Map<string, MauthThemeMeta>();
   for (const record of registry.values()) {
     if (record.device !== device || record.page !== page) continue;
-    // 精确匹配 view；新版式下 view 即包名，所以这一行就能精确命中。
-    // `BASE_VIEW_ID` 兼容旧机制（login 等页面 view 仍可能为 'base'）。
-    if (record.view !== view && record.view !== BASE_VIEW_ID) continue;
+    // 精确匹配 view（= 包名），一行命中
+    if (record.view !== view) continue;
     if (!seen.has(record.meta.id)) seen.set(record.meta.id, record.meta);
   }
   return [...seen.values()].sort((a, b) => a.id.localeCompare(b.id));
@@ -475,8 +480,8 @@ export function listColorsOf(device: ThemeDevice, page: string, view: string): M
  *    后者会回落到该版式的默认配色，于是"一个本版式不存在的 id"会拿到**别的配色**
  *    的系别，store 据此判断"要不要联动"就会判错。
  *
- * 新版式下 `findRecord` 需要 pkg（见 `findRecord` 注释）。该函数不知道当前包，
- * 只能先按 DEFAULT_THEME_PACKAGE 查；新版式下这通常够用（同名 id 跨包系别一致）。
+ * `findRecord` 需要 pkg，而本函数不知道当前包（只收 device/page/view）：它只能先按
+ * `DEFAULT_THEME_PACKAGE` 查；`view ≡ pkg` 下这通常够用（同名 id 跨包系别一致）。
  */
 export function toneOfColor(
   id: string,
@@ -573,21 +578,24 @@ export function resolveThemeId(
  * 尺寸/圆角都对不上的东西，不如老实用基线。
  *
  * @param pkg  主题包 id（`DEFAULT_THEME_PACKAGE` = 'default' 表示默认包）；
- *             新版式架构下应**显式传当前包**（即 `packageId`），否则会按 default 查，
+ *             应**显式传当前包**（即 `packageId`），否则会按 default 查，
  *             与「切到 compact 包」后的版式/UI 不一致。
  * @param page 页面名（`theme/views/<page>.ts` 的文件名，如 `register`）
- * @param view 版式 id（新版式下 = pkg 名；旧机制下 'base' 或变体名）
+ * @param view 版式 id —— **恒等于包名**（2026-09-26 收窄）；传 `'base'` 会被归一化到包名
  */
 export function getThemeRecord(
   id: string,
   pkg: string = DEFAULT_THEME_PACKAGE,
   device: ThemeDevice = DEFAULT_THEME_DEVICE,
   page: string = DEFAULT_THEME_PAGE,
-  view: string = BASE_VIEW_ID
+  view: string = DEFAULT_THEME_PACKAGE
 ): MauthThemeRecord {
-  // 新版式下「未指定 view」语义模糊 —— 默认行为：取 pkg 名作为 view（与
-  // pickRegisterViewId 的兜底一致）。调用方显式传 view 时仍以调用方为准。
-  const effectiveView = view === BASE_VIEW_ID && pkg !== DEFAULT_THEME_PACKAGE ? pkg : view;
+  // 🔴 `'base'` 归一化到包名（2026-09-26）：配色键里的 view 段恒等于包名，`'base'`
+  //    永远不在键里。若原样透传，`findRecord` 会全链落空 → 最终 `emptyRecord`
+  //    → **配色 tokens 静默全丢、只剩余 SCSS 基线**（`?view=typo` 曾经就是这个症状）。
+  //    各页 `pick*ViewId` 已归一化，这里是最后一道防线。两个都传 'base' 时落默认包。
+  const effectiveView =
+    view === BASE_VIEW_ID ? (pkg === BASE_VIEW_ID ? DEFAULT_THEME_PACKAGE : pkg) : view;
   const record = findRecord(id, pkg, device, page, effectiveView);
   if (record) return record;
   // 同系别回落：请求的 id 没登记在当前作用域时，取它的系别在本作用域的首套
@@ -616,18 +624,23 @@ export function getThemePackage(
   pkg: string = DEFAULT_THEME_PACKAGE,
   device: ThemeDevice = DEFAULT_THEME_DEVICE,
   page: string = DEFAULT_THEME_PAGE,
-  view: string = BASE_VIEW_ID
+  view: string = DEFAULT_THEME_PACKAGE
 ): string {
   return getThemeRecord(id, pkg, device, page, view).pkg;
 }
 
 /**
- * 该版式下默认用哪套配色（供 store 在"没选过"时取值）；无配色时返回 null
+ * 该范围内默认用哪套配色（供 store 在"没选过"时取值）；无配色时返回 null
+ *
+ * ⚠️ `view` 默认值是**包名**而不是 `'base'`（2026-09-26）：配色键里的 view 段恒等于
+ *    包名，用 `'base'` 查会一套都匹配不到 → 返回 null → 调用方拿到 null 后可能
+ *    退到"拿设备名当配色 id"这类无意义兜底（`stores/theme.ts` 的 `readInitialTheme`
+ *    就是这么用的）。
  */
 export function getDefaultThemeId(
   device: ThemeDevice = DEFAULT_THEME_DEVICE,
   page: string = DEFAULT_THEME_PAGE,
-  view: string = BASE_VIEW_ID
+  view: string = DEFAULT_THEME_PACKAGE
 ): string | null {
   return defaultColorIdOf(device, page, view);
 }
