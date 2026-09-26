@@ -147,28 +147,29 @@ export interface RegisterViewProps {
 /**
  * 注册页版式注册表 —— 谁来决定"用哪套 UI"
  *
- * === 选择优先级（高 → 低；与 login / forgot-password 同形）===
+ * === 选择优先级（高 → 低；三页同形，链的唯一实现在 `./picker.ts`）===
  *   1. URL `?view=<id>`        —— 本次访问的显式意图（命中版式 → 用它；命中其它包 → 切包）
  *                                 （设备维度键 `view.<设备>` 已在容器侧解析完，见 `./params.ts`）
  *   2. 主题包声明               —— 配色记录里的 `views.register`（`themeStore.viewFor` 取出）
  *   3. `VITE_REGISTER_VIEW`    —— 部署级默认（整站换 UI，不动代码）
  *   4. 当前包名                 —— 一个主题包 = 一种版式（不再是 `BASE_VIEW_ID='base'`）
  *
- * === 注册表的实际行为（2026-09-25 起 register 专属）===
+ * === 注册表的实际行为 ===
  *   • 一个主题包 = 一种 register 版式（无变体子目录）—— 见本文件顶部"主题包粒度的版式"
  *   • glob 扫的是「themes 下所有包所有设备里的 register/index.vue」（路径写法见下方代码块）
- *   • `createViewRegistry` 把每个匹配识别为该包该设备的 base 版式
- *   • `pickRegisterViewId` 找不到时**回退为包名**，让 `?view=compact` 切到 compact 包
+ *   • `createViewRegistry` 把每个匹配识别为该包该设备的唯一版式（id ≡ 包名）
+ *   • `picker` 找不到时**回退为包名**，让 `?view=compact` 切到 compact 包
  *
- * ⚠️ 变体是**惰性加载**的（`import.meta.glob` → 独立 chunk）；内置包的基础版式由容器
+ * ⚠️ 非内置包的版式是**惰性加载**的（`import.meta.glob` → 独立 chunk）；内置包的版式由容器
  *    静态引入（首屏零请求）。新增包或版式目录后要**重启 dev server**
  *    （glob 在启动时静态扫描，热更新发现不了新目录）。
  *
  * @author yijiu2025
+ * @see ./picker.ts —— 取值链与回退口径的唯一实现
  */
 import type { Component } from 'vue';
 import { createViewRegistry } from './registry';
-import { DEFAULT_THEME_DEVICE, THEME_DEVICES, type ThemeDevice } from '../index';
+import { createViewPicker, type ViewPickerSource } from './picker';
 
 /**
  * 各主题包里本页的版式实现
@@ -193,107 +194,42 @@ const viewLoaders = import.meta.glob<{ default: Component }>(
 /** 本页版式注册表 */
 export const registerViews = createViewRegistry(viewLoaders, { page: 'register' });
 
-/** 部署级默认版式（构建期注入；未配置为 undefined） */
-const ENV_VIEW: unknown = import.meta.env.VITE_REGISTER_VIEW;
+/**
+ * 本页的版式选择器（取值链的唯一实现在 `./picker.ts`）
+ *
+ * ⚠️ 环境变量必须在**这里**读并传进去：`import.meta.env` 靠构建期静态替换，
+ *    包进工厂内部拿不到这个能力（会被当成普通的对象属性访问、恒为 undefined）。
+ */
+const picker = createViewPicker({
+  registry: registerViews,
+  envView: import.meta.env.VITE_REGISTER_VIEW
+});
 
-/** 只把"非空字符串"当作有效外部输入 */
-function asText(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() !== '' ? value : null;
-}
-
-/** 取当前主题包；未传则落内置包（与 `@/theme` 的回退口径一致） */
-function asPackage(value: unknown): string {
-  return asText(value) ?? registerViews.builtinPackage;
+/**
+ * 按优先级挑出版式 id（永远返回可用 id：最差是当前**包名**）
+ *
+ * 链与回退口径的唯一实现在 `./picker.ts`（三页同形）；本函数只负责"把本页的
+ * 注册表与环境变量接上去"，不再自己实现一遍。
+ *
+ * @param source.url    `?view=`（设备维度解析**之后**）的原始值 —— 未校验
+ * @param source.theme  当前配色记录声明的版式 id（`store.viewFor('register')` 取出）
+ * @param source.pkg    当前主题包 id —— 查找范围的包那一段
+ * @param source.device 当前设备（`'mobile' | 'standard' | 'mini'`）—— 查找范围的设备那一段
+ */
+export function pickRegisterViewId(source: ViewPickerSource = {}): string {
+  return picker.pick(source);
 }
 
 /**
- * 取当前**设备**；未传 / 传了不认识的取值都落默认设备。
+ * 提前把版式 chunk 拉下来（路由守卫里调用，**不 await**）
  *
- * 这是第三段查找范围（包 × 设备 × 版式 id）。设备判定在容器侧完成
- * （`utils/device.ts`），这里只负责"拿到一个合法值"，判断口径不重复实现。
+ * 非内置包的版式是动态 import，容器首帧只能先渲染静态兜底、等 chunk 到了再接管。
+ * 在导航阶段就把请求发出去（与路由组件自身的 chunk 并行），绝大多数情况下容器挂载时
+ * 已在模块缓存里 → 赋值发生在同一 tick 内，用户看不到切换。
+ *
+ * ⚠️ `source` 必须**原样**交给 `picker.preload`：漏掉 `theme`（声明档）会让预取算出
+ *    一个与容器不同的 id —— 白拉一个用不上的 chunk，而真正要用的那个仍得现场等。
  */
-function asDevice(value: unknown): ThemeDevice {
-  return typeof value === 'string' && (THEME_DEVICES as readonly string[]).includes(value)
-    ? (value as ThemeDevice)
-    : DEFAULT_THEME_DEVICE;
-}
-
-/**
- * 按优先级挑出版式 id（永远返回可用 id：最差也是当前 pkg 的包名）
- *
- * === 一个主题包 = 一种版式（2026-09-26 收窄）===
- *   • 一个主题包只包含一种 register 版式（架构约定）
- *   • 因此 `viewId` ≡ `packageId`：选哪套版式 = 选哪个主题包
- *
- * === 解析优先级（高 → 低，与 login / forgot-password **同形**）===
- *   1. URL `?view=<id>`        —— 本次访问的显式意图
- *                                 （命中**别的包** = 切到那个包 + 用它的配色）
- *   2. 主题包声明               —— `theme/themes/<包>/index.ts` 的 `views.register`
- *                                 （写在包根则该包所有配色共用；写在 colors 里只覆盖那套）
- *   3. `VITE_REGISTER_VIEW`    —— 部署级默认（整站换 UI，不动代码）
- *   4. 当前 `pkg`              —— **包名本身**（不再是 `BASE_VIEW_ID='base'`）
- *
- * ⚠️ `?view.<设备>` 这一档在**调用方之前**就已经解决（容器用
- *    `readDeviceParam(route.query, 'view', THEME_DEVICE)` 取值）—— 本函数拿到的是
- *    "这台设备最终该用哪个原始值"，所以这里不需要、也拿不到设备名。
- *
- * 🔴 URL 给了值就**不再回退到第 2/3 档**（三页统一口径）：`?view=typo` 落到**当前包**，
- *    而不是被主题包声明或环境变量接管 —— 显式参数写错时静默换用另一套 UI，比看到
- *    当前包的版式难排查得多。
- * 🔴 `?view=base` 归一到**当前包名**（`resolve` 的别名分支），不是返回 `'base'`：
- *    `BASE_VIEW_ID='base'` 在新版式下已不是合法 view 名（配色键里的 view 段恒等于包名，
- *    见 `theme/index.ts` 的 `colorFromKey` 注释）。把它当 view 返回会让 store 拿
- *    `view='base'` 去 findRecord —— 全链落空 → **tokens 静默全丢、只剩余 SCSS 基线**。
- *
- * ⚠️ 曾经这里还有一条「直接传主题包名」的参数档与一条「把 url 当包名再试一次」的分支，
- *    都已删除：
- *    • 那条参数档**从来没有实现过**（全仓没有任何地方读 query 里的 pkg），只是 JSDoc 空话；
- *    • 「把 url 当包名试」由 `resolve` 的跨包分支覆盖（`?view=compact` 命中
- *      `themes/compact/<设备>/register/` 就返回 `'compact'`），重复一遍反而让
- *      `?view=base` 从这条分支漏出 `'base'` 这个非法值。
- *
- * @param source.url    `?view=`（设备维度解析**之后**）的原始值 —— 未校验，可以是数组/undefined
- * @param source.theme  当前配色记录声明的版式 id（`theme/themes/<包>/index.ts` 的
- *                      `views.register`，由 store 的 `viewFor('register')` 取出）
- * @param source.pkg    当前主题包 id（`getThemePackage(配色)`）——查找范围的包那一段
- * @param source.device 当前设备（`'mobile' | 'standard' | 'mini'`）——查找范围的设备那一段
- *                      两者合起来决定"在哪个包里、哪种设备下"找版式
- */
-export function pickRegisterViewId(
-  source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown } = {}
-): string {
-  const pkg = asPackage(source.pkg);
-  const device = asDevice(source.device);
-  const url = asText(source.url);
-  // 第 1 档：URL 显式意图 —— 非法值也**不回退**到下面的档（见上方 🔴）
-  if (url) return registerViews.resolve(url, pkg, device) ?? pkg;
-
-  // 第 2/3 档 → 第 4 档：声明 → 部署级默认 → 当前包
-  const env = asText(ENV_VIEW);
-  return (
-    registerViews.resolve(source.theme, pkg, device) ??
-    (env ? registerViews.resolve(env, pkg, device) : null) ??
-    pkg
-  );
-}
-
-/**
- * 提前把版式 chunk 拉下来（路由器守卫里调用，**不 await**）
- *
- * 变体是动态 import，容器首帧只能先渲染静态兜底、等 chunk 到了再接管。
- * 在导航阶段就把请求发出去（与路由组件自身的 chunk 并行），绝大多数情况下
- * 容器挂载时已在模块缓存里 → 赋值发生在同一 tick 内，用户看不到切换。
- *
- * 「内置包 + 该包名版式」是零请求组合：那是容器静态引入的，
- * 默认 view = pkg = builtinPackage 时直接 return。
- */
-export function preloadRegisterView(
-  source: { url?: unknown; pkg?: unknown; device?: unknown } = {}
-): void {
-  const pkg = asPackage(source.pkg);
-  const device = asDevice(source.device);
-  const id = pickRegisterViewId(source);
-  // 内置包的版式由容器静态引入 → 零请求，不必预热（`load()` 对内置包也直接返回 null）
-  if (id === pkg && pkg === registerViews.builtinPackage) return;
-  void registerViews.load(id, pkg, device);
+export function preloadRegisterView(source: ViewPickerSource = {}): void {
+  picker.preload(source);
 }

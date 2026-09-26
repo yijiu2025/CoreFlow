@@ -78,6 +78,8 @@ import {
   DEFAULT_THEME_PACKAGE,
   DEFAULT_THEME_DEVICE,
   DEFAULT_THEME_PAGE,
+  DEFAULT_THEME_COLOR,
+  DEFAULT_THEME_DARK_COLOR,
   getDefaultThemeId,
   getThemeRecord,
   isKnownTheme,
@@ -138,8 +140,9 @@ function readInitialMode(): ThemeMode {
 /**
  * 初始化主题：旧键 `theme-skin` 兜底
  *
- * 未登记 / 非法一律回**默认设备 × 默认页面 × 默认包**里字母序最前的那套
- * （通常是 `black`）。这里不按具体设备判：落盘的只是一个"用户/部署方选过的配色"，
+ * 未登记 / 非法一律回**默认设备 × 默认页面 × 默认包**里的兜底配色 ——
+ * 即 `DEFAULT_THEME_COLOR`（`white`，2026-09-26 定；此前是"字母序最前者"= `black`）。
+ * 这里不按具体设备判：落盘的只是一个"用户/部署方选过的配色"，
  * 它在哪端可用由各调用点按自己的设备解析（见 `themeRecordFor`）。
  *
  * ⚠️ 最后兜底是 `DEFAULT_THEME_ID`（`'default'`）而**不是** `DEFAULT_THEME_DEVICE`：
@@ -440,10 +443,10 @@ export const useThemeStore = defineStore('theme', () => {
     // 优先取该系别槽里那套；它在当前版式下不存在时（如 rainbow 只有 login 有）弃用
     const slot = dark ? darkColor.value : lightColor.value;
     const fromSlot = slot && isKnownTheme(slot, device, page, view) ? slot : null;
-    // 明暗切换的目标系别配色：优先该系别的「标配」（白系=white / 黑系=black），
-    // 没有标配时退回该系别第一套。白/黑是默认搭配的两套（用户 2026-09-25 定），
-    // 不能因为字母序让「切到明」落到 blue 上（"切到明"就该是白、"切到暗"就该是黑）。
-    const standard = target === 'dark' ? 'black' : 'white';
+    // 明暗切换的目标系别配色：优先该系别的「标配」（白系 = DEFAULT_THEME_COLOR / 黑系 =
+    // DEFAULT_THEME_DARK_COLOR），没有标配时退回该系别第一套。白/黑是默认搭配的两套
+    //（用户 2026-09-25 定），不能因为字母序让「切到明」落到 blue 上。
+    const standard = target === 'dark' ? DEFAULT_THEME_DARK_COLOR : DEFAULT_THEME_COLOR;
     const ids = listColorIdsOfTone(device, page, view, target);
     const next = fromSlot ?? (ids.includes(standard) ? standard : ids[0]) ?? null;
 
@@ -456,8 +459,9 @@ export const useThemeStore = defineStore('theme', () => {
   /**
    * 首屏对齐：按当前「系别意图」把配色校正到匹配的系别
    *
-   * 明 = 白系、暗 = 黑系、跟随系统 = 按系统偏好。全新用户也走这里：默认配色
-   * 字母序是 black（黑系），若系统是亮色就该首屏落到白系，否则「跟随系统」形同虚设
+   * 明 = 白系、暗 = 黑系、跟随系统 = 按系统偏好。全新用户也走这里：默认配色是
+   * `DEFAULT_THEME_COLOR`（`white`，白系），系统亮色时本就一致（本函数①直接返回），
+   * 系统深色时才需要校正到黑系 —— 否则「跟随系统」形同虚设，
    * 且出现 html 深色 / 页面浅色的撕裂。
    *
    * 场景：用户上次在浅色的 `blue` 下关掉页面，这次系统已是深色 —— 首屏就该是黑系。
@@ -629,16 +633,16 @@ export const useThemeStore = defineStore('theme', () => {
    * 当前 themeId 仍指向**旧包**的同名配色（如 blue），新包下的同名 tokens
    * 通常一致（紧凑版式不该改色）→ 视觉零差异 → 用户感觉「颜色没刷新」。
    *
-   * 修：切到新包时把 themeId 重置到该包/页/设备的默认色（字母序最前者），
+   * 修：切到新包时把 themeId 重置到该包/页/设备的默认色（`DEFAULT_THEME_COLOR`，
+   *    即 `white` —— 2026-09-26 起是显式默认值，不再是"字母序最前者"），
    *    让用户首帧就看到新版的颜色基调。
    *
    * 守门（每个都要有，写在前头防止后人手贱删）：
    *   • 仅**新版式**触发：用 `oldView` 查 themeId 当前解析到的包（**不是**当前 view）——
    *     当前 view 已是 newView，用它查 `themeRecordFor()` 会扫全命中**新**包 → currentPkg
    *     永远等于 newView → 整段逻辑失效。换成「用旧 view 看 themeId 在哪」：
-   *       • 同包切变体（旧机制 login 'base' → 'mini'）→ currentPkg='default'、newView='mini'
-   *         **都是 default**（mini 是 default 包下的变体）→ 不动 ✓
-   *       • 切到另一主题包（新版式 register 'default' → 'compact'）→ currentPkg='default'
+   *       • 同包内换版式 → 已不存在这种形态（一包一版式，无变体子目录）
+   *       • 切到另一主题包（register 'default' → 'compact'）→ currentPkg='default'
    *         ≠ newView='compact' → 重置 ✓
    *   • 仅 activeView **真的变了**（`newView !== oldView`）—— 重复设同值、setup 时
    *     初次赋值等情况都不应触发重置（后者由 URL 锁定兜底，但少一次副作用更好）。

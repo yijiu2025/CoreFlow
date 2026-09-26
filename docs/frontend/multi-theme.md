@@ -234,6 +234,54 @@ themes/<包>/<设备>/<page>/index.vue            非内置包版式（`import.m
 - **用 `viewEpoch` 丢弃过期结果**：版式 A→B→A 时，A 的旧 chunk 回来不得覆盖当前状态。
 - **`markRaw` 包组件**，避免组件对象被深层代理。
 
+### 🔴 生产构建的例外：PWA 预缓存会把"惰性"全部拉回来（2026-09-26 定案并已处置）
+
+`vite.config.js` 的 `VitePWA`（默认 `generateSW`）会把 **dist 里全部产物写进 `sw.js` 的
+precache 清单**——含每一份本应惰性的配色 `theme.scss` chunk 与 compact 包版式。
+**dev server 下看不到这一层**（`devOptions` 未开），所以 `verify-first-paint-budget.mjs`
+是绿的、按需加载看着完全成立；生产构建下首访实际会发生：
+
+| 口径 | 实测（生产构建，窄屏 `/login`） |
+| --- | --- |
+| 页面自己按需加载的 44 个请求 | **212.5 KB 过线**（未压缩 596 KB；链路带压缩） |
+| SW 预缓存清单（`globIgnores` 之前） | 85 项 **802 KB**（gzip 264 KB） |
+| 其中"只有 SW 才会拉"的净增 | 43 项 **205.6 KB**（gzip 70.5 KB） |
+| **首访合计（处置前）** | ≈ 802 KB（gzip **264 KB**）＝ 整个 dist |
+| **二次访问** | **0.1 KB**（SW 全命中） |
+
+#### 定案：首访流量最小
+
+用户口径（2026-09-26，原话）：
+
+> 第一次访问时需要使用的主题和版式已经就固定了，桌面、mini、手机版的都有，缓存就好了；
+> 其他惰性主题和版式不需要加载，首访流量最小。
+
+代价（离线 / 二次访问时那些 chunk 要**回源**）已明确接受。落地要**两条一起**才成立：
+
+1. **先让"惰性"在产物路径上可见**：`vite.config.js` 的 `lazyThemeDir()` 把「非内置包的版式 chunk」
+   与「全部配色 `theme.scss` chunk」产出到 `lazy-theme/`。
+
+   ⚠️ **不能按文件名排除**。产物默认叫 `assets/<basename>-<hash>.js`，而
+   配色 `theme.scss`（`?inline`）切出的 chunk 就叫 `theme-*.js` —— 与 `stores/theme.ts` 那个 50 KB
+   chunk **撞名**；compact 包版式切出的叫 `register-*.js`，与一堆路由 chunk 撞名。
+   按名字排除必然误伤（把 store 排掉 → 首访反而多一次回源）。
+
+2. **SW 排除整个目录**：`VitePWA.workbox.globIgnores: ['**/lazy-theme/**']`。
+
+| 口径 | 处置前 | 处置后 |
+| --- | --- | --- |
+| SW 预缓存清单 | 85 项 · 802 KB（gzip 264 KB） | **76 项 · 780 KB（gzip 257 KB）** |
+| 清单里的惰性资产 | 8 份 `theme.scss` chunk + compact 版式 | **0** |
+| 首访少下 | — | 9 项 · **22.4 KB（gzip 6.8 KB）** |
+
+**改动前后都必须量**：`.tmp-probe/verify-pwa-precache.mjs`（详见第十节第 5 条）。
+它同时验两件事，缺一个都是半个关卡：
+
+- **排得干净**：`lazy-theme/` 里没有任何文件被预缓存；预缓存里没有 `theme.scss` 编译出的 chunk
+  （判据：JS chunk 内含 `data-mauth-theme`，那是主题样式表的选择器前缀）。
+- **排得够少**：入口 HTML、入口 chunk（`assets/index-*.js`）、内置包三设备版式**都还在**清单里 ——
+  把入口一起排掉会让首访第一次请求就回源，比不排更糟。
+
 ## 六、契约与编译期自检
 
 `theme/views/<page>.ts` 里的类型定义是**该页版式的唯一接口**，纯类型（不含实现，`import type` 编译后擦除）。
@@ -327,7 +375,7 @@ tokens: {
 - 白系配色在用时切夜间 → 自动跳到黑系配色；再切回 → 恢复**原来那套**白系（双侧记忆槽 `lightColor`/`darkColor` 落盘保存）。
 - 黑系起手则反之。实现见 `stores/theme.ts` 的 `watch(isDark) → syncColorToTone`。
 - **单向**：手动点颜色**不改**明暗（黑白蓝青是并列选项，不该被强制切明暗）；`setTheme` 不碰 `mode`。
-- 首屏对齐只在**有落盘偏好**时生效（全新用户不被字母序换色）；URL `?theme=` 显式指定时豁免（部署方"永远用蓝"的链接要压过联动）。
+- 首屏对齐：`mode=system` 且系统为**深色**时，把默认的白系校正到黑系（`DEFAULT_THEME_DARK_COLOR`）。全新用户的默认配色是显式常量 `DEFAULT_THEME_COLOR`（`white`，白系），系统亮色时这一步是空操作；URL `?theme=` 显式指定时豁免（部署方"永远用蓝"的链接要压过联动）。
 - **跨设备系别一致**：`theme/index.ts` 的 `getThemeRecord` 在请求 id 不在当前作用域时，按该 id 系别（`toneOfAnyScope`）取同系别首套 —— mobile 选 `blue`(light) 拉宽到 standard(无 blue) → 回落 `white`(light)；
   但**设备维度参数那一路优先级更高**：`?theme.standard=black` 会让电脑端直接用 `black`，回落链不会启动。
 
@@ -368,7 +416,7 @@ tokens: {
 | 输入 | 校验位置 | 口径 |
 | --- | --- | --- |
 | 版式 id | `theme/views/registry.ts` 的 `resolve()` | 只认 `^[a-z0-9-]+$` 且**当前包当前设备内已登记**；未登记返回 `null`，**不拼路径、不做模糊匹配** |
-| 配色 id | `theme/index.ts` 注册表 | 同上；未登记回退**该范围的兜底配色**（`defaultColorIdOf(device, page, view)`，按 id 字母序取最前） |
+| 配色 id | `theme/index.ts` 注册表 | 同上；未登记回退**该范围的兜底配色**（`defaultColorIdOf(device, page, view)`：先 `DEFAULT_THEME_COLOR`=`white`，该范围没它才按 id 字母序取最前） |
 | 设备维度参数名 | `theme/views/params.ts` | 只按 `<名>.<设备>` 组装，设备名来自容器常量白名单，**不拼任意键** |
 | token 名 / 取值 | `src/theme/runtime.ts` | token 名必须 `--mauth-` 前缀；取值只接受 `#hex` / `rgb()` / `hsl()` / 长度 / `var(--mauth-*)` / 少量关键字 |
 
@@ -397,7 +445,9 @@ tokens: {
    ⚠️ 第 4 档（环境变量）需要一个**带 `VITE_<PAGE>_VIEW` 启动**的实例 —— 用 `--env-base <url>` 传入；
    不传就**明确跳过该组**，不写恒绿的空断言。第 3 档（声明）本仓三个包都还没声明 `views`，
    浏览器侧只能验"不误伤"，"声明真的生效"由下一项从实现口径守。
-2. **目录口径关卡**：`.tmp-probe/verify-theme-dirs.mjs`（**519 项**静态断言，纯文件系统、**不需要浏览器**）。
+2. **目录口径关卡**：`.tmp-probe/verify-theme-dirs.mjs`（**552 项**静态断言，纯文件系统、**不需要浏览器**）。
+   其中第 13 节是**抽包后新增的包契约断言**（内核不得依赖宿主 / 公开面显式具名 / 壳里无逻辑，18 条），
+   与「主题框架抽包立项」的验收判据一一对应。
    守的就是本节「主题包 = 一个目录」那张表：**四级结构**（包 / 设备 / 页面 / 配色）、目录名合法性、必备文件、
    `theme.scss` 选择器必须用目录名、🔴 **页面下不存在「版式层」目录**（一个主题包 = 一种版式）、
    **黑白是与蓝青并列的实体颜色**（每个「包×设备×页面」作用域下都要同时有 `black` 与 `white` 且自带 token）、
@@ -426,17 +476,37 @@ tokens: {
    要守的是**除此之外一个不多**：**零个非内置包的版式 chunk、零个 `theme.scss`**；
    再做正向对照 —— `?view=<其它包>` 只多那一个 chunk、`?theme=<配色>` 只多那一个 `theme.scss`
    （证明探针看得见差异，不是恒绿）。
-5. **门禁**：`npm run type-check`（= `vue-tsc -b`）必须绿，且按第六节做**毒丸验证**。
-6. **视觉回归**：遵循[视觉回归归因三铁律](/frontend/coding-standard) ——
+   ⚠️ **这几个数字是 dev server 的"请求条数"口径，不是生产流量**。要真实流量（KB、含 SW 预缓存）
+   用 `.tmp-probe/measure-load-budget.mjs`：它跑**生产构建**（`vite build --outDir <全新目录>` →
+   `vite preview`）并用 CDP 记 `encodedDataLength`，自带两轮（`--block-sw` 隔离页面按需 /
+   不屏蔽看真实首访）。**量流量必须新建 outDir**（沙箱会拦已存在目录的清理）。
+5. **PWA 预缓存关卡（生产产物 + `sw.js`）**：`.tmp-probe/verify-pwa-precache.mjs`（无浏览器，纯文件）。
+   它与第 4 条是**一对**：第 4 条量"页面自己请求了什么"（dev 口径 / 请求条数），这条量
+   "Service Worker 会替首访预取什么"（生产口径 / KB）。两者都会因"惰性被拉回来"而红，但成因不同 ——
+   前者管源码与容器写法，后者管**产物路径与 workbox 配置**。
+   判定：① `lazy-theme/` 里任何文件都不得出现在预缓存清单里，清单里不得有 `theme.scss` 编译出的 chunk
+   （判据：JS chunk 内含 `data-mauth-theme`）；② 入口 HTML、入口 chunk、内置包三设备版式**必须都在**清单里。
+   只有①是半个关卡 —— 把入口一起排掉会让首访第一次请求就回源（见第五节）。
+   它同时打印"预缓存 X 条 · gzip Y kB / 未预缓存 Z 条"，改 `globIgnores` 或 `lazyThemeDir()` 后照它报数。
+   实测：85 项 802 KB（gzip 264 KB）→ **76 项 780 KB（gzip 257 KB）**。
+6. **门禁**：`npm run type-check`（= `vue-tsc -b`）必须绿，且按第六节做**毒丸验证**。
+7. **视觉回归**：遵循[视觉回归归因三铁律](/frontend/coding-standard) ——
    ① 先稳定化（冻结过渡/动画 + 等 `fonts.ready`，冻结样式须在**加载后**注入并**断言生效**）；
    ② 比对前先确认基准与结果**来自不同状态**（否则同一份代码自比恒等，"重构前后一致"这类结论不成立）；
    ③ 报**逐场景归因表**，不报一个总百分比。
    ⚠️ 连拍两次不一致的项是非确定性的（如 3s 自动关闭的提示条），**不能作断言目标**。
-7. **调试面板**：`?debug=theme` 会列出当前设备的**可选版式**（就是包名本身）
+8. **调试面板**：`?debug=theme` 会列出当前设备的**可选版式**（就是包名本身）
    与当前页面的可选配色 —— 面板的"版式"区现在只列**当前设备的包**，
    写道具用 `view.<设备>`（该键已存在时）否则 `view`，与 URL 参数口径一致。
    面板带**设备切换**（跟随路由 / 手机端 / 桌面端 / 紧凑版）。
    ⚠️ 面板**只控制当前页面的版式与配色**，不展示路由、不跨页跳转（2026-09-25 改）。
+9. **形态切换关卡（窄屏 → 拉宽 → 缩窄）**：`.tmp-probe/verify-responsive-switch.mjs`（**23 项**，Playwright，
+   跑**生产构建**）。用户提问原话：「第一次加载时屏幕是窄屏，加载手机端，拉宽后开始加载电脑端，
+   这个阶段主题切换、预加载会不会有问题」—— 这条路径上任何一环坏了，其它关卡都不会红，所以单列。
+   断言四类：**T** 主题跟着形态走（`?theme.mobile=blue` 拉宽后必须**同系别下沉**到 `white`，
+   token 与 `data-mauth-theme` 不许撕裂）、**D** DOM 真的换形态（`.mauth-page` / `.standard-login-root` 互斥）、
+   **S** `<style id="mauth-theme-css">` 在目标配色没有 `theme.scss` 时**必须被摘掉**（不许残留手机端背景图）、
+   **N** 拉宽/缩窄的增量请求数必须为 **0**（三形态容器已被分发器预热，形态切换不该产生新流量）。
 
 ### 关卡必须自己"会红"（毒丸验证）
 
@@ -552,6 +622,10 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 | **把已废弃的 `'base'` 当版式 id 返回下去** | 页面配色无声变回基线（**tokens 全丢**）、`activeView` 与 `data-mauth-view` 都是 `'base'`、且**没有任何报错** | 一个主题包 = 一种版式 ⇒ 版式 id ≡ 包名，配色键里的 view 段从不出现 `'base'`。`resolve()` 只把 `base` 当"当前包"的**别名**归一到包名；各页 `pick*ViewId` 对非法值一律 `?? pkg`（**别写 `?? baseId`**），也别再写「把 url 当包名再 resolve 一次」那种重复分支 —— 它会让 `?view=base` 从缝里漏出 `'base'`（register 曾长期如此） |
 | **几个 dev 实例同时冷启** | 页面白屏，控制台 `504 (Outdated Optimize Dep)`，`.mauth-page` 永远等不到 | 多个 Vite 实例共用 `node_modules/.vite`，各自的 `optimizeDeps` 结果**互相作废**（客户端请求的 `?v=<hash>` 过期）。**串行启动**（前一个 curl 到 200 再起下一个），或给各实例不同的 `cacheDir` |
 | 版式没带 `data-mauth-view`（或写了 `'base'`） | 关卡读不到"现在渲染的是哪套 UI"，报 `view=<多套:…>` / `'base'` | **三端每份版式**的根元素都要写 `data-mauth-view="<包名>"`（值 = 版式 id = 包名）。`verify-theme-dirs.mjs` §7b 守这条（毒丸④：把值改回 `'base'` 必须变红） |
+| **拉宽窗口后颜色"自己变了"** | 窄屏 `?theme.mobile=blue` 是蓝的，拉宽成电脑端后变白 | **不是 bug，是设计的"自动下沉"**：`blue` 只在 `mobile/` 下登记，电脑端按**同系别**回落到标配 `white`（`data-mauth-theme` 也会被摘掉 —— 没命中就不许写）。想让两端都是同一套色，必须**在电脑端也建一份该配色目录**，或链接里显式钉 `?theme=white`。关卡 A 段守这条（`verify-responsive-switch.mjs`） |
+| **宽屏首访会白拉移动端版式 chunk** | `/m/login` 在宽视口下其实渲染桌面卡片，但守卫仍预取了 mobile 那套 | 已知取舍（`withViewPreload` 的 `PRELOAD_DEVICE='mobile'`，代价仅一个 chunk）。根因：`/m/*` 与 `/<page>` 共用分发器，**导航时还判断不出最终形态**。要省就先算 `isMobileViewport()` 再决定预取哪个设备 |
+| **非内置包版式的预取只覆盖 `/m/*` 的 mobile 端** | 在 `/login`（电脑端路由）打开、视口变窄时，非内置包的手机端版式要**现场拉**（可能闪一下） | `beforeEnter` 只挂在 `mobileRoutes` 上。现状不痛是因为**三形态容器已被分发器 `onMounted` 预热**、内置包版式又是静态引入（实测形态切换 **+0 请求**）；一旦某个非内置包同时有 mobile+standard 版式，就要给 `authRoutes` 也补守卫（按 `isMobileViewport()` 选设备） |
+| **首访流量远大于"按需加载"该有的数** | dev 下首屏只拉该拉的，生产上首访却是整个 dist（本仓 801 KB） | PWA 预缓存（`VitePWA` 默认 `generateSW`）把全部产物写进 `sw.js`。**dev 看不见**（`devOptions` 未开）。要首访最省就给 workbox 加 `globIgnores`；要离线性就接受。量它用 `measure-load-budget.mjs`（见第五节） |
 
 ## 本仓现状
 
@@ -586,5 +660,22 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 **五色完全并列**：同一个列表、同一套选中逻辑、同一优先级，黑白不兼职明暗开关。
 `blue`（改取值 + 贴底剪影）、`cyan`（改取值 + 改结构 + 横屏断点）、`rainbow`（多彩装饰，仅 mobile/login 页）是两个不同深度的范例。
 
-> 相关：[主题系统](/frontend/theme)（各前端通用的 HSL 变量 / Store 约定）、
+**默认 = `default` 包 + `white` 配色**（2026-09-26 定）：兜底值是显式常量 `DEFAULT_THEME_COLOR`、
+暗系配对 `DEFAULT_THEME_DARK_COLOR`，不再靠"字母序第一个"（旧口径下默认落在 `black`，靠首屏系别对齐纠正）。
+
+### 抽包（进行中）
+
+这一层正在被抽成工作区包（`packages/theme-core` 纯内核 + `packages/theme-vue` 框架壳），
+目的是让别的前端"换个适配器"就能复用同一套机制，而不是复制 3600 行。
+**这是部署形态的演进，不改本节任何规则**；依赖方向、注入点契约、迁移分期与每期验收判据见
+[主题框架抽包立项](/frontend/theme-package-extraction)。
+
+**进度：Stage 1 已完成**（2026-09-26）——纯叶子层（`constants` / `tokens` / `tone` / `mode` /
+`types` / `views/params`）的实现已住进 `packages/theme-core/src/`，`oauth21/src/theme/`
+下留同名**零逻辑 re-export 壳**，`@/theme/*` 导入面一个字未变。
+迁移期有两条机械断言兜底（`verify-theme-dirs.mjs` §13）：内核不得出现
+`import.meta` / `window.` / `document.` / `localStorage` / 非 `import type` 的 `vue` /
+`vue-router` / `axios` / `@/` 别名；壳里除转发不得有任何逻辑（"同一时刻只有一个实现"）。
+
+> 相关：[主题框架抽包立项](/frontend/theme-package-extraction)、[主题系统](/frontend/theme)（各前端通用的 HSL 变量 / Store 约定）、
 > [前端统一规范](/frontend/coding-standard)、[跨内核渲染基线](/frontend/browser-baseline)。

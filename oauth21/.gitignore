@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# 关卡 / 流量实测用的临时构建产物：一律走「全新 outDir」（沙箱不允许清空已存在的目录）
+dist-*
 *.local
 
 .env

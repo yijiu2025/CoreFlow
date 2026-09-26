@@ -68,64 +68,42 @@
  *
  * @author yijiu2025
  */
+import {
+  BASE_VIEW_ID,
+  DEFAULT_THEME_COLOR,
+  DEFAULT_THEME_DEVICE,
+  DEFAULT_THEME_ID,
+  DEFAULT_THEME_PACKAGE,
+  DEFAULT_THEME_PAGE,
+  THEME_DEVICES,
+  THEME_ID_RE,
+  type ThemeDevice
+} from 'mauth-theme-core';
 import type { MauthThemeColor, MauthThemePackage, MauthThemeMeta, MauthThemeRecord } from './types';
 import { normalizeTone, type ThemeTone } from './tone';
 
 /**
- * 空记录（registered 目录尚未产出任何记录）的占位配色 id
+ * 常量与白名单**已迁到内核包**（2026-09-26 抽包 Stage 1）
  *
- * ⚠️ 它**不再**表示"默认配色"：自 2026-09-24 起黑白是各设备下**具名的正式配色**
- * （`<页面>/colors/{black,white}/`），由 `defaultColorIdOf(device, page, view)` 按范围取。
- * 这里只用于空记录占位。
+ * 取值集合（设备三值、默认包/页面/配色、id 白名单）只有一个来源：
+ * `packages/theme-core/src/constants.ts`。本文件把名字**原样转发**出去，
+ * 于是 `@/theme` 的导入面一个字不变 —— 40 多处 `from '@/theme'` 的调用点、
+ * 关卡断言、调试面板都不用改。
+ *
+ * ⚠️ 下面这组 `export … from` **不创建本地绑定**（所以本文件真用到的那几个走上面的
+ *    `import`）。加新常量时两处都要动：白名单进包、名字在这里露出。
  */
-export const DEFAULT_THEME_ID = 'default';
-
-/**
- * 内置默认**主题包** id
- *
- * 与 `DEFAULT_THEME_ID` 含义不同，它用在版式侧：该包的基础版式由容器**静态引入**
- * （首屏零请求），其它包的基础版式才需要惰性加载。见 `theme/views/registry.ts`。
- */
-export const DEFAULT_THEME_PACKAGE = 'default';
-
-/**
- * 设备维度：主题包内的一级目录，决定"这套配色/版式给哪种设备用"
- *
- * 三值（2026-09-25 起）：`mobile` / `standard` / `mini` 是三种**平级**的设备形态，
- * 与桌面分发器 `view/web/<page>/index.vue` 的 `activeForm`（mobile/mini/standard）
- * 一一对应：
- *   • `mobile`   —— 手机端（窄视口 / 真机 UA）
- *   • `standard` —— 桌面主窗口（宽视口，双栏卡片）
- *   • `mini`     —— iframe 紧凑版（`?from=mini` / `/mini-login` 路由）
- * `mini` 不是 `standard` 下的「变体子目录」，而是独立设备：它有自己的配色
- * 目录（`mini/<page>/colors/`），与 `standard` 完全并列。
- */
-export const THEME_DEVICES = ['mobile', 'standard', 'mini'] as const;
-export type ThemeDevice = (typeof THEME_DEVICES)[number];
-
-/** 兜底设备：设备无法判定时按手机端处理（与 `utils/device.ts` 的口径一致） */
-export const DEFAULT_THEME_DEVICE: ThemeDevice = 'mobile';
-
-/**
- * 兜底页面：`getThemeRecord` 这类函数在调用点没给页面时的默认值
- *
- * 取 `login` 是因为它是认证流程的默认入口（未指定页面时最可能问的就是它）。
- * 有明确页面的调用点（容器、面板）都应显式传 `page`，不要依赖这个兜底。
- */
-export const DEFAULT_THEME_PAGE = 'login';
-
-/**
- * 基础版式的**逻辑** id（与 `theme/views/registry.ts` 的 `BASE_VIEW_ID` 同一约定值）
- *
- * ⚠️ 它只是「版本注册表」里的逻辑 baseId，**不是配色注册表里的 view 值**：
- *    配色记录里的 view 段恒等于包名（一个主题包 = 一种版式），`'base'` 永远不会
- *    出现在配色键里。外部 `?view=base` 由各页 `pick*ViewId` 归一化到当前包名
- *    （见 `views/register.ts` 的注释），到不了本注册表。
- *
- * 保留本常量是为了 `createViewRegistry` 的默认值与旧调用点的兼容；
- * 新增代码不要用它当作配色查找的 view 参数。
- */
-export const BASE_VIEW_ID = 'base';
+export {
+  BASE_VIEW_ID,
+  DEFAULT_THEME_COLOR,
+  DEFAULT_THEME_DARK_COLOR,
+  DEFAULT_THEME_DEVICE,
+  DEFAULT_THEME_ID,
+  DEFAULT_THEME_PACKAGE,
+  DEFAULT_THEME_PAGE,
+  THEME_DEVICES
+} from 'mauth-theme-core';
+export type { ThemeDevice } from 'mauth-theme-core';
 
 /** 各主题包的包定义（只有 meta / views，不再充当默认配色） */
 const packageModules = import.meta.glob<{ default: MauthThemePackage }>('./themes/*/index.ts', {
@@ -155,8 +133,11 @@ const colorStyles = import.meta.glob<string>('./themes/*/*/*/colors/*/theme.scss
   import: 'default'
 });
 
-/** 目录名只允许小写字母/数字/短横线：既约束了主题作者，也避免奇怪目录名进入属性选择器 */
-const THEME_ID_RE = /^[a-z0-9-]+$/;
+/**
+ * ⚠️ `THEME_ID_RE`（目录名只允许小写字母/数字/短横线）由上面从 `mauth-theme-core`
+ *    import 进来，本文件不再自己声明 —— 白名单只有一个来源，见
+ *    `packages/theme-core/src/constants.ts`。
+ */
 
 /** 设备名必须命中 `THEME_DEVICES`（mobile / standard / mini），否则整个目录按"不认识"跳过 */
 function asDevice(raw: string | undefined): ThemeDevice | null {
@@ -360,9 +341,12 @@ function findRecord(
 /**
  * 某版式下的兜底配色 id
  *
- * 取该版式下**排在最前**的配色（按 id 排序 → `black` 这类基础档通常在前）。
- * 之所以不写死 `black`：允许某个版式只提供一套配色而不必强行命名。
- * 该版式下一套配色都没有时返回 null，由调用方退回"什么都不注入"的基线路径。
+ * 口径（2026-09-26 定）：**先取显式默认色 `DEFAULT_THEME_COLOR`（`white`）**，
+ * 该范围里没有它才退回「排在最前的那套」（按 id 排序）。
+ *
+ * 那条退路保留的原因：允许某个版式只提供一套自命名的配色而不必强行叫 `white`
+ * —— 它是"只有一套时的兜底"，**不是**"默认是 `black`"（旧口径的误读点）。
+ * 该范围一套配色都没有时返回 null，由调用方退回"什么都不注入"的基线路径。
  *
  * ⚠️ view = 包名（一个主题包 = 一种版式）；若该范围内没配色，本函数返回 null ——
  *    调用方应当别跨范围借配色（拿别包的 token 渲染当前版式尺寸/圆角会错位）。
@@ -372,6 +356,7 @@ function defaultColorIdOf(device: ThemeDevice, page: string, view: string): stri
     .filter(r => r.device === device && r.page === page && r.view === view)
     .map(r => r.meta.id)
     .sort();
+  if (ids.includes(DEFAULT_THEME_COLOR)) return DEFAULT_THEME_COLOR;
   return ids[0] ?? null;
 }
 
@@ -631,6 +616,9 @@ export function getThemePackage(
 
 /**
  * 该范围内默认用哪套配色（供 store 在"没选过"时取值）；无配色时返回 null
+ *
+ * 口径 = `defaultColorIdOf`：**先 `DEFAULT_THEME_COLOR`（`white`）**，该范围没有才
+ * 退回 id 字母序第一（2026-09-26 定；此前是"字母序第一"→ 实际落到黑系 `black`）。
  *
  * ⚠️ `view` 默认值是**包名**而不是 `'base'`（2026-09-26）：配色键里的 view 段恒等于
  *    包名，用 `'base'` 查会一套都匹配不到 → 返回 null → 调用方拿到 null 后可能

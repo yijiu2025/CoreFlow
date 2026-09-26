@@ -1,0 +1,31 @@
+{
+  "name": "mauth-theme-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "多主题 / 多版式机制的纯内核：常量与白名单、契约类型、token 形态、设备维度参数读取。零运行时依赖，不碰 DOM / 构建器 / 路由。",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "theme",
+    "design-token",
+    "vue",
+    "multi-theme",
+    "layout"
+  ]
+}

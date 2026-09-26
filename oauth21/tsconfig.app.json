@@ -26,8 +26,18 @@
     "paths": {
       "@/*": ["./src/*"],
       "stable-deviceid": ["../packages/shared-device/src/index.ts"],
-      "stable-deviceid/*": ["../packages/shared-device/src/*"]
+      "stable-deviceid/*": ["../packages/shared-device/src/*"],
+      "mauth-theme-core": ["../packages/theme-core/src/index.ts"]
     }
   },
-  "include": ["src/**/*", "src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "src/auto-import.d.ts", "src/components.d.ts", "../packages/shared-device/src/**/*.ts"]
+  "include": [
+    "src/**/*",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "src/auto-import.d.ts",
+    "src/components.d.ts",
+    "../packages/shared-device/src/**/*.ts",
+    "../packages/theme-core/src/**/*.ts"
+  ]
 }
