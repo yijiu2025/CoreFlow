@@ -1,17 +1,34 @@
 # theme —— 主题层（机制 + 主题包 + 版式契约）
 
+> 🧩 **抽包进行中（2026-09-26 立项）**：这一层正在被抽成工作区包
+> `packages/theme-core`（纯内核：常量 / 契约 / 参数 / 注册表，零运行时依赖）与
+> `packages/theme-vue`（Pinia store + DOM 应用 + glob 适配）。**规则不变**，
+> 变的是"实现在哪个目录"。
+>
+> **Stage 1 已完成**——纯叶子层已进包：`constants` / `tokens` / `tone` / `mode` /
+> `types` / `views/params` 的**实现**住在 `packages/theme-core/src/`，本目录下的
+> 同名文件变成**零逻辑的 re-export 壳**，所以下面目录树里的路径与 `@/theme/*`
+> 的导入面一个字不变（`@/theme` 那个 barrel 也照旧转发这些常量）。
+> 后续每期都按「迁一个实现 → 在原地留一只壳」推进，任何一期都能独立回滚。
+> 设计、注入点契约、迁移分期与每期验收判据见
+> `docs/frontend/theme-package-extraction.md`（文档站：/frontend/theme-package-extraction）。
+
 一个目录管三层，**层级即语义**（主题包 → 设备 → 页面 → 配色）：
 
 ```
 src/theme/
 ├── index.ts            配色注册表：扫描 主题包 / 设备 / 页面 / 配色（机制）
-├── types.ts            主题包 / 配色的契约
-├── mode.ts             明暗三态（浅色 / 深色 / 跟随系统）—— 与配色正交，不参与配色选择
+│                       + 转发内核包常量（`DEFAULT_THEME_*` / `THEME_DEVICES` …）
+├── types.ts            主题包 / 配色的契约                    —— 壳 → mauth-theme-core
+├── tone.ts             配色自带的明暗系别（白系 / 黑系，参与明暗联动）—— 壳 → mauth-theme-core
+├── mode.ts             明暗三态（浅色 / 深色 / 跟随系统）—— 与配色正交；壳 → mauth-theme-core
 ├── remote.ts           后端下发的换配色配置
-├── runtime.ts          token 白名单校验 + 注入
+├── runtime.ts          token 注入（往根节点写 inline 变量）
+│                       ⚠️ 白名单校验已进内核包，这里只转发 + 做注入
 ├── views/              版式机制（架构层）：契约 + 注册表，与主题包无关
 │   ├── registry.ts     版式注册表工厂（「业务容器 + 可换 UI」机制）
 │   ├── params.ts       URL 参数读取：`theme.<设备>` / `view.<设备>`（含通用参数回退）
+│   │                                                        —— 壳 → mauth-theme-core
 │   ├── pages.ts        页面版式总览（调试面板用）
 │   ├── login.ts        login 页的契约 + 注册表
 │   ├── register.ts     register 页的契约 + 注册表
@@ -290,18 +307,22 @@ html[data-mauth-theme='<id>'] {
 2. URL 参数 `?theme=<配色 id>`（`?skin=` 同义；所有设备共用同一个 id）
 3. 后端下发 `{ "theme": "<配色 id>" }`（见 `remote.ts`）
 4. localStorage 里用户上次的选择
-5. 该**包 × 设备 × 页面**下的兜底配色（按 id 字母序取最前，当前是 `black`）
+5. 该**包 × 设备 × 页面**下的兜底配色 —— **`DEFAULT_THEME_COLOR` = `white`**（2026-09-26 定）；
+   只有该范围里没有 `white` 时才退回「按 id 字母序取最前」那套
 
 ⚠️ 第 5 档的查找范围是**当前包 × 当前设备 × 当前页面**：任一不同就是另一套可选集合。
 配色的"能不能用"也按这个范围判 —— URL 给了一个属于别的范围（比如桌面端、或另一个页面）的
 配色时**不跨范围借用**，而是回落到当前范围的兜底（跨设备回落时**先取同 `tone` 系别**的
 首套，避免"点了深色却跳成浅色"）。
 
-> 「兜底 = 字母序第一个」意味着**新增一个 id 比 `black` 更靠前的颜色会静默改变默认外观**
-> （如 `amber`）。当前兜底是 `black`（深色底）。
-> ⚠️ 但**首屏看到的不一定是 `black`**：store 挂载时有一次「首屏系别对齐」
-> （`syncColorToTone`）—— `mode=system` 且系统是亮色时会把黑系校正到白系
-> （否则「跟随系统」形同虚设、还会出现 html 深色 / 页面浅色的撕裂）。
+> **默认版式 = `default` 包，默认配色 = `white`**（用户 2026-09-26 定）。
+> 兜底值是**显式常量** `DEFAULT_THEME_COLOR`（`theme/index.ts`），不再靠"字母序第一个"
+> —— 旧口径下 `black < blue < cyan < rainbow < white`，默认实际落在**黑系**，
+> 还要靠首屏系别对齐纠正；而且新增一个比 `black` 更靠前的 id（如 `amber`）
+> 会**静默**改掉默认外观。
+> 两条退路仍保留：① 该范围没有 `white` → 退回字母序第一套（允许某版式只提供一套自命名的配色）；
+> ② `mode=system` 且系统是**深色**时，首屏系别对齐（`syncColorToTone`）会把它校正到黑系
+> `DEFAULT_THEME_DARK_COLOR`（`black`）—— 否则「跟随系统」形同虚设。
 > 该设备被 URL 显式锁定时不干预。
 
 明暗 `mode` 同理但**独立**：`?mode=light|dark|system` > 后端下发 > localStorage > 跟随系统。
@@ -478,7 +499,16 @@ node .tmp-probe/verify-glob-device.mjs        # glob 真的扫到设备段、配
 node .tmp-probe/verify-first-paint-budget.mjs # 首屏请求清单：零个非内置包 chunk、零个 theme.scss（需 dev server）
 node .tmp-probe/verify-view-priority.mjs      # 版式优先级五档 + 设备维度键 + 空串/非法值规则（需 dev server）
 node .tmp-probe/verify-forgot-view.mjs        # 重置密码页版式 + 分发一致性（需 dev server）
+node .tmp-probe/verify-responsive-switch.mjs  # 窄→宽→窄：主题跟随形态、附加样式不残留、0 新请求（跑生产构建）
+node .tmp-probe/measure-load-budget.mjs       # 真实流量（生产构建，需先 vite build --outDir <全新目录> + vite preview）
 ```
+
+- 后两条要**生产构建**：`npx vite build --outDir dist-measure-1` →
+  `npx vite preview --outDir dist-measure-1 --port 5189 --strictPort`，然后
+  `node .tmp-probe/measure-load-budget.mjs http://127.0.0.1:5189 <abs dist 路径> [--block-sw]`。
+  ⚠️ `--block-sw` 是隔离"页面按需"的口径；不屏蔽才是**真实首访**（PWA 预缓存会把整站 801 KB 拉一遍，
+  dev server 下看不到这一层 —— 见 `docs/frontend/multi-theme.md` 第五节）。
+  ⚠️ outDir 每次用**全新目录名**（沙箱会拦已存在目录的清理）。
 
 - `verify-view-priority.mjs` 的第 4 档（`VITE_<PAGE>_VIEW`）需要一个**带环境变量启动**的实例：
   `VITE_REGISTER_VIEW=compact npx vite --port 5177 --strictPort`，然后
@@ -488,7 +518,8 @@ node .tmp-probe/verify-forgot-view.mjs        # 重置密码页版式 + 分发�
   `optimizeDeps` 结果互相作废 → 页面白屏 + 控制台 `504 (Outdated Optimize Dep)`。
 - `verify-theme-dirs.mjs` / `verify-glob-device.mjs` 用**毒丸验证**过有效性
   （`node .tmp-probe/poison-verify-theme-dirs.mjs`）：临时建一个 `<页面>/<版式>/` 目录、
-  把 6 段配色 glob 塞回去、给 `colorFromKey` 加第二个模式、或把某份版式的
-  `data-mauth-view` 改回 `'base'` —— 四枚毒丸都必须让关卡变红，且还原后字节级一致。
+  把 6 段配色 glob 塞回去、给 `colorFromKey` 加第二个模式、把某份版式的
+  `data-mauth-view` 改回 `'base'`、或把默认配色常量改回 `black` —— **五枚毒丸**
+  都必须让关卡变红，且还原后字节级一致。
 - `verify-forgot-view.mjs` 的 **I 段**用毒丸验证过：
   删掉分发器里的 `fromLogin === 'mini'` 分支后，I1 必须从"保持桌面版"变成"切成移动端"。

@@ -515,6 +515,8 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 
   规则全文（目录约定、选择优先级、接入新页面清单、安全边界、验收要求、设备分发一致性、iframe 握手与父 origin 白名单）：[docs/frontend/multi-theme.md](docs/frontend/multi-theme.md)；主题包 / 配色 / 版式的目录约定另见 `oauth21/src/theme/README.md`。
 
+  🔄 **抽包（进行中，2026-09-26 立项）**：这一层正在被抽成工作区包 `packages/theme-core`（纯内核，零运行时依赖）+ `packages/theme-vue`（Pinia store + DOM + glob 适配器），目的是让别的前端换个适配器就能复用同一套机制。**规则不变**，变的只是"实现在哪个目录"；迁移期间 `oauth21/src/theme/` 留同名 re-export 壳，`@/theme/*` 导入面保持不变。**Stage 1 已完成**（纯叶子层 `constants` / `tokens` / `tone` / `mode` / `types` / `views/params` 进包，应用侧留零逻辑壳）。依赖方向、四个注入点契约、迁移分期与每期验收判据：[docs/frontend/theme-package-extraction.md](docs/frontend/theme-package-extraction.md)。
+
 ### 导出位置（强制）
 
 **所有 `export` 一律收拢到文件末尾**，定义处不写 `export` 关键字。

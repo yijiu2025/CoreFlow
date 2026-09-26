@@ -2,152 +2,52 @@
  * 主题运行时：把主题包 token 与外部来源（后端下发 / 父应用 postMessage）的 token
  * 校验后注入为 CSS 变量，实现「不改前端代码即可换配色」与「组件级 UI 定制」。
  *
- * === 为什么必须校验 ===
- * CSS 自定义属性是能直接改变渲染的输入。未校验就 `setProperty` 等于把 CSS 注入的
- * 口子交给后端或父页面：
- *   • 值里塞 `url(https://evil/x)` → 触发对第三方的外发请求（可用于探测/追踪）
- *   • 值里塞 `red } body { display:none` → 闭合规则，注入任意样式
- * 所以这里 token 名与取值**都走白名单**，而不是黑名单过滤。
+ * === 本文件现在只管"往 DOM 写"，不管"该不该写"（2026-09-26 抽包 Stage 1）===
+ * 白名单校验（token 名 / 取值 / 逐条过滤）已迁到内核包 `mauth-theme-core` 的
+ * `tokens.ts`：那部分是**纯函数**，与 DOM 无关，能被任何前端复用。这里保留的是
+ * 注入动作本身（读 `documentElement`、差集清理、写入顺序），仍然属于应用侧。
+ * 本文件把校验函数**原样转发**出去，所以 `@/theme/runtime` 的导入面没有变化。
  *
- * 主题包自己的 theme.scss 不走这条通道 —— 那是构建期就在仓库里的受信代码，
- * 由 Vite 编译打包，不存在运行期注入问题。
+ * === 为什么必须校验（细节见包内 `tokens.ts`）===
+ * CSS 自定义属性是能直接改变渲染的输入。未校验就 `setProperty` 等于把 CSS 注入的
+ * 口子交给后端或父页面（外发请求 / 闭合规则注入任意样式）。所以走白名单，不走黑名单。
+ * 主题包自己的 theme.scss 不走这条通道 —— 那是构建期就在仓库里的受信代码。
  *
  * === 分层与优先级（低 → 高）===
  *   1. SCSS 基线          :root / html.dark / 断点块
  *   2. 主题包 tokens      getThemeRecord(...).tokens
  *   3. 外部覆写 tokens    后端下发 / 父应用同步
- * 第 2、3 层都写在 `documentElement` 的 inline style 上（优先级高于任何选择器），
- * 层间顺序靠**写入顺序**保证：先写主题包，再写外部覆写，同名后者胜。
+ * 第 2、3 层都写在根节点的 inline style 上（优先级高于任何选择器），层间顺序靠
+ * **写入顺序**保证：先写主题包，再写外部覆写，同名后者胜。
  *
  * === tokens 是**一组扁平值**，不分明暗档（2026-09-25 改）===
- * 早先 `tokens` 是 `{ light, dark }` 两档，注入时按明暗取「light」或「light ∪ dark」。
- * 用户 2026-09-25 明确要求取消这个分档：
- *
- *   > 没有深浅两档了，深和浅就是两种颜色配置。
- *   > 蓝色没有白蓝和黑蓝之分，底色由蓝色自己选择设置。
- *
- * 于是 `tokens` 就是 `Record<string, string>` 一张表，**与明暗偏好完全无关**：
- *   • 每套配色**自带完整底色**，选谁就是谁 —— 不会出现「选了黑再选蓝，底色还是黑」;
- *   • 需要深色版品牌色？**另加一个颜色目录**（如 `navy`），而不是做"某配色的深色档";
- *   • 明暗偏好仍然存在（`mode.ts`），但它只在**基线 SCSS** 那层生效，
- *     不再参与配色 token 的选档 —— 两者彻底正交。
+ * 每套配色**自带完整底色**，选谁就是谁 —— 不会出现「选了黑再选蓝，底色还是黑」。
+ * 需要深色版品牌色？**另加一个颜色目录**（如 `navy`），而不是做"某配色的深色档"。
+ * 明暗偏好仍然存在（见 `./mode`），但它只在**基线 SCSS** 那层生效。
  *
  * @author yijiu2025
  */
 
-/** 只放行移动端认证页的主题变量，避免外部配置误伤全局（--background 等 shadcn 变量） */
-const TOKEN_NAME_RE = /^--mauth-[a-z0-9-]+$/;
-
-/** 单条取值长度上限：正常颜色/长度都远小于此，超长基本是要撑爆样式表 */
-const MAX_VALUE_LENGTH = 120;
-
-/** 字体族 token 单独放宽：字体栈天然含空格、逗号、引号 */
-const FONT_FAMILY_TOKEN = '--mauth-font-family';
+import { sanitizeOverrides } from 'mauth-theme-core';
+import type { ThemeTokenLayers, ThemeTokenOverrides } from 'mauth-theme-core';
 
 /**
- * 允许的取值形态（白名单，逐条匹配其一即可）
+ * token 形态与白名单校验 —— **从内核包原样转发**（2026-09-26 抽包 Stage 1）
  *
- * ⚠️ 刻意**不支持 CSS 颜色名**（`red` / `blue` 之类）：
- *   一是颜色名上百个、维护白名单容易漏；二是若放宽成「任意字母」，
- *   会连带放行 `expression` 这类历史攻击向量。
- *   配置品牌色请用 #hex / rgb() / hsl()。
- *
- * ⚠️ 刻意**不支持 `url()`**：这是外发请求的唯一入口，也是背景图必须走
- *   theme.scss 的原因（见 types.ts 的分界说明）。
+ * 保留这些名字是为了 `@/theme/runtime` 这个导入面不变：验收脚本会在页面里
+ * `import('/src/theme/runtime.ts')` 直接测 `isSafeTokenEntry`，容器与 store 也从这个
+ * 路径取 `ThemeTokenOverrides`。实现只有一份，在 `packages/theme-core/src/tokens.ts`。
  */
-const VALUE_PATTERNS: RegExp[] = [
-  /^#[0-9a-fA-F]{3,8}$/, // #fff / #ffffff / #ffffffcc
-  /^rgba?\(\s*[\d.,%\s/]+\)$/, // rgb(30 41 59) / rgba(30,41,59,0.12)
-  /^hsla?\(\s*[\d.,%\s/]+(deg|rad|turn)?[\d.,%\s/]*\)$/, // hsl(210 40% 96%)
-  /^-?\d+(\.\d+)?(px|rem|em|%|vh|vw|ch)$/, // 12px / 1.5rem / 100%
-  /^var\(--mauth-[a-z0-9-]+\)$/, // 引用另一个主题变量
-  /^(transparent|none|auto|inherit|currentcolor|initial|0)$/i // 关键字
-];
-
-/**
- * 字体栈：字母数字、空格、逗号、连字符、下划线、单双引号。
- * 不含括号，因此写不出任何函数；配合 FORBIDDEN_RE 已足够安全。
- */
-const FONT_VALUE_RE = /^[a-zA-Z0-9 ,'"_-]{1,120}$/;
-
-/** 明确拒绝的危险片段（白名单之外的兜底，双保险） */
-const FORBIDDEN_RE = /[;{}<>\\]|url\s*\(|expression\s*\(|\/\*|\*\/|@import/i;
+export {
+  isSafeTokenName,
+  isSafeTokenValue,
+  isSafeTokenEntry,
+  sanitizeOverrides
+} from 'mauth-theme-core';
+export type { ThemeTokenOverrides, SanitizeResult, ThemeTokenLayers } from 'mauth-theme-core';
 
 /** 上一次注入到 inline style 的变量名，用于下次注入前清理，避免换配色后残留旧值 */
 let injectedNames: string[] = [];
-
-/** 校验 token 名：必须是 --mauth- 前缀的小写短横线命名 */
-export function isSafeTokenName(name: unknown): name is string {
-  return typeof name === 'string' && TOKEN_NAME_RE.test(name);
-}
-
-/** 校验 token 取值：命中白名单且不含危险片段（不含字体栈特例，见 isSafeTokenEntry） */
-export function isSafeTokenValue(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
-  const v = value.trim();
-  if (v.length === 0 || v.length > MAX_VALUE_LENGTH) return false;
-  if (FORBIDDEN_RE.test(v)) return false;
-  return VALUE_PATTERNS.some(re => re.test(v));
-}
-
-/**
- * 校验一条 token 键值对
- *
- * 单独抽出来的原因：**取值白名单要依赖 token 名**（字体族是唯一的例外），
- * 只看值无法判断 `Inter, sans-serif` 是否合法。
- */
-export function isSafeTokenEntry(name: unknown, value: unknown): boolean {
-  if (!isSafeTokenName(name)) return false;
-  if (typeof value !== 'string') return false;
-  const v = value.trim();
-  if (v.length === 0 || v.length > MAX_VALUE_LENGTH) return false;
-  if (FORBIDDEN_RE.test(v)) return false;
-  if (name === FONT_FAMILY_TOKEN) return FONT_VALUE_RE.test(v);
-  return VALUE_PATTERNS.some(re => re.test(v));
-}
-
-/**
- * 一组扁平 token 覆写表（主题包与后端下发共用的数据形态）
- *
- * ⚠️ 不再分 `light` / `dark` 两档（2026-09-25 改）—— 见文件头说明。
- *    键是 `--mauth-<角色>`，值是白名单内的取值。
- */
-export type ThemeTokenOverrides = Record<string, string>;
-
-/** 校验结果：通过白名单的项 + 被拒绝的项（后者供调用方上报，便于发现配置写错） */
-export interface SanitizeResult {
-  tokens: Record<string, string>;
-  rejected: string[];
-}
-
-/** 参与注入的分层：主题包在前，外部覆写在后（后者同名覆盖前者） */
-export interface ThemeTokenLayers {
-  /** 主题包自带 token（来自 src/theme/themes/<包>） */
-  theme?: ThemeTokenOverrides | null;
-  /** 外部覆写 token（后端下发 / 父应用同步） */
-  external?: ThemeTokenOverrides | null;
-}
-
-/**
- * 逐条校验覆写表，丢弃不安全的条目
- *
- * 不采用「有一条非法就整体拒绝」的策略：配置里混入一条写错的色值时，
- * 其余合法配色仍应生效，否则改一个字就整站退回默认配色，排查成本很高。
- * 被拒绝的条目会返回给调用方，便于上报告警。
- */
-export function sanitizeOverrides(input: ThemeTokenOverrides | null | undefined): SanitizeResult {
-  const result: SanitizeResult = { tokens: {}, rejected: [] };
-  if (!input || typeof input !== 'object') return result;
-
-  for (const [name, value] of Object.entries(input)) {
-    if (!isSafeTokenEntry(name, value)) {
-      result.rejected.push(`${name}=${String(value).slice(0, 40)}`);
-      continue;
-    }
-    result.tokens[name] = value.trim();
-  }
-  return result;
-}
 
 /** 清掉上一次注入的所有主题变量 */
 export function clearThemeTokens(): void {
@@ -165,7 +65,7 @@ export function clearThemeTokens(): void {
  *
  * 层内顺序：先 theme 后 external，同名后者胜 —— 这就是「后端覆写压过主题默认」。
  *
- * ⚠️ 不再接收 `isDark` 参数（2026-09-25 改）：tokens 已是一组扁平值，
+ * ⚠️ 不接收 `isDark` 参数（2026-09-25 改）：tokens 已是一组扁平值，
  *    与明暗偏好无关。明暗只影响 SCSS 基线那层（`html.dark` 选择器），
  *    由样式表自己处理，不需要经过这里。
  *

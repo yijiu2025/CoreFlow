@@ -82,6 +82,7 @@ export default defineConfig({
           { text: '前端统一规范', link: '/frontend/coding-standard' },
           { text: '跨内核渲染基线', link: '/frontend/browser-baseline' },
           { text: '多主题 / 多版式开发模式', link: '/frontend/multi-theme' },
+          { text: '主题框架抽包立项', link: '/frontend/theme-package-extraction' },
           { text: '认证集成', link: '/frontend/auth-integration' },
           { text: '主题系统', link: '/frontend/theme' }
         ]

@@ -4,6 +4,7 @@ import { preloadLoginView } from '@/theme/views/login';
 import { preloadForgotPasswordView } from '@/theme/views/forgot-password';
 import { useThemeStore } from '@/stores/theme';
 import { readDeviceParam } from '@/theme/views/params';
+import type { ThemeDevice } from '@/theme';
 
 /**
  * 组装一个 `beforeEnter`：顺手预取该页**移动端版式**的 chunk
@@ -39,11 +40,19 @@ import { readDeviceParam } from '@/theme/views/params';
 const PRELOAD_DEVICE = 'mobile' as const;
 
 function withViewPreload(
-  preload: (source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown }) => void
+  preload: (source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown }) => void,
+  page: string
 ) {
   return (to: RouteLocationNormalized) => {
     preload({
       url: readDeviceParam(to.query, 'view', PRELOAD_DEVICE),
+      // 🔴 声明档（`views.<page>`）**必须和容器用同一个来源**：容器的 `viewId` 是
+      //    `pick({ url, theme: themeStore.viewFor(page), … })`，守卫漏传 `theme` 就会
+      //    算出一个**不同**的 id —— 白拉一个用不上的 chunk，真正要用的那个仍得现场等
+      //    （症状与不预取一样，却多花一次请求）。目前三个包都没声明 `views`，所以这是
+      //    潜伏缺口；一旦有包声明就会显形。
+      //    设备固定在 mobile：这些守卫只挂在 `/m/*` 上，取的是该设备的声明。
+      theme: readDeclaredView(page, PRELOAD_DEVICE),
       pkg: readPackageId(),
       device: PRELOAD_DEVICE
     });
@@ -55,6 +64,20 @@ function withViewPreload(
 function readPackageId(): string | undefined {
   try {
     return useThemeStore().packageId;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 读该页当前的**声明式版式**（`views.<page>`）
+ *
+ * 与容器同源（`themeStore.viewFor`），失败同样吞掉 —— 预取是"提前把请求发出去"的优化，
+ * 拿不到上下文宁可不发，绝不能因为预取而挡住导航。
+ */
+function readDeclaredView(page: string, device: ThemeDevice): string | undefined {
+  try {
+    return useThemeStore().viewFor(page, device);
   } catch {
     return undefined;
   }
@@ -107,21 +130,21 @@ export const mobileRoutes: RouteRecordRaw[] = [
     name: 'MobileLogin',
     component: () => import('@/view/web/login/index.vue'),
     meta: { title: '移动端登录', device: 'mobile' },
-    beforeEnter: withViewPreload(preloadLoginView)
+    beforeEnter: withViewPreload(preloadLoginView, 'login')
   },
   {
     path: 'm/register',
     name: 'MobileRegister',
     component: () => import('@/view/web/register/index.vue'),
     meta: { title: '移动端注册', device: 'mobile' },
-    beforeEnter: withViewPreload(preloadRegisterView)
+    beforeEnter: withViewPreload(preloadRegisterView, 'register')
   },
   {
     path: 'm/forgot-password',
     name: 'MobileForgotPassword',
     component: () => import('@/view/web/forgot-password/index.vue'),
     meta: { title: '移动端重置密码', device: 'mobile' },
-    beforeEnter: withViewPreload(preloadForgotPasswordView)
+    beforeEnter: withViewPreload(preloadForgotPasswordView, 'forgot-password')
   }
 ];
 

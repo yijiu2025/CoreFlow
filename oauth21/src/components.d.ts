@@ -11,7 +11,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    __PoisonProbe: typeof import('./components/dev/__PoisonProbe.vue')['default']
     AgreementModals: typeof import('./components/common/AgreementModals.vue')['default']
     AntiCacheDebugPanel: typeof import('./components/common/AntiCacheDebugPanel.vue')['default']
     AppNameMissing: typeof import('./components/common/AppNameMissing.vue')['default']
