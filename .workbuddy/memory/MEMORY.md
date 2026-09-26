@@ -37,36 +37,32 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 
 ### 3.1 设备 / 包 / 版式 / 配色结构（2026-09-25 三值化定案）
 
-- 🔴 **设备三值**：`THEME_DEVICES = ['mobile','standard','mini']`，与分发器 `activeForm`（mobile/mini/standard）一一对应。
-  **mini 是独立设备**（iframe 紧凑版），**不是 web/standard 下的变体子目录**；`themes/default/web/` 已更名 `standard/`。
-  mini 独立配色目录 `mini/<page>/colors/`。路由层目录 `view/web/` **不改名**（那是电脑端路由语义）。
-- 🔴 **分发器 renderedDevice 三映射**：`mobile→'mobile'`、`mini→'mini'`、`standard→'standard'`；路由基线（`setupThemeDeviceSync`）
-  兜底 `'standard'`（非 mobile 即 standard）。`setupThemeDeviceSync` 只听 `route.meta.device`，别听整个 currentRoute（query 噪声）。
-- 🔴 **`pageFromPath` 会剥 `mini-` 前缀**（`/mini-login` → login）：不剥则调试面板在 mini 路由上推断不出页面 → 版式/配色区全空。
-- **版式优先级** `?view=` > 主题包 `views.<page>` > `VITE_<PAGE>_VIEW` > 基础版式；URL 显式非法值**不回退**；**新增版式目录要重启 dev server**。
-- 🔴 **新版式下 view ≡ pkg**（v2.18.5）：基础版式登记 view = 包名，`'base'` 不是合法 view 名；`findRecord/getThemeRecord` 必须接收 pkg。
-- **跨包切版式 → 自动重置配色到新包默认色**（v2.18.5 设计，字母序 black）：要跨包**比样式**必须 URL 钉 `&theme=`（否则比的是配色差）。
-- **配色注册表键 = 五段** `包/设备/页面/版式/配色`；配色**每版式各一份**漏了静默回落；tokens 扁平值无 light/dark 两档。
-- **明暗 = 配色系别**：`isDark = 当前配色 tone`；每套配色必填 `tone`；点色卡同步 mode、切 mode 联动配色；跨设备回落先按同系别（关卡 F 段）。
-- **跨设备系别一致**：`getThemeRecord` 回落先取同系别首套；`themeId` 不随设备变。
-- 🔴 **URL `?theme=`/`?skin=` 设备无关**（store `readUrlIntent` 读 `location.search`，**不限定设备**）：能否生效只看该设备
-  `colors/` 下有无该配色，没有则**同系别回落**且**不写** `data-mauth-theme`。电脑端 standard/mini 三页**只有 black/white**
-  （mobile login 有 5 套）→ 想让电脑端支持更多色，补 `themes/default/<设备>/<页>/colors/<id>/`（**只需 tokens**；
-  ⚠️ `theme.scss` 不可照抄手机端 —— 选择器针对 `.mauth-*`，电脑端是 `std*-*`）。`?theme=dark|light` 是 MiniLogin 残留的旧明暗语义。
-- 🔴 **设备维度参数两侧同形**（2026-09-26）：`?theme.<设备>`/`?skin.<设备>`/`?view.<设备>` 一律
-  「设备专属 → 通用键（`?view=` / `?theme=`） → 落盘/包默认」；版式侧唯一入口 `theme/views/params.ts` 的
-  `readDeviceParam`（**别直接读 `route.query.view`**）。**空串/纯空白 = 未指定**（两侧都要显式判：
-  `URLSearchParams.get('theme.mobile')` 对 `?theme.mobile=` 返回**空串而非 null**，`'' ?? 通用键` 会**把通用键一起吞掉**）。
-  版式 id 恒 ≡ 包名：`?view=base` 只是**别名**要归一到包名，**任何地方都不许返回 `'base'`**（配色键里没有它 → tokens 静默全丢）。
+- 🔴 **设备三值** `THEME_DEVICES = ['mobile','standard','mini']`，与分发器 `activeForm`（mobile/mini/standard）一一对应。
+  **mini 是独立设备**（iframe 紧凑版），不是 web/standard 下的变体子目录；电脑端设备目录是 `themes/<包>/standard/`。
+  路由层目录 `view/web/` **不改名**（那是电脑端路由语义）。
+- 🔴 **分发器 renderedDevice 三映射** mobile→'mobile'、mini→'mini'、standard→'standard'；`setupThemeDeviceSync` 兜底 `'standard'`
+  （非 mobile 即 standard），且**只听 `route.meta.device`**，别听整个 currentRoute（query 噪声会误触发）。
+- 🔴 **`pageFromPath` 会剥 `mini-` 前缀**（`/mini-login` → login）：不剥则调试面板在 mini 路由上推不出页面 → 版式/配色区全空。
+- **版式优先级** `?view=` > 包声明 `views.<page>` > `VITE_<PAGE>_VIEW` > 当前包名；URL 显式非法值**不回退**；新增版式目录要重启 dev server。
+- 🔴 **新版式下 view ≡ pkg**（v2.18.5）：登记的 view = 包名，`'base'` 不是合法 view 名；`findRecord/getThemeRecord` 必须接收 pkg。
+- **跨包切版式 → 配色自动重置到新包默认色**（现为 `DEFAULT_THEME_COLOR`）：要跨包**比样式**必须 URL 钉 `&theme=`（否则比的是配色差）。
+- **配色注册表键 = 五段**（`包/设备/页面/版式/配色`）；配色**每版式各一份**，漏了静默回落；tokens 是扁平值，无 light/dark 两档。
+- **明暗 = 配色系别**：`isDark = 当前配色 tone`；每套配色必填 `tone`；点色卡同步 mode、切 mode 联动配色；跨设备回落**先按同系别**
+  （关卡 F 段）；`themeId` 不随设备变，`getThemeRecord` 回落先取同系别首套。
+- 🔴 **URL `?theme=`/`?skin=` 设备无关**（`readUrlIntent` 读 `location.search`，不限设备）：能否生效只看该设备 `colors/` 有无该配色，
+  没有则**同系别回落**且**不写** `data-mauth-theme`；电脑端三页只有 black/white（补目录做法 → **details §11.16 A**）。
+- 🔴 **设备维度参数两侧同形**：`?theme.<设备>`/`?skin.<设备>`/`?view.<设备>` 一律「设备专属 → 通用键 → 落盘/包默认」；
+  版式侧唯一入口 `theme/views/params.ts` 的 `readDeviceParam`（**别直接读 `route.query.view`**）。
+  **空串/纯空白 = 未指定**（`get('theme.mobile')` 对 `?theme.mobile=` 返回**空串非 null** → `'' ?? 通用键` **会把通用键一起吞掉**）。
+  版式 id 恒 ≡ 包名：`?view=base` 只是**别名**要归一，**任何地方都不许返回 `'base'`**（配色键里没有它 → tokens 静默全丢）。
 - 🔴 **`data-mauth-view` 值 = 主题包名，且三端每份版式都带**（关卡与排查的唯一取值口；`verify-theme-dirs` §7b 守）。
 
 ### 3.2 样式 / token 硬规则
 
 - **样式单一来源** = `mobile-auth.scss`（`mauth-*`）；基础版式与 `/m/*` 页禁自带 `<style>`；移动端版式刻意不限宽。
 - 🔴 **scoped 禁写 `:global(.dark) X` / `:deep(.dark) X`**：编译成裸 `.dark` 命中 html → 夜间背景变红。正确 **`.dark X`**；桌面卡片根挂 `:class="{ dark: activeTone==='dark' }"`。
-- 🔴 **纯黑口径**：black = `#000000`（不借 slate-950）→ 必须 `--mauth-bg` + `--mauth-body-bg` 同时 #000000；surface 系列 `#121212/#1c1c1c/#262626/#2e2e2e`；
-  accent 用中性 `#e5e5e5`；focus 用冷调蓝灰 `#94a3b8`；input field-bg 0.10 白半透（0.06 看不见层次）；disabled = opacity 0.4 + `saturate(0)`；
-  focus-within 图标联动 `color: var(--mauth-text)`；`--mauth-header-bg` 禁 transparent（要同色显式 `var(--mauth-bg)`）。
+- 🔴 **纯黑口径**：black = `#000000`（不借 slate-950），且 `--mauth-bg` + `--mauth-body-bg` **必须同时**设；
+  `--mauth-header-bg` 禁 `transparent`（要显式 `var(--mauth-bg)`）。surface/accent/focus/input/disabled 精确值 → **details §11.16 C**。
 - 🔴 **main.scss body 已 token 化**（`var(--mauth-canvas, …)`）：desktop 页 body 也走 token，别再引 Tailwind `bg-background`。
 - 浮层（GraphicCaptcha/MessageToast/DocModal）已全 token 化；**GraphicCaptcha 输入框类名 `.mauth-captcha-input`**（旧 `.minimal-input-large` 已删，守卫已同步）。
 
@@ -93,7 +89,13 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 - 事件循环冻结用 tick 间隔法；手机端注入刘海用 CDP `setSafeAreaInsetsOverride`。
 - 测试命令：`node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPatterns "<p>"`。
 - 临时脚本放 `.tmp-probe/`（唯一 gitignore 项）。**oauth21 的 Playwright 关卡长期留在 `.tmp-probe/verify-*.mjs`**，改前先跑当基线。
-- 🔴 **起 dev server 必须服务本身当后台命令**（`run_in_background`）；端口：5174=code · 5175=link · 5177=compact · 5197=color-peer · 5184=panel-v3（跑前探活）。
+- 🔴 **起 dev server 必须服务本身当后台命令**（`run_in_background`）；端口：5174=code · 5175=link · 5177=compact · 5197=color-peer · 5184=panel-v3 · **5189=dist 预览（流量实测）**（跑前探活）。
+- 🔴 **量首屏流量必须用生产构建**（dev 每模块一请求，无意义）+ **必须新建 outDir**（`dist-*` 已 gitignore）：
+  `vite build --outDir dist-measure-N` → `vite preview --outDir … --port 5189` → `measure-load-budget.mjs`（`--block-sw` 只看页面口径）。
+  ⚠️ **dev 看不见的真相：PWA 预缓存**（`VitePWA` 默认 `generateSW`）会照 dist **全量**写进 `sw.js`（曾 85 项/802 KB，
+  首访 gzip 264 KB）；`verify-first-paint-budget.mjs` 绿 ≠ 生产首访轻。
+  ✅ **2026-09-26 已收口**：惰性主题 chunk 走 `lazy-theme/` 前缀 + `workbox.globIgnores` 排除 → **76 项/780 KB（gzip 257 KB）**；
+  判据看 `.tmp-probe/verify-pwa-precache.mjs`（无浏览器，读 `sw.js` 清单）。改 `globIgnores`/`lazyThemeDir()` 后必跑它。
   🔴 **多实例必须串行启动**（前一个 curl 到 200 再起下一个）：几个 Vite 共用 `node_modules/.vite`，
   同时冷启会互相废掉 optimizeDeps → 页面白屏 + 控制台 `504 (Outdated Optimize Dep)`（客户端 `?v=<hash>` 已过期）。
 
@@ -110,3 +112,9 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
   `preserve-caught-error` 已补 `{ cause: err }` 修复）。
 - ✅ oauth21 三页（login/register/forgot-password）的 **standard/mini 容器+版式拆分已全部完成**（v2.21.0–v2.23.0），
   设备三值化（mobile/standard/mini）+ mini 独立设备目录均已落地。
+- ✅ **主题抽包 Stage 1 已完成**：`packages/theme-core`（`mauth-theme-core`，源码直供）= 纯叶子层
+  （constants/tokens/tone/mode/types/views-params + 具名 barrel），`oauth21/src/theme/` 同路径变零逻辑壳；
+  默认 = `default` 包 + `white`（显式常量 `DEFAULT_THEME_COLOR`）；版式选择收口 `views/picker.ts`。
+  ⏳ **Stage 2 未做**：`runtime.ts` 注入器 → 注入点 `ThemeAssets`/`ThemeEnv`/`ThemeHost`。
+- ⚠️ 卡关脚本欠账：`verify-theme.mjs` 期望值仍按旧配色名（已 `exit 2` 自检）；面板三件套仍按 `'base'` 断言。
+- ⚠️ `phonecopy` 是**嵌套 git 仓**（不在 `.gitmodules`）→ 永远显示脏，`release.mjs` 会拒发，需 `--allow-dirty`。
