@@ -49,6 +49,10 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 - **配色注册表键 = 五段** `包/设备/页面/版式/配色`；配色**每版式各一份**漏了静默回落；tokens 扁平值无 light/dark 两档。
 - **明暗 = 配色系别**：`isDark = 当前配色 tone`；每套配色必填 `tone`；点色卡同步 mode、切 mode 联动配色；跨设备回落先按同系别（关卡 F 段）。
 - **跨设备系别一致**：`getThemeRecord` 回落先取同系别首套；`themeId` 不随设备变。
+- 🔴 **URL `?theme=`/`?skin=` 设备无关**（store `readUrlIntent` 读 `location.search`，**不限定设备**）：能否生效只看该设备
+  `colors/` 下有无该配色，没有则**同系别回落**且**不写** `data-mauth-theme`。电脑端 standard/mini 三页**只有 black/white**
+  （mobile login 有 5 套）→ 想让电脑端支持更多色，补 `themes/default/<设备>/<页>/colors/<id>/`（**只需 tokens**；
+  ⚠️ `theme.scss` 不可照抄手机端 —— 选择器针对 `.mauth-*`，电脑端是 `std*-*`）。`?theme=dark|light` 是 MiniLogin 残留的旧明暗语义。
 
 ### 3.2 样式 / token 硬规则
 
