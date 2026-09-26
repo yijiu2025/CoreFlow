@@ -1182,6 +1182,17 @@ themes/app/register/compact/index.vue 变体（`import.meta.glob` → 独立惰�
 - **教训**：`~12KB` 这条自律线是靠"上次压缩后的大小"拍的，容易与实测数字打架。
   **压缩前先看本节**，别只看头部那句话；改完顺手量一次字节数（`wc -c`）。
 
+**2026-09-26 追记（第五轮压缩：§3 精确值外迁）**：
+
+- 起因：抽包轮结束时要往主索引加 Stage 1 / 待办条目，先量了一下 —— **已经 13812 B，本就超线**。
+- 做法：按上面"优先迁 §3"的既定方针，把 §3.1/§3.2 里**精确值/操作清单**整段外迁到本文件新增的 **§11.16**
+  （A URL `?theme=` 设备无关与补配色目录的做法 · B 设备维度参数两侧同形 · C 纯黑精确值清单 · D 其它样式口径），
+  主索引只留"违反就出事"的规则句 + `→ details §11.16 X` 指针；顺带把 §3.1 里的解释性从句、重复的
+  "路由基线"表述去掉（信息不丢，都已在 §11.16 或原 §11）。
+- 结果：**13812 B → 13119 B**（−693 B）。⚠️ **仍高于自律线 ~12KB**，但距实测截断点 17302 B 还有 ~4.2KB 余量。
+- ⏭️ **下一轮该做的**：§4「手法 / 命令」里 `事件循环冻结 tick 间隔法`、`手机端刘海 CDP setSafeAreaInsetsOverride`、
+  `测试命令` 三条属"怎么做"而非"违反就出事"，应迁 §9；§6 的两条 ✅ 历史项可压成一行。目标是回到 **≤12KB**。
+
 ### 11.12 🔴 `vue-tsc` 在本仓**空转**（2026-09-23 实测，必读）
 
 **症状**：`vue-tsc --noEmit`（项目 `build` 与 `type-check` 用的都是它）**恒 exit 0**。
@@ -1334,6 +1345,61 @@ defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
 **别用文案定位**：主题描述里就含"深色"二字，会误命中明暗按钮。
 强断言示例（值得照抄）：点 ocean 后 `--mauth-primary` 由 `#1e293b` → `#0e7490`、`<style>` 内容是
 **替换**而非叠加（3074B → 3775B，节点数恒 1）、切版式后 query 里的 `client_id` 不能丢。
+
+---
+
+### 11.16 精确值清单（2026-09-26 第五轮压缩时从主索引 §3 迁入）
+
+主索引只保留"违反就出事"的规则句，精确值/清单落在这里。查的时候别只看主索引。
+
+**A. URL `?theme=` / `?skin=` 是设备无关的**（2026-09-25 核实）
+
+- 读取点是 store 的 `readUrlIntent`，它读 `location.search`，**不限定设备**。所以 `?theme=blue`
+  在手机端与电脑端是**同一个键**（`?theme.mobile=` 才是设备专属，见 B）。
+- 能否生效只看**该设备**的 `colors/` 目录下有没有这个配色：
+  - 有 → 写 `data-mauth-theme="<id>"`；
+  - 没有 → **按同系别回落**到该设备实际用的那套，且**不写** `data-mauth-theme`
+    （"没命中登记配色就不许写属性" —— 关卡与排查都靠这个属性判断"用户意图是否落空"）。
+- 现状：电脑端 `standard` / `mini` 的三页**只有 `black` / `white`**（手机端 login 有 5 套）。
+- 想让电脑端支持更多色：补 `themes/default/<设备>/<页面>/colors/<id>/` 目录，**只需 tokens**
+  （`index.ts` + `tokens`/`tokens.json` 形态），不需要 `theme.scss`。
+  ⚠️ **`theme.scss` 不可照抄手机端**：手机端选择器针对 `.mauth-*`，电脑端是 `std*-*`，
+  照抄的结果是"颜色生效了但没有附加背景样式"，很难看出是照抄的错。
+- `?theme=dark|light` 是 **MiniLogin 残留的旧明暗语义**（不是"黑系/白系配色 id"），别当通用约定用。
+
+**B. 设备维度参数的两侧同形**（2026-09-26）
+
+- 三个键同形：`?theme.<设备>` / `?skin.<设备>` / `?view.<设备>`，规则都是
+  **「设备专属 → 通用键（`?theme=` / `?view=`） → 落盘/包默认」**。
+- 版式侧唯一入口是 `oauth21/src/theme/views/params.ts` 的 `readDeviceParam`
+  —— **别直接读 `route.query.view`**（会漏掉 `.standard` / `.mini` 两类设备键）。
+- 🔴 **空串/纯空白 = 未指定**，两侧都要显式判：
+  `new URLSearchParams(location.search).get('theme.mobile')` 对 `?theme.mobile=` 返回的是
+  **空串而不是 `null`** —— 写成 `` param ?? generic `` 时**会把通用键一起吞掉**
+  （症状：在手机端写 `?theme.mobile=&theme=blue`，blue 也不生效）。
+- 版式 id 恒 ≡ 包名：`?view=base` 只是**别名**，要归一到当前包名；
+  🔴 **任何地方都不许把 `'base'` 返回出去** —— 配色注册表的 view 段没有 `'base'`，
+  传下去会让整条键链落空 → **tokens 静默全丢、只剩余 SCSS 基线**（没有任何报错）。
+
+**C. 纯黑（`black`）配色的精确值清单**
+
+- 纯黑 = `#000000`，**不借 slate-950**。必须 `--mauth-bg` 与 `--mauth-body-bg` **同时**设为 `#000000`
+  （只改一个 → 滚动回弹区/body 露出浅色）。
+- surface 系列：`#121212` / `#1c1c1c` / `#262626` / `#2e2e2e`。
+- accent 用中性 `#e5e5e5`（不要用蓝色系，纯黑下会显得脏）。
+- focus 环用冷调蓝灰 `#94a3b8`。
+- input 的 field-bg = **0.10 白半透**（0.06 看不见层次）。
+- disabled = `opacity: 0.4` + `saturate(0)`。
+- focus-within 时图标联动 `color: var(--mauth-text)`。
+- `--mauth-header-bg` **禁 `transparent`**，要显式 `var(--mauth-bg)`。
+
+**D. 其它样式口径**
+
+- `main.scss` 的 body 已 token 化（`var(--mauth-canvas, …)`）：desktop 页的 body 也走 token，
+  **别再引 Tailwind `bg-background`**（会让桌面页在黑系配色下闪白）。
+- 浮层已全部 token 化：`GraphicCaptcha` / `MessageToast` / `DocModal`。
+  🔴 **GraphicCaptcha 输入框类名是 `.mauth-captcha-input`**（旧的 `.minimal-input-large` 已删，
+  守卫已同步改到新类名 —— 探针里别再找旧名字）。
 
 ---
 
