@@ -17,8 +17,11 @@
  *    这么改是为了让"黑白"在配置层面有名字，而不是一个隐式的兜底 ——
  *    它同时保住了"零 token → 渲染路径与没有主题机制时完全一致"这条不变量。
  *
- * ⚠️ 配色 id **全局唯一**（跨包、跨设备）：URL `?theme=` 只给一个 id，
- *    要靠它反查所属包与设备。所以电脑端不能也叫 `ocean`，需另起名（如 `standard-ocean`）。
+ * ⚠️ 配色 id 的唯一性作用域是「同包 × 同设备 × 同页面 × 同版式」：**跨设备可以同名** ——
+ *    本包的 `mobile/login/colors/black` 与 `standard/login/colors/black` 就是两份
+ *    独立文件（各写各的 tokens），这正是"两端各配一套色值"的落点。
+ *    仅当两端要用**不同的配色 id**（手机 `blue`、电脑 `black`）时才需要设备维度的 URL
+ *    参数，当前只支持一个 `?theme=`（见 `stores/theme.ts` 的 `readUrlIntent`）。
  *
  * @author yijiu2025
  */
