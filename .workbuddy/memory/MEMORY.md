@@ -53,6 +53,12 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
   `colors/` 下有无该配色，没有则**同系别回落**且**不写** `data-mauth-theme`。电脑端 standard/mini 三页**只有 black/white**
   （mobile login 有 5 套）→ 想让电脑端支持更多色，补 `themes/default/<设备>/<页>/colors/<id>/`（**只需 tokens**；
   ⚠️ `theme.scss` 不可照抄手机端 —— 选择器针对 `.mauth-*`，电脑端是 `std*-*`）。`?theme=dark|light` 是 MiniLogin 残留的旧明暗语义。
+- 🔴 **设备维度参数两侧同形**（2026-09-26）：`?theme.<设备>`/`?skin.<设备>`/`?view.<设备>` 一律
+  「设备专属 → 通用键（`?view=` / `?theme=`） → 落盘/包默认」；版式侧唯一入口 `theme/views/params.ts` 的
+  `readDeviceParam`（**别直接读 `route.query.view`**）。**空串/纯空白 = 未指定**（两侧都要显式判：
+  `URLSearchParams.get('theme.mobile')` 对 `?theme.mobile=` 返回**空串而非 null**，`'' ?? 通用键` 会**把通用键一起吞掉**）。
+  版式 id 恒 ≡ 包名：`?view=base` 只是**别名**要归一到包名，**任何地方都不许返回 `'base'`**（配色键里没有它 → tokens 静默全丢）。
+- 🔴 **`data-mauth-view` 值 = 主题包名，且三端每份版式都带**（关卡与排查的唯一取值口；`verify-theme-dirs` §7b 守）。
 
 ### 3.2 样式 / token 硬规则
 
@@ -88,6 +94,8 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 - 测试命令：`node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPatterns "<p>"`。
 - 临时脚本放 `.tmp-probe/`（唯一 gitignore 项）。**oauth21 的 Playwright 关卡长期留在 `.tmp-probe/verify-*.mjs`**，改前先跑当基线。
 - 🔴 **起 dev server 必须服务本身当后台命令**（`run_in_background`）；端口：5174=code · 5175=link · 5177=compact · 5197=color-peer · 5184=panel-v3（跑前探活）。
+  🔴 **多实例必须串行启动**（前一个 curl 到 200 再起下一个）：几个 Vite 共用 `node_modules/.vite`，
+  同时冷启会互相废掉 optimizeDeps → 页面白屏 + 控制台 `504 (Outdated Optimize Dep)`（客户端 `?v=<hash>` 已过期）。
 
 ## 5. 部署 / CI（细则全在 details §10）
 

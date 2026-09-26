@@ -29,7 +29,7 @@ const ctx = toRef(props, 'ctx');
 </script>
 
 <template>
-  <div class="stdforgot-root">
+  <div class="stdforgot-root" data-mauth-view="default">
     <AuthContainer :app-name="'Enterprise SSO'">
       <template #header>
         <h2 class="text-xl font-bold dark:text-white leading-tight">{{ ctx.title }}</h2>

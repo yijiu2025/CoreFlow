@@ -34,8 +34,8 @@ const showConfirmPwd = ref(false);
 
 <template>
   <!-- 移动端全屏注册（与手机端登录页共用 mauth-* 样式体系）
-       data-mauth-view：版式自己声明身份，排查"现在到底是哪套 UI"时一眼可见 -->
-  <div class="mauth-page" data-mauth-view="base">
+       data-mauth-view：版式自己声明身份，值 = **主题包名**（一个主题包 = 一种版式） -->
+  <div class="mauth-page" data-mauth-view="default">
     <!-- 顶部 Header：返回 + 标题 + 步骤副标题 + 进度条 -->
     <header class="mauth-header">
       <button class="mauth-back-btn" :aria-label="ctx.t('register.prev')" @click="ctx.actions.back()">

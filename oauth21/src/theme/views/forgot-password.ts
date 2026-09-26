@@ -168,21 +168,18 @@ import { createViewRegistry } from './registry';
 import { DEFAULT_THEME_DEVICE, THEME_DEVICES, type ThemeDevice } from '../index';
 
 /**
- * 各主题包里本页的版式实现
+ * 各主题包里本页的版式实现 —— **一个主题包一种版式**（2026-09-26 收窄）
  *
- * 基础版式在 `<page>/index.vue`，变体在 `<page>/<变体>/index.vue`。两种都扫进来：
- * 内置包的基础版式由容器静态引入、用不上它，但其它包的基础版式只能靠这里惰性拿到
- * —— 包是运行时才定的，静态 import 钉不住。glob 用两个模式合并（`index.vue` 少了
- * 一层目录，一个通配模式盖不住两种形态）。
+ * 只有一种目录形态：`themes/<包>/<设备>/forgot-password/index.vue`。
+ * 内置包的那份由容器静态引入、用不上它，但其它包只能靠这里惰性拿到
+ * —— 包是运行时才定的，静态 import 钉不住。
+ *
+ * ⚠️ 曾有第二个模式 `.../forgot-password/<版式>/index.vue`（变体子目录），
+ *    已随「变体版式使用新包」删除。
  */
-const viewLoaders = {
-  ...import.meta.glob<{ default: Component }>(
-    '/src/theme/themes/*/*/forgot-password/index.vue'
-  ),
-  ...import.meta.glob<{ default: Component }>(
-    '/src/theme/themes/*/*/forgot-password/*/index.vue'
-  )
-};
+const viewLoaders = import.meta.glob<{ default: Component }>(
+  '/src/theme/themes/*/*/forgot-password/index.vue'
+);
 
 /** 本页版式注册表 */
 export const forgotPasswordViews = createViewRegistry(viewLoaders, { page: 'forgot-password' });
@@ -227,12 +224,13 @@ export function pickForgotPasswordViewId(
   const pkg = asPackage(source.pkg);
   const device = asDevice(source.device);
   const url = asText(source.url);
-  if (url) return forgotPasswordViews.resolve(url, pkg, device) ?? forgotPasswordViews.baseId;
+  // 🔴 URL 非法时回退**当前包**，而不是 `forgotPasswordViews.baseId`（2026-09-26 修）：
+  //    配色注册表里的 view 段恒等于包名，`'base'` 不是合法 view —— 返回它会让 store
+  //    以 `view='base'` 查配色，全链落空 → **tokens 静默全丢、只剩余 SCSS 基线**。
+  //    回退 pkg 的语义也是对的：URL 显式非法值**不回退到别的版式**，即"用当前包"。
+  if (url) return forgotPasswordViews.resolve(url, pkg, device) ?? pkg;
 
-  // 默认落到**当前主题包**（2026-09-25 改）：与新版式架构一致（`colorFromKey` 把基础
-  // 版式形态登记为 `view=包名`，旧 BASE_VIEW_ID='base' 在新版式下不是合法 view）。
-  // forgot-password 仍可能有变体版式，但基础版式按包走；
-  // 旧 `forgotPasswordViews.baseId='base'` 仅在「该主题包未声明 forgot-password 基础版式」时由 registry.load 兜底使用。
+  // 默认落到**当前主题包**：一个主题包 = 一种版式 ⇒ 版式 id ≡ 包名。
   const env = asText(ENV_VIEW);
   return (
     forgotPasswordViews.resolve(source.theme, pkg, device) ??
@@ -248,7 +246,7 @@ export function pickForgotPasswordViewId(
  * 在导航阶段就把请求发出去（与路由组件自身的 chunk 并行），绝大多数情况下
  * 容器挂载时已在模块缓存里 → 赋值发生在同一 tick 内，用户看不到切换。
  *
- * 「内置包 + base」是唯一无需预热的组合：那是容器静态引入的，零请求。
+ * 「内置包 + 该包名版式」是唯一无需预热的组合：那是容器静态引入的，零请求。
  */
 export function preloadForgotPasswordView(
   source: { url?: unknown; theme?: unknown; pkg?: unknown; device?: unknown } = {}
@@ -256,8 +254,7 @@ export function preloadForgotPasswordView(
   const pkg = asPackage(source.pkg);
   const device = asDevice(source.device);
   const id = pickForgotPasswordViewId(source);
-  // 内置包 + 默认设备 + base 是唯一零请求组合：容器静态引入的那份
-  if (id === forgotPasswordViews.baseId && pkg === forgotPasswordViews.builtinPackage && device === DEFAULT_THEME_DEVICE)
-    return;
+  // 内置包的版式由容器静态引入 → 零请求，不必预热
+  if (id === pkg && pkg === forgotPasswordViews.builtinPackage) return;
   void forgotPasswordViews.load(id, pkg, device);
 }

@@ -27,7 +27,7 @@ const emailVerifyOpen = computed(() => ctx.value.panel === 'emailVerify');
 </script>
 
 <template>
-  <div class="standard-login-root" :class="{ dark: ctx.isDark }">
+  <div class="standard-login-root" data-mauth-view="default" :class="{ dark: ctx.isDark }">
     <!-- 错误场景：应用标识缺失 -->
     <AppNameMissing v-if="!ctx.hasAppName" />
 

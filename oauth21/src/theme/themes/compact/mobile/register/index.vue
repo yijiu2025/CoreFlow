@@ -35,7 +35,8 @@ const showConfirmPwd = ref(false);
 </script>
 
 <template>
-  <!-- data-mauth-view：版式自己声明身份，便于排查"现在到底是哪套 UI"（基础版式同样带） -->
+  <!-- data-mauth-view：版式自己声明身份，值 = **主题包名**（一个主题包 = 一种版式）；
+       三个设备的版式都要带（关卡靠它读"现在渲染的是哪套 UI"） -->
   <div class="mauth-page mreg" data-mauth-view="compact">
     <!-- 顶部工具行：返回 + 主题开关（嵌 iframe 时自动隐藏） -->
     <header class="mreg-top">

@@ -7,9 +7,11 @@
  *                       system=跟随系统偏好。它不是独立于配色的第二个维度，而是
  *                       「切到哪一系别」的意图；最终明暗由**当前配色的 tone** 决定。
  *   theme（配色）—— 一个**配色 id**，对应
- *                   `theme/themes/<包>/<设备>/<页面>/[<版式>/]colors/<配色>/`；
+ *                   `theme/themes/<包>/<设备>/<页面>/colors/<配色>/`；
  *                   每套配色自带 `tone`（白系/黑系）与完整底色。
- *   view（版式） —— 版式 id（`?view=` / 包声明 / 环境变量），在"包 × 设备"内查找
+ *                   🔴 取值是「**设备专属 URL 值** ?? 全局 `themeId`」——见下节。
+ *   view（版式） —— 版式 id（`?view=` / 包声明 / 环境变量），在"包 × 设备"内查找。
+ *                   🔴 版式 id ≡ 主题包名（一个主题包 = 一种版式，2026-09-26）。
  *   **设备**（'mobile' | 'standard' | 'mini'）—— 不是偏好，而是**页面身份**：本 store 存的
  *               `themeId` 是"当前这套配色"，但**能不能用**要按调用方所在设备判：
  *               电脑端页面拿手机端的配色来渲染会得到一套尺寸/圆角都对不上的东西，
@@ -18,6 +20,22 @@
  * ⚠️ 明暗与配色**是同一个东西**：`isDark = 当前配色的系别`；`mode` 是系别意图，
  *    二者通过 `setTheme`（点色卡同步 mode）/`setMode`（切 mode 联动配色）保持**永远一致**。
  *    点黑卡即暗、点白卡即明；切「暗」落到黑系、切「明」落到白系（两侧各自记住上次选的配色）。
+ *
+ * === 设备维度参数（2026-09-26 起）：同一链接，各端各配一套 ===
+ * ```
+ * /login?theme=blue&view=compact                      三端共用：蓝 + 轻版式（缺则自动下沉）
+ * /login?theme.mobile=blue&theme.standard=black       手机蓝、电脑黑，mini 走通用/落盘
+ * /login?theme.mobile=blue&theme.standard=black&view=default
+ *                                                     版式统一、配色按端分
+ * ```
+ * 取值链（**每台设备各一条**，互不影响）：
+ *   `theme.<设备>` / `skin.<设备>`  →  `theme` / `skin`  →  落盘 `theme-id`  →  该范围默认色
+ * 版式侧同构：`view.<设备>`  →  `view`  →  包声明  →  `VITE_*_VIEW`  →  当前包
+ * （版式侧的解析在 `theme/views/`，本 store 只消费容器算好的 `activeView`。）
+ *
+ * 「锁」也是**逐设备**的：`?theme.standard=black` 只锁 standard 那一条，
+ * mobile / mini 仍照常接收后端下发、首屏系别对齐与切版式重置。
+ * 设备专属参数**不落盘**（与"URL 不落盘"同一纪律）。
  *
  * === 为什么设备不放进 store、而是由调用方传 ===
  * 同一个 SPA 里可以既有 `/m/login`（移动端页面）又有 `/login`（电脑端分发器），
@@ -33,12 +51,16 @@
  * 'system' 就是显式地跟随系统，随时可回。
  *
  * === 主题来源与优先级（高 → 低）===
- *   theme：URL `?theme=` / `?skin=`  >  后端下发  >  localStorage  >  该范围默认配色
- *   mode ：URL `?mode=`           >  后端下发  >  localStorage  >  跟随系统
+ *   用户显式操作（点色卡 / 切明暗）
+ *     > theme：URL `?theme.<设备>` / `?theme=` / `?skin=`  >  后端下发 / 父应用  >  localStorage
+ *     > mode ：URL `?mode=`  >  后端下发 / 父应用  >  localStorage  >  跟随系统
  *
  * 为什么 URL 最高：入口链接是**本次访问的显式意图**（部署方给不同租户发不同链接），
  * 它必须压过后端按 client_id 推的默认值，否则链接参数就形同虚设。
- * URL 命中的项会被「锁定」，后续后端下发不再覆盖它。
+ * URL 命中的设备会被「锁定」，后续后端下发不再覆盖它。
+ * 但**用户显式操作压过 URL**（`setTheme` / `cycleMode` / `toggleTheme` 会清掉当前设备
+ * 那条 URL 覆盖）—— 否则部署方发一条 `?theme.mobile=blue` 的链接后，用户在手机上
+ * 点任何色卡、切任何明暗都没有反应，看起来像坏了。
  *
  * 为什么 URL 与后端都不落盘：两者都是「这一侧的默认值」，不是用户的选择。
  * 只有用户/开发者在界面上显式调用 setMode/setTheme 才写 localStorage，
@@ -52,6 +74,7 @@ import { MODE_CYCLE, normalizeMode, type ThemeMode } from '@/theme/mode';
 import { applyThemeLayers, type ThemeTokenOverrides } from '@/theme/runtime';
 import { type ThemeTone } from '@/theme/tone';
 import {
+  DEFAULT_THEME_ID,
   DEFAULT_THEME_PACKAGE,
   DEFAULT_THEME_DEVICE,
   DEFAULT_THEME_PAGE,
@@ -61,6 +84,7 @@ import {
   listColorIdsOfTone,
   listThemes,
   resolveThemeId,
+  THEME_DEVICES,
   toneOfAnyScope,
   type ThemeDevice
 } from '@/theme';
@@ -114,47 +138,121 @@ function readInitialMode(): ThemeMode {
 /**
  * 初始化主题：旧键 `theme-skin` 兜底
  *
- * 未登记 / 非法一律回**默认设备的默认配色**（通常是黑白 mono）。
- * 这里不按具体设备判：落盘的只是一个"用户/部署方选过的配色"，它在哪端可用
- * 由各调用点按自己的设备解析（见 `themeRecordFor`）。
+ * 未登记 / 非法一律回**默认设备 × 默认页面 × 默认包**里字母序最前的那套
+ * （通常是 `black`）。这里不按具体设备判：落盘的只是一个"用户/部署方选过的配色"，
+ * 它在哪端可用由各调用点按自己的设备解析（见 `themeRecordFor`）。
+ *
+ * ⚠️ 最后兜底是 `DEFAULT_THEME_ID`（`'default'`）而**不是** `DEFAULT_THEME_DEVICE`：
+ *    后者是设备名（`'mobile'`），拿它当配色 id 会得到一个永远查不到的 id ——
+ *    虽然渲染层会回落到该范围第一套，但 `?debug=theme` 里看到一个设备名当配色、
+ *    且 `data-mauth-theme` 被无谓地摘掉，排查时极具误导性。
  */
 function readInitialTheme(): string {
   return (
     resolveThemeId(safeGet(STORAGE_THEME) ?? safeGet(LEGACY_STORAGE_SKIN)) ??
     getDefaultThemeId(DEFAULT_THEME_DEVICE) ??
-    DEFAULT_THEME_DEVICE
+    DEFAULT_THEME_ID
   );
 }
 
+/** URL 上按设备解析出的配色意图：只记"这台设备被**显式**指定了哪套色" */
+type DeviceThemeIntent = Partial<Record<ThemeDevice, string>>;
+
 /**
- * 读取 URL 上的主题意图
+ * 读取 URL 上的主题意图（**含设备维度**，2026-09-26 起）
  *
- * `skin` 作为 `theme` 的兼容别名继续支持（已发出的历史链接不能失效）。
+ * === 每台设备各一条取值链 ===
+ *   `?theme.<设备>` / `?skin.<设备>`  →  `?theme` / `?skin`  → （缺则不算命中）
+ * 即"**设备专属优先，缺了退到通用键**"。两条都可能缺 —— 缺了这台设备就走
+ * 落盘偏好 / 该范围默认色（由 `themeRecordFor` 后面的链路决定）。
+ *
+ *   例 ① 三端共用一套：      `/login?theme=blue&view=compact`
+ *   例 ② 两端各一套配色：    `/login?theme.mobile=blue&theme.standard=black`
+ *   例 ③ 设备专属 + 通用版式：`/login?theme.mobile=blue&view=default`（mini 无专属 → 走通用/落盘）
+ *
+ * `skin` 作为 `theme` 的兼容别名继续支持（已发出的历史链接不能失效），
+ * 设备维度下同样支持 `?skin.<设备>`。
+ *
  * 非法值一律折成 null —— 不抛错、不锁项，让后端配置与本地存储照常参与。
  *
- * ⚠️ 这里**不限定设备**：URL 可能来自部署方给电脑端的链接，也可能给手机端。
- *    设备匹配留到各调用点（`themeRecordFor`）判 —— 在那里才知道"我是什么设备"。
+ * ⚠️ 这里**不校验"该设备下是否真有这套色"**：只在"任意一处登记过"这一层过滤
+ *    （`resolveThemeId` 的默认口径）。设备不匹配时由 `getThemeRecord` 回落
+ *    （同系别首套 → 该范围兜底）—— 这正是「电脑端没有 blue 就自动下沉到 white」的落点。
+ *    若在这里按设备拒绝，`?theme.standard=blue` 会连"下沉"的机会都没有。
+ *
+ * 🔴 **空串 = 未指定**（2026-09-26 修，与版式侧 `theme/views/params.ts` 的
+ *    `readDeviceParam` 同形）：`?theme.mobile=` 不能把 `?theme=blue` 顶掉。
+ *    `URLSearchParams.get()` 对 `?theme.mobile=` 返回 `''`（**不是** null），
+ *    `'' ?? anyScope` 仍是 `''` —— 旧写法下这一条会让**通用键也一起失效**
+ *    （`resolveThemeId('')` 返回 null ⇒ 该设备一条锁都不记），与文档承诺
+ *    「留空 = 这台设备不特殊指定」正好相反。部署方常把参数留空当成"不特殊指定"。
  */
-function readUrlIntent(): { theme: string | null; mode: ThemeMode | null } {
+function readUrlIntent(): { deviceTheme: DeviceThemeIntent; mode: ThemeMode | null } {
+  const deviceTheme: DeviceThemeIntent = {};
   try {
     const params = new URLSearchParams(window.location.search);
-    return {
-      theme: resolveThemeId(params.get('theme') ?? params.get('skin')),
-      mode: normalizeMode(params.get('mode'))
-    };
+    /** 空串 / 纯空白视为**未指定** —— 与 `readDeviceParam` 的 `isPresent()` 同一口径 */
+    const present = (raw: string | null): string | null =>
+      raw && raw.trim() !== '' ? raw : null;
+    // 无设备前缀的通用键：三端共用，任一设备没有专属键时用它
+    const anyScope = present(params.get('theme') ?? params.get('skin'));
+    for (const device of THEME_DEVICES) {
+      const scoped = present(params.get(`theme.${device}`) ?? params.get(`skin.${device}`));
+      const resolved = resolveThemeId(scoped ?? anyScope);
+      if (resolved) deviceTheme[device] = resolved;
+    }
+    return { deviceTheme, mode: normalizeMode(params.get('mode')) };
   } catch {
-    return { theme: null, mode: null };
+    return { deviceTheme, mode: null };
   }
 }
 
 export const useThemeStore = defineStore('theme', () => {
   const urlIntent = readUrlIntent();
-  /** URL 显式命中的项要锁定，避免随后到达的后端配置把它覆盖掉 */
-  const urlLockedTheme = urlIntent.theme !== null;
+
+  /**
+   * URL 按设备指定的配色（**响应式**）
+   *
+   * 做成 ref 而不是普通常量，是因为**用户显式操作会清掉当前设备那一条**
+   * （见 `clearDeviceThemeOverride`）—— 不清的话，带 `?theme.mobile=blue` 的链接在
+   * 手机上点任何色卡、切任何明暗都毫无反应（URL 优先级高于 themeId），像坏了一样。
+   */
+  const deviceTheme = ref<DeviceThemeIntent>({ ...urlIntent.deviceTheme });
+
+  /**
+   * 某设备的配色是否被 URL **显式**指定 → 该设备"锁定"
+   *
+   * 锁定只挡**自动**改写（首屏系别对齐 / 切版式重置 / 后端下发），不挡用户的显式操作。
+   * 逐设备判定是必须的：`?theme.standard=black` 不该把手机端的首屏对齐也一起冻住。
+   */
+  function urlLockedThemeOf(device: ThemeDevice): boolean {
+    return deviceTheme.value[device] !== undefined;
+  }
+
+  /**
+   * 清掉某设备被 URL 写下的配色 —— **只该由用户的显式操作调用**
+   *
+   * 「显式操作压过部署方的链接」与既有优先级口径一致（用户点了色卡就是你说了算），
+   * 但只清**当前设备**那一条：别的设备仍按部署方的意图走。
+   */
+  function clearDeviceThemeOverride(device: ThemeDevice = activeDevice.value): void {
+    if (deviceTheme.value[device] === undefined) return;
+    const next = { ...deviceTheme.value };
+    delete next[device];
+    deviceTheme.value = next;
+  }
+
   const urlLockedMode = urlIntent.mode !== null;
 
   const mode = ref<ThemeMode>(urlIntent.mode ?? readInitialMode());
-  const themeId = ref<string>(urlIntent.theme ?? readInitialTheme());
+  /**
+   * **全局**配色 —— 只被"URL 没有覆盖这台设备"的那些设备采用
+   *
+   * 设备专属 URL 值在 `themeRecordFor` 里优先于它（这是"两端各配一套色"的落点）。
+   * 初值取默认设备那条 URL 值，让"默认设备 + 一条 `?theme=` 链接"的常规场景
+   * 与旧行为完全一致。
+   */
+  const themeId = ref<string>(urlIntent.deviceTheme[DEFAULT_THEME_DEVICE] ?? readInitialTheme());
 
   /** 系统偏好（始终跟踪，是否采用由 mode 决定） */
   const systemDark = ref(false);
@@ -245,15 +343,18 @@ export const useThemeStore = defineStore('theme', () => {
   /**
    * 按设备 + 页面 + 版式解析出**实际生效**的配色记录
    *
-   * 这是本 store 里唯一一处"把 themeId 变成可渲染的配色"的地方，其余访问器都由它派生，
+   * 这是本 store 里唯一一处"把配色意图变成可渲染的配色"的地方，其余访问器都由它派生，
    * 避免"有的地方判维度、有的地方不判"导致同一个 id 在不同组件里表现不一致。
-   * 不匹配（如电脑端页面遇上手机端的配色）时由 `getThemeRecord` 回落到该版式默认配色。
+   * 不匹配（如电脑端页面遇上手机端的配色）时由 `getThemeRecord` 回落到该范围默认配色。
    *
-   * 🔴 接收 `pkg` 参数（2026-09-25 起）：新版式下 view ≡ pkg，**配色查找必须按当前包**，
-   *    否则 `findRecord` 会以 `DEFAULT_THEME_PACKAGE` 兜底（修前曾 hardcode），导致
-   *    切到 compact 包点 blue 永远命中 default 包 —— 用户反馈「切换版式后蓝青颜色切换无效」。
-   *    缺省值仍是 `DEFAULT_THEME_PACKAGE`，保留旧调用点的语义（`getThemeRecord` 内部
-   *    会在 pkg ≠ default 时把 view 兜底成 pkg，避免 view='base' 这种非法名）。
+   * 🔴 **设备专属 URL 配色优先于全局 `themeId`**（2026-09-26）：取
+   *    `deviceTheme[device] ?? themeId` —— 这就是「同一链接，手机蓝、电脑黑」的落点。
+   *    只有一个入口做这个合并，别处（`data-mauth-theme` 写入、附加样式加载、面板）
+   *    都从它或同口径取值，才不会出现"token 是 black、DOM 属性写 blue"这类撕裂。
+   *
+   * 🔴 接收 `pkg` 参数：view ≡ pkg（一个主题包 = 一种版式），**配色查找必须按当前包**，
+   *    否则 `findRecord` 会以 `DEFAULT_THEME_PACKAGE` 兜底，导致切到 compact 包点 blue
+   *    永远命中 default 包 —— 用户反馈「切换版式后蓝青颜色切换无效」。
    */
   function themeRecordFor(
     pkg: string = DEFAULT_THEME_PACKAGE,
@@ -261,7 +362,8 @@ export const useThemeStore = defineStore('theme', () => {
     page: string = activePage.value,
     view: string = activeView.value
   ) {
-    return getThemeRecord(themeId.value, pkg, device, page, view);
+    const id = deviceTheme.value[device] ?? themeId.value;
+    return getThemeRecord(id, pkg, device, page, view);
   }
 
   /* ==========================================================================
@@ -352,29 +454,24 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   /**
-   * 首屏对齐：打开页面时按**当前明暗**把配色校正到匹配的系别
-   *
-   * 场景：用户上次在浅色的 `blue` 下关掉页面，这次系统已是深色 —— 首屏就该是黑系。
-   *
-   * ⚠️ URL 显式给了 `?theme=` 时**不干预**：那是部署方/用户的明确意图
-   *    （部署方可能故意发一条"永远用蓝"的链接），链接必须压过联动。
-   *    与既有优先级「URL > 后端 > localStorage」同一口径。
-   *
-   * ⚠️ 只在**有落盘偏好**时对齐（theme-id / 旧键 / 任一记忆槽任一存在）：
-   *    全新用户什么都没选过时，"默认长什么样"必须保持既有事实
-   *    （该范围的默认配色），不能因为一次系别对齐被换到意料之外的色上。
-   */
-  /**
    * 首屏对齐：按当前「系别意图」把配色校正到匹配的系别
    *
    * 明 = 白系、暗 = 黑系、跟随系统 = 按系统偏好。全新用户也走这里：默认配色
    * 字母序是 black（黑系），若系统是亮色就该首屏落到白系，否则「跟随系统」形同虚设
    * 且出现 html 深色 / 页面浅色的撕裂。
    *
-   * ⚠️ URL 显式给了 `?theme=` 时不干预：那是部署方/用户的明确意图
+   * 场景：用户上次在浅色的 `blue` 下关掉页面，这次系统已是深色 —— 首屏就该是黑系。
+   *
+   * ⚠️ **该设备**的配色被 URL 显式指定时不干预：那是部署方/用户的明确意图
    *    （部署方可能故意发一条"永远用蓝"的链接），链接必须压过联动。
+   *    与既有优先级「URL > 后端 > localStorage」同一口径。
+   *
+   * ⚠️ 判定用 `activeDevice`：此刻路由还没接管 `setActiveDevice`，所以通常是默认设备
+   *    （mobile）。带 `?theme.standard=black` 而 mobile 未被锁定时，这里照常为
+   *    mobile/mini 对齐一次 —— standard 那端由 `themeRecordFor` 的 URL 覆盖保证，
+   *    不受影响（这正是"逐设备判定"而非"全局一刀切"的原因）。
    */
-  if (!urlLockedTheme) {
+  if (!urlLockedThemeOf(activeDevice.value)) {
     syncColorToTone(mode.value === 'system' ? systemDark.value : mode.value === 'dark');
   }
 
@@ -489,29 +586,33 @@ export const useThemeStore = defineStore('theme', () => {
    * 此时若照写，`theme.scss` 的选择器会挂到一套**并未生效**的配色上 ——
    * 背景图、字体都来自别处，而 DOM 却宣称用的是它，排查时极难归因。
    *
-   * === 为什么 mono 会（并且应当）写出属性 ===
-   * `mono` 是**具名基线配色**（`<设备>/colors/mono/`，零 token）：它的色值就是
-   * 样式表基线本身，所以"写不写属性"在**当前**不影响任何像素 —— 基线规则不带
-   * 属性选择器。写出来的好处有两条：
-   *   ① 语义诚实：配置层面用户确实选了 `mono`（`?theme=mono`），DOM 应当如实反映；
-   *   ② 前向兼容：将来若给 mono 加 `theme.scss`（例如换个中性灰底纹），
-   *      选择器立刻可用，不必回头改这里。
-   * "零配色 → 渲染路径与没有主题机制时一致"这条不变量由 **mono 零 token** 保证，
-   * 而不是靠不写属性 —— 少写一个属性省不下任何渲染代价，却让排查少一个线索。
+   * === 为什么黑白会（并且应当）写出属性 ===
+   * 黑白是**具名配色**（`<页面>/colors/{black,white}/`）—— 它们自带 token，所以
+   * "写不写属性"在**当前**不影响任何像素（token 走 inline style，基线规则不带属性
+   * 选择器）。写出来的好处有两条：
+   *   ① 语义诚实：配置层面用户确实选了 `black`，DOM 应当如实反映；
+   *   ② 前向兼容：配色若带 `theme.scss`（背景图 / 字体），选择器
+   *      `html[data-mauth-theme='black']` 立刻可用，不必回头改这里。
+   * "零配色 → 渲染路径与没有主题机制时一致"这条不变量由**空记录**（`emptyRecord`，
+   * tokens 为 undefined、外观全交给 SCSS 基线）保证，而不是靠不写属性 ——
+   * 少写一个属性省不下任何渲染代价，却让排查少一个线索。
    *
-   * ⚠️ 必须同时依赖 `activeDevice` / `activePage` / `activeView`：同一个 `themeId`
-   *    在四段归属不同的地方解析出的记录可能不同（不匹配时会回落），只盯 themeId
-   *    会漏掉"从 /login 跳到 /register""切成 compact 版式"这一整类切换。
+   * ⚠️ 必须同时依赖 `themeId` / `deviceTheme` / `activeDevice` / `activePage` /
+   *    `activeView`：生效 id 是「设备专属 URL 值 ?? 全局 themeId」，少依赖一个就会
+   *    漏掉整类切换（跳页、切版式、切设备、"两端各配一套色"）。
    */
   watch(
-    [themeId, activeDevice, activePage, activeView],
-    ([id, device, page, view]) => {
-      // 新版式下 view ≡ pkg —— 主动用 activeView 同时充当 view 和 pkg：
+    [themeId, deviceTheme, activeDevice, activePage, activeView],
+    ([, , device, page, view]) => {
+      // 生效 id 按**设备**取 URL 覆盖 —— 与 `themeRecordFor` 同一口径。只用 themeId
+      // 会让 DOM 属性在"两端各配一套色"时说谎（渲的是 black，属性却写 blue）。
+      const id = deviceTheme.value[device] ?? themeId.value;
+      // view ≡ pkg —— 主动用 activeView 同时充当 view 和 pkg：
       //   • view 给 findRecord 的视图段（精确匹配当前生效配色）
       //   • pkg 给 findRecord 的包段（避免被 DEFAULT_THEME_PACKAGE 兜底抢走）
       const record = getThemeRecord(id, view, device, page, view);
       const root = document.documentElement;
-      // 解析出的 id 与请求的 id 不一致 = 该版式下没有这套配色，用了回落档
+      // 解析出的 id 与请求的 id 不一致 = 该范围下没有这套配色，用了回落档
       if (record.meta.id === id) root.dataset.mauthTheme = id;
       else delete root.dataset.mauthTheme;
 
@@ -540,9 +641,10 @@ export const useThemeStore = defineStore('theme', () => {
    *       • 切到另一主题包（新版式 register 'default' → 'compact'）→ currentPkg='default'
    *         ≠ newView='compact' → 重置 ✓
    *   • 仅 activeView **真的变了**（`newView !== oldView`）—— 重复设同值、setup 时
-   *     初次赋值等情况都不应触发重置（后者由 `urlLockedTheme` 兜底，但少一次副作用更好）。
-   *   • URL 锁定的 theme 不动：部署方/用户的显式意图必须压过联动
-   *     （如 `?view=compact&theme=blue`）。
+   *     初次赋值等情况都不应触发重置（后者由 URL 锁定兜底，但少一次副作用更好）。
+   *   • **该设备**被 URL 锁定的 theme 不动：部署方/用户的显式意图必须压过联动
+   *     （如 `?view=compact&theme=blue`、`?view.standard=compact&theme.standard=black`）。
+   *     逐设备判定 —— 只有 standard 被锁定时，mobile/mini 的切版式重置照常发生。
    *   • **不写 STORAGE_THEME**：切版式 ≠ 用户选色 —— 用户切回旧版式应恢复上次自选色。
    *   • **不联动 mode / 不动记忆槽**：同理，切版式 ≠ 用户定系别。
    *
@@ -558,22 +660,35 @@ export const useThemeStore = defineStore('theme', () => {
       oldView
     ).pkg;
     if (currentPkg === newView) return;
-    // URL 锁定 theme（如 `?theme=blue&view=compact`）→ 部署方的显式意图，不被切版式覆盖
-    if (urlLockedTheme) return;
+    // 该设备被 URL 锁定 theme → 部署方的显式意图，不被切版式覆盖
+    if (urlLockedThemeOf(activeDevice.value)) return;
     const fallback = getDefaultThemeId(activeDevice.value, activePage.value, newView);
     if (!fallback || fallback === themeId.value) return;
     // 仅 in-memory 重置 —— 切回旧版式时能恢复 STORAGE_THEME 里的「上次自选色」
     themeId.value = fallback;
   });
 
-  /** 设置明暗意图（明=白系 / 暗=黑系 / 跟随系统；用户显式选择 → 落盘，联动切配色由 watch(mode) 驱动） */
+  /**
+   * 设置明暗意图（明=白系 / 暗=黑系 / 跟随系统）
+   *
+   * ⚠️ 这是**底层写入口**，**不清** URL 覆盖：外部同步（`applyTheme` ← 父应用
+   *    postMessage / 后端下发的 appConfig）也走它，而那些属于"默认值"，优先级低于 URL
+   *    （口径：显式操作 > URL > 后端/父应用 > localStorage）。
+   *    用户的显式操作请走 `cycleMode` / `toggleTheme` —— 它们会先清掉当前设备的覆盖。
+   */
   function setMode(next: ThemeMode): void {
     mode.value = next;
     safeSet(STORAGE_MODE, next);
   }
 
-  /** 循环切换明暗意图（跟随系统 → 明 → 暗 → 跟随系统） */
+  /**
+   * 循环切换明暗意图（跟随系统 → 明 → 暗 → 跟随系统）
+   *
+   * 用户显式操作 → 先清掉当前设备被 URL 写下的配色，否则带
+   * `?theme.mobile=blue` 的链接下点这个按钮会毫无反应（URL 优先于 themeId）。
+   */
   function cycleMode(): void {
+    clearDeviceThemeOverride();
     const idx = MODE_CYCLE.indexOf(mode.value);
     setMode(MODE_CYCLE[(idx + 1) % MODE_CYCLE.length]);
   }
@@ -583,8 +698,10 @@ export const useThemeStore = defineStore('theme', () => {
    *
    * 与 cycleMode 的区别：这个不进入 'system'，纯做反色切换。
    * 现在 `isDark` = 当前配色的系别，所以"切到相反明暗"即"切到相反系别的配色"。
+   * 同 `cycleMode`：用户显式操作，先清掉当前设备的 URL 覆盖。
    */
   function toggleTheme(): void {
+    clearDeviceThemeOverride();
     setMode(isDark.value ? 'light' : 'dark');
   }
 
@@ -608,9 +725,15 @@ export const useThemeStore = defineStore('theme', () => {
    *    下不再是合法 view 名（见 `theme/index.ts` 的 `colorFromKey` 注释）。改用
    *    `activeView` 让查找范围与"当前渲染的版式"一致。views 字段通常为空（包定义里
    *    没声明），本函数绝大多数调用点会拿到 undefined —— 调用方按包名兜底即可。
+   *
+   * 🔴 **包那一段用 `packageId`（当前生效包），不是 `DEFAULT_THEME_PACKAGE`**（2026-09-26 修）：
+   *    `view ≡ pkg` 之后"哪个包声明的版式"必须是**当前包** —— 写死默认包会让
+   *    `themes/compact/index.ts` 里声明的版式**永远读不到**（切到 compact 包也照样读
+   *    default 的记录），表现为"改了包定义里的 views 没反应"。
+   *    本仓三个包都还没声明 `views`，所以这条修的是"声明档对非默认包静默失效"的隐患。
    */
   function viewFor(page: string, device: ThemeDevice = activeDevice.value): string | undefined {
-    return themeRecordFor(DEFAULT_THEME_PACKAGE, device, page, activeView.value).views?.[page];
+    return themeRecordFor(packageId.value, device, page, activeView.value).views?.[page];
   }
 
   /**
@@ -634,16 +757,21 @@ export const useThemeStore = defineStore('theme', () => {
   /**
    * 设置配色（开发者/部署方调用 → 落盘）
    *
-   * @param id 配色 id，须已在 `src/theme/themes/<包>/<设备>/colors/` 登记；
+   * @param id 配色 id，须已在 `src/theme/themes/<包>/<设备>/<页面>/colors/` 登记；
    *           未登记时返回 false 且不改动现状。
    *
    * ⚠️ 这里**不按设备过滤**：用户/部署方可能先设一个"手机端配色"，随后又访问电脑端页面
    *    —— 后者会因设备不匹配而回落（见 `themeRecordFor`），但选择本身仍被记住。
    *    若在这里判设备拒绝，就会出现"在手机端能设、在电脑端设了无声失败"的怪现象。
+   *
+   * ⚠️ 会清掉**当前设备**被 URL 写下的配色（`clearDeviceThemeOverride`）：
+   *    点色卡是用户的显式操作，必须能压过部署方链接 —— 否则带
+   *    `?theme.mobile=blue` 的链接在手机上点任何色卡都没反应（URL 优先级高于 themeId）。
    */
   function setTheme(id: string): boolean {
     const resolved = resolveThemeId(id);
     if (!resolved) return false;
+    clearDeviceThemeOverride();
     themeId.value = resolved;
     safeSet(STORAGE_THEME, resolved);
     // 明暗 = 色系：点色卡同步把「明暗意图」设为该配色的系别（点黑卡→暗、点白卡→明、
@@ -688,7 +816,9 @@ export const useThemeStore = defineStore('theme', () => {
     }
 
     const wanted = config.theme ?? config.skin;
-    if (wanted !== undefined && !urlLockedTheme) {
+    // 该设备被 URL 显式指定配色时不覆盖（逐设备判定：`?theme.standard=black` 不该
+    // 冻结手机端接收后端下发的能力）
+    if (wanted !== undefined && !urlLockedThemeOf(activeDevice.value)) {
       // 不按设备过滤：后端可能只配了一套配色给某一端，落库后由各端自行回落。
       // 若这里按当前设备拒绝，会把"下次访问另一端的正确配置"也一起丢掉。
       const resolved = resolveThemeId(wanted);
@@ -727,11 +857,16 @@ export const useThemeStore = defineStore('theme', () => {
   if (import.meta.env.DEV && typeof window !== 'undefined' && new URLSearchParams(location.search).get('debug') === 'theme') {
     (window as unknown as Record<string, unknown>).__MAUTH_STORE__ = {
       get themeId() { return themeId.value; },
+      /** URL 按设备指定的配色（`?theme.<设备>`）；空对象 = 没有任何设备被 URL 指定 */
+      get deviceTheme() { return { ...deviceTheme.value }; },
       get mode() { return mode.value; },
       get packageId() { return packageId.value; },
       get activeDevice() { return activeDevice.value; },
       get activePage() { return activePage.value; },
-      get activeView() { return activeView.value; }
+      get activeView() { return activeView.value; },
+      /** 当前生效配色的 id + 系别（跨设备回落后的**真实**结果，验收关卡读它） */
+      get activeThemeId() { return themeRecordFor().meta.id; },
+      get activeTone() { return themeRecordFor().tone; }
     };
   }
 

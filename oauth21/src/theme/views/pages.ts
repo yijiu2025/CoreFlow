@@ -6,7 +6,7 @@
  * （与 `@/theme` 主题注册表同一策略）。
  *
  * 消费者是调试面板 `components/dev/ThemeDebugPanel.vue`
- * —— `ViewRegistry.list()` 的注释里写的就是这个场景。
+ * —— `ViewRegistry.packages()` 的注释里写的就是这个场景。
  *
  * ⚠️ 注释里不要写出「星号紧跟斜杠」的两个字符：它会提前闭合本段块注释，
  *    症状是后面的正文被当成代码解析（`theme/types.ts` 与 `scripts/check-browser-baseline.mjs`
@@ -16,7 +16,6 @@
  * @since 2026-09-23
  */
 import type { PackageViews, ViewRegistry } from './registry';
-import { DEFAULT_THEME_DEVICE, THEME_DEVICES, type ThemeDevice } from '../index';
 
 /** 页面名 = 版式目录名 = 路由 path 的末段（如 register）；与主题 id 同规则 */
 const PAGE_RE = /^[a-z0-9-]+$/;
@@ -40,20 +39,15 @@ export interface PageViews {
   /** 该页的版式注册表 */
   registry: ViewRegistry;
   /**
-   * **内置包 × 默认设备**下的可选版式 id：`base` 在最前，其余为已登记变体（已排序）
+   * 各主题包 × 设备在这页各有哪些版式（按"包/设备"排序）
    *
-   * 取这一档是因为面板默认这么展示（内置包 + 默认设备 = 基础版式被容器静态引入的那份）；
-   * 按设备 / 按包的全貌见 `byDevice` / `packages`。
-   */
-  ids: string[];
-  /**
-   * 按**设备**拆开的内置包版式清单
+   * 版式住在包与设备里，所以要按两段列。⚠️ 一个主题包 = 一种版式（2026-09-26），
+   * 所以每个条目的 `ids` 恒为 `[包名]`，这里保留元组形态只是为了"哪天一个包要挂
+   * 多套版式"时不改调用方。
    *
-   * 「手机端有哪些版式、电脑端有哪些版式」是两件独立的事，面板要分开列。
-   * 某个设备下该页一套版式都没登记时，其 `ids` 只有 `base`。
+   * ⚠️ 曾有 `ids` / `byDevice` 两个字段（按设备列出内置包下的变体 id），随变体
+   *    子目录机制的删除一并移除 —— 它们没有任何消费点。
    */
-  byDevice: { device: ThemeDevice; ids: string[] }[];
-  /** 各主题包 × 设备在这页各有哪些版式（按"包/设备"排序）—— 版式住在包与设备里，所以要按两段列 */
   packages: PackageViews[];
 }
 
@@ -89,11 +83,6 @@ function buildPages(): Map<string, PageViews> {
     pages.set(page, {
       page,
       registry,
-      ids: [registry.baseId, ...registry.list(registry.builtinPackage, DEFAULT_THEME_DEVICE)],
-      byDevice: THEME_DEVICES.map(device => ({
-        device,
-        ids: [registry.baseId, ...registry.list(registry.builtinPackage, device)]
-      })),
       packages: registry.packages()
     });
   }

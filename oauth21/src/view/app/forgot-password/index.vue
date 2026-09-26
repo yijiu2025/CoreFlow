@@ -57,6 +57,7 @@ import { useThemeStore } from '@/stores/theme';
  */
 import BaseForgotPasswordView from '@/theme/themes/default/mobile/forgot-password/index.vue';
 import { forgotPasswordViews, pickForgotPasswordViewId } from '@/theme/views/forgot-password';
+import { readDeviceParam } from '@/theme/views/params';
 import type {
   ForgotPasswordStage,
   ForgotPasswordTranslate,
@@ -309,14 +310,14 @@ const THEME_DEVICE = 'mobile' as const;
 
 /**
  * 用哪套版式：`?view=` > 主题包声明（theme/themes/<包>/index.ts 的 views['forgot-password']）
- * > VITE_FORGOT_PASSWORD_VIEW > base。
+ * > VITE_FORGOT_PASSWORD_VIEW > 当前包名（一个主题包 = 一种版式）。
  *
  * 做成 computed 而不是 setup 里取一次：后端下发的换配色配置可能晚于本页 setup 到达。
  * `pkg` 决定**在哪个包里找**（版式跟随主题包），所以包变了要重新解析。
  */
 const viewId = computed(() =>
   pickForgotPasswordViewId({
-    url: route.query.view,
+    url: readDeviceParam(route.query, 'view', THEME_DEVICE),
     theme: themeStore.viewFor('forgot-password'),
     pkg: themeStore.packageId,
     device: THEME_DEVICE

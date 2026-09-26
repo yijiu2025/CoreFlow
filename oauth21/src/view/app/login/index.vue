@@ -63,6 +63,7 @@ import { useThemeStore } from '@/stores/theme';
  */
 import BaseLoginView from '@/theme/themes/default/mobile/login/index.vue';
 import { loginViews, pickLoginViewId } from '@/theme/views/login';
+import { readDeviceParam } from '@/theme/views/params';
 import type { LoginDirection, LoginPanel, LoginTranslate, LoginViewContext } from '@/theme/views/login';
 import type { SocialProviderId } from '@/composables/useSocialLogin';
 import type { Component, Ref } from 'vue';
@@ -298,7 +299,7 @@ const THEME_DEVICE = 'mobile' as const;
 
 /**
  * 用哪套版式：`?view=` > 主题包声明（theme/themes/<包>/index.ts 的 views.login）
- * > VITE_LOGIN_VIEW > base。解析细节与安全边界见 registry.ts。
+ * > VITE_LOGIN_VIEW > 当前包名（一个主题包 = 一种版式）。解析细节与安全边界见 registry.ts。
  *
  * 做成 computed 而不是 setup 里取一次，是因为主题是**运行时**才定的：
  * 后端下发的换配色配置在 App.vue 的 onMounted 之后才到（可能晚于本页 setup），
@@ -309,7 +310,7 @@ const THEME_DEVICE = 'mobile' as const;
  */
 const viewId = computed(() =>
   pickLoginViewId({
-    url: route.query.view,
+    url: readDeviceParam(route.query, 'view', THEME_DEVICE),
     theme: themeStore.viewFor('login'),
     pkg: themeStore.packageId,
     device: THEME_DEVICE

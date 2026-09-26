@@ -45,6 +45,7 @@ import { rsaEncrypt, getCachedKid } from '@/utils/crypto';
 import { useThemeStore } from '@/stores/theme';
 import BaseForgotPasswordView from '@/theme/themes/default/standard/forgot-password/index.vue';
 import { forgotPasswordViews, pickForgotPasswordViewId } from '@/theme/views/forgot-password';
+import { readDeviceParam } from '@/theme/views/params';
 import type {
   ForgotPasswordStage,
   ForgotPasswordTranslate,
@@ -274,11 +275,11 @@ const themeStore = useThemeStore();
 const THEME_DEVICE = 'standard' as const;
 
 /**
- * 用哪套版式：`?view=` > 主题包声明 > VITE_FORGOT_PASSWORD_VIEW > base。
+ * 用哪套版式：`?view=` > 主题包声明 > VITE_FORGOT_PASSWORD_VIEW > 当前包名。
  */
 const viewId = computed(() =>
   pickForgotPasswordViewId({
-    url: route.query.view,
+    url: readDeviceParam(route.query, 'view', THEME_DEVICE),
     theme: themeStore.viewFor('forgot-password'),
     pkg: themeStore.packageId,
     device: THEME_DEVICE

@@ -57,8 +57,8 @@ const emailVerifyOpen = computed(() => ctx.value.panel === 'emailVerify');
 
 <template>
   <!-- 移动端登录（白灰高级色 + 全屏平铺 + slide 切换）
-       data-mauth-view：版式自己声明身份，排查"现在到底是哪套 UI"时一眼可见 -->
-  <div class="mauth-page" data-mauth-view="base">
+       data-mauth-view：版式自己声明身份，值 = **主题包名**（一个主题包 = 一种版式） -->
+  <div class="mauth-page" data-mauth-view="default">
     <!-- 应用标识缺失：直接打开 /m/login 无 appName 时给明确提示。
          ⚠️ 判据由容器给出（ctx.hasAppName），版式不要自己去读 query —— 
          "什么算缺标识"是业务口径，各版式各写一遍必然漂移。 -->
