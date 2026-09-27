@@ -17,6 +17,11 @@
 - export 收拢文件末尾（仅 src/）· `src` 不得 import `scripts` · `src/app/<A>` 不得 import `src/app/<B>`（白名单在各自守卫测试里）。
 - **测试有效性**：真实加载被测代码，禁「手写常量自测」「内联复制被测逻辑」；`KNOWN_INEFFECTIVE_TESTS` 只减不增（14）+ 同步 `FROZEN_SIZE`；
   **一个测试文件只能注册一组路由**（`_routeRegistry` 模块级无重置）。
+- **🔍 运行期"鸭子类型"判据必须由接口派生**：写 `Record<keyof T, 'string'|'function'>` 再遍历 ——
+  穷尽性由 TS 保证，接口加成员不在这里分类直接编译失败。**手抄成员名 = 接口一改判据静默落后**
+  （实锤：`theme/views/pages.ts` 判 `candidate.list`，而 `list()` 已在 `8f6b328` 删除 → `isViewRegistry` 恒假
+  → `pageFromPath`/`viewsForPage` 恒 undefined → 调试面板「版式」区永不渲染，零报错，潜伏整轮）。
+  同类：**"长红的关卡 = 噪声"**，它会掩护真红 —— 过期关卡要**显式退役**（移走或对齐口径），不许留在原地。
 - **firewall 分层（单向）**：interface → config/util → dao → engine → services/cli/data → index.js；禁直接 import `app/firewall/dao/block-manager.js`。
 - **📐 文档 ≠ 实现**：核法 = 文档承诺的环境变量名 grep 代码，命中 0 = 未实现（`src/loader|auth|db|redis` **均不存在**，全在 `src/framework/`）。
 - **🔗 文档站**：`ignoreDeadLinks` 只放行 `AGENTS|oauth21|posecraft|packages` 前缀 → 指 `docs/` 之外必 `docs:build` 失败，**指源码用反引号**；
@@ -112,6 +117,12 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 
 - ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**；P2 `session.js` 拆分评估未开始；`firewall` 前端无类型检查（121 错）；CI 无前端作业 —— 均待定夺。
 - ⚠️ 卡关脚本欠账：`verify-theme.mjs` 期望值仍按旧配色名（已 `exit 2` 自检）；面板三件套仍按 `'base'` 断言。
+  🔴 **`verify-panel-v3.mjs` 的 `base` 断言（L72/L135/L160）必须优先修**：它长红掩护了真红
+  （`pages.ts` 的静默失效藏了整整一轮）。**长红的关卡 = 噪声，必须先让它回到可信状态再谈别的。**
+- 📄 **主题模块改造方案已出，等排期**：`reports/theme-module-analysis-plan-2026-09-27.html`
+  （B1 止血 → B2 修失修关卡 → B3 包自描述 `coverage` 拆「关卡即配置」→ B4 二级索引 → B5 四段键 → B6 清场）。
+  用户已定：**B5「清理 view 冗余」要做**；新页面自动接线 / 外置主题包**暂不做**。
+  ⚠️ B1 与 B2 顺序不能颠倒（否则尺子没校准）。
 - ⚠️ `phonecopy` 是**嵌套 git 仓**（不在 `.gitmodules`）→ `git status` 永远显示脏 ` m phonecopy`。
   **但 `release.mjs` 已在 porcelain 里显式过滤它**（L338）→ 正常发版**不需要** `--allow-dirty`（2026-09-27 实测 v2.25.1 一次通过）。
 - ✅ **主题抽包 Stage 1 已完成**（`packages/theme-core` 纯叶子层 + 零逻辑壳；默认 `default`+`white`；版式选择收口 `views/picker.ts`）。

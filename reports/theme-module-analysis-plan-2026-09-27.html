@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>主题模块分析与改造方案：可 drop-in 的主题层 · nodeServers</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#101828; --ink2:#475467; --ink3:#667085;
+    --line:#e4e7ec; --line2:#d0d5dd;
+    --crit:#b42318; --crit-bg:#fef3f2; --crit-line:#fecdca;
+    --warn:#b54708; --warn-bg:#fffaeb; --warn-line:#fedf89;
+    --ok:#067647;  --ok-bg:#ecfdf3;  --ok-line:#abefc6;
+    --info:#175cd3; --info-bg:#eff8ff; --info-line:#b2ddff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 80px}
+
+  header{padding:56px 0 32px;border-bottom:2px solid var(--ink)}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:16px}
+  h1{margin:0 0 14px;font-size:34px;line-height:1.25;letter-spacing:-.02em;font-weight:700}
+  .sub{color:var(--ink2);font-size:16px;max-width:76ch;margin:0 0 24px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px}
+  .tag{font:500 12px/1 var(--mono);padding:7px 11px;border-radius:6px;background:#f2f4f7;color:var(--ink2);border:1px solid var(--line)}
+
+  section{padding-top:44px}
+  h2{font-size:22px;margin:0 0 6px;letter-spacing:-.01em;font-weight:700;display:flex;align-items:baseline;gap:12px}
+  h2 .num{font:600 13px/1 var(--mono);color:#fff;background:var(--ink);padding:5px 8px;border-radius:5px;position:relative;top:-2px}
+  h3{font-size:16px;margin:28px 0 10px;font-weight:650}
+  h4{font-size:14px;margin:20px 0 8px;font-weight:650;color:var(--ink2)}
+  .lead{color:var(--ink2);margin:0 0 20px;max-width:78ch}
+  p{margin:0 0 12px}
+  code{font:13px/1.5 var(--mono);background:#f2f4f7;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:#344054}
+  .path{font:12px/1.5 var(--mono);color:var(--ink2);background:#f9fafb;border:1px solid var(--line);border-radius:5px;padding:2px 7px;display:inline-block}
+  pre{font:12.5px/1.6 var(--mono);background:#0f172a;color:#e2e8f0;border-radius:9px;padding:16px 18px;overflow-x:auto;margin:12px 0}
+  pre .c{color:#94a3b8}
+  pre .k{color:#7dd3fc}
+  pre .s{color:#a5f3a5}
+  pre .r{color:#fca5a5}
+
+  .verdict{background:var(--panel);border:1px solid var(--line2);border-left:4px solid var(--warn);border-radius:10px;padding:22px 24px;margin:0 0 8px}
+  .verdict .vtag{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.1em;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);padding:5px 9px;border-radius:5px;margin-bottom:12px}
+  .verdict p{margin:0 0 8px}
+  .verdict p:last-child{margin-bottom:0}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:20px 0 4px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .kpi .k{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:6px}
+  .kpi .l{font-size:12.5px;color:var(--ink3);line-height:1.45}
+  .kpi.crit .k{color:var(--crit)} .kpi.warn .k{color:var(--warn)} .kpi.ok .k{color:var(--ok)}
+
+  .finding{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin:0 0 14px}
+  .finding.crit{border-left:4px solid var(--crit)}
+  .finding.warn{border-left:4px solid var(--warn)}
+  .finding.ok{border-left:4px solid var(--ok)}
+  .finding.info{border-left:4px solid var(--info)}
+  .fhead{display:flex;align-items:flex-start;gap:11px;margin-bottom:12px;flex-wrap:wrap}
+  .fid{font:700 12px/1 var(--mono);padding:5px 8px;border-radius:5px;flex:none;margin-top:2px}
+  .fid.crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line)}
+  .fid.warn{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line)}
+  .fid.ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line)}
+  .fid.info{color:var(--info);background:var(--info-bg);border:1px solid var(--info-line)}
+  .ftitle{font-size:16px;font-weight:660;line-height:1.4;flex:1;min-width:200px}
+  .fwhere{font:12px/1.5 var(--mono);color:var(--ink3);width:100%}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;background:var(--panel)}
+  th{text-align:left;font:650 11.5px/1.4 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);
+     padding:10px 12px;border-bottom:2px solid var(--line2)}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fcfcfd}
+  td.num{font:13px/1.5 var(--mono);white-space:nowrap;font-weight:600}
+  td.mono{font:12.5px/1.55 var(--mono)}
+  .st{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:4px;white-space:nowrap;display:inline-block}
+  .st.open{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line)}
+  .st.done{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line)}
+  .st.part{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line)}
+  .st.p0{color:#fff;background:var(--crit)}
+  .st.p1{color:#fff;background:var(--warn)}
+  .st.p2{color:var(--ink2);background:#f2f4f7;border:1px solid var(--line2)}
+
+  .note{border-radius:9px;padding:14px 17px;margin:14px 0;font-size:14px;border:1px solid}
+  .note.crit{background:var(--crit-bg);border-color:var(--crit-line)}
+  .note.warn{background:var(--warn-bg);border-color:var(--warn-line)}
+  .note.info{background:var(--info-bg);border-color:var(--info-line)}
+  .note.ok{background:var(--ok-bg);border-color:var(--ok-line)}
+  .note .nt{font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono);display:block;margin-bottom:7px}
+  .note.crit .nt{color:var(--crit)} .note.warn .nt{color:var(--warn)}
+  .note.info .nt{color:var(--info)} .note.ok .nt{color:var(--ok)}
+  .note p:last-child{margin-bottom:0}
+
+  .fig{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px;margin:18px 0;overflow-x:auto}
+  .figcap{font-size:12.5px;color:var(--ink3);margin-top:14px;text-align:center}
+
+  ul.clean{margin:10px 0;padding-left:20px} ul.clean li{margin-bottom:7px}
+  ol.clean{margin:10px 0;padding-left:22px} ol.clean li{margin-bottom:7px}
+  .yes{color:var(--ok);font-weight:700}
+  .no{color:var(--crit);font-weight:700}
+
+  footer{margin-top:52px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink3);font-size:12.5px}
+  @media print{body{background:#fff}.finding,.verdict,.fig,.kpi,pre{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Theme Module · Analysis &amp; Plan</div>
+  <h1>主题模块分析与改造方案：从「能跑」到「扔进文件夹就能用」</h1>
+  <p class="sub">
+    对象：<strong>oauth21</strong> 的主题层（<span class="path">src/theme/</span> +
+    <span class="path">packages/theme-core/</span>）。方法：<strong>代码级独立取证</strong> ——
+    逐文件读完注册表 / 版式工厂 / 选择器 / store / 注入器 / 参数读取 / 调试面板，
+    对每条结论给出可复核的<strong>文件:行号</strong>或<strong>可执行命令</strong>。
+    本轮<strong>不改代码</strong>，只交付分析与方案（按你的选择）。
+  </p>
+  <div class="meta">
+    <span class="tag">2026-09-27</span>
+    <span class="tag">29 条配色记录 / 10 份版式 / 2 个主题包</span>
+    <span class="tag">机制面 1245 行（views）+ 905 行（store）</span>
+    <span class="tag">发现 3 个真实缺陷 + 2 个隐患 + 1 处安全一致性缺口</span>
+    <span class="tag">目标：主题包 drop-in</span>
+  </div>
+</header>
+
+<!-- ══════════════ 01 结论 ══════════════ -->
+
+<section>
+  <h2><span class="num">01</span>结论</h2>
+  <p class="lead">三句话：</p>
+
+  <div class="verdict">
+    <span class="vtag">Verdict</span>
+    <p><strong>① 机制主体是健康的。</strong>「一个主题包 = 一种版式」这条 2026-09-26 的收窄是对的，
+    它消灭了「换版式要复制整套配色」的漂移源；三级 glob（包定义 / 配色 / 版式）让
+    <strong>加配色、加版式包确实无需改任何源码文件</strong>。这一点已经不欠账。</p>
+    <p><strong>② 但「不需要配置」的瓶颈不在源码，在关卡。</strong>
+    真正拦住 drop-in 的是 <span class="path">.tmp-probe/verify-theme-dirs.mjs</span> 里
+    <code>PEER_COLORS = ['black','white']</code>（L68）与 <code>if (pkg === 'compact')</code>（L195 / L417-418）
+    这类<strong>写死的包名与颜色名</strong>——新增一个只覆盖部分设备/页面、或只带一套自命名配色的主题包，
+    必须回来改关卡脚本。<strong>关卡即配置</strong>，这才是要拆掉的那道墙。</p>
+    <p><strong>③ 有一个 P0 级静默失效已经发生，而且被"失修关卡"掩护了。</strong>
+    <span class="path">theme/views/pages.ts</span> L67 的鸭子类型判据要求 <code>list()</code> 方法，
+    而该方法已在 <code>8f6b328</code> 随变体机制删除 → 判据<strong>恒假</strong> →
+    调试面板的「版式」区<strong>永远不会渲染</strong>，且全程零报错。</p>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi crit"><div class="k">1</div><div class="l">P0 · 静默失效回归<br>（pages.ts 判据滞后于接口）</div></div>
+    <div class="kpi crit"><div class="k">1</div><div class="l">P0 · 零配置阻塞<br>（关卡写死包名/颜色名）</div></div>
+    <div class="kpi warn"><div class="k">2</div><div class="l">P1 · 输入未过白名单<br>+ 工具恢复默认落错色</div></div>
+    <div class="kpi warn"><div class="k">3</div><div class="l">P2 · 自相矛盾的默认参数<br>全表扫描 · 重复项</div></div>
+    <div class="kpi ok"><div class="k">0</div><div class="l">可直接利用的注入面<br>（token 白名单复核通过）</div></div>
+  </div>
+</section>
+
+<!-- ══════════════ 02 现状 ══════════════ -->
+
+<section>
+  <h2><span class="num">02</span>现状：机制分层与真实规模</h2>
+  <p class="lead">先摆事实。下面每条数字都用命令复核过（见 §10）。</p>
+
+  <table>
+    <thead><tr><th>维度</th><th>实测</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td>配色记录</td><td class="num">29</td><td><span class="path">themes/*/*/*/colors/*/index.ts</span> 数；就是注册表的条目数</td></tr>
+      <tr><td>　按包分布</td><td class="num">default 25 / compact 4</td><td>compact 只做 mobile/register，是「部分覆盖包」的唯一实例</td></tr>
+      <tr><td>版式实现</td><td class="num">10</td><td><span class="path">themes/**/index.vue</span>：default 9（三设备×三页）+ compact 1</td></tr>
+      <tr><td>附加样式</td><td class="num">8</td><td><span class="path">theme.scss</span>（惰性 chunk，各配色的背景图/webfont）</td></tr>
+      <tr><td>主题包</td><td class="num">2</td><td><span class="path">themes/{default,compact}/index.ts</span></td></tr>
+      <tr><td>版式机制代码</td><td class="num">1245 行</td><td><span class="path">theme/views/</span>：registry 221 · login 314 · register 235 · forgot-password 227 · pages 126 · picker 109 · params 13</td></tr>
+      <tr><td>store</td><td class="num">905 行</td><td><span class="path">stores/theme.ts</span> 单文件，三维度 + 双侧记忆槽 + 4 个 watch</td></tr>
+      <tr><td>内核包</td><td class="num">7 文件</td><td><span class="path">packages/theme-core/src/</span>：零依赖纯函数（常量/契约/token 校验/参数读取）</td></tr>
+      <tr><td>探针脚本</td><td class="num">162</td><td>根 <span class="path">.tmp-probe/</span> 135 + <span class="path">oauth21/.tmp-probe/</span> 27；但 README 只认 8 个是「关卡」</td></tr>
+    </tbody>
+  </table>
+
+  <div class="fig">
+    <pre><span class="c">// 运行期取值链（版式侧）—— 一条链，三页共用一份实现（picker.ts）</span>
+  ?view.&lt;设备&gt;  →  ?view=  →  包/配色声明的 views.&lt;page&gt;  →  VITE_&lt;PAGE&gt;_VIEW  →  当前包名
+      <span class="c">└─ 命中即停：非法值落「当前包」，绝不回退到 3/4 档（显式写错时静默换 UI 更难查）</span>
+
+<span class="c">// 运行期取值链（配色侧）—— 与版式侧同形（同键形、同"设备专属优先"口径）</span>
+  ?theme.&lt;设备&gt; / ?skin.&lt;设备&gt;  →  ?theme / ?skin  →  后端下发  →  localStorage  →  该范围兜底色
+
+<span class="c">// 五段复合键（当前）—— 注意第 4 段恒等于第 1 段</span>
+  registry key = <span class="k">`${pkg}/${device}/${page}/${view}/${colorId}`</span>
+                                                <span class="r">^▲ 恒等于 pkg（2026-09-26 起）</span></pre>
+    <div class="figcap">图 1 · 两条取值链与注册表键形。第 4 段的冗余是 §07 要清理的对象。</div>
+  </div>
+
+  <div class="note ok">
+    <span class="nt">已经做到的</span>
+    <p>加一套配色 = 建一个目录（<span class="path">colors/&lt;id&gt;/{index.ts,theme.scss,assets/}</span>），
+    <strong>0 个源码文件要改</strong>；加一个版式包 = 建 <span class="path">themes/&lt;新包&gt;/</span> 全套，
+    <strong>0 个源码文件要改</strong>（非内置包走惰性 glob，连容器的静态 import 都不用动）。
+    这两条是这套机制真正的资产，方案里必须保住。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 03 缺陷 ══════════════ -->
+
+<section>
+  <h2><span class="num">03</span>缺陷清单</h2>
+  <p class="lead">按「影响面 × 隐蔽度」排序。每条给出：证据 → 后果 → 修法 → 验收。</p>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <span class="fid crit">P0-1</span>
+      <span class="ftitle">鸭子类型判据滞后于接口：调试面板的「版式」区永久失效（静默）</span>
+      <span class="fwhere">oauth21/src/theme/views/pages.ts:61-70（判据）· L67（<code>candidate.list</code>）｜仓库 .tmp-probe/verify-panel-v3.mjs:72,135,160（掩护它的失修关卡）</span>
+    </div>
+
+    <p><strong>证据链（三步，全部可复核）：</strong></p>
+    <ol class="clean">
+      <li><code>git log -S "list(" -- oauth21/src/theme/views/registry.ts</code> → 提交 <code>8f6b328</code>
+        <strong>删掉</strong>了 <code>list(pkg, device): string[]</code>；</li>
+      <li>当前 <span class="path">registry.ts</span> 的返回值只有
+        <code>{ baseId, builtinPackage, packages(), has(), resolve(), load() }</code>
+        —— <code>grep -n "list" src/theme/views/registry.ts</code> <strong>零命中</strong>；</li>
+      <li>而 <span class="path">pages.ts</span> L67 仍在判 <code>typeof candidate.list === 'function'</code>，
+        且 <code>git log -S "candidate.list"</code> 显示该方法<strong>从未被删过</strong>（只有添加它的 <code>4aa5317</code>）。</li>
+    </ol>
+
+    <p><strong>后果（链路完整，且全程无报错）：</strong></p>
+    <pre>isViewRegistry() 恒 false
+  → buildPages() 返回空 Map
+    → pageFromPath(route.path) 恒 undefined
+    → viewsForPage(page) 恒 undefined
+      → panel: viewOptions = []          <span class="c">// 「版式」整区不渲染</span>
+      → panel: activeViewId 退化成 themeStore.packageId
+                                           <span class="c">// 读不到 ?view= 的真实值 → 颜色清单</span>
+                                           <span class="c">// 会按错的 range 取，且「另有版式可选」永不显示</span></pre>
+
+    <p><strong>为什么长期没被发现：</strong>唯一能抓到它的关卡
+    <span class="path">verify-panel-v3.mjs</span> 自己已经过期 ——
+    L72 断言 <code>B2 含 base</code>、L135 <code>E0 register 列出 base + compact</code>、
+    L160 <code>E5 切回 base</code>，而 2026-09-26 起 <code>view ≡ pkg</code>，面板列的是
+    <strong>包名</strong>（<code>default</code> / <code>compact</code>）。该关卡长期是红的，
+    <strong>pages.ts 的红被淹没在里面</strong>。这是「关卡自己也在骗人」的第二个实例
+    （第一个是上一轮 PWA 的流量探针看不见 SW 流量）。</p>
+
+    <div class="note warn">
+      <span class="nt">关键设计判断</span>
+      <p>修法不能只是"把 <code>list</code> 换成 <code>packages</code>"—— 那只是把同一个坑填上，
+      下次接口一变又会静默落后。<strong>正确修法是让判据由接口派生</strong>，
+      使"判据落后于接口"在<strong>编译期</strong>就不可能发生：</p>
+      <pre><span class="c">// pages.ts —— 成员清单与 ViewRegistry 同源，缺一项 TS 直接报错</span>
+<span class="k">const</span> MEMBER_KINDS: Record&lt;keyof ViewRegistry, <span class="s">'string'</span> | <span class="s">'function'</span>&gt; = {
+  baseId: <span class="s">'string'</span>, builtinPackage: <span class="s">'string'</span>,
+  packages: <span class="s">'function'</span>, has: <span class="s">'function'</span>,
+  resolve: <span class="s">'function'</span>, load: <span class="s">'function'</span>
+};
+<span class="c">// Record&lt;keyof ViewRegistry, …&gt; 提供穷尽性：接口加成员而不在这里分类 → 编译失败</span>
+<span class="k">function</span> isViewRegistry(value: unknown): value <span class="k">is</span> ViewRegistry {
+  <span class="k">if</span> (!value || <span class="k">typeof</span> value !== <span class="s">'object'</span>) <span class="k">return</span> <span class="k">false</span>;
+  <span class="k">const</span> c = value <span class="k">as</span> Record&lt;string, unknown&gt;;
+  <span class="k">return</span> Object.entries(MEMBER_KINDS).every(([k, kind]) =&gt; <span class="k">typeof</span> c[k] === kind);
+}</pre>
+    </div>
+
+    <p><strong>验收：</strong>新增<strong>行为断言</strong>（不是静态 grep）——
+    在浏览器里 <code>import('/src/theme/views/pages.ts')</code> 后断言
+    <code>pageFromPath('/login') === 'login'</code>、<code>pageFromPath('/mini-login') === 'login'</code>、
+    且 <span class="path">/m/register</span> 上面板 <code>[data-view-id]</code> 至少含
+    <code>default</code> 与 <code>compact</code>。<strong>并毒丸验证</strong>：把判据里任一成员名改错，关卡必须变红。</p>
+  </div>
+
+  <div class="finding crit">
+    <div class="fhead">
+      <span class="fid crit">P0-2</span>
+      <span class="ftitle">「关卡即配置」：写死的包名与颜色名，恰好挡住了 drop-in</span>
+      <span class="fwhere">.tmp-probe/verify-theme-dirs.mjs:68 · :195 · :417-418</span>
+    </div>
+
+    <p>关卡里有两类<strong>硬编码的例外</strong>：</p>
+    <ul class="clean">
+      <li>L68 <code>const PEER_COLORS = ['black','white']</code> —— 断言
+        <strong>每一个「包 × 设备 × 页面」下都必须同时存在 black 与 white</strong>；</li>
+      <li>L195 / L417-418 <code>if (pkg === 'compact' &amp;&amp; device !== 'mobile') continue;</code> ——
+        把「compact 只覆盖 mobile/register」这条<strong>数据性事实</strong>写成了<strong>代码里的 if</strong>。</li>
+    </ul>
+
+    <p><strong>为什么这正是你要拆的那道墙：</strong>theme 目录本身已经做到了 drop-in
+    （glob 自动登记），但一个<strong>新的、只覆盖部分范围的主题包</strong>会因为
+    <code>PEER_COLORS</code> 而变红，一个<strong>只提供一套自命名配色</strong>的包同理 ——
+    于是作者必须回来读并修改一个 1125 行的探针脚本。<strong>「放进去就能用」在这一步断掉了。</strong></p>
+
+    <div class="note info">
+      <span class="nt">方向</span>
+      <p>把「例外」从 <code>if</code> 变成<strong>包自己声明的数据</strong>（见 §06）。
+      声明与实现同目录 → 只放那一套文件即可；关卡改为<strong>读声明推导期望</strong>，
+      删掉 <code>PEER_COLORS</code> 与全部 <code>pkg === 'compact'</code> 分支。</p>
+    </div>
+  </div>
+
+  <div class="finding warn">
+    <div class="fhead">
+      <span class="fid warn">P1-1</span>
+      <span class="ftitle">外部输入一致性缺口：<code>applyThemeConfig</code> 的 <code>mode</code> 没过白名单</span>
+      <span class="fwhere">oauth21/src/stores/theme.ts:839｜对照 oauth21/src/theme/remote.ts（同字段做了 normalizeMode）</span>
+    </div>
+
+    <p><strong>证据：</strong>后端那条路（<span class="path">remote.ts</span> 的 <code>normalize()</code>）
+    对同一份 JSON 做了 <code>normalizeMode(raw.mode)</code>；但 store 的
+    <code>applyThemeConfig()</code> 第 839 行是<strong>裸赋值</strong>：</p>
+    <pre><span class="k">if</span> (config.mode && !urlLockedMode) mode.value = config.mode;   <span class="c">// ← 未经 normalizeMode</span></pre>
+
+    <p><strong>可达路径：</strong><span class="path">composables/useParentThemeSync.ts:74</span>
+    （iframe 父应用的 <code>postMessage</code>）进的正是这个方法。父页面虽然受信
+    （origin 过白名单），但 postMessage 载荷在浏览器里终究是外部输入 ——
+    这一点项目自己在同一文件的注释里写明过（tokens 就是按这个理由逐条校验的）。
+    <strong>tokens 校验了、mode 没校验，是同一威胁模型下的不一致。</strong></p>
+
+    <p><strong>后果：</strong>非法 mode 写进 store 后 ——
+    <code>MODE_LABELS[mode]</code> 变 <code>undefined</code>（面板头部显示空白）、
+    <code>MODE_CYCLE.indexOf(mode)</code> 变 <code>-1</code>（「循环明暗」按钮跳回 <code>'system'</code>，
+    看着像随机行为）、<code>syncColorToTone</code> 的判定落空。</p>
+
+    <p><strong>修法：</strong>与 <span class="path">remote.ts</span> 同口径，
+    <code>const m = normalizeMode(config.mode); if (m &amp;&amp; !urlLockedMode) mode.value = m;</code>
+    —— 并把 <code>RemoteThemeConfig.mode</code> 的类型收紧为「已归一化」以示区分。</p>
+
+    <p><strong>验收：</strong>页面内 <code>import()</code> 到 store 后调
+    <code>applyThemeConfig({ mode: 'DARK' })</code> 与 <code>{ mode: 'zzz' }</code>，
+    断言 <code>__MAUTH_STORE__.mode</code> 未被写成非法值；现有关卡
+    <span class="path">verify-theme.mjs</span> G 段（后端下发优先级）可扩一段覆盖它。</p>
+  </div>
+
+  <div class="finding warn">
+    <div class="fhead">
+      <span class="fid warn">P1-2</span>
+      <span class="ftitle">面板「恢复默认」实际落到 <code>black</code>，与「默认配色 = white」的口径相反</span>
+      <span class="fwhere">oauth21/src/components/dev/ThemeDebugPanel.vue:357-361</span>
+    </div>
+
+    <pre><span class="k">function</span> resetAll(): void {
+  themeStore.setMode(<span class="s">'system'</span>);          <span class="c">// ① 先写 system</span>
+  <span class="k">const</span> first = colors.value[0];       <span class="c">// ② colors 按 id 字母序 → [0] === 'black'</span>
+  <span class="k">if</span> (first) themeStore.setTheme(first.id);  <span class="c">// ③ setTheme 又把 mode 改成该色系别 = 'dark'</span>
+}</pre>
+
+    <p>两处问题叠在一起：<strong>①</strong> <code>setTheme</code> 会把 mode 同步成配色的系别，
+    所以前面那次 <code>setMode('system')</code> 立刻被覆盖，「恢复默认」并<strong>没有</strong>回到「跟随系统」；
+    <strong>②</strong> <code>colors[0]</code> 是字母序第一 ——
+    <code>black &lt; blue &lt; cyan &lt; rainbow &lt; white</code> → 落到 <code>black</code>。
+    这恰好是 <code>DEFAULT_THEME_COLOR</code> 当初专门引入要消灭的那个事故
+    （"字母序第一 → 默认外观落在黑系"），在调试工具里<strong>原地复现</strong>了。</p>
+
+    <p><strong>修法：</strong>顺序反过来并走显式常量 ——
+    <code>themeStore.setTheme(DEFAULT_THEME_COLOR)</code> 后再 <code>setMode('system')</code>；
+    或让 <code>resetAll</code> 只清 localStorage + 重载，不在 UI 层复刻选择逻辑。</p>
+  </div>
+
+  <div class="finding info">
+    <div class="fhead">
+      <span class="fid info">P2-1</span>
+      <span class="ftitle">默认参数自相矛盾：<code>themeRecordFor()</code> 的 <code>pkg</code> 与 <code>view</code> 默认值不同源</span>
+      <span class="fwhere">oauth21/src/stores/theme.ts:362-370（签名）· :750（packageId）· :287（isDark）· :344（activeTone）</span>
+    </div>
+
+    <pre><span class="k">function</span> themeRecordFor(
+  pkg: string = DEFAULT_THEME_PACKAGE,   <span class="c">// ← 默认 'default'</span>
+  device = activeDevice.value,
+  page   = activePage.value,
+  view: string = activeView.value        <span class="c">// ← 默认当前版式（可能 'compact'）</span>
+) { … getThemeRecord(id, pkg, device, page, view) }</pre>
+
+    <p>当 <code>activeView</code> 是 <code>compact</code> 时，签名自相矛盾
+    （"包 = default，版式 = compact"），<strong>精确键必然 miss</strong>，
+    只能靠 <span class="path">theme/index.ts</span> <code>findRecord()</code> 的
+    <strong>②兜底全表扫描</strong>碰对。而 <code>packageId</code>、<code>isDark</code>、
+    <code>activeTone</code> 三个 computed 全部建在它上面 —— <strong>正确性靠巧合、性能靠运气</strong>。
+    这不是当前会出错的地方（兜底确实能碰对），但它把所有派生访问器都拴在了兜底分支上，
+    任何一次"收紧兜底"的优化都会立刻打断它们。<strong>§07 的 view 清理会从根上消掉它。</strong></p>
+  </div>
+
+  <div class="finding info">
+    <div class="fhead">
+      <span class="fid info">P2-2</span>
+      <span class="ftitle">注入器的变量名清单可能含重复项</span>
+      <span class="fwhere">oauth21/src/theme/runtime.ts:81-94</span>
+    </div>
+    <p><code>applied</code> 是普通数组：同一个 token 名同时出现在主题层与外部覆写层时会被
+    <code>push</code> 两次，<code>injectedNames</code> 随之含重复。清理时多调一次
+    <code>removeProperty</code> 无害，但 <code>getInjectedTokenNames()</code>（验收脚本在读它）
+    会返回长度虚高的清单 —— <strong>断言"注入了 N 个变量"的关卡可能被这个虚高骗过</strong>。
+    修法：<code>injectedNames = [...nextNames]</code>（复用已有的 Set）。</p>
+  </div>
+
+  <div class="finding info">
+    <div class="fhead">
+      <span class="fid info">P2-3</span>
+      <span class="ftitle">残留物：28 文件的旧主题树备份 + 162 个探针脚本</span>
+      <span class="fwhere">oauth21/.tmp-probe/_backup-color-headers/src/theme/themes/（28 个 .ts/.scss）｜.tmp-probe/ 135 + oauth21/.tmp-probe/ 27</span>
+    </div>
+    <p><code>_backup-color-headers</code> 是 <span class="path">fix-color-headers.mjs</span>
+    留下的整棵旧主题树副本。它<strong>不影响关卡</strong>（关卡只扫
+    <code>join(HERE,'..','oauth21','src')</code>，见 verify-theme-dirs.mjs:54），
+    但它是"这份仓库里有两份 themes/ 树"的假象来源，建议清掉。
+    探针脚本 162 个而 README 只认 8 个是"关卡" —— 其余 154 个是历史一次性探针，
+    其中已有多个过期（<span class="path">verify-theme.mjs</span> 靠末尾自检 <code>exit 2</code>
+    兜着，面板三件套则<strong>没有</strong>这种保护，于是淹没了 P0-1）。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 04 安全复核 ══════════════ -->
+
+<section>
+  <h2><span class="num">04</span>安全边界复核</h2>
+  <p class="lead">主题层是"能把值写进渲染"的层，所以逐条走了注入面。结论：
+  <strong>主边界是成立的，只有 P1-1 那一处一致性缺口。</strong></p>
+
+  <table>
+    <thead><tr><th>外部输入</th><th>入口</th><th>校验</th><th>判定</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>配色 id</td><td class="mono">?theme= / ?skin= / 后端 / localStorage / 父应用</td>
+        <td><code>resolveThemeId</code>（<code>THEME_ID_RE=/^[a-z0-9-]+$/</code> + 必须已登记 + trim+lowercase）</td>
+        <td><span class="st done">通过</span></td>
+      </tr>
+      <tr>
+        <td>版式 id</td><td class="mono">?view= / 包声明 / <code>VITE_*_VIEW</code></td>
+        <td><code>registry.resolve</code> 白名单（当前包×设备内已登记，不拼路径、不模糊匹配）</td>
+        <td><span class="st done">通过</span></td>
+      </tr>
+      <tr>
+        <td>token 名</td><td class="mono">后端 tokens / 父应用 postMessage tokens</td>
+        <td><code>--mauth-[a-z0-9-]+</code> 白名单</td>
+        <td><span class="st done">通过</span></td>
+      </tr>
+      <tr>
+        <td>token 值</td><td class="mono">同上</td>
+        <td>白名单（#hex / rgb() / hsl() / 长度 / <code>var(--mauth-*)</code> / 少量关键字）<br>
+            + 明确拒绝 <code>; &#123; &#125; &lt; &gt; \</code> · <code>url(</code> · <code>expression(</code> · <code>/* */</code> · <code>@import</code><br>
+            + 长度上限 120 + 字体栈单独一条无括号规则</td>
+        <td><span class="st done">通过</span></td>
+      </tr>
+      <tr>
+        <td>DOM 属性值</td><td class="mono"><code>html[data-mauth-theme]</code></td>
+        <td>写入前必经 <code>resolveThemeId</code>，取值域与上面第一条同源 ⇒ 无属性注入</td>
+        <td><span class="st done">通过</span></td>
+      </tr>
+      <tr>
+        <td>明暗 mode</td><td class="mono">?mode= · <b>后端 JSON</b> · <b>父应用 postMessage</b></td>
+        <td>URL/后端走 <code>normalizeMode</code>；<b>postMessage → store 这条路没有</b></td>
+        <td><span class="st open">缺口 · P1-1</span></td>
+      </tr>
+      <tr>
+        <td>CSS 正文</td><td class="mono">theme.scss</td>
+        <td>构建期受信代码（Vite 编译打包），不经运行期注入通道</td>
+        <td><span class="st done">通过</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note ok">
+    <span class="nt">值得肯定的两条设计</span>
+    <p>① <strong>token 名也进白名单</strong>（不只是取值）—— 大部分实现只过滤值，
+    于是能让外部配置去覆写 <code>--background</code> 之类的全局变量，误伤面远超主题层。
+    这里用 <code>--mauth-</code> 前缀把可写域钉死在认证页。</p>
+    <p>② <strong>刻意不支持 CSS 颜色名</strong>（<code>red</code> / <code>blue</code>）——
+    注释里写的理由是"白名单上百个易漏 + 放宽成任意字母会连带放行 <code>expression</code>"，
+    这是对的取舍，也应当在文档里保留。</p>
+  </div>
+
+  <div class="note warn">
+    <span class="nt">改完必须重测的三条（回归红线）</span>
+    <p>① token 白名单：<code>url(</code> / <code>;</code> / 超长 / 非 <code>--mauth-</code> 前缀<strong>四类必须被拒</strong>，
+    且被拒的条目要出现在返回的 <code>rejected</code> 里（现在 store 会 <code>console.warn</code>）。
+    ② <code>data-mauth-theme</code> 在"该范围没有这套色"时必须被 <code>delete</code> 而不是照写
+    （否则 theme.scss 的选择器挂到一套并未生效的配色上）。
+    ③ 版式 id 非法时落<strong>当前包</strong>而不是 <code>'base'</code>
+    （落 <code>'base'</code> 会让配色键全链落空 → tokens 静默全丢）。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 05 零配置差距 ══════════════ -->
+
+<section>
+  <h2><span class="num">05</span>「零配置 drop-in」的差距清单</h2>
+  <p class="lead">把"加一样东西"拆成四种操作，逐个数"现在要动几个文件"。
+  <span class="yes">0 个</span> = 已达目标；<span class="no">非 0</span> = 待拆的墙。</p>
+
+  <table>
+    <thead>
+      <tr><th>你要加的东西</th><th>现在必须动什么</th><th>源码文件</th><th>关卡</th><th>判定</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>加一套配色</strong><br><span class="path">colors/&lt;新色&gt;/index.ts</span></td>
+        <td>无。glob <span class="path">themes/*/*/*/colors/*/index.ts</span> 自动登记；<code>theme.scss</code> 自动按同一键挂上</td>
+        <td class="num yes">0</td><td class="num">0*</td>
+        <td><span class="st done">已达成</span></td>
+      </tr>
+      <tr>
+        <td><strong>加一个版式包</strong><br><span class="path">themes/&lt;新包&gt;/{index.ts,&lt;设备&gt;/&lt;页&gt;/index.vue,colors/…}</span></td>
+        <td>无源码改动：非内置包走 <code>import.meta.glob</code> 惰性加载；容器静态 import 的只有内置包</td>
+        <td class="num yes">0</td><td class="num no">≥2 处</td>
+        <td><span class="st part">卡在关卡</span></td>
+      </tr>
+      <tr>
+        <td><strong>加一个新页面</strong><br>（版式 + 架构文件）</td>
+        <td>① <span class="path">theme/views/&lt;page&gt;.ts</span>（契约+注册表）② 容器 <span class="path">view/app/&lt;page&gt;/</span> 与 <span class="path">view/web/&lt;page&gt;/</span>
+            ③ <span class="path">router/routes.ts</span> 加路由 + <code>withViewPreload</code> ④ 各包各设备的版式与配色目录</td>
+        <td class="num no">≥5</td><td class="num no">多处</td>
+        <td><span class="st open">未达成</span></td>
+      </tr>
+      <tr>
+        <td><strong>加一种设备</strong><br>（如未来 <code>tablet</code>）</td>
+        <td>① 内核包 <span class="path">theme-core/src/constants.ts</span> 的 <code>THEME_DEVICES</code>
+            ② 分发器 <code>activeForm</code> 映射 ③ 各容器 ④ 关卡 ⑤ 调试面板标签</td>
+        <td class="num no">≥5</td><td class="num no">多处</td>
+        <td><span class="st open">未达成</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="font-size:13px;color:var(--ink3)">* 加配色的关卡负担只在"该包只提供一套自命名配色"时出现 —— 那就是 <code>PEER_COLORS</code>（P0-2）。</p>
+
+  <div class="note info">
+    <span class="nt">读法</span>
+    <p>第 2 行是<strong>最高性价比</strong>的修复对象：源码侧已经做到了 0，唯一的障碍是关卡里的
+    <code>if</code>。把 P0-2 修掉，"加一个只覆盖部分范围的主题包"就变成真正的 drop-in。</p>
+    <p>第 3 行（新页面）才是"架构文件放进去就能用"的完整版，它需要一个
+    <strong>页面描述表</strong>把三份同形页面文件收口（见 §08 优化项 O4）——
+    按你的选择，这一档<strong>本轮不做</strong>，但方案里给出形态，以便下一轮决定。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 06 方案A ══════════════ -->
+
+<section>
+  <h2><span class="num">06</span>方案 A（P0）：主题包自描述——把「例外」从 <code>if</code> 变成数据</h2>
+  <p class="lead">这是拆掉 P0-2 那道墙的落点。核心原则：
+  <strong>声明必须与实现住在同一个目录里</strong>，否则"放进去就能用"又会变成"放进去再改别处"。</p>
+
+  <h3>6.1 形态：<code>themes/&lt;包&gt;/index.ts</code> 增加可选的 <code>coverage</code></h3>
+  <pre><span class="c">// oauth21/src/theme/themes/compact/index.ts</span>
+<span class="k">export default</span> {
+  meta: { id: <span class="s">'compact'</span>, name: <span class="s">'紧凑版'</span> },
+  views: { register: <span class="s">'compact'</span> },
+  <span class="c">// 🆕 自描述覆盖范围 —— 不写 = 全设备 / 全页面 / 要求 black+white（即现行口径）</span>
+  coverage: {
+    devices: [<span class="s">'mobile'</span>],           <span class="c">// 只做手机端</span>
+    pages:   [<span class="s">'register'</span>],          <span class="c">// 只做注册页</span>
+    colors:  { min: 1 }                  <span class="c">// 不强制 black+white，至少 1 套</span>
+  }
+} <span class="k">satisfies</span> MauthThemePackage;</pre>
+
+  <p>字段语义（都很小，能被关卡机械推导）：</p>
+  <table>
+    <thead><tr><th>字段</th><th>不写时的默认</th><th>关卡据此断言</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">coverage.devices</td><td>全部 <code>THEME_DEVICES</code></td><td>该包在每个列出设备的<strong>每个列出页面</strong>下都必须有 <code>index.vue</code></td></tr>
+      <tr><td class="mono">coverage.pages</td><td>全部页面（= <span class="path">views/*.ts</span> 的页面集合）</td><td>同上；未列出的设备/页面<strong>不参与</strong>断言（替代 <code>pkg === 'compact'</code>）</td></tr>
+      <tr><td class="mono">coverage.colors.min</td><td><code>2</code>（即 black+white）</td><td>每个「包的覆盖范围 × 页面」下配色数 ≥ min（替代 <code>PEER_COLORS</code>）</td></tr>
+      <tr><td class="mono">coverage.colors.require</td><td><code>['black','white']</code></td><td>若要更强约定可显式列出；空数组 = 只要数量够</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.2 改完之后的关卡形态</h3>
+  <pre><span class="c">// verify-theme-dirs.mjs —— 期望值来自被检对象自己，而不是脚本里的常量</span>
+<span class="k">const</span> pkgs = readdirSync(PKGS).filter(isDir)
+  .map(name =&gt; ({ name, decl: readPackageDecl(name) }))
+  .filter(p =&gt; p.decl);                       <span class="c">// 包根坏了 → 跳过（现状口径不变）</span>
+
+<span class="k">for</span> (<span class="k">const</span> { name, decl } <span class="k">of</span> pkgs) {
+  <span class="k">const</span> devices = decl.coverage?.devices ?? THEME_DEVICES;
+  <span class="k">const</span> pages   = decl.coverage?.pages   ?? allPages();
+  <span class="k">const</span> need    = decl.coverage?.colors?.require ?? [<span class="s">'black'</span>, <span class="s">'white'</span>];
+  <span class="k">for</span> (<span class="k">const</span> d <span class="k">of</span> devices) <span class="k">for</span> (<span class="k">const</span> p <span class="k">of</span> pages) {
+    <span class="k">if</span> (!hasView(name, d, p)) <span class="k">continue</span>;      <span class="c">// 声明覆盖但没实现 → 由下面单独报</span>
+    assertColorsContain(name, d, p, need);      <span class="c">// ← 不再有 PEER_COLORS</span>
+  }
+}</pre>
+
+  <div class="note ok">
+    <span class="nt">为什么这是对的形态</span>
+    <p>① <strong>删掉的是"例外"，不是"检查"</strong> —— 默认值仍是现行口径，检查强度不变；
+    变的只是"例外从哪来"。② <strong>声明与实现同目录</strong>，
+    复制一个主题包时声明跟着走，不会出现"新包忘了在某处登记例外"。
+    ③ <strong>它同时是最好的文档</strong>：打开 <span class="path">themes/compact/index.ts</span>
+    就知道这个包覆盖什么，不必去读 1125 行的探针。④ 未来若要支持"外置主题包"（选项 C），
+    运行时需要知道的正好就是这几项 —— <code>coverage</code> 是那条路的前置条件。</p>
+  </div>
+
+  <h3>6.3 兼容与风险</h3>
+  <ul class="clean">
+    <li><strong>完全向后兼容</strong>：<code>coverage</code> 可选，两个现有包不加也能跑（等价于现行口径）。</li>
+    <li><strong>类型面</strong>：<code>MauthThemePackage</code> 加一个可选字段，属<strong>加面</strong>不是改面，
+      不影响 <code>import type</code> 的调用点；内核包只加类型不加逻辑（零运行时依赖不变）。</li>
+    <li><strong>风险</strong>：声明与实现不一致时（声明覆盖但没实现）必须<strong>明确报错</strong>而不是静默 ——
+      这是这套方案唯一的新失败模式，关卡要有一条专门的断言。</li>
+  </ul>
+</section>
+
+<!-- ══════════════ 07 方案B ══════════════ -->
+
+<section>
+  <h2><span class="num">07</span>方案 B：清理 <code>view</code> 冗余（你已选「清理」）</h2>
+  <p class="lead">注册表键的第 4 段恒等于第 1 段。这段冗余本身无害，
+  但它在整个系统里滋生了<strong>六处补丁</strong>——每一处都是一次过去的事故留下的疤痕。</p>
+
+  <h3>7.1 冗余催生的六处补丁（逐一可查）</h3>
+  <table>
+    <thead><tr><th>#</th><th>位置</th><th>补丁内容</th><th>它在补什么</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td class="mono">theme/index.ts getThemeRecord</td><td><code>view === 'base' ? (pkg === 'base' ? 'default' : pkg) : view</code></td><td>自 2026-09-26 起 <code>'base'</code> 不在键里，原样透传会让全链落空 → tokens 静默全丢</td></tr>
+      <tr><td class="num">2</td><td class="mono">theme/index.ts findRecord</td><td>②兜底全表扫描 + ③跨包回退 default</td><td>调用方给的 <code>pkg</code> 与 <code>view</code> 可能不同源（见 P2-1）</td></tr>
+      <tr><td class="num">3</td><td class="mono">theme/index.ts toneOfColor</td><td>签名只收 <code>device/page/view</code>，内部只能拿 <code>DEFAULT_THEME_PACKAGE</code> 当 pkg</td><td>拿不到 pkg，而 <code>findRecord</code> 需要它</td></tr>
+      <tr><td class="num">4</td><td class="mono">views/registry.ts resolve</td><td><code>if (id === baseId) return pkg;</code></td><td>把别名 <code>'base'</code> 归一成包名，避免它流下去</td></tr>
+      <tr><td class="num">5</td><td class="mono">views/picker.ts 文件头</td><td>🔴 两条"绝不落 <code>'base'</code>"的强调注释</td><td>同样的病，换一层再防一遍</td></tr>
+      <tr><td class="num">6</td><td class="mono">stores/theme.ts loadThemeStyle / watch</td><td>注释解释"新版式下 view ≡ pkg，但外部传 view 仍可能是 'base'"</td><td>第三层防御</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <span class="nt">这正是典型的"补丁地层"</span>
+    <p>同一个概念（<code>'base'</code> 不再合法）被防了<strong>三层</strong>。
+    地层一旦形成，任何一层单独看都合理，合起来就没人说得清"到底谁负责"。
+    <strong>把第 4 段删掉，这六处补丁里有五处会自动消失</strong>——
+    比逐条加固每一层要便宜得多。</p>
+  </div>
+
+  <h3>7.2 目标形态：四段键</h3>
+  <pre><span class="c">// 改前</span>
+registry key = <span class="k">`${pkg}/${device}/${page}/${view}/${colorId}`</span>
+findRecord(id, pkg, device, page, view)        <span class="c">// view 与 pkg 必须同时给、且相等</span>
+listColorsOf(device, page, view)
+listColorIdsOfTone(device, page, view, tone)
+toneOfColor(id, device, page, view)
+getDefaultThemeId(device, page, view)
+
+<span class="c">// 改后</span>
+registry key = <span class="k">`${pkg}/${device}/${page}/${colorId}`</span>
+findRecord(id, pkg, device, page)
+listColorsOf(pkg, device, page)                <span class="c">// 包成为正常入参，不再是"由别处断言相等"</span>
+listColorIdsOfTone(pkg, device, page, tone)
+toneOfColor(id, pkg, device, page)             <span class="c">// ✅ 拿得到包了</span>
+getDefaultThemeId(pkg, device, page)</pre>
+
+  <p><strong>顺带修好的两件事：</strong></p>
+  <ul class="clean">
+    <li><strong>P2-1 消失</strong>：<code>themeRecordFor()</code> 不再需要"pkg 与 view 两个默认值"，只留一个 ——
+      精确键<strong>必然命中</strong>，<code>packageId</code> / <code>isDark</code> / <code>activeTone</code>
+      不再依赖兜底扫描。</li>
+    <li><strong>跨包回退语义变清晰</strong>：现在 <code>findRecord</code> 的 ③ 是
+      "view ≠ default 时回退 default 包的同名色"；四段后它就是自然的
+      "该包没有 → 回退默认包"，不再需要拿 <code>view</code> 当代理去判。</li>
+  </ul>
+
+  <h3>7.3 影响面（已实测统计）</h3>
+  <table>
+    <thead><tr><th>符号</th><th>调用点数</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">getThemeRecord</td><td class="num">4</td><td>store 3 处 + 面板 1 处</td></tr>
+      <tr><td class="mono">listColorsOf</td><td class="num">1</td><td>面板颜色区</td></tr>
+      <tr><td class="mono">listColorIdsOfTone</td><td class="num">1</td><td>store 明暗联动</td></tr>
+      <tr><td class="mono">toneOfColor</td><td class="num">1</td><td>面板色卡系别标签</td></tr>
+      <tr><td class="mono">getDefaultThemeId</td><td class="num">2</td><td>store 初值 + 切版式重置</td></tr>
+      <tr><td class="mono">resolveThemeId / isKnownTheme</td><td class="num">5 / 1</td><td>校验面，签名基本不变</td></tr>
+      <tr><td class="mono">关卡断言</td><td class="num">≈10</td><td>verify-theme-dirs 的"五段键""view ≡ pkg"相关组</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.4 分期（每期独立可回滚，符合仓内既有节奏）</h3>
+  <table>
+    <thead><tr><th>期</th><th>做什么</th><th>回滚点</th></tr></thead>
+    <tbody>
+      <tr><td><strong>R1</strong></td><td>内部键改四段；<strong>对外签名不动</strong>——把 <code>view</code> 参数保留但忽略（标注 deprecated），并在内部断言 <code>view === pkg</code> 时走快路径</td><td>单 commit，改回键拼接即可</td></tr>
+      <tr><td><strong>R2</strong></td><td>删 <code>view</code> 参数与 <code>'base'</code> 归一化；删 <code>BASE_VIEW_ID</code> 在配色侧的暴露；<code>toneOfColor</code> 收 pkg</td><td>R1 后行为已验证一致，R2 只动签名</td></tr>
+      <tr><td><strong>R3</strong></td><td>关卡断言同步（把"五段键"改"四段键"）+ 补毒丸</td><td>关卡与实现同 commit</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note crit">
+    <span class="nt">红线（做 R1/R2 时必须守住）</span>
+    <p>四段化的<strong>唯一行为目标</strong>是"等价重构"。必须能在改前改后各跑一遍
+    <strong>同一份</strong>行为快照并逐项比对：三端三页 × 各配色的
+    <code>{data-mauth-theme, --mauth-primary, --mauth-canvas, html.dark}</code> 四元组。
+    <strong>不允许</strong>出现"顺手把跨包回退也改了"这类夹带 ——
+    它会让"重构"与"行为变更"混在一起，出了偏差无法归因。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 08 优化项 ══════════════ -->
+
+<section>
+  <h2><span class="num">08</span>其他优化项（按性价比排序）</h2>
+
+  <table>
+    <thead><tr><th>#</th><th>优化</th><th>位置</th><th>收益</th><th>成本</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="num">O1</td>
+        <td><strong>注册表二级索引</strong>：构建期建 <code>byId: Map&lt;string, Record[]&gt;</code> 与 <code>byScope: Map&lt;scopeKey, Record[]&gt;</code></td>
+        <td class="mono">theme/index.ts<br>buildRegistry / findRecord / defaultColorIdOf / listColorsOf</td>
+        <td>消掉 <code>[...registry.values()]</code> 的<strong>全表扫描与数组分配</strong>（现散在 6 个查询函数里）。
+            当前 29 条无感，但 <code>themeRecordFor()</code> 被 <code>isDark</code>/<code>activeTone</code>/<code>packageId</code>
+            反复调用，且"加配色"正是鼓励增长的操作 —— <strong>把增长成本从 O(n) 变成 O(1)</strong></td>
+        <td class="num">低<br>（纯增量，行为不变）</td>
+      </tr>
+      <tr>
+        <td class="num">O2</td>
+        <td><strong>判据由接口派生</strong>（P0-1 的修法）作为一条通则：
+            <code>pages.ts</code> 的鸭子类型、调试面板的 <code>MEMBER_KINDS</code> 同法</td>
+        <td class="mono">views/pages.ts</td>
+        <td>把"判据落后于接口"从<strong>静默</strong>变成<strong>编译期报错</strong>。
+            这类 bug 本次已经真实发生一次</td>
+        <td class="num">低</td>
+      </tr>
+      <tr>
+        <td class="num">O3</td>
+        <td><strong>作用域缓存</strong>：<code>defaultColorIdOf(device,page,view)</code> 与
+            <code>listColorIdsOfTone(...)</code> 结果随注册表静态，可记忆化</td>
+        <td class="mono">theme/index.ts</td>
+        <td>这两者都在 <code>getThemeRecord</code> 的回退链上，是"未命中"路径的热点；
+            注册表构建后<strong>永不变</strong>，缓存零失效风险</td>
+        <td class="num">低</td>
+      </tr>
+      <tr>
+        <td class="num">O4</td>
+        <td><strong>三个页面文件收口为"页面描述表 + 工厂"</strong><br>
+            login 314 + register 235 + forgot-password 227 = <strong>776 行 × 3 份同形</strong>
+            （取值链已收口到 picker，剩下的是契约类型 + glob + 两个薄包装）</td>
+        <td class="mono">theme/views/{login,register,forgot-password}.ts</td>
+        <td>这是<strong>「架构文件不配置」的完整版前置</strong>：页面从"一份手写文件"变成
+            "表里一行 + 契约类型"。也直接缩小 §05 第 3 行那个 ≥5 文件的数字</td>
+        <td class="num">中<br>（契约类型必须留在原地，不能进表）</td>
+      </tr>
+      <tr>
+        <td class="num">O5</td>
+        <td><strong>关卡整合</strong>：162 个探针 → 一份清单 + 一条命令跑全部；
+            过期关卡必须<strong>显式退役</strong>（像 <code>verify-pwa-precache.mjs</code> 那样移走），
+            而不是留在原地长红</td>
+        <td class="mono">.tmp-probe/</td>
+        <td>P0-1 之所以潜伏，直接原因就是"<strong>长红的关卡掩护了真红</strong>"。
+            这条的收益不是整洁，是<strong>把关卡的信号从噪声里救出来</strong></td>
+        <td class="num">中</td>
+      </tr>
+      <tr>
+        <td class="num">O6</td>
+        <td><strong>清理</strong>：删 <span class="path">oauth21/.tmp-probe/_backup-color-headers/</span>（28 文件旧主题树）</td>
+        <td class="mono">—</td>
+        <td>消除"仓库里有两份 themes/ 树"的假象</td>
+        <td class="num">极低</td>
+      </tr>
+      <tr>
+        <td class="num">O7</td>
+        <td><strong>注入器去重</strong>（P2-2）：<code>injectedNames = [...nextNames]</code></td>
+        <td class="mono">theme/runtime.ts:94</td>
+        <td>让 <code>getInjectedTokenNames()</code> 的清单与真实注入一致，
+            避免"断言注入数"的关卡被虚高骗过</td>
+        <td class="num">极低</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note info">
+    <span class="nt">不在本轮建议范围的</span>
+    <p>① <strong>把设备提为顶层目录</strong> —— 现行「设备在包内」的理由（换设计只改一处）是站得住的，
+    不动它。② <strong>给 <code>tokens</code> 恢复明暗两档</strong> —— 2026-09-25 已明确取消，
+    且现行"每套配色自带底色"语义更直白。③ <strong>引入第三方主题引擎</strong> ——
+    当前机制的复杂度主要来自"外部输入安全边界"与"跨端回落"，这两件事换库也躲不掉。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 09 实施顺序 ══════════════ -->
+
+<section>
+  <h2><span class="num">09</span>实施顺序与验收口径</h2>
+  <p class="lead">按「先止血 → 再拆墙 → 后重构 → 末清场」排。
+  每批都是独立可提交、可回滚的单元。</p>
+
+  <table>
+    <thead><tr><th>批</th><th>内容</th><th>验收</th><th>预估改动面</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="st p0">B1</span></td>
+        <td><strong>止血</strong>：P0-1（pages.ts 判据由接口派生）+ P1-1（mode 过白名单）+ P1-2（面板恢复默认）</td>
+        <td>新增行为断言：<code>pageFromPath('/login')==='login'</code>、<code>'/mini-login'→login</code>、
+            面板含 <code>default</code>/<code>compact</code>；<code>applyThemeConfig({mode:'DARK'})</code> 不污染 store；
+            「恢复默认」后 <code>data-mauth-theme === 'white'</code>。<strong>每条都要毒丸验证</strong></td>
+        <td class="num">3 文件<br>+ 1 关卡</td>
+      </tr>
+      <tr>
+        <td><span class="st p0">B2</span></td>
+        <td><strong>修失修关卡</strong>：<code>verify-panel-v3.mjs</code> 的 <code>base</code> 断言改为包名口径；
+            <code>verify-theme.mjs</code> 的旧配色名期望值对齐（或正式退役移到 <code>/tmp</code>）</td>
+        <td>两条关卡从"长红"变"应绿即绿"；<strong>且用 B1 毒丸确认它们真的能抓到 P0-1</strong></td>
+        <td class="num">2 文件</td>
+      </tr>
+      <tr>
+        <td><span class="st p1">B3</span></td>
+        <td><strong>拆墙</strong>（方案 A）：<code>coverage</code> 声明 + <code>MauthThemePackage</code> 加字段 +
+            关卡改为读声明推导、删 <code>PEER_COLORS</code> 与全部 <code>pkg === 'compact'</code></td>
+        <td>关卡在"两个现有包都不加 coverage"时结果与现状<strong>一字不差</strong>（等价性证明）；
+            再加一个只覆盖 mobile/login 的临时包 → 关卡<strong>应绿</strong>（这才是目标）；
+            毒丸：声明覆盖却未实现 → 必须红</td>
+        <td class="num">1 类型<br>1 关卡<br>2 包（可选加声明）</td>
+      </tr>
+      <tr>
+        <td><span class="st p1">B4</span></td>
+        <td><strong>优化</strong>：O1 二级索引 + O3 作用域缓存（纯增量，行为不变）</td>
+        <td>改前/改后同一份<strong>行为快照</strong>逐项一致（三端三页 × 各配色）；
+            关卡全绿；<code>theme/index.ts</code> 的公开面不变</td>
+        <td class="num">1 文件</td>
+      </tr>
+      <tr>
+        <td><span class="st p2">B5</span></td>
+        <td><strong>重构</strong>（方案 B）：四段键，分 R1/R2/R3 三期</td>
+        <td>每期：等价性快照一致 + 关卡全绿 + 毒丸（把键改回五段 → 相关断言必须红）</td>
+        <td class="num">2 文件<br>+ 关卡 ≈10 处</td>
+      </tr>
+      <tr>
+        <td><span class="st p2">B6</span></td>
+        <td><strong>清场</strong>：O5 关卡整合 + O6 删备份 + O7 去重</td>
+        <td>一条命令跑全关卡；<code>_backup-color-headers</code> 不存在；
+            <code>getInjectedTokenNames()</code> 无重复</td>
+        <td class="num">杂项</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <span class="nt">B1 与 B2 的顺序不能颠倒</span>
+    <p>先修关卡再修代码，等于<strong>用一把还没校准的尺子去量</strong>：
+    <code>verify-panel-v3.mjs</code> 现在的 <code>base</code> 断言会让它无论如何都红，
+    你无法从中读出"pages.ts 是否已修好"。正确顺序是
+    <strong>先让 P0-1 的判据可被观测（B1 的行为断言）→ 再让旧关卡回到可信状态（B2）</strong>。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 10 待定 ══════════════ -->
+
+<section>
+  <h2><span class="num">10</span>需要你定的事</h2>
+  <table>
+    <thead><tr><th>#</th><th>问题</th><th>选项</th><th>我的倾向</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="num">Q1</td>
+        <td><code>coverage</code> 的粒度：设备与页面是<strong>各列一个数组</strong>（笛卡尔积），
+            还是允许<strong>按设备分别列页面</strong>？</td>
+        <td>① <code>{devices:[], pages:[]}</code>（笛卡尔积，简单）<br>
+            ② <code>{byDevice:{mobile:['register']}}</code>（精确，表达力强）</td>
+        <td><strong>先 ①</strong>：现有 compact 用 ① 就能表达，② 等出现真实需求再加（加面容易，改面贵）</td>
+      </tr>
+      <tr>
+        <td class="num">Q2</td>
+        <td>要不要做<strong>「新页面自动接线」</strong>（§05 第 3 行）与<strong>外置主题包</strong>（§05 第 4 行）？</td>
+        <td>① 本轮先不做，只留方案<br>② 一起做<br>③ 只做新页面，不做外置</td>
+        <td><strong>①</strong>：这两档都依赖 O4（页面描述表），而 O4 的形态取决于
+            "契约类型是否允许移出页面文件"（现行明确要求留在原地）。建议在 B1–B6 落地后再单独评估</td>
+      </tr>
+      <tr>
+        <td class="num">Q3</td>
+        <td>B5（四段键重构）要不要<strong>与 <span class="path">theme-core</span> 抽包 Stage 2 合并做</strong>？</td>
+        <td>① 分开：先四段键，再 Stage 2<br>② 合并：一次把 runtime 注入器也搬进包</td>
+        <td><strong>①</strong>：Stage 2 要引入 <code>ThemeAssets/ThemeEnv/ThemeHost</code> 三个注入点，
+            是接口面的扩大；四段键是<strong>收窄</strong>。两件事混在一期会让
+            "行为等价"这条验收线失去意义</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════ 附 ══════════════ -->
+
+<section>
+  <h2><span class="num">附</span>复核命令与数字</h2>
+  <p class="lead">本报告每条结论的来源。全部可直接在仓库根执行。</p>
+
+  <pre><span class="c"># 规模</span>
+find oauth21/src/theme/themes -path <span class="s">"*/colors/*/index.ts"</span> | wc -l          <span class="c"># 29 条配色记录</span>
+find oauth21/src/theme/themes -name index.vue | wc -l                          <span class="c"># 10 份版式</span>
+find oauth21/src/theme/themes -name theme.scss | wc -l                         <span class="c"># 8 份附加样式</span>
+
+<span class="c"># P0-1 证据链</span>
+git log --oneline -S <span class="s">"list("</span> -- oauth21/src/theme/views/registry.ts            <span class="c"># 8f6b328 删除了 list()</span>
+git log --oneline -S <span class="s">"candidate.list"</span> -- oauth21/src/theme/views/pages.ts     <span class="c"># 只有 4aa5317（添加）→ 从未同步删除</span>
+grep -n <span class="s">"list"</span> oauth21/src/theme/views/registry.ts                          <span class="c"># 零命中</span>
+grep -n <span class="s">"candidate.list"</span> oauth21/src/theme/views/pages.ts                   <span class="c"># L67</span>
+
+<span class="c"># P0-2 关卡硬编码</span>
+grep -n <span class="s">"PEER_COLORS ="</span> .tmp-probe/verify-theme-dirs.mjs                    <span class="c"># L68</span>
+grep -n <span class="s">"pkg === 'compact'"</span> .tmp-probe/verify-theme-dirs.mjs                <span class="c"># L195 / L417 / L418</span>
+grep -n <span class="s">"含 base\|列出 base\|切回 base"</span> .tmp-probe/verify-panel-v3.mjs        <span class="c"># L72 / L135 / L160（失修关卡）</span>
+
+<span class="c"># P1-1 输入一致性</span>
+grep -n <span class="s">"normalizeMode"</span> oauth21/src/theme/remote.ts                         <span class="c"># 后端侧有</span>
+grep -n <span class="s">"config.mode && "</span> oauth21/src/stores/theme.ts                      <span class="c"># L839 裸赋值</span>
+
+<span class="c"># P2 / 影响面</span>
+grep -n <span class="s">"function resetAll"</span> oauth21/src/components/dev/ThemeDebugPanel.vue    <span class="c"># L357</span>
+grep -n <span class="s">"injectedNames"</span> oauth21/src/theme/runtime.ts                          <span class="c"># L50/81/94</span>
+grep -rn <span class="s">"getThemeRecord("</span> oauth21/src/ | grep -v <span class="s">"theme/index.ts"</span> | wc -l      <span class="c"># 4</span>
+grep -rn <span class="s">"listColorsOf("</span> oauth21/src/ | grep -v <span class="s">"theme/index.ts"</span> | wc -l         <span class="c"># 1</span>
+
+<span class="c"># 残留物</span>
+find oauth21/.tmp-probe/_backup-color-headers -name <span class="s">"*.ts"</span> -o -name <span class="s">"*.scss"</span> | wc -l  <span class="c"># 28</span>
+ls .tmp-probe/*.mjs | wc -l   <span class="c"># 135</span>  ;  ls oauth21/.tmp-probe/*.mjs | wc -l   <span class="c"># 27</span></pre>
+
+  <div class="note info">
+    <span class="nt">报告的归宿</span>
+    <p>本文件是<strong>评审产物</strong>（一次性、可留档）。等 B1–B6 定稿后，
+    其中<strong>有长期约束力</strong>的部分应回写到
+    <span class="path">docs/frontend/multi-theme.md</span>（coverage 声明口径、四段键口径）
+    与 <span class="path">oauth21/src/theme/README.md</span>（加包步骤），
+    并按仓内规则同步 <span class="path">docs/.vitepress/config.ts</span> 的 sidebar ——
+    本报告<strong>不</strong>直接进文档站，避免"报告 ≠ 规范"混淆。
+    <strong>本轮不改任何源码文件</strong>，符合你选的"先只出分析与方案"。</p>
+  </div>
+</section>
+
+<footer>
+  生成于 2026-09-27 · 方法：代码级独立取证（逐文件阅读 + git 历史检索 + 可执行命令复核）·
+  全部结论附 <code>文件:行号</code>，可用附录命令逐条复原 ·
+  本轮未修改任何源码，仅产出本分析报告
+</footer>
+
+</div>
+</body>
+</html>
