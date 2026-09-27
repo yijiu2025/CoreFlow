@@ -16,17 +16,19 @@
  * @since 2026-09-23
  */
 import type { PackageViews, ViewRegistry } from './registry';
+import { isThemePage } from './page';
 
 /** 页面名 = 版式目录名 = 路由 path 的末段（如 register）；与主题 id 同规则 */
 const PAGE_RE = /^[a-z0-9-]+$/;
 
 /**
- * 各页面的版式注册表模块（`./login.ts`、`./register.ts` 等）。
+ * 各页面的版式模块（`./login.ts`、`./register.ts` 等）。
  *
- * 每个页面文件里同时装了「契约类型 + 注册表」，且注册表导出名各页不同
- * （`loginViews` / `registerViews` / `forgotPasswordViews`…），所以：
- *   • 只 glob `*.ts`，用负向断言排除本文件（`pages.ts`）与工厂（`registry.ts`）；
- *   • 靠鸭子类型从模块的所有导出里找出注册表实例，不认固定导出名。
+ * 每个页面文件 = 「契约类型 + 一次 `defineThemePage` 声明」，导出名各页不同
+ * （`loginPage` / `registerPage`…），所以：
+ *   • 只 glob `*.ts`，不排除任何文件名（`registry.ts`/`picker.ts`/`page.ts`/本文件
+ *     都不含页面对象，自然被跳过）；
+ *   • 靠**运行时标记**（`isThemePage`）从模块的导出里找出页面对象，不认固定导出名。
  */
 const registryModules = import.meta.glob<Record<string, unknown>>('./*.ts', {
   eager: true
@@ -34,8 +36,12 @@ const registryModules = import.meta.glob<Record<string, unknown>>('./*.ts', {
 
 /** 一个页面接入版式机制后的可查询信息 */
 export interface PageViews {
-  /** 页面名（`theme/views/<page>.ts` 里的页面名） */
+  /** 页面名（`theme/views/<page>.ts` 里声明的 `page`） */
   page: string;
+  /** 默认路由标题（设备专属标题用 `titleOf`） */
+  title: string;
+  /** 取某设备的标题（缺省回落 `title`）—— 加一种设备不必改这里 */
+  titleOf(device: string): string;
   /** 该页的版式注册表 */
   registry: ViewRegistry;
   /**
@@ -52,20 +58,45 @@ export interface PageViews {
 }
 
 /**
- * 鸭子类型识别注册表实例
+ * 兜底判据：一个模块直接导出了**裸注册表**（没走页面工厂）时，怎么认出它
+ *
+ * === 为什么这张表必须是 `Record<keyof ViewRegistry, …>` ===
+ * 手抄成员名（`typeof candidate.baseId === 'string' && typeof candidate.list === 'function' && …`）
+ * 的问题是**它不会随接口一起更新**，而且失败是静默的：
+ *   实锤：`ViewRegistry.list()` 在 `8f6b328` 被删除（一个主题包 = 一种版式后，
+ *   包内不再有"变体清单"），但那时的判据表里还留着 `candidate.list === 'function'`。
+ *   于是判据**恒假** → `buildPages()` 永远返回空 → `pageFromPath()` /
+ *   `viewsForPage()` 恒 `undefined` → 调试面板的「版式」区永不渲染，
+ *   `activeViewId` 退化成 `packageId`（读不到 `?view=` 的真实值）。**全程零报错**，
+ *   潜伏了整整一轮。
+ *
+ * 换成 `Record<keyof ViewRegistry, 'string' | 'function'>` 后，**穷尽性由 TS 保证**：
+ * 接口加一个成员而不在这里分类，本文件直接编译失败 —— 判据再也不会"落后于接口"。
+ *
+ * ⚠️ 改完必须让 `Record` 的键集合真的跟着接口走（所以类型标注不能省成 `Record<string, …>`；
+ *    写成 `Record<string, …>` 就退回了手抄表，只是换了个写法）。
+ *
+ * ⚠️ 首选判据已经是**页面工厂的运行时标记**（`isThemePage`）—— 标记不会因接口改成员而失效。
+ *    这张形态表只服务"没走工厂、直接导出一个裸注册表"的模块（向后兼容 / 外部页面）。
  *
  * 不用 `instanceof`：`registry.ts` 导出的是工厂函数的返回值，没有类可言。
  * 也不认固定导出名（各页叫 `registerViews` / `loginViews`…）—— 那样每加一页都要来改这里。
- * 判据只取「长得像 ViewRegistry」：一个模块里只要有一个对象满足就认它。
  */
-function isViewRegistry(value: unknown): value is ViewRegistry {
+const VIEW_REGISTRY_SHAPE: Record<keyof ViewRegistry, 'string' | 'function'> = {
+  baseId: 'string',
+  builtinPackage: 'string',
+  packages: 'function',
+  has: 'function',
+  resolve: 'function',
+  load: 'function'
+};
+
+/** 键集合来自接口；逐项核形态。一个模块里只要有一个对象满足就认它是注册表实例 */
+function isViewRegistryShape(value: unknown): value is ViewRegistry {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.baseId === 'string' &&
-    typeof candidate.list === 'function' &&
-    typeof candidate.resolve === 'function' &&
-    typeof candidate.load === 'function'
+  return (Object.keys(VIEW_REGISTRY_SHAPE) as (keyof ViewRegistry)[]).every(
+    key => typeof candidate[key] === VIEW_REGISTRY_SHAPE[key]
   );
 }
 
@@ -74,14 +105,39 @@ function buildPages(): Map<string, PageViews> {
 
   for (const [key, mod] of Object.entries(registryModules)) {
     // 从文件名切出页面名：`./register.ts` → `register`；`./forgot-password.ts` → `forgot-password`。
-    // 工厂（`registry.ts`）与本文件（`pages.ts`）会被下面这行排除：它们不含注册表实例。
-    const page = /^\.\/(.+)\.ts$/.exec(key)?.[1];
-    if (!page || !PAGE_RE.test(page)) continue;
-    const registry = Object.values(mod).find(isViewRegistry);
-    // 模块里没有注册表实例（写坏了，或就是工厂/本文件）：跳过而不是抛错 —— 一个页面接错，不该让面板起不来
+    // 工厂/本文件等不含页面对象的模块会被下面两道判定自然跳过。
+    const filePage = /^\.\/(.+)\.ts$/.exec(key)?.[1];
+    if (!filePage || !PAGE_RE.test(filePage)) continue;
+
+    // ① 首选：页面工厂的产物（带运行时标记 —— 判据不会随接口漂移）
+    const page = Object.values(mod).find(isThemePage);
+    if (page) {
+      // 三处必须字面一致（目录名 / 文件名 / 路由末段）；不一致只告警不抛错：
+      // 一个名字写歪的页面不该让整个面板起不来，但也不该静默。
+      if (page.page !== filePage) {
+        console.warn(
+          `[view] ${key} 里声明的 page 是「${page.page}」，与文件名「${filePage}」不一致：` +
+            '主题目录名 / 页面文件名 / 路由末段三处必须字面一致。'
+        );
+      }
+      pages.set(filePage, {
+        page: page.page,
+        title: page.title,
+        titleOf: page.titleOf,
+        registry: page.views,
+        packages: page.views.packages()
+      });
+      continue;
+    }
+
+    // ② 兼容：模块里直接导出了一个裸注册表（未走工厂的页面）。
+    //    判据是**由接口派生**的形态表（见上方 `VIEW_REGISTRY_SHAPE`），不是手抄成员名。
+    const registry = Object.values(mod).find(isViewRegistryShape);
     if (!registry) continue;
-    pages.set(page, {
-      page,
+    pages.set(filePage, {
+      page: filePage,
+      title: filePage,
+      titleOf: () => filePage,
       registry,
       packages: registry.packages()
     });

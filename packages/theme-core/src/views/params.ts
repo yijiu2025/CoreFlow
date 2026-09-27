@@ -32,22 +32,10 @@
  * @author yijiu2025
  * @since 2026-09-26
  */
-import { THEME_DEVICES, type ThemeDevice } from '../constants';
-
 /** 支持设备维度的参数名（与配色侧 `readUrlIntent` 的键保持一致） */
 export type DeviceScopedParam = 'view' | 'theme';
 
-/**
- * 把外部传入的设备名归一化
- *
- * 不认识的取值返回 null（**不是**落默认设备）—— 调用方各有自己的兜底口径
- * （各页 `pick*ViewId` 落默认设备，卡片等场景可能直接忽略）。
- */
-export function asThemeDevice(raw: unknown): ThemeDevice | null {
-  return typeof raw === 'string' && (THEME_DEVICES as readonly string[]).includes(raw)
-    ? (raw as ThemeDevice)
-    : null;
-}
+export const DEVICE_SCOPED_PARAMS: readonly DeviceScopedParam[] = ['view', 'theme'];
 
 /** 值"存在且非空" —— 空串 / 空数组视为**未指定**，不顶掉兜底键 */
 function isPresent(value: unknown): boolean {
@@ -64,7 +52,7 @@ function isPresent(value: unknown): boolean {
  *
  * @param query  路由 query（`route.query`）
  * @param name   参数名（`'view'` / `'theme'`）
- * @param device 当前设备 —— 容器用自己的 `THEME_DEVICE` 常量传进来（文件位置即身份）
+ * @param device 当前设备 —— 容器用自己的设备常量传进来（文件位置即身份）
  * @returns `query['<name>.<device>']` 优先；缺席或空值时退 `query[name]`；
  *          两者都没有则返回 undefined，表示"**这台设备**没有被显式指定"
  *
@@ -73,11 +61,13 @@ function isPresent(value: unknown): boolean {
  *    由下游按"非字符串即非法"处理，与改前的行为一致。
  * ⚠️ 空串视为"未指定"：`?view.standard=` 不该把 `?view=compact` 顶掉 ——
  *    部署方常把参数留空当作"这台设备不特殊指定"。
+ * ⚠️ 设备名是**宿主**的词汇表（本包不认识具体取值），所以这里只把它当字符串拼键；
+ *    「这个名字认不认得」由宿主的设备清单归一（`asThemeDevice`）。
  */
 export function readDeviceParam(
   query: Record<string, unknown> | undefined,
   name: DeviceScopedParam,
-  device: ThemeDevice
+  device: string
 ): unknown {
   const scoped = query?.[`${name}.${device}`];
   if (isPresent(scoped)) return scoped;

@@ -31,7 +31,7 @@
  * @since 2026-09-26
  */
 import { DEFAULT_THEME_DEVICE, type ThemeDevice } from '../index';
-import { asThemeDevice } from './params';
+import { asThemeDevice } from '../devices';
 import type { ViewRegistry } from './registry';
 
 /** 选择器的输入：四个都是外部值，全部未校验 */
