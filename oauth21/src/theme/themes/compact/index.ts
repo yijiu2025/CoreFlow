@@ -26,5 +26,12 @@ export default {
     name: '紧凑版式包',
     description: '手机端 register 紧凑版式与配套配色：信息密度更高、控件更紧凑',
     preview: { primary: '#0e7490', accent: '#2563eb' }
+  },
+  // 本包只覆盖「mobile × register」：其余设备/页面回退到 default 包。
+  // 这个范围以前靠目录口径关卡里的 `if (pkg === 'compact')` 写死，现在声明成数据
+  // （声明与实现同目录，关卡据此推导，不再写死包名 —— 见 types.ts 的 coverage）。
+  coverage: {
+    devices: ['mobile'],
+    pages: ['register']
   }
 } satisfies MauthThemePackage;
