@@ -35,7 +35,6 @@
  */
 import type { Component } from 'vue';
 import { THEME_ID_RE } from 'mauth-theme-core';
-import { isMobileViewport } from '@/utils/device';
 
 /** 设备容器的惰性加载器（与 `import.meta.glob` 的取值形态一致） */
 export type DeviceContainerLoader = () => Promise<{ default: Component }>;
@@ -134,15 +133,15 @@ function pathHasDeviceSegment(path: string, prefix: string): boolean {
  * 设备清单（**加一种设备就在这里加一条**）
  *
  * ⚠️ 顺序即优先级；最后一条 `standard` 是兜底（无条件命中），别在它后面加东西。
+ *
+ * ⚠️ **mini 排在 mobile 之前**（2026-09-27 定）：mini 是"iframe 嵌入弹窗"的**显式
+ *    来源**（`?from=mini` / 路径前缀），它的意图比"视口窄"更明确 —— iframe 列宽窄
+ *    不代表是手机。三个分发器（login/register/forgot-password）早先的顺序也是
+ *    「显式 isMobile → mini 来源 → 视口」—— 本清单复刻这一顺序，只是把"视口"与
+ *    "显式 isMobile"合并进 mobile 的 match，而 mini 的 match 里**排除显式 isMobile**
+ *    （`?isMobile=true` 是比 `?from=mini` 更明确的意图，必须压过它）。
  */
 export const THEME_DEVICE_DEFS = [
-  {
-    id: 'mobile',
-    label: '手机端',
-    containers: mobileContainers,
-    routePath: (page: string) => `m/${page}`,
-    match: (ctx: DeviceMatchContext) => ctx.explicitMobile || ctx.viewportIsMobile
-  },
   {
     id: 'mini',
     label: '紧凑版',
@@ -153,11 +152,23 @@ export const THEME_DEVICE_DEFS = [
      *
      * `fromLogin` 是"从 mini 登录页点『忘记密码』"留下的键（见 MiniLogin.vue），
      * 与 `from` 是同义词的两个历史写法，都要继续认 —— 在途链接不能失效。
+     *
+     * 🔴 排除 `explicitMobile`：`?isMobile=true&from=mini` 时按显式 isMobile 走手机端
+     *    （显式意图 > 来源标记），否则"联调时想强制手机端"会被一个残留的 from=mini 顶掉。
      */
     match: (ctx: DeviceMatchContext) =>
-      ctx.from === 'mini' ||
-      ctx.fromLogin === 'mini' ||
-      pathHasDeviceSegment(ctx.path, 'mini')
+      !ctx.explicitMobile &&
+      (ctx.from === 'mini' ||
+        ctx.fromLogin === 'mini' ||
+        pathHasDeviceSegment(ctx.path, 'mini'))
+  },
+  {
+    id: 'mobile',
+    label: '手机端',
+    containers: mobileContainers,
+    routePath: (page: string) => `m/${page}`,
+    // 显式 `?isMobile=true` 或视口/UA 判定为移动端（mini 来源已在上一档被拦截）
+    match: (ctx: DeviceMatchContext) => ctx.explicitMobile || ctx.viewportIsMobile
   },
   {
     id: 'standard',
@@ -227,14 +238,22 @@ export function containerOf(id: string, page: string): DeviceContainerLoader | u
 }
 
 /**
- * 从当前访问信息构造判定上下文（`utils/device.ts` 的视口判定只在这里调用一次）
+ * 从当前访问信息构造判定上下文
  *
- * @param query 路由 query（`route.query`）
- * @param path  路由 path（`route.path`）
+ * ⚠️ `viewportIsMobile` 由**调用方传入**，而不是在这里非响应式地算一次：分发器的
+ *    设备判定必须是**响应式**的（视口拉宽要能自动切回桌面），而 `utils/device.ts`
+ *    的 `isMobileViewport()` 是一次性快照，塞进来会丢掉 matchMedia 的响应能力。
+ *    分发器手里正好有响应式值（`useDeviceDetect().isMobileDevice.value`），传进来即可；
+ *    守卫等非响应式场景可直接传 `isMobileViewport()`。
+ *
+ * @param query           路由 query（`route.query`）
+ * @param path            路由 path（`route.path`）
+ * @param viewportIsMobile 视口/UA 判定结果（**响应式**：分发器传 computed 的值）
  */
 export function deviceContext(
   query: Record<string, unknown> | undefined,
-  path: string
+  path: string,
+  viewportIsMobile: boolean
 ): DeviceMatchContext {
   const text = (key: string): string => (typeof query?.[key] === 'string' ? (query[key] as string) : '');
   return {
@@ -242,6 +261,6 @@ export function deviceContext(
     path: path.split(/[?#]/)[0],
     from: text('from'),
     fromLogin: text('fromLogin'),
-    viewportIsMobile: isMobileViewport()
+    viewportIsMobile
   };
 }

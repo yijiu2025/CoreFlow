@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import { useThemeStore } from '@/stores/theme';
 import { DEFAULT_THEME_PACKAGE, type ThemeDevice } from '@/theme';
+import { pickDeviceId, deviceContext } from '@/theme/devices';
 
 const route = useRoute();
 
@@ -19,27 +20,10 @@ const MobileRegister = defineAsyncComponent(() => import('../../app/register/ind
 // 动态路由/参数分发逻辑
 // 🔴 形态判定**单一来源**：activeForm 既决定渲染哪个组件，也决定主题的设备作用域
 //    —— 两件事必须同源，否则会出现"渲染的是手机端、主题却是电脑端那套"。
-const activeForm = computed(() => {
-  // 1. 移动端（显式 isMobile=true 优先，不走自动识别）
-  if (route.query.isMobile === 'true') {
-    return 'mobile' as const;
-  }
-
-  // 2. mini 来源（iframe 嵌入弹窗场景）→ 紧凑版
-  // 精确匹配：/mini-register 路径（避免 /administrators 等含 "mini" 字符串的路径误判）
-  if (route.query.from === 'mini' || route.path.startsWith('/mini-register')) {
-    return 'mini' as const;
-  }
-
-  // 3. 自动识别：视口宽度 < 768px 或真机 UA → 手机端注册页
-  // 手机直接打开 /register 不再挤在桌面双栏布局里
-  if (isMobileDevice.value) {
-    return 'mobile' as const;
-  }
-
-  // 4. 默认桌面版标准注册
-  return 'standard' as const;
-});
+// 判定收敛到设备清单（theme/devices.ts 的 pickDeviceId）：三分发器不各写 if-链。
+const activeForm = computed(() =>
+  pickDeviceId(deviceContext(route.query, route.path, isMobileDevice.value))
+);
 
 const activeComponent = computed(() =>
   activeForm.value === 'mobile' ? MobileRegister
@@ -55,9 +39,8 @@ const activeComponent = computed(() =>
  * 面板切手机端主题"无效"。mini 来源恒为 web：iframe 列宽造成的"窄"不是手机。
  */
 const themeStore = useThemeStore();
-const renderedDevice = computed<ThemeDevice>(() =>
-  activeForm.value === 'mobile' ? 'mobile' : activeForm.value === 'mini' ? 'mini' : 'standard'
-);
+// activeForm 直接是 ThemeDevice（pickDeviceId 返回值），无需二次映射
+const renderedDevice = computed<ThemeDevice>(() => activeForm.value);
 watch(
   renderedDevice,
   device => {

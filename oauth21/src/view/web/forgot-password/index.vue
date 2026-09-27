@@ -19,6 +19,7 @@ import { useRoute } from 'vue-router';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import { useThemeStore } from '@/stores/theme';
 import { DEFAULT_THEME_PACKAGE, type ThemeDevice } from '@/theme';
+import { pickDeviceId, deviceContext } from '@/theme/devices';
 
 const route = useRoute();
 
@@ -33,33 +34,11 @@ const MobileForgot = defineAsyncComponent(() => import('../../app/forgot-passwor
 
 // 🔴 形态判定**单一来源**：activeForm 既决定渲染哪个组件，也决定主题的设备作用域
 //    —— 两件事必须同源，否则会出现"渲染的是手机端、主题却是电脑端那套"。
-const activeForm = computed(() => {
-  // 1. 显式指定移动端（不走自动识别）
-  if (route.query.isMobile === 'true') {
-    return 'mobile' as const;
-  }
-
-  // 2. mini 来源（iframe 嵌入弹窗场景）→ 紧凑版卡片，**不按宽度自动切移动端**
-  //
-  //    🔴 2026-09-24 修复：此前漏了这条分支，导致 iframe 场景下重置密码页会"自己跳成手机端"。
-  //    成因：mini 登录页（/mini-login）被嵌在宿主弹窗里，弹窗内列宽很窄（实测宿主 1440px 时
-  //    iframe 宽 854px，宿主收窄到 ≤800px 时 iframe 内宽度就掉到 768px 以下）→ 自动识别判定为
-  //    移动端 → 渲染 MobileForgot（全屏手机版），而同一 iframe 里的 mini 登录页却仍是桌面卡片，
-  //    两页视觉因此割裂。
-  //    mini 登录页的"忘记密码"链接已带上 `fromLogin=mini`（见 MiniLogin.vue），语义就是
-  //    "从 iframe 紧凑版点进来的" —— 与登录/注册分发器的 `from=mini` / `mini-login` 分支对齐。
-  if (route.query.fromLogin === 'mini') {
-    return 'mini' as const;
-  }
-
-  // 3. 自动识别：视口宽度 < 768px 或真机 UA
-  if (isMobileDevice.value) {
-    return 'mobile' as const;
-  }
-
-  // 4. 默认桌面标准版
-  return 'standard' as const;
-});
+// 判定收敛到设备清单（theme/devices.ts 的 pickDeviceId）：mini 来源三个历史键
+// （from / fromLogin / 路径）与显式 isMobile 的优先级只有一份实现，三分发器不再漂移。
+const activeForm = computed(() =>
+  pickDeviceId(deviceContext(route.query, route.path, isMobileDevice.value))
+);
 
 const activeComponent = computed(() =>
   activeForm.value === 'mobile' ? MobileForgot
@@ -76,9 +55,8 @@ const activeComponent = computed(() =>
  *（正是上面分支 2 修掉的那类问题，主题侧同样不能说话）。
  */
 const themeStore = useThemeStore();
-const renderedDevice = computed<ThemeDevice>(() =>
-  activeForm.value === 'mobile' ? 'mobile' : activeForm.value === 'mini' ? 'mini' : 'standard'
-);
+// activeForm 直接是 ThemeDevice（pickDeviceId 返回值），无需二次映射
+const renderedDevice = computed<ThemeDevice>(() => activeForm.value);
 watch(
   renderedDevice,
   device => {
