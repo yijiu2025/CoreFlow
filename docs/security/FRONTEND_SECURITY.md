@@ -223,6 +223,21 @@ VITE_TURNSTILE_SITE_KEY=<从 Cloudflare Dashboard 复制 site key>
 # 后端用 secret key 调 https://challenges.cloudflare.com/turnstile/v0/siteverify 验证
 ```
 
+### ⚠️ VITE_SIGN_APP_KEY 会打进产物（H5 签名是防爬，不是防伪造）
+
+`oauth21/.env` 里的 `VITE_SIGN_APP_KEY`（与后端 `.env` 的 `SIGN_APP_KEY` 同一值）是**前后端共享的签名 appKey**，
+但它**会被打进前端构建产物** —— 任何 `VITE_*` 前缀的变量都会被 Vite 在构建期内联到 JS 里，
+浏览器 F12 / 反编译即可取到。**这是设计使然，不是漏洞**：
+
+- **定位**：H5 签名（`utils/sign.ts` 的 `sha256(appKey&timestamp&nonce&url&params&body)`）是**弱防爬**——
+  防止接口被脚本简单灌水、query 被随手篡改。它**不是**防伪造的加密边界。
+- **真正的安全边界**：敏感操作（登录态、权限、支付、数据读写）一律靠**后端**的登录态 + 权限校验（PBAC），
+  **不依赖**前端签名。签名被伪造、被绕过，都不会直接获得任何未授权能力。
+- **后端必须另行验签 + 限流**：后端用自己 `.env` 的 `SIGN_APP_KEY` 重算验签，并配 nonce 去重（防重放）与
+  端点级限流。前端签名的存在**不能替代**后端的这些校验。
+- **结论**：不要把 `VITE_SIGN_APP_KEY` 当成 Secret Key 管理（它做不到保密），也不要因为它"公开"就
+  删掉前端签名（它仍有防爬价值）。两者边界在 `utils/sign.ts` 文件头注释里写得很清楚。
+
 ### 检测机制（推荐 CI 加）
 
 - **git-secrets**（[git-secret-mirror](https://github.com/awslabs/git-secrets)）：commit hook 自动检测常见 key pattern（AKIA / 0x4AAAA / AIzaSy / sk- 等）

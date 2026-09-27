@@ -60,7 +60,7 @@
    | `socket.io-client` | 0 | 体积较大的包 |
    | `@vueuse/core` | 0 | `vite.config.js` 注释里已明确"本仓零使用"却仍留在依赖里 |
 
-2. **幽灵依赖 1 个（P1）** —— `mauth-theme-core` 被 `src/theme/` 下 3 个文件 import，但**未出现在 `package.json`**，仅靠 `vite.config.js` 的 alias 硬编码 `../packages/theme-core/src/index.ts` 解析。一旦该包被移出 `packages/`，构建静默失败且无依赖解析报错。
+2. **幽灵依赖 1 个（P1）** —— `skinsuite` 被 `src/theme/` 下 3 个文件 import，但**未出现在 `package.json`**，仅靠 `vite.config.js` 的 alias 硬编码 `../packages/theme-core/src/index.ts` 解析。一旦该包被移出 `packages/`，构建静默失败且无依赖解析报错。
 
 3. **跨大版本依赖分裂（P1）** —— 根 `node_modules` 与 `oauth21/node_modules` 装了两套：
 
@@ -222,7 +222,7 @@
 | # | 事项 | 动作 | 预期收益 | 估算 |
 | --- | --- | --- | --- | --- |
 | P1-1 | **拆分 `useThemeStore`（901 行）** | 拆 `useThemeDevice` / `useThemeColor` / `useThemeView` + 薄聚合 store；6 个 watch 改为显式调用链 | 消除已付过两次学费的 watch 时序耦合；主题逻辑可单测 | **3 人日** |
-| P1-2 | **依赖治理** | 删除 5 个僵尸依赖；`mauth-theme-core` 补进 `dependencies`（或改用 workspace 协议 `@oauth21/theme-core: workspace:*`）；统一 vite / vue-i18n / vue-router 到单一版本；删除 `oauth21/package-lock.json` | 依赖树可复现，消除跨大版本漂移 | **1 人日** |
+| P1-2 | **依赖治理** | 删除 5 个僵尸依赖；`skinsuite` 补进 `dependencies`（或改用 workspace 协议 `@oauth21/theme-core: workspace:*`）；统一 vite / vue-i18n / vue-router 到单一版本；删除 `oauth21/package-lock.json` | 依赖树可复现，消除跨大版本漂移 | **1 人日** |
 | P1-3 | **CSS 按设备分包** | `mobile-auth.scss` 从全局入口移出，随移动端容器 chunk 异步加载 | 首屏 CSS 从 64 KB 显著下降，桌面端不再下载移动端样式 | **1 人日** |
 | P1-4 | **字体自托管** | Google Fonts 三家字体族改为本地子集（或降级系统字体栈） | 去除渲染阻塞 + 国内可达性风险 | **0.5 人日** |
 | P1-5 | **修 `sign` 缺陷** | `view/web/login/index.vue` 的 `sign.value` 改读 `query.sign`；同步检查另两个分发器是否同源复制 | 消除一个已存在但被"未启用"掩盖的语义错误 | **0.25 人日** |
