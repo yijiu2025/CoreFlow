@@ -41,6 +41,7 @@ import BaseLoginView from '@/theme/themes/default/standard/login/index.vue';
 import { loginViews, pickLoginViewId } from '@/theme/views/login';
 import { readDeviceParam } from '@/theme/views/params';
 import type { LoginTranslate, LoginViewContext } from '@/theme/views/login';
+import type { ThemeDevice } from '@/theme';
 import type { Component, Ref } from 'vue';
 
 const authStore = useAuthStore();
@@ -181,15 +182,18 @@ onUnmounted(() => {
    版式（UI）加载 + 契约组装
    ========================================================================== */
 
-/** 本容器的设备身份：文件位置即身份（`view/web/` 下都是电脑端） */
-const THEME_DEVICE = 'standard' as const;
+/** 本容器的设备身份：默认 standard（文件位置即身份，`view/web/` 下都是电脑端）。
+ *  其它设备（如 tablet）复用本容器的业务时，通过 `device` prop 覆盖 —— 避免
+ *  「加一种设备就要复制一整份业务容器」的重复（业务只有一份，见 multi-theme.md 职责红线）。 */
+const props = withDefaults(defineProps<{ device?: ThemeDevice }>(), { device: 'standard' });
+const THEME_DEVICE = computed(() => props.device);
 
 const viewId = computed(() =>
   pickLoginViewId({
-    url: readDeviceParam(route.query, 'view', THEME_DEVICE),
+    url: readDeviceParam(route.query, 'view', THEME_DEVICE.value),
     theme: themeStore.viewFor('login'),
     pkg: themeStore.packageId,
-    device: THEME_DEVICE
+    device: THEME_DEVICE.value
   })
 );
 
@@ -206,7 +210,7 @@ watch(
   [viewId, () => themeStore.packageId],
   ([id, pkg]) => {
     const epoch = ++viewEpoch;
-    void loginViews.load(id, pkg, THEME_DEVICE).then(loaded => {
+    void loginViews.load(id, pkg, THEME_DEVICE.value).then(loaded => {
       if (epoch !== viewEpoch) return;
       activeView.value = loaded ? markRaw(loaded) : BaseLoginView;
     });

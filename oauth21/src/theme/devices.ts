@@ -163,11 +163,31 @@ export const THEME_DEVICE_DEFS = [
         pathHasDeviceSegment(ctx.path, 'mini'))
   },
   {
+    id: 'tablet',
+    label: '平板',
+    containers: pageContainers(
+      import.meta.glob<{ default: Component }>('/src/view/tablet/*/index.vue'),
+      /^index\.vue$/
+    ),
+    routePath: (page: string) => `tablet/${page}`,
+    /**
+     * tablet 来源：显式 `?from=tablet` 标记（与 mini 的 `?from=mini` 同形）。
+     *
+     * 🔴 排除 `explicitMobile`：`?isMobile=true&from=tablet` 时按显式 isMobile 走手机端，
+     *    显式意图 > 来源标记（与 mini 的口径一致）。
+     *
+     * 这是「加一种设备」的落地范例：判定只用一条来源标记，不碰视口/UA 的三级判定，
+     * 零侵入现有 mobile/standard 的响应式切换。
+     */
+    match: (ctx: DeviceMatchContext) =>
+      !ctx.explicitMobile && ctx.from === 'tablet'
+  },
+  {
     id: 'mobile',
     label: '手机端',
     containers: mobileContainers,
     routePath: (page: string) => `m/${page}`,
-    // 显式 `?isMobile=true` 或视口/UA 判定为移动端（mini 来源已在上一档被拦截）
+    // 显式 `?isMobile=true` 或视口/UA 判定为移动端（mini/tablet 来源已在前面拦截）
     match: (ctx: DeviceMatchContext) => ctx.explicitMobile || ctx.viewportIsMobile
   },
   {
@@ -235,6 +255,21 @@ export function containersOf(id: string): ReadonlyMap<string, DeviceContainerLoa
  */
 export function containerOf(id: string, page: string): DeviceContainerLoader | undefined {
   return containersOf(id).get(page);
+}
+
+/**
+ * 取某设备在某页的容器加载器，**没写时兜底到 standard 设备**
+ *
+ * 分发器用它做「设备 id → 该页容器」的数据化映射：加一种设备（如 tablet）时，
+ * 只要给它写了容器，分发器就能渲染；没写则该设备退到桌面容器 —— 不再在分发器里
+ * 写死「mobile ? X : mini ? Y : Standard」的三选一（那是加设备时的静默半生效根因）。
+ */
+export function resolveContainerOf(id: string, page: string): DeviceContainerLoader {
+  return (
+    containerOf(id, page) ??
+    containerOf('standard', page) ??
+    (() => Promise.reject(new Error(`[theme] 设备「${id}」在页面「${page}」没有容器，也没有 standard 兜底`)))
+  );
 }
 
 /**

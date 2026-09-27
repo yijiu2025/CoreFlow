@@ -46,6 +46,7 @@ import BaseRegisterView from '@/theme/themes/default/standard/register/index.vue
 import { pickRegisterViewId, registerViews } from '@/theme/views/register';
 import { readDeviceParam } from '@/theme/views/params';
 import type { RegisterDirection, RegisterTranslate, RegisterViewContext } from '@/theme/views/register';
+import type { ThemeDevice } from '@/theme';
 import type { Component, Ref } from 'vue';
 
 /** 步骤总数：web 端两步（账号+验证码 → 密码+协议） */
@@ -313,16 +314,17 @@ onUnmounted(() => dispose());
    ========================================================================== */
 
 /**
- * 本容器的**设备身份**：文件位置即身份（`view/web/` 下都是电脑端）。
- * 取常量而不是运行时判定，让「这个页面属于哪种设备」只有一个答案。
+ * 本容器的**设备身份**：默认 standard（文件位置即身份，`view/web/` 下都是电脑端）。
+ * 其它设备（如 tablet）复用本容器的业务时通过 `device` prop 覆盖 —— 避免复制业务。
  */
-const THEME_DEVICE = 'standard' as const;
+const props = withDefaults(defineProps<{ device?: ThemeDevice }>(), { device: 'standard' });
+const THEME_DEVICE = computed(() => props.device);
 
 const viewId = computed(() =>
   pickRegisterViewId({
-    url: readDeviceParam(route.query, 'view', THEME_DEVICE),
+    url: readDeviceParam(route.query, 'view', THEME_DEVICE.value),
     pkg: themeStore.packageId,
-    device: THEME_DEVICE
+    device: THEME_DEVICE.value
   })
 );
 
@@ -334,7 +336,7 @@ watch(
   [viewId, () => themeStore.packageId],
   ([id, pkg]) => {
     const epoch = ++viewEpoch;
-    void registerViews.load(id, pkg, THEME_DEVICE).then(loaded => {
+    void registerViews.load(id, pkg, THEME_DEVICE.value).then(loaded => {
       if (epoch !== viewEpoch) return;
       activeView.value = loaded ? markRaw(loaded) : BaseRegisterView;
     });

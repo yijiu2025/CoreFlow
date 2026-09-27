@@ -67,6 +67,7 @@ import {
   listColorsOf,
   listColorViews,
   THEME_DEVICES,
+  deviceLabel,
   toneOfColor,
   type ThemeDevice
 } from '@/theme';
@@ -106,12 +107,7 @@ function asText(value: unknown): string {
 
 const visible = computed(() => !dismissed.value && asText(route.query.debug) === 'theme');
 
-/** 设备中文名（面板上要让人一眼分清三端） */
-const DEVICE_LABELS: Record<ThemeDevice, string> = {
-  mobile: '手机端',
-  standard: '桌面端',
-  mini: '紧凑版'
-};
+/** 设备中文名不再在此维护 —— 单一来源是 `theme/devices.ts` 的 `deviceLabel()`（加设备自动有标签） */
 
 /* ============================================================================
    当前页 / 当前设备 / 当前版式
@@ -398,7 +394,7 @@ function resetAll(): void {
             class="rounded px-1.5 py-0.5 text-[10px] transition-colors"
             :class="deviceOverride === null ? 'bg-sky-400/20 text-slate-100' : 'text-slate-500 hover:text-slate-300'"
             data-device="auto"
-            :title="`跟随页面（当前 ${DEVICE_LABELS[themeStore.activeDevice]}）`"
+            :title="`跟随页面（当前 ${deviceLabel(themeStore.activeDevice)}）`"
             @click="deviceOverride = null"
           >
             跟随
@@ -412,7 +408,7 @@ function resetAll(): void {
             :data-device="d"
             @click="deviceOverride = d"
           >
-            {{ DEVICE_LABELS[d] }}
+            {{ deviceLabel(d) }}
           </button>
         </div>
       </div>

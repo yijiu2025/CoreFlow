@@ -51,6 +51,7 @@ import type {
   ForgotPasswordTranslate,
   ForgotPasswordViewContext
 } from '@/theme/views/forgot-password';
+import type { ThemeDevice } from '@/theme';
 import type { Component, Ref } from 'vue';
 
 const { t, locale } = useI18n();
@@ -270,19 +271,21 @@ const goBack = () => {
 const themeStore = useThemeStore();
 
 /**
- * 本容器的**设备身份**：文件位置即身份（`view/web/` 下都是电脑端，标准形态）。
+ * 本容器的**设备身份**：默认 standard（文件位置即身份，`view/web/` 下都是电脑端，标准形态）。
+ * 其它设备（如 tablet）复用本容器的业务时通过 `device` prop 覆盖 —— 避免复制业务。
  */
-const THEME_DEVICE = 'standard' as const;
+const props = withDefaults(defineProps<{ device?: ThemeDevice }>(), { device: 'standard' });
+const THEME_DEVICE = computed(() => props.device);
 
 /**
  * 用哪套版式：`?view=` > 主题包声明 > VITE_FORGOT_PASSWORD_VIEW > 当前包名。
  */
 const viewId = computed(() =>
   pickForgotPasswordViewId({
-    url: readDeviceParam(route.query, 'view', THEME_DEVICE),
+    url: readDeviceParam(route.query, 'view', THEME_DEVICE.value),
     theme: themeStore.viewFor('forgot-password'),
     pkg: themeStore.packageId,
-    device: THEME_DEVICE
+    device: THEME_DEVICE.value
   })
 );
 
@@ -294,7 +297,7 @@ watch(
   [viewId, () => themeStore.packageId],
   ([id, pkg]) => {
     const epoch = ++viewEpoch;
-    void forgotPasswordViews.load(id, pkg, THEME_DEVICE).then(loaded => {
+    void forgotPasswordViews.load(id, pkg, THEME_DEVICE.value).then(loaded => {
       if (epoch !== viewEpoch) return;
       activeView.value = loaded ? markRaw(loaded) : BaseForgotPasswordView;
     });

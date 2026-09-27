@@ -100,8 +100,8 @@ export {
   DEFAULT_THEME_PAGE
 } from 'mauth-theme-core';
 
-/** 设备维度取值集合、默认设备、设备联合类型 —— 随应用走，见 `./devices` */
-export { DEFAULT_THEME_DEVICE, THEME_DEVICES } from './devices';
+/** 设备维度取值集合、默认设备、设备联合类型、设备中文名 —— 随应用走，见 `./devices` */
+export { DEFAULT_THEME_DEVICE, THEME_DEVICES, deviceLabel } from './devices';
 export type { ThemeDevice } from './devices';
 
 /** 各主题包的包定义（只有 meta / views，不再充当默认配色） */

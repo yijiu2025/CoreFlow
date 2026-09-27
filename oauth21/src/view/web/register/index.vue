@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import { useThemeStore } from '@/stores/theme';
 import { DEFAULT_THEME_PACKAGE, type ThemeDevice } from '@/theme';
-import { pickDeviceId, deviceContext } from '@/theme/devices';
+import { pickDeviceId, deviceContext, THEME_DEVICES, resolveContainerOf } from '@/theme/devices';
 
 const route = useRoute();
 
@@ -13,9 +13,10 @@ const route = useRoute();
 const { isMobileDevice } = useDeviceDetect();
 
 // 异步按需加载不同形态的注册组件（与 login 分发器架构一致）
-const StandardRegister = defineAsyncComponent(() => import('./StandardRegister.vue'));
-const MiniRegister = defineAsyncComponent(() => import('./MiniRegister.vue'));
-const MobileRegister = defineAsyncComponent(() => import('../../app/register/index.vue'));
+// 🔴 数据化（2026-09-27）：设备 id → 该页容器 从设备清单派生，不再写死三选一。
+const deviceComponents = new Map(
+  THEME_DEVICES.map(id => [id, defineAsyncComponent(resolveContainerOf(id, 'register'))])
+);
 
 // 动态路由/参数分发逻辑
 // 🔴 形态判定**单一来源**：activeForm 既决定渲染哪个组件，也决定主题的设备作用域
@@ -26,9 +27,7 @@ const activeForm = computed(() =>
 );
 
 const activeComponent = computed(() =>
-  activeForm.value === 'mobile' ? MobileRegister
-  : activeForm.value === 'mini' ? MiniRegister
-  : StandardRegister
+  deviceComponents.get(activeForm.value) ?? deviceComponents.get('standard')!
 );
 
 /**
@@ -87,9 +86,9 @@ provide('registerContext', registerContext);
  * 三个形态全部预热：chunk 总量 < 30KB，并行下载几乎瞬时；用户切换任意形态都不闪。
  */
 onMounted(() => {
-  void import('./StandardRegister.vue').catch(() => {});
-  void import('./MiniRegister.vue').catch(() => {});
-  void import('../../app/register/index.vue').catch(() => {});
+  for (const id of THEME_DEVICES) {
+    void resolveContainerOf(id, 'register')().catch(() => {});
+  }
 });
 </script>
 
