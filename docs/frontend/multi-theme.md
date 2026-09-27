@@ -328,11 +328,17 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
 
 ## 七、接入一个新页面（清单）
 
+> 🔴 **2026-09-27 起，路由已数据化**：`router/routes.ts` 的 `/<page>` 与 `/m/<page>` 由
+> 页面注册表（`theme/views/pages.ts` 的 `listPageViews()`）**自动生成**，分发器用
+> `import.meta.glob('/src/view/web/*/index.vue')` 自动发现。所以**加页面不用再改路由**，
+> 下面第 5 步只保留"预取守卫自动接上"的说明。
+
 1. **容器**：`view/app/<page>/index.vue` 收拢全部业务；模板里只留两件事 ——
    `<component :is="activeView" :ctx="ctx" />` + 与版式无关的业务浮层。
    （电脑端另建 `view/web/<page>/` 的分发器 + `Standard*` / `Mini*` 容器。）
-2. **契约**：建 `theme/views/<page>.ts`，定义 `<Page>ViewContext` / `<Page>ViewProps` + 各子结构，
-   再在同文件里建注册表（`createViewRegistry` + `ENV_VIEW` + `pick<Page>ViewId` + `preload<Page>View`）。
+2. **契约 + 页面声明**：建 `theme/views/<page>.ts`，定义 `<Page>ViewContext` / `<Page>ViewProps` + 各子结构，
+   再用**页面工厂** `defineThemePage({ page, title, titles, envView, loaders })` 一次声明
+   （机制统一在 `views/page.ts`，页面文件只声明自己的契约与页面名，**不再手写 `createViewRegistry` + picker**）。
    能从既有实现复用的联合类型，用 `import type` 直接引（如 `LoginSocialProviderId = SocialProviderId`），**不要重写一份**。
    ⚠️ 读 URL 参数一律用 `readDeviceParam(route.query, 'view', THEME_DEVICE)`，**不要**直接 `route.query.view`
    （直接取会漏掉 `?view.<设备>` 这一档）。
@@ -341,7 +347,8 @@ const ctx = assertLoginContract(reactive({ /* … */ }));
    关卡与排查都只能靠它读"现在渲染的是哪套 UI"），移动端的**不写 `<style>`**（消费 `mauth-*`）。
 4. **容器改造**：静态引入该设备的版式、`ctx = assert<Page>Contract(reactive({...}))`、
    `activeView` 按 `pick<Page>ViewId` 惰性加载、`viewEpoch` 防过期。
-5. **路由预取**：在 `router/routes.ts` 给该页的 `beforeEnter` 接上 `preload<Page>View`（预取是无条件优化，不再有"宽屏跳转"分支——见下文「URL 不被视口改写」）。
+5. **路由预取**：无需手动接线 —— `routes.ts` 从页面对象取 `pv.preload`（`defineThemePage` 已把它接上
+   共享 picker）。只要页面文件在 `theme/views/<page>.ts` 里 `defineThemePage`，路由、标题、预取三样自动就位。
 6. **重启 dev server**，访问 `?view=<id>` 看效果。
 7. **补验收关卡**（见第十节），并跑一遍既有基线。
 
@@ -416,12 +423,59 @@ tokens: {
    `themes/default/<设备>/<页面>/index.vue` 照抄起步。
 3. 建 `<新包>/<设备>/<页面>/colors/<配色>/index.ts` —— ⚠️ **配色是按包查的，新包必须自带一份**，
    不想要多的就只建 `{black,white}`。
-4. **重启 dev server**，访问 `?view=<新包名>`（或 `?view.<设备>=<新包名>` 只换某端）。
+4. **（只覆盖部分设备/页面时必填）声明 `coverage`**：见下方「coverage 覆盖声明」。
+5. **重启 dev server**，访问 `?view=<新包名>`（或 `?view.<设备>=<新包名>` 只换某端）。
 
 参考实现照抄仓库里的 `themes/compact/`（`mobile/register` 的「换包换版式」范例）。
 
 > 「换版式要复制配色」是这条口径的**已知代价**，也是刻意的：两套 DOM 的 token 集合本来就不同，
 > 共享一份文件只会让配色里堆满"只对某版式有意义"的条目。
+
+### coverage 覆盖声明（部分覆盖的包自述范围，关卡据此推导）
+
+主题包可以**只覆盖部分设备 / 部分页面**（例：`compact` 只覆盖 `mobile × register`）。
+以前这个范围只能靠目录口径关卡里的 `if (pkg === 'compact')` 这类**写死的包名**表达，
+于是每新增一个部分覆盖的包都要回来改关卡（「关卡即配置」）。现在把范围写成包**自带的声明**
+（声明与实现同目录，复制主题包时声明跟着走）：
+
+```ts
+export default {
+  meta: { /* … */ },
+  // 本包只覆盖 mobile × register，其余回退 default 包
+  coverage: {
+    devices: ['mobile'],        // 缺省 = 全部设备
+    pages: ['register'],        // 缺省 = 全部页面
+    requiredColors: ['black', 'white']  // 缺省 = 黑白并列实体色
+  }
+} satisfies MauthThemePackage;
+```
+
+- 目录口径关卡（`.tmp-probe/verify-theme-dirs.mjs`）据此**推导**该包应有的目录，不再写死包名/颜色名。
+- 声明**只影响关卡校验**，不改变运行时（注册表仍是"glob 扫到什么就登记什么"）。
+- 声明范围**只能 ≤ 实际目录**（写多会红，写少无害）。
+
+### 加一种设备（如未来的 tablet）
+
+> 🔴 **设备维度取值集合已下沉到 `theme/devices.ts`**（2026-09-27 起，不再散在常量/分发器/路由三处）。
+> 加一种设备 = 改这一份清单 + 写容器，其余自动接线。
+
+1. **清单加一条** `theme/devices.ts` 的 `THEME_DEVICE_DEFS`：
+   ```ts
+   {
+     id: 'tablet',                      // = 主题包内目录名（themes/<包>/tablet/）
+     label: '平板',                      // 调试面板 / 日志用
+     containers: pageContainers(import.meta.glob('/src/view/tablet/*/index.vue'), /^index\.vue$/),
+     routePath: (page) => `tablet/${page}`,  // 路由前缀（/tablet/login）
+     match: (ctx) => /* 判定：视口中段？UA？ */ false
+   }
+   ```
+   ⚠️ **顺序即优先级**，末条 `standard` 必须无条件命中（兜底）。
+2. **写容器** `view/<设备 id>/<页面>/index.vue`（或用 `containers` 指定别的 glob 规则，
+   像 `mini` 那样与 standard 共用 `view/web/` 目录靠文件名前缀区分）。
+3. **主题目录** `themes/<包>/<设备 id>/<页面>/{index.vue, colors/}`（只覆盖部分设备可用 `coverage.devices` 声明）。
+4. **分发器**自动认它：三个分发器的设备判定已统一到 `pickDeviceId`（`theme/devices.ts`），
+   `THEME_DEVICES` 由清单派生，路由/面板/关卡跟着清单走，**不需要再改**。
+5. **重启 dev server**。
 
 ## 九、安全边界
 

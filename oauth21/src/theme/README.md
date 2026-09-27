@@ -145,6 +145,12 @@ themes/<包>/<设备>/<页面>/colors/<配色>/      ← 该页的配色
 4. （可选）加 `theme.scss` 放背景图 / `@font-face` / 伪元素装饰。
 5. 访问 `?theme=<配色 id>` 看效果。
 
+> 🔴 **只覆盖部分设备 / 页面时，在包定义里声明 `coverage`**（2026-09-27 起）：
+> `compact` 包只覆盖 `mobile × register`，就在 `index.ts` 里写
+> `coverage: { devices: ['mobile'], pages: ['register'] }`。
+> 目录口径关卡据此推导该包应有的目录，不再写死包名 —— 声明与实现同目录，
+> 复制主题包时声明跟着走（见 `docs/frontend/multi-theme.md` §八「coverage 覆盖声明」）。
+
 **加一种版式**（换 DOM 结构）＝ **加一个包**，不是加深目录：
 
 1. 复制一个包骨架（或新建 `themes/<新包>/index.ts`）。
@@ -494,7 +500,7 @@ store（`main.ts` → `setupThemeDeviceSync(router)`）。store 用这个值决�
 ## 关卡（改完必须跑的静态断言）
 
 ```bash
-node .tmp-probe/verify-theme-dirs.mjs         # 目录口径 + 无版式层目录 + 三设备静态引入 + store/路由接线 + 内核包契约（552 项）
+node .tmp-probe/verify-theme-dirs.mjs         # 目录口径 + 无版式层目录 + 三设备静态引入 + store/路由接线 + 内核包契约（553 项）
 node .tmp-probe/verify-no-pwa.mjs             # PWA 已移除：产物无 manifest / 无 SW 注入，sw.js 只能是自毁迁移版（无浏览器）
 node .tmp-probe/verify-glob-device.mjs        # glob 真的扫到设备段、配色 glob 只有一套（需能起 Vite）
 node .tmp-probe/verify-first-paint-budget.mjs # 首屏请求清单：零个非内置包 chunk、零个 theme.scss（需 dev server）
