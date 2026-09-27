@@ -18,7 +18,7 @@
 | ------------ | ------------------ | --------------------------------------------------- | ----------------------------------------------- |
 | `admin/`     | 通用管理后台       | Vue 3 + Vite + TypeScript + Pinia + Tailwind        | API 类型、刷新 Token TODO、目录名 `view` 迁移   |
 | `firewall/`  | 防火墙控制台       | Vue 3 + Vite + TypeScript + ECharts + Tailwind      | 大组件拆分、i18n 资源拆分                       |
-| `oauth21/`   | 登录/授权前端      | Vue 3 + Vite + TypeScript + VeeValidate + Zod + PWA | 表单组件复用、日志清理、目录名 `view` 迁移      |
+| `oauth21/`   | 登录/授权前端      | Vue 3 + Vite + TypeScript + VeeValidate + Zod | 表单组件复用、日志清理、目录名 `view` 迁移      |
 | `poseadmin/` | PoseCraft 管理后台 | Vue 3 + Vite + TypeScript + Element Plus            | 按后台规范补齐 API/Store/权限层                 |
 | `posecraft/` | PoseCraft 创作前端 | Vue 3 + Vite + TypeScript + Fabric + TensorFlow     | 编码乱码、文件超限、`any` 收敛、Canvas 逻辑拆分 |
 | `phonecopy/` | 移动端/混合应用    | Vue 3 + Vite + Capacitor + TensorFlow + Fabric      | 从 JS 迁移 TS、超大页面拆分、模型资源外置       |

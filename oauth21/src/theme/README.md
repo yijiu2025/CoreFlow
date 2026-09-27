@@ -494,7 +494,8 @@ store（`main.ts` → `setupThemeDeviceSync(router)`）。store 用这个值决�
 ## 关卡（改完必须跑的静态断言）
 
 ```bash
-node .tmp-probe/verify-theme-dirs.mjs         # 目录口径 + 无版式层目录 + 三设备静态引入 + store/路由接线（519 项）
+node .tmp-probe/verify-theme-dirs.mjs         # 目录口径 + 无版式层目录 + 三设备静态引入 + store/路由接线 + 内核包契约（552 项）
+node .tmp-probe/verify-no-pwa.mjs             # PWA 已移除：产物无 manifest / 无 SW 注入，sw.js 只能是自毁迁移版（无浏览器）
 node .tmp-probe/verify-glob-device.mjs        # glob 真的扫到设备段、配色 glob 只有一套（需能起 Vite）
 node .tmp-probe/verify-first-paint-budget.mjs # 首屏请求清单：零个非内置包 chunk、零个 theme.scss（需 dev server）
 node .tmp-probe/verify-view-priority.mjs      # 版式优先级五档 + 设备维度键 + 空串/非法值规则（需 dev server）
@@ -505,9 +506,9 @@ node .tmp-probe/measure-load-budget.mjs       # 真实流量（生产构建，�
 
 - 后两条要**生产构建**：`npx vite build --outDir dist-measure-1` →
   `npx vite preview --outDir dist-measure-1 --port 5189 --strictPort`，然后
-  `node .tmp-probe/measure-load-budget.mjs http://127.0.0.1:5189 <abs dist 路径> [--block-sw]`。
-  ⚠️ `--block-sw` 是隔离"页面按需"的口径；不屏蔽才是**真实首访**（PWA 预缓存会把整站 801 KB 拉一遍，
-  dev server 下看不到这一层 —— 见 `docs/frontend/multi-theme.md` 第五节）。
+  `node .tmp-probe/measure-load-budget.mjs http://127.0.0.1:5189 <abs dist 路径>`。
+  ℹ️ `--block-sw` 参数仍在，但 **oauth21 已于 2026-09-27 移除 PWA**，屏蔽与否已无差别
+  （dev server 下本来就没有 SW）。移除原因与必须留的自毁迁移见 `docs/frontend/PWA_GUIDE.md` 第六节。
   ⚠️ outDir 每次用**全新目录名**（沙箱会拦已存在目录的清理）。
 
 - `verify-view-priority.mjs` 的第 4 档（`VITE_<PAGE>_VIEW`）需要一个**带环境变量启动**的实例：

@@ -361,8 +361,8 @@ npx vite build     # 纯构建
 - `npx vue-tsc --noEmit` 零错误零警告
 - 构建产物 `dist/` 包含（按需）：
   - `index.html`
-  - `sw.js` + `workbox-*.js`（PWA）
-  - `manifest.webmanifest`（PWA）
+  - `sw.js` + `workbox-*.js` + `manifest.webmanifest`（**仅启用 PWA 的项目**，如 posecraft；
+    oauth21 属于规范里"不适用"的纯登录页，已于 2026-09-27 移除 —— 见 [PWA_GUIDE.md](./PWA_GUIDE.md) 第六节）
   - `assets/`（JS/CSS 哈希化）
 
 ### 12.3 部署路径

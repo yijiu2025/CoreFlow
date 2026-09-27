@@ -1,7 +1,8 @@
 # PWA 接入规范（前端项目通用）
 
-> 适用于所有 Vue 3 + Vite 前端项目。新建前端项目时按本规范启用 PWA。
-> 现有项目（posecraft、oauth21）已参考本规范集成。
+> 适用于所有 Vue 3 + Vite 前端项目。新建前端项目时**先确认适用场景**（见第一节末），再按本规范启用。
+> 现有项目：`posecraft` 已启用；**`oauth21` 曾启用，已于 2026-09-27 整体移除**（它是"用完即走"的登录页，
+> 本就不属于适用场景；移除过程与必须留的自毁迁移见第六节 —— 那一节是实战踩坑记录，值得先读）。
 
 ## 一、为什么用 PWA
 
@@ -11,7 +12,14 @@ PWA（渐进式 Web 应用）让网站能像原生 App 一样：
 2. **离线访问**——Service Worker 预缓存静态资源，断网时仍能打开页面 UI
 3. **自动更新**——新版本上线，用户下次访问自动拿到最新资源
 
-适用场景：内容型应用（posecraft 之类）、用户高频访问的工具页。**不适用**：纯登录页（oauth21 用完即走，安装价值低）。
+适用场景：内容型应用（posecraft 之类）、用户高频访问的工具页。
+
+🔴 **不适用**：**纯登录页 / 授权页**（oauth21 那种"用完即走"的入口闸门）。理由不是"收益不高"这么轻，
+而是**成本与收益正好错配**：首访代价（SW 注册 + 预缓存全套）在新用户 / 无痕 / 清了缓存时**每次都要付**，
+而它换来的"二次访问 0 请求"恰恰付在最不需要快的场景 —— 用户一次登录能用很久，不会反复冷启同一个 origin。
+更严重的是它**会破坏功能**（`NavigationRoute` 顶掉同源导航），详见第六节。
+
+> 判断口径一句话：**这个页面会不会成为用户反复冷启的入口？** 会 → 适合；不会 → 别启用。
 
 ## 二、技术栈
 
@@ -120,7 +128,69 @@ Promise.all([
 
 图标放 `public/` 根目录（会被复制到 dist），文件路径在 manifest.icons 中引用。
 
-## 六、构建验证
+## 六、如何移除（迁移期必须留自毁脚本）
+
+**不适用就别启用**—— oauth21 就是一次反例：它正是上面写的"纯登录页"，却一直启用着 PWA，直到 2026-09-27
+被整体移除（原因：无 denylist 的 `NavigationRoute` 顶掉了后端设备码授权页 `/oauth2.1/device`）。
+
+### 6.1 光删配置是不够的（最容易漏的一步）
+
+> 浏览器一旦装过 SW，就会**一直用它**：导航与静态资源都走它的 fetch handler，**永远不回源**。
+> 删掉 `VitePWA` 只是不再生成新的 SW，**已装机的那些仍会继续劫持请求**。
+
+所以必须留一次**自毁迁移**。
+
+### 6.2 移除步骤（四件，缺一不可）
+
+1. **删 `VitePWA({...})`**（含 `workbox` / `manifest` 段）。
+
+2. **在 `public/` 放一个 `sw.js`**，顶替 `/sw.js` 这个 URL。浏览器做 SW **更新检查**时会取到它 ——
+   这是浏览器原生行为，**不需要任何页面代码注册或引用它**。
+
+   ```js
+   self.addEventListener('install', event => {
+     event.waitUntil(self.skipWaiting()); // 不等旧页面关闭
+   });
+
+   self.addEventListener('activate', event => {
+     event.waitUntil(
+       (async () => {
+         await self.clients.claim();
+         const names = await caches.keys();
+         await Promise.all(names.map(n => caches.delete(n))); // 清空全部 Cache Storage
+         await self.registration.unregister(); // 注销自己
+         const clients = await self.clients.matchAll({ type: 'window' });
+         // 让已打开的页面立刻回到"纯网络"态，否则用户还得手动刷新一次
+         clients.forEach(c => c.navigate(c.url).catch(() => null));
+       })()
+     );
+   });
+   ```
+
+   它**不要注册任何 `fetch` handler** —— 缓存清空后它就是个空壳，不参与任何请求。
+
+3. **清掉为 PWA 做的构建期改造**。本仓曾把惰性主题 chunk 产出到 `lazy-theme/`，再用
+   `workbox.globIgnores` 整目录排除 —— 那套路径前缀的**唯一**存在理由就是配合 SW，应随 SW 一起回滚
+   （回滚路径 ≠ 少打包：产物里该切分的 chunk 仍要切分出来，这条要有断言守）。
+
+4. **把"PWA 已移除"写成会红的关卡**，而不是删掉检查。本仓：`verify-no-pwa.mjs`（静态产物断言）
+   + `verify-sw-migration.mjs`（造一个假老 SW 复现劫持 → 让真 `/sw.js` 接管同 scope → 断言缓存清空、
+   registration 注销、导航回源）。
+
+⛔ **自毁脚本什么时候才能删**：等旧 SW 装机量归零之后（建议 ≥2 个发布周期，确认 `/sw.js` 不再被请求）。
+在那之前删掉它 ＝ 让仍在旧缓存里的用户**永远卡在旧版本**。
+
+### 6.3 排查顺序
+
+症状：生产上首访流量远大于"按需加载"该有的数，或**某个后端页面打不开、返回了前端 SPA 骨架**。
+
+1. 打开 `dist/sw.js`：有没有 `precacheAndRoute` / `NavigationRoute` / `createHandlerBoundToUrl`；
+2. 打开 `dist/index.html`：有没有 `<link rel="manifest">` 与 SW 注册注入；
+3. ⚠️ **别指望页面级流量探针能发现它** —— SW 的 install 跑在**独立的 ServiceWorker target** 上，
+   page 级的 `Network.enable` 一个字节都看不见（实测屏蔽与不屏蔽两轮数字**一字不差**）。
+   要量它必须遍历 `caches`（`caches.keys()` + 逐个 `open().keys()`），或用 `navigator.storage.estimate()`。
+
+## 七、构建验证
 
 ```bash
 npx vite build
@@ -142,14 +212,14 @@ files generated
 - `Could not resolve entry module "index.html"` → `cd <app-dir>` 后再 build（cwd 问题）
 - `NODE_ENV=production is not supported` → 根目录 .env 不要设 NODE_ENV=production，Vite 默认会自动设
 
-## 七、部署注意事项
+## 八、部署注意事项
 
 1. **HTTPS 必须**：SW 仅在 HTTPS（localhost 除外）下注册。生产环境必须 HTTPS。
 2. **Service-Worker-Allowed 头**：如果 SW 不在根目录，后端需返回 `Service-Worker-Allowed: /` 头允许作用域扩展（通常不需）
 3. **首次访问需联网**：SW 注册 + 资源预缓存需要首次在线访问
 4. **更新延迟**：`autoUpdate` 模式下，新版本在用户下次打开标签页（关闭所有同域标签）后生效
 
-## 八、调试
+## 九、调试
 
 浏览器 DevTools：
 - **Application → Service Workers**：查看 SW 状态、更新、注销
@@ -157,16 +227,17 @@ files generated
 - **Application → Cache Storage**：查看预缓存的资源列表
 - **Network**：勾选 "Offline" 测试离线行为
 
-## 九、参考实现
+## 十、参考实现
 
 - [posecraft/vite.config.ts](../../posecraft/vite.config.ts) — SPA + 大文件排除（AI 模型不预缓存）
-- [oauth21/vite.config.js](../../oauth21/vite.config.js) — 登录页简单启用
+- [oauth21/public/sw.js](../../oauth21/public/sw.js) — **移除时的自毁迁移脚本**（不是功能代码，见第六节）
 - [vite-plugin-pwa 文档](https://vite-pwa-org.netlify.app/)
 
-## 十、新建前端项目检查清单
+## 十一、新建前端项目检查清单
 
-新建 Vue 3 + Vite 前端项目时，按本规范启用 PWA：
+新建 Vue 3 + Vite 前端项目时，**先过第一节的适用场景判断**，确认适合再按本规范启用 PWA：
 
+- [ ] **适用场景确认**：这个页面会是用户反复冷启的入口吗？（纯登录页 / 授权页 → **不要启用**）
 - [ ] `npm install -D vite-plugin-pwa`
 - [ ] vite.config.ts 加 `VitePWA({...})`，base 与 manifest.scope/start_url 对齐
 - [ ] public/ 放 pwa-192x192.png + pwa-512x512.png
