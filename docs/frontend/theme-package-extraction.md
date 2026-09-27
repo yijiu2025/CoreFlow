@@ -259,8 +259,8 @@ const assets = {
   界面级判据：`type-check` / `eslint` 0 错、`verify-theme-dirs` 552/552、八枚毒丸全中、`docs:build` exit 0。
 - 已知**欠账**（与本立项无关，但同属这一层）：
   `docs/frontend/theme.md` 讲的是 shadcn 的全局 HSL 变量（与 `--mauth-*` 主题层不是一回事）；
-  `AGENTS.md` 与 `docs/frontend/coding-standard.md` 里的多主题条目仍在用旧口径（`web` 作为设备名、
-  五段键、`<页面>/<变体>/` 形态），待单独一轮收口。
+  `AGENTS.md` 与 `docs/frontend/coding-standard.md` 里的多主题条目旧口径（`web` 设备名、
+  五段键、`<页面>/<变体>/` 形态）已于 B5 四段键收口时同步纠正。
 
 ## 相关
 
