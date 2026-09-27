@@ -235,9 +235,16 @@ function buildRegistry(): Map<string, MauthThemeRecord> {
   /** 包名 → 包定义的版式声明（配色未自带声明时继承它；跨设备共用一份） */
   const packageViews = new Map<string, Record<string, string> | undefined>();
 
-  /** 复合键：`包/设备/页面/版式/配色`（五段，避免嵌套 Map 样板） */
+  /**
+   * 复合键：`包/设备/页面/配色`（四段，避免嵌套 Map 样板）
+   *
+   * 🔴 **没有「版式」段**（2026-09-27 B5）：一个主题包 = 一种版式，`view ≡ pkg`，
+   *    所以「版式」段恒等于「包」段 —— 五段里有两段永远相同，是纯冗余。
+   *    删掉它后，唯一性作用域仍是「同包同设备同页」（与文档承诺一致，见文件头），
+   *    查询时给 pkg 就等于同时给了 view。
+   */
   const keyOf = (info: ColorKeyInfo): string =>
-    `${info.pkg}/${info.device}/${info.page}/${info.view}/${info.colorId}`;
+    `${info.pkg}/${info.device}/${info.page}/${info.colorId}`;
 
   // ① 包定义：只提供 meta 与可选的 views 声明（**不再充当默认配色**）
   for (const [key, mod] of sortedEntries(packageModules)) {
@@ -320,11 +327,11 @@ function findRecord(
   page: string,
   view: string
 ): MauthThemeRecord | undefined {
-  // ① 精确匹配：当前包 × 当前设备 × 当前页面 × 当前 view（= 包名）
+  // ① 精确匹配：当前包 × 当前设备 × 当前页面（键已无 view 段，见 keyOf 注释）
   // 🔴 旧实现这里 hardcode 了 `DEFAULT_THEME_PACKAGE`，导致切到 compact 包后点
   //    blue 永远命中 default 包 —— 因为 compact 包的配色键根本命中不了。改为按
   //    调用方传入的 pkg 查。
-  return registry.get(`${pkg}/${device}/${page}/${view}/${id}`) ??
+  return registry.get(`${pkg}/${device}/${page}/${id}`) ??
     // ② 兜底扫描：任意包 × 同 view（切包后 pkg 还没跟上的那一帧，极少见）
     [...registry.values()].find(
       r => r.meta.id === id && r.device === device && r.page === page && r.view === view
