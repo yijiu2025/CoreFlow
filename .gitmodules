@@ -1,0 +1,3 @@
+[submodule "packages/theme-core"]
+	path = packages/theme-core
+	url = https://github.com/yijiu2025/theme.git

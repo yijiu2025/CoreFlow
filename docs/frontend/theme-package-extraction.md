@@ -31,7 +31,7 @@
 | 改「一个主题包 = 一种版式」的结构 | 2026-09-26 已定案（见 [multi-theme.md](/frontend/multi-theme)），抽包**不**动结构 |
 | SSR / 非 DOM 渲染目标 | 当前 target 只有浏览器。内核本身已无 DOM，将来要支持再补适配器即可 |
 | 把 `themes/**` 搬进包 | 版式实现与配色数据是**业务资产**（认证页长什么样），随应用走 |
-| 本期就发 npm | 先做**工作区源码直供**（与 `stable-deviceid` 同形）；发布是后话，见 §八 |
+| 随大盘一起发版 | 内核包有**自己的仓库与版本号**（<https://github.com/yijiu2025/theme>，npm 包 `mauth-theme-core`），与本仓的发版通道无关 |
 
 ## 二、现状盘点（全部有出处）
 
@@ -239,7 +239,7 @@ const assets = {
 | 抽包期间出现"两份真相"（`src` 与包各有一份实现） | 铁律：**同一时刻只有一个实现**，另一侧只允许是 re-export 壳。壳文件里不得有任何逻辑 |
 | 守卫脚本按路径读源码 → 迁一个文件就要改一堆断言 | 已引入 `implText(['views/params.ts'])` 这类解析器：候选相对路径 × 两个根目录，实现搬走不用改断言 |
 | `vue-tsc -b` 与"工作区源码包"不兼容 | 已有先例：`stable-deviceid` 用 `tsconfig.app.json` 的 `paths` + `include` 指到 `packages/shared-device/src/**`，Vite 侧用 `resolve.alias` 指同一份源码。照抄这套 |
-| 包被误当成"可复用"而先于成熟度发布 | 本期**不发 npm**：`exports` 指向源码，只作工作区消费。发布另立一项，需先补齐 `dist` 构建与版本策略 |
+| 包被先于成熟度发布出去后失去控制 | **已发布**（2026-09-27）：`mauth-theme-core@0.1.0` 已上线 npm，并有**自己的仓库与版本号**（<https://github.com/yijiu2025/theme>）。本仓以 submodule 方式挂它，改动不必混进业务提交；0.x 阶段允许重命名，Stage 2 及以后按 semver 发版 |
 | 抽包改动混进业务改动 | 每期独立提交，提交信息里写清"纯迁移"或"行为变更"；纯迁移的提交**不得**同时改行为 |
 
 **回滚**：任一期回滚 = 把包内文件移回 `src/theme/` 原路径、删壳。因为导入面没变、`implText` 兼容两处，
@@ -257,6 +257,12 @@ const assets = {
   接线照抄 `stable-deviceid` 那套：Vite `resolve.alias` + `tsconfig.app.json` 的 `paths` / `include`
   都指到**源码**（不依赖 `node_modules` 里那条由 `npm install` 生成的符号链接）。
   界面级判据：`type-check` / `eslint` 0 错、`verify-theme-dirs` 552/552、八枚毒丸全中、`docs:build` exit 0。
+- **Stage 1 已对外发布**（2026-09-27）：包有了自己的仓库（<https://github.com/yijiu2025/theme>，
+  本仓以 **submodule** 挂在 `packages/theme-core`，克隆时要带 `--recurse-submodules`）与
+  npm 包名 `mauth-theme-core@0.1.0`（MIT / 零依赖 / ESM + `dist`，`prepack` 自动构建）。
+  本仓因此**不再直接跟踪**包内文件 —— 改内核去那个仓提，业务仓不受污染。
+  ⚠️ 消费侧（Vite `resolve.alias` + `tsconfig.app.json` 的 `paths`）仍指**源码**，
+  所以本地 `packages/theme-core/src/**` 就是宿主看到的那一份，无需重新安装。
 - 已知**欠账**（与本立项无关，但同属这一层）：
   `docs/frontend/theme.md` 讲的是 shadcn 的全局 HSL 变量（与 `--mauth-*` 主题层不是一回事）；
   `AGENTS.md` 与 `docs/frontend/coding-standard.md` 里的多主题条目旧口径（`web` 设备名、
