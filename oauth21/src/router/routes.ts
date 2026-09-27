@@ -1,7 +1,5 @@
 import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
-import { preloadRegisterView } from '@/theme/views/register';
-import { preloadLoginView } from '@/theme/views/login';
-import { preloadForgotPasswordView } from '@/theme/views/forgot-password';
+import { listPageViews } from '@/theme/views/pages';
 import { useThemeStore } from '@/stores/theme';
 import { readDeviceParam } from '@/theme/views/params';
 import type { ThemeDevice } from '@/theme';
@@ -83,25 +81,51 @@ function readDeclaredView(page: string, device: ThemeDevice): string | undefined
   }
 }
 
+/**
+ * 分发器（`view/web/<page>/index.vue`）—— 页面名 → 惰性加载器
+ *
+ * glob 路径是**字面量**（Vite 编译期静态分析，不能用变量拼），但键是页面目录名，
+ * 与页面注册表（`theme/views/pages.ts` 的 `listPageViews()`）的页面名字面一致。
+ * 于是「加一个页面」只需写契约文件 + 分发器目录 + 主题目录，路由由下面两段自动生成。
+ */
+const dispatchers = import.meta.glob('/src/view/web/*/index.vue');
+
+/** 路由名规范：`login` 保持小写（`router/index.ts` 的 `redirect: { name: 'login' }` 依赖它），其余与页面名一致 */
+function routeNameOf(page: string): string {
+  return page;
+}
+
+/**
+ * 页面路由（`/<page>`）—— 由页面注册表**自动生成**，不再手写每页一条
+ *
+ * 每个页面（login / register / forgot-password / 将来的新页）都在 `listPageViews()`
+ * 里，标题取自页面声明（`title`），组件取自分发器 glob。加页面 = 写文件，不改这里。
+ */
+const pageRoutes: RouteRecordRaw[] = listPageViews().map(pv => ({
+  path: pv.page,
+  name: routeNameOf(pv.page),
+  component: dispatchers[`/src/view/web/${pv.page}/index.vue`],
+  meta: { title: pv.title }
+}));
+
+/**
+ * 移动端页面路由（`/m/<page>`）—— 同样由页面注册表自动生成
+ *
+ * `/m/*` 与 `/<page>` 共用同一套分发器（`view/web/<page>/index.vue`）：窄视口渲染
+ * 手机端容器、宽视口渲染桌面卡片，**URL 不被视口改写**（2026-09-25）。
+ * `meta.device='mobile'` 只是给主题 store 的基线，分发器会按实际渲染形态纠正。
+ * `beforeEnter` 用页面对象自带的 `preload`（`pv.preload`）—— 预取函数不再手写。
+ */
+const mobilePageRoutes: RouteRecordRaw[] = listPageViews().map(pv => ({
+  path: `m/${pv.page}`,
+  name: `Mobile-${pv.page}`,
+  component: dispatchers[`/src/view/web/${pv.page}/index.vue`],
+  meta: { title: pv.titleOf('mobile'), device: 'mobile' },
+  beforeEnter: withViewPreload(pv.preload, pv.page)
+}));
+
 export const authRoutes: RouteRecordRaw[] = [
-  {
-    path: 'login',
-    name: 'login',
-    component: () => import('@/view/web/login/index.vue'),
-    meta: { title: '安全登录' }
-  },
-  {
-    path: 'register',
-    name: 'Register',
-    component: () => import('@/view/web/register/index.vue'),
-    meta: { title: '账户注册' }
-  },
-  {
-    path: 'forgot-password',
-    name: 'ForgotPassword',
-    component: () => import('@/view/web/forgot-password/index.vue'),
-    meta: { title: '忘记密码' }
-  },
+  ...pageRoutes,
   {
     /*
      * 邮件里的重置链接指向 `/reset-password?token=…`（后端 src/api/user/v1/open.js
@@ -114,39 +138,17 @@ export const authRoutes: RouteRecordRaw[] = [
     redirect: to => ({ path: '/forgot-password', query: to.query, hash: to.hash })
   },
   {
+    // mini-login 是 login 的「紧凑版」独立路由（mini 设备）。只有 login 有这条
+    // 独立入口（MiniLogin 内跳转用的是 `/mini-login` 路径，见 MiniLogin.vue），
+    // register / forgot-password 的 mini 形态由分发器按 `?from=mini` 判定，不单开路由。
     path: 'mini-login',
     name: 'MiniLogin',
-    component: () => import('@/view/web/login/index.vue'),
+    component: dispatchers['/src/view/web/login/index.vue'],
     meta: { title: '快捷登录' }
   }
 ];
 
-export const mobileRoutes: RouteRecordRaw[] = [
-  {
-    // `/m/*` 与 `/<page>` 共用同一套分发器（view/web/<page>/index.vue）：
-    // 窄视口渲染手机端容器、宽视口渲染桌面卡片，**URL 不被视口改写**（2026-09-25）。
-    // `meta.device='mobile'` 只是给主题 store 的基线，分发器会按实际渲染形态纠正。
-    path: 'm/login',
-    name: 'MobileLogin',
-    component: () => import('@/view/web/login/index.vue'),
-    meta: { title: '移动端登录', device: 'mobile' },
-    beforeEnter: withViewPreload(preloadLoginView, 'login')
-  },
-  {
-    path: 'm/register',
-    name: 'MobileRegister',
-    component: () => import('@/view/web/register/index.vue'),
-    meta: { title: '移动端注册', device: 'mobile' },
-    beforeEnter: withViewPreload(preloadRegisterView, 'register')
-  },
-  {
-    path: 'm/forgot-password',
-    name: 'MobileForgotPassword',
-    component: () => import('@/view/web/forgot-password/index.vue'),
-    meta: { title: '移动端重置密码', device: 'mobile' },
-    beforeEnter: withViewPreload(preloadForgotPasswordView, 'forgot-password')
-  }
-];
+export const mobileRoutes: RouteRecordRaw[] = mobilePageRoutes;
 
 export const authFlowRoutes: RouteRecordRaw[] = [
   {

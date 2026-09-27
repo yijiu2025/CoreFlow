@@ -16,6 +16,7 @@
  * @since 2026-09-23
  */
 import type { PackageViews, ViewRegistry } from './registry';
+import { createViewPicker, type ViewPicker } from './picker';
 import { isThemePage } from './page';
 
 /** 页面名 = 版式目录名 = 路由 path 的末段（如 register）；与主题 id 同规则 */
@@ -44,6 +45,10 @@ export interface PageViews {
   titleOf(device: string): string;
   /** 该页的版式注册表 */
   registry: ViewRegistry;
+  /** 按优先级挑出版式 id（与页面文件的 `pick*ViewId` 同一个函数） */
+  pick: ViewPicker['pick'];
+  /** 提前把版式 chunk 拉下来（路由守卫调用，不 await） */
+  preload: ViewPicker['preload'];
   /**
    * 各主题包 × 设备在这页各有哪些版式（按"包/设备"排序）
    *
@@ -125,6 +130,8 @@ function buildPages(): Map<string, PageViews> {
         title: page.title,
         titleOf: page.titleOf,
         registry: page.views,
+        pick: page.pick,
+        preload: page.preload,
         packages: page.views.packages()
       });
       continue;
@@ -134,11 +141,14 @@ function buildPages(): Map<string, PageViews> {
     //    判据是**由接口派生**的形态表（见上方 `VIEW_REGISTRY_SHAPE`），不是手抄成员名。
     const registry = Object.values(mod).find(isViewRegistryShape);
     if (!registry) continue;
+    const picker = createViewPicker({ registry });
     pages.set(filePage, {
       page: filePage,
       title: filePage,
       titleOf: () => filePage,
       registry,
+      pick: picker.pick,
+      preload: picker.preload,
       packages: registry.packages()
     });
   }
