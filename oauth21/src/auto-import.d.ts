@@ -131,7 +131,7 @@ declare global {
   export type { UseCountdownReturn } from './composables/useCountdown'
   import('./composables/useCountdown')
   // @ts-ignore
-  export type { LoginResponse, LoginSuccessResponse, LoginUser, EmailVerifyState, UseLoginFlowOptions } from './composables/useLoginFlow'
+  export type { SessionBrief, LoginResponse, LoginSuccessResponse, LoginUser, EmailVerifyState, UseLoginFlowOptions } from './composables/useLoginFlow'
   import('./composables/useLoginFlow')
   // @ts-ignore
   export type { PasswordLevel, PasswordStrength } from './composables/usePasswordStrength'

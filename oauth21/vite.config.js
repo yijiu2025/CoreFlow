@@ -100,7 +100,9 @@ export default defineConfig({
     // 生产不输出 .map 文件（防源码泄露到 dist）
     // 需要调试时单独配 sourcemap: true 单独 build
     sourcemap: false,
-    // chunk 大小警告阈值（Vite 默认 500KB，oauth21 较大组件略超）
-    chunkSizeWarningLimit: 1024
+    // chunk 大小警告阈值：回落 Vite 默认 500 KB。
+    // 实测最大 chunk 仅 170.91 KB，远未触及 500 KB 默认线 —— 此前抬高到 1024 无实际收益，
+    // 反而会掩盖未来的真实膨胀，故回落默认值，让体积告警重新生效。
+    chunkSizeWarningLimit: 500
   }
 });

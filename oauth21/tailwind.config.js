@@ -45,9 +45,18 @@ export default {
         sm: 'calc(var(--radius) - 4px)'
       },
       fontFamily: {
-        outfit: ['Outfit', 'sans-serif'],
-        sora: ['Sora', 'sans-serif'],
-        sans: ['DM Sans', 'Source Sans 3', 'system-ui', 'sans-serif'],
+        // 系统字体栈（不再依赖 Google Fonts 外链）。outfit/sora 此前零使用，已移除；
+        // 如需品牌标题字体请自托管子集，再在此处加回对应族名。
+        sans: [
+          'Inter',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'PingFang SC',
+          'Microsoft YaHei',
+          'system-ui',
+          'sans-serif'
+        ],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace']
       },
       keyframes: {

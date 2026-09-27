@@ -16,13 +16,11 @@
          万一某个内核连这条最简写法也丢，由 src/utils/viewport-fix.ts 兜住整页比例。 -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Enterprise SSO Login</title>
-    <!-- Preconnect to Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Outfit:wght@400;600;700&family=Sora:wght@400;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- 字体：不再外链 Google Fonts（DM Sans / Outfit / Sora）。
+         理由：外链 CSS 是渲染阻塞资源，国内可达性差会导致 FOUT 甚至长时间空白，
+         且引入第三方域名隐私合规成本。正文字体降级为系统字体栈
+         （见 tailwind.config.js 的 fontFamily.sans），视觉差异可接受。
+         如需品牌字体，应改为自托管字体子集（中文场景仅保留拉丁子集）。 -->
   </head>
   <body>
     <div id="app"></div>

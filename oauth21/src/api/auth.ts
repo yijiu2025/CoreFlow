@@ -15,6 +15,37 @@ export interface LoginPayload {
 }
 
 /**
+ * 注册请求负载类型
+ *
+ * 字段对齐后端 `POST /user/v1/register`（`src/api/user/v1/open.js`）：
+ * - `username` / `email` / `code`（邮箱验证码）是表单必填；
+ * - `password` 是 RSA 加密后的密文（`kid` 标明用哪把公钥，后端据此解密）；
+ * - `captchaKey` 为图形验证码 key（先过图形码才发邮箱码）；
+ * - `agreementVersion` / `invite` / `appName` 仅 Mini/Standard 版式透传，
+ *   app 容器不传 —— 故标为可选；`recaptchaToken` 仅在启用 reCAPTCHA 时存在。
+ */
+export interface RegisterPayload {
+  username: string;
+  email: string;
+  /** 邮箱验证码（6 位数字） */
+  code: string;
+  /** RSA 加密后的密码密文 */
+  password: string;
+  /** 加密所用公钥的 kid（后端据此选私钥解密） */
+  kid: string | null;
+  captchaKey: string;
+  /**
+   * 协议版本快照（`useAgreementVersion` 的 `AgreementVersionSnapshot` 结构）。
+   * 这里内联字段而非 import 该类型：api 层不应反向依赖 composable 层
+   * （composable 会 import 本文件），避免循环依赖。
+   */
+  agreementVersion?: { serviceVersion: string; privacyVersion: string; acceptedAt: number };
+  invite?: string;
+  appName?: string;
+  recaptchaToken?: string;
+}
+
+/**
  * 认证相关接口
  *
  * scope 不由前端携带：scope 是 app 属性（oauth_clients 表已存），后端 directLogin
@@ -91,9 +122,9 @@ export const authApi = {
 
   /**
    * 注册请求
-   * @param data 注册信息
+   * @param data 注册信息（密码已 RSA 加密，字段契约见 RegisterPayload）
    */
-  async register(data: any) {
+  async register(data: RegisterPayload) {
     return request.post('/user/v1/register', data);
   },
 

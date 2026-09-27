@@ -15,6 +15,11 @@ const i18n = createI18n({
         requesting_permissions: '请求的权限',
         deny: '拒绝',
         approve: '批准'
+      },
+      // 组件模板里 `t('auth.required')` 渲染必填标记「（必需）」——缺这个 key 会
+      // 让 vue-i18n 回退成 key 字面量 `auth.required`，`（必需）` 断言静默失败。
+      auth: {
+        required: '必需'
       }
     }
   }
