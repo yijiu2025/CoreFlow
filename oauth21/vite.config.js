@@ -1,75 +1,9 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import path from 'path';
-import { readFileSync } from 'node:fs';
 import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { createSvgIconsPlugin } from 'vite-plugin-svg-icons';
-import { VitePWA } from 'vite-plugin-pwa';
-
-/** 惰性主题资产的产出目录名（PWA 预缓存按它整目录排除，见 globIgnores） */
-const LAZY_THEME_DIR = 'lazy-theme';
-
-/**
- * 内置主题包 id 的**唯一来源**：内核包常量，不在构建配置里再写一份字面量
- *
- * 构建期要按它区分「内置包的版式（首屏可能用）」与「别的包的版式（惰性）」。
- * 解析失败就抛 —— 宁可构建期炸，也不要静默退回一个字面量、让排除规则错位。
- */
-const BUILTIN_THEME_PKG = (() => {
-  const file = path.resolve(import.meta.dirname, '../packages/theme-core/src/constants.ts');
-  const matched = /DEFAULT_THEME_PACKAGE\s*=\s*'([a-z0-9-]+)'/.exec(readFileSync(file, 'utf8'));
-  if (!matched) {
-    throw new Error(`没从 ${file} 读到 DEFAULT_THEME_PACKAGE：构建配置要靠它判定哪些版式属于内置包`);
-  }
-  return matched[1];
-})();
-
-/** 主题包源码根目录（统一成正斜杠，Windows 下也要能前缀比对） */
-const THEMES_SRC = path.resolve(import.meta.dirname, 'src/theme/themes').replace(/\\/g, '/');
-
-/** 去 query、统一分隔符：`.../colors/cyan/theme.scss?inline` → `.../colors/cyan/theme.scss` */
-const normalizeId = id => String(id ?? '').replace(/\\/g, '/').split('?')[0];
-
-/**
- * 这个源文件属于「惰性主题资产」吗 —— 决定它产出到 `lazy-theme/` 还是 `assets/`
- *
- * === 为什么需要它 ===
- * 主题与版式是**刻意按需加载**的：第一跳只该有内置包三设备的版式与首屏配色，
- * 其它靠 `import.meta.glob` 切出的 chunk「用到才下」。但 `vite-plugin-pwa` 默认把
- * **整棵 dist** 塞进 precache，于是"按需"在生产首访被静默还原成"全下"——
- * dev 期看不出来（`devOptions` 关着），只有量产物才发现。
- *
- * 要让 SW 把惰性资产排除，`globIgnores` 只能按**产物路径**匹配，而默认产物名是
- * `assets/<basename>-<hash>.js`，直接用 basename 必然误伤：
- *   • 配色 `theme.scss`（`?inline`）切出的 chunk 叫 `theme-*.js`
- *     —— 与 `stores/theme.ts` 那个 50 kB chunk **撞名**，按名字排除会把 store 也排掉；
- *   • compact 包版式切出的 chunk 叫 `register-*.js` —— 与一堆路由 chunk 撞名。
- * 所以先把「惰性」写进**路径**（`lazy-theme/`），再让 SW 排除整个目录：
- * 规则与源目录口径一一对应，且与构建哈希无关。
- *
- * 判定口径（与关卡 `verify-theme-dirs.mjs` 的目录口径同源）：
- *   • `themes/<包>/<设备>/<页面>/colors/<配色>/theme.scss`
- *                                     → **永远惰性**（配色附加样式，选到才要）
- *   • `themes/<非内置包>/…`            → 惰性（换包/换版式才要）
- *   • `themes/<内置包>/…`              → 保留（三设备版式首屏可能就要）
- *
- * ⚠️ 本段注释里**不能**出现「星号紧跟斜杠」的字符组合（写 glob 时最容易顺手写出来）：
- *    它会提前闭合块注释，报的错会落在下面的正文上（`colors is not defined` 之类），
- *    排查时很难联想到注释。这个坑本仓踩过两次（见 types.ts 的同类告警）。
- *
- * @returns `'lazy-theme'` = 排除出预缓存；`null` = 走默认 `assets/`
- */
-function lazyThemeDir(sourceId) {
-  const id = normalizeId(sourceId);
-  if (!id.startsWith(`${THEMES_SRC}/`)) return null;
-  if (id.endsWith('/theme.scss')) return LAZY_THEME_DIR;
-  const pkg = id.slice(THEMES_SRC.length + 1).split('/')[0];
-  return pkg === BUILTIN_THEME_PKG ? null : LAZY_THEME_DIR;
-}
-
-/** 统一的产出路径：`<目录>/[name]-[hash]<尾巴>`（目录由 lazyThemeDir 决定） */
-const themedFileNames = (dir, tail) => `${dir ?? 'assets'}/[name]-[hash]${tail}`;
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -91,41 +25,28 @@ export default defineConfig({
     createSvgIconsPlugin({
       iconDirs: [path.resolve(import.meta.dirname, 'src/assets/icons')],
       symbolId: 'icon-[dir]-[name]'
-    }),
-    VitePWA({
-      registerType: 'autoUpdate',
-      workbox: {
-        /**
-         * 预缓存**不收录**惰性主题资产（`lazy-theme/` 整个目录，见上面的 lazyThemeDir）
-         *
-         * 用户口径（2026-09-26）：「第一次访问要用到的主题和版式是固定的（桌面 / mini / 手机版
-         * 都在内置包里），缓存那些就够了；其它惰性主题和版式不必加载，首访流量最小」。
-         * 代价：离线或二访时用到那些 chunk 会回源 —— 已确认接受，因为它换来的是
-         * "预缓存不跟按需加载的设计对着干"。
-         *
-         * ⚠️ 这条规则**只影响预缓存**，产物照常生成、照常能被请求到；
-         *    改这里之前先想清楚：排除太多 = 首访少下、离线缺件；排除太少 = 首访白下。
-         */
-        globIgnores: ['**/lazy-theme/**']
-      },
-      manifest: {
-        name: 'Enterprise Login',
-        short_name: 'Login',
-        theme_color: '#4f46e5',
-        icons: [
-          {
-            src: '/pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: '/pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
-      }
     })
+
+    // ⛔️ 这里刻意**没有** `VitePWA` —— 2026-09-27 整体移除。
+    //
+    // 判断依据不是"收益不高"，而是**登录页根本不适用**，规范里本来就写着这一条：
+    // `docs/frontend/PWA_GUIDE.md` §一「适用场景：内容型应用…**不适用**：纯登录页（oauth21 用完即走，
+    // 安装价值低）」。也就是说此前的集成是**违反自家规范**的 —— 这条移除是把实现改回规范，不是改规范迁就实现。
+    //
+    // 为什么"收益低"就足以移除：登录页是入口闸门，SW 的首访成本必须每次重付
+    // （全新浏览器 / 无痕 / 清了缓存 / 新用户），而它换来的复用收益恰恰付在最不需要快的地方
+    // （用户不会反复冷启同一个 origin，一次登录能用很久）。
+    //
+    // 直接原因是两条**已实测**的危害，任一都足以定案：
+    //   ① 未配 denylist 的 `NavigationRoute` 会把一切同源 GET 导航顶成预缓存的 index.html
+    //      ⇒ 后端设备码授权页 `/oauth2.1/device`（`verification_uri`，只能靠浏览器导航打开）
+    //        必然不可用。A/B 对照实验坐实：屏蔽 SW 拿到设备页，装过 SW 变成 SPA 骨架。
+    //   ② 预缓存把整棵 dist 写进 `sw.js` 清单，首访多下 780 KB —— 页面自身按需只要 214 KB，
+    //      78% 的流量是这次根本用不到的东西。
+    //
+    // ⚠️ 想加回来之前，先读 `docs/frontend/PWA_GUIDE.md` 第六节「如何移除」：
+    //    光删配置**清不掉**已经装过 SW 的浏览器（它会一直用旧 SW、永远不回源），必须留一次自毁迁移。
+    //    本仓那次迁移就是 `oauth21/public/sw.js`（它的顶部注释写了何时可以删）。
   ],
   resolve: {
     alias: {
@@ -180,19 +101,6 @@ export default defineConfig({
     // 需要调试时单独配 sourcemap: true 单独 build
     sourcemap: false,
     // chunk 大小警告阈值（Vite 默认 500KB，oauth21 较大组件略超）
-    chunkSizeWarningLimit: 1024,
-    rollupOptions: {
-      output: {
-        /**
-         * 惰性主题资产产出到 `lazy-theme/`，其余照旧 `assets/`
-         *
-         * 目的只有一个：让 PWA 那条 `globIgnores` 有东西可精确匹配（见 lazyThemeDir 的长注释）。
-         * ⚠️ 想删掉这两个函数之前先读那段注释 —— 名字级的排除会误伤 `stores/theme.ts`。
-         */
-        chunkFileNames: info => themedFileNames(lazyThemeDir(info.facadeModuleId), '.js'),
-        assetFileNames: info =>
-          themedFileNames(lazyThemeDir(info.originalFileNames?.[0] ?? info.names?.[0]), '[extname]')
-      }
-    }
+    chunkSizeWarningLimit: 1024
   }
 });

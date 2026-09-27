@@ -234,53 +234,67 @@ themes/<包>/<设备>/<page>/index.vue            非内置包版式（`import.m
 - **用 `viewEpoch` 丢弃过期结果**：版式 A→B→A 时，A 的旧 chunk 回来不得覆盖当前状态。
 - **`markRaw` 包组件**，避免组件对象被深层代理。
 
-### 🔴 生产构建的例外：PWA 预缓存会把"惰性"全部拉回来（2026-09-26 定案并已处置）
+### 🔴 生产构建的例外：PWA 预缓存会把"惰性"全部拉回来 —— **已整体移除 PWA**（2026-09-27）
 
-`vite.config.js` 的 `VitePWA`（默认 `generateSW`）会把 **dist 里全部产物写进 `sw.js` 的
-precache 清单**——含每一份本应惰性的配色 `theme.scss` chunk 与 compact 包版式。
-**dev server 下看不到这一层**（`devOptions` 未开），所以 `verify-first-paint-budget.mjs`
-是绿的、按需加载看着完全成立；生产构建下首访实际会发生：
+> 这一节保留完整过程与实测数字，因为它是本仓**最典型的一次「关卡自己也在骗人」**：
+> 三条独立原因叠在一起，让一个会**破坏后端功能**的问题在 dev 期、在页面级探针、在肉眼检查下**全部无感**。
+
+`vite.config.js` 曾有 `VitePWA`（默认 `generateSW`），它把 **dist 全部产物写进 `sw.js` 的 precache 清单** ——
+含每一份本应惰性的配色 `theme.scss` chunk 与其它包的版式。**dev server 下看不到这一层**（`devOptions` 未开），
+所以 `verify-first-paint-budget.mjs` 是绿的、按需加载看着完全成立。生产构建下首访实际发生：
 
 | 口径 | 实测（生产构建，窄屏 `/login`） |
 | --- | --- |
-| 页面自己按需加载的 44 个请求 | **212.5 KB 过线**（未压缩 596 KB；链路带压缩） |
-| SW 预缓存清单（`globIgnores` 之前） | 85 项 **802 KB**（gzip 264 KB） |
-| 其中"只有 SW 才会拉"的净增 | 43 项 **205.6 KB**（gzip 70.5 KB） |
-| **首访合计（处置前）** | ≈ 802 KB（gzip **264 KB**）＝ 整个 dist |
-| **二次访问** | **0.1 KB**（SW 全命中） |
+| 页面自己按需加载 | 46 个请求 · **214.0 KB 过线** |
+| SW 预缓存清单 | 85 项 · **802 KB**（gzip 264 KB） |
+| **首访合计** | ≈ **994 KB** —— 其中 **78%** 是这次根本用不到的东西 |
+| 二次访问 | 0.1 KB（SW 全命中） |
 
-#### 定案：首访流量最小
+#### 第一次处置（2026-09-26）：只把惰性资产排出预缓存
 
-用户口径（2026-09-26，原话）：
+用户口径（原话）：
 
 > 第一次访问时需要使用的主题和版式已经就固定了，桌面、mini、手机版的都有，缓存就好了；
 > 其他惰性主题和版式不需要加载，首访流量最小。
 
-代价（离线 / 二次访问时那些 chunk 要**回源**）已明确接受。落地要**两条一起**才成立：
+落地是**两条一起**：`lazyThemeDir()` 把惰性 chunk 产出到 `lazy-theme/`，再由
+`workbox.globIgnores: ['**/lazy-theme/**']` 整目录排除。清单 85 项 → **76 项 · 780 KB**。
 
-1. **先让"惰性"在产物路径上可见**：`vite.config.js` 的 `lazyThemeDir()` 把「非内置包的版式 chunk」
-   与「全部配色 `theme.scss` chunk」产出到 `lazy-theme/`。
+⚠️ 这条教训**值得留着**：**不能按文件名排除**。产物默认叫 `assets/<basename>-<hash>.js`，
+而配色 `theme.scss`（`?inline`）切出的 chunk 就叫 `theme-*.js` —— 与 `stores/theme.ts` 那个 50 KB chunk
+**撞名**；compact 包版式切出的叫 `register-*.js`，与一堆路由 chunk 撞名。按名字排除必然误伤。
 
-   ⚠️ **不能按文件名排除**。产物默认叫 `assets/<basename>-<hash>.js`，而
-   配色 `theme.scss`（`?inline`）切出的 chunk 就叫 `theme-*.js` —— 与 `stores/theme.ts` 那个 50 KB
-   chunk **撞名**；compact 包版式切出的叫 `register-*.js`，与一堆路由 chunk 撞名。
-   按名字排除必然误伤（把 store 排掉 → 首访反而多一次回源）。
+#### 最终定案（2026-09-27）：整体移除 PWA
 
-2. **SW 排除整个目录**：`VitePWA.workbox.globIgnores: ['**/lazy-theme/**']`。
+排出惰性资产只解决"多下 780 KB"，另外两个问题**排不掉**，其中一个会**破坏后端功能**：
 
-| 口径 | 处置前 | 处置后 |
+1. 🔴 **无 denylist 的 `NavigationRoute` 顶掉一切同源导航**。产物 `sw.js` 末尾是
+   `new NavigationRoute(createHandlerBoundToURL("index.html"))`，workbox 默认 `{allowlist:[/./], denylist:[]}`，
+   而 `createHandlerBoundToURL` 是 **precache-first** ⇒ **服务器返回什么都会被换成预缓存的 index.html**。
+   本仓是**单服务同源**（`docker-compose` 里只有 `nodeservers:local`，Fastify 用 `@fastify/static`
+   同时发前端与 `/oauth2.1/*`），而后端恰好有一个页面**只能靠浏览器导航打开**：
+   `GET /oauth2.1/device`（设备码授权的 `verification_uri`）⇒ **设备码授权 100% 不可用**。
+   A/B 对照实验坐实：屏蔽 SW 拿到设备页，装过 SW 变成 SPA 骨架。
+2. **`registerType: 'autoUpdate'` 会在用户填表单期间静默接管**（skipWaiting + clientsClaim）：旧页面再
+   `import.meta.glob` 动态导入旧 chunk 时缓存已换 ⇒ `Failed to fetch dynamically imported module`。
+   本仓主题/版式全是懒加载，这条尤其高危。
+3. manifest 的 `start_url: '/'` 命中的是 `:pathMatch(.*)*`（前端路由**没有** `/`），且它引用的
+   `/pwa-192x192.png` / `/pwa-512x512.png` 在 `public/` 里**根本不存在**。
+
+而登录页**本来就是规范里写明的"不适用"场景**（`PWA_GUIDE.md` §一：「**不适用**：纯登录页」）——
+所以这次移除是**把实现改回规范**，不是改规范迁就实现。
+
+**落地四件（缺一不可）**
+
+| # | 动作 | 理由 |
 | --- | --- | --- |
-| SW 预缓存清单 | 85 项 · 802 KB（gzip 264 KB） | **76 项 · 780 KB（gzip 257 KB）** |
-| 清单里的惰性资产 | 8 份 `theme.scss` chunk + compact 版式 | **0** |
-| 首访少下 | — | 9 项 · **22.4 KB（gzip 6.8 KB）** |
+| 1 | 删 `VitePWA`（含 `workbox` / `manifest`） | 不再生成 SW 与 manifest |
+| 2 | 回滚 `lazyThemeDir()` 那套路径前缀 | 它**唯一**的理由就是给 `globIgnores` 精确匹配。回滚路径 ≠ 少打包 —— 由 `verify-no-pwa.mjs` D 段守 |
+| 3 | **留一次自毁迁移** `oauth21/public/sw.js` | ⚠️ 最容易漏：光删配置**清不掉**已装过 SW 的浏览器，它会一直用旧 SW、永远不回源 |
+| 4 | 关卡改写 | 旧预缓存关卡的判据**正好反了**，见第十节第 5 条 |
 
-**改动前后都必须量**：`.tmp-probe/verify-pwa-precache.mjs`（详见第十节第 5 条）。
-它同时验两件事，缺一个都是半个关卡：
-
-- **排得干净**：`lazy-theme/` 里没有任何文件被预缓存；预缓存里没有 `theme.scss` 编译出的 chunk
-  （判据：JS chunk 内含 `data-mauth-theme`，那是主题样式表的选择器前缀）。
-- **排得够少**：入口 HTML、入口 chunk（`assets/index-*.js`）、内置包三设备版式**都还在**清单里 ——
-  把入口一起排掉会让首访第一次请求就回源，比不排更糟。
+⛔ **不要顺手删掉** `oauth21/public/sw.js`：它顶替 `/sw.js` 这个 URL，靠浏览器原生的 SW 更新检查被取到，
+清空全部 Cache Storage 并注销自己。等旧 SW 装机量归零（建议 ≥2 个发布周期）才能删 —— 判据写在文件头注释里。
 
 ## 六、契约与编译期自检
 
@@ -480,15 +494,23 @@ tokens: {
    用 `.tmp-probe/measure-load-budget.mjs`：它跑**生产构建**（`vite build --outDir <全新目录>` →
    `vite preview`）并用 CDP 记 `encodedDataLength`，自带两轮（`--block-sw` 隔离页面按需 /
    不屏蔽看真实首访）。**量流量必须新建 outDir**（沙箱会拦已存在目录的清理）。
-5. **PWA 预缓存关卡（生产产物 + `sw.js`）**：`.tmp-probe/verify-pwa-precache.mjs`（无浏览器，纯文件）。
-   它与第 4 条是**一对**：第 4 条量"页面自己请求了什么"（dev 口径 / 请求条数），这条量
-   "Service Worker 会替首访预取什么"（生产口径 / KB）。两者都会因"惰性被拉回来"而红，但成因不同 ——
-   前者管源码与容器写法，后者管**产物路径与 workbox 配置**。
-   判定：① `lazy-theme/` 里任何文件都不得出现在预缓存清单里，清单里不得有 `theme.scss` 编译出的 chunk
-   （判据：JS chunk 内含 `data-mauth-theme`）；② 入口 HTML、入口 chunk、内置包三设备版式**必须都在**清单里。
-   只有①是半个关卡 —— 把入口一起排掉会让首访第一次请求就回源（见第五节）。
-   它同时打印"预缓存 X 条 · gzip Y kB / 未预缓存 Z 条"，改 `globIgnores` 或 `lazyThemeDir()` 后照它报数。
-   实测：85 项 802 KB（gzip 264 KB）→ **76 项 780 KB（gzip 257 KB）**。
+5. **PWA 关卡（生产产物，一对，2026-09-27 改写）**：
+   - `.tmp-probe/verify-no-pwa.mjs`（**无浏览器，纯文件**）—— 守"PWA 别静默回来"。判据四段：
+     **A** `index.html` 无 manifest 链接 / 无 SW 注册注入；**B** 产物无 `manifest.webmanifest`、无 `workbox-*.js`、
+     JS chunk 里无 workbox 运行时符号；**C** `sw.js` **只能是自毁迁移版**（含 `skipWaiting` + 清 cache +
+     `unregister`，且不含 `precacheAndRoute` / `NavigationRoute` / 预缓存清单字面量）；
+     **D** 惰性主题 chunk 仍在产物里且回到默认 `assets/`（**回滚路径 ≠ 少打包**）。
+   - `.tmp-probe/verify-sw-migration.mjs`（Playwright，跑生产产物）—— 守"**已装过 SW 的老浏览器迁移真的生效**"。
+     它往产物里临时放一个「假老 SW」（留缓存 + 劫持导航）先复现 P0，再用真 `/sw.js` 接管**同一个 scope**
+     （同 scope 换 scriptURL ＝ 老用户的真实升级路径），断言缓存清空 + registration 注销 + 导航回源。跑完自动清理。
+
+   ⚠️ **为什么不能用第 4 条的探针代劳**：SW 的 install 跑在**独立的 ServiceWorker target** 上，
+   page 级的 CDP `Network.enable` **一个字节都看不见**（实测 `--block-sw` 与不屏蔽两轮数字**一字不差**，
+   还报出"清单里首访不会请求的有 0 项"这种自我安慰的结论）。预缓存那一层只能用产物 `sw.js` 与 `caches` 遍历来量。
+
+   📌 历史脚本：`verify-sw-hijack.mjs`（用真实旧产物复现 P0）与 `measure-sw-download.mjs`（量 SW 预缓存下载量）
+   **需要带 PWA 的旧产物**；在新产物上会全绿 / 量到 0 —— 那正是预期。旧的 `verify-pwa-precache.mjs` 已退场
+   （它的判据与新关卡**正好相反**），逻辑并入 `verify-no-pwa.mjs` 的 C 段。
 6. **门禁**：`npm run type-check`（= `vue-tsc -b`）必须绿，且按第六节做**毒丸验证**。
 7. **视觉回归**：遵循[视觉回归归因三铁律](/frontend/coding-standard) ——
    ① 先稳定化（冻结过渡/动画 + 等 `fonts.ready`，冻结样式须在**加载后**注入并**断言生效**）；
@@ -625,7 +647,7 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 | **拉宽窗口后颜色"自己变了"** | 窄屏 `?theme.mobile=blue` 是蓝的，拉宽成电脑端后变白 | **不是 bug，是设计的"自动下沉"**：`blue` 只在 `mobile/` 下登记，电脑端按**同系别**回落到标配 `white`（`data-mauth-theme` 也会被摘掉 —— 没命中就不许写）。想让两端都是同一套色，必须**在电脑端也建一份该配色目录**，或链接里显式钉 `?theme=white`。关卡 A 段守这条（`verify-responsive-switch.mjs`） |
 | **宽屏首访会白拉移动端版式 chunk** | `/m/login` 在宽视口下其实渲染桌面卡片，但守卫仍预取了 mobile 那套 | 已知取舍（`withViewPreload` 的 `PRELOAD_DEVICE='mobile'`，代价仅一个 chunk）。根因：`/m/*` 与 `/<page>` 共用分发器，**导航时还判断不出最终形态**。要省就先算 `isMobileViewport()` 再决定预取哪个设备 |
 | **非内置包版式的预取只覆盖 `/m/*` 的 mobile 端** | 在 `/login`（电脑端路由）打开、视口变窄时，非内置包的手机端版式要**现场拉**（可能闪一下） | `beforeEnter` 只挂在 `mobileRoutes` 上。现状不痛是因为**三形态容器已被分发器 `onMounted` 预热**、内置包版式又是静态引入（实测形态切换 **+0 请求**）；一旦某个非内置包同时有 mobile+standard 版式，就要给 `authRoutes` 也补守卫（按 `isMobileViewport()` 选设备） |
-| **首访流量远大于"按需加载"该有的数** | dev 下首屏只拉该拉的，生产上首访却是整个 dist（本仓 801 KB） | PWA 预缓存（`VitePWA` 默认 `generateSW`）把全部产物写进 `sw.js`。**dev 看不见**（`devOptions` 未开）。要首访最省就给 workbox 加 `globIgnores`；要离线性就接受。量它用 `measure-load-budget.mjs`（见第五节） |
+| **首访流量远大于"按需加载"该有的数 / 后端页面被顶成登录页** | dev 下首屏只拉该拉的、页面级探针也全绿，生产上首访却是整个 dist（本仓实测 ≈994 KB，页面自身只需 214 KB）；设备码授权页 `/oauth2.1/device` 打不开，返回的是 SPA 骨架 | **PWA 预缓存 + 无 denylist 的 `NavigationRoute`**（`VitePWA` 默认 `generateSW`）。**dev 看不见**（`devOptions` 未开），**page 级探针也看不见**（SW 的下载走独立 target）。oauth21 已整体移除 PWA（见第五节）；排查用 `verify-no-pwa.mjs` / `verify-sw-migration.mjs` |
 
 ## 本仓现状
 
