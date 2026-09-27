@@ -35,18 +35,16 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 
 ## 3. oauth21 → **details §11**（细则/实测数据全在那里）
 
-### 3.1 设备 / 包 / 版式 / 配色结构（2026-09-25 三值化定案）
+### 3.1 设备 / 包 / 版式 / 配色
 
-- 🔴 **设备三值** `THEME_DEVICES = ['mobile','standard','mini']`，与分发器 `activeForm`（mobile/mini/standard）一一对应。
-  **mini 是独立设备**（iframe 紧凑版），不是 web/standard 下的变体子目录；电脑端设备目录是 `themes/<包>/standard/`。
-  路由层目录 `view/web/` **不改名**（那是电脑端路由语义）。
-- 🔴 **分发器 renderedDevice 三映射** mobile→'mobile'、mini→'mini'、standard→'standard'；`setupThemeDeviceSync` 兜底 `'standard'`
-  （非 mobile 即 standard），且**只听 `route.meta.device`**，别听整个 currentRoute（query 噪声会误触发）。
-- 🔴 **`pageFromPath` 会剥 `mini-` 前缀**（`/mini-login` → login）：不剥则调试面板在 mini 路由上推不出页面 → 版式/配色区全空。
+> **结构描述**（设备三值、`renderedDevice` 三映射、`setupThemeDeviceSync` 只听 `route.meta.device`、
+> `pageFromPath` 剥 `mini-` 前缀、注册表键五段、路由级 fade 默认非 `out-in`）→ **details §11.17**。
+
+- 🔴 **设备三值平级** `mobile|standard|mini`（mini 是**独立设备**，不是变体子目录；路由层 `view/web/` 不改名）。
 - **版式优先级** `?view=` > 包声明 `views.<page>` > `VITE_<PAGE>_VIEW` > 当前包名；URL 显式非法值**不回退**；新增版式目录要重启 dev server。
 - 🔴 **新版式下 view ≡ pkg**（v2.18.5）：登记的 view = 包名，`'base'` 不是合法 view 名；`findRecord/getThemeRecord` 必须接收 pkg。
 - **跨包切版式 → 配色自动重置到新包默认色**（现为 `DEFAULT_THEME_COLOR`）：要跨包**比样式**必须 URL 钉 `&theme=`（否则比的是配色差）。
-- **配色注册表键 = 五段**（`包/设备/页面/版式/配色`）；配色**每版式各一份**，漏了静默回落；tokens 是扁平值，无 light/dark 两档。
+- 🔴 **配色注册表键 = 五段**（`包/设备/页面/版式/配色`）；配色**每版式各一份**，漏了静默回落；tokens 扁平无 light/dark 两档。
 - **明暗 = 配色系别**：`isDark = 当前配色 tone`；每套配色必填 `tone`；点色卡同步 mode、切 mode 联动配色；跨设备回落**先按同系别**
   （关卡 F 段）；`themeId` 不随设备变，`getThemeRecord` 回落先取同系别首套。
 - 🔴 **URL `?theme=`/`?skin=` 设备无关**（`readUrlIntent` 读 `location.search`，不限设备）：能否生效只看该设备 `colors/` 有无该配色，
@@ -91,30 +89,29 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 - 临时脚本放 `.tmp-probe/`（唯一 gitignore 项）。**oauth21 的 Playwright 关卡长期留在 `.tmp-probe/verify-*.mjs`**，改前先跑当基线。
 - 🔴 **起 dev server 必须服务本身当后台命令**（`run_in_background`）；端口：5174=code · 5175=link · 5177=compact · 5197=color-peer · 5184=panel-v3 · **5189=dist 预览（流量实测）**（跑前探活）。
 - 🔴 **量首屏流量必须用生产构建**（dev 每模块一请求，无意义）+ **必须新建 outDir**（`dist-*` 已 gitignore）：
-  `vite build --outDir dist-measure-N` → `vite preview --outDir … --port 5189` → `measure-load-budget.mjs`（`--block-sw` 只看页面口径）。
-  ⚠️ **dev 看不见的真相：PWA 预缓存**（`VitePWA` 默认 `generateSW`）会照 dist **全量**写进 `sw.js`（曾 85 项/802 KB，
-  首访 gzip 264 KB）；`verify-first-paint-budget.mjs` 绿 ≠ 生产首访轻。
-  ✅ **2026-09-26 已收口**：惰性主题 chunk 走 `lazy-theme/` 前缀 + `workbox.globIgnores` 排除 → **76 项/780 KB（gzip 257 KB）**；
-  判据看 `.tmp-probe/verify-pwa-precache.mjs`（无浏览器，读 `sw.js` 清单）。改 `globIgnores`/`lazyThemeDir()` 后必跑它。
-  🔴 **多实例必须串行启动**（前一个 curl 到 200 再起下一个）：几个 Vite 共用 `node_modules/.vite`，
-  同时冷启会互相废掉 optimizeDeps → 页面白屏 + 控制台 `504 (Outdated Optimize Dep)`（客户端 `?v=<hash>` 已过期）。
+  `vite build --outDir dist-measure-N` → `vite preview --outDir … --port 5189` → `measure-load-budget.mjs`。
+  🔴 **这个口径看不见 SW 流量**（SW install 跑在独立 target，不在 page 的 Network 域）—— 曾据此误判"SW 无成本"。
+- ✅ **oauth21 的 PWA 已于 2026-09-27 整体移除**（它本就是 `PWA_GUIDE.md` §一写的「**不适用**：纯登录页」→ 此前**违反自家规范**）：
+  首访 **994 KB → 213.5 KB**；`VitePWA` / `workbox` / `lazy-theme` 前缀全删。🔴 **光删配置清不掉老用户** →
+  `oauth21/public/sw.js` 是**自毁迁移脚本**（顶替 `/sw.js`，靠浏览器原生更新检查清缓存并注销自己），**旧装机量归零才可删**。
+  关卡：`verify-no-pwa.mjs`（17 项 + 毒丸 10/10）、`verify-sw-migration.mjs`（8/8）；旧 `verify-pwa-precache.mjs` 已退场（判据反了）。
+- 🔴 **workspaces 共用根 `node_modules`** → 删任一 workspace 的依赖**前先 `npm ls <包>`**（`vite-plugin-pwa` 仍被 `posecraft` 依赖，
+  按"oauth21 不用了"的直觉移走包体会**连带弄坏 posecraft**，已踩一次）。
+- ℹ️ **行尾混合、但每文件内部一致**（258 文件：113 LF / 142 CRLF / **0 混用**）；`core.autocrlf=true` 让 git 归一化，
+  **工作区行尾不影响 diff**。惯例：配置与脚本 LF，`src/` 源码多为 CRLF。**别做批量转换**。
+- 🔴 **多实例必须串行启动**（前一个 curl 到 200 再起下一个）：几个 Vite 共用 `node_modules/.vite`，同时冷启会互相废掉
+  optimizeDeps → 白屏 + `504 (Outdated Optimize Dep)`。**删依赖后**首启还会被沙箱拦在"清 `.vite/deps`"（>50 文件）→ 先 `mv` 走 `.vite` 再起。
 
 ## 5. 部署 / CI（细则全在 details §10）
 
 改 `ci.yml` / Dockerfile 前先读 details §10：CI 安装三件套 · Dockerfile tini 按实际路径建软链 · response schema 覆盖信封全字段 ·
 生产三 secret ≥32 位 · 复刻树验收 `git archive HEAD | tar -x` 到**仓库外**。
 
-## 6. 待办
+## 6. 待办 / 进度
 
-- ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**。P2 session.js 拆分评估**未开始**。
-- `firewall` 前端无类型检查（121 错）；CI 无前端作业——均待定夺。
-- ✅ `oauth21` eslint 存量已清零（`no-undef` 已在 eslint.config.js 置 off 由 TS 处理；`AntiCacheDebugPanel.vue` 的
-  `preserve-caught-error` 已补 `{ cause: err }` 修复）。
-- ✅ oauth21 三页（login/register/forgot-password）的 **standard/mini 容器+版式拆分已全部完成**（v2.21.0–v2.23.0），
-  设备三值化（mobile/standard/mini）+ mini 独立设备目录均已落地。
-- ✅ **主题抽包 Stage 1 已完成**：`packages/theme-core`（`mauth-theme-core`，源码直供）= 纯叶子层
-  （constants/tokens/tone/mode/types/views-params + 具名 barrel），`oauth21/src/theme/` 同路径变零逻辑壳；
-  默认 = `default` 包 + `white`（显式常量 `DEFAULT_THEME_COLOR`）；版式选择收口 `views/picker.ts`。
-  ⏳ **Stage 2 未做**：`runtime.ts` 注入器 → 注入点 `ThemeAssets`/`ThemeEnv`/`ThemeHost`。
+- ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**；P2 `session.js` 拆分评估未开始；`firewall` 前端无类型检查（121 错）；CI 无前端作业 —— 均待定夺。
 - ⚠️ 卡关脚本欠账：`verify-theme.mjs` 期望值仍按旧配色名（已 `exit 2` 自检）；面板三件套仍按 `'base'` 断言。
 - ⚠️ `phonecopy` 是**嵌套 git 仓**（不在 `.gitmodules`）→ 永远显示脏，`release.mjs` 会拒发，需 `--allow-dirty`。
+- ✅ **主题抽包 Stage 1 已完成**（`packages/theme-core` 纯叶子层 + 零逻辑壳；默认 `default`+`white`；版式选择收口 `views/picker.ts`）。
+  ⏳ **Stage 2 未做**：`runtime.ts` 注入器 → `ThemeAssets` / `ThemeEnv` / `ThemeHost`。
+- ✅ 历史已完成（细节可查 git log）：oauth21 三页 standard/mini 容器+版式拆分、设备三值化、eslint 存量清零（v2.21.0–v2.23.0）。

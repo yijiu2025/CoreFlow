@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>前端架构评审：可维护性、可读性与安全 · nodeServers</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#101828; --ink2:#475467; --ink3:#667085;
+    --line:#e4e7ec; --line2:#d0d5dd;
+    --crit:#b42318; --crit-bg:#fef3f2; --crit-line:#fecdca;
+    --warn:#b54708; --warn-bg:#fffaeb; --warn-line:#fedf89;
+    --ok:#067647;  --ok-bg:#ecfdf3;  --ok-line:#abefc6;
+    --info:#175cd3; --info-bg:#eff8ff; --info-line:#b2ddff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 80px}
+
+  header{padding:56px 0 32px;border-bottom:2px solid var(--ink)}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:16px}
+  h1{margin:0 0 14px;font-size:34px;line-height:1.25;letter-spacing:-.02em;font-weight:700}
+  .sub{color:var(--ink2);font-size:16px;max-width:76ch;margin:0 0 24px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px}
+  .tag{font:500 12px/1 var(--mono);padding:7px 11px;border-radius:6px;background:#f2f4f7;color:var(--ink2);border:1px solid var(--line)}
+
+  section{padding-top:44px}
+  h2{font-size:22px;margin:0 0 6px;letter-spacing:-.01em;font-weight:700;display:flex;align-items:baseline;gap:12px}
+  h2 .num{font:600 13px/1 var(--mono);color:#fff;background:var(--ink);padding:5px 8px;border-radius:5px;position:relative;top:-2px}
+  h3{font-size:16px;margin:28px 0 10px;font-weight:650}
+  .lead{color:var(--ink2);margin:0 0 20px;max-width:78ch}
+  p{margin:0 0 12px}
+  code{font:13px/1.5 var(--mono);background:#f2f4f7;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:#344054}
+  .path{font:12px/1.5 var(--mono);color:var(--ink2);background:#f9fafb;border:1px solid var(--line);border-radius:5px;padding:2px 7px;display:inline-block}
+
+  .verdict{background:var(--panel);border:1px solid var(--line2);border-left:4px solid var(--warn);border-radius:10px;padding:22px 24px;margin:0 0 8px}
+  .verdict .vtag{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.1em;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);padding:5px 9px;border-radius:5px;margin-bottom:12px}
+  .verdict p{margin:0 0 8px}
+  .verdict p:last-child{margin-bottom:0}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:20px 0 4px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .kpi .k{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:6px}
+  .kpi .l{font-size:12.5px;color:var(--ink3);line-height:1.45}
+  .kpi.crit .k{color:var(--crit)} .kpi.warn .k{color:var(--warn)} .kpi.ok .k{color:var(--ok)}
+
+  .finding{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin:0 0 14px}
+  .finding.crit{border-left:4px solid var(--crit)}
+  .finding.warn{border-left:4px solid var(--warn)}
+  .finding.ok{border-left:4px solid var(--ok)}
+  .fhead{display:flex;align-items:flex-start;gap:11px;margin-bottom:12px;flex-wrap:wrap}
+  .fid{font:700 12px/1 var(--mono);padding:5px 8px;border-radius:5px;flex:none;margin-top:2px}
+  .fid.crit{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line)}
+  .fid.warn{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line)}
+  .fid.ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line)}
+  .ftitle{font-size:16px;font-weight:660;line-height:1.4;flex:1;min-width:200px}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;background:var(--panel)}
+  th{text-align:left;font:650 11.5px/1.4 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);
+     padding:10px 12px;border-bottom:2px solid var(--line2)}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fcfcfd}
+  td.num{font:13px/1.5 var(--mono);white-space:nowrap;font-weight:600}
+  .st{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:4px;white-space:nowrap;display:inline-block}
+  .st.open{color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line)}
+  .st.done{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line)}
+  .st.part{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line)}
+  .st.p0{color:#fff;background:var(--crit)}
+  .st.p1{color:#fff;background:var(--warn)}
+  .st.p2{color:var(--ink2);background:#f2f4f7;border:1px solid var(--line2)}
+
+  .note{border-radius:9px;padding:14px 17px;margin:14px 0;font-size:14px;border:1px solid}
+  .note.crit{background:var(--crit-bg);border-color:var(--crit-line)}
+  .note.warn{background:var(--warn-bg);border-color:var(--warn-line)}
+  .note.info{background:var(--info-bg);border-color:var(--info-line)}
+  .note.ok{background:var(--ok-bg);border-color:var(--ok-line)}
+  .note .nt{font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono);display:block;margin-bottom:7px}
+  .note.crit .nt{color:var(--crit)} .note.warn .nt{color:var(--warn)}
+  .note.info .nt{color:var(--info)} .note.ok .nt{color:var(--ok)}
+  .note p:last-child{margin-bottom:0}
+
+  .fig{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px;margin:18px 0;overflow-x:auto}
+  .figcap{font-size:12.5px;color:var(--ink3);margin-top:14px;text-align:center}
+
+  ul.clean{margin:10px 0;padding-left:20px} ul.clean li{margin-bottom:7px}
+  .score{font:700 15px/1 var(--mono)}
+  .stars{color:#dc6803;letter-spacing:1px}
+
+  footer{margin-top:52px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink3);font-size:12.5px}
+  @media print{body{background:#fff}.finding,.verdict,.fig,.kpi{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Frontend Architecture Review</div>
+  <h1>前端架构评审：可维护性、可读性与安全</h1>
+  <p class="sub">
+    评估对象 <strong>oauth21</strong> 及其所在的 <strong>nodeServers</strong> mono-repo 前端面
+    （oauth21 · posecraft · firewall · packages/*）。技术栈 Vue 3.5 + Vite 8 + Pinia 3 + TypeScript strict。
+    本报告基于<strong>代码级独立取证</strong>：依赖审计、配置与源码静态统计、既有验收关卡实测。
+    每条结论都附可复核的命令或数字，不做印象式评价。
+  </p>
+  <div class="meta">
+    <span class="tag">评估日期 2026-09-27</span>
+    <span class="tag">方法：npm audit + 静态统计 + 关卡实测</span>
+    <span class="tag">oauth21 129 源文件</span>
+    <span class="tag">3 前端工程 / 3 工作区包</span>
+    <span class="tag">审计 34 项（1 严重 · 15 高危）</span>
+  </div>
+</header>
+
+<!-- ══════════════ 01 结论 ══════════════ -->
+<section>
+  <h2><span class="num">01</span>总体结论</h2>
+
+  <div class="verdict">
+    <span class="vtag">核心判断</span>
+    <p><strong>设计是健康的，问题几乎全在工程化。</strong>这套前端的架构意识明显高于平均水平：
+    主题 / 设备 / 版式三个正交维度拆得干净，"一个主题包 = 一种版式"这条约束被落成了可执行断言；
+    依赖方向（<span class="path">themes → 容器 → theme-vue → theme-core</span>）有静态守卫；
+    验收关卡<strong>能自己变红</strong>（毒丸验证 8/8 命中）。这些都是"设计对了"的证据，
+    <strong>不需要推倒重来</strong>。</p>
+
+    <p>真正拖后腿的是三条<strong>工程化缺口</strong>，且互为因果：</p>
+    <p>① <strong>生产依赖带 1 严重 + 15 高危漏洞，且没有任何机制会提醒你</strong> ——
+    <code>@fastify/static</code> 的路径穿越可绕过路由守卫、<code>nodemailer</code> 可被注入邮件头，
+    两者都在生产请求路径上。</p>
+    <p>② <strong>三个前端工程完全不在 CI 里</strong> —— 类型闸门、ESLint、主题关卡全部只在本地跑。
+    后端有 3 条 CI 作业 + 82 个测试文件，前端是 0 条作业 + 4 个测试文件。这个落差是整份报告里最大的一处。</p>
+    <p>③ <strong>依赖不可复现</strong> —— <code>package-lock.json</code>（847 KB）被 <code>.gitignore</code> 排除，
+    CI 只能靠 <code>--legacy-peer-deps</code> 现算整棵依赖树。根因是 <code>packages/log</code> 是个不在
+    <code>.gitmodules</code> 里的嵌套 git 仓，lockfile 无法整体入库。</p>
+
+    <p><strong>一句话结论：这是一套"设计 4 星、工程化 2 星"的前端。</strong>
+    把 CI 补上、把漏洞修掉，综合分能从 72 走到 85 以上，而不需要动一行架构。</p>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi crit"><div class="k">34</div><div class="l">依赖漏洞<br>1 严重 · 15 高危 · 17 中</div></div>
+    <div class="kpi crit"><div class="k">0</div><div class="l">前端 CI 作业<br>（后端 3 条）</div></div>
+    <div class="kpi warn"><div class="k">905</div><div class="l"><code>stores/theme.ts</code> 行数<br>30 个顶层概念</div></div>
+    <div class="kpi warn"><div class="k">65%</div><div class="l">主题层注释占比<br>（代码只占 1/3）</div></div>
+    <div class="kpi warn"><div class="k">6+1</div><div class="l">声明但零引用的<br>前端依赖（+1 类型包）</div></div>
+  </div>
+</section>
+
+<!-- ══════════════ 02 评分 ══════════════ -->
+<section>
+  <h2><span class="num">02</span>五维度评分</h2>
+  <p class="lead">四个能力维度各 25 分，加总为百分制综合分。评分依据均为本次实测数字，逐维度给了扣分点。</p>
+
+  <table>
+    <thead>
+      <tr><th>维度</th><th>得分</th><th>评级</th><th>扣分依据（可复核）</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>技术栈健康度</strong></td>
+        <td class="num">20 / 25</td>
+        <td class="stars">⭐⭐⭐⭐</td>
+        <td>
+          <strong>加分</strong>：Vue 3.5 + <code>script setup</code> + Pinia 3 + TS <code>strict</code>；
+          类型闸门口径已修正为 <code>vue-tsc -b</code>（裸 <code>vue-tsc</code> 在本仓会空转，已修）；
+          ESLint 禁 <code>v-html</code>/<code>eval</code>/<code>no-script-url</code>。<br>
+          <strong>扣分</strong>：<code>npm audit</code> 报 34 项漏洞（仅生产依赖 23 项）；
+          6 个依赖声明后零引用；<code>bcryptjs</code> 仍在依赖里（合理 —— 仅用于校验历史 <code>$2b$</code> 哈希）。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>架构设计模式</strong></td>
+        <td class="num">18 / 25</td>
+        <td class="stars">⭐⭐⭐⭐</td>
+        <td>
+          <strong>加分</strong>：三正交维度（主题 / 设备 / 版式）职责清晰；"包即版式"约束落成断言；
+          <code>theme-core</code> 抽包后依赖方向可断言；iframe 父 origin 白名单单一来源且用类型谓词收窄；
+          后端 firewall 分层单向 + 守卫测试。<br>
+          <strong>扣分</strong>：<code>stores/theme.ts</code> 905 行、30 个顶层概念，把"设备上下文 / 配色系别 /
+          token 注入 / 落盘 / URL 意图"五件事塞进一个 store；版式模板跨设备近重复（最高 81.8%）。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>工程化成熟度</strong></td>
+        <td class="num">15 / 25</td>
+        <td class="stars">⭐⭐⭐</td>
+        <td>
+          <strong>加分</strong>：后端 CI 三作业（lint / test / 跨进程 verify）设计得相当讲究，
+          注释里写清了每条 <code>--flag</code> 的成因；82 个后端测试文件；关卡有退出码语义（0/1/2/3）。<br>
+          <strong>扣分</strong>：<strong>三个前端工程零 CI 覆盖</strong>；前端测试 4 个文件（posecraft / firewall 各 0，
+          且三个前端都没有 <code>test</code> 脚本）；lockfile 不入库 → 依赖不可复现。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>性能与可维护性</strong></td>
+        <td class="num">19 / 25</td>
+        <td class="stars">⭐⭐⭐⭐</td>
+        <td>
+          <strong>加分</strong>：三形态容器预热使形态切换 <strong>0 新请求</strong>（实测 23/23 绿）；
+          首屏请求清单关卡守住了"页面自己按需加载"这一层。<br>
+          <strong>加分</strong>：<strong>PWA 已整体移除</strong>（P0-1，2026-09-27 落地）—— 首访从
+          ≈994 KB 回到 <strong>214 KB</strong>（＝页面自身该有的量），并补了两条<strong>会红</strong>的关卡守着：
+          静态产物断言（17 项 + 毒丸 10/10 全被点亮）＋ 老用户自毁迁移的行为验证（8/8）。<br>
+          <strong>但要留下教训</strong>：原先那条"预缓存 KB"关卡<strong>根本量不到 SW 流量</strong>
+          （CDP 口径挂在 page target 上，而 SW 请求走独立 target）—— 见 03 节。
+          <strong>扣分</strong>：三维矩阵（包 × 设备 × 页面）让文件数线性膨胀，新增一页要动 14–18 个文件；
+          死代码 <code>md5.ts</code>（222 行、零引用）仍在；文档混入 <code>src/</code>。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>综合评分</strong></td>
+        <td class="num">72 / 100</td>
+        <td class="stars">⭐⭐⭐</td>
+        <td>设计层面接近 4 星，工程化层面 2~3 星，加权后落在 3 星。缺口集中且定点可修。</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════ 03 架构分析 ══════════════ -->
+<section>
+  <h2><span class="num">03</span>架构分析：哪里是对的</h2>
+  <p class="lead">先把"不需要动"的部分说清楚 —— 否则后面的整改建议容易被误读成"架构要换"。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 1000 430" width="100%" role="img" aria-label="前端分层与依赖方向">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 z" fill="#475467"/>
+        </marker>
+      </defs>
+
+      <text x="0" y="16" font-family="monospace" font-size="12" fill="#667085">依赖方向（单向，可断言）</text>
+
+      <rect x="10" y="34" width="215" height="70" rx="9" fill="#eff8ff" stroke="#b2ddff"/>
+      <text x="117" y="62" text-anchor="middle" font-size="13.5" font-weight="650" fill="#101828">业务 / 主题包</text>
+      <text x="117" y="82" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#475467">theme/themes/**</text>
+      <text x="117" y="96" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#475467">view/app · view/web</text>
+
+      <rect x="265" y="34" width="215" height="70" rx="9" fill="#ecfdf3" stroke="#abefc6"/>
+      <text x="372" y="62" text-anchor="middle" font-size="13.5" font-weight="650" fill="#101828">框架壳</text>
+      <text x="372" y="82" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#475467">stores/theme · router</text>
+      <text x="372" y="96" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#475467">theme/views · runtime</text>
+
+      <rect x="520" y="34" width="215" height="70" rx="9" fill="#fffaeb" stroke="#fedf89"/>
+      <text x="627" y="62" text-anchor="middle" font-size="13.5" font-weight="650" fill="#101828">内核包（本轮抽出）</text>
+      <text x="627" y="82" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#475467">packages/theme-core</text>
+      <text x="627" y="96" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#475467">零 import.meta / window</text>
+
+      <rect x="775" y="34" width="215" height="70" rx="9" fill="#f2f4f7" stroke="#d0d5dd"/>
+      <text x="882" y="62" text-anchor="middle" font-size="13.5" font-weight="650" fill="#101828">共享包</text>
+      <text x="882" y="82" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#475467">shared-device（设备 ID）</text>
+      <text x="882" y="96" text-anchor="middle" font-family="monospace" font-size="10.5" fill="#475467">log（后端日志）</text>
+
+      <line x1="228" y1="69" x2="262" y2="69" stroke="#475467" stroke-width="1.6" marker-end="url(#ar)"/>
+      <line x1="483" y1="69" x2="517" y2="69" stroke="#475467" stroke-width="1.6" marker-end="url(#ar)"/>
+
+      <text x="0" y="150" font-family="monospace" font-size="12" fill="#667085">三个正交维度（各自独立变，互不越界）</text>
+
+      <rect x="10" y="168" width="310" height="98" rx="9" fill="#ffffff" stroke="#e4e7ec"/>
+      <text x="26" y="192" font-size="13.5" font-weight="650" fill="#101828">① 主题包（= 版式）</text>
+      <text x="26" y="214" font-family="monospace" font-size="11" fill="#475467">themes/&lt;包&gt;/&lt;设备&gt;/&lt;页面&gt;/index.vue</text>
+      <text x="26" y="232" font-family="monospace" font-size="11" fill="#475467">包名 ≡ 版式 id（无变体子目录）</text>
+      <text x="26" y="252" font-family="monospace" font-size="11" fill="#067647">已抽 theme-core，契约可断言</text>
+
+      <rect x="340" y="168" width="310" height="98" rx="9" fill="#ffffff" stroke="#e4e7ec"/>
+      <text x="356" y="192" font-size="13.5" font-weight="650" fill="#101828">② 设备（mobile / standard / mini）</text>
+      <text x="356" y="214" font-family="monospace" font-size="11" fill="#475467">判宽窄与来源，切容器形态</text>
+      <text x="356" y="232" font-family="monospace" font-size="11" fill="#475467">URL 不被视口改写；mini 是独立设备</text>
+      <text x="356" y="252" font-family="monospace" font-size="11" fill="#067647">形态切换 0 新请求（实测）</text>
+
+      <rect x="670" y="168" width="320" height="98" rx="9" fill="#ffffff" stroke="#e4e7ec"/>
+      <text x="686" y="192" font-size="13.5" font-weight="650" fill="#101828">③ 配色（tokens + 可选 theme.scss）</text>
+      <text x="686" y="214" font-family="monospace" font-size="11" fill="#475467">…/colors/&lt;配色&gt;/index.ts</text>
+      <text x="686" y="232" font-family="monospace" font-size="11" fill="#475467">每版式各一份；明暗 = 配色系别</text>
+      <text x="686" y="252" font-family="monospace" font-size="11" fill="#475467">配色 chunk 按需加载（不进预缓存）</text>
+
+      <text x="0" y="300" font-family="monospace" font-size="12" fill="#667085">取值优先级（版式，三页同形，唯一实现在 views/picker.ts）</text>
+
+      <rect x="10" y="316" width="150" height="40" rx="8" fill="#eef4ff" stroke="#b2ddff"/>
+      <text x="85" y="341" text-anchor="middle" font-family="monospace" font-size="11.5" fill="#175cd3">?view.&lt;设备&gt;</text>
+      <rect x="170" y="316" width="130" height="40" rx="8" fill="#eef4ff" stroke="#b2ddff"/>
+      <text x="235" y="341" text-anchor="middle" font-family="monospace" font-size="11.5" fill="#175cd3">?view</text>
+      <rect x="310" y="316" width="175" height="40" rx="8" fill="#f2f4f7" stroke="#d0d5dd"/>
+      <text x="397" y="341" text-anchor="middle" font-family="monospace" font-size="11.5" fill="#475467">包声明 views.&lt;page&gt;</text>
+      <rect x="495" y="316" width="185" height="40" rx="8" fill="#f2f4f7" stroke="#d0d5dd"/>
+      <text x="587" y="341" text-anchor="middle" font-family="monospace" font-size="11.5" fill="#475467">VITE_&lt;PAGE&gt;_VIEW</text>
+      <rect x="690" y="316" width="160" height="40" rx="8" fill="#f2f4f7" stroke="#d0d5dd"/>
+      <text x="770" y="341" text-anchor="middle" font-family="monospace" font-size="11.5" fill="#475467">当前包名</text>
+      <text x="870" y="341" font-size="12" fill="#b42318">非法值不回退</text>
+    </svg>
+    <div class="figcap">图 1 · 分层与依赖方向、三个正交维度、版式取值链。虚线框内是本轮刚抽出的内核包。</div>
+  </div>
+
+  <h3>做对了的三件事（建议保留，别在重构里丢掉）</h3>
+  <ul class="clean">
+    <li><strong>约束被写成了可执行断言，而不是文档里的君子协定。</strong>
+      "页面下不允许有版式层目录""每份版式都要带 <code>data-mauth-view</code> 且值等于包名"
+      —— 这些都以静态断言形式存在（<code>verify-theme-dirs</code>，552 项），
+      并且配了<strong>毒丸脚本</strong>反过来证明"断言真的会红"（8/8 命中）。
+      大多数团队的 lint 规则是恒绿的摆设，这里不是。</li>
+    <li><strong>内核与宿主分离的边界画对了。</strong> <code>packages/theme-core</code> 只放纯叶子层
+      （常量 / token 校验 / 色调 / 模式 / 类型 / 设备参数），并明确禁止出现
+      <code>import.meta</code> / <code>window</code> / <code>document</code> / <code>localStorage</code>。
+      这让"内核知不知道宿主"变成一条可 grep 的规则，而不是靠人自觉。</li>
+    <li><strong>性能不靠感觉，靠关卡 —— 但这次评审也证明"关卡本身会骗人"。</strong>
+      首屏请求清单（dev 口径）确实守住了"页面自己按需加载"这一层，且它会真红。
+      可"再加一条 PWA 预缓存 KB 关卡"这个组合<strong>没能救场</strong>：它读的是 <code>sw.js</code> 清单的
+      <strong>体积</strong>，而真正量流量的 <code>measure-load-budget.mjs</code> 把 CDP
+      <code>Network.enable</code> 挂在 page target 上 —— <strong>SW 发出的请求它一个都看不见</strong>
+      （SW 的 install 跑在独立 target）。于是"屏蔽 SW"与"不屏蔽"两轮数字一字不差，
+      还报出"清单里首访不会请求的有 0 项"这种自我安慰的结论。
+      教训：<strong>关卡要能证明自己量得到东西</strong>，毒丸思维对新关卡同样适用。</li>
+  </ul>
+
+  <div class="note info">
+    <span class="nt">顺带纠正一个常见误读</span>
+    <p><code>theme/views/*.ts</code> 那几个文件看着"很大"（<code>login.ts</code> 15.6 KB），
+    但实测<strong>代码只有 98 行</strong>（236 行里 178 行是注释/空行）。它们并不臃肿，
+    臃肿的是注释。见第 07 节。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 04 可优化点 ══════════════ -->
+<section>
+  <h2><span class="num">04</span>可优化点：P0 / P1 / P2</h2>
+  <p class="lead">按"不修会出事"的程度排序，附预期收益与估算工时（单人、含自测）。</p>
+
+  <table>
+    <thead>
+      <tr><th>优先级</th><th>事项</th><th>预期收益</th><th>工时</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="st p0">P0</span></td>
+        <td><strong>处理 PWA：SW 的 <code>NavigationRoute</code> 正在劫持同源导航</strong>
+          <br><strong>✅ 已于 2026-09-27 整体移除 PWA 并验证</strong><br>
+          <span class="path">oauth21/vite.config.js → VitePWA</span></td>
+        <td>产物 <code>sw.js</code> 末尾注册了
+          <code>NavigationRoute(createHandlerBoundToUrl('index.html'))</code>，构造时未传 denylist
+          ⇒ <strong>一切同源 GET 导航</strong>都被换成预缓存的 <code>index.html</code>。
+          本项目<strong>单服务同源</strong>（Fastify <code>@fastify/static</code> 同时发前端与 <code>/oauth2.1/*</code>），
+          因此 <code>/oauth2.1/device</code>（设备码授权的 <code>verification_uri</code>，后端 <code>text/html</code> 页）
+          会被顶成登录页 → <strong>设备授权流程不可用</strong>。<br>
+          已实测（放标记页做 A/B 对照）：同一 URL 在装过 SW 的浏览器里返回的是 SPA 骨架。
+          另：首访替用户多下 <strong>780 KB</strong>（页面自身只需 214 KB），
+          <code>autoUpdate</code> 还会在用户停留期间静默换掉 chunk。<br>
+          <strong>落地四件</strong>：删 <code>VitePWA</code>（含 workbox / manifest）；
+          回滚 <code>lazy-theme/</code> 路径前缀改造（它唯一的理由就是配合 <code>globIgnores</code>）；
+          留 <code>public/sw.js</code> 自毁迁移（顶替 <code>/sw.js</code>，靠浏览器原生更新检查清空 Cache Storage
+          并注销自己 —— 光删配置清不掉老用户）；关卡改写为 <code>verify-no-pwa.mjs</code>（17 项）
+          + <code>verify-sw-migration.mjs</code>（8/8：造假老 SW 复现劫持 → 真脚本接管 → 断言缓存清空 / 注销 / 回源）。
+          首访实测 994 KB → <strong>214 KB</strong>。</td>
+        <td class="num">已完成</td>
+      </tr>
+      <tr>
+        <td><span class="st p0">P0</span></td>
+        <td><strong>修生产路径上的高危依赖</strong><br>
+          <span class="path">@fastify/static → 10.1.5</span>
+          <span class="path">nodemailer → 10.x</span>
+          <span class="path">sharp → 0.35.4</span>
+          <span class="path">geoip-lite / ip-address</span></td>
+        <td>关掉"静态资源路径穿越绕过路由守卫"与"邮件头注入"两个真实可触发面。
+          <strong>这两条与 P0-1 并列，是本次仅有的对外风险项。</strong></td>
+        <td class="num">2–4h</td>
+      </tr>
+      <tr>
+        <td><span class="st p0">P0</span></td>
+        <td><strong>把 oauth21 纳入 CI</strong>：新增一条前端作业，跑
+          <code>npm run type-check</code>（<code>vue-tsc -b</code>）+ <code>eslint src/</code>，
+          并把 <code>verify-theme-dirs</code> 这类纯文件系统关卡挂上去</td>
+        <td>类型闸门与目录契约从"我记得跑"变成"不跑就红"。
+          后端已有这条路，复用现成模式即可，成本极低收益极高。</td>
+        <td class="num">2–3h</td>
+      </tr>
+      <tr>
+        <td><span class="st p1">P1</span></td>
+        <td><strong>让依赖可复现</strong>：把 <code>wb-logkit</code> 从
+          <code>link: packages/log</code> 改为 npm 版本依赖（它已发布到 npm），
+          然后把 <code>package-lock.json</code> 入库、CI 改用 <code>npm ci</code></td>
+        <td>一次解决三个连带问题：依赖可复现、CI 不再需要
+          <code>--legacy-peer-deps</code> 绕崩溃、供应链版本漂移风险消失。</td>
+        <td class="num">3–4h</td>
+      </tr>
+      <tr>
+        <td><span class="st p1">P1</span></td>
+        <td><strong>拆 <code>stores/theme.ts</code></strong>（905 行 / 30 个顶层概念）
+          → 建议切成 3 块：设备与页面上下文 / 配色与系别 / token 注入与落盘</td>
+        <td>这块是前端最大的可维护性负债。拆完单文件可读性、改动冲突面、单元可测性同时改善。</td>
+        <td class="num">6–8h</td>
+      </tr>
+      <tr>
+        <td><span class="st p1">P1</span></td>
+        <td><strong>清理零引用依赖与死代码</strong>：6 个声明但零 import 的依赖 +
+          <code>src/utils/md5.ts</code>（222 行 / 0 引用）+ <code>src/</code> 内混入的文档</td>
+        <td>减少安装体积与审计面（其中 <code>@vueuse/core</code> 的"零使用"其实已写在
+          <code>vite.config.js</code> 注释里，只是没删）。半小时的活。</td>
+        <td class="num">0.5–1h</td>
+      </tr>
+      <tr>
+        <td><span class="st p2">P2</span></td>
+        <td><strong>版式模板去重</strong>：<code>StandardRegister.vue</code> 与
+          <code>MiniRegister.vue</code> 相似度 81.8%，同页跨设备模板最高重复度也达 39%</td>
+        <td>把公共结构抽成子组件后，新增设备变体的成本从"复制 400 行"降为"组合 3 个子组件"。</td>
+        <td class="num">6–10h</td>
+      </tr>
+      <tr>
+        <td><span class="st p2">P2</span></td>
+        <td><strong>修 ESLint 配置的自相矛盾</strong>：<code>.vue</code> 里把
+          <code>no-explicit-any</code> 设为 <code>warn</code>，随后 <code>.ts</code> 的覆盖块又设为
+          <code>off</code> —— 后者胜出，等于在 <code>.ts</code> 里该规则从未生效</td>
+        <td>规则意图与实际行为一致。修完会暴露一批既有 <code>any</code>，建议先降到
+          <code>warn</code> 再逐步清理。</td>
+        <td class="num">1–2h</td>
+      </tr>
+      <tr>
+        <td><span class="st p2">P2</span></td>
+        <td><strong>给主题层补单元测试</strong>：至少覆盖取值链（<code>picker</code>）与设备回落</td>
+        <td>目前这层只有 Playwright 端到端关卡，缺快速反馈；补单测后改口径不必再起浏览器。</td>
+        <td class="num">6–8h</td>
+      </tr>
+      <tr>
+        <td><span class="st p2">P2</span></td>
+        <td><strong>生产构建缺少 iframe 白名单的自检</strong>：<code>VITE_ALLOWED_PARENT_ORIGINS</code>
+          未配置时会静默回落到 <code>localhost:5176</code></td>
+        <td>失败方向是安全的（拒绝发送），但症状是"宿主弹窗 loading 慢"，
+          没有任何显式提示。加一条 build 期告警即可。</td>
+        <td class="num">1h</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════ 05 使用繁琐度 ══════════════ -->
+<section>
+  <h2><span class="num">05</span>使用是否繁琐</h2>
+  <p class="lead">把"新增一个页面"当成一次真实的开发任务，数一数要动多少文件。这是"用起来是否顺手"最硬的指标。</p>
+
+  <table>
+    <thead><tr><th>任务</th><th class="num">要动的文件数</th><th>清单</th><th>判断</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>新增一个业务页</strong><br>（三设备形态全覆盖）</td>
+        <td class="num">14–18</td>
+        <td>
+          容器 4：<span class="path">view/app/&lt;page&gt;/index.vue</span>
+          <span class="path">view/web/&lt;page&gt;/index.vue</span>
+          <span class="path">Standard&lt;Page&gt;.vue</span>
+          <span class="path">Mini&lt;Page&gt;.vue</span><br>
+          版式 3：<span class="path">themes/default/{mobile,standard,mini}/&lt;page&gt;/index.vue</span><br>
+          配色 ≥6 目录（每设备 black/white）<br>
+          契约 1：<span class="path">theme/views/&lt;page&gt;.ts</span> +
+          改 <span class="path">theme/views/pages.ts</span><br>
+          路由 1：<span class="path">router/routes.ts</span>（含预取守卫）
+        </td>
+        <td><span class="st part">偏繁琐</span><br>矩阵是设计选择，不是错误；但"复制粘贴三份"确实容易漂移</td>
+      </tr>
+      <tr>
+        <td><strong>新增一套配色</strong><br>（只给某个设备某页）</td>
+        <td class="num">1–4</td>
+        <td>补 <span class="path">…/colors/&lt;id&gt;/index.ts</span>（必需），
+          可选 <code>theme.scss</code> + <code>assets/</code></td>
+        <td><span class="st done">很轻</span><br>只需 tokens，不加 SCSS 也能用</td>
+      </tr>
+      <tr>
+        <td><strong>新增一个主题包（版式）</strong></td>
+        <td class="num">1–3</td>
+        <td>建 <span class="path">themes/&lt;新包&gt;/&lt;设备&gt;/&lt;页面&gt;/index.vue</span>
+          （按需补 <code>index.ts</code> 与配色）</td>
+        <td><span class="st done">很轻</span><br>目录名即 id，无需注册中心</td>
+      </tr>
+      <tr>
+        <td><strong>给某页换默认版式（部署级）</strong></td>
+        <td class="num">0</td>
+        <td>改环境变量 <code>VITE_&lt;PAGE&gt;_VIEW</code> 或加 <code>?view=</code></td>
+        <td><span class="st done">很好</span><br>不动代码</td>
+      </tr>
+      <tr>
+        <td><strong>首次搭起本地环境</strong></td>
+        <td class="num">—</td>
+        <td>根 <code>npm install</code>（含 3 个前端 workspace）+ 起多实例时需注意
+          几个 Vite 不能同时冷启（会互相废掉 <code>optimizeDeps</code> 而白屏）</td>
+        <td><span class="st part">有隐性门槛</span><br>这条约束只写在记忆文件里，新人不看就踩</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note warn">
+    <span class="nt">结论</span>
+    <p><strong>改样式、换配色、换版式都很轻（1–4 个文件，且不动代码）；重的是"新增一个业务页"（14–18 个文件）。</strong>
+    这个分布其实是合理的 —— 它把复杂度压在了"新增功能"这种低频操作上，而不是"调外观"这种高频操作上。</p>
+    <p>真正让使用变繁琐的是两处<strong>隐性知识</strong>：① 多 Vite 实例必须串行启动（否则 504 白屏）；
+    ② 沙箱/本机环境下构建必须用全新 <code>outDir</code>。这两条都只存在于项目内部记忆里，
+    应该搬进 <code>README</code> 或 <code>docs/</code>，否则每个新人都会各自踩一遍。</p>
+  </div>
+</section>
+
+<!-- ══════════════ 06 漏洞 ══════════════ -->
+<section>
+  <h2><span class="num">06</span>漏洞与安全风险</h2>
+  <p class="lead">
+    <code>npm audit</code> 实测：全量 <strong>34 项</strong>（1 严重 / 15 高危 / 17 中 / 1 低）；
+    仅生产依赖 <strong>23 项</strong>（1 严重 / 11 高危 / 11 中）。
+    下表只列高危及以上，并标注真实暴露面 —— "构建期"与"运行时"的处置紧急度完全不同。
+  </p>
+
+  <table>
+    <thead><tr><th>包</th><th>等级</th><th>暴露面</th><th>问题</th><th>修复</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>@fastify/static</code></td><td><span class="st open">高</span></td>
+        <td><strong>生产·运行时</strong></td>
+        <td>非规范 URL 路径可绕过路由守卫；路径穿越可读到非预期文件。服务器正是用它发前端静态资源。</td>
+        <td class="num">→ 10.1.5</td>
+      </tr>
+      <tr>
+        <td><code>nodemailer</code></td><td><span class="st open">高</span></td>
+        <td><strong>生产·运行时</strong></td>
+        <td><code>List-*</code> 头注释里的 CRLF 注入 → 可伪造任意邮件头；
+          <code>jsonTransport</code> 会绕过 <code>disableFileAccess</code>/<code>disableUrlAccess</code>。
+          本服务用它发验证码与重置链接。</td>
+        <td class="num">→ 10.0.10<br><span style="font-weight:400;color:#b54708">跨大版本，需回归</span></td>
+      </tr>
+      <tr>
+        <td><code>sharp</code></td><td><span class="st open">高</span></td>
+        <td><strong>生产·运行时</strong></td>
+        <td>继承 libvips / libheif 的多个 CVE（其中含内存安全类）。用于图像处理链路。</td>
+        <td class="num">→ 0.35.4</td>
+      </tr>
+      <tr>
+        <td><code>ip-address</code><br><span style="color:#667085">（经 geoip-lite）</span></td>
+        <td><span class="st open">高</span></td>
+        <td><strong>生产·运行时</strong></td>
+        <td>Address6 的 HTML 输出方法存在 XSS；
+          前导零八进制解析歧义可致 <strong>SSRF 与信任边界绕过</strong>（若用于 IP 判定/加白）。</td>
+        <td class="num">升级或换库</td>
+      </tr>
+      <tr>
+        <td><code>fast-uri</code> · <code>find-my-way</code></td><td><span class="st open">高</span></td>
+        <td><strong>生产·运行时</strong><br><span style="color:#667085">（fastify 间接）</span></td>
+        <td>反斜杠 authority 混淆（host 判断可被绕）；HTTP/2 下的 DDoS 放大。</td>
+        <td class="num">升级</td>
+      </tr>
+      <tr>
+        <td><code>tar</code><br><span style="color:#667085">（经 fabric → canvas → node-pre-gyp）</span></td>
+        <td><span class="st open">严重</span></td>
+        <td>构建期</td>
+        <td>硬链接路径穿越 → 任意文件创建/覆盖。来自 posecraft 的 <code>fabric</code> 链，
+          不进浏览器产物。</td>
+        <td class="num">升级 fabric 链</td>
+      </tr>
+      <tr>
+        <td><code>brace-expansion</code> · <code>js-yaml</code></td><td><span class="st open">高</span></td>
+        <td>构建期 / 工具链</td>
+        <td>指数级展开与合并键链的 DoS（ReDoS 类）。</td>
+        <td class="num">升级</td>
+      </tr>
+      <tr>
+        <td><code>vite</code> ≤ 6.4.2</td><td><span class="st open">高</span></td>
+        <td>开发期</td>
+        <td>optimized deps 的 <code>.map</code> 处理存在路径穿越；
+          <code>launch-editor</code> 在 Windows 下经 UNC 路径泄露 NTLMv2 哈希。</td>
+        <td class="num">升级 vitepress 链<br><span style="font-weight:400;color:#b54708">上游暂无补丁</span></td>
+      </tr>
+      <tr>
+        <td><code>echarts</code> · <code>ajv</code> · <code>fastify</code> ·
+          <code>mysql2</code> · <code>sequelize</code> · <code>uuid</code> · <code>esbuild</code></td>
+        <td><span class="st part">中</span></td><td>混合</td>
+        <td>主要为 DoS 与原型污染类，均已有可用补丁版本。</td>
+        <td class="num">升级</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note crit">
+    <span class="nt">为什么"34 项漏洞"这件事本身比漏洞更值得注意</span>
+    <p>这个项目在<strong>代码层</strong>做了大量安全防护（禁 <code>v-html</code>/<code>eval</code>、
+    白名单化 iframe 父 origin、用类型谓词收窄、密码用 <code>crypto.scrypt</code> 替掉 bcryptjs 的阻塞实现），
+    但在<strong>依赖层</strong>连"有漏洞"这个事实都没有人被告知 —— 根 <code>package.json</code> 里
+    有 <code>audit</code> 脚本，却没有 CI 作业或定时任务去跑它。
+    <strong>建议：在 CI 加一条 <code>npm audit --omit=dev --audit-level=high</code>，
+    或接一个 Dependabot 配置。</strong>否则这类问题永远靠事后发现。</p>
+  </div>
+
+  <h3>代码层安全核查（已逐项验证，含两处排除误判）</h3>
+  <table>
+    <thead><tr><th>检查项</th><th>结论</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>iframe 父 origin 白名单</td><td><span class="st done">好</span></td>
+        <td>单一来源 <span class="path">utils/parent-origins.ts</span>；
+          优先读<strong>不可被父页伪造</strong>的 <code>ancestorOrigins</code>，退化才用 <code>referrer</code>；
+          用类型谓词 <code>origin is string</code> 收窄，避免调用点二次判空。</td>
+      </tr>
+      <tr>
+        <td>白名单未配置时的行为</td><td><span class="st part">需加告警</span></td>
+        <td>生产构建若缺 <code>VITE_ALLOWED_PARENT_ORIGINS</code>，会静默回落到
+          <code>localhost:5176</code>。方向是安全的（拒绝发送），但症状是"宿主弹窗 loading 慢"，
+          <strong>没有任何显式提示</strong>。</td>
+      </tr>
+      <tr>
+        <td>客户端密码加密</td><td><span class="st done">已正确</span></td>
+        <td>曾怀疑依赖 <code>jsencrypt</code> 做客户端 RSA。实测 <span class="path">utils/crypto.ts</span>
+          已改用 <strong>WebCrypto <code>crypto.subtle</code> RSA-OAEP</strong> + 运行时
+          <code>fetchPublicKey()</code>，<code>jsencrypt</code> 零引用。
+          ⚠️ 仍应明确记录边界：客户端加密只防"明文落日志/抓包工具"，<strong>不能替代 TLS</strong>。</td>
+      </tr>
+      <tr>
+        <td>硬编码凭据</td><td><span class="st done">未发现</span></td>
+        <td>全仓跟踪文件扫描 <code>sk-</code>/<code>AKIA</code>/<code>AIza</code>/PEM 私钥：
+          命中项经核对均为误报（<code>.bin</code> 二进制模型文件、以及一处测试对 PEM 头的
+          <code>toContain</code> 断言）。<code>.env.example</code> 全为占位符。</td>
+      </tr>
+      <tr>
+        <td>XSS 防护</td><td><span class="st done">好</span></td>
+        <td>ESLint 层 <code>vue/no-v-html: error</code>、<code>no-script-url</code>、
+          <code>no-implied-eval</code>、<code>no-new-func</code> 全为 error。</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════ 07 可读性 ══════════════ -->
+<section>
+  <h2><span class="num">07</span>代码可读性</h2>
+  <p class="lead">这个项目的可读性问题很特殊：<strong>不是注释太少，而是注释太多</strong>。先说数据。</p>
+
+  <table>
+    <thead><tr><th>文件</th><th class="num">总行</th><th class="num">注释</th><th class="num">有效代码</th><th class="num">注释占比</th></tr></thead>
+    <tbody>
+      <tr><td><code>theme/views/register.ts</code></td><td class="num">236</td><td class="num">178</td><td class="num">58</td><td class="num">75.4%</td></tr>
+      <tr><td><code>theme/views/forgot-password.ts</code></td><td class="num">228</td><td class="num">170</td><td class="num">58</td><td class="num">74.6%</td></tr>
+      <tr><td><code>utils/parent-origins.ts</code></td><td class="num">68</td><td class="num">48</td><td class="num">20</td><td class="num">70.6%</td></tr>
+      <tr><td><code>theme/views/login.ts</code></td><td class="num">315</td><td class="num">217</td><td class="num">98</td><td class="num">68.9%</td></tr>
+      <tr><td><code>stores/theme.ts</code></td><td class="num">906</td><td class="num">584</td><td class="num">322</td><td class="num">64.5%</td></tr>
+      <tr><td><code>theme/views/registry.ts</code></td><td class="num">222</td><td class="num">131</td><td class="num">91</td><td class="num">59.0%</td></tr>
+      <tr><td><code>theme/index.ts</code></td><td class="num">669</td><td class="num">377</td><td class="num">292</td><td class="num">56.4%</td></tr>
+      <tr><td><code>theme/views/picker.ts</code></td><td class="num">110</td><td class="num">61</td><td class="num">49</td><td class="num">55.5%</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok">
+    <span class="nt">这是在夸它</span>
+    <p>注释里记的是<strong>成因与实测数据</strong>，不是"这是一个 ref"这种废话。典型例子：
+    为什么必须换掉 bcryptjs（附 774ms / 649ms / 164ms 三组实测与"不要用
+    <code>monitorEventLoopDelay</code> 量"的警告）、为什么 CI 不能用 <code>npm ci</code>、
+    为什么不能用 <code>monitorEventLoopDelay</code>。
+    这类注释的边际价值极高 —— 它把"为什么这么写"从口头传承变成了仓库资产。</p>
+  </div>
+
+  <h3>但代价也是真实的（三条）</h3>
+  <ul class="clean">
+    <li><strong>注释与实现会漂移，而且已经漂了。</strong>
+      本次评审就抓到一处：<code>verify-theme.mjs</code> 的期望值仍按 <code>ocean</code>/<code>graphite</code>
+      两套早已改名的配色写（38 项失败）。同一份仓库里，"文档承诺的环境变量名"也曾与实现不符。
+      <strong>建议：长注释里凡是"数值/名字/路径"这类会过期的事实，要么写进可执行断言，要么只留规则 + 指向
+      <code>docs/</code>，别把实测数据抄进源码。</strong></li>
+    <li><strong>浏览成本高，改代码时要在注释里"捞"代码。</strong>
+      75% 注释占比意味着打开文件先看到三屏解释。<code>register.ts</code> 里有效代码只有 58 行，
+      但文件有 236 行 —— 改一行要滚动很久。</li>
+    <li><strong>文件体积被注释推大，掩盖了真实结构。</strong>
+      <code>login.ts</code> 显示 15.6 KB 时难以判断它是不是上帝文件；实测代码只有 98 行才松一口气。
+      这种"看起来很大其实不大"会让评审者错判。</li>
+  </ul>
+
+  <h3>其它可读性负债</h3>
+  <table>
+    <thead><tr><th>问题</th><th>证据</th><th>建议</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>上帝 store</td>
+        <td><span class="path">stores/theme.ts</span> 905 行 / 30 个顶层 <code>ref</code>·<code>computed</code>·函数，
+          混合了设备上下文、配色系别、token 注入、localStorage 落盘、URL 意图五个关注点</td>
+        <td>按关注点切 3 块，对外暴露面保持不变（调用方只需改 import 路径）</td>
+      </tr>
+      <tr>
+        <td>模板跨设备近重复</td>
+        <td><code>StandardRegister.vue</code> vs <code>MiniRegister.vue</code> 相似度 <strong>81.8%</strong>；
+          同页 standard vs mini 版式相似度 <strong>61.0%</strong></td>
+        <td>抽公共子组件；这是"三维矩阵"必然的代价，靠组件化而不是靠纪律解决</td>
+      </tr>
+      <tr>
+        <td>死代码未清</td>
+        <td><span class="path">src/utils/md5.ts</span> 222 行、全仓 0 引用，已被 ESLint 显式 ignore
+          （ignore 注释本身写着"保留作历史参考"）</td>
+        <td>删除 —— git 历史本身就是"历史参考"，留在工作区只会让人以为它有用途</td>
+      </tr>
+      <tr>
+        <td>文档混入源码树</td>
+        <td><code>src/</code> 下有 10+ 个 <code>.md</code>：审计报告、<code>claude.md</code>、
+          <code>src/app/user/dao/优化说明.md</code></td>
+        <td>移到 <code>docs/</code>；源码树只留"紧贴实现"的 README</td>
+      </tr>
+      <tr>
+        <td>ESLint 规则自相矛盾</td>
+        <td><code>no-explicit-any</code> 在 <code>.vue</code> 块为 <code>warn</code>，
+          随后在 <code>.ts</code> 块被覆盖为 <code>off</code> → 后者胜出</td>
+        <td>统一为 <code>warn</code>，先暴露存量再分批清理</td>
+      </tr>
+      <tr>
+        <td>零引用依赖</td>
+        <td>6 个：<code>jsencrypt</code> · <code>dayjs</code> ·
+          <code>lodash-es</code> · <code>socket.io-client</code> · <code>@unhead/vue</code> ·
+          <code>@vueuse/core</code>，另加 1 个类型包 <code>@types/crypto-js</code>
+          （已用全量符号 grep 排除"自动导入"造成的误判）</td>
+        <td>删；<code>@vueuse/core</code> 的"零使用"其实已写在 <code>vite.config.js</code> 注释里</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════ 08 结论 ══════════════ -->
+<section>
+  <h2><span class="num">08</span>结论与行动顺序</h2>
+
+  <table>
+    <thead><tr><th>顺序</th><th>动作</th><th>为什么排这个位置</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>处理 PWA（P0-1）<strong>✅ 已完成 2026-09-27</strong></td>
+        <td>唯一<strong>确定会触发</strong>的功能破坏项，且改动面最小（一个配置文件 + 一次 SW 迁移）。
+          实测首访 994 KB → <strong>214 KB</strong>；老用户迁移由 <code>verify-sw-migration.mjs</code> 端到端证明</td></tr>
+      <tr><td class="num">2</td><td>修生产依赖漏洞（P0-2）</td>
+        <td>需先做风险评估；与 P0-1 并列的两项对外风险</td></tr>
+      <tr><td class="num">3</td><td>给 oauth21 加 CI 作业（type-check + eslint + 目录关卡）</td>
+        <td>做完这一步，后面所有整改才"不跑就红"</td></tr>
+      <tr><td class="num">4</td><td>lockfile 可复现（wb-logkit 改 npm 依赖）</td>
+        <td>CI 稳定的前提；顺带消掉 <code>--legacy-peer-deps</code> 这个绕行</td></tr>
+      <tr><td class="num">5</td><td>拆 <code>stores/theme.ts</code> + 清死代码/零引用依赖</td>
+        <td>纯内部质量，无外部风险，可在 CI 保护下安全推进</td></tr>
+      <tr><td class="num">6</td><td>模板去重 / 补单测 / 隐性知识进文档</td>
+        <td>长期收益项，可与功能迭代并行消化</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note info">
+    <span class="nt">关于"是否要按建议全做"</span>
+    <p>本报告只给出基于证据的优先级建议，<strong>不构成唯一正确决策</strong>。
+    例如模板 81.8% 的重复度，如果产品形态已稳定、三个月内不会再动版式，
+    那么"抽子组件"的收益远低于"把 CI 补上"。<strong>架构没有银弹，合适的才是最好的。</strong></p>
+  </div>
+</section>
+
+<footer>
+  <p><strong>免责声明</strong>：本报告基于对仓库的静态分析、依赖审计（<code>npm audit</code>）与既有验收关卡实测生成，
+  评分与优先级为经验性判断，<strong>仅供参考</strong>；实际重构决策请结合团队情况、发布节奏与业务优先级综合判断。</p>
+  <p>评估范围：<code>oauth21/</code>、<code>firewall/</code>、<code>posecraft/</code>、<code>packages/*</code>
+  及根工程配置；后端 <code>src/</code> 仅在依赖与 CI 交叉处涉及。
+  报告生成于 2026-09-27。仓库内所有凭据均未进入本报告。</p>
+</footer>
+
+</div>
+</body>
+</html>
