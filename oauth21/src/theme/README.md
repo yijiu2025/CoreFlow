@@ -19,16 +19,16 @@
 src/theme/
 ├── index.ts            配色注册表：扫描 主题包 / 设备 / 页面 / 配色（机制）
 │                       + 转发内核包常量（`DEFAULT_THEME_*` / `THEME_DEVICES` …）
-├── types.ts            主题包 / 配色的契约                    —— 壳 → mauth-theme-core
-├── tone.ts             配色自带的明暗系别（白系 / 黑系，参与明暗联动）—— 壳 → mauth-theme-core
-├── mode.ts             明暗三态（浅色 / 深色 / 跟随系统）—— 与配色正交；壳 → mauth-theme-core
+├── types.ts            主题包 / 配色的契约                    —— 壳 → skinsuite
+├── tone.ts             配色自带的明暗系别（白系 / 黑系，参与明暗联动）—— 壳 → skinsuite
+├── mode.ts             明暗三态（浅色 / 深色 / 跟随系统）—— 与配色正交；壳 → skinsuite
 ├── remote.ts           后端下发的换配色配置
 ├── runtime.ts          token 注入（往根节点写 inline 变量）
 │                       ⚠️ 白名单校验已进内核包，这里只转发 + 做注入
 ├── views/              版式机制（架构层）：契约 + 注册表，与主题包无关
 │   ├── registry.ts     版式注册表工厂（「业务容器 + 可换 UI」机制）
 │   ├── params.ts       URL 参数读取：`theme.<设备>` / `view.<设备>`（含通用参数回退）
-│   │                                                        —— 壳 → mauth-theme-core
+│   │                                                        —— 壳 → skinsuite
 │   ├── pages.ts        页面版式总览（调试面板用）
 │   ├── login.ts        login 页的契约 + 注册表
 │   ├── register.ts     register 页的契约 + 注册表

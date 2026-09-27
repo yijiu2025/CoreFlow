@@ -27,7 +27,7 @@
       "@/*": ["./src/*"],
       "stable-deviceid": ["../packages/shared-device/src/index.ts"],
       "stable-deviceid/*": ["../packages/shared-device/src/*"],
-      "mauth-theme-core": ["../packages/theme-core/src/index.ts"]
+      "skinsuite": ["../packages/theme-core/src/index.ts"]
     }
   },
   "include": [

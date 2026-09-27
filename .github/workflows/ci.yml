@@ -139,7 +139,7 @@ jobs:
   # oauth21 是**独立前端项目**（有自己的 package.json / node_modules / lock），
   # 不是 workspace 成员，因此用 `npm install --prefix oauth21` 独立安装，而不是
   # `--workspace=oauth21`。
-  # 两个本地包 `mauth-theme-core` / `stable-deviceid` **不在** package.json 里 ——
+  # 两个本地包 `skinsuite` / `stable-deviceid` **不在** package.json 里 ——
   # 它们靠 `vite.config.js` 的 resolve.alias 直指 `../packages/*/src/index.ts`
   # （源码直供，不依赖 node_modules 符号链接），源码随 checkout 天然存在，
   # 所以独立 install 即可构建，无需 workspace 联动。

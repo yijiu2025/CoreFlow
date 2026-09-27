@@ -7,9 +7,10 @@
 
 - **`packages/log/` 与 `phonecopy/` 是嵌套 git 仓**（不在 .gitmodules）→ `git status` 恒显示脏；`release.mjs` L338 已过滤 phonecopy → 正常发版**不需** `--allow-dirty`。
 - 🔴 **`packages/theme-core/` 是 submodule**（指向 <https://github.com/yijiu2025/theme>，见 `.gitmodules`）→ **克隆主仓必须 `--recurse-submodules`**（oauth21 的 vite alias / tsconfig paths 直接指它 `src/index.ts`，缺了构建就炸）。
-  改内核**去 theme 仓提**再回来 bump gitlink；它已发布 npm 包 `mauth-theme-core`（2026-09-27 起 0.1.0）。
+  改内核**去 theme 仓提**再回来 bump gitlink；它已发布 npm 包 **`skinsuite`**（2026-09-27 起 0.1.0，旧名 `mauth-theme-core` 已 deprecated）。
+  ⚠️ 宿主侧的 vite alias / tsconfig paths / vitest alias 的**键**必须跟着包名走，改名要三者同改（漏一处就静默找不到模块）。
 - 🔴 **oauth21 / posecraft / firewall 是独立前端项目，非 workspace 成员**（各有独立 package.json / node_modules / lock；根 `workspaces` 虽列了它们但 CI 安装只装 `packages/shared-device` 一个 workspace）。
-  它们引用本地包（`mauth-theme-core` / `stable-deviceid`）靠 **vite alias + tsconfig paths 源码直供**（`../packages/*/src/index.ts`），**不得在 package.json 用 `workspace:*` 声明**；给 oauth21 装依赖用 `npm install --prefix oauth21`，CI job 要 `submodules: recursive`。
+  它们引用本地包（`skinsuite` / `stable-deviceid`）靠 **vite alias + tsconfig paths 源码直供**（`../packages/*/src/index.ts`），**不得在 package.json 用 `workspace:*` 声明**；给 oauth21 装依赖用 `npm install --prefix oauth21`，CI job 要 `submodules: recursive`。
 - **本机 git ref 失灵**：status 谎报 ahead、push 可能数分钟零输出 → **以 `git ls-remote origin main` 为准**，超时≠失败。
   push 后异常：`node "C:/Users/22701/.workbuddy/tools/fix-packed-refs.mjs" "<完整40位SHA>"`。
 - **发版**：提交推送后**顺手发不必问**：`node scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；
@@ -102,11 +103,11 @@ Fastify（顺序/`onRoute`/`preClose`/`OPTIONAL_LOADERS`/`/health/*`）· Redis 
   **新查出（此前未记录）**：① 测试体系实际为 0（`__tests__` 4 文件无任何命令执行，且让 lint 红 38 项）·
   ② **husky pre-commit 两行全被注释**且 lint-staged 只配 `src/**` 管不到前端 · ③ **跨大版本依赖分裂**
   （根 vite 5.4.21/vue-i18n 9 vs oauth21 vite 8.2.2/vue-i18n 11）· ④ 僵尸依赖 5 个零引用 ·
-  ⑤ 幽灵依赖 `mauth-theme-core`（只靠 vite alias）· ⑥ 双 lock · ⑦ 主 CSS 单体 64 KB + Google Fonts 外链 ·
+  ⑤ 幽灵依赖 `skinsuite`（被 `src/theme/` 多文件 import，只靠 vite alias）· ⑥ 双 lock · ⑦ 主 CSS 单体 64 KB + Google Fonts 外链 ·
   ⑧ `view/web/login/index.vue` L54 `sign.value = query.rnd`（应为 `query.sign`）· ⑨ `chunkSizeWarningLimit:1024` 掩盖告警。
   **P0 只需 ≈3 人日**：CI 加前端 job + vitest 落地 + 恢复 husky。
 - ⚠️ 卡关欠账：`verify-theme.mjs` 期望值仍按旧配色名（已 `exit 2` 自检）。
-- ⏳ **主题抽包 Stage 2 未做**：`runtime.ts` 注入器 → `ThemeAssets` / `ThemeEnv` / `ThemeHost`（Stage 1 `packages/theme-core` 已完成，**并已作为 `mauth-theme-core@0.1.0` 发 npm + 独立仓**，自带 README/CHANGELOG/CI）。
+- ⏳ **主题抽包 Stage 2 未做**：`runtime.ts` 注入器 → `ThemeAssets` / `ThemeEnv` / `ThemeHost`（Stage 1 `packages/theme-core` 已完成，**并已作为 `skinsuite@0.1.0` 发 npm + 独立仓**，自带 README/CHANGELOG/CI）。
   🔴 发新版：在那仓跑 `npm version <major|minor|patch> && git push --follow-tags`，`prepack` 会自动构建 dist；
   🔴 包内 `src` 的相对 import **必须带 `.js` 后缀**（NodeNext 产物要能被原生 ESM 解析），测试跑 `node --test`（**不能**写 `node --test test/`，Windows 下会被当成模块路径报 MODULE_NOT_FOUND），且是测 **dist** 不是 src。
 - ✅ **主题改造 B1→B6 + B5 四段键已落地**（2026-09-27）：判据由接口派生 · 修失修关卡 · 包自描述 `coverage` · 页面工厂 ·

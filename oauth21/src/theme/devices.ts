@@ -3,7 +3,7 @@
  *
  * === 这个文件解决什么 ===
  * 「有哪些设备」原先散在四个地方，且每处都是**代码里的 if-链**：
- *   ① `mauth-theme-core` 的 `THEME_DEVICES = ['mobile','standard','mini']`（词汇表）
+ *   ① `skinsuite` 的 `THEME_DEVICES = ['mobile','standard','mini']`（词汇表）
  *   ② 三个分发器各自的 `activeForm`（判定 + 渲染哪个组件）
  *   ③ `router/routes.ts` 手写的三条路由（`/login`、`/m/login`、`/mini-login`）
  *   ④ 调试面板的 `DEVICE_LABELS`
@@ -34,7 +34,7 @@
  * @since 2026-09-27
  */
 import type { Component } from 'vue';
-import { THEME_ID_RE } from 'mauth-theme-core';
+import { THEME_ID_RE } from 'skinsuite';
 
 /** 设备容器的惰性加载器（与 `import.meta.glob` 的取值形态一致） */
 export type DeviceContainerLoader = () => Promise<{ default: Component }>;

@@ -1,7 +1,7 @@
 /**
  * 主题包契约 —— **re-export 壳**（2026-09-26 抽包 Stage 1）
  *
- * 实现已迁到工作区包 `mauth-theme-core`（`packages/theme-core/src/types.ts`）。
+ * 实现已迁到工作区包 `skinsuite`（`packages/theme-core/src/types.ts`）。
  * 本文件只做转发，作用有两个：
  *   1. `@/theme/types` 这个导入面**一个字不变** —— 30 多个配色/版式文件都用它取
  *      `MauthThemeColor` / `MauthThemePackage`，少改一处就少一份漂移风险；
@@ -16,4 +16,4 @@ export type {
   MauthThemePackage,
   MauthThemeColor,
   MauthThemeRecord
-} from 'mauth-theme-core';
+} from 'skinsuite';

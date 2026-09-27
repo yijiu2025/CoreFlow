@@ -31,7 +31,7 @@
 | 改「一个主题包 = 一种版式」的结构 | 2026-09-26 已定案（见 [multi-theme.md](/frontend/multi-theme)），抽包**不**动结构 |
 | SSR / 非 DOM 渲染目标 | 当前 target 只有浏览器。内核本身已无 DOM，将来要支持再补适配器即可 |
 | 把 `themes/**` 搬进包 | 版式实现与配色数据是**业务资产**（认证页长什么样），随应用走 |
-| 随大盘一起发版 | 内核包有**自己的仓库与版本号**（<https://github.com/yijiu2025/theme>，npm 包 `mauth-theme-core`），与本仓的发版通道无关 |
+| 随大盘一起发版 | 内核包有**自己的仓库与版本号**（<https://github.com/yijiu2025/theme>，npm 包 `skinsuite`），与本仓的发版通道无关 |
 
 ## 二、现状盘点（全部有出处）
 
@@ -78,8 +78,8 @@
 
 | 层 | 归属 | 装什么 | 依赖 |
 | --- | --- | --- | --- |
-| 内核 | `packages/theme-core`（`mauth-theme-core`） | 常量与白名单、`types`、`tone`、`mode`、参数读取、token 形态与校验、配色注册表、版式注册表工厂、回退链 | **零运行时依赖**（`Component` 等 Vue 类型用 `import type`） |
-| 壳 | `packages/theme-vue`（`mauth-theme-vue`） | Pinia store、DOM 应用（inline token + `theme.scss` 节点）、存储适配、系统偏好订阅、glob 适配器、调试出口 | `vue` + `pinia` + `mauth-theme-core` |
+| 内核 | `packages/theme-core`（`skinsuite`） | 常量与白名单、`types`、`tone`、`mode`、参数读取、token 形态与校验、配色注册表、版式注册表工厂、回退链 | **零运行时依赖**（`Component` 等 Vue 类型用 `import type`） |
+| 壳 | `packages/theme-vue`（`mauth-theme-vue`） | Pinia store、DOM 应用（inline token + `theme.scss` 节点）、存储适配、系统偏好订阅、glob 适配器、调试出口 | `vue` + `pinia` + `skinsuite` |
 | 应用 | 各前端仓库 | `themes/**`（版式 + 配色）、`view/app/<page>/`（容器）、每页 ctx 契约、路由接线 | 上面两个包 |
 
 ### 3.2 依赖方向（单向，可断言）
@@ -96,7 +96,7 @@ themes/**  →  容器（业务）  →  theme-vue  →  theme-core
 
 ```
 packages/theme-core/
-├── package.json           name: mauth-theme-core，源码直供（exports 指 src）
+├── package.json           name: skinsuite，源码直供（exports 指 src）
 └── src/
     ├── index.ts           唯一公开出口（barrel，显式具名导出）   ✅ Stage 1
     ├── constants.ts       设备 / 页面 / 默认包 / 默认配色 / id 白名单  ✅ Stage 1
@@ -116,7 +116,7 @@ packages/theme-core/
 表里没有的名字不该出去（内部正则、解析器等）；`export *` 会让承诺变成隐式清单，
 加一个内部导出就悄悄扩大了对外的面。
 
-> ⚠️ **子路径导出（`mauth-theme-core/tone`）本期不提供**。宿主的 `resolve.alias` / `paths`
+> ⚠️ **子路径导出（`skinsuite/tone`）本期不提供**。宿主的 `resolve.alias` / `paths`
 > 当前直接指到 `src/index.ts`，子路径根本解析不到；要支持就得同时补 `package.json` 的
 > `exports` 子路径与别名里的通配 —— 两张表要一起维护，而目前**一个调用点都没有**。
 > 等真有宿主需要"只拿某一小块"时再加，加的时候记得两处同改。
@@ -189,7 +189,7 @@ interface ThemeHost {
 **Vite 适配器（应用侧，约 15 行）**：
 
 ```ts
-import { createColorRegistry } from 'mauth-theme-core';
+import { createColorRegistry } from 'skinsuite';
 
 const assets = {
   packages: Object.values(import.meta.glob('./themes/*/index.ts', { eager: true }) as any).map(m => m.default),
@@ -229,7 +229,7 @@ const assets = {
    - 内核源码（剔掉注释后）不得出现 `import.meta` / `window.` / `document.` / `localStorage` /
      非 `import type` 的 `vue` / `vue-router` / `axios`·`fetch` / `@/` 别名；
    - `src/index.ts` 必须含全部关键导出，且**不用 `export *`**；
-   - `src/theme/` 下的壳文件除「注释 + 从 `mauth-theme-core` 转发」外**空无一物**（"同一时刻只有一个实现"）。
+   - `src/theme/` 下的壳文件除「注释 + 从 `skinsuite` 转发」外**空无一物**（"同一时刻只有一个实现"）。
    对应的毒丸 ⑦（内核塞 `window.location`）与 ⑧（壳里塞 `const __logic = 1`）都必须让关卡变红。
 
 ## 八、风险与回滚
@@ -239,7 +239,7 @@ const assets = {
 | 抽包期间出现"两份真相"（`src` 与包各有一份实现） | 铁律：**同一时刻只有一个实现**，另一侧只允许是 re-export 壳。壳文件里不得有任何逻辑 |
 | 守卫脚本按路径读源码 → 迁一个文件就要改一堆断言 | 已引入 `implText(['views/params.ts'])` 这类解析器：候选相对路径 × 两个根目录，实现搬走不用改断言 |
 | `vue-tsc -b` 与"工作区源码包"不兼容 | 已有先例：`stable-deviceid` 用 `tsconfig.app.json` 的 `paths` + `include` 指到 `packages/shared-device/src/**`，Vite 侧用 `resolve.alias` 指同一份源码。照抄这套 |
-| 包被先于成熟度发布出去后失去控制 | **已发布**（2026-09-27）：`mauth-theme-core@0.1.0` 已上线 npm，并有**自己的仓库与版本号**（<https://github.com/yijiu2025/theme>）。本仓以 submodule 方式挂它，改动不必混进业务提交；0.x 阶段允许重命名，Stage 2 及以后按 semver 发版 |
+| 包被先于成熟度发布出去后失去控制 | **已发布**（2026-09-27）：`skinsuite@0.1.0` 已上线 npm，并有**自己的仓库与版本号**（<https://github.com/yijiu2025/theme>）。本仓以 submodule 方式挂它，改动不必混进业务提交；0.x 阶段允许重命名，Stage 2 及以后按 semver 发版 |
 | 抽包改动混进业务改动 | 每期独立提交，提交信息里写清"纯迁移"或"行为变更"；纯迁移的提交**不得**同时改行为 |
 
 **回滚**：任一期回滚 = 把包内文件移回 `src/theme/` 原路径、删壳。因为导入面没变、`implText` 兼容两处，
@@ -250,7 +250,7 @@ const assets = {
 - 当前 oauth21 已有 **3 设备 × 3 页面** 的完整拆分（`default` + `compact` 两个主题包），
   配色按「包 × 设备 × 页面」分布（`black`/`white` 处处都有，`blue`/`cyan` 仅手机端，`rainbow` 仅手机端登录页）。
 - **Stage 0 已完成**（默认色收口 / 预取缺口 / picker 工厂）。
-- **Stage 1 已完成**（2026-09-26）：`packages/theme-core`（`mauth-theme-core`，源码直供）落地纯叶子层
+- **Stage 1 已完成**（2026-09-26）：`packages/theme-core`（`skinsuite`，源码直供）落地纯叶子层
   —— `constants` / `tokens` / `tone` / `mode` / `types` / `views/params` 六个模块 + barrel；
   `oauth21/src/theme/` 侧 `tone.ts` / `mode.ts` / `types.ts` / `views/params.ts` 变**零逻辑转发壳**，
   `index.ts` 转发常量、`runtime.ts` 转发 token 校验（本体只剩注入动作）。
@@ -259,7 +259,7 @@ const assets = {
   界面级判据：`type-check` / `eslint` 0 错、`verify-theme-dirs` 552/552、八枚毒丸全中、`docs:build` exit 0。
 - **Stage 1 已对外发布**（2026-09-27）：包有了自己的仓库（<https://github.com/yijiu2025/theme>，
   本仓以 **submodule** 挂在 `packages/theme-core`，克隆时要带 `--recurse-submodules`）与
-  npm 包名 `mauth-theme-core@0.1.0`（MIT / 零依赖 / ESM + `dist`，`prepack` 自动构建）。
+  npm 包名 `skinsuite@0.1.0`（MIT / 零依赖 / ESM + `dist`，`prepack` 自动构建）。
   本仓因此**不再直接跟踪**包内文件 —— 改内核去那个仓提，业务仓不受污染。
   ⚠️ 消费侧（Vite `resolve.alias` + `tsconfig.app.json` 的 `paths`）仍指**源码**，
   所以本地 `packages/theme-core/src/**` 就是宿主看到的那一份，无需重新安装。
