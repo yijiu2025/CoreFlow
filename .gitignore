@@ -33,7 +33,7 @@ docs/.vitepress/config.ts.timestamp-*.mjs
 # wb-log 已独立成库（https://github.com/yijiu2025/log），经 npm workspace 软链使用
 packages/log/
 packages/log-backup-*/
-# 注：主题内核 mauth-theme-core 同样是独立仓（https://github.com/yijiu2025/theme），
+# 注：主题内核 `skinsuite` 同样是独立仓（https://github.com/yijiu2025/theme，npm 同名已发布），
 #     但它是以 **submodule** 方式挂进来的（见 .gitmodules），因此不在此处忽略。
 
 架构文件/kx-lang-extension/
