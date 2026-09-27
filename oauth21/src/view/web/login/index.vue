@@ -7,6 +7,7 @@ import AntiCacheDebugPanel from '@/components/common/AntiCacheDebugPanel.vue';
 import { postToParent } from '@/utils/parent';
 import { useThemeStore } from '@/stores/theme';
 import { DEFAULT_THEME_PACKAGE, type ThemeDevice } from '@/theme';
+import { pickDeviceId, deviceContext } from '@/theme/devices';
 
 const route = useRoute();
 
@@ -18,7 +19,6 @@ const appEntrance = ref('web');
 const bizParams = ref(''); // 业务透传占位（父应用用，未启用下游使用）
 const notLoadSsoView = ref(false);
 const notKeepLogin = ref(false);
-const isMobile = ref(false);
 const qrCodeFirst = ref(false);
 // 使用防缓存功能
 const {
@@ -49,7 +49,6 @@ watch(
     bizParams.value = (query.bizParams as string) || '';
     notLoadSsoView.value = query.notLoadSsoView === 'true';
     notKeepLogin.value = query.notKeepLogin === 'true';
-    isMobile.value = query.isMobile === 'true';
     qrCodeFirst.value = query.qrCodeFirst === 'true';
     stie.value = (query.stie as string) || '02';
     rnd.value = (query.rnd as string) || '0.7164508668310778';
@@ -92,28 +91,11 @@ const onDebugPanelClose = () => {
 // 动态路由/参数分发逻辑
 // 🔴 形态判定**单一来源**：activeForm 既决定渲染哪个组件，也决定主题的设备作用域
 //    —— 两件事必须同源，否则会出现"渲染的是手机端、主题却是电脑端那套"。
-const activeForm = computed(() => {
-  // 1. 如果指定为移动端，或者 isMobile 参数为 true（显式优先，不走自动识别）
-  if (isMobile.value) {
-    return 'mobile' as const;
-  }
-
-  // 2. mini 登录来源（iframe 嵌入弹窗场景）→ 紧凑版
-  //    仅当显式 from=mini 或路径含 mini 时走 MiniLogin；
-  //    styleType 的 vertical/horizontal/split 都是 StandardLogin 的布局变体，不应误判为 mini
-  if (route.query.from === 'mini' || route.path.includes('/mini-login')) {
-    return 'mini' as const;
-  }
-
-  // 3. 自动识别：视口宽度 < 768px 或真机 UA → 手机端登录页
-  //    手机直接打开 /login 不再挤在桌面布局里
-  if (isMobileDevice.value) {
-    return 'mobile' as const;
-  }
-
-  // 4. 默认桌面版标准 SSO 登录
-  return 'standard' as const;
-});
+// 判定本身也收敛到设备清单（theme/devices.ts 的 pickDeviceId）：三个分发器不再各写
+// 一份 if-链，mini 来源（from/fromLogin/路径）与显式 isMobile 的优先级只有一份实现。
+const activeForm = computed(() =>
+  pickDeviceId(deviceContext(route.query, route.path, isMobileDevice.value))
+);
 
 const activeComponent = computed(() =>
   activeForm.value === 'mobile' ? MobileLogin : activeForm.value === 'mini' ? MiniLogin : StandardLogin
@@ -134,9 +116,8 @@ const activeComponent = computed(() =>
  * 但它与 standard 是**并列**的设备形态，各有各的配色目录。
  */
 const themeStore = useThemeStore();
-const renderedDevice = computed<ThemeDevice>(() =>
-  activeForm.value === 'mobile' ? 'mobile' : activeForm.value === 'mini' ? 'mini' : 'standard'
-);
+// activeForm 现在直接是 ThemeDevice（pickDeviceId 的返回值），无需再做一次映射
+const renderedDevice = computed<ThemeDevice>(() => activeForm.value);
 watch(
   renderedDevice,
   device => {
