@@ -1193,6 +1193,18 @@ themes/app/register/compact/index.vue 变体（`import.meta.glob` → 独立惰�
 - ⏭️ **下一轮该做的**：§4「手法 / 命令」里 `事件循环冻结 tick 间隔法`、`手机端刘海 CDP setSafeAreaInsetsOverride`、
   `测试命令` 三条属"怎么做"而非"违反就出事"，应迁 §9；§6 的两条 ✅ 历史项可压成一行。目标是回到 **≤12KB**。
 
+**2026-09-27 追记（第六轮压缩：§3.1 结构描述外迁 + §6 历史项压缩）**：
+
+- 起因：PWA 移除轮往主索引加了 3 条（PWA 已移除 / workspaces 删依赖前必 `npm ls` / 行尾混合口径），**涨到 14366 B**。
+- 做法：① §3.1 的**结构描述类**全部外迁到新增的 **§11.17**（设备三值、`renderedDevice` 三映射、
+  `setupThemeDeviceSync` 只听 `route.meta.device`、`pageFromPath` 剥 `mini-` 前缀、注册表键五段、路由级 fade），
+  主索引只留 1 行指针 + 4 条铁律；② §6 的三条 ✅ 历史项压成 1 行"细节可查 git log"；
+  ③ 就地精简 PWA / workspaces / 行尾三条的措辞。
+- 结果：**14366 B → 13002 B**（−1364 B）。
+- ℹ️ **别再为"~12KB"焦虑**：那是拍的自律线，**实测截断点是 17302 B**（见本节上一条），当前余量约 **4.3 KB**。
+  真正该补的是"一条会在注入时露馅的检查"（例如把 §5/§6 的开头句写进某个守卫脚本），而不是无限压缩。
+- ⏭️ 若哪天真的逼近 17302：按 §3.3（约 −1 KB）→ §4 操作手册类（约 −0.8 KB）→ §3.2（约 −0.8 KB）的顺序外迁。
+
 ### 11.12 🔴 `vue-tsc` 在本仓**空转**（2026-09-23 实测，必读）
 
 **症状**：`vue-tsc --noEmit`（项目 `build` 与 `type-check` 用的都是它）**恒 exit 0**。
@@ -1400,6 +1412,27 @@ defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
 - 浮层已全部 token 化：`GraphicCaptcha` / `MessageToast` / `DocModal`。
   🔴 **GraphicCaptcha 输入框类名是 `.mauth-captcha-input`**（旧的 `.minimal-input-large` 已删，
   守卫已同步改到新类名 —— 探针里别再找旧名字）。
+
+---
+
+### 11.17 设备 / 包 / 版式 / 配色的结构描述（2026-09-27 第六轮压缩时从主索引 §3.1 迁入）
+
+> 主索引只留"违反就出事"的铁律；这些**结构事实**在代码与 `docs/frontend/multi-theme.md` 里都能查到，
+> 迁到这里是为了让主索引留在注入上限内（见 §11.11）。
+
+- **设备三值**：`THEME_DEVICES = ['mobile','standard','mini']`（`packages/theme-core/src/constants.ts`），
+  与分发器 `activeForm`（mobile/mini/standard）一一对应。
+  **mini 是独立设备**（iframe 紧凑版），**不是** `web/standard/` 下的变体子目录；电脑端设备目录是 `themes/<包>/standard/`。
+  路由层目录 `view/web/` **不改名** —— 那是电脑端路由语义，与设备目录名是两回事。
+- **分发器 `renderedDevice` 三映射**：mobile→`'mobile'`、mini→`'mini'`、standard→`'standard'`。
+  路由基线 `setupThemeDeviceSync` 兜底 `'standard'`（判据是"非 mobile 即 standard"），
+  且**只听 `route.meta.device`** —— 别听整个 `currentRoute`，query 噪声会误触发设备重算。
+- **`pageFromPath` 会剥 `mini-` 前缀**（`/mini-login` → `login`）。不剥的话调试面板在 mini 路由上推不出页面
+  → 面板的版式/配色区全空（症状是"面板没内容"，**不是报错**）。
+- **配色注册表键 = 五段**：`包/设备/页面/版式/配色`。配色**每版式各一份**，漏了会静默回落到同系别首套；
+  tokens 是扁平值（没有 light/dark 两档）。
+- **路由级 fade + 三层 prefetch**（v2.20.1）：路由过渡默认模式**不是** `out-in`；`.route-stage` 用 absolute；
+  dispatcher 内层**禁止**用 `out-in` 包异步组件（会与预取/形态切换打架）。
 
 ---
 
