@@ -29,14 +29,11 @@ export {
   THEME_ID_RE,
   DEFAULT_THEME_ID,
   DEFAULT_THEME_PACKAGE,
-  THEME_DEVICES,
-  DEFAULT_THEME_DEVICE,
   DEFAULT_THEME_PAGE,
   DEFAULT_THEME_COLOR,
   DEFAULT_THEME_DARK_COLOR,
   BASE_VIEW_ID
 } from './constants';
-export type { ThemeDevice } from './constants';
 
 export { THEME_TONES, TONE_LABELS, isThemeTone, normalizeTone } from './tone';
 export type { ThemeTone } from './tone';
@@ -59,5 +56,5 @@ export type {
   MauthThemeRecord
 } from './types';
 
-export { asThemeDevice, readDeviceParam } from './views/params';
+export { readDeviceParam } from './views/params';
 export type { DeviceScopedParam } from './views/params';

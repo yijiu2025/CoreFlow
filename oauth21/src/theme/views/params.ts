@@ -8,6 +8,10 @@
  *   2. 任何一期抽包都能**独立回滚**：把实现搬回本文件、删掉壳即可。
  *
  * 🔴 壳里**不得有任何逻辑**。要改行为，去 `packages/theme-core/src/views/params.ts`。
+ *
+ * ⚠️ `asThemeDevice` **不在这里转发**（2026-09-27）：它需要设备白名单（`THEME_DEVICES`），
+ *    而取值集合已下沉到应用侧 `@/theme/devices.ts` —— 内核不认识设备集合，自然不提供
+ *    归一化。要取设备归一化，从 `@/theme/devices` 引 `asThemeDevice`。
  */
-export { asThemeDevice, readDeviceParam } from 'mauth-theme-core';
+export { readDeviceParam } from 'mauth-theme-core';
 export type { DeviceScopedParam } from 'mauth-theme-core';

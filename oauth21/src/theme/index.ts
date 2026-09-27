@@ -71,22 +71,21 @@
 import {
   BASE_VIEW_ID,
   DEFAULT_THEME_COLOR,
-  DEFAULT_THEME_DEVICE,
   DEFAULT_THEME_ID,
   DEFAULT_THEME_PACKAGE,
   DEFAULT_THEME_PAGE,
-  THEME_DEVICES,
-  THEME_ID_RE,
-  type ThemeDevice
+  THEME_ID_RE
 } from 'mauth-theme-core';
 import type { MauthThemeColor, MauthThemePackage, MauthThemeMeta, MauthThemeRecord } from './types';
 import { normalizeTone, type ThemeTone } from './tone';
+import { DEFAULT_THEME_DEVICE, THEME_DEVICES, type ThemeDevice } from './devices';
 
 /**
  * 常量与白名单**已迁到内核包**（2026-09-26 抽包 Stage 1）
  *
- * 取值集合（设备三值、默认包/页面/配色、id 白名单）只有一个来源：
- * `packages/theme-core/src/constants.ts`。本文件把名字**原样转发**出去，
+ * 取值集合（默认包/页面/配色、id 白名单）只有一个来源：
+ * `packages/theme-core/src/constants.ts`。**设备取值集合例外** —— 它随应用走，
+ * 声明在本应用的 `./devices.ts`（见该文件头）。本文件把名字**原样转发**出去，
  * 于是 `@/theme` 的导入面一个字不变 —— 40 多处 `from '@/theme'` 的调用点、
  * 关卡断言、调试面板都不用改。
  *
@@ -97,13 +96,14 @@ export {
   BASE_VIEW_ID,
   DEFAULT_THEME_COLOR,
   DEFAULT_THEME_DARK_COLOR,
-  DEFAULT_THEME_DEVICE,
   DEFAULT_THEME_ID,
   DEFAULT_THEME_PACKAGE,
-  DEFAULT_THEME_PAGE,
-  THEME_DEVICES
+  DEFAULT_THEME_PAGE
 } from 'mauth-theme-core';
-export type { ThemeDevice } from 'mauth-theme-core';
+
+/** 设备维度取值集合、默认设备、设备联合类型 —— 随应用走，见 `./devices` */
+export { DEFAULT_THEME_DEVICE, THEME_DEVICES } from './devices';
+export type { ThemeDevice } from './devices';
 
 /** 各主题包的包定义（只有 meta / views，不再充当默认配色） */
 const packageModules = import.meta.glob<{ default: MauthThemePackage }>('./themes/*/index.ts', {

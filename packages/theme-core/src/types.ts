@@ -58,9 +58,21 @@
  *
  * @author yijiu2025
  */
-import type { ThemeDevice } from './constants';
 import type { ThemeTone } from './tone';
 import type { ThemeTokenOverrides } from './tokens';
+
+/**
+ * 设备维度取值：**由宿主的设备清单决定**（内核不绑定某个应用的设备集合）
+ *
+ * 内核只承诺"设备名是个 `[a-z0-9-]` 字符串"这条形态约定；`mobile` / `standard` /
+ * `mini` 是 `oauth21` 的词汇表，不是机制的一部分。取值集合、中文名、判定规则、
+ * 容器位置都声明在宿主（本仓 = `oauth21/src/theme/devices.ts`），
+ * 于是「加一种设备」只需改宿主清单，内核与任何其它前端都无感。
+ *
+ * 因此这里用宽松的 `string`：内核无从（也不该）知道有哪些设备。
+ * 白名单归一在宿主（`asThemeDevice`）。
+ */
+type ThemeDevice = string;
 
 /**
  * 配色的元信息（用于列表展示与日志，不参与渲染）

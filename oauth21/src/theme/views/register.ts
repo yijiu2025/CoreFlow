@@ -168,68 +168,35 @@ export interface RegisterViewProps {
  * @see ./picker.ts —— 取值链与回退口径的唯一实现
  */
 import type { Component } from 'vue';
-import { createViewRegistry } from './registry';
-import { createViewPicker, type ViewPickerSource } from './picker';
+import { defineThemePage } from './page';
 
 /**
- * 各主题包里本页的版式实现
+ * 本页的版式机制 —— 机制本身在 `./page.ts`（页面工厂），本文件只声明三件**本页独有**的事：
+ *   ① `page`    —— 页面名（= 主题包内的目录名 = 本文件名 = 路由末段）
+ *   ② 标题      —— 默认标题 + 设备专属覆盖
+ *   ③ `loaders` —— 版式 glob（模式必须是字面量，只能写在页面文件里）
+ * 取值链的唯一实现在 `./picker.ts`。
  *
- * 主题包粒度的版式（2026-09-25 起）：
- *   • 每个主题包只包含一种 register 版式（架构约定）—— 详见 `theme/themes/README.md`
- *   • 路径形态：**唯一**一种 `themes/<包>/<设备>/register/index.vue`
- *   • 版式跟随主题包，换包 = 换版式；URL 里 `view` 的值就是**目标包名**（`?view=compact`）
- *
- * 容器静态引入内置包的基础版式（`default` + `mobile` + `register/index.vue`）；
- * 其它主题包（包括 compact）的版式靠 glob 惰性加载。
- *
- * ⚠️ 用 **`/src/...` 根绝对路径**，不要用 `../` 相对路径：本文件在 `views/` 下一层，
- *    相对路径（`../../themes/...`）在当前 Vite 版本下**扫不到任何文件且不报错**
- *    —— 表现为「变体永远加载不出来、`list()` 恒为空」，极难排查。绝对路径不受
- *    当前文件所在层级影响（也不会再犯「数错 `../` 层数」的错）。
+ * ⚠️ 用 **`/src/...` 根绝对路径**（相对路径会静默扫不到文件）；
+ *    新增包或版式目录后要**重启 dev server**。
  */
-const viewLoaders = import.meta.glob<{ default: Component }>(
-  '/src/theme/themes/*/*/register/index.vue'
-);
-
-/** 本页版式注册表 */
-export const registerViews = createViewRegistry(viewLoaders, { page: 'register' });
-
-/**
- * 本页的版式选择器（取值链的唯一实现在 `./picker.ts`）
- *
- * ⚠️ 环境变量必须在**这里**读并传进去：`import.meta.env` 靠构建期静态替换，
- *    包进工厂内部拿不到这个能力（会被当成普通的对象属性访问、恒为 undefined）。
- */
-const picker = createViewPicker({
-  registry: registerViews,
-  envView: import.meta.env.VITE_REGISTER_VIEW
+export const registerPage = defineThemePage({
+  page: 'register',
+  title: '账户注册',
+  titles: { mobile: '移动端注册' },
+  envView: import.meta.env.VITE_REGISTER_VIEW,
+  loaders: import.meta.glob<{ default: Component }>('/src/theme/themes/*/*/register/index.vue')
 });
 
-/**
- * 按优先级挑出版式 id（永远返回可用 id：最差是当前**包名**）
- *
- * 链与回退口径的唯一实现在 `./picker.ts`（三页同形）；本函数只负责"把本页的
- * 注册表与环境变量接上去"，不再自己实现一遍。
- *
- * @param source.url    `?view=`（设备维度解析**之后**）的原始值 —— 未校验
- * @param source.theme  当前配色记录声明的版式 id（`store.viewFor('register')` 取出）
- * @param source.pkg    当前主题包 id —— 查找范围的包那一段
- * @param source.device 当前设备（`'mobile' | 'standard' | 'mini'`）—— 查找范围的设备那一段
- */
-export function pickRegisterViewId(source: ViewPickerSource = {}): string {
-  return picker.pick(source);
-}
+/** 本页版式注册表（容器与调试面板按这个名字取） */
+export const registerViews = registerPage.views;
+
+/** 按优先级挑出版式 id —— 永远返回可用 id，最差是当前**包名** */
+export const pickRegisterViewId = registerPage.pick;
 
 /**
  * 提前把版式 chunk 拉下来（路由守卫里调用，**不 await**）
  *
- * 非内置包的版式是动态 import，容器首帧只能先渲染静态兜底、等 chunk 到了再接管。
- * 在导航阶段就把请求发出去（与路由组件自身的 chunk 并行），绝大多数情况下容器挂载时
- * 已在模块缓存里 → 赋值发生在同一 tick 内，用户看不到切换。
- *
- * ⚠️ `source` 必须**原样**交给 `picker.preload`：漏掉 `theme`（声明档）会让预取算出
- *    一个与容器不同的 id —— 白拉一个用不上的 chunk，而真正要用的那个仍得现场等。
+ * ⚠️ `source` 必须**原样**传（含声明档 `theme`）：漏掉它会让预取算出一个与容器**不同**的 id。
  */
-export function preloadRegisterView(source: ViewPickerSource = {}): void {
-  picker.preload(source);
-}
+export const preloadRegisterView = registerPage.preload;

@@ -253,62 +253,37 @@ export interface LoginViewProps {
  * @see ./picker.ts —— 取值链与回退口径的唯一实现
  */
 import type { Component } from 'vue';
-import { createViewRegistry } from './registry';
-import { createViewPicker, type ViewPickerSource } from './picker';
+import { defineThemePage } from './page';
 
 /**
- * 各主题包里本页的版式实现 —— **一个主题包一种版式**（2026-09-26 收窄）
+ * 本页的版式机制 —— 机制本身在 `./page.ts`（页面工厂），本文件只声明三件**本页独有**的事：
+ *   ① `page`    —— 页面名（= 主题包内的目录名 = 本文件名 = 路由末段）
+ *   ② 标题      —— 默认标题 + 设备专属覆盖
+ *   ③ `loaders` —— 版式 glob（`import.meta.glob` 的模式必须是字面量，只能写在这里）
+ * 取值链（`?view=` > 声明 > 环境变量 > 当前包名）的唯一实现在 `./picker.ts`。
  *
- * 只有一种目录形态：`themes/<包>/<设备>/login/index.vue`。
- * 内置包的那份由容器静态引入、用不上它，但其它包（如 compact）只能靠这里惰性拿到
- * —— 包是运行时才定的，静态 import 钉不住。
- *
- * ⚠️ 曾有第二个模式 `themes/<包>/<设备>/login/<版式>/index.vue`（变体子目录），
- *    已随「变体版式使用新包」删除：一个通配模式现在盖得住全部情形。
+ * ⚠️ 用 **`/src/...` 根绝对路径**：相对路径在当前 Vite 版本下**扫不到任何文件且不报错**，
+ *    非内置包的版式会永远加载不出来（表现为"变体加载不出来、版式列表恒为空"）。
+ * ⚠️ 新增包或版式目录后要**重启 dev server**（glob 在启动时静态扫描，热更新发现不了新目录）。
  */
-const viewLoaders = import.meta.glob<{ default: Component }>(
-  '/src/theme/themes/*/*/login/index.vue'
-);
-
-/** 本页版式注册表 */
-export const loginViews = createViewRegistry(viewLoaders, { page: 'login' });
-
-/**
- * 本页的版式选择器（取值链的唯一实现在 `./picker.ts`）
- *
- * ⚠️ 环境变量必须在**这里**读并传进去：`import.meta.env` 靠构建期静态替换，
- *    包进工厂内部拿不到这个能力（会被当成普通的对象属性访问、恒为 undefined）。
- */
-const picker = createViewPicker({
-  registry: loginViews,
-  envView: import.meta.env.VITE_LOGIN_VIEW
+export const loginPage = defineThemePage({
+  page: 'login',
+  title: '安全登录',
+  titles: { mobile: '移动端登录', mini: '快捷登录' },
+  envView: import.meta.env.VITE_LOGIN_VIEW,
+  loaders: import.meta.glob<{ default: Component }>('/src/theme/themes/*/*/login/index.vue')
 });
 
-/**
- * 按优先级挑出版式 id（永远返回可用 id：最差是当前**包名**）
- *
- * 链与回退口径的唯一实现在 `./picker.ts`（三页同形）；本函数只负责"把本页的
- * 注册表与环境变量接上去"，不再自己实现一遍。
- *
- * @param source.url    `?view=`（设备维度解析**之后**）的原始值 —— 未校验
- * @param source.theme  当前配色记录声明的版式 id（`store.viewFor('login')` 取出）
- * @param source.pkg    当前主题包 id —— 查找范围的包那一段
- * @param source.device 当前设备（`'mobile' | 'standard' | 'mini'`）—— 查找范围的设备那一段
- */
-export function pickLoginViewId(source: ViewPickerSource = {}): string {
-  return picker.pick(source);
-}
+/** 本页版式注册表（容器与调试面板按这个名字取） */
+export const loginViews = loginPage.views;
+
+/** 按优先级挑出版式 id —— 永远返回可用 id，最差是当前**包名** */
+export const pickLoginViewId = loginPage.pick;
 
 /**
  * 提前把版式 chunk 拉下来（路由守卫里调用，**不 await**）
  *
- * 非内置包的版式是动态 import，容器首帧只能先渲染静态兜底、等 chunk 到了再接管。
- * 在导航阶段就把请求发出去（与路由组件自身的 chunk 并行），绝大多数情况下容器挂载时
- * 已在模块缓存里 → 赋值发生在同一 tick 内，用户看不到切换。
- *
- * ⚠️ `source` 必须**原样**交给 `picker.preload`：漏掉 `theme`（声明档）会让预取算出
- *    一个与容器不同的 id —— 白拉一个用不上的 chunk，而真正要用的那个仍得现场等。
+ * ⚠️ `source` 必须**原样**传（含声明档 `theme`）：漏掉它会让预取算出一个与容器**不同**的
+ *    id —— 白拉一个用不上的 chunk，而真正要用的那个仍得现场等。
  */
-export function preloadLoginView(source: ViewPickerSource = {}): void {
-  picker.preload(source);
-}
+export const preloadLoginView = loginPage.preload;

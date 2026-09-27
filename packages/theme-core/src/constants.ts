@@ -41,21 +41,21 @@ export const DEFAULT_THEME_ID = 'default';
 export const DEFAULT_THEME_PACKAGE = 'default';
 
 /**
- * 设备维度：主题包内的一级目录，决定"这套配色/版式给哪种设备用"
+ * 设备维度：**取值集合由宿主的设备清单声明**，内核不再自带一份
  *
- * 三值是三种**平级**的设备形态，与桌面分发器的形态判定一一对应：
- *   • `mobile`   —— 手机端（窄视口 / 真机 UA）
- *   • `standard` —— 桌面主窗口（宽视口，双栏卡片）
- *   • `mini`     —— iframe 紧凑版（`?from=mini` / `/mini-login` 路由）
- * `mini` 不是 `standard` 下的「变体子目录」，而是独立设备：它有自己的配色目录
- * （`mini/<页面>/colors/`），与 `standard` 完全并列。
+ * === 为什么从这里搬走（2026-09-27）===
+ * 内核原先写着 `THEME_DEVICES = ['mobile','standard','mini']` —— 那是**某个应用的**
+ * 词汇表，不是机制的一部分。它带来的实际代价是"加一种设备要改好几处"，而其中一处
+ * 在包里、另外几处在宿主（判定、容器、路由、面板），漏一处就是静默的半生效。
+ * 现在：
+ *   • 内核只留「设备名是个 `[a-z0-9-]` 字符串」这一条**形态**约定；
+ *   • 取值集合、中文名、判定规则、容器位置，全部在宿主的设备清单里声明
+ *     （本仓 = `oauth21/src/theme/devices.ts`）。
+ * 内核因此可以在任何前端被复用 —— 那个前端有几台设备、叫什么，与内核无关。
+ *
+ * ⚠️ 内核里所有"需要知道设备取值集合"的函数都已改成**接收它**（而不是查常量）：
+ *    白名单校验在宿主（`asThemeDevice`），设备维度参数读取只需要"当前设备是谁"。
  */
-export const THEME_DEVICES = ['mobile', 'standard', 'mini'] as const;
-
-export type ThemeDevice = (typeof THEME_DEVICES)[number];
-
-/** 兜底设备：设备无法判定时按手机端处理（与 `utils/device.ts` 的口径一致） */
-export const DEFAULT_THEME_DEVICE: ThemeDevice = 'mobile';
 
 /**
  * 兜底页面：注册表类函数在调用点没给页面时的默认值
