@@ -97,7 +97,8 @@ Fastify（顺序/`onRoute`/`preClose`/`OPTIONAL_LOADERS`/`/health/*`）· Redis 
 
 ## 6. 待办 / 进度
 
-- ⚠️ **待定夺**：多服务器（Swarm/K8s）仅设计稿 · P2 `session.js` 拆分未开始 · **`firewall` 前端无类型检查（121 错）** · **CI 无前端作业**。
+- ⚠️ **待定夺**：多服务器（Swarm/K8s）仅设计稿 · P2 `session.js` 拆分未开始 · **`firewall` 前端无类型检查（121 错）** ·
+  跨大版本依赖分裂（根 vite 5.4.21 / vue-i18n 9 vs oauth21 vite 8.2.2 / vue-i18n 11）。（~~CI 无前端作业~~ 已于 2026-09-27 解决：`ci.yml` 的 `frontend` job 跑 type-check/eslint/vitest/build。）
 - 📊 **oauth21 前端架构评审已完成**（2026-09-27，报告 `reports/oauth21-frontend-architecture-review.md`）：**66.5/100 ⭐⭐⭐**
   （技术栈 36 / 架构 40 / 工程化 24 / 性能可维护性 33，各 /50）。结论「设计远超工程保障」。
   **新查出（此前未记录）**：① 测试体系实际为 0（`__tests__` 4 文件无任何命令执行，且让 lint 红 38 项）·
@@ -115,4 +116,9 @@ Fastify（顺序/`onRoute`/`preClose`/`OPTIONAL_LOADERS`/`/health/*`）· Redis 
 - ✅ **O5 关卡整合**（2026-09-27）：`.tmp-probe/` 收敛为「17 活跃关卡 + `_retired/`」；统一入口 `verify-all.mjs` + 索引 `VERIFY.md`。
   🔴 `verify-no-pwa.mjs` 默认 `--dir dist` 但本机 dist 是旧 PWA 产物 → 统一入口指到 `dist-nopwa`，跑前须重 build。
 - ✅ **tablet 落地演练**（`42c5a92`）：证明 drop-in 加设备零配置可用；顺带把分发器 `activeComponent` 数据化（此前写死三元表达式）。
+- ✅ **评审 P2 收口（`f49e27d` / `22bd800`，2026-09-28）**：
+  ① **`theme/index.ts` 645 行拆分** —— 构建层（glob + 键解析 + `buildRegistry`）抽到 `registry.ts`，
+  **查询层留在 `index.ts`、导出面不变**；🔴 关卡 `verify-theme-dirs.mjs` 里拼 `implText` 的**文件清单要同步加 `registry.ts`**，
+  否则"壳是否只有转发"的断言会因为读不到注册表实现而漏判。
+  ② **vendor 分包**（vue / form / net 三个 manualChunks）—— 稳定依赖不再随业务代码改动而整体失效。
 - ✅ 历史已完成（细节查 git log）：三页 standard/mini 容器+版式拆分、设备三值化、eslint 存量清零（v2.21.0–v2.23.0）。
