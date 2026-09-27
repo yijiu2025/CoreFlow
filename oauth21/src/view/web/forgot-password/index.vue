@@ -19,7 +19,7 @@ import { useRoute } from 'vue-router';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import { useThemeStore } from '@/stores/theme';
 import { DEFAULT_THEME_PACKAGE, type ThemeDevice } from '@/theme';
-import { pickDeviceId, deviceContext } from '@/theme/devices';
+import { pickDeviceId, deviceContext, THEME_DEVICES, resolveContainerOf } from '@/theme/devices';
 
 const route = useRoute();
 
@@ -28,9 +28,10 @@ const route = useRoute();
 const { isMobileDevice } = useDeviceDetect();
 
 // 异步按需加载三种形态（与 login / register 分发器同一架构）
-const StandardForgot = defineAsyncComponent(() => import('./StandardForgot.vue'));
-const MiniForgot = defineAsyncComponent(() => import('./MiniForgot.vue'));
-const MobileForgot = defineAsyncComponent(() => import('../../app/forgot-password/index.vue'));
+// 🔴 数据化（2026-09-27）：设备 id → 该页容器 从设备清单派生，不再写死三选一。
+const deviceComponents = new Map(
+  THEME_DEVICES.map(id => [id, defineAsyncComponent(resolveContainerOf(id, 'forgot-password'))])
+);
 
 // 🔴 形态判定**单一来源**：activeForm 既决定渲染哪个组件，也决定主题的设备作用域
 //    —— 两件事必须同源，否则会出现"渲染的是手机端、主题却是电脑端那套"。
@@ -41,9 +42,7 @@ const activeForm = computed(() =>
 );
 
 const activeComponent = computed(() =>
-  activeForm.value === 'mobile' ? MobileForgot
-  : activeForm.value === 'mini' ? MiniForgot
-  : StandardForgot
+  deviceComponents.get(activeForm.value) ?? deviceComponents.get('standard')!
 );
 
 /**
@@ -69,11 +68,11 @@ watch(
   { immediate: true }
 );
 
-// v2.20.1：dispatcher 挂载后预热三种形态组件，避免「回到登录」切换闪屏
+// v2.20.1：dispatcher 挂载后预热各形态组件，避免「回到登录」切换闪屏
 onMounted(() => {
-  void import('./StandardForgot.vue').catch(() => {});
-  void import('./MiniForgot.vue').catch(() => {});
-  void import('../../app/forgot-password/index.vue').catch(() => {});
+  for (const id of THEME_DEVICES) {
+    void resolveContainerOf(id, 'forgot-password')().catch(() => {});
+  }
 });
 </script>
 

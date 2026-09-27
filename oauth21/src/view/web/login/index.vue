@@ -7,7 +7,7 @@ import AntiCacheDebugPanel from '@/components/common/AntiCacheDebugPanel.vue';
 import { postToParent } from '@/utils/parent';
 import { useThemeStore } from '@/stores/theme';
 import { DEFAULT_THEME_PACKAGE, type ThemeDevice } from '@/theme';
-import { pickDeviceId, deviceContext } from '@/theme/devices';
+import { pickDeviceId, deviceContext, THEME_DEVICES, resolveContainerOf } from '@/theme/devices';
 
 const route = useRoute();
 
@@ -64,9 +64,13 @@ watch(
 const { isMobileDevice } = useDeviceDetect();
 
 // 异步按需加载不同形态的登录组件
-const StandardLogin = defineAsyncComponent(() => import('./StandardLogin.vue'));
-const MiniLogin = defineAsyncComponent(() => import('./MiniLogin.vue'));
-const MobileLogin = defineAsyncComponent(() => import('../../app/login/index.vue'));
+// 🔴 数据化（2026-09-27）：设备 id → 该页容器 的映射从设备清单派生，不再写死
+//    「mobile ? MobileLogin : mini ? MiniLogin : StandardLogin」的三选一 —— 那是加
+//    一种设备（如 tablet）时的静默半生效根因（pickDeviceId 返回新设备、映射却落到
+//    Standard 分支）。现在清单加一条 + 写容器，这里自动认。
+const deviceComponents = new Map(
+  THEME_DEVICES.map(id => [id, defineAsyncComponent(resolveContainerOf(id, 'login'))])
+);
 
 // 组件挂载后执行
 onMounted(() => {
@@ -76,10 +80,11 @@ onMounted(() => {
     postToParent({ type: 'SSO_READY' });
     console.warn('[SSO] 发送 SSO_READY 消息到父窗口');
   }
-  // v2.20.1：dispatcher 挂载后立即预热三个形态的登录组件，避免「切换闪屏」
-  void import('./StandardLogin.vue').catch(() => {});
-  void import('./MiniLogin.vue').catch(() => {});
-  void import('../../app/login/index.vue').catch(() => {});
+  // v2.20.1：dispatcher 挂载后立即预热所有设备的登录容器，避免「切换闪屏」。
+  // 遍历设备清单（含将来新增的设备），不再手写三个 import()。
+  for (const id of THEME_DEVICES) {
+    void resolveContainerOf(id, 'login')().catch(() => {});
+  }
 });
 
 // 调试面板关闭事件处理
@@ -98,7 +103,7 @@ const activeForm = computed(() =>
 );
 
 const activeComponent = computed(() =>
-  activeForm.value === 'mobile' ? MobileLogin : activeForm.value === 'mini' ? MiniLogin : StandardLogin
+  deviceComponents.get(activeForm.value) ?? deviceComponents.get('standard')!
 );
 
 /**
