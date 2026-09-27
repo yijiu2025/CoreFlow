@@ -9,7 +9,8 @@
 - **本机 git ref 失灵**：status 谎报 ahead、push 可能数分钟零输出 → **以 `git ls-remote origin main` 为准**，超时≠失败。
   push 后异常：`node "C:/Users/22701/.workbuddy/tools/fix-packed-refs.mjs" "<完整40位SHA>"`。
 - **发版**：提交推送后**顺手发不必问**：`node scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；
-  破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` 不发。版本源是 git tag；工作区脏（含子模块）会拒。
+  破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` 不发。版本源是 git tag；
+  工作区脏会拒（`--allow-dirty` 放行）；**唯一例外 `phonecopy`** —— 脚本已显式过滤（release.mjs L338 `!line.includes('phonecopy')`）。
 
 ## 1. 强制约定（有守卫 / 有规则文档，违反会红）
 
@@ -111,7 +112,8 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 
 - ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**；P2 `session.js` 拆分评估未开始；`firewall` 前端无类型检查（121 错）；CI 无前端作业 —— 均待定夺。
 - ⚠️ 卡关脚本欠账：`verify-theme.mjs` 期望值仍按旧配色名（已 `exit 2` 自检）；面板三件套仍按 `'base'` 断言。
-- ⚠️ `phonecopy` 是**嵌套 git 仓**（不在 `.gitmodules`）→ 永远显示脏，`release.mjs` 会拒发，需 `--allow-dirty`。
+- ⚠️ `phonecopy` 是**嵌套 git 仓**（不在 `.gitmodules`）→ `git status` 永远显示脏 ` m phonecopy`。
+  **但 `release.mjs` 已在 porcelain 里显式过滤它**（L338）→ 正常发版**不需要** `--allow-dirty`（2026-09-27 实测 v2.25.1 一次通过）。
 - ✅ **主题抽包 Stage 1 已完成**（`packages/theme-core` 纯叶子层 + 零逻辑壳；默认 `default`+`white`；版式选择收口 `views/picker.ts`）。
   ⏳ **Stage 2 未做**：`runtime.ts` 注入器 → `ThemeAssets` / `ThemeEnv` / `ThemeHost`。
 - ✅ 历史已完成（细节可查 git log）：oauth21 三页 standard/mini 容器+版式拆分、设备三值化、eslint 存量清零（v2.21.0–v2.23.0）。
