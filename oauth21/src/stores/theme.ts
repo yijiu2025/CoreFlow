@@ -362,11 +362,10 @@ export const useThemeStore = defineStore('theme', () => {
   function themeRecordFor(
     pkg: string = DEFAULT_THEME_PACKAGE,
     device: ThemeDevice = activeDevice.value,
-    page: string = activePage.value,
-    view: string = activeView.value
+    page: string = activePage.value
   ) {
     const id = deviceTheme.value[device] ?? themeId.value;
-    return getThemeRecord(id, pkg, device, page, view);
+    return getThemeRecord(id, pkg, device, page);
   }
 
   /* ==========================================================================
@@ -425,7 +424,8 @@ export const useThemeStore = defineStore('theme', () => {
     const target: ThemeTone = dark ? 'dark' : 'light';
     const device = activeDevice.value;
     const page = activePage.value;
-    const view = activeView.value;
+    // view ≡ pkg：activeView 的值就是当前包名，配色查找按它（= 包）过滤
+    const pkg = activeView.value;
 
     // ① 已经同系别 —— 按**任意登记处**查系别，而不是只看当前作用域：
     //    "当前作用域没有这套配色"（如 blue 只在手机端有）时，渲染层已经按同系别
@@ -440,14 +440,14 @@ export const useThemeStore = defineStore('theme', () => {
     if (curTone === 'light') lightColor.value = themeId.value;
     else if (curTone === 'dark') darkColor.value = themeId.value;
 
-    // 优先取该系别槽里那套；它在当前版式下不存在时（如 rainbow 只有 login 有）弃用
+    // 优先取该系别槽里那套；它在当前包下不存在时（如 rainbow 只有 login 有）弃用
     const slot = dark ? darkColor.value : lightColor.value;
-    const fromSlot = slot && isKnownTheme(slot, device, page, view) ? slot : null;
+    const fromSlot = slot && isKnownTheme(slot, device, page, pkg) ? slot : null;
     // 明暗切换的目标系别配色：优先该系别的「标配」（白系 = DEFAULT_THEME_COLOR / 黑系 =
     // DEFAULT_THEME_DARK_COLOR），没有标配时退回该系别第一套。白/黑是默认搭配的两套
     //（用户 2026-09-25 定），不能因为字母序让「切到明」落到 blue 上。
     const standard = target === 'dark' ? DEFAULT_THEME_DARK_COLOR : DEFAULT_THEME_COLOR;
-    const ids = listColorIdsOfTone(device, page, view, target);
+    const ids = listColorIdsOfTone(device, page, pkg, target);
     const next = fromSlot ?? (ids.includes(standard) ? standard : ids[0]) ?? null;
 
     // ② / ③
@@ -554,11 +554,9 @@ export const useThemeStore = defineStore('theme', () => {
    *    极难从表象定位。
    */
   let styleEpoch = 0;
-  async function loadThemeStyle(id: string, pkg: string, device: ThemeDevice, page: string, view: string): Promise<void> {
+  async function loadThemeStyle(id: string, pkg: string, device: ThemeDevice, page: string): Promise<void> {
     const epoch = ++styleEpoch;
-    // 新版式下 view ≡ pkg，但外部传 view 仍可能是 'base'（旧机制） —— getThemeRecord
-    // 内部会把 `view === 'base' && pkg !== 'default'` 的情况兜底成 `pkg`，所以这里直传即可。
-    const loader = getThemeRecord(id, pkg, device, page, view).loadStyle;
+    const loader = getThemeRecord(id, pkg, device, page).loadStyle;
 
     if (!loader) {
       document.getElementById(STYLE_ELEMENT_ID)?.remove();
@@ -611,17 +609,15 @@ export const useThemeStore = defineStore('theme', () => {
       // 生效 id 按**设备**取 URL 覆盖 —— 与 `themeRecordFor` 同一口径。只用 themeId
       // 会让 DOM 属性在"两端各配一套色"时说谎（渲的是 black，属性却写 blue）。
       const id = deviceTheme.value[device] ?? themeId.value;
-      // view ≡ pkg —— 主动用 activeView 同时充当 view 和 pkg：
-      //   • view 给 findRecord 的视图段（精确匹配当前生效配色）
-      //   • pkg 给 findRecord 的包段（避免被 DEFAULT_THEME_PACKAGE 兜底抢走）
-      const record = getThemeRecord(id, view, device, page, view);
+      // view ≡ pkg —— 用 activeView 充当 pkg（配色键只有包段，view 段已并入包段）
+      const record = getThemeRecord(id, view, device, page);
       const root = document.documentElement;
       // 解析出的 id 与请求的 id 不一致 = 该范围下没有这套配色，用了回落档
       if (record.meta.id === id) root.dataset.mauthTheme = id;
       else delete root.dataset.mauthTheme;
 
       themeTokens.value = record.tokens ?? null;
-      void loadThemeStyle(id, view, device, page, view);
+      void loadThemeStyle(id, view, device, page);
     },
     { immediate: true }
   );
@@ -656,12 +652,12 @@ export const useThemeStore = defineStore('theme', () => {
    */
   watch(activeView, (newView, oldView) => {
     if (!newView || newView === oldView) return;
-    // 用**旧 view**查 themeId 当前解析到的包（activeView 已变 → 用它查会落到新包 → currentPkg=newView → 永远相等 = 整段失效）
+    // 用**旧 view（= 旧包）**查 themeId 当前解析到的包（activeView 已变 → 用它查会落到
+    // 新包 → currentPkg=newView → 永远相等 = 整段失效）。view ≡ pkg，所以旧 view 就是旧包。
     const currentPkg = themeRecordFor(
-      DEFAULT_THEME_PACKAGE,
+      oldView,
       activeDevice.value,
-      activePage.value,
-      oldView
+      activePage.value
     ).pkg;
     if (currentPkg === newView) return;
     // 该设备被 URL 锁定 theme → 部署方的显式意图，不被切版式覆盖
@@ -737,7 +733,7 @@ export const useThemeStore = defineStore('theme', () => {
    *    本仓三个包都还没声明 `views`，所以这条修的是"声明档对非默认包静默失效"的隐患。
    */
   function viewFor(page: string, device: ThemeDevice = activeDevice.value): string | undefined {
-    return themeRecordFor(packageId.value, device, page, activeView.value).views?.[page];
+    return themeRecordFor(packageId.value, device, page).views?.[page];
   }
 
   /**
