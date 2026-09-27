@@ -458,24 +458,38 @@ export default {
 
 > 🔴 **设备维度取值集合已下沉到 `theme/devices.ts`**（2026-09-27 起，不再散在常量/分发器/路由三处）。
 > 加一种设备 = 改这一份清单 + 写容器，其余自动接线。
+> **已用 tablet 真实落地演练验证过端到端**（2026-09-27，`42c5a92`，见 `themes/default/tablet/` + `view/tablet/`）。
 
 1. **清单加一条** `theme/devices.ts` 的 `THEME_DEVICE_DEFS`：
    ```ts
    {
      id: 'tablet',                      // = 主题包内目录名（themes/<包>/tablet/）
-     label: '平板',                      // 调试面板 / 日志用
+     label: '平板',                      // 调试面板 / 日志用（面板标签自动从这读，不必另抄）
      containers: pageContainers(import.meta.glob('/src/view/tablet/*/index.vue'), /^index\.vue$/),
      routePath: (page) => `tablet/${page}`,  // 路由前缀（/tablet/login）
-     match: (ctx) => /* 判定：视口中段？UA？ */ false
+     match: (ctx) => !ctx.explicitMobile && ctx.from === 'tablet'  // 见下「判定」
    }
    ```
    ⚠️ **顺序即优先级**，末条 `standard` 必须无条件命中（兜底）。
-2. **写容器** `view/<设备 id>/<页面>/index.vue`（或用 `containers` 指定别的 glob 规则，
-   像 `mini` 那样与 standard 共用 `view/web/` 目录靠文件名前缀区分）。
-3. **主题目录** `themes/<包>/<设备 id>/<页面>/{index.vue, colors/}`（只覆盖部分设备可用 `coverage.devices` 声明）。
-4. **分发器**自动认它：三个分发器的设备判定已统一到 `pickDeviceId`（`theme/devices.ts`），
-   `THEME_DEVICES` 由清单派生，路由/面板/关卡跟着清单走，**不需要再改**。
-5. **重启 dev server**。
+   ⚠️ **`match` 不能写死 `false`**：恒 false 会让设备永远命中不了，成为「长红的死设备」。
+   判定用一个**可触发的信号**——推荐「来源标记」（`?from=tablet`，与 mini 的 `?from=mini`
+   同形，零侵入视口/UA 三级判定），或视口中段 / UA（但要改 `utils/device.ts`，回归面大）。
+   tablet 落地用的就是 `?from=tablet`。
+2. **写容器** `view/<设备 id>/<页面>/index.vue`。若该设备的业务与 standard 相同（如平板 =
+   桌面表单），容器可做成**薄转发**：`<StandardLogin device="tablet" />`（standard 容器
+   已支持 `device` prop），业务零复制。三个 standard 容器的 `device` prop 默认各自设备，
+   转发时显式传新设备 id 即可。
+3. **主题目录** `themes/<包>/<设备 id>/<页面>/{index.vue, colors/}`。若视觉与配色与
+   standard 相同，**版式与配色都可 re-export standard**（`export { default } from
+   '@/theme/themes/default/standard/...'`）——防漂移：改 standard 一套，本设备自动跟上，
+   不必复制整套 token / 版式。关卡已识别 re-export 形态（配色与版式各一条分支）。
+   ⚠️ **设备必须有配色目录**，否则 `getThemeRecord` 回落到空记录 → tokens 全丢只剩基线。
+4. **分发器已数据化**（2026-09-27，`42c5a92`）：三个分发器的 `activeComponent` 与预热
+   从 `THEME_DEVICES` 清单派生（`resolveContainerOf(id, page)`），**不再写死三选一**。
+   `THEME_DEVICES` / 面板标签（`deviceLabel`）/ 关卡设备白名单（`readDeviceIds`）都跟着
+   清单走，加设备**不需要再改分发器、面板、关卡**。
+5. **重启 dev server（要 `--force`）**：新目录会让 `import.meta.glob` 与 optimizeDeps
+   缓存失效，不带 `--force` 会报 `504 (Outdated Optimize Dep)`、容器动态 import 失败。
 
 ## 九、安全边界
 
@@ -705,23 +719,27 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 
 ## 本仓现状
 
-### 三设备（mobile / standard / mini）
+### 四设备（mobile / standard / mini / tablet）
 
-| 页面 | 手机端容器 | 桌面端容器 | 紧凑版容器 | 版式目录 |
-| --- | --- | --- | --- | --- |
-| 登录 | `view/app/login/index.vue` | `view/web/login/StandardLogin.vue` | `view/web/login/MiniLogin.vue` | `themes/default/<设备>/login/index.vue` |
-| 注册 | `view/app/register/index.vue` | `view/web/register/StandardRegister.vue` | `view/web/register/MiniRegister.vue` | `themes/default/<设备>/register/index.vue` |
-| 重置密码 | `view/app/forgot-password/index.vue` | `view/web/forgot-password/StandardForgot.vue` | `view/web/forgot-password/MiniForgot.vue` | `themes/default/<设备>/forgot-password/index.vue` |
+| 页面 | 手机端容器 | 桌面端容器 | 紧凑版容器 | 平板容器 | 版式目录 |
+| --- | --- | --- | --- | --- | --- |
+| 登录 | `view/app/login/index.vue` | `view/web/login/StandardLogin.vue` | `view/web/login/MiniLogin.vue` | `view/tablet/login/index.vue` | `themes/default/<设备>/login/index.vue` |
+| 注册 | `view/app/register/index.vue` | `view/web/register/StandardRegister.vue` | `view/web/register/MiniRegister.vue` | `view/tablet/register/index.vue` | `themes/default/<设备>/register/index.vue` |
+| 重置密码 | `view/app/forgot-password/index.vue` | `view/web/forgot-password/StandardForgot.vue` | `view/web/forgot-password/MiniForgot.vue` | `view/tablet/forgot-password/index.vue` | `themes/default/<设备>/forgot-password/index.vue` |
 
 ✅ 三页 × 三设备的**容器 + 版式拆分已全部落地**（v2.21.0 ~ v2.23.0），
 电脑端版式自带 `<style scoped>`（`std*-*` / `m*-*` 体系，已 token 化），移动端消费 `mauth-*`。
 每个容器都**静态引入自己设备的那份**内置包版式 → 不带 `view` 参数时首屏零请求。
 
+✅ **tablet 是「加一种设备」的落地范例**（2026-09-27，`42c5a92`）：判定用 `?from=tablet`
+来源标记；容器是转发 standard 容器的薄转发（`device="tablet"`，业务零复制）；版式与配色
+都 re-export standard（防漂移）。见 §八「加一种设备」。
+
 ### 主题包
 
 | 包 | 覆盖范围 | 说明 |
 | --- | --- | --- |
-| `default` | mobile / standard / mini × 三页 | 主包，**版式 id 就是 `default`** |
+| `default` | mobile / standard / mini / tablet × 三页 | 主包，**版式 id 就是 `default`** |
 | `compact` | mobile × register | 「换包换版式」的范例：`?view=compact` |
 
 ### 配色
@@ -730,7 +748,7 @@ oauth21 iframe 挂载 → postToParent({ type: 'SSO_READY' })
 | --- | --- | --- |
 | mobile | login | `black` `white` `blue` `cyan` `rainbow` |
 | mobile | register / forgot-password | `black` `white` `blue` `cyan` |
-| standard / mini | 三页 | `black` `white` |
+| standard / mini / tablet | 三页 | `black` `white` |
 | compact | mobile / register | `black` `white` `blue` `cyan` |
 
 **五色完全并列**：同一个列表、同一套选中逻辑、同一优先级，黑白不兼职明暗开关。
