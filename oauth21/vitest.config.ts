@@ -8,7 +8,7 @@
  * 直接复用本仓的 alias 与 vue 插件，是 Vue 3 生态的标准选择。
  *
  * === alias 必须与 vite.config.js 一致 ===
- * `@` → src；`mauth-theme-core` / `stable-deviceid` → 两个 workspace 包源码
+ * `@` → src；`skinsuite` / `stable-deviceid` → 两个 workspace 包源码
  * （与 vite.config.js 的 resolve.alias 同形，否则组件里 import 这些包会解析失败）。
  */
 import { defineConfig } from 'vitest/config';
@@ -20,7 +20,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
-      'mauth-theme-core': path.resolve(import.meta.dirname, '../packages/theme-core/src/index.ts'),
+      'skinsuite': path.resolve(import.meta.dirname, '../packages/theme-core/src/index.ts'),
       'stable-deviceid': path.resolve(import.meta.dirname, '../packages/shared-device/src/index.ts')
     }
   },

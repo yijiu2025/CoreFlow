@@ -1,7 +1,7 @@
 /**
  * `readDeviceParam` 设备维度参数解析测试
  *
- * 真实加载 `mauth-theme-core` 的 `views/params.ts` 实现（通过 re-export 壳
+ * 真实加载 `skinsuite` 的 `views/params.ts` 实现（通过 re-export 壳
  * `@/theme/views/params` 的底层实现），覆盖取值链：
  *   `view.<设备>` → `view` → undefined
  * 以及「空串/空数组 = 未指定」这条最容易踩坑的规则。

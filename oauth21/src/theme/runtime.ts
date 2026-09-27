@@ -3,7 +3,7 @@
  * 校验后注入为 CSS 变量，实现「不改前端代码即可换配色」与「组件级 UI 定制」。
  *
  * === 本文件现在只管"往 DOM 写"，不管"该不该写"（2026-09-26 抽包 Stage 1）===
- * 白名单校验（token 名 / 取值 / 逐条过滤）已迁到内核包 `mauth-theme-core` 的
+ * 白名单校验（token 名 / 取值 / 逐条过滤）已迁到内核包 `skinsuite` 的
  * `tokens.ts`：那部分是**纯函数**，与 DOM 无关，能被任何前端复用。这里保留的是
  * 注入动作本身（读 `documentElement`、差集清理、写入顺序），仍然属于应用侧。
  * 本文件把校验函数**原样转发**出去，所以 `@/theme/runtime` 的导入面没有变化。
@@ -28,8 +28,8 @@
  * @author yijiu2025
  */
 
-import { sanitizeOverrides } from 'mauth-theme-core';
-import type { ThemeTokenLayers, ThemeTokenOverrides } from 'mauth-theme-core';
+import { sanitizeOverrides } from 'skinsuite';
+import type { ThemeTokenLayers, ThemeTokenOverrides } from 'skinsuite';
 
 /**
  * token 形态与白名单校验 —— **从内核包原样转发**（2026-09-26 抽包 Stage 1）
@@ -43,8 +43,8 @@ export {
   isSafeTokenValue,
   isSafeTokenEntry,
   sanitizeOverrides
-} from 'mauth-theme-core';
-export type { ThemeTokenOverrides, SanitizeResult, ThemeTokenLayers } from 'mauth-theme-core';
+} from 'skinsuite';
+export type { ThemeTokenOverrides, SanitizeResult, ThemeTokenLayers } from 'skinsuite';
 
 /** 上一次注入到 inline style 的变量名，用于下次注入前清理，避免换配色后残留旧值 */
 let injectedNames: string[] = [];

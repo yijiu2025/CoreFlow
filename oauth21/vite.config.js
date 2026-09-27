@@ -56,7 +56,7 @@ export default defineConfig({
       // 主题内核（工作区源码直供，与 stable-deviceid 同形）：包只发源码，不发 dist。
       // 指到 src/index.ts 而不是包目录，是为了不依赖 node_modules 里那条符号链接
       // （符号链接由 npm install 生成，首次克隆后还没装依赖时也必须能解析）。
-      'mauth-theme-core': path.resolve(import.meta.dirname, '../packages/theme-core/src/index.ts')
+      'skinsuite': path.resolve(import.meta.dirname, '../packages/theme-core/src/index.ts')
     }
   },
   server: {
@@ -103,6 +103,30 @@ export default defineConfig({
     // chunk 大小警告阈值：回落 Vite 默认 500 KB。
     // 实测最大 chunk 仅 170.91 KB，远未触及 500 KB 默认线 —— 此前抬高到 1024 无实际收益，
     // 反而会掩盖未来的真实膨胀，故回落默认值，让体积告警重新生效。
-    chunkSizeWarningLimit: 500
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        // vendor 分包：把「几乎每次发版才变一次」的稳定依赖从入口 chunk 拆出去，
+        // 使业务代码改动不再让整个入口 hash 失效 —— 长缓存命中率提升。
+        // 三组刻意按「变更频率 + 体积」切：
+        //   vue-vendor  ：vue / pinia / vue-router / vue-i18n（框架层，最稳定）
+        //   form-vendor ：zod / vee-validate / @vee-validate/zod（表单校验层）
+        //   net-vendor  ：axios（网络层）
+        // 不在清单里的包（qrcode / dayjs 等）仍按动态 import 自然切分，不必全收。
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('/vue/') || id.includes('/pinia/') || id.includes('/vue-router/') || id.includes('/vue-i18n/') || id.includes('/@intlify/')) {
+            return 'vue-vendor';
+          }
+          if (id.includes('/zod/') || id.includes('/vee-validate/')) {
+            return 'form-vendor';
+          }
+          if (id.includes('/axios/')) {
+            return 'net-vendor';
+          }
+          return undefined;
+        }
+      }
+    }
   }
 });
