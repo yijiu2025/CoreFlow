@@ -116,13 +116,14 @@ Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）�
 ## 6. 待办 / 进度
 
 - ⚠️ 多服务器（Swarm/K8s）**仍只有设计稿**；P2 `session.js` 拆分评估未开始；`firewall` 前端无类型检查（121 错）；CI 无前端作业 —— 均待定夺。
-- ⚠️ 卡关脚本欠账：`verify-theme.mjs` 期望值仍按旧配色名（已 `exit 2` 自检）；面板三件套仍按 `'base'` 断言。
-  🔴 **`verify-panel-v3.mjs` 的 `base` 断言（L72/L135/L160）必须优先修**：它长红掩护了真红
-  （`pages.ts` 的静默失效藏了整整一轮）。**长红的关卡 = 噪声，必须先让它回到可信状态再谈别的。**
-- 📄 **主题模块改造方案已出，等排期**：`reports/theme-module-analysis-plan-2026-09-27.html`
-  （B1 止血 → B2 修失修关卡 → B3 包自描述 `coverage` 拆「关卡即配置」→ B4 二级索引 → B5 四段键 → B6 清场）。
-  用户已定：**B5「清理 view 冗余」要做**；新页面自动接线 / 外置主题包**暂不做**。
-  ⚠️ B1 与 B2 顺序不能颠倒（否则尺子没校准）。
+- ⚠️ 卡关脚本欠账：`verify-theme.mjs` 期望值仍按旧配色名（已 `exit 2` 自检）。面板四件套已于 2026-09-27
+  退役到 `_retired/`，`verify-panel-v3.mjs` 已重写（34/34）—— 长红关卡已清理。
+- ✅ **主题模块改造 B1→B6 已落地**（2026-09-27，见 `theme-module-analysis-plan` 报告与当日日志）：
+  B1 判据由接口派生 + 运行时标记 · B2 修失修关卡 · B3 包自描述 `coverage` + 关卡去硬编码 ·
+  B4 页面工厂 + 清残留 · B6 设备清单 `devices.ts` 下沉 + 三分发器统一 `pickDeviceId` + 路由数据化。
+  **加包/加页面 = 只写目录+契约文件，加设备 = 加一条清单+写容器**（runbook 见 `docs/frontend/multi-theme.md` §七/§八）。
+- ⏳ **B5 四段键未做**（删注册表 view 冗余段，用户此前选定要做）：动 `theme/index.ts` 近 10 函数 + store 调用面，
+  风险高，需单独一轮 R1→R2→R3。B4 剩余：注册表二级索引、runtime 注入名去重、O5 关卡整合。
 - ⚠️ `phonecopy` 是**嵌套 git 仓**（不在 `.gitmodules`）→ `git status` 永远显示脏 ` m phonecopy`。
   **但 `release.mjs` 已在 porcelain 里显式过滤它**（L338）→ 正常发版**不需要** `--allow-dirty`（2026-09-27 实测 v2.25.1 一次通过）。
 - ✅ **主题抽包 Stage 1 已完成**（`packages/theme-core` 纯叶子层 + 零逻辑壳；默认 `default`+`white`；版式选择收口 `views/picker.ts`）。
