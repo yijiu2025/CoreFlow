@@ -52,7 +52,9 @@ watch(
     qrCodeFirst.value = query.qrCodeFirst === 'true';
     stie.value = (query.stie as string) || '02';
     rnd.value = (query.rnd as string) || '0.7164508668310778';
-    sign.value = (query.rnd as string) || '';
+    // sign 语义 = 后端 H5 签名校验的 query.sign（见 utils/sign.ts），
+    // 此前误读成 query.rnd（复制粘贴错），字段一旦启用即错 —— 改回 query.sign
+    sign.value = (query.sign as string) || '';
   },
   { immediate: true, deep: true }
 );

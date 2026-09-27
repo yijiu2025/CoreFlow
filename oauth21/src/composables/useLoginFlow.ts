@@ -21,11 +21,28 @@ import { sanitizeLocalRedirect } from '@/utils/redirect';
 import { getStableDeviceId } from 'stable-deviceid';
 import { useCountdown } from './useCountdown';
 
+/**
+ * 会话摘要（`max_sessions` 分支里后端下发的活跃会话列表）
+ *
+ * 字段对齐后端 `src/framework/auth/session-governance.js` 的 `checkMaxSessions`
+ * 里 push 的对象：sessionId / ip / userAgent / lastActive / deviceType / appId。
+ * 前端只把整份列表透传给父窗口（postMessage），不消费内部字段 ——
+ * 但给它明确类型能让「后端字段微调」在类型层暴露，而不是靠运行时猜。
+ */
+export interface SessionBrief {
+  sessionId: string;
+  ip: string;
+  userAgent: string;
+  lastActive: number | string;
+  deviceType?: string;
+  appId?: string;
+}
+
 /** 登录响应判别联合（按 action 区分四种分支） */
 export type LoginResponse =
   | { action: 'consent'; consentKey: string; client_name: string; scope: string; user: LoginUser }
   | { action: 'needs_email_verify'; verifyToken: string; email: string; reason?: string }
-  | { action: 'max_sessions'; sessions: any[]; maxSessions: number }
+  | { action: 'max_sessions'; sessions: SessionBrief[]; maxSessions: number }
   | LoginSuccessResponse;
 
 /** 登录成功响应（兼容 JWT 与 Session） */

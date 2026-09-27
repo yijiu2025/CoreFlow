@@ -15,6 +15,9 @@ export default [
   {
     ignores: [
       'dist/**',
+      // 临时构建产物目录（`dist-*`）：gitignore 已覆盖，但 lint 走 `eslint .` 会扫进来，
+      // 必须显式忽略 —— 否则一堆压缩产物被打进 lint 范围、报出成千个 no-undef。
+      'dist-*/**',
       'node_modules/**',
       'src/auto-import.d.ts',
       'src/components.d.ts',

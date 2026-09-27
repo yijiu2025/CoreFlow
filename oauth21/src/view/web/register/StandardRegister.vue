@@ -266,13 +266,16 @@ const goLogin = () => {
 /**
  * 处理注册表单提交
  */
-const handleRegister = handleSubmit(async () => {
+// 用 handleSubmit 的回调参数 data 而非外部 values：data 是 vee-validate 校验后的
+// 精确类型（字段非 undefined），外部 values 是宽松的 string | undefined —— 后者
+// 展开进 RegisterPayload 会因「必填字段可空」而类型报错。
+const handleRegister = handleSubmit(async data => {
   if (!agreed.value || isEmailDuplicate.value) return;
   if (submitLock.locked.value) return;
   submitLock.lock();
 
   // 解构排除 confirmPassword（`_` 前缀 = 有意不使用）：它只用于本地一致性校验，不发往后端
-  const { confirmPassword: _confirmPassword, ...submitData } = values;
+  const { confirmPassword: _confirmPassword, ...submitData } = data;
 
   try {
     const encryptedPassword = await withTimeout(rsaEncrypt(submitData.password!), RSA_ENCRYPT_TIMEOUT, 'rsaEncrypt');

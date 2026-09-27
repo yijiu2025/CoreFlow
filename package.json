@@ -39,6 +39,9 @@
     "src/**/*.{js,ts,vue}": [
       "eslint --fix",
       "prettier --write"
+    ],
+    "oauth21/src/**/*.{ts,vue}": [
+      "eslint --fix --config oauth21/eslint.config.js"
     ]
   },
   "keywords": [],
