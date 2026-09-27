@@ -82,16 +82,20 @@ export function applyThemeLayers(layers: ThemeTokenLayers): string[] {
     if (!nextNames.has(name)) root.style.removeProperty(name);
   }
 
-  const applied: string[] = [];
+  // 🔴 去重：theme 层与 external 层**同名** token 时（external 压过 theme），
+  //    同一变量会被 setProperty 两次（后者胜是设计行为），但注入名单里不该有重复名 ——
+  //    `injectedNames` 是「当前注入了哪些**不同**变量名」的口径，供差集清理与
+  //    `getInjectedTokenNames()` 断言使用。用 Set 保证无重复。
+  const applied = new Set<string>();
   for (const [name, value] of Object.entries(theme.tokens)) {
     root.style.setProperty(name, value);
-    applied.push(name);
+    applied.add(name);
   }
   for (const [name, value] of Object.entries(external.tokens)) {
     root.style.setProperty(name, value);
-    applied.push(name);
+    applied.add(name);
   }
-  injectedNames = applied;
+  injectedNames = [...applied];
 
   return [...theme.rejected, ...external.rejected];
 }
