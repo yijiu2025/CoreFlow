@@ -258,13 +258,13 @@ function toneOfCard(id: string): ThemeTone {
    当前状态
    ========================================================================== */
 
-/** 当前**生效**的配色 id（按当前设备/页面/版式校正过的）
+/** 当前**生效**的配色 id（按当前设备/页面/包校正过的）
  *
  * 🔴 传 `activeViewId.value` 作为 pkg：view ≡ pkg（一个主题包 = 一种版式），
  *    这样 `findRecord` 按**当前包**查 —— 否则会把 compact 包点的 blue 又落回 default 包。
  */
 const activeThemeId = computed(
-  () => themeStore.themeRecordFor(activeViewId.value, device.value, activePage.value, activeViewId.value).meta.id
+  () => themeStore.themeRecordFor(activeViewId.value, device.value, activePage.value).meta.id
 );
 
 /** 头部展示的当前配色名（查不到时退回 id） */
