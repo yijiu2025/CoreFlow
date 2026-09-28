@@ -61,8 +61,9 @@ export const authApi = {
    * @param payload 登录信息（不含 scope/nonce/timestamp，这些由 crypto 层组装）
    * 解密失败时自动清除公钥缓存并重试一次（应对服务器重启密钥轮换）
    */
-  async login(payload: LoginPayload & { captchaKey?: string; client_id?: string }) {
-    const { captchaKey, client_id, ...rest } = payload;
+  async login(payload: Record<string, unknown> & Partial<LoginPayload>) {
+    // 入参同时接受强类型 LoginPayload 与流程组装的宽松对象（Record）
+    const { captchaKey, client_id, ...rest } = payload as Record<string, unknown>;
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -73,8 +74,10 @@ export const authApi = {
           captchaKey,
           client_id
         });
-      } catch (err: any) {
-        if (attempt === 0 && err.message?.includes('解密失败')) {
+      } catch (err: unknown) {
+        // 解密失败重试：只在首次尝试时判断（err.message 含"解密失败"）
+        const message = err instanceof Error ? err.message : '';
+        if (attempt === 0 && message.includes('解密失败')) {
           // 公钥可能已过期（服务器重启），清除缓存重试
           clearPublicKeyCache();
           continue;

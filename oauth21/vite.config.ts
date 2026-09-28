@@ -4,7 +4,7 @@ import path from 'path';
 import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { createSvgIconsPlugin } from 'vite-plugin-svg-icons';
-import { aliases, OAUTH21_ROOT } from './config/aliases';
+import { aliases, OAUTH21_ROOT } from './config/aliases.js';
 
 // https://vite.dev/config/
 export default defineConfig({

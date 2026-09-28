@@ -206,11 +206,12 @@ jobs:
         run: npm run build --prefix oauth21
 
       # 静态验收关卡（不需要 dev server / 浏览器）——把「配置写错但无声」的那一类挡在 CI。
-      # 为什么挑这三个进 CI：
+      # 为什么挑这四个进 CI：
       #   verify-alias-single-source  → 别名三处漂移（vite/tsconfig/aliases.ts），此前只能靠人记
       #   verify-kernel-zero-coupling → 内核包若 import vue 会静默出两份 Vue，npm/构建都不报
       #   verify-console-strip        → Vite 8 下 `build.esbuild.drop` 静默失效（实测残留 28 处），
       #                                 本关卡自建一次构建扫产物，属"以为有其实没有"的典型
+      #   verify-no-any-debt          → 评审 P1：52 处 any 集中在登录/验证码边界，守卫防回涨
       # ⚠️ 其余关卡（verify-theme-dirs / verify-glob-device / verify-no-pwa）暂未进 CI：
       #    theme-dirs / glob-device 依赖本地子模块与主题目录的完整形态，可在后续按需补；
       #    verify-no-pwa 需要 dist-nopwa 产物（当前 CI 只产出默认 dist）。
@@ -219,6 +220,7 @@ jobs:
           node oauth21/e2e/verify-alias-single-source.mjs
           node oauth21/e2e/verify-kernel-zero-coupling.mjs
           node oauth21/e2e/verify-console-strip.mjs
+          node oauth21/e2e/verify-no-any-debt.mjs
 
   # --------------------------------------------------------------------------
   # 3. 跨进程不变量（E1 分布式锁 / E3 遥测聚合 / E3 WS 扇出）

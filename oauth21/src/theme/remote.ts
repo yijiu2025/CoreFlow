@@ -49,7 +49,7 @@ import { normalizeMode, type ThemeMode } from './mode';
 import type { ThemeTokenOverrides } from './runtime';
 
 /** 配置在 .env 里；未配置则整个机制不生效 */
-const ENDPOINT = (import.meta as any).env?.VITE_THEME_ENDPOINT as string | undefined;
+const ENDPOINT = import.meta.env.VITE_THEME_ENDPOINT as string | undefined;
 
 /** 超时上限：超过就放弃，不能让主题请求拖慢登录首屏 */
 const TIMEOUT_MS = 3000;

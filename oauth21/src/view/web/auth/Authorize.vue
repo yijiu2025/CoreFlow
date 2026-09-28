@@ -1,11 +1,11 @@
 <script setup lang="ts">
-/* eslint-disable @typescript-eslint/no-explicit-any -- 后端 OAuth 响应字段动态，any 合理 */
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { authApi } from '@/api/auth';
 import { isMobileViewport } from '@/utils/device';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
+import { pickRedirectUrl } from '@/types/external';
 import MessageToast from '@/components/common/MessageToast.vue';
 import { useMessage } from '@/composables/useMessage';
 
@@ -68,22 +68,17 @@ interface AuthorizeCheckResult {
   data?: AuthorizeCheckResult;
 }
 
-/** 从响应里取后端校验过的跳转地址（不直接用 query.redirect_uri，防开放重定向） */
-function pickRedirectUrl(res: any): string | undefined {
-  return res?.redirect_url || res?.data?.redirect_url;
-}
-
 // 确认授权：调后端 /oauth2.1/authorize/consent，后端签发 code 并 302 到 redirect_uri
 const handleApprove = async () => {
   if (submitting.value) return;
   submitting.value = true;
   try {
-    // request.ts 拦截器已解包 AxiosResponse.data，类型断言拿 redirect_url
-    const res = (await authApi.authorizeConsent({
+    // request.ts 拦截器已解包 AxiosResponse.data，交给 pickRedirectUrl 取 redirect_url
+    const res: unknown = await authApi.authorizeConsent({
       sessionId: sessionId.value,
       user_id: userId.value,
       action: 'approve'
-    })) as unknown as { redirect_url?: string; data?: { redirect_url?: string } };
+    });
     const redirectUrl = pickRedirectUrl(res);
     if (redirectUrl) {
       window.location.href = redirectUrl;

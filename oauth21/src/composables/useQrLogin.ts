@@ -17,12 +17,14 @@
 import { ref, onUnmounted } from 'vue';
 import QRCode from 'qrcode';
 import { authApi } from '@/api/auth';
+import { parseQrStatus, qrGenerateSchema } from '@/types/external';
+import type { QrStatusResponse } from '@/types/external';
 
 export type QrStatus = 'pending' | 'scanned' | 'confirmed' | 'expired';
 
 export function useQrLogin(
   clientId: () => string,
-  onSuccess: (res: any) => void,
+  onSuccess: (res: QrStatusResponse) => void,
   onExpired?: () => void
 ) {
   const qrKey = ref('');
@@ -34,9 +36,11 @@ export function useQrLogin(
     try {
       // scope 不前端传（app 属性，后端从 client_id 查）；
       // H5 签名（timestamp/nonce/device_id/sign）由 request 拦截器自动注入
-      const res: any = await authApi.generateQR({
+      const raw: unknown = await authApi.generateQR({
         client_id: clientId()
       });
+      // zod 校验：qrKey 缺失（后端改字段）直接落到 catch，不静默生成空二维码
+      const res = qrGenerateSchema.parse(raw);
       qrKey.value = res.qrKey;
       qrStatus.value = 'pending';
       qrDataUrl.value = await QRCode.toDataURL(res.qrContent || res.qrKey, { width: 200, margin: 1 });
@@ -51,18 +55,20 @@ export function useQrLogin(
     pollTimer = setInterval(async () => {
       if (!qrKey.value) return;
       try {
-        const res: any = await authApi.checkQRStatus(qrKey.value);
+        const raw: unknown = await authApi.checkQRStatus(qrKey.value);
+        const res = parseQrStatus(raw);
+        if (!res) return; // 解析失败按「未确认」继续轮询
         // 兼容 JWT（accessToken）与 Session（session_token）+ 状态字段
-        if (res?.accessToken || res?.access_token || res?.session_token || res?.status === 'CONFIRMED') {
+        if (res.accessToken || res.access_token || res.session_token || res.status === 'CONFIRMED') {
           qrStatus.value = 'confirmed';
           clearTimer();
           onSuccess(res);
-        } else if (res?.status === 'EXPIRED' || res?.status === 'ERROR') {
+        } else if (res.status === 'EXPIRED' || res.status === 'ERROR') {
           qrStatus.value = 'expired';
           clearTimer();
           onExpired?.();
         } else {
-          qrStatus.value = (res?.status || 'PENDING').toLowerCase() as QrStatus;
+          qrStatus.value = (res.status || 'PENDING').toLowerCase() as QrStatus;
         }
       } catch {
         // 单次轮询失败不中断后续轮询（网络抖动等）

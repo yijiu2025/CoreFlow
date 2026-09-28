@@ -3,6 +3,7 @@
  * 特性：请求/响应拦截、Token 自动注入、401 无感刷新队列、请求取消
  */
 import axios from 'axios';
+import type { AxiosRequestConfig } from 'axios';
 
 const service = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
@@ -163,8 +164,30 @@ const redirectToLogin: RedirectFn = () => {
   }
 };
 redirectToLogin._locked = false;
-async function handleRiskBlock(res: any): Promise<any> {
-  const risk = res.data?.__risk__ || res.data?.data?.__risk__;
+/**
+ * 风险拦截响应（后端 `__risk__` 字段）——窄接口，只声明前端用到的成员。
+ * 载荷可能出现在 `res.data.__risk__`（已解包）或 `res.data.data.__risk__`（信封嵌套）两层。
+ */
+interface RiskBlockPayload {
+  level: string;
+  verifyToken?: string;
+  reasons?: string[];
+  message?: string;
+}
+
+/** handleRiskBlock 的入参：既能接拦截器里的 AxiosResponse，也能接 error 分支手搓的 { data, config } */
+interface RiskBlockInput {
+  data?: { __risk__?: RiskBlockPayload; data?: { __risk__?: RiskBlockPayload }; message?: string };
+  config?: AxiosRequestConfig;
+}
+
+/** 从任意响应形态里提取 __risk__ 载荷（顶层或信封嵌套一层） */
+function extractRisk(data: RiskBlockInput['data']): RiskBlockPayload | undefined {
+  return data?.__risk__ || data?.data?.__risk__;
+}
+
+async function handleRiskBlock(res: RiskBlockInput): Promise<unknown> {
+  const risk = extractRisk(res.data);
   if (!risk || risk.level !== 'warn' || !risk.verifyToken) {
     return Promise.reject(new Error(res.data?.message || '请求被拦截'));
   }
@@ -187,8 +210,13 @@ async function handleRiskBlock(res: any): Promise<any> {
       },
       onSuccess: () => {
         cleanup();
-        // 验证通过，重发原请求（基准已更新，不再拦截）
-        resolve(service(res.config));
+        // 验证通过，重发原请求（基准已更新，不再拦截）。
+        // config 可能缺失（error 分支手搓入参时）→ 缺失则直接 reject，避免 `service(undefined)`。
+        if (res.config) {
+          resolve(service(res.config));
+        } else {
+          reject(new Error('验证通过但缺少原始请求配置，请重试'));
+        }
       }
     });
     app.mount(container);

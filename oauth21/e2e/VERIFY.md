@@ -32,7 +32,7 @@ node oauth21/e2e/verify-all.mjs --dev http://127.0.0.1:5174   # 覆盖端口
 ⚠️ 起多个实例**必须串行**（前一个 curl 到 200 再起下一个）：几个 Vite 共用
 `node_modules/.vite`，同时冷启会互相废掉 optimizeDeps → 白屏 + `504 (Outdated Optimize Dep)`。
 
-## 三、活跃关卡（20 个，分四组）
+## 三、活跃关卡（21 个，分四组）
 
 ### ① 静态关卡（无浏览器 / 无服务器）
 | 关卡 | 守什么 |
@@ -42,6 +42,7 @@ node oauth21/e2e/verify-all.mjs --dev http://127.0.0.1:5174   # 覆盖端口
 | `verify-alias-single-source.mjs` | **别名三处一致**：`config/aliases.ts` ↔ `tsconfig.app.json` paths ↔ vite 实解析（`skinsuite`/`stable-deviceid` 必须解析到 `packages/*/src/index.ts`，不是 node_modules dist）（21 项） |
 | `verify-kernel-zero-coupling.mjs` | **内核零框架耦合**：两包 dependencies/peerDependencies 全空、源码只 import 相对路径（禁 vue）⇒ 防"源码直供"下静默产出两份 Vue（18 项） |
 | `verify-console-strip.mjs` | **生产构建真的删了 console**（自建一次构建扫产物计数为 0，并对照源码确实有 console 待删）（6 项） |
+| `verify-no-any-debt.mjs` | **类型逃逸清零**：`src/` 业务代码无 `any`/`@ts-ignore`/`@ts-expect-error`（剥注释后统计），且外部边界单一入口 `src/types/external.ts` 存在并导出关键收口件（11 项） |
 | `verify-no-pwa.mjs` | PWA 已移除：产物无 manifest/SW 注入，`sw.js` 只能是自毁迁移版（`--dir dist-nopwa`） |
 
 ### ② dev 实例关卡（默认 5174）

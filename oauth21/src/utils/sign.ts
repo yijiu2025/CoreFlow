@@ -75,7 +75,7 @@ export async function generateSign(
  * 与后端 signature.js serializeQueryForSign 必须完全一致。
  * 只支持扁平 key-value；数组/嵌套对象不保证一致。
  */
-export function serializeParamsForSign(params: any): string {
+export function serializeParamsForSign(params: unknown): string {
   if (!params) return '';
   if (params instanceof URLSearchParams) {
     const pairs: [string, string][] = [];
@@ -85,10 +85,11 @@ export function serializeParamsForSign(params: any): string {
     return pairs.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
   }
   if (typeof params !== 'object') return '';
-  const keys = Object.keys(params).filter(k => params[k] !== undefined && params[k] !== null);
+  const record = params as Record<string, unknown>;
+  const keys = Object.keys(record).filter(k => record[k] !== undefined && record[k] !== null);
   if (keys.length === 0) return '';
   keys.sort();
-  return keys.map(k => `${encodeURIComponent(k)}=${encodeURIComponent(String(params[k]))}`).join('&');
+  return keys.map(k => `${encodeURIComponent(k)}=${encodeURIComponent(String(record[k]))}`).join('&');
 }
 
 /** 获取 appKey（供外部判断是否配置） */

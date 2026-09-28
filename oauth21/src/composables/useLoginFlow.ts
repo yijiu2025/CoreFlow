@@ -10,6 +10,10 @@
  *
  * 兼容 JWT（accessToken）与 Session（session_token）两种模式。
  *
+ * 🔴 后端响应**不在这里 `as any` 读字段**：全部经 `@/types/external` 的
+ *    `parseLoginResponse` 做 zod 判别联合校验后，按 `kind` 分支消费。
+ *    后端改字段 → 这里落到 `kind: 'unknown'` → 明确报错，而不是静默传空值给父窗口。
+ *
  * @author yijiu2025
  * @since 2026-08-26
  */
@@ -20,67 +24,20 @@ import { postToParent } from '@/utils/parent';
 import { sanitizeLocalRedirect } from '@/utils/redirect';
 import { getStableDeviceId } from 'stable-deviceid';
 import { useCountdown } from './useCountdown';
+import { parseLoginResponse } from '@/types/external';
+import type {
+  LoginUser,
+  LoginSuccessResponse,
+  LoginActionResponse,
+  SessionBrief
+} from '@/types/external';
 
-/**
- * 会话摘要（`max_sessions` 分支里后端下发的活跃会话列表）
- *
- * 字段对齐后端 `src/framework/auth/session-governance.js` 的 `checkMaxSessions`
- * 里 push 的对象：sessionId / ip / userAgent / lastActive / deviceType / appId。
- * 前端只把整份列表透传给父窗口（postMessage），不消费内部字段 ——
- * 但给它明确类型能让「后端字段微调」在类型层暴露，而不是靠运行时猜。
- */
-export interface SessionBrief {
-  sessionId: string;
-  ip: string;
-  userAgent: string;
-  lastActive: number | string;
-  deviceType?: string;
-  appId?: string;
-}
+// 类型从 @/types/external 统一导出，这里 re-export 保持既有 import 路径可用
+export type { LoginUser, LoginSuccessResponse, SessionBrief };
+export type { ParsedLoginResponse } from '@/types/external';
 
-/** 登录响应判别联合（按 action 区分四种分支） */
-export type LoginResponse =
-  | { action: 'consent'; consentKey: string; client_name: string; scope: string; user: LoginUser }
-  | { action: 'needs_email_verify'; verifyToken: string; email: string; reason?: string }
-  | { action: 'max_sessions'; sessions: SessionBrief[]; maxSessions: number }
-  | LoginSuccessResponse;
-
-/** 登录成功响应（兼容 JWT 与 Session） */
-export interface LoginSuccessResponse {
-  accessToken?: string;      // JWT 模式
-  access_token?: string;     // JWT 模式（snake_case 兜底）
-  session_token?: string;    // Session 模式
-  refresh_token?: string;    // JWT 模式
-  expires_in?: number;
-  scope?: string;
-  user: LoginUser;
-}
-
-export interface LoginUser {
-  id: string | number;
-  username: string;
-  name?: string;
-  email?: string;
-  avatar?: string | null;
-}
-
-/**
- * 类型守卫函数（按 action 区分响应类型，分支内用 narrowing 自动收窄）
- * 替代 `LoginResponse | any` —— 判别联合的 discriminant 在 `| any` 时彻底失效
- */
-export function isConsentResponse(res: unknown): res is Extract<LoginResponse, { action: 'consent' }> {
-  return !!res && typeof res === 'object' && (res as any).action === 'consent';
-}
-export function isEmailVerifyResponse(res: unknown): res is Extract<LoginResponse, { action: 'needs_email_verify' }> {
-  return !!res && typeof res === 'object' && (res as any).action === 'needs_email_verify';
-}
-export function isMaxSessionsResponse(res: unknown): res is Extract<LoginResponse, { action: 'max_sessions' }> {
-  return !!res && typeof res === 'object' && (res as any).action === 'max_sessions';
-}
-export function isLoginSuccessResponse(res: unknown): res is LoginSuccessResponse {
-  return !!res && typeof res === 'object' && (res as any).action === undefined
-    && (('accessToken' in (res as any)) || ('access_token' in (res as any)) || ('session_token' in (res as any)));
-}
+/** 授权确认期状态（consent 分支的 action 响应） */
+type ConsentState = Extract<LoginActionResponse, { action: 'consent' }>;
 
 export interface EmailVerifyState {
   verifyToken: string;
@@ -92,7 +49,7 @@ export interface UseLoginFlowOptions {
   /** 是否保持登录（控制 sid_r 长登录） */
   keepLogin: () => boolean;
   /** 表单值（username/password/email/code/type） */
-  values: () => any;
+  values: () => Record<string, unknown>;
   /** 图形验证码 key */
   captchaKey: () => string;
   /** 客户端 ID */
@@ -115,7 +72,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
 
   // 授权确认状态
   const showConsent = ref(false);
-  const consentState = ref<any>(null);
+  const consentState = ref<ConsentState | null>(null);
   const submittingConsent = ref(false);
 
   // 邮箱二次验证状态
@@ -127,12 +84,12 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
   /** 通知父窗口登录成功（兼容 JWT/Session） */
   function notifyParentLoginSuccess(res: LoginSuccessResponse | unknown) {
     if (!(window.parent && window.parent !== window)) return;
-    // narrow unknown → LoginSuccessResponse 才能读字段
-    const data = res as LoginSuccessResponse | undefined;
-    if (!data || typeof data !== 'object') return;
-    const token = (data as any).accessToken || (data as any).access_token;
-    const sessionToken = (data as any).session_token;
-    const user: LoginUser = (data as any).user || {};
+    // 非成功形状直接返回（父窗口不接收无 token 的消息，避免下游误判）
+    if (!res || typeof res !== 'object') return;
+    const data = res as LoginSuccessResponse;
+    const token = data.accessToken || data.access_token;
+    const sessionToken = data.session_token;
+    const user: LoginUser = data.user;
     postToParent({
       type: 'LOGIN_SUCCESS',
       token,
@@ -153,7 +110,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
    * 避免只在其中一条上漏掉回跳 —— 历史上就没有任何一条处理 redirect，
    * 导致"守卫把未登录访问者送去 /login?redirect=/authorize，登录后再没人送回来"。
    */
-  function finishLogin(res: unknown) {
+  function finishLogin(res: LoginSuccessResponse | unknown) {
     notifyParentLoginSuccess(res);
 
     // iframe 内：父窗口按 LOGIN_SUCCESS 消息自行处理，这里不跳转
@@ -169,42 +126,54 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
   /** 执行登录（提交后端 + 处理四种响应分支） */
   async function executeLogin() {
     try {
-      const loginPayload = {
+      // values() 由各版式表单提供（含 type/username/password/code 等），
+      // 形状是 Record<string, unknown>；authApi.login 同口径接收后按需解构 + 加密。
+      const loginPayload: Record<string, unknown> = {
         ...values(),
         keepLogin: keepLogin(),
         captchaKey: captchaKey(),
         client_id: clientId()
       };
-      // 响应类型未知（后端可能微调字段），用 unknown + 类型守卫 narrowing
-      const res: unknown = await authStore.login(loginPayload);
-      if (isConsentResponse(res)) {
-        consentState.value = res;
-        showConsent.value = true;
-      } else if (isEmailVerifyResponse(res)) {
-        emailVerifyState.value = {
-          verifyToken: res.verifyToken,
-          email: res.email,
-          reason: res.reason || '登录环境变更'
-        };
-        emailVerifyCode.value = '';
-        showEmailVerify.value = true;
-        emailVerifyCountdown.start(60);
-      } else if (isMaxSessionsResponse(res)) {
-        if (window.parent && window.parent !== window) {
-          postToParent({
-            type: 'MAX_SESSIONS',
-            sessions: res.sessions,
-            maxSessions: res.maxSessions
-          });
-        }
-      } else if (isLoginSuccessResponse(res)) {
-        finishLogin(res);
+      // 响应类型未知（后端可能微调字段）→ zod 判别联合解析，按 kind 分支消费
+      const raw: unknown = await authStore.login(loginPayload);
+      const parsed = parseLoginResponse(raw);
+
+      if (parsed.kind === 'action') {
+        handleActionResponse(parsed.value);
+      } else if (parsed.kind === 'success') {
+        finishLogin(parsed.value);
       } else {
-        // 后端返回了未识别的响应（可能是新 action 或字段微调），按成功处理兜底
+        // 后端返回了未识别的响应（新 action 或字段改名）→ 明确报错
         showError('登录响应格式异常，请重试');
       }
-    } catch (err: any) {
-      showError(err.message || '登录失败');
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : '登录失败');
+    }
+  }
+
+  /** 处理带 action 的三个分支（consent / needs_email_verify / max_sessions） */
+  function handleActionResponse(res: LoginActionResponse) {
+    if (res.action === 'consent') {
+      consentState.value = res;
+      showConsent.value = true;
+    } else if (res.action === 'needs_email_verify') {
+      emailVerifyState.value = {
+        verifyToken: res.verifyToken,
+        email: res.email,
+        reason: res.reason || '登录环境变更'
+      };
+      emailVerifyCode.value = '';
+      showEmailVerify.value = true;
+      emailVerifyCountdown.start(60);
+    } else {
+      // max_sessions：仅在 iframe 内通知父窗口
+      if (window.parent && window.parent !== window) {
+        postToParent({
+          type: 'MAX_SESSIONS',
+          sessions: res.sessions,
+          maxSessions: res.maxSessions
+        });
+      }
     }
   }
 
@@ -222,12 +191,13 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
     if (!consentState.value) return;
     submittingConsent.value = true;
     try {
-      const res: LoginSuccessResponse | unknown = await authApi.confirmConsent(consentState.value.consentKey);
+      const raw: unknown = await authApi.confirmConsent(consentState.value.consentKey);
       showConsent.value = false;
       consentState.value = null;
-      finishLogin(res);
-    } catch (err: any) {
-      showError(err.message || '授权确认失败');
+      const parsed = parseLoginResponse(raw);
+      finishLogin(parsed.kind === 'success' ? parsed.value : raw);
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : '授权确认失败');
     } finally {
       submittingConsent.value = false;
     }
@@ -240,8 +210,8 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
       await authApi.sendLoginVerifyCode(emailVerifyState.value.verifyToken);
       emailVerifyCountdown.start(60);
       showError('验证码已重新发送至邮箱');
-    } catch (err: any) {
-      showError(err.message || '验证码发送失败');
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : '验证码发送失败');
     }
   }
 
@@ -252,7 +222,7 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
       return;
     }
     try {
-      const res: LoginSuccessResponse | unknown = await authApi.verifyEmailLogin(
+      const raw: unknown = await authApi.verifyEmailLogin(
         emailVerifyState.value.verifyToken,
         emailVerifyCode.value
       );
@@ -260,9 +230,10 @@ export function useLoginFlow(opts: UseLoginFlowOptions) {
       emailVerifyState.value = null;
       emailVerifyCode.value = '';
       emailVerifyCountdown.stop();
-      finishLogin(res);
-    } catch (err: any) {
-      showError(err.message || '验证码错误');
+      const parsed = parseLoginResponse(raw);
+      finishLogin(parsed.kind === 'success' ? parsed.value : raw);
+    } catch (err: unknown) {
+      showError(err instanceof Error ? err.message : '验证码错误');
     }
   }
 
