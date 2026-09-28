@@ -7,9 +7,22 @@
 #   frontend  → oauth21 前端（类型 / 规范 / 单测 / 生产构建）
 #   verify    → 跨进程不变量（分布式锁、WS 扇出、遥测聚合）—— 只能多进程验证
 #
-# 关于依赖安装：**不用 `npm ci`**，且必须带 `--legacy-peer-deps`。
-#   `package-lock.json` 把 `wb-logkit` 记为 `link: packages/log`，那是个被
-#   .gitignore 排除的独立嵌套仓库，CI 检出主仓后并不存在 → `npm ci` 直接失败。
+# 关于依赖安装：分两类作业，口径**刻意不同**。
+#
+#   【前端 frontend job】用 `npm ci --prefix oauth21`。
+#     oauth21 是独立前端工程，有自己的 `oauth21/package-lock.json`（已入库），
+#     它的依赖图与根工程完全无关（不引用 `wb-logkit` 那条 link），所以 `npm ci`
+#     能正常同步校验并安装。lock 入库后这一步才成立 —— 此前 lock 被 .gitignore
+#     无差别排除，只能 `npm install`，构建不可复现。
+#
+#   【后端 lint / test / verify 三个 job】**继续用 `npm install`，不要改 `npm ci`**。
+#     根 `package-lock.json` 已入库（供应链审计基线），但它把 `wb-logkit` 记为
+#     `link: packages/log` —— 那是个被 .gitignore 排除的独立嵌套仓库
+#     （https://github.com/yijiu2025/log），CI 检出主仓后并不存在。
+#     实测（2026-09-28）：`npm ci --workspace=packages/shared-device --include-workspace-root`
+#     本身能装上（exit 0，736 包），但 npm **会照样给 `node_modules/wb-logkit` 建一条
+#     指向 `packages/log` 的**悬空软链**，`import 'wb-logkit'` 立即 `ERR_MODULE_NOT_FOUND`
+#     → 后端三个 job 齐红。所以根 lock 是"给人/审计看的基线"，不是后端安装路径。
 #
 #   安装范围 = `--workspace=packages/shared-device --include-workspace-root`：
 #     只把「根工程 + shared-device 这一个 workspace」纳入安装，
@@ -30,11 +43,11 @@
 #
 #   `--ignore-scripts`：根 `prepare` 是 husky，CI 不需要 git hooks，且能挡掉 postinstall 供应链面。
 #
-#   `--legacy-peer-deps`：没有它这一步必崩 —— 它不是在"放宽校验"，是在绕开
+#   `--legacy-peer-deps`：后端三个 job 没有它必崩 —— 它不是在"放宽校验"，是在绕开
 #     npm 10 / @npmcli/arborist 的一个崩溃：
 #       npm error Cannot read properties of null (reading 'edgesOut')
 #     成因链（2026-09-21 逐条实测）：
-#       1. 本仓库刻意不入库 lockfile → CI 上 npm 必须从 registry 现算整棵理想树；
+#       1. 本仓库的依赖安装路径刻意不依赖 lockfile → CI 上 npm 必须从 registry 现算整棵理想树；
 #       2. 三个前端 workspace 的 devDependencies 也在这个图里
 #          （崩溃日志最后两条正是 `fetch manifest vitest@4.1.11` 与其 peer `@types/node`）；
 #       3. vitest 的 peer 集合让 arborist 走到 `#loadPeerSet`
@@ -48,12 +61,13 @@
 #     Dockerfile 那边不需要它：`--omit=dev` 让 vitest 这类 devDependency 不进图，
 #       所以镜像一直是能构建的（这也解释了为什么"镜像能构建"却"CI 装不上"）。
 #
-# ⚠️ 因此 setup-node **不能开 `cache: npm`**（别再顺手加回去）。
-#   缓存功能会去找 package-lock.json 算缓存 key，而 lockfile 被 .gitignore 排除、CI 检出后
-#   并不存在 → 该步骤在「安装依赖」之前就以
-#     ##[error]Dependencies lock file is not found ... Supported file patterns: package-lock.json
-#   失败，三个作业会一起红，且看不到任何代码层面的信息。这与上面"不用 npm ci"是同一条约束的
-#   两个面：**本仓库的依赖安装路径刻意不依赖 lockfile**。实测 2026-09-21。
+# ⚠️ 后端三个 job 的 setup-node **仍然不能开 `cache: npm`**。
+#   缓存 key 由根 `package-lock.json` 的哈希算出 —— 该文件现已入库，看似可以开，
+#   但缓存恢复后仍要走 `npm install`（见上：后端不能用 ci），而 `cache: npm` 的
+#   收益只在 `npm ci` 路径上才成立；开着它只会给一个命中率无意义的缓存目录。
+#   真要开，必须先让后端也具备 `npm ci` 能力（= 让 `packages/log` 在 CI 里存在）。
+#   **frontend job 可以考虑开 `cache: npm` + `cache-dependency-path: oauth21/package-lock.json`**，
+#   因为那一条走的正是 `npm ci`。
 #
 # 关于数据库：**测试作业不需要 MySQL/Redis**。
 #   这不是省事，是实测结论 —— `framework/db` 在测试环境检测到缺配置会跳过而非退出，
@@ -92,6 +106,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: 安装依赖
+        # ⚠️ 用 `npm install` 而非 `npm ci`：根 lock 把 `wb-logkit` 记为 link→packages/log，
+        #    而该目录是 .gitignore 排除的嵌套仓、CI 里不存在；`npm ci` 会建出悬空软链，
+        #    `import 'wb-logkit'` 直接 ERR_MODULE_NOT_FOUND。详见文件头注释。实测 2026-09-28。
         run: |
           npm install --workspace=packages/shared-device --include-workspace-root \
             --ignore-scripts --legacy-peer-deps --no-audit --no-fund
@@ -118,6 +135,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: 安装依赖
+        # ⚠️ 同 lint job：后端保持 `npm install`，理由见文件头注释（wb-logkit 悬空软链）。
         run: |
           npm install --workspace=packages/shared-device --include-workspace-root \
             --ignore-scripts --legacy-peer-deps --no-audit --no-fund
@@ -137,17 +155,23 @@ jobs:
   # 都没跑过 —— 本地能过靠的是人记得手动跑。这里补上 oauth21 的闸门。
   #
   # oauth21 是**独立前端项目**（有自己的 package.json / node_modules / lock），
-  # 不是 workspace 成员，因此用 `npm install --prefix oauth21` 独立安装，而不是
+  # 不是 workspace 成员，因此用 `npm ci --prefix oauth21` 独立安装，而不是
   # `--workspace=oauth21`。
-  # 两个本地包 `skinsuite` / `stable-deviceid` **不在** package.json 里 ——
-  # 它们靠 `vite.config.js` 的 resolve.alias 直指 `../packages/*/src/index.ts`
-  # （源码直供，不依赖 node_modules 符号链接），源码随 checkout 天然存在，
-  # 所以独立 install 即可构建，无需 workspace 联动。
+  #
+  # 🔴 **用 `npm ci` 而非 `npm install`**：lock 已入库（2026-09-28 起），
+  #    这一步从 registry 现算树变成严格按 lock 复现，构建可复现、供应链有基线。
+  #    两个本地包 `skinsuite` / `stable-deviceid` 现已**显式声明在
+  #    `oauth21/package.json` 的 dependencies 里**（作为「可解析性声明」，不再是幽灵依赖），
+  #    因此 lock 里带它们的 resolved + integrity，`npm ci` 能正常同步校验。
+  #    ⚠️ 但运行期解析仍走 `vite.config.js` 的 resolve.alias 直指
+  #      `../packages/*/src/index.ts`（源码直供，优先于 node_modules 里的 dist 版本）。
+  #      所以真装进来的 npm 版只是"让 lock/审计说得通"，不参与构建产物。
   # ⚠️ `packages/theme-core` 是 **git submodule**（.gitmodules → yijiu2025/theme.git），
   #    vite alias 直指它的 `src/index.ts` —— checkout 必须带 `submodules: recursive`，
   #    否则该目录是空的、type-check / build 直接失败。
-  # `--legacy-peer-deps` 同样必须 —— 见文件头注释里关于 vitest peer 集合让
-  # arborist 崩溃的实测结论（2026-09-21）。
+  #
+  # 为什么不用 `--legacy-peer-deps`：这条路径是 `npm ci`，按 lock 精确安装、
+  # 不重新求解 peer；文件头记录的 arborist 崩溃只发生在 `npm install` 现算理想树时。
   # --------------------------------------------------------------------------
   frontend:
     name: Frontend（oauth21）
@@ -160,9 +184,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          # lock 已入库 → 这条路径是 `npm ci`，缓存命中是有意义的
+          cache: npm
+          cache-dependency-path: oauth21/package-lock.json
 
-      - name: 安装依赖
-        run: npm install --prefix oauth21 --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: 安装依赖（lock 复现）
+        run: npm ci --prefix oauth21 --ignore-scripts --no-audit --no-fund
 
       # 顺序刻意按「类型 → 规范 → 单测 → 构建」：
       # 类型错是最便宜的（不进构建），先挡；构建最贵（含 type-check），放最后兜底。
@@ -177,6 +204,21 @@ jobs:
 
       - name: 生产构建
         run: npm run build --prefix oauth21
+
+      # 静态验收关卡（不需要 dev server / 浏览器）——把「配置写错但无声」的那一类挡在 CI。
+      # 为什么挑这三个进 CI：
+      #   verify-alias-single-source  → 别名三处漂移（vite/tsconfig/aliases.ts），此前只能靠人记
+      #   verify-kernel-zero-coupling → 内核包若 import vue 会静默出两份 Vue，npm/构建都不报
+      #   verify-console-strip        → Vite 8 下 `build.esbuild.drop` 静默失效（实测残留 28 处），
+      #                                 本关卡自建一次构建扫产物，属"以为有其实没有"的典型
+      # ⚠️ 其余关卡（verify-theme-dirs / verify-glob-device / verify-no-pwa）暂未进 CI：
+      #    theme-dirs / glob-device 依赖本地子模块与主题目录的完整形态，可在后续按需补；
+      #    verify-no-pwa 需要 dist-nopwa 产物（当前 CI 只产出默认 dist）。
+      - name: 静态验收关卡
+        run: |
+          node oauth21/e2e/verify-alias-single-source.mjs
+          node oauth21/e2e/verify-kernel-zero-coupling.mjs
+          node oauth21/e2e/verify-console-strip.mjs
 
   # --------------------------------------------------------------------------
   # 3. 跨进程不变量（E1 分布式锁 / E3 遥测聚合 / E3 WS 扇出）
@@ -205,6 +247,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: 安装依赖
+        # ⚠️ 同 lint job：后端保持 `npm install`，理由见文件头注释（wb-logkit 悬空软链）。
         run: |
           npm install --workspace=packages/shared-device --include-workspace-root \
             --ignore-scripts --legacy-peer-deps --no-audit --no-fund
