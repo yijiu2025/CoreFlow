@@ -24,6 +24,11 @@
     "noFallthroughCasesInSwitch": true,
 
     "paths": {
+      /* ⚠️ 这几个别名与 `config/aliases.ts` 是**同一份语义的两处表达**：
+         vite.config.ts / vitest.config.ts 从那个文件 import（唯一来源），
+         而 compilerOptions.paths 是静态 JSON、无法求值 TS 模块，只能手写这份副本。
+         🔴 改任何一条都必须**两处同改** —— 关卡 `e2e/verify-alias-single-source.mjs`
+            会比对二者是否一致，漂移即红。 */
       "@/*": ["./src/*"],
       "stable-deviceid": ["../packages/shared-device/src/index.ts"],
       "stable-deviceid/*": ["../packages/shared-device/src/*"],
