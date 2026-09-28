@@ -904,6 +904,60 @@ build: {
 三枚都是**纯静态**（无端口 / 无外部产物依赖），已注册进 `verify-all.mjs` 的①静态组 + `VERIFY.md`（活跃 20 个），
 并加进 CI 的 `frontend` job 末尾（从仓库根跑，已实测 exit 0）。
 
+### 10.95 外部边界类型收口（2026-09-28，评审第 3 条）
+
+**问题**：全仓 44 处 `any`（排除生成文件）集中在核心业务链路最危险处，且 `vue-tsc -b` 报零错误
+⇒ 严格模式真开着，这些是**显式类型逃逸**，不是"TS 管不到的地方"。
+
+实测分布：`useLoginFlow` 13 · `useHCaptcha` 10 · `useTurnstile` 7 · `Consent.vue` 4 ·
+`useQrLogin` 3 · `stores/auth` 2 · 各 1（`api/auth` / `Authorize.vue` / `sign` / `request` / `theme/remote`）。
+
+**两类性质**（决定收口手法不同）：
+
+| 性质 | 例 | 手法 |
+| --- | --- | --- |
+| SDK 全局注入（外部脚本） | `(window as any).hcaptcha` | `declare global` 窄接口 |
+| 后端响应字段（契约会变） | `(res as any).action` / `(data as any).accessToken` | zod schema + 派生类型 |
+
+**方案**：`src/types/external.ts` 作为**唯一入口**，三类都收在这里。
+
+1. **SDK 窄接口**：`HCaptchaSdk` / `TurnstileSdk` 只声明**实际调用**的成员
+   （hCaptcha: `render`/`execute`；Turnstile: `render`/`reset`/`execute`）。
+   `execute` 返回类型是并集 `Promise<Resp> | Resp | undefined` —— 因为 SDK 三种形式共存：
+   新 SDK 返 Promise、旧 SDK 同步返 `{response}`、纯 callback 返 undefined。
+   消费侧 `if (maybe instanceof Promise) ... else if (maybe && (maybe.response || maybe.token))`。
+   ⚠️ 不要用 `typeof maybe.then === 'function'` 判 Promise：并集含 `undefined` 时
+   TS 对 `maybe.then` 的访问会报"可能为 undefined"（因 `undefined` 不在 `then` 的收窄内）。
+2. **登录响应**：`z.discriminatedUnion('action', [consent, needs_email_verify, max_sessions])`
+   + `parseLoginResponse(raw)` → `{kind:'action'|'success'|'unknown'}`。
+   🔴 **`kind:'unknown'` 的价值**：旧代码 `LoginResponse | any` 时判别联合的 discriminant
+   **彻底失效**（`| any` 会把联合吞成 any），读不到字段就静默传空对象给父窗口；
+   现在明确落到 `unknown` → `showError('登录响应格式异常')`。这就是"后端字段变了下游零提示"的解药。
+3. **其余**：`pickRedirectUrl(raw)`（认顶层 `redirect_url` 与 `data.redirect_url` 两种嵌套）·
+   `parseQrStatus(raw)`（解析失败返 null，轮询侧按"未确认"继续）。
+
+**三个边界反直觉坑**：
+
+- 🔴 `authApi.login` 参数**不要**写成 `LoginPayload & {...}`：`useLoginFlow.values()` 是
+  `Record<string, unknown>`，spread 后 TS 报"缺 type"。正解 = **`Record<string, unknown> & Partial<LoginPayload>`**，
+  内部 `as Record<string, unknown>` 解构。这是如实建模"表单形状随版式变"，不是逃逸。
+- 🔴 `handleRiskBlock` 的入参**不要**写 `Parameters<typeof service>[0]` —— axios 的 call signature
+  会把参数解析成第一个重载的 `string`。用结构化窄接口 `{ data?; config?: AxiosRequestConfig }`。
+  顺带修掉 `service(res.config)` 可能传 `undefined` 的隐患（加判空 + 明确 reject）。
+- 🔴 **守卫必须剥注释再统计**：源码注释里到处是 "把 `(window as any).x` 换成..." 这类说明文字，
+  不剥注释会把这些算成逃逸（实测误报 5 处）。
+
+**守卫** `e2e/verify-no-any-debt.mjs`（11 项）：剥注释后统计 `src/` 逃逸必须为 0 +
+断言 `external.ts` 存在且导出 7 个关键件（`parseLoginResponse` / `loginResponseSchema` /
+`declare global` / `HCaptchaSdk` / `TurnstileSdk` / `pickRedirectUrl` / `parseQrStatus`）+
+两个 SDK 全局已声明。毒丸：源码插一处 `as any` → 11→10 exit 1。已进 `verify-all.mjs` 静态组（21 个）+ CI。
+
+### 10.94 `config/aliases` 的 import 扩展名（Vite 未来默认 configLoader）
+
+`vite.config.ts` / `vitest.config.ts` 里 `import { aliases } from './config/aliases'`（无扩展名）
+会触发 Vite 警告：`configLoader: 'native'` 计划成为未来默认，需**显式扩展名**。
+修法：写 `'./config/aliases.js'`（TS 侧 `allowImportingTsExtensions` + bundler resolution 可解析）。
+
 ## 11. oauth21 移动端认证页（完整版；主索引只留结论句）
 
 ### 11.1 版式分发与「电脑上看不到手机上的东西」
