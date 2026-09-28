@@ -44,11 +44,11 @@ const json = body => ({ status: 200, contentType: 'application/json', body: JSON
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
 
-/** 各端点捕获到的请求体（未发出则保持 null） */
-let capturedVerify = null; // /verify/v1/verify-captcha
-let capturedReset = null; // /user/v1/reset-password
-let capturedLink = null; // /user/v1/send-reset-link
-let capturedByLink = null; // /user/v1/reset-password-by-link
+/** 各端点捕获到的请求体（未发出则保持 undefined） */
+let capturedVerify; // /verify/v1/verify-captcha
+let capturedReset; // /user/v1/reset-password
+let capturedLink; // /user/v1/send-reset-link
+let capturedByLink; // /user/v1/reset-password-by-link
 
 async function mock(page) {
   await page.route('**/oauth2.1/crypto/public-key', route => route.fulfill(json({ kid: 'mock-kid-1', key: pubJwk })));
@@ -137,7 +137,10 @@ console.log('\n=== E 业务完整性（容器侧）===');
 
   // E1 邮箱非法 → 连图形码都不该弹（validateField 前置拦截）
   await open(page, CODE, PATH);
-  capturedVerify = null;
+  // 清掉上一条用例残留的捕获值：本用例断言"不该发出 verify-captcha"，
+  // 必须确认它确实没被再赋值 —— 这是有意的显式重置，非无用赋值。
+  // eslint-disable-next-line no-useless-assignment
+  capturedVerify = undefined;
   await page.fill('.mauth-input >> nth=0', 'not-an-email');
   await page.click('.mauth-submit');
   await page.waitForTimeout(700);
@@ -152,7 +155,7 @@ console.log('\n=== E 业务完整性（容器侧）===');
   check('E2 邮箱合法 → 弹出图形验证码（浮层由容器渲染）', true);
 
   // E3 过图形码 → verify-captcha 带上 email + type=reset_password；随后进入第 2 步
-  capturedVerify = null;
+  capturedVerify = undefined;
   await page.fill('.mauth-captcha-input', '1234');
   await page.waitForTimeout(1400);
   const v = capturedVerify || {};
@@ -164,7 +167,7 @@ console.log('\n=== E 业务完整性（容器侧）===');
   check('E3 重发按钮进入倒计时禁用（容器驱动）', await page.isDisabled('.mauth-code-btn'));
 
   // E4 邮箱码留空 → 容器显式拦截（schema 里 code 是 optional，validateField 放行）
-  capturedReset = null;
+  capturedReset = undefined;
   await page.fill('.mauth-input >> nth=1', 'Abcdef12');
   await page.fill('.mauth-input >> nth=2', 'Abcdef12');
   await page.click('.mauth-submit');
@@ -173,7 +176,7 @@ console.log('\n=== E 业务完整性（容器侧）===');
   check('E4 邮箱码留空 → 报错且不发请求', codeErr.length > 0 && capturedReset === null, `err="${codeErr}"`);
 
   // E5 两次密码不一致 → 必须显式比对（zod 的 object 级 refine 不被 validateField 执行）
-  capturedReset = null;
+  capturedReset = undefined;
   await page.fill('.mauth-input >> nth=0', '123456');
   await page.fill('.mauth-input >> nth=1', 'Abcdef12');
   await page.fill('.mauth-input >> nth=2', 'Abcdef99');
@@ -183,7 +186,7 @@ console.log('\n=== E 业务完整性（容器侧）===');
   check('E5 两次密码不一致 → 报错且不发请求（refine 补丁生效）', confirmErr.length > 0 && capturedReset === null, `err="${confirmErr}"`);
 
   // E6 密码太弱（两次都填 'abc'，避免落到"不一致"分支）→ 报错且不发请求
-  capturedReset = null;
+  capturedReset = undefined;
   await page.fill('.mauth-input >> nth=1', 'abc');
   await page.fill('.mauth-input >> nth=2', 'abc');
   await page.click('.mauth-submit');
@@ -192,7 +195,7 @@ console.log('\n=== E 业务完整性（容器侧）===');
   check('E6 密码太弱 → 报错且不发请求', pwdErr.length > 0 && capturedReset === null, `err="${pwdErr}"`);
 
   // E7 合法提交 → reset-password，密码走加密信封
-  capturedReset = null;
+  capturedReset = undefined;
   await page.fill('.mauth-input >> nth=1', 'Abcdef12');
   await page.fill('.mauth-input >> nth=2', 'Abcdef12');
   await page.click('.mauth-submit');
@@ -254,8 +257,8 @@ console.log('\n=== G 步骤状态由容器判定 ===');
   check('G5 link 模式无 token → 落在第 1 步（进度 25%，总步数 4）', Math.round(await progressOf(page)) === 25, `progress=${await progressOf(page)}`);
 
   // G6 link 模式走完第 1 步 → sent（50%），且调的是 send-reset-link 而不是邮箱码
-  capturedLink = null;
-  capturedVerify = null;
+  capturedLink = undefined;
+  capturedVerify = undefined;
   await page.fill('.mauth-input >> nth=0', 'user@example.com');
   await page.click('.mauth-submit');
   await page.waitForSelector('.mauth-captcha-input', { timeout: 8000 });
@@ -267,7 +270,7 @@ console.log('\n=== G 步骤状态由容器判定 ===');
 
   // G7 link 模式第 3 步提交 → reset-password-by-link，带 token
   await open(page, LINK, PATH + '?token=tk-abc');
-  capturedByLink = null;
+  capturedByLink = undefined;
   await page.fill('.mauth-input >> nth=0', 'Abcdef12');
   await page.fill('.mauth-input >> nth=1', 'Abcdef12');
   await page.click('.mauth-submit');

@@ -27,7 +27,7 @@
  * 用法：node oauth21/e2e/verify-no-pwa.mjs [--dir dist-nopwa]
  */
 import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
-import { join, dirname, relative, basename } from 'node:path';
+import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

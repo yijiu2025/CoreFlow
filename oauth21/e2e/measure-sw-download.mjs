@@ -21,7 +21,6 @@
  * 用法: node measure-sw-download.mjs [baseUrl] [--wait 秒数]
  */
 import { chromium } from 'playwright-core';
-import { readFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const baseArg = args.find(a => !a.startsWith('--')) || 'http://127.0.0.1:5189';

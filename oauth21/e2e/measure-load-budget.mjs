@@ -124,7 +124,7 @@ const summarize = list => {
   const raw = list.reduce((a, r) => a + (rawOf(r.url) ?? 0), 0);
   const byExt = {};
   for (const r of list) {
-    const ext = (/\.([a-z0-9]+)(?:\?|$)/i.exec(new URL(r.url).pathname) || [, 'other'])[1];
+    const ext = (/\.([a-z0-9]+)(?:\?|$)/i.exec(new URL(r.url).pathname) || [null, 'other'])[1];
     byExt[ext] = (byExt[ext] || 0) + (r.bytes || 0);
   }
   return { total, gz, raw, count: list.length, byExt };

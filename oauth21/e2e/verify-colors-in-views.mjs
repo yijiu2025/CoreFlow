@@ -99,7 +99,7 @@ check('D1 register base: theme=white 生效', dWhite.theme === 'white', `theme=$
 check('D2 white 自带浅色底 --mauth-bg=#f8fafc', dWhite.bg === '#f8fafc', `bg=${dWhite.bg}`);
 check('D2b white 自带画布色 #ffffff', dWhite.canvas === '#ffffff', `canvas=${dWhite.canvas}`);
 
-const dDark = await probe('/m/register' + QS + '&theme=black&mode=dark');
+await probe('/m/register' + QS + '&theme=black&mode=dark');
 check('D3 black+mode=dark: html 有 dark 类', await page.evaluate(() => document.documentElement.classList.contains('dark')));
 
 await ctx.close();
