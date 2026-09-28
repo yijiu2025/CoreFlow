@@ -90,6 +90,23 @@ export default defineConfig({
   },
   build: {
     outDir: '../public/posecraft',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      // 🔴 这些是 @tensorflow-models 的 peer 依赖，但它们的 esm 构建顶部**无条件** import，
+      //    而本项目所有模型一律用 `runtime: 'tfjs'` + `tfjs-backend-webgl`（见 useAi.ts /
+      //    useAIAnalysis.ts），从不走 mediapipe / wasm / webgpu 分支，这些 import 全是死路径。
+      //    - @mediapipe/*：IIFE 全局脚本，无 ESM 命名导出（vite5/esbuild 宽容，vite8/rolldown 报错）
+      //    - tfjs-backend-wasm / webgpu：本项目未安装、也从不启用（只装 webgl）
+      //    vite8/rolldown 对未解析 import 严格报错，externalize 它们：构建时不解析、运行时也不加载
+      //    （死分支不触发这些 import），行为与 vite5 时代完全一致。
+      external: [
+        '@mediapipe/hands',
+        '@mediapipe/selfie_segmentation',
+        '@mediapipe/face_mesh',
+        '@mediapipe/pose',
+        '@tensorflow/tfjs-backend-wasm',
+        '@tensorflow/tfjs-backend-webgpu'
+      ]
+    }
   }
 });
