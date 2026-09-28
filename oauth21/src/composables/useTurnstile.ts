@@ -25,6 +25,8 @@
  * @since 2026-08-29
  */
 
+import type { TurnstileSdk } from '@/types/external';
+
 interface TurnstileInstance {
   widgetId: string | null;
   container: HTMLDivElement | null;
@@ -44,25 +46,25 @@ function createInstance(): TurnstileInstance {
 }
 
 /** 加载 Turnstile SDK（一次性，15s 超时兜底） */
-async function loadSdk(): Promise<any> {
-  if ((window as any).turnstile) return (window as any).turnstile;
+async function loadSdk(): Promise<TurnstileSdk | null> {
+  if (window.turnstile) return window.turnstile;
 
-  return new Promise((resolve) => {
+  return new Promise<TurnstileSdk | null>((resolve) => {
     const LOAD_TIMEOUT_MS = 15_000;
     let settled = false;
     const done = (ok: boolean) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      if (ok && (window as any).turnstile) {
-        resolve((window as any).turnstile);
+      if (ok && window.turnstile) {
+        resolve(window.turnstile);
       } else {
         resolve(null);
       }
     };
 
-    (window as any).turnstileOnLoad = () => done(true);
-    (window as any).onloadTurnstileCallback = () => done(true);
+    window.turnstileOnLoad = () => done(true);
+    window.onloadTurnstileCallback = () => done(true);
 
     const script = document.createElement('script');
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=turnstileOnLoad';
@@ -82,7 +84,7 @@ async function loadSdk(): Promise<any> {
 }
 
 /** render invisible widget */
-function ensureWidget(ts: any, inst: TurnstileInstance, siteKey: string, action: string): string {
+function ensureWidget(ts: TurnstileSdk, inst: TurnstileInstance, siteKey: string, action: string): string {
   if (inst.widgetId !== null) return inst.widgetId;
   if (!inst.container) {
     inst.container = document.createElement('div');

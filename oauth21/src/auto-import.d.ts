@@ -140,7 +140,7 @@ declare global {
   export type { UseCountdownReturn } from './composables/useCountdown'
   import('./composables/useCountdown')
   // @ts-ignore
-  export type { SessionBrief, LoginResponse, LoginSuccessResponse, LoginUser, EmailVerifyState, UseLoginFlowOptions } from './composables/useLoginFlow'
+  export type { EmailVerifyState, UseLoginFlowOptions, LoginUser, LoginSuccessResponse, SessionBrief, ParsedLoginResponse } from './composables/useLoginFlow'
   import('./composables/useLoginFlow')
   // @ts-ignore
   export type { PasswordLevel, PasswordStrength } from './composables/usePasswordStrength'
@@ -182,10 +182,6 @@ declare module 'vue' {
     readonly getCurrentWatcher: UnwrapRef<typeof import('vue')['getCurrentWatcher']>
     readonly h: UnwrapRef<typeof import('vue')['h']>
     readonly inject: UnwrapRef<typeof import('vue')['inject']>
-    readonly isConsentResponse: UnwrapRef<typeof import('./composables/useLoginFlow')['isConsentResponse']>
-    readonly isEmailVerifyResponse: UnwrapRef<typeof import('./composables/useLoginFlow')['isEmailVerifyResponse']>
-    readonly isLoginSuccessResponse: UnwrapRef<typeof import('./composables/useLoginFlow')['isLoginSuccessResponse']>
-    readonly isMaxSessionsResponse: UnwrapRef<typeof import('./composables/useLoginFlow')['isMaxSessionsResponse']>
     readonly isProxy: UnwrapRef<typeof import('vue')['isProxy']>
     readonly isReactive: UnwrapRef<typeof import('vue')['isReactive']>
     readonly isReadonly: UnwrapRef<typeof import('vue')['isReadonly']>

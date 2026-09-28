@@ -22,6 +22,8 @@
  * @renamed 2026-08-29 重命名为 useHCaptcha（与 Turnstile 区分）
  */
 
+import type { HCaptchaSdk, HCaptchaWidgetId, HCaptchaExecuteResponse } from '@/types/external';
+
 /** hCaptcha siteKey（从 meta 或环境变量注入） */
 function getSiteKey(): string {
   const meta = document.querySelector('meta[name="recaptcha-site-key"]')?.getAttribute('content');
@@ -39,8 +41,8 @@ const isEnabled = import.meta.env.VITE_RECAPTCHA_ENABLED === 'true';
  */
 interface HCaptchaInstance {
   sdkLoaded: boolean;
-  hcaptchaObj: any;
-  widgetId: string | null;
+  hcaptchaObj: HCaptchaSdk | null;
+  widgetId: HCaptchaWidgetId | null;
   container: HTMLDivElement | null;
 }
 
@@ -49,7 +51,7 @@ function createInstance(): HCaptchaInstance {
 }
 
 /** 加载 hCaptcha SDK（仅一次，带 onerror 超时兜底，防永久 pending） */
-async function loadSdk(inst: HCaptchaInstance): Promise<any> {
+async function loadSdk(inst: HCaptchaInstance): Promise<HCaptchaSdk | null> {
   if (inst.sdkLoaded && inst.hcaptchaObj) return inst.hcaptchaObj;
 
   const siteKey = getSiteKey();
@@ -59,21 +61,21 @@ async function loadSdk(inst: HCaptchaInstance): Promise<any> {
   }
 
   // 已被别的实例加载过（同页共享 window.hcaptcha）
-  if ((window as any).hcaptcha) {
-    inst.hcaptchaObj = (window as any).hcaptcha;
+  if (window.hcaptcha) {
+    inst.hcaptchaObj = window.hcaptcha;
     inst.sdkLoaded = true;
     return inst.hcaptchaObj;
   }
 
-  return new Promise((resolve) => {
+  return new Promise<HCaptchaSdk | null>((resolve) => {
     const LOAD_TIMEOUT_MS = 15_000;
     let settled = false;
     const done = (ok: boolean) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      if (ok && (window as any).hcaptcha) {
-        inst.hcaptchaObj = (window as any).hcaptcha;
+      if (ok && window.hcaptcha) {
+        inst.hcaptchaObj = window.hcaptcha;
         inst.sdkLoaded = true;
         resolve(inst.hcaptchaObj);
       } else {
@@ -82,7 +84,7 @@ async function loadSdk(inst: HCaptchaInstance): Promise<any> {
     };
 
     // 全局回调（hCaptcha SDK 加载完调）
-    (window as any).hcaptchaOnLoad = () => done(true);
+    window.hcaptchaOnLoad = () => done(true);
 
     const script = document.createElement('script');
     script.src = 'https://js.hcaptcha.com/1/api.js?onload=hcaptchaOnLoad&render=explicit';
@@ -103,7 +105,7 @@ async function loadSdk(inst: HCaptchaInstance): Promise<any> {
 }
 
 /** render invisible widget（拿到 widgetId） */
-function ensureWidget(inst: HCaptchaInstance, hcaptcha: any): string {
+function ensureWidget(inst: HCaptchaInstance, hcaptcha: HCaptchaSdk): HCaptchaWidgetId {
   if (inst.widgetId !== null) return inst.widgetId;
   const siteKey = getSiteKey();
   // 隐藏容器：必须留在可视区域内（不能偏移到 -9999px 屏外，否则挑战弹窗跑到屏幕外），
@@ -227,18 +229,18 @@ export function useHCaptcha(action = 'login') {
       try {
         // 兼容三种 SDK 形式：Promise 返回 / callback 回调 / 同步返回 tokenResp
         // callback 形式：execute(id, opts, cb) —— 旧 SDK 第三个参数是回调
-        const cb = (tokenResp: any) => finish(tokenResp?.response || tokenResp?.token || null);
+        const cb = (tokenResp: HCaptchaExecuteResponse) => finish(tokenResp?.response || tokenResp?.token || null);
         const maybe = hcaptcha.execute(id, { action }, cb);
 
         // 新 SDK 返回 Promise
-        if (maybe && typeof maybe.then === 'function') {
+        if (maybe instanceof Promise) {
           maybe
-            .then((tokenResp: any) => finish(tokenResp?.response || tokenResp?.token || null))
+            .then((tokenResp: HCaptchaExecuteResponse) => finish(tokenResp?.response || tokenResp?.token || null))
             .catch(() => finish(null));
         }
         // 同步返回 tokenResp（旧 SDK 不调 callback 直接返回）—— cb 不会被触发，用 maybe
         else if (maybe && (maybe.response || maybe.token)) {
-          finish(maybe.response || maybe.token);
+          finish(maybe.response || maybe.token || null);
         }
         // 纯 callback 形式：maybe 为 undefined，等 cb 被调（已传 cb）
       } catch (e) {

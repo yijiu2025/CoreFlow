@@ -63,6 +63,8 @@ const GROUPS = [
       { name: 'verify-kernel-zero-coupling', cmd: ['verify-kernel-zero-coupling.mjs'], needs: {} },
       // 2026-09-28 新增：console 剥离真生效（自建一次生产构建扫产物；Vite 8 下曾长期静默失效）
       { name: 'verify-console-strip', cmd: ['verify-console-strip.mjs'], needs: {} },
+      // 2026-09-28 新增：类型逃逸清零（any/@ts-ignore 关在 types/external.ts 单一入口）
+      { name: 'verify-no-any-debt', cmd: ['verify-no-any-debt.mjs'], needs: {} },
       { name: 'verify-no-pwa', cmd: ['verify-no-pwa.mjs', '--dir', 'dist-nopwa'], needs: { dist: join(OA, 'dist-nopwa') } },
     ],
   },

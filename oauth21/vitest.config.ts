@@ -15,7 +15,8 @@
  */
 import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
-import { aliases } from './config/aliases';
+// 带 .js 后缀：Vite 未来默认 configLoader:'native' 需显式扩展名，否则打警告
+import { aliases } from './config/aliases.js';
 
 export default defineConfig({
   plugins: [vue()],

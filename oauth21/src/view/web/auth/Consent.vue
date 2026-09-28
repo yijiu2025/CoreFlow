@@ -1,5 +1,4 @@
 <script setup lang="ts">
-/* eslint-disable @typescript-eslint/no-explicit-any -- 后端 OAuth 响应字段动态，any 合理 */
 /**
  * 独立授权确认页（全屏可直达：/consent?...）
  *
@@ -23,6 +22,7 @@ import { sanitizeLocalRedirect } from '@/utils/redirect';
 import { useDeviceDetect } from '@/composables/useDeviceDetect';
 import { useMessage } from '@/composables/useMessage';
 import { useThemeStore } from '@/stores/theme';
+import { pickRedirectUrl } from '@/types/external';
 import ConsentPanel from '@/components/auth/ConsentPanel.vue';
 import MessageToast from '@/components/common/MessageToast.vue';
 
@@ -72,7 +72,7 @@ const scopeDetails = computed<Array<{ id: string; name: string; desc: string; re
     try {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length) {
-        return parsed.map((s: any, i: number) => ({
+        return parsed.map((s: Record<string, unknown>, i: number) => ({
           id: String(s?.id ?? s?.name ?? i),
           name: String(s?.name ?? s?.id ?? ''),
           desc: String(s?.desc ?? ''),
@@ -96,11 +96,6 @@ const consentState = computed(() => ({
   scopeDetails: scopeDetails.value
 }));
 
-/** 取后端校验过的跳转地址（不直接用 query.redirect_uri，防开放重定向） */
-function pickRedirectUrl(res: any): string | undefined {
-  return res?.redirect_url || res?.data?.redirect_url;
-}
-
 /** 登录流授权成功后收尾：iframe 通知父窗口；全屏按 ?redirect= 回跳或返回 */
 function finishLoginConsent(res: unknown) {
   if (inIframe.value) {
@@ -121,7 +116,7 @@ const approve = async () => {
   submitting.value = true;
   try {
     if (isAuthorizeFlow.value) {
-      const res: any = await authApi.authorizeConsent({
+      const res: unknown = await authApi.authorizeConsent({
         sessionId: sessionId.value,
         user_id: userId.value,
         action: 'approve'
@@ -147,7 +142,7 @@ const deny = async () => {
   submitting.value = true;
   try {
     if (isAuthorizeFlow.value) {
-      const res: any = await authApi.authorizeConsent({
+      const res: unknown = await authApi.authorizeConsent({
         sessionId: sessionId.value,
         user_id: userId.value,
         action: 'deny'
