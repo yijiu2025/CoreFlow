@@ -1,0 +1,1 @@
+import{dt as e}from"./vue.runtime.esm-bundler-Nqkf8Y6-.js";import{o as t}from"./index-BOYIS8ob.js";var n=e({userApi:()=>r}),r={getProfile:()=>t.get(`/user/v1/profile`),updateProfile:e=>t.put(`/user/v1/update`,e),uploadAvatar:e=>{let n=new FormData;return n.append(`avatar`,e),t.post(`/user/v1/avatar`,n,{headers:{"Content-Type":`multipart/form-data`}})}};export{n,r as t};

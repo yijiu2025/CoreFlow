@@ -1,0 +1,1 @@
+import{t as e}from"./createLucideIcon-M3vT07sn.js";var t=e(`ShieldCheckIcon`,[[`path`,{d:`M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10`,key:`1irkt0`}],[`path`,{d:`m9 12 2 2 4-4`,key:`dzmm74`}]]);export{t};
