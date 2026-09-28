@@ -22,6 +22,12 @@
 - **测试有效性**：真实加载被测代码，禁「手写常量自测」「内联复制被测逻辑」；`KNOWN_INEFFECTIVE_TESTS` 只减不增（14）+ 同步 `FROZEN_SIZE`；**一个测试文件只能注册一组路由**（`_routeRegistry` 无重置）。
 - **🔍 运行期"鸭子类型"判据必须由接口派生**：写 `Record<keyof T, 'string'|'function'>` 再遍历（TS 保穷尽性）。**手抄成员名 = 接口一改判据静默落后**。
   同类：**"长红的关卡 = 噪声"** 会掩护真红 → 过期关卡必须**显式退役**。
+- 🔴 **往 lint 范围新增目录必须先配语言环境**：oauth21 `e2e/`（Node脚本+浏览器片段）从 gitignore
+  迁入版本控制后被 `eslint .` 扫到 → 缺全局配置报 446 error。**"纳管"≠只加进目录，要同时给
+  `languageOptions.globals` + 关掉不适用规则**（见 `oauth21/eslint.config.js` 的 `e2e/**` 块）。
+- 🔴 **拆分/移动源码后，凡"断言读文件内容"的关卡必须同步文件清单**（`implText`/`read(join(...))`）：
+  已三次踩到 —— P2-3 拆 `theme/index.ts`→`registry.ts`、2026-09-28 拆 `stores/theme.ts`→
+  `theme-persistence.ts`（`verify-theme-dirs` 的 URL 解析断言改读两文件拼接）。
 - **firewall 分层（单向）**：interface → config/util → dao → engine → services/cli/data → index.js；禁直接 import `app/firewall/dao/block-manager.js`。
 - **📐 文档 ≠ 实现**：核法 = 文档承诺的环境变量名 grep 代码，命中 0 = 未实现（`src/loader|auth|db|redis` 均不存在，全在 `src/framework/`）。
 - **🔗 文档站**：`ignoreDeadLinks` 只放行 `AGENTS|oauth21|posecraft|packages` 前缀 → 指 `docs/` 之外必 `docs:build` 失败（指源码用反引号）；
