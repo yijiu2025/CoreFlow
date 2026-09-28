@@ -753,6 +753,157 @@ opaque），Chrome 把 iframe 判为第三方 → `window.localStorage` **读属
 归因结论：**所有差异都能指到一次有意为之的改动上**，没有说不清的偏移 —— 这才是有意义的
 "视觉验证"结论；只报一个总差异百分比是没有信息量的。
 
+### 10.99 lock 入库 + 前端 CI 改 `npm ci`（2026-09-28 定案）
+
+**背景**：`.gitignore:12` 有一条无差别的 `package-lock.json`，把所有层级的 lock 全排除了。
+后果：CI 只能用 `npm install` 现算依赖树 ⇒ **构建不可复现 + 依赖投毒无审计基线**。
+
+**决策（用户拍板）**：全仓 lock 入库。删掉那条 gitignore 规则后，六个 lock 进版本控制：
+根（823 KB）/ oauth21（340 KB）/ firewall（196 KB）/ posecraft（336 KB）/ admin / poseadmin。
+
+#### 🔴 根 lock 当时是过期/不同步的
+
+删 ignore 后跑 `npm ci` 立刻报：
+```
+Missing: search-insights@2.17.3 from lock file
+Missing: nodeservers@2.6.0 from lock file
+```
+- `search-insights` 是 vitepress → algolia 的 **optional peer**（npm 记在 `peerMeta` 里，未落到 `packages` 段）；
+- `nodeservers` 是**根工程自身**（`node_modules/nodeservers` 自链接条目，`resolved:""`, `link:true`）。
+
+⇒ 用 `npm install --package-lock-only --ignore-scripts --legacy-peer-deps --no-audit --no-fund`
+**重新生成**后同步通过（`npm ci` 不再报 EUSAGE，只是安装耗时长被 240s timeout 截断）。
+
+#### 🔴 决定性实测：后端 CI **不能**改 `npm ci`
+
+在 `/tmp` 复刻「CI 形态」（只有根 package.json + lock + `packages/shared-device`，**没有** `packages/log`）跑：
+```bash
+npm ci --workspace=packages/shared-device --include-workspace-root \
+  --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+```
+**结果：exit 0，装入 736 包** —— 看起来成功。但验证 `node_modules/wb-logkit`：
+
+```
+lrwxrwxrwx  node_modules/wb-logkit -> /tmp/ci-lock-sim/packages/log   ← 悬空！
+$ node -e "import('wb-logkit')"
+{ code: 'ERR_MODULE_NOT_FOUND' }
+```
+
+⇒ **`npm ci` 会照 lock 建软链，不管目标存不存在**。root lock 把 `wb-logkit` 记为 `link: packages/log`，
+而那是 `.gitignore:34` 排除的嵌套仓（<https://github.com/yijiu2025/log>）、CI 检出后不存在。
+后端 `src` 大量 `import 'wb-logkit'` ⇒ test / lint / verify 三 job 必红。
+
+**结论**：根 lock 入库作**审计基线** ✅；后端三 job **保持 `npm install`** ❌ 不能改 `npm ci`。
+这也是"lock 入库"与"能用 `npm ci`"两件事**唯一不重合**的地方。
+
+#### 前端路径干净
+
+`oauth21` 的 lock 不涉及 `wb-logkit`，可放心用 `npm ci`：
+- 从**仓库根**跑 `npm ci --dry-run --prefix oauth21` → **exit 0**（这是 CI 的形态）。
+- ⚠️ 在 `oauth21/` 目录**内部**跑会被父级根 lock 干扰（报根 lock 的 search-insights 缺失）—— 必须用 `--prefix` 从根跑。
+- **毒丸验证有效**：从 lock 删 `node_modules/skinsuite` → `npm error code EUSAGE` exit 1。
+
+#### CI 改动
+
+```yaml
+# frontend job
+- uses: actions/setup-node@v4
+  with:
+    node-version: ${{ env.NODE_VERSION }}
+    cache: npm                                  # lock 入库后才有意义
+    cache-dependency-path: oauth21/package-lock.json
+- name: 安装依赖（lock 复现）
+  run: npm ci --prefix oauth21 --ignore-scripts --no-audit --no-fund
+```
+- 后端三 job **不开 `cache: npm`**（收益只在 `npm ci` 路径上；开着只给一个命中率无意义的缓存目录）。
+- 后端三 job 的安装步骤保留原样（`npm install --workspace=… --legacy-peer-deps`），已加注释说明原因。
+
+#### 幽灵依赖 → 可解析性声明
+
+`oauth21/package.json` 的 dependencies 补：
+```json
+"skinsuite": "^0.1.0",
+"stable-deviceid": "^1.0.3"
+```
+⇒ lock 里带它们的 `resolved` + `integrity`，`npm ci` 能同步校验。
+⚠️ **运行期解析仍走 vite alias 源码直供**（`../packages/*/src/index.ts`，优先于 node_modules 里的 dist 版）；
+npm 版只是让 lock / 供应链审计说得通，不参与构建产物。装完跑四闸确认 alias 未被真装版本带偏（47/47 全绿）。
+
+### 10.98 「配置类保护措施」的静默失效（2026-09-28 实测）
+
+`vite.config` 由 `.js` 改 `.ts` 纳入 `vue-tsc -b` 后**立刻**报错：
+```
+vite.config.ts(92,5): error TS2769: No overload matches this call.
+  'esbuild' does not exist in type 'BuildEnvironmentOptions'.
+```
+
+**背景**：原配置写着
+```js
+build: { esbuild: { drop: ['console'] } }   // 意图：生产删除所有 console
+```
+这在 **Vite 8 下完全无效** —— `build.esbuild` 不是合法字段；顶层 `esbuild` 也已 deprecated（内部转 `oxc`）。
+实测产物残留 **28 处 `console.*`**（源码共 33 处），也就是说这条"防 Error 堆栈泄露到 DevTools"的
+保护措施**长期根本不存在**。
+
+**三重静默**：① Vite 8 改 Rolldown + Oxc；② config 是 `.js` 从不参与类型检查；③ 构建 exit 0，配置被忽略但无任何信号。
+
+**正确写法（Vite 8）**：
+```ts
+build: {
+  rolldownOptions: {              // 注意：不是 rollupOptions（后者已 deprecated）
+    output: {
+      minify: {
+        compress: { dropConsole: true, dropDebugger: true }
+        // Oxc 的等价项：esbuild `drop:['console']` / terser `drop_console`
+      }
+    }
+  }
+}
+```
+- ⚠️ **不要**改用 `build.minify: 'terser'` + `terserOptions.compress.drop_console` —— 那会牺牲
+  默认的 Oxc minifier（比 terser 快 30~90x，见 `build.minify` 文档），只为删 console 不值得。
+- `rollupOptions` → `rolldownOptions`（Vite 8 起 `rollupOptions` 是别名但已 deprecated）。
+- 修后残留 **28 → 0**；毒丸（`dropConsole: false`）→ 回到 28。
+
+**教训**：**构建期配置文件必须参与类型检查**（`.js` → `.ts`）；且**"配置类保护措施"一定要有关卡**
+（行为层真跑一次构建扫产物，而不是只断言配置字符串还在）。
+
+### 10.97 别名单一来源 + 内核零耦合（2026-09-28）
+
+**别名三处手抄**：`@` / `skinsuite` / `stable-deviceid` 此前同时存在于
+`vite.config.js` 的 `resolve.alias`、`vitest.config.ts` 的 `resolve.alias`、`tsconfig.app.json` 的 `paths`。
+漂移症状全都静默：vite/vitest 漏改 → `Cannot find module`；tsconfig 漏改 → 可能退化成 any 或报"找不到声明"；
+两处各指不同实现 → 类型检查用 A、运行用 B（最阴险）。
+
+收敛为 `oauth21/config/aliases.ts`（唯一来源，导出 `aliases` 与 `tsconfigPaths`）；
+`vite.config.js` → **`vite.config.ts`**（与 vitest.config 统一语言），两处 config 都 `import { aliases }`。
+`tsconfig.app.json` 的 `paths` 是**静态 JSON 无法 import**，仍手写 —— 由关卡守一致性。
+
+⚠️ 写关卡时踩坑：**不能用正则剥 JSONC 注释** —— tsconfig 里 `"@/*"` 键名自带 `/*`，
+朴素块注释正则会从它开始吃掉后面一大段。改用 `typescript.parseConfigFileTextToJson`（tsc 自己的实现）。
+
+**内核零耦合（评审第 4 条的核实结论）**：评审说「skinsuite 未在 root-workspace 对齐，有双 Vue 实例风险」。
+实测核实后判定**当前不成立**：
+- `packages/theme-core`（skinsuite 0.1.0）：deps / peers **全空**，只有 devDep `typescript`；源码 import 面**只有内部相对路径**。
+- `packages/shared-device`（stable-deviceid 1.0.3）：deps / peers 全空，连 devDep 都没有；同样零外部 import。
+⇒ 两包都不 import vue、也不声明 vue 为 peer，**不可能**成为第二个 Vue 实例的来源。
+
+但"当前不成立"是易失的：两包被三个前端**源码直供**（alias 指 src，不走 node_modules），
+一旦包内 `import vue` ⇒ **静默两份 Vue**（npm / 构建都不报）。
+⇒ 把「零框架耦合」升格为被守卫的不变量：`verify-kernel-zero-coupling.mjs`（判据见该文件头注释）。
+⚠️ 判据必须**排除 `__tests__/`**（测试用 `@jest/globals` / `node:crypto` 是正当的，第一版没排除导致误报 7 处）。
+
+### 10.96 本轮新增关卡（三枚，均毒丸自证）
+
+| 关卡 | 项数 | 守什么 | 毒丸 |
+| --- | --- | --- | --- |
+| `verify-alias-single-source.mjs` | 21 | aliases.ts ↔ tsconfig.paths ↔ vite 实解析（`pluginContainer.resolveId`）三处一致 | 改 tsconfig 的 skinsuite 路径 → 19/21 |
+| `verify-kernel-zero-coupling.mjs` | 18 | 两内核包 deps/peers 全空、源码零外部 import、sideEffects:false | 内核 `import { ref } from 'vue'` → 17/18 |
+| `verify-console-strip.mjs` | 6 | 配置层 + **真构建扫产物为 0** + 反面对照（源码确有 console 待删） | `dropConsole:false` → 残留回到 28 |
+
+三枚都是**纯静态**（无端口 / 无外部产物依赖），已注册进 `verify-all.mjs` 的①静态组 + `VERIFY.md`（活跃 20 个），
+并加进 CI 的 `frontend` job 末尾（从仓库根跑，已实测 exit 0）。
+
 ## 11. oauth21 移动端认证页（完整版；主索引只留结论句）
 
 ### 11.1 版式分发与「电脑上看不到手机上的东西」
