@@ -40,8 +40,8 @@ const json = body => ({ status: 200, contentType: 'application/json', body: JSON
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
 
-let capturedLogin = null;
-let capturedVerify = null;
+let capturedLogin;
+let capturedVerify;
 /** 登录接口的响应体（各场景改写它来驱动容器的分支） */
 let loginData = { accessToken: 'mock-token', user: { id: 1, username: 'tester' } };
 

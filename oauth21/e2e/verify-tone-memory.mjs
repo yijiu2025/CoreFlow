@@ -19,7 +19,8 @@ await page.addInitScript(() => localStorage.clear());
 let pass = 0, fail = 0;
 const assert = (name, cond, extra = '') => {
   console.log(`${cond ? 'PASS' : 'FAIL'} ${name}${extra ? `  (${extra})` : ''}`);
-  cond ? pass++ : fail++;
+  if (cond) pass++;
+  else fail++;
 };
 const theme = () =>
   page.evaluate(() => document.documentElement.dataset.mauthTheme || '(none)');

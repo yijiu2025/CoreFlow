@@ -33,6 +33,26 @@ export default [
       '.tmp-probe/**'
     ]
   },
+  // ⚠️ e2e/ 是**纳入版本控制**的验收关卡（2026-09-28 从 .tmp-probe 迁入）。
+  //    它们是 Node 脚本（import fs / process.argv / console）+ 注入到页面里跑的
+  //    浏览器片段（document / caches / navigator），两套全局都要给。
+  //    与 src（浏览器 + 禁 console.log）不同：这里脚本本就靠 console 输出结论。
+  {
+    files: ['e2e/**/*.{mjs,js}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.browser, ...globals.es2022 }
+    },
+    rules: {
+      // 关卡脚本靠 console 打印结论（与 src 的"禁 log"是两回事）
+      'no-console': 'off',
+      'no-undef': 'off',       // Node + 浏览器全局混杂，交给运行时
+      'no-empty': 'off',       // 关卡里大量 `catch {}` 是"跳过该断言"的语义
+      'no-sparse-arrays': 'off', // 注入到页面求值用的表达式偶有稀疏数组字面量
+      '@typescript-eslint/no-unused-vars': 'warn'
+    }
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...vue.configs['flat/recommended'],
