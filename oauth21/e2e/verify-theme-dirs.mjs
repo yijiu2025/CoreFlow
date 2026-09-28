@@ -1027,7 +1027,12 @@ console.log('\n=== 11. 设备维度 URL 参数（theme.<设备> / view.<设备>�
     '`?view.mobile=&view=compact` 里 mobile 侧应回退到通用的 compact'
   );
 
-  const store = read(join(ROOT, 'stores', 'theme.ts'));
+  // ⚠️ 配色侧的 URL 解析逻辑在 2026-09-28 被抽到 `stores/theme-persistence.ts`
+  //    （纯函数层；store 主体保留）。断言读**两个文件拼接**，否则拆分后本组必红。
+  const store = [
+    read(join(ROOT, 'stores', 'theme.ts')),
+    read(join(ROOT, 'stores', 'theme-persistence.ts'))
+  ].join('\n');
   check(
     '配色侧按设备读 `theme.<设备>` / `skin.<设备>`',
     /params\.get\(\s*`theme\.\$\{device\}`\s*\)/.test(store) &&
