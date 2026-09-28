@@ -4,6 +4,7 @@ import path from 'path';
 import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { createSvgIconsPlugin } from 'vite-plugin-svg-icons';
+import { aliases, OAUTH21_ROOT } from './config/aliases';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -23,7 +24,7 @@ export default defineConfig({
       dts: 'src/components.d.ts'
     }),
     createSvgIconsPlugin({
-      iconDirs: [path.resolve(import.meta.dirname, 'src/assets/icons')],
+      iconDirs: [path.resolve(OAUTH21_ROOT, 'src/assets/icons')],
       symbolId: 'icon-[dir]-[name]'
     })
 
@@ -49,15 +50,9 @@ export default defineConfig({
     //    本仓那次迁移就是 `oauth21/public/sw.js`（它的顶部注释写了何时可以删）。
   ],
   resolve: {
-    alias: {
-      // Vite 原生 configLoader（未来默认）不支持 CJS 的 __dirname，用 ESM 的 import.meta.dirname
-      '@': path.resolve(import.meta.dirname, './src'),
-      'stable-deviceid': path.resolve(import.meta.dirname, '../packages/shared-device/src/index.ts'),
-      // 主题内核（工作区源码直供，与 stable-deviceid 同形）：包只发源码，不发 dist。
-      // 指到 src/index.ts 而不是包目录，是为了不依赖 node_modules 里那条符号链接
-      // （符号链接由 npm install 生成，首次克隆后还没装依赖时也必须能解析）。
-      'skinsuite': path.resolve(import.meta.dirname, '../packages/theme-core/src/index.ts')
-    }
+    // 别名**单一来源** = `config/aliases.ts`（vite / vitest / tsconfig 三处共用，关卡守一致性）。
+    // 此处不再手写，避免与 vitest.config.ts 漂移。
+    alias: aliases
   },
   server: {
     host: '0.0.0.0', // 允许内网 IP 访问（手机调试）
@@ -91,12 +86,6 @@ export default defineConfig({
     }
   },
   build: {
-    // 生产构建删除所有 console 调用（防 Error 堆栈泄露到浏览器 DevTools）
-    // 关键错误通过 main.ts 的 useErrorReporter 上报到后端（/api/v1/client-error）
-    // 不依赖客户端 console 留痕
-    esbuild: {
-      drop: ['console']
-    },
     // 生产不输出 .map 文件（防源码泄露到 dist）
     // 需要调试时单独配 sourcemap: true 单独 build
     sourcemap: false,
@@ -104,8 +93,32 @@ export default defineConfig({
     // 实测最大 chunk 仅 170.91 KB，远未触及 500 KB 默认线 —— 此前抬高到 1024 无实际收益，
     // 反而会掩盖未来的真实膨胀，故回落默认值，让体积告警重新生效。
     chunkSizeWarningLimit: 500,
-    rollupOptions: {
+    // 生产删除 console 调用（防 Error 堆栈 / 内部标识泄露到浏览器 DevTools）。
+    // 关键错误通过 main.ts 的 useErrorReporter 上报到后端（/api/v1/client-error），
+    // 不依赖客户端 console 留痕。
+    //
+    // 🔴 2026-09-28 修正：此处原写作 `build.esbuild.drop: ['console']` —— **在 Vite 8 下完全无效**。
+    //    Vite 8 改用 Rolldown + Oxc，`build.esbuild` 不再是合法字段（顶层 `esbuild` 也已 deprecated、
+    //    内部转成 `oxc`），Oxc 的 console 删除开关是 **minifier 的 `compress.dropConsole`**。
+    //    之所以长期没被发现：vite.config 当时是 `.js`，从不参与 `vue-tsc -b` 类型检查，
+    //    写错也不会报错、只是静默不生效（实测当时产物里残留 28 处 console.*）。
+    //    ⇒ 这与「前端类型闸门必须是真检查」是同一类问题：**配置文件的类型检查缺失 = 配置写错无声**。
+    //
+    //    `output.minify` 接受 `MinifyOptions`（rolldown 绑定），其中 `compress.dropConsole` 等价于
+    //    esbuild 的 `drop: ['console']`、terser 的 `drop_console`。
+    //    ⚠️ 不要改成 `build.minify: 'terser'` + terserOptions —— 那会把默认的 Oxc minifier 换掉
+    //    （Oxc 比 terser 快 30~90x，见 build.minify 文档），只为删 console 不值得。
+    rolldownOptions: {
       output: {
+        // 见上方注释：Vite 8 / Oxc 下删 console 的唯一入口。
+        // dropDebugger 若为真会更精简：Vite 8 的 Oxc minifier 里它是**默认开**，
+        // 这里显式写出来只是为了把语义钉死（不依赖上游默认值变动）。
+        minify: {
+          compress: {
+            dropConsole: true,
+            dropDebugger: true
+          }
+        },
         // vendor 分包：把「几乎每次发版才变一次」的稳定依赖从入口 chunk 拆出去，
         // 使业务代码改动不再让整个入口 hash 失效 —— 长缓存命中率提升。
         // 三组刻意按「变更频率 + 体积」切：

@@ -57,6 +57,12 @@ const GROUPS = [
     items: [
       { name: 'verify-theme-dirs', cmd: ['verify-theme-dirs.mjs'], needs: {} },
       { name: 'verify-glob-device', cmd: ['verify-glob-device.mjs'], needs: {} },
+      // 2026-09-28 新增：别名三处一致（aliases.ts ↔ tsconfig.app.json ↔ vite 实解析）
+      { name: 'verify-alias-single-source', cmd: ['verify-alias-single-source.mjs'], needs: {} },
+      // 2026-09-28 新增：内核零框架耦合（防 packages/* 引入 vue → 静默双实例）
+      { name: 'verify-kernel-zero-coupling', cmd: ['verify-kernel-zero-coupling.mjs'], needs: {} },
+      // 2026-09-28 新增：console 剥离真生效（自建一次生产构建扫产物；Vite 8 下曾长期静默失效）
+      { name: 'verify-console-strip', cmd: ['verify-console-strip.mjs'], needs: {} },
       { name: 'verify-no-pwa', cmd: ['verify-no-pwa.mjs', '--dir', 'dist-nopwa'], needs: { dist: join(OA, 'dist-nopwa') } },
     ],
   },
