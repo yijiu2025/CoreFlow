@@ -9,6 +9,10 @@
 export {}
 declare global {
   const EffectScope: typeof import('vue').EffectScope
+  const LEGACY_MANUAL: typeof import('./stores/theme-persistence').LEGACY_MANUAL
+  const LEGACY_STORAGE_SKIN: typeof import('./stores/theme-persistence').LEGACY_STORAGE_SKIN
+  const STORAGE_MODE: typeof import('./stores/theme-persistence').STORAGE_MODE
+  const STORAGE_THEME: typeof import('./stores/theme-persistence').STORAGE_THEME
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const captureAgreementVersion: typeof import('./composables/useAgreementVersion').captureAgreementVersion
   const computed: typeof import('vue').computed
@@ -59,10 +63,15 @@ declare global {
   const onWatcherCleanup: typeof import('vue').onWatcherCleanup
   const provide: typeof import('vue').provide
   const reactive: typeof import('vue').reactive
+  const readInitialMode: typeof import('./stores/theme-persistence').readInitialMode
+  const readInitialTheme: typeof import('./stores/theme-persistence').readInitialTheme
+  const readUrlIntent: typeof import('./stores/theme-persistence').readUrlIntent
   const readonly: typeof import('vue').readonly
   const ref: typeof import('vue').ref
   const reportError: typeof import('./composables/useErrorReporter').reportError
   const resolveComponent: typeof import('vue').resolveComponent
+  const safeGet: typeof import('./stores/theme-persistence').safeGet
+  const safeSet: typeof import('./stores/theme-persistence').safeSet
   const setActivePinia: typeof import('pinia').setActivePinia
   const setMapStoreSuffix: typeof import('pinia').setMapStoreSuffix
   const shallowReactive: typeof import('vue').shallowReactive
@@ -142,6 +151,9 @@ declare global {
   // @ts-ignore
   export type { SocialProviderId } from './composables/useSocialLogin'
   import('./composables/useSocialLogin')
+  // @ts-ignore
+  export type { DeviceThemeIntent } from './stores/theme-persistence'
+  import('./stores/theme-persistence')
 }
 
 // for vue template auto import
@@ -150,6 +162,10 @@ declare module 'vue' {
   interface GlobalComponents {}
   interface ComponentCustomProperties {
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
+    readonly LEGACY_MANUAL: UnwrapRef<typeof import('./stores/theme-persistence')['LEGACY_MANUAL']>
+    readonly LEGACY_STORAGE_SKIN: UnwrapRef<typeof import('./stores/theme-persistence')['LEGACY_STORAGE_SKIN']>
+    readonly STORAGE_MODE: UnwrapRef<typeof import('./stores/theme-persistence')['STORAGE_MODE']>
+    readonly STORAGE_THEME: UnwrapRef<typeof import('./stores/theme-persistence')['STORAGE_THEME']>
     readonly acceptHMRUpdate: UnwrapRef<typeof import('pinia')['acceptHMRUpdate']>
     readonly captureAgreementVersion: UnwrapRef<typeof import('./composables/useAgreementVersion')['captureAgreementVersion']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>
@@ -200,10 +216,15 @@ declare module 'vue' {
     readonly onWatcherCleanup: UnwrapRef<typeof import('vue')['onWatcherCleanup']>
     readonly provide: UnwrapRef<typeof import('vue')['provide']>
     readonly reactive: UnwrapRef<typeof import('vue')['reactive']>
+    readonly readInitialMode: UnwrapRef<typeof import('./stores/theme-persistence')['readInitialMode']>
+    readonly readInitialTheme: UnwrapRef<typeof import('./stores/theme-persistence')['readInitialTheme']>
+    readonly readUrlIntent: UnwrapRef<typeof import('./stores/theme-persistence')['readUrlIntent']>
     readonly readonly: UnwrapRef<typeof import('vue')['readonly']>
     readonly ref: UnwrapRef<typeof import('vue')['ref']>
     readonly reportError: UnwrapRef<typeof import('./composables/useErrorReporter')['reportError']>
     readonly resolveComponent: UnwrapRef<typeof import('vue')['resolveComponent']>
+    readonly safeGet: UnwrapRef<typeof import('./stores/theme-persistence')['safeGet']>
+    readonly safeSet: UnwrapRef<typeof import('./stores/theme-persistence')['safeSet']>
     readonly setActivePinia: UnwrapRef<typeof import('pinia')['setActivePinia']>
     readonly setMapStoreSuffix: UnwrapRef<typeof import('pinia')['setMapStoreSuffix']>
     readonly shallowReactive: UnwrapRef<typeof import('vue')['shallowReactive']>
