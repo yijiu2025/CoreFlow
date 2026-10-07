@@ -47,7 +47,7 @@
 - 🔴 **后端三 job（lint/test/verify）必须保持 `npm install`**：根 lock 记 `wb-logkit` 为 `link: packages/log`，`npm ci` 建**悬空软链** → ERR_MODULE_NOT_FOUND；**不能开 `cache: npm`**。
 - 改 `ci.yml`/Dockerfile 前先读 §10（安装三件套 · tini 软链 · 生产 secret ≥32 位 · 复刻树 `git archive` 到**仓库外**）。
 
-## 6. retroweb + retrochimera（逆合成工作台）→ **§14~§43**
+## 6. retroweb + retrochimera（逆合成工作台）→ **§14~§44**
 
 前端 #7，端口 **5177** `strictPort`；Vue3.5+TS6+Vite8+Pinia+EP2.14。后端 `F:/retrochimera`（`启动后端API.bat`；`models/` 9GB 不入库）。🔴 **禁硬编码盘符**（`RETRO_MODELS_DIR`/`RETRO_MODEL_<KEY>`）·⚠️ 后端改动**须重启**。
 - 🔴 **前端规范单一来源 `.claude/skills/fullstack-rules/`**（**未纳管**⇒只读；改完跑 `doctor.mjs`）。
@@ -60,11 +60,11 @@
 - 🔴 **端点配置（§20）**：`base_url`+`model`+`keys` **绑一套**、可存多套（`profiles[]`）；**读时懒迁移**老扁平结构；🔴 **Key 轮换状态按配置分桶**；🔴 **落盘只写新形态**、**扁平 payload 只并进激活那套**；「使用中」=下标记起**首个可用** key；`mask_key` **必须保尾部**；🔴 前端须容忍后端旧版（无 `profiles`⇒**白屏**）。
 - 🔴 **LLM 面板/拉模型（§25/§27）**：同一状态**两处口径不一**⇒先打两个真值；真凶常是环境变量**单复数拼错**⇒静默返回空；key 真值 3 处（`key_pool`/`_pool_keys`/`_profile_creds`）**都回落 `.env`、仅激活那套**；每把标 `source`；`.env` 那把删不掉⇒无删除按钮、保存能**认领**；多 key **401/403/429** 才轮换；「刷新」=**只读配置**+有改动**先确认**。守门 `verify-llm-{refresh,models}.cjs`
 - 🔴 **侧栏（§22/§26/§28/§30）**：顺序=导航→**最近的任务**→**目标分析**，同在 `.app__side-scroll`（**禁内嵌滚动**）；同目标可确认**多条**；`confirmRouteNetwork`(**自动分叉**)≠`confirmScheme`≠`unconfirmRouteNetwork`；🔴 共用 `networkStats`；`sessionSignature` **须带 confirmed**；🔴 **整行热区**⇒操作区 `@click.stop`；🔴 计数=**本组条数**（`verify-side-scroll.cjs`）；「目标分析」卡§35（`verify-targetbar-stepmol.cjs`）
-- 🔴 **断言与探针（§24/§25.8/§28.3/§33）**：同一份数据**只画一遍**；**主指标须脱离灰色小字**；🔴 **新断言须"改回旧写法确认会红"**；🔴 **探针会崩** ⇒ `st[0] if st else {}`+`.get()`、**锚点两版都须在**；🔴 **反向证明前先证"加载的是旧代码"**⇒`touch`+**验特征串**；🔴 **替换禁空串**（`count('')`⇒必炸）；🔴 **反向补丁锚点按文件适配换行**（工作区 LF/CRLF 混存⇒多行锚点**命中 0**）；🔴 **`el-overlay` 铺满视口**（弹窗开着⇒其下可见性判据全**假红**）；🔴 **可见性判据用 `elementFromPoint`**。
+- 🔴 **断言与探针（§24/§25.8/§28.3/§33）**：同一份数据**只画一遍**；**主指标须脱离灰色小字**；🔴 **新断言须"改回旧写法确认会红"**；🔴 **探针会崩**⇒加空守卫、**锚点两版都须在**；🔴 **反向证明前先证"加载的是旧代码"**⇒`touch`+**验特征串**；🔴 **替换禁空串**（`count('')`⇒必炸）；🔴 **反向补丁锚点按文件适配换行**（LF/CRLF 混存⇒多行锚点**命中 0**）；🔴 **`el-overlay` 铺满视口**（弹窗开⇒其下判据全**假红**）；🔴 **可见性判据用 `elementFromPoint`**。
 - 🔴 **后端只提供 API**。**Windows spawn 死锁修复不可回退**：模型在独立**非守护单线程** `Process`（`_REQ_Q`/`_RESP_Q`）；**"代跑 app.py"的启动器须注册 `sys.modules['__main__']`**；**`.bat` 改完验 BOM**。
 - 🔴 **解析/画板/网络层/CAS→§16/§34**：RDKit（**CDXML 必须回落后端**）· Ketcher 3.14 四约束（§16.5）· `_request()` 档序由 **`RETRO_LLM_PROXY` 三态**定。🔴 **CAS = PubChem（§34）**：**POST 表单**（GET 遇立体化学 `/` 被拒 400）· 404=未收录 · CAS 混 synonyms · 查不到**删整块**。守门 `verify-mol-cas.cjs`
 - 🔴 **UI 细则 → §16.2/16.3/18.1/§23**：防跳位=`Session.sig` 指纹；标定态「换目标/新任务」**禁 filter 删上条会话**；DOM 三坑 §16.3；🔴 **收起/展开不得改控件位置**：贴底页脚**禁靠可伸缩兄弟顶住**、含可隐藏文字的按钮**须定高**（`verify-collapse-stable.cjs`）。🔴 **`<td>`禁`display:flex`**（⇒**线断两截**）⇒flex 挂**内层**；`verify-tbl-lines.cjs` §38
 - 🔴 **画布拖动/缩放（§29/§36）**：偏移只一套（`sizer=max(画布×zoom,容器)+2×余量`；**余量省不得**⇒缩图后 **拖不动**）；滚轮**手动注册非被动**+`preventDefault()`；缩放**先同步写 sizer 再设 scroll**；容器链须**确定高度**⇒否则与 `max(画布,容器)` 互撑成**几万 px**。守门 `verify-canvas-fit.cjs`
 - 🔴 **方案栏的收与位（§32/§33/§43）**：「目标分析」页签**整条收起**（留下那处须带**主指标**）；其余页签夹在**页签与内容之间**—EP 默认插槽整块进 `.el-tabs__content` ⇒ 放"页签后、首 pane 前"。🔴 **点标题栏即收起**（`v-show`；箭头**只旋转**；收起态分隔线**改透明色**——`border-bottom:0` 会让 head 矮 1px ⇒ 开合跳一下）；判据须含**画布增量≈卡片减少量**。🔴 **位置类报障量「顺序」不只「存在」**（DOM 序+几何链同量；改结构先 grep）。守门 `verify-schemes-collapse.cjs`
-- 🔴 **行内 chip 行（§41/§42）**：禁竖排（撑高行+撑等宽）；`el-dropdown` 挂 pill **外层**才是整块热区；**EP 下拉不吃 Esc**。🔴 菜单项类名=`el-dropdown-menu__item`**（写错⇒空集**假绿**）；🔴 同页 7 个 `.el-dropdown-menu` 全预渲染，可见性只在**祖先** `.el-popper`；🔴 断言禁**绝对**行高 ⇒ 用**量化不变式**。守门 `verify-steprow-tags.cjs`
+- 🔴 **行内 chip 行（§41/§42/§44）**：禁竖排；`el-dropdown` 挂 pill **外层**才是整块热区；**EP 下拉不吃 Esc**；菜单项类名=`el-dropdown-menu__item`（写错⇒空集**假绿**）；断言禁**绝对**行高⇒**量化不变式**。🔴 **询价标识单一来源 `suppliers.ts`**：逐家声明 `prefers`（按平台索引，禁全局写死 CAS）；**懒查别拿被预热的目标分子**。守门 `verify-steprow-tags.cjs`/`verify-suppliers.cjs`
 - 🔴 **「分析模块」key 前后端必须对齐**（`ALL_ANALYSIS_MODULES` ↔ `_MODULE_FIELDS` 同序）；加模块两侧同改；现 9 个含 **`workup`**（与 `conditions.workup` **分别渲染**）；断言 `_build_system` 只看 **`split("\n\n")[-1]`**。§16.7

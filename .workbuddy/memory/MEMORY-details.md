@@ -4002,3 +4002,52 @@ fixture 里给压力行 n2 加了个孩子 n3（`CCO`）⇒ n2 不再是叶子 �
 `off` ⇒ 逐字节还原（md5 一致）、关卡回绿（这一步同时也是"页面确实加载的是当前磁盘代码"的证明）。
 四关全 0；全量回归 **34/34 exit=0**。提交 `retroweb → 4a494ce`。
 
+---
+
+## §44 询价选供应商 + CAS 检索（三入口 + 右面板偏好）
+
+用户报：「查询哪家使用价格可以选择使用哪家查询，在右边设置也可以，然后支持一下使用cas查询」。
+
+### 设计核心
+
+- `src/utils/suppliers.ts` 重构为「标识解析单一来源」：每家供应商声明 **`prefers`（cas/smiles）**
+  与 **`acceptsQuery`**（URL 能不能带查询词）。新增两个函数：
+  - `resolveSupplierQuery(id, smiles, preferCas)`：**纯函数**，从 PubChem 缓存读 CAS（不打网络），
+    按 4 条独立路径决策标识 —— ①平台认 SMILES ⇒ `smiles-native`；②认 CAS 但用户关了开关 ⇒ `cas-off`；
+    ③认 CAS 且已查到 ⇒ `cas`；④认 CAS 但未查到（未查/未收录）⇒ `cas-missing` **回落 SMILES 不阻塞**。
+    返回 `SupplierQuery{ident,value,label,url,reason}`，让 UI 能如实告诉用户「这次用的什么、为什么」。
+  - `querySupplier(id, smiles, preferCas)`：真正执行。🔴 **顺序是「先 `window.open`、再复制，且复制不 await」**
+    —— `window.open` 必须在用户手势同一次任务里调用，中间夹 `await` 会被浏览器判「非用户触发」拦弹窗。
+- 供应商 8 家，分两派（这是**平台索引方式**决定的，不能全局写死「CAS 更准」）：
+  - 结构式/列表检索（Molport / eMolecules / LabNetwork / 阿拉丁）`prefers:'smiles'`、`acceptsQuery:false`（跳固定查询页）；
+  - 试剂商（Sigma / TCI / 麦克林 / 毕得）`prefers:'cas'`、`acceptsQuery:true`（URL 带 CAS 直出结果）。
+
+### 三处入口统一走 `querySupplier`
+
+RouteCanvas 画布卡片 / StepRow「可购买」pill / CandidatePanel 候选面板，三处的询价图标都从
+「直跳 Molport」改成「`el-dropdown` 弹供应商菜单」，菜单项带「默认」标记 + 本次标识预览
+（`resolveSupplierQuery(...).label`，与真正点下去走**同一条解析**，不会"菜单写 CAS、点了却用 SMILES"）。
+CAS 仍懒查（`@visible-change` 才 `requestCas`）。
+
+### 右面板「采购询价」组（RunParams）
+
+默认供应商下拉 + 「优先用 CAS」开关，落盘 `retroweb_supplier` / `retroweb_supplier_prefer_cas`。
+🔴 默认供应商读 localStorage 时**必须校验 id 合法性**（`readText(..., isSupplierId)`）：
+清单会随版本增删，老值失效时 `el-select` 会显示一格空白而不是"没选"。
+
+### 踩坑（本轮新）
+
+- 🔴 **懒查判据不能拿目标分子**：`TargetOverview` 开局就 `requestCasMany([root, ...startingMaterials])`
+  预热它 ⇒ 拿目标分子验"拉开菜单才查"**恒绿**（requestCas 有去重，已查到就不发新请求）。
+  改拿**中间体**（intermediate + purchased，不在 startingMaterials 里）验：拉开它的菜单前后计数 +1。
+- 🔴 **默认值未改动时 localStorage 是 null 是正常的**：`watch(supplierId)` 只在值变化时写盘，
+  初始值=默认值（molport）⇒ 从不写盘。断言别写"已落盘"，写"下拉显示的是默认供应商 Molport"。
+- 🔴 反向补丁 `off` 方向**不能 `git checkout` 还原**：文件可能含未提交改动，checkout 会连工作一起丢。
+  改为「on 先备份 → off 从备份还原」，往返逐字节无损、不依赖 git 状态。
+
+### 结果
+
+`verify-suppliers.cjs` **26/26**（右面板组 / 画布下拉 / CAS 链路 window.open+剪贴板 readText / 懒查 /
+回落 / 关开关 / 5 源码哨兵）；反向补丁 **13/26、exit 1、不崩、逐字节还原**。
+四关全 0；全量回归 **35/35 exit=0**。提交 `retroweb → 20e140b`。
+
