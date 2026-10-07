@@ -1745,3 +1745,2189 @@ base 是绝大多数访问的默认路径 → 由容器**静态引入**，默认
 与 `themes/app/index.ts` → 4 条断言变红、exit 1；清理后 22/22。
 
 
+
+## 14. retroweb（逆合成工作台前端）细则（2026-09-29 建立 · 2026-10-05 追加）
+
+### 14.1 定位与栈
+
+- 第 7 个独立前端项目（非 workspace 成员）：`retroweb/`，端口 **5177** `strictPort`，自己的 lock。
+  栈：Vue 3.5 + TS 6 + Vite 8 + Pinia + router 5 + axios + **Element Plus 2.14**
+  （按需自动引入 + 全量 CSS + `ElConfigProvider` 注入 zh-cn locale）。
+- 登录 = iframe 嵌 oauth21 `/mini-login`（照抄 posecraft/firewall）：`SSO_READY` 才关 loading
+  （`@load` 只启 3s 兜底）→ `LOGIN_SUCCESS` → `adoptDeviceId` → `bind-session` 换本域 cookie，
+  **失败必须中断**（否则假登录）。宿主收消息须 **origin + source 双校验**。注册/找回/二次验证一律不自建。
+- 🔴 调通前置：`oauth21/.env.development` 的 `VITE_ALLOWED_PARENT_ORIGINS` 要有 5177；
+  生产 `CORS_ORIGINS` 要有前端 origin（`bind-session` 走 `origin-guard`，
+  **dev 空白名单放行 ⇒ 本地无感、上线才炸**）。
+
+### 14.2 预测链路 = 多次一步
+
+- 只调 `/api/predict`（单步），前端自己长路线树；**不调** `/api/search`。
+- Flask 8000 经 vite proxy `/retro/* → /api/*`；模型首帧可达数分钟 ⇒ 超时 10 min + 预热按钮 + 可 abort。
+
+### 14.3 🔴 路线方案 / 分析留档 / AI 工艺分析（2026-09-29）
+
+① 地基 = 确定性 `reactionIdFor(nodeId, precursors)`（同前体恒等 id），「同一反应」判定一律走它；
+② 切方案 = `detached:true` **不删树**（在 `allNodes`、不在 `nodeList`），切回按 id 接回；
+③ 🔴 改「已保存」方案的选择**必须 fork 新方案**，绝不就地写；`applyScheme` 须遍历 `allNodes`；
+④ AI 分析 = **POST+fetch 的 SSE** + 花括号配平抽 JSON + **质量数 RDKit 算、LLM 只解读**；
+   配置 `F:/retrochimera/web/.env`（**mtime 热重载，改完不用重启**），缺 key 优雅降级。守门 `npm run test:store`。
+⑤ 🔴 LLM 端点/key 排查三步：`GET /v1/models` 探鉴权 → `/api/llm/status?probe=1` 验 key+模型 →
+   `/api/llm/models` 列可用。**`/v1/models` 会骗人**（列表里 3/9 个不在套餐内）；
+   **推理模型只吐 `reasoning_content`**（必须单独发 `thinking`，否则界面假死）；
+   🔴 **`max_tokens` 别省**（思考 token 计入输出额度）；限流 **按模型端点算**（换模型 = 换配额），
+   前端只在点「验证」时 probe。
+
+### 14.4 🔴 版式重构（2026-10-05 二次）：标定态 / 路线态两版式
+
+> ⚠️ 本节第一版（"目标胶囊 + 收起左栏 + 侧栏底部抽屉"）**已被推翻**，下面是现行设计。
+
+**两个互斥形态，由 `store.targetSetupOpen` 一个开关切**（详见源码注释）：
+
+| | 标定态 | 路线态 |
+| --- | --- | --- |
+| 触发 | 首次进入 / 点「换目标」 | 点「确定目标，开始分析」后 |
+| 布局 | 整屏居中大卡片 [左 画布+粘贴框+解析诊断 \| 右 运行参数] | 顶 `TargetBar` + 中三页签 + 右参数栏 |
+| 出口 | 底部唯一按钮「确定目标，开始分析」（未解析时禁用） | 「换目标」回标定态 |
+
+侧栏：上部导航（工作台 / 历史记录 / 个人中心），**下部常驻「最近的任务」**紧凑列表
+（状态圆点 + 相对时间 + hover 删除 + 二次确认），侧栏收起时隐藏。
+
+**三条语义约定（最容易实现错，逐一踩过）：**
+
+1. 🔴 **面板可见性判据只能是 `store.targetSetupOpen`，不能是 `!store.rootId`**。
+   我先写成 `computed(() => !store.rootId)` → 「换目标」时旧 rootId 还在（故意不删），
+   `!rootId` 恒 false ⇒ **点了换目标面板根本不出现**。
+   而且用户正在标定卡里填结构、还没解析时 rootId 也是空的 —— 那正是最需要看到面板的时刻。
+   ⇒ 可见性只归一个显式开关管；`rootId` 只决定「能不能直接把面板关掉」（`closeTargetSetup` 的守卫）。
+
+2. 🔴 **「解析成功」≠「开始分析」，必须拆成两个动作**。
+   我先让 `setTarget()` 顺手关面板（想少一次点击）→ 示例 chip 一点就悄悄收面板开跑，
+   用户来不及改模型参数。改法：`setTarget()` **不碰** `targetSetupOpen`；
+   只有标定卡底部的「确定目标，开始分析」调 `closeTargetSetup()` + 对根节点 predict。
+   配套把画板 dialog 里的「解析后自动展开一步」复选框**删掉**（同一个动作两个入口必乱）。
+   ⇒ 规则：**有副作用的「阶段推进」不能藏在「数据设置」里**。
+
+3. 🔴 **「换目标」必须顺手 `reset()`**。不清旧树会让 `TargetInput` 的 `seedFromCurrent()`
+   把旧 SMILES 回填进输入框，且 `canStart` 误判为可开跑（指向的是上一个任务的根节点）。
+
+**🔴 居中：四种做法里只有「脱离文档流」稳**（标定卡要整屏居中，但它挂在 `.app__content` 里）：
+
+| 做法 | 实测偏差 | 结论 |
+| --- | --- | --- |
+| 直接 `justify-content:center` | 恒 +236（= 侧栏宽） | 基准错：只在主区居中 |
+| `transform: translateX(-150px)` | 恒 -64，与栏宽无关 | 数值拍脑袋 ⇒ 修不干净 |
+| `margin-right: calc(300px+16px)` | 卡片被压到左边界 x=258 | 反而把可用宽吃掉 |
+| ✅ `position:absolute; inset:0` + 外层 `.workspace__layer{position:relative}` | 层内左 70 / 右 70（差 0） | **唯一不随视口漂移** |
+
+⇒ **要"相对某容器居中"就先脱离那个容器的流向**，否则同时受父级 padding、栅格列、
+flex 对齐三重影响，逐个补偏移补不完。
+另：**量居中必须用对基准** —— 侧栏是常驻导航，基准应是**内容区**（`.workspace__layer`），
+拿视口算会被侧栏恒带偏 236px（那不是 bug，是基准选错）。
+
+**🔴 别用 `el-empty` 当小占位**：默认 180+px 高，在标定卡里撑出一大片死白
+（卡片被拉到 674px 又高又空）。换成「一行虚线框 + 压暗示意结构（`opacity:.55`）+ 两句引导」。
+
+**验收**：`.tmp-probe/verify-workbench.cjs`（playwright，**26 条断言**）——
+标定卡内容区内居中差 0、居中卡含画布+参数、未解析时出口禁用、「解析后仍留标定态」、
+点按钮后才消失、参数伸缩 ±260px、侧栏最近任务常驻、换目标回退且清空旧目标。
+辅助：`center-scan.cjs`（扫 7 视口居中偏差）、`geometry-probe.cjs`（逐层量真实几何）。
+⚠️ 版式验收量 `boundingBox()` 而非截图目测 —— `playwright-core` + `channel:'chrome'` 复用系统 Chrome。
+四关：`vue-tsc -b` / `eslint .` / `vite build`（**必须 `--outDir <全新目录>`**）/ `npm run test:store`。
+
+### 14.5 TS6 / axios 两个坑（新建前端会再遇到）
+
+- `paths` 非相对映射需 `baseUrl`（已废弃）⇒ 必须同时写 `"ignoreDeprecations":"6.0"`；
+- axios 拆信封后类型不符 ⇒ 自定义 `HttpClient` 接口 + 实例断言。
+  `http.ts` **别**动态 import store（会成环 + INEFFECTIVE_DYNAMIC_IMPORT）⇒ 用 `setUnauthorizedHandler()` 注入。
+
+### 14.6 结构式画板（自绘 SVG）
+
+- `components/mol/StructureEditor.vue`：分工 = **画板只管拓扑与坐标，化学正确性交 RDKit** ——
+  出图 `graphToMolfile()` → `/api/parse`；入图 `/api/depict` → `molfileToGraph()`。
+- 🔴 选型（别再重踩）：Ketcher 3.18 只有 React 形态（peer react + @mui + redux，30MB+）；
+  `openchemlib@9.25` npm 包**不含 StructureEditor**（full build 需 Java+GWT 自编译）；
+  **smiles-drawer 只能渲染**（`parse()` 只出语法树、`draw()` 不回写坐标）⇒ **自研最划算**。
+- 🔴 画板「载入已有结构」依赖 F 盘 `web/app.py` 的 `/api/depict`（RDKit 2D 坐标）。
+  molfile 列宽是硬契约（写歪一点 RDKit 静默读成空分子）；立体标注只允许挂单键。
+
+## 15. RetroChimera 后端部署 / 可移植性（2026-10-05）
+
+- 后端在 **F 盘**（`F:/retrochimera/`，本地路径，非本仓）；本仓只有 `retroweb/`。
+
+### 15.1 目录形态（别再判断错）
+
+| 路径 | 是什么 | 入库？ |
+| --- | --- | --- |
+| `web/` | **我们自己写的** Flask 封装（app.py / llm.py / jobhub.py） | ✅ |
+| `upstream/` | **上游 retrochimera v1.3.0 全量源码**（2026-10-05 vendored） | ✅ 128 文件 / 1.1MB |
+| `models/` | 模型权重 **9.0GB** | ❌ `.gitignore` |
+| `repo/` | 旧的上游克隆（已废弃） | ❌ |
+
+### 15.2 🔴 上游 vendored 进仓库（不再用拉取脚本）
+
+- 方式：`git archive v1.3.0 | tar -x`（只含被跟踪文件、**不带 `.git`**），
+  放 `upstream/`，配 `upstream/VENDORED.md`（来源 / 版本 `v1.3.0` / commit `bf5ec59` /
+  纳入方式 / 更新步骤 / **为什么不用 submodule**：部署机常没 git、内网镜像拉不动、这点量直接入库）。
+- `scripts/fetch_upstream.py` **已删除**（连同 `scripts/` 目录）。
+- 装上游：`cd upstream && pip install -e .`（卡 build 依赖就 `--no-build-isolation`）。
+- 好处：**克隆本仓即拿到可运行的完整后端**，不再需要联网 clone 上游。
+
+### 15.3 🔴 后端只提供 API，不托管前端页面
+
+- `web/app.py`：删掉 `send_from_directory` / `STATIC` / `/static/<path>` 路由；
+  `/` 与新增 `/api` 都返回**自描述的端点清单 JSON**（`_API_INDEX`）。
+- `web/static/` **整目录删除**（旧 index.html + 备份 + smiles-drawer.min.js ——
+  前端 `retroweb/public/` 有同一份）。
+- `启动网页版.bat` → **`启动后端API.bat`**：去掉自动开浏览器，提示改为"这是 API，界面在 retroweb 仓"。
+- 🔴 **判活打 `/api/models`**（**没有 `/api/health`** —— 这个端点从未存在过，
+  README 曾写错，靠 `grep '@app.route'` 核出来）。
+- 实机验证：`/` 200 清单 · `/api` 200 · `/api/models` 两模型 `loaded:true` ·
+  **`/static/index.html` 404** · `/api/llm/status` configured / glm-5.2。
+
+### 15.4 可移植三件套 / 依赖 / 已知坑
+
+- 🔴 模型路径与 CORS 必须走环境变量（`RETRO_MODELS_DIR` / `RETRO_MODEL_PISTACHIO` /
+  `RETRO_MODEL_USPTO50K` / `RETRO_CORS_ORIGINS`），脱敏模板 `web/.env.example`，
+  依赖清单 `web/requirements.txt`（分 4 步，torch 必须 pip wheel，pyg wheel 源目录名是 `torch-2.2.0+cu121`，
+  numpy 锁 1.26.4）。真实 key 只在 `web/.env`（**不入 git，mtime 热重载**）。
+- 依赖栈：Python 3.9.7 / torch 2.2.2+cu121 / torch-geometric 2.5.2 / rdkit 2023.9.6 / syntheseus 0.8.0。
+- 模型体积 **9.0GB**（`retrochimera_pistachio` / `retrochimera_uspto50k`）⇒ 不进 git，不进 `sites` 托管。
+- 🔴 Windows spawn 死锁已修（勿回退）：模型跑在独立**非守护单线程** `multiprocessing.Process` worker，
+  Flask 经 `_REQ_Q`/`_RESP_Q` 通信。
+- 🔴 **`.bat` 改完必须验 BOM**：带 BOM 的 bat 在 cmd 下报 `'ï»¿@echo' 不是内部或外部命令`。
+  去 BOM：`tail -c +4 file > clean && cp clean file`，再 `head -c 3 | xxd` 验为 `40 65 63`。
+- 启动脚本的 Python 探测链：`RETRO_PYTHON` > `CONDA_PREFIX` > 仓库内 `.venv` > 默认 conda 路径 > PATH；
+  含端口占用检测。`RETRO_RULE_WORKERS=4` 默认。
+
+## 16. retroweb / retrochimera 第五轮：渲染、侧栏、网络层（2026-10-06）
+
+### 16.1 smiles-drawer 的两个真缺陷（补丁不可回退）
+
+文件：`retroweb/public/smiles-drawer.min.js`（1.0.0，252114 B，vendored 不改），调用方 `src/utils/smiles-drawer.ts`。
+
+**缺陷 1：`compactDrawing: true` 会算出退化布局。**
+某些分子所有原子被放到同一坐标、一条键都不生成。实测 `CC(=O)O`（乙酸）在 SVG 里
+`<defs>` 为空、无 `<line>`，4 个原子标签挤进**同一个 `<text>`**（渲染成「COOHCH₃」）。
+改为 `false` 后：乙酸 0→4 键、阿司匹林 12→15、水杨酸 8→11 —— **全面变好，不是取舍**。
+
+> 定案手法：`probe-opts.cjs` 选项隔离矩阵 —— 8 个选项 × 10 个 SMILES，逐个组合数 `bond`/`text` 节点数。
+> 结果是**只有 `compactDrawing` 能改变输出**，`bondLength`/`padding`/`shortBondLength`/`explicitHydrogens`/`fontSizeSmall` 全部无关。
+
+**缺陷 2：`<mask>` 没写 x/y/width/height ⇒ 单根水平键的组被整块裁掉。**
+SVG 规范：`<mask>` 不给几何属性时 `maskUnits` 默认 `objectBoundingBox`，
+裁剪区 = **被引用元素的 bbox 再外扩 10%**。
+而**单根水平键**的 bbox **高度恰为 0** ⇒ 外扩 10% 之后高度仍是 0 ⇒ 整组 `<g mask>` 被裁掉 ⇒ 键不可见。
+症状：甲醇（`CO`）、碘甲烷（`CI`）只剩孤立原子标签；`CCO` 因为 bbox 有高度而**正常** ——
+这就是「有些小分子正常、有些没键」的原因。
+
+修：`fixMaskRegions(svg)` —— 遍历 `g[mask]`，改 `maskUnits="userSpaceOnUse"` 并显式写
+`x/y/width/height`（取 `mask > rect` 范围 ∪ 键组 `getBBox()` 的并集，各边留 1 兜底）。
+在 `finish()` 里、`fitSvg()` 之前调用，整体 `try/catch` 吞异常（渲染不能因为修图失败而崩）。
+
+> 排查路径（值得复用）：`probe-mol-svg.cjs` 导出 SVG 源码 → 发现 `<line>` 存在但看不见 →
+> `probe-mol-mask.cjs` 量 `g[mask]` 的 `getBBox()` 高度 → 去掉 mask 后键立刻出现 ⇒ 定位到裁剪。
+
+### 16.2 el-dialog 默认不居中
+
+Element Plus 2.14 的 `.el-dialog` 带 `--el-dialog-margin-top: 15vh`，**默认是顶部对齐**（这就是「没居中」）。
+真居中用 **`align-center` prop**：`use-dialog.mjs` 的 `overlayDialogStyle` 会返回 inline `{display:'flex'}`，
+配合 `.el-dialog.is-align-center{margin:auto}` 实现。
+
+🔴 **别自己写 `align-items:center`** —— EP 用 `margin:auto` 是**溢出安全**的：
+内容比容器高时顶部不会被裁掉，而 `align-items:center` 会。
+
+### 16.3 侧栏「最近的任务」跳位 + 任务凭空消失
+
+**症状**：点开列表里任何一条旧任务，它就跳到第一位。
+
+**根因**：`persistSession()` 在**每次状态落盘**时都会跑，原先用 `updatedAt` 判「内容变了」，
+而打开任务也会走这条路径 ⇒ `updatedAt` 被刷新 ⇒ 列表按 `updatedAt` 倒序 ⇒ 跳到第一位。
+
+**修**：`Session` 加 `sig?: string`（内容指纹），只取**与字段顺序无关、且 `normalizeNode` 能保留**的字段：
+`rootId` / `currentSchemeId` / `params` 逐字段 / `jobIds` 的 keys / `schemes` /
+每节点的 `status·role·chosenReactionId·duplicateOf·reusedFrom·children·fetched·purchased·collapsed·
+candidates.length·analyses 的 名+status`；一律 `.sort()` 后拼串。
+
+🔴 **不能用 `JSON.stringify(snapshot)`** —— 对象 key 顺序不稳定，指纹会恒变，等于没做。
+🔴 旧数据首载（`sig === undefined`）**只登记、不刷新 `updatedAt`**，否则老任务会被集体顶到最前面。
+
+**第二个 bug**：`persistSession()` 在 `!rootId.value`（标定态，即「换目标 / 新建任务」）时
+**filter 掉了当前会话**。修：只把 `currentSessionId` 置 `null`，**绝不删**。
+（「新任务要能放在左侧列表」这条需求就是被它挡住的。）
+
+**入口**：`SessionPanel.vue` 新增 `new` 事件 + 常驻标题行右侧的「＋新任务」按钮；
+`AppShell.vue` 的 `newSession()` = `store.openTargetSetup()`（必要时 `router.push('/')`），**不碰**任何已有会话。
+
+**第三个 bug（第六轮补）**：`setTarget()` 无条件 `currentSessionId = uid('sess')` **新建会话**。
+于是「打开一个草稿任务 → 清空 → 点示例 / 重粘」会在列表里多冒一条新任务、把旧任务顶到最前
+（这就是「选第二个跳到第一个」的另一条触发路径，和 sig 那条是两回事）。
+修：新增 `editingSessionId`（标定面板正在编辑的会话 id，null=全新）。
+`setTarget` 优先复用 `editingSessionId`；`loadSession` 设 `editingSessionId = id` 并用
+`isDraftSession`（**只判根节点 `status==='idle'`**）决定打开标定面板还是路线态；
+`openTargetSetup`（＋新任务 / 换目标）清 `editingSessionId` + `currentSessionId` ⇒ 之后 setTarget 才新建。
+🔴 `isDraftSession` 判草稿**不能**用「单节点 / 无 jobIds」：目标本身就是可购买原料时
+`predictNode` 直接置 `terminated`（无子节点、无 job），但那是「已分析」不是草稿。
+
+### 16.3b 路线图标注与候选面板（第七轮，2026-10-06 深夜）
+
+- **「未知化合物」标注必须长在卡片本体上**：橙虚线边框卡 + 浅橙底 + 左上角标（`is-anno` 牌）；
+  外圈虚线椭圆保留做远观，**椭圆外的浮动标签已撤**（top:-17px 挤 34px 行距、被邻卡压 —— 两轮都栽在这）。
+  🔴 通用教训：贴图说明一律 corner tag，不挂标注几何外面。
+- `duplicateOf` 叶子（防环/同分支重复）**不是未知化合物** → `kind:'dup'`（灰虚线卡 + 灰角标）；
+  分类顺序：root→target；叶+duplicateOf→dup；叶+isTerminal→starting；其余叶→unknown。
+- **CandidatePanel = 反应方程式行**：`[前体]+[前体] ──(概率圆片)──▶ [产物]`，
+  原料左产物右（与路线图同向）；前体「可购买」= `countHeavyAtoms(smi) <= heavyAtomThreshold`
+  或命中 `params.startingMaterials`（与 `isTerminal` 同口径，但前体不是节点只能现算）；
+  已采纳行绿高亮。runs / 重新分析 / 复用横幅 / 撤销 全保留。
+  探针：`.tmp-probe/verify-candidate-rxn.cjs`（22 断言）· 路线图 `.tmp-probe/verify-route-canvas.cjs`（39）。
+
+### 16.4 目标分子输入区按 Reaxys 排布
+
+```
+[ 输入框（textarea, resize=none） ][ 解析结构 ]     ← 同一行，间隙 8px
+格式提示 + 「选择文件 · 清空」                        ← 提示行，文案随模式变化
+──────────────────  或者  ──────────────────      ← 两侧 1px 线的分隔
+            [ ⬡✎ 绘制结构式 ]                      ← 居中，带图标
+```
+
+- `rows` 随模式：SMILES = 1 行，结构式粘贴 = 3 行。
+- SMILES 框里 `@keyup.enter.exact` 直接触发解析。
+- 绘制按钮图标是**内联 SVG**（尖顶六元环 + 铅笔），20px。
+  🔴 画图标时**别把铅笔贴在六元环的角上** —— 20px 下两段路径会连成一个闭合形状，看起来像字母「Q」。
+
+### 16.5 LLM 网络层：多档 + 直连兜底（`web/llm.py`）
+
+**故障**：`SSLError: HTTPSConnectionPool(host='token.sensenova.cn', port=443) … SSLEOFError(8, 'EOF occurred in violation of protocol')`。
+
+**定性**：curl 走 `HTTPS_PROXY` 探端点 10/10 成功、Python requests 连打 12/12 成功
+⇒ **瞬时 / 环境性**，不是上游端点坏了。
+根因：后端 Flask 进程继承了**启动那一刻的本机临时端口代理**（实测 `HTTPS_PROXY=http://127.0.0.1:51795`，
+端口每会话都变）；代理一重启/换端口 ⇒ CONNECT 隧道被掐 ⇒ OpenSSL 看到 EOF。
+
+**修**：`_request(method, url, ..., attempts=3)` 统一出口。
+- 档序由 `RETRO_LLM_PROXY` 决定：`off/none/0/false…` → **强制直连**；
+  空/`env/auto/1/on/true…` → **[环境代理, 直连兜底]**；其他值 → **指定代理**。
+- 每档内**指数退避重试**（0.5s / 1s）；`ProxyError` 在本档不重试，直接换下一档。
+- `tried` 列表由 `_request` 就地 append，错误文案里回显「已尝试：…」，并给出
+  「关代理 / 指定代理 / `curl -I`」三步排查指引。`probe()/list_models()/analyze()/stream_analyze()` 全改走它。
+
+🔴 **关代理必须传 `{"http": None, "https": None}`**（代码里是常量 `_DIRECT`）。
+传 `{}` 是**无效的** —— requests 的 `merge_environment_settings` 会对空 dict 做 `setdefault`，
+把环境变量里的代理**填回来**。踩到的症状：直连档仍报 `ProxyError`，且文案只显示一档「环境代理/未指定」。
+
+🔴 **可重试判据必须以 `isinstance` 为准**：
+`isinstance(err, (rex.SSLError, rex.ConnectionError, rex.Timeout, rex.ChunkedEncodingError))` 优先，
+类名匹配只作兜底。只按类名会**漏掉 `ProxyError`**（第一版就栽在这），直连兜底根本不跑。
+
+🔴 **`SSLEOFError(8, 'EOF occurred in violation of protocol')` 不专指上游端点的故障。**
+把 `RETRO_LLM_BASE_URL` 指向一个**不存在的域名**，抛出的正是同一条签名（`_ssl.c:1032` 变体）。
+⇒ 见到这条错误先查网络路径（代理/DNS），别先怀疑模型服务。
+
+**机理分析**：`_SYSTEM` prompt 新增硬性要求 + `mechanism` JSON schema
+（`type` / `steps[{seq,step,detail}]` / `intermediates[{name,note}]` / `rate_determining` /
+`selectivity` / `evidence[]`），并明令**「SN2」三个字不算机理**、机理必须与 `order`/`conditions` 自洽。
+真调 glm-5.2 验证：33.1s、`finish_reason=stop`、4 步电子转移 + 四面体中间体 + 决速步 + 3 条判据。
+前端在 `StepAnalysis.vue` 的「反应类型」之后、「投料顺序」之前插入「反应机理」板块。
+
+---
+
+## 17. 主索引精简迁入（2026-10-07）
+
+> `MEMORY.md` 超注入阈值被截断，本轮精简索引。以下条目**只在本节存在**（其余 §1/§3/§6 条目
+> 原文在 details 的 §1 / §11 / §13 / §14–§16，索引只留结论句 + §号）。
+
+- 🔴 **oauth21 三个分发器必须都认「mini 来源」**（login / register / forgot 三个 `index.vue` 分发器同构；
+  漏一个 ⇒ 从 `/mini-login` 进来的会话落到错版式）。另见 §11（视口判定顺序 宽≥1024 ＞ 窄<768 ＞ UA；调试必先造窄视口并刷新）。
+- 🔴 **oauth21 父 origin 白名单单一来源 `utils/parent-origins.ts`**：漏配的**症状是「弹窗 loading 慢」而非报错**
+  （postMessage 被静默丢弃，宿主一直等）。retroweb 的 iframe 登录同理（`VITE_ALLOWED_PARENT_ORIGINS`）。
+
+### 16.7 分析模块新增「后处理分析」`workup`（2026-10-07）
+
+**目标**：AI 工艺分析的可勾选「分析模块」新增「后处理分析」，输出**能照着做**的后处理步骤。
+
+- 模块 key = `workup`，对应**顶层 JSON 字段 `workup`**（结构化 8 子字段）：
+  `quench` 淬灭 / `extraction` 萃取·分液 / `wash` 洗涤 / `dry` 干燥 / `concentration` 浓缩 /
+  `purification` 纯化 / `recovery` 回收率与纯度 / `notes` 放大注意（数组）。
+- 🔴 **与 `conditions.workup` 的分工**：后者是**一句话概览**（前端标签改「后处理概览」），
+  新模块是**照做级细节**；两者**分别渲染、不互相顶掉**（探针专门断言）。
+- 后端 `web/llm.py`：`_SYSTEM` JSON 骨架加顶层 `workup`；`conditions.workup` 描述改「一句话概览」；
+  硬性要求新增第 8 条（workup 必须逐步可执行 + 指出放大最先出问题的环节）；
+  `_MODULE_FIELDS` 在 `conditions` **之后**插 `workup`（顺序 = 前端 chip 顺序 = prompt 字段顺序）。
+- 前端：`types/retro.ts` 加 `'workup'` + `StepWorkup` 接口 + `StepAnalysisData.workup?`；
+  `stores/workspace.ts` 的 `ALL_ANALYSIS_MODULES` 8→9、`ANALYSIS_MODULE_LABELS.workup='后处理分析'`；
+  `StepAnalysis.vue` 在「反应条件」后插「后处理分析」区块（标题右侧 `.ana__tag-flow` 流程胶囊
+  「淬灭 → 萃取 → 洗涤 → 干燥 → 浓缩 → 纯化」；`notes` 复用 `.ana__mech-ev` 渲染成「放大注意」）。
+
+**验收**：`vue-tsc -b` 0 · `eslint` 0 · `vite build` 2.36s；后端 import 级校验 14 项；
+新探针 `verify-workup-module.cjs` **9/9**；`verify-analysis-modules.cjs` 同步 8→9 后 **10/10**；
+回归 `verify-ui-fixes` 23/23 · `verify-route-canvas` 39/39 · `verify-candidate-rxn` 22/22 ·
+`verify-lcms-struct` 10/10 · `verify-llm-api-settings` 21/21 · `assert-workspace-head` 15/15 ·
+`assert-error-retry` 7/7。
+
+🔴 **写断言时的坑（同一处踩两次）**：`_build_system(modules)` = **`_SYSTEM` 全文 + 追加一段
+「只输出这些字段」**，所以基础 JSON 骨架**永远包含全部字段名**（含 `nmr`）⇒
+断言"裁剪后不含 nmr"**必须只看 `s.split("\n\n")[-1]`**，扫全文必假失败。
+
+⚠️ **发现的既有 doc/impl 不一致（本轮未改）**：`_build_system` 里 `desc_lines` 收集了各模块 `desc`
+却**从未被消费**（`extra` 只用了 `field_json`），而 `_MODULE_FIELDS` 注释声称「`desc` 用于生成精简版
+system」。补上会给**所有**模块的 prompt 加一段要点清单 ⇒ 属行为变更，需实测 LLM 输出后再定。
+
+---
+
+## 18. retroweb 第八轮：工作台版式再分配 + 「追问」（2026-10-07）
+
+### 18.1 四分区外壳的第三版（本轮定案）
+
+上一版（§14.4）是「顶 `TargetBar` + 中三页签 + 右参数栏」。本轮把**目标信息整体搬到常驻侧栏**，
+主区顶部腾出整条，并把状态条移进右辅助面板底部：
+
+| 区 | 内容 | 备注 |
+| --- | --- | --- |
+| 侧栏（240↔64） | 上部导航 → 🔴 **「目标分析」卡（`TargetBar` 重写）** → 下部「最近的任务」 | 卡与最近任务**同列、卡在上** |
+| 顶栏 | 纯 Slim Header（品牌/账号） | 高度走 `--rw-header-h` |
+| 主区 | 通知条 → 四页签 → 页面 | 🔴 默认页签 = **目标分析** |
+| 右辅助面板（320↔40） | 按页签切换（运行参数 / 路线方案对比）+ 🔴 **底部 `footer` 插槽挂状态条** | `asideKind` 决定内容 |
+
+- 页签（`mainTab`）：`'overview' | 'tree' | 'route' | 'flow'`，文案 **目标分析 / 逆合成树 / 路线网络 / 步骤详情**；默认 `'overview'`。
+- `openTargetSetup()` / `resumeSessions()` / `loadSession()` **三处都要把 `mainTab` 复位成 `'overview'`**，
+  否则换了任务还停在上一轮的页签上。
+- 新增 `TargetOverview.vue`（总览页）与 `MolPreviewDialog.vue`（预览弹窗，侧栏与主区共用）。
+- `RouteStats.vue` 加 **`embedded` prop**（去 margin/边框/圆角、降字号），并补一个 **「停止」按钮**
+  —— 自动拆按钮搬到标定卡后，运行时已在路线态、标定卡已收起，停止出口必须跟着搬到一个常在的地方。
+- 🔴 **`el-tabs` 默认会预渲染全部 pane（`v-show` 切换）** ⇒ 断言「默认不在某页签」**不能查 `count() === 0`**，
+  必须查 `.isVisible()`。本轮 `assert-workspace-head.cjs` 就因此假失败一次。
+
+**断点表**（写死 `calc(100vh - 60px)` 之类的算式前必看）：
+
+| 视口 | 行为 |
+| --- | --- |
+| ≥1280 | 三列（侧栏 + 主区 + 右面板） |
+| <1180 | 右面板下堆 |
+| <1024 | 侧栏收成仅图标（64px） |
+| <768 | 顶栏降到 52px |
+
+### 18.2 合规提示（幻觉警告）可关闭
+
+- 描述：**「模型预测可能存在幻觉：排名越靠后越可能不合理，实验前必须由专业人员验证。」**
+  原先常显，现可关闭且**状态落盘**。
+- `stores/settings.ts`：`DISCLAIMER_KEY = 'retroweb_hide_disclaimer'`，`hideDisclaimer` ref + `watch` 写 localStorage。
+- `WorkspaceView.vue` 的 warn 条加 `v-if="!settings.hideDisclaimer"` + 关闭按钮；正文包进 `.workspace__notice-text`。
+- **重新打开的入口**：总览页 `.ov__toggle` 的 `el-switch`（绑定同一个 `hideDisclaimer`）。
+- 🔴 **连带坑**：错误条也用 `.workspace__notice-close` ⇒ **选择器变歧义**，
+  Playwright strict mode 会因 2 个匹配直接抛错（`assert-error-retry.cjs` 已改为
+  `.workspace__notice--error .workspace__notice-close`）。
+
+### 18.3 「追问」：带上下文问这一步的其他问题
+
+**目标**：工艺分析出结果后，能就**这一步反应**追问（放大控温、后处理替代、杂质来源…），
+且回答**接着前文**，不会答成对另一个反应的评论。
+
+后端（`F:/retrochimera`）：
+
+- `web/llm.py`：
+  - `_body(cfg, messages, stream, json_mode=None)` —— 新增 `json_mode`；`None` 用配置值，
+    **显式 `False` 时覆盖配置、不写 `response_format`**（否则自由文本会被逼成转义 JSON）。
+  - `build_messages(req, masses, json_footer=True)` —— 新增 `json_footer`；False 时不追加「请按 JSON 结构输出…」。
+    🔴 **上下文复用同一个 `build_messages`**（`modules: None` + `json_footer=False`）⇒ 与首轮分析**同一份背景**，
+    不会两边各写一遍而漂移。
+  - 新增 `FOLLOWUP_SYSTEM`（只答那一个问题、不要 JSON、中文 markdown、给数量级/判据、与前文一致、安全提示、不确定就说）。
+  - 新增 `build_followup_messages(req, masses)`：system(FOLLOWUP_SYSTEM) + user(背景资料 + `ctx_text`)；
+    有 `analysis` 时加 user(JSON，截 12000 字) + assistant(「收到，背景…请提问。」)；再逐条追加 `history[-12:]`；末尾 user(问句)。
+  - 新增 `stream_followup(req)`：SSE 事件序列与 `stream_analyze` **一致**（meta/thinking/thinking_end/delta/done/error），
+    但 `done` 负载是 `{text, model, reasoning, finish_reason}`；`_body(..., json_mode=False)`；
+    🔴 `finish_reason == "length" and not answer` 时**响亮报错**（别静默给空答案）。
+- `web/app.py`：`_llm_followup_payload()`（history 逐条白名单 role ∈ user|assistant + `content[:4000]`）+
+  `POST /api/llm/followup/stream`（缺 question → 400）+ `_API_INDEX` 补条目。
+
+前端（`retroweb`）：
+
+- `types/retro.ts`：`StepFollowup {id,q,a,status:'streaming'|'done'|'failed',error?,at}`、`StepAnalysis.followups?`、`FollowupRequest`。
+- `api/retro.ts`：把 SSE 分帧抽成通用 **`postSse<T>()`**，`streamAnalyze` 与 `streamFollowup` 共用
+  （POST + fetch，不用 EventSource/axios —— 那两个都做不到「POST 且读流」）。
+- `stores/workspace.ts`：
+  - `askFollowup(nodeId, question)`：守卫 `rec.followups?.some(f => f.status === 'streaming')` ⇒ **一次只跑一条**；
+    `MAX_FOLLOWUPS = 10`，超出 `splice` 掉最旧（追问会累积，不限量 localStorage 迟早爆）；
+    abort key `fu:${nodeId}`；history 由已 `done` 的历史条目构造。
+  - 🔴 **响应式陷阱**：`cur()` **每次从响应式数组重新 `find`**，绝不缓存 push 时那个对象引用，
+    也不缓存下标（trim 会移动下标）。
+  - `cancelFollowup(nodeId)`；`finally` 把仍 `streaming` 的置 `failed` + `schedulePersist()`。
+- `StepAnalysis.vue`：`.ana__fu` 区块（仅在 `status==='done' && analysis?.data` 时出现）——
+  问答列表（`.ana__fu-item` / `.ana__fu-q` / `.ana__fu-a`）+ 流式等待行（`.ana__fu-wait`）
+  + 输入框（`@keyup.enter.exact="ask"`）+ 「追问」/「停止」。
+
+**验收**：`vue-tsc -b` 0 · `eslint src/` 0 · `vite build` 2.28s · `npm run test:store` ALL PASS。
+新探针 `verify-followup.cjs` **26/26**（受控 SSE：请求体带 product/precursors/context/analysis、
+首问 history 为空、二问 history = [user,assistant] 且内容等于首问问答、流式期间按钮禁用、
+两段 delta 拼接后 `done` 覆盖、刷新后问答仍在）。
+`assert-workspace-head.cjs` 重写后 **31/31**（左栏卡与最近任务同列且在上、默认页签/总览页、
+状态条在辅助面板内、幻觉提示可关 + 落盘 + 可重开、切回逆合成树后原有断言仍在）。
+回归：`verify-shell-route` 16/16 · `verify-ui-fixes` 23/23 · `verify-route-canvas` 39/39 ·
+`verify-candidate-rxn` 22/22 · `verify-candidate-struct-fit` ALL PASS · `verify-analysis-modules` 10/10 ·
+`verify-lcms-struct` 10/10 · `verify-workup-module` 9/9 · `verify-llm-api-settings` 21/21 ·
+`verify-shell` 11/11 · `verify-narrow` 6/6 · `assert-error-retry` 7/7。
+
+⚠️ **后端需重启**才能加载 `/api/llm/followup/stream` 与 `_body(json_mode=...)`。
+
+---
+
+## §19 候选反应条件：先枚举再选定，深入分析锁定条件（2026-10-07 第九轮）
+
+### 19.1 为什么要这一步
+
+反应条件（溶剂 / 温度 / 碱与缩合剂 / 浓度 / 投料方式）本来就是**组合空间**，一次只给一套
+等于把模型的第一直觉当成唯一答案。改为两阶段：`/api/llm/conditions/stream` 先列出 N 套
+候选条件（各成一派并给 pros/cons/risk/best_for）→ 用户挑一套 → 深入分析把它**锁定**。
+
+### 19.2 后端（`web/llm.py` / `web/app.py`）
+
+- `CONDITIONS_SYSTEM`：明确「**只做一件事**」——不写机理 / 投料顺序 / NMR（那些是选定后的下一步），
+  并要求各套之间「至少两项实质差别」，否则模型会给同一套换个说法。
+- `_norm_conditions(data, count)`：字段类型兜底 + id 缺失/重复按位置补 A/B/C + name 缺补「方案 X」
+  + confidence 夹到 0~1 + 空 note 补「未经实验验证」的安全底线。
+  🔴 **真缺陷（已修）**：原先「先按 count 截断、再过滤非对象」⇒ 模型混进 `options` 的一条**字符串
+  会白吃掉一个配额**（要 4 套只拿到 3 套）。必须**先过滤非对象再截断**。
+- `build_conditions_messages`：上下文**必须与深入分析同一份** ⇒ 复用 `build_messages(..., json_footer=False)`
+  且显式 `chosen_condition=None`；后者是防止上次选定过的条件把枚举带偏成「再给一套类似的」。
+- `stream_conditions`：SSE 事件序列与 `stream_analyze` **完全一致**（前端复用同一套解析），
+  截断（`length` 且抽不出 JSON）与「抽不出 JSON」都**响亮报错**（前者点到 max_tokens 与减少方案数）。
+- `build_messages` 支持 `chosen_condition`：把整套条件（含 pros/cons）回述进 prompt，并要求
+  `conditions` 字段**沿用、不许另换**（"如果你认为这套条件有问题，仍按它写，把问题写进 outcome.risk"）。
+  `_build_system(modules, extra_note)` 新增 `extra_note` 追加约束（锁定条件时同时约束 system）。
+- `app.py`：`_llm_payload` 对 `chosen_condition` 做**白名单 + 截断**（它是前端回传对象，直传 = 给 prompt
+  开任意注入口）；抽出 `_llm_common_payload` 让两条链路共用同一套上下文解析；`count` 夹到 2~6。
+
+### 19.3 前端（`retroweb`）
+
+- 设置：`condPlanFirst`（默认 **true**）+ `condOptionCount`（默认 4），存 `localStorage['retroweb_cond_pref']`
+  （属「用户习惯」，**不进会话快照**）；读写都 try/catch（SSR harness 里没有 localStorage）。
+- **默认流程真的落地**：这一步**还没分析过**时，主按钮就是「先看候选条件」；列过一次后回落为
+  「开始分析」；`status === 'done'` 时是「重新分析」⇒ 此时枚举入口退到候选区里，两者互不遮挡。
+  🔴 关掉开关即老行为（直接给一套条件做分析）。
+- StepAnalysis 候选区：`planFirstPending` / `planStreaming` / `planThinkingOnly`；卡片含
+  编号 / 名称 / 设计取向 / 条件摘要 / 优缺点 / 风险 / 适用 / 把握度；`is-chosen` 高亮 + 「已选」角标；
+  「不限条件（直接分析）」= `chooseCondition(nodeId, null)`。
+- 「反应条件」区标题挂 `.ana__cond-lock`（按候选方案 B · 碱性水相 · 一锅法）—— 一眼看出这份分析
+  是按哪套条件做的。
+- 🔴 **重新分析必须保留 `condOptions` 与 `chosenConditionId`**：`analyzeStep` 会重建 `analyses[rid]`，
+  不带上就会在这次分析开始时把枚举结果与已选状态一起抹掉（枚举等于白跑）。
+- 🔴 **quota 兜底瘦身要连 `condOptions.raw` 一起丢**（与 `rec.raw` 同量级），否则会话体积翻倍。
+
+### 19.4 验证（本轮）
+
+- 新探针 `.tmp-probe/verify-conditions.cjs` **48/48**（受控 SSE：默认主按钮 → 枚举请求体 count=4
+  → 卡片渲染 → 选第 2 套 → analyze 请求带 `chosen_condition`（字段完整、id=B）→ 条件来源标注
+  → 刷新后仍在 → 不限条件时 `chosen_condition===null`）。
+- 新后端脚本 `F:/retrochimera/.tmp-probe/check_conditions_sse.py` **28/28**：替换 `request_chat` 为
+  假网关，覆盖 ①正常流事件序列 meta/thinking/thinking_end/delta/delta/done + 归一化
+  ②请求体（system「3 套」、user 复用分析上下文、枚举时**不带**「已选定」段、`response_format` 生效）
+  ③`length` 截断报错 ④抽不出 JSON 报错 ⑤网关 4xx ⑥未配置。
+- 🔴 **探针坑**：`el-button` 的 loading 会在**按钮**与内部 **spinner 图标**上各带一个 `is-loading`
+  ⇒ 查 `.is-loading` 会数到 **2**，必须限定 `button.is-loading`。
+- 🔴 **探针坑**：默认流程开着时主按钮是「先看候选条件」，`verify-analysis-modules` 点在不到
+  「开始分析」⇒ 该探针 `addInitScript` 里显式预置 `retroweb_cond_pref = {planFirst:false}`。
+
+⚠️ **后端需重启**才能加载 `/api/llm/conditions/stream`。
+
+## §20 大模型「端点配置」：地址 + 模型 + 多 Key 绑定成一套，可存多套切换（2026-10-07 第十轮）
+
+**要解决的问题**：`base_url` / `model` / `api_keys` 三者互相依赖 —— MiMo 的 key 配 DeepSeek
+的地址、DeepSeek 的地址配 MiMo 的模型名，都是无效组合。原先它们是面板里三个独立字段，
+换供应商要挨个改三处，改漏一处就得到「看着配好了、一调就 401/404」的状态。
+
+**存储形态**（`web/llm_settings.json`，唯一形态）：
+
+    {"active_profile": "deepseek",
+     "profiles": [{"id","name","base_url","model","api_keys":[…],
+                   "max_tokens","temperature","timeout","json_mode","note"}]}
+
+### 五条硬约束（违反就出事）
+
+1. 🔴 **Key 轮换状态必须按配置分桶**。`bad` 是按 key 的**下标**记的（`_KEY_STATE["pool"][pid].bad[idx]`）。
+   共用一份的话，「MiMo 配置里第 2 个 key 失效」会把「DeepSeek 配置里第 2 个 key」也标成失效
+   —— 两个池子毫无关系，白丢一个可用 key。
+   → `_pool_of(pid)` / `_pool()`；`key_usable(i, pid)` / `mark_key_bad(..., pid)` / `key_states(pid)`。
+
+2. 🔴 **落盘只写新形态，顶层扁平字段一律清掉**。留着扁平字段 = 多出一套「隐藏配置」：
+   `_norm_profiles` 的迁移分支（判据是 `declared = "profiles" in ov` 为假）会在用户
+   **删光全部配置之后**把它复活出来。
+
+3. 🔴 **老界面的扁平 payload 只合并进「当前激活」那套**。原实现 `rows = [merged]` 把数组
+   覆盖成单项 ⇒ 一次老式保存会**删掉用户新建的其它端点**。正确做法：保留 `saved` 全量、
+   只替换 id 匹配的那一项（顺序也不变，面板排列不会因一次保存而跳动）。
+
+4. 🔴 **`mask_key` 必须保留尾部**。原实现短 key 只留前 3 位（`len<=12` → `k[:3]+"****"`），
+   `sk-aaa1` 与 `sk-bbb2` 会脱敏成**同一个串**；而回传保存是按这个串**反查真实 key** 的
+   ⇒ 撞上就静默丢 key。现在：≤8 保「首2+尾2」，≤16 保「首4+尾3」，其余首 8 尾 4。
+   （测试数据要用**真实长度**的 key，否则会撞出一堆假失败。）
+
+5. 🔴 **「使用中」= 从当前下标起第一个可用的 key**，不是 `idx` 指向的那把。当前那把失效时，
+   旧逻辑显示成「没有任何 key 在使用中」，而请求其实已经顺延到备用 key 了 —— 多 key 轮换
+   最该看清的恰恰是这个。
+
+### 懒迁移（读时，不是兼容摆设）
+
+老扁平结构（`base_url` / `model` / `api_keys` 在顶层）在 `_norm_profiles` 里折成一套
+`id="default"`。⚠️ 迁移时缺的字段要用**当期 .env / 环境变量**补（`_env_or`）—— 这一步的语义
+是「把当时的有效配置固化下来」；不补的话，用户原本靠 .env 配好的 base_url / model /
+max_tokens 正好在迁进 profile 结构时丢掉。
+**本机当时就是「只有 .env、没有 llm_settings.json」** ⇒ 这是真实入口，必须实测这条路径。
+
+### 接口
+
+- `GET /api/llm/settings` → `{active_profile, profiles[]}`（每套带**自己的** `keys` 状态）
+  + 兼容用的扁平字段（= 激活配置的展开）
+- `POST /api/llm/settings` → 整包 `{profiles, active_profile}`：新建 / 修改 / 删除都走它
+- `POST /api/llm/settings/active` → `{id}`，只改 `active_profile`，**切换立即生效、不用保存**
+- `POST /api/llm/models` → `{profile_id}` 或 `{profile:{base_url, api_keys}}`；GET 支持 `?profile_id=`。
+  🔴 必须支持**草稿**：新建端点时要先看看「这个地址 + 这个 key」下有哪些模型可选，
+  不能只让用户盲填模型名。草稿里的脱敏串按该配置自己的池还原（`_profile_creds`）
+- `POST /api/llm/keys/reset` → 可选 `{profile_id}`（只清那一套的标记）
+
+### 前端（`RunParams.vue`）
+
+- 状态：`profiles: ProfileDraft[]` + `editingId`（下拉选中 = 正在生效的）；`cur` computed 指向当前编辑项
+- 🔴 切换器用 **`:model-value` + `@change`**，**不用 `v-model`**：选中要等后端真的切完才算数，
+  切换失败时下拉必须能显示回原来那套，否则界面会停在一个并没有生效的选项上
+- 🔴 **有未保存改动时先落盘再切**（`saveSettings(true)`），否则改动静默丢失；但
+  **校验失败照常提示** —— `silent` 只静默「成功」，不静默「失败」（否则「看着切过去了、其实没保存」）
+- `dirty` = 内容指纹，**不含 `keyStates`**（服务端 key 状态随请求在变，算进去会「什么都没改
+  也提示未保存」）
+- 删除走 `ElMessageBox.confirm`；复制 = `{...src, id: uniqueId(base+'-copy'), keys: [...src.keys]}`
+- 🔴 **防御版本错配**：后端还在跑旧版本时 `ok:true` 但没有 `profiles`，直接 `.map` 会让异常冒到
+  渲染层 ⇒ 整块面板连带**页面白屏**（实测踩到）。`applySettings` 用 `Array.isArray(s.profiles)`
+  兜底，并 `ElMessage.warning('后端还在跑旧版本…请重启后端服务')`。
+
+### 验收
+
+- 后端 `F:/retrochimera/.tmp-probe/check_profiles.py` **64/64**（不联网：`_SETTINGS_FILE` 指到
+  临时目录 + `_request` 换假 resp）：纯 .env 迁移 / 老扁平迁移 / 两套切换 / **Key 分桶** /
+  整包保存含脱敏还原 / 复制回溯唯一匹配 / 删一套 / 删光不复活 / 扁平 payload 不删别的配置 /
+  归一化兜底 / 凭据解析（草稿）/ probe 打到激活配置。
+- 前端 `verify-llm-profiles.cjs` **44/44**（切换 = 地址/模型/Key 三件套一起换 · key 状态不串 ·
+  先落盘再切 · 复制/新建/删除 · 拉模型带当前配置）；`verify-llm-api-settings.cjs` 同步后 **31/31**。
+- 🔴 **探针坑**：要断言「切回原配置还能看到它自己的失效标记」，必须在**任何保存之前**做 ——
+  后端保存设置会 `reset_key_state()` 复位全部标记（设计行为），保存过就看不到了。
+- ⚠️ 当时本机后端（8000）**正跑着旧代码**（返回扁平结构），于是**未 mock `/llm/settings`** 的
+  那批探针全都报 `Cannot read properties of undefined (reading 'map')` —— 这正是加防御的场景。
+  修好后 17 组探针的 `pageerror` 全部归零。
+
+⚠️ **后端需重启**才能加载 `/api/llm/settings/active` 与 profiles 结构。
+
+## §21 待定夺 / 欠账（进度性质，不占主索引）
+
+- ⚠️ **待定夺**（方案未定，别当已完成）：
+  - 「多服务器」目前**只有设计稿**；
+  - `session.js` 拆分**未开始**；
+  - **`firewall` 前端没有类型检查**（实测 121 个 error）—— 动它之前先决定是补类型还是先纳管。
+- 欠账（期望值/常量过期，会让关卡假红）：
+  - `verify-theme.mjs` 的期望值仍按**旧配色名**；
+  - `login/index.vue` L54 应为 `query.sign`。
+- 上游核对（2026-10-06）：`microsoft/retrochimera` 最新 release 仍是 **v1.3.0** ⇒ vendored `core/` **无需跟进**。
+- ⚠️ **9GB `models/` 不入库**（`F:/retrochimera/models`）。
+
+## §22 路线网络：已确认的多步路线，可多条、从逆合成树确认（2026-10-07 第十一轮）
+
+**概念**：「已确认路线」这个叫法不再成立 —— 一条路线可以有**分支**（多组分反应一步拆出
+≥2 个前体），那就是一张**网**而不是一条链；同一目标可以确认**多条**（小试 / 放大各一条）。
+**确认入口在「逆合成树」**：拆到满意就在那儿点，判断发生在树上，不用切页签再回来。
+
+**数据模型（复用 RouteScheme，不新开一套）**
+- `RouteScheme` += `confirmed?: boolean` / `confirmedAt?: number`；缺省 = 仅保存的备选草稿。
+- `SchemeStat` += `branches`（`rxn.precursorList.length > 1` 的步数）/ `confirmed` / `confirmedAt`。
+- `networkStats` = `simulateScheme({ choices: collectChoices() })` ⇒ 侧栏与网络列表**同一口径**，
+  🔴 别在组件里自己数步数（否则同一张网出现两个数字）。
+- `routeNetworks` = `schemeStats` 排序（已确认在前，再按 confirmedAt 新→旧）。
+  🔴 同毫秒确认会 tie ⇒ 靠 `Array.sort` 的稳定序回落（先创建的在前）；**别在测试里写死
+     两条已确认的先后**（实测 5 跑 4 红，改为断言"已确认的占前两位"才稳定）。
+
+**三个确认入口，语义不同（别混用）**
+
+| 入口 | 调用 | 语义 |
+| --- | --- | --- |
+| 逆合成树工具条 | `confirmRouteNetwork()` | 按**当前树**确认；当前方案已被改动 ⇒ **自动分叉**一条新记录 |
+| 侧栏 / 方案栏 / 右栏对比里那一行 | `confirmScheme(id)` | 按**记录**确认，不动当前树 |
+| 取消 | `unconfirmRouteNetwork(id)` | 只清标记，记录与节点一个不删 |
+
+**落盘 / 签名**
+- 🔴 `sessionSignature` 的 schemes 片段**必须带 confirmed**（`${id}:${choiceCount}:${confirmed?1:0}`），
+  否则点确认后 sessions 的 `updatedAt` 不刷新、任务也不上浮 —— 用户以为没生效。
+- 新建时（确认走的路径）默认名 = `网络 N`（`saveScheme(name?)` 的缺省分支）。
+
+**UI**
+- 侧栏顺序（第十一轮**反转**）：品牌 / 导航 / **最近的任务**（`flex:1`、超出滚动）/ **目标分析** / 收起。
+  `.app__target { flex: 0 1 auto; max-height: 55%; overflow-y: auto }` —— 不封顶会把任务列表挤到只剩两三行。
+- 「目标分析」不再是卡片（无外框 / 无底色），与「最近的任务」共用同一套 section 标题排版
+  （11px / 600 / text-3 / `letter-spacing .03em` / 左右 12px）；一致性靠探针比 computed style 守住。
+- 4 个指标之间加 `·` 分隔 —— 200px 宽一列里纯空格会糊成「2 步1 分支2/2 物料」。
+- 视觉语言：已确认 = 左侧绿色实线（`.is-confirmed`）；当前 = 品牌色边 + 浅底。
+- 空态文案指向「逆合成树 → 确认路线网络」，别写"采纳"就完事（采纳 ≠ 确认，见上表）。
+
+**🔴 全局字体坑（本轮顺手修，影响全站按钮）**
+表单控件**不继承** `font-family`（浏览器 UA 默认 Arial）⇒ 按钮里的中文回落到**宋体**，
+与正文（PingFang SC / Microsoft YaHei）明显不是一套。实测命中 `.app__nav-item` / `.recent__new` /
+`.app__collapse` / `.tan__net-btn`，**以及 `.el-button`**（Element Plus 只设字号、没设字族）。
+修法：`src/styles/index.scss` 里
+`button, input, select, textarea, optgroup { font-family: inherit }` + `:root { --el-font-family: inherit }`。
+⚠️ 只改**字族**，别动 font-size / line-height（EP 另有定义，覆盖会把按钮排版整体带偏）。
+
+**验收（2026-10-07 第十一轮，仅前端）**
+`vue-tsc -b` 0 · `eslint src/` 0 · `vite build` 6.0s · `test:store` ALL PASS（连跑 6 次稳定）。
+新探针 `verify-route-networks.cjs` **30/30**（侧栏顺序 / 排版一致 / 字体一致 / 多网络 / 切换 /
+树上确认 / 总览 chips）；既有 15 组探针全绿。
+**两条过期断言已显式改写**（不是噪音，是需求变了）：`assert-workspace-head` 的
+「目标分析排在最近任务**上方**」→「**下方**」、统计 chips 4 → 5；`verify-shell-route` 的
+「路线方案对比」→「路线网络对比」。
+探针 fixture 抽成 `fixture-networks.cjs`，探针与实拍共用一份（免得改一处忘一处）。
+
+## §23 收起/展开必须「控件不动」：三处位置漂移的根因与写法（2026-10-07 第十二轮）
+
+用户报「收起面板在收起后位置变了」。实测到的是**三处同源漂移**，全都是「靠内容撑高度 /
+靠 padding 凑位置」。守门探针 `.tmp-probe/verify-collapse-stable.cjs`（23 条，含窄屏）。
+
+### ① 左栏「收起侧栏」按钮：Δy = **-738px**（主轴那次）
+
+| | |
+| --- | --- |
+| 现象 | 收起后按钮从侧栏**底部**弹到**导航下方**（y 957 → 219），还剩 750px 死区在按钮下面 |
+| 根因 | `.app__recent` 是侧栏里**唯一** `flex: 1` 的孩子；收起时它与 `.app__target` 一起被 `v-show` 置成 `display: none` ⇒ **剩余高度没人认领** ⇒ 贴底的 `.app__aside-foot` 被顶到导航下面 |
+| 写法 | 只在收起态补：`.app.is-collapsed .app__aside-foot { margin-top: auto }` |
+| 为什么**不**无条件加 | 展开态本来就由 `.app__recent` 的 flex:1 顶住；无条件加会引入「flex-grow 与 auto margin 谁先分配剩余空间」这个**实现细节依赖**（规范上 flex 长度先解析、auto margin 后分配，但没必要赌） |
+
+**可迁移判据**：`flex-direction: column` 的容器里，**贴底的页脚不能只靠"某个可伸缩兄弟"顶住** ——
+只要那个兄弟可能被 `v-show`/`v-if` 拿掉，收起来就会把页脚甩上去。给页脚留 `margin-top: auto` 才是自持的。
+
+### ② 左栏收起态 64px 图标条：图标偏左，与品牌 logo 不在一条竖线上
+
+`.app__brand` 靠 `padding: 0 16px` + 32px logo 正好凑成 64px（**看起来**居中），
+而 `.app__nav-item`(`padding: 9px 12px`) / `.app__collapse`(`padding: 8px 12px`) 的
+`padding-left` 还在 ⇒ 图标中心落在 21px 而不是 32px。修法（三个选择器一起）：
+
+```css
+.app.is-collapsed .app__brand,
+.app.is-collapsed .app__nav-item,
+.app.is-collapsed .app__collapse { justify-content: center; padding-left: 0; padding-right: 0; }
+```
+
+### ③ 左栏收起按钮：Δy = **2px**（高度随文字显隐变化）
+
+`.app__collapse` 里「收起侧栏」文字的**行盒 17px** 比 `el-icon`（1em = **13px**）高；
+收起时文字 `v-show` 掉 ⇒ 按钮从 **33px 缩到 29px**；而页脚是**贴底**的 ⇒ 按钮中心下移 2px。
+修法：`line-height: 1.5` + `.app__collapse .el-icon { height: 1.5em }`（两处都从 font-size 派生，
+不写死像素）⇒ 两种状态内容高都是 19.5px，按钮恒为 35.5px。
+
+**可迁移判据**：**「图标 + 可隐藏文字」的按钮，高度会被文字显隐改变** —— 图标只有 1em，
+文字行盒是 1.5em 左右。凡该按钮处在贴底/居中容器里，就得把行高定死。同类：`.app__nav-item`
+之所以没事，是因为它的图标字号(15px)比文字(14px)大，图标才是那个"最高的孩子"。
+
+### ④ 右栏「收起辅助面板」箭头：Δy = **-8.5px**
+
+| | |
+| --- | --- |
+| 展开态 | `›` 在 `.aside__head`（`height: var(--rw-header-h)`）里垂直居中 ⇒ 中心 = header 中线（30px） |
+| 收起态（旧） | `.aside__rail { padding: 14px 0; gap: 10px }` 靠 padding 硬凑 ⇒ 箭头中心落在 **21.5px** |
+| 写法 | 让箭头自己占满与 header 同高的一块并居中：`height: var(--rw-header-h); flex: 0 0 var(--rw-header-h)` + `display:flex; align-items:center; justify-content:center`，并补 `border-bottom: 1px solid var(--rw-border)` 与展开态 header 底边对齐；竖排文字 `padding-top: 14px` 对齐 `.aside__body` 的 padding |
+| 关键 | **引用同一个 token**（`--rw-header-h`），不写死 22.5px 之类的补偿值 —— 顶栏一改高就静默错位（同 §1 的 `.route-stage` 教训） |
+
+窄屏（`<1180`）收起态是**横排**，必须把箭头那块还原成行内元素，否则它仍占满整宽 + 60px 高、
+把竖排文字挤出容器：
+
+```css
+@media (max-width: 1180px) {
+  .aside__rail { flex-direction: row; justify-content: center; gap: 8px; height: auto; padding: 10px 12px; }
+  .aside__rail-chevron { width: auto; height: auto; flex: 0 0 auto; border-bottom: 0; }
+  .aside__rail-text { writing-mode: horizontal-tb; padding-top: 0; }
+}
+```
+
+### 验收口径（照抄可用）
+
+**同一枚控件在两种状态下的中心坐标必须一致，容差 1px** —— 直接量
+`getBoundingClientRect()` 的中心，比"看起来差不多"可靠：
+
+```
+A 左栏收起后按钮 Δy≈0 且仍贴底（底部间隙 < 20px）
+B 收起态三处图标中心 x = 轨道中线（64/2 = 32）
+C 收起→展开往返后 Δy≈0、宽度回 240px
+D 右栏收起前后箭头中心 Δy≈0、中心 x = 竖条中线；箭头与竖排文字不重叠
+E 窄屏收起态：箭头高 < 30（不再占满 60px）、不溢出、文字 horizontal-tb、与箭头同行
+```
+
+### 顺手退役的三个过期关卡（同 §1「长红关卡 = 噪声」）
+
+`verify-frontend-parse.cjs` / `verify-ketcher.cjs` / `verify-ketcher-prod.cjs` 第一步都是
+`page.locator('.el-radio-button', { hasText: 'SMILES' })`，而 `grep -rn "el-radio-button" src/`
+**已无输出** —— 目标输入区早改成「`[输入框][解析结构]` + 绘制结构式」。
+三个探针会永久卡到超时（长红 = 噪声，会掩护真红）⇒ 移到
+`.tmp-probe/_retired/round11-stale-target-input/`，并留 README 说明替代覆盖与新的稳定选择器。
+（`probe-ketcher-*.cjs` / `shot-*` 是一次性诊断脚本，不是关卡，留着当历史证据。）
+
+### 本轮提交
+
+前端 `retroweb` → `f1ddf6f`（`git ls-remote` 已核对一致）。后端本轮无改动。
+四关：`vue-tsc -b` 0 · `eslint src/` 0 · `vite build` exit 0 · `test:store` ALL PASS；
+17 组探针全绿（新增 `verify-collapse-stable` 23/23）。
+
+
+---
+
+## §24 同一份数据只许画一遍 + 「主指标必须能被看见」（2026-10-07 第十四轮）
+
+### 事故现象
+
+`SchemeBar.vue`（工作台左侧「路线网络」卡）里，**同一个 `store.schemeStats` 被渲染了两遍**：
+
+| 位置 | DOM | 渲染条件 |
+| --- | --- | --- |
+| 上面 | `<ul class="schemes__list">` 卡片行（名称 + 标签 + 灰色元信息 + 操作按钮） | `stats.length > 0` |
+| 下面 | `<table class="schemes__table">` 路线 / 步数 / 总概率 / 起始物料 / 完整 | `stats.length > 1` |
+
+同一个方案名在屏幕上出现 **2 次**（卡片 + 表格单元格）。用户原话是"上面的没概率、下面的有概率"。
+
+### 根因（两层，第二层才是真问题）
+
+1. 直接原因：两处各写了一遍渲染，改一处忘一处；而且看着像**两批不同的数据**。
+2. 🔴 **真问题：卡片里本来就有 `总概率`，但它被五个 `·` 串成 11.5px 灰色小字**
+   （`2 步 · 1 分支 · 总概率 72.00% · 起始物料 2/2 · 最深第 2 层`）⇒ **等于看不见**。
+   反倒是下面那张表把它排成一列，才让眼睛抓得住。
+   ⇒ 用户要的不是"补一个概率"，是**把概率从灰色小字里救出来**。
+
+> **教训**：用户对**症状**的描述可能不准（"上面的没概率"），但**症状本身一定是真的**。
+> 先按可测量的东西（DOM / computed style）还原现场，再决定改什么 —— 别照字面执行。
+
+### 做法（可迁移）
+
+- 🔴 **一条记录 = 一处渲染**。同一份 stats 在同一个卡片里画两遍，既有冗余又误导。
+  横向对比的价值靠**行与行逐项对照**实现，不靠再挂一张表。
+- 🔴 **主指标（这里是总概率）必须脱离灰色小字**：单独成块、加字重（700）、加大字号（> 元信息 1~2px）。
+- 🔴 **`tabular-nums` 只保证"同宽度内"数字对齐** —— 容器宽度不等，小数点照样错位。
+  必须**先让容器等宽**：给 `.schemes__actions` 这种"宽度随内容变化"的兄弟节点定 `min-width`。
+  实测：有「切换」按钮的行自然宽 **228px**，当前行（无切换）**190px** ⇒ 定 `min-width: 232px`
+  并 `justify-content: flex-end`，两行 `actionsW=232 / probRight=986` 完全一致。
+- 元信息保留 步数 / 分支 / 起始物料 / 最深 —— **二合一是"并"不是"减"**，删表格不能顺带删信息。
+
+### 验收与「可证伪」做法（本轮新增的硬规矩）
+
+守门探针 `verify-scheme-merge.cjs`，最关键的两条：
+
+```js
+// 硬判据：数「文本节点」而不是「元素」—— 更能证明"只画一遍"
+const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+// 每个方案名命中次数必须 === 1（改动前是 2：卡片 + 表格单元格）
+```
+
+🔴 **新增 🔴 断言后，必须把源码改动撤回跑一遍，确认它会红** ——
+`git stash push -- <file>` → 跑探针 → `git stash pop`。本轮撤回后**10 条变红**
+（`schemes__table` 计数 1、两个名字各渲染 2 次、概率块 `missing: true`），恢复后 21/21。
+**不能证明会红的断言 = 空断言**（本项目已有约定："长红关卡=噪声，会掩护真红"）。
+
+验收全绿：`vue-tsc -b` 0 · `eslint src/` 0 · `build` exit 0 · `test:store` ALL PASS；
+`verify-scheme-merge` 21/21 + 17 组回归探针全绿、pageerror 归零。
+
+### 本轮提交
+
+前端 `retroweb` → `7254836`（`git ls-remote` 已核对一致）。后端无改动。
+
+### 遗留（未做，用户未提）
+
+`SchemeCompare.vue`（右辅助面板的「路线网络对比」）与 `SchemeBar` 现在**高度重复**：
+同一份 `schemeStats`、同一套 确认/改名/删除 动作。若再出现"两处要同步改"的诉求，
+合并它们就是下一步；但"主区一条 + 右面板一条"本身是有意为之（一边看树一边比），不急着动。
+
+### 附：写入陷阱 —— Windows 上 Python 会偷偷把 `\n` 变成 `\r\n`（应归入 §9 手法）
+
+用 Python 批量改文本文件（本轮压 `MEMORY.md`）时踩到：
+
+```python
+io.open(p, 'w', encoding='utf-8').write(s)          # ❌ Windows 默认 newline=None ⇒ \n → \r\n
+io.open(p, 'w', encoding='utf-8', newline='\n').write(s)  # ✅ 显式指定
+```
+
+症状：**Python 自报 11942 字节，`wc -c` 却是 12014 —— 差值 72 恰好等于行数**。
+`MEMORY.md` 每轮注入、按字节卡 ~12KB 阈值，多出来的字节会真占额度（且不自知）。
+
+🔴 **判据：改完必须用 `wc -c` 复核，别信 Python 自报的 `len(s.encode())`。**
+（同理：凡是"按字节卡阈值"的文件，改完都要用外部工具复核一次体积。）
+
+
+---
+
+## §25 「面板显示 0 条 / 实际能跑」类矛盾：先找同一条链上两处口径不一致（2026-10-07 第十五轮）
+
+用户报三件事：**① 没有刷新按钮 ② 当前的 token 没显示出来 ③ 配置名显示太短（截成「T…」）**。
+②是真缺陷（跨两仓），①③是交互/布局。下面按"可迁移判据"写，条目留在 §25 供以后同类问题套用。
+
+### 25.1 症状的本质：一个状态被三种说法描述，且互相矛盾
+
+现场（`GET /api/llm/settings` 原始回包）：
+
+```json
+{"keys":[{"masked":"sk-L7w15****WDZ8","state":"active"}],   ← 顶层扁平：有 1 把
+ "profiles":[{"id":"default","name":"Token","keys":[]}]}     ← 每套配置：0 把
+```
+
+于是同时出现三句话：面板「API Keys（0）」· 点保存被「至少一个 API Key 必填」拦住 · 模型跑得动。
+🔴 **判据：凡是「界面说 X、系统行为说 not X」，一定存在两处各自算了一遍的同一份真值。**
+先把它俩都打出来（这里是 `key_pool()` 与 `key_states(profile_id)`），不要先猜 UI。
+
+### 25.2 根因一：`.env` 懒迁移只认复数名（拼写级不一致）
+
+`_norm_profiles()` 折扁平配置进 profile 时读 `RETRO_LLM_API_KEYS`（**复数**），
+而 README / `.env.example` / 用户 `.env` / `key_pool()` 用的都是 `RETRO_LLM_API_KEY`（**单数**）。
+全仓 grep 复数名 = **0 命中**（除了那一行），单数名一堆 —— 一眼可判。
+
+🔴 **判据：字段名沿用 `RETRO_<模块>_<字段名>` 前缀约定时，要 grep 一遍"这个名字在别处是不是另一个写法"。**
+`_env_or(ov, "api_keys")` 这种"由字段名拼环境变量名"的写法最容易拼错，而它**不会报错，只会静默返回空**。
+
+修法：加 `_env_keys()`，复数优先、单数回落，迁移与 `key_pool()` 共用一个入口。
+
+**顺带发现的同类隐患**：`_norm_profile` 对 `api_keys` 做 `for k in raw_keys`，
+若 `raw_keys` 是**字符串**（手写 json / 从环境变量直接读），会把它拆成**一个个字符** ——
+变成一堆单字符假 key（实测：`"sk-pl-0001, sk-pl-0002"` → 21 个元素 `['s','k','-',…]`）。
+⇒ `isinstance(raw_keys, str)` 时走 `_split_keys()`。
+
+### 25.3 根因二：面板显示口径 ≠ 运行时口径
+
+`key_pool()` 对**激活那套**有 `.env` 回落；`key_states(profile_id)` 只回显配置里存的数组。
+⇒ 新增 `_pool_keys(p, active)`：激活那套补上 `.env` 那些，并给每把 key 标 **`source`**（`profile` / `env`）。
+
+🔴 **为什么要标 `source`**：`.env` 那把**删不掉**（它是回落默认值，得改 .env 才生效）。
+不标出来，UI 就会给它一个删除按钮 = 又一个「看着能删、其实删不掉」。
+⇒ UI 侧：`source === 'env'` 时**不给删除按钮**，改标 `.env` + tooltip 说明"想固定就点保存设置"。
+
+🔴 **为什么下标只写 `.env` 两个字符**：先写的是「来自 .env」，结果把脱敏串挤成
+`sk-L7w15****WD…` —— 而**尾部 4 位正是区分两把 key 的唯一信息**（`mask_key` 特意保留它就是为了防撞）。
+⇒ 详细说明放 tooltip，**别跟 key 抢宽度**。
+
+### 25.4 根因三：保存会把面板上那把 key 悄悄丢掉
+
+`_resolve()` 只在"这套配置自己的池"里按脱敏串反查 → 池是空的 → 反查不到 → 落盘一份**空池**。
+本机就是这么被写坏的：用户在界面上点了「保存设置」，`web/llm_settings.json` 从此留下 `api_keys: []`
+（**16:07:11 的文件 mtime 精确指认了这次点击**）。
+⇒ 激活那套允许从 `.env` 池**认领**（`allow_env`）；**非**激活那套仍然不许 ——
+否则等于把激活配置的 key 写到别人名下（这条已固化成断言 K3）。
+
+### 25.5 前端兜底：让修复不必等后端重启
+
+前端在 `profiles[].keys` 为空、而激活那套的扁平回显有值时补上，并**推断** `source: 'env'`
+（后端没把这把 key 算进配置却给了扁平回显 ⇒ 它只可能来自 .env）。
+🔴 只在**激活**那套、且**仅在其自身为空**时补 —— 反向判据「profiles 有值时以 profiles 为准」
+已写成断言（实测扁平给 3 条、profiles 给 2 条 ⇒ 必须用 2 条）。
+⇒ 后端没重启时界面也已经正确（实测：旧后端 `profiles[0].keys=0` 而面板显示 1 行 + `.env` 标）。
+
+### 25.6 「刷新」按钮的分工与取消语义
+
+- **刷新** = 只读配置（`GET /llm/settings` + `/llm/status`），**不**真打大模型（网关有限流）；
+  **验证** = 真发一次最小请求。两者别混。
+- 🔴 **有未保存改动时必须先确认**：刷新会整块覆盖编辑区，默默丢掉用户刚粘的 key 是最坏的结果。
+  ⇒ 断言要覆盖「点取消后**一个请求都没发**、且改动还在」，不只是"弹了框"。
+- 断言"不真打大模型"要**按请求 URL 判断**（收集 `page.on('request')` 里 `/llm/` 的 URL，
+  断言新增里没有 `probe=1`/`analyze`），**别写成 `check(name, true)` 这种占位**——
+  本轮初版就写了占位，等于空断言，自查时才发现。
+
+### 25.7 布局：窄栏里「下拉 + 三个按钮」挤一行 = 名字消失
+
+右辅助面板只有 ~240px：`新建/复制/删除` 占 168px，下拉只剩 **62px** ⇒「Token」截成「T…」。
+⇒ 下拉独占一行（实测 62px → **268px**），三件套另起一行。
+🔴 **判据用「文本节点没被 ellipsis 截断」**：EP 2.14 的选中文本在
+`.el-select__placeholder`（**不是** `.el-select__input-wrapper` —— 那是隐藏的搜索 input，
+第一版量到它，等于没量），判 `scrollWidth > clientWidth`。
+🔴 并且**当场做一次反向证明**：注入 `.params__prof-select{width:62px !important}`，
+判据必须变红（实测 `clipped=true`），否则这条断言就是空的。
+
+### 25.8 两条手法（与 §24 一脉相承）
+
+1. 🔴 **探针自己也会崩**：判据红的时候再按下标取（`st[0]["source"]`）会 `IndexError`，
+   整个探针当场退出 ⇒ **第一条红吞掉后面全部结论**（本轮踩到，只有 1 条 FAIL 输出、连汇总都没打印）。
+   ⇒ 断言里一律 `st[0] if st else {}` + `.get()`。
+2. 🔴 **新增 🔴 断言必须做"改回旧写法 ⇒ 必须变红"的反向证明**；而且**补丁本身要先过语法检查**
+   （本轮把 `allow_env=pid_raw == active_in` 替换成 `allow_env=False  # 临时` 把括号注释掉了，
+   探针报的是 `SyntaxError: '(' was never closed`，差点被误读成"断言真的红了"）。
+
+## §26 「整行热区」与「探针仪器上电 / 状态相对」（2026-10-07 第十六轮）
+
+### 26.1 症状：同一份数据三处入口，手感不一致
+
+用户原话：「路线网络应该点击空白区域就可以切换，而不是只能点切换按钮」。
+
+`schemeStats` 有**三处**入口，前两处**整张卡就是一个 `<button>`**：
+
+| 入口 | 节点 | 可点面积 |
+| --- | --- | --- |
+| 侧栏「目标分析」 | `.tan__net-btn`（`<button>` 包住 name + meta） | 整卡 |
+| 「目标分析」页签 | `.ov__net`（同上） | 整卡 |
+| 「路线网络对比」栏 | `SchemeBar` 的 `<li>` | **只有右边的小「切换」按钮** |
+
+⇒ 前两处随便点哪都能切，第三处要精确命中小按钮，用户自然报「只能点按钮」。
+
+🔴 **约定：同一份数据被多处入口渲染时，交互手感必须一致**。三处里已有两处是"整卡可点"，
+第三处不做，用户会当成 bug，而不是"这处设计如此"。
+发现手法：`grep -rn "<数据名>" src/` 列出全部渲染点，逐个看"可点面积"。
+
+### 26.2 写法：行 click + 操作区 `@click.stop`（挂在容器上）
+
+```html
+<li :class="{ 'is-switchable': s.schemeId !== store.currentSchemeId }"
+    :title="s.schemeId === store.currentSchemeId ? undefined : `点击切换到「${s.name}」`"
+    @click="onRowClick(s)">
+  ...
+  <!-- 🔴 挂在**容器**上，不是逐个按钮上 ⇒ 将来加按钮不用记得补 .stop -->
+  <div class="schemes__actions" @click.stop>
+```
+
+```ts
+function onRowClick(s: SchemeStat): void {
+  if (s.schemeId === store.currentSchemeId) return;  // 幂等：别弹"已切换"
+  if (window.getSelection()?.toString()) return;     // 拖着选字不跳走
+  onApply(s.schemeId);
+}
+```
+
+四条必须记住的：
+
+1. 🔴 **操作区必须 `.stop`**，否则点「改名 / 删除」会**顺手把路线也切了**；
+   挂容器而非逐个按钮 —— 否则下次加按钮就漏。`.stop` 在 EP 组件上也可用
+   （`el-button` 的 `click` 会把原生 `MouseEvent` 透出来），但挂容器更稳、更省心。
+2. 🔴 **当前行刻意不给 `cursor:pointer`**：它点了没反应（`onRowClick` 直接返回），
+   给手型反而像"点了没生效"。同时不给 title。
+3. 🔴 **悬停底色不能盖掉「已确认」的绿色左线**：
+   `.is-switchable:hover { border-color: brand }` 特异度 `(0,3,0)` 会盖掉
+   `.is-confirmed { border-left: 2px solid ok }` 的 `(0,2,0)`
+   ⇒ 必须补一条更高特异度的 `.is-switchable.is-confirmed:hover { border-left-color: ok }`（`(0,4,0)`）。
+   CSS 是**特异度优先**，与书写顺序无关。
+4. **显式「切换」按钮保留**：它是**键盘可达**的那条路径（行 click 只有鼠标能用），
+   也是"这行能点"的可发现性。可访问性上**不要**给 `<li>` 加 `role="button"`
+   （顶掉 listitem 语义 + 出现嵌套交互元素），按钮已经够了。
+
+### 26.3 两条探针手法（本轮踩到，通用）
+
+1. 🔴 **「没弹提示」类断言必须先证明"仪器上电"**。
+   `addInitScript` 里 `new MutationObserver(fn).observe(document.documentElement)` 会抛
+   `TypeError: parameter 1 is not of type 'Node'` —— 那一刻 `documentElement` **还不存在**。
+   抛了之后收集器没挂上、`window.__msgs` 恒为 `[]`，于是**每条「没有弹提示」都变成空断言**
+   （本轮 5 条红里 3 条是它，其中 2 条是**假绿**）。
+   ⇒ ① 改成 `observe(document)`；② `try/catch` 置 `window.__msgsReady`，
+   并在**第一条断言**就检查它 —— 把"仪器没上电"和"真没弹"区分开。
+2. 🔴 **判据一律"状态相对"，不写死行名 / 行号**。
+   第一版写死「网络A 有切换按钮 / 网络B 没有」，一旦前面某步红掉，后面就开始拿**错误前提**再断言一次；
+   更糟的是 `locator.click` 找不到元素会抛 `TimeoutError` **把脚本崩掉**，后面的结论全被吞
+   （与 §25.8 的 `IndexError` 同一类病）。
+   ⇒ 每段独立：`const before = await currentName(page)` → 动作 → `assert(currentName() !== before)`；
+   行索引一律 `idxWhere(r => r.confirmed && !r.current)` 现算，不写 `[1]` / `[2]`。
+3. **「点空白区域」要证明点到的真是行本身**：取 `.schemes__main` 右边界与 `.schemes__prob` 左边界的
+   中点（那才是真正的行空隙），并断言 `document.elementFromPoint(x, y) === li`
+   —— 否则可能一直在点文字，判据就成了"点文字能切换"。
+
+**守门**：`.tmp-probe/verify-scheme-rowclick.cjs`（34 条 / A~H 八段）。
+**反向证明**：`git checkout -- src/components/workspace/SchemeBar.vue` 去掉整行 click 再跑 ⇒
+**8 条红**，核心那条红成「点空白区域 ⇒ 当前行原地不动（网络A vs 网络B）」，正是用户报的症状。
+验完 `cp` 备份文件还原，`git diff --stat` 复核仍是 50 insertions。
+
+## §27 「拉取拿不到东西」类故障：先数清同一条链的**几处**口径（2026-10-07 第十七轮）
+
+**症状**：用户报「大模型设置中模型拉取有点问题」（上一轮刚把面板显示与保存修好）。
+**现场**（实测，同一条链路）：不带 profile 能拿 9 个模型；带草稿 profile（前端
+`refreshModels` 的真实形态）返回 `{ok:false, models:[], error:""}` —— **错误还是个空串**。
+
+### 27.1 三处口径不一致（本次的根因形状）
+| 路径 | `.env` 回落 | 结果 |
+| --- | --- | --- |
+| `key_pool()` —— 运行时真发请求 | ✅ | 1 把 key ⇒ 模型跑得动 |
+| `_pool_keys()` —— 面板显示 | ✅（上一轮补的） | 1 行 key |
+| `_profile_creds()` —— **拉模型** | ❌（本次才补） | 0 把 ⇒ 空列表 |
+
+⇒ **修"某一处的口径"时，要把"所有消费同一份真值的入口"列一遍**。只补显示那一处，
+下一个入口（拉取 / 验证 / 保存）会在几天后以**另一个症状**复现。
+核法：`grep -n "api_keys" web/llm.py` 逐个看它有没有 `.env` 回落那一级。
+
+### 27.2 谁可以回落 `.env`
+- 只有**激活那套**（`pid == norm["active"]`）—— 与保存时的 `allow_env` 同口径。
+- 非激活那套回落 = 把激活的 key 记到别人名下 ⇒ 会出现「拉得到模型、保存却说没 key」。
+
+### 27.3 错误文案不能取 `public_status()["hint"]`
+那个 hint 只为「完全没配」服务，**已配置**的实例里它是 `""` ⇒ 前端拿到空串只能弹
+兜底文案，用户看不到任何线索（这正是"有点问题"却说不清的那种体验）。
+⇒ 要**当场说清缺哪一项**（接口地址 / API Key），且两种原因分开写。
+
+### 27.4 多 key 必须轮换（拉取口径 = 运行时口径）
+`list_models` 原先只试 `keys[0]`：第一把失效/冷却 ⇒ 整条拉取失败，而真正发请求的
+链路早就顺延到后面那把了。
+- **401/403/429 才换下一把**；其余状态码换 key 也不会变好 ⇒ 立即返回，不白打请求。
+- 全失败时错误里带**每把**的脱敏 key（多把时才知道是哪些）。
+
+### 27.5 前端：列表是**带配置的**结果，不是全局常量
+两个坑，都会变成"一次错、永久错"：
+1. **跨配置串** —— `onModelDropdown` 只看 `!modelOptions.length`：拉到 A 的列表后切到 B，
+   B 的下拉里躺着 A 的模型名，而且因为列表非空**再也不刷新**。
+   ⇒ `modelSource` 指纹（id + base_url + keys[0] + keys.length），打开下拉时比对，失配就重拉。
+2. **迟到响应** —— 拉取途中改了地址/切了配置，慢响应回来会写进当前列表。
+   ⇒ 守卫用**指纹**比，不只是比 id（同一个 id 把 base_url 改掉之后，那份列表同样作废）。
+
+### 27.6 前置校验：必然失败的请求不要发
+缺 base_url / 没 key 时先拦、当场说缺哪项。判据就是**请求计数为 0**（比"有没有弹提示"硬）。
+
+### 27.7 两条手法
+1. 🔴 **`bash -c "..."` 双引号内的 `\n` 反斜杠会被吃掉**（`\n` → 字面 `n`）⇒
+   `s.count("...\n")` 恒为 0，断言"红"其实是**假红**（差点当成真红写进结论）。
+   ⚠️ 同一段里 `\"` 转义却生效 ⇒ 这个 shell 的转义处理**不一致**，别去推理，直接上文件。
+   ⇒ 含换行的替换/断言一律写成**脚本文件**（如 `.tmp-probe/patch-reverse.py`）。
+2. 🔴 **反向证明的补丁脚本必须带 `assert count == 1`**，且**先 `py_compile` 再跑** ——
+   补丁写坏括号报 `SyntaxError: '(' was never closed`，很容易被误读成"断言真的红了"
+   （§25.8 已记一次，本轮再次用上）。`replace_all` 类替换还要防**命中自己刚写的函数体**
+   （本轮 `resetModelOptions()` 就被替换成递归调用，`vue-tsc` 不报、运行才炸）。
+
+**守门**：前端 `.tmp-probe/verify-llm-models.cjs`（18 条 / A~H 八段）；
+后端 `.tmp-probe/check_profiles.py` **91 条**（新增 L / L2 共 13 条）。
+**反向证明**：前端回退三处 ⇒ **10 条红**（含"迟到响应被写进下拉"、"缺地址时真发了请求"）；
+后端关掉回落 + 只认第一把 ⇒ **7 条红**（含"第一把 401 不顺延"）。
+
+## §28 侧栏「最近的任务 + 目标分析」合并成同一根滚动条（2026-10-07 第十八轮）
+
+用户原话：「最近的任务和目标分析使用同一个滚动，放在一起」。
+
+### 28.1 症状不是"两根滚动条"，是**同一条阅读线被切成两个独立滚动容器**
+
+侧栏（240px）里导航之下原本是两段，各自管自己的滚动：
+
+| 容器 | 原样式 | 后果 |
+| --- | --- | --- |
+| `.app__recent`（最近的任务） | `flex: 1` + `overflow-y: auto` | 占满剩余高度 ⇒ 任务一多，先在这里滚 |
+| `.app__target`（目标分析） | `flex: 0 1 auto; max-height: 55%` + `overflow-y: auto` | 被 55% 封顶 ⇒ 内容一长，在这里再滚一层 |
+| `.tan__nets` / `.tan__steps`（目标分析内部两个小列表） | `max-height: 132px / 128px` + `overflow-y: auto` | 各自封顶 ⇒ 滚轮停在上面会被**截住** |
+
+⇒ 侧栏里**套娃三层滚动**。实测（探针 A 段，矮视口 620px + 8 条任务 + 8 条网络）：
+侧栏内**真正可滚**的元素 = **3 个**：`app__recent`、`app__target`、`tan__nets`。
+
+🔴 判据要认准"**真正**可滚"：只看 `getComputedStyle(el).overflowY ∈ {auto, scroll}` 会把**死代码**
+也算进去（`SessionPanel` 的 `.recent__list` 就有这么一处 `overflow-y: auto` ——
+父级没有高度约束时它根本不生效）。所以过滤条件必须是
+`overflowY ∈ {auto,scroll}` **且** `scrollHeight > clientHeight + 1`。
+
+### 28.2 改法：一个容器 + 高度由内容决定 + 内层不封顶
+
+- 两段包进**同一个** `.app__side-scroll rw-scroll`（`flex: 1 1 auto; min-height: 0; overflow-y: auto`）。
+- 去掉 `.app__target` 的 `max-height: 55%` 与 `overflow-y` —— 那两个属性**就是"两段各占一半"的机制本身**，
+  留着它在合并后的容器里仍会把自己再截一次。
+- 去掉 `.tan__nets` / `.tan__steps` 的封顶：整条侧栏已经是一个滚动流，
+  内层再套一根 ⇒ 滚轮停在这里被截住，与"一个滚动"的诉求直接冲突。
+- 与导航之间的分隔线挪到**容器**上：`overflow-y: auto` 的元素的 border 在它的 border-box 上，
+  **不随内容滚走**（挂在第一段的 `border-top` 上则会被一起滚掉）。两段之间那条分隔线保留，视觉分段不丢。
+- 收起态不受影响：`.app__side-scroll` 被 `v-show` 置成 `display: none` 后，页脚仍靠
+  `.app.is-collapsed .app__aside-foot { margin-top: auto }` 钉回底部（这条注释里提到的
+  "侧栏里唯一 `flex: 1` 的孩子"要跟着改成 `.app__side-scroll`）。
+
+### 28.3 🔴 反向证明前，必须先证明"页面加载的确实是旧代码"
+
+**踩到的坑（本轮最值得记的一条）**：反向证明用
+`git checkout -- <3 个文件>` 退回旧写法，然后直接跑探针 —— 结果**页面里 AppShell 是旧版、
+TargetBar 却是新版**，两半实现**混搭**：外层在各自滚（旧）、内层已不封顶（新）。
+于是 D 段那三条"内层不再自己滚"的量到的全是**新代码** ⇒ **假绿**，结论不可信。
+
+成因：Vite dev server 的 watcher 在这次多文件重写里**漏了一个文件**没发 change 事件 ⇒
+模块图没失效 ⇒ 新开的页面仍拿到上一版的 transform 结果。
+
+⇒ 规矩两条：
+1. 退回/还原多个文件后**必须 `touch` 它们**（强制补一次 change 事件）并留出几秒；
+   只靠 `git checkout` 的写入不可靠。
+2. **探针里内置"实现自洽哨兵"** —— 挑两个**分属不同文件**、且新旧写法下取值相反的探针点，
+   断言它们指向同一版本：
+
+   ```js
+   const sentinel = await page.evaluate(() => ({
+     wrapper: !!document.querySelector('.app__side-scroll'),                  // AppShell
+     netsMax: getComputedStyle(document.querySelector('.tan__nets') || document.body).maxHeight // TargetBar
+   }));
+   check('整页实现自洽（外层合并 ⇔ 内层无封顶），不混搭新旧',
+     sentinel.wrapper === (sentinel.netsMax === 'none'), ...);
+   ```
+
+   这条在**新旧两种版本下都绿**，只有"混搭"时红 ⇒ 不挑版本，只抓中途态。
+
+（同类教训：§25.8 的"补丁脚本要带 `assert count == 1`、先 `py_compile`" —— 都是
+ "别把**中间态**当成结论"。）
+
+### 28.4 探针设计：核心判据必须能用"位移量相等"证明是同一根在驱动
+
+`verify-side-scroll.cjs`（26 条，前置 + A~F 六段），关键几条：
+
+- **前置**：内容真的溢出（`scrollHeight > clientHeight + 40`）—— 不溢出后面全是空转。
+  矮视口（620px）是前提：侧栏可用高约 350px，而 8 条任务 + 一整个目标分析约 700px。
+- **A**：两段都在 `.app__side-scroll` 内（`wrap.contains`）；侧栏内真正可滚的元素**恰好 1 个**。
+- **B（核心）**：把容器滚到底，**两段的位移量都等于 `scrollTop` 的变化量**
+  （`|Δtop − ΔscrollTop| ≤ 1`）—— 这才叫"同一根驱动两段"，只断言"能滚"是空断言。
+  另加：滚到底后 `.tan` 尾部完整进入可视区（旧写法下它被 55% 截在容器外）；
+  滚回顶部两段位置复原（往返稳定，不漂）。
+- **C**：`.app__target` 的 `computed max-height === 'none'`、`overflow-y` 不是 auto/scroll，
+  且**高度 / 容器高 > 0.7**（旧写法恰好卡在 0.55 并内部滚动）。
+- **D**：**8 条网络全部展开**（`.tan__nets` 的 `clientHeight > 132`）—— 行为判据。
+  步骤明细只留 computed 判据：这份 fixture 只有 2 步（48px），不溢出时
+  "clientHeight > 128"在旧写法下也会绿 ⇒ **空断言**，不如不写。
+- **E**：收起 → 展开 往返后两段位置复原、容器仍是唯一那一个。
+- **F**：pageerror 归零。
+
+### 28.5 反向证明的成绩
+
+退回旧写法（+ `touch` + 哨兵自洽）⇒ **16 条红**，症状精确复现：
+
+```
+❌ 侧栏内真正可滚的元素恰好 1 个 —— 实际 3 个：
+   ["app__recent rw-scroll","app__target rw-scroll","tan__nets"]
+❌ .app__target max-height 已去掉 —— computed max-height = 55%（overflow-y = auto）
+❌ 8 条网络全部展开 —— clientH = 132px（scrollH 349）
+❌ 网络列表 max-height 已去掉 —— computed max-height = 132px
+❌ 滚动后两段位移 —— Δrecent = 0，Δtarget = 0
+```
+
+⚠️ 第一版反向证明**崩掉了**：`document.querySelector('.app__side-scroll')` 在旧写法下是 null，
+`w.scrollTop = ...` 直接抛 `TypeError`，只打出 4 条 ❌ 就没了 —— 又是 §26.3 那条
+「判据红时崩掉 ⇒ 吞掉后面全部结论」。⇒ 一律用 `w ? ... : null` + `Number.isFinite` 守卫，
+让缺陷代码下**红出结论**而不是崩掉。
+
+### 28.6 改动面
+
+`src/components/layout/AppShell.vue`（模板 + 样式 + 三处注释同步）、
+`src/components/workspace/TargetBar.vue`（去掉两处封顶）、
+`src/components/workspace/SessionPanel.vue`（清掉 `.recent__list` 的 overflow 残留）。
+探针 `verify-collapse-stable.cjs` 头部注释里"`.app__recent` 是侧栏里唯一 `flex: 1` 的孩子"
+也一并改成 `.app__side-scroll`（**结构变了，注释与判据的说明都要跟**）。
+
+**提交**：`retroweb → 433bbc6`。验收：`vue-tsc -b` 0 · `eslint src/` 0 · `build` 3.54s exit 0 ·
+`test:store` ALL PASS · **探针 22 组全绿**（新 `verify-side-scroll` 26/26）。
+
+---
+
+## §29 画布「拖动平移 / 滚轮缩放」：只留一套偏移 + 两个必须的细节（2026-10-07 第二十一轮）
+
+用户报「路线网络要可以鼠标拖动自由缩放」。改前 `RouteCanvas.vue` 只有工具条那几个
+按钮（±0.1 步进、0.35~2 倍），画布不能拖、滚轮只是浏览器原生滚动。
+
+### 29.1 核心决定：交互只留**一套偏移**
+
+`sizer` 宽高 = 画布尺寸 × zoom，容器 `scrollLeft/Top` 就是**唯一**的偏移量。
+
+- 拖动 = 改 `scrollLeft/Top`
+- 滚轮缩放 = 改 zoom 后**换算** `scrollLeft/Top`（保持锚点）
+- 原生滚动条 = 同一套
+
+三者落在同一套坐标上，所以不会出现"拖过之后再缩放，图就跳走"。
+（反例：各自存一份 `translate(x,y)` 再叠加 —— 两套偏移必然对不上，且滚到边界时互相打架。）
+
+### 29.2 🔴 坑一：滚轮监听必须**手动注册非被动** + `preventDefault()`
+
+模板上的 `@wheel` 无法保证非被动监听。一旦被浏览器按被动处理，`preventDefault()`
+就是空转 —— 缩放刚把 scroll 换算好，浏览器紧接着又按 `deltaY` 滚一截，用户看到的是
+"缩放时图乱跳"。
+
+```ts
+let wheelBound: HTMLElement | null = null;
+function bindWheel(): void {
+  const el = wrap.value;
+  if (el === wheelBound) return;
+  wheelBound?.removeEventListener('wheel', onWheel);
+  wheelBound = el;
+  wheelBound?.addEventListener('wheel', onWheel, { passive: false });
+}
+watch(wrap, bindWheel, { immediate: true, flush: 'post' });  // 画布 v-else，元素会来会走
+onBeforeUnmount(() => { wheelBound?.removeEventListener('wheel', onWheel); wheelBound = null; });
+```
+
+**这条被探针抓住过一次**：我写了非被动注册却**漏了 `e.preventDefault()`**，探针断言
+`defaultPrevented === true` 直接红。防漏的做法是把判据写成"浏览器自己的记账"：
+
+```js
+window.addEventListener('wheel', (e) => window.__wheelLog.push(e.defaultPrevented));
+// 我们的监听在 wrap（冒泡阶段）先跑，window 的冒泡监听后跑 ⇒ 能读到是否被拦
+```
+
+顺带：**"滚轮没把页面滚走"要先把页面撑高再断言**（`document.body.style.minHeight = '3000px'`），
+否则本应用是 `100vh` + 内部滚动、窗口根本不会滚 ⇒ 那条断言是**空断言**。
+
+### 29.3 🔴 坑二：缩放换算**先同步写 sizer 尺寸，再设 scroll**
+
+```ts
+const cx = (el.scrollLeft + ax) / zoom.value;   // 锚点当前的内容坐标
+zoom.value = z;
+sizerEl.value.style.width  = `${canvasW.value * z}px`;   // ← 同步撑开，不能等 nextTick
+sizerEl.value.style.height = `${canvasH.value * z}px`;
+el.scrollLeft = cx * z - ax;
+el.scrollTop  = cy * z - ay;
+```
+
+两个坑一次解决：
+
+1. 只改 `zoom` 就写 `scrollLeft` ⇒ 被**旧的** `scrollWidth` 夹住 ⇒ **放大时必然偏移**；
+2. 改成 `await nextTick()` 再写 ⇒ 连续滚轮之间会读到"还没应用"的 `scrollLeft` ⇒ **锚点一路漂**。
+
+手动写一次 `style`（Vue 随后写入的是同一个值，不冲突）就没有这两个窗口期。
+
+### 29.4 其余决定
+
+- 步进用 `Math.exp(-dy * 0.0016)` 而不是 `zoom + k*dy`：**固定倍率**，20% 与 300% 手感一致。
+- `deltaMode` 归一化（Firefox 行模式 `deltaMode===1` 一个刻度 ±3，像素模式 ±100，差 30 倍）。
+- 范围放宽到 **0.2~3**（原 0.35~2；深树要缩得下去、细节要放得大）。
+- **只接管鼠标**（`pointerType === 'mouse'`）—— 触屏留给原生滚动 / 双指缩放，别吃人家的手势。
+- 按在卡片图标上（`closest('button, a, input, textarea, select')`）**不拖动** —— 图标自己的点击不被抢。
+- 拖动中 `is-panning`：抓手光标 + `user-select: none` + 平面 `pointer-events: none`（否则拖过卡片时
+  `:hover` 一路闪，动作图标行一亮一暗）。
+- 「适应视图」顺手把滚动归零（= 看到全部）。
+- ± 按钮改**乘法步进**并以**视口中心**为锚点（原来只改 zoom 不调 scroll ⇒ 视野跳）。
+
+### 29.5 探针与反向证明
+
+守门 `.tmp-probe/verify-canvas-panzoom.cjs`（26 条，A~E 五段；造 4 列 × 5 行 = 16 张卡的树，
+两个方向都必然溢出）。核心判据两处：
+
+- **滚轮**：锚点内容坐标前后不变，**且必须同时断言"缩放真的变了"** ——
+  只断言锚点不动，滚轮没生效时它也"不动"⇒ **平凡成立**（第一版就这么假绿过）。
+- **拖动**：`滚动位移 = −鼠标位移`，期望值取**浏览器实际发出的** `pointerdown` 与最后一帧
+  `pointermove` 的 `clientX/Y` 之差，**不用我请求的坐标**（请求 150px 经取整/步进压缩后
+  未必是 150，第一版差了 2px，看着像实现对不上）。
+- 拖动起点用**扫描**找空白点（`elementFromPoint` 逐格找，且把命中元素的类名打出来）——
+  不随便挑坐标，否则"拖动平移"验的可能是"拖卡片"。
+
+反向证明：撤回拖动、滚轮注册、`preventDefault` 三处 ⇒ **10 条红**且不崩。
+
+---
+
+## §30 「最多显示 N 条 + 折叠」：计数口径 + 可见性判据（2026-10-07 第二十一轮）
+
+用户报「最近的任务最多显示6条，其他的折叠起来」。
+
+### 30.1 这条**原本就已实现** —— 真问题在计数口径
+
+实测（8 条任务）：`RECENT_SIZE = 6` + 「更早的任务」`<details>`，**只列 6 条、其余折叠**，
+行为完全正确。不一致的是**头部计数写的是总数**：
+
+```
+最近的任务  8          ← all.length
+  任务 1 … 任务 6      ← 只有 6 行
+› 更早的任务  2        ← earlier.length
+```
+
+"最近的任务 8" 底下只有 6 行 ⇒ 看上去像漏渲染。改成本组条数（总数挪进 `title`），
+与「更早的任务 2」口径一致。
+
+🔴 教训：**「最多显示 N 条」类报障，先量"实际显示了几条"再动手** ——
+这一条的第一嫌疑（没封顶）是错的，真凶是旁边那个数字。若直接去改 `RECENT_SIZE`，
+会得出"改了没用"的错误结论。
+
+### 30.2 🔴 可见性判据：用 `elementFromPoint`，**不要** `getBoundingClientRect`
+
+折叠组是 `<details>`，隐藏内容走 `content-visibility: hidden`。**被隐藏的行
+`getBoundingClientRect()` 仍会返回非零矩形**（本仓诊断脚本实测）：
+
+```
+archOpen: false, archBoxH: 29, archContentH: 29   ← details 只有标题那么高
+archItemCount: 2, archVisibleItems: 2             ← 谎报！实际看不见
+```
+
+正确判据是"用户能不能真的点到这一行"：
+
+```js
+const hit = (el) => {
+  const r = el.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return false;
+  const t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+  return !!t && (t === el || el.contains(t));
+};
+```
+
+实测：折叠 ⇒ `archHit = 0/2`；展开 ⇒ `2/2`；再收起 ⇒ `0/2`。
+
+### 30.3 两条"防止假绿"的前置条件
+
+- `archHit === 0` 在**没有折叠组**时是**空集合上的平凡为真** ⇒ 必须把
+  `archItemCount === 2` 并进同一条断言（反向证明第一版正是它假绿）。
+- 展开/收起那一段要先判 `archExists`，否则旧写法下 `.locator.click()` 会
+  `TimeoutError` **把脚本崩掉、吞掉后面全部结论**（反向证明第一版就是这么崩的）。
+  修完：旧写法 **12 条红且跑完**（16 条里 4 条通过）。
+
+守门 `.tmp-probe/verify-recent-collapse.cjs`（20 条，A~E 五段，含 6/7/8 条三档边界）。
+
+### 30.4 顺手发现：`<details>` 的 `display: flex` 值得警惕
+
+`.recent__group` 是 `display: flex`，而「更早的任务」直接复用了这个 class。
+测量时踩到的"隐藏行仍有矩形"很可能就与 `details` + `display:flex` 的组合有关
+（Chromium 新版把内容放进 `::details-content` 并加 `content-visibility`）。
+**结论不是"要改样式"，而是"别用矩形判断可见性"** —— 行为（`elementFromPoint`）才是判据。
+
+---
+
+## §31 「页签整块静默消失」：同一份数据在两个页签里口径不同（2026-10-07 第二十轮）
+
+用户报「目标分析不显示路线网络」。实测三分场景（矮视口）：
+
+| 场景 | `.ov__nets` | 卡片里还有什么 |
+|---|---|---|
+| **S1 `schemes` 空（拆了树但没保存过方案）+ 有步骤** | ❌ **整块消失、无任何提示** | chips + 步骤表 |
+| S2 `schemes` 非空 | ✅ 8 条 | chips + 列表 + 步骤表 |
+| S3 连步骤都没有 | — | 交给 `.ov__empty` |
+
+S1 就是现场。根因是**同一份数据在两个页签里口径不同**：
+
+- 「逆合成树」`StepTree` —— 读当前树的确认条数 ⇒ 有内容
+- 「路线网络」`RouteCanvas` —— 画**当前树** ⇒ 有内容
+- 「目标分析」`TargetOverview` —— 读 `routeNetworks`（**已保存的 schemes**）⇒ 没保存过就是空，
+  而空时它**一句话都不说**
+
+所以用户看到的是"这两个页签有、第一个页签没有"。
+
+修法：加 `showNetHint = 无网络 && 有步骤`，渲染一段说明（为什么空 + 下一步点哪个按钮 +
+"另两个页签画的是当前树，本页只列已保存的方案" —— 把口径差**解释给用户**）；
+刻意与 `.ov__empty`（一步都没有）**互斥**，两段都在说"这里是空的"等于没说清是哪一种空。
+
+守门 `verify-overview-nets.cjs`（22 条，S1/S2/S3；每条都断言"说明在**视野内**"而不只是
+"DOM 里存在"）。反向证明：`showNetHint` 恒 false ⇒ **3 条红**，正是"整块消失、一句都没有"。
+
+**同轮撤销**：对侧栏排布（`.app__recent` 限高自滚）的改动用户要求撤销，`AppShell.vue`
+回到上一版「两段共用一个滚动」；`verify-side-scroll.cjs` 同步成撤销后的口径（27 条，
+含 DOM 层 + 源码层两条"实现自洽哨兵"）。
+**提交**：`retroweb → 4588443`。
+
+---
+
+## §32 「某处不显示」类报障：先证"其实都在画"，再定"该收哪一处"（2026-10-07 第二十二轮）
+
+用户第二次报「目标分析界面不显示路线网络」（上一轮已按"整块静默消失"修过），这次带截图：
+红框圈住页签正上方那条「路线网络」栏（`已确认 0 / 共 2 条`），箭头指向「目标分析」页签。
+
+**实测（放大截图逐字读 + `diag-target-nets.cjs`）三处都在渲染**：顶栏 `SchemeBar` 2 条 /
+侧栏「目标分析」`.tan__net` 2 条 / 正文卡 `.ov__route` 2 个 chip。
+⇒ 字面描述（"不显示"）与截图**不符**：真问题是**该页签一屏里同一份 `routeNetworks`
+画了两遍**（顶栏 + 正文卡），用户分不清该看哪一个。
+
+### 判据（可迁移）
+
+1. 🔴 **"不显示"先量"到底画了几处"。** 同一份数据有多个入口时，报障措辞
+   （"没有 / 看不到"）常常指"重复得不知道看哪个"，而不是"一个都没有"。
+   直接按字面去"补一个"，会把它画成第三遍。
+2. 🔴 **同一份数据在一屏里画两遍就是缺陷**（§24 同一条），**哪怕两处形态不同**
+   （"栏" vs "卡"）。
+3. 🔴 **收起其中一处时，必须把"主指标"搬到留下的那一处。** 顶栏带着每条的总概率
+   （横向选优的判据），一收起这一页就只剩名字 chip ⇒ 等于没法选优。
+   顺带对齐口径（侧栏 `.tan__net-meta` 本来就带概率）——
+   §31 说的"同一份数据两处口径不一"是同一个病。
+4. 🔴 **措辞与证据冲突时以证据为准，但方向要问。** "不显示"可读成"应该显示（补）"
+   或"不该显示（收）"，两种改法正好相反 ⇒ 摆出可选项让用户选一次（本轮就是）。
+   同时把"其实三处都在渲染"这个观察摆出来，用户才好纠正。
+
+### 实现（`retroweb → e6163d7`）
+
+```html
+<!-- WorkspaceView.vue -->
+<SchemeBar v-if="store.schemeStats.length && store.mainTab !== 'overview'" />
+<!-- TargetOverview.vue：chip 补上主指标 -->
+<span class="ov__net-meta">{{ n.steps }} 步 · {{ n.branches }} 分支 · {{ pctText(n.probability) }}</span>
+```
+
+### 两个踩到的坑
+
+- 🔴 **选择器会串**：`SchemeCompare`（右面板「路线网络对比」）**根类也叫 `.schemes`**
+  ⇒ 判"顶栏在不在"要用顶栏专属的 `.workspace > .schemes`（或 SchemeBar 独有的
+  `.schemes__item`）；裸 `.schemes` 在「路线网络」页签上会数到 2 个。
+- 🔴 **"某处不再渲染"会连带打红"落点在默认页签上"的旧关卡**：
+  `verify-scheme-merge` / `verify-scheme-rowclick` 原来点开任务就等 `.schemes__item`
+  （默认页签正是「目标分析」）⇒ 各补一句"先切「逆合成树」"
+  （**文案定位页签，别用下标**：页签会增减）。
+  ⇒ 配套规矩：改完必须**跑全量回归**（本轮 25 组），不能只跑新关卡；
+  汇总时别拿 `grep -c "❌"` 当失败数 —— 有的探针把 `❌ 无` 当**状态**打印
+  （`verify-overview-nets` 就被误计成 4），**以退出码 + 脚本自报的汇总为准**。
+
+守门 `verify-overview-bar.cjs`（14 条：A 目标分析顶栏不存在且数据没丢 / B chip 带概率 /
+C 逆合成树与路线网络页签顶栏照旧在 / D 切回来仍收起）。反向证明
+（`patch-overview-bar-reverse.py on`）⇒ **4 条红**且跑完不崩。
+
+---
+
+## §33 「位置不对」类报障：页签放最上面，路线网络栏夹在**页签与内容之间**（2026-10-07 第二十三轮）
+
+用户接着上一轮改口径（截图里激活页签其实是**「逆合成树」**，所以方案栏可见，与 e6163d7 一致）：
+「路线网络放在页签和内容中间，页签放在顶部」。
+
+改前：通知条 → **方案栏** → 页签行 → 内容　改后：通知条 → **页签行** → **方案栏** → 内容
+
+### 🔴 判据（本轮最值钱的一条）
+
+**"位置不对"必须同时量「DOM 顺序」+「几何」，只测"元素还在"一定假绿。**
+把方案栏挪回页签上方时，`.workspace__schemes` 依旧存在、行数依旧 = 方案数
+⇒ `barExists` / `barRows` 那类判据**两边都绿**。本轮判据落成两组：
+- DOM 侧：方案栏是 `.el-tabs__content` 的**直接子节点** / 是它的**第一个元素子节点** /
+  在第一个 `.el-tab-pane` **之前** / `compareDocumentPosition` 里 header 在它之前；
+- 几何侧：`header.bottom ≤ wrap.top` 且 `wrap.bottom ≤ pane.top`，加一条三段单调链
+  `header.top < wrap.top < wrap.bottom ≤ pane.top`。
+实测（1600×1000）：header=[123,156] wrap=[168,448] pane.top=458。
+反例（旧位置）：header=[423,456] wrap=[78,358] ⇒ 几何判据当场红。
+
+### 实现：不必拆 `el-tabs` 的 header / content
+
+Element Plus 把默认插槽**整块**渲染进 `.el-tabs__content`
+（`tabs.mjs`：`panels = h('div', { class: 'el-tabs__content' }, [renderSlot(slots, 'default')])`）
+⇒ 把 `SchemeBar` 放在**页签之后、第一个 `el-tab-pane` 之前**就落在页签下方、内容上方。
+自拆 header / content 得自己维护 `active-bar` 定位与 `swapChildren`（`tabPosition` 左右时
+还要换序），纯亏。
+
+🔴 **非页签子节点不会污染页签导航**：`useOrderedChildren` 的 `getOrderedChildren`
+只按 `type.name === 'ElTabPane'` 收集 ⇒ 插在默认插槽里的普通 div 被 filter 掉。
+
+```html
+<!-- WorkspaceView.vue -->
+<el-tabs v-model="tab" class="workspace__tabs">
+  <div v-if="store.schemeStats.length && store.mainTab !== 'overview'" class="workspace__schemes">
+    <SchemeBar />
+  </div>
+  <el-tab-pane label="目标分析" name="overview">…</el-tab-pane>
+  …
+</el-tabs>
+```
+```css
+/* 它拿不到 .workspace 的 gap（已在 el-tabs 内容区里）⇒ 下边距自己带 */
+.workspace__schemes { margin-bottom: 10px; }
+```
+
+### 三个坑
+
+- 🔴 **位置相关的选择器会随位置一起失效**：原来判"顶栏在不在"用 `.workspace > .schemes`
+  （直接子级），挪进去之后恒为 null ⇒ **必然假红**。改用外壳 `.workspace__schemes`
+  （它只由本文件渲染，唯一）。**改结构后先 grep 探针里的位置相关选择器**。
+  （§1 已有一条同族教训：拆分/移动源码后"断言读文件内容"的关卡要同步清单。）
+- 🔴 **反向补丁的守卫要挂在外层 div 上**，别只挂里面的组件：第一版把
+  `<div class="workspace__schemes"><SchemeBar v-if=… /></div>` 挂到页签上方时**外壳没带 v-if**
+  ⇒「目标分析」页签下留下一个**空外壳**（`rows=0` 但 `wrap=true`）⇒ C 段那条"既定口径没被破坏"
+  跟着变红，**多出一条与"位置"无关的红**，归因就脏了。
+  修法：`<div v-if=… class="workspace__schemes"><SchemeBar /></div>`。
+  教训：**反向证明要"只翻一处、其余判据保持绿"**，多的红要么是真缺陷、要么是补丁瑕疵，必须查清。
+- 🔴 **`git commit -m "...反引号..."` 会被 bash 当命令替换**（消息里 `el-tabs`、`.el-tabs__content`
+  被吃掉，`bash: el-tabs: command not found`）。含反引号/`$`/换行的提交消息**写进文件再 `git commit -F`**。
+  （同族：§9 的 `bash -c "…"` 吃 `\n`。）
+
+### 验收
+`vue-tsc -b` 0 · `eslint src/` 0 · `build` 2.87s exit 0 · `test:store` ALL PASS ·
+**探针 26 组全绿**（新增 `verify-schemes-position.cjs` **17/17**；overview-bar 14/14、
+scheme-merge 21/21、scheme-rowclick 34/34；**全量以退出码为准，26 条 exit=0**）。
+反向证明：`patch-schemes-position-reverse.py on` ⇒ **7 条红**（顺序/几何），C 段保持绿。
+**提交**：`retroweb → 814cea8`（推送后 `ls-remote` 复核远端 = 本地）。后端本轮未动。
+
+⚠️ **待用户裁决**：合规提示条仍在上方（页签之上）。它是页面级横幅、可关闭，
+默认口径是不动；若用户要"页签绝对在最顶"，把它也挪到页签下方即可。
+
+
+## §34 接入外部数据源：结构 → CAS 号（2026-10-07 第二十四轮）
+
+**需求**（用户截图圈「目标分析」路线表的产物 / 前体两列）：
+「显示结构式，在哪里可以查询 cas 号，有的也要显示」——
+改前那两列只有一串 SMILES 文本，人眼认不出分子，也没有任何查 CAS 的入口。
+
+**数据源选择：PubChem PUG REST**（`utils/pubchem.ts`，本轮新增）——
+免费、不需要 key、**开放 CORS**（实测响应头 `Access-Control-Allow-Origin: *`）、
+按**结构**精确检索（同一分子的不同 SMILES 写法都落到同一个 CID）。
+不引后端：CAS 与逆合成引擎无关，前端直连即可 ⇒ **零后端改动、用户不用重启后端**。
+
+### 🔴 三条实测事实（已写进 `utils/pubchem.ts` 文件头）
+
+1. **必须 POST 表单，不能把 SMILES 拼进 URL 路径。**
+   含立体化学的 `C/C=C/C` 走 `/compound/smiles/<smiles>/synonyms/JSON` 会被直接拒：
+   `400 PUGREST.BadRequest — Unable to standardize the given structure`
+   （`/` 先被 URL 路径吃掉再解码，结构就烂了）。
+   改成 `POST` + `Content-Type: application/x-www-form-urlencoded`，
+   体里 `smiles=…` ⇒ 正常（实测 `C/C=C/C` → CID 62695 / CAS 624-64-6）。
+   附带好处：form-urlencoded 属 CORS **简单请求** ⇒ **不触发预检**。
+2. **404 = 「PubChem 没收录这个结构」**（体 `PUGREST.NotFound`），**不是错误**：
+   要缓存成「查过、确实没有」（`absent`），否则每次渲染都白查一遍。
+   与「网络失败」必须分开：网络失败**不写缓存**（`undefined`），允许以后重查。
+3. **CAS 号混在 synonyms 列表里**（aspirin 的第 3 条才是 `50-78-2`）⇒
+   用标准形态正则 `/^\d{2,7}-\d{2}-\d$/` 从同义词里挑，**不能取第一条**。
+
+### 🔴 口径：查不到就**什么都不显示**
+
+不占位成「—」、不显示「无」——「这个分子没有 CAS 登记」与「我们没查到」
+对用户是两件事，只显示确定的。CAS 是可点外链（`pubchem.ncbi.nlm.nih.gov/compound/<cid>`），
+这同时回答了「在哪里可以查」。外部服务全挂时 **CAS 消失但结构式一个不少**
+（增强项不许拖垮主内容）。
+
+### 🔴 排队竞态（真 bug，探针抓到的）
+
+第一版 `drain()` 在 `queue.shift()` 后立刻 `pending.delete(smiles)`，然后才 `await fetch`。
+⇒ `await` 期间同一分子再次 `requestCas` 时「缓存里还没有 + 不在 pending」⇒ **重复入队**。
+实测：目标分子被查了**两遍** —— 一次来自 `TargetOverview` 自己的 `watch`，
+一次来自它渲染出的 `MolChip`，**两者不在同一个 tick**（setup 阶段 watch 先跑，
+子组件挂载后才轮到它的 CasTag）。
+修法：**只在 fetch 返回并写回缓存之后**才 `pending.delete()`。
+教训：**"已排队"标记要覆盖"正在查"的整段时间**，不是排队那一刻。
+
+### 🔴 `<a>` 不能嵌在 `<button>` 里
+
+起始物料卡原来是 `<button class="ov__start-item">`（整卡可点开预览）。
+要往里加 CAS 外链时不能直接塞 `<a>`：**无效 HTML**，浏览器会重排 DOM，
+点链接还会连带触发外层的「放大预览」。
+修法：外壳改成 `div` + 内部结构式 `<button>`（点击热区落在缩略图上）——
+与表格里 `MolChip` 的手势正好一致（**都是点结构式放大**）。
+（`CasTag` 的 `<a>` 另加了 `@click.stop`：链接点击不该触发容器行为。）
+
+### 🔴 探针：`enterTask` 的锚点必须**新旧两版都有**
+
+第一版用 `.ov__table .mol-chip svg` 当"已进入任务"的锚点 —— 那是**新版才有的元素**。
+反向证明时脚本在**第一段就 TimeoutError 崩掉**，后面 20 多条断言连跑都跑不到，
+只剩一句异常：红是红了，但**归因全丢**（正是"崩掉吞结论"）。
+改用 `.ov__table tbody tr`（两版都有）。同族：`.locator.click()` 找不到元素会抛异常 ⇒
+**先 `.count()` 再点**。
+
+### 🔴 反向补丁：**不能用空串当替换目标**
+
+`patch-mol-cas-reverse.py` 里要"删掉一行"，第一版把 `NEW = ''`。
+`off` 时方向反过来（`a = new = ''`），而 `s.count('')` **恒等于长度 + 1** ⇒ 断言必炸、
+**文件停在补丁态**（本轮真踩到：还原失败但没注意，接着跑出一堆"红"）。
+修法：带上文锚点成对替换（`<i>{{ n.formula }}</i>` 那行一起带上）。
+
+### 其它落点
+
+- 新组件放**已有目录** `src/components/mol/`（`MolChip.vue` / `CasTag.vue`），
+  不新建目录 —— §1：新目录进 lint 范围前要先配语言环境。
+- PubChem 响应类型收进 `src/types/external.ts`（§1：外部边界类型只收在这里）。
+- `MolChip` 里 `CasTag` **必须无条件渲染**：它的 `watch(..., { immediate: true })`
+  就是查询的触发点，外面用 `v-if` 包住 ⇒ 没查到就没人去查，永远查不到。
+
+### 验收
+
+`vue-tsc -b` 0 · `eslint src/` 0 · `build` 2.73s exit 0 · `test:store` ALL PASS ·
+**探针 26 组逐条 exit=0**（新增 `verify-mol-cas.cjs` **30/30**）。
+反向证明 `patch-mol-cas-reverse.py on` ⇒ **17 条红且脚本跑完不崩**（补丁没触及的
+既有功能仍绿：起始物料 / 目标分子的结构式、"乙酸不显示 CAS"等负面断言）。
+另跑 `assert-workspace-head.cjs`（不在 `verify-*` 通配里）**31/31** 全绿 ——
+它用内联夹具，起始物料本就是 2 个（与 `fixture-networks.cjs` 的 3 个不同源，都正确）。
+**提交**：`retroweb → 0b036d3`（推送后 `ls-remote` 复核远端 = 本地）。后端本轮未动。
+
+## §35 侧栏「目标分析」卡：删重复入口 + 各步明细画结构式（2026-10-07 第二十五轮）
+
+**需求**（用户截图把两行步骤明细与「切换目标」按钮一起圈红）：
+「切换目标按钮删掉，显示结构式」。
+
+**改了什么**（单文件 `TargetBar.vue`）：
+
+1. 删「切换目标」。同页签正文的「目标分子」卡头部（`TargetOverview`）本来就有它 ——
+   侧栏这条是**重复入口**。🔴 **删入口前先 grep 它还有没有别处**：数出
+   `openTargetSetup` 的调用点（AppShell 的「＋新任务」、TargetOverview 的卡头），
+   确认删掉不丢功能。
+   顺带把 `.tan__ops` 合并进 `v-if="!netCount"`：有网络时「存为新方案」本来也不渲染，
+   留一个空的 flex 容器只会白占 `.tan` 的 `gap: 8px`。
+2. 各步明细：`<code>` 截断 SMILES → 结构式缩略图（`MolView` + `fit`，点开放大）。
+   侧栏可用宽 ~200px，SMILES 截到 16 个字符（`CC(C)Cc1ccc(C(C)…`）认不出分子；
+   完整 SMILES 与「产物 ← 前体」留在缩略图的 title 里。手势与主区分子小卡一致。
+   为此删掉只有一个用处的 `short()`。
+
+### 🔴 行尾（⑂ + 概率）必须包成**定宽**一组
+
+第一版做完实测：两行结构式盒子 143px vs 156px，右边界参差。原因是 `flex: 1`
+的结构式分到的是「剩余宽度」，而"剩余"逐行不同：第 1 步有分叉标记 `⑂`、概率 2 位数；
+第 2 步没有。**`tabular-nums` 只保证数字等宽，管不了「有没有⑂」和位数** ⇒
+必须给尾巴定宽（`.tan__step-tail { flex: 0 0 auto; min-width: 44px; justify-content: flex-end }`），
+改完两行都是 131px。守门断言直接量 `boxLeft`/`boxRight` 逐行相等。
+
+### 🔴 探针：两处会「假绿」的地方（本轮都踩到了）
+
+1. **类名新旧同名**：旧写法那串 `<code>` 的 class **也是 `tan__step-mol`**
+   ⇒ 「2 行各有一个结构式盒子」在旧形态下照样绿。改判 `tagName === 'BUTTON'`
+   才真的能红。
+2. **"同一分子"不能比 `outerHTML`**：smiles-drawer 每次给键 def 的 id 带**随机前缀**
+   （实测 `m61WD-line-3` vs `7nAsl-line-3`），`viewBox` 又来自 `getBBox()`、对 `<text>`
+   有 ~0.01 单位抖动 ⇒ 同一分子两次绘制字符串也不等，判据必**假红**。
+   改用**指纹 = 键坐标（`x1/y1/x2/y2` 排序）+ 原子标签**：实测对同一分子稳定
+   （12 根键两次一致）、对不同分子可区分（乙酸酐 8 根），且能抓住"明细里画错节点"。
+3. 凡"两处都是 `undefined`"的比较都要加非空守卫（`!!a && !!b && a === b`），
+   否则旧形态下平凡为真。
+4. `new Function('svg', src)` 的**函数体没有 `return`** ⇒ 求值恒为 `undefined`
+   ⇒ 诊断脚本里所有比较平凡为真（一度以为"签名没问题"）。写 `'return ' + src`。
+
+### 验收
+
+`vue-tsc -b` 0 · `eslint src/` 0 · `build` 2.94s exit 0 · `test:store` ALL PASS ·
+**探针 28 组逐条 exit=0**（新增 `verify-targetbar-stepmol.cjs` **21/21**）。
+反向证明 `patch-targetbar-reverse.py on` ⇒ **15 条红、退出码 1、脚本跑完不崩**，
+12 条 🔴 全部变红，补丁没碰的保持绿（主区仍有「切换目标」、行数、序号与概率、
+无网络时「存为新方案」、无 pageerror）。
+同步 `assert-workspace-head.cjs`（原断言「卡上有切换目标」⇒ 改为断言没有 + 有结构式）**32/32**。
+**提交**：`retroweb → cdc67a3`（推送后 `ls-remote` 复核远端 = 本地）。后端本轮未动。
+
+---
+
+## §36 画布：缩到很小也能自由拖动 + 让画布吃满剩余高度（2026-10-07 第二十六轮）
+
+> 用户报：「合成路线路缩的比较小时鼠标左键不能自由拖动，这个界面规划一下，
+> 经量保证画布面积占的足够大，方便操作查看。」
+
+### 36.1 真凶一：平移靠 scroll 实现 ⇒ 图缩小到"装得下"时**根本没有滚动空间**
+
+`RouteCanvas` 的平移是改 `scrollLeft/Top` 实现的（拖动 / 滚轮 / 原生滚动条**共用一套偏移**，
+见 §29）。好处是三者不打架；代价是**滚动位置只在"内容比容器大"时存在**：
+
+- 旧实现的 `sizer` 宽高 = 画布 × zoom；
+- 图一缩小（或路线本来就窄）⇒ sizer 比容器还小 ⇒ `scrollWidth === clientWidth`
+  ⇒ `scrollLeft` **恒为 0** ⇒ 按住左键拖动**毫无反应**。
+
+实测（1440×620，缩到 20%）：`{"scrollW":800,"clientW":800,"room":0}`，
+`el.scrollLeft = 300` 读回来仍是 `0`。反向证明时旧实现的对应判据：
+鼠标位移 `(-150, -95)`，滚动位移 `(0.0, 0.0)`。
+
+**正解：给 sizer 四周垫一圈可平移余量（`PAN_PAD = 320`）**
+
+```
+sizerW = max(画布宽 × zoom, 容器 clientWidth) + PAN_PAD * 2
+sizerH = max(画布高 × zoom, 容器 clientHeight) + PAN_PAD * 2
+plane 定位在 (PAN_PAD, PAN_PAD)
+```
+
+🔴 `max(…, 容器)` **不能省**：图很小时 `画布 × zoom` 比容器还小，此时 sizer 若取它，
+滚动空间与可拖余量**一起归零**（就退回上面的 bug）。用容器尺寸打底后，
+**任何缩放下都至少留 2 × PAN_PAD 的可拖空间**（实测缩到下限 20% 仍有 640px 余量）。
+
+连带要改三处（都容易漏）：
+
+① `zoomAt` 的锚点换算要减掉/加回 `PAN_PAD`：
+   `cx = (scrollLeft + anchorX - PAN_PAD) / zoom`，回写 `scrollLeft = cx*z + PAN_PAD - anchorX`；
+② `fitView` 的落点不再是"滚动回左上角"（加了余量后那是**留白**），
+   改为 `centerView()`：`scrollLeft = PAN_PAD + (画布宽*zoom - clientWidth) / 2` ——
+   让图的中央对准容器中央；
+③ **探针里算锚点的公式也要跟着减 `PAN_PAD`**，且要**从 DOM 读**
+   （`getComputedStyle(plane).left`）而不是硬编码 320。本轮就踩了：
+   实现改对了、探针公式没跟上，"锚点不漂"这条判据报了 **218.6px 的假红**
+   （正好 = `320/0.716 − 320/1.402`）。
+
+### 36.2 真凶二：画布上方三块**占流** + 一个魔法数
+
+旧实现画布上方依次是：卡片头（标题 + 工具条 ~55px）、计分条（~40~65px，提示文字换行会撑到 65）、
+免责声明（~35px），加上卡片内边距与间距合计约 **165px 白送**；画布高度还被
+`max-height: calc(100vh - 330px)` 钉死 —— 那个 **330 是把上方所有块加起来估的魔法数**，
+上面每多一行（通知条 / 方案栏 / 页签）它就失准一次，窗口越矮越吃亏
+（620 高的窗口：`620-330 = 290` ⇒ 又被 `min-height: 320` 顶回来，画布只剩 320）。
+
+**正解：全部收进"贴顶浮层" + 画布吃满卡片**
+
+- 卡片头 + 计分条 + 图例 ⇒ 一条 `position: absolute` 的 `.rcanvas__bar`（`inset: 0 0 auto 0`）；
+  🔴 **容器 `pointer-events: none` + 子元素 `auto`**：浮层的空白缝隙要能**穿透**到画布，
+  否则画布顶部一整条带拖不动 —— 跟 36.1 是同一类"拖不动"，**别只修一个**；
+- 免责声明 ⇒ **不删**（顶部通知条那条虽然同义，但**它是可关闭的**，删了会一处不剩），
+  改成画布左下角 `.rcanvas__hint` 浮层（`pointer-events: none`）；
+- 图例 ⇒ 工具条下方的浮层卡片；
+- `.rcanvas__wrap` 去掉 `max-height`，改 `flex: 1` + `min-height: 320px`
+  （**小窗口兜底**：空间不够时宁可整页滚动，也不把画布压成一条缝）；
+- 🔴 `.rcanvas__body` 必须显式 `padding: 0` —— 全局 `.rw-card__body` 有 `padding: 16px 18px`，
+  不清掉画布就比卡片矮 **34px**（实测）。
+
+结果（1440×620）：画布 **320 → 432px**（视口占比 52% → 70%），且页面不再被撑出滚动条。
+
+### 36.3 🔴 高度链必须是"确定高度"，否则 `max(画布, 容器)` 会正反馈
+
+让画布"吃满剩余空间"要打通一条 flex 链（写在 `WorkspaceView` 的 `.workspace.is-canvas`）：
+
+```
+.workspace(高度确定) → .el-tabs(flex:1) → .el-tabs__content(flex:1)
+  → .el-tab-pane(flex:1) → .rcanvas(height:100%) → .rcanvas__body(flex:1) → .rcanvas__wrap(flex:1)
+```
+
+🔴 第一环必须是 **`height`**，不能只写 `min-height`：
+容器高度 auto 时 `.rcanvas__wrap` 的 `flex: 1` 拿不到"剩余空间"，于是退回"由内容决定"；
+而它的内容（sizer）高度又依赖 wrap 自身高度（`max(画布, 容器) + 余量`）
+⇒ **正反馈**，画布一路涨到 **95480px**（实测），窗口里只剩一片空白。
+钉死 `height: calc(100vh - var(--rw-header-h) - var(--rw-content-pad-y) * 2)` 后环就断了。
+
+两个配套细节：
+
+- 🔴 `.el-tabs__content` 在画布页签下要变成**纵向 flex**：它里面除了页签还夹着
+  「路线方案栏」（§32），两者要竖排（方案栏占自身高度、页签吃剩下的），
+  否则 `height: 100%` 的 pane 会跟方案栏叠在一起、把画布顶出容器；
+- 🔴 画布页签是**懒显示**的：组件挂载时它是 `display: none`，`wrap` 尺寸全是 0
+  ⇒ 那一刻的 `fitView` 只会走"尺寸不合法"的早退分支（zoom 停在 1、滚动停在 0）。
+  所以要在 **ResizeObserver 第一次报出"可见"** 时补一次 `fitView()` ——
+  否则用户切过来看到左上角一大片留白（垫了 36.1 的余量后尤其刺眼）。
+
+`--rw-content-pad-y` 是新增的单一来源变量（`.app__content` 的上下内边距）：
+标定态 `.workspace__layer` 的居中基准与本处的"可用高度"都引用它，**别就地写 36px**。
+
+### 36.4 本轮顺带的两个坑（都是"改完发现不对"才抓到的）
+
+- 🔴 **Python 切片上界是排他的**：用 `lines[a:b] = NEW` 整块替换模板时，
+  `b` 指向的那一行**不会被替换掉** ⇒ 若 NEW 末尾又写了同一行
+  （这里是 `<div v-if="!hasRoute" class="rcanvas__empty">`），就会**静默重复一行**，
+  Vite 报 `Element is missing end tag.`（整页白屏，探针连登录页的锚点都等不到）。
+  断言要盯"替换后该行**只出现一次**"，不能只 assert 切片边界。
+- 🔴 **`git stash push -- src/` + `pop` 会把工作区文件转成 CRLF**（本仓 `core.autocrlf=true`）：
+  反向证明之后要核 `b.count(b'\r')`，必要时 `replace(b'\r\n', b'\n')` 转回 LF。
+  `git status` **不会**提示，只有一句 warning "LF will be replaced by CRLF"。
+
+### 36.5 验收
+
+守门 **`verify-canvas-fit.cjs`（新增，15 条）**：
+
+- A0 `max-height` 不再是魔法数（`none`；旧实现读数为 `290px`）；
+- A1 🔴 **画布吃满卡片**（wrap ≈ card，差 ≤ 2px 边框）；
+- A2 🔴 矮窗口（620）下画布 ≥ 视口 60%（实测 **70%**）；
+- A3 工具条与提示条都是 `absolute`（不占流）；
+- B1 页面不产生纵向滚动；B2 `.workspace` 高度 = 内容区可用高度；
+- C1+C2 🔴 **缩到 20% 后 sizer 仍比容器大、拖动 1:1 跟手**（用户报的那个 bug）；C3 放大到 300% 同样跟手；
+- D1~D3 切到别的页签 ⇒ 摘掉 `is-canvas`、content 不是 flex、内容仍高于一屏。
+
+**反向证明**：`git stash push -- src/` 回退实现后跑同一脚本 ⇒ **8 条红、退出码 1**，
+逐条对得上（A0 读数 290px = 旧魔法数；C1 `sizer 214×152` vs 容器 `800×318`；
+C2 滚动位移恒 0），其中 **A0 同时充当"加载的确实是旧代码"的自洽哨兵**。
+
+**全量回归 32 组逐条 exit=0**。画布相关的 `verify-canvas-panzoom.cjs` 同步改了两处：
+sizer 断言从"= 画布×缩放"改为"**≥ 容器 + 600**"，锚点公式减 `PAN_PAD`；
+并把两个画布探针的种子合并成 `_seed-panzoom-session.cjs`（**抄两份迟早会漂开**）。
+
+**提交**：`retroweb → 67c54b1`（4 files changed, 330 insertions(+), 127 deletions(-)；
+推送后 `ls-remote` 复核远端 = 本地）。后端本轮未动。
+
+## §37 「解析结构」不该建任务：任务诞生点必须唯一（2026-10-07 第二十七轮）
+
+> 用户报：「新建逆合成分析界面 点击解析结构会创建新任务」。
+
+### 37.1 实测：每点一次解析就多一条任务（真值先打出来）
+
+全新进入（＝首次打开 / 「＋新任务」/「换目标」后的标定态），连点 3 次「解析结构」：
+
+```
+起点              条数=0（头部计数 "0"）
+第 1 次解析后      条数=1   任务 2026/10/7 20:33:04
+第 2 次解析后      条数=2   任务 ...:05 | 任务 ...:04
+第 3 次解析后      条数=3   （localStorage 同步 1→2→3）
+```
+
+而**从侧栏打开一条已有任务**再解析是正常的（条数不变、改写的是那一条）——
+说明 `editingSessionId` 那套归属判断是好的，漏的是"没有归属"的那条路。
+
+### 37.2 根因：`setTarget()` 在无归属时**无条件新建会话**
+
+```ts
+const reuse = editingSessionId.value;
+if (reuse && sessions.value.some((s) => s.id === reuse)) currentSessionId.value = reuse;
+else { currentSessionId.value = uid('sess'); editingSessionId.value = null; }  // ← 真凶
+persistSession();   // 找不到 currentSessionId ⇒ 建一条新会话
+```
+
+`editingSessionId` 只在**开始**标定时（`openTargetSetup`：＋新任务 / 换目标）被置空，
+挡不住解析阶段的重复调用 ⇒ 同一次标定里解析 N 次 = N 条任务（名字还都是「任务 <时间>」，
+肉眼看不出区别）。用户在侧栏看到的就是一堆同名任务。
+
+### 37.3 改法：把"任务诞生"从解析挪到开始分析（三处，缺一不可）
+
+① `setTarget()` 只**认领**正在编辑的已有会话，其余情况**保持无归属**（`currentSessionId = null`）——
+   顺带清掉可能残留的旧 id，否则接下来那次落盘会写到**别的任务**身上；
+② `persistSession()` 增加闸门：**没有任务归属 ⇒ 不落盘也不新建**；
+③ `closeTargetSetup()`（＝「确定目标，开始分析」/「自动往下拆」）负责
+   `if (!currentSessionId) currentSessionId = uid('sess')` + **落第一次盘**。
+
+🔴 闸门的判据必须是「**有没有归属**」而**不是**「在不在标定态」：
+   从侧栏打开一条**草稿**任务、在标定面板里改结构，仍然要写回**那一条**（否则改动静默丢掉）。
+   这一点由 `repro-jump-new.cjs`（场景 2）+ 新关卡的 C 段双向锁住。
+
+🔴 也不能只靠那个 `watch([nodes, params, …], schedulePersist, {deep:true})` 兜：
+   **目标本身就是可购买起始物料**时（≤6 重原子 / 在起始物料表里），根节点从 `makeNode`
+   起就是 `terminated`，`predictNode` 只是重设同一个值 ⇒ **watcher 一次都不触发** ⇒
+   任务永远不会出现在侧栏、刷新也就丢了。所以 `closeTargetSetup` 里要**显式落一次盘**。
+
+### 37.4 顺带对齐一处"同一快照两个落点"
+
+`loadSession()` 尊重 `isDraftSession`（草稿 → 回标定面板继续编），
+而 `resumeSessions()`（刷新自动恢复）原来**无条件** `targetSetupOpen = false` ——
+同一份草稿快照，**点侧栏打开**回标定面板、**刷新**却进路线态（面板凭空消失，
+只剩一棵光秃秃的单目标树，用户以为任务没了）。现按 `loadSession` 的口径统一。
+
+> 教训：**任何"同一状态、两个入口"的地方，落点判据必须同源**。
+> 上一处同类问题见 §31（同一份数据在两个页签里口径不同）。
+
+### 37.5 测试有效性：harness 也要跟着新契约走
+
+`tests/store-harness.ts` 的入口就是 `setTarget`，第 11 节原来直接调 `store.persistSession()`
+并断言"会话快照里有 schemes" —— 那条断言实际上依赖的正是"setTarget 会建会话"这个**旧实现细节**。
+新契约下要先「开始分析」才有任务可落盘 ⇒ 第 11 节补 `store.closeTargetSetup()`，
+并**新增一条真判据**：
+
+```
+check('🔴 只解析、还没开始分析 ⇒ 一条任务都不建', store.sessions.length === 0)
+```
+
+（旧实现下这条红：`会话数 1`。）注意这两件事要一起做：只改断言 = 把闸门测没了；
+只补 `closeTargetSetup()` = 漏掉新契约。
+
+### 37.6 验收
+
+守门 **`verify-parse-notask.cjs`（新增，26 条 / 5 段）**：
+
+- **A** 解析 3 次（含点「示例」）⇒ 侧栏「最近的任务」恒 **0 条**、localStorage 也 0 条；
+  同时断言"**解析确实成功了**"（结果卡显示 canonical SMILES + 结构式 svg 有元素）——
+  否则"什么都不做"也能让 A 段为真；
+- **B** 点「确定目标，开始分析」⇒ 恰好 **1 条**（名 `任务 <时间>`、目标 = 最后解析的那个、
+  被标为当前、根节点已落盘），且**确实打了 `/jobs``（不是靠"什么都没干"混过去）；
+- **C** 打开一条**草稿**任务改结构 ⇒ 任务数仍 1、`id` 没变、`target` 已改写（防新闸门误伤）；
+- **D** 草稿态刷新 ⇒ 仍回标定面板、结构还在输入框里（37.4）；
+- **E** 解析后**不点**开始分析直接刷新 ⇒ 无任务、面板空白
+  （＝用户选定的取舍："还没开始分析的内容不落盘"，写成断言防将来被"顺手"改回去）。
+
+**反向证明**：`git stash push -- src/` 回退实现后跑同一脚本 ⇒ **16 红、退出码 1、无崩**
+（A 段读数直接就是用户报的现象：解析 1 次后侧栏 1 条）；
+`npm run test:store` 在旧实现下**恰好 1 红**（就是 37.5 新加的那条）。
+
+**四关**：`vue-tsc -b` 0 / `eslint src/` 0 / `vite build` ✓ / `test:store` ALL PASS。
+**全量回归 34 组**（30 verify + 3 assert + `repro-jump-new.cjs`）逐条 exit=0。
+
+### 37.7 探针又踩到的两个坑
+
+- 🔴 **别用「结果 === 输入」判解析成功**：RDKit 给的是 **canonical** SMILES，
+  咖啡因的输入 `Cn1cnc2c1c(=O)n(C)c(=O)n2C` 出来是 `Cn1c(=O)c2c(ncn2C)n(C)c1=O` ⇒
+  等这个条件会 **120s 超时崩掉**。判据改成"结果非空、且与上一次不同"，并把
+  canonical 值**取回来当后面几段的基准**。
+- 🔴 **结构式（smiles-drawer）是异步注入 svg 的**：刚读到 `code` 更新时 `svg` 还是空的
+  （`path` 数 = 0）。要等 `svg` 里长出元素再断言，且**别**把"画得慢"当成"没画"。
+- 🔴 侧栏行里的目标被 `shortTarget()` 截断（>22 字加省略号）⇒ 比对前先对齐口径，
+  否则会是**假红**。
+
+**提交**：`retroweb → ea968c0`（2 files changed, 47 insertions(+), 7 deletions(-)；
+推送后 `ls-remote` 复核远端 = 本地）。后端本轮未动。
+**提交**：`retroweb → ea968c0`（2 files changed, 47 insertions(+), 7 deletions(-)；
+推送后 `ls-remote` 复核远端 = 本地）。后端本轮未动。
+
+## §38 表格里的 `<td>` 禁设 `display:flex`：行分隔线会断成两截（2026-10-07 第二十八轮）
+
+**报障**（附截图，红框是一个**细长的红矩形**，横跨表格、圈住第 1 行与第 2 行之间那条线）：
+「这里中间线没在同一条直线上」。
+
+**第一步不是读代码，是读像素**（脚本里手打几十行 PIL 比猜快）：
+先定位用户红框（`R>230 且 G,B<130` 的连通区域）⇒ 它是 y 311..314 与 331..334 两条横线
+（**不是矩形边框**，就是圈了一条带）；再扫表格区的长横线段，拿到真值：
+
+```
+y=261  x 595..1696          表头分隔线（整幅，正常）
+y=320  x 1051..1624         ← 前体列那一格
+y=326  x  595..1050  +  1625..1696
+```
+
+⇒ **行分隔线裂成三段、中段比两侧高 6px**，跑偏的只有前体列那一格。
+
+**根因**：上一轮（§34）把前体列的排版从竖排改成横排时，写成了
+`td.ov__precursors { display: flex; flex-wrap: wrap }` —— **flex 挂在了 `<td>` 上**。
+
+给 `<td>` 设 `display:flex` 之后它**不再是真正的表格单元格**（浏览器用匿名 table-cell
+把它包起来）⇒ ① 不再拉伸到行高；② `vertical-align: top` 一并失效。
+而 `.ov__table td { border-bottom: ... }` 的那条边是**画在元素自己的 border box 下沿**的
+⇒ 它就画在内容高度上，与同排其它三格错开。
+实测（`diag-tbl-line.cjs`，fixture 2 行、其中一行双前体）：
+
+```
+行 0  四格底边 361.8 / 361.8 / 356.3 / 361.8   （极差 5.5px）
+行 1  四格底边 426.3 / 426.3 / 419.8 / 426.3   （极差 6.5px）
+        ↑ 前体格的 display=flex，top 也比兄弟低 0.5px
+```
+
+**改法**：flex 挪到 `<td>` 里的**内层 div**，`<td>` 回归 `table-cell`。改后四格底边全等（极差 0）。
+
+**判据（`verify-tbl-lines.cjs`，14 条，三层）**：
+① 几何层 —— 同一行四格 border box 的上下边极差 = 0；**且没有任何一格的 display 不是
+   `table-cell`**（这条是**根因判据**，比"底边相等"更贴病灶）；
+② 🔴 像素层 —— 把 `.ov__table` **截图回灌 canvas** 读像素（`data:` URL 不会 taint canvas，
+   `getImageData` 可用，不用引依赖也不用另起进程）：
+   要求「期望的行底边那一行上，线的横向覆盖 ≥ 99%」＋「所有横跨 ≥30% 的段落在同一个 y」；
+③ 前体格里 2 个 chip 都还在、都在格内、svg 都在（对齐别把内容搞丢）。
+
+**踩到的坑**：
+- 🔴 像素判据**不能用"窗口内最暗的那个像素"**：前体小卡自己的下边框颜色和行分隔线
+  **一模一样**（都是 `var(--rw-border)` = `rgb(228,233,240)`），而且就落在分隔线上方 7px
+  ⇒ 逐列取最暗会取到卡边框，读数毫无意义（实测踩到：把 y=89 的卡边框当成了线）。
+  改用**横向覆盖率直方图**：分隔线横跨整幅（cov 1.000 或 0.546+0.454），一张卡只有 0.103
+  ⇒ 阈值 0.30 分得干干净净。**判据要选对物理量，别只调参数。**
+- 🔴 小卡边框与行分隔线**同色**这件事本身值得记：任何"按颜色找线"的探针在这里都会混。
+- 🔴 `liney()` 这类手打的粗扫脚本会把卡边框算进去（本次一度以为改前改后图一样）⇒
+  用 PIL 复核两版截图时先 `md5sum`：本次两张 zoom 图**字节完全相同**，
+  说明"看起来的差异"是我读数错了，不是图错了。
+
+**验证**：四关（`vue-tsc -b` 0 / `eslint src/` 0 / `build` 2.70s exit 0 / `test:store` ALL PASS）；
+**全量回归 35 组逐条 exit=0**；**反向证明** `patch-tbl-lines-reverse.py on`（把 flex 挪回 `<td>`）
+⇒ **6 红、退出码 1、不崩**，且像素层独立复现用户症状：
+`横跨段 ["y=90(0.546)","y=96(0.454)"] ⇒ 极差 6px`（与截图里 y=326/320 的 6px 一致）。
+补丁 `off` 后与备份**逐字节一致**。
+
+**提交**：`retroweb → 64d7dfa`（1 file changed, 21 insertions(+), 11 deletions(-)）。
+后端本轮未动。
+
+> 待用户裁决（沿用 §34 的两条）：侧栏「目标分析」卡是否也显示 CAS；内网无法访问 PubChem 时是否改后端代理。**提交**：`retroweb → 64d7dfa`（1 file changed, 21 insertions(+), 11 deletions(-)）。
+后端本轮未动。
+
+## §39 「自动往下拆 N 层」点击后不切页签 ⇒ 看不到是否在跑（2026-10-07 第二十九轮）
+
+**报障**（附截图，红框圈住标定卡片底部的「自动往下拆 4 层」按钮，红箭头从按钮指向
+页签行）：「自动往下拆4层点击后要跳转逆合成树，不然看不到是否正常运行了」。
+
+**第一步是打真值，不是读代码**（`diag-auto-jump.cjs`：后端 `/retro/**` 全打桩，
+另加一个 **hold 开关**把任务卡在 `running` —— 否则打桩秒回、采不到"运行中"这段中间态）：
+
+```
+点之前        标定面板独占主区 ⇒ 页签行还没渲染（tabs = []）
+点之后 t=0.25s 面板=关  活动页签="目标分析"  节点="节点 1"  状态条="自动拆分层 1/40"
+…（hold 全程）  活动页签一直是"目标分析"；树卡片 getBoundingClientRect 高 = 0
+放行跑完 8.9s  活动页签仍是"目标分析"；节点已长到 23
+```
+
+⇒ 树**一直在长**，只是长在一个**没被激活的 pane** 里（`el-tabs` 预渲染全部 pane，
+非活动 pane 里的 `.tree` 元素存在但矩形为 0）。用户在"目标分析"页上看到的是一屏
+"还没有确定的路线"，**无法判断到底有没有在跑** —— 用户的描述完全准确。
+
+**根因**：同一个阶段的**两条起跑线**手感不一致。
+- 手动那条（`TargetInput.startAnalysis`）本来就显式 `store.mainTab = 'tree'`
+  （注释写着"这一步的候选面板就长在那里"）；
+- 自动这条（`TargetSetupPanel.onAuto`）只 `closeTargetSetup()` + `autoRun()`，漏了这行。
+
+**改法**：`onAuto` 里补 `store.mainTab = 'tree'`。位置按本仓既有约定 ——
+「开跑 / 查看动作切哪个页签」由**组件**决定（`TargetInput.startAnalysis`、
+`StepRow`、`RouteCanvas` 都在组件里切；store 只在换任务时把页签复位成总览）。
+
+**新的探针手法（值得复用）**：
+1. 🔴 **"加载的是新代码"哨兵 = 直接读 dev server 送来的模块**：
+   `await fetch('/src/components/workspace/TargetSetupPanel.vue')` 拿 Vite 变换后的产物
+   （`<script setup>` 是内联在**主模块 URL** 里的，实测含 `store.mainTab = "tree"`），
+   断言其中含新代码的特征串。比 `touch` + 碰运气可靠得多 —— 而且它把
+   "补丁是否真的生效"从**人工检查**变成**关卡里的一条断言**（反向跑时它会红，
+   正好当"确实加载了旧代码"的证明）。
+2. 🔴 **`elementFromPoint` 的取样点要避开浮层**：点击后 1~2s 内会有一条居中的
+   ElMessage（"模型预测可能存在幻觉…"）压住卡片**头部**，在头部打点会得到
+   `el-message` 而不是树 ⇒ 假红。改成在卡片**中下部**（`top + height*0.7`）取样。
+3. 🔴 **落盘是 400ms 防抖的**（`schedulePersist`）⇒ 跑完立刻读 `localStorage`
+   会读到上一次写入（实测 DOM 23 / 快照 21，差的就是最后一次 `adopt` 的防抖）
+   ⇒ 断言前先等一拍。
+
+**验收**（`verify-auto-jump.cjs`，26 条）：
+- A 前置（标定态没有页签行）；B 🔴 点完即切「逆合成树」**且树真的可见**；
+- C 🔴 运行中**全程**停在树页签、状态条报「自动拆分层 x/y」、有「停止」出口；
+- D 跑完页签**不被复位**、节点长到 23 且已落盘（≥5 判据，防"颜色变了其实没跑"）；
+- E **防倒退**：另一条起跑线「确定目标，开始分析」也落在树页签（旧写法下这段是绿的）；
+- F 无 pageerror。
+可见性用三把独立尺子：导航项 `.is-active`、树卡片**矩形高度**（隐藏 pane 里恒 0）、
+`elementFromPoint` 打点。另有"加载新代码"哨兵一条。
+
+**反向证明**：`patch-auto-jump-reverse.py on` ⇒ **8 红、退出码 1、不崩**
+（哨兵 + 7 条实质；红读数精确复现症状：`活动页签「目标分析」/ 树高 0px / 命中 zero-rect`）。
+`off` 后与备份**逐字节一致**，复跑 26/26。
+
+**验证**：四关（`vue-tsc -b` 0 / `eslint src/` 0 / `vite build` 2.69s exit 0 /
+`test:store` ALL PASS）；**全量回归 36 组逐条 exit=0**。
+
+**提交**：`retroweb → 141563b`（1 file changed, 11 insertions(+)，纯注释 + 一行实现）。
+后端本轮未动。
+
+> 待用户裁决（沿用 §34/§38）：侧栏「目标分析」卡是否也显示 CAS；内网无法访问 PubChem 时是否改后端代理。
+## §40 后端「一次搜到底」只有 /api/search；「拆分约束」那组参数本就是它的（2026-10-07 第三十轮）
+
+**本轮只调查、未改任何代码。** 用户问：「一次性直接预测多步这个在哪，调用预算都没用上」。
+
+### 实测：预算用不上是真的
+
+真后端（8000，模型已 loaded）跑「自动往下拆 4 层」—— 阿司匹林 `CC(=O)Oc1ccccc1C(=O)O`，深度 4 / 预算 40 / 阈值 6：
+
+- **预测调用 4 次**（预算只用了 10%），48.6s，树 7 节点，状态条全程「自动拆分层 k/40」。
+- 调用序列：目标 → `CC(=O)OC(C)=O` → `O=C(O)c1ccccc1O` → `O=C([O-])c1ccccc1O`。
+
+根因在 `stores/workspace.ts autoRun()`：`while (queue.length && !stop && calls < budgetCalls)` 预算判据是真的，但每轮只 `adopt(node.candidates[0])`（**Top-1**），加上 `node.depth >= maxDepth` 封顶 ⇒ 调用次数 ≤ 层级数，40 是摆设。
+
+### 🔴 前端「拆分约束」= /api/search 的参数集（却被接到了单步循环上）
+
+| 前端（`params`） | 默认 | /api/search | 默认 |
+|---|---|---|---|
+| `maxDepth` | 4 | `max_depth` | 3 |
+| `budgetCalls` | 40 | `max_calls`（5..400） | 60 |
+| `heavyAtomThreshold` | 6 | `max_heavy_atoms`（1..40） | 10 |
+| `startingMaterials[]` | [] | `purchasable[]` | [] |
+
+另有界面未暴露的 `max_routes`(≤20) / `time_limit`(10..600s) / `value_fn`(complexity|constant) / `required_materials[]`。
+
+### 后端能力边界（逐个路由查过 `web/app.py` 的 24 个路由）
+
+- 单步：`POST /api/predict`（内部复用 job）、`POST /api/jobs`（kind **写死 `"predict"`**）→ 走独立 worker 进程（`predict_remote` 队列）。
+- **一次搜到底：只有 `POST /api/search`** = `RetroStarSearch(limit_reaction_model_calls=max_calls, time_limit_s, max_expansion_depth)`。
+- `core/retrochimera/` **只出单步** reaction model（`RetroChimeraModel` 等），无任何多步/搜索 API。syntheseus 里另有 `breadth_first` / `mcts` / `pdvn` / `random`，后端写死 RetroStar 未暴露；上游 `cli/run_search.py`（走 `syntheseus.cli.search`）理论可换算法，本项目未用。
+
+### 实测 /api/search（同参数：max_calls=40 / max_depth=4 / max_heavy_atoms=6 / value_fn=complexity）
+
+| | 冷启动 | 热启动 |
+|---|---|---|
+| 总耗时 | 4m16s | 2m03s |
+| `load_seconds` | 126.3 | **0.0** |
+| `search_seconds` | 126.9 | 123.3 |
+
+- 图规模：**1003 个反应节点** / 1335 分子节点 / **3 条完整路线** / 起始物料 `[CC(=O)O, CCOC(C)=O, c1ccncc1]`。
+- 返回体：`routes[].steps[] = {product, reactants, reactants_joined, probability}` + `starting_materials` + `purchasable` + `required_materials` + `filtered_out` + `value_fn` + `stats` + 两个耗时字段。
+
+### 🔴 接之前必须先解决的三个坑
+
+1. **同步接口，无进度无取消**：一次 HTTP 挂 2 分钟起。任务系统 `/api/jobs` 的 `kind` 是**写死的 `"predict"`**（`jobhub.submit("predict", params, _PREDICT_RUNNER)`），没有 search runner ⇒ 要接得先加一种 job kind。
+2. 🔴 **会在 Flask 进程内再加载一份模型**：`/api/search` 用 `get_model()`（进程内 `_loaded` 缓存），而单步预测走的是**独立 worker 进程** ⇒ 两份模型并存、内存翻倍；冷启动那 126s 就是第二份在加载。⚠️ `/api/models` 的 `loaded` 看的是 `_WORKER_READY`，**与此缓存无关**（别拿它判断 search 就绪没）。
+3. **「每步候选数」对搜索不生效**：syntheseus 用 `DEFAULT_NUM_RESULTS = 100`（`interface/models.py`），界面上那个 5 不参与 ⇒ 40 次预算能炸出 1000+ 反应节点（≈25/次）。
+
+### 证据
+
+`.tmp-probe/diag-autorun-budget.cjs`（真后端实跑计数）· `shot-autorun-budget.png` · `search-oneshot.json`（冷）· `search-oneshot-warm.json`（热）。
+
+### 待裁决
+
+接 `/api/search`（需后端加 job kind，跑在 worker 里才不重复载模型）+ 前端接线，还是只把 `autoRun` 改成吃满预算（广度优先 / Top-K）。**决策未落，代码未动。**
+
+## §41 逆合成树「行内标签」：竖排会撑高整行 + 被拉伸等宽；pill 整块才是热区（2026-10-07 第三十一轮）
+
+用户报两张图：截图红框里「目标产物 / 已分析」「起始物料 / 可购买 / ¥」挤成一竖列，
+¥ 还掉到第三行单独一个圆点。随后追加要求：**「可购买要整体可以点击选择，不能只能图标可以点击」**。
+
+### 实测（先量后改，`.tmp-probe/diag-steprow-tags.cjs`）
+
+真前端（5177）灌一条 3 节点会话进「逆合成树」页签，读每个标签的矩形：
+
+| 指标 | 改前 |
+|---|---|
+| `.step-row__tags` 的 `flex-direction` | **column** |
+| 标签宽度 | 全部被拉成 **60px**（`align-items: stretch`，最宽的「起始物料」撑满；「已分析」3 个字也 60px） |
+| ¥ 与「可购买」同行？ | **否**（第 3 行；`x - pill.right = -57px`） |
+| 5 个标签那行 | 标签列 **136px** > 结构盒 64px ⇒ 行高 **152px**（其余行 80px） |
+| 可点的 ¥ 热区 | 16×16（「可购买」三个字点了没反应） |
+
+### 改法（`src/components/workspace/StepRow.vue`）
+
+1. 标签块从 `.step-row__inner` 的**独立一列**搬进 `.step-row__main`（分子信息下面），
+   改成 `flex-wrap: wrap` 的一行 chip。搬家的理由不只是好看：主列是 `flex: 1; min-width: 0`，
+   标签因此拿到**整列宽度**（5~6 个也排得下），而右列只剩操作按钮 ⇒ 按钮右缘天然对齐。
+   留在右列做横排的话，标签会把主列宽度吃掉（实测 SMILES 列 332→195px），
+   12.5px 的 SMILES 与 11px 的属性行就会各自多折一行，行高反而更高。
+2. `el-dropdown` 从 pill **内部**挪到 pill **外层** ⇒ 「可购买」整块都是选供应商的热区；
+   ¥ 退化成 pill 里的一枚 `<i>` 装饰图标（去掉它自己的 `cursor`/`hover`，
+   否则鼠标移到圆点变色、移到文字不变色，"整块可点"的信号又乱了）。
+3. 「取消可购买」补 `plain`：原来 `type="success"` 不带 plain 是**纯绿实心**
+   （实测 bg `rgb(103,194,58)`），在一行里比主操作「查看候选」还抢眼，
+   而「可购买」这个状态右边的标签已经用绿色表示过一次。
+
+### 🔴 可复用陷阱
+
+1. **`display: inline-flex` 容器里的文字是「匿名 flex item」，行盒高度与块级元素差 1px**
+   ⇒ 同一排 chip 里，`inline-flex` 的 pill 比兄弟标签矮 1px（实测 21 vs 20，肉眼看得出来）。
+   修法是给 `.step-tag` **写死 `line-height: 17px`**（高度 = 行高 + 上下内距 1×2 + 边框 1×2 = 21），
+   不要指望继承值。⚠️ 改这个数时要记得 `box-sizing` 是 **content-box**（19 会得到 23，不是 21）。
+2. **Element Plus 的下拉不吃 `Escape`** ⇒ 探针实拍前必须点一个「外部且无副作用」的元素
+   （这里点 `.tree__stat`）**并断言下拉确已关闭**。
+   这次是怎么发现的：两次跑出的截图 **`md5sum` 完全相同**，而其中一次明明改了 CSS ——
+   说明那两张图都不是我以为的内容（下拉一直开着盖住下面两行）。
+3. 🔴 **`?raw` 拿到的是「整份 SFC 塞进 JS 字符串」的模块** ⇒ 双引号与换行都被转义
+   （`\"` / `
+`）。用它当"加载的是新代码"哨兵时，**任何含 `"` 的正则都恒不命中**
+   ⇒ 变成永远红的假警报。先 `t.replace(/\(.)/g, (m,c)=> c==='n' ? '
+' : c)` 还原再断言。
+4. 🔴 **反向补丁下探针的选择器不能从「即将被改掉的祖先」出发**：
+   旧版里 ¥ 是 pill 的**兄弟**，`pill.locator('.step-row__query').boundingBox()` 直接 30s 超时
+   把整个探针**崩掉**。反向证明要的是「红 + 退出码 1」，不是「崩」⇒
+   选择器从稳定的外层（`.step-row`）出发 + `count()` 判空。
+5. **给 chip 高度写死 `line-height` 后，`grep -c plain` 这种粗核对要留神**：
+   注释里也含同一关键词，改前后计数会差在"注释行"上。
+
+### 数字对照（同一探针，改前 → 改后）
+
+| | 改前 | 改后 |
+|---|---|---|
+| 标签视觉行数（每行） | 2 / 2 / **5** | 1 / 1 / 1 |
+| 行高（三行） | 80 / 80 / **152** | 80 / 80 / 80 |
+| 标签宽度 | 全 60px | 按内容（60 / 49 / 65…） |
+| ¥ 与「可购买」 | 不同行、gap −57px | 同一 pill 内 |
+| 可点热区 | ¥ 的 16×16 | 整个 pill |
+| 取消可购买按钮底色 | `rgb(103,194,58)` 实心 | 描边（`is-plain`） |
+
+### 验收
+
+`.tmp-probe/verify-steprow-tags.cjs` —— **32 项**（A 横排 / B ¥ 归位 / B2 整块热区 / C 行高 /
+D 询价下拉 + 窄屏 + 按钮权重 + 三个代码哨兵）。
+
+反向：`.tmp-probe/patch-steprow-tags-reverse.py on|off`（8 处锚点，往返无损）
+⇒ 打回旧写法 **19 红 / 退出码 1、不崩**，红读数精确复现症状
+（标签列 136px、行高 152px、`¥ 不在 pill 内`、按钮 bg=rgb(103,194,58)、5 个视觉行）。
+全量回归 **33/33 exit=0**；四关（`vue-tsc -b` / `eslint .` / `vite build` / `test:store`）全 0。
+
+⚠️ 探针锚点经验：本次「改前 / 改后」两张实拍的 **md5 相同**（改前 pill 21px、改后 pill 21px，
+DOM 换了但像素一致）—— 这正说明「整块可点」是纯交互改动、视觉零回归；
+但**不能把「md5 相同」当成默认预期**，上一次它其实是"下拉没关"的征兆（见陷阱 2）。
+
+提交 `retroweb → b9f5b3f`。
+
+---
+
+## §42 标签行加「复制标识」pill：EP 菜单选择器两个坑 + 绝对断言换成量化不变式（2026-10-07 第三十二轮）
+
+需求（用户第三条，附截图）：「可购买这种这里添加复制 cas 和 SMILES 或其他 id 的功能」。
+
+### 设计
+
+- 标签行新增「**复制 ▾**」pill，与「可购买」**同款交互**：`el-dropdown` 挂在 pill **外层**
+  ⇒ 整块 pill 是热区（沿用 §41 的结论）。中性配色（工具 ≠ 状态），与绿/蓝状态 chip 区分。
+- 菜单项：`SMILES` / `分子式` / `分子量` / `CAS` / `名称` / `PubChem CID`（有值才列）。
+  值 = 直接写进剪贴板的原文（不做任何加工 —— 避免"看着一样、粘出来不一样"）。
+- 🔴 **CAS 懒查**：挂在 `@visible-change` 上，**不是** `onMounted` / `watch(immediate)`。
+  一棵几十节点的树一挂载就把 PubChem 队列塞满（限流 5 req/s），而绝大多数行的 CAS 没人看。
+- 新增 `src/utils/clipboard.ts`：`copyText(text, { okMsg, failMsg, emptyMsg })`。
+
+### 🔴 坑 1：EP 菜单项的类名是 `el-dropdown-menu__item`，**不是** `el-dropdown-item`
+
+写成 `.el-dropdown-item` 时 `querySelectorAll` 返回**空集** ⇒「菜单里有 SMILES/分子式」这类断言
+和 `.click()` 全都变成**空集恒真 / 空集无操作**的**假绿**（本轮的「CAS 已查到 ⇒ 没有兜底说明」
+就是靠空集"通过"的）。凡是"集合里找元素"的判据，都要先断言**集合非空**。
+
+### 🔴 坑 2：EP 把**所有** popper 预渲染进 body；「可见」只体现在**祖先** `.el-popper` 上
+
+同一个页面上 `.el-dropdown-menu` 有 **7 个**（3 个复制菜单 + 2 个询价菜单 + 个人中心 + 导出菜单）。
+隐藏时**菜单自身仍是 `display:block`**，`display:none` 加在祖先 `.el-popper` 上
+⇒ 只能靠 `getBoundingClientRect()` 的宽高判空来筛「当前可见的那个」。
+不筛就串台：读到的是别处的菜单（表现为"菜单是空的"）。
+
+### 🔴 坑 3：「读到的菜单是空的」≠「点击没打开菜单」
+
+要**分开验证**两件事。本轮的反向线索是：`@visible-change` 触发的 CAS 请求**确实新增了一条**
+（3 → 4）⇒ 证明菜单**开了**，问题 100% 在读的那一侧 —— 于是直奔选择器，而不是去改点击方式。
+
+### 🔴 坑 4：「所有行等高 80px」这种**绝对**断言，在信息量增加后必然被打破
+
+加第 6 个 chip 后，压力行的标签需要 **383px**，而主列只有 **360px** ⇒ 换行到 2 行
+⇒ 行高 80 → 104.5px。chip 行换行是**正常**行为，错的不是实现而是那条断言。
+改成**量化不变式**：
+
+```
+标签块高 ≤ 2×21 + 4 = 46px           （最多两行 chip）
+行高 = 80 + 25 × (标签行数 − 1)        （每多占一行只加"一行文字高 21 + 行距 4"）
+且至少有一行贴回 80px
+```
+
+绝对断言只该写**真·恒定**的事；会随数据增长的量，要写"随什么增长、增长多少"。
+（前提写进注释：fixture 各行 SMILES 都是 1 行 —— 长 SMILES 被 `-webkit-line-clamp` 卡到 2 行时，
+行高还有第三个来源，不在本条射程内。）
+
+### 🔴 坑 5：懒查判据必须挑「非叶子」分子，否则**恒绿**
+
+`store.startingMaterials` 的定义是 `nodeList.filter(n => n.id !== rootId && n.children.length === 0)`
+（**就是叶子**），而 `TargetOverview` 开局 `immediate` watch 就 `requestCasMany([root, ...叶子])`。
+⇒ 拿叶子分子验「挂载时不查 CAS」永远是绿的（它早被侧栏预热了）。
+fixture 里给压力行 n2 加了个孩子 n3（`CCO`）⇒ n2 不再是叶子 ⇒ 只有它的 CAS 由 StepRow 首查。
+首次请求集合实测 = `{aspirin, CC(=O)O, CCO}`（root + 两个叶子），**不含** n2 —— 判据才有意义。
+
+### DRY 收编：5 处手写剪贴板 → 一个入口
+
+原仓库有 5 处各写 `navigator.clipboard.writeText` + 各自的 catch：
+`StepRow` / `TargetOverview` / `TargetInput` / `TargetBar` / `RouteCanvas`
+⇒ **降级话术 3 种、成功话术 5 种**，"是不是安全上下文"这件事要在 5 个地方各想一次。
+全部改走 `copyText()`，各点文案用 `{ okMsg, failMsg }` **原样保留**（零行为变化）。
+依据：`.claude/skills/fullstack-rules/SKILL.md` 第 1 条就是「DRY 原则：拒绝重复代码」。
+
+### 验收
+
+`.tmp-probe/verify-steprow-tags.cjs`：**32 → 56 项**（新增 E 组 pill 形态 5 项、F 组菜单内容
++ 懒查 + 剪贴板 12 项；A 组改成按**角色标签**定位 —— 第 1 行现在是 3 个 chip）。
+- 剪贴板是**读回来比对**的（`grantPermissions(['clipboard-read','clipboard-write'])` +
+  `navigator.clipboard.readText()`），不是只看 toast。
+- PubChem 用 `page.route` **拦成固定响应**（aspirin 的 CID 2244 / CAS 50-78-2）⇒
+  请求次数与菜单内容都可断言，不吃网络抖动/限流/内网。
+
+反向：`.tmp-probe/patch-steprow-tags-reverse.py on|off` —— 锚点 8 → 10 处：
+① 把「复制标识」整块**并进**模板标签块那一对锚点（两段是**紧邻**的，能拼）；
+② CSS 段前后夹着 4 个别的 `.step-tag` 规则 ⇒ **不能拼**，改用 `on` 删 / `off` 插回
+（`CSS_COPY_ANCHOR` = 「询价图标」注释行，两种形态下都唯一）。
+⇒ 打回旧写法 **18/56 通过、退出码 1、不崩**（E/F 两组确实会红，不是恒绿）。
+`on` → `off` 往返 **逐字节一致**（md5 校验）。
+
+四关（`vue-tsc -b` / `eslint .` / `vite build` / `test:store`）全 0；全量回归 **33/33 exit=0**。
+
