@@ -1,103 +1,70 @@
 # nodeServers 项目笔记（主索引）
 
-> 只放"违反就出事"的约定；成因/实测数据/全过程 → `MEMORY-details.md`（§号即引用）与 `YYYY-MM-DD.md`。
-> 维护用 Write/Edit（勿 `cat >>`）。本文件**每轮注入且超 ~12KB 会被静默截断** → 宁缺勿长。
+> 只放"违反就出事"的约定；见 `MEMORY-details.md`（§即引用；欠账→§21）。**超 ~12KB 静默截断** ⇒ 宁缺勿长。
 
 ## 0. 仓库形态 / 发版
 
-- **`packages/log/` 与 `phonecopy/` 是嵌套 git 仓**（不在 .gitmodules）→ `git status` 恒脏；`release.mjs` 已过滤 phonecopy → 正常发版**不需** `--allow-dirty`。
-- 🔴 **`packages/theme-core/` 是 submodule**（→ <https://github.com/yijiu2025/theme>）→ **克隆必须 `--recurse-submodules`**（vite alias 直指它 `src/index.ts`，缺了构建炸）。已发 npm 包 **`skinsuite`**。
-- 🔴 **oauth21 / posecraft / firewall / admin / poseadmin 是独立前端项目，非 workspace 成员**（各有独立 package.json / node_modules / lock）。
-  引用本地包（`skinsuite` / `stable-deviceid`）靠 **vite alias + tsconfig paths 源码直供**，**不得用 `workspace:*` 声明**；装依赖用 `npm install --prefix <dir>`；CI job 要 `submodules: recursive`。
-- **本机 git ref 失灵**：status 谎报 ahead、push 可能数分钟零输出 → **以 `git ls-remote origin main` 为准**，超时≠失败。
-  push 后异常：`node "C:/Users/22701/.workbuddy/tools/fix-packed-refs.mjs" "<完整40位SHA>"`。
-- **发版**：提交推送后**顺手发不必问**：`node scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` 不发。版本源是 git tag。
+- **`packages/log/`、`phonecopy/` 是嵌套仓** ⇒ `status` 恒脏；`release.mjs` 已过滤 ⇒ 不用 `--allow-dirty`。
+- 🔴 **`packages/theme-core/` 是 submodule** ⇒ 克隆必须 `--recurse-submodules`。
+- 🔴 **oauth21/posecraft/firewall/admin/poseadmin/retroweb 非 workspace 成员**：包靠 **vite alias + tsconfig paths 源码直供**，**禁 `workspace:*`**；装依赖 `npm install --prefix <dir>`；CI `submodules: recursive`。
+- **本机 git ref 失灵**：status 谎报 ahead、push 零输出 ⇒ **以 `git ls-remote` 为准**；异常跑 `fix-packed-refs.mjs`。
+- **发版**：`scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；破坏性（**只认 footer 行首+冒号**）→major；`chore/docs/test/style/ci/refactor` 不发。
 
-## 1. 强制约定（有守卫 / 有规则文档，违反会红）
+## 1. 强制约定（违反会红）→ **§1 全表**
 
-- export 收拢文件末尾（仅 src/）· `src` 不得 import `scripts` · `src/app/<A>` 不得 import `src/app/<B>`。
-- **测试有效性**：真实加载被测代码，禁「手写常量自测」「内联复制被测逻辑」；`KNOWN_INEFFECTIVE_TESTS` 只减不增（14）+ 同步 `FROZEN_SIZE`；**一个测试文件只能注册一组路由**。
-- **🔍 运行期"鸭子类型"判据必须由接口派生**：写 `Record<keyof T, 'string'|'function'>` 再遍历（TS 保穷尽性）。**手抄成员名 = 接口一改判据静默落后**。同类：**"长红的关卡 = 噪声"** 会掩护真红 → 过期关卡必须**显式退役**。
-- 🔴 **往 lint 范围新增目录必须先配语言环境**（"纳管"≠只加进目录）：oauth21 `e2e/` 迁入后被 `eslint .` 扫到、缺全局配置报 446 error ⇒ 要同时给 `languageOptions.globals` + 关不适用规则。
-- 🔴 **拆分/移动源码后，凡"断言读文件内容"的关卡必须同步文件清单**（`implText`/`read(join(...))`）—— 已三次踩到。
-- 🔴 **构建期配置文件必须参与类型检查**（`.js` → `.ts`）：`vite.config` 长期 `.js` ⇒ `build.esbuild.drop:['console']` 在 **Vite 8 下早已失效**却无信号（实测残留 28 处）。
-  **Vite 8 = Rolldown+Oxc**：删 console 入口 `build.rolldownOptions.output.minify.compress.dropConsole`；`rollupOptions`→`rolldownOptions`；顶层 `esbuild` deprecated。详见 details §10.98。
-- 🔴 **路径别名单一来源 `oauth21/config/aliases.ts`**（vite/vitest 共用；tsconfig.paths 静态 JSON 仍手写、由 `verify-alias-single-source.mjs` 守）。改别名**两处同改**。JSONC 解析**禁用正则剥注释**，用 `typescript.parseConfigFileTextToJson`。
-- 🔴 **`skinsuite` / `stable-deviceid` 必须零外部 import**：宿主靠 alias **源码直供**，包内 `import vue` 会**静默出两份 Vue**。守 `verify-kernel-zero-coupling.mjs`（判据排除 `__tests__/`）。细节 → details §10.97。
-- 🔴 **外部边界类型（SDK 全局 / 后端响应）只许收在 `src/types/external.ts`**：`declare global` 窄接口 + zod 判别联合，业务代码禁 `any`/`@ts-ignore`。守 `verify-no-any-debt.mjs`。细节 → details §10.95。
-- **firewall 分层（单向）**：interface → config/util → dao → engine → services/cli/data → index.js；禁直接 import dao。
-- **📐 文档 ≠ 实现**：核法 = 文档承诺的环境变量名 grep 代码，命中 0 = 未实现。
-- **🔗 文档站**：`ignoreDeadLinks` 只放行 `AGENTS|oauth21|posecraft|packages` 前缀 → 指 `docs/` 之外必 `docs:build` 失败；新增页要**同时**注册进 sidebar。
-- **代码审查**唯一入口 `docs/development/code-review.md`（L0–L3/五道闸）；**L3（格式类）禁止人工提出**。
-- 🔴 **前端类型闸门必须是"真检查"**：方案式 tsconfig 下裸 `vue-tsc` 恒 exit 0 → 口径 **`vue-tsc -b`**，改完口径必须毒丸验证。
-- **跨内核渲染基线**（`docs/frontend/browser-baseline.md`）：规范留白处不显式声明 = 把渲染交给内核；viewport meta 跨行/加实验键会被内核整条丢弃。
-- 🔴 **多主题 / 多版式开发模式（强制）**（`docs/frontend/multi-theme.md`）：token 基线 → 皮肤 → 版式三正交；**目录名即 id**（坏目录静默跳过）；**业务只在容器**，版式只读 `ctx`、只调 `ctx.actions`。
+- export 收拢文件末尾（仅 src/）· `src` 禁 import `scripts` · `src/app/<A>` 禁 import `src/app/<B>`。
+- **测试有效性**：真实加载被测代码；禁手写常量自测/内联复制逻辑；`KNOWN_INEFFECTIVE_TESTS` 只减不增+同步 `FROZEN_SIZE`；**一文件只注册一组路由**。
+- 🔴 **鸭子类型判据必须由接口派生**（`Record<keyof T,…>` 再遍历）；手抄成员名⇒判据静默落后。**"长红关卡=噪声"**⇒ 过期关卡**显式退役**。
+- 🔴 **拆分/移动源码后，「断言读文件内容」的关卡必须同步文件清单**（已三踩）；🔴 **新目录进 lint 范围前先配语言环境**。
+- 🔴 **构建期配置必须进类型检查**：Vite8=**Rolldown+Oxc**，`esbuild.drop` **已失效** ⇒ 用 `rolldownOptions.output.minify.compress.dropConsole`。
+- 🔴 **路径别名单一来源 `oauth21/config/aliases.ts`**（改别名**两处同改**；JSONC **禁正则剥注释**）；🔴 **`skinsuite`/`stable-deviceid` 零外部 import**（包内 `import vue` ⇒ **两份 Vue**）。
+- 🔴 **外部边界类型只收在 `src/types/external.ts`**（`declare global` + zod，禁 `any`）。
+- 🔴 **前端类型闸门**：裸 `vue-tsc` 恒 exit 0 ⇒ 口径 **`vue-tsc -b`**。
+- 🔴 **多主题/多版式**：token 基线 → 皮肤 → 版式三正交；**目录名即 id**（坏目录静默跳过）；**业务只在容器**，版式只读 `ctx`/`ctx.actions`。
+- 其余（firewall 分层 · 文档≠实现 · 审查唯一入口 + L3 禁提）→ §1 全表。
 
-## 2. 后端陷阱速查 → **details §12**（14 条整表在那里）
+## 2. 后端陷阱速查 → **§12**
 
-`getModel` TypeError · `getStore` 命名空间 · 禁 `bcryptjs` · 禁 `*Sync(` 路径 · `underscored:true` · 模块级 `process.exit` 伪装绿 ·
-改导出面要真实 import · 外部输入归一化 · `vue-tsc` 拦不住模板标识符 · `/user/v1/register` 只认 `username` ·
-Fastify（顺序/`onRoute`/`preClose`/`OPTIONAL_LOADERS`/`/health/*`）· Redis v5（驼峰/`duplicate()` 不建连）· Guard（RUNTIME_FIELDS/`restore()` 清表）· 日志（`log.info` 会被丢）。
+`getModel` TypeError · `getStore` 命名空间 · 禁 `bcryptjs` · 禁 `*Sync(` · `underscored:true` · `process.exit` 伪装绿 · register 只认 `username` · Fastify（`onRoute`/`preClose`）· Redis v5（驼峰/`duplicate()` 不建连）· Guard（`restore()` 清表）。
 
-## 3. oauth21 → **details §11**（细则/实测数据全在那里）
+## 3. oauth21 → **§11/§13/§17**
 
-### 3.1 设备 / 包 / 版式 / 配色
+- 🔴 **设备平级** `mobile|standard|mini|tablet`（mini **独立**）⇒ 加设备改 `devices.ts`+写容器。🔴 **view ≡ pkg**：`'base'` **不是合法 view 名**；版式优先级 `?view=` > 包声明 > `VITE_<PAGE>_VIEW` > 包名；URL 显式非法值**不回退**。
+- 🔴 **配色/样式**：注册表键 **四段**（包/设备/页面/配色）**每版式各一份**；`isDark = tone`、跨设备回落**先按同系别**；URL `?theme=`/`?skin=` **设备无关**（否则同系别回落且**不写** `data-mauth-theme`）；🔴 scoped 禁 `:global(.dark) X` ⇒ **`.dark X`**；black = `#000000` 且两个 bg **同时**设。
+- 🔴 **设备维度参数两侧同形**：唯一入口 `readDeviceParam`（**空串 = 未指定**）。🔴 **移动端页**：调前先造窄视口并刷新（`宽≥1024 > 窄<768 > UA`）；**三个分发器都要认「mini 来源」**；**URL 不被视口改写**；父 origin 白名单 = `utils/parent-origins.ts`。
+- 其余（`validateField` 不跑 zod object 级 refine · 新 watch 取旧值须显式传）→ §11/§13。
 
-- 🔴 **设备平级** `mobile|standard|mini|tablet`（mini 是**独立设备**非变体；路由层 `view/web/` 不改名）。加设备 = `devices.ts` 一条 + 写容器。
-- **版式优先级** `?view=` > 包声明 `views.<page>` > `VITE_<PAGE>_VIEW` > 当前包名；URL 显式非法值**不回退**；新增版式目录要重启 dev server。
-- 🔴 **view ≡ pkg**：登记的 view = 包名，`'base'` **不是合法 view 名**；任何地方都不许返回 `'base'`。
-- 🔴 **配色注册表键 = 四段**（`包/设备/页面/配色`）；配色**每版式各一份**，漏了静默回落；`data-mauth-view` 值 = 主题包名。
-- **明暗 = 配色系别**：`isDark = 当前配色 tone`；每套配色必填 `tone`；跨设备回落**先按同系别**；`themeId` 不随设备变。
-- 🔴 **URL `?theme=`/`?skin=` 设备无关**：只看该设备 `colors/` 有无该配色，否则同系别回落且**不写** `data-mauth-theme`。
-- 🔴 **设备维度参数两侧同形**：`?theme.<设备>`/`?skin.<设备>`/`?view.<设备>` 一律「设备专属 → 通用键 → 落盘/包默认」；版式侧唯一入口 `readDeviceParam`。**空串 = 未指定**。
+## 4. 手法/命令 → **§9**
 
-### 3.2 样式 / token 硬规则
+🔴 ① **禁在 Bash 里 `git rm` src/ 下任何路径**（会递归清空整个 src/）→ `rm <path> && git add -A`。
+🔴 ② **safe-delete shim 拦 `rm`/`fs.unlinkSync`** → 删文件用 **`mv <path> .tmp-probe/`**；`vite build` 须 `--outDir <全新目录>`。
+🔴 ③ **同一文件多 Edit 同条消息会静默丢失** → 串行 + grep 复核；块注释禁 `*/` 紧邻。
+其余（ESLint `--ext` 静默失效 · **写/核文件行尾只用 Python** · **`bash -c` 的 `\n`、`git commit -m` 的反引号**被吃 ⇒ 含换行/反引号者写**脚本文件**）→ §9。
 
-- **样式单一来源** = `mobile-auth.scss`（`mauth-*`）；基础版式与 `/m/*` 页禁自带 `<style>`；移动端版式刻意不限宽。
-- 🔴 **scoped 禁写 `:global(.dark) X` / `:deep(.dark) X`**（编译成裸 `.dark` 命中 html → 夜间背景变红）。正确 **`.dark X`**；桌面卡片根挂 `:class="{ dark: activeTone==='dark' }"`。
-- 🔴 **纯黑口径**：black = `#000000`（不借 slate-950），`--mauth-bg` + `--mauth-body-bg` **必须同时**设；`--mauth-header-bg` 禁 `transparent`。
+## 5. 部署/CI → **§10**
 
-### 3.3 行为 / 业务坑
+- 🔴 **前端 CI 用 `npm ci`**（`--prefix oauth21`，**必须从仓库根跑**）；lock 全仓入库。
+- 🔴 **后端三 job（lint/test/verify）必须保持 `npm install`**：根 lock 记 `wb-logkit` 为 `link: packages/log`，`npm ci` 建**悬空软链** → ERR_MODULE_NOT_FOUND；**不能开 `cache: npm`**。
+- 改 `ci.yml`/Dockerfile 前先读 §10（安装三件套 · tini 软链 · 生产 secret ≥32 位 · 复刻树 `git archive` 到**仓库外**）。
 
-- 🔴 **调试移动端页前先造窄视口并刷新**：判定 `宽(≥1024) ＞ 窄(<768) ＞ UA`；probe 模拟真机横屏必须带移动 UA。
-- 🔴 **三个分发器必须都认「mini 来源」**（显式 isMobile ＞ from=mini/路径 ＞ 自动 ＞ 桌面默认）；**URL 不被视口改写**。
-- 🔴 **父 origin 白名单单一来源 `utils/parent-origins.ts`**；漏配症状 =「弹窗 loading 慢」非报错；别把 5174/5175 写进白名单。
-- 🔴 **`validateField` 不跑 zod object 级 refine** → 两次密码一致须显式比对 + `setFieldError`。
-- 🔴 **新 watch 取「旧值」必须显式传**（default 参数在触发时已变 → 整段静默失效）。
-- **路由级 fade + 三层 prefetch**：默认非 out-in；`.route-stage` absolute；dispatcher 内层禁 out-in 包异步组件。
-- 🔴 **外部输入（URL / SDK / 后端响应）过窄接口 + zod**：`any` 只许关在 `src/types/external.ts` 单一入口。
+## 6. retroweb + retrochimera（逆合成工作台）→ **§14~§42**
 
-## 4. 手法 / 命令 → **details §9**（整表在那里）
-
-🔴 三条最容易出事的：**① 禁在 Bash 里 `git rm` src/ 下任何路径**（会递归清空整个 src/）→ 删 src 一律 `rm <path> && git add -A`；
-**② 沙箱 safe-delete shim 拦 `rm`/`fs.unlinkSync`**（报 state lock timeout）→ 删文件用 **`mv <path> .tmp-probe/`**，`vite build` 出目录必须 `--outDir <全新目录>`；
-**③ 同一文件多 Edit 同条消息会静默丢失** → 串行并 grep 复核；块注释禁 `*/` 紧邻。
-
-其余（ESLint `--ext` 静默失效 · spawn 管道 IO 抛 EBUSY · `npm run` 丢环境变量 · watch 目录 rename 被拒 ·
-dev server 端口表 · 量首屏须生产构建 + 新 outDir · 多实例串行启动）全在 details §9。
-
-## 5. 部署 / CI（细则全在 details §10）
-
-🔴 **lock 已全仓入库**（2026-09-28，删了 `.gitignore` 的无差别 `package-lock.json`）：根 / oauth21 / firewall / posecraft / admin / poseadmin。
-- **前端 CI 用 `npm ci`**（`npm ci --prefix oauth21`，**必须从仓库根跑** —— 在 `oauth21/` 内部跑会被父级根 lock 干扰）。
-- 🔴 **后端三个 job（lint/test/verify）必须保持 `npm install`，不能改 `npm ci`**：根 lock 把 `wb-logkit` 记为 `link: packages/log`（gitignore 的嵌套仓），`npm ci` 会建**悬空软链** → `import 'wb-logkit'` 直接 ERR_MODULE_NOT_FOUND。
-- 后端 job **不能开 `setup-node` 的 `cache: npm`**（收益只在 `npm ci` 路径；前端 job 可开 + `cache-dependency-path`）。
-
-改 `ci.yml` / Dockerfile 前先读 details §10：CI 安装三件套 · Dockerfile tini 按实际路径建软链 · response schema 覆盖信封全字段 · 生产三 secret ≥32 位 · 复刻树验收 `git archive HEAD | tar -x` 到**仓库外**。
-
-## 6. 待办 / 进度
-
-- ⚠️ **待定夺**：多服务器（Swarm/K8s）仅设计稿 · P2 `session.js` 拆分未开始 · **`firewall` 前端无类型检查（121 错）**。
-- 📊 **oauth21 前端架构评审**：一期 2026-09-27 = 66.5/100 → **二期 2026-09-28 = 80.0/100**
-  → `reports/oauth21-frontend-architecture-review-2026-09-28.md`。剩余待办：**核心七模块零测试** +
-  22 e2e 关卡未全进 CI + 793 行 `stores/theme.ts` 上帝模块（待按"只抽纯函数+输入侧"拆）+
-  650 行 standard/login 容器（待字段级下沉）。
-  🔴 **已结清**：零 lock · 幽灵依赖 ×2 · alias 三处手抄 · 内核零耦合 · console 剥离长期失效 ·
-  **44 处 any 清零**（收口进 `src/types/external.ts`，细节 details §10.95）。
-  ⚠️ 仍未做：`view/web/login/index.vue` L54 `sign.value = query.rnd`（应为 `query.sign`）· 主 CSS 单体 64 KB。
-- ⚠️ 卡关欠账：`verify-theme.mjs` 期望值仍按旧配色名（已 `exit 2` 自检）。
-- ⏳ **主题抽包 Stage 2 未做**：`runtime.ts` 注入器 → `ThemeAssets` / `ThemeEnv` / `ThemeHost`。
-  🔴 发新版：theme 仓跑 `npm version <…> && git push --follow-tags`；🔴 包内 `src` 相对 import **必须带 `.js` 后缀**；测试 `node --test`（**不能**写 `node --test test/`），且**测 dist 不测 src**。
-- ✅ **关卡体系**：统一入口 `verify-all.mjs` + 索引 `VERIFY.md`，**活跃 21 个**，4 个静态关卡已进 CI。
-  🔴 `verify-no-pwa.mjs` 默认 `--dir dist` 但本机 dist 是旧 PWA 产物 → 统一入口指 `dist-nopwa`，跑前须重 build。
-  ✅ 已完成（查 git log / details）：`theme/index.ts` 拆分 · vendor 分包 · tablet 演练 · 主题改造 B1→B6 + 配色键四段 · 设备三值化 · eslint 清零。
+前端 #7，端口 **5177** `strictPort`；Vue3.5+TS6+Vite8+Pinia+EP2.14。后端 `F:/retrochimera`（`启动后端API.bat`；`models/` 9GB 不入库）。🔴 **禁硬编码盘符**（`RETRO_MODELS_DIR`/`RETRO_MODEL_<KEY>`）·⚠️ 后端改动**须重启**。
+- 🔴 **前端规范单一来源 `.claude/skills/fullstack-rules/`**（**未纳管**⇒只读；改完跑 `doctor.mjs`）。
+- 🔴 **登录 = iframe 嵌 oauth21 `/mini-login`**：`bind-session` **失败必须中断**；宿主 **origin+source 双校验**；dev/生产白名单都要有 5177（空白名单放行 ⇒ 本地无感、上线才炸）。
+- **预测 = 多次一步**：只调 `/api/predict`，**不调** `/api/search`；proxy `/retro/* → /api/*`。**TS6**：`paths` 非相对需 `baseUrl` + `"ignoreDeprecations":"6.0"`；`http.ts` **别**动态 import store ⇒ `setUnauthorizedHandler()`。
+- 🔴 **工作台 = 标定态 / 路线态**（`targetSetupOpen`）：ⓐ 可见性判据**只能 `targetSetupOpen`**；ⓑ **解析成功 ≠ 开跑**；ⓒ「换目标」须 `reset()`；ⓓ **居中靠脱离文档流**；ⓔ **`mainTab` 三处复位**；ⓕ 🔴 **解析不建任务**（生于 `closeTargetSetup()`；`persistSession` **无归属不落盘**；草稿**打开 vs 刷新**落点一致）·ⓖ 🔴 **同阶段起跑线落点同源**。`verify-parse-notask.cjs`/`verify-auto-jump.cjs`。§14.4/§37/§39
+- 🔴 **路线方案/AI 分析**：① 地基=确定性 `reactionIdFor(nodeId,precursors)`；② 切方案=`detached:true` **不删树**；③ 改已保存方案**须 fork**；④ AI = **POST+fetch SSE**，**质量数 RDKit 算、LLM 只解读**；守门 `test:store`；⑤ LLM 三步排查见 §25；推理模型只吐 `reasoning_content`（须发 `thinking`）。
+- 🔴 **追问（§18.3）**：上下文复用 `build_messages(json_footer=False)`；自由文本必须 **`_body(json_mode=False)`** 关 `response_format`；一次一条 + ≤10 条；`cur()` **每次重新 find**。
+- 🔴 **候选条件（§19）**：枚举 → 选定 → 分析带 `chosen_condition` **锁定**；🔴 **`_norm_conditions` 先滤非对象再截断**；🔴 **重分析必须保留 `condOptions`/`chosenConditionId`**。
+- 🔴 **端点配置（§20）**：`base_url`+`model`+`keys` **绑一套**、可存多套（`profiles[]`）；**读时懒迁移**老扁平结构；🔴 **Key 轮换状态按配置分桶**；🔴 **落盘只写新形态**、**扁平 payload 只并进激活那套**；「使用中」= 下标起**首个可用** key；`mask_key` **必须保尾部**；🔴 前端须容忍后端旧版（无 `profiles`⇒**白屏**）。
+- 🔴 **LLM 面板/拉模型（§25/§27）**：同一状态**两处口径不一**⇒先打两个真值；真凶常是环境变量**单复数拼错**（`…_KEYS` vs `…_KEY`）⇒ 静默返回空；key 真值 3 处（`key_pool`/`_pool_keys`/`_profile_creds`）**都回落 `.env`、仅激活那套**；每把标 `source`；`.env` 那把删不掉⇒无删除按钮、保存能**认领**；多 key **401/403/429** 才轮换；「刷新」=**只读配置**+有改动**先确认**。守门 `verify-llm-{refresh,models}.cjs`
+- 🔴 **侧栏（§22/§26/§28/§30）**：顺序=导航→**最近的任务**→**目标分析**，同在 `.app__side-scroll`（**禁内嵌滚动**）；同目标可确认**多条**「已确认路线」；`confirmRouteNetwork()`（改过已定步骤**自动分叉**）≠ `confirmScheme` ≠ `unconfirmRouteNetwork`；🔴 共用 `networkStats`；`sessionSignature` **须带 confirmed**；🔴 **整行热区**一致⇒行 click + 操作区 `@click.stop`；🔴 计数 = **本组条数**（`verify-side-scroll.cjs`）；**「目标分析」卡 → §35**（**无「切换目标」**、明细**结构式**+行尾**定宽**；`verify-targetbar-stepmol.cjs`）
+- 🔴 **断言与探针（§24/§25.8/§28.3/§33）**：同一份数据**只许画一遍**；**主指标须脱离灰色小字**；**`tabular-nums` 只保等宽内对齐**⇒先给兄弟定 `min-width`（`verify-scheme-merge.cjs`）；🔴 **新增断言须"改回旧写法确认会红"**；🔴 **探针会崩** ⇒ `st[0] if st else {}` + `.get()`；🔴 **反向证明前先证"加载的是旧代码"** ⇒ `touch`+**读 dev 模块验特征串**；🔴 **探针锚点须新旧两版都有**（否则**首段崩**）；🔴 **替换禁空串**（`count('')`⇒必炸）；🔴 **可见性判据用 `elementFromPoint`**。
+- 🔴 **后端只提供 API**。**Windows spawn 死锁修复不可回退**：模型在独立**非守护单线程** `Process`（`_REQ_Q`/`_RESP_Q`）；**"代跑 app.py"的启动器须注册 `sys.modules['__main__']`**；**`.bat` 改完验 BOM**。
+- 🔴 **解析/画板/网络层/CAS → §16/§34**：RDKit（**CDXML 必须回落后端**）· Ketcher 3.14 四约束（§16.5）· `_request()` 档序由 **`RETRO_LLM_PROXY` 三态**定。🔴 **CAS = PubChem（§34）**：**POST 表单**（GET 遇立体化学 `/` 被拒 400）· 404 = 未收录 · CAS 混在 synonyms · 查不到**删整块**。守门 `verify-mol-cas.cjs`
+- 🔴 **UI 细则 → §16.2/16.3/18.1/§23**：防跳位 = `Session.sig` 指纹（§18.1）；标定态「换目标/新任务」**禁 filter 删上一条会话**；DOM 三坑 §16.3；🔴 **收起/展开不得改控件位置**：贴底页脚**禁靠可伸缩兄弟顶住**、含可隐藏文字的按钮**须定高**（`verify-collapse-stable.cjs`）。🔴 **`<td>` 禁 `display:flex`**（⇒**分隔线断两截**）⇒flex 挂**内层 div**；`verify-tbl-lines.cjs` §38
+- 🔴 **画布拖动/缩放（§29/§36）**：偏移只一套（`sizer=max(画布×zoom,容器)+2×余量`；**余量省不得**⇒缩图后 **拖不动**）；滚轮**手动注册非被动**+`preventDefault()`；缩放**先同步写 sizer 再设 scroll**；容器链须**确定高度**⇒否则与 `max(画布,容器)` 互撑成**几万 px**；懒页签⇒fitView **首次可见**补。守门 `verify-canvas-fit.cjs`
+- 🔴 **方案栏的收与位（§32/§33）**：「目标分析」页签**整条收起**（留下那处须带**主指标**）；其余页签夹在**页签与内容之间**—EP 默认插槽整块进 `.el-tabs__content` ⇒ 放"页签后、首 pane 前"。🔴 **位置类报障量「顺序」不只「存在」**（DOM 序+几何链同量；改结构先 grep）
+- 🔴 **行内 chip 行（§41/§42）**：禁竖排（撑高行+撑等宽）；`el-dropdown` 挂 pill **外层**才是整块热区；**EP 下拉不吃 Escape**。🔴 菜单项类名=`el-dropdown-menu__item`**（写错⇒空集**假绿**）；🔴 同页 7 个 `.el-dropdown-menu` 全预渲染，可见性只在**祖先** `.el-popper`（筛可见）；🔴 断言禁**绝对**行高 ⇒ 用**量化不变式**。守门 `verify-steprow-tags.cjs`
+- 🔴 **「分析模块」key 前后端必须对齐**（`ALL_ANALYSIS_MODULES` ↔ `_MODULE_FIELDS` 同序）；加模块两侧同改；现 9 个含 **`workup`**（与 `conditions.workup` **分别渲染**）；断言 `_build_system` 只看 **`split("\n\n")[-1]`**。§16.7
