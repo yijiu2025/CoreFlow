@@ -7,7 +7,7 @@
 - **`packages/log/`、`phonecopy/` 是嵌套仓** ⇒ `status` 恒脏；`release.mjs` 已过滤 ⇒ 不用 `--allow-dirty`。
 - 🔴 **`packages/theme-core/` 是 submodule** ⇒ 克隆必须 `--recurse-submodules`。
 - 🔴 **oauth21/posecraft/firewall/admin/poseadmin/retroweb 非 workspace 成员**：包靠 **vite alias + tsconfig paths 源码直供**，**禁 `workspace:*`**；装依赖 `npm install --prefix <dir>`；CI `submodules: recursive`。
-- **本机 git ref 失灵**：status 谎报 ahead、push 零输出 ⇒ **以 `git ls-remote` 为准**；异常跑 `fix-packed-refs.mjs`。
+- **本机 git ref 失灵** ⇒ **以 `git ls-remote` 为准**；异常跑 `fix-packed-refs.mjs`。
 - **发版**：`scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；破坏性（**只认 footer 行首+冒号**）→major；其余不发。
 
 ## 1. 强制约定（违反会红）→ **§1 全表**
@@ -21,8 +21,6 @@
 - 🔴 **外部边界类型只收在 `src/types/external.ts`**（`declare global` + zod，禁 `any`）。
 - 🔴 **前端类型闸门**：裸 `vue-tsc` 恒 0 ⇒ 口径 **`vue-tsc -b`**。
 - 🔴 **多主题/多版式**：token 基线 → 皮肤 → 版式三正交；**目录名即 id**（坏目录静默跳过）；**业务只在容器**，版式只读 `ctx`/`ctx.actions`。
-- 其余（firewall 分层 · 文档≠实现 · 审查唯一入口）→ §1 全表。
-
 ## 2. 后端陷阱速查 → **§12**
 
 `getModel` TypeError · `getStore` 命名空间 · 禁 `bcryptjs` · 禁 `*Sync(` · `underscored:true` · `process.exit` 伪装绿 · register 只认 `username` · Fastify（`onRoute`/`preClose`）· Redis v5（驼峰/`duplicate()` 不建连）· Guard（`restore()` 清表）。
@@ -39,7 +37,7 @@
 🔴 ① **禁在 Bash 里 `git rm` src/ 下任何路径**（会递归清空整个 src/）→ `rm <path> && git add -A`。
 🔴 ② **safe-delete shim 拦 `rm`/`fs.unlinkSync`** → 删文件用 **`mv <path> .tmp-probe/`**；`vite build` 须 `--outDir <全新目录>`。
 🔴 ③ **同一文件多 Edit 同条消息会静默丢失** → 串行 + grep 复核；块注释禁 `*/` 紧邻。
-其余（ESLint `--ext` 静默失效 · **写/核文件行尾只用 Python** · **`bash -c` 的 `\n`、`git commit -m` 的反引号**被吃 ⇒ 含换行/反引号者写**脚本文件**）→ §9。
+其余（**写/核文件行尾只用 Python** · **`bash -c` 的 `\n`、`git commit -m` 的反引号**被吃 ⇒ 含换行/反引号者写**脚本文件**）→ §9。
 
 ## 5. 部署/CI → **§10**
 
@@ -47,7 +45,7 @@
 - 🔴 **后端三 job（lint/test/verify）保持 `npm install`**：根 lock 记 `wb-logkit` 为 `link: packages/log`，`npm ci` 建**悬空软链**⇒ERR_MODULE_NOT_FOUND；**禁开 `cache: npm`**。
 - 改 `ci.yml`/Dockerfile 前先读 §10（安装三件套 · tini 软链 · 生产 secret ≥32 位 · 复刻树 `git archive` 到**仓库外**）。
 
-## 6. retroweb + retrochimera（逆合成工作台）→ **§14~§45**
+## 6. retroweb + retrochimera（逆合成工作台）→ **§14~§53**
 
 前端 #7，端口 **5177** `strictPort`；Vue3.5+TS6+Vite8+Pinia+EP2.14。后端 `F:/retrochimera`（`启动后端API.bat`；`models/` 9GB 不入库）。🔴 **禁硬编码盘符**（`RETRO_MODELS_DIR`/`RETRO_MODEL_<KEY>`）·⚠️ 后端改动**须重启**。
 - 🔴 **前端规范单一来源 `.claude/skills/fullstack-rules/`**（**未纳管**⇒只读，改完跑 doctor）。- 🔴 **登录=iframe 嵌 oauth21 `/mini-login`**：`bind-session` **失败必须中断**；宿主 **origin+source 双校验**；dev/生产白名单都要有 5177（空白名单⇒上线才炸）。
@@ -55,11 +53,11 @@
 - 🔴 **工作台=标定态/路线态**（`targetSetupOpen`）：ⓐ 可见性只认 `targetSetupOpen`；ⓒ「换目标」须 `reset()`；ⓓ 居中靠脱离文档流；ⓔ `mainTab` 三处复位；ⓕ 🔴 **解析不建任务**（生于 `closeTargetSetup()`）·ⓖ **同阶段起跑线同源**。`verify-parse-notask.cjs`/`verify-auto-jump.cjs`。§14.4/§37/§39- 🔴 **路线方案/AI 分析**：① 地基=确定性 `reactionIdFor`；② 切方案=`detached:true` **不删树**；③ 改已存方案**须 fork**；④ AI=**POST+fetch SSE**，质量数 **RDKit 算、LLM 只解读**；⑤ 推理模型只吐 `reasoning_content`（须发 `thinking`）。
 - 🔴 **追问（§18.3）**：自由文本必须 **`_body(json_mode=False)`** 关 `response_format`；一次一条+≤10 条；`cur()` **每次重新 find**。
 - 🔴 **候选条件（§19）**：枚举→选定→分析带 `chosen_condition` **锁定**；🔴 `_norm_conditions` **先滤非对象再截断**；🔴 重分析**保留** `condOptions`。
-- 🔴 **端点配置（§20）**：`base_url`+`model`+`keys` **绑一套**、可存多套（`profiles[]`）；🔴 key 轮换状态**按配置分桶**；🔴 落盘只写新形态；「使用中」=首个可用 key；`mask_key` **保尾部**；🔴 `max_tokens` **0=无限制**（不发字段；clamp 别把 0 吃掉）；🔴 前端容忍后端旧版（无 `profiles`⇒**白屏**）。
+- 🔴 **端点配置（§20）**：`base_url`+`model`+`keys` **绑一套**、可存多套（`profiles[]`）；🔴 key 轮换状态**按配置分桶**；🔴 落盘只写新形态；「使用中」=首个可用 key；`mask_key` **保尾部**；🔴 `max_tokens` **0=无限制**（不发字段）；🔴 **生效值在 profile（盖 `.env`）**⇒文案按来源指路、<1024 先拦（§47）；🔴 前端容忍后端旧版（无 `profiles`⇒**白屏**）。
 - 🔴 **LLM 面板/拉模型（§25/§27）**：同状态两处口径不一⇒先打两个真值；真凶常是环境变量**单复数拼错**；key 真值 3 处（`key_pool`/`_pool_keys`/`_profile_creds`）**都回落 `.env`、仅激活套**；每把标 `source`；`.env` 删不掉⇒无删除钮、保存能**认领**；多 key **401/403/429** 才轮换；「刷新」=只读+有改动**先确认**。守门 `verify-llm-{refresh,models}.cjs`
 - 🔴 **侧栏（§22/§26/§28/§30）**：顺序=导航→**最近的任务**→**目标分析**，同在 `.app__side-scroll`（**禁内嵌滚动**）；`confirmRouteNetwork`(**自动分叉**)≠`confirmScheme`≠`unconfirmRouteNetwork`；🔴 共用 `networkStats`；🔴 整行热区⇒操作区 `@click.stop`；🔴 计数=**本组数**（`verify-side-scroll.cjs`）；目标分析卡§35
 - 🔴 **断言与探针（§24/§25.8/§28.3/§33）**：🔴 **新断言须"改回旧写法确认会红"**；🔴 探针会崩⇒空守卫+锚点两版都在；🔴 **反向证明前先证"加载的是旧代码"**⇒`touch`+验特征串；🔴 **替换禁空串**（`count('')`⇒必炸）；🔴 **反向补丁 `off` 整文件拷回**（反向替换⇒命中 0 会被误读成假绿）+ 锚点适配换行；🔴 **`el-overlay` 铺满视口**（弹窗开⇒其下判据**假红**）。
-- 🔴 **后端只提供 API**。**Windows spawn 死锁修复不可回退**：模型在独立**非守护单线程** `Process`（`_REQ_Q`/`_RESP_Q`）；"代跑 app.py"启动器须注册 `sys.modules['__main__']`；`.bat` 改完验 BOM。
+- 🔴 **后端只提供 API**。**Windows spawn 死锁修复不可回退**：模型在独立**非守护单线程** `Process`（`_REQ_Q`/`_RESP_Q`）；"代跑 app.py"启动器须注册 `sys.modules['__main__']`；`.bat` 改完验 BOM。🔴 **搜索预算=`num_calls()`+本次**（跨搜索累计⇒涨过即**开局即停/0 秒**；§50）。
 - 🔴 **解析/画板/网络/CAS→§16/§34**：RDKit（**CDXML 回落后端**）· Ketcher 3.14 四约束（§16.5）· `_request()` 档序=`RETRO_LLM_PROXY`。🔴 **CAS=PubChem（§34）**：**POST 表单**（GET 遇立体 `/` 拒 400）· 404=未收录 · CAS 混 synonyms · 查不到**删块/留空禁填 null**。守门 `verify-mol-cas.cjs`
 - 🔴 **UI 细则→§16.2/16.3/18.1/§23**：防跳位=`Session.sig`；标定态「换目标/新任务」**禁 filter 删上条**；DOM 三坑 §16.3；🔴 **收起/展开不得改控件位置**：贴底页脚禁靠伸缩兄弟顶、含可隐文字按钮**须定高**（`verify-collapse-stable.cjs`）。🔴 **`<td>`禁flex**（线断两截）⇒flex 挂内层；`verify-tbl-lines.cjs` §38
 - 🔴 **画布拖动/缩放（§29/§36）**：偏移只一套（`sizer=max(画布×zoom,容器)+2×余量`；余量省不得⇒缩图后**拖不动**）；滚轮**手动非被动**+`preventDefault()`；缩放**先写 sizer 再 scroll**；容器链须定高⇒否则互撑**几万 px**；🔴 **`v-else` 只认紧邻 `v-if`**（隔元素即失效⇒同一支渲染两个图标；判重禁 `new Set`、按卡分组）；🔴 卡在缩放画布里常在视口外⇒探针等 `attached`；🔴 EP 菜单全量进 DOM⇒须 `.el-dropdown__popper:visible`；⛔ 复制单一来源 `useMolIdents`（画布用纯函数版，循环里**不能**调 composable）+ `route-copy.ts`。守门 `verify-canvas-fit.cjs`
