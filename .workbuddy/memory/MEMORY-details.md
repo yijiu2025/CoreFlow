@@ -4148,3 +4148,245 @@ RouteStats 状态条改用 `autoProgress.label`。
   「只有手动步时总概率 = 1」「混合路线总概率 = 1 × 0.5」「恢复后概率仍是 null」「A.B 与 B.A 得到同一个 id」）。
 - 四关（`vue-tsc -b` / `eslint .` / `test:store` / `vite build --outDir dist-manual-step2`）全 0。
 - 全量回归 **40/40 探针 0 失败**。
+
+## §47 max_tokens 生效来源：profile 盖掉 .env（枚举/分析「0 字符正文」的真凶）（2026-10-08）
+
+### 症状
+
+前端点「先选条件，再深入分析」⇒
+
+> 候选条件枚举失败：枚举被截断（finish_reason=length，已收到 0 字符正文）：多方案输出较长，
+> 请调大 .env 里的 RETRO_LLM_MAX_TOKENS（当前 16）或减少方案数。
+
+### 真凶：生效的是 profile 里的 16，不是 .env 里的 32768
+
+配置有**三级回落**，优先级 `profiles[active]` > 老顶层扁平字段 > `.env`：
+
+| 位置 | 值 |
+|---|---|
+| `web/.env` → `RETRO_LLM_MAX_TOKENS` | **32768**（正常） |
+| `web/llm_settings.json` → `profiles[0].max_tokens` | **16** ← 生效的是这个 |
+
+`config()` 里的 `_raw()` 先取 profile，取到就不再往下看 ⇒ **`.env` 那一行被整片盖掉**。
+所以旧文案「请调大 .env 里的 …」是**永远无效的指引**：用户照着改 `.env`，改多少次都没用
+（那行本来就是 32768）。
+
+### 为什么 16 一定出不来正文（量化）
+
+实测一次 `POST /api/llm/conditions/stream`（glm-5.2，count=2）：
+
+- `thinking` 事件 **500** 条、思考正文 **9288 字符**
+- `delta` **176** 条、正文 **2128 字符**、`finish_reason=stop`
+- 事件序列 `meta → thinking×500 → thinking_end → delta×176 → done`
+
+推理模型的思考 token **也计入输出额度** ⇒ 16 个 token 连思考的开头都写不完，正文自然是 0 字符。
+而 `_max_tokens_in` 的**格式下限 16 恰好落在这个坏区间里** —— 它的注释写着
+「下限 16 是为了防额度小到思考吃光」，但 16 本身防不住，**实现与意图不符**。
+
+### 修复（三处）
+
+1. **数据**（立即生效；`llm_settings.json` 按 mtime 热重载，**不用重启**）：
+   profile 的 `max_tokens` 16 → **32768**。脚本 `.tmp-probe/fix-max-tokens.py`
+   （只抬 `0 < x < 1024`；**0 是合法语义，不动**），备份 `.tmp-probe/llm_settings.bak.json`。
+2. **文案**（`_tokens_hint`）：按 `config()` 新增的 **`max_tokens_source`**（`profile`/`settings`/`env`）
+   决定指哪 —— profile/settings ⇒ 「运行参数 → 大模型设置 → 端点配置」改「输出上限」或勾「无限制」；
+   只有来源确实是 env 才提 `web/.env`。
+3. **哨兵**（`MT_MIN_USABLE = 1024` + `_tiny_tokens_text()`）：在 `_body()` 里**发请求之前**抛
+   `LlmConfigError` —— 不再让用户白等一整轮（那次要等思考跑完才报「被截断」）。4 个收口
+   （`analyze` / `stream_analyze` / `stream_conditions` / `stream_followup`）各加一个
+   `except LlmConfigError`，给**不带类名前缀**的干净文案。
+   0（无限制）**放行** —— 它是合法语义，不能当「小」拦掉。
+
+### 守门与反向证明
+
+- `.tmp-probe/verify-tokens-guard.py`（隔离 `import`，**不碰运行中的服务**）**20/0**。
+  含环境自检：缺 `LlmConfigError` / `_tiny_tokens_text` / `MT_MIN_USABLE` 直接判红，**不崩**。
+- 反向证明**两级**：
+  - 整份 `git show HEAD:web/llm.py` 装回 ⇒ 自检判红（`0 通过 / 1 失败`）
+  - **只摘掉** `_body` 里那一行 `raise` ⇒ **仅 C 段红**（19/1），其余全绿 ——
+    证明 C 段真的在测哨兵本身，而不是被别的改动顺带带绿
+- 前端侧未受影响：`verify-llm-unlimited-tokens.cjs` **24/24**、`verify-conditions.cjs` **48/48**
+  （`config()` 只多一个键；`get_settings()` 是显式列字段的 ⇒ 接口格式没变）。
+
+### 🔴 两条纪律
+
+1. **`.py` 改动须重启**（`app.run(debug=False)`，无 reloader）；
+   `.env` / `llm_settings.json` 则是按 mtime 热重载、立即生效。
+2. **凡是「让用户去哪改」的报错文案，都必须先问「生效值是哪一级来的」** ——
+   指错地方比不指还糟：用户会反复去改一个**被上层盖掉**的位置，看什么都没变。
+
+---
+
+## §48 两个官方 checkpoint 的区别：pistachio vs uspto50k（2026-10-08）
+
+**同一份代码、同一套架构**：`models.json` 里两者都只有 `smiles_transformer` +
+`template_localization` 两个子模型（数组是 ensemble 权重向量），**只有权重不同**。
+所以「换模型」不是换代码路径，而是换训练数据规模 ⇒ **状态矩阵里两行是同一套加载逻辑**。
+
+| 维度 | pistachio（默认/主推） | uspto50k（基准，官方自述较弱） |
+|---|---|---|
+| 训练数据 | Pistachio 工业反应库（百万级） | USPTO-50K（约 5 万条专利反应） |
+| `template_localization/template_lib.json` | **146,256 行**（JSONL，43MB） | **9,735 行**（2.6MB） |
+| 权重体积 | 4.2GB（766M + 3.7G） | 0.3GB（200M + 206M） |
+| `template_localization` 编码器 | `PNA` · hidden 1024 · 5 层 · dropout 0.05 | **`GPS_PNA`** · hidden 64 · 3 层 · dropout 0.1 |
+| `smiles_transformer` | hidden 512 · 8 层 · heads 8 · silu · seq 1024 · dropout 0.1 | hidden 256 · 6 层 · heads 8 · gelu · seq 512 · dropout 0.3 |
+| `vocab.txt` | 346 行 | 72 行 |
+| 权重文件 | `combined.ckpt` + `template_lib.json` | 同构（文件名一致） |
+
+🔴 **`GPS_PNA` 会 `import graphium`**（`core/retrochimera/encoders/gnn.py`，
+`gnn_class == "GPS_PNA"` 分支），缺库直接 `ModuleNotFoundError`。
+**本机 `retrochimera` conda 环境已装** `graphium` + `syntheseus_graphium 0.1.0` +
+`torch_geometric 2.5.2` ⇒ uspto50k **能跑**；但**别在干净环境里假设两个模型都能直接跑**。
+官方 README 同语：跑 USPTO-50K checkpoint 需 `pip install retrochimera[graphium]`。
+
+⚠️ **默认推理超参是针对 pistachio 调的**（官方 README）⇒ 要复现 USPTO 论文数字必须换成
+论文扩展数据表 3/4 的超参，否则数字对不上不是代码的错。
+
+**采样手法（比加载模型便宜几个数量级，值得复用）**：`combined.ckpt` 是 zip，
+读内部 `archive/data.pkl` 即可拿到 `input_encoder_kwargs` / `hidden_dim` 等超参。
+pickle 操作码陷阱：`M`(BININT2) 是**小端**（`M 00 02` = 0x0200 = **512**，不是 2）、
+`K`(BININT1) 单字节、`G`(BINFLOAT) 大端 8 字节；键字符串后面跟 `q`(1 字节参数)或
+`r`(4 字节参数)的 memo 操作码，**跳过时必须按参数长度跳**，否则读到 `None`。
+
+---
+
+## §49 多步自动拆分「没结果」的三个真因（2026-10-08）
+
+> 🔴 **补正（当晚）**：下面三条是**观感层**的原因，**都不是根因**。真正的根因是
+> **搜索预算计数跨搜索累计**（见 §50）—— 计数涨过 `max_calls` 之后，每次搜索
+> **开局即停**（0 秒 / `or_nodes=1`）。本节末尾那组「40 calls 出 8 条路线」的实测数字，
+> 是在**模型刚加载、计数还小**的窗口里测到的，属**幸存者偏差**：同样的参数在跑过几轮
+> 之后就是 0 秒 0 结果。**排查这类问题先量「耗时」——0 秒返回说明根本没跑，不是「没找到」。**
+
+用户报「单步有结果、多步自动拆分不运行 / 没结果」。实测结论（按重要性）：
+
+1. **单步永远有结果，多步只认「完整路线」**：单步 = 模型给 top-k，**永不空**；
+   多步 = Retro* 必须把每条分支拆到「重原子 ≤ `heavyAtomThreshold`（界面默认 **6**）
+   或在可购买列表里」，且同时受 `max_depth`（界面默认 4）/ `max_calls`
+   （`budgetCalls` 默认 40）/ `time_limit`（界面 300s）三重预算。找不到 ⇒
+   `routes = []`，`stats` 里只剩半棵树。
+2. 🔴 **`routes=[]` 时前端是静默的（原实现）**：`applySearchRoutes` 第一行
+   `if (!routes.length) return;` ⇒ 树 / 页签 / 统计**一个都不动**；而
+   「完成 · 0 条路线」只在 `autoRunning` 为真时可见（`RouteStats.stateText`）
+   ⇒ `autoRunning` 落回 false 后状态条变回 **「还没有展开任何一步」**。
+   用户看到的就是「点了没反应」。⇒ **已修**：0 条路线时 `setGlobalError(...)`
+   留一条**不会自己消失**的说明（含预算 / 深度 / 换模型的可操作建议 + 重试入口），
+   守门 `tests/store-harness.ts` **18.9**（摘掉该块 ⇒ 恰好 2 红，其余 3 条仍绿）。
+3. 🔴 **搜索进行中绝不能切模型 / 重新加载**：`ModelServiceClient.load()` 的语义是
+   「停旧进程 + 起新进程」⇒ 在飞的搜索请求被**掐断**（实测 `ConnectionResetError
+   [WinError 10054]`，随后一切请求报「模型服务未运行」）。**这不是崩溃**：同一秒里
+   API 起了新服务（state 文件的 `pid` / `started_at` 可证），且最近 30 分钟
+   Windows Application Error / WER 事件 **0 条**。
+   ⇒ **排查「服务没了」先读 state 文件的 `pid` 与 `started_at`，再下结论** ——
+   我第一次就把它误读成「搜索把服务打崩了」。
+
+**实测数字**（pistachio，界面默认参数：depth 4 / 重原子 ≤6 / 40 calls / 阿司匹林）：
+`routes = 8`、`search_seconds = 181.5`、`or_nodes 3279 / and_nodes 2382`。
+⇒ **一次自动拆分要等约 3 分钟**（界面 `timeLimit=300` 已快贴上限），
+「等了一会儿没动静」本身就会被误判成「没运行」。
+
+**内存硬约束**：本机 32GB；`RETRO_RULE_WORKERS=4`（`bootstrap/limit_workers.py`
+把 syntheseus 的 `cpu_count` 从 **16** 压到 4），项目自估规则子进程 ≈ 4×4.4 =
+**17.6GB**；实测每个规则子进程空载 WS ≈ **2.39GB**（主要是 import 开销 ——
+uspto50k 的模板库才 2.6MB）。⇒ **「换 uspto50k 省内存」省的只是权重与模板，
+规则子进程那份固定开销一分不少**；pistachio 实测加载 57.4s。
+
+---
+
+## §50 🔴 搜索预算被「历史调用」吃掉：常驻模型服务下 max_calls 开局即停（2026-10-08 晚）
+
+**症状**：多步拆分「点了没结果」。实测 `POST /api/search` 给
+`max_calls=40 / 60 / 80` 一律 **0.0~0.1 秒**返回、`routes=0`、
+`stats={or_nodes:1, and_nodes:0}`（**根节点一次都没扩展**）；`max_calls=120` 才跑得动
+（122s、or_nodes≈2900）。**「0 秒」是唯一的入口线索** —— 凡是 0 秒返回，
+都说明搜索**根本没启动**，跟「预算不够所以没找到」是两件事。
+
+**机制**（syntheseus 0.8.0）：
+- `SearchAlgorithm.should_stop_search` 里有一条
+  `self.reaction_model.num_calls() >= self.limit_reaction_model_calls`；
+- `BaseModel.num_calls()` 返回 **`_num_cache_misses`**（缓存未命中**累计数**），
+  **只在 `reaction_model.reset()` 时归零**；
+- 官方 CLI 每次搜索前都 `alg.reset()`（`syntheseus/cli/search.py` → `Algorithm.reset()`
+  里就一句 `self.reaction_model.reset()`）⇒ 官方那边天然是「每次」语义；
+- **我们漏了这一步**，而改造后模型是**常驻**的（`web/model_server.py`）⇒
+  这个计数从加载那刻起**跨搜索一路上涨**，涨过 `max_calls` 后**每次搜索开局即停**。
+
+**修法**（`web/model_runtime.py` 与 `scripts/search.py` 两处同改，口径必须一致）：
+```python
+_calls_base = model.num_calls()          # 当前累计（缓存未命中数）
+searcher = RetroStarSearch(..., limit_reaction_model_calls=_calls_base + max_calls, ...)
+```
+=「当前基线 + 本次预算」。**不用 reset** 是为了保留跨搜索 cache（换参数重跑同一目标更快）。
+
+**验证**（`.tmp-probe/verify-calls-budget2.py`）：改代码后 **stop → start 真重启**
+（`restart` 是 no-op，见 §51），再连跑 3 次 `max_calls=40, max_heavy_atoms=10`：
+**65.6 / 60.1 / 60.3 秒、各 5 条路线、or_nodes≈1530、0 次早退**；
+同样参数在修复前 3 次全是 0 秒。
+⚠️ 该修复住在**模型服务进程**里（`run_retro_search` 在那边执行）⇒ **必须重启模型服务才生效**。
+
+**顺带量清的重原子阈值口径**：界面默认 `heavyAtomThreshold=6` 是**故意**的
+（`DEFAULT_PARAMS` 注释：阈值 10 会让阿司匹林一步到底，「多步」形同虚设），
+而后端三处默认都是 **10**（`jobhub` search runner / `api_search` / `scripts/search.py`）。
+实测利多卡因 `C14H22N2O`（17 重原子）：**阈值 6 + 120 calls 跑 126 秒仍 0 条**
+（关键原料 2,6-二甲基苯胺 9 重原子 > 6 ⇒ 判「不可购买」，模型又拆不出它的上游）；
+**阈值 10 + 40 calls 出 5 条**。⇒ **拆不通时第一建议是把阈值调到 ~10**，而不是加预算。
+
+## §51 🔴 POST /api/model-service/restart 曾是 no-op（模型已就绪时不重启）
+
+`ModelServiceClient.load()` 开头有一条「已在跑同一模型就直接返回」
+（`{"ok": True, "already": True, **st}`）—— 那是 **start** 的语义；
+而 `/api/model-service/restart` 也走同一个 `load()` ⇒ **点「重启」不会重启**。
+返回体照样 `ok:true / already:true`，**从结果上完全看不出来**。
+本轮排查被它坑了一整轮（以为新代码生效了，其实还在跑旧进程，于是「修复后依旧 0 秒」）。
+
+**修法**：`load(self, model_key, force=False)`；`api_model_service` 里
+`_model_service.load(key, force=(act == "restart"))`。
+（前端「加载模型」走 `/api/load`，语义仍是「已就绪就复用」，不受影响。）
+
+**验证**：`.tmp-probe/verify-restart-force.py` —— 替身覆盖 `status/stop/_spawn`
+（**不碰真服务**），8 条 ALL PASS；**反向证明**去掉 `not force` ⇒ 恰好 3 红
+（force 分支那三条），装回后复跑全绿。⚠️ 需**重启 API 进程**才生效。
+
+## §52 官方模型族与取得方式（RetroChimera 1 / pypi 1.3.0）
+
+官方 README 直接给了 4 个 checkpoint 的 ndownloader 直链：
+
+| checkpoint | 链接 | 大小 |
+|---|---|---|
+| Pistachio | `figshare.com/ndownloader/files/59468882` | 3.92 GB（figshare 页面标注） |
+| USPTO-50K | `.../59511926` | **272 MB**（figshare API 实测 284,852,815 B；DOI 10.6084/m9.figshare.30601718） |
+| USPTO-FULL | `.../59494598` | 未取到 |
+| forward | `.../66654872` | 未取到 |
+
+⚠️ figshare 的 **ndownloader 对 HEAD / Range 一律回 `202 Accepted` + `Content-Length: 0`**，
+拿不到体积；`api.figshare.com/v2/files/<id>` 也不认 ndownloader 的 id（404）。
+要拿大小只能走 `api.figshare.com/v2/articles/<article_id>`（还得先知道 article id）。
+
+- **USPTO-50K 的 graphium 依赖**：`pip install retrochimera[graphium]` 装的是
+  **`syntheseus-graphium`**，但它**提供的模块名就是 `graphium`**（不是 `syntheseus_graphium`）。
+  `core/retrochimera/encoders/gnn.py` 里也是 `import graphium`。本机已装
+  （`syntheseus-graphium 0.1.0` + `graphium dev` + `torch_geometric 2.5.2`）⇒ **依赖是齐的**。
+  ⚠️ 但 `import graphium` 会连带 `ssl`：**PATH 缺 conda 的 `Library/bin` 时**报
+  `ImportError: DLL load failed while importing _ssl` —— 看着像缺库，其实是 DLL 路径问题。
+- **forward 模型**：官方类已导出（`retrochimera.ForwardChimeraDeNovoModel`
+  = `SmilesTransformerForwardModel`），但 **`syntheseus` 的 `ForwardModelClass` 枚举里只有
+  `Chemformer`** ⇒ 官方 CLI 的 `forward_filter` **接不上它**（只能接 Chemformer）。
+  要用得手写装配：`FilteredBackwardReactionModel(backward_model=…,
+  filter_models={"forward": ForwardReactionFilterModel(
+  forward_model=ForwardChimeraDeNovoModel(model_dir=…), top_k=5)})`。
+- **USPTO-FULL 大概率不需要 graphium**：`cli/config/uspto_full/` 只有 3 个 yaml
+  （`smiles_transformer` / `template_classification_chem` / `template_localization`），
+  **没有 `template_classification_gnn.yaml`**；`uspto_50k/` 有 4 个（含 gnn）。
+- 三个 preset 目录：`core/retrochimera/cli/config/{pistachio,uspto_50k,uspto_full}/`；
+  **`uspto_full` 已内置，缺的只是 checkpoint 文件**。
+- `syntheseus` 的搜索默认超参文件是 `syntheseus/cli/search_config.yml`，
+  只覆盖 MEGAN / RootAligned（RetroChimera 用默认值）。
+
+## §53 🔴 批量改写的「同一文件多处替换」必须按文件累积缓冲
+
+写 patch 脚本时踩了：对**同一文件**的两处改动**各自基于原文**做 `replace`，
+再**依次整体写回** ⇒ 后写的把先写的**静默抹掉**。
+脚本还打印了两个 `✅`、`py_compile` 也过（丢的偏偏是**函数签名参数**，
+要跑到运行时才 `NameError: name 'force' is not defined`）。
+⇒ 正确做法：**先把同一文件的所有改动叠进内存**（先全部做命中检查），**再统一落盘**。
+（这与「同一文件多 Edit 同条消息会静默丢失」是同一个坑的另一副面孔。）
