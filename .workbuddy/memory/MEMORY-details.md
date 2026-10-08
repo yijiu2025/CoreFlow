@@ -4051,3 +4051,100 @@ CAS 仍懒查（`@visible-change` 才 `requestCas`）。
 回落 / 关开关 / 5 源码哨兵）；反向补丁 **13/26、exit 1、不崩、逐字节还原**。
 四关全 0；全量回归 **35/35 exit=0**。提交 `retroweb → 20e140b`。
 
+
+## §45 自动拆分 = 一次 Retro* 搜到底（kind=search，吃满预算）
+
+旧「单步循环 Top-1」实测 40 预算只发 4 次（每层 adopt candidates[0] + depth 封顶）。
+改：前端提交 kind=search 后台任务，后端 Retro*（best-first）一次搜完，返回多条完整路线。
+
+**后端**（F:/retrochimera `b47de0b`）：`run_retro_search` 纯函数（同步 /api/search 与 job 共用）；
+worker 循环 `kind=="search"` 分支（复用已载模型）；`search_remote` 桥（读 `search` 字段）；
+`jobhub.make_search_runner`（validate→skip load→search w=0.92→post）；`/api/jobs` 按 kind 分发。
+
+**前端**（retroweb `347bd22`）：`createSearchJob`；`SearchOk` 类型；
+`autoRun` = createSearchJob + 1s 轮询 + 「搜索中…」；`applySearchRoutes` 灌树；
+RouteStats 状态条改用 `autoProgress.label`。
+
+- 🔴 **applySearchRoutes 两踩**：
+  ① 多路线共享节点（都从 target 出发）时 `candidates=[reaction]` 覆盖 ⇒ 后铺路线顶掉
+     先铺路线的候选，adopt 按 reactionId 找不到 ⇒ 静默 return、树只剩根。必须**追加去重**。
+  ② 采纳不能逐路线 adopt（互相覆盖 chosenReactionId/children）。正确姿势：`layRoute`
+     只铺 candidates（🔴 parentReactionId 必须挂对，`childrenOfReaction`/`simulateScheme`
+     靠它找子节点）；`applyToTree(choices[0])` 深度序直接设 chosen+children；
+     叶子 purchased 用 `starting_materials` 显式标（重原子可能超阈值，isTerminal 判不出）。
+- 备选路线存 `RouteScheme{choices}`（名字「搜索路线 N」），切换走 applyScheme→adopt。
+- `verify-search-autorun.cjs` 13/13（page.route 打桩，running×3 再 succeeded；
+  等树必须 **>=3 节点**——树上 1 个根节点在搜索完成前就有，等 >0 会假绿）；
+  反向 `patch-search-reverse.py`（kind→predict + applySearchRoutes 插 return）on 红/off 绿。
+- `verify-auto-jump.cjs` 旧断言（「自动拆分层 x/y」「≥5 节点」）随口径退役：
+  mock 改 SearchOk、进度断言改「搜索」、阈值 ≥4 ⇒ 26/26。
+- 全量回归 **36/36**；提交 retroweb `347bd22`（ls-remote 复核）。
+- ⚠️ 后端改动须重启 `启动后端API.bat`。
+
+
+## §46 手动改路线（= 用户自己改一步的前体）
+
+需求：「支持手动绘制修改部分路线」。本质**不是画一张图**，而是给某个节点换一组前体 ——
+「加减一个组分」「插入一个中间体」都是它的特例（插中间体 = 把某个前体换成自己画的新分子，
+那个新分子立刻就是一个可继续展开 / 继续手改的普通节点）。
+
+### 架构：一个原语 + 一个弹窗，其余全部零改动
+
+- 唯一新增 store 原语 **`setPrecursors(nodeId, precursors[])`**：规范化（去空 / 去重 / **排序**）→
+  `reactionIdFor(nodeId, list.join('.'))` 派生 id → 已有则改 `origin='manual'`、没有则追加候选 → `adopt(id)`。
+- 🔴 **手工反应与模型反应数据结构同构**（都靠确定性 `reactionIdFor` 派生 id）⇒
+  `adopt` / `RouteScheme` / `applyScheme` / `simulateScheme` / 持久化 / 导出 / 复制 **全都不用改**。
+  这是「改了自己那条路线、还能切回模型方案」成立的前提（reactionId 稳定 ⇒ 子树接得回来）。
+- 准入判据单一来源 **`store.manualPrecursorIssue(nodeId, list)`**（非空 / 不能是产物自己 /
+  不能含上游已出现过的分子＝死循环）。弹窗只负责「提前把话说清楚」，**不得另写一份**，
+  否则两处判据一分叉就出现「界面说行、点了没反应」。
+- 弹窗 `StepEditDialog.vue` 全应用**只挂一份**（挂在 `WorkspaceView`）：两个入口
+  （画布双击卡片、候选面板「手动指定前体」）都只是设 `store.stepEditNodeId`，组件自己不接 props、不 emit。
+  理由：弹窗内嵌 Ketcher 画板，多挂一份＝多一份 WASM 常驻内存。
+
+### 概率诚实性：手动步用 `null`，不是 0 也不是 1
+
+四层必须一致，缺一层就是在撒谎：
+
+1. **数据模型** `Reaction.probability: number | null`：`null` = **用户手定的这一步**（模型没表态），
+   区别于 `0` = 模型说不可行、`1` = 模型很有把握；另加 `origin: 'model' | 'manual'`。
+2. **统计** `simulateScheme` 里手动步 `manualSteps += 1`、连乘按 `probability ?? 1` 跳过
+   （既不惩罚也不虚高）；`SchemeStat.manualSteps`；`adopt` 两处 `probabilityChain` 同样是 `?? 1`。
+3. **展示** 全部走 `utils/probability.ts`（`stepPct` / `stepPctTitle` / `routePct` / `manualStepsNote`）：
+   手动步写「手动」，总概率写「xx%（含 N 步手动）」。🔴 `manualSteps === 0` 时输出必须与旧实现
+   **逐字符相同**，否则既有探针（targetbar / overview / route-canvas…）会假红。
+4. **导出** JSON 写 `probability: null` + `manual: true` + `manualSteps`；CSV / 表格概率列写「手动」
+   （不能写 `1.0000`）。
+
+### 踩坑
+
+- 🔴 **`normalizeNode` 把 `null` 兜成 `0`**：原写法 `typeof r.probability === 'number' ? r.probability : 0`
+  ⇒ 手动步落盘再读回就变成 0 ⇒ 总概率连乘归零。必须兜成 **`null`**；同时补 `origin` 归一化
+  （老数据没有 `origin` 字段 ⇒ `'model'`，不能漏判成手动）。
+- 🔴 **`@dblclick` 在画布卡片上恒不触发**：画布平移在 `pointerdown` 里
+  `e.preventDefault()` + `el.setPointerCapture()` 之后，浏览器**不再合成 dblclick**
+  （实测以**捕获阶段**在卡片上挂监听都收不到事件）。改为在 `onPointerUp` 自判
+  「同一卡片（靠 `:data-node-id`）、位移 ≤ 4px、间隔 < 400ms 的两次按下」。
+- 🔴 **`canonical` 是「上一次 blur」留下的快照，不能当「这一行有没有内容」的判据**：
+  Playwright `fill('')` 只 focus 不 blur ⇒ `verifyRow` 没跑 ⇒ 空框仍挂着上一个分子的 canonical
+  ⇒ `draftList` 非空、「应用」可点、`.sed__block` 不渲染 ＝ 用户看到的「点了没反应」。
+  修法：草稿行加 `srcText`（产生 `canonical` 的那次输入）+ `rowClean(r)`；判「有没有内容」**只看 `text`**；
+  **提交清单另走 `canonicalList()`**（只认校验通过的规范 SMILES —— 提交原文会让
+  `c1ccccc1` 与 `C1=CC=CC=C1` 变成两个节点）。空行在 `verifyRow` 里返回 **true**
+  （空行不是「错」，`verifyAll` 不该被它绊倒去报「有结构没通过校验」）。
+- `pushRun` / `switchRun` 会把未采纳的手动候选冲掉（它下面的子树会悬空）⇒ 两处都要
+  `if (old.origin === 'manual' && !merged.some(...)) merged.push(old)`。
+
+### 守门与结果
+
+- `verify-manual-step.cjs` **22/22**：A 双击打开 + 预填当前前体 / B 改前体→RDKit 校验→应用→自动关闭 /
+  C 画布只剩目标 + 新前体、chip 写「手动」且**不是 0.0% / 100.0%** / D 再打开预填的是改过的那组 /
+  E 空前体说清原因且「应用」禁用 / F 改掉已定的一步 ⇒ 方案分叉 + 总概率带「含 1 步手动」 /
+  G 候选面板（树里没有面板时跳过，不判红）/ H 复制文本写「手动指定」。
+- 反向补丁：`.tmp-probe/stepedit-copies/{on,off}.vue` **整文件对拷**（只把 `draftList` 判据改回旧写法），
+  `curl <dev>/src/components/workspace/StepEditDialog.vue` 验特征串确认**服务的是旧代码**之后再跑
+  ⇒ E 段两条红、随后装回 22/22。
+- `npm run test:store` 第 17 段「手动指定前体」ALL PASS（含「空前体被拒」「改掉已定的一步 ⇒ 自动分叉」
+  「只有手动步时总概率 = 1」「混合路线总概率 = 1 × 0.5」「恢复后概率仍是 null」「A.B 与 B.A 得到同一个 id」）。
+- 四关（`vue-tsc -b` / `eslint .` / `test:store` / `vite build --outDir dist-manual-step2`）全 0。
+- 全量回归 **40/40 探针 0 失败**。
