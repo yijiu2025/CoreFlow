@@ -1,0 +1,10 @@
+{
+  "name": "retroweb",
+  "alias": "RetroWeb",
+  "prefix": "/retroweb",
+  "description": "逆合成工作台：任务云端存储（绑定用户）+ 算法服务中转",
+  "enabled": true,
+  "requireLogin": false,
+  "allowIps": [],
+  "allowRoles": []
+}
