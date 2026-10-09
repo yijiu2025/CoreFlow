@@ -4,9 +4,15 @@
  * 🔴 取代 Python 侧那份**全局** `web/llm_settings.json`：绑定用户后，端点与密钥
  *    必须按用户隔离，否则 A 用户会花掉 B 用户的 token，且谁改都影响全站。
  *
- * 🔴 `keys_enc` 是**加密**存储（复用 framework/keys），且**永不回传明文**：
+ * 🔴 `keys_enc` 是**加密**存储（对称加密，见 utils/secret.js），且**永不回传明文**：
  *    接口只回掩码（与前端 `mask_key` 保尾部的口径一致）。
  *    谁能在日志里看到明文，等于谁的日志就能泄露别人的 key —— 所以加密 + 掩码两条都要。
+ *
+ * 🔴 `owner` 区分「用户自建」与「系统官方」：
+ *    · `user`   —— 用户自己的端点与密钥，存本表（per-user），前端可增删改、只回掩码；
+ *    · `system` —— 官方共享端点，🔴 **token 不进本表、不落前端**，只存服务端（.env），
+ *                 前端只看到「模型名 + 配额」，token 数量与值永不出后端（暂不起用）。
+ *    系统官方条目通常由种子/迁移预置（user_id 指向一个系统占位），密钥走内存注入。
  *
  * @since 2026-10-09
  */
@@ -29,7 +35,13 @@ const defineLlmProfile = (sequelize, DataTypes) => {
       user_id: {
         type: DataTypes.BIGINT,
         allowNull: false,
-        comment: '所属用户'
+        comment: '所属用户（system 型指向系统占位用户）'
+      },
+      owner: {
+        type: DataTypes.ENUM('user', 'system'),
+        allowNull: false,
+        defaultValue: 'user',
+        comment: '来源：user=用户自建（密钥存本表） / system=系统官方（密钥只在服务端，不回传）'
       },
       name: {
         type: DataTypes.STRING(100),
@@ -79,9 +91,10 @@ const defineLlmProfile = (sequelize, DataTypes) => {
       underscored: true,
       indexes: [
         { fields: ['user_id'], name: 'idx_llm_profile_user' },
-        { fields: ['user_id', 'active'], name: 'idx_llm_profile_active' }
+        { fields: ['user_id', 'active'], name: 'idx_llm_profile_active' },
+        { fields: ['owner'], name: 'idx_llm_profile_owner' }
       ],
-      comment: 'RetroWeb 大模型端点配置（per-user，密钥加密）'
+      comment: 'RetroWeb 大模型端点配置（per-user / system 双来源，密钥对称加密）'
     }
   );
 
