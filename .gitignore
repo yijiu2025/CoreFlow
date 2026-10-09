@@ -59,8 +59,11 @@ _budget-*.json
 # src 目录的临时压缩备份（本地修复仓库时留下，不入库）
 src.zip
 
-# retroweb 
-retroweb/
+# retroweb 前端仓库（根目录下那个，它自带 .git，属嵌套仓）
+# 🔴 必须带前导斜杠：写成 `retroweb/` 会匹配**任意层级**的同名目录，
+#    把后端模块 src/models/retroweb/、src/api/retroweb/、migrations/retroweb/
+#    一并忽略掉（新文件 git add 不进去，且没有任何报错提示）。
+/retroweb/
 
 
 # --- 编辑器 / AI 工具配置 ---
