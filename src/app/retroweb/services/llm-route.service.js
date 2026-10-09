@@ -4,9 +4,10 @@
  * 前端发 analyze / conditions / followup 时**不传凭据**（它也不该知道官方 key）。
  * 真正的「这次调用用哪套 LLM」由 Node 服务端按用户身份自动解析：
  *
- *   ① 用户自建（owner=user）里激活的那套 —— 解密 keys（llm-profile.dao.activeForUser）；
- *   ② 官方 LLM（RETROWEB_OFFICIAL_LLM_ENABLED=true 时）—— 内存 keys，官方默认模型；
- *   ③ 都没有 → 返回 null（不注入，Python 用自己 .env 兜底，老路径不破坏）。
+ *   ① 先读用户 `llm_source` 偏好（settings.dao）：显式选「官方」则只走官方；
+ *   ② 否则用户自建（owner=user）里激活的那套 —— 解密 keys（llm-profile.dao.activeForUser）；
+ *   ③ 自建没有 → 官方 LLM（RETROWEB_OFFICIAL_LLM_ENABLED=true 时）—— 内存 keys 兜底；
+ *   ④ 都没有 → 返回 null（不注入，Python 用自己 .env 兜底，老路径不破坏）。
  *
  * 🔴 返回的凭据里含明文 key，**只在 Node → Python 的内网转发里出现，永不出前端**。
  *    （前端发的 analyze 请求体里本来就没有凭据，注入发生在服务端转发前。）
@@ -17,7 +18,20 @@
  * @since 2026-10-09
  */
 import llmProfileDao from '../dao/llm-profile.dao.js';
+import settingsDao from '../dao/settings.dao.js';
 import { officialEnabled, officialModelsInternal, officialKeys } from './official-llm.service.js';
+
+/** 取某个官方模型的凭据（🔴 仅后端内部，明文 key 不出本文件） */
+function officialCreds(official) {
+  if (!official || !official.base_url || !official.model) return null;
+  const keys = officialKeys(official.name);
+  if (!keys.length) return null;
+  return {
+    base_url: official.base_url,
+    api_keys: keys,
+    model: official.model
+  };
+}
 
 /**
  * 解析某用户这次 LLM 调用该用的凭据。
@@ -27,7 +41,14 @@ import { officialEnabled, officialModelsInternal, officialKeys } from './officia
  *   null = 未命中（既不注入，让 Python 兜底）
  */
 async function resolveLlmCreds(userId) {
-  // ① 用户自建：激活的那套优先
+  // ① 用户显式选了「官方」⇒ 只走官方（不再回落自建）
+  const source = await settingsDao.llmSource(userId);
+  if (source === 'official' && officialEnabled()) {
+    const official = officialModelsInternal().find(m => m.model);
+    return officialCreds(official);
+  }
+
+  // ② 用户自建：激活的那套优先
   const active = await llmProfileDao.activeForUser(userId);
   if (active && active.base_url && active.model && active.keys?.length) {
     return {
@@ -37,17 +58,10 @@ async function resolveLlmCreds(userId) {
     };
   }
 
-  // ② 官方 LLM：启用时用第一个官方模型兜底（后续可扩展成按配额/负载选）
+  // ③ 官方 LLM：启用时用第一个官方模型兜底（后续可扩展成按配额/负载选）
   if (officialEnabled()) {
-    const official = officialModelsInternal().find(m => m.model);
-    const keys = official ? officialKeys(official.name) : [];
-    if (official && official.base_url && official.model && keys.length) {
-      return {
-        base_url: official.base_url,
-        api_keys: keys,
-        model: official.model
-      };
-    }
+    const creds = officialCreds(officialModelsInternal().find(m => m.model));
+    if (creds) return creds;
   }
 
   return null;
