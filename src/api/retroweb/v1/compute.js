@@ -17,6 +17,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { RETROWEB_PERMISSIONS } from '../../../app/retroweb/permission/index.js';
 import { forwardJson, forwardStream } from '../../../app/retroweb/services/upstream.service.js';
+import { resolveLlmCreds, injectProfile } from '../../../app/retroweb/services/llm-route.service.js';
 import jobDao from '../../../app/retroweb/dao/job.dao.js';
 
 async function registerComputeRoutes(fastify) {
@@ -226,6 +227,19 @@ async function registerComputeRoutes(fastify) {
   // ---------- SSE 透传 ----------
   // 🔴 路径与前端 retroApi 完全一致（`/llm/<x>/stream`），Node 原样透传给上游，
   //    前端切 baseURL 即可、路径不用改；上游 Python 也是这些路径。
+  // 🔴 LLM 凭据在转发前由 Node 解析注入（用户自建 → 官方 → 不注入），
+  //    前端不传、也不该知道官方 key。
+
+  /**
+   * 解析并注入 LLM 凭据：返回转发给上游的请求体。
+   * @param {number} userId
+   * @param {object} body
+   * @returns {Promise<object>}
+   */
+  async function withLlmProfile(userId, body) {
+    const creds = await resolveLlmCreds(userId);
+    return injectProfile(body ?? {}, creds);
+  }
 
   /** AI 工艺分析（流式） */
   registerSecureRoute(fastify, {
@@ -236,7 +250,8 @@ async function registerComputeRoutes(fastify) {
     requireLogin: true,
     permission: RETROWEB_PERMISSIONS.LLM.USE,
     handler: async (request, reply) => {
-      return await forwardStream(fastify, reply, '/llm/analyze/stream', request.body);
+      const body = await withLlmProfile(request.state.user.userId, request.body);
+      return await forwardStream(fastify, reply, '/llm/analyze/stream', body);
     }
   });
 
@@ -249,7 +264,8 @@ async function registerComputeRoutes(fastify) {
     requireLogin: true,
     permission: RETROWEB_PERMISSIONS.LLM.USE,
     handler: async (request, reply) => {
-      return await forwardStream(fastify, reply, '/llm/conditions/stream', request.body);
+      const body = await withLlmProfile(request.state.user.userId, request.body);
+      return await forwardStream(fastify, reply, '/llm/conditions/stream', body);
     }
   });
 
@@ -262,7 +278,8 @@ async function registerComputeRoutes(fastify) {
     requireLogin: true,
     permission: RETROWEB_PERMISSIONS.LLM.USE,
     handler: async (request, reply) => {
-      return await forwardStream(fastify, reply, '/llm/followup/stream', request.body);
+      const body = await withLlmProfile(request.state.user.userId, request.body);
+      return await forwardStream(fastify, reply, '/llm/followup/stream', body);
     }
   });
 
@@ -275,8 +292,9 @@ async function registerComputeRoutes(fastify) {
     requireLogin: true,
     permission: RETROWEB_PERMISSIONS.LLM.USE,
     handler: async (request, reply) => {
+      const body = await withLlmProfile(request.state.user.userId, request.body);
       try {
-        const { ok, status, data } = await forwardJson('POST', '/llm/analyze', request.body);
+        const { ok, status, data } = await forwardJson('POST', '/llm/analyze', body);
         if (!ok) return reply.result.fail(data?.error || '分析失败', data, status);
         return reply.result.success(null, data);
       } catch (e) {

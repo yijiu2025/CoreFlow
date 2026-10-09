@@ -9,10 +9,11 @@
  *    结构先落好，算法中转（S3）将来路由到官方 key 时再打开；现在 `officialModels()` 仍
  *    返回清单（供前端"官方模型"占位展示），但配额为 0、enabled=false。
  *
- * 官方模型列表用 `.env` 配置（逗号分隔的 `name|model|quota` 三元组），例如：
+ * 官方模型列表用 `.env` 配置（逗号分隔的 `name|base_url|model|quota` 四元组），例如：
  *   RETROWEB_OFFICIAL_LLM_ENABLED=true
- *   RETROWEB_OFFICIAL_LLMS=官方GPT|gpt-4o|10000,官方Claude|claude-3-7|5000
+ *   RETROWEB_OFFICIAL_LLMS=官方GPT|https://api.x.ai/v1|gpt-4o|10000
  *   每个模型的密钥走 RETROWEB_OFFICIAL_KEY_<NAME>（内存读取，不落库、不回传）。
+ *   🔴 base_url 也是官方凭据的一部分（key 得知道往哪个 OpenAI 兼容端点发），同样不出前端。
  *
  * @since 2026-10-09
  */
@@ -23,8 +24,8 @@ function officialEnabled() {
 }
 
 /**
- * 解析官方模型清单（每项 `name|model|quota`）
- * @returns {Array<{id: string, name: string, model: string, quota: number}>}
+ * 解析官方模型清单（每项 `name|base_url|model|quota`）
+ * @returns {Array<{id: string, name: string, base_url: string, model: string, quota: number}>}
  */
 function parseOfficialModels() {
   const raw = process.env.RETROWEB_OFFICIAL_LLMS || '';
@@ -34,11 +35,12 @@ function parseOfficialModels() {
     .map(seg => seg.trim())
     .filter(Boolean)
     .map((seg, i) => {
-      const [name = '', model = '', quotaRaw = '0'] = seg.split('|').map(s => (s || '').trim());
+      const [name = '', baseUrl = '', model = '', quotaRaw = '0'] = seg.split('|').map(s => (s || '').trim());
       const quota = Number(quotaRaw);
       return {
         id: `official-${i + 1}`,
         name: name || `官方模型 ${i + 1}`,
+        base_url: baseUrl,
         model,
         quota: Number.isFinite(quota) && quota > 0 ? quota : 0
       };
@@ -49,11 +51,26 @@ function parseOfficialModels() {
 /**
  * 官方模型清单（出给前端）。
  *
- * 🔴 只含 name / model / quota 三样，**刻意不含 token 数量与值**。
- * @returns {Array<{id: string, name: string, model: string, quota: number}>}
+ * 🔴 只含 name / model / quota 三样，**刻意不含 token 数量与值，也不含 base_url**：
+ *    base_url 同样是官方凭据的一部分（暴露端点地址等于告诉别人往哪打）。
+ * @returns {Array<{id: string, name: string, model: string, quota: number, enabled: boolean}>}
  */
 function officialModels() {
-  return parseOfficialModels().map(item => ({ ...item, enabled: officialEnabled() }));
+  return parseOfficialModels().map(({ id, name, model, quota }) => ({
+    id,
+    name,
+    model,
+    quota,
+    enabled: officialEnabled()
+  }));
+}
+
+/**
+ * 官方模型完整形态（🔴 仅后端内部解析凭据用，永不回传）。
+ * @returns {Array<{id: string, name: string, base_url: string, model: string, quota: number}>}
+ */
+function officialModelsInternal() {
+  return parseOfficialModels();
 }
 
 /**
@@ -70,4 +87,4 @@ function officialKeys(name) {
     .filter(Boolean);
 }
 
-export { officialEnabled, officialModels, officialKeys };
+export { officialEnabled, officialModels, officialModelsInternal, officialKeys };
