@@ -28,6 +28,7 @@ export async function up({ queryInterface, Sequelize }) {
   await createTableIfNotExists('retroweb_task', {
     id: { type: Sequelize.BIGINT, primaryKey: true, autoIncrement: true },
     user_id: { type: Sequelize.BIGINT, allowNull: false },
+    client_id: { type: Sequelize.STRING(64), allowNull: true },
     name: { type: Sequelize.STRING(200), allowNull: false, defaultValue: '' },
     target: { type: Sequelize.TEXT, allowNull: false },
     model: { type: Sequelize.STRING(64), allowNull: true },
@@ -51,6 +52,7 @@ export async function up({ queryInterface, Sequelize }) {
   await addIndexIfNotExists('retroweb_task', ['user_id', 'updated_at'], { name: 'idx_task_user_updated' });
   await addIndexIfNotExists('retroweb_task', ['user_id', 'status'], { name: 'idx_task_user_status' });
   await addIndexIfNotExists('retroweb_task', ['user_id', 'target'], { name: 'idx_task_user_target' });
+  await addIndexIfNotExists('retroweb_task', ['user_id', 'client_id'], { name: 'idx_task_user_client' });
 
   // ---------- 2. 路线方案 ----------
   await createTableIfNotExists('retroweb_scheme', {
@@ -116,10 +118,11 @@ export async function up({ queryInterface, Sequelize }) {
     name: 'uk_retroweb_settings_user'
   });
 
-  // ---------- 5. 大模型端点配置（密钥加密） ----------
+  // ---------- 5. 大模型端点配置（密钥加密，双来源） ----------
   await createTableIfNotExists('retroweb_llm_profile', {
     id: { type: Sequelize.BIGINT, primaryKey: true, autoIncrement: true },
     user_id: { type: Sequelize.BIGINT, allowNull: false },
+    owner: { type: Sequelize.ENUM('user', 'system'), allowNull: false, defaultValue: 'user' },
     name: { type: Sequelize.STRING(100), allowNull: false, defaultValue: '默认' },
     base_url: { type: Sequelize.STRING(500), allowNull: false, defaultValue: '' },
     model: { type: Sequelize.STRING(100), allowNull: false, defaultValue: '' },
@@ -136,6 +139,7 @@ export async function up({ queryInterface, Sequelize }) {
   });
   await addIndexIfNotExists('retroweb_llm_profile', ['user_id'], { name: 'idx_llm_profile_user' });
   await addIndexIfNotExists('retroweb_llm_profile', ['user_id', 'active'], { name: 'idx_llm_profile_active' });
+  await addIndexIfNotExists('retroweb_llm_profile', ['owner'], { name: 'idx_llm_profile_owner' });
 }
 
 export async function down({ queryInterface }) {

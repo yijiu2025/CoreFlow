@@ -41,6 +41,11 @@ const defineTask = (sequelize, DataTypes) => {
         allowNull: false,
         comment: '所属用户（IAM User.id）'
       },
+      client_id: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+        comment: '前端本地任务的 id（import 幂等键，保证同一份本地数据导两次不重复）'
+      },
       name: {
         type: DataTypes.STRING(200),
         allowNull: false,
@@ -130,7 +135,8 @@ const defineTask = (sequelize, DataTypes) => {
       indexes: [
         { fields: ['user_id', 'updated_at'], name: 'idx_task_user_updated' },
         { fields: ['user_id', 'status'], name: 'idx_task_user_status' },
-        { fields: ['user_id', 'target'], name: 'idx_task_user_target' }
+        { fields: ['user_id', 'target'], name: 'idx_task_user_target' },
+        { fields: ['user_id', 'client_id'], name: 'idx_task_user_client' }
       ],
       comment: 'RetroWeb 任务（一个目标分子 + 整棵路线树）'
     }
