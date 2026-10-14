@@ -65,6 +65,11 @@ src.zip
 #    一并忽略掉（新文件 git add 不进去，且没有任何报错提示）。
 /retroweb/
 
+# oauth21 登录授权前端仓库（根目录下那个，它自带 .git，属嵌套仓）
+# 🔴 同样必须带前导斜杠：写成 `oauth21/` 会匹配任意层级的同名目录。
+# 已拆分为独立仓库：https://github.com/yijiu2025/oauth-web（GPL-3.0）
+/oauth21/
+
 
 # --- 编辑器 / AI 工具配置 ---
 .claude
