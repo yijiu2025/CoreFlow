@@ -29,7 +29,9 @@
 ## 3. oauth21 → **§11/§13/§17**
 
 - 🔴 **主题替换规范 = 根仓 `docs/standards/theme-replacement.md`**（oauth-web `docs/` 有副本；view≡pkg、四入口优先级、`?theme.<设备>`、token 白名单——总文档 FRONTEND_STANDARDS 已接入）。
-- 🔴 **env 四文件同序同注释**（`.env`/`.env.development`/`.env.production`/`.env.example`，14 变量；`.env.production` 的 parent 白名单刻意留空）；死变量 `VITE_APP_TITLE` 已删（title 走路由 meta）。
+- 🔴 **env 四文件同序同注释**（`.env`/`.env.development`/.env.production/`.env.example`，14 变量；`.env.production` 的 parent 白名单刻意留空）；死变量 `VITE_APP_TITLE` 已删（title 走路由 meta）。
+- 🔴 **oauth-web CI 自带**（`.github/workflows/ci.yml`：type-check→lint→vitest→build→dist-nopwa→静态关卡 8 项）；🔴 **eslint 只给 `e2e/` 配了 node 全局** ⇒ 新增 `scripts/*.mjs` 先补 languageOptions 块；🔴 **本机 shim 拦 `vite build`**（后台清 dist 超 50 文件必红，前台 escalation 过；CI runner 无此问题）。
+- **主题热更新设计**（未实现）= `oauth21/docs/theme-hot-update.md`：L1 token/L2 配色已由 `remote.ts` 实现；L3 主题包 CDN 热更（manifest+content-hash+`registerRuntimeTheme`+`import(/* @vite-ignore */)`+SRI），P0-P3 分期，manifest 即开关。
 
 - 🔴 **view ≡ pkg**：`'base'` **不是合法 view 名**；版式优先级 `?view=` > 包声明 > `VITE_<PAGE>_VIEW` > 包名；URL 显式非法值**不回退**。🔴 **设备平级** `mobile|standard|mini|tablet`（mini 独立）⇒ 加设备改 `devices.ts`+写容器。
 - 🔴 **配色/样式**：注册表键**四段**（包/设备/页面/配色）**每版式各一份**；`isDark = tone`、跨设备回落**先按同系别**；URL `?theme=`/`?skin=` **设备无关**；🔴 scoped 禁 `:global(.dark) X` ⇒ **`.dark X`**；black = `#000000` 且两个 bg **同时**设。
