@@ -4,12 +4,19 @@
 #
 # 设计取舍（每条都对应一个真实踩坑点，改动前请先读）：
 #
-# 1. **不用 `npm ci`，改用 `npm install --workspaces=false`**
-#    `package-lock.json` 把 `wb-logkit` 记录为 `link: packages/log` —— 那是被
-#    `.gitignore` 排除的独立嵌套仓库，克隆主仓时并不存在，`npm ci` 会因
-#    workspace 缺失直接失败。忽略 workspaces 后，`wb-logkit` 与
+# 1. **不用 `npm ci`，lockfile 也一律不进镜像；安装用
+#    `npm install --workspaces=false --legacy-peer-deps`**
+#    `package-lock.json`（2026-09-28 起入库，939b91b）把 `wb-logkit` 记为
+#    `link: packages/log` —— 那是被 `.gitignore` 排除的独立嵌套仓库，克隆主仓
+#    时并不存在。`npm ci` 会因 workspace 缺失直接失败；`npm install` 若照到
+#    lock 也会给 `node_modules` 建**悬空软链**（容器里没有 `packages/`），
+#    `import 'wb-logkit'` 立即 ERR_MODULE_NOT_FOUND。所以 lock 只供人/审计看，
+#    安装路径一律不依赖它（2026-10-15 E2E 冒烟连红一周的根因，见 deps 阶段）。
+#    忽略 workspaces 且容器里没有 packages/ 目录时，`wb-logkit` 与
 #    `stable-deviceid` 都从 registry 取**已发布版本**，这在部署语义上更正确：
 #    镜像应当依赖已发布产物，而不是某台开发机上的软链。
+#    `--legacy-peer-deps` 是无 lock 现算理想树的必要项（绕 arborist 崩溃，
+#    根仓 ci.yml 后端三 job 同款；理由见 deps 阶段 RUN 处注释）。
 #
 # 2. **`--ignore-scripts`**
 #    根 `prepare` 脚本是 `husky`（devDependency），`--omit=dev` 后该命令不存在，
@@ -55,16 +62,37 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false \
     NPM_CONFIG_AUDIT=false
 
-# 只拷清单：这一层的缓存由 package.json（以及存在时的 lock）决定，改源码不会触发重装。
-# ⚠️ 用通配符而不是逐个列举：`package-lock.json` **不在仓库里**（被 .gitignore 排除，
-#    原因见文件头第 1 条），写死 `COPY package-lock.json` 会让构建在解析 COPY 时就失败：
-#      ERROR: ... "/package-lock.json": not found
-#    通配符的语义是"有就拷、没有就跳过"，与"刻意不依赖 lockfile 安装"的设计一致。
-COPY package*.json ./
+# 只拷 package.json（🔴 不拷 lockfile，2026-10-15 修）：
+#   lockfile 入库（939b91b）后，旧的 `COPY package*.json` 通配符会把它带进镜像，
+#   而它把两包记为 link（wb-logkit → packages/log、stable-deviceid →
+#   packages/shared-device）—— 容器里没有这些目录，npm install 照 lock 建出
+#   **悬空软链**：安装退出码 0、"added 311 packages" 一路绿灯，import 却
+#   ERR_MODULE_NOT_FOUND。构建期自证原先只查 fastify/sequelize/redis 看不到，
+#   直到 E2E 冒烟的 migrate 步骤才炸（2026-10-08 起连红一周）。
+#   不拷 lock ⇒ npm 从 registry 现算 ⇒ 两包都取**已发布版本**（已在 Temp 复刻树
+#   实测：无 packages/ 目录时 stable-deviceid@1.0.3 / wb-logkit@0.5.0 均装为
+#   真实目录，具名导入与功能正常）。
+#   缓存键只剩 package.json：改源码不会触发重装，语义不变。
+COPY package.json ./
 
-RUN npm install --omit=dev --workspaces=false --ignore-scripts \
+# ⚠️ `--legacy-peer-deps` 不是"放宽校验"，是绕开 npm 10 / arborist 的一个崩溃：
+#    无 lock ⇒ 必须从 registry 现算整棵理想树 ⇒ 三个前端 workspace 的 devDeps
+#    也进图 ⇒ vitest 的 peer 集合让 arborist 走到 `build-ideal-tree.js:1289`
+#    的 `node.parent.edgesOut`（parent 为 null）→ TypeError，安装直接失败。
+#    `--omit=dev` 挡不住它（崩溃发生在装载 peer 集合阶段，实测 2026-10-15：
+#    不带该标志必崩；带上后 267 包装完）。根仓 ci.yml 后端三 job 同款标志。
+RUN npm install --omit=dev --workspaces=false --ignore-scripts --legacy-peer-deps \
  && npm cache clean --force \
- && node -e "require.resolve('fastify'); require.resolve('sequelize'); require.resolve('redis'); console.log('✅ 生产依赖校验通过')"
+ && node --input-type=module -e "
+     await import('fastify');
+     await import('sequelize');
+     await import('redis');
+     const { createLogger } = await import('wb-logkit');
+     const { encodeTimestamp } = await import('stable-deviceid/base62-timestamp');
+     if (typeof createLogger !== 'function') throw new Error('wb-logkit 导出异常');
+     if (typeof encodeTimestamp !== 'function') throw new Error('stable-deviceid 导出异常');
+     console.log('✅ 生产依赖校验通过（含 wb-logkit / stable-deviceid 解析）');
+   "
 
 # ---------------------------------------------------------------------------
 # 阶段 2：运行时
@@ -91,8 +119,8 @@ ENV NODE_ENV=production \
     NPM_CONFIG_UPDATE_NOTIFIER=false
 
 COPY --from=deps /app/node_modules ./node_modules
-# 同上：lockfile 不在仓库里，用通配符避免 "not found"
-COPY package*.json index.js ./
+# 同上：不拷 lockfile（悬空软链的源头，见 deps 阶段）；运行期只需要 package.json
+COPY package.json index.js ./
 COPY src ./src
 COPY migrations ./migrations
 COPY scripts ./scripts
