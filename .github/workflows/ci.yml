@@ -15,14 +15,21 @@
 #     能正常同步校验并安装。lock 入库后这一步才成立 —— 此前 lock 被 .gitignore
 #     无差别排除，只能 `npm install`，构建不可复现。
 #
-#   【后端 lint / test / verify 三个 job】**继续用 `npm install`，不要改 `npm ci`**。
+#   【后端 lint / test / verify 三个 job】**继续用 `npm install`，不要改 `npm ci`**，
+#     且必须带 `--no-package-lock`（2026-10-15 补，test/verify 连红一周的根因）。
 #     根 `package-lock.json` 已入库（供应链审计基线），但它把 `wb-logkit` 记为
 #     `link: packages/log` —— 那是个被 .gitignore 排除的独立嵌套仓库
 #     （https://github.com/yijiu2025/log），CI 检出主仓后并不存在。
 #     实测（2026-09-28）：`npm ci --workspace=packages/shared-device --include-workspace-root`
 #     本身能装上（exit 0，736 包），但 npm **会照样给 `node_modules/wb-logkit` 建一条
 #     指向 `packages/log` 的**悬空软链**，`import 'wb-logkit'` 立即 `ERR_MODULE_NOT_FOUND`
-#     → 后端三个 job 齐红。所以根 lock 是"给人/审计看的基线"，不是后端安装路径。
+#     → 后端三个 job 齐红。
+#     🔴 2026-10-15 补：`npm install` **同样照 lock 建软链**（939b91b 当天只验证了
+#         `npm ci` 会挂，漏了 `install` 这条路）—— lock 入库后 test/verify 连红一周，
+#         报错与 ci 一字不差。修法：安装命令统一加 `--no-package-lock`，安装路径
+#         彻底不读 lock（与 Dockerfile deps 阶段同思路）；lock 退回"只给人/审计看"
+#         的单一职责。实测该标志下 wb-logkit 从 registry 装为真实目录、
+#         stable-deviceid 软链指向**存在的** packages/shared-device（有效）。
 #
 #   安装范围 = `--workspace=packages/shared-device --include-workspace-root`：
 #     只把「根工程 + shared-device 这一个 workspace」纳入安装，
@@ -111,7 +118,7 @@ jobs:
         #    `import 'wb-logkit'` 直接 ERR_MODULE_NOT_FOUND。详见文件头注释。实测 2026-09-28。
         run: |
           npm install --workspace=packages/shared-device --include-workspace-root \
-            --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+            --ignore-scripts --legacy-peer-deps --no-package-lock --no-audit --no-fund
           node packages/shared-device/scripts/build.mjs
 
       # 只扫"我们维护的代码"：
@@ -138,7 +145,7 @@ jobs:
         # ⚠️ 同 lint job：后端保持 `npm install`，理由见文件头注释（wb-logkit 悬空软链）。
         run: |
           npm install --workspace=packages/shared-device --include-workspace-root \
-            --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+            --ignore-scripts --legacy-peer-deps --no-package-lock --no-audit --no-fund
           node packages/shared-device/scripts/build.mjs
 
       # 必须带 --experimental-vm-modules：项目是 ESM 且测试大量使用
@@ -168,9 +175,15 @@ jobs:
 #      不在（本 job 单仓 checkout / 开源用户）→ 删键，解析回落 node_modules 的 npm 版。
 #      所以 lock 里这两个包不只是"让审计说得通"—— standalone 形态下构建产物真用它们，
 #      改包源码必须同步发版（npm 版滞后 = CI 验的是旧代码）。
-  # ⚠️ `packages/theme-core` 是 **git submodule**（.gitmodules → yijiu2025/theme.git），
-  #    vite alias 直指它的 `src/index.ts` —— checkout 必须带 `submodules: recursive`，
-  #    否则该目录是空的、type-check / build 直接失败。
+# ⚠️ `packages/theme-core` 是 **git submodule**（.gitmodules → yijiu2025/theme.git，公开仓），
+#    vite alias 直指它的 `src/index.ts` —— checkout 后必须精确 init 这一个
+#    （见下方「拉取主题内核 submodule」步骤），否则该目录是空的、type-check / build
+#    直接失败。
+#    刻意**不**用 `submodules: recursive`：另一个 submodule `phonecopy` 是**私有**仓
+#    （本地嵌套仓，8 万文件第三方快照），CI 的 GITHUB_TOKEN 无权访问，recursive 会让
+#    整个 checkout 以 `No url found for submodule path 'phonecopy'` 失败
+#    （2026-10-15 实测；声明缺失已随 .gitmodules 补全修复，但私有属性不变，
+#    CI 依然不能整树拉）。
   #
   # 为什么不用 `--legacy-peer-deps`：这条路径是 `npm ci`，按 lock 精确安装、
   # 不重新求解 peer；文件头记录的 arborist 崩溃只发生在 `npm install` 现算理想树时。
@@ -179,9 +192,11 @@ jobs:
     name: Frontend（oauth21）
     runs-on: ubuntu-latest
     steps:
+      # 不递归拉 submodule：phonecopy 私有（CI 拉不动），前端只需要 theme-core
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: 拉取主题内核 submodule（公开仓）
+        run: git submodule update --init packages/theme-core
 
       - uses: actions/setup-node@v4
         with:
@@ -254,7 +269,7 @@ jobs:
         # ⚠️ 同 lint job：后端保持 `npm install`，理由见文件头注释（wb-logkit 悬空软链）。
         run: |
           npm install --workspace=packages/shared-device --include-workspace-root \
-            --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+            --ignore-scripts --legacy-peer-deps --no-package-lock --no-audit --no-fund
           node packages/shared-device/scripts/build.mjs
 
       # 关卡用 process.loadEnvFile() 自己读 env 文件（因为 npm run 会丢命令行变量），
