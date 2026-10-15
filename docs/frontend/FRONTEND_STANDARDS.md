@@ -2,7 +2,7 @@
 
 > 适用项目：`oauth21`（登录/注册 SSO 中心）、`firewall`（防火墙）、`admin`（管理后台）、`posecraft`（AI 姿势分析）
 > 目标：统一前端工程结构、组件、服务、安全实践，提升可维护性与交接效率
-> 配套文档：[PWA_GUIDE.md](./PWA_GUIDE.md)（PWA 接入规范）、[theme.md](./theme.md)（主题规范）、[coding-standard.md](./coding-standard.md)（编码风格）、[auth-integration.md](./auth-integration.md)（认证集成）、[overview.md](./overview.md)（架构总览）
+> 配套文档：[PWA_GUIDE.md](./PWA_GUIDE.md)（PWA 接入规范）、[theme.md](./theme.md)（主题基线：CSS 变量与明暗 Store）、[theme-replacement.md](./theme-replacement.md)（主题替换规范：主题包 × 设备 × 页面 × 配色，换 UI/配色不改业务代码）、[coding-standard.md](./coding-standard.md)（编码风格）、[auth-integration.md](./auth-integration.md)（认证集成）、[overview.md](./overview.md)（架构总览）
 
 > **历史说明**：旧版本文档（`FRONTEND_STANDARDS.md.corrupted`）因编辑工具双重编码损坏，已不可读但保留在 git 历史中可查。本文为重写版，按当前项目实际实践沉淀。
 
@@ -53,6 +53,9 @@
 │   ├── layouts/            # 路由布局（BlankLayout 等）
 │   ├── router/             # 路由
 │   ├── stores/             # Pinia 状态
+│   ├── theme/              # 主题体系：主题包 × 设备 × 页面 × 配色（换 UI 不改业务代码）
+│   │   ├── views/          #   版式机制（架构层：契约 + 注册表，与主题包无关）
+│   │   └── themes/         #   主题包：<包>/<设备>/<页面>/{index.vue, colors/<配色>/}
 │   ├── utils/              # 工具函数（request、crypto、sign、device）
 │   ├── view/               # 页面（按平台/功能分子目录）
 │   │   ├── web/            # PC 端页面
@@ -71,6 +74,7 @@
 - **不内嵌其他模块**：组件 A 中不出现组件 B 的 UI/逻辑
 - **状态归属**：由消费方（父组件）管理状态，不内嵌数据
 - **跨模块通信**：通过 props / emit / v-model / 共享 composable，禁止反向依赖
+- **业务容器 vs 主题版式**：页面拆成「业务容器」（状态/校验/请求，每页每设备一份）与「版式」（只长什么样，读容器给的 `ctx` 渲染）。业务逻辑禁止进版式，版式只读 `ctx`/`ctx.actions` —— 目录契约、替换入口与优先级见 [theme-replacement.md](./theme-replacement.md)
 
 ---
 
