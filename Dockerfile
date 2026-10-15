@@ -75,24 +75,21 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
 #   缓存键只剩 package.json：改源码不会触发重装，语义不变。
 COPY package.json ./
 
+# 校验脚本随包清单进 deps 阶段（构建期自证用，见下方 RUN；runtime 阶段另有
+# `COPY docker ./docker` 会再带一份，体积可忽略）
+COPY docker/verify-deps.mjs ./docker/verify-deps.mjs
+
 # ⚠️ `--legacy-peer-deps` 不是"放宽校验"，是绕开 npm 10 / arborist 的一个崩溃：
 #    无 lock ⇒ 必须从 registry 现算整棵理想树 ⇒ 三个前端 workspace 的 devDeps
 #    也进图 ⇒ vitest 的 peer 集合让 arborist 走到 `build-ideal-tree.js:1289`
 #    的 `node.parent.edgesOut`（parent 为 null）→ TypeError，安装直接失败。
 #    `--omit=dev` 挡不住它（崩溃发生在装载 peer 集合阶段，实测 2026-10-15：
 #    不带该标志必崩；带上后 267 包装完）。根仓 ci.yml 后端三 job 同款标志。
+# ⚠️ 自证走独立脚本而不是内联 `node -e`：Dockerfile 的续行不进入引号字符串，
+#    多行 `-e` 会被解析器当成新 instruction（首版实测 `unknown instruction: await`）。
 RUN npm install --omit=dev --workspaces=false --ignore-scripts --legacy-peer-deps \
  && npm cache clean --force \
- && node --input-type=module -e "
-     await import('fastify');
-     await import('sequelize');
-     await import('redis');
-     const { createLogger } = await import('wb-logkit');
-     const { encodeTimestamp } = await import('stable-deviceid/base62-timestamp');
-     if (typeof createLogger !== 'function') throw new Error('wb-logkit 导出异常');
-     if (typeof encodeTimestamp !== 'function') throw new Error('stable-deviceid 导出异常');
-     console.log('✅ 生产依赖校验通过（含 wb-logkit / stable-deviceid 解析）');
-   "
+ && node docker/verify-deps.mjs
 
 # ---------------------------------------------------------------------------
 # 阶段 2：运行时
