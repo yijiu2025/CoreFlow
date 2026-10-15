@@ -24,6 +24,25 @@ export async function up({ queryInterface, Sequelize }) {
     }
   }
 
+  /**
+   * 手工下裸 SQL 加索引（Sequelize 的 addIndex **不支持给列指定前缀长度**）。
+   *
+   * 🔴 为什么需要它：MySQL 不允许 TEXT/BLOB 列直接进索引 ——
+   *    `BLOB/TEXT column 'target' used in key specification without a key length`。
+   *    target 存的是 SMILES（可能很长），必须写成 `target(191)` 这种前缀索引。
+   *    191 个字符在 utf8mb4 下是 764 字节，还在 InnoDB 单列 3072 字节上限内，
+   *    而且不同分子的 SMILES 前 191 字符几乎必然不同 ⇒ 区分度足够。
+   */
+  async function addPrefixIndex(tableName, indexName, columnExpr) {
+    try {
+      await queryInterface.sequelize.query(
+        `ALTER TABLE \`${tableName}\` ADD INDEX \`${indexName}\` ${columnExpr}`
+      );
+    } catch (err) {
+      if (!err.message.includes('Duplicate key name')) throw err;
+    }
+  }
+
   // ---------- 1. 任务 ----------
   await createTableIfNotExists('retroweb_task', {
     id: { type: Sequelize.BIGINT, primaryKey: true, autoIncrement: true },
@@ -51,7 +70,8 @@ export async function up({ queryInterface, Sequelize }) {
   });
   await addIndexIfNotExists('retroweb_task', ['user_id', 'updated_at'], { name: 'idx_task_user_updated' });
   await addIndexIfNotExists('retroweb_task', ['user_id', 'status'], { name: 'idx_task_user_status' });
-  await addIndexIfNotExists('retroweb_task', ['user_id', 'target'], { name: 'idx_task_user_target' });
+  // 🔴 不能写成 ['user_id', 'target']：TEXT 列必须带前缀长度，否则 MySQL 直接拒绝
+  await addPrefixIndex('retroweb_task', 'idx_task_user_target', '(user_id, target(191))');
   await addIndexIfNotExists('retroweb_task', ['user_id', 'client_id'], { name: 'idx_task_user_client' });
 
   // ---------- 2. 路线方案 ----------
