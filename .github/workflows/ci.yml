@@ -163,9 +163,11 @@ jobs:
   #    两个本地包 `skinsuite` / `stable-deviceid` 现已**显式声明在
   #    `oauth21/package.json` 的 dependencies 里**（作为「可解析性声明」，不再是幽灵依赖），
   #    因此 lock 里带它们的 resolved + integrity，`npm ci` 能正常同步校验。
-  #    ⚠️ 但运行期解析仍走 `vite.config.js` 的 resolve.alias 直指
-  #      `../packages/*/src/index.ts`（源码直供，优先于 node_modules 里的 dist 版本）。
-  #      所以真装进来的 npm 版只是"让 lock/审计说得通"，不参与构建产物。
+#    ⚠️ 但运行期解析走 `oauth21/config/aliases.ts` 的**双形态**注册（2026-10-15 修）：
+#      上级 `packages/` 在 → alias 源码直供（monorepo 开发态，优先于 node_modules）；
+#      不在（本 job 单仓 checkout / 开源用户）→ 删键，解析回落 node_modules 的 npm 版。
+#      所以 lock 里这两个包不只是"让审计说得通"—— standalone 形态下构建产物真用它们，
+#      改包源码必须同步发版（npm 版滞后 = CI 验的是旧代码）。
   # ⚠️ `packages/theme-core` 是 **git submodule**（.gitmodules → yijiu2025/theme.git），
   #    vite alias 直指它的 `src/index.ts` —— checkout 必须带 `submodules: recursive`，
   #    否则该目录是空的、type-check / build 直接失败。
