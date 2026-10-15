@@ -1,20 +1,19 @@
 # ============================================================================
 # CI —— 提交门禁
 #
-# 四条作业，对应四类"本可以拦住"的回归：
+# 三条作业，对应三类"本可以拦住"的回归：
 #   lint      → 后端风格与约定（导出位置、禁 console、prettier）
 #   test      → 后端单元 / 契约 / 结构守卫（Jest）
-#   frontend  → oauth21 前端（类型 / 规范 / 单测 / 生产构建）
 #   verify    → 跨进程不变量（分布式锁、WS 扇出、遥测聚合）—— 只能多进程验证
 #
+# 🔴 前端闸门**不在本仓**：oauth21 已于 2026-10-14 拆为独立仓 oauth-web
+#   （GPL-3.0，github.com/yijiu2025/oauth-web），类型/规范/单测/构建/静态关卡
+#   在那边自己的 CI 跑。本仓自 986e34e 起不再跟踪 oauth21/ 目录，此前的
+#   frontend job（`npm ci --prefix oauth21`）随拆分失去目标、连红数日，
+#   于 2026-10-15 删除。
+#
 # 关于依赖安装：分两类作业，口径**刻意不同**。
-#
-#   【前端 frontend job】用 `npm ci --prefix oauth21`。
-#     oauth21 是独立前端工程，有自己的 `oauth21/package-lock.json`（已入库），
-#     它的依赖图与根工程完全无关（不引用 `wb-logkit` 那条 link），所以 `npm ci`
-#     能正常同步校验并安装。lock 入库后这一步才成立 —— 此前 lock 被 .gitignore
-#     无差别排除，只能 `npm install`，构建不可复现。
-#
+##
 #   【后端 lint / test / verify 三个 job】**继续用 `npm install`，不要改 `npm ci`**，
 #     且必须带 `--no-package-lock`（2026-10-15 补，test/verify 连红一周的根因）。
 #     根 `package-lock.json` 已入库（供应链审计基线），但它把 `wb-logkit` 记为
@@ -73,8 +72,6 @@
 #   但缓存恢复后仍要走 `npm install`（见上：后端不能用 ci），而 `cache: npm` 的
 #   收益只在 `npm ci` 路径上才成立；开着它只会给一个命中率无意义的缓存目录。
 #   真要开，必须先让后端也具备 `npm ci` 能力（= 让 `packages/log` 在 CI 里存在）。
-#   **frontend job 可以考虑开 `cache: npm` + `cache-dependency-path: oauth21/package-lock.json`**，
-#   因为那一条走的正是 `npm ci`。
 #
 # 关于数据库：**测试作业不需要 MySQL/Redis**。
 #   这不是省事，是实测结论 —— `framework/db` 在测试环境检测到缺配置会跳过而非退出，
@@ -152,92 +149,6 @@ jobs:
       # jest.unstable_mockModule，直接 npx jest 会丢掉这个标志而大面积失败。
       - name: 运行测试
         run: node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci
-
-  # --------------------------------------------------------------------------
-  # 2.5 oauth21 前端（类型 / 规范 / 单测 / 生产构建）
-  #
-  # 为什么此前完全没有这条作业：三个前端工程（oauth21 / posecraft / firewall）
-  # 各有自己的构建与依赖，而 CI 的依赖安装刻意只装 `packages/shared-device` 一个
-  # workspace（见文件头注释），所以前端的 vue-tsc / eslint / build 在 CI 上一次
-  # 都没跑过 —— 本地能过靠的是人记得手动跑。这里补上 oauth21 的闸门。
-  #
-  # oauth21 是**独立前端项目**（有自己的 package.json / node_modules / lock），
-  # 不是 workspace 成员，因此用 `npm ci --prefix oauth21` 独立安装，而不是
-  # `--workspace=oauth21`。
-  #
-  # 🔴 **用 `npm ci` 而非 `npm install`**：lock 已入库（2026-09-28 起），
-  #    这一步从 registry 现算树变成严格按 lock 复现，构建可复现、供应链有基线。
-  #    两个本地包 `skinsuite` / `stable-deviceid` 现已**显式声明在
-  #    `oauth21/package.json` 的 dependencies 里**（作为「可解析性声明」，不再是幽灵依赖），
-  #    因此 lock 里带它们的 resolved + integrity，`npm ci` 能正常同步校验。
-#    ⚠️ 但运行期解析走 `oauth21/config/aliases.ts` 的**双形态**注册（2026-10-15 修）：
-#      上级 `packages/` 在 → alias 源码直供（monorepo 开发态，优先于 node_modules）；
-#      不在（本 job 单仓 checkout / 开源用户）→ 删键，解析回落 node_modules 的 npm 版。
-#      所以 lock 里这两个包不只是"让审计说得通"—— standalone 形态下构建产物真用它们，
-#      改包源码必须同步发版（npm 版滞后 = CI 验的是旧代码）。
-# ⚠️ `packages/theme-core` 是 **git submodule**（.gitmodules → yijiu2025/theme.git，公开仓），
-#    vite alias 直指它的 `src/index.ts` —— checkout 后必须精确 init 这一个
-#    （见下方「拉取主题内核 submodule」步骤），否则该目录是空的、type-check / build
-#    直接失败。
-#    刻意**不**用 `submodules: recursive`：另一个 submodule `phonecopy` 是**私有**仓
-#    （本地嵌套仓，8 万文件第三方快照），CI 的 GITHUB_TOKEN 无权访问，recursive 会让
-#    整个 checkout 以 `No url found for submodule path 'phonecopy'` 失败
-#    （2026-10-15 实测；声明缺失已随 .gitmodules 补全修复，但私有属性不变，
-#    CI 依然不能整树拉）。
-  #
-  # 为什么不用 `--legacy-peer-deps`：这条路径是 `npm ci`，按 lock 精确安装、
-  # 不重新求解 peer；文件头记录的 arborist 崩溃只发生在 `npm install` 现算理想树时。
-  # --------------------------------------------------------------------------
-  frontend:
-    name: Frontend（oauth21）
-    runs-on: ubuntu-latest
-    steps:
-      # 不递归拉 submodule：phonecopy 私有（CI 拉不动），前端只需要 theme-core
-      - uses: actions/checkout@v4
-
-      - name: 拉取主题内核 submodule（公开仓）
-        run: git submodule update --init packages/theme-core
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          # lock 已入库 → 这条路径是 `npm ci`，缓存命中是有意义的
-          cache: npm
-          cache-dependency-path: oauth21/package-lock.json
-
-      - name: 安装依赖（lock 复现）
-        run: npm ci --prefix oauth21 --ignore-scripts --no-audit --no-fund
-
-      # 顺序刻意按「类型 → 规范 → 单测 → 构建」：
-      # 类型错是最便宜的（不进构建），先挡；构建最贵（含 type-check），放最后兜底。
-      - name: 类型检查（vue-tsc -b）
-        run: npm run type-check --prefix oauth21
-
-      - name: ESLint
-        run: npm run lint --prefix oauth21
-
-      - name: 单元测试（vitest）
-        run: npm run test --prefix oauth21
-
-      - name: 生产构建
-        run: npm run build --prefix oauth21
-
-      # 静态验收关卡（不需要 dev server / 浏览器）——把「配置写错但无声」的那一类挡在 CI。
-      # 为什么挑这四个进 CI：
-      #   verify-alias-single-source  → 别名三处漂移（vite/tsconfig/aliases.ts），此前只能靠人记
-      #   verify-kernel-zero-coupling → 内核包若 import vue 会静默出两份 Vue，npm/构建都不报
-      #   verify-console-strip        → Vite 8 下 `build.esbuild.drop` 静默失效（实测残留 28 处），
-      #                                 本关卡自建一次构建扫产物，属"以为有其实没有"的典型
-      #   verify-no-any-debt          → 评审 P1：52 处 any 集中在登录/验证码边界，守卫防回涨
-      # ⚠️ 其余关卡（verify-theme-dirs / verify-glob-device / verify-no-pwa）暂未进 CI：
-      #    theme-dirs / glob-device 依赖本地子模块与主题目录的完整形态，可在后续按需补；
-      #    verify-no-pwa 需要 dist-nopwa 产物（当前 CI 只产出默认 dist）。
-      - name: 静态验收关卡
-        run: |
-          node oauth21/e2e/verify-alias-single-source.mjs
-          node oauth21/e2e/verify-kernel-zero-coupling.mjs
-          node oauth21/e2e/verify-console-strip.mjs
-          node oauth21/e2e/verify-no-any-debt.mjs
 
   # --------------------------------------------------------------------------
   # 3. 跨进程不变量（E1 分布式锁 / E3 遥测聚合 / E3 WS 扇出）
