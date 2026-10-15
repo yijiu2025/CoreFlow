@@ -4390,3 +4390,1354 @@ searcher = RetroStarSearch(..., limit_reaction_model_calls=_calls_base + max_cal
 要跑到运行时才 `NameError: name 'force' is not defined`）。
 ⇒ 正确做法：**先把同一文件的所有改动叠进内存**（先全部做命中检查），**再统一落盘**。
 （这与「同一文件多 Edit 同条消息会静默丢失」是同一个坑的另一副面孔。）
+
+---
+
+## §54 正向模型「可行性过滤」+ USPTO-FULL 入表
+
+**需求**：模型表加官方 `RetroChimera (USPTO-FULL)`；把正向模型做成界面开关 —— 逆向模型每吐
+一条候选，用正向模型复核「这些前体 → 目标产物」是否命中正向 top-k，命中才保留（砍幻觉前体）。
+提交：`retro` `922d99b`、`retroweb` `16cddcc`（远端 `ls-remote` 已核对）。
+
+### 54.1 机制（全部用 syntheseus 自带，别自研）
+`FilteredBackwardReactionModel` + `ForwardReactionFilterModel`：
+- `filters/forward.py::_get_acceptance()` 对每条候选调
+  `forward_model([rxn.reactants], num_results=top_k)`，判 `rxn.product in pred.products`。
+- `Molecule` 是 frozen dataclass，**eq/hash 只看 `(smiles, identifier)`**（`metadata` 不参与）
+  ⇒ 匹配靠 **canonical SMILES**。构造 `Molecule` 默认 `canonicalize=True, make_rdkit_mol=True`
+  ⇒ **SMILES 必须合法**（`MolFromSmiles` 非法返回 None，`MolToSmiles(None)` 抛
+  "Cannot canonicalize..."）。
+- 包装对象额外暴露 `acceptance_rate = _num_accepted / max(_num_seen,1)`（0/1 都是**异常信号**：
+  全删或全留）。
+- 🔴 **`FilteredBackwardReactionModel.__init__` → `super().__init__()` → `BaseModel.reset()`
+  → `backward_model.reset()`** ⇒ **构造包装会当场把底层 `num_calls()` 归零**。
+
+### 54.2 🔴 预算基线：取「真正交给搜索器的对象」，且在包装构造**之后**读
+`should_stop_search` 比的是 `reaction_model.num_calls() >= limit_reaction_model_calls`
+（`num_calls()` = **缓存未命中累计数**，只被 `reset()` 归零）。做法：
+```python
+wrapped = False; search_model = model
+if use_forward_filter:
+    search_model = wrap_with_forward_filter(model, forward_model, top_k=forward_top_k)
+    wrapped = True
+_calls_base = search_model.num_calls()          # ← 必须在包装之后
+limit_reaction_model_calls=_calls_base + max_calls
+```
+- 顺序反了（先读 `model.num_calls()`）⇒ 包装随后 reset 归零，但 limit 已按旧计数抬高 ⇒
+  **预算越搜越松**。探针实测反例：`三次消耗 = [6, 12, 18]`。
+- 不清 cache（跨搜索复用同一分子预测）是本项目的**有意选择**；代价是 must 用「基线+本次」表达。
+
+### 54.3 正向模型：独立注册 + 可热挂
+- **单独 `FORWARD_MODELS`，禁止塞进 `MODELS`**：塞进去前端会渲染成一格可选「预测模型」，
+  选中它跑逆合成必然失败。`/api/models` 用独立的 `forward` 字段承载（`models` 数组不变）。
+- `default_forward_key()` **默认空串 = 不预加载**（不替所有人吃 ~1GB 内存）；
+  `RETRO_PRELOAD_FORWARD` 才指定；`=none` 显式关。
+- 🔴 **可热挂（`POST /forward/load`），与「换逆向模型」不是一回事**：换逆向模型要
+  stop→start（Windows spawn 死锁 ⇒ 加载必须在单线程阶段），会顺带丢掉已加载模型；
+  正向模型是**纯 transformer、构造时不 spawn 规则子进程** ⇒ HTTP 起来后热挂即可。
+- 因此前端 `syncModelsPolling` 的「忙」**必须**含 `forwardModel.state==='loading'`
+  （此时 `service.state` 已 ready、`models` 里没有任何 loading 行 ⇒ 只按这两者判忙会**立刻停
+  轮询**，按钮永远停在「加载中」）。
+- 未就绪却开了开关 ⇒ **在提交任务之前**拦（`app.py::_require_forward_ready()` +
+  `jobhub.make_search_runner(..., forward_check=)` 两条路都拦），给可照做的提示；
+  `/search` 白名单加 `use_forward_filter`/`forward_top_k`，但 **`forward_model` 不在白名单**，
+  由 `ModelHost.search()` 注入（客户端不能指定任意模型对象）。
+
+### 54.4 `catalog()` 的 forward 状态机（4 分支，错一个=「看着就绪、一点就失败」）
+优先级：**缺文件 → `unavailable`** ＞ 服务没在跑（`not running`，即使 state 文件说 ready）
+→ `idle` ＞ 服务报的是**别的 key** → `idle` ＞ 否则透传 `loading/ready/failed`
+（failed 带 `error`，附带 `load_seconds`）。老模型服务不返回 `forward` ⇒ 前端按「没有正向模型」
+渲染（`forward=null`，不崩、也不假装就绪）。
+
+### 54.5 🔴 探针两个坑（`.tmp-probe/verify-forward-filter.py`，A~E 32 条）
+- **要让预算成为唯一约束**：单链假模型每展开一层 OR 深度 **+2**（OR→AND→OR），而
+  `run_retro_search` 把 `max_depth` 夹在 **8** ⇒ **4 次展开就撞 `too_deep`**，
+  `max_calls=6` 永远吃不满（那时断言量的是**层数**，不是预算，看着在量其实啥也没量）。
+  改法：假模型每次吐 **3 条**（分叉）⇒ 层数上限要 40 次展开才够，预算才成为真约束。
+- **假模型的 `metadata`**：`ReactionModelLogProbCost` 会读 `rxn.metadata["probability"]`，
+  缺了直接抛 `Cannot call node evaluator as reaction model probability is not set`。
+- 反向证明：`.tmp-probe/_reverse_proof.py`（备份→打补丁→跑→**整文件拷回**→`diff` 验还原）。
+  两组：拆接线 ⇒ 红 A 节整组；基线读在包装前 ⇒ `[6, 12, 18]`。
+
+### 54.6 🔴 store 试验台的前缀陷阱（本次真凶）
+适配器里 `if (url.endsWith('/load'))`（重载**逆向**模型）**会抢先匹配 `/forward/load`**
+（`'/forward/load'.endsWith('/load')` 为真）⇒ 请求被当成「重载逆向模型」（service 切 loading、
+forward 一直 idle）。后果：**5 条假红** + **service 永远 loading ⇒ 轮询永不停止 ⇒ node 进程
+不退出**（`test:store` 跑 9 分钟不结束的真相；`process.exitCode` 不结束事件循环）。
+- 修法：**更具体的分支排在前面**（`/forward/load` 判在 `/load` 之前）。
+- 另一条断言本身也写错：用 `endsWith('/load')` 去排除「重载逆向模型」⇒ 出现 `/forward/load`
+  必判失败。要排除就精确到 `u === '/load'`（`loadModel` → `'/load'`）。
+- 一般规则：**路由/URL 判据禁用 `endsWith` 这种前缀包含式写法**，除非确认没有更长的同后缀路由。
+
+### 54.7 其他事实
+- **figshare**（实测）：直链**首跳 302 且 `Content-Length: 0`**，真实长度只在 S3 那段 ⇒
+  「下全了没」按 `zip_bytes` 判，**不能看响应头**。Pistachio 4213968927B / USPTO-50K
+  284852815B / USPTO-FULL 4607889148B（文件 59494598）/ ForwardChimera 835317085B（文件
+  66654872，zip 内名 `forwardchimera_denovo_pistachio.zip`）。本机速率约 **38 KB/s** ⇒
+  4.6GB≈35h、835MB≈6h，**不适合实下**，只交付 `scripts/download_model.py`（断点续传。
+  `curl -L -C - --retry 8 --retry-all-errors`，无 curl 时 urllib+Range 兜底）+ 文档。
+- **`ForwardModelClass` 枚举只有 `Chemformer`** ⇒ 官方 CLI 的 `forward_filter` **接不上**
+  RetroChimera 的正向模型（`ForwardChimeraDeNovoModel` 在 `core/retrochimera/inference`
+  已导出），必须手写装配。
+- **Python 3.9.7 运行时**：`web/*.py` 的 `from __future__ import annotations` 在**模块
+  docstring 之后** ⇒ `head -3` 查不到，别用 head 判断有没有它；PEP 604 `X | None` 注解
+  因延迟求值才安全。改完跑 `py_compile` + **真导入**（`import jobhub, model_runtime,
+  model_client, app, model_server`）。
+
+---
+
+## §55 多步搜索「官方用法文档」+ 搜索进行中的主区动画面板（2026-10-08 第三轮）
+
+**需求两条**：① 把多步搜索（Retro\* / syntheseus）的**官方完整用法**写成文档（参数、默认值、
+CLI、调参）；② 多步搜索进行时**主区动画要明显**，位置 = 截图红框 = **画布中央的一片留白**
+（现状：唯一的动静是右栏底部那行小字「搜索中 · 多步路线搜索 … 停止」，主区一片死寂）。
+
+**落盘**：`retro` 仓 `3ea8f17`（`使用说明.md` 1 文件 +254/−4）；`retroweb` 仓 `9908fda`
+（6 文件 +537/−6：新增 `components/workspace/SearchProgress.vue`，改 `StepTree.vue`、
+`RouteCanvas.vue`、`stores/workspace.ts`、`components.d.ts`、`tests/store-harness.ts`）。
+两远端 `git ls-remote` 已核对 == 本地 HEAD。
+
+### 55.1 🔴 `DEFAULT_NUM_RESULTS=100`：「每步候选数」不作用于多步搜索
+
+- 常量在 `syntheseus/interface/models.py:17`（`DEFAULT_NUM_RESULTS = 100`）。
+- 搜索主循环调 `self.reaction_model(mols)` 时**不带 `num_results`** ⇒ 走模型自己的
+  `default_num_results`。官方 CLI 用 `get_model(default_num_results=num_top_results)` 覆盖成
+  **50**（`num_top_results` 默认 50）；**本项目直接构造 `RetroChimeraModel(model_dir=…)` 没传**
+  ⇒ 实际用的是 syntheseus 全局默认 **100**。
+- ⇒ 界面上那个「每步候选数」**只作用于单步预测**，多步搜索里改它无效。写进文档，免得用户
+  以为「调小了就能搜快些」。
+
+### 55.2 官方 CLI 的形状与两个必知
+
+- 入口是壳：`retrochimera/cli/run_search.py`（仅 `SearchConfig(BackwardModelConfig,
+  syntheseus.cli.search.BaseSearchConfig)`）→ `syntheseus/cli/search.py::main(argv, config_cls)`。
+- 🔴 参数是 **OmegaConf `key=value`**，**不是 `--flag`**：`python -m retrochimera.cli.run_search
+  model_class=RetroChimera model_dir=… search_target="…" inventory_smiles_file=… time_limit_s=600`。
+  可叠 `--config x.yaml`，**命令行优先级最高**。
+- 🔴 **本机直接跑必先报** `ValueError: Could not import visualization code (likely `viz`
+  dependencies are not installed); please install missing dependencies or set
+  `num_routes_to_plot=0``。**它先校验、后加载模型**（报错时模型根本没开始载）⇒ 别误判成
+  「模型加载失败」。解法：加 `num_routes_to_plot=0`（或装 viz/graphviz 依赖）。
+- `search_config.yml`（syntheseus 自带）按 **(算法 × 模型)** 给超参覆写；**RetroChimera 没有
+  条目** ⇒ 走 `RetroStarConfig` 的**类默认**（`max_expansion_depth=10`、
+  `value_function=ConstantNodeEvaluator(0.0)`、`and_node_cost_fn=ReactionModelLogProbCost`）。
+
+### 55.3 官方默认值（实测本机 syntheseus，config dump 逐项核对）
+
+`time_limit_s=600` · `limit_reaction_model_calls=1_000_000` · `limit_iterations=1_000_000` ·
+`limit_graph_nodes=INT_INF(10^17)` · `prevent_repeat_mol_in_trees=True` ·
+`stop_on_first_solution=False` · `expand_purchasable_target=False` · `num_top_results=50` ·
+`reaction_model_use_cache=True` · `save_graph=True` · `num_routes_to_plot=5` ·
+`forward_filter.top_k=5`；`retro_star.max_expansion_depth=10`；
+`mcts`：depth 20 / `value=0.5` / `bound_constant=1.0`；
+`pdvn`：depth 10 / `c_dead=5.0` / `bound_constant=1e2`。
+`BackwardModelClass` 枚举：Chemformer / GLN / Graph2Edits / LocalRetro / MEGAN / MHNreact /
+RetroChimeraDeNovo / RetroChimeraEdit / RetroChimera / RetroKNN / RootAligned；
+🔴 `ForwardModelClass` **只有 Chemformer**。
+
+### 55.4 停止条件 `should_stop_search`
+
+`elapsed>=time_limit_s` ∨ `num_calls()>=limit_reaction_model_calls` ∨
+`len(graph)>=limit_graph_nodes` ∨ (`stop_on_first_solution` ∧ 根已有解)；
+旁路 = `limit_iterations` 用完 或 **队列空**（提前返回，不需要上面四条命中）。
+🔴 `num_calls()` 是**缓存未命中累计数**，只在 `reaction_model.reset()` 归零 ⇒ 与 §50 的
+「跨搜索累计 ⇒ 开局即停」是同一根因的不同侧面。
+
+### 55.5 库存两套口径
+
+官方：`SmilesListInventory.load_from_file(inventory_smiles_file)`（真实供应商目录）。
+本项目：`make_inventory(max_heavy_atoms, purchasable)`（**重原子数 ≤N 即视为可购买** ∨ 显式
+白名单，二者「或」；比较前转 **RDKit canonical SMILES**）。文档里要分清这两套，否则「为什么
+这个分子被判可购买」对不上。
+
+### 55.6 🔴 搜索动画面板：计时起点必须由 store 落，组件只做减法
+
+面板（`SearchProgress.vue`）**挂在页签上** ⇒ 组件可能在搜索**跑到一半才挂载**（用户在搜索
+进行中来回切页签、甚至刷新页面后恢复会话）。组件自己 `Date.now()` 起表 ⇒ **显示用时比真实短**。
+- 起点由**发起搜索的那一方**落下：`stores/workspace.ts` 的 `autoRun()` 在
+  `autoRunning=true` 之后写 `autoStartedAt.value = Date.now()`，`finally` 里 `autoRunning=false`
+  之后归零（免得下次开跑前残留上一次读数）。组件只做 `Date.now() - store.autoStartedAt` 的减法。
+- 正反两向都证过：删写入行 ⇒ store 试验台「进行中 autoStartedAt 已落下 — null」红；
+  删 finally 归零 ⇒「开跑前为 null」「跑完归零」两条红。
+
+### 55.7 🔴 面板的两个位置判据坑（本轮真凶）
+
+- **判「画布是不是空的」禁用 `hasRoute`**：它判的是「有没有根节点卡片」，**有目标之后就恒为
+  true**（画布里始终画着那张目标卡）⇒ 拿它当空画布判据 ⇒ 面板**永远不显示**。
+  正确：`store.autoRunning && !route.length`。
+- 🔴 **`.rcanvas__empty` 与 `.rcanvas__wrap` 是一对 `v-if` / `v-else`** ⇒ 面板 div 必须插在
+  **`v-if` 那位之前**；中间插任何元素都会让 **`v-else` 失效**（与 §29/§36 是同一条规则的
+  再次踩中：Vue **只认紧邻的 `v-if`/`v-else`**）。
+- 位置选在**树体里根节点之后、留白中央偏上**（正好落在截图红框处），**不遮挡根卡片**；
+  路线网络页签里则钉在**画布上方**一条（盖中央会压住目标卡，那是此刻唯一的上下文）。
+
+### 55.8 🔴 探针计数用 `:visible`：el-tabs 内容常驻 DOM
+
+`el-tabs` 的**所有页签内容常驻 DOM**（非当前页签只是 `display:none`）⇒ `.sprog` 会数到 **2**。
+断言「同一时刻只有一块面板」必须用 **`.sprog:visible`**；用 `count()===1` 只会量到「另一块还没
+渲染」，是**假绿**。
+
+### 55.9 动画的可测性设计
+
+- 六处动画（`.sprog__edges` / `__node` / `__bar` / `__dots` / `__glow` / `__sweep`）**各自挂独立
+  选择器** ⇒ 探针逐条量 `playState==='running'` **且** `currentTime` 在推进（只查 `playState`
+  会被「动画其实写在别的元素上」骗过）。
+- 进度条**留 `min-width:10px` + 斜纹跑马灯** ⇒ `done=0` 时也看得出在动。
+- `@media (prefers-reduced-motion: reduce)` 停掉全部动画，但**信息一条不少**（动画是装饰、
+  不是数据）。
+- 🔴 探针里 `locator.boundingBox()` 找不到元素时**等满 30s 才抛** ⇒ 反向证明时面板被摘掉会崩、
+  后面的红全量不到（看着像「只红了一条」）⇒ 必须自包短超时（`{timeout:2500}` + try/catch）
+  的帮助函数 `box()/text()`，且 `panel` 用**选择器字符串**而非 Locator 对象。
+
+### 55.10 反向证明三组（均 sha256 还原）
+
+- **A**：摘掉 `StepTree.vue` 的 import + 使用点 ⇒ 浏览器探针 **16 条精确转红**。
+- **B**：删 `autoStartedAt.value = Date.now();` ⇒ store 试验台 **1 红**。
+- **B2**：删 `finally` 里的归零段 ⇒ store 试验台 **2 红**。
+探针 `.tmp-probe/verify-search-anim.cjs`（`**/retro/**` 全打桩，`jobState` 开关在
+running/succeeded 间切）**30 条全绿**；实测面板 560×119、树体内左右各 217 居中、
+路线网络里「面板底 306 / 画布顶 320」（未压住画布）。
+
+## §56 retroweb store 的「零件」形态 + 大文件拆分的两个硬教训（2026-10-09）
+
+### store 拆法：工厂函数零件，不是多个 Pinia store
+
+`src/stores/workspace.ts` 3057 → 2321 行。形态是 `createXxxPart(ctx)` 返回一组
+ref/函数，主 store 解构后**原样放进 return** ⇒ 对外返回对象一字未改，组件层零改动。
+- `stores/parts/models.ts` 模型域（只靠 params + setGlobalError，唯一完全自包含）
+- `stores/parts/llm.ts` 大模型分析域（只读节点、只把 analyses 挂回节点）
+- `stores/parts/shared.ts` 纯常量/纯函数（不依赖 store 状态 ⇒ 组件可直接 import，不循环）
+  `ALL_ANALYSIS_MODULES` / `ANALYSIS_MODULE_LABELS` / `reactionIdFor` 仍从
+  `stores/workspace` 再导出（RunParams.vue 的 import 不用改）。
+零件的 ctx 一律写成**窄接口**，只给需要的那几样 —— 防它长回成第二个 store。
+
+### 教训一：删代码块**不许按花括号计数**
+
+用脚本 `while lines[j].strip()!='}'` 找函数结尾 ⇒ `reactionIdFor` 的 `for` 循环闭合
+括号被当成函数结尾，文件语法崩，只能 `git checkout --` 从零重做（白干一轮）。
+**正解**：① 完整字面量锚点 `s.find(start)/find(end)` + `assert s.count(start)==1`；
+② 或直接用 Edit 精确替换；③ 删单行（起止锚点相同）要特判，否则 `find(end,i)==i` 断言失败。
+
+### 教训二：`git commit -F` 的临时信息文件要「先移走再 add」
+
+`git add -A` 会把它一起提交（连踩两次）。修法：`git add -A && git commit --amend --no-edit`。
+
+### 后端 Python 大文件拆分的三件套验证
+
+`web/llm.py` 2343 → `llm_config`(788) / `llm_prompts`(547) / `llm_transport`(498) /
+`llm_stream`(453) / `llm.py`(170 再导出壳)。先算顶层定义依赖图，**循环依赖必须同模块**
+（端点配置↔钥匙池、传输↔流式各成环）。Python 是动态语言，`compileall` 抓不到漏 import ⇒
+必须补：① AST 未定义名检查（误报要排除嵌套函数 / `except X as e` / 函数内延迟 import）
+② `import llm` 冒烟 + 关键入口断言。
+🔴 app.py 用 `import llm; llm.xxx()` ⇒ llm.py 要把 66 个对外名字全部再导出（已进 `__all__`）。
+
+## §57 在 nodeServers 后端新增一个业务模块：范式 + 两个静默坑（2026-10-09 retroweb S0）
+
+### 范式：建目录即可，**没有任何注册清单要改**
+
+- 引擎链路 `framework/loader/registry/00..10`：redis→db→auth→firewall→models→keys→api→apps
+- `06-models`：递归扫 `src/models/<ns>/Xxx.js` ⇒ 挂 `app.db.<ns>.<Model>`；全局已 `define:{underscored:true}`
+- `08-api`：递归扫 `src/api/<app>/v1/*.js`（目录根 `system.json` 声明应用元信息）；
+  文件 `export default registerXxxRoutes`，由 `app.register(plugin)` 挂载。
+  🔴 目录里有 `index.js` 时**只加载 index.js**，子模块由它组合。
+- `10-apps`：扫 `src/app/<app>/`，自动加载 `config.js` + `permission/index.js` + `permission/roles.js`
+  ⇒ 权限/角色**不用 import，建文件就自动注册**（所以别到处 import 它们）。
+  `oauth_client` 与 `init` 都判空可选 —— iframe+bind-session 型应用别注册 oauth_client。
+- 分层：`api/<app>/v1`（路由）→ `app/<app>/dao/*.dao.js` → `models/<app>/`；迁移 `migrations/<app>/<ts>-*.js`
+  迁移一律 `createTableIfNotExists` + `addIndexIfNotExists`（重跑会中断整个 migrate）。
+- 路由：`registerSecureRoute(fastify,{name,alias,method,url,requireLogin,permission,handler})`，
+  `request.state.user.userId` / `.permissions` / `.roles`；应答 `reply.result.success|fail(msg,data,httpCode)|paginated|conflict|tooManyRequests`。
+- 取模型：`getModel('retroweb.Task')`（**带命名空间**）。
+
+### 坑一：`.gitignore` 里 `retroweb/` 没写前导斜杠 ⇒ 静默吞掉整个模块目录
+
+`git add src/models/retroweb` 只会提示 "ignored by .gitignore"，**新文件完全进不了库**，
+且日常 `git status` 看不出来（未跟踪目录被折叠）。git 的目录规则无前导斜杠 = 匹配任意层级。
+修法：`/retroweb/`（只忽略根下那个嵌套前端仓），并在该行写清理由防改回去。
+⇒ 排查命令：`git check-ignore -v <path>`。
+
+### 坑二：`src/` 下 export 必须收拢到文件末尾（pre-commit 会拦）
+
+自定义规则 `no-restricted-syntax`：定义处不许 `export function/const/class`，
+`export default` 也要"先具名再在末尾导出"（`export default new Xxx()` 亦违规）。
+⇒ 写法：`const/function/class` 裸定义 → 文件末尾 `export { a, b };` / `export default xxx;`
+（`migrations/` 不在 src/ 下，不受此限）。提交前先 `npx eslint <新目录>`，别等 husky 拦。
+
+### 坑三（复现）：heredoc 里的中文引号会被转成 ASCII 双引号
+
+`python - <<'PY'` 里写中文引号（U+201C/D）会在传输中变成 ASCII `"` ⇒ 截断 Python 字符串
+⇒ SyntaxError。改文件**优先用 Edit 工具**；确实要脚本时，字符串里别出现任何引号。
+
+## §58 retroweb S1：LLM 双来源 + 服务端持久化（2026-10-09）
+
+### LLM 双来源（用户拍板，硬约束）
+- `LlmProfile.owner`：`user`=用户自建（密钥存 `keys_enc`，回前端只掩码 `mask_key` 保尾部）
+  / `system`=系统官方（🔴 **token 只在服务端** `.env` 内存，**不进用户表、不回前端**）。
+- 🔴 官方 LLM **出接口只回 name/model/quota**，token 的**数量与值都不外泄**（连 key_count 都不带）。
+- 🔴 官方 LLM **暂不起用**（`RETROWEB_OFFICIAL_LLM_ENABLED !== 'true'`）：结构落好，S3 中转再开。
+- 官方模型 `.env`：`RETROWEB_OFFICIAL_LLMS=name|model|quota,...`，密钥 `RETROWEB_OFFICIAL_KEY_<NAME>`。
+- 密钥加解密统一 `utils/secret.js`（AES-256-CBC，密钥由 `APP_SECRET` SHA-256 派生，**不新增 env**）。
+  🔴 不用 framework/keys（那是 RSA 非对称，面向"客户端加密回传"），对称存服务端自有密钥。
+
+### 服务端持久化适配层（前端）
+- `persist/index.ts` 是单一出口，`local`/`server` 双实现按 `VITE_PERSIST_SERVER`（默认关）切换；
+  `activateServerPersist(authed)` 登录预热/登出切回。
+- 🔴 接口**同步**（S0 写死）⇒ server 实现必须「read 返回本地缓存 + write 同步更新缓存、
+  后台 debounce 提交 /tasks/import、失败静默降级」，绝不让断网打断用户改树。
+- 🔴 `cond_pref` 是 UI 偏好，**两种实现都走 local**（server 实现委托 local，不迁服务端）。
+- 🔴 串号防线：`auth.setUser` 一处挂钩（登录/登出/401/切账号都过它）→ 懒 import
+  `workspace.clearLocalData()`（清内存+persist.clear）+ `activateServerPersist`。
+
+### 后端任务读写口径
+- 统计列 `node_count/step_count/depth/scheme_count` 由 `utils/stats.js` 从快照**派生**，
+  不信任前端传值（前端传的会和快照漂移）。
+- import 幂等：`Task.client_id` = 前端 Session.id，(user_id, client_id) upsert。
+- 新建才做配额校验（`assertCanCreate` 2/50），快照更新不校验；软删仍占配额。
+
+## §59 retroweb S2/S3：读路径切云端 + 算法中转（2026-10-09）
+
+### S2 读路径（前端 cb...9e5bfac）
+- 🔴 **persist 接口加 ensureLoaded(id)**：local=no-op；server=从 /tasks/:id 拉全量快照
+  填缓存。列表只回元数据（后端设计），打开任务才按需拉详情。
+- 🔴 **loadSession/resumeSessions 必须 local 模式完全同步**：历史测试假设 loadSession 同步生效，
+  无条件改 async 会破坏"恢复后立刻读到节点"的时序（实测踩到 store 测试红 1 个）。
+  用 `isServerPersist()` 分支：local 同步 / server 异步（await ensureLoaded 再 restore）。
+
+### S3 算法中转（前端 aa770bd / 后端 4fe712c）
+- 🔴 **对外契约与 Python 完全一致**（前端零改动的关键）：提交 {ok,job_id}（job_id=上游
+  provider_job_id 字符串）、轮询透传 JobSnapshot、取消 POST /jobs/:id/cancel。
+  Node 自增 id 不对外，只用 provider_job_id 关联。
+- 🔴 **stale 语义**：Python job 存内存重启即失 ⇒ Node 轮询上游 404 时标 stale（非 failed），
+  前端 getJob 识别 state='stale' → 抛 non-transient RetroApiError 复用"请重新展开"提示。
+- 前端三个 client（retroClient/retroJobClient/retroLlmClient）统一 baseURL + unwrapNodeEnvelope
+  拦截器（走 Node 拆 {code,data} 信封，直连原样）；开关 RETRO_VIA_NODE（默认关）。
+- SSE 透传三约束：客户端断开取消上游（AbortController 联动 close）、背压（write 返回 false
+  等 drain）、O(1) 内存（边读边写不缓存整段）。上游地址单一来源 RETRO_PYTHON_URL（含 /api）。
+
+### 发版前收尾（都还欠着，勿发版）
+迁移未执行（5 表未建）· RETRO_PYTHON_URL 未配 · 前端开关未开（VITE_PERSIST_SERVER /
+VITE_RETRO_VIA_NODE）· 官方 LLM 未接进中转路由（只回清单）。
+
+## §60 retroweb：官方 LLM 接进算法中转（2026-10-09，Node fc13524 / Python fa2f059）
+
+### 核心机制：凭据服务端注入，前端零感知
+- 前端发 analyze/conditions/followup **不传凭据**（analyze 里的 `model` 字段是**逆合成
+  预测模型名**如 pistachio，不是 LLM 名，别混）。LLM 凭据由 Node 按用户身份解析注入。
+- `services/llm-route.service.js`：`resolveLlmCreds(userId)` = 用户自建激活套（解密 keys）
+  → 官方模型（内存 keys）→ null（不注入，Python 用自己 .env 兜底）。`injectProfile(body, creds)`
+  注入 `profile` 字段（base_url/api_keys/model）。
+- 🔴 **base_url 也是官方凭据的一部分**：官方模型配置是四元组 `name|base_url|model|quota`；
+  出前端的 `officialModels()` 只回 name/model/quota，**base_url 也不出**（暴露端点地址=告诉别人往哪打）。
+  内部解析用 `officialModelsInternal()`。
+- 🔴 官方 key 只在 Node→Python 内网转发里出现，不落日志、不写响应。
+
+### Python 侧请求级覆盖（llm_config / llm_stream / app）
+- `config(override)`：override 的 base_url/api_keys/model **齐全**才生效（否则忽略回落读盘，
+  避免半套凭据去调模型）；生效时 profile_name 标 `(请求注入)`。
+- `_llm_common_payload` 白名单解析 `profile` 字段。
+- 🔴 四个 LLM 入口（analyze/stream_analyze/stream_conditions/stream_followup）：
+  `cfg = config(req.get("profile"))`，且 `is_configured()` 要换成 `cfg["base_url"] and
+  cfg["model"] and cfg["api_keys"]` 判断 —— **override 注入的凭据 is_configured() 读不到，
+  会误判未配置**。
+- `_chat_url()` 会把 base_url 规范化成 `.../chat/completions`（断言时别用原始 URL 比）。
+- prompt 构建函数全用 `req.get("字段")` 精确取，多出的 `profile` 字段被安全忽略。
+
+### 发版收尾现状（更新）
+官方 LLM 已接进中转路由 ✅（仍 ENABLED=false）。仍欠：迁移未执行 · RETRO_PYTHON_URL 未配 ·
+前端两开关未开 · 官方/自建的「选择 UI」未做（当前策略=自建激活套优先，官方兜底）。
+
+---
+
+## §58 标定面板（2026-10-09 六轮重排，终稿=第六轮）— MEMORY.md §标定面板 的全表
+
+- **卡宽 760**（960 在胶囊态是 3.2:1 扁长条，用户报"比例不美观"；守门 `>700`）。
+- **设置齿轮在动作栏最左 = 卡片左下角**（用户两次箭头指认，挪右上角被否）。
+- 输入区节奏：label「目标分子结构」→ 大输入框+解析拼块（stretch、按钮贴右缘 48px 高）
+  → 格式提示 →「或者」→ 居中 Draw → **选择文件·清空居中独立行** → **示例居中可换行**；
+  说明行居中。TargetInput **无卡片头**。
+- **收起胶囊 = 品牌色高亮**（蓝描边+浅蓝底+「已解析目标」徽标+属性带标签）。
+- **动作栏 = 独立收尾块**（圆角卡片浅底，左设置 + 层数/预算 右两起跑按钮）。
+  数值框 = label 带范围「层数 (1~8):」+ `:controls="false"` 蓝粗居中 52px + 白底浮块；
+  两按钮带闪电/右箭头 SVG；提示行 = 灯泡 SVG +「一键搜到底/先展开单步」文案。
+- **设置 = 侧栏底部按钮**（`.app__settings`，AppShell aside-foot）开全局 el-dialog
+  （`.app__run-settings-dialog`）：
+  - 🔴 弹窗**必须挂 AppShell** 而非 TargetSetupPanel——路线态下后者 v-if 卸载 ⇒ 弹窗跟死（实测踩过）。
+  - 🔴 开关提为 store 共享 `runSettingsOpen`——跨路由 prop 够不着。
+  - 首次打开前不渲染 ⇒ 守门**先点再断言**。
+  - **预测模型下拉并排动作栏**（与层数/预算同排绑 store.params）。
+- **动作栏两行**（行1=模型/层数/预算参数，行2=两按钮右对齐；一行塞 5 元素会重叠）。
+- stepper 与弹窗「拆分约束」**同源绑 store.params**（已双向实测）。
+- **解析成功即收胶囊**（`collapsed` 归 TargetInput 本地；**失败必须留输入态**）。
+- 居中 `margin:auto`。
+- 🔴 **卡片内禁放运行态 UI**（`onAuto` 先 `closeTargetSetup` ⇒ 卡片即消失）。
+- 守门锚点：`.setup__auto-ops` 只包自动按钮（primary）· `.target__start-btn` 在外 ·
+  `.setup__settings-dialog .params`（先点 `.setup__settings-btn`）· 网格落 `:deep(.params__body)`。
+- verify-workbench（`.tbar`→`.tan`、换目标→「目标分析」页「切换目标」）与假绿已对齐修正。
+
+## §59 登录弹窗尺寸 + 前端安全/结构/env（2026-10-10）— MEMORY.md §登录 的展开
+
+### 弹窗尺寸（**现行结论（2026-10-10 深夜 二改）：`.sso-frame{height:484px}` + `DIALOG_WIDTH=880` + el-dialog 左右 padding 归零**）
+
+> ⚠️ **本小节前半段（460/440 单栏档、自然高 425~445px 那套表）是 10-10 首版结论，已被下面「二改」推翻**，
+>    仅保留作为"为什么会误判"的历史记录。现行口径见本小节末尾「🔴 二改」。
+
+**（历史）首版实测**（440 宽单栏档，**掐掉 transition** 后量的内容自然高度）：
+
+| 页面 | 标题 | 自然高 |
+|---|---|---|
+| `/mini-login` | 欢迎回来 | 425px |
+| `/mini-login` 扫码态 | 扫码登录 | **445px** ← 最高 |
+| `/register?from=mini` | 创建新账户 | 427px |
+| `/forgot-password?from=mini` | 重置密码 | 299px |
+
+⚠️ 四个量法坑：
+1. `.auth-card{transition: all .4s cubic-bezier(.4,0,.2,1)}` ⇒ 注入中和样式后卡片在
+   **动画收缩**，120ms 读数是中间帧（455/526/564 随机出现）。必须同时
+   `*,*::before,*::after{transition:none!important}` 并量两次确认定帧。
+2. oauth21 **只单开了 `/mini-login`** 一条 mini 路由；register / forgot 的 mini 形态
+   由分发器按 `?from=mini` 判定（`router/routes.ts:141` 注释）。写 `/mini-forgot`
+   会 404 → `NotFound.vue` → `replace('/mini-login')` ⇒ **量的其实是登录页**。
+3. 不带 `appName` 会渲染「应用标识缺失」错误卡（228px），也是假数字。
+4. 判据不能用"出不出滚动条"：`.auth-viewport{overflow:hidden}` ⇒ 给矮了是
+   **静默裁剪**（底部链接消失）。唯一可靠判据是「卡片内非 absolute 后代 bottom ≤ 卡片底边」。
+
+🔴 **`<style scoped>` 的 `v-bind()` 在 Vite 8（Rolldown+Oxc）下不生效**：
+编译产物是 `height: var(--91c0c8e2-\`\$\{FRAME_HEIGHT\}px\`)` —— 表达式**没被求值**，
+var() 解析失败 ⇒ 整条 height 声明失效 ⇒ `.sso-frame` 退化成内容高度（实测 150px），
+弹窗塌成 224px、登录表单被裁一半。**CSS 里必须写死字面量**；script 侧加 dev-only
+`assertFrameHeight()` 比对真实 DOM 高度防两边脱节（无法自动关联，只能运行时喊）。
+
+---
+
+### 🔴 二改（2026-10-10 深夜，**这是现行结论**）：档位开关是 `iframe 内视口宽`，不是弹窗宽
+
+用户再报「还是有问题 + 学 posecraft」。实测发现**首版 856 也掉档**，根因：
+
+```
+iframe 内宽 = DIALOG_WIDTH − el-dialog 左右 padding(32) − .sso-frame 左右 border(2)
+```
+- 旧 `DIALOG_WIDTH=856` ⇒ 内宽 **822 < 854** ⇒ 落 oauth21 的 **「600~853 双栏压缩档」**
+  （`.auth-card{height:auto; min-height:484px}`）—— **不是**稳定档：内容恰好撑到 484 而已，
+  一多就被撑高、超过 `.sso-frame` 定高后由 `.auth-viewport{overflow:hidden}` **静默裁**。
+- **posecraft 的 856 不能照抄**：它的 iframe 是 `w-full` 塞在**无内边距**的容器里
+  （`<div class="w-[856px] ..."><div class="w-full relative h-[484px]"><iframe class="w-full h-full">`）
+  ⇒ 内宽真 856 ≥ 854。retroweb 的 `.sso-frame` 在 el-dialog 的 `padding:16px` 里、还多 1px border。
+
+**修法（两处必须成对，缺一即掉档）**：
+1. **全局（非 scoped）`<style>`** 块：
+   `.sso-dialog.el-dialog { --el-dialog-padding-primary: 16px 0; }`（左右归零、上下 16）。
+2. `DIALOG_WIDTH = 880` ⇒ `880 − 2 = 878 ≥ 854`（余 24px）。
+   `assertFrameHeight()` 的宽度判据改为量 **`iframe.clientWidth`**（= 内视口宽），不是 `.sso-frame` 外框。
+
+🔴🔴 **scoped 样式打不到 el-dialog 根**（踩了三次才定位）：
+el-dialog 内容被 `<Teleport>` 到 body，**弹窗根 `.el-dialog.sso-dialog` 不带组件 `data-v-xxx`**
+（实测 `dialogHasScope=false`；只有模板里显式写的 span/div 带）。
+⇒ `.sso-dialog :deep(.el-dialog)` 编译成 `.sso-dialog[data-v-xxx] .el-dialog` **恒不命中**，
+只剩 EP 的 `.el-dialog{padding:var(--el-dialog-padding-primary)}` 生效。
+⇒ **必须独立非 scoped `<style>`**，用 `.sso-dialog.el-dialog`（类名唯一）限定；覆盖 **EP 旋钮变量**
+而非硬写 padding。验证不泄漏：运行设置弹窗仍 `padding:16px`，登录弹窗 `16px 0px`。
+
+### 🔴 「一直转圈」的**真实形态 = 空白 iframe**，不是无限 spinner
+- 5174(oauth21) 不可达时，iframe 的 **`load` 事件仍会触发**（Chromium 对错误页也发）
+  ⇒ 3s 兜底撤遮罩 ⇒ 用户看到**空白/报错 iframe，零提示**（这就是"加载不出来"）。
+- 修法：`handshaked` 标志 + 6s 定时器 ⇒ **独立于遮罩**的排障条：
+  「登录服务未能就绪 / 请确认 oauth21 登录服务(:5174) 已启动、网络正常，然后重试 / 重新加载」+ `reloadFrame()`。
+- loading 遮罩由**纯色全遮**改 `color-mix(…85%) + backdrop-blur`（学 posecraft，不再像卡死白屏）；
+  补 `document.body.style.overflow = open?'hidden':''`（锁背景滚动，学 posecraft）。
+
+### 验证矩阵（二改后实测）
+- `iframe.clientWidth=878`、`matchMedia('(min-width:854px)')=true`、卡片定高 484、内容溢出 −1px。
+- 宿主视口 **1440/1280/1024/900** × 三页（登录/注册/忘记）全绿（`/register?appName=retroweb&lang=zh_cn&from=mini`）。
+- **反向注入** `DIALOG_WIDTH=800` ⇒ 宽度判据红（`798<854`、`mq854=false`）⇒ 断言真的有效。
+- 拦截 5174 ⇒ ~9s 排障条出现（`slowHint=true`）。
+
+守门：`.tmp-probe/verify-login-tier-final.cjs`（跨视口 + 溢出判据）、`verify-three-pages.cjs`、
+`verify-css-scope.cjs`（防全局样式泄漏）、`diag-login-modal.cjs`（一次性诊断）。
+截图 `_shots/{VERIFY-880,FINAL-1440,FINAL-1024,DOWN-5174-trouble}.png`。
+
+⚠️ **环境**：5174/5177/8000 **平时都不在跑**，只有 3000 常驻 ⇒ 报"登录加载不出来"先查服务是否已起；
+本机 curl 打 localhost 要 `--noproxy '*'`（系统代理会吃掉请求）。
+
+
+守门：`.tmp-probe/scan-mini-natural.cjs`（各形态自然高 + 反证不裁剪）、
+`.tmp-probe/verify-sso-dialog-size.cjs`（在 5177 真开弹窗，**进 iframe 内部**量裁剪）。
+
+### 前端安全（新增 `src/utils/safe-url.ts`）
+
+🔴 **`avatar` 是真实 XSS 面**：后端 `PATCH /user/v1/profile` 的 `allowedFields` 直收
+`avatar`，`UserDao.updateProfile` **不做协议校验**，前端原样绑 `<img :src>`。
+攻击者设成 `javascript:…` / `data:text/html,…` ⇒ 所有看到其头像的人中招（存储型）。
+修法：`safeRemoteUrl()` **协议白名单**（只放行 http/https + 站内相对路径），
+接 UserMenu / ProfileView / SsoLoginModal 三个头像点。用黑名单必漏
+（`java\nscript:`、大小写、前导空白）。守门 `verify-safe-url.cjs`（16 项）+
+`diag-safe-url.cjs`（真实 DOM 双向证明）。
+⚠️ 探针别调 store 的 `setUser` —— 它是**内部函数、未导出**，误用会静默 patch 原始 ref
+绕过 Vue 响应式，把"注入没生效"读成"被拦了"。用真实入口 `applyLogin()`。
+
+查过没问题：`v-html`/`innerHTML`/`eval`/`new Function` 零处；`postMessage` 仅
+`useSsoMessage.ts` 一处且 origin+source 双校验；`console.log` 零处；
+头像之外的 `:src`/`:href` 全是常量 URL；前端不接触任何 LLM key
+（官方 token 与 base_url 均不出后端）；`.env.development.local` 被 `*.local` 正确忽略。
+
+### 文件结构与死代码
+
+- 全部 `.vue` 组件**零个零引用**。
+- 删：`smiles.ts::splitParts`、`probability.ts::stepPctTitle` / `manualStepsNote`
+  （后者零调用；概率 tooltip 最终都复用 `routePct`）。
+- 消重复：`HistoryView.formatTime` 与 `SsoLoginModal.formatLastLogin` 各自手抄了
+  `utils/time.ts` ⇒ 归位 `absoluteTime` / 新增 `relativeDays`
+  （后者"超过一天继续数天前"，与 `relativeTime` 退回日期的口径不同 ⇒ 两个函数）。
+- 保留（是契约/内部使用，非死代码）：`CopyOpts`、`SupplierIdent`、`DrawOptions`、
+  `loadRdkit`、`loadSmilesDrawer`、`shortDate`。
+- 大文件（未拆，仅登记）：RunParams 2555、workspace.ts 2352、RouteCanvas 1828、
+  StepAnalysis 1608 行。
+
+### env 开关
+
+模板顶部写明 **Vite 覆盖顺序**：`.env` → `.env.local` → `.env.development` →
+`.env.development.local`（后者盖前者）。想在某档生效必须写**最靠右**的那个文件；
+写 `.env.local` 会被 `.env.development` 静默盖回。生产模板补齐了原先漏掉的
+`VITE_RETRO_VIA_NODE` / `VITE_PERSIST_SERVER`。
+
+🔴 **修掉直连/中转两档的错误口径不一致**：`postSse` 拒因原先只读 `{error}`（Python 形态），
+而 Node `forwardStream` 失败时回统一信封 `{code,message,data}`（502/503）⇒ 走 Node 时
+提示退化成干巴巴的「HTTP 502」。改为 `payload.error || payload.message`。
+
+两档**实测互斥**（`.tmp-probe/verify-retro-switch.cjs`）：
+- `VITE_RETRO_VIA_NODE=false` → 请求 `127.0.0.1:5177/retro/models`（vite proxy → Flask 8000），
+  零 `/retroweb/v1`；
+- `=true` → 请求 `127.0.0.1:3000/retroweb/v1/models`，零 `/retro/`。
+
+## §61 MEMORY.md §6「retroweb 陷阱」逐条展开
+
+> MEMORY.md 把这一块压成索引，全表留在此处。条目按 MEMORY.md 顺序。
+
+### 预测两条路（§45）
+- 单步预测 = `POST /api/jobs`（`kind=predict`）。
+- 「自动往下拆」= **`kind=search`**，让 Retro* 吃满预算一次搜到底：最优解建树、
+  剩余存 `schemes`。
+- 🔴 **applySearchRoutes**：`layRoute` **只铺 candidates**（不设 chosen），
+  `applyToTree` 直接设 chosen。**禁逐路线 adopt** —— 多条路线共享节点时会互相覆盖，
+  结果树只剩根节点。探针要等树 **≥3 节点**才算过。
+- ⛔ **改断言/探针前先查断言是否已 `new Set`/已过滤**：若上游已去重，重复藏在下游，
+  断言会静默假绿。
+- 装配三件：vite `proxy` · TS6 `baseUrl`（无则路径解析错）· `http.ts` **禁动态 import store**
+  （循环依赖 ⇒ 运行时 undefined）。
+
+### 工作台两态（§14.4/§37/§39）
+- 标定态 / 路线态由 `targetSetupOpen` 判别：ⓐ **可见性只认它**；ⓒ「换目标」必须
+  `reset()`；ⓓ 卡片居中靠**脱离文档流**；ⓔ `mainTab` 三处复位；ⓕ 🔴 **解析不建任务**
+  （任务生于 `closeTargetSetup()`）；ⓖ **同阶段起跑线同源**。
+- 守门：`verify-parse-notask.cjs`、`verify-auto-jump.cjs`。
+
+### 路线方案 / AI 分析
+- ① 地基 = 确定性 `reactionIdFor`（同一反应必得同一 id）；
+- ② 切方案 = `detached:true`，**不删树**；
+- ③ 改**已存**方案**必须 fork**（否则污染历史）；
+- ④ AI 分析 = **POST + fetch SSE**；质量数由 **RDKit 算、LLM 只解读**；
+- ⑤ 推理模型只吐 `reasoning_content` ⇒ 必须显式发 `thinking` 字段。
+
+### 追问（§18.3）
+- 自由文本必须走 **`_body(json_mode=False)`**（关掉 `response_format`，否则模型被强制 JSON）；
+- 一次一条、总共 **≤10 条**；`cur()` **每次重新 find**（缓存会拿到过期 DOM）。
+
+### 候选条件（§19）
+- 枚举 → 选定 → 分析时带 `chosen_condition` **锁定**；
+- 🔴 `_norm_conditions` **先滤非对象再截断**（先截断会把对象切成碎片）；
+- 🔴 重分析**保留** `condOptions`。
+
+### 端点配置（§20/§47）
+- `base_url` + `model` + `keys` **绑成一套**，可存多套（`profiles[]`）；
+- key 轮换状态**按配置分桶**（不跨配置共享）；
+- `mask_key` **保尾部**（只遮前缀）；
+- 🔴 `max_tokens` **0 = 无限制**（此时**不发**该字段）；
+- 🔴 **生效值在 profile**（盖 `.env`）⇒ 文案要按来源指路；`<1024` 先拦；
+- 🔴 前端容忍后端旧版：无 `profiles` 字段 ⇒ **白屏**（必须有兜底）。
+
+### LLM 面板 / 拉模型（§25/§27）
+- 同状态两处口径不一 ⇒ **先打两个真值**再比；
+- 真凶常是环境变量**单复数拼错**（`KEY` vs `KEYS`）；
+- key 真值 3 处：`key_pool` / `_pool_keys` / `_profile_creds` —— **都回落 `.env`、仅激活套**；
+- `.env` 删不掉 ⇒ 界面**无删除钮**、保存能**认领**已有 key；
+- 多 key 只在 **401/403/429** 才轮换；
+- 「刷新」= 只读；有改动**先确认**。
+- 守门：`verify-llm-refresh.cjs` / `verify-llm-models.cjs`。
+
+### 侧栏（§22/§26/§28/§30/§35）
+- 顺序 = 导航 → **最近的任务** → **目标分析**，同在 `.app__side-scroll`（**禁内嵌滚动**）；
+- 🔴 三块左右 padding **必须同值 8px**（`.app__nav`/`.app__recent`/`.app__target`）——
+  只动一层就破坏对齐（实测踩过）；
+- `confirmRouteNetwork`（**自动分叉**）≠ `confirmScheme` ≠ `unconfirmRouteNetwork`；
+- 🔴 共用 `networkStats`；🔴 整行热区 ⇒ 操作区 `@click.stop`；🔴 计数 = **本组数**；
+- 🔴 任务条目 = 状态点 + 缩略图(52×40) + 名称（SMILES/时间禁入）；
+- 🔴 导航图标 = **内联 SVG**（`NAV_ICON_PATHS`；emoji/Unicode 字符禁用）；
+- 🔴 **零值统计行禁渲染**（`v-if="cur.steps"`）。
+
+### 断言与探针（§24/§25.8/§28.3/§33）
+- 🔴 **新断言须"改回旧写法确认会红"**（否则不知在测什么）；
+- 🔴 探针会崩 ⇒ 空守卫 + 锚点**两版都在**；
+- 🔴 **反向证明前先证"加载的是旧代码"** ⇒ `touch` + 验特征串；
+- 🔴 **替换禁空串**（`count('')` ⇒ 必炸）；
+- 🔴 **反向补丁 `off` 整文件拷回** + 锚点适配换行；
+- 🔴 **`el-overlay` 铺满视口**（弹窗开 ⇒ 其下判据**假红**）；
+- 🔴 可见性判据用 `elementFromPoint`。
+
+### 后端（Windows spawn）
+- 🔴 **后端只提供 API**；
+- **Windows spawn 死锁修复不可回退**：模型跑在独立**非守护单线程** `Process`
+  （`_REQ_Q`/`_RESP_Q`）；
+- "代跑 app.py"启动器须注册 `sys.modules['__main__']`；`.bat` 改完**验 BOM**；
+- 🔴 **搜索预算 = `num_calls()` + 本次**（跨搜索累计 ⇒ 涨过即**开局即停**）；
+- 🔴 **基线取「真正交给搜索器的对象」且在包装构造之后读**（构造会 `reset()` 底层；§50/§54）。
+
+### 可行性过滤（§54）
+- 正向模型**独立**注册（`FORWARD_MODELS`）；
+- **可热挂**（`/forward/load` 不重启服务 ⇒「加载中」须计入轮询忙）；
+- 未就绪**拦在提交前**；URL 判据禁 `endsWith` 前缀式。
+- 守门 `verify-forward-filter.py`。
+
+### 搜索进行中的动画（§55）
+- 面板挂在**页签**上 ⇒ **计时起点由 store 落**（`autoStartedAt`：`autoRun()` 写、
+  `finally` 归零，组件只做减法）；
+- 🔴 **判空画布禁 `hasRoute`**（有目标即恒 true）⇒ 用 `autoRunning && !route.length`，
+  且必须插在**空画布 `v-if` 之前**（它与 `v-else` 是一对）；
+- 🔴 探针计数用 **`:visible`**（el-tabs 内容常驻 DOM）。
+- 守门 `verify-search-anim.cjs`；官方参数见 §55（`DEFAULT_NUM_RESULTS=100` ⇒
+  「每步候选数」只管单步）。
+
+### 解析 / 画板 / 网络 / CAS（§16/§34）
+- RDKit（**CDXML 回落后端**）；Ketcher 3.14 四约束（§16.5）；
+- `_request()` 档序 = `RETRO_LLM_PROXY`；
+- 🔴 **CAS = PubChem（§34）**：**POST 表单**（GET 遇立体 `/` 拒 400）· 404 = 未收录 ·
+  CAS 混在 synonyms 里 · 查不到**删块/留空，禁填 null**。
+- 守门 `verify-mol-cas.cjs`。
+
+### UI 细则（§16.2/16.3/18.1/§23）
+- 防跳位 = `Session.sig`；标定态「换目标/新任务」**禁 filter 删上条**；
+- 🔴 **收起/展开不得改控件位置**：贴底页脚禁靠伸缩兄弟顶、含可隐文字按钮**须定高**
+  （`verify-collapse-stable.cjs`）；
+- 🔴 **`<td>` 禁 flex**（线断两截）⇒ flex 挂内层；`verify-tbl-lines.cjs`（§38）。
+
+### 画布拖动/缩放（§29/§36）
+- 偏移只一套（`sizer = max(画布×zoom, 容器) + 2×余量`；余量省不得 ⇒ 缩图后**拖不动**）；
+- 滚轮**手动非被动** + `preventDefault()`；
+- 缩放**先写 sizer 再 scroll**；容器链须定高 ⇒ 否则互撑**几万 px**；
+- 🔴 **`v-else` 只认紧邻 `v-if`**（隔元素即失效；判重禁 `new Set`）；
+- 🔴 探针等 `attached`（卡常在视口外）；
+- 🔴 EP 菜单须 `.el-dropdown__popper:visible`；
+- ⛔ 复制单一来源 `useMolIdents`（画布用纯函数版，循环里**不能**调 composable）
+  + `route-copy.ts`。
+- 守门 `verify-canvas-fit.cjs`。
+
+### 方案栏的收与位（§32/§33/§43）
+- 🔴 **点标题栏即收起**（`v-show`；箭头**只旋转**；收起态分隔线**改透明**——
+  `border-bottom:0` 让 head 矮 1px ⇒ 跳）；
+- 判据含**画布增量 ≈ 卡片减量**；
+- 「目标分析」页签整条收起（留**主指标**）；其余页签夹在页签与内容间；
+- 🔴 位置类报障量「顺序」不只「存在」（DOM 序 + 几何链；改结构先 grep）。
+- 守门 `verify-schemes-collapse.cjs`。
+
+### 行内 chip 行（§41/§42/§44）
+- 禁竖排；`el-dropdown` 挂 pill **外层**才整块热区（EP 下拉不吃 Esc）；
+- 断言禁**绝对**行高 ⇒ **量化不变式**；
+- 🔴 **询价标识单一来源 `suppliers.ts`**：逐家声明 `prefers`（按平台索引，禁写死 CAS）；
+  **懒查别拿预热的目标分子**。
+- 守门 `verify-steprow-tags.cjs` / `verify-suppliers.cjs`。
+
+### 分析模块 / 手动改路线
+- 🔴 **「分析模块」key 前后端对齐**（`ALL_ANALYSIS_MODULES` ↔ `_MODULE_FIELDS` 同序）；
+  加模块两侧同改；10 个含 `tlc` / `workup`（分别渲染）；断言 `_build_system` 只看
+  **`split("\n\n")[-1]`**（§16.7）。
+- 🔴 **手动改路线 → §46**：`setPrecursors`；手工步概率 **`null`**（禁兜 0）；
+  双击须 `pointerup` 自判。守门 `verify-manual-step.cjs`。
+
+### 标定面板（§58）
+见 §58 全表。要点：卡宽 **760**；设置齿轮在**动作栏最左**；动作栏**两行**（参数 / 两按钮）；
+**解析成功即收胶囊**（`collapsed` 归 TargetInput 本地，失败必须留输入态）；设置 = 侧栏底按钮
+开**全局 el-dialog**（🔴 挂 AppShell **不是** TargetSetupPanel——路线态后者 `v-if` 卸载 ⇒
+弹窗跟死；开关提为 store 共享 `runSettingsOpen`）；🔴 **卡片内禁放运行态 UI**
+（`onAuto` 先 `closeTargetSetup`）。锚点 `.setup__auto-ops` / `.target__start-btn` /
+`.setup__settings-dialog .params`。
+
+### 真实模式联调（§57）
+见 §57。开关放 `retroweb/.env.development.local`（🔴 不能用 `.env.local`——会被
+`.env.development` **半覆盖**）。五环缺一即「没数据」而不报错：
+① 三个 axios + SSE fetch **必须带凭据**（跨源 5177→3000 不带 cookie ⇒ 登录了照样 401）；
+② 401 用**哨兵** `__rw_unauthorized__`，**禁文案正则**（`{message}`/`{error}` 措辞一改即静默失效）；
+③ 登录后 `refreshAfterLogin()` + `refreshPersist()`（后者**重灌 `sessions` ref**）；
+④ Node 需 `GET /llm/models`（内部走 POST 转发）；
+⑤ 五张表先跑 `node --env-file=.env src/framework/db/migrate.js`（TEXT 入索引须前缀 `(191)`）。
+守门 `verify-real-login-chain.cjs`。
+🔴 **假绿四个**：错误条**双容器** · 必打**非 401 对照组** · 注入体要像真信封 · VITE_ 开关**三层钉**。
+
+
+## §63 retroweb：401 全客户端统一 + 重放守卫 / EP 按需样式 / 入口拆分 / env 严格模式（2026-10-11）
+
+本节展开 MEMORY.md §6 的「401 唯一入口」「EP 样式按需」「入口形态」「env 严格模式」「视觉回归」四条。
+
+### §63.1 401 处理：`intercept401` 是唯一入口（本轮修复）
+
+**修复前的三个问题**（真实存在，非理论）：
+1. 🔴 **`replay` 无守卫 ⇒ 潜在无界循环**。原 `handle401` 是
+   `try { return replay(config) } finally { isRefreshing = false }`。JS 中 `finally` 在
+   处理完 return 表达式后**立即**执行，**不等**那个 promise settle ⇒ 重放请求回来时
+   `isRefreshing` 早已是 false ⇒ 重放再 401 就重新进入续期分支。
+   ✅ **反向证明**（`.tmp-probe/retry-guard/reverse.cjs`，把守卫去掉的副本独立构建）：
+   续期成功 + 资源恒 401 的场景下，**资源 61 次 / 续期 60 次打满上限**。
+   加守卫后：**资源恰好 2 次 / 续期 1 次**。
+2. 🟡 空 `catch {}`：续期失败原因（401/网络/超时）全丢 ⇒ 线上无从查证。已加 `console.warn`。
+3. 🟡 **两条客户端 401 触发不对等**：只有 `apiClient` 会弹登录窗；retro 三个 client
+   401 只打哨兵不触发登录流 ⇒ 会话在使用中过期时**被静默吞掉**（业务侧看见哨兵让位，
+   登录窗又没人开）。首屏还能弹窗只因 `authStore.init()` 恰好走 apiClient。
+
+**修复要点**：
+- `type RetriableConfig = AxiosRequestConfig & { _retry?: boolean }`（**局部类型**，
+  不做 module augmentation —— 泛型接口声明合并要连类型参数对齐，不值当）。
+- `intercept401(error, instance)`：非 401 / 无 config → `null`；首轮 → 置 `_retry` → `handle401`；
+  **`_retry` 已置 → `requestLogin()` + reject 哨兵**（最后一档必须把话说完，否则用户看到
+  一条看不懂的错误条却等不到登录窗）。
+- `handle401(config, replay)`：`replay` 改为**参数**（原实现写死 `rawClient`，
+  被 retro 复用时**打错 baseURL**）。
+- 导出 `attachUnauthorizedInterceptor(instance)`；`api/retro.ts` 末尾
+  `[retroClient, retroJobClient, retroLlmClient].forEach(attachUnauthorizedInterceptor)`。
+- 导出 `notifyUnauthorized(reason?)`：供**不走拦截器**的出口 —— SSE(`fetch`) 的
+  `resp.status === 401`（通知后 `return`，**不再**挂业务错误条）+ `fail()` 兜底分支。
+- 常量 `SESSION_EXPIRED = '登录已过期，请重新登录'`（原先三处硬编码）。
+- 🔴 **`fail()` 必须先 `if (isUnauthorizedError(err)) throw err;`**：
+  `createUnauthorizedError` **没有 `.response`**，落到 `res?.status === 401` 判 false
+  ⇒ 被重包成普通 Error ⇒ **哨兵弄丢** ⇒ `isAuthFailure` 瞎掉。
+
+**探针（`.tmp-probe/retry-guard/`，14/14）**：
+- `entry.ts` + `vite.config.ts`：**vite SSR 构建**真实 `src/api/http.ts` 成 Node 可 import 的 ESM。
+  ⚠️ `outDir` **必须落在 retroweb 下**，否则 Node 解析不到 `axios`（ESM 不认 `NODE_PATH`）；
+  ⚠️ 构建期用 `define` 钉住 `import.meta.env.VITE_API_URL`，否则 `refreshClient` baseURL 是空串。
+- `run.cjs`：A 续期成功但资源恒 401；B 续期失败；C 并发 5 个 401。
+- `http-noguard.ts` + `reverse.cjs`：反向证明。
+
+🔴 **探针三个坑**：
+1. **axios 的 Node 适配器发绝对形式请求行** —— mock server 收到的是
+   `req.url = 'http://127.0.0.1:5911/auth/v1/refresh-session'`，`startsWith('/auth/...')`
+   **恒 false** ⇒ 续期接口被当普通资源返回 401 ⇒ 用例「假装」通过。必须先
+   `raw.startsWith('http') ? new URL(raw).pathname : raw`。
+2. **仓库根与 retroweb 各有一份 axios** —— 混用会让实例/错误类型对不上。
+   用 `createRequire('…/retroweb/package.json')` 强制取 retroweb 那份。
+3. **单飞的固有缺口**：续期窗口关闭后才拿到 401 的请求会再发起一轮 ⇒ 5 并发实测 **2 次**续期。
+   这是设计固有（非回归），断言写「续期次数 ≪ 并发数」而不是「恰好 1 次」。
+
+### §63.2 EP 样式改按需（2026-10-11）
+
+`ElementPlusResolver({ importStyle: 'css' })`（**不是** `false`）+ `main.ts` **不引**
+`dist/index.css`。实测首屏 CSS **399.5 → 167.8 KB**（gzip **55.1 → 24.8**，-55%），入口 JS 不变
+（205.1 KB）。`ui-vendor` CSS chunk 355.4 → 123.7 KB。
+🔴 `element-plus/theme-chalk/dark/css-vars.css` **必须单独手引**（纯 `--el-*` 变量覆盖、
+81 个变量、`html.dark` 作用域，**不隶属任何组件**，按需机制带不进来 ⇒ 漏了=暗色整体失效）。
+⚠️ **0 字节的同名 css 是正常的**：`el-tooltip.css` / `el-dropdown-item.css` / `el-tab-pane.css`
+实测 0 字节，真实规则在父组件文件（`el-popper` / `el-select-dropdown__item` 等）⇒ **别按文件名判缺失**。
+
+**视觉回归（3 组探针，共 173 断言）**：
+- `verify-main-ep-ondemand.cjs`（126）：默认首屏，6 元素 ×（几何 + 9 项 computed style）× 2 视口。
+- `verify-main-ep-dialog.cjs`（26）：**弹层态** —— `el-dialog`/下拉 Teleport 到 body，
+  样式来自独立 css，漏一个就「弹出但没样式」。
+- `verify-main-ep-dark.cjs`（21）：**暗色** —— EP 暗色是两套机制叠加（① `dark/css-vars.css` 变量层
+  ② 各组件 css 里的 `.dark .el-xxx` 覆写，**跟着 importStyle 走**）；②若丢 ⇒「浅色的暗色模式」。
+- 判据 = **几何差 ≤1px + computed style 逐项相等**，**不比像素**（抗锯齿噪声）。
+
+### §63.3 入口拆分 main.ts + bootstrap.ts（2026-10-11）
+
+四前端统一形态：`main.ts` = 文件头 + 样式 import + `import './bootstrap'`；启动顺序全在 bootstrap。
+| 项目 | main.ts | bootstrap.ts |
+|---|---|---|
+| posecraft | 5 行 | 38 行 |
+| firewall | 5 行 | 36 行 |
+| admin | 26 行（**未拆**） | 无 |
+| retroweb | 29 行（样式**留 main**） | 101 行 |
+🔴 挂载一律 `router.isReady().then(mount)` + `.catch` **降级直接挂载**（照抄 oauth21/main.ts:62-66），
+**禁 `app.mount()` 直挂**（会闪一帧未登录态）。
+⚠️ 验证 console 剥离**别用 `grep "RetroWeb"`**：会命中用户可见文案
+（`'登录 RetroWeb 逆合成工作台'`、侧栏 logo）⇒ 假阳性。查带方括号的 `"[RetroWeb]"` 才是日志模板。
+产���里剩的 `console.*` 来自 **Ketcher 内部 logger**（`window.console.*` 形式，`dropConsole` 不认）。
+
+### §63.4 Vite 严格 env 模式（2026-10-11）
+
+`vite/client` 的 `ImportMetaEnv extends Record<string, any>`
+（`type ImportMetaEnvFallbackKey = 'strictImportMetaEnv' extends keyof ViteTypeOptions ? never : string`）
+⇒ index signature 让**任何** `import.meta.env.XXX` 都合法 ⇒ 声明清单**形同虚设**
+（`VITE_API_URL` 拼成 `VITE_API_UR` 也能过 `vue-tsc`，运行时静默 `undefined`）。
+✅ 修法：`src/env.d.ts` 写全局声明 **`interface ViteTypeOptions { strictImportMetaEnv: unknown }`**
+（非空即启用；**必须是 interface**，对象字面量无效）。
+实测：加之前拼错**编译通过**；加之后 `TS2551 ... Did you mean 'VITE_API_URL'?`。
+全仓四前端均 Vite 8（retroweb/posecraft/firewall 8.3.1、oauth21 8.2.2）⇒ 都可用，
+⚠️ **目前只有 retroweb 开了**；`firewall` 用了 `VITE_WS_HOST` / `VITE_USER_API_URL` 却**全未声明**。
+
+### §63.5 `@author` 约定（skill `references/note.md`）
+
+**只在文件头标**，函数级不加（归属以 `git blame` 为准）。格式 `@author <作者>` + `@since YYYY-MM-DD`。
+本仓值：`Claude`（posecraft 全线）、`yijiu2025`（oauth21 全线）。
+⚠️ retroweb / firewall / admin **原先 0 个 `@author`**。
+
+## §64 retroweb：export 收拢文件末尾（2026-10-11）
+
+展开 MEMORY.md §6 的「export 收拢文件末尾」条。
+
+### 约定来源与范围（容易搞错的地方）
+
+根仓 `eslint.config.js` 的「5.2 导出位置约定」，选择器是
+`ExportNamedDeclaration > {FunctionDeclaration,ClassDeclaration,VariableDeclaration}`
++ `ExportDefaultDeclaration:not(:has(> Identifier))`，**作用范围 `src/**/*.js`**（只有后端 JS）。
+retroweb 有自己的 eslint 配置，**原先没有这条规则**，所以 32 个 .ts 里全是内联 export。
+
+### 扫描结果（先 AST 全量扫，别用 grep 估）
+
+- 正则估 221 处，**AST 实扫 218 处**（skill 陷阱 12 的实例）。
+- 形态：Interface 88 / Function 75 / VariableStatement 31 / TypeAlias 23 / Class 1。
+- 裸 `export {}` **2 处**，都是**再导出已 import 的名字**：
+  `stores/persist/index.ts` 的 `export type { CondPref }`、
+  `stores/workspace.ts` 的 `export { ALL_ANALYSIS_MODULES, ANALYSIS_MODULE_LABELS, reactionIdFor }`。
+- **`export *` 0 处、带 source 的 re-export 0 处** ⇒ 移动导出块**不会**改变模块求值顺序
+  （有这两种就必须重新评估，因为它们有副作用语义）。
+- **`.vue` 0 处**（全用 `<script setup>`，顶层 export 本就非法）⇒ 影响面纯 `.ts`。
+
+🔴 **`verbatimModuleSyntax: true`**：类型导出**必须**写 `export type { … }`。
+所以「值块 + 类型块」两个导出块的拆分是**编译器要求**，不是审美。
+
+### 脚本要点（`.tmp-probe/export-refactor/`）
+
+| 文件 | 作用 |
+|---|---|
+| `backup.cjs` | 备份 32 个文件（+ 逐字节校验） |
+| `analyze.cjs` | AST 扫描导出形态 |
+| `scan-comments.cjs` | 找「被移动导出带前置注释」 |
+| `transform.cjs` | 主改写器（`--stage` / `--write`） |
+| `diffcheck.cjs` | 逐行核对 diff 是否都在预期模式内 |
+| `gen-import-check.cjs` + `vite.import.config.ts` | 生成并构建「导出值可用」探针 |
+
+- 用 **TypeScript Compiler API**（`ts.createSourceFile` + `ts.isExportDeclaration` 等），
+  **不是 espree** —— espree 解析不了 TS。
+- 🔴 `export { a as b }` 的 AST：**`propertyName` = 本地名 `a`、`name` = 对外名 `b`**
+  （与 `ImportSpecifier` 相反）。先写 4 行实测确认再用。
+- 🔴 **指纹要带类型标记**：`export interface X` 记成 `X as X (type)`；否则
+  before `X as X` vs after `X as X (type)` 恒不等（第一版栽在这）。
+- 删除语句时吃「本行换行 + 紧随的一个空行」，避免留 3 连换行；
+  末尾统一 `trimEnd` 后再追加，保证只有 1 个空行分隔。
+- 断言 7 条：重解析无语法错 / 指纹前后全等 / 无残留内联 export /
+  `export default` 必须是最后一条语句 / 无混合行尾 / 未新增连续空行 / 未知形态中止。
+- 🔴 **幂等**：对已改写文件重跑产出完全一致（实测 0 漂移）。
+
+### 两个真坑
+
+1. 🔴 **脚本里不要用非 ASCII 变量名**。`const 残留 = …` 在写入时空格丢失变成 `const残留`
+   （单个标识符）⇒ 运行时报 `残留 is not defined`，而报错信息看起来像别的问题。
+2. 🔴 **搬移导出语句会孤立其前置注释**。`stores/workspace.ts` 的裸再导出上方有
+   「组件仍从 `@/stores/workspace` 拿这几个（见 RunParams.vue）—— 在这里统一再导出…」。
+   只搬语句 ⇒ 注释留在原地，错误地挂到后面的 `const HISTORY_LIMIT = 30;` 上。
+   修法 = **带注释的裸 export 整块搬运**（注释 + 自己的 export 语句一起放末尾，
+   不并进大块 —— 并进去会让"这几个"指代失真）。
+   ⚠️ 扫描报 **156 处「导出语句带前置注释」，但绝大多数是 JSDoc**：那种只删 `export` 关键字，
+   注释本就该留在声明上，**不需要搬**。只有裸 `export {}` 的注释才要处理。
+
+### 验证矩阵
+
+| 关卡 | 结果 |
+|---|---|
+| `diffcheck.cjs` 逐行模式核对 | 410 新增 / 219 删除行**全部**合规 |
+| `vue-tsc -b` | 0（**这是 verbatimModuleSyntax 的真正关卡**） |
+| `eslint .` | 0（改前也 0 ⇒ 零新增） |
+| `vite build` | 通过；入口 JS 205.1 → **205.3 KB** |
+| 真实 import 探针 | **110 通过 / 0 失败**（31 模块，导出**值**全部可用） |
+| 浏览器冒烟 | 挂载 ✅ / 4 导航项 / 登录弹窗正常 / **0 pageerror** |
+| eslint 规则自测 | 注入违规 → **5 error**（`export default <标识符>` 正确放行） |
+| 幂等 | 重跑 0 漂移 |
+
+⚠️ 探针的两个判据细节：
+- `types/*.ts` 运行时命名空间为空是**对的**（纯类型模块被擦除）⇒ 判据按「有无值导出」区分。
+- 探针**排除 `router/index.ts`**（它 dynamic import 4 个 `.vue`，Node 侧没 vue 插件）；
+  其 `export default router` 由浏览器冒烟覆盖。
+
+### 落地的 eslint 规则
+
+retroweb `eslint.config.js` 新增一个 `{ files: ['src/**/*.ts'] }` 块，含 7 个选择器：
+根仓那 4 个 + **TS 专用 3 个**（`TSInterfaceDeclaration` / `TSTypeAliasDeclaration` /
+`TSEnumDeclaration`）—— 根仓那条只作用 `.js`，**管不到 `export interface`**，不加就漏掉 111 处。
+
+🔴 **范围必须是 `src/**/*.ts`**（不是 `**/*.ts`）：实测 `**/*.ts` 会把根级 `vite.config.ts` 的
+`export default defineConfig(({ mode }) => {…})` 判红 —— 那是工具配置的惯用写法，
+强行"先命名再导出"只是噪音。根仓同样只圈 `src/`。亦不含 `.vue`。
+
+### 遗留
+
+`MEMORY.md` 已 **14.7 KB**，超过它自己标的 ~12 KB 预算（本会话新增条目已尽量压成指向 §63/§64 的短索引）。
+建议另开一轮做专门精简。
+
+## §65 retroweb：多模型并行（走 Node 中转时）— 需求定案 2026-10-11
+
+展开 MEMORY.md §6 的「多模型并行」条。
+
+### 需求原话（用户 2026-10-11）
+
+> 如果后期走 nodejs 中转流程局部需要考虑模型加载了，前端只考虑模型能不能用，
+> 可以 3 个模型或者多个模型同时运行，而不是只运行一个。
+
+拆成三条：
+1. **模型加载**（下盘、fork 子进程、阶段进度、加载耗时）归 **Node 侧**管 —— 前端不该感知；
+2. 前端**只关心"某个模型此刻能不能用"**；
+3. **可以 3 个或更多模型同时运行**，不是"同一时刻只加载一个"。
+
+### 落点
+
+`docs/plan-node-backend.md` **§6.7**（放在「6. 六个必须提前定的决策」下）——
+理由：现在不在契约里收敛，以后要**拆两遍**。
+
+### 核实出的耦合面（关键：比看起来小）
+
+| 位置 | 现状 | 前端是否读 |
+|---|---|---|
+| `stores/parts/models.ts` 的 `modelService` ref（**单例**） | 一个 `ModelServiceInfo` | ✅ 读（`modelBusy` / `modelPhase` / `RunParams.vue` 进度）← **唯一真耦合点** |
+| `RetroModel.is_current`（types/retro.ts） | 布尔 | ❌ **死字段**（全仓仅声明处出现） |
+| `ModelsResponse.current`（types/retro.ts） | 单 key | ❌ **死字段** |
+| `currentModel` computed（models.ts:253） | `models.find(m => m.key === ctx.params.value.model)` | ✅ 读，但**按用户下拉选择**算 ⇒ 语义本来就对，多模型下**不用动** |
+
+⇒ 结论：多模型改造实际只需动 `modelService` 这一处，**不是契约全量重写**。
+（`is_current` 是"服务当前加载的那个"，与 `currentModel` 的"用户选的那个"是**两回事**，
+别混 —— 后者本来就不依赖单模型假设。）
+
+### 目标契约（Node 中转档）
+
+- 每个模型**各自一份**状态：`{ key, usable, state, progress? }`；
+- **去掉"当前/唯一"语义**：契约里不再出现 `is_current` 与单个 `current`；
+- 进度按模型给；或干脆前端不展示"加载到几 %"，只给 `usable / loading / unavailable` 三态；
+- 🔴 **`modelBusy` 改为"我要用的那个模型忙不忙"**，而不是"服务在不在忙"。
+  这是多模型下**最容易出的错**：A 模型加载中会把**已经就绪的 B** 一起挡掉。
+
+### 迁移注意
+
+- 直连 Python 档（`VITE_RETRO_VIA_NODE=false`）后端**仍是单模型**（Flask 一次只跑一个）
+  ⇒ 契约必须**同时容忍两种**：单模型后端退化成一个元素的数组。
+  **别把前端改成"必须多模型"**，否则直连档全废。
+- 现状契约（`ModelServiceInfo` 单例 + `current` + `is_current`）**先别加深用法**，
+  否则以后要拆两遍。
+
+### 已落地的 TODO 锚点（5 处，都指向 §6.7）
+
+| 文件 | 位置 |
+|---|---|
+| `src/types/retro.ts` | `ModelServiceInfo` 接口文档 |
+| `src/types/retro.ts` | `RetroModel.is_current` |
+| `src/types/retro.ts` | `ModelsResponse.current` |
+| `src/stores/parts/models.ts` | `modelService` ref |
+| `src/stores/parts/models.ts` | `modelBusy` computed |
+
+### 本轮关联的提交（retroweb 是独立仓）
+
+- `6d912b7` `refactor:` 收拢 export 到文件末尾（32 文件）+ 401 重放守卫等本会话改动
+- `f4d02e1` `docs:` 定案「模型加载归 Node 管、前端只问能不能用、允许多模型并行」
+
+🔴 **retroweb 是独立 git 仓**（`github.com/yijiu2025/retroweb.git`，`main`），根仓**不跟踪**它
+（`git ls-files retroweb` = 0）。提交/推送在 retroweb 目录里做；推送判定用 `git ls-remote origin main`。
+
+### 遗留
+
+`MEMORY.md` 已 **15.7 KB**，超其头部标注的「~12KB 静默截断」预算。
+且本轮新增条目在**文件尾部** —— 若截断真发生，新规则会**静默丢失**。
+建议另开一轮：把 §6（retroweb，占最大头）的细节整体下沉到本文件，主索引只留 1-2 行判据 + § 号。
+
+## §66 retroweb：前端不启停模型（env `VITE_RETRO_MODEL_CONTROL`，2026-10-11）
+
+需求：「使用 nodejs 后端后就不能负责模型启动了……在 env 里面，直连需要支持」。
+
+**改前查证**：`.env.*` 六个开关**全与模型启停无关**；Node 侧 `src/api/retroweb/v1/compute.js`
+实现了 `/load` 与 `/model-service/:action` 但只是 `forwardJson` 转发 ⇒ 中转档前端**仍在**启停模型。
+**能跑通 ≠ 职责清楚**。
+
+**开关**：`VITE_RETRO_MODEL_CONTROL = auto | on | off`，默认 `auto`
+（`auto` ⇒ `!RETRO_VIA_NODE`）。落在 `src/config/services.ts` 的 `MODEL_CONTROL_ENABLED`；
+取值无法识别时 **dev 下 `console.warn`**（不静默按 auto 走）。
+
+**管住三个入口**（UI + store 双层）：
+| 入口 | 说明 |
+|---|---|
+| `warmModel(key?)` | 加载 / 切换预测模型，含**下拉切换的自动加载** |
+| `stopModelService()` | 停止模型服务 |
+| `loadForward()` | 热挂正向模型（可行性过滤） |
+
+- UI（`RunParams.vue`）：隐藏「加载/停止」按钮；下拉切换**不再触发**
+  （否则会弹「要停掉当前模型重新加载吗」的确认框，而前端没这权限）；
+  状态文案分档（直连 =「点「加载」拉起模型服务…」／中转 =「由后端负责启动」）。
+- store 三动作各加一道 `if (!MODEL_CONTROL_ENABLED) { console.warn(...); return; }`
+  —— **UI 隐藏了但 store 是公开的**（探针 / 历史代码 / 快捷键都能调到）。
+- **模型状态展示永远保留**：前端不问"怎么加载"，但仍然回答"能不能用"。
+
+**验证**：
+- `.tmp-probe/model-control/`：vite SSR 构建**真实 `services.ts`**，6 组 VIA_NODE×CONTROL ⇒ 6/6。
+  ⚠️ 第一版写的是"内联复制逻辑"的真值表，违反本仓「禁内联复制逻辑」，已改成跑真实模块。
+- 端到端：构建两份（默认 vs `CONTROL=off`，产物 sha 不同 ⇒ env 确实生效），
+  浏览器里数 `.params__model .el-button`。
+  🔴 **第一次探针无效**：两版都 `hasModelRow:false` —— 选择器没命中，等于什么都没证明；
+  原因是**工作台在标定态**（`targetSetupOpen`）时参数栏不渲染。
+  切到路线态（`ws.targetSetupOpen=false`）后：默认档 `modelBtns:1`（文案「加载」）、
+  `CONTROL=off` 档 `modelBtns:0`（文案「由后端负责启动」）。
+- `eslint 0` · `vue-tsc -b 0` · `vite build` 通过。
+
+⚠️ **坑**：用 `git checkout <file>` 回滚"反证"时，它取回的是**上次提交**的版本，
+连带**丢掉本轮刚加的 `VITE_RETRO_MODEL_CONTROL` 声明**（tsc 报错才发现）。
+**工作区有未提交改动时不要用 `git checkout <file>` 回滚** —— 用备份。
+
+🔴 **严格 env 模式的反证**：删掉 `env.d.ts` 里该变量的声明即报
+`TS2339: Property 'VITE_RETRO_MODEL_CONTROL' does not exist on type 'ImportMetaEnv'`
+⇒ 证明新开关也在严格模式覆盖内（不是只有旧变量被守着）。
+
+## §67 retroweb：超级管理员「配置启用哪些模型」权限（2026-10-11）
+
+需求：「如果使用 nodejs 会登录，超级管理员给个权限，有权限就可以设置启用哪些模型。」
+
+**机制（`framework/auth/permission-loader.js:102-110`）**：GLOBAL `superadmin` 会
+`roles.push(\`${appId}_admin\`)` 再按**确切 code** 去 Role 表查 policy。
+
+🔴 **改前的缺口**：retroweb **根本没有 `retroweb_admin` 角色** ⇒ 超管在 retroweb 上
+**一个额外权限都拿不到**，且**不报错、静默失效**。连带 `retroweb:admin:task_any`
+处于「定义了但无人被授予」状态。
+
+**新增**（根仓 `src/app/retroweb/permission/`）：
+- `index.js` ADMIN 组：`MODEL: { code: 'retroweb:admin:model', label: '配置启用哪些模型', type: 'high_risk' }`
+- `roles.js`：角色 `retroweb_admin`（rank 80，授予 `ADMIN.TASK_ANY` + `ADMIN.MODEL`）
+
+🔴 角色 **code 必须是 `${appId}_admin`**（写 `retroweb_super` 之类 ⇒ 静默失效）。
+🔴 **判定用权限码，不写死 `superadmin`**（该文件头部：权限可单独授予，写死角色码会让
+"给某个用户单独放行"变成改代码）。
+⚠️ `createPermissionRegistry` 返回的是 **code 字符串**（`constants[g][a] = meta.code`），
+**不是 meta 对象** ⇒ `Action: [PERM.ADMIN.MODEL]` 写法正确。
+
+**验证**：`.tmp-probe/verify-retroweb-admin-perm.mjs` **15/15**（含"loader 会查的 code
+确实在 registry 里"、"meta 含该 code 且 high_risk + 中文 label"、"既有角色没被改坏"）；
+根仓 `eslint` 0；权限测试 3 套件 / 29 tests 全过。
+
+⚠️ **jest 两个坑**：参数是 `--testPathPatterns`（旧名 `--testPathPattern` 已废）；
+ESM 走 `NODE_OPTIONS=--experimental-vm-modules npx jest`（写成
+`node --experimental-vm-modules npx jest` 会报 `Cannot find module '...\npx'`）。
+
+**待定**（已写进 `retroweb/docs/plan-node-backend.md` §7 的 Q6–Q8）：
+启用清单存哪（设置表 / 新表 / Node 配置文件）、粒度（建议**部署级全局** —— 模型服务是整机共享资源）、
+管理 UI 放哪（retroweb 内嵌管理页 / 管理后台）。
+
+### §67 补充：「启用清单」定义与已定决策（2026-10-11）
+
+**「启用清单」= 一组 model key，表示"这个部署允许被使用哪些模型"** —— 配置，非运行时状态。
+与「模型状态」**正交**（见 §65）：清单里 3 个模型可以**同时运行**，不是单选；
+清单答"哪些允许用"，状态答"某个此刻能不能用"。前端只读状态、只列清单内模型、**不碰清单**。
+⚠️ 清单必须**至少留一个**启用项（���禁 = 部署不可用）。
+
+**用户已拍板**：粒度 = **部署级全局**；管理 UI = **retroweb 内嵌管理页（按权限显示）**。
+由此推导「在 UI 里改 ⇒ 必须落库」⇒ 存储倾向系统设置表。
+
+🔴 **实现前置缺口（已核实）**：前端**无权限信息** ——
+`retroweb/src/types/sso.ts` 的 `AuthUser` 只有 `uid/username/email/avatar/name`；
+`stores/auth.ts` 无 `permissions`/`roles`；Node 侧 `permission-loader` / `perm-cache`
+的 `allows/denies` **只用于服务端 `requirePermission`**，**无下发通道**。
+⇒ 按权限显示前须先补下发（建议 userinfo 带 `permissions: string[]`）。
+⚠️ 前端隐藏只是体验，写接口仍必须后端兜底。
+
+**新增待拍板**：Q9 权限下发方式；Q10 停用正在被用的模型（建议"拒绝新任务、跑完的跑完"）。
+
+## §69 retroweb：暗色首屏白闪修复 + App.vue 挂载审查（2026-10-11）
+
+用户问「AppShell 和 SsoLoginModal 都是什么，放在 app.vue 合理吗，质量怎么样」⇒ 修。
+
+### 挂载位置：审查结论是「正确，且是唯一正确的位置」
+
+`AppShell.vue`（750 行）= **布局层**，持有**唯一的 `router-view`**（5 个页面共用一套壳），
+根元素 `overflow:hidden`。`SsoLoginModal.vue`（729 行）= **全局浮层**，
+触发源是全局的（401 → `intercept401` / 路由守卫 / 手动点登录）。
+
+🔴 **必须是兄弟而非挂进页面**：① `AppShell` 挂页面 ⇒ 路由切换时卸载，侧栏/顶栏跟着闪；
+② `SsoLoginModal` 全局触发 ⇒ "不在那个页面就弹不出来"不可接受；
+③ `AppShell` 是 `overflow:hidden` 容器 ⇒ 弹窗必须挂它**外面**才不被裁剪。
+
+四前端对比：**retroweb 是唯一把外壳抽成独立组件、`App.vue` 只做装配的**
+（posecraft 同构但用 prop 手动同步 `is-open`；firewall 21 行；admin 把 header 写死在 App.vue；
+oauth21 还在 App.vue 塞主题同步/远程配色/debug 面板）。
+
+### 白闪根因与修法
+
+`settings` store 在 `AppShell` 的 `setup()` 里才首次实例化
+（`useSettingsStore` 在 main.ts / bootstrap.ts / App.vue / router 全都没出现），
+挂载还等 `router.isReady()` ⇒ `html.dark` **晚于首屏 paint** ⇒ 深色用户刷新闪一帧白。
+`readInitial()` 回落 `prefers-color-scheme` ⇒ **首次访问（没存过主题）的深色用户也闪**。
+
+修法 = `index.html` `<head>` 内联 IIFE（与既有 `window.global`/`process` 垫片同风格）。
+
+🔴 **口径必须与 `readInitial()` 逐字一致**：
+- key = `retroweb_theme`
+- 值 = **`'dark'` / `'light'`** —— ⚠️ **不是其他偏好用的 `'1'` / `'0'`**（`readFlag` 那套）
+- 读不到 / 值不认识 ⇒ 回落 `prefers-color-scheme`
+
+不一致 ⇒ store 初始化算出相反值、把 class 改回去 ⇒ **闪得更狠**。
+🔴 **改 key 名或取值口径时 `index.html` 与 `settings.ts` 必须同改**（已写进两处注释）。
+
+`data-theme` 目前无 CSS 消费者（只有 `apply()` 在写），但照样写上以保持终态一致。
+隐私模式（`localStorage` 抛）⇒ try/catch 退浅色，不阻断首屏。
+
+### 验证（`.tmp-probe/verify-theme-flash.cjs`）
+
+判据：**逐帧 rAF 记录 `<html>` 的 dark 状态 + PerformanceObserver 取 FP/FCP**，
+断「**第一帧**是否已 dark」与「**FP 之前是否全是暗帧**」。
+
+🔴 **不要测"稳定后 dark 对不对"** —— 那必然对（store 会补上），测它等于没测。
+白闪的本质就是"第一帧是浅的"。
+
+| 场景 | 结果 |
+|---|---|
+| 修复后（深色） | **5/5**：第一帧 `dark=true`、FP(300ms) 前 4 帧**零亮帧**、body 亮度 17.5 |
+| **反向证明**（删掉**产物**里的 IIFE，其余逐字不动，另起端口） | **FP 前 2 帧全亮**、第一帧 `dark=false`，但最终 dark=true ⇒ 正是「闪一下再变暗」 |
+| 显式浅色 | 第一帧 light ✅ |
+| 未存过 + 系统浅 | 第一帧 light ✅ |
+| 未存过 + 系统深 | 第一帧 dark ✅ |
+
+三条路径**后续翻转帧均 = 0** ⇒ store 没把 class 改回去 ⇒ **证明两处口径一致**。
+暗色冒烟：挂载 ✅ / 4 导航项 / `--el-bg-color=#141414` / 0 pageerror。
+
+### 两个自己的错
+
+1. 🔴 **Edit 写中文注释产生了一个 U+FFFD 替换字符**（"主题退��默认"）。
+   ✅ **写完中文文件立刻 `grep \ufffd` 复核**。
+2. 🔴 **反向证明的断言写错了**：拿 `retroweb_theme` 关键字判"是否删干净"，
+   但那段**注释里本来就有这个 key 名** ⇒ 误报"还有残留"。
+   ✅ 正确判据 = 查**可执行代码**（`matchMedia(` / `classList.toggle`）+ `<script>` 标签数变化。
+   另：assert 失败时脚本**在写盘前**中止，文件其实没被改 —— 别误以为改了一半。
+
+### 另两处改进（纯注释）
+
+- 三个文件补 `@author yijiu2025` + `@since 2026-10-05`。
+  🔴 **用 `git log --diff-filter=A --format='%an | %ad'` 定值，别猜**；本仓 `@author` 只有 `yijiu2025` 一个值。
+- `App.vue` 文件头补上**漏掉的第三件事** `authStore.init()`，写明它与
+  `router.beforeEach` 里那次**是同一件事**、靠 `initialized` 幂等守卫去重（**不是写重了**），
+  并保留的理由（不依赖路由是否被触发）。
+- 三个组件各补"为什么必须挂在 App.vue / 为什么是兄弟"的说明。
+
+**验收**：`eslint .` 0 · `vue-tsc -b` 0 · `vite build` 通过 · 无残留产物。
+改动：`index.html`（真修复）+ `src/App.vue` / `AppShell.vue` / `SsoLoginModal.vue`（仅注释）。
+
+### §69 补充：手机端 UI 方案（2026-10-11）
+
+**原型文件**：`retroweb/docs/mobile-ui-prototype.html`（单文件、可直接打开交互）。
+左侧写设计决策，右侧 390×844 真机框可点。
+
+#### 现状实测缺口（改造前的事实基线）
+
+| 项 | 实测 |
+|---|---|
+| 断点 | **只有 1180 / 768**（`TasksView` 另有 900）⇒ 无 480 一档 |
+| 768 的做法 | 侧栏收成 **64px 图标条**（仍占宽、无文字、5 入口靠记忆） |
+| `isMobile` | **只参与收侧栏**，不参与任何布局切换 |
+| 🔴 `RouteCanvas` | **零 touch 事件** —— 只有 `wheel`（非被动）+ 直接改 `scrollLeft/Top` ⇒ 手机上双指缩放不可用、单指拖不动 |
+| `StructureEditor` | 高度写死 `clamp(400px, 58vh, 620px)` |
+
+#### 方案取舍
+
+- **借骨架不借配色**：参考图给的是「暖底 + 暗紫主卡 + 砖红强调」，
+  只借**版式语言**（暖底、深色主卡、大留白、轻描边、大圆角），
+  色板仍用 retroweb 的化学蓝。🔴 **主色是产品识别，换掉等于换品牌。**
+- **横屏只有 2 处**（实测结论，恰好与「大部分竖屏」一致）：
+  ① 结构画板 Ketcher（笔杆+画布+模板，竖屏挤成缝）
+  ② 路线网络画布（拖拽+缩放，且无 touch）。
+  这两处点进去给「请横屏」提示 + 尝试 `screen.orientation.lock`。
+- **触摸目标统一 ≥44×44**，含 `.seg` 分段控件（Apple/Google 对分段控件允许略小，本项目不给例外）。
+
+#### 原型里踩到并修掉的 3 个真问题
+
+1. 🔴 **容器复用按钮类** → `.cta.wide-2` 继承了 `.cta` 的 `background`/`border-radius`，
+   两个白色按钮之间露出蓝底、被 15px 圆角挖成「透镜形」。**行容器另起 `.btn-row`。**
+2. 🔴 **浮层 z-index 序**：`.canvas-land` 40 < 顶栏 50 / 页签 55 ⇒ 画板被压住，
+   且画板区内**点页签会误跳**。定序：`rotate95 > canvas90 > toast85 > mask70 > sheet71 > tab55 > bar50`。
+3. 🔴 **触摸目标 12 处偏小**。修法分两种：
+   - 视觉密度要紧的 → `box-sizing:content-box` + padding 撑开 + **负 margin 收回占位**
+     （`icon-btn` 视觉仍 34、点击区 44，顶栏不挤换行）
+   - 其余直接放到 44。
+
+#### 探针的两个坑
+
+- `elementFromPoint` 常返回 **SVG 子元素**（`<path>`）⇒ 判层叠要从命中元素**往上遍历父链**，
+  别比类名字符串。
+- 🔴 **坐标别写死**：手机框在页面中位于 x≈727，`elementFromPoint(195,300)` 全落在页面空白，
+  会误报「画板不在最上层」。应从 `getBoundingClientRect()` 取中心点。
+
+### §70 retroweb：端点配置切 Node 落库 + 两套路径规则（2026-10-11）
+
+#### 两套后端的路径规则（不能混用）
+
+| 档位 | 前端 baseURL | 端点配置接口 | 语义 | 落点 |
+|---|---|---|---|---|
+| 直连 Python | `/retro`（vite 代理 rewrite） | `/llm/settings` | **整包提交** | `web/llm_settings.json`（**全局、不绑用户**） |
+| 走 Node 中转 | `{API}/retroweb/v1` | `/llm/profiles` | **逐条 upsert + 删多余** | `retroweb_llm_profile` 表（**per-user、密钥加密、只回掩码**） |
+
+🔴 **Node 路径是拼出来的**：`src/api/retroweb/system.json` 的 `prefix`（`/retroweb`）
++ `registerGroupMetadata({ prefix: '/v1' })`，由 `framework/api/guard.js` 的
+`joinUrl(systemPrefix, currentPrefix, url)` 拼成。
+Python 侧是 `@app.route("/api/llm/settings")` 硬编码（`F:/retrochimera/web/app.py:948`）。
+
+其它对照：查询类走 `src/api/retroweb/v1/llm.js`（profiles / official）、
+`settings.js`（settings / llm-source）、`tasks.js`（tasks / quota / import）；
+计算类在 `compute.js`（parse / models / load / jobs / predict / llm/* / feedback），
+其中多数是 `forwardJson` **转发给 Python**。
+
+#### 🔴 切换前发现的数据销毁级 bug
+
+`llm-profile.dao.js` 的 `upsert` 原为 `encryptSecret(input.keys.join(','))`（**整包替换**），
+而面板回传的 `api_keys` 含掩码串（约定"含 `*` = 保留原 key"）⇒
+**真 key 被自己的掩码覆盖、永久不可恢复**。
+实测（跑真实 encrypt/mask，非复制逻辑）：`["****ab3f","****cd4e"]` 落库再解仍是掩码。
+
+✅ **修法必须在 DAO**（前端只有掩码、没有明文，只有这层能 `decryptKeys`）：
+新增 `mergeKeys(incoming, existing)`：
+- 含 `*` ⇒ 用旧明文顶上；旧明文不够则**丢弃该掩码**（宁可少一把，不把掩码当 key 存）
+- 不含 `*` ⇒ 明文新增
+- `keys` 未传 ⇒ **不动旧 key**；`[]` ⇒ **显式清空**（与 Python 整包语义一致）
+- 去重 + 裁空白
+`upsert` 必须在组装 payload **之前**读旧行（旧密文一落库就没了）。
+
+#### 能力层 `retroweb/src/api/endpoint-config.ts`
+
+面板只认**一套 `LlmSettings`**，差异全收在这一层。三处形状翻译：
+`id` number↔string · `temperature`/`timeout`/`json_mode` ↔ `extra_json`（Node 表**无这三列**）·
+`keys: LlmKeyState[]` ↔ 单个 `key_masked`（**只一把**；后端刻意不返回数量，
+注释写明"不要为显示全而拼出来"）。
+
+`resetKeys` 中转档**显式抛错**（轮换状态是 Python 进程内运行时状态，Node 表无列）——
+静默成功会让用户以为重置了。免登录档一律不发请求。
+
+🔴 **`keys: []` ≠ 不动密钥**：写能力层时先用了 `keys: []` 表示"不动"，而 `mergeKeys`
+的语义是「`undefined` = 不动，`[]` = 清空」⇒ **切一次生效就清空密钥**。
+已改为不传该键（`api/llm.ts` 的 `saveProfile` 也配合"`undefined` 不参与序列化"）。
+
+#### 探针
+
+- `.tmp-probe/verify-merge-keys.mjs` 16/16（跑真实 mergeKeys）
+- `.tmp-probe/reverse-merge-keys.mjs` 反向证明
+- `.tmp-probe/ep-switch/`：跑**真实** `endpoint-config.ts`，用 **vite alias 正则**把
+  `@/api/llm`、`@/api/retro` 换成 mock（`{ find: /^@\/api\/llm$/, ... }`）
+  ⇒ **中转档 28/28 + 直连档 8/8**。
+  ⚠️ 档位必须**硬编码生成两份 config**（`vite.node.config.ts` / `vite.python.config.ts`）——
+  SSR 下 `process.env` 派生的 `define` 不生效（§68 已记）。
+  ⚠️ 用例间有状态依赖要重置 fixture（② 删了 id=9，③ 必须先 `__reset()`）。
+  ⚠️ mock 状态要在**模块加载时**初始化（直连档下 lazy seed 不会被调用）。
+
+### §71 手机端落地 ①②：底部页签 + 480 断点 + RouteCanvas 触摸手势（2026-10-11）
+
+原型见 §69；本节是**落地到真实组件**的记录。③（其余页面逐个适配）未做。
+
+#### ① AppShell：侧栏 → 底部页签
+
+底部固定 5 格页签，`v-if="isMobile"` + `position:fixed` + `padding-bottom: env(safe-area-inset-bottom)`。
+第五格「设置」打开**本组件**内的共享弹窗（`store.runSettingsOpen`）⇒ 侧栏不渲染时仍有入口。
+
+🔴 `collapsed` **不能**再写 `settings.sidebarCollapsed || isMobile` ——
+那会**污染落盘偏好**（手机端打开一次就把桌面侧的收起态写成 true）。
+已改为 `isMobile ? false : settings.sidebarCollapsed`。
+
+🔴🔴 **768 边界 bug（多视口扫描抓到的）**：CSS `max-width:768px` **包含** 768 整，
+JS 原本写 `< 768` **排除**它 ⇒ 768 整这一档「CSS 判手机 ⇒ 侧栏隐藏」+
+「JS 判非手机 ⇒ 不渲染页签」⇒ **两套导航同时消失、且零报错**。✅ 修为 `<=`。
+🛡️ 加了 **dev 运行时自检**：`asideHiddenByCss` 问 CSS「侧栏此刻是否被隐藏」，
+与 JS 判断矛盾时渲染一条红条 ⇒ 把静默失效变成可见报错。
+⚠️ `import.meta.env.DEV` **不能写在模板表达式里**（Vue 编译模板时 sourceType 不是 module，
+构建期报 "import.meta may appear only with 'sourceType: module'"）⇒ 必须经脚本侧 computed。
+
+🔴 **给滚动容器留白的目标类**：是 `.app__content`（`flex:1` 的滚动容器），
+**不是** `.app__body`（flex 列，padding 加它上面不会让内部滚动区变短），
+更不是不存在的 `.app__main`（我第一版就写错了）。
+🔴🔴 **`padding-bottom` 必须写在 `padding` 简写之后** —— 简写会把它重置回上下值
+（实测 767/768 留白只剩 12px、内容被 fixed 页签盖住；480 档只是**碰巧**顺序对）。
+
+🔴 `addEventListener` **不能传内联箭头**：为加自检换成匿名函数后，
+`removeEventListener(…, onResize)` 移除的是另一个引用 ⇒ 监听器泄漏。须用具名 `handleResize`。
+
+**验证**：多视口扫描 **12 档 60/60**（1440/1024/820/**769**/**768**/**767**/**481**/**480**/
+430/390/375/360），核心判据 = **两套导航恰好有一套存在**；另断页签 5 格、高 ≥44、
+底部留白 ≥ 页签高、左右留白按档位（12px / 10px）、无横向溢出、无自检报错。
+
+#### ② RouteCanvas：单指平移 + 双指捏合
+
+**改前实测缺口**：`onPointerDown` 里 `if (e.pointerType !== 'mouse') return;`
+（注释说「触屏交给原生滚动 / 双指缩放」），但**全仓无任何 touch 监听器、`touch-action` 也没设**
+⇒ 那条注释描述的是一个**并不存在**的实现。
+
+实现要点：
+- `touch-action: none` + `-webkit-tap-highlight-color: transparent`（只在 `.rcanvas__wrap`）。
+- 双指 ⇒ `zoomAt(zoom × 距离比, 两指中点)`（**倍数**，与滚轮 exp 同手感）；
+  单指 ⇒ 改 `scrollLeft/Top`，偏移**从最初按下点**算（与鼠标 pan 同口径）。
+- 双指抬起一根 ⇒ 剩余那根**重新起算起点**（否则 scroll 被一次性拽回去、跳一下）。
+- 双击卡片改步骤复用 `onPointerUp` 同一套 `TAP_SLOP` / `TAP_GAP`。
+- 🔴 用 **touch 事件**做 pinch，不用 Pointer Events：双指在 Pointer Events 里是两个独立
+  `pointerId`，要自维护活跃集合 + 判断"第二指落下"，多一层状态机与竞态。
+- 🔴 状态**必须 ref 不能 let** —— `touching` computed 读它们决定 `.is-touching`，
+  `let` 非响应式 ⇒ computed 只算一次、类永远停在初始值。
+
+**验证**：`verify-canvas-touch.cjs` **15/15**（真手机视口 + CDP
+`Input.dispatchTouchEvent`，**不用 mouse 冒充触摸**）；`verify-canvas-mouse-regression.cjs`
+**9/9**（桌面鼠标路径未被改坏）。
+
+⚠️ **探针的四个坑（都是假红/假绿）**：
+1. 🔴 **`.el-overlay` 铺满视口吃掉所有触摸**（登录浮层有 4~6 个）⇒ 表现是"画布在、样式对、
+   手势全无反应"。必须先 `authStore.closeLogin()` 并断言"可见 overlay = 0"。
+2. 🔴 **节点树缺 `children: string[]`**（`MolNode` 真实字段，`types/retro.ts:946`）：
+   `build()` 靠它递归 ⇒ 漏了则 `hasRoute` 恒 false（看起来像"数据没注入"）。
+3. `el-tabs` **只渲染当前页签** ⇒ 必须先 `mainTab='route'`；且不能在一个 tick 里同时改
+   `targetSetupOpen` + 注入节点（Vue 来不及渲染中间态）。
+4. **反引号模板字符串里不能再出现反引号** —— 注释里写 `` `children` `` 会截断模板串。
+
+⚠️ **一条反向证明（结论：headless 测不出）**：把 `touch-action:none` 改成 `auto`
+后手势**照样全绿** —— CDP `Input.dispatchTouchEvent` 直接投递渲染进程、绕过合成器手势判定。
+⇒ 「去掉它会坏」只能在真机复现，**别拿 headless 的绿反推它可有可无**。
+能验的那半已验：`preventDefault` 生效（`cancelable=true` + `defaultPrevented=true`，
+`.tmp-probe/passive-check.cjs`）。代码注释已按此如实改写。
+
+#### 未做（③）
+`TasksView` / `HistoryView` / `ProfileView` / `TargetSetupPanel` / WorkspaceView 页签内容
+的逐个适配；`StructureEditor`（Ketcher）横屏模式与「请横屏」提示。
+
+### §72 api 层分层重构（入口只装配、业务下沉，2026-10-11）
+
+**备份**：`.tmp-probe/_backup/api-refactor/`（逐字节校验）。旧 `api/http.ts`、`api/retro.ts` 从那里恢复。
+
+#### 改前
+- `api/retro.ts` **780 行** = baseURL 决策 + 三个实例 + `fail()` 错误归一 + `retroApi` + `llmApi`
+  + **220 行 SSE**（而那 220 行与"逆合成"毫无关系，是全项目最大的错位）。
+- `api/http.ts` 264 行 = 传输（实例/拆信封）与**会话状态机**混在一起。
+- `api/llm.ts` 与 `retro.ts` **并列**当兄弟，实为「Node 档实现」，应属能力层。
+- `bootstrap.ts:56` `setUnauthorizedHandler(() => useAuthStore().markExpired(...))`
+  ⇒ **入口层知道了 store 的方法名**。
+
+#### 改后（三层 + 一张地图）
+```
+http/{client,session,sse,index}.ts   传输：平台
+retro/{client,compute,llm,index}.ts 算法：client=实例+fail()；compute=计算类；llm=分析类
+capability/{endpoint-config,node-llm}.ts  能力：跨档位决策
+session/install.ts                   把 401 接到 auth store
+auth.ts + README.md
+```
+传输层判据：**只认"有没有收到响应"，不认"哪个业务字段"**。
+
+#### 关键取舍（都写进了文件头）
+1. SSE 下沉到 `http/sse.ts`，**baseUrl 改成参数** ⇒ 不再绑定逆合成，第二条 SSE 业务可直接复用。
+2. 401 抽成 `http/session.ts`（不认识业务）。⚠️ 续期从「直接用本模块 refreshClient」改成
+   **由 client 反向注入的 `doRefresh()`** —— 否则 session 要知道端点、端点在 client 里，会成环。
+3. `fail()` 属**传输层**：它在 `{error}`(Python) / `{message}`(Node) 两种体里取文案，
+   那是**协议差异**不是业务。
+4. `bootstrap.ts` 只留一行 `installSession()`；文件头写明判据：
+   **「删掉本文件换一种装配方式，业务一行不该变」**。
+5. `RetroApiError` 必须**值导出**（`workspace.ts` 用它 `instanceof`）——
+   `verbatimModuleSyntax` 下误写 `export type` 会 `TS1362`。
+
+#### 验证
+`vue-tsc -b` 0 · `eslint .` 0 · `build` 7.13s；产物核对五处超时 + `x-device-id` +
+续期端点 + 哨兵常量全部在位。
+`.tmp-probe/session-split/` **20/20**（vite SSR 跑真实 `session.ts`）：
+doRefresh 真被调 / 单飞（并发 5 只发 1 次）/ `_retry` 守卫（0 次续期 + 弹窗 + 哨兵）/
+续期失败 / 500 透传 / notifyUnauthorized / 哨兵不误判。
+**反向证明**：摘掉 `doRefresh()` 的副本 ⇒ **5 条断言红**。
+行为无回归：触摸 **15/15**、鼠标 **9/9**。
+
+⚠️ **拆分三坑（都是 tsc 报出来才发现）**：
+1. 🔴 **盲按行号切片会截断函数**：`streamFollowup` 按 754 切、实际到 761 ⇒ 缺 `}`，
+   `TS1005`。**用备份 + 括号配平自检**。
+2. 🔴 **类型归属要按实际内容核对**：`analyze()`/`feedback()` 一度放进 `compute.ts`，
+   实际在 `llmApi` 段 ⇒ `TS2304`。**按 tsc 逐条修，别按直觉搬**。
+3. 🔴 **`export type` ≠ 值导出**：见上第 5 点。
