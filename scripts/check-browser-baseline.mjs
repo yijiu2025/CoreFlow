@@ -78,7 +78,7 @@ const html = read(path.join(APP_DIR, 'index.html'));
 console.log(`跨内核渲染基线检查 → ${TARGET}\n${'-'.repeat(56)}`);
 
 /* ------------------------------------------------------------------
- * H1　viewport meta：单行 + 必需键 + 无实验键
+ * H1 viewport meta：单行 + 必需键 + 无实验键
  * 丢 meta 的两次真机事故：跨行书写（小米）、带 interactive-widget（夸克）
  * ------------------------------------------------------------------ */
 const metaMatch = /<meta[^>]*name=["']viewport["'][^>]*>/i.exec(html);
@@ -113,7 +113,7 @@ if (metaTag) {
 }
 
 /* ------------------------------------------------------------------
- * H2　color-scheme：不带 only 与带 only 各一条
+ * H2 color-scheme：不带 only 与带 only 各一条
  * ------------------------------------------------------------------ */
 const schemeLines = styleText.match(/color-scheme\s*:[^;]+;/g) || [];
 assert(schemeLines.length > 0, 'H2', '声明了 color-scheme', '初始值 normal 会让画布配色交给 UA 决定');
@@ -131,7 +131,7 @@ if (schemeLines.length > 0) {
 }
 
 /* ------------------------------------------------------------------
- * H3　画布底色：根元素显式 background-color 取自画布 token
+ * H3 画布底色：根元素显式 background-color 取自画布 token
  * ------------------------------------------------------------------ */
 const canvasUse = /background(-color)?\s*:\s*var\(\s*--[\w-]*canvas\b/.test(styleText);
 assert(
@@ -149,7 +149,7 @@ warn(
 );
 
 /* ------------------------------------------------------------------
- * H4　-webkit-text-size-adjust
+ * H4 -webkit-text-size-adjust
  * ------------------------------------------------------------------ */
 assert(
   /-webkit-text-size-adjust\s*:\s*100%/.test(styleText),
@@ -159,7 +159,7 @@ assert(
 );
 
 /* ------------------------------------------------------------------
- * H5　布局视口兜底的配套（仅当引入了兜底实现时校验）
+ * H5 布局视口兜底的配套（仅当引入了兜底实现时校验）
  * ------------------------------------------------------------------ */
 const vpfixTs = files.find(f => /viewport-fix\.(ts|js)$/.test(f));
 
