@@ -53,7 +53,9 @@
 ## 5. 部署/CI → **§10**
 
 - 🔴 **前端 CI 用 `npm ci`**（`--prefix oauth21`，**必须从仓库根跑**）；lock 全仓入库。
-- 🔴 **后端三 job（lint/test/verify）保持 `npm install`**：根 lock 记 `wb-logkit` 为 `link: packages/log`，`npm ci` 建**悬空软链**⇒ERR_MODULE_NOT_FOUND；**禁开 `cache: npm`**。
+- 🔴 **后端三 job（lint/test/verify）用 `npm install --no-package-lock`**：根 lock 记 `wb-logkit` 为 `link: packages/log`（gitignore 嵌套仓）⇒ `npm ci`/`npm install` **都**建悬空软链⇒ERR_MODULE_NOT_FOUND（939b91b lock 入库后 install 也中招，test/verify 连红一周）；**禁开 `cache: npm`**。
+- 🔴 **Dockerfile lockfile 不进镜像**（只 `COPY package.json`，registry 取已发布版）+ 安装加 `--legacy-peer-deps`（无 lock 现算树必要）；构建期自证走 `docker/verify-deps.mjs`——🔴 **RUN 里 `node -e` 引号不跨行**，多行必解析失败（`unknown instruction: await`）。🔴 **复刻树验容器 install 要删 packages/ 且删 install 生成的 lock**（否则读到 link 又建软链，白验）。
+- 🔴 **frontend job 禁 `submodules: recursive`**：phonecopy 私有仓（CI token 拉不动）⇒ 精确 `git submodule update --init packages/theme-core`；**gitlink 必有 .gitmodules 条目**（漏声明=所有 recursive clone fatal）。
 - 改 `ci.yml`/Dockerfile 前先读 §10（安装三件套 · tini 软链 · secret ≥32 位 · `git archive` 到**仓库外**）。
 
 ## 6. retroweb + retrochimera（逆合成工作台）→ **§14~§72**
