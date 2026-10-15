@@ -7,6 +7,10 @@
 > `oauth21/src/theme/views/registry.ts`（版式注册表工厂）、
 > `oauth21/src/theme/views/params.ts`（设备维度 URL 参数的唯一读取入口）。
 > 上游依赖：[跨内核渲染基线](/frontend/browser-baseline) 定义画布与视口，本文定义它之上的分层。
+>
+> 📖 只想把机制用到新项目、不看演进记录：读精简规范
+> [theme-replacement.md](./theme-replacement.md)（目录契约 / 优先级 / 安全边界 / 验收清单）。
+> 本文保留全部「为什么」与历史定案。
 
 ## 〇、一条原则
 
