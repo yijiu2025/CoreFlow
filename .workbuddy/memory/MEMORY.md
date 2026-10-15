@@ -32,6 +32,7 @@
 - 🔴 **env 四文件同序同注释**（`.env`/`.env.development`/.env.production/`.env.example`，14 变量；`.env.production` 的 parent 白名单刻意留空）；死变量 `VITE_APP_TITLE` 已删（title 走路由 meta）。
 - 🔴 **oauth-web CI 自带**（`.github/workflows/ci.yml`：type-check→lint→vitest→build→dist-nopwa→静态关卡 8 项）；🔴 **eslint 只给 `e2e/` 配了 node 全局** ⇒ 新增 `scripts/*.mjs` 先补 languageOptions 块；🔴 **本机 shim 拦 `vite build`**（后台清 dist 超 50 文件必红，前台 escalation 过；CI runner 无此问题）。
 - **主题热更新设计**（未实现）= `oauth21/docs/theme-hot-update.md`：L1 token/L2 配色已由 `remote.ts` 实现；L3 主题包 CDN 热更（manifest+content-hash+`registerRuntimeTheme`+`import(/* @vite-ignore */)`+SRI），P0-P3 分期，manifest 即开关。
+- 🔴 **别名双形态**（2026-10-15 CI 修复）：`config/aliases.ts` 对 skinsuite/stable-deviceid **条件注册**——上级 `packages/` 在→源码直供；不在→**删键**，解析回落 node_modules npm 版（独立仓/CI 无 packages/）。🔴 vite alias 精确匹配**不回落** node_modules、TS paths 未命中**会回落**（故 type-check 绿而 vitest 红）。三关卡（alias-single-source/theme-dirs/kernel-zero-coupling）按同条件分流；standalone 探针用 node `import.meta.resolve`（vite 探针被 optimizeDeps `.vite/deps` 缓存干扰）。🔴 **改包源码必须同步发版**——CI 验的是 npm 发布版。
 
 - 🔴 **view ≡ pkg**：`'base'` **不是合法 view 名**；版式优先级 `?view=` > 包声明 > `VITE_<PAGE>_VIEW` > 包名；URL 显式非法值**不回退**。🔴 **设备平级** `mobile|standard|mini|tablet`（mini 独立）⇒ 加设备改 `devices.ts`+写容器。
 - 🔴 **配色/样式**：注册表键**四段**（包/设备/页面/配色）**每版式各一份**；`isDark = tone`、跨设备回落**先按同系别**；URL `?theme=`/`?skin=` **设备无关**；🔴 scoped 禁 `:global(.dark) X` ⇒ **`.dark X`**；black = `#000000` 且两个 bg **同时**设。
@@ -47,6 +48,7 @@
 ⑦ **批量改文本的 anchor 只用签名行**（含函数体会插出重复函数体）；脚本注入后必查**块内裸空行**（只清"一侧是 `@` 标签"的，分段空行是有意排版）。
 ⑧ 🔴 **Bash 的 cwd 每条命令都会重置**（并不持久）⇒ 每条必带 `cd <dir> &&` 或 `git -C <dir>`；漏了会**静默跑在根仓**（把子仓 log/remote 看成根仓的，已误判一次）。
 ⑨ **Write 工具保留原文件行尾**（原 CRLF 写完仍 CRLF）⇒ 批量写后 Python 核行尾。
+⑩ **standalone 预演**（CI 形态复现）：`.tmp-probe/standalone/<仓>/` 搭副本——配置/src/__tests__ **真实拷贝** + node_modules/public junction；🔴 **禁整目录 junction**（`import.meta.dirname` realpath 让 MONOREPO_ROOT 解回真实上级，fallback 白搭）；🔴 **src 禁 junction**（vite glob 键变 `./themes/` 相对形态，关卡假红）。
 
 ## 5. 部署/CI → **§10**
 
