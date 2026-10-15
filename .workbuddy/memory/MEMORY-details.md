@@ -81,7 +81,7 @@ reflog 正常追加，但松散 ref 不落地（`GIT_TRACE_REFS` 显示旧值读
   `firewall-layering` 等读文件做静态断言，零 import 是**正当**的。必须区分。
 - **禁止内联复制被测逻辑**：副本会与真身各自演化，「测试通过」≠「真身正确」，**比零覆盖更危险**。
   已核对 3 份副本全部与真身有实质差异（最严重：`signature.test.js` 的签名串因子与真身完全不同）
-  → `docs/development/test-inline-copy-drift-report.md`。模拟登录态时 `reply.result` 请 import 真实装饰器
+  → `docs/archive/test-inline-copy-drift-report.md`。模拟登录态时 `reply.result` 请 import 真实装饰器
   （`loader/registry/00-globals.js`）。
 - **一个测试文件只能注册一组路由**：`registerSecureRoute` 的 `_routeRegistry`（`api/guard.js:35`）
   是模块级全局状态且**无重置入口** → 重复注册同一 URL 抛错。注册集中在顶层 `beforeAll` 一次。
@@ -108,7 +108,7 @@ reflog 正常追加，但松散 ref 不落地（`GIT_TRACE_REFS` 显示旧值读
 **教训**：`docs/` 里的设计稿与"已完成"标记**大量失真**。评估架构或规划扩容前必须先核**文档 vs 代码**，
 否则会把设计稿当现状。**手法：拿文档承诺的环境变量名去 grep 代码，命中 0 = 未实现**（比读文档可靠）。
 
-已实测失真（详见 `docs/core/architecture-review-2026-09-19.md`）：`SERVER_ROLE`+`MODULE_*` 多服务器方案
+已实测失真（详见 `docs/archive/architecture-review-2026-09-19.md`）：`SERVER_ROLE`+`MODULE_*` 多服务器方案
 代码 0 引用；roadmap 标"Docker 化 ✅"但 `Dockerfile`/`docker-compose.yml`/`.github/` **全不存在**；
 `/health/live` `/health/ready` 原本不存在（现已补）；`AGENTS.md`/`CLAUDE.md`/`core/guard.md` 都写
 "守卫配置持久化到 `data/guard_config.json`"，实际已迁 **DB**（`GuardConfigDao.loadFromDB()`）
@@ -1497,7 +1497,7 @@ defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
 ——而这几条恰恰是"不写就会在真机上炸"的类型。所以把它提到规范层。
 
 **产出两件，缺一不可**：
-1. `docs/frontend/browser-baseline.md` —— 规则文档。结构：**留白清单表**（值 → 规范初始值 → 受它支配的东西 → 不声明的后果）
+1. `docs/standards/browser-baseline.md` —— 规则文档。结构：**留白清单表**（值 → 规范初始值 → 受它支配的东西 → 不声明的后果）
    → 必做项 B1–B7（每条给规则 / 机制 / 代码 / 验证方式）→ **禁止项表**（全是踩过的）→ **验收方法论** → 新前端接入清单 → 参考实现落点。
 2. `scripts/check-browser-baseline.mjs`（`npm run check:baseline [目录]`）—— 零依赖静态断言。
    规则只写在文档里会慢慢失守；静态检查能在提交前把「漏写某个初始值」拦下来。
@@ -1515,7 +1515,7 @@ defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
 - 提醒项容易全场静默（都通过就不打印）→ 输出里要显式给计数，否则看不出机制有没有被跑到。
 
 **挂载点（四处都要动，否则规则等于没落地）**：`AGENTS.md`（照「新前端设备身份接入（强制）」的 8 步清单体例）
-+ `docs/frontend/coding-standard.md` 样式节 + `docs/.vitepress/config.ts` 侧边栏 + `package.json` 的 `check:baseline`。
++ `docs/standards/coding-standard.md` 样式节 + `docs/.vitepress/config.ts` 侧边栏 + `package.json` 的 `check:baseline`。
 
 **两个踩坑记录**：
 - 🔴 **又在注释里写了 `src/**/index.ts`，`*/` 再次提前闭合块注释**（同 §11.12 的坑，**第二次踩**）——
@@ -1622,7 +1622,7 @@ defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
 
 ### 11.17 设备 / 包 / 版式 / 配色的结构描述（2026-09-27 第六轮压缩时从主索引 §3.1 迁入）
 
-> 主索引只留"违反就出事"的铁律；这些**结构事实**在代码与 `docs/frontend/multi-theme.md` 里都能查到，
+> 主索引只留"违反就出事"的铁律；这些**结构事实**在代码与 `oauth21/docs/multi-theme.md` 里都能查到，
 > 迁到这里是为了让主索引留在注入上限内（见 §11.11）。
 
 - **设备三值**：`THEME_DEVICES = ['mobile','standard','mini']`（`packages/theme-core/src/constants.ts`），
@@ -1664,7 +1664,7 @@ defineField(path): [Ref<TValue>, Ref<BaseFieldProps & TExtras>]
 
 ## 13. 「多主题 / 多版式」规则化 + 三页接入（2026-09-24）
 
-> 规则全文 = **`docs/frontend/multi-theme.md`**（强制，已注册进 sidebar）；本节只留"为什么这么定"与踩坑经过。
+> 规则全文 = **`oauth21/docs/multi-theme.md`**（强制，已注册进 sidebar）；本节只留"为什么这么定"与踩坑经过。
 
 ### 13.1 三个正交维度（一句话版）
 

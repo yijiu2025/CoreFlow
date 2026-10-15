@@ -58,7 +58,7 @@ reconnectStrategy: retries => {
 
 > ⚠️ **2026-09-19 核实：制品不存在。** 仓库内没有 `Dockerfile`、`docker-compose.yml`、
 > `.dockerignore`，也没有 `.github/` 目录 —— 此前标注的 ✅ 属误标。
-> 补齐 Docker 制品已列为 `docs/core/architecture-review-2026-09-19.md` 阶段 1 的 1.4 项，
+> 补齐 Docker 制品已列为 `docs/archive/architecture-review-2026-09-19.md` 阶段 1 的 1.4 项，
 > 它同时是横向扩容的前置条件。
 
 ### 1.5 Pre-commit Hooks ✅ 已完成

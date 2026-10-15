@@ -8,7 +8,7 @@
 - 🔴 **`oauth21/` 已拆为独立仓 `oauth-web`**（GPL-3.0，2026-10-14）：根仓不跟踪（`.gitignore` 有 `/oauth21/`），**提交/推送进 oauth21 目录做**；开源版已删 `file:..` nodeservers 依赖并清 lockfile 的 `..` 树（外部可独立 `npm install`）。
 - 🔴 **oauth21/posecraft/firewall/admin/poseadmin/retroweb 非 workspace 成员**：靠 **vite alias + tsconfig paths 源码直供**，**禁 `workspace:*`**；装依赖 `npm install --prefix <dir>`。
 - **本机 git ref 失灵** ⇒ **以 `git ls-remote` 为准**；异常跑 `fix-packed-refs.mjs`。
-- **发版**：`scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；破坏性（**只认 footer 行首+冒号**）→major；其余不发。🔴 **子前端/独立仓**用 `scripts/release-web.mjs`（自包含可拷走，判据同上，`--npm` 才发 npm）；统一规则 = `docs/development/git-release-rules.md`（提交/版本号/分支三合一，oauth-web 已落地）。⚠️ 正则里**类外 `/` 必须转义**（`\/`），类内合法。
+- **发版**：`scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；破坏性（**只认 footer 行首+冒号**）→major；其余不发。🔴 **子前端/独立仓**用 `scripts/release-web.mjs`（自包含可拷走，判据同上，`--npm` 才发 npm）；统一规则 = `docs/standards/git-release-rules.md`（提交/版本号/分支三合一，oauth-web 已落地）。⚠️ 正则里**类外 `/` 必须转义**（`\/`），类内合法。
 
 ## 1. 强制约定（违反会红）→ **§1 全表**
 
@@ -28,7 +28,7 @@
 
 ## 3. oauth21 → **§11/§13/§17**
 
-- 🔴 **主题替换规范 = 根仓 `docs/frontend/theme-replacement.md`**（oauth-web `docs/` 有副本；view≡pkg、四入口优先级、`?theme.<设备>`、token 白名单——总文档 FRONTEND_STANDARDS 已接入）。
+- 🔴 **主题替换规范 = 根仓 `docs/standards/theme-replacement.md`**（oauth-web `docs/` 有副本；view≡pkg、四入口优先级、`?theme.<设备>`、token 白名单——总文档 FRONTEND_STANDARDS 已接入）。
 - 🔴 **env 四文件同序同注释**（`.env`/`.env.development`/`.env.production`/`.env.example`，14 变量；`.env.production` 的 parent 白名单刻意留空）；死变量 `VITE_APP_TITLE` 已删（title 走路由 meta）。
 
 - 🔴 **view ≡ pkg**：`'base'` **不是合法 view 名**；版式优先级 `?view=` > 包声明 > `VITE_<PAGE>_VIEW` > 包名；URL 显式非法值**不回退**。🔴 **设备平级** `mobile|standard|mini|tablet`（mini 独立）⇒ 加设备改 `devices.ts`+写容器。

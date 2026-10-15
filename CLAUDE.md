@@ -66,7 +66,7 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 - **认证**: Session-based（Cookie sid + Redis）+ OAuth 2.1 JWT（对外 API）
 - **迁移**: Umzug v3（`migrations/` 目录）
 - **前端**: Vue 3 + Vite + TypeScript（`oauth21/`、`firewall/`、`admin/`、`posecraft/`）
-- **前端 PWA**: vite-plugin-pwa（posecraft 默认启用，生成 SW + manifest + 可安装到主屏幕；详细规范见 [docs/frontend/FRONTEND_STANDARDS.md](docs/frontend/FRONTEND_STANDARDS.md)）
+- **前端 PWA**: vite-plugin-pwa（posecraft 默认启用，生成 SW + manifest + 可安装到主屏幕；详细规范见 [docs/standards/frontend-standards.md](docs/standards/frontend-standards.md)）
 
 ## 启动流程
 
