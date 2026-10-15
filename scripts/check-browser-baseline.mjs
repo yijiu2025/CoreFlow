@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 跨内核渲染基线检查（静态断言）—— 规则全文见 `docs/frontend/browser-baseline.md`
+ * 跨内核渲染基线检查（静态断言）—— 规则全文见 `docs/standards/browser-baseline.md`
  *
  * 为什么需要它：「同一个页面在不同浏览器不一样」这类问题，根源通常是**我们没写某个值**
  * （规范把它留给了用户代理）。静态断言能在提交前就把这类「漏写」拦下来，
@@ -244,7 +244,7 @@ console.log(`${'-'.repeat(56)}`);
 console.log(
   `硬性项 ${passes.length} 通过 / ${failures.length} 未通过` +
     (warnings.length ? `；提醒 ${warnings.length} 条` : '') +
-    `（规则：docs/frontend/browser-baseline.md）`
+    `（规则：docs/standards/browser-baseline.md）`
 );
 
 process.exit(failures.length ? 1 : 0);

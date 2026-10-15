@@ -9,7 +9,7 @@
  *   node scripts/release-web.mjs --apply --npm    # 额外发布当前仓库的 npm 包（默认不发）
  *   node scripts/release-web.mjs --apply --allow-dirty  # 并行任务遗留脏文件时放行
  *
- * 判据（权威描述见 docs/git-release-rules.md，与根仓 scripts/release.mjs 完全一致）：
+ * 判据（权威描述见 docs/standards/git-release-rules.md，与根仓 scripts/release.mjs 完全一致）：
  *   含破坏性变更 → major；含 feat → minor；仅 fix/perf → patch；其余 → 不发版
  *
  * 与根仓 release.mjs 的关系：

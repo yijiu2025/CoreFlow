@@ -215,7 +215,7 @@ node scripts/release-web.mjs --apply --allow-dirty
 ```bash
 # 1. 拷两个文件进新仓库
 cp <任意现有仓>/scripts/release-web.mjs <新仓库>/scripts/
-cp <任意现有仓>/docs/development/git-release-rules.md <新仓库>/docs/   # 或 docs/
+cp <任意现有仓>/docs/standards/git-release-rules.md <新仓库>/docs/   # 或 docs/
 
 # 2. 建远程仓并关联（GitHub 先建空仓，勿自动生成 README——本地已有）
 git init -b main && git add -A && git commit -m "feat: 初始提交"

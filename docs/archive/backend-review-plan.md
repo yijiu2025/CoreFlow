@@ -9,7 +9,7 @@
 | --- | --- |
 | `src/auth/`、`src/db/`、`src/redis/`、`src/loader/` | **这些目录已不存在**。系统层基础设施已统一收拢到 `src/framework/` 下，即 `src/framework/auth/`、`src/framework/db/`、`src/framework/redis/`、`src/framework/loader/` |
 | 下面「P0：编码乱码」一节 | **已完成**。全量扫描 `src/` 已无乱码字符（`鍓`/`鎼`/`闁` 等异常区段均无命中） |
-| 「Review 清单」 | 仍然有效，但已并入 [代码审查标准与流程](./code-review) 作为清单来源之一；请以该文为准 |
+| 「Review 清单」 | 仍然有效，但已并入 [代码审查标准与流程](../development/code-review) 作为清单来源之一；请以该文为准 |
 :::
 
 ## 检查范围

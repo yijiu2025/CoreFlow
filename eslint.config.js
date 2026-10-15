@@ -92,7 +92,7 @@ export default [
   // 5.2 导出位置约定：所有 export 一律收拢到文件末尾，定义处不写 export 关键字。
   //     正确：function foo() {}  ...  export { foo };  /  export default foo;
   //     禁止：export function foo() {}  /  export default () => {}  /  export const x = 1
-  //     理由见 docs/development-standards.md「导出位置」：定义与导出分离，导出面一眼可见，
+  //     理由见 docs/development/development-standards.md「导出位置」：定义与导出分离，导出面一眼可见，
   //     避免导出散落各处导致模块契约难以审计。
   {
     files: ['src/**/*.js'],

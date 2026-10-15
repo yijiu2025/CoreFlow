@@ -2,7 +2,7 @@
 
 > 本文是**基线层**（CSS 变量 + 明暗 Store），即主题替换机制的「第 1 层」。
 > 多主题包 / 多版式 / 多配色的完整替换机制（换 UI 不改业务代码）见
-> [theme-replacement.md](./theme-replacement.md)；演进细节见 [multi-theme.md](./multi-theme.md)。
+> [theme-replacement.md](./theme-replacement.md)；演进细节见 [multi-theme.md](../../oauth21/docs/multi-theme.md)。
 
 ## CSS 变量
 

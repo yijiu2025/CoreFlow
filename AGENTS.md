@@ -443,7 +443,7 @@ npm test -- --coverage      # 运行并生成覆盖率报告
   改造完一个就从清单删一条（守卫会校验清单条目的真实性）
 - **禁止内联复制被测逻辑**：副本会与真身各自演化，且测试断言的是副本行为 ——
   「测试通过」不代表「真身正确」。已核对的 3 份副本全部与真身存在实质差异，
-  详见 [docs/development/test-inline-copy-drift-report.md](docs/development/test-inline-copy-drift-report.md)
+  详见 [docs/archive/test-inline-copy-drift-report.md](docs/archive/test-inline-copy-drift-report.md)
 - 在测试里模拟已登录态时，`reply.result` 请 `import` 真实装饰器
   （`framework/loader/registry/00-globals.js`），不要手写副本
 - **一个测试文件只能注册一组路由**：`registerSecureRoute` 的 `_routeRegistry` 是模块级
@@ -493,7 +493,7 @@ npm test -- --coverage      # 运行并生成覆盖率报告
   7. 内核丢弃 meta 的兜底：入口在 `createApp` **之前**调用视口自救；样式侧配套 `calc(<n>dvh / var(--k))` 并限定 `[data-*]` 作用域
   8. 提交前跑 `npm run check:baseline <前端目录>`，**全绿**才算完成
 
-  规则全文（机制、禁止项、验收方法）：[docs/frontend/browser-baseline.md](docs/frontend/browser-baseline.md)
+  规则全文（机制、禁止项、验收方法）：[docs/standards/browser-baseline.md](docs/standards/browser-baseline.md)
 
 - **前端类型闸门必须"真检查"（强制）**：方案式 tsconfig（`"files": []` + `references`）下**裸 `vue-tsc` 恒 exit 0** —— 它不编译任何文件，往里写类型错误也不报，而因为是"绿的"没人会察觉。本仓 `oauth21` 曾长期如此，攒下 9 个真实错误（2026-09-23 修复）。规则：
 
@@ -502,7 +502,7 @@ npm test -- --coverage      # 运行并生成覆盖率报告
   3. **改完口径必须毒丸验证**：`src/` 临时写 `export const __p: number = 'x';` → `npm run type-check` 必须报错且退出码非 0；撤销后恢复绿。**恒绿的闸门等于没有闸门**
   4. `TS5101`（如 `baseUrl` 弃用）这类**配置级错误**会让 TS **中止全部语义检查** —— 看着只剩一条无关报错，实际一个类型都没查，比空转更难识别，必须立刻修
 
-  现状：`oauth21` / `admin` / `poseadmin` = `vue-tsc -b` ✅；`posecraft` = `vue-tsc --noEmit`（tsconfig 非方案式，有效）✅；`firewall` 无类型检查 ❌（另有 121 个存量错误待修）。细则见 [docs/frontend/coding-standard.md](docs/frontend/coding-standard.md) 的「类型闸门必须是"真检查"」。
+  现状：`oauth21` / `admin` / `poseadmin` = `vue-tsc -b` ✅；`posecraft` = `vue-tsc --noEmit`（tsconfig 非方案式，有效）✅；`firewall` 无类型检查 ❌（另有 121 个存量错误待修）。细则见 [docs/standards/coding-standard.md](docs/standards/coding-standard.md) 的「类型闸门必须是"真检查"」。
 
 - **多主题 / 多版式开发模式（强制）**：改「页面长什么样」必须走既有机制，不得复制业务。`oauth21` 的认证页（登录 / 注册 / 重置密码）已全部接入；**手机端已完整，电脑端目前只有目录骨架**（`themes/default/web/`：三页最小占位版式 + 每页 `colors/{black,white}/`，无消费方 —— 核心组件仍是业务与 UI 揉在一起、尚未拆成「容器 + 版式」的单体）。六条铁律：
 
@@ -513,9 +513,9 @@ npm test -- --coverage      # 运行并生成覆盖率报告
   5. **分发器必须认「mini 来源」**（`oauth21` 的 `view/web/<page>/index.vue`）：优先级 = 显式 `?isMobile=true` ＞ mini 来源（`from=mini` / 路径含 `mini-login` / `fromLogin=mini`）＞ 自动识别（宽视口>窄视口>UA）＞ 桌面默认。**mini 来源 = 页面正被嵌在宿主 app 的弹窗 iframe 里**，此时的「窄」来自弹窗列宽而非真机 → 必须保持桌面/紧凑版式。🔴 漏掉这条的症状极具欺骗性：iframe 宽 <768px 时**只有这一页**（如重置密码）跳成全屏手机端，同 iframe 的登录/注册仍是桌面卡片；且**桌面直接开该路由不复现**，必须真放进 iframe 看 `iframe 内容页的 innerWidth`。2026-09-24 真实踩过（`forgot-password` 分发器漏了此分支）
   6. **iframe 握手靠 `SSO_READY`，父 origin 白名单是单一来源**（`oauth21/src/utils/parent-origins.ts`）：`utils/parent.ts`（发）与 `composables/useParentThemeSync.ts`（收）**共用**它，改白名单只改这一处 + 各 `.env` 的 `VITE_ALLOWED_PARENT_ORIGINS`。⚠️ **只写「嵌 oauth21 的父应用」的 origin，别写 oauth21 自己的 5174/5175**（它是被嵌方，不是父应用）。🔴 **漏配的症状是「弹窗 loading 慢」而不是报错**：`SSO_READY` 被 `postToParent` 拒发 → 宿主等满自己的 **3s 兜底超时**（实测 posecraft 弹窗 3608ms；补对白名单后 719ms）。**排查任何 iframe 握手类「慢」，第一件事 grep 控制台 `[SSO] 拒绝 postMessage：父 origin 未授权`**。补充：剩余 ~800ms 属 dev 冷启动（~65 个模块 waterfall）+ 宿主侧收尾（~280ms），**不要把 `SSO_READY` 提前到 app mount** —— 收消息的监听器在 `App.vue` setup 注册、`onMounted` 才挂，提前发会让宿主回发的主题消息落空
 
-  规则全文（目录约定、选择优先级、接入新页面清单、安全边界、验收要求、设备分发一致性、iframe 握手与父 origin 白名单）：[docs/frontend/multi-theme.md](docs/frontend/multi-theme.md)；主题包 / 配色 / 版式的目录约定另见 `oauth21/src/theme/README.md`。
+  规则全文（目录约定、选择优先级、接入新页面清单、安全边界、验收要求、设备分发一致性、iframe 握手与父 origin 白名单）：通用规范 [docs/standards/theme-replacement.md](docs/standards/theme-replacement.md)（可复用，新前端直接套用）；本项目实例全文与演进记录见 [oauth21/docs/multi-theme.md](oauth21/docs/multi-theme.md)；主题包 / 配色 / 版式的目录约定另见 `oauth21/src/theme/README.md`。
 
-  🔄 **抽包（进行中，2026-09-26 立项）**：这一层正在被抽成工作区包 `packages/theme-core`（纯内核，零运行时依赖）+ `packages/theme-vue`（Pinia store + DOM + glob 适配器），目的是让别的前端换个适配器就能复用同一套机制。**规则不变**，变的只是"实现在哪个目录"；迁移期间 `oauth21/src/theme/` 留同名 re-export 壳，`@/theme/*` 导入面保持不变。**Stage 1 已完成**（纯叶子层 `constants` / `tokens` / `tone` / `mode` / `types` / `views/params` 进包，应用侧留零逻辑壳）。依赖方向、四个注入点契约、迁移分期与每期验收判据：[docs/frontend/theme-package-extraction.md](docs/frontend/theme-package-extraction.md)。
+  🔄 **抽包（进行中，2026-09-26 立项）**：这一层正在被抽成工作区包 `packages/theme-core`（纯内核，零运行时依赖）+ `packages/theme-vue`（Pinia store + DOM + glob 适配器），目的是让别的前端换个适配器就能复用同一套机制。**规则不变**，变的只是"实现在哪个目录"；迁移期间 `oauth21/src/theme/` 留同名 re-export 壳，`@/theme/*` 导入面保持不变。**Stage 1 已完成**（纯叶子层 `constants` / `tokens` / `tone` / `mode` / `types` / `views/params` 进包，应用侧留零逻辑壳）。依赖方向、四个注入点契约、迁移分期与每期验收判据：[docs/standards/theme-package-extraction.md](docs/standards/theme-package-extraction.md)。
 
 ### 导出位置（强制）
 

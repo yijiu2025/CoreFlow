@@ -123,7 +123,7 @@ const handleLike = async (item: any) => { ... }
 
 ## 导出位置
 
-**所有 `export` 一律收拢到文件末尾**，定义处不写 `export` 关键字。完整约定（含违约示例与默认导出改法对照表）见 [AGENTS.md](../AGENTS.md) 的「导出位置」一节，这里只给速查：
+**所有 `export` 一律收拢到文件末尾**，定义处不写 `export` 关键字。完整约定（含违约示例与默认导出改法对照表）见 [AGENTS.md](../../AGENTS.md) 的「导出位置」一节，这里只给速查：
 
 ```js
 // ✅ 正确
@@ -149,3 +149,17 @@ export default new OrderService();
 | 契约测试                 | `src/__tests__/conventions/export-placement.test.js` | 跨文件扫描全仓一致性（含 re-export 位置）     |
 
 改写方式：这条规则**没有 `eslint --fix` 自动修复**（需要 AST 精确定位 + 保证导出面不变），小范围按上表手工改即可。
+
+---
+
+## 性能工程
+
+**所有前端项目适用**（Vite + Vue/React 单页应用）。完整规范（构建期清单 / 懒加载决策树 / SVG 安全压缩 / 预算守门关卡 / nginx 缓存分级 / 指标目标值 / 验证方法论）见 [frontend-performance-rules.md](../standards/frontend-performance-rules.md)，这里只给三条铁律速查：
+
+| 铁律 | 一句话 |
+| --- | --- |
+| **先量后改** | 没有生产构建 + 真实浏览器的实测数字，不动一行构建配置（dev server 数据无参考价值） |
+| **懒加载判据** | 省的是首屏带宽不是总带宽 —— 挂载后 1 秒内必然用到的模块，懒加载它是负优化 |
+| **防回归靠守门** | 性能退化功能全绿、无声无息 —— 用预算关卡把首屏静态集 gzip / 单 chunk / dist 总量钉成硬线，关卡必须带毒丸自证（`--poison` 必须红） |
+
+落地案例（含完整实测数据与"刻意不动"决策记录）：`../../oauth21/docs/frontend/performance-tuning.md`。

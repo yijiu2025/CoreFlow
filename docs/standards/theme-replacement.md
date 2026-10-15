@@ -5,8 +5,8 @@
 > 「不改业务代码换 UI / 换配色 / 换明暗」的能力。
 >
 > 参考实现：`oauth21/src/theme/`（机制源码）、`oauth21/src/stores/theme.ts`（运行时状态）。
-> 深度细节与演进记录见总文档 `docs/frontend/multi-theme.md`；抽包设计见
-> `docs/frontend/theme-package-extraction.md`。
+> 深度细节与演进记录见总文档 `oauth21/docs/multi-theme.md`；抽包设计见
+> `docs/standards/theme-package-extraction.md`。
 
 ---
 
@@ -333,8 +333,8 @@ src/theme/                          # 架构层：机制，所有主题包共用
 
 ## 附：与旧版主题体系的关系
 
-- 旧的「CSS 变量 + theme Store（`useColorMode`）」见 `docs/frontend/theme.md` —— 那是
+- 旧的「CSS 变量 + theme Store（`useColorMode`）」见 `docs/standards/theme-baseline.md` —— 那是
   **基线层**（本文第五层的第 1 层），继续有效；多包 / 多版式机制以本文为准。
 - 机制源码可整体复用：新项目拷贝 `src/theme/` 架构层 + `src/stores/theme.ts`，
   按需裁剪设备与页面即可。纯函数部分（常量 / 契约 / token 校验 / 设备参数）已可从
-  内核包 `skinsuite`（`packages/theme-core`）直接取，见 `theme-package-extraction.md`。
+  内核包 `skinsuite`（`packages/theme-core`）直接取，见 `standards/theme-package-extraction.md`。

@@ -3,7 +3,7 @@
 > **状态：立项；Stage 0 / Stage 1 已完成**（定案 2026-09-26）。
 > 已落地 = 纯叶子层进包 + 应用侧零逻辑壳；**注册表、picker、store 仍全在 `oauth21/src/`**（Stage 2 起迁）。
 > 适用范围：`oauth21` 的主题层（`src/theme/**` + `src/stores/theme.ts`），以及未来任何要复用这套机制的前端。
-> 上游规则：[多主题 / 多版式开发模式](/frontend/multi-theme)（本页只讲"怎么搬走"，不重复"规则是什么"）。
+> 上游规则：[多主题 / 多版式开发模式](../../oauth21/docs/multi-theme.md)（本页只讲"怎么搬走"，不重复"规则是什么"）。
 >
 > ⚠️ **阅读约定**：本页把「**现状**」与「**目标**」严格分开。带 §二 的每一条现状都有 `grep` / `Read` 作依据；
 > 带 §三 之后的都是**尚未实现的提案**，不得被当成规则引用 —— 抽包是一段演进，写进代码之前它只是计划。
@@ -28,7 +28,7 @@
 | 不做 | 原因 |
 | --- | --- |
 | 主题包上云 / 运行时下载 | 仍是"构建期目录 + 编译期 glob"。运行时下载会引入签名、缓存、版本对齐三件套，本阶段不背 |
-| 改「一个主题包 = 一种版式」的结构 | 2026-09-26 已定案（见 [multi-theme.md](/frontend/multi-theme)），抽包**不**动结构 |
+| 改「一个主题包 = 一种版式」的结构 | 2026-09-26 已定案（见 [multi-theme.md](../../oauth21/docs/multi-theme.md)），抽包**不**动结构 |
 | SSR / 非 DOM 渲染目标 | 当前 target 只有浏览器。内核本身已无 DOM，将来要支持再补适配器即可 |
 | 把 `themes/**` 搬进包 | 版式实现与配色数据是**业务资产**（认证页长什么样），随应用走 |
 | 随大盘一起发版 | 内核包有**自己的仓库与版本号**（<https://github.com/yijiu2025/theme>，npm 包 `skinsuite`），与本仓的发版通道无关 |
@@ -219,7 +219,7 @@ const assets = {
 
 一期没全绿 = 这一期没做完：
 
-1. `npm run type-check`（`vue-tsc -b`，口径见 [coding-standard](/frontend/coding-standard)）0 错。
+1. `npm run type-check`（`vue-tsc -b`，口径见 [coding-standard](./coding-standard.md)）0 错。
 2. `npx eslint src/` 0 错；`npm run docs:build` exit 0。
 3. `.tmp-probe/verify-theme-dirs.mjs` 全绿 —— **它现在能跨"实现还在 `src` 还是已进包"两处找源码**（`implText` 解析器），
    所以抽包期间不用改断言逻辑，只在断言真的失效时才改。
@@ -264,12 +264,12 @@ const assets = {
   ⚠️ 消费侧（Vite `resolve.alias` + `tsconfig.app.json` 的 `paths`）仍指**源码**，
   所以本地 `packages/theme-core/src/**` 就是宿主看到的那一份，无需重新安装。
 - 已知**欠账**（与本立项无关，但同属这一层）：
-  `docs/frontend/theme.md` 讲的是 shadcn 的全局 HSL 变量（与 `--mauth-*` 主题层不是一回事）；
-  `AGENTS.md` 与 `docs/frontend/coding-standard.md` 里的多主题条目旧口径（`web` 设备名、
+  `docs/standards/theme-baseline.md` 讲的是 shadcn 的全局 HSL 变量（与 `--mauth-*` 主题层不是一回事）；
+  `AGENTS.md` 与 `docs/standards/coding-standard.md` 里的多主题条目旧口径（`web` 设备名、
   五段键、`<页面>/<变体>/` 形态）已于 B5 四段键收口时同步纠正。
 
 ## 相关
 
-- [多主题 / 多版式开发模式](/frontend/multi-theme) —— 规则全文（目录约定、选择优先级、安全边界、验收）。
-- [前端统一规范](/frontend/coding-standard) —— 类型闸门、导出位置等通用约定。
+- [多主题 / 多版式开发模式](../../oauth21/docs/multi-theme.md) —— 规则全文（目录约定、选择优先级、安全边界、验收）。
+- [前端统一规范](./coding-standard.md) —— 类型闸门、导出位置等通用约定。
 - 主题包 / 配色 / 版式的目录约定与关卡清单：`oauth21/src/theme/README.md`（该 README 是本规则的一部分）。
