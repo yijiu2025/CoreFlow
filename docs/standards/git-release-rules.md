@@ -224,7 +224,11 @@ git push -u origin main
 
 # 3. 按 3.5 节配好分支保护
 
-# 4. 首次发版
+# 4. 接入 CI 门禁（前端家族）：分发共享门禁三件套 + 写入口 ci.yml
+node <fullstack-rules 技能路径>/scripts/distribute-ci.mjs <新仓库路径>
+#    规范：fullstack-rules → references/ci-conventions.md（入口骨架 / 顺序口径 / 专属关卡）
+
+# 5. 首次发版
 node scripts/release-web.mjs          # 预览：应判定 minor 并给出 v0.1.0 或 v1.0.0
 node scripts/release-web.mjs --apply  # 执行
 ```

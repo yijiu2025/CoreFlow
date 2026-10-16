@@ -153,7 +153,7 @@ kt 文件需包含：
 
 | 依赖       | 用途       | 参考版本  |
 | ---------- | ---------- | --------- |
-| Node.js    | 运行时     | >= 20 LTS |
+| Node.js    | 运行时     | >= 20 LTS（CI 统一 22，见 ci-conventions.md） |
 | Vue        | 前端框架   | 3.x       |
 | Vite       | 构建工具   | 5.x       |
 | TypeScript | 类型系统   | 5.x       |
@@ -173,6 +173,7 @@ kt 文件需包含：
 - [ ] 配置 Prettier（`.prettierrc`）
 - [ ] 配置 `.gitignore`（含 `node_modules/`、`.env`、`.env.*`、`*.pem`、`*.key`）
 - [ ] 配置 `.env.example` 环境变量模板
+- [ ] 配置 CI 门禁：按 [ci-conventions.md](ci-conventions.md) 接入清单（共享门禁三件套 + 入口 `ci.yml`，5 分钟）
 
 ### 4.3 创建目录骨架
 
