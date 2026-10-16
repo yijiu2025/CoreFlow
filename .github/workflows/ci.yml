@@ -1,6 +1,12 @@
 # ============================================================================
 # CI —— 提交门禁
 #
+# 🔴 家族 CI 规范（文件命名 / 入口骨架 / 共享门禁 / 专属关卡）：
+#    .claude/skills/fullstack-rules/references/ci-conventions.md
+#    本仓是后端栈，不接入前端共享门禁（ci-quality.yml），但入口骨架
+#    （头部注释 / 触发三件 / concurrency / permissions）按同一规范；
+#    安装口径的分栈理由见下方长注释（勿删）。
+#
 # 三条作业，对应三类"本可以拦住"的回归：
 #   lint      → 后端风格与约定（导出位置、禁 console、prettier）
 #   test      → 后端单元 / 契约 / 结构守卫（Jest）
@@ -86,11 +92,16 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 # 同一分支连续推送时取消上一次：让人只看得到最新一次结果
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   NODE_VERSION: '22'
@@ -102,6 +113,7 @@ jobs:
   lint:
     name: Lint（约定守卫）
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -131,6 +143,7 @@ jobs:
   test:
     name: Test（Jest）
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -160,6 +173,7 @@ jobs:
   verify:
     name: Verify（跨进程关卡）
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       redis:
         image: redis:7

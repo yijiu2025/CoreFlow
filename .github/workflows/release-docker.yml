@@ -1,6 +1,9 @@
 # ============================================================================
 # CD —— 构建镜像、推送到 GHCR，并在真实 MySQL + Redis 上做端到端冒烟
 #
+# 命名说明：2026-10-17 按家族 CI 规范由 publish-image.yml 改名 release-docker.yml
+#   （发布族文件一律 release-<target>.yml，规范见 fullstack-rules → ci-conventions.md）。
+#
 # 为什么"构建成功"不算交付成功：
 #   这个镜像有四个只有真跑起来才暴露的失败点 ——
 #     · `npm install --workspaces=false` 漏装某个生产依赖 → 启动即崩溃；
