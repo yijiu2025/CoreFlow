@@ -1,0 +1,64 @@
+name: 功能建议
+description: 提出新功能或改进建议
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请搜索现有 Issue，避免重复提案。
+        安全漏洞请勿在此提交，报告方式见 [SECURITY.md](https://github.com/yijiu2025/CoreFlow/blob/main/SECURITY.md)。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 背景与问题
+      description: 你想解决什么问题？现状哪里不便？
+      placeholder: 描述遇到的痛点或使用场景……
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的方案
+      description: 描述你希望产品做成什么样
+      placeholder: 描述期望的行为、接口或交互……
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的备选方案
+      description: 你评估过哪些其他做法？为什么没有选它们？
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响面
+      multiple: true
+      options:
+        - 后端 API / 认证 / OAuth 2.1
+        - 防火墙
+        - 防火墙前端
+        - 管理后台前端
+        - 数据库 / 迁移
+        - 构建 / CI / 部署
+        - 文档
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 附加上下文
+      description: 截图、链接、参考实现等
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索现有 Issue，确认没有重复提案
+          required: true
+        - label: 如有需要，我愿意为此提交 PR（可选）
