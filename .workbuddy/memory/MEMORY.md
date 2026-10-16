@@ -8,7 +8,7 @@
 - 🔴 **`oauth21/` 已拆为独立仓 `oauth-web`**（GPL-3.0，2026-10-14）：根仓不跟踪（`.gitignore` 有 `/oauth21/`），**提交/推送进 oauth21 目录做**；开源版已删 `file:..` nodeservers 依赖并清 lockfile 的 `..` 树（外部可独立 `npm install`）。
 - 🔴 **oauth21/posecraft/firewall/admin/poseadmin/retroweb 非 workspace 成员**：靠 **vite alias + tsconfig paths 源码直供**，**禁 `workspace:*`**；装依赖 `npm install --prefix <dir>`。
 - **本机 git ref 失灵** ⇒ **以 `git ls-remote` 为准**；异常跑 `fix-packed-refs.mjs`。
-- **发版**：`scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；破坏性（**只认 footer 行首+冒号**）→major；其余不发。🔴 **子前端/独立仓**用 `scripts/release-web.mjs`（自包含可拷走，判据同上，`--npm` 才发 npm）；统一规则 = `docs/standards/git-release-rules.md`（提交/版本号/分支三合一，oauth-web 已落地）。⚠️ 正则里**类外 `/` 必须转义**（`\/`），类内合法。
+- **发版**：`scripts/release.mjs` → `--apply`。`feat`→minor；仅 `fix|perf`→patch；破坏性（**只认 footer 行首+冒号**）→major；其余不发。🔴 **子前端/独立仓**用 `scripts/release-web.mjs`（自包含可拷走，判据同上，`--npm` 才发 npm）；统一规则 = `docs/standards/git-release-rules.md`（提交/版本号/分支三合一，oauth-web 已落地）。⚠️ 正则里**类外 `/` 必须转义**（`\/`），类内合法。🔴 **基线 = `git describe --tags --abbrev=0`（离 HEAD 最近的 tag，≠最高版本）**⇒ 误在旧提交上打低版本 tag 会劫持基线（2026-10-16 v1.0.0 事故，本地+远端已删）。
 
 ## 1. 强制约定（违反会红）→ **§1 全表**
 
