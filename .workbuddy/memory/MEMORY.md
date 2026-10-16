@@ -60,13 +60,16 @@
 - 🔴 **Dockerfile lockfile 不进镜像**（只 `COPY package.json`）+ `--legacy-peer-deps`；构建期自证 `docker/verify-deps.mjs`——🔴 RUN 里 `node -e` 引号不跨行。🔴 复刻树验容器 install 要删 packages/ 且删 install 生成的 lock。
 - 🔴 **frontend job 禁 `submodules: recursive`**：phonecopy 私有仓 CI 拉不动 ⇒ 精确 `git submodule update --init packages/theme-core`；gitlink 必有 .gitmodules 条目。
 - 改 `ci.yml`/Dockerfile 前先读 §10（安装三件套 · tini 软链 · secret ≥32 位 · `git archive` 到仓库外）。
+- 🔴 **CI 统一规范**（2026-10-17 落地，单一来源 = fullstack-rules `references/ci-conventions.md`）：工作流命名四类 —— `ci.yml`（唯一入口）/ `ci-quality.yml`（共享门禁，前端家族**字节一致**）/ `ci-<domain>.yml`（专属关卡）/ `release-<target>.yml`（发布；CoreFlow publish-image→release-docker 已改名）。共享门禁 canonical 在 skill `assets/ci/`，分发 = `node .claude/skills/fullstack-rules/scripts/distribute-ci.mjs <仓>`；🔴 **禁手改副本**（文件末 `canonical-sha256` 章 + CI 首步 `scripts/ci-quality-check.mjs` 自检，手改即红）。oauth-web/retroweb 已接入（retroweb 从零建 CI + 补分支保护）。
+- 🔴 **GitHub API 两坑**（2026-10-17 实战）：合并 PR 用 **PUT** `/pulls/<n>/merge`（**POST 静默 404**，勿误判 blocked/权限）；改必检项用 **PATCH** `/branches/main/protection/required_status_checks`（PUT 无效且不报错）。🔴 **作业名一改，必检项必须同步**——reusable workflow 作业名 = `<caller job key> / <called job 名>`（如 `quality / 类型 / 规范 / 单测 / 构建`），不同步则 PR 永远 blocked。
+- retroweb 三浏览器关卡（verify:retro-envelope/ep-style/interrupt）需 dev server:5177，**不进 CI**（同 oauth-web dev/prod 口径，本地跑）；本机 `npm ci` 会被 safe-delete 垫拦（node_modules/.bin 批量删 >50）——与 lock 同步时可先用现有依赖预验证。
 
 ## 6. retroweb + retrochimera（逆合成工作台）→ **§14~§72**
 
 前端 #7，端口 **5177** `strictPort`；Vue3.5+TS6+Vite8+Pinia+EP2.14。后端 `F:/retrochimera`（`启动后端API.bat`，`models/` 9GB 不入库）。🔴 **禁硬编码盘符**（`RETRO_MODELS_DIR`/`RETRO_MODEL_<KEY>`）·⚠️ 后端改动**须重启**。
 🟡 条目末 §号 = 细节在 `MEMORY-details.md`；守门脚本在 `scripts/`（retroweb）或 `.tmp-probe/`。
 - 🔴 **retroweb 是独立 git 仓**（`yijiu2025/retroweb.git`，main）——根仓完全不跟踪。🔴 提交/推送必须在 retroweb 目录里做；推送判定用 `git ls-remote origin main`，不信退出码。
-- 🔴 **前端规范单一来源 `.claude/skills/fullstack-rules/`**（未纳管⇒只读，改完跑 doctor）。
+- 🔴 **前端规范单一来源 `.claude/skills/fullstack-rules/`**（根仓 git 跟踪；子目录副本只读，改完跑 doctor）。v2.6.0 起含 CI 统一规范 + 入口规范 + main 主干支线模型（→ §5）。
 - 🔴 **入口形态 = `main.ts` 门牌 + `bootstrap.ts` 编排**（四前端统一）。🔴 挂载一律 `router.isReady().then(mount)` + `.catch` 降级。→§63.3
 - 🔴 **`@author` 只在文件头标**（函数级不加；归属以 `git blame` 为准）+ `@since`。本仓值 `Claude`/`yijiu2025`。→§63.5
 - 🔴 **env 类型必须开严格模式**：`interface ViteTypeOptions { strictImportMetaEnv: unknown }`（interface，非对象字面量）。→§63.4
