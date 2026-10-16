@@ -1,51 +1,50 @@
 # Git 规范
 
+> **版本号 / 发版权威细则**在根仓 `docs/standards/git-release-rules.md`（提交/版本号/分支三合一，两个 release 脚本共用同一套判据）；本文聚焦**分支怎么开、怎么合**。两文冲突时以该文为准。
+
 ## 核心原则
 
+- **主干唯一**：`main` 是唯一长期分支，发版只从 `main` 打 tag；随时可部署
+- **改动必走支线**：修 Bug、开发新功能一律先切支线，合回 `main` 后删除——禁止直接往 `main` 堆提交
 - **提交要小**：一个提交只做一件事，方便回滚和 Code Review
 - **信息要清晰**：让队友（和未来的自己）看一眼就知道改了什么
-- **不要破坏历史**：已推送的提交禁止 `rebase` / `force push`（除非是个人分支且确认无人依赖）
+- **不要破坏历史**：已推送的提交禁止 `rebase` / `force push`（个人支线确认无人依赖除外）
 
 ---
 
-## 一、分支模型（Git Flow 轻量版）
+## 一、分支模型（main 主干 + 短支线）
 
 ```
-main          # 生产分支，只接受 hotfix 和 release 合并
-develop       # 开发分支，功能分支从这里切
-feature/*     # 功能分支，从 develop 切，合并回 develop
-release/*     # 发布分支，从 develop 切，合并到 main + develop
-hotfix/*      # 紧急修复，从 main 切，合并到 main + develop
+main ────●───────●──────────●───────●─── (tag: v1.0.0) ──▶
+          │             ▲                 │
+          └─ feature/xxx ┘                 └─ hotfix/yyy ──┐
+                                                     main ◀┘ (tag: v1.0.1)
 ```
 
-> **首次使用需初始化 `develop` 分支**：Git 不会自动创建 `develop`，如果仓库只有 `main`，需要手动执行：
->
-> ```bash
-> git checkout -b develop main
-> git push -u origin develop
-> ```
->
-> 后续 `feature/*` 和 `release/*` 才能从 `develop` 切出。
+| 分支            | 生命周期     | 基线分支       | 合并目标 | 规则                                     |
+| --------------- | ------------ | -------------- | -------- | ---------------------------------------- |
+| `main`          | **唯一长期** | —              | —        | 发版唯一入口；禁止 force push             |
+| `feature/*`     | 短支线       | `main`         | `main`   | 一个需求 / 一个提交主题一条；合并即删     |
+| `hotfix/*`      | 短支线       | 出问题的 tag   | `main`   | 生产紧急修复；修完补 patch 版             |
+| `docs/*`        | 短支线       | `main`         | `main`   | 纯文档改动，避免污染 feature 命名         |
+| `chore/*`       | 短支线       | `main`         | `main`   | 依赖升级、CI 配置、工程杂务               |
 
 ### 分支命名
 
 ```
-<type>/<简短描述>
+<type>/<简短描述>        # 小写连字符
 
-# 示例
-feature/user-login          # 新功能
-feature/oauth2-google       # 新功能
-release/v1.2.0              # 发布
-hotfix/fix-npe-on-login     # 紧急修复
-chore/upgrade-sequelize     # 杂务（依赖升级、配置变更等）
+feature/user-login       # 新功能
+hotfix/fix-npe-on-login  # 紧急修复
+docs/ci-conventions      # 文档
+chore/upgrade-sequelize  # 杂务
 ```
 
-| 类型        | 基线分支  | 合并目标           | 说明                        |
-| ----------- | --------- | ------------------ | --------------------------- |
-| `feature/*` | `develop` | `develop`          | 日常开发                    |
-| `release/*` | `develop` | `main` + `develop` | 发布准备，只修 bug 不添功能 |
-| `hotfix/*`  | `main`    | `main` + `develop` | 生产紧急修复                |
-| `chore/*`   | `develop` | `develop`          | 构建、依赖、配置变更        |
+### 红线
+
+- 🔴 **支线不打 tag** —— tag 只从 `main` 的提交打（`git tag -a`，见 git-release-rules.md §2.3）；
+- 🔴 **合并即删** —— 合回 `main` 后立即删除本地与远端支线，拒绝"长寿分支"（超过 2 周未合并应考虑拆分）;
+- 🔴 **常规改动禁止直推 `main`** —— `main` 受分支保护；admin bypass 仅限发版与紧急抢修，用后必须在 PR 或提交说明里留痕。
 
 ---
 
@@ -63,41 +62,37 @@ chore/upgrade-sequelize     # 杂务（依赖升级、配置变更等）
 
 ### 类型（type）
 
-| 类型       | 说明                      | 示例                                               |
-| ---------- | ------------------------- | -------------------------------------------------- |
-| `feat`     | 新功能                    | `feat(auth): 新增 Google OAuth2 登录`              |
-| `fix`      | Bug 修复                  | `fix(login): 修复空指针异常`                       |
-| `refactor` | 重构（不修 bug 不加功能） | `refactor(session): 抽取双令牌刷新逻辑`            |
-| `perf`     | 性能优化                  | `perf(db): 优化 N+1 查询，加 eager loading`        |
-| `style`    | 代码格式（不影响逻辑）    | `style: 统一 prettier 格式化`                      |
-| `docs`     | 文档                      | `docs(api): 补充用户接口 JSDoc`                    |
-| `test`     | 测试                      | `test(auth): 新增 Session 续期测试用例`            |
-| `chore`    | 构建/依赖/配置            | `chore: 升级 sequelize 到 v6.35`                   |
-| `ci`       | CI/CD                     | `ci: 添加 GitHub Actions 自动部署`                 |
-| `revert`   | 回滚                      | `revert: 回滚 feat(auth): 新增 Google OAuth2 登录` |
+| 类型       | 说明                      | 是否触发发版 | 示例                                               |
+| ---------- | ------------------------- | ------------ | -------------------------------------------------- |
+| `feat`     | 新功能                    | ✅ minor     | `feat(auth): 新增 Google OAuth2 登录`              |
+| `fix`      | Bug 修复                  | ✅ patch     | `fix(login): 修复空指针异常`                       |
+| `perf`     | 性能优化                  | ✅ patch     | `perf(db): 优化 N+1 查询，加 eager loading`        |
+| `refactor` | 重构（不修 bug 不加功能） | ❌           | `refactor(session): 抽取双令牌刷新逻辑`            |
+| `docs`     | 文档                      | ❌           | `docs(api): 补充用户接口 JSDoc`                    |
+| `test`     | 测试                      | ❌           | `test(auth): 新增 Session 续期测试用例`            |
+| `chore`    | 构建/依赖/配置            | ❌           | `chore: 升级 sequelize 到 v6.35`                   |
+| `ci`       | CI/CD                     | ❌           | `ci: 接入家族共享门禁`                             |
+| `build`    | 构建系统                  | ❌           | `build: 切换 tailwind v4 postcss 插件`             |
+| `style`    | 格式（不影响逻辑）        | ❌           | `style: 统一 prettier 格式化`                      |
+| `revert`   | 回滚                      | ❌           | `revert: 回滚 feat(auth): 新增 Google OAuth2 登录` |
+
+> 标题写错前缀 = 该提交不计入发版判据（已推送用 `--amend` 或认栽等下次）。
+> 破坏性变更只认 footer 行首 + 冒号（`BREAKING CHANGE: …`）或 `!:` 简写——细则与敏感词自查见 git-release-rules.md §1.4 / §1.5。
 
 ### 范围（scope）
 
-可选但推荐，表示影响范围：
+可选但推荐，写**受影响的面**，不写文件名：
 
 ```
-feat(auth):     # 认证模块
-fix(db):        # 数据库
-fix(firewall):  # 防火墙
-refactor(api):  # API 路由
-style(ui):      # 前端样式
+feat(auth):     # 认证模块        fix(db):        # 数据库
+fix(firewall):  # 防火墙          refactor(api):  # API 路由
+style(ui):      # 前端样式        ci:             # 工程化（scope 可省略）
 ```
 
 ### 正文（body）
 
 - 描述 **为什么改**，而不是**改了什么**（代码本身已经说明了改了什么）
-- 每行不超过 72 字符
-- 可用列表说明多个改动点
-
-### 尾部（footer）
-
-- **关闭 Issue**：`Closes #123` / `Closes #123, #456`
-- **Breaking Changes**：`BREAKING CHANGE: OAuth 授权码格式变更为 JWT`
+- 每行不超过 72 字符；可用列表说明多个改动点
 
 ### 完整示例
 
@@ -107,7 +102,6 @@ feat(auth): 新增 Google OAuth2 登录
 - 实现 Google OAuth2 授权码流程
 - 用户首次登录自动创建本地账号
 - 新增 UserIdentity 模型存储第三方身份
-- 登录页增加"使用 Google 登录"按钮
 
 Closes #123
 ```
@@ -117,158 +111,63 @@ fix(db): 修复迁移时外键冲突导致回滚失败
 
 迁移 2026071301 在 down 时删除了被其他表引用的列，
 导致回滚到该版本时数据库报错。改为先删除引用外键再执行 down。
-
-关联迁移需按顺序回滚，详见 migration/README.md
-```
-
-```
-refactor(session): 抽取双令牌刷新逻辑为独立函数
-
-原来的 refreshSession 函数内联了 sid 和 sid_r 的刷新逻辑，
-导致单测无法 mock 令牌刷新。拆分为 refreshSid 和 refreshSidR，
-方便单测覆盖各自分支。
-
-BREAKING CHANGE: refreshSession 返回值格式变更，调用方需适配
 ```
 
 ---
 
-## 三、分支操作规范
-
-### 3.1 创建分支
+## 三、支线开发全流程（修 Bug / 新功能都用这条）
 
 ```bash
-# 功能分支
-git checkout -b feature/user-login develop
+# 1. 从 main 切支线（修复生产问题从出问题的 tag 切）
+git checkout main && git pull
+git checkout -b fix/xxx            # 或 feature/xxx
 
-# 紧急修复
-git checkout -b hotfix/fix-npe-on-login main
-
-# 发布分支
-git checkout -b release/v1.2.0 develop
-```
-
-### 3.2 提交
-
-```bash
+# 2. 开发：小步提交，一个提交只做一件事
 git add <files>
-git commit -m "feat(auth): 新增 Google OAuth2 登录"
-```
+git commit -m "fix(login): 修复空指针异常"
 
-**禁止：**
+# 3. 开发中 main 前进了 → 变基同步（保持历史线性，禁止 merge 进来）
+git fetch origin
+git rebase origin/main
 
-- `git commit -m "fix bug"` — 信息无意义
-- `git commit -m "update"` — 信息无意义
-- 一个提交包含多个不相关功能（如同时改了 auth 和 firewall）
+# 4. 推送支线并开 PR
+git push -u origin fix/xxx
 
-### 3.2.1 提交信息反例
+# 5. 等 CI 绿 + Review 通过 → 合并（--no-ff 保留支线拓扑）
+git checkout main && git merge --no-ff fix/xxx
+git push origin main
 
-```bash
-# ❌ 无意义信息
-git commit -m "fix bug"
-git commit -m "update"
-git commit -m "wip"
-git commit -m "调整"
-
-# ❌ 一个提交包含多个不相关改动
-git commit -m "feat(auth): 新增登录 + fix(db): 修复查询 + style: 格式化"
-
-# ✅ 正确：一个提交只做一件事
-git commit -m "feat(auth): 新增 Google OAuth2 登录"
-git commit -m "fix(db): 修复用户查询时的 N+1 问题"
-git commit -m "refactor(session): 抽取双令牌刷新逻辑"
-```
-
-### 3.3 特性分支同步上游代码
-
-开发期间 `develop` 可能已被其他合并推进，需要同步最新代码。
-
-```bash
-# 切回 feature 分支，用 rebase 变基，保持历史线性
-git checkout feature/user-login
-git rebase develop
-```
-
-**禁止**在 feature 分支使用 `git merge develop`，会产生无意义的 `Merge branch 'develop' into feature/xxx` 杂乱记录。
-
-> 如果 rebase 过程中有冲突，按提示逐个解决后执行 `git rebase --continue`。遇到复杂冲突可 `git rebase --abort` 放弃本次变基，改用 `git merge develop` 临时处理（事后需告知团队）。
-
-### 3.4 合并策略
-
-| 场景              | 策略             | 说明                                                  |
-| ----------------- | ---------------- | ----------------------------------------------------- |
-| feature → develop | **Squash merge** | 功能分支的多个小提交压缩为一个，保持 develop 历史清晰 |
-| hotfix → main     | **Merge commit** | 保留修复上下文，方便追溯                              |
-| release → main    | **Merge commit** | 保留发布节点                                          |
-| release → develop | **Merge commit** | 确保 develop 包含 release 的修复                      |
-| develop → main    | **Merge commit** | 常规发布                                              |
-
-### 3.5 合并信息规范
-
-```bash
-# Squash merge 示例
-git merge --squash feature/user-login
-git commit -m "feat(auth): 新增 Google OAuth2 登录"
-```
-
-### 3.6 推送
-
-```bash
-git push origin feature/user-login
-```
-
-**禁止 `git push --force`** 到共享分支（develop、main、release/\*）。个人 feature 分支如需 force push，先确认队友没有基于它工作。
-
-### 3.7 分支清理与生命周期
-
-PR/MR 合并后及时清理，拒绝"长寿分支"（Long-running branches）：
-
-```bash
-# 删除本地已合并的分支
-git branch -d feature/user-login
-
-# 删除远程已合并的分支（或 PR 合并时勾选 "Delete source branch"）
-git push origin --delete feature/user-login
-
-# 清理本地记录中已不存在的远程分支引用
+# 6. 合并即删（本地 + 远端）
+git branch -d fix/xxx
+git push origin --delete fix/xxx
 git fetch -p
 ```
 
-| 规则     | 说明                                              |
-| -------- | ------------------------------------------------- |
-| 合并即删 | feature 分支合并到 develop 后立即删除本地和远程   |
-| 拒绝长寿 | 功能分支生命周期不超过 2 周，长期未完成应考虑拆分 |
-| 定期清理 | 每周执行 `git fetch -p` 清理远程失效分支引用      |
+> GitHub 上等价操作：PR 合并方式选 **Create a merge commit**（= `--no-ff`）；
+> 单人杂务支线（docs/chore）允许选 **Squash and merge**。
+> PR 标题必须符合 Conventional Commits（squash 时它会成为 main 上的提交信息）。
+
+### 合并策略
+
+| 场景              | 策略             | 说明                                     |
+| ----------------- | ---------------- | ---------------------------------------- |
+| `feature/*` → main | **Merge commit** | 保留支线拓扑，changelog 才读得出来       |
+| `hotfix/*` → main  | **Merge commit** | 保留修复上下文，方便追溯                 |
+| `docs/*` `chore/*` → main | Squash 或 Merge | 杂务允许压缩为一个提交               |
+
+### 提 PR 前自查
+
+- [ ] 分支名符合 `<type>/<desc>`，一个支线只做一件事
+- [ ] 提交信息 / PR 标题符合 Conventional Commits
+- [ ] 本地 lint / test 通过（CI 之外的最后一道闸）
+- [ ] 没有调试代码（`console.log`、`debugger`）
+- [ ] 新增 API 有权限校验；数据库变更有迁移；新配置有 env 说明
 
 ---
 
 ## 四、Code Review 规范
 
-### 4.1 提 PR 前自查
-
-- [ ] 提交信息符合 Conventional Commits 格式
-- [ ] 分支名符合 `<type>/<desc>` 规范
-- [ ] 代码通过 `npm run lint` 和 `npm test`
-- [ ] 没有包含调试代码（`console.log`、`debugger`、TODO 注释）
-- [ ] 新增 API 有对应的权限校验
-- [ ] 数据库变更有对应的迁移文件
-- [ ] 新增配置有对应的环境变量说明
-
-### 4.2 PR 标题规范
-
-PR 标题必须严格遵循 Conventional Commits 格式（例如 `feat(auth): 新增 Google OAuth2 登录`），因为 **Squash merge** 会默认使用 PR 标题作为合并到 `develop` 的提交信息。
-
-```
-# 正确示例
-feat(auth): 新增 Google OAuth2 登录
-fix(db): 修复迁移时外键冲突
-
-# 错误示例（会污染 develop 历史）
-修复了一些 bug
-更新代码
-```
-
-### 4.3 PR 描述模板
+### 4.1 PR 描述模板
 
 ```markdown
 ## 变更说明
@@ -295,7 +194,7 @@ Closes #123
 <!-- 迁移回滚、配置变更、依赖升级等 -->
 ```
 
-### 4.4 Review 原则
+### 4.2 Review 原则
 
 - **先看文件名和改动范围** — 确认是不是预期改动
 - **关注逻辑正确性** — 边界条件、异常处理、并发安全
@@ -309,19 +208,13 @@ Closes #123
 ```
 主版本.次版本.修订号
 
-# 示例
-v1.0.0   # 首次正式发布
-v1.2.0   # 新增功能
-v1.2.1   # Bug 修复
-v2.0.0   # 不兼容的 API 变更
+v1.0.0   # 首次正式发布        v1.2.0   # 新增功能
+v1.2.1   # Bug 修复            v2.0.0   # 不兼容的 API 变更
 ```
 
-### Tag 命名
-
-```bash
-git tag -a v1.2.0 -m "release: v1.2.0 - 新增 OAuth2 登录"
-git push origin v1.2.0
-```
+- tag 格式 `vX.Y.Z`，必须 annotated，message 写版本摘要；
+- **版本源是 git tag，`package.json` 单向跟随**（细则见 git-release-rules.md §2.2）；
+- 发版流程（预览 → --apply → 推送判定 → 收尾）见 git-release-rules.md §四。
 
 ---
 
@@ -347,17 +240,17 @@ git checkout -- <file>
 # 修改最近一次提交信息（仅未推送时）
 git commit --amend -m "新消息"
 
-# 交互式 rebase（仅本地分支）
-git rebase -i HEAD~3
-
-# 变基同步上游（feature 分支同步 develop）
-git rebase develop
+# 支线同步上游（rebase，勿用 merge）
+git fetch origin && git rebase origin/main
 
 # 清理本地已合并分支
 git branch -d feature/user-login
 
-# 清理远程已删除分支的本地引用
+# 清理本地已删除的远端分支引用
 git fetch -p
+
+# 交互式 rebase（仅本地个人支线）
+git rebase -i HEAD~3
 ```
 
 ---
@@ -368,12 +261,12 @@ git fetch -p
 2. **提交粒度**：按逻辑原子化提交（One Atomic Commit per Action），禁止积压大提交。
 3. **排错逻辑**：修复 Bug 前先定位根本原因，禁止盲目"试一下"式提交。
 4. **提交不带 Co-Authored-By**，不需要署名协作信息。
-5. **分支生命周期**：功能开发完成并通过 CR 后，及时提 PR/MR 合并到 `develop` 分支，验收通过后删除本地与远程的 `feature/*` 分支，不要长期积压未合并的代码。
-6. **安全红线**：严禁提交 API 密钥、数据库密码、私钥等明文敏感信息。环境配置文件（如 `.env.local`、`.env.development`）必须写入 `.gitignore`，仅提交 `.env.example` 作为模板。
+5. **嵌套仓**（oauth21 / retroweb 等）的提交推送**必须在它自己的目录里做**，根仓 `git commit` 对它无效；各仓独立维护 tag 线（细则见 git-release-rules.md §3.4）。
+6. **安全红线**：严禁提交 API 密钥、数据库密码、私钥等明文敏感信息。环境配置文件（`.env.local`、`.env.development`）必须写入 `.gitignore`，仅提交 `.env.example` 作为模板。
 
 ---
 
-## 八、自动化卡点（推荐）
+## 八、自动化卡点
 
 靠人肉规范难以 100% 杜绝不规范提交，建议引入 Git 钩子工程化卡点。
 
@@ -410,7 +303,7 @@ echo 'npx lint-staged' > .husky/pre-commit
 
 提交前自动修复代码格式和 ESLint 错误，不符合规范的代码无法提交。
 
-### 8.3 当前项目状态（均未启用）
+### 8.3 当前项目状态（根仓 CoreFlow）
 
 | 卡点        | 状态      | 说明                                            |
 | ----------- | --------- | ----------------------------------------------- |
@@ -418,7 +311,7 @@ echo 'npx lint-staged' > .husky/pre-commit
 | commitlint  | ❌ 未配置 | 无 `commit-msg` hook，无 `commitlint.config.js` |
 | lint-staged | ❌ 未启用 | `pre-commit` hook 被注释，`lint-staged` 未安装  |
 
-> ⚠️ **当前项目以上卡点均未实际启用**，提交信息的规范校验完全依赖人工遵守。如需启用，请按 8.1 和 8.2 的步骤配置。
+> ⚠️ 提交信息的规范校验目前完全依赖人工遵守。新项目建议按 8.1 / 8.2 启用。
 
 ---
 

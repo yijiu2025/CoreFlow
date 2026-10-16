@@ -116,6 +116,8 @@ const REQUIRED = [
   'references/workflows.md',
   'references/toolbox.md',
   'references/orchestration.md',
+  'references/ci-conventions.md',
+  'references/entry-conventions.md',
   'scripts/doctor.mjs',
   'scripts/install-skill.mjs',
   'scripts/kx-validate.mjs',
