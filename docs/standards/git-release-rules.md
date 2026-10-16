@@ -228,7 +228,12 @@ git push -u origin main
 node <fullstack-rules 技能路径>/scripts/distribute-ci.mjs <新仓库路径>
 #    规范：fullstack-rules → references/ci-conventions.md（入口骨架 / 顺序口径 / 专属关卡）
 
-# 5. 首次发版
+# 5. 建 docs 总入口：docs/README.md 逐文档登记，拷校验脚本并挂 CI
+cp <fullstack-rules 技能路径>/assets/docs/check-docs-index.mjs <新仓库>/scripts/
+node scripts/check-docs-index.mjs docs   # 退出码 0 方可提交
+#    规范：fullstack-rules → references/docs-conventions.md（两级入口体系 / 双写 / 死链口径）
+
+# 6. 首次发版
 node scripts/release-web.mjs          # 预览：应判定 minor 并给出 v0.1.0 或 v1.0.0
 node scripts/release-web.mjs --apply  # 执行
 ```
