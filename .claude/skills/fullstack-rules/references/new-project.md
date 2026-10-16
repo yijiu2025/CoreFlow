@@ -174,6 +174,7 @@ kt 文件需包含：
 - [ ] 配置 `.gitignore`（含 `node_modules/`、`.env`、`.env.*`、`*.pem`、`*.key`）
 - [ ] 配置 `.env.example` 环境变量模板
 - [ ] 配置 CI 门禁：按 [ci-conventions.md](ci-conventions.md) 接入清单（共享门禁三件套 + 入口 `ci.yml`，5 分钟）
+- [ ] 建 `docs/README.md` 总入口（逐文档登记「路径 + 一句话用途」）并拷 `check-docs-index.mjs` 到 `scripts/`，按 [docs-conventions.md](docs-conventions.md) 接入清单
 
 ### 4.3 创建目录骨架
 

@@ -14,7 +14,7 @@
 ### 1. 规则有，但入口七零八落
 
 同一条"导出必须收拢到文件末尾"，同时存在于三个地方：`eslint.config.js` 的 `no-restricted-syntax`、
-一份 conventions 守卫、以及 [开发规范](./development-standards) 的一节。新人面对的真实体验不是"规则太松"，
+一份 conventions 守卫、以及 [开发规范](./development-standards.md) 的一节。新人面对的真实体验不是"规则太松"，
 而是"**不知道有哪些规则**"—— 规则散落在 6 处，没有任何一处是权威入口。
 
 ### 2. 第一道闸门被人为关闭
@@ -31,7 +31,7 @@ $ cat .husky/pre-commit
 
 | 文档里的说法 | 实测情况 |
 | --- | --- |
-| 「编码乱码」列为 **P0**（[后端检查规划](../archive/backend-review-plan)） | 全量扫描 `src/` **已扫不到乱码**，该项已修复 |
+| 「编码乱码」列为 **P0**（[后端检查规划](../archive/backend-review-plan.md)） | 全量扫描 `src/` **已扫不到乱码**，该项已修复 |
 | 路径写作 `src/auth/`、`src/db/`、`src/redis/`、`src/loader/registry/` | 实际已是 `src/framework/auth/`、`src/framework/db/` 等，**文件系统层已重组** |
 | `package.json` 的 `version` = 最新版本 | 停在 `2.6.0`，而最近 tag 是 `v2.9.0` |
 
@@ -150,7 +150,7 @@ CI     → L3 全部 + L1 的机械部分（守卫/回归/关卡）
       依赖有序集合的限流/排行榜在无 Redis 时会静默失效 —— 是否有兜底或明确的失败？
 - [ ] **所有"等外部依赖就绪"的地方是否有界**？客户端库的重连策略默认"永不放弃"，
       `await client.connect()` 可能**永远不 reject**，外层 `try/catch` 和 timeout 选项根本轮不到触发。
-      必须三段式：有界 TCP 预检 + 有界重试策略 + 外层硬超时。（详见 [Docker 部署](../deployment/docker) 的依赖等待设计）
+      必须三段式：有界 TCP 预检 + 有界重试策略 + 外层硬超时。（详见 [Docker 部署](../deployment/docker.md) 的依赖等待设计）
 - [ ] 请求路径上是否调用了 `*Sync(` 系列 API（`existsSync`、`readFileSync` 等）？会阻塞事件循环。
 - [ ] 是否有**模块级 `process.exit`**？它会让测试汇总恒报 0 失败 —— **伪装成绿色**。必须加 `!isTestEnv` 守卫。
 - [ ] 新增的导出面是否真实 `import` 过上层入口一次？（否则 `unstable_mockModule` 替身会失真）
@@ -307,7 +307,7 @@ npm run verify:all    # 跨进程验收（退出码 0/1/2/3）
 
 ### Phase 2：补齐自动闸门（本季度）
 
-对齐 [后端检查规划](../archive/backend-review-plan) 的 Phase 4，把仍靠人眼的三项交给机器：
+对齐 [后端检查规划](../archive/backend-review-plan.md) 的 Phase 4，把仍靠人眼的三项交给机器：
 
 1. **乱码扫描进 CI** —— 存量虽已清干净，但需要守卫防止回流（扫 `鍓`、`鎼`、`闁` 等异常区段）。
 2. **接口契约测试** —— 断言响应统一走 `reply.result`、分页字段齐全，把第三节的白名单例外显式登记。
@@ -330,10 +330,10 @@ npm run verify:all    # 跨进程验收（退出码 0/1/2/3）
 | 2 | 脚本仍用 `sequelize.sync()` | `scripts/initSuperAdmin.js`（`sync({ alter: true })`）、`scripts/setup-superadmin.js`（`sync()`） | L1 |
 | 3 | 部分业务接口绕过 `reply.result` | `src/api/**` 多处裸 `reply.send({ code, message })`，缺 `data`/`timestamp`/`requestId`；另有 OAuth 协议例外（合法，需登记） | L1 |
 | 4 | `package.json` 版本与 tag 不一致 | `version: 2.6.0` vs 最近 tag `v2.9.0` | L2 |
-| 5 | 文档路径过时 | `AGENTS.md` 写 `src/loader/registry/`，实际 `src/framework/loader/registry/`；[后端检查规划](../archive/backend-review-plan) 写 `src/auth/`、`src/db/`、`src/redis/` | L1（误导新人） |
-| 6 | [后端检查规划](../archive/backend-review-plan) 中"编码乱码 P0"已不成立 | 全量扫 `src/` 已无乱码字符 | L2（删除过时条目） |
+| 5 | 文档路径过时 | `AGENTS.md` 写 `src/loader/registry/`，实际 `src/framework/loader/registry/`；[后端检查规划](../archive/backend-review-plan.md) 写 `src/auth/`、`src/db/`、`src/redis/` | L1（误导新人） |
+| 6 | [后端检查规划](../archive/backend-review-plan.md) 中"编码乱码 P0"已不成立 | 全量扫 `src/` 已无乱码字符 | L2（删除过时条目） |
 | 7 | 存量伪测试清单仍挂 14 条 | `test-effectiveness.test.js` 的 `KNOWN_INEFFECTIVE_TESTS` | L2（只减不增） |
-| 8 | `session.js` 拆分评估未开始 | 见 [架构评估](../archive/architecture-review-2026-09-19) P2 项 | L2 |
+| 8 | `session.js` 拆分评估未开始 | 见 [架构评估](../archive/architecture-review-2026-09-19.md) P2 项 | L2 |
 | 9 | 前端类型检查未进 CI | `.github/workflows/ci.yml` 无 `vue-tsc` 步骤 | L1 |
 
 ---
