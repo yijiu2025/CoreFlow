@@ -44,6 +44,7 @@
     "vue-tsc": "^3.2.8"
   },
   "overrides": {
-    "estree-walker": "^2.0.2"
+    "estree-walker": "^2.0.2",
+    "tar": "7.5.22"
   }
 }
