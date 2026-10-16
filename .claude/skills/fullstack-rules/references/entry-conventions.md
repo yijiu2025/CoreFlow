@@ -84,12 +84,18 @@ src/       # 全部实现在 src/，入口不出现业务逻辑
 | posecraft    | 同 retroweb                                      | ✅   |
 | firewall     | 同 retroweb                                      | ✅   |
 | admin        | 同 retroweb                                      | ✅   |
-| oauth-web    | `main.ts` 单体（装配与样式混在一条 66 行里）      | ❌ 待改造 |
+| oauth-web    | `main.ts` 门牌 + `bootstrap.ts` 编排             | ✅（2026-10-17，PR #5） |
 | CoreFlow     | `index.js` 入口                                  | ✅   |
 
-**oauth-web 改造要点**（独立任务，走支线 + PR）：
+**oauth-web 改造记录**（2026-10-17，PR #5 已合并）：
 
-1. 新建 `src/bootstrap.ts`，把 `main.ts` 中的装配整体搬入（createApp → errorHandler → pinia → router → i18n → setupThemeDeviceSync → H5 token 预取 → isReady → mount）；
-2. `main.ts` 收敛为：文件头 + 两个 scss import + `import './bootstrap'`；
-3. 挂载改 `router.isReady().then(...).catch(降级)`；
-4. 改完本地 `npm run build` + `npm run test` 全绿再提 PR。
+1. 新建 `src/bootstrap.ts`，装配整体搬入（viewport 自救 → 设备 ID 同步 → createApp → errorHandler
+   → pinia → router → i18n → setupThemeDeviceSync → H5 token 预发 → isReady → mount），
+   原 `main.ts` 的装配语句与决策记录注释**原样搬迁**，行为零变化；
+2. `main.ts` 收敛为门牌：文件头 + 两个 scss import + `import './bootstrap'`（66 行 → 23 行，import 仅 3 行）；
+3. 本地验证全绿后才提 PR：`type-check` / `lint` / `test` 47-47 / `build`；
+4. 🔴 **教训（第四次踩）**：`e2e/verify-theme-dirs.mjs` 有一条"读 `main.ts` 断言 `setupThemeDeviceSync`
+   在 `app.use(pinia)` 之后"的静态关卡——搬文件后忘了同步关卡的文件清单，CI 假红
+   （588/589，唯一失败项正是它）。**断言读文件内容的关卡，移动源码时必须同步目标文件**；
+5. 连带修正 4 处指向 `main.ts` 的过时注释（viewport-fix.ts / router/index.ts / vite.config.ts /
+   useParentThemeSync.ts）——注释不随代码搬迁会变成谎言。
