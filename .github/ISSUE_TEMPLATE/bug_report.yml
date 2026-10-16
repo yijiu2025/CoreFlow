@@ -1,0 +1,94 @@
+name: 缺陷报告
+description: 报告一个可复现的问题（安全漏洞请勿使用本模板，见 SECURITY.md）
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **提交前请确认：**
+        - 已搜索现有 Issue，没有重复
+        - 安全漏洞请走私密渠道，详见 [SECURITY.md](https://github.com/yijiu2025/CoreFlow/blob/main/SECURITY.md)
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 发生了什么？期望的结果是什么？
+      placeholder: 清晰描述问题现象与期望行为……
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 请提供最小复现路径
+      placeholder: |
+        1. 打开 '...'
+        2. 调用 '...'
+        3. 出现 '...'
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / 提交
+      description: 运行的版本号或 commit SHA（git describe --tags）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响面
+      multiple: true
+      options:
+        - 后端 API / 认证 / OAuth 2.1
+        - 防火墙
+        - 防火墙前端
+        - 管理后台前端
+        - 数据库 / 迁移
+        - 构建 / CI / 部署
+        - 文档
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: 运行环境
+      options:
+        - 本地开发
+        - Docker / docker-compose
+        - 自建服务器
+        - 其他
+
+  - type: textarea
+    id: env-details
+    attributes:
+      label: 环境详情
+      description: Node 版本、MySQL / Redis 版本、操作系统；前端问题请附浏览器与版本
+      render: shell
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志与截图
+      description: 关键报错信息或截图。请务必脱敏，不要包含密钥、Token、Cookie 或个人数据
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索现有 Issue，确认没有重复
+          required: true
+        - label: 我已移除日志 / 截图中的敏感信息（密钥、Token、个人数据）
+          required: true

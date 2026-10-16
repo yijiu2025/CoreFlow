@@ -1,0 +1,11 @@
+# Issue 模板配置
+# 保留空白 Issue 通道（个人项目不强制走表单），同时提供常用联系入口。
+blank_issues_enabled: true
+
+contact_links:
+  - name: 安全漏洞私密报告
+    url: https://github.com/yijiu2025/CoreFlow/security/advisories/new
+    about: 安全漏洞请勿提交公开 Issue，报告方式与响应承诺详见 SECURITY.md
+  - name: 项目文档
+    url: https://github.com/yijiu2025/CoreFlow/tree/main/docs
+    about: 开发规范、架构说明与部署指南（VitePress）
