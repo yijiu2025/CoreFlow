@@ -96,7 +96,7 @@ if (skillLines > 160) {
 }
 checks.push(`SKILL.md 行数: ${skillLines} / 160`);
 
-const fm = skillContent.match(/^---\n([\s\S]*?)\n---/);
+const fm = skillContent.match(/^---\r?\n([\s\S]*?)\r?\n---/);
 if (!fm) {
   problems.push('SKILL.md 缺少 frontmatter');
 } else {
@@ -118,6 +118,7 @@ const REQUIRED = [
   'references/orchestration.md',
   'references/ci-conventions.md',
   'references/entry-conventions.md',
+  'references/docs-conventions.md',
   'scripts/doctor.mjs',
   'scripts/install-skill.mjs',
   'scripts/kx-validate.mjs',
