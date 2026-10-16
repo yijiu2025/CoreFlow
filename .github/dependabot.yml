@@ -1,0 +1,44 @@
+version: 2
+
+updates:
+  # npm 依赖。directory "/" 覆盖 monorepo 全部清单（根 / posecraft / poseadmin / firewall / admin）
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai
+    # 默认上限 5 是告警只开出 4 个 PR 的原因；分组后提上限，让排队中的更新流动起来
+    open-pull-requests-limit: 15
+    groups:
+      # 次版本 / 补丁按生产、开发分组，一次一个 PR，降低评审噪音
+      prod-minor-patch:
+        dependency-type: production
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      dev-minor-patch:
+        dependency-type: development
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+      # 大版本不分组：逐个评审（Breaking change 风险）
+
+  # GitHub Actions 版本
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai
+
+  # Docker 基础镜像（Dockerfile 在仓库根）
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai

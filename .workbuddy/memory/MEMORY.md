@@ -29,6 +29,7 @@
 ## 3. oauth21 → **§11/§13/§17**
 
 - 🔴 **主题替换规范 = 根仓 `docs/standards/theme-replacement.md`**（oauth-web `docs/` 有副本；view≡pkg、四入口优先级、`?theme.<设备>`、token 白名单——总文档 FRONTEND_STANDARDS 已接入）。
+- 🔴 **社区标准已补齐**（2026-10-16 `a5ca610`，oauth21/ 目录提交推送）：根目录 CoC/CONTRIBUTING/SECURITY/ACCESSIBILITY + `.github/ISSUE_TEMPLATE/` 3 件 + PR 模板；main 分支保护同 CoreFlow（必检 CI 单作业、strict、禁强推/禁删除、admin 可绕过）。**CodeQL / Wiki / Project 挂载未做**（待用户定）。oauth-web 自身无 prettier（借根仓 bin 格式化）；eslint **已覆盖 `scripts/`** node 全局（旧口径过期）。
 - 🔴 **env 四文件同序同注释**（`.env`/`.env.development`/.env.production/`.env.example`，14 变量；`.env.production` 的 parent 白名单刻意留空）；死变量 `VITE_APP_TITLE` 已删（title 走路由 meta）。
 - 🔴 **oauth-web CI 自带**（`.github/workflows/ci.yml`：type-check→lint→vitest→build→dist-nopwa→静态关卡 8 项）；🔴 **eslint 只给 `e2e/` 配了 node 全局** ⇒ 新增 `scripts/*.mjs` 先补 languageOptions 块；🔴 **本机 shim 拦 `vite build`**（后台清 dist 超 50 文件必红，前台 escalation 过；CI runner 无此问题）。
 - **主题热更新设计**（未实现）= `oauth21/docs/theme-hot-update.md`：L1 token/L2 配色已由 `remote.ts` 实现；L3 主题包 CDN 热更（manifest+content-hash+`registerRuntimeTheme`+`import(/* @vite-ignore */)`+SRI），P0-P3 分期，manifest 即开关。
