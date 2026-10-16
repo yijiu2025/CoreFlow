@@ -147,6 +147,22 @@ const Model = sequelize.define(
 
 ---
 
+## 八、CI / 工程文件命名
+
+| 类型        | 规范                      | 示例                                       | 说明                                  |
+| ----------- | ------------------------- | ------------------------------------------ | ------------------------------------- |
+| 门禁入口    | `ci.yml`                  | `.github/workflows/ci.yml`                 | 每仓**唯一**门禁入口                  |
+| 共享门禁    | `ci-quality.yml`          | 同上目录                                   | 前端家族字节级一致，**禁手改**        |
+| 专属关卡    | `ci-<domain>.yml`         | `ci-gates.yml`、`ci-security.yml`          | 域名单数：gates / security / e2e / perf |
+| 发布工作流  | `release-<target>.yml`    | `release-docker.yml`                       | 镜像 / npm / 部署                     |
+| 工程脚本    | `kebab-case.mjs`          | `scripts/distribute-ci.mjs`                | scripts/ 下的工具脚本                 |
+
+> 禁止 `main.yml` / `test.yml` / `build.yml` 等无法表明职责的工作流文件名。
+> 完整规则（入口骨架、顺序口径、共享门禁设计、接入清单）见 [ci-conventions.md](ci-conventions.md)；
+> 入口文件形态（main.ts 门牌 + bootstrap.ts 编排）见 [entry-conventions.md](entry-conventions.md)。
+
+---
+
 ## 命名反例
 
 ```js
@@ -191,3 +207,5 @@ user-profile.vue   → 应为 UserProfile.vue
 | 常量     | `UPPER_SNAKE_CASE` | `camelCase`, `PascalCase`  |
 | 表名     | `snake_case`       | `camelCase`, `PascalCase`  |
 | 权限编码 | `:` 分隔           | `/` 分隔, `.` 分隔         |
+| 分支名   | `<type>/<desc>`    | 无类型前缀、大小写混乱     |
+| CI 文件  | `ci.yml` / `ci-<domain>.yml` / `release-<target>.yml` | `main.yml`、`test.yml`、无职责名 |
