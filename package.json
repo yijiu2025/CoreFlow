@@ -89,5 +89,8 @@
     "prettier": "^3.8.3",
     "vitepress": "^1.6.4",
     "vue": "^3.5.38"
+  },
+  "overrides": {
+    "tar": "7.5.22"
   }
 }
