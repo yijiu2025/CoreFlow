@@ -70,7 +70,7 @@
 🟡 条目末 §号 = 细节在 `MEMORY-details.md`；守门脚本在 `scripts/`（retroweb）或 `.tmp-probe/`。
 - 🔴 **retroweb 是独立 git 仓**（`yijiu2025/retroweb.git`，main）——根仓完全不跟踪。🔴 提交/推送必须在 retroweb 目录里做；推送判定用 `git ls-remote origin main`，不信退出码。
 - 🔴 **前端规范单一来源 `.claude/skills/fullstack-rules/`**（根仓 git 跟踪；子目录副本只读，改完跑 doctor）。v2.6.0 起含 CI 统一规范 + 入口规范 + main 主干支线模型（→ §5）。
-- 🔴 **入口形态 = `main.ts` 门牌 + `bootstrap.ts` 编排**（四前端统一）。🔴 挂载一律 `router.isReady().then(mount)` + `.catch` 降级。→§63.3
+- 🔴 **入口形态 = `main.ts` 门牌 + `bootstrap.ts` 编排**（五前端统一：retroweb/posecraft/firewall/admin/oauth-web，oauth-web 2026-10-17 PR #5 门牌化）。🔴 挂载一律 `router.isReady().then(mount)` + `.catch` 降级。→§63.3
 - 🔴 **`@author` 只在文件头标**（函数级不加；归属以 `git blame` 为准）+ `@since`。本仓值 `Claude`/`yijiu2025`。→§63.5
 - 🔴 **env 类型必须开严格模式**：`interface ViteTypeOptions { strictImportMetaEnv: unknown }`（interface，非对象字面量）。→§63.4
 - 🔴 **JSDoc 基线 = 62 个导出函数**，`@param`/`@returns`/文件头缺口 0（2026-10-11）。守门 `npm run audit:jsdoc`（有缺口 exit 1）。口径：`@param` 写语义不抄类型；`@returns` 必交代失败路径；无参不写 `@param`；改脚本注意正则关键字白名单/只认末尾 export 块/无参函数先数逗号/文件头扫整个首块注释/`.d.ts` 豁免。→§73
