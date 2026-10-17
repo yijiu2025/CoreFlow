@@ -133,6 +133,7 @@ Node 版本、超时等运行参数住共享门禁（见下）；后端 / 库仓
 | oauth-web | （无独立文件） | 静态关卡 8 项经 `post-build-cmd` 进共享门禁（需 dist，见 §三） |
 | retroweb  | `ci-gates.yml` | JSDoc 审计 / README 同步 / 发布脚本测试（浏览器三关卡需 dev server，本地跑） |
 | CoreFlow  | （无）         | 后端三作业（lint/test/verify）直接在 `ci.yml`，见 §七           |
+| retro     | （无）         | ruff + conda 参考环境 pytest 直接在 `ci.yml`（Python 后端口径，见 §七） |
 
 > 何时拆独立文件：关卡步骤 ≥3 且不依赖共享门禁产物；否则走 `post-build-cmd` 或直接在 `ci.yml` 写 job。
 
@@ -189,3 +190,5 @@ node .claude/skills/fullstack-rules/scripts/distribute-ci.mjs <新仓路径>
 | oauth-web | `ci.yml` 改为入口（调用共享门禁，静态关卡走 post-build-cmd）           |
 | retroweb  | 从零建 CI：`ci.yml` + `ci-gates.yml` + 共享门禁三件套                 |
 | CoreFlow  | `publish-image.yml` → `release-docker.yml`；`ci.yml` 补规范骨架        |
+| theme     | 库仓自建 `ci.yml` 对齐骨架（补 concurrency / permissions / workflow_dispatch）；Node 矩阵 [20,22] 为发布库刻意保留（engines>=18，两条 LTS 验产物），偏离理由写头注 |
+| retro     | 从零建 CI：`ci.yml` 双作业（ruff + 文档入口校验 / conda `core/environment.yml` 参考环境 pytest）；测试环境复刻上游配方，用 conda 不用 pip 的原因写头注 |
