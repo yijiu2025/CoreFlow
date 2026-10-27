@@ -1,6 +1,6 @@
 # 端到端任务剧本（Playbooks）
 
-> 五类高频任务的端到端步骤与验收清单。执行顺序铁律见 SKILL.md；
+> 高频任务的端到端步骤与验收清单。执行顺序铁律见 SKILL.md；
 > 写代码前先扫 [pitfalls.md](pitfalls.md) 对应条目；细节模板在各专题文档。
 
 ## 剧本 A：新增后端 API
@@ -88,3 +88,37 @@
    发现回填剧本 D 修复流程；技能不存在时降级为本文件人工清单并注明
 
 **验收**：security.md"安全自查清单"逐项打勾；防线一览表确认没有绕过既有设施造第二套。
+
+## 剧本 G：npm 包发版（嵌套独立仓，skinsuite 型）
+
+**涉及**：[git-patterns.md](git-patterns.md) §五（版本号）、[pitfalls.md](pitfalls.md) #13–#17（workspaces 提升 / 多 lock 失同步 / Pages base / 游离文件类型）
+**适用**：独立发 npm 的嵌套仓（如 `packages/theme-core` = skinsuite）——与根仓 release.mjs 通道**互不相干**；发版链：tag → CI（Trusted Publishing）→ 宿主同步脚本。
+
+### 发版前检查（逐项打勾，全绿才准打 tag）
+
+```
+[ ] 1. 工作区干净、main 已与远端同步（git status 空 + git ls-remote 核对）
+[ ] 2. 全量闸门本地绿：npm run typecheck + npm test（0 fail）
+[ ] 3. 公开面 diff 审查：git log <上个tag>..HEAD 逐笔过，
+       标出导出签名/新增/删除 → 0.x 口径定版本（改名/结构调整 = minor，仅 fix = patch）
+[ ] 4. CHANGELOG「未发布」段定稿：公开面变更置顶、migration 提示写清
+[ ] 5. node scripts/release-notes.mjs <版本> 能抽出该段（CI 建 Release 靠它，缺失响亮失败）
+[ ] 6. package.json version 已升且与 tag 一致（CI 校验 tag === 'v' + version，不一致直接红）
+[ ] 7. 敏感表述扫描：commit 标题/正文含 漏洞/密钥/token 字样的，确认适合公开 Release 正文
+[ ] 8. 有文档站的仓：npm run docs:build 零死链零告警
+```
+
+### 发布链（顺序执行）
+
+1. 提交 `chore(release): <pkg> <版本>` → 推 main
+2. 打 annotated tag `v<版本>`（message 写版本摘要）→ 推 tag
+3. **tag 到远端用 `git ls-remote --tags origin` 核实**——不信 push 退出码（推送可能极慢零输出）
+4. CI（release-npm.yml）以 Trusted Publishing（OIDC）发布 + 自动建 GitHub Release（正文 = release-notes 抽取段）
+5. 轮询 `npm view <pkg> version` 直到等于目标版本（registry 传播有延迟，2 分钟量级）
+6. 宿主同步：`node scripts/publish-and-sync.mjs --skip-publish`（补宿主 package.json + lock 三字段 + `npm ci --dry-run` 自证）
+7. **同步所有持有该包的 lock**——含根仓 lock 里 workspace 提升的那份：根仓 `npm install --package-lock-only --ignore-scripts`，漏了根仓 `npm ci` 直接红（pitfalls #15）
+8. 确认 GitHub Release 已自动创建；docs 站（有则）等 Pages workflow 跑完刷新验证
+
+**验收**：npm registry 版本 = tag；宿主 + 根 lock 的该包 version 一致；GitHub Release 存在且正文完整。
+
+**禁止**：本地手跑 `npm publish`（本仓走 OIDC，本地无 token 会 401）；拿 package.json 的 version 反推 tag；工作区未提交就打 tag。

@@ -86,3 +86,38 @@
 - **根因**：目录迁移时只改了代码，没改文档；三份指引（AGENTS/CLAUDE/skill）各自维护同一事实。
 - **规则**：**目录/包名变更必须同步所有指引文件**（AGENTS.md、CLAUDE.md、.claude/skills/fullstack-rules/references/**）；改完跑 `node .claude/skills/fullstack-rules/scripts/doctor.mjs` 自检。
 - **防回归**：doctor.mjs 脚本检测旧路径残留与断链。
+
+## 13. 嵌套 npm 仓装依赖提升污染根仓（2026-10-25，theme-core）
+
+- **现象**：在嵌套独立仓（`packages/theme-core`）`npm i -D vitepress`，依赖落进**根仓** package-lock.json，且子仓自己的 node_modules 不完整；根仓 `npm run <script>` 在子目录执行时报 workspace 上下文。
+- **根因**：根仓 `workspaces: ["packages/*"]` 把子仓当 workspace 成员，npm 一律 hoist 到根 node_modules / 根 lock——而子仓是独立发 npm 的仓，本不该是成员。
+- **规则**：独立发 npm 的嵌套仓必须在根 workspaces **显式排除**（`"!packages/theme-core"`），并在子仓独立 `npm install`（有自己的 lockfile）；改完根仓跑 `npm install --package-lock-only` 同步 lock，否则根 `npm ci` 因 lock 失同步直接红。
+- **防回归**：发版剧本 G（workflows.md）第 6/7 步；`grep 'packages/theme-core' 根lock` 除排除行外应为 0。
+
+## 14. 根 lock 的旧 link 解析残留 → npm install 不重算（2026-10-25）
+
+- **现象**：workspaces 排除子仓后，根 lock 仍把该包解析成 `"resolved": "packages/xxx"` + `link: true`；删掉 node_modules junction、重跑 install 都不消失。
+- **根因**：lock 是解析的**事实源**——npm 对已解析条目信任 lock，不会因 package.json 变化主动重算。
+- **规则**：强制重解析要对目标包**显式下 spec**：`npm install <pkg>@<range> -w <宿主> --package-lock-only`；其它手段（删 junction / 无参 install）无效。
+- **防回归**：操作后 `grep '"link": true' 根lock` 中不应再有该包。
+
+## 15. 发版只同步宿主 lock → 根仓 npm ci 红（2026-10-25）
+
+- **现象**：publish-and-sync 把 oauth21 的 skinsuite 升到 ^0.11.0 并自证通过后，根仓 `npm ci` 会因 lock 与 package.json 失同步报错。
+- **根因**：oauth21 依赖经 workspaces 提升进**根 lock**，那份的 skinsuite 还停在 0.10.1——不满足新范围 ^0.11.0。
+- **规则**：发版后同步**所有**持有该包的 lock（宿主 lock 之外还有根 lock）：根仓 `npm install --package-lock-only --ignore-scripts`，然后 grep 验证版本一致。
+- **防回归**：剧本 G 第 7 步固定动作。
+
+## 16. VitePress 站点挂 GitHub Pages 子路径 → 线上裸 HTML 无样式（2026-10-25，theme docs）
+
+- **现象**：本地 dev/build 正常，`https://<user>.github.io/<repo>/` 打开无 CSS/JS，只有裸 HTML。
+- **根因**：Pages 把站点挂在 `/<repo>/` 子路径下，VitePress 默认 `base: '/'`，构建产物资源全指向域名根 → 线上 404；`cleanUrls: true` 在 Pages（无服务器重写）下深层链接也会 404。
+- **规则**：Pages 部署的 VitePress 必须 `base: '/<repo>/'` + `cleanUrls: false`；构建后 grep dist 的资源 URL 是否全部带前缀。
+- **防回归**：发版剧本 G 第 8 步（docs:build + 产物抽查）。
+
+## 17. 编辑器把跨仓文件当游离文件 → import.meta.env 报 TS2339（2026-10-25）
+
+- **现象**：包内类型闸门全绿，但在根仓工作区直接打开嵌套仓的 `.ts` 文件，`import.meta.env.DEV` 报 TS2339（ImportMeta 上不存在 env）。
+- **根因**：编辑器 TS 服务对「游离文件」（不属于任何 tsconfig include）不加载包内 d.ts / vite/client types——文件里写 `/// <reference types="包名/子路径" />` 也解析不到子路径入口。
+- **规则**：库级 env 类型兜底用**自包含 d.ts**（与 vite/client 同形声明，同场时接口合并零冲突）+ **使用文件顶部 `/// <reference path="../env.d.ts" />`**（路径引用由编译器语义保证在任何上下文生效）。
+- **防回归**：验证姿势 = 无 vite 上下文 `tsc --ignoreConfig` 直跑样例绿 + 毒丸真红（恒绿等于没验证）。

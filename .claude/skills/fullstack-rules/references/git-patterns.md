@@ -216,6 +216,10 @@ v1.2.1   # Bug 修复            v2.0.0   # 不兼容的 API 变更
 - **版本源是 git tag，`package.json` 单向跟随**（细则见 git-release-rules.md §2.2）；
 - 发版流程（预览 → --apply → 推送判定 → 收尾）见 git-release-rules.md §四。
 
+### 嵌套独立 npm 仓的发版（skinsuite 型，另一条通道）
+
+独立发 npm 的嵌套仓（如 `packages/theme-core`）**不走根仓 release.mjs**，发版链是：tag → CI（release-npm.yml，Trusted Publishing/OIDC）→ `publish:sync --skip-publish` 宿主同步。版本口径 0.x 阶段改名/结构调整 = minor；发版前检查清单与多 lock 同步（宿主 lock + **根仓 lock**）见 [workflows.md](workflows.md) 剧本 G，相关事故见 [pitfalls.md](pitfalls.md) #13–#15。
+
 ---
 
 ## 六、常用命令速查
