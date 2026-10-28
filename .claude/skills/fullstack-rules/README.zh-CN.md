@@ -37,6 +37,7 @@ well-skill/
 │   ├── anti-patterns.md  #   反例速查 + 企业级审查清单
 │   ├── requirement-intake.md / kx.md   # 需求确认流程 / KX 架构 DSL
 │   ├── note.md / naming-convention.md / testing.md / security.md / git-patterns.md / code-review.md
+│   ├── release-checklist.md   # 端到端发布剧本（CHANGELOG → 文档 → 版本号 → 门禁 → 发版 → 镜像）
 │   ├── backend/          #   Fastify 路由模板 / Redis 规范
 │   └── frontend/         #   Vue 3 规范 / Remotion
 ├── scripts/doctor.mjs    # 技能自检脚本

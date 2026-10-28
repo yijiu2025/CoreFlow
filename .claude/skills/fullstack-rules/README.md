@@ -40,6 +40,7 @@ well-skill/
 │   ├── anti-patterns.md  #   Anti-pattern quick sheet + enterprise review checklist
 │   ├── requirement-intake.md / kx.md   # Requirement intake / KX architecture DSL
 │   ├── note.md / naming-convention.md / testing.md / security.md / git-patterns.md / code-review.md
+│   ├── release-checklist.md   # End-to-end release playbook (CHANGELOG → docs → version → CI → release → image)
 │   ├── backend/          #   Fastify route templates / Redis rules
 │   └── frontend/         #   Vue 3 rules / Remotion
 ├── scripts/doctor.mjs    # Skill self-check script

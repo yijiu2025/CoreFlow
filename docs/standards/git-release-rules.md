@@ -170,6 +170,10 @@ main ─────●──────●──────────●─
 
 ## 四、发布流程（脚本用法）
 
+> 🔎 **端到端发布 checklist**（更新 CHANGELOG → 完善文档 → 对齐版本号 → 跑门禁 → 发版 → 镜像 → 校验）
+> 见 fullstack-rules 技能 `references/release-checklist.md`。本节是脚本用法与行为约定，checklist 是
+> 「一次完整发布」的动作顺序。
+
 ### 4.1 用法（所有仓统一）
 
 ```bash
@@ -200,12 +204,15 @@ node scripts/release-web.mjs --apply --allow-dirty
 5. **漂移自愈**：tag 已推而 Release 缺失时，重跑脚本自动补建（不依赖"有无新提交"的判断）；
 6. **推送判定**：push 后一律 `git ls-remote` 核对远端 SHA 与 tag，**不信退出码**；成功同步后自动跑 `fix-packed-refs.mjs`（本机不写松散 ref，不修则 `git status` 长期谎报 ahead）；
 7. **凭据**：GitHub token 依次取 `$GITHUB_TOKEN` / `$GH_TOKEN` / git credential manager（GCM），无需 `gh` CLI；
-8. **敏感词**：命中 1.5 节词表的提交标题会被列出，要求人工确认后才可外发。
+8. **敏感词**：命中 1.5 节词表的提交标题会被列出，要求人工确认后才可外发；
+9. **CHANGELOG 自动提升**（release-web.mjs）：`--apply` 时把 `CHANGELOG.md` 的「未发布（Unreleased）」区块提升为 `## X.Y.Z — YYYY-MM-DD` 并重建空区块；区块为空则**不提升**、预览时警告；
+10. **package.json 自动对齐**（release-web.mjs）：`--apply` 时把 `package.json` / `package-lock.json` 的 `version` 对齐到新 tag（单向跟随，见 2.2），不再手动改。
 
-### 4.3 发版后的手动收尾
+### 4.3 发版后的校验（脚本已自动收尾，剩人工核对）
 
-- `package.json` 的 `version` 对齐新 tag（见 2.2），提交推送；
+- CHANGELOG / package.json 已由脚本 `--apply` 自动处理，**检查生成结果**是否符合预期即可；
 - 在 Release 页面检查说明是否符合预期（尤其敏感词提交）；
+- 有 Docker 镜像的仓：等 `docker-publish` workflow 完成，核对 GHCR / Docker Hub 的 `<version>` 与 `latest` tag（见 release-checklist.md §六）；
 - 若 push 提示远端不一致：重试推送并用 `git ls-remote origin main` 复核——**超时不等于失败**。
 
 ---
