@@ -80,3 +80,12 @@ src.zip
 .video_agent
 .zcode
 lefthook.yml
+
+# WorkBuddy 本地工作目录（memory 日记 / 临时文件，AI 助手本地产物，不入库）
+.workbuddy/
+.workbuddy-ai/
+
+# AI 生成的本地产物（图片 / 公众号文章 / 审查报告），不入库
+generated-images/
+articles/
+reports/
