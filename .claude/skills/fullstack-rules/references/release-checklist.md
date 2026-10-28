@@ -3,6 +3,7 @@
 > **权威判据**（major/minor/patch、tag 命名、分支闸）见仓库内 `docs/standards/git-release-rules.md`；
 > 本文聚焦「一次完整发布」的**动作顺序**：从更新 CHANGELOG 到镜像上线后的校验。
 > 适用：oauth-web、retroweb 等**打 tag 发版 + 推镜像**的前端仓。纯静态仓 / 无镜像仓自动跳过对应步骤。
+> 根仓 CoreFlow 发版走 `scripts/release.mjs`（三通道），步骤结构相同、无镜像环节，CHANGELOG 提升与版本号对齐能力两个脚本一致。
 
 ---
 

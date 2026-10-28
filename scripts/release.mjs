@@ -28,7 +28,8 @@ import {
   bumpVersion,
   compareSemver,
   buildNotes,
-  findSensitive
+  findSensitive,
+  bumpChangelog
 } from '../src/framework/release/index.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -179,6 +180,52 @@ function remoteSlug() {
   if (!r.ok) return null;
   const m = /github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/.exec(r.out.trim());
   return m ? { owner: m[1], repo: m[2] } : null;
+}
+
+/* ---------- CHANGELOG 提升 + package.json 对齐 ---------- */
+
+/** 取今天日期（本地时区 YYYY-MM-DD）。不手算时间戳——直接走 `date`，避免跨时区/跨年算错。 */
+function todayISO() {
+  const r = tryRun('date', ['+%Y-%m-%d']);
+  return r.ok && r.out ? r.out : new Date().toISOString().slice(0, 10);
+}
+
+/** 读根仓 CHANGELOG.md；不存在返回 null（自动跳过提升）。 */
+function readChangelog() {
+  const p = path.join(ROOT, 'CHANGELOG.md');
+  if (!existsSync(p)) return null;
+  try {
+    return readFileSync(p, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 对齐根仓 package.json 的 version 到新版本号（单向跟随 tag，见 git-release-rules.md §2.2）。
+ * 返回 null 表示无 package.json 或已一致。子仓（oauth21 等）的 package.json 不在这里对齐。
+ *
+ * @param {string} version 不带 v 的新版本号
+ * @returns {{ path: string, from: string, to: string } | null}
+ */
+function alignPackageVersion(version) {
+  const p = path.join(ROOT, 'package.json');
+  if (!existsSync(p)) return null;
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(p, 'utf8'));
+  } catch {
+    return null;
+  }
+  if (!pkg.version || pkg.version === version) return null;
+  return { path: p, from: pkg.version, to: version };
+}
+
+/** 写回根仓 package.json（保留 2 空格缩进 + 末尾换行，与 npm 默认一致） */
+function writePackageVersion(pkgPath, version) {
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+  pkg.version = version;
+  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
 /* ---------- GitHub 通道 ---------- */
@@ -387,6 +434,30 @@ async function main() {
   const tag = `v${next}`;
   log(`→ 判定：${kind} 递增，${from ?? '(无)'} → ${tag}`);
 
+  // 版本号漂移检查 + CHANGELOG 提升预览（tag 是版本源，见规则文档 2.2 节）
+  const changelog = readChangelog();
+  const changelogBump = changelog ? bumpChangelog(changelog, next, todayISO()) : null;
+  const pkgAlign = alignPackageVersion(next);
+
+  if (changelogBump) {
+    log('── 收尾 1/2：CHANGELOG ────────────');
+    if (changelogBump.changed) {
+      log(`   ${APPLY ? '将提升' : '提升'}「未发布（Unreleased）」→「${next} — ${todayISO()}」并重建空未发布区块`);
+    } else {
+      log(`   ⚠ ${changelogBump.reason} —— 发版前请先在 CHANGELOG 的「未发布」区块补上本次变更`);
+    }
+  } else {
+    log('── 收尾 1/2：CHANGELOG ────────────');
+    log('   · 无 CHANGELOG.md，跳过（如需变更记录，请先创建）');
+  }
+
+  log('── 收尾 2/2：package.json 版本号 ──');
+  if (pkgAlign) {
+    log(`   ${APPLY ? '将对齐' : '将对齐'} package.json version ${pkgAlign.from} → ${next}`);
+  } else {
+    log(`   ✓ package.json 无需对齐（${next}）`);
+  }
+
   if (gitTry('rev-parse', '-q', '--verify', `refs/tags/${tag}`).ok) {
     if (APPLY) {
       log(`✗ tag ${tag} 已存在，请先确认版本号`);
@@ -437,13 +508,27 @@ async function main() {
 
   if (!APPLY) {
     log('');
+    if (changelogBump && !changelogBump.changed) {
+      log('⚠ 提示：CHANGELOG「未发布」区块为空，发版前请先补上本次变更，否则不会自动提升。');
+    }
     log('预览结束。确认无误后执行：node scripts/release.mjs --apply');
     return;
   }
 
-  // 3) 通道 1：tag + push
+  // 3) 收尾：CHANGELOG 提升 + package.json 对齐（先写，再打 tag，保证 tag 指向含新 CHANGELOG 的提交）
   log('');
   log('执行中…');
+
+  if (changelogBump?.changed) {
+    writeFileSync(path.join(ROOT, 'CHANGELOG.md'), changelogBump.text);
+    log(`  ✓ CHANGELOG 已提升：未发布 → ${next}`);
+  }
+  if (pkgAlign) {
+    writePackageVersion(pkgAlign.path, next);
+    log(`  ✓ package.json version ${pkgAlign.from} → ${next}`);
+  }
+
+  // 4) 通道 1：tag + push
   git('tag', '-a', tag, '-m', notes);
   log(`  ✓ 已创建 tag ${tag}`);
 

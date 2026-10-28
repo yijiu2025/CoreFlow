@@ -94,6 +94,9 @@
 **涉及**：[git-patterns.md](git-patterns.md) §五（版本号）、[pitfalls.md](pitfalls.md) #13–#17（workspaces 提升 / 多 lock 失同步 / Pages base / 游离文件类型）
 **适用**：独立发 npm 的嵌套仓（如 `packages/theme-core` = skinsuite）——与根仓 release.mjs 通道**互不相干**；发版链：tag → CI（Trusted Publishing）→ 宿主同步脚本。
 
+> ⚠️ 本剧本只覆盖「npm 独立仓」这条专用通道。**Web 应用 / 打 tag 发版的前端仓**（oauth-web、retroweb 等）
+> 走 [release-checklist.md](release-checklist.md) 的端到端流程（CHANGELOG → 文档 → 版本号 → 门禁 → 发版 → 镜像 → 校验）。
+
 ### 发版前检查（逐项打勾，全绿才准打 tag）
 
 ```

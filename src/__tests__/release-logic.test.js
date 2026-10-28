@@ -16,7 +16,8 @@ import {
   bumpVersion,
   compareSemver,
   buildNotes,
-  findSensitive
+  findSensitive,
+  bumpChangelog
 } from '../framework/release/index.js';
 
 const commit = (subject, body = '') => ({ subject, body });
@@ -159,5 +160,44 @@ describe('findSensitive：发版前自查对外可见的表述', () => {
 
   it('普通标题不误报', () => {
     expect(findSensitive([commit('feat: 新增分页参数'), commit('docs: 补充部署说明')])).toEqual([]);
+  });
+});
+
+describe('bumpChangelog：未发布区块提升为版本号区块', () => {
+  const base = ['# Changelog', '', '## 未发布（Unreleased）', '', '### 修复', '', '- 修了一个 bug', ''].join('\n');
+
+  it('非空的未发布区块提升为「版本号 — 日期」并重建空区块', () => {
+    const tail = ['', '## 1.0.0 — 2026-10-14', '', '- 首个版本', ''].join('\n');
+    const { text, changed } = bumpChangelog(`${base}${tail}`, '1.1.0', '2026-10-28');
+
+    expect(changed).toBe(true);
+    expect(text).toContain('## 1.1.0 — 2026-10-28');
+    expect(text).toContain('- 修了一个 bug');
+    expect(text).toContain('## 1.0.0 — 2026-10-14');
+    // 重建的空未发布区块必须排在新版本之后
+    const newIdx = text.indexOf('## 1.1.0 — 2026-10-28');
+    const placeholderIdx = text.indexOf('## 未发布（Unreleased）');
+    expect(newIdx).toBeGreaterThanOrEqual(0);
+    expect(placeholderIdx).toBeGreaterThan(newIdx);
+  });
+
+  it('未发布区块为空时不提升', () => {
+    const empty = ['# Changelog', '', '## 未发布（Unreleased）', '', '## 1.0.0 — 2026-10-14', ''].join('\n');
+    const { changed, reason } = bumpChangelog(empty, '1.1.0', '2026-10-28');
+    expect(changed).toBe(false);
+    expect(reason).toContain('为空');
+  });
+
+  it('没有未发布标题时返回原样并说明原因', () => {
+    const { changed, reason } = bumpChangelog('# Changelog\n\n## 1.0.0 — 2026-10-14\n', '1.1.0', '2026-10-28');
+    expect(changed).toBe(false);
+    expect(reason).toContain('未找到');
+  });
+
+  it('提升后幂等：再次提升返回 unchanged', () => {
+    const first = bumpChangelog(base, '1.1.0', '2026-10-28');
+    expect(first.changed).toBe(true);
+    const second = bumpChangelog(first.text, '1.2.0', '2026-10-29');
+    expect(second.changed).toBe(false);
   });
 });

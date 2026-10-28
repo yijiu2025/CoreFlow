@@ -205,8 +205,8 @@ node scripts/release-web.mjs --apply --allow-dirty
 6. **推送判定**：push 后一律 `git ls-remote` 核对远端 SHA 与 tag，**不信退出码**；成功同步后自动跑 `fix-packed-refs.mjs`（本机不写松散 ref，不修则 `git status` 长期谎报 ahead）；
 7. **凭据**：GitHub token 依次取 `$GITHUB_TOKEN` / `$GH_TOKEN` / git credential manager（GCM），无需 `gh` CLI；
 8. **敏感词**：命中 1.5 节词表的提交标题会被列出，要求人工确认后才可外发；
-9. **CHANGELOG 自动提升**（release-web.mjs）：`--apply` 时把 `CHANGELOG.md` 的「未发布（Unreleased）」区块提升为 `## X.Y.Z — YYYY-MM-DD` 并重建空区块；区块为空则**不提升**、预览时警告；
-10. **package.json 自动对齐**（release-web.mjs）：`--apply` 时把 `package.json` / `package-lock.json` 的 `version` 对齐到新 tag（单向跟随，见 2.2），不再手动改。
+9. **CHANGELOG 自动提升**（两个 release 脚本）：`--apply` 时把 `CHANGELOG.md` 的「未发布（Unreleased）」区块提升为 `## X.Y.Z — YYYY-MM-DD` 并重建空区块；区块为空或文件不存在则**不提升**、预览时警告；
+10. **package.json 自动对齐**（两个 release 脚本）：`--apply` 时把根/本仓 `package.json` 的 `version` 对齐到新 tag（单向跟随，见 2.2）；子仓的 lock 文件一并对齐，不再手动改。
 
 ### 4.3 发版后的校验（脚本已自动收尾，剩人工核对）
 

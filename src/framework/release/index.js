@@ -116,6 +116,51 @@ function findSensitive(commits) {
   return commits.map(c => c.subject).filter(subject => SENSITIVE_RE.test(subject));
 }
 
+/**
+ * 把 CHANGELOG 顶部的「未发布（Unreleased）」区块提升为带版本号 + 日期的正式区块。
+ *
+ * 约定（见 git-release-rules.md 发布 checklist）：
+ *   - 未发布区块的标题行固定是 `## 未发布（Unreleased）`；
+ *   - 提升后变成 `## <version> — <date>`，紧随其后插入一个**空的**未发布区块（保持幂等）；
+ *   - 未发布区块为空时**不提升**（返回 { changed: false }，避免发一个只有空壳的版本）。
+ *
+ * 纯函数：输入旧文本，输出新文本 + 是否变化，便于单测锁住行为。
+ * 宿主（scripts/release.mjs / scripts/release-web.mjs）负责读文件、写文件与传日期。
+ *
+ * @param {string} text CHANGELOG 原文
+ * @param {string} version 不带 v 的版本号，如 `2.6.1`
+ * @param {string} date YYYY-MM-DD
+ * @returns {{ text: string, changed: boolean, reason?: string }}
+ */
+function bumpChangelog(text, version, date) {
+  const heading = '## 未发布（Unreleased）';
+  const idx = text.indexOf(heading);
+  if (idx === -1) {
+    return { text, changed: false, reason: '未找到「未发布（Unreleased）」标题' };
+  }
+
+  const afterHeading = idx + heading.length;
+  const nextHeading = text.indexOf('\n## ', afterHeading + 1);
+  const bodyEnd = nextHeading === -1 ? text.length : nextHeading;
+
+  // 未发布区块正文：标题行之后到下一个 ## 之前；去掉引文/空行后仍无内容即视为空
+  const body = text.slice(afterHeading, bodyEnd).trim();
+  if (!/\S/.test(body)) {
+    return { text, changed: false, reason: '未发布区块为空，无可提升内容' };
+  }
+
+  const head = text.slice(0, idx);
+  const tail = text.slice(bodyEnd);
+  const newSection = `## ${version} — ${date}\n\n${body}\n`;
+  // 重建的空未发布区块：只留标题，正文留空（保持幂等——下次提升前由人补内容）。
+  const placeholder = `${heading}\n`;
+
+  return {
+    text: `${head}${newSection}\n${placeholder}${tail}`,
+    changed: true
+  };
+}
+
 export {
   TYPE_RE,
   BREAKING_RE,
@@ -127,5 +172,6 @@ export {
   bumpVersion,
   compareSemver,
   buildNotes,
-  findSensitive
+  findSensitive,
+  bumpChangelog
 };
