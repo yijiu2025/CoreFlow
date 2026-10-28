@@ -72,13 +72,16 @@ class JobDao {
   /**
    * 轮询：原样透传上游 JobSnapshot；上游 404 ⇒ 返回 stale 快照。
    *
+   * 🔴 归属校验：必须传 userId，只允许读取/操作自己的 job（此前仅按 provider_job_id 查询 = IDOR）。
+   *
    * @param {string} jobId 上游 provider_job_id（前端持有的字符串）
    * @param {number} since 增量日志 seq
+   * @param {string|number} userId 当前登录用户 id
    * @returns {Promise<object>} 上游快照（或 stale 标记快照）
    */
-  async poll(jobId, since = 0) {
+  async poll(jobId, since = 0, userId) {
     const Job = this.getModel();
-    const job = await Job.findOne({ where: { provider_job_id: jobId } });
+    const job = await Job.findOne({ where: { provider_job_id: jobId, user_id: userId } });
     if (!job) {
       return { ok: false, error: 'job 不存在', state: 'stale' };
     }
@@ -120,10 +123,13 @@ class JobDao {
     }
   }
 
-  /** 取消：透传上游 cancel，本地标终态 */
-  async cancel(jobId) {
+  /**
+   * 取消：透传上游 cancel，本地标终态
+   * 🔴 归属校验：必须传 userId，只允许取消自己的 job（IDOR 修复）。
+   */
+  async cancel(jobId, userId) {
     const Job = this.getModel();
-    const job = await Job.findOne({ where: { provider_job_id: jobId } });
+    const job = await Job.findOne({ where: { provider_job_id: jobId, user_id: userId } });
     if (!job) return false;
     try {
       await forwardJson('POST', `/jobs/${jobId}/cancel`, {});

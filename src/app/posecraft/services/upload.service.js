@@ -15,10 +15,38 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** 上传目录（public/uploads/posecraft，由静态资源服务暴露） */
 const UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads/posecraft');
-/** 允许的图片 MIME 类型 */
+/** 允许的图片 MIME 类型 → 固定扩展名（扩展名只从白名单映射，绝不用用户文件名） */
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const EXT_BY_MIME = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif'
+};
+/** multipart 上传最大 10MB（防内存/磁盘耗尽） */
+const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 /** Base64 上传最大 10MB */
 const MAX_BASE64_SIZE = 10 * 1024 * 1024;
+
+/** 常见图片魔数，用于校验真实文件头（不信任客户端声明的 mimetype） */
+const MAGIC_BYTES = [
+  { mime: 'image/jpeg', bytes: [0xff, 0xd8, 0xff] },
+  { mime: 'image/png', bytes: [0x89, 0x50, 0x4e, 0x47] },
+  { mime: 'image/webp', bytes: [0x52, 0x49, 0x46, 0x46] },
+  { mime: 'image/gif', bytes: [0x47, 0x49, 0x46, 0x38] }
+];
+
+/**
+ * 校验 Buffer 的真实文件头是否与声明 MIME 匹配
+ * @param {Buffer} buffer 文件内容
+ * @param {string} mime 客户端声明的 MIME
+ * @returns {boolean}
+ */
+function isMagicMatch(buffer, mime) {
+  const rule = MAGIC_BYTES.find(r => r.mime === mime);
+  if (!rule || buffer.length < rule.bytes.length) return false;
+  return rule.bytes.every((b, i) => buffer[i] === b);
+}
 
 // 确保上传目录存在
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -36,11 +64,22 @@ async function saveUploadFile(file) {
     throw new Error('不支持的文件类型');
   }
 
-  const ext = path.extname(file.filename) || '.png';
+  const buffer = await file.toBuffer();
+
+  // 大小上限：先拒超限文件，避免全量读入内存被滥用
+  if (buffer.length > MAX_UPLOAD_SIZE) {
+    throw new Error('文件大小超过限制 (10MB)');
+  }
+  // 魔数校验：拒绝「声明 image/png 实为 .html/.svg/.js」的伪造类型（防存储型 XSS）
+  if (!isMagicMatch(buffer, file.mimetype)) {
+    throw new Error('文件内容与类型不符');
+  }
+
+  // 文件名完全服务端生成：扩展名只从 MIME 白名单映射，绝不用用户文件名（防路径穿越）
+  const ext = EXT_BY_MIME[file.mimetype] || '.png';
   const filename = `${crypto.randomUUID()}${ext}`;
   const filepath = path.join(UPLOAD_DIR, filename);
 
-  const buffer = await file.toBuffer();
   fs.writeFileSync(filepath, buffer);
 
   return {
@@ -53,9 +92,9 @@ async function saveUploadFile(file) {
 /**
  * 保存 Base64 图片到磁盘
  * @param {string} dataUri - data:image/xxx;base64,... 格式
- * @param {string} [filename] - 可选文件名
+ * @param {string} [filename] - 已废弃：文件名一律服务端生成，参数仅为兼容旧调用方保留（不再使用）
  * @returns {Promise<{url: string, filename: string, size: number}>}
- * @throws {Error} 格式无效 / 超过大小限制
+ * @throws {Error} 格式无效 / 超过大小限制 / 内容与类型不符
  */
 async function saveBase64Image(dataUri, filename) {
   const matches = dataUri.match(/^data:image\/(\w+);base64,(.+)$/);
@@ -63,14 +102,25 @@ async function saveBase64Image(dataUri, filename) {
     throw new Error('无效的 Base64 格式');
   }
 
-  const ext = matches[1] === 'jpeg' ? '.jpg' : `.${matches[1]}`;
+  // MIME 白名单 + 固定扩展名（不用 data URI 里声明的任意类型）
+  const mime = `image/${matches[1]}`;
+  const ext = EXT_BY_MIME[mime];
+  if (!ext) {
+    throw new Error('不支持的文件类型');
+  }
+
   const buffer = Buffer.from(matches[2], 'base64');
 
   if (buffer.length > MAX_BASE64_SIZE) {
     throw new Error('文件大小超过限制 (10MB)');
   }
+  // 魔数校验：拒绝伪造类型（防存储型 XSS）
+  if (!isMagicMatch(buffer, mime)) {
+    throw new Error('文件内容与类型不符');
+  }
 
-  const finalFilename = filename || `${crypto.randomUUID()}${ext}`;
+  // 🔴 文件名完全服务端生成：用户传入的 filename（如 ../../x.js）不再参与路径拼接（防路径穿越）
+  const finalFilename = `${crypto.randomUUID()}${ext}`;
   const filepath = path.join(UPLOAD_DIR, finalFilename);
   fs.writeFileSync(filepath, buffer);
 

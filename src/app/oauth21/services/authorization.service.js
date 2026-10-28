@@ -205,15 +205,19 @@ class AuthorizationService {
     // 这也正是原先那个只写了 `throw err` 的空 try/catch 被移除的原因。
     const validated = await this.validateAuthorizeRequest(request.query);
     const sessionId = uuidv4();
-    await sessionStore.set(sessionId, {
-      ...validated,
-      query: request.query,
-      createdAt: Date.now()
-    });
 
     // 使用 session 验证用户身份（非 Cookie 直接信任）
     const user = request.state?.user;
     const userId = user?.sub;
+
+    await sessionStore.set(sessionId, {
+      ...validated,
+      query: request.query,
+      // 🔴 已认证用户身份必须绑定进服务端 session：
+      // consent 阶段一律以这里为准，绝不信任请求体里的 user_id（否则任意用户可为他人签发授权码）。
+      userId: userId || null,
+      createdAt: Date.now()
+    });
 
     if (!userId) {
       return reply.send({
@@ -301,6 +305,9 @@ class AuthorizationService {
       });
     }
 
+    // 登录成功后把已认证身份绑定进服务端 session，consent 阶段以此为唯一身份来源
+    await sessionStore.set(sessionId, { ...session, userId: user.id });
+
     const approval = await ApprovalDao.getEffectiveApproval(user.id, session.client.client_id);
     if (approval) {
       return await this.issueCodeAndRedirect(reply, sessionId, user.id, sessionStore);
@@ -325,13 +332,24 @@ class AuthorizationService {
    * 用户 approve/deny → deny 则重定向 access_denied，approve 则存授权记录并签发 code 重定向。
    */
   async handleAuthorizeConsent(request, reply, sessionStore) {
-    const { sessionId, user_id, action } = request.body;
+    const { sessionId, action } = request.body;
     const session = await sessionStore.get(sessionId);
     if (!session) {
       return reply.code(400).send({
         code: 400,
         message: '会话无效',
         data: null
+      });
+    }
+
+    // 🔴 身份只认服务端 session 里绑定的 userId，绝不信任请求体中的 user_id
+    //（此前直接信任 body.user_id，任何登录用户可为任意用户签发授权码 = 账号接管）。
+    const userId = session.userId;
+    if (!userId) {
+      return reply.code(401).send({
+        code: 401,
+        message: '授权会话未绑定用户，请先登录',
+        data: { action: 'login', sessionId }
       });
     }
 
@@ -344,14 +362,14 @@ class AuthorizationService {
     }
 
     await ApprovalDao.saveApproval({
-      uid: user_id,
+      uid: userId,
       appId: session.client.client_id,
       scopes: session.scope.split(' ')
     });
 
     // 签发 code，返回 redirect_url（前端 window.location.href 跳转，绕过 XHR 跨域限制）
     const code = await this.issueAuthorizationCode({
-      userId: user_id,
+      userId,
       clientId: session.client.client_id,
       scope: session.scope,
       redirectUri: session.query.redirect_uri,

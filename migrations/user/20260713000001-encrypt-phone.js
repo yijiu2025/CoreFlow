@@ -17,9 +17,11 @@ export async function up({ queryInterface, Sequelize }) {
   }
 
   // 动态加载模型和加密函数（需要 process.env.PHONE_ENCRYPT_KEY 已配置）
-  const { default: UserDefine } = await import('../src/models/user/User.js');
-  const { sequelize } = await import('../src/db/index.js');
-  const User = UserDefine(sequelize, Sequelize);
+  // 🔴 路径修正：迁移文件位于 migrations/user/ 下，必须用 ../../src 才能指到仓库根的 src/；
+  // 此前 '../src/...' 会解析到不存在的 migrations/src/，且 src/db/index.js 也不存在（实为 src/framework/db/）。
+  // sequelize 实例直接用迁移框架注入的 queryInterface.sequelize，无需再 import db。
+  const { default: UserDefine } = await import('../../src/models/user/User.js');
+  const User = UserDefine(queryInterface.sequelize, Sequelize);
 
   let count = 0;
   for (const row of rows) {

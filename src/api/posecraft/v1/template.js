@@ -276,7 +276,6 @@ async function registerTemplateRoutes(fastify) {
     handler: async (request, reply) => {
       const { id } = request.params;
       const user = request.state.user;
-      const data = request.body;
 
       const template = await TemplateDao.findById(id);
 
@@ -289,10 +288,38 @@ async function registerTemplateRoutes(fastify) {
         return reply.result.forbidden('无权编辑他人的模板');
       }
 
-      // 修改后如果需要重新审核，在此处将 status 重置为 2（非管理员修改后重置）
       const isAdmin = checkDataPermission({ user_id: -1 }, user);
-      if (data.status === undefined && !isAdmin) {
+
+      // 🔴 字段白名单：只允许更新用户可编辑字段，杜绝 body 透传批量赋值
+      //（此前整个 request.body 直接进 template.update，可改写 user_id/status/likes_count 等敏感列）。
+      const ALLOWED_FIELDS = [
+        'title',
+        'description',
+        'category',
+        'image_url',
+        'thumbnail_url',
+        'pose_data',
+        'tags',
+        'publication_address',
+        'publication_lat',
+        'publication_lng',
+        'publication_source',
+        'work_address',
+        'work_lat',
+        'work_lng',
+        'work_address_source'
+      ];
+      const data = {};
+      for (const key of ALLOWED_FIELDS) {
+        if (request.body[key] !== undefined) data[key] = request.body[key];
+      }
+
+      // 🔴 非管理员修改后一律重新审核：此前仅在 status===undefined 时重置，显式传 status:1
+      // 即可绕过审核直接公开发布。现在非管理员无论传什么都强制 status=2。
+      if (!isAdmin) {
         data.status = 2;
+      } else if (request.body.status !== undefined) {
+        data.status = request.body.status;
       }
 
       const updated = await TemplateDao.update(id, data);

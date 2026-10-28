@@ -41,7 +41,9 @@ class IamDao {
 
     const highestRole = await getModel('UserRole').findOne({
       where: { user_id: user.id, app_id: [appId, 'GLOBAL'] },
-      order: [['role_id', 'DESC']],
+      // 🔴 按角色的 rank_level 降序取最高职级（此前按 role_id DESC 排序，实际取的是最新分配的角色，
+      // 用户同时持有高权角色与后创建的低权角色时会把管理员等级算低，造成权限边界误判）。
+      order: [[{ model: getModel('Role'), as: 'role' }, 'rank_level', 'DESC']],
       include: [{ model: getModel('Role'), as: 'role', attributes: ['rank_level'] }]
     });
     return highestRole?.role?.rank_level || 0;
@@ -71,15 +73,15 @@ class IamDao {
   async getManageableUsers(adminUid, keyword = '') {
     const adminLevel = await this.getMemberLevel(adminUid, 'GLOBAL');
 
-    // 采用下划线表名
+    // 采用下划线表名（与 models/iam 的实际表名一致：iam_user_role / iam_role）
     const query = `
       SELECT 
         u.uid, u.username, u.email, u.status, u.avatar,
         COALESCE(MAX(r.rank_level), 0) AS max_level,
         GROUP_CONCAT(DISTINCT r.name) AS roles
       FROM \`user_user\` u
-      LEFT JOIN \`user_app_user_role\` ur ON u.id = ur.user_id AND ur.deletedAt IS NULL
-      LEFT JOIN \`user_role\` r ON ur.role_id = r.id AND r.deletedAt IS NULL
+      LEFT JOIN \`iam_user_role\` ur ON u.id = ur.user_id AND ur.deletedAt IS NULL
+      LEFT JOIN \`iam_role\` r ON ur.role_id = r.id AND r.deletedAt IS NULL
       WHERE (u.username LIKE :keyword OR u.email LIKE :keyword) AND u.deletedAt IS NULL
       GROUP BY u.id
       HAVING max_level <= :adminLevel
@@ -180,12 +182,12 @@ class IamDao {
     const user = await getModel('User').findOne({ where: { uid } });
     if (!user) return { allows: [], denies: [] };
 
-    // 1. 提取角色策略
+    // 1. 提取角色策略（表名与 models/iam 一致：iam_role / iam_user_role）
     const roles = await sequelize.query(
       `
       SELECT r.policy 
-      FROM user_role r
-      JOIN user_app_user_role ur ON r.id = ur.role_id
+      FROM iam_role r
+      JOIN iam_user_role ur ON r.id = ur.role_id
       WHERE ur.user_id = :userId AND (ur.app_id = :appId OR ur.app_id = 'GLOBAL') 
       AND ur.deletedAt IS NULL AND r.deletedAt IS NULL
       AND (ur.expire_at IS NULL OR ur.expire_at > NOW())

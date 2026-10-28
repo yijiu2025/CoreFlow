@@ -5,6 +5,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
+import crypto from 'node:crypto';
 import emailService from '../../notice/services/email.js';
 import config from '../config.js';
 
@@ -16,12 +17,14 @@ class EmailService {
 
   /**
    * 生成验证码
+   * 🔴 必须用密码学安全随机（crypto.randomInt）——Math.random 可预测，攻击者能据此推算他人验证码。
    * @param {number} [length=6] 验证码长度
    * @returns {string} 数字验证码
    */
   generateCode(length = 6) {
     const min = Math.pow(10, length - 1);
-    return Math.floor(min + Math.random() * 9 * min).toString();
+    // randomInt(min, max) 是 [min, max) 半开区间：max 取 10^length 才能覆盖到 999…9
+    return crypto.randomInt(min, Math.pow(10, length)).toString();
   }
 
   /**

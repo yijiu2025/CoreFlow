@@ -13,7 +13,7 @@
  * @author yijiu2025
  * @since 2026-08-23
  */
-import { getModel } from '../../../framework/db/index.js';
+import { getModel, sequelize } from '../../../framework/db/index.js';
 import { Op } from 'sequelize';
 import deactivationDao from '../dao/deactivation.js';
 import { DEACTIVATION_SCOPE, DEACTIVATION_STATUS } from '../dao/deactivation.js';
@@ -189,49 +189,57 @@ class DeactivationService {
   async executeAllDeactivation(userId, uid) {
     const result = { oauth_approval: 0, oauth_consents: 0, oauth_tokens: 0, session_tokens: 0, user_deleted: false };
 
-    // 1. 清所有 OAuth 授权（sub=uid）
-    const OauthApproval = getModel('oauth21.OauthApproval');
-    if (OauthApproval) {
-      result.oauth_approval = await OauthApproval.destroy({ where: { sub: uid } });
-    }
-    const OauthConsent = getModel('oauth21.OauthConsent');
-    if (OauthConsent) {
-      result.oauth_consents = await OauthConsent.destroy({ where: { sub: uid } });
-    }
-    const OauthToken = getModel('oauth21.OauthToken');
-    if (OauthToken) {
-      const [affected] = await OauthToken.update({ revoked: true }, { where: { sub: uid, revoked: false } });
-      result.oauth_tokens = affected || 0;
-    }
+    // 🔴 破坏性多表写入必须在一个事务内：此前无事务，中途失败会留下「半注销」状态
+    //（OAuth 已清、identity 已删、user 未软删 → 用户还能登录部分应用但数据不完整）。
+    await sequelize.transaction(async transaction => {
+      // 1. 清所有 OAuth 授权（sub=uid）
+      const OauthApproval = getModel('oauth21.OauthApproval');
+      if (OauthApproval) {
+        result.oauth_approval = await OauthApproval.destroy({ where: { sub: uid }, transaction });
+      }
+      const OauthConsent = getModel('oauth21.OauthConsent');
+      if (OauthConsent) {
+        result.oauth_consents = await OauthConsent.destroy({ where: { sub: uid }, transaction });
+      }
+      const OauthToken = getModel('oauth21.OauthToken');
+      if (OauthToken) {
+        const [affected] = await OauthToken.update(
+          { revoked: true },
+          { where: { sub: uid, revoked: false }, transaction }
+        );
+        result.oauth_tokens = affected || 0;
+      }
 
-    // 2. 吊销所有 session_tokens + 踢所有 Redis session
-    result.session_tokens = await this.revokeAllSessions(userId);
+      // 2. 软删 user_user（status=-1 已注销，配合 delete_version 软删除钩子）
+      const User = getModel('User');
+      if (User) {
+        // 先显式软删 user_identity：Sequelize 的 hasMany 关联级联软删（hooks:true）
+        // 只在 user.destroy 预加载 include 时才触发，此处未 include，级联不跑，
+        // user_identity 会遗留（deleted_at=null/delete_version=0），其唯一索引
+        // uk_identity_type_identifier=(identity_type,identifier,delete_version)
+        // 占着 (password,email,0) 坑 → 邮箱无法重新注册（ER_DUP_ENTRY 被翻译成"邮箱已存在"）。
+        // 逐条 instance.destroy 触发 beforeDestroy 钩子写 delete_version=id，释放唯一索引。
+        const UserIdentity = getModel('UserIdentity');
+        if (UserIdentity) {
+          const identities = await UserIdentity.findAll({ where: { user_id: userId }, transaction });
+          for (const id of identities) {
+            await id.destroy({ transaction });
+          }
+        }
 
-    // 3. 软删 user_user（status=-1 已注销，配合 delete_version 软删除钩子）
-    const User = getModel('User');
-    if (User) {
-      // 先显式软删 user_identity：Sequelize 的 hasMany 关联级联软删（hooks:true）
-      // 只在 user.destroy 预加载 include 时才触发，此处未 include，级联不跑，
-      // user_identity 会遗留（deleted_at=null/delete_version=0），其唯一索引
-      // uk_identity_type_identifier=(identity_type,identifier,delete_version)
-      // 占着 (password,email,0) 坑 → 邮箱无法重新注册（ER_DUP_ENTRY 被翻译成"邮箱已存在"）。
-      // 逐条 instance.destroy 触发 beforeDestroy 钩子写 delete_version=id，释放唯一索引。
-      const UserIdentity = getModel('UserIdentity');
-      if (UserIdentity) {
-        const identities = await UserIdentity.findAll({ where: { user_id: userId }, transaction: undefined });
-        for (const id of identities) {
-          await id.destroy();
+        const user = await User.findByPk(userId, { transaction });
+        if (user) {
+          user.status = -1; // 标记已注销
+          await user.save({ transaction }); // 先保存 status
+          await user.destroy({ transaction }); // 软删除（paranoid + delete_version 钩子）
+          result.user_deleted = true;
         }
       }
+    });
 
-      const user = await User.findByPk(userId);
-      if (user) {
-        user.status = -1; // 标记已注销
-        await user.save(); // 先保存 status
-        await user.destroy(); // 软删除（paranoid + delete_version 钩子）
-        result.user_deleted = true;
-      }
-    }
+    // 3. 事务提交成功后再吊销所有 session（DB revoke + Redis 踢下线）。
+    // Redis 无法回滚，故放在事务外；revoke 幂等，失败只记日志不阻断注销。
+    result.session_tokens = await this.revokeAllSessions(userId);
 
     return result;
   }
