@@ -49,7 +49,19 @@ const RETROWEB_PERMISSIONS = createPermissionRegistry('retroweb', 'RetroWeb 逆�
 
   // F. 管理
   ADMIN: {
-    TASK_ANY: { code: 'retroweb:admin:task_any', label: '查看并管理他人任务', type: 'high_risk' }
+    TASK_ANY: { code: 'retroweb:admin:task_any', label: '查看并管理他人任务', type: 'high_risk' },
+    /**
+     * 配置**本部署启用哪些模型**（走 Node 中转时的模型启用清单）。
+     *
+     * 🔴 为什么是管理权限而不是普通功能：模型服务是**部署级共享资源**（占显存 / 内存、
+     *    起一个要 40~90 秒），"能用哪些模型"是运维决策，不该由每个用户各自决定。
+     *    走 Node 中转后前端**不再负责启停模型**（见 `docs/plan-node-backend.md` §6.7/§6.8），
+     *    改由持本权限的人在管理侧配置启用清单；普通用户只看到"哪些可用"。
+     *
+     * ⚠️ 判定一律用本权限码，**不要写死 `superadmin`** —— 权限可单独授予，
+     *    写死角色码会让"给某个用户单独放行"变成改代码（见本文件头部）。
+     */
+    MODEL: { code: 'retroweb:admin:model', label: '配置启用哪些模型', type: 'high_risk' }
   }
 });
 

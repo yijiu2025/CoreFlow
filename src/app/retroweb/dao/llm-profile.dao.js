@@ -56,6 +56,52 @@ function decryptKeys(keysEnc) {
     .filter(Boolean);
 }
 
+/**
+ * 🔴 掩码合并：把前端回传的 `keys` 与库里**已有明文**合成一份可落库的明文。
+ *
+ * 为什么必须在这里做（而不是让前端绕过）：
+ *   前端拿到的永远是 `toSafeProfile` 的**掩码**（`****ab3f`），它没有、也不该有明文。
+ *   面板的既有约定是「元素含 `*` = 保留那把原 key，不含 `*` = 新增」（Python 侧
+ *   `api_keys` 语义）。若把含 `*` 的串直接加密落库，真 key 会被**自己的掩码覆盖**、
+ *   永久不可恢复（实测见 `.tmp-probe/verify-llm-profile-keyroundtrip.mjs`）。
+ *   只有本层能用 `decryptKeys` 拿到旧明文把掩码换回去，所以修法只能落在这里。
+ *
+ * 规则（与 Python 侧 `llm_settings` 的掩码往返一致）：
+ *   · 含 `*` = 掩码 ⇒ 依次用**旧明文**顶上；旧明文不够则该项**丢弃**
+ *     （宁可少一把，也不要把掩码当 key 存进去）。
+ *   · 不含 `*` = 明文新增 ⇒ 原样采用（重复的只留一次）。
+ *   · `keys` 未传（undefined）⇒ **不动旧 key**（调用方只想改地址/模型名）。
+ *
+ * @param {string[]|undefined} incoming 前端回传的 keys
+ * @param {string[]} existing 库里已有的明文
+ * @returns {string[]} 要落库的明文
+ */
+function mergeKeys(incoming, existing) {
+  if (incoming === undefined || incoming === null) return existing;
+  if (!Array.isArray(incoming)) return existing;
+
+  const out = [];
+  let cursor = 0; // 旧明文游标：掩码按出现顺序依次对应旧 key
+  const push = k => {
+    const v = typeof k === 'string' ? k.trim() : '';
+    if (v && !out.includes(v)) out.push(v);
+  };
+
+  for (const item of incoming) {
+    if (typeof item !== 'string') continue;
+    const v = item.trim();
+    if (!v) continue;
+    if (v.includes('*')) {
+      // 掩码：用旧明文顶上；旧的用完就丢弃（绝不把掩码本身存进去）
+      if (cursor < existing.length) push(existing[cursor]);
+      cursor++;
+    } else {
+      push(v); // 明文新增
+    }
+  }
+  return out;
+}
+
 class LlmProfileDao {
   getModel() {
     return getModel('retroweb.LlmProfile');
@@ -80,6 +126,15 @@ class LlmProfileDao {
   async upsert(userId, input, id = null) {
     const model = this.getModel();
 
+    // 🔴 先取旧明文：掩码合并要用它把 `****ab3f` 换回真 key（见 mergeKeys 的说明）。
+    //    必须在写 payload **之前**读 —— update 一旦落库，旧密文就没了。
+    let existingKeys = [];
+    if (id) {
+      const old = await model.findOne({ where: { id, user_id: userId } });
+      existingKeys = decryptKeys(old?.get ? old.get('keys_enc') : null);
+    }
+    const finalKeys = mergeKeys(input.keys, existingKeys);
+
     // 若设为激活，先清掉该用户其它 active（每用户最多一套生效）
     if (input.active) {
       await model.update({ active: false }, { where: { user_id: userId, owner: 'user' } });
@@ -91,8 +146,8 @@ class LlmProfileDao {
       name: input.name ?? '默认',
       base_url: input.base_url ?? '',
       model: input.model ?? '',
-      // 🔴 明文 → 逗号拼接 → 加密后才落库
-      keys_enc: input.keys?.length ? encryptSecret(input.keys.join(',')) : null,
+      // 🔴 明文 → 逗号拼接 → 加密后才落库。finalKeys 已把掩码换回真 key。
+      keys_enc: finalKeys.length ? encryptSecret(finalKeys.join(',')) : null,
       active: !!input.active,
       max_tokens: input.max_tokens ?? null,
       extra_json: input.extra_json ?? null
@@ -126,4 +181,4 @@ class LlmProfileDao {
 const llmProfileDao = new LlmProfileDao();
 
 export default llmProfileDao;
-export { toSafeProfile, maskKey, decryptKeys };
+export { toSafeProfile, maskKey, decryptKeys, mergeKeys };

@@ -22,12 +22,21 @@ async function registerAuthRoutes(fastify) {
   const sessionStore = getStore('session');
   const qrStore = getStore('qr');
 
-  // 安全头处理：允许特定页面被 iframe 嵌入
+  // 🔴 受信父域白名单：与 app.js 的 CORS_ORIGINS 同一套（iframe 嵌入 SSO 的宿主应用）。
+  // 此前写死 frame-ancestors 'self' *（任意站点可 iframe 嵌入登录/注册页 = 点击劫持/钓鱼）。
+  const CORS_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  // 安全头处理：允许特定页面被**受信白名单** iframe 嵌入
   fastify.addHook('onSend', (request, reply, payload, done) => {
     const isMini = request.url.includes('mini-login') || request.url.includes('mini-register');
     if (isMini) {
-      reply.header('X-Frame-Options', 'ALLOWALL');
-      reply.header('Content-Security-Policy', "frame-ancestors 'self' *");
+      // CSP frame-ancestors 优先级高于 X-Frame-Options；白名单为空时只允许同源
+      const ancestors = CORS_ORIGINS.length ? `'self' ${CORS_ORIGINS.join(' ')}` : "'self'";
+      reply.header('Content-Security-Policy', `frame-ancestors ${ancestors}`);
+      reply.header('X-Frame-Options', 'SAMEORIGIN');
     }
     done();
   });

@@ -382,6 +382,11 @@ function setBroadcastHandler(handler) {
  * @param {object} record
  */
 function pushRecord(record) {
+  // 🔒 PII 脱敏：URL 只保留路径，剔除查询串。OAuth 授权码/token、H5 签名参数等
+  // 敏感值绝不能随遥测记录落盘、进内存环形缓冲或刷入 Redis。
+  if (record && typeof record.url === 'string') {
+    record.url = record.url.split('?')[0];
+  }
   records.push(record);
   totalRequests++;
 
@@ -518,9 +523,7 @@ function mergeAggregated(remote, pending) {
   const ips = new Map((remote.ips || []).map(r => [r.ip, r.count]));
   for (const [k, v] of pending.ips) ips.set(k, (ips.get(k) || 0) + v);
 
-  const paths = new Map(
-    (remote.paths || []).map(p => [p.key, { path: p.path, count: p.count, apiName: p.apiName }])
-  );
+  const paths = new Map((remote.paths || []).map(p => [p.key, { path: p.path, count: p.count, apiName: p.apiName }]));
   for (const [k, stat] of pending.paths) {
     const cur = paths.get(k) || { path: stat.path, count: 0, apiName: stat.apiName };
     cur.count += stat.count;

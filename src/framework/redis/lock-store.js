@@ -26,6 +26,7 @@
  * @since 2026-08-06
  */
 
+import crypto from 'node:crypto';
 import { RedisStore } from './redis-store.js';
 import { isRedisConfigured } from './utils.js';
 
@@ -33,9 +34,10 @@ const LOCK_PREFIX = 'lock';
 
 /**
  * 生成唯一实例 ID（进程级别），用于标记锁的持有者
+ * 🔴 用密码学安全随机（crypto.randomUUID）替代 Math.random——锁持有者 ID 可预测/碰撞会导致误释放或冲突。
  */
 function _instanceId() {
-  return `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${process.pid}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 /**

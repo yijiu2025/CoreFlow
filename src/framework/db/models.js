@@ -214,12 +214,25 @@ async function getTableNames() {
 }
 
 /**
+ * 校验表名合法性（只允许 [A-Za-z0-9_]+），防拼接 SQL 时注入反引号
+ * @param {string} tableName - 表名
+ * @returns {string} 校验后的表名
+ */
+function assertSafeTableName(tableName) {
+  if (!/^[A-Za-z0-9_]+$/.test(String(tableName || ''))) {
+    throw new Error(`非法表名: ${tableName}`);
+  }
+  return tableName;
+}
+
+/**
  * 获取表的行数
  * @param {string} tableName - 表名
  * @returns {Promise<number>} 行数
  */
 async function getTableRowCount(tableName) {
-  const [results] = await sequelize.query(`SELECT COUNT(*) as count FROM \`${tableName}\``);
+  const safe = assertSafeTableName(tableName);
+  const [results] = await sequelize.query(`SELECT COUNT(*) as count FROM \`${safe}\``);
   return results[0]?.count || 0;
 }
 
@@ -229,7 +242,8 @@ async function getTableRowCount(tableName) {
  * @returns {Promise<Array>} 列信息数组
  */
 async function getTableColumns(tableName) {
-  const [columns] = await sequelize.query(`DESCRIBE \`${tableName}\``);
+  const safe = assertSafeTableName(tableName);
+  const [columns] = await sequelize.query(`DESCRIBE \`${safe}\``);
   return columns;
 }
 

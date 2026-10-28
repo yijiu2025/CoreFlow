@@ -50,7 +50,7 @@ const defineUser = (sequelize, DataTypes) => {
         type: DataTypes.TEXT, // 使用 TEXT 存储密文（明文≤20 字节，密文约 100+ 字节）
         allowNull: true,
         // 修正：追加了 phone 唯一性安全防线，改用下方的联合唯一索引 uk_phone_delete_version，保证手机号全局唯一且支持软删除
-        comment: '联系手机号（AES-256-CBC 加密存储，格式: base64(IV):base64(ciphertext)）'
+        comment: '联系手机号（AES-256-CBC + HMAC 完整性标签，格式: base64(IV):base64(ciphertext):base64(HMAC)）'
       },
       avatar: {
         type: DataTypes.STRING(255),

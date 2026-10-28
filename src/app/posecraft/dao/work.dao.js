@@ -35,6 +35,11 @@ class WorkDao {
 
     if (options.userId) {
       where.user_id = options.userId;
+      // 🔴 按用户查询同样不得默认暴露非公开作品（此前只在非用户查询时加 status=1）。
+      // 调用方查看「自己」的非公开作品时需显式传 status。
+      if (options.status === undefined) {
+        where.status = 1;
+      }
     } else {
       where.status = 1; // 非用户查询时默认只返回公开作品
     }
@@ -293,7 +298,8 @@ class WorkDao {
           required: false
         }
       ],
-      attributes: { exclude: ['analysis_data', 'delete_version', 'user_id', 'deleted_at'] }
+      // 🔴 user_id 不得 exclude：详情页 isOwner、删除归属、预览可见性都依赖它（此前被排除导致这些判断恒失效）
+      attributes: { exclude: ['analysis_data', 'delete_version', 'deleted_at'] }
     });
   }
 
@@ -326,10 +332,15 @@ class WorkDao {
    * @returns {Promise<boolean>}
    */
   async delete(id, userId) {
-    const work = await this.findById(id);
-    if (!work || work.user_id !== userId) return false;
-    await work.update({ delete_version: id });
-    return true;
+    const model = this.getModel();
+    // 🔴 修复：此前 findById 的 attributes 排除了 user_id，work.user_id 恒为 undefined，
+    // `work.user_id !== userId` 恒真 → 作者永远删不了自己的作品。
+    // 改为带 user_id + delete_version=0 条件的原子更新，既修 bug 又防越权删除。
+    const [affected] = await model.update(
+      { delete_version: id },
+      { where: { id, user_id: userId, delete_version: 0 } }
+    );
+    return affected > 0;
   }
 
   /**

@@ -36,7 +36,9 @@ async function cacheThrough(key, fetchFn, ttl, options = {}) {
   if (cached !== null) return cached;
 
   // 2. 未命中：singleflight 防击穿
-  const lock = createLock(`cache:${prefix}:${key}`, { ttl: Math.min(lockTtl, ttl * 1000) });
+  // 🔴 修复：ttl<=0 时 Math.min(lockTtl, ttl*1000) 得到 0，Redis `PX 0` 非法导致防击穿锁失效。
+  const lockTtlMs = Math.max(1000, Math.min(lockTtl, ttl * 1000 || lockTtl));
+  const lock = createLock(`cache:${prefix}:${key}`, { ttl: lockTtlMs });
   const acquired = await lock.tryAcquire();
 
   if (!acquired) {

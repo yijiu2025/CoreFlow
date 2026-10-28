@@ -29,8 +29,12 @@ class ChannelDao {
       where: {
         enabled: true,
         delete_version: 0,
-        [Op.or]: [{ start_at: null }, { start_at: { [Op.lte]: now } }],
-        [Op.or]: [{ end_at: null }, { end_at: { [Op.gte]: now } }]
+        // 🔴 修复：此前对象字面量两处 [Op.or] 键互相覆盖（后写的 end_at 覆盖 start_at），
+        // 未到开始时间的频道会提前展示。改为 [Op.and] 组合两个独立条件。
+        [Op.and]: [
+          { [Op.or]: [{ start_at: null }, { start_at: { [Op.lte]: now } }] },
+          { [Op.or]: [{ end_at: null }, { end_at: { [Op.gte]: now } }] }
+        ]
       },
       order: [
         ['sort_order', 'DESC'],

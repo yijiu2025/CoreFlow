@@ -63,10 +63,10 @@ class UserDao {
 
     const roleIds = request.body.role_ids || [];
     if (roleIds.length > 0) {
-      for (const id of roleIds) {
-        const role = await getModel('Role').findByPk(id);
-        if (!role) throw new Error(`NOT_FOUND:角色[${id}]不存在`);
-      }
+      // 🔴 N+1 修复：此前逐个 findByPk；改为一次 count 与数量比对
+      const { Op } = await import('sequelize');
+      const count = await getModel('Role').count({ where: { id: { [Op.in]: roleIds } } });
+      if (count !== roleIds.length) throw new Error('NOT_FOUND:存在无效的角色ID');
     }
 
     return await this.registerUser(request);

@@ -107,10 +107,22 @@ async function runDown() {
  */
 async function runDownTo(targetName) {
   const executed = await umzug.executed();
-  const target = executed.find(m => m.name === targetName || m.name.endsWith(targetName));
+  // 🔴 精确匹配优先：此前 endsWith 模糊匹配命中多个迁移时取第一个，可能回滚非预期版本。
+  const exact = executed.find(m => m.name === targetName);
+  const fuzzy = executed.filter(m => m.name.endsWith(targetName));
+  let target = exact;
+  if (!exact && fuzzy.length === 1) {
+    target = fuzzy[0];
+  } else if (!exact && fuzzy.length > 1) {
+    log.error(`[Migrate] ${targetName} 匹配到 ${fuzzy.length} 个迁移，请提供完整名称：`);
+    for (const m of fuzzy) log.error(`  - ${m.name}`);
+    setTimeout(() => process.exit(1), 100);
+    return;
+  }
   if (!target) {
     log.error(`[Migrate] 未找到已执行的迁移: ${targetName}`);
     setTimeout(() => process.exit(1), 100);
+    return;
   }
   const migrations = await umzug.down({ to: target.name });
   if (migrations.length === 0) {

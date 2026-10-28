@@ -13,6 +13,17 @@ const smsConfig = config.sms;
 
 class SmsDao {
   /**
+   * 手机号脱敏：138****1234
+   * @param {string} phone 完整手机号
+   * @returns {string} 掩码后的手机号
+   */
+  maskPhone(phone) {
+    const p = String(phone || '');
+    if (p.length <= 7) return `${p.slice(0, 1)}****`;
+    return `${p.slice(0, 3)}****${p.slice(-4)}`;
+  }
+
+  /**
    * 发送短信验证码
    * @param {string} phone 手机号
    * @param {string} sessionId 会话标识
@@ -21,7 +32,8 @@ class SmsDao {
    */
   async sendCode(phone, sessionId, store) {
     const code = smsService.generateCode();
-    Logger.info(`[Verify] 发送短信验证码: ${phone}, 会话: ${sessionId}`);
+    // 🔴 PII 脱敏：不落完整手机号
+    Logger.info(`[Verify] 发送短信验证码: ${this.maskPhone(phone)}`);
 
     // 频率限制检查
     const current = await store.get(phone);
@@ -56,8 +68,22 @@ class SmsDao {
       throw new Error('PARAM_ERROR:手机号和验证码不能为空');
     }
 
+    // 🔴 爆破防护：失败尝试次数上限 5 次，达到即作废验证码（此前 6 位码在 TTL 内可无限重试）
+    const MAX_ATTEMPTS = 5;
     const info = await store.get(phone);
-    if (!info || info.code !== code) {
+    if (!info) {
+      throw new Error('VERIFY_FAILED:验证码错误或已过期');
+    }
+
+    const attempts = (info.attempts || 0) + 1;
+    if (attempts > MAX_ATTEMPTS) {
+      await store.delete(phone);
+      throw new Error('VERIFY_FAILED:尝试次数过多，请重新获取验证码');
+    }
+
+    if (info.code !== code) {
+      const remainingSec = Math.max(1, Math.ceil(smsConfig.ttl - (Date.now() - info.sentAt) / 1000));
+      await store.set(phone, { ...info, attempts }, remainingSec);
       throw new Error('VERIFY_FAILED:验证码错误或已过期');
     }
 

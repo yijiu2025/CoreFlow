@@ -190,32 +190,41 @@ function _createRedisQueue(prefix, maxSize, dataTtl, timeout) {
 
   return {
     async push(data) {
-      const m = await _meta();
-      const len = m.tail - m.head;
+      // 🔴 原子写入 + key 前缀修正：
+      // 1) 此前「读 _metaCache + MULTI 写」不是原子的——多实例并发读到同一 tail，后写覆盖先写（丢消息）；
+      // 2) 此前 data key 用裸 `data:N`（store.call 的裸客户端不加前缀），而 shift 用 store.getDel
+      //    自动加前缀 `prefix:data:N`，两者对不上——Redis 后端下 push 的数据 shift 根本读不到。
+      // 现在用 Lua 脚本在 Redis 内原子完成「读 meta → 上限检查 → 写 data → 更新 meta」，
+      // 且 data/meta key 统一带 prefix。
+      const metaKey = `${prefix}:meta`;
+      const dataKeyPrefix = `${prefix}:data:`;
+      const payload = JSON.stringify({ data, createdAt: Date.now() });
 
-      if (len >= maxSize) {
-        // 先检查实际数据量，如果只剩 meta 说明队列已空，重置指针
-        const remaining = await store.size();
-        if (remaining <= 1) {
-          m.head = 0;
-          m.tail = 0;
-        } else {
-          throw new TypeError(`Queue[${prefix}]: 已达上限 ${maxSize}，拒绝写入`);
-        }
+      const script = `
+        local metaRaw = redis.call('GET', KEYS[1])
+        local m = cjson.decode(metaRaw or '{"head":0,"tail":0}')
+        local len = m.tail - m.head
+        if len >= tonumber(ARGV[1]) then
+          return -1
+        end
+        local dkey = KEYS[2] .. m.tail
+        redis.call('SET', dkey, ARGV[2])
+        if tonumber(ARGV[3]) > 0 then
+          redis.call('EXPIRE', dkey, tonumber(ARGV[3]))
+        end
+        m.tail = m.tail + 1
+        redis.call('SET', KEYS[1], cjson.encode(m))
+        return m.tail - m.head
+      `;
+
+      const result = await store.call(redis =>
+        redis.eval(script, 2, metaKey, dataKeyPrefix, String(maxSize), payload, String(dataTtl))
+      );
+
+      if (Number(result) === -1) {
+        throw new TypeError(`Queue[${prefix}]: 已达上限 ${maxSize}，拒绝写入`);
       }
-
-      // MULTI 原子写入：data + meta 在一次往返中完成
-      await store.call(redis => {
-        const multi = redis
-          .multi()
-          .set(`data:${m.tail}`, JSON.stringify({ data, createdAt: Date.now() }))
-          .set('meta', JSON.stringify({ head: m.head, tail: m.tail + 1 }));
-        if (dataTtl > 0) multi.expire(`data:${m.tail}`, dataTtl);
-        return multi.exec();
-      });
-      m.tail++;
-      _saveMeta({ head: m.head, tail: m.tail });
-      return m.tail - m.head;
+      return Number(result);
     },
 
     async tryPush(data) {

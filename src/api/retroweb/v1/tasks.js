@@ -257,6 +257,7 @@ async function registerTaskRoutes(fastify) {
         properties: {
           items: {
             type: 'array',
+            maxItems: 500, // 🔴 上限：此前无限制，可一次导入海量条目拖慢服务
             items: {
               type: 'object',
               required: ['client_id', 'target'],

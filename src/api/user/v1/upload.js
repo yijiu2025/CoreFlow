@@ -11,6 +11,9 @@
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { processAndUploadAvatar, AvatarError } from '../../../app/user/services/avatar.service.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('api.user.upload');
 
 async function registerUploadRoutes(fastify) {
   registerGroupMetadata({
@@ -62,9 +65,11 @@ async function registerUploadRoutes(fastify) {
             data: null
           });
         }
+        // 内部错误不向客户端回显原始错误（避免泄露内部路径/堆栈），只记录日志
+        log.error('头像上传失败', err);
         return reply.code(500).send({
           code: 500,
-          message: '头像上传失败: ' + err.message,
+          message: '头像上传失败，请稍后重试',
           data: null
         });
       }

@@ -161,6 +161,14 @@ async function registerTemplateRoutes(fastify) {
         return reply.code(404).send('Template not found');
       }
 
+      // 🔴 越权修复：非公开/审核中的模板，预览图同样只允许作者或管理员访问
+      //（此前预览接口不校验 status/归属，可获取未公开内容的渲染结果）。
+      const user = request.state?.user;
+      const isAdmin = checkDataPermission({ user_id: -1 }, user);
+      if (template.status !== 1 && template.user_id !== user?.userId && !isAdmin) {
+        return reply.code(403).send('Forbidden');
+      }
+
       // 委托 preview.js 合成透明背景 + 骨骼 SVG 的 PNG
       const buffer = await composeTemplatePreview(template);
       reply.type('image/png');

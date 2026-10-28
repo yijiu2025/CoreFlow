@@ -5,7 +5,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import { getModel } from '../../../framework/db/index.js';
+import { getModel, sequelize } from '../../../framework/db/index.js';
 
 class InteractionDao {
   /**
@@ -118,13 +118,20 @@ class InteractionDao {
       if (existing) {
         return { success: true, liked: true, message: '已点赞' };
       }
-      // 创建记录
-      await Like.create({
-        user_id: userId,
-        work_id: workId || null,
-        template_id: templateId || null,
-        delete_version: 0
+      // 原子创建：依赖 (user_id, work_id/template_id, delete_version) 唯一索引，
+      // 并发重复点赞时只有一次真正插入，计数也只加一次。
+      const [, created] = await Like.findOrCreate({
+        where,
+        defaults: {
+          user_id: userId,
+          work_id: workId || null,
+          template_id: templateId || null,
+          delete_version: 0
+        }
       });
+      if (!created) {
+        return { success: true, liked: true, message: '已点赞' };
+      }
       // 递增点赞数
       if (workId) {
         await Work.increment('likes_count', { by: 1, where: { id: workId } });
@@ -136,9 +143,19 @@ class InteractionDao {
       if (!existing) {
         return { success: true, liked: false, message: '未点赞' };
       }
-      // 软删除记录
-      await existing.update({ delete_version: existing.id });
-      await existing.destroy();
+      // 原子取消点赞：一条条件 UPDATE 同时完成「释放唯一索引槽位（delete_version=id）
+      // + 软删除（deleted_at）」。并发取消时只会有一行受影响，计数也只减一次，
+      // 避免 check-then-act 竞态导致计数被重复扣减。
+      const [affected] = await Like.update(
+        {
+          delete_version: sequelize.literal('id'),
+          deletedAt: new Date()
+        },
+        { where: { ...where, deletedAt: null } }
+      );
+      if (affected === 0) {
+        return { success: true, liked: false, message: '未点赞' };
+      }
       // 递减点赞数
       if (workId) {
         await Work.increment('likes_count', { by: -1, where: { id: workId } });

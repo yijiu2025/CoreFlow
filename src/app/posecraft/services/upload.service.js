@@ -28,6 +28,18 @@ const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 /** Base64 上传最大 10MB */
 const MAX_BASE64_SIZE = 10 * 1024 * 1024;
 
+/**
+ * 上传业务错误（用户可读、可安全返回给客户端的错误）
+ * 仅用于"预期的业务校验失败"；内部错误（写盘失败、解析失败等）请抛普通 Error，
+ * 由路由层记日志后统一返回通用提示，避免泄露内部路径/堆栈。
+ */
+class UploadError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'UploadError';
+  }
+}
+
 /** 常见图片魔数，用于校验真实文件头（不信任客户端声明的 mimetype） */
 const MAGIC_BYTES = [
   { mime: 'image/jpeg', bytes: [0xff, 0xd8, 0xff] },
@@ -61,18 +73,18 @@ if (!fs.existsSync(UPLOAD_DIR)) {
  */
 async function saveUploadFile(file) {
   if (!ALLOWED_TYPES.includes(file.mimetype)) {
-    throw new Error('不支持的文件类型');
+    throw new UploadError('不支持的文件类型');
   }
 
   const buffer = await file.toBuffer();
 
   // 大小上限：先拒超限文件，避免全量读入内存被滥用
   if (buffer.length > MAX_UPLOAD_SIZE) {
-    throw new Error('文件大小超过限制 (10MB)');
+    throw new UploadError('文件大小超过限制 (10MB)');
   }
   // 魔数校验：拒绝「声明 image/png 实为 .html/.svg/.js」的伪造类型（防存储型 XSS）
   if (!isMagicMatch(buffer, file.mimetype)) {
-    throw new Error('文件内容与类型不符');
+    throw new UploadError('文件内容与类型不符');
   }
 
   // 文件名完全服务端生成：扩展名只从 MIME 白名单映射，绝不用用户文件名（防路径穿越）
@@ -99,24 +111,24 @@ async function saveUploadFile(file) {
 async function saveBase64Image(dataUri, filename) {
   const matches = dataUri.match(/^data:image\/(\w+);base64,(.+)$/);
   if (!matches) {
-    throw new Error('无效的 Base64 格式');
+    throw new UploadError('无效的 Base64 格式');
   }
 
   // MIME 白名单 + 固定扩展名（不用 data URI 里声明的任意类型）
   const mime = `image/${matches[1]}`;
   const ext = EXT_BY_MIME[mime];
   if (!ext) {
-    throw new Error('不支持的文件类型');
+    throw new UploadError('不支持的文件类型');
   }
 
   const buffer = Buffer.from(matches[2], 'base64');
 
   if (buffer.length > MAX_BASE64_SIZE) {
-    throw new Error('文件大小超过限制 (10MB)');
+    throw new UploadError('文件大小超过限制 (10MB)');
   }
   // 魔数校验：拒绝伪造类型（防存储型 XSS）
   if (!isMagicMatch(buffer, mime)) {
-    throw new Error('文件内容与类型不符');
+    throw new UploadError('文件内容与类型不符');
   }
 
   // 🔴 文件名完全服务端生成：用户传入的 filename（如 ../../x.js）不再参与路径拼接（防路径穿越）
@@ -131,4 +143,4 @@ async function saveBase64Image(dataUri, filename) {
   };
 }
 
-export { saveUploadFile, saveBase64Image };
+export { saveUploadFile, saveBase64Image, UploadError };

@@ -80,13 +80,24 @@ async function getPublicKey(kid) {
 /**
  * 从 JWT header 的 kid 获取公钥（供 verify 使用）
  *
- * kid 为空时回退到当前密钥；当前密钥也不存在则自动生成。
+ * 🔴 验签路径**绝不**自动生成密钥：无 kid 且无当前密钥时直接报错。
+ * 此前会走到 getPublicKey 的自动生成分支 —— 攻击者可用无 kid 的伪造 token
+ * 触发 2048 位 RSA 生成并写库，冷启动并发即可打满 CPU/DB。
+ * 密钥初始化由启动加载器（loader 07-keys）负责，验签时缺失说明配置错误。
  *
  * @param {string} [kid] - JWT header 的 kid
  * @returns {Promise<{pem: string, kid: string}>}
+ * @throws {Error} 无当前密钥
  */
 async function getPublicKeyByKid(kid) {
-  return getPublicKey(kid);
+  const resolvedKid = kid || getCurrentKid();
+  if (!resolvedKid) {
+    throw new Error('无可用的当前密钥，验签失败（请检查密钥初始化）');
+  }
+  let key = getCachedKey(resolvedKid);
+  if (!key) key = await loadKey(resolvedKid);
+  if (!key) throw new Error(`密钥对 "${resolvedKid}" 不存在或已退役`);
+  return { pem: key.publicKey, kid: resolvedKid };
 }
 
 /**

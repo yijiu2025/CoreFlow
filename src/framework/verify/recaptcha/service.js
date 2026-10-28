@@ -22,6 +22,18 @@ const VERIFY_RESULT = {
 
 class RecaptchaService {
   /**
+   * 🔴 未配置时是否放行：生产必须 fail-closed（宁可拒绝也不静默绕过人机校验），
+   * 非生产放行以便本地开发。
+   */
+  _missingKeyResult(logMsg) {
+    log.warn(logMsg);
+    if (process.env.NODE_ENV === 'production') {
+      return { success: false, error: 'not_configured' };
+    }
+    return { success: true };
+  }
+
+  /**
    * 验证 reCAPTCHA token
    * @param {string} token 前端传入的 reCAPTCHA token
    * @param {string} [remoteIp] 客户端 IP（可选）
@@ -42,8 +54,7 @@ class RecaptchaService {
       case 'turnstile':
         return await this._verifyTurnstile(token, remoteIp);
       default:
-        log.warn(`[Recaptcha] 未知服务商: ${provider}，跳过验证`);
-        return { success: true };
+        return this._missingKeyResult(`[Recaptcha] 未知服务商: ${provider}，拒绝验证`);
     }
   }
 
@@ -54,8 +65,7 @@ class RecaptchaService {
   async _verifyGoogle(token, remoteIp) {
     const secretKey = recaptchaConfig.secretKey;
     if (!secretKey) {
-      log.warn('[Recaptcha] RECAPTCHA_SECRET_KEY 未配置，跳过验证');
-      return { success: true };
+      return this._missingKeyResult('[Recaptcha] RECAPTCHA_SECRET_KEY 未配置');
     }
 
     try {
@@ -67,7 +77,9 @@ class RecaptchaService {
 
       const res = await fetch('https://www.google.com/recaptcha/api/siteverify', {
         method: 'POST',
-        body: params
+        body: params,
+        // 🔴 必须限时：上游不可达时请求不能无限挂起（此前无超时）
+        signal: AbortSignal.timeout(3000)
       });
 
       const data = await res.json();
@@ -99,8 +111,7 @@ class RecaptchaService {
   async _verifyHcaptcha(token, remoteIp) {
     const secretKey = recaptchaConfig.secretKey;
     if (!secretKey) {
-      log.warn('[Recaptcha] RECAPTCHA_SECRET_KEY 未配置，跳过验证');
-      return { success: true };
+      return this._missingKeyResult('[Recaptcha] RECAPTCHA_SECRET_KEY 未配置');
     }
 
     try {
@@ -115,7 +126,8 @@ class RecaptchaService {
 
       const res = await fetch('https://api.hcaptcha.com/siteverify', {
         method: 'POST',
-        body: params
+        body: params,
+        signal: AbortSignal.timeout(3000)
       });
 
       const data = await res.json();
@@ -143,8 +155,7 @@ class RecaptchaService {
     // 独立 secret key（不与 hcaptcha/google 混用）
     const secretKey = recaptchaConfig.turnstileSecretKey;
     if (!secretKey) {
-      log.warn('[Turnstile] TURNSTILE_SECRET_KEY 未配置，跳过验证（生产环境必须配）');
-      return { success: true };
+      return this._missingKeyResult('[Turnstile] TURNSTILE_SECRET_KEY 未配置');
     }
 
     try {
@@ -156,7 +167,8 @@ class RecaptchaService {
 
       const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
         method: 'POST',
-        body: params
+        body: params,
+        signal: AbortSignal.timeout(3000)
       });
 
       const data = await res.json();

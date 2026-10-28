@@ -446,15 +446,19 @@ const RedisStore = {
   },
 
   /**
-   * 清空所有 RedisStore 数据
-   * 使用 SCAN 遍历所有 key，按 prefix 筛选后批量删除
-   * 注意：此操作不调用 FLUSHDB，仅删除符合 prefix:* 模式的键
+   * 清空指定命名空间下所有数据（与 destroy 等价，语义对齐 MapStore.clear：只清当前前缀）
+   * 使用 SCAN + DEL 逐步删除，避免 KEYS 阻塞
+   * 注意：此操作不调用 FLUSHDB，仅删除符合 `prefix:*` 模式的键，不会误删其他命名空间
+   * @param {string} prefix - 命名空间（必填，拒绝全局清空）
    * @param {number} [timeout] - 超时毫秒，默认 3000
    * @returns {Promise<number>} 删除的键数量
    * @throws {RedisRequiredError} Redis 不可用时
    */
-  async clear(timeout, useBackup) {
-    const redis = _getRedis('clear', '*', useBackup);
+  async clear(prefix, timeout, useBackup) {
+    // fail-safe：不传前缀时拒绝执行，防止误清整个 Redis DB
+    _validateInput(prefix);
+    const redis = _getRedis('clear', prefix, useBackup);
+    const pattern = _keyPattern(prefix);
     let deleted = 0;
     let cursor = 0;
     const deadline = Date.now() + (timeout ?? REDIS_OP_TIMEOUT);
@@ -462,12 +466,12 @@ const RedisStore = {
     try {
       do {
         if (Date.now() + MIN_REMAINING >= deadline) {
-          _log(`[RedisStore] CLEAR 达到总超时，已删除 ${deleted} 个键`);
+          _log(`[RedisStore] CLEAR ${prefix} 达到总超时，已删除 ${deleted} 个键`);
           break;
         }
         const remaining = deadline - Date.now();
         const [nextCursor, batch] = await withTimeoutPromise(
-          redis.scan(cursor, { MATCH: '*:*', COUNT: 500 }),
+          redis.scan(cursor, { MATCH: pattern, COUNT: 500 }),
           remaining
         );
         cursor = nextCursor;
@@ -476,10 +480,10 @@ const RedisStore = {
           deleted += count;
         }
       } while (cursor !== 0);
-      _log(`[RedisStore] CLEAR → 删除 ${deleted} 个键`);
+      _log(`[RedisStore] CLEAR ${prefix} → 删除 ${deleted} 个键`);
       return deleted;
     } catch (err) {
-      _wrapRedisError(err, 'clear', '*');
+      _wrapRedisError(err, 'clear', prefix);
     }
   },
 
@@ -860,7 +864,7 @@ function getRedisStore(resolvedPrefix, timeout, useBackup) {
     mget: keys => RedisStore.mget(resolvedPrefix, keys, timeout),
     mset: (entries, ttl) => RedisStore.mset(resolvedPrefix, entries, ttl, timeout),
     destroy: () => RedisStore.destroy(resolvedPrefix, timeout, useBackup),
-    clear: () => RedisStore.clear(timeout, useBackup),
+    clear: () => RedisStore.clear(resolvedPrefix, timeout, useBackup),
     config: () => {},
 
     // ========== Hash 操作 ==========

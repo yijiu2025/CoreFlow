@@ -362,8 +362,8 @@ const authPlugin = fp(async app => {
     if (!request.state) request.state = {};
 
     const cookies = request.cookies || {};
-    log.debug('━━━ 请求认证开始 ━━━ url=%s, ip=%s', request.url, request.ip);
-    log.debug('Cookie: sid=%s, sid_r=%s', cookies.sid ? '✅' : '❌', cookies.sid_r ? '✅' : '❌');
+    // log.debug('━━━ 请求认证开始 ━━━ url=%s, ip=%s', request.url, request.ip);
+    // log.debug('Cookie: sid=%s, sid_r=%s', cookies.sid ? '✅' : '❌', cookies.sid_r ? '✅' : '❌');
 
     // 2. JWT 认证（仅在 JWT_ENABLED=true 时启用）
     const jwtUser = await authenticateByJwt(cookies, request.headers);
@@ -377,14 +377,14 @@ const authPlugin = fp(async app => {
 
     // 尝试用 sid 获取 session（同时递增访问次数）
     if (cookies[COOKIE_SID]) {
-      log.debug('📋 检测到 sid Cookie，尝试 Session 认证');
+      // log.debug('📋 检测到 sid Cookie，尝试 Session 认证');
       sessionData = await getSession({ cookies, reply });
-      log.debug('📋 Session 认证结果: %s', sessionData ? '✅ 成功' : '❌ 未命中');
+      // log.debug('📋 Session 认证结果: %s', sessionData ? '✅ 成功' : '❌ 未命中');
     }
 
     // 写入 request.state.user + 风险检测
     if (sessionData) {
-      log.debug('✅ 认证完成: userId=%s, username=%s', sessionData.userId, sessionData.username);
+      // log.debug('✅ 认证完成: userId=%s, username=%s', sessionData.userId, sessionData.username);
       request.state.user = {
         sub: sessionData.uid,
         uid: sessionData.uid,

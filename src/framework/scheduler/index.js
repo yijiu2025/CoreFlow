@@ -77,7 +77,10 @@ async function acquirePeriodLock(taskKey, intervalMs) {
   if (!isRedisConfigured()) return true; // 单实例部署：不引入锁语义
 
   try {
-    const lock = createLock(`scheduler:${taskKey}`, { ttl: intervalMs });
+    // 🔴 锁 TTL 必须显著大于任务周期：此前 TTL=周期，任务一旦跑超周期锁就过期，
+    // 其他实例可并发执行同一任务（重复执行）。取 2 倍周期作为安全余量。
+    const lockTtl = Math.max(intervalMs * 2, intervalMs + 60_000);
+    const lock = createLock(`scheduler:${taskKey}`, { ttl: lockTtl });
     return await lock.tryAcquire(intervalMs);
   } catch (err) {
     // 已配置但不可达 → 跳过，不回退。回退执行在多实例下会重复跑任务。

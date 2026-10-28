@@ -21,6 +21,18 @@ class EmailDao {
   }
 
   /**
+   * 邮箱脱敏：u***@example.com
+   * @param {string} email 完整邮箱
+   * @returns {string} 掩码后的邮箱
+   */
+  maskEmail(email) {
+    const [local, domain] = String(email || '').split('@');
+    if (!domain) return '***';
+    const head = local.slice(0, Math.min(2, local.length));
+    return `${head}***@${domain}`;
+  }
+
+  /**
    * 计算客户端指纹
    *
    * 基础：SHA-256(IP | UA)，防邮件被劫持后异地消费
@@ -50,7 +62,8 @@ class EmailDao {
    */
   async sendCode(email, sessionId, store, ctx = {}) {
     const code = emailService.generateCode();
-    Logger.info(`[Verify] 发送验证码: ${email}, 会话: ${sessionId}`);
+    // 🔴 PII 脱敏：不落完整邮箱（此前 [Verify] 日志含完整 email + sessionId）
+    Logger.info(`[Verify] 发送验证码: ${this.maskEmail(email)}`);
 
     // 频率限制检查
     const current = await store.get(email);
@@ -93,14 +106,34 @@ class EmailDao {
       throw new Error('PARAM_ERROR:邮箱和验证码不能为空');
     }
 
+    // 🔴 爆破防护：失败尝试次数上限 5 次，达到即作废验证码（此前 6 位码在 TTL 内可无限重试）
+    const MAX_ATTEMPTS = 5;
     const info = await store.get(email);
-    if (!info || info.code !== code) {
+    if (!info) {
+      throw new Error('VERIFY_FAILED:邮箱验证码错误或已过期');
+    }
+
+    const attempts = (info.attempts || 0) + 1;
+    if (attempts > MAX_ATTEMPTS) {
+      await store.delete(email);
+      throw new Error('VERIFY_FAILED:尝试次数过多，请重新获取验证码');
+    }
+
+    // 记录失败尝试（保留原 TTL：按剩余时间计算，避免失败重试反而延长有效期）
+    const recordFailure = async () => {
+      const remainingSec = Math.max(1, Math.ceil(this.codeTtl - (Date.now() - info.sentAt) / 1000));
+      await store.set(email, { ...info, attempts }, remainingSec);
+    };
+
+    if (info.code !== code) {
+      await recordFailure();
       throw new Error('VERIFY_FAILED:邮箱验证码错误或已过期');
     }
 
     // sessionId 一致性校验：发码时绑定的 captchaKey 必须与用码时回传的一致
     // 防止 A 流程发的码被 B 流程复用（即使同 email+code 也要同 captchaKey）
     if (ctx.sessionId && info.sessionId && ctx.sessionId !== info.sessionId) {
+      await recordFailure();
       throw new Error('VERIFY_FAILED:邮箱验证码错误或已过期');
     }
 
@@ -110,6 +143,7 @@ class EmailDao {
       const currentFingerprint = this.fingerprint(ctx.ip, ctx.ua, ctx.deviceFp);
       if (info.fingerprint !== currentFingerprint) {
         // 指纹不符：疑似异地冒用，静默拒绝（不暴露具体原因给攻击者）
+        await recordFailure();
         throw new Error('VERIFY_FAILED:邮箱验证码错误或已过期');
       }
     }

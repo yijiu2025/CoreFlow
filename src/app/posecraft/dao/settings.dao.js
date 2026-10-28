@@ -42,7 +42,15 @@ class SettingsDao {
     const Model = this.getSettingsModel();
 
     const row = await Model.findOne({ where: { user_id: userId } });
-    const current = row?.settings ? JSON.parse(row.settings) : {};
+    // 🔴 与 getByUserId 一致做脏数据兜底：损坏 JSON 不能让接口 500
+    let current = {};
+    if (row?.settings) {
+      try {
+        current = JSON.parse(row.settings);
+      } catch {
+        current = {};
+      }
+    }
     const merged = { ...current, ...partial };
 
     if (row) {

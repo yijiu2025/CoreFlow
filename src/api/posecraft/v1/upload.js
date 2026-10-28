@@ -10,7 +10,10 @@
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { saveUploadFile, saveBase64Image } from '../../../app/posecraft/services/upload.service.js';
+import { saveUploadFile, saveBase64Image, UploadError } from '../../../app/posecraft/services/upload.service.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('api.posecraft.upload');
 
 async function registerUploadRoutes(fastify) {
   registerGroupMetadata({
@@ -35,7 +38,12 @@ async function registerUploadRoutes(fastify) {
         const result = await saveUploadFile(file);
         return reply.result.success('上传成功', result);
       } catch (err) {
-        return reply.result.fail(`上传失败: ${err.message}`);
+        if (err instanceof UploadError) {
+          return reply.result.fail(err.message);
+        }
+        // 内部错误不向客户端回显原始错误（避免泄露内部路径/堆栈），只记录日志
+        log.error('上传文件失败', err);
+        return reply.result.fail('上传失败，请稍后重试');
       }
     }
   });
@@ -56,7 +64,12 @@ async function registerUploadRoutes(fastify) {
         const result = await saveBase64Image(data, filename);
         return reply.result.success('上传成功', result);
       } catch (err) {
-        return reply.result.fail(`上传失败: ${err.message}`);
+        if (err instanceof UploadError) {
+          return reply.result.fail(err.message);
+        }
+        // 内部错误不向客户端回显原始错误（避免泄露内部路径/堆栈），只记录日志
+        log.error('上传 Base64 图片失败', err);
+        return reply.result.fail('上传失败，请稍后重试');
       }
     }
   });

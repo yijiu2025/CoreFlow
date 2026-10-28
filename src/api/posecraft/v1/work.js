@@ -178,6 +178,13 @@ async function registerWorkRoutes(fastify) {
         return reply.code(404).send('Work not found');
       }
 
+      // 🔴 越权修复：非公开作品，预览图只允许作者或管理员访问
+      const user = request.state?.user;
+      const isAdmin = checkDataPermission({ user_id: -1 }, user);
+      if (work.status !== 1 && work.user_id !== user?.userId && !isAdmin) {
+        return reply.code(403).send('Forbidden');
+      }
+
       // 委托 preview.js 合成（查关联模板 → 复用 composeTemplatePreview → 兜底占位图）
       const buffer = await composeWorkPreview(work);
       reply.type('image/png');

@@ -124,7 +124,12 @@ const CodeDao = {
       return null;
     }
 
-    await entry.update({ consumed: true });
+    // 🔴 原子消费：只有 consumed=false 的行才会被更新，affected=0 说明并发下已被他人消费。
+    // 此前「先 findByPk 再 update」非原子，两个并发兑换可同时读到 consumed=false，同一 code 被签发两次 token。
+    const [affected] = await model.update({ consumed: true }, { where: { code, consumed: false } });
+    if (affected === 0) {
+      return { ...data, consumed: true, replay_detected: true };
+    }
     return { ...data, consumed: true };
   },
 

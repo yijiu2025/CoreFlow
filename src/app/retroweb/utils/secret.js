@@ -16,8 +16,9 @@
  */
 import crypto from 'node:crypto';
 
-const ALGO = 'aes-256-cbc';
-const IV_LENGTH = 16;
+const ALGO = 'aes-256-gcm';
+const IV_LENGTH = 12; // GCM 推荐 12 字节 nonce
+const VERSION_PREFIX = 'v2:'; // v2 = AES-256-GCM（带完整性校验）；旧格式为 CBC `iv:cipher`
 
 /** 从 APP_SECRET 派生 32 字节密钥（缓存，避免每次请求都派生） */
 let cachedKey = null;
@@ -33,7 +34,8 @@ function key() {
 }
 
 /**
- * 加密字符串 → `iv:cipher`（base64）
+ * 加密字符串 → `v2:nonce:cipher:tag`（base64）
+ * AES-256-GCM 自带完整性校验（GCM tag），杜绝 CBC 密文被篡改的问题。
  * @param {string} plain
  * @returns {string}
  */
@@ -42,23 +44,38 @@ function encryptSecret(plain) {
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGO, key(), iv);
   const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
-  return iv.toString('base64') + ':' + enc.toString('base64');
+  const tag = cipher.getAuthTag();
+  return VERSION_PREFIX + iv.toString('base64') + ':' + enc.toString('base64') + ':' + tag.toString('base64');
 }
 
 /**
- * 解密字符串（非本格式 / 解密失败 → 原样返回，让旧明文数据平滑过渡）
+ * 解密字符串
+ * - `v2:...` 新格式：GCM 解密 + 验签，验签失败/解密失败 → 原样返回（拒绝输出被篡改明文）
+ * - 旧格式 `iv:cipher`：CBC 解密，向后兼容存量数据
+ * - 非本格式 → 原样返回（旧明文数据平滑过渡）
  * @param {string} value
  * @returns {string}
  */
 function decryptSecret(value) {
   if (!value || !value.includes(':')) return value;
   try {
+    if (value.startsWith(VERSION_PREFIX)) {
+      const [, ivB64, cipherB64, tagB64] = value.split(':');
+      const iv = Buffer.from(ivB64, 'base64');
+      const tag = Buffer.from(tagB64, 'base64');
+      const decipher = crypto.createDecipheriv(ALGO, key(), iv);
+      decipher.setAuthTag(tag);
+      const dec = Buffer.concat([decipher.update(Buffer.from(cipherB64, 'base64')), decipher.final()]);
+      return dec.toString('utf8');
+    }
+    // 旧 CBC 格式（无完整性标签）
     const [ivB64, cipherB64] = value.split(':');
     const iv = Buffer.from(ivB64, 'base64');
-    const decipher = crypto.createDecipheriv(ALGO, key(), iv);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key(), iv);
     const dec = Buffer.concat([decipher.update(Buffer.from(cipherB64, 'base64')), decipher.final()]);
     return dec.toString('utf8');
   } catch {
+    // 解密失败（篡改 / 旧明文数据）→ 原样返回
     return value;
   }
 }

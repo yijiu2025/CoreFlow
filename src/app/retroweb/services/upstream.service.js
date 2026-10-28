@@ -86,6 +86,12 @@ async function forwardStream(fastify, reply, path, body = undefined) {
     return reply.result.fail('逆合成算法服务未配置（请设置 RETRO_PYTHON_URL）', null, 503);
   }
 
+  // 🔴 客户端断开 ⇒ 取消上游：AbortController 必须**先创建并接入 fetch 的 signal**。
+  // 此前 abort 只挂在 close 事件上却从未传给 fetch，客户端断开后上游仍继续计算到 10 分钟超时。
+  const abort = new AbortController();
+  const onClose = () => abort.abort();
+  reply.raw.on('close', onClose);
+
   const upstream = await fetch(base + path, {
     method: 'POST',
     headers: {
@@ -93,10 +99,12 @@ async function forwardStream(fastify, reply, path, body = undefined) {
       Accept: 'text/event-stream'
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(600000) // SSE 长任务：最长 10 分钟
+    // SSE 长任务最多 10 分钟；客户端 close 时 abort 立即取消上游
+    signal: AbortSignal.any([AbortSignal.timeout(600000), abort.signal])
   });
 
   if (!upstream.ok || !upstream.body) {
+    reply.raw.removeListener('close', onClose);
     const text = await upstream.text().catch(() => '');
     return reply.result.fail(`上游算法服务返回 ${upstream.status}`, { detail: text }, 502);
   }
@@ -107,11 +115,6 @@ async function forwardStream(fastify, reply, path, body = undefined) {
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no'
   });
-
-  // 客户端断开 ⇒ 取消上游（AbortController 联动 request.raw 的 close 事件）
-  const abort = new AbortController();
-  const onClose = () => abort.abort();
-  reply.raw.on('close', onClose);
 
   const reader = upstream.body.getReader();
   try {

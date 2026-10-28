@@ -181,7 +181,26 @@ async function registerAdminRoutes(fastify) {
     permission: 'posecraft:banner:manage',
     handler: async (request, reply) => {
       const id = Number(request.params.id);
-      const updated = await bannerConfigDao.update(id, request.body);
+      // 🔴 字段白名单：此前整个 request.body 透传 update，可改写 id/delete_version 等非预期列
+      const ALLOWED = [
+        'title',
+        'description',
+        'badge_text',
+        'button_text',
+        'image_url',
+        'link_url',
+        'sort_order',
+        'enabled',
+        'start_at',
+        'end_at'
+      ];
+      const data = {};
+      for (const key of ALLOWED) {
+        if (request.body[key] !== undefined) data[key] = request.body[key];
+      }
+      if (data.sort_order !== undefined) data.sort_order = Number(data.sort_order);
+      if (data.enabled !== undefined) data.enabled = !!data.enabled;
+      const updated = await bannerConfigDao.update(id, data);
       if (!updated) {
         return reply.result.fail('Banner 不存在或已删除', null, 404);
       }
@@ -274,7 +293,28 @@ async function registerAdminRoutes(fastify) {
     permission: 'posecraft:channel:manage',
     handler: async (request, reply) => {
       const id = Number(request.params.id);
-      const updated = await channelDao.update(id, request.body);
+      // 🔴 字段白名单：此前整个 request.body 透传 update，可改写 id/delete_version 等非预期列
+      const ALLOWED = [
+        'label',
+        'icon',
+        'type',
+        'url',
+        'route',
+        'category',
+        'has_banner',
+        'sort_order',
+        'enabled',
+        'start_at',
+        'end_at'
+      ];
+      const data = {};
+      for (const key of ALLOWED) {
+        if (request.body[key] !== undefined) data[key] = request.body[key];
+      }
+      if (data.has_banner !== undefined) data.has_banner = !!data.has_banner;
+      if (data.sort_order !== undefined) data.sort_order = Number(data.sort_order);
+      if (data.enabled !== undefined) data.enabled = !!data.enabled;
+      const updated = await channelDao.update(id, data);
       if (!updated) {
         return reply.result.fail('频道不存在或已删除', null, 404);
       }

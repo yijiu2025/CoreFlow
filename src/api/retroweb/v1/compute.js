@@ -422,7 +422,10 @@ async function registerComputeRoutes(fastify) {
     permission: RETROWEB_PERMISSIONS.LLM.CONFIG,
     handler: async (request, reply) => {
       try {
-        const { ok, status, data } = await forwardJson('GET', '/llm/settings');
+        // 🔴 读取也按 user_id 隔离：此前 GET 不传用户标识，多用户会串读到他人端点配置（含密钥信息）。
+        const { ok, status, data } = await forwardJson('GET', '/llm/settings', undefined, {
+          user_id: request.state.user.userId
+        });
         if (!ok) return reply.result.fail(data?.error || '读取端点设置失败', data, status);
         return reply.result.success(null, data);
       } catch (e) {

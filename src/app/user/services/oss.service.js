@@ -32,7 +32,9 @@ let ossClient = null;
  * 初始化 OSS 客户端
  */
 function getOssClient() {
-  if (ossClient !== undefined) return ossClient;
+  // 🔴 修复：此前 `!== undefined` 恒真（null !== undefined），首次调用即返回 null，
+  // OSS 客户端永远走不到初始化，配置了 OSS 也静默降级本地存储。
+  if (ossClient !== null) return ossClient;
 
   const accessKeyId = process.env.OSS_ACCESS_KEY_ID;
   const accessKeySecret = process.env.OSS_ACCESS_KEY_SECRET;
