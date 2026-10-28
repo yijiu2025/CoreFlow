@@ -5,6 +5,15 @@ import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const DEAD_PEERS = [
+  '@mediapipe/hands',
+  '@mediapipe/selfie_segmentation',
+  '@mediapipe/face_mesh',
+  '@mediapipe/pose',
+  '@tensorflow/tfjs-backend-wasm',
+  '@tensorflow/tfjs-backend-webgpu'
+];
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -88,6 +97,14 @@ export default defineConfig({
       }
     }
   },
+  optimizeDeps: {
+    // 🔴 必须与下面 build.rollupOptions.external 是同一份清单（同源 DEAD_PEERS）。
+    //    rollupOptions.external **只对 build 生效**；dev 的依赖预优化走optimizer，
+    //    不读它 ⇒ @mediapipe/hands（Closure IIFE 全局脚本，0 个 export）被静态分析
+    //    判定 MISSING_EXPORT，dev 直接起不来。exclude 让这些包不进预打包，
+    //    由浏览器原生 ESM 在真正执行到那条死分支时才加载。
+    exclude: DEAD_PEERS
+  },
   build: {
     outDir: '../public/posecraft',
     emptyOutDir: true,
@@ -99,14 +116,7 @@ export default defineConfig({
       //    - tfjs-backend-wasm / webgpu：本项目未安装、也从不启用（只装 webgl）
       //    vite8/rolldown 对未解析 import 严格报错，externalize 它们：构建时不解析、运行时也不加载
       //    （死分支不触发这些 import），行为与 vite5 时代完全一致。
-      external: [
-        '@mediapipe/hands',
-        '@mediapipe/selfie_segmentation',
-        '@mediapipe/face_mesh',
-        '@mediapipe/pose',
-        '@tensorflow/tfjs-backend-wasm',
-        '@tensorflow/tfjs-backend-webgpu'
-      ]
+      external: DEAD_PEERS
     }
   }
 });

@@ -4,8 +4,13 @@ import * as poseDetection from '@tensorflow-models/pose-detection';
 import * as bodySegmentation from '@tensorflow-models/body-segmentation';
 import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
-// @ts-ignore
-import * as tf from '@tensorflow/tfjs';
+// 🔴 必须用 tfjs-core + 显式 backend，不要 import 聚合包 '@tensorflow/tfjs'：
+//    ① package.json 根本没装它（只有 tfjs-core/converter/backend-webgl）⇒ vite dev 报
+//       "Failed to resolve import @tensorflow/tfjs"；② 它会把 wasm/webgpu backend 一起拖进来，
+//       而本项目只走 webgl（见 vite.config.ts 的 DEAD_PEERS）。
+//    口径与 useAIAnalysis.ts 保持一致。
+import * as tf from '@tensorflow/tfjs-core';
+import '@tensorflow/tfjs-backend-webgl';
 
 /**
  * AI 分析功能
