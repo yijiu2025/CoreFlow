@@ -15,6 +15,7 @@
 | [theme-baseline.md](./theme-baseline.md) | 主题基线（CSS 变量 + 明暗 Store） |
 | [theme-replacement.md](./theme-replacement.md) | **主题替换规范**（主题包 × 设备 × 页面 × 配色，换 UI 不改业务代码） |
 | [theme-package-extraction.md](./theme-package-extraction.md) | 主题框架抽包立项（`packages/theme-core` 纯内核） |
+| [theme-onboarding.md](./theme-onboarding.md) | **新前端接入主题库（skinsuite）完整指南**（安装 → 目录 → bootstrap → 验证） |
 | [pwa-guide.md](./pwa-guide.md) | PWA 接入规范（启用前先确认适用场景） |
 | [frontend-security.md](./frontend-security.md) | 前端安全清单 |
 | [frontend-data-loading-rules.md](./frontend-data-loading-rules.md) | 前端数据加载规则（分层加载 + API 文件收口） |

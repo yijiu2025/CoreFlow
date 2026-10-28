@@ -297,13 +297,43 @@ JWT 模式：401 → 调 `/oauth2.1/token` 用 refresh_token 刷新，重发原�
 
 ## 10. i18n 规范
 
-### 10.1 key 命名
+### 10.1 文件拆分
+
+**一个领域 = 一个文件，双语收在同一文件内**，`index.ts` 只做装配、**不放任何文案**：
+
+```
+src/i18n/
+  index.ts        # 装配：import 各领域 + createI18n
+  login.ts        # 登录页（含二维码 / 第三方登录 / 移动端）
+  auth.ts         # 授权确认页
+  register.ts     # 注册页
+  forgot.ts       # 重置密码页
+  validation.ts   # 通用校验
+  not_found.ts    # 404
+  app_missing.ts  # 应用标识缺失
+```
+
+- 文件名 = namespace（key 前缀），snake_case；
+- 每个领域文件的**固定形态**：`zh` 是 key 的权威来源，`en` 用
+  `Record<keyof typeof zh, string>` 强制与 `zh` 对齐 —— 漏译 / 多译 / 键名不一致都会**编译报错**，杜绝「只改了中文忘了英文」：
+
+```ts
+// login.ts
+const zh = { welcome: '欢迎回来', submit: '立即登录' };
+const en: Record<keyof typeof zh, string> = { welcome: 'Welcome Back', submit: 'Sign In' };
+export default { zh_cn: zh, en };
+```
+
+- **新增领域**：新建一个领域文件 + 在 `index.ts` 的 `messages.zh_cn` / `messages.en`
+  两处各注册一行；**不要**往 `index.ts` 里塞文案。
+
+### 10.2 key 命名
 
 层级结构 + 业务域：
-- `login.welcome` / `login.consent_title` / `register.step1` / `forgot.code_sent`
-- 通用：`validation.email_invalid` / `common.cancel`
+- `login.welcome` / `login.consent_title` / `register.sub_step1` / `forgot.code_sent`
+- 通用：`validation.email_invalid` / `not_found.title`
 
-### 10.2 使用方式
+### 10.3 使用方式
 
 ```vue
 <template>
@@ -316,7 +346,7 @@ const { t } = useI18n();
 </script>
 ```
 
-### 10.3 兜底
+### 10.4 兜底
 
 ```ts
 t('login.perm_email', { email: '保密' }) || '获取您的电子邮箱地址'

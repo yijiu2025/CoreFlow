@@ -100,3 +100,44 @@ node check-docs-index.mjs docs .vitepress public   # 后跟忽略目录（构建
 
 **Q：子仓 README 要抄总入口的分类吗？**
 不抄。子仓只登记自己的文档 + 一段「其他项目的文档在哪」指回 CoreFlow 总入口即可。
+
+## 9. 文档站（VitePress，对外发布）
+
+独立发 npm 的库仓（如 theme / skinsuite）**建文档站**对外；根仓 CoreFlow 也已有站。文档站与两级入口体系**并存不互替**：站点是对外呈现，`docs/README.md` 总入口是仓内导航——建站的仓两者都要。
+
+### 9.1 站点结构（theme 仓定稿形态）
+
+```
+docs/
+├── index.md                  封面（hero + features，不算导航）
+├── .vitepress/config.ts      中文界面 + nav + 分区侧边栏 + 本地搜索（唯一来源，改目录先改这里）
+├── guide/                    指南区：教程式章节（简介→快速上手→逐主题→FAQ）
+├── api/                      API 参考：全部导出逐个列表 + 用法
+├── advanced/                 进阶：架构地图 / 发布流程
+└── public/                   静态资源（logo 等）
+```
+
+### 9.2 写作口径
+
+- **章节化**：一篇 md = 一个主题，头部 frontmatter 不写标题（VitePress 用 `## ` 起头）；每章结尾给「验收/验证」表；
+- **教程与参考分开**：guide 讲「怎么做」（步骤 + 代码），api 讲「有什么」（导出表）；同一事实两处出现时 guide 引用 api，不复制；
+- **警示用容器**：`::: warning` / `::: danger` / `::: tip`，🔴 级约束放 danger；
+- **代码块语言标注**：`ts` / `vue` / `bash` / `ini`（VitePress 不认识 `env`，会报 fallback 告警）；
+- **README 双语链接指站**：库仓 README 的「详细文档」链接指 `https://<user>.github.io/<仓>/` + 相对路径兜底；
+- **构建验证**：`npm run docs:build` 零死链零告警才许推（死链会让 CI 红或被忽略，二选一明确写进 config）。
+
+### 9.3 部署（GitHub Pages）
+
+- workflow：`docs-pages.yml`（要点见 [ci-conventions.md](ci-conventions.md) §6.2：两段式 + concurrency + paths 触发）；
+- **一次性人工步骤**：Settings → Pages → Source 选「GitHub Actions」；
+- VitePress `base: '/<仓名>/'` + `cleanUrls: false`（子路径托管，漏了线上裸 HTML——pitfalls #16）；
+- 脚本三件套：`docs:dev` / `docs:build` / `docs:preview`。
+
+### 9.4 新仓接入清单
+
+1. `npm i -D vitepress` + scripts 三件套（嵌套独立仓注意 pitfalls #13：先确认已从根 workspaces 排除）
+2. `docs/.vitepress/config.ts`（nav/sidebar/搜索中文翻译抄 theme 仓）
+3. `.gitignore` 补 `docs/.vitepress/cache/`
+4. `docs-pages.yml` 照 §6.2 写
+5. 本地 `npm run docs:build` 绿 → 推 → Settings 开 Pages → 重跑 workflow
+

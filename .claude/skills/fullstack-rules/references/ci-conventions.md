@@ -141,6 +141,26 @@ Node 版本、超时等运行参数住共享门禁（见下）；后端 / 库仓
 
 镜像 / npm / 部署等发布族文件：`release-<目标>.yml`，触发用 `tags: ['v*']` + `workflow_dispatch`，权限按最小必要声明（如 GHCR 推 `packages: write`）。CoreFlow 现状：`release-docker.yml`（构建镜像 + compose 全栈冒烟，改名自 `publish-image.yml`）。
 
+### 6.1 npm 发布：Trusted Publishing（OIDC，theme 仓 release-npm.yml）
+
+npm 发布**不用长期 token**，走 npm Trusted Publishing（OIDC）：
+
+- `permissions: id-token: write`（唯一权限声明），npm 侧在 npmjs 包设置里配一次性 Trusted Publisher（仓 + workflow 文件名，配一次永久生效）；
+- **前置校验步骤必须保留**：npm ≥ 11.5.1 且 node ≥ 22.14.0——版本不足时 OIDC **静默不生效**，npm 回退找 token 最后以 401 收场，报错完全指不到真因；宁可前置红；
+- **tag 与源码版本一致性校验**：CI 下 tag 必须等于 `v` + package.json version，不一致直接红（防 tag 与源码漂移）；
+- 发布后自动建 GitHub Release：正文由 `scripts/release-notes.mjs <版本>` 从 CHANGELOG 抽对应段（缺失响亮失败，不发空 Release）；tag 已推而 Release 缺失时，重跑 workflow 自动补建；
+- **CI 只发布、不同步宿主**（checkout 里没有宿主仓）：宿主 lock 同步由本地 `publish-and-sync.mjs --skip-publish` 续跑，并发 **所有持有该包的 lock**（含根仓提升条目，pitfalls #15）；
+- 发布链全貌与发版前检查清单：[workflows.md](workflows.md) 剧本 G。
+
+### 6.2 文档站部署：docs-pages.yml（GitHub Pages）
+
+库仓带 VitePress 文档站的（如 theme），`docs-pages.yml` 四个要点：
+
+- **触发**：push main 且 `paths: ['docs/**', 'README*.md', 'package.json']` + `workflow_dispatch`；
+- **权限**：`pages: write` + `id-token: write`（Pages 的 OIDC 部署方式），配 `concurrency: { group: pages, cancel-in-progress: true }`（新推送取消在跑的旧部署）；
+- **两段式**：build job（setup-node + install + `docs:build` + upload-pages-artifact）→ deploy job（actions/deploy-pages@v4）；
+- **一次性人工步骤**：仓库 Settings → Pages → Source 选「GitHub Actions」——不选则 deploy 永远红；VitePress 侧必须 `base: '/<仓名>/'` + `cleanUrls: false`（子路径托管，漏了线上裸 HTML，pitfalls #16）。
+
 ## 七、各仓安装口径（为什么不能都 npm ci）
 
 安装命令是 CI 里最"因地而异"的一块，**口径差异必须写进各仓 ci.yml 头部注释**，不允许默默不一样：
@@ -180,6 +200,9 @@ node .claude/skills/fullstack-rules/scripts/distribute-ci.mjs <新仓路径>
 | PR 合并不了："required check 未满足"               | 作业名变了但分支保护必检项没更新。首跑后从 PR checks 抄新名字去 protection 改 |
 | 本机 `npm ci` 报 SAFE_DELETE_BULK_CONFIRM_REQUIRED | 本机安全垫拦批量删除。确认 node_modules 与 lock 同步后可先用现有依赖预验证    |
 | 某仓不该用共享门禁（后端 / 库）                     | 对。共享门禁只覆盖前端家族；后端按 §七自建 ci.yml，骨架仍按 §二               |
+| npm 发布 401（OIDC 仓）                            | setup-node 版本低于 22.14 / npm 低于 11.5.1，OIDC 静默失效回退找 token。升前置版本，看 §6.1 |
+| Pages 站点线上裸 HTML 无样式                        | VitePress base 未设 `'/<仓名>/'`（子路径托管）。见 §6.2 与 pitfalls #16      |
+| docs-pages deploy 一直红                           | Settings → Pages → Source 没选「GitHub Actions」。选完重跑 workflow          |
 
 ---
 

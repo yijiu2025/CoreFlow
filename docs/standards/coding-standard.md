@@ -272,7 +272,7 @@ declare module 'vue-router' {
 ## 国际化和文案
 
 1. 对用户可见的固定文案应进入 `i18n/`，临时内部后台可以先中文，但要避免硬编码散落。
-2. i18n 文件按模块拆分，单文件超过 500 行时拆分聚合。
+2. i18n 按领域（namespace）拆文件（`login.ts` / `auth.ts` / `register.ts` / `forgot.ts` / `validation.ts` / `not_found.ts` / `app_missing.ts`），双语收在同一文件、`en` 用 `Record<keyof typeof zh, string>` 与 `zh` 对齐；`index.ts` 只做装配、不放文案。详见 `frontend-standards.md` §10。
 3. 禁止提交乱码文案；发现 `鍓嶇`、`鎼滅储` 等异常字符时，先修编码再继续开发。
 4. 日志、注释、README 使用简体中文，技术标识保留英文原文。
 

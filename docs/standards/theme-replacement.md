@@ -288,11 +288,12 @@ src/theme/                          # 架构层：机制，所有主题包共用
 
 ### 9.3 加一种设备（如未来的 `tablet`）
 
-1. `src/theme/devices.ts` 加一条 `ThemeDeviceDef`（id / label / routePath / match / containers）
+1. `src/theme/devices.ts` 加一条 `defineThemeDevice`（id / label / urlKey / containers 三参数）
 2. 写它的容器：`view/<设备 id>/<页面>/index.vue`（或像 mini 那样指定自己的 glob 与文件名规则）
 3. 在主题包里加该设备的目录：`themes/<包>/<设备>/<页面>/{index.vue, colors/}`
    （只覆盖部分设备 / 页面是允许的）
-4. 🔴 清单**最后一条必须无条件成立**（兜底设备）；判定顺序就是清单顺序，先命中先用
+4. 🔴 清单**最后一条必须无条件成立**（兜底设备）：`fallbackDevice()` / `resolveContainerOf()`
+   的兜底都取末条；判定不归库（宿主设备模块 `utils/device-resolve.ts`，见本文 §4.4）
 
 ### 9.4 接入一个新页面
 

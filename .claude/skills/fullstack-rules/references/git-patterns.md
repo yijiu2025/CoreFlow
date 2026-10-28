@@ -46,6 +46,20 @@ chore/upgrade-sequelize  # 杂务
 - 🔴 **合并即删** —— 合回 `main` 后立即删除本地与远端支线，拒绝"长寿分支"（超过 2 周未合并应考虑拆分）;
 - 🔴 **常规改动禁止直推 `main`** —— `main` 受分支保护；admin bypass 仅限发版与紧急抢修，用后必须在 PR 或提交说明里留痕。
 
+### PR 流程（分支模型的合并落点）
+
+```
+开支线（feature|hotfix|docs|chore/*） → push → 开 PR → CI 绿 → 审查 → merge → 删支线
+```
+
+1. **开 PR**：标题与提交规范同式（`<type>(<scope>): <subject>`）；base = `main`；**跨仓改动分仓各开 PR**（嵌套仓 PR 在它自己的 GitHub 仓里开）；
+2. **PR body 三段**：改了什么 / 为什么（根因或需求）/ 怎么验证的（跑过哪些命令、什么现象）——「怎么验证」不许空着；
+3. **等 CI 绿**：分支保护必检项过了才能合并（必检项 = PR checks 列表里的实际作业名，见 ci-conventions.md §八）；
+4. **审查**：按剧本 E（workflows.md）过 15 项清单；自审也算——推送前自己把 diff 从头读一遍，🔴 项修完再请人看；
+5. **合并**：本仓实践 = GitHub 网页 merge commit（`Merge pull request #N from <branch>`，历史保留支线形状）；合并前确认没有把别的支线混进本 PR 的 diff；
+6. **删支线**：合并即删本地与远端（`git branch -d` + `git push origin --delete`），然后 `git fetch -p`；
+7. **直推 main 留痕**：发版 commit / 紧急抢修允许 admin bypass 直推，提交信息或紧随的说明里必须写明为什么绕过 PR。
+
 ---
 
 ## 二、提交信息规范（Conventional Commits）
@@ -214,7 +228,8 @@ v1.2.1   # Bug 修复            v2.0.0   # 不兼容的 API 变更
 
 - tag 格式 `vX.Y.Z`，必须 annotated，message 写版本摘要；
 - **版本源是 git tag，`package.json` 单向跟随**（细则见 git-release-rules.md §2.2）；
-- 发版流程（预览 → --apply → 推送判定 → 收尾）见 git-release-rules.md §四。
+- 发版流程（预览 → --apply → 推送判定 → 收尾）见 git-release-rules.md §四；
+- **端到端发布动作顺序**（更新 CHANGELOG → 完善文档 → 对齐版本号 → 跑门禁 → 发版 → 镜像 → 校验）见 [release-checklist.md](release-checklist.md)。
 
 ### 嵌套独立 npm 仓的发版（skinsuite 型，另一条通道）
 
