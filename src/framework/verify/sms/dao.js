@@ -87,8 +87,11 @@ class SmsDao {
       throw new Error('VERIFY_FAILED:验证码错误或已过期');
     }
 
-    // 一次性消费
-    await store.delete(phone);
+    // 一次性原子消费（防并发重复消费）
+    const consumed = await store.getDel(phone);
+    if (!consumed) {
+      throw new Error('VERIFY_FAILED:验证码错误或已过期');
+    }
     return true;
   }
 }

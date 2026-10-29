@@ -528,7 +528,14 @@ async function main() {
     log(`  ✓ package.json version ${pkgAlign.from} → ${next}`);
   }
 
-  // 4) 通道 1：tag + push
+  // 版本文件必须先提交，再对提交打 tag，否则 tag 指向的提交不含新 CHANGELOG/版本号
+  if (changelogBump?.changed || pkgAlign) {
+    git('add', 'CHANGELOG.md', pkgAlign?.path ?? 'CHANGELOG.md');
+    git('commit', '-m', `chore(release): ${next}`);
+    log(`  ✓ 已提交版本文件 ${next}`);
+  }
+
+  // 4) 通道 1：tag + push（tag 指向刚提交的版本提交）
   git('tag', '-a', tag, '-m', notes);
   log(`  ✓ 已创建 tag ${tag}`);
 

@@ -137,8 +137,9 @@ class CaptchaService {
     }
 
     if (info.verified === true) {
-      await store.delete(tag);
-      return true;
+      // 原子消费：并发只有一个能取到，防重放
+      const consumed = await store.getDel(tag);
+      return Boolean(consumed);
     }
 
     return false;

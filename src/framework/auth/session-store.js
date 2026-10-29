@@ -59,6 +59,64 @@ const PERM_NAMESPACE = 'auth:perm';
 // **唯一写入方**是 perm-cache.js 自身。此处实例化仅为让本文件保持"认证相关 Redis
 // 命名空间全景"的单一出处 —— 命名空间字符串散落就是下一个 'user_sessions' 事故。
 const permStore = getStore(PERM_NAMESPACE);
+// 与 JWT 认证共用用户缓存：状态变更通常在 30 秒内可见，避免每个 Session 请求都查 User 表。
+const userStore = getStore('user', { timeout: 3000 });
+const USER_STATUS_TTL = 30;
+
+/**
+ * 读取 Session 对应的当前用户状态；缓存未命中才回源 User 表。
+ * 返回结构与 JWT 用户缓存兼容，避免两个认证入口互相写入不完整数据。
+ */
+async function getSessionUser(userId, uid) {
+  const cacheKey = String(uid || userId);
+  let cached = null;
+  try {
+    cached = await userStore.get(cacheKey);
+  } catch (err) {
+    log.warn('[Session] 用户状态缓存读取失败，回源 DB:', err);
+  }
+  if (cached) return cached;
+
+  const User = getModel('User');
+  const user = uid ? await User.findOne({ where: { uid } }) : await User.findByPk(userId);
+  if (!user) return null;
+  const data = {
+    id: user.uid,
+    numericId: user.id,
+    uid: user.uid,
+    username: user.username,
+    email: user.email,
+    name: user.username,
+    avatar: user.avatar,
+    status: user.status
+  };
+  try {
+    await userStore.set(cacheKey, data, USER_STATUS_TTL);
+  } catch (err) {
+    log.warn('[Session] 用户状态缓存写入失败:', err);
+  }
+  return data;
+}
+
+function isSessionUserActive(user) {
+  return Number(user?.status) === 1;
+}
+
+/** 禁用/注销用户：当前 Session 立即失效，并按已有 family 语义吊销关联凭证。 */
+async function revokeDisabledSession(sessionId, { userId, familyId = null, token = null } = {}) {
+  await sessionStore.delete(sessionId);
+  if (userId != null) {
+    await deleteRefreshTokensForSession(userId, sessionId, familyId);
+    await userSessionsStore.zRem(String(userId), [sessionId]);
+  }
+  if (familyId) {
+    await revokeFamily(familyId, userId);
+  } else if (token) {
+    await token.update({ revoked: true });
+  } else {
+    await getModel('SessionToken').update({ revoked: true }, { where: { token: sidHash(sessionId) } });
+  }
+}
 
 /**
  * sessionId → DB token 列存的哈希（sha256），集中一处避免散落
@@ -139,5 +197,8 @@ export {
   permStore,
   sidHash,
   deleteRefreshTokensForSession,
-  revokeFamily
+  revokeFamily,
+  getSessionUser,
+  isSessionUserActive,
+  revokeDisabledSession
 };

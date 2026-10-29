@@ -147,7 +147,7 @@ describe('健康探针分级', () => {
     expect(body.data.loaders).toMatchObject({ failed: 0, completed: false, errors: [] });
   });
 
-  it('可降级加载器失败：仍 200（不摘流），但 status 记为 degraded 并列出文件', async () => {
+  it('可降级加载器失败：仍 200（不摘流），但 status 记为 degraded 且不回显文件', async () => {
     // 真实跑一遍引擎，让进程级摘要进入"有降级失败"的状态
     await runEngine({}, { registryDir: path.resolve(__dirname, '../__fixtures__/loader-ok') });
 
@@ -158,7 +158,8 @@ describe('健康探针分级', () => {
     expect(res.statusCode).toBe(200);
     expect(body.data.status).toBe('degraded');
     expect(body.data.loaders.failed).toBe(1);
-    expect(body.data.loaders.errors[0].file).toBe('01-monitor.js');
+    // 公开探针不得暴露加载器文件名
+    expect(JSON.stringify(body.data.loaders.errors)).not.toContain('01-monitor');
   });
 });
 

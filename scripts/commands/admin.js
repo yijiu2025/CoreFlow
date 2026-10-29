@@ -224,7 +224,7 @@ export async function revokeSuperadmin() {
       return;
     }
 
-    await target.update({ delete_version: target.id });
+    await target.destroy();
 
     // 清除 session
     const redis = await connectRedis();

@@ -57,8 +57,11 @@ const log = createLogger('api.system.health');
  */
 const READY_CHECK_TIMEOUT_MS = 3_000;
 
-/** 加载器失败原因在响应里的最大长度（公开端点，避免整段堆栈外泄） */
-const LOAD_ERROR_DETAIL_MAX = 200;
+/** DB 探测结果缓存 TTL（毫秒）：公开探针重复请求不应每次都打 DB */
+const READY_DB_CACHE_TTL_MS = 5_000;
+
+/** DB 探测结果缓存：{ at: number, promise: Promise } 与单飞合并 */
+let _dbProbeCache = null;
 
 /**
  * 给 Promise 加上超时上限
@@ -118,22 +121,33 @@ async function checkDatabase() {
   if (!isDbConfigured()) {
     return { status: 'skipped', detail: 'DB 未配置（测试/本地环境）' };
   }
-  try {
-    await raceTimeout(sequelize.authenticate(), READY_CHECK_TIMEOUT_MS);
-    const result = { status: 'up' };
-    // 连接池占用只作**诊断信息，不参与就绪判定**：
-    // 池满（waiting > 0）在高负载下是正常现象，若因此返回 503，
-    // 负载均衡会把正在扛流量的实例全部摘掉，反而把局部拥塞放大成整体不可用。
-    // 它的价值在于让"变慢"可归因 —— 池枯竭时 acquire 要等 30s，
-    // 而本探针 3s 就超时，没有这组数字就只能看到"超时"。
-    const pool = getPoolStats();
-    if (pool) result.pool = pool;
-    return result;
-  } catch (err) {
-    // 完整错误进日志（含地址/库名，供运维排障），响应只给标签
-    log.error('❌ [Health] 数据库探测失败', err);
-    return { status: 'down', detail: errorLabel(err) };
+
+  // 短 TTL 缓存 + 单飞：并发/高频探针只触发一次真实 DB 探测，
+  // 避免公开端点被用来持续占用连接池。
+  if (_dbProbeCache && Date.now() - _dbProbeCache.at < READY_DB_CACHE_TTL_MS) {
+    return _dbProbeCache.promise;
   }
+  const probe = (async () => {
+    try {
+      await raceTimeout(sequelize.authenticate(), READY_CHECK_TIMEOUT_MS);
+      const result = { status: 'up' };
+      // 连接池占用只作**诊断信息，不参与就绪判定**：
+      // 池满（waiting > 0）在高负载下是正常现象，若因此返回 503，
+      // 负载均衡会把正在扛流量的实例全部摘掉，反而把局部拥塞放大成整体不可用。
+      // 它的价值在于让"变慢"可归因 —— 池枯竭时 acquire 要等 30s，
+      // 而本探针 3s 就超时，没有这组数字就只能看到"超时"。
+      const pool = getPoolStats();
+      if (pool) result.pool = pool;
+      return result;
+    } catch (err) {
+      // 完整错误进日志（含地址/库名，供运维排障），响应只给标签
+      log.error('❌ [Health] 数据库探测失败', err);
+      return { status: 'down', detail: errorLabel(err) };
+    }
+  })();
+
+  _dbProbeCache = { at: Date.now(), promise: probe };
+  return probe;
 }
 
 /**
@@ -150,9 +164,9 @@ function checkRedis(app) {
 }
 
 /**
- * 汇总加载器状态（只含可降级加载器的失败明细，见文件头说明）
+ * 汇总加载器状态（公开端点，不回显加载器文件与原始错误）
  *
- * @returns {{total: number, failed: number, completed: boolean, errors: Array<{file: string, reason: string}>}} 加载器摘要
+ * @returns {{total: number, failed: number, completed: boolean, errors: Array}} 加载器摘要
  */
 function collectLoaderStatus() {
   const summary = getLoaderStatus();
@@ -160,10 +174,8 @@ function collectLoaderStatus() {
     total: summary.total,
     failed: summary.failed,
     completed: summary.completed,
-    errors: summary.loadErrors.map(e => ({
-      file: e.file,
-      reason: String(e.message || '').slice(0, LOAD_ERROR_DETAIL_MAX)
-    }))
+    // 公开探针不暴露加载器文件名与内部错误，只保留聚合失败数
+    errors: summary.failed > 0 ? [{ reason: '存在初始化失败的加载器' }] : []
   };
 }
 

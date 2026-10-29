@@ -5,7 +5,7 @@
  * - 未配置 Redis（单实例）→ 保持原有行为，每次都执行
  * - 配置了 Redis → 抢占周期锁，一个周期内全集群只有一个实例执行
  * - **Redis 不可达 → 跳过本轮，绝不回退到本地执行**（回退会造成多实例重复执行）
- * - 锁 TTL 必须等于任务周期（否则锁提前过期，下个实例会重复跑）
+ * - 锁 TTL 必须大于任务周期（为长任务保留执行余量）
  *
  * 测试用一把"模拟 SET NX 语义"的假锁替代真实 Redis，
  * 因此不需要 Redis 环境也能验证"两实例只执行一次"——这类断言若依赖真实 Redis
@@ -83,12 +83,12 @@ describe('调度器 · 配置了 Redis（多实例部署）', () => {
     redisConfigured = true;
   });
 
-  it('锁 TTL 必须等于任务周期，否则锁会提前过期导致重复执行', async () => {
+  it('锁 TTL 必须大于任务周期，为长任务保留执行余量', async () => {
     const interval = 24 * HOUR;
     await acquirePeriodLock('session-cleanup', interval);
     expect(createLockCalls).toHaveLength(1);
     expect(createLockCalls[0].name).toBe('scheduler:session-cleanup');
-    expect(createLockCalls[0].options.ttl).toBe(interval);
+    expect(createLockCalls[0].options.ttl).toBe(interval * 2);
   });
 
   it('第一个实例抢到锁，第二个实例抢不到', async () => {

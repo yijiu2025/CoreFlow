@@ -34,7 +34,7 @@ import { findUserById } from '../../shared/user-dao.js';
 import { getPermissions } from './perm-cache.js';
 import StpUtil from './stp-util.js';
 import { getDeviceId, computeDeviceFingerprint } from './device.js';
-import { detectSessionRisk, isHighRiskRequest } from './anomaly-detector.js';
+import { detectSessionRisk, isHighRiskRequest, hasVerifiedFlag } from './anomaly-detector.js';
 import { getStore } from '../redis/index.js';
 import { createLogger, setLogContextProvider } from '../log/index.js';
 
@@ -292,9 +292,9 @@ async function detectAndHandleRisk(request, reply, sessionData) {
       log.debug('⚠️ 会话风险: %s %j', risk.level, risk.reasons);
 
       // 高风险操作（非 GET）+ warn → 拦截，要求先完成人机验证
-      // 豁免：带 x-verify-token 头的请求（用户正在调验证端点完成验证，不能拦自己）
-      const isVerifying = !!request.headers['x-verify-token'];
-      if (!isVerifying && risk.level === 'warn' && isHighRiskRequest(request) && risk.verify) {
+      // 只有服务端已写入的免验标记才能放行；不再信任客户端任意 x-verify-token 头。
+      const verified = await hasVerifiedFlag(sessionData.userId, deviceId);
+      if (!verified && risk.level === 'warn' && isHighRiskRequest(request) && risk.verify) {
         // 直接 reply.send 后必须标记 sent（守卫依赖 reply.sent 判断是否已发送响应）
         reply.code(403).send({
           code: 403,

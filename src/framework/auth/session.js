@@ -4,24 +4,9 @@
  * 负责会话的创建、验证、刷新、切换、销毁与安全基准维护。
  * 所有 Redis 操作统一通过 getStore 管理（自带超时、序列化、降级）。
  *
- * 2026-09-14 按职责拆分（AUDIT-REPORT-2026-09-12.md §2.3 批次 C），原 1409 行单文件拆为 4 份：
- * - `session-store.js`      共享底座：Redis 实例 / 常量 / `sidHash` / 吊销原语
- * - `session-kick.js`       踢出与吊销入口（本文件 createSession 反向依赖其 kickByDeviceType）
- * - `session-governance.js` 设备裁剪 / 陈旧行清理 / 统计趋势 / 失败日志
- * - `session.js`（本文件）  会话生命周期：建 / 取 / 刷新 / 切换 / 销毁 / 记住我 / 基准更新
- *
- * 2026-09-16 追加拆分（权限指纹改造使本文件触及 1000 行硬限）：
- * - `session-perm.js`       会话恢复时的权限解析（第 3 层权限指纹在会话路径的落地点）
- *
- * **兼容性**：本文件末尾 re-export 上述子模块的公开符号，故拆分前所有
- * `./session.js` 为来源解构这些符号的调用方（11 处非测试引用 + 契约测试）**零感知**；
- * 对外导出集合与拆分前逐字一致（24 项），未新增内部符号（store 实例 / MAX_* / _kickSession 不外泄）。
- * ⚠️ `session-perm.js` 的 `resolveSessionPermissions` 是**内部符号**，**刻意不 re-export** ——
- * 它是"会话怎么解析权限"的实现细节，对外开放等于邀请外部绕过指纹直接改权限语义。
- *
+ * 子模块拆分后，本文件负责会话生命周期；权限恢复见 session-perm.js，公开导出保持兼容。
  * @author yijiu2025
  * @since 2026-08-17
- * @since 2026-09-14 按职责拆分为 4 文件，对外导出集合保持不变
  */
 
 import crypto from 'node:crypto';
@@ -57,7 +42,10 @@ import {
   MAX_REFRESH_TOKENS,
   sidHash,
   deleteRefreshTokensForSession,
-  revokeFamily
+  revokeFamily,
+  getSessionUser,
+  isSessionUserActive,
+  revokeDisabledSession
 } from './session-store.js';
 // 兄弟子模块：createSession 需查配额并踢旧会话
 import { checkMaxSessions, pruneActiveDevices } from './session-governance.js';
@@ -364,22 +352,36 @@ async function getSession(params) {
   if (raw) {
     log.debug('✅ Redis 命中: userId=%s, username=%s', raw.userId, raw.username);
 
-    // ⚠️ 这里是权限失效的**最后一公里**：会话 TTL 最长 30 天（记住我），
-    //    Redis session 里那份 permissions 原先在整个 TTL 内无人校验 ——
-    //    管理员撤销权限后，用户仍可拿着旧权限继续访问，直到会话自然过期。
-    //    先做指纹比对，变更过则把新权限写回会话，再返回。
+    // Redis 里的 status 是登录时快照；当前状态走共享短缓存，未命中才查 User 表。
+    let currentUser;
+    try {
+      currentUser = await getSessionUser(raw.userId, raw.uid);
+    } catch (err) {
+      log.warn('[Session] 用户状态校验失败，拒绝本次认证: userId=%s', raw.userId, err);
+      return null;
+    }
+    if (!isSessionUserActive(currentUser)) {
+      log.warn('[Session] 用户已禁用或注销，吊销会话: userId=%s', raw.userId);
+      await revokeDisabledSession(sessionId, raw);
+      if (reply) {
+        reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+        reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
+      }
+      return null;
+    }
+
     let session = raw;
     try {
       const resolved = await resolveSessionPermissions(raw.userId, raw.appId, raw);
       if (resolved.permFingerprint !== raw.permFingerprint) {
         session = { ...raw, ...resolved };
-        // TTL 沿用会话自身剩余时长（expire 在下方按 rememberMe 续期，此处不覆盖）
         await sessionStore.set(sessionId, session, raw.rememberMe ? LONG_SESSION_TTL : SHORT_SESSION_TTL);
         log.info('♻️ [Session] 已就地刷新会话权限: userId=%s, appId=%s', raw.userId, raw.appId);
       }
     } catch (err) {
-      // 权限校验失败不应中断认证：保留旧会话数据（行为等同改动前），仅记录告警
-      log.warn('[Session] 会话权限指纹校验失败，沿用会话内权限: userId=%s', raw.userId, err);
+      // 无法证明快照仍有效时 fail-closed，尤其不得使用已自然到期的角色权限。
+      log.warn('[Session] 会话权限校验失败，拒绝本次认证: userId=%s', raw.userId, err);
+      return null;
     }
 
     // 续期 + 重新签名 cookie（带 app 隔离的 path）
@@ -413,17 +415,22 @@ async function getSession(params) {
     return null;
   }
 
-  // TTL 判定：用 DB 存的 remember_me 真值区分短/长期会话。
-  // 锚点必须用 last_active 而非 createdAt：session_tokens 行按 (user_id, device_id) 幂等复用，
-  // re-login 只更新 token/last_active/revoked，createdAt 保持首次建行时间——
-  // 若按 createdAt 判，行建行超 30min 后该设备所有降级请求都会被误判"超短期 TTL"：
-  // 刚发几分钟的 sid 被清、强制重登（非记住我）或强制走 sid_r（记住我），超 30d 直接误 revoke。
-  // last_active 在 re-login / updateSessionBaseline 时刷新，与 Redis 路径滚动续期语义对齐。
-  // （残差：Redis 滚动保活期间 DB last_active 不动，驱逐降级按 last_active 判偏保守，容灾宁严勿松）
-  //   超 LONG（30d）→ 真过期，revoke（无论是否记住我都已失效）
-  //   记住我会话超 SHORT 未超 LONG → 不复活、不 revoke，清 sid 交 sid_r 刷新恢复
-  //   非记住我会话超 SHORT → 直接失效（无 sid_r 可恢复，清 sid 让前端重登）
-  //   未超 SHORT → 从 DB 重建 Redis（容灾：Redis 短暂驱逐后复活）
+  const user = token.user;
+  if (!isSessionUserActive(user)) {
+    log.warn('[Session] DB 恢复命中禁用或注销用户，吊销会话: userId=%s', token.user_id);
+    await revokeDisabledSession(sessionId, {
+      userId: token.user_id,
+      familyId: token.family_id,
+      token
+    });
+    if (reply) {
+      reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+      reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
+    }
+    return null;
+  }
+
+  // TTL 以 last_active 为锚点（行会幂等复用）；超 LONG 吊销，记住我超 SHORT 交 sid_r，其余超 SHORT 拒绝。
   const isRemember = !!token.remember_me;
   const lastActiveMs = token.last_active ? token.last_active.getTime() : token.createdAt.getTime();
   const shortExpiresAt = lastActiveMs + SHORT_SESSION_TTL * 1000;
@@ -455,7 +462,6 @@ async function getSession(params) {
   }
 
   // 短期 TTL 内：重建 Redis 缓存（容灾：Redis 主动驱逐后从 DB 恢复）
-  const user = token.user;
   // 权限走指纹校验：会话里若存过指纹且仍一致则沿用，变更过则回源重载
   const { roles, permissions, permFingerprint } = await resolveSessionPermissions(user.id, token.app_id, {
     roles: token.sessionRoles,

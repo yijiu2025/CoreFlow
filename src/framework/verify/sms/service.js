@@ -7,23 +7,8 @@
  */
 import crypto from 'node:crypto';
 import config from '../config.js';
-import { createLogger } from '../../log/index.js';
-
-const log = createLogger('framework.verify.sms.service');
 
 const smsConfig = config.sms;
-
-/**
- * 手机号脱敏：138****1234
- * 🔴 严禁在日志中输出完整手机号与验证码——有日志权限者可直接绕过验证。
- * @param {string} phone 完整手机号
- * @returns {string} 掩码后的手机号
- */
-function maskPhone(phone) {
-  const p = String(phone || '');
-  if (p.length <= 7) return `${p.slice(0, 1)}****`;
-  return `${p.slice(0, 3)}****${p.slice(-4)}`;
-}
 
 /**
  * 短信服务商适配器
@@ -45,9 +30,7 @@ class SmsService {
       case 'tencent':
         return await this._sendTencent(phone, code);
       default:
-        log.warn(`[SMS] 未知服务商: ${provider}，使用模拟发送`);
-        log.info(`[SMS] 模拟发送: ${maskPhone(phone)}`);
-        return true;
+        throw new Error(`SEND_CODE_FAILED:不支持的短信服务商: ${provider}`);
     }
   }
 
@@ -55,22 +38,17 @@ class SmsService {
    * 阿里云短信发送
    * @private
    */
-  async _sendAliyun(phone, code) {
-    // TODO: 对接阿里云短信 API
-    // const Dysmsapi = require('@alicloud/dysmsapi20170525');
-    log.info(`[SMS] 阿里云发送: ${maskPhone(phone)}`);
-    return true;
+  async _sendAliyun(_phone, _code) {
+    // 未对接真实 API 时不得模拟成功：静默成功会让验证码流形同虚设
+    throw new Error('SEND_CODE_FAILED:阿里云短信 API 尚未接入');
   }
 
   /**
    * 腾讯云短信发送
    * @private
    */
-  async _sendTencent(phone, code) {
-    // TODO: 对接腾讯云短信 API
-    // const tencentcloud = require('tencentcloud-sdk-nodejs');
-    log.info(`[SMS] 腾讯云发送: ${maskPhone(phone)}`);
-    return true;
+  async _sendTencent(_phone, _code) {
+    throw new Error('SEND_CODE_FAILED:腾讯云短信 API 尚未接入');
   }
 
   /**

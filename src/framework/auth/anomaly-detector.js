@@ -377,11 +377,12 @@ async function issueVerifyToken(userId, deviceId) {
 }
 
 /**
- * 验证端点调用：校验 verify token 一致后，写"已验证"标记（30 分钟免验）
+ * 验证端点调用：校验 verify token 归属当前用户后，写"已验证"标记（30 分钟免验）
  * @param {string} token - 前端传来的 x-verify-token
+ * @param {{userId?: number}} identity - 当前请求身份（必须匹配 token 签发时的 userId）
  * @returns {Promise<boolean>} 是否验证成功
  */
-async function confirmVerifyToken(token) {
+async function confirmVerifyToken(token, identity = {}) {
   try {
     if (!token || typeof token !== 'string') {
       return false;
@@ -389,6 +390,10 @@ async function confirmVerifyToken(token) {
     const store = getVerifyStore();
     const data = await store.get(`vtoken:${token}`);
     if (!data) return false;
+    // 归属校验：token 必须签发给自己，防止跨用户消费
+    if (identity.userId && Number(data.userId) !== Number(identity.userId)) {
+      return false;
+    }
     // 写已验证标记
     await store.set(`verified:${data.userId}:${data.deviceId}`, { at: Date.now() }, VERIFIED_TTL);
     // 验证 token 一次性，消费掉
@@ -397,6 +402,24 @@ async function confirmVerifyToken(token) {
   } catch (err) {
     // 校验流程异常不直接放行（返回 false 让前端重试），但记日志便于排障
     log.warn(`⚠️ [Anomaly] confirmVerifyToken 异常`, err);
+    return false;
+  }
+}
+
+/**
+ * 判断当前用户+设备是否已完成人机验证（免验标记）
+ * @param {number} userId 用户内部 ID
+ * @param {string} deviceId 设备 ID
+ * @returns {Promise<boolean>}
+ */
+async function hasVerifiedFlag(userId, deviceId) {
+  if (!userId || !deviceId) return false;
+  try {
+    const store = getVerifyStore();
+    const data = await store.get(`verified:${userId}:${deviceId}`);
+    return Boolean(data);
+  } catch (err) {
+    log.warn(`⚠️ [Anomaly] hasVerifiedFlag 查询失败`, err);
     return false;
   }
 }
@@ -443,6 +466,7 @@ export {
   detectLoginEnvironmentAnomaly,
   detectSessionRisk,
   confirmVerifyToken,
+  hasVerifiedFlag,
   isHighRiskRequest,
   clearAccountLock,
   clearIpLock

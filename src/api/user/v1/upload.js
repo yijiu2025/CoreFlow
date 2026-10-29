@@ -12,8 +12,12 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { processAndUploadAvatar, AvatarError } from '../../../app/user/services/avatar.service.js';
 import { createLogger } from '../../../framework/log/index.js';
+import { USER_PERMISSIONS } from '../../../app/user/permission/index.js';
 
 const log = createLogger('api.user.upload');
+
+/** 头像上传硬上限：在完整缓冲前拒绝，避免大文件先耗尽内存 */
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 async function registerUploadRoutes(fastify) {
   registerGroupMetadata({
@@ -34,6 +38,7 @@ async function registerUploadRoutes(fastify) {
     method: 'POST',
     url: '/avatar',
     requireLogin: true,
+    requirePermission: USER_PERMISSIONS.BASE.WRITE,
     handler: async (request, reply) => {
       const user = request.state?.user;
       if (!user?.sub) {
@@ -46,10 +51,18 @@ async function registerUploadRoutes(fastify) {
         return reply.code(400).send({ code: 400, message: '请选择图片文件', data: null });
       }
 
-      // 2. 读取文件内容为 Buffer
+      // 2. 流式读取并限制大小：超过上限立即中止，不构建超大 Buffer
       const chunks = [];
+      let total = 0;
       for await (const chunk of file.file) {
+        total += chunk.length;
+        if (total > MAX_AVATAR_BYTES) {
+          throw new AvatarError('图片过大，请上传 5MB 以内的图片', 413);
+        }
         chunks.push(chunk);
+      }
+      if (file.file.truncated) {
+        throw new AvatarError('图片过大，请上传 5MB 以内的图片', 413);
       }
       const buffer = Buffer.concat(chunks);
 

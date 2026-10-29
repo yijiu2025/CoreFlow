@@ -326,8 +326,8 @@ export async function deleteUser() {
       await closeRedis(redis);
     }
 
-    // 软删除用户
-    await user.update({ delete_version: user.id });
+    // 软删除用户：走 destroy() 触发 paranoid + delete_version 钩子，避免遗留可查询的活跃行
+    await user.destroy();
 
     printSuccess(`用户已删除: ${email}（所有设备已踢出）`);
   } finally {

@@ -124,9 +124,10 @@ COPY scripts ./scripts
 COPY public ./public
 COPY docker ./docker
 
-# 运行期需要可写的三个位置：滚动日志、防火墙统计落盘、用户上传
+# 运行期只对需要写的位置开放写权限：滚动日志、防火墙统计落盘、用户上传。
+# 源码 / migrations / scripts 保持 root 所有、只读，缩小容器内被入侵后的可写面。
 RUN mkdir -p logs src/data public/uploads \
- && chown -R node:node /app
+ && chown -R node:node logs src/data public/uploads
 
 # 非 root 运行：node 镜像自带 uid/gid 1000 的 node 用户
 USER node

@@ -179,6 +179,9 @@ function createErrorHandler(isProduction) {
       // AJV 校验失败以 400 返回，拼接所有校验错误信息方便前端定位
       statusCode = 400;
       message = error.validation.map(v => v.message || v.instancePath).join('; ');
+    } else if (isProduction && statusCode >= 500) {
+      // 生产环境非预期 500 不回显内部错误原文（可能含 SQL/路径/内网地址）
+      message = '服务器内部错误，请稍后重试';
     }
 
     // 500+ 记录完整错误栈，400 仅记录摘要（统一日志出口，落 logs/*.log）
@@ -252,7 +255,8 @@ async function createApp() {
               req(request) {
                 return {
                   method: request.method,
-                  url: request.url,
+                  // 只记路径，剥离 query 中的 code/token/sign 等敏感参数
+                  url: request.url.split('?')[0],
                   hostname: request.hostname,
                   remoteAddress: request.ip,
                   requestId: request.id
@@ -266,7 +270,14 @@ async function createApp() {
             }
           })
     },
-    genReqId: req => req.headers['x-request-id'] || crypto.randomUUID(),
+    genReqId: req => {
+      const raw = req.headers['x-request-id'];
+      // 仅信任受限安全字符，防止日志注入/超长字符串
+      if (typeof raw === 'string' && raw.length >= 1 && raw.length <= 128 && /^[\w.-]+$/.test(raw)) {
+        return raw;
+      }
+      return crypto.randomUUID();
+    },
     // 尾部斜杠由网关层（Nginx）统一处理，应用层不做模糊匹配以提升路由性能
     trustProxy
   });

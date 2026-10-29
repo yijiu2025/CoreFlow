@@ -152,10 +152,12 @@ async function createKey({ kid, algorithm = ALGORITHMS.RS256, modulusLength = MO
 
 /**
  * 列出所有密钥对（含未启用，供管理端）
+ * 安全：默认剥离 private_key，列表接口不应隐含私钥导出能力
  * @returns {Promise<Array>}
  */
 async function listKeys() {
-  return findAll();
+  const records = await findAll();
+  return records.map(({ private_key, ...safe }) => safe);
 }
 
 /**

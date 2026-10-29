@@ -116,7 +116,7 @@ async function computePermFingerprint(userId, appId) {
   // 只取 id / updatedAt / deletedAt（paranoid 软删行也要反映进指纹）
   const userRoles = await UserRole.findAll({
     where: { user_id: userId, app_id: { [Op.in]: apps } },
-    attributes: ['id', 'updatedAt', 'deletedAt', 'role_id'],
+    attributes: ['id', 'updatedAt', 'deletedAt', 'role_id', 'expire_at'],
     paranoid: false
   });
 
@@ -136,8 +136,14 @@ async function computePermFingerprint(userId, appId) {
     paranoid: false
   });
 
+  const now = Date.now();
   const rows = [
-    ...userRoles.map(r => `ur:${r.get('id')}:${normalizeTs(r.get('updatedAt'))}:${normalizeTs(r.get('deletedAt'))}`),
+    ...userRoles.map(r => {
+      const expiresAt = normalizeTs(r.get('expire_at'));
+      // expire_at 自然到期不会更新 DB 行；把到期状态纳入指纹，跨期后旧快照才会失效。
+      const expiryState = expiresAt && Number(expiresAt) <= now ? 'expired' : 'active';
+      return `ur:${r.get('id')}:${normalizeTs(r.get('updatedAt'))}:${normalizeTs(r.get('deletedAt'))}:${expiresAt}:${expiryState}`;
+    }),
     ...roles.map(r => `role:${r.get('id')}:${normalizeTs(r.get('updatedAt'))}:${normalizeTs(r.get('deletedAt'))}`),
     ...inlinePolicies.map(
       r => `ip:${r.get('id')}:${normalizeTs(r.get('updatedAt'))}:${normalizeTs(r.get('deletedAt'))}`

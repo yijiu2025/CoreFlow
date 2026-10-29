@@ -138,8 +138,16 @@ async function deleteFile(url) {
         await client.delete(key);
       }
     } else if (url.startsWith('/uploads/')) {
-      // 本地文件
-      const filePath = path.join(LOCAL_UPLOAD_DIR, url.replace('/uploads/', ''));
+      // 本地文件：解析规范化路径后校验目录边界，阻断 ../ 穿越及相似前缀目录。
+      const filePath = path.resolve(LOCAL_UPLOAD_DIR, url.slice('/uploads/'.length));
+      const relativeFilePath = path.relative(LOCAL_UPLOAD_DIR, filePath);
+      const outsideUploadDir =
+        !relativeFilePath ||
+        relativeFilePath === '..' ||
+        relativeFilePath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativeFilePath);
+      if (outsideUploadDir) return;
+
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }

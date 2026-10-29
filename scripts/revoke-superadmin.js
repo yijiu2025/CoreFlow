@@ -139,8 +139,8 @@ async function main() {
     }
   }
 
-  // 8. 执行软删除
-  await targetUserRole.update({ delete_version: targetUserRole.id });
+  // 8. 执行软删除（destroy 触发 paranoid + delete_version 钩子）
+  await targetUserRole.destroy();
   logStdout('✅ 已撤销 superadmin 角色');
 
   // 9. 清除 Redis session

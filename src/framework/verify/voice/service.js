@@ -7,23 +7,8 @@
  */
 import crypto from 'node:crypto';
 import config from '../config.js';
-import { createLogger } from '../../log/index.js';
-
-const log = createLogger('framework.verify.voice.service');
 
 const smsConfig = config.sms;
-
-/**
- * 手机号脱敏：138****1234
- * 🔴 严禁在日志中输出完整手机号与验证码——有日志权限者可直接绕过验证。
- * @param {string} phone 完整手机号
- * @returns {string} 掩码后的手机号
- */
-function maskPhone(phone) {
-  const p = String(phone || '');
-  if (p.length <= 7) return `${p.slice(0, 1)}****`;
-  return `${p.slice(0, 3)}****${p.slice(-4)}`;
-}
 
 class VoiceService {
   /**
@@ -41,9 +26,7 @@ class VoiceService {
       case 'tencent':
         return await this._sendTencent(phone, code);
       default:
-        log.warn(`[Voice] 未知服务商: ${provider}，使用模拟发送`);
-        log.info(`[Voice] 模拟语音播报: ${maskPhone(phone)}`);
-        return true;
+        throw new Error(`SEND_CODE_FAILED:不支持的语音服务商: ${provider}`);
     }
   }
 
@@ -51,20 +34,16 @@ class VoiceService {
    * 阿里云语音验证码
    * @private
    */
-  async _sendAliyun(phone, code) {
-    // TODO: 对接阿里云语音 API
-    log.info(`[Voice] 阿里云语音: ${maskPhone(phone)}`);
-    return true;
+  async _sendAliyun(_phone, _code) {
+    throw new Error('SEND_CODE_FAILED:阿里云语音 API 尚未接入');
   }
 
   /**
    * 腾讯云语音验证码
    * @private
    */
-  async _sendTencent(phone, code) {
-    // TODO: 对接腾讯云语音 API
-    log.info(`[Voice] 腾讯云语音: ${maskPhone(phone)}`);
-    return true;
+  async _sendTencent(_phone, _code) {
+    throw new Error('SEND_CODE_FAILED:腾讯云语音 API 尚未接入');
   }
 
   /**

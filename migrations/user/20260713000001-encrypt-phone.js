@@ -24,6 +24,7 @@ export async function up({ queryInterface, Sequelize }) {
   const User = UserDefine(queryInterface.sequelize, Sequelize);
 
   let count = 0;
+  const failed = [];
   for (const row of rows) {
     try {
       const encrypted = User.encryptPhoneStatic(row.phone);
@@ -32,8 +33,17 @@ export async function up({ queryInterface, Sequelize }) {
       });
       count++;
     } catch (err) {
+      failed.push({ id: row.id, message: err.message });
       log.warn(`  ⚠️  加密失败 id=${row.id}: ${err.message}`);
     }
+  }
+
+  // 任何单行失败都必须使迁移失败，不能报告"已加密 N/总数"后仍标记成功
+  if (failed.length > 0) {
+    const first = failed[0];
+    throw new Error(
+      `手机号加密迁移失败：${failed.length} 条记录加密失败（示例 id=${first.id}: ${first.message}），请排查后重跑`
+    );
   }
 
   logStdout(`  ✅ 已加密 ${count}/${rows.length} 条手机号记录`);

@@ -25,10 +25,10 @@ const bulkCreate = jest.fn(async () => []);
 const roleCreate = jest.fn(async () => ({}));
 
 const models = {
-  User: { create: jest.fn(async () => ({ id: 42 })) },
+  User: { create: jest.fn(async () => ({ id: 42 })), findOne: jest.fn(async () => null) },
   UserIdentity: { create: jest.fn(async () => ({})) },
   UserRole: { create: roleCreate, bulkCreate },
-  Role: { findOne: jest.fn(async () => ({ id: 7 })) }
+  Role: { findOne: jest.fn(async () => ({ id: 7 })), count: jest.fn(async () => 1) }
 };
 
 const mockSequelize = {
@@ -85,7 +85,7 @@ describe('registerUser 角色写入路径', () => {
     expect(roleCreate).not.toHaveBeenCalled();
   });
 
-  it('未传角色：落到默认 guest 角色，仍只写一条（单条路径不受影响）', async () => {
+  it('未传角色：落到默认普通角色，仍只写一条（单条路径不受影响）', async () => {
     await userDao.registerUser(registerRequest());
 
     expect(models.Role.findOne).toHaveBeenCalledTimes(1);
@@ -101,5 +101,24 @@ describe('registerUser 角色写入路径', () => {
 
     expect(roleCreate).not.toHaveBeenCalled();
     expect(bulkCreate).not.toHaveBeenCalled();
+  });
+
+  it('公开注册忽略客户端 role_ids，只分配服务端普通角色', async () => {
+    await userDao.createUser(registerRequest({ role_ids: [99] }));
+
+    expect(models.Role.count).not.toHaveBeenCalled();
+    expect(bulkCreate).not.toHaveBeenCalled();
+    expect(roleCreate).toHaveBeenCalledTimes(1);
+    expect(roleCreate.mock.calls[0][0]).toMatchObject({ user_id: 42, role_id: 7, app_id: 'GLOBAL' });
+  });
+
+  it('默认角色按 user_normal 编码查询，不会选中同应用的 user_banned', async () => {
+    models.Role.findOne.mockImplementationOnce(async ({ where }) =>
+      where.code === 'user_normal' ? { id: 7, code: 'user_normal' } : { id: 1, code: 'user_banned' }
+    );
+
+    await userDao.registerUser(registerRequest());
+
+    expect(roleCreate.mock.calls[0][0]).toMatchObject({ role_id: 7 });
   });
 });

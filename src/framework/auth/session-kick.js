@@ -193,6 +193,10 @@ async function kickAllSessions(userId) {
     await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
   }
 
+  // DB 兜底：Redis 逆索引可能丢失（重启/驱逐/故障），按 user_id 全量 revoke 未吊销行。
+  // 与 hashes 批量 revoke 互补而非重复——hashes 覆盖的是索引可达的，此处覆盖索引遗漏的。
+  await SessionToken.update({ revoked: true }, { where: { user_id: userId, revoked: false } });
+
   await SessionLog.create({
     user_id: userId,
     event: 'KICK',
@@ -229,6 +233,12 @@ async function kickUser(userId, appId = null) {
   if (hashes.length) {
     await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
   }
+
+  // DB 兜底：Redis 逆索引可能丢失（重启/驱逐/故障），按 user_id (+ app_id) 全量 revoke 未吊销行。
+  // 与 hashes 批量 revoke 互补——覆盖索引遗漏的 DB 行（如 Redis 重启后新增的 session）。
+  const dbFallbackWhere = { user_id: userId, revoked: false };
+  if (appId) dbFallbackWhere.app_id = appId;
+  await SessionToken.update({ revoked: true }, { where: dbFallbackWhere });
 
   await SessionLog.create({
     user_id: userId,

@@ -81,7 +81,7 @@ async function acquirePeriodLock(taskKey, intervalMs) {
     // 其他实例可并发执行同一任务（重复执行）。取 2 倍周期作为安全余量。
     const lockTtl = Math.max(intervalMs * 2, intervalMs + 60_000);
     const lock = createLock(`scheduler:${taskKey}`, { ttl: lockTtl });
-    return await lock.tryAcquire(intervalMs);
+    return await lock.tryAcquire();
   } catch (err) {
     // 已配置但不可达 → 跳过，不回退。回退执行在多实例下会重复跑任务。
     log.warn(

@@ -133,7 +133,9 @@ class QrCodeService {
     const data = await store.get(sessionId);
     if (!data || data.status !== QR_STATUS.CONFIRMED) return null;
 
-    await store.delete(sessionId);
+    // 原子消费：并发只有一个能取到确认态
+    const consumed = await store.getDel(sessionId);
+    if (!consumed) return null;
     return data.confirmedBy;
   }
 }

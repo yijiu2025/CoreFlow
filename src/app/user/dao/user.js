@@ -6,7 +6,7 @@
  * （历史 bcrypt 哈希继续可校验，并在登录成功时透明升级，见 password-hash.js）。
  * 登录成功后通过 PBAC 计算用户策略并签发 JWT Token。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import jwt from 'jsonwebtoken';
@@ -18,6 +18,8 @@ import { log } from '../../../framework/log/index.js';
 import IamDao from '../../admin/dao/iam.dao.js';
 import { validatePasswordStrength } from '../../../framework/auth/password-policy.js';
 import { maskPhone } from '../../../utils/crypto.js';
+import { kickAllSessions } from '../../../framework/auth/session.js';
+import TokenDao from '../../oauth21/dao/token.dao.js';
 
 class UserDao {
   /**
@@ -43,13 +45,14 @@ class UserDao {
   }
 
   /**
-   * 创建新用户
+   * 创建新用户（公开注册）
    *
-   * 校验用户名/邮箱唯一性和角色有效性后，调用 registerUser 完成注册。
+   * 校验用户名/邮箱唯一性后，调用 registerUser 完成注册。
+   * 公开注册始终使用服务端默认普通角色，忽略客户端提交的角色。
    *
    * @param {import('fastify').FastifyRequest} request - Fastify 请求对象
    * @returns {Promise<object>} 新创建的 User 模型实例
-   * @throws {Error} 用户名或邮箱为空、邮箱已存在、角色不存在时抛出
+   * @throws {Error} 用户名或邮箱为空、邮箱已存在、默认角色不存在时抛出
    */
   async createUser(request) {
     let { username, email } = request.body;
@@ -61,15 +64,8 @@ class UserDao {
       if (user) throw new Error('REGISTER_FAILED:邮箱已存在');
     }
 
-    const roleIds = request.body.role_ids || [];
-    if (roleIds.length > 0) {
-      // 🔴 N+1 修复：此前逐个 findByPk；改为一次 count 与数量比对
-      const { Op } = await import('sequelize');
-      const count = await getModel('Role').count({ where: { id: { [Op.in]: roleIds } } });
-      if (count !== roleIds.length) throw new Error('NOT_FOUND:存在无效的角色ID');
-    }
-
-    return await this.registerUser(request);
+    const publicRequest = { ...request, body: { ...request.body, role_ids: [] } };
+    return await this.registerUser(publicRequest);
   }
 
   /**
@@ -170,7 +166,7 @@ class UserDao {
    * 在单个数据库事务中完成：
    * 1. 创建 User 基础信息
    * 2. 创建 UserIdentity 密码凭证
-   * 3. 分配指定角色或默认 guest 角色
+   * 3. 分配指定角色或默认 user_normal 普通角色
    *
    * @param {import('fastify').FastifyRequest} request - Fastify 请求对象（需包含 body.email, body.password, body.username?, body.role_ids?）
    * @returns {Promise<object>} 新创建的 User 模型实例
@@ -221,19 +217,19 @@ class UserDao {
             { transaction: t }
           );
         } else {
-          // 默认 guest 角色（rank_level=1, app_id=GLOBAL），找不到则抛错回滚，
-          // 避免注册出"有用户无角色"的脏数据（权限为空无法正常使用）
-          const guestRole = await getModel('Role').findOne({
-            where: { rank_level: 1, app_id: 'GLOBAL' },
+          // 默认普通角色必须按固定编码查询；rank_level=1 对应 user_banned，不能用于注册。
+          // 找不到则抛错回滚，避免注册出"有用户无角色"的脏数据（权限为空无法正常使用）。
+          const normalRole = await getModel('Role').findOne({
+            where: { code: 'user_normal', app_id: 'GLOBAL' },
             transaction: t
           });
-          if (!guestRole) {
+          if (!normalRole) {
             throw new Error('REGISTER_FAILED:默认角色未初始化，请联系管理员运行角色同步');
           }
           await getModel('UserRole').create(
             {
               user_id: user.id,
-              role_id: guestRole.id,
+              role_id: normalRole.id,
               app_id: 'GLOBAL'
             },
             { transaction: t }
@@ -262,6 +258,7 @@ class UserDao {
    * 1. 按 email 查 UserIdentity（identity_type=password）
    * 2. RSA 解密新密码 + 复杂度校验
    * 3. scrypt 重新哈希 + 更新 credential
+   * 4. 【安全】撤销该用户所有既有凭证（Session/Refresh/OAuth），防止旧凭证继续可用
    *
    * @param {string} email 邮箱
    * @param {string} encryptedPassword RSA 加密的新密码密文
@@ -294,6 +291,34 @@ class UserDao {
 
     identity.credential = await hashPassword(password);
     await identity.save();
+
+    // 【安全】密码更新成功后，撤销该用户所有既有凭证
+    // 防止攻击者使用旧 Session/Refresh/OAuth Token 继续访问
+    const userId = identity.user.id;
+    const uid = identity.user.uid;
+
+    const revocationErrors = [];
+
+    try {
+      await kickAllSessions(userId);
+      log.info(`[UserDao] 密码重置后已撤销用户所有 Session: userId=${userId}`);
+    } catch (err) {
+      revocationErrors.push(err);
+      log.error(`[UserDao] 密码重置后撤销 Session 失败: userId=${userId}, error=${err.message}`, err);
+    }
+
+    try {
+      await TokenDao.revokeAllForUser(uid);
+      log.info(`[UserDao] 密码重置后已撤销用户所有 OAuth Token: uid=${uid}`);
+    } catch (err) {
+      revocationErrors.push(err);
+      log.error(`[UserDao] 密码重置后撤销 OAuth Token 失败: uid=${uid}, error=${err.message}`, err);
+    }
+
+    if (revocationErrors.length > 0) {
+      throw new Error('RESET_FAILED:密码已更新，但旧凭证撤销未完成，请重试或联系管理员');
+    }
+
     return true;
   }
 

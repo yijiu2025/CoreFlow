@@ -10,7 +10,10 @@
  */
 import { verify } from '../jwt/index.js';
 import { createSession, updateRememberMe, switchSessionByRefreshToken, revokeRememberMe } from './session.js';
+import { getModel } from '../db/index.js';
 import { getStore } from '../redis/index.js';
+import { userRefreshStore } from './session-store.js';
+import { log } from '../log/index.js';
 import {
   signCookie,
   COOKIE_OPTIONS,
@@ -81,15 +84,12 @@ async function bindSessionToCookie(sessionToken, request, reply) {
     return { ok: false, statusCode: 400, body: { code: 400, message: '缺少 session_token', data: null } };
   }
 
-  // 从 Redis 读取临时 session 数据
+  // 一次性原子消费临时 token：并发请求只有一个能取到数据（getDel = GETDEL/Map 同步取删）
   const sessionStore = getStore('session_token');
-  const sessionData = await sessionStore.get(sessionToken);
+  const sessionData = await sessionStore.getDel(sessionToken);
   if (!sessionData) {
     return { ok: false, statusCode: 401, body: { code: 401, message: 'session_token 无效或已过期', data: null } };
   }
-
-  // 删除临时 token（一次性使用）
-  await sessionStore.delete(sessionToken);
 
   // 创建正式 Session，refreshToken 写入 HttpOnly 凭证 cookie（JS 读不到，防 XSS）
   // accountKey 始终返回 uid（前端据此记录账号到列表，无论是否保持登录）；
@@ -297,6 +297,12 @@ async function switchAccount(request, reply, accountKey) {
  * 前端发 accountKey(=uid)，后端用 accountKeyForUid(uid) 派生 cookie 名 → 读 rt cookie
  * → revokeRememberMe + 清该凭证 cookie。下次该账号需重新输密码登录。
  *
+ * **Cookie Path 问题**：k_* cookie 的 path 收窄到 `/auth/v1/switch-account`，
+ * 浏览器不会向 `/auth/v1/saved-accounts/revoke` 端点发送该 cookie。
+ * 因此本函数采用双路径策略：
+ * 1. 优先从 cookie 读 refreshToken（兼容将来 path 调整）
+ * 2. Cookie 不可达时，走服务端安全索引兜底：uid → userId → userRefreshStore → revokeRememberMe
+ *
  * @param {object} request - Fastify request
  * @param {object} reply - Fastify reply
  * @param {string} accountKey - 前端 localStorage 的目标账号 key（uid 明文）
@@ -305,9 +311,28 @@ async function removeSavedAccount(request, reply, accountKey) {
   if (!accountKey) return;
   const cookieName = accountKeyForUid(accountKey);
   const refreshToken = request?.cookies?.[cookieName];
+
   if (refreshToken) {
+    // 路径 1：cookie 可达（兼容 path 放宽后的场景）
     await revokeRememberMe(refreshToken);
+  } else {
+    // 路径 2：cookie path 收窄导致不可达，走服务端索引兜底
+    // uid → User.userId → userRefreshStore（Redis 逆索引）→ 逐个 revokeRememberMe
+    try {
+      const User = getModel('User');
+      const user = await User.findOne({ where: { uid: accountKey }, attributes: ['id'] });
+      if (user) {
+        const rts = await userRefreshStore.zRangeByScore(String(user.id), '-inf', '+inf');
+        for (const rt of rts) {
+          await revokeRememberMe(rt);
+        }
+      }
+    } catch (err) {
+      log.error(`[Auth] 撤销免切凭证失败: ${err?.message}`, err);
+      throw new Error('服务端凭证撤销失败，请稍后重试', { cause: err });
+    }
   }
+
   reply.clearCookie(cookieName, USER_COOKIE_OPTS);
   // 清 sid_r cookie（若当前浏览器持有的正是该账号的 sid_r）
   reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });

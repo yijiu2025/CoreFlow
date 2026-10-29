@@ -207,7 +207,7 @@ export async function revokeRole() {
       return;
     }
 
-    await userRole.update({ delete_version: userRole.id });
+    await userRole.destroy();
 
     // 清除 session
     const redis = await connectRedis();

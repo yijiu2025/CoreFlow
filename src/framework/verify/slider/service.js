@@ -117,8 +117,9 @@ class SliderService {
     const data = await store.get(sliderKey);
     if (!data || !data.verified) return false;
 
-    await store.delete(sliderKey);
-    return true;
+    // 原子消费：并发只有一个能取到
+    const consumed = await store.getDel(sliderKey);
+    return Boolean(consumed);
   }
 }
 

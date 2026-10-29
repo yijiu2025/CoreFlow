@@ -12,6 +12,7 @@
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import UserDao from '../../../app/user/dao/user.js';
+import { USER_PERMISSIONS } from '../../../app/user/permission/index.js';
 
 async function registerUserRoutes(fastify) {
   registerGroupMetadata({
@@ -197,6 +198,7 @@ async function registerUserRoutes(fastify) {
     method: 'PUT',
     url: '/update',
     requireLogin: true,
+    requirePermission: USER_PERMISSIONS.BASE.WRITE,
     handler: async (request, reply) => {
       const tokenUser = request.state?.user;
       if (!tokenUser?.userId) {
@@ -206,10 +208,9 @@ async function registerUserRoutes(fastify) {
         });
       }
 
-      const { username, avatar, gender, age, city, bio, personal_id } = request.body || {};
+      const { username, gender, age, city, bio, personal_id } = request.body || {};
       const updated = await UserDao.updateProfile(tokenUser.userId, {
         username,
-        avatar,
         gender,
         age,
         city,

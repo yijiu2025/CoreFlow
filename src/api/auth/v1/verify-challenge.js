@@ -43,14 +43,19 @@ async function registerVerifyChallengeRoutes(fastify) {
         return reply.result.fail('缺少 x-verify-token 头', null, 400);
       }
 
-      const ok = await confirmVerifyToken(String(verifyToken));
+      const user = request.state?.user;
+      if (!user?.userId) {
+        return reply.result.fail('登录态缺失，请重新登录', null, 401);
+      }
+
+      // 归属校验：token 必须签发自当前用户，防止跨用户消费他人验证 token
+      const ok = await confirmVerifyToken(String(verifyToken), { userId: user.userId });
       if (!ok) {
         return reply.result.fail('验证令牌无效或已过期，请重新触发验证', null, 400);
       }
 
       // 验证通过后：把当前请求的新环境（device_id/IP/UA/指纹）更新成基准
       // 这样后续请求不再报"指纹变了"，Redis session + DB session_tokens 同步更新
-      const user = request.state?.user;
       const sessionId = user?.sessionId;
       if (sessionId) {
         try {

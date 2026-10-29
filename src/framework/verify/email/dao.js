@@ -148,8 +148,12 @@ class EmailDao {
       }
     }
 
-    // 一次性消费
-    await store.delete(email);
+    // 一次性原子消费：getDel 在 Redis 下是 GETDEL、Map 下同步取删，
+    // 并发请求只有一个能取到值，防止同一验证码被多次消费。
+    const consumed = await store.getDel(email);
+    if (!consumed) {
+      throw new Error('VERIFY_FAILED:邮箱验证码错误或已过期');
+    }
     return true;
   }
 }

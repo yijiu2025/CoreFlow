@@ -168,6 +168,14 @@ describe('keys 组件', () => {
     expect(all[0].remark).toBe('a');
   });
 
+  test('listKeys 默认剥离私钥，列表不等于私钥导出', async () => {
+    await createKey({ remark: 'no-private' });
+    const [rec] = await listKeys();
+    expect(rec.remark).toBe('no-private');
+    expect(rec).not.toHaveProperty('private_key');
+    expect(rec.name).toBeTruthy();
+  });
+
   test('rotateKey 停用旧密钥，宽限内仍可验签且 JWKS 含两把', async () => {
     await ensureCurrentKey();
     const oldKid = getCurrentKid();

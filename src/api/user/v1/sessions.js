@@ -96,7 +96,7 @@ async function registerSessionsRoutes(fastify) {
 
   /**
    * POST /user/v1/sessions/kick
-   * 踢掉指定会话
+   * 踢掉指定会话（需验证目标会话属于当前用户，防越权踢他人）
    */
   registerSecureRoute(fastify, {
     name: 'kickSession',
@@ -113,6 +113,16 @@ async function registerSessionsRoutes(fastify) {
       const { sessionId } = request.body;
       if (!sessionId) {
         return reply.code(400).send({ code: 400, message: '缺少 sessionId', data: null });
+      }
+
+      // 归属验证：目标 session 必须属于当前用户，否则返回 404（不泄露存在性）
+      const SessionToken = getModel('SessionToken');
+      const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
+      const token = await SessionToken.findOne({
+        where: { token: tokenHash, user_id: user.userId || user.sub, revoked: false }
+      });
+      if (!token) {
+        return reply.code(404).send({ code: 404, message: '会话不存在', data: null });
       }
 
       await kickSession(sessionId, user.userId || user.sub);

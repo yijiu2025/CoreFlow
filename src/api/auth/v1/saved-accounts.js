@@ -75,7 +75,7 @@ async function registerSavedAccountsRoutes(fastify) {
     alias: '撤销已登录账号凭证',
     method: 'POST',
     url: '/saved-accounts/revoke',
-    requireLogin: false,
+    requireLogin: true,
     handler: async (request, reply) => {
       if (!isAllowedOrigin(request)) {
         return reply.code(403).send({ code: 403, message: '来源不在允许列表', data: null });
@@ -83,6 +83,9 @@ async function registerSavedAccountsRoutes(fastify) {
       const { accountKey } = request.body || {};
       if (!accountKey) {
         return reply.code(400).send({ code: 400, message: '缺少 accountKey', data: null });
+      }
+      if (request.state.user?.sub !== accountKey) {
+        return reply.code(403).send({ code: 403, message: '只能撤销当前账号的服务端凭证', data: null });
       }
       await removeSavedAccount(request, reply, accountKey);
       return reply.result.success('已撤销');

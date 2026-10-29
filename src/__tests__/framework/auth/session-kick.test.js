@@ -242,7 +242,7 @@ describe('kickSession：踢指定会话（含 userId 为空的操作者场景）
 });
 
 describe('kickAllSessions：全端下线，批量 revoke', () => {
-  test('清空该用户全部会话，DB 只发一次 Op.in 批量 revoke', async () => {
+  test('清空该用户全部会话，DB 发 Op.in 批量 revoke + user_id 兜底', async () => {
     await seedSession('sid-1', { appId: 'app1', familyId: 'f-1' });
     await seedSession('sid-2', { appId: 'app2', familyId: 'f-2' });
     await seedRefreshToken('rt-1', 'sid-1', 'f-1');
@@ -255,16 +255,28 @@ describe('kickAllSessions：全端下线，批量 revoke', () => {
     expect(await refreshStore.get('rt-1')).toBeNull();
     expect(await refreshStore.get('rt-2')).toBeNull();
     expect(await userSessionsStore.zRangeByScore(String(UID))).toEqual([]);
-    // 批量：恰好一次 update，hashes 全部命中
-    expect(dbCalls.tokenUpdate).toHaveLength(1);
+    // 2 次 DB update：1) Op.in hashes 批量 revoke  2) user_id 兜底 revoke
+    expect(dbCalls.tokenUpdate).toHaveLength(2);
     const hashes = dbCalls.tokenUpdate[0].opts.where.token[Op.in];
     expect(hashes.sort()).toEqual([sidHash('sid-1'), sidHash('sid-2')].sort());
+    // DB 兜底：按 user_id 全量 revoke
+    expect(dbCalls.tokenUpdate[1].opts.where).toEqual({ user_id: UID, revoked: false });
     expect(dbCalls.logCreate[0].details).toEqual({ reason: 'kick_all', count: 2 });
+  });
+
+  test('Redis 逆索引丢失时 DB 兜底仍能 revoke', async () => {
+    // 模拟 Redis 逆索引为空（重启/驱逐丢失），DB 中仍有未吊销行
+    // 不 seedSession，直接调用 → 逆索引为空，hashes 为空，只有 DB 兜底生效
+    await kickAllSessions(UID);
+
+    // 无 hashes（索引为空），只有 1 次 DB update（兜底）
+    expect(dbCalls.tokenUpdate).toHaveLength(1);
+    expect(dbCalls.tokenUpdate[0].opts.where).toEqual({ user_id: UID, revoked: false });
   });
 });
 
 describe('kickUser：管理员踢人（可按应用过滤）', () => {
-  test('指定 appId：只踢该应用会话，并清出僵尸索引项', async () => {
+  test('指定 appId：只踢该应用会话，清出僵尸索引项，DB 兜底按 user_id+app_id', async () => {
     await seedSession('sid-a1', { appId: 'app1', familyId: 'f-a1' });
     await seedSession('sid-a2', { appId: 'app2', familyId: 'f-a2' });
     await userSessionsStore.zAdd(String(UID), Date.now(), 'sid-zombie');
@@ -276,9 +288,12 @@ describe('kickUser：管理员踢人（可按应用过滤）', () => {
     expect(await userSessionsStore.zRangeByScore(String(UID))).not.toContain('sid-zombie');
     expect(dbCalls.logCreate[0]).toMatchObject({ event: 'KICK', app_id: 'app1' });
     expect(dbCalls.logCreate[0].details).toEqual({ kickedCount: 1 });
+    // DB 兜底：按 user_id + app_id 过滤
+    const lastCall = dbCalls.tokenUpdate[dbCalls.tokenUpdate.length - 1];
+    expect(lastCall.opts.where).toEqual({ user_id: UID, revoked: false, app_id: 'app1' });
   });
 
-  test('appId 为 null：踢全部应用，日志 app_id 记为 ALL', async () => {
+  test('appId 为 null：踢全部应用，日志 app_id 记为 ALL，DB 兜底不带 app_id', async () => {
     await seedSession('sid-a1', { appId: 'app1', familyId: 'f-a1' });
     await seedSession('sid-a2', { appId: 'app2', familyId: 'f-a2' });
 
@@ -288,6 +303,18 @@ describe('kickUser：管理员踢人（可按应用过滤）', () => {
     expect(await sessionStore.get('sid-a2')).toBeNull();
     expect(dbCalls.logCreate[0]).toMatchObject({ event: 'KICK', app_id: 'ALL' });
     expect(dbCalls.logCreate[0].details).toEqual({ kickedCount: 2 });
+    // DB 兜底：不带 app_id（全部应用）
+    const lastCall = dbCalls.tokenUpdate[dbCalls.tokenUpdate.length - 1];
+    expect(lastCall.opts.where).toEqual({ user_id: UID, revoked: false });
+  });
+
+  test('Redis 逆索引丢失时 DB 兜底仍能 revoke（按 appId 过滤）', async () => {
+    // 模拟 Redis 逆索引为空
+    await kickUser(UID, 'app1');
+
+    // 无 hashes，只有 1 次 DB update（兜底，带 app_id）
+    expect(dbCalls.tokenUpdate).toHaveLength(1);
+    expect(dbCalls.tokenUpdate[0].opts.where).toEqual({ user_id: UID, revoked: false, app_id: 'app1' });
   });
 });
 
@@ -320,8 +347,11 @@ describe('_revokeOneSession 抽取后的等价性（🔵-3 回归）', () => {
 
     expect(afterA).toEqual({ session: null, inIndex: false, rt: null, inFamily: false });
     expect(afterB).toEqual(afterA);
-    // DB 侧等价：两者都对同一个 hash 做了 revoke
+    // DB 侧等价：两者都对同一个 hash 做了 revoke（第一次 update 是 Op.in hashes）
     expect(dbCalls.tokenUpdate[0].opts.where.token[Op.in]).toEqual([sidHash('sid-eq')]);
+    // kickUser 额外有 DB 兜底（按 user_id）
+    expect(dbCalls.tokenUpdate.length).toBe(2);
+    expect(dbCalls.tokenUpdate[1].opts.where).toEqual({ user_id: UID, revoked: false });
   });
 
   test('DB 不可用时踢出会抛错，不静默吞（family 清理已完成，具备重试幂等性）', async () => {
