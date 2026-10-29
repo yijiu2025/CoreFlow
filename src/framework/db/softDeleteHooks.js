@@ -67,10 +67,19 @@ function registerDeleteVersionHooks(Model, options = {}) {
     // 仅 paranoid 模型需要补 delete_version（非 paranoid 模型走硬删，beforeDestroy 会处理）
     if (Model.options?.paranoid) {
       const seq = Model.sequelize;
-      await Model.update(
-        { [field]: seq.literal('id') },
-        { where: { ...opts.where, [field]: 0 }, transaction: opts.transaction, hooks: false }
-      ).catch(err => {
+      // 在同一条 UPDATE 里同时写 delete_version 与 deleted_at：
+      // 消除"先写 delete_version、再由 Sequelize 二次写 deleted_at"的窗口——
+      // 若第二步失败，此前会留下 delete_version 已改但 deleted_at 仍空的活跃行。
+      // 这里一次性写死后，Sequelize 随后的 paranoid UPDATE（WHERE deleted_at IS NULL）匹配 0 行，退化为无害空操作。
+      const patch = { [field]: seq.literal('id') };
+      if (Model.rawAttributes?.deletedAt) {
+        patch.deletedAt = seq.fn('NOW');
+      }
+      await Model.update(patch, {
+        where: { ...opts.where, [field]: 0 },
+        transaction: opts.transaction,
+        hooks: false
+      }).catch(err => {
         throw new Error(`[软删除] 批量 destroy 补 ${field} 失败: ${err.message}`);
       });
     }

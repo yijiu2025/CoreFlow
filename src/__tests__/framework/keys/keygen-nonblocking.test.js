@@ -18,6 +18,8 @@ import cryptoReal from 'node:crypto';
 const syncCalls = [];
 
 jest.unstable_mockModule('node:crypto', () => ({
+  // 保留全部具名导出（如 randomUUID），避免其他模块因 mock 缺导出而崩
+  ...cryptoReal,
   default: {
     // 除 generateKeyPairSync 外一律委托真身，保证被替换的只有"被禁止的那一个"
     ...cryptoReal,

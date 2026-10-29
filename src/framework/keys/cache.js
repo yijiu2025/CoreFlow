@@ -11,11 +11,21 @@
  * @since 2026-08-15
  */
 
+import { subscribe } from '../redis/pubsub.js';
+
 /** kid → { privateKey, publicKey, jwk } */
 const KEY_CACHE = new Map();
 
 /** 当前系统使用的密钥 kid（由 ensureCurrentKey / createKey 维护） */
 let currentKid = null;
+
+// 跨实例失效：收到其他实例的密钥变更广播后，清除本地对应缓存。
+// subscribe 在主连接未就绪时仅登记、不产生网络调用（见 redis/pubsub.js）。
+subscribe('keys:invalidate', ({ kid } = {}) => {
+  if (!kid) return;
+  deleteCachedKey(kid);
+  if (currentKid === kid) currentKid = null;
+});
 
 /**
  * 读取缓存的密钥对

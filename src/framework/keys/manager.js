@@ -18,6 +18,7 @@ import { C } from '../../utils/colors.js';
 import { setCachedKey, deleteCachedKey, setCurrentKid, getCurrentKid, clearCache } from './cache.js';
 import { findNewestActive, findAll, insertKey, removeByName, setActive, existsByName } from './repository.js';
 import { createLogger } from '../log/index.js';
+import { publish } from '../redis/pubsub.js';
 
 const log = createLogger('framework.keys.manager');
 
@@ -171,6 +172,8 @@ async function listKeys() {
 async function deleteKey(kid) {
   await removeByName(kid);
   deleteCachedKey(kid);
+  // 通知其他实例失效该密钥缓存（fire-and-forget，Redis 未就绪时仅返回失败不影响本地）
+  void publish('keys:invalidate', { kid });
 
   // 删除当前密钥后，重选最新 active 为当前
   if (getCurrentKid() === kid) {
@@ -199,6 +202,7 @@ async function rotateKey({ remark } = {}) {
   if (oldKid && oldKid !== created.kid) {
     await setActive(oldKid, false);
     deleteCachedKey(oldKid); // 移出缓存，验签时按需从 DB 读以准确判定宽限
+    void publish('keys:invalidate', { kid: oldKid });
   }
 
   // 清理已过宽限期的退役密钥，DB 不无限膨胀
@@ -220,6 +224,7 @@ async function pruneExpiredRetired() {
     if (!withinGrace(record.updatedAt)) {
       await removeByName(record.name);
       deleteCachedKey(record.name);
+      void publish('keys:invalidate', { kid: record.name });
       removed++;
     }
   }
