@@ -65,6 +65,33 @@ const SCRYPT_PREFIX = 'scrypt';
 const BCRYPT_PATTERN = /^\$2[aby]\$/;
 
 /**
+ * scrypt 并发上限（防御公开登录突发放大 libuv 线程池与内存）。
+ * 每次 scrypt 内存开销约 16MB，默认并发上限 16 → 峰值约 256MB。
+ * 超限时抛 SCRYPT_BUSY，由上层按 503 背压，而不是无界排队拖垮整个进程。
+ */
+const SCRYPT_MAX_CONCURRENCY = Math.max(1, Number(process.env.SCRYPT_MAX_CONCURRENCY) || 16);
+let _scryptActive = 0;
+
+/**
+ * 在 scrypt 并发上限内执行回调，超限抛错（背压）。
+ * @param {() => Promise<any>} fn
+ * @returns {Promise<any>}
+ */
+async function withScryptLimit(fn) {
+  if (_scryptActive >= SCRYPT_MAX_CONCURRENCY) {
+    const err = new Error('密码计算过于繁忙，请稍后重试');
+    err.code = 'SCRYPT_BUSY';
+    throw err;
+  }
+  _scryptActive++;
+  try {
+    return await fn();
+  } finally {
+    _scryptActive--;
+  }
+}
+
+/**
  * 从存储串解析出的参数上限。
  * scrypt 的参数直接决定内存与 CPU 开销，而参数是从**数据库字符串**里读出来的 ——
  * 若该字段被污染成一个超大 N，校验会变成一次内存爆炸（DoS）。
@@ -105,11 +132,13 @@ async function hashPassword(plain) {
     throw new TypeError('hashPassword: 密码必须是字符串');
   }
   const salt = crypto.randomBytes(SALT_LENGTH);
-  const derived = await scryptAsync(plain, salt, KEY_LENGTH, {
-    N: SCRYPT_N,
-    r: SCRYPT_R,
-    p: SCRYPT_P
-  });
+  const derived = await withScryptLimit(() =>
+    scryptAsync(plain, salt, KEY_LENGTH, {
+      N: SCRYPT_N,
+      r: SCRYPT_R,
+      p: SCRYPT_P
+    })
+  );
   return [SCRYPT_PREFIX, SCRYPT_N, SCRYPT_R, SCRYPT_P, salt.toString('base64'), derived.toString('base64')].join('$');
 }
 
@@ -150,7 +179,7 @@ async function _verifyScrypt(plain, stored) {
 
   let derived;
   try {
-    derived = await scryptAsync(plain, salt, expected.length, { N, r, p });
+    derived = await withScryptLimit(() => scryptAsync(plain, salt, expected.length, { N, r, p }));
   } catch {
     // 参数在合法界内但仍可能因 maxmem 抛错 —— 判为不匹配而非让异常冒泡
     return false;

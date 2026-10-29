@@ -32,6 +32,7 @@ async function registerVerifyRoutes(fastify, opts) {
     method: 'GET',
     url: '/generate-captcha',
     schema: generateCaptchaSchema,
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     handler: async (request, reply) => {
       reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
@@ -50,6 +51,7 @@ async function registerVerifyRoutes(fastify, opts) {
     method: 'POST',
     url: '/verify-captcha',
     schema: verifyCaptchaSchema,
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     handler: async (request, reply) => {
       try {
         const result = await captchaDao.verifyAndSendEmail(
@@ -83,6 +85,7 @@ async function registerVerifyRoutes(fastify, opts) {
     alias: '校验邮箱验证码',
     method: 'POST',
     url: '/check-email-code',
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     handler: async (request, reply) => {
       const { email, code } = request.body;
       try {
@@ -108,6 +111,7 @@ async function registerVerifyRoutes(fastify, opts) {
     alias: '发送登录二次验证邮箱码',
     method: 'POST',
     url: '/send-login-verify-code',
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     handler: async (request, reply) => {
       const { verifyToken } = request.body;
       if (!verifyToken) {

@@ -35,7 +35,14 @@ async function getTransporter() {
       host: config.host,
       port: config.port,
       secure: config.secure,
-      auth: { user: config.user, pass: config.pass }
+      // 非 SSL（端口 25/587）强制 STARTTLS，禁止明文传输 SMTP 凭据与内容
+      requireTLS: !config.secure,
+      auth: { user: config.user, pass: config.pass },
+      // 默认校验证书，防止中间人
+      tls: { rejectUnauthorized: true },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 30000
     });
     cachedConfigHash = hash;
   }
