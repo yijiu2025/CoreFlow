@@ -76,7 +76,9 @@ const apiLoader = async app => {
         }
       }
     } catch (err) {
-      log.warn(`⚠️ [Loader] ${C.yellow}读取目录失败: ${currentPath}${C.reset}`, err);
+      // 读取目录失败不再是可降级项：路由没加载完会造成"部分 404"的隐性故障，必须 fail-fast
+      log.error(`❌ [Loader] ${C.red}读取目录失败: ${currentPath}${C.reset}`, err);
+      throw err;
     }
   }
 

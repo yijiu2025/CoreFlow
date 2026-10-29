@@ -17,7 +17,18 @@ const log = createLogger('framework.loader.registry.03-db');
 const DB_CONNECT_TIMEOUT = 30_000;
 
 const dbLoader = async app => {
-  const { DB_HOST, DB_PORT, DB_NAME } = process.env;
+  const { DB_HOST, DB_PORT, DB_NAME, DB_USER } = process.env;
+  const dbConfigured = Boolean(DB_HOST && DB_NAME && DB_USER);
+
+  if (!dbConfigured) {
+    // 本地/测试环境未配置 DB：保持原降级语义（app.db=null），允许无库启动
+    log.warn(
+      `📦 [Loader: DB] ${C.yellow}未配置数据库（DB_HOST/DB_NAME/DB_USER），降级为 null（仅本地/测试）${C.reset}`
+    );
+    app.decorate('db', null);
+    return;
+  }
+
   log.always(`📦 [Loader: DB] ${C.cyan}正在连接数据库: ${DB_HOST}:${DB_PORT}/${DB_NAME}...${C.reset}`);
 
   try {
@@ -42,9 +53,10 @@ const dbLoader = async app => {
       log.always(`📦 [Loader: DB] ${C.cyan}数据库连接已关闭${C.reset}`);
     });
   } catch (err) {
-    log.error(`❌ [Loader: DB] ${C.red}数据库连接失败${C.reset}`, err);
-    // 连接失败不阻塞启动，降级为 null
-    app.decorate('db', null);
+    // 已配置但连不上 → 致命错误，向上抛出让 engine fail-fast，
+    // 而不是带着 null DB 继续启动（后续模型/密钥/路由全会在 null 上崩成 500）
+    err.message = `数据库连接失败（${DB_HOST}:${DB_PORT}/${DB_NAME}）: ${err.message}`;
+    throw err;
   }
 };
 

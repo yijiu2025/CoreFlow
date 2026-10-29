@@ -78,17 +78,24 @@ describe('加载器失败分级', () => {
 
 describe('可降级名单边界', () => {
   it('名单内的加载器判定为可选', () => {
-    ['01-monitor.js', '02-redis.js', '03-db.js', '09-notice.js'].forEach(file => {
+    ['01-monitor.js', '02-redis.js', '09-notice.js'].forEach(file => {
       expect(isOptionalLoader(file)).toBe(true);
     });
   });
 
   it('承载核心能力的加载器不是可选（缺失即 fail-fast）', () => {
-    ['00-globals.js', '04-auth.js', '05-firewall.js', '06-models.js', '07-keys.js', '08-api.js', '10-apps.js'].forEach(
-      file => {
-        expect(isOptionalLoader(file)).toBe(false);
-      }
-    );
+    [
+      '00-globals.js',
+      '03-db.js',
+      '04-auth.js',
+      '05-firewall.js',
+      '06-models.js',
+      '07-keys.js',
+      '08-api.js',
+      '10-apps.js'
+    ].forEach(file => {
+      expect(isOptionalLoader(file)).toBe(false);
+    });
   });
 
   it('未声明的文件名默认按关键处理', () => {

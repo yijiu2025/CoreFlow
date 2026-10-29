@@ -20,6 +20,7 @@ async function keysLoader(app) {
     log.always(`🔑 [Loader: Keys] ${C.cyan}密钥初始化完成${C.reset}`);
   } catch (err) {
     log.error(`❌ [Loader: Keys] ${C.red}密钥初始化失败${C.reset}`, err);
+    throw err; // 密钥是签发/验签的硬依赖，失败必须 fail-fast
   }
 }
 

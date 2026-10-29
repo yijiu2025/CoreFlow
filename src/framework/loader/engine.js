@@ -41,7 +41,8 @@ const LOAD_TIMEOUT = 30000;
 const OPTIONAL_LOADERS = new Set([
   '01-monitor.js', // 请求耗时监控：缺失只丢 X-Response-Time 与慢请求告警
   '02-redis.js', // Redis：设计上未配置时就走进程内 MapStore 降级，属合法模式
-  '03-db.js', // 该加载器自身语义即"连接失败不阻塞启动，降级为 null"
+  // 03-db.js 已移出：未配置 DB 时不抛（保持本地/测试可无库启动），
+  // 已配置但连不上会 throw，必须 fail-fast（不再降级为 null 继续启动）。
   '09-notice.js' // 通知配置种子：缺失只是没有种子数据，不影响请求处理
 ]);
 

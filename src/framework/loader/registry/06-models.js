@@ -17,6 +17,9 @@ const log = createLogger('framework.loader.registry.06-models');
 
 const modelsLoader = async app => {
   const db = app.db;
+  if (!db) {
+    throw new Error('数据库连接不可用（app.db=null），无法加载模型');
+  }
   const loadErrors = []; // 收集加载失败的模型，末尾统一告警
 
   // 递归扫描模型目录，按子目录自动创建命名空间
@@ -68,10 +71,10 @@ const modelsLoader = async app => {
 
   log.always(`📦 [Loader: Models] ${C.cyan}所有模型加载完毕${C.reset}`);
 
-  // 模型加载失败告警
+  // 模型加载失败告警：模型是路由/密钥/应用的硬依赖，任何失败都必须 fail-fast
   if (loadErrors.length > 0) {
-    log.error(`⚠️ [Loader: Models] ${C.yellow}${loadErrors.length} 个模型加载失败，请检查:${C.reset}`);
     loadErrors.forEach(e => log.error(`  - ${e.file}: ${e.error}`));
+    throw new Error(`${loadErrors.length} 个模型加载失败，启动中止`);
   }
 };
 

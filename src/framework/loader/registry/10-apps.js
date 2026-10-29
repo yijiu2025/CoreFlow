@@ -52,6 +52,7 @@ const appsLoader = async app => {
         log.dev(`📦 [Apps] ${C.cyan}加载应用: ${appConfig.name || dir.name}${C.reset}`);
       } catch (err) {
         log.error(`❌ [Apps] ${C.red}加载配置失败 [${dir.name}]${C.reset}`, err);
+        throw err;
       }
     }
 
@@ -64,6 +65,7 @@ const appsLoader = async app => {
         log.dev(`📦 [Apps] ${C.cyan}权限定义已加载: ${dir.name}${C.reset}`);
       } catch (err) {
         log.error(`❌ [Apps] ${C.red}加载权限失败 [${dir.name}]${C.reset}`, err);
+        throw err;
       }
     }
 
@@ -76,6 +78,7 @@ const appsLoader = async app => {
         log.dev(`📦 [Apps] ${C.cyan}角色定义已加载: ${dir.name}${C.reset}`);
       } catch (err) {
         log.error(`❌ [Apps] ${C.red}加载角色失败 [${dir.name}]${C.reset}`, err);
+        throw err;
       }
     }
 
@@ -153,6 +156,7 @@ const appsLoader = async app => {
       log.always(`✅ [PBAC] ${C.green}集中注册器已将内存中的 ${successCount} 个角色同步至数据库${C.reset}`);
     } catch (error) {
       log.error(`❌ [PBAC] ${C.red}集中同步数据库失败${C.reset}`, error);
+      throw error; // PBAC 角色同步失败会导致鉴权配置漂移，必须 fail-fast
     }
   } else {
     log.dev(`ℹ️ [PBAC] ${C.cyan}暂无通过 defineRoles 注册的基础角色${C.reset}`);
