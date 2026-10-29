@@ -823,15 +823,15 @@ const RedisStore = {
     const redis = _getRedis('mset', prefix, useBackup);
     const kvPairs = entries.flatMap(([k, v]) => [makeKey(prefix, k), serialize(v)]);
     try {
-      await withTimeout(redis, r => r.mSet(kvPairs), timeout);
-      // 逐 key 设置 TTL（Pipeline 批量，一次往返）
+      // 写入与 TTL 放进同一个 MULTI/EXEC 事务：避免 MSET 成功后 expire 失败留下无 TTL 数据
+      const pipe = redis.multi();
+      pipe.mSet(kvPairs);
       if (ttl > 0) {
-        const pipe = redis.multi();
         for (const [k] of entries) {
           pipe.expire(makeKey(prefix, k), ttl);
         }
-        await withTimeout(pipe, p => p.exec(), timeout);
       }
+      await withTimeout(pipe, p => p.exec(), timeout);
     } catch (err) {
       _wrapRedisError(err, 'mset', prefix);
     }
