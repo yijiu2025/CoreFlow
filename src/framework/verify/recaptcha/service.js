@@ -34,6 +34,26 @@ class RecaptchaService {
   }
 
   /**
+   * 校验上游返回的 hostname / action（防 token 跨域名/跨用途挪用）
+   * 仅当配置了期望值时才校验；配置了但上游缺失或不匹配 → fail-closed。
+   * @private
+   */
+  _matchHostnameAndAction(data) {
+    const { expectedHostname, expectedAction } = recaptchaConfig;
+    if (expectedHostname) {
+      if (!data.hostname || data.hostname !== expectedHostname) {
+        return { success: false, error: 'hostname_mismatch' };
+      }
+    }
+    if (expectedAction) {
+      if (!data.action || data.action !== expectedAction) {
+        return { success: false, error: 'action_mismatch' };
+      }
+    }
+    return null;
+  }
+
+  /**
    * 验证 reCAPTCHA token
    * @param {string} token 前端传入的 reCAPTCHA token
    * @param {string} [remoteIp] 客户端 IP（可选）
@@ -97,6 +117,9 @@ class RecaptchaService {
         return { success: false, score: data.score, error: 'score_too_low' };
       }
 
+      const hostActionMismatch = this._matchHostnameAndAction(data);
+      if (hostActionMismatch) return hostActionMismatch;
+
       return { success: true, score: data.score };
     } catch (err) {
       log.error('[Recaptcha] Google API 请求失败:', err);
@@ -138,6 +161,9 @@ class RecaptchaService {
           error: data['error-codes']?.join(', ') || 'verification_failed'
         };
       }
+
+      const hostActionMismatch = this._matchHostnameAndAction(data);
+      if (hostActionMismatch) return hostActionMismatch;
 
       return { success: true };
     } catch (err) {
@@ -182,6 +208,9 @@ class RecaptchaService {
 
       // Turnstile 返回 hostname（验证 token 是哪个域名发的，防止跨域 token 挪用）
       // 生产环境可选：校验 hostname 与配置域名一致
+      const hostActionMismatch = this._matchHostnameAndAction(data);
+      if (hostActionMismatch) return hostActionMismatch;
+
       return { success: true, hostname: data.hostname, action: data.action };
     } catch (err) {
       log.error('[Turnstile] Cloudflare API 请求失败:', err);

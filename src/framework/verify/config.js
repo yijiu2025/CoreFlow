@@ -45,6 +45,9 @@ const verifyConfig = {
     secretKey: process.env.RECAPTCHA_SECRET_KEY || '',
     siteKey: process.env.RECAPTCHA_SITE_KEY || '',
     minScore: parseFloat(process.env.RECAPTCHA_MIN_SCORE || '0.5'),
+    // 可选：校验验证结果来自预期域名/动作（生产建议配置，防 token 跨域挪用）
+    expectedHostname: process.env.RECAPTCHA_HOSTNAME || '',
+    expectedAction: process.env.RECAPTCHA_ACTION || '',
     // turnstile 独立配置（API 与上面不兼容）
     turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',
     turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || ''
