@@ -58,6 +58,10 @@ async function bindTokenToCookie(authHeader, reply) {
     if (!payload?.sub) {
       return { ok: false, statusCode: 401, error: { error: 'invalid_token', error_description: 'Token 无效' } };
     }
+    // 仅 access_token / client_token 可绑定为 HttpOnly access_token Cookie
+    if (payload.token_type !== 'access_token' && payload.token_type !== 'client_token') {
+      return { ok: false, statusCode: 401, error: { error: 'invalid_token', error_description: 'Token 类型无效' } };
+    }
 
     // Cookie 过期时间与 JWT exp 对齐（至少 1 分钟）
     const now = Math.floor(Date.now() / 1000);

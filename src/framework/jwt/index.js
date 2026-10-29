@@ -42,17 +42,26 @@ async function sign(payload, options = {}) {
 /**
  * 验证 JWT
  * @param {string} token - JWT 字符串
+ * @param {object} [options] - 额外校验
+ * @param {string} [options.issuer] - 期望的 issuer（iss），提供则校验
+ * @param {string|string[]} [options.audience] - 期望的 audience（aud），提供则校验
+ * @param {string} [options.tokenType] - 期望的 token_type claim，提供则校验
  * @returns {Promise<object>} 解码后的 Payload
- * @throws {jwt.JsonWebTokenError} 签名无效或令牌过期时抛出
+ * @throws {jwt.JsonWebTokenError} 签名无效、令牌过期或 claims 不符时抛出
  */
-async function verify(token) {
+async function verify(token, options = {}) {
   const header = jwt.decode(token, { complete: true })?.header;
   // header 无 kid 时回退到当前密钥（getPublicKeyByKid 内部处理）
   const kid = header?.kid;
   const { pem } = await getPublicKeyByKid(kid);
-  return jwt.verify(token, pem, {
-    algorithms: [ALGORITHMS.RS256]
-  });
+  const verifyOptions = { algorithms: [ALGORITHMS.RS256] };
+  if (options.issuer) verifyOptions.issuer = options.issuer;
+  if (options.audience) verifyOptions.audience = options.audience;
+  const payload = jwt.verify(token, pem, verifyOptions);
+  if (options.tokenType && payload.token_type !== options.tokenType) {
+    throw new jwt.JsonWebTokenError('token_type 不匹配');
+  }
+  return payload;
 }
 
 export { sign, verify };

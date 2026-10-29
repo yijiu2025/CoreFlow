@@ -18,6 +18,8 @@ const sendQueue = [];
 let isProcessing = false;
 const QUEUE_BATCH_SIZE = 10;
 const QUEUE_INTERVAL_MS = 1000;
+/** 队列容量上限：满时拒绝入队，避免无界内存增长 */
+const MAX_QUEUE_SIZE = 1000;
 
 /**
  * 获取或创建 transporter（配置变更时自动重建）
@@ -146,6 +148,10 @@ class EmailService {
    * @returns {Promise<boolean>}
    */
   async sendAsync(email, subject, content) {
+    if (sendQueue.length >= MAX_QUEUE_SIZE) {
+      Logger.warn(`[Notice:Email] 发送队列已满(${MAX_QUEUE_SIZE})，拒绝新任务`);
+      return false;
+    }
     return new Promise(resolve => {
       sendQueue.push({ email, subject, content, resolve });
 

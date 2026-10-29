@@ -6,13 +6,18 @@
  */
 import crypto from 'node:crypto';
 import { getStore } from '../redis/index.js';
+import { createNonceStore } from '../redis/nonce-store.js';
+
+/** H5 签名 nonce 防重放（TTL 略大于时间窗，见 verifySignature） */
+const h5NonceStore = createNonceStore('h5_nonce', 180);
 
 /**
  * 校验客户端请求签名，防爬防篡改防重放 (类似阿里巴巴 H5 Mtop 签名校验)
  */
 async function verifySignature(request, reply) {
   // 1. 仅对 requireSignature 的路由校验签名（requireLogin 自动开启，或公开端点显式配置）
-  if (!request.routeConfig?.requireSignature) {
+  //    routeConfig 挂在 Fastify 的 routeOptions.config，由 registerSecureRoute 写入。
+  if (!request.routeOptions?.config?.requireSignature) {
     return;
   }
 
@@ -21,13 +26,19 @@ async function verifySignature(request, reply) {
   const timestampStr = request.headers['x-timestamp'] || request.query?.['x-timestamp'];
   const nonce = request.headers['x-nonce'] || request.query?.['x-nonce'];
 
-  // 2. 无签名时自动下发 h5_token cookie，本次放行（前端拿到 cookie 后续请求即可签名）
+  // 2. 无签名参数：仅当也还没有 cookie 时才下发 h5_token cookie 引导（首次访问）；
+  //    已有 cookie 仍不签名 → 拒绝，避免客户端永久省略签名即可绕过。
+  const existingCookie = request.cookies?._m_h5_tk;
   if (!sign || !timestampStr || !nonce) {
-    const existingCookie = request.cookies?._m_h5_tk;
     if (!existingCookie) {
       await issueH5Token(request.server, reply);
+      return;
     }
-    return;
+    return reply.code(403).send({
+      code: 403,
+      error: 'signature_required',
+      message: '安全检测失败：缺少签名参数'
+    });
   }
 
   // 3. 防重放校验 (时间偏差限制在 2 分钟以内)
@@ -70,6 +81,16 @@ async function verifySignature(request, reply) {
       code: 403,
       error: 'invalid_token',
       message: '安全检测失败：Token 不合法'
+    });
+  }
+
+  // 5.1 nonce 防重放：同一 nonce 在时间窗内只允许使用一次（原子 check-and-mark）
+  const replayed = await h5NonceStore.checkAndMark(nonce);
+  if (replayed) {
+    return reply.code(403).send({
+      code: 403,
+      error: 'replay_detected',
+      message: '安全检测失败：请求重复提交'
     });
   }
 

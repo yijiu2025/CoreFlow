@@ -121,6 +121,12 @@ async function getUserFromToken(token) {
   try {
     const payload = await verify(token);
     if (!payload?.sub) return null;
+    // 仅允许 access_token / client_token 作为 Bearer 认证凭证；
+    // id_token / refresh_token 或缺失 token_type 的 token 不得用于 API 认证。
+    if (payload.token_type !== 'access_token' && payload.token_type !== 'client_token') {
+      log.warn('[Auth] 拒绝非 access/client token 作为 Bearer 凭证: token_type=%s', payload.token_type);
+      return null;
+    }
     log.debug('🔑 JWT 解析成功: sub=%s, aud=%s, token_type=%s', payload.sub, payload.aud, payload.token_type);
 
     // client_token：客户端凭证令牌（M2M），无用户上下文，直接返回客户端信息
