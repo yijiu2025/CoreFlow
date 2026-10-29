@@ -1,5 +1,10 @@
 # 认证集成 {#frontend-auth}
 
+> ⚠️ **安全基线（必须遵守）**：默认使用 **HttpOnly Session Cookie**（`withCredentials: true`，由后端下发/续期）。
+> **不要把高权限长期 Token 存进 `localStorage`/`sessionStorage`** —— XSS 可被直接读取并持久化窃取。
+> Bearer Token 仅用于**独立的 API 客户端**（服务端集成 / 移动端），此时才需要显式管理
+> Token 生命周期、吊销与轮换，并说明与 Cookie 会话不同的 CSRF/XSS 防护边界。
+
 ## auth Store 标准实现
 
 所有前端的 `stores/auth.ts` 必须包含以下功能：
@@ -122,7 +127,9 @@ const service = axios.create({
   withCredentials: true // 允许跨域携带 Cookie
 });
 
-// 请求拦截：自动带 token
+// 请求拦截：Cookie 会话由浏览器自动携带（withCredentials）。
+// 仅当使用独立 API 客户端的 Bearer Token 方案时，才需要显式读 token 并注入 Authorization；
+// 且此时不要把长期 Token 存 localStorage（见文件头安全基线）。
 service.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
