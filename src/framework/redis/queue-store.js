@@ -20,7 +20,7 @@
 
 import { MapStore } from './map-store.js';
 import { getStore } from './get-store.js';
-import { isRedisConfigured } from './utils.js';
+import { isRedisConfigured, safeParse } from './utils.js';
 import { createLogger } from '../log/index.js';
 
 const log = createLogger('framework.redis.queue-store');
@@ -269,7 +269,12 @@ function _createRedisQueue(prefix, maxSize, dataTtl, timeout) {
           arguments: []
         })
       );
-      return item ?? null;
+      // 🔴 必须 parse：`push` 写进 Redis 的是 `JSON.stringify({ data, createdAt })`，
+      //    Lua 返回的是**原始字符串**；MapStore 版存的本来就是对象，直接返回。
+      //    不 parse 时 Redis 后端的 `shift()` 永远返回字符串，调用方读 `msg.data` 得到
+      //    undefined —— 表现为"消息消费到了，但内容全是空的"，而且不报错。
+      //    同文件的 `peek()` / `list()` 走 `store.get` 已被 safeParse 过，只有这里走 Lua。
+      return safeParse(item);
     },
 
     async peek() {
