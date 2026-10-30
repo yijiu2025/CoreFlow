@@ -47,18 +47,11 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
  *
  * 2026-09-20 曾短暂清零（直接删除 14 个文件），应用户要求已恢复文件，
  * 清单同步回填 —— 改造完成后逐个摘除。
+ *
+ * 2026-10-30：14 个存量文件全部改造为加载真身的测试，清单清零。
+ * 此后的新测试若未加载被测代码，会被上面的守卫直接拦下（没有豁免通道）。
  */
-const KNOWN_INEFFECTIVE_TESTS = new Set([
-  'api-integration.test.js',
-  'database-models.test.js',
-  'edge-cases.test.js',
-  'email-notification.test.js',
-  'error-handling.test.js',
-  'integration/app.test.js',
-  'integration-flow.test.js',
-  'oauth-flow.test.js',
-  'performance.test.js'
-]);
+const KNOWN_INEFFECTIVE_TESTS = new Set([]);
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -167,7 +160,7 @@ describe('测试有效性守卫', () => {
     // 该断言把「清单长度」钉在当前值上。新增违规想混过检查，
     // 必须同时改这里 —— 那是一次可见的、需要理由的修改，而非静默绕过。
     // 2026-10-30 起逐个改造真身测试，改完即从清单摘除并同步下调冻结值（只减不增）。
-    const FROZEN_SIZE = 9;
+    const FROZEN_SIZE = 0;
     expect(KNOWN_INEFFECTIVE_TESTS.size).toBeLessThanOrEqual(FROZEN_SIZE);
   });
 

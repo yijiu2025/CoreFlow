@@ -1,145 +1,115 @@
 /**
- * 集成流程测试
+ * 会话权限解析流程（真实模块驱动）
  *
- * 覆盖：完整登录流程、权限加载流程、会话管理流程
+ * 旧版本用 `[{ step: '1', action: 'Redis 查找 session' }]` 这类流程数组自证，
+ * 没有任何生产代码参与。
+ *
+ * 本版驱动真实的 `resolveSessionPermissions`（第 3 层防御：权限指纹在会话路径的落地点），
+ * 只把 perm-cache 换成可控实现，断言四种真实决策：
+ * - 指纹一致 → 沿用会话副本（不回源）
+ * - 指纹不一致 → 权限作废重载
+ * - 会话没存指纹（老会话）→ 直接回源
+ * - 指纹计算失败 → **保守回源**（宁可多查一次库，不沿用可能过期的权限）
+ *
+ * 这些正是"管理员撤销权限后，用户还能不能继续用旧权限"的判据。
  *
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-describe('集成流程', () => {
-  describe('登录流程', () => {
-    it('邮箱验证码登录流程', () => {
-      const flow = [
-        { step: '1', action: '输入邮箱', data: { email: 'test@example.com' } },
-        { step: '2', action: '图形验证码', data: { captchaKey: 'key123' } },
-        { step: '3', action: '邮箱验证码', data: { code: '123456' } },
-        { step: '4', action: '提交登录', data: { type: 'email', email: 'test@example.com', code: '123456' } },
-        { step: '5', action: '返回 token', data: { access_token: 'eyJ...', refresh_token: 'abc...' } }
-      ];
-      expect(flow).toHaveLength(5);
-      expect(flow[4].data).toHaveProperty('access_token');
-    });
+const cache = {
+  permissions: { allows: ['user:profile:read'], denies: [] },
+  roles: ['user_normal'],
+  fingerprint: 'fp-1',
+  fingerprintError: null,
+  getPermissionsCalls: 0
+};
 
-    it('密码登录流程', () => {
-      const flow = [
-        { step: '1', action: 'RSA 加密密码', data: { encrypted: '...' } },
-        { step: '2', action: '提交登录', data: { encrypted: '...', timestamp: Date.now(), nonce: 'abc' } },
-        { step: '3', action: '返回 token', data: { access_token: 'eyJ...' } }
-      ];
-      expect(flow).toHaveLength(3);
-    });
+jest.unstable_mockModule('../framework/auth/perm-cache.js', () => ({
+  getPermissions: async () => {
+    cache.getPermissionsCalls++;
+    return { roles: cache.roles, permissions: cache.permissions };
+  },
+  computePermFingerprint: async () => {
+    if (cache.fingerprintError) throw cache.fingerprintError;
+    return cache.fingerprint;
+  }
+}));
 
-    it('设备数超限流程', () => {
-      const flow = [
-        { step: '1', action: '提交登录' },
-        { step: '2', action: '返回 409', data: { action: 'max_sessions', sessions: [], maxSessions: 5 } },
-        { step: '3', action: '用户踢出设备' },
-        { step: '4', action: '重新登录' }
-      ];
-      expect(flow[1].data.action).toBe('max_sessions');
-    });
+const { resolveSessionPermissions } = await import('../framework/auth/session-perm.js');
+
+beforeEach(() => {
+  cache.permissions = { allows: ['user:profile:read'], denies: [] };
+  cache.roles = ['user_normal'];
+  cache.fingerprint = 'fp-1';
+  cache.fingerprintError = null;
+  cache.getPermissionsCalls = 0;
+});
+
+/** 已登录会话副本 */
+function sessionWith(fingerprint) {
+  return {
+    roles: ['user_normal'],
+    permissions: { allows: ['user:profile:read'], denies: [] },
+    permFingerprint: fingerprint
+  };
+}
+
+describe('resolveSessionPermissions', () => {
+  it('指纹一致：沿用会话副本，不回源查询', async () => {
+    const session = sessionWith('fp-1');
+    const resolved = await resolveSessionPermissions(1, 'firewall', session);
+
+    expect(cache.getPermissionsCalls).toBe(0);
+    expect(resolved.roles).toBe(session.roles);
+    expect(resolved.permissions).toBe(session.permissions);
+    expect(resolved.permFingerprint).toBe('fp-1');
   });
 
-  describe('权限加载流程', () => {
-    it('Session 模式权限加载', () => {
-      const flow = [
-        { step: '1', action: '请求到达', data: { cookies: { sid: 'abc123' } } },
-        { step: '2', action: 'auth 中间件验证 sid' },
-        { step: '3', action: 'Redis 查找 session' },
-        {
-          step: '4',
-          action: '返回 session 数据',
-          data: { roles: ['admin'], permissions: { allows: ['*'], denies: [] } }
-        },
-        { step: '5', action: '写入 request.state.user' }
-      ];
-      expect(flow[3].data.roles).toContain('admin');
-      expect(flow[3].data.permissions.allows).toContain('*');
-    });
+  it('指纹不一致：权限作废重载，返回新权限与新指纹', async () => {
+    cache.permissions = { allows: [], denies: ['user:profile:read'] };
+    cache.roles = ['user_limited'];
+    cache.fingerprint = 'fp-2';
 
-    it('JWT 模式权限加载', () => {
-      const flow = [
-        { step: '1', action: '请求到达', data: { headers: { authorization: 'Bearer eyJ...' } } },
-        { step: '2', action: 'auth 中间件验证 JWT' },
-        { step: '3', action: '从 Redis 缓存读取权限' },
-        { step: '4', action: '缓存未命中，从数据库加载' },
-        { step: '5', action: '写入缓存', data: { ttl: 300 } },
-        { step: '6', action: '写入 request.state.user' }
-      ];
-      expect(flow[4].data.ttl).toBe(300);
-    });
+    const resolved = await resolveSessionPermissions(2, 'firewall', sessionWith('fp-1'));
 
-    it('超管自动继承', () => {
-      const flow = [
-        { step: '1', action: '加载用户角色', data: { roles: ['superadmin'] } },
-        { step: '2', action: '检测到 superadmin，appId=firewall' },
-        { step: '3', action: '自动注入 firewall_admin 角色' },
-        { step: '4', action: '返回角色列表', data: { roles: ['superadmin', 'firewall_admin'] } }
-      ];
-      expect(flow[3].data.roles).toContain('superadmin');
-      expect(flow[3].data.roles).toContain('firewall_admin');
-    });
+    expect(cache.getPermissionsCalls).toBe(1);
+    expect(resolved.roles).toEqual(['user_limited']);
+    expect(resolved.permissions).toEqual({ allows: [], denies: ['user:profile:read'] });
+    expect(resolved.permFingerprint).toBe('fp-2');
   });
 
-  describe('会话管理流程', () => {
-    it('创建会话流程', () => {
-      const flow = [
-        { step: '1', action: '检查设备数限制' },
-        { step: '2', action: '踢出同设备旧会话' },
-        { step: '3', action: '加载权限' },
-        { step: '4', action: '生成 sessionId 和 refreshToken' },
-        { step: '5', action: 'Redis 写入 session' },
-        { step: '6', action: '设置 sid/sid_r Cookie' },
-        { step: '7', action: 'DB 写入 SessionToken' }
-      ];
-      expect(flow).toHaveLength(7);
-    });
+  it('会话没存指纹（老会话/字段被裁）：无法判断新鲜度，直接回源', async () => {
+    const legacy = { roles: ['user_normal'], permissions: { allows: [], denies: [] } };
+    const resolved = await resolveSessionPermissions(3, 'firewall', legacy);
 
-    it('刷新会话流程', () => {
-      const flow = [
-        { step: '1', action: '解析 sid_r Cookie' },
-        { step: '2', action: 'Redis 查找 refreshToken → sessionId' },
-        { step: '3', action: 'DB 查找 SessionToken' },
-        { step: '4', action: '加载用户权限' },
-        { step: '5', action: '生成新 sessionId' },
-        { step: '6', action: 'Redis 写入新 session' },
-        { step: '7', action: '删除旧 session' },
-        { step: '8', action: '设置新 sid Cookie' }
-      ];
-      expect(flow).toHaveLength(8);
-    });
-
-    it('销毁会话流程', () => {
-      const flow = [
-        { step: '1', action: 'Redis 删除 session' },
-        { step: '2', action: 'DB 标记 SessionToken 为 revoked' },
-        { step: '3', action: '清除 Cookie' }
-      ];
-      expect(flow).toHaveLength(3);
-    });
+    expect(cache.getPermissionsCalls).toBe(1);
+    expect(resolved.permFingerprint).toBe('fp-1');
   });
 
-  describe('Token 刷新流程', () => {
-    it('refresh_token 轮换', () => {
-      const flow = [
-        { step: '1', action: '旧 refresh_token 验证' },
-        { step: '2', action: '吊销旧 refresh_token' },
-        { step: '3', action: '签发新 access_token' },
-        { step: '4', action: '签发新 refresh_token' },
-        { step: '5', action: '返回新 tokens' }
-      ];
-      expect(flow).toHaveLength(5);
-    });
+  it('会话缺 roles/permissions：同样回源', async () => {
+    const resolved = await resolveSessionPermissions(4, 'firewall', { permFingerprint: 'fp-1' });
+    expect(cache.getPermissionsCalls).toBe(1);
+    expect(resolved.roles).toEqual(['user_normal']);
+  });
 
-    it('refresh_token 过期', () => {
-      const flow = [
-        { step: '1', action: '旧 refresh_token 验证' },
-        { step: '2', action: 'Token 已过期或已撤销' },
-        { step: '3', action: '返回 401 错误' }
-      ];
-      expect(flow[2].action).toContain('401');
-    });
+  it('指纹计算失败：保守回源，不沿用旧权限', async () => {
+    cache.permissions = { allows: ['user:profile:write'], denies: [] };
+    cache.fingerprintError = new Error('DB 不可用');
+
+    const resolved = await resolveSessionPermissions(5, 'firewall', sessionWith('fp-1'));
+
+    expect(cache.getPermissionsCalls).toBe(1);
+    expect(resolved.permissions).toEqual({ allows: ['user:profile:write'], denies: [] });
+    // 取不到新指纹 → 保留旧指纹，下次恢复仍判"不一致"继续回源（保守方向）
+    expect(resolved.permFingerprint).toBe('fp-1');
+  });
+
+  it('空 session 参数（未登录恢复场景）也能安全回源', async () => {
+    const resolved = await resolveSessionPermissions(6, 'GLOBAL');
+    expect(cache.getPermissionsCalls).toBe(1);
+    expect(resolved.roles).toEqual(['user_normal']);
+    expect(resolved.permFingerprint).toBe('fp-1');
   });
 });

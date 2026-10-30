@@ -1,100 +1,88 @@
 /**
- * 性能测试
+ * 资源上限与背压（真实模块驱动）
  *
- * 覆盖：大量数据处理、内存限制、超时处理
+ * 旧版本文件是「JS 语言特性自测」：数组 filter 长度、Map 删除、Promise.race 超时……
+ * 全部不 import 生产代码，删除被测模块后仍全绿（毒丸实验已证实）。
+ *
+ * 本版只测**生产代码里的真实资源闸门**，断言的都是"超出上限时系统怎么反应"：
+ * - scrypt 并发上限：超限抛 SCRYPT_BUSY 让上层 503 背压，而不是无界排队拖垮进程
+ * - MapStore 硬上限：满时拒绝写入并保留已有数据（不是静默淘汰）
+ *
+ * 这些断言在"把闸门去掉"时必然变红 ——— 那正是它们存在的意义。
  *
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 
-describe('性能', () => {
-  describe('大量数据处理', () => {
-    it('大数组处理', () => {
-      const arr = Array.from({ length: 10000 }, (_, i) => i);
-      const filtered = arr.filter(n => n % 2 === 0);
-      expect(filtered.length).toBe(5000);
-    });
+// 必须在 import password-hash 之前设定：并发上限是模块加载时从 env 读的常量
+process.env.SCRYPT_MAX_CONCURRENCY = '1';
 
-    it('大对象处理', () => {
-      const obj = {};
-      for (let i = 0; i < 1000; i++) {
-        obj[`key${i}`] = `value${i}`;
-      }
-      expect(Object.keys(obj).length).toBe(1000);
-    });
+const { MapStore } = await import('../framework/redis/map-store.js');
+const { hashPassword, verifyPassword } = await import('../framework/auth/password-hash.js');
 
-    it('JSON 序列化大对象', () => {
-      const data = Array.from({ length: 100 }, (_, i) => ({
-        id: i,
-        name: `user${i}`,
-        email: `user${i}@example.com`,
-        roles: ['admin', 'user'],
-        permissions: { allows: ['*'], denies: [] }
-      }));
-      const json = JSON.stringify(data);
-      const parsed = JSON.parse(json);
-      expect(parsed.length).toBe(100);
-    });
+describe('scrypt 并发上限（背压而非排队）', () => {
+  it('超过并发上限时立刻抛 SCRYPT_BUSY，不进入队列', async () => {
+    // 第一个调用在 await 前就同步占用了名额，第二个必然看到 active >= 上限
+    const first = hashPassword('first-password');
+    const second = hashPassword('second-password');
+
+    await expect(second).rejects.toMatchObject({ code: 'SCRYPT_BUSY' });
+    await expect(first).resolves.toMatch(/^scrypt\$/);
   });
 
-  describe('内存限制', () => {
-    it('Map 清理过期数据', () => {
-      const store = new Map();
-      const now = Date.now();
+  it('被拒绝的请求不占名额：之前之后都能正常哈希', async () => {
+    await expect(hashPassword('before')).resolves.toMatch(/^scrypt\$/);
 
-      // 添加 1000 条记录
-      for (let i = 0; i < 1000; i++) {
-        store.set(`key${i}`, { value: i, expires: now + (i % 2 === 0 ? 60000 : -60000) });
-      }
+    const holder = hashPassword('holder');
+    await expect(hashPassword('rejected')).rejects.toMatchObject({ code: 'SCRYPT_BUSY' });
+    await holder;
 
-      // 清理过期记录
-      for (const [k, v] of store.entries()) {
-        if (v.expires < now) store.delete(k);
-      }
-
-      expect(store.size).toBe(500);
-    });
-
-    it('Set 去重', () => {
-      const set = new Set();
-      for (let i = 0; i < 100; i++) {
-        set.add(`item${i % 10}`);
-      }
-      expect(set.size).toBe(10);
-    });
+    // 若拒绝路径漏了 _scryptActive--，这里会一直 SCRYPT_BUSY
+    await expect(hashPassword('after')).resolves.toMatch(/^scrypt\$/);
   });
 
-  describe('超时处理', () => {
-    it('Promise 超时', async () => {
-      const timeout = ms => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
+  it('饱和时校验返回 false 而不是抛错（fail-closed）', async () => {
+    const stored = await hashPassword('correct-password');
 
-      await expect(Promise.race([new Promise(resolve => setTimeout(resolve, 200)), timeout(100)])).rejects.toThrow(
-        'timeout'
-      );
-    });
+    const holder = hashPassword('holder-2');
+    // 校验路径把 SCRYPT_BUSY 吞成"不匹配"：宁可误拒一次登录，也不让异常冒到路由层
+    await expect(verifyPassword('correct-password', stored)).resolves.toBe(false);
+    await holder;
 
-    it('异步操作完成', async () => {
-      const result = await Promise.resolve(42);
-      expect(result).toBe(42);
-    });
+    await expect(verifyPassword('correct-password', stored)).resolves.toBe(true);
+  });
+});
+
+describe('MapStore 硬上限（拒绝写入而非静默淘汰）', () => {
+  const PREFIX = '__perf_test_cap__';
+
+  beforeAll(() => {
+    MapStore.config(PREFIX, { maxSize: 3, ttl: 0 });
   });
 
-  describe('并发处理', () => {
-    it('Promise.all 并发执行', async () => {
-      const tasks = Array.from({ length: 10 }, (_, i) => Promise.resolve(i));
-      const results = await Promise.all(tasks);
-      expect(results.length).toBe(10);
-      expect(results[0]).toBe(0);
-      expect(results[9]).toBe(9);
-    });
+  afterAll(() => {
+    MapStore.destroy(PREFIX);
+  });
 
-    it('Promise.allSettled 混合结果', async () => {
-      const tasks = [Promise.resolve('success'), Promise.reject(new Error('fail')), Promise.resolve('ok')];
-      const results = await Promise.allSettled(tasks);
-      expect(results[0].status).toBe('fulfilled');
-      expect(results[1].status).toBe('rejected');
-      expect(results[2].status).toBe('fulfilled');
-    });
+  it('装满后继续写入抛 TypeError', () => {
+    MapStore.set(PREFIX, 'k1', 1);
+    MapStore.set(PREFIX, 'k2', 2);
+    MapStore.set(PREFIX, 'k3', 3);
+
+    expect(() => MapStore.set(PREFIX, 'k4', 4)).toThrow(TypeError);
+    expect(() => MapStore.set(PREFIX, 'k4', 4)).toThrow(/已达上限 3/);
+  });
+
+  it('拒绝写入不会破坏已有数据', () => {
+    expect(MapStore.get(PREFIX, 'k1')).toBe(1);
+    expect(MapStore.get(PREFIX, 'k3')).toBe(3);
+    expect(MapStore.get(PREFIX, 'k4')).toBeNull();
+  });
+
+  it('删除一条后重新可写（上限是容量约束，不是永久锁死）', () => {
+    MapStore.delete(PREFIX, 'k2');
+    expect(() => MapStore.set(PREFIX, 'k4', 4)).not.toThrow();
+    expect(MapStore.get(PREFIX, 'k4')).toBe(4);
   });
 });

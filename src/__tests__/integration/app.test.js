@@ -1,333 +1,199 @@
 /**
- * 集成测试：应用核心流程端到端验证
- * 使用 Fastify inject() 模拟 HTTP 请求，无需真实数据库/Redis
+ * 认证插件端到端（真实插件 + 真实 Fastify inject）
+ *
+ * 旧版本在测试里手写了一个 `buildTestApp()`：自己 decorateReply、自己定义
+ * `/api/public` 假路由、自己写 auth 钩子 —— 断言的是这份副本，生产插件删掉也全绿。
+ *
+ * 本版注册**真实** `framework/auth/index.js`，只把外部依赖（session/jwt/风险检测/
+ * 用户查询/Redis）换成可控实现，用 inject 发真实请求，断言：
+ * - 无 cookie 时 request.state.user 不被写入（不能凭空白放行身份）
+ * - 有效 sid 时 state.user 的字段映射（sub=uid、appId、roles、sessionId）
+ * - 无效/已失效 sid 不产生身份
+ * - 高风险设备变更 + 写操作 → 403 且业务 handler 不执行；读操作放行并注入 __risk__
  *
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 import Fastify from 'fastify';
+import cookie from '@fastify/cookie';
 
-/**
- * 构建轻量级测试应用
- * 仅注册核心插件和路由，跳过数据库/Redis 依赖
- */
-async function buildTestApp() {
-  const app = Fastify({ logger: false });
+process.env.JWT_ENABLED = 'false';
 
-  // 注册 reply.result 装饰器（模拟 00-globals.js）
-  app.decorateReply('result', {
-    getter() {
-      const reply = this;
-      return {
-        success(message = '操作成功', data = null) {
-          return reply.code(200).send({
-            code: 200,
-            message,
-            data,
-            timestamp: Date.now(),
-            requestId: reply.request?.id
-          });
-        },
-        fail(message = '操作失败', data = null, code = 400) {
-          return reply.code(code).send({
-            code,
-            message,
-            data,
-            timestamp: Date.now(),
-            requestId: reply.request?.id
-          });
-        },
-        unauth(message = '身份验证失败') {
-          return reply.code(401).send({
-            code: 401,
-            message,
-            data: null,
-            timestamp: Date.now(),
-            requestId: reply.request?.id
-          });
-        },
-        forbidden(message = '权限不足') {
-          return reply.code(403).send({
-            code: 403,
-            message,
-            data: null,
-            timestamp: Date.now(),
-            requestId: reply.request?.id
-          });
-        }
-      };
-    }
+/** 可控的认证上游状态 */
+const state = {
+  session: null,
+  risk: { level: 'safe' },
+  verified: false,
+  handlerCalls: 0
+};
+
+jest.unstable_mockModule('../../framework/auth/session.js', () => ({
+  getSession: async () => state.session,
+  getSessionTokenDevice: async () => null
+}));
+
+jest.unstable_mockModule('../../framework/jwt/index.js', () => ({
+  verify: async () => null
+}));
+
+jest.unstable_mockModule('../../shared/user-dao.js', () => ({
+  findUserById: async () => null
+}));
+
+jest.unstable_mockModule('../../framework/auth/perm-cache.js', () => ({
+  getPermissions: async () => ({ roles: [], permissions: { allows: [], denies: [] } }),
+  computePermFingerprint: async () => 'fp'
+}));
+
+jest.unstable_mockModule('../../framework/auth/device.js', () => ({
+  getDeviceId: async () => 'dev-from-server',
+  computeDeviceFingerprint: () => 'fingerprint-1'
+}));
+
+jest.unstable_mockModule('../../framework/auth/anomaly-detector.js', () => ({
+  detectSessionRisk: async () => state.risk,
+  isHighRiskRequest: request => request.method !== 'GET',
+  hasVerifiedFlag: async () => state.verified
+}));
+
+jest.unstable_mockModule('../../framework/redis/index.js', () => ({
+  getStore: () => ({ get: async () => null, set: async () => {} })
+}));
+
+const { default: authPlugin } = await import('../../framework/auth/index.js');
+
+let app;
+
+beforeAll(async () => {
+  app = Fastify({ logger: false });
+  await app.register(cookie);
+  await app.register(authPlugin);
+
+  app.get('/whoami', async request => ({
+    user: request.state?.user ?? null,
+    risk: request.state?.risk ?? null
+  }));
+  app.post('/write', async () => {
+    state.handlerCalls++;
+    return { ok: true };
   });
 
-  // 注册 request.state（模拟 auth middleware）
-  app.addHook('onRequest', async request => {
-    request.state = request.state || {};
+  await app.ready();
+});
+
+afterAll(async () => {
+  await app?.close();
+});
+
+beforeEach(() => {
+  state.session = null;
+  state.risk = { level: 'safe' };
+  state.verified = false;
+  state.handlerCalls = 0;
+});
+
+const validSession = {
+  userId: 42,
+  uid: 'user-uuid-42',
+  username: 'alice',
+  email: 'alice@example.com',
+  avatar: null,
+  status: 1,
+  appId: 'firewall',
+  roles: ['user_normal'],
+  permissions: { allows: ['user:profile:read'], denies: [] },
+  sessionId: 'sid-42',
+  deviceId: 'dev-from-server',
+  userAgent: 'jest',
+  ip: '127.0.0.1'
+};
+
+describe('无凭证请求', () => {
+  it('不写入 state.user（空白请求不能拿到身份）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/whoami' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user).toBeNull();
   });
 
-  // 测试路由：公开接口
-  app.get('/api/public', async (request, reply) => {
-    return reply.result.success('公开接口访问成功', { hello: 'world' });
+  it('畸形的 sid cookie 不产生身份也不 500', async () => {
+    const res = await app.inject({ method: 'GET', url: '/whoami', cookies: { sid: 'not-a-signed-cookie' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user).toBeNull();
   });
+});
 
-  // 测试路由：需要登录
-  app.get('/api/protected', async (request, reply) => {
-    if (!request.state.user) {
-      return reply.result.unauth();
-    }
-    return reply.result.success('受保护接口访问成功', { uid: request.state.user.uid });
-  });
+describe('Session 认证', () => {
+  it('有效 sid：state.user 字段映射正确（sub 取 uid 而不是内部 id）', async () => {
+    state.session = validSession;
+    const res = await app.inject({ method: 'GET', url: '/whoami', cookies: { sid: 'signed-sid' } });
 
-  // 测试路由：权限不足
-  app.get('/api/admin', async (request, reply) => {
-    if (!request.state.user) {
-      return reply.result.unauth();
-    }
-    if (request.state.user.role !== 'admin') {
-      return reply.result.forbidden('需要管理员权限');
-    }
-    return reply.result.success('管理后台访问成功');
-  });
-
-  // 测试路由：业务失败
-  app.post('/api/validate', async (request, reply) => {
-    const { username } = request.body || {};
-    if (!username) {
-      return reply.result.fail('用户名不能为空');
-    }
-    if (username.length < 3) {
-      return reply.result.fail('用户名长度不能少于3个字符');
-    }
-    return reply.result.success('校验通过');
-  });
-
-  // 测试路由：模拟服务器错误
-  app.get('/api/error', async () => {
-    throw new Error('模拟的服务器内部错误');
-  });
-
-  // 全局错误处理
-  app.setErrorHandler((error, request, reply) => {
-    const statusCode = error.statusCode || 500;
-    reply.status(statusCode).send({
-      code: statusCode,
-      message: error.message || '服务器内部错误',
-      data: null,
-      timestamp: Date.now(),
-      requestId: request.id
+    expect(res.statusCode).toBe(200);
+    const { user } = res.json();
+    expect(user).toMatchObject({
+      sub: 'user-uuid-42',
+      uid: 'user-uuid-42',
+      userId: 42,
+      username: 'alice',
+      appId: 'firewall',
+      roles: ['user_normal'],
+      sessionId: 'sid-42'
     });
   });
 
-  return app;
-}
-
-describe('应用核心流程集成测试', () => {
-  let app;
-
-  beforeAll(async () => {
-    app = await buildTestApp();
+  it('sid 存在但会话已失效：不被当成已登录', async () => {
+    state.session = null;
+    const res = await app.inject({ method: 'GET', url: '/whoami', cookies: { sid: 'expired-sid' } });
+    expect(res.json().user).toBeNull();
   });
+});
 
-  afterAll(async () => {
-    await app.close();
-  });
+describe('会话风险拦截', () => {
+  it('warn 级风险 + 写操作：403，且业务 handler 不执行', async () => {
+    state.session = validSession;
+    state.risk = {
+      level: 'warn',
+      reasons: ['device_fingerprint_changed'],
+      verify: { url: '/verify/v1/slider', header: 'x-verify-token', token: 'tok-1' }
+    };
 
-  describe('响应格式标准化', () => {
-    test('公开接口返回标准成功格式', async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/public' });
-      const body = res.json();
+    const res = await app.inject({ method: 'POST', url: '/write', cookies: { sid: 'signed-sid' } });
 
-      expect(res.statusCode).toBe(200);
-      expect(body.code).toBe(200);
-      expect(body.message).toBe('公开接口访问成功');
-      expect(body.data).toEqual({ hello: 'world' });
-      expect(body.timestamp).toBeDefined();
-    });
-
-    test('业务失败返回标准失败格式', async () => {
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/validate',
-        payload: {}
-      });
-      const body = res.json();
-
-      expect(res.statusCode).toBe(400);
-      expect(body.code).toBe(400);
-      expect(body.message).toBe('用户名不能为空');
-    });
-
-    test('参数校验通过返回成功', async () => {
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/validate',
-        payload: { username: 'testuser' }
-      });
-      const body = res.json();
-
-      expect(res.statusCode).toBe(200);
-      expect(body.message).toBe('校验通过');
-    });
-
-    test('参数校验失败返回具体错误', async () => {
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/validate',
-        payload: { username: 'ab' }
-      });
-      const body = res.json();
-
-      expect(res.statusCode).toBe(400);
-      expect(body.message).toContain('用户名长度');
+    expect(res.statusCode).toBe(403);
+    expect(state.handlerCalls).toBe(0);
+    expect(res.json().__risk__).toMatchObject({
+      level: 'warn',
+      verifyUrl: '/verify/v1/slider',
+      verifyHeader: 'x-verify-token'
     });
   });
 
-  describe('认证流程', () => {
-    test('未登录访问受保护接口返回 401', async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/protected' });
-      const body = res.json();
+  it('已完成人机验证（服务端免验标记）时放行写操作', async () => {
+    state.session = validSession;
+    state.verified = true;
+    state.risk = {
+      level: 'warn',
+      reasons: ['device_fingerprint_changed'],
+      verify: { url: '/verify/v1/slider', header: 'x-verify-token', token: 'tok-1' }
+    };
 
-      expect(res.statusCode).toBe(401);
-      expect(body.code).toBe(401);
-      expect(body.message).toBe('身份验证失败');
-    });
-
-    test('登录后访问受保护接口返回成功', async () => {
-      // 构建带用户状态的应用
-      const authApp = Fastify({ logger: false });
-      authApp.decorateReply('result', {
-        getter() {
-          const reply = this;
-          return {
-            success(message, data) {
-              return reply.code(200).send({ code: 200, message, data });
-            },
-            unauth(message) {
-              return reply.code(401).send({ code: 401, message });
-            }
-          };
-        }
-      });
-      authApp.addHook('onRequest', async request => {
-        request.state = {
-          user: { uid: 'test-uid-123', role: 'user' }
-        };
-      });
-      authApp.get('/api/protected', async (request, reply) => {
-        if (!request.state.user) return reply.result.unauth();
-        return reply.result.success('受保护接口访问成功', { uid: request.state.user.uid });
-      });
-
-      const res = await authApp.inject({ method: 'GET', url: '/api/protected' });
-      const body = res.json();
-
-      expect(res.statusCode).toBe(200);
-      expect(body.data.uid).toBe('test-uid-123');
-      await authApp.close();
-    });
+    const res = await app.inject({ method: 'POST', url: '/write', cookies: { sid: 'signed-sid' } });
+    expect(res.statusCode).toBe(200);
+    expect(state.handlerCalls).toBe(1);
   });
 
-  describe('权限控制', () => {
-    test('非管理员访问管理接口返回 403', async () => {
-      const roleApp = Fastify({ logger: false });
-      roleApp.decorateReply('result', {
-        getter() {
-          const reply = this;
-          return {
-            success(msg) {
-              return reply.code(200).send({ code: 200, message: msg });
-            },
-            unauth(msg) {
-              return reply.code(401).send({ code: 401, message: msg });
-            },
-            forbidden(msg) {
-              return reply.code(403).send({ code: 403, message: msg });
-            }
-          };
-        }
-      });
-      roleApp.addHook('onRequest', async request => {
-        request.state = { user: { uid: 'user-1', role: 'user' } };
-      });
-      roleApp.get('/api/admin', async (request, reply) => {
-        if (!request.state.user) return reply.result.unauth();
-        if (request.state.user.role !== 'admin') return reply.result.forbidden('需要管理员权限');
-        return reply.result.success('管理后台访问成功');
-      });
+  it('读操作不阻断，但在响应体注入 __risk__ 让前端弹验证', async () => {
+    state.session = validSession;
+    state.risk = {
+      level: 'info',
+      reasons: ['ip_changed'],
+      verify: { url: '/verify/v1/slider', header: 'x-verify-token', token: 'tok-2' }
+    };
 
-      const res = await roleApp.inject({ method: 'GET', url: '/api/admin' });
-      const body = res.json();
-
-      expect(res.statusCode).toBe(403);
-      expect(body.message).toBe('需要管理员权限');
-      await roleApp.close();
-    });
-
-    test('管理员访问管理接口返回成功', async () => {
-      const adminApp = Fastify({ logger: false });
-      adminApp.decorateReply('result', {
-        getter() {
-          const reply = this;
-          return {
-            success(msg) {
-              return reply.code(200).send({ code: 200, message: msg });
-            },
-            forbidden(msg) {
-              return reply.code(403).send({ code: 403, message: msg });
-            }
-          };
-        }
-      });
-      adminApp.addHook('onRequest', async request => {
-        request.state = { user: { uid: 'admin-1', role: 'admin' } };
-      });
-      adminApp.get('/api/admin', async (request, reply) => {
-        if (request.state.user.role !== 'admin') return reply.result.forbidden('需要管理员权限');
-        return reply.result.success('管理后台访问成功');
-      });
-
-      const res = await adminApp.inject({ method: 'GET', url: '/api/admin' });
-      expect(res.statusCode).toBe(200);
-      await adminApp.close();
-    });
-  });
-
-  describe('错误处理', () => {
-    test('服务器内部错误返回 500', async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/error' });
-      const body = res.json();
-
-      expect(res.statusCode).toBe(500);
-      expect(body.code).toBe(500);
-      expect(body.message).toBe('模拟的服务器内部错误');
-    });
-
-    test('不存在的路由返回 404', async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/nonexistent' });
-
-      expect(res.statusCode).toBe(404);
-    });
-  });
-
-  describe('请求上下文', () => {
-    test('响应包含 requestId', async () => {
-      const res = await app.inject({
-        method: 'GET',
-        url: '/api/public',
-        headers: { 'x-request-id': 'test-req-123' }
-      });
-      const body = res.json();
-
-      // requestId 可能来自 header 或自动生成
-      expect(body.requestId).toBeDefined();
-    });
-
-    test('自动生成 requestId 当未提供时', async () => {
-      const res = await app.inject({ method: 'GET', url: '/api/public' });
-      const body = res.json();
-
-      expect(body.requestId).toBeDefined();
-      expect(typeof body.requestId).toBe('string');
-    });
+    const res = await app.inject({ method: 'GET', url: '/whoami', cookies: { sid: 'signed-sid' } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.user).toMatchObject({ sub: 'user-uuid-42' });
+    expect(body.__risk__).toMatchObject({ level: 'info', reasons: ['ip_changed'] });
   });
 });

@@ -114,8 +114,20 @@ const appsLoader = async app => {
     }
 
     // 5. 调用 init 函数注册应用插件（如 config.js 中定义了 init）
+    //
+    // ⚠️ init 运行在**独立封装作用域**里：它内部 addHook 的钩子只对同一作用域内
+    //    之后注册的路由生效，而业务路由由 08-api 提前注册在根作用域 —— 因此
+    //    "在 init 里 addHook" 对真实 API 是**不生效**的（静默失效）。
+    //    需要覆盖全应用路由的插件必须走 rootPlugins（下面 5.1），在根作用域注册。
     if (appConfig?.init && typeof appConfig.init === 'function') {
       await app.register(appConfig.init);
+    }
+
+    // 5.1 需要注册在**根作用域**的插件（如全局 preHandler 钩子）
+    if (Array.isArray(appConfig?.rootPlugins)) {
+      for (const plugin of appConfig.rootPlugins) {
+        await app.register(plugin);
+      }
     }
 
     // 6. 打印应用加载完成

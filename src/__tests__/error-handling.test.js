@@ -1,113 +1,113 @@
 /**
- * 错误处理测试
+ * 统一响应契约（真实装饰器驱动）
  *
- * 覆盖：统一错误格式、HTTP 状态码、日志脱敏
+ * 旧版本用 `const response = { code: 400, message: '参数错误' }` 这种手写常量自证，
+ * 生产代码里的 `reply.result` 全部改坏也照样全绿。
+ *
+ * 本版注册**真实** `00-globals.js` 装饰器，用 Fastify inject 发真实请求，
+ * 断言状态码 / code / message / data / requestId 的实际落点，以及分页计算。
  *
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import Fastify from 'fastify';
 
-describe('错误处理', () => {
-  describe('统一错误格式', () => {
-    it('成功响应格式', () => {
-      const response = { code: 200, message: '获取成功', data: { id: 1 } };
-      expect(response.code).toBe(200);
-      expect(response.message).toBeTruthy();
-      expect(response).toHaveProperty('data');
-    });
+import globalsLoader from '../framework/loader/registry/00-globals.js';
 
-    it('400 错误格式', () => {
-      const response = { code: 400, message: '参数错误', data: null };
-      expect(response.code).toBe(400);
-      expect(response.data).toBeNull();
-    });
+let app;
 
-    it('401 错误格式', () => {
-      const response = { code: 401, message: '未登录', data: null };
-      expect(response.code).toBe(401);
-    });
+beforeAll(async () => {
+  app = Fastify({ logger: false });
+  await app.register(globalsLoader);
 
-    it('403 错误格式', () => {
-      const response = { code: 403, message: '权限不足', data: null };
-      expect(response.code).toBe(403);
-    });
+  app.get('/success', (request, reply) => reply.result.success('获取成功', { id: 1 }));
+  app.get('/created', (request, reply) => reply.result.created({ id: 2 }));
+  app.get('/no-content', (request, reply) => reply.result.noContent());
+  app.get('/bad-request', (request, reply) => reply.result.badRequest());
+  app.get('/unauth', (request, reply) => reply.result.unauth());
+  app.get('/forbidden', (request, reply) => reply.result.forbidden());
+  app.get('/not-found', (request, reply) => reply.result.notFound());
+  app.get('/conflict', (request, reply) => reply.result.conflict());
+  app.get('/too-many', (request, reply) => reply.result.tooManyRequests());
+  app.get('/internal', (request, reply) => reply.result.internalError());
+  app.get('/fail-biz', (request, reply) => reply.result.fail('库存不足', { stock: 0 }, 400, 40001));
+  app.get('/paginated', (request, reply) => reply.result.paginated([1, 2], 25, 2, 10));
 
-    it('404 错误格式', () => {
-      const response = { code: 404, message: '资源不存在', data: null };
-      expect(response.code).toBe(404);
-    });
+  await app.ready();
+});
 
-    it('429 限频错误格式', () => {
-      const response = { code: 429, message: '请求过于频繁', data: null };
-      expect(response.code).toBe(429);
-    });
+afterAll(async () => {
+  await app?.close();
+});
 
-    it('500 错误格式', () => {
-      const response = { code: 500, message: '服务器内部错误', data: null };
-      expect(response.code).toBe(500);
-    });
+/** 统一封装：code/message/data/timestamp/requestId 五件套 */
+function expectEnvelope(body, expectedCode) {
+  expect(body).toMatchObject({ code: expectedCode });
+  expect(typeof body.message).toBe('string');
+  expect(body.message.length).toBeGreaterThan(0);
+  expect(body).toHaveProperty('data');
+  expect(typeof body.timestamp).toBe('number');
+  expect(body).toHaveProperty('requestId');
+}
+
+describe('成功响应', () => {
+  it('success → 200 + data 原样透传', async () => {
+    const res = await app.inject({ method: 'GET', url: '/success' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expectEnvelope(body, 200);
+    expect(body.message).toBe('获取成功');
+    expect(body.data).toEqual({ id: 1 });
   });
 
-  describe('日志脱敏', () => {
-    function sanitize(obj) {
-      if (!obj || typeof obj !== 'object') return obj;
-      const result = {};
-      for (const [key, value] of Object.entries(obj)) {
-        if (/password|token|secret|key|credential/i.test(key)) {
-          result[key] = '***';
-        } else if (typeof value === 'object') {
-          result[key] = sanitize(value);
-        } else {
-          result[key] = value;
-        }
-      }
-      return result;
-    }
-
-    it('密码字段被脱敏', () => {
-      const data = { username: 'test', password: 'secret123' };
-      const result = sanitize(data);
-      expect(result.username).toBe('test');
-      expect(result.password).toBe('***');
-    });
-
-    it('token 字段被脱敏', () => {
-      const data = { token: 'eyJhbGciOiJSUzI1NiIs...' };
-      const result = sanitize(data);
-      expect(result.token).toBe('***');
-    });
-
-    it('嵌套对象被脱敏', () => {
-      const data = { user: { name: 'test', password: 'secret' } };
-      const result = sanitize(data);
-      expect(result.user.name).toBe('test');
-      expect(result.user.password).toBe('***');
-    });
-
-    it('非敏感字段保持不变', () => {
-      const data = { username: 'test', email: 'test@example.com' };
-      const result = sanitize(data);
-      expect(result.username).toBe('test');
-      expect(result.email).toBe('test@example.com');
-    });
+  it('created → 201', async () => {
+    const res = await app.inject({ method: 'GET', url: '/created' });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ code: 201, data: { id: 2 } });
   });
 
-  describe('HTTP 状态码映射', () => {
-    it('200 表示成功', () => {
-      expect(200).toBe(200);
-    });
+  it('noContent → 204 且无响应体', async () => {
+    const res = await app.inject({ method: 'GET', url: '/no-content' });
+    expect(res.statusCode).toBe(204);
+    expect(res.body).toBe('');
+  });
+});
 
-    it('401 表示未认证', () => {
-      expect(401).toBe(401);
-    });
+describe('失败响应的状态码映射', () => {
+  it.each([
+    ['/bad-request', 400],
+    ['/unauth', 401],
+    ['/forbidden', 403],
+    ['/not-found', 404],
+    ['/conflict', 409],
+    ['/too-many', 429],
+    ['/internal', 500]
+  ])('%s → HTTP %i，data 为 null', async (url, status) => {
+    const res = await app.inject({ method: 'GET', url });
+    expect(res.statusCode).toBe(status);
+    const body = res.json();
+    expectEnvelope(body, status);
+    expect(body.data).toBeNull();
+  });
 
-    it('403 表示无权限', () => {
-      expect(403).toBe(403);
-    });
+  it('fail 支持业务码：HTTP 400 但 body.code 为业务码', async () => {
+    const res = await app.inject({ method: 'GET', url: '/fail-biz' });
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.code).toBe(40001);
+    expect(body.message).toBe('库存不足');
+    expect(body.data).toEqual({ stock: 0 });
+  });
+});
 
-    it('429 表示限频', () => {
-      expect(429).toBe(429);
-    });
+describe('分页响应', () => {
+  it('totalPages 向上取整，分页元信息独立于 data', async () => {
+    const res = await app.inject({ method: 'GET', url: '/paginated' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expectEnvelope(body, 200);
+    expect(body.data).toEqual([1, 2]);
+    expect(body.pagination).toEqual({ total: 25, page: 2, pageSize: 10, totalPages: 3 });
   });
 });

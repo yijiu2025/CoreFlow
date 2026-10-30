@@ -213,8 +213,10 @@ async function applyGuardLogic(opts = {}, request, reply) {
       const authError = request.state?.authError;
       if (authError) {
         if (authError.name === 'TokenExpiredError') {
+          // 不要再写 `reply.sent = true`：Fastify 5 的 reply.sent 是**只读 getter**，
+          // ESM 严格模式下赋值会抛 TypeError（被上层当成 500 记录），而 send() 本身
+          // 已经把 sent 置为 true —— createGuard 里的 reply.sent 判断照常成立。
           reply.code(401).send({ error: 'invalid_token', error_description: 'Token expired' });
-          reply.sent = true;
           return;
         }
         reply.code(401).send({

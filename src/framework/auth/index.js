@@ -301,7 +301,9 @@ async function detectAndHandleRisk(request, reply, sessionData) {
       // 只有服务端已写入的免验标记才能放行；不再信任客户端任意 x-verify-token 头。
       const verified = await hasVerifiedFlag(sessionData.userId, deviceId);
       if (!verified && risk.level === 'warn' && isHighRiskRequest(request) && risk.verify) {
-        // 直接 reply.send 后必须标记 sent（守卫依赖 reply.sent 判断是否已发送响应）
+        // 不要写 `reply.sent = true`：Fastify 5 的 reply.sent 是只读 getter，ESM 严格
+        // 模式下赋值抛 TypeError（会被本函数的 catch 吞成一条"风险检测异常"警告），
+        // 而 send() 本身已置 sent，下游守卫/钩子的 reply.sent 判断不受影响。
         reply.code(403).send({
           code: 403,
           message: '检测到设备环境变更，请完成人机验证后再操作',
@@ -314,7 +316,6 @@ async function detectAndHandleRisk(request, reply, sessionData) {
             verifyToken: risk.verify.token
           }
         });
-        reply.sent = true;
         return;
       }
     }

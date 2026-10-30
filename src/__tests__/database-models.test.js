@@ -1,182 +1,172 @@
 /**
- * 数据库模型测试
+ * 数据库模型定义契约（真实模型文件驱动）
  *
- * 覆盖：模型结构、关联关系、验证规则
+ * 旧版本手写 `{ id, uid, username }` 之类的对象再断言它有这些键 —— 生产模型
+ * 改列名、删索引、关掉软删除都照样全绿。
+ *
+ * 本版加载真实的 `defineXxx(sequelize, DataTypes)`，用一个只做记录的 sequelize 桩
+ * 捕获**实际传给 Sequelize 的定义**，断言的是真正决定行为的约束：
+ * - 软删除安全唯一索引（email/phone + delete_version，`_uk_` 必须 unique）
+ * - 手机号密文列必须是 TEXT（明文 ≤20 字节，密文 100+）
+ * - 会话表的查询索引（token / family_id / user+app+device）——删了就是全表扫
+ * - 软删除钩子与手机号加解密钩子的挂载（丢一个就会写出明文手机号）
  *
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { Sequelize, DataTypes } from 'sequelize';
 
-describe('数据库模型', () => {
-  describe('User 模型', () => {
-    it('字段结构正确', () => {
-      const user = {
-        id: 1,
-        uid: 'uuid-xxx',
-        username: 'testuser',
-        email: 'test@example.com',
-        phone: '13800138000',
-        avatar: null,
-        status: 1,
-        delete_version: 0
-      };
-      expect(user).toHaveProperty('id');
-      expect(user).toHaveProperty('uid');
-      expect(user).toHaveProperty('username');
-      expect(user).toHaveProperty('email');
-      expect(user).toHaveProperty('status');
-      expect(typeof user.id).toBe('number');
-      expect(typeof user.uid).toBe('string');
-    });
+import defineUser from '../models/user/User.js';
+import defineSessionToken from '../models/session/SessionToken.js';
+import defineKeyPair from '../models/key/KeyPair.js';
 
-    it('status 枚举值', () => {
-      const ACTIVE = 1;
-      const BANNED = 0;
-      const DEACTIVATED = -1;
-      expect(ACTIVE).toBe(1);
-      expect(BANNED).toBe(0);
-      expect(DEACTIVATED).toBe(-1);
+/**
+ * 记录型 sequelize 桩：不连库，只保留 define 收到的参数与注册的钩子。
+ * 模型文件用到的 API 只有 define / addHook / beforeValidate / afterFind。
+ */
+function createRecorder() {
+  const defined = [];
+
+  function define(name, attributes, options) {
+    const record = { name, attributes, options, hooks: {} };
+    const model = {
+      name,
+      addHook(kind, fn) {
+        (record.hooks[kind] ||= []).push(fn);
+      },
+      beforeValidate(fn) {
+        model.addHook('beforeValidate', fn);
+      },
+      afterFind(fn) {
+        model.addHook('afterFind', fn);
+      }
+    };
+    record.model = model;
+    defined.push(record);
+    return model;
+  }
+
+  return { define, defined };
+}
+
+const recorder = createRecorder();
+const User = defineUser(recorder, DataTypes);
+// 只关心它注册出来的定义（recorded），模型对象本身不需要引用
+defineSessionToken(recorder, DataTypes);
+
+const userDef = recorder.defined.find(d => d.name === 'User');
+const sessionDef = recorder.defined.find(d => d.name === 'SessionToken');
+
+/** 按索引名取定义 */
+function indexByName(def, name) {
+  return (def.options.indexes || []).find(i => i.name === name);
+}
+
+describe('User 模型', () => {
+  it('表名与软删除配置', () => {
+    expect(userDef.options.tableName).toBe('user_user');
+    expect(userDef.options.paranoid).toBe(true);
+    expect(userDef.options.timestamps).toBe(true);
+  });
+
+  it('email / phone 唯一性靠联合索引，不用字段级 unique（软删除会让 NULL 穿透）', () => {
+    expect(userDef.attributes.email.unique).toBeUndefined();
+    expect(userDef.attributes.phone.unique).toBeUndefined();
+
+    const emailIdx = indexByName(userDef, 'uk_email_delete_version');
+    expect(emailIdx).toMatchObject({ unique: true, fields: ['email', 'delete_version'] });
+
+    const phoneIdx = indexByName(userDef, 'uk_phone_delete_version');
+    expect(phoneIdx).toMatchObject({ unique: true, fields: ['phone', 'delete_version'] });
+  });
+
+  it('手机号列必须是 TEXT（存的是密文不是明文）', () => {
+    expect(userDef.attributes.phone.type.key).toBe('TEXT');
+  });
+
+  it('delete_version 非空且默认 0（唯一索引的参与列不能为 NULL）', () => {
+    expect(userDef.attributes.delete_version.allowNull).toBe(false);
+    expect(userDef.attributes.delete_version.defaultValue).toBe(0);
+  });
+
+  it('软删除钩子已挂载：禁止硬删 / 禁止手动改 delete_version', () => {
+    expect(userDef.hooks.beforeDestroy?.length).toBeGreaterThan(0);
+    expect(userDef.hooks.beforeRestore?.length).toBeGreaterThan(0);
+    expect(userDef.hooks.beforeUpdate?.length).toBeGreaterThan(0);
+    expect(userDef.hooks.beforeBulkDestroy?.length).toBeGreaterThan(0);
+  });
+
+  it('手机号加解密钩子已挂载', () => {
+    expect(userDef.hooks.beforeValidate?.length).toBeGreaterThan(0);
+    expect(userDef.hooks.afterFind?.length).toBeGreaterThan(0);
+  });
+
+  it('模型上有供迁移脚本调用的静态加解密方法', () => {
+    expect(typeof User.encryptPhoneStatic).toBe('function');
+    expect(typeof User.decryptPhoneStatic).toBe('function');
+  });
+});
+
+describe('SessionToken 模型', () => {
+  it('表名 + 时间戳，且不做 paranoid（吊销走 revoked 列）', () => {
+    expect(sessionDef.options.tableName).toBe('session_tokens');
+    expect(sessionDef.options.timestamps).toBe(true);
+    expect(sessionDef.options.paranoid).toBeUndefined();
+  });
+
+  it('关键查询索引齐全（删任一条都会退化成全表扫）', () => {
+    expect(indexByName(sessionDef, 'idx_session_token_identifier')).toMatchObject({ fields: ['token'] });
+    expect(indexByName(sessionDef, 'idx_session_token_family')).toMatchObject({ fields: ['family_id'] });
+    expect(indexByName(sessionDef, 'idx_user_app_device')).toMatchObject({
+      fields: ['user_id', 'app_id', 'device_id']
     });
   });
 
-  describe('UserIdentity 模型', () => {
-    it('字段结构正确', () => {
-      const identity = {
-        id: 1,
-        user_id: 1,
-        identity_type: 'password',
-        identifier: 'test@example.com',
-        credential: '$2a$10$...',
-        failed_attempts: 0,
-        locked_until: null
-      };
-      expect(identity).toHaveProperty('user_id');
-      expect(identity).toHaveProperty('identity_type');
-      expect(identity).toHaveProperty('identifier');
-      expect(identity).toHaveProperty('credential');
-    });
+  it('revoked / remember_me 默认值决定"新会话默认有效且短期"', () => {
+    expect(sessionDef.attributes.revoked.defaultValue).toBe(false);
+    expect(sessionDef.attributes.remember_me.defaultValue).toBe(false);
+    expect(sessionDef.attributes.remember_me.allowNull).toBe(false);
+  });
 
-    it('identity_type 枚举值', () => {
-      const types = ['password', 'wechat', 'github', 'phone_sms'];
-      expect(types).toContain('password');
+  it('token 存的是哈希，列宽足够（sha256 hex = 64）', () => {
+    expect(sessionDef.attributes.token.allowNull).toBe(false);
+    const { type } = sessionDef.attributes.token;
+    expect(type.options?.length ?? Number(type.options)).toBeGreaterThanOrEqual(64);
+  });
+});
+
+describe('KeyPair 模型（真实 Sequelize init）', () => {
+  let sequelize;
+
+  beforeAll(() => {
+    // 只构造实例，不发起连接：Sequelize 的连接池是懒的
+    sequelize = new Sequelize({
+      dialect: 'mysql',
+      host: '127.0.0.1',
+      username: 'u',
+      password: 'p',
+      database: 'd',
+      logging: false
     });
   });
 
-  describe('Role 模型', () => {
-    it('字段结构正确', () => {
-      const role = {
-        id: 1,
-        code: 'admin',
-        app_id: 'GLOBAL',
-        name: '管理员',
-        rank_level: 99,
-        policy: { Statement: [{ Effect: 'Allow', Action: ['*'] }] },
-        description: '系统管理员',
-        delete_version: 0
-      };
-      expect(role).toHaveProperty('code');
-      expect(role).toHaveProperty('app_id');
-      expect(role).toHaveProperty('rank_level');
-      expect(role).toHaveProperty('policy');
-      expect(role.rank_level).toBeGreaterThanOrEqual(0);
-      expect(role.rank_level).toBeLessThanOrEqual(99);
-    });
-
-    it('policy Statement 格式正确', () => {
-      const policy = {
-        Statement: [
-          { Effect: 'Allow', Action: ['fw:config:read', 'fw:config:write'] },
-          { Effect: 'Deny', Action: ['fw:config:delete'] }
-        ]
-      };
-      expect(policy.Statement).toHaveLength(2);
-      expect(policy.Statement[0].Effect).toBe('Allow');
-      expect(policy.Statement[1].Effect).toBe('Deny');
-    });
+  afterAll(() => {
+    sequelize?.close();
   });
 
-  describe('UserRole 模型', () => {
-    it('字段结构正确', () => {
-      const userRole = {
-        id: 1,
-        user_id: 1,
-        role_id: 1,
-        app_id: 'firewall',
-        delete_version: 0
-      };
-      expect(userRole).toHaveProperty('user_id');
-      expect(userRole).toHaveProperty('role_id');
-      expect(userRole).toHaveProperty('app_id');
-    });
+  it('表名、下划线命名与 name 唯一索引', () => {
+    const KeyPair = defineKeyPair(sequelize, DataTypes);
+    expect(KeyPair.getTableName()).toBe('oauth_key_pairs');
+    expect(KeyPair.options.underscored).toBe(true);
+    expect(KeyPair.options.indexes).toEqual([expect.objectContaining({ unique: true, fields: ['name'] })]);
   });
 
-  describe('SessionToken 模型', () => {
-    it('字段结构正确', () => {
-      const token = {
-        id: 1,
-        user_id: 1,
-        app_id: 'firewall',
-        device_id: 'web',
-        token: 'sha256hash...',
-        ip: '192.168.1.1',
-        user_agent: 'Mozilla/5.0...',
-        last_active: new Date(),
-        revoked: false
-      };
-      expect(token).toHaveProperty('user_id');
-      expect(token).toHaveProperty('token');
-      expect(token).toHaveProperty('revoked');
-      expect(token.revoked).toBe(false);
-    });
-  });
-
-  describe('AuditLog 模型', () => {
-    it('字段结构正确', () => {
-      const log = {
-        id: 1,
-        user_id: 1,
-        event: 'LOGIN_SUCCESS',
-        app_id: 'firewall',
-        ip: '192.168.1.1',
-        user_agent: 'Mozilla/5.0...',
-        details: { reason: 'direct_login' }
-      };
-      expect(log).toHaveProperty('event');
-      expect(log).toHaveProperty('user_id');
-      expect(log).toHaveProperty('ip');
-      expect(log).toHaveProperty('details');
-    });
-  });
-
-  describe('OauthClient 模型', () => {
-    it('字段结构正确', () => {
-      const client = {
-        client_id: 'firewall',
-        client_name: 'CoreFlow Firewall',
-        client_secret: '$2a$10$...',
-        redirect_uris: ['http://localhost:5173/firewall/'],
-        grant_types: ['authorization_code', 'refresh_token'],
-        scope: 'openid profile email',
-        token_endpoint_auth_method: 'none',
-        application_type: 'web'
-      };
-      expect(client).toHaveProperty('client_id');
-      expect(client).toHaveProperty('client_secret');
-      expect(client).toHaveProperty('redirect_uris');
-      expect(client).toHaveProperty('grant_types');
-    });
-  });
-
-  describe('软删除机制', () => {
-    it('delete_version 0 表示活跃', () => {
-      const record = { delete_version: 0 };
-      expect(record.delete_version).toBe(0);
-    });
-
-    it('delete_version > 0 表示已删除', () => {
-      const record = { delete_version: 42 };
-      expect(record.delete_version).toBeGreaterThan(0);
-    });
+  it('私钥/公钥列是 TEXT，且都不可为空', () => {
+    const KeyPair = defineKeyPair(sequelize, DataTypes);
+    expect(KeyPair.rawAttributes.private_key.type.key).toBe('TEXT');
+    expect(KeyPair.rawAttributes.private_key.allowNull).toBe(false);
+    expect(KeyPair.rawAttributes.public_key.type.key).toBe('TEXT');
+    expect(KeyPair.rawAttributes.public_key.allowNull).toBe(false);
   });
 });
