@@ -58,6 +58,15 @@ defineRoles([
 ]);
 ```
 
+::: warning `rank_level` 有硬上限
+职级区间由 `src/models/iam/Role.js` 的 `validate: { min: 0, max: 99 }` 决定，**99 是最大值**。
+写成 100 不会在本地报错（角色早已落库时 `Role.findOrCreate()` 只走"更新 policy"分支），
+但**空库首次部署**（新环境 / CI 的 compose 冒烟）会真的 insert，于是抛
+`SequelizeValidationError: Validation max on rank_level failed`，而 appsLoader 是 fail-fast 的
+—— 应用直接起不来。`src/__tests__/permission/role-rank-levels.test.js` 用模型自身的边界
+守卫这条约束（边界从模型派生，不手抄 0/99）。
+:::
+
 ### 策略格式
 
 **Statement 格式（推荐）：**

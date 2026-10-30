@@ -42,6 +42,18 @@ const log = createLogger('framework.redis.redis-store');
 /** 单次 Redis 操作超时（毫秒） */
 const REDIS_OP_TIMEOUT = 3000;
 
+/**
+ * SCAN 的结束游标
+ *
+ * 🔴 node-redis v5 的 `scan()` 返回 `{ cursor, keys }`，且 `cursor` 是**字符串** ——
+ *    扫完时是 `'0'` 而不是数字 `0`。写成 `while (cursor !== 0)` 恒为真，
+ *    list/size 会一直扫到总超时才被 break 掉（表现为"慢"，不是"报错"）。
+ *    同理不能用数组解构 `const [next, keys] = await redis.scan(...)`：
+ *    v5 返回的是对象，数组解构会抛 `TypeError: (intermediate value) is not iterable`
+ *    （2026-10-30 由 queue-atomic 关卡在真 Redis 上炸出来）。
+ */
+const SCAN_END = '0';
+
 /** 是否启用 Redis 调试日志 */
 const DEBUG = process.env.DEBUG_REDIS === 'true';
 
@@ -338,7 +350,7 @@ const RedisStore = {
     const redis = _getRedis('list', prefix, useBackup);
     const pattern = _keyPattern(prefix);
     const keys = [];
-    let cursor = 0;
+    let cursor = SCAN_END;
     const deadline = Date.now() + (timeout ?? REDIS_OP_TIMEOUT);
     const MIN_REMAINING = 500;
     try {
@@ -349,7 +361,7 @@ const RedisStore = {
         }
         const remaining = deadline - Date.now();
         const count = limit > 0 ? Math.min(limit, 1000) : 100;
-        const [nextCursor, batch] = await withTimeoutPromise(
+        const { cursor: nextCursor, keys: batch } = await withTimeoutPromise(
           redis.scan(String(cursor), { MATCH: pattern, COUNT: count }),
           remaining
         );
@@ -357,11 +369,11 @@ const RedisStore = {
         for (const key of batch) {
           keys.push(key);
           if (limit > 0 && keys.length >= limit) {
-            cursor = 0;
+            cursor = SCAN_END;
             break;
           }
         }
-      } while (cursor !== 0);
+      } while (cursor !== SCAN_END);
       return keys;
     } catch (err) {
       _wrapRedisError(err, 'list', prefix);
@@ -381,7 +393,7 @@ const RedisStore = {
     const redis = _getRedis('size', prefix, useBackup);
     const pattern = _keyPattern(prefix);
     let total = 0;
-    let cursor = 0;
+    let cursor = SCAN_END;
     const deadline = Date.now() + (timeout ?? REDIS_OP_TIMEOUT);
     const MIN_REMAINING = 500;
     try {
@@ -391,14 +403,14 @@ const RedisStore = {
           break;
         }
         const remaining = deadline - Date.now();
-        const [nextCursor, batch] = await withTimeoutPromise(
+        const { cursor: nextCursor, keys: batch } = await withTimeoutPromise(
           redis.scan(String(cursor), { MATCH: pattern, COUNT: 1000 }),
           remaining
         );
         cursor = nextCursor;
         total += batch.length;
         if (total >= limit) break;
-      } while (cursor !== 0);
+      } while (cursor !== SCAN_END);
       return total;
     } catch (err) {
       _wrapRedisError(err, 'size', prefix);
@@ -416,15 +428,13 @@ const RedisStore = {
   async destroy(prefix, timeout, useBackup) {
     _validateInput(prefix);
     const redis = _getRedis('destroy', prefix, useBackup);
-    // 🔴 SCAN 的游标必须是**字符串**：node-redis v5 在写 socket 前逐参数校验
-    //    `string | Buffer`，`redis.scan(0, ...)` 会抛
-    //      TypeError: "arguments[1]" must be of type "string | Buffer", got number
-    //    而这条错误是在 socket 写入路径上抛的 —— 栈里全是 node-redis 自己的帧，
-    //    对调用方表现为一个**未捕获异常**（进程直接挂），完全看不出是 destroy/keys。
-    //    本文件其余 3 处 scan（含 keys 的）同理，由 conventions 守卫兜住。
+    // 返回值是 `{ cursor, keys }`（不是数组），结束游标是字符串 '0' —— 见 SCAN_END 处的说明。
+    // 游标仍统一 String() 一次：v5 在写 socket 前逐参数校验 `string | Buffer`，
+    // 传数字会抛 "arguments[1]" must be of type "string | Buffer"，而那条错误抛在
+    // socket 写入路径上、栈里没有业务帧，表现为未捕获异常直接杀进程。
     const pattern = _keyPattern(prefix);
     let deleted = 0;
-    let cursor = 0;
+    let cursor = SCAN_END;
     const deadline = Date.now() + (timeout ?? REDIS_OP_TIMEOUT);
     const MIN_REMAINING = 500;
     try {
@@ -434,7 +444,7 @@ const RedisStore = {
           break;
         }
         const remaining = deadline - Date.now();
-        const [nextCursor, batch] = await withTimeoutPromise(
+        const { cursor: nextCursor, keys: batch } = await withTimeoutPromise(
           redis.scan(String(cursor), { MATCH: pattern, COUNT: 500 }),
           remaining
         );
@@ -443,7 +453,7 @@ const RedisStore = {
           const count = await withTimeoutPromise(redis.del(batch), remaining);
           deleted += count;
         }
-      } while (cursor !== 0);
+      } while (cursor !== SCAN_END);
       _log(`[RedisStore] DESTROY ${prefix} → 删除 ${deleted} 个键`);
       return deleted;
     } catch (err) {
@@ -466,7 +476,7 @@ const RedisStore = {
     const redis = _getRedis('clear', prefix, useBackup);
     const pattern = _keyPattern(prefix);
     let deleted = 0;
-    let cursor = 0;
+    let cursor = SCAN_END;
     const deadline = Date.now() + (timeout ?? REDIS_OP_TIMEOUT);
     const MIN_REMAINING = 500;
     try {
@@ -476,7 +486,7 @@ const RedisStore = {
           break;
         }
         const remaining = deadline - Date.now();
-        const [nextCursor, batch] = await withTimeoutPromise(
+        const { cursor: nextCursor, keys: batch } = await withTimeoutPromise(
           redis.scan(String(cursor), { MATCH: pattern, COUNT: 500 }),
           remaining
         );
@@ -485,7 +495,7 @@ const RedisStore = {
           const count = await withTimeoutPromise(redis.del(batch), remaining);
           deleted += count;
         }
-      } while (cursor !== 0);
+      } while (cursor !== SCAN_END);
       _log(`[RedisStore] CLEAR ${prefix} → 删除 ${deleted} 个键`);
       return deleted;
     } catch (err) {

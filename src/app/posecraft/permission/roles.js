@@ -154,7 +154,12 @@ defineRoles([
     code: 'posecraft_admin',
     app_id: 'posecraft',
     name: '管理员',
-    rank_level: 100,
+    // 🔴 上限是 99（`models/iam/Role.js` 的 validate.max），写 100 会在
+    //    `Role.findOrCreate()` 里抛 SequelizeValidationError: Validation max on rank_level failed
+    //    —— 而 findOrCreate 只在**库里还没有这个角色**时才真正 insert，
+    //    所以本地（角色早已落库）全绿、容器冒烟（空库）直接起不来。
+    //    2026-10-30 由 publish-image 的 compose 冒烟发现，见 __tests__/permission/role-rank-levels.test.js。
+    rank_level: 99,
     description: '具有全量具体的管理控制权（包括审批创作者的提现申请）',
     policy: {
       Version: '2026-06-06',
