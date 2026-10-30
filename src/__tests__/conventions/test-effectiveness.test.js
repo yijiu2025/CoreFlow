@@ -56,13 +56,8 @@ const KNOWN_INEFFECTIVE_TESTS = new Set([
   'error-handling.test.js',
   'integration/app.test.js',
   'integration-flow.test.js',
-  'jwt.test.js',
   'oauth-flow.test.js',
-  'performance.test.js',
-  'permission-loader.test.js',
-  'permission-system.test.js',
-  'rate-limiter.test.js',
-  'security.test.js'
+  'performance.test.js'
 ]);
 
 function walk(dir, out = []) {
@@ -171,8 +166,8 @@ describe('测试有效性守卫', () => {
   it('存量清单规模不得扩张（防绕过：把新违规偷塞进冻结清单）', () => {
     // 该断言把「清单长度」钉在当前值上。新增违规想混过检查，
     // 必须同时改这里 —— 那是一次可见的、需要理由的修改，而非静默绕过。
-    // 2026-09-20 恢复 14 个存量伪测试文件，清单同步回填，冻结值回到 14。
-    const FROZEN_SIZE = 14;
+    // 2026-10-30 起逐个改造真身测试，改完即从清单摘除并同步下调冻结值（只减不增）。
+    const FROZEN_SIZE = 9;
     expect(KNOWN_INEFFECTIVE_TESTS.size).toBeLessThanOrEqual(FROZEN_SIZE);
   });
 

@@ -179,7 +179,9 @@ class StpUtil {
    * @returns {boolean}
    */
   static hasPermission(permission) {
-    const { allows, denies } = StpUtil.getPermissionList();
+    // 缺字段按空集处理：权限对象形状不完整时应当"无权限"（fail-closed），
+    // 而不是在这里抛 TypeError 变成 500 —— 后者会让鉴权失败伪装成服务端故障。
+    const { allows = [], denies = [] } = StpUtil.getPermissionList() || {};
 
     // Deny 优先
     if (denies.some(p => StpUtil._isMatch(p, permission))) {

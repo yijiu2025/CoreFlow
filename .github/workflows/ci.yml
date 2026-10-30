@@ -144,6 +144,26 @@ jobs:
     name: Test（Jest）
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # 🔴 必须提供 Redis：lock-store / stream-store 两个套件在无 Redis 时是
+    #    `describe.skip`，本地跑看起来"2 套件跳过"很正常，CI 里就变成
+    #    "Redis 相关行为从未被验证"。给上 service 之后它们是必跑。
+    services:
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # 指向 service 并切到 db15，避免与关卡/本地数据串键
+      REDIS_ENABLED: 'true'
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: '6379'
+      REDIS_DB: '15'
+      # 让 redis-ci-guard.test.js 在"配置丢了"时变红，而不是静默跳过
+      EXPECT_REDIS: 'true'
     steps:
       - uses: actions/checkout@v4
 
