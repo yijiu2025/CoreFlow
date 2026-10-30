@@ -13,8 +13,10 @@
  * @since 2026-09-14
  */
 
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import crypto from 'node:crypto';
+import { isRedisConfigured } from '../../../framework/redis/utils.js';
+import { connectTestRedis, disconnectTestRedis } from '../../helpers/redis-connection.js';
 
 describe('auth 公共契约（🔴-2 回归）', () => {
   describe('session.js 导出完整性', () => {
@@ -92,6 +94,16 @@ describe('auth 公共契约（🔴-2 回归）', () => {
   });
 
   describe('redis 命名空间一致性（🔴-3 回归）', () => {
+    // 这一组验的是「同一命名空间双向可见」，与后端无关，MapStore / Redis 下都成立。
+    // 但 CI 里 REDIS_ENABLED=true：`isRedisConfigured()` 为真而没人连过 Redis，
+    // `getStore()` 会抛 RedisRequiredError(503)。配了就连，没配就走 MapStore。
+    beforeAll(async () => {
+      if (isRedisConfigured()) await connectTestRedis();
+    });
+    afterAll(async () => {
+      if (isRedisConfigured()) await disconnectTestRedis();
+    });
+
     test('session 子模块与 deactivation.service.js 使用同一 user_sessions 命名空间', async () => {
       const { readFileSync, readdirSync } = await import('node:fs');
       const root = new URL('../../../', import.meta.url);

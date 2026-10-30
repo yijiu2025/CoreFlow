@@ -28,6 +28,21 @@ if (!TASK_KEY || !Number.isFinite(TTL_MS) || !Number.isFinite(AT_EPOCH)) {
 
 const { connectStandalone, disconnectStandalone } = await import('../../src/framework/redis/index.js');
 const { acquirePeriodLock } = await import('../../src/framework/scheduler/index.js');
+const { createLock } = await import('../../src/framework/redis/lock-store.js');
+
+/**
+ * 抢锁方式（`PROBE_MODE`）
+ *
+ *   period —— 走真实调度器路径 `acquirePeriodLock()`，父进程给的是**任务周期**，
+ *             实际锁 TTL 会被派生（≥ 2 倍周期）。第 1/2 轮用它，验中间件真实行为。
+ *   lock   —— 直接用 `createLock(..., { ttl })`，TTL **精确等于**父进程给的值。
+ *             第 3/4 轮用它验"锁本身会自然过期，不会永久卡死"这条原始语义。
+ *
+ * 为什么必须分开：调度器的 TTL 派生（周期 ×2 或 +60s）意味着拿一个 3s 的周期
+ * 去等 3s 看锁过期**永远等不到**（实际 TTL 63s）。把两种语义塞进同一轮，
+ * 关卡要么等 63s、要么得出"锁泄漏"的错误结论。实测 2026-10-30。
+ */
+const MODE = process.env.PROBE_MODE === 'lock' ? 'lock' : 'period';
 
 const conn = await connectStandalone({ timeoutMs: 8000 });
 if (!conn.ready) {
@@ -43,7 +58,10 @@ while (Date.now() < AT_EPOCH) {
 }
 
 const t0 = Date.now();
-const acquired = await acquirePeriodLock(TASK_KEY, TTL_MS);
+const acquired =
+  MODE === 'lock'
+    ? await createLock(`scheduler:${TASK_KEY}`, { ttl: TTL_MS }).tryAcquire()
+    : await acquirePeriodLock(TASK_KEY, TTL_MS);
 const drift = Math.max(0, t0 - AT_EPOCH);
 
 console.log(`RESULT ${LABEL} ${acquired} 起跑偏差${drift}ms 判定耗时${Date.now() - t0}ms`);

@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Node.js-24-339933?logo=node.js&logoColor=white" />
+  <a href="https://yijiu2025.github.io/CoreFlow/"><img src="https://img.shields.io/badge/文档-在线阅读-4FC08D?logo=vitepress&logoColor=white" /></a>
+  <img src="https://img.shields.io/badge/Node.js-22%20%7C%2024-339933?logo=node.js&logoColor=white" />
   <img src="https://img.shields.io/badge/Fastify-5-000000?logo=fastify&logoColor=white" />
   <img src="https://img.shields.io/badge/Vue-3-4FC08D?logo=vue.js&logoColor=white" />
   <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white" />
@@ -22,16 +23,19 @@
 - **PBAC 权限系统** — 策略级访问控制，三级守卫（System→Group→API），通配符匹配
 - **双模式认证** — Session Cookie（默认）和 JWT Bearer 灵活切换
 - **多应用支持** — 一个后端服务多个前端应用，按应用隔离权限和会话
-- **优雅降级** — Redis 不可用时自动降级到内存模式
+- **Redis 可选，但不含糊** — 未配置时走进程内存储（单实例开箱即用）；一旦配置就要求在线，
+  连不上返回 503 而不是静默退回内存（多实例下"悄悄降级"会让会话与限流失效）
 
 ---
 
 ## 快速开始
 
+> 完整文档：<https://yijiu2025.github.io/CoreFlow/>（本仓 `docs/` 的在线版）
+
 ```bash
-# 克隆项目
-git clone https://github.com/your-username/nodeservers.git
-cd nodeservers
+# 克隆项目（含 theme-core 子模块）
+git clone --recurse-submodules https://github.com/yijiu2025/CoreFlow.git
+cd CoreFlow
 
 # 安装依赖
 npm install

@@ -1,0 +1,100 @@
+# ============================================================================
+# 文档站发布 —— https://yijiu2025.github.io/CoreFlow/
+#
+# 与 ci.yml 的分工（刻意不合并）：
+#   ci.yml      → **验证**：任何 PR 都要能构建出文档站（子路径 + 死链），失败即拦。
+#   docs.yml    → **发布**：只在 main 上构建并推 Pages，不参与 PR 门禁。
+#
+# 为什么不把发布塞进 ci.yml：发布需要 `pages: write` + `id-token: write`，
+# 而 PR 来自 fork 时拿不到这两个权限；把发布与验证混在一个工作流里，
+# 要么给 PR 无谓的写权限，要么让发布在 PR 上必然失败。
+#
+# 🔴 站点是**项目站点**（`/<repo>/`），不是域名根：构建时必须给
+#   `DOCS_BASE=/CoreFlow/`，否则站内绝对路径（`/core/auth`、`/logo.svg`）
+#   全部指向 `yijiu2025.github.io/` 根目录 → 首页能开、点进去 404。
+#   vitepress 会自动给站内链接补 base，但 `head` 里的资源路径是原样输出，
+#   所以 config.ts 里那处也要用 BASE 拼（见 docs/.vitepress/config.ts）。
+#
+# 前置条件（仓库设置，一次性）：Settings → Pages → Source = GitHub Actions。
+#   缺这一步时 deploy 步骤会报 "Get Pages site failed"，不是代码问题。
+# ============================================================================
+
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    # 只在文档/依赖/本工作流变化时重建；改后端代码不需要重发站点
+    paths:
+      - 'docs/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+# 发布不取消：中途取消会留下一次半成品部署（Pages 的部署是不可回滚的原子替换，
+# 但"构建到一半被 kill"会让当前线上版本与仓库内容不一致一段时间）。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  NODE_VERSION: '22'
+  # 见文件头：项目站点的子路径前缀，必须与实际部署地址一致
+  DOCS_BASE: /CoreFlow/
+
+jobs:
+  build:
+    name: Build（vitepress）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # 与 ci.yml 的安装口径保持一致（后端不能用 `npm ci`：根 lock 把 wb-logkit
+      # 记为 link→packages/log，那是不入库的嵌套仓，`npm ci` 会建悬空软链）。
+      # 文档站只需要 vitepress（根 devDependency），装同一棵树即可复用缓存习惯。
+      - name: 安装依赖
+        run: |
+          npm install --workspace=packages/shared-device --include-workspace-root \
+            --ignore-scripts --legacy-peer-deps --no-package-lock --no-audit --no-fund
+
+      - name: 构建文档站
+        run: npx vitepress build docs
+
+      # 站点自检：产物里必须真的带着 base 前缀，否则说明 DOCS_BASE 没生效
+      # （只检查 index.html 一处，够用且不会因页面改名而假红）
+      - name: 校验 base 前缀已生效
+        run: |
+          if ! grep -q '"/CoreFlow/assets/' docs/.vitepress/dist/index.html; then
+            echo "❌ 产物里没有 /CoreFlow/ 前缀 —— DOCS_BASE 未生效，部署后站内链接会全 404"
+            grep -o 'src="[^"]*"' docs/.vitepress/dist/index.html | head -5
+            exit 1
+          fi
+          echo "✅ base 前缀正确"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    name: Deploy（GitHub Pages）
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

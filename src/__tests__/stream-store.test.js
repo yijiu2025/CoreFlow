@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { createStream } from '../framework/redis/stream-store.js';
 import { isRedisConfigured } from '../framework/redis/utils.js';
+import { connectTestRedis, disconnectTestRedis } from './helpers/redis-connection.js';
 
 const describeOrSkip = isRedisConfigured() ? describe : describe.skip;
 
@@ -17,7 +18,9 @@ describeOrSkip('Stream 存储', () => {
   const PREFIX = 'test_stream';
   let stream;
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    // 🔴 同 lock-store：配置不等于连接，CI 里必须显式连一次
+    await connectTestRedis();
     stream = createStream(PREFIX, { maxLen: 100 });
   });
 
@@ -27,6 +30,7 @@ describeOrSkip('Stream 存储', () => {
     } catch {
       /* ignore */
     }
+    await disconnectTestRedis();
   });
 
   it('add 添加消息并返回 ID', async () => {

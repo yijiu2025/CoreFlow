@@ -5,7 +5,8 @@
 > | 文件 | 触发 | 做什么 |
 > | --- | --- | --- |
 > | `.github/workflows/ci.yml` | push 到 main、所有 PR | lint 门禁 / Jest 全量 / **跨进程关卡**（真 Redis） |
-> | `.github/workflows/publish-image.yml` | push 到 main、打 `v*` tag、手动 | 构建镜像推 GHCR + **compose 全栈端到端冒烟** |
+> | `.github/workflows/release-docker.yml` | push 到 main、打 `v*` tag、手动 | 构建镜像推 GHCR + **compose 全栈端到端冒烟**（workflow name 显示为 `Publish Image`） |
+> | `.github/workflows/docs.yml` | push 到 main（`docs/**` 变化）、手动 | 构建文档站并发布到 <https://yijiu2025.github.io/CoreFlow/> |
 >
 > 本页此前是**未落地的示例**（2026-09-19 核实：仓库内没有 `.github/`）。
 > 当时的真实自动化只有 `.husky/pre-commit` + lint-staged（提交时对 `src/**`
@@ -58,12 +59,25 @@ CI 的价值就是把这件事变成**不可协商**的：门禁不通过，代�
 
 ---
 
-## 本项目的三条流水线
+## 本项目的流水线
+
+| 工作流 | 作业 | 拦什么 |
+| --- | --- | --- |
+| `ci.yml` | lint | 风格/约定漂移、文档死链、文档站构建不出来 |
+| `ci.yml` | test | 单元 / 契约 / 结构守卫回归 |
+| `ci.yml` | verify | 只在多进程下才暴露的并发缺陷 |
+| `docs.yml` | build → deploy | 文档站发布到 GitHub Pages |
+| `release-docker.yml` | publish | 镜像产物与启动冒烟 |
+
+`ci.yml` 是**唯一门禁入口**（分支保护只认它的三个作业名）；`docs.yml` 负责发布，
+不参与 PR 判定 —— 发布需要 `pages: write`，而 fork 来的 PR 拿不到这个权限。
 
 ### 1. `ci.yml` / lint —— 约定门禁
 
 ```bash
-npx eslint src scripts migrations docker index.js
+node scripts/verify/doc-links.mjs                 # 文档相对链接（零依赖，最先跑）
+npx eslint src scripts migrations docker index.js  # 风格与约定
+DOCS_BASE=/CoreFlow/ npx vitepress build docs      # 文档站必须能构建
 ```
 
 跑的是项目自己的规则，其中有几条是**这个仓库特有的**，从别处抄不来：
@@ -75,6 +89,15 @@ npx eslint src scripts migrations docker index.js
 为什么只扫这几个目录：仓库里还住着 `phonecopy/`（8 万文件的第三方快照）
 与三个独立前端工程。把它们扫进来，这条流水线会常年红灯 ——
 **长期亮红灯的检查等于没有检查**，这条原则在本仓库反复出现。
+
+文档那两步各有分工，缺一个都会漏：
+
+- **死链扫描**（`doc-links.mjs`）只看相对链接，零依赖所以放在装依赖之前。
+  它的判据是"目标会不会出现在干净检出里"——`docs/` 内的必须存在，
+  `docs/` 外且未被 git 跟踪的（`oauth21/` 独立仓、`phonecopy/` 嵌套仓）算外部指针跳过。
+  用 `existsSync` 判会得到"本地绿、CI 红"，2026-10-30 就这么红过一次。
+- **文档站构建**用与发布**完全相同的 base**（`/CoreFlow/`）。base 错的表现是
+  "构建成功、部署后站内链接全 404"，只有按子路径构建一次才会暴露。
 
 ### 2. `ci.yml` / test —— 全量测试
 
@@ -122,7 +145,32 @@ node scripts/verify/queue-atomic.mjs      # U12：队列指针 Lua 原子性（�
 | 2 | 回滚不完整 | 失败，且**需要人工检查数据** |
 | 3 | 环境不可用 | CI 里也失败 —— service 是我们自己声明的，取不到只可能是流水线坏了 |
 
-### 4. `publish-image.yml` —— CD 的产物与冒烟
+### 4. `docs.yml` —— 文档站发布（GitHub Pages）
+
+站点地址：<https://yijiu2025.github.io/CoreFlow/>
+
+```
+push main（docs/**、package.json 变化）
+   → vitepress build docs（DOCS_BASE=/CoreFlow/）
+   → 校验产物里真的带 /CoreFlow/ 前缀
+   → upload-pages-artifact → deploy-pages
+```
+
+几个刻意的选择：
+
+- **项目站点 = 子路径**。仓库名 `CoreFlow` 决定站点落在 `/CoreFlow/` 而不是域名根，
+  所以构建必须给 `DOCS_BASE`；`head` 里的资源路径（favicon）是原样输出的，
+  得在 `config.ts` 里自己拼前缀（站内链接由 vitepress 自动补）。
+- **不取消进行中的发布**（`cancel-in-progress: false`）。构建被 kill 会让线上版本
+  与仓库内容不一致一段时间，而文档站没有"回滚"按钮。
+- **发布与验证分家**。PR 上跑构建（lint 作业），main 上才发布；合并起来就得给 PR
+  开 `pages: write`，或者让发布在 PR 上必然失败。
+- **不跑 `npm ci`**：理由同后端三个作业（根 lock 把 `wb-logkit` 记为 link→不入库的嵌套仓）。
+
+一次性配置：仓库 Settings → Pages → Source 选 **GitHub Actions**。
+缺这一步时 `deploy-pages` 会报 `Get Pages site failed`，与本工作流无关。
+
+### 5. `release-docker.yml`（Publish Image）—— CD 的产物与冒烟
 
 ```
 构建镜像（带 gha 层缓存 + SBOM + provenance）
@@ -157,14 +205,14 @@ CI 文件进了仓库不等于门禁生效，还需要在 GitHub 上做两步：
 1. **分支保护**（Settings → Branches → Branch protection rules）：
    要求 `Lint` / `Test` / `Verify` 三个 check 通过才能合并到 main。
    没有这一步，流水线只是"一个会亮灯的页面"，红灯也能合。
-2. **GHCR 权限**：`publish-image.yml` 用内置 `GITHUB_TOKEN` 推包，
+2. **GHCR 权限**：`release-docker.yml` 用内置 `GITHUB_TOKEN` 推包，
    `permissions: packages: write` 已声明。若组织策略禁用了它，
    需要改用 PAT 并放进 `secrets`。
 
 ### 接上真正的部署（示例，未落地）
 
 ```yaml
-# 在 publish-image.yml 末尾追加一个 job
+# 在 release-docker.yml 末尾追加一个 job
 deploy:
   needs: [smoke]
   if: github.ref == 'refs/heads/main'

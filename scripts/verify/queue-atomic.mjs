@@ -83,7 +83,10 @@ const { connectStandalone, disconnectStandalone, createQueue, createRingQueue } 
     console.error('   本关卡验证的是代码语义，不是给你排查环境问题的。退出码 3。');
     process.exit(EXIT_ENV);
   }
-  await disconnectStandalone();
+  // 🔴 不要在这里断开：本关卡**由父进程自己**扮演写入者/读取者（第 1 轮的 producer、
+  //    第 3 轮的 ring），它直接调用 createQueue/createRingQueue。断连会让 getStore()
+  //    虽然 isRedisConfigured()=true 却拿不到客户端，一路抛 RedisRequiredError(503)——
+  //    表现成"断言失败"，实际是关卡自己把连接掐了。连接保留到进程结束前统一关闭。
 }
 
 /**
@@ -262,4 +265,7 @@ console.log(`第 3 轮：环形队列（容量 ${RING_MAX}）两个写入者各�
 console.log('');
 const allPass = failures === 0;
 console.log(allPass ? '═══ U12 队列跨进程原子性复验：全部通过 ═══' : `═══ U12 复验：${failures} 项失败 ═══`);
+
+// 退出前必须断开：保留的连接会让进程挂住不退出（关卡"跑完了但不返回"）
+await disconnectStandalone();
 process.exit(allPass ? EXIT_PASS : EXIT_ASSERT);

@@ -8,12 +8,19 @@
  * 的一类——链接指向已删除/移动的文件时，读者拿到的是 404，而不是旧内容。
  * 这类问题不会让任何测试变红，只能靠静态扫描兜住。
  *
+ * 🔴 判据必须与「干净检出」一致：文档里指向 `oauth21/`（独立仓）、`phonecopy/`（嵌套仓）
+ * 这类**不被本仓跟踪**的目录是有意为之（给开发者指路到真实源码），它们在 CI 的 checkout
+ * 里并不存在。用 `existsSync` 判定就会得到「本地绿、CI 红」。所以未命中时先查 git 索引：
+ *   - 目标在 `docs/` 内 → 必验（文档站自己的页面，缺了就是死链）；
+ *   - 目标在 `docs/` 外且未被跟踪 → 视为外部指针，跳过并计数（不静默：会打印条数）。
+ *
  * 用法：
  *   node scripts/verify/doc-links.mjs          # 检查（有失效链接 ⇒ 退出码 1）
  *   node scripts/verify/doc-links.mjs --list   # 仅打印全部链接映射，不做断言
  *
  * 退出码：0 通过 / 1 存在失效链接
  */
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,12 +83,41 @@ function stripSuffix(target) {
   return target.split('#')[0].split('?')[0];
 }
 
+/**
+ * 仓库已跟踪文件清单（懒加载，只取一次）
+ *
+ * 为什么需要它：文档里有大量**指向仓库外或未跟踪目录**的路径，比如
+ * `../../oauth21/src/utils/request.ts`（oauth21 是独立仓，本仓不跟踪）、
+ * `../../phonecopy/...`（嵌套仓、被 gitignore）。这些链接在开发机上能命中，
+ * 在干净检出（CI）里必然失效 —— 用 `existsSync` 判定就得到「本地绿、CI 红」的假绿。
+ * 判据必须与「这份文件会不会出现在检出里」一致，也就是 git 索引，而不是工作区。
+ *
+ * @returns {Set<string>|null} 相对仓库根的路径集合；git 不可用时返回 null（退化为只看工作区）
+ */
+let trackedCache;
+function trackedFiles() {
+  if (trackedCache !== undefined) return trackedCache;
+  try {
+    const out = execFileSync('git', ['ls-files', '-z'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      maxBuffer: 128 * 1024 * 1024
+    });
+    trackedCache = new Set(out.split('\0').filter(Boolean));
+  } catch {
+    trackedCache = null;
+  }
+  return trackedCache;
+}
+
 /** 收集全部 Markdown */
 const files = [...new Set(SCAN_ROOTS.flatMap(r => collect(r)))].sort();
 const listOnly = process.argv.includes('--list');
 
 const broken = [];
 let checked = 0;
+/** 指向仓库外/未跟踪目录的链接数（不判定，仅报告，避免"看起来全都验过了"） */
+let external = 0;
 
 for (const file of files) {
   const rel = path.relative(ROOT, file).split(path.sep).join('/');
@@ -117,13 +153,35 @@ for (const file of files) {
         : [path.resolve(path.dirname(file), target)];
 
       const ok = candidates.some(p => existsSync(p) || existsSync(`${p}.md`) || existsSync(path.join(p, 'README.md')));
-      if (!ok) broken.push({ file: rel, line: i + 1, target: raw });
-      if (listOnly) console.log(`${rel}:${i + 1} -> ${raw}${ok ? '' : '  ❌'}`);
+      if (ok) {
+        if (listOnly) console.log(`${rel}:${i + 1} -> ${raw}`);
+        continue;
+      }
+
+      // 未命中：先判断它是不是"本来就不在检出里"的外部指针。
+      // 判据只看**目标是否落在 docs/ 内**：docs 内的一律必验（文档站自己的页面），
+      // docs 外的（前端源码、独立仓、嵌套仓）只有在 git 跟踪时才验 —— 否则本地有、CI 无。
+      const resolvedRel = path.relative(ROOT, candidates[0]).split(path.sep).join('/');
+      const insideDocs = !resolvedRel.startsWith('..') && resolvedRel.startsWith('docs/');
+      const tracked = trackedFiles();
+      const outsideAndUntracked = !insideDocs && resolvedRel !== '' && !resolvedRel.startsWith('..') && tracked
+        ? !tracked.has(resolvedRel)
+        : false;
+
+      if (outsideAndUntracked) {
+        external++;
+        if (listOnly) console.log(`${rel}:${i + 1} -> ${raw}  (跳过：未跟踪) ${resolvedRel}`);
+        continue;
+      }
+
+      broken.push({ file: rel, line: i + 1, target: raw });
+      if (listOnly) console.log(`${rel}:${i + 1} -> ${raw}  ❌`);
     }
   });
 }
 
 console.log(`\n扫描 ${files.length} 份 Markdown，检查 ${checked} 条相对链接`);
+if (external) console.log(`（其中 ${external} 条指向仓库外/未跟踪目录，按设计跳过：它们不存在于干净检出里）`);
 
 if (broken.length) {
   console.log(`\n❌ 失效链接 ${broken.length} 处：`);

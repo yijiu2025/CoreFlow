@@ -9,7 +9,7 @@
 > | `docker/entrypoint.mjs` | 依赖等待 → 可选迁移 → 启动并转发信号 |
 > | `.dockerignore` | 裁剪构建上下文（仓库里住着 8 万文件的第三方快照） |
 > | `.env.docker.example` | 部署环境变量模板（含全部必填项说明） |
-> | `.github/workflows/publish-image.yml` | 构建推镜像 + **compose 全栈端到端冒烟** |
+> | `.github/workflows/release-docker.yml` | 构建推镜像 + **compose 全栈端到端冒烟**（workflow name 显示为 `Publish Image`） |
 >
 > 本页**曾经是一份未落地的设计稿**（2026-09-19 核实：仓库里没有 Dockerfile）。
 > 旧稿里的示例有几处照着做会直接踩坑 —— 已在文末「与旧设计稿的差异」逐条列出。

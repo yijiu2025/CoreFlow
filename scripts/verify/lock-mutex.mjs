@@ -60,10 +60,12 @@ try {
   process.exit(EXIT_ENV);
 }
 
+// 连接工具提到顶层：前置检查、PTTL 断言、退出清理三处都要用。
+// 放在块级作用域里会被挡住（`const` 不外泄），表现为后面"未定义"而非"连不上"。
+const { connectStandalone, disconnectStandalone, getStore } = await import('../../src/framework/redis/index.js');
+
 // ── 前置检查：环境不可用要和断言失败分开，否则关卡会因环境问题长期变红 ──
 {
-  const { connectStandalone, disconnectStandalone } = await import('../../src/framework/redis/index.js');
-
   // 有界前置检查（2026-09-20 起由 connectStandalone 自身保证）：
   // 它先做有界 TCP 预检、再以 'bounded' 重连策略 + 外层超时连接，
   // 环境不可用时数秒内返回 ready:false，不再挂进客户端永不放弃的重连循环。
@@ -82,7 +84,10 @@ try {
     console.error('   本关卡验证的是代码语义，不是给你排查环境问题的。退出码 3。');
     process.exit(EXIT_ENV);
   }
-  await disconnectStandalone();
+  // ⚠️ 这里**不能**断开：后面要用同一个连接读 `PTTL scheduler:<key>` 断言派生的锁 TTL。
+  //    断连后 getStore() 仍然 isRedisConfigured()=true 但没有客户端，直接抛
+  //    RedisRequiredError(503)，表现成"关卡断言失败"，实际是关卡自己掐了连接。
+  //    统一在退出前 disconnectStandalone()。
 }
 
 /**
@@ -93,15 +98,21 @@ try {
  *
  * @param {number} at 统一的起跑时刻（epoch ms）
  * @param {string} label 标签，用于汇总时指认是哪个竞争者
+ * @param {object} [opts]
+ * @param {'period'|'lock'} [opts.mode='period'] 抢锁方式（见 lock-mutex-child.mjs 的说明）
+ * @param {string} [opts.taskKey=TASK_KEY] 锁名（第 3/4 轮用独立的 key，避免复用 63s 的周期锁）
  */
-function runChild(at, label) {
+function runChild(at, label, opts = {}) {
+  const mode = opts.mode || 'period';
+  const taskKey = opts.taskKey || TASK_KEY;
   return new Promise(resolve => {
     // 不再传 `--env-file`：父进程已把 env 加载进 process.env，子进程直接继承即可。
     const p = spawn(process.execPath, [CHILD], {
       cwd: ROOT,
       env: {
         ...process.env,
-        PROBE_TASK_KEY: TASK_KEY,
+        PROBE_TASK_KEY: taskKey,
+        PROBE_MODE: mode,
         PROBE_TTL_MS: String(TTL_MS),
         PROBE_AT: String(at),
         PROBE_LABEL: label,
@@ -140,7 +151,7 @@ function runChild(at, label) {
 
 console.log('═══ E1 跨进程互斥复验 ═══');
 console.log(`锁 key : scheduler:${TASK_KEY}`);
-console.log(`TTL    : ${TTL_MS}ms`);
+console.log(`周期   : ${TTL_MS}ms（调度器派生锁 TTL ≥ 2 倍周期；原始锁 TTL 见第 3/4 轮）`);
 console.log(`Redis  : ${process.env.REDIS_HOST || '(未配置)'}:${process.env.REDIS_PORT || 6379} (db${PROBE_REDIS_DB})`);
 console.log(`竞争者 : ${N} 个独立进程\n`);
 
@@ -165,24 +176,47 @@ if (maxDrift !== null && maxDrift > DRIFT_WARN_MS) {
   console.log(`   ⚠️  最大起跑偏差 ${maxDrift}ms（> ${DRIFT_WARN_MS}ms）—— 本轮"同时抢"的强度被削弱，结论偏弱`);
 }
 
+// ── 派生 TTL：任务周期 → 锁 TTL 必须留出余量 ──
+// 回归守卫：调度器曾把锁 TTL 取成"等于任务周期"，任务跑超周期时锁就过期，
+// 其他实例并发执行同一任务（重复执行）。现在派生规则是 max(2×周期, 周期+60s)。
+// 这条断言同时也是本关卡第 3 轮的前置：不先证明"TTL 被放大"，第 3 轮等 TTL_MS 就等不到。
+const lockKey = `scheduler:${TASK_KEY}`;
+const pttl = await getStore('verify-e1').call('PTTL', lockKey);
+const derivedTtlOk = typeof pttl === 'number' && pttl >= TTL_MS * 2;
+console.log('');
+console.log(
+  `派生锁 TTL（周期 ${TTL_MS}ms）  ${derivedTtlOk ? `✅ ${pttl}ms（≥ 2×周期）` : `❌ ${pttl}ms —— 不足 2 倍周期，任务跑超周期会重复执行`}`
+);
+
 // ── 第 2 轮：TTL 未过，单进程再抢（应当失败）──
 await sleep(300);
 const r2 = await runChild(Date.now() + 400, 'r2-solo');
 const pass2 = r2.ok === false;
 
-// ── 第 3 轮：等 TTL 过期后再抢（应当成功）──
-await sleep(TTL_MS + 300);
-const r3 = await runChild(Date.now() + 400, 'r3-after-ttl');
+// ── 第 3/4 轮：原始锁的过期语义（独立 key，TTL 精确 = TTL_MS）──
+// 这两轮刻意**不走** acquirePeriodLock：那个路径会把 TTL 放大到 ≥60s，
+// 拿它验"到期可重抢"要么等一分钟、要么得出"锁泄漏"的假结论。
+// 要验的是"锁本身不会永久卡死"，那是 lock-store 的属性，用 createLock 直连才对得上。
+const TTL_KEY = `verify-e1-ttl-${Date.now()}`;
+const r3 = await runChild(Date.now() + 300, 'r3-raw', { mode: 'lock', taskKey: TTL_KEY });
 const pass3 = r3.ok === true;
+
+await sleep(TTL_MS + 400);
+const r4 = await runChild(Date.now() + 300, 'r4-after-ttl', { mode: 'lock', taskKey: TTL_KEY });
+const pass4 = r4.ok === true;
 
 console.log('');
 console.log(`第 2 轮（TTL 内再抢）      ${pass2 ? '✅ 未抢到，符合预期' : '❌ 抢到了 → 锁被提前释放'}`);
-console.log(`第 3 轮（TTL 过期后抢）    ${pass3 ? '✅ 抢到，锁会自然过期' : '❌ 仍未抢到 → 锁泄漏了'}`);
+console.log(`第 3 轮（原始锁首次抢）    ${pass3 ? '✅ 抢到' : '❌ 空锁都抢不到 → 锁实现坏了'}`);
+console.log(`第 4 轮（TTL 过期后重抢）  ${pass4 ? '✅ 抢到，锁会自然过期' : '❌ 仍未抢到 → 锁泄漏了'}`);
 console.log('');
 console.log(
   `第 1 轮竞争者 ${N} 个，成功 ${winners1.length} 个 → ${pass1 ? '✅ 恰好 1 个（互斥成立）' : '❌ 互斥不成立'}`
 );
 
-const allPass = pass1 && pass2 && pass3;
+const allPass = pass1 && pass2 && pass3 && pass4 && derivedTtlOk;
 console.log(allPass ? '\n═══ E1 跨进程互斥复验：全部通过 ═══' : '\n═══ E1 复验：存在失败项 ═══');
+
+// 退出前断开：保留的连接会让进程挂住不退出
+await disconnectStandalone();
 process.exit(allPass ? EXIT_PASS : EXIT_ASSERT);

@@ -1,6 +1,29 @@
 import { defineConfig } from 'vitepress';
 
+/**
+ * 部署子路径（GitHub Pages 项目站点是 `/<repo>/`，不是域名根）
+ *
+ * 本地 `npm run docs:dev` 走 `/`；CI 构建站点时用 `DOCS_BASE=/CoreFlow/`。
+ * 站点内链由 vitepress 自动补前缀，但 `head` 里的资源路径是原样输出的，
+ * 所以下面统一用 `BASE` 拼接，避免把 `/logo.svg` 写死成"根目录资源"
+ * （部署到 /CoreFlow/ 后它就变成 404，浏览器标签页静默丢图标）。
+ */
+const BASE = process.env.DOCS_BASE || '/';
+
+// 校验而不是"猜一个能用的值"：base 写错的表现是**部署后站内链接全 404**，
+// 而构建本身完全成功 —— 静默回退到 '/' 只会把问题推到线上。
+// 典型踩法：Git Bash / MSYS 会把 `DOCS_BASE=/CoreFlow/` 转成 `D:/.../CoreFlow/`，
+// 于是这里拿到的是 Windows 绝对路径（含盘符冒号）。本地验证请用
+//   MSYS_NO_PATHCONV=1 DOCS_BASE=/CoreFlow/ npx vitepress build docs
+if (!/^\/[\w./-]*$/.test(BASE) || BASE.includes(':')) {
+  throw new Error(
+    `DOCS_BASE 必须是站点绝对路径（形如 /CoreFlow/），当前为 "${BASE}"。\n` +
+      'Windows 本地构建若被 MSYS 改写成盘符路径，请加 MSYS_NO_PATHCONV=1 前缀。'
+  );
+}
+
 export default defineConfig({
+  base: BASE,
   lang: 'zh-CN',
   title: 'CoreFlow',
   description: '企业级 Node.js 全栈框架',
@@ -21,9 +44,10 @@ export default defineConfig({
    */
   ignoreDeadLinks: [/^\.\.?\/(\.\.\/){0,2}(AGENTS|oauth21|posecraft|packages)(\/|$)/],
 
-  head: [['link', { rel: 'icon', href: '/logo.svg' }]],
+  head: [['link', { rel: 'icon', href: `${BASE}logo.svg` }]],
 
   themeConfig: {
+    // themeConfig 里的图片/logo 由 vitepress 按 base 处理，保持站点绝对路径即可
     logo: '/logo.svg',
 
     nav: [
@@ -143,7 +167,8 @@ export default defineConfig({
     socialLinks: [{ icon: 'github', link: 'https://github.com/yijiu2025/CoreFlow' }],
 
     footer: {
-      message: '基于 MIT 许可发布',
+      // 许可证必须与仓库根 LICENSE 一致：根包与 LICENSE 都是 GPL-3.0
+      message: '基于 GPL-3.0 许可发布',
       copyright: 'Copyright © 2026 CoreFlow'
     },
 

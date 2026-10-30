@@ -8,7 +8,7 @@
 #    安装口径的分栈理由见下方长注释（勿删）。
 #
 # 三条作业，对应三类"本可以拦住"的回归：
-#   lint      → 后端风格与约定（导出位置、禁 console、prettier）
+#   lint      → 后端风格与约定（导出位置、禁 console、prettier）+ 文档站可构建（含子路径）
 #   test      → 后端单元 / 契约 / 结构守卫（Jest）
 #   verify    → 跨进程不变量（分布式锁、WS 扇出、遥测聚合）—— 只能多进程验证
 #
@@ -19,7 +19,7 @@
 #   于 2026-10-15 删除。
 #
 # 关于依赖安装：分两类作业，口径**刻意不同**。
-##
+#
 #   【后端 lint / test / verify 三个 job】**继续用 `npm install`，不要改 `npm ci`**，
 #     且必须带 `--no-package-lock`（2026-10-15 补，test/verify 连红一周的根因）。
 #     根 `package-lock.json` 已入库（供应链审计基线），但它把 `wb-logkit` 记为
@@ -79,11 +79,16 @@
 #   收益只在 `npm ci` 路径上才成立；开着它只会给一个命中率无意义的缓存目录。
 #   真要开，必须先让后端也具备 `npm ci` 能力（= 让 `packages/log` 在 CI 里存在）。
 #
-# 关于数据库：**测试作业不需要 MySQL/Redis**。
-#   这不是省事，是实测结论 —— `framework/db` 在测试环境检测到缺配置会跳过而非退出，
-#   访问层则降级到进程内 MapStore，本机无 DB/Redis 时 1066 个用例全绿。
-#   给 CI 硬塞 services 只会让流水线更慢、更脆。
-#   （需要真实 Redis 的检查在 verify 作业里，那里才起 service。）
+# 关于数据库：**test / verify 两个作业都带 Redis service，但都不带 MySQL**。
+#   - MySQL：确实不需要。`framework/db` 在测试环境检测到缺配置会跳过而非退出，
+#     单测不碰真实库；连真库的是 verify 之外的场景，本仓暂无。
+#   - Redis：**必须给**（2026-10-30 起）。它过去是"没有也全绿"，代价是
+#     lock-store / stream-store 两个套件长期 `describe.skip` —— 报告上只是多两条跳过，
+#     没人察觉分布式锁与消费者组从没被验证过。给上 service 后这两个套件是必跑，
+#     并由 redis-ci-guard.test.js 把"配置丢了"变红，而不是再悄悄跳过。
+#     ⚠️ 光给 service 不够：`isRedisConfigured()` 只看环境变量，没人建连接时
+#     `getStore()` 会抛 RedisRequiredError(503)。测试侧统一用
+#     src/__tests__/helpers/redis-connection.js 的 connectTestRedis()。
 # ============================================================================
 
 name: CI
@@ -141,6 +146,14 @@ jobs:
       #   它们各有自己的构建，扫进来只会让这条流水线常年红灯。
       - name: ESLint
         run: npx eslint src scripts migrations docker index.js
+
+      # 文档站必须能构建 —— 死链、theme 配置语法错误、base 写错都不会让 Jest 变红，
+      # 只会在"发布之后"表现为线上 404。这里用与 docs.yml **同一个 base** 构建，
+      # 把"子路径下才暴露的问题"提前到 PR 阶段。
+      - name: 构建文档站（子路径）
+        env:
+          DOCS_BASE: /CoreFlow/
+        run: npx vitepress build docs
 
   # --------------------------------------------------------------------------
   # 2. 单元 / 契约 / 结构守卫

@@ -21,11 +21,37 @@
  * @since 2026-08-17
  * @since 2026-09-15 重写为真身契约测试（🟡-7）
  */
-import { describe, it, expect, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, afterEach, beforeAll, afterAll, jest } from '@jest/globals';
 import { getStore, MapStore } from '../framework/redis/index.js';
 
 /** 用例用过的命名空间，逐个销毁，避免用例间通过共享静态存储互相污染 */
 const usedPrefixes = new Set();
+
+/**
+ * 🔴 本文件的被测对象是 **MapStore 降级实现**，必须在「未配置 Redis」前提下跑。
+ *
+ * CI 的 test 作业装了 redis service 并设 `REDIS_ENABLED=true`（为了让 lock-store /
+ * stream-store 真正执行）。若不处理，`getStore()` 会走 Redis 分支，
+ * 「无 Redis 配置时降级到 MapStore」「MapStore 下的 hset 抛 TypeError」这类断言全红 ——
+ * 而它们本身没错，错的是运行前提。这里临时摘掉环境变量，用 afterAll 还原，
+ * 避免污染同一 worker 里后续套件（jest 每个文件独立模块注册表，但 process.env 是共享的）。
+ */
+const SAVED_REDIS_ENV = {
+  REDIS_ENABLED: process.env.REDIS_ENABLED,
+  REDIS_HOST: process.env.REDIS_HOST
+};
+
+beforeAll(() => {
+  delete process.env.REDIS_ENABLED;
+  delete process.env.REDIS_HOST;
+});
+
+afterAll(() => {
+  for (const [k, v] of Object.entries(SAVED_REDIS_ENV)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+});
 
 function freshStore(prefix, options) {
   usedPrefixes.add(prefix);

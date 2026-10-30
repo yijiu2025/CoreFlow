@@ -10,13 +10,18 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { createLock } from '../framework/redis/lock-store.js';
 import { isRedisConfigured } from '../framework/redis/utils.js';
+import { connectTestRedis, disconnectTestRedis } from './helpers/redis-connection.js';
 
 const describeOrSkip = isRedisConfigured() ? describe : describe.skip;
 
 describeOrSkip('分布式锁', () => {
   let lock;
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    // 🔴 先连上再抢锁：`isRedisConfigured()` 只读环境变量，不代表有连接。
+    //    CI 里 REDIS_ENABLED=true 但没有 Fastify 插件跑过，getStore() 会抛
+    //    RedisRequiredError(503) —— 看起来像锁坏了，实际是测试没连过 Redis。
+    await connectTestRedis();
     lock = createLock('test_lock', { ttl: 5000 });
   });
 
@@ -26,6 +31,7 @@ describeOrSkip('分布式锁', () => {
     } catch {
       /* ignore */
     }
+    await disconnectTestRedis();
   });
 
   it('tryAcquire 返回 true', async () => {
