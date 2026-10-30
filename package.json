@@ -28,6 +28,7 @@
     "verify:fanout": "node scripts/verify/ws-fanout.mjs",
     "verify:stats": "node scripts/verify/stats-aggregation.mjs",
     "verify:queue": "node scripts/verify/queue-atomic.mjs",
+    "verify:docs": "node scripts/verify/doc-links.mjs",
     "bench": "node scripts/bench/baseline.mjs",
     "audit": "npm audit --production",
     "audit:fix": "npm audit fix --production",
@@ -47,7 +48,7 @@
   },
   "keywords": [],
   "author": "qirly",
-  "license": "GPL",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "@fastify/cookie": "11.0.2",
     "@fastify/cors": "^11.2.0",

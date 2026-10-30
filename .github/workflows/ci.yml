@@ -117,6 +117,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 零依赖静态扫描，放在装依赖之前：文档指向不存在的文件时，
+      # 读者拿到的是 404 而不是旧内容，而这种问题不会让任何测试变红。
+      - name: 文档相对链接
+        run: node scripts/verify/doc-links.mjs
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}

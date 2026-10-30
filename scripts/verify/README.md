@@ -18,7 +18,12 @@
 | `npm run verify:stats`  | 进程 A 产生的流量出现在进程 B 的聚合统计里；**总数不丢不重**（多算一次就变红）                                   | Redis |
 | `npm run verify:queue`  | 队列指针跨实例一致：别人写的消息立刻可见（不因进程内 meta 缓存而"指针倒退"）；多消费者并发取**不重不漏**；环形队列 count 不被并发写坏 | Redis |
 | `npm run verify:guard`  | 进程 A 改库 → 进程 B 的内存配置在同步周期内跟上；版本不变时不重复合并                                            | MySQL |
-| `npm run verify:all`    | 依次跑上面五个，聚合退出码                                                                                       | 同上  |
+| `npm run verify:docs`   | 全仓 Markdown 的相对链接是否指向真实文件（不依赖任何服务，纯静态）                                               | 无    |
+| `npm run verify:all`    | 依次跑上面五个需要服务的关卡，聚合退出码                                                                         | 同上  |
+
+> `verify:docs` 不在 `verify:all` 里：它零依赖、跑得极快，被挂在 CI 的 **lint 作业**
+> （装依赖之前）与本地 `npm run verify:docs`，混进需要 Redis/MySQL 的聚合器只会让
+> "环境不可用"污染一个本来永远能跑的检查。
 
 可用环境变量微调：`PROBE_PROCS`（竞争者进程数，默认 5）、`PROBE_TTL_MS`（锁 TTL，默认 3000）、
 `PROBE_SEED`（队列条数，默认 300）、`PROBE_CONSUME_PROCS`（并发消费者，默认 3）、

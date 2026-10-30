@@ -4,9 +4,9 @@
 > 本文是**可直接套用的规范**：定义目录契约、替换入口、优先级与红线，新项目照抄即可获得
 > 「不改业务代码换 UI / 换配色 / 换明暗」的能力。
 >
-> 参考实现：`oauth21/src/theme/`（机制源码）、`oauth21/src/stores/theme.ts`（运行时状态）。
-> 深度细节与演进记录见总文档 `oauth21/docs/multi-theme.md`；抽包设计见
-> `docs/standards/theme-package-extraction.md`。
+> 参考实现：`packages/theme-core`（机制源码，随 `skinsuite` 发布）、`oauth21/src/stores/theme.ts`
+> （宿主侧状态壳）。抽包设计与演进台账见 [theme-package-extraction.md](./theme-package-extraction.md)
+> 与 [theme-view-component-design.md](./theme-view-component-design.md)。
 
 ---
 
@@ -265,7 +265,7 @@ src/theme/                          # 架构层：机制，所有主题包共用
 | 非内置包的版式 | **惰性 + 路由守卫预热**（`preload` 不 await） | 包是运行时才定的，静态 import 钉不住；容器首帧先渲染静态兜底、chunk 到了再接管 |
 
 ⚠️ 惰性加载会被 PWA 预缓存破坏（"惰性"全部被拉回来）—— 需要 PWA 的项目要么把主题
-   资产排出预缓存，要么整体移除 PWA（`oauth21` 已整体移除，原因见 multi-theme.md 第五节）。
+   资产排出预缓存，要么整体移除 PWA（`oauth21` 已整体移除 PWA）。
 
 ---
 

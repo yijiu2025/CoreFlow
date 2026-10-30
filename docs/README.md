@@ -30,7 +30,7 @@ oauth-web（oauth21）另持 `theme-replacement.md` 与 `git-release-rules.md` �
 
 | 项目 | 位置 |
 | --- | --- |
-| oauth-web（oauth21 前端） | [`oauth21/docs/`](../oauth21/docs/)（入口 `README.md`；多主题实例文档 `multi-theme.md` 在此） |
+| oauth-web（oauth21 前端） | [`oauth21/docs/`](../oauth21/docs/)（入口 `README.md`）。多主题 / 多版式规范**已收回本仓**：[docs/standards/theme-replacement.md](./standards/theme-replacement.md) |
 | retroweb | `retroweb/docs/` |
 | 模块级文档 | 与代码共置：`src/app/<模块>/docs/`（firewall 审计报告、auth 权限缓存加固设计）、`packages/log/docs/` |
 | 历史报告 | `reports/`（一次性评审报告，不再维护） |

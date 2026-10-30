@@ -68,8 +68,12 @@ depends_on:
 
 - **DB 等不到 → 直接失败退出**：缺连接池的应用能监听端口却对每个请求返回 500。
   让它"启动成功"是最糟的失败形态 —— 监控全绿、用户全错。
-- **Redis 等不到 → 告警后继续**：访问层会降级到进程内 MapStore，限流/验证码/会话
-  在单实例内照常工作。把可选组件的抖动判成致命，等于用一次缓存故障换取整体不可用。
+- **Redis 等不到 → 告警后继续**：应用能起来，但**依赖 Redis 的能力（限流/验证码/会话）
+  会返回 503**，不会偷偷退回内存 —— `getStore()` 只在「完全没配 Redis」时才用进程内
+  `MapStore`；配了却连不上时访问层仍然选 Redis 实现，操作抛 `RedisRequiredError`。
+  把可选组件的抖动判成致命，等于用一次缓存故障换取整体不可用，所以这里选择"带病启动 +
+  `/health/ready` 报 503 摘流"。反过来，**不要**为了"让它跑起来"去删 `REDIS_ENABLED`：
+  那才会真的降级成单实例内存，多副本下计数与限流各算一套。
 
 ### 优雅停机要给够时间
 
@@ -123,8 +127,9 @@ readinessProbe: { httpGet: { path: /v1/health/ready, port: 3000 } }
 | 现象 | 先看哪里 |
 | --- | --- |
 | 容器起来但 `/v1/health/ready` 503 | 响应体里 `dependencies.database.status` 与 `redis.status`；错误只给标签（如 `ECONNREFUSED`），完整错误在 `docker compose logs app` |
-| 应用启动即退出 | 大概率是 DB 配置缺失 —— 生产环境下 `framework/db` 检测不到 `DB_HOST/DB_NAME/DB_USER` 会直接终止进程 |
-| 日志出现"Redis 等待超时，继续启动" | 这是**降级**不是故障。确认 `REDIS_HOST` 是否指到了容器网络外的地址（容器里必须用服务名 `redis`） |
+| 应用启动即退出，日志有"数据库连接失败（host:port/db）" | DB **已配置但连不上**（地址错、账号错、MySQL 还没初始化完）。`03-db.js` 在这一步 fail-fast，不会带 `null` 库继续起 |
+| 应用启动即退出，但没有任何依赖报错 | 看是否某个**关键 Loader** 失败（鉴权/防火墙/模型/密钥/路由/应用）——只有 `01-monitor` / `02-redis` / `09-notice` 允许失败降级 |
+| 日志出现"Redis 等待超时，继续启动" | 进程会起来，但限流/验证码/会话返回 **503**（不是内存降级）。确认 `REDIS_HOST` 是否指到容器网络外（容器里必须用服务名 `redis`），再查 `/v1/health/ready` 的 `redis.status` |
 | 表不存在 / 列不存在 | 迁移没跑：`docker compose --env-file .env.docker run --rm migrate` |
 | 探针一直失败但服务正常 | 检查是不是用了 `/health/live`（少 `/v1`） |
 | 停机要等 10 秒 | `stop_grace_period` 小于应用兜底时间，或镜像里 tini 被改掉了 |

@@ -146,8 +146,10 @@ CI     → L3 全部 + L1 的机械部分（守卫/回归/关卡）
 
 ### D. 并发、降级与故障
 
-- [ ] **Redis 降级到 `MapStore` 之后，这段代码还成立吗**？`MapStore` **不支持 `zAdd` / `zRangeByScore`**，
-      依赖有序集合的限流/排行榜在无 Redis 时会静默失效 —— 是否有兜底或明确的失败？
+- [ ] **Redis 未配置（走 `MapStore`）时，这段代码还成立吗**？`MapStore` **不支持 `zAdd` / `zRangeByScore`**，
+      依赖有序集合的限流/排行榜在无 Redis 的开发与测试环境会静默失效 —— 是否有兜底或明确的失败？
+      注意别把它和"运行期降级"混为一谈：**配了 Redis 却连不上不会退回 MapStore**，操作抛
+      `RedisRequiredError`（503），所以异常路径也要能优雅收场。
 - [ ] **所有"等外部依赖就绪"的地方是否有界**？客户端库的重连策略默认"永不放弃"，
       `await client.connect()` 可能**永远不 reject**，外层 `try/catch` 和 timeout 选项根本轮不到触发。
       必须三段式：有界 TCP 预检 + 有界重试策略 + 外层硬超时。（详见 [Docker 部署](../deployment/docker.md) 的依赖等待设计）

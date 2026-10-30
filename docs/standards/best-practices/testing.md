@@ -68,7 +68,7 @@ describe('Auth API', () => {
   test('POST /login 返回 200', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/oauth21/v1/auth/login',
+      url: '/oauth2.1/login',
       payload: { email: 'test@example.com', password: 'password123' }
     });
 

@@ -85,13 +85,20 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci
 必须带 `--experimental-vm-modules`：项目是 ESM 且测试大量使用
 `jest.unstable_mockModule`，丢掉这个标志会大面积失败（本地 `npx jest` 同理）。
 
-**这个作业不需要 MySQL / Redis** —— 这不是图省事，是实测结论：
+**这个作业需要 Redis，不需要 MySQL** —— 不是随口定的，是两条实测结论：
 
-- `framework/db` 在测试环境检测到缺 DB 配置会**跳过**而非终止进程；
-- Redis 不可用时访问层降级到进程内 MapStore。
+- `framework/db` 在测试环境检测到缺 DB 配置会**跳过**而非终止进程，所以 MySQL 可以不提供；
+- Redis **必须提供**：`framework/redis` 的集成套件在"没有 Redis"时会整体跳过，
+  而"跳过"在 CI 里的语义是**通过** —— 这正是 U19 记录的假绿：
+  断言全绿，实际一行 Redis 代码没跑。
 
-本机在没有 DB / Redis 的情况下 1066 个用例全绿。给 CI 硬塞 services
-只会让流水线更慢、更脆，且掩盖"测试本应自足"这个事实。
+因此 test 作业声明 `redis:7` service（`--health-cmd "redis-cli ping"`），
+并在 `env` 里写 `REDIS_DB: '15'`（与本地开发库隔离）+ `EXPECT_REDIS: 'true'`。
+`src/__tests__/framework/redis/redis-ci-guard.test.js` 会读这个变量：
+**一旦有人把 service 或 env 删掉，它当场变红**，而不是静默退回跳过。
+
+> 这条守卫的存在理由值得记住：让测试"可选依赖真实服务"等于让它随时可以被无声降级。
+> 需要外部服务的断言要么带守卫强制在 CI 提供，要么承认它不是回归门禁。
 
 ### 3. `ci.yml` / verify —— 跨进程不变量（真 Redis）
 
@@ -99,6 +106,7 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci
 node scripts/verify/lock-mutex.mjs        # E1：分布式锁互斥
 node scripts/verify/ws-fanout.mjs         # E3：WS 广播跨实例扇出
 node scripts/verify/stats-aggregation.mjs # E3：遥测统计跨实例聚合
+node scripts/verify/queue-atomic.mjs      # U12：队列指针 Lua 原子性（不重不漏不倒退）
 ```
 
 这三件事**在单进程里都能被单例状态"伪装成正确"**，只有真实多进程 + 真实 Redis

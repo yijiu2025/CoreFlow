@@ -101,9 +101,14 @@ v{major}.{minor}.{patch}
 ### 2.2 版本源是 git tag，package.json 单向跟随
 
 - 🔴 **不要反过来拿 `package.json` 的 `version` 推版本号**——tag 才是唯一版本源；
-- 每次发版后**顺手把 `package.json` 的 `version` 对齐到新 tag**（提交一个 `chore: 对齐版本号` 或并入发版前的提交）；
-- 脚本会检测"将打的 tag"与 `package.json version` 的漂移并警告，但**不会自动改**（改版本号必须是显式提交）；
+- 🔴 **对齐动作由脚本完成，不靠人记**：`--apply` 会把根仓（子前端为各自仓）`package.json` 的
+  `version` 写成新版本号，并**单独提交** `chore(release): X.Y.Z`，**再**打 tag ——
+  顺序不能颠倒，否则 tag 指向的提交里没有新版本号和新 CHANGELOG；
+- dry-run 阶段只打印 `将对齐 package.json version a → b`，不落盘；
 - 子前端若没有 `package.json`（纯静态仓），此规则自动跳过。
+
+> 为什么强调顺序：tag 是不可变的指针，一旦指向"还没更新版本号"的提交，之后无论怎么提交
+> 都对不上 `tag 名 == package.json version` 这条判据，`release-npm.yml` 会当场红。
 
 ### 2.3 tag 命名与创建方式
 

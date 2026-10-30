@@ -4,7 +4,8 @@
 
 - **Node.js** >= 18.0.0
 - **MySQL** >= 8.0
-- **Redis** >= 6.0（可选，不启用时自动降级到内存）
+- **Redis** >= 6.0（可选：**未配置**时走进程内 `MapStore`；一旦配置就必须连得上，
+  否则访问层返回 503，不会静默退回内存）。生产多实例必须配 Redis
 
 ## 安装
 
@@ -77,9 +78,12 @@ cd firewall && npm run dev
 ## 验证安装
 
 ```bash
-# 健康检查
-curl http://localhost:3000/health/live
+# 存活探针（进程活着就 200，不看依赖）
+curl http://localhost:3000/v1/health/live
 # 应返回: { "status": "ok", "uptime": ... }
+
+# 就绪探针（关键依赖不可用即 503，用于摘流；带响应式明细）
+curl http://localhost:3000/v1/health/ready
 ```
 
 ## 超级管理员管理
