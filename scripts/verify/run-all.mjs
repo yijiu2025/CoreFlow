@@ -25,6 +25,7 @@ const GATES = [
   { name: 'E1 跨进程互斥（调度器锁）', file: 'lock-mutex.mjs' },
   { name: 'E3 跨实例 WS 广播', file: 'ws-fanout.mjs' },
   { name: 'E3 遥测统计跨实例汇聚', file: 'stats-aggregation.mjs' },
+  { name: 'U12 队列指针跨实例原子性', file: 'queue-atomic.mjs' },
   { name: 'E2 守卫配置跨实例同步', file: 'guard-sync.mjs' }
 ];
 

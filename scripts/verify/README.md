@@ -16,10 +16,13 @@
 | `npm run verify:lock`   | 同一任务周期内，N 个进程抢同一把锁 → **恰好 1 个**成功；TTL 内抢不到（未被提前释放）；TTL 过期后能抢到（无泄漏） | Redis |
 | `npm run verify:fanout` | 进程 A 产生一条告警 → 进程 B 的 WS 客户端收到；且**两端都恰好 1 条**（不重复投递）                               | Redis |
 | `npm run verify:stats`  | 进程 A 产生的流量出现在进程 B 的聚合统计里；**总数不丢不重**（多算一次就变红）                                   | Redis |
+| `npm run verify:queue`  | 队列指针跨实例一致：别人写的消息立刻可见（不因进程内 meta 缓存而"指针倒退"）；多消费者并发取**不重不漏**；环形队列 count 不被并发写坏 | Redis |
 | `npm run verify:guard`  | 进程 A 改库 → 进程 B 的内存配置在同步周期内跟上；版本不变时不重复合并                                            | MySQL |
-| `npm run verify:all`    | 依次跑上面四个，聚合退出码                                                                                       | 同上  |
+| `npm run verify:all`    | 依次跑上面五个，聚合退出码                                                                                       | 同上  |
 
-可用环境变量微调：`PROBE_PROCS`（竞争者进程数，默认 5）、`PROBE_TTL_MS`（锁 TTL，默认 3000）。
+可用环境变量微调：`PROBE_PROCS`（竞争者进程数，默认 5）、`PROBE_TTL_MS`（锁 TTL，默认 3000）、
+`PROBE_SEED`（队列条数，默认 300）、`PROBE_CONSUME_PROCS`（并发消费者，默认 3）、
+`PROBE_RING_MAX` / `PROBE_RING_SEED`（环形队列容量与每写入者条数，默认 100 / 60）。
 
 ## 前置条件
 

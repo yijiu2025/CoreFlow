@@ -27,6 +27,7 @@
     "verify:guard": "node scripts/verify/guard-sync.mjs",
     "verify:fanout": "node scripts/verify/ws-fanout.mjs",
     "verify:stats": "node scripts/verify/stats-aggregation.mjs",
+    "verify:queue": "node scripts/verify/queue-atomic.mjs",
     "bench": "node scripts/bench/baseline.mjs",
     "audit": "npm audit --production",
     "audit:fix": "npm audit fix --production",

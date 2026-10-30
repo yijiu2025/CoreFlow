@@ -40,6 +40,11 @@ import { isRedisConfigured } from './utils.js';
 function createRingQueue(prefix, options = {}) {
   const { maxSize = 1000, dataTtl = 0, backend = 'map', timeout = 3000 } = options;
 
+  // 环形指针在 Lua 里做 `% maxSize`：0 会让脚本直接报错，负数会让 head/tail 变成负数索引。
+  if (!Number.isInteger(maxSize) || maxSize <= 0) {
+    throw new TypeError(`RingQueue[${prefix}]: maxSize 必须是正整数（收到 ${maxSize}）`);
+  }
+
   if (backend === 'redis') {
     if (!isRedisConfigured()) {
       throw new Error(`RingQueue[${prefix}]: Redis 未配置，无法使用 Redis 后端`);
@@ -162,52 +167,86 @@ function _createMapRing(prefix, maxSize, dataTtl) {
 
 // ===== Redis 版 =====
 
+/**
+ * push：写 data → 推进 tail → 满则推进 head（覆盖最旧）→ 回写计数，全部在 Redis 内完成。
+ * 环形的指针是「共享可变状态」，任何一步落到脚本外都会让两个实例把同一个 index 当成
+ * 不同的落点（互相覆盖）或把 count 算成 2 倍。
+ */
+const PUSH_SCRIPT = `
+  local metaRaw = redis.call('GET', KEYS[1])
+  local m = cjson.decode(metaRaw or '{"head":0,"tail":0,"count":0}')
+  local maxSize = tonumber(ARGV[1])
+  local dkey = KEYS[2] .. m.tail
+  redis.call('SET', dkey, ARGV[2])
+  if tonumber(ARGV[3]) > 0 then
+    redis.call('EXPIRE', dkey, tonumber(ARGV[3]))
+  end
+  m.tail = (m.tail + 1) % maxSize
+  if m.count >= maxSize then
+    m.head = (m.head + 1) % maxSize
+  else
+    m.count = m.count + 1
+  end
+  redis.call('SET', KEYS[1], cjson.encode(m))
+  return m.count
+`;
+
+/** shift：取 head 条目 + 推进 head + 减 count 同一事务。 */
+const SHIFT_SCRIPT = `
+  local metaRaw = redis.call('GET', KEYS[1])
+  if not metaRaw then
+    return nil
+  end
+  local m = cjson.decode(metaRaw)
+  if m.count <= 0 then
+    return nil
+  end
+  local dkey = KEYS[2] .. m.head
+  local val = redis.call('GET', dkey)
+  if val then
+    redis.call('DEL', dkey)
+  end
+  m.head = (m.head + tonumber(ARGV[1])) % tonumber(ARGV[1])
+  m.count = m.count - 1
+  redis.call('SET', KEYS[1], cjson.encode(m))
+  return val or false
+`;
+
 function _createRedisRing(prefix, maxSize, dataTtl, timeout) {
   const store = getStore(prefix, { timeout });
-  let _cache = null;
+  // 裸客户端不自动加前缀，key 必须手工拼全；store.get/set 则自动加，两边要一致。
+  const metaKey = `${prefix}:meta`;
+  const dataKeyPrefix = `${prefix}:data:`;
 
+  /**
+   * 每次读 Redis，不用进程内缓存：缓存会把本实例最后写入的 tail/count 当全局真相，
+   * 其他实例写入后本地一写回就把它们的指针抹掉（`toArray` 直接少数据）。
+   */
   async function _meta() {
-    if (_cache) return _cache;
     const m = await store.get('meta');
-    if (m) {
-      _cache = m;
-      return m;
-    }
-    const init = { head: 0, tail: 0, count: 0 };
-    await store.set('meta', init);
-    _cache = init;
-    return init;
+    return m || { head: 0, tail: 0, count: 0 };
   }
 
   return {
     async push(data) {
-      const m = await _meta();
-
-      await store.set(`data:${m.tail}`, { data, createdAt: Date.now() }, dataTtl);
-      m.tail = (m.tail + 1) % maxSize;
-
-      if (m.count >= maxSize) {
-        m.head = (m.head + 1) % maxSize;
-      } else {
-        m.count++;
-      }
-
-      await store.set('meta', m);
-      _cache = m;
-      return m.count;
+      const payload = JSON.stringify({ data, createdAt: Date.now() });
+      const count = await store.call(redis =>
+        redis.eval(PUSH_SCRIPT, {
+          keys: [metaKey, dataKeyPrefix],
+          arguments: [String(maxSize), payload, String(dataTtl)]
+        })
+      );
+      return Number(count);
     },
 
     async shift() {
-      const m = await _meta();
-      if (m.count === 0) return null;
-
-      const key = `data:${m.head}`;
-      const item = await store.getDel(key);
-      m.head = (m.head + 1) % maxSize;
-      m.count--;
-      await store.set('meta', m);
-      _cache = m;
-      return item;
+      const item = await store.call(redis =>
+        redis.eval(SHIFT_SCRIPT, {
+          keys: [metaKey, dataKeyPrefix],
+          arguments: [String(maxSize)]
+        })
+      );
+      return item ?? null;
     },
 
     async toArray(limit = 0) {
@@ -241,7 +280,6 @@ function _createRedisRing(prefix, maxSize, dataTtl, timeout) {
     },
 
     async clear() {
-      _cache = null;
       await store.destroy();
     }
   };

@@ -38,6 +38,10 @@ const log = createLogger('framework.redis.queue-store');
 function createQueue(prefix, options = {}) {
   const { maxSize = 100000, dataTtl = 0, backend = 'map', timeout = 3000 } = options;
 
+  if (!Number.isInteger(maxSize) || maxSize <= 0) {
+    throw new TypeError(`Queue[${prefix}]: maxSize 必须是正整数（收到 ${maxSize}）`);
+  }
+
   if (backend === 'redis') {
     if (!isRedisConfigured()) {
       throw new Error(`Queue[${prefix}]: Redis 未配置，无法使用 Redis 后端`);
@@ -165,60 +169,82 @@ function _createMapQueue(prefix, maxSize, dataTtl) {
 
 // ===== Redis 版 =====
 
+/** push：读 meta → 上限检查 → 写 data → 自增 tail，全部在 Redis 内一步完成。 */
+const PUSH_SCRIPT = `
+  local metaRaw = redis.call('GET', KEYS[1])
+  local m = cjson.decode(metaRaw or '{"head":0,"tail":0}')
+  local len = m.tail - m.head
+  if len >= tonumber(ARGV[1]) then
+    return -1
+  end
+  local dkey = KEYS[2] .. m.tail
+  redis.call('SET', dkey, ARGV[2])
+  if tonumber(ARGV[3]) > 0 then
+    redis.call('EXPIRE', dkey, tonumber(ARGV[3]))
+  end
+  m.tail = m.tail + 1
+  redis.call('SET', KEYS[1], cjson.encode(m))
+  return m.tail - m.head
+`;
+
+/**
+ * shift：读 meta → 逐个 index 取值并前移 head（跳过 TTL 空洞）→ 写回 meta。
+ * 指针推进必须与取值同一事务，否则两个消费者会各自从同一 head 取值、各自写回 head+1，
+ * 其中一个消息被读走但 head 只前进一格；更糟的是把**过期的旧 tail** 写回 Redis，
+ * 直接截断其他实例刚 push 的消息（消息在 Redis 里存在但指针永远走不到）。
+ */
+const SHIFT_SCRIPT = `
+  local metaRaw = redis.call('GET', KEYS[1])
+  if not metaRaw then
+    return nil
+  end
+  local m = cjson.decode(metaRaw)
+  if m.head >= m.tail then
+    return nil
+  end
+  while m.head < m.tail do
+    local dkey = KEYS[2] .. m.head
+    m.head = m.head + 1
+    local val = redis.call('GET', dkey)
+    if val then
+      redis.call('DEL', dkey)
+      redis.call('SET', KEYS[1], cjson.encode(m))
+      return val
+    end
+  end
+  m.head = 0
+  m.tail = 0
+  redis.call('SET', KEYS[1], cjson.encode(m))
+  return nil
+`;
+
 function _createRedisQueue(prefix, maxSize, dataTtl, timeout) {
   const store = getStore(prefix, { timeout });
 
-  // meta 本地缓存，减少 Redis 往返
-  let _metaCache = null;
+  // meta/data key 必须带 prefix：store.call 的客户端是裸客户端，不会自动加前缀，
+  // 而 store.get/set 会自动加。两边不统一就会出现「push 写进去、shift 读不到」。
+  const metaKey = `${prefix}:meta`;
+  const dataKeyPrefix = `${prefix}:data:`;
 
+  /**
+   * 读 meta：不再使用进程内缓存。缓存会把「本实例最后一次写入的 tail」当成全局真相，
+   * 其他实例 push 之后本地 shift 一写回就把它们的消息指针抹掉。多实例下每次读 Redis 是
+   * 唯一正确的做法（GET 的成本远低于丢消息）。
+   */
   async function _meta() {
-    if (_metaCache) return _metaCache;
     const m = await store.get('meta');
-    if (m) {
-      _metaCache = m;
-      return m;
-    }
-    const init = { head: 0, tail: 0 };
-    await store.set('meta', init);
-    _metaCache = init;
-    return init;
-  }
-
-  function _saveMeta(m) {
-    _metaCache = m;
+    return m || { head: 0, tail: 0 };
   }
 
   return {
     async push(data) {
-      // 🔴 原子写入 + key 前缀修正：
-      // 1) 此前「读 _metaCache + MULTI 写」不是原子的——多实例并发读到同一 tail，后写覆盖先写（丢消息）；
-      // 2) 此前 data key 用裸 `data:N`（store.call 的裸客户端不加前缀），而 shift 用 store.getDel
-      //    自动加前缀 `prefix:data:N`，两者对不上——Redis 后端下 push 的数据 shift 根本读不到。
-      // 现在用 Lua 脚本在 Redis 内原子完成「读 meta → 上限检查 → 写 data → 更新 meta」，
-      // 且 data/meta key 统一带 prefix。
-      const metaKey = `${prefix}:meta`;
-      const dataKeyPrefix = `${prefix}:data:`;
       const payload = JSON.stringify({ data, createdAt: Date.now() });
 
-      const script = `
-        local metaRaw = redis.call('GET', KEYS[1])
-        local m = cjson.decode(metaRaw or '{"head":0,"tail":0}')
-        local len = m.tail - m.head
-        if len >= tonumber(ARGV[1]) then
-          return -1
-        end
-        local dkey = KEYS[2] .. m.tail
-        redis.call('SET', dkey, ARGV[2])
-        if tonumber(ARGV[3]) > 0 then
-          redis.call('EXPIRE', dkey, tonumber(ARGV[3]))
-        end
-        m.tail = m.tail + 1
-        redis.call('SET', KEYS[1], cjson.encode(m))
-        return m.tail - m.head
-      `;
-
       const result = await store.call(redis =>
-        redis.eval(script, 2, metaKey, dataKeyPrefix, String(maxSize), payload, String(dataTtl))
+        redis.eval(PUSH_SCRIPT, {
+          keys: [metaKey, dataKeyPrefix],
+          arguments: [String(maxSize), payload, String(dataTtl)]
+        })
       );
 
       if (Number(result) === -1) {
@@ -237,32 +263,13 @@ function _createRedisQueue(prefix, maxSize, dataTtl, timeout) {
     },
 
     async shift() {
-      const m = await _meta();
-      let skipped = 0;
-      while (m.head < m.tail) {
-        const key = `data:${m.head}`;
-        const item = await store.getDel(key);
-        m.head++;
-
-        if (item !== null) {
-          if (skipped > 0) {
-            log.warn(`[Queue] ${prefix} shift 跳过 ${skipped} 个空洞索引`);
-          }
-          await store.set('meta', m);
-          _saveMeta(m);
-          return item;
-        }
-        skipped++;
-      }
-
-      if (skipped > 0) {
-        log.warn(`[Queue] ${prefix} shift 全部跳过 ${skipped} 个空洞，重置指针`);
-      }
-      m.head = 0;
-      m.tail = 0;
-      await store.set('meta', m);
-      _saveMeta(m);
-      return null;
+      const item = await store.call(redis =>
+        redis.eval(SHIFT_SCRIPT, {
+          keys: [metaKey, dataKeyPrefix],
+          arguments: []
+        })
+      );
+      return item ?? null;
     },
 
     async peek() {
@@ -302,7 +309,6 @@ function _createRedisQueue(prefix, maxSize, dataTtl, timeout) {
     },
 
     async clear() {
-      _metaCache = null;
       await store.destroy();
     }
   };

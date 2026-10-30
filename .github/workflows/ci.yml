@@ -218,7 +218,7 @@ jobs:
         run: |
           set +e
           failed=0
-          for k in lock-mutex ws-fanout stats-aggregation; do
+          for k in lock-mutex ws-fanout stats-aggregation queue-atomic; do
             echo "=== $k ==="
             node "scripts/verify/$k.mjs"
             code=$?
