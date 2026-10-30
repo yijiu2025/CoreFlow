@@ -154,7 +154,7 @@ function runChild(at, label, opts = {}) {
 }
 
 console.log('═══ E1 跨进程互斥复验 ═══');
-console.log(`锁 key : scheduler:${TASK_KEY}`);
+console.log(`锁 key : lock:scheduler:${TASK_KEY}`);
 console.log(`周期   : ${TTL_MS}ms（调度器派生锁 TTL ≥ 2 倍周期；原始锁 TTL 见第 3/4 轮）`);
 console.log(`Redis  : ${process.env.REDIS_HOST || '(未配置)'}:${process.env.REDIS_PORT || 6379} (db${PROBE_REDIS_DB})`);
 console.log(`竞争者 : ${N} 个独立进程\n`);
@@ -184,7 +184,9 @@ if (maxDrift !== null && maxDrift > DRIFT_WARN_MS) {
 // 回归守卫：调度器曾把锁 TTL 取成"等于任务周期"，任务跑超周期时锁就过期，
 // 其他实例并发执行同一任务（重复执行）。现在派生规则是 max(2×周期, 周期+60s)。
 // 这条断言同时也是本关卡第 3 轮的前置：不先证明"TTL 被放大"，第 3 轮等 TTL_MS 就等不到。
-const lockKey = `scheduler:${TASK_KEY}`;
+// 真实键名 = `lock:`（lock-store.js 的 LOCK_PREFIX）+ 传入的 name。
+// 少写这一层前缀时 PTTL 返回 -2（键不存在），看起来像"锁没建起来"。
+const lockKey = `lock:scheduler:${TASK_KEY}`;
 // 🔴 `store.call()` 的签名是 (fn, timeout)，不是 (command, ...args)：
 //    fn 会收到**裸客户端**，命令由调用方自己发。写成 `call('PTTL', key)` 会得到
 //    `TypeError: fn is not a function` —— 而 MapStore 版恰好对任何入参都抛

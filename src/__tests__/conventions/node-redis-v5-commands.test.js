@@ -15,6 +15,13 @@
  * 注意 `store().hgetall(...)` 这类是**框架自己**的小写 store API（内部再映射到驼峰命令），
  * 不在拦截范围内 —— 判据是「接收者是不是一个裸客户端标识符」。
  *
+ * 2026-10-30 追加第二类：**参数类型**。v5 在写 socket 前逐参数校验 `string | Buffer`，
+ * `redis.scan(0, ...)` 的游标是 number 就会抛
+ *   TypeError: "arguments[1]" must be of type "string | Buffer", got number
+ * 且抛点在 socket 写入路径上：栈里没有一行业务代码，表现为**未捕获异常**直接杀进程，
+ * 只有真连上 Redis 才触发。上面「历史第二种」就是它 —— 当时记为已知现象，
+ * 但一直没被拦住，2026-10-30 又把 queue-atomic 关卡打挂一次，故补成守卫。
+ *
  * @author yijiu2025
  */
 import fs from 'node:fs';
@@ -134,6 +141,57 @@ describe('node-redis v5 命令名契约：裸客户端必须用驼峰方法名',
     expect(findViolations('await client.hSet(key, field, value);')).toHaveLength(0);
     expect(findViolations('await client.dbSize();')).toHaveLength(0);
     expect(findViolations('const keys = await client.keys(pattern);')).toHaveLength(0);
+  });
+
+  /**
+   * 找出「裸客户端 .scan( 非字符串化游标)」的写法
+   *
+   * 只认裸客户端（`redis` / CLIENT_IDS），不认 `store.scan` / `RedisStore.scan` ——
+   * 后者是框架自己的 API，内部会把游标 String() 掉。
+   */
+  function findUnstringifiedScanCursors(text) {
+    const hits = [];
+    const receivers = [...CLIENT_IDS, 'redis'];
+    const re = new RegExp(`\\b(${receivers.join('|')})\\s*\\.\\s*scan\\s*\\(\\s*([^,)]+)`, 'g');
+
+    text.split(/\r?\n/).forEach((line, i) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('*') || trimmed.startsWith('//')) return;
+
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(line))) {
+        const cursor = m[2].trim();
+        // 合法形态：String(...) 或字符串字面量
+        if (/^String\(/.test(cursor) || /^['"`]/.test(cursor)) continue;
+        hits.push({ line: i + 1, receiver: m[1], cursor });
+      }
+    });
+
+    return hits;
+  }
+
+  it('SCAN 的游标必须字符串化（v5 参数校验只接受 string | Buffer）', () => {
+    // 检测器有牙：反例必须被抓到。
+    // 反例用 join 拼出来 —— 本文件也在 SCAN_DIRS 的扫描范围内，
+    // 直接写完整字面量会让「全仓无违规」那条断言抓到自己的夹具（自指假红）。
+    const BAD_CASE = ['const [c, k] = await ', 'redis', '.scan(0, { MATCH: p });'].join('');
+    expect(findUnstringifiedScanCursors(BAD_CASE)).toHaveLength(1);
+    // 不误伤：String() 包装、字符串字面量、框架自己的 scan API 都放行
+    expect(findUnstringifiedScanCursors('await redis.scan(String(cursor), { MATCH: p });')).toHaveLength(0);
+    expect(findUnstringifiedScanCursors("await redis.scan('0', { MATCH: p });")).toHaveLength(0);
+    expect(findUnstringifiedScanCursors('await RedisStore.scan(resolvedPrefix, cursor, opts);')).toHaveLength(0);
+    expect(findUnstringifiedScanCursors('store.scan(cursor, { MATCH: p });')).toHaveLength(0);
+
+    const offenders = [];
+    for (const file of FILES) {
+      const src = fs.readFileSync(file, 'utf8');
+      if (!/\.scan\s*\(/.test(src)) continue;
+      for (const hit of findUnstringifiedScanCursors(src)) {
+        offenders.push(`${rel(file)}:${hit.line}  ${hit.receiver}.scan(${hit.cursor}, …) —— 游标需 String() 包装`);
+      }
+    }
+    expect(offenders.join('\n')).toBe('');
   });
 
   it('仓库内不存在裸客户端上的小写多词命令', () => {

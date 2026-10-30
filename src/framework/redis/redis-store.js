@@ -350,7 +350,7 @@ const RedisStore = {
         const remaining = deadline - Date.now();
         const count = limit > 0 ? Math.min(limit, 1000) : 100;
         const [nextCursor, batch] = await withTimeoutPromise(
-          redis.scan(cursor, { MATCH: pattern, COUNT: count }),
+          redis.scan(String(cursor), { MATCH: pattern, COUNT: count }),
           remaining
         );
         cursor = nextCursor;
@@ -392,7 +392,7 @@ const RedisStore = {
         }
         const remaining = deadline - Date.now();
         const [nextCursor, batch] = await withTimeoutPromise(
-          redis.scan(cursor, { MATCH: pattern, COUNT: 1000 }),
+          redis.scan(String(cursor), { MATCH: pattern, COUNT: 1000 }),
           remaining
         );
         cursor = nextCursor;
@@ -416,6 +416,12 @@ const RedisStore = {
   async destroy(prefix, timeout, useBackup) {
     _validateInput(prefix);
     const redis = _getRedis('destroy', prefix, useBackup);
+    // 🔴 SCAN 的游标必须是**字符串**：node-redis v5 在写 socket 前逐参数校验
+    //    `string | Buffer`，`redis.scan(0, ...)` 会抛
+    //      TypeError: "arguments[1]" must be of type "string | Buffer", got number
+    //    而这条错误是在 socket 写入路径上抛的 —— 栈里全是 node-redis 自己的帧，
+    //    对调用方表现为一个**未捕获异常**（进程直接挂），完全看不出是 destroy/keys。
+    //    本文件其余 3 处 scan（含 keys 的）同理，由 conventions 守卫兜住。
     const pattern = _keyPattern(prefix);
     let deleted = 0;
     let cursor = 0;
@@ -429,7 +435,7 @@ const RedisStore = {
         }
         const remaining = deadline - Date.now();
         const [nextCursor, batch] = await withTimeoutPromise(
-          redis.scan(cursor, { MATCH: pattern, COUNT: 500 }),
+          redis.scan(String(cursor), { MATCH: pattern, COUNT: 500 }),
           remaining
         );
         cursor = nextCursor;
@@ -471,7 +477,7 @@ const RedisStore = {
         }
         const remaining = deadline - Date.now();
         const [nextCursor, batch] = await withTimeoutPromise(
-          redis.scan(cursor, { MATCH: pattern, COUNT: 500 }),
+          redis.scan(String(cursor), { MATCH: pattern, COUNT: 500 }),
           remaining
         );
         cursor = nextCursor;
