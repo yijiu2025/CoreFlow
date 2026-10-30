@@ -19,11 +19,11 @@ import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 
 jest.unstable_mockModule('../app/oauth21/middleware/rate-limiter.js', () => ({
-  registerSensitiveRateLimits: () => {}
+  sensitiveRateLimitPlugin: async () => {}
 }));
 
 jest.unstable_mockModule('../app/oauth21/middleware/csrf.middleware.js', () => ({
-  registerCsrfProtection: () => {}
+  createCsrfProtectionPlugin: () => async () => {}
 }));
 
 jest.unstable_mockModule('../framework/redis/index.js', () => ({
@@ -39,10 +39,9 @@ beforeAll(async () => {
   app = Fastify({ logger: false });
   await app.register(cookie);
 
-  // 与 10-apps loader 的接线保持一致：
-  // 1) init 在封装作用域内跑（限频/CSRF 已换成桩，只验证接线不被破坏）
-  // 2) rootPlugins 注册在根作用域 —— H5 签名钩子必须在这一层才对全应用路由生效
-  await app.register(oauth21Config.init);
+  // 与 10-apps loader 的接线保持一致：rootPlugins 注册在根作用域 ——
+  // H5 签名 / CSRF / 限频三个钩子都必须在这一层才对全应用路由生效
+  // （限频与 CSRF 在本文件里换成桩，只验证签名接线）。
   for (const plugin of oauth21Config.rootPlugins) await app.register(plugin);
 
   app.get('/oauth2.1/protected', { config: { requireSignature: true } }, async () => ({ ok: true }));

@@ -118,16 +118,44 @@ export default service;
 前端要做的就是：从 `_m_h5_tk` cookie 取 token，按后端约定的串拼接后放进请求头，
 并带上 `x-device-id`。签名算法见 `src/framework/auth/signature.js`。
 
-## CSRF（当前未启用，接入前先读）
+## CSRF（`/oauth2.1` 作用域，已启用）
 
-后端 oauth21 的 CSRF 钩子**目前没有生效**（钩子注册在封装作用域内，覆盖不到根作用域路由，
-详见修复状态文档的 U21）。启用前必须同时满足：
+oauth21 的 CSRF 采用 **Double Submit Cookie**，只作用于 `/oauth2.1` 前缀：
 
-1. 前端所有非 GET 请求带上 `x-csrf-token`，值与 `_csrf` cookie 一致；
-2. 登录 / 注册 / 改密等公开 POST 也要带（否则一刀切 403）；
-3. 先灰度到 `/oauth2.1` 前缀，再评估其他前端。
+| 环节 | 行为 |
+| --- | --- |
+| 安全方法（GET/HEAD/OPTIONS） | 没有 `_csrf` cookie 就**下发**一枚（非 HttpOnly，前端可读） |
+| 引导端点 `GET /oauth2.1/csrf` | 返回 `{ token }` 并铺好 cookie，供登录前显式获取 |
+| 非安全方法 | `x-csrf-token` 必须与 `_csrf` cookie **完全一致**，缺失/不等一律 **403** |
+| 排除端点 | `/oauth2.1/token`、`/revoke`、`/crypto`、`/device_authorization`、`/device/token` —— 它们用客户端凭据或一次性 token，不依赖浏览器 cookie |
 
-**在此之前不要在前端硬编码"已开启 CSRF"的假设**，也不要新增依赖它的逻辑。
+🔴 **登录也在保护范围内**（登录 CSRF = 把受害者登进攻击者账号，之后受害者的一切操作
+都落在攻击者账号里）。因此「打开登录页直接提交」这条最短路径必须由前端补一次引导请求：
+
+```typescript
+// 首次提交前没有 _csrf cookie，先打引导端点把 cookie 铺好，再回填 header
+async function ensureCsrfToken(): Promise<string> {
+  const fromCookie = document.cookie.match(/(?:^|;\s*)_csrf=([^;]+)/)?.[1];
+  if (fromCookie) return decodeURIComponent(fromCookie);
+  const { token } = await service.get('/oauth2.1/csrf');
+  return token;
+}
+```
+
+参考实现：`oauth21/src/utils/request.ts`（请求拦截器里对 `/oauth2.1` 的非安全方法统一注入，
+并发请求共用一个引导 Promise）。
+
+> 🔴 **敏感接口限频**（同一作用域、同一根作用域接线）：`/oauth2.1` 下
+> 登录 / mini-login 5 次/分、邮箱二次验证 5 次/分、扫码确认 10 次/分、注册 3 次/时（按 IP）。
+> 超限返回 **429 + `Retry-After`**，前端要提示"稍后再试"而不是当成"账号或密码错误"。
+> 同一 NAT 出口的多人共用一份配额 —— 内网集中办公场景如频繁触发，应调高阈值而不是关掉它。
+>
+> 两个钩子共用一个应急开关 `OAUTH21_SECURITY_HOOKS=off`（默认开启）：仅在"前端版本落后于
+> 后端、老 bundle 不带 `x-csrf-token` 导致登录 403"时临时救场，恢复后立即置回。
+
+> 历史坑（U21）：这套钩子曾经注册在应用 `init` 里，而 `init` 运行在封装子作用域，覆盖不到
+> 08-api 注册在根作用域的业务路由 —— **注册了但从未执行**；排除清单还把 `/login`、`/authorize`、
+> `/qr` 全列进去，等于把要保护的对象豁免了。现在改由 `rootPlugins` 在根作用域注册。
 
 ## 后端接口清单
 

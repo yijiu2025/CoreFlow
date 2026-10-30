@@ -85,29 +85,43 @@ describe('Cookie 属性（真实 COOKIE_OPTIONS）', () => {
 });
 
 describe('CSRF 排除清单（真实 CSRF_EXCLUDE_PATHS）', () => {
-  const excluded = url => CSRF_EXCLUDE_PATHS.some(p => url.startsWith(p));
+  const excluded = url => CSRF_EXCLUDE_PATHS.some(p => url === p || url.startsWith(`${p}/`));
 
-  it('公开登录 / 注册端点被排除（它们本来就没有既有会话可被 CSRF 利用）', () => {
-    expect(excluded('/oauth2.1/login')).toBe(true);
-    expect(excluded('/oauth2.1/mini-login')).toBe(true);
-    expect(excluded('/oauth2.1/mini-register')).toBe(true);
-  });
-
-  it('OAuth 标准端点被排除', () => {
-    for (const url of ['/oauth2.1/authorize', '/oauth2.1/token', '/oauth2.1/revoke']) {
-      expect(excluded(url)).toBe(true);
+  it('只有"不依赖浏览器 cookie"的端点被排除：token / revoke / crypto / 设备流', () => {
+    for (const url of [
+      '/oauth2.1/token',
+      '/oauth2.1/revoke',
+      '/oauth2.1/crypto/public-key',
+      '/oauth2.1/device_authorization',
+      '/oauth2.1/device/token'
+    ]) {
+      expect({ url, excluded: excluded(url) }).toEqual({ url, excluded: true });
     }
   });
 
-  it('验证码服务前缀被排除', () => {
-    expect(excluded('/verify/v1/generate-captcha')).toBe(true);
-    expect(excluded('/verify/v1/check-email-code')).toBe(true);
-  });
-
-  it('业务写接口不在排除清单里（豁免必须逐条列举，不能靠前缀漏进来）', () => {
-    for (const url of ['/auth/v1/user/profile', '/api/firewall/v1/monitor/summary', '/oauth2.1/clients']) {
+  it('🔴 登录 / 授权确认 / 扫码确认 / 登出 必须在保护范围内（登录 CSRF = 登录劫持）', () => {
+    for (const url of [
+      '/oauth2.1/login',
+      '/oauth2.1/mini-login',
+      '/oauth2.1/login/consent/confirm',
+      '/oauth2.1/login/verify-email',
+      '/oauth2.1/authorize/consent',
+      '/oauth2.1/qr/confirm',
+      '/oauth2.1/logout'
+    ]) {
       expect({ url, excluded: excluded(url) }).toEqual({ url, excluded: false });
     }
+  });
+
+  it('排除项全部落在 /oauth2.1 内（作用域外的前缀没有意义，只会误导）', () => {
+    for (const path of CSRF_EXCLUDE_PATHS) {
+      expect({ path, inScope: path.startsWith('/oauth2.1/') }).toEqual({ path, inScope: true });
+    }
+  });
+
+  it('豁免不能靠前缀把兄弟路径一起带进来（`/oauth2.1/device` 不吞 `/oauth2.1/device/authorize`）', () => {
+    expect(excluded('/oauth2.1/device/authorize')).toBe(false);
+    expect(excluded('/oauth2.1/device')).toBe(false);
   });
 });
 
