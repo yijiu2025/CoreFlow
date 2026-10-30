@@ -28,11 +28,15 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { explainRedisEncodeErrors } from './lib/redis-debug.mjs';
+
 // 父子进程统一切库，避免碰到 db0 里的真实键
 const PROBE_REDIS_DB = process.env.PROBE_REDIS_DB || '15';
 process.env.REDIS_DB = PROBE_REDIS_DB;
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
+/* 让编码错误带上命令名（排障辅助，见 lib/redis-debug.mjs） */
+explainRedisEncodeErrors();
 const ROOT = path.resolve(DIR, '..', '..');
 const CHILD = path.join(DIR, 'queue-atomic-child.mjs');
 

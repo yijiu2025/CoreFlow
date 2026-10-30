@@ -21,11 +21,15 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { explainRedisEncodeErrors } from './lib/redis-debug.mjs';
+
 // 父子进程统一切库，避免碰到 db0 里的真实键
 const PROBE_REDIS_DB = process.env.PROBE_REDIS_DB || '15';
 process.env.REDIS_DB = PROBE_REDIS_DB;
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
+/* 让编码错误带上命令名（排障辅助，见 lib/redis-debug.mjs） */
+explainRedisEncodeErrors();
 const ROOT = path.resolve(DIR, '..', '..');
 const CHILD = path.join(DIR, 'lock-mutex-child.mjs');
 
@@ -181,7 +185,11 @@ if (maxDrift !== null && maxDrift > DRIFT_WARN_MS) {
 // 其他实例并发执行同一任务（重复执行）。现在派生规则是 max(2×周期, 周期+60s)。
 // 这条断言同时也是本关卡第 3 轮的前置：不先证明"TTL 被放大"，第 3 轮等 TTL_MS 就等不到。
 const lockKey = `scheduler:${TASK_KEY}`;
-const pttl = await getStore('verify-e1').call('PTTL', lockKey);
+// 🔴 `store.call()` 的签名是 (fn, timeout)，不是 (command, ...args)：
+//    fn 会收到**裸客户端**，命令由调用方自己发。写成 `call('PTTL', key)` 会得到
+//    `TypeError: fn is not a function` —— 而 MapStore 版恰好对任何入参都抛
+//    "无 Redis 客户端"，所以单测覆盖不到这个错法。
+const pttl = await getStore('verify-e1').call(client => client.pTTL(lockKey));
 const derivedTtlOk = typeof pttl === 'number' && pttl >= TTL_MS * 2;
 console.log('');
 console.log(
