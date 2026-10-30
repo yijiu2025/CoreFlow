@@ -97,15 +97,16 @@ async function checkMaxSessions(userId, appId, maxSessions = 5) {
  * SessionToken 无 paranoid/软删钩子，destroy 为硬删除（膨胀治理应真删行不留壳）。
  *
  * @param {number} userId 用户 ID
+ * @param {object} [options] Sequelize 查询选项（创建会话时传入所属事务）
  * @returns {Promise<number>} 实际删除的行数
  */
-async function pruneActiveDevices(userId) {
+async function pruneActiveDevices(userId, options = {}) {
   const SessionToken = getModel('SessionToken');
   if (!SessionToken) return 0;
 
   // 只数活跃行（revoked=false），超过上限才清（等于上限不裁——本函数在新增设备行
   // 之后调用，count 已含新设备，activeCount > MAX 才代表"旧设备 + 新设备"超限）
-  const activeCount = await SessionToken.count({ where: { user_id: userId, revoked: false } });
+  const activeCount = await SessionToken.count({ where: { user_id: userId, revoked: false }, ...options });
   if (activeCount <= MAX_ACTIVE_DEVICES) return 0;
 
   const removeCount = activeCount - MAX_ACTIVE_DEVICES;
@@ -114,14 +115,16 @@ async function pruneActiveDevices(userId) {
     where: { user_id: userId, revoked: false },
     order: [['last_active', 'ASC']],
     limit: removeCount,
-    attributes: ['id']
+    attributes: ['id'],
+    ...options
   });
   if (!oldest.length) return 0;
 
   // 批量硬删除：SessionToken 无 delete_version/paranoid（撤销语义由 revoked 字段表达），
   // destroy 即物理 DELETE。被裁剪的都是 last_active 最旧的设备行，设备下次访问会重新 upsert。
   const destroyed = await SessionToken.destroy({
-    where: { id: oldest.map(r => r.id) }
+    where: { id: oldest.map(r => r.id) },
+    ...options
   });
   log.debug(
     '🧹 [session] 裁剪活跃设备: userId=%s, 删除 %s 行 (原 %s, 上限 %s)',

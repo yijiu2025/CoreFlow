@@ -73,8 +73,10 @@ describe('权限缓存命名空间契约（第 2 层）', () => {
 });
 
 describe('会话权限走的必须是指纹入口（第 3 层）', () => {
-  test('session.js 不得再直接调用 loadUserPermissions', () => {
-    const body = stripComments(read('framework/auth/session.js'));
+  test('Session 创建/恢复/刷新模块不得再直接调用 loadUserPermissions', () => {
+    const body = stripComments(
+      [read('framework/auth/session.js'), read('framework/auth/session-refresh.js')].join('\n')
+    );
     // 直接调用会绕过指纹校验 → 会话长 TTL 再次掩盖权限变更
     expect(body).not.toMatch(/loadUserPermissions\s*\(/);
     expect(body).toMatch(/resolveSessionPermissions\s*\(/);
@@ -87,8 +89,10 @@ describe('会话权限走的必须是指纹入口（第 3 层）', () => {
   });
 
   test('会话数据里持久化了 permFingerprint', () => {
-    const body = stripComments(read('framework/auth/session.js'));
-    // 三处构造 sessionData 的位置都应带上指纹
+    const body = stripComments(
+      [read('framework/auth/session.js'), read('framework/auth/session-refresh.js')].join('\n')
+    );
+    // 创建、DB 恢复、sid_r 刷新三处构造 sessionData 的位置都应带上指纹
     const hits = body.match(/permFingerprint,/g) || [];
     expect(hits.length).toBeGreaterThanOrEqual(3);
   });
