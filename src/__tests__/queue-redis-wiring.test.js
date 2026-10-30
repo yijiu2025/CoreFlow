@@ -21,7 +21,7 @@
  * @author yijiu2025
  * @since 2026-10-30
  */
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterAll, jest } from '@jest/globals';
 
 /** 记录对 fake store 的所有调用 */
 const rec = {
@@ -56,9 +56,18 @@ jest.unstable_mockModule('../framework/redis/get-store.js', () => ({
   getStore: () => fakeStore
 }));
 
-jest.unstable_mockModule('../framework/redis/utils.js', () => ({
-  isRedisConfigured: () => true
-}));
+// 只 mock「怎么拿到 store」；`utils.js` 保持真身 —— 只要有两个环境变量就能让
+// `isRedisConfigured()` 为真，同时 `safeParse` 用的是生产实现（不复制一份进测试）。
+const SAVED_ENV = { REDIS_ENABLED: process.env.REDIS_ENABLED, REDIS_HOST: process.env.REDIS_HOST };
+process.env.REDIS_ENABLED = 'true';
+process.env.REDIS_HOST = '127.0.0.1';
+
+afterAll(() => {
+  for (const [key, value] of Object.entries(SAVED_ENV)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
 
 const { createQueue } = await import('../framework/redis/queue-store.js');
 const { createRingQueue } = await import('../framework/redis/ring-queue-store.js');
@@ -100,7 +109,10 @@ describe('Queue（Redis 后端）变更操作必须是一次 EVAL', () => {
 
     const msg = await q.shift();
 
-    expect(JSON.parse(msg).data).toBe('m1');
+    // 返回值是**已解析**的消息对象（与 Map 后端同形）；此前这里断言的是
+    // `JSON.parse(msg).data`，等于把"Redis 后端返回原始字符串"这个缺陷写进了期望里。
+    expect(msg.data).toBe('m1');
+    expect(msg.createdAt).toBe(1);
     expect(rec.evals).toHaveLength(1);
     expect(rec.evals[0].options.keys).toEqual([`${PREFIX}:meta`, `${PREFIX}:data:`]);
     expect(rec.sets).toHaveLength(0);
@@ -151,7 +163,7 @@ describe('RingQueue（Redis 后端）变更操作必须是一次 EVAL', () => {
     await expect(ring.shift()).resolves.toBeNull();
 
     rec.evalResult = JSON.stringify({ data: 'a', createdAt: 1 });
-    expect(JSON.parse(await ring.shift()).data).toBe('a');
+    expect((await ring.shift()).data).toBe('a');
     expect(rec.sets).toHaveLength(0);
   });
 

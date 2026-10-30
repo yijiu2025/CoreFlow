@@ -25,7 +25,7 @@
 
 import { MapStore } from './map-store.js';
 import { getStore } from './get-store.js';
-import { isRedisConfigured } from './utils.js';
+import { isRedisConfigured, safeParse } from './utils.js';
 
 /**
  * 创建循环队列
@@ -246,7 +246,9 @@ function _createRedisRing(prefix, maxSize, dataTtl, timeout) {
           arguments: [String(maxSize)]
         })
       );
-      return item ?? null;
+      // 与 queue-store 同理：Lua 交回的是 push 时写进去的 JSON 串，不 parse 会让
+      // 调用方读到字符串（`msg.data` 恒 undefined）。Map 版存的是对象，两边必须同形。
+      return safeParse(item);
     },
 
     async toArray(limit = 0) {
