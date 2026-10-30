@@ -21,7 +21,12 @@
  * @author yijiu2025
  * @since 2026-10-30
  */
-import { createQueue, createRingQueue } from '../../src/framework/redis/index.js';
+import {
+  connectStandalone,
+  disconnectStandalone,
+  createQueue,
+  createRingQueue
+} from '../../src/framework/redis/index.js';
 
 const MODE = process.env.PROBE_MODE;
 const PREFIX = process.env.PROBE_PREFIX;
@@ -51,6 +56,13 @@ async function run() {
   }
 
   const isFifo = MODE.endsWith('fifo');
+  // 🔴 必须自己建连：`createQueue(..., { backend: 'redis' })` 只是**选后端**，
+  //    它不会替你连 Redis —— 连接由 `connectStandalone()` 建立并放进 globalRedis，
+  //    没连的时候每个队列操作都抛 `RedisRequiredError: 主 Redis 不可用`。
+  //    缺这一步时子进程全部以 CHILD_ERROR 收场，而父进程的断言只会报"消费者异常"。
+  const conn = await connectStandalone({ timeoutMs: 8000 });
+  if (!conn.ready) throw new Error(`connect_failed:${conn.reason}`);
+
   const handle = isFifo
     ? createQueue(PREFIX, { backend: 'redis', maxSize: Math.max(COUNT * 4, 1000) })
     : createRingQueue(PREFIX, { backend: 'redis', maxSize: MAX });
@@ -94,7 +106,9 @@ async function run() {
     const ids = items.map(it => it.data);
     emit(`RESULT ${LABEL} ${ids.length} ${ids.join(',')}`);
   } finally {
-    // 不在这里 clear：清了会让同批其他进程读到空队列，清理由父进程统一做
+    // 不在这里 clear：清了会让同批其他进程读到空队列，清理由父进程统一做。
+    // 但连接要关：未关闭的 socket 会让进程挂住不退出，父进程只能等到硬超时。
+    await disconnectStandalone();
   }
 }
 

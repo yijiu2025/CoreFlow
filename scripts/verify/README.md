@@ -116,6 +116,23 @@ E3 的两个关卡也在 **`REDIS_DB=15`** 上运行，并把遥测落盘路径�
 关卡结束会删除临时文件，并清掉自己写入的 `fwstats:*` 基数（**只清这个前缀**，
 它是本项目自有的统计键，不影响其他数据）。
 
+## 子进程约定：**自建连接**
+
+`createQueue(..., { backend: 'redis' })` / `createLock(...)` 只是**选后端**，不会替你连 Redis；
+连接由 `connectStandalone()` 建好放进 `globalRedis`。所以每个被拉起的子进程都必须：
+
+```js
+const conn = await connectStandalone({ timeoutMs: 8000 });
+if (!conn.ready) throw new Error(`connect_failed:${conn.reason}`);
+// …干活…
+await disconnectStandalone();   // 不关 socket 会让进程挂住，父进程只能等到硬超时
+```
+
+漏了这一步的表现**不是**"连不上"，而是每个队列/锁操作抛
+`RedisRequiredError: 主 Redis 不可用`，父进程汇总成一句"消费者异常 / 写入者异常"，
+看起来像业务回归。2026-10-30 `queue-atomic` 就因为这个一直红在"断言失败"上
+（同一个关卡前面还压着一个 `destroy()` 的数组解构崩溃，把它挡住了）。
+
 ## 注意：这些关卡不探测 Redis 之外的部署形态
 
 `docker` / 多主机等形态不在覆盖范围内（本机无 Docker）。
