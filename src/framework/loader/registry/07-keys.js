@@ -8,7 +8,7 @@
  * @since 2026-08-14
  */
 
-import { ensureCurrentKey } from '../../keys/index.js';
+import { ensureCurrentKey, assertKeyEncryptionReady } from '../../keys/index.js';
 import { C } from '../../../utils/colors.js';
 import { createLogger } from '../../log/index.js';
 
@@ -16,6 +16,9 @@ const log = createLogger('framework.loader.registry.07-keys');
 
 async function keysLoader(app) {
   try {
+    // 先自检信封加密：KEY_ENCRYPTION_REQUIRED=true 时缺 KEK 必须当场失败，
+    // 而不是等到第一次签发才炸（也不能让明文私钥悄悄继续入库）
+    assertKeyEncryptionReady();
     await ensureCurrentKey();
     log.always(`🔑 [Loader: Keys] ${C.cyan}密钥初始化完成${C.reset}`);
   } catch (err) {

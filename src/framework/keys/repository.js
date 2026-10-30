@@ -9,6 +9,7 @@
  */
 
 import { getModel } from '../db/index.js';
+import { isEnabled, isSealed, seal, open } from './envelope.js';
 
 /**
  * 取 KeyPair 模型（未加载时返回 null）
@@ -19,6 +20,51 @@ function getKeyPairModel() {
 }
 
 /**
+ * 写入前加密私钥
+ *
+ * 只在启用信封加密（配置了 KEK）时封；未配置时保持历史明文行为，
+ * 避免未做密钥管理准备的部署突然无法启动。是否强制由 `KEY_ENCRYPTION_REQUIRED` 决定。
+ *
+ * @param {object} data
+ * @returns {object} 待写入的数据
+ */
+function sealForWrite(data) {
+  if (!isEnabled() || !data?.private_key || isSealed(data.private_key)) return data;
+  return { ...data, private_key: seal(data.private_key, data.name) };
+}
+
+/**
+ * 读取后解密私钥（就地替换 dataValues，保留 Sequelize 实例能力）
+ *
+ * 历史明文行原样返回；密文行解不开则抛错——绝不能把密文冒充 PEM 传到签名环节。
+ *
+ * @param {object|null} row
+ * @returns {object|null}
+ */
+function openRow(row) {
+  if (!row) return row;
+  const stored = row.private_key;
+  if (!stored || !isSealed(stored)) return row;
+  const plaintext = open(stored, row.name);
+  if (typeof row.setDataValue === 'function') {
+    // setDataValue 不改 changed()，不会被误判为脏字段而回写
+    row.setDataValue('private_key', plaintext);
+  } else {
+    row.private_key = plaintext;
+  }
+  return row;
+}
+
+/**
+ * 批量解密
+ * @param {object[]} rows
+ * @returns {object[]}
+ */
+function openRows(rows) {
+  return rows.map(openRow);
+}
+
+/**
  * 按名(kid)查启用的密钥对
  * @param {string} name - kid
  * @returns {Promise<object|null>}
@@ -26,7 +72,7 @@ function getKeyPairModel() {
 async function findActiveByName(name) {
   const KeyPair = getKeyPairModel();
   if (!KeyPair) return null;
-  return KeyPair.findOne({ where: { name, active: true } });
+  return openRow(await KeyPair.findOne({ where: { name, active: true } }));
 }
 
 /**
@@ -40,7 +86,7 @@ async function findActiveByName(name) {
 async function findByName(name) {
   const KeyPair = getKeyPairModel();
   if (!KeyPair) return null;
-  return KeyPair.findOne({ where: { name } });
+  return openRow(await KeyPair.findOne({ where: { name } }));
 }
 
 /**
@@ -61,10 +107,12 @@ async function setActive(name, active) {
 async function findNewestActive() {
   const KeyPair = getKeyPairModel();
   if (!KeyPair) return null;
-  return KeyPair.findOne({
-    where: { active: true },
-    order: [['createdAt', 'DESC']]
-  });
+  return openRow(
+    await KeyPair.findOne({
+      where: { active: true },
+      order: [['createdAt', 'DESC']]
+    })
+  );
 }
 
 /**
@@ -74,10 +122,12 @@ async function findNewestActive() {
 async function findAllActive() {
   const KeyPair = getKeyPairModel();
   if (!KeyPair) return [];
-  return KeyPair.findAll({
-    where: { active: true },
-    order: [['createdAt', 'DESC']]
-  });
+  return openRows(
+    await KeyPair.findAll({
+      where: { active: true },
+      order: [['createdAt', 'DESC']]
+    })
+  );
 }
 
 /**
@@ -87,7 +137,7 @@ async function findAllActive() {
 async function findAll() {
   const KeyPair = getKeyPairModel();
   if (!KeyPair) return [];
-  return KeyPair.findAll({ order: [['createdAt', 'DESC']] });
+  return openRows(await KeyPair.findAll({ order: [['createdAt', 'DESC']] }));
 }
 
 /**
@@ -98,7 +148,7 @@ async function findAll() {
 async function insertKey(data) {
   const KeyPair = getKeyPairModel();
   if (!KeyPair) throw new Error('KeyPair 模型未加载');
-  return KeyPair.create(data);
+  return openRow(await KeyPair.create(sealForWrite(data)));
 }
 
 /**

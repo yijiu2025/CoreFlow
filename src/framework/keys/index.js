@@ -24,5 +24,7 @@ export {
 } from './manager.js';
 // 缓存（供测试/管理刷新）
 export { clearCache, getCurrentKid } from './cache.js';
+// 私钥信封加密（启动自检 / 迁移脚本 / 测试）
+export { assertReady as assertKeyEncryptionReady, isEnabled as isKeyEncryptionEnabled, isSealed } from './envelope.js';
 // 常量
 export { MODULUS_LENGTH_2048, ALGORITHMS } from './config.js';
