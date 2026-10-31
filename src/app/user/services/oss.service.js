@@ -128,15 +128,15 @@ async function deleteFile(url) {
 
   try {
     const client = getOssClient();
-    if (client && url.includes('aliyuncs.com')) {
-      // 从 URL 提取 key
-      const bucket = process.env.OSS_BUCKET;
-      const region = process.env.OSS_REGION || 'oss-cn-hangzhou';
-      const prefix = `https://${bucket}.${region}.aliyuncs.com/`;
-      if (url.startsWith(prefix)) {
-        const key = url.slice(prefix.length);
-        await client.delete(key);
-      }
+    // 判据必须是**解析后的 hostname 精确相等**，不能用 `url.includes('aliyuncs.com')`：
+    // 后者对 `https://evil.com/?x=aliyuncs.com` 也为真（CodeQL js/incomplete-url-substring-sanitization）。
+    const bucket = process.env.OSS_BUCKET;
+    const region = process.env.OSS_REGION || 'oss-cn-hangzhou';
+    const expectedHost = `${bucket}.${region}.aliyuncs.com`;
+    const ossKey = toOssKey(url, expectedHost);
+
+    if (client && ossKey !== null) {
+      await client.delete(ossKey);
     } else if (url.startsWith('/uploads/')) {
       // 本地文件：解析规范化路径后校验目录边界，阻断 ../ 穿越及相似前缀目录。
       const filePath = path.resolve(LOCAL_UPLOAD_DIR, url.slice('/uploads/'.length));
@@ -157,4 +157,30 @@ async function deleteFile(url) {
   }
 }
 
-export { uploadFile, deleteFile };
+/**
+ * 把 OSS 公网 URL 转成 object key
+ *
+ * 只接受 `https://<bucket>.<region>.aliyuncs.com/<key>` 这一种形态：
+ * hostname 精确比对（含端口/大小写归一），scheme 必须是 https，key 不得为空。
+ * 任何其它形态（含把 `aliyuncs.com` 塞在 query/path 里的伪造 URL）一律返回 null。
+ *
+ * @param {string} url 待解析的地址
+ * @param {string} expectedHost 期望的 hostname（`<bucket>.<region>.aliyuncs.com`）
+ * @returns {string|null} object key；不属于该 OSS bucket 时返回 null
+ */
+function toOssKey(url, expectedHost) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:') return null;
+  if (parsed.hostname.toLowerCase() !== expectedHost.toLowerCase()) return null;
+
+  const key = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+  return key ? key : null;
+}
+
+// toOssKey 导出仅为单测直接验证「URL → object key」的判据（见 src/__tests__/app/user/oss-url.test.js）
+export { uploadFile, deleteFile, toOssKey };

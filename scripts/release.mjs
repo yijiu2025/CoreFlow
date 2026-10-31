@@ -396,7 +396,9 @@ async function apiCreateRelease({ owner, repo, tag, body, token }) {
  *  且 CLI 在 workspaces 下会混入干扰性警告。仅用于读取线上版本。 */
 async function latestPublished(name) {
   try {
-    const res = await fetch(`https://registry.npmjs.org/${name.replace('/', '%2F')}/latest`, {
+    // 用 replaceAll 而非 replace：后者只替换第一处 `/`，scoped 包名里再出现 `/` 时
+    // 会拼出错误的 registry URL（CodeQL js/incomplete-sanitization）
+    const res = await fetch(`https://registry.npmjs.org/${name.replaceAll('/', '%2F')}/latest`, {
       headers: { 'User-Agent': 'coreflow-release' }
     });
     if (!res.ok) return null;

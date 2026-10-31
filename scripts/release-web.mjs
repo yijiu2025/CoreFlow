@@ -433,7 +433,8 @@ async function syncReleaseIfMissing({ tag, slug, token }) {
 /** 走 registry 的 HTTP 接口而非 npm CLI：Windows 下 execFileSync('npm') 会 ENOENT */
 async function latestPublished(name) {
   try {
-    const res = await fetch(`https://registry.npmjs.org/${name.replace('/', '%2F')}/latest`, {
+    // 用 replaceAll 而非 replace：后者只替换第一处 `/`（CodeQL js/incomplete-sanitization）
+    const res = await fetch(`https://registry.npmjs.org/${name.replaceAll('/', '%2F')}/latest`, {
       headers: { 'User-Agent': 'release-web' }
     });
     if (!res.ok) return null;

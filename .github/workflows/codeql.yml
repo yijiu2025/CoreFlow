@@ -1,0 +1,71 @@
+# CodeQL —— 用**仓库内的 advanced setup** 取代 GitHub 托管的 default setup
+#
+# 为什么不再用 default setup：
+#   1. 它的语言列表由 GitHub 托管（历史上出现过 `javascript` + `typescript` +
+#      `javascript-typescript` 三个名字并存），语言一旦和仓库实际内容对不上，
+#      Security 页面就只给一句「Code scanning configuration error」，**看不到任何日志**；
+#   2. 每次失败只能翻 Actions 里的动态工作流，无法 diff、无法 review、无法在 PR 里评论；
+#   3. 前后端分仓后仓库只剩 JS（无 TS 源），语言集合需要稳定钉死，而不是随托管逻辑漂移。
+#
+# advanced setup 的代价是：**这份文件就是配置，改它要过 review**。
+#
+# 语言选择：
+#   - `javascript-typescript`：覆盖 src/ scripts/ migrations/ docker/ 下的 JS（本仓无 .ts 源，
+#     但带上 typescript 提取器不影响，且避免将来加 TS 时静默漏扫）
+#   - `actions`：扫 .github/workflows/ 本身（workflow 注入、未固定版本的三方 action 等）
+#   刻意**不扫** `packages/`（独立嵌套仓）与已迁出的前端目录 —— 它们不在本仓索引里。
+#
+# 与 CI 的关系：CodeQL 是**独立**工作流，不参与 ci.yml 的三道门禁
+# （Lint / Test / Verify 才是分支保护要求），因此它失败不会挡住合并，但 Security 页面会红。
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 每周一 03:00 UTC —— 规则包更新后无需等下一次提交也能重扫
+    - cron: '0 3 * * 1'
+
+# 同一分支只保留最新的分析，避免 push 密集时排队
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # 上传 SARIF 到 code scanning 必需
+  security-events: write
+  # `actions` 语言要读取 workflow 元数据
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, actions]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # 先用 default suite（与之前的托管配置覆盖面一致，不引入新噪音）；
+          # 想扩大覆盖时改成 security-extended —— 代价是多出一批需要人判断的规则，
+          # 没人看的安全告警等于没有。
+          queries: default
+
+      # JS / TS / actions 都是解释型提取，不需要 build 步骤；
+      # 真加了原生构建（如 TS 编译产物参与分析）时，在这里插入 build。
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'
