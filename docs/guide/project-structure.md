@@ -1,12 +1,17 @@
 # 项目结构 {#project-structure}
 
+> 本仓自 2026-10-31 起**只包含后端**。前端工程（`oauth21` / `posecraft` / `admin` /
+> `poseadmin` / `firewall` / `phonecopy`）已移出索引、改为独立维护；
+> `package.json` 的 `workspaces` 里仍保留它们的名字（`oauth21` / `posecraft` / `firewall`），
+> 是为了让本地同时开发前后端时能复用同一份依赖树 —— 干净检出里没有这些目录时 npm 会跳过。
+
 ## 总览
 
 ```
 nodeServers/
 ├── index.js                    # 入口文件
-├── package.json                # workspaces: packages/*
-├── .env                        # 环境变量（四份模板见 .env.example）
+├── package.json                # workspaces: packages/* + 三个（已迁出的）前端目录名
+├── .env                        # 环境变量（模板见 .env.example / .env.docker.example）
 │
 ├── src/
 │   ├── app.js                  # Fastify 应用创建 + 生命周期编排
@@ -44,9 +49,13 @@ nodeServers/
 │   ├── models/                 # 数据模型（按领域分目录）
 │   │   ├── user/  iam/  oauth21/  session/  key/  notice/  guard/  posecraft/  retroweb/
 │   │
-│   ├── data/                   # 运行时数据
+│   ├── data/                   # 运行时数据（默认配置 JSON：firewall_config / scheduler_config / traffic_stats）
 │   ├── shared/                 # 跨层共享工具
-│   └── public/                 # 静态资源（前端构建产物）
+│   └── public/                 # 运行时上传目录（uploads/）
+│
+├── public/                     # 静态资源根（后端以 @fastify/static 挂载）
+│   ├── uploads/                # 上传文件（gitignore，只保留目录）
+│   └── <前端名>/               # ⚠️ 历史前端构建产物，前端独立后不再更新，见下方说明
 │
 ├── migrations/                 # 数据库迁移文件（按域分目录）
 ├── packages/                   # npm workspace 包
@@ -56,14 +65,17 @@ nodeServers/
 │
 ├── scripts/                    # 运维脚本（release / 迁移 / verify 关卡）
 ├── docker/                     # 镜像与依赖自证
-├── reports/                    # 一次性评审报告（不随代码演进）
-│
-├── oauth21/  firewall/  posecraft/  admin/  poseadmin/  retroweb/  phonecopy/   # 前端源码（各自独立仓/构建）
+├── reports/                    # 一次性评审报告（**已 gitignore，不入库**）
 └── docs/                       # 项目文档
 ```
 
-> `packages/theme-core` 是 **git submodule**，克隆时要 `--recurse-submodules`；
-> `oauth21/` 是独立仓 `oauth-web`（GPL-3.0），提交与推送在该目录内进行。
+> `packages/theme-core` 是 **git submodule**，克隆时要 `--recurse-submodules`。
+>
+> **关于 `public/<前端名>/`**：里面是 190 个历史前端构建产物（`assets/*.js|css`），
+> 后端以 `@fastify/static` 挂载 `public/` 提供访问。前端工程独立之后这些产物**不再更新**，
+> 也不应跟随后端发布 —— 生产上应由各前端自身的 CDN / Nginx 提供。
+> 清理它们属于仓库卫生事项（需同步确认 `Dockerfile` 的 `COPY public` 与部署方式），
+> 尚未执行，此处如实标注。
 
 ## 启动流程
 

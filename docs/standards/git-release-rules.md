@@ -151,19 +151,23 @@ main ─────●──────●──────────●─
 - 合并用 `--no-ff`（保留支线拓扑，changelog 才读得出来）；
 - 支线**不打 tag**——tag 只从 `main` 的提交打。
 
-### 3.4 子前端 / 嵌套仓协作（本仓库族的特殊规则）
+### 3.4 仓库族协作（2026-10-31 起：前后端彻底分仓）
 
-| 仓 | 远程 | 与根仓关系 |
+前端工程已全部移出本仓索引、各自独立，**不再是本地嵌套目录**：
+
+| 仓 | 远程 | 与本仓关系 |
 | --- | --- | --- |
-| CoreFlow（根） | `yijiu2025/CoreFlow` | 单体，跟踪 `src/`、`migrations/` 等 |
-| oauth-web | `yijiu2025/oauth-web` | 独立 git 仓，位于 `oauth21/`，根仓 `.gitignore` 有 `/oauth21/` |
-| retroweb | `yijiu2025/retroweb` | 同上，位于 `retroweb/` |
-| posecraft / firewall / admin / phonecopy | 各自远程 | 同上 |
+| CoreFlow（本仓） | `yijiu2025/CoreFlow` | 只含后端（`src/`、`migrations/`、`scripts/`、`docs/`） |
+| oauth-web | `yijiu2025/oauth-web` | 独立仓（原 `oauth21/` 前端） |
+| 其他前端 | 各自远程 | `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy` |
 
-- 🔴 **嵌套仓的提交 / 推送必须在它自己的目录里做**（`cd oauth21 && git …`），在根仓 `git commit` 对它无效；
-- 根仓的 `.gitignore` **必须带前导斜杠**（`/oauth21/` 而非 `oauth21/`）——否则会误伤 `src/oauth21/`、`migrations/retroweb/` 等后端同名目录，且无任何报错；
-- 每个嵌套仓**独立维护自己的 tag 线**（`v1.0.0` 各自从 1.0.0 起算，与根仓版本号无关）；
-- 根仓 `release.mjs` 已过滤嵌套仓的脏状态，不需要 `--allow-dirty` 兜它们。
+- 前端改动**在本仓无效**：干净检出里已没有这些目录，`git status` 也不会再出现它们；
+- 每个前端仓**独立维护自己的 tag 线**（各自从 `v1.0.0` 起算，与本仓版本号无关）；
+- 本仓 `.gitignore` 保留 `/oauth21/`、`/posecraft/`、`/admin/`、`/poseadmin/`、`/firewall/`、
+  `/phonecopy/` 六条**带前导斜杠**的规则 —— 目的是让本地同时检出前后端时不被误提交，
+  同时**不能**误伤后端同名目录（`src/oauth21/`、`src/app/firewall/`、`migrations/retroweb/` 等），
+  这就是必须带前导斜杠的原因 —— 写成 `oauth21/` 会连 `src/oauth21/` 一起忽略且不报错；
+- `packages/theme-core` 仍是 **git submodule**（不是独立仓），提交前注意它的指针是否漂移。
 
 ### 3.5 GitHub 侧保护设置（每个仓建仓后做一次）
 

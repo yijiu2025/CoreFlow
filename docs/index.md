@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: CoreFlow
-  text: 企业级 Node.js 全栈框架
-  tagline: 基于 Fastify + Sequelize + Vue 3 构建的现代化 Web 应用框架，内置认证、权限、防火墙、OAuth 2.1
+  text: 企业级 Node.js 后端框架
+  tagline: 基于 Fastify v5 + Sequelize v6，内置认证、PBAC 权限、五层防火墙、OAuth 2.1 —— 前端自由选型
   actions:
     - theme: brand
       text: 快速上手
@@ -31,7 +31,10 @@ features:
     details: 应用即插件，一个目录 = 一个完整应用，包含配置、权限、模型、路由、业务逻辑
   - icon: 🚀
     title: 开箱即用
-    details: 内置用户管理、通知系统、验证码、防火墙管理面板，Vue 3 前端开箱即用
+    details: 内置用户管理、通知系统、验证码、密钥信封加密与 Docker/CI 制品，克隆即可跑起来
+  - icon: 🔌
+    title: 前后端解耦
+    details: 只通过 HTTP 线协议耦合（Cookie 会话 / 签名头 / CSRF）；本仓不含任何前端代码，前端可自由选型
 ---
 
 <style>

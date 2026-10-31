@@ -1,6 +1,10 @@
 # 项目简介 {#introduction}
 
-CoreFlow 是一个基于 **Fastify v5 + Sequelize v6 + Vue 3** 构建的企业级全栈框架。它提供了一套完整的后端基础设施，包括认证、权限、防火墙、OAuth 2.1 等核心能力，让开发者可以专注于业务逻辑。
+CoreFlow 是一个基于 **Fastify v5 + Sequelize v6** 的后端框架，提供认证、权限、防火墙、OAuth 2.1 等基础设施，让开发者专注于业务逻辑。
+
+> 自 2026-10-31 起本仓**只包含后端**：前端工程（`oauth21` / `posecraft` / `admin` / `poseadmin` /
+> `firewall` / `phonecopy`）已迁出、各自独立维护。后端与前端之间是**线协议**（HTTP + Cookie），
+> 契约见 [认证集成](/standards/auth-integration)。
 
 ## 核心特性
 
@@ -44,12 +48,11 @@ CoreFlow 是一个基于 **Fastify v5 + Sequelize v6 + Vue 3** 构建的企业�
 
 | 层级   | 技术                      | 版本            |
 | ------ | ------------------------- | --------------- |
-| 运行时 | Node.js                   | ESM             |
+| 运行时 | Node.js                   | ≥18（ESM）      |
 | 框架   | Fastify                   | v5              |
 | ORM    | Sequelize                 | v6              |
 | 数据库 | MySQL                     | 8.0+            |
-| 缓存   | Redis                     | v5 (node-redis) |
-| 前端   | Vue 3 + Vite + TypeScript | -               |
+| 缓存   | Redis（可选）             | v5 客户端 / 6.0+ 服务端 |
 | 认证   | Session + JWT             | -               |
 | 迁移   | Umzug                     | v3              |
 
@@ -60,7 +63,8 @@ CoreFlow 是一个基于 **Fastify v5 + Sequelize v6 + Vue 3** 构建的企业�
 3. **安全默认值**：三级守卫系统，每级可独立拦截
 4. **渐进式增强**：Redis 可选（未配置时用进程内 `MapStore`，配置后要求在线的 503 语义），
    JWT 可选（默认 Session）
-5. **前后端一体**：后端 API + Vue 3 前端统一管理
+5. **前后端解耦**：后端只提供 HTTP 契约（Cookie 会话 / 签名 / CSRF 头），
+   前端可以是任意栈 —— 本仓不再包含任何前端代码
 
 ## 下一步
 

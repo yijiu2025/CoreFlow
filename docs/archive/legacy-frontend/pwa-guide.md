@@ -1,3 +1,13 @@
+> **⚠️ 已迁出本仓（仅作历史参考）**
+>
+> 本文描述的前端工程（`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`）
+> 已于 2026-10-31 从本仓库移除，改为独立维护。**文中出现的源码路径、目录结构与 npm 命令均已失效**，
+> 接入或改造时请以对应前端仓自身的文档为准（`oauth21` → https://github.com/yijiu2025/oauth-web ）。
+>
+> 本仓只保留**后端**相关规范；后端侧的认证集成契约见 [auth-integration](../../standards/auth-integration.md)。
+
+---
+
 # PWA 接入规范（前端项目通用）
 
 > 适用于所有 Vue 3 + Vite 前端项目。新建前端项目时**先确认适用场景**（见第一节末），再按本规范启用。
@@ -229,8 +239,8 @@ files generated
 
 ## 十、参考实现
 
-- [posecraft/vite.config.ts](../../posecraft/vite.config.ts) — SPA + 大文件排除（AI 模型不预缓存）
-- [oauth21/public/sw.js](../../oauth21/public/sw.js) — **移除时的自毁迁移脚本**（不是功能代码，见第六节）
+- `posecraft/vite.config.ts` — SPA + 大文件排除（AI 模型不预缓存）
+- `oauth21/public/sw.js` — **移除时的自毁迁移脚本**（不是功能代码，见第六节）
 - [vite-plugin-pwa 文档](https://vite-pwa-org.netlify.app/)
 
 ## 十一、新建前端项目检查清单

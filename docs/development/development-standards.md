@@ -57,19 +57,7 @@
  */
 ```
 
-**前端 API 模块** (`posecraft/src/api/bannerConfig.ts`):
-
-```ts
-/**
- * Banner 配置前台 API
- * 首页推荐大图 Banner 的查询接口（公开、无登录）
- *
- * @author Claude
- * @since 2026-07-13
- */
-```
-
-**迁移文件** (`migrations/20260713000001-encrypt-phone.js`):
+**迁移文件** (`migrations/20260527000001-baseline-all-tables.js`):
 
 ```js
 /**
@@ -152,14 +140,16 @@ export default new OrderService();
 
 ---
 
-## 性能工程
+## 性能工程（后端）
 
-**所有前端项目适用**（Vite + Vue/React 单页应用）。完整规范（构建期清单 / 懒加载决策树 / SVG 安全压缩 / 预算守门关卡 / nginx 缓存分级 / 指标目标值 / 验证方法论）见 [frontend-performance-rules.md](../standards/frontend-performance-rules.md)，这里只给三条铁律速查：
+后端性能要点见 [best-practices/performance.md](../standards/best-practices/performance.md)
+（缓存与 TTL、连接池、优雅关闭、慢请求告警、限流器往返次数）。三条铁律：
 
 | 铁律 | 一句话 |
 | --- | --- |
-| **先量后改** | 没有生产构建 + 真实浏览器的实测数字，不动一行构建配置（dev server 数据无参考价值） |
-| **懒加载判据** | 省的是首屏带宽不是总带宽 —— 挂载后 1 秒内必然用到的模块，懒加载它是负优化 |
-| **防回归靠守门** | 性能退化功能全绿、无声无息 —— 用预算关卡把首屏静态集 gzip / 单 chunk / dist 总量钉成硬线，关卡必须带毒丸自证（`--poison` 必须红） |
+| **先量后改** | 没有实测数字（`npm run bench` 基线 / 火焰图 / `EXPLAIN`）就不动配置或索引 |
+| **热路径不分配** | 每请求都会走到的路径（守卫、IP 匹配、限流）禁止逐请求 new 对象 / 编译正则 / 查库 |
+| **失效要主动** | 缓存不是"设了 TTL 就安全" —— 权限变更必须主动失效，否则撤销会被推迟到过期 |
 
-落地案例（含完整实测数据与"刻意不动"决策记录）：`../../oauth21/docs/frontend/performance-tuning.md`。
+> 原先这里的「前端性能工程」整节已随前端工程一并迁出，
+> 内容见 [archive/legacy-frontend/frontend-performance-rules.md](../archive/legacy-frontend/frontend-performance-rules.md)。

@@ -1,3 +1,13 @@
+> **⚠️ 已迁出本仓（仅作历史参考）**
+>
+> 本文描述的前端工程（`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`）
+> 已于 2026-10-31 从本仓库移除，改为独立维护。**文中出现的源码路径、目录结构与 npm 命令均已失效**，
+> 接入或改造时请以对应前端仓自身的文档为准（`oauth21` → https://github.com/yijiu2025/oauth-web ）。
+>
+> 本仓只保留**后端**相关规范；后端侧的认证集成契约见 [auth-integration](../../standards/auth-integration.md)。
+
+---
+
 # oauth21 前端安全清单
 
 > 适用于 oauth21 及其同技术栈前端项目（Vue 3 + Vite + TypeScript）。
@@ -274,11 +284,11 @@ VITE_TURNSTILE_SITE_KEY=<从 Cloudflare Dashboard 复制 site key>
    VITE_TURNSTILE_ENABLED=true
    VITE_TURNSTILE_SITE_KEY=<同后端 SITE_KEY>  # 公开 key
    ```
-5. **后端代码已就位**（[src/framework/verify/recaptcha/service.js](../../src/framework/verify/recaptcha/service.js#L133)）：
+5. **后端代码已就位**（[src/framework/verify/recaptcha/service.js](../../../src/framework/verify/recaptcha/service.js#L133)）：
    - `provider === 'turnstile'` 自动用 `_verifyTurnstile`
    - 调 `https://challenges.cloudflare.com/turnstile/v0/siteverify`
    - 失败返 400 `人机验证失败`
-6. **前端代码已就位**（[oauth21/src/composables/useCaptcha.ts](../../oauth21/src/composables/useCaptcha.ts)）：
+6. **前端代码已就位**（`oauth21/src/composables/useCaptcha.ts`）：
    - 3 个 register 组件用 `useCaptcha('register')` 自动选 Turnstile
    - `getToken()` 拿 token 随 `authApi.register` 提交
 7. **测试端到端**：

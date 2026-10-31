@@ -1,8 +1,18 @@
+> **⚠️ 已迁出本仓（仅作历史参考）**
+>
+> 本文描述的前端工程（`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`）
+> 已于 2026-10-31 从本仓库移除，改为独立维护。**文中出现的源码路径、目录结构与 npm 命令均已失效**，
+> 接入或改造时请以对应前端仓自身的文档为准（`oauth21` → https://github.com/yijiu2025/oauth-web ）。
+>
+> 本仓只保留**后端**相关规范；后端侧的认证集成契约见 [auth-integration](../../standards/auth-integration.md)。
+
+---
+
 # 前端统一规范文档
 
 > 适用项目：`oauth21`（登录/注册 SSO 中心）、`firewall`（防火墙）、`admin`（管理后台）、`posecraft`（AI 姿势分析）
 > 目标：统一前端工程结构、组件、服务、安全实践，提升可维护性与交接效率
-> 配套文档：[PWA_GUIDE.md](./pwa-guide.md)（PWA 接入规范）、[theme.md](./theme-baseline.md)（主题基线：CSS 变量与明暗 Store）、[theme-replacement.md](./theme-replacement.md)（主题替换规范：主题包 × 设备 × 页面 × 配色，换 UI/配色不改业务代码）、[coding-standard.md](./coding-standard.md)（编码风格）、[auth-integration.md](./auth-integration.md)（认证集成）、[overview.md](./frontend-overview.md)（架构总览）
+> 配套文档：[PWA_GUIDE.md](./pwa-guide.md)（PWA 接入规范）、[theme.md](./theme-baseline.md)（主题基线：CSS 变量与明暗 Store）、[theme-replacement.md](./theme-replacement.md)（主题替换规范：主题包 × 设备 × 页面 × 配色，换 UI/配色不改业务代码）、[coding-standard.md](./coding-standard.md)（编码风格）、[auth-integration.md](../../standards/auth-integration.md)（认证集成）、[overview.md](./frontend-overview.md)（架构总览）
 
 > **历史说明**：旧版本文档（`FRONTEND_STANDARDS.md.corrupted`）因编辑工具双重编码损坏，已不可读但保留在 git 历史中可查。本文为重写版，按当前项目实际实践沉淀。
 
@@ -275,7 +285,7 @@ JWT 模式：401 → 调 `/oauth2.1/token` 用 refresh_token 刷新，重发原�
 
 ### 9.3 请求签名（防爬）
 
-[utils/sign.ts](../../oauth21/src/utils/sign.ts)（学闲鱼 generateSign）：
+`utils/sign.ts`（学闲鱼 generateSign）：
 - `appKey` 前后端共享（`.env` 配置）
 - 签名串：sha256(`sessionKey & appKey & timestamp & nonce & url & params & body`)
 - params 按 key 排序序列化纳入签名（防 query 篡改）
@@ -417,8 +427,8 @@ npx vite build     # 纯构建
 
 ## 14. 协议与法律合规
 
-参考 [components/common/agreements/](../../oauth21/src/components/common/agreements/)：
-- 协议配置集中在 [agreementConfig.ts](../../oauth21/src/components/common/agreements/agreementConfig.ts)
+参考 `components/common/agreements/`：
+- 协议配置集中在 `agreementConfig.ts`
 - **上线前**必须填真实值（OPERATOR、注册地址、统一社会信用代码、DPO 邮箱、客服电话、版本号、响应时限、保存期限）
 - 网信办/工信部检查会逐项核对处理者身份，**留空或写占位符会被认定为"未公开收集使用规则"**
 

@@ -1,3 +1,13 @@
+> **⚠️ 已迁出本仓（仅作历史参考）**
+>
+> 本文描述的前端工程（`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`）
+> 已于 2026-10-31 从本仓库移除，改为独立维护。**文中出现的源码路径、目录结构与 npm 命令均已失效**，
+> 接入或改造时请以对应前端仓自身的文档为准（`oauth21` → https://github.com/yijiu2025/oauth-web ）。
+>
+> 本仓只保留**后端**相关规范；后端侧的认证集成契约见 [auth-integration](../../standards/auth-integration.md)。
+
+---
+
 # 前端统一规范 {#frontend-coding-standard}
 
 本文档适用于当前仓库中的所有前端项目：`admin/`、`firewall/`、`oauth21/`、`poseadmin/`、`posecraft/`、`phonecopy/`。

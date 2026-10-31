@@ -60,16 +60,14 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 ```
 
-## 前端优化
+## 热路径与限流器
 
-| 优化项         | 做法                                                     |
-| -------------- | -------------------------------------------------------- |
-| 路由懒加载     | `component: () => import('./views/X.vue')`               |
-| 组件异步加载   | `defineAsyncComponent(() => import('./HeavyChart.vue'))` |
-| 虚拟滚动       | `@tanstack/vue-virtual` 替代全量渲染                     |
-| 图表按需加载   | ECharts tree-shaking                                     |
-| 图片/字体优化  | 字体 `font-display: swap`                                |
-| Service Worker | PWA 离线缓存静态资源                                     |
+守卫 / IP 匹配 / 限流是**每个请求都走**的路径，这里的一次额外分配会乘以全站 QPS：
+
+- `net.BlockList` 按规则缓存，不要逐请求 `new`（见 `src/utils/ip.js` 的 `getBlockList`）
+- 正则、`Set`、序列化结果提到模块级，别在函数体里现编
+- `createIpRateLimiter` 的 Redis 路径目前是 5 次往返（`zRemRangeByScore / zCard / zRange / zAdd / expire`），
+  被刷时这 5 次往返本身就是放大倍数 —— 可 pipeline 压到 1–2 次（待办，见 `src/app/oauth21/middleware/rate-limiter.js`）
 
 ## 慢请求告警
 
@@ -80,3 +78,6 @@ if (ms > 2000) {
   request.log.warn({ duration: `${ms}ms`, method: request.method, url: request.url });
 }
 ```
+
+> 前端性能规则（首屏预算 / 懒加载判据 / 构建期清单）已随前端工程迁出，
+> 见 [archive/legacy-frontend/frontend-performance-rules.md](../../archive/legacy-frontend/frontend-performance-rules.md)。

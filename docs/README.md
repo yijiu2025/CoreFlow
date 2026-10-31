@@ -1,62 +1,49 @@
 # 文档地图
 
-CoreFlow 仓库文档的总入口。**写文档前先读本文决定放哪；找文档也从本文进。**
+CoreFlow **后端仓库**的文档总入口。**写文档前先读本文决定放哪；找文档也从本文进。**
 
-## 三类分化
+> 📌 本仓自 2026-10-31 起**只包含后端**。前端工程（`oauth21` / `posecraft` / `admin` /
+> `poseadmin` / `firewall` / `phonecopy`）已全部移出、改为独立维护，
+> 原先描述它们的 18 篇文档已归档到 [archive/legacy-frontend/](./archive/legacy-frontend/)。
+> 在线站点：<https://yijiu2025.github.io/CoreFlow/>
 
-### 🟢 通用规范（适合所有项目）— `standards/`
-
-新前端 / 新项目直接取用。master 在本目录；子项目持副本（改动双写，见文末约定）。
-逐文件清单见 [standards/README.md](./standards/README.md)。
-
-oauth-web（oauth21）另持 `theme-replacement.md` 与 `git-release-rules.md` 两份副本
-—— 它是独立开源仓库，外部用户拿不到 CoreFlow，副本必须自包含。
-
-### 🔵 CoreFlow 项目文档（只适用于本仓库）
+## 结构约定
 
 采用**两级入口**：本文件是总入口（分类地图），每个子目录各持 `README.md` 逐文件登记用途。
+新增文档时必须同时更新所在目录的 `README.md`，否则视为未完成。
 
-| 位置 | 内容 |
+| 位置 | 内容 | 入口 |
+| --- | --- | --- |
+| `guide/` | 入门：简介 / 快速上手 / 项目结构 / CLI / CLI 插件 / AI 辅助开发 | [guide/README.md](./guide/README.md) |
+| `core/` | 核心概念：架构 / 请求流水线 / 认证 / 权限（PBAC）/ 三级守卫 | [core/README.md](./core/README.md) |
+| `development/` | 开发指南：规范总纲 / 应用模块 / 数据模型 / API 路由 / 命名 / 迁移 / 代码审查 / 全链路流程图 | [development/README.md](./development/README.md) |
+| `standards/` | 后端规范：Git 与发版规则 / 认证集成契约 / 最佳实践（安全·性能·测试） | [standards/README.md](./standards/README.md) |
+| `deployment/` | 部署：Docker / 多服务器 / CI·CD / 私钥信封加密（每篇开头有实现状态标注） | [deployment/README.md](./deployment/README.md) |
+| `roadmap/` | 升级路线图（单文件，不设二级入口） | [roadmap/index.md](./roadmap/index.md) |
+| `archive/` | 归档：历史快照 + 已迁出的前端文档 | [archive/README.md](./archive/README.md) |
+
+### 不设二级入口的单文件
+
+| 文档 | 内容 |
 | --- | --- |
-| [guide/](./guide/README.md) | 入门：简介 / 快速上手 / 项目结构 / CLI / CLI 插件 / AI 辅助开发 |
-| [core/](./core/README.md) | 核心概念：架构 / 请求流水线 / 认证 / 权限 / 三级守卫 |
-| [development/](./development/README.md) | 开发指南：规范总纲 / 应用模块 / 数据模型 / API 路由 / 命名 / 迁移 / 代码审查 / 登录与多账号接入模板 / 设备 ID 系列 |
-| [deployment/](./deployment/README.md) | 部署：Docker / 多服务器 / CI/CD（每篇开头有实现状态标注） |
-| [roadmap/index.md](./roadmap/index.md) | 升级路线图（单文件，不设二级入口） |
-| [oauth21-api-report.md](./oauth21-api-report.md) | OAuth 2.1 授权服务器（后端 app）对外 API 报告 |
-| [test-audit-prompts.md](./test-audit-prompts.md) | 测试审计提示词集（让 AI 按固定口径审查测试有效性的提示词模板） |
+| [oauth21-api-report.md](./oauth21-api-report.md) | `/oauth2.1` 授权服务器的对外 API 报告（端点 / 参数 / 响应，按真实路由整理） |
+| [test-audit-prompts.md](./test-audit-prompts.md) | 测试审计提示词集（让 AI 按固定口径审查测试有效性，配合 `conventions/test-effectiveness` 守卫使用） |
 
-### 🟡 其他项目的文档（不住本仓）
+## 与其他仓库的关系
 
 | 项目 | 位置 |
 | --- | --- |
-| oauth-web（oauth21 前端） | [`oauth21/docs/`](../oauth21/docs/)（入口 `README.md`）。多主题 / 多版式规范**已收回本仓**：[docs/standards/theme-replacement.md](./standards/theme-replacement.md) |
-| retroweb | `retroweb/docs/` |
-| 模块级文档 | 与代码共置：`src/app/<模块>/docs/`（firewall 审计报告、auth 权限缓存加固设计）、`packages/log/docs/` |
-| 历史报告 | `reports/`（一次性评审报告，不再维护） |
+| `oauth21` 前端（SSO 登录 / 授权确认） | 独立仓 <https://github.com/yijiu2025/oauth-web> |
+| 其他前端（`posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`） | 各自独立维护，不在本仓 |
+| 模块级文档 | 与代码共置：`src/app/<模块>/docs/`、`packages/log/docs/` |
+| 一次性审查报告 | `reports/`（**已 gitignore**，不入库） |
 
-### ⚪ 归档（不再维护）— `archive/`
+## 写文档的三条约定
 
-过期但有查证价值的历史文档，逐文件清单见 [archive/README.md](./archive/README.md)。
-
-## 新文档放哪（决策顺序）
-
-1. **别的前端 / 新项目也要遵守** → `standards/`（子项目常用的同步副本）
-2. **CoreFlow 自己的事** → `guide/` `core/` `development/` `deployment/` `roadmap/`
-3. **某个前端项目的实例文档** → 该项目仓的 `docs/`（如 oauth-web）
-4. **只服务某个模块** → 与代码共置 `src/app/<模块>/docs/`
-5. **一次性报告 / 已过期的计划** → `archive/`（或 `reports/`）
-
-## 约定
-
-- **每个 `docs/` 目录必须有 README 总入口**：本文即本仓总入口；子仓（oauth21 / retroweb 等）
-  同样持 `docs/README.md`，逐文档登记「路径 + 一句话用途」。新文档**先登记进入口再提交**，
-  漏登记 = 文档不可发现（完整规范：fullstack-rules → references/docs-conventions.md，
-  可执行校验 `assets/docs/check-docs-index.mjs`）
-- 命名：小写连字符（`theme-replacement.md`），不用下划线和全大写
-- 站内互链用相对路径；跨仓引用：本仓文档用 `../../<项目>/...` 相对路径（GitHub 可点，
-  VitePress 死链检查按 `ignoreDeadLinks` 放行），公开子仓（oauth-web）的文档用完整
-  GitHub URL（外部用户没有 CoreFlow）
-- **改通用规范 = 双写**：master（本仓 `standards/`）+ 子项目副本，防副本静默过期；
-  入口索引表同样双写（新增 / 改名 / 归档同步到子仓 README）
-- 本地预览 `npm run docs:dev`；构建 + 死链检查 `npm run docs:build`
+1. **路径必须真实存在**：`scripts/verify/doc-links.mjs` 会校验 `docs/` 内的相对链接；
+   指向本仓之外的路径（已迁出的前端、`packages/*`、根 `AGENTS.md`）会被当作外部指针跳过，
+   但**不要**用它来掩盖失效链接 —— 指向本仓内已删除的文件就是错。
+2. **状态要标注**：设计稿 / 未实现的能力，在文档开头写「📐 设计稿·未实现」；
+   已落地写「✅ 已落地」。部署类文档尤其如此（见 `deployment/README.md`）。
+3. **示例可执行**：命令、路径、环境变量必须能直接复制运行；改了接口或脚本时同步改文档，
+   只写「示意」而不标注的示例，下一个人会当成真的。

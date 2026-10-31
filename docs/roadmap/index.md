@@ -1,159 +1,77 @@
-# 升级路线图 {#roadmap}
+# 路线图 {#roadmap}
 
-基于全面代码审计，制定从前到后、从安全到工程化的完整升级路线。
+> 本文记录**当前真实状态**与**仍未完成的待办**，不保留已经过去的排期。
+> 状态口径：✅ 已完成 / 🚧 进行中 / 📐 设计稿·未实现 / ❌ 已作废。
+>
+> 最近一次核对：2026-10-31（同日完成全量后端审查与仓库脱库，见 `reports/audit/`）。
 
-## 优先级矩阵
+## 已完成（原 Phase 0–1 的落地结果）
 
-```
-紧急 + 重要          重要但不紧急
-┌───────────────────┬────────────────────┐
-│ Phase 0 安全修复   │ Phase 2 TypeScript │
-│ Phase 1.1 优雅关闭 │ Phase 3 前端架构   │
-│ Phase 1.2 健康检查 │ Phase 4 测试体系   │
-│ Phase 1.3 Redis重连│ Phase 6 高级特性   │
-├───────────────────┼────────────────────┤
-│ Phase 1.5 Hooks   │ Phase 1.4 Docker   │
-│ Phase 5.2 Swagger │ Phase 5.1 CI/CD    │
-│ Phase 1.6 清理    │ Phase 6.5 缓存层   │
-└───────────────────┴────────────────────┘
-```
+| 能力 | 状态 | 落点 |
+| --- | --- | --- |
+| 密码哈希 | ✅ | `crypto.scrypt`（libuv 线程池 + 并发背压），bcrypt 仅历史兼容校验 |
+| 环境变量校验 | ✅ | `src/framework/config/env.js`（`validateEnv` / 弱值拒绝 / 跨字段关系） |
+| CORS 白名单 | ✅ | `src/app.js` + `src/framework/auth/origin-guard.js`（生产 fail-closed） |
+| 防火墙 API 鉴权 | ✅ | 走 `registerSecureRoute` + PBAC 权限码 |
+| 优雅关闭 | ✅ | `src/app.js` 的 `onClose`：守卫配置 flush + Redis Pub/Sub 关闭 |
+| 健康检查 | ✅ | `GET /v1/health/live`、`GET /v1/health/ready`（统一响应封装） |
+| Redis 重连与降级 | ✅ | `src/framework/redis/`：「未配置 → 进程内实现」「配置了但连不上 → 503」 |
+| Docker 制品 | ✅ | `Dockerfile`、`docker-compose.yml`、`.dockerignore`、`docker/verify-deps.mjs` |
+| CI / CD | ✅ | `.github/workflows/`：CI（Lint·Verify·Test）、Docs、Publish Image、CodeQL、依赖自证 |
+| Pre-commit | ✅ | Husky + lint-staged（ESLint + Prettier） |
+| 分布式锁 / 队列 / 环形队列 | ✅ | `src/framework/redis/{lock-store,queue-store,ring-queue-store}.js` + 跨进程关卡 |
+| 私钥信封加密 | ✅ | `src/framework/keys/`（AES-GCM + KEK + 迁移脚本 `scripts/migrate-key-encryption.js`） |
+| 三级守卫 + PBAC | ✅ | `src/api/guard.js`（deny 优先 / 通配 / fail-closed） |
+| 权限缓存与指纹失效 | ✅ | `src/framework/auth/{perm-cache,session-perm}.js` + 主动失效 |
 
-## Phase 0: 安全修复 ✅ 已完成
+## 待办（按"能不能被打到"排序）
 
-- [x] 密码哈希化（bcryptjs）
-- [x] 环境变量校验（INSECURE_SECRETS）
-- [x] CORS 白名单化
-- [x] Firewall API 鉴权
+### P0 · 安全与可用性
 
-## Phase 1: 工程化基础
+- [ ] **图形验证码的失败尝试上限已加，但 `/auth/v1/verify-challenge` 不在任何限频作用域内** ——
+  应纳入限频（当前只有 `/oauth2.1/*` 的敏感端点有 IP 限频）
+- [ ] **限流器 Redis 路径 5 次往返**（`zRemRangeByScore / zCard / zRange / zAdd / expire`）→ pipeline 压到 1–2 次，
+  被刷时这 5 倍往返本身就是放大面
+- [ ] **`public/<前端名>/` 下 190 个历史前端构建产物**仍需清理（前后端解耦后不应随后端发布；
+  需同步确认 `@fastify/static` 挂载与 `Dockerfile` 的 `COPY public`）
+- [ ] **依赖告警 296 条**（131 high / 138 moderate / 27 low，见 Dependabot）——
+  先 `npm audit --production` 看生产链路，前端工作区的告警可随各自仓库处理
 
-### 1.1 优雅关闭
+### P1 · 架构收敛
 
-```js
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
-```
+- [ ] **反向依赖清理**：`src/framework/notice/services/email.js` → `src/app/notice/dao`（framework 依赖 app）、
+  `src/shared/user-dao.js` → `src/app/oauth21/dao`（shared 依赖 app）。
+  现有守卫只覆盖 `app → app` 与 `src → scripts`，这两种方向无人拦
+- [ ] **未接线模块决策**：`framework/verify/slider`、`verify/sms`、`verify/voice`
+  要么接线（并补 TTL / 失败上限），要么删除 —— 它们在仓库里只增加"看起来支持"的错觉
+- [ ] **`package.json` workspaces 与已迁出目录**：`oauth21` / `posecraft` / `firewall` 仍列在
+  `workspaces`，而目录已不在本仓。当前可用（npm 跳过缺失项），但语义上应收敛
 
-### 1.2 健康检查端点
+### P2 · 工程质量
 
-```js
-registerSecureRoute(fastify, {
-  name: 'liveness',
-  method: 'GET',
-  url: '/health/live',
-  handler: async (req, reply) => reply.send({ status: 'ok', uptime: process.uptime() })
-});
-```
+- [ ] **覆盖率阈值偏低**：`jest.config.js` 现为 branches 30 / functions 40 / lines 40 / statements 40，
+  且 `collectCoverageFrom` 只覆盖 `src/api`、`src/app`（局部）。建议按模块分级提高，并扩大采集范围
+- [ ] **Swagger / OpenAPI 文档**：目前 `oauth21-api-report.md` 是手写报告；路由已有 `schema`
+  （Fastify 侧），可据此生成 OpenAPI，避免文档与实现再次漂移
+- [ ] **测试有效性守卫的覆盖面**：`conventions/test-effectiveness` 已改为 AST 判据，
+  但"一个文件里有真 import + 大段自证常量"仍拦不住（只能靠 review）
 
-### 1.3 Redis 重连策略
+## 已作废
 
-```js
-reconnectStrategy: retries => {
-  if (retries > 10) return new Error('Redis max retries reached');
-  return Math.min(retries * 200, 5000); // 指数退避，最大 5s
-};
-```
+- ❌ **TypeScript 渐进式迁移**（原 Phase 2）：从未启动。原计划设想的是根级 TS 文件
+  （如 `src/env.ts`、`src/api/guard.ts`，**这些路径今天都不存在**），与现在的
+  `src/framework/*` 分层也对不上。若要做，需重新出方案。
+- ❌ **前端架构升级**（原 Phase 3：Pinia / Vue Router / `App.vue` 瘦身）：
+  前端工程已于 2026-10-31 迁出本仓，随各自前端仓的路线图走。
+- ❌ **原「实施时间线」8 周排期**：已过期，删除（保留排期只会误导读者以为"还在按周推进"）。
 
-### 1.4 Docker 化 📐 设计稿 · 未实现
+## 成功指标（仅后端）
 
-> ⚠️ **2026-09-19 核实：制品不存在。** 仓库内没有 `Dockerfile`、`docker-compose.yml`、
-> `.dockerignore`，也没有 `.github/` 目录 —— 此前标注的 ✅ 属误标。
-> 补齐 Docker 制品已列为 `docs/archive/architecture-review-2026-09-19.md` 阶段 1 的 1.4 项，
-> 它同时是横向扩容的前置条件。
-
-### 1.5 Pre-commit Hooks ✅ 已完成
-
-Husky + lint-staged 已配置。
-
-## Phase 2: TypeScript 渐进式迁移
-
-由底向上逐步迁移：
-
-```
-Step 1: src/env.ts                    -- 环境变量类型定义
-Step 2: src/core/result.ts            -- 纯函数
-Step 3: src/auth/utils/lib/*.ts       -- 工具函数
-Step 4: src/firewall/config.ts        -- 配置常量
-Step 5: src/models/*.ts               -- Sequelize 模型定义
-Step 6: src/api/guard.ts              -- 守卫系统
-Step 7: src/auth/*.ts                 -- 认证系统
-Step 8: src/api/**/v1/*.ts            -- API 路由（最后）
-```
-
-## Phase 3: 前端架构升级
-
-### 3.1 引入 Pinia 状态管理
-
-```
-stores/
-  dashboard.ts        -- summary, logs, wsEvents
-  settings.ts         -- securitySettings
-  firewall.ts         -- activeBlocks, activeWhitelist
-  configs.ts          -- configs (3-level guard tree)
-  ui.ts               -- isDarkMode, modal 开关, locale
-```
-
-### 3.2 引入 Vue Router
-
-```ts
-const routes = [
-  { path: '/', component: () => import('./views/Dashboard.vue') },
-  { path: '/firewall', component: () => import('./views/Firewall.vue') },
-  { path: '/settings', component: () => import('./views/Settings.vue') },
-  { path: '/logs', component: () => import('./views/Logs.vue') }
-];
-```
-
-### 3.3 App.vue 瘦身
-
-从 ~975 行缩减到 ~200 行（仅布局 + 组件引用）。
-
-## Phase 4: 后端测试体系
-
-覆盖率目标：
-
-```json
-{
-  "coverageThreshold": {
-    "global": { "branches": 60, "functions": 70, "lines": 70 }
-  }
-}
-```
-
-## Phase 5: CI/CD 与 API 文档
-
-- GitHub Actions 自动化
-- Swagger / OpenAPI 文档
-
-## Phase 6: 高级特性
-
-- 错误类体系（AppError 继承链）
-- 请求日志中间件
-- 数据库迁移规范化
-- 前端性能优化
-- Redis 缓存层
-- WebSocket 鉴权
-
-## 实施时间线
-
-```
-Week 1:  Phase 0 + Phase 1.1-1.3
-Week 2:  Phase 1.4-1.6 + Phase 5.2
-Week 3-4: Phase 2 (TypeScript 迁移)
-Week 5-6: Phase 3 (前端架构)
-Week 7:  Phase 4 + Phase 5.1
-Week 8+: Phase 6 (按需迭代)
-```
-
-## 成功指标
-
-| 指标                | 目标值           |
-| ------------------- | ---------------- |
-| 安全漏洞 (Critical) | 0                |
-| 测试覆盖率          | > 60%            |
-| TypeScript 覆盖     | > 80%            |
-| API 自动文档        | Swagger UI       |
-| 部署时间            | CI/CD 自动       |
-| 容器化              | Docker + Compose |
-| 前端 App.vue 行数   | < 200            |
-| 首屏加载时间        | < 2s             |
+| 指标 | 目标值 | 当前 |
+| --- | --- | --- |
+| Critical 安全漏洞 | 0 | 本轮审查已修 4 个 🔴（队列丢消息 / 限流死规则 / 代理信任过宽 / 阈值形同虚设） |
+| 测试 | 全绿且"毒丸可变红" | 105 套件 / 1250 用例通过，4 套件按 Redis 条件跳过 |
+| Redis 双后端语义一致 | Map 与 Redis 同形 | 环形队列已补同形对比测试 |
+| 容器化 | Docker + Compose | ✅ |
+| 部署 | CI/CD 自动 | ✅（CI / Docs / Publish Image） |
+| API 文档 | 自动生成 | ❌ 未做（手写报告会漂移） |

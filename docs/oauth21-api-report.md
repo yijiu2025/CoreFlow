@@ -1,5 +1,10 @@
 # OAuth 2.1 授权服务器 API 报告
 
+> **核对口径**：本文按 `src/api/oauth21/` 的**真实路由**整理（末次核对 2026-10-31，
+> 当时 `src/api/oauth21/` 共 23 处 `url:` 声明）。路由是唯一事实来源 ——
+> 改了端点请同步本文，否则下一个人会照文档调一个不存在的路径。
+> 更稳妥的下一步见 [roadmap](/roadmap/)：由 Fastify 的 route `schema` 生成 OpenAPI，替代手写报告。
+
 > 授权服务器（Authorization Server + OIDC Provider）对外 API 总览。
 > 所有端点挂在 `/oauth2.1` 前缀下（system.json `prefix`），issuer = `http://localhost:3000/oauth2.1`。
 > 两种认证模式：**JWT 模式**（`JWT_ENABLED=true`）签发 JWT access/refresh token；**Session 模式**（默认）创建 sid/sid_r Cookie。

@@ -1,30 +1,34 @@
-# 通用规范（standards）
+# 规范（standards）
 
-**适合所有项目的规范**——新前端 / 新项目直接取用。master 在本目录；子项目持副本
-（改动双写，见 [总入口约定](../README.md)）。
+本目录只放**后端相关**规范。2026-10-31 起，本仓不再包含任何前端工程
+（`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy` 均已迁出、
+独立维护），因此原先前端与主题类规范已整体移入
+[archive/legacy-frontend/](../archive/legacy-frontend/)。
 
 ## 规范文档
 
 | 文档 | 内容 |
 | --- | --- |
-| [frontend-standards.md](./frontend-standards.md) | 前端统一规范**总纲**（目录约定 / 分层边界 / 技术栈） |
-| [frontend-overview.md](./frontend-overview.md) | 前端架构总览（技术栈基线） |
-| [coding-standard.md](./coding-standard.md) | 编码风格（类型闸门 / 导出位置 / 样式约定） |
-| [browser-baseline.md](./browser-baseline.md) | 跨内核渲染基线（新建前端强制） |
-| [auth-integration.md](./auth-integration.md) | 认证集成（auth Store 标准实现） |
-| [theme-baseline.md](./theme-baseline.md) | 主题基线（CSS 变量 + 明暗 Store） |
-| [theme-replacement.md](./theme-replacement.md) | **主题替换规范**（主题包 × 设备 × 页面 × 配色，换 UI 不改业务代码） |
-| [theme-package-extraction.md](./theme-package-extraction.md) | 主题框架抽包立项（`packages/theme-core` 纯内核） |
-| [theme-onboarding.md](./theme-onboarding.md) | **新前端接入主题库（skinsuite）完整指南**（安装 → 目录 → bootstrap → 验证） |
-| [pwa-guide.md](./pwa-guide.md) | PWA 接入规范（启用前先确认适用场景） |
-| [frontend-security.md](./frontend-security.md) | 前端安全清单 |
-| [frontend-data-loading-rules.md](./frontend-data-loading-rules.md) | 前端数据加载规则（分层加载 + API 文件收口） |
-| [frontend-performance-rules.md](./frontend-performance-rules.md) | 前端性能工程规则（先量后改 / 懒加载判据 / 预算守门） |
-| [git-release-rules.md](./git-release-rules.md) | **Git 提交 / 版本号 / 分支统一规则** |
+| [git-release-rules.md](./git-release-rules.md) | **Git 提交 / 版本号 / 分支 / 发版统一规则**（`npm run` 脚本、tag 与 Release 的判定依据） |
+| [auth-integration.md](./auth-integration.md) | 认证集成：`/oauth2.1` 作用域、CSRF 与签名契约、接口清单、限频阈值（前后端共同遵守的线协议） |
 
 ## 最佳实践（best-practices）
 
-跨项目通用手段沉淀，逐文件清单见 [best-practices/README.md](./best-practices/README.md)
-（安全 / 性能 / 测试）。
+跨项目通用的**后端**手段沉淀，逐文件清单见 [best-practices/README.md](./best-practices/README.md)：
+
+| 文档 | 内容 |
+| --- | --- |
+| [security.md](./best-practices/security.md) | 密码哈希（scrypt）、防重放、CSRF、限频、失败锁定、Cookie、安全响应头、代理信任 |
+| [performance.md](./best-practices/performance.md) | 缓存（含权限缓存键的正确形态）、连接池、优雅关闭、慢请求告警 |
+| [testing.md](./best-practices/testing.md) | 测试铁律（毒丸判据）、目录结构、分层优先级、覆盖率口径、Redis 套件写法 |
+
+## 已迁出的前端规范
+
+原 `frontend-*` / `theme-*` / `coding-standard` / `browser-baseline` / `pwa-guide` 共 13 篇，
+现位于 [archive/legacy-frontend/](../archive/legacy-frontend/) 且已标注「路径失效」。
+需要前端规范请到对应前端仓：
+
+- `oauth21` → <https://github.com/yijiu2025/oauth-web>
+- 其余前端（`posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`）各自维护
 
 总入口（全部文档的地图）在 [../README.md](../README.md)。
