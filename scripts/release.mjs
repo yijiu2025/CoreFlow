@@ -6,6 +6,8 @@
  *   node scripts/release.mjs              # 预览：只输出决策，不做任何写操作
  *   node scripts/release.mjs --apply      # 执行
  *   node scripts/release.mjs --from v2.5.0  # 指定起算点（复盘/补发用，默认取最近 tag）
+ *   node scripts/release.mjs --kind patch   # 显式指定档位（仅当提交类型判定为"不发版"
+ *                                           # 但确实需要交付时使用，会打印覆盖告警）
  *
  * 判据（权威描述见 AGENTS.md / CLAUDE.md 的「Git 提交与发版」）：
  *   含破坏性变更 → major；含 feat → minor；仅 fix/perf → patch；其余 → 不发版
@@ -48,6 +50,24 @@ const ALLOW_DIRTY = process.argv.includes('--allow-dirty');
 const FROM_OVERRIDE = (() => {
   const i = process.argv.indexOf('--from');
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : null;
+})();
+
+/**
+ * `--kind <major|minor|patch>` 显式指定递增档位
+ *
+ * 逃生门用途：本次只有 chore/docs/ci 类提交（按规则"不发版"），但维护者确实需要一个
+ * 可交付的 tag（例如仓库结构变更、依赖锁同步这类"没有 fix 标签但用户可见"的变化）。
+ * 显式指定时必须打印原因，避免它变成绕过版本规则的后门。
+ */
+const KIND_OVERRIDE = (() => {
+  const i = process.argv.indexOf('--kind');
+  const v = i !== -1 ? process.argv[i + 1] : null;
+  if (!v) return null;
+  if (!['major', 'minor', 'patch'].includes(v)) {
+    console.error(`✗ --kind 只能是 major / minor / patch（收到 ${v}）`);
+    process.exit(1);
+  }
+  return v;
 })();
 
 /* ---------- 同步执行子进程 ---------- */
@@ -418,7 +438,8 @@ async function main() {
   }
 
   const { buckets, breaking } = classify(commits);
-  const kind = decideBump({ buckets, breaking });
+  const decided = decideBump({ buckets, breaking });
+  const kind = KIND_OVERRIDE || decided;
   const summary = Object.entries(buckets)
     .sort((a, b) => b[1].length - a[1].length)
     .map(([type, list]) => `${list.length} ${type}`)
@@ -428,6 +449,11 @@ async function main() {
   if (!kind) {
     log('✓ 提交类型只有 chore/docs/test/style/ci/refactor → 按规则不发版');
     return;
+  }
+
+  if (KIND_OVERRIDE && KIND_OVERRIDE !== decided) {
+    log(`⚠ --kind ${KIND_OVERRIDE} 为显式指定（按提交类型应为 ${decided ?? '不发版'}）；` +
+      `这类覆盖要有明确交付理由，别当常规路径用`);
   }
 
   const next = bumpVersion(from || '0.0.0', kind);

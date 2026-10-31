@@ -70,6 +70,36 @@
 
 ## 未发布（Unreleased）
 
+### 仓库
+
+- **AI 工具目录脱库**：`.claude/`（含 `skills/fullstack-rules` 整套技能、plans、agents、
+  `settings.local.json`）、`.codebuddy`、`.codegraph`、`.mimocode`、`.v2c`、`.video_agent`、
+  `.zcode` 共 47 个文件移出索引。**根因是 `.gitignore` 对已跟踪文件无效** —— 规则早就写了，
+  但这些文件入库在规则之前，所以一直没生效。本地文件与历史提交完整保留。
+- **前端工程脱库**：`posecraft/`（162）、`admin/`（18）、`poseadmin/`（31）、`firewall/`（67）
+  共 278 个文件移出索引（`oauth21/` 早于 986e34e 已脱库）。本仓只做后端，
+  `ci.yml` 与 `.dockerignore` 本就把这些前端工程排除在 CI 图与镜像之外。
+- **移除失效 submodule**：`phonecopy` 目录里只有一个空 `.git/`（从未真正初始化），
+  却仍挂在 `.gitmodules` 上 → 别人 `clone --recurse-submodules` 会去拉一个用不上的仓库。
+- `.gitignore` 补齐 `/posecraft/`、`/admin/`、`/poseadmin/`、`/firewall/`、`/phonecopy/`。
+
+> 以上均为「只删索引」：本地目录照常可用，`git checkout <旧提交> -- <路径>` 可取回。
+
+### 修复
+
+- **`package-lock.json` 与 `package.json` 版本脱节**：发版脚本只 bump `package.json`，
+  lock 的 `version` 落后两个版本 → 同步为当前版本（三方包 `nan@2.28.0` 不受影响）。
+  同时带上一次 `npm install` 的 devDeps 刷新，使 lock 的 `workspaces` / `dependencies` /
+  `devDependencies` 与 `package.json` 完全一致。
+- **`packages/theme-core` submodule 指针漂移**：本地 checkout 比父仓记录点领先 1 个提交，
+  属工作区漂移而非有意升级 → 复原到父仓记录点，不擅自推进主题版本线。
+
+### 工具
+
+- `scripts/release.mjs` 新增 `--kind <major|minor|patch>`：本次改动只有 chore 类提交
+  （按规则「不发版」），但仓库结构变更需要可交付的 tag。该参数是**显式逃生门**，
+  触发与提交类型不一致时会打印覆盖告警，避免变成绕过版本规则的后门。
+
 ## 2.28.1 — 2026-10-16
 
 ### 修复
