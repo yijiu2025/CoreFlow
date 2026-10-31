@@ -130,7 +130,7 @@
   容易被误判成"依赖没装对"）。只做文本替换且要求上一行是 `name` 锚点，
   绝不触碰 `packages` 里同版本号的三方包。
 
-## 未发布（Unreleased）
+## 2.29.4 — 2026-10-31
 
 ### 依赖安全
 
@@ -155,6 +155,8 @@
 - 测试侧：`exceptions.test.js` / `proxy-trust.test.js` 对 `@fastify/static` 用空插件替身 ——
   jest 的 CJS 运行时无法 `require(ESM)`，而这两个套件只验证错误处理器与代理信任判定；
   真实静态服务链路由 CI 的 compose 冒烟覆盖。
+
+## 未发布（Unreleased）
 
 ## 2.28.1 — 2026-10-16
 
