@@ -156,7 +156,7 @@
   jest 的 CJS 运行时无法 `require(ESM)`，而这两个套件只验证错误处理器与代理信任判定；
   真实静态服务链路由 CI 的 compose 冒烟覆盖。
 
-## 未发布（Unreleased）
+## 2.29.5 — 2026-10-31
 
 ### CI / 代码扫描
 
@@ -177,6 +177,8 @@
   `app.addHook('onRequest'|'onClose')` 与限流中间件自身，不是路由 handler；
   全局限流由 `@fastify/rate-limit` 在 05-firewall loader 注册（600 次/60 秒/键）。
 - 结果：代码扫描告警 **6 fixed / 4 dismissed / 0 open**。
+
+## 未发布（Unreleased）
 
 ## 2.28.1 — 2026-10-16
 
