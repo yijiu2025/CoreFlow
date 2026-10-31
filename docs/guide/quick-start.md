@@ -2,8 +2,9 @@
 
 ## 环境要求
 
-- **Node.js** >= 18.0.0（`package.json` 目前没有声明 `engines`，属于约定而非强制；
-  低于 18 会因 ESM / 内置 `fetch` / `AbortSignal.timeout` 等能力缺失而以难懂的方式失败）
+- **Node.js** >= 20.19（`package.json` 已声明 `engines`，CI 与镜像都用 22）
+  —— 下限来自 `@fastify/static@10`：它依赖 ESM-only 的 `content-disposition@3`，
+  需要 `require(esm)` 支持；Node 18 会直接起不来
 - **MySQL** >= 8.0
 - **Redis** >= 6.0（可选：**未配置**时走进程内 `MapStore`；一旦配置就必须连得上，
   否则访问层返回 503，不会静默退回内存）。生产多实例必须配 Redis

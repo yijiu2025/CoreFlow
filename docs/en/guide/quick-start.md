@@ -2,9 +2,9 @@
 
 ## Requirements
 
-- **Node.js** ≥ 18 (`package.json` does not declare `engines`, so this is a convention rather
-  than an enforced constraint — below 18 you will hit confusing failures from missing ESM,
-  `fetch` and `AbortSignal.timeout` support)
+- **Node.js** ≥ 20.19 (`package.json` declares `engines`; CI and the image run 22)
+  — the floor comes from `@fastify/static@10`: it pulls the ESM-only
+  `content-disposition@3`, which needs `require(esm)` support. Node 18 will not boot at all
 - **MySQL** ≥ 8.0
 - **Redis** ≥ 6.0 (optional: when **not configured** the app uses the in-process `MapStore`;
   once configured it must be reachable, otherwise the access layer returns 503 instead of

@@ -36,8 +36,17 @@
   `posecraft/` 107、`models/` 37、`firewall/` 24、`poseadmin/` 22，约 152MB。
   `public/` 只留 `uploads/.gitkeep` 占位 —— `@fastify/static` 的 root 与 `Dockerfile` 的
   `COPY public ./public` 都要求该目录存在，否则干净检出时镜像构建直接失败。
-- [ ] **依赖告警 296 条**（131 high / 138 moderate / 27 low，见 Dependabot）——
-  先 `npm audit --production` 看生产链路，前端工作区的告警可随各自仓库处理
+- [x] **依赖告警 296 条 → 已治理**（2026-10-31）：
+  - **根因**：`workspaces` 里仍挂着三个已迁出的前端目录（`oauth21`/`posecraft`/`firewall`），
+    npm 把整个前端依赖树（vue/vite/tensorflow/echarts…）都算进 lock 与审计 → 告警的主体在这里。
+    移除后 lock 1675 → 878 条目。
+  - **生产链路 21 条（9 high）→ 5 条（0 high）**：fastify 5.12.7 / @fastify/static 10.1.8 /
+    @fastify/multipart 10.1.6 / nodemailer 10.3.1 / sharp 0.35.5 / mysql2 3.24.6 / geoip-lite 2.0.3，
+    外加 6 个补丁级 `overrides`（busboy / brace-expansion / fast-uri / ajv / fast-copy / moment）。
+  - **剩余 5 条 moderate 的成因**：`glob 14` / `minimatch 11` 需跨 major（由 @fastify/static 引入）；
+    `sequelize`→`uuid` 的自动修复建议是**降到 3.30.0**，等于换库，不采纳；待 sequelize v7 再说。
+  - ⚠️ **Node 下限抬到 20.19**（`engines` 已声明）：@fastify/static@10 依赖 ESM-only 的
+    `content-disposition@3`，需要 `require(esm)`。CI 与镜像本就是 Node 22，运行行为未变。
 
 ### P1 · 架构收敛
 

@@ -9,8 +9,13 @@
  * 历史上 `.env.docker.example` 就给了 `172.16.0.0/12`（100 万个地址），
  * 等于把 IP 维度整体让出去。本文件把"什么算过宽"钉死。
  */
-import { describe, it, expect } from '@jest/globals';
-import { describeProxyTrustRisk } from '../app.js';
+import { describe, it, expect, jest } from '@jest/globals';
+// @fastify/static@10 依赖 **ESM-only** 的 content-disposition；Node 22.12+ 的 require(esm)
+// 能跑通，但 jest 的 CJS 运行时不行 —— 于是任何 import src/app.js 的套件都会在加载阶段炸。
+// 本文件只验证代理信任网段的过宽判定（describeProxyTrustRisk），与静态资源无关，所以用空插件替身；
+// 真实的静态服务链路由 CI 的 compose 冒烟（GET /v1/health/ready + 站点资源）覆盖。
+jest.unstable_mockModule('@fastify/static', () => ({ default: async () => {} }));
+const { describeProxyTrustRisk } = await import('../app.js');
 
 describe('describeProxyTrustRisk', () => {
   it('默认值（仅回环）没有风险', () => {

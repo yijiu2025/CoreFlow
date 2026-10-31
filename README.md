@@ -85,7 +85,11 @@ curl -i http://localhost:3000/v1/health/ready   # readiness (503 when a critical
 ```
 
 > Every response is wrapped as `{ code, message, data, timestamp, requestId }` — never a bare object.
-> Requirements: Node ≥ 18 (ESM), MySQL ≥ 8.0; Redis optional (mandatory for multi-instance).
+> Requirements: **Node ≥ 20.19** (ESM; CI and the image both run 22 — see the note below),
+> MySQL ≥ 8.0; Redis optional (mandatory for multi-instance).
+>
+> Node 18 is no longer supported: `@fastify/static@10` pulls the ESM-only
+> `content-disposition@3`, which needs `require(esm)` support (Node ≥ 20.19 / 22.12).
 > Full walkthrough and troubleshooting:
 > [Quick start](https://yijiu2025.github.io/CoreFlow/guide/quick-start).
 

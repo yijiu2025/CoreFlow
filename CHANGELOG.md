@@ -132,6 +132,30 @@
 
 ## 未发布（Unreleased）
 
+### 依赖安全
+
+- **根因先修：`workspaces` 里还挂着三个已迁出的前端目录**（`oauth21` / `posecraft` / `firewall`）。
+  npm 因此仍把整个前端依赖树（vue / vite / tensorflow / echarts / fabric…）算进 lock 与审计结果 ——
+  Dependabot 的绝大部分告警来自这里，与本仓后端无关。移除这三个 workspace 名并重建 lock 后，
+  lock 条目 1675 → 878，**审计从 296 条降到可治理的量级**。
+- **生产依赖：21 条（9 high）→ 5 条（0 high，全 moderate）**：
+  `fastify` 5.8.5 → 5.12.7（含 `find-my-way` / `fast-uri` 等传递依赖）、
+  `@fastify/static` 9.1.3 → 10.1.8（修「Authorization Bypass via Non-Canonical URL Paths」）、
+  `@fastify/multipart` → 10.1.6（含 `@fastify/busboy` 3.2.x DoS 修复）、
+  `nodemailer` 8 → 10.3.1、`sharp` 0.34 → 0.35.5、`mysql2` → 3.24.6（解压炸弹 DoS）、
+  `geoip-lite` → 2.0.3。
+- 用 `overrides` 固定补丁级安全修复（同 major，语义兼容）：
+  `@fastify/busboy ^3.2.1`、`brace-expansion ^5.0.6`、`fast-uri ^3.1.4`、`ajv ^8.18.0`
+  （`$data` ReDoS）、`fast-copy ^4.1.0`、`moment ^2.31.0`。
+- 🔴 **Node 版本下限抬到 20.19**（`package.json` 新增 `engines`）：`@fastify/static@10` 依赖
+  ESM-only 的 `content-disposition@3`，需要 `require(esm)` 支持，Node 18 起不来。
+  CI 与镜像本来就用 Node 22，行为未变；README / 快速上手 / 技术栈表已同步。
+- 仍保留的 5 条 moderate 已在 roadmap 记录成因：`@fastify/static`→`glob 14` /
+  `minimatch 11` 需跨 major；`sequelize`→`uuid` 的"修复建议"是降到 3.30.0（等于拆库，不采纳）。
+- 测试侧：`exceptions.test.js` / `proxy-trust.test.js` 对 `@fastify/static` 用空插件替身 ——
+  jest 的 CJS 运行时无法 `require(ESM)`，而这两个套件只验证错误处理器与代理信任判定；
+  真实静态服务链路由 CI 的 compose 冒烟覆盖。
+
 ## 2.28.1 — 2026-10-16
 
 ### 修复
