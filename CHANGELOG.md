@@ -102,6 +102,27 @@
 
 ## 未发布（Unreleased）
 
+### 文档
+
+- **文档体系重构（前后端分家后的收口）**：18 篇描述已迁出前端工程的规范与接入模板移入
+  `docs/archive/legacy-frontend/`（带弃用横幅 + 索引），`standards/` 由 16 篇收敛到 2 篇 +
+  最佳实践，侧边栏 8 组 → 7 组；归档文档的相对链接按「迁移前基准目录」重算（56 处修正、
+  25 处目标已不在本仓的降级为行内代码）。
+- **修掉与实现相反的事实错误**：`security.md` 的「使用 bcryptjs 做密码哈希」（实际是 scrypt，
+  bcrypt 只做历史校验 + 登录后透明升级）、签名时间窗 5 分钟（实际 2 分钟）、
+  `SCRYPT_CONCURRENCY`（实际 `SCRYPT_MAX_CONCURRENCY`）、不存在的 `SSO_READY` 握手名、
+  `StpUtil` 导入路径、注册端点 `/user/v1/open/register`（实际 `/user/v1/register`）、
+  admin 用户管理 `/admin/v1/iam/users`（实际 `/admin/iam/v1/users`）、
+  roadmap 的「Docker 化未实现，仓库内没有 Dockerfile」（早已实现）。
+- **文档站双语（中文为主语言，新增 `/en/` 英文站）**：`config.ts` 改为 `locales` 结构，
+  中英各自的 nav / sidebar / footer / 搜索与组件文案分开；英文侧边栏只挂已翻译页面；
+  新增 7 篇英文页（index / introduction / quick-start / project-structure / architecture /
+  auth-integration / docker）与 [翻译状态页](https://yijiu2025.github.io/CoreFlow/en/translation-status)。
+- **双语 README（英文为主）**：`README.md` 为英文主入口、`README.zh-CN.md` 为中文版，
+  顶部互加语言切换；`doc-links` 关卡的扫描根补上中文版，避免其链接静默腐烂。
+- `.env.example` 补「资源闸门」段：`SCRYPT_MAX_CONCURRENCY` / `BCRYPT_MAX_CONCURRENCY` /
+  `CAPTCHA_MAX_ATTEMPTS`（都是代码真实读取、此前模板缺失的开关）。
+
 ### 工具
 
 - `scripts/release.mjs` 发版时**同步 `package-lock.json` 的根版本号**（顶层 `version` 与
