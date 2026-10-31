@@ -60,6 +60,14 @@
 
 ## 未发布（Unreleased）
 
+### 修复
+
+- **CI 上真身驱动的签名/登录用例拿到 503**：`REDIS_ENABLED=true` 但没有 Fastify 插件跑过时，
+  `getStore()` 按设计抛 `RedisRequiredError(503)`（fail-fast，不静默退回内存）。
+  `integration/signature.test.js` 与 `service.test.js` 补上
+  `isRedisConfigured() ? connectTestRedis() : 跳过建连` 引导 —— CI 里真连上 Redis 并真正
+  验到 Redis 路径，本地未配置时仍走进程内实现。（仅测试代码，无运行期行为变更。）
+
 ## 2.28.1 — 2026-10-16
 
 ### 修复
