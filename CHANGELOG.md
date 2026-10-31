@@ -158,6 +158,26 @@
 
 ## 未发布（Unreleased）
 
+### CI / 代码扫描
+
+- **CodeQL 从托管 default setup 改为仓库内 advanced setup**（`.github/workflows/codeql.yml`）。
+  托管模式的真正问题是**失败不可诊断**：语言列表由 GitHub 托管，出问题时 Security 页面只给
+  一句「Code scanning configuration error」，没有任何日志。现在语言集合
+  （`javascript-typescript` + `actions`）、权限（`security-events: write` / `actions: read`）、
+  触发条件与并发全部可 review、可 diff、失败日志在 Actions 里。
+  配套把 default setup 置为 `not-configured`（两者并存会互相冲突）。
+  - 坑：`queries: default` 是**无效输入**（只接受 extended / quality / query pack 名），
+    会让 Initialize CodeQL 直接失败 —— 想用默认套件就不要写这个 input，已写进文件注释。
+- **修掉 3 条真实代码扫描告警**：
+  `scripts/release*.mjs` 的 `name.replace('/', '%2F')` 只替换第一处 `/` → 改 `replaceAll`；
+  `oss.service.js` 用 `url.includes('aliyuncs.com')` 判断 OSS 地址（`https://evil.com/?x=aliyuncs.com`
+  也为真）→ 改为 `new URL()` 解析后 **hostname 精确比对** + 强制 https + key 非空，
+  并新增 `src/__tests__/app/user/oss-url.test.js`（10 例）把判据钉死。
+- **4 条 `js/missing-rate-limiting` 按误报 dismiss**，理由写进告警本身：它们指向的是
+  `app.addHook('onRequest'|'onClose')` 与限流中间件自身，不是路由 handler；
+  全局限流由 `@fastify/rate-limit` 在 05-firewall loader 注册（600 次/60 秒/键）。
+- 结果：代码扫描告警 **6 fixed / 4 dismissed / 0 open**。
+
 ## 2.28.1 — 2026-10-16
 
 ### 修复
