@@ -44,7 +44,7 @@ curl -s http://127.0.0.1:3000/v1/health/ready
 | --- | --- |
 | **不用 `npm ci`** | lock 把 `wb-logkit` 记为 `link: packages/log`，那是被 gitignore 排除的独立嵌套仓库，CI/克隆环境不存在 → `npm ci` 必失败。改用 `npm install --workspaces=false`：两个 workspace 包都从 registry 取已发布版本 |
 | **`--ignore-scripts`** | 根 `prepare` 是 `husky`（devDependency），`--omit=dev` 后该命令不存在，不忽略会在安装最后一步炸掉；顺带挡掉 postinstall 供应链面 |
-| **`node:22-slim` 而非 alpine** | `sharp` 是原生模块，slim（glibc）有官方预编译二进制；alpine（musl）要额外装 libc6-compat，镜像升级时容易踩 ABI 不匹配 |
+| **`node:24-slim` 而非 alpine** | `sharp` 是原生模块，slim（glibc）有官方预编译二进制；alpine（musl）要额外装 libc6-compat，镜像升级时容易踩 ABI 不匹配 |
 | **镜像里不放 `.env.production`** | 含密钥且被 gitignore。配置全部由编排层注入；`index.js` 的 dotenv 在文件不存在时静默跳过，不会覆盖已注入变量。**启动必须用 `node index.js`** —— `npm start` 的 `--env-file` 在文件缺失时会直接报错退出 |
 | **tini 作 PID 1** | 应用自己监听 SIGTERM 做优雅关闭（广播 WS 关闭帧 → 关 DB/Redis）。没有 init 时 PID 1 信号语义不同，`docker stop` 会退化成"等 10 秒再 SIGKILL"，手写的优雅关闭等于白写 |
 

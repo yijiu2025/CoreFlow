@@ -2,9 +2,10 @@
 
 ## 环境要求
 
-- **Node.js** >= 20.19（`package.json` 已声明 `engines`，CI 与镜像都用 22）
-  —— 下限来自 `@fastify/static@10`：它依赖 ESM-only 的 `content-disposition@3`，
-  需要 `require(esm)` 支持；Node 18 会直接起不来
+- **Node.js** >= 24（`package.json` 的 `engines` 与仓库里的 `.nvmrc` 都钉在 24，CI 与镜像同版本）
+  —— 两条来源：`@fastify/static@10` 依赖 ESM-only 的 `content-disposition@3`，需要
+  `require(esm)`（Node 18 会直接起不来）；`geoip-lite@2`（防火墙的运行期依赖）声明
+  `engines >= 24`。本地直接 `nvm use` 即可
 - **MySQL** >= 8.0
 - **Redis** >= 6.0（可选：**未配置**时走进程内 `MapStore`；一旦配置就必须连得上，
   否则访问层返回 503，不会静默退回内存）。生产多实例必须配 Redis

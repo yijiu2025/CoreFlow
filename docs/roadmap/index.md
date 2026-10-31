@@ -50,8 +50,9 @@
     `@babel/core` low、`deepmerge` low）：根因在 jest / eslint 自身未升级其 glob / minimatch，
     要等上游 major。**不要**用全局 override 硬压 —— 实测会把 `jest --coverage` 打崩
     （`minimatch is not a function`）。
-  - ⚠️ **Node 下限抬到 20.19**（`engines` 已声明）：@fastify/static@10 依赖 ESM-only 的
-    `content-disposition@3`，需要 `require(esm)`。CI 与镜像本就是 Node 22，运行行为未变。
+  - ⚠️ **Node 下限抬到 24**（`engines >=24` + 仓库根 `.nvmrc`）：`geoip-lite@2`（防火墙运行期
+    依赖）声明 `engines >= 24`，而 CI 与镜像此前都跑 22 —— 只靠"没走到那条被版本门控的路径"
+    在撑。CI / `Dockerfile` 一并升到 24，声明与实际运行对齐。
 
 ### P1 · 架构收敛
 

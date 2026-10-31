@@ -7,6 +7,17 @@
 
 ## 未发布（Unreleased）
 
+### 构建 / 运行时
+
+- **Node 下限 20.19 → 24**：`engines` 改为 `>=24.0.0`，新增仓库根 `.nvmrc`（内容 `24`），
+  CI（`.github/workflows/{ci,docs}.yml` 的 `NODE_VERSION`）与 `Dockerfile`
+  （`ARG NODE_VERSION`）同步升到 24。
+  原因不是"24 更新"，而是 `geoip-lite@2`（防火墙的运行期依赖）**声明 `engines >= 24`**，
+  而 CI 与镜像一直在 22 上跑 —— 那只是"还没走到被版本门控的路径"，
+  声明与实际运行不一致才是真风险。对齐后 `npm install` 不再刷 EBADENGINE。
+  > 没有写 `BREAKING CHANGE` 走 major：本仓是应用不是库，版本号不对运行时兼容性做对外承诺。
+  > **部署方需要把基础镜像 / 宿主 Node 一起升到 24**，这一条写在这里，不靠 semver 去猜。
+
 ### 安全
 
 - **机密扫描告警 1 → 0（误报，证据留档）**：`google_api_key` 指向 6 个 `.bin` 模型权重文件，

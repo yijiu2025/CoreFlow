@@ -2,9 +2,10 @@
 
 ## Requirements
 
-- **Node.js** ≥ 20.19 (`package.json` declares `engines`; CI and the image run 22)
-  — the floor comes from `@fastify/static@10`: it pulls the ESM-only
-  `content-disposition@3`, which needs `require(esm)` support. Node 18 will not boot at all
+- **Node.js** ≥ 24 (`engines` and `.nvmrc` both pin 24; CI and the image run the same line)
+  — two reasons: `@fastify/static@10` pulls the ESM-only `content-disposition@3`, which needs
+  `require(esm)` (Node 18 will not boot at all); and `geoip-lite@2` — a runtime dependency of
+  the firewall — declares `engines >= 24`. Locally, just `nvm use` (the repo ships `.nvmrc`)
 - **MySQL** ≥ 8.0
 - **Redis** ≥ 6.0 (optional: when **not configured** the app uses the in-process `MapStore`;
   once configured it must be reachable, otherwise the access layer returns 503 instead of

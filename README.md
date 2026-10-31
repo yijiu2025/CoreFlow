@@ -85,11 +85,15 @@ curl -i http://localhost:3000/v1/health/ready   # readiness (503 when a critical
 ```
 
 > Every response is wrapped as `{ code, message, data, timestamp, requestId }` — never a bare object.
-> Requirements: **Node ≥ 20.19** (ESM; CI and the image both run 22 — see the note below),
+> Requirements: **Node ≥ 24** (the LTS line CI and the image both run — `.nvmrc` pins it),
 > MySQL ≥ 8.0; Redis optional (mandatory for multi-instance).
 >
-> Node 18 is no longer supported: `@fastify/static@10` pulls the ESM-only
-> `content-disposition@3`, which needs `require(esm)` support (Node ≥ 20.19 / 22.12).
+> Why 24:
+> - `@fastify/static@10` pulls the ESM-only `content-disposition@3`, which needs
+>   `require(esm)` (Node ≥ 20.19 / 22.12) — this is what ruled out Node 18;
+> - `geoip-lite@2` declares `engines: >= 24`, and it is a runtime dependency of the
+>   firewall. Running 22 works today only because we never hit the version-gated path —
+>   declaring 20/22 while shipping 24 would just move that surprise to someone's deploy.
 > Full walkthrough and troubleshooting:
 > [Quick start](https://yijiu2025.github.io/CoreFlow/guide/quick-start).
 

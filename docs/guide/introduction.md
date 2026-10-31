@@ -48,7 +48,7 @@ CoreFlow 是一个基于 **Fastify v5 + Sequelize v6** 的后端框架，提供�
 
 | 层级   | 技术                      | 版本            |
 | ------ | ------------------------- | --------------- |
-| 运行时 | Node.js                   | ≥20.19（ESM）   |
+| 运行时 | Node.js                   | ≥24（ESM，LTS） |
 | 框架   | Fastify                   | v5              |
 | ORM    | Sequelize                 | v6              |
 | 数据库 | MySQL                     | 8.0+            |

@@ -41,7 +41,7 @@ Each one maps to a real failure; read the header comment in `Dockerfile` before 
 | --- | --- |
 | **No `npm ci`** | the lockfile records `wb-logkit` as `link: packages/log`, a gitignored nested repo that does not exist in CI or a clone → `npm ci` always fails. `npm install --workspaces=false` pulls both workspace packages from the registry instead |
 | **`--ignore-scripts`** | the root `prepare` runs `husky` (a devDependency); with `--omit=dev` that binary is absent and the last install step explodes — and it also closes the postinstall supply-chain surface |
-| **`node:22-slim`, not alpine** | `sharp` is a native module; slim (glibc) has official prebuilt binaries, alpine (musl) needs libc6-compat and tends to hit ABI mismatches on base-image upgrades |
+| **`node:24-slim`, not alpine** | `sharp` is a native module; slim (glibc) has official prebuilt binaries, alpine (musl) needs libc6-compat and tends to hit ABI mismatches on base-image upgrades |
 | **No `.env.production` in the image** | it holds secrets and is gitignored. All config is injected by the orchestrator; `index.js`'s dotenv silently skips a missing file and never overrides injected variables. **Start with `node index.js`** — `npm start`'s `--env-file` aborts when the file is missing |
 | **tini as PID 1** | the app handles SIGTERM itself (broadcast WS close frames → close DB/Redis). Without an init, PID 1 signal semantics differ and `docker stop` degrades to "wait 10s then SIGKILL", making the hand-written graceful shutdown pointless |
 

@@ -71,11 +71,15 @@ curl -i http://localhost:3000/v1/health/ready   # 就绪（关键依赖不可用
 ```
 
 > 响应统一封装为 `{ code, message, data, timestamp, requestId }`，不是裸对象。
-> 环境要求：**Node ≥ 20.19**（ESM；CI 与镜像都用 22 —— 原因见下）、MySQL ≥ 8.0；
+> 环境要求：**Node ≥ 24**（CI 与镜像都跑这条 LTS 线，`.nvmrc` 已钉住）、MySQL ≥ 8.0；
 > Redis 可选（多实例必须）。
 >
-> Node 18 不再支持：`@fastify/static@10` 依赖 ESM-only 的 `content-disposition@3`，
-> 需要 `require(esm)` 能力（Node ≥ 20.19 / 22.12）。
+> 为什么是 24：
+> - `@fastify/static@10` 依赖 ESM-only 的 `content-disposition@3`，需要 `require(esm)`
+>   能力（Node ≥ 20.19 / 22.12）—— 这是当初排除 Node 18 的原因；
+> - `geoip-lite@2` 声明 `engines: >= 24`，而它是防火墙的运行期依赖。在 22 上跑只是
+>   因为还没走到那条被版本门控的路径 —— 声明 20/22 却发 24 的镜像，等于把这个惊喜
+>   推给部署方。
 > 完整步骤与排错见 [快速上手](https://yijiu2025.github.io/CoreFlow/guide/quick-start)。
 
 ## 目录结构

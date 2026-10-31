@@ -52,7 +52,7 @@ A complete authorization server:
 
 | Layer | Technology | Version |
 | --- | --- | --- |
-| Runtime | Node.js | ≥ 20.19 (ESM) |
+| Runtime | Node.js | ≥ 24 (ESM, LTS) |
 | Framework | Fastify | v5 |
 | ORM | Sequelize | v6 |
 | Database | MySQL | 8.0+ |
