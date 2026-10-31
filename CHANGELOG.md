@@ -68,7 +68,7 @@
   `isRedisConfigured() ? connectTestRedis() : 跳过建连` 引导 —— CI 里真连上 Redis 并真正
   验到 Redis 路径，本地未配置时仍走进程内实现。（仅测试代码，无运行期行为变更。）
 
-## 未发布（Unreleased）
+## 2.29.2 — 2026-10-31
 
 ### 仓库
 
@@ -99,6 +99,8 @@
 - `scripts/release.mjs` 新增 `--kind <major|minor|patch>`：本次改动只有 chore 类提交
   （按规则「不发版」），但仓库结构变更需要可交付的 tag。该参数是**显式逃生门**，
   触发与提交类型不一致时会打印覆盖告警，避免变成绕过版本规则的后门。
+
+## 未发布（Unreleased）
 
 ## 2.28.1 — 2026-10-16
 
