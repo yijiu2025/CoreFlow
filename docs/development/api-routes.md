@@ -6,6 +6,7 @@
 
 ```js
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import { getModel } from '../../../framework/db/index.js';
 
 export default async function (fastify) {
   registerSecureRoute(fastify, {
@@ -16,7 +17,12 @@ export default async function (fastify) {
     requireLogin: true,
     permission: 'admin:user:read',
     handler: async (request, reply) => {
-      const users = await app.db.user.User.findAll();
+      // `app.db` 只在 loader 期可用；请求期取模型用 getModel('User')。
+      // 业务仓库里更推荐把这行下沉到 DAO（见「应用模块开发」的 DAO / Service 分层）
+      const users = await getModel('User').findAll({
+        attributes: ['uid', 'username', 'email', 'status'],
+        limit: 20
+      });
       return reply.result.success('获取成功', users);
     }
   });

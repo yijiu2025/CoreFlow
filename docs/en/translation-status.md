@@ -21,6 +21,9 @@ demand — the Chinese page is always the canonical source.
 | [Docker deployment](/en/deployment/docker) | [Docker 部署](/deployment/docker) |
 | [Building an app module](/en/development/app-module) | [应用模块开发](/development/app-module) |
 | [Security](/en/standards/best-practices/security) | [安全最佳实践](/standards/best-practices/security) |
+| [API routes](/en/development/api-routes) | [API 路由](/development/api-routes) |
+| [Models](/en/development/models) | [数据模型](/development/models) |
+| [Git commits and releases](/en/standards/git-release-rules) | [Git 提交与发版规则](/standards/git-release-rules) |
 
 ## Chinese only (not translated yet)
 
@@ -30,14 +33,11 @@ demand — the Chinese page is always the canonical source.
 | [CLI 插件开发](/guide/cli-plugins) | writing CLI plugins |
 | [AI 辅助开发](/guide/ai-development) | AI prompts for backend scaffolding |
 | [开发规范总纲](/development/development-standards) | coding conventions |
-| [数据模型](/development/models) | Sequelize models |
-| [API 路由](/development/api-routes) | route conventions |
 | [命名规范](/development/naming) | naming |
 | [数据库迁移](/development/migrations) | migrations |
 | [代码审查标准与流程](/development/code-review) | code review |
 | [注册登录全链路流程图](/development/注册登录全链路流程图) | registration/login sequence diagrams |
 | [OAuth 2.1 API 报告](/oauth21-api-report) | endpoint inventory |
-| [Git 提交与发版规则](/standards/git-release-rules) | commits and releases |
 | [性能最佳实践](/standards/best-practices/performance) | performance |
 | [测试最佳实践](/standards/best-practices/testing) | testing |
 | [私钥信封加密](/deployment/key-encryption) | envelope encryption for private keys |

@@ -78,12 +78,24 @@ export default (sequelize, DataTypes) => {
 
 ## 自动注册
 
-模型加载器扫描 `src/models/{app_name}/` 目录，自动注册为 `app.db.{app_name}.ModelName`：
+模型加载器扫描 `src/models/{app_name}/` 目录，注册到 `app.db.{app_name}.ModelName`：
 
 ```js
+// loader 期（能拿到 app 实例时）
 const article = await app.db.myapp.Article.findByPk(1);
-const user = await app.db.user.User.findByPk(article.user_id);
 ```
+
+请求期手里通常只有 `request`，拿模型走 `getModel()`（按模型名注册，全局唯一）：
+
+```js
+import { getModel } from '../../../framework/db/index.js';
+
+const article = await getModel('Article').findByPk(1);
+const user = await getModel('User').findByPk(article.user_id);
+```
+
+> `app.db` 是 loader 阶段装饰到 Fastify 实例上的；业务代码（路由 / service / DAO）
+> 一律用 `getModel('ModelName')`，不要依赖 `app` 变量在作用域里。
 
 ## DDD 分域
 

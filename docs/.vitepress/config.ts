@@ -224,15 +224,22 @@ const EN_THEME = {
     },
     {
       text: 'Development',
-      items: [{ text: 'Building an app module', link: '/en/development/app-module' }]
+      items: [
+        { text: 'Building an app module', link: '/en/development/app-module' },
+        { text: 'API routes', link: '/en/development/api-routes' },
+        { text: 'Models', link: '/en/development/models' }
+      ]
     },
     {
-      text: 'Integration',
-      items: [{ text: 'Auth integration (wire protocol)', link: '/en/standards/auth-integration' }]
-    },
-    {
-      text: 'Best practices',
-      items: [{ text: 'Security', link: '/en/standards/best-practices/security' }]
+      text: 'Backend standards',
+      items: [
+        { text: 'Git commits and releases', link: '/en/standards/git-release-rules' },
+        { text: 'Auth integration (wire protocol)', link: '/en/standards/auth-integration' },
+        {
+          text: 'Best practices',
+          items: [{ text: 'Security', link: '/en/standards/best-practices/security' }]
+        }
+      ]
     },
     {
       text: 'Deployment',
