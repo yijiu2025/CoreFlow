@@ -1,6 +1,3 @@
 [submodule "packages/theme-core"]
 	path = packages/theme-core
 	url = https://github.com/yijiu2025/theme.git
-[submodule "phonecopy"]
-	path = phonecopy
-	url = https://github.com/yijiu2025/phonecopy.git

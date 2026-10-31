@@ -70,6 +70,10 @@ src.zip
 # 已拆分为独立仓库：https://github.com/yijiu2025/oauth-web（GPL-3.0）
 /oauth21/
 
+/posecraft/
+/admin/
+/phonecopy/
+
 
 # --- 编辑器 / AI 工具配置 ---
 .claude
