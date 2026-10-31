@@ -14,6 +14,9 @@ demand — the Chinese page is always the canonical source.
 | [Quick start](/en/guide/quick-start) | [快速上手](/guide/quick-start) |
 | [Project structure](/en/guide/project-structure) | [项目结构](/guide/project-structure) |
 | [Architecture](/en/core/architecture) | [架构总览](/core/architecture) |
+| [Authentication](/en/core/auth) | [认证系统](/core/auth) |
+| [Permissions (PBAC)](/en/core/permission) | [权限系统 (PBAC)](/core/permission) |
+| [Three-level guard](/en/core/guard) | [三级守卫](/core/guard) |
 | [Auth integration](/en/standards/auth-integration) | [认证集成](/standards/auth-integration) |
 | [Docker deployment](/en/deployment/docker) | [Docker 部署](/deployment/docker) |
 
@@ -24,10 +27,6 @@ demand — the Chinese page is always the canonical source.
 | [命令行工具](/guide/cli) | interactive admin CLI |
 | [CLI 插件开发](/guide/cli-plugins) | writing CLI plugins |
 | [AI 辅助开发](/guide/ai-development) | AI prompts for backend scaffolding |
-| [请求处理流水线](/core/request-pipeline) | the full request path |
-| [认证系统](/core/auth) | session / JWT internals |
-| [权限系统 (PBAC)](/core/permission) | permission model |
-| [三级守卫](/core/guard) | guard levels |
 | [开发规范总纲](/development/development-standards) | coding conventions |
 | [应用模块开发](/development/app-module) | building an app module |
 | [数据模型](/development/models) | Sequelize models |

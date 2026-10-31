@@ -215,7 +215,12 @@ const EN_THEME = {
     },
     {
       text: 'Core concepts',
-      items: [{ text: 'Architecture', link: '/en/core/architecture' }]
+      items: [
+        { text: 'Architecture', link: '/en/core/architecture' },
+        { text: 'Authentication', link: '/en/core/auth' },
+        { text: 'Permissions (PBAC)', link: '/en/core/permission' },
+        { text: 'Three-level guard', link: '/en/core/guard' }
+      ]
     },
     {
       text: 'Integration',

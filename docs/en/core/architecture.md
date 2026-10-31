@@ -115,6 +115,8 @@ Models are registered as `app.db.<namespace>.<ModelName>`, one namespace per dom
 
 ## Next steps
 
+- [Authentication](/en/core/auth) — session / JWT internals
+- [Permissions (PBAC)](/en/core/permission) — the permission model
+- [Three-level guard](/en/core/guard) — System / Group / API guards
 - [Auth integration](/en/standards/auth-integration) — the frontend/backend wire protocol
 - [Project structure](/en/guide/project-structure) — the full directory tree
-- [Quick start](/en/guide/quick-start) — boot an instance
