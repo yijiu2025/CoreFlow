@@ -121,8 +121,13 @@ function findSensitive(commits) {
  *
  * 约定（见 git-release-rules.md 发布 checklist）：
  *   - 未发布区块的标题行固定是 `## 未发布（Unreleased）`；
- *   - 提升后变成 `## <version> — <date>`，紧随其后插入一个**空的**未发布区块（保持幂等）；
+ *   - 提升后变成 `## <version> — <date>`，**在它上面**重建一个空的未发布区块（保持幂等）；
  *   - 未发布区块为空时**不提升**（返回 { changed: false }，避免发一个只有空壳的版本）。
+ *
+ * ⚠️ 空区块必须放在**最新版本之上**，不能放在它下面。
+ * 放在下面时，下一次发版会在原地提升那个占位块，于是新版本落到上一个版本下方，
+ * CHANGELOG 变成 2.29.6 / 2.29.7 / 2.29.0 这种乱序（实测踩过两次：v2.29.6、v2.29.7）。
+ * 正确形态永远是：`## 未发布` → 最新版本 → 次新版本 → …
  *
  * 纯函数：输入旧文本，输出新文本 + 是否变化，便于单测锁住行为。
  * 宿主（scripts/release.mjs / scripts/release-web.mjs）负责读文件、写文件与传日期。
@@ -156,7 +161,9 @@ function bumpChangelog(text, version, date) {
   const placeholder = `${heading}\n`;
 
   return {
-    text: `${head}${newSection}\n${placeholder}${tail}`,
+    // 顺序是 placeholder → newSection：占位块永远在最上面，
+    // 下次发版原地提升它时，新版本才落到旧版本之上（否则会一路往下沉）。
+    text: `${head}${placeholder}\n${newSection}\n${tail}`,
     changed: true
   };
 }

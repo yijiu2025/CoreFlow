@@ -5,6 +5,34 @@
 > 子前端（oauth-web、retroweb、posecraft 等）各自维护独立的 CHANGELOG 与 tag 线，不在本文件内记录。
 > 发版流程见 `docs/standards/git-release-rules.md` 与 fullstack-rules 技能的 `references/release-checklist.md`。
 
+## 未发布（Unreleased）
+
+### 依赖安全
+
+- `@babel/core` 7.29.0 → **7.29.7**（GHSA-4x5r-pxfx-6jf8：sourceMappingURL 任意文件读取），
+  由 `overrides` 顶到首个修复版之上。仅 jest 覆盖率插桩使用；`jest --coverage` 实测仍正常。
+
+### 仓库治理
+
+- **Dependabot 开放告警 296 → 0**。三分之二根本不是"现存漏洞"，而是仓库结构变化后没人清理的残留：
+  - **169 条**挂在已删除的清单文件上（`firewall/` / `admin/` / `poseadmin/` / `posecraft/` 的
+    `package-lock.json`）。这些前端工程 2026-10-31 已移出本仓，按 `not_used` dismiss，
+    理由写进每一条告警。
+  - **127 条**挂在根 `package-lock.json` 上，逐条与当前 lock 比对后：**20 条依赖已不存在**
+    （`not_used`）、**92 条已被 v2.29.4–v2.29.7 的升级修掉**（`fix_started`）、
+    **12 条 vite 告警判据错位**（区间是 `>=8.2.0,<=8.2.3` / `>=8.3.0,<=8.3.2`，
+    当前 lock 里是 6.4.5 → `inaccurate`；Dependabot 快照仍记着已移除工作区的 8.2.2/8.3.1）、
+    **1 条 deepmerge 无上游修复版**（`tolerable_risk`：仅 jest-config 合并静态配置）。
+  - 处理前先按 `vulnerable_version_range` 逐条比对再 dismiss —— 第一版判据用的是
+    "所有副本里的最小版本"，把 eslint 内部的 ajv 6.15.0 也算进了 `>=7` 的公告，
+    属于误判，已重开并改写理由。**dismiss 的理由必须能被复核**，否则等于把告警静音。
+
+### 工具
+
+- **`bumpChangelog` 的顺序缺陷**：提升「未发布」后，重建的空占位块被放在新版本**下面**，
+  于是下一次发版在原地提升它 → 新版本落到旧版本下方（实测已产出 2.29.6 / 2.29.7 的乱序）。
+  改为占位块始终在最上方；补一条"连续两次发版仍保持从新到旧"的回归用例。
+
 ## 2.29.6 — 2026-11-01
 
 ### 依赖安全
@@ -40,7 +68,125 @@
   `src/redis` / `src/log`，这四个目录在 framework 重整后已不存在 ⇒ `--coverage` 实际只统计
   `src/api`，覆盖率数字是**假的高**。改为按当前结构收集（api / app / framework / utils / shared）。
 
-## 未发布（Unreleased）
+## 2.29.5 — 2026-10-31
+
+### CI / 代码扫描
+
+- **CodeQL 从托管 default setup 改为仓库内 advanced setup**（`.github/workflows/codeql.yml`）。
+  托管模式的真正问题是**失败不可诊断**：语言列表由 GitHub 托管，出问题时 Security 页面只给
+  一句「Code scanning configuration error」，没有任何日志。现在语言集合
+  （`javascript-typescript` + `actions`）、权限（`security-events: write` / `actions: read`）、
+  触发条件与并发全部可 review、可 diff、失败日志在 Actions 里。
+  配套把 default setup 置为 `not-configured`（两者并存会互相冲突）。
+  - 坑：`queries: default` 是**无效输入**（只接受 extended / quality / query pack 名），
+    会让 Initialize CodeQL 直接失败 —— 想用默认套件就不要写这个 input，已写进文件注释。
+- **修掉 3 条真实代码扫描告警**：
+  `scripts/release*.mjs` 的 `name.replace('/', '%2F')` 只替换第一处 `/` → 改 `replaceAll`；
+  `oss.service.js` 用 `url.includes('aliyuncs.com')` 判断 OSS 地址（`https://evil.com/?x=aliyuncs.com`
+  也为真）→ 改为 `new URL()` 解析后 **hostname 精确比对** + 强制 https + key 非空，
+  并新增 `src/__tests__/app/user/oss-url.test.js`（10 例）把判据钉死。
+- **4 条 `js/missing-rate-limiting` 按误报 dismiss**，理由写进告警本身：它们指向的是
+  `app.addHook('onRequest'|'onClose')` 与限流中间件自身，不是路由 handler；
+  全局限流由 `@fastify/rate-limit` 在 05-firewall loader 注册（600 次/60 秒/键）。
+- 结果：代码扫描告警 **6 fixed / 4 dismissed / 0 open**。
+
+## 2.29.4 — 2026-10-31
+
+### 依赖安全
+
+- **根因先修：`workspaces` 里还挂着三个已迁出的前端目录**（`oauth21` / `posecraft` / `firewall`）。
+  npm 因此仍把整个前端依赖树（vue / vite / tensorflow / echarts / fabric…）算进 lock 与审计结果 ——
+  Dependabot 的绝大部分告警来自这里，与本仓后端无关。移除这三个 workspace 名并重建 lock 后，
+  lock 条目 1675 → 878，**审计从 296 条降到可治理的量级**。
+- **生产依赖：21 条（9 high）→ 5 条（0 high，全 moderate）**：
+  `fastify` 5.8.5 → 5.12.7（含 `find-my-way` / `fast-uri` 等传递依赖）、
+  `@fastify/static` 9.1.3 → 10.1.8（修「Authorization Bypass via Non-Canonical URL Paths」）、
+  `@fastify/multipart` → 10.1.6（含 `@fastify/busboy` 3.2.x DoS 修复）、
+  `nodemailer` 8 → 10.3.1、`sharp` 0.34 → 0.35.5、`mysql2` → 3.24.6（解压炸弹 DoS）、
+  `geoip-lite` → 2.0.3。
+- 用 `overrides` 固定补丁级安全修复（同 major，语义兼容）：
+  `@fastify/busboy ^3.2.1`、`brace-expansion ^5.0.6`、`fast-uri ^3.1.4`、`ajv ^8.18.0`
+  （`$data` ReDoS）、`fast-copy ^4.1.0`、`moment ^2.31.0`。
+- 🔴 **Node 版本下限抬到 20.19**（`package.json` 新增 `engines`）：`@fastify/static@10` 依赖
+  ESM-only 的 `content-disposition@3`，需要 `require(esm)` 支持，Node 18 起不来。
+  CI 与镜像本来就用 Node 22，行为未变；README / 快速上手 / 技术栈表已同步。
+- 仍保留的 5 条 moderate 已在 roadmap 记录成因：`@fastify/static`→`glob 14` /
+  `minimatch 11` 需跨 major；`sequelize`→`uuid` 的"修复建议"是降到 3.30.0（等于拆库，不采纳）。
+- 测试侧：`exceptions.test.js` / `proxy-trust.test.js` 对 `@fastify/static` 用空插件替身 ——
+  jest 的 CJS 运行时无法 `require(ESM)`，而这两个套件只验证错误处理器与代理信任判定；
+  真实静态服务链路由 CI 的 compose 冒烟覆盖。
+
+## 2.29.3 — 2026-10-31
+
+### 文档
+
+- **文档体系重构（前后端分家后的收口）**：18 篇描述已迁出前端工程的规范与接入模板移入
+  `docs/archive/legacy-frontend/`（带弃用横幅 + 索引），`standards/` 由 16 篇收敛到 2 篇 +
+  最佳实践，侧边栏 8 组 → 7 组；归档文档的相对链接按「迁移前基准目录」重算（56 处修正、
+  25 处目标已不在本仓的降级为行内代码）。
+- **修掉与实现相反的事实错误**：`security.md` 的「使用 bcryptjs 做密码哈希」（实际是 scrypt，
+  bcrypt 只做历史校验 + 登录后透明升级）、签名时间窗 5 分钟（实际 2 分钟）、
+  `SCRYPT_CONCURRENCY`（实际 `SCRYPT_MAX_CONCURRENCY`）、不存在的 `SSO_READY` 握手名、
+  `StpUtil` 导入路径、注册端点 `/user/v1/open/register`（实际 `/user/v1/register`）、
+  admin 用户管理 `/admin/v1/iam/users`（实际 `/admin/iam/v1/users`）、
+  roadmap 的「Docker 化未实现，仓库内没有 Dockerfile」（早已实现）。
+- **文档站双语（中文为主语言，新增 `/en/` 英文站）**：`config.ts` 改为 `locales` 结构，
+  中英各自的 nav / sidebar / footer / 搜索与组件文案分开；英文侧边栏只挂已翻译页面；
+  新增 7 篇英文页（index / introduction / quick-start / project-structure / architecture /
+  auth-integration / docker）与 [翻译状态页](https://yijiu2025.github.io/CoreFlow/en/translation-status)。
+- **双语 README（英文为主）**：`README.md` 为英文主入口、`README.zh-CN.md` 为中文版，
+  顶部互加语言切换；`doc-links` 关卡的扫描根补上中文版，避免其链接静默腐烂。
+- `.env.example` 补「资源闸门」段：`SCRYPT_MAX_CONCURRENCY` / `BCRYPT_MAX_CONCURRENCY` /
+  `CAPTCHA_MAX_ATTEMPTS`（都是代码真实读取、此前模板缺失的开关）。
+
+### 工具
+
+- `scripts/release.mjs` 发版时**同步 `package-lock.json` 的根版本号**（顶层 `version` 与
+  `packages[""]`）。此前只 bump `package.json`，lock 会一路落后（实测脱节过两个版本，
+  容易被误判成"依赖没装对"）。只做文本替换且要求上一行是 `name` 锚点，
+  绝不触碰 `packages` 里同版本号的三方包。
+
+## 2.29.2 — 2026-10-31
+
+### 仓库
+
+- **AI 工具目录脱库**：`.claude/`（含 `skills/fullstack-rules` 整套技能、plans、agents、
+  `settings.local.json`）、`.codebuddy`、`.codegraph`、`.mimocode`、`.v2c`、`.video_agent`、
+  `.zcode` 共 47 个文件移出索引。**根因是 `.gitignore` 对已跟踪文件无效** —— 规则早就写了，
+  但这些文件入库在规则之前，所以一直没生效。本地文件与历史提交完整保留。
+- **前端工程脱库**：`posecraft/`（162）、`admin/`（18）、`poseadmin/`（31）、`firewall/`（67）
+  共 278 个文件移出索引（`oauth21/` 早于 986e34e 已脱库）。本仓只做后端，
+  `ci.yml` 与 `.dockerignore` 本就把这些前端工程排除在 CI 图与镜像之外。
+- **移除失效 submodule**：`phonecopy` 目录里只有一个空 `.git/`（从未真正初始化），
+  却仍挂在 `.gitmodules` 上 → 别人 `clone --recurse-submodules` 会去拉一个用不上的仓库。
+- `.gitignore` 补齐 `/posecraft/`、`/admin/`、`/poseadmin/`、`/firewall/`、`/phonecopy/`。
+
+> 以上均为「只删索引」：本地目录照常可用，`git checkout <旧提交> -- <路径>` 可取回。
+
+### 修复
+
+- **`package-lock.json` 与 `package.json` 版本脱节**：发版脚本只 bump `package.json`，
+  lock 的 `version` 落后两个版本 → 同步为当前版本（三方包 `nan@2.28.0` 不受影响）。
+  同时带上一次 `npm install` 的 devDeps 刷新，使 lock 的 `workspaces` / `dependencies` /
+  `devDependencies` 与 `package.json` 完全一致。
+- **`packages/theme-core` submodule 指针漂移**：本地 checkout 比父仓记录点领先 1 个提交，
+  属工作区漂移而非有意升级 → 复原到父仓记录点，不擅自推进主题版本线。
+
+### 工具
+
+- `scripts/release.mjs` 新增 `--kind <major|minor|patch>`：本次改动只有 chore 类提交
+  （按规则「不发版」），但仓库结构变更需要可交付的 tag。该参数是**显式逃生门**，
+  触发与提交类型不一致时会打印覆盖告警，避免变成绕过版本规则的后门。
+
+## 2.29.1 — 2026-10-31
+
+### 修复
+
+- **CI 上真身驱动的签名/登录用例拿到 503**：`REDIS_ENABLED=true` 但没有 Fastify 插件跑过时，
+  `getStore()` 按设计抛 `RedisRequiredError(503)`（fail-fast，不静默退回内存）。
+  `integration/signature.test.js` 与 `service.test.js` 补上
+  `isRedisConfigured() ? connectTestRedis() : 跳过建连` 引导 —— CI 里真连上 Redis 并真正
+  验到 Redis 路径，本地未配置时仍走进程内实现。（仅测试代码，无运行期行为变更。）
 
 ## 2.29.0 — 2026-10-31
 
@@ -94,126 +240,6 @@
   缺「毒丸判据」这条最重要的约定 —— 全部重写。
 - `guide/quick-start.md`：`cd antigravity`、`DB_NAME`、探针响应结构（统一封装而非裸 `status`）。
 - `standards/auth-integration.md`：注册限频的真实位置与数值（此前写的 3 次/时从未生效）。
-
-## 2.29.1 — 2026-10-31
-
-### 修复
-
-- **CI 上真身驱动的签名/登录用例拿到 503**：`REDIS_ENABLED=true` 但没有 Fastify 插件跑过时，
-  `getStore()` 按设计抛 `RedisRequiredError(503)`（fail-fast，不静默退回内存）。
-  `integration/signature.test.js` 与 `service.test.js` 补上
-  `isRedisConfigured() ? connectTestRedis() : 跳过建连` 引导 —— CI 里真连上 Redis 并真正
-  验到 Redis 路径，本地未配置时仍走进程内实现。（仅测试代码，无运行期行为变更。）
-
-## 2.29.2 — 2026-10-31
-
-### 仓库
-
-- **AI 工具目录脱库**：`.claude/`（含 `skills/fullstack-rules` 整套技能、plans、agents、
-  `settings.local.json`）、`.codebuddy`、`.codegraph`、`.mimocode`、`.v2c`、`.video_agent`、
-  `.zcode` 共 47 个文件移出索引。**根因是 `.gitignore` 对已跟踪文件无效** —— 规则早就写了，
-  但这些文件入库在规则之前，所以一直没生效。本地文件与历史提交完整保留。
-- **前端工程脱库**：`posecraft/`（162）、`admin/`（18）、`poseadmin/`（31）、`firewall/`（67）
-  共 278 个文件移出索引（`oauth21/` 早于 986e34e 已脱库）。本仓只做后端，
-  `ci.yml` 与 `.dockerignore` 本就把这些前端工程排除在 CI 图与镜像之外。
-- **移除失效 submodule**：`phonecopy` 目录里只有一个空 `.git/`（从未真正初始化），
-  却仍挂在 `.gitmodules` 上 → 别人 `clone --recurse-submodules` 会去拉一个用不上的仓库。
-- `.gitignore` 补齐 `/posecraft/`、`/admin/`、`/poseadmin/`、`/firewall/`、`/phonecopy/`。
-
-> 以上均为「只删索引」：本地目录照常可用，`git checkout <旧提交> -- <路径>` 可取回。
-
-### 修复
-
-- **`package-lock.json` 与 `package.json` 版本脱节**：发版脚本只 bump `package.json`，
-  lock 的 `version` 落后两个版本 → 同步为当前版本（三方包 `nan@2.28.0` 不受影响）。
-  同时带上一次 `npm install` 的 devDeps 刷新，使 lock 的 `workspaces` / `dependencies` /
-  `devDependencies` 与 `package.json` 完全一致。
-- **`packages/theme-core` submodule 指针漂移**：本地 checkout 比父仓记录点领先 1 个提交，
-  属工作区漂移而非有意升级 → 复原到父仓记录点，不擅自推进主题版本线。
-
-### 工具
-
-- `scripts/release.mjs` 新增 `--kind <major|minor|patch>`：本次改动只有 chore 类提交
-  （按规则「不发版」），但仓库结构变更需要可交付的 tag。该参数是**显式逃生门**，
-  触发与提交类型不一致时会打印覆盖告警，避免变成绕过版本规则的后门。
-
-## 2.29.3 — 2026-10-31
-
-### 文档
-
-- **文档体系重构（前后端分家后的收口）**：18 篇描述已迁出前端工程的规范与接入模板移入
-  `docs/archive/legacy-frontend/`（带弃用横幅 + 索引），`standards/` 由 16 篇收敛到 2 篇 +
-  最佳实践，侧边栏 8 组 → 7 组；归档文档的相对链接按「迁移前基准目录」重算（56 处修正、
-  25 处目标已不在本仓的降级为行内代码）。
-- **修掉与实现相反的事实错误**：`security.md` 的「使用 bcryptjs 做密码哈希」（实际是 scrypt，
-  bcrypt 只做历史校验 + 登录后透明升级）、签名时间窗 5 分钟（实际 2 分钟）、
-  `SCRYPT_CONCURRENCY`（实际 `SCRYPT_MAX_CONCURRENCY`）、不存在的 `SSO_READY` 握手名、
-  `StpUtil` 导入路径、注册端点 `/user/v1/open/register`（实际 `/user/v1/register`）、
-  admin 用户管理 `/admin/v1/iam/users`（实际 `/admin/iam/v1/users`）、
-  roadmap 的「Docker 化未实现，仓库内没有 Dockerfile」（早已实现）。
-- **文档站双语（中文为主语言，新增 `/en/` 英文站）**：`config.ts` 改为 `locales` 结构，
-  中英各自的 nav / sidebar / footer / 搜索与组件文案分开；英文侧边栏只挂已翻译页面；
-  新增 7 篇英文页（index / introduction / quick-start / project-structure / architecture /
-  auth-integration / docker）与 [翻译状态页](https://yijiu2025.github.io/CoreFlow/en/translation-status)。
-- **双语 README（英文为主）**：`README.md` 为英文主入口、`README.zh-CN.md` 为中文版，
-  顶部互加语言切换；`doc-links` 关卡的扫描根补上中文版，避免其链接静默腐烂。
-- `.env.example` 补「资源闸门」段：`SCRYPT_MAX_CONCURRENCY` / `BCRYPT_MAX_CONCURRENCY` /
-  `CAPTCHA_MAX_ATTEMPTS`（都是代码真实读取、此前模板缺失的开关）。
-
-### 工具
-
-- `scripts/release.mjs` 发版时**同步 `package-lock.json` 的根版本号**（顶层 `version` 与
-  `packages[""]`）。此前只 bump `package.json`，lock 会一路落后（实测脱节过两个版本，
-  容易被误判成"依赖没装对"）。只做文本替换且要求上一行是 `name` 锚点，
-  绝不触碰 `packages` 里同版本号的三方包。
-
-## 2.29.4 — 2026-10-31
-
-### 依赖安全
-
-- **根因先修：`workspaces` 里还挂着三个已迁出的前端目录**（`oauth21` / `posecraft` / `firewall`）。
-  npm 因此仍把整个前端依赖树（vue / vite / tensorflow / echarts / fabric…）算进 lock 与审计结果 ——
-  Dependabot 的绝大部分告警来自这里，与本仓后端无关。移除这三个 workspace 名并重建 lock 后，
-  lock 条目 1675 → 878，**审计从 296 条降到可治理的量级**。
-- **生产依赖：21 条（9 high）→ 5 条（0 high，全 moderate）**：
-  `fastify` 5.8.5 → 5.12.7（含 `find-my-way` / `fast-uri` 等传递依赖）、
-  `@fastify/static` 9.1.3 → 10.1.8（修「Authorization Bypass via Non-Canonical URL Paths」）、
-  `@fastify/multipart` → 10.1.6（含 `@fastify/busboy` 3.2.x DoS 修复）、
-  `nodemailer` 8 → 10.3.1、`sharp` 0.34 → 0.35.5、`mysql2` → 3.24.6（解压炸弹 DoS）、
-  `geoip-lite` → 2.0.3。
-- 用 `overrides` 固定补丁级安全修复（同 major，语义兼容）：
-  `@fastify/busboy ^3.2.1`、`brace-expansion ^5.0.6`、`fast-uri ^3.1.4`、`ajv ^8.18.0`
-  （`$data` ReDoS）、`fast-copy ^4.1.0`、`moment ^2.31.0`。
-- 🔴 **Node 版本下限抬到 20.19**（`package.json` 新增 `engines`）：`@fastify/static@10` 依赖
-  ESM-only 的 `content-disposition@3`，需要 `require(esm)` 支持，Node 18 起不来。
-  CI 与镜像本来就用 Node 22，行为未变；README / 快速上手 / 技术栈表已同步。
-- 仍保留的 5 条 moderate 已在 roadmap 记录成因：`@fastify/static`→`glob 14` /
-  `minimatch 11` 需跨 major；`sequelize`→`uuid` 的"修复建议"是降到 3.30.0（等于拆库，不采纳）。
-- 测试侧：`exceptions.test.js` / `proxy-trust.test.js` 对 `@fastify/static` 用空插件替身 ——
-  jest 的 CJS 运行时无法 `require(ESM)`，而这两个套件只验证错误处理器与代理信任判定；
-  真实静态服务链路由 CI 的 compose 冒烟覆盖。
-
-## 2.29.5 — 2026-10-31
-
-### CI / 代码扫描
-
-- **CodeQL 从托管 default setup 改为仓库内 advanced setup**（`.github/workflows/codeql.yml`）。
-  托管模式的真正问题是**失败不可诊断**：语言列表由 GitHub 托管，出问题时 Security 页面只给
-  一句「Code scanning configuration error」，没有任何日志。现在语言集合
-  （`javascript-typescript` + `actions`）、权限（`security-events: write` / `actions: read`）、
-  触发条件与并发全部可 review、可 diff、失败日志在 Actions 里。
-  配套把 default setup 置为 `not-configured`（两者并存会互相冲突）。
-  - 坑：`queries: default` 是**无效输入**（只接受 extended / quality / query pack 名），
-    会让 Initialize CodeQL 直接失败 —— 想用默认套件就不要写这个 input，已写进文件注释。
-- **修掉 3 条真实代码扫描告警**：
-  `scripts/release*.mjs` 的 `name.replace('/', '%2F')` 只替换第一处 `/` → 改 `replaceAll`；
-  `oss.service.js` 用 `url.includes('aliyuncs.com')` 判断 OSS 地址（`https://evil.com/?x=aliyuncs.com`
-  也为真）→ 改为 `new URL()` 解析后 **hostname 精确比对** + 强制 https + key 非空，
-  并新增 `src/__tests__/app/user/oss-url.test.js`（10 例）把判据钉死。
-- **4 条 `js/missing-rate-limiting` 按误报 dismiss**，理由写进告警本身：它们指向的是
-  `app.addHook('onRequest'|'onClose')` 与限流中间件自身，不是路由 handler；
-  全局限流由 `@fastify/rate-limit` 在 05-firewall loader 注册（600 次/60 秒/键）。
-- 结果：代码扫描告警 **6 fixed / 4 dismissed / 0 open**。
 
 ## 2.28.1 — 2026-10-16
 

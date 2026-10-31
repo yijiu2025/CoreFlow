@@ -174,11 +174,32 @@ describe('bumpChangelog：未发布区块提升为版本号区块', () => {
     expect(text).toContain('## 1.1.0 — 2026-10-28');
     expect(text).toContain('- 修了一个 bug');
     expect(text).toContain('## 1.0.0 — 2026-10-14');
-    // 重建的空未发布区块必须排在新版本之后
+    // 重建的空未发布区块必须排在新版本**之上**：这样下次发版原地提升它时，
+    // 新版本才落到旧版本上方。放下面会让版本号一路往下沉（实测出过 2.29.6/2.29.7 乱序）
     const newIdx = text.indexOf('## 1.1.0 — 2026-10-28');
     const placeholderIdx = text.indexOf('## 未发布（Unreleased）');
     expect(newIdx).toBeGreaterThanOrEqual(0);
-    expect(placeholderIdx).toBeGreaterThan(newIdx);
+    expect(placeholderIdx).toBeGreaterThanOrEqual(0);
+    expect(placeholderIdx).toBeLessThan(newIdx);
+  });
+
+  it('连续发版后版本号仍保持从新到旧排列', () => {
+    const tail = ['', '## 1.0.0 — 2026-10-14', '', '- 首个版本', ''].join('\n');
+    const v11 = bumpChangelog(`${base}${tail}`, '1.1.0', '2026-10-28').text;
+    // 第二版：先补内容（模拟人写未发布区块），再提升
+    const withBody = v11.replace('## 未发布（Unreleased）', '## 未发布（Unreleased）\n\n### 修复\n\n- 修了第二个 bug');
+    const v12 = bumpChangelog(withBody, '1.2.0', '2026-10-29').text;
+
+    const iPlaceholder = v12.indexOf('## 未发布（Unreleased）');
+    const i12 = v12.indexOf('## 1.2.0 — 2026-10-29');
+    const i11 = v12.indexOf('## 1.1.0 — 2026-10-28');
+    const i10 = v12.indexOf('## 1.0.0 — 2026-10-14');
+
+    expect(iPlaceholder).toBeGreaterThanOrEqual(0);
+    // 顺序必须是：未发布 → 1.2.0 → 1.1.0 → 1.0.0
+    expect(iPlaceholder).toBeLessThan(i12);
+    expect(i12).toBeLessThan(i11);
+    expect(i11).toBeLessThan(i10);
   });
 
   it('未发布区块为空时不提升', () => {
