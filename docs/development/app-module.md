@@ -127,6 +127,8 @@ defineRoles([
 
 ```js
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import articleDao from '../../../app/myapp/dao/article.dao.js';
+import articleService from '../../../app/myapp/services/article.service.js';
 
 export default async function (fastify) {
   registerGroupMetadata({
@@ -141,11 +143,10 @@ export default async function (fastify) {
     alias: '获取文章列表',
     method: 'GET',
     url: '/articles',
+    requireLogin: true,
     handler: async (request, reply) => {
-      const user = request.state.user;
-      const articles = await app.db.myapp.Article.findAll({
-        where: { user_id: user.userId }
-      });
+      // 路由层不直接碰模型：统一走 DAO / service（`app.db` 只在 loader 期可用）
+      const articles = await articleDao.findByUser(request.state.user.userId);
       return reply.result.success('获取成功', articles);
     }
   });
@@ -158,11 +159,7 @@ export default async function (fastify) {
     requireLogin: true,
     handler: async (request, reply) => {
       const { title, content } = request.body;
-      const article = await app.db.myapp.Article.create({
-        user_id: request.state.user.userId,
-        title,
-        content
-      });
+      const article = await articleService.createArticle(request.state.user.userId, { title, content });
       return reply.result.success('创建成功', article);
     }
   });
@@ -173,11 +170,12 @@ export default async function (fastify) {
 
 ```js
 // src/app/myapp/dao/article.dao.js
-import sequelize from '../../../db/index.js';
+import { getModel } from '../../../framework/db/index.js';
 
 class ArticleDao {
   getModel() {
-    return sequelize.models.Article;
+    // 模型按领域命名空间注册：src/models/myapp/Article.js → getModel('Article')
+    return getModel('Article');
   }
 
   async findByUser(userId, options = {}) {
@@ -202,7 +200,7 @@ export default new ArticleDao();
 ```js
 // src/app/myapp/services/article.service.js
 import articleDao from '../dao/article.dao.js';
-import Logger from '../../../log/index.js';
+import Logger from '../../../framework/log/index.js';
 
 class ArticleService {
   async createArticle(userId, data) {

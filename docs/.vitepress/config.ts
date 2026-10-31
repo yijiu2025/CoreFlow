@@ -223,8 +223,16 @@ const EN_THEME = {
       ]
     },
     {
+      text: 'Development',
+      items: [{ text: 'Building an app module', link: '/en/development/app-module' }]
+    },
+    {
       text: 'Integration',
       items: [{ text: 'Auth integration (wire protocol)', link: '/en/standards/auth-integration' }]
+    },
+    {
+      text: 'Best practices',
+      items: [{ text: 'Security', link: '/en/standards/best-practices/security' }]
     },
     {
       text: 'Deployment',

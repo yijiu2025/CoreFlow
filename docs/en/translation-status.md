@@ -19,6 +19,8 @@ demand — the Chinese page is always the canonical source.
 | [Three-level guard](/en/core/guard) | [三级守卫](/core/guard) |
 | [Auth integration](/en/standards/auth-integration) | [认证集成](/standards/auth-integration) |
 | [Docker deployment](/en/deployment/docker) | [Docker 部署](/deployment/docker) |
+| [Building an app module](/en/development/app-module) | [应用模块开发](/development/app-module) |
+| [Security](/en/standards/best-practices/security) | [安全最佳实践](/standards/best-practices/security) |
 
 ## Chinese only (not translated yet)
 
@@ -28,7 +30,6 @@ demand — the Chinese page is always the canonical source.
 | [CLI 插件开发](/guide/cli-plugins) | writing CLI plugins |
 | [AI 辅助开发](/guide/ai-development) | AI prompts for backend scaffolding |
 | [开发规范总纲](/development/development-standards) | coding conventions |
-| [应用模块开发](/development/app-module) | building an app module |
 | [数据模型](/development/models) | Sequelize models |
 | [API 路由](/development/api-routes) | route conventions |
 | [命名规范](/development/naming) | naming |
@@ -37,7 +38,6 @@ demand — the Chinese page is always the canonical source.
 | [注册登录全链路流程图](/development/注册登录全链路流程图) | registration/login sequence diagrams |
 | [OAuth 2.1 API 报告](/oauth21-api-report) | endpoint inventory |
 | [Git 提交与发版规则](/standards/git-release-rules) | commits and releases |
-| [安全最佳实践](/standards/best-practices/security) | security checklist |
 | [性能最佳实践](/standards/best-practices/performance) | performance |
 | [测试最佳实践](/standards/best-practices/testing) | testing |
 | [私钥信封加密](/deployment/key-encryption) | envelope encryption for private keys |
