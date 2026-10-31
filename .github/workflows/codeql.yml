@@ -28,6 +28,11 @@ on:
   schedule:
     # 每周一 03:00 UTC —— 规则包更新后无需等下一次提交也能重扫
     - cron: '0 3 * * 1'
+  # 手动触发：想在 Security 页面立刻看到一次完整分析时用
+  #   gh workflow run CodeQL --ref main
+  #   （或 Actions → CodeQL → Run workflow）
+  # default setup 时代没有这个入口，想重扫只能推一个空提交，所以补上。
+  workflow_dispatch:
 
 # 同一分支只保留最新的分析，避免 push 密集时排队
 concurrency:
