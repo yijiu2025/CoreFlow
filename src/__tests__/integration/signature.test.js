@@ -27,6 +27,8 @@ import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 
 import { verifySignature } from '../../framework/auth/signature.js';
+import { isRedisConfigured } from '../../framework/redis/utils.js';
+import { connectTestRedis, disconnectTestRedis } from '../helpers/redis-connection.js';
 
 const APP_KEY = 'test-sign-app-key';
 /** 复原环境，避免污染同进程其他测试 */
@@ -51,6 +53,12 @@ async function freshCookie() {
 }
 
 beforeAll(async () => {
+  // 真身中间件会 `getStore('h5_token')`：配了 Redis 却没人建连时，访问层按设计抛
+  // RedisRequiredError(503)（fail-fast，不静默退回内存）。CI 里 REDIS_ENABLED=true
+  // 但没有 Fastify 插件跑过 → 必须在这里显式建连，否则所有用例都收到 503。
+  // 没配 Redis 时走进程内 MapStore，无需建连。
+  if (isRedisConfigured()) await connectTestRedis();
+
   process.env.SIGN_APP_KEY = APP_KEY;
 
   app = Fastify({ logger: false });
@@ -69,6 +77,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app?.close();
+  if (isRedisConfigured()) await disconnectTestRedis();
   if (originalAppKey === undefined) delete process.env.SIGN_APP_KEY;
   else process.env.SIGN_APP_KEY = originalAppKey;
 });

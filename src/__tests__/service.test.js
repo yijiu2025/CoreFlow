@@ -20,8 +20,10 @@
  * @since 2026-08-17
  * @since 2026-10-31 改为真身驱动（此前为纯常量自证，生产代码零覆盖）
  */
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, beforeAll, afterAll, jest } from '@jest/globals';
 import crypto from 'node:crypto';
+import { isRedisConfigured } from '../framework/redis/utils.js';
+import { connectTestRedis, disconnectTestRedis } from './helpers/redis-connection.js';
 
 /** 由用例驱动的替身状态 */
 const fake = {
@@ -48,6 +50,17 @@ const ENCRYPTED = 'ZmFrZS1jaXBoZXJ0ZXh0';
 beforeEach(() => {
   fake.timestampOk = true;
   fake.decryptImpl = async () => '{}';
+});
+
+// 真身的 nonce 去重走 `createNonceStore()` → Redis（或未配置时的进程内实现）。
+// 配了 Redis 而没人建连时访问层按设计抛 RedisRequiredError(503)，CI 里就是这样；
+// 因此这里显式建连（本地未配置 Redis 时无需建连，自动走内存实现）。
+beforeAll(async () => {
+  if (isRedisConfigured()) await connectTestRedis();
+});
+
+afterAll(async () => {
+  if (isRedisConfigured()) await disconnectTestRedis();
 });
 
 describe('decryptLoginRequest · RSA 分支的三道闸', () => {
