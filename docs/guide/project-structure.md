@@ -59,7 +59,7 @@ nodeServers/
 │
 ├── migrations/                 # 数据库迁移文件（按域分目录）
 ├── packages/                   # npm workspace 包
-│   ├── log/                    # wb-logkit
+│   ├── log/                    # wb-logkit（嵌套仓，**本地 gitignore**；CI/镜像从 registry 取 ^0.5.0）
 │   ├── theme-core/             # skinsuite（git submodule）
 │   └── shared-device/          # stable-deviceid
 │

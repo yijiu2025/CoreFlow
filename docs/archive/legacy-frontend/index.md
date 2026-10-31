@@ -1,6 +1,6 @@
 # 已迁出的前端文档（legacy-frontend）
 
-> **⚠️ 这里的 18 篇文档描述的前端工程已不在本仓库。**
+> **⚠️ 这里的文档描述的前端工程已不在本仓库。**
 >
 > 2026-10-31 起，`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`
 > 六个前端工程全部移出本仓索引、改为独立维护（`oauth21` → <https://github.com/yijiu2025/oauth-web>）。
@@ -34,6 +34,12 @@
 | [多账号免切接入模板.md](./多账号免切接入模板.md) | 抖音式多账号免密切换 |
 | [设备ID全链路梳理.md](./设备ID全链路梳理.md) | 设备 ID / 指纹的生成·存储·传递·消费（六端） |
 | [设备ID稳定性评估与架构图.md](./设备ID稳定性评估与架构图.md) | 设备 ID 稳定性分析与收敛方案 |
+
+## AI 前端提示词（原 `docs/guide/ai-development.md`）
+
+| 文档 | 原主题 |
+| --- | --- |
+| [ai-frontend-prompts.md](./ai-frontend-prompts.md) | 用 AI 生成前端 API 模块 / Pinia Store / 页面 / 表单的提示词模板 |
 
 ## 主题计划（原 `docs/plans/`）
 

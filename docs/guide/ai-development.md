@@ -1,6 +1,6 @@
 # AI 辅助开发 {#ai-development}
 
-本框架的目录结构和约定高度统一，非常适合使用 AI（如 Claude、ChatGPT、Cursor）生成适配项目规范的前后端代码。
+本框架的目录结构和约定高度统一，非常适合使用 AI（如 Claude、ChatGPT、Cursor）生成适配项目规范的**后端代码**。
 
 ## 核心理念
 
@@ -125,70 +125,18 @@ export default (sequelize, DataTypes) => {
 
 ## 前端代码生成
 
-### 生成 API 模块
+::: warning 本仓不含前端
+自 2026-10-31 起，前端工程（`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` /
+`phonecopy`）已迁出本仓库、各自独立维护，本仓**只生成后端代码**。
 
-```
-帮我创建博客系统的前端 API 模块，接口：
-- GET /blog/v1/posts — 获取文章列表
-- POST /blog/v1/posts — 创建文章
-- GET /blog/v1/posts/:id — 获取文章详情
-- PUT /blog/v1/posts/:id — 更新文章
-- DELETE /blog/v1/posts/:id — 删除文章
-- GET /blog/v1/posts/:id/comments — 获取评论
-- POST /blog/v1/posts/:id/comments — 发表评论
-```
+给 AI 写前端的提示词（API 模块 / Pinia Store / 页面 / 表单）已随文档一起归档，
+仅作历史参考：
 
-AI 会生成：
+- [前端 AI 提示词（已归档）](../archive/legacy-frontend/ai-frontend-prompts.md)
 
-```typescript
-// api/blog.ts
-import service from '@/utils/request';
-
-export const blogApi = {
-  // 文章
-  getPosts: (params?: { page?: number; pageSize?: number }) => service.get('/blog/v1/posts', { params }),
-  getPost: (id: number) => service.get(`/blog/v1/posts/${id}`),
-  createPost: (data: { title: string; content: string }) => service.post('/blog/v1/posts', data),
-  updatePost: (id: number, data: { title?: string; content?: string; status?: number }) =>
-    service.put(`/blog/v1/posts/${id}`, data),
-  deletePost: (id: number) => service.delete(`/blog/v1/posts/${id}`),
-
-  // 评论
-  getComments: (postId: number) => service.get(`/blog/v1/posts/${postId}/comments`),
-  createComment: (postId: number, data: { content: string }) => service.post(`/blog/v1/posts/${postId}/comments`, data)
-};
-```
-
-### 生成 Store
-
-```
-帮我创建博客系统的 Pinia store，功能：
-- 文章列表和详情的缓存
-- 创建/更新/删除文章的乐观更新
-- 登录状态检查
-```
-
-### 生成页面组件
-
-```
-帮我创建博客文章列表页面，要求：
-- 使用 Vue 3 Composition API + <script setup lang="ts">
-- 表格展示文章列表（标题、作者、状态、创建时间）
-- 支持分页
-- 有新增、编辑、删除按钮
-- 使用 v-auth 指令控制按钮权限
-- 支持深色模式
-```
-
-### 生成表单组件
-
-```
-帮我创建文章编辑表单组件，要求：
-- 使用 vee-validate + zod 做表单验证
-- 字段：标题（必填，最大200字）、内容（富文本）、状态（下拉选择）
-- 提交时调用 blogApi.createPost 或 blogApi.updatePost
-- 支持 i18n
-```
+本仓与前端之间是**线协议**（HTTP + Cookie + 签名头），契约见
+[认证集成](../standards/auth-integration.md)。
+:::
 
 ---
 
@@ -220,46 +168,15 @@ export const blogApi = {
 5. 包含完整的 JSDoc 注释
 ```
 
-### 前端页面生成提示词
-
-```markdown
-请根据以下需求生成前端页面代码：
-
-## 项目框架信息
-
-- 框架：Vue 3 + TypeScript + Pinia + Vue Router
-- HTTP：Axios（withCredentials: true）
-- 认证：Cookie 自动携带，authStore 管理状态
-- 权限：v-auth="权限编码" 指令
-- 样式：Tailwind CSS + HSL 变量
-
-## 后端接口
-
-[接口列表]
-
-## 需求描述
-
-[页面功能需求]
-
-## 输出要求
-
-1. 使用 <script setup lang="ts">
-2. 使用 Composition API
-3. 包含完整的类型定义
-4. 支持深色模式
-5. 包含 i18n 翻译 key
-```
-
----
-
 ## AI 生成的最佳实践
 
 ### 1. 提供足够的上下文
 
 ```
-❌ "帮我写一个用户管理页面"
-✅ "帮我写一个用户管理页面，后端接口是 GET/POST/PUT/DELETE /admin/v1/iam/users，
-   使用 registerSecureRoute 注册，需要 admin 角色，表格展示用户名、邮箱、角色、状态"
+❌ "帮我写个用户管理接口"
+✅ "帮我写 GET/POST/PUT/DELETE /admin/iam/v1/users 四个路由，
+   用 registerSecureRoute 注册、需要 admin 角色，
+   字段含 username/email/roles/status，列表要分页，删除走软删（delete_version）"
 ```
 
 ### 2. 明确技术栈
@@ -274,11 +191,11 @@ export const blogApi = {
 ### 3. 分步骤生成
 
 ```
-步骤 1: 生成模型（models/blog/Post.js）
+步骤 1: 生成模型（models/blog/Post.js）+ 迁移（migrations/blog/）
 步骤 2: 生成权限（app/blog/permission/）
-步骤 3: 生成路由（api/blog/v1/post.js）
-步骤 4: 生成前端 API（api/blog.ts）
-步骤 5: 生成页面（views/blog/PostList.vue）
+步骤 3: 生成 DAO / services（app/blog/dao|services/）
+步骤 4: 生成路由（api/blog/v1/post.js）
+步骤 5: 补测试（src/__tests__/blog/，驱动真实实现）
 ```
 
 ### 4. 让 AI 参考现有代码
@@ -297,8 +214,8 @@ export const blogApi = {
 | 新建应用 | 业务需求描述           | 完整的应用目录（config + permission + models + api） |
 | 新增接口 | 接口路径 + 参数 + 权限 | 路由文件 + Schema 定义                               |
 | 新增模型 | 字段列表 + 关系        | 模型文件 + 迁移文件                                  |
-| 新增页面 | 页面功能 + 接口列表    | Vue 组件 + API 模块 + Store                          |
 | 新增权限 | 权限编码 + 角色        | permission/index.js + roles.js                       |
+| 新增测试 | 被测模块 + 契约要点    | `src/__tests__/` 用例（须加载生产实现，不得内联副本） |
 | 代码重构 | 现有代码 + 改进目标    | 重构后的代码                                         |
 
 ---
@@ -308,5 +225,6 @@ export const blogApi = {
 1. **AI 生成的代码需要人工审查**：检查权限配置、SQL 注入风险、业务逻辑正确性
 2. **迁移文件需要手动运行**：AI 生成迁移后，需要 `npm run migrate` 执行
 3. **权限需要手动分配**：角色定义后，需要在管理后台给用户分配角色
-4. **前端路由需要手动配置**：AI 生成页面后，需要在 `router/index.ts` 中添加路由
+4. **测试必须是「真身」驱动**：AI 常写出「在测试文件里复制一份实现、再断言这份副本」的假测试，
+   `src/__tests__/conventions/test-effectiveness.test.js` 会拦（判据已改为 AST + 仓库内路径解析）
 5. **环境变量需要手动配置**：如 SMTP、OAuth 客户端密钥等

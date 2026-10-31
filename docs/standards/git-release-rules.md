@@ -165,8 +165,8 @@ main ─────●──────●──────────●─
 - 每个前端仓**独立维护自己的 tag 线**（各自从 `v1.0.0` 起算，与本仓版本号无关）；
 - 本仓 `.gitignore` 保留 `/oauth21/`、`/posecraft/`、`/admin/`、`/poseadmin/`、`/firewall/`、
   `/phonecopy/` 六条**带前导斜杠**的规则 —— 目的是让本地同时检出前后端时不被误提交，
-  同时**不能**误伤后端同名目录（`src/oauth21/`、`src/app/firewall/`、`migrations/retroweb/` 等），
-  这就是必须带前导斜杠的原因 —— 写成 `oauth21/` 会连 `src/oauth21/` 一起忽略且不报错；
+  同时**不能**误伤后端同名目录（`src/api/oauth21/`、`src/app/firewall/`、`migrations/retroweb/` 等），
+  这就是必须带前导斜杠的原因 —— 写成 `oauth21/` 会连 `src/api/oauth21/` 一起忽略且不报错；
 - `packages/theme-core` 仍是 **git submodule**（不是独立仓），提交前注意它的指针是否漂移。
 
 ### 3.5 GitHub 侧保护设置（每个仓建仓后做一次）

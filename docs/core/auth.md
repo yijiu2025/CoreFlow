@@ -17,7 +17,8 @@
 并对历史 bcrypt 哈希（`$2a$` / `$2b$` / `$2y$`）保留**只校验**能力，登录成功后按需重写为 scrypt。
 **新代码不得再引入 `bcrypt` / `bcryptjs`**：同步版本会冻结事件循环，异步版本同样是纯 JS 计算，
 实测 10 次 `bcrypt.hash` 会让事件循环最长冻结 649ms，而 scrypt 为 22ms。
-scrypt 并发有全局上限（`SCRYPT_CONCURRENCY`，默认 16），超限排队而不是堆满线程池。
+scrypt 并发有全局上限（`SCRYPT_MAX_CONCURRENCY`，默认 16），超限排队而不是堆满线程池；
+历史 bcrypt 校验单独限流（`BCRYPT_MAX_CONCURRENCY`，默认 4），因为它每次会阻塞主线程约 68ms。
 
 ## Session 双令牌机制
 
@@ -167,7 +168,7 @@ window.addEventListener('message', event => {
 });
 ```
 
-完整握手（`SSO_READY`、主题同步、兜底超时）见
+完整的 iframe 握手（父窗口 ↔ 登录页的消息往来、兜底超时）见
 [docs/standards/auth-integration.md](../standards/auth-integration.md)。
 
 ## 获取当前用户

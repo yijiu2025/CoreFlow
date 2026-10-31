@@ -1,6 +1,7 @@
 # 代码审查标准与流程 {#code-review}
 
-> 适用范围：`src/`、`migrations/`、`scripts/`、以及前端工作区（`oauth21/`、`posecraft/`、`firewall/`、`admin/`）。
+> 适用范围：仅后端 —— `src/`、`migrations/`、`scripts/`、`docs/`。
+> （前端工程 `oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy` 已于 2026-10-31 迁出本仓，各自独立审查。）
 > 配套制品：PR 模板 `.github/PULL_REQUEST_TEMPLATE.md`、审查归属 `.github/CODEOWNERS`。
 
 ---
@@ -181,7 +182,8 @@ CI     → L3 全部 + L1 的机械部分（守卫/回归/关卡）
       相关测试**必须变红**。照绿 = 该测试没在验证这个东西。实验后务必恢复。
 - [ ] 是否覆盖了**降级路径**（无 Redis / 无 DB）与**边界**，而不是只覆盖 happy path？
 - [ ] 一个测试文件是否只注册了一组路由？（`registerSecureRoute` 的 `_routeRegistry` 是模块级全局状态且无重置入口）
-- [ ] 新增的伪测试是否被登记进 `KNOWN_INEFFECTIVE_TESTS`？该清单**只减不增**且条数被守卫冻结。
+- [ ] 新增测试是否真的**加载了生产实现**？（判据见 `src/__tests__/conventions/test-effectiveness.test.js`：
+      AST 解析 + 仓库内路径解析 —— 注释里写 `from '../x'`、夹具字符串、`import('crypto')` 一律不算）
 
 ---
 
@@ -322,21 +324,22 @@ npm run verify:all    # 跨进程验收（退出码 0/1/2/3）
 
 ---
 
-## 九、存量债务台账（2026-09-20 实测）
+## 九、存量债务台账（2026-09-20 首测 · 2026-10-31 复核）
 
 > 本表只记录**已实测确认**的项。改完之后请更新本表——一份诚实的台账比一份完美的规划有用得多。
+> 状态列：✅ 已修 / ⏳ 仍在 / — 不再适用。
 
-| # | 项 | 实测证据 | 建议级别 |
+| # | 项 | 实测证据 | 状态 |
 | --- | --- | --- | --- |
-| 1 | `.husky/pre-commit` 钩子被注释，本地无任何检查 | 文件内容为两行注释 | L1（Phase 1 第 1 条） |
-| 2 | 脚本仍用 `sequelize.sync()` | `scripts/initSuperAdmin.js`（`sync({ alter: true })`）、`scripts/setup-superadmin.js`（`sync()`） | L1 |
-| 3 | 部分业务接口绕过 `reply.result` | `src/api/**` 多处裸 `reply.send({ code, message })`，缺 `data`/`timestamp`/`requestId`；另有 OAuth 协议例外（合法，需登记） | L1 |
-| 4 | `package.json` 版本与 tag 不一致 | `version: 2.6.0` vs 最近 tag `v2.9.0` | L2 |
-| 5 | 文档路径过时 | `AGENTS.md` 写 `src/loader/registry/`，实际 `src/framework/loader/registry/`；[后端检查规划](../archive/backend-review-plan.md) 写 `src/auth/`、`src/db/`、`src/redis/` | L1（误导新人） |
-| 6 | [后端检查规划](../archive/backend-review-plan.md) 中"编码乱码 P0"已不成立 | 全量扫 `src/` 已无乱码字符 | L2（删除过时条目） |
-| 7 | 存量伪测试清单仍挂 14 条 | `test-effectiveness.test.js` 的 `KNOWN_INEFFECTIVE_TESTS` | L2（只减不增） |
-| 8 | `session.js` 拆分评估未开始 | 见 [架构评估](../archive/architecture-review-2026-09-19.md) P2 项 | L2 |
-| 9 | 前端类型检查未进 CI | `.github/workflows/ci.yml` 无 `vue-tsc` 步骤 | L1 |
+| 1 | `.husky/pre-commit` 钩子被注释，本地无任何检查 | 文件内容为两行注释 | ⏳ L1（Phase 1 第 1 条） |
+| 2 | 脚本仍用 `sequelize.sync()` | ~~`scripts/initSuperAdmin.js`（`sync({ alter: true })`）~~ 已删除；`scripts/setup-superadmin.js`（`sync()`）仍在 | ⏳ L1（仅剩 1 处） |
+| 3 | 部分业务接口绕过 `reply.result` | `src/api/**` 多处裸 `reply.send({ code, message })`，缺 `data`/`timestamp`/`requestId`；另有 OAuth 协议例外（合法，需登记） | ⏳ L1 |
+| 4 | `package.json` 版本与 tag 不一致 | 2026-09-20 时 `2.6.0` vs `v2.9.0`；现为 `2.29.2` 且 tag `v2.29.2` 对齐，发版脚本已同步 lock 根版本 | ✅ |
+| 5 | 文档路径过时 | `AGENTS.md` 的 `src/loader/registry/` 已改为 `src/framework/...`；2026-10-31 又批量修正 docs（路径/端点/脚本名/环境变量） | ✅ |
+| 6 | [后端检查规划](../archive/backend-review-plan.md) 中"编码乱码 P0"已不成立 | 全量扫 `src/` 已无乱码字符 | — 归档文档不再维护 |
+| 7 | 存量伪测试清单仍挂 14 条 | 清单已清零并**改为 AST 判据**；四份假覆盖测试（dao / service / signature / guard）已重写为真身驱动 | ✅ |
+| 8 | `session.js` 拆分评估未开始 | 见 [架构评估](../archive/architecture-review-2026-09-19.md) P2 项 | ⏳ L2 |
+| 9 | 前端类型检查未进 CI | 前端工程 2026-10-31 全部迁出本仓，CI 只跑后端 | — 不再适用 |
 
 ---
 

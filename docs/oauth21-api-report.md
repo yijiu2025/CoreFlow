@@ -85,7 +85,7 @@
 |---|---|---|---|
 | POST | `/oauth2.1/mini-register` | 公开 | iframe 嵌入式注册 |
 
-> 当前为 stub，注册主逻辑在 `user` 域 `POST /user/v1/open/register`。oauth21 仅提供嵌入入口。
+> 当前为 stub，注册主逻辑在 `user` 域 `POST /user/v1/register`（`src/api/user/v1/open.js`）。oauth21 仅提供嵌入入口。
 
 ### 1.3 扫码登录（`auth/qr.js`）
 

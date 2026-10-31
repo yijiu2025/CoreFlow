@@ -4,8 +4,8 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [security.md](./security.md) | 安全：bcryptjs 密码哈希、生产环境密钥校验（拒绝默认密钥）等加固清单 |
-| [performance.md](./performance.md) | 性能：后端 Redis 缓存层等优化手段 |
-| [testing.md](./testing.md) | 测试：常用命令（npm test 等）与测试编写约定 |
+| [security.md](./security.md) | 安全：scrypt 密码哈希（bcrypt 仅历史兼容校验）、防重放、限频、Cookie 与响应头加固 |
+| [performance.md](./performance.md) | 性能：Redis 缓存层、连接池、热路径与限流器往返次数 |
+| [testing.md](./testing.md) | 测试：常用命令、分层约定、毒丸自证与「真身驱动」要求 |
 
 上级入口 [../README.md](../README.md)；总入口（全部文档的地图）在 [../../README.md](../../README.md)。

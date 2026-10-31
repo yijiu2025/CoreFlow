@@ -135,7 +135,7 @@ PBAC 的 allows/denies = 用户实际拥有什么权限
 ## StpUtil 静态鉴权
 
 ```js
-import StpUtil from '../../auth/StpUtil.js';
+import StpUtil from '../../src/framework/auth/stp-util.js'; // 仓内路径：src/framework/auth/stp-util.js
 
 StpUtil.hasPermission('user:admin:*'); // 判断：返回 true/false
 StpUtil.checkPermission('user:admin:*'); // 校验：不通过抛 403

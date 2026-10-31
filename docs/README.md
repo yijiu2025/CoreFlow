@@ -35,7 +35,7 @@ CoreFlow **后端仓库**的文档总入口。**写文档前先读本文决定�
 | --- | --- |
 | `oauth21` 前端（SSO 登录 / 授权确认） | 独立仓 <https://github.com/yijiu2025/oauth-web> |
 | 其他前端（`posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`） | 各自独立维护，不在本仓 |
-| 模块级文档 | 与代码共置：`src/app/<模块>/docs/`、`packages/log/docs/` |
+| 模块级文档 | 与代码共置：`src/app/<模块>/docs/`（`packages/log/docs/` 为 wb-logkit 嵌套仓的文档，该目录本地 gitignore） |
 | 一次性审查报告 | `reports/`（**已 gitignore**，不入库） |
 
 ## 写文档的三条约定
