@@ -5,7 +5,7 @@
 > 子前端（oauth-web、retroweb、posecraft 等）各自维护独立的 CHANGELOG 与 tag 线，不在本文件内记录。
 > 发版流程见 `docs/standards/git-release-rules.md` 与 fullstack-rules 技能的 `references/release-checklist.md`。
 
-## 未发布（Unreleased）
+## 2.29.6 — 2026-11-01
 
 ### 依赖安全
 
@@ -39,6 +39,8 @@
 - `jest.config.js` 的 `collectCoverageFrom` 修正：旧配置指向 `src/auth` / `src/firewall/engine` /
   `src/redis` / `src/log`，这四个目录在 framework 重整后已不存在 ⇒ `--coverage` 实际只统计
   `src/api`，覆盖率数字是**假的高**。改为按当前结构收集（api / app / framework / utils / shared）。
+
+## 未发布（Unreleased）
 
 ## 2.29.0 — 2026-10-31
 
