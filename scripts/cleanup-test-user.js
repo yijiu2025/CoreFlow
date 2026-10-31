@@ -35,19 +35,42 @@ const C = {
 
 /**
  * 执行查询，返回结果数组（兼容 sequelize v6 + mysql2 的 [results, metadata] 返回结构）
+ * @param {string} sql
+ * @param {any[]} [replacements]
+ * @param {object} [options] 额外选项（如 { transaction }）
  */
-async function query(sql, replacements) {
-  const [results] = await sequelize.query(sql, { replacements });
+async function query(sql, replacements, options = {}) {
+  const [results] = await sequelize.query(sql, { replacements, ...options });
   return results;
 }
 
 /**
  * 执行写/删，返回受影响行数
+ * @param {string} sql
+ * @param {any[]} [replacements]
+ * @param {object} [options] 额外选项（如 { transaction }）
  */
-async function exec(sql, replacements) {
-  const [result] = await sequelize.query(sql, { replacements });
+async function exec(sql, replacements, options = {}) {
+  const [result] = await sequelize.query(sql, { replacements, ...options });
   // mysql2: result.affectedRows；其他驱动可能是数组或对象
   return result?.affectedRows ?? 0;
+}
+
+/**
+ * 转义 Redis MATCH 通配符
+ *
+ * 🔴 为什么必须转义：本脚本把用户输入的邮箱拼进 `*<email>*` 当 MATCH 模式，
+ * 而邮箱校验正则（`/^[^@\s]+@[^@\s]+\.[^@\s]+$/`）**允许 `*` 与 `?`**。
+ * 于是 `node scripts/cleanup-test-user.js 'a*@x.com'` 会把 Redis 里所有含 `a` 的 key
+ * 全部扫进待删列表（`*a*@x.com*` 退化成 `*a*`）。
+ *
+ * Redis glob 特殊字符：`*` `?` `[` `]` `\`，逐字加反斜杠转义。
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeGlob(str) {
+  return String(str).replace(/[*?[\]\\]/g, ch => `\\${ch}`);
 }
 
 /** 要清理的表（按依赖顺序：子表在前，主表在后） */
@@ -102,12 +125,18 @@ async function countRelated(userId) {
 
 /**
  * 删除某用户在各关联表的数据
+ * @param {number} userId
+ * @param {object} [transaction] Sequelize 事务，传入则与其他删除同一事务
  */
-async function deleteRelated(userId) {
+async function deleteRelated(userId, transaction) {
   const deleted = {};
   for (const { table, col } of TABLES_BY_USER_ID) {
     try {
-      deleted[table] = await exec(`DELETE FROM ${table} WHERE ${col} = ?`, [userId]);
+      deleted[table] = await exec(
+        `DELETE FROM ${table} WHERE ${col} = ?`,
+        [userId],
+        transaction ? { transaction } : {}
+      );
     } catch (e) {
       deleted[table] = `err: ${e.message}`;
     }
@@ -141,8 +170,13 @@ async function cleanupRedis(redis, emails, dryRun) {
   const deadline = Date.now() + SCAN_TIMEOUT;
 
   outer: for (const email of emails) {
-    const localPart = email.split('@')[0];
-    const patterns = [`*${email}*`, `*${localPart}*`];
+    const localPart = String(email).split('@')[0];
+    // 通配符必须转义（见 escapeGlob 注释）：否则邮箱里的 `*`/`?` 会把 MATCH 变成
+    // 前缀通配，扫出并删除大量无关 key。
+    const patterns = [`*${escapeGlob(email)}*`];
+    // 邮箱前缀只在前缀足够长时才用：`*a*` 这种模式几乎能命中整个 keyspace，
+    // 对 3 字符以下的 localPart 直接跳过（宁可有残留，也不误删）。
+    if (localPart.length >= 3) patterns.push(`*${escapeGlob(localPart)}*`);
     const seen = new Set();
     for (const pattern of patterns) {
       for await (const key of redis.scanIterator({ MATCH: pattern, COUNT: 500 })) {
@@ -228,21 +262,31 @@ async function main() {
     logStdout(`\n${C.cyan}🗑️  开始删除...${C.reset}`);
     let totalDeleted = 0;
     for (const u of users) {
-      const deleted = await deleteRelated(u.id);
+      // 🔴 必须在**同一个事务**里删子表 + 主表：
+      // 原实现逐表裸删，中途任何一张表失败都会留下"子表已删、主表还在"的半删状态
+      // （用户还能登录但角色/凭证没了，比全删或全留都更难排查）。
+      let deleted = {};
+      let mainCnt = 0;
+      try {
+        await sequelize.transaction(async transaction => {
+          deleted = await deleteRelated(u.id, transaction);
+          mainCnt = await exec(`DELETE FROM ${MAIN_TABLE.table} WHERE id = ?`, [u.id], { transaction });
+        });
+      } catch (e) {
+        logStdout(`   ${C.red}-${C.reset} ${u.email} → 事务回滚（未删除任何行）: ${e.message}`);
+        continue;
+      }
+
       let userTotal = 0;
       for (const { table, label } of TABLES_BY_USER_ID) {
         const d = deleted[table];
         if (typeof d === 'number') userTotal += d;
         logStdout(`   ${C.green}-${C.reset} ${u.email} → ${label} (${table}): 删除 ${d} 行`);
       }
-      // 删主表
-      try {
-        const cnt = await exec(`DELETE FROM ${MAIN_TABLE.table} WHERE id = ?`, [u.id]);
-        logStdout(`   ${C.green}-${C.reset} ${u.email} → ${MAIN_TABLE.label} (${MAIN_TABLE.table}): 删除 ${cnt} 行`);
-        userTotal += cnt;
-      } catch (e) {
-        logStdout(`   ${C.red}-${C.reset} ${u.email} → ${MAIN_TABLE.table} 删除失败: ${e.message}`);
-      }
+
+      logStdout(`   ${C.green}-${C.reset} ${u.email} → ${MAIN_TABLE.label} (${MAIN_TABLE.table}): 删除 ${mainCnt} 行`);
+      userTotal += mainCnt;
+
       totalDeleted += userTotal;
       logStdout(`   ${C.dim}小计: ${userTotal} 行${C.reset}\n`);
     }

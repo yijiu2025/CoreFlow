@@ -65,38 +65,38 @@ function expectResultEnvelope(body) {
 
 describe('API 路由（真实驱动）', () => {
   describe('验证模块 /verify/v1', () => {
-    it('generate-captcha 成功时返回真实 UUID key 与 base64 SVG', async () => {
+    it('generate-captcha：成功时返回真实 UUID key 与 base64 SVG；存储不可用时按契约降级为 503', async () => {
       const res = await app.inject({ method: 'GET', url: '/verify/v1/generate-captcha' });
-
-      // 该端点需写 captcha store：Redis 可用则 200，不可用则由 RedisUnavailableError 降级为 503。
-      // 两种情况都是真实契约，分别由本用例与下一条用例覆盖（避免条件断言）。
-      if (res.statusCode === 503) {
-        return; // 环境无 Redis，交由「降级」用例断言
-      }
-
-      expect(res.statusCode).toBe(200);
       const body = res.json();
-      expectResultEnvelope(body);
-      expect(body.code).toBe(200);
+      const ok = res.statusCode === 200;
 
-      // 真实生成的验证码：key 是 UUID 形态，image 是 base64 编码的 SVG
-      expect(body.data.captchaKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-      expect(body.data.captchaImage).toMatch(/^data:image\/svg\+xml;base64,/);
+      // 该端点需要写 captcha store。两种结果都是**真实契约**：
+      //   · 存储可用（真 Redis 或进程内 MapStore）→ 200 + 真实 SVG
+      //   · 配了 Redis 但连不上 → 503，且**不得**把驱动错误/内部栈吐给调用方
+      // 旧版本写成 `if (res.statusCode === 503) return;`，于是任何环境下必有一条用例
+      // 空跑却显示 PASS（本地空跑"降级"、CI 空跑"成功"）—— 等于半个用例不存在。
+      // 这里用「一次断言表达两个分支各自必须成立的事实」，没有空跑分支：
+      // 落到 404/500 等其它状态码会立刻失败（jest/no-conditional-expect 也不允许 if 里断言）。
+      const svg = ok ? Buffer.from(String(body.data?.captchaImage || '').split(',')[1] || '', 'base64').toString() : '';
+      const facts = {
+        statusIsKnown: res.statusCode === 200 || res.statusCode === 503,
+        uuidOk: ok
+          ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.data?.captchaKey || '')
+          : true,
+        base64PrefixOk: ok ? String(body.data?.captchaImage || '').startsWith('data:image/svg+xml;base64,') : true,
+        realSvg: ok ? svg.includes('<svg') : true,
+        envelopeOk: ok ? body.code === 200 && typeof body.timestamp === 'number' : body.statusCode === 503,
+        noDriverLeak: !/ECONNREFUSED|ETIMEDOUT|at .*\.js:\d+/.test(JSON.stringify(body))
+      };
 
-      // 解码后应是真实 SVG 文档，而非占位字符串
-      const svg = Buffer.from(body.data.captchaImage.split(',')[1], 'base64').toString('utf-8');
-      expect(svg).toContain('<svg');
-    });
-
-    it('generate-captcha 在存储不可用时按契约降级为 503（不泄漏内部栈）', async () => {
-      const res = await app.inject({ method: 'GET', url: '/verify/v1/generate-captcha' });
-
-      if (res.statusCode === 200) {
-        return; // 环境有 Redis，交由上一条用例断言
-      }
-
-      expect(res.statusCode).toBe(503);
-      expect(res.json()).toHaveProperty('statusCode', 503);
+      expect(facts).toEqual({
+        statusIsKnown: true,
+        uuidOk: true,
+        base64PrefixOk: true,
+        realSvg: true,
+        envelopeOk: true,
+        noDriverLeak: true
+      });
     });
 
     it('verify-captcha 缺少必填参数时被 schema 拦截（不进入 handler）', async () => {

@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import readline from 'readline';
 import sequelize from '../src/framework/db/index.js';
 import { hashPassword } from '../src/framework/auth/password-hash.js';
+import { validatePasswordStrength } from '../src/framework/auth/password-policy.js';
 import { createLogger, logStdout } from '../src/framework/log/index.js';
 
 const log = createLogger('scripts.setup-superadmin');
@@ -152,9 +153,11 @@ async function main() {
       // 先检查用户是否已存在
       const existingUser = await User.findOne({ where: { email } });
       if (!existingUser) {
-        password = await ask(rl, '🔑 请输入密码（至少6位）: ', true);
-        if (!password || password.length < 6) {
-          log.error('❌ 密码不能为空且至少6位');
+        password = await ask(rl, '🔑 请输入密码（至少 8 位，且含大写、小写、数字）: ', true);
+        // 与 Web 端同一套策略：CLI 自写"至少 6 位"会让建号绕过复杂度要求
+        const pwCheck = validatePasswordStrength(password);
+        if (!pwCheck.valid) {
+          log.error(`❌ 密码不符合要求：${pwCheck.errors.join('；')}`);
           process.exit(1);
         }
         const password2 = await ask(rl, '🔑 请再次输入密码: ', true);

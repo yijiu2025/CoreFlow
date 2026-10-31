@@ -3,6 +3,7 @@
  */
 import crypto from 'crypto';
 import { hashPassword } from '../../src/framework/auth/password-hash.js';
+import { validatePasswordStrength } from '../../src/framework/auth/password-policy.js';
 import { getModels } from '../../src/framework/db/models.js';
 import { connectRedis, closeRedis, clearUserSessions } from '../lib/redis.js';
 import {
@@ -100,9 +101,12 @@ export async function setupSuperadmin() {
 
     if (!user) {
       // 用户不存在，需要创建
-      const password = await ask(rl, '🔑 密码（至少6位）: ', true);
-      if (!password || password.length < 6) {
-        printError('密码不能为空且至少6位');
+      const password = await ask(rl, '🔑 密码（至少 8 位，且含大写、小写、数字）: ', true);
+      // 与 Web 端同一套策略（framework/auth/password-policy.js）：
+      // CLI 自写"至少 6 位"会让命令行建号绕过复杂度要求，是最容易被忽略的策略绕过面
+      const pwCheck = validatePasswordStrength(password);
+      if (!pwCheck.valid) {
+        printError(`密码不符合要求：${pwCheck.errors.join('；')}`);
         return;
       }
 

@@ -92,6 +92,42 @@ async function withScryptLimit(fn) {
 }
 
 /**
+ * 历史 bcrypt 校验的并发上限（与 scrypt 分开计数）
+ *
+ * 为什么要单独限：bcrypt 校验**阻塞主线程**约 68ms/次（bcryptjs 是纯 JS，
+ * 异步版也只是 setImmediate 分段，总时长几乎不变）。存量账号的登录突发若不受控，
+ * 等于给攻击者一个"用登录接口冻结事件循环"的杠杆 —— 健康探针和其他所有请求一起卡住。
+ *
+ * 为什么不能与 scrypt 共用计数器：scrypt 的 16 是**内存**预算（每次约 16MB），
+ * bcrypt 的开销性质是纯 CPU 阻塞。混用一个计数器会让存量账号的突发把正常 scrypt
+ * 校验挤掉，反之亦然。bcrypt 的上限因此更小（默认 4）。
+ *
+ * 超限时与 scrypt 一样走"判为不匹配"（fail-closed）：宁可误拒一次登录，
+ * 也不让异常冒到路由层。
+ */
+const BCRYPT_MAX_CONCURRENCY = Math.max(1, Number(process.env.BCRYPT_MAX_CONCURRENCY) || 4);
+let _bcryptActive = 0;
+
+/**
+ * 在 bcrypt 并发上限内执行回调，超限立刻抛错（不排队）
+ * @param {() => Promise<any>} fn
+ * @returns {Promise<any>}
+ */
+async function withBcryptLimit(fn) {
+  if (_bcryptActive >= BCRYPT_MAX_CONCURRENCY) {
+    const err = new Error('密码校验过于繁忙，请稍后重试');
+    err.code = 'PASSWORD_HASH_BUSY';
+    throw err;
+  }
+  _bcryptActive++;
+  try {
+    return await fn();
+  } finally {
+    _bcryptActive--;
+  }
+}
+
+/**
  * 从存储串解析出的参数上限。
  * scrypt 的参数直接决定内存与 CPU 开销，而参数是从**数据库字符串**里读出来的 ——
  * 若该字段被污染成一个超大 N，校验会变成一次内存爆炸（DoS）。
@@ -207,9 +243,12 @@ async function verifyPassword(plain, stored) {
   }
 
   if (BCRYPT_PATTERN.test(stored)) {
+    // 存量 bcrypt 哈希：必须过并发上限。这里不加限就是"用登录接口做事件循环 DoS"
+    // —— 每次 compare 阻塞主线程约 68ms，公开登录突发可把它叠加成秒级冻结。
     try {
-      return await bcrypt.compare(plain, stored);
+      return await withBcryptLimit(() => bcrypt.compare(plain, stored));
     } catch {
+      // 含 PASSWORD_HASH_BUSY（背压）与脏哈希导致的异常：一律判为不匹配
       return false;
     }
   }

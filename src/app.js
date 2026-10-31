@@ -70,6 +70,67 @@ initLogErrorTraps();
 const PROXY_TRUST_CIDR = process.env.PROXY_TRUST_CIDR?.trim();
 const trustProxy = PROXY_TRUST_CIDR ? PROXY_TRUST_CIDR.split(',').map(s => s.trim()) : ['127.0.0.1', '::1'];
 
+/**
+ * 判断一条信任网段是否「宽到把 IP 维度让给攻击者」
+ *
+ * 为什么必须管这件事：`trustProxy` 里的每一条网段，其来源都可以**自定义 `X-Forwarded-For`**，
+ * 于是 `request.ip` 变成攻击者可填的字符串。而 `request.ip` 是下面三件事的唯一判据：
+ *   1. `allowIps` 守卫白名单（`src/api/guard.js`）
+ *   2. `@fastify/rate-limit` 的 `keyGenerator`（`rate:ip:*`）
+ *   3. 防火墙按 IP 的封禁与挑战（`fw:blocked:ips`）
+ * 网段写得越宽，等于越多来源能自证"我是任意 IP"。
+ *
+ * 判据（只报「明显过宽」，避免正常部署天天告警）：
+ *   - `0.0.0.0/0` / `::/0`：信任全部来源 —— 等于关掉 IP 维度，必报；
+ *   - IPv4 前缀 ≤ 12（如 `172.16.0.0/12` 覆盖 100 万地址）、IPv6 前缀 ≤ 32：必报；
+ *   - 单个主机地址（无 `/`）：永远安全，不报。
+ *
+ * @param {string[]} entries - `trustProxy` 的取值
+ * @returns {string[]} 每一条过宽网段的说明；空数组表示没有风险
+ */
+function describeProxyTrustRisk(entries) {
+  const risks = [];
+  for (const raw of entries || []) {
+    const entry = String(raw).trim();
+    if (!entry) continue;
+
+    const slash = entry.lastIndexOf('/');
+    if (slash === -1) continue; // 单主机地址，不存在"整段可伪造"的问题
+
+    const addr = entry.slice(0, slash);
+    const prefix = Number(entry.slice(slash + 1));
+    if (!Number.isInteger(prefix) || prefix < 0) continue; // 非法写法交给 Fastify 报错
+
+    const isV6 = addr.includes(':');
+    const maxPrefix = isV6 ? 128 : 32;
+    if (prefix > maxPrefix) continue;
+
+    if (prefix === 0) {
+      risks.push(`"${entry}" 信任了全部来源（/${prefix}），等价于关闭 IP 维度防护`);
+      continue;
+    }
+    const tooWide = isV6 ? prefix <= 32 : prefix <= 12;
+    if (tooWide) {
+      risks.push(
+        `"${entry}" 覆盖约 ${isV6 ? '2^(128-' + prefix + ')' : '2^(32-' + prefix + ')'} 个地址，` +
+          `其中任何来源都能自定义 X-Forwarded-For 并冒充任意客户端 IP`
+      );
+    }
+  }
+  return risks;
+}
+
+{
+  const proxyRisks = describeProxyTrustRisk(trustProxy);
+  if (proxyRisks.length > 0) {
+    log.warn(
+      `⚠️ [Proxy] PROXY_TRUST_CIDR 过宽，IP 白名单 / 限流 / 封禁可被 X-Forwarded-For 绕过：\n` +
+        proxyRisks.map(r => `   - ${r}`).join('\n') +
+        `\n   修法：只填反向代理的**确切地址**（如 172.18.0.2/32），不要填整个网段。`
+    );
+  }
+}
+
 // 启动时解析 CORS 白名单，避免每次请求重复解析环境变量
 const CORS_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
   .split(',')
@@ -409,4 +470,4 @@ async function createApp() {
   return app;
 }
 
-export { createApp };
+export { createApp, describeProxyTrustRisk, createErrorHandler };

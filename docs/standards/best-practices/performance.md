@@ -22,15 +22,22 @@ export async function getCachedSettings(redis) {
 Bearer Token 路径每次请求都查库，已添加 Redis 缓存：
 
 ```js
-const cacheKey = `perm:${userData.id}:${appId}`;
-const cached = await redis.get(cacheKey);
+// 键必须是 sha256(userId \0 appId) 前 16 hex，**不能**用 `${userId}:${appId}` 明文：
+// 明文键可被 `SCAN auth:perm:*oauth21*` 直接枚举出某个应用的全体用户。
+// 实现见 framework/auth/perm-cache.js 的 buildPermKey()，直接用即可，不要自己拼。
+const cacheKey = buildPermKey(userId, appId); // → 16 位 hex
+const cached = await redis.get(`${PERM_NAMESPACE}:${cacheKey}`);
 if (cached) {
   const { roles, permissions } = JSON.parse(cached);
 } else {
   const loaded = await loadUserPermissions(userId, appId);
-  await redis.set(cacheKey, JSON.stringify(loaded), { EX: 300 }); // 5分钟
+  await redis.set(`${PERM_NAMESPACE}:${cacheKey}`, JSON.stringify(loaded), { EX: PERM_TTL }); // ≤300s
 }
 ```
+
+> ⚠️ TTL 必须短（`PERM_TTL ≤ 300s`）且**授权变更后主动失效**：长 TTL 会把"撤销权限"推迟到
+> 下次过期，等于给被撤销的人留了一个最长为 TTL 的窗口。
+> 另外会话里还存了 `permFingerprint`，权限数据一变指纹就变，会话副本会立刻作废（第 3 层）。
 
 ### 连接池配置
 

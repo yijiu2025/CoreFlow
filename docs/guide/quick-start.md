@@ -2,7 +2,8 @@
 
 ## 环境要求
 
-- **Node.js** >= 18.0.0
+- **Node.js** >= 18.0.0（`package.json` 目前没有声明 `engines`，属于约定而非强制；
+  低于 18 会因 ESM / 内置 `fetch` / `AbortSignal.timeout` 等能力缺失而以难懂的方式失败）
 - **MySQL** >= 8.0
 - **Redis** >= 6.0（可选：**未配置**时走进程内 `MapStore`；一旦配置就必须连得上，
   否则访问层返回 503，不会静默退回内存）。生产多实例必须配 Redis
@@ -12,7 +13,7 @@
 ```bash
 # 克隆项目
 git clone https://github.com/yijiu2025/CoreFlow.git
-cd antigravity
+cd CoreFlow
 
 # 安装依赖
 npm install
@@ -34,11 +35,11 @@ cp .env.example .env
 # 数据库
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_NAME=antigravity
+DB_NAME=your_database_name
 DB_USER=root
 DB_PASS=your_password
 
-# 安全密钥（务必修改为强随机值）
+# 安全密钥（务必修改为强随机值，至少 32 字符）
 APP_SECRET=your-app-secret-key
 SESSION_SECRET=your-session-secret-key
 FIREWALL_SECRET=your-firewall-secret-key
@@ -80,11 +81,15 @@ cd firewall && npm run dev
 ```bash
 # 存活探针（进程活着就 200，不看依赖）
 curl http://localhost:3000/v1/health/live
-# 应返回: { "status": "ok", "uptime": ... }
+# 返回统一封装：{"code":200,"message":"...","data":{"status":"ok"},"timestamp":...,"requestId":"..."}
 
 # 就绪探针（关键依赖不可用即 503，用于摘流；带响应式明细）
 curl http://localhost:3000/v1/health/ready
+# 关键依赖不可用时 data.dependencies.<name>.status = "down"，HTTP 503
 ```
+
+> 注意响应是**统一封装**（`code` / `message` / `data` / `timestamp` / `requestId`），
+> 不是裸的 `{"status":"ok"}`。写探活脚本时判据用 HTTP 状态码最稳。
 
 ## 超级管理员管理
 

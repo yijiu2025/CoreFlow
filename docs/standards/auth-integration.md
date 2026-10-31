@@ -145,10 +145,19 @@ async function ensureCsrfToken(): Promise<string> {
 参考实现：`oauth21/src/utils/request.ts`（请求拦截器里对 `/oauth2.1` 的非安全方法统一注入，
 并发请求共用一个引导 Promise）。
 
-> 🔴 **敏感接口限频**（同一作用域、同一根作用域接线）：`/oauth2.1` 下
-> 登录 / mini-login 5 次/分、邮箱二次验证 5 次/分、扫码确认 10 次/分、注册 3 次/时（按 IP）。
+> 🔴 **敏感接口限频**（同一作用域、同一根作用域接线，规则表见
+> `src/app/oauth21/middleware/rate-limiter.js`）：
+> `/oauth2.1` 下 登录 / mini-login 5 次/分、邮箱二次验证 5 次/分、扫码确认 10 次/分、
+> iframe 注册入口（`/oauth2.1/mini-register`）3 次/时（均按 IP）。
 > 超限返回 **429 + `Retry-After`**，前端要提示"稍后再试"而不是当成"账号或密码错误"。
 > 同一 NAT 出口的多人共用一份配额 —— 内网集中办公场景如频繁触发，应调高阈值而不是关掉它。
+>
+> ⚠️ **真正的注册端点在 user 域**：`POST /user/v1/register`，由该路由自己的
+> `config.rateLimit`（5 次/分/IP）+ 邮箱验证码 + 图形验证三重保护。
+> oauth21 的 `/mini-register` 只是 iframe 嵌入入口（当前为占位实现）。
+> 规则表里每一条路径都会被 `src/__tests__/security/rate-limit-rules.test.js`
+> 拿去和真实路由表比对 —— 写错路径不会报错，只会让那条限频永远不命中，
+> 所以这条守卫必须存在（历史缺陷：曾经的 `/oauth2.1/register` 就不存在）。
 >
 > 两个钩子共用一个应急开关 `OAUTH21_SECURITY_HOOKS=off`（默认开启）：仅在"前端版本落后于
 > 后端、老 bundle 不带 `x-csrf-token` 导致登录 403"时临时救场，恢复后立即置回。

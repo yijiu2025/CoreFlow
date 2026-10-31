@@ -14,7 +14,7 @@ import { USER_PERMISSIONS } from './index.js';
 async function seedUserRoles() {
   const Role = getModel('Role');
 
-  // 如果数据库还没准备好（例如还没执行 initSuperAdmin），跳过
+  // 如果数据库还没准备好（例如还没执行 `npm run migrate` + `npm run setup:admin`），跳过
   if (!Role) return;
 
   const baseRoles = [

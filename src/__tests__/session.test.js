@@ -61,43 +61,25 @@ describe('session', () => {
     });
   });
 
-  describe('session data structure', () => {
-    it('包含必要字段', () => {
-      const sessionData = {
-        userId: 1,
-        uid: 'uuid-xxx',
-        username: 'test',
-        email: 'test@example.com',
-        appId: 'firewall',
-        roles: ['admin'],
-        permissions: { allows: ['*'], denies: [] },
-        loginAt: Math.floor(Date.now() / 1000),
-        lastActiveAt: Math.floor(Date.now() / 1000),
-        rememberMe: false
-      };
-
-      expect(sessionData).toHaveProperty('userId');
-      expect(sessionData).toHaveProperty('uid');
-      expect(sessionData).toHaveProperty('username');
-      expect(sessionData).toHaveProperty('email');
-      expect(sessionData).toHaveProperty('appId');
-      expect(sessionData).toHaveProperty('roles');
-      expect(sessionData).toHaveProperty('permissions');
-      expect(sessionData).toHaveProperty('loginAt');
-      expect(sessionData).toHaveProperty('rememberMe');
-    });
-  });
+  // 说明：这里曾有一个 `describe('session data structure')` 用例，通篇是
+  // `const sessionData = {...}` + `expect(sessionData).toHaveProperty('userId')` ——
+  // 断言的是自己刚写的字面量，把 `framework/auth/session.js` 改坏也照样全绿，
+  // 于 2026-10-31 移除。会话数据结构真正的契约由 `session-flow.test.js`、
+  // `framework/auth/auth-contract.test.js`、`framework/auth/session-security.test.js`
+  // 驱动真身覆盖（创建 / 恢复 / 刷新 / 踢下线 全链路）。
 
   // accountKey 与凭证 cookie 名分离模型测试
   // accountKey = uid 明文（前端 localStorage key + 切账号发送值）
   // cookie 名 = accountKeyForUid(uid) = HMAC(uid, SECRET)（HttpOnly，后端派生）
   describe('accountKey 与凭证 cookie 名分离', () => {
-    // 复用真实 SECRET：与 cookie.js 同源（测试环境默认值）
-    const SECRET = process.env.SESSION_SECRET || 'change-me-session-secret';
+    // ⚠️ 这里必须用真身 `framework/auth/cookie.js` 的 accountKeyForUid。
+    // 旧版本在测试里用 crypto.createHmac 重新实现了一遍，于是派生算法、前缀、
+    // 截断长度、SECRET 来源任何一处漂移都不会被这条断言发现（副本自证）。
+    let accountKeyForUid;
 
-    function accountKeyForUid(uid) {
-      return `k_${crypto.createHmac('sha256', SECRET).update(String(uid)).digest('hex').slice(0, 16)}`;
-    }
+    beforeAll(async () => {
+      ({ accountKeyForUid } = await import('../framework/auth/cookie.js'));
+    });
 
     it('accountKey 即 uid，cookie 名 = HMAC(uid)，两者不同', () => {
       const uid = 'd102d02f-c338-4847-8cd8-71afb69b878a';
@@ -128,11 +110,15 @@ describe('session', () => {
       expect(a).not.toBe(b);
     });
 
-    it('换 SECRET → cookie 名变（强制重新登录）', () => {
+    it('cookie 名不可逆：不含 uid 明文（uid 泄露 ≠ 能算出 cookie 名）', () => {
       const uid = 'd102d02f-c338-4847-8cd8-71afb69b878a';
-      const oldName = accountKeyForUid(uid);
-      const newName = `k_${crypto.createHmac('sha256', 'new-secret').update(uid).digest('hex').slice(0, 16)}`;
-      expect(newName).not.toBe(oldName); // 旧 cookie 读不到 → need_password
+      expect(accountKeyForUid(uid)).not.toContain(uid);
+    });
+
+    it('非字符串 / 空 uid 直接抛 INVALID_PARAM（避免派生"undefined 用户"的凭证名）', () => {
+      for (const bad of ['', null, undefined, 123]) {
+        expect(() => accountKeyForUid(bad)).toThrow(/uid 参数无效/);
+      }
     });
 
     it('accountKey 不含凭证：uid 明文泄露无法读 rt（rt 在 HttpOnly cookie）', () => {

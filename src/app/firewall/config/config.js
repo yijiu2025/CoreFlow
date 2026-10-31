@@ -203,8 +203,13 @@ const DEFAULT_SECURITY_SETTINGS = {
     idcIpPrefixes: ['100.104.', '101.37.', '47.88.', '162.14.', '101.36.', '52.82.'],
 
     // --- 全局限频 ---
+    // 阈值是「每个键（已登录按 user.id，未登录按 IP）在窗口内的请求数」。
+    // 历史默认 10000/60s ≈ 167 rps/键 —— 单 IP 打这么多请求已足以压垮进程，
+    // 等于没有这一层防护；600/60s ≈ 10 rps/键，面板（WebSocket + 20s 心跳）与
+    // 正常 SPA 交互都有 10 倍以上余量。压测需要更宽时用 FW_RATE_LIMIT_OVERRIDE
+    // （只放宽、且必须严格正整数，见 engine/detectors/first-ratelimit.js）。
     enableRateLimit: false,
-    rateLimitRequests: parseInt(process.env.FW_RATE_LIMIT || '10000'),
+    rateLimitRequests: parseInt(process.env.FW_RATE_LIMIT || '600'),
     rateLimitWindow: parseInt(process.env.FW_RATE_WINDOW || '60'),
 
     // --- 用户级限频 ---

@@ -6,6 +6,8 @@
  *
  * 本版只测**生产代码里的真实资源闸门**，断言的都是"超出上限时系统怎么反应"：
  * - scrypt 并发上限：超限抛 SCRYPT_BUSY 让上层 503 背压，而不是无界排队拖垮进程
+ * - bcrypt 历史哈希校验的并发上限：超限判为不匹配（否则存量账号的登录突发
+ *   能靠"每次阻塞主线程 68ms"把事件循环冻住）
  * - MapStore 硬上限：满时拒绝写入并保留已有数据（不是静默淘汰）
  *
  * 这些断言在"把闸门去掉"时必然变红 ——— 那正是它们存在的意义。
@@ -14,9 +16,11 @@
  * @since 2026-08-17
  */
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import bcrypt from 'bcryptjs';
 
 // 必须在 import password-hash 之前设定：并发上限是模块加载时从 env 读的常量
 process.env.SCRYPT_MAX_CONCURRENCY = '1';
+process.env.BCRYPT_MAX_CONCURRENCY = '1';
 
 const { MapStore } = await import('../framework/redis/map-store.js');
 const { hashPassword, verifyPassword } = await import('../framework/auth/password-hash.js');
@@ -51,6 +55,22 @@ describe('scrypt 并发上限（背压而非排队）', () => {
     await holder;
 
     await expect(verifyPassword('correct-password', stored)).resolves.toBe(true);
+  });
+});
+
+describe('bcrypt 历史哈希校验的并发上限（防"用登录接口冻结事件循环"）', () => {
+  it('饱和时判为不匹配而不是无限并发阻塞主线程', async () => {
+    // cost=4 只为让夹具生成得快；被测的是"是否过闸门"，与 cost 无关
+    const legacy = bcrypt.hashSync('legacy-password', 4);
+
+    // 名额上限为 1（见文件头 env）：第一个 compare 占住名额，第二个必然超限
+    const holder = verifyPassword('legacy-password', legacy);
+    await expect(verifyPassword('legacy-password', legacy)).resolves.toBe(false);
+    await expect(holder).resolves.toBe(true);
+
+    // 名额释放后恢复正常（若拒绝路径漏了 _bcryptActive--，这里会一直 false）
+    await expect(verifyPassword('legacy-password', legacy)).resolves.toBe(true);
+    await expect(verifyPassword('wrong-password', legacy)).resolves.toBe(false);
   });
 });
 

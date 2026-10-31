@@ -13,9 +13,13 @@
  * 单进程测试对这两条**恒真**：进程内缓存永远是最新的，指针也永远只有一个写者。
  * 所以这里必须真多进程 + 真 Redis。
  *
- * 三轮都不可省：
+ * 四轮都不可省：
  *   第 1 轮只证明"别人的写入能被看见"，第 2 轮才证明并发消费不重不漏，
- *   第 3 轮覆盖环形队列的 head/tail/count 三元组（与 FIFO 的二元组不是同一套代码）。
+ *   第 3 轮覆盖环形队列的 head/tail/count 三元组（与 FIFO 的二元组不是同一套代码），
+ *   第 4 轮覆盖环形队列的 **shift()** —— 它的 head 推进在另一支 Lua（SHIFT_SCRIPT）里，
+ *   曾把推进量写成 maxSize（`(head + maxSize) % maxSize` 恒等于 head）导致 head 永不前进：
+ *   第一次 shift 之后永远取到 nil，却仍把 count 减 1，队列静默丢消息。
+ *   第 1–3 轮都不碰这段代码，所以缺陷能长期存活。
  *
  * 用法
  * ----
@@ -55,6 +59,9 @@ const RUN = `verify-u12-${Date.now()}`;
 const PREFIX_FIFO = `${RUN}:fifo`;
 const PREFIX_FIFO_CONCURRENT = `${RUN}:fifo-concurrent`;
 const PREFIX_RING = `${RUN}:ring`;
+const PREFIX_RING_SHIFT = `${RUN}:ring-shift`;
+/** 第 4 轮容量要大于写入总量：本轮验的是 shift 的指针推进，不掺"满则覆盖" */
+const RING_SHIFT_MAX = RING_SEED * 2 + 20;
 
 const EXIT_PASS = 0;
 const EXIT_ASSERT = 1;
@@ -166,7 +173,7 @@ const pass = msg => console.log(`   ✅ ${msg}`);
 
 console.log('═══ U12 队列跨进程原子性复验 ═══');
 console.log(`Redis  : ${process.env.REDIS_HOST || '(未配置)'}:${process.env.REDIS_PORT || 6379} (db${PROBE_REDIS_DB})`);
-console.log(`前缀   : ${RUN}:{fifo,fifo-concurrent,ring}`);
+console.log(`前缀   : ${RUN}:{fifo,fifo-concurrent,ring,ring-shift}`);
 console.log('');
 
 // ── 第 1 轮：消费者先看到空队列，写入者随后写入 ──
@@ -261,6 +268,64 @@ console.log(`第 3 轮：环形队列（容量 ${RING_MAX}）两个写入者各�
 
     const reported = await ring.length();
     if (reported !== expectVisible) fail(`length() 报 ${reported}，与实际可见 ${expectVisible} 条不符（count 被并发写坏）`);
+  }
+
+  await ring.clear();
+}
+
+console.log('');
+
+// ── 第 4 轮：环形队列的 shift()（head 推进在独立的 Lua 脚本里）──
+// 旧实现把推进量写成 maxSize，`(head + maxSize) % maxSize === head` → head 永不前进：
+// 第一个消费者取走 1 条后其余全部取到 nil，但 count 照样每轮减 1，最后 length()=0
+// 而数据还躺在 Redis 里。第 1–3 轮都不执行 shift，故必须单独有这一轮。
+console.log(`第 4 轮：环形队列（容量 ${RING_SHIFT_MAX}）两写两读，全部 shift 取尽…`);
+{
+  const at = Date.now() + START_LEAD_MS;
+  const writers = ['s1', 's2'].map(label =>
+    runChild({ mode: 'seed-ring', prefix: PREFIX_RING_SHIFT, label, at, count: RING_SEED, max: RING_SHIFT_MAX })
+  );
+  const writerResults = await Promise.all(writers);
+  const brokenWriters = writerResults.filter(w => w.ids === null);
+  if (brokenWriters.length) fail(`写入者异常：${brokenWriters.map(b => `${b.label} ${b.raw}`).join(' | ')}`);
+
+  const total = RING_SEED * 2;
+  const allowed = new Set([...expected('s1', RING_SEED), ...expected('s2', RING_SEED)]);
+
+  const consumers = ['d1', 'd2'].map(label =>
+    runChild({
+      mode: 'drain-ring',
+      prefix: PREFIX_RING_SHIFT,
+      label,
+      at: Date.now() + START_LEAD_MS,
+      max: RING_SHIFT_MAX
+    })
+  );
+  const results = await Promise.all(consumers);
+  const broken = results.filter(r => r.ids === null);
+
+  const ring = createRingQueue(PREFIX_RING_SHIFT, { backend: 'redis', maxSize: RING_SHIFT_MAX });
+
+  if (broken.length) {
+    fail(`消费者异常：${broken.map(b => `${b.label} ${b.raw}`).join(' | ')}`);
+  } else {
+    const all = results.flatMap(r => r.ids);
+    const set = new Set(all);
+    const counts = results.map(r => `${r.label}=${r.ids.length}`).join(' ');
+
+    if (all.length !== total) {
+      // head 不前进时这里会是 2 条（每进程各取到 1 条），是最好认的症状
+      fail(`共 shift 出 ${all.length}/${total} 条（${counts}）—— head 没有按 1 格推进，指针卡住`);
+    } else if (set.size !== total) {
+      fail(`出现重复投递：${all.length} 条里只有 ${set.size} 条不同（${counts}）`);
+    } else if (all.some(id => !allowed.has(id))) {
+      fail('取到了不属于任何写入者的 id');
+    } else {
+      pass(`合计 shift 出 ${total} 条，无重复无丢失（${counts}）`);
+    }
+
+    const left = await ring.length();
+    if (left !== 0) fail(`shift 取尽后 length() 仍报 ${left} —— count 与真实数据脱节`);
   }
 
   await ring.clear();

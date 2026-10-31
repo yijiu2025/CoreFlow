@@ -191,7 +191,18 @@ const PUSH_SCRIPT = `
   return m.count
 `;
 
-/** shift：取 head 条目 + 推进 head + 减 count 同一事务。 */
+/**
+ * shift：取 head 条目 + 推进 head + 减 count 同一事务。
+ *
+ * ⚠️ 推进量恒为 `1`（一格），**不是** ARGV[1]。
+ * ARGV[1] 是 maxSize；历史实现写成 `(m.head + maxSize) % maxSize`，而该式恒等于 head ——
+ * 结果是 head 永不前进：第一次 shift 取到并删掉 `data:head`，之后每次都取到 nil 却仍把
+ * count 减 1，count 逐步归零而数据还在，`length()` / `toArray()` 与实际彻底脱节，
+ * 表现为**队列静默丢消息且无任何异常**。此处不可再改成模 maxSize 的加法。
+ *
+ * `val` 为 nil 有两种可能：该槽位从未写入，或数据已按 dataTtl 过期 —— 两种情况都应该
+ * 跳过这一格（head 前进 + count 减 1），并把 nil 交回调用方表示"没取到内容"。
+ */
 const SHIFT_SCRIPT = `
   local metaRaw = redis.call('GET', KEYS[1])
   if not metaRaw then
@@ -201,12 +212,13 @@ const SHIFT_SCRIPT = `
   if m.count <= 0 then
     return nil
   end
+  local maxSize = tonumber(ARGV[1])
   local dkey = KEYS[2] .. m.head
   local val = redis.call('GET', dkey)
   if val then
     redis.call('DEL', dkey)
   end
-  m.head = (m.head + tonumber(ARGV[1])) % tonumber(ARGV[1])
+  m.head = (m.head + 1) % maxSize
   m.count = m.count - 1
   redis.call('SET', KEYS[1], cjson.encode(m))
   return val or false
@@ -246,6 +258,11 @@ function _createRedisRing(prefix, maxSize, dataTtl, timeout) {
           arguments: [String(maxSize)]
         })
       );
+      // Lua 在「该槽位没有内容」（从未写入 / dataTtl 已过期）时返回 **false** 而不是 nil，
+      // 这是 Redis 脚本里 `return val or false` 的直接后果。不归一化的话调用方会拿到
+      // 一个布尔 false 并当成"取到了一条消息"（`msg.data` 恒 undefined）。
+      // Map 版这种情况返回 null，两后端必须同形。
+      if (item === false) return null;
       // 与 queue-store 同理：Lua 交回的是 push 时写进去的 JSON 串，不 parse 会让
       // 调用方读到字符串（`msg.data` 恒 undefined）。Map 版存的是对象，两边必须同形。
       return safeParse(item);

@@ -126,13 +126,40 @@ function parseInfo(info, key) {
 // ============== Key 操作 ==============
 
 /**
- * 按模式匹配 keys
- * @param {import('redis').RedisClient} client - Redis 客户端实例
- * @param {string} pattern - 匹配模式（如 'session:*'）
- * @returns {Promise<string[]>} 匹配的 key 数组
+ * 用 SCAN 游标遍历匹配的 key（**不要用 `KEYS`**）
+ *
+ * 为什么必须 SCAN：`KEYS` 是 O(N) 且**阻塞 Redis 单线程**的 —— 在生产库上跑一次
+ * 可能让整个服务卡住数秒（键多时有报告是几十秒）。本文件是 CLI 工具，但它连的
+ * 往往是**生产 Redis**（`npm run cli` 在运维机上直接指向线上）。
+ *
+ * 注意 node-redis v5 的两处坑（都已踩过）：
+ *   - `scan()` 返回 `{ cursor, keys }` 对象，不是 `[cursor, keys]` 数组；
+ *   - `cursor` 是**字符串**，结束标志是 `'0'`（写成 `0` 会永不结束）。
+ *
+ * @param {import('redis').RedisClient} client
+ * @param {string} pattern 匹配模式（如 'session:*'）
+ * @param {object} [opts]
+ * @param {number} [opts.count=500] 每次往返的提示条数
+ * @returns {Promise<string[]>}
  */
-export async function getKeysByPattern(client, pattern) {
-  return await client.keys(pattern);
+export async function getKeysByPattern(client, pattern, opts = {}) {
+  const count = Number(opts.count) > 0 ? Number(opts.count) : 500;
+  const SCAN_END = '0';
+  const keys = [];
+  let cursor = SCAN_END;
+
+  do {
+    // String(cursor)：v5 在写 socket 前逐参数校验 `string | Buffer`，number 会在
+    // socket 写入路径上抛 TypeError（栈里没有业务代码，表现为未捕获异常）
+    const { cursor: nextCursor, keys: batch } = await client.scan(String(cursor), {
+      MATCH: pattern,
+      COUNT: count
+    });
+    cursor = nextCursor;
+    for (const key of batch) keys.push(key);
+  } while (cursor !== SCAN_END);
+
+  return keys;
 }
 
 /**
@@ -142,7 +169,7 @@ export async function getKeysByPattern(client, pattern) {
  * @returns {Promise<number>} 清除的 key 数量
  */
 export async function clearKeysByPattern(client, pattern) {
-  const keys = await client.keys(pattern);
+  const keys = await getKeysByPattern(client, pattern);
   if (keys.length === 0) return 0;
 
   // 批量删除，每批 1000 个
@@ -159,27 +186,42 @@ export async function clearKeysByPattern(client, pattern) {
 
 /**
  * 清除指定用户的 session
+ *
+ * 逐 key `GET` 是不可避免的（session 内容里才有 userId），但**取 key 列表必须用
+ * SCAN**；同时把「读」批量化成 pipeline，把 N 次往返压成 N/100 次。
+ *
  * @param {import('redis').RedisClient} client - Redis 客户端实例
  * @param {number} userId - 用户 ID
  * @param {string} uid - 用户 UUID
  * @returns {Promise<number>} 清除的 session 数量
  */
 export async function clearUserSessions(client, userId, uid) {
-  const keys = await client.keys('session:*');
-  let cleared = 0;
+  const keys = await getKeysByPattern(client, 'session:*');
+  if (keys.length === 0) return 0;
 
-  for (const key of keys) {
-    const data = await client.get(key);
-    if (data) {
+  let cleared = 0;
+  const batchSize = 200;
+
+  for (let i = 0; i < keys.length; i += batchSize) {
+    const batch = keys.slice(i, i + batchSize);
+    const multi = client.multi();
+    for (const key of batch) multi.get(key);
+    const values = await multi.exec();
+
+    const toDelete = [];
+    values.forEach((raw, idx) => {
+      if (!raw) return;
       try {
-        const session = JSON.parse(data);
-        if (session.userId === userId || session.uid === uid) {
-          await client.del(key);
-          cleared++;
-        }
+        const session = JSON.parse(raw);
+        if (session.userId === userId || session.uid === uid) toDelete.push(batch[idx]);
       } catch {
         // 跳过非 JSON 格式的 key
       }
+    });
+
+    if (toDelete.length > 0) {
+      await client.del(toDelete);
+      cleared += toDelete.length;
     }
   }
 
@@ -192,7 +234,7 @@ export async function clearUserSessions(client, userId, uid) {
  * @returns {Promise<number>}
  */
 export async function getSessionCount(client) {
-  const keys = await client.keys('session:*');
+  const keys = await getKeysByPattern(client, 'session:*');
   return keys.length;
 }
 

@@ -77,7 +77,36 @@ class CaptchaService {
   }
 
   /**
-   * 验证图形验证码（不销毁，可重复验证）
+   * 记一次失败尝试；达到上限即作废整个 captchaKey
+   *
+   * 为什么必须记：图码只有 4–6 位字符，TTL 默认 10 分钟。没有次数上限时，
+   * 拿同一个 captchaKey 反复试错的总猜中概率远高于直觉（且路由层限频是按 IP 的，
+   * 攻击者换 IP 就能继续打同一个 key —— 限频对此完全无效）。
+   *
+   * 写回时**按剩余 TTL** 计算，不能用完整 TTL：否则每失败一次就续命一次，
+   * 失败越多有效期越长（与 verify/email/dao.js 的同类处理保持一致）。
+   *
+   * @param {string} tag captchaKey
+   * @param {object} info 当前记录
+   * @param {object} store 存储适配器
+   * @param {number} now 当前毫秒时间
+   * @returns {Promise<void>}
+   */
+  async _recordFailure(tag, info, store, now) {
+    const maxAttempts = Number(DEFAULTS.maxAttempts) > 0 ? Number(DEFAULTS.maxAttempts) : 5;
+    const attempts = (info.attempts || 0) + 1;
+
+    if (attempts >= maxAttempts) {
+      await store.delete(tag);
+      return;
+    }
+
+    const remainingSec = Math.max(1, Math.ceil((info.expired - now) / 1000));
+    await store.set(tag, { ...info, attempts }, remainingSec);
+  }
+
+  /**
+   * 验证图形验证码（不销毁，可重复验证；失败次数有上限）
    * @param {string} captcha 用户输入
    * @param {string} tag 验证码标识
    * @param {object} store 存储适配器
@@ -90,7 +119,8 @@ class CaptchaService {
     const info = await store.get(tag);
     if (!info) return false;
 
-    if (Date.now() > info.expired) {
+    const now = Date.now();
+    if (now > info.expired) {
       await store.delete(tag);
       return false;
     }
@@ -99,17 +129,19 @@ class CaptchaService {
     if (info.fingerprint && ctx) {
       const currentFp = fingerprintFromCtx(ctx);
       if (info.fingerprint !== currentFp) {
+        await this._recordFailure(tag, info, store, now);
         return false; // 指纹不符静默拒绝（不提示原因，防探测）
       }
     }
 
-    if (info.text.toLowerCase() !== captcha.toLowerCase()) {
+    if (info.text.toLowerCase() !== String(captcha).toLowerCase()) {
+      await this._recordFailure(tag, info, store, now);
       return false;
     }
 
     // 标记为已验证，延长生命周期
     info.verified = true;
-    info.expired = Date.now() + DEFAULTS.extendTtl * 1000;
+    info.expired = now + DEFAULTS.extendTtl * 1000;
     await store.set(tag, info, DEFAULTS.extendTtl);
 
     return true;

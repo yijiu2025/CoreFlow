@@ -153,19 +153,24 @@ describe('CSRF：作用域与豁免', () => {
 });
 
 describe('敏感接口限频：精确路径 + 429', () => {
-  const loginRule = RATE_LIMIT_RULES.find(r => r.path === '/oauth2.1/login');
+  // 规则表的形状是 `paths: string[]`（一条规则可覆盖多个真实端点），
+  // 每条 path 必须命中真实路由 —— 由 security/rate-limit-rules.test.js 兜底校验。
+  const loginRule = RATE_LIMIT_RULES.find(r => r.paths.includes('/oauth2.1/login'));
 
-  it('规则表覆盖登录 / 二次验证 / 扫码确认 / 注册，且都带 /oauth2.1 前缀', () => {
-    const paths = RATE_LIMIT_RULES.map(r => r.path);
+  it('规则表覆盖登录 / 二次验证 / 扫码确认 / iframe 注册入口，且都带 /oauth2.1 前缀', () => {
+    const paths = RATE_LIMIT_RULES.flatMap(r => r.paths);
     expect(paths).toEqual(
       expect.arrayContaining([
         '/oauth2.1/login',
         '/oauth2.1/mini-login',
         '/oauth2.1/login/verify-email',
-        '/oauth2.1/register'
+        '/oauth2.1/qr/confirm',
+        '/oauth2.1/mini-register'
       ])
     );
     for (const p of paths) expect(p.startsWith('/oauth2.1/')).toBe(true);
+    // 历史死规则不得复活：全仓没有 /oauth2.1/register 这条路由
+    expect(paths).not.toContain('/oauth2.1/register');
   });
 
   it(`同一 IP 连续登录超过 ${loginRule.maxRequests} 次 → 429 且带 Retry-After`, async () => {

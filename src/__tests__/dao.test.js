@@ -1,165 +1,182 @@
 /**
- * DAO 层测试
+ * OAuth 刷新令牌 DAO 契约（真实模块驱动）
  *
- * 覆盖：UserDAO、ApprovalDAO、TokenDAO 核心逻辑
+ * ⚠️ 为什么重写：旧版本通篇是「手写一个对象字面量 → 断言它有 xxx 字段」，
+ * 完全没有 import 任何 DAO —— 把 `src/app/oauth21/dao/` 整个删掉它也全绿。
+ * 它之所以能通过 test-effectiveness 守卫，只是因为在最后一个用例里
+ * `await import('crypto')`（内建模块）。
+ *
+ * 现在直接驱动真身 `TokenDao`，用替身 model 记录 Sequelize 的调用参数，
+ * 锁住三条真正要命的安全语义：
+ *   1. **refresh_token 必须以 sha256 哈希入库** —— 明文入库意味着一次拖库即可直接登录；
+ *   2. **find 必须同时带 `revoked: false` 与 `expires_at > now`** ——
+ *      少任何一个都会让已吊销/已过期的令牌继续换发 access token；
+ *   3. **revoke 是逻辑吊销（update revoked=true），不是物理删除** ——
+ *      删了就失去了「已吊销令牌再次出现 = 被盗用」这条检测能力。
  *
  * @author yijiu2025
  * @since 2026-08-17
+ * @since 2026-10-31 改为真身驱动（此前为纯常量自证，生产代码零覆盖）
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import crypto from 'node:crypto';
 
-describe('DAO 层', () => {
-  describe('UserDAO', () => {
-    // 模拟 UserDAO 返回结构
-    function formatUser(user) {
-      if (!user) return null;
-      return {
-        id: user.uid,
-        numericId: user.id,
-        username: user.username,
-        email: user.email,
-        name: user.username,
-        avatar: user.avatar,
-        uid: user.uid
-      };
-    }
+/** 替身 OauthToken 模型：只记录调用，不碰数据库 */
+const modelCalls = [];
+const modelResult = { row: null };
 
-    it('formatUser 返回正确结构', () => {
-      const raw = { id: 1, uid: 'uuid-1', username: 'test', email: 'test@example.com', avatar: null };
-      const result = formatUser(raw);
-      expect(result.id).toBe('uuid-1');
-      expect(result.numericId).toBe(1);
-      expect(result.username).toBe('test');
-      expect(result.email).toBe('test@example.com');
-      expect(result.avatar).toBeNull();
-    });
+const noop = async () => {};
 
-    it('formatUser null 输入返回 null', () => {
-      expect(formatUser(null)).toBeNull();
-    });
+function makeFakeModel() {
+  return {
+    create: async payload => {
+      modelCalls.push({ op: 'create', payload });
+      return { toJSON: () => payload, ...{} };
+    },
+    findOne: async options => {
+      modelCalls.push({ op: 'findOne', options });
+      const row = modelResult.row;
+      return row ? { toJSON: () => row } : null;
+    },
+    update: async (values, options) => {
+      modelCalls.push({ op: 'update', values, options });
+      return [1];
+    },
+    destroy: async options => {
+      modelCalls.push({ op: 'destroy', options });
+      return 3;
+    },
+    noop
+  };
+}
 
-    it('numericId 是数字类型', () => {
-      const raw = { id: 42, uid: 'uuid-42', username: 'test', email: 't@t.com', avatar: null };
-      const result = formatUser(raw);
-      expect(typeof result.numericId).toBe('number');
-      expect(result.numericId).toBe(42);
-    });
+jest.unstable_mockModule('../framework/db/index.js', () => {
+  const OauthToken = makeFakeModel();
+  return {
+    default: { models: { OauthToken } },
+    getModel: name => (name === 'OauthToken' ? OauthToken : null),
+    sequelize: { models: { OauthToken } }
+  };
+});
+
+const { default: TokenDao } = await import('../app/oauth21/dao/token.dao.js');
+
+/** 生产侧使用的哈希算法（与 token.dao.js 的 rtHash 同构） */
+const sha256 = s => crypto.createHash('sha256').update(s).digest('hex');
+
+const PLAIN_RT = 'plain-refresh-token-value-abc123';
+
+beforeEach(() => {
+  modelCalls.length = 0;
+  modelResult.row = null;
+});
+
+describe('TokenDao.save：明文绝不入库', () => {
+  it('入库的是 sha256 哈希，不是明文', async () => {
+    await TokenDao.save(PLAIN_RT, { sub: 'user-1', client_id: 'firewall', scope: 'openid', expiresIn: 600 });
+
+    const call = modelCalls.find(c => c.op === 'create');
+    expect(call).toBeDefined();
+
+    const stored = call.payload.refresh_token;
+    expect(stored).not.toBe(PLAIN_RT);
+    expect(stored).not.toContain(PLAIN_RT);
+    expect(stored).toBe(sha256(PLAIN_RT));
+    expect(stored).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  describe('ApprovalDao', () => {
-    it('授权数据结构正确', () => {
-      const approval = {
-        uid: 'uuid-xxx',
-        appId: 'firewall',
-        scopes: ['openid', 'profile', 'email']
-      };
-      expect(approval).toHaveProperty('uid');
-      expect(approval).toHaveProperty('appId');
-      expect(approval).toHaveProperty('scopes');
-      expect(Array.isArray(approval.scopes)).toBe(true);
-    });
+  it('默认未吊销，且 expires_at 落在 expiresIn 之后', async () => {
+    const before = Date.now();
+    await TokenDao.save(PLAIN_RT, { sub: 'user-1', client_id: 'firewall', expiresIn: 600 });
+    const { payload } = modelCalls.find(c => c.op === 'create');
 
-    it('scopes 应包含至少一个权限', () => {
-      const approval = { uid: 'uuid', appId: 'fw', scopes: ['openid', 'profile'] };
-      expect(approval.scopes.length).toBeGreaterThan(0);
-    });
+    expect(payload.revoked).toBe(false);
+    expect(payload.sub).toBe('user-1');
+    expect(payload.client_id).toBe('firewall');
+    const delta = payload.expires_at.getTime() - before;
+    expect(delta).toBeGreaterThan(590_000);
+    expect(delta).toBeLessThan(620_000);
   });
 
-  describe('TokenDao', () => {
-    it('refresh token 数据结构正确', () => {
-      const tokenData = {
-        sub: 'uuid-xxx',
-        client_id: 'firewall',
-        scope: 'openid profile email',
-        expiresIn: 86400
-      };
-      expect(tokenData).toHaveProperty('sub');
-      expect(tokenData).toHaveProperty('client_id');
-      expect(tokenData).toHaveProperty('scope');
-      expect(tokenData).toHaveProperty('expiresIn');
-      expect(tokenData.expiresIn).toBeGreaterThan(0);
-    });
+  it('未传 expiresIn 时默认 24 小时', async () => {
+    const before = Date.now();
+    await TokenDao.save(PLAIN_RT, { sub: 'user-1', client_id: 'firewall' });
+    const { payload } = modelCalls.find(c => c.op === 'create');
+    const delta = payload.expires_at.getTime() - before;
+    expect(delta).toBeGreaterThan(86_000_000);
+    expect(delta).toBeLessThan(86_500_000);
+  });
+});
 
-    it('refresh token 是随机字符串', async () => {
-      const { randomBytes } = await import('crypto');
-      const token1 = randomBytes(32).toString('hex');
-      const token2 = randomBytes(32).toString('hex');
-      expect(token1).not.toBe(token2);
-      expect(token1.length).toBe(64);
-    });
+describe('TokenDao.find：必须同时排除已吊销与已过期', () => {
+  it('用哈希查询，且条件带 revoked:false + expires_at 下界', async () => {
+    await TokenDao.find(PLAIN_RT);
+
+    const { options } = modelCalls.find(c => c.op === 'findOne');
+    expect(options.where.refresh_token).toBe(sha256(PLAIN_RT));
+    expect(options.where.revoked).toBe(false);
+    // expires_at 必须是「大于当前时间」的条件对象（Sequelize 的 Op.gt 是 Symbol，
+    // 所以要用 getOwnPropertySymbols 取；只写 Object.keys 会得到空数组而假绿）
+    expect(options.where.expires_at).toBeDefined();
+    const expSymbols = Object.getOwnPropertySymbols(options.where.expires_at);
+    expect(expSymbols.length).toBe(1);
+    const boundary = options.where.expires_at[expSymbols[0]];
+    expect(boundary).toBeInstanceOf(Date);
+    expect(boundary.getTime()).toBeGreaterThan(Date.now() - 1000);
   });
 
-  describe('ClientDao', () => {
-    it('客户端数据结构正确', () => {
-      const client = {
-        client_id: 'firewall',
-        client_name: 'CoreFlow Firewall',
-        redirect_uris: ['http://localhost:5173/firewall/'],
-        grant_types: ['authorization_code', 'refresh_token'],
-        scope: 'openid profile email',
-        token_endpoint_auth_method: 'none',
-        application_type: 'web'
-      };
-      expect(client.client_id).toBe('firewall');
-      expect(Array.isArray(client.redirect_uris)).toBe(true);
-      expect(Array.isArray(client.grant_types)).toBe(true);
-      expect(client.grant_types).toContain('authorization_code');
-    });
+  it('命中时返回 toJSON 结果，未命中返回 null', async () => {
+    modelResult.row = { sub: 'user-1', client_id: 'firewall', revoked: false };
+    expect(await TokenDao.find(PLAIN_RT)).toMatchObject({ sub: 'user-1', client_id: 'firewall' });
 
-    it('公钥客户端 token_endpoint_auth_method 为 none', () => {
-      const publicClient = { token_endpoint_auth_method: 'none' };
-      expect(publicClient.token_endpoint_auth_method).toBe('none');
-    });
+    modelResult.row = null;
+    expect(await TokenDao.find(PLAIN_RT)).toBeNull();
+  });
+});
 
-    it('机密客户端 token_endpoint_auth_method 为 client_secret_basic', () => {
-      const confidentialClient = { token_endpoint_auth_method: 'client_secret_basic' };
-      expect(confidentialClient.token_endpoint_auth_method).toBe('client_secret_basic');
-    });
+describe('TokenDao.revoke：逻辑吊销，不物理删除', () => {
+  it('只把 revoked 置 true，绝不出现在 destroy 调用里', async () => {
+    await TokenDao.revoke(PLAIN_RT);
+
+    const update = modelCalls.find(c => c.op === 'update');
+    expect(update.values).toEqual({ revoked: true });
+    expect(update.options.where.refresh_token).toBe(sha256(PLAIN_RT));
+    expect(modelCalls.some(c => c.op === 'destroy')).toBe(false);
   });
 
-  describe('ConsentDao', () => {
-    it('授权记录结构正确', () => {
-      const consent = {
-        sub: 'uuid-xxx',
-        clientId: 'firewall',
-        scopes: ['openid', 'profile', 'email']
-      };
-      expect(consent).toHaveProperty('sub');
-      expect(consent).toHaveProperty('clientId');
-      expect(consent).toHaveProperty('scopes');
-      expect(consent.scopes).toContain('openid');
-    });
+  it('findRevoked 不带 revoked 过滤（否则"已吊销令牌再次出现"永远检测不到）', async () => {
+    await TokenDao.findRevoked(PLAIN_RT);
+
+    const { options } = modelCalls.find(c => c.op === 'findOne');
+    expect(options.where.refresh_token).toBe(sha256(PLAIN_RT));
+    expect('revoked' in options.where).toBe(false);
   });
 
-  describe('CodeDao', () => {
-    it('授权码数据结构正确', () => {
-      const code = {
-        code: 'abc123',
-        userId: 'uuid-xxx',
-        clientId: 'firewall',
-        redirectUri: 'http://localhost:5173/callback',
-        scope: 'openid profile',
-        codeChallenge: 'challenge123',
-        codeChallengeMethod: 'S256'
-      };
-      expect(code).toHaveProperty('code');
-      expect(code).toHaveProperty('userId');
-      expect(code).toHaveProperty('clientId');
-      expect(code).toHaveProperty('redirectUri');
-      expect(code).toHaveProperty('codeChallenge');
-    });
-  });
+  it('revokeAllForUser / revokeAllForClient 按对应维度批量吊销', async () => {
+    await TokenDao.revokeAllForUser('user-9');
+    await TokenDao.revokeAllForClient('firewall');
 
-  describe('PermissionDao', () => {
-    it('权限记录结构正确', () => {
-      const permission = {
-        module: 'firewall',
-        action: 'config:read',
-        appId: 'firewall'
-      };
-      expect(permission).toHaveProperty('module');
-      expect(permission).toHaveProperty('action');
-      expect(permission).toHaveProperty('appId');
-    });
+    const updates = modelCalls.filter(c => c.op === 'update');
+    expect(updates).toHaveLength(2);
+    expect(updates[0].values).toEqual({ revoked: true });
+    expect(updates[0].options.where).toEqual({ sub: 'user-9' });
+    expect(updates[1].options.where).toEqual({ client_id: 'firewall' });
+  });
+});
+
+describe('TokenDao.cleanup：只清过期与已吊销', () => {
+  it('条件必须是 OR(过期, 已吊销)——把未过期且未吊销的删掉等于随机踢人下线', async () => {
+    await TokenDao.cleanup();
+
+    const { options } = modelCalls.find(c => c.op === 'destroy');
+    const orSymbol = Object.getOwnPropertySymbols(options.where)[0];
+    const or = options.where[orSymbol];
+    expect(Array.isArray(or)).toBe(true);
+    expect(or).toHaveLength(2);
+
+    const hasRevokedClause = or.some(c => c.revoked === true);
+    const hasExpiredClause = or.some(c => c.expires_at !== undefined);
+    expect(hasRevokedClause).toBe(true);
+    expect(hasExpiredClause).toBe(true);
   });
 });

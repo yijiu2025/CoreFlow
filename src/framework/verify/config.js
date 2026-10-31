@@ -12,6 +12,10 @@ const verifyConfig = {
     noise: parseInt(process.env.CAPTCHA_NOISE || '3'),
     ttl: parseInt(process.env.CAPTCHA_TTL || '600'),
     extendTtl: parseInt(process.env.CAPTCHA_EXTEND_TTL || '300'),
+    // 同一个 captchaKey 允许的失败次数上限：达到即作废（重新取图）。
+    // 4–6 位字符的图码在 10 分钟 TTL 内可被反复试错，靠路由层限频兜底并不可靠
+    // （限频按 IP，攻击者可换 IP 打同一个 key）。默认 5 次，够正常人看错两次。
+    maxAttempts: parseInt(process.env.CAPTCHA_MAX_ATTEMPTS || '5'),
     levels: {
       easy: { size: 3, noise: 1, fontSize: 50 },
       normal: { size: 4, noise: 3, fontSize: 45 },

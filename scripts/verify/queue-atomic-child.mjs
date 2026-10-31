@@ -8,6 +8,8 @@
  *              时刻后一直 shift 到空，打印收到的全部 id
  *   seed-ring  往环形队列 push N 条
  *   read-ring  先 toArray 一次（同样会触发旧实现的缓存），等到起跑时刻再 toArray
+ *   drain-ring 把环形队列 shift 到空（与 drain-fifo 同构，但走的是环形队列的
+ *              Lua SHIFT_SCRIPT —— 那是**另一段代码**，head 推进量曾经写错成 maxSize）
  *
  * 「先探空队列」不是多余的仪式：旧实现的 `_metaCache` 就是在这一步被写成
  * `{head:0,tail:0}`，之后无论别的进程写多少条，本地都认为队列是空的，
@@ -51,7 +53,7 @@ function emit(line) {
 
 async function run() {
   if (!PREFIX) throw new Error('缺少 PROBE_PREFIX');
-  if (!['seed-fifo', 'drain-fifo', 'seed-ring', 'read-ring'].includes(MODE)) {
+  if (!['seed-fifo', 'drain-fifo', 'seed-ring', 'read-ring', 'drain-ring'].includes(MODE)) {
     throw new Error(`未知 PROBE_MODE: ${MODE}`);
   }
 
@@ -76,7 +78,7 @@ async function run() {
       return;
     }
 
-    if (MODE === 'drain-fifo') {
+    if (MODE === 'drain-fifo' || MODE === 'drain-ring') {
       // 触发一次 meta 读取（旧实现会在此刻把空 meta 缓存下来）
       await handle.length();
       await waitForStart();

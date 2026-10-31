@@ -1,12 +1,53 @@
 /**
- * 三级级联守卫测试
- * 测试 IP 匹配引擎、权限校验逻辑
+ * 三级级联守卫：IP 匹配 + 权限判定
+ *
+ * ⚠️ 为什么重写：旧版本的后两段 `describe` 在文件内**重新实现了一遍**被测逻辑
+ * （`checkAccess` 与 `isPermissionMatch/matchSingle/checkPermission`，注释写着
+ * "模拟 applyGuardLogic 的核心逻辑"），然后断言自己刚写的东西 —— 生产代码改坏、
+ * 甚至整个删掉，它们都照样全绿。这类"副本测试"最危险的地方是：副本与真身漂移后，
+ * 测试会**固化一个与线上相反**的结论。
+ *
+ * 现在两段都改为驱动真身 `__test__applyGuardLogic`（`src/api/guard.js` 专门为此导出的
+ * 非公开入口，正常路径是 createGuard 生成的 preHandler）。
+ * IP 匹配那一段原本就是真的，保留并补上边界。
  *
  * @author yijiu2025
  * @since 2026-08-17
+ * @since 2026-10-31 权限判定改为真身驱动（此前为内联副本）
  */
 import { describe, test, expect } from '@jest/globals';
 import { isIpMatch } from '../utils/ip.js';
+import { __test__applyGuardLogic as applyGuardLogic } from '../api/guard.js';
+
+/** 记录型 reply：只关心"守卫最终调了哪个 result 方法" */
+function makeReply() {
+  const reply = { calls: [], sent: false, statusCode: 200, body: null };
+  const record = name => message => {
+    reply.calls.push({ name, message });
+    reply.sent = true;
+    reply.statusCode = name === 'unauth' ? 401 : name === 'forbidden' ? 403 : 200;
+    return reply;
+  };
+  reply.result = {
+    success: record('success'),
+    unauth: record('unauth'),
+    forbidden: record('forbidden'),
+    badRequest: record('badRequest')
+  };
+  reply.code = c => {
+    reply.statusCode = c;
+    return reply;
+  };
+  reply.send = b => {
+    reply.sent = true;
+    reply.body = b;
+    return reply;
+  };
+  return reply;
+}
+
+const makeRequest = (user, ip = '127.0.0.1') => ({ ip, state: { user }, headers: {} });
+const userWith = (allows, denies = []) => ({ sub: 1, roles: ['user'], permissions: { allows, denies } });
 
 describe('IP 匹配引擎 (isIpMatch)', () => {
   test('通配符 * 应匹配所有 IP', () => {
@@ -29,42 +70,42 @@ describe('IP 匹配引擎 (isIpMatch)', () => {
     expect(isIpMatch('192.168.2.1', '192.168.1.*')).toBe(false);
   });
 
+  test('🔴 通配符按段比对：192.168.*.1 不会把整段 192.168. 都放进来', () => {
+    // 旧实现是 `cleanIp.startsWith(rule.split('*')[0])` → 前缀是 '192.168.'，
+    // 于是 192.168.55.2 这种明显不符合 "第四段必须是 1" 的地址也会被放行，
+    // allowIps 白名单因此比配置写的更宽。
+    expect(isIpMatch('192.168.5.1', '192.168.*.1')).toBe(true);
+    expect(isIpMatch('192.168.55.1', '192.168.*.1')).toBe(true);
+    expect(isIpMatch('192.168.55.2', '192.168.*.1')).toBe(false);
+    expect(isIpMatch('192.169.5.1', '192.168.*.1')).toBe(false);
+  });
+
+  test('通配符规则不适用于 IPv6（避免通配串误吃 IPv6 地址）', () => {
+    expect(isIpMatch('2001:db8::1', '2001:db8::*')).toBe(false);
+  });
+
   test('CIDR 规则: 192.168.1.0/24', () => {
     expect(isIpMatch('192.168.1.1', '192.168.1.0/24')).toBe(true);
     expect(isIpMatch('192.168.1.255', '192.168.1.0/24')).toBe(true);
     expect(isIpMatch('192.168.2.1', '192.168.1.0/24')).toBe(false);
   });
 
-  test('CIDR 规则: 10.0.0.0/8', () => {
+  test('CIDR 规则: 10.0.0.0/8 与 172.16.0.0/12', () => {
     expect(isIpMatch('10.0.0.1', '10.0.0.0/8')).toBe(true);
     expect(isIpMatch('10.255.255.255', '10.0.0.0/8')).toBe(true);
     expect(isIpMatch('11.0.0.1', '10.0.0.0/8')).toBe(false);
-  });
 
-  test('CIDR 规则: 172.16.0.0/12', () => {
     expect(isIpMatch('172.16.0.1', '172.16.0.0/12')).toBe(true);
     expect(isIpMatch('172.31.255.255', '172.16.0.0/12')).toBe(true);
     expect(isIpMatch('172.32.0.1', '172.16.0.0/12')).toBe(false);
   });
 
-  test('不匹配的 IP 应返回 false', () => {
-    expect(isIpMatch('192.168.1.100', '10.0.0.0/8')).toBe(false);
-    expect(isIpMatch('192.168.1.100', '172.16.0.0/12')).toBe(false);
-  });
-
-  test('IPv6 精确匹配', () => {
+  test('IPv6 精确 / CIDR / ::/0', () => {
     expect(isIpMatch('2001:db8::1', '2001:db8::1')).toBe(true);
     expect(isIpMatch('2001:db8::1', '2001:db8::2')).toBe(false);
-  });
-
-  test('IPv6 通配符匹配 (::/0 匹配所有)', () => {
     expect(isIpMatch('2001:db8::1', '::/0')).toBe(true);
-  });
-
-  test('IPv6 CIDR 子网匹配', () => {
     expect(isIpMatch('2001:db8::1', '2001:db8::/32')).toBe(true);
     expect(isIpMatch('2001:db8::1', '2001:db8::/64')).toBe(true);
-    expect(isIpMatch('2001:db8:85a3::8a2e:370:7334', '2001:db8::/32')).toBe(true);
     expect(isIpMatch('2001:db9::1', '2001:db8::/32')).toBe(false);
   });
 
@@ -74,128 +115,95 @@ describe('IP 匹配引擎 (isIpMatch)', () => {
   });
 });
 
-describe('守卫权限逻辑', () => {
-  // 模拟 applyGuardLogic 的核心逻辑
-  function checkAccess(opts, user, clientIp) {
-    const { enabled = true, allowIps = [], allowRoles = [], requireLogin = false } = opts;
-
-    if (!enabled) return { blocked: true, reason: 'disabled' };
-
-    if (allowIps.length > 0) {
-      const isAllowed = allowIps.some(rule => isIpMatch(clientIp, rule));
-      if (!isAllowed) return { blocked: true, reason: 'ip_denied' };
-    }
-
-    if (requireLogin || allowRoles.length > 0) {
-      if (!user) return { blocked: true, reason: 'unauth' };
-      if (allowRoles.length > 0 && !allowRoles.includes(user.role)) {
-        return { blocked: true, reason: 'role_denied' };
-      }
-    }
-
-    return { blocked: false };
-  }
-
-  test('enabled=false 应拒绝所有请求', () => {
-    expect(checkAccess({ enabled: false }, null, '127.0.0.1').blocked).toBe(true);
+describe('权限判定（真身 applyGuardLogic）', () => {
+  test('单个权限精确命中 → 放行', async () => {
+    const reply = makeReply();
+    await applyGuardLogic({ requirePermission: 'fw:config:read' }, makeRequest(userWith(['fw:config:read'])), reply);
+    expect(reply.sent).toBe(false);
   });
 
-  test('requireLogin=true 无用户应拒绝', () => {
-    expect(checkAccess({ requireLogin: true }, null, '127.0.0.1').blocked).toBe(true);
-    expect(checkAccess({ requireLogin: true }, null, '127.0.0.1').reason).toBe('unauth');
+  test('尾部通配符 fw:admin:* 命中其子权限，但不命中兄弟前缀', async () => {
+    const user = userWith(['fw:admin:*']);
+
+    const hit = makeReply();
+    await applyGuardLogic({ requirePermission: 'fw:admin:reset' }, makeRequest(user), hit);
+    expect(hit.sent).toBe(false);
+
+    const miss = makeReply();
+    await applyGuardLogic({ requirePermission: 'fw:config:read' }, makeRequest(user), miss);
+    expect(miss.calls[0].name).toBe('forbidden');
   });
 
-  test('requireLogin=true 有用户应放行', () => {
-    expect(checkAccess({ requireLogin: true }, { sub: 'u1' }, '127.0.0.1').blocked).toBe(false);
+  test('全局通配符 * 放行任意权限', async () => {
+    const reply = makeReply();
+    await applyGuardLogic({ requirePermission: 'anything:here' }, makeRequest(userWith(['*'])), reply);
+    expect(reply.sent).toBe(false);
   });
 
-  test('allowRoles 限制应拒绝无角色用户', () => {
-    const result = checkAccess({ allowRoles: ['admin'] }, { sub: 'u1', role: 'user' }, '127.0.0.1');
-    expect(result.blocked).toBe(true);
-    expect(result.reason).toBe('role_denied');
+  test('deny 优先于 allows 里的 *（这是本仓权限模型的核心语义）', async () => {
+    const reply = makeReply();
+    await applyGuardLogic({ requirePermission: 'user:delete' }, makeRequest(userWith(['*'], ['user:delete'])), reply);
+    expect(reply.calls[0].name).toBe('forbidden');
   });
 
-  test('allowRoles 限制应放行匹配角色用户', () => {
-    const result = checkAccess({ allowRoles: ['admin', 'moderator'] }, { sub: 'u1', role: 'admin' }, '127.0.0.1');
-    expect(result.blocked).toBe(false);
+  test('deny 支持通配符：denies 里的 user:* 拦掉全部 user 子权限', async () => {
+    const reply = makeReply();
+    await applyGuardLogic({ requirePermission: 'user:read' }, makeRequest(userWith(['*'], ['user:*'])), reply);
+    expect(reply.calls[0].name).toBe('forbidden');
   });
 
-  test('IP 白名单 + requireLogin 组合', () => {
-    // IP 不在白名单 → 拒绝
-    const r1 = checkAccess({ allowIps: ['192.168.1.*'], requireLogin: true }, { sub: 'u1' }, '10.0.0.1');
-    expect(r1.blocked).toBe(true);
-    expect(r1.reason).toBe('ip_denied');
+  test('any 模式（OR）：命中任一即放行，全不中则 403', async () => {
+    const ok = makeReply();
+    await applyGuardLogic(
+      { requirePermission: { any: ['fw:config:read', 'fw:admin:*'] } },
+      makeRequest(userWith(['fw:config:read'])),
+      ok
+    );
+    expect(ok.sent).toBe(false);
 
-    // IP 在白名单 + 已登录 → 放行
-    const r2 = checkAccess({ allowIps: ['192.168.1.*'], requireLogin: true }, { sub: 'u1' }, '192.168.1.100');
-    expect(r2.blocked).toBe(false);
-  });
-});
-
-describe('权限匹配 (checkPermission)', () => {
-  function isPermissionMatch(pattern, target) {
-    if (pattern === '*') return true;
-    if (pattern === target) return true;
-    if (pattern.endsWith(':*')) return target.startsWith(pattern.slice(0, -1));
-    return false;
-  }
-
-  function matchSingle(perm, allows, denies) {
-    if (denies.some(d => isPermissionMatch(d, perm))) return false;
-    return allows.some(a => isPermissionMatch(a, perm));
-  }
-
-  function checkPermission(required, user) {
-    if (!user) return false;
-    const { allows = [], denies = [] } = user.permissions || {};
-    if (typeof required === 'string') return matchSingle(required, allows, denies);
-    if (required.any) return required.any.some(p => matchSingle(p, allows, denies));
-    if (required.all) return required.all.every(p => matchSingle(p, allows, denies));
-    return false;
-  }
-
-  test('单个权限精确匹配', () => {
-    const user = { permissions: { allows: ['fw:config:read'], denies: [] } };
-    expect(checkPermission('fw:config:read', user)).toBe(true);
-    expect(checkPermission('fw:config:write', user)).toBe(false);
+    const no = makeReply();
+    await applyGuardLogic(
+      { requirePermission: { any: ['fw:block:write', 'fw:admin:*'] } },
+      makeRequest(userWith(['fw:config:read'])),
+      no
+    );
+    expect(no.calls[0].name).toBe('forbidden');
   });
 
-  test('通配符匹配 fw:admin:*', () => {
-    const user = { permissions: { allows: ['fw:admin:*'], denies: [] } };
-    expect(checkPermission('fw:admin:reset', user)).toBe(true);
-    expect(checkPermission('fw:admin:node', user)).toBe(true);
-    expect(checkPermission('fw:config:read', user)).toBe(false);
+  test('all 模式（AND）：缺一项即 403，提示列出全部所需权限', async () => {
+    const ok = makeReply();
+    await applyGuardLogic(
+      { requirePermission: { all: ['fw:config:read', 'fw:config:write'] } },
+      makeRequest(userWith(['fw:config:read', 'fw:config:write'])),
+      ok
+    );
+    expect(ok.sent).toBe(false);
+
+    const no = makeReply();
+    await applyGuardLogic(
+      { requirePermission: { all: ['fw:config:read', 'fw:admin:*'] } },
+      makeRequest(userWith(['fw:config:read'])),
+      no
+    );
+    expect(no.calls[0].name).toBe('forbidden');
+    expect(no.calls[0].message).toContain('fw:config:read, fw:admin:*');
   });
 
-  test('全局通配符 *', () => {
-    const user = { permissions: { allows: ['*'], denies: [] } };
-    expect(checkPermission('anything:here', user)).toBe(true);
+  test('空权限集合 → 403（不是"没配权限就放行"）', async () => {
+    const reply = makeReply();
+    await applyGuardLogic({ requirePermission: 'fw:config:read' }, makeRequest(userWith([])), reply);
+    expect(reply.calls[0].name).toBe('forbidden');
   });
 
-  test('deny 优先于 allow', () => {
-    const user = { permissions: { allows: ['*'], denies: ['user:delete'] } };
-    expect(checkPermission('user:read', user)).toBe(true);
-    expect(checkPermission('user:delete', user)).toBe(false);
+  test('未登录访问需权限的接口 → 401 unauth', async () => {
+    const reply = makeReply();
+    await applyGuardLogic({ requirePermission: 'fw:config:read' }, makeRequest(null), reply);
+    expect(reply.calls[0].name).toBe('unauth');
   });
 
-  test('any 模式（OR）', () => {
-    const user = { permissions: { allows: ['fw:config:read'], denies: [] } };
-    expect(checkPermission({ any: ['fw:config:read', 'fw:admin:*'] }, user)).toBe(true);
-    expect(checkPermission({ any: ['fw:block:write', 'fw:admin:*'] }, user)).toBe(false);
-  });
-
-  test('all 模式（AND）', () => {
-    const user = { permissions: { allows: ['fw:config:read', 'fw:config:write'], denies: [] } };
-    expect(checkPermission({ all: ['fw:config:read', 'fw:config:write'] }, user)).toBe(true);
-    expect(checkPermission({ all: ['fw:config:read', 'fw:admin:*'] }, user)).toBe(false);
-  });
-
-  test('空用户返回 false', () => {
-    expect(checkPermission('fw:config:read', null)).toBe(false);
-  });
-
-  test('空权限返回 false', () => {
-    const user = { permissions: { allows: [], denies: [] } };
-    expect(checkPermission('fw:config:read', user)).toBe(false);
+  test('非法权限格式 fail-closed（403，而不是静默放行）', async () => {
+    const reply = makeReply();
+    await applyGuardLogic({ requirePermission: { invalid: ['a:read'] } }, makeRequest(userWith(['*'])), reply);
+    expect(reply.calls[0].name).toBe('forbidden');
   });
 });
