@@ -7,6 +7,17 @@
 
 ## 未发布（Unreleased）
 
+### 安全
+
+- **机密扫描告警 1 → 0（误报，证据留档）**：`google_api_key` 指向 6 个 `.bin` 模型权重文件，
+  实际内容是保存下来的 **Kaggle 页面**（5401 字节 HTML），其中的 key 属 Kaggle 自己的公开前端
+  key（`projectId: kaggle-161607`），不是本仓凭据、也无法由本仓吊销。按 `false_positive` 关闭并写明依据；
+  该批文件已在 `c7f08d82`（2026-10-31）随 `public/` 历史产物一起删除，`git grep` 确认 HEAD 中已无此串。
+- **新增载荷形状守卫** `src/utils/payload-guard.js`：只看开头 256 字节判断"这是网页不是数据"；
+  `scripts/download-models.js` 在写盘前调用它，并保留 `content-type` 作第一道闸门。
+  这条事故的根因正是"下载只看 HTTP 状态码"——地址返回登录页时会把 HTML 原样写成 `.bin`。
+  配套 9 例测试（含"二进制里偶然出现 `<html>` 不误判"与"脚本确实调用了守卫"）。
+
 ## 2.29.7 — 2026-11-01
 
 ### 依赖安全
