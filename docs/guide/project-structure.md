@@ -53,9 +53,8 @@ nodeServers/
 │   ├── shared/                 # 跨层共享工具
 │   └── public/                 # 运行时上传目录（uploads/）
 │
-├── public/                     # 静态资源根（后端以 @fastify/static 挂载）
-│   ├── uploads/                # 上传文件（gitignore，只保留目录）
-│   └── <前端名>/               # ⚠️ 历史前端构建产物，前端独立后不再更新，见下方说明
+├── public/                     # 静态资源根（后端以 @fastify/static 挂载，prefix `/`）
+│   └── uploads/                # 上传文件（gitignore，只保留 .gitkeep 占位）
 │
 ├── migrations/                 # 数据库迁移文件（按域分目录）
 ├── packages/                   # npm workspace 包
@@ -71,11 +70,11 @@ nodeServers/
 
 > `packages/theme-core` 是 **git submodule**，克隆时要 `--recurse-submodules`。
 >
-> **关于 `public/<前端名>/`**：里面是 190 个历史前端构建产物（`assets/*.js|css`），
-> 后端以 `@fastify/static` 挂载 `public/` 提供访问。前端工程独立之后这些产物**不再更新**，
-> 也不应跟随后端发布 —— 生产上应由各前端自身的 CDN / Nginx 提供。
-> 清理它们属于仓库卫生事项（需同步确认 `Dockerfile` 的 `COPY public` 与部署方式），
-> 尚未执行，此处如实标注。
+> **`public/` 现在只剩 `uploads/`**：此前这里住着 190 个历史前端构建产物
+> （`posecraft/` 107、`models/` 37、`firewall/` 24、`poseadmin/` 22，约 152MB），
+> 已于 2026-10-31 清理 —— 它们各自属于对应前端仓，不该随后端发布。
+> 目录里只留 `uploads/.gitkeep`：`@fastify/static` 的 `root` 必须存在，`Dockerfile` 也有
+> `COPY public ./public`，没有占位文件时干净检出里没有这个目录，镜像构建会直接失败。
 
 ## 启动流程
 

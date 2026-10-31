@@ -53,9 +53,8 @@ CoreFlow/
 │   ├── shared/                 # cross-layer helpers
 │   └── public/                 # runtime upload directory (uploads/)
 │
-├── public/                     # static root (served by @fastify/static)
-│   ├── uploads/                # uploaded files (gitignored, directory only)
-│   └── <frontend-name>/        # ⚠️ legacy frontend build output — frozen, see below
+├── public/                     # static root (served by @fastify/static, prefix `/`)
+│   └── uploads/                # uploaded files (gitignored; only a .gitkeep placeholder is tracked)
 │
 ├── migrations/                 # database migrations (by domain)
 ├── packages/                   # npm workspace packages
@@ -71,12 +70,12 @@ CoreFlow/
 
 > `packages/theme-core` is a **git submodule** — clone with `--recurse-submodules`.
 >
-> **About `public/<frontend-name>/`**: it holds ~190 legacy frontend build artifacts
-> (`assets/*.js|css`) that the backend mounts via `@fastify/static`. After the frontends moved
-> out these files **stop being updated** and should not ship with the backend — production
-> should serve them from each frontend's CDN or nginx. Removing them is repository hygiene work
-> (it must be coordinated with `Dockerfile`'s `COPY public`), so they are still here and
-> documented as-is.
+> **`public/` now only holds `uploads/`**: it used to carry 190 legacy frontend build artifacts
+> (`posecraft/` 107, `models/` 37, `firewall/` 24, `poseadmin/` 22 — about 152 MB), removed on
+> 2026-10-31 because each of them belongs to a frontend repository and must not ship with the
+> backend. Only `uploads/.gitkeep` is tracked: `@fastify/static` needs its `root` to exist and
+> `Dockerfile` runs `COPY public ./public`, so a clean checkout without a placeholder file would
+> fail the image build.
 
 ## Boot sequence
 

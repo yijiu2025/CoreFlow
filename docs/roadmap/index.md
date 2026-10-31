@@ -32,8 +32,10 @@
   应纳入限频（当前只有 `/oauth2.1/*` 的敏感端点有 IP 限频）
 - [ ] **限流器 Redis 路径 5 次往返**（`zRemRangeByScore / zCard / zRange / zAdd / expire`）→ pipeline 压到 1–2 次，
   被刷时这 5 倍往返本身就是放大面
-- [ ] **`public/<前端名>/` 下 190 个历史前端构建产物**仍需清理（前后端解耦后不应随后端发布；
-  需同步确认 `@fastify/static` 挂载与 `Dockerfile` 的 `COPY public`）
+- [x] **`public/<前端名>/` 下 190 个历史前端构建产物已清理**（2026-10-31）：
+  `posecraft/` 107、`models/` 37、`firewall/` 24、`poseadmin/` 22，约 152MB。
+  `public/` 只留 `uploads/.gitkeep` 占位 —— `@fastify/static` 的 root 与 `Dockerfile` 的
+  `COPY public ./public` 都要求该目录存在，否则干净检出时镜像构建直接失败。
 - [ ] **依赖告警 296 条**（131 high / 138 moderate / 27 low，见 Dependabot）——
   先 `npm audit --production` 看生产链路，前端工作区的告警可随各自仓库处理
 

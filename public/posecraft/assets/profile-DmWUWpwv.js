@@ -1,1 +1,0 @@
-import{o as e}from"./index-BOYIS8ob.js";var t={getMyStats:()=>e.get(`/posecraft/v1/profile/stats`),getUserStats:t=>e.get(`/posecraft/v1/profile/stats/${t}`)};export{t as profileApi};
