@@ -58,10 +58,13 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          # 先用 default suite（与之前的托管配置覆盖面一致，不引入新噪音）；
-          # 想扩大覆盖时改成 security-extended —— 代价是多出一批需要人判断的规则，
-          # 没人看的安全告警等于没有。
-          queries: default
+          # 查询套件用**默认**（不写 queries）。想扩大覆盖时加一行
+          #   queries: security-extended
+          # 代价是多出一批需要人判断的规则 —— 没人看的安全告警等于没有，
+          # 所以升级套件要和"谁来清告警"一起决定。
+          #
+          # ⚠️ 不要写 queries: default —— 该输入只接受 extended/quality 或 query pack 名，
+          # 传 default 会让 Initialize CodeQL 直接失败（已实测）。
 
       # JS / TS / actions 都是解释型提取，不需要 build 步骤；
       # 真加了原生构建（如 TS 编译产物参与分析）时，在这里插入 build。
