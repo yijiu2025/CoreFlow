@@ -11,12 +11,16 @@ export default {
   //    实测 2026-09-21。
   testPathIgnorePatterns: ['/node_modules/', '/\\.tmp-probe/'],
   modulePathIgnorePatterns: ['/\\.tmp-probe/'],
+  // 覆盖范围按**当前目录结构**收集。
+  // 旧配置写的是 src/auth、src/firewall/engine、src/redis、src/log —— 这四个目录
+  // 在 2026-09 的 framework 重整里已经搬到 src/framework/* 与 src/app/firewall/engine，
+  // 留下来等于 `--coverage` 只统计 src/api 一处、其余静默为空，覆盖率数字是假的高。
   collectCoverageFrom: [
     'src/api/**/*.js',
-    'src/auth/**/*.js',
-    'src/firewall/engine/**/*.js',
-    'src/redis/**/*.js',
-    'src/log/**/*.js',
+    'src/app/**/*.js',
+    'src/framework/**/*.js',
+    'src/utils/**/*.js',
+    'src/shared/**/*.js',
     '!src/**/__tests__/**',
     '!src/**/*.test.js'
   ],

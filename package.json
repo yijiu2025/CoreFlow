@@ -88,7 +88,7 @@
     "nodemon": "^3.1.14",
     "prettier": "^3.8.3",
     "vitepress": "^1.6.4",
-    "vue": "^3.5.38"
+    "vue": "^3.5.44"
   },
   "overrides": {
     "@fastify/busboy": "^3.2.1",
@@ -99,7 +99,15 @@
     "moment": "^2.31.0",
     "eslint": {
       "ajv": "^6.12.6"
-    }
+    },
+    "@fastify/static": {
+      "glob": "^14.0.3"
+    },
+    "js-yaml": "^4.1.1",
+    "follow-redirects": "^1.16.2",
+    "@vue/server-renderer": "^3.5.44",
+    "uuid": "^11.1.1",
+    "vite": "^6.4.5"
   },
   "engines": {
     "node": ">=20.19.0"

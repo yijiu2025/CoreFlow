@@ -5,6 +5,41 @@
 > 子前端（oauth-web、retroweb、posecraft 等）各自维护独立的 CHANGELOG 与 tag 线，不在本文件内记录。
 > 发版流程见 `docs/standards/git-release-rules.md` 与 fullstack-rules 技能的 `references/release-checklist.md`。
 
+## 未发布（Unreleased）
+
+### 依赖安全
+
+- **生产依赖漏洞 5 → 0**。剩余 5 条 moderate 的"自动修复建议"都是错的（让 @fastify/static 降到 6、
+  让 sequelize 降到 3.30.0），逐条按真实调用点验证后处理：
+  - `@fastify/static` → `glob 13.0.6`（GHSA-3g3m-2fjr-6pw4：AbortSignal 取消绕过 ⇒ 超时后仍可
+    遍历文件系统）→ `overrides: { "@fastify/static": { glob: "^14.0.3" } }`。
+    **只对这一个父包作用域化**：全局把 glob 抬到 14 会打碎 `rimraf@3` / `test-exclude` 依赖的
+    `glob.sync`（v9 起已移除）。`wildcard: true` 那条 `glob('**/**')` 分支已实测：命中 200、
+    不存在的文件 404。
+  - `sequelize` → `uuid 8.3.2`（GHSA-w5hq-g745-h8pq：v3/v5/v6 传 buf 时缺边界检查）
+    → 全局 `uuid ^11.1.1`。sequelize 只调用 `require('uuid').v1/.v4`，v11 同名导出；
+    实测 `DataTypes.UUIDV4` 默认值仍能生成。
+  - `glob` → `minimatch`（GHSA-g3hv-75wg-m249：globparts 放大的 DoS）由 glob 14 自带的
+    `minimatch ^11` 一并解决。
+- **docs 站点链路**：`vue` / `@vue/server-renderer` 3.5.38 → **3.5.44**（XSS：attribute-name
+  黑名单缺 CR）、`vite` 5.4.21 → **6.4.5**（优化依赖 `.map` 路径穿越等 8 条）、
+  `follow-redirects` 1.16.0 → **1.16.2**（跨域凭据头剥离失效）、`js-yaml` 3.14.2 → **4.3.2**
+  （merge-key 二次复杂度 DoS；调用方用的是 `yaml.load()`，v4 同名导出）。
+  vite 6 与 vitepress 1.6.4 的兼容性已实测：文档站构建通过（`dist/en/` 19 页）。
+- **踩到的坑**：一开始也把 `minimatch` 全局抬到 11 —— `npm audit` 确实更干净，但
+  `jest --coverage` 直接崩在 `generateEmptyCoverage`（`minimatch is not a function`）：
+  v11 的 CJS 导出形态变了，`test-exclude` 仍按函数调用。**审计数字好看 ≠ 工具能跑**，
+  所以撤掉那条 override，只让 glob 14 自带新版 minimatch。
+- 结果：`npm audit --production` **0 条**；全量 43 → **33 条，全部 dev-only**
+  （jest 30 → glob 10.5.0、eslint 10 → minimatch 10.2.5、`@babel/core` low、`deepmerge` low）——
+  根因是 jest / eslint 自身尚未升级它们的 glob / minimatch，需等上游 major，不在本仓可控范围。
+
+### 工具
+
+- `jest.config.js` 的 `collectCoverageFrom` 修正：旧配置指向 `src/auth` / `src/firewall/engine` /
+  `src/redis` / `src/log`，这四个目录在 framework 重整后已不存在 ⇒ `--coverage` 实际只统计
+  `src/api`，覆盖率数字是**假的高**。改为按当前结构收集（api / app / framework / utils / shared）。
+
 ## 2.29.0 — 2026-10-31
 
 ### 修复
@@ -177,8 +212,6 @@
   `app.addHook('onRequest'|'onClose')` 与限流中间件自身，不是路由 handler；
   全局限流由 `@fastify/rate-limit` 在 05-firewall loader 注册（600 次/60 秒/键）。
 - 结果：代码扫描告警 **6 fixed / 4 dismissed / 0 open**。
-
-## 未发布（Unreleased）
 
 ## 2.28.1 — 2026-10-16
 
