@@ -5,7 +5,7 @@
 > 子前端（oauth-web、retroweb、posecraft 等）各自维护独立的 CHANGELOG 与 tag 线，不在本文件内记录。
 > 发版流程见 `docs/standards/git-release-rules.md` 与 fullstack-rules 技能的 `references/release-checklist.md`。
 
-## 未发布（Unreleased）
+## 2.29.0 — 2026-10-31
 
 ### 修复
 
@@ -57,6 +57,8 @@
   缺「毒丸判据」这条最重要的约定 —— 全部重写。
 - `guide/quick-start.md`：`cd antigravity`、`DB_NAME`、探针响应结构（统一封装而非裸 `status`）。
 - `standards/auth-integration.md`：注册限频的真实位置与数值（此前写的 3 次/时从未生效）。
+
+## 未发布（Unreleased）
 
 ## 2.28.1 — 2026-10-16
 

@@ -1,11 +1,12 @@
 {
   "name": "nodeservers",
-  "version": "2.28.0",
+  "version": "2.29.0",
   "description": "公众号：柒染靓月",
   "type": "module",
   "main": "index.js",
   "workspaces": [
     "packages/*",
+    "!packages/theme-core",
     "oauth21",
     "posecraft",
     "firewall"
