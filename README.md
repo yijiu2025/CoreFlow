@@ -1,124 +1,145 @@
 # CoreFlow
 
 <p align="center">
-  <strong>Fastify v5 + Sequelize v6 的后端框架：认证 · PBAC 权限 · 五层防火墙 · OAuth 2.1</strong>
+  <strong>A backend framework on Fastify v5 + Sequelize v6: authentication · PBAC permissions · five-layer firewall · OAuth 2.1</strong>
 </p>
 
 <p align="center">
-  <a href="https://yijiu2025.github.io/CoreFlow/"><img src="https://img.shields.io/badge/文档-在线阅读-4FC08D?logo=vitepress&logoColor=white" /></a>
+  <b>English</b> · <a href="./README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="https://yijiu2025.github.io/CoreFlow/"><img src="https://img.shields.io/badge/docs-read%20online-4FC08D?logo=vitepress&logoColor=white" /></a>
   <img src="https://img.shields.io/badge/Node.js-%E2%89%A518-339933?logo=node.js&logoColor=white" />
   <img src="https://img.shields.io/badge/Fastify-v5-000000?logo=fastify&logoColor=white" />
   <img src="https://img.shields.io/badge/MySQL-%E2%89%A58.0-4479A1?logo=mysql&logoColor=white" />
-  <img src="https://img.shields.io/badge/Redis-%E5%8F%AF%E9%80%89-DC382D?logo=redis&logoColor=white" />
+  <img src="https://img.shields.io/badge/Redis-optional-DC382D?logo=redis&logoColor=white" />
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue" />
 </p>
 
 ---
 
-## 这是什么
+> The documentation site is currently written in Chinese. This README and the doc map
+> ([docs/README.md](./docs/README.md)) are the English entry points.
 
-一个**能直接跑起来的后端骨架**，把「认证 / 授权 / 限流 / 拦截 / 审计」这些每个项目都要重写一遍的东西做成框架能力：
+## What this is
 
-- **认证**：Session Cookie（默认）与 JWT Bearer 双模式，RSA 加密登录、HMAC 签名 Cookie、nonce 防重放
-- **权限（PBAC）**：`应用:资源:动作` 三段式，通配符 + **deny 优先** + 角色权重，三级守卫（System → Group → API）
-- **防火墙**：五层拦截管道（连接追踪 → 封禁 → 挑战 → Bot 检测 → 地理围栏/端点限频），可后台调参
-- **OAuth 2.1**：授权码 + PKCE、客户端凭证、设备码、OIDC 发现、刷新令牌轮换与盗用检测
-- **可选 Redis，但语义不含糊**：未配置走进程内实现（单实例开箱即用）；一旦配置就要求在线，
-  连不上返回 **503** 而不是静默退回内存 —— 多实例下"悄悄降级"会让会话与限流失效
+A **backend skeleton you can actually boot**, taking the parts every project rewrites from
+scratch — auth, authorization, rate limiting, request interception, audit — and shipping
+them as framework capabilities:
 
-## 这**不是**什么
+- **Authentication**: session cookie (default) or JWT bearer, RSA-encrypted login,
+  HMAC-signed cookies, nonce-based replay protection
+- **Permissions (PBAC)**: `app:resource:action` triples with wildcards, **deny-before-allow**
+  precedence and role weights; three guard levels (System → Group → API)
+- **Firewall**: a five-stage pipeline (connection tracking → blocking → challenge → bot
+  detection → geo/endpoint rate limiting), tunable at runtime from the admin API
+- **OAuth 2.1**: authorization code + PKCE, client credentials, device code, OIDC discovery,
+  refresh-token rotation with reuse detection
+- **Redis is optional, but the semantics are explicit**: with no Redis configured it runs on
+  in-process implementations (single instance, zero setup); once configured it must be
+  reachable — otherwise the access layer returns **503** instead of silently falling back to
+  memory, because a quiet downgrade breaks sessions and rate limiting across instances
 
-> 本仓自 **2026-10-31** 起**只包含后端**。前端工程（`oauth21` / `posecraft` / `admin` /
-> `poseadmin` / `firewall` / `phonecopy`）已移出索引、各自独立维护
-> （`oauth21` → [oauth-web](https://github.com/yijiu2025/oauth-web)）。
+## What this is **not**
+
+> Since **2026-10-31** this repository contains **the backend only**. The frontend projects
+> (`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`) have been
+> removed from the index and are maintained separately
+> (`oauth21` → [oauth-web](https://github.com/yijiu2025/oauth-web)).
 >
-> 前后端之间只通过 **HTTP 线协议**耦合：Cookie 会话、`x-sign` 签名头、`x-csrf-token`。
-> 契约见 [认证集成](https://yijiu2025.github.io/CoreFlow/standards/auth-integration)，
-> 前端可以是任意技术栈。
+> Frontend and backend are coupled through an **HTTP wire protocol only**: session cookies,
+> the `x-sign` header, the `x-csrf-token` header. The contract lives in
+> [Authentication integration](https://yijiu2025.github.io/CoreFlow/standards/auth-integration);
+> any frontend stack will do.
 
-## 快速开始
+## Quick start
 
 ```bash
-# 1. 克隆（theme-core 是 git submodule）
+# 1. Clone (theme-core is a git submodule)
 git clone --recurse-submodules https://github.com/yijiu2025/CoreFlow.git
 cd CoreFlow
 
-# 2. 安装依赖
+# 2. Install dependencies
 npm install
 
-# 3. 配置环境变量（三处密钥必须改，生产环境弱值会被拒绝启动）
+# 3. Configure the environment (three secrets MUST be changed; weak values refuse to boot
+#    in production)
 cp .env.example .env
 
-# 4. 建表
+# 4. Create the schema
 npm run migrate
 
-# 5. 创建超级管理员
+# 5. Create a super admin
 npm run setup:admin -- --email admin@example.com
 
-# 6. 启动（开发模式，nodemon 热重载）
+# 6. Boot (dev mode, nodemon hot reload)
 npm run dev
 ```
 
-验证：
+Verify:
 
 ```bash
-curl -i http://localhost:3000/v1/health/live    # 存活（进程活着就 200）
-curl -i http://localhost:3000/v1/health/ready   # 就绪（关键依赖不可用 → 503）
+curl -i http://localhost:3000/v1/health/live    # liveness (200 while the process runs)
+curl -i http://localhost:3000/v1/health/ready   # readiness (503 when a critical dependency is down)
 ```
 
-> 响应统一封装为 `{ code, message, data, timestamp, requestId }`，不是裸对象。
-> 环境要求：Node ≥ 18（ESM）、MySQL ≥ 8.0；Redis 可选（多实例必须）。
-> 完整步骤与排错见 [快速上手](https://yijiu2025.github.io/CoreFlow/guide/quick-start)。
+> Every response is wrapped as `{ code, message, data, timestamp, requestId }` — never a bare object.
+> Requirements: Node ≥ 18 (ESM), MySQL ≥ 8.0; Redis optional (mandatory for multi-instance).
+> Full walkthrough and troubleshooting:
+> [Quick start](https://yijiu2025.github.io/CoreFlow/guide/quick-start).
 
-## 目录结构
+## Project layout
 
 ```
 src/
-├── app.js              # 创建 Fastify 实例 + 生命周期编排
-├── framework/          # 基础设施（15 个子域，不写业务）
-│   ├── auth/  jwt/  keys/            # 会话 / Cookie / 签名 / 密码 / 密钥
-│   ├── db/  redis/                   # Sequelize 连接 / 缓存·锁·队列·PubSub
-│   ├── loader/  config/  log/  ops/  # 加载器 / 环境校验 / 日志 / 就绪判定
-│   ├── verify/  notice/  scheduler/  # 验证码 / 邮件 / 定时任务
+├── app.js              # Fastify instance creation + lifecycle orchestration
+├── framework/          # Infrastructure (15 sub-domains, no business logic)
+│   ├── auth/  jwt/  keys/            # Session / cookies / signatures / passwords / keys
+│   ├── db/  redis/                   # Sequelize connection / cache · locks · queues · pubsub
+│   ├── loader/  config/  log/  ops/  # Loader / env validation / logging / readiness
+│   ├── verify/  notice/  scheduler/  # CAPTCHA / mail / cron jobs
 │   └── websocket/  cli/  release/
-├── app/                # 业务应用（一个目录 = 一个应用：oauth21 / user / admin /
-│                       #   firewall / guard / notice / posecraft / retroweb）
-├── api/                # 路由层（域/版本），guard.js 是三级守卫引擎
-├── models/             # Sequelize 模型（user / iam / oauth21 / session / key /
-│                       #   notice / guard / posecraft / retroweb）
-├── data/               # 运行时默认配置（防火墙 / 调度 / 流量统计）
+├── app/                # Business apps (one directory = one app: oauth21 / user / admin /
+│                       #   firewall / guard / notice / posecraft / retroweb)
+├── api/                # Route layer (domain/version); guard.js is the three-level guard engine
+├── models/             # Sequelize models (user / iam / oauth21 / session / key /
+│                       #   notice / guard / posecraft / retroweb)
+├── data/               # Runtime default config (firewall / scheduler / traffic stats)
 └── shared/  utils/  public/
 ```
 
-完整目录树（含每个 loader 的加载顺序与 fail-fast 语义）见
-[项目结构](https://yijiu2025.github.io/CoreFlow/guide/project-structure)。
+For the full tree (including loader order and fail-fast semantics) see
+[Project structure](https://yijiu2025.github.io/CoreFlow/guide/project-structure).
 
-## 启动都发生了什么
+## What happens on boot
 
-`index.js → createApp() → initLoader()`，按 `src/framework/loader/registry/` 的文件名前缀顺序加载：
+`index.js → createApp() → initLoader()`, loading in filename-prefix order from
+`src/framework/loader/registry/`:
 
 ```
-00-globals  装饰 reply.result       06-models  扫描 src/models/ 注册全部模型
-01-monitor  请求监控 / 慢请求告警     07-keys    JWT 密钥加载 + 启动自检
-02-redis    连接 + 健康监控          08-api     扫描 src/api/ 注册路由
-03-db       Sequelize 连接          09-notice  SMTP 配置种子
-04-auth     Session 验证 + ALS       10-apps    加载应用配置 + 角色 + OAuth 客户端
-05-firewall 五层拦截管道
+00-globals   decorate reply.result       06-models   scan src/models/ and register every model
+01-monitor   request metrics / slow-request warnings   07-keys   JWT keys + startup self-check
+02-redis     connect + health monitoring 08-api      scan src/api/ and register routes
+03-db        Sequelize connection        09-notice  seed SMTP config
+04-auth      session validation + ALS    10-apps    app config + roles + OAuth clients
+05-firewall  five-stage pipeline
 ```
 
-`01-monitor` / `02-redis` / `09-notice` 属可选 loader（失败只告警）；其余 **fail-fast**
-—— 能监听端口却处理不了正确请求的进程，比直接退出更难排查。
+`01-monitor` / `02-redis` / `09-notice` are optional loaders (failures only warn); everything
+else is **fail-fast** — a process that binds a port but cannot serve correct responses is
+harder to diagnose than one that exits.
 
-## 权限：三级守卫
+## Permissions: three guard levels
 
-| 级别 | 来源 | 可配置项 |
+| Level | Declared in | Options |
 | --- | --- | --- |
-| **System** | `src/api/<域>/system.json` | `enabled` / `allowIps` / `requireLogin` |
+| **System** | `src/api/<domain>/system.json` | `enabled` / `allowIps` / `requireLogin` |
 | **Group** | `registerGroupMetadata()` | `enabled` / `allowIps` / `allowRoles` |
 | **API** | `registerSecureRoute()` | `requireLogin` / `requirePermission` / `requireSignature` / `config.rateLimit` |
 
 ```js
-// 单个权限（deny 优先于 allows，通配符仅支持尾部 `:*`）
+// Single permission (deny beats allow; wildcards are suffix-only `:*`)
 registerSecureRoute(fastify, {
   name: 'readConfig',
   method: 'GET',
@@ -127,98 +148,108 @@ registerSecureRoute(fastify, {
   handler: async (req, reply) => reply.result.success(await readConfig())
 });
 
-// 任一满足（OR）
+// Any of (OR)
 requirePermission: { any: ['fw:block:write', 'fw:admin:*'] }
 
-// 全部满足（AND）
+// All of (AND)
 requirePermission: { all: ['fw:config:read', 'fw:config:write'] }
 ```
 
-判定顺序：`enabled → IP/角色 → 登录 → 权限（deny 命中即拒）`；
-未登录返回 **401**、权限不足返回 **403**，非法权限格式 **fail-closed**（也是 403）。
+Evaluation order: `enabled → IP/roles → login → permissions (a deny short-circuits)`.
+Not logged in returns **401**, insufficient permissions **403**, and a malformed permission
+string **fails closed** (also 403).
 
-## 防火墙：五层管道
+## Firewall: five-stage pipeline
 
 ```
-请求 → ① 连接追踪（并发上限）→ ② 全局封禁（IP/设备/指纹黑名单）
-     → ③ 人机挑战（挑战 Cookie）→ ④ Bot 检测（UA 模式 + 高频行为）
-     → ⑤ 地理围栏 / 端点限频
+request → ① connection tracking (concurrency cap) → ② global blocking (IP/device/fingerprint lists)
+        → ③ human challenge (challenge cookie) → ④ bot detection (UA patterns + burst behaviour)
+        → ⑤ geo-fencing / endpoint rate limiting
 ```
 
-检测器都在 `src/app/firewall/engine/detectors/`：`rate-limiter`（滑窗，Redis Lua 单次往返 +
-内存降级）、`bot-detector`、`brute-force`、`scan-trap`（404/403 扫描陷阱）、`geo-filter`。
-限流规则与阈值从 `src/data/firewall_config.json` 读取，管理端可热改（`PATCH /api/firewall/v1/monitor/settings`）。
+Detectors live in `src/app/firewall/engine/detectors/`: `rate-limiter` (sliding window, one
+Redis Lua round-trip + in-memory fallback), `bot-detector`, `brute-force`, `scan-trap`
+(404/403 scan trap), `geo-filter`. Rules and thresholds come from
+`src/data/firewall_config.json` and can be hot-edited through the admin API
+(`PATCH /api/firewall/v1/monitor/settings`).
 
-## API 域
+## API domains
 
-| 域 | 前缀 | 能力 |
+| Domain | Prefix | Capabilities |
 | --- | --- | --- |
-| `oauth21` | `/oauth2.1` | 授权码+PKCE / 登录 / Token / 撤销 / 设备码 / OIDC |
-| `user` | `/user/v1` | 用户信息、权限、会话、设备、注册、重置密码 |
-| `auth` | `/auth/v1` | 会话绑定 / 切换账号 / H5 签名令牌 / 验证码校验 |
-| `admin` | `/admin/v1` | IAM 角色、策略、客户端管理 |
-| `notice` | `/notice/v1` | 通知渠道与模板 |
-| `verify` | `/verify/v1` | 图形验证码、邮箱验证码 |
-| `firewall` | `/api/firewall/v1` | 监控、封禁、白名单、配置、WebSocket |
-| `system` | `/v1` | 健康探针、系统信息 |
-| `posecraft` / `retroweb` | `/posecraft` · `/retroweb` | 内置业务应用（可裁剪） |
+| `oauth21` | `/oauth2.1` | Authorization code + PKCE / login / token / revocation / device code / OIDC |
+| `user` | `/user/v1` | Profile, permissions, sessions, devices, registration, password reset |
+| `auth` | `/auth/v1` | Session binding / account switching / H5 signed tokens / challenge verification |
+| `admin` | `/admin/v1` | IAM roles, policies, client management |
+| `notice` | `/notice/v1` | Notification channels and templates |
+| `verify` | `/verify/v1` | Image CAPTCHA, email verification codes |
+| `firewall` | `/api/firewall/v1` | Monitoring, blocks, allowlists, config, WebSocket |
+| `system` | `/v1` | Health probes, system info |
+| `posecraft` / `retroweb` | `/posecraft` · `/retroweb` | Bundled business apps (removable) |
 
-端点细节见 [OAuth 2.1 API 报告](https://yijiu2025.github.io/CoreFlow/oauth21-api-report) 与
-[API 路由规范](https://yijiu2025.github.io/CoreFlow/development/api-routes)。
+Endpoint details: [OAuth 2.1 API report](https://yijiu2025.github.io/CoreFlow/oauth21-api-report)
+and [API route conventions](https://yijiu2025.github.io/CoreFlow/development/api-routes).
 
-## 环境变量
+## Environment variables
 
-62 个可配置项，全部见 `.env.example`（每项都有注释与默认值）。**生产必填的三处密钥**：
+62 configurable keys, all documented with defaults in `.env.example`. The **three secrets you
+must set in production**:
 
 ```ini
-APP_SECRET=       # 至少 32 字符，弱值/默认值会被 validateEnv 拒绝启动
-SESSION_SECRET=   # Cookie 签名（换掉 = 全员重新登录）
-FIREWALL_SECRET=  # 挑战 Cookie 签名
+APP_SECRET=       # ≥ 32 chars; weak/default values are rejected by validateEnv at boot
+SESSION_SECRET=   # cookie signing (rotating it logs everyone out)
+FIREWALL_SECRET=  # challenge-cookie signing
 
 DB_HOST=127.0.0.1
 DB_NAME=your_database_name
 DB_USER=root
 
-CORS_ORIGINS=https://your-domain.com   # 生产必填：为空时敏感端点 fail-closed
+CORS_ORIGINS=https://your-domain.com   # required in production: sensitive endpoints fail closed when empty
 ```
 
-另有两项容易踩：
+Two more that commonly bite:
 
-- `PROXY_TRUST_CIDR`：只有前面真挂了反向代理才填，且**只填代理的确切地址**（如 `172.18.0.2/32`）。
-  填整个网段等于把 IP 白名单 / 限流键 / 封禁记录交给攻击者自填 `X-Forwarded-For`。
-- `REDIS_ENABLED`：配了就必须连得上（否则访问层 503）；不配则走进程内实现。
+- `PROXY_TRUST_CIDR`: set it only when a reverse proxy really sits in front, and list the
+  proxy's **exact address** (e.g. `172.18.0.2/32`). Trusting a whole subnet lets clients forge
+  `X-Forwarded-For`, which defeats IP allowlists, rate-limit keys and block records.
+- `REDIS_ENABLED`: if set, Redis must be reachable (otherwise 503 at the access layer); if
+  unset, in-process implementations are used.
 
-## 常用命令
+## Commands
 
 ```bash
-npm run dev            # 开发（nodemon 热重载）
-npm start              # 生产启动（读 .env.production）
-npm run migrate        # 数据库迁移
-npm run setup:admin    # 创建 / 授予超级管理员
-npm run revoke:admin   # 撤销超级管理员（最后一名会被拦住）
-npm run cli            # 交互式管理终端
-npm test               # Jest（105 套件 / 1250 用例）
-npm run lint           # ESLint（自动修复）
-npm run verify:all     # 跨进程关卡（锁 / 队列 / 守卫同步 / 统计 / WS 扇出）
-npm run docs:dev       # 本地起文档站
+npm run dev            # development (nodemon hot reload)
+npm start              # production start (reads .env.production)
+npm run migrate        # run database migrations
+npm run setup:admin    # create / grant a super admin
+npm run revoke:admin   # revoke a super admin (the last one is refused)
+npm run cli            # interactive admin terminal
+npm test               # Jest (105 suites / 1250 tests)
+npm run lint           # ESLint (auto-fix)
+npm run verify:all     # cross-process gates (locks / queues / guard sync / metrics / WS fan-out)
+npm run docs:dev       # serve the documentation site locally
 ```
 
-## 文档
+## Documentation
 
-| 入口 | 内容 |
+| Entry | What it covers |
 | --- | --- |
-| [在线文档](https://yijiu2025.github.io/CoreFlow/) | 完整站（VitePress） |
-| [docs/README.md](./docs/README.md) | 文档地图（先读这个再找文档） |
-| [架构总览](https://yijiu2025.github.io/CoreFlow/core/architecture) | 分层与依赖方向 |
-| [请求处理流水线](https://yijiu2025.github.io/CoreFlow/core/request-pipeline) | 一个请求的完整路径 |
-| [认证集成](https://yijiu2025.github.io/CoreFlow/standards/auth-integration) | 前后端线协议（Cookie / 签名 / CSRF） |
+| [docs/README.md](./docs/README.md) | Documentation map — read this before searching |
+| [Online docs](https://yijiu2025.github.io/CoreFlow/) | Full VitePress site (Chinese) |
+| [Architecture](https://yijiu2025.github.io/CoreFlow/core/architecture) | Layering and dependency direction |
+| [Request pipeline](https://yijiu2025.github.io/CoreFlow/core/request-pipeline) | The full path of one request |
+| [Auth integration](https://yijiu2025.github.io/CoreFlow/standards/auth-integration) | Frontend/backend wire protocol (cookies / signatures / CSRF) |
 
-## 贡献
+## Contributing
 
-提交前请跑 `npm run lint && npm test`。提交信息遵循 Conventional Commits
-（`fix` → patch、`feat` → minor、破坏性变更 → major），发版由 `node scripts/release.mjs --apply` 执行，
-规则详见 [Git 提交与发版规则](https://yijiu2025.github.io/CoreFlow/standards/git-release-rules)。
+Run `npm run lint && npm test` before committing. Commit messages follow Conventional Commits
+(`fix` → patch, `feat` → minor, breaking change → major); releases are cut by
+`node scripts/release.mjs --apply`. Details:
+[Git commit and release rules](https://yijiu2025.github.io/CoreFlow/standards/git-release-rules).
 
-## 许可
+Translations are welcome — add `README.<locale>.md` next to this file and link it in the
+language switcher at the top.
+
+## License
 
 [GPL-3.0](./LICENSE)

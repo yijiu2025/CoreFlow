@@ -4,8 +4,10 @@ CoreFlow **后端仓库**的文档总入口。**写文档前先读本文决定�
 
 > 📌 本仓自 2026-10-31 起**只包含后端**。前端工程（`oauth21` / `posecraft` / `admin` /
 > `poseadmin` / `firewall` / `phonecopy`）已全部移出、改为独立维护，
-> 原先描述它们的 18 篇文档已归档到 [archive/legacy-frontend/](./archive/legacy-frontend/)。
-> 在线站点：<https://yijiu2025.github.io/CoreFlow/>
+> 原先描述它们的 19 篇文档已归档到 [archive/legacy-frontend/](./archive/legacy-frontend/)。
+> 在线站点：<https://yijiu2025.github.io/CoreFlow/>（文档正文为中文；仓库入口 README 有
+> [英文](https://github.com/yijiu2025/CoreFlow/blob/main/README.md) /
+> [中文](https://github.com/yijiu2025/CoreFlow/blob/main/README.zh-CN.md) 两版）
 
 ## 结构约定
 

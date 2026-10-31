@@ -29,7 +29,15 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(DIR, '..', '..');
 
 /** 扫描根目录（相对仓库根）。刻意不含 node_modules / packages 内第三方文档。 */
-const SCAN_ROOTS = ['docs', 'reports', '.github', 'README.md', 'CONTRIBUTING.md', 'SECURITY.md'];
+const SCAN_ROOTS = [
+  'docs',
+  'reports',
+  '.github',
+  'README.md',
+  'README.zh-CN.md',
+  'CONTRIBUTING.md',
+  'SECURITY.md'
+];
 
 /** 递归收集 Markdown 文件 */
 function collect(target, out = []) {
