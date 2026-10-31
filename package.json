@@ -107,7 +107,8 @@
     "follow-redirects": "^1.16.2",
     "@vue/server-renderer": "^3.5.44",
     "uuid": "^11.1.1",
-    "vite": "^6.4.5"
+    "vite": "^6.4.5",
+    "@babel/core": "^7.29.6"
   },
   "engines": {
     "node": ">=20.19.0"
