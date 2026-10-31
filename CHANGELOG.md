@@ -58,7 +58,7 @@
 - `guide/quick-start.md`：`cd antigravity`、`DB_NAME`、探针响应结构（统一封装而非裸 `status`）。
 - `standards/auth-integration.md`：注册限频的真实位置与数值（此前写的 3 次/时从未生效）。
 
-## 未发布（Unreleased）
+## 2.29.1 — 2026-10-31
 
 ### 修复
 
@@ -67,6 +67,8 @@
   `integration/signature.test.js` 与 `service.test.js` 补上
   `isRedisConfigured() ? connectTestRedis() : 跳过建连` 引导 —— CI 里真连上 Redis 并真正
   验到 Redis 路径，本地未配置时仍走进程内实现。（仅测试代码，无运行期行为变更。）
+
+## 未发布（Unreleased）
 
 ## 2.28.1 — 2026-10-16
 
