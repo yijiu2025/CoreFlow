@@ -115,7 +115,6 @@ src/
 ├── framework/db/         # 数据库连接 + 迁移入口
 ├── framework/redis/      # 缓存 / 锁 / 队列 / PubSub
 ├── framework/log/        # 日志
-├── framework/firewall/   # 防火墙引擎
 ├── framework/notice/     # 通知
 ├── framework/verify/     # 验证码
 ├── framework/loader/     # 加载器引擎
@@ -129,7 +128,7 @@ src/
 │   ├── oauth21/          # OAuth 2.1（登录 / SSO / 授权）
 │   ├── user/             # 用户
 │   ├── admin/            # 管理
-│   ├── firewall/         # 防火墙
+│   ├── firewall/         # 防火墙（引擎在 engine/detectors/，五层管道都在这里）
 │   ├── guard/            # 三级守卫
 │   ├── notice/           # 通知
 │   ├── posecraft/        # posecraft 后端

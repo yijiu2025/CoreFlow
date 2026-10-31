@@ -4,6 +4,9 @@
 > **不要把高权限长期 Token 存进 `localStorage`/`sessionStorage`** —— XSS 可被直接读取并持久化窃取。
 > Bearer Token 仅用于**独立的 API 客户端**（服务端集成 / 移动端），此时才需要显式管理
 > Token 生命周期、吊销与轮换，并说明与 Cookie 会话不同的 CSRF/XSS 防护边界。
+>
+> 📦 文中出现的 `oauth21/src/...` 是**独立前端仓**的路径
+> （<https://github.com/yijiu2025/oauth-web>），本仓不含该目录，仅作为参考实现指路。
 
 ## auth Store 标准实现
 

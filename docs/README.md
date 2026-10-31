@@ -23,6 +23,7 @@ CoreFlow **后端仓库**的文档总入口。**写文档前先读本文决定�
 | `deployment/` | 部署：Docker / 多服务器 / CI·CD / 私钥信封加密（每篇开头有实现状态标注） | [deployment/README.md](./deployment/README.md) |
 | `roadmap/` | 升级路线图（单文件，不设二级入口） | [roadmap/index.md](./roadmap/index.md) |
 | `archive/` | 归档：历史快照 + 已迁出的前端文档 | [archive/README.md](./archive/README.md) |
+| `en/` | 英文站（`/en/` 前缀）：只含已翻译页面，清单见 [translation-status](./en/translation-status.md) | [en/translation-status.md](./en/translation-status.md) |
 
 ### 不设二级入口的单文件
 

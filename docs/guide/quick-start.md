@@ -11,16 +11,16 @@
 ## 安装
 
 ```bash
-# 克隆项目
-git clone https://github.com/yijiu2025/CoreFlow.git
+# 克隆项目（theme-core 是 git submodule，省略 --recurse-submodules 时它会是空目录）
+git clone --recurse-submodules https://github.com/yijiu2025/CoreFlow.git
 cd CoreFlow
 
 # 安装依赖
 npm install
-
-# 安装前端依赖（以 firewall 为例）
-cd firewall && npm install && cd ..
 ```
+
+> 本仓只含后端。前端工程（`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` /
+> `phonecopy`）已迁出、各自独立维护，安装与启动请到对应仓库进行。
 
 ## 配置环境变量
 
@@ -66,15 +66,12 @@ npm run migrate
 ```bash
 # 启动后端（nodemon 热重载）
 npm run dev
-
-# 另一个终端，启动前端
-cd firewall && npm run dev
 ```
 
 访问：
 
 - 后端 API：`http://localhost:3000`
-- 前端面板：`http://localhost:5173`
+- 前端面板：已不在本仓（见各前端仓的 README）
 
 ## 验证安装
 
