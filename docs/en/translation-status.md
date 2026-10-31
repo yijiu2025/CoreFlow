@@ -24,6 +24,9 @@ demand — the Chinese page is always the canonical source.
 | [API routes](/en/development/api-routes) | [API 路由](/development/api-routes) |
 | [Models](/en/development/models) | [数据模型](/development/models) |
 | [Git commits and releases](/en/standards/git-release-rules) | [Git 提交与发版规则](/standards/git-release-rules) |
+| [CI/CD](/en/deployment/cicd) | [CI/CD](/deployment/cicd) |
+| [Private-key envelope encryption](/en/deployment/key-encryption) | [私钥信封加密](/deployment/key-encryption) |
+| [Multi-server (design only)](/en/deployment/multi-server) | [多服务器架构](/deployment/multi-server) |
 
 ## Chinese only (not translated yet)
 
@@ -40,9 +43,6 @@ demand — the Chinese page is always the canonical source.
 | [OAuth 2.1 API 报告](/oauth21-api-report) | endpoint inventory |
 | [性能最佳实践](/standards/best-practices/performance) | performance |
 | [测试最佳实践](/standards/best-practices/testing) | testing |
-| [私钥信封加密](/deployment/key-encryption) | envelope encryption for private keys |
-| [多服务器架构](/deployment/multi-server) | multi-server roles |
-| [CI/CD](/deployment/cicd) | pipelines |
 | [升级路线图](/roadmap/) | roadmap |
 
 ## Want a page translated?

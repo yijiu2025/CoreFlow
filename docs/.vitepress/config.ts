@@ -243,7 +243,12 @@ const EN_THEME = {
     },
     {
       text: 'Deployment',
-      items: [{ text: 'Docker', link: '/en/deployment/docker' }]
+      items: [
+        { text: 'Docker', link: '/en/deployment/docker' },
+        { text: 'Private-key envelope encryption', link: '/en/deployment/key-encryption' },
+        { text: 'Multi-server (design only)', link: '/en/deployment/multi-server' },
+        { text: 'CI/CD', link: '/en/deployment/cicd' }
+      ]
     },
     {
       text: 'Reference',
