@@ -248,6 +248,62 @@ function writePackageVersion(pkgPath, version) {
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
+/**
+ * 检查 package-lock.json 的**根版本号**是否与将要发布的版本一致
+ *
+ * 为什么必须一起对齐：lock 里有两个"根版本"字段（顶层 `version` 与 `packages[""]` 的
+ * `version`）。发版只 bump `package.json` 时，这两个字段会一路落后 —— 实测脱节过两个版本
+ * （package.json 2.29.1 / lock 2.28.0），排查时很容易被当成"依赖没装对"。
+ *
+ * 判据只看根对象，不看 `packages` 里成千上万个三方包（它们有自己的版本号，绝不能改）。
+ *
+ * @param {string} version 目标版本
+ * @returns {{path: string, from: string, rootFrom: string, to: string}|null} 需要改动时返回描述
+ */
+function alignLockVersion(version) {
+  const p = path.join(ROOT, 'package-lock.json');
+  if (!existsSync(p)) return null;
+  let lock;
+  try {
+    lock = JSON.parse(readFileSync(p, 'utf8'));
+  } catch {
+    return null;
+  }
+  const rootFrom = lock?.packages?.['']?.version;
+  if (lock.version === version && rootFrom === version) return null;
+  return { path: p, from: String(lock.version), rootFrom: String(rootFrom), to: version };
+}
+
+/**
+ * 写回 package-lock.json 的根版本号（**只配文本替换，不重新序列化**）
+ *
+ * 重新 `JSON.stringify` 会重排整个 1.5 万行文件（npm 的换行/数字/嵌套格式细节不同），
+ * 产生一份无法 review 的巨量 diff。这里只替换锚点明确的两处：
+ * 顶层 `version`（缩进 2）与 `packages[""]` 的 `version`（缩进 6），
+ * 且要求其**上一行是 `name`** —— 以保证绝不会误改某个恰好同版本号的三方包。
+ *
+ * @param {string} lockPath
+ * @param {string} version
+ * @returns {boolean} 是否成功替换了两处
+ */
+function writeLockVersion(lockPath, version) {
+  const raw = readFileSync(lockPath, 'utf8');
+  const nl = raw.includes('\r\n') ? '\r\n' : '\n';
+  const lines = raw.split(/\r?\n/);
+
+  let changed = 0;
+  for (let i = 1; i < lines.length && changed < 2; i += 1) {
+    if (!/^\s{2,6}"version":\s*"[^"]+",$/.test(lines[i])) continue;
+    if (!/"name":/.test(lines[i - 1])) continue; // 必须是紧跟 name 的"根版本行"
+    lines[i] = lines[i].replace(/"version":\s*"[^"]+"/, `"version": "${version}"`);
+    changed += 1;
+  }
+
+  if (changed !== 2) return false;
+  writeFileSync(lockPath, lines.join(nl));
+  return true;
+}
+
 /* ---------- GitHub 通道 ---------- */
 
 /** GCM 里存有 GitHub 凭据时可直接调 API，无需 gh CLI */
@@ -464,6 +520,7 @@ async function main() {
   const changelog = readChangelog();
   const changelogBump = changelog ? bumpChangelog(changelog, next, todayISO()) : null;
   const pkgAlign = alignPackageVersion(next);
+  const lockAlign = alignLockVersion(next);
 
   if (changelogBump) {
     log('── 收尾 1/2：CHANGELOG ────────────');
@@ -482,6 +539,11 @@ async function main() {
     log(`   ${APPLY ? '将对齐' : '将对齐'} package.json version ${pkgAlign.from} → ${next}`);
   } else {
     log(`   ✓ package.json 无需对齐（${next}）`);
+  }
+  if (lockAlign) {
+    log(`   将对齐 package-lock.json 根版本 ${lockAlign.from} → ${next}（只改根，不动三方包）`);
+  } else {
+    log(`   ✓ package-lock.json 根版本已对齐（${next}）`);
   }
 
   if (gitTry('rev-parse', '-q', '--verify', `refs/tags/${tag}`).ok) {
@@ -553,10 +615,18 @@ async function main() {
     writePackageVersion(pkgAlign.path, next);
     log(`  ✓ package.json version ${pkgAlign.from} → ${next}`);
   }
+  if (lockAlign) {
+    const ok = writeLockVersion(lockAlign.path, next);
+    log(ok
+      ? `  ✓ package-lock.json 根版本 ${lockAlign.from} → ${next}`
+      : `  ⚠ package-lock.json 根版本对齐失败（未找到两处锚点），请手动检查`);
+  }
 
   // 版本文件必须先提交，再对提交打 tag，否则 tag 指向的提交不含新 CHANGELOG/版本号
-  if (changelogBump?.changed || pkgAlign) {
-    git('add', 'CHANGELOG.md', pkgAlign?.path ?? 'CHANGELOG.md');
+  if (changelogBump?.changed || pkgAlign || lockAlign) {
+    git('add', 'CHANGELOG.md');
+    if (pkgAlign) git('add', pkgAlign.path);
+    if (lockAlign) git('add', lockAlign.path);
     git('commit', '-m', `chore(release): ${next}`);
     log(`  ✓ 已提交版本文件 ${next}`);
   }

@@ -102,6 +102,13 @@
 
 ## 未发布（Unreleased）
 
+### 工具
+
+- `scripts/release.mjs` 发版时**同步 `package-lock.json` 的根版本号**（顶层 `version` 与
+  `packages[""]`）。此前只 bump `package.json`，lock 会一路落后（实测脱节过两个版本，
+  容易被误判成"依赖没装对"）。只做文本替换且要求上一行是 `name` 锚点，
+  绝不触碰 `packages` 里同版本号的三方包。
+
 ## 2.28.1 — 2026-10-16
 
 ### 修复
