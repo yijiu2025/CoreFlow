@@ -1,21 +1,27 @@
 /**
  * 密码策略模块
- * 密码强度校验、历史密码检查、强制修改周期
+ * 密码强度校验（含 bcrypt 72 字节截断防护）
+ *
+ * 设计说明：曾包含 isPasswordReused / checkPasswordAge（历史密码防重用与有效期），
+ * 因全仓零引用且缺少配套存储（无密码历史表），于 2026-11-01 按
+ * docs/PLACEMENT-password-policy.md 的 P0 决策移除，文件收窄为「强度校验」。
+ * 若将来要实现防重用，需先补 password_history 存储与改密追加写入路径。
  *
  * @author yijiu2025
  * @since 2026-08-17
  */
 
+/** bcrypt 只取前 72 字节参与哈希（超出部分静默忽略），见 docs/PLACEMENT-password-policy.md 实测 */
+const BCRYPT_MAX_BYTES = 72;
+
 /** 默认密码策略 */
 const DEFAULT_POLICY = {
-  minLength: 8, // 最小长度
-  maxLength: 128, // 最大长度
+  minLength: 8, // 最小长度（字符）
+  maxLength: 128, // 最大长度（字符）；实际硬上限由 BCRYPT_MAX_BYTES 字节校验兜住
   requireUppercase: true, // 需要大写字母
   requireLowercase: true, // 需要小写字母
   requireNumbers: true, // 需要数字
-  requireSpecial: false, // 需要特殊字符
-  maxHistory: 5, // 记住最近 N 个密码，防止重复使用
-  maxAgeDays: 0 // 密码有效期（天），0 表示永不过期
+  requireSpecial: false // 需要特殊字符
 };
 
 /**
@@ -40,6 +46,12 @@ function validatePasswordStrength(password, policy = {}) {
     errors.push(`密码长度不能超过 ${cfg.maxLength} 个字符`);
   }
 
+  // 🔴 bcrypt 72 字节截断防护：超出 72 字节的部分不参与哈希，
+  // 用户以为设置了更长密码实则没有；多字节字符（中文 3 字节/字）24 个字即触发。
+  if (Buffer.byteLength(password, 'utf8') > BCRYPT_MAX_BYTES) {
+    errors.push(`密码长度不能超过 ${BCRYPT_MAX_BYTES} 字节（中文字符按 3 字节计）`);
+  }
+
   if (cfg.requireUppercase && !/[A-Z]/.test(password)) {
     errors.push('密码必须包含至少一个大写字母');
   }
@@ -59,48 +71,5 @@ function validatePasswordStrength(password, policy = {}) {
   return { valid: errors.length === 0, errors };
 }
 
-/**
- * 检查密码是否在历史记录中（防止重复使用）
- * @param {string} password 新密码
- * @param {string[]} passwordHistory 历史密码哈希列表（最近 N 个）
- * @param {Function} hashFn 哈希函数（如 bcrypt.compare）
- * @returns {Promise<boolean>} true = 密码在历史记录中，应拒绝
- */
-async function isPasswordReused(password, passwordHistory, hashFn) {
-  if (!passwordHistory || passwordHistory.length === 0) return false;
-
-  for (const oldHash of passwordHistory) {
-    if (await hashFn(password, oldHash)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * 检查密码是否已过期
- * @param {Date} lastPasswordChange 最后修改密码时间
- * @param {number} maxAgeDays 有效期天数（0 = 永不过期）
- * @returns {{ expired: boolean, daysRemaining: number }}
- */
-function checkPasswordAge(lastPasswordChange, maxAgeDays = 0) {
-  if (maxAgeDays <= 0) {
-    return { expired: false, daysRemaining: -1 };
-  }
-
-  if (!lastPasswordChange) {
-    return { expired: true, daysRemaining: 0 };
-  }
-
-  const now = new Date();
-  const diffDays = Math.floor((now - lastPasswordChange) / (1000 * 60 * 60 * 24));
-  const daysRemaining = maxAgeDays - diffDays;
-
-  return {
-    expired: daysRemaining <= 0,
-    daysRemaining: Math.max(0, daysRemaining)
-  };
-}
-
-export { validatePasswordStrength, isPasswordReused, checkPasswordAge };
+export { validatePasswordStrength, BCRYPT_MAX_BYTES };
 export default DEFAULT_POLICY;

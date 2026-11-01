@@ -142,7 +142,7 @@ export {
   isDisableLevel
 } from './security/ban.js';
 export { hashPassword, verifyPassword, isLegacyHash } from './security/password-hash.js';
-export { validatePasswordStrength, isPasswordReused, checkPasswordAge } from './security/password-policy.js';
+export { validatePasswordStrength, BCRYPT_MAX_BYTES } from './security/password-policy.js';
 export { generateSecret, generateTOTP, verifyTOTP } from './security/totp.js';
 export {
   DEFAULT_SAFE_TIME,

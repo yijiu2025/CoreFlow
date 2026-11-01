@@ -28,7 +28,7 @@ auth/
 | `../bearer-auth.js` | JWT Bearer 认证：token 校验 → 用户缓存/DB → 权限指纹快照装配 | `authenticateByJwt` |
 | `request-context.js` | ALS 实例本体（零依赖，防循环依赖的解耦点） | `requestContext` |
 | `accessors.js` | 请求上下文访问器（业务层任意深度取 request/db/插件实例） | `getCtx` `getDb` `getServerResource` |
-| `stp-util.js` | 权限工具类（对标 Sa-Token），同时被 `app.decorate('auth')` | `default` = `StpUtil` |
+| `stp-util.js` | 权限工具类（对标 Sa-Token），同时被 `app.decorate('auth')`；方法分组：认证（getLoginId/check/checkRole 精确匹配）、权限（hasPermission/checkPermission/And/Or，Deny 优先+通配，零参显式报错）、封禁（disable 系 6 方法，⚠️ loginId 必须数字主键）、二级认证（openSafe 系 5 方法）。API 详解见文档站 `docs/core/permission.md` §StpUtil | `default` = `StpUtil` |
 | `cookie.js` | Cookie HMAC 签名、双令牌 Cookie 策略与 TTL 常量 | `signCookie` `verifyCookie` `COOKIE_SID` `COOKIE_OPTIONS` `COOKIE_POLICY` |
 
 ## session/ — 会话生命周期与治理
@@ -71,7 +71,7 @@ auth/
 |------|------|----------|
 | `ban.js` | 账号/设备封禁（登录与访问两档服务） | `disable` `untieDisable` `checkDisable` `checkDisableLevel` |
 | `password-hash.js` | 密码哈希与校验（含旧哈希识别） | `hashPassword` `verifyPassword` `isLegacyHash` |
-| `password-policy.js` | 密码强度/复用/有效期策略 | `validatePasswordStrength` `isPasswordReused` `checkPasswordAge` |
+| `password-policy.js` | 密码强度校验（含 bcrypt 72 字节截断防护） | `validatePasswordStrength` `BCRYPT_MAX_BYTES` |
 | `totp.js` | 两步验证（TOTP） | `generateSecret` `generateTOTP` `verifyTOTP` |
 | `safe.js` | 二级验证保险箱（敏感操作前的验证标记） | `openSafe` `checkSafe` `createSafePreHandler` |
 | `signature.js` | H5 接口签名（防爬防篡改） | `verifySignature` `issueH5Token` |

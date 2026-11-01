@@ -51,6 +51,23 @@ describe('密码策略（真实 validatePasswordStrength）', () => {
     expect(validatePasswordStrength('MyPassw0rd', { requireSpecial: true }).valid).toBe(false);
     expect(validatePasswordStrength('MyPassw0rd!', { requireSpecial: true }).valid).toBe(true);
   });
+
+  it('bcrypt 72 字节截断防护：73 字节 ASCII 密码被拒（超出部分 bcrypt 静默忽略）', () => {
+    // 72 字节恰好通过，73 字节必须拒绝
+    expect(validatePasswordStrength('A'.repeat(70) + 'a1').valid).toBe(true);
+    const over = validatePasswordStrength('A'.repeat(71) + 'a1');
+    expect(over.valid).toBe(false);
+    expect(over.errors.join()).toMatch(/72 字节/);
+  });
+
+  it('bcrypt 72 字节截断防护：多字节字符按字节计（中文 3 字节/字）', () => {
+    // 23 个中文（69 字节）+ 'Aa1'（3 字节）= 恰好 72 字节 → 通过
+    expect(validatePasswordStrength('中'.repeat(23) + 'Aa1').valid).toBe(true);
+    // 再多 1 字节即超限
+    const over = validatePasswordStrength('中'.repeat(23) + 'Aa12');
+    expect(over.valid).toBe(false);
+    expect(over.errors.join()).toMatch(/72 字节/);
+  });
 });
 
 describe('Cookie 属性（真实 COOKIE_OPTIONS）', () => {
