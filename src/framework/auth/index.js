@@ -110,8 +110,9 @@ function getServerResource(name) {
 /**
  * 从 Bearer Token 解析用户信息
  *
- * 优先从 JWT Claims 读取 roles/permissions（新版 token 已嵌入），
- * 旧版 token 无 claims 时降级为 Redis 缓存 → 数据库查询。
+ * 签发端（app/oauth21/crypto/jwt.js）不把 roles/permissions 嵌入 JWT
+ * （权限变更即时生效语义），因此这里统一走带指纹校验的缓存
+ * （auth/perm-cache.js）→ 数据库查询加载权限。
  * 缓存通过 getStore 统一管理，自带超时保护、序列化和降级。
  *
  * @param {string} token - JWT access_token
@@ -175,17 +176,11 @@ async function getUserFromToken(token) {
       return null;
     }
 
-    // 3. 优先从 JWT 读取权限；Claims 未携带时走带指纹校验的缓存（auth/perm-cache.js）
+    // 3. 权限加载：走带指纹校验的缓存（auth/perm-cache.js）
     //
-    //    注意：JWT Claims 里**嵌了** permissions 时直接用（签发时的快照，token 自校验语义），
-    //    这是 OAuth 的无状态约定；不嵌则走缓存 + 指纹，权限变更可即时生效。
-    let roles = payload.roles;
-    let permissions = payload.permissions;
-    if (!roles || !permissions) {
-      const loaded = await getPermissions(userData.id, payload.aud || 'GLOBAL');
-      roles = roles || loaded.roles;
-      permissions = permissions || loaded.permissions;
-    }
+    //    签发端不把权限嵌进 JWT（权限变更即时生效，不等 token 过期），
+    //    所以这里永远从缓存/DB 读实时快照，不读 payload claims。
+    const { roles, permissions } = await getPermissions(userData.id, payload.aud || 'GLOBAL');
 
     return {
       sub: userData.id,
