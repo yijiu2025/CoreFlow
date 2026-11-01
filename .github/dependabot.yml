@@ -1,7 +1,9 @@
 version: 2
 
 updates:
-  # npm 依赖。directory "/" 覆盖 monorepo 全部清单（根 / posecraft / poseadmin / firewall / admin）
+  # npm 依赖。
+  # 只覆盖仓库根的清单：前端工作区（oauth21 / posecraft / firewall / admin / poseadmin）
+  # 已于 2026-10-31 拆为独立仓库移出本仓，各自的依赖更新在各自仓库里跑。
   - package-ecosystem: npm
     directory: "/"
     schedule:
@@ -11,6 +13,25 @@ updates:
       timezone: Asia/Shanghai
     # 默认上限 5 是告警只开出 4 个 PR 的原因；分组后提上限，让排队中的更新流动起来
     open-pull-requests-limit: 15
+
+    # ── 上游未跟进的三条，别让 Dependabot 反复开失败的 job ──────────────
+    # 症状：这三条的 security update 跑完必红（`Dependabot encountered '1' error(s)`），
+    # 而且**没有可用修复路径** —— 例：minimatch 的唯一"修复"路径要求把 @eslint/js 从
+    # 10.0.1 降到 9.39.5；glob 的修复版要 rimraf@3 / test-exclude 放弃 `glob.sync`。
+    # 本仓已用 overrides 把**生产链路**修到 0（见 package.json `overrides`），
+    # 剩下的副本全部只在 devDependency 里（jest 30 / eslint 10），且 Dockerfile
+    # 是 `npm install --omit=dev` —— 它们不进镜像。
+    #
+    # ⚠️ 解除条件（满足后请删掉对应 ignore 并跑一次 `npm audit`）：
+    #   · jest 发布版本改用 glob ≥14 / minimatch ≥11
+    #   · eslint 发布版本改用 minimatch ≥11
+    # 现在硬压会打碎工具链：全局 override `minimatch@^11` 实测让 `jest --coverage`
+    # 崩在 generateEmptyCoverage（`minimatch is not a function`，v11 的 CJS 导出形态变了）。
+    ignore:
+      - dependency-name: minimatch
+      - dependency-name: glob
+      - dependency-name: deepmerge
+
     groups:
       # 次版本 / 补丁按生产、开发分组，一次一个 PR，降低评审噪音
       prod-minor-patch:
