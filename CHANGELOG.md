@@ -7,6 +7,8 @@
 
 ## 未发布（Unreleased）
 
+## 2.31.0 — 2026-11-01
+
 ### 变更（v2.31.0 候选）
 
 - **feat(redis)**：`getStore` 新增 `{ memory: true }` 选项——强制进程内 MapStore，
@@ -20,6 +22,7 @@
 - **refactor(auth)**：模块拆 7 个职责子目录（context/session/permission/device/risk/
   security/audit），`index.js` 收拢为纯门面（141 个分类命名导出）；业务代码统一走门面，
   测试直连叶子文件，auth 内部相对互引禁碰 index（防环）。
+
 
 ## 2.30.0 — 2026-11-01
 
