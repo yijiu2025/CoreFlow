@@ -11,12 +11,7 @@
  * @since 2026-08-17
  * @since 2026-09-15 新增设备维度（跨 IP 生效）
  */
-import {
-  getSummaryAggregated,
-  getRecentRecordsAggregated,
-  clearAll,
-  setBroadcastHandler
-} from '../data/store.js';
+import { getSummaryAggregated, getRecentRecordsAggregated, clearAll, setBroadcastHandler } from '../data/store.js';
 import { addToBlacklist, removeFromBlacklist, addToWhitelist, removeFromWhitelist } from '../dao/dao.js';
 import {
   setBlock,
@@ -152,10 +147,12 @@ subscribe(BROADCAST_CHANNEL, payload => deliverLocal(payload));
 
 // ==================== 封禁/白名单编排 ====================
 
-/** 计算是否永久封禁 + 过期时间 */
-function computeBlockMeta({ duration, permanent }) {
+/** 计算是否永久封禁 + 过期时间（`now` 由调用方传入，保证与 createdAt 同源） */
+function computeBlockMeta({ duration, permanent, now = Date.now() }) {
   const isPermanent = permanent === true || (!duration && permanent !== false);
-  const expiresAt = isPermanent ? null : Date.now() + (duration || 86400) * 1000;
+  // createdAt 与 expiresAt 分开取 Date.now() 会差 1ms，让"封禁时长 = expiresAt - createdAt"
+  // 这个不变量在边界抖动（Node 24 上实测复现过测试偶发失败）
+  const expiresAt = isPermanent ? null : now + (duration || 86400) * 1000;
   return { isPermanent, expiresAt };
 }
 
@@ -172,12 +169,13 @@ async function addBlacklistEntry({ type, value, duration, permanent }) {
 
   // IP 类型同步写入 Redis 封禁
   if (type === 'ip') {
-    const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent });
+    const now = Date.now();
+    const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent, now });
     await setBlock(value, {
       status: 'BLOCKED',
       source: 'manual',
       permanent: isPermanent,
-      createdAt: Date.now(),
+      createdAt: now,
       expiresAt
     });
   }
@@ -204,14 +202,15 @@ async function removeBlacklistEntry({ type, value }) {
 async function addIpBlock({ ip, duration, permanent, status }) {
   if (!ip) return { ok: false, message: '缺少 IP 参数' };
 
-  const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent });
+  const now = Date.now();
+  const { isPermanent, expiresAt } = computeBlockMeta({ duration, permanent, now });
   const blockStatus = status || 'BLOCKED';
 
   await setBlock(ip, {
     status: blockStatus,
     source: 'manual',
     permanent: isPermanent,
-    createdAt: Date.now(),
+    createdAt: now,
     expiresAt
   });
   addToBlacklist('ip', ip);

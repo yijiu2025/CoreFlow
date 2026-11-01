@@ -53,12 +53,14 @@ const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null) => {
   const count = await bumpCounter(trapKey, window);
 
   if (count >= limit) {
+    // 同一个 now 推导 createdAt / expiresAt，避免两次 Date.now() 差 1ms 让时长不守恒
+    const now = Date.now();
     await setBlockForSubject(subject, {
       status: 'SCANNER',
       source: 'auto',
       permanent: false,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + duration * 1000
+      createdAt: now,
+      expiresAt: now + duration * 1000
     });
     // 封禁后清掉陷阱计数，避免解封后立即再次触发
     await removeKeys([trapKey]);

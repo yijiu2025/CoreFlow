@@ -84,12 +84,16 @@ const checkRateLimit = async (actorId, options = {}) => {
   const count = await consumeRateWindow(rel.rateLimit(actorId), window * 1000);
 
   if (count > limit) {
+    // 只取一次时间：createdAt 与 expiresAt 必须由同一个 now 推导。
+    // 写成两次 `Date.now()` 会让二者相差 1ms（实测在 Node 24 上复现），
+    // 于是"过期时间 = 封禁时长"这个不变量会在边界上抖动，测试也随之偶发失败。
+    const now = Date.now();
     await setBlock(actorId, {
       status: 'BLOCKED',
       source: 'auto',
       permanent: false,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + blockTime * 1000
+      createdAt: now,
+      expiresAt: now + blockTime * 1000
     });
     const err = new Error(`Too Many Requests. Blocked for ${blockTime}s`);
     err.statusCode = 429;

@@ -18,6 +18,30 @@
   > 没有写 `BREAKING CHANGE` 走 major：本仓是应用不是库，版本号不对运行时兼容性做对外承诺。
   > **部署方需要把基础镜像 / 宿主 Node 一起升到 24**，这一条写在这里，不靠 semver 去猜。
 
+### 依赖
+
+- **Dependabot 恢复可用**（此前它自己就是坏的）：
+  - `.github/dependabot.yml` 的 `groups.<name>.update-types` 写成了 `version-update:semver-*`
+    （那是 `ignore` 的写法），GitHub 直接判配置非法 —— **分组从 2026-10-16 起从未生效**，
+    每次推送都挂一个「contained invalid details」的红检查。改成 `minor` / `patch` 后恢复正常。
+  - `uuid` 的 override 由写死的 `^11.1.1` 改成引用式 `"$uuid"`：它既是直接依赖、又被 override
+    钉住，Dependabot 想把 uuid 推大版本就会撞
+    `Override for uuid@14.0.3 conflicts with direct dependency`，导致整批更新 job 失败。
+    `$uuid` 由 npm 解析时展开为直接依赖的声明值，"顶掉 sequelize 的 uuid@8"效果不变。
+  - `minimatch` / `glob` / `deepmerge` 加入 `ignore` 并写明解除条件：这三条在 devDependency
+    里没有可行修复路径（唯一"修复"要降级 eslint，或要 rimraf 放弃 `glob.sync`），
+    跑一次红一次纯噪音；**生产链路早已是 0**。
+- 合并两个 Dependabot 分组 PR：生产 7 个 minor/patch（@fastify/cookie / cors / helmet /
+  websocket、light-my-request、pino-pretty、umzug）与开发 7 个（eslint 10.13、jest 30.5、
+  prettier 3.9 等）。全量 `npm audit` 29 条，**0 high**。
+
+### 修复
+
+- **防火墙封禁元数据的时间来源不唯一**：`rate-limiter.js` / `scan-trap.js` / `monitor.service.js`
+  里 `createdAt` 与 `expiresAt` 各自取一次 `Date.now()`，二者可能差 1ms，
+  使"封禁时长 = expiresAt - createdAt"这个不变量在边界抖动（Node 24 上实测让
+  `rate-limiter.test.js` 偶发失败：期望 120000，实得 120001）。改为同一个 `now` 推导。
+
 ### 安全
 
 - **机密扫描告警 1 → 0（误报，证据留档）**：`google_api_key` 指向 6 个 `.bin` 模型权重文件，

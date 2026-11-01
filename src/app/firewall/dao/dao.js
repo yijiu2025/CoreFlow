@@ -282,12 +282,15 @@ async function migrateBlockKey(keyRel) {
 
   if (!meta) {
     const ttl = await ttlOf(keyRel);
+    // createdAt / expiresAt 必须由同一个 now 推导：两次 Date.now() 会差 1ms，
+    // 让"expiresAt - createdAt === ttl"这个不变量在边界抖动（Node 24 上实测复现）
+    const now = Date.now();
     meta = {
       status: raw === '1' ? 'BLOCKED' : raw,
       source: 'auto',
       permanent: ttl === -1,
-      createdAt: Date.now(),
-      expiresAt: ttl > 0 ? Date.now() + ttl * 1000 : null
+      createdAt: now,
+      expiresAt: ttl > 0 ? now + ttl * 1000 : null
     };
   }
   await addBlockIndexEntry(field, JSON.stringify(meta), hashRel);
