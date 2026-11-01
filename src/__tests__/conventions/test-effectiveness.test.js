@@ -51,6 +51,10 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
   ['conventions/node-redis-v5-commands.test.js', '扫描源码文本校验 node-redis v5 命令名'],
   ['conventions/app-isolation.test.js', '扫描源码 import 语句校验跨应用边界'],
   ['conventions/firewall-layering.test.js', 'AST 构建依赖图做 DFS 找环，断言对象是"文件间的边"'],
+  [
+    'conventions/framework-app-isolation.test.js',
+    '扫描 framework/** 的 import 语句校验 framework→app 方向（结构守卫）'
+  ],
   ['conventions/no-scripts-import.test.js', 'AST 扫描 src/ 是否 import scripts/，断言对象是说明符'],
   ['conventions/terminal-colors.test.js', '读 colors.js 源码文本，校验输出用 IS_TTY 判断而非直读 stdout'],
   ['conventions/test-effectiveness.test.js', '本文件：扫描全部测试文件的 import 图，天然不 import 被测模块']

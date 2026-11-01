@@ -1,7 +1,7 @@
 /**
  * 跨实例统计汇聚（E3b）—— data/store.js 层单测
  *
- * 打桩点选在语义化访问层（`app/firewall/util/redis.js`），store.js 的
+ * 打桩点选在语义化访问层（`framework/firewall/util/redis.js`），store.js 的
  * 增量维护 / 合并 / 降级逻辑全部跑真身：
  *   - 增量刷写必须「批量一次」且失败时原样放回（不丢也不重复计）；
  *   - 聚合读取 = Redis 全量 + 本实例未刷写增量（键按 apiIdentifier 对齐）；
@@ -20,7 +20,7 @@ const readAggregatedStats = jest.fn(async () => null);
 const resetAggregatedStats = jest.fn(async () => true);
 const redisAvailableMock = jest.fn(() => true);
 
-jest.unstable_mockModule('../../app/firewall/util/redis.js', () => ({
+jest.unstable_mockModule('../../app/firewall/data/stats-redis.js', () => ({
   flushStatsDelta: (...a) => flushStatsDelta(...a),
   readAggregatedStats: (...a) => readAggregatedStats(...a),
   resetAggregatedStats: (...a) => resetAggregatedStats(...a),
@@ -54,7 +54,10 @@ const remoteStats = () => ({
   paths: [{ key: 'notice.getChannels', path: '/v1/notice/channels', count: 30, apiName: 'notice.getChannels' }],
   ips: [{ ip: '8.8.8.8', count: 25 }],
   recordCount: 2,
-  records: [{ ip: '8.8.8.8', url: '/old' }, { ip: '8.8.4.4', url: '/older' }]
+  records: [
+    { ip: '8.8.8.8', url: '/old' },
+    { ip: '8.8.4.4', url: '/older' }
+  ]
 });
 
 beforeEach(async () => {

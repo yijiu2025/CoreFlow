@@ -21,7 +21,9 @@ const rawHashes = {
   'stats:region': { '广东-深圳': '7' },
   'stats:path': { 'notice.getChannels': '5' },
   // 值是 JSON 字符串 —— 这就是当年被掩盖的关键形态
-  'stats:pathmeta': { 'notice.getChannels': JSON.stringify({ path: '/v1/notice/channels', apiName: 'notice.getChannels' }) },
+  'stats:pathmeta': {
+    'notice.getChannels': JSON.stringify({ path: '/v1/notice/channels', apiName: 'notice.getChannels' })
+  },
   'stats:ip': { '1.2.3.4': '3' },
   'stats:records': null // 走 call(lRange)
 };
@@ -43,7 +45,7 @@ jest.unstable_mockModule('../../framework/redis/index.js', () => ({
   isRedisReady: () => true
 }));
 
-const { readAggregatedStats } = await import('../../app/firewall/util/redis.js');
+const { readAggregatedStats } = await import('../../app/firewall/data/stats-redis.js');
 
 describe('readAggregatedStats 元数据解析（真身 + 原始字符串假 Redis）', () => {
   test('pathMeta 原始 JSON 字符串必须被解析，path 不得退化成 apiKey', async () => {

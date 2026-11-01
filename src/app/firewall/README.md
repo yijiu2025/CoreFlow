@@ -1,43 +1,53 @@
 # Firewall 模块架构
 
+# Firewall 模块架构（两层分离，2026-11-01）
+
+> **分层约定**：关键防护引擎上移 `src/framework/firewall/`（五道管卡、封禁语义、
+> 挑战 PoW——删除 firewall 应用后这些代码仍在，只是不再被安装）；本目录（app 层）
+> 保留**与前端互动的部分**：策略配置与持久化、面板遥测与 WebSocket 广播、CLI、
+> 以及把引擎"接线安装"进 Fastify 的入口。app → framework 单向依赖，
+> framework 零依赖 app（由 `conventions/framework-app-isolation.test.js` 守卫）。
+
 ## 目录结构
 
 ```
-src/app/firewall/
-├── index.js                          # Fastify 插件入口：注册限流、同步名单、挂载生命周期钩子
-│
-├── config/                           # 配置文件
-│   └── config.js                     # 默认安全策略矩阵、IP 解析 API 列表、常量定义
-│
-├── data/                             # 运行中数据
-│   ├── store.js                      # 内存环形缓冲区（1000 条）、统计汇总、磁盘持久化、WebSocket 广播
-│   └── challenge-template.js         # 人机挑战页面 HTML 模板（内联 SHA-256 PoW 求解器，载荷由服务端持有）
-│
-├── interface/                        # 依赖倒置接口层（零 import，依赖图最底层）
-│   └── config-access.js              # 配置读取器注册点：dao 注册、util 消费，以此断开 util ↔ dao 环
-│
-├── dao/                              # 数据访问层
-│   ├── dao.js                        # 配置持久化（JSON 文件）、黑白名单管理、节点自动定位
-│   └── block-manager.js              # 封禁/白名单**真身**：三维度 CRUD + checkGlobalBlock
-│
-├── util/                             # 公共工具函数
-│   ├── shared.js                     # 共享状态（activeConnections Map、getConfig、ipRequestTimestamps）
-│   ├── redis.js                      # Redis 访问层（key 构造、Lua、内存降级）
+src/framework/firewall/               # 【架构层】防护引擎（始终存在）
+├── block-manager.js                  # 封禁/白名单**真身**：三维度 CRUD + checkGlobalBlock + isUserManuallyBlocked
+├── challenge-template.js             # 人机挑战页 HTML 模板（内联 SHA-256 PoW 求解器，载荷服务端持有）
+├── telemetry-sink.js                 # 遥测注入点：app 注册 pushRecord，引擎经此产生记录事件
+├── interface/
+│   └── config-access.js              # 配置读取器注册点（零 import，依赖图最底层，断开 util ↔ dao 环）
+├── util/
+│   ├── redis.js                      # Redis 访问层（key 构造、Lua、三维度封禁/白名单/计数/挑战语义、内存降级）
+│   ├── shared.js                     # 共享内存状态（activeConnections、ipRequestTimestamps、getConfig）
 │   ├── connection-tracker.js         # 并发连接追踪 + 僵尸清理定时任务
-│   └── fingerprint.js                # 请求指纹生成（IP+UA+Lang+Enc → SHA256 前 16 位）
-│
-└── engine/                           # 防火墙核心逻辑（只做检测与响应，不含存储实现）
-    ├── index.js                      # barrel 导出：只暴露检测器 / 自动响应 / 请求管道
-    ├── pipeline.js                   # onRequest 五层拦截管道 + 日志记录
-    ├── auto-responder.js             # 攻击告警与自动响应
-    │
-    └── detectors/                    # 检测器模块
-        ├── rate-limiter.js           # 滑窗限频（Redis sorted-set + 内存降级）
-        ├── scan-trap.js              # 404/403 扫描陷阱检测
-        ├── brute-force.js            # 登录暴力破解防护
+│   ├── fingerprint.js                # 请求指纹生成（IP+UA+Lang+Enc → SHA256 前 16 位）
+│   └── pow-sha256.js                 # PoW 原语
+└── engine/                           # 五道管卡（只做检测与响应，不含面板遥测）
+    ├── index.js                      # barrel：检测器 / 自动响应 / 请求管道
+    ├── pipeline.js                   # onRequest 五层拦截管道 + 登录结果观测 + 日志记录
+    ├── auto-responder.js             # 攻击告警与自动响应（邮件通道由 app 注入，Webhook 直发）
+    └── detectors/
+        ├── first-ratelimit.js        # 第一层：@fastify/rate-limit 全局限流（enableRateLimit 开关）
+        ├── rate-limiter.js           # 端点级滑窗限频（enableEndpointRateLimit 独立开关）
+        ├── bot-detector.js           # Bot/僵尸网络检测 + 挑战触发
         ├── geo-filter.js             # 地理围栏 + GeoIP 解析
-        └── bot-detector.js           # Bot/僵尸网络检测 + 挑战触发
-```
+        ├── brute-force.js            # 登录爆破防护（IP 挑战 + 账号锁定，执行点在 oauth21 登录链）
+        └── scan-trap.js              # 404/403 扫描陷阱检测
+
+src/app/firewall/                     # 【应用层】面板/配置/接线（可卸载）
+├── index.js                          # initFirewall：装配入口——注入配置/遥测/邮件通道，挂载引擎钩子
+├── config.js                         # 应用清单（loader 扫描约定，10-apps.js 消费）
+├── config/
+│   └── config.js                     # 默认安全策略矩阵、IP 解析 API 列表、常量定义
+├── dao/
+│   └── dao.js                        # 策略持久化（JSON）、黑白名单管理、向 framework 注册配置读取器
+├── data/
+│   ├── store.js                      # 面板遥测：环形缓冲、统计汇总、磁盘持久化、WebSocket 广播（注册遥测 sink）
+│   └── stats-redis.js                # 遥测跨实例汇聚（自访问层拆出，随消费者留在 app）
+├── services/                         # 面板编排（monitor / metrics / challenge 校验端点）
+├── cli/                              # 运维命令行
+└── permission/                       # 面板权限
 
 ### 分层约定（有契约测试守卫）
 

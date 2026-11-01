@@ -1,5 +1,5 @@
 /**
- * 速率限制（测试 `app/firewall/engine/detectors/rate-limiter.js` 真身）
+ * 速率限制（测试 `framework/firewall/engine/detectors/rate-limiter.js` 真身）
  *
  * ⚠️ 为什么重写：本文件的前身把限流算法**抄进了测试**（自己维护一个 Map、
  * 自己实现滑动窗口），然后断言自己抄的那份实现。生产代码怎么改都不会影响结论，
@@ -32,12 +32,12 @@ const calls = {
 let accessState = { ipBlock: null, fpBlock: null };
 let windowCount = 1;
 
-jest.unstable_mockModule('../app/firewall/util/shared.js', () => ({
+jest.unstable_mockModule('../framework/firewall/util/shared.js', () => ({
   getConfig: () => cfg,
   ipRequestTimestamps: timestamps
 }));
 
-jest.unstable_mockModule('../app/firewall/util/redis.js', () => ({
+jest.unstable_mockModule('../framework/firewall/util/redis.js', () => ({
   rel: { rateLimit: actor => `rate:${actor}` },
   readAccessState: async args => {
     calls.readAccessState.push(args);
@@ -49,13 +49,13 @@ jest.unstable_mockModule('../app/firewall/util/redis.js', () => ({
   }
 }));
 
-jest.unstable_mockModule('../app/firewall/dao/block-manager.js', () => ({
+jest.unstable_mockModule('../framework/firewall/block-manager.js', () => ({
   setBlock: async (actor, meta) => {
     calls.setBlock.push({ actor, meta });
   }
 }));
 
-const { trackRequestCount, checkRateLimit } = await import('../app/firewall/engine/detectors/rate-limiter.js');
+const { trackRequestCount, checkRateLimit } = await import('../framework/firewall/engine/detectors/rate-limiter.js');
 
 beforeEach(() => {
   timestamps.clear();
@@ -65,6 +65,7 @@ beforeEach(() => {
   accessState = { ipBlock: null, fpBlock: null };
   windowCount = 1;
   cfg.defense.enableRateLimit = true;
+  cfg.defense.enableEndpointRateLimit = true;
 });
 
 afterEach(() => {
@@ -100,7 +101,9 @@ describe('trackRequestCount：60 秒滑窗计数', () => {
 
 describe('checkRateLimit：判定与错误契约', () => {
   test('开关关闭时直接放行，且不访问存储', async () => {
-    cfg.defense.enableRateLimit = false;
+    // 2026-11-01 拆分：端点级限频不再受全局 enableRateLimit 联动，
+    // 改由独立开关 enableEndpointRateLimit 控制（默认开启）
+    cfg.defense.enableEndpointRateLimit = false;
 
     await expect(checkRateLimit('/api/x:1.1.1.1')).resolves.toBe(true);
     expect(calls.readAccessState).toHaveLength(0);

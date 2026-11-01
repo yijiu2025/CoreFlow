@@ -26,7 +26,7 @@ export { checkGeoReputation, resolveGeoInfo } from './detectors/geo-filter.js';
 export { checkBotChallenge } from './detectors/bot-detector.js';
 
 // --- 攻击告警 / 自动响应 ---
-export { handleAttackEvent, notifyAttack, sendAlert } from './auto-responder.js';
+export { handleAttackEvent, notifyAttack, sendAlert, registerEmailAlertSender } from './auto-responder.js';
 
 // --- 请求管道 ---
 export {

@@ -28,7 +28,10 @@ import * as espree from 'espree';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
-const FIREWALL = path.join(ROOT, 'src/app/firewall');
+// 两层分离（2026-11-01）：引擎上移 framework/firewall，app/firewall 留面板/配置/遥测。
+// 契约对**并集**扫描：相对 import 跨目录解析，框架与 app 侧的分层单向约束一并生效。
+const FIREWALL = path.join(ROOT, 'src/framework/firewall');
+const FIREWALL_APP = path.join(ROOT, 'src/app/firewall');
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist']);
 
 function walk(dir, out = []) {
@@ -145,18 +148,24 @@ function findCycles(graph, keys) {
   return unique;
 }
 
-const FILES = walk(FIREWALL);
+// firewall 应用可卸载（conventions/framework-app-isolation.test.js 的前提）：
+// 整个 app/firewall 目录被删除时，本套件守卫的分层结构随之消失，应整体跳过而不是红
+const firewallInstalled =
+  fs.existsSync(path.join(FIREWALL_APP, 'index.js')) && fs.existsSync(path.join(FIREWALL, 'engine', 'pipeline.js'));
+const FILES = firewallInstalled ? [...walk(FIREWALL), ...walk(FIREWALL_APP)] : [];
 const GRAPH = buildGraph(FILES);
 
-describe('依赖方向契约：src/app/firewall 无循环依赖', () => {
+const d = firewallInstalled ? describe : describe.skip;
+
+d('依赖方向契约：firewall（framework 引擎层 + app 面板层）无循环依赖', () => {
   it('扫描范围有效（防路径写错导致空扫描假通过）', () => {
     expect(FILES.length).toBeGreaterThan(20);
     const paths = FILES.map(rel);
     expect(paths).toContain('src/app/firewall/index.js');
     expect(paths).toContain('src/app/firewall/dao/dao.js');
-    expect(paths).toContain('src/app/firewall/dao/block-manager.js');
-    expect(paths).toContain('src/app/firewall/interface/config-access.js');
-    expect(paths).toContain('src/app/firewall/engine/pipeline.js');
+    expect(paths).toContain('src/framework/firewall/block-manager.js');
+    expect(paths).toContain('src/framework/firewall/interface/config-access.js');
+    expect(paths).toContain('src/framework/firewall/engine/pipeline.js');
   });
 
   it('依赖边非空（防解析口径写错导致所有文件都是零出边）', () => {
@@ -261,7 +270,7 @@ describe('存储实现不得回流到 engine/', () => {
   });
 
   it('dao/block-manager.js 就是真身，不再是 re-export 门面', () => {
-    const shim = fs.readFileSync(path.join(FIREWALL, 'dao/block-manager.js'), 'utf8');
+    const shim = fs.readFileSync(path.join(FIREWALL, 'block-manager.js'), 'utf8');
     // 若再次退化成纯转发，说明有人把实现搬回了别的目录 —— 那是本文件要防的回归
     const body = shim
       .replace(/\/\*\*[\s\S]*?\*\//g, '')

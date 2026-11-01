@@ -3,7 +3,7 @@
  *
  * ⚠️ 为什么要重写（AUDIT-REPORT-2026-09-15 🟡-7）：
  * 本文件的前身把 `classifyRequest` **内联复制**在测试文件里，测的是副本而不是真身
- * （`app/firewall/engine/detectors/bot-detector.js`）。副本与真身早已漂移 ——
+ * （`framework/firewall/engine/detectors/bot-detector.js`）。副本与真身早已漂移 ——
  * 副本把 `curl` 列为 bot 模式并断言「curl 超限触发挑战」，而真身默认配置里
  * **只有 `libcurl`（config.js:249 起）**，裸 `curl/7.68.0` 既不匹配 bot 模式、也不匹配
  * 浏览器模式，无论请求多少次都只走 PASS。也就是说那条断言若打向真身是**失败**的。
@@ -41,14 +41,14 @@ const settings = {
   }
 };
 
-jest.unstable_mockModule('../app/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../framework/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => settings,
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
 }));
 
-const { checkBotChallenge } = await import('../app/firewall/engine/detectors/bot-detector.js');
-const { checkGlobalBlock, getActiveBlocks } = await import('../app/firewall/dao/block-manager.js');
+const { checkBotChallenge } = await import('../framework/firewall/engine/detectors/bot-detector.js');
+const { checkGlobalBlock, getActiveBlocks } = await import('../framework/firewall/block-manager.js');
 const { generateServerSideDeviceId } = await import('../framework/auth/device/device-id-service.js');
 
 const CHROME_UA =

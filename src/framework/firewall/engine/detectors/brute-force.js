@@ -12,11 +12,11 @@
  */
 import { getConfig } from '../../util/shared.js';
 import { readAccessState, bumpCounter, removeCounters, setFlag, hasFlag, rel } from '../../util/redis.js';
-import { setBlockForSubject } from '../../dao/block-manager.js';
+import { setBlockForSubject } from '../../block-manager.js';
 import { notifyAttack } from '../auto-responder.js';
-import { createLogger } from '../../../../framework/log/index.js';
+import { createLogger } from '../../../log/index.js';
 
-const log = createLogger('app.firewall.engine.detectors.brute-force');
+const log = createLogger('framework.firewall.engine.detectors.brute-force');
 
 // 不再在日志里硬编码 ANSI 颜色：这些字符串会原样落进 logs/ 的 .log 文件，
 // 污染归档与 grep 结果。控制台着色交给终端/CLI 层处理。

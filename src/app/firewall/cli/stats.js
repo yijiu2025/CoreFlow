@@ -16,8 +16,8 @@
  */
 import { printLine } from '../../../framework/cli/index.js';
 import { logStdout } from '../../../framework/log/index.js';
-import { getActiveBlocks, getActiveWhitelist } from '../dao/block-manager.js';
-import { scanKeys } from '../util/redis.js';
+import { getActiveBlocks, getActiveWhitelist } from '../../../framework/firewall/block-manager.js';
+import { scanKeys } from '../../../framework/firewall/util/redis.js';
 import { withFirewallRedis } from './redis-boot.js';
 
 /**

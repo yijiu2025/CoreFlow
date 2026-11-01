@@ -9,7 +9,10 @@
  *      而 Fastify 对未知 route config 不报错，线上完全看不出来。
  */
 import { describe, it, expect, afterEach } from '@jest/globals';
-import { resolveRateLimitMax, describeRateLimitRisk } from '../../app/firewall/engine/detectors/first-ratelimit.js';
+import {
+  resolveRateLimitMax,
+  describeRateLimitRisk
+} from '../../framework/firewall/engine/detectors/first-ratelimit.js';
 
 const ORIGINAL_OVERRIDE = process.env.FW_RATE_LIMIT_OVERRIDE;
 

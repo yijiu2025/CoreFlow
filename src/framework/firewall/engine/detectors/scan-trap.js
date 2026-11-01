@@ -12,11 +12,11 @@
  */
 import { getConfig } from '../../util/shared.js';
 import { readAccessState, bumpCounter, removeKeys, rel } from '../../util/redis.js';
-import { setBlockForSubject } from '../../dao/block-manager.js';
+import { setBlockForSubject } from '../../block-manager.js';
 import { notifyAttack } from '../auto-responder.js';
-import { createLogger } from '../../../../framework/log/index.js';
+import { createLogger } from '../../../log/index.js';
 
-const log = createLogger('app.firewall.engine.detectors.scan-trap');
+const log = createLogger('framework.firewall.engine.detectors.scan-trap');
 
 /**
  * 检测 404/403 扫描陷阱

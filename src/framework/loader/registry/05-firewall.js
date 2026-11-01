@@ -19,12 +19,37 @@
  * 导致统计 ×2；修复方式是**在此处保留唯一注册点**（因为这里是更早、更正确的位置），
  * 而不是删掉本文件 —— 删掉它会把限流一起删失效。
  *
+ * ⚠️ 可卸载性（2026-11-01）：本文件是 registry 里**唯一点名具体 app 的加载器**
+ * （除它之外 framework 对 src/app 零依赖，由 conventions/framework-app-isolation.test.js
+ * 契约守卫）。因此 import 必须是「存在性守卫 + 动态 import」而不是顶层静态 import ——
+ * 删除 `src/app/firewall/` 整个文件夹后，后端必须照常启动（防护层随应用一起消失，
+ * 这正是卸载语义）。防火墙依赖 02-redis（getStore）与 04-auth（设备 ID），位置 05
+ * 恰好都在二者之后，动态加载时机无依赖问题。
+ *
  * @author yijiu2025
  * @since 2026-08-17
+ * @since 2026-11-01 应用可卸载：存在性守卫 + 动态 import
  */
-import { initFirewall } from '../../../app/firewall/index.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.loader.registry.05-firewall');
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/** firewall 应用入口（可卸载：目录不存在时本加载器跳过并告警） */
+const FIREWALL_ENTRY = path.resolve(__dirname, '../../../app/firewall/index.js');
 
 const firewallLoader = async app => {
+  if (!fs.existsSync(FIREWALL_ENTRY)) {
+    log.warn('⏭️ [Firewall] app/firewall 不存在（应用已卸载），跳过防火墙加载');
+    return;
+  }
+
+  // 动态 import 用字面量相对说明符（与上面 FIREWALL_ENTRY 同源）：
+  // 让 conventions/framework-app-isolation.test.js 能静态识别这条白名单边
+  const { initFirewall } = await import('../../../app/firewall/index.js');
   await app.register(initFirewall);
 };
 

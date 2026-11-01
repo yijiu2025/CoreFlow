@@ -17,16 +17,16 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 /** 可切换的防御配置（替身 config-access 的返回值） */
 let defenseConfig = { enableConnLimit: true, maxConn: 3 };
 
-jest.unstable_mockModule('../../app/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../../framework/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => ({ defense: defenseConfig }),
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
 }));
 
 const { trackConnection, getConnectionStats, cleanupStaleConnections } =
-  await import('../../app/firewall/util/connection-tracker.js');
+  await import('../../framework/firewall/util/connection-tracker.js');
 // 直接拿内部表做清理与断言，避免用例之间互相干扰
-const { activeConnections } = await import('../../app/firewall/util/shared.js');
+const { activeConnections } = await import('../../framework/firewall/util/shared.js');
 
 const STALE_AFTER_MS = 10 * 60 * 1000;
 

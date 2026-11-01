@@ -22,11 +22,11 @@ jest.unstable_mockModule('../../framework/redis/index.js', () => ({
 jest.unstable_mockModule('../../app/firewall/dao/dao.js', () => ({
   getSecuritySettings: () => ({ defense: { enableRateLimit: true } })
 }));
-jest.unstable_mockModule('../../app/firewall/engine/detectors/geo-filter.js', () => ({
+jest.unstable_mockModule('../../framework/firewall/engine/detectors/geo-filter.js', () => ({
   resolveGeoInfo: () => ({})
 }));
 
-const { resolveRateLimitMax } = await import('../../app/firewall/engine/detectors/first-ratelimit.js');
+const { resolveRateLimitMax } = await import('../../framework/firewall/engine/detectors/first-ratelimit.js');
 
 const ENV_KEY = 'FW_RATE_LIMIT_OVERRIDE';
 const savedEnv = process.env[ENV_KEY];

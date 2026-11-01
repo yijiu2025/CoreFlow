@@ -24,7 +24,7 @@
  * @since 2026-08-17
  * @since 2026-09-15 新增设备维度（跨 IP 生效）与自动封禁的双维度镜像
  */
-import { getConfig } from '../util/shared.js';
+import { getConfig } from './util/shared.js';
 import {
   readAccessState,
   writeBlock as writeBlockEntry,
@@ -35,7 +35,7 @@ import {
   redisAvailable,
   normalizeDuration,
   PERMANENT_RETRY_AFTER
-} from '../util/redis.js';
+} from './util/redis.js';
 
 // ============== IP 封禁操作 ==============
 
@@ -291,6 +291,42 @@ function remainingSeconds(meta, now) {
   return Math.max(0, Math.ceil((meta.expiresAt - now) / 1000));
 }
 
+/**
+ * 用户是否命中防火墙手动黑名单（manualBlacklistUsers 的**执行点**）
+ *
+ * 历史缺口：面板 addToBlacklist('user', value) 只写配置，checkGlobalBlock 只查
+ * manualBlacklistIps —— 用户黑名单从未被执行。ip 维度在 onRequest（认证前）生效，
+ * 用户身份此时还不存在，因此用户维度的执行点在**认证之后**：api/guard.js 的
+ * applyGuardLogic（framework/api 分层里 api/guard.js 属 api 层，import 方向合法）。
+ *
+ * 配置单例在内存里，O(n) 小数组比对，无 I/O，可放热路径。
+ *
+ * @param {object} user 已认证用户（request.state.user）
+ * @param {string} [user.uid] 对外 UUID
+ * @param {number} [user.userId] 数字主键
+ * @param {string} [user.username] 用户名
+ * @param {string} [user.email] 邮箱
+ * @returns {boolean} 是否命中黑名单
+ */
+function isUserManuallyBlocked(user) {
+  // fail-open：配置读取器未注册（firewall 应用未安装 / 纯 guard 单测环境）时
+  // 返回 false —— 这是面板的拉黑功能，不是鉴权链的必经环节；读不到配置
+  // 就拦人等于让一个可选功能拥有 fail-closed 的破坏力（guard-unit 实测炸过）。
+  try {
+    const list = getConfig().defense?.manualBlacklistUsers;
+    if (!Array.isArray(list) || list.length === 0) return false;
+    const identifiers = [
+      user?.uid,
+      user?.userId != null ? String(user.userId) : null,
+      user?.username,
+      user?.email
+    ].filter(Boolean);
+    return identifiers.some(id => list.includes(id));
+  } catch {
+    return false;
+  }
+}
+
 // ============== 全局封禁检查 ==============
 
 /**
@@ -388,5 +424,6 @@ export {
   getActiveBlocks,
   getActiveWhitelist,
   checkGlobalBlock,
+  isUserManuallyBlocked,
   normalizeDuration
 };

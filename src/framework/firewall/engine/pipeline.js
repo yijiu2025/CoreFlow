@@ -10,21 +10,21 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { buildChallengePage } from '../data/challenge-template.js';
+import { buildChallengePage } from '../challenge-template.js';
 import { checkRateLimit, trackRequestCount } from './detectors/rate-limiter.js';
 import { checkGeoReputation, resolveGeoInfo } from './detectors/geo-filter.js';
 import { checkBotChallenge } from './detectors/bot-detector.js';
 import { checkLoginBruteForce } from './detectors/brute-force.js';
-import { checkGlobalBlock, removeBlock, removeBlockFp, removeBlockDevice } from '../dao/block-manager.js';
+import { checkGlobalBlock, removeBlock, removeBlockFp, removeBlockDevice } from '../block-manager.js';
 import { trackConnection } from '../util/connection-tracker.js';
 import { generateFingerprint } from '../util/fingerprint.js';
-import { pushRecord } from '../data/store.js';
-import { getSecuritySettings } from '../dao/dao.js';
+import { recordFirewallEvent } from '../telemetry-sink.js';
+import { readSecuritySettings } from '../interface/config-access.js';
 import { hasPass, readAccessState } from '../util/redis.js';
-import { getClientDeviceId } from '../../../framework/auth/index.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { getClientDeviceId } from '../../auth/index.js';
+import { createLogger } from '../../log/index.js';
 
-const log = createLogger('app.firewall.engine.pipeline');
+const log = createLogger('framework.firewall.engine.pipeline');
 
 // ============== 跳过规则 ==============
 
@@ -245,7 +245,7 @@ async function checkGlobalBlockPhase(request, reply) {
       // ③ 其余请求 → 挑战页
       firewallLog.blocked = true;
       firewallLog.statusCode = 200;
-      pushRecord({ ...firewallLog });
+      recordFirewallEvent({ ...firewallLog });
       await sendChallengePage(reply, ip, fingerprint, deviceId);
       return true;
     }
@@ -253,7 +253,7 @@ async function checkGlobalBlockPhase(request, reply) {
     // ---- 硬封禁：403 / 429 ----
     firewallLog.blocked = true;
     firewallLog.statusCode = err.statusCode || 429;
-    pushRecord({ ...firewallLog });
+    recordFirewallEvent({ ...firewallLog });
     // 透传封禁错误自带的响应头（如 Retry-After）：buildBlockError 刻意设置了它，
     // 供客户端退避；此前的全局封禁阶段漏了这一步，导致该响应头从未真正下发
     // （检测流水线里的同款回包是有透传的，两处行为此前不一致）。
@@ -317,7 +317,7 @@ async function runDetectionPipeline(ip, ua, url, firewallLog, fingerprint, reply
     await checkGeoReputation(ip, url);
 
     // 端点级限频（从配置读取规则）
-    const settings = getSecuritySettings();
+    const settings = readSecuritySettings();
     const endpointRules = settings.defense?.endpointRateLimits || [];
 
     for (const rule of endpointRules) {
@@ -341,7 +341,7 @@ async function runDetectionPipeline(ip, ua, url, firewallLog, fingerprint, reply
 
     firewallLog.blocked = true;
     firewallLog.statusCode = isChallenge ? 200 : err.statusCode || 429;
-    pushRecord({ ...firewallLog });
+    recordFirewallEvent({ ...firewallLog });
 
     // 挑战请求返回 HTML 验证页
     if (isChallenge) {
@@ -393,7 +393,7 @@ async function observeLoginOutcome(request, reply) {
   if (!LOGIN_PATH_PATTERN.test(pathOf(request.url))) return;
 
   try {
-    if (!getSecuritySettings().defense?.enableBruteForce) return;
+    if (!readSecuritySettings().defense?.enableBruteForce) return;
 
     const body = request.body && typeof request.body === 'object' ? request.body : {};
     const username = typeof body.username === 'string' ? body.username : undefined;
@@ -425,7 +425,7 @@ async function observeLoginOutcome(request, reply) {
  */
 function recordLog(firewallLog, statusCode, alreadyLogged = false) {
   if (firewallLog && !alreadyLogged) {
-    pushRecord({ ...firewallLog, statusCode });
+    recordFirewallEvent({ ...firewallLog, statusCode });
   }
 }
 

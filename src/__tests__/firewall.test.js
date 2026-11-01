@@ -60,16 +60,21 @@ jest.unstable_mockModule('../app/firewall/data/store.js', () => ({
   flushPersist: async () => {}
 }));
 
-const { buildChallengePage } = await import('../app/firewall/data/challenge-template.js');
+// 两层分离：引擎经 framework 的 telemetry-sink 产生记录事件；store.js 被替身后，
+// 替身模块体（sink 注册）不会执行 —— 在此把 pushedRecords 桩显式注册进 sink。
+const { registerRecordSink } = await import('../framework/firewall/telemetry-sink.js');
+registerRecordSink(r => pushedRecords.push(r));
+
+const { buildChallengePage } = await import('../framework/firewall/challenge-template.js');
 const { verifyChallenge } = await import('../app/firewall/services/challenge.service.js');
-const { sha256Hex } = await import('../app/firewall/util/pow-sha256.js');
-const { generateFingerprint } = await import('../app/firewall/util/fingerprint.js');
-const { hasPass } = await import('../app/firewall/util/redis.js');
-const { ipRequestTimestamps } = await import('../app/firewall/util/shared.js');
+const { sha256Hex } = await import('../framework/firewall/util/pow-sha256.js');
+const { generateFingerprint } = await import('../framework/firewall/util/fingerprint.js');
+const { hasPass } = await import('../framework/firewall/util/redis.js');
+const { ipRequestTimestamps } = await import('../framework/firewall/util/shared.js');
 const { setBlock, setBlockDevice, setWhitelistDevice, getActiveBlocks, getActiveWhitelist, checkGlobalBlock } =
-  await import('../app/firewall/dao/block-manager.js');
+  await import('../framework/firewall/block-manager.js');
 const { buildRequestContext, checkGlobalBlockPhase, willBeRejectedAsAnonymous } =
-  await import('../app/firewall/engine/pipeline.js');
+  await import('../framework/firewall/engine/pipeline.js');
 const { generateServerSideDeviceId } = await import('../framework/auth/device/device-id-service.js');
 const { getSecuritySettings } = await import('../app/firewall/dao/dao.js');
 const { initFirewall } = await import('../app/firewall/index.js');
@@ -206,7 +211,7 @@ describe('封禁状态机：四种状态 × 请求入口行为', () => {
     await setBlock(ipWhitelisted, { status: 'SCANNER', source: 'auto', permanent: true });
     expect((await catchBlock(ipWhitelisted)).statusCode).toBe(403); // 先确认封禁确实生效
 
-    const { setWhitelist } = await import('../app/firewall/dao/block-manager.js');
+    const { setWhitelist } = await import('../framework/firewall/block-manager.js');
     await setWhitelist(ipWhitelisted, 60);
     expect(await catchBlock(ipWhitelisted)).toBeNull();
   });

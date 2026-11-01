@@ -21,12 +21,71 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-import * as adapter from '../app/firewall/util/redis.js';
-import * as blockManager from '../app/firewall/dao/block-manager.js';
+import * as adapter from '../framework/firewall/util/redis.js';
+import * as blockManager from '../framework/firewall/block-manager.js';
+
+// 2026-11-01 修复回归：memDeleteByRel 此前漏了 block:dev:/whitelist:dev: 两个前缀，
+// Redis 降级走内存时 removeKeys 会把设备维度条目错删进 IP 表（设备表残留）。
+// 这里钉住：内存模式下按相对 key 清理必须三维度全对得上。
+describe('内存降级路径：removeKeys 的维度前缀清理', () => {
+  beforeEach(() => {
+    adapter.resetMemoryState();
+  });
+
+  it('block:dev:{id} 清理后设备维度不再命中，且不污染 IP 表', async () => {
+    await adapter.writeBlock(
+      { deviceId: 'WEB-t1' },
+      { status: 'BLOCKED', permanent: false, expiresAt: Date.now() + 60_000 }
+    );
+    await adapter.removeKeys(['block:dev:WEB-t1']);
+    const st = await adapter.readAccessState({ ip: '9.9.9.9', fingerprint: null, deviceId: 'WEB-t1' });
+    expect(st.devBlock).toBeNull();
+    expect(st.ipBlock).toBeNull();
+  });
+
+  it('whitelist:dev:{id} 同样被清理（此前漏枚举的第二个前缀）', async () => {
+    await adapter.writeWhitelist({ deviceId: 'WEB-t2' }, 60);
+    await adapter.removeKeys(['whitelist:dev:WEB-t2']);
+    const st = await adapter.readAccessState({ ip: '9.9.9.9', fingerprint: null, deviceId: 'WEB-t2' });
+    expect(st.devWhitelisted).toBeFalsy();
+  });
+});
+
+describe('isUserManuallyBlocked：manualBlacklistUsers 执行点（修复"只写不执行"）', () => {
+  beforeEach(() => {
+    adapter.resetMemoryState();
+  });
+
+  it('按 uid / 数字主键 / username / email 任一命中', async () => {
+    const { registerSettingsReader } = await import('../framework/firewall/interface/config-access.js');
+    registerSettingsReader(() => ({ defense: { manualBlacklistUsers: ['uid-abc', '42', 'bob', 'bob@x.com'] } }));
+    expect(blockManager.isUserManuallyBlocked({ uid: 'uid-abc' })).toBe(true);
+    expect(blockManager.isUserManuallyBlocked({ userId: 42 })).toBe(true);
+    expect(blockManager.isUserManuallyBlocked({ username: 'bob' })).toBe(true);
+    expect(blockManager.isUserManuallyBlocked({ email: 'bob@x.com' })).toBe(true);
+    expect(blockManager.isUserManuallyBlocked({ uid: 'other' })).toBe(false);
+  });
+
+  it('名单为空 / 非数组 / user 缺失时恒 false（firewall 卸载语义）', async () => {
+    const { registerSettingsReader } = await import('../framework/firewall/interface/config-access.js');
+    registerSettingsReader(() => ({ defense: { manualBlacklistUsers: [] } }));
+    expect(blockManager.isUserManuallyBlocked({ uid: 'uid-abc' })).toBe(false);
+    registerSettingsReader(() => ({ defense: {} }));
+    expect(blockManager.isUserManuallyBlocked({ uid: 'uid-abc' })).toBe(false);
+    registerSettingsReader(() => ({}));
+    expect(blockManager.isUserManuallyBlocked(null)).toBe(false);
+  });
+});
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '..');
-const FIREWALL_DIRS = [path.join(SRC, 'app', 'firewall'), path.join(SRC, 'api', 'firewall')];
+// 访问层已上移 framework（2026-11-01 两层分离）：扫描范围加 framework/firewall，
+// app/firewall 保留面板/配置/遥测消费方，api/firewall 是路由层
+const FIREWALL_DIRS = [
+  path.join(SRC, 'framework', 'firewall'),
+  path.join(SRC, 'app', 'firewall'),
+  path.join(SRC, 'api', 'firewall')
+];
 
 /** 收集目录下全部 .js 源文件 */
 function walkJs(dir, out = []) {
@@ -43,7 +102,7 @@ const IP = '203.0.113.10';
 const FP = 'abc123def456abcd';
 
 const FILES = FIREWALL_DIRS.flatMap(d => walkJs(d));
-const ADAPTER_PATH = path.join(SRC, 'app', 'firewall', 'util', 'redis.js');
+const ADAPTER_PATH = path.join(SRC, 'framework', 'firewall', 'util', 'redis.js');
 
 /** 相对 src/ 的展示路径 */
 const relToSrc = f => path.relative(SRC, f).replace(/\\/g, '/');
@@ -487,7 +546,7 @@ describe('firewall Redis 访问层：源码级回潮守卫', () => {
     // 但 pipeline.js 里两个「Security Policy Blocked」回包点只有一个透传了
     // err.headers —— 全局封禁阶段那处漏了，导致首屏拦截场景下该响应头从未下发。
     // 这里锁住「两处对称」，防止再次只改一处。
-    const pipelinePath = path.join(SRC, 'app', 'firewall', 'engine', 'pipeline.js');
+    const pipelinePath = path.join(SRC, 'framework', 'firewall', 'engine', 'pipeline.js');
     const lines = codeLines(fs.readFileSync(pipelinePath, 'utf8'));
 
     const replyIdx = lines.map((l, i) => (/Security Policy Blocked/.test(l.text) ? i : -1)).filter(i => i >= 0);

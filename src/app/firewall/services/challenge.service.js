@@ -13,9 +13,9 @@
  * @since 2026-08-17
  */
 import crypto from 'crypto';
-import { generateFingerprint } from '../util/fingerprint.js';
-import { verifyPow } from '../util/pow-sha256.js';
-import { grantPass, takeChallenge } from '../util/redis.js';
+import { generateFingerprint } from '../../../framework/firewall/util/fingerprint.js';
+import { verifyPow } from '../../../framework/firewall/util/pow-sha256.js';
+import { grantPass, takeChallenge } from '../../../framework/firewall/util/redis.js';
 import { getClientDeviceId } from '../../../framework/auth/index.js';
 
 /** 通过令牌有效期（30 分钟） */

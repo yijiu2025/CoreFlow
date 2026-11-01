@@ -8,7 +8,7 @@
  * @since 2026-08-16
  */
 import { getSummaryAggregated } from '../data/store.js';
-import { getActiveBlocks, getActiveWhitelist } from '../dao/block-manager.js';
+import { getActiveBlocks, getActiveWhitelist } from '../../../framework/firewall/block-manager.js';
 
 /**
  * 聚合防火墙性能指标视图

@@ -20,6 +20,7 @@ import { isIpMatch } from '../utils/ip.js';
 import { getPermissions } from '../framework/auth/index.js';
 import { createSafePreHandler } from '../framework/auth/index.js';
 import { isWildcardMatch } from '../framework/auth/permission/wildcard-match.js';
+import { isUserManuallyBlocked } from '../framework/firewall/block-manager.js';
 import { createLogger } from '../framework/log/index.js';
 
 const log = createLogger('api.guard');
@@ -174,6 +175,18 @@ async function applyGuardLogic(opts = {}, request, reply) {
     if (!isAllowed) {
       return reply.result.forbidden(`IP [${clientIp}] 无权访问此受保护区域`);
     }
+  }
+
+  // 2.6 防火墙手动用户黑名单（manualBlacklistUsers 的执行点）
+  //
+  // 历史缺口：面板拉黑用户只写配置、从未被执行（ip 维度在 onRequest 认证前生效，
+  // 用户身份此时不存在）。认证完成后在此拦截；firewall 引擎已上移 framework，
+  // 判定函数读的是内存配置单例（无 I/O）。firewall 应用卸载时配置为空数组，
+  // 本检查恒 false，不构成硬依赖。
+  const fwUser = request.state?.user;
+  if (fwUser && isUserManuallyBlocked(fwUser)) {
+    log.warn(`🚫 [Guard] 命中防火墙手动用户黑名单: uid=${fwUser.uid}`);
+    return reply.result.forbidden('该账号已被安全策略限制访问');
   }
 
   // 2.5 敏感操作回源校验（第 4 层：freshPermission）

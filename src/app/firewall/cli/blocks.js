@@ -26,9 +26,13 @@ import {
   closeRl
 } from '../../../framework/cli/index.js';
 import { logStdout } from '../../../framework/log/index.js';
-import { getActiveBlocks, setBlock, removeBlock as removeBlockEntry } from '../dao/block-manager.js';
+import {
+  getActiveBlocks,
+  setBlock,
+  removeBlock as removeBlockEntry
+} from '../../../framework/firewall/block-manager.js';
 import { addToBlacklist, removeFromBlacklist, initDao } from '../dao/dao.js';
-import { removeKeys, rel } from '../util/redis.js';
+import { removeKeys, rel } from '../../../framework/firewall/util/redis.js';
 import { withFirewallRedis } from './redis-boot.js';
 
 /**

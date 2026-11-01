@@ -17,9 +17,9 @@
  * @since 2026-08-17
  */
 import crypto from 'crypto';
-import { sha256Hex } from '../util/pow-sha256.js';
-import { getConfig } from '../util/shared.js';
-import { writeChallenge } from '../util/redis.js';
+import { sha256Hex } from './util/pow-sha256.js';
+import { getConfig } from './util/shared.js';
+import { writeChallenge } from './util/redis.js';
 
 /** 挑战载荷有效期（秒） */
 const CHALLENGE_TTL_SEC = 300;

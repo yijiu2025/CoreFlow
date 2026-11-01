@@ -50,9 +50,7 @@ const ALLOWED_EDGES = new Set([
   // user DAO 需要复用 admin 的 IAM 数据访问（角色/权限同源，避免复制查询逻辑）
   'user/dao/user.js -> admin/dao/iam.dao.js',
   // 密码变更必须同步撤销 OAuth 凭证，用户域单向调用 OAuth 数据访问层
-  'user/dao/user.js -> oauth21/dao/token.dao.js',
-  // 防火墙自动响应触发告警邮件，复用 notice 的邮件服务（动态 import，通知失败不影响拦截）
-  'firewall/engine/auto-responder.js -> notice/services/email.js'
+  'user/dao/user.js -> oauth21/dao/token.dao.js'
 ]);
 
 /** 提取源码里全部 import/export-from 的模块说明符 */

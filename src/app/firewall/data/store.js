@@ -19,7 +19,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createLogger } from '../../../framework/log/index.js';
-import { flushStatsDelta, readAggregatedStats, resetAggregatedStats, redisAvailable } from '../util/redis.js';
+import { flushStatsDelta, readAggregatedStats, resetAggregatedStats, redisAvailable } from './stats-redis.js';
+import { registerRecordSink } from '../../../framework/firewall/telemetry-sink.js';
 
 const log = createLogger('app.firewall.data.store');
 
@@ -626,6 +627,10 @@ async function clearAll() {
     log.error('[Firewall Store] 清空持久化数据失败:', err);
   });
 }
+
+// 两层分离（2026-11-01）：引擎在 framework 层经 telemetry-sink 产生记录事件，
+// 本模块加载时把 pushRecord 注册为接收器（模块体执行 = 注册完成，先于任何钩子触发）。
+registerRecordSink(pushRecord);
 
 export {
   setBroadcastHandler,

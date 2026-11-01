@@ -10,7 +10,7 @@
 import { printWarning, printLine } from '../../../framework/cli/index.js';
 import { logStdout, createLogger } from '../../../framework/log/index.js';
 import { connectStandalone, disconnectStandalone } from '../../../framework/redis/index.js';
-import { getActiveBlocks, getActiveWhitelist } from '../dao/block-manager.js';
+import { getActiveBlocks, getActiveWhitelist } from '../../../framework/firewall/block-manager.js';
 import { initDao, getSecuritySettings, getServerNode } from '../dao/dao.js';
 
 const log = createLogger('app.firewall.cli.status');

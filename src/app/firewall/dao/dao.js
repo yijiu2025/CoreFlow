@@ -21,9 +21,9 @@ import {
   ttlOf,
   addBlockIndexEntry,
   hasIndexField
-} from '../util/redis.js';
+} from '../../../framework/firewall/util/redis.js';
 import { createLogger } from '../../../framework/log/index.js';
-import { registerSettingsReader } from '../interface/config-access.js';
+import { registerSettingsReader } from '../../../framework/firewall/interface/config-access.js';
 
 const log = createLogger('app.firewall.dao.dao');
 

@@ -7,13 +7,13 @@
  * @since 2026-08-17
  */
 import rateLimit from '@fastify/rate-limit';
-import { createBoundStore } from '../../../../framework/redis/index.js';
-import { getSecuritySettings } from '../../dao/dao.js';
+import { createBoundStore } from '../../../redis/index.js';
+import { readSecuritySettings } from '../../interface/config-access.js';
 import { resolveGeoInfo } from './geo-filter.js';
-import { pushRecord } from '../../data/store.js';
-import { createLogger } from '../../../../framework/log/index.js';
+import { recordFirewallEvent } from '../../telemetry-sink.js';
+import { createLogger } from '../../../log/index.js';
 
-const log = createLogger('app.firewall.engine.detectors.first-ratelimit');
+const log = createLogger('framework.firewall.engine.detectors.first-ratelimit');
 
 /**
  * 解析生效的限流阈值（配置值 + 环境变量旁路取较大者）
@@ -79,7 +79,7 @@ function describeRateLimitRisk({ enabled, max, windowSec }) {
  * @param {import('fastify').FastifyInstance} app Fastify 实例
  */
 async function registerRateLimit(app) {
-  const settings = getSecuritySettings() || {};
+  const settings = readSecuritySettings() || {};
   const defense = settings.defense || {};
 
   // 历史遗留：securitySettings 顶层曾经也有一份扁平的同名字段（enableRateLimit /
@@ -111,7 +111,7 @@ async function registerRateLimit(app) {
     await app.register(rateLimit, {
       global: true,
       store: createBoundStore(app, {
-        getWindowMs: () => (getSecuritySettings().defense.rateLimitWindow || 60) * 1000
+        getWindowMs: () => (readSecuritySettings().defense.rateLimitWindow || 60) * 1000
       }),
       continueExceeding: false,
       skipOnError: false,
@@ -124,13 +124,13 @@ async function registerRateLimit(app) {
         return `rate:ip:${req.ip}`;
       },
 
-      max: () => resolveRateLimitMax(getSecuritySettings().defense.rateLimitRequests),
-      timeWindow: () => (getSecuritySettings().defense.rateLimitWindow || 60) * 1000,
+      max: () => resolveRateLimitMax(readSecuritySettings().defense.rateLimitRequests),
+      timeWindow: () => (readSecuritySettings().defense.rateLimitWindow || 60) * 1000,
 
       errorResponseBuilder: (request, context) => {
         const ip = request.ip;
         request._firewallLogged = true;
-        pushRecord({
+        recordFirewallEvent({
           time: new Date().toISOString(),
           ip,
           userId: request.state?.user?.id || null,

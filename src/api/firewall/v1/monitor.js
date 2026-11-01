@@ -27,7 +27,7 @@ import {
   updateSecuritySettings,
   getIpApis
 } from '../../../app/firewall/dao/dao.js';
-import { getActiveBlocks, getActiveWhitelist } from '../../../app/firewall/dao/block-manager.js';
+import { getActiveBlocks, getActiveWhitelist } from '../../../framework/firewall/block-manager.js';
 import {
   summarySchema,
   updateNodeSchema,
@@ -94,8 +94,7 @@ async function registerMonitorRoutes(fastify) {
     url: '/records',
     requireLogin: true,
     requirePermission: FIREWALL_PERMISSIONS.MONITOR.LOGS,
-    handler: async (req, reply) =>
-      reply.result.success('操作成功', await getRecentRecordsAggregated())
+    handler: async (req, reply) => reply.result.success('操作成功', await getRecentRecordsAggregated())
   });
 
   registerSecureRoute(fastify, {

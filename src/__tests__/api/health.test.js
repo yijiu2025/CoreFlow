@@ -24,7 +24,7 @@ import Fastify from 'fastify';
 import globalsLoader from '../../framework/loader/registry/00-globals.js';
 import registerHealthRoutes from '../../api/system/v1/health.js';
 import { runEngine } from '../../framework/loader/engine.js';
-import { shouldSkipDeepCheck, PROBE_PATHS } from '../../app/firewall/engine/pipeline.js';
+import { shouldSkipDeepCheck, PROBE_PATHS } from '../../framework/firewall/engine/pipeline.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

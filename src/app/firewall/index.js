@@ -22,10 +22,11 @@ import {
   runDetectionPipeline,
   observeLoginOutcome,
   recordLog
-} from './engine/index.js';
-import { registerRateLimit } from './engine/detectors/first-ratelimit.js';
-import { checkNotFoundTrap } from './engine/detectors/scan-trap.js';
-import { startCleanupTask, trackConnection } from './util/connection-tracker.js';
+} from '../../framework/firewall/engine/index.js';
+import { registerRateLimit } from '../../framework/firewall/engine/detectors/first-ratelimit.js';
+import { checkNotFoundTrap } from '../../framework/firewall/engine/detectors/scan-trap.js';
+import { registerEmailAlertSender } from '../../framework/firewall/engine/auto-responder.js';
+import { startCleanupTask, trackConnection } from '../../framework/firewall/util/connection-tracker.js';
 import { flushPersist } from './data/store.js';
 import fp from 'fastify-plugin';
 import { createLogger } from '../../framework/log/index.js';
@@ -47,6 +48,15 @@ const initFirewall = fp(async function (app) {
 
   // ============== 定时任务 ==============
   startCleanupTask(app);
+
+  // ============== 邮件告警通道注入 ==============
+  // 引擎在 framework 层，framework 不得 import app（契约测试守卫）；
+  // 发信能力属于 notice 应用，由本模块把「动态 import + 发送」注册给引擎。
+  // firewall 应用卸载后引擎不会被安装，此注册自然消失 —— 依赖方向始终 app → framework。
+  registerEmailAlertSender(async (to, subject, html) => {
+    const emailService = await import('../../../notice/services/email.js');
+    await emailService.default.send(to, subject, html);
+  });
 
   // ============== 第一层速率限制（onRequest 阶段） ==============
   await registerRateLimit(app);
@@ -106,7 +116,7 @@ const initFirewall = fp(async function (app) {
     // WebSocket 升级请求也经过基本安全检查
     if (request.headers.upgrade === 'websocket') {
       const ip = request.ip;
-      const { checkGlobalBlock } = await import('./dao/block-manager.js');
+      const { checkGlobalBlock } = await import('../../framework/firewall/block-manager.js');
 
       // 检查 IP 是否被封禁
       try {

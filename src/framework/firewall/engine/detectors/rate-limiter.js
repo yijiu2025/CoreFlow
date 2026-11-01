@@ -17,7 +17,7 @@
  */
 import { getConfig, ipRequestTimestamps } from '../../util/shared.js';
 import { readAccessState, consumeRateWindow, rel } from '../../util/redis.js';
-import { setBlock } from '../../dao/block-manager.js';
+import { setBlock } from '../../block-manager.js';
 
 /**
  * 追踪 IP 请求次数（基于内存滑动窗口，供 Bot 检测的「短时高频」判断使用）
@@ -58,7 +58,12 @@ const checkRateLimit = async (actorId, options = {}) => {
   const { limit = 50, window = 60, blockTime = 60, retryAfter = 60 } = options;
 
   const settings = getConfig().defense;
-  if (!settings.enableRateLimit) return true;
+  // 端点级限频的**独立开关**（默认开启）。历史缺陷：这里读的是全局开关
+  // `enableRateLimit` —— 而它同时控制 @fastify/rate-limit 插件的注册与否，
+  // 默认 false。结果是「面板上关掉全局限频」会把 /api/sms、/api/order 等
+  // 端点规则一起杀死，且面板上是两个独立开关，运维无从知晓这层联动。
+  // 现拆开：全局限频只归 first-ratelimit.js，端点规则只归本开关。
+  if (settings.enableEndpointRateLimit === false) return true;
 
   // 已封禁 / 挑战状态：一次往返取回状态 + 剩余 TTL
   const state = await readAccessState({ ip: actorId, fingerprint: null });

@@ -30,6 +30,7 @@ import deactivationService from '../../user/services/deactivation.service.js';
 import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
 import { detectLoginEnvironmentAnomaly } from '../../../framework/auth/index.js';
 import { computeDeviceFingerprint, getDeviceIdAndWrapResponse } from '../../../framework/auth/index.js';
+import { isAccountLocked } from '../../../framework/firewall/engine/detectors/brute-force.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.oauth21.services.login.service');
@@ -135,6 +136,31 @@ async function directLogin(request, reply, fastify) {
         data: null
       });
     }
+  }
+
+  // 1.6 防火墙账号锁定检查（暴力破解防护的「账号维度」执行点）
+  //
+  // 历史缺口：brute-force.js 命中阈值后 setFlag(lock:{user}) 锁定账号，但
+  // isAccountLocked 全仓零调用 —— 账号维度只写不执行。引擎上移 framework 后，
+  // 本处（app → framework 方向）成为合法接入点：锁定标记由 firewall 引擎的
+  // 登录结果观测写入（onResponse）；firewall 应用卸载时标记永远不会产生，
+  // 本检查退化为恒 false 的空操作，不构成对 firewall 的硬依赖。
+  // 423 在 pipeline 的 CREDENTIAL_FAILURE_CODES 内，锁定期间的尝试仍会被
+  // 观测计数（重新攒满阈值才会续锁，不会因单次失败无限续期）。
+  if (loginEmail && (await isAccountLocked(loginEmail))) {
+    await logLogin({
+      userId: null,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] || '',
+      appId: 'oauth21',
+      success: false,
+      reason: 'firewall 账号锁定中'
+    });
+    return reply.code(423).send({
+      code: 423,
+      message: '该账号因多次登录失败已被临时锁定，请稍后再试',
+      data: null
+    });
   }
 
   // 2. 验证用户

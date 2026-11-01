@@ -6,8 +6,43 @@
  * @since 2026-08-17
  */
 import nodemailer from 'nodemailer';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Logger from '../../log/index.js';
-import noticeDao from '../../../app/notice/dao/notice.js';
+
+// ============== notice 应用 DAO（可卸载） ==============
+//
+// SMTP 配置与邮件模板的 CRUD 属于 notice **应用**（app/notice/dao/notice.js），
+// 而发信机制（队列/重试/transporter）属于**架构**（本文件，被 framework/verify、
+// user API 等消费）。删除 app/notice（连同 api/notice）后，架构必须照常运行，
+// 邮件能力降级为「调用时报清晰错误」而不是启动即崩 —— 因此这里必须是
+// 「存在性守卫 + 动态 import」，禁止改回顶层静态 import
+// （由 conventions/framework-app-isolation.test.js 契约守卫）。
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const NOTICE_DAO_FILE = path.resolve(__dirname, '../../../app/notice/dao/notice.js');
+
+/** 缓存动态 import 的 Promise（ESM 按 URL 缓存模块，重复 await 开销为零） */
+let noticeDaoPromise = null;
+
+/**
+ * 获取 notice 应用的 DAO
+ *
+ * @returns {Promise<object>} noticeDao（含 getConfig / getTemplate）
+ * @throws {Error} notice 应用未安装时抛出（调用方按发送失败处理并记日志）
+ */
+async function getNoticeDao() {
+  if (!fs.existsSync(NOTICE_DAO_FILE)) {
+    throw new Error('notice 应用未安装（app/notice 不存在），邮件能力不可用');
+  }
+  if (!noticeDaoPromise) {
+    // 动态 import 用字面量相对说明符（与上面 NOTICE_DAO_FILE 同源）：
+    // 让 conventions/framework-app-isolation.test.js 能静态识别这条白名单边
+    noticeDaoPromise = import('../../../app/notice/dao/notice.js').then(mod => mod.default);
+  }
+  return noticeDaoPromise;
+}
 
 /** 缓存的 transporter 和配置哈希 */
 let cachedTransporter = null;
@@ -25,7 +60,8 @@ const MAX_QUEUE_SIZE = 1000;
  * 获取或创建 transporter（配置变更时自动重建）
  */
 async function getTransporter() {
-  const config = await noticeDao.getConfig('email');
+  const dao = await getNoticeDao();
+  const config = await dao.getConfig('email');
 
   if (!config.host || !config.user) {
     throw new Error('SMTP 配置不完整，请在管理后台进行配置');
@@ -64,8 +100,9 @@ async function processQueue() {
   for (const task of batch) {
     try {
       const transporter = await getTransporter();
+      const config = await (await getNoticeDao()).getConfig('email');
       const info = await transporter.sendMail({
-        from: (await noticeDao.getConfig('email')).from || (await noticeDao.getConfig('email')).user,
+        from: config.from || config.user,
         to: task.email,
         subject: task.subject,
         html: task.content
@@ -115,7 +152,7 @@ class EmailService {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const transporter = await getTransporter();
-        const config = await noticeDao.getConfig('email');
+        const config = await (await getNoticeDao()).getConfig('email');
 
         const info = await transporter.sendMail({
           from: config.from || config.user,
@@ -172,7 +209,8 @@ class EmailService {
    * @returns {Promise<boolean>}
    */
   async sendWithTemplate(email, templateId, vars = {}) {
-    const template = await noticeDao.getTemplate(templateId);
+    const dao = await getNoticeDao();
+    const template = await dao.getTemplate(templateId);
     if (!template) {
       Logger.error(`[Notice:Email] 模板不存在: ${templateId}`);
       return false;

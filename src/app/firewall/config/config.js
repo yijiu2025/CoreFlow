@@ -209,6 +209,10 @@ const DEFAULT_SECURITY_SETTINGS = {
     // 正常 SPA 交互都有 10 倍以上余量。压测需要更宽时用 FW_RATE_LIMIT_OVERRIDE
     // （只放宽、且必须严格正整数，见 engine/detectors/first-ratelimit.js）。
     enableRateLimit: false,
+    // 端点级限频独立开关（默认开启）：只管 defense.endpointRateLimits 规则；
+    // enableRateLimit 只管 @fastify/rate-limit 全局限流。二者互不联动
+    // （2026-11-01 拆分：此前关全局会把端点规则一起杀死）。
+    enableEndpointRateLimit: true,
     rateLimitRequests: parseInt(process.env.FW_RATE_LIMIT || '600'),
     rateLimitWindow: parseInt(process.env.FW_RATE_WINDOW || '60'),
 

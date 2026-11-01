@@ -24,8 +24,8 @@ import {
   removeBlockDevice,
   setWhitelistDevice,
   removeWhitelistDevice
-} from '../dao/block-manager.js';
-import { removeKeys, rel } from '../util/redis.js';
+} from '../../../framework/firewall/block-manager.js';
+import { removeKeys, rel } from '../../../framework/firewall/util/redis.js';
 import { publish, subscribe } from '../../../framework/redis/index.js';
 import { createLogger } from '../../../framework/log/index.js';
 

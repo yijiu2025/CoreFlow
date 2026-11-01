@@ -8,9 +8,9 @@
 import geoip from 'geoip-lite';
 import { getConfig } from '../../util/shared.js';
 import { checkRateLimit } from './rate-limiter.js';
-import { createLogger } from '../../../../framework/log/index.js';
+import { createLogger } from '../../../log/index.js';
 
-const log = createLogger('app.firewall.engine.detectors.geo-filter');
+const log = createLogger('framework.firewall.engine.detectors.geo-filter');
 
 /**
  * 基于地理位置和网络类型的信誉检查

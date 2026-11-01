@@ -19,12 +19,36 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { createLogger } from '../../../framework/log/index.js';
-import { setBlock } from '../dao/block-manager.js';
-import { pushRecord } from '../data/store.js';
+import { createLogger } from '../../log/index.js';
+import { setBlock } from '../block-manager.js';
+import { recordFirewallEvent } from '../telemetry-sink.js';
 import { getConfig } from '../util/shared.js';
 
-const log = createLogger('app.firewall.engine.auto-responder');
+const log = createLogger('framework.firewall.engine.auto-responder');
+
+// ============== 邮件告警通道（依赖倒置） ==============
+//
+// 引擎已上移 framework，而发信能力在 notice 应用（app/notice → framework/notice）。
+// framework 不得 import app，因此这里持有**函数引用**：app/firewall/index.js 在
+// 初始化时把「动态 import notice 邮件服务并发送」注册进来。未注册时邮件告警
+// 静默跳过（fail-open）：告警是旁路能力，不影响防护本身。
+// Webhook 告警不依赖任何 app，留在本模块直接发送。
+
+/** @type {((to: string, subject: string, html: string) => Promise<void>) | null} */
+let emailAlertSender = null;
+
+/**
+ * 注册邮件告警发送器（由 app/firewall/index.js 在初始化时调用）
+ *
+ * @param {(to: string, subject: string, html: string) => Promise<void>} sender 发送函数
+ * @returns {void}
+ */
+function registerEmailAlertSender(sender) {
+  if (typeof sender !== 'function') {
+    throw new TypeError('registerEmailAlertSender 需要传入函数');
+  }
+  emailAlertSender = sender;
+}
 
 /** 默认告警配置（可被 `defense.alert` 覆盖） */
 const DEFAULT_ALERT = {
@@ -106,15 +130,10 @@ async function sendAlert(ip, type, details) {
 
   const message = `[安全告警] ${type} 攻击来自 ${ip}\n详情: ${JSON.stringify(details ?? {})}`;
 
-  // 邮件告警
-  if (alert.email) {
+  // 邮件告警（通道由 app 层注入；未注册时跳过）
+  if (alert.email && emailAlertSender) {
     try {
-      const emailService = await import('../../notice/services/email.js');
-      await emailService.default.send(
-        alert.email,
-        `[安全告警] ${type} 攻击检测`,
-        `<p>${message.replace(/\n/g, '<br>')}</p>`
-      );
+      await emailAlertSender(alert.email, `[安全告警] ${type} 攻击检测`, `<p>${message.replace(/\n/g, '<br>')}</p>`);
     } catch (err) {
       log.warn(`[AutoResponder] 邮件告警失败: ${err.message}`);
     }
@@ -149,7 +168,7 @@ async function sendAlert(ip, type, details) {
  */
 async function notifyAttack(ip, type, details) {
   try {
-    pushRecord({
+    recordFirewallEvent({
       time: new Date().toISOString(),
       ip,
       method: 'ATTACK',
@@ -215,4 +234,4 @@ async function handleAttackEvent(params) {
   }
 }
 
-export { handleAttackEvent, notifyAttack, sendAlert };
+export { handleAttackEvent, notifyAttack, sendAlert, registerEmailAlertSender };
