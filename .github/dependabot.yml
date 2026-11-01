@@ -14,22 +14,21 @@ updates:
     # 默认上限 5 是告警只开出 4 个 PR 的原因；分组后提上限，让排队中的更新流动起来
     open-pull-requests-limit: 15
 
-    # ── 上游未跟进的三条，别让 Dependabot 反复开失败的 job ──────────────
-    # 症状：这三条的 security update 跑完必红（`Dependabot encountered '1' error(s)`），
-    # 而且**没有可用修复路径** —— 例：minimatch 的唯一"修复"路径要求把 @eslint/js 从
-    # 10.0.1 降到 9.39.5；glob 的修复版要 rimraf@3 / test-exclude 放弃 `glob.sync`。
-    # 本仓已用 overrides 把**生产链路**修到 0（见 package.json `overrides`），
-    # 剩下的副本全部只在 devDependency 里（jest 30 / eslint 10），且 Dockerfile
-    # 是 `npm install --omit=dev` —— 它们不进镜像。
+    # ── overrides 已修到修复版的两条，不再 ignore ──────────────────────
+    # minimatch / glob 过去因为「没有可用修复路径」被 ignore，2026-11-01 复核后已解除：
+    #   · minimatch → overrides.minimatch = ^11.0.3，修 GHSA-g3hv-75wg-m249
+    #   · glob      → overrides.glob = ^14.0.3，修 GHSA-3g3m-2fjr-6pw4
+    # 早期结论「全局 override minimatch@^11 会让 jest --coverage 崩在
+    # generateEmptyCoverage（minimatch is not a function）」已不成立：把
+    # brace-expansion 一并 override 到 ^5.0.6 之后，jest 30 / eslint 10 / nodemon
+    # 三套工具链的全量用例（1273 条）与 `--coverage` 都能通过。
+    # 所以这里不再留 ignore —— 留着会让后续针对这两个包的安全更新被静默吞掉。
     #
-    # ⚠️ 解除条件（满足后请删掉对应 ignore 并跑一次 `npm audit`）：
-    #   · jest 发布版本改用 glob ≥14 / minimatch ≥11
-    #   · eslint 发布版本改用 minimatch ≥11
-    # 现在硬压会打碎工具链：全局 override `minimatch@^11` 实测让 `jest --coverage`
-    # 崩在 generateEmptyCoverage（`minimatch is not a function`，v11 的 CJS 导出形态变了）。
+    # deepmerge 仍然 ignore：GHSA-gcqx-w48m-w2h4（mergeObject 原型污染）至今没有修复版，
+    # 只能等上游；它仅经 jest-config 进入 dev 链路（Dockerfile 用 --omit=dev，不进镜像），
+    # 是 `npm audit` 里唯一残留的 low。
+    # 解除条件：上游发布修复版后删掉这一行，并跑一次 `npm audit`。
     ignore:
-      - dependency-name: minimatch
-      - dependency-name: glob
       - dependency-name: deepmerge
 
     # `uuid` 没有列进 ignore：它的 override 写成了 `"$uuid"`（见 package.json），

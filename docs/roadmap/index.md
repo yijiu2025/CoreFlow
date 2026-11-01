@@ -46,13 +46,20 @@
   - **第二轮（同日）把生产链路收到 0**：`@fastify/static` → `glob ^14.0.3`（作用域 override，
     全局抬会打碎 `glob.sync`）、`sequelize` → `uuid ^11.1.1`（只用到 v1/v4）；
     docs 链路顺带升 vue 3.5.44 / vite 6.4.5 / follow-redirects 1.16.2 / js-yaml 4.3.2。
-  - **剩余 32 条全部 dev-only**（jest 30 → glob 10.5.0 / minimatch 10.2.5、`deepmerge` low）：
-    根因在 jest / eslint 自身未升级其 glob / minimatch，要等上游 major。**不要**用全局
-    override 硬压 —— 实测会把 `jest --coverage` 打崩（`minimatch is not a function`）。
-    另外 `.github/dependabot.yml` 已对 `minimatch` / `glob` / `deepmerge` 加 `ignore`：
-    这三条的 security update 在 Dependabot 里**没有可行修复路径**（例：minimatch 的唯一
-    "修复"要求把 `@eslint/js` 从 10.0.1 降到 9.39.5），跑一次红一次，纯噪音。
-    解除条件写在那个文件的注释里。
+  - **第三轮（2026-11-01）dev 链路清零**：`jest` / `eslint` 仍带着 `glob 10.x` / `minimatch 10.x`，
+    但**全局 override 其实可行** —— 早期"抬高会打碎 `jest --coverage`"的结论源于
+    `brace-expansion` 版本错配。把 `brace-expansion ^5.0.6` + `minimatch ^11.0.3` +
+    `glob ^14.0.3` 三处同时固定后，jest 30 / eslint 10 / nodemon 的全量用例（1273 条）
+    与 `--coverage` 全绿。这一轮同时修掉两条新告警：minimatch `GHSA-g3hv-75wg-m249`、
+    glob `GHSA-3g3m-2fjr-6pw4`。
+  - **仅剩 `deepmerge` low（无修复版）**：`GHSA-gcqx-w48m-w2h4` 上游至今没发修复版，
+    且只经 `jest-config` 进 dev 链路（镜像用 `--omit=dev`，不进产物）。
+    `.github/dependabot.yml` 现在只对 `deepmerge` 保留 `ignore`，`minimatch` / `glob`
+    的 `ignore` 已删除 —— 留着会静默吞掉后续安全更新。
+  - **同批主依赖跨大版本**：redis 5 → 6、dotenv 17 → 18、cookie 1 → 2、
+    `@fastify/rate-limit` 10 → 11。node-redis v6 改了两个默认值（RESP3 协议、
+    5s 命令超时），两者都不会报配置错误、只在运行期表现为"偶发超时 / 字段读不到"，
+    已在 `framework/redis/plugin.js` 的 createClient 处显式固化回 v5 语义。
   - ⚠️ **Node 下限抬到 24**（`engines >=24` + 仓库根 `.nvmrc`）：`geoip-lite@2`（防火墙运行期
     依赖）声明 `engines >= 24`，而 CI 与镜像此前都跑 22 —— 只靠"没走到那条被版本门控的路径"
     在撑。CI / `Dockerfile` 一并升到 24，声明与实际运行对齐。
