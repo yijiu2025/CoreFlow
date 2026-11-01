@@ -7,6 +7,20 @@
 
 ## 未发布（Unreleased）
 
+### 变更（v2.31.0 候选）
+
+- **feat(redis)**：`getStore` 新增 `{ memory: true }` 选项——强制进程内 MapStore，
+  数据严格单实例、永不进 Redis。补全存储工厂语义矩阵（`backup`=要高可用跨实例共享，
+  `memory`=要进程本位）；默认 `false`，既有调用方行为不变。
+- **feat(auth)**：封禁负缓存切换 `getStore('auth_ban_neg', { memory: true })` 并修复
+  历史缺陷——负缓存 Map 此前从未有读路径（"30s 内不再打 Redis"从未生效），本次补上
+  读路径（`getBanInfo` 公共底层，session 认证热路径"零额外 Redis 读"首次兑现）、
+  删除手写过期逻辑（改用 MapStore 惰性清理 + 兜底清扫 + 容量上限）、fail-open 不缓存、
+  封禁/解封事件对本进程即时失效。新增 2 回归用例钉契约。
+- **refactor(auth)**：模块拆 7 个职责子目录（context/session/permission/device/risk/
+  security/audit），`index.js` 收拢为纯门面（141 个分类命名导出）；业务代码统一走门面，
+  测试直连叶子文件，auth 内部相对互引禁碰 index（防环）。
+
 ## 2.30.0 — 2026-11-01
 
 ### 构建 / 运行时
