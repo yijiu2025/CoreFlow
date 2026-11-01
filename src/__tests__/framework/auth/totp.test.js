@@ -132,6 +132,21 @@ describe('framework/auth/totp（🟡-3 补测）', () => {
       expect(verifyTOTP(secret, generateTOTP(secret, Date.now(), RFC_CONFIG), RFC_CONFIG)).toBe(true);
     });
 
+    test('部分配置对象：未传的字段回退默认值（回归：window/period 不得为 undefined）', () => {
+      // 回归：修复前 verifyTOTP/generateTOTP 直接读 config.window / config.period，
+      // 调用方只传 { digits: 8 } 时 window 为 undefined →
+      // for (i = -undefined...) NaN 循环永不执行 → verifyTOTP 恒 false（2FA 静默全拒）；
+      // generateTOTP 的 counter = epoch / undefined = NaN → 产出错码。
+      const partial = { digits: 8 };
+      const code = generateTOTP(secret, Date.now(), partial);
+      expect(code).toMatch(/^\d{8}$/);
+      expect(verifyTOTP(secret, code, partial)).toBe(true);
+      // 窗口语义也必须真实生效（前后各 1 步长）
+      const now = Date.now();
+      expect(verifyTOTP(secret, generateTOTP(secret, now - 30_000, partial), partial)).toBe(true);
+      expect(verifyTOTP(secret, generateTOTP(secret, now - 90_000, partial), partial)).toBe(false);
+    });
+
     test('数字类型的 code 可被接受（JSON body 常传 number）', () => {
       // 找一个首位非 0 的时间点，避免把前导零问题混进来
       const now = Date.now();

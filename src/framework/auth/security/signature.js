@@ -1,8 +1,13 @@
 /**
- * H5 签名工具（HMAC-SHA256）
+ * H5 签名工具（SHA-256 摘要 + nonce 防重放 + 双因子）
+ *
+ * token 双通道：浏览器走 `_m_h5_tk` cookie；小程序 / API 直连等不便携带
+ * cookie 的客户端走 `x-h5-tk` 请求头（引导时同名响应头下发）。
+ * 机制全貌与客户端接入见 docs/H5-SIGNATURE.md。
  *
  * @author yijiu2025
  * @since 2026-08-17
+ * @since 2026-11-01 x-h5-tk 双通道（非 cookie 客户端接入）
  */
 import crypto from 'node:crypto';
 import { getStore } from '../../redis/index.js';
@@ -10,6 +15,28 @@ import { createNonceStore } from '../../redis/nonce-store.js';
 
 /** H5 签名 nonce 防重放（TTL 略大于时间窗，见 verifySignature） */
 const h5NonceStore = createNonceStore('h5_nonce', 180);
+
+/**
+ * 引导下发 token（首次访问 / token 失效后的重新引导）。
+ *
+ * 🔴 引导放行仅限 GET/HEAD（浏览器首访兼容）；写方法（POST/PUT/DELETE/PATCH）
+ * 下发 token 后返回 403 token_required，**不执行 handler** —— 否则攻击者
+ * "永不上交 token"（curl 天然如此）即可免签名打写接口（2026-11-01 深度检查确认的
+ * 引导绕过，本次修复）。
+ *
+ * @returns {boolean} true = 已放行（调用方直接 return，handler 继续执行）；
+ *                    false = 已回复 403 token_required（调用方同样直接 return）
+ */
+async function bootstrapToken(request, reply) {
+  await issueH5Token(request.server, reply);
+  if (request.method === 'GET' || request.method === 'HEAD') return true;
+  reply.code(403).send({
+    code: 403,
+    error: 'token_required',
+    message: '安全检测失败：缺少访问凭证，请使用本次响应下发的 token 完成签名后重试'
+  });
+  return false;
+}
 
 /**
  * 校验客户端请求签名，防爬防篡改防重放 (类似阿里巴巴 H5 Mtop 签名校验)
@@ -26,12 +53,17 @@ async function verifySignature(request, reply) {
   const timestampStr = request.headers['x-timestamp'] || request.query?.['x-timestamp'];
   const nonce = request.headers['x-nonce'] || request.query?.['x-nonce'];
 
-  // 2. 无签名参数：仅当也还没有 cookie 时才下发 h5_token cookie 引导（首次访问）；
-  //    已有 cookie 仍不签名 → 拒绝，避免客户端永久省略签名即可绕过。
-  const existingCookie = request.cookies?._m_h5_tk;
+  // 2. Token 双通道读取：cookie 为主（浏览器），`x-h5-tk` 请求头兜底
+  //    （小程序 wx.request / 服务端 API 直连等不便携带 cookie 的客户端）。
+  //    非 cookie 客户端的 token 由引导响应的同名响应头下发（见 issueH5Token），
+  //    客户端自行存储并在后续请求回传 —— 两条通道的 token 形态与校验完全一致。
+  const clientToken = request.cookies?._m_h5_tk || request.headers['x-h5-tk'];
+
+  // 无签名参数：仅当也还没有 token 时才引导（首次访问）；已有 token（cookie 或头）
+  // 仍不签名 → 拒绝，避免客户端永久省略签名即可绕过。
   if (!sign || !timestampStr || !nonce) {
-    if (!existingCookie) {
-      await issueH5Token(request.server, reply);
+    if (!clientToken) {
+      await bootstrapToken(request, reply);
       return;
     }
     return reply.code(403).send({
@@ -52,16 +84,17 @@ async function verifySignature(request, reply) {
     });
   }
 
-  // 4. 获取 H5 临时 Token（cookie 为准）
-  let m5H5Tk = request.cookies?._m_h5_tk;
+  // 4. 获取 H5 临时 Token（双通道，见步骤 2）
+  const m5H5Tk = clientToken;
 
-  // 无 cookie 时自动下发，本次放行（前端拿到 cookie 后后续请求即可签名）
+  // 有签名参数但无 token（首访直接带签名 / cookie 过期被清）：
+  // 同样走引导 —— 假签名头换不来执行权，写方法收到 403 token_required
   if (!m5H5Tk) {
-    await issueH5Token(request.server, reply);
+    await bootstrapToken(request, reply);
     return;
   }
 
-  // 解析 Cookie 格式: [h5_token_md5]_[expired_time]
+  // 解析 Token 格式（cookie 与 x-h5-tk 头同构）: [h5_token_md5]_[expired_time]
   const [h5TokenMd5, expiredTimeStr] = m5H5Tk.split('_');
   const expiredTime = parseInt(expiredTimeStr, 10);
   if (!h5TokenMd5 || isNaN(expiredTime) || now > expiredTime) {
@@ -96,7 +129,10 @@ async function verifySignature(request, reply) {
 
   // 6. 重算签名：h5TokenMd5（会话密钥）+ SIGN_APP_KEY（前后端共享常量）双因子
   // 与前端 utils/sign.ts generateSignWithKey 保持一致
-  const url = request.routerPath || request.url.split('?')[0];
+  // ⚠️ Fastify 5 已移除 request.routerPath（v4 弃用、v5 删除，恒为 undefined）。
+  // 前端签的是**具体请求路径**（非路由模板 /user/:id），request.url 去 query 即为
+  // 该值 —— 这正是对齐的正确来源，不能改成 routeOptions.url（那是模板形态）。
+  const url = request.url.split('?')[0];
   const bodyStr = request.body ? JSON.stringify(request.body) : '';
   // query 剔除签名自身字段后按 key 排序纳入验签（与前端 serializeParamsForSign 对齐）
   const paramsStr = serializeQueryForSign(request.query, ['x-sign', 'x-timestamp', 'x-nonce', 'x-device-id']);
@@ -144,6 +180,10 @@ async function issueH5Token(fastify, reply) {
     sameSite: 'lax',
     maxAge: ttlSeconds
   });
+
+  // 非 cookie 客户端通道（小程序 / API 直连）：同名响应头下发，值与 cookie 完全
+  // 同构（md5_expireAt），客户端存储后以 x-h5-tk 请求头回传；浏览器端忽略此头（走 cookie）。
+  reply.header('x-h5-tk', cookieValue);
 
   return rawH5Token;
 }

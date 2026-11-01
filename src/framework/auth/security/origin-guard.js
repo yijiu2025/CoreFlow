@@ -7,7 +7,8 @@ const log = createLogger('framework.auth.origin-guard');
  * 为消费一次性凭证（如 session_token）的敏感端点提供来源白名单校验，
  * 防止凭证泄露后被非授权域消费（纵深防御）。
  *
- * 白名单复用 CORS_ORIGINS 环境变量（与跨域访问白名单一致，启动时解析缓存）。
+ * 白名单复用 CORS_ORIGINS 环境变量（与跨域访问白名单一致，惰性解析 + 按值缓存，
+ * 归一化尾斜杠与大小写后精确比对）。
  * 生产环境 fail-closed：未配置白名单或来源不在白名单内 → 拒绝。
  * 开发环境宽松：放行所有来源，便于本地跨端口调试。
  *
@@ -18,16 +19,44 @@ const log = createLogger('framework.auth.origin-guard');
  * @since 2026-08-18
  */
 
-/** 允许的来源白名单（复用 CORS_ORIGINS，启动时解析缓存） */
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
+/**
+ * 允许的来源白名单（复用 CORS_ORIGINS）
+ *
+ * 惰性解析 + 按原始串缓存：env 在进程生命周期内不变时只解析一次（与启动时解析
+ * 等效），但不与 import 时序耦合（测试/工具在 import 后设置 env 也能生效）。
+ *
+ * 🔴 归一化：env 里的尾斜杠（`https://a.com/`）与大小写都会导致精确匹配失配 ——
+ * 浏览器 Origin 头与 `new URL(referer).origin` 都是 scheme/host 小写、无尾斜杠
+ * 形态，白名单侧必须做同样归一化再比对。
+ */
+let _cachedRaw = null;
+let _cachedOrigins = [];
+let _warnedEmpty = false;
 
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+function allowedOrigins() {
+  const raw = process.env.CORS_ORIGINS?.trim() || '';
+  if (raw !== _cachedRaw) {
+    _cachedRaw = raw;
+    _cachedOrigins = raw
+      .split(',')
+      .map(s => s.trim().replace(/\/+$/, '').toLowerCase())
+      .filter(Boolean);
+    _warnedEmpty = false;
+  }
+  if (process.env.NODE_ENV === 'production' && _cachedOrigins.length === 0 && !_warnedEmpty) {
+    _warnedEmpty = true;
+    log.warn('⚠️ [Auth] 生产环境未配置 CORS_ORIGINS，origin-guard 将拒绝所有敏感端点请求（fail-closed）');
+  }
+  return _cachedOrigins;
+}
 
-if (IS_PRODUCTION && ALLOWED_ORIGINS.length === 0) {
-  log.warn('⚠️ [Auth] 生产环境未配置 CORS_ORIGINS，origin-guard 将拒绝所有敏感端点请求（fail-closed）');
+function isProduction() {
+  return process.env.NODE_ENV === 'production';
+}
+
+/** 与白名单同口径归一化（Origin 头 / Referer origin 都走这里） */
+function normalizeOrigin(raw) {
+  return String(raw).trim().replace(/\/+$/, '').toLowerCase();
 }
 
 /**
@@ -36,12 +65,14 @@ if (IS_PRODUCTION && ALLOWED_ORIGINS.length === 0) {
  * @returns {boolean} 是否允许
  */
 function isAllowedOrigin(request) {
+  const origins = allowedOrigins();
+  const production = isProduction();
   const origin = request?.headers?.origin;
 
   if (origin) {
     // 有 Origin：白名单为空时开发放行、生产拒绝；否则校验白名单
-    if (ALLOWED_ORIGINS.length === 0) return !IS_PRODUCTION;
-    return ALLOWED_ORIGINS.includes(origin);
+    if (origins.length === 0) return !production;
+    return origins.includes(normalizeOrigin(origin));
   }
 
   // 无 Origin：同源浏览器请求可能仅带 Referer，用它兜底
@@ -49,8 +80,8 @@ function isAllowedOrigin(request) {
   if (referer) {
     try {
       const refOrigin = new URL(referer).origin;
-      if (ALLOWED_ORIGINS.length === 0) return !IS_PRODUCTION;
-      return ALLOWED_ORIGINS.includes(refOrigin);
+      if (origins.length === 0) return !production;
+      return origins.includes(normalizeOrigin(refOrigin));
     } catch {
       // Referer 格式异常 → 拒绝
       return false;
@@ -58,7 +89,7 @@ function isAllowedOrigin(request) {
   }
 
   // 既无 Origin 又无 Referer：非浏览器请求（如 curl），开发放行生产拒绝
-  return !IS_PRODUCTION;
+  return !production;
 }
 
 export { isAllowedOrigin };

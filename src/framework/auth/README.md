@@ -74,8 +74,8 @@ auth/
 | `password-policy.js` | 密码强度校验（含 bcrypt 72 字节截断防护） | `validatePasswordStrength` `BCRYPT_MAX_BYTES` |
 | `totp.js` | 两步验证（TOTP） | `generateSecret` `generateTOTP` `verifyTOTP` |
 | `safe.js` | 二级验证保险箱（敏感操作前的验证标记） | `openSafe` `checkSafe` `createSafePreHandler` |
-| `signature.js` | H5 接口签名（防爬防篡改） | `verifySignature` `issueH5Token` |
-| `origin-guard.js` | Origin/Referer 白名单 | `isAllowedOrigin` |
+| `signature.js` | H5 接口签名（防爬防篡改；cookie + `x-h5-tk` 头双通道，小程序/API 直连接入见 [docs/H5-SIGNATURE.md](docs/H5-SIGNATURE.md)） | `verifySignature` `issueH5Token` |
+| `origin-guard.js` | Origin/Referer 白名单（敏感端点来源校验，生产 fail-closed） | `isAllowedOrigin` |
 
 ## audit/ — 审计 / 事件
 

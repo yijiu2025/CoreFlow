@@ -16,6 +16,10 @@
  *   6. nonce 重放 → 403 `replay_detected`（真身有原子 check-and-mark，副本没有）
  *   7. query 参与验签：改一个参数 → 签名失效
  *   8. 未声明 requireSignature 的路由完全不受影响，也不下发 cookie
+ *   9. 非 cookie 客户端：引导响应以 x-h5-tk 响应头下发 token，客户端凭同名请求头
+ *      回传完成签名（与 cookie 同等约束：不签名 403、伪造 403）
+ *  10. 引导放行仅限 GET/HEAD：写方法无 token → 403 token_required + 下发 token、
+ *      handler 不执行；凭下发 token 签名重试 → 200（"永不上交 token"无法打写接口）
  *
  * @author yijiu2025
  * @since 2026-08-17
@@ -67,6 +71,11 @@ beforeAll(async () => {
   // 真身中间件直接挂 preHandler —— 与 registerSecureRoute 写入 requireSignature 后的效果一致
   app.get('/secure', { preHandler: verifySignature, config: { requireSignature: true } }, async (_req, reply) =>
     reply.code(200).send({ ok: true })
+  );
+
+  // 写方法路由：引导放行收口（仅 GET/HEAD 放行）的断言对象
+  app.post('/secure-post', { preHandler: verifySignature, config: { requireSignature: true } }, async (_req, reply) =>
+    reply.code(200).send({ ok: true, posted: true })
   );
 
   // 未声明 requireSignature：应完全跳过
@@ -289,5 +298,126 @@ describe('未声明 requireSignature 的路由', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
     expect(h5CookieOf(res)).toBeUndefined();
+  });
+});
+
+describe('非 cookie 客户端（x-h5-tk 头双通道）', () => {
+  // 小程序 wx.request / 服务端 API 直连不便携带 cookie：
+  // 引导响应同时以 x-h5-tk 响应头下发 token，客户端存储后以同名请求头回传。
+  it('引导响应带 x-h5-tk 响应头；客户端凭该头完成签名请求', async () => {
+    const bootstrap = await app.inject({ method: 'GET', url: '/secure' });
+    expect(bootstrap.statusCode).toBe(200);
+
+    const tk = bootstrap.headers['x-h5-tk'];
+    expect(tk).toMatch(/^[a-f0-9]{64}_\d+$/);
+
+    const md5 = tk.split('_')[0];
+    const timestamp = Date.now();
+    const nonce = `hdr-${crypto.randomUUID()}`;
+    const signed = await app.inject({
+      method: 'GET',
+      url: '/secure',
+      headers: {
+        'x-h5-tk': tk,
+        'x-sign': signFor({ md5, timestamp, nonce, url: '/secure' }),
+        'x-timestamp': String(timestamp),
+        'x-nonce': nonce
+      }
+    });
+    expect(signed.statusCode).toBe(200);
+    expect(signed.json()).toEqual({ ok: true });
+  });
+
+  it('带 x-h5-tk 头但不签名 → 403 signature_required（与 cookie 同等约束）', async () => {
+    const bootstrap = await app.inject({ method: 'GET', url: '/secure' });
+    const tk = bootstrap.headers['x-h5-tk'];
+
+    const res = await app.inject({ method: 'GET', url: '/secure', headers: { 'x-h5-tk': tk } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('signature_required');
+  });
+
+  it('header token 不在存储中（伪造）→ 403 invalid_token', async () => {
+    const fake = `${'c'.repeat(64)}_${Date.now() + 3_600_000}`;
+    const res = await app.inject({
+      method: 'GET',
+      url: '/secure',
+      headers: {
+        'x-h5-tk': fake,
+        'x-sign': 'a'.repeat(64),
+        'x-timestamp': String(Date.now()),
+        'x-nonce': 'hdr-fake'
+      }
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('invalid_token');
+  });
+});
+
+describe('引导放行仅限 GET/HEAD（写方法防"永不上交 token"绕过）', () => {
+  // 回归：修复前写方法（POST）无 token 也走"引导 + 放行"——攻击者每次丢弃 token
+  // 即可免签名打写接口（引导绕过）。修复后写方法下发 token 但不执行 handler。
+  it('POST 无签名无 token → 403 token_required + 下发 token，handler 未执行', async () => {
+    const res = await app.inject({ method: 'POST', url: '/secure-post' });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('token_required');
+    // token 已随本次响应下发（cookie + x-h5-tk 头），客户端可凭它签名重试
+    expect(res.headers['x-h5-tk']).toMatch(/^[a-f0-9]{64}_\d+$/);
+    expect(h5CookieOf(res)).toBeDefined();
+  });
+
+  it('POST 带签名参数但无 token → 403 token_required（假签名头换不来执行权）', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/secure-post',
+      headers: {
+        'x-sign': 'a'.repeat(64),
+        'x-timestamp': String(Date.now()),
+        'x-nonce': `bypass-${crypto.randomUUID()}`
+      }
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('token_required');
+    expect(res.json()).not.toEqual({ ok: true, posted: true });
+  });
+
+  it('POST：凭 403 响应下发的 token 签名重试 → 200（引导-重试闭环）', async () => {
+    const first = await app.inject({ method: 'POST', url: '/secure-post' });
+    const tk = first.headers['x-h5-tk'];
+    const md5 = tk.split('_')[0];
+
+    const timestamp = Date.now();
+    const nonce = `retry-${crypto.randomUUID()}`;
+    const retry = await app.inject({
+      method: 'POST',
+      url: '/secure-post',
+      headers: {
+        'x-h5-tk': tk,
+        'x-sign': signFor({ md5, timestamp, nonce, url: '/secure-post', body: '{"a":1}' }),
+        'x-timestamp': String(timestamp),
+        'x-nonce': nonce
+      },
+      payload: { a: 1 }
+    });
+
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toEqual({ ok: true, posted: true });
+  });
+
+  it('GET 带签名参数但无 token（cookie 过期场景）→ 仍引导放行（浏览器首访兼容）', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/secure',
+      headers: {
+        'x-sign': 'a'.repeat(64),
+        'x-timestamp': String(Date.now()),
+        'x-nonce': `expired-${crypto.randomUUID()}`
+      }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(h5CookieOf(res)).toBeDefined();
   });
 });

@@ -38,8 +38,11 @@ function generateSecret(issuer = 'App', account = '') {
  * @returns {string} 6 位验证码
  */
 function generateTOTP(secret, time = Date.now(), config = DEFAULT_CONFIG) {
+  // 合并默认值：调用方传部分配置（如 { digits: 8 }）时，period/window 不得变成
+  // undefined —— 否则 counter=NaN、窗口循环 -undefined=NaN 直接跳过（恒失败/恒错码）
+  const cfg = { ...DEFAULT_CONFIG, ...config };
   const epoch = Math.floor(time / 1000);
-  const counter = Math.floor(epoch / config.period);
+  const counter = Math.floor(epoch / cfg.period);
 
   // Base32 解码
   const key = base32Decode(secret);
@@ -63,7 +66,7 @@ function generateTOTP(secret, time = Date.now(), config = DEFAULT_CONFIG) {
       (hash[offset + 3] & 0xff)) %
     Math.pow(10, config.digits);
 
-  return code.toString().padStart(config.digits, '0');
+  return code.toString().padStart(cfg.digits, '0');
 }
 
 /**
@@ -79,6 +82,10 @@ function generateTOTP(secret, time = Date.now(), config = DEFAULT_CONFIG) {
  * @returns {boolean}
  */
 function verifyTOTP(secret, code, config = DEFAULT_CONFIG) {
+  // 同 generateTOTP：部分配置对象合并默认值，防止 window/period 为 undefined
+  // 导致窗口循环（i = -undefined = NaN）永不执行 → 恒 false（2FA 静默全拒）
+  const cfg = { ...DEFAULT_CONFIG, ...config };
+
   // 入参防御：code 可能缺失、是数字（JSON body 里客户端常传 number）、或带空格。
   // 若直接透传给下方的 timingSafeEqual，会在读 `b.length` 时抛
   // `TypeError: Cannot read properties of undefined` —— 2FA 校验端点会 500 而非
@@ -86,16 +93,16 @@ function verifyTOTP(secret, code, config = DEFAULT_CONFIG) {
   if (typeof secret !== 'string' || !secret) return false;
   if (code === undefined || code === null) return false;
 
-  const digits = config?.digits || DEFAULT_CONFIG.digits;
+  const digits = cfg.digits;
   const normalized = String(code).trim();
   if (normalized.length !== digits || !/^\d+$/.test(normalized)) return false;
 
   const now = Date.now();
 
   // 检查当前时间步长和前后窗口
-  for (let i = -config.window; i <= config.window; i++) {
-    const time = now + i * config.period * 1000;
-    const expected = generateTOTP(secret, time, config);
+  for (let i = -cfg.window; i <= cfg.window; i++) {
+    const time = now + i * cfg.period * 1000;
+    const expected = generateTOTP(secret, time, cfg);
     if (timingSafeEqual(expected, normalized)) {
       return true;
     }
