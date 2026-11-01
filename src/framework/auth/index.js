@@ -121,8 +121,8 @@ export {
   detectLoginEnvironmentAnomaly,
   detectSessionRisk,
   confirmVerifyToken,
-  hasVerifiedFlag,
   isHighRiskRequest,
+  registerRiskVerifyUrl,
   clearAccountLock,
   clearIpLock
 } from './risk/anomaly-detector.js';

@@ -45,8 +45,14 @@ jest.unstable_mockModule('../../../framework/db/index.js', () => ({
   }
 }));
 
-const { detectSessionRisk, confirmVerifyToken, isHighRiskRequest, detectLoginEnvironmentAnomaly, detectLoginAnomaly } =
-  await import('../../../framework/auth/risk/anomaly-detector.js');
+const {
+  detectSessionRisk,
+  confirmVerifyToken,
+  isHighRiskRequest,
+  registerRiskVerifyUrl,
+  detectLoginEnvironmentAnomaly,
+  detectLoginAnomaly
+} = await import('../../../framework/auth/risk/anomaly-detector.js');
 const { computeDeviceFingerprint } = await import('../../../framework/auth/device/device.js');
 
 const BASE = {
@@ -173,24 +179,37 @@ describe('confirmVerifyToken 一次性消费', () => {
     const risk = await detectSessionRisk({ ...BASE, fingerprint: 'fp-b' });
     const token = risk.verify.token;
 
-    expect(await confirmVerifyToken(token)).toBe(true);
+    expect(await confirmVerifyToken(token, { userId: BASE.userId })).toBe(true);
     // 免验标记已写入
     expect(storeMap.has(`verified:${BASE.userId}:${BASE.deviceId}`)).toBe(true);
     // 二次消费同 token → false（一次性）
-    expect(await confirmVerifyToken(token)).toBe(false);
+    expect(await confirmVerifyToken(token, { userId: BASE.userId })).toBe(false);
     // 后续风险检测直接 safe
     const after = await detectSessionRisk({ ...BASE, fingerprint: 'fp-b' });
     expect(after.level).toBe('safe');
   });
 
+  test('无身份上下文 → 拒绝（fail-closed，不给跳过归属校验的口子）', async () => {
+    const risk = await detectSessionRisk({ ...BASE, fingerprint: 'fp-b' });
+    expect(await confirmVerifyToken(risk.verify.token)).toBe(false);
+    expect(await confirmVerifyToken(risk.verify.token, {})).toBe(false);
+    // token 未被消费，原主仍可正常验证
+    expect(await confirmVerifyToken(risk.verify.token, { userId: BASE.userId })).toBe(true);
+  });
+
+  test('跨用户消费 → false（归属校验）', async () => {
+    const risk = await detectSessionRisk({ ...BASE, fingerprint: 'fp-b' });
+    expect(await confirmVerifyToken(risk.verify.token, { userId: 999 })).toBe(false);
+  });
+
   test('非法 / 不存在的 token → false', async () => {
-    expect(await confirmVerifyToken('1.WEB-xxx.notexist')).toBe(false);
-    expect(await confirmVerifyToken('')).toBe(false);
+    expect(await confirmVerifyToken('1.WEB-xxx.notexist', { userId: 1 })).toBe(false);
+    expect(await confirmVerifyToken('', { userId: 1 })).toBe(false);
   });
 
   test('验证标记按 deviceId 维度隔离：换设备验证不互认', async () => {
     const risk = await detectSessionRisk({ ...BASE, fingerprint: 'fp-b' });
-    await confirmVerifyToken(risk.verify.token);
+    await confirmVerifyToken(risk.verify.token, { userId: BASE.userId });
 
     const otherDevice = { ...BASE, deviceId: 'IOS-AbCdEfGhIjK-Xy9Zw1', fingerprint: 'fp-b' };
     const result = await detectSessionRisk(otherDevice);
@@ -210,11 +229,41 @@ describe('isHighRiskRequest 高风险判定', () => {
     expect(isHighRiskRequest({ method: 'DELETE', url: '/work/1' })).toBe(true);
   });
 
-  test('豁免路径（退出/切换/验证类）写操作也不拦，防死锁', () => {
-    expect(isHighRiskRequest({ method: 'POST', url: '/auth/v1/logout' })).toBe(false);
-    expect(isHighRiskRequest({ method: 'POST', url: '/auth/v1/switch-account' })).toBe(false);
-    expect(isHighRiskRequest({ method: 'POST', url: '/auth/v1/verify-challenge?code=x' })).toBe(false);
-    expect(isHighRiskRequest({ method: 'POST', url: '/auth/v1/bind-session' })).toBe(false);
+  test('路由声明 riskExempt（config 标志）→ 写操作不拦，防死锁', () => {
+    // 🔴 单一事实源 = registerSecureRoute({ riskExempt: true }) 写进 routeOptions.config，
+    // 判定与 URL 前缀无关 —— 前缀改了、路由搬家都不影响
+    const exempt = {
+      method: 'POST',
+      url: '/any/prefix/auth/v1/verify-challenge',
+      routeOptions: { config: { riskExempt: true } }
+    };
+    expect(isHighRiskRequest(exempt)).toBe(false);
+    // query string / 子路径同样由标志位决定，不再依赖路径匹配
+    const subPath = {
+      method: 'DELETE',
+      url: '/auth/v1/saved-accounts/revoke?x=1',
+      routeOptions: { config: { riskExempt: true } }
+    };
+    expect(isHighRiskRequest(subPath)).toBe(false);
+  });
+
+  test('未声明路由（含 404）写操作照拦（fail-closed）', () => {
+    // 曾硬编码 '/auth/v1/logout' 豁免 —— 该路径根本不存在（真实登出在 /oauth2.1），
+    // 现在无声明 = 无豁免，杜绝"清单腐烂出死锁"整类问题
+    expect(isHighRiskRequest({ method: 'POST', url: '/oauth2.1/v1/logout' })).toBe(true);
+    expect(isHighRiskRequest({ method: 'POST', url: '/auth/v1/whatever' })).toBe(true);
+  });
+
+  test('registerRiskVerifyUrl：验证端点注册时回填真实 URL 作为兜底', async () => {
+    registerRiskVerifyUrl('/oauth2.1/v1/verify-challenge');
+    const result = await detectSessionRisk({ ...BASE, fingerprint: 'fp-b' }); // 不传 verifyUrl → 用回填值
+    expect(result.verify.url).toBe('/oauth2.1/v1/verify-challenge');
+    // 无效 URL 拒绝回填
+    registerRiskVerifyUrl('not-a-url');
+    const r2 = await detectSessionRisk({ ...BASE, fingerprint: 'fp-b' });
+    expect(r2.verify.url).toBe('/oauth2.1/v1/verify-challenge');
+    // 恢复默认，避免污染其他用例
+    registerRiskVerifyUrl('/auth/v1/verify-challenge');
   });
 });
 
@@ -376,5 +425,28 @@ describe('detectLoginAnomaly 暴力破解锁定（DB 降级路径）', () => {
     expect(result.reason).toContain('临时锁定');
     expect(storeMap.has('lockout:ip:1.2.3.4')).toBe(true);
     expect(storeMap.has('lockout:email:a@b.c')).toBe(true);
+  });
+
+  test('锁定期内命中锁定标记 → 直接 block，不打 DB（先查锁短路，撞库不放大成 COUNT）', async () => {
+    storeMap.set('lockout:email:a@b.c', '1', 1800);
+    let countCalls = 0;
+    modelStubs.SessionLog = {
+      count: async () => {
+        countCalls += 1;
+        return 99;
+      }
+    };
+    const result = await detectLoginAnomaly(PARAMS);
+    expect(result.status).toBe('block');
+    expect(result.reason).toContain('已被锁定');
+    expect(countCalls).toBe(0); // 🔴 原实现锁定期内每次尝试仍打两次 DB COUNT
+  });
+
+  test('email 缺失 → 跳过账号维度，不产生 lockout:email:undefined 垃圾键', async () => {
+    modelStubs.SessionLog = { count: async () => 99 };
+    const result = await detectLoginAnomaly({ ip: '5.6.7.8' });
+    expect(result.status).toBe('block'); // 仍按 IP 维度锁
+    expect(storeMap.has('lockout:email:undefined')).toBe(false);
+    expect(storeMap.has('lockout:ip:5.6.7.8')).toBe(true);
   });
 });

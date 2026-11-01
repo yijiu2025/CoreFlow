@@ -12,7 +12,7 @@
 import { getSessionTokenDevice } from '../session/session.js';
 import { COOKIE_OPTIONS } from '../context/cookie.js';
 import { getDeviceId, computeDeviceFingerprint } from '../device/device.js';
-import { detectSessionRisk, isHighRiskRequest, hasVerifiedFlag } from './anomaly-detector.js';
+import { detectSessionRisk, isHighRiskRequest } from './anomaly-detector.js';
 import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.risk-hooks');
@@ -73,9 +73,9 @@ async function detectAndHandleRisk(request, reply, sessionData) {
       log.debug('⚠️ 会话风险: %s %j', risk.level, risk.reasons);
 
       // 高风险操作（非 GET）+ warn → 拦截，要求先完成人机验证
-      // 只有服务端已写入的免验标记才能放行；不再信任客户端任意 x-verify-token 头。
-      const verified = await hasVerifiedFlag(sessionData.userId, deviceId);
-      if (!verified && risk.level === 'warn' && isHighRiskRequest(request) && risk.verify) {
+      // 免验标记短路已在 detectSessionRisk 内完成（命中 → 直接 safe），
+      // 走到这里必然未验证，无需再查一次（原实现每 warn 多一跳 Redis）。
+      if (risk.level === 'warn' && isHighRiskRequest(request) && risk.verify) {
         // 不要写 `reply.sent = true`：Fastify 5 的 reply.sent 是只读 getter，ESM 严格
         // 模式下赋值抛 TypeError（会被本函数的 catch 吞成一条"风险检测异常"警告），
         // 而 send() 本身已置 sent，下游守卫/钩子的 reply.sent 判断不受影响。

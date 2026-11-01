@@ -66,6 +66,27 @@ const DETECT_RESULT = {
 };
 
 /**
+ * 人机验证端点的完整 URL（返回给前端弹框用）
+ *
+ * 🔴 不在此硬编码完整路径：真实 URL 由 verify-challenge 路由注册时经
+ * registerRiskVerifyUrl() 回填（guard 解析 system.json.prefix + 组前缀 + url，
+ * 前缀怎么改都不会失联）。此默认值仅供测试与注册前窗口兜底。
+ */
+let riskVerifyEndpointUrl = '/auth/v1/verify-challenge';
+
+/**
+ * 注册人机验证端点的真实 URL（由 api/auth/v1/verify-challenge.js 注册时调用）
+ * @param {string} fullUrl guard 解析后的完整路由 URL
+ */
+function registerRiskVerifyUrl(fullUrl) {
+  if (!fullUrl || typeof fullUrl !== 'string' || !fullUrl.startsWith('/')) {
+    log.warn(`⚠️ [Anomaly] registerRiskVerifyUrl 无效 URL，保留兜底: ${fullUrl}`);
+    return;
+  }
+  riskVerifyEndpointUrl = fullUrl;
+}
+
+/**
  * 检测登录异常
  *
  * 暴力破解锁定（IP + 账号双维度）。Redis 故障时 getStore 降级 MapStore，
@@ -83,6 +104,23 @@ const DETECT_RESULT = {
 async function detectLoginAnomaly(params) {
   const { email, ip } = params;
 
+  // 0. 先查锁定标记（Redis get，最便宜）：锁定期内直接拒，**不打 DB**。
+  //    原实现把锁定检查放在两次 DB COUNT 之后 —— 锁定期内的每次撞库都放大成
+  //    两个 COUNT 查询，锁定机制失去"命中即拒"的意义。锁定固定 30 分钟到期，
+  //    到期后窗口内计数仍在阈值上会立刻重新锁定，防护不间断。
+  if (email) {
+    const emailLocked = await lockoutStore.get(`lockout:email:${email}`);
+    if (emailLocked) {
+      return { status: DETECT_RESULT.BLOCK, reason: '账号已被锁定，请稍后再试' };
+    }
+  }
+  if (ip) {
+    const ipLocked = await lockoutStore.get(`lockout:ip:${ip}`);
+    if (ipLocked) {
+      return { status: DETECT_RESULT.BLOCK, reason: '该 IP 登录尝试异常，已被临时锁定' };
+    }
+  }
+
   // 1. 检查同一 IP 的失败次数
   const ipFailures = await countRecentFailures(null, ip);
   if (ipFailures >= CONFIG.maxFailuresPerIp) {
@@ -95,18 +133,14 @@ async function detectLoginAnomaly(params) {
     return { status: DETECT_RESULT.BLOCK, reason: `IP ${ip} 登录失败次数异常（${ipFailures}次），已被临时锁定` };
   }
 
-  // 2. 检查同一账号的失败次数
-  const accountFailures = await countRecentFailures(email, null);
-  if (accountFailures >= CONFIG.maxFailuresPerAccount) {
-    // 锁定账号（达到阈值当次即锁，不等下次）
-    await lockoutStore.set(`lockout:email:${email}`, '1', Math.floor(CONFIG.lockoutDurationMs / 1000));
-    return { status: DETECT_RESULT.BLOCK, reason: `账号 ${email} 登录失败次数过多，已被锁定 30 分钟` };
-  }
-
-  // 3. 检查是否在锁定期内（早于阈值写入的锁定标记）
-  const emailLocked = await lockoutStore.get(`lockout:email:${email}`);
-  if (emailLocked) {
-    return { status: DETECT_RESULT.BLOCK, reason: '账号已被锁定，请稍后再试' };
+  // 2. 检查同一账号的失败次数（email 缺失时跳过，绝不能拿 'lockout:email:undefined' 当真实键）
+  if (email) {
+    const accountFailures = await countRecentFailures(email, null);
+    if (accountFailures >= CONFIG.maxFailuresPerAccount) {
+      // 锁定账号（达到阈值当次即锁，不等下次）
+      await lockoutStore.set(`lockout:email:${email}`, '1', Math.floor(CONFIG.lockoutDurationMs / 1000));
+      return { status: DETECT_RESULT.BLOCK, reason: `账号 ${email} 登录失败次数过多，已被锁定 30 分钟` };
+    }
   }
 
   return { status: DETECT_RESULT.SAFE };
@@ -349,7 +383,7 @@ async function detectSessionRisk({
       level: 'warn',
       reasons,
       verify: {
-        url: verifyUrl || '/auth/v1/verify-challenge',
+        url: verifyUrl || riskVerifyEndpointUrl,
         header: 'x-verify-token',
         // 验证 token：userId+deviceId+nonce 存 Redis，验证端点校验一致性
         token: await issueVerifyToken(userId, deviceId)
@@ -399,11 +433,19 @@ async function confirmVerifyToken(token, identity = {}) {
     if (!token || typeof token !== 'string') {
       return false;
     }
+    // 🔴 无身份上下文一律拒绝（fail-closed）：归属校验是本函数的安全边界，
+    //    缺 identity 时跳过校验等于任何拿到 token 的人都能替原主消费。
+    //    生产唯一调用方 verify-challenge（requireLogin）恒传 userId。
+    const identityUserId = identity?.userId;
+    if (!identityUserId) {
+      log.warn('⚠️ [Anomaly] confirmVerifyToken 缺少身份上下文，拒绝校验（fail-closed）');
+      return false;
+    }
     const store = getVerifyStore();
     const data = await store.get(`vtoken:${token}`);
     if (!data) return false;
     // 归属校验：token 必须签发给自己，防止跨用户消费
-    if (identity.userId && Number(data.userId) !== Number(identity.userId)) {
+    if (Number(data.userId) !== Number(identityUserId)) {
       return false;
     }
     // 写已验证标记
@@ -419,45 +461,16 @@ async function confirmVerifyToken(token, identity = {}) {
 }
 
 /**
- * 判断当前用户+设备是否已完成人机验证（免验标记）
- * @param {number} userId 用户内部 ID
- * @param {string} deviceId 设备 ID
- * @returns {Promise<boolean>}
- */
-async function hasVerifiedFlag(userId, deviceId) {
-  if (!userId || !deviceId) return false;
-  try {
-    const store = getVerifyStore();
-    const data = await store.get(`verified:${userId}:${deviceId}`);
-    return Boolean(data);
-  } catch (err) {
-    log.warn(`⚠️ [Anomaly] hasVerifiedFlag 查询失败`, err);
-    return false;
-  }
-}
-
-/**
- * 高风险写操作豁免清单
+ * 高风险写操作豁免机制（2026-11-01 重构）
  *
- * 退出/切换/验证类路径必须放行，否则用户一旦触发指纹变会死锁：
- * 退不出、切不了、连验证端点自己都被拦。这些操作要么不依赖 session 基准
- * （退出/切换是销毁/轮转 cookie），要么本身就在完成验证（verify-challenge）。
- */
-const RISK_EXEMPT_PATHS = [
-  '/auth/v1/clear-cookie', // 临时退出（清 cookie，不依赖基准）
-  '/auth/v1/logout', // 正式退出
-  '/auth/v1/switch-account', // 切换账号（轮转凭证 cookie）
-  '/auth/v1/bind-session', // iframe 登录后换 sid（此时基准可能还没更新）
-  '/auth/v1/verify-challenge', // 人机验证端点自身（不能拦自己）
-  '/auth/v1/saved-accounts', // 免切账号管理
-  '/auth/v1/deactivation' // 注销申请（登录流程内，已过认证）
-];
-
-/**
- * 是否高风险写操作（需风险拦截）
+ * 退出/切换/验证类端点必须放行，否则用户一旦触发指纹变会死锁：
+ * 退不出、切不了、连验证端点自己都被拦。
  *
- * 默认：非 GET/HEAD/OPTIONS 方法即视为高风险（写操作）；
- * 豁免清单内路径不拦（见 RISK_EXEMPT_PATHS 注释）。
+ * 🔴 单一事实源 = 路由声明位：各端点在 registerSecureRoute({ riskExempt: true })，
+ *    本函数在 onRequest（路由匹配后）读 request.routeOptions.config.riskExempt 判定。
+ *    不再做路径前缀匹配 —— 旧硬编码清单曾腐烂：'/auth/v1/logout'、'/auth/v1/deactivation'
+ *    两条路径根本不存在（真实路由在 /oauth2.1、/user 下），而真实登出 /oauth2.1/v1/logout
+ *    反而漏豁免；system.json.prefix 一改全部失效且无任何报错。
  *
  * @param {import('fastify').FastifyRequest} request 请求对象
  * @returns {boolean}
@@ -465,11 +478,9 @@ const RISK_EXEMPT_PATHS = [
 function isHighRiskRequest(request) {
   const m = (request?.method || 'GET').toUpperCase();
   if (['GET', 'HEAD', 'OPTIONS'].includes(m)) return false;
-  // 豁免路径不拦（退出/切换/验证类，拦了会死锁）
-  const url = request?.url || '';
-  const path = url.split('?')[0];
-  if (RISK_EXEMPT_PATHS.some(p => path === p || path.startsWith(p + '/'))) return false;
-  return true;
+  // 路由声明了 riskExempt → 不拦（退出/切换/验证类，拦了会死锁）。
+  // 404 等未匹配路由无 config.riskExempt → 正常参与拦截（与旧行为一致）。
+  return request?.routeOptions?.config?.riskExempt !== true;
 }
 
 export {
@@ -478,8 +489,8 @@ export {
   detectLoginEnvironmentAnomaly,
   detectSessionRisk,
   confirmVerifyToken,
-  hasVerifiedFlag,
   isHighRiskRequest,
+  registerRiskVerifyUrl,
   clearAccountLock,
   clearIpLock
 };

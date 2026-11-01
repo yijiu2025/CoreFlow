@@ -49,7 +49,7 @@ jest.unstable_mockModule('../../framework/jwt/index.js', () => ({
 }));
 
 jest.unstable_mockModule('../../shared/user-dao.js', () => ({
-  findUserById: async () => null
+  findUserByUid: async () => null
 }));
 
 jest.unstable_mockModule('../../framework/auth/permission/perm-cache.js', () => ({
@@ -76,10 +76,15 @@ jest.unstable_mockModule('../../framework/auth/risk/anomaly-detector.js', () => 
   DETECT_RESULT: {},
   detectLoginAnomaly: jest.fn(),
   detectLoginEnvironmentAnomaly: jest.fn(),
-  detectSessionRisk: async () => state.risk,
+  // 模拟真实 detectSessionRisk 的免验短路：verified 标记命中 → 直接 safe
+  // （真实实现的免验判定在检测层内完成，risk-hooks 不再单独查标记）
+  detectSessionRisk: async () => {
+    if (state.verified) return { level: 'safe', reasons: ['already_verified'] };
+    return state.risk;
+  },
   confirmVerifyToken: jest.fn(),
-  hasVerifiedFlag: async () => state.verified,
   isHighRiskRequest: request => request.method !== 'GET',
+  registerRiskVerifyUrl: jest.fn(), // 门面 re-export 面必须给全（窄 mock 会炸加载）
   clearAccountLock: jest.fn(),
   clearIpLock: jest.fn()
 }));
