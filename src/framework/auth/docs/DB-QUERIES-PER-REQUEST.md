@@ -3,6 +3,11 @@
 > 结论日期：2026-09-14
 > 方法：全仓 `addHook` 静态梳理 + **真实实例动态实测**（`createApp()` + `sequelize.options.logging`
 > 采集 SQL + `app.inject()` 发请求，逐请求计数并打印原始 SQL）。探针脚本用完即删，未改任何产品代码。
+>
+> **⚠️ 2026-11-01 复核**：核心结论（每请求最少 0 查询、4 个条件落点）仍成立，
+> 但 auth 已物理拆为 7 子目录——§2/§3 中的 `framework/auth/index.js:NNN` 行号已漂移：
+> onRequest 认证钩子在 `framework/auth/plugin.js`，Bearer/JWT 路径在 `framework/auth/bearer-auth.js`。
+> **§5 的三个安全钩子不生效问题已修复**（rootPlugins + 插件工厂，见该节标注），其余为历史快照。
 
 ---
 
@@ -84,6 +89,11 @@
 ---
 
 ## 五、顺带发现：oauth21 的三个安全钩子目前不生效
+
+> **✅ 已修复（2026-09 之后）**：oauth21 `config.js` 现以 `rootPlugins: buildRootPlugins()` 把
+> `sensitiveRateLimitPlugin` / `createCsrfProtectionPlugin({ exclude })` / `initOAuthMiddleware`
+> 三个**插件工厂**注册进根作用域（`10-apps.js` 支持 `appConfig.rootPlugins`），
+> 钩子对业务路由生效，`requireSignature` 也有实际防护了。以下为问题原貌存档。
 
 **现象（实测）**
 

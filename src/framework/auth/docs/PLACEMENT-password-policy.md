@@ -4,6 +4,11 @@
 > 结论：**放在 `framework/auth` 是对的，不建议迁到 `app/oauth21`**。但它当前的**内容**有问题，
 > 真正该做的是「补齐能力 + 抬升归属」，而不是搬家。
 > 分析时间：2026-09-14
+>
+> **✅ 状态（2026-11-01）**：P0 已按方案 (b) 落地——`isPasswordReused`/`checkPasswordAge` 及
+> `maxHistory`/`maxAgeDays` 配置项已删除，文件收窄为强度校验；🔵/P2 已落地——
+> `validatePasswordStrength` 增加 bcrypt 72 字节（`Buffer.byteLength`）校验 + 回归测试。
+> 文件现位于 `security/password-policy.js`（随 auth 拆分迁移）。以下为分析原貌存档。
 
 ---
 

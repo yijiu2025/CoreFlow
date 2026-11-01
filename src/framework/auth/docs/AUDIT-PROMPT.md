@@ -8,24 +8,35 @@
 
 ## 一、审查对象
 
-`src/framework/auth/`（14 个文件，约 4200 行）
+`src/framework/auth/` —— **目录结构以审查当日实际为准**（2026-11-01 起为 7 子目录 +
+根级门面/插件形态，不要再沿用旧「14 文件」清单）：
 
-| 文件 | 行数 | 职责（待核实） |
-| ---- | ---- | -------------- |
-| `session.js` | **1393** | 会话核心 |
-| `anomaly-detector.js` | 450 | 异常检测 |
-| `index.js` | 447 | 模块聚合出口 |
-| `session-api.service.js` | 313 | 会话 HTTP 接口 |
-| `device-id-service.js` | 297 | 设备 ID 服务 |
-| `device.js` | 297 | 设备指纹 |
-| `cookie.js` | 282 | Cookie 处理 |
-| `StpUtil.js` | 221 | 登录状态工具（sa-token 风格） |
-| `audit-logger.js` | 185 | 审计日志 |
-| `totp.js` | 149 | TOTP 二次验证 |
-| `signature.js` | 138 | 签名校验 |
-| `permission-loader.js` | 134 | 权限加载 |
-| `password-policy.js` | 106 | 密码策略 |
-| `origin-guard.js` | 62 | 来源校验 |
+```
+context/        request-context · stp-util · cookie · accessors
+session/        生命周期/踢出/治理/store 等 8 文件
+permission/     perm-cache · permission-loader · wildcard-match
+device/         device · device-id-service
+risk/           anomaly-detector · risk-hooks
+security/       ban · safe · totp · signature · origin-guard · password-policy · password-hash
+audit/          audit-logger
+根级            index.js（纯门面，~190 行，禁业务逻辑）· plugin.js · bearer-auth.js · README.md
+```
+
+**第一步**：`ls -R src/framework/auth/`（排除 `docs/`）+ `wc -l` 生成当日文件清单表，替代下表。
+历史快照（仅说明当时状态，勿据此定位代码）：2026-09-12 首轮审查时为 14 个平铺文件、
+`session.js` 1393 行 —— 该轮全部 🔴/🟡 与大部分 🔵 已在批次 A/B/C 修复，`session.js` 已拆 4 文件。
+
+### 已闭环、勿重复排查（2026-09 首轮审查 + 2026-11 复核确认）
+
+- `verifyCookie` 字节长度守卫（🔴-1）、`sidHash` 导出（🔴-2）、`user_sessions` 命名空间（🔴-3）
+- `index ↔ stp-util` 循环依赖（已抽 `request-context.js`）、`err.code` 控制流、`getSessionStats` 静默吞异常
+- 通配匹配已收拢 `permission/wildcard-match.js`（转义正则元字符 + 中段通配）
+- oauth21 限频/CSRF/H5 签名钩子已走 `rootPlugins` 生效
+- `getModel` 未命中抛 TypeError 的降级路径已有 try/catch + 测试（anomaly-detector）
+- 密码策略死代码 `isPasswordReused`/`checkPasswordAge` 已删除；bcrypt 72 字节截断已加防护
+
+审查仍需**重点覆盖**：门面 index.js 与子目录的 re-export 一致性、
+`unstable_mockModule` 钉具体文件的测试有效性、新增文件的职责单一性与命名（kebab-case）。
 
 ---
 
@@ -52,7 +63,7 @@
 | ------ | -------- |
 | 单文件行数 | ≤1000 硬限（超限必须拆分）；接近 400 应主动规划拆分 |
 | 一文件一模块 | 文件内不应内嵌另一独立模块的完整逻辑 |
-| 命名一致性 | 全目录统一风格（当前 `StpUtil.js` 是 PascalCase、其余 kebab-case，需确认是否有意） |
+| 命名一致性 | 全目录统一 kebab-case 文件名（类名可保留 PascalCase，如 `StpUtil`） |
 | 职责边界 | 文件名是否准确反映内容；是否存在"万能文件"（如 `session.js` 1393 行需核实） |
 | 分层清晰度 | 工具类（`totp`/`signature`/`password-policy`）/ 服务类（`*-service`）/ 聚合出口（`index`）是否各归其位 |
 | 循环依赖 | 用依赖图检查 `auth` 内部是否有环 |
@@ -161,7 +172,7 @@
 ## 六、审查者自检清单
 
 ```
-[ ] 已完整读取所有 14 个文件（非只读片段）
+[ ] 已完整读取当日清单中的全部文件（非只读片段）
 [ ] 已用依赖图确认无循环依赖
 [ ] 已实测签名/令牌校验的边界行为
 [ ] 已核对 index.js 导出与内部实现一致
