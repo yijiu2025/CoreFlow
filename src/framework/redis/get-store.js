@@ -61,6 +61,12 @@ const DEFAULT_TIMEOUT = 5000;
  * @param {boolean} [options.backup=false] - 允许使用备用 Redis 作为主库故障降级
  *                                   true  = 主库不通切备库，都不行抛 503
  *                                   false = 仅主库，不通则抛 503
+ * @param {boolean} [options.memory=false] - 强制进程内 MapStore（进程本位数据）
+ *                                   true  = 无论 Redis 是否配置都走 MapStore：
+ *                                           数据严格单实例、永不进 Redis。适用于
+ *                                           "缓存的价值就是不打 Redis"的场景
+ *                                           （如认证热路径负缓存），跨实例共享
+ *                                           反而会抹掉每实例独立陈旧窗口的语义
  * @param {number} [options.ttlJitter=0] - TTL 随机抖动范围（秒），防缓存雪崩
  * @returns {object} 存储对象
  */
@@ -68,8 +74,8 @@ function getStore(prefix, options = {}) {
   if (prefix !== undefined && prefix !== '' && typeof prefix !== 'string') {
     throw new TypeError('getStore: prefix 必须是字符串');
   }
-  const { timeout = DEFAULT_TIMEOUT, backup = false, ttlJitter } = options;
-  const useRedis = isRedisConfigured();
+  const { timeout = DEFAULT_TIMEOUT, backup = false, ttlJitter, memory = false } = options;
+  const useRedis = memory !== true && isRedisConfigured();
   const resolvedPrefix = prefix ?? '';
 
   // 配置全局 TTL 随机抖动
@@ -81,7 +87,7 @@ function getStore(prefix, options = {}) {
 
   // 链式设置子前缀：aaa.setPrefix('second') → first:second:key
   store.setPrefix = subPrefix =>
-    getStore(resolvedPrefix ? `${resolvedPrefix}:${subPrefix}` : subPrefix, { timeout, backup });
+    getStore(resolvedPrefix ? `${resolvedPrefix}:${subPrefix}` : subPrefix, { timeout, backup, memory });
 
   return store;
 }

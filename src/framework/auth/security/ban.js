@@ -48,8 +48,15 @@ function store() {
   return _store;
 }
 
-/** 未封禁负缓存：`userId:service` → 缓存到期 ms（进程内） */
-const notBannedCache = new Map();
+/**
+ * 未封禁负缓存（进程本位）：`userId:service` → 写入 1 表示"TTL 内已知未封禁"。
+ *
+ * memory:true 强制走 MapStore——负缓存的价值就是不打 Redis，若经普通 getStore
+ * 会在生产环境跑回 Redis 使优化归零；且负缓存要的正是每实例独立的 30s 陈旧窗口。
+ * MapStore 自带读时惰性过期 + 兜底定时清扫 + maxSize 上限，无需手写过期逻辑。
+ * 事件即时失效走 invalidateCache（disable/untie 时调用）。
+ */
+const negStore = getStore('auth_ban_neg', { memory: true });
 
 /** service 维度合法性：防调用方把任意字符串当 service 撑爆键空间 */
 function assertService(service) {
@@ -58,11 +65,11 @@ function assertService(service) {
   }
 }
 
-/** 失效某用户的负缓存（disable/untie 时调用） */
-function invalidateCache(userId) {
+/** 失效某用户的负缓存（disable/untie 时调用）：TTL 之外的事件即时失效通道 */
+async function invalidateCache(userId) {
   const prefix = `${userId}:`;
-  for (const key of notBannedCache.keys()) {
-    if (key.startsWith(prefix)) notBannedCache.delete(key);
+  for (const key of await negStore.keys()) {
+    if (String(key).startsWith(prefix)) await negStore.delete(key);
   }
 }
 
@@ -74,8 +81,16 @@ function invalidateCache(userId) {
  */
 async function getBanInfo(userId, service) {
   assertService(service);
+  const key = `${userId}:${service}`;
+  // 未封禁负缓存命中（TTL 内）：不打 Redis 直接返回未封禁。
+  // 这是 session 认证热路径"常态请求零额外 Redis 读"的兑现点（见 session.js）。
+  if (await negStore.get(key)) return null;
   try {
-    return await store().get(`${userId}:${service}`);
+    const info = await store().get(key);
+    // 仅在 Redis 正常应答时登记负缓存；fail-open（Redis 异常视为未封禁）不缓存，
+    // 避免把一次抖动冻结成 30s 的"未封禁"结论
+    if (!info) await negStore.set(key, 1, NEGATIVE_CACHE_TTL);
+    return info;
   } catch (err) {
     log.warn(
       '[Ban] 封禁明细读取失败（fail-open 视为未封禁）: userId=%s, service=%s, err=%s',
@@ -113,7 +128,7 @@ async function disable(userId, service, time, { reason = '', level = 0, operator
     expireAt: t === PERMANENT ? PERMANENT : now + t * 1000
   };
   await store().set(`${userId}:${service}`, info, t === PERMANENT ? PERMANENT_TTL : t);
-  invalidateCache(userId);
+  await invalidateCache(userId);
   emitAuthEvent(AUTH_EVENTS.ACCOUNT_BAN, { userId, service, ...info });
   log.warn(
     '⛔ [Ban] 账号封禁: userId=%s, service=%s, time=%s, level=%s, reason=%s',
@@ -159,7 +174,7 @@ async function untieDisable(userId, ...services) {
       log.warn('[Ban] 解封失败: userId=%s, service=%s, err=%s', userId, service, err?.message);
     }
   }
-  invalidateCache(userId);
+  await invalidateCache(userId);
   emitAuthEvent(AUTH_EVENTS.ACCOUNT_UNTIE, { userId, services });
   log.warn('✅ [Ban] 账号解封: userId=%s, services=%j', userId, services);
   return n;
@@ -212,11 +227,7 @@ function banError(code, message, detail) {
 async function checkDisable(userId, ...services) {
   for (const service of services) {
     const info = await getBanInfo(userId, service);
-    if (!info) {
-      // 未封禁：登记负缓存（请求路径热读，30s 内不再打 Redis）
-      notBannedCache.set(`${userId}:${service}`, Date.now() + NEGATIVE_CACHE_TTL * 1000);
-      continue;
-    }
+    if (!info) continue;
     throw banError('ACCOUNT_BANNED', `账号已被封禁: ${service}`, {
       service,
       level: info.level,

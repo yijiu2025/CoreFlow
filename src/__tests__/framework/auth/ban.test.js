@@ -26,6 +26,9 @@ const makeStore = () => {
     async delete(k) {
       kv.delete(k);
     },
+    async keys() {
+      return [...kv.keys()];
+    },
     reset() {
       kv.clear();
     }
@@ -99,6 +102,41 @@ describe('disable / isDisable / untieDisable：基础封禁语义', () => {
     await expect(ban.disable(UID, '', 60)).rejects.toThrow('service');
     await expect(ban.disable(UID, 'bad service!', 60)).rejects.toThrow('service');
     await expect(ban.untieDisable(UID)).rejects.toThrow('service');
+  });
+});
+
+describe('未封禁负缓存：热路径零 Redis 读 + 事件即时失效', () => {
+  test('TTL 内重复查询不再读封禁 store；封禁后立即失效并可见', async () => {
+    const banStore = getStore('auth_ban');
+    const origGet = banStore.get.bind(banStore);
+    let redisReads = 0;
+    banStore.get = async k => {
+      redisReads++;
+      return origGet(k);
+    };
+
+    // 第一次查询：未封禁 → 读一次 Redis 并登记负缓存
+    expect(await ban.isDisable(UID, 'login')).toBe(false);
+    expect(redisReads).toBe(1);
+
+    // 第二次查询：负缓存命中，不打 Redis（session 热路径"零额外 Redis 读"的兑现）
+    expect(await ban.isDisable(UID, 'login')).toBe(false);
+    expect(redisReads).toBe(1);
+
+    // 封禁事件 → invalidateCache 即时失效负缓存 → 下次查询立即可见封禁
+    await ban.disable(UID, 'login', 60, { reason: '违规' });
+    expect(await ban.isDisable(UID, 'login')).toBe(true);
+    expect(redisReads).toBe(2);
+  });
+
+  test('解封同样即时失效负缓存', async () => {
+    await ban.disable(UID, 'login', 60);
+    expect(await ban.isDisable(UID, 'login')).toBe(true);
+
+    await ban.untieDisable(UID, 'login');
+    // 解封后第一次查询读 Redis 得 null → 登记负缓存 → 返回未封禁
+    expect(await ban.isDisable(UID, 'login')).toBe(false);
+    expect(await ban.isDisable(UID, 'login')).toBe(false);
   });
 });
 
