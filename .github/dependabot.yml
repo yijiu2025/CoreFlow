@@ -32,6 +32,13 @@ updates:
       - dependency-name: glob
       - dependency-name: deepmerge
 
+    # `uuid` 没有列进 ignore：它的 override 写成了 `"$uuid"`（见 package.json），
+    # 即"覆盖值 = 直接依赖的声明值"。这样 sequelize 的 uuid@8 仍会被顶到根版本，
+    # 但覆盖值不再是一个写死的范围 —— 显式写 `^11.1.1` 时，Dependabot 想把 uuid 升到
+    # 大版本会撞上 `Override for uuid@14.0.3 conflicts with direct dependency`，
+    # 导致整批 npm 更新 job 失败（2026-11-01 实测）。`$uuid` 由 npm 在解析时展开，
+    # 直接依赖改了它自动跟随。
+
     groups:
       # 次版本 / 补丁按生产、开发分组，一次一个 PR，降低评审噪音
       prod-minor-patch:
