@@ -50,8 +50,8 @@ jest.unstable_mockModule('../../../framework/log/index.js', () => ({
   createLogger: () => ({ debug() {}, info() {}, warn() {}, error() {} })
 }));
 
-const safe = await import('../../../framework/auth/safe.js');
-const { removeAllAuthListeners } = await import('../../../framework/auth/events.js');
+const safe = await import('../../../framework/auth/security/safe.js');
+const { removeAllAuthListeners } = await import('../../../framework/auth/audit/events.js');
 
 const UID = 7;
 const SVC = 'change-password';

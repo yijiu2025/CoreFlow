@@ -7,7 +7,12 @@
  * 而"缓存命中"的测试恰好会因为这一点而**通过**。所以这里断言方向相反。
  */
 import { Sequelize, DataTypes } from 'sequelize';
-import { computePermFingerprint, normalizeTs, buildPermKey, PERM_NAMESPACE } from '../../framework/auth/perm-cache.js';
+import {
+  computePermFingerprint,
+  normalizeTs,
+  buildPermKey,
+  PERM_NAMESPACE
+} from '../../framework/auth/permission/perm-cache.js';
 
 describe('权限指纹（第 3 层）', () => {
   describe('normalizeTs', () => {

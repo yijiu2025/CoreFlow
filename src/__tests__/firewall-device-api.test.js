@@ -28,7 +28,7 @@ const { setRegistrationContext } = await import('../api/guard.js');
 const { default: registerMonitorRoutes } = await import('../api/firewall/v1/monitor.js');
 const { default: registerExportRoutes } = await import('../api/firewall/v1/export.js');
 const { getActiveBlocks, getActiveWhitelist } = await import('../app/firewall/dao/block-manager.js');
-const { generateServerSideDeviceId } = await import('../framework/auth/device-id-service.js');
+const { generateServerSideDeviceId } = await import('../framework/auth/device/device-id-service.js');
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36';
 

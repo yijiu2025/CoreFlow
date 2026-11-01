@@ -12,12 +12,12 @@ import { jest } from '@jest/globals';
 // 用 unstable_mockModule 整体替换 perm-cache 的**依赖**，而不是复制策略
 const fpStore = { value: 'FP_INITIAL' };
 
-jest.unstable_mockModule('../../framework/auth/perm-cache.js', () => ({
+jest.unstable_mockModule('../../framework/auth/permission/perm-cache.js', () => ({
   getPermissions: jest.fn(async () => ({ roles: ['r_old'], permissions: { allows: ['a'], denies: [] } })),
   computePermFingerprint: jest.fn(async () => fpStore.value)
 }));
 
-const { resolveSessionPermissions } = await import('../../framework/auth/session-perm.js');
+const { resolveSessionPermissions } = await import('../../framework/auth/session/session-perm.js');
 
 describe('会话权限随指纹失效（第 3 层端到端）', () => {
   test('指纹未变 → 沿用会话副本（不回源）', async () => {
@@ -61,7 +61,7 @@ describe('会话权限随指纹失效（第 3 层端到端）', () => {
   });
 
   test('fingerprint 计算抛错 → 保守回源（宁可多查，不可沿用过期权限）', async () => {
-    const mod = await import('../../framework/auth/perm-cache.js');
+    const mod = await import('../../framework/auth/permission/perm-cache.js');
     mod.computePermFingerprint.mockImplementationOnce(async () => {
       throw new Error('DB 抖动');
     });

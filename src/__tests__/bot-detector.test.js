@@ -49,7 +49,7 @@ jest.unstable_mockModule('../app/firewall/interface/config-access.js', () => ({
 
 const { checkBotChallenge } = await import('../app/firewall/engine/detectors/bot-detector.js');
 const { checkGlobalBlock, getActiveBlocks } = await import('../app/firewall/dao/block-manager.js');
-const { generateServerSideDeviceId } = await import('../framework/auth/device-id-service.js');
+const { generateServerSideDeviceId } = await import('../framework/auth/device/device-id-service.js');
 
 const CHROME_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';

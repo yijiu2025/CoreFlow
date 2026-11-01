@@ -79,14 +79,14 @@ describe('加密模块', () => {
   });
 
   describe('Cookie 签名', () => {
-    // 使用 `framework/auth/cookie.js` 的真身实现，不再内联副本。
+    // 使用 `framework/auth/context/cookie.js` 的真身实现，不再内联副本。
     // 副本曾与真身算法漂移（真身用 hex 摘要 + 字节长度守卫，副本用 base64url 且无
     // 长度守卫），导致测试全绿却掩盖了真身的 timingSafeEqual 崩溃缺陷
     // （AUDIT-REPORT-2026-09-12.md 🔴-1 / 🟡-5）。
     let signCookie, verifyCookie;
 
     beforeAll(async () => {
-      ({ signCookie, verifyCookie } = await import('../framework/auth/cookie.js'));
+      ({ signCookie, verifyCookie } = await import('../framework/auth/context/cookie.js'));
     });
 
     it('签名和验证正常工作', () => {

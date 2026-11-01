@@ -10,8 +10,8 @@
  */
 
 import { describe, test, expect } from '@jest/globals';
-import { getDeviceId } from '../../../framework/auth/device.js';
-import { generateServerSideDeviceId } from '../../../framework/auth/device-id-service.js';
+import { getDeviceId } from '../../../framework/auth/device/device.js';
+import { generateServerSideDeviceId } from '../../../framework/auth/device/device-id-service.js';
 import { encodeTimestamp as feEncode } from '../../../../packages/shared-device/src/base62-timestamp.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';

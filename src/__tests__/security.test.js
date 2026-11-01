@@ -9,8 +9,8 @@
  * 属于凭空的覆盖幻觉。
  *
  * 现在锁的是四条真实基线：
- *   1. 密码策略 `framework/auth/password-policy.js`
- *   2. Cookie 属性 `framework/auth/cookie.js`（HttpOnly / SameSite / path 收窄）
+ *   1. 密码策略 `framework/auth/security/password-policy.js`
+ *   2. Cookie 属性 `framework/auth/context/cookie.js`（HttpOnly / SameSite / path 收窄）
  *   3. CSRF 排除清单 `app/oauth21/config/csrf-exclude.js`
  *   4. 敏感接口限频 `app/oauth21/middleware/rate-limiter.js`（内存降级路径可断言）
  *
@@ -23,9 +23,9 @@ import { describe, it, expect, jest } from '@jest/globals';
 // 限频器惰性解析 globalRedis；这里固定为 null，走可预测的内存降级路径
 jest.unstable_mockModule('../framework/redis/plugin.js', () => ({ globalRedis: null }));
 
-const { validatePasswordStrength } = await import('../framework/auth/password-policy.js');
+const { validatePasswordStrength } = await import('../framework/auth/security/password-policy.js');
 const { COOKIE_OPTIONS, REFRESH_COOKIE_PATH, USER_COOKIE_OPTS, COOKIE_SID, COOKIE_SID_R } =
-  await import('../framework/auth/cookie.js');
+  await import('../framework/auth/context/cookie.js');
 const { CSRF_EXCLUDE_PATHS } = await import('../app/oauth21/config/csrf-exclude.js');
 const { createIpRateLimiter } = await import('../app/oauth21/middleware/rate-limiter.js');
 

@@ -23,7 +23,7 @@ process.env.SCRYPT_MAX_CONCURRENCY = '1';
 process.env.BCRYPT_MAX_CONCURRENCY = '1';
 
 const { MapStore } = await import('../framework/redis/map-store.js');
-const { hashPassword, verifyPassword } = await import('../framework/auth/password-hash.js');
+const { hashPassword, verifyPassword } = await import('../framework/auth/security/password-hash.js');
 
 describe('scrypt 并发上限（背压而非排队）', () => {
   it('超过并发上限时立刻抛 SCRYPT_BUSY，不进入队列', async () => {

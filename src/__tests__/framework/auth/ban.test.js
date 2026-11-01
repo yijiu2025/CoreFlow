@@ -45,8 +45,8 @@ jest.unstable_mockModule('../../../framework/log/index.js', () => ({
   createLogger: () => ({ debug() {}, info() {}, warn() {}, error() {} })
 }));
 
-const ban = await import('../../../framework/auth/ban.js');
-const { AUTH_EVENTS, onAuthEvent, removeAllAuthListeners } = await import('../../../framework/auth/events.js');
+const ban = await import('../../../framework/auth/security/ban.js');
+const { AUTH_EVENTS, onAuthEvent, removeAllAuthListeners } = await import('../../../framework/auth/audit/events.js');
 
 const UID = 42;
 

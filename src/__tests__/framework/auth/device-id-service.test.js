@@ -13,7 +13,7 @@ import {
   verifyAndNormalizeDeviceId,
   generateServerSideDeviceId,
   parseDeviceId
-} from '../../../framework/auth/device-id-service.js';
+} from '../../../framework/auth/device/device-id-service.js';
 import { encodeTimestamp as feEncode } from '../../../../packages/shared-device/src/base62-timestamp.js';
 
 describe('设备 ID 服务测试', () => {

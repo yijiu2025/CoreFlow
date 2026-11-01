@@ -87,10 +87,10 @@ jest.unstable_mockModule('../../../framework/log/index.js', () => ({
   createLogger: () => ({ debug() {}, info() {}, warn() {}, error() {} })
 }));
 
-const { getSession, sidHash } = await import('../../../framework/auth/session.js');
-const { computePermFingerprint } = await import('../../../framework/auth/perm-cache.js');
-const { sessionStore } = await import('../../../framework/auth/session-store.js');
-const { signCookie, COOKIE_SID, COOKIE_SID_R } = await import('../../../framework/auth/cookie.js');
+const { getSession, sidHash } = await import('../../../framework/auth/session/session.js');
+const { computePermFingerprint } = await import('../../../framework/auth/permission/perm-cache.js');
+const { sessionStore } = await import('../../../framework/auth/session/session-store.js');
+const { signCookie, COOKIE_SID, COOKIE_SID_R } = await import('../../../framework/auth/context/cookie.js');
 
 const UID = 7;
 const UUID = 'uid-7';

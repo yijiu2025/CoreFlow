@@ -180,7 +180,7 @@ describe('测试有效性守卫', () => {
     const fakeFile = path.join(TESTS, '__selfcheck2__.test.js');
     const fake = [
       "import { describe, it, expect } from '@jest/globals';",
-      "// 以前这里写过 import { a } from '../framework/auth/cookie.js'",
+      "// 以前这里写过 import { a } from '../framework/auth/context/cookie.js'",
       'const fixture = "import { C } from \'./colors.js\'";',
       'expect(fixture.length).toBeGreaterThan(0);'
     ].join('\n');

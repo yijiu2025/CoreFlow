@@ -11,7 +11,7 @@ jest.unstable_mockModule('../../../framework/redis/index.js', () => ({
     return stores.get(prefix);
   }
 }));
-jest.unstable_mockModule('../../../framework/auth/session.js', () => ({
+jest.unstable_mockModule('../../../framework/auth/session/session.js', () => ({
   createSession,
   updateRememberMe: jest.fn(),
   switchSessionByRefreshToken: jest.fn(),
@@ -25,7 +25,7 @@ jest.unstable_mockModule('../../../framework/log/index.js', () => ({
   log: { info() {}, warn() {}, error() {}, debug() {} }
 }));
 
-const { bindSessionToCookie } = await import('../../../framework/auth/session-api.service.js');
+const { bindSessionToCookie } = await import('../../../framework/auth/session/session-api.service.js');
 
 const sessionData = {
   userId: 7,

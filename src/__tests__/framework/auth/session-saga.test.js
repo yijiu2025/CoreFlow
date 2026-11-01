@@ -139,18 +139,18 @@ jest.unstable_mockModule('../../../framework/db/index.js', () => ({
 jest.unstable_mockModule('../../../framework/log/index.js', () => ({
   createLogger: () => ({ debug() {}, info() {}, warn() {}, error() {} })
 }));
-jest.unstable_mockModule('../../../framework/auth/perm-cache.js', () => ({
+jest.unstable_mockModule('../../../framework/auth/permission/perm-cache.js', () => ({
   getPermissions: async () => ({ roles: ['user'], permissions: { allows: ['user:read'], denies: [] } }),
   computePermFingerprint: async () => 'fingerprint'
 }));
-jest.unstable_mockModule('../../../framework/auth/session-perm.js', () => ({
+jest.unstable_mockModule('../../../framework/auth/session/session-perm.js', () => ({
   resolveSessionPermissions: async () => ({
     roles: ['user'],
     permissions: { allows: ['user:read'], denies: [] },
     permFingerprint: 'fingerprint'
   })
 }));
-jest.unstable_mockModule('../../../framework/auth/session-governance.js', () => ({
+jest.unstable_mockModule('../../../framework/auth/session/session-governance.js', () => ({
   checkMaxSessions: async () => null,
   pruneActiveDevices: async () => 0,
   pruneStaleSessionTokens: async () => 0,
@@ -158,7 +158,7 @@ jest.unstable_mockModule('../../../framework/auth/session-governance.js', () => 
   getLoginTrend: async () => [],
   logLoginFailure: async () => {}
 }));
-jest.unstable_mockModule('../../../framework/auth/session-kick.js', () => ({
+jest.unstable_mockModule('../../../framework/auth/session/session-kick.js', () => ({
   kickByDeviceType: async () => {},
   kickSession: async () => {},
   kickAllSessions: async () => {},
@@ -170,9 +170,9 @@ jest.unstable_mockModule('../../../framework/auth/session-kick.js', () => ({
   getKickTombstone: async () => null
 }));
 
-const { createSession, refreshSessionCore, sidHash } = await import('../../../framework/auth/session.js');
+const { createSession, refreshSessionCore, sidHash } = await import('../../../framework/auth/session/session.js');
 const { sessionStore, refreshStore, userRefreshStore, rotatedStore, familyStore, userSessionsStore } =
-  await import('../../../framework/auth/session-store.js');
+  await import('../../../framework/auth/session/session-store.js');
 
 const OLD_SID = 'a'.repeat(64);
 const OLD_RT = 'b'.repeat(64);

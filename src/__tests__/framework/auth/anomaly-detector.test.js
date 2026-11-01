@@ -40,8 +40,8 @@ jest.unstable_mockModule('../../../framework/db/index.js', () => ({
 }));
 
 const { detectSessionRisk, confirmVerifyToken, isHighRiskRequest, detectLoginEnvironmentAnomaly } =
-  await import('../../../framework/auth/anomaly-detector.js');
-const { computeDeviceFingerprint } = await import('../../../framework/auth/device.js');
+  await import('../../../framework/auth/risk/anomaly-detector.js');
+const { computeDeviceFingerprint } = await import('../../../framework/auth/device/device.js');
 
 const BASE = {
   userId: 1,

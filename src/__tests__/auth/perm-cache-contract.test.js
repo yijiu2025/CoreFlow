@@ -12,8 +12,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PERM_NAMESPACE, PERM_TTL, buildPermKey } from '../../framework/auth/perm-cache.js';
-import { PERM_NAMESPACE as NS_IN_STORE } from '../../framework/auth/session-store.js';
+import { PERM_NAMESPACE, PERM_TTL, buildPermKey } from '../../framework/auth/permission/perm-cache.js';
+import { PERM_NAMESPACE as NS_IN_STORE } from '../../framework/auth/session/session-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(__dirname, '..', '..');
@@ -46,7 +46,7 @@ describe('权限缓存命名空间契约（第 2 层）', () => {
   });
 
   test('perm 缓存键不得是明文 userId:appId 形式', () => {
-    const body = stripComments(read('framework/auth/perm-cache.js'));
+    const body = stripComments(read('framework/auth/permission/perm-cache.js'));
     // 旧实现：`${userId}:${appId}` 直接做键，可被枚举猜测
     expect(body).not.toMatch(/\$\{userId\}:\$\{appId\}/);
     // 新实现必须经过 buildPermKey（sha256）
@@ -75,22 +75,23 @@ describe('权限缓存命名空间契约（第 2 层）', () => {
 describe('会话权限走的必须是指纹入口（第 3 层）', () => {
   test('Session 创建/恢复/刷新模块不得再直接调用 loadUserPermissions', () => {
     const body = stripComments(
-      [read('framework/auth/session.js'), read('framework/auth/session-refresh.js')].join('\n')
+      [read('framework/auth/session/session.js'), read('framework/auth/session/session-refresh.js')].join('\n')
     );
     // 直接调用会绕过指纹校验 → 会话长 TTL 再次掩盖权限变更
     expect(body).not.toMatch(/loadUserPermissions\s*\(/);
     expect(body).toMatch(/resolveSessionPermissions\s*\(/);
   });
 
-  test('auth/index.js 的 JWT 路径走 getPermissions（带指纹）', () => {
-    const body = stripComments(read('framework/auth/index.js'));
+  test('auth/bearer-auth.js 的 JWT 路径走 getPermissions（带指纹）', () => {
+    // 2026-11-01 index.js 收敛为纯门面，JWT 认证流程拆至 bearer-auth.js
+    const body = stripComments(read('framework/auth/bearer-auth.js'));
     expect(body).toMatch(/getPermissions\s*\(/);
     expect(body).not.toMatch(/loadUserPermissions\s*\(/);
   });
 
   test('会话数据里持久化了 permFingerprint', () => {
     const body = stripComments(
-      [read('framework/auth/session.js'), read('framework/auth/session-refresh.js')].join('\n')
+      [read('framework/auth/session/session.js'), read('framework/auth/session/session-refresh.js')].join('\n')
     );
     // 创建、DB 恢复、sid_r 刷新三处构造 sessionData 的位置都应带上指纹
     const hits = body.match(/permFingerprint,/g) || [];

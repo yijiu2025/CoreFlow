@@ -26,7 +26,7 @@ const cache = {
   getPermissionsCalls: 0
 };
 
-jest.unstable_mockModule('../framework/auth/perm-cache.js', () => ({
+jest.unstable_mockModule('../framework/auth/permission/perm-cache.js', () => ({
   getPermissions: async () => {
     cache.getPermissionsCalls++;
     return { roles: cache.roles, permissions: cache.permissions };
@@ -37,7 +37,7 @@ jest.unstable_mockModule('../framework/auth/perm-cache.js', () => ({
   }
 }));
 
-const { resolveSessionPermissions } = await import('../framework/auth/session-perm.js');
+const { resolveSessionPermissions } = await import('../framework/auth/session/session-perm.js');
 
 beforeEach(() => {
   cache.permissions = { allows: ['user:profile:read'], denies: [] };

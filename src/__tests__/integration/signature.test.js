@@ -2,7 +2,7 @@
  * H5 请求签名（真实中间件驱动）
  *
  * ⚠️ 为什么重写：旧版本在测试文件里**内联复制**了一份 `verifySignature`（注释写着
- * "内联版本，避免外部依赖"），生产的 `src/framework/auth/signature.js` 从未被加载 ——
+ * "内联版本，避免外部依赖"），生产的 `src/framework/auth/security/signature.js` 从未被加载 ——
  * 那份副本甚至连 nonce 防重放、`SIGN_APP_KEY` 双因子、query 参与验签都没有，
  * 而这些恰恰是本仓修过的安全点。副本与真身早已分叉：副本「有 cookie 但不签名」直接放行，
  * 真身是 403。
@@ -26,7 +26,7 @@ import crypto from 'node:crypto';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 
-import { verifySignature } from '../../framework/auth/signature.js';
+import { verifySignature } from '../../framework/auth/security/signature.js';
 import { isRedisConfigured } from '../../framework/redis/utils.js';
 import { connectTestRedis, disconnectTestRedis } from '../helpers/redis-connection.js';
 

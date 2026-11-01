@@ -58,20 +58,20 @@ describe('auth 公共契约（🔴-2 回归）', () => {
     ];
 
     test('所有被外部解构的符号都已导出且非 undefined', async () => {
-      const mod = await import('../../../framework/auth/session.js');
+      const mod = await import('../../../framework/auth/session/session.js');
       const missing = REQUIRED_EXPORTS.filter(name => mod[name] === undefined);
       expect(missing).toEqual([]);
     });
 
     test('sidHash 计算 sha256 hex，与 DB token 列存格式一致', async () => {
-      const { sidHash } = await import('../../../framework/auth/session.js');
+      const { sidHash } = await import('../../../framework/auth/session/session.js');
       const sid = 'some-raw-session-id';
       expect(sidHash(sid)).toBe(crypto.createHash('sha256').update(sid).digest('hex'));
       expect(sidHash(sid)).toMatch(/^[0-9a-f]{64}$/);
     });
 
     test('导出集合不因拆分而膨胀（内部符号不外泄）', async () => {
-      const mod = await import('../../../framework/auth/session.js');
+      const mod = await import('../../../framework/auth/session/session.js');
       // 批次 C 把 6 个 Redis 实例 / 常量 / 私有原语挪进 session-store.js，
       // 它们只应被兄弟模块 import，不应进入 session.js 的公开面
       const INTERNAL = [
@@ -108,7 +108,7 @@ describe('auth 公共契约（🔴-2 回归）', () => {
       const { readFileSync, readdirSync } = await import('node:fs');
       const root = new URL('../../../', import.meta.url);
       // 批次 C 拆分后，6 个 getStore 实例集中在 session-store.js
-      const storeSrc = readFileSync(new URL('framework/auth/session-store.js', root), 'utf8');
+      const storeSrc = readFileSync(new URL('framework/auth/session/session-store.js', root), 'utf8');
       const deactSrc = readFileSync(new URL('app/user/services/deactivation.service.js', root), 'utf8');
 
       expect(storeSrc).toMatch(/getStore\('user_sessions'/);
@@ -117,11 +117,15 @@ describe('auth 公共契约（🔴-2 回归）', () => {
       expect(storeSrc).not.toMatch(/getStore\('userSessions'/);
       expect(deactSrc).not.toMatch(/getStore\('userSessions'/);
 
-      // 全 auth 目录扫描：防拆分产生的新文件再次写错命名空间
+      // 全 auth 目录递归扫描：防拆分产生的新文件再次写错命名空间
+      // （2026-11-01 auth 按职责拆为 context/session/permission/device/risk/security/audit 子目录）
       const authDir = new URL('framework/auth/', root);
-      const offenders = readdirSync(authDir)
-        .filter(f => f.endsWith('.js'))
-        .filter(f => /getStore\('userSessions'/.test(readFileSync(new URL(f, authDir), 'utf8')));
+      const walkAuth = dir =>
+        readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+          const p = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
+          return e.isDirectory() ? walkAuth(p) : e.name.endsWith('.js') ? [p] : [];
+        });
+      const offenders = walkAuth(authDir).filter(p => /getStore\('userSessions'/.test(readFileSync(p, 'utf8')));
       expect(offenders).toEqual([]);
     });
 
@@ -140,12 +144,13 @@ describe('auth 公共契约（🔴-2 回归）', () => {
   describe('session 子模块拆分回归（批次 C）', () => {
     // 2026-09-16 追加 session-perm.js：权限指纹改造使 session.js 触及 1000 行硬限，
     // 把"会话恢复时怎么解析权限"拆为独立子模块。它同样受本组行数与无环约束。
+    // 2026-11-01 物理归位：五个文件集中在 auth/session/ 子目录。
     const SESSION_FILES = [
-      'session.js',
-      'session-store.js',
-      'session-kick.js',
-      'session-governance.js',
-      'session-perm.js'
+      'session/session.js',
+      'session/session-store.js',
+      'session/session-kick.js',
+      'session/session-governance.js',
+      'session/session-perm.js'
     ];
     const readAuth = async f => {
       const { readFileSync } = await import('node:fs');
@@ -201,13 +206,15 @@ describe('auth 公共契约（🔴-2 回归）', () => {
     });
 
     test('共享底座 session-store.js 不依赖任何兄弟子模块（无环的最底层）', async () => {
-      const siblings = SESSION_FILES.filter(f => f !== 'session-store.js');
-      const deps = depsOf(await readAuth('session-store.js'));
+      // depsOf 只捕获 './x.js' 形态（session/ 子目录内部互引），比对时取 basename
+      const base = f => f.split('/').pop();
+      const siblings = SESSION_FILES.filter(f => f !== 'session/session-store.js').map(base);
+      const deps = depsOf(await readAuth('session/session-store.js'));
       expect(deps.filter(d => siblings.includes(d))).toEqual([]);
     });
 
     test('_revokeOneSession 已收敛各踢出路径的重复动作（🔵-3）', async () => {
-      const src = await readAuth('session-kick.js');
+      const src = await readAuth('session/session-kick.js');
       // 4 处调用：_kickSession / kickSession / kickAllSessions / kickUser
       expect((src.match(/await _revokeOneSession\(/g) || []).length).toBe(4);
       // 1 处定义

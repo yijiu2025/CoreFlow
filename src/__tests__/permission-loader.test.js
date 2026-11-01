@@ -1,5 +1,5 @@
 /**
- * 权限加载器（测试 `framework/auth/permission-loader.js` 真身）
+ * 权限加载器（测试 `framework/auth/permission/permission-loader.js` 真身）
  *
  * ⚠️ 为什么重写：本文件的前身把 `extractPermissions` **抄进了测试**，
  * 然后断言自己抄的那一份。生产文件里的策略解析、superadmin 扩展、
@@ -59,7 +59,7 @@ jest.unstable_mockModule('../framework/db/index.js', () => ({
   }
 }));
 
-const { loadUserPermissions } = await import('../framework/auth/permission-loader.js');
+const { loadUserPermissions } = await import('../framework/auth/permission/permission-loader.js');
 
 /** 构造一条 UserRole（含 include 的 role） */
 const userRole = (code, policy) => ({ role: { code, policy } });

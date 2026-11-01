@@ -73,7 +73,7 @@ describe('导出位置契约：所有 export 收拢到文件末尾', () => {
 
   test('扫描范围有效（防止路径写错导致空扫描假通过）', () => {
     expect(files.length).toBeGreaterThan(200);
-    expect(files.some(f => rel(f) === 'src/framework/auth/session-store.js')).toBe(true);
+    expect(files.some(f => rel(f) === 'src/framework/auth/session/session-store.js')).toBe(true);
     expect(files.some(f => rel(f) === 'src/app.js')).toBe(true);
   });
 

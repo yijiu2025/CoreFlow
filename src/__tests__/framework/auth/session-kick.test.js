@@ -114,7 +114,7 @@ jest.unstable_mockModule('../../../framework/db/index.js', () => ({
 }));
 
 const { sessionStore, userSessionsStore, refreshStore, userRefreshStore, familyStore, sidHash } =
-  await import('../../../framework/auth/session-store.js');
+  await import('../../../framework/auth/session/session-store.js');
 const {
   kickByDeviceType,
   kickByDeviceId,
@@ -123,8 +123,8 @@ const {
   kickUser,
   kickSessionsByIds,
   getKickTombstone
-} = await import('../../../framework/auth/session-kick.js');
-const { DEVICE_TYPE } = await import('../../../framework/auth/device.js');
+} = await import('../../../framework/auth/session/session-kick.js');
+const { DEVICE_TYPE } = await import('../../../framework/auth/device/device.js');
 
 const UID = 42;
 const APP = 'app1';

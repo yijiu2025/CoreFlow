@@ -70,7 +70,7 @@ const { setBlock, setBlockDevice, setWhitelistDevice, getActiveBlocks, getActive
   await import('../app/firewall/dao/block-manager.js');
 const { buildRequestContext, checkGlobalBlockPhase, willBeRejectedAsAnonymous } =
   await import('../app/firewall/engine/pipeline.js');
-const { generateServerSideDeviceId } = await import('../framework/auth/device-id-service.js');
+const { generateServerSideDeviceId } = await import('../framework/auth/device/device-id-service.js');
 const { getSecuritySettings } = await import('../app/firewall/dao/dao.js');
 const { initFirewall } = await import('../app/firewall/index.js');
 

@@ -9,7 +9,12 @@
  */
 
 import { describe, test, expect, beforeEach } from '@jest/globals';
-import { AUTH_EVENTS, onAuthEvent, emitAuthEvent, removeAllAuthListeners } from '../../../framework/auth/events.js';
+import {
+  AUTH_EVENTS,
+  onAuthEvent,
+  emitAuthEvent,
+  removeAllAuthListeners
+} from '../../../framework/auth/audit/events.js';
 
 const TYPE = 'test:event';
 

@@ -2,7 +2,7 @@
  * 设备 ID 前后端一致性测试
  *
  * 前端（packages/shared-device/src/base62-timestamp.js）与后端
- * （src/framework/auth/device-id-service.js）各自实现了同一套
+ * （src/framework/auth/device/device-id-service.js）各自实现了同一套
  * 时间戳混淆 + Base62 编码算法，历史上因长度常量漂移导致过
  * "所有 ID 校验失败 → 每请求重生 → 验证死循环"的故障（81350f1）。
  *
@@ -20,7 +20,7 @@ import {
   decodeTimestamp as feDecode,
   ENCODED_TS_LENGTH as FE_TS_LEN
 } from '../../../../packages/shared-device/src/base62-timestamp.js';
-import { validateDeviceId, parseDeviceId } from '../../../framework/auth/device-id-service.js';
+import { validateDeviceId, parseDeviceId } from '../../../framework/auth/device/device-id-service.js';
 
 describe('设备 ID 前后端一致性', () => {
   test('前端编码的时间戳段通过后端 validateDeviceId 校验', async () => {

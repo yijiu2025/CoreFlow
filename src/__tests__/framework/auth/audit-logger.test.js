@@ -33,7 +33,7 @@ jest.unstable_mockModule('../../../framework/log/index.js', () => ({
   default: { warn: jest.fn(), info: jest.fn(), error: jest.fn() }
 }));
 
-const { getAuditLogs, logAuditEvent } = await import('../../../framework/auth/audit-logger.js');
+const { getAuditLogs, logAuditEvent } = await import('../../../framework/auth/audit/audit-logger.js');
 
 beforeEach(() => {
   auditFindAll.mockReset();

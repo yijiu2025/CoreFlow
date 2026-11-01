@@ -44,7 +44,7 @@ jest.unstable_mockModule('../../../framework/db/index.js', () => ({
   })
 }));
 
-const { pruneActiveDevices } = await import('../../../framework/auth/session.js');
+const { pruneActiveDevices } = await import('../../../framework/auth/session/session.js');
 
 /** 造 N 台设备的活跃行 */
 function seedDevices(userId, n) {

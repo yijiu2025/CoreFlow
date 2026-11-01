@@ -28,12 +28,23 @@ const state = {
   handlerCalls: 0
 };
 
-jest.unstable_mockModule('../../framework/auth/session.js', () => ({
+// 2026-11-01 auth 拆子目录后业务代码走 index.js 门面，门面 re-export 各模块的
+// 完整导出面 ⇒ mock 必须提供每个被 re-export 的绑定（本套件不能 requireActual：
+// session.js 依赖图含异步 mock 的 perm-cache，require 链会炸），未用到的名字给空桩
+jest.unstable_mockModule('../../framework/auth/session/session.js', () => ({
+  createSession: jest.fn(),
   getSession: async () => state.session,
+  refreshSession: jest.fn(),
+  switchSessionByRefreshToken: jest.fn(),
+  destroySession: jest.fn(),
+  revokeRememberMe: jest.fn(),
+  updateRememberMe: jest.fn(),
+  updateSessionBaseline: jest.fn(),
   getSessionTokenDevice: async () => null
 }));
 
 jest.unstable_mockModule('../../framework/jwt/index.js', () => ({
+  sign: jest.fn(),
   verify: async () => null
 }));
 
@@ -41,24 +52,41 @@ jest.unstable_mockModule('../../shared/user-dao.js', () => ({
   findUserById: async () => null
 }));
 
-jest.unstable_mockModule('../../framework/auth/perm-cache.js', () => ({
+jest.unstable_mockModule('../../framework/auth/permission/perm-cache.js', () => ({
+  PERM_NAMESPACE: 'auth:perm',
+  PERM_TTL: 30,
+  buildPermKey: jest.fn(),
+  computePermFingerprint: async () => 'fp',
   getPermissions: async () => ({ roles: [], permissions: { allows: [], denies: [] } }),
-  computePermFingerprint: async () => 'fp'
+  invalidatePermCache: jest.fn(),
+  normalizeTs: jest.fn(),
+  warmPermissions: jest.fn()
 }));
 
-jest.unstable_mockModule('../../framework/auth/device.js', () => ({
+jest.unstable_mockModule('../../framework/auth/device/device.js', () => ({
+  DEVICE_TYPE: { STANDARD: 'standard' },
+  detectDeviceType: jest.fn(),
   getDeviceId: async () => 'dev-from-server',
+  getDeviceIdAndWrapResponse: jest.fn(),
+  getClientDeviceId: jest.fn(),
   computeDeviceFingerprint: () => 'fingerprint-1'
 }));
 
-jest.unstable_mockModule('../../framework/auth/anomaly-detector.js', () => ({
+jest.unstable_mockModule('../../framework/auth/risk/anomaly-detector.js', () => ({
+  DETECT_RESULT: {},
+  detectLoginAnomaly: jest.fn(),
+  detectLoginEnvironmentAnomaly: jest.fn(),
   detectSessionRisk: async () => state.risk,
+  confirmVerifyToken: jest.fn(),
+  hasVerifiedFlag: async () => state.verified,
   isHighRiskRequest: request => request.method !== 'GET',
-  hasVerifiedFlag: async () => state.verified
+  clearAccountLock: jest.fn(),
+  clearIpLock: jest.fn()
 }));
 
 jest.unstable_mockModule('../../framework/redis/index.js', () => ({
-  getStore: () => ({ get: async () => null, set: async () => {} })
+  getStore: () => ({ get: async () => null, set: async () => {} }),
+  createRingQueue: () => ({ push: async () => {}, shift: async () => null, size: 0 })
 }));
 
 const { default: authPlugin } = await import('../../framework/auth/index.js');

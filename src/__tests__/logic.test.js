@@ -89,12 +89,12 @@ describe('核心逻辑', () => {
   });
 
   describe('Cookie 签名验证', () => {
-    // 改用 framework/auth/cookie.js 真身，不再内联副本（副本与真身已漂移，
+    // 改用 framework/auth/context/cookie.js 真身，不再内联副本（副本与真身已漂移，
     // 掩盖了 🔴-1 timingSafeEqual 崩溃，见 AUDIT-REPORT-2026-09-12.md）
     let signCookie, verifyCookie;
 
     beforeAll(async () => {
-      ({ signCookie, verifyCookie } = await import('../framework/auth/cookie.js'));
+      ({ signCookie, verifyCookie } = await import('../framework/auth/context/cookie.js'));
     });
 
     it('签名后可验证', () => {

@@ -19,8 +19,8 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { Op } from 'sequelize';
 
-import { requestContext } from '../framework/auth/request-context.js';
-import StpUtil from '../framework/auth/stp-util.js';
+import { requestContext } from '../framework/auth/context/request-context.js';
+import StpUtil from '../framework/auth/context/stp-util.js';
 
 /** 在"请求上下文"里跑断言：StpUtil 通过 ALS 取 request */
 const withUser = (user, fn) => requestContext.run({ state: { user } }, fn);
@@ -162,7 +162,9 @@ jest.unstable_mockModule('../framework/db/index.js', () => ({
   }
 }));
 
-jest.unstable_mockModule('../framework/auth/perm-cache.js', () => ({
+jest.unstable_mockModule('../framework/auth/permission/perm-cache.js', async () => ({
+  // 2026-11-01 auth 拆子目录后走 index.js 门面，门面 re-export 需要完整导出面
+  ...(await jest.requireActual('../framework/auth/permission/perm-cache.js')),
   invalidatePermCache: async () => {}
 }));
 

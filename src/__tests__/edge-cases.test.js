@@ -15,7 +15,7 @@
  */
 import { describe, it, expect } from '@jest/globals';
 
-import { signCookie, verifyCookie } from '../framework/auth/cookie.js';
+import { signCookie, verifyCookie } from '../framework/auth/context/cookie.js';
 import { normalizeIp, isIpMatch } from '../utils/ip.js';
 
 describe('verifyCookie 的畸形输入契约', () => {

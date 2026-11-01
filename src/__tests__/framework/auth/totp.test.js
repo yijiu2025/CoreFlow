@@ -14,7 +14,7 @@
  */
 
 import { describe, test, expect } from '@jest/globals';
-import { generateSecret, generateTOTP, verifyTOTP } from '../../../framework/auth/totp.js';
+import { generateSecret, generateTOTP, verifyTOTP } from '../../../framework/auth/security/totp.js';
 
 /** RFC 6238 附录 B 的 SHA-1 测试密钥（ASCII '12345678901234567890' 的 Base32 编码） */
 const RFC_SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
