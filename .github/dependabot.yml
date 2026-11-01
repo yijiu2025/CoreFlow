@@ -37,13 +37,13 @@ updates:
       prod-minor-patch:
         dependency-type: production
         update-types:
-          - version-update:semver-minor
-          - version-update:semver-patch
+          - minor
+          - patch
       dev-minor-patch:
         dependency-type: development
         update-types:
-          - version-update:semver-minor
-          - version-update:semver-patch
+          - minor
+          - patch
       # 大版本不分组：逐个评审（Breaking change 风险）
 
   # GitHub Actions 版本
