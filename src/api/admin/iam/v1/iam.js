@@ -29,7 +29,7 @@ async function registerIamRoutes(fastify) {
     method: 'GET',
     url: '/roles',
     handler: async (request, reply) => {
-      const adminUid = request.user.uid;
+      const adminUid = request.state.user.uid; // 🔴 本仓身份装配在 request.state.user（plugin.js），request.user 从未装饰过
       const { appId } = request.query || {};
 
       try {
@@ -66,7 +66,7 @@ async function registerIamRoutes(fastify) {
     method: 'GET',
     url: '/users',
     handler: async (request, reply) => {
-      const adminUid = request.user.uid;
+      const adminUid = request.state.user.uid; // 🔴 本仓身份装配在 request.state.user（plugin.js），request.user 从未装饰过
       const { keyword } = request.query || {};
 
       try {
@@ -98,7 +98,7 @@ async function registerIamRoutes(fastify) {
     freshPermission: true,
     handler: async (request, reply) => {
       // 从解析后的 JWT 中获取当前管理员 UID
-      const adminUid = request.user.uid;
+      const adminUid = request.state.user.uid; // 🔴 本仓身份装配在 request.state.user（plugin.js），request.user 从未装饰过
       const { targetUid, roleId, appId } = request.body;
 
       if (!targetUid || !roleId || !appId) {
@@ -142,7 +142,7 @@ async function registerIamRoutes(fastify) {
     requirePermission: 'iam:policy:update',
     freshPermission: true,
     handler: async (request, reply) => {
-      const adminUid = request.user.uid;
+      const adminUid = request.state.user.uid; // 🔴 本仓身份装配在 request.state.user（plugin.js），request.user 从未装饰过
       const { targetUid, appId, policy } = request.body;
 
       if (!targetUid || !appId || !policy) {

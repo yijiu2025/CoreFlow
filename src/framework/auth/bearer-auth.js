@@ -13,7 +13,7 @@
  * @since 2026-11-01 自 auth/index.js 拆出（index.js 收敛为纯门面）
  */
 import { verify } from '../jwt/index.js';
-import { findUserById } from '../../shared/user-dao.js';
+import { findUserByUid } from '../../shared/user-dao.js';
 import { getPermissions } from './permission/perm-cache.js';
 import { getStore } from '../redis/index.js';
 import { createLogger } from '../log/index.js';
@@ -70,7 +70,7 @@ async function getUserFromToken(token) {
 
     if (!userData) {
       log.debug('📦 用户缓存未命中，查 DB: userId=%s', payload.sub);
-      userData = await findUserById(payload.sub);
+      userData = await findUserByUid(payload.sub); // payload.sub 是 uid（JWT 契约）
       if (!userData) return null;
       // 写入缓存（30 秒），账号禁用等状态变更 30s 内生效
       try {
@@ -112,7 +112,7 @@ async function getUserFromToken(token) {
       tokenType: 'bearer'
     };
   } catch (err) {
-    // JWT 解析全程异常（verify 失败 / findUserById 抛错 / getPermissions 抛错）：
+    // JWT 解析全程异常（verify 失败 / findUserByUid 抛错 / getPermissions 抛错）：
     // 返回 null 让调用方走"认证失败"分支，但记 warn 便于排障（原 catch {} 静默）
     log.warn('[Auth] getUserFromToken 异常:', err);
     return null;

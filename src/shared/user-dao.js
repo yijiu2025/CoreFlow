@@ -11,11 +11,14 @@
 import UserDao from '../app/oauth21/dao/user.dao.js';
 
 /**
- * 根据 UID 查找用户
+ * 根据 uid（UUID）查找用户
+ *
+ * 🔴 命名契约：`ByUid` = UUID，`ById` = 数字主键。原名 findUserById 实按 uid
+ * 查询，是「uid vs 数字主键」错位类 bug 的帮凶型命名（2026-11-01 改名）。
  * @param {string} uid - 用户 UUID
  * @returns {Promise<object|null>}
  */
-async function findUserById(uid) {
+async function findUserByUid(uid) {
   return UserDao.findById(uid);
 }
 
@@ -37,4 +40,4 @@ async function findUserByUsername(username) {
   return UserDao.findByUsername(username);
 }
 
-export { findUserById, findUserByEmail, findUserByUsername };
+export { findUserByUid, findUserByEmail, findUserByUsername };

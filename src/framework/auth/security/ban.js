@@ -65,6 +65,26 @@ function assertService(service) {
   }
 }
 
+/**
+ * 写路径 userId 合法性：必须是正整数（数字主键）。
+ *
+ * 🔴 键形是 `${userId}:${service}`：传入 uid/UUID 会被 Number() 转成 NaN，
+ * 写入 "NaN:service" 垃圾键——封禁静默失效且无任何报错。写路径直接抛错；
+ * 读路径（checkDisable 系列）不加断言：错误类型的键天然查不到、行为等同
+ * fail-open，且 checkDisable 在每请求热路径上，不付日志成本——防线放在
+ * API 入参校验层（api/admin/user/v1/bans.js）。
+ * @param {number|string} userId 待检值
+ */
+function assertBanUserId(userId) {
+  const n = Number(userId);
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new Error(
+      `ban: userId 必须是数字主键（正整数），收到 ${typeof userId}:${String(userId).slice(0, 12)}——` +
+        'uid/UUID 会生成 NaN 垃圾键使封禁静默失效'
+    );
+  }
+}
+
 /** 失效某用户的负缓存（disable/untie 时调用）：TTL 之外的事件即时失效通道 */
 async function invalidateCache(userId) {
   const prefix = `${userId}:`;
@@ -114,6 +134,7 @@ async function getBanInfo(userId, service) {
  * @returns {Promise<object>} 写入的封禁明细
  */
 async function disable(userId, service, time, { reason = '', level = 0, operator = null } = {}) {
+  assertBanUserId(userId);
   assertService(service);
   if (!Number.isFinite(Number(time))) throw new Error(`ban: time 必须是秒数或 -1，收到 ${time}`);
   const t = Number(time);
@@ -163,6 +184,7 @@ async function disableLevel(userId, service, level, time, opts = {}) {
  * @returns {Promise<number>} 实际解封的服务数
  */
 async function untieDisable(userId, ...services) {
+  assertBanUserId(userId);
   if (services.length === 0) throw new Error('ban: untieDisable 必须指定至少一个 service');
   let n = 0;
   for (const service of services) {

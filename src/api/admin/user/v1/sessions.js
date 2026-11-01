@@ -52,13 +52,18 @@ async function registerSessionsRoutes(fastify) {
       if (!userId) {
         return reply.result.fail('userId 不能为空');
       }
+      // user_id 是数字列：uid/UUID 会被 Number() 转成 NaN，静默查空
+      const numericUserId = Number(userId);
+      if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+        return reply.result.fail('userId 必须是数字主键（正整数），不接受 uid/UUID');
+      }
 
       const SessionToken = getModel('SessionToken');
       if (!SessionToken) {
         return reply.result.fail('SessionToken 模型未加载');
       }
 
-      const where = { user_id: Number(userId) };
+      const where = { user_id: numericUserId };
       if (appId) where.app_id = appId;
       if (revoked !== undefined) where.revoked = revoked === 'true' || revoked === true;
 
@@ -104,8 +109,12 @@ async function registerSessionsRoutes(fastify) {
       if (!userId || !appId || !deviceId) {
         return reply.result.fail('userId / appId / deviceId 不能为空');
       }
+      const numericUserId = Number(userId);
+      if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
+        return reply.result.fail('userId 必须是数字主键（正整数），不接受 uid/UUID');
+      }
 
-      const kicked = await kickByDeviceId(Number(userId), appId, deviceId);
+      const kicked = await kickByDeviceId(numericUserId, appId, deviceId);
       return reply.result.success(`已踢出 ${kicked} 个会话`, { kicked });
     }
   });

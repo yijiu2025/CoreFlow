@@ -26,6 +26,17 @@ import {
   getDisableLevel
 } from '../../../../framework/auth/index.js';
 
+/**
+ * userId 入参必须是数字主键（正整数）。
+ * 🔴 ban 键形是 `${userId}:${service}`：传 uid/UUID 会被 Number() 转成 NaN，
+ * 静默写 "NaN:service" 垃圾键——封禁看似成功实际无效。此处在校验层拦下，
+ * 给管理端明确报错（framework 层 ban.js 写路径也加了断言，双保险）。
+ */
+function parseUserId(raw) {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 async function registerBanRoutes(fastify) {
   registerGroupMetadata({
     name: 'userBansAdmin',
@@ -54,12 +65,16 @@ async function registerBanRoutes(fastify) {
       if (!userId || !service) {
         return reply.result.fail('userId / service 不能为空');
       }
+      const numericUserId = parseUserId(userId);
+      if (!numericUserId) {
+        return reply.result.fail('userId 必须是数字主键（正整数），不接受 uid/UUID');
+      }
 
       const operator = request.state?.user?.username || null;
       const info =
         disableLevelFlag && Number(level) >= 1
-          ? await disableLevel(Number(userId), service, Number(level), Number(time), { reason, operator })
-          : await disable(Number(userId), service, Number(time), { reason, level, operator });
+          ? await disableLevel(numericUserId, service, Number(level), Number(time), { reason, operator })
+          : await disable(numericUserId, service, Number(time), { reason, level, operator });
 
       return reply.result.success('封禁成功', info);
     }
@@ -81,8 +96,12 @@ async function registerBanRoutes(fastify) {
       if (!userId || !Array.isArray(services) || services.length === 0) {
         return reply.result.fail('userId 与 services（非空数组）不能为空');
       }
+      const numericUserId = parseUserId(userId);
+      if (!numericUserId) {
+        return reply.result.fail('userId 必须是数字主键（正整数），不接受 uid/UUID');
+      }
 
-      const count = await untieDisable(Number(userId), ...services);
+      const count = await untieDisable(numericUserId, ...services);
       return reply.result.success(`已解封 ${count} 个服务维度`, { untied: count });
     }
   });
@@ -103,11 +122,15 @@ async function registerBanRoutes(fastify) {
       if (!userId || !service) {
         return reply.result.fail('userId / service 不能为空');
       }
+      const numericUserId = parseUserId(userId);
+      if (!numericUserId) {
+        return reply.result.fail('userId 必须是数字主键（正整数），不接受 uid/UUID');
+      }
 
       const [banned, remaining, level] = await Promise.all([
-        isDisable(Number(userId), service),
-        getDisableTime(Number(userId), service),
-        getDisableLevel(Number(userId), service)
+        isDisable(numericUserId, service),
+        getDisableTime(numericUserId, service),
+        getDisableLevel(numericUserId, service)
       ]);
       return reply.result.success('获取成功', { banned, remaining, level });
     }
