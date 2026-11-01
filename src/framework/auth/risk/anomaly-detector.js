@@ -124,11 +124,6 @@ async function detectLoginAnomaly(params) {
  * @returns {Promise<number>}
  */
 async function countRecentFailures(email, ip) {
-  const SessionLog = getModel('SessionLog');
-  if (!SessionLog) {
-    log.warn('⚠️ [Anomaly] SessionLog 模型未注册，失败计数降级为 0');
-    return 0;
-  }
   const since = new Date(Date.now() - CONFIG.failureWindowMs);
 
   const where = {
@@ -147,7 +142,16 @@ async function countRecentFailures(email, ip) {
     return 0;
   }
 
-  return await SessionLog.count({ where });
+  // 🔴 getModel 未命中是**抛 TypeError** 而非返回 null（framework/db/index.js），
+  //    原来的 `if (!SessionLog)` 守卫永不触发（死代码），模型缺失会直接炸到调用方。
+  //    显式降级：锁定计数 fail-open（返回 0 不误锁），但 warn 可见。
+  try {
+    const SessionLog = getModel('SessionLog');
+    return await SessionLog.count({ where });
+  } catch (err) {
+    log.warn('⚠️ [Anomaly] SessionLog 不可用，失败计数降级为 0:', err?.message);
+    return 0;
+  }
 }
 
 /**
@@ -203,7 +207,15 @@ async function clearIpLock(ip) {
  * @returns {Promise<{status: 'safe'|'warn'|'info', reason?: string, baseline?: object}>}
  */
 async function detectLoginEnvironmentAnomaly({ userId, uid, deviceId, userAgent, ip }) {
-  const SessionToken = getModel('SessionToken');
+  // 🔴 getModel 未命中抛 TypeError（见 countRecentFailures 同款注释），
+  //    模型缺失时显式降级 info（fail-open 但 warn 可见），不把 TypeError 炸给登录主流程。
+  let SessionToken;
+  try {
+    SessionToken = getModel('SessionToken');
+  } catch (err) {
+    log.warn('⚠️ [Anomaly] SessionToken 模型不可用，登录环境检测降级放行:', err?.message);
+    return { status: 'info', reason: '基准存储不可用，跳过环境检测' };
+  }
 
   // 计算本次指纹（先算，供已知设备匹配）。
   // 注意：指纹材料必须与 createSession 写入基准时完全一致——createSession 不传

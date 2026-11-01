@@ -25,9 +25,8 @@ const storeStub = {
   }
 };
 
-/** 按模型名可配置的 DB 桩（各 describe 按需覆盖） */
+/** 按模型名可配置的 DB 桩（各 describe 按需覆盖；未注册的模型名会抛 TypeError，与真实一致） */
 const modelStubs = {};
-const defaultModel = { count: async () => 0, findOne: async () => null };
 
 jest.unstable_mockModule('../../../framework/redis/index.js', () => ({
   default: {},
@@ -36,10 +35,17 @@ jest.unstable_mockModule('../../../framework/redis/index.js', () => ({
 
 jest.unstable_mockModule('../../../framework/db/index.js', () => ({
   default: {},
-  getModel: name => modelStubs[name] || defaultModel
+  // 🔴 与真实 getModel 行为对齐（framework/db/index.js：未命中抛 TypeError 而非返回 null）
+  getModel: name => {
+    const model = modelStubs[name];
+    if (!model) {
+      throw new TypeError(`getModel: 模型 "${name}" 不存在`);
+    }
+    return model;
+  }
 }));
 
-const { detectSessionRisk, confirmVerifyToken, isHighRiskRequest, detectLoginEnvironmentAnomaly } =
+const { detectSessionRisk, confirmVerifyToken, isHighRiskRequest, detectLoginEnvironmentAnomaly, detectLoginAnomaly } =
   await import('../../../framework/auth/risk/anomaly-detector.js');
 const { computeDeviceFingerprint } = await import('../../../framework/auth/device/device.js');
 
@@ -309,6 +315,19 @@ describe('detectLoginEnvironmentAnomaly 多设备/多 app 判定', () => {
     expect(result.reason).toBe('基准指纹缺失');
   });
 
+  test('SessionToken 模型不可用（getModel 抛 TypeError）→ info 降级放行，不炸登录主流程', async () => {
+    // beforeEach 已 delete modelStubs.SessionToken：桩现在与真实 getModel 一致（未注册即抛）
+    const result = await detectLoginEnvironmentAnomaly({
+      userId: 1,
+      uid: UID,
+      deviceId: 'WEB-DeviceAAAA-aaaa1',
+      userAgent: UA,
+      ip: '1.1.1.1'
+    });
+    expect(result.status).toBe('info');
+    expect(result.reason).toContain('基准存储不可用');
+  });
+
   test('指纹材料与 createSession 基准严格一致（防 platformHint 混入回归）', async () => {
     // createSession 存基准用的材料是 `deviceId|uid|UA|`（platformHint 硬编码 ''）。
     // 这里手工按同一材料拼指纹作 DB 行，不与被测函数共用计算入口——
@@ -334,5 +353,28 @@ describe('detectLoginEnvironmentAnomaly 多设备/多 app 判定', () => {
       ip: '1.1.1.1'
     });
     expect(result.status).toBe('safe');
+  });
+});
+
+describe('detectLoginAnomaly 暴力破解锁定（DB 降级路径）', () => {
+  const PARAMS = { email: 'a@b.c', ip: '1.2.3.4' };
+
+  beforeEach(() => {
+    delete modelStubs.SessionLog;
+    storeMap.clear();
+  });
+
+  test('SessionLog 模型不可用 → 计数降级 0，登录放行（fail-open 但不炸）', async () => {
+    const result = await detectLoginAnomaly(PARAMS);
+    expect(result.status).toBe('safe');
+  });
+
+  test('IP 失败次数超阈值 → block + 写入锁定标记（当次即锁，不等下次）', async () => {
+    modelStubs.SessionLog = { count: async () => 10 }; // ≥ maxFailuresPerIp
+    const result = await detectLoginAnomaly(PARAMS);
+    expect(result.status).toBe('block');
+    expect(result.reason).toContain('临时锁定');
+    expect(storeMap.has('lockout:ip:1.2.3.4')).toBe(true);
+    expect(storeMap.has('lockout:email:a@b.c')).toBe(true);
   });
 });
