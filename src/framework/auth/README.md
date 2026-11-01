@@ -36,13 +36,15 @@ auth/
 | 文件 | 职责 | 关键导出 |
 |------|------|----------|
 | `session.js` | 聚合门面：创建/读取/刷新/销毁/记住我/基线更新 | `createSession` `getSession` `refreshSession` `destroySession` `switchSessionByRefreshToken` |
-| `session-store.js` | Redis 底座：6 个 getStore 命名空间全集中于此（共享底座，禁依赖兄弟模块） | `sessionStore` `refreshStore` `userSessionsStore` `sidHash` `revokeFamily` `revokeDisabledSession` |
-| `session-refresh.js` | 刷新令牌换新会话的核心流程 | `refreshSessionCore` |
+| `session-store.js` | Redis 底座：9 个 getStore 命名空间全集中于此（共享底座，禁依赖兄弟模块） | `sessionStore` `refreshStore` `userSessionsStore` `sidHash` `revokeFamily` `revokeDisabledSession` |
+| `session-refresh.js` | 刷新令牌换新会话的核心流程（轮转 + 盗用检测 + 禁用/封禁资格检查） | `refreshSessionCore` |
 | `session-saga.js` | 会话多步写操作的补偿事务 | `runSessionSaga` `withSessionTransaction` |
 | `session-kick.js` | 踢人下线（单会话/全端/按设备/按 ID 列表）+ 踢出墓碑 | `kickSession` `kickAllSessions` `kickUser` `kickByDeviceId` `getKickTombstone` |
 | `session-governance.js` | 会话上限、活跃设备修剪、统计与登录趋势 | `checkMaxSessions` `pruneActiveDevices` `getSessionStats` `getLoginTrend` |
 | `session-api.service.js` | 登录成功后的 Cookie 绑定、记住我切换、账号切换 | `bindSessionToCookie` `clearAuthCookies` `updateRememberMeCookies` `switchAccount` |
 | `session-perm.js` | 会话恢复时怎么解析权限（权限指纹改造的产物） | `resolveSessionPermissions` |
+
+> 子模块机制地图与深度检查记录：[docs/SESSION-LIFECYCLE.md](docs/SESSION-LIFECYCLE.md)
 
 ## permission/ — 权限（PBAC）
 

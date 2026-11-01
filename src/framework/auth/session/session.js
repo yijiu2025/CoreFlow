@@ -220,7 +220,14 @@ async function createSession(params) {
       });
       for (const oldRt of oldTokens) {
         const oldSessionId = await refreshStore.get(oldRt);
-        if (oldSessionId) await sessionStore.delete(oldSessionId);
+        if (oldSessionId) {
+          await sessionStore.delete(oldSessionId);
+          // 🔴 必须同步吊销 DB 行 + 清会话索引：只删 Redis 的话，旧设备凭手中 sid cookie
+          // 走 getSession 的 DB 恢复路径（token 仍 revoked=false）即可复活会话——
+          // 配额清理只删了 refresh 链，会话本体并未真正终结。
+          await userSessionsStore.zRem(userKey, [oldSessionId]);
+          await SessionToken.update({ revoked: true }, { where: { token: sidHash(oldSessionId) } });
+        }
         await refreshStore.delete(oldRt);
       }
       await userRefreshStore.zRem(userKey, oldTokens);
@@ -456,8 +463,8 @@ async function getSession(params) {
     }
   }
 
-  // 4. Redis 未命中，降级到 DB
-  const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
+  // 4. Redis 未命中，降级到 DB（哈希统一走 sidHash——全模块唯一真源，勿再内联 sha256）
+  const tokenHash = sidHash(sessionId);
   const SessionToken = getModel('SessionToken');
   const User = getModel('User');
 
@@ -475,6 +482,22 @@ async function getSession(params) {
   const user = token.user;
   if (!isSessionUserActive(user)) {
     log.warn('[Session] DB 恢复命中禁用或注销用户，吊销会话: userId=%s', token.user_id);
+    await revokeDisabledSession(sessionId, {
+      userId: token.user_id,
+      familyId: token.family_id,
+      token
+    });
+    if (reply) {
+      reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+      reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
+    }
+    return null;
+  }
+
+  // 'access' 维度封禁：DB 恢复路径与 Redis 命中路径同一语义——缺了它，
+  // Redis 被驱逐/清空的瞬间被封禁用户可经本路径获得一次通行（下个请求才被拦）
+  if (await isDisable(user.id, BAN_SERVICE_ACCESS)) {
+    log.warn('[Session] DB 恢复命中 access 封禁用户，吊销会话: userId=%s', token.user_id);
     await revokeDisabledSession(sessionId, {
       userId: token.user_id,
       familyId: token.family_id,

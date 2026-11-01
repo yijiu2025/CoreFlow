@@ -19,8 +19,12 @@ import {
   familyStore,
   userSessionsStore,
   sidHash,
-  revokeFamily
+  revokeFamily,
+  isSessionUserActive
 } from './session-store.js';
+// 封禁检查：刷新路径必须拦 login/access 封禁（否则被禁登录用户凭记住我 sid_r
+// 无限自动续期，登录封禁形同虚设）。ban.js 只依赖 redis/log/audit，无环。
+import { isDisable, BAN_SERVICE_LOGIN, BAN_SERVICE_ACCESS } from '../security/ban.js';
 import { runSessionSaga, withSessionTransaction } from './session-saga.js';
 import { createLogger } from '../../log/index.js';
 
@@ -60,21 +64,31 @@ async function refreshSessionCore(refreshToken, request, reply) {
   const user = await User.findByPk(record.user_id);
   if (!user) return null;
 
+  let familyId = oldSessionId ? oldSessionData?.familyId : null;
+  if (!familyId && record.family_id) familyId = record.family_id;
+  if (!familyId) familyId = crypto.randomBytes(16).toString('hex');
+
+  // ── 资格检查（放在 resolveSessionPermissions 之前：被封禁/禁用用户不值得花指纹查询） ──
+  // ① 全局硬禁用（status=0）：吊销整个 family（既有行为；isSessionUserActive 对 status
+  //    做 Number() 归一——此处原为 `user.status === 0` 严格相等，DB 驱动返回字符串 '0' 时漏拦）
+  if (!isSessionUserActive(user)) {
+    log.debug('🚫 [Session] 用户已禁用，拒绝刷新并吊销 family: userId=%s', user.id);
+    await revokeFamily(familyId, user.id);
+    return null;
+  }
+  // ② login/access 维度封禁：拒绝刷新但**不吊销 family**——login 封禁语义是"只挡新登录，
+  //    不动既有会话"；本浏览器刷新失败被清 cookie 即达成目的，其他设备不受牵连
+  //    （access 封禁本会在 getSession 请求级拦截，这里提前拦省一次轮转）。
+  if ((await isDisable(user.id, BAN_SERVICE_LOGIN)) || (await isDisable(user.id, BAN_SERVICE_ACCESS))) {
+    log.warn('🚫 [Session] 用户封禁中，拒绝 sid_r 刷新: userId=%s', user.id);
+    return null;
+  }
+
   const { roles, permissions, permFingerprint } = await resolveSessionPermissions(user.id, record.app_id, {
     roles: oldSessionData?.roles,
     permissions: oldSessionData?.permissions,
     permFingerprint: oldSessionData?.permFingerprint
   });
-
-  let familyId = oldSessionId ? oldSessionData?.familyId : null;
-  if (!familyId && record.family_id) familyId = record.family_id;
-  if (!familyId) familyId = crypto.randomBytes(16).toString('hex');
-
-  if (user.status === 0) {
-    log.debug('🚫 [Session] 用户已禁用，拒绝刷新并吊销 family: userId=%s', user.id);
-    await revokeFamily(familyId, user.id);
-    return null;
-  }
 
   const newSessionId = crypto.randomBytes(32).toString('hex');
   const newRefreshToken = crypto.randomBytes(32).toString('hex');
