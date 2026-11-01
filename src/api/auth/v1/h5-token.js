@@ -33,7 +33,11 @@ async function registerH5TokenRoutes(fastify) {
     config: {
       rateLimit: {
         max: 30, // 每分钟 30 次，防滥用
-        timeWindow: '1 minute'
+        timeWindow: '1 minute',
+        // 计数隔离：@fastify/rate-limit 默认所有端点共用同一个 rate:ip:<ip> 键，
+        // 其它端点的流量会吃掉本端点额度（反之亦然）。groupId 让 key 追加路由
+        // 维度后缀，本端点 30 次/分钟独立核算，不受 NAT 出口上其它端点流量连带。
+        groupId: 'h5-token'
       }
     },
     handler: async (request, reply) => {
