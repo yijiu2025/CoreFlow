@@ -65,7 +65,7 @@ async function issueDirectTokens(user, client, scope, oidcNonce, request, reply,
   // 按 scope 裁剪返回给前端的 user 字段（phone 等敏感字段不下发）
   // 字段映射见 scope-registry，请求 email scope 才返回 email，profile 才返回 username/name/avatar
   const fieldSet = new Set(resolveFieldSet(scopeString));
-  const userPayload = { id: user.id };
+  const userPayload = { id: user.uid }; // 对外字段：uid（OIDC userinfo 语义）
   if (fieldSet.has('username')) userPayload.username = user.username;
   if (fieldSet.has('name')) userPayload.name = user.name || user.username;
   if (fieldSet.has('avatar')) userPayload.avatar = user.avatar;
@@ -74,7 +74,7 @@ async function issueDirectTokens(user, client, scope, oidcNonce, request, reply,
 
   // 保存授权记录
   await ApprovalDao.saveApproval({
-    uid: user.id,
+    uid: user.uid,
     appId: client.client_id,
     scopes: finalScopes
   });
@@ -88,13 +88,13 @@ async function issueDirectTokens(user, client, scope, oidcNonce, request, reply,
   // ── 模式 A：JWT 启用 ──
   if (config.jwt.enabled) {
     const { token: accessToken, kid: accessKid } = await issueAccessToken({
-      sub: user.id,
+      sub: user.uid,
       aud: client.client_id,
       scope: scopeString
     });
     const refreshToken = generateToken(48);
     await TokenDao.save(refreshToken, {
-      sub: user.id,
+      sub: user.uid,
       client_id: client.client_id,
       scope: scopeString,
       expiresIn: config.jwt.refreshTokenTTL
@@ -126,7 +126,7 @@ async function issueDirectTokens(user, client, scope, oidcNonce, request, reply,
       if (fieldSet.has('name')) idClaims.name = user.name || user.username;
       if (fieldSet.has('email')) idClaims.email = user.email;
       const { token: idToken, kid: idKid } = await issueIdToken({
-        sub: user.id,
+        sub: user.uid,
         aud: client.client_id,
         nonce: oidcNonce,
         auth_time: Math.floor(Date.now() / 1000),
@@ -156,8 +156,8 @@ async function issueDirectTokens(user, client, scope, oidcNonce, request, reply,
       await sessionStore.set(
         sessionToken,
         {
-          userId: user.numericId || user.id,
-          uid: user.uid || user.id,
+          userId: user.id,
+          uid: user.uid,
           username: user.username,
           email: user.email,
           avatar: user.avatar,

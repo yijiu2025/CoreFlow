@@ -18,7 +18,6 @@
 import CodeDao from '../dao/code.dao.js';
 import UserDao from '../dao/user.dao.js';
 import ClientDao from '../dao/client.dao.js';
-import ConsentDao from '../dao/consent.dao.js';
 import ApprovalDao from '../dao/approval.dao.js';
 import { v4 as uuidv4 } from 'uuid';
 import { generateAuthorizationCode } from '../crypto/tokens.js';
@@ -125,23 +124,14 @@ class AuthorizationService {
   }
 
   /**
-   * 检查已有同意
-   */
-  async hasConsent(userId, clientId, requestedScopes) {
-    const consent = await ConsentDao.find(userId, clientId);
-    if (!consent) return false;
-    const needed = requestedScopes.split(' ');
-    return needed.every(s => consent.scopes.includes(s));
-  }
-
-  /**
    * 发放授权码
+   * @param {string} uid - 用户 UUID（即 JWT/OAuth 语义的 sub，全链路 uid 契约）
    */
-  async issueAuthorizationCode({ userId, clientId, scope, redirectUri, codeChallenge, codeChallengeMethod, nonce }) {
+  async issueAuthorizationCode({ uid, clientId, scope, redirectUri, codeChallenge, codeChallengeMethod, nonce }) {
     const code = generateAuthorizationCode();
 
     await CodeDao.save(code, {
-      sub: userId,
+      sub: uid,
       client_id: clientId,
       scope,
       redirect_uri: redirectUri,
@@ -160,15 +150,15 @@ class AuthorizationService {
    * 从 session 取授权上下文 → 签发 code → 删 session → 302 重定向到 redirect_uri。
    * @param {object} reply - Fastify reply
    * @param {string} sessionId
-   * @param {string|number} userId
+   * @param {string} uid - 用户 UUID（session.uid，即 code.sub / JWT sub 的来源）
    * @param {object} sessionStore - getStore('session') 实例
    */
-  async issueCodeAndRedirect(reply, sessionId, userId, sessionStore) {
+  async issueCodeAndRedirect(reply, sessionId, uid, sessionStore) {
     const session = await sessionStore.get(sessionId);
     if (!session) throw new Error('Session expired');
 
     const code = await this.issueAuthorizationCode({
-      userId,
+      uid,
       clientId: session.client.client_id,
       scope: session.scope,
       redirectUri: session.query.redirect_uri,
@@ -207,19 +197,21 @@ class AuthorizationService {
     const sessionId = uuidv4();
 
     // 使用 session 验证用户身份（非 Cookie 直接信任）
+    // 🔴 request.state.user.sub = 用户 UUID（uid），两条认证路径（JWT/Session）契约一致；
+    // session 里存键名 uid（不是 userId）——本仓 userId 既定语义 = 数字主键，别再混用。
     const user = request.state?.user;
-    const userId = user?.sub;
+    const uid = user?.sub;
 
     await sessionStore.set(sessionId, {
       ...validated,
       query: request.query,
       // 🔴 已认证用户身份必须绑定进服务端 session：
       // consent 阶段一律以这里为准，绝不信任请求体里的 user_id（否则任意用户可为他人签发授权码）。
-      userId: userId || null,
+      uid: uid || null,
       createdAt: Date.now()
     });
 
-    if (!userId) {
+    if (!uid) {
       return reply.send({
         code: 200,
         message: '需要登录',
@@ -232,7 +224,7 @@ class AuthorizationService {
       });
     }
 
-    const userData = await UserDao.findById(userId);
+    const userData = await UserDao.findById(uid);
     if (!userData) {
       return reply.send({
         code: 200,
@@ -246,12 +238,12 @@ class AuthorizationService {
       });
     }
 
-    const approval = await ApprovalDao.getEffectiveApproval(userId, validated.client.client_id);
+    const approval = await ApprovalDao.getEffectiveApproval(uid, validated.client.client_id);
     const hasConsent = approval !== null;
 
     // 已授权且非强制 consent → 静默跳转
     if (hasConsent && request.query.prompt !== 'consent') {
-      return await this.issueCodeAndRedirect(reply, sessionId, userId, sessionStore);
+      return await this.issueCodeAndRedirect(reply, sessionId, uid, sessionStore);
     }
 
     // 返回 consent 界面
@@ -264,7 +256,8 @@ class AuthorizationService {
         client_name: validated.client.client_name,
         scope: validated.scope,
         scopeDetails: resolveScopeDetails(validated.scope, validated.client.scope_metadata || {}),
-        user_id: userId,
+        // 对外字段名 user_id 为前端既有契约，值为 uid（UUID）
+        user_id: uid,
         user: {
           username: userData.username,
           name: userData.name || userData.username,
@@ -305,12 +298,12 @@ class AuthorizationService {
       });
     }
 
-    // 登录成功后把已认证身份绑定进服务端 session，consent 阶段以此为唯一身份来源
-    await sessionStore.set(sessionId, { ...session, userId: user.id });
+    // 登录成功后把已认证身份绑定进服务端 session（uid 键名，语义 = 用户 UUID），consent 阶段以此为唯一身份来源
+    await sessionStore.set(sessionId, { ...session, uid: user.uid });
 
-    const approval = await ApprovalDao.getEffectiveApproval(user.id, session.client.client_id);
+    const approval = await ApprovalDao.getEffectiveApproval(user.uid, session.client.client_id);
     if (approval) {
-      return await this.issueCodeAndRedirect(reply, sessionId, user.id, sessionStore);
+      return await this.issueCodeAndRedirect(reply, sessionId, user.uid, sessionStore);
     }
 
     return reply.send({
@@ -321,7 +314,7 @@ class AuthorizationService {
         sessionId,
         client_name: session.client.client_name,
         scope: session.scope,
-        user_id: user.id
+        user_id: user.uid
       }
     });
   }
@@ -342,10 +335,10 @@ class AuthorizationService {
       });
     }
 
-    // 🔴 身份只认服务端 session 里绑定的 userId，绝不信任请求体中的 user_id
+    // 🔴 身份只认服务端 session 里绑定的 uid，绝不信任请求体中的 user_id
     //（此前直接信任 body.user_id，任何登录用户可为任意用户签发授权码 = 账号接管）。
-    const userId = session.userId;
-    if (!userId) {
+    const uid = session.uid;
+    if (!uid) {
       return reply.code(401).send({
         code: 401,
         message: '授权会话未绑定用户，请先登录',
@@ -362,14 +355,14 @@ class AuthorizationService {
     }
 
     await ApprovalDao.saveApproval({
-      uid: userId,
+      uid,
       appId: session.client.client_id,
       scopes: session.scope.split(' ')
     });
 
     // 签发 code，返回 redirect_url（前端 window.location.href 跳转，绕过 XHR 跨域限制）
     const code = await this.issueAuthorizationCode({
-      userId,
+      uid,
       clientId: session.client.client_id,
       scope: session.scope,
       redirectUri: session.query.redirect_uri,

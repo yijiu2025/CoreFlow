@@ -84,9 +84,10 @@ async function getSessionUser(userId, uid) {
   const User = getModel('User');
   const user = uid ? await User.findOne({ where: { uid } }) : await User.findByPk(userId);
   if (!user) return null;
+  // 形状契约（user-dao-shape.test.js）：id = 数字主键、uid = UUID，与 JWT 用户缓存
+  // （bearer-auth 写入的 UserDao.findById 结果）逐字段一致——两个认证入口共用此缓存。
   const data = {
-    id: user.uid,
-    numericId: user.id,
+    id: user.id,
     uid: user.uid,
     username: user.username,
     email: user.email,

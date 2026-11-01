@@ -4,10 +4,17 @@
  * 已整合至统一 IAM 平台，彻底消除”身份孤岛”问题。
  * 直接适配主系统的 User & UserIdentity 体系，sub (Subject) 字段对应 User.uid (UUID)。
  *
+ * 返回形状契约（2026-11-01 改名手术，有测试钉死 user-dao-shape.test.js）：
+ * - `id`   = 数字主键（BIGINT，模型原义）——数字列 FK、权限加载、封禁键
+ * - `uid`  = UUID——JWT sub、API 参数、日志
+ * 历史上曾把 id 劫持成 uid（id: user.uid）+ 数字主键被迫另立字段名，
+ * 同名字段两种语义导致两次同型 bug（审计写库报错 / JWT 用户权限恒空）。
+ *
  * 提供用户查找、密码验证等能力，供授权服务器在用户认证阶段调用。
  *
  * @author Claude
  * @since 2026-07-13
+ * @since 2026-11-01 恢复 id 数字原义、移除旧数字别名（改名手术）
  */
 import { verifyPassword as verifyPasswordHash } from '../../../framework/auth/index.js';
 import { getModel } from '../../../framework/db/index.js';
@@ -28,13 +35,12 @@ const UserDao = {
 
     return user
       ? {
-          id: user.uid, // sub 字段对应 uid
-          numericId: user.id, // BIGINT 数字主键（Session 等内部使用）
+          id: user.id, // 数字主键（模型原义，BIGINT）——数字列 FK / 权限加载 / 封禁键用
+          uid: user.uid, // 对外唯一标识（UUID）——JWT sub、API 参数、日志用
           username: user.username,
           email: user.email,
           name: user.username,
           avatar: user.avatar,
-          uid: user.uid,
           status: user.status // 账号状态（0=禁用，登录/刷新时校验）
         }
       : null;
@@ -55,13 +61,12 @@ const UserDao = {
 
     return user
       ? {
-          id: user.uid, // sub 字段对应 uid
-          numericId: user.id, // BIGINT 数字主键（Session 等内部使用）
+          id: user.id, // 数字主键（模型原义，BIGINT）——数字列 FK / 权限加载 / 封禁键用
+          uid: user.uid, // 对外唯一标识（UUID）——JWT sub、API 参数、日志用
           username: user.username,
           email: user.email,
           name: user.username,
           avatar: user.avatar,
-          uid: user.uid,
           status: user.status // 账号状态（0=禁用，登录/刷新时校验）
         }
       : null;
@@ -89,13 +94,12 @@ const UserDao = {
     if (!identity || !identity.user) return null;
 
     return {
-      id: identity.user.uid, // sub 字段对应 uid
-      numericId: identity.user.id, // BIGINT 数字主键
+      id: identity.user.id, // 数字主键（模型原义，BIGINT）
+      uid: identity.user.uid, // 对外唯一标识（UUID）
       username: identity.user.username,
       email: identity.user.email,
       name: identity.user.username,
       avatar: identity.user.avatar,
-      uid: identity.user.uid,
       credential: identity.credential // 密码 Hash
     };
   },

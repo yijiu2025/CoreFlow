@@ -110,7 +110,7 @@ async function registerOpenRoutes(fastify) {
         const user = await userDao.createUser(request);
         await logRegister({
           ...auditCtx,
-          userId: user?.numericId || user?.id,
+          userId: user?.id,
           success: true
         });
         // L5：字段最小化，注册只返回成功标识，uid/email 等登录后从 user 信息接口取

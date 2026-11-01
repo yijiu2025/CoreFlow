@@ -112,8 +112,8 @@ const makeReply = () => ({
 const requestSession = (sid, reply) => getSession({ cookies: { [COOKIE_SID]: signCookie(sid, 0) }, reply });
 
 const activeUser = () => ({
-  id: UUID,
-  numericId: UID,
+  // 形状契约（user-dao-shape.test.js）：id = 数字主键、uid = UUID
+  id: UID,
   uid: UUID,
   username: 'user',
   email: 'u@example.test',

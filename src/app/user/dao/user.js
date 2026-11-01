@@ -323,7 +323,9 @@ class UserDao {
   }
 
   /**
-   * 根据用户 UID 查找用户（适配后返回，sub 对应 uid）
+   * 根据用户 UID 查找用户（适配后返回）
+   * 形状契约与 oauth21/user.dao.js 一致：id = 数字主键、uid = UUID
+   * （历史 id: user.uid 劫持已修正，见 user-dao-shape.test.js）
    * @param {string} uid 用户唯一标识 (UUID)
    * @returns {Promise<object|null>} 适配后的用户数据或 null
    */
@@ -333,13 +335,12 @@ class UserDao {
     const user = await User.findOne({ where: { uid } });
     return user
       ? {
-          id: user.uid,
-          numericId: user.id,
+          id: user.id,
+          uid: user.uid,
           username: user.username,
           email: user.email,
           name: user.username,
           avatar: user.avatar,
-          uid: user.uid,
           status: user.status
         }
       : null;

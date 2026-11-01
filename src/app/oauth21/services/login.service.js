@@ -197,13 +197,13 @@ async function directLogin(request, reply, fastify) {
   // - info（IP 变梯子 / 无基准）→ 不拦，继续登录
   // - safe → 继续
   // 仅密码登录做（邮箱码登录已验证邮箱所有权，无需二次验证）
-  log.info('[directLogin] 环境检测入口: type=%s, numericId=%s', type, user.numericId);
-  if (type !== 'email' && user.numericId) {
+  log.info('[directLogin] 环境检测入口: type=%s, userId=%s', type, user.id);
+  if (type !== 'email' && user.id) {
     try {
       const deviceId = await getDeviceIdAndWrapResponse(request, reply);
       const userAgent = request.headers['user-agent'] || '';
       const envCheck = await detectLoginEnvironmentAnomaly({
-        userId: user.numericId,
+        userId: user.id,
         uid: user.uid,
         deviceId,
         userAgent,
@@ -218,7 +218,7 @@ async function directLogin(request, reply, fastify) {
         await verifyStore.set(
           verifyToken,
           {
-            userId: user.numericId,
+            userId: user.id,
             uid: user.uid,
             email: user.email,
             clientId: client_id,
@@ -286,11 +286,11 @@ async function directLogin(request, reply, fastify) {
   //     不直接登录，返回 deactivation_pending 状态，前端弹"是否撤销"。
   //     用户确认撤销 → 带 confirmRevoke: true 重新提交登录 → 此处先撤销再继续登录流程。
   //     不撤销则前端不重发，登录被拒。撤销也可走 POST /user/v1/deactivation/revoke（已登录态）。
-  const pendingDeactivation = await deactivationService.checkLoginBlocked(user.numericId || user.id, client.client_id);
+  const pendingDeactivation = await deactivationService.checkLoginBlocked(user.id, client.client_id);
   if (pendingDeactivation) {
     // 用户在登录弹窗点了"撤销"：直接撤销该申请，继续走登录流程
     if (request.body?.confirmRevoke) {
-      await deactivationService.forceRevokeForLogin(pendingDeactivation.id, user.numericId || user.id);
+      await deactivationService.forceRevokeForLogin(pendingDeactivation.id, user.id);
       // 撤销后继续向下签发令牌（不 return）
     } else {
       return reply.code(403).send({
@@ -331,7 +331,7 @@ async function directLogin(request, reply, fastify) {
   //   - 一方应用 skip_consent=true → 自动写 Approval + 默认权限，静默签发令牌
   //   - 其他应用 → 返回 consent 确认页，用户同意后写 Approval + 默认权限再签发
   // 已授权（有 Approval）→ 静默签发
-  const approval = await ApprovalDao.getEffectiveApproval(user.id, client.client_id);
+  const approval = await ApprovalDao.getEffectiveApproval(user.uid, client.client_id);
   if (!approval) {
     // 一方应用配置了 skip_consent=true：自动写 Approval + 默认权限，静默签发令牌，不弹 consent 页。
     // 三方应用保持 false，走 consent 确认页（OAuth 2.1 安全要求）。
@@ -339,12 +339,12 @@ async function directLogin(request, reply, fastify) {
     if (client.skip_consent) {
       try {
         await ApprovalDao.saveApproval({
-          uid: user.id,
+          uid: user.uid,
           appId: client.client_id,
           scopes: finalScopes
         });
         log.info('[directLogin] skip_consent 自动授权完成', {
-          userId: user.id,
+          uid: user.uid,
           clientId: client.client_id
         });
         // 落到下方第 5 步签发令牌（不 return consent）
@@ -359,7 +359,9 @@ async function directLogin(request, reply, fastify) {
       await consentStore.set(
         consentKey,
         {
-          userId: user.id,
+          // 🔴 键名 uid（= 用户 UUID）——UserDao.findById 现按 uid 查；
+          // 本仓 userId 既定语义 = 数字主键，别再用 userId 装 uid
+          uid: user.uid,
           clientId: client.client_id,
           scopes: finalScopes,
           scopeStr: scopeString,
@@ -370,7 +372,7 @@ async function directLogin(request, reply, fastify) {
       );
       log.info('[directLogin] 写入 consentKey', {
         consentKey,
-        userId: user.id,
+        uid: user.uid,
         clientId: client.client_id,
         fingerprint: writeFp,
         ip: request?.ip,
@@ -407,7 +409,7 @@ async function directLogin(request, reply, fastify) {
 
     // 审计日志：登录成功
     await logLogin({
-      userId: user.numericId || user.id,
+      userId: user.id,
       ip: request.ip,
       userAgent: request.headers['user-agent'] || '',
       appId: client.client_id,
@@ -418,7 +420,7 @@ async function directLogin(request, reply, fastify) {
   } catch (err) {
     // 审计日志：登录失败
     await logLogin({
-      userId: user.numericId || user.id,
+      userId: user.id,
       ip: request.ip,
       userAgent: request.headers['user-agent'] || '',
       appId: client.client_id,
@@ -485,7 +487,7 @@ async function confirmDirectConsent(request, reply, fastify) {
     });
   }
 
-  const user = await UserDao.findById(session.userId);
+  const user = await UserDao.findById(session.uid);
   if (!user) {
     return reply.code(404).send({
       code: 404,
@@ -506,7 +508,7 @@ async function confirmDirectConsent(request, reply, fastify) {
   }
 
   await ApprovalDao.saveApproval({
-    uid: user.id,
+    uid: user.uid,
     appId: client.client_id,
     scopes: session.scopes
   });
@@ -569,7 +571,7 @@ async function verifyEmailLogin(request, reply, fastify) {
   }
 
   // 注销中拦截复用（二次验证也可能在注销期，保持一致）
-  const blocked = await deactivationService.checkLoginBlocked(user.numericId, data.clientId);
+  const blocked = await deactivationService.checkLoginBlocked(user.id, data.clientId);
   if (blocked) {
     return reply.code(403).send({
       code: 403,

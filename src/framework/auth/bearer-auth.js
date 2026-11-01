@@ -93,11 +93,15 @@ async function getUserFromToken(token) {
     //
     //    签发端不把权限嵌进 JWT（权限变更即时生效，不等 token 过期），
     //    所以这里永远从缓存/DB 读实时快照，不读 payload claims。
+    //    ⚠️ 必须传数字主键（userData.id）：loadUserPermissions 按数字列 user_id
+    //    查询，传 uid 字符串会查空 → JWT 用户权限恒为空。
     const { roles, permissions } = await getPermissions(userData.id, payload.aud || 'GLOBAL');
 
     return {
-      sub: userData.id,
-      uid: userData.id,
+      sub: userData.uid,
+      uid: userData.uid,
+      // 与 Session 路径（plugin.js）对齐：userId = 数字主键，uid/sub = 对外 UUID。
+      // DAO 形状契约见 user-dao-shape.test.js（id = 数字，uid = UUID）。
       userId: userData.id,
       username: userData.username,
       email: userData.email,
