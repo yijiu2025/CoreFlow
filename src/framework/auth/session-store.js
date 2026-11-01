@@ -52,6 +52,10 @@ const familyStore = getStore('session_family');
 // 用户会话索引：userId → zset[raw sessionId]，供 kick/单设备互踢按 raw sid 定位 Redis session
 // （DB 仅存 sha256(sessionId) 无法反查 raw sid，故用 Redis 逆索引，不暴露 raw sid 到 DB）
 const userSessionsStore = getStore('user_sessions');
+// 踢出墓碑：sid → { reason, code, kickedAt }，短期保留（TTL 24h）。
+// 会话被踢后 sid 已删，旧客户端下次请求 Redis 未命中，靠墓碑区分「普通过期」与
+//「被顶/被踢」，让前端能提示"您已在别处登录"（见 session-kick.js getKickTombstone）。
+const kickTombStore = getStore('session_kick_tomb');
 // 权限缓存的命名空间：与 perm-cache.js 的 PERM_NAMESPACE 必须逐字一致（契约测试钉死）。
 // 这里重复声明而非 import，是为了守住本文件的"零兄弟模块依赖"约束（见文件头）。
 const PERM_NAMESPACE = 'auth:perm';
@@ -193,6 +197,7 @@ export {
   rotatedStore,
   familyStore,
   userSessionsStore,
+  kickTombStore,
   PERM_NAMESPACE,
   permStore,
   sidHash,

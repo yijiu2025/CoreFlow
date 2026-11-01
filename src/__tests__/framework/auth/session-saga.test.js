@@ -163,7 +163,11 @@ jest.unstable_mockModule('../../../framework/auth/session-kick.js', () => ({
   kickSession: async () => {},
   kickAllSessions: async () => {},
   kickByDeviceId: async () => 0,
-  kickUser: async () => {}
+  kickUser: async () => {},
+  // 2026-11-01 session.js 新增消费的两个导出（踢出墓碑 + 登录时选择下线指定会话），
+  // 缺失会在 ESM 链接期抛 "does not provide an export"
+  kickSessionsByIds: async () => 0,
+  getKickTombstone: async () => null
 }));
 
 const { createSession, refreshSessionCore, sidHash } = await import('../../../framework/auth/session.js');

@@ -47,11 +47,33 @@ import {
 } from './session-store.js';
 // 兄弟子模块：createSession 需查配额并踢旧会话
 import { checkMaxSessions, pruneActiveDevices } from './session-governance.js';
-import { kickByDeviceType } from './session-kick.js';
+import { kickByDeviceType, kickSessionsByIds, getKickTombstone } from './session-kick.js';
+// 账号封禁（service 维度 + 时限 + 阶梯）：'login' 拦新登录、'access' 拦请求
+import { checkDisable, isDisable, BAN_SERVICE_LOGIN, BAN_SERVICE_ACCESS } from './ban.js';
+// 认证事件总线（登录/登出广播给审计、推送等监听者）
+import { emitAuthEvent, AUTH_EVENTS } from './events.js';
 import { refreshSessionCore } from './session-refresh.js';
 import { runSessionSaga, withSessionTransaction } from './session-saga.js';
 
 const log = createLogger('framework.auth.session');
+
+// ── 单设备单登录策略 ──
+
+/**
+ * 单设备单登录的 deviceType 白名单（env SESSION_SINGLE_DEVICE_TYPES，逗号分隔）。
+ *
+ * 默认**全部类型**（与历史行为一致：每次登录踢掉同类型旧会话）；配置后只对名单内
+ * 类型互顶，其余类型多端并存。例：`SESSION_SINGLE_DEVICE_TYPES=app,desktop` →
+ * 手机/桌面客户端单登录（新登录顶掉旧会话），浏览器多开互不影响。
+ * 调用方仍可用 createSession 的 multiDevice=true 显式豁免（优先级最高）。
+ */
+const DEFAULT_SINGLE_DEVICE_TYPES = 'browser,app,desktop,miniapp,api';
+function getSingleDeviceTypes() {
+  return (process.env.SESSION_SINGLE_DEVICE_TYPES || DEFAULT_SINGLE_DEVICE_TYPES)
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
 
 // ── 会话生命周期 ──
 
@@ -91,6 +113,16 @@ async function createSession(params) {
     reply
   } = params;
 
+  // 0. 账号封禁检查：'login' 维度封禁阻止新登录（既有会话不自动失效；
+  //    需立即下线由管理端 kickUser/disable('access') 配合，语义见 ban.js 头注）
+  await checkDisable(userId, BAN_SERVICE_LOGIN);
+
+  // 0.5 登录时主动下线指定旧会话：MAX_SESSIONS_EXCEEDED 把活跃会话列表返回给前端后，
+  //     用户勾选"下线哪些设备"，携 offlineSessionIds 重试登录（归属校验在 kickSessionsByIds 内）
+  if (Array.isArray(params.offlineSessionIds) && params.offlineSessionIds.length > 0) {
+    await kickSessionsByIds(userId, params.offlineSessionIds);
+  }
+
   // 1. 并发会话限制：检查是否超限（不自动踢人，由调用方处理）
   const maxSessionsResult = await checkMaxSessions(userId, appId);
   if (maxSessionsResult) {
@@ -101,9 +133,9 @@ async function createSession(params) {
     throw err;
   }
 
-  // 2. 单设备单登录：踢掉同用户同应用同设备类型的旧会话
-  // multiDevice=true 时允许多设备登录，不踢旧会话
-  if (!params.multiDevice) {
+  // 2. 单设备单登录策略：multiDevice=true 显式豁免；否则 deviceType 命中
+  //    SESSION_SINGLE_DEVICE_TYPES 白名单（默认全部类型，与历史行为一致）才互顶
+  if (!params.multiDevice && getSingleDeviceTypes().includes(deviceType || DEVICE_TYPE.BROWSER)) {
     await kickByDeviceType(userId, appId, deviceType || DEVICE_TYPE.BROWSER);
   }
 
@@ -306,6 +338,18 @@ async function createSession(params) {
     });
   }
 
+  // 7. 广播登录事件（审计/推送等监听者消费；监听者抛错不影响主流程）
+  emitAuthEvent(AUTH_EVENTS.SESSION_LOGIN, {
+    userId,
+    uid,
+    appId,
+    sessionId,
+    deviceType: deviceType || DEVICE_TYPE.BROWSER,
+    deviceId,
+    ip,
+    rememberMe: !!rememberMe
+  });
+
   return { sessionId, refreshToken, familyId };
 }
 
@@ -358,6 +402,18 @@ async function getSession(params) {
       return null;
     }
 
+    // 'access' 维度封禁：请求级拦截（临时封访问处罚）。命中即吊销会话（与 status=0 同路径），
+    // 封禁明细走 30s 负缓存，常态请求零额外 Redis 读（见 ban.js）
+    if (await isDisable(raw.userId, BAN_SERVICE_ACCESS)) {
+      log.warn('[Session] 用户 access 维度被封禁，吊销会话: userId=%s', raw.userId);
+      await revokeDisabledSession(sessionId, raw);
+      if (reply) {
+        reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+        reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
+      }
+      return null;
+    }
+
     let session = raw;
     try {
       const resolved = await resolveSessionPermissions(raw.userId, raw.appId, raw);
@@ -386,6 +442,19 @@ async function getSession(params) {
     return { ...session, sessionId, accessCount: accessCount + 1 };
   }
   log.debug('❌ Redis 未命中，降级到 DB');
+
+  // 被顶/被踢感知：会话被踢后墓碑短期留存（24h），据此区分「普通过期 401」与
+  //「被顶/被踢」，前端读 X-Session-Kick 响应头可分别提示"您已在别处登录"/"您已被下线"
+  if (reply) {
+    const tomb = await getKickTombstone(sessionId);
+    if (tomb) {
+      log.info('🪦 [Session] 会话已被踢出: reason=%s, code=%s', tomb.reason, tomb.code);
+      reply.header('X-Session-Kick', tomb.code);
+      reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+      reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
+      return null;
+    }
+  }
 
   // 4. Redis 未命中，降级到 DB
   const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
@@ -652,6 +721,9 @@ async function destroySession(params) {
     app_id: appId,
     ip
   });
+
+  // 4. 广播登出事件（审计/推送等监听者消费）
+  emitAuthEvent(AUTH_EVENTS.SESSION_LOGOUT, { userId, sessionId, appId, ip });
 }
 
 /**

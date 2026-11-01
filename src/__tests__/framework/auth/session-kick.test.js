@@ -115,8 +115,15 @@ jest.unstable_mockModule('../../../framework/db/index.js', () => ({
 
 const { sessionStore, userSessionsStore, refreshStore, userRefreshStore, familyStore, sidHash } =
   await import('../../../framework/auth/session-store.js');
-const { kickByDeviceType, kickByDeviceId, kickSession, kickAllSessions, kickUser } =
-  await import('../../../framework/auth/session-kick.js');
+const {
+  kickByDeviceType,
+  kickByDeviceId,
+  kickSession,
+  kickAllSessions,
+  kickUser,
+  kickSessionsByIds,
+  getKickTombstone
+} = await import('../../../framework/auth/session-kick.js');
 const { DEVICE_TYPE } = await import('../../../framework/auth/device.js');
 
 const UID = 42;
@@ -367,5 +374,71 @@ describe('_revokeOneSession 抽取后的等价性（🔵-3 回归）', () => {
     expect(await sessionStore.get('sid-fail')).toBeNull();
 
     modelStubs.SessionToken.update = original;
+  });
+});
+
+describe('踢出墓碑（被顶/被踢感知）', () => {
+  test('单设备互踢（顶人下线）写 SESSION_REPLACED 墓碑，含原因与时间', async () => {
+    await seedSession('sid-old', { familyId: 'f-old' });
+    await kickByDeviceType(UID, APP, DEVICE_TYPE.BROWSER);
+
+    const tomb = await getKickTombstone('sid-old');
+    expect(tomb).not.toBeNull();
+    expect(tomb.reason).toBe('single_device_login');
+    expect(tomb.code).toBe('SESSION_REPLACED');
+    expect(tomb.kickedAt).toBeGreaterThan(0);
+  });
+
+  test('管理踢人写 SESSION_KICKED 墓碑（与被顶区分，前端提示不同文案）', async () => {
+    await seedSession('sid-admin-kicked', { familyId: 'f-a' });
+    await kickUser(UID, APP);
+
+    const tomb = await getKickTombstone('sid-admin-kicked');
+    expect(tomb.code).toBe('SESSION_KICKED');
+    expect(tomb.reason).toBe('user_kicked');
+  });
+
+  test('未被踢的会话无墓碑', async () => {
+    await seedSession('sid-alive', { familyId: 'f-alive' });
+    await kickByDeviceType(UID, APP, DEVICE_TYPE.APP); // 踢 app 类型，browser 会话保留
+    expect(await getKickTombstone('sid-alive')).toBeNull();
+    expect(await sessionStore.get('sid-alive')).not.toBeNull();
+  });
+});
+
+describe('kickSessionsByIds：登录时"选择下线哪些设备"', () => {
+  test('踢掉归属本人的指定会话，返回踢出数', async () => {
+    await seedSession('sid-pick-1', { familyId: 'f-1' });
+    await seedSession('sid-pick-2', { familyId: 'f-2' });
+
+    const kicked = await kickSessionsByIds(UID, ['sid-pick-1', 'sid-pick-2']);
+
+    expect(kicked).toBe(2);
+    expect(await sessionStore.get('sid-pick-1')).toBeNull();
+    expect(await sessionStore.get('sid-pick-2')).toBeNull();
+    // 走 _kickSession 路径：DB revoke + SessionLog 都有留痕
+    expect(dbCalls.tokenUpdate).toHaveLength(2);
+    expect(dbCalls.logCreate[0].details.reason).toBe('offline_by_login');
+    // 墓碑可读：用户自己在新登录里选择下线旧设备，语义归"被顶"（提示"您已在别处登录"）
+    expect((await getKickTombstone('sid-pick-1')).code).toBe('SESSION_REPLACED');
+  });
+
+  test('越权防护：sid 不归属该用户（别人的会话）被跳过，不被踢', async () => {
+    await seedSession('sid-foreign', { familyId: 'f-f' });
+    // 改写归属：模拟传入的 sid 属于其他用户
+    await sessionStore.set('sid-foreign', { userId: 9999, appId: APP, familyId: 'f-f' }, 60);
+
+    const kicked = await kickSessionsByIds(UID, ['sid-foreign']);
+
+    expect(kicked).toBe(0);
+    expect(await sessionStore.get('sid-foreign')).not.toBeNull();
+    expect(dbCalls.tokenUpdate).toHaveLength(0);
+  });
+
+  test('不存在的 sid 被跳过；空入参直接返回 0', async () => {
+    expect(await kickSessionsByIds(UID, ['sid-ghost'])).toBe(0);
+    expect(await kickSessionsByIds(UID, [])).toBe(0);
+    expect(await kickSessionsByIds(null, ['sid-x'])).toBe(0);
+    expect(dbCalls.tokenUpdate).toHaveLength(0);
   });
 });

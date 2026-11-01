@@ -27,10 +27,61 @@
 import { Op } from 'sequelize';
 import { getModel } from '../db/index.js';
 import { DEVICE_TYPE } from './device.js';
-import { sessionStore, userSessionsStore, sidHash, deleteRefreshTokensForSession } from './session-store.js';
+import {
+  sessionStore,
+  userSessionsStore,
+  kickTombStore,
+  sidHash,
+  deleteRefreshTokensForSession
+} from './session-store.js';
+import { AUTH_EVENTS, emitAuthEvent } from './events.js';
 import { createLogger } from '../log/index.js';
 
 const log = createLogger('framework.auth.session');
+
+// ── 踢出墓碑（被顶/被踢感知） ──
+
+/** 墓碑保留时长：旧客户端需在重登前读一次原因，24h 足够且不堆积 */
+const KICK_TOMB_TTL = 24 * 60 * 60;
+/** 视为"被顶下线"（同账号新登录挤掉旧会话）的原因集合，其余归为"被踢下线" */
+const REPLACED_REASONS = new Set(['single_device_login', 'offline_by_login', 'replaced']);
+
+/**
+ * 踢出原因 → 对外错误码：被顶（SESSION_REPLACED）与被踢/管理下线（SESSION_KICKED）区分，
+ * 前端可分别提示"您已在别处登录"与"您已被管理员下线"
+ * @param {string} reason 踢出原因（SessionLog details.reason 同源）
+ * @returns {'SESSION_REPLACED'|'SESSION_KICKED'}
+ */
+function kickCodeOf(reason) {
+  return REPLACED_REASONS.has(reason) ? 'SESSION_REPLACED' : 'SESSION_KICKED';
+}
+
+/**
+ * 写入踢出墓碑（短期留痕，供旧客户端下次请求感知"被顶/被踢"）
+ * 墓碑是 UX 增强，写失败只降级（旧客户端拿通用 401），不得阻断踢出主流程
+ */
+async function _writeKickTombstone(sid, reason) {
+  try {
+    await kickTombStore.set(sid, { reason, code: kickCodeOf(reason), kickedAt: Date.now() }, KICK_TOMB_TTL);
+  } catch (err) {
+    log.warn('🪦 [Session] 踢出墓碑写入失败（降级为通用 401）: sid=%s, err=%s', sid, err?.message);
+  }
+}
+
+/**
+ * 读取踢出墓碑（getSession 在 Redis 未命中时调用，区分普通过期与被踢）
+ * @param {string} sessionId raw sessionId
+ * @returns {Promise<{reason: string, code: string, kickedAt: number}|null>} null=无墓碑（普通过期）
+ */
+async function getKickTombstone(sessionId) {
+  if (!sessionId) return null;
+  try {
+    return await kickTombStore.get(sessionId);
+  } catch (err) {
+    log.warn('🪦 [Session] 踢出墓碑读取失败: err=%s', err?.message);
+    return null;
+  }
+}
 
 /**
  * 吊销单条 session 的 Redis 侧状态（踢出/吊销路径的公共原语）
@@ -50,18 +101,23 @@ const log = createLogger('framework.auth.session');
  * @param {number|null} userId 用户 ID（null 时跳过需要用户维度的索引/刷新令牌清理）
  * @param {string} sid raw sessionId（user_sessions 索引里的值）
  * @param {object|undefined|null} sd 该 sid 的 Redis session 数据（含 familyId）；取不到时传 null
+ * @param {string} [reason='kicked'] 踢出原因（写入墓碑 + 广播事件；与 SessionLog details.reason 同源）
  * @returns {Promise<string>} sha256(sid)，供 `SessionToken.update({ where: { token } })`
  */
-async function _revokeOneSession(userId, sid, sd) {
+async function _revokeOneSession(userId, sid, sd, reason = 'kicked') {
   const familyId = sd?.familyId || null;
   await sessionStore.delete(sid);
   if (userId != null) {
     await deleteRefreshTokensForSession(userId, sid, familyId);
     await userSessionsStore.zRem(String(userId), [sid]);
   }
+  // 踢出墓碑：删 session 后短期留痕，旧客户端下次请求可感知"被顶/被踢"原因
+  await _writeKickTombstone(sid, reason);
+  // 事件广播：所有踢出路径的唯一落点，监听者（审计/推送等）在此收口
+  emitAuthEvent(AUTH_EVENTS.SESSION_KICK, { userId, sessionId: sid, reason, code: kickCodeOf(reason) });
   // 所有踢出/吊销路径都经此处，故统一在这唯一落点留痕（debug 级：默认不输出，
   // 排障开 LOG_DEBUG 即可看到「哪条 session 被谁踢掉」——拆分前 6 条路径都无日志）
-  log.debug('🔒 [Session] 吊销会话: userId=%s, sid=%s, familyId=%s', userId, sid, familyId);
+  log.debug('🔒 [Session] 吊销会话: userId=%s, sid=%s, familyId=%s, reason=%s', userId, sid, familyId, reason);
   return sidHash(sid);
 }
 
@@ -82,7 +138,7 @@ async function _revokeOneSession(userId, sid, sd) {
 async function _kickSession(userId, sid, sd, appId, logDetails) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
-  const tokenHash = await _revokeOneSession(userId, sid, sd);
+  const tokenHash = await _revokeOneSession(userId, sid, sd, logDetails?.reason || 'kicked');
   await SessionToken.update({ revoked: true }, { where: { token: tokenHash } });
   await SessionLog.create({
     user_id: userId,
@@ -161,7 +217,7 @@ async function kickSession(sessionId, userId) {
 
   // 1-3. 删 sid（立即生效，下个请求 401）+ 失效 sid_r（防记住我用户靠 sid_r 自动恢复）
   //      + 清用户会话逆索引：统一走 _revokeOneSession，与其它踢出路径清理集合完全一致
-  const tokenHash = await _revokeOneSession(userId, sessionId, sd);
+  const tokenHash = await _revokeOneSession(userId, sessionId, sd, 'user_kicked');
 
   // 4. DB revoke（兜底：refreshSession DB 降级也找不到未撤销 token）
   await SessionToken.update({ revoked: true }, { where: { token: tokenHash } });
@@ -187,7 +243,7 @@ async function kickAllSessions(userId) {
   for (const sid of sids) {
     const sd = await sessionStore.get(sid);
     // 逐个吊销 Redis 侧；DB revoke 收集 hashes 后一次批量提交（原实现同样如此，避免 N 次 UPDATE）
-    hashes.push(await _revokeOneSession(userId, sid, sd));
+    hashes.push(await _revokeOneSession(userId, sid, sd, 'kick_all'));
   }
   if (hashes.length) {
     await SessionToken.update({ revoked: true }, { where: { token: { [Op.in]: hashes } } });
@@ -227,7 +283,7 @@ async function kickUser(userId, appId = null) {
       if (sd.appId !== appId) continue;
     }
     // 逐个吊销 Redis 侧；DB revoke 收集 hashes 后一次批量提交（避免 N 次 UPDATE）
-    hashes.push(await _revokeOneSession(userId, sid, sd));
+    hashes.push(await _revokeOneSession(userId, sid, sd, 'user_kicked'));
     kicked++;
   }
   if (hashes.length) {
@@ -248,4 +304,43 @@ async function kickUser(userId, appId = null) {
   });
 }
 
-export { kickByDeviceType, kickByDeviceId, kickSession, kickAllSessions, kickUser };
+/**
+ * 批量踢掉指定的会话（登录时"选择下线哪些设备"路径）
+ *
+ * 与 kickByDeviceId 的区别：目标由**调用方逐条指定**（前端在 MAX_SESSIONS_EXCEEDED
+ * 返回的 sessions 列表里勾选），而非按 deviceId 匹配。安全边界：先校验 sid 确实
+ * 归属该 userId，防止请求方传入任意 sid 踢别人的会话（越权踢人）。
+ *
+ * @param {number} userId 会话归属用户 ID（校验用）
+ * @param {string[]} sessionIds 要下线的 raw sessionId 列表
+ * @param {object} [options]
+ * @param {string} [options.reason='offline_by_login'] 踢出原因（进墓碑/事件/日志）
+ * @returns {Promise<number>} 实际踢出的会话数（不归属/不存在的 sid 被跳过）
+ */
+async function kickSessionsByIds(userId, sessionIds, { reason = 'offline_by_login' } = {}) {
+  if (!userId || !Array.isArray(sessionIds) || sessionIds.length === 0) return 0;
+  let kicked = 0;
+  for (const sid of sessionIds) {
+    if (!sid) continue;
+    const sd = await sessionStore.get(sid);
+    // 归属校验：session 不存在或属于别人 → 跳过（不抛错，批量语义下部分失败可容忍）
+    if (!sd || sd.userId !== userId) {
+      log.warn('🔒 [Session] 跳过不归属/不存在的会话: userId=%s, sid=%s', userId, sid);
+      continue;
+    }
+    await _kickSession(userId, sid, sd, sd.appId, { reason });
+    kicked++;
+  }
+  return kicked;
+}
+
+export {
+  kickByDeviceType,
+  kickByDeviceId,
+  kickSession,
+  kickAllSessions,
+  kickUser,
+  kickSessionsByIds,
+  getKickTombstone,
+  kickCodeOf
+};

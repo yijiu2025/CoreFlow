@@ -24,6 +24,8 @@
  * @since 2026-07-13
  * @since 2026-09-14 改从 ./request-context.js 取 ALS 实例 + session.js 改惰性导入，
  *                    去掉对 index.js 的反向依赖（消除循环依赖与连带副作用）
+ * @since 2026-11-01 对标 Sa-Token 补齐账号封禁（disable/阶梯）与二级认证（openSafe 系列）：
+ *                    两者均为 async + 惰性导入 ban.js/safe.js，继续维持"import 本文件零副作用"
  */
 import { requestContext } from './request-context.js';
 
@@ -113,6 +115,10 @@ class StpUtil {
    * @param {string} [params.deviceId] 设备标识
    * @param {string} [params.deviceType] 设备类型（browser/app/desktop/miniapp）
    * @param {boolean} [params.rememberMe] 是否长期登录
+   * @param {boolean} [params.multiDevice] 是否允许多设备登录（true=不踢同类型旧会话，
+   *   豁免 SESSION_SINGLE_DEVICE_TYPES 策略）
+   * @param {string[]} [params.offlineSessionIds] 登录时主动下线的旧会话列表
+   *   （MAX_SESSIONS_EXCEEDED 后前端勾选"下线哪些设备"的重试路径）
    * @returns {string} sessionId
    */
   static async login(params) {
@@ -141,6 +147,8 @@ class StpUtil {
       deviceType,
       userAgent,
       rememberMe: params.rememberMe || false,
+      multiDevice: params.multiDevice || false,
+      offlineSessionIds: params.offlineSessionIds,
       reply: req.raw?.reply || req.reply
     });
 
@@ -232,6 +240,139 @@ class StpUtil {
       }
     }
     throw new NotPermissionException(permissions.join(' OR '));
+  }
+
+  // ==================== 账号封禁（对标 Sa-Token disable 系列） ====================
+  // 目标账号由 loginId 显式指定（管理端操作他人，不取当前登录上下文）。
+  // 语义与阶梯封禁详见 ./ban.js 头注：'login' 拦新登录、'access' 拦请求、TTL 到期自动解封。
+
+  /** 惰性加载 ban.js（与 login() 惰性导入 session.js 同模式，维持 import 零副作用） */
+  static async _ban() {
+    return import('./ban.js');
+  }
+
+  /**
+   * 封禁账号的指定服务
+   * @param {number|string} loginId 目标用户 ID
+   * @param {string} service 服务维度（'login'/'access'/业务自定义）
+   * @param {number} time 封禁秒数；-1 = 永久
+   * @param {object} [opts] { reason, level, operator }
+   * @returns {Promise<object>} 封禁明细
+   */
+  static async disable(loginId, service, time, opts) {
+    const { disable } = await StpUtil._ban();
+    return disable(loginId, service, time, opts);
+  }
+
+  /**
+   * 阶梯封禁：按等级处罚（level>=1，语义由业务定义）
+   * @param {number|string} loginId 目标用户 ID
+   * @param {string} service 服务维度
+   * @param {number} level 封禁等级
+   * @param {number} time 封禁秒数；-1 = 永久
+   * @param {object} [opts] 同 disable
+   */
+  static async disableLevel(loginId, service, level, time, opts) {
+    const { disableLevel } = await StpUtil._ban();
+    return disableLevel(loginId, service, level, time, opts);
+  }
+
+  /**
+   * 解封
+   * @param {number|string} loginId 目标用户 ID
+   * @param {...string} services 服务维度（至少一个）
+   * @returns {Promise<number>} 实际解封的服务数
+   */
+  static async untieDisable(loginId, ...services) {
+    const { untieDisable } = await StpUtil._ban();
+    return untieDisable(loginId, ...services);
+  }
+
+  /**
+   * 判断账号是否被封禁（不区分等级）
+   * @param {number|string} loginId 目标用户 ID
+   * @param {string} service 服务维度
+   * @returns {Promise<boolean>}
+   */
+  static async isDisable(loginId, service) {
+    const { isDisable } = await StpUtil._ban();
+    return isDisable(loginId, service);
+  }
+
+  /**
+   * 校验账号未被指定服务封禁，被封禁抛 403（code=ACCOUNT_BANNED）
+   * @param {number|string} loginId 目标用户 ID
+   * @param {...string} services 服务维度
+   */
+  static async checkDisable(loginId, ...services) {
+    const { checkDisable } = await StpUtil._ban();
+    return checkDisable(loginId, ...services);
+  }
+
+  /**
+   * 获取剩余封禁时间
+   * @returns {Promise<number>} -2=未封禁；-1=永久；其余=剩余秒数
+   */
+  static async getDisableTime(loginId, service) {
+    const { getDisableTime } = await StpUtil._ban();
+    return getDisableTime(loginId, service);
+  }
+
+  // ==================== 二级认证（对标 Sa-Token openSafe 系列） ====================
+  // 操作对象是**当前请求的登录用户**（ALS 上下文），敏感路由经 createGuard 确保已登录。
+
+  /** 惰性加载 safe.js */
+  static async _safe() {
+    return import('./safe.js');
+  }
+
+  /**
+   * 开启二级认证时间窗（业务路由完成身份确认——重输密码/验证码——后调用）
+   * @param {string} service 二级认证业务维度
+   * @param {number} [safeTime=1800] 时间窗秒数
+   * @returns {Promise<{openedAt:number, expireAt:number}>}
+   * @throws {Error} 非登录上下文抛 401
+   */
+  static async openSafe(service, safeTime) {
+    const { openSafe } = await StpUtil._safe();
+    return openSafe(StpUtil.check().userId, service, safeTime);
+  }
+
+  /**
+   * 是否处于二级认证时间窗内（当前用户）
+   * @param {string} service 二级认证业务维度
+   * @returns {Promise<boolean>}
+   */
+  static async isSafe(service) {
+    const { isSafe } = await StpUtil._safe();
+    return isSafe(StpUtil.check().userId, service);
+  }
+
+  /**
+   * 校验二级认证（当前用户），未开启/已过期抛 403（code=SECOND_AUTH_REQUIRED）
+   * @param {string} service 二级认证业务维度
+   */
+  static async checkSafe(service) {
+    const { checkSafe } = await StpUtil._safe();
+    return checkSafe(StpUtil.check().userId, service);
+  }
+
+  /**
+   * 结束二级认证（当前用户，敏感操作完成后主动关闭）
+   * @param {string} service 二级认证业务维度
+   */
+  static async closeSafe(service) {
+    const { closeSafe } = await StpUtil._safe();
+    return closeSafe(StpUtil.check().userId, service);
+  }
+
+  /**
+   * 获取二级认证剩余时间（当前用户）
+   * @returns {Promise<number>} -1=未开启；其余=剩余秒数
+   */
+  static async getSafeTime(service) {
+    const { getSafeTime } = await StpUtil._safe();
+    return getSafeTime(StpUtil.check().userId, service);
   }
 }
 

@@ -18,6 +18,7 @@ import {
 } from './guard-config.js';
 import { isIpMatch } from '../utils/ip.js';
 import { getPermissions } from '../framework/auth/perm-cache.js';
+import { createSafePreHandler } from '../framework/auth/safe.js';
 import { createLogger } from '../framework/log/index.js';
 
 const log = createLogger('api.guard');
@@ -393,7 +394,10 @@ function registerSecureRoute(fastify, options) {
     permission = null,
     // 敏感操作回源校验（第 4 层）：见 applyGuardLogic 中 2.5 节的说明。
     // 默认关闭 —— 每开一个就多一次 3 表查询，只给不可逆/高影响操作开。
-    freshPermission = false
+    freshPermission = false,
+    // 二级认证（safe.js）：声明后该路由在守卫之后追加 createSafePreHandler，
+    // 要求当前用户处于 openSafe(service) 时间窗内，否则 403 SECOND_AUTH_REQUIRED
+    safe = null
   } = options;
 
   // 参数防御性校验
@@ -447,7 +451,8 @@ function registerSecureRoute(fastify, options) {
     allowIps,
     requireLogin,
     requirePermission: perm,
-    freshPermission
+    freshPermission,
+    safe
   });
 
   // 需要登录的路由自动标记需要签名验证；requireSignature 可单独开启（公开端点防爬）
@@ -461,11 +466,17 @@ function registerSecureRoute(fastify, options) {
   // 只读元数据，不参与鉴权决策 —— 鉴权仍然完全由 preHandler 的级联守卫负责。
   if (requireLogin) routeConfig.requireLogin = true;
 
+  // 二级认证：safe 声明非空时，守卫之后追加 checkSafe preHandler（数组形式，
+  // Fastify 按声明顺序执行：先三级守卫、后二级认证 —— 未登录到不了二级认证）
+  const preHandler = safe
+    ? [createGuard(targetSystem, targetGroup, apiKey), createSafePreHandler(safe)]
+    : createGuard(targetSystem, targetGroup, apiKey);
+
   // 注入级联 Guard 并注册 Fastify 路由
   fastify[method.toLowerCase()](fullUrl, {
     schema,
     config: routeConfig,
-    preHandler: createGuard(targetSystem, targetGroup, apiKey),
+    preHandler,
     handler
   });
 }
