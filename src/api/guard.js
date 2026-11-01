@@ -19,6 +19,7 @@ import {
 import { isIpMatch } from '../utils/ip.js';
 import { getPermissions } from '../framework/auth/index.js';
 import { createSafePreHandler } from '../framework/auth/index.js';
+import { isWildcardMatch } from '../framework/auth/permission/wildcard-match.js';
 import { createLogger } from '../framework/log/index.js';
 
 const log = createLogger('api.guard');
@@ -51,17 +52,16 @@ function joinUrl(...parts) {
 
 /**
  * 权限通配符匹配
+ *
+ * 2026-11-01 收拢到 framework/auth/permission/wildcard-match.js（单一来源，与
+ * StpUtil._isMatch 共用）。原实现只支持尾部 `:*`（中段通配 `user:*:read` 不生效）；
+ * 共享版按转义正则匹配，尾部/中段通配语义一致，其余字符严格按字面量。
  * @param {string} pattern - 权限模式，如 'user:page:read' 或 'user:page:*'
  * @param {string} target - 用户实际拥有的权限
  * @returns {boolean}
  */
 function isPermissionMatch(pattern, target) {
-  if (pattern === '*') return true;
-  if (pattern === target) return true;
-  if (pattern.endsWith(':*')) {
-    return target.startsWith(pattern.slice(0, -1));
-  }
-  return false;
+  return isWildcardMatch(pattern, target);
 }
 
 /**

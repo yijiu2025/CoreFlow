@@ -13,11 +13,12 @@
  * StpUtil.checkPermission('user:write');          // 权限校验（不通过抛 403）
  * ```
  *
- * 依赖方向：本文件只依赖 `./request-context.js`（零依赖）。
+ * 依赖方向：本文件依赖 `./request-context.js`（零依赖）与
+ * `../permission/wildcard-match.js`（纯函数，零副作用）。
  * **不依赖 `./index.js`**——否则会形成 `index.js ↔ StpUtil.js` 循环依赖，且让
  * "仅使用权限工具类" 的调用方连带拉起整条 auth 插件链（DB/Redis 建连）。
- * 也不静态依赖 `./session.js`（它同样会拉起 db/redis）：仅 `login()` 需要它，
- * 故在该方法内**惰性导入**。这样 `import StpUtil` 本身零副作用，
+ * 也不静态依赖 `./session.js` / `./ban.js` / `./safe.js`（它们都会拉起 db/redis）：
+ * 仅在对应方法内**惰性导入**。这样 `import StpUtil` 本身零副作用，
  * 单测/脚本可安全引入而不触发建连。详见 AUDIT-REPORT-2026-09-12.md 🟡-1。
  *
  * @author yijiu
@@ -26,17 +27,26 @@
  *                    去掉对 index.js 的反向依赖（消除循环依赖与连带副作用）
  * @since 2026-11-01 对标 Sa-Token 补齐账号封禁（disable/阶梯）与二级认证（openSafe 系列）：
  *                    两者均为 async + 惰性导入 ban.js/safe.js，继续维持"import 本文件零副作用"
+ * @since 2026-11-01 修复审查问题：① NotPermissionException 补 statusCode=403（否则全局
+ *                    handler 映射成 500）；② 删除死代码 login()（全仓零调用，且 ALS 里
+ *                    没有 reply，真登录入口是 oauth21 的 login.service）；③ _isMatch 收拢
+ *                    到 permission/wildcard-match.js 并转义正则元字符；④ getLoginId 直读 uid
  */
 import { requestContext } from './request-context.js';
+import { isWildcardMatch } from '../permission/wildcard-match.js';
 
 /**
  * 权限不足异常
+ *
+ * statusCode 必须显式设 403：全局 error handler（error.middleware.js）读的是
+ * err.statusCode || 500，只设 code 会被映射成 500——鉴权失败伪装成服务端故障。
  */
 class NotPermissionException extends Error {
   constructor(permission) {
     super(`无此权限: ${permission}`);
     this.name = 'NotPermissionException';
     this.code = 403;
+    this.statusCode = 403;
   }
 }
 
@@ -66,25 +76,30 @@ class StpUtil {
 
   /**
    * 通配符正则匹配（支持 * 通配符）
+   *
+   * 实现收拢到 permission/wildcard-match.js（单一来源，与 api/guard.js 共用）：
+   * 曾是独立正则实现且未转义元字符（'user:read' 会误匹配 'userXread'）。
    * @param {string} pattern 模式（如 'user:admin:*'）
    * @param {string} target 目标字符串
    * @returns {boolean}
    */
   static _isMatch(pattern, target) {
-    if (pattern === target) return true;
-    if (!pattern.includes('*')) return false;
-    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-    return regex.test(target);
+    return isWildcardMatch(pattern, target);
   }
 
   // ==================== 认证方法 ====================
 
   /**
    * 获取当前登录用户 ID
-   * @returns {string|number|undefined}
+   *
+   * 返回的是 **uid（对外 UUID）**，不是数字主键——传给 ban 系列（disable/isDisable
+   * 等，按数字 userId:service 键控）会错键，见各方法 JSDoc 警告。
+   * @returns {string|undefined} uid；client_token 上下文返回客户端名（sub）
    */
   static getLoginId() {
-    return StpUtil._getRequest().state?.user?.sub || StpUtil._getRequest().state?.user?.uid;
+    // uid 优先：两条认证路径（Session/JWT）的 state.user.uid 都是 UUID；
+    // client_token 分支没有 uid 字段，退回 sub（客户端名）保持既有行为。
+    return StpUtil._getRequest().state?.user?.uid || StpUtil._getRequest().state?.user?.sub;
   }
 
   /**
@@ -102,58 +117,11 @@ class StpUtil {
     return user;
   }
 
-  /**
-   * 登录：创建 Session 并下发 Cookie
-   * @param {object} params 登录参数
-   * @param {number} params.userId 用户内部 ID
-   * @param {string} params.uid 用户 UUID
-   * @param {string} params.username 用户名
-   * @param {string} params.email 邮箱
-   * @param {string} params.avatar 头像
-   * @param {number} params.status 用户状态
-   * @param {string} params.appId 登录的应用 ID
-   * @param {string} [params.deviceId] 设备标识
-   * @param {string} [params.deviceType] 设备类型（browser/app/desktop/miniapp）
-   * @param {boolean} [params.rememberMe] 是否长期登录
-   * @param {boolean} [params.multiDevice] 是否允许多设备登录（true=不踢同类型旧会话，
-   *   豁免 SESSION_SINGLE_DEVICE_TYPES 策略）
-   * @param {string[]} [params.offlineSessionIds] 登录时主动下线的旧会话列表
-   *   （MAX_SESSIONS_EXCEEDED 后前端勾选"下线哪些设备"的重试路径）
-   * @returns {string} sessionId
-   */
-  static async login(params) {
-    const req = StpUtil._getRequest();
-
-    // 惰性导入 session.js：只有真正登录才需要它。静态导入会让"只是想用权限工具类"
-    // 的调用方（单测、脚本）连带拉起 session.js → db/redis 建连与告警（🟡-1）。
-    // 模块首次加载后走 ESM 缓存，后续调用无额外开销。
-    const { createSession, detectDeviceType } = await import('../session/session.js');
-
-    // 从请求中推断设备信息
-    const userAgent = req.headers?.['user-agent'] || '';
-    const deviceType = params.deviceType || detectDeviceType(userAgent);
-    const ip = req.ip || req.socket?.remoteAddress || '';
-
-    const { sessionId } = await createSession({
-      userId: params.userId,
-      uid: params.uid,
-      username: params.username,
-      email: params.email,
-      avatar: params.avatar,
-      status: params.status,
-      appId: params.appId,
-      ip,
-      deviceId: params.deviceId || '',
-      deviceType,
-      userAgent,
-      rememberMe: params.rememberMe || false,
-      multiDevice: params.multiDevice || false,
-      offlineSessionIds: params.offlineSessionIds,
-      reply: req.raw?.reply || req.reply
-    });
-
-    return sessionId;
-  }
+  // ==================== 登录说明 ====================
+  // 本类不提供 login()：登录入口是 oauth21 的 login.service（负责密码校验、
+  // createSession 与 Cookie 下发的完整编排）。曾有一个 StpUtil.login 占位实现，
+  // 但 ALS 上下文里只有 request 没有 reply（Fastify 不会自动提供），Cookie 永远
+  // 下发不了——属于"看起来能用、实际必然坏"的陷阱，2026-11-01 审查后删除。
 
   /**
    * 角色校验：当前用户是否拥有指定角色
@@ -245,6 +213,9 @@ class StpUtil {
   // ==================== 账号封禁（对标 Sa-Token disable 系列） ====================
   // 目标账号由 loginId 显式指定（管理端操作他人，不取当前登录上下文）。
   // 语义与阶梯封禁详见 ./ban.js 头注：'login' 拦新登录、'access' 拦请求、TTL 到期自动解封。
+  // ⚠️ loginId 必须是**数字主键**（ban store 按 `userId:service` 数字键控）：
+  //    传 getLoginId() 返回的 uid 字符串不报错但永远封不中——需要数字 id 时在
+  //    管理端 DAO 层按 uid 查出 user.id 再传入。
 
   /** 惰性加载 ban.js（与 login() 惰性导入 session.js 同模式，维持 import 零副作用） */
   static async _ban() {
