@@ -28,15 +28,25 @@ updates:
     # 只能等上游；它仅经 jest-config 进入 dev 链路（Dockerfile 用 --omit=dev，不进镜像），
     # 是 `npm audit` 里唯一残留的 low。
     # 解除条件：上游发布修复版后删掉这一行，并跑一次 `npm audit`。
+    #
+    # uuid 只锁 major（minor / patch 照常自动更新）：uuid 14 的 node 入口是纯 ESM
+    # （dist-node/index.js），而 sequelize 6 是 CJS，`require('uuid')` 在 jest 的
+    # vm-modules 运行时里直接抛
+    #   Cannot require() ES Module ... in a cycle (from sequelize/lib/utils.js)
+    # → 3 个 test suite `failed to run`（2026-11-01 实测）。生产侧 Node 24 的
+    # require(esm) 能加载它，但"测试红、上线绿"这种分裂不值得赌。
+    # 解除条件：sequelize 升到原生 ESM 的 7.x，或 uuid 恢复 CJS 入口。
     ignore:
       - dependency-name: deepmerge
+      - dependency-name: uuid
+        update-types:
+          - version-update:semver-major
 
-    # `uuid` 没有列进 ignore：它的 override 写成了 `"$uuid"`（见 package.json），
-    # 即"覆盖值 = 直接依赖的声明值"。这样 sequelize 的 uuid@8 仍会被顶到根版本，
-    # 但覆盖值不再是一个写死的范围 —— 显式写 `^11.1.1` 时，Dependabot 想把 uuid 升到
-    # 大版本会撞上 `Override for uuid@14.0.3 conflicts with direct dependency`，
-    # 导致整批 npm 更新 job 失败（2026-11-01 实测）。`$uuid` 由 npm 在解析时展开，
-    # 直接依赖改了它自动跟随。
+    # `uuid` 的 override 写成了 `"$uuid"`（见 package.json），即"覆盖值 = 直接依赖的声明值"。
+    # 这样 sequelize 想要的 uuid@8 仍会被顶到根版本，但覆盖值不再写死 —— 显式写
+    # `^11.1.1` 时，Dependabot 想把 uuid 升大版本会撞上
+    # `Override for uuid@14.0.3 conflicts with direct dependency`，让整批 npm 更新
+    # job 直接失败（2026-11-01 实测）。`$uuid` 由 npm 在解析时展开，直接依赖改了它自动跟随。
 
     groups:
       # 次版本 / 补丁按生产、开发分组，一次一个 PR，降低评审噪音
