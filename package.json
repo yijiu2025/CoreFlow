@@ -52,12 +52,12 @@
     "@fastify/cors": "^11.3.1",
     "@fastify/helmet": "^13.2.0",
     "@fastify/multipart": "^10.1.6",
-    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/rate-limit": "^11.2.1",
     "@fastify/static": "^10.1.8",
     "@fastify/websocket": "^11.3.4",
     "bcryptjs": "^3.0.3",
-    "cookie": "1.1.1",
-    "dotenv": "^17.4.2",
+    "cookie": "^2.0.1",
+    "dotenv": "^18.0.9",
     "fastify": "5.12.7",
     "geoip-lite": "^2.0.3",
     "jsonwebtoken": "^9.0.3",
@@ -66,7 +66,7 @@
     "mysql2": "^3.24.6",
     "nodemailer": "^10.3.1",
     "pino-pretty": "^13.2.0",
-    "redis": "^5.12.1",
+    "redis": "^6.3.1",
     "sequelize": "^6.37.8",
     "sharp": "^0.35.5",
     "stable-deviceid": "^1.0.3",
@@ -100,15 +100,14 @@
     "eslint": {
       "ajv": "^6.12.6"
     },
-    "@fastify/static": {
-      "glob": "^14.0.3"
-    },
     "js-yaml": "^4.1.1",
     "follow-redirects": "^1.16.2",
     "@vue/server-renderer": "^3.5.44",
     "vite": "^6.4.5",
     "@babel/core": "^7.29.6",
-    "uuid": "$uuid"
+    "uuid": "$uuid",
+    "minimatch": "^11.0.3",
+    "glob": "^14.0.3"
   },
   "engines": {
     "node": ">=24.0.0"
