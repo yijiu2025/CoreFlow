@@ -17,8 +17,8 @@ import {
   registerGroupMetadata as rawRegisterGroupMetadata
 } from './guard-config.js';
 import { isIpMatch } from '../utils/ip.js';
-import { getPermissions } from '../framework/auth/perm-cache.js';
-import { createSafePreHandler } from '../framework/auth/safe.js';
+import { getPermissions } from '../framework/auth/index.js';
+import { createSafePreHandler } from '../framework/auth/index.js';
 import { createLogger } from '../framework/log/index.js';
 
 const log = createLogger('api.guard');

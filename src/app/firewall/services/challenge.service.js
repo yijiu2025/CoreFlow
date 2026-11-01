@@ -16,7 +16,7 @@ import crypto from 'crypto';
 import { generateFingerprint } from '../util/fingerprint.js';
 import { verifyPow } from '../util/pow-sha256.js';
 import { grantPass, takeChallenge } from '../util/redis.js';
-import { getClientDeviceId } from '../../../framework/auth/device.js';
+import { getClientDeviceId } from '../../../framework/auth/index.js';
 
 /** 通过令牌有效期（30 分钟） */
 const PASS_TOKEN_TTL = 1800;

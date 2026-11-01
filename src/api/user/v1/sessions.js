@@ -10,7 +10,7 @@
  */
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { checkMaxSessions, kickSession, kickAllSessions } from '../../../framework/auth/session.js';
+import { checkMaxSessions, kickSession, kickAllSessions } from '../../../framework/auth/index.js';
 import { formatSessionList, formatDeviceList } from '../../../app/user/services/session-view.service.js';
 import { getModel } from '../../../framework/db/index.js';
 import crypto from 'crypto';

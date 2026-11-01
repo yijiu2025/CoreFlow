@@ -21,7 +21,7 @@ import { generateFingerprint } from '../util/fingerprint.js';
 import { pushRecord } from '../data/store.js';
 import { getSecuritySettings } from '../dao/dao.js';
 import { hasPass, readAccessState } from '../util/redis.js';
-import { getClientDeviceId } from '../../../framework/auth/device.js';
+import { getClientDeviceId } from '../../../framework/auth/index.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.firewall.engine.pipeline');

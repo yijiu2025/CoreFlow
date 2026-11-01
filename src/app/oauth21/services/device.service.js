@@ -29,7 +29,7 @@ const DEVICE_TEMPLATE_PATH = path.join(path.dirname(fileURLToPath(import.meta.ur
  *
  * 模板是静态资源。原实现在**每次请求**里 `readFileSync` + 三次动态 `import()`，
  * 等于把一次同步磁盘 I/O 放进请求路径 —— 同步 I/O 会占住事件循环，
- * 与 `framework/auth/password-hash.js` 处理哈希时遵循的是同一条原则。
+ * 与 `framework/auth/index.js` 处理哈希时遵循的是同一条原则。
  *
  * 生产环境缓存（模板不会在运行期变化）；非生产环境每次重读，改模板即时可见。
  * @type {string|null}

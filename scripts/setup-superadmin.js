@@ -17,8 +17,8 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import readline from 'readline';
 import sequelize from '../src/framework/db/index.js';
-import { hashPassword } from '../src/framework/auth/password-hash.js';
-import { validatePasswordStrength } from '../src/framework/auth/password-policy.js';
+import { hashPassword } from '../src/framework/auth/security/password-hash.js';
+import { validatePasswordStrength } from '../src/framework/auth/security/password-policy.js';
 import { createLogger, logStdout } from '../src/framework/log/index.js';
 
 const log = createLogger('scripts.setup-superadmin');

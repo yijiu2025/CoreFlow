@@ -13,7 +13,7 @@
  * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { destroySession } from '../../../framework/auth/session.js';
+import { destroySession } from '../../../framework/auth/index.js';
 
 async function registerLogoutRoutes(fastify) {
   registerGroupMetadata({

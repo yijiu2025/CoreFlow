@@ -7,7 +7,7 @@
 import sequelize from '../../../framework/db/index.js';
 import { getModel } from '../../../framework/db/index.js';
 import { QueryTypes } from 'sequelize';
-import { invalidatePermCache } from '../../../framework/auth/perm-cache.js';
+import { invalidatePermCache } from '../../../framework/auth/index.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.admin.dao.iam');

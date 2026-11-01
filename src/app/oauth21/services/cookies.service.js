@@ -7,8 +7,8 @@
  */
 
 import config from '../config/config.js';
-import { issueH5Token } from '../../../framework/auth/signature.js';
-import { COOKIE_POLICY } from '../../../framework/auth/cookie.js';
+import { issueH5Token } from '../../../framework/auth/index.js';
+import { COOKIE_POLICY } from '../../../framework/auth/index.js';
 
 /**
  * 设置认证 Cookie（access_token + refresh_token + 辅助 Cookie）

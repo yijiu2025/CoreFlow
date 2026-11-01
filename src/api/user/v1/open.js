@@ -19,7 +19,7 @@ import verifyConfig from '../../../framework/verify/config.js';
 import { getStore } from '../../../framework/redis/index.js';
 import emailNoticeService from '../../../framework/notice/services/email.js';
 import { v4 as uuidv4 } from 'uuid';
-import { logRegister, logAuditEvent } from '../../../framework/auth/audit-logger.js';
+import { logRegister, logAuditEvent } from '../../../framework/auth/index.js';
 import '../../../app/user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
 import { createLogger } from '../../../framework/log/index.js';
 

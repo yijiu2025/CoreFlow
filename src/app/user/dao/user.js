@@ -13,12 +13,12 @@ import jwt from 'jsonwebtoken';
 import sequelize from '../../../framework/db/index.js';
 import { getModel } from '../../../framework/db/index.js';
 import { decrypt } from '../../../framework/keys/encryption.js';
-import { hashPassword, verifyPassword, isLegacyHash } from '../../../framework/auth/password-hash.js';
+import { hashPassword, verifyPassword, isLegacyHash } from '../../../framework/auth/index.js';
 import { log } from '../../../framework/log/index.js';
 import IamDao from '../../admin/dao/iam.dao.js';
-import { validatePasswordStrength } from '../../../framework/auth/password-policy.js';
+import { validatePasswordStrength } from '../../../framework/auth/index.js';
 import { maskPhone } from '../../../utils/crypto.js';
-import { kickAllSessions } from '../../../framework/auth/session.js';
+import { kickAllSessions } from '../../../framework/auth/index.js';
 import TokenDao from '../../oauth21/dao/token.dao.js';
 
 class UserDao {

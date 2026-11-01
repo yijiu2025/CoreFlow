@@ -9,7 +9,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import { verifyPassword as verifyPasswordHash } from '../../../framework/auth/password-hash.js';
+import { verifyPassword as verifyPasswordHash } from '../../../framework/auth/index.js';
 import { getModel } from '../../../framework/db/index.js';
 
 const UserDao = {

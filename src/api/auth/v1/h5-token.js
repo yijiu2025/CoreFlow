@@ -12,7 +12,7 @@
  * @since 2026-08-27
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { issueH5Token } from '../../../framework/auth/signature.js';
+import { issueH5Token } from '../../../framework/auth/index.js';
 
 async function registerH5TokenRoutes(fastify) {
   registerGroupMetadata({

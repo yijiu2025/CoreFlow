@@ -10,7 +10,7 @@
  * @since 2026-08-17
  */
 import fp from 'fastify-plugin';
-import { verifySignature } from '../../../framework/auth/signature.js';
+import { verifySignature } from '../../../framework/auth/index.js';
 
 /**
  * 注册 OAuth2.1 业务中间件

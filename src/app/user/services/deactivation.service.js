@@ -273,7 +273,7 @@ class DeactivationService {
 
     // Redis: 用 session.js 的 kickAllSessions 踢所有
     try {
-      const { kickAllSessions } = await import('../../../framework/auth/session.js');
+      const { kickAllSessions } = await import('../../../framework/auth/index.js');
       if (typeof kickAllSessions === 'function') {
         await kickAllSessions(userId);
       }
@@ -296,7 +296,7 @@ class DeactivationService {
       // 曾写成驼峰 'userSessions'，getStore 按 prefix 隔离命名空间 → 读到空 zset →
       // 下方 for 循环零次执行、注销清理静默失效（AUDIT-REPORT-2026-09-12.md 🔴-3）。
       const userSessionsStore = getStore('user_sessions', { timeout: 3000 });
-      const { deleteRefreshTokensForSession, sidHash } = await import('../../../framework/auth/session.js');
+      const { deleteRefreshTokensForSession, sidHash } = await import('../../../framework/auth/index.js');
       const SessionToken = getModel('session.SessionToken');
       const SessionLog = getModel('session.SessionLog');
 

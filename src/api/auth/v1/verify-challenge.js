@@ -11,9 +11,9 @@
  * @since 2026-08-23
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { confirmVerifyToken } from '../../../framework/auth/anomaly-detector.js';
-import { updateSessionBaseline, getSessionTokenDevice } from '../../../framework/auth/session.js';
-import { getDeviceId, computeDeviceFingerprint } from '../../../framework/auth/device.js';
+import { confirmVerifyToken } from '../../../framework/auth/index.js';
+import { updateSessionBaseline, getSessionTokenDevice } from '../../../framework/auth/index.js';
+import { getDeviceId, computeDeviceFingerprint } from '../../../framework/auth/index.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('api.auth.v1.verify-challenge');

@@ -7,7 +7,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { hashPassword } from '../../../framework/auth/password-hash.js';
+import { hashPassword } from '../../../framework/auth/index.js';
 import sequelize from '../../../framework/db/index.js';
 import { validateScopes } from '../config/scope-registry.js';
 

@@ -8,7 +8,7 @@
  * **量「事件循环被冻结多久」只能用 tick 间隔法**：跑一个 10ms 心跳，取相邻
  * tick 的最大间隔 —— 阻塞多久，空隙就是多久。
  * ⚠️ 不要用 `monitorEventLoopDelay`：按固定分辨率采样，实测会把 774ms 的
- * 一次性冻结报成 17ms（详见 framework/auth/password-hash.js 的注释）。
+ * 一次性冻结报成 17ms（详见 framework/auth/security/password-hash.js 的注释）。
  *
  * === 为什么是独立文件 + `--import` 注入 ===
  * 压测探针不该出现在生产代码里。`node --import <本文件> index.js` 让它

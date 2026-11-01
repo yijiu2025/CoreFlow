@@ -147,7 +147,7 @@ async function removeWhitelistFp(fingerprint) {
 /**
  * 设置设备封禁（**跨 IP 生效**）
  *
- * 设备 ID 来自 auth 的结构化设备 ID 流程（`framework/auth/device.js`），与 IP 无关：
+ * 设备 ID 来自 auth 的结构化设备 ID 流程（`framework/auth/index.js`），与 IP 无关：
  * 同一台设备换网络后 ID 不变，因此这是唯一能拦住「换 IP 重来」的维度。
  *
  * @param {string} deviceId 结构化设备 ID（形如 WEB-DaBOSbNdSuc-8s4T）

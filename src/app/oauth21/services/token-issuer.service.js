@@ -19,10 +19,10 @@ import { generateToken } from '../crypto/tokens.js';
 import ApprovalDao from '../dao/approval.dao.js';
 import TokenDao from '../dao/token.dao.js';
 import config from '../config/config.js';
-import { detectDeviceType, getDeviceId } from '../../../framework/auth/device.js';
+import { detectDeviceType, getDeviceId } from '../../../framework/auth/index.js';
 // 权限缓存读写统一走 perm-cache.js（命名空间 `auth:perm` + 指纹校验），
 // **不要**再自行 getStore('perm') —— 命名空间/键不一致会导致静默失效。
-import { warmPermissions } from '../../../framework/auth/perm-cache.js';
+import { warmPermissions } from '../../../framework/auth/index.js';
 import { getStore } from '../../../framework/redis/index.js';
 import { setAuthCookies } from './cookies.service.js';
 import { resolveFieldSet } from '../config/scope-registry.js';

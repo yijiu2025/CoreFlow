@@ -11,7 +11,7 @@
  * @author yijiu2025
  * @since 2026-09-03
  */
-import { pruneStaleSessionTokens } from '../../auth/session.js';
+import { pruneStaleSessionTokens } from '../../auth/session/session.js';
 import { C } from '../../../utils/colors.js';
 import { createLogger } from '../../log/index.js';
 
