@@ -9,6 +9,18 @@
 #
 # advanced setup 的代价是：**这份文件就是配置，改它要过 review**。
 #
+# 切到 advanced setup 之后的清理（2026-11-01 实战记录，省得下次再摸一遍）：
+#   · default setup 会留下一个动态 workflow `dynamic/github-code-scanning/codeql`。
+#     它**不存在于仓库文件里**，但 Actions 列表会一直挂着一个同名「CodeQL」条目，
+#     和本文件产生的 CodeQL 重名。GitHub 没有「删除 dynamic workflow」的 API ——
+#     只能删掉它名下的全部 run（`DELETE /actions/runs/{id}`），run 清空后条目自动消失
+#     （实测 65 条清完，workflow 列表从 6 个变 5 个）。
+#   · code scanning 的分析记录：**默认分支的删不掉**。
+#     `DELETE /code-scanning/analyses/{id}?confirm_delete=true` 对 `refs/heads/main`
+#     的历史一律返回 400「Analysis specified is not deletable.」——即使 results_count=0、
+#     即使它不是该 category 的最新一条。非默认分支（已关闭 PR 的 `refs/pull/N/merge`）
+#     可以删，一次清理删掉了 82 条 PR 残留。main 上的历史只能在页面上留着，别再试。
+#
 # 语言选择：
 #   - `javascript-typescript`：覆盖 src/ scripts/ migrations/ docker/ 下的 JS（本仓无 .ts 源，
 #     但带上 typescript 提取器不影响，且避免将来加 TS 时静默漏扫）
