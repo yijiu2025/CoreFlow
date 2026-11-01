@@ -27,7 +27,7 @@
  * @since 2026-09-09 结构重排：原始常量→派生配置→函数；公共函数补 INVALID_PARAM 校验
  */
 import crypto from 'node:crypto';
-import { createLogger } from '../log/index.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.cookie');
 

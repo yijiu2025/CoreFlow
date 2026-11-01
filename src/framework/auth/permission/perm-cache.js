@@ -26,10 +26,10 @@
  */
 import crypto from 'node:crypto';
 import { Op } from 'sequelize';
-import { getModel } from '../db/index.js';
+import { getModel } from '../../db/index.js';
 import { loadUserPermissions } from './permission-loader.js';
-import { permStore as sharedPermStore } from './session-store.js';
-import { createLogger } from '../log/index.js';
+import { permStore as sharedPermStore } from '../session/session-store.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.perm-cache');
 

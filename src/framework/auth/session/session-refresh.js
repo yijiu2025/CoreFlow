@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { getModel } from '../db/index.js';
+import { getModel } from '../../db/index.js';
 import {
   signCookie,
   COOKIE_OPTIONS,
@@ -9,7 +9,7 @@ import {
   REFRESH_TOKEN_TTL,
   USER_COOKIE_TTL,
   ROTATED_RETENTION
-} from './cookie.js';
+} from '../context/cookie.js';
 import { resolveSessionPermissions } from './session-perm.js';
 import {
   sessionStore,
@@ -22,7 +22,7 @@ import {
   revokeFamily
 } from './session-store.js';
 import { runSessionSaga, withSessionTransaction } from './session-saga.js';
-import { createLogger } from '../log/index.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.session');
 

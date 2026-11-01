@@ -127,7 +127,7 @@ class StpUtil {
     // 惰性导入 session.js：只有真正登录才需要它。静态导入会让"只是想用权限工具类"
     // 的调用方（单测、脚本）连带拉起 session.js → db/redis 建连与告警（🟡-1）。
     // 模块首次加载后走 ESM 缓存，后续调用无额外开销。
-    const { createSession, detectDeviceType } = await import('./session.js');
+    const { createSession, detectDeviceType } = await import('../session/session.js');
 
     // 从请求中推断设备信息
     const userAgent = req.headers?.['user-agent'] || '';
@@ -248,7 +248,7 @@ class StpUtil {
 
   /** 惰性加载 ban.js（与 login() 惰性导入 session.js 同模式，维持 import 零副作用） */
   static async _ban() {
-    return import('./ban.js');
+    return import('../security/ban.js');
   }
 
   /**
@@ -323,7 +323,7 @@ class StpUtil {
 
   /** 惰性加载 safe.js */
   static async _safe() {
-    return import('./safe.js');
+    return import('../security/safe.js');
   }
 
   /**

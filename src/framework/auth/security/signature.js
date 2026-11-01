@@ -5,8 +5,8 @@
  * @since 2026-08-17
  */
 import crypto from 'node:crypto';
-import { getStore } from '../redis/index.js';
-import { createNonceStore } from '../redis/nonce-store.js';
+import { getStore } from '../../redis/index.js';
+import { createNonceStore } from '../../redis/nonce-store.js';
 
 /** H5 签名 nonce 防重放（TTL 略大于时间窗，见 verifySignature） */
 const h5NonceStore = createNonceStore('h5_nonce', 180);

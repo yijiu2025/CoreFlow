@@ -19,7 +19,7 @@
  * @author yijiu2025
  * @since 2026-11-01
  */
-import { createLogger } from '../log/index.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.events');
 

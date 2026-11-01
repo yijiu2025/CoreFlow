@@ -15,9 +15,9 @@
  * @since 2026-09-09 去掉 redis 传递链，改用 createRingQueue 统一存储层
  */
 
-import { getModel } from '../db/index.js';
-import { createRingQueue } from '../redis/index.js';
-import Logger from '../log/index.js';
+import { getModel } from '../../db/index.js';
+import { createRingQueue } from '../../redis/index.js';
+import Logger from '../../log/index.js';
 
 /** 审计事件 Redis 环形缓冲命名空间 */
 const AUDIT_PREFIX = 'audit:security';

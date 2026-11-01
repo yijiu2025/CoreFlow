@@ -1,426 +1,191 @@
 /**
- * 独立认证插件
+ * auth 模块唯一对外门面（纯 re-export，零业务逻辑）
  *
- * 不依赖任何业务模块，负责 Session/Token 认证与权限上下文传递。
- * 作为 Fastify onRequest 钩子注册，在每个请求开始时执行认证流程。
+ * 默认导出 = Fastify 插件（实现在 ./plugin.js，loader 04-auth.js 注册）；
+ * 命名导出 = 全部公开能力的分类收拢（每类只从权威源文件 re-export 一次，禁重复）。
  *
- * 核心职责：
- * 1. ALS (AsyncLocalStorage) 上下文初始化，实现请求级别的上下文穿透
- * 2. Session Cookie 验证 → request.state.user（主要认证方式）
- * 3. Bearer Token / access_token Cookie 验证 → request.state.user（OAuth 2.1 兼容）
- * 4. sid 过期时用 sid_r 自动刷新（双令牌续期机制）
- *
- * 认证优先级：Bearer Token > access_token Cookie > Session Cookie (sid) > Refresh Token (sid_r)
- *
- * 文件结构（自上而下）：
- * 1. 依赖导入（ALS 实例来自 ./request-context.js，本文件只导入 + 末尾 re-export）
- * 2. 常量与 ALS 日志上下文注册（jwtEnabled / DEBUG_AUTH / setLogContextProvider）
- * 3. ALS 上下文访问器（getCtx / getDb / getServerResource）
- * 4. JWT 解析（getUserFromToken）
- * 5. 认证与风险检测内部函数（authenticateByJwt / detectAndHandleRisk / injectRiskOnSend）
- * 6. 默认导出（Fastify 插件：onRequest/onSend 注册 + decorate）
- * 7. 命名导出
+ * 业务代码统一 `import { xxx } from '<相对路径>/framework/auth/index.js'`；
+ * auth 内部模块互相 import 走具体文件，禁反向 import 本文件（会成环）。
+ * 各文件职责详见同目录 README.md。
  *
  * @author yijiu
  * @since 2026-07-13
- * @since 2026-09-10 结构重排：onRequest 主流程拆函数；getCtx 改 err.code；reply.send 标记 sent；catch 补 warn
+ * @since 2026-11-01 业务实现拆至 plugin.js / bearer-auth.js / context/accessors.js / risk/risk-hooks.js，
+ *                   本文件收敛为纯门面
  */
-import fp from 'fastify-plugin';
-import { requestContext } from './request-context.js';
-import { getSession, getSessionTokenDevice } from './session.js';
-import { COOKIE_SID, COOKIE_OPTIONS } from './cookie.js';
-import { verify } from '../jwt/index.js';
-import { findUserById } from '../../shared/user-dao.js';
-import { getPermissions } from './perm-cache.js';
-import StpUtil from './stp-util.js';
-import { getDeviceId, computeDeviceFingerprint } from './device.js';
-import { detectSessionRisk, isHighRiskRequest, hasVerifiedFlag } from './anomaly-detector.js';
-import { getStore } from '../redis/index.js';
-import { createLogger, setLogContextProvider } from '../log/index.js';
 
-const log = createLogger('framework.auth.index');
+// 0. 默认导出：Fastify 认证插件
+export { default } from './plugin.js';
 
-// ── 2. 常量与 ALS 上下文 ──
+// 1. 请求上下文（ALS）——供业务层在任意深度取 request / db / 插件实例
+export { requestContext } from './context/request-context.js';
+export { getCtx, getDb, getServerResource } from './context/accessors.js';
 
-/** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
-const jwtEnabled = process.env.JWT_ENABLED === 'true';
+// 2. 会话生命周期（session.js 是聚合门面；store/saga 是 Redis 底座与事务）
+export {
+  createSession,
+  getSession,
+  refreshSession,
+  switchSessionByRefreshToken,
+  destroySession,
+  revokeRememberMe,
+  updateRememberMe,
+  updateSessionBaseline,
+  getSessionTokenDevice
+} from './session/session.js';
+export { refreshSessionCore } from './session/session-refresh.js';
+export {
+  MAX_REFRESH_TOKENS,
+  MAX_ACTIVE_DEVICES,
+  sessionStore,
+  refreshStore,
+  userRefreshStore,
+  rotatedStore,
+  familyStore,
+  userSessionsStore,
+  kickTombStore,
+  permStore,
+  sidHash,
+  deleteRefreshTokensForSession,
+  revokeFamily,
+  getSessionUser,
+  isSessionUserActive,
+  revokeDisabledSession
+} from './session/session-store.js';
+export { runSessionSaga, withSessionTransaction } from './session/session-saga.js';
 
-// requestContext 实例定义在 request-context.js（零依赖），此处只导入并在末尾 re-export。
-// 曾在本文件直接 new AsyncLocalStorage()，导致 StpUtil.js 必须反向 import 本文件 →
-// 循环依赖 + 连带拉起整条插件链（AUDIT-REPORT-2026-09-12.md 🟡-1）。
+// 3. 会话治理 / 踢出 / Cookie 绑定与切号 / 会话内权限解析
+export {
+  checkMaxSessions,
+  pruneActiveDevices,
+  pruneStaleSessionTokens,
+  getSessionStats,
+  getLoginTrend,
+  logLoginFailure
+} from './session/session-governance.js';
+export {
+  kickByDeviceType,
+  kickByDeviceId,
+  kickSession,
+  kickAllSessions,
+  kickUser,
+  kickSessionsByIds,
+  getKickTombstone,
+  kickCodeOf
+} from './session/session-kick.js';
+export {
+  bindTokenToCookie,
+  bindSessionToCookie,
+  clearAuthCookies,
+  updateRememberMeCookies,
+  switchAccount,
+  removeSavedAccount
+} from './session/session-api.service.js';
+export { resolveSessionPermissions } from './session/session-perm.js';
 
-// ── 2.1 日志上下文注册（framework/log 不反向依赖 auth，避免循环） ──
+// 4. 权限（PBAC）——缓存+指纹快照 与 逐请求加载 两条路
+export {
+  PERM_NAMESPACE,
+  PERM_TTL,
+  buildPermKey,
+  computePermFingerprint,
+  getPermissions,
+  invalidatePermCache,
+  normalizeTs,
+  warmPermissions
+} from './permission/perm-cache.js';
+export { loadUserPermissions } from './permission/permission-loader.js';
 
-setLogContextProvider(() => {
-  const req = requestContext.getStore();
-  if (!req) return {};
-  return {
-    requestId: req.id,
-    userId: req.state?.user?.userId
-  };
-});
+// 5. 设备——设备 ID/类型/指纹 与 设备 ID 服务端签发/校验
+export {
+  DEVICE_TYPE,
+  detectDeviceType,
+  getDeviceId,
+  getDeviceIdAndWrapResponse,
+  getClientDeviceId,
+  computeDeviceFingerprint
+} from './device/device.js';
+export {
+  validateDeviceId,
+  verifyAndNormalizeDeviceId,
+  parseDeviceId,
+  generateServerSideDeviceId,
+  detectPlatform,
+  decodeTimestamp
+} from './device/device-id-service.js';
 
-// ── 3. ALS 上下文访问器 ──
+// 6. 风控——登录/会话异常检测、人机验证、锁定清理、请求生命周期接线
+export {
+  DETECT_RESULT,
+  detectLoginAnomaly,
+  detectLoginEnvironmentAnomaly,
+  detectSessionRisk,
+  confirmVerifyToken,
+  hasVerifiedFlag,
+  isHighRiskRequest,
+  clearAccountLock,
+  clearIpLock
+} from './risk/anomaly-detector.js';
 
-/**
- * 获取当前请求上下文
- * @returns {import('fastify').FastifyRequest}
- * @throws {Error} code=INTERNAL_CONTEXT_ERROR 当 ALS 无 store（非请求上下文内调用）
- */
-function getCtx() {
-  const req = requestContext.getStore();
-  if (!req) {
-    const err = new Error('认证上下文缺失：当前不在请求生命周期内（ALS 无 store）');
-    err.code = 'INTERNAL_CONTEXT_ERROR';
-    err.statusCode = 500;
-    throw err;
-  }
-  return req;
-}
+// 7. 账号安全——封禁 / 密码哈希与策略 / 两步验证 / 二级验证保险箱 / H5 签名 / Origin 白名单
+export {
+  BAN_SERVICE_LOGIN,
+  BAN_SERVICE_ACCESS,
+  disable,
+  disableLevel,
+  untieDisable,
+  isDisable,
+  checkDisable,
+  getDisableTime,
+  getDisableLevel,
+  checkDisableLevel,
+  isDisableLevel
+} from './security/ban.js';
+export { hashPassword, verifyPassword, isLegacyHash } from './security/password-hash.js';
+export { validatePasswordStrength, isPasswordReused, checkPasswordAge } from './security/password-policy.js';
+export { generateSecret, generateTOTP, verifyTOTP } from './security/totp.js';
+export {
+  DEFAULT_SAFE_TIME,
+  openSafe,
+  isSafe,
+  checkSafe,
+  closeSafe,
+  getSafeTime,
+  getSafeInfo,
+  createSafePreHandler
+} from './security/safe.js';
+export { verifySignature, issueH5Token } from './security/signature.js';
+export { isAllowedOrigin } from './security/origin-guard.js';
 
-/**
- * 获取数据库实例
- * @returns {object} Sequelize 实例
- */
-function getDb() {
-  const db = getCtx().server.db;
-  if (!db) throw new Error('Database plugin not registered');
-  return db;
-}
+// 8. Cookie 签名与策略（session 双令牌的 Cookie 载体）
+export {
+  signCookie,
+  verifyCookie,
+  COOKIE_OPTIONS,
+  COOKIE_POLICY,
+  SHORT_SESSION_TTL,
+  LONG_SESSION_TTL,
+  REFRESH_TOKEN_TTL,
+  REFRESH_COOKIE_PATH,
+  ROTATED_RETENTION,
+  COOKIE_SID,
+  COOKIE_SID_R,
+  USER_COOKIE_OPTS,
+  USER_COOKIE_TTL,
+  accountKeyForUid
+} from './context/cookie.js';
 
-/**
- * 通用服务器资源访问器
- * @param {string} name 插件名
- * @returns {*} 插件实例
- * @throws {Error} code=INVALID_PARAM 当 name 非字符串；未注册时抛普通 Error
- */
-function getServerResource(name) {
-  if (!name || typeof name !== 'string') {
-    const err = new Error('name 参数无效');
-    err.code = 'INVALID_PARAM';
-    throw err;
-  }
-  const resource = getCtx().server[name];
-  if (resource === undefined) throw new Error(`Plugin "${name}" not registered`);
-  return resource;
-}
+// 9. 审计 / 事件
+export {
+  logAuditEvent,
+  getAuditLogs,
+  logLogin,
+  logLogout,
+  logKick,
+  logPasswordChange,
+  logRegister
+} from './audit/audit-logger.js';
+export { AUTH_EVENTS, onAuthEvent, emitAuthEvent, removeAllAuthListeners } from './audit/events.js';
 
-// ── 4. JWT 解析 ──
-
-/**
- * 从 Bearer Token 解析用户信息
- *
- * 签发端（app/oauth21/crypto/jwt.js）不把 roles/permissions 嵌入 JWT
- * （权限变更即时生效语义），因此这里统一走带指纹校验的缓存
- * （auth/perm-cache.js）→ 数据库查询加载权限。
- * 缓存通过 getStore 统一管理，自带超时保护、序列化和降级。
- *
- * @param {string} token - JWT access_token
- * @returns {Promise<object|null} 用户信息对象或 null（验证失败时）
- */
-async function getUserFromToken(token) {
-  try {
-    const payload = await verify(token);
-    if (!payload?.sub) return null;
-    // 仅允许 access_token / client_token 作为 Bearer 认证凭证；
-    // id_token / refresh_token 或缺失 token_type 的 token 不得用于 API 认证。
-    if (payload.token_type !== 'access_token' && payload.token_type !== 'client_token') {
-      log.warn('[Auth] 拒绝非 access/client token 作为 Bearer 凭证: token_type=%s', payload.token_type);
-      return null;
-    }
-    log.debug('🔑 JWT 解析成功: sub=%s, aud=%s, token_type=%s', payload.sub, payload.aud, payload.token_type);
-
-    // client_token：客户端凭证令牌（M2M），无用户上下文，直接返回客户端信息
-    if (payload.token_type === 'client_token') {
-      return {
-        sub: payload.sub,
-        userId: null,
-        username: payload.sub,
-        email: null,
-        avatar: null,
-        status: 1,
-        roles: [],
-        permissions: { allows: [], denies: [] },
-        tokenType: 'client_token'
-      };
-    }
-
-    // 1. 优先查用户缓存（30s TTL），避免每次请求打 DB
-    //    缓存未命中才查库，兼顾性能与账号实时状态
-    const userStore = getStore('user', { timeout: 3000 });
-    let userData = null;
-    try {
-      userData = await userStore.get(String(payload.sub));
-    } catch (err) {
-      log.warn('[Auth] 用户缓存读取失败，降级到数据库:', err);
-    }
-
-    if (!userData) {
-      log.debug('📦 用户缓存未命中，查 DB: userId=%s', payload.sub);
-      userData = await findUserById(payload.sub);
-      if (!userData) return null;
-      // 写入缓存（30 秒），账号禁用等状态变更 30s 内生效
-      try {
-        await userStore.set(String(payload.sub), userData, 30);
-      } catch (err) {
-        log.warn('[Auth] 用户缓存写入失败:', err);
-      }
-    } else {
-      log.debug('📦 用户缓存命中: userId=%s, username=%s', userData.id, userData.username);
-    }
-
-    // 2. 检查账号状态（禁用则拒绝）
-    if (userData.status === 0) {
-      // warn：禁用账号的登录尝试是安全审计事件，生产环境需要可见
-      log.warn('🚫 账号已禁用: userId=%s', userData.id);
-      return null;
-    }
-
-    // 3. 权限加载：走带指纹校验的缓存（auth/perm-cache.js）
-    //
-    //    签发端不把权限嵌进 JWT（权限变更即时生效，不等 token 过期），
-    //    所以这里永远从缓存/DB 读实时快照，不读 payload claims。
-    const { roles, permissions } = await getPermissions(userData.id, payload.aud || 'GLOBAL');
-
-    return {
-      sub: userData.id,
-      uid: userData.id,
-      userId: userData.id,
-      username: userData.username,
-      email: userData.email,
-      avatar: userData.avatar,
-      status: userData.status,
-      roles,
-      permissions,
-      tokenType: 'bearer'
-    };
-  } catch (err) {
-    // JWT 解析全程异常（verify 失败 / findUserById 抛错 / loadUserPermissions 抛错）：
-    // 返回 null 让调用方走"认证失败"分支，但记 warn 便于排障（原 catch {} 静默）
-    log.warn('[Auth] getUserFromToken 异常:', err);
-    return null;
-  }
-}
-
-// ── 5. 认证与风险检测内部函数 ──
-
-/**
- * JWT 认证（Bearer Token + access_token Cookie）
- *
- * @param {object} cookies 解析后的 cookies
- * @param {object} headers 请求头
- * @returns {Promise<object|null>} 认证成功的用户对象，或 null（未走 JWT / 失败）
- */
-async function authenticateByJwt(cookies, headers) {
-  if (!jwtEnabled) return null;
-  log.debug('📋 JWT 模式已启用');
-
-  // 2a. Bearer Token（Header）
-  const authHeader = headers.authorization;
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    log.debug('🔑 检测到 Bearer Token: %s...', token.slice(0, 20));
-    const tokenUser = await getUserFromToken(token);
-    if (tokenUser) {
-      log.debug('✅ JWT 认证成功: userId=%s, username=%s', tokenUser.userId, tokenUser.username);
-      return tokenUser;
-    }
-    // warn：认证失败是安全审计事件（爆破/伪造 token 探测），生产环境需要可见
-    log.warn('❌ JWT 认证失败（Token 无效或用户不存在）');
-  }
-
-  // 2b. access_token Cookie
-  if (cookies['access_token']) {
-    const tokenUser = await getUserFromToken(cookies['access_token']);
-    if (tokenUser) return tokenUser;
-  }
-  return null;
-}
-
-/**
- * 检测会话风险并按需拦截高风险写操作
- *
- * 基准从 Redis sessionData 取（登录时写入 deviceFingerprint + ip），不查 DB。
- * - warn（指纹/设备变更）+ 高风险写操作 → 403 拦截，返回验证信息让前端弹框
- * - info（IP 变/无基准）→ 不拦，记 request.state.risk 供响应体注入
- *
- * @param {import('fastify').FastifyRequest} request
- * @param {import('fastify').FastifyReply} reply
- * @param {object} sessionData 登录会话数据
- * @returns {Promise<void>}
- */
-async function detectAndHandleRisk(request, reply, sessionData) {
-  try {
-    // 登录态恢复：客户端（header+cookie）无有效设备 ID 时，从登录链恢复身份
-    // （Redis sessionData.deviceId 与风险基准指纹同源，优先；旧会话字段缺失才查 DB）。
-    // 恢复/替换结果由下方"与客户端上报不一致 → 回写 X-Device-Id + Set-Cookie"收敛到前端
-    const deviceId = await getDeviceId(request, {
-      sessionDeviceId: sessionData.deviceId || '',
-      sessionUserAgent: sessionData.userAgent || '',
-      loadFromDb: () => getSessionTokenDevice(sessionData.sessionId)
-    });
-    // 设备 ID 与客户端上报不一致（旧格式 UUID / 无效 ID 被替换 / cookie 兜底恢复）→ 回写响应，
-    // 前端 device-sync 读取 X-Device-Id 同步 localStorage，否则客户端永远发旧 ID，
-    // 服务端每次换新随机 ID，指纹每请求都变，人机验证死循环。
-    // X-Device-Id-Updated 为"服务端换发"显式信号（与 login.service 路径语义统一），
-    // 前端收到后强制采纳，不依赖本地比对
-    const clientDeviceId = request.headers['x-device-id'] || request.cookies?.device_id || '';
-    if (deviceId && deviceId !== clientDeviceId) {
-      reply.header('X-Device-Id', deviceId);
-      reply.header('X-Device-Id-Updated', 'true');
-      reply.setCookie('device_id', deviceId, COOKIE_OPTIONS.DEVICE);
-    }
-    const fingerprint = computeDeviceFingerprint({
-      deviceId,
-      userAgent: request.headers['user-agent'] || '',
-      uid: sessionData.uid
-    });
-    const risk = await detectSessionRisk({
-      userId: sessionData.userId,
-      deviceId,
-      ip: request.ip,
-      fingerprint,
-      baselineFingerprint: sessionData.deviceFingerprint, // 基准：登录时写入 Redis 的指纹
-      baselineIp: sessionData.ip,
-      // 设备 ID 丢失/变更：与指纹变更同级 warn，弹人机验证。
-      // 丢失 = 客户端 header+cookie 均无 ID（含已被登录链恢复的情形，环境仍属异常）；
-      // 变更 = 客户端上报 ID 与登录链身份不一致（无效被替换 / 恢复覆盖了新上报 ID）
-      deviceIdMismatch: deviceId !== clientDeviceId,
-      deviceIdMissing: !clientDeviceId
-    });
-    if (risk.level !== 'safe') {
-      request.state.risk = risk;
-      log.debug('⚠️ 会话风险: %s %j', risk.level, risk.reasons);
-
-      // 高风险操作（非 GET）+ warn → 拦截，要求先完成人机验证
-      // 只有服务端已写入的免验标记才能放行；不再信任客户端任意 x-verify-token 头。
-      const verified = await hasVerifiedFlag(sessionData.userId, deviceId);
-      if (!verified && risk.level === 'warn' && isHighRiskRequest(request) && risk.verify) {
-        // 不要写 `reply.sent = true`：Fastify 5 的 reply.sent 是只读 getter，ESM 严格
-        // 模式下赋值抛 TypeError（会被本函数的 catch 吞成一条"风险检测异常"警告），
-        // 而 send() 本身已置 sent，下游守卫/钩子的 reply.sent 判断不受影响。
-        reply.code(403).send({
-          code: 403,
-          message: '检测到设备环境变更，请完成人机验证后再操作',
-          data: null,
-          __risk__: {
-            level: risk.level,
-            reasons: risk.reasons,
-            verifyUrl: risk.verify.url,
-            verifyHeader: risk.verify.header,
-            verifyToken: risk.verify.token
-          }
-        });
-        return;
-      }
-    }
-  } catch (err) {
-    // 风险检测失败不阻塞请求，但记 warn 便于排障（安全相关路径，原仅 _debug 生产不可见）
-    log.warn('⚠️ [Auth] 会话风险检测异常:', err);
-  }
-}
-
-/**
- * onSend 钩子：info 级风险（IP 变但指纹不变，可能是梯子）不拦请求，
- * 但响应体加 __risk__ 让前端弹验证框（不阻断读操作）；
- * warn+高风险已在 onRequest 拦截 403，此处只处理 GET 读操作的弹框提示。
- *
- * @param {import('fastify').FastifyRequest} request
- * @param {import('fastify').FastifyReply} reply
- * @param {*} payload 响应体
- * @returns {*} 处理后的 payload
- */
-async function injectRiskOnSend(request, _reply, payload) {
-  const risk = request.state?.risk;
-  if (!risk || risk.level === 'safe' || !risk.verify) return payload;
-  // warn 已在高风险操作拦截，若到了 onSend 说明是 GET 读操作，仍带验证信息让前端弹（不阻断）
-  try {
-    const body = typeof payload === 'string' ? JSON.parse(payload) : null;
-    if (body && typeof body === 'object' && body.__risk__ === undefined) {
-      body.__risk__ = {
-        level: risk.level,
-        reasons: risk.reasons,
-        verifyUrl: risk.verify.url,
-        verifyHeader: risk.verify.header,
-        verifyToken: risk.verify.token
-      };
-      return JSON.stringify(body);
-    }
-  } catch {
-    // 非 JSON 响应不改，原样返回
-  }
-  return payload;
-}
-
-// ── 6. 默认导出（Fastify 插件）──
-
-const authPlugin = fp(async app => {
-  // onRequest：认证主流程
-  // 注意：认证钩子不依赖 ALS（用 request 参数直传），故先注册无碍。
-  // ALS 钩子在后注册，其 requestContext.run 的 store 在 done() 后的异步延续里
-  // 仍可供 preHandler/handler 阶段的 getCtx()/getDb()/getServerResource() 取用。
-  app.addHook('onRequest', async (request, reply) => {
-    // 1. 初始化 request.state
-    if (!request.state) request.state = {};
-
-    const cookies = request.cookies || {};
-    // log.debug('━━━ 请求认证开始 ━━━ url=%s, ip=%s', request.url, request.ip);
-    // log.debug('Cookie: sid=%s, sid_r=%s', cookies.sid ? '✅' : '❌', cookies.sid_r ? '✅' : '❌');
-
-    // 2. JWT 认证（仅在 JWT_ENABLED=true 时启用）
-    const jwtUser = await authenticateByJwt(cookies, request.headers);
-    if (jwtUser) {
-      request.state.user = jwtUser;
-      return;
-    }
-
-    // 3. Session Cookie 验证（sid）— 主要认证方式
-    let sessionData = null;
-
-    // 尝试用 sid 获取 session（同时递增访问次数）
-    if (cookies[COOKIE_SID]) {
-      // log.debug('📋 检测到 sid Cookie，尝试 Session 认证');
-      sessionData = await getSession({ cookies, reply });
-      // log.debug('📋 Session 认证结果: %s', sessionData ? '✅ 成功' : '❌ 未命中');
-    }
-
-    // 写入 request.state.user + 风险检测
-    if (sessionData) {
-      // log.debug('✅ 认证完成: userId=%s, username=%s', sessionData.userId, sessionData.username);
-      request.state.user = {
-        sub: sessionData.uid,
-        uid: sessionData.uid,
-        userId: sessionData.userId,
-        username: sessionData.username,
-        email: sessionData.email,
-        avatar: sessionData.avatar,
-        status: sessionData.status,
-        appId: sessionData.appId,
-        roles: sessionData.roles,
-        permissions: sessionData.permissions,
-        sessionId: sessionData.sessionId
-      };
-
-      // 访问时风险检测（基准从 Redis sessionData 取，不查 DB）
-      await detectAndHandleRisk(request, reply, sessionData);
-    }
-  });
-
-  // ALS 包裹每个请求
-  app.addHook('onRequest', (request, reply, done) => {
-    requestContext.run(request, () => {
-      done();
-    });
-  });
-
-  // onSend：info 级风险注入响应体（不阻断读操作）
-  app.addHook('onSend', injectRiskOnSend);
-
-  // 挂载 StpUtil 到 app
-  app.decorate('auth', StpUtil);
-});
-
-// ── 7. 导出 ──
-
-export { requestContext, getCtx, getDb, getServerResource };
-export default authPlugin;
+// 10. 权限工具类（app.decorate('auth') 装饰的同一个实例）
+export { default as StpUtil } from './context/stp-util.js';

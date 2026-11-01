@@ -36,8 +36,8 @@ import {
   validateDeviceId,
   parseDeviceId
 } from './device-id-service.js';
-import { COOKIE_OPTIONS } from './cookie.js';
-import { createLogger } from '../log/index.js';
+import { COOKIE_OPTIONS } from '../context/cookie.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.device');
 

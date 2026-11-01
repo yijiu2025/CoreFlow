@@ -7,11 +7,11 @@
  * @since 2026-08-17
  */
 import crypto from 'node:crypto';
-import { getModel } from '../db/index.js';
+import { getModel } from '../../db/index.js';
 import { Op } from 'sequelize';
-import { getStore } from '../redis/index.js';
-import { computeDeviceFingerprint } from './device.js';
-import { createLogger } from '../log/index.js';
+import { getStore } from '../../redis/index.js';
+import { computeDeviceFingerprint } from '../device/device.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.anomaly-detector');
 

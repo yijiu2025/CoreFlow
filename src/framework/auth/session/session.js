@@ -10,7 +10,7 @@
  */
 
 import crypto from 'node:crypto';
-import { getModel } from '../db/index.js';
+import { getModel } from '../../db/index.js';
 import {
   signCookie,
   verifyCookie,
@@ -21,15 +21,15 @@ import {
   LONG_SESSION_TTL,
   REFRESH_TOKEN_TTL,
   USER_COOKIE_TTL
-} from './cookie.js';
+} from '../context/cookie.js';
 // 权限读取统一走带指纹校验的缓存入口（见 perm-cache.js 头部说明），
 // 不再直接调 loadUserPermissions —— 后者无失效机制，会让会话长 TTL 掩盖权限变更。
-import { getPermissions, computePermFingerprint } from './perm-cache.js';
+import { getPermissions, computePermFingerprint } from '../permission/perm-cache.js';
 // 会话恢复时的权限解析（第 3 层指纹在会话路径的落地点），已拆为独立子模块
 import { resolveSessionPermissions } from './session-perm.js';
 // 设备类型常量与判定统一由 device.js 提供，此处导入为本地绑定并在文件末尾 re-export
-import { DEVICE_TYPE, detectDeviceType, computeDeviceFingerprint } from './device.js';
-import { createLogger } from '../log/index.js';
+import { DEVICE_TYPE, detectDeviceType, computeDeviceFingerprint } from '../device/device.js';
+import { createLogger } from '../../log/index.js';
 // 共享底座（Redis 实例 / 常量 / sidHash / 吊销原语）
 import {
   sessionStore,
@@ -49,9 +49,9 @@ import {
 import { checkMaxSessions, pruneActiveDevices } from './session-governance.js';
 import { kickByDeviceType, kickSessionsByIds, getKickTombstone } from './session-kick.js';
 // 账号封禁（service 维度 + 时限 + 阶梯）：'login' 拦新登录、'access' 拦请求
-import { checkDisable, isDisable, BAN_SERVICE_LOGIN, BAN_SERVICE_ACCESS } from './ban.js';
+import { checkDisable, isDisable, BAN_SERVICE_LOGIN, BAN_SERVICE_ACCESS } from '../security/ban.js';
 // 认证事件总线（登录/登出广播给审计、推送等监听者）
-import { emitAuthEvent, AUTH_EVENTS } from './events.js';
+import { emitAuthEvent, AUTH_EVENTS } from '../audit/events.js';
 import { refreshSessionCore } from './session-refresh.js';
 import { runSessionSaga, withSessionTransaction } from './session-saga.js';
 

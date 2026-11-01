@@ -14,7 +14,7 @@
  * @since 2026-07-13
  */
 import { Op } from 'sequelize';
-import { getModel } from '../db/index.js';
+import { getModel } from '../../db/index.js';
 
 /**
  * 从策略文档中提取权限

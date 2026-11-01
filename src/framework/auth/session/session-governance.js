@@ -19,12 +19,12 @@
  */
 
 import { Op } from 'sequelize';
-import sequelize from '../db/index.js';
-import { getModel } from '../db/index.js';
-import { LONG_SESSION_TTL } from './cookie.js';
-import { DEVICE_TYPE } from './device.js';
+import sequelize from '../../db/index.js';
+import { getModel } from '../../db/index.js';
+import { LONG_SESSION_TTL } from '../context/cookie.js';
+import { DEVICE_TYPE } from '../device/device.js';
 import { sessionStore, userSessionsStore, MAX_ACTIVE_DEVICES } from './session-store.js';
-import { createLogger } from '../log/index.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.session');
 

@@ -31,8 +31,8 @@
  * @since 2026-09-16
  */
 
-import { getPermissions, computePermFingerprint } from './perm-cache.js';
-import { createLogger } from '../log/index.js';
+import { getPermissions, computePermFingerprint } from '../permission/perm-cache.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.session');
 

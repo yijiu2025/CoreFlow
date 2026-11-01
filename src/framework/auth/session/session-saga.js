@@ -1,4 +1,4 @@
-import { createLogger } from '../log/index.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.session');
 

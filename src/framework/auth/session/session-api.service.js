@@ -8,12 +8,12 @@
  * @author yijiu
  * @since 2026-08-16
  */
-import { verify } from '../jwt/index.js';
+import { verify } from '../../jwt/index.js';
 import { createSession, updateRememberMe, switchSessionByRefreshToken, revokeRememberMe } from './session.js';
-import { getModel } from '../db/index.js';
-import { getStore } from '../redis/index.js';
+import { getModel } from '../../db/index.js';
+import { getStore } from '../../redis/index.js';
 import { userRefreshStore } from './session-store.js';
-import { log } from '../log/index.js';
+import { log } from '../../log/index.js';
 import {
   signCookie,
   COOKIE_OPTIONS,
@@ -23,7 +23,7 @@ import {
   SHORT_SESSION_TTL,
   LONG_SESSION_TTL,
   REFRESH_TOKEN_TTL
-} from './cookie.js';
+} from '../context/cookie.js';
 
 /** access_token Cookie 配置（JWT 模式，HttpOnly + sameSite lax） */
 const ACCESS_TOKEN_COOKIE_OPTS = maxAge => ({

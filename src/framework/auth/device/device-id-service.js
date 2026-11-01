@@ -28,7 +28,7 @@
 
 import crypto from 'node:crypto';
 import { BASE62_CHARS, ENCODED_TS_LENGTH, encodeTimestamp, decodeTimestamp } from 'stable-deviceid/base62-timestamp';
-import { createLogger } from '../log/index.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.device-id-service');
 

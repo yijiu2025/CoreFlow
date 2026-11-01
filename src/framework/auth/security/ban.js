@@ -23,9 +23,9 @@
  * @author yijiu2025
  * @since 2026-11-01
  */
-import { getStore } from '../redis/index.js';
-import { createLogger } from '../log/index.js';
-import { AUTH_EVENTS, emitAuthEvent } from './events.js';
+import { getStore } from '../../redis/index.js';
+import { createLogger } from '../../log/index.js';
+import { AUTH_EVENTS, emitAuthEvent } from '../audit/events.js';
 
 const log = createLogger('framework.auth.ban');
 

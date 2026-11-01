@@ -25,8 +25,8 @@
  */
 
 import { Op } from 'sequelize';
-import { getModel } from '../db/index.js';
-import { DEVICE_TYPE } from './device.js';
+import { getModel } from '../../db/index.js';
+import { DEVICE_TYPE } from '../device/device.js';
 import {
   sessionStore,
   userSessionsStore,
@@ -34,8 +34,8 @@ import {
   sidHash,
   deleteRefreshTokensForSession
 } from './session-store.js';
-import { AUTH_EVENTS, emitAuthEvent } from './events.js';
-import { createLogger } from '../log/index.js';
+import { AUTH_EVENTS, emitAuthEvent } from '../audit/events.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.session');
 

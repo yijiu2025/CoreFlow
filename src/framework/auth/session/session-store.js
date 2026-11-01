@@ -10,7 +10,7 @@
  *
  * 依赖方向：只依赖 cookie/db/redis 等基础设施，**不 import 任何兄弟子模块**，
  * 因此处于子模块依赖图最底层（谁都可以 import 它，它不 import 谁）→ 无环。
- * ⚠️ 这条约束意味着**不能** `import { PERM_NAMESPACE } from './perm-cache.js'`
+ * ⚠️ 这条约束意味着**不能** `import { PERM_NAMESPACE } from '../permission/perm-cache.js'`
  * （perm-cache 依赖 permission-loader，会把底座抬到非底层）。故这里把字面量**独立声明一次**，
  * 并有契约测试钉死它与 perm-cache.js 的 `PERM_NAMESPACE` 逐字一致。
  *
@@ -22,9 +22,9 @@
 
 import crypto from 'node:crypto';
 import { Op } from 'sequelize';
-import { getModel } from '../db/index.js';
-import { getStore } from '../redis/index.js';
-import { createLogger } from '../log/index.js';
+import { getModel } from '../../db/index.js';
+import { getStore } from '../../redis/index.js';
+import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.session');
 
