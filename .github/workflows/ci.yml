@@ -120,7 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 零依赖静态扫描，放在装依赖之前：文档指向不存在的文件时，
       # 读者拿到的是 404 而不是旧内容，而这种问题不会让任何测试变红。
@@ -183,7 +183,7 @@ jobs:
       # 让 redis-ci-guard.test.js 在"配置丢了"时变红，而不是静默跳过
       EXPECT_REDIS: 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
@@ -222,7 +222,7 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
