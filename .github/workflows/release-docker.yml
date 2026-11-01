@@ -57,7 +57,7 @@ jobs:
       # 标签策略：分支名 / 提交 sha / 语义化版本（打 tag 时）一次生成
       - name: 生成镜像标签
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           tags: |
