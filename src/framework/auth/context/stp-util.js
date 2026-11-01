@@ -31,6 +31,9 @@
  *                    handler 映射成 500）；② 删除死代码 login()（全仓零调用，且 ALS 里
  *                    没有 reply，真登录入口是 oauth21 的 login.service）；③ _isMatch 收拢
  *                    到 permission/wildcard-match.js 并转义正则元字符；④ getLoginId 直读 uid
+ * @since 2026-11-01 二次复查加固：checkPermissionAnd/Or 零参显式报错（此前 AND 空真静默
+ *                    通过 / OR 抛空 message 异常）；getPermissionList/checkRole JSDoc
+ *                    补语义说明（只读引用 / 精确匹配不支持通配）
  */
 import { requestContext } from './request-context.js';
 import { isWildcardMatch } from '../permission/wildcard-match.js';
@@ -125,6 +128,11 @@ class StpUtil {
 
   /**
    * 角色校验：当前用户是否拥有指定角色
+   *
+   * **精确匹配**（`includes`，不支持通配符）——与权限系统的 wildcard 匹配不同：
+   * 角色码是有限枚举（如 'fw_admin'/'superadmin'），通配没有业务意义；
+   * 需要通配语义请用 checkPermission（权限策略里才允许 `*`）。
+   * 角色无 deny 维度（Deny 优先语义只存在于权限层）。
    * @param {string} role 角色标识
    * @throws {Error} 角色不匹配时抛出 403
    */
@@ -142,6 +150,11 @@ class StpUtil {
 
   /**
    * 获取当前账号所拥有的权限集合
+   *
+   * 返回的是请求上下文内权限对象的**只读引用**（勿修改——修改只影响本请求的
+   * 后续校验，不会持久化，但会让同请求内的判断结果互相污染）。
+   * 来源：Session 路径 = createSession 时预热进 Redis 的快照；
+   * JWT 路径 = perm-cache 按数字主键 + 指纹校验读出的实时快照。
    * @returns {{ allows: string[], denies: string[] }}
    */
   static getPermissionList() {
@@ -185,10 +198,14 @@ class StpUtil {
 
   /**
    * 校验当前账号是否含有指定权限（AND 语义：全部通过）
-   * @param {...string} permissions 权限标识列表
+   * @param {...string} permissions 权限标识列表（至少一个——零参属于调用方 bug，显式报错
+   *   而不是"空真"静默通过：守卫本应是关卡，参数写错时必须炸出来）
    * @throws {NotPermissionException} 任一权限不足时抛出
    */
   static checkPermissionAnd(...permissions) {
+    if (permissions.length === 0) {
+      throw new Error('checkPermissionAnd: 至少需要一个权限标识（零参 = 无守卫，疑似调用方笔误）');
+    }
     for (const p of permissions) {
       if (!StpUtil.hasPermission(p)) {
         throw new NotPermissionException(p);
@@ -198,10 +215,13 @@ class StpUtil {
 
   /**
    * 校验当前账号是否含有指定权限（OR 语义：任一通过）
-   * @param {...string} permissions 权限标识列表
+   * @param {...string} permissions 权限标识列表（至少一个——零参显式报错，避免抛出空 message 的异常）
    * @throws {NotPermissionException} 全部权限不足时抛出
    */
   static checkPermissionOr(...permissions) {
+    if (permissions.length === 0) {
+      throw new Error('checkPermissionOr: 至少需要一个权限标识（零参 = 永不通过，疑似调用方笔误）');
+    }
     for (const p of permissions) {
       if (StpUtil.hasPermission(p)) {
         return;

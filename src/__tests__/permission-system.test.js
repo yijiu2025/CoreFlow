@@ -88,6 +88,14 @@ describe('StpUtil：校验方法的异常契约', () => {
     });
   });
 
+  it('checkPermissionAnd/Or 零参显式报错（AND 空真 = 无守卫静默放行 / OR 空 message 异常，都是陷阱）', () => {
+    withUser({ permissions: { allows: ['*'] } }, () => {
+      // 即便权限是全量通配，零参也必须报错——这是调用方 bug，不是授权判断
+      expect(() => StpUtil.checkPermissionAnd()).toThrow(/至少需要一个权限标识/);
+      expect(() => StpUtil.checkPermissionOr()).toThrow(/至少需要一个权限标识/);
+    });
+  });
+
   it('checkPermissionOr：任一满足即通过，全不满足才抛', () => {
     withUser({ permissions: { allows: ['a'] } }, () => {
       expect(() => StpUtil.checkPermissionOr('x', 'a')).not.toThrow();
