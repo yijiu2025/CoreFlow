@@ -71,7 +71,7 @@ $ cat .husky/pre-commit
 | 测试是否真实加载被测代码（禁虚假覆盖） | `conventions/test-effectiveness.test.js` | `npm test` |
 | 跨应用隔离（`app/<A>` 不得 import `app/<B>`） | `conventions/app-isolation.test.js` | `npm test` |
 | firewall 分层单向依赖 | `conventions/firewall-layering.test.js` | `npm test` |
-| node-redis v5 命令名合法性 | `conventions/node-redis-v5-commands.test.js` | `npm test` |
+| node-redis 命令名合法性（v5 / v6 驼峰） | `conventions/node-redis-v5-commands.test.js` | `npm test` |
 | 终端颜色/日志规范 | `conventions/terminal-colors.test.js` | `npm test` |
 | 回归测试 | Jest | `npm test` |
 | 跨进程验收 | `scripts/verify/run-all.mjs` | `npm run verify:all` |

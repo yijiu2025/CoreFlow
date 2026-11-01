@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 
-const { resolveReconnectDelay } = await import('../../framework/redis/plugin.js');
+const { resolveReconnectDelay, resolveCommandTimeout } = await import('../../framework/redis/plugin.js');
 
 describe('resolveReconnectDelay', () => {
   describe('退避序列（未超限）', () => {
@@ -84,5 +84,32 @@ describe('resolveReconnectDelay', () => {
       expect(resolveReconnectDelay({ retries: 2, maxRetries: 3, policy: 'bounded' }).giveUp).toBeFalsy();
       expect(resolveReconnectDelay({ retries: 3, maxRetries: 3, policy: 'bounded' }).giveUp).toBe(true);
     });
+  });
+});
+
+/**
+ * 命令超时（node-redis v6 默认值固化）
+ *
+ * v6 把 `commandOptions.timeout` 的默认值改成了 5000ms，超时即 abort 命令。
+ * 本项目有「大 key 遍历」「长 Lua 脚本」这类耗时不可控的命令（ring queue / 封禁索引 /
+ * 批次清理），5s 默认值会让它们在生产里随机失败 —— 而且报错是 TIMEOUT 而非业务错误，
+ * 排查成本极高。所以默认必须是 0（不设超时，等同 v5 语义）。
+ */
+describe('resolveCommandTimeout', () => {
+  it('未配置时返回 0 —— 不设超时，避免 v6 的 5s 默认值掐断长命令', () => {
+    expect(resolveCommandTimeout(undefined)).toBe(0);
+    expect(resolveCommandTimeout('')).toBe(0);
+  });
+
+  it('0 / 负数 / 非法值一律视为不设超时', () => {
+    expect(resolveCommandTimeout('0')).toBe(0);
+    expect(resolveCommandTimeout(-1)).toBe(0);
+    expect(resolveCommandTimeout('abc')).toBe(0);
+    expect(resolveCommandTimeout(NaN)).toBe(0);
+  });
+
+  it('显式配置的正整数生效（REDIS_COMMAND_TIMEOUT_MS 可开启保护）', () => {
+    expect(resolveCommandTimeout('12000')).toBe(12_000);
+    expect(resolveCommandTimeout(3000)).toBe(3000);
   });
 });

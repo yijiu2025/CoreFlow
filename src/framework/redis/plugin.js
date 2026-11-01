@@ -26,6 +26,7 @@
  *   REDIS_DB            - 默认数据库编号（0-15），默认 0
  *   REDIS_CONNECT_TIMEOUT - 连接超时毫秒，默认 5000
  *   REDIS_MAX_RETRIES    - 重连最大次数，默认 10
+ *   REDIS_COMMAND_TIMEOUT_MS - 单条命令超时毫秒，默认 0（不设超时，等同 node-redis v5）
  *
  * @author yijiu2025
  * @since 2026-07-24
@@ -186,6 +187,20 @@ function resolveReconnectDelay({ retries, maxRetries = 10, policy = 'forever' })
 }
 
 /**
+ * 解析命令超时（毫秒）
+ *
+ * node-redis v6 把 `commandOptions.timeout` 的默认值改成了 5000ms，超时会 abort 命令。
+ * 本项目存在大 key 遍历、长 Lua 脚本等耗时不可控的命令，统一按 v5 语义「不设超时」，
+ * 需要保护时用 REDIS_COMMAND_TIMEOUT_MS 显式开启（<=0 或非法值都视为不设超时）。
+ * @param {string|number|undefined} raw
+ * @returns {number} 0 表示不设超时
+ */
+function resolveCommandTimeout(raw = process.env.REDIS_COMMAND_TIMEOUT_MS) {
+  const ms = Number(raw);
+  return Number.isFinite(ms) && ms > 0 ? ms : 0;
+}
+
+/**
  * 创建 Redis 连接
  * @param {object} opts
  * @param {string} opts.host
@@ -251,7 +266,15 @@ function createRedisConnection({
     socket,
     username,
     password: process.env.REDIS_PASSWORD || undefined,
-    database: db
+    database: db,
+    // node-redis v6 起默认值变了两处（v5 的语义由下面两行显式固化）：
+    //   1. RESP3 成为默认协议 —— 会改变裸 `sendCommand`（`SLOWLOG GET`、Lua 返回）
+    //      的原始返回形态（map→Map、set→Set），本项目按 RESP2 形态解析，故固定 RESP2
+    //   2. commandTimeout 默认 5000ms —— 会把耗时超过 5s 的命令（大 key 遍历、
+    //      长 Lua 脚本）直接 abort。这里默认 0（不设超时，等同 v5），
+    //      确有需要时用 REDIS_COMMAND_TIMEOUT_MS 显式开启
+    RESP: 2,
+    commandOptions: { timeout: resolveCommandTimeout() }
   });
 
   client.on('error', err => {
@@ -606,6 +629,7 @@ export {
   backupRedisHealthy,
   connectStandalone,
   disconnectStandalone,
-  resolveReconnectDelay
+  resolveReconnectDelay,
+  resolveCommandTimeout
 };
 export default redisPlugin;

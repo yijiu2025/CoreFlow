@@ -1,10 +1,14 @@
 /**
- * node-redis v5 命令名契约测试
+ * node-redis 命令名契约测试（v5 起成立，v6 沿用）
  *
- * 背景：本项目用的是 node-redis v5，**只有驼峰方法名**
+ * 背景：本项目用的是 node-redis v5 / v6，**只有驼峰方法名**
  * （`hSet` / `hGetAll` / `zAdd` / `pTTL` / `dbSize` / `sMembers` …），
- * 全小写写法（`hset` / `hgetall` / `dbsize`）在 v5 里是 `undefined`，
+ * 全小写写法（`hset` / `hgetall` / `dbsize`）在 v5/v6 里是 `undefined`，
  * 调用即抛 `TypeError: xxx is not a function`。
+ *
+ * v6 另外把两个默认值改了（RESP3 协议、5s 命令超时），已在
+ * `framework/redis/plugin.js` 的 createClient 处显式固化回 v5 语义，
+ * 本文件只负责命令名与参数类型这两类源码级约束。
  *
  * 这一类缺陷在本仓已出现过三次，每次都是「静默失效或运行期才炸」：
  *   1. firewall 的封禁索引 `fw:blocked:ips` 从未被写入（列表永远空，管理端也解不掉）

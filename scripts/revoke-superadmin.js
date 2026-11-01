@@ -152,8 +152,11 @@ async function main() {
           host: process.env.REDIS_HOST,
           port: parseInt(process.env.REDIS_PORT || '6379')
         },
-        password: process.env.REDIS_PASSWORD || undefined
-      });
+          password: process.env.REDIS_PASSWORD || undefined,
+          // node-redis v6 默认 RESP3 + 5s 命令超时，脚本按 v5 语义（RESP2、不设超时）运行
+          RESP: 2,
+          commandOptions: { timeout: 0 }
+        });
       await redis.connect();
 
       const keys = await redis.keys('session:*');

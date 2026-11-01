@@ -154,7 +154,8 @@ async function getRedisClient() {
   const password = process.env.REDIS_PASSWORD || undefined;
   const db = Number(process.env.REDIS_DB) || 0;
 
-  const client = createClient({ socket: { host, port }, password, database: db });
+  // node-redis v6 默认 RESP3 + 5s 命令超时，脚本按 v5 语义（RESP2、不设超时）运行
+  const client = createClient({ socket: { host, port }, password, database: db, RESP: 2, commandOptions: { timeout: 0 } });
   client.on('error', err => log.warn(`⚠️ [Redis] ${C.yellow}连接错误: ${err.message}${C.reset}`));
   await client.connect();
   return client;

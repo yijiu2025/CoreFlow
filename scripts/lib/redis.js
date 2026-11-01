@@ -32,7 +32,10 @@ export async function connectRedis() {
         connectTimeout: 5000,
         lazyConnect: true
       },
-      password: process.env.REDIS_PASSWORD || undefined
+      password: process.env.REDIS_PASSWORD || undefined,
+      // node-redis v6 默认 RESP3 + 5s 命令超时，脚本按 v5 语义（RESP2、不设超时）运行
+      RESP: 2,
+      commandOptions: { timeout: 0 }
     });
 
     await client.connect();
