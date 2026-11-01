@@ -192,15 +192,22 @@ async function applyGuardLogic(opts = {}, request, reply) {
     if (!user) {
       return reply.result.unauth('身份验证失败，请先登录');
     }
+    // 🔴 getPermissions 必须传数字主键（UserRole.user_id 是数字列）：state.user.sub/uid
+    // 是对外 UUID，传 sub 会静默查空 → fresh 恒为空权限集 → 所有 freshPermission 路由
+    // 必 403（2026-11-01 修复，与 bearer-auth P1 同型：传 uid vs 数字主键）。
+    // client_token（M2M）没有用户主键，同样无 fresh 权限语义，直接拒绝。
+    if (user.userId == null) {
+      return reply.result.forbidden('当前凭证无用户级权限语义，禁止执行敏感操作');
+    }
     // appId 取认证时写入的登录应用；缺省 'GLOBAL' 与 perm-cache 的全局语义一致
     const appId = user.appId || request.state?.session?.appId || 'GLOBAL';
     let fresh;
     try {
-      fresh = await getPermissions(user.sub, appId, { fresh: true });
+      fresh = await getPermissions(user.userId, appId, { fresh: true });
     } catch (err) {
       // 回源失败 → **拒绝**（fail-closed）。这与"权限读取失败降级放行"不同：
       // 敏感操作的默认答案必须是"不执行"。
-      log.error(`🚫 [Guard] 敏感操作权限回源失败，拒绝请求: userId=${user.sub}, appId=${appId}`, err);
+      log.error(`🚫 [Guard] 敏感操作权限回源失败，拒绝请求: userId=${user.userId}, appId=${appId}`, err);
       return reply.result.forbidden('权限校验服务不可用，请稍后重试');
     }
     // 用回源结果覆盖 request.state.user 的权限，后续 handler 内 allOf/anyOf 读到的也是最新值

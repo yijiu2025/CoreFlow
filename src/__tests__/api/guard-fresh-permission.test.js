@@ -57,7 +57,18 @@ const makeReply = () => {
   return r;
 };
 
-const makeRequest = (user = { sub: 7, appId: 'app1', roles: ['r_old'], permissions: { allows: [], denies: [] } }) => ({
+// 真实 state.user 形状（plugin.js/bearer-auth.js 装配契约）：sub/uid = 对外 UUID 字符串，
+// userId = 数字主键。🔴 这里必须保持该形状——曾因夹具写 sub: 7（数值当主键）掩盖了
+// guard 把 user.sub（实为 UUID）传给 getPermissions 的 P1 缺陷（查空 → fresh 路由必 403）。
+const makeRequest = (
+  user = {
+    sub: 'uid-uuid-string',
+    userId: 7,
+    appId: 'app1',
+    roles: ['r_old'],
+    permissions: { allows: [], denies: [] }
+  }
+) => ({
   ip: '127.0.0.1',
   state: { user },
   headers: {}
@@ -74,8 +85,26 @@ describe('敏感操作回源校验（第 4 层）', () => {
     await __test__applyGuardLogic({ enabled: true, freshPermission: true }, req, reply);
     expect(calls).toHaveLength(1);
     expect(calls[0].opts).toEqual({ fresh: true });
+    // 🔴 必须传数字主键 userId，不能传 sub（UUID）：UserRole.user_id 是数字列，
+    // 传 uid 会静默查空 → fresh 恒为空权限 → 敏感操作路由必 403
     expect(calls[0].userId).toBe(7);
+    expect(calls[0].userId).not.toBe(req.state.user.sub);
     expect(calls[0].appId).toBe('app1');
+  });
+
+  test('client_token（无数字主键）→ 403 拒绝，不发起回源', async () => {
+    const req = makeRequest({
+      sub: 'client-id',
+      userId: null,
+      roles: [],
+      permissions: { allows: [], denies: [] },
+      tokenType: 'client_token'
+    });
+    const reply = makeReply();
+    await __test__applyGuardLogic({ enabled: true, freshPermission: true }, req, reply);
+    expect(calls).toHaveLength(0);
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body.forbidden).toContain('无用户级权限语义');
   });
 
   test('回源结果覆盖 request.state.user（后续 requirePermission 读新值）', async () => {
@@ -92,7 +121,13 @@ describe('敏感操作回源校验（第 4 层）', () => {
   });
 
   test('回源失败 → 拒绝（fail-closed），不是放行', async () => {
-    const req = makeRequest({ sub: 7, appId: '__boom__', roles: [], permissions: { allows: [], denies: [] } });
+    const req = makeRequest({
+      sub: 'uid-uuid-string',
+      userId: 7,
+      appId: '__boom__',
+      roles: [],
+      permissions: { allows: [], denies: [] }
+    });
     const reply = makeReply();
     await __test__applyGuardLogic({ enabled: true, freshPermission: true }, req, reply);
     expect(reply.sent).toBe(true);
@@ -117,7 +152,7 @@ describe('敏感操作回源校验（第 4 层）', () => {
   });
 
   test('缺 appId 时回退 GLOBAL（与 perm-cache 的全局语义一致）', async () => {
-    const req = makeRequest({ sub: 7, roles: [], permissions: { allows: [], denies: [] } });
+    const req = makeRequest({ sub: 'uid-uuid-string', userId: 7, roles: [], permissions: { allows: [], denies: [] } });
     const reply = makeReply();
     await __test__applyGuardLogic({ enabled: true, freshPermission: true }, req, reply);
     expect(calls[0].appId).toBe('GLOBAL');

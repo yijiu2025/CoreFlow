@@ -171,6 +171,26 @@ function permStore() {
 }
 
 /**
+ * 运行时防线：userId 必须是数字主键（UserRole/InlinePolicy 的 user_id 是数字列）。
+ *
+ * 本仓 2026-11-01 一天内出现三个同型 P1（token-issuer 预热传 uid、bearer-auth 装配
+ * 传 uid、guard fresh 回源传 user.sub），全是「uid(UUID) vs 数字主键」错位——
+ * 错传 uid 不报错，只是**静默查空**（权限恒为空集），极具隐蔽性。此处只 warn 不抛：
+ * 调用方语义各异（有的场景空集即正确降级），但日志必须让这类错误可见。
+ *
+ * @param {number|string} userId 待检值
+ * @param {string} caller 调用点标识（日志定位用）
+ */
+function warnIfNotNumericUserId(userId, caller) {
+  if (typeof userId !== 'number') {
+    log.warn(
+      `⚠️ [Auth] ${caller} 收到非数字 userId（type=${typeof userId}, value=${String(userId).slice(0, 8)}…）：` +
+        '权限查询按数字列 user_id 匹配，传 uid/UUID 会静默查空。请传数字主键（user.id），uid 见 user-dao-shape 契约'
+    );
+  }
+}
+
+/**
  * 取用户权限，**带指纹校验**
  *
  * 这是权限读取的唯一入口。相比"直接读缓存 TTL 内一律信任"，多了一步指纹比对：
@@ -195,6 +215,7 @@ function permStore() {
  * @returns {Promise<{roles: string[], permissions: {allows: string[], denies: string[]}}>}
  */
 async function getPermissions(userId, appId, opts = {}) {
+  warnIfNotNumericUserId(userId, 'getPermissions');
   const { fresh = false } = opts;
   const store = permStore();
   const key = buildPermKey(userId, appId);
@@ -249,11 +270,14 @@ async function getPermissions(userId, appId, opts = {}) {
  * 指纹机制已能在"下次请求时"发现变更；主动删除是**把生效时机提前到变更瞬间**，
  * 不依赖用户下次请求。两者互补：主动删可能漏（如直接改 DB），指纹兜底。
  *
- * @param {number} userId 用户内部 ID
- * @param {string|null} [appId=null] 指定应用；传 null 表示清该用户所有已知应用
+ * @param {number} userId 用户内部 ID（数字主键）
+ * @param {string|null} [appId=null] 应用标识；传 null 仅清 GLOBAL 维度 ——
+ *   缓存键是 (userId, appId) 的哈希，无法枚举"该用户所有 app"，各 app 维度
+ *   依赖指纹自愈（GLOBAL 行纳入每个 app 的指纹，GLOBAL 变更 → 各 app 指纹必变）。
  * @returns {Promise<number>} 实际删除的键数量
  */
 async function invalidatePermCache(userId, appId = null) {
+  warnIfNotNumericUserId(userId, 'invalidatePermCache');
   const store = permStore();
   const apps = appId ? [appId] : ['GLOBAL'];
   let removed = 0;
@@ -283,6 +307,7 @@ async function invalidatePermCache(userId, appId = null) {
  * @returns {Promise<boolean>} 是否写入成功
  */
 async function warmPermissions(userId, appId) {
+  warnIfNotNumericUserId(userId, 'warmPermissions');
   try {
     const { roles, permissions } = await loadUserPermissions(userId, appId);
     const fingerprint = await computePermFingerprint(userId, appId);

@@ -15,6 +15,9 @@
  */
 import { Op } from 'sequelize';
 import { getModel } from '../../db/index.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.auth.permission-loader');
 
 /**
  * 从策略文档中提取权限
@@ -30,11 +33,12 @@ import { getModel } from '../../db/index.js';
 function extractPermissions(policy, allows, denies) {
   if (!policy) return;
 
-  // 兼容 JSON 字符串格式
+  // 兼容 JSON 字符串格式；解析失败必须留痕（策略 JSON 损坏 → 权限静默缺失，极难排查）
   if (typeof policy === 'string') {
     try {
       policy = JSON.parse(policy);
-    } catch {
+    } catch (err) {
+      log.warn('⚠️ [Permission] 策略 JSON 解析失败，该策略被跳过:', err.message);
       return;
     }
   }
@@ -42,7 +46,10 @@ function extractPermissions(policy, allows, denies) {
   // 格式 1: Statement 数组
   if (Array.isArray(policy.Statement)) {
     for (const stmt of policy.Statement) {
-      const actions = Array.isArray(stmt.Action) ? stmt.Action : [stmt.Action];
+      // Action 缺失/为 null 时跳过该语句（原实现会 push undefined 污染 allows）
+      const raw = Array.isArray(stmt.Action) ? stmt.Action : [stmt.Action];
+      const actions = raw.filter(a => typeof a === 'string' && a.length > 0);
+      if (actions.length === 0) continue;
       if (stmt.Effect === 'Allow') {
         allows.push(...actions);
       } else if (stmt.Effect === 'Deny') {
