@@ -81,8 +81,68 @@ auth/
 
 | 文件 | 职责 | 关键导出 |
 |------|------|----------|
-| `audit-logger.js` | 认证审计日志（登录/登出/踢出/改密/注册） | `logAuditEvent` `getAuditLogs` `logLogin` `logKick` |
+| `audit-logger.js` | 认证审计日志（登录/登出/踢出/改密/注册） | `logAuditEvent` `getAuditLogs` `logLogin` `logLogout` `logKick` `logPasswordChange` `logRegister` |
 | `events.js` | 认证事件中心（发布/订阅） | `AUTH_EVENTS` `onAuthEvent` `emitAuthEvent` |
+
+### audit-logger.js API 详解
+
+**双写架构**（所有便捷方法最终都汇入 `logAuditEvent`）：
+
+```
+logAuditEvent(event)
+  ├── ① DB 持久化：AuditLog 表 create（完整审计数据源，永远写）
+  └── ② Redis 环形缓冲：audit:security 命名空间，固定 1000 条满覆盖最旧（快查副本）
+```
+
+- ②失败/未配置 Redis 时**静默降级只写 ①**——审计是业务附属，不因 Redis 挂而阻塞或雪崩业务；
+- 环形缓冲经 `createRingQueue`（统一存储层），带 3s 超时与命名空间，**禁止改回收裸 redis 客户端**。
+
+**接线状态**（2026-11-01 核对，改代码后同步本表）：
+
+| 接口 | 接线状态 | 实际调用方 |
+|------|----------|------------|
+| `logLogin` | ✅ 已接线 | `app/oauth21/services/login.service.js`（成功路径） |
+| `logRegister` | ✅ 已接线 | `api/user/v1/open.js` |
+| `logAuditEvent` | ✅ 已接线（直用） | `open.js` 记 `PASSWORD_RESET` |
+| `logLogout` | ⚪ 预留未接线 | 登出路径目前只发 `AUTH_EVENTS.SESSION_LOGOUT` 事件总线，不落 AuditLog |
+| `logKick` | ⚪ 预留未接线 | kick 路径目前只发 `AUTH_EVENTS.SESSION_KICK` 事件总线，不落 AuditLog |
+| `logPasswordChange` | ⚪ 预留未接线 | 枚举已在 AuditLog 模型注释登记，无调用点 |
+
+**事件类型对照**（AuditLog 表 `event` 列枚举，模型注释为准）：
+
+| 便捷方法 | success=true | success=false/无 |
+|----------|--------------|------------------|
+| `logLogin` | `LOGIN_SUCCESS` | `LOGIN_FAILED` |
+| `logLogout` | `LOGOUT` | — |
+| `logKick` | `SESSION_KICK` | — |
+| `logPasswordChange` | `PASSWORD_CHANGE` | — |
+| `logRegister` | `REGISTER_SUCCESS` | `REGISTER_FAILED` |
+| （直用 logAuditEvent） | `PERMISSION_CHANGE`、`PASSWORD_RESET` 等自定义 | — |
+
+**逐接口说明**：
+
+| 接口 | 参数（解构对象） | 落库字段映射 | 注意点 |
+|------|------------------|--------------|--------|
+| `logAuditEvent(event)` | `{ type, userId, ip, userAgent, appId, details }` | `type`→`event` 列，`userId`→`user_id`，`appId`→`app_id`，`details`→`details`（JSON） | 唯一底层写入口；`type` 透传不校验枚举（新增审计类型先在 AuditLog 模型注释登记） |
+| `getAuditLogs(options)` | `{ limit=100, event, userId }` | —（读） | **从 AuditLog 表读**（不是环形缓冲）；`limit` 硬上限 500（超出静默截断）；按 `created_at` 倒序；**无 try-catch，DB 异常向上抛** |
+| `logLogin(p)` | `{ userId, ip, userAgent, appId, success, reason }` | `success` 决定事件类型；`reason` 进 `details` | ⚠️ 只管**成功**路径与带 userId 的失败；无 userId 的失败（邮箱盲试）走 `logLoginFailure`（见下） |
+| `logLogout(p)` | `{ userId, ip, appId }` | 无 details | 预留未接线；接线时登出路由调用即可 |
+| `logKick(p)` | `{ userId, ip, targetSessionId, reason }` | `targetSessionId`/`reason` 进 `details` | 预留未接线；参数名 `userId` 语义 = **被踢用户**（发起方走操作者审计） |
+| `logPasswordChange(p)` | `{ userId, ip, userAgent }` | 无 details | 预留未接线；接线时改密路由调用 |
+| `logRegister(p)` | `{ userId, email, ip, userAgent, appId, success, reason }` | `success` 决定事件类型；`details.email` 脱敏 | **邮箱自动脱敏**：只留前 2 字符 + `***@域名`（`zz***@qq.com`），details 里永远不该出现完整邮箱 |
+
+**相关但不同表的函数——`logLoginFailure`（session-governance.js）**：
+
+- 写 **SessionLog 表**（不是 AuditLog），`event='LOGIN_FAILED'`、`user_id=null`（盲试无用户）；
+- `details.email` **不脱敏原文存储**——这是刻意的：`anomaly-detector.js` 按 `details.email = email` 精确匹配做账户锁定判定，脱敏后就查不到了；
+- 两表分工：**AuditLog = 有主安全事件**（成功动作/带 userId 失败），**SessionLog = 无主会话事件**（盲试失败、设备登录历史）。查"某邮箱最近登录失败"去 SessionLog，查"某用户做过什么"去 AuditLog。
+
+**调用约束**：
+
+- **写入型函数**（`logAuditEvent` 及 5 个便捷方法）内部全 try-catch、**不会向调用方抛错**——调用处无需包 try（但必须 await，否则进程退出前可能丢写）；
+- `logLoginFailure` 无 try-catch（SessionLog 写失败会抛）；
+- `AuditLog`/`SessionLog` 模型未注册时（如单测环境）写入自动跳过或抛错，以函数体为准；
+- 审计落库字符串（`LOGIN_SUCCESS`/`SESSION_KICK`…）与 `AUTH_EVENTS` 事件中心的 `session:*` 命名空间是**两套独立体系**（事件总线是进程内 pub/sub，审计是持久化枚举）——不要混用，也不要"统一"它们。
 
 ## 约束（有测试钉死，改动前先看）
 
