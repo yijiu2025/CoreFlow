@@ -65,6 +65,7 @@ async function registerSessionRoutes(fastify) {
     alias: '绑定 Session 到 Cookie',
     method: 'POST',
     url: '/bind-session',
+    riskExempt: true, // iframe 登录后换 sid，此时基准可能还没更新，拦了会死锁
     handler: async (request, reply) => {
       if (!isAllowedOrigin(request)) {
         return reply.code(403).send({ code: 403, message: '来源不在允许列表', data: null });
@@ -93,6 +94,7 @@ async function registerSessionRoutes(fastify) {
     alias: '清除登录态 Cookie',
     method: 'POST',
     url: '/clear-cookie',
+    riskExempt: true, // 临时退出（清 cookie），不依赖基准，拦了退不出
     handler: async (request, reply) => {
       clearAuthCookies(reply);
       return reply.result.success('Cookie 已清除');

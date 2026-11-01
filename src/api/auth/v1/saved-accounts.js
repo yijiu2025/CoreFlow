@@ -42,6 +42,7 @@ async function registerSavedAccountsRoutes(fastify) {
     method: 'POST',
     url: '/switch-account',
     requireLogin: false,
+    riskExempt: true, // 切换账号轮转凭证 cookie，不依赖基准，拦了切不了
     handler: async (request, reply) => {
       if (!isAllowedOrigin(request)) {
         return reply.code(403).send({ code: 403, message: '来源不在允许列表', data: null });
@@ -76,6 +77,7 @@ async function registerSavedAccountsRoutes(fastify) {
     method: 'POST',
     url: '/saved-accounts/revoke',
     requireLogin: true,
+    riskExempt: true, // 免切账号管理（撤销凭证），与 switch-account 同属退出链路
     handler: async (request, reply) => {
       if (!isAllowedOrigin(request)) {
         return reply.code(403).send({ code: 403, message: '来源不在允许列表', data: null });

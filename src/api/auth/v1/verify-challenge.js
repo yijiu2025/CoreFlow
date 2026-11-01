@@ -14,6 +14,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { confirmVerifyToken } from '../../../framework/auth/index.js';
 import { updateSessionBaseline, getSessionTokenDevice } from '../../../framework/auth/index.js';
 import { getDeviceId, computeDeviceFingerprint } from '../../../framework/auth/index.js';
+import { registerRiskVerifyUrl } from '../../../framework/auth/index.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('api.auth.v1.verify-challenge');
@@ -28,12 +29,13 @@ async function registerVerifyChallengeRoutes(fastify) {
     requireLogin: false // 验证端点不强制登录（但需 verify token）
   });
 
-  registerSecureRoute(fastify, {
+  const verifyRoute = registerSecureRoute(fastify, {
     name: 'verifyChallenge',
     alias: '完成风险验证',
     method: 'POST',
     url: '/verify-challenge',
     requireLogin: true, // 需登录态（verify token 绑定 userId）
+    riskExempt: true, // 人机验证端点自身不能被风险拦截（拦了自己就永远验不完）
     config: {
       rateLimit: { max: 10, timeWindow: '1 minute' }
     },
@@ -85,6 +87,11 @@ async function registerVerifyChallengeRoutes(fastify) {
       return reply.result.success('验证通过，30 分钟内免验', { verified: true });
     }
   });
+
+  // 🔴 把解析后的真实完整 URL（system.json.prefix + /v1 + /verify-challenge）回填给
+  // 风险模块：detectSessionRisk 的 verify.url 兜底由此而来，前缀怎么改都不失联。
+  // 此前硬编码 '/auth/v1/verify-challenge'，system 前缀一变前端就会拿到 404 的验证地址。
+  registerRiskVerifyUrl(verifyRoute.fullUrl);
 }
 
 export default registerVerifyChallengeRoutes;

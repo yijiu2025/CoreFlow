@@ -27,22 +27,41 @@ import registerVerifyRoutes from '../api/verify/v1/verify.js';
 import registerUserRoutes from '../api/user/v1/user.js';
 import registerSessionsRoutes from '../api/user/v1/sessions.js';
 import registerSessionRoutes from '../api/auth/v1/session.js';
+import registerSavedAccountsRoutes from '../api/auth/v1/saved-accounts.js';
+import registerVerifyChallengeRoutes from '../api/auth/v1/verify-challenge.js';
+import registerLogoutRoutes from '../api/oauth21/v1/logout.js';
+import registerDeactivationRoutes from '../api/user/v1/deactivation.js';
 import registerNoticeConfigRoutes from '../api/notice/v1/config.js';
 import registerMetricsRoutes from '../api/firewall/v1/metrics.js';
 import registerTokenRoutes from '../api/oauth21/v1/token.js';
 
 let app;
+/** 捕获到的带 riskExempt 标志的路由配置（onRequest 钩子填充） */
+const riskExemptSeen = [];
 
 beforeAll(async () => {
   app = Fastify({ logger: false });
   await app.register(cookie);
   await app.register(globalsLoader);
 
+  // 捕获每个匹配路由的 config，供风险豁免声明位契约断言（onRequest 在路由匹配后执行）。
+  // 必须在路由注册前 addHook：Fastify 封装语义下钩子只对"声明之后注册"的路由生效
+  app.addHook('onRequest', async request => {
+    const cfg = request.routeOptions?.config;
+    if (cfg && cfg.riskExempt !== undefined) {
+      riskExemptSeen.push({ url: request.routeOptions.url, riskExempt: cfg.riskExempt });
+    }
+  });
+
   // 只注册真实模块本身，不重建任何业务逻辑
   await app.register(registerVerifyRoutes, { prefix: '/verify' });
   await app.register(registerUserRoutes, { prefix: '/user' });
   await app.register(registerSessionsRoutes, { prefix: '/user' });
   await app.register(registerSessionRoutes, { prefix: '/auth' });
+  await app.register(registerSavedAccountsRoutes, { prefix: '/auth' });
+  await app.register(registerVerifyChallengeRoutes, { prefix: '/auth' });
+  await app.register(registerLogoutRoutes, { prefix: '/oauth2.1' });
+  await app.register(registerDeactivationRoutes, { prefix: '/user' });
   await app.register(registerNoticeConfigRoutes, { prefix: '/notice' });
   await app.register(registerMetricsRoutes, { prefix: '/api/firewall' });
   await app.register(registerTokenRoutes, { prefix: '/oauth2.1' });
@@ -195,5 +214,48 @@ describe('API 路由（真实驱动）', () => {
     it('未注册的路径确实不存在', () => {
       expect(flat()).not.toContain('this-route-should-not-exist');
     });
+  });
+});
+
+describe('风险豁免声明位（riskExempt）真实契约', () => {
+  // 背景：豁免机制曾是 anomaly-detector 里的硬编码路径清单，腐烂出两条死路径
+  // （'/auth/v1/logout'、'/auth/v1/deactivation' 不存在）+ 漏豁免真实登出。
+  // 现为路由声明制：本组用例用**真实注册的路由**钉住每个豁免端点都声明了标志位。
+  const EXEMPT_URLS = [
+    '/auth/v1/bind-session', // iframe 换 sid
+    '/auth/v1/clear-cookie', // 临时退出
+    '/auth/v1/switch-account', // 切换账号
+    '/auth/v1/saved-accounts/revoke', // 撤销免切凭证
+    '/auth/v1/verify-challenge', // 人机验证自身
+    '/oauth2.1/logout', // 显式登出（旧清单漏豁免 → 退不出登录死锁）
+    '/user/v1/deactivation/apply', // 注销申请（旧清单前缀写错，从未生效）
+    '/user/v1/deactivation/revoke' // 撤销注销
+  ];
+
+  for (const url of EXEMPT_URLS) {
+    it(`POST ${url} 声明了 riskExempt: true`, async () => {
+      // 触发路由匹配（handlers 自带来源/参数校验，未登录会在 handler 层被拒，
+      // 这里只关心 onRequest 捕获到的 config 标志）
+      await app.inject({ method: 'POST', url, payload: {} });
+      const hit = riskExemptSeen.find(r => r.url === url);
+      expect(hit).toBeDefined();
+      expect(hit.riskExempt).toBe(true);
+    });
+  }
+
+  it('verify-challenge 注册时已把真实 URL 回填给风险模块（兜底地址与真实路由一致）', async () => {
+    // 行为验证：detectSessionRisk 不传 verifyUrl 时，兜底 = verify-challenge 注册时
+    // 经 registerRiskVerifyUrl 回填的 guard 解析结果（本测试环境无 system 前缀 → /v1/verify-challenge）
+    const { detectSessionRisk } = await import('../framework/auth/risk/anomaly-detector.js');
+    const risk = await detectSessionRisk({
+      userId: 1,
+      deviceId: 'WEB-AbCdEfGhIjK-Ab3dE9',
+      ip: '1.2.3.4',
+      fingerprint: 'fp-x',
+      baselineFingerprint: 'fp-y',
+      baselineIp: '1.2.3.4'
+    });
+    expect(risk.level).toBe('warn');
+    expect(risk.verify.url).toBe('/v1/verify-challenge');
   });
 });

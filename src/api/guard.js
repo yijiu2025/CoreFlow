@@ -404,7 +404,12 @@ function registerSecureRoute(fastify, options) {
     freshPermission = false,
     // 二级认证（safe.js）：声明后该路由在守卫之后追加 createSafePreHandler，
     // 要求当前用户处于 openSafe(service) 时间窗内，否则 403 SECOND_AUTH_REQUIRED
-    safe = null
+    safe = null,
+    // 风险豁免声明：设备指纹变更（warn 级）会拦截高风险写操作（非 GET），
+    // 退出/切换账号/人机验证等端点若不豁免会死锁（退不出、验不了）。
+    // 🔴 单一事实源 = 路由声明位（前缀无关、改名即随路由走），
+    // 由 anomaly-detector.isHighRiskRequest 在 onRequest 读取 routeOptions.config 消费。
+    riskExempt = false
   } = options;
 
   // 参数防御性校验
@@ -459,7 +464,8 @@ function registerSecureRoute(fastify, options) {
     requireLogin,
     requirePermission: perm,
     freshPermission,
-    safe
+    safe,
+    riskExempt
   });
 
   // 需要登录的路由自动标记需要签名验证；requireSignature 可单独开启（公开端点防爬）
@@ -472,6 +478,9 @@ function registerSecureRoute(fastify, options) {
   // 在不跨 app 依赖 guard 配置表的前提下判断「这个请求注定会被守卫 401」。
   // 只读元数据，不参与鉴权决策 —— 鉴权仍然完全由 preHandler 的级联守卫负责。
   if (requireLogin) routeConfig.requireLogin = true;
+  // 风险豁免标志进路由 config：anomaly-detector 的 onRequest 钩子读
+  // request.routeOptions.config.riskExempt 判定是否放行（onRequest 在路由匹配后执行）
+  if (riskExempt) routeConfig.riskExempt = true;
 
   // 二级认证：safe 声明非空时，守卫之后追加 checkSafe preHandler（数组形式，
   // Fastify 按声明顺序执行：先三级守卫、后二级认证 —— 未登录到不了二级认证）
@@ -486,6 +495,10 @@ function registerSecureRoute(fastify, options) {
     preHandler,
     handler
   });
+
+  // 返回注册结果：调用方（如 verify-challenge）可拿到解析后的真实 fullUrl
+  // （system.json.prefix + 组前缀 + url），避免各处手拼完整路径
+  return { name, fullUrl, method: methodUpper };
 }
 
 /**

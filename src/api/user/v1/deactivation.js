@@ -35,6 +35,7 @@ async function registerDeactivationRoutes(fastify) {
     method: 'POST',
     url: '/deactivation/apply',
     requireLogin: true,
+    riskExempt: true, // 账号自助管理动作（旧清单写错前缀从未生效，本次随声明制修正）
     config: {
       // 注销申请敏感，限频防滥用
       rateLimit: { max: 3, timeWindow: '1 minute' }
@@ -79,6 +80,7 @@ async function registerDeactivationRoutes(fastify) {
     method: 'POST',
     url: '/deactivation/revoke',
     requireLogin: true,
+    riskExempt: true, // 与 apply 同属账号自助管理动作
     handler: async (request, reply) => {
       const user = request.state?.user;
       const userId = user?.userId || user?.id;

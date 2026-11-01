@@ -48,6 +48,7 @@ async function registerLogoutRoutes(fastify) {
     method: 'POST',
     url: '/logout',
     requireLogin: false,
+    riskExempt: true, // 登出不依赖基准且必须永远可达——拦了就是"退不出登录"死锁
     handler: doLogout
   });
 
