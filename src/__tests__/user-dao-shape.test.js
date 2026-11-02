@@ -93,7 +93,10 @@ describe('形状契约的源码级护栏', () => {
   const listJs = dir => {
     const out = [];
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = new URL(`${entry.name}/`, dir);
+      // ⚠️ 尾部 `/` **只能给目录**：给文件也拼斜杠会得到 `.../iam.js/`，
+      // Windows 容忍（readFileSync 照读），Linux 直接 ENOTDIR ——
+      // 本仓 CI 因此从 2026-11-01 起连红两天，本地却全绿（平台差异盲区）。
+      const full = new URL(`${entry.name}${entry.isDirectory() ? '/' : ''}`, dir);
       if (entry.isDirectory()) {
         if (entry.name === '__tests__') continue; // 测试 fixtures 允许提及历史字段名
         out.push(...listJs(full));
@@ -105,9 +108,12 @@ describe('形状契约的源码级护栏', () => {
   };
 
   test('全 src 不再出现 numericId（防止历史命名回归）', () => {
-    const offenders = listJs(srcRoot)
-      .filter(f => /numericId/.test(readFileSync(f, 'utf8')))
-      .map(f => f.pathname);
+    const files = listJs(srcRoot);
+    // 平台无关护栏：文件 URL 不得以 `/` 结尾。Windows 会把 `x.js/` 当文件正常读取，
+    // Linux 直接 ENOTDIR —— 没有这条断言，同一份代码在本地绿、CI 红（已发生两天）。
+    expect(files.filter(f => f.pathname.endsWith('/')).map(f => f.pathname)).toEqual([]);
+
+    const offenders = files.filter(f => /numericId/.test(readFileSync(f, 'utf8'))).map(f => f.pathname);
     expect(offenders).toEqual([]);
   });
 
