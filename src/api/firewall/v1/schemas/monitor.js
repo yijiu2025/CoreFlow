@@ -134,19 +134,7 @@ const updateSettingsSchema = {
           idcIpPrefixes: { type: 'array', items: { type: 'string' } },
           safePaths: { type: 'array', items: { type: 'string' } },
           challengeDifficulty: { type: 'number', minimum: 1, maximum: 6 },
-          geoRules: { type: 'object' },
-          endpointRateLimits: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                path: { type: 'string' },
-                limit: { type: 'number' },
-                window: { type: 'number' },
-                blockTime: { type: 'number' }
-              }
-            }
-          }
+          geoRules: { type: 'object' }
         }
       }
     }

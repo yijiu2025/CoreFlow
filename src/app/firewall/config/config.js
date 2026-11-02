@@ -6,16 +6,12 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.firewall.config.config');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const FIREWALL_FILE = path.resolve(__dirname, '../../../data/firewall_config.json');
+// 持久化路径的单一来源在 framework（防护核心启动期就要读它），这里只做 re-export。
+import { FIREWALL_FILE } from '../../../framework/firewall/config/persisted.js';
 
 const CHALLENGE_SECRET = process.env.FIREWALL_SECRET;
 
@@ -157,158 +153,13 @@ const DEFAULT_IP_APIS = [
 
 const DEFAULT_IP_API = DEFAULT_IP_APIS.find(api => api.id === 'sohu');
 
+// 默认安全策略矩阵已下沉 framework（单一来源：framework/firewall/config/defaults.js，
+// 2026-11-02 随 05-firewall 直接启动防护核心一起迁移）。此处 re-export 维持
+// dao.js 与测试的既有 import 路径不变。
+export { DEFAULT_SECURITY_SETTINGS } from '../../../framework/firewall/config/defaults.js';
+
 /**
- * 默认安全策略矩阵
- * 阈值参数支持环境变量覆盖，格式: FW_<大写参数名>
+ * 默认安全策略矩阵（re-export，定义见 framework/firewall/config/defaults.js）
  */
-const DEFAULT_SECURITY_SETTINGS = {
-  activeIpApi: process.env.FW_ACTIVE_IP_API || 'sohu',
-  showTrajectory: true,
 
-  defense: {
-    manualBlacklistIps: [],
-    manualBlacklistUsers: [],
-    manualWhitelistIps: [],
-
-    // --- 扫描检测 ---
-    enableAutoBlacklist: true,
-    maxNotFoundAttempts: parseInt(process.env.FW_SCAN_THRESHOLD || '10'),
-    blacklistDuration: parseInt(process.env.FW_BLACKLIST_DURATION || '3600'),
-    notFoundWindow: parseInt(process.env.FW_SCAN_WINDOW || '60'),
-    safePaths: ['/health', '/favicon.ico', '/robots.txt', '/__fw/', '/api/firewall/'],
-
-    internalIpPrefixes: [
-      '127.',
-      '10.',
-      '192.168.',
-      '::1',
-      '172.16.',
-      '172.17.',
-      '172.18.',
-      '172.19.',
-      '172.20.',
-      '172.21.',
-      '172.22.',
-      '172.23.',
-      '172.24.',
-      '172.25.',
-      '172.26.',
-      '172.27.',
-      '172.28.',
-      '172.29.',
-      '172.30.',
-      '172.31.'
-    ],
-
-    idcIpPrefixes: ['100.104.', '101.37.', '47.88.', '162.14.', '101.36.', '52.82.'],
-
-    // --- 全局限频 ---
-    // 阈值是「每个键（已登录按 user.id，未登录按 IP）在窗口内的请求数」。
-    // 历史默认 10000/60s ≈ 167 rps/键 —— 单 IP 打这么多请求已足以压垮进程，
-    // 等于没有这一层防护；600/60s ≈ 10 rps/键，面板（WebSocket + 20s 心跳）与
-    // 正常 SPA 交互都有 10 倍以上余量。压测需要更宽时用 FW_RATE_LIMIT_OVERRIDE
-    // （只放宽、且必须严格正整数，见 engine/detectors/first-ratelimit.js）。
-    enableRateLimit: false,
-    // 端点级限频独立开关（默认开启）：只管 defense.endpointRateLimits 规则；
-    // enableRateLimit 只管 @fastify/rate-limit 全局限流。二者互不联动
-    // （2026-11-01 拆分：此前关全局会把端点规则一起杀死）。
-    enableEndpointRateLimit: true,
-    rateLimitRequests: parseInt(process.env.FW_RATE_LIMIT || '600'),
-    rateLimitWindow: parseInt(process.env.FW_RATE_WINDOW || '60'),
-
-    // --- 用户级限频 ---
-    enableUserRateLimit: true,
-    userRateLimitRequests: parseInt(process.env.FW_USER_RATE_LIMIT || '120'),
-    userRateLimitWindow: 60,
-
-    // --- 暴力破解防护 ---
-    enableBruteForce: true,
-    bruteLimit: parseInt(process.env.FW_BRUTE_LIMIT || '5'),
-    bruteWindow: 300,
-    accountLockTime: parseInt(process.env.FW_LOCK_TIME || '900'),
-    ipBlockTime: 600,
-    bruteIpLimit: parseInt(process.env.FW_BRUTE_IP_LIMIT || '10'),
-
-    // --- 并发连接 ---
-    enableConnLimit: true,
-    maxConn: parseInt(process.env.FW_MAX_CONN || '100'),
-
-    // --- 地理围栏 ---
-    enableGeoFilter: process.env.FW_GEO_FILTER === 'true',
-    geoRules: {
-      // 敏感路径（逗号分隔，环境变量覆盖）
-      sensitivePaths: process.env.FW_SENSITIVE_PATHS
-        ? process.env.FW_SENSITIVE_PATHS.split(',')
-        : ['/api/admin', '/api/payment', '/api/user/delete'],
-      internalPrefixes: ['/internal/'],
-      overseasLimit: 10,
-      overseasWindow: 60,
-      overseasBlockTime: 3600
-    },
-
-    // --- 端点级限频（可配置数组） ---
-    endpointRateLimits: [
-      { path: '/api/sms', limit: 3, window: 600, blockTime: 1800 },
-      { path: '/api/order', limit: 10, window: 60, blockTime: 1800 },
-      { path: '/api/verify', limit: 10, window: 60, blockTime: 300 }
-    ],
-
-    // --- Bot 检测（支持字符串和正则表达式） ---
-    // 环境变量 FW_BOT_PATTERNS 可追加自定义模式（逗号分隔）
-    botPatterns: [
-      'python-requests',
-      'scrapy',
-      'httpclient',
-      'go-http-client',
-      'java/',
-      'libcurl',
-      'wget',
-      'axios',
-      'node-fetch',
-      'headless',
-      'phantomjs',
-      'selenium',
-      ...(process.env.FW_BOT_PATTERNS ? process.env.FW_BOT_PATTERNS.split(',') : [])
-    ],
-    browserPatterns: ['chrome', 'firefox', 'safari', 'edge', 'opera'],
-    botChallengeNoUaLimit: parseInt(process.env.FW_BOT_NOUA_LIMIT || '10'),
-    botChallengeBotLimit: parseInt(process.env.FW_BOT_LIMIT || '30'),
-    botChallengeBrowserLimit: parseInt(process.env.FW_BROWSER_LIMIT || '120'),
-
-    // --- 人机挑战的 PoW 难度 ---
-    // 前导十六进制零个数：期望哈希次数 = 16^difficulty（3 → 约 4096 次，浏览器 <0.1s；
-    // 5 → 约 100 万次，约 1~2s）。代码侧夹取到 [1, 6] 上限，防止把低端机卡死。
-    challengeDifficulty: parseInt(process.env.FW_CHALLENGE_DIFFICULTY || '3'),
-
-    // --- 设备维度封禁（跨 IP） ---
-    // 自动封禁/挑战命中时，除 IP 外**同时**记到设备 ID 上（设备 ID 来自 auth 的结构化
-    // 设备 ID 流程，与 IP 无关）。这是唯一能拦住「换个 IP 重来」的维度。
-    // 关掉它则退回纯 IP 维度（历史上只有 IP 一个维度）。
-    enableDeviceBlock: process.env.FW_DEVICE_BLOCK !== 'false',
-
-    // --- 匿名请求的深度检测短路 ---
-    // 打开后：路由声明 requireLogin 且请求**一个凭据都没带**时，跳过 Bot/地理/端点限频
-    // 这三个深度检测（这些请求必被守卫 401，检测结果用不上）。
-    // 取舍：端点枚举的阻力会下降（第一层全局限流与封禁/白名单阶段仍然生效）。
-    // 默认关闭 —— 省下的只是 CPU 与 Redis 往返，而损失的是探测可见性。
-    skipDeepCheckForAnonymous: process.env.FW_SKIP_DEEP_CHECK_ANON === 'true',
-
-    // --- 攻击告警（旁路能力） ---
-    // email / webhookUrl 为空时 auto-responder 不做任何外部请求，等价于关闭。
-    alert: {
-      enabled: true,
-      email: process.env.FW_ALERT_EMAIL || '',
-      webhookUrl: process.env.FW_ALERT_WEBHOOK || '',
-      cooldownMs: 300000
-    }
-  }
-};
-
-export {
-  FIREWALL_FILE,
-  CHALLENGE_SECRET,
-  DEFAULT_SERVER_NODE,
-  DEFAULT_IP_APIS,
-  DEFAULT_IP_API,
-  DEFAULT_SECURITY_SETTINGS
-};
+export { FIREWALL_FILE, CHALLENGE_SECRET, DEFAULT_SERVER_NODE, DEFAULT_IP_APIS, DEFAULT_IP_API };

@@ -81,6 +81,85 @@ registerSecureRoute(fastify, {
 });
 ```
 
+## `registerSecureRoute()` 完整字段参考
+
+定义在 `src/api/guard.js`。除三级守卫外，它还编排了签名验证、二级认证、敏感操作回源、风险豁免等一系列安全设施。字段分四类：**路由基本项 / 守卫项 / 增强安全项 / Fastify 透传项**。
+
+### 字段总表
+
+| 字段 | 类型 / 默认值 | 分类 | 说明 |
+| --- | --- | --- | --- |
+| `name` | string，默认 url 中 `/` 换 `_` | 基本 | API key，用于守卫配置持久化与运行时动态修改；同一 System+Group 内命名需可辨识 |
+| `alias` | string | 基本 | 中文别名，仅用于管理面板/文档展示 |
+| `method` | string，**必填** | 基本 | HTTP 方法，内部转大写 |
+| `url` | string，**必填** | 基本 | 相对路径，与 system prefix、组前缀拼接成最终 URL（见下文 URL 拼接规则） |
+| `handler` | function，**必填** | 基本 | 业务处理函数 |
+| `group` | string，默认 currentGroup | 基本 | 覆盖文件级组归属（一般不用，Loader 自动维护上下文） |
+| `requireLogin` | boolean，默认 `false` | 守卫 | 未登录返回 401。**置 true 会自动开启 H5 签名验证**（见 `requireSignature`） |
+| `allowRoles` | string[]，默认 `[]` | 守卫 | 角色白名单；**非空时隐含必须登录**（未登录连角色都没有） |
+| `allowIps` | string[]，默认 `[]` | 守卫 | IP 白名单，支持精确/通配符/CIDR；非空时白名单外的 IP 一律 403 |
+| `enabled` | 经持久化配置控制 | 守卫 | 代码里不直接声明；在管理面板/`guard_configs` 表中动态开关 |
+| `permission` / `requirePermission` | string \| `{any:[]}` \| `{all:[]}`，默认 `null` | 守卫 | 权限校验，`permission` 是 `requirePermission` 的短别名，两者等价；Deny 优先（见下方权限配置） |
+| `requireSignature` | boolean，默认 `false` | 增强 | H5 签名验证（`_m_h5_tk` + timestamp + nonce SHA-256）；`requireLogin: true` 时自动开启，公开端点也可单独开启防爬 |
+| `freshPermission` | boolean，默认 `false` | 增强 | 敏感操作回源校验：绕过会话内的权限副本，**实时查库**取最新角色/权限再决策。每开一个多 3 表查询，只给改权限、注销账号、导出全量数据这类不可逆/高影响操作开。回源失败 fail-closed（403） |
+| `safe` | string（service 维度），默认 `null` | 增强 | 二级认证：守卫通过后追加 `createSafePreHandler(service)`，要求当前用户处于 `openSafe(service)` 时间窗内，否则 403 `SECOND_AUTH_REQUIRED`（前端引导二次验证后再发起请求） |
+| `riskExempt` | boolean，默认 `false` | 增强 | 风险豁免：设备指纹变更（warn 级）会拦截高风险写操作；退出登录/切换账号/人机验证等端点若不豁免会**死锁**（退不出、验不了）。标志写入路由 config，由防火墙 anomaly-detector 的 onRequest 读取消费 |
+| `schema` | object，默认 `{}` | 透传 | Fastify 原生 schema（body/querystring/response 校验） |
+| `config` | object，默认 `{}` | 透传 | 原样并入路由 config。**`@fastify/rate-limit` 的路由级配置就写在这里**（`max`/`timeWindow`/`groupId`，见 [rate-limit-group-id.md](./rate-limit-group-id.md)） |
+
+### 校验顺序（单次请求内）
+
+```
+onRequest 阶段（守卫之前）
+  ├─ @fastify/rate-limit 全局限频（config.rateLimit 消费点）
+  ├─ 防火墙五层管道（anomaly-detector 读 config.riskExempt 判定豁免）
+  └─ H5 签名验证（config.requireSignature 消费点）
+preHandler 阶段
+  ├─ 1. 三级级联守卫 createGuard（System → Group → API）
+  └─ 2. 二级认证 createSafePreHandler（仅 safe 声明时，数组按序执行）
+handler
+```
+
+### 运行时行为细节
+
+- **重复注册检测**：`method + 最终 URL` 在注册表里查重，重复直接 `throw`（`DUPLICATE_ROUTE`），启动即失败而非延后暴露到无关模块。
+- **参数防御性校验**：`method`/`url`/`handler` 缺失或类型错误启动期抛 `INVALID_PARAM`。
+- **返回值**：`{ name, fullUrl, method }` —— `fullUrl` 是解析后的真实完整路径，调用方可直接用它做客户端配置或跳转，避免手拼 `system.json.prefix + 组前缀 + url`。
+- **守卫结果元数据注入**：`request.state.systemKey/groupKey/apiKey` 会注入请求上下文，供日志审计链路使用。
+- **路由 config 注入**：`requireSignature`、`requireLogin`、`riskExempt` 满足条件时会写入 `request.routeOptions.config`，供下游 onRequest 钩子（防火墙等）在不依赖 guard 配置表的前提下读取——只读元数据，鉴权决策仍完全由 preHandler 守卫负责。
+
+### 组合示例
+
+```js
+// 敏感写操作全家桶：权限 + 实时回源 + 二级认证 + 显式签名
+registerSecureRoute(fastify, {
+  name: 'resetPermissions',
+  method: 'POST',
+  url: '/permissions/reset',
+  requireLogin: true,              // 隐含开启 H5 签名验证
+  permission: 'admin:perm:write',
+  freshPermission: true,           // 改权限前实时查库，防陈旧权限蒙混
+  safe: 'perm_reset',              // 需在二级认证时间窗内
+  config: {
+    rateLimit: { max: 5, timeWindow: '1 minute', groupId: 'perm-reset' }
+  },
+  handler: async (request, reply) => { ... }
+});
+
+// 公开免登录端点：独立限频桶 + 显式签名防爬（无登录则不会自动开签名）
+registerSecureRoute(fastify, {
+  name: 'issueH5Token',
+  method: 'GET',
+  url: '/h5-token',
+  requireLogin: false,
+  requireSignature: false,         // 本端点本身就是发签名 cookie 的，不能要求签名
+  config: {
+    rateLimit: { max: 30, timeWindow: '1 minute', groupId: 'h5-token' }
+  },
+  handler: async (request, reply) => { ... }
+});
+```
+
 ## 权限配置
 
 `permission` 支持三种格式：

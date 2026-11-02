@@ -29,22 +29,52 @@
  * auth 的结构化设备 ID 流程签发、与 IP 无关 —— 它是本模块唯一能跨 IP 追踪的身份。
  * 强度边界见 `dao/block-manager.js` 的 `setBlockForSubject` 注释（客户端可弃用换新）。
  *
+ * ── 模块划分（2026-11-02 拆分，本文件仍是唯一对外入口）──
+ *   `lua-scripts.js`   Lua 脚本字面量（纯字符串）
+ *   `redis-keys.js`    键命名 `rel`/`HASH`、`full()`、`dimOf`/`ID_BY_DIM`（纯函数，零依赖）
+ *   `redis-memory.js`  Redis 不可用时的内存降级实现（表结构 + 惰性清理 + 各域内存读写）
+ *   本文件             Redis 路径：store 取用、`client.eval(...)` 调用点、语义化 API 与门面导出
+ *
+ * 为什么 eval 必须留在本文件：源码守卫（`__tests__/firewall-redis-adapter.test.js`）要求
+ * 「`eval(` 只出现在访问层，且本文件内 `client.eval(` ≥ 9 处、必须是 v5 的 `{ keys, arguments }`
+ * 签名」。拆域时把 eval 搬出去会直接违背这条契约，所以按「脚本 / 命名 / 内存 / Redis 路径」分，
+ * 而不是按业务域分。
+ *
  * @author yijiu2025
  * @since 2026-09-15
+ * @since 2026-11-02 拆出 lua-scripts / redis-keys / redis-memory，导出面与 import 路径不变
  */
 import { getStore, isRedisReady } from '../../redis/index.js';
 import { createLogger } from '../../log/index.js';
+import {
+  LUA_READ_ACCESS_STATE,
+  LUA_WRITE_BLOCK,
+  LUA_WRITE_WHITELIST,
+  LUA_REMOVE_ENTRY,
+  LUA_INCR_WITH_EXPIRE,
+  LUA_GRANT_PASS,
+  LUA_HAS_PASS,
+  LUA_TAKE_CHALLENGE
+} from './lua-scripts.js';
+import { NS, KEY_SENTINEL, full, rel, HASH, dimOf, ID_BY_DIM } from './redis-keys.js';
+import {
+  PERMANENT_RETRY_AFTER,
+  mem,
+  TABLES,
+  sweepMemory,
+  emptyAccessState,
+  readAccessStateFromMemory,
+  writeBlockToMemory,
+  listActiveFromMemory,
+  bumpCounterInMemory,
+  memDeleteByRel,
+  resetMemoryState
+} from './redis-memory.js';
 
 const log = createLogger('framework.firewall.util.redis');
 
-/** 命名空间：getStore 自动加 `fw:` 前缀，store.* 方法传相对 key */
-const NS = 'fw';
-
 /** 单次 Redis 操作超时（毫秒）。防火墙在请求路径上，宁可快速降级也不拖慢请求 */
 const OP_TIMEOUT_MS = 2000;
-
-/** 永久封禁的 Retry-After 兜底值（秒），与历史行为一致 */
-const PERMANENT_RETRY_AFTER = 86400;
 
 /**
  * 惰性取 store。
@@ -59,11 +89,6 @@ function store() {
   return getStore(NS, { timeout: OP_TIMEOUT_MS });
 }
 
-/** 相对 key → 完整 Redis key（仅在需要绕过 store 前缀、直接给 Lua 传 KEYS 时使用） */
-function full(relKey) {
-  return `${NS}:${relKey}`;
-}
-
 /** 当前是否真的能用 Redis（已配置 + 已连接）；否则走内存实现 */
 function redisAvailable() {
   return isRedisReady();
@@ -71,276 +96,46 @@ function redisAvailable() {
 
 // ============== Lua 脚本 ==============
 
-/**
- * 一次往返读取全部访问控制状态（三个维度：设备 / 指纹 / IP）。
- * KEYS: [1] 设备白名单 [2] 指纹白名单 [3] IP 白名单 [4] 设备封禁 [5] 指纹封禁 [6] IP 封禁
- * ARGV: [1] '1'/'0' 是否带指纹 [2] '1'/'0' 是否带设备 ID
- * 返回: { 设备白名单, 指纹白名单, IP白名单, 设备封禁原文, 设备PTTL, 指纹封禁原文, 指纹PTTL, IP封禁原文, IPPTTL }
- *
- * 白名单命中即短路（与旧逻辑一致：白名单优先级最高，命中后不再查封禁）。
- * 设备维度排在指纹之前：它比「IP+请求头」更精确，命中信息更能说明问题。
- */
-const LUA_READ_ACCESS_STATE = `
-local hasFp = ARGV[1] == '1'
-local hasDev = ARGV[2] == '1'
-if hasDev and redis.call('EXISTS', KEYS[1]) == 1 then
-  return { 1, 0, 0, false, -2, false, -2, false, -2 }
-end
-if hasFp and redis.call('EXISTS', KEYS[2]) == 1 then
-  return { 0, 1, 0, false, -2, false, -2, false, -2 }
-end
-if redis.call('EXISTS', KEYS[3]) == 1 then
-  return { 0, 0, 1, false, -2, false, -2, false, -2 }
-end
-local devVal = false
-local devTtl = -2
-if hasDev then
-  devVal = redis.call('GET', KEYS[4])
-  if devVal then devTtl = redis.call('PTTL', KEYS[4]) end
-end
-local fpVal = false
-local fpTtl = -2
-if hasFp then
-  fpVal = redis.call('GET', KEYS[5])
-  if fpVal then fpTtl = redis.call('PTTL', KEYS[5]) end
-end
-local ipVal = redis.call('GET', KEYS[6])
-local ipTtl = -2
-if ipVal then ipTtl = redis.call('PTTL', KEYS[6]) end
-return { 0, 0, 0, devVal or false, devTtl, fpVal or false, fpTtl, ipVal or false, ipTtl }
-`;
-
-/**
- * 写入封禁：SET 封禁键（可带 TTL）+ HSET 索引，一次往返完成，避免「键写进去了但列表查不到」。
- * KEYS: [1] 封禁键 [2] 索引 Hash
- * ARGV: [1] JSON 值 [2] TTL 秒（0 = 永久，不带 TTL）[3] Hash field
- */
-const LUA_WRITE_BLOCK = `
-if tonumber(ARGV[2]) > 0 then
-  redis.call('SET', KEYS[1], ARGV[1], 'EX', tonumber(ARGV[2]))
-else
-  redis.call('SET', KEYS[1], ARGV[1])
-end
-redis.call('HSET', KEYS[2], ARGV[3], ARGV[1])
-return 1
-`;
-
-/**
- * 写入白名单：SET（带 TTL）+ HSET 索引。
- * KEYS: [1] 白名单键 [2] 索引 Hash
- * ARGV: [1] JSON 值 [2] TTL 秒 [3] Hash field
- */
-const LUA_WRITE_WHITELIST = `
-redis.call('SET', KEYS[1], '1', 'EX', tonumber(ARGV[2]))
-redis.call('HSET', KEYS[2], ARGV[3], ARGV[1])
-return 1
-`;
-
-/**
- * 移除访问控制条目：DEL 键 + HDEL 索引 field。
- * KEYS: [1] 键 [2] 索引 Hash
- * ARGV: [1] Hash field
- */
-const LUA_REMOVE_ENTRY = `
-redis.call('DEL', KEYS[1])
-redis.call('HDEL', KEYS[2], ARGV[1])
-return 1
-`;
-
-/**
- * 滑窗限频：清理窗口外成员 + 记录本次 + 计数 + 续期，一次往返且原子。
- * 旧实现是 4 条命令的 pipeline（且 `pipeline()` 在 node-redis 下根本不存在），
- * 并发下「先计数后写入」还会出现窗口漂移。
- * KEYS: [1] 窗口 key
- * ARGV: [1] now(ms) [2] windowMs [3] member [4] 窗口 key TTL(ms)
- * 返回: 窗口内请求数
- */
-const LUA_RATE_WINDOW = `
-redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, tonumber(ARGV[1]) - tonumber(ARGV[2]))
-redis.call('ZADD', KEYS[1], tonumber(ARGV[1]), ARGV[3])
-redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[4]))
-return redis.call('ZCARD', KEYS[1])
-`;
-
-/**
- * 计数 + 首次设置过期（替代旧共享 Lua）：原子，避免 incr 成功但 expire 没执行导致 key 永不过期。
- * KEYS: [1] 计数 key
- * ARGV: [1] 窗口秒
- */
-const LUA_INCR_WITH_EXPIRE = `
-local current = redis.call('INCR', KEYS[1])
-if current == 1 then
-  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))
-end
-return current
-`;
-
-/**
- * 签发挑战通过令牌：按「设备 / 指纹 / IP」同时写最多三个键（一次往返）。
- * KEYS: [1] 设备键 [2] 指纹键（无该维度时传哨兵键）[3] IP 键
- * ARGV: [1] '1'/'0' 是否带设备 ID [2] '1'/'0' 是否带指纹 [3] TTL 秒
- */
-const LUA_GRANT_PASS = `
-if ARGV[1] == '1' then redis.call('SET', KEYS[1], '1', 'EX', tonumber(ARGV[3])) end
-if ARGV[2] == '1' then redis.call('SET', KEYS[2], '1', 'EX', tonumber(ARGV[3])) end
-redis.call('SET', KEYS[3], '1', 'EX', tonumber(ARGV[3]))
-return 1
-`;
-
-/**
- * 校验挑战通过令牌：三个键任一存在即通过，一次往返。
- * KEYS: [1] 设备键 [2] 指纹键（无该维度时传哨兵键）[3] IP 键
- * ARGV: [1] '1'/'0' 是否带设备 ID [2] '1'/'0' 是否带指纹
- */
-const LUA_HAS_PASS = `
-if ARGV[1] == '1' and redis.call('EXISTS', KEYS[1]) == 1 then return 1 end
-if ARGV[2] == '1' and redis.call('EXISTS', KEYS[2]) == 1 then return 1 end
-if redis.call('EXISTS', KEYS[3]) == 1 then return 1 end
-return 0
-`;
-
-/**
- * 取走（读出并删除）挑战载荷：GET + DEL 必须原子，否则并发下同一 challengeId
- * 可以被重放两次 —— 「单次有效」的承诺就落空了。
- * KEYS: [1] 挑战 key
- * 返回: 载荷字符串；不存在返回 false
- */
-const LUA_TAKE_CHALLENGE = `
-local payload = redis.call('GET', KEYS[1])
-if payload then redis.call('DEL', KEYS[1]) end
-return payload
-`;
-
-/** 无指纹时给 KEYS 占位，保证 Lua 中 KEYS 数量恒定（避免 nil 索引） */
-const KEY_SENTINEL = '_none';
+// 脚本字面量已抽到 `./lua-scripts.js`（纯字符串、零依赖）：改脚本只需去那边逐字对齐
+// KEYS/ARGV 顺序与本文件调用点的数组顺序；本文件只保留调用点。
+// 源码守卫（firewall-redis-adapter.test.js）要求 `eval(` 只出现在本访问层，故调用点必须留在这里。
 
 // ============== Key 构造（相对，store 会加 fw: 前缀） ==============
 
-const rel = {
-  block: id => `block:${id}`,
-  blockFp: fp => `block:fp:${fp}`,
-  blockDevice: dev => `block:dev:${dev}`,
-  whitelist: id => `whitelist:${id}`,
-  whitelistFp: fp => `whitelist:fp:${fp}`,
-  whitelistDevice: dev => `whitelist:dev:${dev}`,
-  rateLimit: actor => `rl:${actor}`,
-  trap: ip => `trap:${ip}`,
-  bruteIp: ip => `brute:ip:${ip}`,
-  bruteUser: user => `brute:user:${user}`,
-  accountLock: user => `lock:${user}`,
-  passIp: (ip, token) => `pass:${ip}:${token}`,
-  passFp: (fp, token) => `pass:fp:${fp}:${token}`,
-  passDevice: (dev, token) => `pass:dev:${dev}:${token}`,
-  // 挑战载荷（服务端持有）：{ip, fingerprint, deviceId, salt, difficulty}，一次性消费
-  challenge: id => `chal:${id}`
-};
-
-const HASH = {
-  blockedIps: 'blocked:ips',
-  blockedFps: 'blocked:fps',
-  blockedDevices: 'blocked:devices',
-  whitelistedIps: 'whitelisted:ips',
-  whitelistedFps: 'whitelisted:fps',
-  whitelistedDevices: 'whitelisted:devices'
-};
-
 /**
- * 维度分派表：把某个身份维度在 Redis 与内存两条路径上要用到的名字集中到一处。
+ * 维度分派表：把某个身份维度在 **Redis 路径**上要用到的名字集中到一处。
  *
- * 为什么需要它：三个维度的读写逻辑完全同构，差别只在 key 名、索引名与内存表。
- * 旧版把 `isFp ? A : B` 的三元表达式散在 6 个函数里，加第三个维度时每处都要改，
+ * 为什么需要它：三个维度的读写逻辑完全同构，差别只在 key 名与索引名。旧版把
+ * `isFp ? A : B` 的三元表达式散在 6 个函数里，加第三个维度时每处都要改，
  * 漏一处就退化成「写得进去但读不出来」——本仓出现过同款事故（索引没写导致列表永远为空）。
+ *
+ * 内存侧对应表在 `redis-memory.js` 的 TABLES（那边是 Map，这边是键名）。
  *
  * @type {Record<'device'|'fingerprint'|'ip', object>}
  */
 const DIMS = {
   device: {
-    id: t => t.deviceId,
+    id: ID_BY_DIM.device,
     keyRel: rel.blockDevice,
     hashRel: HASH.blockedDevices,
     wlKeyRel: rel.whitelistDevice,
-    wlHashRel: HASH.whitelistedDevices,
-    // 内存表用 thunk 取：DIMS 在 mem 之前定义，直接取值会拿到 undefined
-    blockMem: () => mem.blocksDev,
-    wlMem: () => mem.whitelistDev
+    wlHashRel: HASH.whitelistedDevices
   },
   fingerprint: {
-    id: t => t.fingerprint,
+    id: ID_BY_DIM.fingerprint,
     keyRel: rel.blockFp,
     hashRel: HASH.blockedFps,
     wlKeyRel: rel.whitelistFp,
-    wlHashRel: HASH.whitelistedFps,
-    blockMem: () => mem.blocksFp,
-    wlMem: () => mem.whitelistFp
+    wlHashRel: HASH.whitelistedFps
   },
   ip: {
-    id: t => t.ip,
+    id: ID_BY_DIM.ip,
     keyRel: rel.block,
     hashRel: HASH.blockedIps,
     wlKeyRel: rel.whitelist,
-    wlHashRel: HASH.whitelistedIps,
-    blockMem: () => mem.blocks,
-    wlMem: () => mem.whitelist
+    wlHashRel: HASH.whitelistedIps
   }
 };
-
-/**
- * 解析目标身份属于哪个维度（优先级：设备 > 指纹 > IP，最精确者胜）
- *
- * @param {{ip?:string, fingerprint?:string, deviceId?:string}} target 目标
- * @returns {'device'|'fingerprint'|'ip'} 维度名
- */
-function dimOf(target) {
-  if (target?.deviceId) return 'device';
-  if (target?.fingerprint) return 'fingerprint';
-  return 'ip';
-}
-
-// ============== 内存降级实现 ==============
-
-/**
- * Redis 不可用时的内存状态。
- * 与 Redis 路径语义一致：临时条目按 expiresAt 惰性过期，永久条目用 permanent 标记。
- */
-const mem = {
-  blocks: new Map(),
-  blocksFp: new Map(),
-  blocksDev: new Map(),
-  whitelist: new Map(),
-  whitelistFp: new Map(),
-  whitelistDev: new Map(),
-  counters: new Map(),
-  windows: new Map(),
-  passes: new Map(),
-  flags: new Map(),
-  challenges: new Map()
-};
-
-/** 惰性清理内存状态，防止长时间无 Redis 时无界增长 */
-let lastSweep = 0;
-const SWEEP_INTERVAL_MS = 60_000;
-
-function sweepMemory() {
-  const now = Date.now();
-  if (now - lastSweep < SWEEP_INTERVAL_MS) return;
-  lastSweep = now;
-  for (const map of [mem.blocks, mem.blocksFp, mem.blocksDev]) {
-    for (const [k, v] of map) {
-      if (!v.permanent && v.expiresAt && now > v.expiresAt) map.delete(k);
-    }
-  }
-  for (const map of [mem.whitelist, mem.whitelistFp, mem.whitelistDev, mem.passes, mem.flags, mem.challenges]) {
-    for (const [k, v] of map) {
-      if (v.expiresAt && now > v.expiresAt) map.delete(k);
-    }
-  }
-  for (const [k, v] of mem.counters) {
-    if (v.expiresAt && now > v.expiresAt) mem.counters.delete(k);
-  }
-  for (const [k, list] of mem.windows) {
-    if (!list.length || now - list[list.length - 1] > 300_000) mem.windows.delete(k);
-  }
-}
 
 // ============== 封禁 / 白名单 ==============
 
@@ -388,23 +183,6 @@ async function readAccessState({ ip, fingerprint, deviceId }) {
 }
 
 /**
- * 空访问状态（Redis 失败时的 fail-open 返回值；只有一处定义，避免两个调用点漂移）
- *
- * @returns {{devWhitelisted:boolean, fpWhitelisted:boolean, ipWhitelisted:boolean,
- *   devBlock:null, fpBlock:null, ipBlock:null}}
- */
-function emptyAccessState() {
-  return {
-    devWhitelisted: false,
-    fpWhitelisted: false,
-    ipWhitelisted: false,
-    devBlock: null,
-    fpBlock: null,
-    ipBlock: null
-  };
-}
-
-/**
  * 解析封禁原文 + PTTL 为统一结构
  *
  * @param {string|false|null} raw 封禁原文（JSON 或旧格式字符串）
@@ -433,73 +211,6 @@ function decodeStatus(raw) {
   } catch {
     return text;
   }
-}
-
-/**
- * 内存版访问控制状态读取（维度与优先级同 Redis 版：设备 > 指纹 > IP）
- *
- * @param {{ip:string, fingerprint?:string, deviceId?:string}} params 目标
- * @returns {object} 与 readAccessState 同构的状态对象
- */
-function readAccessStateFromMemory({ ip, fingerprint, deviceId }) {
-  const now = Date.now();
-
-  // 白名单：任一维度命中即短路
-  if (takeLiveWhitelist('device', deviceId, now)) return { ...emptyAccessState(), devWhitelisted: true };
-  if (takeLiveWhitelist('fingerprint', fingerprint, now)) return { ...emptyAccessState(), fpWhitelisted: true };
-  if (takeLiveWhitelist('ip', ip, now)) return { ...emptyAccessState(), ipWhitelisted: true };
-
-  return {
-    ...emptyAccessState(),
-    devBlock: blockEntryOf('device', deviceId, now),
-    fpBlock: blockEntryOf('fingerprint', fingerprint, now),
-    ipBlock: blockEntryOf('ip', ip, now)
-  };
-}
-
-/**
- * 内存白名单条目是否有效；已过期的顺手删掉（与其它读取路径一致的惰性清理）
- *
- * @param {'device'|'fingerprint'|'ip'} dim 维度
- * @param {string} [id] 该维度的标识
- * @param {number} now 当前毫秒时间戳
- * @returns {boolean} 是否命中有效白名单
- */
-function takeLiveWhitelist(dim, id, now) {
-  if (!id) return false;
-  const table = DIMS[dim].wlMem();
-  const entry = table.get(id);
-  if (!entry) return false;
-  if (now <= entry.expiresAt) return true;
-  table.delete(id);
-  return false;
-}
-
-/**
- * 读内存封禁条目并转成统一结构
- *
- * @param {'device'|'fingerprint'|'ip'} dim 维度
- * @param {string} [id] 该维度的标识
- * @param {number} now 当前毫秒时间戳
- * @returns {{status:string, ttlSec:number}|null} 无该维度或无条目时为 null
- */
-function blockEntryOf(dim, id, now) {
-  if (!id) return null;
-  return memoryBlockEntry(DIMS[dim].blockMem().get(id), now);
-}
-
-/**
- * 内存封禁条目转统一结构（顺带清掉过期条目）
- *
- * @param {object|undefined} entry 内存条目
- * @param {number} now 当前毫秒时间戳
- * @returns {{status:string, ttlSec:number}|null}
- */
-function memoryBlockEntry(entry, now) {
-  if (!entry) return null;
-  if (!entry.permanent && now > entry.expiresAt) return null;
-  const ttlSec = entry.permanent ? PERMANENT_RETRY_AFTER : Math.max(1, Math.ceil((entry.expiresAt - now) / 1000));
-  return { status: entry.status || 'BLOCKED', ttlSec };
 }
 
 /**
@@ -562,26 +273,6 @@ function resolveBlockTtl(metadata, kind, id) {
 }
 
 /**
- * 写内存封禁表
- *
- * @param {{ip?:string, fingerprint?:string, deviceId?:string}} target 目标
- * @param {object} metadata 封禁元数据
- * @param {number} ttlSec 已归一化的 TTL 秒（0 = 永久）
- * @returns {void}
- */
-function writeBlockToMemory(target, metadata, ttlSec) {
-  sweepMemory();
-  const dim = dimOf(target);
-  DIMS[dim].blockMem().set(DIMS[dim].id(target), {
-    status: metadata.status,
-    // 自动封禁只发生在 IP 维度；设备/指纹维度由运维手动指定，缺省记为 manual
-    source: metadata.source || (dim === 'ip' ? 'auto' : 'manual'),
-    permanent: ttlSec === 0,
-    expiresAt: ttlSec === 0 ? null : Date.now() + ttlSec * 1000
-  });
-}
-
-/**
  * 移除封禁（Redis：DEL + HDEL 原子；内存：删表）
  *
  * @param {{ip?:string, fingerprint?:string, deviceId?:string}} target 目标
@@ -590,7 +281,7 @@ function writeBlockToMemory(target, metadata, ttlSec) {
 async function removeBlock(target) {
   const dim = dimOf(target);
   const id = DIMS[dim].id(target);
-  DIMS[dim].blockMem().delete(id);
+  TABLES[dim].block.delete(id);
   if (!redisAvailable()) return;
   try {
     await store().call(client =>
@@ -641,7 +332,7 @@ async function writeWhitelist(target, durationSeconds) {
 
   if (!redisAvailable()) {
     sweepMemory();
-    DIMS[dim].wlMem().set(id, { expiresAt });
+    TABLES[dim].wl.set(id, { expiresAt });
     return;
   }
   try {
@@ -665,7 +356,7 @@ async function writeWhitelist(target, durationSeconds) {
 async function removeWhitelist(target) {
   const dim = dimOf(target);
   const id = DIMS[dim].id(target);
-  DIMS[dim].wlMem().delete(id);
+  TABLES[dim].wl.delete(id);
   if (!redisAvailable()) return;
   try {
     await store().call(client =>
@@ -745,34 +436,6 @@ async function readHashEntries(hashRel, isBlock) {
   return alive;
 }
 
-/** 内存版列表（与 Redis 版返回结构一致） */
-function listActiveFromMemory(kind) {
-  sweepMemory();
-  const now = Date.now();
-  const isBlock = kind === 'block';
-  const toEntries = table => {
-    const out = [];
-    for (const [field, entry] of table) {
-      if (!entry.permanent && !(entry.expiresAt > now)) continue;
-      out.push({
-        field,
-        meta: {
-          status: entry.status,
-          source: entry.source,
-          permanent: Boolean(entry.permanent),
-          expiresAt: entry.permanent ? null : entry.expiresAt
-        }
-      });
-    }
-    return out;
-  };
-  return {
-    ip: toEntries(isBlock ? mem.blocks : mem.whitelist),
-    fp: toEntries(isBlock ? mem.blocksFp : mem.whitelistFp),
-    dev: toEntries(isBlock ? mem.blocksDev : mem.whitelistDev)
-  };
-}
-
 // ============== 计数 / 滑窗限频 ==============
 
 /**
@@ -794,19 +457,6 @@ async function bumpCounter(keyRel, windowSec) {
     log.warn('bumpCounter Redis 失败，降级内存计数', err);
     return bumpCounterInMemory(keyRel, windowSec);
   }
-}
-
-/** 内存计数（固定窗口） */
-function bumpCounterInMemory(keyRel, windowSec) {
-  sweepMemory();
-  const now = Date.now();
-  const entry = mem.counters.get(keyRel);
-  if (!entry || now > entry.expiresAt) {
-    mem.counters.set(keyRel, { count: 1, expiresAt: now + windowSec * 1000 });
-    return 1;
-  }
-  entry.count += 1;
-  return entry.count;
 }
 
 /**
@@ -840,47 +490,6 @@ async function removeCounters(keysRel) {
   } catch (err) {
     log.warn('removeCounters Redis 失败', err);
   }
-}
-
-/**
- * 滑窗计数：清理窗口外记录 → 记录本次 → 返回窗口内总数（一次往返，原子）
- *
- * @param {string} keyRel 相对 key（如 `rl:/api/order:1.2.3.4`）
- * @param {number} windowMs 窗口毫秒
- * @returns {Promise<number>} 窗口内请求数（含本次）
- */
-async function consumeRateWindow(keyRel, windowMs) {
-  const now = Date.now();
-  if (!redisAvailable()) return consumeRateWindowInMemory(keyRel, windowMs, now);
-  try {
-    return Number(
-      await store().call(client =>
-        client.eval(LUA_RATE_WINDOW, {
-          keys: [full(keyRel)],
-          arguments: [
-            String(now),
-            String(windowMs),
-            `${now}:${Math.random().toString(36).slice(2, 8)}`,
-            String(windowMs + 5000)
-          ]
-        })
-      )
-    );
-  } catch (err) {
-    log.warn('consumeRateWindow Redis 失败，降级内存滑窗', err);
-    return consumeRateWindowInMemory(keyRel, windowMs, now);
-  }
-}
-
-/** 内存滑窗计数（数组时间戳，与旧 memorySlidingWindow 同语义） */
-function consumeRateWindowInMemory(keyRel, windowMs, now) {
-  sweepMemory();
-  const start = now - windowMs;
-  const list = mem.windows.get(keyRel) || [];
-  while (list.length && list[0] < start) list.shift();
-  list.push(now);
-  mem.windows.set(keyRel, list);
-  return list.length;
 }
 
 // ============== 挑战通过令牌 ==============
@@ -1015,38 +624,6 @@ async function hasFlag(keyRel) {
 }
 
 // ============== 通用 ==============
-
-/**
- * 按「相对 key」删除内存降级状态。
- *
- * 为什么需要：`removeKeys` 的入参是 `rel.*` 构造出的相对 key（`lock:bob`、`rl:xxx`、
- * `pass:1.2.3.4:tok` …），而内存表有两种键形态 —— counters/windows/passes/flags 按相对 key 存，
- * blocks/whitelist/blocksFp/whitelistFp 按裸 id 存。只删其中一半，就会出现
- * 「Redis 模式解锁干净、内存模式解锁后账号仍被锁定」这类只在降级路径复现的缺陷。
- *
- * @param {string} keyRel 相对 key
- * @returns {void}
- */
-function memDeleteByRel(keyRel) {
-  for (const map of [mem.counters, mem.windows, mem.passes, mem.flags]) map.delete(keyRel);
-
-  // 前缀必须**长优先**匹配：`block:dev:x` 同时以 `block:` 开头，
-  // 短前缀先命中会把设备维度条目错删进 IP 表（设备表条目残留、IP 表被垃圾写入）。
-  const PREFIXED = [
-    ['block:fp:', mem.blocksFp],
-    ['block:dev:', mem.blocksDev],
-    ['whitelist:fp:', mem.whitelistFp],
-    ['whitelist:dev:', mem.whitelistDev]
-  ];
-  for (const [prefix, map] of PREFIXED) {
-    if (keyRel.startsWith(prefix)) {
-      map.delete(keyRel.slice(prefix.length));
-      return;
-    }
-  }
-  if (keyRel.startsWith('block:')) mem.blocks.delete(keyRel.slice('block:'.length));
-  else if (keyRel.startsWith('whitelist:')) mem.whitelist.delete(keyRel.slice('whitelist:'.length));
-}
 
 /**
  * 删除若干 key（如解封后清理残留计数/锁定标记）
@@ -1232,16 +809,6 @@ async function takeChallenge(id) {
   }
 }
 
-/**
- * 重置全部内存状态（测试隔离用）
- *
- * @returns {void}
- */
-function resetMemoryState() {
-  for (const map of Object.values(mem)) map.clear();
-  lastSweep = 0;
-}
-
 export {
   // 遥测统计汇聚（flushStatsDelta / readAggregatedStats / resetAggregatedStats）
   // 已迁往 app/firewall/data/stats-redis.js —— 唯一消费者是 data/store.js（面板遥测），
@@ -1264,7 +831,6 @@ export {
   bumpCounter,
   readCounter,
   removeCounters,
-  consumeRateWindow,
   setFlag,
   hasFlag,
   grantPass,

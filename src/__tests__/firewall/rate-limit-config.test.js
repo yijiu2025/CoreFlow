@@ -53,10 +53,14 @@ describe('resolveRateLimitMax', () => {
 });
 
 describe('describeRateLimitRisk', () => {
-  it('关闭限流 → 明确指出端点级 config.rateLimit 会一起失效', () => {
-    const msg = describeRateLimitRisk({ enabled: false, max: 0, windowSec: 0 });
-    expect(msg).toContain('全局限流未启用');
+  it('两套开关都关 → 明确指出端点级 config.rateLimit 会一起失效', () => {
+    const msg = describeRateLimitRisk({ enabled: false, max: 0, windowSec: 0, routeLevel: false });
+    expect(msg).toContain('均已关闭');
     expect(msg).toContain('config.rateLimit');
+  });
+
+  it('只关全局、端点级仍生效 → 不报风险（2026-11-02 起插件始终注册，声明依然管用）', () => {
+    expect(describeRateLimitRisk({ enabled: false, max: 0, windowSec: 0, routeLevel: true })).toBeNull();
   });
 
   it('阈值高到没意义（10000/60s）被判定为风险', () => {

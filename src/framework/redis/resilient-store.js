@@ -27,6 +27,29 @@ const FAILURE_COOLDOWN = 5_000;
 const REDIS_TIMEOUT = 3000;
 
 /**
+ * 限流计数（单次往返、原子）：INCR 后**仅当窗口首次创建时**设置过期。
+ *
+ * 为什么不能每个请求都 PEXPIRE：那样 TTL 会被不断续期，只要客户端持续重试，
+ * 计数永远不归零 —— 限流退化成「一旦超限就永久 429」，NAT 出口会被整段锁死。
+ * 语义与插件自带的 `RedisStore`（`INCR` + `current == 1 时 PEXPIRE`）保持一致。
+ *
+ * ⚠️ 窗口来自**调用方传入的 timeWindow**（路由级声明），不是全局配置 —— 见 incr 注释。
+ *
+ * KEYS: [1] 计数 key
+ * ARGV: [1] 窗口毫秒
+ * 返回: { 当前计数, 剩余毫秒 }
+ */
+const LUA_INCR_WINDOW = `
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+  redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[1]))
+end
+local ttl = redis.call('PTTL', KEYS[1])
+if ttl < 0 then ttl = tonumber(ARGV[1]) end
+return { current, ttl }
+`;
+
+/**
  * 共享的清理定时器（所有实例共用），避免 child() 创建大量重复定时器
  * 懒初始化 + 引用计数：首个实例创建时启动，末个实例销毁时停止
  * onClose 钩子全局仅注册一次，避免 child() 批量创建时钩子累积
@@ -91,8 +114,12 @@ class ResilientStore {
     this.app = app;
     /** @type {() => number} */
     this.getWindowMs = options.getWindowMs || (() => 60000);
-    /** @type {Map<string, { count: number, expires: number }>} */
-    this.memoryFallback = new Map();
+    /**
+     * @type {Map<string, { count: number, expires: number }>}
+     * 子实例共享父实例这张表：库的计数语义是「按 key」，同一个 key 必须命中同一份计数，
+     * 否则同 groupId 的多个端点、或全局桶，在 Redis 模式共享而在降级模式各算各的。
+     */
+    this.memoryFallback = options.memoryFallback || new Map();
     /** @type {import('fastify').FastifyLogger|import('../log/logger.js').AppLogger} */
     this.log = app.log || log;
     /** 失败冷却截止时间戳（0 表示无冷却），单次命令超时后在该时间内不再尝试 Redis */
@@ -170,31 +197,33 @@ class ResilientStore {
 
   /**
    * 增加计数并返回当前状态
-   * 使用 MULTI/EXEC 保证 INCR + PEXPIRE 原子性
+   *
+   * 窗口优先取**插件传入的 `timeWindow`**（`@fastify/rate-limit` 以第 3 个参数传入，
+   * 即路由声明的 `config.rateLimit.timeWindow`），缺失/非法时才回退全局 `getWindowMs()`。
+   * 历史实现完全忽略该参数，导致路由上写的 `timeWindow` 是装饰品 —— 声明 10 分钟仍是 60 秒。
    *
    * @param {string} key 存储键名
    * @param {Function} cb 回调函数 (err, result)
-   * @param {Error|null} cb.err 错误对象
-   * @param {object} cb.result
-   * @param {number} cb.result.current 当前窗口内的计数
-   * @param {number} cb.result.ttl 当前窗口剩余时间（毫秒）
+   * @param {number} [timeWindow] 窗口毫秒（由插件按路由配置传入）
+   * @param {number} [max] 窗口内上限（本实现不需要，按签名保留）
    * @returns {Promise<void>}
    */
-  async incr(key, cb) {
-    const windowMs = this.getWindowMs();
+  async incr(key, cb, timeWindow) {
+    const requested = Number(timeWindow);
+    const windowMs = Number.isFinite(requested) && requested > 0 ? requested : this.getWindowMs();
 
     if (this._shouldUseRedis()) {
       const redis = this._getRedis();
       try {
-        const results = await Promise.race([
-          redis.multi().incr(key).pExpire(key, windowMs).exec(),
+        const res = await Promise.race([
+          redis.eval(LUA_INCR_WINDOW, { keys: [key], arguments: [String(windowMs)] }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('操作超时')), REDIS_TIMEOUT))
         ]);
-        // 兼容 node-redis v4（直接值）和 v5（{ value } 包装）
-        const count = typeof results[0] === 'object' ? results[0].value : results[0];
-        // 直接以窗口长度作为 ttl，省去一次 PTTL 往返（限流语义上为窗口上界）
-        this.log.debug?.({ key, count, ttl: windowMs }, '[Redis] 限流计数成功');
-        return cb(null, { current: count, ttl: windowMs });
+        // 数组元素可能是字符串（node-redis 的 Lua 返回值类型宽松）
+        const count = Number(res?.[0]);
+        const ttl = Number(res?.[1]) > 0 ? Number(res[1]) : windowMs;
+        this.log.debug?.({ key, count, ttl }, '[Redis] 限流计数成功');
+        return cb(null, { current: count, ttl });
       } catch (err) {
         // 进入冷却，避免抖动期间反复打 Redis
         this._cooldownUntil = Date.now() + FAILURE_COOLDOWN;
@@ -207,7 +236,7 @@ class ResilientStore {
       }
     }
 
-    // 降级逻辑：内存计数
+    // 降级逻辑：内存计数（固定窗口，与 Redis 侧同语义：窗口内不续期）
     if (!this.memoryFallback) {
       this.log.warn?.({ key }, '[Redis] 降级存储已关闭，跳过计数');
       return cb(null, { current: 1, ttl: windowMs });
@@ -224,7 +253,7 @@ class ResilientStore {
 
     this.memoryFallback.set(key, record);
 
-    return cb(null, { current: record.count, ttl: record.expires - now });
+    return cb(null, { current: record.count, ttl: Math.max(0, record.expires - now) });
   }
 
   /**
@@ -236,7 +265,13 @@ class ResilientStore {
    * @returns {ResilientStore} 新的存储实例
    */
   child(_routeOptions) {
-    return new ResilientStore(this.app, { getWindowMs: this.getWindowMs });
+    // 共享 memoryFallback：Redis 模式下所有子实例本来就写同一批 key，
+    // 若降级时每个子实例各建一张表，就会出现「Redis 模式共享、降级模式隔离」
+    // 的语义分裂（同 groupId 的端点不共享桶、全局桶被按路由放大数倍）。
+    return new ResilientStore(this.app, {
+      getWindowMs: this.getWindowMs,
+      memoryFallback: this.memoryFallback
+    });
   }
 
   /**

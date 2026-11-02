@@ -42,6 +42,10 @@ async function registerSessionRoutes(fastify) {
     alias: '绑定 Token 到 Cookie',
     method: 'POST',
     url: '/bind-token',
+    // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
+    config: {
+      rateLimit: { max: 30, timeWindow: '1 minute', groupId: 'bind-token' }
+    },
     handler: async (request, reply) => {
       if (!isAllowedOrigin(request)) {
         return reply.code(403).send({ code: 403, message: '来源不在允许列表', data: null });
@@ -65,6 +69,10 @@ async function registerSessionRoutes(fastify) {
     alias: '绑定 Session 到 Cookie',
     method: 'POST',
     url: '/bind-session',
+    // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
+    config: {
+      rateLimit: { max: 30, timeWindow: '1 minute', groupId: 'bind-session' }
+    },
     riskExempt: true, // iframe 登录后换 sid，此时基准可能还没更新，拦了会死锁
     handler: async (request, reply) => {
       if (!isAllowedOrigin(request)) {

@@ -71,8 +71,8 @@ const relToApp = f => path.relative(APP_DIR, f).replace(/\\/g, '/');
 
 /** 动态 app 依赖白名单（单向边；新增必须写业务理由） */
 const ALLOWED_DYNAMIC_EDGES = new Set([
-  // firewall 的功能性早注册点：应用可卸载，loader 在目录缺失时跳过（见 05-firewall.js 头注释）
-  'loader/registry/05-firewall.js -> firewall/index.js',
+  // （2026-11-02 起）05-firewall.js 不再依赖 app：配置读取已下沉
+  // framework/firewall/config/persisted.js，依赖方向恢复单向（app → framework）。
   // 邮件的 SMTP 配置/模板 CRUD 在 notice 应用；notice 未安装时发信报清晰错误（见 email.js 注释）
   'notice/services/email.js -> notice/dao/notice.js'
 ]);

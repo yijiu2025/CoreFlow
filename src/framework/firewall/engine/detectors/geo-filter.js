@@ -18,7 +18,8 @@ const log = createLogger('framework.firewall.engine.detectors.geo-filter');
  * 开关语义：`enableGeoFilter` 为 false 时**整段跳过**。此前该键没有任何读取点，
  * 运维在面板上关掉「地理围栏」后，IDC/境外限频照旧生效（排障时会产生严重误判）。
  */
-const checkGeoReputation = async (ip, url) => {
+const checkGeoReputation = async (request, url) => {
+  const ip = request.ip;
   const settings = getConfig().defense;
 
   if (!settings.enableGeoFilter) return;
@@ -35,7 +36,8 @@ const checkGeoReputation = async (ip, url) => {
   const geoRules = settings.geoRules || { sensitivePaths: [], internalPaths: [] };
 
   if (isIDC) {
-    await checkRateLimit(`IDC:${ip}`, {
+    await checkRateLimit(request, {
+      keyPrefix: 'IDC',
       limit: settings.idcLimit || 60,
       window: 60,
       blockTime: 3600
@@ -48,7 +50,8 @@ const checkGeoReputation = async (ip, url) => {
   const internalUrlPaths = geoRules.internalPrefixes || [];
   const isInternalPath = internalUrlPaths.some(p => url.startsWith(p));
   if (isOverseas && isInternalPath) {
-    await checkRateLimit(`OVERSEAS:${ip}`, {
+    await checkRateLimit(request, {
+      keyPrefix: 'OVERSEAS',
       limit: geoRules.overseasInternalLimit || 30,
       window: 60,
       blockTime: 1800
@@ -57,7 +60,8 @@ const checkGeoReputation = async (ip, url) => {
 
   const isSensitive = (geoRules.sensitivePaths || []).some(p => url.includes(p));
   if (isOverseas && isSensitive) {
-    await checkRateLimit(`OVERSEAS_SENS:${ip}`, {
+    await checkRateLimit(request, {
+      keyPrefix: 'OVERSEAS_SENS',
       limit: geoRules.overseasLimit || 10,
       window: geoRules.overseasWindow || 60,
       blockTime: geoRules.overseasBlockTime || 3600

@@ -36,6 +36,10 @@ async function registerDeviceRoutes(fastify) {
     alias: '设备授权发起',
     method: 'POST',
     url: '/device_authorization',
+    // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
+    config: {
+      rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'oauth-device' }
+    },
     handler: async (request, reply) => {
       const { client_id, scope } = request.body;
       if (!client_id) {
@@ -67,6 +71,10 @@ async function registerDeviceRoutes(fastify) {
     alias: '设备令牌轮询',
     method: 'POST',
     url: '/device/token',
+    // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
+    config: {
+      rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'oauth-device' }
+    },
     handler: async (request, reply) => {
       const { grant_type, device_code, client_id } = request.body;
 
@@ -101,6 +109,10 @@ async function registerDeviceRoutes(fastify) {
     alias: '设备验证页面',
     method: 'GET',
     url: '/device',
+    // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
+    config: {
+      rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'oauth-device' }
+    },
     handler: async (request, reply) => {
       const html = await deviceService.renderDevicePage(request.query.user_code);
       reply.type('text/html');
@@ -116,6 +128,10 @@ async function registerDeviceRoutes(fastify) {
     alias: '设备授权确认',
     method: 'POST',
     url: '/device/authorize',
+    // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
+    config: {
+      rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'oauth-device' }
+    },
     requireLogin: true,
     handler: async (request, reply) => {
       const { user_code } = request.body;

@@ -36,6 +36,39 @@ const DATA_FILE = process.env.FW_TRAFFIC_STATS_FILE || path.join(__dirname, '../
 
 const MAX_RECORDS = 1000; // 环形缓冲区容量（前端最多显示 100 条，1000 足够）
 
+/**
+ * 本地统计表上限
+ *
+ * 为什么必须有界：这两张表的 key **由请求决定** ——
+ *   · `ipStats` 的 key 是来源 IP：僵尸网络 / IPv6 喷射可造出成千上万条；
+ *   · `pathStats` 的 key 是路径：扫描器随便打 `/a1`、`/a2`… 每一条都是新 key。
+ * 表只增不减（只在管理员 `clearAll` 时清空），既会吃内存，也会被写进
+ * `traffic_stats.json` 让磁盘一起涨，还会让 `getSummary()` 的全量排序变慢 ——
+ * 属于**攻击者可触发**的资源消耗，因此按「计数最高的前 N 条」自限。
+ */
+const MAX_IP_STATS = 2000;
+const MAX_PATH_STATS = 500;
+
+/** 路径 key 的最大长度（防止超长 URL 直接当作 key 占用内存/磁盘） */
+const MAX_PATH_KEY_LEN = 200;
+
+/**
+ * 只保留计数最高的 `cap` 条，其余丢弃
+ *
+ * 兼容两种值形态：数字（ipStats / regionStats）与 `{ count }` 对象（pathStats）。
+ * 仅在超限时调用，所以排序成本能摊薄到大量请求上。
+ *
+ * @param {Map<string, number|{count:number}>} map 目标表
+ * @param {number} cap 保留条数
+ */
+function pruneToTop(map, cap) {
+  if (map.size <= cap) return;
+  const weight = v => (typeof v === 'number' ? v : Number(v?.count) || 0);
+  const kept = [...map.entries()].sort((a, b) => weight(b[1]) - weight(a[1])).slice(0, cap);
+  map.clear();
+  for (const [k, v] of kept) map.set(k, v);
+}
+
 /** Redis 增量刷写周期（ms）。太短会把周期刷写变成压测，太长聚合视图滞后明显 */
 const STATS_FLUSH_INTERVAL = 3000;
 
@@ -190,12 +223,20 @@ function trackDelta(record, pathBase) {
   pStat.count++;
   if (!pStat.apiName && record.apiKey) pStat.apiName = record.apiName || record.apiKey;
   pendingDelta.paths.set(apiIdentifier, pStat);
+  // 与本地表同理：随机路径扫描不能把增量表撑爆（刷写失败时这些键会一直留着）
+  if (pendingDelta.paths.size > MAX_PATH_STATS) pruneToTop(pendingDelta.paths, MAX_PATH_STATS);
 
   if (record.ip) {
     pendingDelta.ips.set(record.ip, (pendingDelta.ips.get(record.ip) || 0) + 1);
+    // 刷写失败时增量会原样放回（见 flushPendingStats），此时 IP 表同样可能被撑爆
+    if (pendingDelta.ips.size > MAX_IP_STATS) pruneToTop(pendingDelta.ips, MAX_IP_STATS);
   }
 
   pendingDelta.records.push(record);
+  // 刷写持续失败时记录数组会一直攒：按环形缓冲同容量自限（丢最旧的）
+  if (pendingDelta.records.length > MAX_RECORDS) {
+    pendingDelta.records.splice(0, pendingDelta.records.length - MAX_RECORDS);
+  }
 }
 
 /**
@@ -406,8 +447,8 @@ function pushRecord(record) {
   const regionKey = `${record.region || '未知'}-${record.city || '未知'}`;
   regionStats.set(regionKey, (regionStats.get(regionKey) || 0) + 1);
 
-  // 路径统计
-  const pathBase = record.url?.split('?')[0] || '/';
+  // 路径统计（key 长度设上限：超长 URL 不配当 key）
+  const pathBase = (record.url?.split('?')[0] || '/').slice(0, MAX_PATH_KEY_LEN);
   let apiIdentifier = record.apiKey || pathBase;
 
   if (!record.apiKey) {
@@ -446,6 +487,10 @@ function pushRecord(record) {
   if (record.ip) {
     ipStats.set(record.ip, (ipStats.get(record.ip) || 0) + 1);
   }
+
+  // 自限：超过上限时只保留计数最高的那部分（见 MAX_IP_STATS / MAX_PATH_STATS 注释）
+  if (ipStats.size > MAX_IP_STATS) pruneToTop(ipStats, MAX_IP_STATS);
+  if (pathStats.size > MAX_PATH_STATS) pruneToTop(pathStats, MAX_PATH_STATS);
 
   if (record.blocked) totalBlocked++;
 

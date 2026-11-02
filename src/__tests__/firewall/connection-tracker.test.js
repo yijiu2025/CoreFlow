@@ -23,7 +23,7 @@ jest.unstable_mockModule('../../framework/firewall/interface/config-access.js', 
   hasSettingsReader: () => true
 }));
 
-const { trackConnection, getConnectionStats, cleanupStaleConnections } =
+const { trackConnection, getConnectionStats, cleanupStaleConnections, startCleanupTask } =
   await import('../../framework/firewall/util/connection-tracker.js');
 // 直接拿内部表做清理与断言，避免用例之间互相干扰
 const { activeConnections } = await import('../../framework/firewall/util/shared.js');
@@ -144,6 +144,33 @@ describe('僵尸记录清理（泄漏修复）', () => {
   });
 });
 
+describe('清理任务', () => {
+  it('单轮清理抛错不会断链（自续 setTimeout 必须 finally 续排，否则表再无人回收）', () => {
+    const hooks = [];
+    const fakeApp = { addHook: (name, fn) => hooks.push({ name, fn }) };
+
+    // 第一轮注定失败：配置对象为 null → 读 defense.connStaleAfterMs 时抛 TypeError
+    defenseConfig = null;
+    activeConnections.set('10.0.0.30', { count: 1, lastAt: Date.now() - 11 * 60 * 1000 });
+
+    startCleanupTask(fakeApp);
+
+    // 异常必须被兜在回调内部：逃出去就再也不会 schedule 下一轮（setInterval 不会这样）
+    expect(() => jest.advanceTimersByTime(5 * 60 * 1000)).not.toThrow();
+    expect(activeConnections.has('10.0.0.30')).toBe(true);
+
+    // 恢复正常配置再走一轮：能清理掉，说明任务链没断
+    defenseConfig = { enableConnLimit: true, maxConn: 3 };
+    jest.advanceTimersByTime(5 * 60 * 1000);
+    expect(activeConnections.has('10.0.0.30')).toBe(false);
+
+    // 关闭钩子必须注册，供 onClose 停止定时器；显式调用来清掉本轮续排的定时器
+    const onClose = hooks.find(h => h.name === 'onClose');
+    expect(onClose).toBeDefined();
+    onClose.fn();
+  });
+});
+
 describe('连接统计', () => {
   it('统计反映当前 IP 数与总连接数，并按连接数降序', () => {
     trackConnection('10.0.1.1', 1);
@@ -161,5 +188,28 @@ describe('连接统计', () => {
     expect(stats.totalIPs).toBe(0);
     expect(stats.totalConnections).toBe(0);
     expect(stats.topIPs).toEqual([]);
+  });
+
+  it('超过 10 个 IP 时 topIPs 截断为前 10 且总量统计不遗漏', () => {
+    // 上限调高，避免测试自身撞 maxConn 限制；本用例只关心统计口径
+    defenseConfig = { enableConnLimit: true, maxConn: 100 };
+    // 12 个 IP，计数互不相同：ip 末位 i 建立第 i 个连接
+    for (let i = 1; i <= 12; i++) {
+      for (let j = 0; j < i; j++) trackConnection(`10.9.0.${i}`, 1);
+    }
+    const stats = getConnectionStats();
+
+    expect(stats.totalIPs).toBe(12);
+    expect(stats.totalConnections).toBe(((1 + 12) * 12) / 2);
+    expect(stats.topIPs).toHaveLength(10);
+    // 头部是计数最大的 10.9.0.12，且整体按计数降序
+    expect(stats.topIPs[0]).toEqual({ ip: '10.9.0.12', count: 12 });
+    for (let k = 1; k < 10; k++) {
+      expect(stats.topIPs[k].count).toBeLessThanOrEqual(stats.topIPs[k - 1].count);
+    }
+    // 被截掉的是计数最小的两个
+    const keptIps = new Set(stats.topIPs.map(t => t.ip));
+    expect(keptIps.has('10.9.0.1')).toBe(false);
+    expect(keptIps.has('10.9.0.2')).toBe(false);
   });
 });

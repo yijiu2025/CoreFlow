@@ -31,6 +31,10 @@ async function registerChallengeRoutes(fastify) {
     alias: '提交验证结果',
     method: 'POST',
     url: '/verify',
+    // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
+    config: {
+      rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'challenge-verify' }
+    },
     // 本组必须保持免登录：被挑战的请求正是**尚未通过验证**的请求，
     // 若这里要求登录，挑战就永远解不开（见 docs/AUDIT-REPORT-2026-09-15.md 🔴-1）。
     // system 级 requireLogin 已改为 false，本组的声明因此才真正生效。

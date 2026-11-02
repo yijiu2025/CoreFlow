@@ -11,7 +11,7 @@
  * @since 2026-08-17
  */
 import { buildChallengePage } from '../challenge-template.js';
-import { checkRateLimit, trackRequestCount } from './detectors/rate-limiter.js';
+import { trackRequestCount } from './detectors/rate-limiter.js';
 import { checkGeoReputation, resolveGeoInfo } from './detectors/geo-filter.js';
 import { checkBotChallenge } from './detectors/bot-detector.js';
 import { checkLoginBruteForce } from './detectors/brute-force.js';
@@ -314,22 +314,12 @@ async function runDetectionPipeline(ip, ua, url, firewallLog, fingerprint, reply
     }
 
     // 地理信誉：IDC 限频、境外敏感路径拦截
-    await checkGeoReputation(ip, url);
+    await checkGeoReputation(reply.request, url);
 
-    // 端点级限频（从配置读取规则）
-    const settings = readSecuritySettings();
-    const endpointRules = settings.defense?.endpointRateLimits || [];
-
-    for (const rule of endpointRules) {
-      if (url.includes(rule.path)) {
-        await checkRateLimit(`${rule.path}:${ip}`, {
-          limit: rule.limit,
-          window: rule.window,
-          blockTime: rule.blockTime
-        });
-        break;
-      }
-    }
+    // 端点级限流**不在这里**：由各路由自己的 config.rateLimit 承担
+    // （@fastify/rate-limit 的 onRoute 钩子，在 onRequest 更早的位置执行）。
+    // 历史上这里还有一套 defense.endpointRateLimits 自研路径规则，因 path 全部写错
+    // 且封禁键不是 IP，整套空转，已于 2026-11-02 移除。
 
     return false; // 放行
   } catch (err) {

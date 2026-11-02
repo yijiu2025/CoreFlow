@@ -1,57 +1,38 @@
 /**
  * 速率限制（测试 `framework/firewall/engine/detectors/rate-limiter.js` 真身）
  *
- * ⚠️ 为什么重写：本文件的前身把限流算法**抄进了测试**（自己维护一个 Map、
- * 自己实现滑动窗口），然后断言自己抄的那份实现。生产代码怎么改都不会影响结论，
- * 甚至把 `detectors/rate-limiter.js` 删掉它依然全绿。
+ * 覆盖两部分：
+ *   - `trackRequestCount()`：Bot 检测用的 60s 滑窗计数（内存、按 IP 隔离、封顶）；
+ *   - `checkRateLimit()`：**计数交给 @fastify/rate-limit 的 createRateLimit**，
+ *     本函数只在超限时写自动封禁并抛 429。
  *
- * 现在测的是真实模块的对外语义：
- *   - `trackRequestCount()`：60s 滑窗计数、按 IP 隔离、过期即出窗；
- *   - `checkRateLimit()`：开关关闭时直接放行（不碰存储）、已封禁/挑战的状态映射、
- *     超限时落封禁并抛 429 + Retry-After。
+ * ⚠️ 2026-11-02 重写：旧实现自己维护 Redis ZSET 滑窗（`consumeRateWindow`），
+ * 且超限时 `setBlock('<路径>:<ip>')` 写的是**非 IP 键**，封禁从未生效。
+ * 现在用库计数、用真实 IP 落封禁，本文件同时钉住这两点。
  *
- * 后者的存储与配置用 mock 替换：本文件验的是**判定与错误契约**，
- * Redis Lua 的原子性由 `scripts/verify/` 的跨进程关卡负责，两者不重复。
+ * 外部依赖（配置 / 封禁写入）用 mock 替换，被测的是真实模块。
  *
  * @author yijiu2025
  * @since 2026-08-17
- * @since 2026-10-30 重写为真身测试（U18）
+ * @since 2026-11-02 计数改为库 createRateLimit，重写 checkRateLimit 用例
  */
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 
 /** 内存滑窗的共享 Map（由 mock 的 shared 模块提供，等价于生产里的单例） */
 const timestamps = new Map();
 
-/** 可通过用例改写的配置与存储桩 */
-const cfg = { defense: { enableRateLimit: true } };
-const calls = {
-  readAccessState: [],
-  consumeRateWindow: [],
-  setBlock: []
-};
-let accessState = { ipBlock: null, fpBlock: null };
-let windowCount = 1;
+/** 可通过用例改写的配置与封禁桩 */
+const cfg = { defense: { enableEndpointRateLimit: true } };
+const calls = { setBlock: [] };
 
 jest.unstable_mockModule('../framework/firewall/util/shared.js', () => ({
   getConfig: () => cfg,
   ipRequestTimestamps: timestamps
 }));
 
-jest.unstable_mockModule('../framework/firewall/util/redis.js', () => ({
-  rel: { rateLimit: actor => `rate:${actor}` },
-  readAccessState: async args => {
-    calls.readAccessState.push(args);
-    return accessState;
-  },
-  consumeRateWindow: async (key, windowMs) => {
-    calls.consumeRateWindow.push({ key, windowMs });
-    return windowCount;
-  }
-}));
-
 jest.unstable_mockModule('../framework/firewall/block-manager.js', () => ({
-  setBlock: async (actor, meta) => {
-    calls.setBlock.push({ actor, meta });
+  setBlock: async (ip, meta) => {
+    calls.setBlock.push({ ip, meta });
   }
 }));
 
@@ -59,17 +40,8 @@ const { trackRequestCount, checkRateLimit } = await import('../framework/firewal
 
 beforeEach(() => {
   timestamps.clear();
-  calls.readAccessState.length = 0;
-  calls.consumeRateWindow.length = 0;
   calls.setBlock.length = 0;
-  accessState = { ipBlock: null, fpBlock: null };
-  windowCount = 1;
-  cfg.defense.enableRateLimit = true;
   cfg.defense.enableEndpointRateLimit = true;
-});
-
-afterEach(() => {
-  jest.useRealTimers();
 });
 
 describe('trackRequestCount：60 秒滑窗计数', () => {
@@ -94,75 +66,92 @@ describe('trackRequestCount：60 秒滑窗计数', () => {
     expect(trackRequestCount('10.0.0.9')).toBe(3);
 
     jest.advanceTimersByTime(61_000);
-    // 三条旧记录全部出窗，本次只算 1
     expect(trackRequestCount('10.0.0.9')).toBe(1);
+
+    jest.useRealTimers();
+  });
+
+  test('单 IP 窗口内的时间戳数组封顶，计数饱和而不是无限增长', () => {
+    let last = 0;
+    for (let i = 0; i < 1200; i++) last = trackRequestCount('10.0.0.99');
+
+    expect(last).toBe(1000);
+    expect(timestamps.get('10.0.0.99')).toHaveLength(1000);
   });
 });
 
-describe('checkRateLimit：判定与错误契约', () => {
-  test('开关关闭时直接放行，且不访问存储', async () => {
-    // 2026-11-01 拆分：端点级限频不再受全局 enableRateLimit 联动，
-    // 改由独立开关 enableEndpointRateLimit 控制（默认开启）
+describe('checkRateLimit：库计数 + 超限落封禁', () => {
+  /** 构造带 server.createRateLimit 的假请求；capture 记录限流器参数 */
+  function makeRequest({ ip = '203.0.113.9', status = {}, capture = [] } = {}) {
+    const finalStatus = { isAllowed: false, isExceeded: false, ttlInSeconds: 60, ...status };
+    return {
+      ip,
+      server: {
+        createRateLimit: opts => {
+          capture.push(opts);
+          return async () => ({ ...finalStatus });
+        }
+      }
+    };
+  }
+
+  test('端点级开关关闭：直接放行，且不创建限流器（不碰存储）', async () => {
     cfg.defense.enableEndpointRateLimit = false;
+    const capture = [];
+    const req = makeRequest({ capture });
 
-    await expect(checkRateLimit('/api/x:1.1.1.1')).resolves.toBe(true);
-    expect(calls.readAccessState).toHaveLength(0);
-    expect(calls.consumeRateWindow).toHaveLength(0);
-  });
-
-  test('已处于挑战态：抛 statusCode=200 + isChallenge（让前端出验证码，不是报错）', async () => {
-    accessState = { ipBlock: { status: 'CHALLENGE', ttlSec: 30 }, fpBlock: null };
-
-    await expect(checkRateLimit('a')).rejects.toMatchObject({ statusCode: 200, isChallenge: true });
-    // 挑战态不该再累计窗口，也不该重复落封禁
-    expect(calls.consumeRateWindow).toHaveLength(0);
+    await expect(checkRateLimit(req, { keyPrefix: 'OFF', limit: 1 })).resolves.toBe(true);
+    expect(capture).toHaveLength(0);
     expect(calls.setBlock).toHaveLength(0);
   });
 
-  test('扫描器封禁映射为 403，Retry-After 取剩余 TTL', async () => {
-    accessState = { ipBlock: { status: 'SCANNER', ttlSec: 42 }, fpBlock: null };
-
-    await expect(checkRateLimit('a')).rejects.toMatchObject({
-      statusCode: 403,
-      headers: { 'Retry-After': '42' }
-    });
+  test('插件未注册（两个开关都关）：没有计数器可用，放行而不是报错', async () => {
+    const req = { ip: '203.0.113.9', server: {} };
+    await expect(checkRateLimit(req, { keyPrefix: 'NOSRV' })).resolves.toBe(true);
   });
 
-  test('普通封禁映射为 429；缺 TTL 时用 retryAfter 兜底', async () => {
-    accessState = { ipBlock: { status: 'BLOCKED', ttlSec: 0 }, fpBlock: null };
+  test('未超限：放行，且把 max / 窗口毫秒 / 键前缀正确传给库', async () => {
+    const capture = [];
+    const req = makeRequest({ capture });
 
-    await expect(checkRateLimit('a', { retryAfter: 77 })).rejects.toMatchObject({
+    await expect(checkRateLimit(req, { keyPrefix: 'OK', limit: 5, window: 30 })).resolves.toBe(true);
+
+    expect(capture).toHaveLength(1);
+    expect(capture[0].max).toBe(5);
+    expect(capture[0].timeWindow).toBe(30_000);
+    // 键 = 前缀 + 真实 IP（不同规则各成一桶）
+    expect(capture[0].keyGenerator({ ip: '1.2.3.4' })).toBe('OK:1.2.3.4');
+    expect(calls.setBlock).toHaveLength(0);
+  });
+
+  test('超出上限：按**真实 IP** 落一条有时限的封禁，并抛 429 + Retry-After', async () => {
+    const req = makeRequest({ status: { isExceeded: true, ttlInSeconds: 42 } });
+
+    await expect(checkRateLimit(req, { keyPrefix: 'BAN', limit: 5, blockTime: 120 })).rejects.toMatchObject({
       statusCode: 429,
+      headers: { 'Retry-After': '42' }
+    });
+
+    expect(calls.setBlock).toHaveLength(1);
+    const { ip, meta } = calls.setBlock[0];
+    // 回归：旧实现写的是 `<路径>:<ip>`，永远匹配不到真实 IP
+    expect(ip).toBe('203.0.113.9');
+    expect(meta).toMatchObject({ status: 'BLOCKED', source: 'auto', permanent: false });
+    expect(meta.expiresAt - meta.createdAt).toBe(120_000);
+  });
+
+  test('库没给有效 ttl 时，Retry-After 用 blockTime 兜底', async () => {
+    const req = makeRequest({ status: { isExceeded: true, ttlInSeconds: undefined } });
+
+    await expect(checkRateLimit(req, { keyPrefix: 'TTLBAN', limit: 1, blockTime: 77 })).rejects.toMatchObject({
       headers: { 'Retry-After': '77' }
     });
   });
 
-  test('未超限：放行，窗口按 window 秒换算成毫秒', async () => {
-    windowCount = 3;
+  test('命中 allowList（isAllowed=true）：放行，不落封禁', async () => {
+    const req = makeRequest({ status: { isAllowed: true } });
 
-    await expect(checkRateLimit('/api/x:1.1.1.1', { limit: 5, window: 30 })).resolves.toBe(true);
-    expect(calls.consumeRateWindow).toEqual([{ key: 'rate:/api/x:1.1.1.1', windowMs: 30_000 }]);
+    await expect(checkRateLimit(req, { keyPrefix: 'ALLOWED' })).resolves.toBe(true);
     expect(calls.setBlock).toHaveLength(0);
-  });
-
-  test('恰好等于 limit 仍放行（判据是 > limit，不是 >=）', async () => {
-    windowCount = 5;
-    await expect(checkRateLimit('a', { limit: 5 })).resolves.toBe(true);
-    expect(calls.setBlock).toHaveLength(0);
-  });
-
-  test('超过 limit：落一条有时限的自动封禁，并抛 429 + Retry-After', async () => {
-    windowCount = 6;
-
-    await expect(checkRateLimit('actor-1', { limit: 5, blockTime: 120 })).rejects.toMatchObject({
-      statusCode: 429,
-      headers: { 'Retry-After': '120' }
-    });
-
-    expect(calls.setBlock).toHaveLength(1);
-    const { actor, meta } = calls.setBlock[0];
-    expect(actor).toBe('actor-1');
-    expect(meta).toMatchObject({ status: 'BLOCKED', source: 'auto', permanent: false });
-    expect(meta.expiresAt - meta.createdAt).toBe(120_000);
   });
 });

@@ -503,7 +503,7 @@ describe('启动链路：initDao 真的被调用 / 安全管道只注册一次',
     }
   });
 
-  it('initFirewall 只有唯一注册点，且 config.js 不再声明 init', async () => {
+  it('装配点契约：核心插件只允许两个注册位，initFirewall 不得被 src 注册，config.init 只能指向 app 侧入口', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
     const { fileURLToPath } = await import('node:url');
@@ -520,26 +520,43 @@ describe('启动链路：initDao 真的被调用 / 安全管道只注册一次',
       return out;
     };
 
-    const registerSites = [];
-    for (const f of walk(srcRoot)) {
-      const src = fs.readFileSync(f, 'utf-8');
-      const code = src
-        .split('\n')
-        .filter(l => {
-          const t = l.trimStart();
-          return !(t.startsWith('*') || t.startsWith('//') || t.startsWith('/*'));
-        })
-        .join('\n');
-      if (/register\(\s*initFirewall\s*\)/.test(code))
-        registerSites.push(path.relative(srcRoot, f).replace(/\\/g, '/'));
-    }
-    expect(registerSites).toEqual(['framework/loader/registry/05-firewall.js']);
+    const findRegisterSites = symbol => {
+      const sites = [];
+      const re = new RegExp(`register\\(\\s*${symbol}\\s*\\)`);
+      for (const f of walk(srcRoot)) {
+        const src = fs.readFileSync(f, 'utf-8');
+        const code = src
+          .split('\n')
+          .filter(l => {
+            const t = l.trimStart();
+            return !(t.startsWith('*') || t.startsWith('//') || t.startsWith('/*'));
+          })
+          .join('\n');
+        if (re.test(code)) sites.push(path.relative(srcRoot, f).replace(/\\/g, '/'));
+      }
+      return sites.sort();
+    };
 
-    // config.js 若声明 init，会被 10-apps 再注册一次（且位置更晚 → 限流静默失效）
+    // 防护核心（bootstrap.js）的注册位必须收敛为两处：05-firewall.js（生产编排）
+    // 与 app/firewall/index.js 的 initFirewall（测试用完整组合）。出现第三处 = 新的重复注册路径
+    expect(findRegisterSites('firewallCorePlugin')).toEqual([
+      'app/firewall/index.js',
+      'framework/loader/registry/05-firewall.js'
+    ]);
+
+    // initFirewall 是测试专用组合；生产路径一律是：05-firewall.js 注册**核心**、
+    // 10-apps 通过 config.init 注册 **app 侧**（操作面）。
+    // 历史事故：两者同时注册 → 管道执行两次、统计 ×2。
+    expect(findRegisterSites('initFirewall')).toEqual([]);
+
+    // app/firewall 是「操作防火墙」的应用层（面板 / 落盘 / 名单同步 / 遥测），按应用约定由
+    // 10-apps 加载。它的 init 只能指向 firewallAppInit（app 侧能力），**不得指向 initFirewall**：
+    // 后者会把防护核心再注册一次，而此时 08-api 的路由已注册完 —— @fastify/rate-limit 的
+    // onRoute 钩子对它们不触发，限流会静默失效。
     const firewallConfigSrc = fs.readFileSync(path.join(srcRoot, 'app', 'firewall', 'config.js'), 'utf-8');
-    const declaredInit = firewallConfigSrc
-      .split('\n')
-      .some(l => !l.trimStart().startsWith('*') && /^\s*init\s*:/.test(l));
-    expect(declaredInit).toBe(false);
+    const initLine = firewallConfigSrc.split('\n').find(l => !l.trimStart().startsWith('*') && /^\s*init\s*:/.test(l));
+    expect(initLine).toBeDefined();
+    expect(initLine).toContain('firewallAppInit');
+    expect(initLine).not.toContain('initFirewall');
   });
 });

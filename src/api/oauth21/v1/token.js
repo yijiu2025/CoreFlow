@@ -31,6 +31,10 @@ async function registerTokenRoutes(fastify) {
     alias: '令牌签发',
     method: 'POST',
     url: '/token',
+    // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
+    config: {
+      rateLimit: { max: 60, timeWindow: '1 minute', groupId: 'oauth-token' }
+    },
     schema: tokenSchema,
     handler: (request, reply) => tokenService.handleTokenGrant(request, reply)
   });
@@ -43,6 +47,10 @@ async function registerTokenRoutes(fastify) {
     alias: '令牌撤销',
     method: 'POST',
     url: '/revoke',
+    // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
+    config: {
+      rateLimit: { max: 60, timeWindow: '1 minute', groupId: 'oauth-token' }
+    },
     schema: revokeSchema,
     handler: (request, reply) => tokenService.handleRevoke(request, reply)
   });

@@ -419,25 +419,6 @@ describe('firewall Redis 访问层：计数 / 滑窗 / 令牌', () => {
     expect(await adapter.readCounter(key)).toBe(0);
   });
 
-  it('consumeRateWindow 返回窗口内累计次数（含本次）', async () => {
-    const key = adapter.rel.rateLimit(`/api/order:${IP}`);
-    expect(await adapter.consumeRateWindow(key, 60_000)).toBe(1);
-    expect(await adapter.consumeRateWindow(key, 60_000)).toBe(2);
-    expect(await adapter.consumeRateWindow(key, 60_000)).toBe(3);
-  });
-
-  it('窗口外的历史记录被滑动清理（用受控时钟，避免同毫秒抖动）', async () => {
-    jest.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') });
-    try {
-      const key = adapter.rel.rateLimit(`/api/order:${IP}`);
-      expect(await adapter.consumeRateWindow(key, 1000)).toBe(1);
-      jest.setSystemTime(new Date('2026-01-01T00:00:02Z')); // 已超出 1s 窗口
-      expect(await adapter.consumeRateWindow(key, 1000)).toBe(1);
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
   it('grantPass / hasPass 支持 IP 与指纹两个维度', async () => {
     await adapter.grantPass({ ip: IP, fingerprint: FP, token: 'tok1', ttlSec: 300 });
     expect(await adapter.hasPass({ ip: IP, token: 'tok1' })).toBe(true);

@@ -1,153 +1,92 @@
 /**
- * 防火墙核心模块
- * Fastify 插件入口：注册速率限制、同步名单、挂载生命周期钩子
- * 安全检测逻辑委托给 engine/pipeline.js
+ * firewall 应用装配（app 层 = 面板/配置/遥测扩展）
+ *
+ * 两层分离后的职责边界（2026-11-02）：
+ *   - 防护核心（限流插件 + 五阶段管道 + 观测钩子）在 framework/firewall/bootstrap.js，
+ *     由 framework/loader/registry/05-firewall.js 直接注册 —— 本文件不再装配任何防护钩子；
+ *   - 本模块只提供 app 侧的三件事：
+ *       ① prepareAppFirewall：配置持久化（initDao）+ 邮件告警通道注入
+ *          （遥测 sink 在 data/store.js 模块体注册，import 本模块即生效）；
+ *       ② firewallAppPlugin：手动名单同步 + onClose 遥测落盘/定时器清理；
+ *       ③ initFirewall：①+核心+② 的完整组合，**仅供测试**在裸 Fastify 上一键装齐
+ *          （生产注册点在 05-firewall.js 分步编排，勿新增第三条注册路径）。
+ *   - firewall 应用被卸载（本文件夹删除）时，05-firewall 跳过 ①③，
+ *     防护核心以 framework 默认策略独立运行。
  *
  * @author yijiu2025
  * @since 2026-08-17
+ * @since 2026-11-02 防护装配上移 framework/firewall/bootstrap.js，本文件只留扩展层
  */
-import {
-  initDao,
-  syncManualBlacklistToRedis,
-  syncManualWhitelistToRedis,
-  cleanupSaveTimer,
-  getSecuritySettings
-} from './dao/dao.js';
-import {
-  shouldSkipDeepCheck,
-  willBeRejectedAsAnonymous,
-  buildRequestContext,
-  checkGlobalBlockPhase,
-  checkChallengeCookie,
-  runDetectionPipeline,
-  observeLoginOutcome,
-  recordLog
-} from '../../framework/firewall/engine/index.js';
-import { registerRateLimit } from '../../framework/firewall/engine/detectors/first-ratelimit.js';
-import { checkNotFoundTrap } from '../../framework/firewall/engine/detectors/scan-trap.js';
+import { initDao, syncManualBlacklistToRedis, syncManualWhitelistToRedis, cleanupSaveTimer } from './dao/dao.js';
 import { registerEmailAlertSender } from '../../framework/firewall/engine/auto-responder.js';
-import { startCleanupTask, trackConnection } from '../../framework/firewall/util/connection-tracker.js';
+import { firewallCorePlugin } from '../../framework/firewall/bootstrap.js';
 import { flushPersist } from './data/store.js';
 import fp from 'fastify-plugin';
-import { createLogger } from '../../framework/log/index.js';
-
-const log = createLogger('app.firewall.index');
 
 /**
- * 初始化防火墙插件
- * @param {import('fastify').FastifyInstance} app Fastify 实例
+ * app 侧前置准备（同步调用，必须在注册 firewallCorePlugin **之前**执行）：
+ *
+ * initDao 把磁盘 firewall_config.json 合并进配置单例 —— registerRateLimit 在插件
+ * 注册期读取 defense.enableRateLimit，本函数晚于核心注册会拿默认值误判开关。
+ * 历史缺陷（2026-09-15 修复）：initDao 从未被调用，磁盘配置从未被加载，
+ * 且下一次保存会用默认值覆盖磁盘文件。
+ *
+ * 邮件通道注入：引擎在 framework 层，framework 不得 import app（契约测试守卫）；
+ * 发信能力属于 notice，由这里把「动态 import + 发送」注册给引擎。
+ * 依赖方向始终 app → framework。
  */
-const initFirewall = fp(async function (app) {
-  // ============== 加载持久化配置（必须在任何读取配置的动作之前） ==============
-  // dao.js 的 initDao 注释写着「由 index.js 在插件注册时调用」，但服务端从未调用过它：
-  // securitySettings 一直是 DEFAULT_SECURITY_SETTINGS 的内存副本，磁盘上
-  // firewall_config.json 里的 enableRateLimit / 手动黑白名单**从未被加载**，
-  // 而 updateSecuritySettings 触发的 triggerSave 又会用默认值把磁盘文件覆盖掉。
-  // 顺序很关键：必须在 registerRateLimit / sync* 之前，否则它们读到的还是默认值。
+function prepareAppFirewall() {
   initDao();
 
-  // ============== 定时任务 ==============
-  startCleanupTask(app);
-
-  // ============== 邮件告警通道注入 ==============
-  // 引擎在 framework 层，framework 不得 import app（契约测试守卫）；
-  // 发信能力属于 notice 应用，由本模块把「动态 import + 发送」注册给引擎。
-  // firewall 应用卸载后引擎不会被安装，此注册自然消失 —— 依赖方向始终 app → framework。
   registerEmailAlertSender(async (to, subject, html) => {
-    const emailService = await import('../../../notice/services/email.js');
+    const emailService = await import('../../framework/notice/services/email.js');
     await emailService.default.send(to, subject, html);
   });
+}
 
-  // ============== 第一层速率限制（onRequest 阶段） ==============
-  await registerRateLimit(app);
-
-  // ============== 启动时同步名单（访问层自行判断 Redis 是否可用） ==============
+/**
+ * app 侧收尾插件：手动名单同步（访问层自行判断 Redis 是否可用）
+ * 与 onClose 清理（DAO 保存定时器 + 内存遥测落盘）
+ * @param {import('fastify').FastifyInstance} app Fastify 实例
+ */
+const firewallAppPlugin = fp(async function (app) {
   await syncManualBlacklistToRedis();
   await syncManualWhitelistToRedis();
 
-  // ============== onRequest：安全检查管道 ==============
-
-  app.addHook('onRequest', async (request, reply) => {
-    const { ip, ua, fingerprint, deviceId } = await buildRequestContext(request);
-
-    // 第 1 阶段：全局封禁检查（连接数 + 黑名单 + 挑战态）
-    const blocked = await checkGlobalBlockPhase(request, reply);
-    if (blocked) {
-      request._firewallLogged = true;
-      return;
-    }
-
-    // 跳过静态资源和挑战验证接口
-    if (shouldSkipDeepCheck(request.url)) return;
-
-    // 已知会被守卫拒绝的匿名请求：连挑战 Cookie 校验与深度检测一起跳过
-    // （配置开关 skipDeepCheckForAnonymous，默认关闭；取舍见 willBeRejectedAsAnonymous 注释）
-    if (getSecuritySettings().defense?.skipDeepCheckForAnonymous && willBeRejectedAsAnonymous(request)) return;
-
-    // 第 2 阶段：挑战 Cookie 验证（已通过的直接放行）
-    const passed = await checkChallengeCookie(request, ip, fingerprint);
-    if (passed) return;
-
-    // 第 3 阶段：深度检测管道（Bot / 地理信誉 / 端点限频）
-    const intercepted = await runDetectionPipeline(
-      ip,
-      ua,
-      request.url,
-      request._firewallLog,
-      fingerprint,
-      reply,
-      deviceId
-    );
-    if (intercepted) {
-      request._firewallLogged = true;
-    }
-  });
-
-  // ============== onSend：记录日志 + 释放连接 ==============
-
-  app.addHook('onSend', async (request, reply, payload) => {
-    trackConnection(request.ip, -1);
-    recordLog(request._firewallLog, reply.statusCode, request._firewallLogged);
-    return payload;
-  });
-
-  // ============== WebSocket 握手防护 ==============
-  app.addHook('onRequest', async (request, reply) => {
-    // WebSocket 升级请求也经过基本安全检查
-    if (request.headers.upgrade === 'websocket') {
-      const ip = request.ip;
-      const { checkGlobalBlock } = await import('../../framework/firewall/block-manager.js');
-
-      // 检查 IP 是否被封禁
-      try {
-        await checkGlobalBlock(ip, null);
-      } catch (err) {
-        reply.code(403).send({ error: 'blocked', message: err.message });
-      }
-    }
-  });
-
-  // ============== onClose：清理定时器 + 落盘遥测 ==============
   app.addHook('onClose', async () => {
     cleanupSaveTimer();
     // 遥测只在内存里，滚动发布 / 重启时不落盘就会丢掉最近的统计
     await flushPersist();
   });
-
-  // ============== onResponse：登录结果观测 + 扫描陷阱 ==============
-
-  app.addHook('onResponse', async (request, reply) => {
-    // 暴力破解防护的接线点：在响应阶段观测登录结果（firewall 自己观测，不反向依赖 oauth21）
-    await observeLoginOutcome(request, reply);
-
-    if ([404, 403].includes(reply.statusCode)) {
-      try {
-        await checkNotFoundTrap(request.ip, request.url, reply.statusCode, request._deviceId || null);
-      } catch (err) {
-        log.warn(`[Firewall] Trap Triggered: ${request.ip} -> ${err.rule}`);
-      }
-    }
-  });
 });
 
-export { initFirewall };
+/**
+ * 完整组合：prepare → 防护核心 → finalize。
+ * 仅供测试使用（生产由 05-firewall.js 分步编排），见文件头注释。
+ * @param {import('fastify').FastifyInstance} app Fastify 实例
+ */
+const initFirewall = fp(async function (app) {
+  prepareAppFirewall();
+  await app.register(firewallCorePlugin);
+  await app.register(firewallAppPlugin);
+});
+
+/**
+ * **10-apps 入口**（生产路径）：app 侧初始化 + 收尾插件。
+ *
+ * 为什么不在这里注册防护核心：核心必须早于 08-api（@fastify/rate-limit 的 onRoute
+ * 只对之后注册的路由生效），所以核心由 05-firewall.js 单独注册。本文件只负责
+ * app 层能力：① initDao（面板配置的来源）+ 邮件通道；② 名单同步 + onClose 落盘。
+ *
+ * 历史：这段曾经由 05-firewall.js 用「存在性守卫 + 动态 import」反向调用（framework → app），
+ * 根源是配置读取住在了 app 层。配置读取已下沉 framework/firewall/config/persisted.js，
+ * 依赖方向恢复单向：app → framework。
+ *
+ * @param {import('fastify').FastifyInstance} app Fastify 实例
+ */
+async function firewallAppInit(app) {
+  prepareAppFirewall();
+  await app.register(firewallAppPlugin);
+}
+
+export { prepareAppFirewall, firewallAppPlugin, initFirewall, firewallAppInit };

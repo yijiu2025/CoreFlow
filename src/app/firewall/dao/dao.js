@@ -40,8 +40,6 @@ let securitySettings = { ...DEFAULT_SECURITY_SETTINGS };
  * 注册的是**函数引用**而非配置对象 —— 每次调用都读当前 `securitySettings` 绑定，
  * 所以 `updateSecuritySettings` 换掉对象后所有调用点立刻可见。
  */
-registerSettingsReader(() => securitySettings);
-
 // ============== 初始化与文件加载 ==============
 
 /**
@@ -49,6 +47,10 @@ registerSettingsReader(() => securitySettings);
  * 注意：此函数由 index.js 在插件注册时调用，不在模块顶层执行
  */
 function initDao() {
+  // 读取器在**初始化之后**再注册：在它之前 framework 的持久化读取（config/persisted.js）
+  // 是权威来源，避免模块加载期用默认值把真实策略盖掉。
+  registerSettingsReader(() => securitySettings);
+
   try {
     if (!fs.existsSync(path.dirname(FIREWALL_FILE))) {
       fs.mkdirSync(path.dirname(FIREWALL_FILE), { recursive: true });
