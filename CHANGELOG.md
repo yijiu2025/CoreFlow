@@ -7,6 +7,39 @@
 
 ## 未发布（Unreleased）
 
+## 2.31.4 — 2026-11-02
+
+### 变更（v2.31.4 候选）
+
+- **fix(firewall)**：**限流链路首次真正生效**。插件注册不再被 `enableRateLimit`
+  提前 return 掐死（改为「有一个开关打开就注册」，`global` 只跟随 `enableRateLimit`；
+  端点级关闭时在注册前用 `onRoute` 钩子摘掉路由上的 `config.rateLimit`）。此前全仓
+  14 处 `config.rateLimit`（含 h5-token 的 `groupId` 计数隔离）从未生效过。
+- **fix(firewall)**：删除自研 ZSET 滑窗（`consumeRateWindow` / `LUA_RATE_WINDOW` /
+  `rel.rateLimit`），计数统一交给 `@fastify/rate-limit` 的 `createRateLimit`；超限才
+  `setBlock` 并抛 429 —— 封禁键改用**真实 IP**（原先把 `<路径>:<ip>` 当 IP 写入，
+  永远匹配不到，端点限频的自动封禁从未落地）。同时删除整套空转的
+  `defense.endpointRateLimits`（三条规则的 path 在现存路由里一条都不存在）。
+- **fix(firewall)**：公开端点补独立 `groupId` 限流 —— `bind-token` / `bind-session`
+  30 次/分、oauth `token` + `revoke` 60 次/分、device 流程 20 次/分、
+  `challenge/verify` 20 次/分。
+- **fix(redis)**：`ResilientStore` 三处语义偏差 —— 窗口取插件传入的 `timeWindow`
+  （此前恒用全局配置，路由声明形同装饰）、只在窗口创建时 `PEXPIRE`（此前每请求续期，
+  客户端持续重试则永不恢复）、`child()` 共享 `memoryFallback`（此前降级模式按路由
+  各算而 Redis 模式共享，属语义分裂）。
+- **refactor(firewall)**：`app/firewall` 归还 **10-apps** 按应用约定注册
+  （`config.init` → `firewallAppInit`），`05-firewall` 只注册防护核心、不再反向 import
+  app；配置读取下沉 `framework/firewall/config/persisted.js`，依赖方向恢复单向
+  （app → framework）。`util/redis.js` 拆为 `lua-scripts` / `redis-keys` /
+  `redis-memory` 三模块，对外 API 与 import 路径不变。
+- **fix(firewall)**：内存无界增长三处 —— 遥测 `ipStats`（上限 2000）与 `pathStats`
+  （上限 500 + 路径长度上限）此前可被随机路径扫描 / 海量源 IP 撑爆，`pendingDelta`
+  同步裁剪；连接追踪清理任务改为「单轮失败不断链」（自续 `setTimeout` 抛错会永久
+  停摆，表从此无人回收）；限流器缓存封顶 32。
+- **fix(auth)**：h5-token 限流计数按 `groupId` 独立核算；`session/` 与 `security/`
+  深度检查修复（会话生命周期、H5 签名双通道与引导收口）。
+
+
 ## 2.31.0 — 2026-11-01
 
 ### 变更（v2.31.0 候选）
@@ -22,7 +55,6 @@
 - **refactor(auth)**：模块拆 7 个职责子目录（context/session/permission/device/risk/
   security/audit），`index.js` 收拢为纯门面（141 个分类命名导出）；业务代码统一走门面，
   测试直连叶子文件，auth 内部相对互引禁碰 index（防环）。
-
 
 ## 2.30.0 — 2026-11-01
 
@@ -72,7 +104,6 @@
   这条事故的根因正是"下载只看 HTTP 状态码"——地址返回登录页时会把 HTML 原样写成 `.bin`。
   配套 9 例测试（含"二进制里偶然出现 `<html>` 不误判"与"脚本确实调用了守卫"）。
 
-
 ## 2.29.7 — 2026-11-01
 
 ### 依赖安全
@@ -100,7 +131,6 @@
 - **`bumpChangelog` 的顺序缺陷**：提升「未发布」后，重建的空占位块被放在新版本**下面**，
   于是下一次发版在原地提升它 → 新版本落到旧版本下方（实测已产出 2.29.6 / 2.29.7 的乱序）。
   改为占位块始终在最上方；补一条"连续两次发版仍保持从新到旧"的回归用例。
-
 
 ## 2.29.6 — 2026-11-01
 
