@@ -96,9 +96,6 @@ name: CI
 on:
   push:
     branches: [main]
-    # 调用图数据快照由 canvas.yml 自动回提交，改这一份 JSON 不需要重跑整套门禁
-    paths-ignore:
-      - 'docs/public/canvas/data.js'
   pull_request:
     branches: [main]
   workflow_dispatch:

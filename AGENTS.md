@@ -11,7 +11,7 @@ npm run migrate      # 执行 Umzug 数据库迁移
 npm run lint         # ESLint 自动修复
 npm run format       # Prettier 格式化
 npm test             # Jest 测试 (ESM 模式)
-npm run canvas:scan  # 重扫 src/ 生成函数调用图数据 → docs/public/canvas/data.js（CI 会自动跑并提交）
+npm run canvas:scan  # 重扫 src/ 生成函数调用图数据 → docs/public/canvas/data.js（发布文档站时 CI 会自动重扫，无需提交）
 ```
 
 单个测试：`node --experimental-vm-modules npx jest --testPathPattern <pattern>`

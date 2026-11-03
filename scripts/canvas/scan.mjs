@@ -2,7 +2,7 @@
 // 用法: node scripts/canvas/scan.mjs   （或 npm run canvas:scan）
 // 输出: docs/public/canvas/data.js （window.CANVAS_DATA = {...}）
 // 页面: docs/public/canvas/index.html —— 文档站发布后即 https://yijiu2025.github.io/CoreFlow/canvas/
-// 数据由 .github/workflows/canvas.yml 在每次推送到 main 时自动刷新并回提交
+// 数据由 .github/workflows/docs.yml 在每次发布文档站时重扫生成（构建期产出，不入库、不提交）
 import { readdirSync, statSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, dirname, basename } from 'node:path';
 import { posix } from 'node:path';

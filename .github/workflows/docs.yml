@@ -24,9 +24,12 @@ name: Docs
 on:
   push:
     branches: [main]
-    # 只在文档/依赖/本工作流变化时重建；改后端代码不需要重发站点
+    # 后端源码变化也要重建：站点里的「函数调用图」是在构建期扫 src/ 生成的，
+    # 不跟着重建就会停在旧快照（见下面的「生成调用图数据」步骤）。
     paths:
       - 'docs/**'
+      - 'src/**'
+      - 'scripts/canvas/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/docs.yml'
@@ -68,11 +71,25 @@ jobs:
           npm install --workspace=packages/shared-device --include-workspace-root \
             --ignore-scripts --legacy-peer-deps --no-package-lock --no-audit --no-fund
 
+      # 调用图数据在**构建期**生成，不落库、不提交：
+      #   - 不需要机器人推送（main 有状态检查保护，机器人推不上去）
+      #   - 天然与这次发布的代码一致，不存在快照过期
+      # 写入 docs/public/canvas/data.js 后由 vitepress 原样拷进产物。
+      - name: 生成调用图数据
+        run: node scripts/canvas/scan.mjs
+
       - name: 构建文档站
         run: npx vitepress build docs
 
       # 站点自检：产物里必须真的带着 base 前缀，否则说明 DOCS_BASE 没生效
       # （只检查 index.html 一处，够用且不会因页面改名而假红）
+      - name: 校验调用图页面已产出
+        run: |
+          for f in docs/.vitepress/dist/canvas/index.html docs/.vitepress/dist/canvas/data.js; do
+            [ -f "$f" ] || { echo "❌ 缺少 $f —— 调用图页面没进产物"; exit 1; }
+          done
+          echo "✅ 调用图页面与数据都在产物里（$(du -h docs/.vitepress/dist/canvas/data.js | cut -f1)）"
+
       - name: 校验 base 前缀已生效
         run: |
           if ! grep -q '"/CoreFlow/assets/' docs/.vitepress/dist/index.html; then
