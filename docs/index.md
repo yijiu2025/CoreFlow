@@ -10,6 +10,10 @@ hero:
       text: 快速上手
       link: /guide/quick-start
     - theme: alt
+      text: 函数调用图
+      link: /canvas/
+      target: _self
+    - theme: alt
       text: 在 GitHub 上查看
       link: https://github.com/yijiu2025/CoreFlow
 

@@ -1,0 +1,2150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeCanvas · 后端函数调用图</title>
+<style>
+  :root {
+    --bg: #f2f4f7; --panel: #ffffff; --line: #e2e6ec; --text: #252d3a; --text2: #7d8794;
+    --accent: #2f6fe4; --shadow: 0 1px 3px rgba(24,34,52,.07), 0 4px 14px rgba(24,34,52,.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body { font: 13px/1.45 "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    color: var(--text); background: var(--bg); display: flex; flex-direction: column;
+    -webkit-font-smoothing: antialiased; }
+
+  /* ---------- 加载遮罩 ---------- */
+  #loading { position: fixed; inset: 0; z-index: 99; background: var(--bg); display: flex;
+    flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  #loading .ring { width: 34px; height: 34px; border-radius: 50%; border: 3px solid #dbe2ec;
+    border-top-color: var(--accent); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading .tip { color: var(--text2); font-size: 12.5px; }
+
+  /* ---------- 顶栏 ---------- */
+  #toolbar { display: flex; align-items: center; gap: 12px; padding: 9px 16px; background: var(--panel);
+    border-bottom: 1px solid var(--line); flex: 0 0 auto; position: relative; z-index: 30; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .brand .logo { width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto;
+    background: linear-gradient(135deg, #2f6fe4, #7b3fe4); position: relative; }
+  .brand .logo::after { content: ""; position: absolute; inset: 6px; border: 2px solid #fff; border-radius: 3px; }
+  .brand .sub { font-weight: 400; font-size: 11.5px; color: var(--text2); margin-left: 2px; }
+  #searchWrap { position: relative; flex: 0 1 320px; }
+  #search { width: 100%; padding: 6px 12px 6px 30px; border: 1px solid var(--line); border-radius: 8px;
+    font: inherit; outline: none; background: var(--bg); transition: border-color .15s, background .15s; }
+  #search:focus { border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgba(47,111,228,.12); }
+  #searchIcon { position: absolute; left: 9px; top: 7px; color: var(--text2); font-size: 12px; pointer-events: none; }
+  #searchResults { position: absolute; top: 36px; left: 0; right: 0; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(20,30,50,.16);
+    max-height: 320px; overflow: auto; display: none; z-index: 40; }
+  #searchResults .item { padding: 7px 12px; cursor: pointer; display: flex; justify-content: space-between;
+    gap: 10px; align-items: baseline; }
+  #searchResults .item:hover, #searchResults .item:hover .file { background: #eef4ff; color: var(--accent); }
+  #searchResults .item .file { color: var(--text2); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seg { display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
+  .seg button { border: none; background: transparent; padding: 4px 11px; border-radius: 6px; cursor: pointer;
+    font: inherit; font-size: 12px; color: var(--text2); white-space: nowrap; transition: all .15s; }
+  .seg button.on { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(24,34,52,.14); }
+  .seg button.on[data-k="import"] { color: #c47314; }
+  .seg button.on[data-k="local"] { color: #3b6fc4; }
+  .seg button.on[data-k="ref"] { color: #2f8f5b; }
+  .seg button.on[data-k="guess"] { color: #6b7690; }
+  .seg button.on[data-k="var"] { color: #7a5cc4; }
+  .seg button.on[data-k="env"] { color: #2380b8; }
+  .seg button.on[data-k="log"] { color: #b05690; }
+  .seg button { padding: 4px 8px; }
+  #toolbar .btn { padding: 6px 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+    cursor: pointer; font: inherit; font-size: 12.5px; white-space: nowrap; transition: all .15s; }
+  #toolbar .btn:hover { border-color: var(--accent); color: var(--accent); }
+  #stats { margin-left: auto; color: var(--text2); font-size: 12px; white-space: nowrap; }
+  #stats b { color: var(--text); font-weight: 600; }
+
+  /* ---------- 主体 ---------- */
+  #main { flex: 1 1 auto; display: flex; min-height: 0; }
+  #sidebar { flex: 0 0 262px; background: var(--panel); border-right: 1px solid var(--line);
+    overflow-y: auto; padding: 10px 0 6px; display: flex; flex-direction: column; }
+  #sidebar .side-title { padding: 2px 14px 8px; font-size: 11px; font-weight: 600; color: var(--text2);
+    letter-spacing: .08em; text-transform: uppercase; }
+  .grp { padding: 5px 14px; cursor: default; display: flex; align-items: center; gap: 8px; user-select: none; }
+  .grp:hover { background: #f4f6fa; }
+  .grp input { accent-color: var(--accent); flex: 0 0 auto; }
+  .grp .gdot { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
+  .grp .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .grp .name:hover { color: var(--accent); }
+  .grp .cnt { color: var(--text2); font-size: 10.5px; white-space: nowrap; }
+  /* 目录树（模块 → 文件夹 → 文件，每级可勾选） */
+  #sidebar .side-head { display: flex; align-items: center; gap: 6px; padding: 2px 12px 7px; }
+  #sidebar .side-head .t { font-size: 11px; font-weight: 600; color: var(--text2); letter-spacing: .08em; }
+  #sidebar .side-head .acts { margin-left: auto; display: flex; gap: 4px; }
+  #sidebar .side-head .acts button { border: 1px solid var(--line); background: #fff; color: var(--text2);
+    border-radius: 6px; padding: 1px 6px; font: inherit; font-size: 10.5px; cursor: pointer; }
+  #sidebar .side-head .acts button:hover { color: var(--accent); border-color: var(--accent); }
+  .tro { display: flex; align-items: center; gap: 5px; padding: 2.5px 10px 2.5px 6px; font-size: 12px;
+    user-select: none; cursor: default; }
+  .tro:hover { background: #f4f6fa; }
+  .tro input { accent-color: var(--accent); margin: 0; flex: 0 0 auto; width: 12px; height: 12px; }
+  .tro .tw { width: 11px; flex: 0 0 auto; text-align: center; color: #b3bcc9; font-size: 9px; cursor: pointer; }
+  .tro .tw:hover { color: var(--accent); }
+  .tro .gdot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+  .tro .tname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .tro .tname:hover { color: var(--accent); text-decoration: underline; }
+  .tro .tcnt { color: var(--text2); font-size: 10px; white-space: nowrap; }
+  .tro.lv0 { font-weight: 600; }
+  .tro.lv1 { color: #55606e; }
+  .tro.lv2 { color: #75808f; }
+  .tro.off .tname, .tro.off .tcnt { opacity: .45; }
+  .legend { margin-top: auto; padding: 12px 14px 10px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--text2); }
+  .legend b { display: block; font-size: 10.5px; letter-spacing: .08em; color: var(--text2); margin-bottom: 7px; }
+  .legend .li { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .legend .sw { width: 22px; height: 0; border-top: 2px solid; flex: 0 0 auto; }
+  .legend .sw.dash { border-top-style: dashed; }
+  .legend .sw.dot { width: 9px; height: 9px; border: none; border-radius: 3px; margin: 0 6px 0 1px; }
+
+  #viewport { flex: 1; position: relative; overflow: hidden; cursor: grab;
+    background: radial-gradient(circle, #d7dce4 1px, transparent 1px); background-size: 24px 24px; }
+  #viewport.dragging { cursor: grabbing; }
+
+  #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; width: 0; height: 0; }
+  #edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3;
+    transform-origin: 0 0; }
+  #world { z-index: 1; }
+  #zoombar, #hint { z-index: 20; }
+  #detail { z-index: 21; }
+  #chainChip { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); display: none; z-index: 22;
+    background: rgba(255,255,255,.96); border: 1px solid var(--line); border-radius: 20px;
+    box-shadow: 0 4px 18px rgba(25,40,70,.14); padding: 7px 16px; font-size: 12px; color: var(--text);
+    white-space: nowrap; pointer-events: none; }
+  #chainChip b { color: var(--accent); }
+  #chainChip .cx { color: #a8b1bd; font-size: 10.5px; }
+  #edges path { fill: none; stroke: #b6c0cf; stroke-width: 1.2; }
+  #edges path.k-import { stroke: #e0912f; stroke-opacity: .32; }
+  #edges path.k-guess { stroke: #c5ccd8; stroke-opacity: .6; stroke-dasharray: 5 4; }
+  #edges path.k-local { stroke: #7ea4dd; stroke-opacity: .6; }
+  #edges path.k-ref { stroke: #3ba55d; stroke-opacity: .55; stroke-dasharray: 2 3; }
+  /* 箭头只在近景（>=50%）或选中时挂载 —— 全量 marker 会让平移掉到 100ms/帧 */
+  #world.arrowed #edges path.k-import { marker-end: url(#ar-import); }
+  #world.arrowed #edges path.k-guess { marker-end: url(#ar-guess); }
+  #world.arrowed #edges path.k-local { marker-end: url(#ar-local); }
+  #world.arrowed #edges path.k-ref { marker-end: url(#ar-ref); }
+  #world.far #edges path { stroke-width: 1; }
+  #world.far #edges path.k-import { stroke-opacity: .2; }
+  #edges path.lit { stroke: var(--accent); stroke-width: 2.4; stroke-opacity: 1; marker-end: url(#ar-lit); }
+  #world.dim #edges path:not(.lit) { opacity: .07; }
+  #world.dim .fn-node:not(.lit) { opacity: .14; }
+  #world.dim .box:not(.lit) { opacity: .15; }
+  /* LOD：缩小到全览时隐藏函数节点，只留文件框（大幅降低渲染量） */
+  #world.far .fn-node { display: none; }
+  #world.far .cont .ctitle { font-size: 11px; }
+
+  /* ---------- 四级容器：模块 / 文件夹 ---------- */
+  #layerContainers, #layerBoxes, #layerNodes { position: absolute; left: 0; top: 0; }
+  .cont { position: absolute; border-radius: 16px; box-sizing: border-box; }
+  .cont.mcont { border: 2px solid hsl(var(--hue),42%,72%); background: hsl(var(--hue),48%,97.2%);
+    box-shadow: 0 2px 14px rgba(25,40,70,.05); }
+  .cont.fcont { border: 1.5px dashed hsl(var(--hue),34%,80%); background: rgba(255,255,255,.42); border-radius: 12px; }
+  .cont .ctitle { position: absolute; left: 12px; top: 6px; right: 12px; display: flex; align-items: baseline;
+    gap: 8px; white-space: nowrap; overflow: hidden; }
+  .cont .ctitle .cname { font-size: 13px; font-weight: 700; color: hsl(var(--hue),44%,38%);
+    background: hsl(var(--hue),62%,93%); padding: 1px 9px; border-radius: 6px; }
+  .cont .ctitle .cmeta { font-size: 10.5px; color: hsl(var(--hue),18%,52%); }
+  .cont.mcont > .ctitle { cursor: pointer; user-select: none; }
+  .cont.mcont .foldarrow { font-size: 10px; opacity: .6; margin-right: 3px; }
+  .cont.mcont.collapsed { border-style: dashed; }
+  .cont.mcont.collapsed > .ctitle { line-height: 26px; }
+  .cont.gcont { border: 2px solid hsl(var(--hue),36%,76%); background: hsl(var(--hue),42%,98.8%);
+    box-shadow: 0 2px 18px rgba(25,40,70,.04); }
+  .cont.gcont > .ctitle { cursor: pointer; user-select: none; }
+  .cont.mcont > .ctitle, .cont.fcont > .ctitle, .cont.gcont > .ctitle { cursor: move; }
+  .cont.fcont .ctitle { left: 8px; top: 2px; }
+  .cont.fcont .ctitle .cname { font-size: 11px; font-weight: 600; background: hsl(var(--hue),40%,95%);
+    color: hsl(var(--hue),32%,42%); padding: .5px 7px; }
+  .cont.fcont .ctitle .cmeta { font-size: 9.5px; }
+  #world.dim .cont { opacity: .4; }
+  #world.far .cont.fcont { border-style: solid; }
+
+  /* 变量 / 存储方框 */
+  .fn-node.vnode { background: #fbfaff; border-style: dashed; }
+  .fn-node.vnode.v-storage { background: #f5fbfa; border-color: #b7e0da !important; border-left-color: #2fa89a !important; }
+  .fn-node.vnode .vtype { font-size: 9px; color: #7b8494; background: #eef1f5; border-radius: 4px; padding: 0 4px; }
+  .fn-node.vnode.v-storage .vtype { color: #1f7f75; background: #e2f3f1; }
+  #edges path.k-var { stroke: #8b6fd4; stroke-opacity: .5; stroke-dasharray: 4 3; }
+  #world.arrowed #edges path.k-var { marker-end: url(#ar-var); }
+
+  .box { position: absolute; background: rgba(255,255,255,.88); border: 1.5px solid; border-radius: 10px;
+    box-shadow: var(--shadow); }
+  #world.showLocal .box { background: rgba(255,255,255,.35); box-shadow: none; }
+  .box-head { position: absolute; left: 0; top: 0; right: 0; height: 28px; display: flex; align-items: center;
+    gap: 6px; padding: 0 10px; border-radius: 8.5px 8.5px 0 0; cursor: grab; user-select: none; }
+  .box-head:active { cursor: grabbing; }
+  .box-head .fold { width: 17px; height: 17px; line-height: 15px; text-align: center; border-radius: 5px;
+    font-size: 11px; color: var(--text2); background: rgba(255,255,255,.85); cursor: pointer; flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.07); }
+  .box-head .fold:hover { color: var(--text); background: #fff; }
+  .box-head { cursor: pointer; }
+  .box.is-collapsed { border-style: dashed; background: rgba(255,255,255,.72); }
+  .box.is-collapsed .box-head { border-radius: 9px; }
+  .box-head .fname { flex: 1; font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .box-head .fmeta { font-size: 10px; opacity: .65; white-space: nowrap; }
+  .box.ghead { position: absolute; border: none; box-shadow: none; background: transparent; }
+  .box.ghead .gtxt { display: inline-flex; align-items: center; gap: 7px; padding: 4px 13px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 700; letter-spacing: .02em; cursor: pointer; white-space: nowrap; }
+  .box.ghead .gtxt .n { font-weight: 400; opacity: .7; font-size: 11px; }
+
+  .fn-node { position: absolute; background: #fff; border: 1px solid; border-left-width: 3px; border-radius: 6px;
+    padding: 2px 7px; font-size: 11.5px; cursor: grab; user-select: none; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; transition: box-shadow .12s; }
+
+  /* ---------- ComfyUI 风格节点卡片（左右端口） ---------- */
+  .fn-node.card { padding: 0; display: block; overflow: visible; border-radius: 7px;
+    box-shadow: 0 1px 3px rgba(25,40,70,.07); background: #fff; }
+  .fn-node.card .nh { display: flex; align-items: center; gap: 4px; height: 18px; padding: 0 5px;
+    border-radius: 6px 6px 0 0; background: hsl(var(--hue, 215), 42%, 96%); border-bottom: 1px solid hsl(var(--hue, 215), 30%, 90%); }
+  .fn-node.card .nh .nn { font-size: 10.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+  .fn-node.card .nh .nl { font-size: 9px; color: #9aa4b2; flex: 0 0 auto; }
+  .fn-node.card .nb { position: relative; }
+  .fn-node.card .port { position: absolute; height: 14px; line-height: 14px; font-size: 9.5px; color: #5b6675;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fn-node.card .port.pin { left: 8px; right: 48%; text-align: left; }
+  .fn-node.card .port.pout { right: 8px; left: 48%; text-align: right; }
+  .fn-node.card .port i { position: absolute; top: 4px; width: 6px; height: 6px; border-radius: 50%;
+    background: #fff; border: 1.5px solid #9aa4b2; }
+  .fn-node.card .port.pin i { left: -7px; }
+  .fn-node.card .port.pout i { right: -7px; }
+  .fn-node.card .port.pin i.on { border-color: #e0912f; background: #fdf0dd; }
+  .fn-node.card .port.pout i.on { border-color: #6f9de0; background: #dce9fb; }
+  .fn-node.card .port.more span { color: #a8b1bd; font-style: italic; }
+  .fn-node.card .port .ph { color: #c0c7d2; font-style: italic; font-size: 9px; }
+  .fn-node.card.lit .port i { border-color: var(--accent); background: #dbe7fb; }
+  .fn-node:hover { box-shadow: 0 2px 10px rgba(30,50,90,.18); z-index: 3; }
+  .fn-node .ln { color: var(--text2); font-size: 10px; margin-left: auto; flex: 0 0 auto; }
+  .fn-node .exp { color: #2f9e63; font-size: 9px; flex: 0 0 auto; }
+  .fn-node .k { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2.5px; }
+  .k-function { background: #6f9de0; } .k-async { background: #9b7fe0; } .k-arrow { background: #45b3bf; } .k-method { background: #e0a54f; }
+  .k-class { background: #2f9e8f; }
+  .fn-node .nh .km { color: #2f9e8f; font-weight: 600; margin-right: 4px; }
+  /* class 节点：一个整体框（方法都收进去了），用左侧粗边区分 */
+  .fn-node.card.k-class-node { border-left-width: 4px; border-left-color: #2f9e8f; background: #f6fbfa; }
+  .fn-node.card.k-class-node .fname, .fn-node.card.k-class-node .nm { color: #1f6f65; }
+  .fn-node.lit { box-shadow: 0 0 0 2px var(--accent), 0 2px 10px rgba(30,50,90,.2); z-index: 4; }
+  .fn-node.pulse, .box.pulse { animation: pulse 1.1s ease-out 2; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(47,111,228,.55); } 100% { box-shadow: 0 0 0 16px rgba(47,111,228,0); } }
+
+  #zoombar { position: absolute; right: 14px; bottom: 14px; display: flex; align-items: center; gap: 2px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px;
+    box-shadow: var(--shadow); z-index: 20; }
+  #zoombar button { width: 30px; height: 30px; border: none; background: transparent; border-radius: 7px;
+    cursor: pointer; font-size: 15px; color: var(--text); }
+  #zoombar button:hover { background: var(--bg); }
+  #zoombar .pct { min-width: 46px; text-align: center; font-size: 11.5px; color: var(--text2); }
+
+  #detail { position: absolute; right: 14px; bottom: 58px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: 0 10px 30px rgba(20,30,50,.16); padding: 12px 16px; min-width: 270px;
+    max-width: 660px; width: max-content; max-height: calc(100% - 100px); overflow: auto; display: none; z-index: 21;
+    font-size: 12px; border-top: 3px solid var(--accent); }
+  #detail h4 { font-size: 13.5px; margin-bottom: 7px; word-break: break-all; display: flex; align-items: center; gap: 6px; }
+  #detailClose { position: absolute; right: 8px; top: 8px; width: 24px; height: 24px; border-radius: 7px;
+    border: 1px solid var(--line); background: #fff; color: var(--text2); font-size: 14px; line-height: 1; cursor: pointer; z-index: 2; }
+  #detailClose:hover { color: #d64545; border-color: #d64545; background: #fff6f6; }
+  #detailBody { padding-right: 26px; }
+  #detail h4 .badge { font-size: 9.5px; font-weight: 600; color: #2f9e63; background: #e5f5ec; border-radius: 4px; padding: 1.5px 6px; }
+  #detail .row { color: var(--text2); margin-top: 3px; word-break: break-all; }
+  #detail .row b { color: var(--text); font-weight: 600; }
+  #detail .row .io { color: var(--accent); font-weight: 600; }
+  #detail .fid { margin-top: 7px; color: #a8b1bd; font-size: 10.5px; }
+  #detail .src-head { display: flex; align-items: center; justify-content: space-between; margin-top: 10px;
+    padding-top: 8px; border-top: 1px dashed var(--line); }
+  #detail .src-head span { font-size: 11px; font-weight: 600; color: var(--text2); }
+  #detail .src-head .btns { display: flex; gap: 6px; }
+  #detail .src-head button { font-size: 10.5px; padding: 2px 9px; border-radius: 6px; border: 1px solid var(--line);
+    background: #fff; color: var(--text2); cursor: pointer; }
+  #detail .src-head button:hover { color: var(--accent); border-color: var(--accent); }
+  #detail pre.code { margin: 7px 0 2px; padding: 10px 12px; background: #f6f8fb; border: 1px solid var(--line);
+    border-radius: 8px; overflow: auto; max-height: 300px; font: 11px/1.55 'Cascadia Code', Consolas, monospace;
+    color: #24292f; tab-size: 2; user-select: text; cursor: text; }
+  #detail pre.code.full { max-height: 560px; }
+  #detail .code .ln { display: inline-block; width: 34px; color: #9aa4b2; text-align: right; margin-right: 12px; user-select: none; }
+  #detail .code .cm { color: #6a8759; font-style: italic; }
+  #detail .code .st { color: #a31515; }
+  #detail .code .kw { color: #0033b3; font-weight: 600; }
+  #detail .code .nu { color: #1750eb; }
+  #detail .code .fn { color: #795e26; }
+  #detail .trunc { color: #c47314; font-size: 10.5px; margin-top: 4px; }
+  #detail .iolist { max-height: 132px; overflow: auto; margin-top: 5px; }
+  #detail .iorow { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 3px 7px;
+    border-radius: 6px; cursor: pointer; color: #4a5568; }
+  #detail .iorow:hover { background: #eef3fb; color: var(--accent); }
+  #detail .iorow .ioarrow { flex: none; font-size: 10px; }
+  #detail .iorow .at { color: #a8b1bd; font-size: 10px; }
+  #detail .iorow .iotag { margin-left: auto; flex: none; font-size: 9px; color: #9aa4b2; background: #f1f4f8;
+    border-radius: 4px; padding: 1px 5px; }
+  #detail .side { font-style: normal; color: #b6c0cf; font-size: 10px; margin-left: 4px; }
+  #detail .ioempty { font-size: 10.5px; color: #9aa4b2; font-style: italic; padding: 3px 2px; }
+  #detail h4 .badge.st { color: #1f7f75; background: #e2f3f1; }
+  .fn-node.vnode { overflow: visible; }
+  .fn-node .pdot { position: absolute; top: 50%; margin-top: -3px; width: 6px; height: 6px; border-radius: 50%;
+    background: #fff; border: 1.5px solid #9aa4b2; }
+  .fn-node .pdot.in { left: -5px; }
+  .fn-node .pdot.out { right: -5px; }
+  .fn-node.v-storage .pdot { border-color: #2fa89a; }
+  .fn-node .vi { font-size: 9px; color: #8b6fd4; line-height: 1; }
+  .empty-hint { position: absolute; font-size: 10px; color: #b6c0cf; font-style: italic; white-space: nowrap; }
+  .fn-node.v-storage .vi { color: #2fa89a; }
+
+  /* ---------- 文件详情卡 ---------- */
+  #fmodal { position: fixed; inset: 0; background: rgba(25,35,55,.38); display: none; z-index: 40;
+    align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+  #fmodal.on { display: flex; }
+  .fcard { background: var(--panel); width: min(880px, 94vw); max-height: 88vh; overflow: auto; border-radius: 14px;
+    box-shadow: 0 24px 70px rgba(15,25,45,.35); border-top: 3px solid var(--accent); }
+  .fcard .fhead { position: sticky; top: 0; background: var(--panel); display: flex; align-items: flex-start;
+    justify-content: space-between; padding: 16px 22px 10px; border-bottom: 1px solid var(--line); z-index: 2; }
+  .fcard .ft { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .fcard .ft .fdot { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+  .fcard .ft h3 { font-size: 17px; margin: 0; word-break: break-all; }
+  .fcard .ft .chip { font-size: 10.5px; font-weight: 600; padding: 2px 9px; border-radius: 20px; }
+  .fcard .fpath { font-size: 11.5px; color: #a8b1bd; margin-top: 4px; word-break: break-all; }
+  .fcard .fpath b { color: var(--text2); font-weight: 600; }
+  .fcard .fclose { flex: none; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; font-size: 15px; color: var(--text2); cursor: pointer; line-height: 1; }
+  .fcard .fclose:hover { color: #d64545; border-color: #d64545; }
+  .fcard .fbody { padding: 14px 22px 20px; }
+  .fcard .fdoc { background: #f4f7fb; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+    font-size: 12.5px; color: #3c4658; line-height: 1.7; white-space: pre-wrap; }
+  .fcard .fdoc.none { color: #9aa4b2; font-style: italic; }
+  .fcard .fstats { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .fcard .fstats .st { font-size: 11px; color: var(--text2); background: #fff; border: 1px solid var(--line);
+    border-radius: 16px; padding: 3px 11px; }
+  .fcard .fstats .st b { color: var(--text); }
+  .fcard .fstats .st.io b { color: var(--accent); }
+  .fcard .fsec { margin-top: 16px; }
+  .fcard .fsec > b { font-size: 12.5px; display: block; margin-bottom: 7px; }
+  .fcard .fsec .cnt2 { color: #a8b1bd; font-weight: 500; font-size: 11px; }
+  .fcard .fempty { font-size: 11.5px; color: #9aa4b2; font-style: italic; padding: 4px 2px; }
+  .fcard .egroup { margin-bottom: 8px; }
+  .fcard .egroup .ename { font-size: 11.5px; font-weight: 600; color: var(--text2); margin-bottom: 3px; }
+  .fcard .erow { display: flex; align-items: center; gap: 7px; font-size: 11.5px; padding: 2.5px 0 2.5px 12px; color: #4a5568; flex-wrap: wrap; }
+  .fcard .erow .arr { color: #b6c0cf; }
+  .fcard .erow .tag { font-size: 9.5px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+  .fcard .erow .tag.t-import { color: #c47314; background: #fdf1e2; }
+  .fcard .erow .tag.t-local { color: #3b6fc4; background: #e9f1fc; }
+  .fcard .erow .tag.t-ref { color: #2f9e63; background: #e5f5ec; }
+  .fcard .erow .tag.t-guess { color: #6b7690; background: #eef1f5; }
+  .fcard .erow .tag.t-var { color: #7a5cc4; background: #f0eafc; }
+  .fcard .erow .tag.t-env { color: #2380b8; background: #e6f3fb; }
+  .fcard .erow .tag.t-log { color: #b05690; background: #faeaf4; }
+  .fcard .frow { border: 1px solid var(--line); border-radius: 9px; padding: 7px 12px; margin-bottom: 6px;
+    cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+  .fcard .frow:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(30,50,90,.1); }
+  .fcard .frow .l1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .fcard .frow .k { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .fcard .frow .k.k-arrow { background: #45b3bf; }
+  .fcard .frow .k.k-async { background: #9b7fe0; }
+  .fcard .frow .k.k-function { background: #6f9de0; }
+  .fcard .frow .k.k-method { background: #e0a54f; }
+  .fcard .frow .k.k-class { background: #2f9e8f; }
+  .fcard .frow .k.k-storage { background: #2fa89a; }
+  .fcard .frow .k.k-prim { background: #b3a6d8; }
+  .fcard .frow .fnm { font-weight: 600; font-size: 12.5px; word-break: break-all; }
+  .fcard .frow .exp { color: #2f9e63; font-size: 10px; }
+  .fcard .frow .fline { color: #a8b1bd; font-size: 10.5px; }
+  .fcard .frow .fio { margin-left: auto; color: var(--text2); font-size: 10.5px; white-space: nowrap; }
+  .fcard .frow .fio b { color: var(--accent); }
+  .fcard .frow .fdesc { font-size: 11px; color: #6b7690; margin-top: 3px; padding-left: 16px; line-height: 1.55; }
+  .fcard .frow .hint2 { font-size: 9.5px; color: #b6c0cf; margin-left: 4px; }
+
+  #hint { position: absolute; left: 14px; bottom: 14px; color: var(--text2); font-size: 11px; z-index: 20;
+    background: rgba(255,255,255,.85); padding: 5px 10px; border-radius: 8px; backdrop-filter: blur(4px); }
+</style>
+</head>
+<body>
+<div id="loading"><div class="ring"></div><div class="tip">正在渲染函数调用图…</div></div>
+
+<header id="toolbar">
+  <div class="brand"><span class="logo"></span>CodeCanvas<span class="sub">后端函数调用图</span></div>
+  <div id="searchWrap">
+    <span id="searchIcon">⌕</span>
+    <input id="search" placeholder="搜索函数 / 文件，回车定位下一个…" autocomplete="off">
+    <div id="searchResults"></div>
+  </div>
+  <div class="seg" id="filterSeg">
+    <button data-k="import" class="on" title="跨文件 import 调用">跨文件边</button>
+    <button data-k="local" class="on" title="同一文件内的调用">同文件边</button>
+    <button data-k="ref" class="on" title="函数作为值传递（handler: someFn 等）">引用边</button>
+    <button data-k="guess" class="on" title="跨文件同名函数推断">推断边</button>
+    <button data-k="var" class="on" title="函数读写模块级变量 / Map 等存储">变量边</button>
+    <button data-k="env" class="on" title="读取 process.env 环境变量">环境变量</button>
+    <button data-k="log" class="on" title="调用日志实例 log.info / log.warn 等">日志</button>
+  </div>
+  <button class="btn" id="btnFit">适应视图 (F)</button>
+  <button class="btn" id="btnReset">重置布局</button>
+  <span id="stats"></span>
+</header>
+<div id="main">
+  <aside id="sidebar"></aside>
+  <main id="viewport">
+    <div id="world">
+      <div id="layerContainers"></div>
+      <div id="layerBoxes"></div>
+      <div id="layerNodes"></div>
+    </div>
+    <div id="zoombar">
+      <button id="zoomOut" title="缩小">−</button>
+      <span class="pct" id="zoomPct">100%</span>
+      <button id="zoomIn" title="放大">＋</button>
+      <button id="btnFit2" title="适应视图">⤢</button>
+    </div>
+    <canvas id="edges"></canvas>
+    <div id="chainChip"></div>
+    <div id="detail"><button id="detailClose" title="关闭 (Esc)">×</button><div id="detailBody"></div></div>
+    <div id="fmodal"><div class="fcard" id="fcard"></div></div>
+    <div id="hint">单双击=高亮/详情 · 拖标题栏或框边=移动整块（自动保存）· 空格/中键拖动=平移画布 · 拖节点=微调位置</div>
+  </main>
+</div>
+<script src="data.js"></script>
+<script>
+(function () {
+  'use strict';
+  const D = window.CANVAS_DATA;
+  const $ = (s) => document.querySelector(s);
+
+  // ---------- 索引 ----------
+  const fnById = new Map(D.functions.map((f) => [f.id, f]));
+  const fileById = new Map(D.files.map((f) => [f.id, f]));
+  const varById = new Map((D.variables || []).map((v) => [v.id, v]));
+  const folderById = new Map((D.folders || []).map((f) => [f.id, f]));
+  const groupById = new Map(D.groups.map((g) => [g.id, g]));
+  const sortedGroups = [...D.groups].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999) || a.name.localeCompare(b.name));
+  sortedGroups.forEach((g, i) => { groupById.get(g.id).hue = Math.round(i * 137.508) % 360; });
+  const groupVisible = new Map(D.groups.map((g) => [g.id, true]));
+  const hiddenFiles = new Set();  // 目录树里取消勾选的文件（隐藏其框/节点/相关边）
+  // 端点 → 所属文件（用于判断边是否该隐藏）
+  const fileOfEnd = (id) => (id.startsWith('file:') ? id.slice(5) : (fnById.get(id)?.file ?? varById.get(id)?.file ?? null));
+  const anyFileVisible = (files) => (files || []).some((fid) => !hiddenFiles.has(fid));
+  const collapsedGroups = new Set(); // 已折叠的模块（点击模块标题栏切换，整体重排）
+  const foldedFiles = new Set();     // 已折叠的文件（点击文件标题栏 / – 按钮切换，重建后保留）
+
+  const nodeEdges = new Map();
+  D.calls.forEach((c, i) => {
+    for (const end of [c.f, c.t]) {
+      if (!nodeEdges.has(end)) nodeEdges.set(end, []);
+      nodeEdges.get(end).push(i);
+    }
+  });
+  // 函数级 入/出 度数（文件详情卡用）
+  const fnIn = new Map(), fnOut = new Map();
+  for (const c of D.calls) {
+    fnIn.set(c.t, (fnIn.get(c.t) || 0) + 1);
+    fnOut.set(c.f, (fnOut.get(c.f) || 0) + 1);
+  }
+
+  // ---------- 布局参数 ----------
+  const COL_W = 250, GAP_X = 40, GAP_Y = 16, HEAD_H = 26, FN_H = 22, PAD_B = 8;
+  const TARGET_H = 5200, MAX_ROW_W = 14000; // LPT 贪心装箱：列高均衡，画布比例贴近屏幕
+  const LOD = 0.15; // 低于该缩放只显示文件框
+
+  const fnPos = new Map();   // fnId -> {x,y,w,h,el,home,shown}
+  const boxPos = new Map();  // fileId -> {x,y,w,h,el,headEl,collapsed,fnIds,group,shown}
+  const edges = [];          // {f,t,k,gf,gt,el,bbox,shown}
+  const filters = { import: true, local: true, guess: true, ref: true, var: true, env: true, log: true };
+
+  // ComfyUI 节点尺寸：标题 18 + 端口行 14×行数
+  const NODE_HEAD = 17, PORT_H = 13, MAXP = 4, VAR_H = 19, NODE_GAP = 3;
+  const inL = new Map(), outL = new Map(); // 边对象按端点索引（端口偏移挂在边对象上）
+  const portRows = (n) => (n ? Math.min(n, MAXP) + (n > MAXP ? 1 : 0) : 0);
+  const nodeRows = (id) => Math.max(1, portRows((inL.get(id) || []).length), portRows((outL.get(id) || []).length));
+  const fnNodeH = (id) => NODE_HEAD + nodeRows(id) * PORT_H + 4;
+  function labelOfNode(id) {
+    if (id.startsWith('file:')) return '📄 ' + (fileById.get(id.slice(5))?.name ?? '?');
+    if (id.startsWith('var:')) return varById.get(id)?.name ?? id;
+    return fnById.get(id)?.name ?? id;
+  }
+  function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  // ---------- 构建（四级容器：模块 → 文件夹 → 文件 → 函数/变量方框） ----------
+  const M_TITLE = 28, M_PAD = 12, F_TITLE = 20, F_PAD = 8;
+  const G_PAD = 16, G_TOP = M_TITLE + 10; // api 业务域外框的内边距与标题高
+  const isApiGroup = (id) => id === 'api' || id.startsWith('api/');
+  const NODE_W = 196, COL_GAP = 18, PAD_X = 6;   // 文件内网格：列宽/列间距（留过线空间）
+  const FOLDER_MAX_W = 3000, MODULE_MAX_W = 6200;
+  // ---------- 位置偏移：拖动模块 / 文件夹 / 文件框后可持久保存 ----------
+  const OFF_KEY = 'codecanvas:offsets:v1';
+  const offStore = (() => {
+    try {
+      const r = JSON.parse(localStorage.getItem(OFF_KEY) || 'null');
+      if (r && r.module && r.folder && r.box) return r;
+    } catch (e) { /* 忽略坏数据 */ }
+    return { module: {}, folder: {}, box: {} };
+  })();
+  function saveOffsets() { try { localStorage.setItem(OFF_KEY, JSON.stringify(offStore)); } catch (e) {} }
+  const bumpOff = (bucket, key, dx, dy) => {
+    const cur = bucket[key] || [0, 0];
+    bucket[key] = [+(cur[0] + dx).toFixed(1), +(cur[1] + dy).toFixed(1)];
+  };
+  const moduleBounds = new Map(); // groupId -> {x,y,w,h,el,shown}
+  const folderBounds = new Map(); // folderId -> {x,y,w,h,group,el,shown}
+  const fileLayouts = new Map();  // fileId -> {w,h,cols,hOf}
+
+  // 文件内节点排序：按「调用深度」分层（调用方深度小、被调方深度大），再按行号
+  // → 切列后绝大多数边都从右列流向左列，不会同列上下互连
+  const orderCache = new Map();
+  function orderFileNodes(file) {
+    if (orderCache.has(file.id)) return orderCache.get(file.id);
+    const ids = file.fns.concat(file.vars || []);
+    const idset = new Set(ids);
+    const lineOf = (id) => (id.startsWith('var:') ? (varById.get(id)?.line ?? 0) : (fnById.get(id)?.line ?? 0));
+
+    const out = new Map();
+    const indeg = new Map(ids.map((id) => [id, 0]));
+    for (const c of D.calls) {
+      if (!idset.has(c.f) || !idset.has(c.t)) continue;
+      if (c.k !== 'local' && c.k !== 'var') continue;
+      if (!out.has(c.f)) out.set(c.f, []);
+      out.get(c.f).push(c.t);
+      indeg.set(c.t, (indeg.get(c.t) || 0) + 1);
+    }
+
+    // 最长路径分层（Kahn）；成环的节点最后统一定为 maxD+1
+    const depth = new Map(ids.map((id) => [id, 0]));
+    const left = new Map(indeg);
+    const queue = ids.filter((id) => (left.get(id) || 0) === 0);
+    for (const q of queue) depth.set(q, 0);
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const t of out.get(cur) ?? []) {
+        depth.set(t, Math.max(depth.get(t) || 0, (depth.get(cur) || 0) + 1));
+        const d = (left.get(t) || 0) - 1;
+        left.set(t, d);
+        if (d === 0) queue.push(t);
+      }
+    }
+    let maxD = 0;
+    for (const d of depth.values()) maxD = Math.max(maxD, d);
+    for (const id of ids) if ((left.get(id) || 0) > 0) depth.set(id, maxD + 1); // 环内节点沉底
+
+    const order = ids.slice().sort((a, b) => (depth.get(a) - depth.get(b)) || (lineOf(a) - lineOf(b)));
+    orderCache.set(file.id, order);
+    return order;
+  }
+
+  // 每个文件的网格布局：按深度顺序切成若干列（列间留出布线空间）→ 文件框呈横长方形
+  function fileLayout(fid) {
+    if (fileLayouts.has(fid)) return fileLayouts.get(fid);
+    const file = fileById.get(fid);
+    const ids = orderFileNodes(file);
+    const hOf = (id) => (id.startsWith('var:') ? VAR_H : fnNodeH(id)) + NODE_GAP;
+    const totalH = ids.reduce((sum, id) => sum + hOf(id), 0) || 1;
+    const nCols = Math.min(4, Math.max(1, Math.ceil(ids.length / 7)));
+    const cols = Array.from({ length: nCols }, () => []);
+    const target = totalH / nCols;
+    let ci = 0, acc = 0;
+    for (const id of ids) {
+      if (ci < nCols - 1 && acc >= target * (ci + 1)) ci++;
+      cols[ci].push(id);
+      acc += hOf(id);
+    }
+    const colH = cols.map((c) => c.reduce((sum, id) => sum + hOf(id), 0));
+    const L = {
+      cols, hOf,
+      w: nCols * NODE_W + (nCols - 1) * COL_GAP + 2 * PAD_X,
+      h: ids.length ? HEAD_H + 6 + Math.max(1, ...colH) : HEAD_H + 26,
+      empty: ids.length === 0,
+    };
+    fileLayouts.set(fid, L);
+    return L;
+  }
+
+  // 列装箱：把方块放进多列，列高尽量均衡；列内按名字排序，读起来整齐
+  function packColumns(items, gapY, nCols) {
+    const cols = Array.from({ length: nCols }, () => ({ items: [], h: 0, w: 0 }));
+    const ranked = items.length > 0 && items.every((it) => it.rank != null);
+    if (ranked) {
+      // 重要性序：按给定顺序填列，列高达到均值即换列 → 阅读顺序严格从上到下
+      const target = items.reduce((sum, it) => sum + it.h + gapY, 0) / nCols;
+      let ci = 0;
+      for (const it of items) {
+        const c = cols[ci];
+        c.items.push(it);
+        c.h += it.h + gapY;
+        c.w = Math.max(c.w, it.w);
+        if (ci < nCols - 1 && c.h >= target) ci++;
+      }
+    } else {
+      for (const it of items.slice().sort((a, b) => b.h - a.h)) {
+        const c = cols.reduce((a, b) => (a.h < b.h ? a : b));
+        c.items.push(it);
+        c.h += it.h + gapY;
+        c.w = Math.max(c.w, it.w);
+      }
+    }
+    for (const c of cols) c.items.sort(ranked ? (a, b) => a.rank - b.rank : (a, b) => (a.name || '').localeCompare(b.name || ''));
+    return { cols, w: cols.reduce((sum, c) => sum + c.w, 0) + (nCols - 1) * 14, h: Math.max(1, ...cols.map((c) => c.h - gapY)) };
+  }
+
+  function build() {
+    // 可重入：模块折叠/展开后清空状态整体重排
+    edges.length = 0; outL.clear(); inL.clear();
+    fnPos.clear(); boxPos.clear(); moduleBounds.clear(); folderBounds.clear();
+    world.classList.remove('dim'); chainChip.style.display = 'none'; detail.style.display = 'none';
+    const contEl = $('#layerContainers'), boxesEl = $('#layerBoxes'), nodesEl = $('#layerNodes');
+    contEl.innerHTML = ''; boxesEl.innerHTML = ''; nodesEl.innerHTML = ''; // 清空旧 DOM，避免重建时叠加副本
+    const fragC = document.createDocumentFragment(), fragB = document.createDocumentFragment(), fragN = document.createDocumentFragment();
+
+    // 先建边对象（节点渲染时把端口 y 偏移写回边对象；连线由 canvas 绘制）
+    for (const c of D.calls) {
+      const e = { f: c.f, t: c.t, k: c.k, l: c.l ?? null, gf: groupOfId(c.f), gt: groupOfId(c.t), pfRel: null, ptRel: null, lit: false };
+      edges.push(e);
+      if (!outL.has(e.f)) outL.set(e.f, []);
+      outL.get(e.f).push(e);
+      if (!inL.has(e.t)) inL.set(e.t, []);
+      inL.get(e.t).push(e);
+    }
+
+    // ① 文件夹内：文件按行铺开（宽度超限换行）
+    const plan = new Map();
+    for (const fo of D.folders) {
+      const fileIds = fo.files.slice().sort((a, b) => a.localeCompare(b));
+      const rel = new Map();
+      let fx = 0, fy = 0, rowH = 0, maxW = 0;
+      for (const fid of fileIds) {
+        const L = fileLayout(fid);
+        if (fx > 0 && fx + L.w > FOLDER_MAX_W) { fx = 0; fy += rowH + GAP_Y; rowH = 0; }
+        rel.set(fid, { x: fx, y: fy });
+        fx += L.w + GAP_X;
+        maxW = Math.max(maxW, fx - GAP_X);
+        rowH = Math.max(rowH, L.h);
+      }
+      plan.set(fo.id, { w: Math.max(120, maxW), h: Math.max(80, fy + rowH), rel, ox: 0, oy: 0 });
+    }
+
+    // ② 模块内：文件夹列装箱（多列，列高均衡；自动选让模块最接近 1.5 宽高比的列数）
+    const plans = [];
+    for (const g of sortedGroups) {
+      if (collapsedGroups.has(g.id)) {
+        plans.push({ g, folders: [], w: 260, h: M_TITLE + 6, collapsed: true });
+        continue;
+      }
+      const folders = D.folders.filter((f) => f.group === g.id);
+      const items = folders.map((fo) => {
+        const p = plan.get(fo.id);
+        return { fo, name: fo.name || g.name, w: p.w + 2 * F_PAD, h: p.h + 2 * F_PAD + F_TITLE };
+      });
+      let best = null;
+      for (let n = 1; n <= Math.min(4, Math.max(1, items.length)); n++) {
+        const packed = packColumns(items, 14, n);
+        const w = packed.w + 2 * M_PAD, h = packed.h + M_TITLE + 2 * M_PAD;
+        const ratio = w / Math.max(1, h);
+        const score = Math.abs(Math.log(ratio / 1.5));
+        if (!best || score < best.score) best = { packed, w, h, score, n };
+      }
+      const packed = best.packed;
+      // 落相对坐标
+      let cx = 0;
+      for (const c of packed.cols) {
+        let cy = 0;
+        for (const it of c.items) {
+          const p = plan.get(it.fo.id);
+          p.ox = cx; p.oy = cy;
+          cy += it.h + 14;
+        }
+        cx += c.w + 14;
+      }
+      plans.push({ g, folders, w: Math.max(380, best.w), h: Math.max(140, best.h) });
+    }
+
+    // ③ 落绝对坐标：模块列装箱；app（入口，plans 末位）独立最右列且底对齐 = 放最下面
+    const appPlan = plans.find((p) => p.g.id === 'app') ?? null; // 入口模块固定最右列、底对齐
+    const restPlans = appPlan ? plans.filter((p) => p !== appPlan) : plans;
+    let bestAll = null;
+    for (let n = 1; n <= Math.max(1, Math.min(6, restPlans.length)); n++) {
+      const packed = packColumns(restPlans.map((p, pi) => ({ p, name: p.g.name, w: p.w, h: p.h, rank: pi })), 60, n);
+      const cols = appPlan
+        ? packed.cols.concat([{ items: [{ p: appPlan, name: appPlan.g.name, w: appPlan.w, h: appPlan.h, rank: restPlans.length }], w: appPlan.w, h: appPlan.h }])
+        : packed.cols;
+      const wAll = cols.reduce((sum, c) => sum + c.w, 0) + (cols.length - 1) * 60;
+      const hAll = Math.max(1, ...cols.map((c) => c.h));
+      const ratio = wAll / hAll;
+      const score = Math.abs(Math.log(ratio / 1.55));
+      if (!bestAll || score < bestAll.score) bestAll = { cols, score };
+    }
+    const modPos = new Map();
+    let apiBox = null; // api 业务域外框（包住所有 api 子模块）
+    {
+      let cx = 40; let prevBottom = 0;
+      bestAll.cols.forEach((c, ci) => {
+        let cy = 40; let colHasApi = false;
+        for (const it of c.items) {
+          const gid = it.p.g.id;
+          const isApi = isApiGroup(gid);
+          if (isApi) colHasApi = true;
+          const ey = isApi ? G_TOP : 0; // api 子模块在框内下移，给外框标题让位
+          modPos.set(gid, { x: cx + (isApi ? G_PAD : 0), y: cy + ey });
+          cy += it.h + ey + 60;
+        }
+        const colBottom = cy - 60 + (colHasApi ? G_PAD : 0); // api 列含外框底边距
+        if (appPlan && ci === bestAll.cols.length - 1 && c.items.length === 1 && c.items[0].p.g.id === 'app') {
+          // app 独占末列：底边与前面所有列的内容底边对齐（api 列算到外框底边）
+          modPos.get(appPlan.g.id).y = Math.max(40, prevBottom - appPlan.h);
+        } else {
+          prevBottom = Math.max(prevBottom, colBottom);
+        }
+        cx += c.w + (colHasApi ? G_PAD : 0) + 60;
+      });
+      const apiPlans = plans.filter((pl) => isApiGroup(pl.g.id));
+      if (apiPlans.length) {
+        let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+        for (const pl of apiPlans) {
+          const p = modPos.get(pl.g.id);
+          x1 = Math.min(x1, p.x); y1 = Math.min(y1, p.y);
+          x2 = Math.max(x2, p.x + pl.w); y2 = Math.max(y2, p.y + pl.h);
+        }
+        apiBox = { x: x1 - G_PAD, y: y1 - G_TOP, w: x2 - x1 + 2 * G_PAD, h: y2 - y1 + G_TOP + G_PAD };
+      }
+    }
+    if (apiBox) {
+      const apiHue = (sortedGroups.find((g) => g.id === 'api') || {}).hue ?? 210;
+      const anyOpen = sortedGroups.some((g) => isApiGroup(g.id) && !collapsedGroups.has(g.id));
+      const nSub = sortedGroups.filter((g) => isApiGroup(g.id)).length;
+      const gEl = document.createElement('div');
+      gEl.className = 'cont gcont';
+      gEl.style.cssText = `left:${apiBox.x}px;top:${apiBox.y}px;width:${apiBox.w}px;height:${apiBox.h}px;--hue:${apiHue}`;
+      gEl.innerHTML = `<div class="ctitle" title="点击折叠 / 展开全部 api 子模块"><span class="foldarrow">${anyOpen ? '▾' : '▸'}</span><span class="cname">api · 业务域</span><span class="cmeta">${nSub} 个子模块 · 点击标题${anyOpen ? '全部折叠' : '全部展开'}</span></div>`;
+      gEl.querySelector('.ctitle').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (suppressClick) return;           // 刚才是拖动，不是点击
+        toggleApiSuperBox();
+      });
+      apiBoxEl = gEl;
+      fragC.insertBefore(gEl, fragC.firstChild);
+    }
+
+    for (const pl of plans) {
+      const pos = modPos.get(pl.g.id) || { x: 40, y: 40 };
+      const mx = pos.x, my = pos.y;
+      const g = pl.g, hue = g.hue;
+
+      const mEl = document.createElement('div');
+      mEl.className = 'cont mcont' + (pl.collapsed ? ' collapsed' : '');
+      mEl.style.cssText = `left:${mx}px;top:${my}px;width:${pl.w}px;height:${pl.h}px;--hue:${hue}`;
+      const mMeta = pl.collapsed ? `已折叠 · ${g.files.length} 文件 · 点击展开` : `${pl.folders.length} 文件夹 · ${g.files.length} 文件 · 点击标题折叠`;
+      mEl.innerHTML = `<div class="ctitle" title="点击折叠 / 展开该模块"><span class="foldarrow">${pl.collapsed ? '▸' : '▾'}</span><span class="cname">${escapeHtml(g.name)}</span><span class="cmeta">${mMeta}</span></div>`;
+      mEl.dataset.group = g.id;
+      mEl.querySelector('.ctitle').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (suppressClick) return;           // 刚才是拖动，不是点击
+        toggleModuleCollapse(g.id);
+      });
+      fragC.appendChild(mEl);
+      moduleBounds.set(g.id, { x: mx, y: my, w: pl.w, h: pl.h, el: mEl, files: g.files, shown: undefined });
+
+      for (const fo of pl.folders) {
+        const p = plan.get(fo.id);
+        const fX = mx + M_PAD + p.ox, fY = my + M_TITLE + M_PAD + p.oy;
+        const fW = p.w + 2 * F_PAD, fH = p.h + 2 * F_PAD + F_TITLE;
+        const fEl = document.createElement('div');
+        fEl.className = 'cont fcont';
+        fEl.style.cssText = `left:${fX}px;top:${fY}px;width:${fW}px;height:${fH}px;--hue:${hue}`;
+        fEl.innerHTML = `<div class="ctitle"><span class="cname">🗀 ${escapeHtml(fo.name || g.name)}</span><span class="cmeta">${fo.files.length} 文件</span></div>`;
+        fEl.dataset.folder = fo.id;
+        fragC.appendChild(fEl);
+        folderBounds.set(fo.id, { x: fX, y: fY, w: fW, h: fH, group: g.id, files: fo.files, el: fEl, shown: undefined });
+
+        for (const fid of fo.files) {
+          const r = p.rel.get(fid);
+          const file = fileById.get(fid);
+          const L = fileLayout(fid);
+          const isFolded = foldedFiles.has(fid);
+          const b = { fileId: fid, x: fX + F_PAD + r.x, y: fY + F_TITLE + F_PAD + r.y, w: L.w,
+            h: isFolded ? HEAD_H : L.h, h0: L.h, collapsed: isFolded,
+            fnIds: file.fns.slice(), varIds: (file.vars || []).slice(), el: null, headEl: null, hintEl: null, group: g.id, folder: fo.id, shown: undefined };
+          const el = document.createElement('div');
+          el.className = 'box' + (isFolded ? ' is-collapsed' : '');
+          el.style.cssText = `left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px;border-color:hsl(${hue},35%,80%)`;
+          const head = document.createElement('div');
+          head.className = 'box-head';
+          head.style.background = `hsl(${hue},50%,95%)`;
+          const vn = (file.vars || []).length;
+          head.innerHTML = `<span class="fold" title="折叠 / 展开该文件">${isFolded ? '+' : '–'}</span><span class="fname" style="color:hsl(${hue},40%,30%)" title="${escapeHtml(file.path)} · 点击标题折叠/展开">${escapeHtml(file.name)}</span><span class="fmeta">${file.fns.length}f${vn ? '·' + vn + 'v' : ''}·${file.lines}L</span>`;
+          el.appendChild(head);
+          fragB.appendChild(el);
+          b.el = el; b.headEl = head;
+          el.dataset.file = fid;
+          boxPos.set(fid, b);
+
+          if (L.empty) {
+            const hint = document.createElement('div');
+            hint.className = 'empty-hint';
+            hint.textContent = '仅内联回调，无可展示函数';
+            hint.style.cssText = `left:${b.x + 10}px;top:${b.y + HEAD_H + 5}px;`;
+            if (isFolded) hint.style.display = 'none';
+            b.hintEl = hint;
+            fragN.appendChild(hint);
+          }
+          // 网格排布：按列放置
+          for (let ci = 0; ci < L.cols.length; ci++) {
+            let ny = b.y + HEAD_H + 6;
+            for (const nid of L.cols[ci]) {
+              // 列镜像：拓扑靠前（调用方）在右，被调方在左，连线条左向流动
+              const nx = b.x + PAD_X + (L.cols.length - 1 - ci) * (NODE_W + COL_GAP);
+              if (nid.startsWith('var:')) {
+                const v = varById.get(nid);
+                const node = document.createElement('div');
+                node.className = 'fn-node vnode' + (v.storage ? ' v-storage' : '');
+                node.style.cssText = `left:${nx}px;top:${ny}px;width:${NODE_W}px;height:${VAR_H - 2}px`;
+                node.innerHTML = `<i class="pdot in"></i><span class="vi">${v.storage ? '▤' : '▫'}</span><span title="${escapeHtml(v.name)}">${escapeHtml(v.name)}</span><span class="vtype">${v.type}</span><span class="ln">${v.line != null ? 'L' + v.line : (v.readers != null ? v.readers + ' 处' : '')}</span><i class="pdot out"></i>`;
+                node.dataset.fn = nid;
+                fragN.appendChild(node);
+                fnPos.set(nid, { x: nx, y: ny, w: NODE_W, h: VAR_H - 2, el: node, home: fid, shown: undefined, portsDone: true });
+                for (const e of inL.get(nid) || []) e.ptRel = (VAR_H - 2) / 2;
+                for (const e of outL.get(nid) || []) e.pfRel = (VAR_H - 2) / 2;
+              } else {
+                const fn = fnById.get(nid);
+                const nh = fnNodeH(nid);
+                const ins = inL.get(nid) || [], outs = outL.get(nid) || [];
+                const node = document.createElement('div');
+                node.className = 'fn-node card' + (fn.kind === 'class' ? ' k-class-node' : '');
+                node.style.cssText = `left:${nx}px;top:${ny}px;width:${NODE_W}px;height:${nh}px;--hue:${hue};border-color:hsl(${hue},25%,88%);border-left-color:hsl(${hue},58%,58%)`;
+                const kindCls = fn.kind === 'arrow' ? 'k-arrow' : fn.kind === 'method' ? 'k-method'
+                  : fn.kind === 'class' ? 'k-class' : fn.kind.startsWith('async') ? 'k-async' : 'k-function';
+                let pr = '';
+                // 左列 = 入口（我调用了谁）—— 出边一律从这里离开，永不改到右侧
+                outs.slice(0, MAXP).forEach((e, i) => {
+                  e.pfRel = NODE_HEAD + i * PORT_H + PORT_H / 2;
+                  pr += `<div class="port pin" style="top:${i * PORT_H}px"><i class="on"></i><span>${escapeHtml(labelOfNode(e.t))}</span></div>`;
+                });
+                if (outs.length > MAXP) {
+                  outs.slice(MAXP).forEach((e) => { e.pfRel = NODE_HEAD + MAXP * PORT_H + PORT_H / 2; });
+                  pr += `<div class="port pin more" style="top:${MAXP * PORT_H}px"><i></i><span>+${outs.length - MAXP} 个入口</span></div>`;
+                }
+                // 右列 = 出口（谁调用了我）—— 入边一律从这里进入
+                ins.slice(0, MAXP).forEach((e, i) => {
+                  e.ptRel = NODE_HEAD + i * PORT_H + PORT_H / 2;
+                  pr += `<div class="port pout" style="top:${i * PORT_H}px"><span>${escapeHtml(labelOfNode(e.f))}</span><i class="on"></i></div>`;
+                });
+                if (ins.length > MAXP) {
+                  ins.slice(MAXP).forEach((e) => { e.ptRel = NODE_HEAD + MAXP * PORT_H + PORT_H / 2; });
+                  pr += `<div class="port pout more" style="top:${MAXP * PORT_H}px"><span>+${ins.length - MAXP} 个出口</span><i></i></div>`;
+                }
+                if (!ins.length && !outs.length) pr = '<div class="port pin" style="top:0"><i></i><span class="ph">未连接</span></div>';
+                node.innerHTML = `<div class="nh"><span class="k ${kindCls}"></span><span class="nn" title="${escapeHtml(fn.name)}">${escapeHtml(fn.name)}</span>${fn.exported ? '<span class="exp">●</span>' : ''}${fn.kind === 'class' && fn.methods?.length ? `<span class="nl km">${fn.methods.length} 方法</span>` : ''}<span class="nl">L${fn.line}</span></div><div class="nb"></div>`;
+                node._ports = pr;
+                node.dataset.fn = nid;
+                fragN.appendChild(node);
+                fnPos.set(nid, { x: nx, y: ny, w: NODE_W, h: nh, el: node, home: fid, shown: undefined, portsDone: false });
+              }
+              ny += L.hOf(nid);
+            }
+          }
+        }
+      }
+    }
+
+    contEl.appendChild(fragC);
+    boxesEl.appendChild(fragB);
+    nodesEl.appendChild(fragN);
+    applySavedOffsets();   // 恢复上次拖动保存的位置
+    syncContainers();      // 文件夹包围盒按最终位置重算（单独拖过文件框时会跟着长大）
+    refreshApiBox();       // 外框按最终模块位置包住
+    drawEdges();
+  }
+
+  // api 业务域外框：一键折叠/展开全部 api 子模块
+  function toggleApiSuperBox() {
+    const apiIds = D.groups.map((g) => g.id).filter(isApiGroup);
+    const anyOpen = apiIds.some((id) => !collapsedGroups.has(id));
+    for (const id of apiIds) { if (anyOpen) collapsedGroups.add(id); else collapsedGroups.delete(id); }
+    build();
+    applyVisibility();
+    syncContainers();
+    scheduleCull();
+  }
+
+  // 模块折叠/展开：重建布局（被折叠模块只留标题条，其余模块重新装箱）
+  function toggleModuleCollapse(gid) {
+    if (collapsedGroups.has(gid)) collapsedGroups.delete(gid); else collapsedGroups.add(gid);
+    build();
+    applyVisibility();
+    syncContainers();
+    scheduleCull();
+  }
+
+  // 空闲预热：把端口行分批注入 DOM，避免首次平移/缩放时集中渲染导致卡顿
+  function warmPorts() {
+    const list = [];
+    for (const pr of fnPos.values()) if (!pr.portsDone) list.push(pr);
+    if (!list.length) return;
+    let i = 0;
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(() => fn({ timeRemaining: () => 8 }), 120));
+    const step = () => {
+      const t0 = performance.now();
+      while (i < list.length && performance.now() - t0 < 6) {
+        const pr = list[i++];
+        const nb = pr.el.querySelector('.nb');
+        if (nb && pr.el._ports && !nb.innerHTML) nb.innerHTML = pr.el._ports;
+        pr.portsDone = true;
+      }
+      if (i < list.length) idle(step, { timeout: 600 });
+    };
+    idle(step, { timeout: 600 });
+  }
+
+  // 拖拽/折叠后让容器贴合子方框
+  function syncContainers() {
+    for (const fo of D.folders) {
+      let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+      for (const fid of fo.files) {
+        const b = boxPos.get(fid);
+        if (!b) continue;
+        minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+        maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
+      }
+      const r = folderBounds.get(fo.id);
+      if (!r || minX > maxX) continue;
+      r.x = minX - F_PAD; r.y = minY - F_TITLE - F_PAD;
+      r.w = maxX - minX + 2 * F_PAD; r.h = maxY - minY + 2 * F_PAD + F_TITLE;
+      r.el.style.left = r.x + 'px'; r.el.style.top = r.y + 'px';
+      r.el.style.width = r.w + 'px'; r.el.style.height = r.h + 'px';
+    }
+    for (const g of sortedGroups) {
+      let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+      for (const fo of D.folders.filter((f) => f.group === g.id)) {
+        const r = folderBounds.get(fo.id);
+        if (!r) continue;
+        minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+        maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
+      }
+      const m = moduleBounds.get(g.id);
+      if (!m || minX > maxX) continue;
+      m.x = minX - M_PAD; m.y = minY - M_TITLE - M_PAD;
+      m.w = maxX - minX + 2 * M_PAD; m.h = maxY - minY + M_TITLE + 2 * M_PAD;
+      m.el.style.left = m.x + 'px'; m.el.style.top = m.y + 'px';
+      m.el.style.width = m.w + 'px'; m.el.style.height = m.h + 'px';
+    }
+  }
+
+  function ownerFileOf(id) {
+    if (id.startsWith('file:')) return id.slice(5);
+    if (id.startsWith('var:')) return varById.get(id)?.file ?? null;
+    return fnById.get(id)?.file ?? null;
+  }
+  function groupOfId(id) {
+    const file = ownerFileOf(id);
+    return file ? fileById.get(file)?.group ?? null : null;
+  }
+
+  // ---------- 连线：Canvas 绘制（比 SVG 逐条 path 快一个数量级） ----------
+  const canvas = $('#edges');
+  const cctx = canvas.getContext('2d');
+  const EDGE_STYLE = {
+    import: { color: '#d99a45', alpha: 0.26, dash: null, w: 1.1 },
+    local: { color: '#6f9ede', alpha: 0.5, dash: null, w: 1.1 },
+    ref: { color: '#4aa96f', alpha: 0.42, dash: [2, 3], w: 1.1 },
+    guess: { color: '#c5ccd8', alpha: 0.4, dash: [5, 4], w: 1 },
+    var: { color: '#8b6fd4', alpha: 0.38, dash: [4, 3], w: 1.1 },
+    env: { color: '#2f8fd0', alpha: 0.46, dash: [1.5, 3], w: 1.1 },
+    log: { color: '#bb5c9e', alpha: 0.44, dash: [6, 3], w: 1.1 },
+  };
+  function sizeCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = viewport.clientWidth, h = viewport.clientHeight;
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  // ---------- 整块位移（模块 / 文件夹 / 文件框，节点随框一起动） ----------
+  function shiftNode(nid, dx, dy) {
+    const p = fnPos.get(nid); if (!p) return;
+    p.x += dx; p.y += dy;
+    p.el.style.left = p.x + 'px'; p.el.style.top = p.y + 'px';
+  }
+  function shiftBox(fid, dx, dy) {
+    const b = boxPos.get(fid); if (!b) return;
+    b.x += dx; b.y += dy;
+    b.el.style.left = b.x + 'px'; b.el.style.top = b.y + 'px';
+    for (const nid of b.fnIds.concat(b.varIds || [])) shiftNode(nid, dx, dy);
+  }
+  function shiftFolderRect(fo, dx, dy) {
+    fo.x += dx; fo.y += dy;
+    fo.el.style.left = fo.x + 'px'; fo.el.style.top = fo.y + 'px';
+  }
+  function shiftFolder(foid, dx, dy) {
+    const fo = folderBounds.get(foid); if (!fo) return;
+    shiftFolderRect(fo, dx, dy);
+    for (const fid of fo.files || []) shiftBox(fid, dx, dy);
+  }
+  function shiftModule(gid, dx, dy) {
+    const m = moduleBounds.get(gid); if (!m) return;
+    m.x += dx; m.y += dy;
+    m.el.style.left = m.x + 'px'; m.el.style.top = m.y + 'px';
+    for (const fo of folderBounds.values()) if (fo.group === gid) shiftFolderRect(fo, dx, dy);
+    for (const b of boxPos.values()) if (b.group === gid) shiftBox(b.fileId, dx, dy);
+  }
+  function applySavedOffsets() {
+    for (const [gid, o] of Object.entries(offStore.module)) shiftModule(gid, o[0], o[1]);
+    for (const [fid, o] of Object.entries(offStore.folder)) shiftFolder(fid, o[0], o[1]);
+    for (const [bid, o] of Object.entries(offStore.box)) shiftBox(bid, o[0], o[1]);
+  }
+  // api 业务域外框：实时按子模块包围盒重算（拖动子模块 / 外框本身时用）
+  let apiBoxEl = null;
+  function refreshApiBox() {
+    if (!apiBoxEl) return;
+    let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9, any = false;
+    for (const g of sortedGroups) {
+      if (!isApiGroup(g.id)) continue;
+      const m = moduleBounds.get(g.id); if (!m) continue;
+      any = true;
+      x1 = Math.min(x1, m.x); y1 = Math.min(y1, m.y);
+      x2 = Math.max(x2, m.x + m.w); y2 = Math.max(y2, m.y + m.h);
+    }
+    if (!any) { apiBoxEl.style.display = 'none'; return; }
+    apiBoxEl.style.display = '';
+    apiBoxEl.style.left = (x1 - G_PAD) + 'px';
+    apiBoxEl.style.top = (y1 - G_TOP) + 'px';
+    apiBoxEl.style.width = (x2 - x1 + 2 * G_PAD) + 'px';
+    apiBoxEl.style.height = (y2 - y1 + G_TOP + G_PAD) + 'px';
+  }
+  // 拖动时收集要一起移动的记录（模块/文件夹/文件框 + 框内节点）
+  function dragMembersOf(pick) {
+    const list = [];
+    const push = (r) => { if (r && !list.includes(r)) list.push(r); };
+    const pushBox = (b) => { if (!b) return; push(b); for (const nid of b.fnIds.concat(b.varIds || [])) push(fnPos.get(nid)); };
+    const pushModule = (gid) => {
+      push(moduleBounds.get(gid));
+      for (const fo of folderBounds.values()) if (fo.group === gid) push(fo);
+      for (const b of boxPos.values()) if (b.group === gid) pushBox(b);
+    };
+    if (pick.type === 'module') pushModule(pick.id);
+    else if (pick.type === 'api') { for (const g of sortedGroups) if (isApiGroup(g.id)) pushModule(g.id); }
+    else if (pick.type === 'folder') {
+      const fo = folderBounds.get(pick.id); push(fo);
+      for (const fid of fo?.files || []) pushBox(boxPos.get(fid));
+    }
+    return list.map((r) => ({ p: r, sx: r.x, sy: r.y }));
+  }
+
+  function anchorOf(id, side) {
+    if (id.startsWith('file:')) {
+      const b = boxPos.get(id.slice(5));
+      if (!b) return null;
+      return { x: side === 'out' ? b.x : b.x + b.w, y: b.y + (b.collapsed ? HEAD_H / 2 : 20) };
+    }
+    const p = fnPos.get(id);
+    if (!p) return null;
+    const b = boxPos.get(p.home);
+    if (b && b.collapsed) return { x: side === 'out' ? b.x : b.x + b.w, y: b.y + HEAD_H / 2 };
+    return { x: side === 'out' ? p.x : p.x + p.w, y: p.y + p.h / 2 };
+  }
+  // 模块顶层调用的起点：文件标题栏右侧（就在目标函数上方，别绕到框外）
+  function headerAnchor(fileId) {
+    const b = boxPos.get(fileId);
+    if (!b) return null;
+    return { x: b.x + b.w - 12, y: b.y + HEAD_H / 2 };
+  }
+  // 节点端口锚点：出口（我调用的）永远在左边缘，入口（调用我的）永远在右边缘
+  // side='out' → 左边缘 · side='in' → 右边缘（任何情况下都不互换）
+  function nodeAnchor(id, relY, side) {
+    const p = fnPos.get(id);
+    if (!p) return null;
+    const b = boxPos.get(p.home);
+    if (b && b.collapsed) return { x: side === 'out' ? b.x : b.x + b.w, y: b.y + HEAD_H / 2 };
+    return { x: side === 'out' ? p.x : p.x + p.w, y: p.y + (relY ?? p.h / 2) };
+  }
+  let drawPending = false;
+  function drawEdges() {
+    if (drawPending) return;
+    drawPending = true;
+    requestAnimationFrame(() => { drawPending = false; paintEdges(); });
+  }
+  function paintEdges() {
+    const W = viewport.clientWidth, H = viewport.clientHeight;
+    cctx.clearRect(0, 0, W, H);
+    const dim = world.classList.contains('dim');
+    const far = vs < LOD;
+    const showArrows = vs >= 0.5;
+    const toX = (x) => x * vs + vx, toY = (y) => y * vs + vy;
+    const ml = 60;
+    for (const e of edges) {
+      if (!filters[e.k]) continue;
+      if (far && (e.k === 'local' || e.k === 'var')) continue;
+      if (!groupVisible.get(e.gf) || !groupVisible.get(e.gt)) continue;
+      // 端点所在文件被目录树取消勾选 → 该边不画
+      const fVis = fileOfEnd(e.f), tVis = fileOfEnd(e.t);
+      if ((fVis && hiddenFiles.has(fVis)) || (tVis && hiddenFiles.has(tVis))) continue;
+      if (dim && !e.lit) continue;
+      // 出口（我调用的）永远锚在节点左边缘；入口（调用我的）永远锚在右边缘，任何情况都不互换
+      const targetFileOf = e.t.startsWith('file:')
+        ? e.t.slice(5)
+        : (fnById.get(e.t)?.file ?? varById.get(e.t)?.file ?? null);
+      const moduleSelf = e.f.startsWith('file:') && targetFileOf === e.f.slice(5);
+      const aOut = moduleSelf
+        ? headerAnchor(e.f.slice(5))
+        : (e.f.startsWith('file:') ? anchorOf(e.f, 'out') : nodeAnchor(e.f, e.pfRel, 'out'));
+      const bIn = e.t.startsWith('file:') ? anchorOf(e.t, 'in') : nodeAnchor(e.t, e.ptRel, 'in');
+      if (!aOut || !bIn) continue;
+      // 两端都在同一个已折叠的文件框内：折叠后没有可落的端口，跳过
+      const fbEnd = fileOfEnd(e.f), tbEnd = fileOfEnd(e.t);
+      if (fbEnd && fbEnd === tbEnd && boxPos.get(fbEnd)?.collapsed) continue;
+      const sx1 = toX(aOut.x), sy1 = toY(aOut.y), sx2 = toX(bIn.x), sy2 = toY(bIn.y);
+
+      // 目标整体在左侧 → 顺向左向短弧（一条贝塞尔）
+      // 否则（同列上下 / 目标在右）→ 左出 → 绕到目标右侧 → 从右入口进（直角绕行，端口方向保持不变）
+      const forward = bIn.x <= aOut.x - 6;
+      const precise = vs >= LOD;   // 远景只看走势，不做绕行（否则满屏直角长线）
+      let pts, bez = null;
+      if (moduleSelf) {
+        // 同文件的模块顶层调用：从标题栏右侧垂到函数右端口，短弧即可
+        pts = [[sx1, sy1], [sx2, sy2]];
+        bez = { c1x: sx1 + 10, c2x: sx2 + 26 };
+      } else if (forward || !precise) {
+        const k = Math.min(Math.max(Math.abs(sx2 - sx1) / 2, 30), 160);
+        const dx = forward ? -k : k;
+        bez = { c1x: sx1 + dx, c2x: sx2 - dx };
+        pts = [[sx1, sy1], [sx2, sy2]];
+      } else {
+        const th = e.t.startsWith('file:')
+          ? (boxPos.get(e.t.slice(5))?.h ?? 40)
+          : (fnPos.get(e.t)?.h ?? 30);
+        const laneWorldY = bIn.y >= aOut.y ? bIn.y + th + 16 : bIn.y - 16;
+        const ly = toY(laneWorldY);
+        const off = 14;
+        pts = [[sx1, sy1], [sx1 - off, sy1], [sx1 - off, ly], [sx2 + off, ly], [sx2 + off, sy2], [sx2, sy2]];
+      }
+
+      // 视口裁剪（用折点包围盒，贝塞尔多留一点余量）
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const [px, py] of pts) {
+        minX = Math.min(minX, px); maxX = Math.max(maxX, px);
+        minY = Math.min(minY, py); maxY = Math.max(maxY, py);
+      }
+      const pad = bez ? Math.max(170, Math.abs(sx2 - sx1)) : 0;
+      if (maxX + pad < -ml || minX - pad > W + ml || maxY < -ml || minY > H + ml) continue;
+
+      const st = EDGE_STYLE[e.k] || EDGE_STYLE.import;
+      cctx.beginPath();
+      if (bez) {
+        cctx.moveTo(sx1, sy1);
+        cctx.bezierCurveTo(bez.c1x, sy1, bez.c2x, sy2, sx2, sy2);
+      } else {
+        cctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length - 1; i++) {
+          cctx.arcTo(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], 5);
+        }
+        cctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+      }
+      cctx.strokeStyle = e.lit ? '#2f6fe4' : st.color;
+      cctx.globalAlpha = e.lit ? 1 : st.alpha;
+      cctx.lineWidth = e.lit ? 2.2 : st.w;
+      cctx.setLineDash(e.lit ? [] : (st.dash || []));
+      cctx.stroke();
+
+      // 箭头：指向被调方（端点处切线方向）
+      if (showArrows || e.lit) {
+        const prev = pts[pts.length - 2];
+        const dirA = bez ? Math.PI : Math.atan2(sy2 - prev[1], sx2 - prev[0]);
+        const len = 5 + (e.lit ? 2 : 0);
+        cctx.globalAlpha = e.lit ? 1 : Math.min(0.85, st.alpha + 0.25);
+        cctx.setLineDash([]);
+        cctx.beginPath();
+        cctx.moveTo(sx2, sy2);
+        cctx.lineTo(sx2 - len * Math.cos(dirA - 0.34), sy2 - len * Math.sin(dirA - 0.34));
+        cctx.lineTo(sx2 - len * Math.cos(dirA + 0.34), sy2 - len * Math.sin(dirA + 0.34));
+        cctx.closePath();
+        cctx.fillStyle = e.lit ? '#2f6fe4' : st.color;
+        cctx.fill();
+      }
+    }
+    cctx.globalAlpha = 1;
+    cctx.setLineDash([]);
+
+    // 卡片遮挡：把可见节点卡片区域从画布上挖掉，连线从卡片背后穿过，不压在文字上
+    cctx.globalCompositeOperation = 'destination-out';
+    for (const p of fnPos.values()) {
+      if (!p.shown) continue;
+      const x = toX(p.x), y = toY(p.y), w = p.w * vs, h = p.h * vs;
+      if (x + w < -2 || x > W + 2 || y + h < -2 || y > H + 2) continue;
+      cctx.fillRect(x, y, w, h);
+    }
+    cctx.globalCompositeOperation = 'source-over';
+  }
+
+  // ---------- 可见性（裁剪 + LOD + 组显隐 + 过滤） ----------
+  function edgeLogical(e) {
+    if (!filters[e.k]) return false;
+    if (vs < LOD && (e.k === 'local' || e.k === 'var')) return false; // 远景只看跨文件主干
+    if (!groupVisible.get(e.gf) || !groupVisible.get(e.gt)) return false;
+    const ff = fileOfEnd(e.f), tf = fileOfEnd(e.t);
+    if ((ff && hiddenFiles.has(ff)) || (tf && hiddenFiles.has(tf))) return false;
+    return true;
+  }
+  let lastFar = null, cullRect = null, cullRunning = false;
+  function applyVisibility() {
+    const far = vs < LOD;
+    world.classList.toggle('far', far);
+    world.classList.toggle('arrowed', vs >= 0.5);
+    $('#zoomPct').textContent = Math.round(vs * 100) + '%';
+    updateCullRect();
+    if (far !== lastFar) {
+      // 跨越 LOD：整体重置显隐状态，交给分片裁剪重新判定
+      lastFar = far;
+      for (const p of fnPos.values()) p.shown = undefined;
+      for (const b of boxPos.values()) b.shown = undefined;
+      drawEdges();
+      for (const c of moduleBounds.values()) c.shown = undefined;
+      for (const c of folderBounds.values()) c.shown = undefined;
+    }
+    runCull();
+  }
+  // 分片裁剪：每帧最多 5ms，跨帧收敛，避免一次 100ms+ 的长任务卡住交互
+  function runCull() {
+    if (cullRunning) return;
+    cullRunning = true;
+    const far = vs < LOD;
+    const containers = [...moduleBounds.values(), ...folderBounds.values()];
+    let i = 0, phase = 0;
+    const slice = () => {
+      const t0 = performance.now();
+      while (performance.now() - t0 < 5) {
+        const r = cullRect;
+        if (!r) break;
+        if (phase === 0) {
+          if (i < containers.length) {
+            const c = containers[i++];
+            const isModule = c.el.dataset.group !== undefined;
+            const gid = isModule ? c.el.dataset.group : c.group;
+            // 整个模块/文件夹下的文件全被取消勾选 → 容器也不显示
+            const subVis = c.files ? anyFileVisible(c.files) : true;
+            const vis = groupVisible.get(gid) && subVis && c.x + c.w > r.x0 && c.x < r.x1 && c.y + c.h > r.y0 && c.y < r.y1;
+            if (vis !== c.shown) { c.shown = vis; c.el.style.display = vis ? '' : 'none'; }
+            continue;
+          }
+          phase = 1; i = 0; continue;
+        }
+        if (phase === 1) { phase = 2; i = 0; boxList = [...boxPos.values()]; continue; }
+        if (i < boxList.length) {
+          const b = boxList[i++];
+          const vis = groupVisible.get(b.group) && !hiddenFiles.has(b.fileId) && b.x + b.w > r.x0 && b.x < r.x1 && b.y + b.h > r.y0 && b.y < r.y1;
+          if (vis !== b.shown) { b.shown = vis; b.el.style.display = vis ? '' : 'none'; }
+          if (far) continue; // 远景由 CSS 隐藏全部节点，不必逐个处理
+          const base = vis && !b.collapsed;
+          for (const fnid of b.fnIds.concat(b.varIds || [])) {
+            const p = fnPos.get(fnid);
+            if (!p) continue;
+            const nv = base && p.x + p.w > r.x0 && p.x < r.x1 && p.y + p.h > r.y0 && p.y < r.y1;
+            if (nv !== p.shown) {
+              p.shown = nv;
+              p.el.style.display = nv ? '' : 'none';
+              if (nv && !p.portsDone) {
+                const nb = p.el.querySelector('.nb');
+                if (nb && p.el._ports && !nb.innerHTML) nb.innerHTML = p.el._ports;
+                p.portsDone = true;
+              }
+            }
+          }
+          continue;
+        }
+        cullRunning = false;
+        return;
+      }
+      requestAnimationFrame(slice);
+    };
+    let boxList = [];
+    slice();
+  }
+  // 交互中只更新 transform（纯合成，不触发 layout），停止后再做一次裁剪
+  let cullTimer = 0, cullPending = false;
+  // 视口裁剪窗口（世界坐标）：平移时立刻更新，避免拖进新区域出现空白
+  function updateCullRect() {
+    const m = 130 / vs;
+    cullRect = {
+      x0: -vx / vs - m, x1: (viewport.clientWidth - vx) / vs + m,
+      y0: -vy / vs - m, y1: (viewport.clientHeight - vy) / vs + m,
+    };
+  }
+  function scheduleCull() {
+    clearTimeout(cullTimer);
+    cullTimer = setTimeout(() => {
+      if (cullPending) return;
+      cullPending = true;
+      requestAnimationFrame(() => { cullPending = false; applyVisibility(); });
+    }, 130);
+  }
+
+  // ---------- 视图变换 ----------
+  let vx = 0, vy = 0, vs = 1;
+  const world = $('#world'), viewport = $('#viewport');
+  function applyView() {
+    world.style.transform = `translate(${vx}px,${vy}px) scale(${vs})`;
+    edgeTf = null;                        // 精确定位：抹掉交互期的近似变换
+    if (canvas.style.transform) canvas.style.transform = '';
+    $('#zoomPct').textContent = Math.round(vs * 100) + '%';
+    drawEdges();
+    applyVisibility();
+  }
+  function boundsOfVisible() {
+    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+    for (const b of boxPos.values()) {
+      minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
+    }
+    return { minX, minY, maxX, maxY };
+  }
+  function fitView() {
+    const r = boundsOfVisible();
+    if (r.minX > r.maxX) return;
+    const vw = viewport.clientWidth - 40, vh = viewport.clientHeight - 40;
+    vs = Math.min(vw / (r.maxX - r.minX), vh / (r.maxY - r.minY), 1.5);
+    vx = (viewport.clientWidth - (r.maxX - r.minX) * vs) / 2 - r.minX * vs;
+    vy = (viewport.clientHeight - (r.maxY - r.minY) * vs) / 2 - r.minY * vs;
+    applyView();
+  }
+  function centerOn(wx, wy, scale) {
+    if (scale) vs = Math.max(scale, 0.3);
+    vx = viewport.clientWidth / 2 - wx * vs;
+    vy = viewport.clientHeight / 2 - wy * vs;
+    applyView();
+  }
+  // 交互（拖动 / 滚轮）期间画布用仿射近似跟着动，停手 160ms 后再按世界坐标精确重绘。
+  // 好处：滚轮不再每步重画 4700 条边，也不触发上千个 DOM 的显隐抖动（之前单步 400~600ms）。
+  let edgeTf = null, settleTimer = 0, panCullPending = false, panCullVx = 0, panCullVy = 0;
+  function applyEdgeTf() {
+    canvas.style.transform = edgeTf && (edgeTf.s !== 1 || edgeTf.tx || edgeTf.ty)
+      ? `translate(${edgeTf.tx}px,${edgeTf.ty}px) scale(${edgeTf.s})`
+      : '';
+  }
+  function scheduleSettle() {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      edgeTf = null;
+      canvas.style.transform = '';
+      updateCullRect();
+      applyVisibility();
+      drawEdges();
+    }, 160);
+  }
+  function zoomAt(mx, my, k) {
+    const ns2 = Math.min(Math.max(vs * k, 0.03), 3);
+    const ratio = ns2 / vs;
+    vx = mx - (mx - vx) * ratio;
+    vy = my - (my - vy) * ratio;
+    vs = ns2;
+    world.style.transform = `translate(${vx}px,${vy}px) scale(${vs})`;
+    // 画布以 (mx,my) 为锚点做同比例缩放（近似），滚轮期间零重绘
+    const cur = edgeTf || { s: 1, tx: 0, ty: 0 };
+    edgeTf = { s: cur.s * ratio, tx: mx - (mx - cur.tx) * ratio, ty: my - (my - cur.ty) * ratio };
+    applyEdgeTf();
+    $('#zoomPct').textContent = Math.round(vs * 100) + '%';
+    updateCullRect();
+    scheduleCull();      // 裁剪去抖，避免滚动中反复改 display
+    scheduleSettle();
+  }
+  viewport.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    const r = viewport.getBoundingClientRect();
+    zoomAt(ev.clientX - r.left, ev.clientY - r.top, ev.deltaY < 0 ? 1.15 : 1 / 1.15);
+  }, { passive: false });
+  $('#zoomIn').addEventListener('click', () => zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, 1.25));
+  $('#zoomOut').addEventListener('click', () => zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, 1 / 1.25));
+  $('#btnFit2').addEventListener('click', fitView);
+
+  // ---------- 拖拽 ----------
+  let drag = null, suppressClick = false, spaceDown = false;
+  window.addEventListener('keydown', (ev) => {
+    if (ev.code === 'Space' && document.activeElement !== document.querySelector('#search')) { spaceDown = true; viewport.style.cursor = 'grab'; }
+  });
+  window.addEventListener('keyup', (ev) => {
+    if (ev.code === 'Space') { spaceDown = false; viewport.style.cursor = ''; }
+  });
+  viewport.addEventListener('mousedown', (ev) => {
+    suppressClick = false;
+    // 中键 / 按住空格 → 任何位置都是平移（高倍缩放下容器铺满屏幕，空白处没法拖）
+    if (ev.button === 1 || (ev.button === 0 && spaceDown)) {
+      canvas.style.transform = '';
+      drag = { kind: 'pan', ox: ev.clientX, oy: ev.clientY, sx: vx, sy: vy, pvx: vx, pvy: vy };
+      panCullVx = vx; panCullVy = vy;
+      viewport.classList.add('dragging');
+      ev.preventDefault();
+      return;
+    }
+    if (ev.button !== 0) return;
+    const foldEl = ev.target.closest('.fold');
+    if (foldEl) { toggleFold(foldEl.closest('.box')); return; }
+    // 若上一轮交互的近似变换还没沉降（例如缩放后 160ms 内就开始拖），先精确重绘一次再开始，
+    // 否则拖动的「纯位移」会覆盖画布的缩放，线会跳一下。
+    if (edgeTf) { clearTimeout(settleTimer); edgeTf = null; canvas.style.transform = ''; updateCullRect(); applyVisibility(); drawEdges(); }
+    // 拖整块：① 标题栏  ② 框自身的空白/边框区域（大框的标题可能在视口外，留个能抓的地方）
+    const contTitle = ev.target.closest('.cont.mcont > .ctitle, .cont.fcont > .ctitle, .cont.gcont > .ctitle');
+    const contSelf = ev.target.closest('.cont.mcont, .cont.fcont, .cont.gcont');
+    const cont = contTitle ? contTitle.parentElement : (contSelf === ev.target ? contSelf : null);
+    if (cont) {
+      const pick = cont.classList.contains('gcont') ? { type: 'api' }
+        : cont.classList.contains('mcont') ? { type: 'module', id: cont.dataset.group }
+        : { type: 'folder', id: cont.dataset.folder };
+      drag = { kind: 'cont', pick, members: dragMembersOf(pick), ox: ev.clientX, oy: ev.clientY, moved: false, ddx: 0, ddy: 0 };
+      ev.preventDefault();
+      return;
+    }
+    const nodeEl = ev.target.closest('.fn-node');
+    const headEl = ev.target.closest('.box-head');
+    if (nodeEl) {
+      const id = nodeEl.dataset.fn, p = fnPos.get(id);
+      drag = { kind: 'node', p, ox: ev.clientX, oy: ev.clientY, sx: p.x, sy: p.y, moved: false,
+        edgeIdxs: nodeEdges.get(id) ?? [] };
+    } else if (headEl) {
+      const b = boxPos.get(headEl.parentElement.dataset.file);
+      drag = { kind: 'box', b, ox: ev.clientX, oy: ev.clientY, sx: b.x, sy: b.y, moved: false, members: snapshotMembers(b) };
+    } else if (ev.target === viewport || ev.target.closest('#world') || ev.target.closest('.box')) {
+      canvas.style.transform = '';
+      drag = { kind: 'pan', ox: ev.clientX, oy: ev.clientY, sx: vx, sy: vy, pvx: vx, pvy: vy };
+      panCullVx = vx; panCullVy = vy;
+      viewport.classList.add('dragging');
+    } else return;
+    ev.preventDefault();
+  });
+  function snapshotMembers(b) {
+    const list = [];
+    for (const fid of b.fnIds) {
+      const p = fnPos.get(fid);
+      if (p && p.x + p.w / 2 >= b.x && p.x + p.w / 2 <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
+        list.push({ p, sx: p.x, sy: p.y, edgeIdxs: nodeEdges.get(fid) ?? [] });
+      }
+    }
+    return list;
+  }
+  window.addEventListener('mousemove', (ev) => {
+    if (!drag) return;
+    if (!drag.moved && Math.abs(ev.clientX - drag.ox) + Math.abs(ev.clientY - drag.oy) < 3) return;
+    drag.moved = true;
+    suppressClick = true;
+    const dx = (ev.clientX - drag.ox) / vs, dy = (ev.clientY - drag.oy) / vs;
+    if (drag.kind === 'pan') {
+      vx = drag.sx + (ev.clientX - drag.ox); vy = drag.sy + (ev.clientY - drag.oy);
+      world.style.transform = `translate(${vx}px,${vy}px) scale(${vs})`;
+      // 边画在 world 之外的画布上：用同样的位移整体搬移（零重绘），松手再精确重绘。
+      // 以前这里只挪 world 不动画布 ⇒ 拖动时线钉死不动。
+      edgeTf = { s: 1, tx: vx - drag.pvx, ty: vy - drag.pvy };
+      applyEdgeTf();
+      // 裁剪必须跟上（它把视口外上千个节点设为 display:none，否则整层重绘反而更卡），
+      // 但视口外已有 130px 余量 → 位移累计超过 60px 才补一次，避免每帧都翻 DOM。
+      if (!panCullPending && Math.abs(vx - panCullVx) + Math.abs(vy - panCullVy) > 60) {
+        panCullPending = true;
+        requestAnimationFrame(() => {
+          panCullPending = false;
+          panCullVx = vx; panCullVy = vy;
+          updateCullRect(); runCull();
+        });
+      }
+      return;
+    }
+    if (drag.kind === 'cont') {
+      drag.ddx = dx; drag.ddy = dy;
+      for (const m of drag.members) {
+        m.p.x = m.sx + dx; m.p.y = m.sy + dy;
+        m.p.el.style.left = m.p.x + 'px'; m.p.el.style.top = m.p.y + 'px';
+      }
+      refreshApiBox();   // 拖动 api 子模块时外框跟着包住
+      drawEdges();       // 节点整体位移，边要重画
+    } else if (drag.kind === 'node') {
+      drag.p.x = drag.sx + dx; drag.p.y = drag.sy + dy;
+      drag.p.el.style.left = drag.p.x + 'px'; drag.p.el.style.top = drag.p.y + 'px';
+      drawEdges();
+    } else if (drag.kind === 'box') {
+      drag.ddx = dx; drag.ddy = dy;
+      drag.b.x = drag.sx + dx; drag.b.y = drag.sy + dy;
+      drag.b.el.style.left = drag.b.x + 'px'; drag.b.el.style.top = drag.b.y + 'px';
+      for (const m of drag.members) {
+        m.p.x = m.sx + dx; m.p.y = m.sy + dy;
+        m.p.el.style.left = m.p.x + 'px'; m.p.el.style.top = m.p.y + 'px';
+        drawEdges();
+      }
+      drawEdges();
+    }
+    scheduleCull();
+  });
+  window.addEventListener('mouseup', () => {
+    const d = drag;
+    drag = null;
+    viewport.classList.remove('dragging');
+    if (d && d.moved) {
+      // 平移不改动任何框的位置：不必重算 113 个文件夹包围盒（syncContainers 在松手时很贵）
+      if (d.kind === 'pan') { edgeTf = null; canvas.style.transform = ''; updateCullRect(); runCull(); drawEdges(); return; }
+      if (d.kind === 'cont' && d.members.length) {
+        // 记下这次位移（相对布局的累计偏移），下次打开自动恢复
+        const { pick } = d;
+        if (pick.type === 'module') bumpOff(offStore.module, pick.id, d.ddx, d.ddy);
+        else if (pick.type === 'api') { for (const g of sortedGroups) if (isApiGroup(g.id)) bumpOff(offStore.module, g.id, d.ddx, d.ddy); }
+        else if (pick.type === 'folder') bumpOff(offStore.folder, pick.id, d.ddx, d.ddy);
+        saveOffsets();
+        refreshApiBox();
+      }
+      if (d.kind === 'box') bumpOff(offStore.box, d.b.fileId, d.ddx || 0, d.ddy || 0), saveOffsets();
+      syncContainers();
+      return;
+    }
+    // 在文件标题栏上按下又原地松开 = 折叠 / 展开该文件
+    if (d && d.kind === 'box' && d.b) toggleFold(d.b);
+  });
+
+  // ---------- 折叠 ----------
+  // 折叠文件：框内节点隐藏，连在函数上的线改连到这个折叠框的左右边缘（paintEdges 里按 b.collapsed 换锚点）
+  function toggleFold(b) {
+    const fid = b.el.dataset.file;
+    b.collapsed = !b.collapsed;
+    if (b.collapsed) foldedFiles.add(fid); else foldedFiles.delete(fid);
+    if (b.h0 == null) b.h0 = fileLayout(fid).h;
+    b.h = b.collapsed ? HEAD_H : b.h0;   // 几何要跟着改：文件夹包围盒、绕行车道的落点都读 b.h
+    b.el.style.height = b.h + 'px';
+    b.el.classList.toggle('is-collapsed', b.collapsed);
+    b.headEl.querySelector('.fold').textContent = b.collapsed ? '+' : '–';
+    if (b.hintEl) b.hintEl.style.display = b.collapsed ? 'none' : '';
+    // 框内节点：折叠即隐藏；展开交给裁剪器按需恢复
+    for (const nid of b.fnIds.concat(b.varIds || [])) {
+      const p = fnPos.get(nid);
+      if (!p) continue;
+      p.shown = false;
+      p.el.style.display = b.collapsed ? 'none' : '';
+      if (b.collapsed) p.portsDone = p.portsDone;
+    }
+    syncContainers();   // 文件夹框跟着收/放
+    drawEdges();        // 端点锚到框边缘
+    scheduleCull();
+  }
+  // 容器点击：模块 → 聚焦整模块；文件夹 → 聚焦该文件夹
+  $('#layerContainers').addEventListener('click', (ev) => {
+    if (suppressClick) return;
+    const f = ev.target.closest('.cont.fcont');
+    if (f && f.dataset.folder) { focusFolder(f.dataset.folder); return; }
+    const m = ev.target.closest('.cont.mcont');
+    if (m && m.dataset.group) focusGroup(m.dataset.group);
+  });
+
+  // ---------- 源码高亮（轻量状态机：逐行，处理块注释/模板串跨行） ----------
+  const KW = new Set('const let var function return if else for while do switch case default break continue new class extends super try catch finally throw typeof instanceof await async yield delete void in of this null true false static get set import export from'.split(' '));
+  function hlCode(src) {
+    const esc = escapeHtml;
+    let st = 0; // 0 常规 1 块注释 2 模板串
+    const out = [];
+    const lines = src.split('\n');
+    for (let ln = 0; ln < lines.length; ln++) {
+      const s = lines[ln];
+      let html = '', i = 0, buf = '';
+      const flush = () => { if (buf) { html += esc(buf); buf = ''; } };
+      const push = (txt, cls) => { flush(); html += cls ? '<span class="' + cls + '">' + esc(txt) + '</span>' : esc(txt); };
+      if (st === 1) {
+        const e = s.indexOf('*/');
+        if (e === -1) { html += '<span class="cm">' + esc(s) + '</span>'; out.push('<span class="ln">' + (ln + 1) + '</span>' + html); continue; }
+        push(s.slice(0, e + 2), 'cm'); st = 0;
+      } else if (st === 2) {
+        let j = 0;
+        for (; j < s.length; j++) { if (s[j] === '\\') { j++; continue; } if (s[j] === '`') break; }
+        if (j >= s.length) { html += '<span class="st">' + esc(s) + '</span>'; out.push('<span class="ln">' + (ln + 1) + '</span>' + html); continue; }
+        push(s.slice(0, j + 1), 'st'); st = 0;
+      }
+      while (i < s.length) {
+        const c = s[i];
+        if (c === '/' && s[i + 1] === '/') { push(s.slice(i), 'cm'); i = s.length; break; }
+        if (c === '/' && s[i + 1] === '*') {
+          const e = s.indexOf('*/', i + 2);
+          if (e === -1) { push(s.slice(i), 'cm'); st = 1; i = s.length; break; }
+          push(s.slice(i, e + 2), 'cm'); i = e + 2; continue;
+        }
+        if (c === '`') {
+          let j = i + 1;
+          for (; j < s.length; j++) { if (s[j] === '\\') { j++; continue; } if (s[j] === '`') break; }
+          if (j >= s.length) { push(s.slice(i), 'st'); st = 2; i = s.length; break; }
+          push(s.slice(i, j + 1), 'st'); i = j + 1; continue;
+        }
+        if (c === '"' || c === "'") {
+          let j = i + 1;
+          for (; j < s.length; j++) { if (s[j] === '\\') { j++; continue; } if (s[j] === c) break; }
+          push(s.slice(i, Math.min(j + 1, s.length)), 'st'); i = j + 1; continue;
+        }
+        if (/[A-Za-z_$]/.test(c)) {
+          let j = i;
+          while (j < s.length && /[\w$]/.test(s[j])) j++;
+          const w = s.slice(i, j);
+          if (KW.has(w)) push(w, 'kw');
+          else {
+            let k = j;
+            while (k < s.length && s[k] === ' ') k++;
+            if (s[k] === '(') push(w, 'fn');
+            else buf += w;
+          }
+          i = j; continue;
+        }
+        if (/\d/.test(c) && !/[\w$]/.test(s[i - 1] ?? '')) {
+          let j = i;
+          while (j < s.length && /[\w.]/.test(s[j])) j++;
+          push(s.slice(i, j), 'nu'); i = j; continue;
+        }
+        buf += c; i++;
+      }
+      flush();
+      out.push('<span class="ln">' + (ln + 1) + '</span>' + html);
+    }
+    return out.join('\n');
+  }
+
+  // ---------- 高亮 / 详情 ----------
+  const detail = $('#detail');
+  let currentSrc = '';
+  $('#layerNodes').addEventListener('click', (ev) => {
+    if (suppressClick) return;
+    const n = ev.target.closest('.fn-node');
+    if (n) select(n.dataset.fn); // 单击：只看调用链，不弹详情
+  });
+  $('#layerNodes').addEventListener('dblclick', (ev) => {
+    const n = ev.target.closest('.fn-node');
+    if (n) select(n.dataset.fn, true); // 双击：展开详情（源码/入口/出口）
+  });
+  $('#layerBoxes').addEventListener('click', (ev) => {
+    if (suppressClick) return; // 拖拽/平移结束的那次 click 不算点击
+    const el = ev.target.closest('.box');
+    if (el && el.dataset.file && !ev.target.closest('.fold') && !ev.target.closest('.box-head')) {
+      openFileModal(el.dataset.file);
+    }
+  });
+  viewport.addEventListener('mousedown', (ev) => {
+    if (ev.target === viewport || ev.target === world || ev.target === $('#layerBoxes') || ev.target === $('#layerNodes')) clearSel();
+  });
+  // 调用链：向上（谁调我）+ 向下（我调谁）多级 BFS
+  const CHAIN_DEPTH = 3, CHAIN_CAP = 160;
+  function chainOf(id) {
+    const up = new Set(), down = new Set(), edgeSet = new Set();
+    const walk = (start, dir) => {
+      const seen = new Set([start]);
+      let frontier = [start], stop = false;
+      for (let d = 0; d < CHAIN_DEPTH && frontier.length && !stop; d++) {
+        const next = [];
+        for (const cur of frontier) {
+          for (const i of nodeEdges.get(cur) ?? []) {
+            const e = edges[i];
+            const other = dir === 'up' ? (e.t === cur ? e.f : null) : (e.f === cur ? e.t : null);
+            if (!other) continue;
+            edgeSet.add(i);
+            if (!seen.has(other)) {
+              seen.add(other);
+              next.push(other);
+              (dir === 'up' ? up : down).add(other);
+              if (up.size + down.size >= CHAIN_CAP) { stop = true; break; }
+            }
+          }
+          if (stop) break;
+        }
+        frontier = next;
+      }
+    };
+    walk(id, 'up'); walk(id, 'down');
+    return { up, down, edgeSet };
+  }
+  const chainChip = $('#chainChip');
+  function select(id, withDetail = false) {
+    clearSel();
+    world.classList.add('dim');
+    const idxs = nodeEdges.get(id) ?? [];
+    const neighborSet = new Set([id]);
+    if (id.startsWith('file:')) {
+      for (const i of idxs) { edges[i].lit = true; neighborSet.add(edges[i].f); neighborSet.add(edges[i].t); }
+    } else {
+      const ch = chainOf(id);
+      for (const i of ch.edgeSet) edges[i].lit = true;
+      for (const x of ch.up) neighborSet.add(x);
+      for (const x of ch.down) neighborSet.add(x);
+      chainChip.innerHTML = `🔗 <b>${escapeHtml(labelOfNode(id))}</b> 调用链 · 上游 <b>${ch.up.size}</b> · 下游 <b>${ch.down.size}</b> <span class="cx">（点击空白 / Esc 关闭 · 双击节点看详情）</span>`;
+      chainChip.style.display = 'block';
+    }
+    drawEdges();
+    for (const nid of neighborSet) {
+      if (nid.startsWith('file:')) { const b = boxPos.get(nid.slice(5)); if (b) b.el.classList.add('lit'); }
+      else {
+        const p = fnPos.get(nid);
+        if (p) { p.el.classList.add('lit'); const b = boxPos.get(p.home); if (b) b.el.classList.add('lit'); }
+      }
+    }
+    if (!withDetail) { detail.style.display = 'none'; return; }
+    let html = '';
+    if (id.startsWith('file:')) {
+      const f = fileById.get(id.slice(5));
+      const inE = idxs.filter((i) => edges[i].t === id).length, outE = idxs.filter((i) => edges[i].f === id).length;
+      html = `<h4>📄 ${escapeHtml(f.name)}</h4><div class="row">路径: <b>${escapeHtml(f.path)}</b></div><div class="row">函数: <b>${f.fns.length}</b> · 行数: <b>${f.lines}</b></div><div class="row">文件级调用 入 <span class="io">${inE}</span> / 出 <span class="io">${outE}</span></div>`;
+    } else if (id.startsWith('var:')) {
+      const v = varById.get(id);
+      const file = fileById.get(v.file);
+      const inList = idxs.filter((i) => edges[i].t === id).map((i) => ({ id: edges[i].f, k: edges[i].k, ln: edges[i].l }));
+      const outList = idxs.filter((i) => edges[i].f === id).map((i) => ({ id: edges[i].t, k: edges[i].k, ln: edges[i].l }));
+      const typeName = ({ map: 'Map 存储', set: 'Set 存储', object: '对象存储', array: '数组存储', instance: '实例存储', primitive: '常量', env: '环境变量', logger: '日志实例' })[v.type] || v.type;
+      currentSrc = v.src || '';
+      const isEnv = v.type === 'env';
+      html = `<h4>${v.storage ? '▤' : '▫'} ${escapeHtml(v.name)}${isEnv ? '<span class="badge st">环境变量</span>' : v.storage ? '<span class="badge st">存储方框</span>' : ''}</h4>` +
+        `<div class="row">文件: <b>${escapeHtml(file?.name ?? v.file)}</b>${v.line != null ? ' · L' + v.line : ''}</div>` +
+        `<div class="row">类型: <b>${escapeHtml(typeName)}</b>${isEnv && v.readers != null ? ' · 被 <b>' + v.readers + '</b> 处读取' : v.exported ? ' · 已导出' : ''}</div>` +
+        (isEnv ? '' : `<div class="src-head"><span>📥 入口 · 它初始化时引用了谁（${outList.length}）<i class="side">← 左侧</i></span></div>${ioListHtml(outList, 'out', '无 — 初始化表达式里没有调用其他函数')}`) +
+        `<div class="src-head"><span>📤 出口 · ${isEnv ? '谁读取了它' : '谁引用 / 写入了它'}（${inList.length}）<i class="side">右侧 →</i></span></div>${ioListHtml(inList, 'in', isEnv ? '无 — 还没有代码读取它' : '无 — 没有函数引用它')}` +
+        (isEnv
+          ? `<div class="src-head"><span>说明</span></div><pre class="code">环境变量（process.env.${escapeHtml(v.name)}）。右侧每条入边 = 一处读取，标注了读取所在的行号（L123）；源是「📄 文件 · 模块顶层」表示该读取发生在模块顶层的条件或调用里。</pre>`
+          : `<div class="src-head"><span>声明（${v.line != null ? 'L' + v.line : ''}）</span></div><pre class="code">${hlCode(currentSrc)}</pre>`) +
+        `<div class="fid">${escapeHtml(v.id)}</div>`;
+    } else {
+      const fn = fnById.get(id);
+      const inList = idxs.filter((i) => edges[i].t === id).map((i) => ({ id: edges[i].f, k: edges[i].k, ln: edges[i].l }));
+      const outList = idxs.filter((i) => edges[i].f === id).map((i) => ({ id: edges[i].t, k: edges[i].k, ln: edges[i].l }));
+      const file = fileById.get(fn.file);
+      const total = fn.endLine - fn.line + 1;
+      currentSrc = fn.src ?? '';
+      html = `<h4>λ ${escapeHtml(fn.name)}${fn.exported ? '<span class="badge">export</span>' : ''}</h4>` +
+        `<div class="row">文件: <b>${escapeHtml(file.name)}</b> · L${fn.line}–${fn.endLine}</div>` +
+        `<div class="row">类型: <b>${escapeHtml(KIND_NAME[fn.kind] ?? fn.kind)}</b>${fn.params?.length ? ` · 入参: <b>(${escapeHtml(fn.params.join(', '))})</b>` : ''}</div>` +
+        (fn.kind === 'class' && fn.methods?.length
+          ? `<div class="row">方法: <b>${escapeHtml(fn.methods.slice(0, 14).join(', '))}</b>${fn.methods.length > 14 ? ` …共 ${fn.methods.length} 个` : ''}</div>`
+          : '') +
+        (fn.doc ? `<div class="row">说明: ${escapeHtml(fn.doc)}</div>` : '') +
+        `<div class="src-head"><span>📥 入口 · 我调用了谁（${outList.length}）<i class="side">← 左侧</i></span></div>${ioListHtml(outList, 'out')}` +
+        `<div class="src-head"><span>📤 出口 · 谁调用了它（${inList.length}）<i class="side">右侧 →</i></span></div>${ioListHtml(inList, 'in')}` +
+        `<div class="src-head"><span>源码（${total} 行）</span><span class="btns"><button data-act="copy">复制</button><button data-act="expand">展开</button></span></div>` +
+        `<pre class="code">${hlCode(currentSrc)}</pre>` +
+        (fn.truncated ? `<div class="trunc">⚠ 源码过长已截断（完整 ${total} 行，见源文件 ${escapeHtml(file.path)}）</div>` : '') +
+        `<div class="fid">${escapeHtml(fn.id)}</div>`;
+    }
+    $('#detailBody').innerHTML = html;
+    detail.style.display = 'block';
+  }
+  function clearSel() {
+    world.classList.remove('dim');
+    chainChip.style.display = 'none';
+    document.querySelectorAll('.lit').forEach((el) => el.classList.remove('lit'));
+    for (const e of edges) e.lit = false;
+    detail.style.display = 'none';
+    drawEdges();
+  }
+  // 入口/出口名单（可点击跳转）
+  function ioListHtml(list, dir, emptyText) {
+    if (!list.length) return `<div class="ioempty">${emptyText || (dir === 'in' ? '无出口 — 被框架/路由直接调用，没有业务代码调用它' : '无入口 — 该函数不调用其他业务函数')}</div>`;
+    return '<div class="iolist">' + list.map(({ id, k, ln }) => {
+      const [txt] = KIND_TAG[k] ?? [k];
+      let label;
+      if (id.startsWith('file:')) label = '📄 ' + escapeHtml(fileById.get(id.slice(5))?.name ?? id) + ` <span class="at">${ln ? '模块顶层 L' + ln : '文件内（未定位到具体函数）'}</span>`;
+      else if (id.startsWith('var:')) {
+        const v2 = varById.get(id);
+        label = (v2?.storage ? '▤ ' : '▫ ') + escapeHtml(v2?.name ?? id) +
+          ` <span class="at">@${escapeHtml(fileById.get(v2?.file)?.name ?? '')}${ln ? ' · L' + ln : ''}</span>`;
+      } else {
+        const f2 = fnById.get(id);
+        label = escapeHtml(f2?.name ?? id) + (f2 ? ` <span class="at">@${escapeHtml(fileById.get(f2.file)?.name ?? '')}${ln ? ' · L' + ln : ''}</span>` : '');
+      }
+      return `<div class="iorow" data-jump="${escapeHtml(id)}"><span class="ioarrow">${dir === 'in' ? '↘' : '↗'}</span>${label}<span class="iotag">${txt}</span></div>`;
+    }).join('') + '</div>';
+  }
+  function jumpTo(id) {
+    const jf = fileOfEnd(id);           // 命中被隐藏的文件 → 先恢复显示，否则跳过去看不到
+    if (jf && hiddenFiles.has(jf)) { hiddenFiles.delete(jf); syncTreeStates(); refreshVisibility(); }
+    if (id.startsWith('file:')) {
+      const b = boxPos.get(id.slice(5));
+      if (!b) return;
+      select(id);
+      detail.style.display = 'none';
+      centerOn(b.x + b.w / 2, b.y + b.h / 2, 0.9);
+      b.el.classList.remove('pulse'); void b.el.offsetWidth; b.el.classList.add('pulse');
+      return;
+    }
+    const p = fnPos.get(id);
+    if (!p) return;
+    const b = boxPos.get(p.home);
+    if (b.collapsed) toggleFold(b);
+    select(id);
+    centerOn(p.x + p.w / 2, p.y + p.h / 2, 0.9);
+    p.el.classList.remove('pulse'); void p.el.offsetWidth; p.el.classList.add('pulse');
+  }
+  $('#detailClose').addEventListener('click', () => clearSel());
+  detail.addEventListener('click', (ev) => {
+    const j = ev.target.closest('[data-jump]');
+    if (j) { jumpTo(j.dataset.jump); return; }
+    const btn = ev.target.closest('button[data-act]');
+    if (!btn) return;
+    if (btn.dataset.act === 'copy' && currentSrc) {
+      const done = () => { btn.textContent = '已复制 ✓'; setTimeout(() => (btn.textContent = '复制'), 1500); };
+      if (navigator.clipboard?.writeText) navigator.clipboard.writeText(currentSrc).then(done, () => fallbackCopy(currentSrc, done));
+      else fallbackCopy(currentSrc, done);
+    } else if (btn.dataset.act === 'expand') {
+      const pre = document.querySelector('#detailBody pre.code');
+      const full = pre.classList.toggle('full');
+      btn.textContent = full ? '收起' : '展开';
+    }
+  });
+  function fallbackCopy(text, done) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { /* 忽略 */ }
+    ta.remove();
+  }
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') {
+      if (fmodal.classList.contains('on')) closeModal();
+      else clearSel();
+    }
+  });
+
+  // ---------- 文件详情卡 ----------
+  const fmodal = $('#fmodal'), fcard = $('#fcard');
+  const KIND_TAG = { import: ['跨文件', 't-import'], local: ['同文件', 't-local'], ref: ['引用', 't-ref'], guess: ['推断', 't-guess'], var: ['变量', 't-var'], env: ['环境变量', 't-env'], log: ['日志', 't-log'] };
+  const KIND_DOT = { arrow: 'k-arrow', method: 'k-method', class: 'k-class' };
+  const KIND_NAME = { class: '类（整体一个框，含全部方法）', method: '方法', arrow: '箭头函数', function: '函数', 'async function': '异步函数', 'async arrow': '异步箭头函数', 'async method': '异步方法' };
+  const kindDot = (kind) => KIND_DOT[kind] ?? (kind.startsWith('async') ? 'k-async' : 'k-function');
+  function endLabel(id, ln) {
+    if (id.startsWith('file:')) return `<i>${ln ? '（模块顶层 L' + ln + '）' : '（文件级）'}</i>`;
+    if (id.startsWith('var:')) { const v = varById.get(id); return (v?.storage ? '▤ ' : '▫ ') + escapeHtml(v?.name ?? id); }
+    const fn = fnById.get(id);
+    return fn ? escapeHtml(fn.name) : escapeHtml(id);
+  }
+  function groupByCounter(arr, isEntry) {
+    const m = new Map();
+    for (const e of arr) {
+      const other = isEntry ? e.f : e.t;
+      const key = other.startsWith('file:') ? other.slice(5) : fnById.get(other)?.file ?? other;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key).push(e);
+    }
+    return [...m.entries()].sort((a, b) => b[1].length - a[1].length);
+  }
+  function openFileModal(fid) {
+    const file = fileById.get(fid);
+    const g = groupById.get(file.group);
+    const fnsSet = new Set(file.fns);
+    const entry = [], exit = [];
+    for (const e of edges) {
+      const tIn = e.t === 'file:' + fid || fnsSet.has(e.t);
+      const fIn = e.f === 'file:' + fid || fnsSet.has(e.f);
+      if (tIn && !fIn) entry.push(e);
+      if (fIn && !tIn) exit.push(e);
+    }
+    const entryG = groupByCounter(entry, true), exitG = groupByCounter(exit, false);
+    const egroupHtml = (groups, isEntry) => {
+      if (!groups.length) return `<div class="fempty">${isEntry ? '无 — 没有其他文件调用本文件' : '无 — 本文件不调用其他文件'}</div>`;
+      return groups.map(([otherFile, list]) => {
+        const fo = fileById.get(otherFile);
+        const rows = list.map((e) => {
+          const [txt, cls] = KIND_TAG[e.k] ?? [e.k, ''];
+          return `<div class="erow">${endLabel(e.f, e.l)} <span class="arr">→</span> ${endLabel(e.t)} <span class="tag ${cls}">${txt}</span></div>`;
+        }).join('');
+        return `<div class="egroup"><div class="ename">📄 ${escapeHtml(fo?.name ?? otherFile)} <span style="color:#b6c0cf">· ${escapeHtml(fo?.path ?? '')}</span></div>${rows}</div>`;
+      }).join('');
+    };
+    const exportCnt = file.fns.filter((id) => fnById.get(id)?.exported).length;
+    const frows = file.fns.map((id) => {
+      const fn = fnById.get(id);
+      const inC = fnIn.get(id) || 0, outC = fnOut.get(id) || 0;
+      return `<div class="frow" data-goto="${escapeHtml(id)}" title="点击画布定位该函数">
+        <div class="l1">
+          <span class="k ${kindDot(fn.kind)}"></span>
+          <span class="fnm">${escapeHtml(fn.name)}</span>
+          ${fn.exported ? '<span class="exp">● export</span>' : ''}
+          <span class="fline">L${fn.line}${fn.endLine > fn.line ? '–' + fn.endLine : ''} · ${escapeHtml(KIND_NAME[fn.kind] ?? fn.kind)}${fn.kind === 'class' && fn.methods?.length ? ` · ${fn.methods.length} 方法` : ''}</span>
+          <span class="fio">被调 <b>${inC}</b> · 调出 <b>${outC}</b></span>
+        </div>
+        ${fn.doc ? `<div class="fdesc">${escapeHtml(fn.doc)}</div>` : ''}
+      </div>`;
+    }).join('');
+    const VT = { map: 'Map', set: 'Set', object: '对象', array: '数组', instance: '实例', primitive: '常量', env: '环境变量', logger: '日志' };
+    const vrows = (file.vars || []).map((vid) => {
+      const v = varById.get(vid);
+      const inC = fnIn.get(vid) || 0, outC = fnOut.get(vid) || 0;
+      return `<div class="frow" data-goto="${escapeHtml(vid)}" title="点击画布定位该方框">
+        <div class="l1">
+          <span class="k ${v.storage ? 'k-storage' : 'k-prim'}"></span>
+          <span class="fnm">${escapeHtml(v.name)}</span>
+          <span class="fline">${v.line != null ? 'L' + v.line + ' · ' : ''}${VT[v.type] || v.type}${v.storage ? ' 存储' : ''}</span>
+          <span class="fio">读/写 <b>${inC}</b> · 传出 <b>${outC}</b></span>
+        </div>
+      </div>`;
+    }).join('');
+    const docHtml = file.doc
+      ? `<div class="fdoc">${escapeHtml(file.doc)}</div>`
+      : `<div class="fdoc none">该文件没有头注释 — 在源文件顶部添加注释块后跑 npm run canvas:scan 即可显示功能说明</div>`;
+    fcard.innerHTML = `
+      <div class="fhead">
+        <div>
+          <div class="ft">
+            <span class="fdot" style="background:hsl(${g.hue},60%,60%)"></span>
+            <h3>${escapeHtml(file.name)}</h3>
+            <span class="chip" style="background:hsl(${g.hue},60%,94%);color:hsl(${g.hue},45%,32%)">${escapeHtml(g.name)}</span>
+          </div>
+          <div class="fpath">${escapeHtml(file.path)} · <b>${file.lines}</b> 行</div>
+        </div>
+        <button class="fclose" title="关闭 (Esc)">×</button>
+      </div>
+      <div class="fbody">
+        ${docHtml}
+        <div class="fstats">
+          <span class="st">函数 <b>${file.fns.length}</b></span>
+          <span class="st">导出 <b>${exportCnt}</b></span>
+          <span class="st io">入口边 <b>${entry.length}</b></span>
+          <span class="st io">出口边 <b>${exit.length}</b></span>
+          <span class="st">变量 <b>${(file.vars || []).length}</b></span>
+        </div>
+        <div class="fsec"><b>📥 入口 <span class="cnt2">本文件调用了谁（${exit.length} 条，去往 ${exitG.length} 个文件）· 线在左侧</span></b>${egroupHtml(exitG, false)}</div>
+        <div class="fsec"><b>📤 出口 <span class="cnt2">谁调用本文件（${entry.length} 条，来自 ${entryG.length} 个文件）· 线在右侧</span></b>${egroupHtml(entryG, true)}</div>
+        <div class="fsec"><b>λ 函数明细 <span class="cnt2">${file.fns.length} 个 · 点击行可跳到画布对应节点</span></b>${frows || '<div class="fempty">本文件没有可解析的顶层函数</div>'}</div>
+        <div class="fsec"><b>▤ 变量 / 存储明细 <span class="cnt2">${(file.vars || []).length} 个 · 点击行可跳到画布对应方框</span></b>${vrows || '<div class="fempty">本文件没有模块级变量</div>'}</div>
+      </div>`;
+    fmodal.classList.add('on');
+  }
+  function closeModal() {
+    fmodal.classList.remove('on');
+    clearSel();
+  }
+  fcard.addEventListener('click', (ev) => {
+    if (ev.target.closest('.fclose')) { closeModal(); return; }
+    const row = ev.target.closest('[data-goto]');
+    if (!row) return;
+    const id = row.dataset.goto;
+    closeModal();
+    jumpTo(id);
+  });
+  fmodal.addEventListener('click', (ev) => { if (ev.target === fmodal) closeModal(); });
+
+  // ---------- 侧栏：目录树（模块 → 文件夹 → 文件，每级可勾选） ----------
+  const treeOpen = { groups: new Set(), folders: new Set() }; // 默认全部收起，按需展开（352 个文件全铺开太长）
+  const treeData = (() => {
+    const list = [];
+    for (const g of sortedGroups) {
+      const folders = D.folders.filter((fo) => fo.group === g.id)
+        .map((fo) => ({ id: fo.id, name: fo.name || g.name, files: fo.files.slice() }));
+      const covered = new Set(folders.flatMap((fo) => fo.files));
+      const rest = g.files.filter((fid) => !covered.has(fid));
+      if (rest.length) folders.push({ id: g.id + '::root', name: '（模块根目录）', files: rest });
+      list.push({ id: g.id, name: g.name, hue: g.hue, files: g.files, folders });
+    }
+    return list;
+  })();
+  let treeRows = []; // { el, input, files }
+
+  function treeRow(o) {
+    const el = document.createElement('div');
+    el.className = 'tro lv' + o.depth;
+    el.style.paddingLeft = (6 + o.depth * 14) + 'px';
+    el.innerHTML = `<input type="checkbox">` +
+      `<span class="tw">${o.hasKids ? (o.open ? '▾' : '▸') : ''}</span>` +
+      (o.hue != null ? `<span class="gdot" style="background:hsl(${o.hue},60%,60%)"></span>` : '') +
+      `<span class="tname" title="${escapeHtml(o.id)}">${escapeHtml(o.name)}</span>` +
+      `<span class="tcnt">${o.cnt}</span>`;
+    const input = el.querySelector('input');
+    input.addEventListener('change', () => {
+      for (const fid of o.files) { if (input.checked) hiddenFiles.delete(fid); else hiddenFiles.add(fid); }
+      syncTreeStates();
+      refreshVisibility();
+    });
+    el.querySelector('.tw').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (!o.hasKids) return;
+      const set = o.kind === 'group' ? treeOpen.groups : treeOpen.folders;
+      if (set.has(o.id)) set.delete(o.id); else set.add(o.id);
+      renderTree();
+    });
+    el.querySelector('.tname').addEventListener('click', () => {
+      if (o.kind === 'file') {
+        if (hiddenFiles.has(o.id)) { hiddenFiles.delete(o.id); syncTreeStates(); refreshVisibility(); }
+        jumpTo('file:' + o.id);
+        return;
+      }
+      // 组/文件夹：若整支被隐藏，先恢复再聚焦
+      if (!anyFileVisible(o.files)) {
+        for (const fid of o.files) hiddenFiles.delete(fid);
+        syncTreeStates();
+        refreshVisibility();
+      }
+      if (o.kind === 'group') focusGroup(o.id); else focusFolder(o.id);
+    });
+    treeRows.push({ el, input, files: o.files });
+    return el;
+  }
+
+  function renderTree() {
+    const box = $('#treeBox');
+    if (!box) return;
+    treeRows = [];
+    const frag = document.createDocumentFragment();
+    for (const g of treeData) {
+      const gOpen = treeOpen.groups.has(g.id);
+      frag.appendChild(treeRow({ depth: 0, kind: 'group', id: g.id, name: g.name, files: g.files, hue: g.hue,
+        open: gOpen, hasKids: g.folders.length > 0, cnt: `${g.files.length}📄` }));
+      if (!gOpen) continue;
+      for (const fo of g.folders) {
+        const fOpen = treeOpen.folders.has(fo.id);
+        frag.appendChild(treeRow({ depth: 1, kind: 'folder', id: fo.id, name: fo.name, files: fo.files,
+          open: fOpen, hasKids: fo.files.length > 0, cnt: `${fo.files.length}📄` }));
+        if (!fOpen) continue;
+        for (const fid of fo.files) {
+          const f = fileById.get(fid) || { name: fid, fns: [] };
+          frag.appendChild(treeRow({ depth: 2, kind: 'file', id: fid, name: f.name, files: [fid],
+            cnt: `${f.fns.length}λ`, hasKids: false }));
+        }
+      }
+    }
+    box.innerHTML = '';
+    box.appendChild(frag);
+    syncTreeStates();
+  }
+
+  // 勾选状态三态：全选 / 半选 / 未选
+  function syncTreeStates() {
+    for (const r of treeRows) {
+      const total = r.files.length;
+      let vis = 0;
+      for (const fid of r.files) if (!hiddenFiles.has(fid)) vis++;
+      r.input.checked = vis > 0;
+      r.input.indeterminate = vis > 0 && vis < total;
+      r.el.classList.toggle('off', vis === 0);
+    }
+  }
+
+  // 勾选变化后：重置裁剪状态并重绘（框/节点/边全部按 hiddenFiles 重新判定）
+  function refreshVisibility() {
+    for (const c of moduleBounds.values()) { c.shown = undefined; c.el.style.display = ''; }
+    for (const c of folderBounds.values()) { c.shown = undefined; c.el.style.display = ''; }
+    for (const b of boxPos.values()) { b.shown = undefined; b.el.style.display = ''; }
+    for (const p of fnPos.values()) p.shown = undefined;
+    renderStats();
+    applyVisibility();
+    drawEdges();
+    scheduleCull();
+  }
+
+  function renderStats() {
+    const hiddenReal = [...hiddenFiles].filter((fid) => fileById.has(fid)).length;
+    const vis = D.files.length - hiddenReal;
+    $('#stats').innerHTML = `<b>${D.stats.folders ?? '-'}</b> 文件夹 · <b>${D.stats.files}</b> 文件 · <b>${D.stats.functions}</b> 函数 · <b>${D.stats.variables ?? 0}</b> 变量 · <b>${D.stats.calls}</b> 边` +
+      (hiddenReal ? ` · <b>显示 ${vis}/${D.files.length}</b> 文件` : '') +
+      ` · 生成于 ${new Date(D.generatedAt).toLocaleString('zh-CN')}`;
+  }
+
+  function buildSidebar() {
+    const sb = $('#sidebar');
+    sb.innerHTML = `<div class="side-head"><span class="t">目录分组</span><span class="acts">` +
+      `<button data-act="all" title="显示全部文件">全选</button>` +
+      `<button data-act="none" title="隐藏全部文件">全不选</button>` +
+      `<button data-act="inv" title="反选">反选</button></span></div><div id="treeBox"></div>`;
+    sb.querySelector('.acts').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-act]');
+      if (!btn) return;
+      const act = btn.dataset.act;
+      for (const f of D.files) {
+        if (act === 'all') hiddenFiles.delete(f.id);
+        else if (act === 'none') hiddenFiles.add(f.id);
+        else if (hiddenFiles.has(f.id)) hiddenFiles.delete(f.id); else hiddenFiles.add(f.id);
+      }
+      syncTreeStates();
+      refreshVisibility();
+    });
+    renderTree();
+    const legend = document.createElement('div');
+    legend.className = 'legend';
+    legend.innerHTML = `<b>图例</b>
+      <div class="li"><span class="sw" style="border-color:#e0912f"></span>跨文件 import 调用</div>
+      <div class="li"><span class="sw" style="border-color:#7ea4dd"></span>同文件调用</div>
+      <div class="li"><span class="sw dash" style="border-color:#3ba55d"></span>函数引用（handler: someFn 等）</div>
+      <div class="li"><span class="sw dash" style="border-color:#c5ccd8"></span>同名函数推断</div>
+      <div class="li"><span class="sw dash" style="border-color:#8b6fd4"></span>变量读写（存储）</div>
+      <div class="li">端口：左 <span class="sw dot" style="background:#e0a54f"></span>入口（调用）· 右 <span class="sw dot" style="background:#6f9de0"></span>出口（被调用）</div>
+      <div class="li"><span class="sw" style="background:#e8f5f3;border-color:#2fa89a"></span>存储方框（Map/对象）&nbsp;<span class="sw" style="background:#fbfaff;border-color:#cdc7e4"></span>变量</div>
+      <div class="li"><span class="sw dot" style="background:#2f9e63"></span>已导出函数</div>
+      <div class="li"><span class="sw dot" style="background:#6f9de0"></span>函数&nbsp;<span class="sw dot" style="background:#45b3bf"></span>箭头&nbsp;<span class="sw dot" style="background:#9b7fe0"></span>异步&nbsp;<span class="sw dot" style="background:#2f9e8f"></span>类（含方法）</div>`;
+    sb.appendChild(legend);
+  }
+
+  function focusRect(r) {
+    const vw = viewport.clientWidth - 60, vh = viewport.clientHeight - 60;
+    vs = Math.min(vw / r.w, vh / r.h, 1);
+    vx = (viewport.clientWidth - r.w * vs) / 2 - r.x * vs;
+    vy = (viewport.clientHeight - r.h * vs) / 2 - r.y * vs;
+    applyView();
+  }
+  function focusGroup(gid) { const m = moduleBounds.get(gid); if (m) focusRect(m); }
+  function focusFolder(fid) { const r = folderBounds.get(fid); if (r) focusRect(r); }
+
+  // ---------- 搜索 ----------
+  const searchInput = $('#search'), results = $('#searchResults');
+  let hits = [], hitIdx = -1;
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim().toLowerCase();
+    hitIdx = -1;
+    if (!q) { results.style.display = 'none'; return; }
+    hits = [];
+    for (const fn of D.functions) if (fn.name.toLowerCase().includes(q)) hits.push({ id: fn.id, label: fn.name, sub: fn.file });
+    for (const f of D.files) if (f.name.toLowerCase().includes(q)) hits.push({ id: 'file:' + f.id, label: f.name, sub: f.path });
+    for (const v of D.variables || []) if (v.name.toLowerCase().includes(q)) hits.push({ id: v.id, label: (v.storage ? '▤ ' : '▫ ') + v.name, sub: v.file + ' · ' + v.type });
+    hits = hits.slice(0, 40);
+    results.innerHTML = hits.map((h, i) => `<div class="item" data-i="${i}"><span>${escapeHtml(h.label)}</span><span class="file">${escapeHtml(h.sub)}</span></div>`).join('') || '<div class="item">无匹配</div>';
+    results.style.display = 'block';
+  });
+  results.addEventListener('click', (ev) => {
+    const item = ev.target.closest('.item[data-i]');
+    if (item) gotoHit(+item.dataset.i);
+  });
+  searchInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && hits.length) gotoHit((hitIdx + 1) % hits.length);
+  });
+  function gotoHit(i) {
+    hitIdx = i;
+    const h = hits[i];
+    if (!h) return;
+    let wx, wy, el;
+    const hf = fileOfEnd(h.id);
+    if (hf && hiddenFiles.has(hf)) { hiddenFiles.delete(hf); syncTreeStates(); refreshVisibility(); }
+    if (h.id.startsWith('file:')) {
+      const b = boxPos.get(h.id.slice(5));
+      if (b.collapsed) toggleFold(b);
+      wx = b.x + b.w / 2; wy = b.y + b.h / 2; el = b.el;
+      select(h.id);
+    } else {
+      const p = fnPos.get(h.id);
+      const b = boxPos.get(p.home);
+      if (b.collapsed) toggleFold(b);
+      wx = p.x + p.w / 2; wy = p.y + p.h / 2; el = p.el;
+      select(h.id);
+    }
+    centerOn(wx, wy, 0.9);
+    el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
+    results.style.display = 'none';
+  }
+
+  // ---------- 边过滤 ----------
+  $('#filterSeg').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button[data-k]');
+    if (!btn) return;
+    const k = btn.dataset.k;
+    filters[k] = !filters[k];
+    btn.classList.toggle('on', filters[k]);
+    world.classList.toggle('showLocal', filters.local);
+    drawEdges();
+    applyVisibility();
+  });
+
+  // ---------- 按钮 / 快捷键 ----------
+  $('#btnFit').addEventListener('click', fitView);
+  $('#btnReset').addEventListener('click', () => {
+    try { localStorage.removeItem(OFF_KEY); } catch (e) { /* ignore */ }
+    location.reload();
+  });
+  window.addEventListener('keydown', (ev) => {
+    if ((ev.key === 'f' || ev.key === 'F') && document.activeElement !== searchInput) fitView();
+  });
+  window.addEventListener('resize', () => { sizeCanvas(); drawEdges(); scheduleCull(); });
+
+  // ---------- 启动 ----------
+  setTimeout(() => {
+    build();
+    buildSidebar();
+    applyVisibility();
+    fitView();
+    sizeCanvas();
+    drawEdges();
+    warmPorts();
+    renderStats();
+    requestAnimationFrame(() => requestAnimationFrame(() => { const l = $('#loading'); if (l) l.remove(); }));
+  }, 40);
+})();
+</script>
+</body>
+</html>

@@ -55,6 +55,9 @@ const ZH_THEME = {
     { text: '规范', link: '/standards/git-release-rules', activeMatch: '/standards/' },
     { text: '部署', link: '/deployment/docker', activeMatch: '/deployment/' },
     { text: '路线图', link: '/roadmap/', activeMatch: '/roadmap/' },
+    // target=_self 让 vitepress 的 SPA 路由放行：/canvas/ 是 docs/public 里的**静态页面**，
+    // 不是 md 路由，被拦截会被当成站内 404 而不刷新。带 target 属性即走整页跳转。
+    { text: '调用图', link: '/canvas/', target: '_self' },
     {
       text: '相关链接',
       items: [

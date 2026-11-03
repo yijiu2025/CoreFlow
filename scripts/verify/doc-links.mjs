@@ -156,8 +156,14 @@ for (const file of files) {
 
       // 站内绝对路径是 **vitepress 路由**（`/core/auth` ⇒ docs/core/auth.md），
       // 不是仓库根路径；相对路径按当前文件所在目录解析。
+      // `docs/public/**` 是 vitepress 的静态资源目录，发布时会被摊平到站点根：
+      // 文档里写 `/canvas/` 对应的就是 `docs/public/canvas/index.html`，属于合法站内链接。
       const candidates = target.startsWith('/')
-        ? [path.join(ROOT, 'docs', target)]
+        ? [
+            path.join(ROOT, 'docs', target),
+            path.join(ROOT, 'docs', 'public', target),
+            path.join(ROOT, 'docs', 'public', target, 'index.html'),
+          ]
         : [path.resolve(path.dirname(file), target)];
 
       const ok = candidates.some(p => existsSync(p) || existsSync(`${p}.md`) || existsSync(path.join(p, 'README.md')));
