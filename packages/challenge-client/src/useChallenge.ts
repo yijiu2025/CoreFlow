@@ -30,6 +30,8 @@ export interface UseChallengeOptions extends ChallengeClientOptions {
   maxAutoRetry?: number;
   /** 自动重试间隔（毫秒，默认 3000） */
   retryDelayMs?: number;
+  /** 成功后在挑战页驻留多久再跳（毫秒，默认 600）：让用户看到"验证通过"，否则页面一闪而过 */
+  successDelayMs?: number;
   /** 验证通过回调（通常是跳回 returnUrl）；返回 Promise 时会被 await */
   onSuccess?: () => void | Promise<void>;
 }
@@ -64,12 +66,15 @@ export function resolveReturnPath(raw: unknown, fallback = '/'): string {
 export function useChallenge(options: UseChallengeOptions = {}) {
   const maxAutoRetry = Math.max(0, options.maxAutoRetry ?? 3);
   const retryDelayMs = Math.max(0, options.retryDelayMs ?? 3000);
+  const successDelayMs = Math.max(0, options.successDelayMs ?? 600);
 
   const phase = ref<ChallengePhase>('idle');
   const progress = ref(0);
   const reason = ref('');
   const retries = ref(0);
   const difficulty = ref(0);
+  /** 本次通过的免挑战时长（秒，服务端按登录态给：登录 1800 / 匿名 120） */
+  const passTtlSec = ref(0);
 
   /** 当前这轮计算的取消手柄 */
   let controller: AbortController | null = null;
@@ -145,6 +150,11 @@ export function useChallenge(options: UseChallengeOptions = {}) {
       progress.value = 1;
       phase.value = 'ok';
       retries.value = 0;
+      passTtlSec.value = verified.passTtlSec ?? 0;
+
+      // 驻留一拍再跳：不给反馈就跳转，用户会觉得"刚才那页闪了一下"
+      if (successDelayMs > 0) await new Promise<void>(resolve => setTimeout(resolve, successDelayMs));
+      if (round.signal.aborted || disposed) return true;
       await options.onSuccess?.();
       return true;
     } catch (err) {
@@ -220,5 +230,5 @@ export function useChallenge(options: UseChallengeOptions = {}) {
   if (getCurrentScope()) onScopeDispose(dispose);
   if (options.auto !== false) void start();
 
-  return { phase, progress, reason, retries, maxAutoRetry, difficulty, start, retry, dispose };
+  return { phase, progress, reason, retries, maxAutoRetry, difficulty, passTtlSec, start, retry, dispose };
 }

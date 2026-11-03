@@ -76,7 +76,14 @@ const PROBE_PATHS = ['/v1/health', '/v1/health/live', '/v1/health/ready'];
  * （`vite build` 默认 `assets/`），此处必须同步。豁免的只是"挑战页外壳"，页面里不得
  * 放任何用户数据 —— 这段路径绕过了 Bot / 地理 / 端点限频判定。
  */
-const CHALLENGE_PAGE_PATHS = ['/firewall/challenge.html', '/admin/challenge.html'];
+const CHALLENGE_PAGE_PATHS = [
+  '/firewall/challenge.html',
+  '/admin/challenge.html',
+  // 根路径兜底：admin 若部署在**站点根**（vite `base: '/'`），它的挑战页就是
+  // `/challenge.html`。多列一个不放大风险（只是"这个路径不挑战"），
+  // 少列一个则会变成"同源部署的 admin 永远打不开挑战页"。
+  '/challenge.html'
+];
 
 /** 挑战页静态资源前缀（构建产物目录，按 SPA 基路径各一份） */
 const CHALLENGE_ASSET_PREFIXES = ['/firewall/assets/', '/admin/assets/'];

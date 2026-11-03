@@ -30,6 +30,8 @@ const props = withDefaults(
     returnPath?: string;
     /** 工作量证明难度（前导零个数），>0 时展示该行 */
     difficulty?: number;
+    /** 本次通过的免挑战时长（秒，服务端按登录态给）；0 = 未知 */
+    passTtlSec?: number;
     /** 左上角产品名 */
     productName?: string;
     /** 触发原因文案（不同站点可覆盖） */
@@ -44,6 +46,7 @@ const props = withDefaults(
     maxRetries: 3,
     returnPath: '/',
     difficulty: 0,
+    passTtlSec: 0,
     productName: 'CORE FLOW',
     triggerLabel: '请求频率超出阈值',
     errorCode: 'FW-428'
@@ -62,7 +65,12 @@ const title = computed(() => {
 });
 
 const subtitle = computed(() => {
-  if (isOk.value) return '正在带你回到刚才的页面，本次验证 30 分钟内有效。';
+  if (isOk.value) {
+    const minutes = Math.max(1, Math.round(props.passTtlSec / 60));
+    return props.passTtlSec > 0
+      ? `正在带你回到刚才的页面，本次通过 ${minutes} 分钟内有效。`
+      : '正在带你回到刚才的页面。';
+  }
   if (isError.value) {
     return props.retries >= props.maxRetries && props.maxRetries > 0
       ? '多次验证未通过，可能是网络环境在验证过程中反复变化，也可能该地址已被策略限制。请联系管理员处理。'
@@ -78,6 +86,13 @@ const statusText = computed(() => {
   if (props.phase === 'solving') return '正在进行工作量证明计算…';
   return '正在准备验证…';
 });
+
+/** 验证前的三条承诺（第 2 条必须写明"登录用户"，匿名档只有 2 分钟） */
+const CHECKS = [
+  '绑定当前设备与网络，令牌不可转移',
+  '登录用户通过后 30 分钟内无需重复验证',
+  '不采集、不上传任何本地数据'
+];
 
 const percent = computed(() => {
   if (isOk.value) return 100;

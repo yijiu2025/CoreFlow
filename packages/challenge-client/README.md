@@ -60,9 +60,10 @@ const { phase, progress, reason, retries, maxAutoRetry, difficulty, retry } = us
 | --- | --- |
 | 题目 | `sha256(challengeId + ':' + salt + ':' + answer)` 前导 `difficulty` 个 `0` |
 | 载荷 | 只存服务端，TTL 300s，**一次性消费**（`GET+DEL`） |
+| 签发前提 | **只在挑战态签发**（非挑战态 → 403 `Not Challenged`，防"预先解一次换免检"） |
 | 绑定 | IP + 请求指纹 + 设备 ID，三者都参与校验 |
-| 通过令牌 | `fw_verified`（HttpOnly，30 分钟） |
-| 挑战页豁免 | `/firewall/challenge.html`、`/admin/challenge.html` 及其 `assets/` 前缀（见 `pipeline.js` 的 `CHALLENGE_PAGE_PATHS`） |
+| 通过令牌 | `fw_verified`（HttpOnly）：**已登录 30 分钟 / 匿名 2 分钟**（按登录态分档，匿名不给长期通行证） |
+| 挑战页豁免 | `/firewall/challenge.html`、`/admin/challenge.html`、`/challenge.html` 及其 `assets/` 前缀（见 `pipeline.js` 的 `CHALLENGE_PAGE_PATHS`） |
 
 > 挑战页是**独立构建入口**（各自的 `challenge.html`），不是 SPA 深链路由：后端没有 SPA
 > 回退，且主 app 启动即请求业务接口，会立刻撞上 428 而自我打死。

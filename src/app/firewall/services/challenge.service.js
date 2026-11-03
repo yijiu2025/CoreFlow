@@ -22,8 +22,34 @@ import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.firewall.services.challenge');
 
-/** 通过令牌有效期（30 分钟） */
-const PASS_TOKEN_TTL = 1800;
+/**
+ * 通过令牌有效期：**按登录态分档**
+ *
+ * 为什么必须分档（2026-11-03 需求）：人机挑战是「限频后的二次自证」，不是「买断 30 分钟」。
+ * 一个**未登录**的客户端解一次 PoW（几十毫秒）就换 30 分钟免检，等于把挑战降级成
+ * 一次性订阅：解一次 → 狂刷半小时 → 再解一次。所以：
+ *   · 已登录：30 分钟（管理员/正常用户，有身份可追责，体验优先）
+ *   · 匿名  ：2 分钟（只够完成"当前这一次交互"——加载一个页面、提交一次表单；
+ *             高频匿名流量 2 分钟后重新进入挑战，攻击成本从"每 30 分钟一次"变成"每 2 分钟一次"）
+ *
+ * 注意匿名档**不是**"免检"：端点级限频（各路由 config.rateLimit）、全局限频、
+ * 连接数上限、封禁/白名单在 pass 命中时**照常执行**，被缩短的只是"免于再次挑战"的窗口。
+ */
+const PASS_TOKEN_TTL_AUTHED = 1800;
+const PASS_TOKEN_TTL_ANON = 120;
+
+/**
+ * 该请求是否已登录（决定通过令牌的有效期档位）
+ *
+ * `request.state.user` 由 04-auth 的 onRequest 钩子填充（早于防火墙与业务路由），
+ * 因此挑战接口本身虽然免登录，但**带了有效 sid 的请求仍能被识别为已登录**。
+ *
+ * @param {object} request Fastify request
+ * @returns {boolean} true 表示已登录
+ */
+function isAuthenticated(request) {
+  return Boolean(request?.state?.user?.id || request?.state?.user?.userId);
+}
 
 /**
  * 为 **Vue 挑战页**签发一份挑战（JSON 入口）
@@ -128,19 +154,23 @@ async function verifyChallenge(request, reply) {
   }
 
   // 4. 签发验证令牌（绑定设备 / 指纹 / IP 三个维度）
+  //    有效期按登录态分档：匿名只换 2 分钟窗口，登录才免 30 分钟（见 PASS_TOKEN_TTL_* 注释）
+  const authed = isAuthenticated(request);
+  const ttlSec = authed ? PASS_TOKEN_TTL_AUTHED : PASS_TOKEN_TTL_ANON;
   const token = crypto.randomBytes(32).toString('hex');
-  await grantPass({ ip: request.ip, fingerprint, deviceId, token, ttlSec: PASS_TOKEN_TTL });
+  await grantPass({ ip: request.ip, fingerprint, deviceId, token, ttlSec });
 
-  // 5. 设置 HttpOnly Cookie
+  // 5. 设置 HttpOnly Cookie（maxAge 与 Redis TTL 必须一致：否则 cookie 还在、服务端已失效，
+  //    每个请求都白跑一次 hasPass 查询）
   reply.setCookie('fw_verified', token, {
     path: '/',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    maxAge: PASS_TOKEN_TTL,
+    maxAge: ttlSec,
     sameSite: 'Strict'
   });
 
-  return { ok: true };
+  return { ok: true, passTtlSec: ttlSec, scope: authed ? 'account' : 'anonymous' };
 }
 
 export { issueChallenge, verifyChallenge };

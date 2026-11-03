@@ -23,10 +23,19 @@ export interface ChallengeIssue {
   ttlSec: number;
 }
 
-/** 验证结果 */
+/**
+ * 验证结果
+ *
+ * `passTtlSec` / `scope` 由服务端按**登录态**决定：已登录 1800s，匿名 120s。
+ * 前端只负责如实展示，不要自己假设"通过就是 30 分钟"。
+ */
 export interface VerifyResult {
   ok: boolean;
   reason?: string;
+  /** 本次通过的免挑战时长（秒），服务端返回 */
+  passTtlSec?: number;
+  /** 档位：account（已登录）/ anonymous */
+  scope?: 'account' | 'anonymous';
 }
 
 /**
@@ -112,7 +121,14 @@ export async function verifyChallenge(
   });
 
   const body = (await safeJson(res)) as Partial<VerifyResult>;
-  if (body && typeof body.ok === 'boolean') return { ok: body.ok, reason: body.reason };
+  if (body && typeof body.ok === 'boolean') {
+    return {
+      ok: body.ok,
+      reason: body.reason,
+      passTtlSec: body.passTtlSec,
+      scope: body.scope
+    };
+  }
   return { ok: false, reason: `Verification failed (${res.status})` };
 }
 

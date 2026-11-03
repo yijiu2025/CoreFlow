@@ -237,7 +237,7 @@ describe('挑战链路端到端：下发 → 求解 → 校验 → 签发令牌 
     const reply = makeReply();
     const res = await verifyChallenge(request, reply);
 
-    expect(res).toEqual({ ok: true });
+    expect(res).toMatchObject({ ok: true });
     expect(reply.cookies.fw_verified).toMatch(/^[0-9a-f]{64}$/);
 
     // 令牌确实落进了访问层，且绑定在本次请求的 IP/指纹上
@@ -325,7 +325,7 @@ describe('挑战链路端到端：下发 → 求解 → 校验 → 签发令牌 
     // 第二步：求解并通过验证（同一指纹/设备上下文）
     const verifyReply = makeReply();
     const res = await verifyChallenge({ ...first, method: 'POST', body: { challengeId, answer } }, verifyReply);
-    expect(res).toEqual({ ok: true });
+    expect(res).toMatchObject({ ok: true });
     const token = verifyReply.cookies.fw_verified;
 
     // 第三步：带令牌再访问 → 放行，且挑战态已被清掉
@@ -727,7 +727,7 @@ describe('Vue 挑战页接入：issue 签发 → 求解 → verify 全链路', (
     const answer = solveFromIssue(issued);
     const reply = makeReply();
     const res = await verifyChallenge({ ...request, body: { challengeId: issued.challengeId, answer } }, reply);
-    expect(res).toEqual({ ok: true });
+    expect(res).toMatchObject({ ok: true });
     expect(reply.cookies.fw_verified).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -899,5 +899,44 @@ describe('挑战态下签发接口必须可达 + 回环地址不被扫描陷阱�
     }
     expect(thrown).not.toBeNull();
     expect(thrown.rule).toBe('scanner-trap');
+  });
+});
+
+// ── ⑫ 通过令牌按登录态分档（2026-11-03 需求） ────────────────────────────────
+
+describe('通过令牌：匿名只换短窗口，登录才免 30 分钟', () => {
+  /** 走一遍「签发 → 求解 → 校验」，返回 verify 的结果 */
+  async function solveAndVerify(ip, extraState) {
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+    const base = makeRequest({ ip, method: 'POST', url: '/api/firewall/v1/challenge/issue', body: {} });
+    const issued = await issueChallenge(base);
+
+    const target = '0'.repeat(issued.difficulty);
+    let answer = null;
+    for (let i = 0; i < 20_000_000; i++) {
+      if (sha256Hex(`${issued.challengeId}:${issued.salt}:${i}`).startsWith(target)) {
+        answer = String(i);
+        break;
+      }
+    }
+    expect(answer).not.toBeNull();
+
+    const req = makeRequest({ ip, method: 'POST', url: '/api/firewall/v1/challenge/verify', body: {} });
+    if (extraState) Object.assign(req, extraState);
+    return verifyChallenge({ ...req, body: { challengeId: issued.challengeId, answer } }, makeReply());
+  }
+
+  it('匿名通过 → 只签 2 分钟（不是 30 分钟）', async () => {
+    const res = await solveAndVerify('203.0.113.271');
+    expect(res.ok).toBe(true);
+    expect(res.scope).toBe('anonymous');
+    expect(res.passTtlSec).toBe(120);
+  });
+
+  it('已登录通过 → 30 分钟', async () => {
+    const res = await solveAndVerify('203.0.113.272', { state: { user: { id: 42 } } });
+    expect(res.ok).toBe(true);
+    expect(res.scope).toBe('account');
+    expect(res.passTtlSec).toBe(1800);
   });
 });
