@@ -18,6 +18,10 @@ const AUTH_CONFIG = {
     // ⚠️ 消费方兜底最小 60 秒，防 0/负数导致 Redis TTL 异常（永不过期或立即失效）。
     rotatedRetentionSeconds: 604800,
 
+    // 单用户最多保留的 refresh token 数（超出裁剪最旧）：防止刷新链路无界增长。
+    // 多端登录 + 反复刷新的场景下，只要不裁剪，user_refresh 集合会一直膨胀。
+    maxRefreshTokens: 10,
+
     // 单用户最大活跃设备数。超过则在写库前裁剪最旧设备行 ——
     // 不裁剪的话「换设备反复登录」会让 session_tokens 行无界增长（设备统计失真 + DB 膨胀）。
     // 默认 20 足够正常用户（手机 / 电脑 / 平板 / 多浏览器）。

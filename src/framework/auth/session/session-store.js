@@ -4,7 +4,7 @@
  * 由 session.js 拆分而来（AUDIT-REPORT-2026-09-12.md §2.3 批次 C）。承载**被兄弟模块共享**的
  * 低层资产，使 session.js / session-kick.js / session-governance.js 不必各自重复获取 Redis 实例：
  * - 7 个 `getStore(...)` 实例（session / refresh / user_refresh / refresh_rotated / session_family / user_sessions / auth:perm）
- * - 环境变量常量 `MAX_REFRESH_TOKENS` / `MAX_ACTIVE_DEVICES`
+ * - 配置常量 `MAX_REFRESH_TOKENS` / `MAX_ACTIVE_DEVICES`（来源 src/config/auth_config.js）
  * - `sidHash`：sessionId → DB token 列哈希，全模块唯一真源（🔴-2 即因它未导出而炸）
  * - `deleteRefreshTokensForSession` / `revokeFamily`：生命周期与踢出两条路径共用的吊销原语
  *
@@ -31,7 +31,9 @@ const log = createLogger('framework.auth.session');
 
 // ── 常量 / Redis 实例 / sidHash / 吊销原语 ──
 
-const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
+// ⚠️ 启动快照（仅为兼容既有导出）：真正生效值用 authSessionConfig().maxRefreshTokens；
+// 来源 src/config/auth_config.js（src/data/auth_config.json 可热改）
+const MAX_REFRESH_TOKENS = Math.max(1, Number(AUTH_CONFIG.session?.maxRefreshTokens) || 10);
 /**
  * 同一用户活跃设备行数上限（session_tokens 表 revoked=false 的行）。
  *

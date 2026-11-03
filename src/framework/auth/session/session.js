@@ -217,8 +217,10 @@ async function createSession(params) {
   if (refreshToken) {
     // 清理超出限制的旧 refresh token。新凭证的唯一键已生成，后续 Saga 不会误删旧链。
     const count = await userRefreshStore.zCard(userKey);
-    if (count >= MAX_REFRESH_TOKENS) {
-      const removeCount = count - MAX_REFRESH_TOKENS + 1;
+    // 上限取热改值（src/data/auth_config.json 的 session.maxRefreshTokens）
+    const maxRefreshTokens = Math.max(1, Number(authSessionConfig().maxRefreshTokens) || MAX_REFRESH_TOKENS);
+    if (count >= maxRefreshTokens) {
+      const removeCount = count - maxRefreshTokens + 1;
       const oldTokens = await userRefreshStore.zRangeByScore(userKey, '-inf', '+inf', {
         LIMIT: { offset: 0, count: removeCount }
       });
