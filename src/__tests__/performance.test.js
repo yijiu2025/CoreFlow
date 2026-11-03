@@ -18,9 +18,15 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import bcrypt from 'bcryptjs';
 
-// 必须在 import password-hash 之前设定：并发上限是模块加载时从 env 读的常量
-process.env.SCRYPT_MAX_CONCURRENCY = '1';
-process.env.BCRYPT_MAX_CONCURRENCY = '1';
+// 并发上限来自 src/config/app_config.js 的 passwordHash 段（env 通道已退役）。
+// 这里直接把配置对象改成闸门值 1，用例结束后由 afterAll 还原。
+const { APP_CONFIG } = await import('../config/app_config.js');
+const ORIGINAL_LIMITS = {
+  scrypt: APP_CONFIG.passwordHash.scryptMaxConcurrency,
+  bcrypt: APP_CONFIG.passwordHash.bcryptMaxConcurrency
+};
+APP_CONFIG.passwordHash.scryptMaxConcurrency = 1;
+APP_CONFIG.passwordHash.bcryptMaxConcurrency = 1;
 
 const { MapStore } = await import('../framework/redis/map-store.js');
 const { hashPassword, verifyPassword } = await import('../framework/auth/security/password-hash.js');
@@ -105,4 +111,10 @@ describe('MapStore 硬上限（拒绝写入而非静默淘汰）', () => {
     expect(() => MapStore.set(PREFIX, 'k4', 4)).not.toThrow();
     expect(MapStore.get(PREFIX, 'k4')).toBe(4);
   });
+});
+
+afterAll(() => {
+  // 还原并发上限，避免污染同进程内其它用例
+  APP_CONFIG.passwordHash.scryptMaxConcurrency = ORIGINAL_LIMITS.scrypt;
+  APP_CONFIG.passwordHash.bcryptMaxConcurrency = ORIGINAL_LIMITS.bcrypt;
 });

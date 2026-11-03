@@ -25,6 +25,7 @@ import { Op } from 'sequelize';
 import { getModel } from '../../db/index.js';
 import { getStore } from '../../redis/index.js';
 import { createLogger } from '../../log/index.js';
+import { AUTH_CONFIG } from '../../../config/auth_config.js';
 
 const log = createLogger('framework.auth.session');
 
@@ -39,7 +40,9 @@ const MAX_REFRESH_TOKENS = parseInt(process.env.MAX_REFRESH_TOKENS) || 10;
  * 设备数统计失真 + DB 膨胀。此上限在 createSession 写 DB 前裁剪最旧行，
  * 只保留最近 N 个活跃设备。默认 20 覆盖正常用户多端场景（手机/电脑/平板/多浏览器）。
  */
-const MAX_ACTIVE_DEVICES = parseInt(process.env.MAX_ACTIVE_DEVICES) || 20;
+// ⚠️ 启动快照（仅为兼容既有导出）：真正生效值请用 authSessionConfig().maxActiveDevices
+// （支持 src/data/auth_config.json 热改）；来源 src/config/auth_config.js
+const MAX_ACTIVE_DEVICES = Math.max(1, Number(AUTH_CONFIG.session?.maxActiveDevices) || 20);
 
 // 统一存储实例（getStore 自动处理 Redis/MapStore、超时、序列化）
 const sessionStore = getStore('session');

@@ -57,7 +57,8 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
   ],
   ['conventions/no-scripts-import.test.js', 'AST 扫描 src/ 是否 import scripts/，断言对象是说明符'],
   ['conventions/terminal-colors.test.js', '读 colors.js 源码文本，校验输出用 IS_TTY 判断而非直读 stdout'],
-  ['conventions/test-effectiveness.test.js', '本文件：扫描全部测试文件的 import 图，天然不 import 被测模块']
+  ['conventions/test-effectiveness.test.js', '本文件：扫描全部测试文件的 import 图，天然不 import 被测模块'],
+  ['config-leaf.test.js', '扫描 src/config/*.js 的源码文本，断言配置值模块零 import（分层结构守卫）']
 ]);
 
 /**

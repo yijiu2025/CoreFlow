@@ -26,6 +26,7 @@ import {
 // 无限自动续期，登录封禁形同虚设）。ban.js 只依赖 redis/log/audit，无环。
 import { isDisable, BAN_SERVICE_LOGIN, BAN_SERVICE_ACCESS } from '../security/ban.js';
 import { runSessionSaga, withSessionTransaction } from './session-saga.js';
+import { authSessionConfig } from './session-config.js';
 import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.session');
@@ -162,7 +163,14 @@ async function refreshSessionCore(refreshToken, request, reply) {
       }
     },
     {
-      execute: () => rotatedStore.set(refreshToken, { familyId, userId: user.id, rotationId }, ROTATED_RETENTION),
+      // TTL 取热改值（src/data/auth_config.json 的 session.rotatedRetentionSeconds），
+      // 兜底最小 60 秒防 0/负数导致 Redis TTL 异常
+      execute: () =>
+        rotatedStore.set(
+          refreshToken,
+          { familyId, userId: user.id, rotationId },
+          Math.max(60, Number(authSessionConfig().rotatedRetentionSeconds) || ROTATED_RETENTION)
+        ),
       compensate: async () => {
         const marker = await rotatedStore.get(refreshToken);
         if (marker?.rotationId === rotationId) await rotatedStore.delete(refreshToken);

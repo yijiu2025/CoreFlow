@@ -70,7 +70,10 @@ const BCRYPT_PATTERN = /^\$2[aby]\$/;
  * 每次 scrypt 内存开销约 16MB，默认并发上限 16 → 峰值约 256MB。
  * 超限时抛 SCRYPT_BUSY，由上层按 503 背压，而不是无界排队拖垮整个进程。
  */
-const SCRYPT_MAX_CONCURRENCY = Math.max(1, Number(APP_CONFIG.passwordHash?.scryptMaxConcurrency) || 16);
+/** 当前生效的 scrypt 并发上限（每次调用读取，便于测试注入与配置变更） */
+function scryptMaxConcurrency() {
+  return Math.max(1, Number(APP_CONFIG.passwordHash?.scryptMaxConcurrency) || 16);
+}
 let _scryptActive = 0;
 
 /**
@@ -79,7 +82,7 @@ let _scryptActive = 0;
  * @returns {Promise<any>}
  */
 async function withScryptLimit(fn) {
-  if (_scryptActive >= SCRYPT_MAX_CONCURRENCY) {
+  if (_scryptActive >= scryptMaxConcurrency()) {
     const err = new Error('密码计算过于繁忙，请稍后重试');
     err.code = 'SCRYPT_BUSY';
     throw err;
@@ -106,7 +109,10 @@ async function withScryptLimit(fn) {
  * 超限时与 scrypt 一样走"判为不匹配"（fail-closed）：宁可误拒一次登录，
  * 也不让异常冒到路由层。
  */
-const BCRYPT_MAX_CONCURRENCY = Math.max(1, Number(APP_CONFIG.passwordHash?.bcryptMaxConcurrency) || 4);
+/** 当前生效的 bcrypt 并发上限（每次调用读取） */
+function bcryptMaxConcurrency() {
+  return Math.max(1, Number(APP_CONFIG.passwordHash?.bcryptMaxConcurrency) || 4);
+}
 let _bcryptActive = 0;
 
 /**
@@ -115,7 +121,7 @@ let _bcryptActive = 0;
  * @returns {Promise<any>}
  */
 async function withBcryptLimit(fn) {
-  if (_bcryptActive >= BCRYPT_MAX_CONCURRENCY) {
+  if (_bcryptActive >= bcryptMaxConcurrency()) {
     const err = new Error('密码校验过于繁忙，请稍后重试');
     err.code = 'PASSWORD_HASH_BUSY';
     throw err;

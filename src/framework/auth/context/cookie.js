@@ -28,6 +28,7 @@
  */
 import crypto from 'node:crypto';
 import { createLogger } from '../../log/index.js';
+import { AUTH_CONFIG } from '../../../config/auth_config.js';
 
 const log = createLogger('framework.auth.cookie');
 
@@ -57,7 +58,9 @@ const USER_COOKIE_TTL = 15552000; // 180天
 
 /** 旧 sid_r 轮转后保留"已轮转"标记的时长（秒），用于复用盗用检测；默认 7 天。
  *  兜底最小 60 秒，防负数/0 导致 Redis TTL 异常（永不过期或立即失效）。 */
-const ROTATED_RETENTION = Math.max(60, parseInt(process.env.ROTATED_RETENTION, 10) || 604800);
+// ⚠️ 启动快照（仅为兼容既有导出）：真正生效值请在写入时读
+// authSessionConfig().rotatedRetentionSeconds（支持 src/data/auth_config.json 热改）
+const ROTATED_RETENTION = Math.max(60, Number(AUTH_CONFIG.session?.rotatedRetentionSeconds) || 604800);
 
 /** Cookie 名称 */
 const COOKIE_SID = 'sid';

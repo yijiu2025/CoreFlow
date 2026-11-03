@@ -47,6 +47,7 @@ import {
 } from './session-store.js';
 // 兄弟子模块：createSession 需查配额并踢旧会话
 import { checkMaxSessions, pruneActiveDevices } from './session-governance.js';
+import { authSessionConfig } from './session-config.js';
 import { kickByDeviceType, kickSessionsByIds, getKickTombstone } from './session-kick.js';
 // 账号封禁（service 维度 + 时限 + 阶梯）：'login' 拦新登录、'access' 拦请求
 import { checkDisable, isDisable, BAN_SERVICE_LOGIN, BAN_SERVICE_ACCESS } from '../security/ban.js';
@@ -67,12 +68,15 @@ const log = createLogger('framework.auth.session');
  * 手机/桌面客户端单登录（新登录顶掉旧会话），浏览器多开互不影响。
  * 调用方仍可用 createSession 的 multiDevice=true 显式豁免（优先级最高）。
  */
-const DEFAULT_SINGLE_DEVICE_TYPES = 'browser,app,desktop,miniapp,api';
 function getSingleDeviceTypes() {
-  return (process.env.SESSION_SINGLE_DEVICE_TYPES || DEFAULT_SINGLE_DEVICE_TYPES)
-    .split(',')
-    .map(s => s.trim())
+  // 来源：src/config/auth_config.js 的 session.singleDeviceTypes（可被
+  // src/data/auth_config.json 热改覆盖）。**每次调用都取最新值**，不要缓存。
+  const configured = authSessionConfig().singleDeviceTypes;
+  const list = (Array.isArray(configured) ? configured : String(configured || '').split(','))
+    .map(s => String(s).trim())
     .filter(Boolean);
+  // 空名单回退「全部类型互顶」（历史行为）：误配成空不该等于关闭单登录策略
+  return list.length ? list : ['browser', 'app', 'desktop', 'miniapp', 'api'];
 }
 
 // ── 会话生命周期 ──

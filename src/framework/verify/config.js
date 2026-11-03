@@ -1,96 +1,73 @@
 /**
  * 验证模块统一配置
- * 读取环境变量，提供默认值，所有 verify 子模块引用此文件
+ *
+ * 分层（2026-11-03 起）：
+ *   - **调优值** → `src/config/verify_config.js`（默认值，带注释）
+ *   - **运行时覆盖** → `src/data/verify_config.json`（**热改，无需重启**）
+ *   - **密钥/账号类** → 仍走 env（每部署不同，不该落进可热改文件）
+ *
+ * ⚠️ 热改实现：`runtime.bind(verifyConfig)` 会在覆盖文件变化时**原地更新**本对象，
+ * 因此消费方继续 `import verifyConfig` 读属性即可 —— 但**每次使用时读属性**，
+ * 不要提前把 `verifyConfig.captcha.ttl` 拷进模块级常量（那样就退回"改完要重启"）。
  *
  * @author yijiu2025
- * @since 2026-08-17
+ * @since 2026-08-17；2026-11-03 调优值迁出 env 并支持热改
  */
-const verifyConfig = {
-  // 图形验证码
+
+import { createRuntimeConfig } from '../config/runtime.js';
+import { VERIFY_CONFIG } from '../../config/verify_config.js';
+
+/** 密钥与账号类配置：必须留在 env（不进可热改文件） */
+const SECRETS = {
+  sms: {
+    provider: process.env.SMS_PROVIDER || 'aliyun',
+    accessKeyId: process.env.SMS_ACCESS_KEY_ID || '',
+    accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET || '',
+    signName: process.env.SMS_SIGN_NAME || '',
+    templateCode: process.env.SMS_TEMPLATE_CODE || ''
+  },
+  recaptcha: {
+    // google + hcaptcha 共用（API 兼容）
+    secretKey: process.env.RECAPTCHA_SECRET_KEY || '',
+    siteKey: process.env.RECAPTCHA_SITE_KEY || '',
+    // turnstile 独立配置（API 与上面不兼容）
+    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',
+    turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || ''
+  }
+};
+
+/**
+ * 生效配置对象（默认值 + 密钥拼装后的完整形态）
+ *
+ * 作为 runtime 的 defaults：热改覆盖会整体重写它，因此密钥也必须在 defaults 里
+ * （否则每次热改都会被"删除缺失键"逻辑抹掉），故显式拼在下面。
+ */
+const BASE = {
   captcha: {
-    size: parseInt(process.env.CAPTCHA_SIZE || '4'),
-    noise: parseInt(process.env.CAPTCHA_NOISE || '3'),
-    ttl: parseInt(process.env.CAPTCHA_TTL || '600'),
-    extendTtl: parseInt(process.env.CAPTCHA_EXTEND_TTL || '300'),
-    // 同一个 captchaKey 允许的失败次数上限：达到即作废（重新取图）。
-    // 4–6 位字符的图码在 10 分钟 TTL 内可被反复试错，靠路由层限频兜底并不可靠
-    // （限频按 IP，攻击者可换 IP 打同一个 key）。默认 5 次，够正常人看错两次。
-    maxAttempts: parseInt(process.env.CAPTCHA_MAX_ATTEMPTS || '5'),
+    ...VERIFY_CONFIG.captcha,
+    // 难度档位预设（结构性数据，不随部署变化，故留在代码里）
     levels: {
       easy: { size: 3, noise: 1, fontSize: 50 },
       normal: { size: 4, noise: 3, fontSize: 45 },
       high: { size: 6, noise: 5, fontSize: 40 }
     }
   },
-
-  // 短信验证码
-  sms: {
-    provider: process.env.SMS_PROVIDER || 'aliyun',
-    accessKeyId: process.env.SMS_ACCESS_KEY_ID || '',
-    accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET || '',
-    signName: process.env.SMS_SIGN_NAME || '',
-    templateCode: process.env.SMS_TEMPLATE_CODE || '',
-    codeLength: parseInt(process.env.SMS_CODE_LENGTH || '6'),
-    ttl: parseInt(process.env.SMS_CODE_TTL || '300'),
-    rateLimit: parseInt(process.env.SMS_RATE_LIMIT || '60')
-  },
-
-  // 人机验证（hCaptcha / Google reCAPTCHA / Cloudflare Turnstile）
-  // ENABLED=false（默认）：不校验，注册流程不受影响（开发/未配密钥时）
-  // ENABLED=true：注册端点校验 captchaToken，需配置对应 provider 的 SECRET_KEY
-  // provider: 'google' | 'hcaptcha' | 'turnstile'
-  //   - 'google'    → 用 RECAPTCHA_SECRET_KEY + RECAPTCHA_SITE_KEY（Google reCAPTCHA v3）
-  //   - 'hcaptcha'  → 用 RECAPTCHA_SECRET_KEY + RECAPTCHA_SITE_KEY（hCaptcha）
-  //   - 'turnstile' → 用 TURNSTILE_SECRET_KEY + TURNSTILE_SITE_KEY（Cloudflare Turnstile，推荐国内）
-  recaptcha: {
-    enabled: process.env.RECAPTCHA_ENABLED === 'true',
-    provider: process.env.RECAPTCHA_PROVIDER || 'google',
-    // google + hcaptcha 共用（API 兼容）
-    secretKey: process.env.RECAPTCHA_SECRET_KEY || '',
-    siteKey: process.env.RECAPTCHA_SITE_KEY || '',
-    minScore: parseFloat(process.env.RECAPTCHA_MIN_SCORE || '0.5'),
-    // 可选：校验验证结果来自预期域名/动作（生产建议配置，防 token 跨域挪用）
-    expectedHostname: process.env.RECAPTCHA_HOSTNAME || '',
-    expectedAction: process.env.RECAPTCHA_ACTION || '',
-    // turnstile 独立配置（API 与上面不兼容）
-    turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',
-    turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || ''
-  },
-
-  // 滑块验证码
-  slider: {
-    tolerance: parseInt(process.env.SLIDER_TOLERANCE || '5'),
-    ttl: parseInt(process.env.SLIDER_TTL || '300')
-  },
-
-  // 二维码扫码
-  qrcode: {
-    ttl: parseInt(process.env.QRCODE_TTL || '300'),
-    pollInterval: parseInt(process.env.QRCODE_POLL_INTERVAL || '2000')
-  },
-
-  // 设备指纹（canvas + WebGL），增强验证码/consentKey 的客户端绑定
-  // 默认关闭：canvas/WebGL 指纹有隐私争议，且依赖浏览器环境
-  // 启用后：前端采集指纹随请求回传，后端与 IP+UA 一起参与指纹计算
-  device: {
-    enabled: process.env.DEVICE_FINGERPRINT_ENABLED === 'true',
-    // 指纹权重：IP+UA 基础指纹 + canvas/WebGL 增强指纹，启用时合并参与校验
-    // 不启用时仅用 IP+UA（向后兼容，现有 V4/V5 指纹逻辑不变）
-    fingerprintFields: process.env.DEVICE_FINGERPRINT_FIELDS || 'ip,ua'
-  },
-
-  // 通用
-  common: {
-    rateLimit: parseInt(process.env.VERIFY_RATE_LIMIT || '60'),
-    codeTtl: parseInt(process.env.VERIFY_CODE_TTL || '600')
-  },
-
-  // 密码重置方式开关：code（验证码重置）/ link（邮件链接重置）
-  // 决定 /user/v1/reset-password vs /user/v1/send-reset-link + reset-password-by-link 哪个启用
-  // 未启用方式的端点返回 403（防绕过前端直接调后端）
-  passwordReset: {
-    mode: process.env.PASSWORD_RESET_MODE || 'code' // 'code' | 'link'
-  }
+  sms: { ...SECRETS.sms, ...VERIFY_CONFIG.sms },
+  recaptcha: { ...VERIFY_CONFIG.recaptcha, ...SECRETS.recaptcha },
+  slider: { ...VERIFY_CONFIG.slider },
+  qrcode: { ...VERIFY_CONFIG.qrcode },
+  device: { ...VERIFY_CONFIG.device },
+  common: { ...VERIFY_CONFIG.common },
+  // 密码重置方式：code（验证码重置）/ link（邮件链接重置）。
+  // 决定 /user/v1/reset-password vs /user/v1/send-reset-link 哪条生效，
+  // 未启用方式的端点返回 403（防绕过前端直接调后端）。
+  // 需与前端 oauth21/.env 的 VITE_PASSWORD_RESET_MODE 保持一致，故留在 env。
+  passwordReset: { mode: process.env.PASSWORD_RESET_MODE || 'code' }
 };
+
+const runtime = createRuntimeConfig({ name: 'verify', defaults: BASE });
+
+/** 全模块共享的配置对象（热改后原地更新，引用不变） */
+const verifyConfig = runtime.bind({});
 
 export default verifyConfig;

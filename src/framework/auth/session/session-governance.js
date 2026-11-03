@@ -24,6 +24,7 @@ import { getModel } from '../../db/index.js';
 import { LONG_SESSION_TTL } from '../context/cookie.js';
 import { DEVICE_TYPE } from '../device/device.js';
 import { sessionStore, userSessionsStore, MAX_ACTIVE_DEVICES } from './session-store.js';
+import { authSessionConfig } from './session-config.js';
 import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.auth.session');
@@ -107,9 +108,11 @@ async function pruneActiveDevices(userId, options = {}) {
   // 只数活跃行（revoked=false），超过上限才清（等于上限不裁——本函数在新增设备行
   // 之后调用，count 已含新设备，activeCount > MAX 才代表"旧设备 + 新设备"超限）
   const activeCount = await SessionToken.count({ where: { user_id: userId, revoked: false }, ...options });
-  if (activeCount <= MAX_ACTIVE_DEVICES) return 0;
+  // 上限取热改值（src/data/auth_config.json 的 session.maxActiveDevices），每次调用都读最新
+  const maxDevices = Math.max(1, Number(authSessionConfig().maxActiveDevices) || MAX_ACTIVE_DEVICES);
+  if (activeCount <= maxDevices) return 0;
 
-  const removeCount = activeCount - MAX_ACTIVE_DEVICES;
+  const removeCount = activeCount - maxDevices;
   // 按 last_active 升序取最旧的 removeCount 条活跃行
   const oldest = await SessionToken.findAll({
     where: { user_id: userId, revoked: false },
@@ -131,7 +134,7 @@ async function pruneActiveDevices(userId, options = {}) {
     userId,
     destroyed,
     activeCount,
-    MAX_ACTIVE_DEVICES
+    maxDevices
   );
   return destroyed;
 }
