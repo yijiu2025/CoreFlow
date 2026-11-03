@@ -441,6 +441,14 @@ async function checkGlobalBlockPhase(request, reply) {
       // ② 验证/签发接口、挑战页自身与其静态资源必须无条件可达（否则挑战打不开 = 死锁）
       if (isChallengeApiUrl(request.url) || isChallengePageUrl(request.url)) return false;
 
+      // ②' 健康探针必须始终 200（2026-11-04 实测：挑战态下 /v1/health → 428）
+      //
+      // `PROBE_PATHS` 原本只在 `shouldSkipDeepCheck` 里，而那是**第二阶段**的跳过名单，
+      // 挑战态在第一阶段就返回了 —— 于是容器/网关的 liveness 探针拿到 428 判失败，
+      // 重启后 IP 仍处于挑战态 → crash loop。探针响应体是固定文案、不含任何业务数据，
+      // 放行不构成信息泄漏；硬封禁（BLOCKED/SCANNER）**不**豁免，真正的封禁仍然拦探针。
+      if (isProbeUrl(request.url)) return false;
+
       // ③ 其余请求 → 挑战页（文档请求）或 428（XHR / 脚本 / 非浏览器客户端）
       firewallLog.blocked = true;
       firewallLog.statusCode = await sendChallengeResponse(reply, ip, fingerprint, deviceId, request);

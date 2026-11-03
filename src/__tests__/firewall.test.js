@@ -940,3 +940,118 @@ describe('通过令牌：匿名只换短窗口，登录才免 30 分钟', () => 
     expect(res.passTtlSec).toBe(1800);
   });
 });
+
+// ── ⑬ 路由层契约：verify 的响应必须带上档位字段（2026-11-04 实测抓到） ────────────
+
+describe('verify 路由：服务返回的档位字段必须真的发到线上', () => {
+  /**
+   * 用假 fastify 捕获 handler，绕开 guard 的 preHandler。
+   *
+   * 为什么必须打在 handler 上：上一轮的单测直接调 `verifyChallenge()`，断言的是
+   * service 的返回值；而线上响应由 handler 组装 —— 它当时手写成 `{ ok: true }`，
+   * 把 `passTtlSec` / `scope` 吞了。service 对、单测绿、线上错，正是这类"只测单元
+   * 不测出口"的典型漏网。这里直接执行 handler，等于测 HTTP 响应的正文。
+   */
+  /** 捕获到的路由（模块级：guard 的 _routeRegistry 是进程级的，只能注册一次） */
+  let capturedRoutes = null;
+
+  async function getVerifyHandler() {
+    if (!capturedRoutes) {
+      const routes = [];
+      const fakeFastify = {
+        post(url, opts) {
+          routes.push({ url, opts });
+        }
+      };
+      const { default: registerChallengeRoutes } = await import('../api/firewall/v1/challenge.js');
+      registerChallengeRoutes(fakeFastify);
+      capturedRoutes = routes;
+    }
+    const route = capturedRoutes.find(r => r.url?.endsWith('/verify'));
+    expect(route).toBeDefined();
+    return route.opts.handler;
+  }
+
+  /** 走一遍签发 + 求解，返回可提交的 body */
+  async function issueAndSolve(ip) {
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+    const issued = await issueChallenge(
+      makeRequest({ ip, method: 'POST', url: '/api/firewall/v1/challenge/issue', body: {} })
+    );
+    const target = '0'.repeat(issued.difficulty);
+    let answer = null;
+    for (let i = 0; i < 20_000_000; i++) {
+      if (sha256Hex(`${issued.challengeId}:${issued.salt}:${i}`).startsWith(target)) {
+        answer = String(i);
+        break;
+      }
+    }
+    expect(answer).not.toBeNull();
+    return { challengeId: issued.challengeId, answer };
+  }
+
+  it('匿名通过 → 响应正文含 passTtlSec=120 / scope=anonymous', async () => {
+    const handler = await getVerifyHandler();
+    const body = await issueAndSolve('203.0.113.281');
+
+    const request = makeRequest({
+      ip: '203.0.113.281',
+      method: 'POST',
+      url: '/api/firewall/v1/challenge/verify',
+      body
+    });
+    const reply = makeReply();
+    const res = await handler(request, reply);
+
+    expect(reply.statusCode).toBe(200);
+    expect(res).toEqual({ ok: true, passTtlSec: 120, scope: 'anonymous' });
+  });
+
+  it('失败时只回 ok/reason，不泄漏内部字段', async () => {
+    const handler = await getVerifyHandler();
+    const request = makeRequest({
+      ip: '203.0.113.282',
+      method: 'POST',
+      url: '/api/firewall/v1/challenge/verify',
+      body: { challengeId: 'a'.repeat(32), answer: '1' }
+    });
+    const reply = makeReply();
+    const res = await handler(request, reply);
+
+    // 未知/已消费的载荷 → 403 + 结构化原因
+    expect(reply.statusCode).toBe(403);
+    expect(reply.sentBody).toEqual({ ok: false, reason: 'Challenge Expired' });
+    expect(res).toBe(reply);
+  });
+});
+
+// ── ⑭ 挑战态下健康探针必须 200（2026-11-04 实测抓到：/v1/health → 428） ──────────
+
+describe('挑战态不影响健康探针', () => {
+  it('CHALLENGE 态请求 /v1/health、/live、/ready → 放行', async () => {
+    const ip = '203.0.113.291';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    for (const url of ['/v1/health', '/v1/health/live', '/v1/health/ready']) {
+      const request = makeRequest({ ip, method: 'GET', url });
+      await buildRequestContext(request);
+      const reply = makeReply();
+      reply.request = request;
+      // false = 未拦截，继续走后续阶段（探针随后在 shouldSkipDeepCheck 里被跳过）
+      expect(await checkGlobalBlockPhase(request, reply)).toBe(false);
+      expect(reply.sentBody).toBeUndefined();
+    }
+  });
+
+  it('硬封禁仍然拦探针（豁免只针对 CHALLENGE）', async () => {
+    const ip = '203.0.113.292';
+    await setBlock(ip, { status: 'BLOCKED', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    const request = makeRequest({ ip, method: 'GET', url: '/v1/health' });
+    await buildRequestContext(request);
+    const reply = makeReply();
+    reply.request = request;
+    expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
+    expect(reply.statusCode).toBe(429);
+  });
+});

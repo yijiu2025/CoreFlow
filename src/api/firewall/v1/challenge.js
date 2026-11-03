@@ -86,7 +86,11 @@ async function registerChallengeRoutes(fastify) {
       if (!result.ok) {
         return reply.code(result.statusCode).send({ ok: false, reason: result.reason });
       }
-      return { ok: true };
+      // 原样返回服务结果，不做字段白名单：之前手写成 `{ ok: true }` 把
+      // `passTtlSec` / `scope` 吞掉了（匿名 120s / 登录 1800s 的档位前端拿不到，
+      // 卡片只能显示"正在返回"而说不出几分钟有效）。单测直接调 service ，
+      // 因此没抓到这条"服务对、线上不对"的链路断裂 —— 现在有 route 级用例覆盖。
+      return result;
     }
   });
 }
