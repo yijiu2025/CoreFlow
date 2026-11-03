@@ -37,6 +37,7 @@
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 import bcrypt from 'bcryptjs';
+import { APP_CONFIG } from '../../../config/app_config.js';
 
 const scryptAsync = promisify(crypto.scrypt);
 
@@ -69,7 +70,7 @@ const BCRYPT_PATTERN = /^\$2[aby]\$/;
  * 每次 scrypt 内存开销约 16MB，默认并发上限 16 → 峰值约 256MB。
  * 超限时抛 SCRYPT_BUSY，由上层按 503 背压，而不是无界排队拖垮整个进程。
  */
-const SCRYPT_MAX_CONCURRENCY = Math.max(1, Number(process.env.SCRYPT_MAX_CONCURRENCY) || 16);
+const SCRYPT_MAX_CONCURRENCY = Math.max(1, Number(APP_CONFIG.passwordHash?.scryptMaxConcurrency) || 16);
 let _scryptActive = 0;
 
 /**
@@ -105,7 +106,7 @@ async function withScryptLimit(fn) {
  * 超限时与 scrypt 一样走"判为不匹配"（fail-closed）：宁可误拒一次登录，
  * 也不让异常冒到路由层。
  */
-const BCRYPT_MAX_CONCURRENCY = Math.max(1, Number(process.env.BCRYPT_MAX_CONCURRENCY) || 4);
+const BCRYPT_MAX_CONCURRENCY = Math.max(1, Number(APP_CONFIG.passwordHash?.bcryptMaxConcurrency) || 4);
 let _bcryptActive = 0;
 
 /**

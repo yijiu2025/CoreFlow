@@ -12,6 +12,7 @@ import { C } from '../utils/colors.js';
 import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
 import { logAuditEvent } from '../framework/auth/index.js';
 import { createLogger } from '../framework/log/index.js';
+import { APP_CONFIG } from '../config/app_config.js';
 
 const log = createLogger('api.guard-config');
 
@@ -546,10 +547,10 @@ async function syncGuardConfigFromDb() {
   return { updated: changed };
 }
 
-/** 跨实例同步的轮询间隔（毫秒）。设为 0 可关闭（单实例部署不需要）。 */
+/** 跨实例同步的轮询间隔（毫秒）。设为 0 可关闭（单实例部署不需要）。来源：src/config/app_config.js */
 const SYNC_INTERVAL_MS = (() => {
-  const raw = process.env.GUARD_CONFIG_SYNC_MS;
-  if (raw === undefined || raw === '') return 30_000;
+  const raw = APP_CONFIG.guard?.syncIntervalMs;
+  if (raw === undefined || raw === null || raw === '') return 30_000;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 30_000;
 })();
@@ -567,7 +568,7 @@ let _syncTimer = null;
 function startGuardConfigSync() {
   if (_syncTimer) return false;
   if (SYNC_INTERVAL_MS === 0) {
-    log.info(`ℹ️ [Guard Config] ${C.dim}跨实例同步已关闭（GUARD_CONFIG_SYNC_MS=0）${C.reset}`);
+    log.info(`ℹ️ [Guard Config] ${C.dim}跨实例同步已关闭（app_config.js 的 guard.syncIntervalMs = 0）${C.reset}`);
     return false;
   }
 

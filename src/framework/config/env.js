@@ -177,18 +177,12 @@ const SCHEMA = [
     fallback: 'info',
     desc: '日志级别',
     validate: validators.oneOf(LOG_LEVELS)
-  },
-
-  // ── 超时（毫秒）──
-  // HTTP_KEEP_ALIVE_TIMEOUT_MS / HTTP_REQUEST_TIMEOUT_MS / WS_SHUTDOWN_GRACE_MS
-  // 已迁到 src/config/app_config.js（JS 模块带注释，env 通道退役，2026-11-03）。
-  {
-    key: 'GUARD_CONFIG_SYNC_MS',
-    group: 'timeout',
-    fallback: '30000',
-    desc: '守卫配置跨实例同步间隔（0 = 关闭）',
-    validate: validators.nonNegativeInt
   }
+
+  // ── 超时/巡检类 ──
+  // HTTP_KEEP_ALIVE_TIMEOUT_MS / HTTP_REQUEST_TIMEOUT_MS / WS_SHUTDOWN_GRACE_MS /
+  // GUARD_CONFIG_SYNC_MS / SLOW_REQUEST_THRESHOLD / SCRYPT|BCRYPT_MAX_CONCURRENCY
+  // 已迁到 src/config/app_config.js（JS 模块带注释，env 通道退役，2026-11-03）。
 ];
 
 /**

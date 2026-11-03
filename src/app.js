@@ -26,7 +26,7 @@ import { configureLog, createLogger, initLogErrorTraps } from './framework/log/i
 import { createWsPreClose, DEFAULT_WS_SHUTDOWN_GRACE_MS } from './framework/websocket/preclose.js';
 import { validateEnv } from './framework/config/env.js';
 import { closePubSub } from './framework/redis/index.js';
-import { APP_CONFIG } from './config/app_config.js';
+import { APP_CONFIG, validateAppConfig } from './config/app_config.js';
 
 // ════════════════════════════════════════════════════════════════════
 // 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
@@ -174,6 +174,13 @@ const HTTP_REQUEST_TIMEOUT_MS = resolveTimeoutMs(APP_CONFIG.http?.requestTimeout
 
 /** WebSocket 关闭宽限期（毫秒）：广播关闭帧后，等这么久再强制断开残留连接 */
 const WS_SHUTDOWN_GRACE_MS = resolveTimeoutMs(APP_CONFIG.websocket?.shutdownGraceMs, DEFAULT_WS_SHUTDOWN_GRACE_MS);
+
+// 运行调优配置校验：未知配置段/配置项（疑似拼写错误）与越界值一律告警。
+// 放在 log 创建之后、任何消费之前 —— 配置问题要在启动日志里一眼可见，
+// 但不阻断启动（调优文件不该有让服务起不来的能力）。
+for (const w of validateAppConfig()) {
+  log.warn(`⚠️ [AppConfig] ${w}`);
+}
 
 /**
  * 校验环境变量

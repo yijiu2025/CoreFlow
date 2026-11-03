@@ -3,17 +3,19 @@
  * 记录请求耗时，添加 X-Response-Time 响应头，慢请求告警
  *
  * 环境变量：
- *   SLOW_REQUEST_THRESHOLD - 慢请求阈值毫秒数（默认 2000），非数字值时使用默认值
+ *   APP_CONFIG.monitor.slowRequestThresholdMs - 慢请求阈值毫秒数（默认 2000），非数字值时使用默认值
  *
  * @author yijiu2025
  * @since 2026-07-24
  */
 
 import { createLogger } from '../../log/index.js';
+import { APP_CONFIG } from '../../../config/app_config.js';
 
 const log = createLogger('framework.loader.monitor');
 
-const SLOW_THRESHOLD = parseInt(process.env.SLOW_REQUEST_THRESHOLD || '2000', 10) || 2000;
+// 慢请求阈值来源：src/config/app_config.js（非法值回退 2000）
+const SLOW_THRESHOLD = Number(APP_CONFIG.monitor?.slowRequestThresholdMs) || 2000;
 
 const monitorLoader = async app => {
   // 记录请求开始时间（使用高精度计时器）
