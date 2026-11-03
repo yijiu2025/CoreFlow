@@ -160,9 +160,9 @@ function resolveTimeoutMs(raw, fallback) {
 // 这些值决定"坏连接能占住资源多久"与"停机能有多快"，因此显式声明而非依赖 Fastify 的
 // 隐式默认，并允许按反代 / 网关的 keepalive 设置对齐。
 //
-// 取值优先级：环境变量 > src/data/app_config.json > 代码内置默认值。
-// 主来源是 app_config.json（与 firewall_config.json / scheduler_config.json 同一
-// 本地文件模式）；env 仅保留给容器部署"不改文件、注入变量"的场景，属可选项。
+// 取值优先级：环境变量 > src/framework/config/app_config.json > 代码内置默认值。
+// 主来源是 app_config.json（与 env.js 同目录，配置归配置；src/data/ 只放运行时
+// 产生的数据）；env 仅保留给容器部署"不改文件、注入变量"的场景，属可选项。
 //
 // ⚠️ Fastify 的选项校验会**静默丢弃**不在其 schema 内的键 —— 实测传入 `headersTimeout`
 // 或 `timeout` 既不报错也不生效（`app.server.headersTimeout` 仍是 Node 默认 60000）。
@@ -179,14 +179,14 @@ function resolveTimeoutMs(raw, fallback) {
 //   网络可下调，若面向弱网移动端则调大，不要下调到低于最慢的真实上传耗时。
 
 /**
- * 读取运行调优配置（src/data/app_config.json）
+ * 读取运行调优配置（src/framework/config/app_config.json）
  * 文件缺失 / JSON 损坏一律静默回退空对象 —— 调优文件不该有让服务起不来的能力
  *
  * @returns {object} 已解析的配置；异常时返回 {}
  */
 function readAppConfig() {
   try {
-    return JSON.parse(fs.readFileSync(path.resolve(__dirname, 'data/app_config.json'), 'utf-8'));
+    return JSON.parse(fs.readFileSync(path.resolve(__dirname, 'framework/config/app_config.json'), 'utf-8'));
   } catch {
     return {};
   }
