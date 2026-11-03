@@ -25,6 +25,7 @@
  * @since 2026-09-15 新增设备维度（跨 IP 生效）与自动封禁的双维度镜像
  */
 import { getConfig } from './util/shared.js';
+import { createLogger } from '../log/index.js';
 import {
   readAccessState,
   writeBlock as writeBlockEntry,
@@ -32,10 +33,11 @@ import {
   writeWhitelist as writeWhitelistEntry,
   removeWhitelist as removeWhitelistEntry,
   listActive,
-  redisAvailable,
   normalizeDuration,
   PERMANENT_RETRY_AFTER
 } from './util/redis.js';
+
+const log = createLogger('framework.firewall.block-manager');
 
 // ============== IP 封禁操作 ==============
 
@@ -337,7 +339,7 @@ function isUserManuallyBlocked(user) {
  *   2. 设备封禁 → 命中则拒绝（403/429）
  *   3. 指纹封禁 → 命中则拒绝（403/429）
  *   4. IP 封禁   → 命中则拒绝（403/429）
- *   5. 手动黑名单 → Redis 不可用时的兜底检查
+ *   5. 手动黑名单 → **恒检查**（纯内存数组比对，零 I/O；不再只在 Redis 不可用时兜底）
  *
  * 维度顺序是「由精确到粗糙」：设备（与 IP 无关，跨网络稳定）> 指纹（含 IP）> IP。
  * 精确的维度命中时给出的处置更能说明问题（同一 IP 下多设备时尤其明显）。
@@ -363,17 +365,44 @@ const checkGlobalBlock = async (ip, fingerprint, deviceId) => {
   if (fpBlock) throw buildBlockError(fpBlock);
   if (ipBlock) throw buildBlockError(ipBlock);
 
-  // Redis 不可用时用配置文件中的手动黑名单兜底（Redis 模式下手动名单已同步进 Redis）
-  if (!redisAvailable()) {
-    const settings = getConfig().defense;
-    if (settings.manualBlacklistIps?.includes(ip)) {
-      const err = new Error('Manually blocked');
-      err.statusCode = 403;
-      err.headers = { 'Retry-After': String(PERMANENT_RETRY_AFTER) };
-      throw err;
-    }
+  // 配置里的手动黑名单：**恒检查**，不再门控在 `!redisAvailable()` 之后。
+  //
+  // 历史缺陷：它只在「Redis 未配置 / 未连接」时执行，而 `readAccessState` 在
+  // 「Redis 慢、命令超时（本层 OP_TIMEOUT_MS=2000）」时是 fail-open（返回空状态），
+  // 此时 `isRedisReady()` 仍为 true —— 于是最便宜的一道兜底（纯内存数组比对，零 I/O）
+  // 恰好被跳过，永久手工封禁在 Redis 抖动窗口内全部失效。
+  //
+  // 配置读取器未注册（纯 guard 单测 / firewall 应用被卸载的极端环境）时
+  // 保持 fail-open：读不到配置就拦人，等于让一个可选能力拥有 fail-closed 的破坏力。
+  let manualIps;
+  try {
+    manualIps = getConfig()?.defense?.manualBlacklistIps;
+  } catch (err) {
+    logManualConfigFailure(err);
+    manualIps = null;
+  }
+  if (Array.isArray(manualIps) && manualIps.includes(ip)) {
+    const err = new Error('Manually blocked');
+    err.statusCode = 403;
+    err.headers = { 'Retry-After': String(PERMANENT_RETRY_AFTER) };
+    throw err;
   }
 };
+
+/** 配置读取失败只告警一次，避免每请求刷屏（Redis 故障期间请求量往往正高） */
+let manualConfigWarned = false;
+
+/**
+ * 记录「读不到 defense 配置」的一次性告警
+ *
+ * @param {Error} err 读取异常
+ * @returns {void}
+ */
+function logManualConfigFailure(err) {
+  if (manualConfigWarned) return;
+  manualConfigWarned = true;
+  log.warn(`⚠️ [Firewall] 读取 defense 配置失败，手动黑名单本次跳过（仅告警一次）: ${err?.message || err}`);
+}
 
 /**
  * 由封禁状态构造拒绝错误（统一 403/429 与 Retry-After 语义）

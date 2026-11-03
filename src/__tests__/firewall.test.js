@@ -73,8 +73,9 @@ const { hasPass } = await import('../framework/firewall/util/redis.js');
 const { ipRequestTimestamps } = await import('../framework/firewall/util/shared.js');
 const { setBlock, setBlockDevice, setWhitelistDevice, getActiveBlocks, getActiveWhitelist, checkGlobalBlock } =
   await import('../framework/firewall/block-manager.js');
-const { buildRequestContext, checkGlobalBlockPhase, willBeRejectedAsAnonymous } =
+const { buildRequestContext, checkGlobalBlockPhase, willBeRejectedAsAnonymous, observeLoginOutcome } =
   await import('../framework/firewall/engine/pipeline.js');
+const { isAccountLocked } = await import('../framework/firewall/engine/detectors/brute-force.js');
 const { generateServerSideDeviceId } = await import('../framework/auth/device/device-id-service.js');
 const { getSecuritySettings } = await import('../app/firewall/dao/dao.js');
 const { initFirewall } = await import('../app/firewall/index.js');
@@ -558,5 +559,131 @@ describe('启动链路：initDao 真的被调用 / 安全管道只注册一次',
     expect(initLine).toBeDefined();
     expect(initLine).toContain('firewallAppInit');
     expect(initLine).not.toContain('initFirewall');
+  });
+});
+
+// ── ⑧ 挑战响应按请求类型分流（2026-11-03） ────────────────────────────────────
+
+describe('挑战响应分流：文档请求给页面，其余给可编程的 428', () => {
+  /** 构造「带 Fastify reply.request」的 reply 替身（真实 reply 一定挂 .request） */
+  function replyFor(request) {
+    const reply = makeReply();
+    reply.request = request;
+    return reply;
+  }
+
+  it('浏览器导航（Sec-Fetch-Mode: navigate）→ 200 + text/html + no-store', async () => {
+    const ip = '203.0.113.231';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    const request = makeRequest({ ip, url: '/console/' });
+    request.headers['sec-fetch-mode'] = 'navigate';
+    request.headers.accept = 'text/html,application/xhtml+xml';
+    await buildRequestContext(request);
+
+    const reply = replyFor(request);
+    expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
+    expect(reply.statusCode).toBe(200);
+    expect(reply.sentType).toBe('text/html');
+    expect(reply.sentBody).toContain('CHALLENGE_ID');
+    // 挑战页可能落在 /assets/*.js 这类地址上：不带 no-store 会被 CDN 当业务响应缓存复用
+    expect(reply.responseHeaders['Cache-Control']).toContain('no-store');
+  });
+
+  it('XHR（Sec-Fetch-Mode: cors）→ 428 + X-Firewall-Challenge，不回 HTML', async () => {
+    const ip = '203.0.113.232';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    const request = makeRequest({ ip, url: '/api/firewall/v1/monitor/summary?x=1' });
+    request.headers['sec-fetch-mode'] = 'cors';
+    request.headers.accept = 'application/json, text/plain, */*';
+    await buildRequestContext(request);
+
+    const reply = replyFor(request);
+    expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
+    expect(reply.statusCode).toBe(428);
+    expect(reply.sentType).toBeUndefined();
+    expect(reply.sentBody).toMatchObject({
+      code: 428,
+      challengeUrl: '/api/firewall/v1/monitor/summary'
+    });
+    expect(reply.responseHeaders['X-Firewall-Challenge']).toBe('/api/firewall/v1/monitor/summary');
+    expect(pushedRecords.at(-1)).toMatchObject({ blocked: true, statusCode: 428 });
+  });
+
+  it('POST 一律不发挑战页（表单/接口都无法执行页面脚本）', async () => {
+    const ip = '203.0.113.233';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    const request = makeRequest({ ip, method: 'POST', url: '/api/user/profile', body: {} });
+    request.headers.accept = 'text/html';
+    await buildRequestContext(request);
+
+    const reply = replyFor(request);
+    expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
+    expect(reply.statusCode).toBe(428);
+  });
+});
+
+// ── ⑨ 登录观测 → 账号维度暴力破解（2026-11-03 修复的回归守卫） ─────────────────
+
+describe('登录结果观测：账号维度必须真的记账（曾只读 body.username 导致永不生效）', () => {
+  /** 构造一个「失败登录」的 onResponse 上下文 */
+  function failedLogin(url, body, ip) {
+    return { request: makeRequest({ ip, method: 'POST', url, body }), reply: { statusCode: 401 } };
+  }
+
+  it('邮箱验证码登录失败达阈值 → 写入账号锁定（isAccountLocked 命中）', async () => {
+    const ip = '203.0.113.241';
+    const email = 'victim@example.com';
+    for (let i = 0; i < 5; i++) {
+      const { request, reply } = failedLogin(
+        '/api/oauth21/v1/auth/login',
+        { type: 'email', email, code: '000000' },
+        ip
+      );
+      await observeLoginOutcome(request, reply);
+    }
+    expect(await isAccountLocked(email)).toBe(true);
+  });
+
+  it('账号锁定用 login.service 的取值口径（email || username）作为键', async () => {
+    const ip = '203.0.113.242';
+    const username = 'plain-user';
+    for (let i = 0; i < 5; i++) {
+      const { request, reply } = failedLogin('/api/oauth21/v1/auth/verify-email', { username }, ip);
+      await observeLoginOutcome(request, reply);
+    }
+    expect(await isAccountLocked(username)).toBe(true);
+  });
+
+  it('登录成功清零失败计数（不会把正常用户推进锁定）', async () => {
+    const ip = '203.0.113.243';
+    const email = 'ok@example.com';
+    for (let i = 0; i < 3; i++) {
+      const { request, reply } = failedLogin('/api/oauth21/v1/auth/login', { type: 'email', email }, ip);
+      await observeLoginOutcome(request, reply);
+    }
+    const request = makeRequest({
+      ip,
+      method: 'POST',
+      url: '/api/oauth21/v1/auth/login',
+      body: { type: 'email', email }
+    });
+    await observeLoginOutcome(request, { statusCode: 200 });
+    // 成功只清计数，不产生锁定
+    expect(await isAccountLocked(email)).toBe(false);
+  });
+
+  it('超长账号字段被截断（不把外部输入原样拼进 Redis 键）', async () => {
+    const ip = '203.0.113.244';
+    const huge = 'x'.repeat(5000);
+    for (let i = 0; i < 5; i++) {
+      const { request, reply } = failedLogin('/api/oauth21/v1/auth/login', { type: 'email', email: huge }, ip);
+      await observeLoginOutcome(request, reply);
+    }
+    // 锁定键按截断后的 128 字符记账：原文查不到，截断值查得到
+    expect(await isAccountLocked(huge)).toBe(false);
+    expect(await isAccountLocked('x'.repeat(128))).toBe(true);
   });
 });

@@ -687,6 +687,26 @@ async function addBlockIndexEntry(field, fieldValue, hashRel = HASH.blockedIps) 
 }
 
 /**
+ * 删除 Hash 索引里的单个 field（不动数据键）
+ *
+ * 用途：清理「索引与真实维度不一致」的历史脏数据（例如旧版启动迁移把
+ * `block:dev:*` 写成了 `blocked:ips` 里的 `dev:` 伪 IP）。数据键本身仍由
+ * `removeBlock` / `removeBlockDevice` 负责，这里只修索引。
+ *
+ * @param {string} field Hash field
+ * @param {string} [hashRel] 相对 hash key，默认封禁 IP 索引
+ * @returns {Promise<void>}
+ */
+async function removeBlockIndexEntry(field, hashRel = HASH.blockedIps) {
+  if (!redisAvailable()) return;
+  try {
+    await store().call(client => client.hDel(full(hashRel), field));
+  } catch (err) {
+    log.warn('removeBlockIndexEntry Redis 失败', err);
+  }
+}
+
+/**
  * 读取原始字符串值（不做 JSON 解析，供旧数据迁移判断格式用）
  *
  * @param {string} keyRel 相对 key
@@ -843,6 +863,7 @@ export {
   ttlOf,
   addBlockIndexEntry,
   hasIndexField,
+  removeBlockIndexEntry,
   setIfAbsent,
   resetMemoryState
 };

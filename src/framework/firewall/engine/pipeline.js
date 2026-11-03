@@ -56,6 +56,22 @@ const PROBE_PATHS = ['/v1/health', '/v1/health/live', '/v1/health/ready'];
 /** 静态资源后缀：不经过深度检测 */
 const SKIP_PATTERN = /\.(js|css|png|jpg|ico|svg|woff2?)$/i;
 
+/** 遥测里 User-Agent 的最大长度（外部输入截断，见 buildRequestContext） */
+const MAX_UA_LOG_LEN = 256;
+
+/**
+ * 挑战类响应的缓存策略：**必须 no-store**
+ *
+ * 为什么：挑战页是按任意 URL 下发的（阶段 1 早于静态资源跳过），`/assets/index.js`
+ * 这种地址也可能拿到 HTML。响应不带缓存头时，前置 CDN / 反代按后缀缓存就会把
+ * 挑战页当成业务响应复用给所有用户 —— 一次缓存污染的后果是全站白屏。
+ */
+const CHALLENGE_NO_STORE = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  Pragma: 'no-cache',
+  Vary: 'Accept, User-Agent'
+};
+
 /**
  * 去掉查询串，取纯路径
  *
@@ -153,7 +169,10 @@ async function buildRequestContext(request) {
     deviceId,
     method: request.method,
     url: request.url,
-    userAgent: ua,
+    // 截断后再入遥测：UA 是纯外部输入，未截断时 1000 条环形缓冲最坏可被
+    // 16KB 级 UA 撑到十几 MB，并原样落盘 traffic_stats.json（安全规范：外部输入
+    // 进日志前必须截断）。Bot 检测仍用完整 ua（见 runDetectionPipeline 的入参）。
+    userAgent: ua.slice(0, MAX_UA_LOG_LEN),
     blocked: false,
     ...geoInfo
   };
@@ -190,6 +209,39 @@ async function clearChallengeState(ip, fingerprint, deviceId) {
 }
 
 /**
+ * 判断这是不是一个「能把挑战页渲染出来」的文档型请求
+ *
+ * 为什么必须区分：挑战页是一段**内联脚本的 HTML**，只有作为文档加载才有执行环境。
+ * 历史上对所有请求一律回 `200 + text/html`，于是：
+ *   - 被挑战的 SPA 后续 `fetch/axios` 拿到 HTML+200 → 前端 JSON 解析报错，
+ *     用户看不到验证入口，只能等 30 分钟挑战 TTL 过期；
+ *   - 无 UA 的 API / SDK / 支付回调 10 次/60s 即被挑战，把 HTML 当成功响应 → 静默数据错误
+ *     （`PROBE_PATHS` 的注释记的就是这个事故，当时只给三个探针路径打了补丁）。
+ * 现在：能渲染的给页面，其余给可编程的 428 + `X-Firewall-Challenge`。
+ *
+ * 判定顺序（强信号优先）：
+ *   ① `Sec-Fetch-Mode`（现代浏览器必带）：只有 `navigate` 才是文档请求；
+ *   ② 降级看 `Accept` 是否声明 `text/html`；
+ *   ③ 两者都没有（脚本/老客户端/测试替身）→ 按历史行为渲染页面，宁可能用不可误伤。
+ *
+ * @param {import('fastify').FastifyRequest} [request] 请求对象（可能为空：测试替身 reply）
+ * @returns {boolean} true 表示可以下发挑战页 HTML
+ */
+function isDocumentRequest(request) {
+  if (!request) return true;
+  const method = String(request.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') return false;
+
+  const headers = request.headers || {};
+  const fetchMode = headers['sec-fetch-mode'];
+  if (typeof fetchMode === 'string' && fetchMode !== '') return fetchMode === 'navigate';
+
+  const accept = headers.accept;
+  if (typeof accept !== 'string' || accept === '') return true;
+  return accept.includes('text/html');
+}
+
+/**
  * 渲染挑战页
  *
  * @param {import('fastify').FastifyReply} reply 响应对象
@@ -200,7 +252,40 @@ async function clearChallengeState(ip, fingerprint, deviceId) {
  */
 async function sendChallengePage(reply, ip, fingerprint, deviceId) {
   const html = await buildChallengePage(ip, fingerprint, deviceId);
-  reply.type('text/html').send(html);
+  reply.headers(CHALLENGE_NO_STORE).type('text/html').send(html);
+}
+
+/**
+ * 挑战处置：文档请求渲染页面，非文档请求返回可编程的 428
+ *
+ * 428（Precondition Required）而不是 429：它表达「少一个前置条件」，不会被
+ * 客户端的限流重试逻辑当成退避信号；同时带 `challengeUrl` 让前端知道去哪个地址
+ * 以文档方式打开挑战页（同一个 URL 只要以文档方式请求就会渲染页面）。
+ *
+ * @param {import('fastify').FastifyReply} reply 响应对象
+ * @param {string} ip 客户端 IP
+ * @param {string} fingerprint 请求指纹
+ * @param {string|null} deviceId 设备 ID
+ * @param {import('fastify').FastifyRequest} [request] 请求对象（用于判定请求类型）
+ * @returns {Promise<number>} 实际下发的状态码（200 = 页面，428 = 提示）
+ */
+async function sendChallengeResponse(reply, ip, fingerprint, deviceId, request) {
+  if (isDocumentRequest(request)) {
+    await sendChallengePage(reply, ip, fingerprint, deviceId);
+    return 200;
+  }
+
+  const challengeUrl = pathOf(request?.url);
+  reply
+    .headers({ ...CHALLENGE_NO_STORE, 'X-Firewall-Challenge': challengeUrl })
+    .code(428)
+    .send({
+      code: 428,
+      error: 'Challenge Required',
+      message: '需要完成人机验证后才能继续访问；请以文档方式打开 challengeUrl 完成验证。',
+      challengeUrl
+    });
+  return 428;
 }
 
 // ============== 第一阶段：全局封禁检查 ==============
@@ -242,11 +327,10 @@ async function checkGlobalBlockPhase(request, reply) {
       // ② 验证接口自身必须可达
       if (isChallengeVerifyUrl(request.url)) return false;
 
-      // ③ 其余请求 → 挑战页
+      // ③ 其余请求 → 挑战页（文档请求）或 428（XHR / 脚本 / 非浏览器客户端）
       firewallLog.blocked = true;
-      firewallLog.statusCode = 200;
+      firewallLog.statusCode = await sendChallengeResponse(reply, ip, fingerprint, deviceId, request);
       recordFirewallEvent({ ...firewallLog });
-      await sendChallengePage(reply, ip, fingerprint, deviceId);
       return true;
     }
 
@@ -329,15 +413,18 @@ async function runDetectionPipeline(ip, ua, url, firewallLog, fingerprint, reply
     // `fw:block:...`），行为就会静默改变。
     const isChallenge = err.isChallenge === true;
 
-    firewallLog.blocked = true;
-    firewallLog.statusCode = isChallenge ? 200 : err.statusCode || 429;
-    recordFirewallEvent({ ...firewallLog });
-
-    // 挑战请求返回 HTML 验证页
+    // 挑战请求：文档请求给 HTML 页面（200），其余给可编程的 428。
+    // 状态码要按实际下发的值记账，否则遥测里「被拦截」会全部显示成 200。
     if (isChallenge) {
-      await sendChallengePage(reply, ip, fingerprint, deviceId);
+      firewallLog.blocked = true;
+      firewallLog.statusCode = await sendChallengeResponse(reply, ip, fingerprint, deviceId, reply.request);
+      recordFirewallEvent({ ...firewallLog });
       return true;
     }
+
+    firewallLog.blocked = true;
+    firewallLog.statusCode = err.statusCode || 429;
+    recordFirewallEvent({ ...firewallLog });
 
     // 封禁请求返回 JSON 错误
     if (err.headers) reply.headers(err.headers);
@@ -363,16 +450,49 @@ const LOGIN_PATH_PATTERN = /\/(mini-login|login|verify-email)$/;
 /** 视为「凭证失败」的状态码（参数错误 400 不计入，避免把用户填错字段当成爆破） */
 const CREDENTIAL_FAILURE_CODES = [401, 403, 422, 423];
 
+/** 账号字段最大长度（进 Redis 键前截断，见 observeLoginOutcome 注释） */
+const MAX_ACCOUNT_KEY_LEN = 128;
+
+/**
+ * 从登录 body 里取出「可用于账号维度计数」的标识
+ *
+ * 优先级 username > email：两者语义等价（`login.service.js` 用 `email || username`
+ * 查锁定标记，因此只要**任一路径**写入了同一个值，锁定就能命中）。
+ *
+ * @param {object} body 请求体
+ * @returns {string|undefined} 账号标识；取不到时 undefined（调用方退回 IP 维度）
+ */
+function extractLoginAccount(body) {
+  const raw = body?.username ?? body?.email;
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, MAX_ACCOUNT_KEY_LEN);
+}
+
 /**
  * 观测登录请求的结果并维护暴力破解计数
  *
  * 旧实现里 `checkLoginBruteForce` / `isAccountLocked` 定义了却**零调用**，
  * 所谓「登录暴力破解防护」从未生效。这里给 `checkLoginBruteForce` 接上真实调用点。
  *
- * 两个已知限制（诚实标注，不假装已解决）：
- *   1. 密码登录的账号名在 RSA 密文里，防火墙拿不到 → 只能做 **IP 维度**计数；
- *      账号维度的 `isAccountLocked` 需要 oauth21 侧接入（跨 app，需架构决策）。
- *   2. 邮箱验证码登录会明文带上 `username`，因此账号维度会生效。
+ * ⚠️ 账号取值只能用 `request.body` 里**明文存在**的字段（`username` / `email`）：
+ *   · 密码登录：body 是 `{ encrypted, timestamp, nonce, kid }`，账号名在 RSA 密文里，
+ *     且 `decryptLoginRequest` 只返回解密结果、**不回写** `request.body`
+ *     → 防火墙拿不到账号，只能做 **IP 维度**计数（这是硬限制，不要假装能取到）；
+ *   · 邮箱验证码登录：body 是 `{ type:'email', email, code }` → **邮箱可用**，
+ *     账号维度从这里生效；
+ *   · `/login/verify-email`：body 只有 `{ verifyToken, code }`，邮箱在服务端的
+ *     `login_email_verify` 存储里 → 这一条路径仍只有 IP 维度（跨 app，需架构决策）。
+ *
+ * 历史缺陷（2026-11-03 修）：只读 `body.username`，而三条登录路径的 body 里都没有
+ * 这个字段，于是 `username` 恒为 undefined → `brute:user:*` / `lock:*` 永不写入
+ * → `isAccountLocked()` 恒 false → 账号锁定（5 次/900s）从未生效，注释还写着
+ * 「邮箱验证码登录会明文带上 username」（错的）。现在改为 `username || email`。
+ *
+ * 账号值会进入 Redis 键（`brute:user:*` / `lock:*`），因此**先截断再使用**：
+ * 登录 schema 对 email/username 没有 maxLength，未截断时一个 1MB 的 email 就能
+ * 造出 1MB 的键（键空间与日志双重膨胀）。
  *
  * @param {import('fastify').FastifyRequest} request 请求对象
  * @param {import('fastify').FastifyReply} reply 响应对象
@@ -386,17 +506,17 @@ async function observeLoginOutcome(request, reply) {
     if (!readSecuritySettings().defense?.enableBruteForce) return;
 
     const body = request.body && typeof request.body === 'object' ? request.body : {};
-    const username = typeof body.username === 'string' ? body.username : undefined;
+    const account = extractLoginAccount(body);
     const success = reply.statusCode >= 200 && reply.statusCode < 300;
 
     if (success) {
       // 登录成功即清零，避免历史失败把正常用户推进挑战/封禁
-      await checkLoginBruteForce(request.ip, username, true, request._deviceId || null);
+      await checkLoginBruteForce(request.ip, account, true, request._deviceId || null);
       return;
     }
     if (!CREDENTIAL_FAILURE_CODES.includes(reply.statusCode)) return;
 
-    await checkLoginBruteForce(request.ip, username, false, request._deviceId || null);
+    await checkLoginBruteForce(request.ip, account, false, request._deviceId || null);
   } catch (err) {
     // 观测失败绝不影响业务响应
     log.warn('⚠️ [Firewall] 登录结果观测失败', err);

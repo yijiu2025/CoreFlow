@@ -23,10 +23,25 @@ import { writeChallenge } from './util/redis.js';
 
 /** 挑战载荷有效期（秒） */
 const CHALLENGE_TTL_SEC = 300;
-/** 难度上限：超过 6 个前导零（期望 1600 万次哈希）会让低端机卡死，服务端与客户端都按此夹取 */
-const MAX_DIFFICULTY = 6;
-/** 客户端最多尝试次数（防御性上限，约等于难度 6 的 2 倍期望值） */
-const MAX_ATTEMPTS = 20_000_000;
+/**
+ * 难度上限：5 个前导零（期望 16^5 ≈ 105 万次哈希，约 1~3s）
+ *
+ * 旧上限是 6（期望 1670 万次）：纯 JS 在主线程上算 1670 万次 ≈ 1 分钟**整页冻结**，
+ * 且下面的尝试上限只有 2000 万（仅 1.2 倍期望值）→ 难度配 6 时约 30% 的用户直接
+ * 得到 "Challenge Unsolvable"，而挑战载荷是一次性的、页面又不重试 → 用户卡死。
+ * 因此把上限收到 5，并让尝试上限随难度按 8 倍期望值推导（见 attemptsForDifficulty）。
+ */
+const MAX_DIFFICULTY = 5;
+/**
+ * 单次挑战允许的尝试次数 = 8 × 期望值（16^difficulty）
+ *
+ * 8 倍期望值下「解不出来」的概率 ≈ e^-8 ≈ 0.03%，既不会误伤低端机，也不会让
+ * 难度配置变成"看运气"。上限 2000 万只是防御性夹取（难度已被 MAX_DIFFICULTY 夹到 5，
+ * 实际最大 840 万）。
+ */
+function attemptsForDifficulty(difficulty) {
+  return Math.min(20_000_000, Math.ceil(8 * 16 ** difficulty));
+}
 
 /**
  * 当前配置的 PoW 难度（前导十六进制零个数）
@@ -51,6 +66,7 @@ async function buildChallengePage(ip, fingerprint, deviceId = null) {
   const challengeId = crypto.randomBytes(16).toString('hex');
   const salt = crypto.randomBytes(8).toString('hex');
   const difficulty = currentDifficulty();
+  const maxAttempts = attemptsForDifficulty(difficulty);
 
   // 载荷只在服务端保存；页面拿到的 challengeId 本身不含任何可直接回放的凭据
   await writeChallenge(
@@ -72,6 +88,7 @@ async function buildChallengePage(ip, fingerprint, deviceId = null) {
           <div style="width:100%;height:4px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;">
              <div id="progress" style="width:0%;height:100%;background:#22d3ee;transition:width 0.4s ease-out;"></div>
           </div>
+          <button id="retry" type="button" style="display:none;margin:1.5rem auto 0;padding:0.6rem 1.5rem;border-radius:0.75rem;border:1px solid rgba(34,211,238,0.4);background:rgba(34,211,238,0.12);color:#22d3ee;font-size:0.875rem;cursor:pointer;">Retry Verification</button>
         </div>
 
         <script>
@@ -81,10 +98,40 @@ async function buildChallengePage(ip, fingerprint, deviceId = null) {
           const CHALLENGE_ID = '${challengeId}';
           const SALT = '${salt}';
           const DIFFICULTY = ${difficulty};
-          const MAX_ATTEMPTS = ${MAX_ATTEMPTS};
+          const MAX_ATTEMPTS = ${maxAttempts};
 
           const statusEl = document.getElementById('status');
           const progress = document.getElementById('progress');
+          const retryEl = document.getElementById('retry');
+          let retryTimer = null;
+          retryEl.addEventListener('click', function () { location.reload(); });
+
+          /** 自动重取挑战的次数（存 sessionStorage，跨刷新保留） */
+          function retryCount() {
+            try { return Number(sessionStorage.getItem('fw_chal_retry') || 0) || 0; } catch (e) { return 0; }
+          }
+
+          /**
+           * 统一失败出口
+           *
+           * 挑战载荷是**一次性**的（服务端 GET+DEL），任何一次失败都已经把它作废：
+           * 停在原地等于把用户关在一个没有任何出口的死页面（旧实现正是如此，
+           * 只在成功时才 location.reload）。这里给按钮 + 最多 3 次自动刷新重取新挑战。
+           *
+           * 为什么要封顶：上下文持续不一致（例如移动端一路换网）时，无限自动刷新会把
+           * 用户锁在「刷新 → 失败 → 刷新」的循环里，也白白打挑战接口。超过 3 次就只留按钮。
+           */
+          function fail(reason) {
+            if (retryTimer) clearTimeout(retryTimer);
+            statusEl.innerText = 'Verification Failed: ' + reason;
+            statusEl.style.color = '#ef4444';
+            retryEl.style.display = 'inline-block';
+            var n = retryCount();
+            if (n < 3) {
+              try { sessionStorage.setItem('fw_chal_retry', String(n + 1)); } catch (e) { /* 隐私模式：退化为手动重试 */ }
+              retryTimer = setTimeout(function () { location.reload(); }, 3000);
+            }
+          }
 
           function solve() {
             const target = '0'.repeat(DIFFICULTY);
@@ -109,8 +156,7 @@ async function buildChallengePage(ip, fingerprint, deviceId = null) {
             setTimeout(function () {
               const answer = solve();
               if (answer === null) {
-                statusEl.innerText = 'Verification Failed: Challenge Unsolvable';
-                statusEl.style.color = '#ef4444';
+                fail('Challenge Unsolvable');
                 return;
               }
               progress.style.width = '90%';
@@ -119,15 +165,14 @@ async function buildChallengePage(ip, fingerprint, deviceId = null) {
                   if (res && res.ok) {
                     progress.style.width = '100%';
                     statusEl.innerText = 'Verified. Redirecting...';
+                    try { sessionStorage.removeItem('fw_chal_retry'); } catch (e) { /* 无 storage 时忽略 */ }
                     setTimeout(function () { location.reload(); }, 500);
                   } else {
-                    statusEl.innerText = 'Verification Failed: ' + ((res && res.reason) || 'Unknown Error');
-                    statusEl.style.color = '#ef4444';
+                    fail((res && res.reason) || 'Unknown Error');
                   }
                 })
                 .catch(function () {
-                  statusEl.innerText = 'Connection Error';
-                  statusEl.style.color = '#ef4444';
+                  fail('Connection Error');
                 });
             }, 50);
           }, 100);

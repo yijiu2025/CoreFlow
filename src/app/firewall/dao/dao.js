@@ -19,8 +19,10 @@ import {
   scanKeys,
   getRaw,
   ttlOf,
+  listActive,
   addBlockIndexEntry,
-  hasIndexField
+  hasIndexField,
+  removeBlockIndexEntry
 } from '../../../framework/firewall/util/redis.js';
 import { createLogger } from '../../../framework/log/index.js';
 import { registerSettingsReader } from '../../../framework/firewall/interface/config-access.js';
@@ -256,15 +258,35 @@ async function removeFromWhitelist(ip) {
 // ============== 启动时同步手动名单到 Redis ==============
 
 /**
+ * 由「数据键的相对 key」反查它属于哪个维度（索引 Hash + field 名）
+ *
+ * 三维度必须**各自成支**：`block:dev:WEB-x` 如果只按 `block:` 剥前缀，会被写成
+ * `blocked:ips` 里 field=`dev:WEB-x` 的**伪 IP**（历史缺陷，2026-11-03 修）。
+ * 后果不是拦截失效，而是面板/CLI 的封禁列表里出现假 IP、按 IP 解封还删不掉设备键 ——
+ * 「看起来解了其实没解」。
+ *
+ * @param {string} keyRel 相对 key（如 `block:1.2.3.4` / `block:fp:abc` / `block:dev:WEB-x`）
+ * @returns {{hashRel: string, field: string, kind: 'device'|'fingerprint'|'ip'}} 维度信息
+ */
+function resolveBlockDim(keyRel) {
+  // 前缀必须**长优先**匹配：`block:dev:` 同时以 `block:` 开头
+  if (keyRel.startsWith('block:dev:')) {
+    return { hashRel: HASH.blockedDevices, field: keyRel.slice('block:dev:'.length), kind: 'device' };
+  }
+  if (keyRel.startsWith('block:fp:')) {
+    return { hashRel: HASH.blockedFps, field: keyRel.slice('block:fp:'.length), kind: 'fingerprint' };
+  }
+  return { hashRel: HASH.blockedIps, field: keyRel.slice('block:'.length), kind: 'ip' };
+}
+
+/**
  * 迁移单个旧格式封禁键到 hash 索引
  *
- * @param {string} keyRel 相对 key（如 `block:1.2.3.4`、`block:fp:abcdef`）
+ * @param {string} keyRel 相对 key（如 `block:1.2.3.4`、`block:fp:abcdef`、`block:dev:WEB-x`）
  * @returns {Promise<void>}
  */
 async function migrateBlockKey(keyRel) {
-  const isFp = keyRel.startsWith('block:fp:');
-  const field = keyRel.replace(isFp ? 'block:fp:' : 'block:', '');
-  const hashRel = isFp ? HASH.blockedFps : HASH.blockedIps;
+  const { hashRel, field } = resolveBlockDim(keyRel);
 
   const raw = await getRaw(keyRel);
   if (!raw) return;
@@ -333,6 +355,38 @@ async function syncManualBlacklistToRedis() {
 
   if (existing.length) {
     log.info(`💾 [Firewall DAO] ${C.dim}已迁移 ${existing.length} 个封禁键到 hash 索引${C.reset}`);
+  }
+
+  await pruneBogusIpIndexFields();
+}
+
+/**
+ * 清理历史脏数据：`blocked:ips` 里以 `dev:` / `fp:` 开头的 field 一定不是 IP
+ *
+ * 这些 field 只可能来自旧版 `migrateBlockKey`（它不认设备维度，把 `block:dev:X`
+ * 写成了 IP 索引里的 `dev:X`）。清掉它们只是修**索引**，数据键与拦截逻辑都不受影响：
+ * 设备/指纹维度读的是各自主键，不读 IP 索引。
+ *
+ * 幂等：没有脏数据时是一次空遍历（HGETALL × 1）。失败只告警，不阻断启动。
+ *
+ * @returns {Promise<number>} 清理掉的 field 数
+ */
+async function pruneBogusIpIndexFields() {
+  try {
+    const { ip: ipEntries } = await listActive('block');
+    const bogus = ipEntries.map(e => e.field).filter(field => /^(dev|fp):/.test(String(field)));
+    if (!bogus.length) return 0;
+    for (const field of bogus) {
+      await removeBlockIndexEntry(field, HASH.blockedIps);
+    }
+    log.warn(
+      `⚠️  [Firewall DAO] 已清理 ${bogus.length} 条历史脏索引（blocked:ips 里的 dev:/fp: 伪 IP）` +
+        `：${bogus.slice(0, 5).join(', ')}${bogus.length > 5 ? ' 等' : ''}`
+    );
+    return bogus.length;
+  } catch (err) {
+    log.warn('⚠️  [Firewall DAO] 清理历史脏索引失败（不影响启动）', err);
+    return 0;
   }
 }
 

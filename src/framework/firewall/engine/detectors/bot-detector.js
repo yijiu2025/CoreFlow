@@ -9,6 +9,12 @@
  */
 import { getConfig } from '../../util/shared.js';
 import { setBlockForSubject } from '../../block-manager.js';
+import { createLogger } from '../../../log/index.js';
+
+const log = createLogger('framework.firewall.engine.detectors.bot-detector');
+
+/** 日志里回显配置原文的最大长度（外部输入截断，避免配置里塞长串撑爆日志） */
+const MAX_PATTERN_LOG_LEN = 64;
 
 /** 预编译的正则缓存（启动时填充，运行时只读） */
 let compiledBotPatterns = [];
@@ -37,7 +43,12 @@ function ensurePatternsCompiled() {
 }
 
 /**
- * 批量编译正则，非法模式直接丢弃（不能让一条坏配置使整个检测失效）
+ * 批量编译正则，非法模式丢弃（不能让一条坏配置使整个检测失效）
+ *
+ * ⚠️ 丢弃时**必须告警**：这是纯配置驱动的安全开关，静默丢弃会让「我明明配了
+ * 这个 UA 模式」和「它其实没生效」看起来一模一样。历史上这里 `catch { return null }`
+ * 没有任何日志 —— 整份 botPatterns 写错（例如转义漏了反斜杠）时 Bot 检测直接失效，
+ * 面板上却一切正常。
  *
  * @param {string[]} patterns 正则源码数组
  * @returns {RegExp[]} 编译成功的正则
@@ -47,7 +58,11 @@ function compilePatterns(patterns) {
     .map(p => {
       try {
         return new RegExp(p, 'i');
-      } catch {
+      } catch (err) {
+        log.warn(
+          `⚠️ [Firewall] botPatterns/browserPatterns 中有非法正则，已丢弃（该模式不生效）: ` +
+            `${String(p).slice(0, MAX_PATTERN_LOG_LEN)} — ${err.message}`
+        );
         return null;
       }
     })
