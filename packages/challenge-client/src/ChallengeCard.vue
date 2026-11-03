@@ -105,15 +105,48 @@ const counterText = computed(() => {
       </div>
 
       <div class="fwc-badge" :class="{ 'is-ok': isOk, 'is-error': isError }">
-        <svg v-if="isOk" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          v-if="isOk"
+          width="26"
+          height="26"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M20 6 9 17l-5-5" />
         </svg>
-        <svg v-else-if="isError" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 9v4" /><path d="M12 17h.01" />
+        <svg
+          v-else-if="isError"
+          width="26"
+          height="26"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
           <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
         </svg>
-        <svg v-else width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M12 8v4" /><path d="M12 16h.01" />
+        <svg
+          v-else
+          width="26"
+          height="26"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
         </svg>
       </div>
 
@@ -121,8 +154,17 @@ const counterText = computed(() => {
       <p class="fwc-sub">{{ subtitle }}</p>
 
       <ul v-if="!isOk && !isError" class="fwc-checks">
-        <li v-for="line in ['绑定当前设备与网络，令牌不可转移', '验证通过后 30 分钟内无需重复验证', '不采集、不上传任何本地数据']" :key="line">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5" /></svg>
+        <li
+          v-for="line in [
+            '绑定当前设备与网络，令牌不可转移',
+            '验证通过后 30 分钟内无需重复验证',
+            '不采集、不上传任何本地数据'
+          ]"
+          :key="line"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
           <span>{{ line }}</span>
         </li>
       </ul>
@@ -130,10 +172,22 @@ const counterText = computed(() => {
       <div class="fwc-bar"><i :style="{ width: percent + '%' }" /></div>
 
       <dl class="fwc-rows">
-        <div><dt>触发原因</dt><dd>{{ triggerLabel }}</dd></div>
-        <div v-if="difficulty > 0"><dt>验证难度</dt><dd>{{ difficulty }} 位前导零</dd></div>
-        <div><dt>验证后返回</dt><dd class="fwc-mono">{{ returnPath }}</dd></div>
-        <div><dt>错误码</dt><dd class="fwc-mono">{{ errorCode }}</dd></div>
+        <div>
+          <dt>触发原因</dt>
+          <dd>{{ triggerLabel }}</dd>
+        </div>
+        <div v-if="difficulty > 0">
+          <dt>验证难度</dt>
+          <dd>{{ difficulty }} 位前导零</dd>
+        </div>
+        <div>
+          <dt>验证后返回</dt>
+          <dd class="fwc-mono">{{ returnPath }}</dd>
+        </div>
+        <div>
+          <dt>错误码</dt>
+          <dd class="fwc-mono">{{ errorCode }}</dd>
+        </div>
       </dl>
 
       <p class="fwc-status" :class="{ 'is-ok': isOk, 'is-error': isError }" role="status" aria-live="polite">
