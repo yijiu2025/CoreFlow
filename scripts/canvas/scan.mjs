@@ -692,6 +692,32 @@ const data = {
   calls: [...edgeMap.values()],
 };
 
+// ---- 稳定性：只有真实内容变化才落盘 ----
+// generatedAt 每次都不同，若照写会让「重扫无变化」也产生 diff，
+// 于是 canvas.yml 每次都给仓库塞一个 2.8MB 的快照提交。这里比较时忽略该字段。
+const stable = (o) => {
+  const norm = (v) => {
+    if (Array.isArray(v)) return v.map(norm);
+    if (v && typeof v === 'object') {
+      const out = {};
+      for (const k of Object.keys(v).sort()) { if (k !== 'generatedAt') out[k] = norm(v[k]); }
+      return out;
+    }
+    return v;
+  };
+  return JSON.stringify(norm(o));
+};
+let prevData = null;
+try {
+  const txt = readFileSync(OUT, 'utf8');
+  prevData = JSON.parse(txt.slice(txt.indexOf('=') + 1).trim().replace(/;\s*$/, ''));
+} catch (e) { /* 首次生成或文件损坏，直接写 */ }
+if (prevData && stable(prevData) === stable(data)) {
+  console.log(`✔ 数据无变化，保留原快照（generatedAt=${prevData.generatedAt}）`);
+  console.log(`  文件: ${data.stats.files}  函数: ${data.stats.functions}  调用边: ${data.stats.calls}`);
+  process.exit(0);
+}
+
 const js =
   '// 由 scripts/canvas/scan.mjs 自动生成，请勿手改。重新生成: npm run canvas:scan\n' +
   'window.CANVAS_DATA = ' + JSON.stringify(data) + ';\n';
