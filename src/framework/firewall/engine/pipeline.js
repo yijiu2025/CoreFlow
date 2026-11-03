@@ -29,11 +29,17 @@ const log = createLogger('framework.firewall.engine.pipeline');
 // ============== 跳过规则 ==============
 
 /**
- * 挑战验证接口的完整路径。
+ * 挑战接口的完整路径（**签发 + 校验，两个都要**）。
  *
  * 集中一处定义：它同时是「深度检测跳过名单」和「挑战态放行名单」的判据，
  * 写成两个字面量一定会漂移（旧实现就只出现在跳过名单里，对第一阶段毫无作用）。
+ *
+ * ⚠️ `issue` 必须在这里 —— 挑战态下前端要**签发**一份新载荷才能开始算 PoW，
+ * 漏了它就会出现"挑战页拉不到挑战"的死锁（实测踩到：Challenge issue failed 428）。
  */
+const CHALLENGE_API_PATHS = ['/api/firewall/v1/challenge/verify', '/api/firewall/v1/challenge/issue'];
+
+/** 校验接口（保留单值导出：历史引用与测试按这个名找） */
 const CHALLENGE_VERIFY_PATH = '/api/firewall/v1/challenge/verify';
 
 /**
@@ -147,7 +153,17 @@ function pathOf(url) {
 }
 
 /**
- * 是否为挑战验证接口
+ * 是否为挑战接口（签发 / 校验）
+ *
+ * @param {string} url 请求路径
+ * @returns {boolean} true 表示是挑战接口
+ */
+function isChallengeApiUrl(url) {
+  return CHALLENGE_API_PATHS.includes(pathOf(url));
+}
+
+/**
+ * 是否为挑战**校验**接口（历史名，等价于只看 verify 一个）
  *
  * @param {string} url 请求路径
  * @returns {boolean} true 表示是验证接口
@@ -172,7 +188,7 @@ function isProbeUrl(url) {
  * @returns {boolean} true 表示跳过
  */
 function shouldSkipDeepCheck(url) {
-  return isChallengeVerifyUrl(url) || isChallengePageUrl(url) || isProbeUrl(url) || SKIP_PATTERN.test(pathOf(url));
+  return isChallengeApiUrl(url) || isChallengePageUrl(url) || isProbeUrl(url) || SKIP_PATTERN.test(pathOf(url));
 }
 
 /**
@@ -416,7 +432,7 @@ async function checkGlobalBlockPhase(request, reply) {
       }
 
       // ② 验证/签发接口、挑战页自身与其静态资源必须无条件可达（否则挑战打不开 = 死锁）
-      if (isChallengeVerifyUrl(request.url) || isChallengePageUrl(request.url)) return false;
+      if (isChallengeApiUrl(request.url) || isChallengePageUrl(request.url)) return false;
 
       // ③ 其余请求 → 挑战页（文档请求）或 428（XHR / 脚本 / 非浏览器客户端）
       firewallLog.blocked = true;
@@ -631,8 +647,12 @@ function recordLog(firewallLog, statusCode, alreadyLogged = false) {
 }
 
 export {
+  CHALLENGE_API_PATHS,
   CHALLENGE_VERIFY_PATH,
+  CHALLENGE_PAGE_PATHS,
   PROBE_PATHS,
+  isChallengeApiUrl,
+  isChallengePageUrl,
   isChallengeVerifyUrl,
   isProbeUrl,
   shouldSkipDeepCheck,

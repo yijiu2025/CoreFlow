@@ -18,6 +18,9 @@ import { createLogger } from '../../../log/index.js';
 
 const log = createLogger('framework.firewall.engine.detectors.scan-trap');
 
+/** 本机回环地址前缀：**永不自动封禁**（理由见 checkNotFoundTrap 注释） */
+const LOOPBACK_PREFIXES = ['127.', '::1', 'localhost'];
+
 /**
  * 检测 404/403 扫描陷阱
  *
@@ -34,6 +37,15 @@ const log = createLogger('framework.firewall.engine.detectors.scan-trap');
 const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null) => {
   const settings = getConfig().defense;
   if (!settings.enableAutoBlacklist) return;
+
+  // 回环地址永不自动封禁（2026-11-03）：本机流量只可能来自"我自己" —— 开发期在
+  // 127.0.0.1 上刷前端、探针直连、SSR 自调用都会产生 404/403，一旦判成 SCANNER 就封掉
+  // 开发机自己（实测踩到：开发时被自己封 1 小时，所有接口 403，排查方向被完全带偏）。
+  //
+  // 只豁免回环、**不**豁免整份 `internalIpPrefixes`：那份含 RFC1918，若代理部署在
+  // 10.x / 192.168.x 且 PROXY_TRUST_CIDR 覆盖它，`request.ip` 会全部变成内网地址，
+  // 豁免整份等于把扫描陷阱整个关掉。
+  if (typeof ip === 'string' && LOOPBACK_PREFIXES.some(prefix => ip.startsWith(prefix))) return;
 
   const safePaths = settings.safePaths || ['/health', '/favicon.ico', '/robots.txt', '/__fw/', '/api/firewall/'];
   if (safePaths.some(p => url.startsWith(p))) return;

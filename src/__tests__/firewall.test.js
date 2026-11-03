@@ -828,3 +828,50 @@ describe('挑战页外壳豁免 + SPA 落点选择', () => {
     expect(apiReply.sentBody.challengeUrl).toBe('/api/firewall/v1/monitor/summary');
   });
 });
+
+// ── ⑪ 实测抓到的两个自伤 bug 的回归守卫（2026-11-03） ─────────────────────────
+
+describe('挑战态下签发接口必须可达 + 回环地址不被扫描陷阱封禁', () => {
+  it('CHALLENGE 态请求 /challenge/issue → 放行（漏了就是"挑战页拉不到挑战"死锁）', async () => {
+    const ip = '203.0.113.261';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    for (const url of [
+      '/api/firewall/v1/challenge/issue',
+      '/api/firewall/v1/challenge/verify',
+      '/api/firewall/v1/challenge/issue?foo=1'
+    ]) {
+      const request = makeRequest({ ip, method: 'POST', url, body: {} });
+      request.headers['sec-fetch-mode'] = 'cors';
+      request.headers.accept = 'application/json';
+      await buildRequestContext(request);
+      const reply = makeReply();
+      reply.request = request;
+      expect(await checkGlobalBlockPhase(request, reply)).toBe(false);
+      expect(reply.sentBody).toBeUndefined();
+    }
+  });
+
+  it('回环地址刷 404 不会被判扫描器封禁（开发期自伤）', async () => {
+    const { checkNotFoundTrap } = await import('../framework/firewall/engine/detectors/scan-trap.js');
+
+    // 连刷 20 次（超过 maxNotFoundAttempts=10），不应抛 scanner-trap
+    for (let i = 0; i < 20; i++) {
+      await expect(checkNotFoundTrap('127.0.0.1', `/__not_${i}__`, 404)).resolves.toBeUndefined();
+      await expect(checkNotFoundTrap('::1', `/__not6_${i}__`, 403)).resolves.toBeUndefined();
+    }
+    // 对照组：公网 IP 第 10 次必抛
+    const publicIp = '203.0.113.262';
+    let thrown = null;
+    for (let i = 0; i < 12; i++) {
+      try {
+        await checkNotFoundTrap(publicIp, `/__scan_${i}__`, 404);
+      } catch (err) {
+        thrown = err;
+        break;
+      }
+    }
+    expect(thrown).not.toBeNull();
+    expect(thrown.rule).toBe('scanner-trap');
+  });
+});

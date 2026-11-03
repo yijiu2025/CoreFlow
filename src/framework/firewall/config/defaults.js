@@ -66,10 +66,14 @@ const SCAN_DETECTION = {
   notFoundWindow: 60,
   // 封禁时长（秒）
   blacklistDuration: 3600,
-  // 免检路径（健康检查 / 静态资源 / 面板自身）
-  safePaths: ['/health', '/favicon.ico', '/robots.txt', '/__fw/', '/api/firewall/'],
+  // 免检路径（健康检查 / 静态资源 / 面板自身 / 前端产物）
+  // ⚠️ 前端产物前缀必须在这里：后端没有 SPA 回退，用户刷新前端深链必然 404，
+  //    10 次/分钟就会被扫描陷阱判成扫描器 —— 这是"正常用户被自己封掉"的典型来源。
+  safePaths: ['/health', '/favicon.ico', '/robots.txt', '/__fw/', '/api/firewall/', '/firewall/', '/admin/'],
 
-  // 内网网段：来自这些地址的请求视为可信代理，不做自动封禁
+  // 内网网段：**仅用于地理围栏判定**（geo-filter 跳过这些来源的 IDC / 境外规则）。
+  // ⚠️ 扫描陷阱（自动封禁）只用回环白名单（scan-trap.js 的 LOOPBACK_PREFIXES），
+  //    不读这份列表 —— 否则代理部署在内网网段时 request.ip 全是内网地址，等于关掉陷阱。
   internalIpPrefixes: [
     '127.',
     '10.',
