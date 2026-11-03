@@ -1,6 +1,8 @@
 /**
  * 防火墙默认策略的 schema 契约测试
  *
+ * 被测对象是 **core 保底默认值**（framework/firewall/config/defaults.js）：
+ * src/config/firewall_config.js 只是可选覆盖，出厂为空。
  * 为什么需要：`securitySettings.defense.*` 的键名是**持久化契约** ——
  * src/data/firewall_config.json 按这些键 deepMerge，管理面板按这些键读写，
  * 52 处检测器按这些键取值。键名写错/漏写不会报错，只会**静默不生效**，
@@ -10,7 +12,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { DEFAULT_SECURITY_SETTINGS } from '../config/firewall_config.js';
+import { DEFAULT_SECURITY_SETTINGS } from '../framework/firewall/config/defaults.js';
 
 /** defense 下允许出现的键（= 持久化 schema，改这里等于改契约） */
 const DEFENSE_KEYS = [

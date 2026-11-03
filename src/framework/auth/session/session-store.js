@@ -25,7 +25,7 @@ import { Op } from 'sequelize';
 import { getModel } from '../../db/index.js';
 import { getStore } from '../../redis/index.js';
 import { createLogger } from '../../log/index.js';
-import { AUTH_CONFIG } from '../../../config/auth_config.js';
+import { authSessionConfig } from './session-config.js';
 
 const log = createLogger('framework.auth.session');
 
@@ -33,7 +33,7 @@ const log = createLogger('framework.auth.session');
 
 // ⚠️ 启动快照（仅为兼容既有导出）：真正生效值用 authSessionConfig().maxRefreshTokens；
 // 来源 src/config/auth_config.js（src/data/auth_config.json 可热改）
-const MAX_REFRESH_TOKENS = Math.max(1, Number(AUTH_CONFIG.session?.maxRefreshTokens) || 10);
+const MAX_REFRESH_TOKENS = Math.max(1, Number(authSessionConfig().maxRefreshTokens) || 10);
 /**
  * 同一用户活跃设备行数上限（session_tokens 表 revoked=false 的行）。
  *
@@ -44,7 +44,7 @@ const MAX_REFRESH_TOKENS = Math.max(1, Number(AUTH_CONFIG.session?.maxRefreshTok
  */
 // ⚠️ 启动快照（仅为兼容既有导出）：真正生效值请用 authSessionConfig().maxActiveDevices
 // （支持 src/data/auth_config.json 热改）；来源 src/config/auth_config.js
-const MAX_ACTIVE_DEVICES = Math.max(1, Number(AUTH_CONFIG.session?.maxActiveDevices) || 20);
+const MAX_ACTIVE_DEVICES = Math.max(1, Number(authSessionConfig().maxActiveDevices) || 20);
 
 // 统一存储实例（getStore 自动处理 Redis/MapStore、超时、序列化）
 const sessionStore = getStore('session');

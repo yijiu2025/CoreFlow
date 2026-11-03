@@ -37,7 +37,7 @@
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 import bcrypt from 'bcryptjs';
-import { APP_CONFIG } from '../../../config/app_config.js';
+import { APP_CONFIG } from '../../config/app-config.js';
 
 const scryptAsync = promisify(crypto.scrypt);
 

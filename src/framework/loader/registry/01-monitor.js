@@ -10,7 +10,7 @@
  */
 
 import { createLogger } from '../../log/index.js';
-import { APP_CONFIG } from '../../../config/app_config.js';
+import { APP_CONFIG } from '../../config/app-config.js';
 
 const log = createLogger('framework.loader.monitor');
 

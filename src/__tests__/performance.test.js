@@ -18,15 +18,10 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import bcrypt from 'bcryptjs';
 
-// 并发上限来自 src/config/app_config.js 的 passwordHash 段（env 通道已退役）。
-// 这里直接把配置对象改成闸门值 1，用例结束后由 afterAll 还原。
-const { APP_CONFIG } = await import('../config/app_config.js');
-const ORIGINAL_LIMITS = {
-  scrypt: APP_CONFIG.passwordHash.scryptMaxConcurrency,
-  bcrypt: APP_CONFIG.passwordHash.bcryptMaxConcurrency
-};
-APP_CONFIG.passwordHash.scryptMaxConcurrency = 1;
-APP_CONFIG.passwordHash.bcryptMaxConcurrency = 1;
+// 并发上限来自 framework/config/app-config.js（src/config 的**可选覆盖**，出厂为空；
+// 未覆盖时用使用处保底 16/4）。这里注入闸门值 1，用例结束后由 afterAll 还原。
+const { APP_CONFIG } = await import('../framework/config/app-config.js');
+APP_CONFIG.passwordHash = { scryptMaxConcurrency: 1, bcryptMaxConcurrency: 1 };
 
 const { MapStore } = await import('../framework/redis/map-store.js');
 const { hashPassword, verifyPassword } = await import('../framework/auth/security/password-hash.js');
@@ -114,7 +109,6 @@ describe('MapStore 硬上限（拒绝写入而非静默淘汰）', () => {
 });
 
 afterAll(() => {
-  // 还原并发上限，避免污染同进程内其它用例
-  APP_CONFIG.passwordHash.scryptMaxConcurrency = ORIGINAL_LIMITS.scrypt;
-  APP_CONFIG.passwordHash.bcryptMaxConcurrency = ORIGINAL_LIMITS.bcrypt;
+  // 撤销注入，避免污染同进程内其它用例（恢复"未覆盖"状态 → 使用处保底 16/4）
+  delete APP_CONFIG.passwordHash;
 });

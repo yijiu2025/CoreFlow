@@ -26,7 +26,8 @@ import { configureLog, createLogger, initLogErrorTraps } from './framework/log/i
 import { createWsPreClose, DEFAULT_WS_SHUTDOWN_GRACE_MS } from './framework/websocket/preclose.js';
 import { validateEnv } from './framework/config/env.js';
 import { closePubSub } from './framework/redis/index.js';
-import { APP_CONFIG, validateAppConfig } from './config/app_config.js';
+import { APP_CONFIG } from './framework/config/app-config.js';
+import { validateAppConfig } from './framework/config/app-config-schema.js';
 
 // ════════════════════════════════════════════════════════════════════
 // 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
@@ -160,7 +161,7 @@ function resolveTimeoutMs(raw, fallback) {
 // 这些值决定"坏连接能占住资源多久"与"停机能有多快"，因此显式声明而非依赖 Fastify 的
 // 隐式默认，并允许按反代 / 网关的 keepalive 设置对齐。
 //
-// 取值统一来自 src/config/app_config.js（运维调优区，JS 模块带注释，env 通道已退役
+// 取值来自 src/config/app_config.js 的**可选覆盖**（缺失即用下方 core 保底值；env 通道已退役
 // —— 调优项不属于「必须设定的 env」）。三个值都是 Fastify 构造参数，只在本模块
 // 加载时读取一次，**不支持运行时热改**；需要热改的调优项走 firewall_config.json
 // deepMerge 那套。详细取舍注释见 app_config.js，此处不再重复。

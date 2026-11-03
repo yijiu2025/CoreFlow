@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRuntimeConfig, deepMerge, applyInPlace } from '../framework/config/runtime.js';
+import { loadOverrides } from '../framework/config/overrides.js';
 
 const DEFAULTS = {
   session: {
@@ -126,5 +127,31 @@ describe('deepMerge / applyInPlace 语义', () => {
     const target = { keep: 1, drop: 2, nested: { a: 1, b: 2 } };
     applyInPlace(target, { keep: 1, nested: { a: 1 } });
     expect(target).toEqual({ keep: 1, nested: { a: 1 } });
+  });
+});
+
+describe('可选覆盖层 · src/config 可缺失', () => {
+  it('文件不存在 → 返回 {}（不抛错，服务用 core 保底继续跑）', () => {
+    expect(loadOverrides('__not_exist_config__.js', 'ANY_CONFIG', 'missing')).toEqual({});
+  });
+
+  it('文件存在但缺导出 → 返回 {}', () => {
+    // 用真实存在的 app_config.js 当"存在但没这个导出"的样本
+    expect(loadOverrides('app_config.js', 'NOT_EXPORTED', 'app_config')).toEqual({});
+  });
+
+  it('overrides 层优先于 core 保底，JSON 再覆盖 overrides', () => {
+    writeOverlay({ session: { maxActiveDevices: 8 } });
+    const store = createRuntimeConfig({
+      name: 'test',
+      defaults: DEFAULTS,
+      overrides: { session: { maxActiveDevices: 5, singleDeviceTypes: ['app'] } },
+      fileName: file,
+      reloadMs: 0
+    });
+    const cfg = store.get();
+    expect(cfg.session.maxActiveDevices).toBe(8); // JSON 覆盖胜出
+    expect(cfg.session.singleDeviceTypes).toEqual(['app']); // overrides 生效
+    expect(cfg.session.nested.keep).toBe('default'); // core 保底保留
   });
 });

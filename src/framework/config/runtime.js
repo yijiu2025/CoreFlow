@@ -1,10 +1,11 @@
 /**
  * 运行时配置热改层（默认值 + JSON 覆盖 + mtime 热加载）
  *
- * ── 三层分工（这是本项目配置体系的总纲）──
- *   src/config/*.js         默认值（叶子模块，零 import，带注释 —— 开发者找配置的唯一入口）
- *   本文件                   机制（deepMerge / mtime 轮询 / 缓存），framework 层
- *   src/data/*_config.json  运行时覆盖（面板或运维可写，**热改无需重启**）
+ * ── 四层分工（这是本项目配置体系的总纲）──
+ *   各 core 模块               保底默认值（写在使用处，带注释；src/config 全空也能跑）
+ *   src/config/*.js           静态覆盖（可选，只写要改的键；经 overrides.js 容错加载）
+ *   本文件                     机制（deepMerge / mtime 轮询 / 缓存），framework 层
+ *   src/data/*_config.json    运行时覆盖（面板或运维可写，**热改无需重启**）
  *
  * ── 热改语义（不可丢）──
  * `get()` 内部按 `reloadMs` 节流检查 mtime：文件变了就重新深合并一次，
@@ -101,14 +102,17 @@ function applyInPlace(target, next) {
  *
  * @param {object} options
  * @param {string} options.name - 名称（日志用，如 'auth'）
- * @param {object} options.defaults - 默认值（来自 src/config/*.js）
- * @param {string} [options.fileName] - 覆盖文件名（默认 `<name>_config.json`，位于 src/data/）
+ * @param {object} options.defaults - **core 保底默认值**（写在使用处，`src/config` 缺失也能跑）
+ * @param {object} [options.overrides] - 静态覆盖（来自 src/config/*.js，可缺省）
+ * @param {string} [options.fileName] - 运行时覆盖文件名（默认 `<name>_config.json`，位于 src/data/）
  * @param {number} [options.reloadMs] - mtime 检查节流（毫秒，默认 1000）
  * @returns {{ get: () => object, reload: () => object, bind: (target: object) => object }}
  */
-function createRuntimeConfig({ name, defaults, fileName, reloadMs = 1_000 }) {
+function createRuntimeConfig({ name, defaults, overrides, fileName, reloadMs = 1_000 }) {
   const file = path.resolve(DATA_DIR, fileName || `${name}_config.json`);
-  let current = clone(defaults);
+  // 基准 = core 保底 ← 静态覆盖（src/config）；运行期 JSON 覆盖再叠在这之上
+  const base = overrides ? deepMerge(defaults, overrides) : clone(defaults);
+  let current = clone(base);
   let currentMtime = 0;
   let lastCheck = 0;
   let lastError = '';
@@ -126,7 +130,7 @@ function createRuntimeConfig({ name, defaults, fileName, reloadMs = 1_000 }) {
     } catch {
       if (currentMtime !== 0) {
         // 文件被删 → 退回纯默认值（运维撤销覆盖的正常路径，不刷告警）
-        current = clone(defaults);
+        current = clone(base);
         currentMtime = 0;
         publish();
       }
@@ -136,7 +140,7 @@ function createRuntimeConfig({ name, defaults, fileName, reloadMs = 1_000 }) {
 
     try {
       const raw = JSON.parse(fs.readFileSync(file, 'utf-8'));
-      current = deepMerge(defaults, raw);
+      current = deepMerge(base, raw);
       currentMtime = stat.mtimeMs;
       lastError = '';
       publish();

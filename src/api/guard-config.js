@@ -12,7 +12,7 @@ import { C } from '../utils/colors.js';
 import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
 import { logAuditEvent } from '../framework/auth/index.js';
 import { createLogger } from '../framework/log/index.js';
-import { APP_CONFIG } from '../config/app_config.js';
+import { APP_CONFIG } from '../framework/config/app-config.js';
 
 const log = createLogger('api.guard-config');
 

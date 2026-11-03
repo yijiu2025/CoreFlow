@@ -6,21 +6,17 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { APP_CONFIG, validateAppConfig } from '../config/app_config.js';
+import { validateAppConfig } from '../framework/config/app-config-schema.js';
+import { APP_CONFIG } from '../config/app_config.js';
 
-describe('app_config · 默认配置', () => {
-  it('默认配置零告警（否则每次启动都会刷警告）', () => {
-    expect(validateAppConfig()).toEqual([]);
+describe('app_config · 覆盖层与默认值', () => {
+  it('src/config 出厂为空覆盖（默认值在 core 使用处，不在这里）', () => {
+    expect(APP_CONFIG).toEqual({});
   });
 
-  it('默认值符合约定（改动需同步本测试与消费方）', () => {
-    expect(APP_CONFIG.http.keepAliveTimeoutMs).toBe(72_000);
-    expect(APP_CONFIG.http.requestTimeoutMs).toBe(300_000);
-    expect(APP_CONFIG.websocket.shutdownGraceMs).toBe(1_000);
-    expect(APP_CONFIG.guard.syncIntervalMs).toBe(30_000);
-    expect(APP_CONFIG.monitor.slowRequestThresholdMs).toBe(2_000);
-    expect(APP_CONFIG.passwordHash.scryptMaxConcurrency).toBe(16);
-    expect(APP_CONFIG.passwordHash.bcryptMaxConcurrency).toBe(4);
+  it('空覆盖零告警（否则每次启动都会刷警告）', () => {
+    expect(validateAppConfig()).toEqual([]);
+    expect(validateAppConfig(APP_CONFIG)).toEqual([]);
   });
 });
 

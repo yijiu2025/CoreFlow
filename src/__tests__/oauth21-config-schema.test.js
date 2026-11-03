@@ -12,26 +12,38 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { OAUTH21_CONFIG } from '../config/oauth21_config.js';
+import { OAUTH21_CONFIG } from '../config/oauth21_config.js'; // 覆盖层（出厂为空）
 import config from '../app/oauth21/config/config.js';
 
 describe('oauth21 配置 · 分组契约', () => {
-  it('顶层分组恰好是 tokens / authorizationCode / jwt / session', () => {
-    expect(Object.keys(OAUTH21_CONFIG).sort()).toEqual(['authorizationCode', 'jwt', 'session', 'tokens']);
+  it('src/config 出厂为空覆盖（默认值在 app/oauth21/config/config.js）', () => {
+    expect(OAUTH21_CONFIG).toEqual({});
   });
 
-  it('jwt 组只放模式开关，不再承载任何 TTL', () => {
-    const jwtKeys = Object.keys(OAUTH21_CONFIG.jwt);
+  it('生效配置顶层分组恰好是 server / tokens / authorizationCode / jwt / pkce / device / session', () => {
+    expect(Object.keys(config).sort()).toEqual([
+      'authorizationCode',
+      'device',
+      'jwt',
+      'pkce',
+      'server',
+      'session',
+      'tokens'
+    ]);
+  });
+
+  it('jwt 组只放模式开关与算法常量，不承载任何 TTL', () => {
+    const jwtKeys = Object.keys(config.jwt);
     expect(jwtKeys).toContain('enabled');
     expect(jwtKeys.filter(k => /TTL/i.test(k))).toEqual([]);
   });
 
   it('三个令牌期都在 tokens 组下', () => {
-    expect(Object.keys(OAUTH21_CONFIG.tokens).sort()).toEqual(['accessTokenTTL', 'idTokenTTL', 'refreshTokenTTL']);
+    expect(Object.keys(config.tokens).sort()).toEqual(['accessTokenTTL', 'idTokenTTL', 'refreshTokenTTL']);
   });
 
   it('授权码独立成组（不经 jwt）', () => {
-    expect(OAUTH21_CONFIG.authorizationCode).toEqual({ ttl: 600 });
+    expect(config.authorizationCode).toEqual({ ttl: 600 });
   });
 });
 
@@ -50,7 +62,7 @@ describe('oauth21 生效配置 · 取值与一致性', () => {
 
   it('algorithm 是结构性常量（不在可调配置里）', () => {
     expect(config.jwt.algorithm).toBe('RS256');
-    expect(OAUTH21_CONFIG.jwt.algorithm).toBeUndefined();
+    expect(OAUTH21_CONFIG.jwt).toBeUndefined();
   });
 
   it('maxRefreshTokens 与框架会话层同源（同一旋钮只留一份默认值）', () => {
