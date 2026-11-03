@@ -1,0 +1,10 @@
+{
+  "$comment": "运行调优配置：应用启动时读取一次。优先级 = 环境变量 > 本文件 > 代码内置默认值。文件缺失或某项未设置时静默回退，不阻断启动。",
+  "http": {
+    "keepAliveTimeoutMs": 72000,
+    "requestTimeoutMs": 300000
+  },
+  "websocket": {
+    "shutdownGraceMs": 1000
+  }
+}
