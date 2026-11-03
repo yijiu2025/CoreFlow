@@ -179,28 +179,9 @@ const SCHEMA = [
     validate: validators.oneOf(LOG_LEVELS)
   },
 
-  // ── 超时（毫秒）── 主来源是 src/config/app_config.json；env 仅作容器部署覆盖项
-  {
-    key: 'HTTP_KEEP_ALIVE_TIMEOUT_MS',
-    group: 'timeout',
-    fallback: '72000',
-    desc: 'HTTP keep-alive 超时（应大于上游反代的 keepalive，否则会出现间歇 502）',
-    validate: validators.nonNegativeInt
-  },
-  {
-    key: 'HTTP_REQUEST_TIMEOUT_MS',
-    group: 'timeout',
-    fallback: '300000',
-    desc: '单请求（含请求体）总时长上限',
-    validate: validators.nonNegativeInt
-  },
-  {
-    key: 'WS_SHUTDOWN_GRACE_MS',
-    group: 'timeout',
-    fallback: '(内置默认)',
-    desc: 'WebSocket 停机宽限期',
-    validate: validators.nonNegativeInt
-  },
+  // ── 超时（毫秒）──
+  // HTTP_KEEP_ALIVE_TIMEOUT_MS / HTTP_REQUEST_TIMEOUT_MS / WS_SHUTDOWN_GRACE_MS
+  // 已迁到 src/config/app_config.js（JS 模块带注释，env 通道退役，2026-11-03）。
   {
     key: 'GUARD_CONFIG_SYNC_MS',
     group: 'timeout',

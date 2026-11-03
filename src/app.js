@@ -14,7 +14,6 @@ import staticPlugin from '@fastify/static';
 import websocket from '@fastify/websocket';
 import cookie from '@fastify/cookie';
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +26,7 @@ import { configureLog, createLogger, initLogErrorTraps } from './framework/log/i
 import { createWsPreClose, DEFAULT_WS_SHUTDOWN_GRACE_MS } from './framework/websocket/preclose.js';
 import { validateEnv } from './framework/config/env.js';
 import { closePubSub } from './framework/redis/index.js';
+import { APP_CONFIG } from './config/app_config.js';
 
 // ════════════════════════════════════════════════════════════════════
 // 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
@@ -155,59 +155,25 @@ function resolveTimeoutMs(raw, fallback) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// HTTP 连接层超时（运行调优项，env 不再是必须配置）
+// HTTP 连接层超时（运行调优项，主来源 = src/config/app_config.js）
 // ════════════════════════════════════════════════════════════════════
 // 这些值决定"坏连接能占住资源多久"与"停机能有多快"，因此显式声明而非依赖 Fastify 的
 // 隐式默认，并允许按反代 / 网关的 keepalive 设置对齐。
 //
-// 取值优先级：环境变量 > src/config/app_config.json > 代码内置默认值。
-// 主来源是 src/config/ —— 运维调优区（env 瘦身后各调优旋钮陆续收敛于此，
-// 与配置代码 env.js 所在的 framework/config/ 区分）；
-// env 仅保留给容器部署"不改文件、注入变量"的场景，属可选项。
+// 取值统一来自 src/config/app_config.js（运维调优区，JS 模块带注释，env 通道已退役
+// —— 调优项不属于「必须设定的 env」）。三个值都是 Fastify 构造参数，只在本模块
+// 加载时读取一次，**不支持运行时热改**；需要热改的调优项走 firewall_config.json
+// deepMerge 那套。详细取舍注释见 app_config.js，此处不再重复。
 //
 // ⚠️ Fastify 的选项校验会**静默丢弃**不在其 schema 内的键 —— 实测传入 `headersTimeout`
 // 或 `timeout` 既不报错也不生效（`app.server.headersTimeout` 仍是 Node 默认 60000）。
 // 只有下面几个键是 Fastify 5 认识并真正透传到 http server 的（已实测确认）。
 // 慢 header 攻击由 Node 内建的 headersTimeout（60s）兜底，Fastify 未透出该选项。
-//
-// keepAliveTimeout：默认 72s（与 Fastify 内置默认一致，故零行为变更）。
-//   必须大于前置反代的 keepalive，否则会出现"反代刚复用连接而应用已关闭"的
-//   间歇性 502 —— 若上游是 Nginx(75s) / ALB(60s)，按需调大或调小。
-// requestTimeout：单请求（含请求体）接收总时长上限，默认 300s = Node 自身默认值。
-//   Fastify 把它默认关掉了（0），显式打开是为了封住"慢速发 body"（RUDY 类）攻击 ——
-//   防火墙的 6 个检测器里**没有**慢连接检测，这一层是唯一防线。
-//   300s 是留给 200MB multipart 上传的余量（约 0.67MB/s 即达标）；若上游都是高速
-//   网络可下调，若面向弱网移动端则调大，不要下调到低于最慢的真实上传耗时。
-
-/**
- * 读取运行调优配置（src/config/app_config.json）
- * 文件缺失 / JSON 损坏一律静默回退空对象 —— 调优文件不该有让服务起不来的能力
- *
- * @returns {object} 已解析的配置；异常时返回 {}
- */
-function readAppConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(path.resolve(__dirname, 'config/app_config.json'), 'utf-8'));
-  } catch {
-    return {};
-  }
-}
-const APP_CONFIG = readAppConfig();
-
-const HTTP_KEEP_ALIVE_TIMEOUT_MS = resolveTimeoutMs(
-  process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS ?? APP_CONFIG.http?.keepAliveTimeoutMs,
-  72_000
-);
-const HTTP_REQUEST_TIMEOUT_MS = resolveTimeoutMs(
-  process.env.HTTP_REQUEST_TIMEOUT_MS ?? APP_CONFIG.http?.requestTimeoutMs,
-  300_000
-);
+const HTTP_KEEP_ALIVE_TIMEOUT_MS = resolveTimeoutMs(APP_CONFIG.http?.keepAliveTimeoutMs, 72_000);
+const HTTP_REQUEST_TIMEOUT_MS = resolveTimeoutMs(APP_CONFIG.http?.requestTimeoutMs, 300_000);
 
 /** WebSocket 关闭宽限期（毫秒）：广播关闭帧后，等这么久再强制断开残留连接 */
-const WS_SHUTDOWN_GRACE_MS = resolveTimeoutMs(
-  process.env.WS_SHUTDOWN_GRACE_MS ?? APP_CONFIG.websocket?.shutdownGraceMs,
-  DEFAULT_WS_SHUTDOWN_GRACE_MS
-);
+const WS_SHUTDOWN_GRACE_MS = resolveTimeoutMs(APP_CONFIG.websocket?.shutdownGraceMs, DEFAULT_WS_SHUTDOWN_GRACE_MS);
 
 /**
  * 校验环境变量

@@ -119,11 +119,10 @@ describe('环境变量校验 · 配错的值（任何环境都判错）', () => 
   });
 
   it('超时配置为负数 → 错误', () => {
+    // HTTP_REQUEST_TIMEOUT_MS 等 HTTP/WS 超时已迁 src/config/app_config.js（env 通道退役），
+    // 这里用仍在 schema 里的 GUARD_CONFIG_SYNC_MS 验证 nonNegativeInt 校验器
     expect(
-      hasError(
-        validateEnv(baseEnv({ HTTP_REQUEST_TIMEOUT_MS: '-1' }), { isProduction: false }),
-        'HTTP_REQUEST_TIMEOUT_MS'
-      )
+      hasError(validateEnv(baseEnv({ GUARD_CONFIG_SYNC_MS: '-1' }), { isProduction: false }), 'GUARD_CONFIG_SYNC_MS')
     ).toBe(true);
   });
 });
