@@ -154,3 +154,67 @@ describe('已迁出的 env 不得回潮', () => {
     }
   });
 });
+
+/**
+ * 四份 env 的变量集合一致性（.env / .env.example / .env.production / .env.docker.example）
+ *
+ * .env 与 .env.production 被 gitignore，CI 上不存在 → 只校验存在的文件。
+ * docker 那份允许额外出现 compose/entrypoint 专用变量。
+ */
+describe('env 文件一致性', () => {
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const ENV_FILES = ['.env', '.env.example', '.env.production', '.env.docker.example'];
+  /** compose / entrypoint 专用（只有 docker 那份需要） */
+  const COMPOSE_ONLY = new Set(['APP_PORT', 'DB_ROOT_PASS', 'WAIT_FOR_DEPS', 'DEP_WAIT_TIMEOUT_MS', 'RUN_MIGRATIONS']);
+
+  const keysOf = file => {
+    const keys = new Set();
+    const src = readFileSync(path.join(ROOT, file), 'utf-8');
+    for (const line of src.split(/\r?\n/)) {
+      const m = /^\s*#?\s*([A-Z][A-Z_0-9]*)=/.exec(line);
+      if (m) keys.add(m[1]);
+    }
+    return keys;
+  };
+
+  const present = () =>
+    ENV_FILES.filter(f => {
+      try {
+        return statSync(path.join(ROOT, f)).isFile();
+      } catch {
+        return false;
+      }
+    });
+
+  it('存在的各份 env 变量集合一致（docker 允许 compose 专用例外）', () => {
+    const files = present();
+    expect(files.length).toBeGreaterThanOrEqual(2); // 至少 .env.example + .env.docker.example
+    const base = keysOf(files[0]);
+    const offenders = [];
+    for (const f of files.slice(1)) {
+      const keys = keysOf(f);
+      for (const key of base) {
+        if (keys.has(key)) continue;
+        if (f === '.env.docker.example' && COMPOSE_ONLY.has(key)) continue;
+        offenders.push(`${f} 缺 ${key}`);
+      }
+      for (const key of keys) {
+        if (base.has(key)) continue;
+        if (f === '.env.docker.example' && COMPOSE_ONLY.has(key)) continue;
+        offenders.push(`${f} 多 ${key}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('四份 env 都不再列出已迁出的 KEY（防止文档把死配置当有效项）', () => {
+    const offenders = [];
+    for (const f of present()) {
+      const keys = keysOf(f);
+      for (const key of MIGRATED_ENV_KEYS) {
+        if (keys.has(key)) offenders.push(`${f} → ${key}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
