@@ -14,6 +14,7 @@ import crypto from 'crypto';
 import { decryptLoginRequest, verifyEmailCode } from './decrypt.service.js';
 import { issueDirectTokens } from './token-issuer.service.js';
 import { buildTokenResponse } from './cookies.service.js';
+import verifyConfig from '../../../framework/verify/config.js';
 import { DEFAULT_SCOPE } from '../config/constants.js';
 import ApprovalDao from '../dao/approval.dao.js';
 import UserDao from '../dao/user.dao.js';
@@ -48,7 +49,7 @@ function clientFingerprint(request) {
   let material = `${ip}|${ua}`;
   // 设备指纹启用时合并（config.device.enabled），抵制代理池换 IP+UA 绕过
   const deviceFp = request?.headers?.['x-device-fp'];
-  if (process.env.DEVICE_FINGERPRINT_ENABLED === 'true' && deviceFp) {
+  if (verifyConfig.device.enabled && deviceFp) {
     material += `|${deviceFp}`;
   }
   return crypto.createHash('sha256').update(material).digest('hex').slice(0, 32);
@@ -404,7 +405,7 @@ async function directLogin(request, reply, fastify) {
         ip: request?.ip,
         ua: request?.headers?.['user-agent'] || '',
         deviceFp: request?.headers?.['x-device-fp'] || 'none',
-        envDeviceFp: process.env.DEVICE_FINGERPRINT_ENABLED
+        envDeviceFp: verifyConfig.device.enabled
       });
 
       return reply.send({
@@ -502,7 +503,7 @@ async function confirmDirectConsent(request, reply, fastify) {
       ip: request?.ip,
       ua: request?.headers?.['user-agent'] || '',
       deviceFp: request?.headers?.['x-device-fp'] || 'none',
-      envDeviceFp: process.env.DEVICE_FINGERPRINT_ENABLED
+      envDeviceFp: verifyConfig.device.enabled
     });
     // 指纹不符：疑似冒用，静默拒绝（不暴露具体原因）
     await consentStore.delete(consentKey);

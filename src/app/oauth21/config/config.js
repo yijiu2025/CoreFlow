@@ -17,7 +17,7 @@
 import 'dotenv/config';
 import { createRuntimeConfig } from '../../../framework/config/runtime.js';
 import { loadOverrides } from '../../../framework/config/overrides.js';
-import { AUTH_SESSION_DEFAULTS } from '../../../framework/auth/session/session-config.js';
+import { AUTH_SESSION_DEFAULTS, authJwtEnabled } from '../../../framework/auth/session/session-config.js';
 
 /**
  * core 保底默认值（改内置默认才动这里；按部署微调写 src/config/oauth21_config.js，
@@ -48,13 +48,6 @@ const OAUTH21_DEFAULTS = {
     ttl: 600
   },
 
-  // ── 签发模式开关 ────────────────────────────────────────────────
-  jwt: {
-    // true = 用 JWT 承载 access/id token；false（默认）= Session 认证。
-    // 签名算法（RS256）是结构性常量、不是可调项，留在 app/oauth21/config/config.js
-    enabled: false
-  },
-
   // ── 会话上限 ────────────────────────────────────────────────────
   session: {
     // 每应用最大活跃 Session 数：超出时踢出最旧会话。
@@ -77,8 +70,10 @@ const BASE = {
   // 授权码：一次性不透明码，与 JWT 无关，独立成组
   authorizationCode: { ...OAUTH21_DEFAULTS.authorizationCode, ...OVERRIDES.authorizationCode },
   jwt: {
-    ...OAUTH21_DEFAULTS.jwt,
-    ...OVERRIDES.jwt,
+    // JWT 总开关唯一来源：framework/auth（core 保底 false + src/config/auth_config.js 覆盖）。
+    // ⚠️ 不要在本文件再定义一份 —— 曾经 framework 校验读 env、这里读配置，
+    // 两处判断不一致会导致"签发了 JWT 但校验不认"。
+    enabled: authJwtEnabled(),
     // 签名算法是结构性常量（不可调），不放进 src/config/
     algorithm: 'RS256'
   },

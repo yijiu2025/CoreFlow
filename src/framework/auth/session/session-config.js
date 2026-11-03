@@ -23,6 +23,12 @@ import { loadOverrides } from '../../config/overrides.js';
  * 或热改 src/data/auth_config.json）
  */
 const AUTH_SESSION_DEFAULTS = {
+  // JWT 认证总开关（framework 侧唯一来源；oauth21 的签发/校验都读这里）
+  // false（默认）= Session 认证。⚠️ 打开需配套配置 RS256 密钥，否则签发会失败。
+  jwt: {
+    enabled: false
+  },
+
   session: {
     // 旧 refresh token 轮转后「已轮转」标记的保留时长（秒），用于盗用检测。
     // 默认 7 天：足够覆盖「客户端长时间离线后带旧 token 回来」的检测窗口。
@@ -60,4 +66,9 @@ function authSessionConfig() {
   return runtime.get().session;
 }
 
-export { runtime as authRuntime, authSessionConfig, AUTH_SESSION_DEFAULTS };
+/** JWT 认证开关（唯一来源；oauth21 签发与 framework 校验共用，避免两处判断不一致） */
+function authJwtEnabled() {
+  return runtime.get().jwt?.enabled === true;
+}
+
+export { runtime as authRuntime, authSessionConfig, authJwtEnabled, AUTH_SESSION_DEFAULTS };

@@ -17,11 +17,12 @@ import { findUserByUid } from '../../shared/user-dao.js';
 import { getPermissions } from './permission/perm-cache.js';
 import { getStore } from '../redis/index.js';
 import { createLogger } from '../log/index.js';
+import { authJwtEnabled } from './session/session-config.js';
 
 const log = createLogger('framework.auth.bearer-auth');
 
-/** JWT 认证开关（从环境变量读取，避免依赖 oauth21 应用层） */
-const jwtEnabled = process.env.JWT_ENABLED === 'true';
+/** JWT 认证开关（唯一来源：src/config/auth_config.js 覆盖 → core 保底 false；不依赖 oauth21 应用层） */
+const jwtEnabled = authJwtEnabled();
 
 /**
  * 从 Bearer Token 解析用户信息

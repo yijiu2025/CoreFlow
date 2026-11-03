@@ -8,6 +8,7 @@
 
 import { Sequelize } from 'sequelize';
 import { createLogger } from '../log/index.js';
+import { loadOverrides } from '../config/overrides.js';
 import { C } from '../../utils/colors.js';
 
 const log = createLogger('framework.db.index');
@@ -38,6 +39,15 @@ if (missing.length > 0 && !isTestEnv) {
 
 const dsn = `${DB_TYPE || 'mysql'}://${DB_USER}:${encodeURIComponent(DB_PASS || '')}@${DB_HOST}:${DB_PORT || 3306}/${DB_NAME}`;
 
+// 连接池调优覆盖（可选；src/config 目录缺失也能跑，用下面 core 保底值）
+const DB_OVERRIDES = loadOverrides('db_config.js', 'DB_CONFIG');
+
+/** 取正整数配置（非法/缺省回退 core 保底） */
+function pickInt(raw, fallback) {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
 const sequelize = new Sequelize(dsn, {
   logging: false,
   define: {
@@ -50,15 +60,16 @@ const sequelize = new Sequelize(dsn, {
   pool: {
     // ⚠️ 容量天花板：本池是**每实例**的。MySQL 默认 max_connections = 151，
     // 按默认 max=10 计算，约 15 个实例就会耗尽数据库连接。
-    // 扩容时按此式取值：DB_POOL_MAX ≈ (MySQL_max_connections − 运维保留) ÷ 预期实例数
+    // 扩容时按此式取值：max ≈ (MySQL_max_connections − 运维保留) ÷ 预期实例数
     // （例如 151 − 11 保留 = 140，跑 4 个实例 → 每实例 35，可设 30 留余量）
-    max: parseInt(process.env.DB_POOL_MAX || '10'),
-    min: parseInt(process.env.DB_POOL_MIN || '2'),
+    // 覆盖方式：src/config/db_config.js（可选，缺失即用下列 core 保底值）
+    max: pickInt(DB_OVERRIDES.pool?.max, 10),
+    min: pickInt(DB_OVERRIDES.pool?.min, 2),
     // acquire 是"等不到连接就放弃"的上限。注意它（默认 30s）远大于健康探针的 3s 超时 ——
     // 池枯竭时探针会先被自己的超时掐断，表现为"探针不稳定"而非"连接池耗尽"。
     // 因此池状态必须单独可观测，见 getPoolStats()。
-    acquire: parseInt(process.env.DB_POOL_ACQUIRE || '30000'),
-    idle: parseInt(process.env.DB_POOL_IDLE || '10000')
+    acquire: pickInt(DB_OVERRIDES.pool?.acquire, 30000),
+    idle: pickInt(DB_OVERRIDES.pool?.idle, 10000)
   }
 });
 

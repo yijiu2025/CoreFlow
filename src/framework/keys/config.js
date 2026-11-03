@@ -6,6 +6,8 @@
  * @since 2026-08-14
  */
 
+import { loadOverrides } from '../config/overrides.js';
+
 /** 默认 RSA 密钥长度（2048 位） */
 const MODULUS_LENGTH_2048 = 2048;
 
@@ -16,7 +18,11 @@ const MODULUS_LENGTH_2048 = 2048;
  * （旧 token 尚未过期）。超过宽限的旧密钥从 JWKS 移除并物理清理。
  * 应 >= 最长 token TTL（如 refresh token TTL）。默认 30 天。
  */
-const KEY_RETIREMENT_GRACE_SECONDS = Number(process.env.KEY_RETIREMENT_GRACE_SECONDS) || 30 * 86400;
+const KEY_RETIREMENT_GRACE_SECONDS = (() => {
+  // 覆盖来源：src/config/auth_config.js 的 keys.retirementGraceSeconds（可选，缺失用 30 天）
+  const raw = Number(loadOverrides('auth_config.js', 'AUTH_CONFIG').keys?.retirementGraceSeconds);
+  return Number.isFinite(raw) && raw > 0 ? raw : 30 * 86400;
+})();
 
 /**
  * 判断密钥是否在退役宽限期内

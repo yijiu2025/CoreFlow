@@ -24,7 +24,8 @@
  *   REDIS_TLS_CA        - TLS CA 证书路径（自签证书场景，可选）
  *   REDIS_TLS_SKIP_VERIFY - 跳过 TLS 证书验证（true/false），默认 false，调试自签证书时使用
  *   REDIS_DB            - 默认数据库编号（0-15），默认 0
- *   REDIS_CONNECT_TIMEOUT - 连接超时毫秒，默认 5000
+ *   （连接/重试/命令超时等调优项已迁 src/config/redis_config.js，env 不再读取）
+ *   REDIS_CONNECT_TIMEOUT/MAX_RETRIES/COMMAND_TIMEOUT_MS：已废弃，见 src/config/redis_config.js
  *   REDIS_MAX_RETRIES    - 重连最大次数，默认 10
  *   REDIS_COMMAND_TIMEOUT_MS - 单条命令超时毫秒，默认 0（不设超时，等同 node-redis v5）
  *
@@ -41,6 +42,7 @@ import { setLogger, getCacheStats } from './redis-store.js';
 import { probeTcp, DEFAULT_PROBE_TIMEOUT } from './probe.js';
 import { C } from '../../utils/colors.js';
 import { createLogger } from '../log/index.js';
+import { loadOverrides } from '../config/overrides.js';
 
 const log = createLogger('framework.redis.plugin');
 
@@ -195,7 +197,16 @@ function resolveReconnectDelay({ retries, maxRetries = 10, policy = 'forever' })
  * @param {string|number|undefined} raw
  * @returns {number} 0 表示不设超时
  */
-function resolveCommandTimeout(raw = process.env.REDIS_COMMAND_TIMEOUT_MS) {
+/** 调优覆盖（可选；src/config/redis_config.js 缺失也能跑，用 core 保底） */
+const REDIS_TUNING = loadOverrides('redis_config.js', 'REDIS_CONFIG');
+
+/** 取正整数（非法/缺省回退 core 保底） */
+function pickInt(raw, fallback) {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
+function resolveCommandTimeout(raw = REDIS_TUNING.commandTimeoutMs) {
   const ms = Number(raw);
   return Number.isFinite(ms) && ms > 0 ? ms : 0;
 }
@@ -380,9 +391,9 @@ async function connectStandalone(opts = {}) {
   // 「预检 + 连接」两段之和不会超过调用方给的预算数量级。
   const probeBudget = Math.min(Math.max(Math.floor(timeoutMs / 3), 500), DEFAULT_PROBE_TIMEOUT);
 
-  const connectTimeoutRaw = parseInt(process.env.REDIS_CONNECT_TIMEOUT || '5000', 10);
+  const connectTimeoutRaw = pickInt(REDIS_TUNING.connectTimeoutMs, 5000);
   const connectTimeout = Number.isFinite(connectTimeoutRaw) ? connectTimeoutRaw : 5000;
-  const maxRetriesRaw = parseInt(process.env.REDIS_MAX_RETRIES || '10', 10);
+  const maxRetriesRaw = pickInt(REDIS_TUNING.maxRetries, 10);
   const maxRetries = Number.isFinite(maxRetriesRaw) ? maxRetriesRaw : 10;
 
   // ① 有界 TCP 预检：不通就地返回，不进入客户端的指数退避
@@ -475,9 +486,9 @@ const redisPlugin = fp(
     const backupHost = process.env.REDIS_BACKUP_HOST;
     const backupPort = parsePort(process.env.REDIS_BACKUP_PORT) ?? 6379;
     const defaultDb = parseInt(process.env.REDIS_DB || '0', 10);
-    const connectTimeoutRaw = parseInt(process.env.REDIS_CONNECT_TIMEOUT || '5000', 10);
+    const connectTimeoutRaw = pickInt(REDIS_TUNING.connectTimeoutMs, 5000);
     const connectTimeout = Number.isFinite(connectTimeoutRaw) ? connectTimeoutRaw : 5000;
-    const maxRetriesRaw = parseInt(process.env.REDIS_MAX_RETRIES || '10', 10);
+    const maxRetriesRaw = pickInt(REDIS_TUNING.maxRetries, 10);
     const maxRetries = Number.isFinite(maxRetriesRaw) ? maxRetriesRaw : 10;
 
     // 启动期配置校验
