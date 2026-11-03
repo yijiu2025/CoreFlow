@@ -16,10 +16,42 @@ import crypto from 'crypto';
 import { generateFingerprint } from '../../../framework/firewall/util/fingerprint.js';
 import { verifyPow } from '../../../framework/firewall/util/pow-sha256.js';
 import { grantPass, takeChallenge } from '../../../framework/firewall/util/redis.js';
+import { issueChallengePayload } from '../../../framework/firewall/challenge-template.js';
 import { getClientDeviceId } from '../../../framework/auth/index.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.firewall.services.challenge');
 
 /** 通过令牌有效期（30 分钟） */
 const PASS_TOKEN_TTL = 1800;
+
+/**
+ * 为 **Vue 挑战页**签发一份挑战（JSON 入口）
+ *
+ * 为什么需要它：挑战载荷原先只在渲染后端 HTML 模板时写入（`buildChallengePage`），
+ * 前端 SPA 拿不到 `challengeId/salt/difficulty`，就没法自己算 PoW。这里把同一份
+ * 签发逻辑（`issueChallengePayload`）开放成 JSON —— 载荷仍然**只存服务端**，
+ * 下发的 challengeId 依旧是不可回放的不透明串，安全语义与内置模板完全一致。
+ *
+ * 绑定上下文与 `verifyChallenge` 逐项对齐（IP + 指纹 + 设备 ID）：同一份载荷
+ * 只能被同一上下文消费，换 IP / 换 UA 都过不了校验。
+ *
+ * @param {object} request Fastify request（取 ip / headers / cookie）
+ * @returns {Promise<{ok:true, challengeId:string, salt:string, difficulty:number, maxAttempts:number, ttlSec:number}
+ *   | {ok:false, statusCode:number, reason:string}>}
+ */
+async function issueChallenge(request) {
+  try {
+    const fingerprint = generateFingerprint(request);
+    const deviceId = await getClientDeviceId(request);
+    const payload = await issueChallengePayload({ ip: request.ip, fingerprint, deviceId });
+    return { ok: true, ...payload };
+  } catch (err) {
+    // 签发失败（Redis 写不进等）：对外只给可编程原因，内部细节进日志
+    log.warn('⚠️ [Firewall] 挑战签发失败', err);
+    return { ok: false, statusCode: 503, reason: 'Challenge Unavailable' };
+  }
+}
 
 /**
  * 定长比较（长度不同直接返回 false，绝不把长度差异喂进 timingSafeEqual —— 那会抛 RangeError）
@@ -94,4 +126,4 @@ async function verifyChallenge(request, reply) {
   return { ok: true };
 }
 
-export { verifyChallenge };
+export { issueChallenge, verifyChallenge };

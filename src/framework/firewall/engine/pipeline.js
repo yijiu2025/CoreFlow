@@ -53,6 +53,68 @@ const CHALLENGE_VERIFY_PATH = '/api/firewall/v1/challenge/verify';
  */
 const PROBE_PATHS = ['/v1/health', '/v1/health/live', '/v1/health/ready'];
 
+/**
+ * 前端人机挑战页（**独立构建入口**，不是 SPA 深链路由）与其静态资源前缀
+ *
+ * 为什么必须是独立 HTML 而不是 `/firewall/challenge` 这种前端路由：
+ *   ① 后端没有 SPA 回退（`@fastify/static` 对不存在的文件直接 404，全站 SPA 深链本来
+ *      就刷不了），深链路由在"用户被 302 过来"这条路上必然 404；
+ *   ② 挑战页**不能启动主 app**：主 app 的 bootstrap 会立刻发 userinfo / permissions 等
+ *      请求，而那些请求此刻正被挑战态挡着 —— 一进页面就自我打死。
+ * 独立入口 = 一个只有挑战卡片的极小应用，与主 app 的鉴权/路由/布局完全隔离。
+ *
+ * 为什么必须豁免：被挑战的客户端如果**连挑战页本身都被拦**，就成"点开验证页 →
+ * 又被判成挑战态 → 再弹一次"的死锁。所以这些路径要像 `CHALLENGE_VERIFY_PATH` 一样无条件可达。
+ *
+ * ⚠️ 与 `CHALLENGE_VERIFY_PATH` 同一性质的字面量：若前端改了挑战页入口名或产物目录
+ * （`vite build` 默认 `assets/`），此处必须同步。豁免的只是"挑战页外壳"，页面里不得
+ * 放任何用户数据 —— 这段路径绕过了 Bot / 地理 / 端点限频判定。
+ */
+const CHALLENGE_PAGE_PATHS = ['/firewall/challenge.html', '/admin/challenge.html'];
+
+/** 挑战页静态资源前缀（构建产物目录，按 SPA 基路径各一份） */
+const CHALLENGE_ASSET_PREFIXES = ['/firewall/assets/', '/admin/assets/'];
+
+/**
+ * 请求 URL 属于哪个 SPA（用于把被拦的导航指向对应的挑战页）
+ *
+ * @param {string} url 请求路径（含查询串也可）
+ * @returns {'firewall'|'admin'|null} SPA 标识；无法判定返回 null
+ */
+function spaOf(url) {
+  const p = pathOf(url);
+  if (p === '/admin' || p.startsWith('/admin/')) return 'admin';
+  if (p === '/firewall' || p.startsWith('/firewall/')) return 'firewall';
+  return null;
+}
+
+/**
+ * 该请求对应的挑战页路径
+ *
+ * @param {string} url 请求路径
+ * @returns {string|null} 如 `/firewall/challenge.html`；不属于已知 SPA 时返回 null（回落到内置模板）
+ */
+function challengePageFor(url) {
+  const spa = spaOf(url);
+  return spa ? `/${spa}/challenge.html` : null;
+}
+
+/**
+ * 是否为挑战页自身（或其静态资源）
+ *
+ * 同时接受带/不带 `.html` 的写法：前端若把入口挂成扩展名省略的形式（某些反代会改写），
+ * 不应该因此掉进挑战死锁。
+ *
+ * @param {string} url 请求路径
+ * @returns {boolean} true 表示挑战页外壳
+ */
+function isChallengePageUrl(url) {
+  const p = pathOf(url);
+  if (CHALLENGE_PAGE_PATHS.includes(p)) return true;
+  if (CHALLENGE_PAGE_PATHS.includes(`${p}.html`)) return true;
+  return CHALLENGE_ASSET_PREFIXES.some(prefix => p.startsWith(prefix));
+}
+
 /** 静态资源后缀：不经过深度检测 */
 const SKIP_PATTERN = /\.(js|css|png|jpg|ico|svg|woff2?)$/i;
 
@@ -110,7 +172,7 @@ function isProbeUrl(url) {
  * @returns {boolean} true 表示跳过
  */
 function shouldSkipDeepCheck(url) {
-  return isChallengeVerifyUrl(url) || isProbeUrl(url) || SKIP_PATTERN.test(pathOf(url));
+  return isChallengeVerifyUrl(url) || isChallengePageUrl(url) || isProbeUrl(url) || SKIP_PATTERN.test(pathOf(url));
 }
 
 /**
@@ -256,26 +318,54 @@ async function sendChallengePage(reply, ip, fingerprint, deviceId) {
 }
 
 /**
- * 挑战处置：文档请求渲染页面，非文档请求返回可编程的 428
+ * 挑战处置：能渲染的给页面，其余给可编程的 428
+ *
+ * 三种落点（按优先级）：
+ *   ① 请求属于已知 SPA（`/firewall/*`、`/admin/*`）且是**文档请求**
+ *      → 302 到该 SPA 的 Vue 挑战页（带 `return`），路径与 assets 已在防护层豁免；
+ *   ② 其余文档请求（非 SPA 客户端、直连 API 的浏览器、移动端内嵌页）
+ *      → 渲染内置 HTML 模板（**兜底**，不依赖前端构建产物是否存在）；
+ *   ③ 非文档请求（XHR / 脚本 / 非浏览器客户端）→ 428 + `X-Firewall-Challenge`。
  *
  * 428（Precondition Required）而不是 429：它表达「少一个前置条件」，不会被
- * 客户端的限流重试逻辑当成退避信号；同时带 `challengeUrl` 让前端知道去哪个地址
- * 以文档方式打开挑战页（同一个 URL 只要以文档方式请求就会渲染页面）。
+ * 客户端的限流退避逻辑当成"过一会儿重试就行"；`challengeUrl` 是**建议值**，
+ * 前端应该用自己基路径 + `challenge` 路由（后端无法可靠推断跨域 SPA 的基路径）。
  *
  * @param {import('fastify').FastifyReply} reply 响应对象
  * @param {string} ip 客户端 IP
  * @param {string} fingerprint 请求指纹
  * @param {string|null} deviceId 设备 ID
- * @param {import('fastify').FastifyRequest} [request] 请求对象（用于判定请求类型）
- * @returns {Promise<number>} 实际下发的状态码（200 = 页面，428 = 提示）
+ * @param {import('fastify').FastifyRequest} [request] 请求对象（用于判定请求类型 / 构造 return）
+ * @returns {Promise<number>} 实际下发的状态码（200 = 内置页面，302 = 跳 SPA，428 = 提示）
  */
 async function sendChallengeResponse(reply, ip, fingerprint, deviceId, request) {
-  if (isDocumentRequest(request)) {
+  const document = isDocumentRequest(request);
+
+  if (document) {
+    // ① 已知 SPA 的导航：交给 Vue 挑战页（可维护、可复用组件、样式与站点一致）
+    const pagePath = challengePageFor(request?.url || '');
+    if (pagePath) {
+      const back = String(request.url || '/');
+      reply
+        .headers({ ...CHALLENGE_NO_STORE, Location: `${pagePath}?return=${encodeURIComponent(back)}` })
+        .code(302)
+        .send('');
+      return 302;
+    }
+
+    // ② 其余文档请求：内置模板兜底
     await sendChallengePage(reply, ip, fingerprint, deviceId);
     return 200;
   }
 
-  const challengeUrl = pathOf(request?.url);
+  // ③ 非文档请求：可编程的 428
+  //
+  // 这里的 `challengeUrl` 只给"挑战页在哪"，**不拼 return**：XHR 的 URL 是接口地址，
+  // 拿它当返回目标会把用户送到一个 JSON 接口上。真正的返回目标是**页面地址**
+  // （`location.pathname`），只有前端自己知道，由拦截器补。
+  const originalUrl = pathOf(request?.url);
+  const challengeUrl = challengePageFor(request?.url || '') || originalUrl;
+
   reply
     .headers({ ...CHALLENGE_NO_STORE, 'X-Firewall-Challenge': challengeUrl })
     .code(428)
@@ -283,7 +373,8 @@ async function sendChallengeResponse(reply, ip, fingerprint, deviceId, request) 
       code: 428,
       error: 'Challenge Required',
       message: '需要完成人机验证后才能继续访问；请以文档方式打开 challengeUrl 完成验证。',
-      challengeUrl
+      challengeUrl,
+      requestUrl: originalUrl
     });
   return 428;
 }
@@ -324,8 +415,8 @@ async function checkGlobalBlockPhase(request, reply) {
         return false;
       }
 
-      // ② 验证接口自身必须可达
-      if (isChallengeVerifyUrl(request.url)) return false;
+      // ② 验证/签发接口、挑战页自身与其静态资源必须无条件可达（否则挑战打不开 = 死锁）
+      if (isChallengeVerifyUrl(request.url) || isChallengePageUrl(request.url)) return false;
 
       // ③ 其余请求 → 挑战页（文档请求）或 428（XHR / 脚本 / 非浏览器客户端）
       firewallLog.blocked = true;

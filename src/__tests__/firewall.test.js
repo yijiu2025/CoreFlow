@@ -66,7 +66,7 @@ const { registerRecordSink } = await import('../framework/firewall/telemetry-sin
 registerRecordSink(r => pushedRecords.push(r));
 
 const { buildChallengePage } = await import('../framework/firewall/challenge-template.js');
-const { verifyChallenge } = await import('../app/firewall/services/challenge.service.js');
+const { issueChallenge, verifyChallenge } = await import('../app/firewall/services/challenge.service.js');
 const { sha256Hex } = await import('../framework/firewall/util/pow-sha256.js');
 const { generateFingerprint } = await import('../framework/firewall/util/fingerprint.js');
 const { hasPass } = await import('../framework/firewall/util/redis.js');
@@ -685,5 +685,146 @@ describe('登录结果观测：账号维度必须真的记账（曾只读 body.u
     // 锁定键按截断后的 128 字符记账：原文查不到，截断值查得到
     expect(await isAccountLocked(huge)).toBe(false);
     expect(await isAccountLocked('x'.repeat(128))).toBe(true);
+  });
+});
+
+// ── ⑩ Vue 挑战页接入（2026-11-03）：issue 接口 / 挑战页豁免 / 302 与 428 落点 ──────
+
+describe('Vue 挑战页接入：issue 签发 → 求解 → verify 全链路', () => {
+  /** 按 issue 返回的 salt/difficulty 求解 PoW */
+  function solveFromIssue(issued) {
+    const target = '0'.repeat(issued.difficulty);
+    for (let answer = 0; answer < 20_000_000; answer++) {
+      if (sha256Hex(`${issued.challengeId}:${issued.salt}:${answer}`).startsWith(target)) {
+        return String(answer);
+      }
+    }
+    throw new Error('PoW 求解失败');
+  }
+
+  it('issue 返回可求解的载荷，且与 verify 的绑定上下文一致 → 通过', async () => {
+    const request = makeRequest({
+      ip: '203.0.113.251',
+      method: 'POST',
+      url: '/api/firewall/v1/challenge/issue',
+      body: {}
+    });
+    const issued = await issueChallenge(request);
+
+    expect(issued.ok).toBe(true);
+    expect(issued.challengeId).toMatch(/^[0-9a-f]{32}$/);
+    expect(issued.salt).toMatch(/^[0-9a-f]{16}$/);
+    expect(issued.difficulty).toBeGreaterThanOrEqual(1);
+    expect(issued.maxAttempts).toBeGreaterThanOrEqual(16 ** issued.difficulty);
+
+    const answer = solveFromIssue(issued);
+    const reply = makeReply();
+    const res = await verifyChallenge({ ...request, body: { challengeId: issued.challengeId, answer } }, reply);
+    expect(res).toEqual({ ok: true });
+    expect(reply.cookies.fw_verified).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('issue 的载荷换一个 IP 消费 → 拒绝（绑定上下文不可转移）', async () => {
+    const request = makeRequest({
+      ip: '203.0.113.252',
+      method: 'POST',
+      url: '/api/firewall/v1/challenge/issue',
+      body: {}
+    });
+    const issued = await issueChallenge(request);
+    const answer = solveFromIssue(issued);
+
+    const other = makeRequest({
+      ip: '203.0.113.253',
+      method: 'POST',
+      url: '/api/firewall/v1/challenge/issue',
+      body: {}
+    });
+    const res = await verifyChallenge({ ...other, body: { challengeId: issued.challengeId, answer } }, makeReply());
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe('Challenge Mismatch');
+  });
+});
+
+describe('挑战页外壳豁免 + SPA 落点选择', () => {
+  it('处于挑战态时，挑战页自身与其静态资源仍可达（否则死锁）', async () => {
+    const ip = '203.0.113.254';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    for (const url of [
+      '/firewall/challenge.html',
+      '/admin/challenge.html',
+      '/firewall/challenge',
+      '/admin/challenge',
+      '/firewall/assets/index-abc.js',
+      '/admin/assets/app.css'
+    ]) {
+      const request = makeRequest({ ip, url });
+      request.headers['sec-fetch-mode'] = 'navigate';
+      await buildRequestContext(request);
+      const reply = makeReply();
+      reply.request = request;
+      expect(await checkGlobalBlockPhase(request, reply)).toBe(false);
+      expect(reply.sentBody).toBeUndefined();
+    }
+  });
+
+  it('SPA 导航（/admin/*）→ 302 到该 SPA 的挑战页，带 return', async () => {
+    const ip = '203.0.113.255';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    const request = makeRequest({ ip, url: '/admin/users?page=2' });
+    request.headers['sec-fetch-mode'] = 'navigate';
+    await buildRequestContext(request);
+    const reply = makeReply();
+    reply.request = request;
+
+    expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
+    expect(reply.statusCode).toBe(302);
+    expect(reply.responseHeaders.Location).toBe(
+      `/admin/challenge.html?return=${encodeURIComponent('/admin/users?page=2')}`
+    );
+    expect(reply.responseHeaders['Cache-Control']).toContain('no-store');
+  });
+
+  it('非 SPA 文档请求 → 仍用内置模板兜底（不依赖前端产物）', async () => {
+    const ip = '203.0.113.256';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    const request = makeRequest({ ip, url: '/some/page' });
+    request.headers['sec-fetch-mode'] = 'navigate';
+    await buildRequestContext(request);
+    const reply = makeReply();
+    reply.request = request;
+
+    expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
+    expect(reply.statusCode).toBe(200);
+    expect(reply.sentBody).toContain('CHALLENGE_ID');
+  });
+
+  it('XHR 落点：SPA 接口给挑战页地址，非 SPA 接口给原路径', async () => {
+    const ip = '203.0.113.257';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    const adminReq = makeRequest({ ip, url: '/admin/v1/users' });
+    adminReq.headers['sec-fetch-mode'] = 'cors';
+    adminReq.headers.accept = 'application/json';
+    await buildRequestContext(adminReq);
+    const adminReply = makeReply();
+    adminReply.request = adminReq;
+    await checkGlobalBlockPhase(adminReq, adminReply);
+    expect(adminReply.statusCode).toBe(428);
+    expect(adminReply.sentBody.challengeUrl).toBe('/admin/challenge.html');
+    expect(adminReply.sentBody.requestUrl).toBe('/admin/v1/users');
+
+    const apiReq = makeRequest({ ip, url: '/api/firewall/v1/monitor/summary' });
+    apiReq.headers['sec-fetch-mode'] = 'cors';
+    apiReq.headers.accept = 'application/json';
+    await buildRequestContext(apiReq);
+    const apiReply = makeReply();
+    apiReply.request = apiReq;
+    await checkGlobalBlockPhase(apiReq, apiReply);
+    expect(apiReply.statusCode).toBe(428);
+    expect(apiReply.sentBody.challengeUrl).toBe('/api/firewall/v1/monitor/summary');
   });
 });
