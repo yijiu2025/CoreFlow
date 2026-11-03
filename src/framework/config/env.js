@@ -179,7 +179,7 @@ const SCHEMA = [
     validate: validators.oneOf(LOG_LEVELS)
   },
 
-  // ── 超时（毫秒）── 主来源是同目录 app_config.json；env 仅作容器部署覆盖项
+  // ── 超时（毫秒）── 主来源是 src/config/app_config.json；env 仅作容器部署覆盖项
   {
     key: 'HTTP_KEEP_ALIVE_TIMEOUT_MS',
     group: 'timeout',

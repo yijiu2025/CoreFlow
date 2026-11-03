@@ -56,6 +56,9 @@ services:
       - app-logs:/app/logs
       - app-data:/app/src/data
       - app-uploads:/app/public/uploads
+      # 运维调优配置（可选）：宿主机 ./src/config 只读覆盖镜像内默认值，
+      # 改完 docker compose restart 即生效，无需重建镜像
+      # - ./src/config:/app/src/config:ro
     # 应用自身优雅关闭上限 30s（index.js 的 SHUTDOWN_TIMEOUT），
     # 编排层必须给得比它宽，否则容器会被更早 SIGKILL，优雅关闭等于没写。
     stop_grace_period: 35s
