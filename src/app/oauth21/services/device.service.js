@@ -159,7 +159,7 @@ class DeviceService {
         sub: entry.sub,
         client_id: entry.client_id,
         scope: entry.scope,
-        expiresIn: config.jwt.refreshTokenTTL
+        expiresIn: config.tokens.refreshTokenTTL
       });
 
       // 清理
@@ -169,7 +169,7 @@ class DeviceService {
       return {
         access_token: accessToken,
         token_type: 'Bearer',
-        expires_in: config.jwt.accessTokenTTL,
+        expires_in: config.tokens.accessTokenTTL,
         refresh_token: refreshToken,
         scope: entry.scope
       };

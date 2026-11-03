@@ -144,14 +144,14 @@ class TokenService {
       sub: codeData.sub,
       client_id: client.client_id,
       scope: codeData.scope,
-      expiresIn: config.jwt.refreshTokenTTL
+      expiresIn: config.tokens.refreshTokenTTL
     });
 
     const result = {
       access_token: accessToken,
       access_token_kid: accessKid,
       token_type: 'Bearer',
-      expires_in: config.jwt.accessTokenTTL,
+      expires_in: config.tokens.accessTokenTTL,
       refresh_token: refreshToken,
       scope: codeData.scope
     };
@@ -198,7 +198,7 @@ class TokenService {
     return {
       access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: config.jwt.accessTokenTTL,
+      expires_in: config.tokens.accessTokenTTL,
       scope: finalScope
     };
   }
@@ -264,13 +264,13 @@ class TokenService {
       sub: tokenData.sub,
       client_id: client.client_id,
       scope: newScope,
-      expiresIn: config.jwt.refreshTokenTTL
+      expiresIn: config.tokens.refreshTokenTTL
     });
 
     return {
       access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: config.jwt.accessTokenTTL,
+      expires_in: config.tokens.accessTokenTTL,
       refresh_token: newRefreshToken,
       scope: newScope
     };
@@ -352,7 +352,7 @@ class TokenService {
         reply.setCookie('refresh_token', result.refresh_token, {
           httpOnly: true,
           secure: COOKIE_POLICY.secure,
-          maxAge: config.jwt.refreshTokenTTL || 604800,
+          maxAge: config.tokens.refreshTokenTTL || 604800,
           path: '/oauth2.1/token',
           sameSite: COOKIE_POLICY.refreshSameSite,
           ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})

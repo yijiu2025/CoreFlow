@@ -24,7 +24,7 @@ async function setAuthCookies(reply, { accessToken, refreshToken, user }, fastif
   reply.setCookie('access_token', accessToken, {
     httpOnly: true,
     secure: COOKIE_POLICY.secure,
-    maxAge: config.jwt.accessTokenTTL * 1000,
+    maxAge: config.tokens.accessTokenTTL * 1000,
     path: '/',
     sameSite: COOKIE_POLICY.sameSite,
     ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
@@ -34,7 +34,7 @@ async function setAuthCookies(reply, { accessToken, refreshToken, user }, fastif
   reply.setCookie('refresh_token', refreshToken, {
     httpOnly: true,
     secure: COOKIE_POLICY.secure,
-    maxAge: config.jwt.refreshTokenTTL * 1000,
+    maxAge: config.tokens.refreshTokenTTL * 1000,
     path: '/oauth2.1/token',
     sameSite: COOKIE_POLICY.refreshSameSite,
     ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
@@ -46,7 +46,7 @@ async function setAuthCookies(reply, { accessToken, refreshToken, user }, fastif
     httpOnly: false,
     secure: COOKIE_POLICY.secure,
     sameSite: COOKIE_POLICY.sameSite,
-    maxAge: config.jwt.accessTokenTTL * 1000,
+    maxAge: config.tokens.accessTokenTTL * 1000,
     ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
   });
 
@@ -55,7 +55,7 @@ async function setAuthCookies(reply, { accessToken, refreshToken, user }, fastif
     httpOnly: false,
     secure: COOKIE_POLICY.secure,
     sameSite: COOKIE_POLICY.sameSite,
-    maxAge: config.jwt.accessTokenTTL * 1000,
+    maxAge: config.tokens.accessTokenTTL * 1000,
     ...(COOKIE_POLICY.domain ? { domain: COOKIE_POLICY.domain } : {})
   });
 
@@ -89,10 +89,10 @@ function buildTokenResponse(result, message = '登录成功') {
     message,
     data: {
       accessToken: result.access_token,
-      accessTokenExpiredTime: String(config.jwt.accessTokenTTL * 1000),
+      accessTokenExpiredTime: String(config.tokens.accessTokenTTL * 1000),
       refreshToken: result.refresh_token,
       tokenType: 'Bearer',
-      expiresIn: config.jwt.accessTokenTTL,
+      expiresIn: config.tokens.accessTokenTTL,
       scope: result.scope,
       user: result.user,
       // iframe SSO 场景：父窗口（firewall/posecraft）用此临时 token

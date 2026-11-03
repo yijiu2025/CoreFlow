@@ -138,7 +138,7 @@ class AuthorizationService {
       code_challenge: codeChallenge,
       code_challenge_method: codeChallengeMethod,
       nonce,
-      expiresIn: config.jwt.authorizationCodeTTL
+      expiresIn: config.authorizationCode.ttl
     });
 
     return code;

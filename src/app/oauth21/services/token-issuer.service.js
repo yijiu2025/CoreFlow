@@ -97,13 +97,13 @@ async function issueDirectTokens(user, client, scope, oidcNonce, request, reply,
       sub: user.uid,
       client_id: client.client_id,
       scope: scopeString,
-      expiresIn: config.jwt.refreshTokenTTL
+      expiresIn: config.tokens.refreshTokenTTL
     });
 
     result.access_token = accessToken;
     result.access_token_kid = accessKid;
     result.refresh_token = refreshToken;
-    result.expires_in = config.jwt.accessTokenTTL;
+    result.expires_in = config.tokens.accessTokenTTL;
 
     // 预热权限缓存：签发时查好 roles/permissions 写入 `auth:perm` 命名空间，
     // 验证侧 getUserFromToken / getSession 都从同一入口读（perm-cache.js），

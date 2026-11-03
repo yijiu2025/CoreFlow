@@ -39,12 +39,12 @@ import { sign, verify } from '../../../framework/jwt/index.js';
 async function issueToken({ sub, aud, token_type = 'access_token', ttl, extra }) {
   const now = Math.floor(Date.now() / 1000);
   const defaultTtl = {
-    access_token: config.jwt.accessTokenTTL,
-    id_token: config.jwt.idTokenTTL,
-    refresh_token: config.jwt.refreshTokenTTL,
-    client_token: config.jwt.accessTokenTTL
+    access_token: config.tokens.accessTokenTTL,
+    id_token: config.tokens.idTokenTTL,
+    refresh_token: config.tokens.refreshTokenTTL,
+    client_token: config.tokens.accessTokenTTL
   };
-  const exp = ttl || defaultTtl[token_type] || config.jwt.accessTokenTTL;
+  const exp = ttl || defaultTtl[token_type] || config.tokens.accessTokenTTL;
   const payload = {
     iss: config.server.issuer,
     sub,
@@ -88,7 +88,7 @@ async function issueIdToken({ sub, aud, nonce, auth_time, email, name }) {
     sub,
     aud,
     iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + config.jwt.idTokenTTL,
+    exp: Math.floor(Date.now() / 1000) + config.tokens.idTokenTTL,
     auth_time: auth_time || Math.floor(Date.now() / 1000),
     token_type: 'id_token'
   };
