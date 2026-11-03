@@ -27,8 +27,12 @@ const DEFAULTS = {
 
 let file;
 
+/** 单调递增的 mtime 偏移：每次写覆盖都往后推，避免同毫秒内两次写入"撞车"导致漏重载 */
+let mtimeTick = 0;
+
 beforeEach(() => {
-  file = path.join(os.tmpdir(), `runtime-config-test-${process.pid}-${Date.now()}.json`);
+  file = path.join(os.tmpdir(), `runtime-config-test-${process.pid}-${Date.now()}-${Math.random()}.json`);
+  mtimeTick = 0;
 });
 
 afterEach(() => {
@@ -39,10 +43,17 @@ afterEach(() => {
   }
 });
 
-/** 写覆盖文件（finish 用于强制 mtime 前进） */
+/**
+ * 写覆盖文件并**强制 mtime 单调前进**
+ *
+ * ⚠️ 不能用固定的 `now + 1s`：同一测试内连续两次写入会得到相同 mtime，
+ * mtime 比较判定"没变" → 第二次覆盖不生效（Linux CI 上必现，Windows 偶发）。
+ * 用递增 tick 保证每次写入的时间戳严格大于上一次。
+ */
 function writeOverlay(obj) {
   fs.writeFileSync(file, JSON.stringify(obj), 'utf-8');
-  const future = new Date(Date.now() + 1_000);
+  mtimeTick += 2;
+  const future = new Date(Date.now() + mtimeTick * 1_000);
   fs.utimesSync(file, future, future);
 }
 

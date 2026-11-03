@@ -113,7 +113,8 @@ function createRuntimeConfig({ name, defaults, overrides, fileName, reloadMs = 1
   // 基准 = core 保底 ← 静态覆盖（src/config）；运行期 JSON 覆盖再叠在这之上
   const base = overrides ? deepMerge(defaults, overrides) : clone(defaults);
   let current = clone(base);
-  let currentMtime = 0;
+  /** 上次读取的文件指纹（mtime + size）：只比 mtime 会漏掉"同时间戳但内容变了"的写入 */
+  let currentSignature = '';
   let lastCheck = 0;
   let lastError = '';
   /** 已绑定的导出对象：热改后总要原地同步，保证消费方手里的引用读到新值 */
@@ -128,20 +129,22 @@ function createRuntimeConfig({ name, defaults, overrides, fileName, reloadMs = 1
     try {
       stat = fs.statSync(file);
     } catch {
-      if (currentMtime !== 0) {
+      if (currentSignature !== '') {
         // 文件被删 → 退回纯默认值（运维撤销覆盖的正常路径，不刷告警）
         current = clone(base);
-        currentMtime = 0;
+        currentSignature = '';
         publish();
       }
       return current;
     }
-    if (stat.mtimeMs === currentMtime) return current;
+    // mtime + size 双指纹：某些文件系统时间戳粒度粗（1s），同秒内改两次只靠 mtime 会漏
+    const signature = `${stat.mtimeMs}:${stat.size}`;
+    if (signature === currentSignature) return current;
 
     try {
       const raw = JSON.parse(fs.readFileSync(file, 'utf-8'));
       current = deepMerge(base, raw);
-      currentMtime = stat.mtimeMs;
+      currentSignature = signature;
       lastError = '';
       publish();
       log.info(`ℹ️ [RuntimeConfig] ${name} 覆盖已生效（${path.basename(file)}）`);
