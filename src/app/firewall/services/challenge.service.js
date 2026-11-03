@@ -15,7 +15,7 @@
 import crypto from 'crypto';
 import { generateFingerprint } from '../../../framework/firewall/util/fingerprint.js';
 import { verifyPow } from '../../../framework/firewall/util/pow-sha256.js';
-import { grantPass, takeChallenge } from '../../../framework/firewall/util/redis.js';
+import { grantPass, takeChallenge, readAccessState } from '../../../framework/firewall/util/redis.js';
 import { issueChallengePayload } from '../../../framework/firewall/challenge-template.js';
 import { getClientDeviceId } from '../../../framework/auth/index.js';
 import { createLogger } from '../../../framework/log/index.js';
@@ -36,6 +36,9 @@ const PASS_TOKEN_TTL = 1800;
  * 绑定上下文与 `verifyChallenge` 逐项对齐（IP + 指纹 + 设备 ID）：同一份载荷
  * 只能被同一上下文消费，换 IP / 换 UA 都过不了校验。
  *
+ * ⚠️ **只在挑战态签发**：非挑战态请求返回 403 `Not Challenged`。否则免登录的 issue
+ * 就成了"预先买票"——先解一次 PoW 换 30 分钟免挑战，把整套挑战降级成可选项。
+ *
  * @param {object} request Fastify request（取 ip / headers / cookie）
  * @returns {Promise<{ok:true, challengeId:string, salt:string, difficulty:number, maxAttempts:number, ttlSec:number}
  *   | {ok:false, statusCode:number, reason:string}>}
@@ -44,6 +47,20 @@ async function issueChallenge(request) {
   try {
     const fingerprint = generateFingerprint(request);
     const deviceId = await getClientDeviceId(request);
+
+    // ── 闸门：只有**当前确实处于挑战态**才签发 ──
+    //
+    // 为什么要这道闸（2026-11-03 补）：issue 是免登录接口，若无条件签发，任何人先打开
+    // 挑战页解一次 PoW（约 4k 次哈希，几十毫秒）就能拿到 30 分钟有效的 fw_verified，
+    // 之后狂刷时 `checkChallengeCookie` 直接放行 —— 等于把"限频后必须过验证"降级成
+    // "每 30 分钟自证一次即可"。而内置 HTML 模板天然没有这个口子：它只在挑战态渲染。
+    // 一道只读 Redis 的判定，把这个不对称补齐。
+    const state = await readAccessState({ ip: request.ip, fingerprint, deviceId });
+    const inChallenge = [state.ipBlock, state.fpBlock, state.devBlock].some(b => b?.status === 'CHALLENGE');
+    if (!inChallenge) {
+      return { ok: false, statusCode: 403, reason: 'Not Challenged' };
+    }
+
     const payload = await issueChallengePayload({ ip: request.ip, fingerprint, deviceId });
     return { ok: true, ...payload };
   } catch (err) {

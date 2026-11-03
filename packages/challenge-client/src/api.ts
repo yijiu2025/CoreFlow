@@ -29,6 +29,17 @@ export interface VerifyResult {
   reason?: string;
 }
 
+/**
+ * 挑战接口错误
+ *
+ * `code` 取服务端的 `reason`（`Not Challenged` / `Challenge Unavailable` …），
+ * 供调用方按**结构化标记**分支，而不是拿 message 文本做控制流。
+ */
+export interface ChallengeError extends Error {
+  code?: string;
+  status?: number;
+}
+
 /** 客户端配置 */
 export interface ChallengeClientOptions {
   /**
@@ -69,7 +80,10 @@ export async function issueChallenge(options: ChallengeClientOptions = {}): Prom
 
   const body = (await safeJson(res)) as Partial<ChallengeIssue> & { ok?: boolean; reason?: string };
   if (!res.ok || body?.ok !== true) {
-    throw new Error(body?.reason || `Challenge issue failed (${res.status})`);
+    const err = new Error(body?.reason || `Challenge issue failed (${res.status})`) as ChallengeError;
+    err.code = body?.reason;
+    err.status = res.status;
+    throw err;
   }
   return body as ChallengeIssue;
 }

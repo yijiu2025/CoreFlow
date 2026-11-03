@@ -17,7 +17,7 @@ export { sha256Hex, solvePow } from './pow';
 export type { SolveOptions, SolveResult } from './pow';
 
 export { issueChallenge, verifyChallenge, ISSUE_PATH, VERIFY_PATH } from './api';
-export type { ChallengeIssue, ChallengeClientOptions, VerifyResult } from './api';
+export type { ChallengeIssue, ChallengeClientOptions, ChallengeError, VerifyResult } from './api';
 
 export { useChallenge, resolveReturnPath } from './useChallenge';
 export type { ChallengePhase, UseChallengeOptions } from './useChallenge';

@@ -703,6 +703,13 @@ describe('Vue 挑战页接入：issue 签发 → 求解 → verify 全链路', (
   }
 
   it('issue 返回可求解的载荷，且与 verify 的绑定上下文一致 → 通过', async () => {
+    // issue 只在挑战态签发（否则等于"预先买票"），先按真实路径把该 IP 判成 CHALLENGE
+    await setBlock('203.0.113.251', {
+      status: 'CHALLENGE',
+      source: 'auto',
+      permanent: false,
+      expiresAt: Date.now() + 60_000
+    });
     const request = makeRequest({
       ip: '203.0.113.251',
       method: 'POST',
@@ -724,7 +731,26 @@ describe('Vue 挑战页接入：issue 签发 → 求解 → verify 全链路', (
     expect(reply.cookies.fw_verified).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('非挑战态请求 issue → 403 Not Challenged（防"预先解一次换 30 分钟免挑战"）', async () => {
+    const clean = makeRequest({
+      ip: '203.0.113.250',
+      method: 'POST',
+      url: '/api/firewall/v1/challenge/issue',
+      body: {}
+    });
+    const res = await issueChallenge(clean);
+    expect(res.ok).toBe(false);
+    expect(res.statusCode).toBe(403);
+    expect(res.reason).toBe('Not Challenged');
+  });
+
   it('issue 的载荷换一个 IP 消费 → 拒绝（绑定上下文不可转移）', async () => {
+    await setBlock('203.0.113.252', {
+      status: 'CHALLENGE',
+      source: 'auto',
+      permanent: false,
+      expiresAt: Date.now() + 60_000
+    });
     const request = makeRequest({
       ip: '203.0.113.252',
       method: 'POST',

@@ -149,6 +149,18 @@ export function useChallenge(options: UseChallengeOptions = {}) {
       return true;
     } catch (err) {
       if (round.signal.aborted || disposed) return false;
+
+      // `Not Challenged`：服务端认为当前上下文**没有被要求验证**（挑战态已过期、或用户
+      // 本来就没被拦）。这不是失败 —— 直接当作通过回原页面，避免让用户对着一个
+      // "验证失败"的红字页面反复重试。
+      const code = (err as { code?: string }).code;
+      if (code === 'Not Challenged') {
+        phase.value = 'ok';
+        progress.value = 1;
+        await options.onSuccess?.();
+        return true;
+      }
+
       reason.value = err instanceof Error ? err.message : 'Challenge Unavailable';
       phase.value = 'error';
       return false;
