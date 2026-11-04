@@ -26,6 +26,7 @@ import {
 } from '../../../framework/firewall/util/redis.js';
 import { createLogger } from '../../../framework/log/index.js';
 import { registerSettingsReader } from '../../../framework/firewall/interface/config-access.js';
+import { dropMisplacedDefenseKeys } from '../../../framework/firewall/config/validate.js';
 
 const log = createLogger('app.firewall.dao.dao');
 
@@ -60,7 +61,12 @@ function initDao() {
     if (fs.existsSync(FIREWALL_FILE)) {
       const raw = JSON.parse(fs.readFileSync(FIREWALL_FILE, 'utf-8'));
       if (raw.serverNode) serverNode = { ...serverNode, ...raw.serverNode };
-      if (raw.securitySettings) securitySettings = deepMerge(securitySettings, raw.securitySettings);
+      if (raw.securitySettings) {
+        // 形状与 framework 一致：顶层出现的 defense 键一律剔除（告警由 framework 的
+        // persisted 层只打一次）；这里保证 app 侧内存里也没有残留的错误形状。
+        const { settings: normalized } = dropMisplacedDefenseKeys(raw.securitySettings);
+        securitySettings = deepMerge(securitySettings, normalized);
+      }
       log.info(`💾 [Firewall DAO] ${C.dim}已从文件恢复安全策略与节点数据${C.reset}`);
     } else {
       refreshServerNodeAuto().catch(err => {

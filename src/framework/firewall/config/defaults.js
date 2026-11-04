@@ -16,7 +16,11 @@
  * **只收防护策略**：一个键若没有任何 core 代码读取（例如面板开关
  * `showTrajectory`、节点定位数据源 `activeIpApi`），它就不属于这里 ——
  * 默认值归面板层（`src/app/firewall/config/panel.js`）。判据：
- * `grep -rn "defense\\.<key>" src/framework/firewall` 为空 ⇒ 不该写在 core。
+ * `grep -rn "defense\.<key>" src/framework/firewall` 为空 ⇒ 不该写在 core。
+ *
+ * **形状是硬约束**：`defense` 的键只能出现在 `defense` 下。写在 `securitySettings` 顶层的
+ * 同名键**不迁移、不读取**，载入时直接剔除并在启动日志里列出来（`config/validate.js`）——
+ * schema 只有一个版本，没有"历史兼容层"。
  *
  * ════════════════════════════════════════════════════════════════════
  * 二、为什么有 `defense` 这一层（不要试图拍平）

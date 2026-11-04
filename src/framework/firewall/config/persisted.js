@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_SECURITY_SETTINGS } from './defaults.js';
+import { dropMisplacedDefenseKeys } from './validate.js';
 import { registerSettingsReader } from '../interface/config-access.js';
 import { createLogger } from '../../log/index.js';
 
@@ -90,7 +91,17 @@ function loadPersistedSettings() {
     if (fs.existsSync(FIREWALL_FILE)) {
       const raw = JSON.parse(fs.readFileSync(FIREWALL_FILE, 'utf-8'));
       if (raw?.securitySettings) {
-        settings = deepMerge(DEFAULT_SECURITY_SETTINGS, raw.securitySettings);
+        // 形状校验：属于 defense 的键写在顶层 → 剔除 + 告警一次（不迁移、不兼容）。
+        // 这类值没有任何读取点，留着只会让人以为它生效了。
+        const { settings: normalized, misplaced } = dropMisplacedDefenseKeys(raw.securitySettings);
+        if (misplaced.length > 0) {
+          log.warn(
+            `⚠️ [Firewall] ${FIREWALL_FILE} 里这些 defense 键写在了 securitySettings 顶层：` +
+              `${misplaced.join(', ')} —— 顶层值已忽略（生效值见 securitySettings.defense.*）。` +
+              `请把它们移到 defense 下`
+          );
+        }
+        settings = deepMerge(DEFAULT_SECURITY_SETTINGS, normalized);
         loaded = true;
       }
     }

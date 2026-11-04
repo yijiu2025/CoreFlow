@@ -29,6 +29,10 @@
  *
  * ⚠️ 数组是**整体替换**（不是追加）：写 botPatterns / safePaths 这类数组时要给全量。
  * ⚠️ 层级（securitySettings.defense）是持久化 schema 契约，别在这里改层级。
+ * ⚠️ defense 的键**必须写在 defense 下**：写成顶层（例如 `enableRateLimit: false`）会被
+ *    **忽略**并在启动时告警 —— 顶层没有任何读取点，留着只会让人以为它生效了。
+ *    载入时会自动剔除这类错位键（`framework/firewall/config/validate.js`），不做迁移、
+ *    不兼容旧形状：这套 schema 只有一个版本。
  *
  * 示例：
  *   const DEFAULT_SECURITY_SETTINGS = {

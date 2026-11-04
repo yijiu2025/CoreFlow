@@ -100,19 +100,8 @@ async function registerRateLimit(app) {
   const settings = readSecuritySettings() || {};
   const defense = settings.defense || {};
 
-  // 历史遗留：securitySettings 顶层曾经也有一份扁平的同名字段（enableRateLimit /
-  // rateLimitRequests / rateLimitWindow），取值与 defense.* 不一致，且**没有任何代码读它**。
-  // 出厂 JSON 已清理，但现场实例的配置文件未必被替换 —— 这里把它喊出来，避免运维看着 60
-  // 以为在限流、实际生效 10000。
-  const legacyFlat = ['enableRateLimit', 'rateLimitRequests', 'rateLimitWindow'].filter(
-    key => key in settings && !(key in defense)
-  );
-  if (legacyFlat.length > 0) {
-    log.warn(
-      `⚠️ [Firewall] 配置文件 securitySettings 下存在已废弃的扁平限流字段（${legacyFlat.join(', ')}），` +
-        `它们**不会被读取**，生效值是 defense.*。请删除这些字段以免误判。`
-    );
-  }
+  // 写在 securitySettings 顶层的 defense 键（如历史遗留的 enableRateLimit）会在载入时
+  // 被剔除并告警一次（config/validate.js）；这里只认 defense.* 的生效值。
 
   const globalEnabled = Boolean(defense.enableRateLimit);
   const routeLevelEnabled = defense.enableEndpointRateLimit !== false;
