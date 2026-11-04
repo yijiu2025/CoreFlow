@@ -42,9 +42,10 @@ const STALE_AFTER_MS = 10 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
- * 活跃 IP 表的高水位告警阈值（条）。超过说明「窗口内有大量不同来源 IP」，
- * 内存占用 = 条数 × 约 125B（实测），每条清理最多打一条 warn，天然限频。
- * 不在这里做强制淘汰：按 IP 挤掉别人记录恰好是攻击者想要的（挤掉即绕过计数）。
+ * 活跃 IP 表的高水位告警阈值兜底值（条）
+ *
+ * 正式来源是 `defense.connHighWater`（framework 默认值 50000，支持 src/config 覆盖与
+ * 面板热改）；本常量仅在配置缺项/非法时兜底。
  */
 const CONN_HIGH_WATER = 50000;
 
@@ -167,14 +168,34 @@ function cleanupStaleConnections() {
   }
 
   // 高水位告警：内存 = 条数 × ~125B（实测）。不强制淘汰 —— 淘汰等于把配额让给攻击者。
-  if (activeConnections.size > CONN_HIGH_WATER) {
+  const highWater = readHighWater();
+  if (activeConnections.size > highWater) {
     log.warn(
-      `[Firewall] activeConnections 活跃 IP 数 ${activeConnections.size} 超过高水位 ${CONN_HIGH_WATER}` +
+      `[Firewall] activeConnections 活跃 IP 数 ${activeConnections.size} 超过高水位 ${highWater}` +
         `（约 ${Math.round((activeConnections.size * 125) / 1048576)}MB），` +
-        `若持续上涨请调小 defense.connStaleAfterMs 或把并发限制前移到边缘`
+        `若持续上涨请调小 defense.connStaleAfterMs / defense.connHighWater，或把并发限制前移到边缘`
     );
   }
   return cleaned;
+}
+
+/**
+ * 读高水位阈值（`defense.connHighWater`），非法值回退常量
+ *
+ * 只做告警阈值，不影响放行 —— 但阈值配成 0/负数会让每次清理都喊一次，
+ * 所以要求严格正数，否则回退。
+ *
+ * @returns {number} 生效阈值（条）
+ */
+function readHighWater() {
+  let configured;
+  try {
+    configured = Number(getConfig().defense.connHighWater);
+  } catch {
+    // 配置层尚未就绪：只影响告警阈值，回退常量即可
+    return CONN_HIGH_WATER;
+  }
+  return Number.isFinite(configured) && configured > 0 ? configured : CONN_HIGH_WATER;
 }
 
 /**

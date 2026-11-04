@@ -5,14 +5,14 @@
  * 只允许一种形状，不做历史兼容
  * ════════════════════════════════════════════════════════════════════
  * `securitySettings` 的合法形状只有三类键：
- *   · `defense`                        防护策略（`DEFAULT_SECURITY_SETTINGS.defense`，35 个）
+ *   · `defense`                        防护策略（`DEFAULT_SECURITY_SETTINGS.defense`，39 个）
  *   · `activeIpApi` / `showTrajectory` 面板层展示配置（app 层所有，见 app/firewall/config/panel.js）
  *
  * 历史上有过把限流阈值**平铺在 securitySettings 顶层**的写法（`securitySettings.enableRateLimit`
  * 等）。那套形状早已没有读取点，留着就是"看着有配置、其实不生效"的陷阱。
  *
  * 这里**不做迁移、不写兼容分支**：任何属于 `defense` 的键出现在顶层，直接剔除并在启动时告警
- * 一次 —— 规则是通用的（对 35 个键一视同仁），不是为某段历史写的补丁：
+ * 一次 —— 规则是通用的（对 defense 的每个键一视同仁），不是为某段历史写的补丁：
  * 以后谁把 `maxConn`、`botChallengeBotLimit` 写到顶层，同样会被发现。
  *
  * 为什么不能"静默忽略"：运维看着 `rateLimitRequests: 60` 会以为限流是 60，实际生效的是

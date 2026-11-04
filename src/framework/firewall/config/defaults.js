@@ -184,7 +184,33 @@ const CONN_LIMIT = {
   // 见 src/config/app_config.js 的 http.requestTimeoutMs），
   // 否则正常长请求的 +1 会在请求结束前被回收，随后的 -1 计数失真。
   // 默认 10 分钟 = 2 × requestTimeout，且为清理周期的 2 倍。
-  connStaleAfterMs: 600000
+  connStaleAfterMs: 600000,
+  // 活跃 IP 表的高水位**告警**阈值（条）：超过即打一条 warn，说明"窗口内有大量不同来源 IP"。
+  // 内存 ≈ 条数 × 125B（实测）。这里**不做强制淘汰** —— 按 IP 挤掉别人的记录恰好是攻击者
+  // 想要的（挤掉即绕过计数），所以只观测、不驱逐。
+  // 小内存实例可以调小（5000 就能提前发现异常），调大则减少日志噪音。
+  connHighWater: 50000
+};
+
+// ════════════════════════════════════════════════════════════════════
+// 路径级跳过规则（探针 / 挑战页外壳）
+// ════════════════════════════════════════════════════════════════════
+// 这三份路径与部署形态有关（探针路径取决于编排配置，挑战页路径取决于前端产物落在哪），
+// 因此做成配置；`pipeline.js` 里保留同名常量作为**最终兜底**（配置缺失/写空时回退），
+// 两者关系是「代码兜底 ← 本文件默认值 ← src/config 覆盖 ← 面板热改」。
+//
+// ⚠️ 与路由注册强绑定的路径**不做配置**：挑战接口路径（`/api/firewall/v1/challenge/*`）
+//    必须和 `api/firewall/v1/challenge.js` 的路由一一对应，可配 = 允许漂移 = 死锁或绕过。
+const ROUTE_SKIP_PATHS = {
+  // 健康探针：必须无条件可达，否则探针会被本系统的 Bot 检测判成"无 UA 高频"而拿到挑战页
+  // （探针通常不带 UA，60s 窗口内 5s 一次 = 12 次 > botChallengeNoUaLimit 默认 10）。
+  // 改这里的同时要确认 `api/system/v1/health.js` 确实注册了这些路径。
+  probePaths: ['/v1/health', '/v1/health/live', '/v1/health/ready'],
+  // 前端人机挑战页（独立构建入口，不是 SPA 深链）：被挑战的客户端连"挑战页外壳"都不能被拦，
+  // 否则「点开验证页 → 又被判挑战态 → 再弹一次」死锁。页面里不得放任何用户数据。
+  challengePagePaths: ['/firewall/challenge.html', '/admin/challenge.html', '/challenge.html'],
+  // 挑战页静态资源前缀（构建产物目录，按 SPA 基路径各一份）
+  challengeAssetPrefixes: ['/firewall/assets/', '/admin/assets/']
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -287,6 +313,7 @@ const FIREWALL_DEFAULTS = {
     ...GLOBAL_RATE_LIMIT,
     ...BRUTE_FORCE,
     ...CONN_LIMIT,
+    ...ROUTE_SKIP_PATHS,
     ...GEO_FENCE,
     ...BOT_DETECTION,
     ...CHALLENGE,

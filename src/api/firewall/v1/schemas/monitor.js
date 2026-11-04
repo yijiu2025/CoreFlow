@@ -127,6 +127,12 @@ const updateSettingsSchema = {
           ipBlockTime: { type: 'number' },
           enableConnLimit: { type: 'boolean' },
           maxConn: { type: 'number' },
+          // 连接表高水位告警阈值（条）：只影响告警，不影响放行
+          connHighWater: { type: 'number' },
+          // 路径级跳过规则（部署相关）：探针路径 / 挑战页外壳
+          probePaths: { type: 'array', items: { type: 'string' } },
+          challengePagePaths: { type: 'array', items: { type: 'string' } },
+          challengeAssetPrefixes: { type: 'array', items: { type: 'string' } },
           enableGeoFilter: { type: 'boolean' },
           // 设备维度封禁开关（跨 IP）：自动封禁/挑战命中时是否同时记到设备 ID 上
           enableDeviceBlock: { type: 'boolean' },

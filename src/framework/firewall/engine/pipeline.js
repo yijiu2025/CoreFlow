@@ -36,6 +36,9 @@ const log = createLogger('framework.firewall.engine.pipeline');
  *
  * ⚠️ `issue` 必须在这里 —— 挑战态下前端要**签发**一份新载荷才能开始算 PoW，
  * 漏了它就会出现"挑战页拉不到挑战"的死锁（实测踩到：Challenge issue failed 428）。
+ *
+ * ⚠️ 刻意**不做配置项**：它必须与 `api/firewall/v1/challenge.js` 的路由注册一一对应，
+ *    可配 = 允许漂移 = 要么挑战死锁、要么 `verify` 被当成普通接口拦掉。
  */
 const CHALLENGE_API_PATHS = ['/api/firewall/v1/challenge/verify', '/api/firewall/v1/challenge/issue'];
 
@@ -54,8 +57,9 @@ const CHALLENGE_VERIFY_PATH = '/api/firewall/v1/challenge/verify';
  * 这不是放宽安全：全局封禁 / 连接数限制阶段**照常执行**，跳过的只是 Bot / 地理 /
  * 端点限频这些启发式判定。
  *
- * ⚠️ 与 `CHALLENGE_VERIFY_PATH` 一样是**字面量路径**：若改动 `api/system/system.json`
- * 的 prefix（当前为空）或 `health.js` 里的 group prefix（当前 `/v1`），此处必须同步。
+ * ⚠️ 这里是**代码兜底值**：正式来源是 `defense.probePaths`（默认值同这份清单，可被
+ *    src/config 与面板覆盖）。改 `system.json` 的 prefix 或 `health.js` 的 group prefix
+ *    时，代码兜底与配置默认值两处都要同步。
  */
 const PROBE_PATHS = ['/v1/health', '/v1/health/live', '/v1/health/ready'];
 
@@ -72,9 +76,10 @@ const PROBE_PATHS = ['/v1/health', '/v1/health/live', '/v1/health/ready'];
  * 为什么必须豁免：被挑战的客户端如果**连挑战页本身都被拦**，就成"点开验证页 →
  * 又被判成挑战态 → 再弹一次"的死锁。所以这些路径要像 `CHALLENGE_VERIFY_PATH` 一样无条件可达。
  *
- * ⚠️ 与 `CHALLENGE_VERIFY_PATH` 同一性质的字面量：若前端改了挑战页入口名或产物目录
- * （`vite build` 默认 `assets/`），此处必须同步。豁免的只是"挑战页外壳"，页面里不得
- * 放任何用户数据 —— 这段路径绕过了 Bot / 地理 / 端点限频判定。
+ * ⚠️ 这里是**代码兜底值**：正式来源是 `defense.challengePagePaths` /
+ *    `defense.challengeAssetPrefixes`（默认值同这份清单，可被 src/config 与面板覆盖）。
+ *    前端改入口名或产物目录时，代码兜底与配置默认值两处都要同步。豁免的只是"挑战页外壳"，
+ *    页面里不得放任何用户数据 —— 这段路径绕过了 Bot / 地理 / 端点限频判定。
  */
 const CHALLENGE_PAGE_PATHS = [
   '/firewall/challenge.html',
@@ -123,9 +128,36 @@ function challengePageFor(url) {
  */
 function isChallengePageUrl(url) {
   const p = pathOf(url);
-  if (CHALLENGE_PAGE_PATHS.includes(p)) return true;
-  if (CHALLENGE_PAGE_PATHS.includes(`${p}.html`)) return true;
-  return CHALLENGE_ASSET_PREFIXES.some(prefix => p.startsWith(prefix));
+  const pagePaths = readPathsFromConfig('challengePagePaths', CHALLENGE_PAGE_PATHS);
+  if (pagePaths.includes(p)) return true;
+  if (pagePaths.includes(`${p}.html`)) return true;
+  const assetPrefixes = readPathsFromConfig('challengeAssetPrefixes', CHALLENGE_ASSET_PREFIXES);
+  return assetPrefixes.some(prefix => p.startsWith(prefix));
+}
+
+/**
+ * 读一份「路径清单」配置，缺失/写空时回退到代码常量
+ *
+ * 三层兜底：代码常量（最基础）← defense.*（必有的默认值）← src/config / 面板热改。
+ * 配置写成空数组或全是非法条目时**回退**而不是「不豁免任何路径」——
+ * 这几份清单是正确性保证（探针 / 挑战页），配错=自伤，不该比默认更危险。
+ *
+ * @param {string} key defense 下的配置键
+ * @param {readonly string[]} fallback 代码兜底清单
+ * @returns {readonly string[]} 生效清单
+ */
+function readPathsFromConfig(key, fallback) {
+  let configured;
+  try {
+    configured = readSecuritySettings()?.defense?.[key];
+  } catch {
+    // 配置层尚未就绪（读取器未注册等）：回退代码兜底。
+    // 探针 / 挑战页属于"必须活着"的路径，不能因为读配置失败就失去豁免。
+    return fallback;
+  }
+  if (!Array.isArray(configured)) return fallback;
+  const list = configured.filter(p => typeof p === 'string' && p.length > 0);
+  return list.length > 0 ? list : fallback;
 }
 
 /** 静态资源后缀：不经过深度检测 */
@@ -186,7 +218,7 @@ function isChallengeVerifyUrl(url) {
  * @returns {boolean} true 表示是编排系统的健康探测
  */
 function isProbeUrl(url) {
-  return PROBE_PATHS.includes(pathOf(url));
+  return readPathsFromConfig('probePaths', PROBE_PATHS).includes(pathOf(url));
 }
 
 /**

@@ -46,6 +46,11 @@ const DEFENSE_KEYS = [
   'maxConn',
   'connCleanupIntervalMs',
   'connStaleAfterMs',
+  'connHighWater',
+  // 路径级跳过规则（探针 / 挑战页外壳，部署相关）
+  'probePaths',
+  'challengePagePaths',
+  'challengeAssetPrefixes',
   // 地理围栏
   'enableGeoFilter',
   'geoRules',
@@ -107,5 +112,31 @@ describe('防火墙默认策略 · schema 契约', () => {
     const d = DEFAULT_SECURITY_SETTINGS.defense;
     // 与 src/config/app_config.js 的 http.requestTimeoutMs（300s）对齐检查
     expect(d.connStaleAfterMs).toBeGreaterThan(300_000);
+  });
+});
+
+describe('路径级跳过规则的默认值', () => {
+  const d = DEFAULT_SECURITY_SETTINGS.defense;
+
+  it('探针 / 挑战页路径清单非空且是以 / 开头的绝对路径', () => {
+    // 这些键的代码里还有一份兜底常量，但配置项本身必须有可用默认值 ——
+    // 否则面板上看到的是空数组，等于"配置关掉了自保能力"。
+    for (const key of ['probePaths', 'challengePagePaths', 'challengeAssetPrefixes']) {
+      expect(Array.isArray(d[key])).toBe(true);
+      expect(d[key].length).toBeGreaterThan(0);
+      for (const p of d[key]) {
+        expect(typeof p).toBe('string');
+        expect(p.startsWith('/')).toBe(true);
+      }
+    }
+  });
+
+  it('连接高水位是正数（0/负数会让每轮清理都告警）', () => {
+    expect(d.connHighWater).toBeGreaterThan(0);
+  });
+
+  it('挑战接口路径**不是**配置项（必须与路由注册一一对应，可配 = 允许漂移）', () => {
+    expect('challengeApiPaths' in d).toBe(false);
+    expect('challengeVerifyPath' in d).toBe(false);
   });
 });
