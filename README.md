@@ -53,6 +53,28 @@ them as framework capabilities:
 > [Authentication integration](https://yijiu2025.github.io/CoreFlow/standards/auth-integration);
 > any frontend stack will do.
 
+## Architecture
+
+Three backend architecture diagrams (click to open the full-size image).
+
+<p align="center">
+  <img src="docs/public/architecture/backend-architecture-1.jpg" alt="Backend architecture diagram 1" width="900" />
+  <br />
+  <sub>Figure 1</sub>
+</p>
+
+<p align="center">
+  <img src="docs/public/architecture/backend-architecture-2.png" alt="Backend architecture diagram 2" width="900" />
+  <br />
+  <sub>Figure 2</sub>
+</p>
+
+<p align="center">
+  <img src="docs/public/architecture/backend-architecture-3.png" alt="Backend architecture diagram 3" width="900" />
+  <br />
+  <sub>Figure 3</sub>
+</p>
+
 ## Quick start
 
 ```bash

@@ -40,6 +40,28 @@
 > 契约见 [认证集成](https://yijiu2025.github.io/CoreFlow/standards/auth-integration)，
 > 前端可以是任意技术栈。
 
+## 架构
+
+下面三张是后端架构图（点开可看原图）。
+
+<p align="center">
+  <img src="docs/public/architecture/backend-architecture-1.jpg" alt="后端架构图（一）" width="900" />
+  <br />
+  <sub>图 1</sub>
+</p>
+
+<p align="center">
+  <img src="docs/public/architecture/backend-architecture-2.png" alt="后端架构图（二）" width="900" />
+  <br />
+  <sub>图 2</sub>
+</p>
+
+<p align="center">
+  <img src="docs/public/architecture/backend-architecture-3.png" alt="后端架构图（三）" width="900" />
+  <br />
+  <sub>图 3</sub>
+</p>
+
 ## 快速开始
 
 ```bash
