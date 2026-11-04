@@ -76,6 +76,7 @@ const { setBlock, setBlockDevice, setWhitelistDevice, getActiveBlocks, getActive
 const { buildRequestContext, checkGlobalBlockPhase, willBeRejectedAsAnonymous, observeLoginOutcome } =
   await import('../framework/firewall/engine/pipeline.js');
 const { isAccountLocked } = await import('../framework/firewall/engine/detectors/brute-force.js');
+const { checkNotFoundTrap, isSafePath } = await import('../framework/firewall/engine/detectors/scan-trap.js');
 const { generateServerSideDeviceId } = await import('../framework/auth/device/device-id-service.js');
 const { getSecuritySettings } = await import('../app/firewall/dao/dao.js');
 const { initFirewall } = await import('../app/firewall/index.js');
@@ -145,6 +146,31 @@ async function catchBlock(...args) {
   } catch (err) {
     return err;
   }
+}
+
+/**
+ * challenge 路由的注册选项快照
+ *
+ * 用假 fastify 捕获 `post(url, opts)`，绕开 guard 的 preHandler —— 既能拿到 handler
+ * 验响应体，也能拿到 `config` 验路由声明。guard 的 `_routeRegistry` 是**进程级**的，
+ * 同一进程重复注册同一路由会抛 DUPLICATE_ROUTE，所以这里必须缓存。
+ *
+ * @returns {Promise<Array<{url: string, opts: object}>>} 捕获到的路由
+ */
+let challengeRouteOptions = null;
+async function captureChallengeRoutes() {
+  if (!challengeRouteOptions) {
+    const routes = [];
+    const fakeFastify = {
+      post(url, opts) {
+        routes.push({ url, opts });
+      }
+    };
+    const { default: registerChallengeRoutes } = await import('../api/firewall/v1/challenge.js');
+    registerChallengeRoutes(fakeFastify);
+    challengeRouteOptions = routes;
+  }
+  return challengeRouteOptions;
 }
 
 /** 从挑战页 HTML 中解出 challengeId / salt / difficulty 并暴力求解 PoW */
@@ -879,7 +905,7 @@ describe('挑战态下签发接口必须可达 + 回环地址不被扫描陷阱�
   });
 
   it('回环地址刷 404 不会被判扫描器封禁（开发期自伤）', async () => {
-    const { checkNotFoundTrap } = await import('../framework/firewall/engine/detectors/scan-trap.js');
+    // checkNotFoundTrap 已在模块顶层导入（顶部 `await import`），这里不再重复导入
 
     // 连刷 20 次（超过 maxNotFoundAttempts=10），不应抛 scanner-trap
     for (let i = 0; i < 20; i++) {
@@ -952,22 +978,9 @@ describe('verify 路由：服务返回的档位字段必须真的发到线上', 
    * 把 `passTtlSec` / `scope` 吞了。service 对、单测绿、线上错，正是这类"只测单元
    * 不测出口"的典型漏网。这里直接执行 handler，等于测 HTTP 响应的正文。
    */
-  /** 捕获到的路由（模块级：guard 的 _routeRegistry 是进程级的，只能注册一次） */
-  let capturedRoutes = null;
-
   async function getVerifyHandler() {
-    if (!capturedRoutes) {
-      const routes = [];
-      const fakeFastify = {
-        post(url, opts) {
-          routes.push({ url, opts });
-        }
-      };
-      const { default: registerChallengeRoutes } = await import('../api/firewall/v1/challenge.js');
-      registerChallengeRoutes(fakeFastify);
-      capturedRoutes = routes;
-    }
-    const route = capturedRoutes.find(r => r.url?.endsWith('/verify'));
+    const routes = await captureChallengeRoutes();
+    const route = routes.find(r => r.url?.endsWith('/verify'));
     expect(route).toBeDefined();
     return route.opts.handler;
   }
@@ -1053,5 +1066,79 @@ describe('挑战态不影响健康探针', () => {
     reply.request = request;
     expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
     expect(reply.statusCode).toBe(429);
+  });
+});
+
+// ── ⑮ 扫描陷阱豁免的两层：路由声明 vs 无路由路径前缀（2026-11-04） ──────────────
+
+describe('扫描陷阱：端点自证（路由声明）与无路由路径（safePaths）分工', () => {
+  /** 连打 N 次同一状态码，返回首次抛出的错误（没抛返回 null） */
+  async function hammer(ip, url, statusCode, routeConfig, times = 12) {
+    for (let i = 0; i < times; i++) {
+      try {
+        await checkNotFoundTrap(ip, url, statusCode, null, routeConfig);
+      } catch (err) {
+        return err;
+      }
+    }
+    return null;
+  }
+
+  it('路由声明 config.firewall.skipScanTrap → 连刷 12 次 403 不计数', async () => {
+    const ip = '203.0.113.301';
+    // 挑战端点的 403（Expired / Mismatch / Invalid Proof）属正常业务语义
+    const err = await hammer(ip, '/api/firewall/v1/challenge/verify', 403, {
+      firewall: { skipScanTrap: true }
+    });
+    expect(err).toBeNull();
+  });
+
+  it('未声明的路由 → 第 10 次 403 仍然判 SCANNER（开关必须真的生效，不能顺带把陷阱关掉）', async () => {
+    const ip = '203.0.113.302';
+    const err = await hammer(ip, '/api/some/protected', 403, {});
+    expect(err).not.toBeNull();
+    expect(err.rule).toBe('scanner-trap');
+  });
+
+  it('没有路由的路径（前端产物 404）仍由 safePaths 前缀兜底', async () => {
+    const ip = '203.0.113.303';
+    // 无路由 ⇒ routeConfig 是 null；后端没有 SPA 回退，刷新深链必然 404
+    const err = await hammer(ip, '/firewall/assets/index-abc.js', 404, null);
+    expect(err).toBeNull();
+  });
+
+  it('挑战端点确实带上了 skipScanTrap（防「加了开关没人用」）', async () => {
+    const routes = await captureChallengeRoutes();
+    expect(routes).toHaveLength(2);
+    for (const route of routes) {
+      expect(route.opts.config.firewall.skipScanTrap).toBe(true);
+      // 与 rateLimit 同处一个 config 对象，互不影响
+      expect(route.opts.config.rateLimit.groupId).toMatch(/^challenge-/);
+    }
+  });
+});
+
+// ── ⑯ builtin 免检路径不能被配置数组顶掉（2026-11-04 实测踩到） ─────────────────
+
+describe('safePaths：内置免检项对「配置数组被整体替换」免疫', () => {
+  it('配置写空数组时，前端产物 / 面板前缀仍免检', async () => {
+    // 实测现场：src/data/firewall_config.json 里 safePaths 是旧的 5 条，
+    // deepMerge 对数组整体替换 → 新增的 /firewall/、/admin/ 被静默顶掉，
+    // 「刷新深链 → 404 累计 → 判扫描器」的修复在真实部署里根本没生效。
+    expect(isSafePath('/firewall/assets/index-abc.js', [])).toBe(true);
+    expect(isSafePath('/admin/', [])).toBe(true);
+    expect(isSafePath('/api/firewall/v1/monitor/summary', [])).toBe(true);
+    expect(isSafePath('/favicon.ico', [])).toBe(true);
+  });
+
+  it('配置追加的条目生效，且不影响「不在名单里的路径仍要计数」', async () => {
+    expect(isSafePath('/custom/thing', ['/custom/'])).toBe(true);
+    expect(isSafePath('/api/user/delete', ['/custom/'])).toBe(false);
+    expect(isSafePath('/api/user/delete')).toBe(false);
+  });
+
+  it('非法条目（空串 / 非字符串）不会变成"匹配一切"', async () => {
+    // 空前缀 startsWith('') 恒 true —— 一旦漏进配置就会把整个扫描陷阱关掉
+    expect(isSafePath('/api/user/delete', ['', null, undefined, 42])).toBe(false);
   });
 });

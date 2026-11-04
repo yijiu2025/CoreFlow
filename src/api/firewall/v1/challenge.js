@@ -38,7 +38,12 @@ async function registerChallengeRoutes(fastify) {
     method: 'POST',
     url: '/issue',
     config: {
-      rateLimit: { max: 10, timeWindow: '1 minute', groupId: 'challenge-issue' }
+      rateLimit: { max: 10, timeWindow: '1 minute', groupId: 'challenge-issue' },
+      // 本端点的 403 是**正常业务语义**（非挑战态 / 载荷过期 / 上下文不匹配），
+      // 页面失败会自动重试 → 不该被扫描陷阱当成「路径爆破」累计。
+      // 与 defense.safePaths 的 /api/firewall/ 前缀是两层：前缀管「没有路由的 404」，
+      // 这条声明随路由走（改名 / 换前缀都不会漏）。
+      firewall: { skipScanTrap: true }
     },
     requireLogin: false,
     schema: {
@@ -65,7 +70,9 @@ async function registerChallengeRoutes(fastify) {
     url: '/verify',
     // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
     config: {
-      rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'challenge-verify' }
+      rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'challenge-verify' },
+      // 同 issue：验签失败的 403 属正常语义（Expired / Mismatch / Invalid Proof）
+      firewall: { skipScanTrap: true }
     },
     // 本组必须保持免登录：被挑战的请求正是**尚未通过验证**的请求，
     // 若这里要求登录，挑战就永远解不开（见 docs/AUDIT-REPORT-2026-09-15.md 🔴-1）。

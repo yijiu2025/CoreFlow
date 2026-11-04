@@ -78,9 +78,23 @@ const SCAN_DETECTION = {
   notFoundWindow: 60,
   // 封禁时长（秒）
   blacklistDuration: 3600,
-  // 免检路径（健康检查 / 静态资源 / 面板自身 / 前端产物）
+  // 扫描陷阱的**路径前缀**免检名单：只该放「没有路由」的路径。
+  //
+  // 两类豁免别混（2026-11-04 明确边界）：
+  //   ① 有路由的端点 → 在自己的路由配置里声明 `config: { firewall: { skipScanTrap: true } }`
+  //      （与 `config.rateLimit` 同款，随路由走；用于「我的 403/405 是正常业务语义」，
+  //      如挑战端点验签失败回 403）。core 不需要为它维护路径清单。
+  //   ② 没有路由的路径 → 只能写在这里。这类请求 404 时 `routeOptions.config` 是空对象，
+  //      根本无从声明：静态产物、SPA 深链、favicon/robots。
+  //
   // ⚠️ 前端产物前缀必须在这里：后端没有 SPA 回退，用户刷新前端深链必然 404，
   //    10 次/分钟就会被扫描陷阱判成扫描器 —— 这是"正常用户被自己封掉"的典型来源。
+  // ⚠️ `/api/firewall/` 同理保留：面板旧构建调用已删端点会 404，逐路由声明覆盖不到它。
+  //
+  // ⚠️ 这 7 条**同时**以 `scan-trap.js` 的 `BUILTIN_SAFE_PATHS` 内置（不可关闭）：
+  //    数组在 deepMerge 里是**整体替换**，部署里旧 JSON 只写 5 条时会静默顶掉新增的两条
+  //    （实测：本机 `data/firewall_config.json` 就是旧 5 条，"刷新深链被封"的修复在
+  //    真实部署里没生效）。因此本键现在的语义是「在内置之外**追加**」，不是覆盖。
   safePaths: ['/health', '/favicon.ico', '/robots.txt', '/__fw/', '/api/firewall/', '/firewall/', '/admin/'],
 
   // 内网网段：**仅用于地理围栏判定**（geo-filter 跳过这些来源的 IDC / 境外规则）。

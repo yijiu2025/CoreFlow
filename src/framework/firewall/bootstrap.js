@@ -124,7 +124,15 @@ const firewallCorePlugin = fp(async function (app) {
 
     if ([404, 403].includes(reply.statusCode)) {
       try {
-        await checkNotFoundTrap(request.ip, request.url, reply.statusCode, request._deviceId || null);
+        // 传路由配置：端点可声明 `config.firewall.skipScanTrap`（自己的 403 属正常业务）。
+        // 无路由的 404 拿不到 routeOptions.config，仍由 defense.safePaths 兜底。
+        await checkNotFoundTrap(
+          request.ip,
+          request.url,
+          reply.statusCode,
+          request._deviceId || null,
+          request.routeOptions?.config || null
+        );
       } catch (err) {
         log.warn(`[Firewall] Trap Triggered: ${request.ip} -> ${err.rule}`);
       }
