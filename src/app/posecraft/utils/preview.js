@@ -18,7 +18,7 @@ import path from 'path';
 import fs from 'fs';
 import { getModel } from '../../../framework/db/index.js';
 import { createLogger } from '../../../framework/log/index.js';
-import { appDir, publicUrl } from '../../../framework/storage/index.js';
+import { appDir, publicUrl, publicUrlToPath } from '../../../framework/storage/index.js';
 
 const log = createLogger('app.posecraft.utils.preview');
 
@@ -131,7 +131,9 @@ async function generateImageThumbnail(imageUrl) {
 
   try {
     // 仅处理本地上传图片：URL 以 / 开头且能在 public/ 下找到（OSS 等外链会返回 null）
-    const localPath = path.resolve(process.cwd(), 'public', imageUrl.replace(/^\//, ''));
+    // 路径一律从 framework/storage 取 —— 不用 process.cwd()/相对层数去猜（曾因少写一层
+    // 把预览图写进 src/public，静态服务读的却是根 public，于是全部 404）。
+    const localPath = publicUrlToPath(imageUrl);
     if (!fs.existsSync(localPath)) return null;
 
     // 保持原始尺寸，仅改格式为 WebP + 降低质量

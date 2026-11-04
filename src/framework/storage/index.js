@@ -22,6 +22,19 @@
  * 私有文件强制 `u/<ownerId>/` 前缀：归属写进路径，下载路由据此鉴权，
  * 不依赖任何额外表就能做到"只能下载自己的"。
  *
+ * ════════════════════════════════════════════════════════════════════
+ * 为什么两个根都在**仓库根**，而不是 `src/` 下
+ * ════════════════════════════════════════════════════════════════════
+ *   - `src/` 只放代码（进镜像、可只读挂载）；`public/` 与 `storage/` 是**运行期数据**，
+ *     需要单独挂卷 / 备份 / 在多实例间共享，放在 src 里会被构建和只读约束一起管住。
+ *   - 容器里可写面只有 logs、src/data、public/<app>、storage（见 Dockerfile），
+ *     根目录布局与 `chown` 一一对应。
+ *   - 所有路径都从本模块取（`appDir` / `resolveFile` / `publicUrl` / `publicUrlToPath`），
+ *     **禁止**在业务代码里用 `path.join(__dirname, '../../public')` 之类自己数层级 ——
+ *     数错一级就会静默写进 `src/public`（真实事故：preview.js 少写一层，
+ *     预览图全写进 src/public，静态服务读的是根 public，于是全部 404）。
+ *     这条约束由 `src/__tests__/storage-root.test.js` 静态扫描守着。
+ *
  * @author yijiu2025
  * @since 2026-11-04
  */
@@ -135,6 +148,28 @@ function privateKey(ownerId, filename) {
 }
 
 /**
+ * 公开 URL → 绝对文件路径（`/posecraft/xxx.jpg` → `<repo>/public/posecraft/xxx.jpg`）
+ *
+ * 用于「DB 里存了 URL、需要回头读原文件」的场景（如按底图生成缩略图）。
+ * 不要用 `path.resolve(process.cwd(), 'public', ...)` 代替：那依赖启动时的 cwd，
+ * 从别的目录启动就会静默读不到（返回 null，看起来"没有缩略图"而不是报错）。
+ *
+ * @param {string} url 公开 URL（必须以 `/` 开头；带 query / hash 时会被忽略）
+ * @returns {string} 绝对文件路径
+ * @throws {Error} 非站内绝对路径或含非法段时抛错
+ */
+function publicUrlToPath(url) {
+  if (typeof url !== 'string' || !url.startsWith('/') || url.startsWith('//')) {
+    throw new Error(`不是站内绝对路径: ${String(url)}`);
+  }
+  const clean = url.split(/[?#]/, 1)[0];
+  const segs = assertKey(clean.replace(/^\/+/, ''));
+  const abs = path.resolve(PUBLIC_ROOT, ...segs);
+  if (!abs.startsWith(PUBLIC_ROOT + path.sep)) throw new Error('公开路径越界');
+  return abs;
+}
+
+/**
  * 确保目录存在（幂等）
  *
  * @param {string} dir 绝对目录
@@ -154,6 +189,7 @@ export {
   appDir,
   resolveFile,
   publicUrl,
+  publicUrlToPath,
   privateKey,
   ensureDir
 };
