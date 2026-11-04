@@ -4,7 +4,7 @@
  * ⚠️ 本文件可以整个删掉，服务照常用 core 保底值启动。
  * 这里只写**你想改的键**，未写的键一律走 core 默认值：
  *   默认值 + 取值理由 → src/app/oauth21/config/config.js（OAUTH21_DEFAULTS）
- *   运行期热改（无需重启）→ src/data/oauth21_config.json
+ *   运行期热改（无需重启）→ data/oauth21_config.json
  *
  * 可用键（四组，**TTL 不归 jwt 组** —— 默认 Session 模式同样生效）：
  *   tokens            { accessTokenTTL, refreshTokenTTL, idTokenTTL }   单位：秒

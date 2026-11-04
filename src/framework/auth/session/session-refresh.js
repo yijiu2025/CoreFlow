@@ -163,7 +163,7 @@ async function refreshSessionCore(refreshToken, request, reply) {
       }
     },
     {
-      // TTL 取热改值（src/data/auth_config.json 的 session.rotatedRetentionSeconds），
+      // TTL 取热改值（data/auth_config.json 的 session.rotatedRetentionSeconds），
       // 兜底最小 60 秒防 0/负数导致 Redis TTL 异常
       execute: () =>
         rotatedStore.set(

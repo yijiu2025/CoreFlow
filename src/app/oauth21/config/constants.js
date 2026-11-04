@@ -18,7 +18,7 @@ const DEFAULT_SCOPE = 'openid profile email';
 
 /**
  * 最大并发会话数（每应用）。来源 src/config/oauth21_config.js
- * （src/data/oauth21_config.json 可热改；本导出为启动快照，用到处请读 config 对象）
+ * （data/oauth21_config.json 可热改；本导出为启动快照，用到处请读 config 对象）
  */
 const MAX_SESSIONS_PER_APP = Math.max(1, Number(OAUTH21_CONFIG.session?.maxSessionsPerApp) || 5);
 

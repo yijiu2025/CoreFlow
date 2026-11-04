@@ -24,9 +24,10 @@ const SRC = path.resolve(__dirname, '..');
 const REPO = path.resolve(SRC, '..');
 
 const { PUBLIC_ROOT, PRIVATE_ROOT, REPO_ROOT } = await import('../framework/storage/index.js');
+const { DATA_ROOT, dataFile } = await import('../framework/paths.js');
 
-/** 运行期根目录名（放错位置会静默失效的那两个） */
-const RUNTIME_ROOTS = ['public', 'storage'];
+/** 运行期根目录名（都在仓库根；放错到 src 下会静默失效） */
+const RUNTIME_ROOTS = ['public', 'storage', 'data'];
 
 /**
  * 递归收集 src 下所有 .js（跳过 __tests__ 自身与 node_modules）
@@ -111,23 +112,34 @@ function findBadDirnamePaths() {
 }
 
 describe('存储根：必须在仓库根，不在 src/ 下', () => {
-  it('PUBLIC_ROOT / PRIVATE_ROOT 指向仓库根的两个目录', () => {
+  it('PUBLIC_ROOT / PRIVATE_ROOT / DATA_ROOT 都在仓库根', () => {
     expect(REPO_ROOT).toBe(REPO);
     expect(PUBLIC_ROOT).toBe(path.join(REPO, 'public'));
     expect(PRIVATE_ROOT).toBe(path.join(REPO, 'storage'));
-    // 反证：两者都不在 src 里（否则静态服务与挂卷的假设全部错位）
-    expect(PUBLIC_ROOT.startsWith(SRC + path.sep)).toBe(false);
-    expect(PRIVATE_ROOT.startsWith(SRC + path.sep)).toBe(false);
+    expect(DATA_ROOT).toBe(path.join(REPO, 'data'));
+    expect(dataFile('firewall_config.json')).toBe(path.join(REPO, 'data', 'firewall_config.json'));
+    // 反证：三者都不在 src 里（否则静态服务、挂卷、备份的假设全部错位）
+    for (const root of [PUBLIC_ROOT, PRIVATE_ROOT, DATA_ROOT]) {
+      expect(root.startsWith(SRC + path.sep)).toBe(false);
+    }
   });
 
-  it('src/public 不存在（历史 bug 的产物，已迁进根 public/）', () => {
-    const bugged = path.join(SRC, 'public');
+  it('dataFile 只接受文件名（不让人用 ../ 拼到别的目录）', () => {
+    expect(() => dataFile('../etc/passwd')).toThrow();
+    expect(() => dataFile('a/b.json')).toThrow();
+    expect(() => dataFile('')).toThrow();
+  });
+
+  it('src 下没有运行期目录（public / storage / data）', () => {
     // 空目录不算违规；一旦有文件，说明又有人往 src 里写了运行期文件
-    const files = fs.existsSync(bugged) ? fs.readdirSync(bugged) : [];
-    expect(files).toEqual([]);
+    for (const name of RUNTIME_ROOTS) {
+      const bugged = path.join(SRC, name);
+      const files = fs.existsSync(bugged) ? fs.readdirSync(bugged) : [];
+      expect({ dir: name, files }).toEqual({ dir: name, files: [] });
+    }
   });
 
-  it('没有代码用 __dirname 把 public / storage 拼到 src 里（必须走 framework/storage）', () => {
+  it('没有代码用 __dirname 把运行期根（public / storage / data）拼到 src 里', () => {
     expect(findBadDirnamePaths()).toEqual([]);
   });
 

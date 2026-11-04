@@ -33,7 +33,7 @@
 | 注册            | 每 IP 每分钟 5 次（端点级 `config.rateLimit`）+ 邮箱验证码 + 图形验证 |
 | 全站            | 每键（用户 / IP）600 次/60 秒 | `@fastify/rate-limit`，阈值取 `defense.rateLimitRequests` |
 
-> ⚠️ 全局限流的阈值在 `src/data/firewall_config.json` 的 `defense.rateLimitRequests`，
+> ⚠️ 全局限流的阈值在 `data/firewall_config.json` 的 `defense.rateLimitRequests`，
 > 历史上配成过 10000/60 秒（≈167 rps/键，等于没有这一层）。启动日志会打印生效值，
 > 超过 1000 会打印告警。
 

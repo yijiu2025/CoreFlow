@@ -89,8 +89,13 @@ stop_grace_period: 35s   # 应用自身兜底是 30s（index.js 的 SHUTDOWN_TIM
 | 卷 | 挂载点 | 内容 |
 | --- | --- | --- |
 | `app-logs` | `/app/logs` | 滚动日志 |
-| `app-data` | `/app/src/data` | 防火墙遥测等落盘状态 |
-| `app-uploads` | `/app/public/uploads` | 用户上传 |
+| `app-data` | `/app/data` | 运行期 JSON 状态（配置热改、流量统计） |
+| `app-uploads` | `/app/public` | 公开资源（作品图 / 头像，静态服务直出） |
+| `app-storage` | `/app/storage` | 私有文件（只能经 `/api/files/v1/:app/*` 鉴权下发） |
+
+> 这些目录都在**仓库根**、不在 `src/` 下（`src/` 只放代码，进镜像后可只读）。
+> 路径的单一来源是 `src/framework/paths.js`（`REPO_ROOT` / `DATA_ROOT`）与
+> `src/framework/storage/index.js`（`PUBLIC_ROOT` / `PRIVATE_ROOT`）。
 
 ## 迁移怎么跑
 

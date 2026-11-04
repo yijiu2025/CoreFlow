@@ -32,7 +32,7 @@ const log = createLogger('framework.auth.session');
 // ── 常量 / Redis 实例 / sidHash / 吊销原语 ──
 
 // ⚠️ 启动快照（仅为兼容既有导出）：真正生效值用 authSessionConfig().maxRefreshTokens；
-// 来源 src/config/auth_config.js（src/data/auth_config.json 可热改）
+// 来源 src/config/auth_config.js（data/auth_config.json 可热改）
 const MAX_REFRESH_TOKENS = Math.max(1, Number(authSessionConfig().maxRefreshTokens) || 10);
 /**
  * 同一用户活跃设备行数上限（session_tokens 表 revoked=false 的行）。
@@ -43,7 +43,7 @@ const MAX_REFRESH_TOKENS = Math.max(1, Number(authSessionConfig().maxRefreshToke
  * 只保留最近 N 个活跃设备。默认 20 覆盖正常用户多端场景（手机/电脑/平板/多浏览器）。
  */
 // ⚠️ 启动快照（仅为兼容既有导出）：真正生效值请用 authSessionConfig().maxActiveDevices
-// （支持 src/data/auth_config.json 热改）；来源 src/config/auth_config.js
+// （支持 data/auth_config.json 热改）；来源 src/config/auth_config.js
 const MAX_ACTIVE_DEVICES = Math.max(1, Number(authSessionConfig().maxActiveDevices) || 20);
 
 // 统一存储实例（getStore 自动处理 Redis/MapStore、超时、序列化）

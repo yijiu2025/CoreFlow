@@ -178,7 +178,7 @@ request → ① connection tracking (concurrency cap) → ② global blocking (I
 Detectors live in `src/app/firewall/engine/detectors/`: `rate-limiter` (sliding window, one
 Redis Lua round-trip + in-memory fallback), `bot-detector`, `brute-force`, `scan-trap`
 (404/403 scan trap), `geo-filter`. Rules and thresholds come from
-`src/data/firewall_config.json` and can be hot-edited through the admin API
+`data/firewall_config.json` and can be hot-edited through the admin API
 (`PATCH /api/firewall/v1/monitor/settings`).
 
 ## API domains

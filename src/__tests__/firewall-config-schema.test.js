@@ -4,7 +4,7 @@
  * 被测对象是 **core 保底默认值**（framework/firewall/config/defaults.js）：
  * src/config/firewall_config.js 只是可选覆盖，出厂为空。
  * 为什么需要：`securitySettings.defense.*` 的键名是**持久化契约** ——
- * src/data/firewall_config.json 按这些键 deepMerge，管理面板按这些键读写，
+ * data/firewall_config.json 按这些键 deepMerge，管理面板按这些键读写，
  * 52 处检测器按这些键取值。键名写错/漏写不会报错，只会**静默不生效**，
  * 所以用测试把键集合钉死；改键名必须连带做 JSON 迁移，届时本测试会先失败提醒。
  *

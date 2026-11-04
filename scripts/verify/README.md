@@ -112,7 +112,7 @@ E1 的父子进程都切到 **`REDIS_DB=15`**，不碰 db0 里的真实键
 可用 `PROBE_REDIS_DB` 覆盖。
 
 E3 的两个关卡也在 **`REDIS_DB=15`** 上运行，并把遥测落盘路径重定向到 `.tmp-probe/`
-（`FW_TRAFFIC_STATS_FILE`），避免写到被 git 跟踪的 `src/data/traffic_stats.json`；
+（`FW_TRAFFIC_STATS_FILE`），避免写到`data/traffic_stats.json`（已不进 git）；
 关卡结束会删除临时文件，并清掉自己写入的 `fwstats:*` 基数（**只清这个前缀**，
 它是本项目自有的统计键，不影响其他数据）。
 

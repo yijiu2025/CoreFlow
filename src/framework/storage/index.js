@@ -27,7 +27,7 @@
  * ════════════════════════════════════════════════════════════════════
  *   - `src/` 只放代码（进镜像、可只读挂载）；`public/` 与 `storage/` 是**运行期数据**，
  *     需要单独挂卷 / 备份 / 在多实例间共享，放在 src 里会被构建和只读约束一起管住。
- *   - 容器里可写面只有 logs、src/data、public/<app>、storage（见 Dockerfile），
+ *   - 容器里可写面只有 logs、data、public/<app>、storage（见 Dockerfile），
  *     根目录布局与 `chown` 一一对应。
  *   - 所有路径都从本模块取（`appDir` / `resolveFile` / `publicUrl` / `publicUrlToPath`），
  *     **禁止**在业务代码里用 `path.join(__dirname, '../../public')` 之类自己数层级 ——
@@ -40,12 +40,9 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { REPO_ROOT } from '../paths.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/** 仓库根（src/framework/storage → 上三级） */
-const REPO_ROOT = path.resolve(__dirname, '../../..');
+// 仓库根只从 framework/paths.js 取：这里再数一次 `../` 就等于第二份定义，改一处忘一处。
 /** 公开静态根（`@fastify/static` 的 root） */
 const PUBLIC_ROOT = path.join(REPO_ROOT, 'public');
 /** 私有文件根（不进静态服务，只能走鉴权下载） */

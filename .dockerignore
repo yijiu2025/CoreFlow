@@ -49,8 +49,17 @@ mermaid
 createDocs
 reports
 docs
-public/uploads/*
-!public/uploads/.gitkeep
+
+# --- 运行期目录：内容属于部署状态，镜像里只要空目录（Dockerfile 会 mkdir 并 chown）---
+# 见 src/framework/paths.js：data/ public/<app>/ storage/ 都在仓库根，不在 src/ 下
+data/*
+!data/.gitkeep
+storage/*
+!storage/.gitkeep
+public/posecraft/*
+public/user/*
+!public/posecraft/.gitkeep
+!public/user/.gitkeep
 
 # --- 运行时产物：容器内重新生成，体积大且无意义 ---
 logs

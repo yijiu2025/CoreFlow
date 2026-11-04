@@ -4,7 +4,7 @@
  * ⚠️ 本文件可以整个删掉，服务照常用 core 保底值启动。
  * 这里只写**你想改的键**，未写的键一律走 core 默认值：
  *   默认值 + 取值理由 → src/framework/auth/session/session-config.js（AUTH_SESSION_DEFAULTS）
- *   运行期热改（无需重启）→ src/data/auth_config.json
+ *   运行期热改（无需重启）→ data/auth_config.json
  *
  * 可用键（jwt 组）：
  *   jwt.enabled              JWT 认证总开关（默认 false = Session 认证）。

@@ -10,7 +10,7 @@
  *
  * 【为什么必须先设环境变量再动态导入】
  * `store.js` 的 DATA_FILE 在**模块求值时**读取环境变量，且默认路径
- * （`src/data/traffic_stats.json`）是**被 git 跟踪**的文件 —— 测试直写会留下脏改动。
+ * （`data/traffic_stats.json`）是运行期数据（已不进 git） —— 测试直写会留下脏改动。
  * 因此本文件不在顶部静态 import store.js，而是在 beforeAll 里动态导入。
  *
  * @author yijiu2025

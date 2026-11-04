@@ -91,8 +91,13 @@ is SIGKILLed before `onClose` hooks flush guard config and broadcast WS close fr
 | Volume | Mount | Contents |
 | --- | --- | --- |
 | `app-logs` | `/app/logs` | rolling logs |
-| `app-data` | `/app/src/data` | firewall telemetry and other persisted state |
-| `app-uploads` | `/app/public/uploads` | user uploads |
+| `app-data` | `/app/data` | runtime JSON state (hot-reloaded config, traffic stats) |
+| `app-uploads` | `/app/public` | public assets (work images / avatars, served by static) |
+| `app-storage` | `/app/storage` | private files (only via `GET /api/files/v1/:app/*`) |
+
+> All of these live at the **repo root**, not under `src/` (`src/` holds code only and can be
+> mounted read-only). Single source of truth: `src/framework/paths.js` (`REPO_ROOT` / `DATA_ROOT`)
+> and `src/framework/storage/index.js` (`PUBLIC_ROOT` / `PRIVATE_ROOT`).
 
 ## Running migrations
 

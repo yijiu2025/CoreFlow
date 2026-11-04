@@ -17,22 +17,20 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createLogger } from '../../../framework/log/index.js';
+import { dataFile } from '../../../framework/paths.js';
 import { flushStatsDelta, readAggregatedStats, resetAggregatedStats, redisAvailable } from './stats-redis.js';
 import { registerRecordSink } from '../../../framework/firewall/telemetry-sink.js';
 
 const log = createLogger('app.firewall.data.store');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 /**
  * 遥测持久化文件路径
  *
  * 可用 `FW_TRAFFIC_STATS_FILE` 覆盖 —— 测试**必须**覆盖它：默认路径是
- * `src/data/traffic_stats.json`，那是**被 git 跟踪**的文件，测试直写会留下脏改动。
+ * `data/traffic_stats.json`（仓库根的运行期数据目录；不进 git），测试直写会留下脏改动。
  */
-const DATA_FILE = process.env.FW_TRAFFIC_STATS_FILE || path.join(__dirname, '../../../data/traffic_stats.json');
+const DATA_FILE = process.env.FW_TRAFFIC_STATS_FILE || dataFile('traffic_stats.json');
 
 const MAX_RECORDS = 1000; // 环形缓冲区容量（前端最多显示 100 条，1000 足够）
 
@@ -379,7 +377,7 @@ function stopPersistTimer() {
  *
  * 为什么要做：遥测数据只存在于内存，滚动发布 / 重启时不落盘就会丢掉最近的统计。
  * 「有待写变更才写」这个前置判断很重要 —— 否则每次空跑启动都会把磁盘上的统计算成
- * 全零（`src/data/traffic_stats.json` 是被 git 跟踪的文件，无意义写入会留下脏改动）。
+ * 全零（`data/traffic_stats.json` 是运行期数据（已不进 git），无意义写入会留下脏改动）。
  * 写盘失败只记日志：关闭流程不能被遥测写盘拖住。
  *
  * 同时把未刷写的 Redis 增量冲一次：滚动发布时新实例能立刻看到旧实例的尾部统计。

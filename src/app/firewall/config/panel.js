@@ -25,7 +25,7 @@
  * 也不会覆盖面板值，并由 config.js 的 strayAppKeys 打一条 warn 留痕（不做静默失效）。
  *
  * ⚠️ 持久化 schema 不变：这两个键依旧在 `securitySettings` 顶层
- * （面板与存量 `src/data/firewall_config.json` 无需迁移）。
+ * （面板与存量 `data/firewall_config.json` 无需迁移）。
  *
  * @author yijiu2025
  * @since 2026-11-04（从 core 默认值下沉到面板层）

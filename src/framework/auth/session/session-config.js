@@ -6,7 +6,7 @@
  * ════════════════════════════════════════════════════════════════════
  *   ① 本文件的 AUTH_SESSION_DEFAULTS   core 保底值（src/config 全空也能跑）
  *   ② src/config/auth_config.js        可选静态覆盖（缺失即 {}）
- *   ③ src/data/auth_config.json        运行期覆盖（**热改，无需重启**）
+ *   ③ data/auth_config.json        运行期覆盖（**热改，无需重启**）
  *
  * ⚠️ 消费方必须**每次使用时调用 `authSessionConfig()`**，不要把返回值缓存成
  * 模块级常量 —— 那会退回「改完要重启」，热改语义就丢了。
@@ -20,7 +20,7 @@ import { loadOverrides } from '../../config/overrides.js';
 
 /**
  * core 保底默认值（改内置默认才动这里；按部署微调请写 src/config/auth_config.js
- * 或热改 src/data/auth_config.json）
+ * 或热改 data/auth_config.json）
  */
 const AUTH_SESSION_DEFAULTS = {
   // JWT 认证总开关（framework 侧唯一来源；oauth21 的签发/校验都读这里）
@@ -58,7 +58,7 @@ const OVERRIDES = loadOverrides('auth_config.js', 'AUTH_CONFIG');
 const runtime = createRuntimeConfig({ name: 'auth', defaults: AUTH_SESSION_DEFAULTS, overrides: OVERRIDES });
 
 /**
- * 取当前生效的会话策略（热改：改 src/data/auth_config.json 后下一次调用即生效）
+ * 取当前生效的会话策略（热改：改 data/auth_config.json 后下一次调用即生效）
  *
  * @returns {{ rotatedRetentionSeconds: number, maxRefreshTokens: number, maxActiveDevices: number, singleDeviceTypes: string[] }}
  */

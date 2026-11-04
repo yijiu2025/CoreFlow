@@ -108,7 +108,7 @@ async function pruneActiveDevices(userId, options = {}) {
   // 只数活跃行（revoked=false），超过上限才清（等于上限不裁——本函数在新增设备行
   // 之后调用，count 已含新设备，activeCount > MAX 才代表"旧设备 + 新设备"超限）
   const activeCount = await SessionToken.count({ where: { user_id: userId, revoked: false }, ...options });
-  // 上限取热改值（src/data/auth_config.json 的 session.maxActiveDevices），每次调用都读最新
+  // 上限取热改值（data/auth_config.json 的 session.maxActiveDevices），每次调用都读最新
   const maxDevices = Math.max(1, Number(authSessionConfig().maxActiveDevices) || MAX_ACTIVE_DEVICES);
   if (activeCount <= maxDevices) return 0;
 

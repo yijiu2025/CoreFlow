@@ -70,7 +70,7 @@ const log = createLogger('framework.auth.session');
  */
 function getSingleDeviceTypes() {
   // 来源：src/config/auth_config.js 的 session.singleDeviceTypes（可被
-  // src/data/auth_config.json 热改覆盖）。**每次调用都取最新值**，不要缓存。
+  // data/auth_config.json 热改覆盖）。**每次调用都取最新值**，不要缓存。
   const configured = authSessionConfig().singleDeviceTypes;
   const list = (Array.isArray(configured) ? configured : String(configured || '').split(','))
     .map(s => String(s).trim())
@@ -217,7 +217,7 @@ async function createSession(params) {
   if (refreshToken) {
     // 清理超出限制的旧 refresh token。新凭证的唯一键已生成，后续 Saga 不会误删旧链。
     const count = await userRefreshStore.zCard(userKey);
-    // 上限取热改值（src/data/auth_config.json 的 session.maxRefreshTokens）
+    // 上限取热改值（data/auth_config.json 的 session.maxRefreshTokens）
     const maxRefreshTokens = Math.max(1, Number(authSessionConfig().maxRefreshTokens) || MAX_REFRESH_TOKENS);
     if (count >= maxRefreshTokens) {
       const removeCount = count - maxRefreshTokens + 1;

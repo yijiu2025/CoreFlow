@@ -30,7 +30,7 @@ import Fastify from 'fastify';
 
 // ── 隔离副作用 ────────────────────────────────────────────────────────────────
 // `data/store.js` 的 pushRecord 会起一个 10 秒防抖定时器，把环形缓冲落到
-// `src/data/traffic_stats.json`（一个被 git 跟踪的文件）。jest 进程普遍活过 10 秒
+// `data/traffic_stats.json`（一个运行期数据文件（已不进 git））。jest 进程普遍活过 10 秒
 // → 测试会污染仓库工作区。整体替换为可断言的桩：既消除落盘，又能断言「挑战页下发时
 // 记了一条 blocked 记录」。
 const pushedRecords = [];

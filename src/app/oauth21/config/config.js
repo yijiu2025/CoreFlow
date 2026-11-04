@@ -4,7 +4,7 @@
  * 分层（2026-11-03 起）：
  *   - **TTL / 上限等调优值** → `src/config/oauth21_config.js`（tokens / authorizationCode /
  *     jwt / session 四组，按功能划分）
- *   - **运行时覆盖** → `src/data/oauth21_config.json`（**热改，无需重启**）
+ *   - **运行时覆盖** → `data/oauth21_config.json`（**热改，无需重启**）
  *   - **部署差异** → 仍走 env：PORT / ISSUER / SESSION_SECRET
  *
  * ⚠️ 热改实现：`runtime.bind(config)` 在覆盖文件变化时原地更新本对象，
@@ -21,7 +21,7 @@ import { AUTH_SESSION_DEFAULTS, authJwtEnabled } from '../../../framework/auth/s
 
 /**
  * core 保底默认值（改内置默认才动这里；按部署微调写 src/config/oauth21_config.js，
- * 运行期热改写 src/data/oauth21_config.json）
+ * 运行期热改写 data/oauth21_config.json）
  */
 const OAUTH21_DEFAULTS = {
   // ── 令牌生命周期（秒）────────────────────────────────────────────

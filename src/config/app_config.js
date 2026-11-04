@@ -21,7 +21,7 @@
  *     历史 bcrypt 校验并发（每次阻塞主线程约 68ms），超限判为不匹配
  *
  * 以上均为**启动期读取**（Fastify 构造参数 / 模块常量），改完需重启；
- * 需要热改的项不在本文件（走 src/data/*.json）。
+ * 需要热改的项不在本文件（走 data/*.json）。
  * 拼写错误与越界值会在启动时告警（framework/config/app-config-schema.js）。
  *
  * 示例：

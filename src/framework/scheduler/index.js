@@ -2,7 +2,7 @@
  * 统一定时任务调度器
  *
  * 集中管理后台定时任务（session 清理、未来可扩展其他维护任务）。
- * 任务频率与开关从 src/data/scheduler_config.json 读取（参考 firewall_config.json 的本地文件模式）。
+ * 任务频率与开关从 data/scheduler_config.json 读取（参考 firewall_config.json 的本地文件模式）。
  *
  * 设计：
  * - tasks/ 目录下每个文件导出一个任务工厂 { name, run(app) }，调度器按 config 启动
@@ -33,11 +33,12 @@ import { C } from '../../utils/colors.js';
 import { createLogger } from '../log/index.js';
 import { createLock } from '../redis/lock-store.js';
 import { isRedisConfigured } from '../redis/utils.js';
+import { dataFile } from '../paths.js';
 
 const log = createLogger('framework.scheduler.index');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = path.resolve(__dirname, '../../../src/data/scheduler_config.json');
+const CONFIG_PATH = dataFile('scheduler_config.json');
 
 /** 默认配置（文件缺失或字段缺失时兜底） */
 const DEFAULT_CONFIG = {

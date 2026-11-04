@@ -3,7 +3,7 @@
  *
  * 分层（2026-11-03 起）：
  *   - **调优值** → `src/config/verify_config.js`（默认值，带注释）
- *   - **运行时覆盖** → `src/data/verify_config.json`（**热改，无需重启**）
+ *   - **运行时覆盖** → `data/verify_config.json`（**热改，无需重启**）
  *   - **密钥/账号类** → 仍走 env（每部署不同，不该落进可热改文件）
  *
  * ⚠️ 热改实现：`runtime.bind(verifyConfig)` 会在覆盖文件变化时**原地更新**本对象，
@@ -19,7 +19,7 @@ import { loadOverrides } from '../config/overrides.js';
 
 /**
  * core 保底默认值（改内置默认才动这里；按部署微调写 src/config/verify_config.js，
- * 运行期热改写 src/data/verify_config.json）
+ * 运行期热改写 data/verify_config.json）
  */
 const VERIFY_DEFAULTS = {
   // 图形验证码

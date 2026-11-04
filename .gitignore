@@ -29,6 +29,11 @@ public/user/*
 storage/*
 !storage/.gitkeep
 
+# 运行期数据根（配置热改 JSON / 流量统计）：属于部署状态，不进仓库
+# 缺文件时各处都有内置默认值兜底，首次写入时自动创建
+data/*
+!data/.gitkeep
+
 # VitePress 构建缓存
 docs/.vitepress/cache
 docs/.vitepress/dist

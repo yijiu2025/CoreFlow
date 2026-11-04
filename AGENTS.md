@@ -68,6 +68,23 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 - **迁移**: Umzug v3（`migrations/` 目录）
 - **前端**: Vue 3 + Vite + TypeScript（`oauth21/`、`firewall/`、`admin/`）
 
+## 运行期目录（都在仓库根，`src/` 只放代码）
+
+| 目录 | 用途 | 谁写 |
+| --- | --- | --- |
+| `data/` | 运行期 JSON 状态：`*_config.json` 配置热改、`traffic_stats.json` 流量统计 | `framework/config/runtime.js`、`framework/firewall/config/persisted.js`、`app/firewall/data/store.js`、`framework/scheduler/index.js` |
+| `logs/` | 滚动日志 | 日志模块 |
+| `public/<app>/…` | 公开静态资源 | 业务上传（见下节） |
+| `storage/<app>/…` | 私有文件 | 业务上传（见下节） |
+
+- 路径的**唯一来源**：`src/framework/paths.js`（`REPO_ROOT` / `DATA_ROOT` / `dataFile()` / `ensureDataDir()`）
+  与 `src/framework/storage/index.js`（`PUBLIC_ROOT` / `PRIVATE_ROOT` / `appDir` / `resolveFile` / `publicUrl` / `publicUrlToPath` / `privateKey`）。
+- **禁止自己数 `../` 拼这些根**：数错一级就会静默写进 `src/<root>/` —— 文件照写不误，但读取方在另一个地方，
+  表现为「功能不生效且无报错」（真实事故：`preview.js` 少写一层，预览图全写进 `src/public`，静态服务读根 `public/`，于是全 404）。
+  `src/__tests__/storage-root.test.js` 会静态扫 `src/**/*.js` 拦这类写法，并断言 `src/{public,storage,data}` 下没有文件。
+- `data/` **不进 git**（`.gitignore`）：里面是部署状态，随卷持久化（compose 的 `app-data`）。
+  文件缺失时各处都有内置默认值兜底，首次写入会自动建目录 —— 所以新克隆不需要预置这些 JSON。
+
 ## 文件存储（公开 / 私有两套根，别混）
 
 | 根 | 用途 | 访问方式 |
@@ -75,22 +92,15 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 | `public/<app>/…` | 公开资源（作品图 / 头像 / logo / 字体） | `@fastify/static`（prefix `/`）直出：`GET /<app>/<file>` |
 | `storage/<app>/u/<ownerId>/…` | **私有**文件（合同 / 导出 / 证件 / 付费内容） | 只能经 `GET /api/files/v1/:app/u/<ownerId>/<file>` 鉴权下发 |
 
-- 目录约定与路径守卫的单一来源：`src/framework/storage/index.js`（`appDir` / `resolveFile` / `publicUrl` / `publicUrlToPath` / `privateKey`）。
-- **两个根都在仓库根，不在 `src/` 下**：`src/` 只放代码（进镜像、可只读），`public/` 与 `storage/`
-  是运行期数据（要挂卷 / 备份 / 多实例共享）。容器里可写面就是 `logs`、`src/data`、
-  `public/<app>`、`storage`（见 Dockerfile）。
-- **禁止自己数 `../` 拼这两个根**（`path.join(__dirname, '../../../public')` 这类）：数错一级就会
-  静默写进 `src/public` —— 静态服务读的是根 `public/`，文件照写不误但永远 404
-  （真实事故：`preview.js` 曾因此让预览图全 404）。一律从 `framework/storage` 取路径；
-  `src/__tests__/storage-root.test.js` 会静态扫这类写法并拦下。
 - **判断放哪**：文件被陌生人拿到会不会有损失？不会 → `public/`；会 → `storage/`。
   `public/` **不是权限控制**，只是"URL 猜不到"，URL 一旦流出就永久可下载、无法撤销。
 - 私有文件路径必须带 `u/<ownerId>/`：归属写进路径，下载路由据此鉴权（本人或 admin），
   无需额外查表；`Cache-Control: private, no-store`，非白名单扩展名强制 `attachment`。
-- 多实例部署时 `storage/` 需共享卷或换成对象存储（`src/app/user/services/oss.service.js` 已有降级开关）。
-- 历史遗留的 `public/uploads/**` 与 `src/public/**` 已由
-  `node scripts/storage/migrate-legacy-uploads.mjs`（默认预演，`--apply` 真跑）迁移到现行布局，
-  同时改写 DB 里 `/uploads/...` 的旧 URL。新环境不需要跑它。
+- 多实例部署时 `public/` 与 `storage/` 都需共享卷（compose 的 `app-uploads` / `app-storage`）或换成对象存储
+  （`src/app/user/services/oss.service.js` 已有降级开关）。
+- 历史遗留的 `public/uploads/**` 与 `src/public/**`、`src/data/**` 已分别由
+  `node scripts/storage/migrate-legacy-uploads.mjs`（默认预演，`--apply` 真跑）与人工搬迁整理到现行布局；
+  前者还会改写 DB 里 `/uploads/...` 的旧 URL。新环境不需要跑它。
 
 ## 启动流程
 

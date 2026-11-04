@@ -18,24 +18,21 @@
  * @since 2026-11-02
  */
 import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { DEFAULT_SECURITY_SETTINGS } from './defaults.js';
+import { dataFile } from '../../paths.js';
 import { dropMisplacedDefenseKeys } from './validate.js';
 import { registerSettingsReader } from '../interface/config-access.js';
 import { createLogger } from '../../log/index.js';
 
 const log = createLogger('framework.firewall.config.persisted');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 /**
- * 持久化文件路径（`src/data/firewall_config.json`）
+ * 持久化文件路径（`data/firewall_config.json`，仓库根的运行期数据目录）
  *
  * 单一来源：app 层的 `config/config.js` 从这里 re-export，避免两处各写一份相对路径
  * （写错一层 `../` 就会静默读不到文件、回退默认策略）。
  */
-const FIREWALL_FILE = path.resolve(__dirname, '../../../data/firewall_config.json');
+const FIREWALL_FILE = dataFile('firewall_config.json');
 
 /** 当前生效的安全策略（初值为出厂默认；加载成功后是在其上的深合并结果） */
 let settings = clone(DEFAULT_SECURITY_SETTINGS);

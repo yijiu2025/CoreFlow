@@ -4,7 +4,7 @@
  * ⚠️ 本文件可以整个删掉，服务照常用 core 保底值启动。
  * 这里只写**你想改的键**，未写的键一律走 core 默认值：
  *   默认值 + 取值理由 → src/framework/verify/config.js（VERIFY_DEFAULTS）
- *   运行期热改（无需重启）→ src/data/verify_config.json
+ *   运行期热改（无需重启）→ data/verify_config.json
  *
  * 可用键：
  *   captcha    { size, noise, ttl, extendTtl, maxAttempts }

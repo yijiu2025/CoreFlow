@@ -159,7 +159,7 @@ requirePermission: { all: ['fw:config:read', 'fw:config:write'] }
 
 检测器都在 `src/app/firewall/engine/detectors/`：`rate-limiter`（滑窗，Redis Lua 单次往返 +
 内存降级）、`bot-detector`、`brute-force`、`scan-trap`（404/403 扫描陷阱）、`geo-filter`。
-限流规则与阈值从 `src/data/firewall_config.json` 读取，管理端可热改（`PATCH /api/firewall/v1/monitor/settings`）。
+限流规则与阈值从 `data/firewall_config.json` 读取，管理端可热改（`PATCH /api/firewall/v1/monitor/settings`）。
 
 ## API 域
 

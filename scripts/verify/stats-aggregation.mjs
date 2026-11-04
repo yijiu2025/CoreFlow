@@ -16,7 +16,7 @@
  * 而重复计算（已刷写的部分又被加一遍）正是本实现最容易出的错。
  *
  * 隔离：父子都切到 PROBE_REDIS_DB（默认 db15）并重定向遥测落盘文件，
- * 不碰 db0 的键，也不写被 git 跟踪的 src/data/traffic_stats.json。
+ * 不碰 db0 的键，也不写data/traffic_stats.json（已不进 git）。
  *
  * 用法：node scripts/verify/stats-aggregation.mjs
  * 退出码：0 通过 / 1 断言失败 / 3 环境不可用

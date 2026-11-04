@@ -39,7 +39,7 @@
 | Global | 600 per 60s per key (user / IP) | `@fastify/rate-limit`, threshold from `defense.rateLimitRequests` |
 
 > ⚠️ The global threshold lives at `defense.rateLimitRequests` in
-> `src/data/firewall_config.json`. It has been configured as 10000/60s in the past (≈167 rps per
+> `data/firewall_config.json`. It has been configured as 10000/60s in the past (≈167 rps per
 > key, i.e. that layer did not exist). The startup log prints the effective value and warns above
 > 1000.
 

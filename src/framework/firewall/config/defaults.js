@@ -9,7 +9,7 @@
  *   core 链（本文件负责）：① ← ② ← ③，后者逐层覆盖前者
  *   ① 本文件                          core 保底值（改内置默认才动这里）
  *   ② src/config/firewall_config.js   服务器后端层的静态覆盖（只写要改的键，可缺失）
- *   ③ src/data/firewall_config.json   运行时覆盖（面板热改，数组整体替换）
+ *   ③ data/firewall_config.json   运行时覆盖（面板热改，数组整体替换）
  *   ④ src/app/firewall/config/panel.js 面板层默认值（展示偏好）：由 app 层合并进来，
  *      **不属于 core 链** —— core 不认识也不读它，只在磁盘文件里遇到时原样透传。
  *
@@ -26,7 +26,7 @@
  * 二、为什么有 `defense` 这一层（不要试图拍平）
  * ════════════════════════════════════════════════════════════════════
  * `securitySettings.defense.*` 是**持久化文件的既有 schema**：
- *   - 磁盘：`src/data/firewall_config.json` 的 `securitySettings.defense`
+ *   - 磁盘：`data/firewall_config.json` 的 `securitySettings.defense`
  *   - 合并：initDao 时 deepMerge(默认值, 磁盘值)，逐层覆盖
  *   - 消费：52 处 `settings.defense.xxx` 读取 + 管理面板按此路径读写
  * 改名/拍平 = 破坏存量 JSON 兼容 + 面板全挂。因此**对外结构冻结**。

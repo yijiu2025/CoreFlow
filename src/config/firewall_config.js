@@ -4,12 +4,12 @@
  * ⚠️ 本文件可以整个删掉，服务照常用 core 保底值启动。
  * 这里只写**你想改的键**，未写的键一律走 core 默认值：
  *   默认值 + 取值理由 → src/framework/firewall/config/defaults.js
- *   运行期热改（面板/JSON）→ src/data/firewall_config.json
+ *   运行期热改（面板/JSON）→ data/firewall_config.json
  *
  * 可用键（顶层）：**只有 defense**（防护策略，core 与 app 都按它执行）
  *   ⚠️ `activeIpApi` / `showTrajectory` 属于 **firewall 应用**（控制台展示 + 节点定位），
  *      不在本文件：默认值在 src/app/firewall/config/panel.js（面板层），热改走面板
- *      （落到 src/data/firewall_config.json）。写在这里**会被 app 默认值覆盖**并打一条
+ *      （落到 data/firewall_config.json）。写在这里**会被 app 默认值覆盖**并打一条
  *      warn —— 见 src/app/firewall/config/config.js 的 strayPanelKeys 检查。
  * defense 下的键（37 个，按功能分组见 defaults.js）：
  *   名单      manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps

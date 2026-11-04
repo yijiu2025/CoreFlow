@@ -30,7 +30,7 @@ jest.unstable_mockModule('../../app/firewall/data/stats-redis.js', () => ({
 }));
 
 // store.js 在模块加载期 loadData()：必须先指到临时文件，避免碰被 git 跟踪的
-// src/data/traffic_stats.json
+// data/traffic_stats.json
 process.env.FW_TRAFFIC_STATS_FILE = path.join(os.tmpdir(), `fw-store-test-${process.pid}.json`);
 
 const store = await import('../../app/firewall/data/store.js');

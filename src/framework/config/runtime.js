@@ -5,7 +5,7 @@
  *   各 core 模块               保底默认值（写在使用处，带注释；src/config 全空也能跑）
  *   src/config/*.js           静态覆盖（可选，只写要改的键；经 overrides.js 容错加载）
  *   本文件                     机制（deepMerge / mtime 轮询 / 缓存），framework 层
- *   src/data/*_config.json    运行时覆盖（面板或运维可写，**热改无需重启**）
+ *   data/*_config.json    运行时覆盖（面板或运维可写，**热改无需重启**）
  *
  * ── 热改语义（不可丢）──
  * `get()` 内部按 `reloadMs` 节流检查 mtime：文件变了就重新深合并一次，
@@ -22,13 +22,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createLogger } from '../log/index.js';
+import { DATA_ROOT } from '../paths.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/** 运行时覆盖文件的默认目录（src/data，随 app-data 卷持久化） */
-const DATA_DIR = path.resolve(__dirname, '../../data');
+/** 运行时覆盖文件的默认目录（仓库根 data/，随 app-data 卷持久化；来源见 framework/paths.js） */
+const DATA_DIR = DATA_ROOT;
 
 const log = createLogger('framework.config.runtime');
 
@@ -104,7 +102,7 @@ function applyInPlace(target, next) {
  * @param {string} options.name - 名称（日志用，如 'auth'）
  * @param {object} options.defaults - **core 保底默认值**（写在使用处，`src/config` 缺失也能跑）
  * @param {object} [options.overrides] - 静态覆盖（来自 src/config/*.js，可缺省）
- * @param {string} [options.fileName] - 运行时覆盖文件名（默认 `<name>_config.json`，位于 src/data/）
+ * @param {string} [options.fileName] - 运行时覆盖文件名（默认 `<name>_config.json`，位于 data/）
  * @param {number} [options.reloadMs] - mtime 检查节流（毫秒，默认 1000）
  * @returns {{ get: () => object, reload: () => object, bind: (target: object) => object }}
  */
