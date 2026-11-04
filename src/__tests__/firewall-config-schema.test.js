@@ -47,10 +47,8 @@ const DEFENSE_KEYS = [
   'connCleanupIntervalMs',
   'connStaleAfterMs',
   'connHighWater',
-  // 路径级跳过规则（探针 / 挑战页外壳，部署相关）
+  // 探针路径（部署相关；前端产物路径后端不认识，不是配置项）
   'probePaths',
-  'challengePagePaths',
-  'challengeAssetPrefixes',
   // 地理围栏
   'enableGeoFilter',
   'geoRules',
@@ -121,7 +119,7 @@ describe('路径级跳过规则的默认值', () => {
   it('探针 / 挑战页路径清单非空且是以 / 开头的绝对路径', () => {
     // 这些键的代码里还有一份兜底常量，但配置项本身必须有可用默认值 ——
     // 否则面板上看到的是空数组，等于"配置关掉了自保能力"。
-    for (const key of ['probePaths', 'challengePagePaths', 'challengeAssetPrefixes']) {
+    for (const key of ['probePaths']) {
       expect(Array.isArray(d[key])).toBe(true);
       expect(d[key].length).toBeGreaterThan(0);
       for (const p of d[key]) {
@@ -135,8 +133,12 @@ describe('路径级跳过规则的默认值', () => {
     expect(d.connHighWater).toBeGreaterThan(0);
   });
 
-  it('挑战接口路径**不是**配置项（必须与路由注册一一对应，可配 = 允许漂移）', () => {
+  it('挑战接口路径与前端产物路径都**不是**配置项', () => {
+    // 挑战接口：必须与路由注册一一对应，可配 = 允许漂移
     expect('challengeApiPaths' in d).toBe(false);
     expect('challengeVerifyPath' in d).toBe(false);
+    // 前端产物路径：后端起的是 API，前端由 nginx/CDN 部署，core 不该知道这些路径
+    expect('challengePagePaths' in d).toBe(false);
+    expect('challengeAssetPrefixes' in d).toBe(false);
   });
 });

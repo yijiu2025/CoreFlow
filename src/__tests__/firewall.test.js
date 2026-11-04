@@ -714,7 +714,7 @@ describe('登录结果观测：账号维度必须真的记账（曾只读 body.u
   });
 });
 
-// ── ⑩ Vue 挑战页接入（2026-11-03）：issue 接口 / 挑战页豁免 / 302 与 428 落点 ──────
+// ── ⑩ 挑战接入：issue 签发 / 挑战态放行 / 428 落点 ─────────────────────────────
 
 describe('Vue 挑战页接入：issue 签发 → 求解 → verify 全链路', () => {
   /** 按 issue 返回的 salt/difficulty 求解 PoW */
@@ -798,86 +798,46 @@ describe('Vue 挑战页接入：issue 签发 → 求解 → verify 全链路', (
   });
 });
 
-describe('挑战页外壳豁免 + SPA 落点选择', () => {
-  it('处于挑战态时，挑战页自身与其静态资源仍可达（否则死锁）', async () => {
-    const ip = '203.0.113.254';
+describe('挑战处置：后端只提供 API，不猜前端页面路径', () => {
+  /** 建一个处于挑战态的 IP，并返回一个已构建上下文的 request/reply 对 */
+  async function challengedRequest(ip, url, headers = {}) {
     await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+    const request = makeRequest({ ip, url });
+    Object.assign(request.headers, headers);
+    await buildRequestContext(request);
+    const reply = makeReply();
+    reply.request = request;
+    return { request, reply };
+  }
 
-    for (const url of [
-      '/firewall/challenge.html',
-      '/admin/challenge.html',
-      '/firewall/challenge',
-      '/admin/challenge',
-      '/firewall/assets/index-abc.js',
-      '/admin/assets/app.css'
-    ]) {
-      const request = makeRequest({ ip, url });
-      request.headers['sec-fetch-mode'] = 'navigate';
-      await buildRequestContext(request);
-      const reply = makeReply();
-      reply.request = request;
-      expect(await checkGlobalBlockPhase(request, reply)).toBe(false);
-      expect(reply.sentBody).toBeUndefined();
+  it('文档导航（含 /admin/* 这类 SPA 路径）→ 一律内置模板 200，不再 302 到前端页面', async () => {
+    // 后端不托管前端产物：猜 SPA 路径只会在前端改目录时变成死链。
+    // SPA 的挑战页由拦截器按自己的 BASE_URL 决定（看到 428 / X-Firewall-Challenge 就跳）。
+    for (const url of ['/admin/users?page=2', '/firewall/console', '/some/page']) {
+      const { request, reply } = await challengedRequest('203.0.113.255', url, {
+        'sec-fetch-mode': 'navigate',
+        accept: 'text/html'
+      });
+      expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
+      expect(reply.statusCode).toBe(200);
+      expect(reply.responseHeaders.Location).toBeUndefined();
+      expect(reply.sentBody).toContain('CHALLENGE_ID');
+      expect(reply.responseHeaders['Cache-Control']).toContain('no-store');
     }
   });
 
-  it('SPA 导航（/admin/*）→ 302 到该 SPA 的挑战页，带 return', async () => {
-    const ip = '203.0.113.255';
-    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
-
-    const request = makeRequest({ ip, url: '/admin/users?page=2' });
-    request.headers['sec-fetch-mode'] = 'navigate';
-    await buildRequestContext(request);
-    const reply = makeReply();
-    reply.request = request;
-
-    expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
-    expect(reply.statusCode).toBe(302);
-    expect(reply.responseHeaders.Location).toBe(
-      `/admin/challenge.html?return=${encodeURIComponent('/admin/users?page=2')}`
-    );
-    expect(reply.responseHeaders['Cache-Control']).toContain('no-store');
-  });
-
-  it('非 SPA 文档请求 → 仍用内置模板兜底（不依赖前端产物）', async () => {
-    const ip = '203.0.113.256';
-    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
-
-    const request = makeRequest({ ip, url: '/some/page' });
-    request.headers['sec-fetch-mode'] = 'navigate';
-    await buildRequestContext(request);
-    const reply = makeReply();
-    reply.request = request;
-
-    expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
-    expect(reply.statusCode).toBe(200);
-    expect(reply.sentBody).toContain('CHALLENGE_ID');
-  });
-
-  it('XHR 落点：SPA 接口给挑战页地址，非 SPA 接口给原路径', async () => {
-    const ip = '203.0.113.257';
-    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
-
-    const adminReq = makeRequest({ ip, url: '/admin/v1/users' });
-    adminReq.headers['sec-fetch-mode'] = 'cors';
-    adminReq.headers.accept = 'application/json';
-    await buildRequestContext(adminReq);
-    const adminReply = makeReply();
-    adminReply.request = adminReq;
-    await checkGlobalBlockPhase(adminReq, adminReply);
-    expect(adminReply.statusCode).toBe(428);
-    expect(adminReply.sentBody.challengeUrl).toBe('/admin/challenge.html');
-    expect(adminReply.sentBody.requestUrl).toBe('/admin/v1/users');
-
-    const apiReq = makeRequest({ ip, url: '/api/firewall/v1/monitor/summary' });
-    apiReq.headers['sec-fetch-mode'] = 'cors';
-    apiReq.headers.accept = 'application/json';
-    await buildRequestContext(apiReq);
-    const apiReply = makeReply();
-    apiReply.request = apiReq;
-    await checkGlobalBlockPhase(apiReq, apiReply);
-    expect(apiReply.statusCode).toBe(428);
-    expect(apiReply.sentBody.challengeUrl).toBe('/api/firewall/v1/monitor/summary');
+  it('XHR 的 challengeUrl 一律是请求自身路径（不映射成前端挑战页）', async () => {
+    for (const url of ['/api/firewall/v1/monitor/summary', '/admin/v1/users']) {
+      const { request, reply } = await challengedRequest('203.0.113.257', url, {
+        'sec-fetch-mode': 'cors',
+        accept: 'application/json'
+      });
+      await checkGlobalBlockPhase(request, reply);
+      expect(reply.statusCode).toBe(428);
+      expect(reply.sentBody.challengeUrl).toBe(url);
+      expect(reply.sentBody.requestUrl).toBe(url);
+      expect(reply.responseHeaders['X-Firewall-Challenge']).toBe(url);
+    }
   });
 });
 

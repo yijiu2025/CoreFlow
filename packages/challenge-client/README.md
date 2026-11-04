@@ -63,7 +63,9 @@ const { phase, progress, reason, retries, maxAutoRetry, difficulty, retry } = us
 | 签发前提 | **只在挑战态签发**（非挑战态 → 403 `Not Challenged`，防"预先解一次换免检"） |
 | 绑定 | IP + 请求指纹 + 设备 ID，三者都参与校验 |
 | 通过令牌 | `fw_verified`（HttpOnly）：**已登录 30 分钟 / 匿名 2 分钟**（按登录态分档，匿名不给长期通行证） |
-| 挑战页豁免 | `/firewall/challenge.html`、`/admin/challenge.html`、`/challenge.html` 及其 `assets/` 前缀（见 `pipeline.js` 的 `CHALLENGE_PAGE_PATHS`） |
+| 挑战页位置 | **后端不参与**：后端只提供 API，挑战页由前端自己按 `BASE_URL + challenge.html` 决定；响应只给 `428` + `X-Firewall-Challenge`（无 302） |
 
-> 挑战页是**独立构建入口**（各自的 `challenge.html`），不是 SPA 深链路由：后端没有 SPA
-> 回退，且主 app 启动即请求业务接口，会立刻撞上 428 而自我打死。
+> 挑战页是**独立构建入口**（各自的 `challenge.html`），不是 SPA 深链路由：主 app 启动即
+> 请求业务接口，会立刻撞上 428 而自我打死。
+> 后端**不认识任何前端页面路径**（`/firewall/`、`/admin/` 之类）——那是部署形态，写进 core
+> 只会在前端改目录时变成死链；文档导航直接拿内联的挑战页模板（自包含）。

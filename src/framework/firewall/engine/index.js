@@ -32,9 +32,7 @@ export { handleAttackEvent, notifyAttack, sendAlert, registerEmailAlertSender } 
 export {
   CHALLENGE_API_PATHS,
   CHALLENGE_VERIFY_PATH,
-  CHALLENGE_PAGE_PATHS,
   isChallengeApiUrl,
-  isChallengePageUrl,
   isChallengeVerifyUrl,
   shouldSkipDeepCheck,
   willBeRejectedAsAnonymous,
