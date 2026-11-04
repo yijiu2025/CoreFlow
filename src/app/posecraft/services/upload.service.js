@@ -10,11 +10,10 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { fileURLToPath } from 'url';
+import { appDir, publicUrl, ensureDir } from '../../../framework/storage/index.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-/** 上传目录（public/uploads/posecraft，由静态资源服务暴露） */
-const UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads/posecraft');
+/** 公开上传目录：public/posecraft（按 app 分层，由静态资源服务暴露） */
+const UPLOAD_DIR = appDir('posecraft');
 /** 允许的图片 MIME 类型 → 固定扩展名（扩展名只从白名单映射，绝不用用户文件名） */
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const EXT_BY_MIME = {
@@ -60,10 +59,8 @@ function isMagicMatch(buffer, mime) {
   return rule.bytes.every((b, i) => buffer[i] === b);
 }
 
-// 确保上传目录存在
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+// 确保上传目录存在（幂等，目录由 framework/storage 统一约定）
+ensureDir(UPLOAD_DIR);
 
 /**
  * 保存 multipart 上传的文件到磁盘
@@ -95,7 +92,7 @@ async function saveUploadFile(file) {
   fs.writeFileSync(filepath, buffer);
 
   return {
-    url: `/uploads/posecraft/${filename}`,
+    url: publicUrl('posecraft', filename),
     filename,
     size: buffer.length
   };
@@ -137,7 +134,7 @@ async function saveBase64Image(dataUri, filename) {
   fs.writeFileSync(filepath, buffer);
 
   return {
-    url: `/uploads/posecraft/${finalFilename}`,
+    url: publicUrl('posecraft', finalFilename),
     filename: finalFilename,
     size: buffer.length
   };

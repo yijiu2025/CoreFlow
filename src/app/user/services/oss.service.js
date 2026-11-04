@@ -2,7 +2,7 @@
  * OSS 存储服务
  *
  * 支持阿里云 OSS 和本地存储降级。
- * 优先使用 OSS，未配置时自动降级到本地 public/uploads/ 目录。
+ * 优先使用 OSS，未配置时降级到本地 `public/user/avatars/`（按 app 分层的公开目录）。
  *
  * @author yijiu2025
  * @since 2026-08-17
@@ -10,11 +10,11 @@
 
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import Logger from '../../../framework/log/index.js';
+import { appDir, publicUrl, ensureDir } from '../../../framework/storage/index.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const LOCAL_UPLOAD_DIR = path.resolve(__dirname, '../../../../public/uploads');
+/** 公开上传目录：public/user（按 app 分层；头像放其下 avatars/） */
+const LOCAL_UPLOAD_DIR = appDir('user');
 
 // 延迟加载 ali-oss（未安装时不影响启动）
 let OSS = null;
@@ -103,21 +103,13 @@ async function uploadToOss(client, buffer, fileName, mimeType) {
  * 上传到本地存储（降级方案）
  */
 async function uploadToLocal(buffer, fileName) {
-  // 确保目录存在
-  if (!fs.existsSync(LOCAL_UPLOAD_DIR)) {
-    fs.mkdirSync(LOCAL_UPLOAD_DIR, { recursive: true });
-  }
-
-  const avatarsDir = path.join(LOCAL_UPLOAD_DIR, 'avatars');
-  if (!fs.existsSync(avatarsDir)) {
-    fs.mkdirSync(avatarsDir, { recursive: true });
-  }
+  const avatarsDir = ensureDir(path.join(LOCAL_UPLOAD_DIR, 'avatars'));
 
   const filePath = path.join(avatarsDir, fileName);
   fs.writeFileSync(filePath, buffer);
 
-  // 返回相对 URL（由 Fastify 静态文件服务提供）
-  return `/uploads/avatars/${fileName}`;
+  // 返回相对 URL（由 Fastify 静态文件服务提供）：/user/avatars/<file>
+  return publicUrl('user', `avatars/${fileName}`);
 }
 
 /**
@@ -137,9 +129,9 @@ async function deleteFile(url) {
 
     if (client && ossKey !== null) {
       await client.delete(ossKey);
-    } else if (url.startsWith('/uploads/')) {
-      // 本地文件：解析规范化路径后校验目录边界，阻断 ../ 穿越及相似前缀目录。
-      const filePath = path.resolve(LOCAL_UPLOAD_DIR, url.slice('/uploads/'.length));
+    } else if (url.startsWith('/user/')) {
+      // 本地文件（public/user/avatars/...）：解析规范化路径后校验目录边界，阻断 ../ 穿越
+      const filePath = path.resolve(LOCAL_UPLOAD_DIR, url.slice('/user/'.length));
       const relativeFilePath = path.relative(LOCAL_UPLOAD_DIR, filePath);
       const outsideUploadDir =
         !relativeFilePath ||

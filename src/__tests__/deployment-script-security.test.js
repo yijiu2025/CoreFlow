@@ -38,6 +38,7 @@ describe('Docker 可重复安装与最小写权限', () => {
 
   it('node 用户只能写运行状态目录，不能拥有整棵源码', () => {
     expect(dockerfile).not.toContain('chown -R node:node /app');
-    expect(dockerfile).toMatch(/chown -R node:node logs src\/data public\/uploads/);
+    // 可写面只有：日志、防火墙统计、公开上传（public/<app>）、私有文件根（storage/<app>）
+    expect(dockerfile).toMatch(/chown -R node:node logs src\/data public\/posecraft public\/user storage/);
   });
 });

@@ -16,16 +16,14 @@ import sharp from 'sharp';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { getModel } from '../../../framework/db/index.js';
 import { createLogger } from '../../../framework/log/index.js';
+import { appDir, publicUrl } from '../../../framework/storage/index.js';
 
 const log = createLogger('app.posecraft.utils.preview');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 /** 预览图存储根目录（绝对路径） */
-const PREVIEW_ROOT = path.resolve(__dirname, '../../../public/uploads/posecraft/previews');
+const PREVIEW_ROOT = path.join(appDir('posecraft'), 'previews');
 
 /**
  * 根据类型获取预览图存储子目录
@@ -35,7 +33,7 @@ const PREVIEW_ROOT = path.resolve(__dirname, '../../../public/uploads/posecraft/
 const getPreviewDir = type => path.join(PREVIEW_ROOT, type === 'template' ? 'template' : 'work');
 
 /** 预览图 URL 前缀 */
-const getPreviewUrlPrefix = type => `/uploads/posecraft/previews/${type === 'template' ? 'template' : 'work'}`;
+const getPreviewUrlPrefix = type => publicUrl('posecraft', `previews/${type === 'template' ? 'template' : 'work'}`);
 
 /** 预览图最大宽度（缩略图），像素 */
 const THUMB_MAX_WIDTH = 600;
@@ -125,14 +123,14 @@ function extractFabricData(poseData) {
  * - 骨架预览图（generateSkeletonPreview）= 透明背景，纯骨架，用于模板
  * - 本函数 = 底图原图压缩，**保持原始尺寸**，改用 WebP 70% 质量降低文件体积
  *
- * @param {string} imageUrl - 底图 URL，如 '/uploads/posecraft/xxx.jpg'
+ * @param {string} imageUrl - 底图 URL，如 '/posecraft/xxx.jpg'（公开目录 public/<app>/）
  * @returns {Promise<string|null>} 相对 URL；失败时返回 null（调用方应回退到原图）
  */
 async function generateImageThumbnail(imageUrl) {
   if (!imageUrl || typeof imageUrl !== 'string') return null;
 
   try {
-    // 仅处理本地上传图片（以 /uploads/ 开头）
+    // 仅处理本地上传图片：URL 以 / 开头且能在 public/ 下找到（OSS 等外链会返回 null）
     const localPath = path.resolve(process.cwd(), 'public', imageUrl.replace(/^\//, ''));
     if (!fs.existsSync(localPath)) return null;
 

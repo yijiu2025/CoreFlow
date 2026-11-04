@@ -19,9 +19,15 @@ suspect/
 learn
 tokens.json
 
-# 忽略 public 下的上传文件，但保留目录本身
-public/uploads/*
-!public/uploads/.gitkeep
+# 公开上传目录（按 app 分层）：public/<app>/ 下是运行期写入的用户文件
+public/posecraft/*
+!public/posecraft/.gitkeep
+public/user/*
+!public/user/.gitkeep
+
+# 私有文件根：**不在静态根下**，只经 /api/files/v1/:app/* 鉴权下载
+storage/*
+!storage/.gitkeep
 
 # VitePress 构建缓存
 docs/.vitepress/cache

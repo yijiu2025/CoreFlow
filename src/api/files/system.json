@@ -1,0 +1,10 @@
+{
+  "name": "Files",
+  "alias": "文件服务",
+  "prefix": "/api/files",
+  "description": "私有文件鉴权下载（按 app 隔离、按归属校验）；公开静态资源不走这里。",
+  "enabled": true,
+  "requireLogin": true,
+  "allowIps": [],
+  "allowRoles": []
+}

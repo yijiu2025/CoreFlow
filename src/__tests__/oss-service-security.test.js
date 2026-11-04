@@ -1,5 +1,5 @@
 /**
- * 本地旧头像删除安全契约：只能删除 public/uploads 内的文件。
+ * 本地旧头像删除安全契约：只能删除 public/user 内的文件（URL 形如 /user/avatars/xxx.jpg）。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe('deleteFile 本地路径边界', () => {
-  it.each(['/uploads/../../outside.txt', '/uploads/../uploads-evil/old.jpg'])(
+  it.each(['/user/../../outside.txt', '/user/../user-evil/old.jpg'])(
     '拒绝删除上传目录外的路径：%s',
     async oldAvatar => {
       jest.spyOn(fs, 'existsSync').mockReturnValue(true);
@@ -33,9 +33,9 @@ describe('deleteFile 本地路径边界', () => {
     jest.spyOn(fs, 'existsSync').mockReturnValue(true);
     jest.spyOn(fs, 'unlinkSync').mockImplementation(() => {});
 
-    await deleteFile('/uploads/avatars/old.jpg');
+    await deleteFile('/user/avatars/old.jpg');
 
-    const expectedPath = fileURLToPath(new URL('../../public/uploads/avatars/old.jpg', import.meta.url));
+    const expectedPath = fileURLToPath(new URL('../../public/user/avatars/old.jpg', import.meta.url));
     expect(fs.unlinkSync).toHaveBeenCalledTimes(1);
     expect(fs.unlinkSync).toHaveBeenCalledWith(path.resolve(expectedPath));
   });

@@ -425,11 +425,27 @@ async function createApp() {
     }
   });
 
+  // 静态资源：root=public，prefix=/ ⇒ public/<app>/xxx 直接可访问 /<app>/xxx
+  //
+  // 目录约定（详见 src/framework/storage/index.js）：
+  //   public/<app>/…    公开资源（作品图 / 头像 / logo / 字体）—— 任何人可访问
+  //   storage/<app>/…   **私有**资源，不在这里，只能经 /api/files/v1/:app/* 鉴权下发
+  //
+  // 缓存：文件名由服务端生成（UUID / 内容 hash），内容不会原地变 ⇒ 可以长缓存。
+  // 之前只设了 CORP、没设 maxAge，等于每个资源都带 ETag 回源 304，纯浪费。
+  // 生产若前面有 nginx/CDN，这一段可整段关掉交给它（Node 不该伺候静态文件）。
   await app.register(staticPlugin, {
     root: publicPath,
     prefix: '/',
-    setHeaders: res => {
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    maxAge: '7d',
+    etag: true,
+    setHeaders: reply => {
+      // ⚠️ 回调的第一个参数是 **Fastify reply**，不是裸 http.ServerResponse：
+      // 之前写 `res.setHeader(...)` 会抛 `res.setHeader is not a function`，
+      // 而 public/ 里长期没有文件 → 这条路径从没跑过，直到真正放静态资源才暴露。
+      reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
+      // 上传目录里可能混入被伪造扩展名的内容，禁止浏览器嗅探 MIME
+      reply.header('X-Content-Type-Options', 'nosniff');
     }
   });
 

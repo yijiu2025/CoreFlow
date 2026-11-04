@@ -68,6 +68,20 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 - **迁移**: Umzug v3（`migrations/` 目录）
 - **前端**: Vue 3 + Vite + TypeScript（`oauth21/`、`firewall/`、`admin/`）
 
+## 文件存储（公开 / 私有两套根，别混）
+
+| 根 | 用途 | 访问方式 |
+| --- | --- | --- |
+| `public/<app>/…` | 公开资源（作品图 / 头像 / logo / 字体） | `@fastify/static`（prefix `/`）直出：`GET /<app>/<file>` |
+| `storage/<app>/u/<ownerId>/…` | **私有**文件（合同 / 导出 / 证件 / 付费内容） | 只能经 `GET /api/files/v1/:app/u/<ownerId>/<file>` 鉴权下发 |
+
+- 目录约定与路径守卫的单一来源：`src/framework/storage/index.js`（`appDir` / `resolveFile` / `publicUrl` / `privateKey`）。
+- **判断放哪**：文件被陌生人拿到会不会有损失？不会 → `public/`；会 → `storage/`。
+  `public/` **不是权限控制**，只是"URL 猜不到"，URL 一旦流出就永久可下载、无法撤销。
+- 私有文件路径必须带 `u/<ownerId>/`：归属写进路径，下载路由据此鉴权（本人或 admin），
+  无需额外查表；`Cache-Control: private, no-store`，非白名单扩展名强制 `attachment`。
+- 多实例部署时 `storage/` 需共享卷或换成对象存储（`src/app/user/services/oss.service.js` 已有降级开关）。
+
 ## 启动流程
 
 ```
