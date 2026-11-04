@@ -97,6 +97,11 @@ stop_grace_period: 35s   # 应用自身兜底是 30s（index.js 的 SHUTDOWN_TIM
 > 路径的单一来源是 `src/framework/paths.js`（`REPO_ROOT` / `DATA_ROOT`）与
 > `src/framework/storage/index.js`（`PUBLIC_ROOT` / `PRIVATE_ROOT`）。
 
+**前端不进本镜像**：`firewall/`、`admin/`、`oauth21/` 各自 `vite build` 出 `dist/`，由 nginx/CDN
+按 `base` 挂载（`firewall` 的 `base` 是 `/firewall/`，即 `location /firewall/ { alias …/dist/; }`）。
+后端只提供 API —— 所以 `defense.safePaths` 不需要（也**不该**）放前端目录；
+前端深链的 404 由 nginx 的 `try_files … /firewall/index.html` 负责，与后端无关。
+
 ## 迁移怎么跑
 
 **不做成应用启动的一部分**：多副本同时启动会并发跑迁移，两个进程同时改写同一批

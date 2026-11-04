@@ -28,7 +28,9 @@ async function registerApiConfigRoutes(fastify) {
     // 这里**不能**靠 allowRoles 兜底：`allowRoles: []` 的语义是「不限制角色」，
     // 于是任何登录用户（哪怕零角色）都能改全域 Guard 策略。
     // 授权统一由 requirePermission 表达（见各路由），角色不限。
-    allowRoles: []
+    allowRoles: [],
+    // 端点级限频（组级默认）：安全配置读写，60 次/分钟
+    rateLimit: { max: 60, timeWindow: '1 minute' }
   });
 
   registerSecureRoute(fastify, {

@@ -19,7 +19,9 @@ async function registerMetricsRoutes(fastify) {
     description: '防火墙性能统计',
     prefix: '/v1/metrics',
     enabled: true,
-    requireLogin: true
+    requireLogin: true,
+    // 端点级限频（组级默认）：指标接口计算量大，60 次/分钟
+    rateLimit: { max: 60, timeWindow: '1 minute' }
   });
 
   /**

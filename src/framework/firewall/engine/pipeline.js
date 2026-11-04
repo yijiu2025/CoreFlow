@@ -449,18 +449,26 @@ async function checkChallengeCookie(request, ip, fingerprint) {
  * @param {string} fingerprint 请求指纹
  * @param {import('fastify').FastifyReply} reply 响应对象
  * @param {string|null} [deviceId] 设备 ID（可为空；命中挑战时会一并写设备维度，使挑战跨 IP 有效）
+ * @param {{skipChallenge?: boolean}} [options] skipChallenge=true 表示「只计数、不再判定挑战」
+ *   （通过令牌命中时用：pass 只豁免**再次挑战**，不豁免计数）
  * @returns {Promise<boolean>} true 表示被拦截（已响应），false 表示放行
  */
-async function runDetectionPipeline(ip, ua, url, firewallLog, fingerprint, reply, deviceId = null) {
+async function runDetectionPipeline(ip, ua, url, firewallLog, fingerprint, reply, deviceId = null, options = {}) {
+  const { skipChallenge = false } = options;
   try {
-    // Bot 检测：基于 UA 模式 + 请求频率
+    // 计数必须先做：它既是挑战判定的输入，也是「频次窗口」的事实来源。
+    // 通过令牌命中时也照常计数（只跳过下面的挑战判定），否则 pass 窗口内等于完全不记账，
+    // 「2 分钟」就变成一扇不监控的门，而不是配额。
     const requestCount = trackRequestCount(ip);
-    const isBot = await checkBotChallenge(ip, ua, requestCount, deviceId);
 
-    if (isBot) {
-      const err = new Error('Challenge required');
-      err.isChallenge = true;
-      throw err;
+    if (!skipChallenge) {
+      // Bot 检测：基于 UA 模式 + 请求频率（命中会写挑战态，所以不能只读）
+      const isBot = await checkBotChallenge(ip, ua, requestCount, deviceId);
+      if (isBot) {
+        const err = new Error('Challenge required');
+        err.isChallenge = true;
+        throw err;
+      }
     }
 
     // 地理信誉：IDC 限频、境外敏感路径拦截

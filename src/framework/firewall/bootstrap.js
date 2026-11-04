@@ -76,11 +76,14 @@ const firewallCorePlugin = fp(async function (app) {
     // （配置开关 skipDeepCheckForAnonymous，默认关闭；取舍见 willBeRejectedAsAnonymous 注释）
     if (readSecuritySettings().defense?.skipDeepCheckForAnonymous && willBeRejectedAsAnonymous(request)) return;
 
-    // 第 2 阶段：挑战 Cookie 验证（已通过的直接放行）
+    // 第 2 阶段：挑战 Cookie 验证
+    // ⚠️ 命中通过令牌**不再直接 return**：pass 只豁免「再次挑战」（第 3 阶段里的 Bot 判定），
+    // 不豁免计数 —— 否则 120s 窗口内的请求完全不进频次窗口，「2 分钟」就成了免监控窗口
+    // 而不是配额（实测：持 pass 连发 260 次，第 121 次才触发挑战，前面全没记账）。
+    // 硬封禁 / 地理信誉照常执行：这两类不是「挑战」，不该被 pass 豁免。
     const passed = await checkChallengeCookie(request, ip, fingerprint);
-    if (passed) return;
 
-    // 第 3 阶段：深度检测管道（Bot / 地理信誉 / 端点限频）
+    // 第 3 阶段：深度检测管道（计数 / Bot 挑战 / 地理信誉）
     const intercepted = await runDetectionPipeline(
       ip,
       ua,
@@ -88,7 +91,8 @@ const firewallCorePlugin = fp(async function (app) {
       request._firewallLog,
       fingerprint,
       reply,
-      deviceId
+      deviceId,
+      { skipChallenge: passed }
     );
     if (intercepted) {
       request._firewallLogged = true;

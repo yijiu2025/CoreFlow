@@ -37,6 +37,17 @@ let currentPrefix = '';
 /** 路由注册表：method+fullUrl → { group, name }。用于实时检测重复注册 */
 const _routeRegistry = new Map();
 
+/**
+ * 组级默认端点限频表：group → { max, timeWindow, ... }
+ *
+ * 由 `registerGroupMetadata({ rateLimit })` 声明，`registerSecureRoute` 在路由**没有**
+ * 自己声明 `config.rateLimit` 时继承。为什么按组而不是逐条写：
+ *   - 一组动辄 20+ 路由，逐条声明漏一条就是"这个端点裸奔"，而且看不出来；
+ *   - groupId 由 `组名 + 路由名` 自动生成 ⇒ 同组内每个端点各自一个桶，
+ *     @fastify/rate-limit 默认按 IP 共享一个键，会让高流量端点吃掉低流量端点的额度。
+ */
+const _groupRateLimits = new Map();
+
 // =============================================================================
 // 3. 内部工具函数
 // =============================================================================
@@ -376,6 +387,13 @@ function registerGroupMetadata(metadata) {
   currentGroup = groupKey;
   currentPrefix = metadata.prefix || '';
 
+  // 组级默认端点限频（可选）：只对「自己没声明 config.rateLimit」的路由生效
+  if (metadata.rateLimit && typeof metadata.rateLimit === 'object') {
+    _groupRateLimits.set(groupKey, { ...metadata.rateLimit });
+  } else {
+    _groupRateLimits.delete(groupKey);
+  }
+
   // 如果 metadata 显式指定了 system，则覆盖自动推导的值
   const systemKey = currentSystem;
 
@@ -483,6 +501,13 @@ function registerSecureRoute(fastify, options) {
 
   // 需要登录的路由自动标记需要签名验证；requireSignature 可单独开启（公开端点防爬）
   const routeConfig = { ...config };
+
+  // 组级默认端点限频：路由自己声明了 config.rateLimit 就用路由的（更具体者优先），
+  // 否则继承组的声明。groupId 必须带路由名 —— 组内共享一个 groupId 等于组内共用额度。
+  const groupRateLimit = _groupRateLimits.get(targetGroup);
+  if (groupRateLimit && !routeConfig.rateLimit) {
+    routeConfig.rateLimit = { ...groupRateLimit, groupId: `${targetGroup}-${apiKey}` };
+  }
   if (requireLogin || requireSignature) {
     routeConfig.requireSignature = true;
   }

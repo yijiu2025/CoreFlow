@@ -155,7 +155,9 @@ async function registerExportRoutes(fastify) {
     enabled: true,
     requireLogin: true,
     // 授权交给各路由的 requirePermission；allowRoles 留空表示「不限角色」（而非「禁止」）
-    allowRoles: []
+    allowRoles: [],
+    // 端点级限频（组级默认，逐路由独立桶）：导出/导入都要生成或解析整份数据，10 次/分钟
+    rateLimit: { max: 10, timeWindow: '1 minute' }
   });
 
   /**

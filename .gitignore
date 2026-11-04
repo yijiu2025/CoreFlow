@@ -24,7 +24,8 @@ public/posecraft/*
 !public/posecraft/.gitkeep
 public/user/*
 !public/user/.gitkeep
-# firewall 前端的 vite `outDir` 指向这里（base=/firewall/）：**构建产物不进 git**
+# 历史：firewall 前端曾把构建产物写到这里（outDir 已改为本工程 dist/，由 nginx/CDN 部署）。
+# 保留忽略只为挡住旧分支/旧缓存误建出来的产物。
 public/firewall/
 
 # 私有文件根：**不在静态根下**，只经 /api/files/v1/:app/* 鉴权下载

@@ -66,7 +66,11 @@ async function registerMonitorRoutes(fastify) {
     enabled: true,
     requireLogin: true,
     allowIps: [],
-    allowRoles: []
+    allowRoles: [],
+    // 端点级限频（组级默认，逐路由生成独立桶：`firewall-monitor-<name>`）：
+    // 仪表盘会定时轮询 summary/records，120 次/分钟对正常使用完全够；
+    // 之前这组 23 条路由只有全局限流（600/60s，全站共享），面板被刷时会把额度吃光。
+    rateLimit: { max: 120, timeWindow: '1 minute' }
   });
 
   // ==================== 仪表盘基础 API ====================

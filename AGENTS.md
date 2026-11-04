@@ -92,6 +92,9 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 | `public/<app>/…` | 公开资源（作品图 / 头像 / logo / 字体） | `@fastify/static`（prefix `/`）直出：`GET /<app>/<file>` |
 | `storage/<app>/u/<ownerId>/…` | **私有**文件（合同 / 导出 / 证件 / 付费内容） | 只能经 `GET /api/files/v1/:app/u/<ownerId>/<file>` 鉴权下发 |
 
+- **后端只提供 API，不托管前端产物**：`firewall/`、`admin/`、`oauth21/` 各自 `vite build` 出 `dist/`，
+  由 nginx/CDN 部署（`firewall` 的 base 是 `/firewall/`，纯路径挂载）。后端 `public/` **只放业务上传**，
+  所以 `defense.safePaths` 里也不需要任何前端目录 —— 前后端目录一旦耦合，前端换路径就得改后端配置。
 - **判断放哪**：文件被陌生人拿到会不会有损失？不会 → `public/`；会 → `storage/`。
   `public/` **不是权限控制**，只是"URL 猜不到"，URL 一旦流出就永久可下载、无法撤销。
 - 私有文件路径必须带 `u/<ownerId>/`：归属写进路径，下载路由据此鉴权（本人或 admin），
