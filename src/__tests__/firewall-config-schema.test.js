@@ -13,6 +13,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { DEFAULT_SECURITY_SETTINGS } from '../framework/firewall/config/defaults.js';
+import { DEFAULT_SECURITY_SETTINGS as APP_SECURITY_SETTINGS } from '../app/firewall/config/config.js';
 
 /** defense 下允许出现的键（= 持久化 schema，改这里等于改契约） */
 const DEFENSE_KEYS = [
@@ -33,10 +34,6 @@ const DEFENSE_KEYS = [
   'rateLimitRequests',
   'rateLimitWindow',
   'enableEndpointRateLimit',
-  // 用户级限频
-  'enableUserRateLimit',
-  'userRateLimitRequests',
-  'userRateLimitWindow',
   // 暴力破解
   'enableBruteForce',
   'bruteLimit',
@@ -69,8 +66,20 @@ const DEFENSE_KEYS = [
 ];
 
 describe('防火墙默认策略 · schema 契约', () => {
-  it('顶层只有 activeIpApi / showTrajectory / defense', () => {
-    expect(Object.keys(DEFAULT_SECURITY_SETTINGS).sort()).toEqual(['activeIpApi', 'defense', 'showTrajectory']);
+  it('core 顶层只有 defense（面板展示类配置不属于防护核心）', () => {
+    // 2026-11-04：showTrajectory / activeIpApi 是控制台概念（地图轨迹开关、节点定位数据源），
+    // 只有 firewall 前端与 app/dao 读，防护核心零读取 —— 默认值已下沉 app 层。
+    // 这条断言防回退：core 里重新出现展示类键 = 又把 app 概念塞回核心。
+    expect(Object.keys(DEFAULT_SECURITY_SETTINGS).sort()).toEqual(['defense']);
+  });
+
+  it('app 层把展示类默认值补回来，合并结果仍是完整的三段形状', () => {
+    // dao.js 从这里取初值 → 面板 GET /settings 的形状不能变（持久化 schema 冻结）
+    expect(Object.keys(APP_SECURITY_SETTINGS).sort()).toEqual(['activeIpApi', 'defense', 'showTrajectory']);
+    expect(APP_SECURITY_SETTINGS.activeIpApi).toBe('sohu');
+    expect(APP_SECURITY_SETTINGS.showTrajectory).toBe(true);
+    // defense 必须来自 core（同一份对象内容），不能在 app 层复制一份策略默认值
+    expect(APP_SECURITY_SETTINGS.defense).toEqual(DEFAULT_SECURITY_SETTINGS.defense);
   });
 
   it('defense 键集合与持久化 schema 完全一致（不多不少）', () => {

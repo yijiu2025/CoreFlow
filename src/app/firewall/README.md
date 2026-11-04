@@ -139,9 +139,10 @@ firewall onResponse 钩子
 
 ### config/ — 配置文件
 
-| 文件      | 职责                                  | 关键导出                                                                            |
-| --------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| config.js | 默认安全策略矩阵、IP 解析源、常量路径 | `DEFAULT_SECURITY_SETTINGS`, `DEFAULT_IP_APIS`, `CHALLENGE_SECRET`, `FIREWALL_FILE` |
+| 文件         | 职责                                              | 关键导出                                                                            |
+| ------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| config.js    | 生效默认值（app ← core 合并）、IP 解析源、常量路径 | `DEFAULT_SECURITY_SETTINGS`, `DEFAULT_IP_APIS`, `CHALLENGE_SECRET`, `FIREWALL_FILE` |
+| defaults.js  | **app 层**默认值：面板展示 / 节点定位（`showTrajectory`、`activeIpApi`） | `DEFAULT_APP_SETTINGS`（core 不含这两个键）                                          |
 
 ### data/ — 运行中数据
 

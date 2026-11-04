@@ -12,6 +12,11 @@ const log = createLogger('app.firewall.config.config');
 
 // 持久化路径的单一来源在 framework（防护核心启动期就要读它），这里只做 re-export。
 import { FIREWALL_FILE } from '../../../framework/firewall/config/persisted.js';
+// 生效默认值 = **app 默认 ← core 默认**：core 只含防护策略（defense），
+// 面板展示类键（activeIpApi / showTrajectory）定义在 ./defaults.js。
+import { deepMerge } from '../../../framework/config/runtime.js';
+import { DEFAULT_SECURITY_SETTINGS as CORE_SECURITY_SETTINGS } from '../../../framework/firewall/config/defaults.js';
+import { DEFAULT_APP_SETTINGS } from './defaults.js';
 
 const CHALLENGE_SECRET = process.env.FIREWALL_SECRET;
 
@@ -153,13 +158,23 @@ const DEFAULT_IP_APIS = [
 
 const DEFAULT_IP_API = DEFAULT_IP_APIS.find(api => api.id === 'sohu');
 
-// 默认安全策略矩阵已下沉 framework（单一来源：framework/firewall/config/defaults.js，
-// 2026-11-02 随 05-firewall 直接启动防护核心一起迁移）。此处 re-export 维持
-// dao.js 与测试的既有 import 路径不变。
-export { DEFAULT_SECURITY_SETTINGS } from '../../../framework/firewall/config/defaults.js';
-
 /**
- * 默认安全策略矩阵（re-export，定义见 framework/firewall/config/defaults.js）
+ * 默认安全策略矩阵（**本 app 的生效默认值**）
+ *
+ * `deepMerge(app 默认, core 默认)`：core 里没有 app 专有的两个展示键，所以 app 的值
+ * 会留下；而 `src/config/firewall_config.js` 的静态覆盖是先并进 core 默认对象的，
+ * 因此它显式写了 `activeIpApi` / `showTrajectory` 时，core 一侧仍然覆盖 app 默认 ——
+ * 「顶层键可被静态覆盖」的既有语义不变。
+ *
+ * 消费方：`dao.js` 以它为初值，再叠磁盘 JSON；因此面板 GET /settings 拿到的
+ * 仍是 `{ activeIpApi, showTrajectory, defense }` 这一完整形状（持久化 schema 未变）。
  */
+const DEFAULT_SECURITY_SETTINGS = deepMerge(DEFAULT_APP_SETTINGS, CORE_SECURITY_SETTINGS);
 
 export { FIREWALL_FILE, CHALLENGE_SECRET, DEFAULT_SERVER_NODE, DEFAULT_IP_APIS, DEFAULT_IP_API };
+
+/**
+ * 默认安全策略矩阵（含 app 层展示类默认值，定义见 ./defaults.js 与
+ * framework/firewall/config/defaults.js）
+ */
+export { DEFAULT_SECURITY_SETTINGS };

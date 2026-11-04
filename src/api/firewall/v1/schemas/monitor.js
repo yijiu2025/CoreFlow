@@ -97,6 +97,11 @@ const updateNodeSchema = {
 // `DEFAULT_SECURITY_SETTINGS` 与任何 `settings.xxx` 读取点都不存在该键 ——
 // 面板上勾选它会往配置里写一个永远没人读的键（用户以为开/关了某个功能）。
 // （Bot 挑战的开关实际由 botChallenge*Limit 阈值控制。）
+// 同理 2026-11-04 删掉 `enableUserRateLimit` / `userRateLimitRequests` /
+// `userRateLimitWindow`：自研用户级限频随 `defense.endpointRateLimits` 一起下线后
+// 已无任何读取点；「按用户」现在是全局限流器的 keyGenerator（登录按 user.id）。
+// 顶层两个键是 **app 层**配置（面板展示 / 节点定位），schema 作为 API 契约继续保留；
+// 它们的默认值在 src/app/firewall/config/defaults.js，不在 core。
 const updateSettingsSchema = {
   description: '更新全局防御策略设置',
   body: {
@@ -114,9 +119,6 @@ const updateSettingsSchema = {
           enableRateLimit: { type: 'boolean' },
           rateLimitRequests: { type: 'number' },
           rateLimitWindow: { type: 'number' },
-          enableUserRateLimit: { type: 'boolean' },
-          userRateLimitRequests: { type: 'number' },
-          userRateLimitWindow: { type: 'number' },
           enableBruteForce: { type: 'boolean' },
           bruteLimit: { type: 'number' },
           bruteWindow: { type: 'number' },

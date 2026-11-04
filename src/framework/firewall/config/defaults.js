@@ -6,10 +6,17 @@
  * ════════════════════════════════════════════════════════════════════
  * 默认值必须住在 core（本文件）：防护核心要在「没有 app 层、没有 src/config
  * 覆盖」的前提下也能以完整默认策略启动。
+ *   ⓪ src/app/firewall/config/defaults.js  app 层默认值（面板展示类）
  *   ① 本文件                          core 保底值（改内置默认才动这里）
  *   ② src/config/firewall_config.js   可选静态覆盖（只写要改的键，文件可缺失）
  *   ③ src/data/firewall_config.json   运行时覆盖（面板热改，数组整体替换）
- * 载入顺序：① ← ② ← ③，后者逐层覆盖前者。
+ * 载入顺序：⓪ ← ① ← ② ← ③，后者逐层覆盖前者。
+ *
+ * **只收防护策略**：一个键若没有任何 core 代码读取（例如面板开关
+ * `showTrajectory`、节点定位数据源 `activeIpApi`），它就不属于这里 ——
+ * 默认值归 app 层（`src/app/firewall/config/defaults.js`），core 只在
+ * 磁盘文件里遇到时原样透传。判据：`grep -rn "defense\\.<key>" src/framework/firewall`
+ * 为空 ⇒ 不该写在 core。
  *
  * ════════════════════════════════════════════════════════════════════
  * 二、为什么有 `defense` 这一层（不要试图拍平）
@@ -23,8 +30,8 @@
  * ════════════════════════════════════════════════════════════════════
  * 三、组织方式：按功能分块 → 末尾拼装
  * ════════════════════════════════════════════════════════════════════
- * 功能常量块（展示 / 手动名单 / 扫描检测 / 全局限频 / 用户限频 / 暴破 /
- * 连接闸门 / 地理围栏 / Bot 检测 / 挑战难度 / 设备维度 / 匿名短路 / 告警）
+ * 功能常量块（手动名单 / 扫描检测 / 全局限频 / 暴破 / 连接闸门 /
+ * 地理围栏 / Bot 检测 / 挑战难度 / 设备维度 / 匿名短路 / 告警）
  * 各自带取值理由；末尾按 `defense` 既有键名展开 —— 调某类阈值只看对应那一块。
  * 拼装处不写逻辑（不做运算、不读 env），保证「默认值 = 字面量」。
  *
@@ -33,22 +40,27 @@
  *
  * @author yijiu2025
  * @since 2026-11-03（配置值住在 core，src/config 只做可选覆盖）
+ * @since 2026-11-04（面板展示类键下沉 app 层；删除已无消费者的用户级限频三键）
  */
 
 import { deepMerge } from '../../config/runtime.js';
 import { loadOverrides } from '../../config/overrides.js';
 
 // ════════════════════════════════════════════════════════════════════
-// 展示与手动名单
+// 手动名单
 // ════════════════════════════════════════════════════════════════════
 
-/** 公网 IP 归属查询数据源（面板「当前节点 IP」展示用）：sohu | ipify */
-const ACTIVE_IP_API = 'sohu';
-
-/** 面板是否展示访问轨迹（省份热力图） */
-const SHOW_TRAJECTORY = true;
-
-/** 手动黑/白名单（面板与 CLI 维护，此处只是出厂默认空名单） */
+/**
+ * 手动黑/白名单（面板与 CLI 维护，此处只是出厂默认空名单）
+ *
+ * 它属于 core：`block-manager` 在**每个请求**上直接读这份名单，
+ * 与面板是否安装、app 是否加载无关。
+ *
+ * ⚠️ 这里**不放**面板展示类配置（`showTrajectory` / `activeIpApi`）——
+ * 它们是 firewall 应用控制台的概念（前端开关 + 节点定位数据源），
+ * 防护核心从不读取。默认值住在 `src/app/firewall/config/defaults.js`，
+ * 由 app 层在 core 默认值之上合并（2026-11-04 迁移）。
+ */
 const MANUAL_LISTS = {
   manualBlacklistIps: [],
   manualBlacklistUsers: [],
@@ -124,15 +136,6 @@ const GLOBAL_RATE_LIMIT = {
   // 那套规则既匹配不到现存路由（path 写的是 /api/sms 等不存在的接口），封禁又写到了
   // 非 IP 的键上，整套空转；端点级限流统一由 @fastify/rate-limit 的路由声明承担。
   enableEndpointRateLimit: true
-};
-
-// ════════════════════════════════════════════════════════════════════
-// 用户级限频：登录用户单独的桶（防单账号刷接口）
-// ════════════════════════════════════════════════════════════════════
-const USER_RATE_LIMIT = {
-  enableUserRateLimit: true,
-  userRateLimitRequests: 120,
-  userRateLimitWindow: 60
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -258,15 +261,14 @@ const ALERT = {
 // ════════════════════════════════════════════════════════════════════
 // 拼装：键名与层级是**持久化 schema 契约**（firewall_config.json + 面板），勿改
 // ════════════════════════════════════════════════════════════════════
+// 只拼**防护策略**（defense）。面板展示类配置（showTrajectory / activeIpApi）属于
+// app 层，见 src/app/firewall/config/defaults.js —— core 不认识它们，
+// 也不该因为「文件里碰巧有这两个键」而假装自己拥有一份默认值。
 const FIREWALL_DEFAULTS = {
-  activeIpApi: ACTIVE_IP_API,
-  showTrajectory: SHOW_TRAJECTORY,
-
   defense: {
     ...MANUAL_LISTS,
     ...SCAN_DETECTION,
     ...GLOBAL_RATE_LIMIT,
-    ...USER_RATE_LIMIT,
     ...BRUTE_FORCE,
     ...CONN_LIMIT,
     ...GEO_FENCE,
