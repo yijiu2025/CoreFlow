@@ -33,7 +33,7 @@ describe('PUT /user/v1/update', () => {
     await route.handler(
       {
         state: { user: { userId: 42 } },
-        body: { username: 'updated', avatar: '/uploads/../../outside.txt', gender: 2 }
+        body: { username: 'updated', avatar: '/user/../../outside.txt', gender: 2 }
       },
       reply
     );

@@ -14,8 +14,6 @@ import staticPlugin from '@fastify/static';
 import websocket from '@fastify/websocket';
 import cookie from '@fastify/cookie';
 import crypto from 'node:crypto';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import helmet from '@fastify/helmet';
 import { initLoader } from './framework/loader/index.js';
@@ -28,6 +26,7 @@ import { validateEnv } from './framework/config/env.js';
 import { closePubSub } from './framework/redis/index.js';
 import { APP_CONFIG } from './framework/config/app-config.js';
 import { validateAppConfig } from './framework/config/app-config-schema.js';
+import { PUBLIC_ROOT } from './framework/storage/index.js';
 
 // ════════════════════════════════════════════════════════════════════
 // 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
@@ -138,8 +137,6 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * 解析毫秒级超时配置
@@ -348,7 +345,9 @@ async function createApp() {
     trustProxy
   });
 
-  const publicPath = path.join(__dirname, '../public');
+  // 静态根只从 framework/storage 取（PUBLIC_ROOT = <repo>/public）：这里再数一次 `../`
+  // 就等于第二份定义，和 storage 的 appDir/publicUrl 一旦不同步就是"写进去、读不到"。
+  const publicPath = PUBLIC_ROOT;
 
   // 1. 注册 Fastify 生态插件（按依赖顺序：security → cors → file → ws → cookie）
   // iframe 白名单 = CORS_ORIGINS（同一套受信应用域）：posecraft/firewall/admin 互相 iframe 嵌入 SSO

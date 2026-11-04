@@ -109,14 +109,17 @@ async function registerFileRoutes(fastify) {
         return reply.result.forbidden('无权访问该文件');
       }
 
-      // 3. 存在性（同时挡掉目录与符号链接目录）
+      // 3. 存在性 + 拒绝符号链接
+      // 用 lstat 而不是 stat：stat 会跟随软链，storage/ 里若被人放了指向 /etc/passwd
+      // 的符号链接（备份还原、运维手抖、其它写入方），stat 会照样 `isFile() === true`。
+      // 私有文件的出口只该是**真实文件**，软链一律当不存在。
       let stat;
       try {
-        stat = fs.statSync(abs);
+        stat = fs.lstatSync(abs);
       } catch {
         return reply.result.notFound('文件不存在');
       }
-      if (!stat.isFile()) return reply.result.notFound('文件不存在');
+      if (!stat.isFile() || stat.isSymbolicLink()) return reply.result.notFound('文件不存在');
 
       // 4. 下发：禁止缓存共享、禁止 MIME 嗅探；非白名单扩展名强制下载
       const filename = path.basename(abs);

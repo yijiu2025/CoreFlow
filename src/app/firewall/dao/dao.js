@@ -8,7 +8,6 @@
  * @since 2026-08-17
  */
 import fs from 'fs';
-import path from 'path';
 import { C } from '../../../utils/colors.js';
 import { FIREWALL_FILE, DEFAULT_SERVER_NODE, DEFAULT_SECURITY_SETTINGS, DEFAULT_IP_APIS } from '../config/config.js';
 import {
@@ -27,6 +26,7 @@ import {
 import { createLogger } from '../../../framework/log/index.js';
 import { registerSettingsReader } from '../../../framework/firewall/interface/config-access.js';
 import { dropMisplacedDefenseKeys } from '../../../framework/firewall/config/validate.js';
+import { ensureDataDir } from '../../../framework/paths.js';
 
 const log = createLogger('app.firewall.dao.dao');
 
@@ -55,9 +55,7 @@ function initDao() {
   registerSettingsReader(() => securitySettings);
 
   try {
-    if (!fs.existsSync(path.dirname(FIREWALL_FILE))) {
-      fs.mkdirSync(path.dirname(FIREWALL_FILE), { recursive: true });
-    }
+    // 读路径不需要建目录（缺文件就用默认值）；目录只由写盘前的 ensureDataDir 创建
     if (fs.existsSync(FIREWALL_FILE)) {
       const raw = JSON.parse(fs.readFileSync(FIREWALL_FILE, 'utf-8'));
       if (raw.serverNode) serverNode = { ...serverNode, ...raw.serverNode };
@@ -94,6 +92,7 @@ function triggerSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
+      ensureDataDir(); // data/ 可能被清掉（容器首次启动 / 卷重挂），写前兜一手
       const tmpFile = `${FIREWALL_FILE}.tmp`;
       const dataToSave = { serverNode, securitySettings };
       fs.writeFileSync(tmpFile, JSON.stringify(dataToSave, null, 2), 'utf-8');

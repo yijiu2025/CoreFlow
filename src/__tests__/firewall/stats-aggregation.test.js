@@ -11,7 +11,6 @@
  * @since 2026-09-19
  */
 import { describe, test, expect, jest, beforeEach } from '@jest/globals';
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 

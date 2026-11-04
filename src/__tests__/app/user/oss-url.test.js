@@ -60,6 +60,6 @@ describe('toOssKey：只认精确的 OSS host', () => {
   });
 
   it('本地相对地址不会被误判成 OSS', () => {
-    expect(toOssKey('/uploads/avatars/a.jpg', HOST)).toBeNull();
+    expect(toOssKey('/user/avatars/a.jpg', HOST)).toBeNull();
   });
 });

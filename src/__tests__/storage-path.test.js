@@ -75,12 +75,28 @@ describe('私有文件下载路由', () => {
   const KEY = `u/${OWNER}/${FILE}`;
   let absFile;
   let handler;
+  /** 本机是否允许创建符号链接（Windows 非管理员 / 部分容器会 EPERM） */
+  let symlinkSupported = false;
+  /** 建不出软链时的原始错误（用来说明「为什么这条断言没跑」） */
+  let symlinkError = null;
 
   /** 捕获路由处理器（guard 的 _routeRegistry 是进程级的，只注册一次） */
   beforeAll(async () => {
     absFile = resolveFile(APP, KEY, { private: true });
     fs.mkdirSync(path.dirname(absFile), { recursive: true });
     fs.writeFileSync(absFile, 'hello-private');
+
+    // 探测软链能力：建不出来就显式 skip，而不是让用例「静默通过」
+    // （静默通过的守卫等于没有守卫 —— 这正是本仓库反复踩的坑）。
+    const probe = path.join(PRIVATE_ROOT, APP, '.symlink-probe');
+    try {
+      fs.symlinkSync(absFile, probe);
+      symlinkSupported = true;
+      fs.rmSync(probe, { force: true });
+    } catch (err) {
+      symlinkSupported = false;
+      symlinkError = err;
+    }
 
     const routes = [];
     const fakeFastify = {
@@ -182,6 +198,31 @@ describe('私有文件下载路由', () => {
     const reply = makeReply();
     await handler(makeReq({ id: OWNER }, `u/${OWNER}/nope.txt`), reply);
     expect(reply.statusCode).toBe(404);
+  });
+  it('符号链接 → 404（私有出口只认真实文件）', async () => {
+    // 备份还原 / 运维手抖 / 其它写入方都可能在 storage/ 里留下软链；
+    // 用 statSync 会跟随软链并照常 isFile()，等于把链那头的文件读出去。
+    //
+    // 本机建不出软链时（Windows 非管理员 / 部分容器）不能当「通过」，
+    // 所以把断言点设成「跳过原因是权限」—— 单一断言点，避免分支里 expect。
+    let observed;
+    if (symlinkSupported) {
+      const linkKey = `u/${OWNER}/link-to-outside.txt`;
+      const linkAbs = resolveFile(APP, linkKey, { private: true });
+      fs.symlinkSync(absFile, linkAbs);
+      const reply = makeReply();
+      await handler(makeReq({ id: OWNER }, linkKey), reply);
+      observed = { status: reply.statusCode, sentFile: reply.sentFile };
+    } else {
+      // 把「为什么没跑」压成布尔值，避免在分支里调 expect（jest/no-conditional-expect）
+      observed = {
+        skipped: true,
+        permissionDenied: /^(EPERM|EACCES|ENOTSUP|UNKNOWN)$/.test(String(symlinkError?.code))
+      };
+    }
+
+    const expected = symlinkSupported ? { status: 404, sentFile: null } : { skipped: true, permissionDenied: true };
+    expect(observed).toEqual(expected);
   });
 
   it('扩展名决定 inline / attachment，?download=1 强制附件', async () => {
