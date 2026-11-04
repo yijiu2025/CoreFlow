@@ -16,10 +16,10 @@
  * ════════════════════════════════════════════════════════════════════
  * 合并顺序（见 ./config.js）
  * ════════════════════════════════════════════════════════════════════
- *   本文件（app 默认） ← core 默认 ← src/config 静态覆盖 ← 磁盘 JSON
- * 用 `deepMerge(APP, CORE)` 而不是反过来：core 里没有这两个键时 app 的值留下，
- * 而静态覆盖若显式写了同名键（它会先并进 core 默认对象），core 一侧仍能覆盖 app ——
- * 保住 `src/config/firewall_config.js` 现有的「顶层键可覆盖」语义。
+ *   core 默认（含 src/config 静态覆盖） ← 本文件 ← 磁盘 JSON
+ * 方向是「core 打底、app 补自己的键」：`deepMerge(CORE, APP)`。app 的键在 core 里
+ * 根本不存在，所以不存在「谁覆盖谁」的歧义；万一 core 侧出现同名键，app 的这层仍
+ * 生效，并由 config.js 的 strayAppKeys 打一条 warn（不允许静默失效）。
  *
  * ⚠️ 持久化 schema 不变：这两个键依旧在 `securitySettings` 顶层，
  * 面板与存量 JSON 无需迁移。

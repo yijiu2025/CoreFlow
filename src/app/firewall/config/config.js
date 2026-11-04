@@ -161,15 +161,30 @@ const DEFAULT_IP_API = DEFAULT_IP_APIS.find(api => api.id === 'sohu');
 /**
  * 默认安全策略矩阵（**本 app 的生效默认值**）
  *
- * `deepMerge(app 默认, core 默认)`：core 里没有 app 专有的两个展示键，所以 app 的值
- * 会留下；而 `src/config/firewall_config.js` 的静态覆盖是先并进 core 默认对象的，
- * 因此它显式写了 `activeIpApi` / `showTrajectory` 时，core 一侧仍然覆盖 app 默认 ——
- * 「顶层键可被静态覆盖」的既有语义不变。
+ * `deepMerge(core 默认, app 默认)` —— 方向是「core 打底、app 补自己的键」：
+ *   - `defense` 只有 core 有（35 个防护参数），app 不复制一份；
+ *   - `activeIpApi` / `showTrajectory` 只有 app 有，因此一定落到生效值里。
+ * app 的键**以 app 为准**（这也是「app 的配置放 app/config」的语义）：core 侧即便
+ * 出现了同名键（例如有人误写进 `src/config/firewall_config.js`），也不会覆盖 app，
+ * 且下面会告警留痕 —— 不允许「写了却不生效」的静默。
  *
  * 消费方：`dao.js` 以它为初值，再叠磁盘 JSON；因此面板 GET /settings 拿到的
  * 仍是 `{ activeIpApi, showTrajectory, defense }` 这一完整形状（持久化 schema 未变）。
  */
-const DEFAULT_SECURITY_SETTINGS = deepMerge(DEFAULT_APP_SETTINGS, CORE_SECURITY_SETTINGS);
+const DEFAULT_SECURITY_SETTINGS = deepMerge(CORE_SECURITY_SETTINGS, DEFAULT_APP_SETTINGS);
+
+/** app 专有的顶层键（core 不该有） */
+const APP_OWNED_KEYS = ['activeIpApi', 'showTrajectory'];
+
+// core 侧出现 app 专有键 = 有人把展示配置当成了防护策略。值会被 app 默认值覆盖，
+// 所以必须喊一声：否则「我在 src/config/firewall_config.js 里改了它」会变成静默失效。
+const strayAppKeys = APP_OWNED_KEYS.filter(key => key in CORE_SECURITY_SETTINGS);
+if (strayAppKeys.length) {
+  log.warn(
+    `⚠️ [Firewall] ${strayAppKeys.join(' / ')} 属于 app 层（面板展示），` +
+      `core 侧写的值已忽略；请改 src/app/firewall/config/defaults.js 或走面板热改`
+  );
+}
 
 export { FIREWALL_FILE, CHALLENGE_SECRET, DEFAULT_SERVER_NODE, DEFAULT_IP_APIS, DEFAULT_IP_API };
 

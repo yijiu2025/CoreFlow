@@ -6,11 +6,11 @@
  *   默认值 + 取值理由 → src/framework/firewall/config/defaults.js
  *   运行期热改（面板/JSON）→ src/data/firewall_config.json
  *
- * 可用键（顶层）：defense（防护策略）+ activeIpApi / showTrajectory（app 层展示配置）
- *   ⚠️ activeIpApi / showTrajectory 的默认值属于 **firewall 应用**（控制台展示 + 节点定位），
- *      定义在 src/app/firewall/config/defaults.js，core 不认识它们。写在这里仍然生效
- *      （静态覆盖先并进 core 默认对象，app 合并时 core 一侧优先），但**不要**把它们
- *      当成防护核心的配置 —— 卸载 firewall app 后它们就没有意义了。
+ * 可用键（顶层）：**只有 defense**（防护策略，core 与 app 都按它执行）
+ *   ⚠️ `activeIpApi` / `showTrajectory` 属于 **firewall 应用**（控制台展示 + 节点定位），
+ *      不在本文件：默认值在 src/app/firewall/config/defaults.js，热改走面板
+ *      （落到 src/data/firewall_config.json）。写在这里**会被 app 默认值覆盖**并打一条
+ *      warn —— 见 src/app/firewall/config/config.js 的 strayAppKeys 检查。
  * defense 下的键（35 个，按功能分组见 defaults.js）：
  *   名单      manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps
  *   扫描      enableAutoBlacklist / maxNotFoundAttempts / notFoundWindow /
