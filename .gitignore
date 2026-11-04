@@ -24,6 +24,8 @@ public/posecraft/*
 !public/posecraft/.gitkeep
 public/user/*
 !public/user/.gitkeep
+# firewall 前端的 vite `outDir` 指向这里（base=/firewall/）：**构建产物不进 git**
+public/firewall/
 
 # 私有文件根：**不在静态根下**，只经 /api/files/v1/:app/* 鉴权下载
 storage/*

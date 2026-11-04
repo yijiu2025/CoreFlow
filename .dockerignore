@@ -60,6 +60,8 @@ public/posecraft/*
 public/user/*
 !public/posecraft/.gitkeep
 !public/user/.gitkeep
+# 前端构建产物（本地构建后会落到这里，不该进构建上下文）
+public/firewall
 
 # --- 运行时产物：容器内重新生成，体积大且无意义 ---
 logs
