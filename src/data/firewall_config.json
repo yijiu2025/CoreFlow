@@ -25,9 +25,7 @@
         "/favicon.ico",
         "/robots.txt",
         "/__fw/",
-        "/api/firewall/",
-        "/firewall/",
-        "/admin/"
+        "/api/firewall/"
       ],
       "internalIpPrefixes": [
         "127.",

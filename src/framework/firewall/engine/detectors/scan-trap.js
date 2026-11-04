@@ -22,31 +22,16 @@ const log = createLogger('framework.firewall.engine.detectors.scan-trap');
 const LOOPBACK_PREFIXES = ['127.', '::1', 'localhost'];
 
 /**
- * 内置免检路径（**不可被配置关闭**）
+ * 该路径是否免于扫描计数（**只看配置**）
  *
- * 为什么写死在代码里而不是只放在 `defense.safePaths`：那份是数组，`deepMerge` 对数组是
- * **整体替换** —— 部署里旧的 JSON 只写了 5 条时，升级新增的 `/firewall/`、`/admin/`
- * 会被静默顶掉（实测踩到：本机 `src/data/firewall_config.json` 就是旧 5 条，于是
- * "刷新前端深链 → 404 累计 → 判扫描器封 1 小时" 的修复在真实部署里根本没生效）。
+ * 免检前缀的唯一来源是 `defense.safePaths`（config 通道：默认值 → src/config 静态覆盖 →
+ * 面板热改）。这里刻意**不内置**任何路径：
+ *   - 本仓是前后端分离部署，前端产物由 nginx/CDN 承担，`/firewall/`、`/admin/` 这类
+ *     路径打到本服务本就是 404 —— 不该由代码替某个部署假设兜底；
+ *   - 若某个部署确实把前端产物挂在同一个域下，运维在 `defense.safePaths` 里加上前缀即可。
  *
- * 这几条是**正确性保证**（后端没有 SPA 回退，刷新深链必然 404），不是可调策略，
- * 所以内置不可删；`defense.safePaths` 仍然生效，语义是「在内置之外再追加」。
- */
-const BUILTIN_SAFE_PATHS = [
-  '/health', // 老探针路径（真实路由是 /v1/health*，这里兜误配的监控）
-  '/favicon.ico',
-  '/robots.txt',
-  '/__fw/',
-  '/api/firewall/', // 面板旧构建调已删端点 → 404，不能把它们算成扫描
-  '/firewall/', // 前端产物 + 深链
-  '/admin/' // 同上
-];
-
-/**
- * 该路径是否免于扫描计数（内置 ∪ 配置）
- *
- * 抽成纯函数是为了能直接测「配置把 safePaths 写空/写少」时内置项仍生效 ——
- * 这正是数组整体替换踩过的坑，靠集成测试很难复现（要改全局配置读取器）。
+ * 抽成纯函数是为了能直接测「空配置 / 非法条目」这类边界（`startsWith('')` 恒真，
+ * 一条空串就能把整个扫描陷阱关掉）。
  *
  * @param {string} url 请求路径
  * @param {string[]} [configured] `defense.safePaths`（可为空/缺失）
@@ -54,9 +39,7 @@ const BUILTIN_SAFE_PATHS = [
  */
 function isSafePath(url, configured = []) {
   if (typeof url !== 'string' || !url) return false;
-  for (const prefix of BUILTIN_SAFE_PATHS) {
-    if (url.startsWith(prefix)) return true;
-  }
+  if (!Array.isArray(configured)) return false;
   for (const prefix of configured) {
     if (typeof prefix === 'string' && prefix && url.startsWith(prefix)) return true;
   }
@@ -99,7 +82,7 @@ const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null, routeConf
   // 豁免整份等于把扫描陷阱整个关掉。
   if (typeof ip === 'string' && LOOPBACK_PREFIXES.some(prefix => ip.startsWith(prefix))) return;
 
-  // ② 路径前缀豁免：内置（不可关）+ 配置追加（defense.safePaths）
+  // ② 路径前缀豁免：只认 config 通道（defense.safePaths，无内置项）
   if (isSafePath(url, settings.safePaths)) return;
   if (![404, 403, 405].includes(statusCode)) return;
 
@@ -140,4 +123,4 @@ const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null, routeConf
   }
 };
 
-export { checkNotFoundTrap, isSafePath, BUILTIN_SAFE_PATHS };
+export { checkNotFoundTrap, isSafePath };

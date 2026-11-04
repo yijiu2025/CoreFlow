@@ -1100,10 +1100,10 @@ describe('扫描陷阱：端点自证（路由声明）与无路由路径（safe
     expect(err.rule).toBe('scanner-trap');
   });
 
-  it('没有路由的路径（前端产物 404）仍由 safePaths 前缀兜底', async () => {
+  it('没有路由的路径（favicon 404）由 safePaths 前缀兜底', async () => {
     const ip = '203.0.113.303';
-    // 无路由 ⇒ routeConfig 是 null；后端没有 SPA 回退，刷新深链必然 404
-    const err = await hammer(ip, '/firewall/assets/index-abc.js', 404, null);
+    // 无路由 ⇒ routeConfig 是 null；这类请求只能靠配置里的前缀豁免
+    const err = await hammer(ip, '/favicon.ico', 404, null);
     expect(err).toBeNull();
   });
 
@@ -1118,17 +1118,21 @@ describe('扫描陷阱：端点自证（路由声明）与无路由路径（safe
   });
 });
 
-// ── ⑯ builtin 免检路径不能被配置数组顶掉（2026-11-04 实测踩到） ─────────────────
+// ── ⑯ safePaths 只走配置通道（无内置路径，2026-11-04） ──────────────────────────
 
-describe('safePaths：内置免检项对「配置数组被整体替换」免疫', () => {
-  it('配置写空数组时，前端产物 / 面板前缀仍免检', async () => {
-    // 实测现场：src/data/firewall_config.json 里 safePaths 是旧的 5 条，
-    // deepMerge 对数组整体替换 → 新增的 /firewall/、/admin/ 被静默顶掉，
-    // 「刷新深链 → 404 累计 → 判扫描器」的修复在真实部署里根本没生效。
-    expect(isSafePath('/firewall/assets/index-abc.js', [])).toBe(true);
-    expect(isSafePath('/admin/', [])).toBe(true);
-    expect(isSafePath('/api/firewall/v1/monitor/summary', [])).toBe(true);
-    expect(isSafePath('/favicon.ico', [])).toBe(true);
+describe('safePaths：免检前缀只来自配置，代码里不内置任何路径', () => {
+  it('空配置 = 不豁免任何路径（前后端分离，前端产物不经本服务）', async () => {
+    expect(isSafePath('/firewall/assets/index-abc.js', [])).toBe(false);
+    expect(isSafePath('/admin/', [])).toBe(false);
+    expect(isSafePath('/favicon.ico', [])).toBe(false);
+  });
+
+  it('默认值里的条目生效（favicon/robots/探针/面板 API）', async () => {
+    const defaults = ['/health', '/favicon.ico', '/robots.txt', '/__fw/', '/api/firewall/'];
+    expect(isSafePath('/favicon.ico', defaults)).toBe(true);
+    expect(isSafePath('/api/firewall/v1/monitor/summary', defaults)).toBe(true);
+    // 前端产物前缀不默认 —— 同域托管时由运维自己加
+    expect(isSafePath('/firewall/assets/index-abc.js', defaults)).toBe(false);
   });
 
   it('配置追加的条目生效，且不影响「不在名单里的路径仍要计数」', async () => {
@@ -1137,8 +1141,10 @@ describe('safePaths：内置免检项对「配置数组被整体替换」免疫'
     expect(isSafePath('/api/user/delete')).toBe(false);
   });
 
-  it('非法条目（空串 / 非字符串）不会变成"匹配一切"', async () => {
+  it('非法条目（空串 / 非字符串 / 非数组）不会变成"匹配一切"', async () => {
     // 空前缀 startsWith('') 恒 true —— 一旦漏进配置就会把整个扫描陷阱关掉
     expect(isSafePath('/api/user/delete', ['', null, undefined, 42])).toBe(false);
+    expect(isSafePath('/api/user/delete', null)).toBe(false);
+    expect(isSafePath('/api/user/delete', 'not-an-array')).toBe(false);
   });
 });
