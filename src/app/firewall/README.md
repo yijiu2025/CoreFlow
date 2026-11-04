@@ -142,7 +142,7 @@ firewall onResponse 钩子
 | 文件         | 职责                                              | 关键导出                                                                            |
 | ------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | config.js    | 生效默认值（core 打底 + app 补自己的键）、IP 解析源、常量路径 | `DEFAULT_SECURITY_SETTINGS`, `DEFAULT_IP_APIS`, `CHALLENGE_SECRET`, `FIREWALL_FILE` |
-| defaults.js  | **app 层**默认值：面板展示 / 节点定位（`showTrajectory`、`activeIpApi`） | `DEFAULT_APP_SETTINGS`（core 不含这两个键）                                          |
+| panel.js     | **面板层**配置：展示偏好 / 节点定位（`showTrajectory`、`activeIpApi`） | `DEFAULT_PANEL_SETTINGS`（core 不含这两个键）                                        |
 
 ### data/ — 运行中数据
 

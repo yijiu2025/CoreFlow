@@ -6,17 +6,17 @@
  * ════════════════════════════════════════════════════════════════════
  * 默认值必须住在 core（本文件）：防护核心要在「没有 app 层、没有 src/config
  * 覆盖」的前提下也能以完整默认策略启动。
- *   ⓪ src/app/firewall/config/defaults.js  app 层默认值（面板展示类）
+ *   core 链（本文件负责）：① ← ② ← ③，后者逐层覆盖前者
  *   ① 本文件                          core 保底值（改内置默认才动这里）
- *   ② src/config/firewall_config.js   可选静态覆盖（只写要改的键，文件可缺失）
+ *   ② src/config/firewall_config.js   服务器后端层的静态覆盖（只写要改的键，可缺失）
  *   ③ src/data/firewall_config.json   运行时覆盖（面板热改，数组整体替换）
- * 载入顺序：⓪ ← ① ← ② ← ③，后者逐层覆盖前者。
+ *   ④ src/app/firewall/config/panel.js 面板层默认值（展示偏好）：由 app 层合并进来，
+ *      **不属于 core 链** —— core 不认识也不读它，只在磁盘文件里遇到时原样透传。
  *
  * **只收防护策略**：一个键若没有任何 core 代码读取（例如面板开关
  * `showTrajectory`、节点定位数据源 `activeIpApi`），它就不属于这里 ——
- * 默认值归 app 层（`src/app/firewall/config/defaults.js`），core 只在
- * 磁盘文件里遇到时原样透传。判据：`grep -rn "defense\\.<key>" src/framework/firewall`
- * 为空 ⇒ 不该写在 core。
+ * 默认值归面板层（`src/app/firewall/config/panel.js`）。判据：
+ * `grep -rn "defense\\.<key>" src/framework/firewall` 为空 ⇒ 不该写在 core。
  *
  * ════════════════════════════════════════════════════════════════════
  * 二、为什么有 `defense` 这一层（不要试图拍平）
@@ -40,7 +40,7 @@
  *
  * @author yijiu2025
  * @since 2026-11-03（配置值住在 core，src/config 只做可选覆盖）
- * @since 2026-11-04（面板展示类键下沉 app 层；删除已无消费者的用户级限频三键）
+ * @since 2026-11-04（面板展示类键下沉面板层；删除已无消费者的用户级限频三键）
  */
 
 import { deepMerge } from '../../config/runtime.js';
@@ -58,8 +58,8 @@ import { loadOverrides } from '../../config/overrides.js';
  *
  * ⚠️ 这里**不放**面板展示类配置（`showTrajectory` / `activeIpApi`）——
  * 它们是 firewall 应用控制台的概念（前端开关 + 节点定位数据源），
- * 防护核心从不读取。默认值住在 `src/app/firewall/config/defaults.js`，
- * 由 app 层在 core 默认值之上合并（2026-11-04 迁移）。
+ * 防护核心从不读取。默认值住在 `src/app/firewall/config/panel.js`（面板层），
+ * 由 app 层合并进来（2026-11-04 迁移）。
  */
 const MANUAL_LISTS = {
   manualBlacklistIps: [],
@@ -262,7 +262,7 @@ const ALERT = {
 // 拼装：键名与层级是**持久化 schema 契约**（firewall_config.json + 面板），勿改
 // ════════════════════════════════════════════════════════════════════
 // 只拼**防护策略**（defense）。面板展示类配置（showTrajectory / activeIpApi）属于
-// app 层，见 src/app/firewall/config/defaults.js —— core 不认识它们，
+// 面板层，见 src/app/firewall/config/panel.js —— core 不认识它们，
 // 也不该因为「文件里碰巧有这两个键」而假装自己拥有一份默认值。
 const FIREWALL_DEFAULTS = {
   defense: {

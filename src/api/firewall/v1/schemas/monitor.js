@@ -100,8 +100,8 @@ const updateNodeSchema = {
 // 同理 2026-11-04 删掉 `enableUserRateLimit` / `userRateLimitRequests` /
 // `userRateLimitWindow`：自研用户级限频随 `defense.endpointRateLimits` 一起下线后
 // 已无任何读取点；「按用户」现在是全局限流器的 keyGenerator（登录按 user.id）。
-// 顶层两个键是 **app 层**配置（面板展示 / 节点定位），schema 作为 API 契约继续保留；
-// 它们的默认值在 src/app/firewall/config/defaults.js，不在 core。
+// 顶层两个键是 **面板层**配置（展示 / 节点定位），schema 作为 API 契约继续保留；
+// 它们的默认值在 src/app/firewall/config/panel.js，不在 core。
 const updateSettingsSchema = {
   description: '更新全局防御策略设置',
   body: {

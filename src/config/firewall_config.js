@@ -8,9 +8,9 @@
  *
  * 可用键（顶层）：**只有 defense**（防护策略，core 与 app 都按它执行）
  *   ⚠️ `activeIpApi` / `showTrajectory` 属于 **firewall 应用**（控制台展示 + 节点定位），
- *      不在本文件：默认值在 src/app/firewall/config/defaults.js，热改走面板
+ *      不在本文件：默认值在 src/app/firewall/config/panel.js（面板层），热改走面板
  *      （落到 src/data/firewall_config.json）。写在这里**会被 app 默认值覆盖**并打一条
- *      warn —— 见 src/app/firewall/config/config.js 的 strayAppKeys 检查。
+ *      warn —— 见 src/app/firewall/config/config.js 的 strayPanelKeys 检查。
  * defense 下的键（35 个，按功能分组见 defaults.js）：
  *   名单      manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps
  *   扫描      enableAutoBlacklist / maxNotFoundAttempts / notFoundWindow /

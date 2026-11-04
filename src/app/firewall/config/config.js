@@ -12,11 +12,11 @@ const log = createLogger('app.firewall.config.config');
 
 // 持久化路径的单一来源在 framework（防护核心启动期就要读它），这里只做 re-export。
 import { FIREWALL_FILE } from '../../../framework/firewall/config/persisted.js';
-// 生效默认值 = **app 默认 ← core 默认**：core 只含防护策略（defense），
-// 面板展示类键（activeIpApi / showTrajectory）定义在 ./defaults.js。
+// 生效默认值 = **core 默认 ← 面板层默认**：core 只含防护策略（defense），
+// 面板展示偏好（activeIpApi / showTrajectory）定义在 ./panel.js。
 import { deepMerge } from '../../../framework/config/runtime.js';
 import { DEFAULT_SECURITY_SETTINGS as CORE_SECURITY_SETTINGS } from '../../../framework/firewall/config/defaults.js';
-import { DEFAULT_APP_SETTINGS } from './defaults.js';
+import { DEFAULT_PANEL_SETTINGS } from './panel.js';
 
 const CHALLENGE_SECRET = process.env.FIREWALL_SECRET;
 
@@ -161,28 +161,28 @@ const DEFAULT_IP_API = DEFAULT_IP_APIS.find(api => api.id === 'sohu');
 /**
  * 默认安全策略矩阵（**本 app 的生效默认值**）
  *
- * `deepMerge(core 默认, app 默认)` —— 方向是「core 打底、app 补自己的键」：
- *   - `defense` 只有 core 有（35 个防护参数），app 不复制一份；
- *   - `activeIpApi` / `showTrajectory` 只有 app 有，因此一定落到生效值里。
- * app 的键**以 app 为准**（这也是「app 的配置放 app/config」的语义）：core 侧即便
- * 出现了同名键（例如有人误写进 `src/config/firewall_config.js`），也不会覆盖 app，
- * 且下面会告警留痕 —— 不允许「写了却不生效」的静默。
+ * `deepMerge(core 默认, 面板层默认)` —— 方向是「core 打底、面板层补自己的键」：
+ *   - `defense` 只有 core 有（35 个防护参数），面板层不复制一份；
+ *   - `activeIpApi` / `showTrajectory` 只有面板层有（./panel.js），因此一定落到生效值里。
+ * 面板层的键**以面板层为准**：core 侧即便出现同名键（例如有人误写进
+ * `src/config/firewall_config.js`），也不会覆盖面板值，且下面会告警留痕 ——
+ * 不允许「写了却不生效」的静默。
  *
  * 消费方：`dao.js` 以它为初值，再叠磁盘 JSON；因此面板 GET /settings 拿到的
  * 仍是 `{ activeIpApi, showTrajectory, defense }` 这一完整形状（持久化 schema 未变）。
  */
-const DEFAULT_SECURITY_SETTINGS = deepMerge(CORE_SECURITY_SETTINGS, DEFAULT_APP_SETTINGS);
+const DEFAULT_SECURITY_SETTINGS = deepMerge(CORE_SECURITY_SETTINGS, DEFAULT_PANEL_SETTINGS);
 
-/** app 专有的顶层键（core 不该有） */
-const APP_OWNED_KEYS = ['activeIpApi', 'showTrajectory'];
+/** 面板层专有的顶层键（core 不该有） */
+const PANEL_OWNED_KEYS = ['activeIpApi', 'showTrajectory'];
 
-// core 侧出现 app 专有键 = 有人把展示配置当成了防护策略。值会被 app 默认值覆盖，
+// core 侧出现面板层键 = 有人把展示配置当成了防护策略。值会被面板层默认值覆盖，
 // 所以必须喊一声：否则「我在 src/config/firewall_config.js 里改了它」会变成静默失效。
-const strayAppKeys = APP_OWNED_KEYS.filter(key => key in CORE_SECURITY_SETTINGS);
-if (strayAppKeys.length) {
+const strayPanelKeys = PANEL_OWNED_KEYS.filter(key => key in CORE_SECURITY_SETTINGS);
+if (strayPanelKeys.length) {
   log.warn(
-    `⚠️ [Firewall] ${strayAppKeys.join(' / ')} 属于 app 层（面板展示），` +
-      `core 侧写的值已忽略；请改 src/app/firewall/config/defaults.js 或走面板热改`
+    `⚠️ [Firewall] ${strayPanelKeys.join(' / ')} 属于面板层（控制台展示），` +
+      `core 侧写的值已忽略；请改 src/app/firewall/config/panel.js 或走面板热改`
   );
 }
 
