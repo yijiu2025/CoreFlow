@@ -64,7 +64,7 @@ depends_on:
 
 ### 依赖等待策略：DB 硬失败、Redis 降级继续
 
-这是刻意的**不对称**，策略在 `src/framework/ops/dependency-plan.js`（有测试）：
+这是刻意的**不对称**，策略在 `src/framework/startup/dependency-plan.js`（有测试）：
 
 - **DB 等不到 → 直接失败退出**：缺连接池的应用能监听端口却对每个请求返回 500。
   让它"启动成功"是最糟的失败形态 —— 监控全绿、用户全错。

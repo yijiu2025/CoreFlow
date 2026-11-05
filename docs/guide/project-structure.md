@@ -23,7 +23,7 @@ nodeServers/
 │   │   ├── loader/             # 加载器引擎 + registry/ 顺序表
 │   │   ├── db/                 # Sequelize 连接 + 迁移入口
 │   │   ├── redis/              # Redis 连接 / getStore / 锁 / 队列 / PubSub
-│   │   ├── log/  notice/  verify/  ops/  scheduler/  websocket/  cli/  config/  release/
+│   │   ├── log/  notice/  verify/  startup/  scheduler/  websocket/  cli/  config/
 │   │   └── ...
 │   │
 │   ├── app/                    # 应用模块（每个目录 = 一个应用）
@@ -117,7 +117,7 @@ src/
 ├── framework/notice/     # 通知
 ├── framework/verify/     # 验证码
 ├── framework/loader/     # 加载器引擎
-├── framework/ops/        # 依赖等待 / 就绪判定
+├── framework/startup/    # 启动期依赖等待 / 就绪判定
 ├── framework/scheduler/  # 定时任务
 ├── framework/websocket/  # WS 广播
 ├── models/session/       # 系统模型（会话 / 令牌 / 日志）

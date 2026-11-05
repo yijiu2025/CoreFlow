@@ -27,7 +27,7 @@
 
 import { spawn } from 'node:child_process';
 import { probeTcp } from '../src/framework/redis/probe.js';
-import { planDependencyWaits, classifyWaitOutcome } from '../src/framework/ops/dependency-plan.js';
+import { planDependencyWaits, classifyWaitOutcome } from '../src/framework/startup/dependency-plan.js';
 
 const ENABLE_WAIT = (process.env.WAIT_FOR_DEPS || 'true') === 'true';
 const DEP_WAIT_TIMEOUT_MS = Number.parseInt(process.env.DEP_WAIT_TIMEOUT_MS || '90000', 10) || 90_000;
@@ -128,7 +128,7 @@ async function main() {
   out('🚀 [entrypoint] 容器启动，开始编排');
 
   if (ENABLE_WAIT) {
-    // 依赖清单与「硬依赖 / 可降级」的判定都在 src/ 里（dependency-plan.js），
+    // 依赖清单与「硬依赖 / 可降级」的判定都在 src/framework/startup/dependency-plan.js，
     // 入口脚本只负责执行与输出 —— 那段策略被测试钉住了，见同名测试文件。
     const plan = planDependencyWaits(process.env);
 

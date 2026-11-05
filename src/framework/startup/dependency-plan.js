@@ -13,7 +13,7 @@
  *   局部不可用"，不是"整体降级"。若把它判成致命，一次缓存抖动就会升级为全体起不来。
  *
  * 这类策略一旦被写进入口脚本，就只能靠人工 review 保证；抽到这里后，
- * `dependency-plan.test.js` 会把两个方向都钉死。
+ * `src/__tests__/framework/startup/dependency-plan.test.js` 会把两个方向都钉死。
  *
  * @author yijiu2025
  * @since 2026-09-20

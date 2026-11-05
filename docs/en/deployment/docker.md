@@ -62,7 +62,7 @@ and logs whether the connection actually succeeded.
 
 ### Dependency policy: DB hard-fails, Redis degrades and continues
 
-A deliberate **asymmetry**, implemented in `src/framework/ops/dependency-plan.js` (unit-tested):
+A deliberate **asymmetry**, implemented in `src/framework/startup/dependency-plan.js` (unit-tested):
 
 - **DB unavailable → exit**: an app without a pool can still listen but returns 500 for every
   request. Letting it "start successfully" is the worst failure mode — every monitor green,

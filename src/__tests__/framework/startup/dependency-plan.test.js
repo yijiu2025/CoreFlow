@@ -9,7 +9,8 @@
 
 import { describe, it, expect } from '@jest/globals';
 
-const { planDependencyWaits, classifyWaitOutcome, parsePort } = await import('../../framework/ops/dependency-plan.js');
+const { planDependencyWaits, classifyWaitOutcome, parsePort } =
+  await import('../../../framework/startup/dependency-plan.js');
 
 describe('planDependencyWaits', () => {
   it('DB 已配置 → 进计划且是硬依赖', () => {

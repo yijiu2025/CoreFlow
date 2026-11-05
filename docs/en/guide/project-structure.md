@@ -23,7 +23,7 @@ CoreFlow/
 │   │   ├── loader/             # loader engine + registry/ ordering table
 │   │   ├── db/                 # Sequelize connection + migration entry
 │   │   ├── redis/              # connection / getStore / locks / queues / pubsub
-│   │   ├── log/  notice/  verify/  ops/  scheduler/  websocket/  cli/  config/  release/
+│   │   ├── log/  notice/  verify/  startup/  scheduler/  websocket/  cli/  config/
 │   │   └── ...
 │   │
 │   ├── app/                    # application modules (one directory = one app)
@@ -112,7 +112,7 @@ src/
 ├── framework/auth/  jwt/  keys/      # auth, JWT, key store
 ├── framework/db/  redis/             # database, cache / locks / queues / pubsub
 ├── framework/log/  notice/  verify/  # logging, notifications, CAPTCHA
-├── framework/loader/  ops/           # loader engine, dependency waiting / readiness
+├── framework/loader/  startup/       # loader engine, dependency waiting / readiness
 ├── framework/scheduler/  websocket/  # cron, WS fan-out
 ├── models/session/                   # system models (sessions / tokens / logs)
 │
