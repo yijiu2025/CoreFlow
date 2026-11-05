@@ -172,6 +172,42 @@ describe('Bot 检测器（真身）', () => {
     });
   });
 
+  // ── 阈值的唯一来源是 config（2026-11-05 收敛，与连接表 CONN_DEFAULTS 同一套）───────
+  describe('阈值只认 config，兜底取 framework 默认值的同一份定义', () => {
+    test('写成非数字时回退默认值（旧写法 `|| "abc"` 会让该档**永不触发**）', async () => {
+      const original = settings.defense.botChallengeBotLimit;
+      settings.defense.botChallengeBotLimit = 'abc';
+      try {
+        // 默认 30 → 给 31 次必中；旧写法 `"abc" || 30` 取到 "abc"，
+        // `31 > "abc"` 是 NaN 比较恒 false，这一档等于被静默关掉
+        expect(await checkBotChallenge('198.51.100.61', 'python-requests/2.28.0', 31)).toBe(true);
+      } finally {
+        settings.defense.botChallengeBotLimit = original;
+      }
+    });
+
+    test('写成 0 / 负数时同样回退默认值（不是"照 0 判"也不是"`0 || 30` 恰好撞上"）', async () => {
+      const original = settings.defense.botChallengeNoUaLimit;
+      for (const bad of [0, -1, null]) {
+        settings.defense.botChallengeNoUaLimit = bad;
+        // 默认 10 → 第 11 次必中；有守卫才成立
+        expect(await checkBotChallenge(`198.51.100.6${bad === 0 ? 2 : bad === -1 ? 3 : 4}`, '', 11)).toBe(true);
+      }
+      settings.defense.botChallengeNoUaLimit = original;
+    });
+
+    test('合法值照常生效（不因为加了兜底就把配置读死）', async () => {
+      const original = settings.defense.botChallengeBrowserLimit;
+      settings.defense.botChallengeBrowserLimit = 5;
+      try {
+        expect(await checkBotChallenge('198.51.100.65', CHROME_UA, 5)).toBe(false);
+        expect(await checkBotChallenge('198.51.100.66', CHROME_UA, 6)).toBe(true);
+      } finally {
+        settings.defense.botChallengeBrowserLimit = original;
+      }
+    });
+  });
+
   // ── 总开关（2026-11-05）：面板「Bot 检测」模块的 checkbox 就是它 ──────────────
   describe('enableBotChallenge 总开关', () => {
     test('默认开启：三档阈值都照常判定', async () => {

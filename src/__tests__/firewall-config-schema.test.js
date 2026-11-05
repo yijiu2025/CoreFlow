@@ -13,6 +13,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { DEFAULT_SECURITY_SETTINGS } from '../framework/firewall/config/defaults.js';
+import { DEFENSE_SPEC } from '../framework/firewall/config/schema.js';
 import { DEFAULT_SECURITY_SETTINGS as APP_SECURITY_SETTINGS } from '../app/firewall/config/config.js';
 
 /** defense 下允许出现的键（= 持久化 schema，改这里等于改契约） */
@@ -93,6 +94,13 @@ describe('防火墙默认策略 · schema 契约', () => {
 
   it('defense 键集合与持久化 schema 完全一致（不多不少）', () => {
     expect(Object.keys(DEFAULT_SECURITY_SETTINGS.defense).sort()).toEqual([...DEFENSE_KEYS].sort());
+  });
+
+  it('键**顺序**与 spec 一致（三处排版同源：defaults / schema.js / firewall_config.js）', () => {
+    // 为什么连顺序也钉：这三个文件是给人对照着改的（改配置的人要在 defaults 看取值理由、
+    // 在 schema 看类型约束、在 firewall_config.js 看可覆盖键）。顺序/分组一旦不同，
+    // 找一个键就得来回翻三个文件 —— 2026-11-05 已按 ①..⑪ 分组对齐，这条守卫防止漂回去。
+    expect(Object.keys(DEFAULT_SECURITY_SETTINGS.defense)).toEqual(Object.keys(DEFENSE_SPEC));
   });
 
   it('默认值可 JSON 往返（deepMerge 走 JSON 路径，函数/undefined 会静默丢值）', () => {

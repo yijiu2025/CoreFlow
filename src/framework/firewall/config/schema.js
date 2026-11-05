@@ -21,6 +21,12 @@
  * `__tests__/firewall-config-schema.test.js` 双向钉死：defaults 有的 spec 必须有，
  * spec 有的 defaults 必须存在。
  *
+ * 排版约定（2026-11-05）：本文件的**分组与顺序**必须与 `defaults.js` 的功能块一一对应
+ * （① 开关 ② 名单 ③ 扫描与豁免 ④ 限频 ⑤ 暴破 ⑥ 连接 ⑦ 地理 ⑧ Bot 与挑战 ⑨ 设备
+ * ⑩ 匿名 ⑪ 告警），`src/config/firewall_config.js` 的可覆盖键清单也按同一套编号排。
+ * 三处同源的原因很实际：改配置的人要在 defaults 看取值理由、在这里看类型约束、
+ * 在 firewall_config.js 看能覆盖哪些键 —— 顺序不同就得来回翻三个文件。顺序由测试钉住。
+ *
  * @author yijiu2025
  * @since 2026-11-05
  */
@@ -38,18 +44,18 @@ import { sanitizeBySpec, isPlainObject, toJsonProperties } from '../../config/fi
  * @type {Object<string, object>}
  */
 const DEFENSE_SPEC = {
-  // ── 总开关 + 五道闸门各自的开关 ──
+  // ── ① 总开关 + 五道闸门各自的开关 ──
   // 关闸门 = 这道闸不再拦（其余照旧）；enableFirewall=false 是排障用的整机旁路
   enableFirewall: { type: 'bool' },
   enableGlobalBlock: { type: 'bool' },
   enableChallenge: { type: 'bool' },
 
-  // ── 手动名单 ──
+  // ── ② 手动名单 ──
   manualBlacklistIps: { type: 'stringArray' },
   manualBlacklistUsers: { type: 'stringArray' },
   manualWhitelistIps: { type: 'stringArray' },
 
-  // ── 扫描检测（404 扫描陷阱）──
+  // ── ③ 扫描与豁免（阈值 + 路径/地址清单）──
   enableAutoBlacklist: { type: 'bool' },
   maxNotFoundAttempts: { type: 'int', min: 1 },
   notFoundWindow: { type: 'int', min: 1 },
@@ -59,13 +65,16 @@ const DEFENSE_SPEC = {
   internalIpPrefixes: { type: 'stringArray' },
   idcIpPrefixes: { type: 'stringArray' },
 
-  // ── 全局限频 ──
+  // ── ③b 探针路径（部署相关，与上面的豁免清单同属一类）──
+  probePaths: { type: 'stringArray' },
+
+  // ── ④ 全局限频 ──
   enableRateLimit: { type: 'bool' },
   rateLimitRequests: { type: 'int', min: 1 },
   rateLimitWindow: { type: 'int', min: 1 },
   enableEndpointRateLimit: { type: 'bool' },
 
-  // ── 暴力破解 ──
+  // ── ⑤ 暴力破解 ──
   enableBruteForce: { type: 'bool' },
   bruteLimit: { type: 'int', min: 1 },
   bruteWindow: { type: 'int', min: 1 },
@@ -73,17 +82,14 @@ const DEFENSE_SPEC = {
   ipBlockTime: { type: 'int', min: 1 },
   bruteIpLimit: { type: 'int', min: 1 },
 
-  // ── 并发连接 ──
+  // ── ⑥ 并发连接 ──
   enableConnLimit: { type: 'bool' },
   maxConn: { type: 'int', min: 1 },
   connCleanupIntervalMs: { type: 'int', min: 1 },
   connStaleAfterMs: { type: 'int', min: 1 },
   connHighWater: { type: 'int', min: 1 },
 
-  // ── 探针路径（部署相关）──
-  probePaths: { type: 'stringArray' },
-
-  // ── 地理围栏 ──
+  // ── ⑦ 地理围栏 ──
   enableGeoFilter: { type: 'bool' },
   geoRules: {
     type: 'object',
@@ -99,7 +105,7 @@ const DEFENSE_SPEC = {
     }
   },
 
-  // ── Bot 检测 ──
+  // ── ⑧ 人机挑战：Bot 开关 + UA 特征 + 三档阈值 ──
   // 总开关：false = `checkBotChallenge()` 直接放行（不做 UA 匹配与频率判定）
   enableBotChallenge: { type: 'bool' },
   botPatterns: { type: 'stringArray' },
@@ -108,14 +114,14 @@ const DEFENSE_SPEC = {
   botChallengeBotLimit: { type: 'int', min: 1 },
   botChallengeBrowserLimit: { type: 'int', min: 1 },
 
-  // ── 挑战难度（代码侧夹在 1~6，这里保持一致，避免两处口径不同）──
+  // ── ⑧b 挑战难度（代码侧夹在 1~6，与代码夹取口径一致）──
   challengeDifficulty: { type: 'int', min: 1, max: 6 },
 
-  // ── 设备维度 / 匿名短路 ──
+  // ── ⑨ 设备维度 / ⑩ 匿名短路 ──
   enableDeviceBlock: { type: 'bool' },
   skipDeepCheckForAnonymous: { type: 'bool' },
 
-  // ── 告警 ──
+  // ── ⑪ 告警 ──
   alert: {
     type: 'object',
     spec: {

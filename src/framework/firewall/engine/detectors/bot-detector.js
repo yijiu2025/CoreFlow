@@ -9,9 +9,18 @@
  */
 import { getConfig } from '../../util/shared.js';
 import { setBlockForSubject } from '../../block-manager.js';
+import { DEFAULT_SECURITY_SETTINGS } from '../../config/defaults.js';
 import { createLogger } from '../../../log/index.js';
 
 const log = createLogger('framework.firewall.engine.detectors.bot-detector');
+
+/**
+ * 三档挑战阈值的兜底来源 —— **唯一一份数字**
+ *
+ * 生效值一律来自 config（`defense.botChallenge*Limit`：framework 默认值 → src/config →
+ * 面板热改）。这里读 defaults 里的同一份定义，不再自己写 10 / 30 / 120。
+ */
+const BOT_DEFAULTS = DEFAULT_SECURITY_SETTINGS.defense;
 
 /** 日志里回显配置原文的最大长度（外部输入截断，避免配置里塞长串撑爆日志） */
 const MAX_PATTERN_LOG_LEN = 64;
@@ -117,8 +126,18 @@ const checkBotChallenge = async (ip, ua, requestCount, deviceId = null) => {
   // enableDeviceBlock=false 时退回纯 IP 维度（运维可一键关掉跨 IP 的设备封禁）
   const subject = { ip, deviceId: settings.enableDeviceBlock === false ? null : deviceId };
 
+  // 三档阈值只认 config（`defense.botChallenge*Limit`），兜底取 framework 默认值的
+  // **同一份定义** —— 代码里不再抄 10 / 30 / 120：
+  //   · 抄一份的后果：改 defaults 忘了改这里，运行时还是老数字，看不出来；
+  //   · `|| 默认值` 还有第二个坑：配成 0 时 `0 || 30` 会变回 30（配置被静默改写）。
+  // 现在「非有限正数」才回退，语义是"配置写坏 = 当没配"，与连接表那套（CONN_DEFAULTS）一致。
+  const limitOf = key => {
+    const configured = Number(settings[key]);
+    return Number.isFinite(configured) && configured > 0 ? configured : BOT_DEFAULTS[key];
+  };
+
   if (!ua) {
-    if (requestCount > (settings.botChallengeNoUaLimit || 10)) {
+    if (requestCount > limitOf('botChallengeNoUaLimit')) {
       await challengeSubject(subject);
       return true;
     }
@@ -128,12 +147,12 @@ const checkBotChallenge = async (ip, ua, requestCount, deviceId = null) => {
   const isBotUA = compiledBotPatterns.some(p => p.test(ua));
   const isBrowserUA = compiledBrowserPatterns.some(p => p.test(ua));
 
-  if (isBotUA && requestCount > (settings.botChallengeBotLimit || 30)) {
+  if (isBotUA && requestCount > limitOf('botChallengeBotLimit')) {
     await challengeSubject(subject);
     return true;
   }
 
-  if (isBrowserUA && requestCount > (settings.botChallengeBrowserLimit || 120)) {
+  if (isBrowserUA && requestCount > limitOf('botChallengeBrowserLimit')) {
     await challengeSubject(subject);
     return true;
   }

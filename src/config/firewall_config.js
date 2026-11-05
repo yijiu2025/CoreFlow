@@ -11,24 +11,24 @@
  *      不在本文件：默认值在 src/app/firewall/config/panel.js（面板层），热改走面板
  *      （落到 data/firewall_config.json）。写在这里**会被 app 默认值覆盖**并打一条
  *      warn —— 见 src/app/firewall/config/config.js 的 strayPanelKeys 检查。
- * defense 下的键（42 个，按功能分组见 defaults.js）：
- *   开关      enableFirewall（总开关）/ enableGlobalBlock / enableChallenge
- *   名单      manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps
- *   扫描      enableAutoBlacklist / maxNotFoundAttempts / notFoundWindow /
+ * defense 下的键（42 个）—— 分组与顺序和 `defaults.js`、`config/schema.js` 完全一致：
+ *   ① 开关    enableFirewall（总开关）/ enableGlobalBlock / enableChallenge
+ *   ② 名单    manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps
+ *   ③ 扫描    enableAutoBlacklist / maxNotFoundAttempts / notFoundWindow /
  *             blacklistDuration / safePaths / loopbackPrefixes /
  *             internalIpPrefixes / idcIpPrefixes
- *   全局限频  enableRateLimit / rateLimitRequests / rateLimitWindow / enableEndpointRateLimit
- *   暴破      enableBruteForce / bruteLimit / bruteWindow / accountLockTime /
+ *   ③b 探针   probePaths（部署相关，代码里另有兜底常量）
+ *   ④ 限频    enableRateLimit / rateLimitRequests / rateLimitWindow / enableEndpointRateLimit
+ *   ⑤ 暴破    enableBruteForce / bruteLimit / bruteWindow / accountLockTime /
  *             ipBlockTime / bruteIpLimit
- *   连接      enableConnLimit / maxConn / connCleanupIntervalMs / connStaleAfterMs / connHighWater
- *   探针      probePaths（部署相关，代码里另有兜底常量）
- *   地理围栏  enableGeoFilter / geoRules
- *   Bot       enableBotChallenge（总开关）/ botPatterns / browserPatterns / botChallengeNoUaLimit /
- *             botChallengeBotLimit / botChallengeBrowserLimit
- *   挑战      challengeDifficulty
- *   设备      enableDeviceBlock
- *   匿名短路  skipDeepCheckForAnonymous
- *   告警      alert { enabled, email, webhookUrl, cooldownMs }
+ *   ⑥ 连接    enableConnLimit / maxConn / connCleanupIntervalMs / connStaleAfterMs / connHighWater
+ *   ⑦ 地理    enableGeoFilter / geoRules { sensitivePaths, internalPrefixes, ... }
+ *   ⑧ 挑战    enableBotChallenge（Bot 总开关）/ botPatterns / browserPatterns /
+ *             botChallengeNoUaLimit / botChallengeBotLimit / botChallengeBrowserLimit /
+ *             challengeDifficulty
+ *   ⑨ 设备    enableDeviceBlock
+ *   ⑩ 匿名    skipDeepCheckForAnonymous
+ *   ⑪ 告警    alert { enabled, email, webhookUrl, cooldownMs }
  *
  * ⚠️ 数组是**整体替换**（不是追加）：写 botPatterns / safePaths 这类数组时要给全量。
  * ⚠️ 值会过校验：类型/上下界/枚举由 `framework/firewall/config/schema.js` 的 spec 定义。
