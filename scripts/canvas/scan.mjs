@@ -31,14 +31,6 @@ const files = walkDir(SRC);
 const relSet = new Set(files.map((f) => relative(SRC, f).replaceAll('\\', '/')));
 
 // ---------- AST 工具 ----------
-function parse(code, file) {
-  try {
-    return acorn.parse(code, { ecmaVersion: 'latest', sourceType: 'module', locations: true });
-  } catch (e) {
-    console.warn(`[skip] 解析失败 ${file}: ${e.message}`);
-    return null;
-  }
-}
 // 带注释收集的解析（文件头说明 / 函数说明）
 function parse2(code, file, commentsOut) {
   try {
@@ -54,7 +46,7 @@ function parse2(code, file, commentsOut) {
   }
 }
 const DOC_MAX = 400; // 单条说明上限（字符）
-function cleanDoc(text, block) {
+function cleanDoc(text) {
   const lines = text.split('\n').map((l) => l.replace(/^\s*\/?\*+\/?\s?/, '').replace(/\*\/\s*$/, '').trim());
   const doc = lines.filter(Boolean).join(' ').trim();
   return doc.length > DOC_MAX ? doc.slice(0, DOC_MAX) + '…' : doc;
@@ -67,7 +59,7 @@ function docFor(comments, beforePos, beforeLine) {
       if (!best || c.end > best.end) best = c;
     }
   }
-  return best ? cleanDoc(best.text, best.block) : null;
+  return best ? cleanDoc(best.text) : null;
 }
 function walk(node, visit, ancestors = []) {
   if (!node || typeof node.type !== 'string') return;
@@ -156,7 +148,7 @@ for (const abs of files) {
       if (leading[i].line - seg[seg.length - 1].endLine <= 5) seg.push(leading[i]);
       else break;
     }
-    const doc = seg.map((c) => cleanDoc(c.text, c.block)).filter(Boolean).join('\n');
+    const doc = seg.map((c) => cleanDoc(c.text)).filter(Boolean).join('\n');
     return doc || null;
   })();
 
@@ -264,7 +256,7 @@ for (const abs of files) {
       return;
     }
     // 函数定义
-    let fnNode = null, kind = null, name = null;
+    let fnNode, kind, name;
     if (node.type === 'FunctionDeclaration') {
       fnNode = node; kind = node.async ? 'async function' : 'function'; name = node.id?.name ?? null;
     } else if (node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression') {
@@ -711,7 +703,7 @@ let prevData = null;
 try {
   const txt = readFileSync(OUT, 'utf8');
   prevData = JSON.parse(txt.slice(txt.indexOf('=') + 1).trim().replace(/;\s*$/, ''));
-} catch (e) { /* 首次生成或文件损坏，直接写 */ }
+} catch { /* 首次生成或文件损坏，直接写 */ }
 if (prevData && stable(prevData) === stable(data)) {
   console.log(`✔ 数据无变化，保留原快照（generatedAt=${prevData.generatedAt}）`);
   console.log(`  文件: ${data.stats.files}  函数: ${data.stats.functions}  调用边: ${data.stats.calls}`);
