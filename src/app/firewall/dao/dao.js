@@ -26,6 +26,7 @@ import {
 import { createLogger } from '../../../framework/log/index.js';
 import { registerSettingsReader } from '../../../framework/firewall/interface/config-access.js';
 import { dropMisplacedDefenseKeys } from '../../../framework/firewall/config/validate.js';
+import { sanitizeSecuritySettings, normalizeSettingsPatch } from '../../../framework/firewall/config/schema.js';
 import { ensureDataDir } from '../../../framework/paths.js';
 
 const log = createLogger('app.firewall.dao.dao');
@@ -63,7 +64,16 @@ function initDao() {
         // 形状与 framework 一致：顶层出现的 defense 键一律剔除（告警由 framework 的
         // persisted 层只打一次）；这里保证 app 侧内存里也没有残留的错误形状。
         const { settings: normalized } = dropMisplacedDefenseKeys(raw.securitySettings);
-        securitySettings = deepMerge(securitySettings, normalized);
+        // 值级校验走**同一份** spec（framework/firewall/config/schema.js）：
+        // 非法值丢弃 → deepMerge 时由默认值补回，不留"内存里跑着一个坏值"的窗口。
+        const sanitized = sanitizeSecuritySettings(deepMerge(securitySettings, normalized));
+        if (sanitized.problems.length > 0) {
+          log.warn(
+            `⚠️ [Firewall DAO] 恢复的配置里有 ${sanitized.problems.length} 处不合法，已按默认值处理：` +
+              `${sanitized.problems.map(p => `${p.key}（${p.message}）`).join('；')}`
+          );
+        }
+        securitySettings = deepMerge(securitySettings, sanitized.value);
       }
       log.info(`💾 [Firewall DAO] ${C.dim}已从文件恢复安全策略与节点数据${C.reset}`);
     } else {
@@ -164,7 +174,29 @@ function updateServerNodeMetadata(patch) {
  * @returns {object} 更新后的安全设置
  */
 function updateSecuritySettings(patch) {
-  securitySettings = deepMerge(securitySettings, patch);
+  // ① 形状归位：把"忘了套 defense"的载荷收回 defense 下。
+  //    历史上有调用方直接提交 `{ maxConn: 100 }`，深层合并后会写成
+  //    `securitySettings.maxConn`（顶层死键），下次启动被当错位键剔掉 ——
+  //    保存看着成功、重启全丢。归位比"静默丢弃"或"直接 400"都对用户友好。
+  const { value: normalized, misplaced } = normalizeSettingsPatch(patch);
+  if (misplaced.length > 0) {
+    log.warn(
+      `⚠️ [Firewall DAO] 提交的载荷把 defense 键放在顶层（${misplaced.join(', ')}），已自动归位到 defense 下；` +
+        `请调用方改为 \`{ defense: { ... } }\``
+    );
+  }
+
+  // ② 值级校验：同一份 spec（framework/firewall/config/schema.js）在写入期也执行一次。
+  //    接口 schema 只挡得住明显非法（类型/下界），内部调用方与后续代码路径仍可能塞坏值。
+  const sanitized = sanitizeSecuritySettings(normalized);
+  if (sanitized.problems.length > 0) {
+    log.warn(
+      `⚠️ [Firewall DAO] 提交的配置里有 ${sanitized.problems.length} 处不合法，已忽略这些字段：` +
+        `${sanitized.problems.map(p => `${p.key}（${p.message}）`).join('；')}`
+    );
+  }
+
+  securitySettings = deepMerge(securitySettings, sanitized.value);
   triggerSave();
   return securitySettings;
 }

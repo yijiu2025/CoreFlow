@@ -22,6 +22,12 @@
  * 同名键**不迁移、不读取**，载入时直接剔除并在启动日志里列出来（`config/validate.js`）——
  * schema 只有一个版本，没有"历史兼容层"。
  *
+ * **值也要过校验**：本文件的键集合是"有哪些配置"，每个键的类型/上下界在
+ * `config/schema.js` 的 `DEFENSE_SPEC`（唯一一份规则表）。新增键时**两处都要加**，
+ * 否则 `__tests__/firewall-config-schema.test.js` 会红。校验在三个边界执行：
+ * 加载期清洗（非法值丢弃 → 回落本文件的默认值）、写入期清洗（面板落盘前）、
+ * 面板接口 schema（由 spec 生成）。
+ *
  * ════════════════════════════════════════════════════════════════════
  * 二、为什么有 `defense` 这一层（不要试图拍平）
  * ════════════════════════════════════════════════════════════════════
@@ -49,6 +55,10 @@
 
 import { deepMerge } from '../../config/runtime.js';
 import { loadOverrides } from '../../config/overrides.js';
+import { sanitizeSecuritySettings } from './schema.js';
+import { createLogger } from '../../log/index.js';
+
+const log = createLogger('framework.firewall.config.defaults');
 
 // ════════════════════════════════════════════════════════════════════
 // 手动名单
@@ -336,6 +346,19 @@ const FIREWALL_DEFAULTS = {
 const OVERRIDES = loadOverrides('firewall_config.js', 'DEFAULT_SECURITY_SETTINGS', 'firewall_config');
 
 /** 生效默认值 = core 保底 ← 静态覆盖（运行时 JSON 覆盖由 persisted.js 再叠一层） */
-const DEFAULT_SECURITY_SETTINGS = deepMerge(FIREWALL_DEFAULTS, OVERRIDES);
+const MERGED_DEFAULTS = deepMerge(FIREWALL_DEFAULTS, OVERRIDES);
+
+// 静态覆盖同样要过值校验（2026-11-05）：这里若不校验，`src/config/firewall_config.js`
+// 里写 `maxConn: "abc"` 会变成"默认值本身是坏的" —— 下游任何 sanitize 都把坏值当默认值
+// 再合并回去，等于校验失效。校验后丢弃的键由 FIREWALL_DEFAULTS 补回。
+const CLEANED_DEFAULTS = sanitizeSecuritySettings(MERGED_DEFAULTS);
+if (CLEANED_DEFAULTS.problems.length > 0) {
+  log.warn(
+    `⚠️ [Firewall] src/config/firewall_config.js 里有 ${CLEANED_DEFAULTS.problems.length} 处配置不合法，` +
+      `已按 core 默认值处理：${CLEANED_DEFAULTS.problems.map(p => `${p.key}（${p.message}）`).join('；')}`
+  );
+}
+
+const DEFAULT_SECURITY_SETTINGS = deepMerge(FIREWALL_DEFAULTS, CLEANED_DEFAULTS.value);
 
 export { DEFAULT_SECURITY_SETTINGS };

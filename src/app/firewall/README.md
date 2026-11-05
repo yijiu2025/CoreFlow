@@ -188,6 +188,27 @@ firewall onResponse 钩子
 - `geoip-lite` — IP 地理位置数据库
 - `fastify-plugin` — Fastify 插件封装
 
+## 配置校验（三处入口，**一份规则**）
+
+配置有三条入口，规则只有一份：`framework/firewall/config/schema.js` 的 `DEFENSE_SPEC` /
+`PANEL_SPEC`（工具在 `framework/config/field-spec.js`）。
+
+| 入口 | 校验执行点 | 非法值的结果 |
+| --- | --- | --- |
+| `src/config/firewall_config.js`（部署静态覆盖） | 随启动加载，走下面 persisted 的同一条清洗 | 丢弃 → 回落 `defaults.js` 默认值 + 启动 warn |
+| `data/firewall_config.json`（手改 / 面板落盘） | `config/persisted.js` → `sanitizeSecuritySettings()` | 同上（一次告警列全部被丢弃键） |
+| 面板 `PATCH /monitor/settings` | ① 接口 schema（**由 spec 生成**，数值带 `minimum`）② `dao.updateSecuritySettings()` 写前清洗 | 明显非法 → 400；能归一化的（`"100"` → `100`、`"false"` → `false`）→ 归一化后生效 |
+
+三条硬规则：
+
+1. **规则只写在 spec 里**。不要在检测器里写 `settings.x || 默认值`、也不要在 API schema 里手写
+   `defense` 字段 —— 那会变成第二份规则，改了这处忘那处（历史上 `enableBotChallenge` 就只在
+   API schema 里存在，后端根本没有这个键）。
+2. **新增一个配置项要动三处**：`defaults.js`（值）+ `schema.js` 的 `DEFENSE_SPEC`（类型/上下界）
+   + 读取点。`__tests__/firewall-config-schema.test.js` 会双向比对键集合，漏一处就红。
+3. **写入期会归位形状**：`{ maxConn: 100 }` 这种忘了套 `defense` 的载荷会被收回 `defense` 下
+   并打 warn。历史上前端有一处这么提交，后端深合并后写成顶层死键、重启即丢。
+
 ## 数据持久化
 
 > ⚠️ 下表路径均相对 **`src/`**：`app/firewall/config/config.js` 与 `data/store.js` 用的是

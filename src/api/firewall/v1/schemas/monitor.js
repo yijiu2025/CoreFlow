@@ -2,9 +2,13 @@
  * 防火墙模块 API Schema 定义
  * 使用 JSON Schema 约束请求参数与响应结构
  *
+ * 设置类 schema 的字段约束**由 spec 生成**（framework/firewall/config/schema.js），
+ * 与加载期/写入期的清洗规则同源 —— 不要在这里手写 defense 字段。
+ *
  * @author yijiu2025
  * @since 2026-08-17
  */
+import { toSettingsJsonProperties } from '../../../../framework/firewall/config/schema.js';
 
 // 基础响应结构 (Standard Response Wrapper)
 // ⚠️ 必须与 globals 里 reply.result 的 build() 字段**一一对应**：schema 未声明的字段
@@ -106,46 +110,11 @@ const updateSettingsSchema = {
   description: '更新全局防御策略设置',
   body: {
     type: 'object',
-    properties: {
-      activeIpApi: { type: 'string' },
-      showTrajectory: { type: 'boolean' },
-      defense: {
-        type: 'object',
-        properties: {
-          enableAutoBlacklist: { type: 'boolean' },
-          maxNotFoundAttempts: { type: 'number' },
-          notFoundWindow: { type: 'number' },
-          blacklistDuration: { type: 'number' },
-          enableRateLimit: { type: 'boolean' },
-          rateLimitRequests: { type: 'number' },
-          rateLimitWindow: { type: 'number' },
-          enableBruteForce: { type: 'boolean' },
-          bruteLimit: { type: 'number' },
-          bruteWindow: { type: 'number' },
-          bruteIpLimit: { type: 'number' },
-          accountLockTime: { type: 'number' },
-          ipBlockTime: { type: 'number' },
-          enableConnLimit: { type: 'boolean' },
-          maxConn: { type: 'number' },
-          // 连接表高水位告警阈值（条）：只影响告警，不影响放行
-          connHighWater: { type: 'number' },
-          // 探针路径（部署相关）。前端产物路径后端不认识，不做配置
-          probePaths: { type: 'array', items: { type: 'string' } },
-          enableGeoFilter: { type: 'boolean' },
-          // 设备维度封禁开关（跨 IP）：自动封禁/挑战命中时是否同时记到设备 ID 上
-          enableDeviceBlock: { type: 'boolean' },
-          // 匿名请求深度检测短路开关：默认关闭，取舍见 config.js 注释
-          skipDeepCheckForAnonymous: { type: 'boolean' },
-          internalIpPrefixes: { type: 'array', items: { type: 'string' } },
-          idcIpPrefixes: { type: 'array', items: { type: 'string' } },
-          safePaths: { type: 'array', items: { type: 'string' } },
-          // 回环前缀：扫描陷阱不自动封禁这些来源（保底值在 core defaults，代码侧为空）
-          loopbackPrefixes: { type: 'array', items: { type: 'string' } },
-          challengeDifficulty: { type: 'number', minimum: 1, maximum: 6 },
-          geoRules: { type: 'object' }
-        }
-      }
-    }
+    // ⚠️ properties **由 spec 生成**，不再手写（2026-11-05）：
+    //    spec 在 framework/firewall/config/schema.js，是"什么值算合法"的唯一事实源；
+    //    加载期清洗、写入期清洗、本 schema 三处共用同一份规则，改了 spec 一起变。
+    //    手写清单一定会漂移 —— 历史上 `enableBotChallenge` 就是在这里存在、后端没有。
+    properties: toSettingsJsonProperties()
   },
   response: {
     200: baseResponse({ type: 'object' })

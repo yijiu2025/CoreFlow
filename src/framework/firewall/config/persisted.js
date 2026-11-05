@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import { DEFAULT_SECURITY_SETTINGS } from './defaults.js';
 import { dataFile } from '../../paths.js';
 import { dropMisplacedDefenseKeys } from './validate.js';
+import { sanitizeSecuritySettings } from './schema.js';
 import { registerSettingsReader } from '../interface/config-access.js';
 import { createLogger } from '../../log/index.js';
 
@@ -98,7 +99,16 @@ function loadPersistedSettings() {
               `请把它们移到 defense 下`
           );
         }
-        settings = deepMerge(DEFAULT_SECURITY_SETTINGS, normalized);
+        // 值级校验：形状对了不代表值能用（`connStaleAfterMs: 0`、`maxConn: "abc"` 这类
+        // 会直接把机制弄坏）。非法键在这里丢弃 → 合并时由默认值补回。
+        const sanitized = sanitizeSecuritySettings(deepMerge(DEFAULT_SECURITY_SETTINGS, normalized));
+        if (sanitized.problems.length > 0) {
+          log.warn(
+            `⚠️ [Firewall] ${FIREWALL_FILE} 里有 ${sanitized.problems.length} 处配置不合法，` +
+              `已按默认值处理：${sanitized.problems.map(p => `${p.key}（${p.message}）`).join('；')}`
+          );
+        }
+        settings = deepMerge(DEFAULT_SECURITY_SETTINGS, sanitized.value);
         loaded = true;
       }
     }

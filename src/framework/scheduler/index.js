@@ -34,6 +34,7 @@ import { createLogger } from '../log/index.js';
 import { createLock } from '../redis/lock-store.js';
 import { isRedisConfigured } from '../redis/utils.js';
 import { dataFile } from '../paths.js';
+import { sanitizeSchedulerConfig } from './config-spec.js';
 
 const log = createLogger('framework.scheduler.index');
 
@@ -53,14 +54,25 @@ function loadConfig() {
   try {
     if (!fs.existsSync(CONFIG_PATH)) return DEFAULT_CONFIG;
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+
+    // 值级校验（2026-11-05）：非法字段丢弃 → 下面的浅合并会用默认值补回。
+    // 典型坏值：`intervalHours: "abc"` → intervalMs = NaN → 定时器立刻触发并空转，
+    // 日志却只说"任务已启动，间隔 abch"，排查时看不出任何异常。
+    const sanitized = sanitizeSchedulerConfig(raw);
+    if (sanitized.problems.length > 0) {
+      log.warn(
+        `⚠️ [Scheduler] ${CONFIG_PATH} 里有 ${sanitized.problems.length} 处配置不合法，已按默认值处理：` +
+          `${sanitized.problems.map(p => `${p.key}（${p.message}）`).join('；')}`
+      );
+    }
+
     // 浅合并顶层 + 每个 task 浅合并默认值
     const tasks = { ...DEFAULT_CONFIG.tasks };
-    if (raw.tasks) {
-      for (const [key, val] of Object.entries(raw.tasks)) {
-        tasks[key] = { ...tasks[key], ...val };
-      }
+    for (const [key, val] of Object.entries(sanitized.value.tasks)) {
+      tasks[key] = { ...tasks[key], ...val };
     }
-    return { ...DEFAULT_CONFIG, ...raw, tasks };
+    // tasks 放在最后：sanitized.value 里的同名键（原样保留的空对象）不能盖掉合并结果
+    return { ...DEFAULT_CONFIG, ...sanitized.value, tasks };
   } catch (err) {
     log.error(`❌ [Scheduler] ${C.red}读取配置失败，用默认值${C.reset}`, err);
     return DEFAULT_CONFIG;

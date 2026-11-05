@@ -30,6 +30,9 @@
  *   告警      alert { enabled, email, webhookUrl, cooldownMs }
  *
  * ⚠️ 数组是**整体替换**（不是追加）：写 botPatterns / safePaths 这类数组时要给全量。
+ * ⚠️ 值会过校验：类型/上下界/枚举由 `framework/firewall/config/schema.js` 的 spec 定义。
+ *    写错的值**不会让服务起不来**，但会被丢弃并回落默认值，启动日志里有一条 warn 列出
+ *    所有被丢弃的键 —— 看到那条 warn 就说明这里写错了。
  * ⚠️ 层级（securitySettings.defense）是持久化 schema 契约，别在这里改层级。
  * ⚠️ defense 的键**必须写在 defense 下**：写成顶层（例如 `enableRateLimit: false`）会被
  *    **忽略**并在启动时告警 —— 顶层没有任何读取点，留着只会让人以为它生效了。
