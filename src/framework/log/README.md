@@ -175,16 +175,24 @@ LOG_FILE_NAME=server         # 主日志文件名前缀
 
 | 事件 | 行为 |
 | --- | --- |
-| `uncaughtException` | 记 `fatal`（同步落盘 + fd 2 同步兜底）→ 留 100ms 刷新窗口 → `process.exit(1)` |
-| `unhandledRejection` | 记 `always.error`（不受 `LOG_LEVEL` 门控），**进程继续运行** |
+| `uncaughtException` | 记 `fatal`（文件通道同步落盘）→ 等 stderr **真正 flush 完** → `process.exit(1)` |
+| `unhandledRejection` | 记 `always.error`（不受 `LOG_LEVEL` 门控），**进程继续运行**；非 `Error` 的拒绝值进 `data.reason` 保留原值 |
 
-两个细节值得知道：
+几点值得知道：
 
-1. **100ms 刷新窗口的用途**：stdout/stderr 在管道/重定向场景（docker、pm2、CI）是异步写，
-   立即 `process.exit` 会丢掉控制台最后一条日志，因此先用 `fs.writeSync(2, …)` 同步兜底再退出。
-2. **崩溃留档不与全局 file 开关耦合**：`traps.js` 内部对 `process` logger 强制
+1. **退出前是"等 flush"，不是"盲等 100ms"**：`process.stderr.write('', cb)` 的空写排在已入队
+   内容之后，回调触发即代表崩溃记录已落到 fd 上；`EXIT_FLUSH_MS = 100` 退化为"stderr 已坏、
+   回调不来"时的兜底上限（该定时器刻意**不 unref**，否则事件循环空转时进程会以 0 退出）。
+2. **同一份堆栈只打一份**：早期实现在 `log.fatal` 之外额外用 `fs.writeSync(2, …)` 裸写兜底，
+   导致 docker 日志里每条崩溃都是双份（格式化一条 + 裸写一条，2026-11 修掉）。现在只有
+   **控制台通道被关掉**（`LOG_CONSOLE=false` / `configureLog({ console: false })`）时才同步裸写
+   一行 —— 那种配置下日志库不会往 stderr 写任何东西，崩溃现场否则就是空白的。
+3. **崩溃留档不与全局 file 开关耦合**：`traps.js` 内部对 `process` logger 强制
    `.config({ file: { name: 'process', level: 'all', error: true } })`。进程级致命日志丢了对排查是灾难。
-3. **副作用提醒**：安装 `unhandledRejection` 处理器会改变 Node ≥15 的默认行为
+4. **可卸载、幂等**：`initLogErrorTraps()` 返回 `uninstall()`，重复调用返回同一个句柄；
+   测试里 `const off = initLogErrorTraps(); afterAll(() => off());` 即可清场。
+   子进程回归测试见 [`src/__tests__/framework/log/traps.test.js`](../../__tests__/framework/log/traps.test.js)。
+5. **副作用提醒**：安装 `unhandledRejection` 处理器会改变 Node ≥15 的默认行为
    （默认是 throw 崩溃，安装后进程继续运行）。
 
 ## 特殊出口
