@@ -64,7 +64,15 @@ const trackConnection = (ip, delta) => {
   // 并发连接限制开关：此前没有任何读取点，运维关掉「并发连接限制」后限制照旧生效。
   if (!settings.enableConnLimit) return 0;
 
-  const maxConn = settings.maxConn || settings.maxConnections || 100;
+  // 上限只认 `defense.maxConn`（framework 默认值兜底）。
+  // 两处历史包袱一并清掉（2026-11-05）：
+  //   · `settings.maxConnections` —— 全仓**没有任何写入点**（配置项叫 maxConn），
+  //     留着等于给一个不存在的键开门，写进去还以为生效；
+  //   · 结尾的 `|| 100` —— 与 defaults.js 的 maxConn 默认值重复，两份数字各改各的。
+  // 顺带修一个静默失效：旧写法 `|| "abc"` 会取到字符串，`current > "abc"` 恒 false
+  // = 连接限制被一条写错的配置整个关掉；现在非正数/非数字一律回退默认值。
+  const configuredMax = Number(settings.maxConn);
+  const maxConn = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : CONN_DEFAULTS.maxConn;
 
   const entry = activeConnections.get(ip);
   const current = (entry ? entry.count : 0) + delta;

@@ -87,6 +87,25 @@ describe('并发连接计数', () => {
     expect(trackConnection('10.0.0.5', 1)).toBe(0);
     expect(activeConnections.has('10.0.0.5')).toBe(false);
   });
+
+  it('maxConn 只认 defense.maxConn：旧别名 maxConnections 已无读取点', () => {
+    // 别名 write 点为零，写它以前会"看起来生效"（|| 兜底会取到它），现在必须无效
+    defenseConfig = { enableConnLimit: true, maxConn: undefined, maxConnections: 1 };
+    expect(trackConnection('10.0.0.10', 1)).toBe(1);
+    expect(() => trackConnection('10.0.0.10', 1)).not.toThrow();
+    expect(activeConnections.get('10.0.0.10').count).toBe(2);
+  });
+
+  it('maxConn 写成非法值时回退 framework 默认值，而不是"无限制"', () => {
+    // 旧写法 `|| 'abc'` 取到字符串 → `current > 'abc'` 恒 false → 限制被静默关掉
+    for (const bad of [0, -5, 'abc', null]) {
+      activeConnections.clear();
+      defenseConfig = { enableConnLimit: true, maxConn: bad };
+      const limit = DEFAULT_SECURITY_SETTINGS.defense.maxConn;
+      for (let i = 0; i < limit; i++) trackConnection('10.0.0.11', 1);
+      expect(() => trackConnection('10.0.0.11', 1)).toThrow();
+    }
+  });
 });
 
 describe('僵尸记录清理（泄漏修复）', () => {
