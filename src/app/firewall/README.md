@@ -135,6 +135,19 @@ firewall onResponse 钩子
 
 ```
 
+## 挑战页：CSP nonce + Blob Worker（两条都是必需的）
+
+页面是**单文件自包含**的（零外链，对任意 URL 下发），所以有两条容易踩空的细节：
+
+| 事项 | 做法 | 不做会怎样（实测） |
+| --- | --- | --- |
+| 内联脚本 | 每次响应生成一个 nonce，同时写进 `<script nonce>` 与响应头 `Content-Security-Policy: script-src 'nonce-…'` | 生产全局策略是 `script-src 'self'`，浏览器直接拦掉整段脚本 → 页面永远停在 "Verifying your browser"，**连失败提示都不会出现**（`fail()` 也没执行），用户无出口 |
+| PoW 求解 | 放进 Blob Worker（`worker-src blob:`），主线程同步求解只作降级 | 难度 ≥4 时主线程冻结 0.5~2s：进度条不动、点击无响应、低端机可能被判「页面无响应」 |
+
+- 用 nonce 而不是 `'sha256-…'`：页面每次都不同（内嵌本次 challengeId / salt），哈希无法预置。
+- 脚本**不放** `'unsafe-inline'`：那会把全局 XSS 防护一起削掉。
+- 开发环境 `contentSecurityPolicy: false`，**这类问题本地看不见** —— 所以 `sendChallengePage` 无条件设置本页 CSP，让本地看到的就是线上行为；回归用例见 `__tests__/firewall/challenge-page-csp.test.js`（真 fastify + 真 helmet + 真 HTTP）。
+
 ## 模块职责
 
 ### config/ — 配置文件

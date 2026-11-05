@@ -10,7 +10,8 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { buildChallengePage } from '../challenge-template.js';
+import crypto from 'node:crypto';
+import { buildChallengePage, challengePageCsp } from '../challenge-template.js';
 import { trackRequestCount } from './detectors/rate-limiter.js';
 import { checkGeoReputation, resolveGeoInfo } from './detectors/geo-filter.js';
 import { checkBotChallenge } from './detectors/bot-detector.js';
@@ -305,6 +306,13 @@ function isDocumentRequest(request) {
 /**
  * 渲染挑战页
  *
+ * 响应头里那份 CSP 是**必须**的，不是可选加固：全局 helmet 策略是 `script-src 'self'`，
+ * 而本页脚本是内联的 → 不放行就整段脚本被拦，页面永远停在 "Verifying your browser"。
+ * nonce 由这里生成并同时喂给模板与响应头，两者不可能对不上。
+ *
+ * 这里刻意**不区分环境**（开发环境 helmet 也不发 CSP）：让本地看到的就是线上行为，
+ * 否则这类问题只能在生产环境暴露。
+ *
  * @param {import('fastify').FastifyReply} reply 响应对象
  * @param {string} ip 客户端 IP
  * @param {string} fingerprint 请求指纹
@@ -312,8 +320,12 @@ function isDocumentRequest(request) {
  * @returns {Promise<void>}
  */
 async function sendChallengePage(reply, ip, fingerprint, deviceId) {
-  const html = await buildChallengePage(ip, fingerprint, deviceId);
-  reply.headers(CHALLENGE_NO_STORE).type('text/html').send(html);
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const html = await buildChallengePage(ip, fingerprint, deviceId, { nonce });
+  reply
+    .headers({ ...CHALLENGE_NO_STORE, 'Content-Security-Policy': challengePageCsp(nonce) })
+    .type('text/html')
+    .send(html);
 }
 
 /**

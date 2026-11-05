@@ -13,8 +13,16 @@
  * PoW 的哈希实现直接复用 `util/pow-sha256.js` 的**同一份源码**（`toString()` 内联），
  * 服务端校验与浏览器求解不可能漂移。
  *
+ * 求解跑在 **Blob Worker** 里（`buildSolverSource`）：PoW 是同步纯计算，放主线程会把整页
+ * 冻住；Worker + 主线程降级两条路都保留，Worker 不可用时自动退回同步求解。
+ *
+ * ⚠️ **CSP 是这条链路的隐形杀手**：本页脚本是内联的，而生产环境的全局 helmet 策略是
+ * `script-src 'self'` —— 少了 `challengePageCsp(nonce)` 这一份**专属响应头**，浏览器会
+ * 直接拦掉整段脚本，页面永远停在 "Verifying your browser"。开发环境 CSP 关闭，看不出来。
+ *
  * @author yijiu2025
  * @since 2026-08-17
+ * @since 2026-11-05 内联脚本改 nonce + Blob Worker 求解（此前在生产 CSP 下根本不会执行）
  */
 import crypto from 'crypto';
 import { sha256Hex } from './util/pow-sha256.js';
@@ -79,15 +87,89 @@ async function issueChallengePayload({ ip, fingerprint = null, deviceId = null }
 }
 
 /**
+ * 求解线程源码（Blob Worker 的 body）
+ *
+ * 为什么要线程：PoW 是**同步纯计算**，跑在主线程上会把整页冻住（难度 5 ≈ 2s：
+ * 进度条不动、点击无响应、低端机可能被判「页面无响应」）。放进 Worker 后主线程始终空闲。
+ *
+ * `sha256Hex` 在这里**再内联一次**：Worker 没有外层闭包，必须自带哈希实现。它仍然来自
+ * `util/pow-sha256.js` 的同一份源码（`toString()`），所以服务端校验 / 主线程降级 /
+ * 求解线程三处不可能各改各的。
+ *
+ * @returns {string} 可直接塞进 `new Blob([...])` 的 JS 源码
+ */
+function buildSolverSource() {
+  return `'use strict';
+var sha256Hex = ${sha256Hex.toString()};
+self.onmessage = function (e) {
+  var d = e.data || {};
+  var target = '0'.repeat(d.difficulty);
+  var prefix = d.prefix;
+  var total = d.maxAttempts;
+  for (var i = 0; i < total; i++) {
+    if (sha256Hex(prefix + i).indexOf(target) === 0) {
+      self.postMessage({ answer: String(i) });
+      return;
+    }
+    // 每 16384 次回报一次进度：调用方据此画真实进度条（不是假动画）
+    if ((i & 16383) === 0) self.postMessage({ progress: i / total });
+  }
+  self.postMessage({ answer: null });
+};
+`;
+}
+
+/**
+ * 挑战页的**专属 CSP**（每次响应一个 nonce，只放行本页那一支脚本）
+ *
+ * 为什么必须单独给：全局 helmet 策略是 `script-src 'self'`（生产环境），而本页的脚本是
+ * **内联**的 —— 生产环境下浏览器会把整段 `<script>` 拦掉，页面永远停在
+ * `Verifying your browser, please wait...`，而且连 `fail()` 都跑不到，用户没有任何出口。
+ * 开发环境 `contentSecurityPolicy: false`，所以这个坑在本地完全看不见。
+ *
+ * 为什么不用 `'sha256-…'`：页面每次都不同（内嵌本次 challengeId / salt），哈希无法预置。
+ *
+ * 各条目的必要性：
+ *   script-src 'nonce-X'    本页内联脚本；**不含** 'unsafe-inline'（那会削掉全局 XSS 防护）
+ *   worker-src blob:        PoW 求解线程用 Blob URL 起（页面自包含、不额外发请求）
+ *   connect-src 'self'      POST /api/firewall/v1/challenge/verify 是同源请求
+ *   style-src 'unsafe-inline'  页面全部是内联 style 属性，无外部样式表
+ *   default-src 'none'      其余一律不放（无图片/字体/框架/表单提交）
+ *   base-uri 'none' / form-action 'none' / frame-ancestors 'none'
+ *                           防 <base> 改写相对 URL、防被三方页面内嵌钓鱼
+ *
+ * @param {string} nonce 本次响应的一次性 nonce
+ * @returns {string} Content-Security-Policy 头的值
+ */
+function challengePageCsp(nonce) {
+  return [
+    "default-src 'none'",
+    `script-src 'nonce-${nonce}'`,
+    'worker-src blob:',
+    "style-src 'unsafe-inline'",
+    'img-src data:',
+    "connect-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'"
+  ].join('; ');
+}
+
+/**
  * 构建高强度浏览器挑战页面（含工作量证明）
  *
  * @param {string} ip 客户端 IP
  * @param {string} [fingerprint] 可选的请求指纹（一并绑定到挑战载荷）
  * @param {string|null} [deviceId] 可选的设备 ID（一并绑定；它让「通过」跨 IP 有效）
+ * @param {{nonce?: string}} [options] `nonce` 由调用方传入并与 `challengePageCsp()` 配对；
+ *   不传时自生成一个（HTML 本身仍自洽，但**响应头必须用同一个值**，见 pipeline.sendChallengePage）
  * @returns {Promise<string>} HTML 字符串
  */
-async function buildChallengePage(ip, fingerprint, deviceId = null) {
+async function buildChallengePage(ip, fingerprint, deviceId = null, options = {}) {
   const { challengeId, salt, difficulty, maxAttempts } = await issueChallengePayload({ ip, fingerprint, deviceId });
+  const nonce = options.nonce || crypto.randomBytes(16).toString('hex');
+  // JSON.stringify 负责转义换行/引号；再挡一次 `</` 拼接，避免出现字面量 `</script>`
+  const solverLiteral = JSON.stringify(buildSolverSource()).replace(/<\//g, '<\\/');
 
   return `<!DOCTYPE html>
     <html>
@@ -105,20 +187,28 @@ async function buildChallengePage(ip, fingerprint, deviceId = null) {
           <button id="retry" type="button" style="display:none;margin:1.5rem auto 0;padding:0.6rem 1.5rem;border-radius:0.75rem;border:1px solid rgba(34,211,238,0.4);background:rgba(34,211,238,0.12);color:#22d3ee;font-size:0.875rem;cursor:pointer;">Retry Verification</button>
         </div>
 
-        <script>
-          // 服务端同一份源码内联：浏览器求解与服务端校验共用同一个哈希实现
+        <script nonce="${nonce}">
+          // 服务端同一份源码内联：主线程降级求解与服务端校验共用同一个哈希实现
           const sha256Hex = ${sha256Hex.toString()};
 
           const CHALLENGE_ID = '${challengeId}';
           const SALT = '${salt}';
           const DIFFICULTY = ${difficulty};
           const MAX_ATTEMPTS = ${maxAttempts};
+          const PREFIX = CHALLENGE_ID + ':' + SALT + ':';
+
+          // PoW 求解线程源码（Blob Worker，顺带说明：Worker 无外层闭包，哈希在那里再内联一份）
+          const SOLVER_SRC = ${solverLiteral};
 
           const statusEl = document.getElementById('status');
           const progress = document.getElementById('progress');
           const retryEl = document.getElementById('retry');
           let retryTimer = null;
           retryEl.addEventListener('click', function () { location.reload(); });
+
+          function setProgress(pct) {
+            progress.style.width = String(pct) + '%';
+          }
 
           /** 自动重取挑战的次数（存 sessionStorage，跨刷新保留） */
           function retryCount() {
@@ -147,13 +237,66 @@ async function buildChallengePage(ip, fingerprint, deviceId = null) {
             }
           }
 
-          function solve() {
+          /**
+           * 主线程同步求解 —— **只作为降级路径**
+           *
+           * Worker 起不来时（老浏览器、或 CSP 没放行 worker-src blob:）才走这里。
+           * 它会把页面冻住，所以正常情况下不应执行；执行了也不影响正确性。
+           */
+          function solveOnMain() {
             const target = '0'.repeat(DIFFICULTY);
-            const prefix = CHALLENGE_ID + ':' + SALT + ':';
             for (let answer = 0; answer < MAX_ATTEMPTS; answer++) {
-              if (sha256Hex(prefix + answer).indexOf(target) === 0) return String(answer);
+              if (sha256Hex(PREFIX + answer).indexOf(target) === 0) return String(answer);
             }
             return null;
+          }
+
+          /**
+           * 用 Blob Worker 求解
+           *
+           * resolve 答案字符串（解不出为 null）；**任何**起线程/运行时错误都 reject，
+           * 由调用方降级到主线程 —— 绝不让用户卡在"进度条不动"的状态里。
+           * 用完必须 terminate + revokeObjectURL，否则 Blob 会一直挂在文档上。
+           */
+          function solveInWorker() {
+            return new Promise(function (resolve, reject) {
+              var url = null;
+              var worker = null;
+              var settled = false;
+
+              function finish(answer, err) {
+                if (settled) return;
+                settled = true;
+                try { if (worker) worker.terminate(); } catch (e) { /* 已终止 */ }
+                try { if (url) URL.revokeObjectURL(url); } catch (e) { /* 已释放 */ }
+                if (err) reject(err); else resolve(answer);
+              }
+
+              try {
+                url = URL.createObjectURL(new Blob([SOLVER_SRC], { type: 'text/javascript' }));
+                worker = new Worker(url);
+              } catch (err) {
+                finish(null, err);
+                return;
+              }
+
+              worker.onmessage = function (e) {
+                var data = e.data || {};
+                if (typeof data.progress === 'number') {
+                  // 真实进度：10% → 80% 之间按尝试次数推进
+                  setProgress(10 + Math.floor(data.progress * 70));
+                  return;
+                }
+                finish(data.answer === undefined ? null : data.answer, null);
+              };
+              worker.onerror = function () { finish(null, new Error('worker-error')); };
+
+              try {
+                worker.postMessage({ prefix: PREFIX, difficulty: DIFFICULTY, maxAttempts: MAX_ATTEMPTS });
+              } catch (err) {
+                finish(null, err);
+              }
+            });
           }
 
           function submit(answer) {
@@ -164,31 +307,36 @@ async function buildChallengePage(ip, fingerprint, deviceId = null) {
             }).then(r => r.json());
           }
 
+          /** 拿到答案之后：提交校验 → 通过则刷新（刷新会带上 fw_verified cookie） */
+          function onAnswer(answer) {
+            if (answer === null) {
+              fail('Challenge Unsolvable');
+              return;
+            }
+            setProgress(90);
+            submit(answer)
+              .then(function (res) {
+                if (res && res.ok) {
+                  setProgress(100);
+                  statusEl.innerText = 'Verified. Redirecting...';
+                  try { sessionStorage.removeItem('fw_chal_retry'); } catch (e) { /* 无 storage 时忽略 */ }
+                  setTimeout(function () { location.reload(); }, 500);
+                } else {
+                  fail((res && res.reason) || 'Unknown Error');
+                }
+              })
+              .catch(function () {
+                fail('Connection Error');
+              });
+          }
+
+          setProgress(5);
           setTimeout(function () {
-            progress.style.width = '60%';
-            // 让出一次事件循环，保证进度条先渲染出来再进入同步计算
-            setTimeout(function () {
-              const answer = solve();
-              if (answer === null) {
-                fail('Challenge Unsolvable');
-                return;
-              }
-              progress.style.width = '90%';
-              submit(answer)
-                .then(function (res) {
-                  if (res && res.ok) {
-                    progress.style.width = '100%';
-                    statusEl.innerText = 'Verified. Redirecting...';
-                    try { sessionStorage.removeItem('fw_chal_retry'); } catch (e) { /* 无 storage 时忽略 */ }
-                    setTimeout(function () { location.reload(); }, 500);
-                  } else {
-                    fail((res && res.reason) || 'Unknown Error');
-                  }
-                })
-                .catch(function () {
-                  fail('Connection Error');
-                });
-            }, 50);
+            solveInWorker().then(onAnswer, function () {
+              // 降级：先让 setProgress 那一帧渲染出来，再进同步计算（否则进度条不会动）
+              setProgress(10);
+              setTimeout(function () { onAnswer(solveOnMain()); }, 30);
+            });
           }, 100);
         </script>
       </body>
@@ -198,6 +346,8 @@ async function buildChallengePage(ip, fingerprint, deviceId = null) {
 
 export {
   buildChallengePage,
+  challengePageCsp,
+  buildSolverSource,
   issueChallengePayload,
   currentDifficulty,
   attemptsForDifficulty,

@@ -335,6 +335,16 @@ describe('挑战链路端到端：下发 → 求解 → 校验 → 签发令牌 
     expect(reply.statusCode).toBe(200);
     expect(reply.sentType).toBe('text/html');
     expect(reply.sentBody).toContain('CHALLENGE_ID');
+
+    // 生产环境全局 CSP 是 `script-src 'self'` —— 内联脚本会被拦到"页面永不动"。
+    // 因此响应必须自带一份 nonce 策略，且与 HTML 里的 nonce 同值（实测见挑战页 CSP 用例）。
+    const nonce = reply.sentBody.match(/<script nonce="([0-9a-f]{32})">/);
+    expect(nonce).not.toBeNull();
+    const csp = reply.responseHeaders['Content-Security-Policy'];
+    expect(csp).toContain(`script-src 'nonce-${nonce[1]}'`);
+    expect(csp).toContain('worker-src blob:');
+    expect(csp).not.toContain("script-src 'self'");
+
     expect(pushedRecords.at(-1)).toMatchObject({ blocked: true, statusCode: 200 });
   });
 
