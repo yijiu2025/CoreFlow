@@ -18,8 +18,34 @@ import { createLogger } from '../../../log/index.js';
 
 const log = createLogger('framework.firewall.engine.detectors.scan-trap');
 
-/** 本机回环地址前缀：**永不自动封禁**（理由见 checkNotFoundTrap 注释） */
-const LOOPBACK_PREFIXES = ['127.', '::1', 'localhost'];
+/**
+ * 回环地址前缀 —— **代码里不给值**（2026-11-05 上收到配置）
+ *
+ * 保底值住在 `defense.loopbackPrefixes`（framework/firewall/config/defaults.js 必有），
+ * `src/config/firewall_config.js` 可覆盖，面板热改走 JSON。这里有意的空数组是
+ * "最基础的一层"：想豁免哪段地址是**部署事实**（本机开发 / 探针直连 / SSR 自调用），
+ * 不该由 core 代码替某个部署形态拍板 —— 与 `safePaths` 同一套处理方式。
+ */
+const LOOPBACK_PREFIXES = [];
+
+/**
+ * 该 IP 是否属于本机回环（免于自动封禁）。
+ *
+ * 防呆与 `isSafePath` 一致：非数组 / 非字符串 / 空串一律忽略 ——
+ * `startsWith('')` 恒真，一条空串就能让扫描陷阱对**所有** IP 失效。
+ *
+ * @param {string} ip 客户端 IP
+ * @param {string[]} [configured] `defense.loopbackPrefixes`（缺失/坏值 = 不豁免）
+ * @returns {boolean} true 表示豁免自动封禁
+ */
+function isLoopbackIp(ip, configured = LOOPBACK_PREFIXES) {
+  if (typeof ip !== 'string' || !ip) return false;
+  if (!Array.isArray(configured)) return false;
+  for (const prefix of configured) {
+    if (typeof prefix === 'string' && prefix && ip.startsWith(prefix)) return true;
+  }
+  return false;
+}
 
 /**
  * 该路径是否免于扫描计数（**只看配置**）
@@ -52,11 +78,13 @@ function isSafePath(url, configured = []) {
  * 命中后写「IP + 设备」两个维度（`setBlockForSubject`）：扫描器最典型的规避手段就是
  * 换 IP 继续扫，只封 IP 等于给它留了后门。
  *
- * 豁免分两类（**别把两类混成一类**）：
+ * 豁免分 **路径两类 + 地址一类**（别混成一类）：
  *   ① 路由声明 `config.firewall.skipScanTrap: true` —— 有路由的端点自证「我的 403/405
  *      是正常业务语义」（如挑战失败回 403），随路由走、改名不用动 core；
  *   ② `defense.safePaths` 前缀清单 —— 只兜**没有路由**的路径（静态产物、SPA 深链、
  *      favicon/robots）。这类请求 404 时 `routeOptions.config` 是空对象，根本无从声明。
+ *   ③ `defense.loopbackPrefixes` 地址前缀 —— 回环来源（本机开发 / 探针直连 / SSR 自调用）
+ *      永不自动封禁；同样只走 config，代码侧不内置（见文件顶部 LOOPBACK_PREFIXES）。
  *
  * @param {string} ip 客户端 IP
  * @param {string} url 请求路径
@@ -80,7 +108,7 @@ const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null, routeConf
   // 只豁免回环、**不**豁免整份 `internalIpPrefixes`：那份含 RFC1918，若代理部署在
   // 10.x / 192.168.x 且 PROXY_TRUST_CIDR 覆盖它，`request.ip` 会全部变成内网地址，
   // 豁免整份等于把扫描陷阱整个关掉。
-  if (typeof ip === 'string' && LOOPBACK_PREFIXES.some(prefix => ip.startsWith(prefix))) return;
+  if (isLoopbackIp(ip, settings.loopbackPrefixes)) return;
 
   // ② 路径前缀豁免：只认 config 通道（defense.safePaths，无内置项）
   if (isSafePath(url, settings.safePaths)) return;
@@ -123,4 +151,4 @@ const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null, routeConf
   }
 };
 
-export { checkNotFoundTrap, isSafePath };
+export { checkNotFoundTrap, isSafePath, isLoopbackIp };

@@ -99,9 +99,19 @@ const SCAN_DETECTION = {
   //    core 不再内置任何路径（scan-trap 只读本键）。
   safePaths: ['/health', '/favicon.ico', '/robots.txt', '/__fw/', '/api/firewall/'],
 
+  // 回环地址前缀：扫描陷阱**永不自动封禁**这些来源。
+  // 理由（2026-11-03 实测踩到）：本机流量只可能来自"我自己" —— 开发期在 127.0.0.1 上刷
+  //   前端、探针直连、SSR 自调用都会产生 404/403，一旦判成 SCANNER 就把开发机自己封 1 小时，
+  //   所有接口 403，排查方向被完全带偏。
+  // ⚠️ 与下面的 `internalIpPrefixes` 是两回事：那份含 RFC1918，整份豁免等于关掉扫描陷阱
+  //    （代理部署在 10.x 时 request.ip 全是内网地址）。只豁免回环。
+  // ⚠️ 2026-11-05：值从 scan-trap.js 的代码常量上收到这里 —— 代码侧只剩空数组，
+  //    保底值住本文件。删空本键 = 连本机都不豁免，改之前想清楚。
+  loopbackPrefixes: ['127.', '::1', 'localhost'],
+
   // 内网网段：**仅用于地理围栏判定**（geo-filter 跳过这些来源的 IDC / 境外规则）。
-  // ⚠️ 扫描陷阱（自动封禁）只用回环白名单（scan-trap.js 的 LOOPBACK_PREFIXES），
-  //    不读这份列表 —— 否则代理部署在内网网段时 request.ip 全是内网地址，等于关掉陷阱。
+  // ⚠️ 扫描陷阱（自动封禁）只读上面的 `loopbackPrefixes`，不读这份列表 —— 否则代理部署
+  //    在内网网段时 request.ip 全是内网地址，等于关掉陷阱。
   internalIpPrefixes: [
     '127.',
     '10.',

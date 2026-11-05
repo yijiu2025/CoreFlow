@@ -139,6 +139,8 @@ const updateSettingsSchema = {
           internalIpPrefixes: { type: 'array', items: { type: 'string' } },
           idcIpPrefixes: { type: 'array', items: { type: 'string' } },
           safePaths: { type: 'array', items: { type: 'string' } },
+          // 回环前缀：扫描陷阱不自动封禁这些来源（保底值在 core defaults，代码侧为空）
+          loopbackPrefixes: { type: 'array', items: { type: 'string' } },
           challengeDifficulty: { type: 'number', minimum: 1, maximum: 6 },
           geoRules: { type: 'object' }
         }

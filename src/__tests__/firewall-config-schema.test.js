@@ -27,6 +27,7 @@ const DEFENSE_KEYS = [
   'notFoundWindow',
   'blacklistDuration',
   'safePaths',
+  'loopbackPrefixes',
   'internalIpPrefixes',
   'idcIpPrefixes',
   // 全局限频
@@ -131,6 +132,20 @@ describe('路径级跳过规则的默认值', () => {
 
   it('连接高水位是正数（0/负数会让每轮清理都告警）', () => {
     expect(d.connHighWater).toBeGreaterThan(0);
+  });
+
+  it('回环前缀默认非空、全是非空字符串（代码侧只剩空数组，保底值只能在这里）', () => {
+    // 2026-11-05：scan-trap.js 的 LOOPBACK_PREFIXES 已上收到本键。默认值一空，
+    // 开发机刷几次 404 就会被自己封 1 小时 —— 这条是防"清空配置"的。
+    expect(Array.isArray(d.loopbackPrefixes)).toBe(true);
+    expect(d.loopbackPrefixes.length).toBeGreaterThan(0);
+    for (const p of d.loopbackPrefixes) {
+      expect(typeof p).toBe('string');
+      expect(p.length).toBeGreaterThan(0); // 空串 startsWith('') 恒真 = 谁都不封
+    }
+    // 与 internalIpPrefixes 分工明确：回环豁免不该顺手把 RFC1918 也豁免掉
+    expect(d.loopbackPrefixes).not.toContain('10.');
+    expect(d.loopbackPrefixes).not.toContain('192.168.');
   });
 
   it('挑战接口路径与前端产物路径都**不是**配置项', () => {

@@ -76,7 +76,8 @@ const { setBlock, setBlockDevice, setWhitelistDevice, getActiveBlocks, getActive
 const { buildRequestContext, checkGlobalBlockPhase, willBeRejectedAsAnonymous, observeLoginOutcome } =
   await import('../framework/firewall/engine/pipeline.js');
 const { isAccountLocked } = await import('../framework/firewall/engine/detectors/brute-force.js');
-const { checkNotFoundTrap, isSafePath } = await import('../framework/firewall/engine/detectors/scan-trap.js');
+const { checkNotFoundTrap, isSafePath, isLoopbackIp } =
+  await import('../framework/firewall/engine/detectors/scan-trap.js');
 const { generateServerSideDeviceId } = await import('../framework/auth/device/device-id-service.js');
 const { getSecuritySettings } = await import('../app/firewall/dao/dao.js');
 const { initFirewall } = await import('../app/firewall/index.js');
@@ -1106,5 +1107,40 @@ describe('safePaths：免检前缀只来自配置，代码里不内置任何路�
     expect(isSafePath('/api/user/delete', ['', null, undefined, 42])).toBe(false);
     expect(isSafePath('/api/user/delete', null)).toBe(false);
     expect(isSafePath('/api/user/delete', 'not-an-array')).toBe(false);
+  });
+});
+
+// ── ⑰ loopbackPrefixes：回环豁免也只走配置（代码侧空数组，2026-11-05） ──────────
+
+describe('isLoopbackIp：回环豁免只来自配置，代码里不内置任何前缀', () => {
+  const DEFAULTS = ['127.', '::1', 'localhost'];
+
+  it('空配置 = 谁都不豁免（连本机也不）', async () => {
+    // 代码侧 LOOPBACK_PREFIXES 是空数组，`isLoopbackIp(ip)` 不传第二参时也不该豁免
+    expect(isLoopbackIp('127.0.0.1', [])).toBe(false);
+    expect(isLoopbackIp('127.0.0.1')).toBe(false);
+    expect(isLoopbackIp('::1', [])).toBe(false);
+  });
+
+  it('配置里的前缀生效（本机 IPv4 / IPv6 / localhost）', async () => {
+    expect(isLoopbackIp('127.0.0.1', DEFAULTS)).toBe(true);
+    expect(isLoopbackIp('127.9.9.9', DEFAULTS)).toBe(true);
+    expect(isLoopbackIp('::1', DEFAULTS)).toBe(true);
+    expect(isLoopbackIp('localhost', DEFAULTS)).toBe(true);
+  });
+
+  it('只豁免回环：RFC1918 与公网照常计数（否则等于关掉扫描陷阱）', async () => {
+    for (const ip of ['10.1.2.3', '192.168.1.10', '172.16.0.5', '8.8.8.8', '203.0.113.7']) {
+      expect(isLoopbackIp(ip, DEFAULTS)).toBe(false);
+    }
+  });
+
+  it('非法条目（空串 / 非字符串 / 非数组）不会变成"豁免一切"', async () => {
+    // 空前缀 startsWith('') 恒 true —— 漏进配置就等于对所有 IP 关掉扫描陷阱
+    expect(isLoopbackIp('203.0.113.7', ['', null, undefined, 42])).toBe(false);
+    expect(isLoopbackIp('203.0.113.7', null)).toBe(false);
+    expect(isLoopbackIp('203.0.113.7', 'not-an-array')).toBe(false);
+    expect(isLoopbackIp('', DEFAULTS)).toBe(false);
+    expect(isLoopbackIp(null, DEFAULTS)).toBe(false);
   });
 });
