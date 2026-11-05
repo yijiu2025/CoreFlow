@@ -62,7 +62,8 @@ describe('清洗：非法值丢弃并回落默认值', () => {
       connStaleAfterMs: 0,
       maxConn: 'abc',
       connHighWater: -1,
-      enableBotChallenge: true // 后端从来没有这个键（面板却在写）
+      // 历史上真实存在的死键：面板写过、后端从来没有读取点
+      enableUserRateLimit: true
     });
 
     expect(value).toEqual({});
@@ -70,9 +71,18 @@ describe('清洗：非法值丢弃并回落默认值', () => {
       'defense.connStaleAfterMs',
       'defense.maxConn',
       'defense.connHighWater',
-      'defense.enableBotChallenge'
+      'defense.enableUserRateLimit'
     ]);
     expect(problems.map(p => p.kind)).toEqual(['invalid', 'invalid', 'invalid', 'unknown']);
+  });
+
+  it('enableBotChallenge 是**真实**开关（2026-11-05 补）：默认 true，值按布尔校验', () => {
+    // 它曾经是"面板有、后端没有"的假开关 —— 现在 spec 里必须有它，
+    // 且 detector 真的读（见 __tests__/bot-detector.test.js 的总开关用例）。
+    expect(DEFENSE_SPEC.enableBotChallenge).toEqual({ type: 'bool' });
+    expect(DEFENSE.enableBotChallenge).toBe(true);
+    expect(sanitizeDefense({ enableBotChallenge: false }).value).toEqual({ enableBotChallenge: false });
+    expect(sanitizeDefense({ enableBotChallenge: 'false' }).value).toEqual({ enableBotChallenge: false });
   });
 
   it('回落靠"丢弃 + 与默认值合并"，不是靠业务代码里再写一遍默认值', () => {

@@ -171,6 +171,37 @@ describe('Bot 检测器（真身）', () => {
       expect(entry.remainingSeconds).toBeLessThanOrEqual(1800);
     });
   });
+
+  // ── 总开关（2026-11-05）：面板「Bot 检测」模块的 checkbox 就是它 ──────────────
+  describe('enableBotChallenge 总开关', () => {
+    test('默认开启：三档阈值都照常判定', async () => {
+      expect(settings.defense.enableBotChallenge).toBe(true);
+      expect(await checkBotChallenge('198.51.100.101', '', settings.defense.botChallengeNoUaLimit + 1)).toBe(true);
+    });
+
+    test('关掉后三档全部旁路：连远超阈值的 Bot UA 也不挑战、不写挑战态', async () => {
+      settings.defense.enableBotChallenge = false;
+      try {
+        // 三个分支各打一次，且请求数给到"任意大"——开关若只挡住了其中一个分支，这里会漏
+        expect(await checkBotChallenge('198.51.100.102', '', 100_000)).toBe(false);
+        expect(await checkBotChallenge('198.51.100.103', 'python-requests/2.28.0', 100_000)).toBe(false);
+        expect(await checkBotChallenge('198.51.100.104', CHROME_UA, 100_000)).toBe(false);
+        // 关键：不是"返回 false 但其实写了挑战态"
+        expect(await stateOf('198.51.100.102')).toBeNull();
+        expect(await stateOf('198.51.100.103')).toBeNull();
+      } finally {
+        settings.defense.enableBotChallenge = true;
+      }
+    });
+
+    test('重新打开立刻恢复检测（开关可热改，不需要重启编译模式）', async () => {
+      const ip = '198.51.100.105';
+      settings.defense.enableBotChallenge = false;
+      expect(await checkBotChallenge(ip, '', 11)).toBe(false);
+      settings.defense.enableBotChallenge = true;
+      expect(await checkBotChallenge(ip, '', 11)).toBe(true);
+    });
+  });
 });
 
 /** 真身默认 bot 阈值 + delta，避免在用例里硬编码 31 这类数字 */

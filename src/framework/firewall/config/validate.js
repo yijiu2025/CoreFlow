@@ -10,7 +10,7 @@
  * 只允许一种形状，不做历史兼容
  * ════════════════════════════════════════════════════════════════════
  * `securitySettings` 的合法形状只有三类键：
- *   · `defense`                        防护策略（`DEFAULT_SECURITY_SETTINGS.defense`，38 个）
+ *   · `defense`                        防护策略（`DEFAULT_SECURITY_SETTINGS.defense`，39 个）
  *   · `activeIpApi` / `showTrajectory` 面板层展示配置（app 层所有，见 app/firewall/config/panel.js）
  *
  * 历史上有过把限流阈值**平铺在 securitySettings 顶层**的写法（`securitySettings.enableRateLimit`

@@ -11,7 +11,7 @@
  *      不在本文件：默认值在 src/app/firewall/config/panel.js（面板层），热改走面板
  *      （落到 data/firewall_config.json）。写在这里**会被 app 默认值覆盖**并打一条
  *      warn —— 见 src/app/firewall/config/config.js 的 strayPanelKeys 检查。
- * defense 下的键（38 个，按功能分组见 defaults.js）：
+ * defense 下的键（39 个，按功能分组见 defaults.js）：
  *   名单      manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps
  *   扫描      enableAutoBlacklist / maxNotFoundAttempts / notFoundWindow /
  *             blacklistDuration / safePaths / loopbackPrefixes /
@@ -22,7 +22,7 @@
  *   连接      enableConnLimit / maxConn / connCleanupIntervalMs / connStaleAfterMs / connHighWater
  *   探针      probePaths（部署相关，代码里另有兜底常量）
  *   地理围栏  enableGeoFilter / geoRules
- *   Bot       botPatterns / browserPatterns / botChallengeNoUaLimit /
+ *   Bot       enableBotChallenge（总开关）/ botPatterns / browserPatterns / botChallengeNoUaLimit /
  *             botChallengeBotLimit / botChallengeBrowserLimit
  *   挑战      challengeDifficulty
  *   设备      enableDeviceBlock

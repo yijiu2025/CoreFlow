@@ -96,6 +96,9 @@ async function challengeSubject(subject) {
 /**
  * 僵尸网络/机器人挑战检查
  *
+ * `defense.enableBotChallenge === false` 时**整体旁路**（直接返回"未命中"）：
+ * 这是面板「Bot 检测」模块的开关，只关这一路，地理围栏/限流/扫描陷阱不受影响。
+ *
  * @param {string} ip 客户端 IP
  * @param {string} ua User-Agent
  * @param {number} requestCount 当前窗口内请求数
@@ -103,9 +106,14 @@ async function challengeSubject(subject) {
  * @returns {Promise<boolean>} true 表示已触发挑战
  */
 const checkBotChallenge = async (ip, ua, requestCount, deviceId = null) => {
+  // 总开关最先判：关掉时连正则编译都不做（省一次配置读取后的模式比对），
+  // 语义就是"Bot 检测整套旁路"，而不是把阈值调大那种"近似关掉"。
+  // 注意只关 Bot 这一路：地理围栏、限流、扫描陷阱各自有独立开关。
+  const settings = getConfig().defense;
+  if (settings.enableBotChallenge === false) return false;
+
   ensurePatternsCompiled();
 
-  const settings = getConfig().defense;
   // enableDeviceBlock=false 时退回纯 IP 维度（运维可一键关掉跨 IP 的设备封禁）
   const subject = { ip, deviceId: settings.enableDeviceBlock === false ? null : deviceId };
 

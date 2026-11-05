@@ -94,6 +94,8 @@ const DEFENSE_SPEC = {
   },
 
   // ── Bot 检测 ──
+  // 总开关：false = `checkBotChallenge()` 直接放行（不做 UA 匹配与频率判定）
+  enableBotChallenge: { type: 'bool' },
   botPatterns: { type: 'stringArray' },
   browserPatterns: { type: 'stringArray' },
   botChallengeNoUaLimit: { type: 'int', min: 1 },

@@ -54,6 +54,7 @@ const DEFENSE_KEYS = [
   'enableGeoFilter',
   'geoRules',
   // Bot 检测
+  'enableBotChallenge',
   'botPatterns',
   'browserPatterns',
   'botChallengeNoUaLimit',
