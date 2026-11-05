@@ -216,7 +216,14 @@ npm install wb-logkit
 ```
 
 - **本仓库内**：统一用包名导入 `import { createLogger } from 'wb-logkit'`；`src/framework/log/index.js` 已转发 `export * from 'wb-logkit'`，因此既有 `framework/log/index.js` 路径导入同样有效（同一份实现）
-- **软链机制**：`packages/log` 已在根 `package.json` 的 workspaces 中，经 npm workspace 软链到 `node_modules/wb-logkit`；**不要**把它写进 `dependencies`（会被线上同名包覆盖软链）
+- **软链机制（本机）**：`packages/log` 已在根 `package.json` 的 workspaces 中，npm 会把它软链到
+  `node_modules/wb-logkit`；workspace 优先，所以改包内代码立即生效，与 `dependencies` 里的声明不冲突
+- **`dependencies` 里的声明不能删（生产镜像靠它）**：`packages/log` 同时被 `.gitignore` 与
+  `.dockerignore` 排除，镜像构建用的是 `npm install --workspaces=false`，此时 `wb-logkit` 变成
+  **从 registry 安装的普通依赖**（`docker/verify-deps.mjs` 会校验它能否解析出 `createLogger`）。
+  删掉这条声明，生产镜像 `import 'wb-logkit'` 直接 `ERR_MODULE_NOT_FOUND`。
+  推论：**版本范围必须与已发布版本对齐**（当前 `^1.0.0`）。写旧了本地毫无异样，只有镜像里静默跑旧库 ——
+  2026-11 修的正是这个（曾长期停在 `^0.5.0`，而包早已发到 1.0.0）。发新版后记得同步改这里。
 - **前端项目**：直接 `npm install wb-logkit`，浏览器环境自动降级（无文件通道，`log.file.*` 变体安全变 no-op，控制台经 `console.*` 输出）—— 详见 [包 README「浏览器使用」](../../../packages/log/README.md#浏览器使用)
 
 ## 兼容旧 API

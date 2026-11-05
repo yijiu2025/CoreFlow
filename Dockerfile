@@ -72,8 +72,10 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
 #   ERR_MODULE_NOT_FOUND。构建期自证原先只查 fastify/sequelize/redis 看不到，
 #   直到 E2E 冒烟的 migrate 步骤才炸（2026-10-08 起连红一周）。
 #   不拷 lock ⇒ npm 从 registry 现算 ⇒ 两包都取**已发布版本**（已在 Temp 复刻树
-#   实测：无 packages/ 目录时 stable-deviceid@1.0.3 / wb-logkit@0.5.0 均装为
-#   真实目录，具名导入与功能正常）。
+#   实测：无 packages/ 目录时 stable-deviceid@1.0.3 / wb-logkit@1.0.0 均装为
+#   真实目录，具名导入与功能正常）。⚠️ 顺带一条：这里装的是 **registry 上的版本**，
+#   所以根 package.json 的 `wb-logkit` 版本范围必须跟已发布版本对齐（2026-11 从
+#   ^0.5.0 修到 ^1.0.0；范围写旧了本地毫无异样，只有镜像里静默跑旧库）。
 #   缓存键只剩 package.json：改源码不会触发重装，语义不变。
 COPY package.json ./
 
