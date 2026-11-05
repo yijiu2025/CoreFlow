@@ -13,7 +13,7 @@
  *   含破坏性变更 → major；含 feat → minor；仅 fix/perf → patch；其余 → 不发版
  *
  * 本文件只做宿主职责（取提交、推 tag、调 API、发 npm）；
- * 决策逻辑在 `src/framework/release/index.js`，有独立测试覆盖。
+ * 决策逻辑在 `scripts/lib/release/index.js`（纯函数，有独立测试覆盖）。
  *
  * 默认 dry-run：本脚本会做三件不可逆的事（推 tag、建公开 Release、npm 发布），
  * 一律先预览再执行。
@@ -32,7 +32,7 @@ import {
   buildNotes,
   findSensitive,
   bumpChangelog
-} from '../src/framework/release/index.js';
+} from './lib/release/index.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LOG_PKG_DIR = path.join(ROOT, 'packages', 'log');

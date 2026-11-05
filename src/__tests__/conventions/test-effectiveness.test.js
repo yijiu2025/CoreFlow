@@ -58,7 +58,12 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
   ['conventions/no-scripts-import.test.js', 'AST 扫描 src/ 是否 import scripts/，断言对象是说明符'],
   ['conventions/terminal-colors.test.js', '读 colors.js 源码文本，校验输出用 IS_TTY 判断而非直读 stdout'],
   ['conventions/test-effectiveness.test.js', '本文件：扫描全部测试文件的 import 图，天然不 import 被测模块'],
-  ['config-leaf.test.js', '扫描 src/config/*.js 的源码文本，断言配置值模块零 import（分层结构守卫）']
+  ['config-leaf.test.js', '扫描 src/config/*.js 的源码文本，断言配置值模块零 import（分层结构守卫）'],
+  [
+    'deployment-script-security.test.js',
+    '读 Dockerfile 与 scripts/release.mjs 的源码文本，断言构建/发版脚本的危险写法（结构守卫）；' +
+      '发版决策逻辑搬去 scripts/lib 后，它不再 import 任何模块（src 也不该反向 import scripts）'
+  ]
 ]);
 
 /**

@@ -27,7 +27,7 @@ node scripts/release.mjs --from v2.5.0          # 指定起算点（复盘/补�
 node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改动时放行
 ```
 
-决策逻辑在 `src/framework/release/index.js`（有独立测试覆盖），脚本本身只做宿主职责。
+决策逻辑在 `scripts/lib/release/index.js`（纯函数，测试同目录），脚本本身只做宿主职责。
 
 **判据**（按本次推送包含的提交类型）
 

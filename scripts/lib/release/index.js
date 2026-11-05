@@ -1,11 +1,22 @@
 /**
  * 发版决策的纯逻辑层 —— 不碰 git / 网络 / 文件系统，可直接测试。
  *
- * 宿主入口在 `scripts/release.mjs`（负责取提交、推 tag、调 API、发 npm）。
- * 逻辑放在 `src/` 而非 `scripts/` 的原因有两条：
- *   1. 约定要求 `src/` 不得 import `scripts/`（守卫 `no-scripts-import.test.js`），
- *      而 jest 只收集 `src/__tests__/**` —— 逻辑留在 scripts/ 下就等于无法被测试覆盖；
- *   2. `scripts/` 是可选宿主，不一定随部署安装，可复用代码应属于 `src/framework`。
+ * ════════════════════════════════════════════════════════════════════
+ * 为什么住在 `scripts/lib/` 而不是 `src/framework/`
+ * ════════════════════════════════════════════════════════════════════
+ * `src/` 是**服务端运行时代码**：由 loader 按 registry 顺序加载、进镜像、被业务 import。
+ * 本文件没有任何运行期消费者 —— 只有两个发版宿主（`scripts/release.mjs`、
+ * `scripts/release-web.mjs`）在用，属于构建/发布工具，放进 `src/framework/` 会让它
+ * 看起来像一个「框架能力」，还会被当成运行时依赖一起进镜像。
+ *
+ * 曾经放在 src 的两条理由，现在都不成立了：
+ *   1. 「jest 只收集 src/__tests__」→ `jest.config.js` 的 testMatch 已扩到 scripts 下的单测文件，
+ *      本目录的 `index.test.js` 就是它的覆盖；
+ *   2. 「src 不得 import scripts」→ 逻辑挪走后 src 不再需要它，方向反而更干净：
+ *      工具可以 import 框架，框架不回头 import 工具。
+ *
+ * ⚠️ 单一实现：`release-web.mjs` 原先**复制**了同一套逻辑（靠注释提醒「勿单边改」），
+ *    现在两边都从这里 import —— 复制一份纯函数就等于养一个会漂移的第二事实源。
  *
  * @author yijiu2025
  */

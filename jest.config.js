@@ -1,7 +1,11 @@
 export default {
   testEnvironment: 'node',
   transform: {}, // ESM 下通常不需要 Babel 转译
-  testMatch: ['**/src/__tests__/**/*.test.js'],
+  // 两个测试根：
+  //   src/__tests__/**  服务端运行时代码
+  //   scripts/**        构建/发布工具（纯函数逻辑住 scripts/lib/，测试与它同目录）
+  // 工具类逻辑不再为了「能被 jest 收集」而塞进 src/ —— 那会把发布逻辑伪装成框架能力。
+  testMatch: ['**/src/__tests__/**/*.test.js', '**/scripts/**/*.test.js'],
   // ⚠️ 必须显式排除 `.tmp-probe/`：那是仓库唯一约定的临时目录，
   //    而 `**/src/__tests__/**` 会匹配到其中**任意一份仓库副本**里的测试
   //    （探测脚本常用 `git archive` 造副本）。后果不是"多跑几个用例"，而是

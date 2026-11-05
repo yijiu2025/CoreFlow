@@ -9,6 +9,9 @@
  * @author yijiu2025
  */
 import { describe, it, expect } from '@jest/globals';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   parseSubject,
   classify,
@@ -18,7 +21,7 @@ import {
   buildNotes,
   findSensitive,
   bumpChangelog
-} from '../framework/release/index.js';
+} from './index.js';
 
 const commit = (subject, body = '') => ({ subject, body });
 
@@ -220,5 +223,47 @@ describe('bumpChangelog：未发布区块提升为版本号区块', () => {
     expect(first.changed).toBe(true);
     const second = bumpChangelog(first.text, '1.2.0', '2026-10-29');
     expect(second.changed).toBe(false);
+  });
+});
+
+// ── 与 release-web.mjs 内联副本的漂移守卫（2026-11-05） ────────────────────────
+
+describe('release-web.mjs 的内联副本不得与共享实现漂移', () => {
+  /**
+   * `scripts/release-web.mjs` 刻意**自包含**（可整文件拷进任意仓库），因此它保留了
+   * 一份决策逻辑副本，靠注释"勿单边改"约束 —— 注释不会让测试变红。
+   * 这里直接比对两边的关键常量/正则，任一侧被单独修改都会失败。
+   */
+
+  /** 读两个文件（用 fileURLToPath 定位，避免依赖 cwd） */
+  const readBoth = () => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    return {
+      shared: fs.readFileSync(path.join(here, 'index.js'), 'utf8'),
+      web: fs.readFileSync(path.join(here, '..', '..', 'release-web.mjs'), 'utf8')
+    };
+  };
+
+  /** 抓某个 `const NAME = ...;` 的右侧（单行） */
+  const extractConst = (src, name) => {
+    const m = new RegExp(`^const ${name} = (.+);$`, 'm').exec(src);
+    return m ? m[1].trim() : null;
+  };
+
+  it('TYPE_RE / BREAKING_RE / SENSITIVE_RE 完全一致', () => {
+    const { shared, web } = readBoth();
+    for (const name of ['TYPE_RE', 'BREAKING_RE', 'SENSITIVE_RE']) {
+      expect({ name, value: extractConst(web, name) }).toEqual({ name, value: extractConst(shared, name) });
+    }
+  });
+
+  it('SECTION_TITLES 的键与文案完全一致', () => {
+    const { shared, web } = readBoth();
+    const grab = src => {
+      const start = src.indexOf('const SECTION_TITLES = {');
+      const end = src.indexOf('};', start);
+      return src.slice(start, end).replace(/\s+/g, '');
+    };
+    expect(grab(web)).toBe(grab(shared));
   });
 });

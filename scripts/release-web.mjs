@@ -13,7 +13,10 @@
  *   含破坏性变更 → major；含 feat → minor；仅 fix/perf → patch；其余 → 不发版
  *
  * 与根仓 release.mjs 的关系：
- *   - 本文件**自包含**（决策逻辑内联），可整文件拷进任意新仓库即用；
+ *   - 本文件**自包含**（决策逻辑内联），可整文件拷进任意新仓库即用 —— 这是刻意的：
+ *     拷走时不该依赖本仓的 `scripts/lib/`。代价是它与 `scripts/lib/release/index.js`
+ *     存在一份副本，**靠 `scripts/lib/release/index.test.js` 的漂移用例守着**
+ *     （正则/分组标题一旦单边改动，测试会红）。
  *   - 根仓版多一条 npm 通道（packages/log 独立仓），且 import src/framework 的决策层；
  *   - 本版 npm 通道默认关闭，`--npm` 开启后发布**当前仓库**的 package.json 对应包。
  *
@@ -31,7 +34,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/* ═══════════════════ 决策逻辑（与 src/framework/release/index.js 保持一致，勿单边改） ═══════════════ */
+/* ═══════════════════ 决策逻辑（与 scripts/lib/release/index.js 保持一致，勿单边改） ═══════════════ */
 
 /** Conventional Commits 前缀：type(scope)!: subject */
 const TYPE_RE = /^(feat|fix|perf|refactor|docs|test|chore|style|ci|build|revert)(?:\([^)]*\))?(!)?:\s*(.+)$/;

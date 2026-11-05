@@ -7,9 +7,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const releaseSource = readFileSync(path.join(ROOT, 'scripts/release.mjs'), 'utf8');
 const dockerfile = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
 
-// 加载真实发版模块但不执行 main；静态断言用于覆盖禁止实际执行的 git/tag 流程。
-await import('../framework/release/index.js');
-
 describe('release 自动元数据提交顺序', () => {
   it('写 CHANGELOG/package.json 后必须显式 add + commit，再从该提交创建 tag', () => {
     const applySection = releaseSource.slice(releaseSource.indexOf('// 3) 收尾'));
