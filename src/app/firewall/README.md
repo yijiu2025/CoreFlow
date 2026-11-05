@@ -147,6 +147,7 @@ firewall onResponse 钩子
 - 用 nonce 而不是 `'sha256-…'`：页面每次都不同（内嵌本次 challengeId / salt），哈希无法预置。
 - 脚本**不放** `'unsafe-inline'`：那会把全局 XSS 防护一起削掉。
 - 开发环境 `contentSecurityPolicy: false`，**这类问题本地看不见** —— 所以 `sendChallengePage` 无条件设置本页 CSP，让本地看到的就是线上行为；回归用例见 `__tests__/firewall/challenge-page-csp.test.js`（真 fastify + 真 helmet + 真 HTTP）。
+- **后续加固计划**（PoW 提速 / 递进难度 / provider / 观测 / 边缘层）：`./docs/PLAN-2026-11-06-challenge-hardening.md`（待批准）。
 
 ## 模块职责
 
