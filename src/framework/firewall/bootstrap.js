@@ -22,6 +22,7 @@ import {
   shouldSkipDeepCheck,
   willBeRejectedAsAnonymous,
   buildRequestContext,
+  isFirewallEnabled,
   checkGlobalBlockPhase,
   checkChallengeCookie,
   runDetectionPipeline,
@@ -60,9 +61,14 @@ const firewallCorePlugin = fp(async function (app) {
   // ============== onRequest：安全检查管道 ==============
 
   app.addHook('onRequest', async (request, reply) => {
+    // 总开关（defense.enableFirewall，排障用）：关掉时整套防护旁路 ——
+    // 连 buildRequestContext 都不做（省掉指纹/设备 ID 解析），直接放行。
+    if (!isFirewallEnabled()) return;
+
     const { ip, ua, fingerprint, deviceId } = await buildRequestContext(request);
 
     // 第 1 阶段：全局封禁检查（连接数 + 黑名单 + 挑战态）
+    // 内部依 defense.enableGlobalBlock / enableChallenge 决定是否真的拦（见 pipeline）。
     const blocked = await checkGlobalBlockPhase(request, reply);
     if (blocked) {
       request._firewallLogged = true;
@@ -76,12 +82,13 @@ const firewallCorePlugin = fp(async function (app) {
     // （配置开关 skipDeepCheckForAnonymous，默认关闭；取舍见 willBeRejectedAsAnonymous 注释）
     if (readSecuritySettings().defense?.skipDeepCheckForAnonymous && willBeRejectedAsAnonymous(request)) return;
 
-    // 第 2 阶段：挑战 Cookie 验证
+    // 第 2 阶段：挑战 Cookie 验证（挑战闸门关闭时没有"挑战"这回事，整个跳过）
     // ⚠️ 命中通过令牌**不再直接 return**：pass 只豁免「再次挑战」（第 3 阶段里的 Bot 判定），
     // 不豁免计数 —— 否则 120s 窗口内的请求完全不进频次窗口，「2 分钟」就成了免监控窗口
     // 而不是配额（实测：持 pass 连发 260 次，第 121 次才触发挑战，前面全没记账）。
     // 硬封禁 / 地理信誉照常执行：这两类不是「挑战」，不该被 pass 豁免。
-    const passed = await checkChallengeCookie(request, ip, fingerprint);
+    const challengeGateOn = readSecuritySettings().defense?.enableChallenge !== false;
+    const passed = challengeGateOn ? await checkChallengeCookie(request, ip, fingerprint) : false;
 
     // 第 3 阶段：深度检测管道（计数 / Bot 挑战 / 地理信誉）
     const intercepted = await runDetectionPipeline(
@@ -102,6 +109,9 @@ const firewallCorePlugin = fp(async function (app) {
   // ============== onSend：记录日志 + 释放连接 ==============
 
   app.addHook('onSend', async (request, reply, payload) => {
+    // 总开关关闭时没有 +1（见 checkGlobalBlockPhase），这里也就不能 -1：
+    // 否则会去减别的请求留下的计数，把并发数越减越乱
+    if (!isFirewallEnabled()) return payload;
     trackConnection(request.ip, -1);
     recordLog(request._firewallLog, reply.statusCode, request._firewallLogged);
     return payload;
@@ -110,7 +120,9 @@ const firewallCorePlugin = fp(async function (app) {
   // ============== WebSocket 握手防护 ==============
   app.addHook('onRequest', async (request, reply) => {
     // WebSocket 升级请求也经过基本安全检查
-    if (request.headers.upgrade === 'websocket') {
+    if (request.headers.upgrade === 'websocket' && isFirewallEnabled()) {
+      // 封禁闸门关闭时不查黑名单（与 HTTP 路径保持一致）
+      if (readSecuritySettings().defense?.enableGlobalBlock === false) return;
       // 检查 IP 是否被封禁
       try {
         await checkGlobalBlock(request.ip, null);
@@ -123,6 +135,9 @@ const firewallCorePlugin = fp(async function (app) {
   // ============== onResponse：登录结果观测 + 扫描陷阱 ==============
 
   app.addHook('onResponse', async (request, reply) => {
+    // 总开关关闭：观测类钩子同样不跑（暴力破解 / 扫描陷阱都属于防护动作）
+    if (!isFirewallEnabled()) return;
+
     // 暴力破解防护的接线点：在响应阶段观测登录结果（firewall 自己观测，不反向依赖 oauth21）
     await observeLoginOutcome(request, reply);
 

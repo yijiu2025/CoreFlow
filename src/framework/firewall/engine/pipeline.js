@@ -91,6 +91,22 @@ function readPathsFromConfig(key, fallback) {
 /** 静态资源后缀：不经过深度检测 */
 const SKIP_PATTERN = /\.(js|css|png|jpg|ico|svg|woff2?)$/i;
 
+/**
+ * 防火墙总开关（`defense.enableFirewall`）
+ *
+ * false = 整套防护旁路：不计数、不查封禁、不下挑战、不拦请求。**排障用**。
+ * 配置层尚未就绪时按"开启"处理 —— 安全功能的兜底方向是保留防护，不是放行。
+ *
+ * @returns {boolean} true = 正常执行防护
+ */
+function isFirewallEnabled() {
+  try {
+    return readSecuritySettings()?.defense?.enableFirewall !== false;
+  } catch {
+    return true;
+  }
+}
+
 /** 遥测里 User-Agent 的最大长度（外部输入截断，见 buildRequestContext） */
 const MAX_UA_LOG_LEN = 256;
 
@@ -367,13 +383,24 @@ async function checkGlobalBlockPhase(request, reply) {
   const deviceId = request._deviceId || null;
   const firewallLog = request._firewallLog;
 
+  if (!isFirewallEnabled()) return false;
+
+  const settings = readSecuritySettings().defense ?? {};
+
   try {
     trackConnection(ip, 1);
+    // 封禁闸门：关掉后不再看黑名单 / 已封禁态（含由 Bot 检测写入的挑战态），
+    // 只保留上面的连接数统计。这条闸关闭时"封禁"整类处置都失效 —— 排障用。
+    if (settings.enableGlobalBlock === false) return false;
     await checkGlobalBlock(ip, fingerprint, deviceId);
     return false; // 放行
   } catch (err) {
     // ---- 挑战态：不硬封禁 ----
     if (err.isChallenge) {
+      // 挑战闸门：关掉后挑战态一律放行（不再渲染挑战页 / 428）。
+      // ⚠️ 此时 Bot 检测也没有处置手段了 —— runDetectionPipeline 会一并跳过 Bot 判定。
+      if (settings.enableChallenge === false) return false;
+
       const token = request.cookies?.fw_verified;
 
       // ① 已通过验证：撤销挑战态，正常放行
@@ -455,13 +482,19 @@ async function checkChallengeCookie(request, ip, fingerprint) {
  */
 async function runDetectionPipeline(ip, ua, url, firewallLog, fingerprint, reply, deviceId = null, options = {}) {
   const { skipChallenge = false } = options;
+  // 总开关：整机旁路时不计数、不做任何检测
+  if (!isFirewallEnabled()) return false;
+
+  const settings = readSecuritySettings().defense ?? {};
   try {
     // 计数必须先做：它既是挑战判定的输入，也是「频次窗口」的事实来源。
     // 通过令牌命中时也照常计数（只跳过下面的挑战判定），否则 pass 窗口内等于完全不记账，
     // 「2 分钟」就变成一扇不监控的门，而不是配额。
     const requestCount = trackRequestCount(ip);
 
-    if (!skipChallenge) {
+    // 挑战闸门关掉后 Bot 检测**没有处置手段**（它只会写挑战态，而挑战态已不拦人），
+    // 继续跑只会白烧 CPU 并往库里写一堆没人读的状态 —— 一并跳过。
+    if (!skipChallenge && settings.enableChallenge !== false) {
       // Bot 检测：基于 UA 模式 + 请求频率（命中会写挑战态，所以不能只读）
       const isBot = await checkBotChallenge(ip, ua, requestCount, deviceId);
       if (isBot) {
@@ -617,6 +650,7 @@ export {
   CHALLENGE_API_PATHS,
   CHALLENGE_VERIFY_PATH,
   PROBE_PATHS,
+  isFirewallEnabled,
   isChallengeApiUrl,
   isChallengeVerifyUrl,
   isProbeUrl,

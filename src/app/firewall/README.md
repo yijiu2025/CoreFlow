@@ -209,6 +209,31 @@ firewall onResponse 钩子
 3. **写入期会归位形状**：`{ maxConn: 100 }` 这种忘了套 `defense` 的载荷会被收回 `defense` 下
    并打 warn。历史上前端有一处这么提交，后端深合并后写成顶层死键、重启即丢。
 
+## 开关一览（总开关 + 五道闸门）
+
+面板「Firewall」标签页把这套开关画成「总开关 + 每道闸门一个 checkbox」，全部落在
+`securitySettings.defense` 下（因此也走同一份 spec 校验、可被 `src/config` 与 JSON 覆盖）。
+
+| 层 | 配置键 | 关掉之后 |
+| --- | --- | --- |
+| 总开关 | `enableFirewall` | **整套防护旁路**：不计数、不查封禁、不下挑战、不拦请求（排障用，生产别留 false） |
+| 闸门① 连接数 | `enableConnLimit` | 不再统计/限制单 IP 并发连接 |
+| 闸门② 封禁 | `enableGlobalBlock` | 不再执行黑名单与已封禁态拦截（挑战态也属封禁键，一并失效） |
+| 闸门③ 挑战 | `enableChallenge` | 挑战态请求直接放行、不再下发挑战页；**Bot 检测一并跳过**（它只会写挑战态） |
+| 闸门④ Bot | `enableBotChallenge` | `checkBotChallenge()` 直接返回未命中（三档阈值保留，重开即恢复） |
+| 闸门⑤ 地理围栏 | `enableGeoFilter` | 不再按 GeoIP 做 IDC / 境外收紧 |
+| 旁路 全局限流 | `enableRateLimit` | 不注册全局 `@fastify/rate-limit` |
+| 旁路 扫描陷阱 | `enableAutoBlacklist` | 404/403 不再累计、不再自动封禁 |
+
+语义边界（改代码前先确认）：
+
+- **关闸门 = 这道闸不拦**，其余闸门照常；每道闸的关闭点都在实现处留了注释，便于排障时确认
+  "是关掉的"而不是"没生效"。
+- `enableFirewall=false` 时 `onSend` 的 `-1` 也跳过 —— 没有 `+1` 就不能 `-1`，否则会去减
+  别的请求留下的计数。
+- 挑战闸门关闭时 Bot 检测无法处置（它唯一的处置手段是写挑战态），因此一并跳过，
+  避免白烧 CPU 并往库里写没人读的状态。
+
 ## 数据持久化
 
 > ⚠️ 下表路径均相对 **`src/`**：`app/firewall/config/config.js` 与 `data/store.js` 用的是

@@ -11,7 +11,8 @@
  *      不在本文件：默认值在 src/app/firewall/config/panel.js（面板层），热改走面板
  *      （落到 data/firewall_config.json）。写在这里**会被 app 默认值覆盖**并打一条
  *      warn —— 见 src/app/firewall/config/config.js 的 strayPanelKeys 检查。
- * defense 下的键（39 个，按功能分组见 defaults.js）：
+ * defense 下的键（42 个，按功能分组见 defaults.js）：
+ *   开关      enableFirewall（总开关）/ enableGlobalBlock / enableChallenge
  *   名单      manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps
  *   扫描      enableAutoBlacklist / maxNotFoundAttempts / notFoundWindow /
  *             blacklistDuration / safePaths / loopbackPrefixes /

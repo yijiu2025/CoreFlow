@@ -17,6 +17,10 @@ import { DEFAULT_SECURITY_SETTINGS as APP_SECURITY_SETTINGS } from '../app/firew
 
 /** defense 下允许出现的键（= 持久化 schema，改这里等于改契约） */
 const DEFENSE_KEYS = [
+  // 总开关 + 五道闸门各自的开关
+  'enableFirewall',
+  'enableGlobalBlock',
+  'enableChallenge',
   // 手动名单
   'manualBlacklistIps',
   'manualBlacklistUsers',

@@ -38,6 +38,12 @@ import { sanitizeBySpec, isPlainObject, toJsonProperties } from '../../config/fi
  * @type {Object<string, object>}
  */
 const DEFENSE_SPEC = {
+  // ── 总开关 + 五道闸门各自的开关 ──
+  // 关闸门 = 这道闸不再拦（其余照旧）；enableFirewall=false 是排障用的整机旁路
+  enableFirewall: { type: 'bool' },
+  enableGlobalBlock: { type: 'bool' },
+  enableChallenge: { type: 'bool' },
+
   // ── 手动名单 ──
   manualBlacklistIps: { type: 'stringArray' },
   manualBlacklistUsers: { type: 'stringArray' },

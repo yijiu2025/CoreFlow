@@ -61,6 +61,28 @@ import { createLogger } from '../../log/index.js';
 const log = createLogger('framework.firewall.config.defaults');
 
 // ════════════════════════════════════════════════════════════════════
+// 总开关 + 五道闸门各自的开关（2026-11-05）
+// ════════════════════════════════════════════════════════════════════
+// 面板把防火墙拆成「总开关 + 每道闸门一个开关」，全部落在 defense 下：
+//   总开关            enableFirewall        false = 所有钩子直接放行（连计数都不做）
+//   ① 连接数闸门      enableConnLimit       （见 CONN_LIMIT，既有关键开关）
+//   ② 封禁闸门        enableGlobalBlock     false = 不再执行黑名单 / 已封禁态拦截
+//   ③ 挑战闸门        enableChallenge       false = 挑战态请求直接放行，且不再下挑战
+//   ④ Bot 闸门        enableBotChallenge    （见 BOT_DETECTION，既有关键开关）
+//   ⑤ 地理围栏闸门    enableGeoFilter       （见 GEO_FENCE，既有关键开关）
+// 另有两条不属于"五道闸门"的旁路：全局限流 enableRateLimit、扫描陷阱 enableAutoBlacklist。
+//
+// ⚠️ 关闸门的语义是"这道闸不再拦"，不是"这道闸失效得静默" —— 每道闸关闭时都会在
+//    命中点留一条 debug/warn（见各自实现），排障时能看出是"关掉的"而不是"没生效"。
+// ⚠️ enableFirewall=false 是**排障用**的核弹级开关：整套防护（含封禁、限流、扫描陷阱）
+//    全部旁路。生产环境不要留 false。
+const FIREWALL_SWITCHES = {
+  enableFirewall: true,
+  enableGlobalBlock: true,
+  enableChallenge: true
+};
+
+// ════════════════════════════════════════════════════════════════════
 // 手动名单
 // ════════════════════════════════════════════════════════════════════
 
@@ -331,6 +353,7 @@ const ALERT = {
 // 也不该因为「文件里碰巧有这两个键」而假装自己拥有一份默认值。
 const FIREWALL_DEFAULTS = {
   defense: {
+    ...FIREWALL_SWITCHES,
     ...MANUAL_LISTS,
     ...SCAN_DETECTION,
     ...GLOBAL_RATE_LIMIT,

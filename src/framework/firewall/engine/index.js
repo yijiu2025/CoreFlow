@@ -37,6 +37,7 @@ export {
   shouldSkipDeepCheck,
   willBeRejectedAsAnonymous,
   buildRequestContext,
+  isFirewallEnabled,
   checkGlobalBlockPhase,
   checkChallengeCookie,
   runDetectionPipeline,
