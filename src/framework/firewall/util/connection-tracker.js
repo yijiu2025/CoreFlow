@@ -19,35 +19,29 @@
  * @since 2026-09-19 清理判据由「计数阈值」改为「最后活跃时间」，修复泄漏计数永不回收
  * @since 2026-11-02 清理周期与静默阈值改为可配置（defense.connCleanupIntervalMs / connStaleAfterMs）
  * @since 2026-11-02 热路径原地更新 entry；统计单遍维护 top-10；清理日志聚合；timer.unref
+ * @since 2026-11-05 三个阈值删掉代码里的重复常量，只认 config（保底值 = framework 默认值）
  */
 import { getConfig, activeConnections } from './shared.js';
+import { DEFAULT_SECURITY_SETTINGS } from '../config/defaults.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.firewall.util.connection-tracker');
 
 /**
- * 记录过期阈值**兜底值**（毫秒）：超过这么久没有再活跃，即视为泄漏残留并回收。
+ * 连接表三个阈值的**唯一一份数字**：framework 默认值
  *
- * ⚠️ 必须**大于单请求的最长生命周期**。上游 `requestTimeout` 默认 300s，
- * 若本阈值小于它，一个正常的长请求（大文件上传）的 +1 记录会在请求还没结束
- * 时被回收，其随后的 -1 就变成"减一个不存在的记录"，计数失真。
- * 取 10 分钟 = 2 × requestTimeout(300s)，并恰好是清理周期的 2 倍。
+ * `connStaleAfterMs` / `connCleanupIntervalMs` / `connHighWater` 的生效值一律来自 config
+ * （`framework/firewall/config/defaults.js` → `src/config/firewall_config.js` 静态覆盖 →
+ * 面板热改落 JSON）。代码里**不再抄第二份**：
+ *   - 配置缺项时 `getConfig().defense[key]` 返回的本来就是这里的值；
+ *   - 只有「显式写了非法值」（0 / 负数 / 非数字）或「配置读取器尚未注册」才走到下面的兜底，
+ *     兜底取的也是同一份定义 —— 全仓只有一个数字，改一处全生效。
  *
- * 正式来源是 `defense.connStaleAfterMs`（framework/firewall/config/defaults.js，
- * 支持 FW_CONN_STALE_AFTER 环境变量与磁盘配置覆盖）；本常量仅在配置缺项/非法时兜底。
+ * 为什么不彻底不留兜底：`setTimeout(tick, undefined)` 会退化成 0ms 空转，
+ * 「静默阈值」变成 `now - lastAt > undefined` = 恒 false（永不回收），
+ * 都属于"配置写错就把机制弄坏"的形态。宁可回到 framework 默认值，然后由运维在面板上看见。
  */
-const STALE_AFTER_MS = 10 * 60 * 1000;
-
-/** 清理任务周期兜底值（毫秒），正式来源是 `defense.connCleanupIntervalMs` */
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-
-/**
- * 活跃 IP 表的高水位告警阈值兜底值（条）
- *
- * 正式来源是 `defense.connHighWater`（framework 默认值 50000，支持 src/config 覆盖与
- * 面板热改）；本常量仅在配置缺项/非法时兜底。
- */
-const CONN_HIGH_WATER = 50000;
+const CONN_DEFAULTS = DEFAULT_SECURITY_SETTINGS.defense;
 
 /**
  * 追踪 IP 的当前并发连接数
@@ -139,15 +133,23 @@ function getConnectionStats() {
 /**
  * 清理僵尸连接记录
  *
- * 判据是「最后活跃时间」而非「计数阈值」：任何超过静默阈值（defense.connStaleAfterMs，
- * 缺省回退 STALE_AFTER_MS）没有再活跃的记录一律回收，**与残留计数多少无关**。
- * 这样即使只泄漏 1 个计数也能被收回，不会像原先那样永久占用该 IP 的配额。
+ * 判据是「最后活跃时间」而非「计数阈值」：任何超过静默阈值（`defense.connStaleAfterMs`，
+ * 缺项/非法时回退 `CONN_DEFAULTS.connStaleAfterMs`）没有再活跃的记录一律回收，
+ * **与残留计数多少无关**。这样即使只泄漏 1 个计数也能被收回，不会像原先那样永久占用该 IP 的配额。
+ *
+ * ⚠️ 该阈值必须**大于单请求的最长生命周期**（上游 `requestTimeout` 默认 300s），否则正常
+ * 长请求的 +1 会在请求结束前被回收，随后的 -1 就变成"减一个不存在的记录"，计数失真。
+ * 取值与理由见 defaults.js 的 connStaleAfterMs。
+ *
+ * 配置读取抛错（如 `defense` 整个为 null）时**刻意不在这里兜住** —— 让它冒到
+ * `startCleanupTask` 的 tick 里：那里有 try/finally 保证续排，而本函数半途放弃回收
+ * 也不会破坏计数一致性。就地吞掉反而会把"配置坏了"变成"看起来一切正常"。
  *
  * @returns {number} 本次回收的记录数
  */
 function cleanupStaleConnections() {
   const configured = Number(getConfig().defense.connStaleAfterMs);
-  const staleAfterMs = Number.isFinite(configured) && configured > 0 ? configured : STALE_AFTER_MS;
+  const staleAfterMs = Number.isFinite(configured) && configured > 0 ? configured : CONN_DEFAULTS.connStaleAfterMs;
 
   const now = Date.now();
   let cleaned = 0;
@@ -180,7 +182,7 @@ function cleanupStaleConnections() {
 }
 
 /**
- * 读高水位阈值（`defense.connHighWater`），非法值回退常量
+ * 读高水位阈值（`defense.connHighWater`），非法值回退 framework 默认值
  *
  * 只做告警阈值，不影响放行 —— 但阈值配成 0/负数会让每次清理都喊一次，
  * 所以要求严格正数，否则回退。
@@ -192,10 +194,10 @@ function readHighWater() {
   try {
     configured = Number(getConfig().defense.connHighWater);
   } catch {
-    // 配置层尚未就绪：只影响告警阈值，回退常量即可
-    return CONN_HIGH_WATER;
+    // 配置层尚未就绪：只影响告警阈值，回退默认值即可
+    return CONN_DEFAULTS.connHighWater;
   }
-  return Number.isFinite(configured) && configured > 0 ? configured : CONN_HIGH_WATER;
+  return Number.isFinite(configured) && configured > 0 ? configured : CONN_DEFAULTS.connHighWater;
 }
 
 /**
@@ -203,7 +205,7 @@ function readHighWater() {
  *
  * 周期来自 `defense.connCleanupIntervalMs`（FW_CONN_CLEANUP_INTERVAL / 磁盘配置可覆盖）。
  * 用自续 setTimeout 而非 setInterval：每轮跑完**重新读配置**再排下一轮，
- * 面板上改周期无需重启即生效；配置缺项或非法（非正数）时回退默认 5 分钟。
+ * 面板上改周期无需重启即生效；配置缺项或非法（非正数）时回退 framework 默认值。
  *
  * ⚠️ 自续 setTimeout 必须自己保证「单轮失败不断链」：setInterval 的回调抛错不会杀死
  * 定时器，而自续 setTimeout 一旦让异常逃出回调，`schedule()` 就不会被再次调用 ——
@@ -222,9 +224,9 @@ function startCleanupTask(app) {
       const configured = Number(getConfig().defense.connCleanupIntervalMs);
       if (Number.isFinite(configured) && configured > 0) return configured;
     } catch (err) {
-      log.warn(`[Firewall] 读取清理周期失败，本轮回退 ${CLEANUP_INTERVAL_MS}ms: ${err.message}`);
+      log.warn(`[Firewall] 读取清理周期失败，本轮回退 ${CONN_DEFAULTS.connCleanupIntervalMs}ms: ${err.message}`);
     }
-    return CLEANUP_INTERVAL_MS;
+    return CONN_DEFAULTS.connCleanupIntervalMs;
   };
 
   const schedule = () => {

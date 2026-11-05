@@ -27,8 +27,10 @@ const { trackConnection, getConnectionStats, cleanupStaleConnections, startClean
   await import('../../framework/firewall/util/connection-tracker.js');
 // 直接拿内部表做清理与断言，避免用例之间互相干扰
 const { activeConnections } = await import('../../framework/firewall/util/shared.js');
-
-const STALE_AFTER_MS = 10 * 60 * 1000;
+// 阈值/周期只认一处定义：framework 默认值（代码里不再抄第二份，测试也跟着走）
+const { DEFAULT_SECURITY_SETTINGS } = await import('../../framework/firewall/config/defaults.js');
+const STALE_AFTER_MS = DEFAULT_SECURITY_SETTINGS.defense.connStaleAfterMs;
+const CLEANUP_INTERVAL_MS = DEFAULT_SECURITY_SETTINGS.defense.connCleanupIntervalMs;
 
 beforeEach(() => {
   activeConnections.clear();
@@ -129,6 +131,27 @@ describe('僵尸记录清理（泄漏修复）', () => {
     expect(activeConnections.get('10.0.0.8').count).toBe(6);
   });
 
+  // ── 阈值只有一个来源：config（代码里不再抄第二份数字）──────────────────────
+  it('配置里的静默阈值生效：写 1 分钟就按 1 分钟判，不用等默认的 10 分钟', () => {
+    defenseConfig = { enableConnLimit: true, maxConn: 3, connStaleAfterMs: 60 * 1000 };
+    activeConnections.set('10.0.0.41', { count: 1, lastAt: Date.now() - 61 * 1000 });
+
+    expect(cleanupStaleConnections()).toBe(1);
+    expect(activeConnections.has('10.0.0.41')).toBe(false);
+  });
+
+  it('配置写成非法值（0 / 负数 / 非数字）时回退 framework 默认值，而不是"谁都立刻回收"', () => {
+    // 0 若被当成生效值 → `now - lastAt > 0` 恒真 → 每条在飞的连接都被回收，计数直接失真
+    for (const bad of [0, -1, 'abc', null]) {
+      activeConnections.clear();
+      defenseConfig = { enableConnLimit: true, maxConn: 3, connStaleAfterMs: bad };
+      activeConnections.set('10.0.0.42', { count: 1, lastAt: Date.now() - 1000 });
+
+      expect(cleanupStaleConnections()).toBe(0);
+      expect(activeConnections.has('10.0.0.42')).toBe(true);
+    }
+  });
+
   it('回收后该 IP 的配额恢复可用（不再被残留计数挤占）', () => {
     defenseConfig = { enableConnLimit: true, maxConn: 2 };
     trackConnection('10.0.0.9', 1);
@@ -156,12 +179,12 @@ describe('清理任务', () => {
     startCleanupTask(fakeApp);
 
     // 异常必须被兜在回调内部：逃出去就再也不会 schedule 下一轮（setInterval 不会这样）
-    expect(() => jest.advanceTimersByTime(5 * 60 * 1000)).not.toThrow();
+    expect(() => jest.advanceTimersByTime(CLEANUP_INTERVAL_MS)).not.toThrow();
     expect(activeConnections.has('10.0.0.30')).toBe(true);
 
     // 恢复正常配置再走一轮：能清理掉，说明任务链没断
     defenseConfig = { enableConnLimit: true, maxConn: 3 };
-    jest.advanceTimersByTime(5 * 60 * 1000);
+    jest.advanceTimersByTime(CLEANUP_INTERVAL_MS);
     expect(activeConnections.has('10.0.0.30')).toBe(false);
 
     // 关闭钩子必须注册，供 onClose 停止定时器；显式调用来清掉本轮续排的定时器
