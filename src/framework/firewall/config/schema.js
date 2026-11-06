@@ -114,8 +114,12 @@ const DEFENSE_SPEC = {
   botChallengeBotLimit: { type: 'int', min: 1 },
   botChallengeBrowserLimit: { type: 'int', min: 1 },
 
-  // ── ⑧b 挑战难度（代码侧夹在 1~6，与代码夹取口径一致）──
+  // ── ⑧b 挑战难度 + 挑战页地址（代码侧夹在 1~6，与代码夹取口径一致）──
   challengeDifficulty: { type: 'int', min: 1, max: 6 },
+  // 独立前端挑战页地址：**空串合法**（= 用后端内置页）。非空要求站内相对路径，
+  // 但"是不是站内相对路径"由 `buildChallengeRedirect` 在运行时把关（spec 只查类型/长度）：
+  // 这里若用正则强约束，面板改配置时会给出一堆与"回落内置页"行为不一致的报错。
+  challengePageUrl: { type: 'string', minLength: 0 },
 
   // ── ⑨ 设备维度 / ⑩ 匿名短路 ──
   enableDeviceBlock: { type: 'bool' },

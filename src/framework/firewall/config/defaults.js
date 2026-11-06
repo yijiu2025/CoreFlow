@@ -311,7 +311,22 @@ const BOT_DETECTION = {
 // 前导十六进制零个数：期望哈希次数 = 16^difficulty（3 → 约 4096 次，浏览器 <0.1s；
 // 5 → 约 100 万次，约 1~2s）。代码侧夹取到 [1, 6] 上限，防止把低端机卡死。
 const CHALLENGE = {
-  challengeDifficulty: 3
+  challengeDifficulty: 3,
+  // 独立前端挑战页的地址（**空 = 用后端内置页**）
+  //
+  // 配了以后，**文档请求**（浏览器直接打开被挑战的 URL）会 302 到它，带上
+  // `?return=<原 URL>`，让这类流量也走前端那套 UI（多语言、错误引导、将来的验证码）。
+  // 非文档请求（XHR）不受影响：仍返回 428 + `X-Firewall-Challenge`，由前端拦截器跳转。
+  //
+  // 取值约束：只接受**站内相对路径**（如 `/firewall/challenge.html`）——
+  //   · 绝对地址/协议相对地址会把 302 变成开放重定向；
+  //   · 跨站后 `fw_verified` 变成第三方 cookie，`SameSite=Strict` 不再发送
+  //     → 用户通过后立刻又被挑战（死循环）。
+  // 非法值按"空"处理（回落内置页），不报错、不影响可用性。
+  //
+  // 前端页自己起不来时（chunk 404 / 超时）会跳回 `?return=` 指向的原 URL，
+  // 后端用一次性标记 cookie 识别这类回退，直接给内置页 —— 见 pipeline.sendChallengeResponse。
+  challengePageUrl: ''
 };
 
 // ════════════════════════════════════════════════════════════════════

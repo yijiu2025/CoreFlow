@@ -67,6 +67,7 @@ const DEFENSE_KEYS = [
   'botChallengeBrowserLimit',
   // 挑战难度
   'challengeDifficulty',
+  'challengePageUrl',
   // 设备维度
   'enableDeviceBlock',
   // 匿名短路

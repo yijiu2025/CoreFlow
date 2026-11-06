@@ -162,7 +162,7 @@ const DEFAULT_IP_API = DEFAULT_IP_APIS.find(api => api.id === 'sohu');
  * 默认安全策略矩阵（**本 app 的生效默认值**）
  *
  * `deepMerge(core 默认, 面板层默认)` —— 方向是「core 打底、面板层补自己的键」：
- *   - `defense` 只有 core 有（42 个防护参数），面板层不复制一份；
+ *   - `defense` 只有 core 有（43 个防护参数），面板层不复制一份；
  *   - `activeIpApi` / `showTrajectory` 只有面板层有（./panel.js），因此一定落到生效值里。
  * 面板层的键**以面板层为准**：core 侧即便出现同名键（例如有人误写进
  * `src/config/firewall_config.js`），也不会覆盖面板值，且下面会告警留痕 ——

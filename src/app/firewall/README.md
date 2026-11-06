@@ -149,6 +149,17 @@ firewall onResponse 钩子
 - 开发环境 `contentSecurityPolicy: false`，**这类问题本地看不见** —— 所以 `sendChallengePage` 无条件设置本页 CSP，让本地看到的就是线上行为；回归用例见 `__tests__/firewall/challenge-page-csp.test.js`（真 fastify + 真 helmet + 真 HTTP）。
 - **后续加固计划**（PoW 提速 / 递进难度 / provider / 观测 / 边缘层）：`./docs/PLAN-2026-11-06-challenge-hardening.md`（待批准）。
 
+### 挑战页去哪儿：`defense.challengePageUrl`
+
+| 请求类型 | 响应 |
+| --- | --- |
+| 文档请求 + **配了** `challengePageUrl` | **302** 到该地址（带 `?return=<原 URL>`），让这类流量也走前端那套 UI |
+| 文档请求 + 没配（或刚从前方页回退） | 200 + 内置 HTML（自包含、零外链） |
+| 非文档请求（XHR / 脚本 / 非浏览器客户端） | 428 + `X-Firewall-Challenge`，由前端拦截器按自家 `BASE_URL` 跳转 |
+
+- 只接受**站内相对路径**（`/firewall/challenge.html`）：绝对地址会让 302 变成开放重定向，且跨站后 `fw_verified` 变第三方 cookie，`SameSite=Strict` 不发送 → 通过后又被挑战。写坏按"空"处理（回落内置页）。
+- **前端页挂了怎么兜底**：`challenge.html` 里有自愈守卫（资源 error / 8s 未挂载 → 跳回 `return`），后端用 30s 的一次性 cookie `fw_chal_page` 识别这类回退，直接给内置页。这条环必须有标记 cookie 才闭合，否则"前端挂 → 回退 → 又 302 → 又挂"是死循环。
+
 ## 模块职责
 
 ### config/ — 配置文件

@@ -11,7 +11,7 @@
  * @since 2026-08-17
  */
 import crypto from 'node:crypto';
-import { buildChallengePage, challengePageCsp } from '../challenge-template.js';
+import { buildChallengePage, buildChallengeRedirect, challengePageCsp } from '../challenge-template.js';
 import { trackRequestCount } from './detectors/rate-limiter.js';
 import { checkGeoReputation, resolveGeoInfo } from './detectors/geo-filter.js';
 import { checkBotChallenge } from './detectors/bot-detector.js';
@@ -337,9 +337,13 @@ async function sendChallengePage(reply, ip, fingerprint, deviceId) {
  *      → 渲染内置 HTML 模板（自包含，不依赖任何构建产物）；
  *   ② 非文档请求（XHR / 脚本 / 非浏览器客户端）→ 428 + `X-Firewall-Challenge`。
  *
- * SPA 的挑战页由**前端自己决定**：拦截器看到 428 / 响应头就用自家 `BASE_URL + challenge.html`
- * 跳转（`return` 用 `location.pathname`，后端无从得知也不该得知）。后端硬编码 `/firewall/`、
- * `/admin/` 这类路径只会在前端改目录时变成"永远打不开的死链"。
+ * 三种去向（**都不是**硬编码前端路径）：
+ *   ① 文档请求 + 配了 `defense.challengePageUrl` → **302** 到该地址（带 `?return=`），
+ *      让"浏览器直接打开被挑战 URL"这类流量也走前端那套 UI；
+ *   ② 文档请求 + 没配（或刚从前端页回退）→ 内置 HTML 模板（自包含、零外链）；
+ *   ③ 非文档请求（XHR / 脚本 / 非浏览器客户端）→ 428 + `X-Firewall-Challenge`，
+ *      由前端拦截器按**自家** `BASE_URL` 跳转（后端无从得知也不该得知前端目录：
+ *      写死 `/firewall/`、`/admin/` 只会在前端改目录时变成"永远打不开的死链"）。
  *
  * 428（Precondition Required）而不是 429：它表达"少一个前置条件"，不会被客户端的限流
  * 退避逻辑当成"过一会儿重试就行"。
@@ -349,10 +353,37 @@ async function sendChallengePage(reply, ip, fingerprint, deviceId) {
  * @param {string} fingerprint 请求指纹
  * @param {string|null} deviceId 设备 ID
  * @param {import('fastify').FastifyRequest} [request] 请求对象（用于判定请求类型）
- * @returns {Promise<number>} 实际下发的状态码（200 = 内置页面，428 = 提示）
+ * @returns {Promise<number>} 实际下发的状态码（200 = 内置页面，302 = 前端页，428 = 提示）
  */
 async function sendChallengeResponse(reply, ip, fingerprint, deviceId, request) {
   if (isDocumentRequest(request)) {
+    // ① 配了 `defense.challengePageUrl` → 302 到独立前端挑战页（带 `?return=` 原 URL）
+    //
+    // 前端页自己起不来时（chunk 404 / 加载超时）会跳回 `return` —— 那又是一次文档请求，
+    // 会再次命中这里。用**一次性标记 cookie** 打破这个环：带标记就不再跳，直接给内置页
+    // （内置页零外链、由后端生成，必然可用）。cookie 只活 30s，且只用于"选哪个页面"，
+    // 不参与任何安全判定，所以 SameSite=Lax 足够（顶层导航会带）。
+    const fellBack = request?.cookies?.fw_chal_page === '1';
+    const redirectTo = fellBack
+      ? null
+      : buildChallengeRedirect(readSecuritySettings().defense?.challengePageUrl, request?.raw?.url || request?.url);
+
+    if (redirectTo) {
+      reply.setCookie('fw_chal_page', '1', {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 30
+      });
+      reply
+        .headers({ ...CHALLENGE_NO_STORE, Location: redirectTo })
+        .code(302)
+        .send();
+      return 302;
+    }
+
+    // ② 没配 / 回退 → 内置页
     await sendChallengePage(reply, ip, fingerprint, deviceId);
     return 200;
   }

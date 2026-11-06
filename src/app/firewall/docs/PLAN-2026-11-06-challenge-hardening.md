@@ -72,6 +72,14 @@
 - `VITE_API_URL` **留空**（生产默认空串 = 相对路径）。配成绝对地址就等于把形态切成 B，`Strict` 立刻失效 → 通过后又被挑战，死循环。
 - 反代必须传真实 IP：`X-Forwarded-For` / `X-Real-IP` + 后端 `PROXY_TRUST_CIDR` 成对配置。否则 `request.ip` 全是反代地址，而 `generateFingerprint` 也含 IP → **一个人通过挑战，120s 内全站共享**。
 
+**实测发现（2026-11-06，端到端跑出来的真问题）**：`firewall/.env` 原本写着 `VITE_API_URL=http://localhost:3000`，而 Vite 的 `.env` 对 **`vite build` 同样生效** → 生产产物里 API 根被烧成 `http://localhost:3000`。后果有两层：
+
+1. 线上所有 API 调用打到 `localhost:3000`（用户机器上没有这个服务 → 前端整体不可用）；
+2. 挑战页因此变成**跨站**请求：`fw_verified` 是第三方 cookie，`SameSite=Strict` 不发送 → 通过后立刻又被挑战，无限循环。
+
+修法：`.env` 只留空值（同源相对路径），本机地址移到 `.env.development`（Vite 只在 dev 模式读它）。验证方式：`grep -rl "localhost:3000" firewall/dist/` 必须为空。
+
+
 ### D3 挂载路径可配置（详见第 3 节）
 
 后端不认识 `/firewall/`（`safePaths` 默认不含它，且有测试钉死"不特例化前端目录"）。需要改的只有前端 3 处。
@@ -96,6 +104,28 @@
 
 内嵌页当前 CSP 是 `default-src 'none'` + nonce。接 Turnstile/腾讯云要放 `script-src` / `frame-src` / `connect-src` 到第三方域 —— 不放进内嵌页。
 
+### D7 内嵌页保留为兜底，但默认可以让位给独立前端（`challengePageUrl`）
+
+`defense.challengePageUrl`（**空 = 用内置页**）：配了以后**文档请求**（浏览器直接打开被挑战的 URL）302 到前端页并带 `?return=<原 URL>`；XHR 不受影响（仍 428 + `X-Firewall-Challenge`，由拦截器跳转）。
+
+"优先前端、异常兜底"的闭环**不靠后端探活**（探测在热路径上等于把可用性绑两次失败）：
+
+```
+文档请求 → 302 到前端页（同时下发 30s 的一次性标记 cookie fw_chal_page=1）
+           ├─ 前端页正常 → PoW → verify → 回 return
+           └─ 前端页挂了（chunk 404 / 8s 未挂载）→ challenge.html 里的自愈守卫跳回 return
+                        → 这次请求带 fw_chal_page=1 → 后端**不再 302**，直接给内置页
+```
+
+四条约束：
+
+| 约束 | 原因 |
+| --- | --- |
+| 只接受站内相对路径（`/x`，拒绝 `//host`、`/\host`、绝对 URL） | 否则 302 就是开放重定向；且跨站会让 `fw_verified` 变第三方 cookie，`Strict` 不发送 → 通过后又被挑战 |
+| 配置写坏按"空"处理，回落内置页 | 配置错误不该让防护能力消失 |
+| 302 必须带 `Cache-Control: no-store` | 被缓存就等于把所有人永久导向挑战页 |
+| 回退用**一次性标记 cookie** 而不是 query 参数 | 不污染业务 URL（否则严格的 query schema 会在通过后 400） |
+
 ---
 
 ## 3. 挂载路径专项（本次验证结论）
@@ -113,13 +143,18 @@
 | 后端是否托管前端产物 | 否。前端 dist 由 nginx/CDN 直出，`/firewall/*` 请求根本不进后端 |
 | 前端 asset/挑战页跳转 | `firewall/src/api/firewall.ts:78` 已用 `new URL(BASE_URL + 'challenge.html', origin)` ✅ |
 
-### 3.3 需要改的 3 处（换路径前必须做）
+### 3.3 需要改的 3 处（**已于 2026-11-06 完成**）
 
-| 位置 | 现状 | 换路径后会怎样 | 改法 |
-| --- | --- | --- | --- |
-| `firewall/vite.config.js` | `base: '/firewall/'` | 构建期设定，本身可改 | 改为 `process.env.VITE_BASE \|\| '/firewall/'`，便于不改代码切路径 |
-| `firewall/src/router/index.ts:57` | `createWebHistory('/firewall/')` **硬编码** | 所有路由 404 | `createWebHistory(import.meta.env.BASE_URL)` |
-| `firewall/src/challenge/ChallengePage.vue:19` | `resolveReturnPath(params.get('return'), '/firewall/')` **硬编码** | 挑战成功后跳回不存在的路径 | fallback 改 `import.meta.env.BASE_URL` |
+| 位置 | 原状 | 改法 |
+| --- | --- | --- |
+| `firewall/vite.config.js` | `base: '/firewall/'` 写死 | `process.env.VITE_BASE \|\| '/firewall/'` |
+| `firewall/src/router/index.ts` | `createWebHistory('/firewall/')` 写死 | `createWebHistory(import.meta.env.BASE_URL)` |
+| `firewall/src/challenge/ChallengePage.vue` | 挑战成功默认返回 `'/firewall/'` | fallback 改为 `import.meta.env.BASE_URL` |
+
+验证：`MSYS_NO_PATHCONV=1 VITE_BASE=/ npx vite build` → 产物引用变成 `/assets/…`；默认构建仍是 `/firewall/assets/…`。
+
+> Windows / Git Bash 下 `VITE_BASE=/` 会被 MSYS 当成路径改写（产物里出现 `C:/Program Files/…`）。
+> 用 `.env` 文件写 `VITE_BASE=/`，或加 `MSYS_NO_PATHCONV=1`。
 
 > `resolveReturnPath` 只接受"站内相对路径"（拒 `//`、`/\`、控制字符），fallback 传 `'/'` 合法，无需改共享包。
 
@@ -152,6 +187,15 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
 ---
 
 ## 4. 五项详细方案
+
+> **已落地（2026-11-06，D7 + 3.3）**：
+> `defense.challengePageUrl`（defaults / spec / 面板 schema 自动生成 / 前端 `DEFENSE_KEYS`）
+> + `pipeline.sendChallengeResponse` 的 302 分支（含一次性标记 cookie 打破回退环）
+> + `challenge.html` 自愈守卫 + `main.ts` 挂载打点
+> + 三处挂载路径硬编码改为跟随 `BASE_URL`
+> + `__tests__/firewall/challenge-redirect.test.js`（11 例：开放重定向防护 / 302 / 回退环 / XHR 不受影响）
+>
+> 下面六项是**尚未开始**的部分。
 
 ### 阶段 0：护栏（0.5 人日｜纯测试，可立即开工）
 

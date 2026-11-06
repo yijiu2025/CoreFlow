@@ -156,6 +156,38 @@ function challengePageCsp(nonce) {
 }
 
 /**
+ * 拼「文档请求 → 独立前端挑战页」的 302 Location
+ *
+ * 只在 `defense.challengePageUrl` 配了的时候用；返回 null 表示继续用内置页。
+ *
+ * 三条硬规则：
+ *   ① 只接受**站内相对路径**（`/…` 但**不是** `//host` 或 `/\host`）——
+ *      否则 302 就是开放重定向（配置写错 = 把被挑战的用户送到任意站点）；
+ *   ② 跨站部署下 `fw_verified` 会变成第三方 cookie，`SameSite=Strict` 不发送
+ *      → 用户通过后立刻又被挑战（死循环）。所以这里**不**支持绝对地址，是功能约束
+ *      而不只是安全考虑；确实要跨站得先改 cookie 策略（另立配置项）；
+ *   ③ `return` 必须是原样可回跳的站内地址：原 URL 带查询串时也要带回去，
+ *      否则用户过完验证会落在"少了筛选条件"的页面上。
+ *
+ * @param {string} pageUrl `defense.challengePageUrl` 的值（可为空/非法）
+ * @param {string} originalUrl 被挑战的原始 URL（可含查询串）
+ * @returns {string|null} 形如 `/firewall/challenge.html?return=%2Fapi%2Fx%3Fa%3D1`
+ */
+function buildChallengeRedirect(pageUrl, originalUrl) {
+  const page = typeof pageUrl === 'string' ? pageUrl.trim() : '';
+  if (!page) return null;
+  if (!page.startsWith('/')) return null;
+  if (page.startsWith('//') || page.startsWith('/\\')) return null;
+
+  const raw = typeof originalUrl === 'string' ? originalUrl : '';
+  // 只回跳站内地址；其他情况（空、绝对 URL）退回根路径，绝不把外部地址塞进 return
+  const target = raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : '/';
+
+  const sep = page.includes('?') ? '&' : '?';
+  return `${page}${sep}return=${encodeURIComponent(target)}`;
+}
+
+/**
  * 构建高强度浏览器挑战页面（含工作量证明）
  *
  * @param {string} ip 客户端 IP
@@ -346,6 +378,7 @@ async function buildChallengePage(ip, fingerprint, deviceId = null, options = {}
 
 export {
   buildChallengePage,
+  buildChallengeRedirect,
   challengePageCsp,
   buildSolverSource,
   issueChallengePayload,
