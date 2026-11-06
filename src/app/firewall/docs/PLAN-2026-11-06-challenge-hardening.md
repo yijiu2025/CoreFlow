@@ -14,8 +14,9 @@
 | 部署形态 | **形态 A**：前端与 API 同站反代（同一个 nginx server 块、不同 location），`fw_verified` 保持 `SameSite=Strict` |
 | 前端能不能挂到别的路径 / 别的域名？ | **能**。后端完全不认识前端路径（已用测试钉死）；前端有 **3 处硬编码**要先改成跟随 `import.meta.env.BASE_URL`，否则换路径会 404 |
 | PoW 怎么提速？ | **不用 `crypto.subtle`**（实测比现状还慢 1.3×），改用零分配实现（实测 **5.9×**） |
-| 顺序 | 护栏 → 提速 → 观测 → 递进难度 → provider → 边缘层 →（可选）WebAuthn |
-| 工期 | **8~9 人日**到"四项落地"，WebAuthn 另计 3~4 人日 |
+| 验证码要不要自己写？ | **不用**：`framework/verify/recaptcha` 已支持 google / hcaptcha / turnstile；PoW 的"能力"也收进 `verify/pow/`（策略留在 firewall） |
+| 顺序 | 护栏 → 提速 → 观测 → PoW 归 verify → 递进难度 → provider → 边缘层 →（可选）WebAuthn |
+| 工期 | **7.5 人日**到"四项落地"，WebAuthn 另计 3~4 人日 |
 
 ---
 
@@ -126,6 +127,20 @@
 | 302 必须带 `Cache-Control: no-store` | 被缓存就等于把所有人永久导向挑战页 |
 | 回退用**一次性标记 cookie** 而不是 query 参数 | 不污染业务 URL（否则严格的 query schema 会在通过后 400） |
 
+### D8 复用 `framework/verify`，不要在防火墙里另造一套验证码
+
+`src/framework/verify/` 本来就是「系统级验证能力库」：`captcha`（图形）/ `slider`（滑块）/ **`recaptcha`（Google + hCaptcha + Turnstile）** / `email` / `sms` / `voice` / `qrcode`，统一 `service + dao + index`，存储走调用方注入的 store 适配器，无 API 路由、业务无关；已被 `api/verify/v1`、`api/user/v1/open`、`oauth21` 的登录/解密链路使用。
+
+三条结论：
+
+| 能力 | 归属 | 理由 |
+| --- | --- | --- |
+| 第三方验证码（④a） | **复用 `verify/recaptcha`**（已支持 Turnstile，且自带 hostname/action 校验与生产 fail-closed） | 原计划要新建 `app/firewall/services/providers/`，属重复建设 |
+| PoW 的"能力"（发码/校验/一次性消费） | **新增 `verify/pow/`**，与其余子模块同构 | 它就是"另一种人机验证"，和 captcha/slider 是一类东西 |
+| PoW 的"策略"（何时挑战、绑谁、给多久 pass、渲哪个页面） | **留在 firewall** | 这是访问控制语义；搬进 verify 会让工具库反向依赖防火墙的 `ip/fingerprint/deviceId/pass` 概念 |
+
+依赖方向必须保持单向：`app/*` → `framework/verify`，`framework/firewall` → `framework/verify`，**绝不反向**。
+
 ---
 
 ## 3. 挂载路径专项（本次验证结论）
@@ -195,7 +210,7 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
 > + 三处挂载路径硬编码改为跟随 `BASE_URL`
 > + `__tests__/firewall/challenge-redirect.test.js`（11 例：开放重定向防护 / 302 / 回退环 / XHR 不受影响）
 >
-> 下面六项是**尚未开始**的部分。
+> 下面七项是**尚未开始**的部分。
 
 ### 阶段 0：护栏（0.5 人日｜纯测试，可立即开工）
 
@@ -229,6 +244,33 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
 - 告警：成功率 < 80% 或 `issued` 突增 → 复用现有 `alert` 通道（`enabled/email/webhookUrl/cooldownMs`）
 - **验收**：跑一次挑战，面板能看到 issued/verified 各 1 次 + 耗时分位数；手动关掉 CSP（模拟事故）→ 成功率掉到 0 并能触发告警
 
+### 阶段 2b：把 PoW 的"能力"收进 `framework/verify/pow/`（1 人日｜行为不变）
+
+`framework/verify` 是「验证能力库」（`captcha` / `slider` / `recaptcha` / `email` / `sms` / `voice` / `qrcode`，统一 `service + dao + index`，存储走调用方注入的 store 适配器、无 API 路由、业务无关）。PoW 与它们是同一种东西，只是当年长在防火墙里。
+
+**搬什么**：
+
+```
+framework/verify/pow/
+├── service.js   buildChallenge({ difficulty })                → { challengeId, salt, difficulty, maxAttempts, ttlSec }
+│                verifyAnswer({ challengeId, answer })          → { ok, reason }   （内部复用 pow-sha256.js 的 verifyPow）
+├── dao.js       一次性消费（原子 GET+DEL）+ 频控，与其他子模块同构
+└── index.js
+```
+
+**不搬什么**（越界就会让 verify 反向依赖防火墙）：
+
+| 留在 firewall | 原因 |
+| --- | --- |
+| `fw_verified` 的 TTL 档位（匿名 120s / 登录 1800s）与签发 | 访问控制策略 |
+| 挑战态（`CHALLENGE` 封禁键）的读写与语义 | 防火墙域模型 |
+| 绑定比对（ip / fingerprint / deviceId） | 策略；verify 只把它当**不透明字段**存取、原样回传 |
+| 页面渲染 / CSP / 302 / 自愈守卫（`challenge-template.js`） | 与"验证能力"无关 |
+
+**存储适配是唯一真实工作量**：firewall 现在用自己的 redis 封装（`writeChallenge` / `takeChallenge`），而 verify 子模块走"调用方传 store"。做法是给 `verify/pow` 写一个 3 行的 store 适配器，把防火墙的封装转成 verify 期望的接口 —— 否则会出现两套存储语义（多实例下必踩）。
+
+**验收**：既有 11 条挑战用例全绿且**断言不改**（只改 import）；`challengeProvider` 与 `turnstile` 形状一致。
+
 ### 阶段 3：项② 递进难度（2 人日｜默认关闭上线）
 
 - `resolveChallengeDifficulty({ ip, fingerprint, deviceId, loggedIn }) → { difficulty, reason }`
@@ -240,15 +282,28 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
 - 契约同步（一个都不能漏）：`defaults.js` → `schema.js DEFENSE_SPEC` → `persisted.js`（自动清洗生效）→ `monitor.js`（自动生成）→ **`firewall/src/stores/settings.ts` 的 `DEFENSE_KEYS`**
 - **验收**：连续通过 → 降到 Min；连续失败 → 升到 Max；`challengeReputationEnabled=false` → 恒定基准（三条都要有对照用例）
 
-### 阶段 4：项④a 匿名真实验证 provider（2~3 人日/每个｜默认 `pow`）
+### 阶段 4：项④a 复用现成验证码能力（**0.5 人日**｜默认 `pow`）
 
-- 接口：`{ name, issue(ctx), verify(ctx, answer) }`，落 `src/app/firewall/services/providers/`
-  - `pow`（默认，现有逻辑搬进来）、`turnstile`、`tencent-captcha`、`cap`（先做其一）
-- 配置：`defense.challengeProvider` 走 spec；**密钥走环境变量**（`CHALLENGE_TURNSTILE_SECRET` 等），**不进** `data/firewall_config.json`（那份文件会被面板整份写回）
-- 校验失败策略：外部超时 → **fail-closed 但返回可重试的 503**，同时计入观测；**不要**静默放行
-- 前端：`ChallengeCard` 增加 captcha 插槽；前端页 CSP 放行对应第三方域
-- 内嵌页：`provider ≠ pow` 时降级为 pow（不接第三方）
-- **风险（需拍板）**：第三方可达性（国内）、隐私（客户端 IP 暴露给第三方）、成本、SLA
+**修正**：`src/framework/verify/` 已经是一个「验证能力库」，里面 **`recaptcha/` 已支持 Google reCAPTCHA / hCaptcha / Cloudflare Turnstile**（2026-08-29 加），还自带两条这里本来要自己写的东西：
+
+- `expectedHostname` / `expectedAction` 校验（防 token 跨域 / 跨用途挪用）
+- 未配置密钥时**生产 fail-closed**、非生产放行
+
+所以**不新建 `app/firewall/services/providers/`**（那是重复建设），改为按 `defense.challengeProvider` 在几个已有 dao 之间选：
+
+| provider | 实现位置 | 调用形态 |
+| --- | --- | --- |
+| `pow`（默认） | 阶段 2 抽出的 `framework/verify/pow/` | `verifyAnswer({ challengeId, answer })` |
+| `turnstile` / `hcaptcha` / `google` | `framework/verify/recaptcha/`（已在用） | `recaptchaDao.verify(token, ip)` → `{ success, score, error }` |
+| `slider` / `captcha` | `framework/verify/slider/`、`captcha/`（已在用） | 同上，各自 dao |
+
+改动只有三处：
+
+- `challenge.service.verifyChallenge`：按 provider 分派（`pow` 走答案校验，其余走 dao），**`fw_verified` 的签发/TTL/绑定仍在这里**（访问控制语义不外移）
+- `defense.challengeProvider` 走 spec；密钥**走环境变量**（`RECAPTCHA_*` / `TURNSTILE_*` 已存在，见 `framework/verify/config.js`），**不进** `data/firewall_config.json`（那份文件会被面板整份写回）
+- 前端：`ChallengeCard` 增加 captcha 插槽；**只在独立前端页**放行第三方域（内嵌页保持 `default-src 'none'`，`provider ≠ pow` 时降级 pow）
+
+**风险（需拍板）**：第三方可达性（国内）、隐私（客户端 IP 暴露给第三方）、成本、SLA。
 
 ### 阶段 5：项③ 边缘层（1 人日 + 运维协作）
 
@@ -278,18 +333,19 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
 | 0 | 等价性护栏 + 链路冒烟 | 0.5 | ✅ | — |
 | 1 | PoW 提速 5.9× | 1 | ✅ | 无行为变化 |
 | 2 | 观测 | 1.5 | ✅ | 纯旁路 |
+| 2b | PoW 能力收进 `verify/pow/` | 1 | ✅ | 无行为变化（只改 import） |
 | 3 | 递进难度 | 2 | ✅ | `challengeReputationEnabled`（默认 false） |
-| 4 | provider + 1 个第三方 | 2~3 | ✅ | `challengeProvider`（默认 pow） |
+| 4 | 复用 `verify/recaptcha` 接第三方 | 0.5 | ✅ | `challengeProvider`（默认 pow） |
 | 5 | 边缘层 | 1 | ✅ | nginx 侧开关 |
 | 6 | WebAuthn | 3~4 | 可选 | 按用户开关 |
 
-合计 **8~9 人日**到"四项落地"（不含 WebAuthn）。阶段 0/1 不依赖任何决策。
+合计 **7.5 人日**到"四项落地"（不含 WebAuthn）。阶段 0/1 不依赖任何决策。
 
 ---
 
 ## 6. 待拍板
 
-1. **④a 是否引入第三方验证码**（Turnstile / 腾讯云 / Cap）？只做 pow + WebAuthn 则零外部依赖。
+1. **④a 用哪家 provider**？代码已支持 google / hcaptcha / turnstile（`verify/recaptcha`），默认仍是 `pow`。引第三方的取舍：国内可达性、隐私（IP 外发）、SLA。
 2. **③ 边缘限流由谁维护**？有 nginx 写权 → 给完整 conf 片段；只有 CDN 控制台 → 改成 CDN 规则文档。
 3. **挂载路径最终形态**（`/firewall/` 保持 / 换子路径 / 独立域名）—— 决定阶段 0 是否顺带做 3.3 的三处改造。
 4. **是否允许用登录用户 ID 的历史做信誉信号**（涉及跨设备行为聚合）。

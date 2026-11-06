@@ -13,7 +13,7 @@
 ## 目录结构
 
 ```
-src/verify/
+src/framework/verify/
 ├── config.js                   # 统一配置（环境变量 + 默认值）
 ├── captcha/                    # 图形验证码
 │   ├── service.js              # CaptchaService（生成/验证/消费）
@@ -35,7 +35,7 @@ src/verify/
 │   ├── service.js              # QrCodeService（生成/轮询/确认）
 │   ├── dao.js
 │   └── index.js
-├── recaptcha/                  # 人机验证
+├── recaptcha/                  # 人机验证（Google / hCaptcha / Turnstile）
 │   ├── service.js              # RecaptchaService（Google/hCaptcha）
 │   ├── dao.js
 │   └── index.js
@@ -66,7 +66,7 @@ config.js（统一配置）
 所有验证子模块从 `config.js` 读取配置，支持环境变量覆盖：
 
 ```js
-import config from '../verify/config.js';
+import config from '../../framework/verify/config.js';
 
 // 使用
 const ttl = config.captcha.ttl; // 图形验证码 TTL
@@ -133,7 +133,7 @@ const captchaStore = getStore('captcha');
 ### 1. 图形验证码 (captcha/)
 
 ```js
-import { captchaService, captchaDao } from '../verify/captcha/index.js';
+import { captchaService, captchaDao } from '../../framework/verify/captcha/index.js';
 
 // 生成
 const { captchaImage, captchaKey } = await captchaService.generate(store, { level: 'normal' });
@@ -150,7 +150,7 @@ const isConsumed = await captchaService.consume(captchaKey, store);
 ### 2. 邮箱验证码 (email/)
 
 ```js
-import { emailDao } from '../verify/email/index.js';
+import { emailDao } from '../../framework/verify/email/index.js';
 
 // 发送
 await emailDao.sendCode(email, sessionId, store);
@@ -162,7 +162,7 @@ await emailDao.verifyCode(email, code, store);
 ### 3. 短信验证码 (sms/)
 
 ```js
-import { smsDao } from '../verify/sms/index.js';
+import { smsDao } from '../../framework/verify/sms/index.js';
 
 // 发送
 await smsDao.sendCode(phone, sessionId, store);
@@ -176,7 +176,7 @@ await smsDao.verifyCode(phone, code, store);
 ### 4. 滑块验证码 (slider/)
 
 ```js
-import { sliderDao } from '../verify/slider/index.js';
+import { sliderDao } from '../../framework/verify/slider/index.js';
 
 // 生成
 const { sliderKey, bgWidth, bgHeight, sliderWidth, sliderHeight, token } = await sliderDao.generate(store);
@@ -197,7 +197,7 @@ const isConsumed = await sliderDao.consume(sliderKey, store);
 ### 5. 二维码扫码 (qrcode/)
 
 ```js
-import { qrCodeDao, QR_STATUS } from '../verify/qrcode/index.js';
+import { qrCodeDao, QR_STATUS } from '../../framework/verify/qrcode/index.js';
 
 // 生成二维码
 const { sessionId, qrContent, expiresAt } = await qrCodeDao.generate(store);
@@ -220,7 +220,7 @@ const userId = await qrCodeDao.consume(sessionId, store);
 ### 6. 人机验证 (recaptcha/)
 
 ```js
-import { recaptchaDao } from '../verify/recaptcha/index.js';
+import { recaptchaDao } from '../../framework/verify/recaptcha/index.js';
 
 // 验证
 const result = await recaptchaDao.verify(token, remoteIp);
@@ -230,12 +230,12 @@ const result = await recaptchaDao.verify(token, remoteIp);
 const isValid = await recaptchaDao.isValid(token, remoteIp);
 ```
 
-**支持服务商：** Google reCAPTCHA v2/v3、hCaptcha
+**支持服务商：** Google reCAPTCHA v2/v3、hCaptcha、Cloudflare Turnstile（`config.recaptcha.provider`，密钥走 `RECAPTCHA_*` / `TURNSTILE_*` 环境变量）
 
 ### 7. 语音验证码 (voice/)
 
 ```js
-import { voiceDao } from '../verify/voice/index.js';
+import { voiceDao } from '../../framework/verify/voice/index.js';
 
 // 发送
 await voiceDao.sendCode(phone, sessionId, store);
@@ -250,7 +250,7 @@ await voiceDao.verifyCode(phone, code, store);
 
 ### 新增验证方式
 
-1. 创建文件夹 `src/verify/xxx/`
+1. 创建文件夹 `src/framework/verify/xxx/`
 2. 实现 `service.js`（纯验证逻辑）
 3. 实现 `dao.js`（存储 + 频率限制）
 4. 实现 `index.js`（导出）

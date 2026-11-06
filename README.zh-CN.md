@@ -109,20 +109,25 @@ curl -i http://localhost:3000/v1/health/ready   # 就绪（关键依赖不可用
 ```
 src/
 ├── app.js              # 创建 Fastify 实例 + 生命周期编排
-├── framework/          # 基础设施（15 个子域，不写业务）
-│   ├── auth/  jwt/  keys/            # 会话 / Cookie / 签名 / 密码 / 密钥
-│   ├── db/  redis/                   # Sequelize 连接 / 缓存·锁·队列·PubSub
-│   ├── loader/  config/  log/  ops/  # 加载器 / 环境校验 / 日志 / 就绪判定
-│   ├── verify/  notice/  scheduler/  # 验证码 / 邮件 / 定时任务
-│   └── websocket/  cli/  release/
+├── framework/          # 基础设施（16 个子域，不写业务）
+│   ├── auth/  jwt/  keys/                 # 会话 / Cookie / 签名 / 密码 / 密钥
+│   ├── db/  redis/                        # Sequelize 连接 / 缓存·锁·队列·PubSub
+│   ├── loader/  config/  log/  startup/   # 加载器 / 环境校验 / 日志 / 就绪探针
+│   ├── verify/  notice/  scheduler/       # 验证能力（图形·人机·邮件·短信）/ 邮件 / 定时任务
+│   ├── firewall/  storage/  websocket/    # 五层拦截管道 / 公开+私有文件根 / WebSocket
+│   └── cli/  paths.js                     # CLI 辅助 / REPO_ROOT·DATA_ROOT·dataFile()
 ├── app/                # 业务应用（一个目录 = 一个应用：oauth21 / user / admin /
 │                       #   firewall / guard / notice / posecraft / retroweb）
 ├── api/                # 路由层（域/版本），guard.js 是三级守卫引擎
 ├── models/             # Sequelize 模型（user / iam / oauth21 / session / key /
 │                       #   notice / guard / posecraft / retroweb）
-├── data/               # 运行时默认配置（防火墙 / 调度 / 流量统计）
-└── shared/  utils/  public/
+├── config/             # 静态覆盖（防火墙 / 认证 / 数据库 / Redis / 验证），按部署可选
+└── shared/  utils/     # 共享异常 / DAO / 工具
 ```
+
+> **运行期状态都在仓库根，不在 `src/` 下**：`data/`（可热改的 JSON：防火墙 / 调度 / 流量统计）、
+> `logs/`、`public/<app>/…`（公开上传）、`storage/<app>/u/<ownerId>/…`（私有文件，只经鉴权路由下发）。
+> 有守卫测试兜底：任何代码往 `src/{data,public,storage}` 里写文件都会让测试变红。
 
 完整目录树（含每个 loader 的加载顺序与 fail-fast 语义）见
 [项目结构](https://yijiu2025.github.io/CoreFlow/guide/project-structure)。
@@ -179,7 +184,7 @@ requirePermission: { all: ['fw:config:read', 'fw:config:write'] }
      → ⑤ 地理围栏 / 端点限频
 ```
 
-检测器都在 `src/app/firewall/engine/detectors/`：`rate-limiter`（滑窗，Redis Lua 单次往返 +
+检测器都在 `src/framework/firewall/engine/detectors/`：`rate-limiter`（滑窗，Redis Lua 单次往返 +
 内存降级）、`bot-detector`、`brute-force`、`scan-trap`（404/403 扫描陷阱）、`geo-filter`。
 限流规则与阈值从 `data/firewall_config.json` 读取，管理端可热改（`PATCH /api/firewall/v1/monitor/settings`）。
 
@@ -202,7 +207,9 @@ requirePermission: { all: ['fw:config:read', 'fw:config:write'] }
 
 ## 环境变量
 
-62 个可配置项，全部见 `.env.example`（每项都有注释与默认值）。**生产必填的三处密钥**：
+`validateEnv` 在启动时校验 **19** 个键（`DB_HOST` / `DB_NAME` / `DB_USER` 恒必填；
+`APP_SECRET` / `SESSION_SECRET` / `FIREWALL_SECRET` 生产环境必填）。`.env.example` 记录
+**38** 个键（含注释与默认值）。**生产必填的三处密钥**：
 
 ```ini
 APP_SECRET=       # 至少 32 字符，弱值/默认值会被 validateEnv 拒绝启动

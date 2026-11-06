@@ -124,20 +124,26 @@ curl -i http://localhost:3000/v1/health/ready   # readiness (503 when a critical
 ```
 src/
 ├── app.js              # Fastify instance creation + lifecycle orchestration
-├── framework/          # Infrastructure (15 sub-domains, no business logic)
-│   ├── auth/  jwt/  keys/            # Session / cookies / signatures / passwords / keys
-│   ├── db/  redis/                   # Sequelize connection / cache · locks · queues · pubsub
-│   ├── loader/  config/  log/  ops/  # Loader / env validation / logging / readiness
-│   ├── verify/  notice/  scheduler/  # CAPTCHA / mail / cron jobs
-│   └── websocket/  cli/  release/
+├── framework/          # Infrastructure (16 sub-domains, no business logic)
+│   ├── auth/  jwt/  keys/                 # Session / cookies / signatures / passwords / keys
+│   ├── db/  redis/                        # Sequelize connection / cache · locks · queues · pubsub
+│   ├── loader/  config/  log/  startup/   # Loader / env validation / logging / readiness probes
+│   ├── verify/  notice/  scheduler/       # Verification (captcha · recaptcha · email · sms) / mail / cron
+│   ├── firewall/  storage/  websocket/    # Five-stage interception pipeline / public+private file roots / WS
+│   └── cli/  paths.js                     # CLI helpers / REPO_ROOT · DATA_ROOT · dataFile()
 ├── app/                # Business apps (one directory = one app: oauth21 / user / admin /
 │                       #   firewall / guard / notice / posecraft / retroweb)
 ├── api/                # Route layer (domain/version); guard.js is the three-level guard engine
 ├── models/             # Sequelize models (user / iam / oauth21 / session / key /
 │                       #   notice / guard / posecraft / retroweb)
-├── data/               # Runtime default config (firewall / scheduler / traffic stats)
-└── shared/  utils/  public/
+├── config/             # Static overrides (firewall / auth / db / redis / verify), optional per deployment
+└── shared/  utils/     # Shared exceptions / DAO / helpers
 ```
+
+> **Runtime state lives at the repo root, not under `src/`**: `data/` (hot-reloadable JSON:
+> firewall / scheduler / traffic stats), `logs/`, `public/<app>/…` (public uploads),
+> `storage/<app>/u/<ownerId>/…` (private files, served only through an authenticated route).
+> A guard test fails the build if anything writes into `src/{data,public,storage}`.
 
 For the full tree (including loader order and fail-fast semantics) see
 [Project structure](https://yijiu2025.github.io/CoreFlow/guide/project-structure).
@@ -197,7 +203,7 @@ request → ① connection tracking (concurrency cap) → ② global blocking (I
         → ⑤ geo-fencing / endpoint rate limiting
 ```
 
-Detectors live in `src/app/firewall/engine/detectors/`: `rate-limiter` (sliding window, one
+Detectors live in `src/framework/firewall/engine/detectors/`: `rate-limiter` (sliding window, one
 Redis Lua round-trip + in-memory fallback), `bot-detector`, `brute-force`, `scan-trap`
 (404/403 scan trap), `geo-filter`. Rules and thresholds come from
 `data/firewall_config.json` and can be hot-edited through the admin API
@@ -222,8 +228,10 @@ and [API route conventions](https://yijiu2025.github.io/CoreFlow/development/api
 
 ## Environment variables
 
-62 configurable keys, all documented with defaults in `.env.example`. The **three secrets you
-must set in production**:
+`validateEnv` checks **19** keys at boot (`DB_HOST` / `DB_NAME` / `DB_USER` always;
+`APP_SECRET` / `SESSION_SECRET` / `FIREWALL_SECRET` additionally in production).
+`.env.example` documents **38** keys with comments and defaults. The **three secrets you must
+set in production**:
 
 ```ini
 APP_SECRET=       # ≥ 32 chars; weak/default values are rejected by validateEnv at boot
