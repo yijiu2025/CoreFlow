@@ -65,8 +65,12 @@ const DEFENSE_KEYS = [
   'botChallengeNoUaLimit',
   'botChallengeBotLimit',
   'botChallengeBrowserLimit',
-  // 挑战难度
+  // 挑战难度（基准 + 递进）
   'challengeDifficulty',
+  'challengeReputationEnabled',
+  'challengeDifficultyMin',
+  'challengeDifficultyMax',
+  'challengeReputationWindowSec',
   'challengePageUrl',
   // 设备维度
   'enableDeviceBlock',

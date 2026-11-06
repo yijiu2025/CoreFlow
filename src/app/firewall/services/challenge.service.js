@@ -16,6 +16,7 @@
 import crypto from 'crypto';
 import { generateFingerprint } from '../../../framework/firewall/util/fingerprint.js';
 import { powChallengeStore } from '../../../framework/firewall/util/pow-store.js';
+import { noteChallengePassed, noteChallengeProofFailed } from '../../../framework/firewall/challenge-difficulty.js';
 import { powDao } from '../../../framework/verify/pow/index.js';
 import { grantPass, readAccessState } from '../../../framework/firewall/util/redis.js';
 import { issueChallengePayload } from '../../../framework/firewall/challenge-template.js';
@@ -92,7 +93,13 @@ async function issueChallenge(request) {
       return { ok: false, statusCode: 403, reason: 'Not Challenged' };
     }
 
-    const payload = await issueChallengePayload({ ip: request.ip, fingerprint, deviceId });
+    const payload = await issueChallengePayload({
+      ip: request.ip,
+      fingerprint,
+      deviceId,
+      // 登录用户难度降一档（递进难度开着时才有效果）
+      loggedIn: isAuthenticated(request)
+    });
     recordChallengeEvent({ type: 'issued', provider: 'pow', difficulty: payload.difficulty });
     return { ok: true, ...payload };
   } catch (err) {
@@ -177,6 +184,9 @@ async function verifyChallenge(request, reply) {
   // 3. 工作量证明校验（盐/难度取载荷内的值，避免下发后改配置导致前后不一致）
   const proof = powDao.check(payload, { challengeId, answer });
   if (!proof.ok) {
+    // 递进难度的唯一"升"信号：**答案不对**。Expired / Mismatch / Malformed 都不计 ——
+    // 那些更像客户端或网络问题，拿它们加难度会把真实用户越推越死。
+    await noteChallengeProofFailed(request.ip);
     return failWith(proof.reason);
   }
 
@@ -199,6 +209,8 @@ async function verifyChallenge(request, reply) {
 
   // 观测：通过 + 客户端上报的求解耗时（分桶统计；**不参与任何判定**，可伪造）
   recordChallengeEvent({ type: 'verified', provider: 'pow', solveMs: body.solveMs });
+  // 信誉：顺利通过一次（递进难度关闭时是空操作）
+  await noteChallengePassed(request.ip);
 
   return { ok: true, passTtlSec: ttlSec, scope: authed ? 'account' : 'anonymous' };
 }

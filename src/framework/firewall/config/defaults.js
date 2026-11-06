@@ -312,6 +312,28 @@ const BOT_DETECTION = {
 // 5 → 约 100 万次，约 1~2s）。代码侧夹取到 [1, 6] 上限，防止把低端机卡死。
 const CHALLENGE = {
   challengeDifficulty: 3,
+  // ── 递进难度（默认关闭）──
+  //
+  // 开起来以后，挑战难度不再是固定值，而是「基准 ± 1~2」，依据该 IP 近窗口内的
+  // 挑战结果浮动（见 challenge-difficulty.js）：
+  //   连续答错 → 升（最多到 challengeDifficultyMax）；连续顺利通过 → 降（最低到 Min）；
+  //   登录用户整体降一档（有身份可追责，体验优先）。
+  //
+  // 为什么默认关：它改变的是"给用户出多难的题"，属于体验与防护的取舍，
+  // 不该由升级动作替运维决定。想用就显式打开，并观察 challenge 观测里的
+  // 成功率与 solveMs 分位（`GET /api/firewall/v1/monitor/challenge`）。
+  //
+  // ⚠️ 只把 **Invalid Proof（答案不对）** 计入升难度。`Challenge Expired`（载荷 300s
+  // 过期）/ `Mismatch`（切网导致 IP 变）/ `Malformed` 都不计 —— 它们更像客户端或
+  // 网络问题，拿它们加难度会把真实用户越推越死，这是这类机制最常见的自伤。
+  challengeReputationEnabled: false,
+  // 难度下限：连续顺利通过时最低降到这（不要低于 2，难度 1 只需 16 次哈希，等于没有成本）
+  challengeDifficultyMin: 2,
+  // 难度上限：连续答错时最高升到这（上限受代码侧 MAX_DIFFICULTY=5 夹取）
+  challengeDifficultyMax: 5,
+  // 计数窗口（秒）：从**第一次**计数起算，不滑动。600s 约等于一个正常用户
+  // "被挑战 → 求解 → 继续浏览"的若干个来回，够区分"偶发"与"反复"。
+  challengeReputationWindowSec: 600,
   // 独立前端挑战页的地址（**空 = 用后端内置页**）
   //
   // 配了以后，**文档请求**（浏览器直接打开被挑战的 URL）会 302 到它，带上

@@ -115,8 +115,15 @@ const DEFENSE_SPEC = {
   botChallengeBotLimit: { type: 'int', min: 1 },
   botChallengeBrowserLimit: { type: 'int', min: 1 },
 
-  // ── ⑧b 挑战难度 + 挑战页地址（代码侧夹在 1~6，与代码夹取口径一致）──
+  // ── ⑧b 挑战难度（基准 + 递进）与挑战页地址 ──
   challengeDifficulty: { type: 'int', min: 1, max: 5 },
+  // 递进难度：开起来后难度按该 IP 近窗口的挑战结果浮动（详见 challenge-difficulty.js）。
+  // Min/Max 只做上下界，`challengeDifficulty` 仍是基准；三者都在 [1, 5] 内（代码侧 MAX_DIFFICULTY）。
+  challengeReputationEnabled: { type: 'bool' },
+  challengeDifficultyMin: { type: 'int', min: 1, max: 5 },
+  challengeDifficultyMax: { type: 'int', min: 1, max: 5 },
+  // 计数窗口（秒）：太短则"偶发"和"反复"分不开，太长则一次误伤要背很久
+  challengeReputationWindowSec: { type: 'int', min: 30 },
   // 独立前端挑战页地址：**空串合法**（= 用后端内置页）。非空要求站内相对路径，
   // 但"是不是站内相对路径"由 `buildChallengeRedirect` 在运行时把关（spec 只查类型/长度）：
   // 这里若用正则强约束，面板改配置时会给出一堆与"回落内置页"行为不一致的报错。

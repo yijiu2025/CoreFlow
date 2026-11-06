@@ -22,6 +22,7 @@ src/framework/firewall/               # 【架构层】防护引擎（始终存�
 ├── block-manager.js                  # 封禁/白名单**真身**：三维度 CRUD + checkGlobalBlock + isUserManuallyBlocked
 ├── bootstrap.js                      # 【核心装配插件】firewallCorePlugin：限流插件 + 五阶段管道 + 观测钩子（05-firewall 直接启动）
 ├── challenge-template.js             # 人机挑战页 HTML 模板（页面 / CSP / 302 / Worker；PoW 能力在 verify/pow）
+├── challenge-difficulty.js           # 挑战难度决策：基准 ± 信誉浮动（默认关闭），取代"难度写死一个值"
 ├── telemetry-sink.js                 # 遥测注入点：app 注册 pushRecord，引擎经此产生记录事件
 ├── config/
 │   └── defaults.js                   # 默认安全策略矩阵（framework 单一来源；app config.js 只是 re-export）
@@ -163,6 +164,31 @@ firewall onResponse 钩子
 
 - 只接受**站内相对路径**（`/firewall/challenge.html`）：绝对地址会让 302 变成开放重定向，且跨站后 `fw_verified` 变第三方 cookie，`SameSite=Strict` 不发送 → 通过后又被挑战。写坏按"空"处理（回落内置页）。
 - **前端页挂了怎么兜底**：`challenge.html` 里有自愈守卫（资源 error / 8s 未挂载 → 跳回 `return`），后端用 30s 的一次性 cookie `fw_chal_page` 识别这类回退，直接给内置页。这条环必须有标记 cookie 才闭合，否则"前端挂 → 回退 → 又 302 → 又挂"是死循环。
+
+### 递进难度（`defense.challengeReputationEnabled`，默认关闭）
+
+难度不再是一个写死的数字，而是「基准 ± 1~2 档」，按**该 IP 近窗口内的挑战表现**浮动
+（`challenge-difficulty.js`）：
+
+| 触发 | 变化 | 区间 |
+| --- | --- | --- |
+| 顺利通过 ≥3 次、零失败 | 降 1 档 | 不低于 `challengeDifficultyMin`（默认 2） |
+| 答错 ≥2 次且一次没通过 | 升 1 档 | — |
+| 答错 ≥5 次 | 升 2 档 | 不高于 `challengeDifficultyMax`（默认 5） |
+| 已登录 | 再降 1 档 | 同上 |
+
+三条刻意的取舍（改之前请先读 `challenge-difficulty.js` 头注释）：
+
+1. **只有「答案不对」（`Invalid Proof`）计入升难度**。`Challenge Expired`（载荷 300s 过期）、
+   `Mismatch`（切网导致 IP 变）、`Malformed` 都不计 —— 它们是客户端/网络问题，计进去就是
+   这类机制最经典的自伤：用户越倒霉 → 题越难 → 更过不去 → 题更难。
+2. **只按 IP 记**（`chal:fail:<ip>` / `chal:pass:<ip>`，窗口从第一次计数起算）。换设备/换指纹
+   正是攻击方的常规动作，捆太细记不住；NAT 共享的副作用被「窗口 10 分钟 + 最多 ±2 档」限制住。
+3. **配置写坏不变成机制失效**：`Min > Max` 自动交换、窗口 <30s 回退 600s、难度 `"abc"`/`0`
+   回退基准 —— 任何一项都不允许退化成「永远基准」或「永远上限」。
+
+issue 响应体多一个 `reason`（`baseline` / `hardened` / `relaxed`），前端可以解释一句
+"为什么这次要多算一会儿"。它**不含分数也不含计数**，不足以让攻击者反推阈值。
 
 ### 挑战链路指标（`GET /api/firewall/v1/monitor/challenge`）
 

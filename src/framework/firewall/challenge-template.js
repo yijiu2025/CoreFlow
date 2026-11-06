@@ -27,25 +27,11 @@
  */
 import crypto from 'crypto';
 import { makePowSolver, SHA256_K, powDao, MAX_DIFFICULTY, DEFAULT_TTL_SEC } from '../verify/pow/index.js';
-import { getConfig } from './util/shared.js';
+import { resolveChallengeDifficulty } from './challenge-difficulty.js';
 import { powChallengeStore } from './util/pow-store.js';
 
 /** 挑战载荷有效期（秒）：语义与出处都在 `verify/pow`，这里只是本模块的对外名字 */
 const CHALLENGE_TTL_SEC = DEFAULT_TTL_SEC;
-
-/**
- * 当前配置的 PoW 难度（前导十六进制零个数）
- *
- * **这是"策略"，不是"能力"**：难度上限由 `verify/pow` 定（`MAX_DIFFICULTY`），
- * 而"这次该用多少"取决于部署/运营配置，所以读配置夹取这一步留在防火墙。
- *
- * @returns {number} 夹取到 [1, MAX_DIFFICULTY] 的难度
- */
-function currentDifficulty() {
-  const raw = Number(getConfig().defense?.challengeDifficulty);
-  if (!Number.isFinite(raw) || raw < 1) return 3;
-  return Math.min(MAX_DIFFICULTY, Math.floor(raw));
-}
 
 /**
  * 签发一份挑战载荷（**服务端持有**），只把不透明 challengeId + 求解参数交给调用方
@@ -54,18 +40,30 @@ function currentDifficulty() {
  * 共用这一处实现：绑定字段、TTL、难度、尝试上限只有一份，两个入口不可能漂移。
  *
  * 题目本身的生成与落盘在 `verify/pow`（`powDao.issue`）；这里只决定**难度取多少**
- * （读配置）与**题目绑谁**（ip / 指纹 / 设备 ID）—— 后两者都是防火墙的域知识，
+ * 与**题目绑谁**（ip / 指纹 / 设备 ID）—— 后两者都是防火墙的域知识，
  * 对 verify 来说只是不透明字段，原样存取、原样回传给调用方自己比对。
  *
- * @param {{ip: string, fingerprint?: string|null, deviceId?: string|null}} subject 绑定上下文
- * @returns {Promise<{challengeId:string, salt:string, difficulty:number, maxAttempts:number, ttlSec:number}>}
+ * 难度来自 `resolveChallengeDifficulty()`（基准 ± 信誉浮动，默认关闭 → 恒为基准）。
+ * 返回体里的 `reason` 是粗粒度归因（`baseline` / `hardened` / `relaxed`），
+ * 只用来让前端解释"为什么这道题更难了"，不含分数也不含计数。
+ *
+ * @param {object} subject 挑战对象
+ * @param {string} subject.ip 客户端 IP
+ * @param {string|null} [subject.fingerprint] 请求指纹
+ * @param {string|null} [subject.deviceId] 设备 ID
+ * @param {boolean} [subject.loggedIn] 是否已登录（登录用户难度降一档）
+ * @returns {Promise<{challengeId:string, salt:string, difficulty:number, maxAttempts:number, ttlSec:number, reason:string}>}
  */
-async function issueChallengePayload({ ip, fingerprint = null, deviceId = null }) {
-  return await powDao.issue(powChallengeStore, {
-    difficulty: currentDifficulty(),
+async function issueChallengePayload({ ip, fingerprint = null, deviceId = null, loggedIn = false }) {
+  const { difficulty, reason } = await resolveChallengeDifficulty({ ip, loggedIn });
+  const challenge = await powDao.issue(powChallengeStore, {
+    difficulty,
     ttlSec: CHALLENGE_TTL_SEC,
     binding: { ip, fingerprint: fingerprint || null, deviceId: deviceId || null }
   });
+  // `reason` 只是粗粒度归因（baseline / hardened / relaxed），与题目本身一起下发，
+  // 让前端能说清"为什么这次更难"，又不至于把分数/计数暴露给攻击者当调参反馈。
+  return { ...challenge, reason };
 }
 
 /**
@@ -181,7 +179,13 @@ function buildChallengeRedirect(pageUrl, originalUrl) {
  * @returns {Promise<string>} HTML 字符串
  */
 async function buildChallengePage(ip, fingerprint, deviceId = null, options = {}) {
-  const { challengeId, salt, difficulty, maxAttempts } = await issueChallengePayload({ ip, fingerprint, deviceId });
+  const { challengeId, salt, difficulty, maxAttempts } = await issueChallengePayload({
+    ip,
+    fingerprint,
+    deviceId,
+    // 登录用户难度降一档（递进难度开着时才有效果）：有身份可追责，体验优先
+    loggedIn: options.loggedIn === true
+  });
   const nonce = options.nonce || crypto.randomBytes(16).toString('hex');
   // JSON.stringify 负责转义换行/引号；再挡一次 `</` 拼接，避免出现字面量 `</script>`
   const solverLiteral = JSON.stringify(buildSolverSource()).replace(/<\//g, '<\\/');
@@ -378,7 +382,6 @@ export {
   challengePageCsp,
   buildSolverSource,
   issueChallengePayload,
-  currentDifficulty,
   // 这两个是**能力常量**（出处 `verify/pow/service.js`），本模块转出只为让调用方
   // 不必同时 import 两处；数值只有一个来源，不会出现两套口径。
   CHALLENGE_TTL_SEC,

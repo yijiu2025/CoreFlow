@@ -21,6 +21,17 @@ export interface ChallengeIssue {
   difficulty: number;
   maxAttempts: number;
   ttlSec: number;
+  /**
+   * 这道题为什么是这个难度（**粗粒度**归因，可选）
+   *
+   * `baseline` = 基准；`hardened` = 该 IP 最近反复答错，题变难了；
+   * `relaxed` = 最近顺利通过，题变简单了。
+   *
+   * 由服务端的「递进难度」产生（`defense.challengeReputationEnabled`，默认关闭 →
+   * 恒为 `baseline`）。它**不含分数也不含计数**，只够让页面解释一句
+   * "为什么这次要多算一会儿"，不足以让攻击者反推阈值。
+   */
+  reason?: 'baseline' | 'hardened' | 'relaxed';
 }
 
 /**

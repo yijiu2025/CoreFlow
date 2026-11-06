@@ -102,7 +102,18 @@ const rel = {
   // 只下发不透明的 challengeId（页面里不含任何可直接回放的凭据）；
   // 校验时用 Lua `GET + DEL` **一次性消费** —— 并发/重放第二次必然取不到值，
   // 「一次挑战只能用一次」这条承诺就落在这里（旧实现把凭据内嵌进 HTML，脚本回填即可绕过）。
-  challenge: id => `chal:${id}`
+  challenge: id => `chal:${id}`,
+
+  // ── 挑战"信誉"计数（递进难度用） ──────────────────────────────────────
+  // 类型：计数器（正数，`bumpCounter` 的 INCR+EXPIRE）。TTL：`challengeReputationWindowSec`。
+  // 只按 IP 维度记 —— 递进难度问的是"这台机器最近被挑战时表现如何"，
+  // 换设备/换指纹正是攻击方的常见动作，捆太细反而记不住。
+  //
+  // ⚠️ `fail` **只统计「答案不对」**（Invalid Proof）。`Challenge Expired`（载荷过期）、
+  //    `Mismatch`（切网改 IP）、`Malformed` 一律不计：那些更像客户端/网络问题，
+  //    计入升难度会把真实用户越推越死（这类机制最常见的自伤方式）。
+  chalFail: ip => `chal:fail:${ip}`,
+  chalPass: ip => `chal:pass:${ip}`
 };
 
 /**

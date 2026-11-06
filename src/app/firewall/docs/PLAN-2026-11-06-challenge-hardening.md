@@ -303,16 +303,28 @@ framework/verify/pow/
 **验收**：既有挑战用例全绿且**断言不改**（只改 import 路径），firewall 相关 **321 例**通过；
 新增 `__tests__/verify/pow-dao.test.js`（10 例）钉住存储契约与不透明性。
 
-### 阶段 3：项② 递进难度（2 人日｜默认关闭上线）
+### 阶段 3：项② 递进难度（2 人日｜**已完成 2026-11-06**）
 
-- `resolveChallengeDifficulty({ ip, fingerprint, deviceId, loggedIn }) → { difficulty, reason }`
-  - 信号（全部现成，不新建表）：封禁来源（bot/scan/brute）、近窗口失败次数、该设备 pass 历史、UA 是否命中 `botPatterns`、是否登录
-  - 存储：复用 `bumpCounter` / `readCounter`（`util/redis.js`），TTL = 窗口
-  - 输出：以 `challengeDifficulty`（现有键）为基准 ±n，夹在 `[Min, Max]`
-  - 返回体加 `reason`（粗粒度原因，**不暴露分数**），前端可显示"为什么被挑战"
-- 新增配置（42 → **47** 个 defense 键）：`challengeProvider`、`challengeDifficultyMin`、`challengeDifficultyMax`、`challengeReputationEnabled`、`challengeReputationWindowSec`
-- 契约同步（一个都不能漏）：`defaults.js` → `schema.js DEFENSE_SPEC` → `persisted.js`（自动清洗生效）→ `monitor.js`（自动生成）→ **`firewall/src/stores/settings.ts` 的 `DEFENSE_KEYS`**
-- **验收**：连续通过 → 降到 Min；连续失败 → 升到 Max；`challengeReputationEnabled=false` → 恒定基准（三条都要有对照用例）
+- `resolveChallengeDifficulty({ ip, loggedIn }) → { difficulty, reason }`（`framework/firewall/challenge-difficulty.js`）
+  - 信号（全部现成，不新建表）：`chal:fail:<ip>` / `chal:pass:<ip>` 两个窗口计数（`bumpCounter` / `readCounter`，TTL = 窗口）+ 是否登录
+  - 输出：以 `challengeDifficulty` 为基准 ±1~2 档，夹在 `[Min, Max]`
+  - 返回体加 `reason`（`baseline` / `hardened` / `relaxed`，**不暴露分数也不暴露计数**）
+- 新增配置：`challengeReputationEnabled`（默认 **false**）、`challengeDifficultyMin`(2)、
+  `challengeDifficultyMax`(5)、`challengeReputationWindowSec`(600) —— defense 43 → **47** 键
+- 契约同步（一个都没漏）：`defaults.js` → `schema.js DEFENSE_SPEC`（**顺序逐键一致**，有测试钉住）
+  → `persisted.js`（自动清洗生效）→ `monitor.js`（自动生成）→ `firewall/src/stores/settings.ts` 的
+  `DEFENSE_KEYS` + `DEFAULT_DEFENSE` + `types/index.ts`
+- **验收**：连续通过 → 降到 Min；连续失败 → 升到 Max；`challengeReputationEnabled=false` → 恒定基准（三条都有对照用例）
+
+**与原计划的三处偏差（都是刻意的）**：
+
+1. **`challengeProvider` 推迟到阶段 4**。现在加它只能写 `'pow'` 一个值，属于"配了不生效"——
+   刚在阶段 1 才修掉同类问题（`challengeDifficulty` 上限 6 被静默夹成 5），不该再制造一个。
+2. **没用「封禁来源」当信号**。它在 `sendChallengeResponse` 那条链路上拿不到（`buildBlockError`
+   不带 source），要拿就得给错误对象加字段、穿四层；而它的价值被计数覆盖了大半 ——
+   首次被 Bot 判定时计数本来就是 0，复犯才会升级，那正是"递进"要的效果。
+3. **升难度只认 `Invalid Proof`**（原计划写的是"近窗口失败次数"）。`Expired` / `Mismatch` /
+   `Malformed` 是客户端或网络问题，计进去会把真实用户越推越死 —— 这是这类机制最经典的自伤。
 
 ### 阶段 4：项④a 复用现成验证码能力（**0.5 人日**｜默认 `pow`）
 

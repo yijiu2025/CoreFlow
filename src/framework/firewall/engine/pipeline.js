@@ -320,9 +320,9 @@ function isDocumentRequest(request) {
  * @param {string|null} deviceId 设备 ID（可能为 null）
  * @returns {Promise<void>}
  */
-async function sendChallengePage(reply, ip, fingerprint, deviceId) {
+async function sendChallengePage(reply, ip, fingerprint, deviceId, options = {}) {
   const nonce = crypto.randomBytes(16).toString('hex');
-  const html = await buildChallengePage(ip, fingerprint, deviceId, { nonce });
+  const html = await buildChallengePage(ip, fingerprint, deviceId, { nonce, loggedIn: options.loggedIn });
   reply
     .headers({ ...CHALLENGE_NO_STORE, 'Content-Security-Policy': challengePageCsp(nonce) })
     .type('text/html')
@@ -389,7 +389,9 @@ async function sendChallengeResponse(reply, ip, fingerprint, deviceId, request) 
 
     // ② 没配 / 回退 → 内置页
     recordChallengeEvent({ type: 'surface', surface: 'inline' });
-    await sendChallengePage(reply, ip, fingerprint, deviceId);
+    // `state.user` 由 04-auth 的 onRequest 钩子先填充（早于防火墙），所以这里能拿到登录态。
+    // 它只影响递进难度的"降一档"（默认关闭时无效果），不参与任何放行判定。
+    await sendChallengePage(reply, ip, fingerprint, deviceId, { loggedIn: Boolean(request?.state?.user?.id) });
     return 200;
   }
 
