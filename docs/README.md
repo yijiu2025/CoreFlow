@@ -31,6 +31,7 @@ CoreFlow **后端仓库**的文档总入口。**写文档前先读本文决定�
 | --- | --- |
 | [oauth21-api-report.md](./oauth21-api-report.md) | `/oauth2.1` 授权服务器的对外 API 报告（端点 / 参数 / 响应，按真实路由整理） |
 | [test-audit-prompts.md](./test-audit-prompts.md) | 测试审计提示词集（让 AI 按固定口径审查测试有效性，配合 `conventions/test-effectiveness` 守卫使用） |
+| [firewall-flowchart.html](./firewall-flowchart.html) | 防火墙机制**全链路**流程图（单文件自包含 HTML，零外链零脚本，浏览器直接打开；不进 VitePress 站点，故不是 `.md`） |
 
 ## 与其他仓库的关系
 

@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nodeServers · 防火墙机制全链路流程图</title>
+<style>
+  :root{
+    --bg:#f6f8fb; --card:#ffffff; --ink:#0f172a; --ink2:#334155; --muted:#64748b;
+    --line:#e2e8f0; --line2:#cbd5e1;
+    --cyan:#0e7490; --cyan-bg:#ecfeff; --cyan-line:#a5f3fc;
+    --red:#b91c1c; --red-bg:#fef2f2; --red-line:#fecaca;
+    --amber:#b45309; --amber-bg:#fffbeb; --amber-line:#fde68a;
+    --green:#047857; --green-bg:#ecfdf5; --green-line:#a7f3d0;
+    --violet:#6d28d9; --violet-bg:#f5f3ff; --violet-line:#ddd6fe;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:14px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px; margin:0 auto; padding:40px 28px 90px}
+
+  /* ---------- header ---------- */
+  header.hero{margin-bottom:44px}
+  .eyebrow{font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--cyan); font-weight:700}
+  h1{font-size:31px; line-height:1.22; margin:8px 0 10px; letter-spacing:-.02em; font-weight:800}
+  .sub{color:var(--muted); font-size:14.5px; max-width:940px}
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:10px; margin-top:22px}
+  .stat{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px}
+  .stat b{display:block; font-family:var(--mono); font-size:20px; color:var(--cyan); line-height:1.2}
+  .stat span{font-size:11.5px; color:var(--muted)}
+
+  /* ---------- section ---------- */
+  section{margin-top:52px}
+  h2{font-size:19px; margin:0 0 4px; letter-spacing:-.01em; font-weight:750; display:flex; align-items:center; gap:10px}
+  h2 .n{
+    font-family:var(--mono); font-size:11px; font-weight:700; color:#fff; background:var(--ink);
+    border-radius:6px; padding:2px 7px; letter-spacing:.04em;
+  }
+  .lede{color:var(--muted); font-size:13.5px; margin:0 0 20px; max-width:960px}
+  h3{font-size:14.5px; margin:26px 0 10px; font-weight:700}
+  h3 code{font-size:12.5px}
+
+  /* ---------- flow ---------- */
+  .flow{display:flex; flex-direction:column; align-items:stretch; gap:0}
+  .node{
+    position:relative; background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:13px 16px; box-shadow:0 1px 2px rgba(15,23,42,.04);
+  }
+  .node .lbl{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  .node .fn{font-family:var(--mono); font-size:13px; font-weight:700; color:var(--ink); margin-top:3px; word-break:break-word}
+  .node .fn em{font-style:normal; color:var(--cyan)}
+  .node .desc{font-size:12.5px; color:var(--ink2); margin-top:5px}
+  .node .desc code{font-size:11.5px}
+
+  .node.entry{border-color:var(--ink); border-width:1.5px; background:linear-gradient(180deg,#fff,#f8fafc)}
+  .node.decision{border-color:var(--amber-line); background:linear-gradient(180deg,#fffdf6,#fff)}
+  .node.decision .fn{color:var(--amber)}
+  .node.hook{border-left:4px solid var(--violet)}
+  .node.hook .fn{color:var(--violet)}
+  .node.bad{border-left:4px solid var(--red)}
+  .node.good{border-left:4px solid var(--green)}
+  .node.dim{background:#fbfcfe}
+
+  .link{position:relative; height:30px; display:flex; align-items:center; justify-content:center}
+  .link::before{content:""; position:absolute; top:0; bottom:0; left:50%; width:2px; background:var(--line2); transform:translateX(-1px)}
+  .link::after{
+    content:""; position:absolute; bottom:-1px; left:50%; transform:translateX(-50%);
+    border-left:5px solid transparent; border-right:5px solid transparent; border-top:7px solid var(--line2);
+  }
+  .link .tag{
+    position:relative; z-index:1; background:var(--bg); padding:2px 9px; border-radius:999px;
+    font-family:var(--mono); font-size:11px; color:var(--ink2); border:1px solid var(--line2);
+  }
+  .link.pass::before{background:var(--green-line)}
+  .link.pass::after{border-top-color:var(--green-line)}
+  .link.pass .tag{border-color:var(--green-line); color:var(--green); background:var(--green-bg)}
+  .link.stop::before{background:var(--red-line)}
+  .link.stop::after{border-top-color:var(--red-line)}
+  .link.stop .tag{border-color:var(--red-line); color:var(--red); background:var(--red-bg)}
+
+  .branchrow{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; margin-top:12px}
+  .branch{
+    font-size:12.5px; border-radius:10px; padding:9px 11px; border:1px dashed var(--line2);
+    background:#fff; color:var(--ink2);
+  }
+  .branch b{display:block; font-family:var(--mono); font-size:11.5px; margin-bottom:2px}
+  .branch.b{border-color:var(--red-line); background:var(--red-bg); color:var(--red)}
+  .branch.b b{color:var(--red)}
+  .branch.a{border-color:var(--amber-line); background:var(--amber-bg); color:var(--amber)}
+  .branch.a b{color:var(--amber)}
+  .branch.g{border-color:var(--green-line); background:var(--green-bg); color:var(--green)}
+  .branch.g b{color:var(--green)}
+  .branch.v{border-color:var(--violet-line); background:var(--violet-bg); color:var(--violet)}
+  .branch.v b{color:var(--violet)}
+
+  .altgrid{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:860px){.altgrid{grid-template-columns:1fr}}
+
+  /* ---------- tables ---------- */
+  .tblwrap{overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--card)}
+  table{width:100%; border-collapse:collapse; font-size:12.5px; min-width:660px}
+  thead th{
+    text-align:left; padding:9px 12px; background:#f8fafc; color:var(--muted);
+    font-size:11px; letter-spacing:.06em; text-transform:uppercase; font-weight:700;
+    border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  tbody td{padding:9px 12px; border-bottom:1px solid #f1f5f9; vertical-align:top; color:var(--ink2)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fcfdff}
+  td.fn{font-family:var(--mono); font-size:12px; font-weight:650; color:var(--ink); white-space:normal; overflow-wrap:anywhere; min-width:150px}
+  td.fn small{display:block; font-weight:400; color:var(--muted); font-size:11px}
+  code{font-family:var(--mono); font-size:11.5px; background:#f1f5f9; padding:1px 5px; border-radius:4px; color:#0b4a5c}
+  .k{font-family:var(--mono); font-size:11.5px; color:var(--violet)}
+  .pill{
+    display:inline-block; font-family:var(--mono); font-size:10.5px; padding:1px 6px; border-radius:5px;
+    border:1px solid var(--line2); color:var(--ink2); background:#fff; margin:1px 2px 1px 0;
+  }
+  .pill.r{border-color:var(--red-line); background:var(--red-bg); color:var(--red)}
+  .pill.g{border-color:var(--green-line); background:var(--green-bg); color:var(--green)}
+  .pill.a{border-color:var(--amber-line); background:var(--amber-bg); color:var(--amber)}
+  .pill.c{border-color:var(--cyan-line); background:var(--cyan-bg); color:var(--cyan)}
+  .pill.v{border-color:var(--violet-line); background:var(--violet-bg); color:var(--violet)}
+
+  /* ---------- file card ---------- */
+  .file{background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:18px}
+  .file > .head{
+    display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    padding:11px 16px; background:#f8fafc; border-bottom:1px solid var(--line);
+  }
+  .file > .head .path{font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--ink)}
+  .file > .head .role{font-size:11.5px; color:var(--muted)}
+  .file > .head .lines{margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--muted)}
+  .file table{min-width:600px}
+  .file .tblwrap{border:none; border-radius:0}
+
+  .legend{display:flex; flex-wrap:wrap; gap:14px; margin:14px 0 0; font-size:12px; color:var(--muted)}
+  .legend i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px}
+
+  .note{
+    border-left:3px solid var(--cyan); background:var(--cyan-bg); color:#155e75;
+    padding:10px 14px; border-radius:0 10px 10px 0; font-size:12.5px; margin:14px 0 0;
+  }
+  .note b{color:#0e7490}
+  .warn{border-left-color:var(--amber); background:var(--amber-bg); color:#7c2d12}
+  .warn b{color:#b45309}
+
+  footer{margin-top:56px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">nodeServers · src/framework/firewall</div>
+  <h1>后端防火墙机制 · 全链路流程图</h1>
+  <p class="sub">
+    按「装配 → 请求主链路 → 检测器 → 存储访问层 → 挑战子系统」五层展开。
+    每个节点标注<b>函数名</b>、它<b>写入/读取的状态</b>（内存 Map、request 上的隐藏字段、Redis key）以及<b>依赖的库</b>。
+    全部内容来自对 <code>src/framework/firewall/**</code>（23 个文件、4585 行）与调用方
+    <code>loader/registry/05-firewall.js</code>、<code>api/firewall/v1/*</code>、<code>app/firewall/*</code> 的逐行通读。
+  </p>
+  <div class="stats">
+    <div class="stat"><b>23</b><span>framework/firewall 文件</span></div>
+    <div class="stat"><b>122</b><span>函数声明（同构 CRUD 合并成行）</span></div>
+    <div class="stat"><b>5</b><span>拦截阶段（onRequest 内）</span></div>
+    <div class="stat"><b>9</b><span>Lua 脚本（原子操作）</span></div>
+    <div class="stat"><b>11</b><span>内存降级 Map</span></div>
+    <div class="stat"><b>8</b><span>外部库 + 4 个内部框架模块</span></div>
+  </div>
+</header>
+
+<!-- ============================================================ 1 -->
+<section>
+  <h2><span class="n">01</span>装配链路：注册顺序是功能性的</h2>
+  <p class="lede">
+    <code>05-firewall.js</code> 的三步编排顺序不可交换：第 ② 步注册的 <code>@fastify/rate-limit</code> v10 靠
+    <code>onRoute</code> 钩子给「此后注册的每条路由」挂限流配置 —— 一旦挪到 <code>08-api</code> 之后，插件装上了但
+    钩子一次都不会触发，全局限流静默失效。
+  </p>
+
+  <div class="flow">
+    <div class="node entry">
+      <div class="lbl">启动</div>
+      <div class="fn">index.js → createApp() → runEngine() → registry 顺序执行</div>
+      <div class="desc">前序 loader：<code>00-globals</code> · <code>01-monitor</code> · <code>02-redis</code>(<code>app.redis</code>) · <code>03-db</code> · <code>04-auth</code>(Session + ALS)。防火墙必须在这之后、<code>08-api</code> 之前。</div>
+    </div>
+
+    <div class="link"><span class="tag">engine 装载 05</span></div>
+
+    <div class="node hook">
+      <div class="lbl">① app 侧前置（可选，存在才做）</div>
+      <div class="fn"><em>prepareAppFirewall</em>() &nbsp;·&nbsp; app/firewall/index.js</div>
+      <div class="desc">
+        调用 <code>initDao()</code> → <code>registerSettingsReader()</code> 注入磁盘配置读取器（<code>interface/config-access.js</code> 的 <code>settingsReader</code> 引用）；
+        再 <code>registerEmailAlertSender()</code> 注入「动态 import notice 邮件服务」的闭包。<br>
+        <b>为什么必须最先：</b><code>registerRateLimit</code> 在<b>插件注册期</b>就读 <code>defense.enableRateLimit</code>，晚读会拿默认值误判开关。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">fs.existsSync 存在性守卫</span></div>
+
+    <div class="node">
+      <div class="lbl">② framework 防护核心（无条件启动）</div>
+      <div class="fn"><em>firewallCorePlugin</em>(app) &nbsp;·&nbsp; framework/firewall/bootstrap.js</div>
+      <div class="desc">
+        模块顶层的兜底：<code>if (!hasSettingsReader()) registerSettingsReader(() =&gt; DEFAULT_SECURITY_SETTINGS)</code> —— 保证 app 被卸载后仍能以
+        <code>config/defaults.js</code> 的默认策略矩阵独立运行。<br>
+        内部依次：<code>startCleanupTask(app)</code> → <code>registerRateLimit(app)</code> → 注册 4 个钩子（见下节）。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">③ app 侧收尾</span></div>
+
+    <div class="node hook">
+      <div class="lbl">收尾</div>
+      <div class="fn"><em>firewallAppPlugin</em>(app) &nbsp;·&nbsp; fastify-plugin 封装</div>
+      <div class="desc">
+        <code>syncManualBlacklistToRedis()</code> + <code>syncManualWhitelistToRedis()</code>：把配置里的手动名单灌进 Redis；
+        <code>app.addHook('onClose')</code> → <code>cleanupSaveTimer()</code> + <code>flushPersist()</code>（遥测内存落盘）。
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>依赖倒置的三处「函数引用注入」</b>（framework 不许 import app，全部靠注入）：
+    <code>interface/config-access.js</code>（配置读取器）、<code>telemetry-sink.js</code>（遥测 sink，由 <code>data/store.js</code>
+    模块体里 <code>registerRecordSink(pushRecord)</code> 注册）、<code>engine/auto-responder.js</code>（邮件通道）。
+    三者未注册时都 <b>fail-open 静默跳过</b>，防护本身不受影响。
+  </div>
+</section>
+
+<!-- ============================================================ 2 -->
+<section>
+  <h2><span class="n">02</span>请求主链路：onRequest 五阶段拦截管道</h2>
+  <p class="lede">
+    <code>firewallCorePlugin</code> 一共挂了 <b>4 个钩子</b>：两个 <code>onRequest</code>（主管道 + WebSocket 升级）、一个 <code>onSend</code>、一个 <code>onResponse</code>。
+    主管道在框架的 <code>@fastify/cookie</code> / <code>auth</code> / 全局 <code>@fastify/rate-limit</code> 之后执行。
+  </p>
+
+  <div class="flow">
+    <div class="node dim">
+      <div class="lbl">框架前置（非防火墙代码，但决定防火墙能看到什么）</div>
+      <div class="fn">onRequest[0] @fastify/cookie → onRequest[1] auth → onRequest[2] @fastify/rate-limit（全局桶）</div>
+      <div class="desc">
+        <code>request.cookies</code> 由 cookie 插件解析；<code>request.state.user</code> 由 auth 填充（sid → Redis session，过期用 <code>sid_r</code> 刷新）。
+        全局限流由 <code>registerRateLimit</code> 注册，<code>keyGenerator</code> 已登录用 <code>rate:user:{id}</code>、否则 <code>rate:ip:{ip}</code>。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">进入防火墙 onRequest</span></div>
+
+    <div class="node">
+      <div class="lbl">阶段 0 · 上下文构建</div>
+      <div class="fn"><em>buildRequestContext</em>(request) → { ip, ua, fingerprint, deviceId, geoInfo }</div>
+      <div class="desc">
+        写 request 三个隐藏字段：<code>request._fingerprint</code>、<code>request._deviceId</code>、<code>request._firewallLog</code>（一条含 time/ip/fingerprint/deviceId/method/url/userAgent/blocked + <code>region,city</code> 的日志草稿）。<br>
+        调用：<code>generateFingerprint(request)</code>（sha256 前 16 位）· <code>getClientDeviceId(request)</code>（auth，只认客户端自报且校验通过，<b>不补发</b>）· <code>resolveGeoInfo(ip)</code>（geoip-lite）。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">await</span></div>
+
+    <div class="node decision">
+      <div class="lbl">阶段 1 · 全局封禁检查（最先、无条件下达）</div>
+      <div class="fn"><em>checkGlobalBlockPhase</em>(request, reply)</div>
+      <div class="desc">
+        内部：<code>trackConnection(ip, +1)</code> 累加并发计数 → <code>checkGlobalBlock(ip, fingerprint, deviceId)</code> 抛错即视为命中。
+        <b>一次 Lua 取回 6 类状态</b>（3 白名单 + 3 封禁），优先级：白名单短路 → 设备封禁 → 指纹封禁 → IP 封禁 → 手动黑名单兜底（仅 Redis 不可用时）。
+      </div>
+      <div class="branchrow">
+        <div class="branch g"><b>白名单命中</b>直接 return false，放行</div>
+        <div class="branch b"><b>SCANNER / BLOCKED</b>→ <code>buildBlockError</code>：403 / 429 + <code>Retry-After</code>，透传 <code>err.headers</code></div>
+        <div class="branch a"><b>CHALLENGE</b>→ 不硬封禁，三种去向（见下）</div>
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">err.isChallenge === true</span></div>
+
+    <div class="node decision">
+      <div class="lbl">阶段 1b · 挑战态处置（分支收敛）</div>
+      <div class="fn">① <em>hasPass</em>({ip,fingerprint,deviceId,token}) &nbsp; ② <em>isChallengeVerifyUrl</em>(url) &nbsp; ③ <em>sendChallengePage</em></div>
+      <div class="desc">
+        ① 已持有 <code>fw_verified</code> Cookie 且校验通过 → <code>clearChallengeState()</code>（<b>只清 CHALLENGE</b>，逐维度 <code>removeBlockDevice/removeBlockFp/removeBlock</code>）后放行；
+        ② 请求的就是 <code>/api/firewall/v1/challenge/verify</code> → 放行（否则挑战永远解不开）；
+        ③ 其余 → <code>firewallLog.blocked = true</code> + <code>recordFirewallEvent</code> + 渲染挑战页（HTTP <b>200</b>）。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">放行后继续</span></div>
+
+    <div class="node decision">
+      <div class="lbl">阶段 2a · 深度检测跳过名单</div>
+      <div class="fn"><em>shouldSkipDeepCheck</em>(url)</div>
+      <div class="desc">
+        <code>isChallengeVerifyUrl(url)</code> ‖ <code>isProbeUrl(url)</code>（<code>/v1/health</code>、<code>/v1/health/live</code>、<code>/v1/health/ready</code>）‖
+        <code>SKIP_PATTERN</code>（<code>/\.(js|css|png|jpg|ico|svg|woff2?)$/i</code>）。命中 → <b>直接 return</b>（全局封禁/连接数已执行过）。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">未命中</span></div>
+
+    <div class="node decision">
+      <div class="lbl">阶段 2b · 匿名必拒短路（配置开关，默认关）</div>
+      <div class="fn"><em>willBeRejectedAsAnonymous</em>(request)</div>
+      <div class="desc">
+        判据：<code>request.routeOptions.config.requireLogin === true</code> 且无 <code>request.state.user</code> 且
+        <b>一个凭据都没有</b>（无 <code>cookies.sid</code> / <code>access_token</code> / <code>authorization</code>）。
+        仅在 <code>defense.skipDeepCheckForAnonymous</code> 为真时生效 —— 省的是 CPU 与 Redis 往返，代价是端点枚举阻力下降。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">未短路</span></div>
+
+    <div class="node decision">
+      <div class="lbl">阶段 3 · 挑战 Cookie 校验</div>
+      <div class="fn"><em>checkChallengeCookie</em>(request, ip, fingerprint)</div>
+      <div class="desc">
+        读 <code>request.cookies.fw_verified</code>，一次原子 <code>hasPass</code>（<code>LUA_HAS_PASS</code>：设备/指纹/IP 三键任一 EXISTS 即通过）→ true 直接 return 放行。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">未通过 → 深度检测</span></div>
+
+    <div class="node">
+      <div class="lbl">阶段 4 · 深度检测管道</div>
+      <div class="fn"><em>runDetectionPipeline</em>(ip, ua, url, firewallLog, fingerprint, reply, deviceId)</div>
+      <div class="desc">
+        顺序固定：<code>trackRequestCount(ip)</code> → <code>checkBotChallenge(ip, ua, count, deviceId)</code> →
+        <code>checkGeoReputation(ip, url)</code> → 遍历 <code>defense.endpointRateLimits</code> 命中即 <code>checkRateLimit(`${rule.path}:${ip}`, {limit,window,blockTime})</code> 并 break。
+      </div>
+      <div class="branchrow">
+        <div class="branch a"><b>isChallenge</b>→ 挑战页 HTML + 200（<code>sendChallengePage</code>）</div>
+        <div class="branch b"><b>硬封禁</b>→ <code>err.statusCode</code>（403/429）+ <code>Retry-After</code>，JSON 体 <code>{error:'Security Policy Blocked'}</code></div>
+        <div class="branch g"><b>全部通过</b>→ return false，交给业务 handler</div>
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">业务 handler 执行</span></div>
+
+    <div class="node good">
+      <div class="lbl">onSend</div>
+      <div class="fn"><em>trackConnection</em>(request.ip, −1) &nbsp;+&nbsp; <em>recordLog</em>(request._firewallLog, reply.statusCode, request._firewallLogged)</div>
+      <div class="desc">
+        连接数归还（<code>-1</code> 侧<b>故意不做前置 +1 校验</b>：<code>current &lt;= 0</code> 直接 delete，天然无害）；
+        <code>recordLog</code> 在未被前面阶段记录过时才补一条 → <code>recordFirewallEvent</code> → app 层 <code>pushRecord</code> 环形缓冲。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">响应已发出</span></div>
+
+    <div class="node">
+      <div class="lbl">onResponse · 旁路观测</div>
+      <div class="fn"><em>observeLoginOutcome</em>(request, reply) &nbsp;|&nbsp; <em>checkNotFoundTrap</em>(ip, url, statusCode, deviceId)</div>
+      <div class="desc">
+        前者：仅 <code>POST</code> + 路径匹配 <code>/\/(mini-login|login|verify-email)$/</code> + <code>enableBruteForce</code>；2xx 视为成功（清零计数），
+        <code>401/403/422/423</code> 视为凭证失败（累加）。<br>
+        后者：<code>reply.statusCode ∈ {404,403}</code> 时累加扫描陷阱计数，达阈值封 <code>SCANNER</code> 并抛 403。
+      </div>
+    </div>
+
+    <div class="link"><span class="tag">另一个独立的 onRequest 钩子</span></div>
+
+    <div class="node bad">
+      <div class="lbl">WebSocket 升级防护</div>
+      <div class="fn">if (headers.upgrade === 'websocket') → <em>checkGlobalBlock</em>(request.ip, null)</div>
+      <div class="desc">
+        只查封禁（不传 fingerprint/deviceId），命中即 <code>reply.code(403).send({error:'blocked'})</code>。注意这里抛错<b>不</b>走 <code>buildBlockError</code> 的状态码映射，一律 403。
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:#0f172a"></i>入口/主干</span>
+    <span><i style="background:#fde68a"></i>判定点（分支）</span>
+    <span><i style="background:#7c3aed"></i>app 层装配钩子</span>
+    <span><i style="background:#047857"></i>放行/归还资源</span>
+    <span><i style="background:#b91c1c"></i>独立拦截入口</span>
+  </div>
+</section>
+
+<!-- ============================================================ 3 -->
+<section>
+  <h2><span class="n">03</span>函数全清单：每个文件、每个函数、它动了什么状态</h2>
+  <p class="lede">
+    「写入状态」列记录的是**跨请求存活**的东西（内存 Map / Redis key / 闭包变量），请求级临时字段用
+    <code>request._*</code> 标注。签名只保留形参名，返回值省略以免噪音。
+  </p>
+
+  <!-- engine/pipeline.js -->
+  <div class="file">
+    <div class="head">
+      <span class="path">engine/pipeline.js</span>
+      <span class="role">请求管道 —— 五阶段的具体实现</span>
+      <span class="lines">445 行 · 13 个函数 + 5 个路径/开关常量</span>
+    </div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>函数</th><th>做什么 / 分支</th><th>写入状态</th><th>依赖库</th></tr></thead>
+      <tbody>
+        <tr><td class="fn">pathOf<small>(url)</small></td><td>去掉查询串取纯路径（所有路径判定共用）</td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">isChallengeVerifyUrl<small>(url)</small></td><td>是否等于 <code>CHALLENGE_VERIFY_PATH</code> 常量</td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">isProbeUrl<small>(url)</small></td><td>是否属于 <code>PROBE_PATHS</code>（健康探针必须无条件可达）</td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">shouldSkipDeepCheck<small>(url)</small></td><td>三者取或：验证接口 / 探针 / 静态后缀正则</td><td>—</td><td>RegExp 字面量</td></tr>
+        <tr><td class="fn">willBeRejectedAsAnonymous<small>(request)</small></td><td>requireLogin 且无 user 且无任何凭据 → 可跳过深度检测</td><td>读 <code>request.routeOptions.config</code></td><td>—</td></tr>
+        <tr><td class="fn">buildRequestContext<small>(request)</small></td><td>生成指纹/设备/地理上下文与日志草稿</td><td class="k">request._fingerprint<br>request._deviceId<br>request._firewallLog</td><td><span class="pill">auth</span><span class="pill">geoip-lite</span><span class="pill">node:crypto</span></td></tr>
+        <tr><td class="fn">clearChallengeState<small>(ip, fp, dev)</small></td><td>校验通过后撤销 CHALLENGE 状态（只清 CHALLENGE 型）</td><td class="k">DEL fw:block:dev / :fp / :{ip} + HDEL 索引</td><td>block-manager</td></tr>
+        <tr><td class="fn">sendChallengePage<small>(reply, ip, fp, dev)</small></td><td><code>buildChallengePage</code> → <code>reply.type('text/html').send()</code>，状态 200</td><td class="k">fw:chal:{id}（载荷，300s）</td><td>challenge-template</td></tr>
+        <tr><td class="fn">checkGlobalBlockPhase<small>(request, reply)</small></td><td>阶段 1：+1 连接 → 全局封禁 → 按 isChallenge / statusCode 分别回包</td><td class="k">firewallLog.blocked / statusCode<br>activeConnections</td><td>block-manager</td></tr>
+        <tr><td class="fn">checkChallengeCookie<small>(request, ip, fp)</small></td><td>阶段 3：一次 <code>hasPass</code> 原子校验三维度令牌</td><td>读 <code>request.cookies.fw_verified</code></td><td>util/redis</td></tr>
+        <tr><td class="fn">runDetectionPipeline<small>(ip, ua, url, log, fp, reply, dev)</small></td><td>阶段 4：Bot → 地理 → 端点限频；只认 <code>err.isChallenge === true</code> 结构化标记</td><td class="k">firewallLog.blocked / statusCode</td><td>4 个 detector</td></tr>
+        <tr><td class="fn">observeLoginOutcome<small>(request, reply)</small></td><td>onResponse 观测登录结果，接上暴力破解计数（firewall 自己观测，不反向依赖 oauth21）</td><td class="k">brute:ip:* / brute:user:*<br>lock:{user}</td><td>brute-force</td></tr>
+        <tr><td class="fn">recordLog<small>(log, statusCode, alreadyLogged=false)</small></td><td>未被前面阶段记录过时补一条遥测事件</td><td class="k">无（转发 recordFirewallEvent）</td><td>telemetry-sink</td></tr>
+        <tr><td class="fn">buildBlockError<small>(block) — block-manager</small></td><td>CHALLENGE→200+isChallenge；SCANNER→403；其余→429；都带 <code>Retry-After</code></td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- detectors -->
+  <div class="file">
+    <div class="head">
+      <span class="path">engine/detectors/</span>
+      <span class="role">6 个检测器 —— 每个都有独立开关与阈值</span>
+      <span class="lines">6 文件 · 13 个函数</span>
+    </div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>函数</th><th>做什么 / 分支</th><th>写入状态</th><th>依赖库 / 开关</th></tr></thead>
+      <tbody>
+        <tr><td class="fn">registerRateLimit<small>(app) · first-ratelimit</small></td><td>注册 <code>@fastify/rate-limit</code>；<code>global</code> 只跟随 <code>enableRateLimit</code>，插件<b>始终尽量注册</b>（否则各路由 <code>config.rateLimit</code> 静默失效）。端点级关闭时先挂 <code>onRoute</code> 钩子把 <code>config.rateLimit</code> 摘掉</td><td class="k">Fastify 插件实例<br>onRoute 钩子</td><td><span class="pill c">@fastify/rate-limit</span><span class="pill">createBoundStore</span></td></tr>
+        <tr><td class="fn">resolveRateLimitMax<small>(rateLimitRequests)</small></td><td>取 <code>max(配置, FW_RATE_LIMIT_OVERRIDE)</code>，override 必须是严格正整数（<b>只放宽不收紧</b>）</td><td>读 <code>process.env</code></td><td>—</td></tr>
+        <tr><td class="fn">describeRateLimitRisk<small>({enabled,max,windowSec,routeLevel})</small></td><td>识别两种「看着开了实际没防护」的配置，返回告警文案</td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">trackRequestCount<small>(ip)</small></td><td>内存滑窗计数（60s），供 Bot「短时高频」判据；索引式 splice 裁剪，封顶 <code>MAX_WINDOW_ENTRIES=1000</code></td><td class="k">ipRequestTimestamps: Map&lt;ip, number[]&gt;</td><td>util/shared</td></tr>
+        <tr><td class="fn">checkRateLimit<small>(actorId, {limit,window,blockTime,retryAfter})</small></td><td>先读封禁态（命中则按 CHALLENGE/SCANNER/其它分别抛 200/403/429）→ <code>consumeRateWindow</code> → 超限 <code>setBlock(status:'BLOCKED')</code> 并抛 429</td><td class="k">fw:rl:{actor} (ZSET)<br>fw:block:{actor}</td><td><span class="pill a">enableEndpointRateLimit</span></td></tr>
+        <tr><td class="fn">checkBotChallenge<small>(ip, ua, count, deviceId)</small></td><td>三条触发分支：<b>无 UA</b> &gt; <code>botChallengeNoUaLimit(10)</code>；<b>Bot UA</b> &gt; <code>botChallengeBotLimit(30)</code>；<b>浏览器 UA</b> &gt; <code>botChallengeBrowserLimit(120)</code></td><td class="k">compiledBotPatterns / compiledBrowserPatterns（RegExp[]）<br>lastBot/BrowserPatternsRef（引用比较）</td><td><span class="pill a">enableDeviceBlock</span></td></tr>
+        <tr><td class="fn">ensurePatternsCompiled<small>()</small></td><td>配置数组<b>引用变了</b>才重新编译（避免每请求 JSON.stringify）</td><td class="k">上面 4 个闭包变量</td><td>—</td></tr>
+        <tr><td class="fn">compilePatterns<small>(patterns)</small></td><td>批量 <code>new RegExp(p,'i')</code>，非法模式直接丢弃</td><td>—</td><td>RegExp</td></tr>
+        <tr><td class="fn">challengeSubject<small>(subject)</small></td><td>下发 <code>CHALLENGE</code> 挑战态，TTL <code>CHALLENGE_TTL_SEC=1800</code>，IP + 设备两维度</td><td class="k">fw:block:{ip} / fw:block:dev:{id}<br>fw:blocked:* Hash</td><td>block-manager</td></tr>
+        <tr><td class="fn">checkGeoReputation<small>(ip, url)</small></td><td>内网前缀直接返回；IDC 段限频 60/60s；境外 + 内部路径 30/60s；境外 + 敏感路径 10/60s</td><td class="k">委托 checkRateLimit 写 fw:rl:*</td><td><span class="pill">geoip-lite</span><span class="pill a">enableGeoFilter</span></td></tr>
+        <tr><td class="fn">resolveGeoInfo<small>(ip)</small></td><td>内网 → <code>{region:'内部网络',city:'局域网'}</code>，否则 geoip 查表；异常兜底「未知」</td><td>—</td><td><span class="pill">geoip-lite</span></td></tr>
+        <tr><td class="fn">checkLoginBruteForce<small>(ip, username, success, deviceId)</small></td><td>成功 → 清空两个计数；失败先查是否已封（已封不再累加）→ 并发 <code>bumpCounter</code> → IP 达 <code>bruteIpLimit(10)</code> 挑战 IP，账号达 <code>bruteLimit(5)</code> <code>setFlag</code> 锁定 + 清计数 + 挑战</td><td class="k">fw:brute:ip:* / fw:brute:user:*<br>fw:lock:{user}</td><td><span class="pill a">enableBruteForce</span></td></tr>
+        <tr><td class="fn">isAccountLocked<small>(username)</small></td><td><code>hasFlag(rel.accountLock(username))</code>（当前仅导出，账号维度未接线）</td><td>读 fw:lock:{user}</td><td>util/redis</td></tr>
+        <tr><td class="fn">checkNotFoundTrap<small>(ip, url, statusCode, deviceId)</small></td><td>safePaths 跳过；404/403/405 累加；达 <code>maxNotFoundAttempts</code> → 封 <code>SCANNER</code> + <code>removeKeys(陷阱键)</code> + 告警 + 抛 403</td><td class="k">fw:trap:{ip}<br>fw:block:{ip} / :dev</td><td><span class="pill a">enableAutoBlacklist</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- auto responder -->
+  <div class="file">
+    <div class="head">
+      <span class="path">engine/auto-responder.js · telemetry-sink.js</span>
+      <span class="role">告警旁路 / 遥测注入点</span>
+      <span class="lines">237 + 57 行 · 8 个函数</span>
+    </div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>函数</th><th>做什么</th><th>写入状态</th><th>依赖库</th></tr></thead>
+      <tbody>
+        <tr><td class="fn">registerEmailAlertSender<small>(sender)</small></td><td>注入发信函数（app 层动态 import notice 邮件服务）</td><td class="k">闭包 emailAlertSender</td><td>—</td></tr>
+        <tr><td class="fn">readResponderConfig<small>()</small></td><td>深层合并 <code>defense.alert</code> / <code>defense.autoBlock</code>（不再把子对象平铺到根）</td><td>—</td><td>util/shared</td></tr>
+        <tr><td class="fn">rememberCooldown<small>(key, now)</small></td><td>写冷却时间戳，超 <code>ALERT_COOLDOWN_MAX=5000</code> 按插入顺序淘汰</td><td class="k">alertCooldown: Map&lt;"ip|type", ts&gt;</td><td>—</td></tr>
+        <tr><td class="fn">sendAlert<small>(ip, type, details)</small></td><td>冷却内跳过；邮件（未注册则跳过）+ Webhook（<code>AbortController</code> 5000ms 超时）</td><td class="k">alertCooldown</td><td><span class="pill">全局 fetch</span><span class="pill">AbortController</span></td></tr>
+        <tr><td class="fn">notifyAttack<small>(ip, type, details)</small></td><td>记一条 <code>method:'ATTACK'</code> 遥测事件 + warn 日志 + sendAlert；<b>任何失败都不影响主流程</b></td><td class="k">遥测环形缓冲（app 侧）</td><td>log</td></tr>
+        <tr><td class="fn">shouldAutoBlock<small>(type, autoBlock)</small></td><td>scan / brute_force / bot_attack 且开启才封</td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">handleAttackEvent<small>({ip, type, details})</small></td><td>告警 + 自动封禁（元数据必须带 <code>expiresAt</code>，否则临时封禁会变永久）</td><td class="k">fw:block:{ip}</td><td>block-manager</td></tr>
+        <tr><td class="fn">registerRecordSink<small>(sink)</small></td><td>app 层 store.js 把 <code>pushRecord</code> 注册进来</td><td class="k">闭包 recordSink</td><td>—</td></tr>
+        <tr><td class="fn">recordFirewallEvent<small>(record)</small></td><td>未注册 sink 时<b>静默跳过</b>；sink 抛错被吞</td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">hasRecordSink<small>()</small></td><td>仅测试断言用</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- block-manager -->
+  <div class="file">
+    <div class="head">
+      <span class="path">block-manager.js</span>
+      <span class="role">封禁/白名单的策略层 —— 三维度 CRUD + 入口检查</span>
+      <span class="lines">429 行 · 20 个函数（同构 CRUD 成对合并为行）</span>
+    </div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>函数</th><th>做什么</th><th>写入状态</th><th>依赖</th></tr></thead>
+      <tbody>
+        <tr><td class="fn">setBlock<small>(ip, meta)</small></td><td>IP 维度封禁 → <code>writeBlock({ip})</code></td><td class="k">fw:block:{ip} + fw:blocked:ips</td><td>util/redis</td></tr>
+        <tr><td class="fn">removeBlock<small>(ip)</small></td><td>解封（数据键 + 索引一起清）</td><td class="k">DEL + HDEL</td><td>util/redis</td></tr>
+        <tr><td class="fn">setBlockFp / removeBlockFp<small>(fp)</small></td><td>指纹维度（输入含 IP，换 IP 即变）</td><td class="k">fw:block:fp:{fp}</td><td>util/redis</td></tr>
+        <tr><td class="fn">setBlockDevice / removeBlockDevice<small>(dev)</small></td><td>设备维度 —— <b>唯一能跨 IP 生效</b>的身份</td><td class="k">fw:block:dev:{dev}</td><td>util/redis</td></tr>
+        <tr><td class="fn">setWhitelist / removeWhitelist<small>(ip, dur)</small></td><td>IP 白名单（<code>normalizeDuration</code> 归一化有效期）</td><td class="k">fw:whitelist:{ip}</td><td>util/redis</td></tr>
+        <tr><td class="fn">setWhitelistFp / removeWhitelistFp<small>(fp, dur)</small></td><td>指纹白名单</td><td class="k">fw:whitelist:fp:{fp}</td><td>util/redis</td></tr>
+        <tr><td class="fn">setWhitelistDevice / removeWhitelistDevice<small>(dev, dur)</small></td><td>设备白名单（跨 IP）</td><td class="k">fw:whitelist:dev:{dev}</td><td>util/redis</td></tr>
+        <tr><td class="fn">setBlockForSubject<small>({ip,deviceId}, meta)</small></td><td><b>同时</b>写 IP 与设备两维度（换 IP 重来的成本抬升）；拿不到合法 deviceId 就退回纯 IP</td><td class="k">两个维度各一份</td><td>自身</td></tr>
+        <tr><td class="fn">getActiveBlocks<small>()</small></td><td>三维度列表摊平 + 排序：临时在前（剩余时间升序），永久在后</td><td>读 fw:blocked:*</td><td>util/redis</td></tr>
+        <tr><td class="fn">getActiveWhitelist<small>()</small></td><td>同上，按剩余时间升序</td><td>读 fw:whitelisted:*</td><td>util/redis</td></tr>
+        <tr><td class="fn">flattenDimension<small>(field,type,entries,now)</small></td><td>条目 → 对外记录（附 <code>remainingSeconds</code>）</td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">remainingSeconds<small>(meta, now)</small></td><td>永久项返回 null，否则 <code>max(0, ceil((expiresAt-now)/1000))</code></td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">isUserManuallyBlocked<small>(user)</small></td><td>用户级手动黑名单的<b>执行点</b>（在 <code>api/guard.js</code> 认证之后调用，此时才有 uid/userId/username/email）；读不到配置一律 fail-open</td><td>读 <code>defense.manualBlacklistUsers</code></td><td>util/shared</td></tr>
+        <tr><td class="fn">checkGlobalBlock<small>(ip, fp, dev)</small></td><td>一次 <code>readAccessState</code> 拿 6 类状态；白名单短路 → dev/fp/ip 依次 <code>buildBlockError</code> 抛错；Redis 不可用时用手动 IP 黑名单兜底</td><td>读 6 个 key（1 次 Lua）</td><td>util/redis</td></tr>
+        <tr><td class="fn">buildBlockError<small>(block)</small></td><td>CHALLENGE→200+<code>isChallenge</code>；SCANNER→403；其余→429；皆带 <code>Retry-After</code></td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">normalizeDuration<small>(value)</small></td><td>非法入参兜底 24h（历史缺陷：传对象导致 <code>EX NaN</code> 静默写不进）</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- util -->
+  <div class="file">
+    <div class="head">
+      <span class="path">util/</span>
+      <span class="role">访问层 + 内存降级 + 键命名 + Lua + 指纹 + 连接追踪 + PoW</span>
+      <span class="lines">7 文件 · 59 个函数</span>
+    </div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>函数</th><th>做什么</th><th>写入状态 / Key</th><th>库</th></tr></thead>
+      <tbody>
+        <tr><td class="fn">shared.getConfig<small>()</small></td><td>读安全配置（委托 interface 层，<b>不做快照缓存</b>，整体替换后立即可见）</td><td>读 settingsReader</td><td>config-access</td></tr>
+        <tr><td class="fn">shared 模块体<small>setInterval(60s).unref()</small></td><td>兜底清扫沉默 IP 的时间戳数组；&gt;50000 条打高水位告警</td><td class="k">ipRequestTimestamps</td><td>—</td></tr>
+        <tr><td class="fn">generateFingerprint<small>(request)</small></td><td><code>sha256(ip|ua|accept-language|accept-encoding)</code> 取前 16 位 hex</td><td>—</td><td><span class="pill">node:crypto</span></td></tr>
+        <tr><td class="fn">generateDeviceFingerprint<small>(request)</small></td><td>不含 IP 的近似指纹，<b>仅供观测，禁用于封禁</b>（同型号浏览器会共享）</td><td>—</td><td>node:crypto</td></tr>
+        <tr><td class="fn">digest16<small>(raw)</small></td><td>sha256 hex 前 16 位</td><td>—</td><td>node:crypto</td></tr>
+        <tr><td class="fn">trackConnection<small>(ip, delta)</small></td><td>并发连接计数 +1/−1；<code>delta&gt;0 且 current&gt;maxConn</code> 抛 429（<code>rule:'connection-limit'</code>）</td><td class="k">activeConnections: Map&lt;ip,{count,lastAt}&gt;</td><td><span class="pill a">enableConnLimit / maxConn</span></td></tr>
+        <tr><td class="fn">getConnectionStats<small>()</small></td><td>单遍算总量 + 维护 top-10（面板轮询用）</td><td>读 activeConnections</td><td>—</td></tr>
+        <tr><td class="fn">cleanupStaleConnections<small>()</small></td><td>按<b>最后活跃时间</b>（非计数阈值）回收静默记录 + 高水位告警</td><td class="k">activeConnections.delete</td><td>—</td></tr>
+        <tr><td class="fn">startCleanupTask<small>(app)</small></td><td>自续 <code>setTimeout</code>（非 setInterval），每轮重读 <code>connCleanupIntervalMs</code>；<code>try/catch/finally</code> 保证单轮失败不断链；<code>onClose</code> 清定时器</td><td class="k">闭包 timer / closed</td><td>—</td></tr>
+        <tr><td class="fn">redis.readAccessState<small>({ip,fp,dev})</small></td><td>一次 Lua 取回 3 白名单 + 3 封禁原文 + PTTL；失败按「无状态」处理（fail-open）</td><td class="k">fw:whitelist*/fw:block*</td><td><span class="pill c">EVAL</span>getStore</td></tr>
+        <tr><td class="fn">redis.writeBlock<small>(target, meta)</small></td><td><code>resolveBlockTtl</code> 归一化后 Lua 双写 SET+HSET；Redis 失败降级写内存</td><td class="k">fw:block:* + fw:blocked:*</td><td>EVAL</td></tr>
+        <tr><td class="fn">redis.resolveBlockTtl<small>(meta,kind,id)</small></td><td>permanent→0；<code>expiresAt</code> 非法 → 兜底 60s 并告警（否则临时封禁会变永久）</td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">redis.writeWhitelist<small>(target, dur)</small></td><td>Lua SET(EX)+HSET 索引</td><td class="k">fw:whitelist:* + fw:whitelisted:*</td><td>EVAL</td></tr>
+        <tr><td class="fn">redis.removeBlock / removeWhitelist<small>(target)</small></td><td>Lua DEL+HDEL；同时删内存表（避免降级路径残留）</td><td class="k">DEL + HDEL</td><td>EVAL</td></tr>
+        <tr><td class="fn">redis.listActive<small>(kind)</small></td><td>3 个 HGETALL 并发 + <code>readHashEntries</code> 过滤过期，过期 field 合并一次 HDEL</td><td>读 fw:blocked:* / fw:whitelisted:*</td><td>—</td></tr>
+        <tr><td class="fn">redis.bumpCounter<small>(keyRel, windowSec)</small></td><td>单 Lua 原子 INCR+EXPIRE（首次才 EXPIRE）</td><td class="k">fw:trap:* / fw:brute:*</td><td>EVAL</td></tr>
+        <tr><td class="fn">redis.consumeRateWindow<small>(keyRel, windowMs)</small></td><td>单 Lua：ZREMRANGEBYSCORE + ZADD + PEXPIRE + ZCARD（原子滑窗，1 次往返）</td><td class="k">fw:rl:{actor} (ZSET)</td><td>EVAL</td></tr>
+        <tr><td class="fn">redis.grantPass<small>({ip,fp,dev,token,ttlSec})</small></td><td>Lua 一次写最多 3 个维度的通过令牌</td><td class="k">fw:pass:{ip|fp|dev}:{token}</td><td>EVAL</td></tr>
+        <tr><td class="fn">redis.hasPass<small>({ip,fp,dev,token})</small></td><td>Lua 三键任一 EXISTS 即通过</td><td>读 fw:pass:*</td><td>EVAL</td></tr>
+        <tr><td class="fn">redis.setFlag / hasFlag<small>(keyRel[, ttlSec])</small></td><td>账号锁定标记（走框架 KV 接口，自动前缀+超时）</td><td class="k">fw:lock:{user}</td><td>getStore</td></tr>
+        <tr><td class="fn">redis.removeKeys / removeCounters / readCounter<small>(...)</small></td><td>批量删键 / 清计数 / 读计数</td><td class="k">DEL 批量</td><td>—</td></tr>
+        <tr><td class="fn">redis.writeChallenge<small>(id, payload, ttl)</small></td><td>服务端持有挑战载荷（只下发不透明 id）</td><td class="k">fw:chal:{id} 300s</td><td>SET EX</td></tr>
+        <tr><td class="fn">redis.takeChallenge<small>(id)</small></td><td>Lua <code>GET+DEL</code> 原子一次性消费 —— 「一挑战一用」的落点</td><td class="k">DEL fw:chal:{id}</td><td>EVAL</td></tr>
+        <tr><td class="fn">redis.scanKeys / getRaw / ttlOf / addBlockIndexEntry / hasIndexField / setIfAbsent<small>(...)</small></td><td>运维/迁移辅助：SCAN、原始 GET、TTL、补索引、NX 写</td><td class="k">fw:*（迁移用）</td><td>SCAN/GET/SET NX</td></tr>
+        <tr><td class="fn">redis.store / redisAvailable<small>()</small></td><td>惰性 <code>getStore('fw',{timeout:2000})</code>；<code>isRedisReady()</code> 决定走 Redis 还是内存</td><td class="k">store 实例缓存（框架内）</td><td><span class="pill c">framework/redis</span></td></tr>
+        <tr><td class="fn">keys.rel.* / keys.full / keys.HASH<small>(...)</small></td><td><b>全部 key 的唯一命名来源</b>（13 个构造器 + 6 个索引 Hash），键名即线上数据契约</td><td class="k">见 §05 键布局</td><td>零依赖</td></tr>
+        <tr><td class="fn">keys.dimOf / ID_BY_DIM<small>(target)</small></td><td>维度优先级：设备 &gt; 指纹 &gt; IP（最精确者胜）</td><td>—</td><td>—</td></tr>
+        <tr><td class="fn">memory.sweepMemory<small>()</small></td><td>60s 节流惰性清理 11 张内存表（防无 Redis 时无界增长）</td><td class="k">mem.*（11 个 Map）</td><td>—</td></tr>
+        <tr><td class="fn">memory.readAccessStateFromMemory<small>(...)</small></td><td>白名单任一命中即短路，否则三维度封禁条目</td><td>读 mem.blocks* / mem.whitelist*</td><td>—</td></tr>
+        <tr><td class="fn">memory.bumpCounterInMemory / consumeRateWindowInMemory<small>(...)</small></td><td>固定窗口计数 / 时间戳数组滑窗（语义与 Redis 路径一致）</td><td class="k">mem.counters / mem.windows</td><td>—</td></tr>
+        <tr><td class="fn">memory.memDeleteByRel<small>(keyRel)</small></td><td>按相对 key 删内存项；前缀<b>长优先</b>匹配（否则 <code>block:dev:</code> 会被错删进 IP 表）</td><td class="k">mem.*</td><td>—</td></tr>
+        <tr><td class="fn">memory.resetMemoryState<small>()</small></td><td>测试隔离清空</td><td class="k">全部 mem 表</td><td>—</td></tr>
+        <tr><td class="fn">pow.sha256Hex<small>(input)</small></td><td>纯 JS 同步 SHA-256（浏览器 <code>crypto.subtle</code> 在 HTTP 下不存在，故自实现并内联到挑战页）</td><td>—</td><td>零依赖</td></tr>
+        <tr><td class="fn">pow.verifyPow<small>(id, salt, answer, difficulty)</small></td><td>答案必须是 <code>^\d{1,10}$</code>；<code>sha256(id:salt:answer)</code> 以 N 个 <code>0</code> 开头</td><td>—</td><td>自身 sha256Hex</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- challenge -->
+  <div class="file">
+    <div class="head">
+      <span class="path">challenge-template.js · api/firewall/v1/challenge.js · app/firewall/services/challenge.service.js</span>
+      <span class="role">人机挑战子系统（签发 → 求解 → 校验 → 令牌）</span>
+      <span class="lines">140 + 58 + 97 行 · 5 个函数</span>
+    </div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>函数</th><th>做什么</th><th>写入状态</th><th>依赖库</th></tr></thead>
+      <tbody>
+        <tr><td class="fn">currentDifficulty<small>()</small></td><td>读 <code>defense.challengeDifficulty</code>，夹取到 <code>[1, MAX_DIFFICULTY=6]</code></td><td>读配置</td><td>util/shared</td></tr>
+        <tr><td class="fn">buildChallengePage<small>(ip, fp, deviceId)</small></td><td><code>randomBytes(16)</code> 生成 challengeId + <code>randomBytes(8)</code> 盐；载荷写服务端；HTML 内联 <code>sha256Hex.toString()</code> 让浏览器求解与服务端校验用<b>同一份源码</b></td><td class="k">fw:chal:{id}（300s）</td><td><span class="pill">node:crypto</span></td></tr>
+        <tr><td class="fn">registerChallengeRoutes<small>(fastify)</small></td><td><code>registerGroupMetadata</code> + <code>registerSecureRoute</code>（<code>requireLogin:false</code>，否则挑战永远解不开）</td><td class="k">路由表 / PBAC 元数据</td><td>api/guard</td></tr>
+        <tr><td class="fn">verifyChallenge<small>(request, reply)</small></td><td>五步：格式校验 → <code>takeChallenge</code>(原子取走) → 绑定校验(ip/fp/device 三选) → <code>verifyPow</code> → <code>grantPass</code> + <code>reply.setCookie('fw_verified')</code></td><td class="k">fw:pass:{ip|fp|dev}:{token}<br>Cookie fw_verified (HttpOnly, SameSite=Strict, maxAge 1800)</td><td>node:crypto</td></tr>
+        <tr><td class="fn">safeEqual<small>(a, b)</small></td><td>定长比较：长度不同直接 false（否则 <code>timingSafeEqual</code> 抛 RangeError）</td><td>—</td><td><span class="pill">crypto.timingSafeEqual</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- loader / app -->
+  <div class="file">
+    <div class="head">
+      <span class="path">loader/registry/05-firewall.js · app/firewall/index.js · interface/config-access.js · config/defaults.js</span>
+      <span class="role">装配与配置来源</span>
+      <span class="lines">73 + 80 + 72 + 176 行</span>
+    </div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>函数 / 导出</th><th>做什么</th><th>写入状态</th><th>库</th></tr></thead>
+      <tbody>
+        <tr><td class="fn">firewallLoader<small>(app)</small></td><td>fs.existsSync 守卫 → 动态 import → prepareAppFirewall → register(firewallCorePlugin) → register(firewallAppPlugin)</td><td>—</td><td><span class="pill">node:fs</span><span class="pill">node:path</span><span class="pill">node:url</span></td></tr>
+        <tr><td class="fn">prepareAppFirewall<small>()</small></td><td>initDao + 注入邮件发送器</td><td class="k">settingsReader / emailAlertSender</td><td>fastify-plugin</td></tr>
+        <tr><td class="fn">firewallAppPlugin / initFirewall<small>(app)</small></td><td>手动名单同步 + onClose 落盘；initFirewall 仅供测试一键装齐</td><td class="k">Redis 手动名单键</td><td>fastify-plugin</td></tr>
+        <tr><td class="fn">registerSettingsReader / readSecuritySettings / hasSettingsReader<small>(...)</small></td><td><b>零 import 的最底层模块</b>，持有读取函数引用；未注册时抛错而不是静默 undefined</td><td class="k">闭包 settingsReader</td><td>零依赖</td></tr>
+        <tr><td class="fn">DEFAULT_SECURITY_SETTINGS</td><td>默认策略矩阵（约 40 个开关/阈值），全部支持 <code>FW_*</code> 环境变量覆盖</td><td>—</td><td><code>process.env</code></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============================================================ 4 -->
+<section>
+  <h2><span class="n">04</span>存储层：Redis 优先，内存自动降级</h2>
+  <p class="lede">
+    访问层把「机制」收拢成<b>语义操作</b>，所有 key 都经 <code>getStore('fw', {timeout:2000})</code> 自动加 <code>fw:</code> 前缀；
+    <code>redisAvailable()</code> 为假或单次调用抛错时，同一套语义自动落到内存表 —— 调用方<b>不需要</b>写 <code>if (!redis)</code> 分支。
+  </p>
+
+  <div class="altgrid">
+    <div class="flow">
+      <div class="node">
+        <div class="lbl">Redis 路径</div>
+        <div class="fn">store().call(client =&gt; client.eval(LUA_X, { keys, arguments }))</div>
+        <div class="desc">
+          9 个 Lua 脚本承担全部原子性：读状态（1 次往返取 6 项）、写封禁（SET+HSET）、写白名单、DEL+HDEL、滑窗（4 命令合 1）、INCR+EXPIRE、签发令牌、校验令牌、GET+DEL。单次操作 <code>OP_TIMEOUT_MS=2000</code>，失败即降级。
+        </div>
+      </div>
+      <div class="link stop"><span class="tag">Redis 不可用 / 调用抛错</span></div>
+      <div class="node good">
+        <div class="lbl">内存降级路径</div>
+        <div class="fn">mem.blocks / blocksFp / blocksDev / whitelist×3 / counters / windows / passes / flags / challenges</div>
+        <div class="desc">
+          11 张 Map，按 <code>expiresAt</code> 惰性过期，<code>sweepMemory()</code> 每 60s 清理一次。<b>进程内状态</b>：多实例各一份，Redis 恢复后不补写，重启即丢 —— 宁可弱化，不做假的强一致。
+        </div>
+      </div>
+    </div>
+
+    <div class="node dim" style="align-self:start">
+      <div class="lbl">为什么两张「进程内表」坚持不走 getStore</div>
+      <div class="fn">activeConnections · ipRequestTimestamps</div>
+      <div class="desc">
+        四条硬伤：① 无原子自增（读-改-写在并发下丢更新）；② 同步热路径→异步传染，+1/−1 各一次往返；③ 降级分叉（部分计数进 Redis、部分进内存，更难推理）；
+        ④ 统计要全表（Redis 侧只能 SCAN）。MapStore 还有 <code>maxSize</code> 抛错风险 —— 洪水下新 IP 写不进，异常会被当成封禁错误回 429。
+        <br><b>代价已知：</b>放行上限 = <code>maxConn × 实例数</code>；Bot 频次按实例切分，多实例对低速爬虫会漏判。要跨实例精确限流，前移到边缘（Nginx limit_conn / ALB）。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 5 -->
+<section>
+  <h2><span class="n">05</span>状态字典：Redis 键布局 + 内存变量</h2>
+
+  <h3>Redis 键（相对 key，实际前缀 <code>fw:</code>）</h3>
+  <div class="tblwrap"><table>
+    <thead><tr><th>相对 key</th><th>类型 / 值</th><th>TTL</th><th>写入者 → 读取者</th></tr></thead>
+    <tbody>
+      <tr><td class="fn">block:{ip}</td><td>JSON <code>{status,source,permanent,createdAt,expiresAt}</code></td><td>剩余封禁时长；永久则无 TTL</td><td>setBlock / challengeSubject → readAccessState</td></tr>
+      <tr><td class="fn">block:fp:{fp}</td><td>同上（指纹含 IP，换 IP 即变）</td><td>同上</td><td>setBlockFp → readAccessState</td></tr>
+      <tr><td class="fn">block:dev:{dev}</td><td>同上（<b>跨 IP 唯一有效维度</b>）</td><td>同上</td><td>setBlockDevice / setBlockForSubject</td></tr>
+      <tr><td class="fn">whitelist:{ip|fp:{fp}|dev:{dev}}</td><td>JSON <code>{expiresAt}</code>（无永久概念）</td><td>写入时给，非法入参兜底 24h</td><td>setWhitelist* → readAccessState（<b>最高优先级，命中即短路</b>）</td></tr>
+      <tr><td class="fn">blocked:ips / :fps / :devices<br>whitelisted:ips / :fps / :devices</td><td>Hash 索引：field=id, value=元数据 JSON（**field 无 TTL**，读列表时按 permanent/expiresAt 过滤）</td><td>—</td><td>LUA_WRITE_* / LUA_REMOVE_ENTRY → getActiveBlocks / listActive</td></tr>
+      <tr><td class="fn">rl:{actor}</td><td>ZSET，member=<code>now:随机后缀</code>，score=now（滑窗）</td><td>窗口 + 5s</td><td>consumeRateWindow（checkRateLimit / geo-filter）</td></tr>
+      <tr><td class="fn">trap:{ip}</td><td>整数计数（固定窗口）</td><td>notFoundWindow 60s</td><td>bumpCounter（scan-trap）</td></tr>
+      <tr><td class="fn">brute:ip:{ip} / brute:user:{user}</td><td>整数计数</td><td>bruteWindow 300s</td><td>checkLoginBruteForce；成功时 removeCounters 清零</td></tr>
+      <tr><td class="fn">lock:{user}</td><td>标记 <code>'1'</code></td><td>accountLockTime 900s</td><td>setFlag；<b>写入时必须同清 brute:user</b>（否则可被低成本永久锁死 → DoS）</td></tr>
+      <tr><td class="fn">pass:{ip}:{token}<br>pass:fp:{fp}:{token}<br>pass:dev:{dev}:{token}</td><td>标记 <code>'1'</code>，三维度各一份</td><td>PASS_TOKEN_TTL 1800s</td><td>grantPass（verifyChallenge）→ hasPass（checkChallengeCookie / 阶段 1b）</td></tr>
+      <tr><td class="fn">chal:{id}</td><td>JSON <code>{ip,fingerprint,deviceId,salt,difficulty,issuedAt}</code></td><td>300s</td><td>writeChallenge → takeChallenge（GET+DEL 一次性消费）</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>进程内变量（跨请求存活）</h3>
+  <div class="tblwrap"><table>
+    <thead><tr><th>变量</th><th>所在模块</th><th>结构</th><th>回收方式</th></tr></thead>
+    <tbody>
+      <tr><td class="fn">activeConnections</td><td>util/shared.js</td><td><code>Map&lt;ip, {count, lastAt}&gt;</code></td><td>归零 delete；静默 &gt; connStaleAfterMs(600000) 由清理任务回收；&gt;50000 告警</td></tr>
+      <tr><td class="fn">ipRequestTimestamps</td><td>util/shared.js</td><td><code>Map&lt;ip, number[]&gt;</code>（60s 窗口，单 IP 封顶 1000 条）</td><td>下次请求时索引式 splice + 模块体 60s 清扫；&gt;50000 告警</td></tr>
+      <tr><td class="fn">mem.*（11 张）</td><td>util/redis-memory.js</td><td>blocks / blocksFp / blocksDev / whitelist / whitelistFp / whitelistDev / counters / windows / passes / flags / challenges</td><td>sweepMemory() 每 60s 惰性清理</td></tr>
+      <tr><td class="fn">compiledBotPatterns<br>compiledBrowserPatterns</td><td>engine/detectors/bot-detector.js</td><td><code>RegExp[]</code>（启动/配置变更时编译）</td><td>配置数组引用变化时重建</td></tr>
+      <tr><td class="fn">lastBotPatternsRef / lastBrowserPatternsRef</td><td>同上</td><td>数组引用（不是哈希）</td><td>—</td></tr>
+      <tr><td class="fn">alertCooldown</td><td>engine/auto-responder.js</td><td><code>Map&lt;"ip|type", ts&gt;</code></td><td>上限 5000，超出按插入顺序淘汰</td></tr>
+      <tr><td class="fn">emailAlertSender / recordSink / settingsReader</td><td>auto-responder / telemetry-sink / config-access</td><td>函数引用（依赖倒置）</td><td>未注册时 fail-open</td></tr>
+      <tr><td class="fn">timer / closed（闭包）</td><td>util/connection-tracker.js</td><td>自续 setTimeout 句柄</td><td><code>onClose</code> clearTimeout</td></tr>
+      <tr><td class="fn">request._fingerprint / _deviceId / _firewallLog / _firewallLogged</td><td>engine/pipeline.js</td><td>请求级字段</td><td>随请求销毁</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 6 -->
+<section>
+  <h2><span class="n">06</span>依赖库清单</h2>
+  <div class="tblwrap"><table>
+    <thead><tr><th>库 / 模块</th><th>用在哪</th><th>不可替代的原因</th></tr></thead>
+    <tbody>
+      <tr><td class="fn">@fastify/rate-limit</td><td>first-ratelimit.js</td><td>v10+ 用 <code>onRoute</code> 钩子给路由挂限流，消费全仓 14 处 <code>config.rateLimit</code> 声明 —— 插件不注册就静默失效</td></tr>
+      <tr><td class="fn">fastify-plugin (fp)</td><td>bootstrap.js / app/index.js</td><td>保证插件不被封装成子作用域，钩子对本实例所有路由生效</td></tr>
+      <tr><td class="fn">geoip-lite</td><td>geo-filter.js</td><td>纯本地 GeoIP 库（无外部 HTTP 依赖），返回 <code>{country, region, city}</code></td></tr>
+      <tr><td class="fn">node:crypto</td><td>fingerprint.js / challenge-template.js / challenge.service.js</td><td><code>createHash('sha256')</code>、<code>randomBytes</code>（挑战 id/盐/令牌）、<code>timingSafeEqual</code>（定长比较）</td></tr>
+      <tr><td class="fn">node:fs / node:path / node:url</td><td>05-firewall.js</td><td><code>fs.existsSync</code> 存在性守卫 + <code>fileURLToPath</code> 定位 app 入口（可卸载语义）</td></tr>
+      <tr><td class="fn">全局 fetch + AbortController</td><td>auto-responder.js</td><td>Webhook 告警；<code>AbortController</code> 提供 5000ms 超时（不设超时会挂住请求链）</td></tr>
+      <tr><td class="fn">framework/redis<br>(getStore / isRedisReady / createBoundStore)</td><td>util/redis.js / first-ratelimit.js</td><td>前缀命名空间 + 单次调用超时 + 主备降级 + Redis/MapStore 自动选择</td></tr>
+      <tr><td class="fn">framework/log (createLogger)</td><td>全部模块</td><td>按命名空间分级日志（<code>framework.firewall.*</code>），不硬编码 ANSI 颜色以免污染 .log 文件</td></tr>
+      <tr><td class="fn">framework/auth (getClientDeviceId)</td><td>pipeline.js / challenge.service.js</td><td>只取<b>客户端自报且校验通过</b>的结构化设备 ID（<code>WEB-xxx</code>），不补发 —— 补发的 ID 每请求都变，封了等于没封</td></tr>
+      <tr><td class="fn">Redis Lua (EVAL)</td><td>util/redis.js 调用点</td><td>9 段脚本提供原子性；源码守卫要求 <code>eval(</code> 只出现在访问层且必须是 v5 的 <code>{keys, arguments}</code> 签名</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <b>三处「静默失效」历史坑（都已在代码注释里留档）</b>：① 把 <code>@fastify/rate-limit</code> 注册挪到 <code>08-api</code> 之后 → <code>onRoute</code> 不触发、14 处端点限流全废，且 Fastify 不警告；
+    ② <code>CHALLENGE</code> 状态被当成硬封禁回 429 → 挑战页一渲染就被自己的封禁拦掉，连 <code>challenge/verify</code> 也 429，用户被硬封 30 分钟且永远无法自解；
+    ③ 封禁元数据缺 <code>expiresAt</code> → TTL 算出 NaN → 临时封禁变永久封禁（<code>resolveBlockTtl</code> 现在兜底 60s 并告警）。
+  </div>
+</section>
+
+<footer>
+  生成于 C:\Users\22701\Desktop\nodeServers · 依据：src/framework/firewall/**（23 文件 / 4585 行）、src/framework/loader/registry/05-firewall.js、
+  src/api/firewall/v1/*、src/app/firewall/{index.js,services/challenge.service.js,data/store.js}。
+  行内注释里标注的历史缺陷与取舍已如实保留，未做美化。
+</footer>
+
+</div>
+</body>
+</html>
