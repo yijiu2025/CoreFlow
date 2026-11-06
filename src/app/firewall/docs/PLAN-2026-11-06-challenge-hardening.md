@@ -238,17 +238,28 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
   的 `MAX_DIFFICULTY = 5` —— 配 6 会被静默夹成 5。实测难度 6 ≈ 1670 万次哈希（浏览器 6 秒以上），
   不适合做上限，因此把 spec 收到 **5**，让"接口能配"与"运行时生效"一致。
 
-### 阶段 2：项⑤ 观测（1.5 人日｜可独立上线）
+### 阶段 2：项⑤ 观测（1.5 人日｜**已完成 2026-11-06**）
 
-- 事件：`challenge.issued / solved / verified / failed{reason} / unsolvable`
-- 字段：`provider`、`difficulty`、`surface`（`inline` | `page`）、`solveMs`、`reason`
-- 落点：
-  - 新增 `src/framework/firewall/challenge-metrics.js`：内存累加 + 定时 flush，**不进** `store.js` 的 1000 条环形缓冲（否则把流量记录冲掉）
-  - `src/app/firewall/data/stats-redis.js`：delta 增加 `challenge` 分片 → 新 `STATS_KEY.challenge`（用直方图桶统计 `solveMs`，不要存原始数组）
-  - 新端点 `GET /api/firewall/v1/monitor/challenge`（`registerSecureRoute` + `registerGroupMetadata` 上限频）
-- 客户端：verify 请求体加可选 `solveMs`（schema 加字段）。**只用于统计，不参与任何判定**（客户端可伪造）。
-- 告警：成功率 < 80% 或 `issued` 突增 → 复用现有 `alert` 通道（`enabled/email/webhookUrl/cooldownMs`）
-- **验收**：跑一次挑战，面板能看到 issued/verified 各 1 次 + 耗时分位数；手动关掉 CSP（模拟事故）→ 成功率掉到 0 并能触发告警
+落地形态：
+
+- `framework/firewall/challenge-metrics.js`：**进程内累加 + 增量汇出**
+  - 热路径只做一次 `Map.set` 自增；字段由枚举维度拼成（`issued:pow` / `failed:Expired` / `solveMs:b2` /
+    `difficulty:3` / `surface:inline`），**字段数有界**，不会被攻击撑爆
+  - 只收服务端能真观测到的五种事件：`issued` / `issueRejected` / `verified` / `failed` / `surface`
+    （客户端"解不出来"没有上报入口，用 `issued - verified - failed` 的差额反映，不造假计数）
+- 汇出：`data/store.js` 在既有刷写周期里 `drainChallengeMetrics()` → 与流量增量**同一次 MULTI**
+  写进 `stats:challenge`；刷写失败 `mergeChallengeMetrics()` 原样放回（否则一次失败丢一段统计）
+- 读取：`readAggregatedStats()` 增加 `challenge`（汇总）+ `challengeFields`（原始字段）；
+  `store.getChallengeStatsAggregated()` 把"Redis 全量 + 本实例未刷写增量"**先并字段表再汇总**
+  （分位数不能把两个已汇总的结果相加）
+- 端点：`GET /api/firewall/v1/monitor/challenge`（`registerSecureRoute` + 组级限频）
+- 客户端：`solveMs` 由两端上报（`challenge-client` 的 `useChallenge` 测求解耗时；内嵌页同理），
+  路由 schema 限定 `0..600000` 整数，**只统计不判定**
+- 埋点：`challenge.service` 的 issue/verify 各分支 + `pipeline.sendChallengeResponse` 的三种 surface
+- 测试：`challenge-metrics.test.js`（15 例：桶边界 / 只记可观测维度 / drain-merge 语义 /
+  成功率分母口径 / 分位估算 / 脏输入）+ `challenge-stats.test.js`（6 例：MULTI 写入、空增量、
+  读取汇总、清空覆盖）+ 跳转用例里补 `surface` 三态断言
+
 
 ### 阶段 2b：把 PoW 的"能力"收进 `framework/verify/pow/`（1 人日｜行为不变）
 

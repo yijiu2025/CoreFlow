@@ -17,6 +17,7 @@ import { generateFingerprint } from '../../../framework/firewall/util/fingerprin
 import { verifyPow } from '../../../framework/firewall/util/pow-sha256.js';
 import { grantPass, takeChallenge, readAccessState } from '../../../framework/firewall/util/redis.js';
 import { issueChallengePayload } from '../../../framework/firewall/challenge-template.js';
+import { recordChallengeEvent } from '../../../framework/firewall/challenge-metrics.js';
 import { getClientDeviceId } from '../../../framework/auth/index.js';
 import { createLogger } from '../../../framework/log/index.js';
 
@@ -84,14 +85,18 @@ async function issueChallenge(request) {
     const state = await readAccessState({ ip: request.ip, fingerprint, deviceId });
     const inChallenge = [state.ipBlock, state.fpBlock, state.devBlock].some(b => b?.status === 'CHALLENGE');
     if (!inChallenge) {
+      // 观测：非挑战态却来要票 —— 正常用户不会走到这里，突增说明有脚本在刷 issue
+      recordChallengeEvent({ type: 'issueRejected', reason: 'Not Challenged' });
       return { ok: false, statusCode: 403, reason: 'Not Challenged' };
     }
 
     const payload = await issueChallengePayload({ ip: request.ip, fingerprint, deviceId });
+    recordChallengeEvent({ type: 'issued', provider: 'pow', difficulty: payload.difficulty });
     return { ok: true, ...payload };
   } catch (err) {
     // 签发失败（Redis 写不进等）：对外只给可编程原因，内部细节进日志
     log.warn('⚠️ [Firewall] 挑战签发失败', err);
+    recordChallengeEvent({ type: 'issueRejected', reason: 'Challenge Unavailable' });
     return { ok: false, statusCode: 503, reason: 'Challenge Unavailable' };
   }
 }
@@ -112,6 +117,21 @@ function safeEqual(a, b) {
 }
 
 /**
+ * 记一次验证失败并返回统一形状
+ *
+ * 观测与返回解耦的用意：**只做统计**，绝不改变状态码/原因。失败原因分布是
+ * "链路是否还活着"的关键信号（例如 Expired 占比突然 100% = 载荷根本没写进去，
+ * 或前端页把已消费的载荷重放）。
+ *
+ * @param {string} reason 对外原因
+ * @returns {{ok:false, statusCode:number, reason:string}} 统一失败响应
+ */
+function failWith(reason) {
+  recordChallengeEvent({ type: 'failed', provider: 'pow', reason });
+  return { ok: false, statusCode: 403, reason };
+}
+
+/**
  * 验证浏览器提交的挑战结果，通过则签发 fw_verified 令牌（Cookie + Redis）
  *
  * @param {object} request - Fastify request（取 body / ip / 指纹 / 设备 ID）
@@ -123,13 +143,13 @@ async function verifyChallenge(request, reply) {
   const { challengeId, answer } = body;
 
   if (typeof challengeId !== 'string' || !/^[0-9a-f]{32}$/.test(challengeId)) {
-    return { ok: false, statusCode: 403, reason: 'Malformed Challenge' };
+    return failWith('Malformed Challenge');
   }
 
   // 1. 取走载荷（原子 GET+DEL）→ 未知 / 已消费 / 已过期 一律同类失败
   const payload = await takeChallenge(challengeId);
   if (!payload) {
-    return { ok: false, statusCode: 403, reason: 'Challenge Expired' };
+    return failWith('Challenge Expired');
   }
 
   const fingerprint = generateFingerprint(request);
@@ -139,18 +159,18 @@ async function verifyChallenge(request, reply) {
   //    设备维度只有在下发时确实绑定了、且本次仍能取到时才校验 —— 反过来（下发时没有、
   //    本次有）不算绕过，因为它本来就只是「额外多一个维度」而不是必要条件。
   if (!safeEqual(payload.ip || '', request.ip || '')) {
-    return { ok: false, statusCode: 403, reason: 'Challenge Mismatch' };
+    return failWith('Challenge Mismatch');
   }
   if (payload.fingerprint && !safeEqual(payload.fingerprint, fingerprint)) {
-    return { ok: false, statusCode: 403, reason: 'Challenge Mismatch' };
+    return failWith('Challenge Mismatch');
   }
   if (payload.deviceId && !safeEqual(payload.deviceId, deviceId || '')) {
-    return { ok: false, statusCode: 403, reason: 'Challenge Mismatch' };
+    return failWith('Challenge Mismatch');
   }
 
   // 3. 工作量证明校验（难度取载荷内的值，避免下发后改配置导致前后不一致）
   if (!verifyPow(challengeId, payload.salt, answer, payload.difficulty)) {
-    return { ok: false, statusCode: 403, reason: 'Invalid Proof' };
+    return failWith('Invalid Proof');
   }
 
   // 4. 签发验证令牌（绑定设备 / 指纹 / IP 三个维度）
@@ -169,6 +189,9 @@ async function verifyChallenge(request, reply) {
     maxAge: ttlSec,
     sameSite: 'Strict'
   });
+
+  // 观测：通过 + 客户端上报的求解耗时（分桶统计；**不参与任何判定**，可伪造）
+  recordChallengeEvent({ type: 'verified', provider: 'pow', solveMs: body.solveMs });
 
   return { ok: true, passTtlSec: ttlSec, scope: authed ? 'account' : 'anonymous' };
 }

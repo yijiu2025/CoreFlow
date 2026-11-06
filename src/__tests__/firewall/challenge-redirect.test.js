@@ -30,6 +30,7 @@ jest.unstable_mockModule('../../framework/firewall/interface/config-access.js', 
 const { DEFAULT_SECURITY_SETTINGS } = await import('../../app/firewall/config/config.js');
 const { buildChallengeRedirect } = await import('../../framework/firewall/challenge-template.js');
 const { checkGlobalBlockPhase } = await import('../../framework/firewall/engine/pipeline.js');
+const { peekChallengeMetrics, resetChallengeMetrics } = await import('../../framework/firewall/challenge-metrics.js');
 const { setBlock } = await import('../../framework/firewall/block-manager.js');
 const { resetMemoryState } = await import('../../framework/firewall/util/redis-memory.js');
 
@@ -97,6 +98,7 @@ async function challengeAndRun(ip, extra = {}) {
 
 beforeEach(() => {
   resetMemoryState();
+  resetChallengeMetrics();
   settings = {
     ...DEFAULT_SECURITY_SETTINGS,
     defense: { ...DEFAULT_SECURITY_SETTINGS.defense, challengePageUrl: '' }
@@ -155,6 +157,8 @@ describe('管道：文档请求按配置 302 / 回落内置页', () => {
     expect(reply.sentBody).toContain('CHALLENGE_ID');
     expect(reply.responseHeaders.Location).toBeUndefined();
     expect(reply.cookies.fw_chal_page).toBeUndefined();
+    // 观测：没配 → 走内置页
+    expect(peekChallengeMetrics()).toMatchObject({ 'surface:inline': 1 });
   });
 
   test('配了 → 302 + Location + 一次性标记 cookie（不渲染 HTML）', async () => {
@@ -170,6 +174,8 @@ describe('管道：文档请求按配置 302 / 回落内置页', () => {
     expect(reply.cookies.fw_chal_page.options).toMatchObject({ path: '/', httpOnly: true, sameSite: 'lax' });
     // 302 绝不能被缓存，否则所有人被永久导向挑战页
     expect(reply.responseHeaders['Cache-Control']).toContain('no-store');
+    // 观测：走前端页的流量单独计数（用来回答"内嵌页还有没有真实流量"）
+    expect(peekChallengeMetrics()).toMatchObject({ 'surface:page': 1 });
   });
 
   test('配置写坏（绝对地址）→ 当作没配，回落内置页而不是 302 到外站', async () => {
@@ -211,5 +217,7 @@ describe('管道：文档请求按配置 302 / 回落内置页', () => {
     expect(reply.responseHeaders['X-Firewall-Challenge']).toBe('/api/user/profile');
     expect(reply.responseHeaders.Location).toBeUndefined();
     expect(reply.cookies.fw_chal_page).toBeUndefined();
+    // 观测：XHR 是第三种形态，不能和两个页面混在一起
+    expect(peekChallengeMetrics()).toMatchObject({ 'surface:xhr': 1 });
   });
 });

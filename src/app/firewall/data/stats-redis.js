@@ -28,6 +28,7 @@
  * @since 2026-11-01（自 util/redis.js 迁出，逻辑保持逐字不变）
  */
 import { store, full, redisAvailable } from '../../../framework/firewall/util/redis.js';
+import { summarizeChallengeFields } from '../../../framework/firewall/challenge-metrics.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.firewall.data.stats-redis');
@@ -42,7 +43,15 @@ const STATS_KEY = {
   path: 'stats:path',
   pathMeta: 'stats:pathmeta',
   ip: 'stats:ip',
-  records: 'stats:records'
+  records: 'stats:records',
+  /**
+   * 挑战链路计数器（field → count，见 framework/firewall/challenge-metrics.js）
+   *
+   * 单独一个 hash 而不是塞进 `stats:totals`：挑战指标是**枚举维度**（provider / reason /
+   * 耗时桶 / 难度 / 页面形态），塞进 totals 会让那个 hash 变成混合语义，面板读的时候
+   * 还得挑字段。
+   */
+  challenge: 'stats:challenge'
 };
 
 /**
@@ -60,13 +69,20 @@ const STATS_KEY = {
  * @param {Map<string, {path: string, count: number, apiName: string|null}>} delta.paths
  * @param {Map<string, number>} delta.ips
  * @param {object[]} delta.records - 新增记录（按时间正序）
+ * @param {Object<string, number>} [delta.challenge] - 挑战链路计数增量（field → count）
  * @returns {Promise<boolean>} 是否写入成功
  */
 async function flushStatsDelta(delta) {
   if (!redisAvailable()) return false;
 
+  const challengeFields = delta.challenge && typeof delta.challenge === 'object' ? Object.entries(delta.challenge) : [];
   const hasCounters =
-    delta.requests > 0 || delta.blocked > 0 || delta.regions.size > 0 || delta.paths.size > 0 || delta.ips.size > 0;
+    delta.requests > 0 ||
+    delta.blocked > 0 ||
+    delta.regions.size > 0 ||
+    delta.paths.size > 0 ||
+    delta.ips.size > 0 ||
+    challengeFields.length > 0;
   const hasRecords = delta.records.length > 0;
   if (!hasCounters && !hasRecords) return true; // 空刷写不算失败
 
@@ -84,6 +100,10 @@ async function flushStatsDelta(delta) {
           if (stat.apiName) {
             pipe.hSetNX(full(STATS_KEY.pathMeta), k, JSON.stringify({ path: stat.path, apiName: stat.apiName }));
           }
+        }
+        // 挑战计数：field 是枚举维度拼出来的（issued:pow / failed:Expired / solveMs:b2 …）
+        for (const [field, count] of challengeFields) {
+          if (Number(count) > 0) pipe.hIncrBy(full(STATS_KEY.challenge), field, Number(count));
         }
         return pipe.exec();
       });
@@ -121,12 +141,13 @@ async function readAggregatedStats({ recordLimit = 100 } = {}) {
 
   try {
     const wantRecords = recordLimit > 0;
-    const [totals, regions, pathCounts, pathMetas, ips, recordCount, rawRecords] = await Promise.all([
+    const [totals, regions, pathCounts, pathMetas, ips, challengeCounts, recordCount, rawRecords] = await Promise.all([
       store().hgetall(STATS_KEY.totals),
       store().hgetall(STATS_KEY.region),
       store().hgetall(STATS_KEY.path),
       store().hgetall(STATS_KEY.pathMeta),
       store().hgetall(STATS_KEY.ip),
+      store().hgetall(STATS_KEY.challenge),
       store().call(client => client.lLen(full(STATS_KEY.records))),
       wantRecords
         ? store().call(client => client.lRange(full(STATS_KEY.records), 0, recordLimit - 1))
@@ -183,6 +204,15 @@ async function readAggregatedStats({ recordLimit = 100 } = {}) {
       ips: toEntries(ips)
         .sort((a, b) => b[1] - a[1])
         .map(([ip, count]) => ({ ip, count })),
+      // 挑战链路汇总（成功率 / 失败原因 / 求解耗时分位 / 页面形态分布）
+      challenge: summarizeChallengeFields(challengeCounts || {}),
+      /**
+       * 原始字段表（field → count）
+       *
+       * 调用方要合并"本实例未刷写的增量"时必须拿原始字段再算一次 ——
+       * 分位数不能把两个**已汇总**的结果相加。
+       */
+      challengeFields: challengeCounts || {},
       recordCount: Number(recordCount) || 0,
       records: (rawRecords || [])
         .map(raw => {

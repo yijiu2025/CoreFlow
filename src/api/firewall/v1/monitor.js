@@ -18,7 +18,11 @@
  * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute, registerSecureWebSocket, getFullUrl } from '../../guard.js';
-import { getRecentRecordsAggregated, getSummaryAggregated } from '../../../app/firewall/data/store.js';
+import {
+  getRecentRecordsAggregated,
+  getSummaryAggregated,
+  getChallengeStatsAggregated
+} from '../../../app/firewall/data/store.js';
 import {
   getServerNode,
   updateServerNodeMetadata,
@@ -99,6 +103,26 @@ async function registerMonitorRoutes(fastify) {
     requireLogin: true,
     requirePermission: FIREWALL_PERMISSIONS.MONITOR.LOGS,
     handler: async (req, reply) => reply.result.success('操作成功', await getRecentRecordsAggregated())
+  });
+
+  /**
+   * GET /api/firewall/v1/monitor/challenge — 挑战链路指标
+   *
+   * 为什么单独一条：这类指标回答的是「**用户能不能过验证**」，而 `summary` 只回答
+   * 「拦了多少」。2026-11-05 那次生产 CSP 把挑战页整段拦掉，HTTP 全是 200、
+   * summary 看起来"一切正常"，但因为成功率是 0 且没人看得见，事故潜伏了一整天。
+   *
+   * 返回：签发 / 通过 / 失败数、成功率（分母是真正提交过答案的次数）、
+   * 失败原因分布、求解耗时分位估算、难度与页面形态分布。
+   */
+  registerSecureRoute(fastify, {
+    name: 'challenge',
+    alias: '挑战链路指标',
+    method: 'GET',
+    url: '/challenge',
+    requireLogin: true,
+    requirePermission: FIREWALL_PERMISSIONS.MONITOR.SUMMARY,
+    handler: async (req, reply) => reply.result.success('操作成功', await getChallengeStatsAggregated())
   });
 
   registerSecureRoute(fastify, {

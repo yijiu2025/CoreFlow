@@ -117,6 +117,8 @@ export function useChallenge(options: UseChallengeOptions = {}) {
       if (round.signal.aborted || disposed) return false;
 
       difficulty.value = issued.difficulty;
+      // 只测**求解本身**的耗时（不含签发/校验的网络时间）—— 这才是"用户卡了多久"的分子
+      const solveStartedAt = Date.now();
       const solved = await solvePow({
         challengeId: issued.challengeId,
         salt: issued.salt,
@@ -135,10 +137,12 @@ export function useChallenge(options: UseChallengeOptions = {}) {
         return false;
       }
 
+      const solveMs = Date.now() - solveStartedAt;
       phase.value = 'verifying';
       progress.value = 0.95;
 
-      const verified = await verifyChallenge(issued.challengeId, solved.answer, options);
+      // solveMs 只进服务端统计（成功率之外的第二块拼图），不参与判定
+      const verified = await verifyChallenge(issued.challengeId, solved.answer, options, solveMs);
       if (round.signal.aborted || disposed) return false;
 
       if (!verified.ok) {

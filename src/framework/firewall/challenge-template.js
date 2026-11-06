@@ -238,6 +238,14 @@ async function buildChallengePage(ip, fingerprint, deviceId = null, options = {}
           const progress = document.getElementById('progress');
           const retryEl = document.getElementById('retry');
           let retryTimer = null;
+          /**
+           * 求解开始时刻（毫秒）。只在**真正开始算**时打一次：Worker 起不来会降级到
+           * 主线程再算一遍，但"用户等了多久"应当从第一次开始算起，不能重置。
+           */
+          var solveStartedAt = 0;
+          function markSolveStart() {
+            if (!solveStartedAt) solveStartedAt = Date.now();
+          }
           retryEl.addEventListener('click', function () { location.reload(); });
 
           function setProgress(pct) {
@@ -334,10 +342,13 @@ async function buildChallengePage(ip, fingerprint, deviceId = null, options = {}
           }
 
           function submit(answer) {
+            // solveMs 只用于服务端统计（"用户卡了多久"），不参与任何判定
+            var payload = { challengeId: CHALLENGE_ID, answer: answer };
+            if (solveStartedAt > 0) payload.solveMs = Date.now() - solveStartedAt;
             return fetch('/api/firewall/v1/challenge/verify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ challengeId: CHALLENGE_ID, answer: answer })
+              body: JSON.stringify(payload)
             }).then(r => r.json());
           }
 
@@ -366,6 +377,7 @@ async function buildChallengePage(ip, fingerprint, deviceId = null, options = {}
 
           setProgress(5);
           setTimeout(function () {
+            markSolveStart();
             solveInWorker().then(onAnswer, function () {
               // 降级：先让 setProgress 那一帧渲染出来，再进同步计算（否则进度条不会动）
               setProgress(10);

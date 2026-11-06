@@ -84,7 +84,10 @@ async function registerChallengeRoutes(fastify) {
         required: ['challengeId', 'answer'],
         properties: {
           challengeId: { type: 'string', pattern: '^[0-9a-f]{32}$' },
-          answer: { type: 'string', minLength: 1, maxLength: 10 }
+          answer: { type: 'string', minLength: 1, maxLength: 10 },
+          // 客户端上报的本机求解耗时（毫秒）：**只进统计**，不参与任何判定。
+          // 上限 10 分钟只是防脏数据把分位数拉爆（难度 5 在低端机上也不过几秒）。
+          solveMs: { type: 'integer', minimum: 0, maximum: 600000 }
         }
       }
     },

@@ -105,19 +105,27 @@ export async function issueChallenge(options: ChallengeClientOptions = {}): Prom
  * @param challengeId 挑战 ID
  * @param answer 求解答案（纯十进制数字串）
  * @param options 客户端配置
+ * @param solveMs 本机求解耗时（毫秒，可选）
+ *   **只用于服务端统计**（成功率之外的"用户到底卡了多久"），不参与任何判定 ——
+ *   既然是客户端自报，服务端不会拿它做安全决定。
  * @returns `{ ok: true }` 或 `{ ok: false, reason }`
  */
 export async function verifyChallenge(
   challengeId: string,
   answer: string,
-  options: ChallengeClientOptions = {}
+  options: ChallengeClientOptions = {},
+  solveMs?: number
 ): Promise<VerifyResult> {
   const doFetch = options.fetchImpl ?? fetch;
+  const payload: Record<string, unknown> = { challengeId, answer };
+  if (typeof solveMs === 'number' && Number.isFinite(solveMs) && solveMs >= 0) {
+    payload.solveMs = Math.round(solveMs);
+  }
   const res = await doFetch(`${normalizeBase(options.baseURL)}${VERIFY_PATH}`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ challengeId, answer })
+    body: JSON.stringify(payload)
   });
 
   const body = (await safeJson(res)) as Partial<VerifyResult>;

@@ -160,6 +160,25 @@ firewall onResponse 钩子
 - 只接受**站内相对路径**（`/firewall/challenge.html`）：绝对地址会让 302 变成开放重定向，且跨站后 `fw_verified` 变第三方 cookie，`SameSite=Strict` 不发送 → 通过后又被挑战。写坏按"空"处理（回落内置页）。
 - **前端页挂了怎么兜底**：`challenge.html` 里有自愈守卫（资源 error / 8s 未挂载 → 跳回 `return`），后端用 30s 的一次性 cookie `fw_chal_page` 识别这类回退，直接给内置页。这条环必须有标记 cookie 才闭合，否则"前端挂 → 回退 → 又 302 → 又挂"是死循环。
 
+### 挑战链路指标（`GET /api/firewall/v1/monitor/challenge`）
+
+回答的是「**用户能不能过验证**」，而 `/summary` 只回答「拦了多少」。2026-11-05 那次生产 CSP 把挑战页整段拦掉，
+HTTP 全是 200、`/summary` 看起来一切正常 —— 因为当时**没有成功率**，事故才潜伏了一整天。
+
+| 字段 | 含义 |
+| --- | --- |
+| `issued` / `verified` / `failed` | 签发 / 通过 / 失败次数 |
+| `successRate` | 通过率，**分母是"真正提交过答案"的次数**（签发数会被"打开页面又关掉"放大，拿它当分母会显得永远不达标） |
+| `reasons` | 失败原因分布（Expired / Mismatch / Invalid Proof / Malformed） |
+| `solveMs` | 求解耗时**分位估算**（桶中点口径，不是精确值）+ 原始桶计数 |
+| `bySurface` | `inline`（内置页）/ `page`（302 前端页）/ `xhr`（428）—— 用来回答"内嵌页还有多少真实流量" |
+| `byDifficulty` / `byProvider` | 难度、验证方式分布 |
+
+- 计数在 `framework/firewall/challenge-metrics.js` 里**进程内累加**（热路径只做一次 Map 自增，不写 Redis），
+  由 `data/store.js` 的刷写周期取增量批量 `HINCRBY` 进 `stats:challenge`（与流量统计同一次 MULTI）。
+- `solveMs` 由客户端上报，**只进统计、不参与任何判定**（客户端可伪造）。
+- 告警建议：`successRate < 0.8` 或 `issued` 突增 → 链路大概率坏了，先按「页面能不能真的渲染」去查。
+
 ## 模块职责
 
 ### config/ — 配置文件
@@ -173,8 +192,8 @@ firewall onResponse 钩子
 
 | 文件                  | 职责                                                   | 关键导出                                                                          |
 | --------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| store.js              | 1000 条环形缓冲区、地域/路径/IP 统计、10 秒节流持久化  | `pushRecord`, `getRecentRecords`, `getSummary`, `clearAll`, `setBroadcastHandler` |
-| challenge-template.js | 生成含 SHA-256 PoW 的挑战 HTML 页面                    | `buildChallengePage`                                                              |
+| store.js              | 1000 条环形缓冲区、地域/路径/IP 统计、10 秒节流持久化  | `pushRecord`, `getRecentRecords`, `getSummary`, `getChallengeStatsAggregated`, `clearAll`, `setBroadcastHandler` |
+| challenge-template.js | 生成含 SHA-256 PoW 的挑战 HTML 页面                    | `buildChallengePage`, `buildChallengeRedirect`, `challengePageCsp`                |
 
 ### dao/ — 数据交互层
 

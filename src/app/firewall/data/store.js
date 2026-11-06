@@ -21,6 +21,12 @@ import { createLogger } from '../../../framework/log/index.js';
 import { dataFile } from '../../../framework/paths.js';
 import { flushStatsDelta, readAggregatedStats, resetAggregatedStats, redisAvailable } from './stats-redis.js';
 import { registerRecordSink } from '../../../framework/firewall/telemetry-sink.js';
+import {
+  drainChallengeMetrics,
+  mergeChallengeMetrics,
+  peekChallengeMetrics,
+  summarizeChallengeFields
+} from '../../../framework/firewall/challenge-metrics.js';
 
 const log = createLogger('app.firewall.data.store');
 
@@ -149,7 +155,9 @@ function hasPendingStats() {
     pendingDelta.regions.size > 0 ||
     pendingDelta.paths.size > 0 ||
     pendingDelta.ips.size > 0 ||
-    pendingDelta.records.length > 0
+    pendingDelta.records.length > 0 ||
+    // 挑战计数单独一张表（枚举维度、不随流量记录滚动），有增量就得刷
+    Object.keys(peekChallengeMetrics()).length > 0
   );
 }
 
@@ -170,7 +178,9 @@ function takeDelta() {
     regions: new Map(pendingDelta.regions),
     paths: new Map(pendingDelta.paths),
     ips: new Map(pendingDelta.ips),
-    records: [...pendingDelta.records]
+    records: [...pendingDelta.records],
+    /** 挑战链路计数（framework 层累加，这里只取增量；刷写失败时原样放回） */
+    challenge: drainChallengeMetrics()
   };
   clearPendingDelta();
   return delta;
@@ -188,6 +198,8 @@ function restoreDelta(delta) {
   }
   for (const [k, v] of delta.ips) pendingDelta.ips.set(k, (pendingDelta.ips.get(k) || 0) + v);
   pendingDelta.records.unshift(...delta.records);
+  // 挑战计数放回（否则一次刷写失败就永久丢一段统计）
+  mergeChallengeMetrics(delta.challenge);
 }
 
 /**
@@ -621,6 +633,29 @@ async function getSummaryAggregated() {
 }
 
 /**
+ * 获取挑战链路的跨实例聚合视图
+ *
+ * 合并口径：**先把字段表并起来再汇总**（Redis 全量 + 本实例未刷写增量）——
+ * 分位数/成功率都不能把两个已汇总的结果相加，那样 P95 会算错。
+ * Redis 不可用时只给本实例，并用 `source` 标出来，免得运营把"单实例切片"当成全局。
+ *
+ * @returns {Promise<object>} 挑战汇总（issued / verified / failed / successRate / solveMs / 各维度）
+ */
+async function getChallengeStatsAggregated() {
+  const local = peekChallengeMetrics();
+  if (!redisAvailable()) return { source: 'local', ...summarizeChallengeFields(local) };
+
+  const remote = await readAggregatedStats({ recordLimit: 0 });
+  if (!remote) return { source: 'local', ...summarizeChallengeFields(local) };
+
+  const fields = { ...(remote.challengeFields || {}) };
+  for (const [field, count] of Object.entries(local)) {
+    fields[field] = (Number(fields[field]) || 0) + count;
+  }
+  return { source: 'redis', ...summarizeChallengeFields(fields) };
+}
+
+/**
  * 获取跨实例聚合的最近记录
  *
  * 未刷写增量（pendingDelta.records，时间正序）比 Redis 里已刷写的都新，
@@ -681,6 +716,7 @@ export {
   getRecentRecords,
   getSummary,
   getSummaryAggregated,
+  getChallengeStatsAggregated,
   getRecentRecordsAggregated,
   clearAll,
   stopPersistTimer,

@@ -20,6 +20,7 @@ import { checkGlobalBlock, removeBlock, removeBlockFp, removeBlockDevice } from 
 import { trackConnection } from '../util/connection-tracker.js';
 import { generateFingerprint } from '../util/fingerprint.js';
 import { recordFirewallEvent } from '../telemetry-sink.js';
+import { recordChallengeEvent } from '../challenge-metrics.js';
 import { readSecuritySettings } from '../interface/config-access.js';
 import { hasPass, readAccessState } from '../util/redis.js';
 import { getClientDeviceId } from '../../auth/index.js';
@@ -369,6 +370,9 @@ async function sendChallengeResponse(reply, ip, fingerprint, deviceId, request) 
       : buildChallengeRedirect(readSecuritySettings().defense?.challengePageUrl, request?.raw?.url || request?.url);
 
     if (redirectTo) {
+      // 观测：文档请求走的是**前端页**（302）。与内置页/428 分开计数，
+      // 才能回答"内嵌页到底还有多少真实流量"（决定它要不要保留）
+      recordChallengeEvent({ type: 'surface', surface: 'page' });
       reply.setCookie('fw_chal_page', '1', {
         path: '/',
         httpOnly: true,
@@ -384,6 +388,7 @@ async function sendChallengeResponse(reply, ip, fingerprint, deviceId, request) 
     }
 
     // ② 没配 / 回退 → 内置页
+    recordChallengeEvent({ type: 'surface', surface: 'inline' });
     await sendChallengePage(reply, ip, fingerprint, deviceId);
     return 200;
   }
@@ -392,6 +397,7 @@ async function sendChallengeResponse(reply, ip, fingerprint, deviceId, request) 
   // 真实验证页在哪由前端按自己的基路径决定。
   const originalUrl = pathOf(request?.url);
 
+  recordChallengeEvent({ type: 'surface', surface: 'xhr' });
   reply
     .headers({ ...CHALLENGE_NO_STORE, 'X-Firewall-Challenge': originalUrl })
     .code(428)
