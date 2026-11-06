@@ -9,6 +9,8 @@
 - **Store 适配器**：通过 Store 接口解耦存储层（Redis/内存）
 - **配置统一**：所有配置从 `config.js` 读取，支持环境变量覆盖
 - **业务无关**：不含业务逻辑（如检查邮箱是否注册），由调用方负责
+- **能力与策略分离**：只回答"怎么出题/怎么判题"，不回答"什么时候该验证、绑谁、通过后给多久"
+  （后者是访问控制策略，属调用方的域；越界会让本库反向依赖业务模块）
 
 ## 目录结构
 
@@ -39,6 +41,10 @@ src/framework/verify/
 │   ├── service.js              # RecaptchaService（Google/hCaptcha）
 │   ├── dao.js
 │   └── index.js
+├── pow/                        # 工作量证明（纯 JS SHA-256，浏览器可内联）
+│   ├── service.js              # 出题/判题 + 哈希原语（**策略不在这里**，见下文）
+│   ├── dao.js                  # 一次性消费（store 的 take 必须原子）
+│   └── index.js
 ├── voice/                      # 语音验证码
 │   ├── service.js              # VoiceService（语音播报）
 │   ├── dao.js
@@ -46,13 +52,37 @@ src/framework/verify/
 └── README.md                   # 本文档
 ```
 
+### pow/：只出题判题，不认识"谁被挑战"
+
+`pow` 与本目录其它子模块同构（存储由调用方注入），但它的**边界最容易被越界**，所以单独说明：
+
+| 归 `pow/` | 归调用方（防火墙） |
+| --- | --- |
+| `sha256Hex` / `makePowSolver` / `verifyPow`（原语，可 `toString()` 内联进页面） | 什么时候出题（挑战态 / 限频 / 封禁判定） |
+| `buildChallenge({ difficulty, ttlSec })` → 题号 / 盐 / 尝试上限 | 难度取多少（本模块只提供 `clampDifficulty` 与 `MAX_DIFFICULTY` 上限） |
+| `verifyAnswer({ challengeId, salt, answer, difficulty })` | 题目绑谁（`binding` 对 pow 是**不透明字段**，原样存取） |
+| `dao.issue` / `dao.consume` / `dao.check` | 通过后免检多久、令牌怎么签（访问控制策略） |
+
+存储适配器契约只有两个方法：
+
+```js
+const store = {
+  put(challengeId, payload, ttlSec) {},   // 写入带 TTL
+  take(challengeId) {}                    // ⚠️ 原子取走（GET+DEL / Lua），拿不到返回 null
+};
+```
+
+**为什么只认 `take` 不认 `get + delete`**：两次非原子调用之间，同一题号可能被两个并发请求
+各读一次 → 同一份答案用两次。这是安全性质，不是清理优化。
+防火墙侧的适配器在 `framework/firewall/util/pow-store.js`。
+
 ## 调用关系
 
 ```
 API 路由层（api/verify/, api/user/, api/oauth21/）
     │
     ▼
-captcha/dao.js 或 email/dao.js 或 sms/dao.js ...
+captcha/dao.js 或 email/dao.js 或 sms/dao.js 或 pow/dao.js ...
     │
     ▼
 对应的 service.js

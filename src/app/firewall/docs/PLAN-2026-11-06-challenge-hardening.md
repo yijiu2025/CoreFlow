@@ -261,19 +261,24 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
   读取汇总、清空覆盖）+ 跳转用例里补 `surface` 三态断言
 
 
-### 阶段 2b：把 PoW 的"能力"收进 `framework/verify/pow/`（1 人日｜行为不变）
+### 阶段 2b：把 PoW 的"能力"收进 `framework/verify/pow/`（1 人日｜**已完成 2026-11-06**）
 
 `framework/verify` 是「验证能力库」（`captcha` / `slider` / `recaptcha` / `email` / `sms` / `voice` / `qrcode`，统一 `service + dao + index`，存储走调用方注入的 store 适配器、无 API 路由、业务无关）。PoW 与它们是同一种东西，只是当年长在防火墙里。
 
-**搬什么**：
+**实际落地**：
 
 ```
 framework/verify/pow/
-├── service.js   buildChallenge({ difficulty })                → { challengeId, salt, difficulty, maxAttempts, ttlSec }
-│                verifyAnswer({ challengeId, answer })          → { ok, reason }   （内部复用 pow-sha256.js 的 verifyPow）
-├── dao.js       一次性消费（原子 GET+DEL）+ 频控，与其他子模块同构
+├── service.js   buildChallenge({ difficulty, ttlSec })   → { challengeId, salt, difficulty, maxAttempts, ttlSec }
+│                verifyAnswer({ challengeId, salt, answer, difficulty }) → { ok, reason }
+│                clampDifficulty / attemptsForDifficulty / MAX_DIFFICULTY / DEFAULT_TTL_SEC
+│                sha256Hex / makePowSolver / verifyPow / SHA256_K   ← 原 util/pow-sha256.js 整体迁入
+├── dao.js       issue(store, { difficulty, ttlSec, binding }) / consume(store, id) / check(payload, { challengeId, answer })
 └── index.js
 ```
+
+`util/pow-sha256.js` **已删除**（不做 re-export 兼容层：全仓 4 处 import 全部改到位，
+留 shim 只会让"到底该从哪 import"长期含糊）。
 
 **不搬什么**（越界就会让 verify 反向依赖防火墙）：
 
@@ -284,9 +289,19 @@ framework/verify/pow/
 | 绑定比对（ip / fingerprint / deviceId） | 策略；verify 只把它当**不透明字段**存取、原样回传 |
 | 页面渲染 / CSP / 302 / 自愈守卫（`challenge-template.js`） | 与"验证能力"无关 |
 
-**存储适配是唯一真实工作量**：firewall 现在用自己的 redis 封装（`writeChallenge` / `takeChallenge`），而 verify 子模块走"调用方传 store"。做法是给 `verify/pow` 写一个 3 行的 store 适配器，把防火墙的封装转成 verify 期望的接口 —— 否则会出现两套存储语义（多实例下必踩）。
+**两处比原计划更严格的地方**：
 
-**验收**：既有 11 条挑战用例全绿且**断言不改**（只改 import）；`challengeProvider` 与 `turnstile` 形状一致。
+1. **store 适配器只认 `put` / `take`，不接受 `get + delete`**。`take` 的"取走即消失"是
+   **安全性质**而非清理优化：两次非原子调用之间，同一题号可能被两个并发请求各读一次 →
+   同一份答案用两次。适配器落 `framework/firewall/util/pow-store.js`（3 行转发到
+   `writeChallenge` / `takeChallenge`，含内存降级与 Lua GETDEL）。
+2. **载荷里的绑定字段嵌套成 `binding`**：`{ salt, difficulty, binding: { ip, fingerprint, deviceId }, issuedAt }`。
+   嵌套不是为了好看 —— 它让"verify 不认识 ip"从注释变成**结构约束**：`dao` 从头到尾
+   只碰 `payload.binding` 整体，想解读它就得先拆开，一眼能看出越界。
+   键空间仍是 `fw:chal:<id>`，升级瞬间的进行中挑战不受影响。
+
+**验收**：既有挑战用例全绿且**断言不改**（只改 import 路径），firewall 相关 **321 例**通过；
+新增 `__tests__/verify/pow-dao.test.js`（10 例）钉住存储契约与不透明性。
 
 ### 阶段 3：项② 递进难度（2 人日｜默认关闭上线）
 

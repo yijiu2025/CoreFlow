@@ -1,23 +1,40 @@
 /**
- * SHA-256 纯 JS 实现（同步、零依赖）
+ * 工作量证明（PoW）能力服务 —— 纯计算 + 纯参数推导
  *
- * 为什么不用 `crypto.createHash` / `crypto.subtle`：
- *   - 服务端 `crypto.createHash` 没问题，但**挑战页里的 PoW 必须跑在浏览器**；
- *   - 浏览器侧的 `crypto.subtle` 只在**安全上下文**（HTTPS / localhost）下存在，
- *     纯 HTTP 部署时 `crypto.subtle` 为 `undefined`，PoW 会直接失败 → 用户被永久卡在挑战页。
+ * 归属：`framework/verify` 是「验证能力库」（`captcha` / `slider` / `recaptcha` /
+ * `email` / `sms` / `voice` / `qrcode`，统一 `service + dao + index`）。PoW 与它们是
+ * 同一种东西 —— 都只回答两个问题：**怎么出题**、**怎么判题**。
  *
- * 因此挑战页需要一个**同步、零依赖、任何环境都能跑**的哈希。这里实现 SHA-256，
- * 并通过 `Function.prototype.toString()` 把**同一份源码**内联进挑战页
- * （见 `data/challenge-template.js`）—— 服务端校验与浏览器求解用的是同一个函数，
- * 不存在「两份实现各改各的」漂移风险，也让本模块可以直接对着 Node 的
- * `crypto.createHash('sha256')` 做等价性单测。
+ * 因此本文件只做两件事：
+ *   ① 出题：给定难度，给出本题参数（不透明题号 + 盐 + 尝试上限 + TTL）
+ *   ② 判题：给定答案，判断是否满足难度
  *
- * 输入约束：PoW 的输入只可能是 `[0-9a-f:]` 组成的 ASCII 串，因此按「一字符一字节」
- * 处理即可，无需 UTF-8 编码逻辑（这也是本实现能保持极短的原因）。
+ * **刻意不在这里的东西**（越界会让 verify 反向依赖防火墙，依赖方向就翻了）：
+ *
+ * | 留给 firewall | 原因 |
+ * | --- | --- |
+ * | 什么时候该出题（挑战态 / 限频 / 封禁判定） | 访问控制策略 |
+ * | 题目绑谁（ip / fingerprint / deviceId） | 策略；本模块只把它当**不透明字段**存取 |
+ * | 通过后免检多久（匿名 120s / 登录 1800s） | 访问控制策略 |
+ * | 题目怎么呈现（页面 / CSP / 302 / Worker） | 与「验证能力」无关，见 `challenge-template.js` |
+ *
+ * 为什么自己实现 SHA-256，而不用 `crypto.createHash` / `crypto.subtle`：
+ *   - 服务端 `crypto.createHash` 没问题，但**求解发生在浏览器**；
+ *   - 浏览器侧 `crypto.subtle` 只在安全上下文（HTTPS / localhost）存在，纯 HTTP 部署时
+ *     为 `undefined` → PoW 直接失败、用户被永久卡在挑战页；
+ *   - 所以需要一份**同步、零依赖、任何环境都能跑**的实现，并通过
+ *     `Function.prototype.toString()` 内联进挑战页 —— 出题 / 判题 / 求解三处共用同一份
+ *     源码，不存在「两份实现各改各的」漂移（跨端回归见
+ *     `__tests__/firewall/challenge-solver-parity.test.js`）。
+ *
+ * 输入约束：PoW 的输入只可能是 `[0-9a-f:]` 组成的 ASCII 串，因此按「一字符一字节」处理即可，
+ * 无需 UTF-8 编码逻辑（这也是本实现能保持极短的原因）。
  *
  * @author yijiu2025
  * @since 2026-09-15
+ * @since 2026-11-06 从 framework/firewall/util/pow-sha256.js 迁入（能力归位，策略留 firewall）
  */
+import crypto from 'node:crypto';
 
 /**
  * SHA-256 常量表（前 64 个素数立方根小数部分的前 32 位）
@@ -38,6 +55,26 @@ const SHA256_K = [
   0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
   0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 ];
+
+/**
+ * 难度上限：5 个前导十六进制零（期望 16^5 ≈ 105 万次哈希，约 0.4~3s）
+ *
+ * 上限曾是 6（期望 1670 万次）：纯 JS 在主线程上算 1670 万次 ≈ 1 分钟**整页冻结**，
+ * 而且尝试上限只有 1.2 倍期望值 → 难度配 6 时约 30% 的用户直接 "Unsolvable"，
+ * 而载荷是一次性的、页面又不重试 → 用户卡死。因此收到 5，并让尝试上限按 8 倍期望值推导。
+ *
+ * ⚠️ 与配置契约联动：`config/schema.js` 里 `challengeDifficulty` 的 `max` 必须等于本值，
+ * 否则「配了 6 却被静默夹成 5」= 配了不生效（有契约测试钉住）。
+ *
+ * @type {number}
+ */
+const MAX_DIFFICULTY = 5;
+
+/** 默认难度（配置缺项/非法时的保底值） */
+const DEFAULT_DIFFICULTY = 3;
+
+/** 挑战载荷默认有效期（秒）：够慢设备解完，又不至于让同一个题号被长期持有 */
+const DEFAULT_TTL_SEC = 300;
 
 /**
  * 计算字符串的 SHA-256 十六进制摘要
@@ -142,11 +179,11 @@ function sha256Hex(input) {
  * 另：`crypto.subtle` 在这类输入上反而更慢（2.95 µs/次，每次调用的固定开销 + TextEncoder），
  * 所以**不要**为了"提速"去换 WebCrypto。
  *
- * 三处共享同一份源码（`toString()` 内联）：服务端 `verifyPow`、挑战页 Worker、主线程降级。
+ * 三处共享同一份源码（`toString()` 内联）：服务端判题、挑战页 Worker、主线程降级。
  * 因此函数必须**自包含**（除 `SHA256_K` 外不引用任何外部量），内联时把 K 一起发过去即可。
  *
  * @param {string} prefix 固定前缀（`challengeId + ':' + salt + ':'`）
- * @param {number} difficulty 前导十六进制零个数（0 表示恒真，与服务端 `verifyPow` 一致）
+ * @param {number} difficulty 前导十六进制零个数（0 表示恒真，与 `verifyPow` 一致）
  * @returns {(answer: number) => boolean} 判定器（复用同一块缓冲，**不可重入/不可跨线程共享**）
  */
 function makePowSolver(prefix, difficulty) {
@@ -294,4 +331,93 @@ function verifyPow(challengeId, salt, answer, difficulty) {
   return digest.startsWith('0'.repeat(depth));
 }
 
-export { sha256Hex, makePowSolver, verifyPow, SHA256_K };
+/**
+ * 把外部来的难度夹到能力允许的区间
+ *
+ * 调用方（firewall）从自己的配置里读难度后必须过这一道：配置能写坏
+ * （`0` / 负数 / `"abc"` / `null`），而难度写坏的两个方向都很糟 ——
+ * `0` 等于关掉挑战，过大则让用户永远解不出。
+ *
+ * @param {unknown} raw 原始值（可能来自 JSON 配置）
+ * @param {number} [fallback] 非法时使用（默认 3）
+ * @returns {number} `[1, MAX_DIFFICULTY]` 内的整数
+ */
+function clampDifficulty(raw, fallback = DEFAULT_DIFFICULTY) {
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return Math.min(MAX_DIFFICULTY, n);
+}
+
+/**
+ * 单次挑战允许的尝试次数 = 8 × 期望值（16^difficulty）
+ *
+ * 8 倍期望值下「解不出来」的概率 ≈ e^-8 ≈ 0.03%，既不会误伤低端机，也不会让
+ * 难度配置变成"看运气"。上限 2000 万只是防御性夹取（难度已被 `MAX_DIFFICULTY`
+ * 夹到 5，实际最大 840 万）。
+ *
+ * @param {number} difficulty 难度
+ * @returns {number} 尝试次数上限
+ */
+function attemptsForDifficulty(difficulty) {
+  return Math.min(20_000_000, Math.ceil(8 * 16 ** difficulty));
+}
+
+/**
+ * 出一道题（**只产生参数，不落存储**）
+ *
+ * 载荷由 `dao.issue()` 写进存储；本函数保持纯函数语义 —— 同样的入参结构，
+ * 输出只有随机题号/盐不同，便于单测与跨端对拍。
+ *
+ * @param {object} [options] 出题参数
+ * @param {number} [options.difficulty] 难度（会被夹到 `[1, MAX_DIFFICULTY]`）
+ * @param {number} [options.ttlSec] 有效期（秒）
+ * @returns {{challengeId:string, salt:string, difficulty:number, maxAttempts:number, ttlSec:number}} 题目
+ */
+function buildChallenge({ difficulty, ttlSec } = {}) {
+  const depth = clampDifficulty(difficulty);
+  const ttl = Number(ttlSec);
+  return {
+    // 32/16 位十六进制：不可猜测，且本身不含任何可直接回放的凭据
+    challengeId: crypto.randomBytes(16).toString('hex'),
+    salt: crypto.randomBytes(8).toString('hex'),
+    difficulty: depth,
+    maxAttempts: attemptsForDifficulty(depth),
+    ttlSec: Number.isFinite(ttl) && ttl > 0 ? Math.floor(ttl) : DEFAULT_TTL_SEC
+  };
+}
+
+/**
+ * 判题（纯函数）
+ *
+ * `salt` / `difficulty` 必须来自**服务端存的载荷**，不能现读配置：
+ * 下发后改配置会让同一份题号前后难度不一致，用户必然解不出。
+ *
+ * @param {object} params 判题参数
+ * @param {string} params.challengeId 题号
+ * @param {string} params.salt 盐（来自载荷）
+ * @param {unknown} params.answer 客户端答案
+ * @param {number} params.difficulty 难度（来自载荷）
+ * @returns {{ok:true} | {ok:false, reason:string}} 判定结果
+ */
+function verifyAnswer({ challengeId, salt, answer, difficulty }) {
+  if (!verifyPow(challengeId, salt, answer, difficulty)) {
+    // 原因文案与既有对外契约一致（`Invalid Proof`），改它会连带改掉
+    // 观测里的失败原因分布与前端提示，所以这里不细分"格式错"与"难度不符"。
+    return { ok: false, reason: 'Invalid Proof' };
+  }
+  return { ok: true };
+}
+
+export {
+  SHA256_K,
+  MAX_DIFFICULTY,
+  DEFAULT_DIFFICULTY,
+  DEFAULT_TTL_SEC,
+  sha256Hex,
+  makePowSolver,
+  verifyPow,
+  clampDifficulty,
+  attemptsForDifficulty,
+  buildChallenge,
+  verifyAnswer
+};

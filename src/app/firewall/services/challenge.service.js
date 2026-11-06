@@ -2,7 +2,8 @@
  * 人机挑战验证服务
  *
  * 从 api/firewall/v1/challenge.js 下沉：浏览器挑战结果验证 + 签发通过令牌。
- * 复用 firewall 的 PoW 原语 / generateFingerprint / 访问层挑战载荷 / auth 的设备 ID 流程。
+ * 复用 `framework/verify/pow`（出题/判题能力）/ generateFingerprint / 访问层挑战载荷 /
+ * auth 的设备 ID 流程。**这里只做策略编排**：什么时候签发、绑谁、给多久 pass、失败算哪类。
  *
  * 校验三要素（缺一不可）：
  *   1. **服务端持有**：challengeId 必须能回查到载荷（旧实现把凭据内嵌进页面，无需回查即通过）；
@@ -14,8 +15,9 @@
  */
 import crypto from 'crypto';
 import { generateFingerprint } from '../../../framework/firewall/util/fingerprint.js';
-import { verifyPow } from '../../../framework/firewall/util/pow-sha256.js';
-import { grantPass, takeChallenge, readAccessState } from '../../../framework/firewall/util/redis.js';
+import { powChallengeStore } from '../../../framework/firewall/util/pow-store.js';
+import { powDao } from '../../../framework/verify/pow/index.js';
+import { grantPass, readAccessState } from '../../../framework/firewall/util/redis.js';
 import { issueChallengePayload } from '../../../framework/firewall/challenge-template.js';
 import { recordChallengeEvent } from '../../../framework/firewall/challenge-metrics.js';
 import { getClientDeviceId } from '../../../framework/auth/index.js';
@@ -147,7 +149,7 @@ async function verifyChallenge(request, reply) {
   }
 
   // 1. 取走载荷（原子 GET+DEL）→ 未知 / 已消费 / 已过期 一律同类失败
-  const payload = await takeChallenge(challengeId);
+  const payload = await powDao.consume(powChallengeStore, challengeId);
   if (!payload) {
     return failWith('Challenge Expired');
   }
@@ -158,19 +160,24 @@ async function verifyChallenge(request, reply) {
   // 2. 绑定校验：挑战是在某个 IP/指纹/设备上下发的，换一个上下文不能复用。
   //    设备维度只有在下发时确实绑定了、且本次仍能取到时才校验 —— 反过来（下发时没有、
   //    本次有）不算绕过，因为它本来就只是「额外多一个维度」而不是必要条件。
-  if (!safeEqual(payload.ip || '', request.ip || '')) {
+  //
+  //    `binding` 对 `verify/pow` 是**不透明字段**（它只负责原样存取），比对策略在这里：
+  //    谁和谁必须一致、不一致算哪类失败，都是防火墙的域知识。
+  const binding = payload.binding || {};
+  if (!safeEqual(binding.ip || '', request.ip || '')) {
     return failWith('Challenge Mismatch');
   }
-  if (payload.fingerprint && !safeEqual(payload.fingerprint, fingerprint)) {
+  if (binding.fingerprint && !safeEqual(binding.fingerprint, fingerprint)) {
     return failWith('Challenge Mismatch');
   }
-  if (payload.deviceId && !safeEqual(payload.deviceId, deviceId || '')) {
+  if (binding.deviceId && !safeEqual(binding.deviceId, deviceId || '')) {
     return failWith('Challenge Mismatch');
   }
 
-  // 3. 工作量证明校验（难度取载荷内的值，避免下发后改配置导致前后不一致）
-  if (!verifyPow(challengeId, payload.salt, answer, payload.difficulty)) {
-    return failWith('Invalid Proof');
+  // 3. 工作量证明校验（盐/难度取载荷内的值，避免下发后改配置导致前后不一致）
+  const proof = powDao.check(payload, { challengeId, answer });
+  if (!proof.ok) {
+    return failWith(proof.reason);
   }
 
   // 4. 签发验证令牌（绑定设备 / 指纹 / IP 三个维度）

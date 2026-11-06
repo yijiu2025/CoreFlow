@@ -10,8 +10,9 @@
  * 现在：服务端只下发一个**不透明 challengeId**（载荷存服务端，见 util/redis.js writeChallenge），
  * 客户端必须付出可校验的计算代价（找到满足前导零难度的 PoW 答案）才能通过。
  *
- * PoW 的哈希实现直接复用 `util/pow-sha256.js` 的**同一份源码**（`toString()` 内联），
- * 服务端校验与浏览器求解不可能漂移。
+ * PoW 的**能力**（哈希原语 / 出题 / 判题）在 `framework/verify/pow/`（验证能力库，与
+ * captcha / recaptcha 同构）；本文件只负责「**怎么把题呈现给用户**」—— 页面、CSP、302、
+ * Worker。两边共用同一份哈希源码（`toString()` 内联），求解与判题不可能漂移。
  *
  * 求解跑在 **Blob Worker** 里（`buildSolverSource`）：PoW 是同步纯计算，放主线程会把整页
  * 冻住；Worker + 主线程降级两条路都保留，Worker 不可用时自动退回同步求解。
@@ -25,34 +26,18 @@
  * @since 2026-11-05 内联脚本改 nonce + Blob Worker 求解（此前在生产 CSP 下根本不会执行）
  */
 import crypto from 'crypto';
-import { makePowSolver, SHA256_K } from './util/pow-sha256.js';
+import { makePowSolver, SHA256_K, powDao, MAX_DIFFICULTY, DEFAULT_TTL_SEC } from '../verify/pow/index.js';
 import { getConfig } from './util/shared.js';
-import { writeChallenge } from './util/redis.js';
+import { powChallengeStore } from './util/pow-store.js';
 
-/** 挑战载荷有效期（秒） */
-const CHALLENGE_TTL_SEC = 300;
-/**
- * 难度上限：5 个前导零（期望 16^5 ≈ 105 万次哈希，约 1~3s）
- *
- * 旧上限是 6（期望 1670 万次）：纯 JS 在主线程上算 1670 万次 ≈ 1 分钟**整页冻结**，
- * 且下面的尝试上限只有 2000 万（仅 1.2 倍期望值）→ 难度配 6 时约 30% 的用户直接
- * 得到 "Challenge Unsolvable"，而挑战载荷是一次性的、页面又不重试 → 用户卡死。
- * 因此把上限收到 5，并让尝试上限随难度按 8 倍期望值推导（见 attemptsForDifficulty）。
- */
-const MAX_DIFFICULTY = 5;
-/**
- * 单次挑战允许的尝试次数 = 8 × 期望值（16^difficulty）
- *
- * 8 倍期望值下「解不出来」的概率 ≈ e^-8 ≈ 0.03%，既不会误伤低端机，也不会让
- * 难度配置变成"看运气"。上限 2000 万只是防御性夹取（难度已被 MAX_DIFFICULTY 夹到 5，
- * 实际最大 840 万）。
- */
-function attemptsForDifficulty(difficulty) {
-  return Math.min(20_000_000, Math.ceil(8 * 16 ** difficulty));
-}
+/** 挑战载荷有效期（秒）：语义与出处都在 `verify/pow`，这里只是本模块的对外名字 */
+const CHALLENGE_TTL_SEC = DEFAULT_TTL_SEC;
 
 /**
  * 当前配置的 PoW 难度（前导十六进制零个数）
+ *
+ * **这是"策略"，不是"能力"**：难度上限由 `verify/pow` 定（`MAX_DIFFICULTY`），
+ * 而"这次该用多少"取决于部署/运营配置，所以读配置夹取这一步留在防火墙。
  *
  * @returns {number} 夹取到 [1, MAX_DIFFICULTY] 的难度
  */
@@ -68,22 +53,19 @@ function currentDifficulty() {
  * 页面模板（本文件）与 JSON 接口（`POST /api/firewall/v1/challenge/issue`，供 Vue 挑战页）
  * 共用这一处实现：绑定字段、TTL、难度、尝试上限只有一份，两个入口不可能漂移。
  *
+ * 题目本身的生成与落盘在 `verify/pow`（`powDao.issue`）；这里只决定**难度取多少**
+ * （读配置）与**题目绑谁**（ip / 指纹 / 设备 ID）—— 后两者都是防火墙的域知识，
+ * 对 verify 来说只是不透明字段，原样存取、原样回传给调用方自己比对。
+ *
  * @param {{ip: string, fingerprint?: string|null, deviceId?: string|null}} subject 绑定上下文
  * @returns {Promise<{challengeId:string, salt:string, difficulty:number, maxAttempts:number, ttlSec:number}>}
  */
 async function issueChallengePayload({ ip, fingerprint = null, deviceId = null }) {
-  const challengeId = crypto.randomBytes(16).toString('hex');
-  const salt = crypto.randomBytes(8).toString('hex');
-  const difficulty = currentDifficulty();
-
-  // 载荷只在服务端保存；调用方拿到的 challengeId 本身不含任何可直接回放的凭据
-  await writeChallenge(
-    challengeId,
-    { ip, fingerprint: fingerprint || null, deviceId: deviceId || null, salt, difficulty, issuedAt: Date.now() },
-    CHALLENGE_TTL_SEC
-  );
-
-  return { challengeId, salt, difficulty, maxAttempts: attemptsForDifficulty(difficulty), ttlSec: CHALLENGE_TTL_SEC };
+  return await powDao.issue(powChallengeStore, {
+    difficulty: currentDifficulty(),
+    ttlSec: CHALLENGE_TTL_SEC,
+    binding: { ip, fingerprint: fingerprint || null, deviceId: deviceId || null }
+  });
 }
 
 /**
@@ -94,8 +76,8 @@ async function issueChallengePayload({ ip, fingerprint = null, deviceId = null }
  *
  * 求解内核用 `makePowSolver()`（零分配，比 `sha256Hex + startsWith` 快约 5.9×，实测见该函数注释）。
  * 它必须**再内联一次**：Worker 没有外层闭包，`toString()` 只带函数体、不带外面的 `SHA256_K`，
- * 所以常量表单独发一份。两者仍来自 `util/pow-sha256.js` 的同一份源码，
- * 服务端校验 / 主线程降级 / 求解线程三处不可能各改各的。
+ * 所以常量表单独发一份。两者仍来自 `verify/pow/service.js` 的同一份源码，
+ * 服务端判题 / 主线程降级 / 求解线程三处不可能各改各的。
  *
  * @returns {string} 可直接塞进 `new Blob([...])` 的 JS 源码
  */
@@ -397,7 +379,8 @@ export {
   buildSolverSource,
   issueChallengePayload,
   currentDifficulty,
-  attemptsForDifficulty,
+  // 这两个是**能力常量**（出处 `verify/pow/service.js`），本模块转出只为让调用方
+  // 不必同时 import 两处；数值只有一个来源，不会出现两套口径。
   CHALLENGE_TTL_SEC,
   MAX_DIFFICULTY
 };

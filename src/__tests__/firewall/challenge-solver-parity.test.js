@@ -2,7 +2,7 @@
  * 跨端 PoW 等价性护栏（阶段 0）
  *
  * 浏览器端实现（`packages/challenge-client/src/pow.ts`）与服务端
- * （`src/framework/firewall/util/pow-sha256.js`）是**两份手写代码**，注释里写着
+ * （`src/framework/verify/pow/service.js`）是**两份手写代码**，注释里写着
  * "必须逐字节等价"，但此前没有任何测试守着它 —— 一旦漂移，症状是"用户永远解不出，
  * 服务端永远判 Invalid Proof"，而且只在线上暴露。
  *
@@ -18,7 +18,7 @@ import { readFileSync } from 'node:fs';
 import { describe, test, expect } from '@jest/globals';
 import { transformSync } from 'esbuild';
 
-const SERVER = await import('../../framework/firewall/util/pow-sha256.js');
+const SERVER = await import('../../framework/verify/pow/service.js');
 
 /** 把 `pow.ts` 现场转成 CJS 并求值，拿到它的导出（不依赖前端构建产物） */
 function loadBrowserPow() {

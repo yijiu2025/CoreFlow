@@ -1,7 +1,7 @@
 /**
  * 浏览器端工作量证明（PoW）求解
  *
- * ⚠️ 与服务端 `src/framework/firewall/util/pow-sha256.js` **必须逐字节等价**：
+ * ⚠️ 与服务端 `src/framework/verify/pow/service.js` **必须逐字节等价**：
  * 题目是 `sha256(challengeId + ':' + salt + ':' + answer)` 的十六进制摘要以
  * `difficulty` 个 `0` 开头，服务端用 Node 侧那份实现校验。两边算法一致才能对上。
  *
@@ -30,7 +30,7 @@ const rotr = (x: number, n: number): number => (x >>> n) | (x << (32 - n));
 /**
  * 造一个「答案是否满足难度」的判定器（**零分配**热循环）
  *
- * 与服务端 `src/framework/firewall/util/pow-sha256.js` 的 `makePowSolver()` **必须逐字节等价**
+ * 与服务端 `src/framework/verify/pow/service.js` 的 `makePowSolver()` **必须逐字节等价**
  * （由 `src/__tests__/firewall/challenge-solver-parity.test.js` 对拍）。
  *
  * 为什么不用 `sha256Hex()` + `startsWith`：那是"每次新建 bytes 数组与 w 表 + 拼 64 位十六进制串

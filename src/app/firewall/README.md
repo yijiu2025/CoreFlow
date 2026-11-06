@@ -21,7 +21,7 @@
 src/framework/firewall/               # 【架构层】防护引擎（始终存在）
 ├── block-manager.js                  # 封禁/白名单**真身**：三维度 CRUD + checkGlobalBlock + isUserManuallyBlocked
 ├── bootstrap.js                      # 【核心装配插件】firewallCorePlugin：限流插件 + 五阶段管道 + 观测钩子（05-firewall 直接启动）
-├── challenge-template.js             # 人机挑战页 HTML 模板（内联 SHA-256 PoW 求解器，载荷服务端持有）
+├── challenge-template.js             # 人机挑战页 HTML 模板（页面 / CSP / 302 / Worker；PoW 能力在 verify/pow）
 ├── telemetry-sink.js                 # 遥测注入点：app 注册 pushRecord，引擎经此产生记录事件
 ├── config/
 │   └── defaults.js                   # 默认安全策略矩阵（framework 单一来源；app config.js 只是 re-export）
@@ -32,7 +32,7 @@ src/framework/firewall/               # 【架构层】防护引擎（始终存�
 │   ├── shared.js                     # 共享内存状态（activeConnections、ipRequestTimestamps、getConfig）
 │   ├── connection-tracker.js         # 并发连接追踪 + 僵尸清理定时任务
 │   ├── fingerprint.js                # 请求指纹生成（IP+UA+Lang+Enc → SHA256 前 16 位）
-│   └── pow-sha256.js                 # PoW 原语
+│   └── pow-store.js                  # 挑战载荷存储适配器（把 writeChallenge/takeChallenge 注入 verify/pow）
 └── engine/                           # 五道管卡（只做检测与响应，不含面板遥测）
     ├── index.js                      # barrel：检测器 / 自动响应 / 请求管道
     ├── pipeline.js                   # onRequest 五层拦截管道 + 登录结果观测 + 日志记录
@@ -147,7 +147,11 @@ firewall onResponse 钩子
 - 用 nonce 而不是 `'sha256-…'`：页面每次都不同（内嵌本次 challengeId / salt），哈希无法预置。
 - 脚本**不放** `'unsafe-inline'`：那会把全局 XSS 防护一起削掉。
 - 开发环境 `contentSecurityPolicy: false`，**这类问题本地看不见** —— 所以 `sendChallengePage` 无条件设置本页 CSP，让本地看到的就是线上行为；回归用例见 `__tests__/firewall/challenge-page-csp.test.js`（真 fastify + 真 helmet + 真 HTTP）。
-- **后续加固计划**（PoW 提速 / 递进难度 / provider / 观测 / 边缘层）：`./docs/PLAN-2026-11-06-challenge-hardening.md`（待批准）。
+- **PoW 能力不在本目录**：哈希原语 / 出题 / 判题在 `framework/verify/pow/`（验证能力库，与 captcha / recaptcha 同构）。
+  本目录只负责"怎么把题呈现给用户"——页面、CSP、302、Worker。载荷的存储通过
+  `util/pow-store.js` 注入（`put` / `take`，**`take` 必须是原子取走**，否则"一次性"就没了）。
+- **后续加固计划**（递进难度 / provider / 边缘层 / WebAuthn）：`./docs/PLAN-2026-11-06-challenge-hardening.md`
+  （PoW 提速 5.9×、观测、PoW 能力归位已完成）。
 
 ### 挑战页去哪儿：`defense.challengePageUrl`
 
@@ -193,7 +197,7 @@ HTTP 全是 200、`/summary` 看起来一切正常 —— 因为当时**没有�
 | 文件                  | 职责                                                   | 关键导出                                                                          |
 | --------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
 | store.js              | 1000 条环形缓冲区、地域/路径/IP 统计、10 秒节流持久化  | `pushRecord`, `getRecentRecords`, `getSummary`, `getChallengeStatsAggregated`, `clearAll`, `setBroadcastHandler` |
-| challenge-template.js | 生成含 SHA-256 PoW 的挑战 HTML 页面                    | `buildChallengePage`, `buildChallengeRedirect`, `challengePageCsp`                |
+| challenge-template.js | 生成挑战 HTML 页面（PoW 能力在 `framework/verify/pow`）  | `buildChallengePage`, `buildChallengeRedirect`, `challengePageCsp`                |
 
 ### dao/ — 数据交互层
 

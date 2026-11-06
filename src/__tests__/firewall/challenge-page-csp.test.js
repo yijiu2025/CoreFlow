@@ -17,6 +17,7 @@ import helmet from '@fastify/helmet';
 
 import { registerSettingsReader } from '../../framework/firewall/interface/config-access.js';
 import { DEFAULT_SECURITY_SETTINGS } from '../../framework/firewall/config/defaults.js';
+import { verifyPow } from '../../framework/verify/pow/service.js';
 import {
   buildChallengePage,
   challengePageCsp,
@@ -100,6 +101,31 @@ describe('buildChallengePage：nonce 与响应头同源', () => {
     const decoded = JSON.parse(literal[1]);
     expect(decoded).toContain('makePowSolver');
     expect(decoded).toContain('\n');
+  });
+
+  it('求解线程源码**真的能跑**：内联后解出的答案能被服务端判题接受', async () => {
+    // 这条不测"字符串长得对"，而是把内联出来的 Worker 源码**当代码执行**：
+    // 内联是三段拼接（函数体 `toString()` + 常量表 `JSON.stringify` + 模板字符串），
+    // 任何一环断了（例如把 `makePowSolver` 改成箭头函数、或让它引用闭包变量），
+    // Worker 里会直接 ReferenceError —— 而浏览器端表现为"页面卡在 5%、没有任何报错"。
+    const html = await buildChallengePage('127.0.0.1', null, null, { nonce: 'b'.repeat(32) });
+    const challengeId = html.match(/const CHALLENGE_ID = '([0-9a-f]+)'/)[1];
+    const salt = html.match(/const SALT = '([0-9a-f]+)'/)[1];
+    const difficulty = Number(html.match(/const DIFFICULTY = (\d+)/)[1]);
+    const maxAttempts = Number(html.match(/const MAX_ATTEMPTS = (\d+)/)[1]);
+    const src = JSON.parse(html.match(/const SOLVER_SRC = ("(?:[^"\\]|\\.)*");/)[1]);
+
+    // 桩 `self`：Worker 里唯一的全局沟通渠道就是它
+    const posted = [];
+    const self = { postMessage: m => posted.push(m) };
+    new Function('self', src)(self);
+    self.onmessage({ data: { prefix: `${challengeId}:${salt}:`, difficulty, maxAttempts } });
+
+    const answer = posted.find(m => m.answer !== undefined)?.answer;
+    expect(answer).not.toBeNull();
+    expect(typeof answer).toBe('string');
+    // 与服务端判题共用同一份哈希源码 —— 内联版能解、服务端认，才叫闭环
+    expect(verifyPow(challengeId, salt, answer, difficulty)).toBe(true);
   });
 });
 

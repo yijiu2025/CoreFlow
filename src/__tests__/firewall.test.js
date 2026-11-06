@@ -67,7 +67,7 @@ registerRecordSink(r => pushedRecords.push(r));
 
 const { buildChallengePage } = await import('../framework/firewall/challenge-template.js');
 const { issueChallenge, verifyChallenge } = await import('../app/firewall/services/challenge.service.js');
-const { sha256Hex } = await import('../framework/firewall/util/pow-sha256.js');
+const { sha256Hex } = await import('../framework/verify/pow/service.js');
 const { generateFingerprint } = await import('../framework/firewall/util/fingerprint.js');
 const { hasPass } = await import('../framework/firewall/util/redis.js');
 const { ipRequestTimestamps } = await import('../framework/firewall/util/shared.js');
