@@ -35,7 +35,7 @@ import { sanitizeBySpec, isPlainObject, toJsonProperties } from '../../config/fi
 /**
  * 支持的人机验证 provider（**配置契约**，`challengeProvider` 的 enum 来源）
  *
- * ⚠️ 各 provider 的**实现注册表**在 `src/app/firewall/services/challenge-providers/`（app 层），
+ * ⚠️ 各 provider 的**实现注册表**在 `src/app/firewall/services/challenge/providers/`（app 层），
  * 而 framework 不能反向 import app —— 所以两边各有一份清单，用契约测试钉住"完全一致"。
  * 新增 provider 时两处都要改；漏改 app 那份 → 配置能存进去但运行时回落 pow（有测试拦）。
  *
@@ -137,11 +137,18 @@ const DEFENSE_SPEC = {
   // 与对应 `*_SITE_KEY`），**不进** `data/firewall_config.json`（那份文件会被面板整份写回）。
   challengeProvider: { type: 'enum', values: CHALLENGE_PROVIDERS },
   challengeDifficulty: { type: 'int', min: 1, max: 5 },
-  // 递进难度：开起来后难度按该 IP 近窗口的挑战结果浮动（详见 challenge-difficulty.js）。
+  // 递进难度：开起来后难度按该 IP 近窗口的挑战结果浮动（详见 challenge/difficulty.js）。
   // Min/Max 只做上下界，`challengeDifficulty` 仍是基准；三者都在 [1, 5] 内（代码侧 MAX_DIFFICULTY）。
   challengeReputationEnabled: { type: 'bool' },
   challengeDifficultyMin: { type: 'int', min: 1, max: 5 },
   challengeDifficultyMax: { type: 'int', min: 1, max: 5 },
+  // 三个触发阈值（次数）。`min: 1` 是硬门槛：0 会让每台机器立刻顶到上限。
+  // `HardenStrong < Harden` 这种语义写反不在这里拦 —— spec 只能查单值上下界，
+  // 跨键关系交给读取点抬齐（challenge/difficulty.js 的 readThresholds），
+  // 这样面板改配置时不会出现"两个值互相校验、改一个必然报错"的死结。
+  challengeReputationHardenAfterFails: { type: 'int', min: 1 },
+  challengeReputationHardenStrongAfterFails: { type: 'int', min: 1 },
+  challengeReputationRelaxAfterPasses: { type: 'int', min: 1 },
   // 计数窗口（秒）：太短则"偶发"和"反复"分不开，太长则一次误伤要背很久
   challengeReputationWindowSec: { type: 'int', min: 30 },
   // 独立前端挑战页地址：**空串合法**（= 用后端内置页）。非空要求站内相对路径，

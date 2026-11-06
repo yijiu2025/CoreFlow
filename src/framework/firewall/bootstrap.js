@@ -76,7 +76,7 @@ const firewallCorePlugin = fp(async function (app) {
     }
 
     // 跳过静态资源和挑战验证接口
-    if (shouldSkipDeepCheck(request.url)) return;
+    if (shouldSkipDeepCheck(request)) return;
 
     // 已知会被守卫拒绝的匿名请求：连挑战 Cookie 校验与深度检测一起跳过
     // （配置开关 skipDeepCheckForAnonymous，默认关闭；取舍见 willBeRejectedAsAnonymous 注释）

@@ -181,15 +181,36 @@ TTL 被不断续期 → 持续重试的客户端永远不会解封。两处都�
 
 公开端点（`requireLogin: false`）默认最容易被刷，全部已带独立 `groupId`：
 
-| 端点 | 阈值 | groupId | 说明 |
-| --- | --- | --- | --- |
-| `GET /auth/v1/h5-token` | 30/min | `h5-token` | 预发 H5 签名 cookie |
-| `POST /auth/v1/verify-challenge` | 10/min | — | 人机验证回执 |
-| `POST /auth/v1/bind-token` | 30/min | `bind-token` | Bearer → Cookie |
-| `POST /auth/v1/bind-session` | 30/min | `bind-session` | 一次性 session_token → Cookie |
-| `POST /oauth2.1/token`、`/revoke` | 60/min | `oauth-token` | 同一令牌流程共用桶 |
-| `POST /oauth2.1/device_authorization`、`/device/token`、`GET /device`、`POST /device/authorize` | 20/min | `oauth-device` | 设备码流程四个端点共用一个桶 |
-| `POST /api/firewall/v1/challenge/verify` | 20/min | `challenge-verify` | 挑战回执（CPU + 被刷） |
+| 端点                                                                                            | 阈值   | groupId            | 说明                          |
+| ----------------------------------------------------------------------------------------------- | ------ | ------------------ | ----------------------------- |
+| `GET /auth/v1/h5-token`                                                                         | 30/min | `h5-token`         | 预发 H5 签名 cookie           |
+| `POST /auth/v1/verify-challenge`                                                                | 10/min | —                  | 人机验证回执                  |
+| `POST /auth/v1/bind-token`                                                                      | 30/min | `bind-token`       | Bearer → Cookie               |
+| `POST /auth/v1/bind-session`                                                                    | 30/min | `bind-session`     | 一次性 session_token → Cookie |
+| `POST /oauth2.1/token`、`/revoke`                                                               | 60/min | `oauth-token`      | 同一令牌流程共用桶            |
+| `POST /oauth2.1/device_authorization`、`/device/token`、`GET /device`、`POST /device/authorize` | 20/min | `oauth-device`     | 设备码流程四个端点共用一个桶  |
+| `POST /api/firewall/v1/challenge/verify`                                                        | 20/min | `challenge-verify` | 挑战回执（CPU + 被刷）        |
 
 > 登录本身**不靠这一层**：由防火墙的 `checkLoginBruteForce`（账号锁定 + IP 挑战）负责。
 > 新增公开端点时，先问自己「它会不会被脚本无限调用」——会，就必须带 `groupId`。
+
+## 同族的「路由级声明」
+
+`groupId` 解决的是「**额度**该按哪条路由切」，同一个思路还用在另外三处 ——
+都是把「关于这条路由的事实」写在路由上，**不用路径正则去猜**：
+
+| 声明                               | 事实                                           | 读取点                                 |
+| ---------------------------------- | ---------------------------------------------- | -------------------------------------- |
+| `config.rateLimit.groupId`         | 这条路由的额度独立核算                         | `@fastify/rate-limit`                  |
+| `config.firewall.credentialRoute`  | 这条路由**消费凭证**（响应参与暴力破解计数）   | `pipeline.js` 的 `observeLoginOutcome` |
+| `config.firewall.challengeSurface` | 这条路由**是挑战接口**（任何状态下无条件可达） | `pipeline.js` 的 `isChallengeApiUrl`   |
+| `config.firewall.probeEndpoint`    | 这条路由**是健康探针**（任何状态下无条件可达） | `pipeline.js` 的 `isProbeUrl`          |
+| `config.firewall.skipScanTrap`     | 这条路由的 403/404 是正常业务                  | `scan-trap.js`                         |
+| `config.riskExempt`                | 这条路由不参与「指纹变更拦截」                 | `anomaly-detector`                     |
+
+> 探针是**两条腿**：除了 `probeEndpoint` 声明，还有 `defense.probePaths` 配置兜底
+> （部署方可能探一个没有路由的 `/healthz`）。两条是并集，任一条命中即放行。
+
+它们的共同前提是：**钩子执行时路由已匹配**，所以 `request.routeOptions.config` 一定可读
+（`onRequest` / `onResponse` 都成立）。也因此这些声明**只能写在 `registerSecureRoute` 的
+`config` 里** —— 那份 config 会原样传给 Fastify 路由配置，写在别处不生效。

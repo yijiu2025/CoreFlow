@@ -12,10 +12,9 @@
  * @since 2026-11-06
  */
 import crypto from 'crypto';
-import { issueChallengePayload } from '../../../../framework/firewall/challenge-template.js';
-import { powChallengeStore } from '../../../../framework/firewall/util/pow-store.js';
-import { noteChallengeProofFailed } from '../../../../framework/firewall/challenge-difficulty.js';
-import { powDao } from '../../../../framework/verify/pow/index.js';
+import { issueChallengePayload, noteChallengeProofFailed } from '../../../../../framework/firewall/challenge/index.js';
+import { powChallengeStore } from '../../../../../framework/firewall/util/pow-store.js';
+import { powDao } from '../../../../../framework/verify/pow/index.js';
 
 /** 题号格式（32 位十六进制）：格式不对就不必去打存储 */
 const CHALLENGE_ID_RE = /^[0-9a-f]{32}$/;

@@ -28,11 +28,21 @@ handler ── 业务路由
   │
   ▼
 onSend ── 日志 + 连接释放
-onResponse ── 慢请求告警 + 扫描陷阱
+onResponse ── 登录结果观测 + 扫描陷阱
   │
   ▼
 客户端收到响应
 ```
+
+> onResponse 里这两件事都**只对"自己声明过"的路由生效**，不看 URL：
+> `config.firewall.credentialRoute`（参与暴力破解计数）、
+> `config.firewall.skipScanTrap`（自己的 403/404 不算扫描）。
+> 同一族还有 `config.firewall.challengeSurface` / `config.firewall.probeEndpoint`
+> （这条路由是挑战接口 / 健康探针，任何状态下无条件可达）—— 它们在 `onRequest`
+> 就被消费，因为挑战态在第一阶段就要放行。探针另有 `defense.probePaths` 配置兜底，
+> 两者取并集（部署方可能探一个没有路由的路径）。
+> 路由在 `onResponse` 阶段已匹配，所以读的是 `request.routeOptions.config`。
+> 用声明而不用路径正则的原因见 `src/app/firewall/README.md` 的「路由级防火墙声明」。
 
 ## 详细流程
 

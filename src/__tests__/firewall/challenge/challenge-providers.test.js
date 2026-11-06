@@ -14,13 +14,13 @@
 import { describe, test, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
 let settings;
-jest.unstable_mockModule('../../framework/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../../../framework/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => settings,
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
 }));
 
-jest.unstable_mockModule('../../app/firewall/data/store.js', () => ({
+jest.unstable_mockModule('../../../app/firewall/data/store.js', () => ({
   pushRecord: () => {},
   getRecentRecords: () => [],
   getSummary: () => ({}),
@@ -30,18 +30,18 @@ jest.unstable_mockModule('../../app/firewall/data/store.js', () => ({
   flushPersist: async () => {}
 }));
 
-const { DEFAULT_SECURITY_SETTINGS } = await import('../../framework/firewall/config/defaults.js');
-const { CHALLENGE_PROVIDERS } = await import('../../framework/firewall/config/schema.js');
+const { DEFAULT_SECURITY_SETTINGS } = await import('../../../framework/firewall/config/defaults.js');
+const { CHALLENGE_PROVIDERS } = await import('../../../framework/firewall/config/schema.js');
 const { resolveChallengeProvider, pickVerifyProvider, resetProviderWarnings, EXTERNAL_PROVIDERS } =
-  await import('../../app/firewall/services/challenge-providers/index.js');
-const { createRecaptchaProvider } = await import('../../app/firewall/services/challenge-providers/recaptcha.js');
-const { recaptchaService } = await import('../../framework/verify/recaptcha/index.js');
-const { verifyConfig } = await import('../../framework/verify/config.js').then(m => ({
+  await import('../../../app/firewall/services/challenge/providers/index.js');
+const { createRecaptchaProvider } = await import('../../../app/firewall/services/challenge/providers/recaptcha.js');
+const { recaptchaService } = await import('../../../framework/verify/recaptcha/index.js');
+const { verifyConfig } = await import('../../../framework/verify/config.js').then(m => ({
   verifyConfig: m.default
 }));
-const { resetMemoryState } = await import('../../framework/firewall/util/redis-memory.js');
-const { setBlock } = await import('../../framework/firewall/block-manager.js');
-const { issueChallenge, verifyChallenge } = await import('../../app/firewall/services/challenge.service.js');
+const { resetMemoryState } = await import('../../../framework/firewall/util/redis-memory.js');
+const { setBlock } = await import('../../../framework/firewall/block-manager.js');
+const { issueChallenge, verifyChallenge } = await import('../../../app/firewall/services/challenge/index.js');
 
 const IP = '203.0.113.70';
 

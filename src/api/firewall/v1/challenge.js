@@ -4,14 +4,14 @@
  * POST /api/firewall/v1/challenge/issue  — 为 Vue 挑战页签发一份挑战（JSON）
  * POST /api/firewall/v1/challenge/verify — 提交验证结果
  *
- * 业务逻辑见 app/firewall/services/challenge.service.js（issueChallenge / verifyChallenge）。
+ * 业务逻辑见 app/firewall/services/challenge/index.js（issueChallenge / verifyChallenge）。
  *
  * @author yijiu2025
  * @since 2026-08-17
  * @since 2026-11-03 新增 issue：前端 Vue 挑战页需要的 JSON 签发入口（内置 HTML 模板仍保留）
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { issueChallenge, verifyChallenge } from '../../../app/firewall/services/challenge.service.js';
+import { issueChallenge, verifyChallenge } from '../../../app/firewall/services/challenge/index.js';
 
 async function registerChallengeRoutes(fastify) {
   registerGroupMetadata({
@@ -43,7 +43,11 @@ async function registerChallengeRoutes(fastify) {
       // 页面失败会自动重试 → 不该被扫描陷阱当成「路径爆破」累计。
       // 与 defense.safePaths 的 /api/firewall/ 前缀是两层：前缀管「没有路由的 404」，
       // 这条声明随路由走（改名 / 换前缀都不会漏）。
-      firewall: { skipScanTrap: true }
+      //
+      // `challengeSurface`：声明「本路由属于挑战接口」。防火墙据此让它在**任何状态下**
+      // 都无条件可达（否则挑战态下的请求连"签发"都拿不到 → 挑战永远解不开 = 死锁）。
+      // 这两个字段在同一个对象里，URL 和声明物理上无法漂移。
+      firewall: { skipScanTrap: true, challengeSurface: true }
     },
     requireLogin: false,
     schema: {
@@ -71,8 +75,9 @@ async function registerChallengeRoutes(fastify) {
     // 防滥用：该端点公开且会消耗凭证/CPU，按 IP+用户维度独立计数（groupId 与其它端点隔离）
     config: {
       rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'challenge-verify' },
-      // 同 issue：验签失败的 403 属正常语义（Expired / Mismatch / Invalid Proof）
-      firewall: { skipScanTrap: true }
+      // 同 issue：验签失败的 403 属正常语义（Expired / Mismatch / Invalid Proof），
+      // 且本路由必须无条件可达（`challengeSurface`，见 issue 处注释）。
+      firewall: { skipScanTrap: true, challengeSurface: true }
     },
     // 本组必须保持免登录：被挑战的请求正是**尚未通过验证**的请求，
     // 若这里要求登录，挑战就永远解不开（见 docs/AUDIT-REPORT-2026-09-15.md 🔴-1）。

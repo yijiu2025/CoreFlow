@@ -71,6 +71,9 @@ const DEFENSE_KEYS = [
   'challengeReputationEnabled',
   'challengeDifficultyMin',
   'challengeDifficultyMax',
+  'challengeReputationHardenAfterFails',
+  'challengeReputationHardenStrongAfterFails',
+  'challengeReputationRelaxAfterPasses',
   'challengeReputationWindowSec',
   'challengePageUrl',
   // 设备维度
@@ -123,7 +126,7 @@ describe('防火墙默认策略 · schema 契约', () => {
     expect(d.bruteLimit).toBeGreaterThan(0);
     expect(d.maxConn).toBeGreaterThan(0);
     expect(d.challengeDifficulty).toBeGreaterThanOrEqual(1);
-    // 与 challenge-template.js 的 MAX_DIFFICULTY 对齐：配置 6 会被静默夹成 5，
+    // 与 challenge/template.js 的 MAX_DIFFICULTY 对齐：配置 6 会被静默夹成 5，
     // 那属于"配了不生效"，不如直接在 spec 上拒绝
     expect(d.challengeDifficulty).toBeLessThanOrEqual(5);
   });

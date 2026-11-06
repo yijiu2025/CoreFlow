@@ -31,12 +31,17 @@ function registerAuthorizeRoutes(fastify, sessionStore) {
   });
 
   // POST /authorize/login — 用户登录验证
+  //
+  // `credentialRoute: true` 不能少：这条路由校验 username/password（失败返 401），
+  // 与 `/login` 是同一类「消费凭证」的端点。旧版靠路径正则的 `$` 后缀匹配侥幸覆盖到了它，
+  // 但那是巧合 —— 改成路由声明后这里是显式的（见 `login.js` 头注释）。
   registerSecureRoute(fastify, {
     name: 'authorizeLogin',
     alias: '授权登录验证',
     method: 'POST',
     url: '/authorize/login',
     schema: authorizeLoginSchema,
+    config: { firewall: { credentialRoute: true } },
     handler: (request, reply) => authService.handleAuthorizeLogin(request, reply, sessionStore)
   });
 

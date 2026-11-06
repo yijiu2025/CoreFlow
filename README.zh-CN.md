@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://yijiu2025.github.io/CoreFlow/"><img src="https://img.shields.io/badge/文档-在线阅读-4FC08D?logo=vitepress&logoColor=white" /></a>
-  <img src="https://img.shields.io/badge/Node.js-%E2%89%A518-339933?logo=node.js&logoColor=white" />
+  <img src="https://img.shields.io/badge/Node.js-%E2%89%A524-339933?logo=node.js&logoColor=white" />
   <img src="https://img.shields.io/badge/Fastify-v5-000000?logo=fastify&logoColor=white" />
   <img src="https://img.shields.io/badge/MySQL-%E2%89%A58.0-4479A1?logo=mysql&logoColor=white" />
   <img src="https://img.shields.io/badge/Redis-%E5%8F%AF%E9%80%89-DC382D?logo=redis&logoColor=white" />

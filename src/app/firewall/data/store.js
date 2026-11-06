@@ -26,7 +26,7 @@ import {
   mergeChallengeMetrics,
   peekChallengeMetrics,
   summarizeChallengeFields
-} from '../../../framework/firewall/challenge-metrics.js';
+} from '../../../framework/firewall/challenge/index.js';
 
 const log = createLogger('app.firewall.data.store');
 

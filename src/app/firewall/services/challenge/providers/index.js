@@ -12,7 +12,7 @@
  * }
  * ```
  *
- * 这样 `challenge.service` 只剩三段：出题 → 记观测 → 等客户端回来；判题 → 签 pass → 记观测。
+ * 这样 `challenge/service` 只剩三段：出题 → 记观测 → 等客户端回来；判题 → 签 pass → 记观测。
  * 加第四个 provider 时**不需要**动 service。
  *
  * ── 降级规则（写死在这里，避免"每个调用点各有一套"）──
@@ -25,13 +25,13 @@
  * @author yijiu2025
  * @since 2026-11-06
  */
-import { getConfig } from '../../../../framework/firewall/util/shared.js';
-import { recaptchaService } from '../../../../framework/verify/recaptcha/index.js';
-import { createLogger } from '../../../../framework/log/index.js';
+import { getConfig } from '../../../../../framework/firewall/util/shared.js';
+import { recaptchaService } from '../../../../../framework/verify/recaptcha/index.js';
+import { createLogger } from '../../../../../framework/log/index.js';
 import { powProvider } from './pow.js';
 import { createRecaptchaProvider } from './recaptcha.js';
 
-const log = createLogger('app.firewall.services.challenge-providers');
+const log = createLogger('app.firewall.services.challenge.providers');
 
 /**
  * 支持的第三方服务商

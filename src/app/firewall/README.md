@@ -21,8 +21,11 @@
 src/framework/firewall/               # 【架构层】防护引擎（始终存在）
 ├── block-manager.js                  # 封禁/白名单**真身**：三维度 CRUD + checkGlobalBlock + isUserManuallyBlocked
 ├── bootstrap.js                      # 【核心装配插件】firewallCorePlugin：限流插件 + 五阶段管道 + 观测钩子（05-firewall 直接启动）
-├── challenge-template.js             # 人机挑战页 HTML 模板（页面 / CSP / 302 / Worker；PoW 能力在 verify/pow）
-├── challenge-difficulty.js           # 挑战难度决策：基准 ± 信誉浮动（默认关闭），取代"难度写死一个值"
+├── challenge/                        # 【人机挑战】出题 / 难度 / 观测（三件事各一个文件，公共出口是 index.js）
+│   ├── index.js                      # 门面：调用方一律从这里导入，改文件划分时只动这里
+│   ├── difficulty.js                 # 挑战难度决策：基准 ± 信誉浮动（默认关闭），取代"难度写死一个值"
+│   ├── metrics.js                    # 签发/通过/失败计数 + 求解耗时分位（进程内累加，热路径不写 Redis）
+│   └── template.js                   # 内置挑战页 HTML 模板（页面 / CSP / 302 / Worker；PoW 能力在 verify/pow）
 ├── telemetry-sink.js                 # 遥测注入点：app 注册 pushRecord，引擎经此产生记录事件
 ├── config/
 │   └── defaults.js                   # 默认安全策略矩阵（framework 单一来源；app config.js 只是 re-export）
@@ -56,8 +59,11 @@ src/app/firewall/                     # 【应用层】面板/配置/遥测（�
 ├── data/
 │   ├── store.js                      # 面板遥测：环形缓冲、统计汇总、磁盘持久化、WebSocket 广播（注册遥测 sink）
 │   └── stats-redis.js                # 遥测跨实例汇聚（自访问层拆出，随消费者留在 app）
-├── services/                         # 面板编排（monitor / metrics / challenge 校验端点）
-│   └── challenge-providers/          # 挑战 provider（pow / turnstile / hcaptcha / google 同一形状）
+├── services/                         # 面板编排（monitor / metrics）
+│   └── challenge/                    # 人机挑战编排（门面 index.js）
+│       ├── index.js                  # 门面：issueChallenge / verifyChallenge
+│       ├── service.js                # 编排：取上下文 → 选 provider → 记观测 → 判题 → 签 pass
+│       └── providers/                # 出题/判题实现（pow / turnstile / hcaptcha / google 同一形状）
 ├── cli/                              # 运维命令行
 └── permission/                       # 面板权限
 
@@ -109,6 +115,9 @@ firewall onRequest（五层拦截管道） ← engine/pipeline.js
 │
 ├── 第 2 层：全局封禁
 │ └── checkGlobalBlock() ← dao/block-manager.js
+│ └── 挑战态分支先放行「挑战接口」与「健康探针」（否则挑战解不开 = 死锁）
+│ · firewall.challengeSurface 声明 ← 路由自证
+│ · defense.probePaths / PROBE_PATHS ← 配置 + 代码兜底
 │
 ├── 第 3 层：挑战 Cookie
 │ └── checkChallengeCookie() ← engine/pipeline.js
@@ -121,7 +130,7 @@ firewall onRequest（五层拦截管道） ← engine/pipeline.js
 └── checkRateLimit() ← engine/detectors/rate-limiter.js
 │
 ▼ (若触发挑战)
-buildChallengePage() ← data/challenge-template.js
+buildChallengePage() ← framework/firewall/challenge/template.js
 │
 ▼ (正常放行)
 业务路由处理
@@ -133,9 +142,68 @@ firewall onSend 钩子
 │
 ▼
 firewall onResponse 钩子
-└── checkNotFoundTrap() ← engine/detectors/scan-trap.js
+├── observeLoginOutcome() ← pipeline.js（只认声明了 firewall.credentialRoute 的路由）
+└── checkNotFoundTrap() ← engine/detectors/scan-trap.js（可被 firewall.skipScanTrap 豁免）
 
 ```
+
+### 路由级防火墙声明
+
+「这条路由的 403 是正常业务」「这条路由消费凭证」「这条路由是挑战接口」这类
+**关于路由的事实**，由路由自己在 `config.firewall` 里声明，防火墙从
+`request.routeOptions.config` 读（`onRequest` / `onResponse` 阶段路由已匹配）。
+**不要**在防火墙里用路径正则或路径常量去猜：
+
+| 声明 | 作用 | 读取点 |
+| --- | --- | --- |
+| `config.firewall.skipScanTrap: true` | 该端点的 403/404 不计入扫描陷阱 | `scan-trap.js` |
+| `config.firewall.credentialRoute: true` | 该端点的响应参与暴力破解计数（成功清零 / 失败累加） | `pipeline.js` 的 `observeLoginOutcome` |
+| `config.firewall.challengeSurface: true` | 该端点是挑战接口：**任何状态下无条件可达**（深度检测跳过 + 挑战态放行） | `pipeline.js` 的 `isChallengeApiUrl` |
+| `config.firewall.probeEndpoint: true` | 该端点是健康探针：**任何状态下无条件可达**（同上） | `pipeline.js` 的 `isProbeUrl` |
+| `config.riskExempt: true` | 设备指纹变更时不被拦截（退出/切号/验证等） | `anomaly-detector` |
+
+其中 `challengeSurface` **漏了就是全站死锁**，不是"少拦一点" —— 挑战态下的请求连
+"签发一份载荷"都拿不到，客户端永远解不开。两个挑战路由（`/issue`、`/verify`）都必须有。
+`probeEndpoint` 漏了则是**容器重启循环**（探针拿到 428 → 编排判死 → 重启 → IP 仍在挑战态）。
+
+**健康探针是"两条腿"的例外** —— 声明 + 配置**并集**，任一条命中即放行：
+
+| 腿 | 覆盖什么 | 会不会漂 |
+| --- | --- | --- |
+| 路由声明 `probeEndpoint` | 本服务注册了的探针路由（默认三条） | 不漂，随路由走 |
+| `defense.probePaths`（兜底 `PROBE_PATHS`） | 部署方额外探的路径，**可能没有对应路由**（`/healthz`） | 靠人同步 |
+
+为什么不能只留一条：只有配置 → `system.json` prefix 一改，真实路由变了而配置里的旧值没跟上，
+探针就被挑战（和挑战接口常量漂移同一类 bug）；只有声明 → 覆盖不到"没有路由的探针路径"，
+而那正是运营最常自定义的形态。并集方向故意选 **fail-open**（多豁免 > 少豁免）：
+这里少豁免的后果是容器起不来，多豁免的代价只是在固定文案端点上少跑几条启发式判定。
+
+**两个 flag 为什么不能合成一个**（`alwaysReachable` 之类）：
+`challengeSurface` / `probeEndpoint` 说的是「这条路由**是什么**」，不是「它要豁免」。
+合成一个就丢掉三样东西：对账测试的归属（哪一类归哪个文件拥有、数量钉死）、
+将来语义分化的余地（探针可能还要豁免扫描陷阱，挑战接口要限流），
+以及读代码时"事实 vs 机制"的分界。**机制共用在判据函数里做**
+（`pipeline.js` 的 `isUnconditionallyReachable`），标记保持分开。
+
+**`skipScanTrap` 为什么不给健康路由也加**：那个声明只影响 **403/404** 的计数
+（`bootstrap.js` 里 `if ([404, 403].includes(reply.statusCode))` 才进扫描陷阱），
+而健康端点只会返 200 / 503 —— 403/404 根本不存在，加了是空转。
+挑战端点必须两个都有：它的 403 是**正常业务**（`Invalid Proof` / `Expired` / `Mismatch`）。
+
+为什么不用路径正则 / 路径常量（2026-11-06 的教训）：
+
+- 暴力破解上一版用 `/\/(mini-login|login|verify-email)$/`。它有两个**静默失效**方向 ——
+  路由改名（`/login` → `/signin`）就不再计数；新增登录端点忘记同步正则，同样不计数。
+  改成声明后，名字怎么写都不影响计数是否生效。迁移时还发现 `/authorize/login`
+  （OAuth 授权流程里的登录提交）一直被旧正则的 `$` 后缀"侥幸"覆盖着，没人显式决定过。
+- 挑战接口上一版用常量 `['/api/firewall/v1/challenge/issue', ...]`，而这两个字面量是
+  `system.json` prefix + group prefix + route url **三段手拼**的。任一段改了常量不跟着变
+  → 挑战接口自己被挑战 → **死锁**。现在声明和 URL 在同一个对象字面量里，改 URL 的人
+  眼前就是那行声明。
+
+对账用例：`__tests__/firewall/login-brute-force-wiring.test.js`、
+`__tests__/firewall/challenge-surface-wiring.test.js`（正查 / 反查 / 数量 / 接线四向）。
+
 
 ## 挑战页：CSP nonce + Blob Worker（两条都是必需的）
 
@@ -175,7 +243,7 @@ firewall onResponse 钩子
 | `hcaptcha` | 同上 | 同上 | |
 | `google` | 同上 | 同上 | reCAPTCHA v2/v3（v3 带 score 阈值） |
 
-provider 层在 `services/challenge-providers/`（`pow.js` / `recaptcha.js` / `index.js` 注册表），
+provider 层在 `services/challenge/providers/`（`pow.js` / `recaptcha.js` / `index.js` 注册表），
 形状统一为 `{ name, issue(ctx), verify(input) }` —— 加第四种只需在注册表登记一行。
 
 三条必须知道的规则：
@@ -191,32 +259,38 @@ provider 层在 `services/challenge-providers/`（`pow.js` / `recaptcha.js` / `i
 把基础设施故障挫成 403，运维看到的会是"用户全在失败"，真实原因却是我们的外网出口挂了。
 
 issue 响应新增 `provider` 字段（前端据此决定"解 PoW"还是"渲染第三方组件"），
-`challenge-providers` 之外**不需要改动调用方**。
+`providers/` 之外**不需要改动调用方**。
 
-前端侧：`challenge-client` 的 `ProviderWidget.vue` 用一张"脚本地址 + 全局对象名"表挂载三家组件
-（Turnstile / hCaptcha / reCAPTCHA 的渲染接口本来就一样），`ChallengeCard` 在 `awaiting`
-阶段渲染它，页面把 token 交给 `submitToken()`。
+前端侧（组件挂载 / 脚本加载与卸载 / 重试时机 / 回退路径）不在本仓：
+见前端 `firewall/docs/待开发流程日志.md`。本文只保留**后端要保证的**那部分 ——
+下发 `provider` 与 `siteKey`、判题按载荷形状选路、失败语义可区分。
 
-两件部署时要知道的事：
-
-- **脚本地址可覆盖**（`VITE_TURNSTILE_SRC`）：国内常把 `challenges.cloudflare.com` 走自家反代，
-  私有化部署则可能完全在内网 —— 写死官方域名等于"组件永远渲不出来"。
-- **本地已用官方测试密钥跑通**（sitekey `1x00000000000000000000AA` 永远通过，
-  secret `1x0000000000000000000000000000000AA`），真上线前换成自己的；端到端证据见计划书阶段 4。
+后端只有一件部署要做：`TURNSTILE_SECRET_KEY` / `RECAPTCHA_SECRET_KEY` 及其 `*_SITE_KEY`
+走环境变量（**不进** `data/firewall_config.json`，那份文件会被面板整份写回）。
+本地用官方测试密钥跑通过（secret `1x0000000000000000000000000000000AA` 永远通过），
+**真上线前必须换** —— 测试密钥等于谁都能过。
 
 ### 递进难度（`defense.challengeReputationEnabled`，默认关闭）
 
 难度不再是一个写死的数字，而是「基准 ± 1~2 档」，按**该 IP 近窗口内的挑战表现**浮动
-（`challenge-difficulty.js`）：
+（`challenge/difficulty.js`）：
 
-| 触发 | 变化 | 区间 |
+| 触发 | 变化 | 区间 / 配置项 |
 | --- | --- | --- |
-| 顺利通过 ≥3 次、零失败 | 降 1 档 | 不低于 `challengeDifficultyMin`（默认 2） |
-| 答错 ≥2 次且一次没通过 | 升 1 档 | — |
-| 答错 ≥5 次 | 升 2 档 | 不高于 `challengeDifficultyMax`（默认 5） |
+| 顺利通过 ≥3 次、零失败 | 降 1 档 | 不低于 `challengeDifficultyMin`（默认 2）<br>次数由 `challengeReputationRelaxAfterPasses` 定 |
+| 答错 ≥2 次且一次没通过 | 升 1 档 | — <br>次数由 `challengeReputationHardenAfterFails` 定 |
+| 答错 ≥5 次 | 升 2 档 | 不高于 `challengeDifficultyMax`（默认 5）<br>次数由 `challengeReputationHardenStrongAfterFails` 定 |
 | 已登录 | 再降 1 档 | 同上 |
 
-三条刻意的取舍（改之前请先读 `challenge-difficulty.js` 头注释）：
+三个触发阈值（2 / 5 / 3）都是 `defense` 下的配置项，可按自己的流量画像改（最小 1）：
+不同站点"一次正常浏览撞几次挑战""一个误触用户会错几次"差别很大，写死在代码里等于
+假设所有人一样。窗口的**下限 30s** 与**缺省 600s** 刻意留在代码里 —— 它们是给配置
+兜底的东西，本身再可配就成了没有兜底，而 schema 里已经有一份（`min: 30`）。
+
+`challengeReputationHardenStrongAfterFails` 写得比 `HardenAfterFails` 小时不会静默失效：
+读配置时抬到同值，退化成"答错 N 次直接升 2 档"（见 `readThresholds`）。
+
+三条刻意的取舍（改之前请先读 `challenge/difficulty.js` 头注释）：
 
 1. **只有「答案不对」（`Invalid Proof`）计入升难度**。`Challenge Expired`（载荷 300s 过期）、
    `Mismatch`（切网导致 IP 变）、`Malformed` 都不计 —— 它们是客户端/网络问题，计进去就是
@@ -224,7 +298,8 @@ issue 响应新增 `provider` 字段（前端据此决定"解 PoW"还是"渲染�
 2. **只按 IP 记**（`chal:fail:<ip>` / `chal:pass:<ip>`，窗口从第一次计数起算）。换设备/换指纹
    正是攻击方的常规动作，捆太细记不住；NAT 共享的副作用被「窗口 10 分钟 + 最多 ±2 档」限制住。
 3. **配置写坏不变成机制失效**：`Min > Max` 自动交换、窗口 <30s 回退 600s、难度 `"abc"`/`0`
-   回退基准 —— 任何一项都不允许退化成「永远基准」或「永远上限」。
+   回退基准、三个阈值写成 `0`/负数/`"abc"` 回退 2/5/3、`HardenStrong < Harden` 抬平 ——
+   任何一项都不允许退化成「永远基准」或「永远上限」。
 
 issue 响应体多一个 `reason`（`baseline` / `hardened` / `relaxed`），前端可以解释一句
 "为什么这次要多算一会儿"。它**不含分数也不含计数**，不足以让攻击者反推阈值。
@@ -243,7 +318,7 @@ HTTP 全是 200、`/summary` 看起来一切正常 —— 因为当时**没有�
 | `bySurface` | `inline`（内置页）/ `page`（302 前端页）/ `xhr`（428）—— 用来回答"内嵌页还有多少真实流量" |
 | `byDifficulty` / `byProvider` | 难度、验证方式分布 |
 
-- 计数在 `framework/firewall/challenge-metrics.js` 里**进程内累加**（热路径只做一次 Map 自增，不写 Redis），
+- 计数在 `framework/firewall/challenge/metrics.js` 里**进程内累加**（热路径只做一次 Map 自增，不写 Redis），
   由 `data/store.js` 的刷写周期取增量批量 `HINCRBY` 进 `stats:challenge`（与流量统计同一次 MULTI）。
 - `solveMs` 由客户端上报，**只进统计、不参与任何判定**（客户端可伪造）。
 - 告警建议：`successRate < 0.8` 或 `issued` 突增 → 链路大概率坏了，先按「页面能不能真的渲染」去查。
@@ -262,7 +337,20 @@ HTTP 全是 200、`/summary` 看起来一切正常 —— 因为当时**没有�
 | 文件                  | 职责                                                   | 关键导出                                                                          |
 | --------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
 | store.js              | 1000 条环形缓冲区、地域/路径/IP 统计、10 秒节流持久化  | `pushRecord`, `getRecentRecords`, `getSummary`, `getChallengeStatsAggregated`, `clearAll`, `setBroadcastHandler` |
-| challenge-template.js | 生成挑战 HTML 页面（PoW 能力在 `framework/verify/pow`）  | `buildChallengePage`, `buildChallengeRedirect`, `challengePageCsp`                |
+| stats-redis.js        | 遥测跨实例汇聚（自访问层拆出，随消费者留在 app）       | `summarizeChallengeFields` 的 Redis 侧装配                                        |
+
+### services/challenge/ — 人机挑战
+
+框架层的三件事（难度 / 观测 / 内置页）在 `framework/firewall/challenge/`，
+这里只做**编排**：取上下文 → 选 provider → 记观测 → 判题 → 签 pass。
+
+| 文件 | 职责 | 关键导出 |
+| --- | --- | --- |
+| index.js | 门面：对外只有签发与验证两个动作 | `issueChallenge`, `verifyChallenge` |
+| service.js | 编排：绑定上下文 / 观测埋点 / 通过后签 `fw_verified` | `issueChallenge`, `verifyChallenge` |
+| providers/index.js | provider 注册表 + 降级 + 按载荷形状选判题方 | `resolveChallengeProvider`, `pickVerifyProvider`, `EXTERNAL_PROVIDERS` |
+| providers/pow.js | 自包含 PoW（出题落载荷、判题取载荷） | `powProvider` |
+| providers/recaptcha.js | turnstile / hcaptcha / google 三家共用的工厂 | `createRecaptchaProvider` |
 
 ### dao/ — 数据交互层
 

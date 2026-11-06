@@ -30,10 +30,8 @@ export { handleAttackEvent, notifyAttack, sendAlert, registerEmailAlertSender } 
 
 // --- 请求管道 ---
 export {
-  CHALLENGE_API_PATHS,
-  CHALLENGE_VERIFY_PATH,
   isChallengeApiUrl,
-  isChallengeVerifyUrl,
+  isUnconditionallyReachable,
   shouldSkipDeepCheck,
   willBeRejectedAsAnonymous,
   buildRequestContext,

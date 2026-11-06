@@ -166,17 +166,24 @@ describe('健康探针分级', () => {
 describe('探针路径的深度检测豁免', () => {
   it('三个探针路径都被判定为可跳过深度检测', () => {
     for (const path of PROBE_PATHS) {
-      expect(shouldSkipDeepCheck(path)).toBe(true);
+      expect(shouldSkipDeepCheck({ url: path })).toBe(true);
     }
   });
 
   it('带查询串时同样跳过', () => {
-    expect(shouldSkipDeepCheck('/v1/health/ready?x=1')).toBe(true);
+    expect(shouldSkipDeepCheck({ url: '/v1/health/ready?x=1' })).toBe(true);
   });
 
   it('反例：普通业务路径不被跳过（否则豁免范围就失控了）', () => {
-    expect(shouldSkipDeepCheck('/v1/user/userinfo')).toBe(false);
-    expect(shouldSkipDeepCheck('/v1/healthz')).toBe(false);
-    expect(shouldSkipDeepCheck('/v1/health/ready-extra')).toBe(false);
+    expect(shouldSkipDeepCheck({ url: '/v1/user/userinfo' })).toBe(false);
+    expect(shouldSkipDeepCheck({ url: '/v1/healthz' })).toBe(false);
+    expect(shouldSkipDeepCheck({ url: '/v1/health/ready-extra' })).toBe(false);
+  });
+
+  it('反例：挑战接口的路径本身不再自带豁免（豁免来自路由声明，不是路径字符串）', () => {
+    // 2026-11-06 起 `isChallengeApiUrl` 读 `request.routeOptions.config.firewall.challengeSurface`。
+    // 只给一个像挑战接口的 URL、不给声明 → 拿不到豁免。这条断言防的是
+    // "悄悄退回按路径判断"（那会重新引入 prefix 漂移导致的死锁）。
+    expect(shouldSkipDeepCheck({ url: '/api/firewall/v1/challenge/issue' })).toBe(false);
   });
 });

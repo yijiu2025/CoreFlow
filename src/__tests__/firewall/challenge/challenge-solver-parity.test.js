@@ -18,7 +18,7 @@ import { readFileSync } from 'node:fs';
 import { describe, test, expect } from '@jest/globals';
 import { transformSync } from 'esbuild';
 
-const SERVER = await import('../../framework/verify/pow/service.js');
+const SERVER = await import('../../../framework/verify/pow/service.js');
 
 /** 把 `pow.ts` 现场转成 CJS 并求值，拿到它的导出（不依赖前端构建产物） */
 function loadBrowserPow() {

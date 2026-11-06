@@ -11,7 +11,12 @@
  * @since 2026-08-17
  */
 import crypto from 'node:crypto';
-import { buildChallengePage, buildChallengeRedirect, challengePageCsp } from '../challenge-template.js';
+import {
+  buildChallengePage,
+  buildChallengeRedirect,
+  challengePageCsp,
+  recordChallengeEvent
+} from '../challenge/index.js';
 import { trackRequestCount } from './detectors/rate-limiter.js';
 import { checkGeoReputation, resolveGeoInfo } from './detectors/geo-filter.js';
 import { checkBotChallenge } from './detectors/bot-detector.js';
@@ -20,7 +25,6 @@ import { checkGlobalBlock, removeBlock, removeBlockFp, removeBlockDevice } from 
 import { trackConnection } from '../util/connection-tracker.js';
 import { generateFingerprint } from '../util/fingerprint.js';
 import { recordFirewallEvent } from '../telemetry-sink.js';
-import { recordChallengeEvent } from '../challenge-metrics.js';
 import { readSecuritySettings } from '../interface/config-access.js';
 import { hasPass, readAccessState } from '../util/redis.js';
 import { getClientDeviceId } from '../../auth/index.js';
@@ -31,26 +35,49 @@ const log = createLogger('framework.firewall.engine.pipeline');
 // ============== 跳过规则 ==============
 
 /**
- * 挑战接口的完整路径（**签发 + 校验，两个都要**）。
+ * 「本路由属于挑战接口」——由**路由自己声明**（`config.firewall.challengeSurface`）
  *
- * 集中一处定义：它同时是「深度检测跳过名单」和「挑战态放行名单」的判据，
- * 写成两个字面量一定会漂移（旧实现就只出现在跳过名单里，对第一阶段毫无作用）。
+ * ```js
+ * // api/firewall/v1/challenge.js
+ * registerSecureRoute(fastify, { url: '/issue', config: { firewall: { challengeSurface: true } } })
+ * ```
  *
- * ⚠️ `issue` 必须在这里 —— 挑战态下前端要**签发**一份新载荷才能开始算 PoW，
- * 漏了它就会出现"挑战页拉不到挑战"的死锁（实测踩到：Challenge issue failed 428）。
+ * 它同时是两张名单的判据：「深度检测跳过」和「挑战态放行」。两张都要，
+ * 因为旧实现只把它放进前者，对第一阶段（挑战态）毫无作用 —— 实测症状是
+ * "Challenge issue failed 428"：挑战页连一份载荷都拉不到，**所有用户死锁**。
  *
- * ⚠️ 刻意**不做配置项**：它必须与 `api/firewall/v1/challenge.js` 的路由注册一一对应，
- *    可配 = 允许漂移 = 要么挑战死锁、要么 `verify` 被当成普通接口拦掉。
+ * ⚠️ `issue` 与 `verify` **都要声明** —— 挑战态下前端要先**签发**载荷才能开始算 PoW。
+ *
+ * ## 为什么改成路由声明（2026-11-06）
+ *
+ * 上一版是常量数组 `['/api/firewall/v1/challenge/verify', '/api/firewall/v1/challenge/issue']`，
+ * 而这两个字面量是把三段手拼出来的：
+ *
+ * ```
+ * /api/firewall   ← api/firewall/system.json 的 prefix
+ * /v1/challenge   ← registerGroupMetadata 的 prefix
+ * /verify         ← registerSecureRoute 的 url
+ * ```
+ *
+ * **任何一段改了，常量都不会跟着变** —— 而失效后果不是"少统计某类攻击"，是
+ * 「挑战接口自己被挑战」→ 挑战永远解不开 → 全站登录死锁。所以它既不该是配置项
+ * （`defaults.js` 早就写明"必须与路由注册一一对应，可配 = 允许漂移"），也不该是常量
+ * （常量一样会漂）。声明是唯一让「URL 与判据」物理上无法分离的写法：两个字段在同一个
+ * 对象字面量里，改 URL 的人眼前就是这行声明。
+ *
+ * 漏声明的兜底：`challenge-surface-wiring.test.js` 的正查（像挑战接口的路由必须声明）。
+ *
+ * @param {import('fastify').FastifyRequest} request 请求对象
+ * @returns {boolean} true 表示是挑战接口
  */
-const CHALLENGE_API_PATHS = ['/api/firewall/v1/challenge/verify', '/api/firewall/v1/challenge/issue'];
-
-/** 校验接口（保留单值导出：历史引用与测试按这个名找） */
-const CHALLENGE_VERIFY_PATH = '/api/firewall/v1/challenge/verify';
+function isChallengeApiUrl(request) {
+  return request?.routeOptions?.config?.firewall?.challengeSurface === true;
+}
 
 /**
- * 健康探针路径（编排系统的存活 / 就绪探测）。
+ * 健康探针路径（编排系统的存活 / 就绪探测）—— **代码兜底值**
  *
- * 与挑战验证接口同一性质：**必须保持无条件可达**，否则探针会被本系统自己的防护判成异常。
+ * 与挑战接口同一性质：**必须保持无条件可达**，否则探针会被本系统自己的防护判成异常。
  * 具体故障链：探针通常**不带 User-Agent**（部分 Docker HEALTHCHECK、自研监控），
  * 会命中 Bot 检测的 `requestCount > botChallengeNoUaLimit`（默认 10）分支 ——
  * 按 60s 窗口、5s 一次的常规探测频率即 12 次 → 返回**挑战页 HTML 且状态码 200**，
@@ -59,9 +86,24 @@ const CHALLENGE_VERIFY_PATH = '/api/firewall/v1/challenge/verify';
  * 这不是放宽安全：全局封禁 / 连接数限制阶段**照常执行**，跳过的只是 Bot / 地理 /
  * 端点限频这些启发式判定。
  *
- * ⚠️ 这里是**代码兜底值**：正式来源是 `defense.probePaths`（默认值同这份清单，可被
- *    src/config 与面板覆盖）。改 `system.json` 的 prefix 或 `health.js` 的 group prefix
- *    时，代码兜底与配置默认值两处都要同步。
+ * ## 豁免由两条腿组成（**并集**，任一条命中即放行）
+ *
+ * | 来源 | 覆盖什么 | 会不会漂 |
+ * | --- | --- | --- |
+ * | 路由声明 `config.firewall.probeEndpoint` | 本服务**注册了的**探针路由（默认三条） | 不漂：随路由走，prefix 改了自动跟上 |
+ * | `defense.probePaths`（本常量是其兜底） | 部署方**额外**探的路径，可能没有对应路由（`/healthz`） | 靠人同步 |
+ *
+ * 为什么两条都要：
+ *   · 只有配置 → 默认三条会随 prefix 漂（`system.json` 改成 `/sys` 后，真实路由变成
+ *     `/sys/v1/health/live`，而配置里还是旧值）→ 探针拿到 428 → **容器重启循环**。
+ *     这与挑战接口的常量漂移是同一类 bug，只有声明能结构性消除。
+ *   · 只有声明 → 覆盖不到"没有路由的探针路径"，而那正是运营最常自定义的形态。
+ *
+ * 并集方向是**故意选 fail-open**（多豁免 > 少豁免）：这里少豁免的后果是容器起不来，
+ * 多豁免的代价只是在固定文案端点上少跑几条启发式判定。
+ *
+ * ⚠️ 本常量仍是 `readPathsFromConfig` 的兜底：firewall app 卸载后 `defense` 读取器
+ *    不存在，此时它是配置那条腿的唯一来源（声明那条腿始终有效，它不依赖配置）。
  */
 const PROBE_PATHS = ['/v1/health', '/v1/health/live', '/v1/health/ready'];
 
@@ -138,42 +180,55 @@ function pathOf(url) {
 }
 
 /**
- * 是否为挑战接口（签发 / 校验）
+ * 是否为健康探针（**并集**：路由声明 ∪ 配置清单）
  *
- * @param {string} url 请求路径
- * @returns {boolean} true 表示是挑战接口
- */
-function isChallengeApiUrl(url) {
-  return CHALLENGE_API_PATHS.includes(pathOf(url));
-}
-
-/**
- * 是否为挑战**校验**接口（历史名，等价于只看 verify 一个）
+ * 两条腿的分工与"为什么必须都要"见 `PROBE_PATHS` 的注释。
  *
- * @param {string} url 请求路径
- * @returns {boolean} true 表示是验证接口
- */
-function isChallengeVerifyUrl(url) {
-  return pathOf(url) === CHALLENGE_VERIFY_PATH;
-}
-
-/**
- * 是否为健康探针路径
- *
- * @param {string} url 请求路径
+ * @param {import('fastify').FastifyRequest} request 请求对象
  * @returns {boolean} true 表示是编排系统的健康探测
  */
-function isProbeUrl(url) {
-  return readPathsFromConfig('probePaths', PROBE_PATHS).includes(pathOf(url));
+function isProbeUrl(request) {
+  if (request?.routeOptions?.config?.firewall?.probeEndpoint === true) return true;
+  return readPathsFromConfig('probePaths', PROBE_PATHS).includes(pathOf(request?.url));
+}
+
+/**
+ * 是否为「**无条件可达**」端点（挑战接口 / 健康探针）
+ *
+ * 这两类在**任何状态**下都放行：深度检测跳过 + 挑战态放行。原因是失效后果都是死锁型：
+ *
+ * | 类别 | 判据 | 失效后果 |
+ * | --- | --- | --- |
+ * | 挑战接口 | `config.firewall.challengeSurface`（路由声明） | 挑战态下拿不到载荷 → 挑战永远解不开 → **全站登录死锁** |
+ * | 健康探针 | `config.firewall.probeEndpoint`（声明）∪ `defense.probePaths`（配置） | 探针拿到 428/挑战页 → 编排判死 → **容器重启循环** |
+ *
+ * ## 这个函数存在的唯一理由：把"哪些类别享有无条件可达"收成一处
+ *
+ * 2026-11-03 的真实事故就是它被抄成了两份 —— `issue` 加进了「深度检测跳过」那份，
+ * 漏了「挑战态放行」那份，症状是挑战页连一份载荷都拉不到（`Challenge issue failed 428`）。
+ * 两份名单放在两个函数里，改一份忘一份是必然会发生的。现在两个消费点
+ * （`shouldSkipDeepCheck` 与 `checkGlobalBlockPhase` 的挑战态分支）**都只调本函数**，
+ * 新增一类只改这里一处。
+ *
+ * ⚠️ 硬封禁（BLOCKED / SCANNER）**不**在此豁免范围内：真正的封禁仍然拦探针与挑战接口。
+ * 让被硬封的机器还能无限问挑战，等于把封禁降级成限速。
+ *
+ * @param {import('fastify').FastifyRequest} request 请求对象
+ * @returns {boolean} true 表示任何状态下都放行
+ */
+function isUnconditionallyReachable(request) {
+  return isChallengeApiUrl(request) || isProbeUrl(request);
 }
 
 /**
  * 判断请求是否应跳过深度检测
- * @param {string} url 请求路径
+ *
+ * @param {import('fastify').FastifyRequest} request 请求对象（挑战接口的判据在路由声明里，
+ *   所以必须传 request 而不是 url —— 单看路径已经认不出挑战接口了）
  * @returns {boolean} true 表示跳过
  */
-function shouldSkipDeepCheck(url) {
-  return isChallengeApiUrl(url) || isProbeUrl(url) || SKIP_PATTERN.test(pathOf(url));
+function shouldSkipDeepCheck(request) {
+  return isUnconditionallyReachable(request) || SKIP_PATTERN.test(pathOf(request?.url));
 }
 
 /**
@@ -460,16 +515,16 @@ async function checkGlobalBlockPhase(request, reply) {
         return false;
       }
 
-      // ② 验证/签发接口必须无条件可达（否则挑战永远解不开 = 死锁）
-      if (isChallengeApiUrl(request.url)) return false;
-
-      // ②' 健康探针必须始终 200（2026-11-04 实测：挑战态下 /v1/health → 428）
+      // ② 无条件可达的端点：挑战接口 + 健康探针
       //
-      // `PROBE_PATHS` 原本只在 `shouldSkipDeepCheck` 里，而那是**第二阶段**的跳过名单，
-      // 挑战态在第一阶段就返回了 —— 于是容器/网关的 liveness 探针拿到 428 判失败，
-      // 重启后 IP 仍处于挑战态 → crash loop。探针响应体是固定文案、不含任何业务数据，
-      // 放行不构成信息泄漏；硬封禁（BLOCKED/SCANNER）**不**豁免，真正的封禁仍然拦探针。
-      if (isProbeUrl(request.url)) return false;
+      // 必须在这里（第一阶段）就放行，不能只写在 `shouldSkipDeepCheck` 里 ——
+      // 那是**第二阶段**的跳过名单，而挑战态在第一阶段就 return 了。
+      // 2026-11-03 的 `Challenge issue failed 428` 与 2026-11-04 的 `探针拿到 428` 都是这个错位：
+      // 名单只加在了第二阶段。
+      //
+      // 两类各自的判据见 `isUnconditionallyReachable` 的注释（声明 / 配置两条腿）。
+      // 硬封禁（BLOCKED/SCANNER）**不**豁免 —— 那是下一段分支，真正的封禁仍然生效。
+      if (isUnconditionallyReachable(request)) return false;
 
       // ③ 其余请求 → 挑战页（文档请求）或 428（XHR / 脚本 / 非浏览器客户端）
       firewallLog.blocked = true;
@@ -597,15 +652,45 @@ async function runDetectionPipeline(ip, ua, url, firewallLog, fingerprint, reply
 // ============== 登录结果观测（暴力破解防护接线） ==============
 
 /**
- * 登录类路径（账号密码 / 快捷登录 / 邮箱二次验证）
+ * 「这个端点消费凭证」——由**路由自己声明**，不由路径正则猜
  *
- * 注意：这里刻意**不**在 oauth21 的登录服务里 import firewall 的检测器 ——
- * 本仓的架构约定是「app 之间不互相依赖」。防火墙自己挂在 `onResponse` 上观测
- * 登录请求的结果，从而实现同一件事，且依赖方向仍然是 oauth21 ⊥ firewall。
+ * ```js
+ * // api/oauth21/v1/auth/login.js
+ * registerSecureRoute(fastify, { url: '/login', config: { firewall: { credentialRoute: true } }, ... })
+ * ```
+ *
+ * 为什么不用路径正则（2026-11-06 改）：本仓的架构约定是「app 之间不互相依赖」，
+ * 所以 firewall 不 import oauth21 的登录服务，而是自己挂在 `onResponse` 上观测结果 ——
+ * 方向仍然是对的。但**上一版是用正则硬编码 oauth21 的 URL 字面量**
+ * （`/\/(mini-login|login|verify-email)$/`），依赖没消失，只是从 `import` 变成了字符串，
+ * 还带来两种**静默失效**：
+ *
+ *   · 路由改名（`/login` → `/signin`）→ 不再匹配 → 暴力破解计数直接不写了，零报错零日志；
+ *   · 新增登录端点（短信登录等）→ 忘记同步正则 → 同样静默不计。
+ *
+ * 根因是正则枚举的是「**名字**」，而真正该声明的性质是「**这个端点消费凭证**」——
+ * 改名不该改变这个性质。改成路由声明后，名字怎么写都不影响计数是否生效，
+ * 与 `config.firewall.skipScanTrap` / `riskExempt` 同一套机制（声明位即单一事实源）。
+ *
+ * ⚠️ 声明是**唯一入口**：`onResponse` 阶段路由已匹配（`request.routeOptions` 可读），
+ * 未匹配到路由的请求（404）拿不到 config，但 404 本来就不在
+ * `CREDENTIAL_FAILURE_CODES` 里，没有损失。
+ *
+ * @param {import('fastify').FastifyRequest} request 请求对象
+ * @returns {boolean} true 表示该路由声明了自己消费凭证
  */
-const LOGIN_PATH_PATTERN = /\/(mini-login|login|verify-email)$/;
+function isCredentialRoute(request) {
+  return request.routeOptions?.config?.firewall?.credentialRoute === true;
+}
 
-/** 视为「凭证失败」的状态码（参数错误 400 不计入，避免把用户填错字段当成爆破） */
+/**
+ * 视为「凭证失败」的状态码（参数错误 400 不计入，避免把用户填错字段当成爆破）
+ *
+ * ⚠️ 这是**与登录模块响应码的契约**，不是可调策略 —— 所以刻意不进 `defense` 配置：
+ * 没有任何部署需要一组不同的值，而配错的后果很隐蔽（把 400 加进去 → 用户邮箱格式
+ * 填错就被记一次爆破 → 5 次锁号，症状是"用户莫名其妙被锁"，联想不到这里）。
+ * 与 `login.service.js` 是否漂移由 `login-brute-force-wiring.test.js` 静态对账。
+ */
 const CREDENTIAL_FAILURE_CODES = [401, 403, 422, 423];
 
 /** 账号字段最大长度（进 Redis 键前截断，见 observeLoginOutcome 注释） */
@@ -634,6 +719,9 @@ function extractLoginAccount(body) {
  * 旧实现里 `checkLoginBruteForce` / `isAccountLocked` 定义了却**零调用**，
  * 所谓「登录暴力破解防护」从未生效。这里给 `checkLoginBruteForce` 接上真实调用点。
  *
+ * 只对**声明了 `config.firewall.credentialRoute: true`** 的路由生效
+ * （见 `isCredentialRoute` 的注释：为什么不用路径正则）。
+ *
  * ⚠️ 账号取值只能用 `request.body` 里**明文存在**的字段（`username` / `email`）：
  *   · 密码登录：body 是 `{ encrypted, timestamp, nonce, kid }`，账号名在 RSA 密文里，
  *     且 `decryptLoginRequest` 只返回解密结果、**不回写** `request.body`
@@ -657,8 +745,7 @@ function extractLoginAccount(body) {
  * @returns {Promise<void>}
  */
 async function observeLoginOutcome(request, reply) {
-  if (request.method !== 'POST') return;
-  if (!LOGIN_PATH_PATTERN.test(pathOf(request.url))) return;
+  if (!isCredentialRoute(request)) return;
 
   try {
     if (!readSecuritySettings().defense?.enableBruteForce) return;
@@ -698,13 +785,14 @@ function recordLog(firewallLog, statusCode, alreadyLogged = false) {
 }
 
 export {
-  CHALLENGE_API_PATHS,
-  CHALLENGE_VERIFY_PATH,
   PROBE_PATHS,
+  // 凭证失败判定用的状态码集合：导出给「与登录服务是否漂移」的对账测试读，
+  // 也让改登录响应码的人能直接看到自己要不要同步这里。
+  CREDENTIAL_FAILURE_CODES,
   isFirewallEnabled,
   isChallengeApiUrl,
-  isChallengeVerifyUrl,
   isProbeUrl,
+  isUnconditionallyReachable,
   shouldSkipDeepCheck,
   willBeRejectedAsAnonymous,
   buildRequestContext,

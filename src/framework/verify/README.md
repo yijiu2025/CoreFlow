@@ -268,7 +268,7 @@ const ready = recaptchaService.isConfigured('turnstile');
 
 **失败语义：** 上游不可达返回 `error: 'api_error'`，与"token 不对"（`invalid-input-response` 等）
 分开 —— 调用方应据此决定回 5xx（可重试）还是 4xx（用户重试即可），不要把基础设施故障
-伪装成"这个用户是机器人"（`app/firewall/services/challenge-providers/recaptcha.js` 就是这么用的）。
+伪装成"这个用户是机器人"（`app/firewall/services/challenge/providers/recaptcha.js` 就是这么用的）。
 
 ### 7. 语音验证码 (voice/)
 

@@ -218,6 +218,8 @@ async function registerHealthRoutes(fastify) {
     alias: '存活探针',
     method: 'GET',
     url: '/health/live',
+    // 探针端点自证：防火墙据此在任何状态下放行（否则探针拿到 428/挑战页 → 容器重启循环）。
+    config: { firewall: { probeEndpoint: true } },
     requireLogin: false,
     handler: async (request, reply) => {
       return reply.result.success('ok', {
@@ -237,6 +239,8 @@ async function registerHealthRoutes(fastify) {
     alias: '就绪探针',
     method: 'GET',
     url: '/health/ready',
+    // 探针端点自证：防火墙据此在任何状态下放行（否则探针拿到 428/挑战页 → 容器重启循环）。
+    config: { firewall: { probeEndpoint: true } },
     requireLogin: false,
     handler: async (request, reply) => {
       const { dependencies, loaders, ready } = await probeDependencies(fastify);
@@ -276,6 +280,8 @@ async function registerHealthRoutes(fastify) {
     alias: '健康检查（兼容保留，恒 200）',
     method: 'GET',
     url: '/health',
+    // 探针端点自证：防火墙据此在任何状态下放行（否则探针拿到 428/挑战页 → 容器重启循环）。
+    config: { firewall: { probeEndpoint: true } },
     requireLogin: false,
     handler: async (request, reply) => {
       return reply.result.success('ok', {

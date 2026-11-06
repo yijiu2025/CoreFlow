@@ -26,9 +26,9 @@
  * @since 2026-11-05 内联脚本改 nonce + Blob Worker 求解（此前在生产 CSP 下根本不会执行）
  */
 import crypto from 'crypto';
-import { makePowSolver, SHA256_K, powDao, MAX_DIFFICULTY, DEFAULT_TTL_SEC } from '../verify/pow/index.js';
-import { resolveChallengeDifficulty } from './challenge-difficulty.js';
-import { powChallengeStore } from './util/pow-store.js';
+import { makePowSolver, SHA256_K, powDao, MAX_DIFFICULTY, DEFAULT_TTL_SEC } from '../../verify/pow/index.js';
+import { resolveChallengeDifficulty } from './difficulty.js';
+import { powChallengeStore } from '../util/pow-store.js';
 
 /** 挑战载荷有效期（秒）：语义与出处都在 `verify/pow`，这里只是本模块的对外名字 */
 const CHALLENGE_TTL_SEC = DEFAULT_TTL_SEC;

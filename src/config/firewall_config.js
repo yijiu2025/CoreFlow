@@ -11,7 +11,7 @@
  *      不在本文件：默认值在 src/app/firewall/config/panel.js（面板层），热改走面板
  *      （落到 data/firewall_config.json）。写在这里**会被 app 默认值覆盖**并打一条
  *      warn —— 见 src/app/firewall/config/config.js 的 strayPanelKeys 检查。
- * defense 下的键（48 个）—— 分组与顺序和 `defaults.js`、`config/schema.js` 完全一致：
+ * defense 下的键（51 个）—— 分组与顺序和 `defaults.js`、`config/schema.js` 完全一致：
  *   ① 开关    enableFirewall（总开关）/ enableGlobalBlock / enableChallenge
  *   ② 名单    manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps
  *   ③ 扫描    enableAutoBlacklist / maxNotFoundAttempts / notFoundWindow /
@@ -27,7 +27,9 @@
  *             botChallengeNoUaLimit / botChallengeBotLimit / botChallengeBrowserLimit /
  *             challengeProvider（pow / turnstile / hcaptcha / google）/ challengeDifficulty（基准）/
  *             challengeReputationEnabled（递进难度，默认关）/
- *             challengeDifficultyMin / challengeDifficultyMax / challengeReputationWindowSec /
+ *             challengeDifficultyMin / challengeDifficultyMax /
+ *             challengeReputationHardenAfterFails / challengeReputationHardenStrongAfterFails /
+ *             challengeReputationRelaxAfterPasses / challengeReputationWindowSec /
  *             challengePageUrl（独立前端挑战页，空 = 用内置页）
  *   ⑨ 设备    enableDeviceBlock
  *   ⑩ 匿名    skipDeepCheckForAnonymous

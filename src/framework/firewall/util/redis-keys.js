@@ -98,7 +98,7 @@ const rel = {
   // ── 挑战载荷（服务端持有） ────────────────────────────────────────────
   // 值：JSON `{salt, difficulty, binding:{ip,fingerprint,deviceId}, issuedAt}`；
   //     TTL：`CHALLENGE_TTL_SEC` = 300s。
-  // `binding` 是**不透明字段**（`framework/verify/pow` 只原样存取，比对策略在 challenge.service）。
+  // `binding` 是**不透明字段**（`framework/verify/pow` 只原样存取，比对策略在 challenge/service）。
   // 只下发不透明的 challengeId（页面里不含任何可直接回放的凭据）；
   // 校验时用 Lua `GET + DEL` **一次性消费** —— 并发/重放第二次必然取不到值，
   // 「一次挑战只能用一次」这条承诺就落在这里（旧实现把凭据内嵌进 HTML，脚本回填即可绕过）。

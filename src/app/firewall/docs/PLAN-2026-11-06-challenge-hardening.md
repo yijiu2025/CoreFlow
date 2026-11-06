@@ -3,6 +3,14 @@
 > 日期：2026-11-06 · 状态：**待批准**（阶段 0/1 不依赖任何决策，可先开工）
 > 范围：人机挑战（PoW 提速 / 递进难度 / 边缘层 / 真实验证 / 观测）
 > 相关：`AUDIT-REPORT-2026-09-15.md`（历史缺陷）、`FIX-REPORT-2026-09-15.md`（修复记录）
+>
+> ⚠️ **路径已归位（2026-11-06，晚于本计划定稿）**：挑战相关的三个文件已收进
+> `framework/firewall/challenge/`（`difficulty.js` / `metrics.js` / `template.js`，
+> 公共出口是 `index.js`），app 侧的 `services/challenge.service.js` + `challenge-providers/`
+> 收进 `services/challenge/`（`service.js` + `providers/`）。
+> 正文仍写作当时的路径 —— 保留原文是为了让"当时为什么这么改"可追溯；
+> 查**今天**的位置请看 `src/app/firewall/README.md` 与
+> `framework/firewall/challenge/index.js` 头注释。
 
 ---
 

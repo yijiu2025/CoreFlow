@@ -24,10 +24,10 @@
  * @author yijiu2025
  * @since 2026-11-06
  */
-import { recaptchaService } from '../../../../framework/verify/recaptcha/index.js';
-import { createLogger } from '../../../../framework/log/index.js';
+import { recaptchaService } from '../../../../../framework/verify/recaptcha/index.js';
+import { createLogger } from '../../../../../framework/log/index.js';
 
-const log = createLogger('app.firewall.services.challenge-providers.recaptcha');
+const log = createLogger('app.firewall.services.challenge.providers.recaptcha');
 
 /**
  * 造一个第三方 provider

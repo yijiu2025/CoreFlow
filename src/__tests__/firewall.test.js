@@ -65,8 +65,8 @@ jest.unstable_mockModule('../app/firewall/data/store.js', () => ({
 const { registerRecordSink } = await import('../framework/firewall/telemetry-sink.js');
 registerRecordSink(r => pushedRecords.push(r));
 
-const { buildChallengePage } = await import('../framework/firewall/challenge-template.js');
-const { issueChallenge, verifyChallenge } = await import('../app/firewall/services/challenge.service.js');
+const { buildChallengePage } = await import('../framework/firewall/challenge/index.js');
+const { issueChallenge, verifyChallenge } = await import('../app/firewall/services/challenge/index.js');
 const { sha256Hex } = await import('../framework/verify/pow/service.js');
 const { generateFingerprint } = await import('../framework/firewall/util/fingerprint.js');
 const { hasPass } = await import('../framework/firewall/util/redis.js');
@@ -100,11 +100,21 @@ function makeRequest({
   cookies = {},
   body = null,
   url = '/api/firewall/v1/monitor/summary',
-  method = 'GET'
+  method = 'GET',
+  // 模拟 Fastify 路由匹配后的状态：`request.routeOptions.config` 可读。
+  // 登录观测只认 `credentialRoute` 声明、挑战接口放行只认 `challengeSurface` 声明
+  // （见 pipeline.js 的 isCredentialRoute / isChallengeApiUrl），都不再看 URL 正则。
+  credentialRoute = false,
+  challengeSurface = false
 }) {
   const headers = { 'user-agent': ua };
   if (deviceId) headers['x-device-id'] = deviceId;
-  return { ip, url, method, headers, cookies, body };
+  const request = { ip, url, method, headers, cookies, body };
+  const firewall = {};
+  if (credentialRoute) firewall.credentialRoute = true;
+  if (challengeSurface) firewall.challengeSurface = true;
+  if (Object.keys(firewall).length) request.routeOptions = { config: { firewall } };
+  return request;
 }
 
 /** 构造一个记录副作用的 reply 替身（type / headers / code / send / setCookie） */
@@ -665,10 +675,29 @@ describe('挑战响应分流：文档请求给页面，其余给可编程的 428
 // ── ⑨ 登录观测 → 账号维度暴力破解（2026-11-03 修复的回归守卫） ─────────────────
 
 describe('登录结果观测：账号维度必须真的记账（曾只读 body.username 导致永不生效）', () => {
-  /** 构造一个「失败登录」的 onResponse 上下文 */
+  /**
+   * 构造一个「失败登录」的 onResponse 上下文
+   *
+   * `credentialRoute: true` 是必须的：2026-11-06 起观测入口改成读路由声明
+   * （`request.routeOptions.config.firewall.credentialRoute`），不再用 URL 正则。
+   */
   function failedLogin(url, body, ip) {
-    return { request: makeRequest({ ip, method: 'POST', url, body }), reply: { statusCode: 401 } };
+    return {
+      request: makeRequest({ ip, method: 'POST', url, body, credentialRoute: true }),
+      reply: { statusCode: 401 }
+    };
   }
+
+  it('未声明 credentialRoute 的路由 → 401 一次都不记（URL 长得像登录也不算）', async () => {
+    const ip = '203.0.113.240';
+    const email = 'not-credential@example.com';
+    for (let i = 0; i < 6; i++) {
+      // 故意用 /login 这个"看起来像登录"的 URL，但不带声明
+      const request = makeRequest({ ip, method: 'POST', url: '/api/oauth21/v1/auth/login', body: { email } });
+      await observeLoginOutcome(request, { statusCode: 401 });
+    }
+    expect(await isAccountLocked(email)).toBe(false);
+  });
 
   it('邮箱验证码登录失败达阈值 → 写入账号锁定（isAccountLocked 命中）', async () => {
     const ip = '203.0.113.241';
@@ -705,7 +734,8 @@ describe('登录结果观测：账号维度必须真的记账（曾只读 body.u
       ip,
       method: 'POST',
       url: '/api/oauth21/v1/auth/login',
-      body: { type: 'email', email }
+      body: { type: 'email', email },
+      credentialRoute: true
     });
     await observeLoginOutcome(request, { statusCode: 200 });
     // 成功只清计数，不产生锁定
@@ -864,7 +894,8 @@ describe('挑战态下签发接口必须可达 + 回环地址不被扫描陷阱�
       '/api/firewall/v1/challenge/verify',
       '/api/firewall/v1/challenge/issue?foo=1'
     ]) {
-      const request = makeRequest({ ip, method: 'POST', url, body: {} });
+      // 放行依据是路由声明（`config.firewall.challengeSurface`），不是 URL —— 2026-11-06 起
+      const request = makeRequest({ ip, method: 'POST', url, body: {}, challengeSurface: true });
       request.headers['sec-fetch-mode'] = 'cors';
       request.headers.accept = 'application/json';
       await buildRequestContext(request);
@@ -873,6 +904,30 @@ describe('挑战态下签发接口必须可达 + 回环地址不被扫描陷阱�
       expect(await checkGlobalBlockPhase(request, reply)).toBe(false);
       expect(reply.sentBody).toBeUndefined();
     }
+  });
+
+  it('反例：同样的 URL 但没有声明 → 挑战态下照样被挑战（豁免不来自路径字符串）', async () => {
+    // ⚠️ IP 必须与下面「回环地址刷 404」那例的对照组错开（它用 .262），
+    //    否则这例留下的挑战态会让那例的扫描计数提前满额。
+    const ip = '203.0.113.263';
+    await setBlock(ip, { status: 'CHALLENGE', source: 'auto', permanent: false, expiresAt: Date.now() + 60_000 });
+
+    const request = makeRequest({
+      ip,
+      method: 'POST',
+      url: '/api/firewall/v1/challenge/issue',
+      body: {}
+    });
+    request.headers['sec-fetch-mode'] = 'cors';
+    request.headers.accept = 'application/json';
+    await buildRequestContext(request);
+    const reply = makeReply();
+    reply.request = request;
+
+    // 没有声明 → 走挑战分支（428）。这条断言的意义：如果哪天有人把判据退回"按路径猜"，
+    // prefix 一改就会全站死锁；有它在，退回的那次改动会立刻红。
+    expect(await checkGlobalBlockPhase(request, reply)).toBe(true);
+    expect(reply.statusCode).toBe(428);
   });
 
   it('回环地址刷 404 不会被判扫描器封禁（开发期自伤）', async () => {

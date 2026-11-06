@@ -16,7 +16,7 @@
  * | 什么时候该出题（挑战态 / 限频 / 封禁判定） | 访问控制策略 |
  * | 题目绑谁（ip / fingerprint / deviceId） | 策略；本模块只把它当**不透明字段**存取 |
  * | 通过后免检多久（匿名 120s / 登录 1800s） | 访问控制策略 |
- * | 题目怎么呈现（页面 / CSP / 302 / Worker） | 与「验证能力」无关，见 `challenge-template.js` |
+ * | 题目怎么呈现（页面 / CSP / 302 / Worker） | 与「验证能力」无关，见 `challenge/template.js` |
  *
  * 为什么自己实现 SHA-256，而不用 `crypto.createHash` / `crypto.subtle`：
  *   - 服务端 `crypto.createHash` 没问题，但**求解发生在浏览器**；

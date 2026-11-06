@@ -28,7 +28,7 @@
  * @since 2026-11-01（自 util/redis.js 迁出，逻辑保持逐字不变）
  */
 import { store, full, redisAvailable } from '../../../framework/firewall/util/redis.js';
-import { summarizeChallengeFields } from '../../../framework/firewall/challenge-metrics.js';
+import { summarizeChallengeFields } from '../../../framework/firewall/challenge/index.js';
 import { createLogger } from '../../../framework/log/index.js';
 
 const log = createLogger('app.firewall.data.stats-redis');
@@ -45,7 +45,7 @@ const STATS_KEY = {
   ip: 'stats:ip',
   records: 'stats:records',
   /**
-   * 挑战链路计数器（field → count，见 framework/firewall/challenge-metrics.js）
+   * 挑战链路计数器（field → count，见 framework/firewall/challenge/index.js）
    *
    * 单独一个 hash 而不是塞进 `stats:totals`：挑战指标是**枚举维度**（provider / reason /
    * 耗时桶 / 难度 / 页面形态），塞进 totals 会让那个 hash 变成混合语义，面板读的时候

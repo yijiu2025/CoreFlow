@@ -10,7 +10,7 @@
  *   3. 令牌怎么签（HttpOnly Cookie + 访问层三绑定）
  *   4. 观测与信誉（issued / verified / failed，以及递进难度的"顺利通过"计数）
  *
- * 「怎么出题 / 怎么判题」交给 provider（`./challenge-providers/`）：
+ * 「怎么出题 / 怎么判题」交给 provider（`./providers/`）：
  * `pow` 自包含（服务端存载荷），`turnstile` / `hcaptcha` / `google` 走
  * `framework/verify/recaptcha`（token 交给上游）。加第四个 provider 时这一层不用动。
  *
@@ -19,14 +19,13 @@
  * @since 2026-11-06 抽出 provider 层（pow / 第三方同一形状），本文件只剩编排
  */
 import crypto from 'crypto';
-import { generateFingerprint } from '../../../framework/firewall/util/fingerprint.js';
-import { getConfig } from '../../../framework/firewall/util/shared.js';
-import { grantPass, readAccessState } from '../../../framework/firewall/util/redis.js';
-import { recordChallengeEvent } from '../../../framework/firewall/challenge-metrics.js';
-import { noteChallengePassed } from '../../../framework/firewall/challenge-difficulty.js';
-import { getClientDeviceId } from '../../../framework/auth/index.js';
-import { createLogger } from '../../../framework/log/index.js';
-import { resolveChallengeProvider, pickVerifyProvider } from './challenge-providers/index.js';
+import { generateFingerprint } from '../../../../framework/firewall/util/fingerprint.js';
+import { getConfig } from '../../../../framework/firewall/util/shared.js';
+import { grantPass, readAccessState } from '../../../../framework/firewall/util/redis.js';
+import { recordChallengeEvent, noteChallengePassed } from '../../../../framework/firewall/challenge/index.js';
+import { getClientDeviceId } from '../../../../framework/auth/index.js';
+import { createLogger } from '../../../../framework/log/index.js';
+import { resolveChallengeProvider, pickVerifyProvider } from './providers/index.js';
 
 const log = createLogger('app.firewall.services.challenge');
 
@@ -155,7 +154,7 @@ async function verifyChallenge(request, reply) {
   const body = request.body && typeof request.body === 'object' ? request.body : {};
 
   // 按**载荷形状**选 provider（不是按配置）：配置可能在出题与提交之间被热改，
-  // 而客户端手里只有当时那种形状的答案。详见 challenge-providers/index.js。
+  // 而客户端手里只有当时那种形状的答案。详见 providers/index.js。
   const provider = pickVerifyProvider(currentProvider(), body);
 
   const fingerprint = generateFingerprint(request);

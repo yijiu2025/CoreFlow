@@ -17,14 +17,14 @@ import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 // ⚠️ 先注册 mock 再 import 任何**传递依赖** config-access 的模块（顺序错了拿到的是真身，
 //    症状是「安全配置读取器尚未注册」）。与 challenge-redirect.test.js 同一套约定。
 let settings;
-jest.unstable_mockModule('../../framework/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../../../framework/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => settings,
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
 }));
 
 // store.js 真身会起 10 秒防抖落盘定时器（jest 进程活过 10 秒就会污染工作区）
-jest.unstable_mockModule('../../app/firewall/data/store.js', () => ({
+jest.unstable_mockModule('../../../app/firewall/data/store.js', () => ({
   pushRecord: () => {},
   getRecentRecords: () => [],
   getSummary: () => ({}),
@@ -34,13 +34,13 @@ jest.unstable_mockModule('../../app/firewall/data/store.js', () => ({
   flushPersist: async () => {}
 }));
 
-const { DEFAULT_SECURITY_SETTINGS } = await import('../../framework/firewall/config/defaults.js');
-const { resolveChallengeDifficulty } = await import('../../framework/firewall/challenge-difficulty.js');
-const { bumpCounter, readCounter, rel } = await import('../../framework/firewall/util/redis.js');
-const { resetMemoryState } = await import('../../framework/firewall/util/redis-memory.js');
-const { issueChallengePayload } = await import('../../framework/firewall/challenge-template.js');
-const { verifyChallenge } = await import('../../app/firewall/services/challenge.service.js');
-const { makePowSolver } = await import('../../framework/verify/pow/service.js');
+const { DEFAULT_SECURITY_SETTINGS } = await import('../../../framework/firewall/config/defaults.js');
+const { resolveChallengeDifficulty } = await import('../../../framework/firewall/challenge/index.js');
+const { bumpCounter, readCounter, rel } = await import('../../../framework/firewall/util/redis.js');
+const { resetMemoryState } = await import('../../../framework/firewall/util/redis-memory.js');
+const { issueChallengePayload } = await import('../../../framework/firewall/challenge/index.js');
+const { verifyChallenge } = await import('../../../app/firewall/services/challenge/index.js');
+const { makePowSolver } = await import('../../../framework/verify/pow/service.js');
 
 const IP = '203.0.113.61';
 const WINDOW = 600;
@@ -149,6 +149,62 @@ describe('信誉浮动：答错升、连过降', () => {
   test('登录用户 + 零失败 → 直接给下限附近（不越过 Min）', async () => {
     await seed(IP, { passes: 3 });
     expect(await resolveChallengeDifficulty({ ip: IP, loggedIn: true })).toEqual({ difficulty: 2, reason: 'relaxed' });
+  });
+});
+
+describe('阈值可调：三个触发点走配置', () => {
+  beforeEach(() => {
+    settings.defense.challengeReputationEnabled = true;
+  });
+
+  test('HardenAfterFails 调成 1 → 答错 1 次就升 1 档', async () => {
+    settings.defense.challengeReputationHardenAfterFails = 1;
+    await seed(IP, { fails: 1 });
+    expect(await resolveChallengeDifficulty({ ip: IP })).toEqual({ difficulty: 4, reason: 'hardened' });
+  });
+
+  test('HardenStrongAfterFails 调成 3 → 答错 3 次直接升 2 档（跳过 1 档）', async () => {
+    settings.defense.challengeReputationHardenStrongAfterFails = 3;
+    await seed(IP, { fails: 3 });
+    expect(await resolveChallengeDifficulty({ ip: IP })).toEqual({ difficulty: 5, reason: 'hardened' });
+  });
+
+  test('RelaxAfterPasses 调成 1 → 通过 1 次就降 1 档', async () => {
+    settings.defense.challengeReputationRelaxAfterPasses = 1;
+    await seed(IP, { passes: 1 });
+    expect(await resolveChallengeDifficulty({ ip: IP })).toEqual({ difficulty: 2, reason: 'relaxed' });
+  });
+
+  test('阈值都调大 → 同样的计数不再触发（改配置真的能关小这套机制）', async () => {
+    settings.defense.challengeReputationHardenAfterFails = 10;
+    settings.defense.challengeReputationHardenStrongAfterFails = 10;
+    await seed(IP, { fails: 5 });
+    expect(await resolveChallengeDifficulty({ ip: IP })).toEqual({ difficulty: 3, reason: 'baseline' });
+  });
+
+  test('HardenStrong 写得比 Harden 小 → 抬到同值，不会让 Harden 那一档静默失效', async () => {
+    settings.defense.challengeReputationHardenAfterFails = 4;
+    settings.defense.challengeReputationHardenStrongAfterFails = 2;
+    // 抬齐后 strongAt = 4：答错 2 次既够不上 Harden(4) 也够不上 Strong(4) → 基准
+    await seed(IP, { fails: 2 });
+    expect(await resolveChallengeDifficulty({ ip: IP })).toEqual({ difficulty: 3, reason: 'baseline' });
+    // 答错 4 次才命中 Strong → 升 2 档
+    await seed(IP, { fails: 2 });
+    expect(await resolveChallengeDifficulty({ ip: IP })).toEqual({ difficulty: 5, reason: 'hardened' });
+  });
+
+  test('三个阈值写坏（0 / 负数 / "abc" / null）→ 各自回退默认，不会变成"人人顶格"', async () => {
+    // 每个坏值换一个 IP：计数是按 IP 累加的，复用同一个 IP 会让上一轮的失败次数串味
+    const bads = ['abc', 0, -1, null];
+    for (let i = 0; i < bads.length; i++) {
+      settings.defense.challengeReputationHardenAfterFails = bads[i];
+      settings.defense.challengeReputationHardenStrongAfterFails = bads[i];
+      settings.defense.challengeReputationRelaxAfterPasses = bads[i];
+      const ip = `203.0.113.${100 + i}`;
+      // 回退到默认 2 / 5 / 3：答错 2 次仍然只升 1 档（而不是被 0 顶到上限）
+      await seed(ip, { fails: 2 });
+      expect((await resolveChallengeDifficulty({ ip })).difficulty).toBe(4);
+    }
   });
 });
 

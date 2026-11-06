@@ -29,19 +29,41 @@
  * `defense.challengeReputationEnabled` 默认 `false`：它改变的是"给用户出多难的题"，
  * 属于体验与防护的取舍，不该由一次升级替运维决定。关着的时候本模块只是"读配置 + return"。
  *
+ * ## 可调项与不可调项
+ *
+ * 三个触发阈值走配置，运维可以按自己的流量画像改（不同站点"偶发"与"反复"的分界线不同）：
+ *
+ * | 配置项 | 默认 | 作用 |
+ * | --- | --- | --- |
+ * | `challengeReputationHardenAfterFails` | 2 | 答错这么多次且零通过 → 升 1 档 |
+ * | `challengeReputationHardenStrongAfterFails` | 5 | 答错这么多次 → 升 2 档 |
+ * | `challengeReputationRelaxAfterPasses` | 3 | 顺利通过这么多次且零失败 → 降 1 档 |
+ * | `challengeReputationWindowSec` | 600 | 计数窗口（秒） |
+ *
+ * 窗口的**下限 30s**与**缺省 600s** 刻意留在代码里（`MIN_WINDOW_SEC` / `DEFAULT_WINDOW_SEC`）：
+ * 它们是"给配置值兜底"的东西，本身再可配就成了没有兜底 —— 而且这两个数在
+ * `config/schema.js` 里已经有一份（`min: 30` 与默认值），多一份可配副本只会漂移。
+ *
  * @author yijiu2025
  * @since 2026-11-06
  */
-import { getConfig } from './util/shared.js';
-import { bumpCounter, readCounter, rel } from './util/redis.js';
-import { clampDifficulty, DEFAULT_DIFFICULTY, MAX_DIFFICULTY } from '../verify/pow/index.js';
+import { getConfig } from '../util/shared.js';
+import { bumpCounter, readCounter, rel } from '../util/redis.js';
+import { clampDifficulty, DEFAULT_DIFFICULTY, MAX_DIFFICULTY } from '../../verify/pow/index.js';
 
+/*
+ * 三档触发阈值的**缺省值**
+ *
+ * 真正生效的值来自 `defense.challengeReputation*`（见 defaults.js 的取值理由）；
+ * 这里的常量只在"配置缺失或写坏"时兜底 —— 配置能写成 `"abc"` / `0` / `null`，
+ * 而这些数写坏之后的方向不能靠猜：`0` 会让每一台机器一秒内就顶到上限。
+ */
 /** 答错这么多次且一次都没通过 → 升 1 档 */
-const HARDEN_AFTER_FAILS = 2;
+const DEFAULT_HARDEN_AFTER_FAILS = 2;
 /** 答错这么多次 → 升 2 档（上限仍由 challengeDifficultyMax 夹） */
-const HARDEN_STRONG_AFTER_FAILS = 5;
+const DEFAULT_HARDEN_STRONG_AFTER_FAILS = 5;
 /** 顺利通过这么多次且零失败 → 降 1 档 */
-const RELAX_AFTER_PASSES = 3;
+const DEFAULT_RELAX_AFTER_PASSES = 3;
 /** 窗口缺省值（秒），与 defaults.js 的 challengeReputationWindowSec 一致 */
 const DEFAULT_WINDOW_SEC = 600;
 /** 窗口下限（秒）：低于 30s 时一次页面加载就能把窗口走完，等于没有窗口 */
@@ -89,6 +111,24 @@ function baseDifficulty(defense) {
 }
 
 /**
+ * 读出三档触发阈值
+ *
+ * 除了"非法值回退"，这里还要处理一处**语义写反**：`strong < harden`。
+ * 那种配置下 `fails >= strong` 的判断先命中，`harden` 那一档永远走不到 ——
+ * 表现为"配了个没人读的键"。抬到 `harden` 同值即可：行为退化成
+ * "答错 harden 次直接升 2 档"，是可预测的，也比静默失效好排查。
+ *
+ * @param {object} defense `defense` 配置
+ * @returns {{hardenAt: number, strongAt: number, relaxAt: number}} 合法阈值（`strongAt >= hardenAt`）
+ */
+function readThresholds(defense) {
+  const hardenAt = readPositive(defense.challengeReputationHardenAfterFails, DEFAULT_HARDEN_AFTER_FAILS);
+  const strongRaw = readPositive(defense.challengeReputationHardenStrongAfterFails, DEFAULT_HARDEN_STRONG_AFTER_FAILS);
+  const relaxAt = readPositive(defense.challengeReputationRelaxAfterPasses, DEFAULT_RELAX_AFTER_PASSES);
+  return { hardenAt, strongAt: Math.max(strongRaw, hardenAt), relaxAt };
+}
+
+/**
  * 算出这一次该给多难
  *
  * @param {{ip?: string, loggedIn?: boolean}} [subject] 挑战对象
@@ -109,11 +149,12 @@ async function resolveChallengeDifficulty({ ip, loggedIn = false } = {}) {
   }
 
   const [fails, passes] = await Promise.all([readCounter(rel.chalFail(ip)), readCounter(rel.chalPass(ip))]);
+  const { hardenAt, strongAt, relaxAt } = readThresholds(defense);
 
   let delta = 0;
-  if (fails >= HARDEN_STRONG_AFTER_FAILS) delta = 2;
-  else if (fails >= HARDEN_AFTER_FAILS && passes === 0) delta = 1;
-  else if (fails === 0 && passes >= RELAX_AFTER_PASSES) delta = -1;
+  if (fails >= strongAt) delta = 2;
+  else if (fails >= hardenAt && passes === 0) delta = 1;
+  else if (fails === 0 && passes >= relaxAt) delta = -1;
 
   // 登录用户降一档：有身份可追责，把体验让给他们（与 pass TTL 分档同一套逻辑）
   if (loggedIn) delta -= 1;

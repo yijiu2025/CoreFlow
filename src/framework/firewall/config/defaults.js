@@ -183,10 +183,17 @@ const SCAN_DETECTION = {
 // 同名常量作为**最终兜底**（配置缺失/写空时回退），关系是
 // 「代码兜底 ← 本文件默认值 ← src/config 覆盖 ← 面板热改」。
 //
-// ⚠️ 两类路径**刻意不做配置**：
-//   · 挑战接口路径（`/api/firewall/v1/challenge/*`）必须与路由注册一一对应，可配 = 允许漂移；
-//   · 前端产物路径（`/firewall/challenge.html` 等）后端**根本不该知道** —— 后端起的是 API，
-//     前端由 nginx/CDN 部署；写死在 core 只会在前端改目录时变成死链（2026-11-04 已移除）。
+// ⚠️ 三类路径的处理各不相同，别把它们混成一类：
+//   · 挑战接口路径 → **不进配置，也不做常量**：它是**路由的性质**，声明在路由上
+//     （`config.firewall.challengeSurface`，2026-11-06 起）。原因：常量是把
+//     `system.json` prefix + group prefix + route url 三段手拼的，任一段改了常量不跟着变
+//     → 挑战接口自己被挑战 → 全站登录死锁。声明与 URL 在同一个对象字面量里，物理上不会漂。
+//   · 健康探针路径 → **两条腿（并集）**：默认三条也声明在路由上
+//     （`config.firewall.probeEndpoint`，随 prefix 走、不会漂）；本文件的 `probePaths`
+//     负责**部署方额外探的路径**（k8s `httpGet.path`、nginx 健康检查，可能没有对应路由）。
+//     只留配置 → prefix 一改探针就被挑战（容器重启循环）；只留声明 → 覆盖不到无路由路径。
+//   · 前端产物路径（`/firewall/challenge.html` 等）→ 后端**根本不该知道** —— 后端起的是
+//     API，前端由 nginx/CDN 部署；写死在 core 只会在前端改目录时变成死链（2026-11-04 已移除）。
 const PROBE_PATHS = {
   // 健康探针：必须无条件可达，否则探针会被本系统的 Bot 检测判成"无 UA 高频"而拿到挑战页
   // （探针通常不带 UA，60s 窗口内 5s 一次 = 12 次 > botChallengeNoUaLimit 默认 10）。
@@ -316,13 +323,13 @@ const CHALLENGE = {
   //
   // 切到第三方前必须先配 `challengePageUrl`：内置挑战页是零外链的单文件
   // （CSP `default-src 'none'`），塞不进第三方组件，只能发 pow 题。
-  // 未知取值 / 密钥没配齐 → 运行时回落 pow 并告警（见 app 的 challenge-providers/index.js）。
+  // 未知取值 / 密钥没配齐 → 运行时回落 pow 并告警（见 app 的 challenge/providers/index.js）。
   challengeProvider: 'pow',
   challengeDifficulty: 3,
   // ── 递进难度（默认关闭）──
   //
   // 开起来以后，挑战难度不再是固定值，而是「基准 ± 1~2」，依据该 IP 近窗口内的
-  // 挑战结果浮动（见 challenge-difficulty.js）：
+  // 挑战结果浮动（见 challenge/difficulty.js）：
   //   连续答错 → 升（最多到 challengeDifficultyMax）；连续顺利通过 → 降（最低到 Min）；
   //   登录用户整体降一档（有身份可追责，体验优先）。
   //
@@ -338,8 +345,29 @@ const CHALLENGE = {
   challengeDifficultyMin: 2,
   // 难度上限：连续答错时最高升到这（上限受代码侧 MAX_DIFFICULTY=5 夹取）
   challengeDifficultyMax: 5,
+  // ── 三个触发阈值（"偶发"与"反复"的分界线）──
+  //
+  // 这不是"安全强度"旋钮，而是**流量画像**旋钮：不同站点一次正常浏览会撞几次挑战、
+  // 一个误触的键盘用户会错几次，差别很大。写死在代码里等于假设了所有人的画像都一样。
+  //
+  // 默认值取 2 / 5 / 3 的理由：
+  //   · 2 次答错还没通过 —— 已经超出"手滑"，但还够不上"在刷"（真人在难度 3 上不会连错 2 次）；
+  //   · 5 次答错 —— 差不多是一次页面重试风暴的量级，这时只加 1 档已经不够；
+  //   · 3 次顺利通过 —— 少于 3 次分不开"运气好"和"这台机器稳定"，多于 3 次降档太迟钝。
+  //
+  // ⚠️ 这三个数是**次数**，不是秒数。调小（尤其改成 1）会让正常的重试立刻顶到上限，
+  // 调大则等于关掉这套机制 —— 调之前请先看 challenge 观测里的失败原因分布
+  // （`GET /api/firewall/v1/monitor/challenge` 的 `reasons`）：如果 `Expired` 占大头，
+  // 要修的是挑战页或网络，不是这三个数。
+  //
+  // `HardenStrong` 写小于 `Harden` 时不会静默失效：读配置时会抬到 `Harden` 同值
+  // （见 challenge/difficulty.js 的 readThresholds），退化成"答错 N 次直接升 2 档"。
+  challengeReputationHardenAfterFails: 2,
+  challengeReputationHardenStrongAfterFails: 5,
+  challengeReputationRelaxAfterPasses: 3,
   // 计数窗口（秒）：从**第一次**计数起算，不滑动。600s 约等于一个正常用户
   // "被挑战 → 求解 → 继续浏览"的若干个来回，够区分"偶发"与"反复"。
+  // 下限 30s 由代码兜底（低于它一次页面加载就能把窗口走完，等于没有窗口）。
   challengeReputationWindowSec: 600,
   // 独立前端挑战页的地址（**空 = 用后端内置页**）
   //
