@@ -16,10 +16,21 @@
 export { sha256Hex, solvePow } from './pow';
 export type { SolveOptions, SolveResult } from './pow';
 
-export { issueChallenge, verifyChallenge, ISSUE_PATH, VERIFY_PATH } from './api';
-export type { ChallengeIssue, ChallengeClientOptions, ChallengeError, VerifyResult } from './api';
+export { issueChallenge, verifyChallenge, verifyToken, ISSUE_PATH, VERIFY_PATH } from './api';
+export type {
+  ChallengeIssue,
+  ChallengeClientOptions,
+  ChallengeError,
+  ChallengeProvider,
+  VerifyResult
+} from './api';
 
 export { useChallenge, resolveReturnPath } from './useChallenge';
 export type { ChallengePhase, UseChallengeOptions } from './useChallenge';
 
 export { default as ChallengeCard } from './ChallengeCard.vue';
+
+// 第三方验证组件（Turnstile / hCaptcha / reCAPTCHA）：坐标表与挂载器
+export { default as ProviderWidget } from './ProviderWidget.vue';
+export { WIDGET_SPECS, loadWidgetScript } from './widget-providers';
+export type { WidgetProvider, WidgetSpec } from './widget-providers';

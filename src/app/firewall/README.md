@@ -193,6 +193,17 @@ provider 层在 `services/challenge-providers/`（`pow.js` / `recaptcha.js` / `i
 issue 响应新增 `provider` 字段（前端据此决定"解 PoW"还是"渲染第三方组件"），
 `challenge-providers` 之外**不需要改动调用方**。
 
+前端侧：`challenge-client` 的 `ProviderWidget.vue` 用一张"脚本地址 + 全局对象名"表挂载三家组件
+（Turnstile / hCaptcha / reCAPTCHA 的渲染接口本来就一样），`ChallengeCard` 在 `awaiting`
+阶段渲染它，页面把 token 交给 `submitToken()`。
+
+两件部署时要知道的事：
+
+- **脚本地址可覆盖**（`VITE_TURNSTILE_SRC`）：国内常把 `challenges.cloudflare.com` 走自家反代，
+  私有化部署则可能完全在内网 —— 写死官方域名等于"组件永远渲不出来"。
+- **本地已用官方测试密钥跑通**（sitekey `1x00000000000000000000AA` 永远通过，
+  secret `1x0000000000000000000000000000000AA`），真上线前换成自己的；端到端证据见计划书阶段 4。
+
 ### 递进难度（`defense.challengeReputationEnabled`，默认关闭）
 
 难度不再是一个写死的数字，而是「基准 ± 1~2 档」，按**该 IP 近窗口内的挑战表现**浮动

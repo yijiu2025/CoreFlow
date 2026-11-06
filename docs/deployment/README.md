@@ -9,5 +9,6 @@
 | [multi-server.md](./multi-server.md) | 多服务器架构（📐 设计稿·未实现）：多机角色裁剪方案，代码中仍零实现 |
 | [cicd.md](./cicd.md) | CI/CD（✅ 已落地）：各 workflow 文件、触发条件与职责（命名规范见家族 CI 规范） |
 | [key-encryption.md](./key-encryption.md) | 私钥信封加密（✅ 已落地）：AES-256-GCM 落库加密、KEK 配置与轮转、明文迁移脚本、失败语义 |
+| [nginx-edge.md](./nginx-edge.md) | 边缘层与挑战页部署（✅ 片段已落地）：同站反代、`limit_req` 阈值原则、`no-store`、真实 IP 透传 |
 
 总入口（全部文档的地图）在 [../README.md](../README.md)。

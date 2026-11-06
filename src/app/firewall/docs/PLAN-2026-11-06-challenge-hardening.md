@@ -365,14 +365,27 @@ index.js        注册表 + 降级规则 + 判题选路
    "验证失败"，运维看到的是"用户全在挂"，真实原因却是我们自己的外网出口。
 3. **降级只有一处**：名字写错 / 密钥没配齐 → 回落 pow + 告警一次；绝不"谁也不验证"。
 
-**仍未做（前端）**：`ChallengeCard.vue` 只加了 `awaiting` 状态文案，**没有**实际挂载
-Turnstile / hCaptcha / reCAPTCHA 组件；`challenge-client` 已提供 `provider` / `siteKey` /
-`submitToken(token)`，页面接上组件即可。所以现在切 `challengeProvider` 前必须先补这段
-（且必须配 `challengePageUrl`，否则内嵌页仍是 pow 入口）。
+**前端（同日补完）**：新增 `ProviderWidget.vue`（三家共用一张"脚本地址 + 全局对象名"表，
+支持 `scriptSrc` 覆盖以适配国内反代/私有化），`ChallengeCard` 在 `awaiting` 阶段渲染它并
+`emit('submitToken', token)`，页面透传给状态机。
+
+实测（无头 Chrome + 官方测试密钥 sitekey `1x00000000000000000000AA`，用本地桩脚本顶替
+连不上的官方 `api.js`）：
+
+```
+issue → provider=turnstile + siteKey
+→ 卡片「请在下方完成人机验证…」+ 组件渲染
+→ 组件回调 token XXXX.DUMMY.TOKEN.XXXX
+→ POST verify（带 solveMs=305）→ 200
+→ 跳回 / → 「PASSED 业务页面（第三方验证已通过）」
+```
+
+⚠️ 切 `challengeProvider` 前仍必须配 `challengePageUrl` —— 内嵌页是零外链单文件，
+塞不进第三方组件，只会发 pow 题（那条路仍是可用入口）。
 
 **风险（需拍板）**：第三方可达性（国内）、隐私（客户端 IP 暴露给第三方）、成本、SLA。
 
-### 阶段 5：项③ 边缘层（1 人日 + 运维协作）
+### 阶段 5：项③ 边缘层（**已完成 2026-11-06**｜片段 + 文档）
 
 仓库目前**没有** firewall 的 nginx 配置（只有 `oauth21/nginx.conf`），需新建：
 
@@ -383,6 +396,17 @@ Turnstile / hCaptcha / reCAPTCHA 组件；`challenge-client` 已提供 `provider
   - 确认 `Cache-Control: no-store` 不被边缘缓存吞掉（`proxy_ignore_headers` 或显式 bypass）
 - 原则写进文档：**边缘只做无状态粗粒度判定，语义权威永远是应用层**；并明确"边缘拒绝 = 面板没有记录"，否则排障时找不到人
 - **风险**：两层阈值不一致 → 用户看到莫名 429 但面板无记录
+
+**实际落地**：`deployment/nginx/firewall-edge.conf`（片段）+ `docs/deployment/nginx-edge.md`（说明）。
+
+三条反向规则写进了配置注释：
+1. **边缘阈值 = 应用层 2 倍**（challenge 端点 40r/m vs 应用层 10+20/min；API 1200r/m vs 600/min）。
+   反过来就是"用户 429、面板查无此人"，只能靠 access_log 对账；
+2. **挑战路径显式 no-store**（`proxy_ignore_headers` + `add_header`）：缓存住等于把同一份题发给所有人；
+3. **`X-Forwarded-For` 必须与 `PROXY_TRUST_CIDR` 成对**：缺了它，指纹里的 IP 全是反代地址
+   → 一个人通过、120s 内全站共享通过态。
+
+恶意 UA/路径的 `map` 默认注释掉（444 完全不可观测，先观察一个月再开）。
 
 ### 阶段 6：项④b WebAuthn（3~4 人日｜建议最后，先看阶段 2/3 数据）
 

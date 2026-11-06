@@ -11,8 +11,10 @@
  * @author yijiu2025
  * @since 2026-11-03
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { ChallengePhase } from './useChallenge';
+import type { WidgetProvider } from './widget-providers';
+import ProviderWidget from './ProviderWidget.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -38,6 +40,12 @@ const props = withDefaults(
     triggerLabel?: string;
     /** 错误码展示 */
     errorCode?: string;
+    /** 验证方式（pow 之外的取值会让卡片渲染第三方组件） */
+    provider?: WidgetProvider | 'pow';
+    /** 第三方组件的站点密钥（服务端下发） */
+    siteKey?: string;
+    /** 覆盖组件脚本地址（国内反代 / 私有化部署用）；空 = 官方地址 */
+    widgetScriptSrc?: string;
   }>(),
   {
     progress: 0,
@@ -49,14 +57,40 @@ const props = withDefaults(
     passTtlSec: 0,
     productName: 'CORE FLOW',
     triggerLabel: '请求频率超出阈值',
-    errorCode: 'FW-428'
+    errorCode: 'FW-428',
+    provider: 'pow',
+    siteKey: '',
+    widgetScriptSrc: ''
   }
 );
 
-const emit = defineEmits<{ retry: [] }>();
+const emit = defineEmits<{
+  retry: [];
+  /** 第三方组件拿到 token 后交给状态机（pow 模式下不会触发） */
+  submitToken: [token: string];
+}>();
 
 const isOk = computed(() => props.phase === 'ok');
 const isError = computed(() => props.phase === 'error');
+/** 需要渲染第三方组件（pow 模式不会有这个阶段） */
+const needsWidget = computed(() => props.provider !== 'pow' && props.phase === 'awaiting');
+
+/**
+ * 组件自身的错误（脚本加载失败 / 上游报错）
+ *
+ * 与「验证失败」分开显示：验证失败该让用户点「重新验证」，而组件压根没加载出来时
+ * 重试也没用 —— 得先让他知道是网络/域名不通。
+ */
+const widgetError = ref('');
+
+/**
+ * 组件报错
+ *
+ * @param reason 组件给出的原因码
+ */
+function onWidgetError(reason: string): void {
+  widgetError.value = reason;
+}
 
 const title = computed(() => {
   if (isOk.value) return '验证通过';
@@ -186,6 +220,20 @@ const counterText = computed(() => {
       </ul>
 
       <div class="fwc-bar"><i :style="{ width: percent + '%' }" /></div>
+
+      <!-- 第三方验证组件：token 直接交给状态机，卡片不做任何判定 -->
+      <ProviderWidget
+        v-if="needsWidget"
+        :provider="(provider as WidgetProvider)"
+        :site-key="siteKey"
+        :script-src="widgetScriptSrc"
+        class="fwc-provider"
+        @verified="token => emit('submitToken', token)"
+        @error="onWidgetError"
+      />
+      <p v-if="widgetError" class="fwc-status is-error" role="alert">
+        验证组件加载失败（{{ widgetError }}），请检查网络后重试
+      </p>
 
       <dl class="fwc-rows">
         <div>
