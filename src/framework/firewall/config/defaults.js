@@ -311,6 +311,13 @@ const BOT_DETECTION = {
 // 前导十六进制零个数：期望哈希次数 = 16^difficulty（3 → 约 4096 次，浏览器 <0.1s；
 // 5 → 约 100 万次，约 1~2s）。代码侧夹取到 [1, 6] 上限，防止把低端机卡死。
 const CHALLENGE = {
+  // 人机验证方式。取值清单在 `config/schema.js` 的 `CHALLENGE_PROVIDERS`（spec 的 enum 来源）：
+  // `pow`（默认，自包含）/ `turnstile` / `hcaptcha` / `google`。
+  //
+  // 切到第三方前必须先配 `challengePageUrl`：内置挑战页是零外链的单文件
+  // （CSP `default-src 'none'`），塞不进第三方组件，只能发 pow 题。
+  // 未知取值 / 密钥没配齐 → 运行时回落 pow 并告警（见 app 的 challenge-providers/index.js）。
+  challengeProvider: 'pow',
   challengeDifficulty: 3,
   // ── 递进难度（默认关闭）──
   //

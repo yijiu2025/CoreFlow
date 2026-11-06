@@ -250,17 +250,25 @@ const userId = await qrCodeDao.consume(sessionId, store);
 ### 6. 人机验证 (recaptcha/)
 
 ```js
-import { recaptchaDao } from '../../framework/verify/recaptcha/index.js';
+import { recaptchaDao, recaptchaService } from '../../framework/verify/recaptcha/index.js';
 
-// 验证
+// 验证（服务商用 config.recaptcha.provider）
 const result = await recaptchaDao.verify(token, remoteIp);
 // result: { success: boolean, score?: number, error?: string }
 
-// 快速校验
-const isValid = await recaptchaDao.isValid(token, remoteIp);
+// 指定服务商（调用方有自己的 provider 配置时用这个，别去要求两份配置保持一致）
+const result2 = await recaptchaService.verify(token, remoteIp, { provider: 'turnstile' });
+
+// 前端渲染用：站点密钥（公开值）；是否两端都配齐
+const siteKey = recaptchaService.siteKeyFor('turnstile');
+const ready = recaptchaService.isConfigured('turnstile');
 ```
 
 **支持服务商：** Google reCAPTCHA v2/v3、hCaptcha、Cloudflare Turnstile（`config.recaptcha.provider`，密钥走 `RECAPTCHA_*` / `TURNSTILE_*` 环境变量）
+
+**失败语义：** 上游不可达返回 `error: 'api_error'`，与"token 不对"（`invalid-input-response` 等）
+分开 —— 调用方应据此决定回 5xx（可重试）还是 4xx（用户重试即可），不要把基础设施故障
+伪装成"这个用户是机器人"（`app/firewall/services/challenge-providers/recaptcha.js` 就是这么用的）。
 
 ### 7. 语音验证码 (voice/)
 

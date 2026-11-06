@@ -1,28 +1,32 @@
 /**
  * 人机挑战验证服务
  *
- * 从 api/firewall/v1/challenge.js 下沉：浏览器挑战结果验证 + 签发通过令牌。
- * 复用 `framework/verify/pow`（出题/判题能力）/ generateFingerprint / 访问层挑战载荷 /
- * auth 的设备 ID 流程。**这里只做策略编排**：什么时候签发、绑谁、给多久 pass、失败算哪类。
+ * 从 api/firewall/v1/challenge.js 下沉：签发挑战 + 校验结果 + 签发通过令牌。
  *
- * 校验三要素（缺一不可）：
- *   1. **服务端持有**：challengeId 必须能回查到载荷（旧实现把凭据内嵌进页面，无需回查即通过）；
- *   2. **单次有效**：载荷是原子 GET+DEL 取走的，重放同一个 challengeId 必然失败；
- *   3. **绑定上下文 + 工作量证明**：载荷里记录的 IP/指纹/设备 ID 必须与本次一致，且答案必须满足难度。
+ * ── 这一层只做**策略编排** ──
+ *
+ *   1. 什么时候能要票（只有处于挑战态才签发）
+ *   2. 通过后免检多久（匿名 120s / 登录 1800s）
+ *   3. 令牌怎么签（HttpOnly Cookie + 访问层三绑定）
+ *   4. 观测与信誉（issued / verified / failed，以及递进难度的"顺利通过"计数）
+ *
+ * 「怎么出题 / 怎么判题」交给 provider（`./challenge-providers/`）：
+ * `pow` 自包含（服务端存载荷），`turnstile` / `hcaptcha` / `google` 走
+ * `framework/verify/recaptcha`（token 交给上游）。加第四个 provider 时这一层不用动。
  *
  * @author yijiu
  * @since 2026-08-17
+ * @since 2026-11-06 抽出 provider 层（pow / 第三方同一形状），本文件只剩编排
  */
 import crypto from 'crypto';
 import { generateFingerprint } from '../../../framework/firewall/util/fingerprint.js';
-import { powChallengeStore } from '../../../framework/firewall/util/pow-store.js';
-import { noteChallengePassed, noteChallengeProofFailed } from '../../../framework/firewall/challenge-difficulty.js';
-import { powDao } from '../../../framework/verify/pow/index.js';
+import { getConfig } from '../../../framework/firewall/util/shared.js';
 import { grantPass, readAccessState } from '../../../framework/firewall/util/redis.js';
-import { issueChallengePayload } from '../../../framework/firewall/challenge-template.js';
 import { recordChallengeEvent } from '../../../framework/firewall/challenge-metrics.js';
+import { noteChallengePassed } from '../../../framework/firewall/challenge-difficulty.js';
 import { getClientDeviceId } from '../../../framework/auth/index.js';
 import { createLogger } from '../../../framework/log/index.js';
+import { resolveChallengeProvider, pickVerifyProvider } from './challenge-providers/index.js';
 
 const log = createLogger('app.firewall.services.challenge');
 
@@ -56,21 +60,46 @@ function isAuthenticated(request) {
 }
 
 /**
- * 为 **Vue 挑战页**签发一份挑战（JSON 入口）
+ * 取当前配置的 challenge provider
  *
- * 为什么需要它：挑战载荷原先只在渲染后端 HTML 模板时写入（`buildChallengePage`），
- * 前端 SPA 拿不到 `challengeId/salt/difficulty`，就没法自己算 PoW。这里把同一份
- * 签发逻辑（`issueChallengePayload`）开放成 JSON —— 载荷仍然**只存服务端**，
- * 下发的 challengeId 依旧是不可回放的不透明串，安全语义与内置模板完全一致。
+ * 每次现读配置（不缓存）：面板换 provider 后立刻生效，且**降级规则只在
+ * `resolveChallengeProvider` 一处**（未知名字 / 密钥没配齐 → 回落 pow）。
  *
- * 绑定上下文与 `verifyChallenge` 逐项对齐（IP + 指纹 + 设备 ID）：同一份载荷
- * 只能被同一上下文消费，换 IP / 换 UA 都过不了校验。
+ * @returns {{name: string, issue: Function, verify: Function}} provider
+ */
+function currentProvider() {
+  return resolveChallengeProvider(getConfig().defense?.challengeProvider);
+}
+
+/**
+ * 记一次验证失败并返回统一形状
+ *
+ * 观测与返回解耦的用意：**只做统计**，绝不改变状态码/原因。失败原因分布是
+ * "链路是否还活着"的关键信号（例如 Expired 占比突然 100% = 载荷根本没写进去，
+ * 或前端页把已消费的载荷重放）。
+ *
+ * @param {string} reason 对外原因
+ * @param {string} [provider] 哪个 provider 判的（用于按实现分桶）
+ * @param {number} [statusCode] 状态码（默认 403；上游不可达时由 provider 指定 503）
+ * @returns {{ok:false, statusCode:number, reason:string}} 统一失败响应
+ */
+function failWith(reason, provider = 'pow', statusCode = 403) {
+  recordChallengeEvent({ type: 'failed', provider, reason });
+  return { ok: false, statusCode, reason };
+}
+
+/**
+ * 为挑战页 / 前端 SPA 签发一份挑战
+ *
+ * 载荷与判定依据都留在服务端，下发的只有「不透明题号 + 求解参数」（pow）或
+ * 「公开的 siteKey」（第三方）—— 客户端即使把整个响应体回传，也拿不到可直接复用的凭据。
  *
  * ⚠️ **只在挑战态签发**：非挑战态请求返回 403 `Not Challenged`。否则免登录的 issue
  * 就成了"预先买票"——先解一次 PoW 换 30 分钟免挑战，把整套挑战降级成可选项。
  *
  * @param {object} request Fastify request（取 ip / headers / cookie）
- * @returns {Promise<{ok:true, challengeId:string, salt:string, difficulty:number, maxAttempts:number, ttlSec:number}
+ * @returns {Promise<{ok:true, provider:string, challengeId?:string, salt?:string, difficulty?:number,
+ *   maxAttempts?:number, ttlSec?:number, siteKey?:string, reason?:string}
  *   | {ok:false, statusCode:number, reason:string}>}
  */
 async function issueChallenge(request) {
@@ -84,7 +113,7 @@ async function issueChallenge(request) {
     // 挑战页解一次 PoW（约 4k 次哈希，几十毫秒）就能拿到 30 分钟有效的 fw_verified，
     // 之后狂刷时 `checkChallengeCookie` 直接放行 —— 等于把"限频后必须过验证"降级成
     // "每 30 分钟自证一次即可"。而内置 HTML 模板天然没有这个口子：它只在挑战态渲染。
-    // 一道只读 Redis 的判定，把这个不对称补齐。
+    // 一道只读 Redis 的判定，把这个不对称补齐。**与 provider 无关**：换第三方也一样要。
     const state = await readAccessState({ ip: request.ip, fingerprint, deviceId });
     const inChallenge = [state.ipBlock, state.fpBlock, state.devBlock].some(b => b?.status === 'CHALLENGE');
     if (!inChallenge) {
@@ -93,15 +122,18 @@ async function issueChallenge(request) {
       return { ok: false, statusCode: 403, reason: 'Not Challenged' };
     }
 
-    const payload = await issueChallengePayload({
+    const provider = currentProvider();
+    const issued = await provider.issue({
       ip: request.ip,
       fingerprint,
       deviceId,
-      // 登录用户难度降一档（递进难度开着时才有效果）
+      // 登录用户难度降一档（递进难度开着时才有效果；第三方 provider 忽略这个字段）
       loggedIn: isAuthenticated(request)
     });
-    recordChallengeEvent({ type: 'issued', provider: 'pow', difficulty: payload.difficulty });
-    return { ok: true, ...payload };
+
+    recordChallengeEvent({ type: 'issued', provider: provider.name, difficulty: issued.difficulty });
+    // provider 字段必须下发：前端要据此决定"解 PoW"还是"渲染第三方组件"
+    return { ok: true, provider: provider.name, ...issued };
   } catch (err) {
     // 签发失败（Redis 写不进等）：对外只给可编程原因，内部细节进日志
     log.warn('⚠️ [Firewall] 挑战签发失败', err);
@@ -111,94 +143,43 @@ async function issueChallenge(request) {
 }
 
 /**
- * 定长比较（长度不同直接返回 false，绝不把长度差异喂进 timingSafeEqual —— 那会抛 RangeError）
+ * 验证客户端提交的挑战结果，通过则签发 fw_verified 令牌（Cookie + Redis）
  *
- * @param {string} a 比较值 a
- * @param {string} b 比较值 b
- * @returns {boolean} 是否相等
- */
-function safeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) return false;
-  return crypto.timingSafeEqual(bufA, bufB);
-}
-
-/**
- * 记一次验证失败并返回统一形状
- *
- * 观测与返回解耦的用意：**只做统计**，绝不改变状态码/原因。失败原因分布是
- * "链路是否还活着"的关键信号（例如 Expired 占比突然 100% = 载荷根本没写进去，
- * 或前端页把已消费的载荷重放）。
- *
- * @param {string} reason 对外原因
- * @returns {{ok:false, statusCode:number, reason:string}} 统一失败响应
- */
-function failWith(reason) {
-  recordChallengeEvent({ type: 'failed', provider: 'pow', reason });
-  return { ok: false, statusCode: 403, reason };
-}
-
-/**
- * 验证浏览器提交的挑战结果，通过则签发 fw_verified 令牌（Cookie + Redis）
+ * 判题交给 provider；本函数只负责：判定 → 签发令牌 → 记观测。
  *
  * @param {object} request - Fastify request（取 body / ip / 指纹 / 设备 ID）
  * @param {object} reply - Fastify reply（设 Cookie）
- * @returns {Promise<{ok:true} | {ok:false, statusCode:number, reason:string}>}
+ * @returns {Promise<{ok:true, passTtlSec:number, scope:string} | {ok:false, statusCode:number, reason:string}>}
  */
 async function verifyChallenge(request, reply) {
   const body = request.body && typeof request.body === 'object' ? request.body : {};
-  const { challengeId, answer } = body;
 
-  if (typeof challengeId !== 'string' || !/^[0-9a-f]{32}$/.test(challengeId)) {
-    return failWith('Malformed Challenge');
-  }
-
-  // 1. 取走载荷（原子 GET+DEL）→ 未知 / 已消费 / 已过期 一律同类失败
-  const payload = await powDao.consume(powChallengeStore, challengeId);
-  if (!payload) {
-    return failWith('Challenge Expired');
-  }
+  // 按**载荷形状**选 provider（不是按配置）：配置可能在出题与提交之间被热改，
+  // 而客户端手里只有当时那种形状的答案。详见 challenge-providers/index.js。
+  const provider = pickVerifyProvider(currentProvider(), body);
 
   const fingerprint = generateFingerprint(request);
   const deviceId = await getClientDeviceId(request);
 
-  // 2. 绑定校验：挑战是在某个 IP/指纹/设备上下发的，换一个上下文不能复用。
-  //    设备维度只有在下发时确实绑定了、且本次仍能取到时才校验 —— 反过来（下发时没有、
-  //    本次有）不算绕过，因为它本来就只是「额外多一个维度」而不是必要条件。
-  //
-  //    `binding` 对 `verify/pow` 是**不透明字段**（它只负责原样存取），比对策略在这里：
-  //    谁和谁必须一致、不一致算哪类失败，都是防火墙的域知识。
-  const binding = payload.binding || {};
-  if (!safeEqual(binding.ip || '', request.ip || '')) {
-    return failWith('Challenge Mismatch');
-  }
-  if (binding.fingerprint && !safeEqual(binding.fingerprint, fingerprint)) {
-    return failWith('Challenge Mismatch');
-  }
-  if (binding.deviceId && !safeEqual(binding.deviceId, deviceId || '')) {
-    return failWith('Challenge Mismatch');
+  const result = await provider.verify({
+    request,
+    context: { ip: request.ip, fingerprint, deviceId },
+    body
+  });
+
+  if (!result.ok) {
+    return failWith(result.reason, provider.name, result.statusCode);
   }
 
-  // 3. 工作量证明校验（盐/难度取载荷内的值，避免下发后改配置导致前后不一致）
-  const proof = powDao.check(payload, { challengeId, answer });
-  if (!proof.ok) {
-    // 递进难度的唯一"升"信号：**答案不对**。Expired / Mismatch / Malformed 都不计 ——
-    // 那些更像客户端或网络问题，拿它们加难度会把真实用户越推越死。
-    await noteChallengeProofFailed(request.ip);
-    return failWith(proof.reason);
-  }
-
-  // 4. 签发验证令牌（绑定设备 / 指纹 / IP 三个维度）
-  //    有效期按登录态分档：匿名只换 2 分钟窗口，登录才免 30 分钟（见 PASS_TOKEN_TTL_* 注释）
+  // 签发验证令牌（绑定设备 / 指纹 / IP 三个维度）
+  // 有效期按登录态分档：匿名只换 2 分钟窗口，登录才免 30 分钟（见 PASS_TOKEN_TTL_* 注释）
   const authed = isAuthenticated(request);
   const ttlSec = authed ? PASS_TOKEN_TTL_AUTHED : PASS_TOKEN_TTL_ANON;
   const token = crypto.randomBytes(32).toString('hex');
   await grantPass({ ip: request.ip, fingerprint, deviceId, token, ttlSec });
 
-  // 5. 设置 HttpOnly Cookie（maxAge 与 Redis TTL 必须一致：否则 cookie 还在、服务端已失效，
-  //    每个请求都白跑一次 hasPass 查询）
+  // 设置 HttpOnly Cookie（maxAge 与 Redis TTL 必须一致：否则 cookie 还在、服务端已失效，
+  // 每个请求都白跑一次 hasPass 查询）
   reply.setCookie('fw_verified', token, {
     path: '/',
     httpOnly: true,
@@ -208,7 +189,7 @@ async function verifyChallenge(request, reply) {
   });
 
   // 观测：通过 + 客户端上报的求解耗时（分桶统计；**不参与任何判定**，可伪造）
-  recordChallengeEvent({ type: 'verified', provider: 'pow', solveMs: body.solveMs });
+  recordChallengeEvent({ type: 'verified', provider: provider.name, solveMs: body.solveMs });
   // 信誉：顺利通过一次（递进难度关闭时是空操作）
   await noteChallengePassed(request.ip);
 

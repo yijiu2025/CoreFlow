@@ -55,16 +55,22 @@ class RecaptchaService {
 
   /**
    * 验证 reCAPTCHA token
+   *
    * @param {string} token 前端传入的 reCAPTCHA token
    * @param {string} [remoteIp] 客户端 IP（可选）
-   * @returns {Promise<{success: boolean, score?: number, error?: string}>}
+   * @param {object} [options] 可选覆盖
+   * @param {'google'|'hcaptcha'|'turnstile'} [options.provider] 指定服务商（不传则用 `config.recaptcha.provider`）
+   *   为什么要能覆盖：调用方可能**有自己的 provider 配置**（例如防火墙的
+   *   `defense.challengeProvider`）。让它显式传进来，好过要求两份配置手工保持一致 ——
+   *   那种"两处都要改"的约定迟早漂移，而且漂移后报错点是"验证莫名其妙失败"。
+   * @returns {Promise<{success: boolean, score?: number, error?: string, hostname?: string}>}
    */
-  async verify(token, remoteIp) {
+  async verify(token, remoteIp, options = {}) {
     if (!token) {
       return { success: false, error: 'token_required' };
     }
 
-    const provider = recaptchaConfig.provider;
+    const provider = options.provider || recaptchaConfig.provider;
 
     switch (provider) {
       case 'google':
@@ -76,6 +82,30 @@ class RecaptchaService {
       default:
         return this._missingKeyResult(`[Recaptcha] 未知服务商: ${provider}，拒绝验证`);
     }
+  }
+
+  /**
+   * 取某个服务商的**站点密钥**（前端渲染组件用，不是秘密）
+   *
+   * @param {'google'|'hcaptcha'|'turnstile'} [provider] 服务商（缺省用配置值）
+   * @returns {string} siteKey；未配置返回空串
+   */
+  siteKeyFor(provider = recaptchaConfig.provider) {
+    return provider === 'turnstile' ? recaptchaConfig.turnstileSiteKey : recaptchaConfig.siteKey;
+  }
+
+  /**
+   * 某个服务商是否**两端都配齐**（有 secret 才验得动，有 siteKey 才渲得出）
+   *
+   * 调用方据此决定"能不能真的切过去"：缺一个就切，用户会卡在一张渲染不出来
+   * 或永远验不过的页面上 —— 那比不用验证码更糟。
+   *
+   * @param {'google'|'hcaptcha'|'turnstile'} [provider] 服务商（缺省用配置值）
+   * @returns {boolean} 是否可用
+   */
+  isConfigured(provider = recaptchaConfig.provider) {
+    const secret = provider === 'turnstile' ? recaptchaConfig.turnstileSecretKey : recaptchaConfig.secretKey;
+    return Boolean(secret && this.siteKeyFor(provider));
   }
 
   /**

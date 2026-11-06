@@ -326,7 +326,7 @@ framework/verify/pow/
 3. **升难度只认 `Invalid Proof`**（原计划写的是"近窗口失败次数"）。`Expired` / `Mismatch` /
    `Malformed` 是客户端或网络问题，计进去会把真实用户越推越死 —— 这是这类机制最经典的自伤。
 
-### 阶段 4：项④a 复用现成验证码能力（**0.5 人日**｜默认 `pow`）
+### 阶段 4：项④a 复用现成验证码能力（**已完成 2026-11-06**｜默认 `pow`）
 
 **修正**：`src/framework/verify/` 已经是一个「验证能力库」，里面 **`recaptcha/` 已支持 Google reCAPTCHA / hCaptcha / Cloudflare Turnstile**（2026-08-29 加），还自带两条这里本来要自己写的东西：
 
@@ -346,6 +346,29 @@ framework/verify/pow/
 - `challenge.service.verifyChallenge`：按 provider 分派（`pow` 走答案校验，其余走 dao），**`fw_verified` 的签发/TTL/绑定仍在这里**（访问控制语义不外移）
 - `defense.challengeProvider` 走 spec；密钥**走环境变量**（`RECAPTCHA_*` / `TURNSTILE_*` 已存在，见 `framework/verify/config.js`），**不进** `data/firewall_config.json`（那份文件会被面板整份写回）
 - 前端：`ChallengeCard` 增加 captcha 插槽；**只在独立前端页**放行第三方域（内嵌页保持 `default-src 'none'`，`provider ≠ pow` 时降级 pow）
+
+**实际落地**（`src/app/firewall/services/challenge-providers/`）：
+
+```
+pow.js          issue → 复用 issueChallengePayload（难度/绑定/载荷）
+                verify → 消费载荷 → 比绑定 → 验 PoW →（失败才）记一次信誉
+recaptcha.js    为 turnstile / hcaptcha / google 各造一个：issue 只回 siteKey，verify 转 token
+index.js        注册表 + 降级规则 + 判题选路
+```
+
+与原计划的三处加严：
+
+1. **判题按载荷形状选 provider**（token → 第三方；challengeId/answer → pow），**不按配置**。
+   配置在"出题"与"提交"之间被热改（面板换 provider）时，拿旧形状答案的用户仍能过 ——
+   按配置路由会把他们永远卡住。安全性不放松：pow 分支要求载荷能在服务端查到。
+2. **上游不可达回 503 `Challenge Unavailable`**，而不是 403。把基础设施故障挫成
+   "验证失败"，运维看到的是"用户全在挂"，真实原因却是我们自己的外网出口。
+3. **降级只有一处**：名字写错 / 密钥没配齐 → 回落 pow + 告警一次；绝不"谁也不验证"。
+
+**仍未做（前端）**：`ChallengeCard.vue` 只加了 `awaiting` 状态文案，**没有**实际挂载
+Turnstile / hCaptcha / reCAPTCHA 组件；`challenge-client` 已提供 `provider` / `siteKey` /
+`submitToken(token)`，页面接上组件即可。所以现在切 `challengeProvider` 前必须先补这段
+（且必须配 `challengePageUrl`，否则内嵌页仍是 pow 入口）。
 
 **风险（需拍板）**：第三方可达性（国内）、隐私（客户端 IP 暴露给第三方）、成本、SLA。
 

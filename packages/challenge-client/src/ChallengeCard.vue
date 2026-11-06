@@ -82,6 +82,7 @@ const subtitle = computed(() => {
 const statusText = computed(() => {
   if (isOk.value) return '已验证，正在返回原页面…';
   if (isError.value) return `验证失败：${props.reason || '未知原因'}`;
+  if (props.phase === 'awaiting') return '请在下方完成人机验证…';
   if (props.phase === 'verifying') return '正在提交验证结果…';
   if (props.phase === 'solving') return '正在进行工作量证明计算…';
   return '正在准备验证…';

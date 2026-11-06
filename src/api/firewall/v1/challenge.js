@@ -81,10 +81,17 @@ async function registerChallengeRoutes(fastify) {
     schema: {
       body: {
         type: 'object',
-        required: ['challengeId', 'answer'],
+        // 两种形状二选一，取决于**后端配的 provider**：
+        //   · pow（默认）            → { challengeId, answer }
+        //   · turnstile/hcaptcha/google → { token }
+        // 用 anyOf 而不是 required 列表：同一份契约要同时容纳两种 provider，
+        // 而"到底该是哪种"由服务端配置决定，路由层无从预知。
+        anyOf: [{ required: ['challengeId', 'answer'] }, { required: ['token'] }],
         properties: {
           challengeId: { type: 'string', pattern: '^[0-9a-f]{32}$' },
           answer: { type: 'string', minLength: 1, maxLength: 10 },
+          // 第三方 provider 的验证 token（Turnstile 约 2KB，给 4KB 余量）
+          token: { type: 'string', minLength: 1, maxLength: 4096 },
           // 客户端上报的本机求解耗时（毫秒）：**只进统计**，不参与任何判定。
           // 上限 10 分钟只是防脏数据把分位数拉爆（难度 5 在低端机上也不过几秒）。
           solveMs: { type: 'integer', minimum: 0, maximum: 600000 }

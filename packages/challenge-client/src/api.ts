@@ -14,13 +14,35 @@ export const ISSUE_PATH = '/api/firewall/v1/challenge/issue';
 /** 提交验证结果（相对 API 根） */
 export const VERIFY_PATH = '/api/firewall/v1/challenge/verify';
 
-/** 服务端下发的挑战材料（载荷本体只在服务端） */
+/** 服务端支持的验证方式（与 `defense.challengeProvider` 取值一致） */
+export type ChallengeProvider = 'pow' | 'turnstile' | 'hcaptcha' | 'google';
+
+/**
+ * 服务端下发的挑战材料（载荷本体只在服务端）
+ *
+ * ⚠️ pow 与第三方 provider 下发的字段**不同**，调用方必须先看 `provider`：
+ *
+ * | provider | 字段 | 客户端要做的 |
+ * | --- | --- | --- |
+ * | `pow`（默认，旧后端无此字段也按 pow 处理） | `challengeId` / `salt` / `difficulty` / `maxAttempts` | 本地解 PoW 后调 `verifyChallenge` |
+ * | `turnstile` / `hcaptcha` / `google` | `siteKey` | 渲染组件，拿到 token 后调 `verifyToken` |
+ *
+ * 因此 pow 专用字段是**可选**的：它们在第三方模式下根本不存在。
+ */
 export interface ChallengeIssue {
-  challengeId: string;
-  salt: string;
-  difficulty: number;
-  maxAttempts: number;
-  ttlSec: number;
+  /** 本次使用的验证方式（缺省视为 `pow`，兼容未升级的后端） */
+  provider?: ChallengeProvider;
+  /** 第三方组件的站点密钥（**公开值**，不是密钥；渲染用） */
+  siteKey?: string;
+
+  /** ↓ pow 专用 */
+  challengeId?: string;
+  salt?: string;
+  difficulty?: number;
+  maxAttempts?: number;
+  /** 挑战材料有效期（秒）；pow 才有意义 */
+  ttlSec?: number;
+
   /**
    * 这道题为什么是这个难度（**粗粒度**归因，可选）
    *
@@ -127,11 +149,22 @@ export async function verifyChallenge(
   options: ChallengeClientOptions = {},
   solveMs?: number
 ): Promise<VerifyResult> {
-  const doFetch = options.fetchImpl ?? fetch;
   const payload: Record<string, unknown> = { challengeId, answer };
   if (typeof solveMs === 'number' && Number.isFinite(solveMs) && solveMs >= 0) {
     payload.solveMs = Math.round(solveMs);
   }
+  return await postVerify(payload, options);
+}
+
+/**
+ * 打 verify 端点并归一化返回（pow 与第三方共用这段）
+ *
+ * @param payload 请求体（`{challengeId,answer}` 或 `{token}`，可选 `solveMs`）
+ * @param options 客户端配置
+ * @returns 归一化后的验证结果
+ */
+async function postVerify(payload: Record<string, unknown>, options: ChallengeClientOptions): Promise<VerifyResult> {
+  const doFetch = options.fetchImpl ?? fetch;
   const res = await doFetch(`${normalizeBase(options.baseURL)}${VERIFY_PATH}`, {
     method: 'POST',
     credentials: 'include',
@@ -149,6 +182,32 @@ export async function verifyChallenge(
     };
   }
   return { ok: false, reason: `Verification failed (${res.status})` };
+}
+
+/**
+ * 提交第三方 provider 的验证 token（Turnstile / hCaptcha / reCAPTCHA）
+ *
+ * 与 `verifyChallenge` 同一个端点，区别只在载荷形状：第三方没有本地求解，
+ * token 由组件在渲染/交互后给出，服务端转给上游校验。
+ *
+ * 区分两个函数而不是给一个函数加可选参数，是为了让**调用点一眼看出走的是哪条路** ——
+ * 混成一个 `verify({challengeId?, answer?, token?})` 之后，"到底该传什么"就只剩注释知道了。
+ *
+ * @param token 组件回调里拿到的 token（一次性，且有效期很短）
+ * @param options 客户端配置
+ * @param solveMs 从展示组件到用户完成的耗时（毫秒，可选）；**只用于统计**
+ * @returns `{ ok: true }` 或 `{ ok: false, reason }`（上游不可达时 reason 为 `Challenge Unavailable`，可重试）
+ */
+export async function verifyToken(
+  token: string,
+  options: ChallengeClientOptions = {},
+  solveMs?: number
+): Promise<VerifyResult> {
+  const payload: Record<string, unknown> = { token };
+  if (typeof solveMs === 'number' && Number.isFinite(solveMs) && solveMs >= 0) {
+    payload.solveMs = Math.round(solveMs);
+  }
+  return await postVerify(payload, options);
 }
 
 /**

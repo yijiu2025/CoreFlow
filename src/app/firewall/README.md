@@ -57,6 +57,7 @@ src/app/firewall/                     # 【应用层】面板/配置/遥测（�
 │   ├── store.js                      # 面板遥测：环形缓冲、统计汇总、磁盘持久化、WebSocket 广播（注册遥测 sink）
 │   └── stats-redis.js                # 遥测跨实例汇聚（自访问层拆出，随消费者留在 app）
 ├── services/                         # 面板编排（monitor / metrics / challenge 校验端点）
+│   └── challenge-providers/          # 挑战 provider（pow / turnstile / hcaptcha / google 同一形状）
 ├── cli/                              # 运维命令行
 └── permission/                       # 面板权限
 
@@ -164,6 +165,33 @@ firewall onResponse 钩子
 
 - 只接受**站内相对路径**（`/firewall/challenge.html`）：绝对地址会让 302 变成开放重定向，且跨站后 `fw_verified` 变第三方 cookie，`SameSite=Strict` 不发送 → 通过后又被挑战。写坏按"空"处理（回落内置页）。
 - **前端页挂了怎么兜底**：`challenge.html` 里有自愈守卫（资源 error / 8s 未挂载 → 跳回 `return`），后端用 30s 的一次性 cookie `fw_chal_page` 识别这类回退，直接给内置页。这条环必须有标记 cookie 才闭合，否则"前端挂 → 回退 → 又 302 → 又挂"是死循环。
+
+### 验证方式（`defense.challengeProvider`）
+
+| 取值 | 出题 | 判题 | 备注 |
+| --- | --- | --- | --- |
+| `pow`（默认） | 服务端存载荷 → 下发 `challengeId/salt/difficulty` | 原子取走载荷 → 比绑定 → 验前导零 | 零外部依赖，**内嵌页唯一可用** |
+| `turnstile` | 只回 `siteKey` | token 转给 `verify.reCAPTCHA` 上游 | Cloudflare，无感；国内可达性一般 |
+| `hcaptcha` | 同上 | 同上 | |
+| `google` | 同上 | 同上 | reCAPTCHA v2/v3（v3 带 score 阈值） |
+
+provider 层在 `services/challenge-providers/`（`pow.js` / `recaptcha.js` / `index.js` 注册表），
+形状统一为 `{ name, issue(ctx), verify(input) }` —— 加第四种只需在注册表登记一行。
+
+三条必须知道的规则：
+
+1. **判题按载荷形状选 provider，不按配置**：带 `token` → 第三方；带 `challengeId/answer` → pow。
+   配置在下发与提交之间被热改（面板换 provider）时，手里拿着旧形状答案的用户仍能过 ——
+   否则他们会被永远卡住。安全性不因此放松：pow 分支要求载荷能在服务端查到，而载荷只由 pow 出题时写入。
+2. **切第三方必须先配 `challengePageUrl`**：内嵌挑战页是零外链单文件（CSP `default-src 'none'`），
+   塞不进第三方组件，只能发 pow 题。没配时会在启动日志里警告（内嵌页仍是一条 pow 入口）。
+3. **降级规则只有一处**：名字写错 / 密钥没配齐 → 回落 pow + 告警一次。绝不"谁也不验证"。
+
+失败语义：token 不对 → 403 `Invalid Proof`；**上游不可达 → 503 `Challenge Unavailable`**（可重试）。
+把基础设施故障挫成 403，运维看到的会是"用户全在失败"，真实原因却是我们的外网出口挂了。
+
+issue 响应新增 `provider` 字段（前端据此决定"解 PoW"还是"渲染第三方组件"），
+`challenge-providers` 之外**不需要改动调用方**。
 
 ### 递进难度（`defense.challengeReputationEnabled`，默认关闭）
 

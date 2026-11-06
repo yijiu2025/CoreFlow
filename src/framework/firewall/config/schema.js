@@ -33,6 +33,23 @@
 import { sanitizeBySpec, isPlainObject, toJsonProperties } from '../../config/field-spec.js';
 
 /**
+ * 支持的人机验证 provider（**配置契约**，`challengeProvider` 的 enum 来源）
+ *
+ * ⚠️ 各 provider 的**实现注册表**在 `src/app/firewall/services/challenge-providers/`（app 层），
+ * 而 framework 不能反向 import app —— 所以两边各有一份清单，用契约测试钉住"完全一致"。
+ * 新增 provider 时两处都要改；漏改 app 那份 → 配置能存进去但运行时回落 pow（有测试拦）。
+ *
+ * 取值语义：
+ *   · `pow`        自包含（服务端存载荷，零外部依赖）—— 默认，也是**内嵌页**唯一可用项
+ *   · `turnstile`  Cloudflare Turnstile（无感；国内可达性一般）
+ *   · `hcaptcha`   hCaptcha
+ *   · `google`     Google reCAPTCHA v2/v3
+ *
+ * @type {string[]}
+ */
+const CHALLENGE_PROVIDERS = ['pow', 'turnstile', 'hcaptcha', 'google'];
+
+/**
  * `defense` 下每个键的类型与约束
  *
  * 约束取值的依据（都是"写错就会静默失效"的地方）：
@@ -115,7 +132,10 @@ const DEFENSE_SPEC = {
   botChallengeBotLimit: { type: 'int', min: 1 },
   botChallengeBrowserLimit: { type: 'int', min: 1 },
 
-  // ── ⑧b 挑战难度（基准 + 递进）与挑战页地址 ──
+  // ── ⑧b 挑战 provider、难度（基准 + 递进）与挑战页地址 ──
+  // 人机验证方式。后三者的密钥走环境变量（`TURNSTILE_SECRET_KEY` / `RECAPTCHA_SECRET_KEY`
+  // 与对应 `*_SITE_KEY`），**不进** `data/firewall_config.json`（那份文件会被面板整份写回）。
+  challengeProvider: { type: 'enum', values: CHALLENGE_PROVIDERS },
   challengeDifficulty: { type: 'int', min: 1, max: 5 },
   // 递进难度：开起来后难度按该 IP 近窗口的挑战结果浮动（详见 challenge-difficulty.js）。
   // Min/Max 只做上下界，`challengeDifficulty` 仍是基准；三者都在 [1, 5] 内（代码侧 MAX_DIFFICULTY）。
@@ -262,6 +282,7 @@ export {
   DEFENSE_SPEC,
   PANEL_SPEC,
   sanitizeDefense,
+  CHALLENGE_PROVIDERS,
   sanitizeSecuritySettings,
   normalizeSettingsPatch,
   toDefenseJsonProperties,
