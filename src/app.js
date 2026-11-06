@@ -410,7 +410,10 @@ async function createApp() {
       'X-Device-Fp',
       'x-verify-token'
     ],
-    exposedHeaders: ['Content-Disposition', 'token', 'X-Request-Id'],
+    // 跨域部署时浏览器只把 exposedHeaders 里的头交给前端 JS：设备 ID 的两个响应头
+    // 是 device-sync 唯一的数据来源（cookie 是 httpOnly，JS 读不到），漏暴露等于跨域直连时
+    // 设备身份同步彻底失效（前端既发不出也存不下 ID）。
+    exposedHeaders: ['Content-Disposition', 'token', 'X-Request-Id', 'X-Device-Id', 'X-Device-Id-Updated'],
     maxAge: 86400
   });
 

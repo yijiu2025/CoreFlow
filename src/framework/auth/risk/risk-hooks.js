@@ -39,15 +39,22 @@ async function detectAndHandleRisk(request, reply, sessionData) {
       sessionUserAgent: sessionData.userAgent || '',
       loadFromDb: () => getSessionTokenDevice(sessionData.sessionId)
     });
-    // 设备 ID 与客户端上报不一致（旧格式 UUID / 无效 ID 被替换 / cookie 兜底恢复）→ 回写响应，
-    // 前端 device-sync 读取 X-Device-Id 同步 localStorage，否则客户端永远发旧 ID，
-    // 服务端每次换新随机 ID，指纹每请求都变，人机验证死循环。
-    // X-Device-Id-Updated 为"服务端换发"显式信号（与 login.service 路径语义统一），
-    // 前端收到后强制采纳，不依赖本地比对
-    const clientDeviceId = request.headers['x-device-id'] || request.cookies?.device_id || '';
-    if (deviceId && deviceId !== clientDeviceId) {
+    // 设备 ID 与客户端上报不一致 → **按通道分别回写**，让前端 device-sync 收敛：
+    // - 头缺失/不同：回写 X-Device-Id（+ X-Device-Id-Updated 显式信号），
+    //   否则 localStorage 永远拿不回身份（httpOnly cookie 前端读不到，无法自救）
+    // - cookie 缺失/不同：补 Set-Cookie，否则 httpOnly 兜底通道永久失效
+    //   （localStorage 与 cookie 的被清理时机完全不同——Safari ITP 清脚本存储只清
+    //   localStorage、清站点数据只清 cookie——任一方单独丢失都是常态，必须各补各的。
+    //   曾经只用一个 clientDeviceId 比较：cookie 丢了但头还在 → 两者相等 → 不补 cookie；
+    //   头丢了但 cookie 还在 → 两者相等 → 不回写头，两个方向都补不回来）
+    const headerDeviceId = request.headers['x-device-id'] || '';
+    const cookieDeviceId = request.cookies?.device_id || '';
+    const clientDeviceId = headerDeviceId || cookieDeviceId;
+    if (deviceId && deviceId !== headerDeviceId) {
       reply.header('X-Device-Id', deviceId);
       reply.header('X-Device-Id-Updated', 'true');
+    }
+    if (deviceId && deviceId !== cookieDeviceId) {
       reply.setCookie('device_id', deviceId, COOKIE_OPTIONS.DEVICE);
     }
     const fingerprint = computeDeviceFingerprint({
