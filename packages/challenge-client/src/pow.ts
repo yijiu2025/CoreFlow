@@ -28,6 +28,140 @@ const K = [
 const rotr = (x: number, n: number): number => (x >>> n) | (x << (32 - n));
 
 /**
+ * 造一个「答案是否满足难度」的判定器（**零分配**热循环）
+ *
+ * 与服务端 `src/framework/firewall/util/pow-sha256.js` 的 `makePowSolver()` **必须逐字节等价**
+ * （由 `src/__tests__/firewall/challenge-solver-parity.test.js` 对拍）。
+ *
+ * 为什么不用 `sha256Hex()` + `startsWith`：那是"每次新建 bytes 数组与 w 表 + 拼 64 位十六进制串
+ * 再比前缀"，在"海量小输入"的热循环里开销占大头。实测（无头 Chrome）2.315 → **0.395 µs/次**，
+ * 难度 3 从 9.5 ms 降到 1.6 ms，难度 5 从 ≈2.4 s 降到 ≈414 ms。
+ *
+ * 也不用 `crypto.subtle`：逐次 `await digest` 实测 2.95 µs/次，比纯 JS 还慢（每次调用的固定
+ * 开销 + TextEncoder 主导），且纯 HTTP 部署下 `crypto.subtle` 根本不存在。
+ *
+ * @param prefix 固定前缀（`challengeId + ':' + salt + ':'`）
+ * @param difficulty 前导十六进制零个数（0 = 恒真，与服务端 `verifyPow` 一致）
+ * @returns 判定器（复用同一块缓冲，**不可重入**）
+ */
+export function makePowSolver(prefix: string, difficulty: number): (answer: number) => boolean {
+  const base = prefix.length;
+  /** 一次哈希最多两块，128 字节够用 */
+  const buf = new Uint8Array(128);
+  for (let i = 0; i < base; i++) buf[i] = prefix.charCodeAt(i) & 0xff;
+
+  const w = new Int32Array(64);
+  const hv = new Int32Array(8);
+  const digits = new Uint8Array(10);
+  const depth = Math.max(0, Math.floor(Number(difficulty) || 0));
+
+  return function matches(answer: number): boolean {
+    // ① 就地写答案的十进制数字
+    let len = base;
+    if (answer < 10) {
+      buf[len++] = 48 + answer;
+    } else {
+      let tmp = answer;
+      let n = 0;
+      while (tmp > 0) {
+        digits[n++] = tmp % 10;
+        tmp = (tmp - (tmp % 10)) / 10;
+      }
+      for (let i = n - 1; i >= 0; i--) buf[len++] = 48 + digits[i];
+    }
+
+    // ② SHA-256 填充（0x80 + 补零 + 64 位大端长度）
+    const bitLen = len * 8;
+    buf[len] = 0x80;
+    const total = len + 9 <= 64 ? 64 : 128;
+    for (let i = len + 1; i < total - 8; i++) buf[i] = 0;
+    buf[total - 8] = 0;
+    buf[total - 7] = 0;
+    buf[total - 6] = 0;
+    buf[total - 5] = 0;
+    buf[total - 4] = (bitLen >>> 24) & 0xff;
+    buf[total - 3] = (bitLen >>> 16) & 0xff;
+    buf[total - 2] = (bitLen >>> 8) & 0xff;
+    buf[total - 1] = bitLen & 0xff;
+
+    // ③ 压缩（w / hv 复用）
+    let h0 = 0x6a09e667;
+    let h1 = 0xbb67ae85;
+    let h2 = 0x3c6ef372;
+    let h3 = 0xa54ff53a;
+    let h4 = 0x510e527f;
+    let h5 = 0x9b05688c;
+    let h6 = 0x1f83d9ab;
+    let h7 = 0x5be0cd19;
+
+    for (let off = 0; off < total; off += 64) {
+      for (let i = 0; i < 16; i++) {
+        const j = off + i * 4;
+        w[i] = (buf[j] << 24) | (buf[j + 1] << 16) | (buf[j + 2] << 8) | buf[j + 3];
+      }
+      for (let i = 16; i < 64; i++) {
+        const x = w[i - 15];
+        const y = w[i - 2];
+        const s0 = rotr(x, 7) ^ rotr(x, 18) ^ (x >>> 3);
+        const s1 = rotr(y, 17) ^ rotr(y, 19) ^ (y >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+      }
+
+      let a = h0;
+      let b = h1;
+      let c = h2;
+      let d = h3;
+      let e = h4;
+      let f = h5;
+      let g = h6;
+      let h = h7;
+
+      for (let i = 0; i < 64; i++) {
+        const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+        const ch = (e & f) ^ (~e & g);
+        const t1 = (h + S1 + ch + K[i] + w[i]) | 0;
+        const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+        const maj = (a & b) ^ (a & c) ^ (b & c);
+        const t2 = (S0 + maj) | 0;
+
+        h = g;
+        g = f;
+        f = e;
+        e = (d + t1) | 0;
+        d = c;
+        c = b;
+        b = a;
+        a = (t1 + t2) | 0;
+      }
+
+      h0 = (h0 + a) | 0;
+      h1 = (h1 + b) | 0;
+      h2 = (h2 + c) | 0;
+      h3 = (h3 + d) | 0;
+      h4 = (h4 + e) | 0;
+      h5 = (h5 + f) | 0;
+      h6 = (h6 + g) | 0;
+      h7 = (h7 + h) | 0;
+    }
+
+    // ④ 只比前 depth 个十六进制位
+    if (depth === 0) return true;
+    hv[0] = h0;
+    hv[1] = h1;
+    hv[2] = h2;
+    hv[3] = h3;
+    hv[4] = h4;
+    hv[5] = h5;
+    hv[6] = h6;
+    hv[7] = h7;
+    for (let i = 0; i < depth; i++) {
+      if (((hv[i >> 3] >>> (28 - (i & 7) * 4)) & 0xf) !== 0) return false;
+    }
+    return true;
+  };
+}
+
+/**
  * 计算字符串的 SHA-256 十六进制摘要
  *
  * 输入只可能是 `[0-9a-f:]` 组成的 ASCII 串，因此按"一字符一字节"处理，
@@ -147,8 +281,9 @@ export type SolveResult = { answer: string } | { answer: null; cancelled: boolea
  */
 export async function solvePow(options: SolveOptions): Promise<SolveResult> {
   const { challengeId, salt, difficulty, onProgress, signal } = options;
-  const target = '0'.repeat(Math.max(1, difficulty));
   const prefix = `${challengeId}:${salt}:`;
+  // 零分配内核：难度 5 时比 sha256Hex+startsWith 快约 5.9×（详见 makePowSolver 注释）
+  const matches = makePowSolver(prefix, Math.max(1, difficulty));
   const chunkSize = options.chunkSize && options.chunkSize > 0 ? options.chunkSize : 20_000;
   const maxAttempts =
     options.maxAttempts && options.maxAttempts > 0 ? options.maxAttempts : Math.ceil(8 * 16 ** difficulty);
@@ -158,7 +293,7 @@ export async function solvePow(options: SolveOptions): Promise<SolveResult> {
 
     const end = Math.min(base + chunkSize, maxAttempts);
     for (let answer = base; answer < end; answer++) {
-      if (sha256Hex(prefix + answer).startsWith(target)) {
+      if (matches(answer)) {
         onProgress?.(1);
         return { answer: String(answer) };
       }

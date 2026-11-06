@@ -39,7 +39,8 @@ import { sanitizeBySpec, isPlainObject, toJsonProperties } from '../../config/fi
  *   · 计数/时长一律 ≥ 1：0 会让判定恒真（如 `now - lastAt > 0` 清空在飞连接）或恒假；
  *   · 数组里的条目要求非空字符串：空前缀/空模式会变成"匹配一切"，
  *     等于把该条规则整条关掉（`startsWith('')` 恒真、`includes('')` 恒真）；
- *   · 枚举（challengeDifficulty 由代码夹在 1~6）与 1~6 的上下限保持一致。
+ *   · 枚举 / 上下界与**代码实际夹取值**保持一致（challengeDifficulty 代码夹在 1~5：
+ *     难度 6 = 期望 1670 万次哈希 ≈ 浏览器 6 秒以上，实测已不适合做默认上限）。
  *
  * @type {Object<string, object>}
  */
@@ -115,7 +116,7 @@ const DEFENSE_SPEC = {
   botChallengeBrowserLimit: { type: 'int', min: 1 },
 
   // ── ⑧b 挑战难度 + 挑战页地址（代码侧夹在 1~6，与代码夹取口径一致）──
-  challengeDifficulty: { type: 'int', min: 1, max: 6 },
+  challengeDifficulty: { type: 'int', min: 1, max: 5 },
   // 独立前端挑战页地址：**空串合法**（= 用后端内置页）。非空要求站内相对路径，
   // 但"是不是站内相对路径"由 `buildChallengeRedirect` 在运行时把关（spec 只查类型/长度）：
   // 这里若用正则强约束，面板改配置时会给出一堆与"回落内置页"行为不一致的报错。

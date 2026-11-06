@@ -118,7 +118,9 @@ describe('防火墙默认策略 · schema 契约', () => {
     expect(d.bruteLimit).toBeGreaterThan(0);
     expect(d.maxConn).toBeGreaterThan(0);
     expect(d.challengeDifficulty).toBeGreaterThanOrEqual(1);
-    expect(d.challengeDifficulty).toBeLessThanOrEqual(6); // 代码侧夹取上限
+    // 与 challenge-template.js 的 MAX_DIFFICULTY 对齐：配置 6 会被静默夹成 5，
+    // 那属于"配了不生效"，不如直接在 spec 上拒绝
+    expect(d.challengeDifficulty).toBeLessThanOrEqual(5);
   });
 
   it('连接静默阈值必须大于上游 requestTimeout（否则长请求的计数会被提前回收）', () => {

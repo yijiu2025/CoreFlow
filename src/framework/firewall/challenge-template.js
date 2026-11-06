@@ -25,7 +25,7 @@
  * @since 2026-11-05 内联脚本改 nonce + Blob Worker 求解（此前在生产 CSP 下根本不会执行）
  */
 import crypto from 'crypto';
-import { sha256Hex } from './util/pow-sha256.js';
+import { makePowSolver, SHA256_K } from './util/pow-sha256.js';
 import { getConfig } from './util/shared.js';
 import { writeChallenge } from './util/redis.js';
 
@@ -92,22 +92,23 @@ async function issueChallengePayload({ ip, fingerprint = null, deviceId = null }
  * 为什么要线程：PoW 是**同步纯计算**，跑在主线程上会把整页冻住（难度 5 ≈ 2s：
  * 进度条不动、点击无响应、低端机可能被判「页面无响应」）。放进 Worker 后主线程始终空闲。
  *
- * `sha256Hex` 在这里**再内联一次**：Worker 没有外层闭包，必须自带哈希实现。它仍然来自
- * `util/pow-sha256.js` 的同一份源码（`toString()`），所以服务端校验 / 主线程降级 /
- * 求解线程三处不可能各改各的。
+ * 求解内核用 `makePowSolver()`（零分配，比 `sha256Hex + startsWith` 快约 5.9×，实测见该函数注释）。
+ * 它必须**再内联一次**：Worker 没有外层闭包，`toString()` 只带函数体、不带外面的 `SHA256_K`，
+ * 所以常量表单独发一份。两者仍来自 `util/pow-sha256.js` 的同一份源码，
+ * 服务端校验 / 主线程降级 / 求解线程三处不可能各改各的。
  *
  * @returns {string} 可直接塞进 `new Blob([...])` 的 JS 源码
  */
 function buildSolverSource() {
   return `'use strict';
-var sha256Hex = ${sha256Hex.toString()};
+var SHA256_K = ${JSON.stringify(SHA256_K)};
+var makePowSolver = ${makePowSolver.toString()};
 self.onmessage = function (e) {
   var d = e.data || {};
-  var target = '0'.repeat(d.difficulty);
-  var prefix = d.prefix;
   var total = d.maxAttempts;
+  var matches = makePowSolver(d.prefix, d.difficulty);
   for (var i = 0; i < total; i++) {
-    if (sha256Hex(prefix + i).indexOf(target) === 0) {
+    if (matches(i)) {
       self.postMessage({ answer: String(i) });
       return;
     }
@@ -220,8 +221,9 @@ async function buildChallengePage(ip, fingerprint, deviceId = null, options = {}
         </div>
 
         <script nonce="${nonce}">
-          // 服务端同一份源码内联：主线程降级求解与服务端校验共用同一个哈希实现
-          const sha256Hex = ${sha256Hex.toString()};
+          // 服务端同一份源码内联：求解内核（零分配）+ 常量表，与 Worker、服务端校验同源
+          const SHA256_K = ${JSON.stringify(SHA256_K)};
+          const makePowSolver = ${makePowSolver.toString()};
 
           const CHALLENGE_ID = '${challengeId}';
           const SALT = '${salt}';
@@ -276,9 +278,9 @@ async function buildChallengePage(ip, fingerprint, deviceId = null, options = {}
            * 它会把页面冻住，所以正常情况下不应执行；执行了也不影响正确性。
            */
           function solveOnMain() {
-            const target = '0'.repeat(DIFFICULTY);
+            const matches = makePowSolver(PREFIX, DIFFICULTY);
             for (let answer = 0; answer < MAX_ATTEMPTS; answer++) {
-              if (sha256Hex(PREFIX + answer).indexOf(target) === 0) return String(answer);
+              if (matches(answer)) return String(answer);
             }
             return null;
           }

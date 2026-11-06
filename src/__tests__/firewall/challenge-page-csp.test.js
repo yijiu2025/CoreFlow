@@ -83,9 +83,11 @@ describe('buildChallengePage：nonce 与响应头同源', () => {
     expect(html.match(/<script/g)).toHaveLength(1);
   });
 
-  it('求解线程源码内联了同一份 sha256Hex，且不会截断 <script>', () => {
+  it('求解线程源码内联了同一份求解内核与常量表，且不会截断 <script>', () => {
     const src = buildSolverSource();
-    expect(src).toContain('function sha256Hex');
+    expect(src).toContain('function makePowSolver');
+    // 常量表必须一起带过去：Worker 没有外层闭包，少了它就是 ReferenceError
+    expect(src).toContain('var SHA256_K = [');
     expect(src).toContain('self.postMessage');
     expect(src).not.toContain('</script');
   });
@@ -96,7 +98,7 @@ describe('buildChallengePage：nonce 与响应头同源', () => {
     expect(literal).not.toBeNull();
     // 用 JSON.parse 反解，证明它确实是一个完整的字符串（没有裸换行把字面量劈开）
     const decoded = JSON.parse(literal[1]);
-    expect(decoded).toContain('sha256Hex');
+    expect(decoded).toContain('makePowSolver');
     expect(decoded).toContain('\n');
   });
 });

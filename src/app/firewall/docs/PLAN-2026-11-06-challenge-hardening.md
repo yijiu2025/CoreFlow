@@ -212,25 +212,31 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
 >
 > 下面七项是**尚未开始**的部分。
 
-### 阶段 0：护栏（0.5 人日｜纯测试，可立即开工）
+### 阶段 0：护栏（0.5 人日｜**已完成 2026-11-06**）
 
 **要解决的问题**：`packages/challenge-client/src/pow.ts` 注释写着"必须与服务端逐字节等价"，但**全仓没有一条测试守着它**（三份实现：服务端 JS / 内联 Worker / TS）。任何一处改动不一致，症状都是"用户永远解不出来"。
 
-- [ ] `scripts/verify/challenge-solver-parity.mjs`
-  - 固定向量 + 随机向量，对拍 `pow-sha256.js` 与 `packages/challenge-client/src/pow.ts`（现场编译 TS）
-  - 覆盖 `difficulty 1..6`
-  - 对拍"优化版 solver"与参考 `sha256Hex`：**逐答案比较布尔结果**，而非只比命中值
-- [ ] 挂进 `npm run verify:all`
-- **验收**：故意改坏 TS 里任一个常量 → 脚本红（反向验证）。
+落地形式与计划略有出入：**做成 jest 用例而不是 `verify:all` 关卡** —— `scripts/verify/` 下那些关卡都要连真 Redis/DB，而这是一次纯静态对拍，放进 `npm test` 才能在 CI 上天天跑。
 
-### 阶段 1：项① PoW 提速（1 人日｜可独立上线）
+- `src/__tests__/firewall/challenge-solver-parity.test.js`
+  - 用 **esbuild** 现场把 `pow.ts` 转成 CJS 求值（不引构建产物、不落地中间文件）
+  - ① `sha256Hex` 对拍：空串 / 短串 / **padding 边界（55·56·63·64·65 字节）** / PoW 真实形状 / 200 条伪随机向量
+  - ② `makePowSolver` 对拍：难度 1~4 的**首个命中答案**必须相同（含"都找不到"），并用 `verifyPow` 二次确认不是两边一起错
+- **反向验证**：把 TS 里 `K[0]` 末位 +1 → **4/5 例转红**；还原后 5/5 绿
 
-- 新增 `makePowSolver(prefix, difficulty) → (answer) => boolean`
-  - 复用 `Uint8Array` 缓冲与 `w` 表；十进制就地写字节；只比前 N 个十六进制位（不产出十六进制串）
-  - `sha256Hex` **保留不动**（服务端 `verifyPow` 与单测基准都用它，动它风险最大）
-- 三处同步：`src/framework/firewall/util/pow-sha256.js`（源）→ 内嵌页 `buildSolverSource()`（`toString()` 内联）→ `packages/challenge-client/src/pow.ts`
-- 顺手修口径不一致：`config/schema.js` 里 `challengeDifficulty` 是 `1~6`，而 `challenge-template.js` 的 `MAX_DIFFICULTY = 5` —— 配置 6 会被静默夹成 5。提速后把代码上限提到 6，并用测试钉住"spec 上限 == 代码夹取上限"。
-- **验收**：阶段 0 对拍绿；难度 3 ≤ 2ms、难度 5 ≤ 500ms（实测基线 9.5ms / 2.4s）
+### 阶段 1：项① PoW 提速（1 人日｜**已完成 2026-11-06**）
+
+- 新增 `makePowSolver(prefix, difficulty) → (answer) => boolean`（`util/pow-sha256.js`）
+  - 复用 `Uint8Array` 缓冲与 `w`/`hv` 表；十进制就地写字节；**只比前 N 个十六进制位**，不产出字符串
+  - `sha256Hex` 保留不动（`verifyPow` 与单测基准都用它）；常量表提到模块级 `SHA256_K`，两份实现共用一张表
+- 三处同步：服务端（源）→ 内嵌页（`makePowSolver.toString()` + `SHA256_K` 内联进 Worker 与主线程降级）→ `packages/challenge-client/src/pow.ts`
+- 内嵌页因此不再内联 `sha256Hex`（页面少一段代码，且与 Worker 共用同一内核）
+- **验收**：`__tests__/firewall/pow-solver.test.js`（7 例：难度 1~6 × 答案边界 × 前缀长度、连续 2 万答案逐个对拍、难度 0/非法值、判定器可复用、`verifyPow` 闭环、常量表完整性）
+- **实测**（无头 Chrome，本机）：2.315 → **0.395 µs/次**；难度 3 9.5ms → **1.6ms**，难度 5 ≈2.4s → **≈414ms**
+- 端到端复验：内嵌页（自带内核 + Worker）与 SPA 页（共享包）各跑一遍完整「302 → issue → PoW → verify → 放行」，均 PASSED
+- 顺手对齐一处"配了不生效"：`schema.js` 里 `challengeDifficulty` 上限是 **6**，而 `challenge-template.js`
+  的 `MAX_DIFFICULTY = 5` —— 配 6 会被静默夹成 5。实测难度 6 ≈ 1670 万次哈希（浏览器 6 秒以上），
+  不适合做上限，因此把 spec 收到 **5**，让"接口能配"与"运行时生效"一致。
 
 ### 阶段 2：项⑤ 观测（1.5 人日｜可独立上线）
 

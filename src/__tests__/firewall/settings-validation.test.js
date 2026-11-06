@@ -172,7 +172,9 @@ describe('面板接口 schema：从 spec 生成', () => {
   it('数值字段带 minimum（0/负数在接口层就 400）', () => {
     expect(props.defense.properties.maxConn).toEqual({ type: 'number', minimum: 1 });
     expect(props.defense.properties.connStaleAfterMs).toEqual({ type: 'number', minimum: 1 });
-    expect(props.defense.properties.challengeDifficulty).toEqual({ type: 'number', minimum: 1, maximum: 6 });
+    // 上下界必须与 challenge-template.js 的 MAX_DIFFICULTY 一致（5），
+    // 否则"配 6"会通过接口校验、却在运行时被静默夹回 5
+    expect(props.defense.properties.challengeDifficulty).toEqual({ type: 'number', minimum: 1, maximum: 5 });
   });
 
   it('数组字段给 items 约束（空串条目在接口层就 400）', () => {
