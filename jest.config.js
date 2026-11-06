@@ -8,6 +8,13 @@ export default {
   // 映射到 CJS 镜像（`.cjs` 保证按 CJS 加载，不受根 package.json "type":"module" 影响）。
   // 语义来源与维护约定见 scripts/jest/shims/cookie.cjs 头注释；真包升级会由
   // src/__tests__/test-env-cookie-shim.test.js 拦下。
+  //
+  // ⚠️ 别顺手删：Node ≥ 24.9（engines 下限）时 jest 能原生 require(esm)，去掉这条映射
+  // 实测也全绿 —— 也就是它不是"为了跑通"而存在的。留着的两个理由：
+  //   1) 过渡期机器上常见 Node 22/24 并存（本仓开发机就是：PowerShell 24.22、bash 里 22.22），
+  //      走错 shell 不该看到一片"与代码无关"的红；
+  //   2) 让 cookie 在所有 Node 版本上走同一条加载路径，测试行为不随解释器版本漂移
+  //      （真包行为的一致性由 test-env-cookie-shim 用 file URL 动态 import 真包来守）。
   moduleNameMapper: {
     '^cookie$': '<rootDir>/scripts/jest/shims/cookie.cjs'
   },

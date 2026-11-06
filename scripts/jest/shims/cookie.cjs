@@ -5,6 +5,7 @@
  * jest 里 light-my-request@6(CJS) 会 require('cookie')，而 cookie@2 是纯 ESM，
  * Node 22.x 的 jest 无法 require(esm) → 所有 app.inject() 用例整片失败。
  * jest.config.js 的 moduleNameMapper 把 'cookie' 指到本文件兜底。
+ * （Node ≥24.9 下 jest 原生就能 require(esm)，此映射非必需；保留理由写在 jest.config.js）
  *
  * 来源：node_modules/cookie/dist/index.js
  * 版本：cookie@2.0.1
