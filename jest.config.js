@@ -1,6 +1,16 @@
 export default {
   testEnvironment: 'node',
   transform: {}, // ESM 下通常不需要 Babel 转译
+  // `cookie@2` 是纯 ESM，而 `light-my-request@6`（fastify `app.inject()` 的实现）是 CJS，
+  // 里面静态 `require('cookie')`：Node ≥ 24.9 时 jest 30 能原生 require(esm)，
+  // Node 22.x 会落到 `createRequireEsmError` → 凡走 app.inject() 的用例全部挂在
+  // `node_modules/light-my-request/lib/cookies.js:3`（"Must use import to load ES Module"）。
+  // 映射到 CJS 镜像（`.cjs` 保证按 CJS 加载，不受根 package.json "type":"module" 影响）。
+  // 语义来源与维护约定见 scripts/jest/shims/cookie.cjs 头注释；真包升级会由
+  // src/__tests__/test-env-cookie-shim.test.js 拦下。
+  moduleNameMapper: {
+    '^cookie$': '<rootDir>/scripts/jest/shims/cookie.cjs'
+  },
   // 两个测试根：
   //   src/__tests__/**  服务端运行时代码
   //   scripts/**        构建/发布工具（纯函数逻辑住 scripts/lib/，测试与它同目录）

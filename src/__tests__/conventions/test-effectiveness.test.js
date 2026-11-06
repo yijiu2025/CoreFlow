@@ -63,6 +63,12 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
     'deployment-script-security.test.js',
     '读 Dockerfile 与 scripts/release.mjs 的源码文本，断言构建/发版脚本的危险写法（结构守卫）；' +
       '发版决策逻辑搬去 scripts/lib 后，它不再 import 任何模块（src 也不该反向 import scripts）'
+  ],
+  [
+    'test-env-cookie-shim.test.js',
+    '测试环境基建自检：断言对象是 jest moduleNameMapper → cookie 的 CJS 镜像，' +
+      '并与 node_modules 里的真包输出比对（真包走 file URL 动态 import）。被测物是环境配置而非 src 模块，' +
+      '且 src/ 禁止 import scripts/，故无法也不必 import 仓库内业务代码'
   ]
 ]);
 
