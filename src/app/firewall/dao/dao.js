@@ -9,7 +9,13 @@
  */
 import fs from 'fs';
 import { C } from '../../../utils/colors.js';
-import { FIREWALL_FILE, DEFAULT_SERVER_NODE, DEFAULT_SECURITY_SETTINGS, DEFAULT_IP_APIS } from '../config/config.js';
+import {
+  FIREWALL_FILE,
+  DEFAULT_SERVER_NODE,
+  DEFAULT_SECURITY_SETTINGS,
+  DEFAULT_IP_APIS,
+  sourceUnavailable
+} from '../config/config.js';
 import {
   HASH,
   writeWhitelist,
@@ -445,30 +451,38 @@ async function syncManualWhitelistToRedis() {
 
 /**
  * 自动刷新服务器节点定位信息
+ *
+ * 失败分两类处理，这是刻意分开的：
+ *   - **数据源给不出可用结果**（`sourceUnavailable`）：本地/内网出口、被限流、
+ *     Key 未配置、返回里没有公网 IP。这是代理或 NAT 后的常态，每次启动都会发生，
+ *     用一条 INFO 说明"保留默认节点信息"即可；带 stack 的 WARN 会把它伪装成故障，
+ *     把真正的问题淹掉。
+ *   - **程序性异常**（fetch 抛错、超时、代码 bug）：保留 WARN + stack，需要人看。
+ *
+ * 不做多源自动回退：`activeIpApi` 是面板上明确选择的源，且候选里有境外服务
+ * （ipapi.co），擅自切换等于把服务器 IP 发给用户没选的第三方。
  */
 async function refreshServerNodeAuto() {
   const activeApiId = securitySettings.activeIpApi || 'sohu';
   const apiConfig = DEFAULT_IP_APIS.find(a => a.id === activeApiId) || DEFAULT_IP_APIS[0];
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(apiConfig.url, { signal: controller.signal });
-    clearTimeout(timeout);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  try {
+    const res = await fetch(apiConfig.url, { signal: controller.signal });
+
+    if (!res.ok) throw sourceUnavailable(`HTTP ${res.status}`);
 
     let raw;
     try {
       raw = apiConfig.isText ? await res.text() : await res.json();
     } catch (parseErr) {
-      throw new Error(`返回数据格式错误: ${parseErr.message}`, {
-        cause: parseErr
-      });
+      throw sourceUnavailable(`返回数据格式错误: ${parseErr.message}`);
     }
     const parsed = apiConfig.parse(raw);
 
-    if (!parsed.ip) throw new Error('返回数据缺少 IP 字段');
+    if (!parsed.ip) throw sourceUnavailable('返回数据缺少 IP 字段');
 
     serverNode = {
       ...serverNode,
@@ -487,7 +501,17 @@ async function refreshServerNodeAuto() {
         `[${serverNode.lat},${serverNode.lon}]${C.reset}`
     );
   } catch (err) {
-    log.warn(`⚠️ [Firewall DAO] ${C.yellow}${apiConfig.name} 定位失败${C.reset}`, err);
+    if (err.sourceUnavailable) {
+      // 常态降级：保留 DEFAULT_SERVER_NODE，不影响防护策略（地理围栏用配置值而非定位结果）
+      log.info(
+        `ℹ️ [Firewall DAO] ${C.dim}${apiConfig.name} 未返回可用定位: ${err.message}，保留默认节点信息${C.reset}`
+      );
+    } else {
+      log.warn(`⚠️ [Firewall DAO] ${C.yellow}${apiConfig.name} 定位失败${C.reset}`, err);
+    }
+  } finally {
+    // 放到 finally：原实现写在 fetch 之后，请求抛错时定时器会挂 5s 才释放
+    clearTimeout(timeout);
   }
 }
 

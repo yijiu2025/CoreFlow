@@ -78,6 +78,22 @@ const COUNTRY_MAP = {
   AR: '阿根廷'
 };
 
+/**
+ * 标记"数据源给不出可用结果"（本地地址 / 解析失败 / 被限流 / Key 未配置）
+ *
+ * 与程序故障区分开：这类失败是**常态** —— 服务器在代理或 NAT 后面时，第三方接口
+ * 看到的就是内网或回环地址。调用方据此降级为提示日志，不再每次启动刷一条带 stack
+ * 的 WARN（那会把真正的故障淹掉）。
+ *
+ * @param {string} reason 面向运维的原因描述
+ * @returns {Error} 带 sourceUnavailable 标记的错误
+ */
+function sourceUnavailable(reason) {
+  const err = new Error(reason);
+  err.sourceUnavailable = true;
+  return err;
+}
+
 const DEFAULT_IP_APIS = [
   {
     id: 'ipinfo',
@@ -85,8 +101,8 @@ const DEFAULT_IP_APIS = [
     url: 'https://ipinfo.io/json',
     isText: false,
     parse: data => {
-      if (data.error || data.status === 429) throw new Error(data.error?.message || '请求被限流');
-      if (!data.ip) throw new Error('返回数据缺少 IP');
+      if (data.error || data.status === 429) throw sourceUnavailable(data.error?.message || '请求被限流');
+      if (!data.ip) throw sourceUnavailable('返回数据缺少 IP');
       const [lat, lon] = (data.loc || '').split(',').map(Number);
       return {
         ip: data.ip,
@@ -104,7 +120,7 @@ const DEFAULT_IP_APIS = [
     url: 'https://ipapi.co/json/',
     isText: false,
     parse: data => {
-      if (data.error || !data.ip) throw new Error(data.reason || '请求失败');
+      if (data.error || !data.ip) throw sourceUnavailable(data.reason || '请求失败');
       return {
         ip: data.ip,
         country: COUNTRY_MAP[data.country_code] || data.country_name || '未知',
@@ -122,9 +138,9 @@ const DEFAULT_IP_APIS = [
     isText: true,
     parse: text => {
       const match = text.match(/returnCitySN\s*=\s*(\{.+\})/);
-      if (!match) throw new Error('解析失败');
+      if (!match) throw sourceUnavailable('解析失败');
       const data = JSON.parse(match[1]);
-      if (!data.cip || data.cip === '127.0.0.1') throw new Error('获取到的是本地地址');
+      if (!data.cip || data.cip === '127.0.0.1') throw sourceUnavailable('获取到的是本地地址');
       const city = (data.cid || '').replace(/省|市|自治区|壮族|回族|维吾尔|特别行政区/g, '');
       return {
         ip: data.cip,
@@ -142,8 +158,8 @@ const DEFAULT_IP_APIS = [
     url: 'https://qifu-api.baidubce.com/ip/local/geo/v1/district',
     isText: false,
     parse: data => {
-      if (data.code === 'KeyDisabled' || data.code === 'InvalidKey') throw new Error('API Key 未配置');
-      if (!data.ip) throw new Error('返回数据缺少 IP');
+      if (data.code === 'KeyDisabled' || data.code === 'InvalidKey') throw sourceUnavailable('API Key 未配置');
+      if (!data.ip) throw sourceUnavailable('返回数据缺少 IP');
       return {
         ip: data.ip,
         country: data.country || '中国',
@@ -187,6 +203,7 @@ if (strayPanelKeys.length) {
 }
 
 export { FIREWALL_FILE, CHALLENGE_SECRET, DEFAULT_SERVER_NODE, DEFAULT_IP_APIS, DEFAULT_IP_API };
+export { sourceUnavailable };
 
 /**
  * 默认安全策略矩阵（含 app 层展示类默认值，定义见 ./defaults.js 与
