@@ -44,28 +44,58 @@ async function loadGuardConfig() {
     return;
   }
 
-  if (data.version > 0) {
+  // ── 判据：DB 里到底有没有行 ──
+  // 用行数而不是 `data.version > 0`：版本是**每行独立**的，全局最大版本为 0
+  // 不代表没有数据（历史数据/手工插入的行版本可能就是 0），那种情况会误走合并分支。
+  const dbSystems = Object.keys(data.configs || {});
+
+  if (dbSystems.length > 0) {
     // 合并：DB 配置覆盖代码级配置（仅覆盖运行时字段，不覆盖结构）
     mergeDbConfig(data.configs);
     currentVersion = data.version;
     _dbVersions = data.versions || {};
-    log.info(`💾 [Guard Config] ${C.dim}已加载持久化策略数据${C.reset}`);
+    log.info(`💾 [Guard Config] ${C.dim}已加载持久化策略数据（${dbSystems.length} 个系统）${C.reset}`);
 
-    // 将内存中的完整配置写回 DB，确保新增/删除的 API 路由同步到数据库
-    // 新增的 API 路由在 runEngine 阶段已注册到内存，但 DB 中可能没有
-    // 删除的 API 路由 DB 中仍有残留，写入时会被覆盖清理
-    try {
-      const result = await saveWithTimeout();
-      currentVersion = result.maxVersion;
-      if (result.updated.length > 0) {
-        const detail = result.updated.map(k => `${k}(v${result.versions[k]})`).join(', ');
-        log.info(`💾 [Guard Config] ${C.dim}已同步代码级配置 — 更新: ${detail}${C.reset}`);
-      } else {
-        log.info(`💾 [Guard Config] ${C.dim}已同步代码级配置 — 无变更${C.reset}`);
+    // ── 只补录"DB 里没有该系统"的行 ──
+    //
+    // 这里曾经是 `saveWithTimeout()`（全量），意图只是"把新增/删除的路由同步进 DB"，
+    // 实际效果却是把内存整棵树覆盖回 DB：任何内存态错误（注册逻辑写错、字段默认值算错、
+    // 某个调用方误改了单例）都会在每次启动时被固化一遍，而且无法察觉。
+    //
+    // 路由级差异**不需要**落库：
+    //   · 面板读的是内存（getAllGuardConfigs），新路由立刻可见；
+    //   · 重启时 mergeDbConfig 对 DB 里的已删路由只告警忽略，不会复活；
+    //   · DB 行里缺的新路由，节点用代码默认值，正是期望行为。
+    // 所以只处理"整行都还没有"的系统，其余交给运行期写入。
+    const missing = Object.keys(configs).filter(k => !(k in data.configs));
+    if (missing.length > 0) {
+      // 逐个预检，把"字段类型非法的系统"隔离出去：一个注册逻辑写错的系统
+      // 不应该让其他合法的新系统也落不了库（整体写入会互相牵连）。
+      // 非法的那些本次不落库 —— 面板读内存仍能看到，但绝不写进 DB，
+      // 修好代码后下次启动会自动补录。
+      const invalid = missing.filter(k => !validateConfigs({ [k]: configs[k] }));
+      const writable = missing.filter(k => !invalid.includes(k));
+
+      if (invalid.length > 0) {
+        log.error(
+          `❌ [Guard Config] ${C.red}以下系统字段类型非法，本次不落库（修复后重启会自动补录）: ${invalid.join(', ')}${C.reset}`
+        );
       }
-    } catch (err) {
-      // 同步失败不阻止启动，下次启动会重试
-      log.warn(`⚠️ [Guard Config] ${C.yellow}代码级配置同步失败，下次启动将重试${C.reset}`, err);
+
+      if (writable.length > 0) {
+        try {
+          const result = await saveWithTimeout(writable);
+          currentVersion = result.maxVersion;
+          log.info(
+            `💾 [Guard Config] ${C.dim}已补录 ${writable.length} 个未落库的系统: ${writable.join(', ')}${C.reset}`
+          );
+        } catch (err) {
+          // 补录失败不阻止启动：这些系统本次用代码默认值运行，下次启动会重试
+          log.warn(`⚠️ [Guard Config] ${C.yellow}未落库系统的补录失败，下次启动将重试${C.reset}`, err);
+        }
+      }
+    } else {
+      log.info(`💾 [Guard Config] ${C.dim}DB 已覆盖全部 ${Object.keys(configs).length} 个系统，无需补录${C.reset}`);
     }
   } else {
     // 首次运行：DB 无数据，将代码级配置写入 DB 作为初始数据
@@ -85,7 +115,20 @@ async function loadGuardConfig() {
 function mergeDbConfig(dbConfigs) {
   for (const [systemKey, dbSystem] of Object.entries(dbConfigs)) {
     if (!configs[systemKey]) {
-      log.warn(`⚠️ [Guard Config] DB 中存在已删除或未注册的系统配置: ${systemKey}，已忽略`);
+      // 只差大小写 ⇒ DB 里是历史键（例：代码后来把 admin 改名 Admin，DB 行仍是 admin）。
+      // 这不能用普通的"已删除系统"一句带过：MySQL 默认 utf8mb4_general_ci 让两个键互相遮蔽，
+      // `WHERE system_key='Admin'` 会命中 admin 行 —— 读的时候键对不上（被忽略），
+      // 写的时候又落回旧键，表现为"该系统的运维配置重启后失效 + 每次启动都补录一次"。
+      const caseTwin = Object.keys(configs).find(k => k.toLowerCase() === systemKey.toLowerCase());
+      if (caseTwin) {
+        log.error(
+          `❌ [Guard Config] ${C.red}DB 行 "${systemKey}" 与代码注册的 "${caseTwin}" 仅大小写不同` +
+            `（ci collation 会互相遮蔽，导致该系统的持久化配置不生效）；` +
+            `需把 system_key 改为 "${caseTwin}"${C.reset}`
+        );
+      } else {
+        log.warn(`⚠️ [Guard Config] DB 中存在已删除或未注册的系统配置: ${systemKey}，已忽略`);
+      }
       continue;
     }
     // 覆盖系统级运行时字段
@@ -209,22 +252,102 @@ function applyRuntimeFields(target, source, path, baselineNode) {
 let _previousSnapshot = null;
 
 /**
- * 验证 configs 对象结构完整性
- * 检查每个系统是否包含必要的字段
+ * 把内存状态还原到上一次写入前的快照
  *
- * @param {object} configs - 要验证的配置树
+ * 写入失败必须回滚：不回滚的话内存是新值、DB 是旧值，本实例会按"运维已改"的语义
+ * 继续放行/拦截，而重启后行为又变回去 —— 这种"改完生效一阵又自己恢复"最难排查。
+ *
+ * 防抖路径（triggerSave）与关停路径（flushGuardConfig）共用这一份实现，
+ * 避免两处各写一遍导致判据漂移。
+ *
+ * @returns {boolean} 是否真的回滚了（无快照时 false）
+ */
+function rollbackToPreviousSnapshot() {
+  if (!_previousSnapshot) return false;
+  configs = structuredClone(_previousSnapshot.configs);
+  currentVersion = _previousSnapshot.version;
+  _dbVersions = { ..._previousSnapshot.versions };
+  _previousSnapshot = null;
+  return true;
+}
+
+/** 运行时字段的合法类型：写库前逐个核对，非法即整次拒绝 */
+const BOOLEAN_NODE_FIELDS = ['enabled', 'requireLogin', 'freshPermission'];
+const STRING_ARRAY_NODE_FIELDS = ['allowIps', 'allowRoles'];
+
+/**
+ * 校验单个节点的运行时字段类型
+ *
+ * 为什么必须校验类型而不是"发现坏了就丢弃"：
+ * 丢弃会让坏值静默变成代码默认值，DB 里存的既不是运维想要的、也不是报错提示的值；
+ * 整次拒绝才能让调用方看到失败。这与 `firewall/config/persisted.js` 的
+ * sanitizeSecuritySettings 取的是同一条思路（那边按 spec 表校验值域）。
+ *
+ * @param {object} node 待校验节点
+ * @param {string} path 日志用的路径
+ * @param {string[]} problems 问题收集器
+ */
+function validateNodeTypes(node, path, problems) {
+  for (const field of BOOLEAN_NODE_FIELDS) {
+    if (node[field] !== undefined && typeof node[field] !== 'boolean') {
+      problems.push(`${path}.${field} 必须是布尔值（实际 ${typeof node[field]}）`);
+    }
+  }
+  for (const field of STRING_ARRAY_NODE_FIELDS) {
+    const value = node[field];
+    if (value === undefined) continue;
+    if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) {
+      problems.push(`${path}.${field} 必须是字符串数组`);
+    }
+  }
+}
+
+/**
+ * 验证配置树的结构与运行时字段类型
+ *
+ * 结构：每个系统必须有 groups，每个模块必须有 apis（可以为空对象）。
+ * 类型：见 validateNodeTypes。任何一条不合法都返回 false，由调用方整次取消写入。
+ *
+ * @param {object} tree - 待写入的配置树（只校验这部分）
  * @returns {boolean}
  */
-function validateConfigs(configs) {
-  for (const [systemKey, system] of Object.entries(configs)) {
+function validateConfigs(tree) {
+  const problems = [];
+
+  for (const [systemKey, system] of Object.entries(tree)) {
     if (!system || typeof system !== 'object') {
-      log.warn(`⚠️ [Guard Config] 验证失败: 系统 ${systemKey} 配置无效`);
-      return false;
+      problems.push(`${systemKey}: 系统配置无效`);
+      continue;
     }
     if (!system.groups || typeof system.groups !== 'object') {
-      log.warn(`⚠️ [Guard Config] 验证失败: 系统 ${systemKey} 缺少 groups`);
-      return false;
+      problems.push(`${systemKey}: 缺少 groups`);
+      continue;
     }
+    validateNodeTypes(system, systemKey, problems);
+
+    for (const [groupKey, group] of Object.entries(system.groups)) {
+      if (!group || typeof group !== 'object') {
+        problems.push(`${systemKey}/${groupKey}: 模块配置无效`);
+        continue;
+      }
+      validateNodeTypes(group, `${systemKey}/${groupKey}`, problems);
+
+      for (const [apiKey, api] of Object.entries(group.apis || {})) {
+        if (!api || typeof api !== 'object') {
+          problems.push(`${systemKey}/${groupKey}/${apiKey}: 接口配置无效`);
+          continue;
+        }
+        validateNodeTypes(api, `${systemKey}/${groupKey}/${apiKey}`, problems);
+      }
+    }
+  }
+
+  if (problems.length > 0) {
+    // 只打前 5 条：配置规模大时全量刷屏反而看不到关键的
+    const shown = problems.slice(0, 5).join('；');
+    const more = problems.length > 5 ? ` …共 ${problems.length} 条` : '';
+    log.warn(`⚠️ [Guard Config] 配置校验失败: ${shown}${more}`);
+    return false;
   }
   return true;
 }
@@ -233,20 +356,43 @@ function validateConfigs(configs) {
 const SAVE_TIMEOUT = 10000;
 
 /**
- * 获取指定层级的配置
+ * 生成节点的只读快照
+ *
+ * 本模块是模块级单例，把内部节点直接交出去等于把全局鉴权状态交给所有调用方：
+ * 任何一处 `node.enabled = false` 都会立刻改变本进程的判定，而且下一次**任意系统**
+ * 的写入会把这棵树整体带进 DB（参见 loadGuardConfig 里关于全量写的教训）。
+ *
+ * 用浅拷贝 + 冻结而不是 structuredClone：本函数在 `preHandler` 上**每个请求**都会调，
+ * 深拷贝整棵子树（含该系统全部 api）会把配置规模乘进 P99。这里只需挡住顶层字段；
+ * `groups` 子对象仍是共享引用 —— 调用方只读时无差别，要改请走 setGuardConfig。
+ *
+ * @param {object} node 内部节点
+ * @returns {Readonly<object>}
+ */
+function toReadonlyNode(node) {
+  return Object.freeze({
+    ...node,
+    allowIps: Object.freeze([...(node.allowIps || [])]),
+    allowRoles: Object.freeze([...(node.allowRoles || [])])
+  });
+}
+
+/**
+ * 获取指定层级的配置（只读快照，非内部引用）
  */
 function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
   const system = configs[systemKey];
   if (!system) return null;
 
-  if (!groupKey) return system;
+  if (!groupKey) return toReadonlyNode(system);
 
   const group = system.groups ? system.groups[groupKey] : null;
   if (!group) return null;
 
-  if (!apiKey) return group;
+  if (!apiKey) return toReadonlyNode(group);
 
-  return group.apis ? group.apis[apiKey] : null;
+  const api = group.apis ? group.apis[apiKey] : null;
+  return api ? toReadonlyNode(api) : null;
 }
 
 /**
@@ -326,7 +472,9 @@ function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null, operat
     // 审计日志写入失败不影响配置更新
   });
 
-  return configs[systemKey];
+  // 与 getGuardConfig 同一套：写路径也不交出内部引用。
+  // 调用方（config.service 的上游）只把它序列化回给面板，冻结副本没有任何代价。
+  return toReadonlyNode(configs[systemKey]);
 }
 
 /**
@@ -338,17 +486,19 @@ function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null, operat
  * @throws {Error} 写入超时或配置校验失败时抛出
  */
 async function saveWithTimeout(systemKeys = null) {
-  // 写入前校验结构完整性
-  if (!validateConfigs(configs)) {
-    throw new Error('配置结构校验失败，已取消写入');
-  }
-
   // 只写入指定系统，或全部写入
   const toSave = systemKeys ? Object.fromEntries(systemKeys.map(k => [k, configs[k]]).filter(([, v]) => v)) : configs;
 
   // 没有需要写入的系统时直接返回
   if (Object.keys(toSave).length === 0) {
     return { maxVersion: currentVersion, updated: [], versions: { ..._dbVersions } };
+  }
+
+  // 写入前校验**待写入的那部分**：结构 + 运行时字段类型。
+  // 只校验 toSave 而不是全树 —— 否则某个系统的脏数据会阻断另一个系统的正常写入，
+  // 一次单系统保存被无关系统拖成失败，运维完全看不出因果。
+  if (!validateConfigs(toSave)) {
+    throw new Error('配置结构或字段类型校验失败，已取消写入');
   }
 
   // 备份当前状态，用于写入失败时回滚
@@ -366,8 +516,10 @@ async function saveWithTimeout(systemKeys = null) {
     GuardConfigDao.saveToDB(toSave, _dbVersions).finally(() => clearTimeout(timeoutId)),
     timeoutPromise
   ]);
-  // 更新每行独立版本号
-  _dbVersions = result.versions;
+  // `result.versions` **只含本次写入的系统**（DAO 只遍历传入的 toSave）。
+  // 直接赋值会把其他系统的本地版本抹成 0 ⇒ 下一轮 syncGuardConfigFromDb 把它们
+  // 全判成"DB 版本更大"：日志谎报"已同步其他实例的配置变更: A,B,C"，并多跑一轮深合并。
+  _dbVersions = { ..._dbVersions, ...result.versions };
   return result;
 }
 
@@ -392,12 +544,7 @@ function triggerSave(systemKey) {
       currentVersion = (await saveWithTimeout(keys)).maxVersion;
     } catch (err) {
       // 写入失败时回滚内存状态到写入前的快照
-      if (_previousSnapshot) {
-        configs = structuredClone(_previousSnapshot.configs);
-        currentVersion = _previousSnapshot.version;
-        _dbVersions = { ..._previousSnapshot.versions };
-        _previousSnapshot = null;
-      }
+      rollbackToPreviousSnapshot();
       log.error(`❌ [Guard Config] ${C.red}异步写入失败${C.reset}`, err);
     }
   }, 1000);
@@ -561,6 +708,12 @@ function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
  * 立即刷新待保存的配置到数据库（用于优雅关闭）
  * 清除防抖定时器并立即执行一次保存
  *
+ * 只在进程退出前调用（`src/app.js` 的 onClose）。它解决的是防抖窗口丢失问题：
+ * `triggerSave` 的 1s 定时器若恰好撞上 SIGTERM，那个 timer 永远不会触发，
+ * 这次修改就静默丢了。onClose 是退出前唯一"in-flight 已结束且能跑异步"的时机。
+ *
+ * 语义是**只写脏系统**：没有脏系统就什么都不写，不做全量覆盖。
+ *
  * @returns {Promise<void>}
  */
 async function flushGuardConfig() {
@@ -568,13 +721,23 @@ async function flushGuardConfig() {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
-  const keys = _dirtySystems.size > 0 ? [..._dirtySystems] : [];
+  const keys = [..._dirtySystems];
   _dirtySystems.clear();
+
+  // 没有脏系统就别走保存：`saveWithTimeout([])` 的 toSave 为空、会直接早退，
+  // 一条都不写却仍然打印"配置已安全写入数据库"——那是假绿。
+  if (keys.length === 0) {
+    log.info(`ℹ️ [Guard Config] ${C.dim}无待写入的变更，跳过落盘${C.reset}`);
+    return;
+  }
+
   try {
-    // 同上：`saveWithTimeout` 返回对象，版本号在 `maxVersion` 上
+    // `saveWithTimeout` 返回对象，版本号在 `maxVersion` 上
     currentVersion = (await saveWithTimeout(keys)).maxVersion;
-    log.info(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}`);
+    log.info(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}（${keys.join(', ')}）`);
   } catch (err) {
+    // 与防抖路径同一套回滚：否则"内存已改 / DB 未改"的不一致会带进下一次启动。
+    rollbackToPreviousSnapshot();
     log.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败${C.reset}`, err);
   }
 }
@@ -585,29 +748,6 @@ async function flushGuardConfig() {
  */
 function getAllGuardConfigs() {
   return structuredClone(configs);
-}
-
-/**
- * 异步原子写入数据库（启动时同步代码变更后调用）
- * 委托 DAO 层处理 upsert + version 乐观锁
- *
- * @returns {Promise<void>}
- * @throws {Error} 版本冲突或数据库写入失败时抛出
- */
-async function saveGuardConfig() {
-  if (saveTimer) {
-    clearTimeout(saveTimer);
-    saveTimer = null;
-  }
-
-  try {
-    // 同上：`saveWithTimeout` 返回对象，版本号在 `maxVersion` 上
-    currentVersion = (await saveWithTimeout()).maxVersion;
-    log.info(`✅ [Guard Config] ${C.green}数据库已同步 (version=${currentVersion})${C.reset}`);
-  } catch (err) {
-    log.error(`❌ [Guard Config] ${C.red}同步失败${C.reset}`, err);
-    throw err;
-  }
 }
 
 /**
@@ -719,7 +859,6 @@ export {
   registerApiMetadata,
   flushGuardConfig,
   getAllGuardConfigs,
-  saveGuardConfig,
   syncGuardConfigFromDb,
   startGuardConfigSync,
   stopGuardConfigSync
