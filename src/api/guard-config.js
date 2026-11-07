@@ -13,6 +13,8 @@ import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
 import { logAuditEvent } from '../framework/auth/index.js';
 import { createLogger } from '../framework/log/index.js';
 import { APP_CONFIG } from '../framework/config/app-config.js';
+import { RUNTIME_FIELDS, diffNode } from '../app/guard/services/direction.js';
+import { verifyRelaxation } from '../app/guard/services/signing.js';
 
 const log = createLogger('api.guard-config');
 
@@ -87,28 +89,121 @@ function mergeDbConfig(dbConfigs) {
       continue;
     }
     // 覆盖系统级运行时字段
-    overrideRuntimeFields(configs[systemKey], dbSystem);
+    applyRuntimeFields(configs[systemKey], dbSystem, systemKey, getBaselineNode(systemKey));
     // 覆盖模块级运行时字段
     for (const [groupKey, dbGroup] of Object.entries(dbSystem.groups || {})) {
       if (!configs[systemKey].groups[groupKey]) {
         log.warn(`⚠️ [Guard Config] DB 中存在已删除的模块配置: ${systemKey}/${groupKey}，已忽略`);
         continue;
       }
-      overrideRuntimeFields(configs[systemKey].groups[groupKey], dbGroup);
+      applyRuntimeFields(
+        configs[systemKey].groups[groupKey],
+        dbGroup,
+        `${systemKey}/${groupKey}`,
+        getBaselineNode(systemKey, groupKey)
+      );
       // 覆盖 API 级运行时字段
       for (const [apiKey, dbApi] of Object.entries(dbGroup.apis || {})) {
         if (!configs[systemKey].groups[groupKey].apis[apiKey]) {
           log.warn(`⚠️ [Guard Config] DB 中存在已删除的 API 配置: ${systemKey}/${groupKey}/${apiKey}，已忽略`);
           continue;
         }
-        overrideRuntimeFields(configs[systemKey].groups[groupKey].apis[apiKey], dbApi);
+        applyRuntimeFields(
+          configs[systemKey].groups[groupKey].apis[apiKey],
+          dbApi,
+          `${systemKey}/${groupKey}/${apiKey}`,
+          getBaselineNode(systemKey, groupKey, apiKey)
+        );
       }
     }
   }
 }
 
-/** 运行时字段列表（仅覆盖这些字段，不覆盖 id/name/url/method 等结构字段） */
-const RUNTIME_FIELDS = ['enabled', 'requireLogin', 'allowIps', 'allowRoles'];
+/**
+ * 代码基线：在每个节点被 register* 时记录**代码声明**的运行时字段值。
+ *
+ * 为什么必须单独存一份：DB 合并会原地改写内存节点，合并之后"代码原本要什么"就丢了。
+ * 判断"DB 里这次改动是放宽还是收紧"必须有一个不会被改写的锚点 —— 否则
+ * 「先放宽一点、再放宽一点」每次都只是相对当前值的小改动，永远绕得过认证。
+ */
+const _codeBaseline = {};
+
+/** 把代码声明的运行时字段记进基线（各层注册完成时调用） */
+function syncBaseline(node, metadata) {
+  if (!node) return;
+  node.enabled = metadata.enabled ?? true;
+  node.requireLogin = metadata.requireLogin ?? false;
+  node.allowIps = Array.isArray(metadata.allowIps) ? [...metadata.allowIps] : [];
+  node.allowRoles = Array.isArray(metadata.allowRoles) ? [...metadata.allowRoles] : [];
+}
+
+/** 取基线的某个节点（未注册时返回 undefined，调用方按"无基线"降级） */
+function getBaselineNode(systemKey, groupKey = null, apiKey = null) {
+  const system = _codeBaseline[systemKey];
+  if (!system) return undefined;
+  if (!groupKey) return system;
+  const group = system.groups?.[groupKey];
+  if (!group) return undefined;
+  if (!apiKey) return group;
+  return group.apis?.[apiKey];
+}
+
+/**
+ * 用 DB 值覆盖目标节点的运行时字段
+ *
+ * ── 与旧实现的关键差异 ──
+ * 旧实现是无条件 `target[field] = source[field]`：DB 里写什么就是什么，
+ * 一句 SQL 就能把某组的角色门槛清空。现在分两步：
+ *   1. 先对照**代码基线**算方向；
+ *   2. 只有"放宽"才要求签名信封（由面板在二次认证后签发），验不过就整节点跳过。
+ *
+ * 跳过而不是部分应用是刻意的：一个节点里若同时放宽了 allowRoles 又收紧了
+ * requireLogin，部分应用会造出一个两边都不成立的中间态，比不应用更难解释。
+ *
+ * @param {object} target 内存节点（会被就地修改）
+ * @param {object} source DB 中的节点
+ * @param {string} path 用于日志与签名的路径（`system/group/apiKey`）
+ * @param {object} [baselineNode] 代码基线节点
+ */
+function applyRuntimeFields(target, source, path, baselineNode) {
+  if (!target || !source || typeof source !== 'object') return;
+
+  // 无基线时以当前值作锚：只会在"该系统尚未被 register 过"的异常路径出现，
+  // 方向判定退化为相对当前值，仍然只会多要求认证、不会少要求。
+  const diff = diffNode(baselineNode || target, source);
+
+  if (diff.direction === 'relax') {
+    const verdict = verifyRelaxation(path, source);
+    if (!verdict.ok) {
+      log.warn(`🔒 [Guard Config] ${C.yellow}已忽略未授权的放宽配置 ${path}：${verdict.reason}${C.reset}`);
+      logAuditEvent({
+        type: 'PERMISSION_CHANGE',
+        userId: null,
+        ip: null,
+        appId: 'guard',
+        details: {
+          action: 'relaxation_rejected',
+          path,
+          code: verdict.code,
+          reason: verdict.reason,
+          changes: diff.changes,
+          timestamp: new Date().toISOString()
+        }
+      }).catch(() => {});
+      return;
+    }
+  }
+
+  for (const field of RUNTIME_FIELDS) {
+    if (source[field] !== undefined) target[field] = source[field];
+  }
+
+  // 签名信封必须随节点一起留下来：saveWithTimeout 会把内存写回 DB，
+  // 若这里不带上 _relaxation，下次启动时这条"已授权的放宽"会被判成未授权而失效。
+  if (source._relaxation !== undefined) target._relaxation = source._relaxation;
+
+  target.updatedAt = new Date().toISOString();
+}
 
 /** 每次写入前备份的旧版本快照，用于写入失败时回滚 */
 let _previousSnapshot = null;
@@ -136,23 +231,6 @@ function validateConfigs(configs) {
 
 /** 异步写入超时时间（毫秒） */
 const SAVE_TIMEOUT = 10000;
-
-/**
- * 用 DB 值覆盖目标对象的运行时字段
- * @param {object} target - 内存中的配置对象
- * @param {object} source - DB 中的配置对象
- */
-function overrideRuntimeFields(target, source) {
-  for (const field of RUNTIME_FIELDS) {
-    if (source[field] !== undefined) {
-      target[field] = source[field];
-    }
-  }
-  // 更新内存中的 updatedAt 时间戳，但注意这里不触发 triggerSave
-  // 因此内存和 DB 的 updatedAt 可能不一致。updatedAt 仅用于展示，
-  // 守卫逻辑不依赖该字段，因此不触发 DB 写入是合理的性能优化
-  target.updatedAt = new Date().toISOString();
-}
 
 /**
  * 获取指定层级的配置
@@ -207,18 +285,27 @@ function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null, operat
 
   const updatePatch = { ...patch, updatedAt: new Date().toISOString() };
 
+  // `_relaxation: null` = 清除旧签名信封。
+  // 收紧操作必须用它把之前放宽留下的签名一起带走：签名覆盖的是**字段值**，
+  // 若残留旧信封而字段已被收紧，下次启动验签必然失配 —— 方向是收紧时虽不校验，
+  // 但节点上留着一份对不上的签名会让审计与排查非常困惑，也会在再次放宽时误导。
+  const clearRelaxation = updatePatch._relaxation === null;
+  if (clearRelaxation) delete updatePatch._relaxation;
+
+  let node;
   if (apiKey && groupKey) {
     const group = system.groups?.[groupKey];
-    const api = group?.apis?.[apiKey];
-    if (!api) return null;
-    Object.assign(api, updatePatch);
+    node = group?.apis?.[apiKey] || null;
+    if (!node) return null;
   } else if (groupKey) {
-    const group = system.groups?.[groupKey];
-    if (!group) return null;
-    Object.assign(group, updatePatch);
+    node = system.groups?.[groupKey] || null;
+    if (!node) return null;
   } else {
-    Object.assign(system, updatePatch);
+    node = system;
   }
+
+  Object.assign(node, updatePatch);
+  if (clearRelaxation) delete node._relaxation;
 
   triggerSave(systemKey);
 
@@ -337,6 +424,10 @@ function registerSystemMetadata(systemKey, metadata) {
     allowRoles: metadata.allowRoles || [],
     updatedAt: new Date().toISOString()
   });
+
+  // 记录代码基线：方向判定与验签都以它为锚（见 applyRuntimeFields）
+  if (!_codeBaseline[systemKey]) _codeBaseline[systemKey] = { groups: {} };
+  syncBaseline(_codeBaseline[systemKey], metadata);
 }
 
 /**
@@ -374,6 +465,11 @@ function registerGroupMetadata(systemKey, groupKey, metadata) {
     allowRoles: metadata.allowRoles || [],
     updatedAt: new Date().toISOString()
   });
+
+  if (!_codeBaseline[systemKey]) _codeBaseline[systemKey] = { groups: {} };
+  if (!_codeBaseline[systemKey].groups) _codeBaseline[systemKey].groups = {};
+  if (!_codeBaseline[systemKey].groups[groupKey]) _codeBaseline[systemKey].groups[groupKey] = { apis: {} };
+  syncBaseline(_codeBaseline[systemKey].groups[groupKey], metadata);
 }
 
 /**
@@ -444,6 +540,17 @@ function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
       updatedAt: new Date().toISOString()
     });
   }
+
+  // 基线记录的是**代码声明值**，与该 API 是否首次注册无关：
+  // 后续更新分支刻意不覆盖运行时字段（否则会重置运维配置），但方向判定
+  // 需要的是"代码原本要什么"，两者不是同一件事，不能混用。
+  if (!_codeBaseline[systemKey]) _codeBaseline[systemKey] = { groups: {} };
+  if (!_codeBaseline[systemKey].groups) _codeBaseline[systemKey].groups = {};
+  if (!_codeBaseline[systemKey].groups[groupKey]) _codeBaseline[systemKey].groups[groupKey] = { apis: {} };
+  const baselineGroup = _codeBaseline[systemKey].groups[groupKey];
+  if (!baselineGroup.apis) baselineGroup.apis = {};
+  if (!baselineGroup.apis[apiKey]) baselineGroup.apis[apiKey] = {};
+  syncBaseline(baselineGroup.apis[apiKey], metadata);
 }
 
 /**

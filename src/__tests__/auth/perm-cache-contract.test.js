@@ -109,10 +109,20 @@ describe('敏感操作回源校验契约（第 4 层）', () => {
   });
 
   test('freshPermission 不得进入 RUNTIME_FIELDS（否则运维改 DB 即可关掉第 4 层）', () => {
-    const body = stripComments(read('api/guard-config.js'));
+    // 单一来源已迁至 app/guard/services/direction.js（2026-11-07）：
+    // 方向判定与字段清单必须同源，否则"判定的字段"和"覆盖的字段"会各写一份。
+    const body = stripComments(read('app/guard/services/direction.js'));
     const m = body.match(/const RUNTIME_FIELDS\s*=\s*\[([^\]]*)\]/);
     expect(m).toBeTruthy();
     expect(m[1]).not.toContain('freshPermission');
+    // requirePermission 同理：它是 PBAC 的判据本身，一旦可写整套权限模型就退化成表单
+    expect(m[1]).not.toContain('requirePermission');
+  });
+
+  test('RUNTIME_FIELDS 只有一处定义（防止两份清单漂移）', () => {
+    const guard = stripComments(read('api/guard-config.js'));
+    expect(guard).not.toMatch(/const RUNTIME_FIELDS\s*=/);
+    expect(guard).toMatch(/RUNTIME_FIELDS/);
   });
 
   test('freshPermission 必须被 registerApiMetadata 落进配置对象（否则守卫读不到）', () => {

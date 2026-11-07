@@ -231,3 +231,57 @@ Guard 配置持久化到**数据库** `guard_configs` 表（`src/app/guard/dao/g
 
 > ⚠️ `data/guard_config.json` 是迁移到数据库**之前**的本地文件方案，**已废弃** ——
 > 直接编辑它不会生效，服务也不会再读写该文件。
+
+### 运行时字段的变更方向（2026-11-07 起）
+
+可被运维调整的字段只有四个（`app/guard/services/direction.js` 的 `RUNTIME_FIELDS`）：
+`enabled`、`requireLogin`、`allowIps`、`allowRoles`。
+`requirePermission` / `freshPermission` 是**代码级授权声明**，面板与数据库都改不动 ——
+它们是 PBAC 的判据本身，一旦可写，权限模型就退化成表单。
+
+变更按方向区别对待：
+
+| 方向 | 例子 | 二次认证 | 签名信封 |
+|---|---|---|---|
+| 收紧 | 关模块、加角色、加 IP、`requireLogin: false → true` | 需要 | 不需要 |
+| 放宽 | 开模块、删角色、清空名单、`requireLogin: true → false` | 需要 | 需要 |
+| 无鉴权语义 | 只改 `description` | 不需要 | 不需要 |
+
+> 收紧同样要认证：把模块关掉、把角色踢出去，和越权放宽在结果上没有区别。
+> 签名信封只用于放宽 —— DB 里收紧越多只会越严，不需要额外授权。
+
+判定语义上有两个易错点：
+
+- `allowRoles: []` / `allowIps: []` 表示**不限制**，所以"清空"是放宽、"从空到有"是收紧；
+- 一次 patch 同时增删时按**放宽**处理，避免"夹带一个删除"绕过认证。
+
+### 二次认证与签名信封
+
+任何运行时字段变更都要先换一张 step-up 票据（`description` 除外）：
+
+```
+POST /api/firewall/v1/apiconfigs/stepup/challenge   { system, group, apiKey, patch, reason, method }
+POST /api/firewall/v1/apiconfigs/stepup/verify      { challengeId, code | password }
+PATCH /api/firewall/v1/apiconfigs/:system/:group    Header: X-Stepup-Token: <ticket>
+```
+
+**谁能改**：只有超级管理员（角色含 `superadmin`，或权限集含通配 `*`）能发起变更。
+`fw:config:write` 不够 —— 那个权限可以授给运维，而安全配置的变更权不该随运维角色扩散。
+若配置了 `GUARD_SUPERADMIN_EMAILS`（逗号分隔、大小写不敏感），账号在**库中绑定的邮箱**
+必须命中列表；未配置时退化为"超管账号自己的邮箱"。白名单比对用库里的值而不是会话快照，
+否则"换绑邮箱后旧会话仍通过"就能绕开。
+
+
+- `method` 支持 `email`（6 位验证码）与 `password`；**短信通道尚未接入**，传 `sms` 会被明确拒绝；
+- 票据 5 分钟有效、一次性、且绑定 `sha256(目标路径 + patch 运行时字段)` ——
+  换目标或换内容都会失效，一次授权只能用于它被批准的那次变更；
+- 放宽落地时节点会带上 `_relaxation`（含 `at/by/reason/sig`），签名覆盖该节点的全部运行时字段值。
+
+启动与跨实例同步合并 DB 时会验签：**签名不符或缺失的放宽整节点跳过并告警**。
+因此直接 `UPDATE guard_configs SET config = ...` 放宽权限**不会生效** ——
+这是刻意的：数据库不该成为绕过二次认证的旁路。
+确需应急时，用面板重新提交（走认证），签名会由服务端签发。
+
+> 签名密钥由 `APP_SECRET` 派生。轮换 `APP_SECRET` 会让存量放宽项验签失败、
+> 回落到代码基线（方向更严），启动日志会逐条列出被忽略的节点，重新授权即可。
+
