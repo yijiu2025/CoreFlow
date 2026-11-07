@@ -24,16 +24,19 @@ import cookie from '@fastify/cookie';
 
 import { APP_CONFIG } from '../config/app-config.js';
 import { PUBLIC_ROOT } from '../storage/index.js';
-import { createWsPreClose, DEFAULT_WS_SHUTDOWN_GRACE_MS } from '../websocket/preclose.js';
+import { createWsPreClose, resolveWsCloseCode, DEFAULT_WS_SHUTDOWN_GRACE_MS } from '../websocket/preclose.js';
 import { resolveTimeoutMs } from '../../utils/timeout.js';
 import { buildHelmetOptions, buildCorsOptions } from './security-options.js';
 
 /**
- * WebSocket 关闭宽限期（毫秒）：广播关闭帧后，等这么久再强制断开残留连接
+ * WebSocket 关闭参数（持久化在 `src/config/app_config.js` 的 websocket 段）
  *
- * 只在模块加载时读一次（与 HTTP 超时同源策略：调优项不支持运行时热改）。
+ * 只在模块加载时读一次（与 HTTP 超时同源策略：调优项不支持运行时热改）：
+ *   - `shutdownGraceMs`：广播关闭帧后等多久再强断（默认 1000ms）
+ *   - `closeCode`：关闭帧状态码（默认 1001 = going away；1005/1006/1015 等禁发码会被回退）
  */
 const WS_SHUTDOWN_GRACE_MS = resolveTimeoutMs(APP_CONFIG.websocket?.shutdownGraceMs, DEFAULT_WS_SHUTDOWN_GRACE_MS);
+const WS_CLOSE_CODE = resolveWsCloseCode(APP_CONFIG.websocket?.closeCode);
 
 /**
  * 注册基础插件（安全头 / 跨域 / 上传 / 静态 / WebSocket / Cookie）
@@ -84,9 +87,12 @@ async function registerBasePlugins(app, { isProduction = false, corsOrigins = []
   });
 
   // 自定义 preClose：广播关闭帧 + 宽限期后强制断开，避免半开 WS 连接拖住 app.close()
-  await app.register(websocket, { preClose: createWsPreClose(WS_SHUTDOWN_GRACE_MS) });
+  // 两个参数都来自 app_config（settings 缺失时用 preclose.js 的保底值）
+  await app.register(websocket, {
+    preClose: createWsPreClose({ graceMs: WS_SHUTDOWN_GRACE_MS, closeCode: WS_CLOSE_CODE })
+  });
 
   await app.register(cookie);
 }
 
-export { WS_SHUTDOWN_GRACE_MS, registerBasePlugins };
+export { WS_SHUTDOWN_GRACE_MS, WS_CLOSE_CODE, registerBasePlugins };

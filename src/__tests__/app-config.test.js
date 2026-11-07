@@ -67,3 +67,26 @@ describe('app_config · 值域校验', () => {
     expect(validateAppConfig({ guard: { syncIntervalMs: 0 }, http: { keepAliveTimeoutMs: 0 } })).toEqual([]);
   });
 });
+
+describe('app_config · websocket 关闭参数', () => {
+  it('closeCode 是已知配置项（不会报"疑似拼写错误"）', () => {
+    expect(validateAppConfig({ websocket: { closeCode: 4001 } })).toEqual([]);
+    expect(validateAppConfig({ websocket: { shutdownGraceMs: 500, closeCode: 1000 } })).toEqual([]);
+  });
+
+  it('closeCode 越界 → 告警', () => {
+    expect(validateAppConfig({ websocket: { closeCode: 5000 } }).some(w => w.includes('websocket.closeCode'))).toBe(
+      true
+    );
+    expect(validateAppConfig({ websocket: { closeCode: 999 } }).some(w => w.includes('websocket.closeCode'))).toBe(
+      true
+    );
+  });
+
+  it('🔴 协议禁发码 1005/1006/1015 落在区间内也必须告警（否则停机时客户端按协议错误断开）', () => {
+    for (const code of [1005, 1006, 1015]) {
+      const warnings = validateAppConfig({ websocket: { closeCode: code } });
+      expect(warnings.some(w => w.includes('websocket.closeCode') && w.includes('不可用'))).toBe(true);
+    }
+  });
+});

@@ -26,25 +26,83 @@
  * @since 2026-09-19
  */
 
-/** 默认宽限期（毫秒）：广播关闭帧后等这么久，再强制断开残留连接 */
+/**
+ * 默认宽限期（毫秒）：广播关闭帧后等这么久，再强制断开残留连接
+ *
+ * ⚠️ 这是**保底值**（core 默认值归使用处）。部署要改请写
+ * `src/config/app_config.js` 的 `websocket.shutdownGraceMs`，
+ * 由 `framework/http/plugins.js` 解析后传进来 —— 本文件不读环境变量、不读配置。
+ */
 const DEFAULT_WS_SHUTDOWN_GRACE_MS = 1_000;
 
-/** WebSocket 正常关闭码：1001 = going away（服务端即将下线） */
+/** WebSocket 正常关闭码：1001 = going away（服务端即将下线）。同样是保底值，可被配置覆盖 */
 const WS_CLOSE_GOING_AWAY = 1001;
+
+/** 允许配置的关闭码区间：1000-2999 协议保留 / 3000-3999 库保留 / 4000-4999 应用自定义 */
+const WS_CLOSE_CODE_MIN = 1000;
+const WS_CLOSE_CODE_MAX = 4999;
+
+/**
+ * 协议**禁止发送**的保留码（只能由协议栈内部产生，主动发送会被客户端判为协议错误）
+ *   1005 = 未收到状态码、1006 = 连接异常断开、1015 = TLS 握手失败
+ */
+const WS_CLOSE_CODE_FORBIDDEN = [1005, 1006, 1015];
+
+/**
+ * 解析并校验可配置的关闭码
+ *
+ * 非法值（非整数 / 越界 / 协议禁发码）一律回退 1001，**绝不把非法码发出去**：
+ * 客户端收到 1005/1006 这类码会直接按协议错误断开，表现为"停机时前端报错"，
+ * 而服务端日志里只有一条看不出原因的关闭记录。
+ *
+ * @param {number|string|undefined|null} raw - 配置值（`websocket.closeCode`）
+ * @returns {number} 合法的关闭码；缺省或非法时返回 1001
+ */
+function resolveWsCloseCode(raw) {
+  if (raw === undefined || raw === null || raw === '') return WS_CLOSE_GOING_AWAY;
+
+  const code = Number(raw);
+  if (!Number.isInteger(code)) return WS_CLOSE_GOING_AWAY;
+  if (code < WS_CLOSE_CODE_MIN || code > WS_CLOSE_CODE_MAX) return WS_CLOSE_GOING_AWAY;
+  if (WS_CLOSE_CODE_FORBIDDEN.includes(code)) return WS_CLOSE_GOING_AWAY;
+
+  return code;
+}
+
+/**
+ * 归一化 preClose 选项
+ *
+ * 兼容两种调用形态：
+ *   - `createWsPreClose(150)`：老签名（只给宽限期），测试与历史调用方仍可用
+ *   - `createWsPreClose({ graceMs, closeCode })`：显式形态（推荐）
+ *
+ * @param {number|object|undefined} options - 原始选项
+ * @returns {{graceMs?: number, closeCode?: number}} 归一化结果
+ */
+function normalizePreCloseOptions(options) {
+  if (typeof options === 'number') return { graceMs: options };
+  if (!options || typeof options !== 'object') return {};
+  return options;
+}
 
 /**
  * 构造 WebSocket preClose 钩子
  *
  * 策略：
- * ① 广播关闭帧（1001 = going away）—— 规范客户端会立即回帧并断开；
+ * ① 广播关闭帧（默认 1001 = going away，可由 `websocket.closeCode` 覆盖）——
+ *    规范客户端会立即回帧并断开；
  * ② 宽限期后对残留客户端 `terminate()` —— 强制 destroy 底层 socket，
  *    使 Fastify 随后调用的 `server.close()` 得以完成。
  *
- * @param {number} [graceMs] - 宽限期毫秒数，默认 1000
+ * @param {number|object} [options] - 宽限期毫秒数（老签名），或 `{ graceMs, closeCode }`
+ * @param {number} [options.graceMs] - 宽限期毫秒数，默认 1000
+ * @param {number} [options.closeCode] - 关闭帧状态码，默认 1001（非法值回退 1001）
  * @returns {(done: () => void) => void} preClose 钩子（`this` 为 Fastify 实例）
  */
-function createWsPreClose(graceMs = DEFAULT_WS_SHUTDOWN_GRACE_MS) {
+function createWsPreClose(options = DEFAULT_WS_SHUTDOWN_GRACE_MS) {
+  const { graceMs, closeCode } = normalizePreCloseOptions(options);
   const grace = Number.isFinite(graceMs) && graceMs >= 0 ? graceMs : DEFAULT_WS_SHUTDOWN_GRACE_MS;
+  const code = resolveWsCloseCode(closeCode);
 
   return function wsPreClose(done) {
     const wss = this.websocketServer;
@@ -56,7 +114,7 @@ function createWsPreClose(graceMs = DEFAULT_WS_SHUTDOWN_GRACE_MS) {
     // ① 优雅：广播关闭帧，规范客户端收到后会立即回帧并断开
     for (const client of wss.clients) {
       try {
-        client.close(WS_CLOSE_GOING_AWAY, 'server shutting down');
+        client.close(code, 'server shutting down');
       } catch {
         // 该客户端在本次遍历前已断开，忽略
       }
@@ -83,4 +141,12 @@ function createWsPreClose(graceMs = DEFAULT_WS_SHUTDOWN_GRACE_MS) {
   };
 }
 
-export { createWsPreClose, DEFAULT_WS_SHUTDOWN_GRACE_MS, WS_CLOSE_GOING_AWAY };
+export {
+  createWsPreClose,
+  resolveWsCloseCode,
+  DEFAULT_WS_SHUTDOWN_GRACE_MS,
+  WS_CLOSE_GOING_AWAY,
+  WS_CLOSE_CODE_MIN,
+  WS_CLOSE_CODE_MAX,
+  WS_CLOSE_CODE_FORBIDDEN
+};

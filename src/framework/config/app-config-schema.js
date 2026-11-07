@@ -5,6 +5,7 @@
  * 本文件只负责校验**用户写的覆盖**：
  *   - 未知配置段 / 配置项 → 疑似拼写错误（如漏写 `Ms` 后缀会静默失效）
  *   - 值域越界 / 非整数 → 提示已回退默认
+ *   - 区间内但语义不可用（WebSocket 禁发关闭码等）→ 单列规则提示已回退
  *
  * 只告警不阻断：调优覆盖不该有让服务起不来的能力。
  *
@@ -12,21 +13,32 @@
  * @since 2026-11-03
  */
 
-/** 每个数值项的合法区间（闭区间，毫秒/次） */
+/** 每个数值项的合法区间（闭区间，毫秒/次/关闭码） */
 const NUMBER_RULES = [
   ['http.keepAliveTimeoutMs', 0, 3_600_000],
   ['http.requestTimeoutMs', 0, 3_600_000],
   ['websocket.shutdownGraceMs', 0, 600_000],
+  ['websocket.closeCode', 1000, 4999],
   ['guard.syncIntervalMs', 0, 3_600_000],
   ['monitor.slowRequestThresholdMs', 0, 3_600_000],
   ['passwordHash.scryptMaxConcurrency', 1, 1024],
   ['passwordHash.bcryptMaxConcurrency', 1, 1024]
 ];
 
+/**
+ * 落在合法区间内、但语义上**不可用**的取值（区间规则表达不了，单列）
+ *
+ * WebSocket 关闭码 1005 / 1006 / 1015 只能由协议栈内部产生，主动发送会被客户端
+ * 判为协议错误 —— 表现为"停机时前端报错，服务端日志看不出原因"。
+ */
+const EXCLUDED_VALUES = [
+  ['websocket.closeCode', [1005, 1006, 1015], '协议禁止发送的保留码（无状态 / 异常断开 / TLS 失败）']
+];
+
 /** 合法配置段 → 合法配置项（用于拼写错误诊断） */
 const KNOWN_SECTIONS = {
   http: ['keepAliveTimeoutMs', 'requestTimeoutMs'],
-  websocket: ['shutdownGraceMs'],
+  websocket: ['shutdownGraceMs', 'closeCode'],
   guard: ['syncIntervalMs'],
   monitor: ['slowRequestThresholdMs'],
   passwordHash: ['scryptMaxConcurrency', 'bcryptMaxConcurrency']
@@ -64,7 +76,15 @@ function validateAppConfig(config = {}) {
     }
   }
 
+  for (const [path, values, reason] of EXCLUDED_VALUES) {
+    const raw = get(path);
+    if (raw === undefined || raw === null || raw === '') continue;
+    if (values.includes(Number(raw))) {
+      warnings.push(`"${path}" = ${JSON.stringify(raw)} 不可用（${reason}），已回退默认值`);
+    }
+  }
+
   return warnings;
 }
 
-export { validateAppConfig, NUMBER_RULES, KNOWN_SECTIONS };
+export { validateAppConfig, NUMBER_RULES, EXCLUDED_VALUES, KNOWN_SECTIONS };

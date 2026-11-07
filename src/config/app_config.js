@@ -9,8 +9,11 @@
  *     （Nginx 默认 75s、ALB 60s）
  *   http.requestTimeoutMs             默认 300000  ← app.js
  *     单请求（含请求体）总时长上限，封堵慢速发 body（RUDY）；给 200MB 上传留余量
- *   websocket.shutdownGraceMs         默认 1000    ← app.js
+ *   websocket.shutdownGraceMs         默认 1000    ← framework/http/plugins.js
  *     停机宽限期：广播关闭帧后等这么久再强断残留连接
+ *   websocket.closeCode               默认 1001    ← framework/websocket/preclose.js
+ *     停机时广播的关闭帧状态码（1001 = going away）。1005/1006/1015 等协议禁发码会被回退成 1001；
+ *     一般不需要改 —— 只有客户端按特定码做重连/提示时才配置
  *   guard.syncIntervalMs              默认 30000   ← api/guard-config.js
  *     守卫配置跨实例同步轮询；单实例部署设 0 关闭
  *   monitor.slowRequestThresholdMs    默认 2000    ← framework/loader/registry/01-monitor.js

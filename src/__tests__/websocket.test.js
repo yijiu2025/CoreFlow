@@ -57,11 +57,12 @@ function withDeadline(promise, ms) {
  *
  * @param {object} [options] - 选项
  * @param {boolean} [options.usePreClose] - 是否挂载被测的 preClose（false 用于反例对照）
+ * @param {number} [options.closeCode] - 关闭帧状态码（模拟 websocket.closeCode 配置）
  * @returns {Promise<{app: object, port: number}>} 应用与监听端口
  */
-async function startWsApp({ usePreClose = true } = {}) {
+async function startWsApp({ usePreClose = true, closeCode } = {}) {
   const app = Fastify({ logger: false, forceCloseConnections: true });
-  await app.register(websocket, usePreClose ? { preClose: createWsPreClose(GRACE_MS) } : {});
+  await app.register(websocket, usePreClose ? { preClose: createWsPreClose({ graceMs: GRACE_MS, closeCode }) } : {});
 
   app.get('/ws', { websocket: true }, conn => {
     const client = conn.socket || conn;
@@ -150,6 +151,17 @@ describe('WebSocket 优雅关闭', () => {
     await new Promise(resolve => setTimeout(resolve, 100));
 
     expect(closeInfo().code).toBe(WS_CLOSE_GOING_AWAY);
+    client.terminate();
+  });
+
+  it('关闭码可配置：配置 websocket.closeCode 后客户端收到自定义码（真实链路）', async () => {
+    const { app, port } = await startWsApp({ closeCode: 4001 });
+    const { client, closeInfo } = await connectWellBehaved(port);
+
+    await app.close();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(closeInfo().code).toBe(4001);
     client.terminate();
   });
 

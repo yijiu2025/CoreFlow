@@ -3,8 +3,8 @@
  *
  * `src/config/app_config.js` 是可选覆盖层：文件缺失 / 导出缺失 / 语法错误 →
  * 本模块导出的 APP_CONFIG 为 `{}`，各消费方用**自己写在使用处的保底值**继续跑：
- *   - app.js            http.keepAliveTimeoutMs → 72_000；requestTimeoutMs → 300_000；
- *                       websocket.shutdownGraceMs → 1_000
+ *   - plugins.js        http.keepAliveTimeoutMs → 72_000；requestTimeoutMs → 300_000；
+ *                       websocket.shutdownGraceMs → 1_000；websocket.closeCode → 1001
  *   - guard-config.js   guard.syncIntervalMs → 30_000
  *   - 01-monitor.js     monitor.slowRequestThresholdMs → 2_000
  *   - password-hash.js  passwordHash.scryptMaxConcurrency → 16；bcrypt… → 4
