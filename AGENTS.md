@@ -16,6 +16,8 @@ npm run canvas:scan  # 重扫 src/ 生成函数调用图数据 → docs/public/c
 
 单个测试：`node --experimental-vm-modules npx jest --testPathPattern <pattern>`
 
+其余工具（CLI、发版、跨进程验收、压测、一次性迁移）逐个说明见 [`scripts/README.md`](scripts/README.md)。
+
 ## Git 提交与发版
 
 提交并推送后，**按情况顺手发布，不必每次询问**。三条通道（git tag / GitHub Release / npm）的判断
@@ -32,23 +34,23 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 
 **判据**（按本次推送包含的提交类型）
 
-| 提交类型                                          | 是否发布 | 版本递增（以最新 tag 为基线） |
-| ------------------------------------------------- | -------- | ----------------------------- |
+| 提交类型                                            | 是否发布 | 版本递增（以最新 tag 为基线） |
+| --------------------------------------------------- | -------- | ----------------------------- |
 | 破坏性变更（`!:` 或 footer 形式的 BREAKING CHANGE） | 发       | major                         |
-| 含 `feat`                                         | 发       | minor：`v2.5.0` → `v2.6.0`    |
-| 仅 `fix` / `perf`                                 | 发       | patch：`v2.5.0` → `v2.5.1`    |
-| 仅 `chore` `docs` `test` `style` `ci` `refactor`  | **不发** | —                             |
+| 含 `feat`                                           | 发       | minor：`v2.5.0` → `v2.6.0`    |
+| 仅 `fix` / `perf`                                   | 发       | patch：`v2.5.0` → `v2.5.1`    |
+| 仅 `chore` `docs` `test` `style` `ci` `refactor`    | **不发** | —                             |
 
 > 破坏性变更**只认 footer 形式**（行首且带冒号）。不可退化成子串匹配 —— commit 正文里"提到"
 > 这个关键词（例如写本条规则自身）会让 minor 被误升成 major，这在真实仓库上发生过。
 
 **三条通道各自按情况发布**
 
-| 通道               | 何时发                              | 要点                                                                                     |
-| ------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------- |
-| git tag            | 判定发版即打                        | annotated tag，随 `main` 一起推                                                          |
-| GitHub Release     | 与 tag 一一对应                     | 调 REST API 创建，说明按提交类型分中文组自动生成。凭据取自 **git credential manager**，本机无 `gh` CLI 也能用；**tag 已推而 Release 缺失时，重跑脚本会自动补建** |
-| npm（`packages/log`） | 该包本地 `version` 已 bump 到高于线上 | 独立嵌套仓库，走 `npm publish --access public`                                           |
+| 通道                  | 何时发                                | 要点                                                                                                                                                             |
+| --------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| git tag               | 判定发版即打                          | annotated tag，随 `main` 一起推                                                                                                                                  |
+| GitHub Release        | 与 tag 一一对应                       | 调 REST API 创建，说明按提交类型分中文组自动生成。凭据取自 **git credential manager**，本机无 `gh` CLI 也能用；**tag 已推而 Release 缺失时，重跑脚本会自动补建** |
+| npm（`packages/log`） | 该包本地 `version` 已 bump 到高于线上 | 独立嵌套仓库，走 `npm publish --access public`                                                                                                                   |
 
 **几条边界**
 
@@ -67,11 +69,11 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 
 规则落在**三层配置**，改一处必须同步另外两处，否则会出现「编辑器写 CRLF、prettier 改回 LF」的来回抖动：
 
-| 层 | 文件 | 作用 |
-| --- | --- | --- |
-| 仓库（权威） | `.gitattributes` | `* text=auto eol=lf`；cmd/bat 例外；二进制不转换 |
-| 编辑器 | `.editorconfig` | 新建/保存时写 LF；`*.md` 保留行尾双空格（硬换行语法） |
-| 格式化 | `.prettierrc.json` | `"endOfLine": "lf"`（**不能写 `auto`**，`auto` 等于不设防） |
+| 层           | 文件               | 作用                                                        |
+| ------------ | ------------------ | ----------------------------------------------------------- |
+| 仓库（权威） | `.gitattributes`   | `* text=auto eol=lf`；cmd/bat 例外；二进制不转换            |
+| 编辑器       | `.editorconfig`    | 新建/保存时写 LF；`*.md` 保留行尾双空格（硬换行语法）       |
+| 格式化       | `.prettierrc.json` | `"endOfLine": "lf"`（**不能写 `auto`**，`auto` 等于不设防） |
 
 排查命令（判据是**索引**，不是工作区表象）：
 
@@ -96,12 +98,12 @@ git config core.autocrlf false           # 本仓：检出时不再转 CRLF
 
 ## 运行期目录（都在仓库根，`src/` 只放代码）
 
-| 目录 | 用途 | 谁写 |
-| --- | --- | --- |
-| `data/` | 运行期 JSON 状态：`*_config.json` 配置热改、`traffic_stats.json` 流量统计 | `framework/config/runtime.js`、`framework/ingress/firewall/config/persisted.js`、`app/firewall/data/store.js`、`framework/lifecycle/scheduler/index.js` |
-| `logs/` | 滚动日志 | 日志模块 |
-| `public/<app>/…` | 公开静态资源 | 业务上传（见下节） |
-| `storage/<app>/…` | 私有文件 | 业务上传（见下节） |
+| 目录              | 用途                                                                      | 谁写                                                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data/`           | 运行期 JSON 状态：`*_config.json` 配置热改、`traffic_stats.json` 流量统计 | `framework/config/runtime.js`、`framework/ingress/firewall/config/persisted.js`、`app/firewall/data/store.js`、`framework/lifecycle/scheduler/index.js` |
+| `logs/`           | 滚动日志                                                                  | 日志模块                                                                                                                                                |
+| `public/<app>/…`  | 公开静态资源                                                              | 业务上传（见下节）                                                                                                                                      |
+| `storage/<app>/…` | 私有文件                                                                  | 业务上传（见下节）                                                                                                                                      |
 
 - 路径的**唯一来源**：`src/framework/config/paths.js`（`REPO_ROOT` / `DATA_ROOT` / `dataFile()` / `ensureDataDir()`）
   与 `src/framework/persistence/storage/index.js`（`PUBLIC_ROOT` / `PRIVATE_ROOT` / `appDir` / `resolveFile` / `publicUrl` / `publicUrlToPath` / `privateKey`）。
@@ -113,9 +115,9 @@ git config core.autocrlf false           # 本仓：检出时不再转 CRLF
 
 ## 文件存储（公开 / 私有两套根，别混）
 
-| 根 | 用途 | 访问方式 |
-| --- | --- | --- |
-| `public/<app>/…` | 公开资源（作品图 / 头像 / logo / 字体） | `@fastify/static`（prefix `/`）直出：`GET /<app>/<file>` |
+| 根                            | 用途                                          | 访问方式                                                    |
+| ----------------------------- | --------------------------------------------- | ----------------------------------------------------------- |
+| `public/<app>/…`              | 公开资源（作品图 / 头像 / logo / 字体）       | `@fastify/static`（prefix `/`）直出：`GET /<app>/<file>`    |
 | `storage/<app>/u/<ownerId>/…` | **私有**文件（合同 / 导出 / 证件 / 付费内容） | 只能经 `GET /api/files/v1/:app/u/<ownerId>/<file>` 鉴权下发 |
 
 - **后端只提供 API，不托管前端产物**：`firewall/`、`admin/`、`oauth21/` 各自 `vite build` 出 `dist/`，
@@ -143,19 +145,19 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/f
 > 此前的版本遗漏了 `01-monitor`、`07-keys`，并把已合并的 `09-pbac` / `10-seed-clients` / `11-apps`
 > 当成三个独立步骤 —— 请勿再按旧表理解启动顺序。
 
-| 顺序 | 文件            | 职责                                                                   |
-| ---- | --------------- | ---------------------------------------------------------------------- |
-| 00   | `00-globals.js` | 装饰 `reply.result`（success/fail/unauth/forbidden）                   |
-| 01   | `01-monitor.js` | 请求耗时记录 + `X-Response-Time` 响应头 + 慢请求告警                    |
-| 02   | `02-redis.js`   | Redis 连接 + 健康监控，失败注入 `null`                                 |
-| 03   | `03-db.js`      | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出                  |
-| 04   | `04-auth.js`    | Session 验证 + ALS 初始化（`src/framework/security/auth/`）                     |
-| 05   | `05-firewall.js`| 五层拦截管道（限频/封禁/挑战/Bot/地理围栏）—— ⚠️ **序号是功能性的，不可挪** |
-| 06   | `06-models.js`  | 自动加载 `src/models/`，按命名空间注册到 `app.db`（实现住 `framework/persistence/db/models.js`） |
-| 07   | `07-keys.js`    | 密钥初始化（补齐默认密钥对，依赖模型已加载）                            |
-| 08   | `08-api.js`     | 自动加载 `src/api/` 路由（读 `system.json`）                           |
-| 09   | `09-notice.js`  | 通知配置种子数据（SMTP）                                               |
-| 10   | `10-apps.js`    | 扫描 `src/app/` 加载应用权限和配置（**合并原 09-pbac + 10-seed-clients + 11-apps**） |
+| 顺序 | 文件             | 职责                                                                                             |
+| ---- | ---------------- | ------------------------------------------------------------------------------------------------ |
+| 00   | `00-globals.js`  | 装饰 `reply.result`（success/fail/unauth/forbidden）                                             |
+| 01   | `01-monitor.js`  | 请求耗时记录 + `X-Response-Time` 响应头 + 慢请求告警                                             |
+| 02   | `02-redis.js`    | Redis 连接 + 健康监控，失败注入 `null`                                                           |
+| 03   | `03-db.js`       | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出                                            |
+| 04   | `04-auth.js`     | Session 验证 + ALS 初始化（`src/framework/security/auth/`）                                      |
+| 05   | `05-firewall.js` | 五层拦截管道（限频/封禁/挑战/Bot/地理围栏）—— ⚠️ **序号是功能性的，不可挪**                      |
+| 06   | `06-models.js`   | 自动加载 `src/models/`，按命名空间注册到 `app.db`（实现住 `framework/persistence/db/models.js`） |
+| 07   | `07-keys.js`     | 密钥初始化（补齐默认密钥对，依赖模型已加载）                                                     |
+| 08   | `08-api.js`      | 自动加载 `src/api/` 路由（读 `system.json`）                                                     |
+| 09   | `09-notice.js`   | 通知配置种子数据（SMTP）                                                                         |
+| 10   | `10-apps.js`     | 扫描 `src/app/` 加载应用权限和配置（**合并原 09-pbac + 10-seed-clients + 11-apps**）             |
 
 每个 loader 导出默认函数接收 `app` 实例，错误被捕获并记录，不阻塞其他模块。
 
@@ -342,14 +344,14 @@ src/
 分组只表达**职责归属**，不改变依赖方向：仍然是「上层 → 下层」单向，`log` / `config`
 是被依赖最多的两层（framework 内部跨模块 import 里 `log` 出现 26 次、`config` 12 次）。
 
-| 分组          | 成员                                | 归类判据                                                       |
-| ------------- | ----------------------------------- | -------------------------------------------------------------- |
-| `config/`     | config, `paths.js`                  | 只产出"值"，不持有连接、不参与请求                              |
-| `persistence/`| db, redis, storage                  | 持有外部连接或磁盘布局                                          |
-| `security/`   | auth, verify, jwt, keys, crypto     | 认证 / 授权 / 密钥 / 人机校验                                    |
-| `ingress/`    | http, websocket, firewall           | 决定"端口如何被访问"：插件装配、协议边界、请求前置管道            |
-| `lifecycle/`  | loader, startup, scheduler          | 只在启动期或后台跑，不参与单次请求                              |
-| `support/`    | log, cli, notice                    | 横切支撑（日志 / CLI / 出站邮件），可脱离 Fastify 独立驱动        |
+| 分组           | 成员                            | 归类判据                                                   |
+| -------------- | ------------------------------- | ---------------------------------------------------------- |
+| `config/`      | config, `paths.js`              | 只产出"值"，不持有连接、不参与请求                         |
+| `persistence/` | db, redis, storage              | 持有外部连接或磁盘布局                                     |
+| `security/`    | auth, verify, jwt, keys, crypto | 认证 / 授权 / 密钥 / 人机校验                              |
+| `ingress/`     | http, websocket, firewall       | 决定"端口如何被访问"：插件装配、协议边界、请求前置管道     |
+| `lifecycle/`   | loader, startup, scheduler      | 只在启动期或后台跑，不参与单次请求                         |
+| `support/`     | log, cli, notice                | 横切支撑（日志 / CLI / 出站邮件），可脱离 Fastify 独立驱动 |
 
 > `websocket/` 只有 `preclose.js` —— 它不实现 WS，只负责"半开连接不拖住 `app.close()`"；
 > 真正的 `@fastify/websocket` 注册在 `ingress/http/plugins.js` 里。
@@ -358,7 +360,6 @@ src/
 > （2）文件里是否用 `import.meta.url` 自己算仓库根（`config/paths.js`、`persistence/db/models.js`、
 > `persistence/db/migrate.js`、`lifecycle/loader/registry/0{8,9,10}-*.js`、
 > `support/notice/services/email.js`）—— 这类锚点不会报错，只会静默指向错误目录。
-
 
 每个应用目录结构：`config.js`（元数据）+ `permission/`（权限/角色定义）+ 业务代码
 
@@ -442,7 +443,11 @@ const user = await cacheThrough('user:1001', () => db.findUser(1001), 600);
 // 分布式锁
 const lock = createLock('task:sync', { ttl: 30000 });
 if (await lock.tryAcquire()) {
-  try { await doWork(); } finally { await lock.release(); }
+  try {
+    await doWork();
+  } finally {
+    await lock.release();
+  }
 }
 
 // 消息队列
@@ -540,6 +545,7 @@ npm test -- --coverage      # 运行并生成覆盖率报告
 ### 测试改造范例
 
 `src/__tests__/api-routes.test.js`（2026-09-16 改造）
+
 - 改造前：18 项手写常量断言，零 import，毒丸实验（把被测文件覆写成 `throw`）下**全绿**
 - 改造后：17 项真实 Fastify + 真实插件 + `inject()` 驱动，毒丸实验下**必红**（已实测）
 
@@ -629,13 +635,13 @@ export default () => {};
 
 **默认导出的写法**（先把值命名 / 把函数具名化，再在末尾导出）：
 
-| 原写法                                     | 改为                                                                              |
-| ------------------------------------------ | --------------------------------------------------------------------------------- |
-| `export default (a, b) => {...}`           | `const defineX = (a, b) => {...};` + 末尾 `export default defineX;`                |
-| `export default new XxxDao()`              | `const xxxDao = new XxxDao();` + 末尾 `export default xxxDao;`                     |
-| `export default {...}`                     | `const xxxConfig = {...};` + 末尾 `export default xxxConfig;`                      |
-| `export default async function (fastify)`  | `async function registerXxxRoutes(fastify) {...}` + 末尾 `export default registerXxxRoutes;` |
-| `export default Foo;`                      | 原样移到文件末尾                                                                   |
+| 原写法                                    | 改为                                                                                         |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `export default (a, b) => {...}`          | `const defineX = (a, b) => {...};` + 末尾 `export default defineX;`                          |
+| `export default new XxxDao()`             | `const xxxDao = new XxxDao();` + 末尾 `export default xxxDao;`                               |
+| `export default {...}`                    | `const xxxConfig = {...};` + 末尾 `export default xxxConfig;`                                |
+| `export default async function (fastify)` | `async function registerXxxRoutes(fastify) {...}` + 末尾 `export default registerXxxRoutes;` |
+| `export default Foo;`                     | 原样移到文件末尾                                                                             |
 
 **re-export 同样属于导出**，也放末尾：`export * from 'x'`、`export { a } from 'y'`（含 `export { default as x } from './y.js'`）。
 
