@@ -67,10 +67,16 @@ const TokenDao = {
   /**
    * 吊销单个刷新令牌（明文哈希后定位）
    * @param {string} refreshToken 明文刷新令牌值
+   * @param {string} [clientId] 归属客户端（RFC 7009 §2.1：撤销请求方必须与令牌
+   *   签发方一致）。传入时只在 client_id 匹配的行上生效——其他客户端（哪怕拿到
+   *   token 值）无法吊销不属于自己的令牌；不传则不约束（内部轮转路径，调用方
+   *   已自行校验归属）。
    */
-  async revoke(refreshToken) {
+  async revoke(refreshToken, clientId) {
     const model = getModel();
-    await model.update({ revoked: true }, { where: { refresh_token: rtHash(refreshToken) } });
+    const where = { refresh_token: rtHash(refreshToken) };
+    if (clientId) where.client_id = clientId;
+    await model.update({ revoked: true }, { where });
   },
 
   /**

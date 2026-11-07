@@ -278,10 +278,15 @@ class TokenService {
 
   /**
    * 撤销令牌
+   *
+   * 🔴 客户端归属绑定（RFC 7009 §2.1）：只吊销**属于当前认证客户端**的令牌。
+   * 旧实现对任意 token 值无条件吊销 —— 任何注册客户端（public client 只需 client_id）
+   * 就能吊销别家客户端签发的 refresh token。
+   * 非 refresh_token hint 的令牌（无状态 JWT）本就不可吊销，保持原行为。
    */
   async revokeToken({ token, token_type_hint, client }) {
-    if (token_type_hint === 'refresh_token' || !token_type_hint) {
-      await TokenDao.revoke(token);
+    if ((token_type_hint === 'refresh_token' || !token_type_hint) && client?.client_id) {
+      await TokenDao.revoke(token, client.client_id);
     }
     return true;
   }
