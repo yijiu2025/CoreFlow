@@ -279,6 +279,21 @@ async function registerTaskRoutes(fastify) {
       const userId = request.state.user.userId;
       const { items } = request.body;
 
+      // 🔴 配额预检（2026-11-07 修复）：import 是 upsert 语义，只有"新建"的条目吃配额，
+      // 所以先算「这批里有多少条是本用户还没有的」。此前这条路径完全跳过配额校验 ——
+      // 一次导入 500 条即可绕开普通 2 / 会员 50 的上限。
+      const willCreate = await taskDao.countMissingClientIds(
+        userId,
+        items.map(i => i.client_id)
+      );
+      const before = await quotaOf(request.state.user);
+      if (before.used + willCreate > before.limit) {
+        return reply.result.tooManyRequests(
+          `导入后将超出任务上限（上限 ${before.limit} 个，已用 ${before.used} 个，本次新增 ${willCreate} 个）。` +
+            '请删除旧任务或升级会员后再导入。'
+        );
+      }
+
       const results = [];
       for (const item of items) {
         const { client_id, name, target, model, status, snapshot, sig } = item;

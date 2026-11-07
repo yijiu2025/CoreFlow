@@ -7,6 +7,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import AnalysisDao from '../../../app/posecraft/dao/analysis.dao.js';
+import { POSECRAFT_PERMISSIONS } from '../../../app/posecraft/permission/index.js';
 
 async function registerAnalysisRoutes(fastify) {
   registerGroupMetadata({
@@ -22,7 +23,11 @@ async function registerAnalysisRoutes(fastify) {
     method: 'POST',
     url: '/analysis',
     requireLogin: true,
-    permission: 'posecraft:analysis:use',
+    // 🔴 权限码必须来自注册表（POSECRAFT_PERMISSIONS）。原先写死的
+    // `posecraft:analysis:use` / `posecraft:analysis:view` 从未定义过，
+    // 除 superadmin 外所有角色都被 checkPermission 拒掉 → AI 分析三个接口对真实用户全 403。
+    // 语义：所有 posecraft 角色都持 analysis:basic，保存/查询都用它。
+    permission: POSECRAFT_PERMISSIONS.ANALYSIS.BASIC,
     handler: async (request, reply) => {
       const { image_url, analysis_type, result_data, processing_time } = request.body;
       const user = request.state.user;
@@ -47,7 +52,7 @@ async function registerAnalysisRoutes(fastify) {
     method: 'GET',
     url: '/analysis',
     requireLogin: true,
-    permission: 'posecraft:analysis:view',
+    permission: POSECRAFT_PERMISSIONS.ANALYSIS.BASIC,
     handler: async (request, reply) => {
       const { analysis_type, page = 1, pageSize = 20 } = request.query;
       const user = request.state.user;
@@ -69,7 +74,7 @@ async function registerAnalysisRoutes(fastify) {
     method: 'GET',
     url: '/analysis/stats',
     requireLogin: true,
-    permission: 'posecraft:analysis:view',
+    permission: POSECRAFT_PERMISSIONS.ANALYSIS.BASIC,
     handler: async (request, reply) => {
       const user = request.state.user;
 

@@ -52,6 +52,16 @@ const POSECRAFT_PERMISSIONS = createPermissionRegistry('posecraft', 'PoseCraft',
   // G. Banner 管理
   BANNER: {
     MANAGE: { code: 'posecraft:banner:manage', label: '管理首页 Banner', type: 'high_risk' }
+  },
+
+  // H. 频道管理（管理端 /posecraft/v1/channels）
+  //
+  // 2026-11-07 补：`api/admin/posecraft/v1/admin.js` 的 4 条频道路由一直在用
+  // `posecraft:channel:manage`，但**没有任何注册表定义过这个码** —— 除 superadmin（持 `*`）
+  // 外任何角色都过不了 `checkPermission`，等于频道管理只有超管能用。
+  // 补上定义并授予 posecraft_operator / posecraft_admin（运营本来就要配频道）。
+  CHANNEL: {
+    MANAGE: { code: 'posecraft:channel:manage', label: '管理频道（运营/管理员）', type: 'high_risk' }
   }
 });
 

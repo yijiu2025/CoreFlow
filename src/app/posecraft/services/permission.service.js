@@ -29,10 +29,13 @@ function checkDataPermission(item, user) {
   // 管理员/运营角色或持有审核/删单权限
   const userRoles = user.roles || [];
   const userPermissions = user.permissions?.allows || [];
+  // ⚠️ 不要写 `userRoles.includes('admin')`：全仓没有 code='admin' 的角色
+  // （2026-11-07 审计确认，admin 应用用的是 admin_admin/admin_operator/admin_viewer）。
+  // 那条判断恒为 false，属"看着像兜底、实际永不生效"的死分支。
   return (
     userRoles.includes('posecraft_admin') ||
     userRoles.includes('posecraft_operator') ||
-    userRoles.includes('admin') ||
+    userRoles.includes('superadmin') ||
     userPermissions.includes('posecraft:work:audit') ||
     userPermissions.includes('posecraft:work:delete_any')
   );

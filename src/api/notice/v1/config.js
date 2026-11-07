@@ -18,7 +18,7 @@ async function registerConfigRoutes(fastify, opts) {
     prefix: '/v1',
     enabled: true,
     requireLogin: true,
-    allowRoles: ['admin'] // 仅管理员可操作配置
+    allowRoles: ['superadmin', 'notice_admin'] // 仅管理员可操作配置
   });
 
   /**

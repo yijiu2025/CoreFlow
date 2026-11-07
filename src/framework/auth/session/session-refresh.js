@@ -107,6 +107,12 @@ async function refreshSessionCore(refreshToken, request, reply) {
     permFingerprint,
     ip: request?.ip || record.ip,
     deviceId: record.device_id,
+    // 🔴 基准指纹必须随会话一起写回（2026-11-07 修复）：
+    // 漏了这一个字段，刷新后的会话就没有基准 → risk-hooks 传 baselineFingerprint=undefined
+    // → detectSessionRisk 命中 `!baselineFingerprint` 分支返回 info/no_baseline →
+    // **设备指纹变更检测从此永久失效**（记住我用户每次 30 分钟空闲都会走这条路径重建会话）。
+    // 与 createSession（session.js:186）/ DB 恢复（session.js:578）同源：取本行 device_fingerprint。
+    deviceFingerprint: record.device_fingerprint || null,
     userAgent: request?.headers?.['user-agent'] || record.user_agent,
     familyId,
     loginAt: Math.floor(record.createdAt.getTime() / 1000),

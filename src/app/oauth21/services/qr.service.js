@@ -24,6 +24,38 @@ import { buildTokenResponse } from './cookies.service.js';
 /** 二维码有效期（秒） */
 const QR_TTL = 120;
 
+/** 一次性票据索引前缀（ticket → qrKey） */
+const TICKET_PREFIX = 'ticket:';
+
+/**
+ * 把「二维码公开票据」解析成真实 qrKey
+ *
+ * 安全模型（2026-11-07 修复）：
+ *   · `qrKey` = 兑换令牌的**唯一凭据**，只在 `GET /qr/generate` 的响应里交给 PC 端，
+ *     **不印在二维码上**；
+ *   · `ticket` = 印在二维码里的公开票据，只能用来 scan / confirm，换不到令牌。
+ *
+ * 为什么必须拆开：此前二维码里放的就是 qrKey，而 `GET /qr/status` 仅凭 qrKey 就签发
+ * 令牌 —— 二维码被投屏/截图/直播露出一次（120s 窗口），看到的人直接轮询即可
+ * 拿走该用户的 access_token / session_token，属登录劫持。
+ *
+ * 兼容性：字段名仍叫 `qrKey`（移动端前端从二维码 JSON 取 `qrKey` 传给 scan/confirm），
+ * 值换成 ticket；这两个端点经本函数解析回真实 qrKey，前端无需改动。
+ *
+ * @param {{get: Function}} qrStore 二维码存储
+ * @param {string} maybeTicket 客户端传来的值（可能是真 qrKey，也可能是 ticket）
+ * @returns {Promise<string|null>} 真实 qrKey；无效返回 null
+ */
+async function resolveQrKey(qrStore, maybeTicket) {
+  if (!maybeTicket || typeof maybeTicket !== 'string') return null;
+  // 真 qrKey 直接命中（PC 端轮询 / 老客户端）
+  const direct = await qrStore.get(maybeTicket);
+  if (direct) return maybeTicket;
+  // ticket → qrKey
+  const mapped = await qrStore.get(`${TICKET_PREFIX}${maybeTicket}`);
+  return typeof mapped === 'string' && mapped ? mapped : null;
+}
+
 /**
  * 计算设备指纹（IP + UA hash，前 32 hex）
  * scan 时记录移动端指纹，confirm 时校验同一移动端
@@ -43,6 +75,8 @@ function deviceFingerprint(request) {
  */
 async function generateQrCode(qrStore, ctx = {}) {
   const qrKey = uuidv4();
+  // 印在二维码上的公开票据：与 qrKey 分离，泄露也换不到令牌（见 resolveQrKey 的注释）
+  const ticket = crypto.randomBytes(16).toString('hex');
   const { clientId = '', scope = '', oidcNonce = '' } = ctx;
   await qrStore.set(
     qrKey,
@@ -57,10 +91,12 @@ async function generateQrCode(qrStore, ctx = {}) {
     },
     QR_TTL
   );
+  // ticket → qrKey 单向索引（ticket 本身不携带任何凭据语义）
+  await qrStore.set(`${TICKET_PREFIX}${ticket}`, qrKey, QR_TTL);
 
-  // 二维码内容 = 扫码 URL（含 client_id），移动端扫到能识别给哪个应用登录
-  // 注意：qrKey 是一次性凭证，放 URL query 里安全（需 120s 内 + 移动端 confirm 才生效）
-  const qrContent = JSON.stringify({ qrKey, clientId, scope });
+  // 二维码内容 = 扫码 URL（含 ticket），移动端扫到能识别给哪个应用登录
+  // ⚠️ 字段名沿用 `qrKey` 是为了不动移动端前端；值是 ticket，不是兑换令牌用的 qrKey。
+  const qrContent = JSON.stringify({ qrKey: ticket, clientId, scope });
   return { qrKey, expires_in: QR_TTL, qrContent };
 }
 
@@ -69,7 +105,11 @@ async function generateQrCode(qrStore, ctx = {}) {
  * 记录移动端设备指纹，confirm 时校验同一设备（防 scan 和 confirm 不同移动端）
  * @returns {Promise<boolean>} 成功返回 true，二维码无效返回 false
  */
-async function scanQrCode(qrStore, qrKey, request) {
+async function scanQrCode(qrStore, qrKeyOrTicket, request) {
+  // 入参可能是二维码里的 ticket（移动端），需先解析成真实 qrKey
+  const qrKey = await resolveQrKey(qrStore, qrKeyOrTicket);
+  if (!qrKey) return false;
+
   const data = await qrStore.get(qrKey);
 
   if (!data || data.status === 'CONFIRMED') {
@@ -96,9 +136,20 @@ async function scanQrCode(qrStore, qrKey, request) {
  * @param {object} request - Fastify request（校验设备指纹）
  * @returns {Promise<boolean>} 成功返回 true，二维码无效/设备不符返回 false
  */
-async function confirmQrCode(qrStore, qrKey, userId, request) {
+async function confirmQrCode(qrStore, qrKeyOrTicket, userId, request) {
+  const qrKey = await resolveQrKey(qrStore, qrKeyOrTicket);
+  if (!qrKey) {
+    return false;
+  }
+
   const data = await qrStore.get(qrKey);
   if (!data) {
+    return false;
+  }
+
+  // 必须先被扫码：否则「未扫码直接确认」会跳过下面的设备一致性校验
+  // （deviceFingerprint 还是 null，比对条件不成立），等于放弃 scan/confirm 同设备约束。
+  if (data.status !== 'SCANNED') {
     return false;
   }
 
@@ -127,6 +178,9 @@ async function confirmQrCode(qrStore, qrKey, userId, request) {
  * @returns {Promise<object>} 状态响应或令牌响应
  */
 async function getQrStatus(qrStore, { qrKey }, request, reply, fastify) {
+  // 🔴 这里**只认真实 qrKey，不做 ticket 解析**（与 scan/confirm 刻意不同）：
+  // 二维码里印的是 ticket，若这里也解析 ticket，等于把"看到二维码即可领令牌"的洞留着。
+  // 拿 ticket 来轮询 → get() 为空 → 返回 EXPIRED，拿不到任何令牌。
   const data = await qrStore.get(qrKey);
 
   if (!data) {
@@ -160,4 +214,4 @@ async function getQrStatus(qrStore, { qrKey }, request, reply, fastify) {
   return { code: 200, message: 'ok', data: { status: data.status } };
 }
 
-export { generateQrCode, scanQrCode, confirmQrCode, getQrStatus };
+export { generateQrCode, scanQrCode, confirmQrCode, getQrStatus, resolveQrKey };

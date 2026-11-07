@@ -39,12 +39,22 @@ class QuotaExceededError extends Error {
 
 /**
  * 该用户的任务上限
- * @param {{permissions?: string[]}} user request.state.user（含 permissions）
+ *
+ * 🔴 `user.permissions` 的形状是 `{ allows: string[], denies: string[] }`
+ * （见 framework/auth/permission/permission-loader.js），**不是数组**。
+ * 2026-11-07 前这里写的是 `Array.isArray(perms) && perms.includes(...)`，
+ * 恒为 false → `limitFor` 永远返回 FREE=2，会员的 50 名额从未生效
+ * （`retroweb_member` 角色确实带了 `retroweb:quota:member`，只是读不到）。
+ *
+ * 兼容两种形态：仍接受裸数组（老会话/测试替身），主路径读 `.allows`。
+ *
+ * @param {{permissions?: {allows?: string[]}|string[]}} user request.state.user（含 permissions）
  * @returns {number}
  */
 function limitFor(user) {
   const perms = user?.permissions;
-  if (Array.isArray(perms) && perms.includes(RETROWEB_PERMISSIONS.QUOTA.MEMBER)) {
+  const allows = Array.isArray(perms) ? perms : perms?.allows;
+  if (Array.isArray(allows) && allows.includes(RETROWEB_PERMISSIONS.QUOTA.MEMBER)) {
     return TASK_QUOTA.MEMBER;
   }
   return TASK_QUOTA.FREE;

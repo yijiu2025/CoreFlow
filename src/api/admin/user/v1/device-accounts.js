@@ -1,7 +1,7 @@
 /**
  * 设备账户关联查询接口（管理端）
  *
- * 落 /admin/user/v1/devices/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['admin']。
+ * 落 /admin/user/v1/devices/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['superadmin'/'admin_admin'/'admin_operator'(读接口另含 admin_viewer)]。
  *
  * GET /admin/user/v1/devices/accounts — 按 device_id 反查该设备登录过的账户列表
  *
@@ -24,7 +24,7 @@ async function registerDeviceAccountsRoutes(fastify) {
     prefix: '/user/v1',
     enabled: true,
     requireLogin: true,
-    allowRoles: ['admin']
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer']
   });
 
   /**
@@ -40,7 +40,7 @@ async function registerDeviceAccountsRoutes(fastify) {
     method: 'GET',
     url: '/devices/accounts',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer'],
     handler: async (request, reply) => {
       const { deviceId } = request.query;
       if (!deviceId) {

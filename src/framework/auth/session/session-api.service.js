@@ -270,7 +270,10 @@ async function updateRememberMeCookies(userId, uid, sessionId, accessCount, reme
  * @returns {Promise<{action:'switched', user:object} | {action:'need_password'}>}
  */
 async function switchAccount(request, reply, accountKey) {
-  if (!accountKey) return { action: 'need_password' };
+  // accountKey = uid 明文，必须是**字符串**：传对象/数字/数组会让
+  // accountKeyForUid 抛 INVALID_PARAM（→ 500，看起来像服务端故障）。
+  // 语义上这等同于"凭证不可用"，走 need_password 降级分支即可。
+  if (typeof accountKey !== 'string' || accountKey.length === 0) return { action: 'need_password' };
 
   // accountKey 即 uid，派生 HttpOnly 凭证 cookie 名 = HMAC(uid)
   const cookieName = accountKeyForUid(accountKey);

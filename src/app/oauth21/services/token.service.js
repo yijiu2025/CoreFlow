@@ -132,7 +132,17 @@ class TokenService {
     }
 
     // 5. 签发令牌
+    //
+    // 🔴 用户必须仍存在且未被禁用：授权码有 10 分钟窗口，用户在这段时间里被禁用/注销
+    // 时也必须拒绝 —— refresh 路径已校验 status，这里漏了就是一条"禁用后仍能换出新令牌"的通道。
+    // （DB 驱动可能返回字符串 '0'，故用 Number 归一，不用严格相等。）
     const user = await UserDao.findById(codeData.sub);
+    if (!user) {
+      throw new TokenError('invalid_grant', 'User not found');
+    }
+    if (Number(user.status) === 0) {
+      throw new TokenError('invalid_grant', 'Account disabled');
+    }
 
     const { token: accessToken, kid: accessKid } = await issueAccessToken({
       sub: codeData.sub,

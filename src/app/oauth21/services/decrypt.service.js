@@ -45,8 +45,15 @@ async function decryptLoginRequest(request) {
     }
 
     // Nonce 防重放（使用原子 checkAndMark 消除并发窗口）
+    //
+    // 🔴 先卡形态再进存储：nonce 会成为 Redis 键，无长度约束时可被匿名请求用来
+    // 制造超长键（TTL 60s 的写放大）。口径与 framework/auth/security/signature.js 一致：
+    // 只限长度上限与字符集，不设最小长度（各端现存的 uuid/hex/base64 形态都要能用）。
+    if (typeof nonce !== 'string' || !/^[A-Za-z0-9._~+/=:-]{1,128}$/.test(nonce)) {
+      return { success: false, error: 'nonce 格式非法', statusCode: 400 };
+    }
     const store = ensureNonceStore(request);
-    if (!nonce || (await store.checkAndMark(nonce))) {
+    if (await store.checkAndMark(nonce)) {
       return { success: false, error: '重放攻击检测：nonce 无效', statusCode: 400 };
     }
 

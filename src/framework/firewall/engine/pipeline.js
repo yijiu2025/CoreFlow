@@ -446,7 +446,11 @@ async function sendChallengeResponse(reply, ip, fingerprint, deviceId, request) 
     recordChallengeEvent({ type: 'surface', surface: 'inline' });
     // `state.user` 由 04-auth 的 onRequest 钩子先填充（早于防火墙），所以这里能拿到登录态。
     // 它只影响递进难度的"降一档"（默认关闭时无效果），不参与任何放行判定。
-    await sendChallengePage(reply, ip, fingerprint, deviceId, { loggedIn: Boolean(request?.state?.user?.id) });
+    // 🔴 判据是 `userId`（不是 `id`）：装配侧的字段名见 plugin.js / bearer-auth.js，
+    // 写成 `id` 恒 undefined → 登录用户永远拿不到降档。
+    await sendChallengePage(reply, ip, fingerprint, deviceId, {
+      loggedIn: Boolean(request?.state?.user?.userId)
+    });
     return 200;
   }
 

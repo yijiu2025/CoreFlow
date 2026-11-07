@@ -81,6 +81,25 @@ function describeRateLimitRisk({ enabled, max, windowSec, routeLevel = false }) 
 }
 
 /**
+ * 取当前请求的用户标识（数字主键）
+ *
+ * 🔴 字段名是 `userId`，不是 `id` —— plugin.js（Session）与 bearer-auth.js（JWT）装配的
+ * 用户对象只有 `userId/uid/sub`，没有 `id`。此前三处写 `state.user.id`（含本文件两处、
+ * pipeline.js 一处）恒为 undefined，后果是：
+ *   · 限流键永远退化成 `rate:ip:<ip>`，"已登录按用户限流"从未生效，
+ *     同 NAT / 同出口的登录用户共用一个桶，互相挤额度；
+ *   · 防火墙遥测里的 userId 恒为 null，按用户追溯攻击的能力丢失。
+ * client_token（M2M）没有用户主键，返回 null → 仍按 IP 计。
+ *
+ * @param {import('fastify').FastifyRequest} req 请求对象
+ * @returns {number|string|null} 用户数字主键；未登录/null
+ */
+function currentUserId(req) {
+  const id = req?.state?.user?.userId;
+  return id === undefined || id === null ? null : id;
+}
+
+/**
  * 注册速率限制插件
  *
  * 两个开关分管两件事（2026-11-02 修：此前全局关 = 插件不注册 = 端点声明全废）：
@@ -149,10 +168,11 @@ async function registerRateLimit(app) {
       continueExceeding: false,
       skipOnError: false,
 
-      // 已登录用 user.id 限流，未登录用 IP 限流
+      // 已登录用 userId 限流，未登录用 IP 限流（见 currentUserId 的注释）
       keyGenerator: req => {
-        if (req.state?.user?.id) {
-          return `rate:user:${req.state.user.id}`;
+        const uid = currentUserId(req);
+        if (uid !== null) {
+          return `rate:user:${uid}`;
         }
         return `rate:ip:${req.ip}`;
       },
@@ -166,7 +186,7 @@ async function registerRateLimit(app) {
         recordFirewallEvent({
           time: new Date().toISOString(),
           ip,
-          userId: request.state?.user?.id || null,
+          userId: currentUserId(request),
           method: request.method,
           url: request.url,
           userAgent: request.headers['user-agent'] || '',

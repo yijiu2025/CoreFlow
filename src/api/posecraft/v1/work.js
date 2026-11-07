@@ -9,11 +9,21 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { createLogger } from '../../../framework/log/index.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
 import templateDao from '../../../app/posecraft/dao/template.dao.js';
+import interactionDao from '../../../app/posecraft/dao/interaction.dao.js';
 import { composeWorkPreview, generateImageThumbnail } from '../../../app/posecraft/utils/preview.js';
 import { checkDataPermission } from '../../../app/posecraft/services/permission.service.js';
 import { formatWorkDetail, formatWorkList } from '../../../app/posecraft/services/work-view.service.js';
 
 const log = createLogger('api.posecraft.work');
+
+/**
+ * 作品底图的合法形态：本站上传接口产出的路径（`/posecraft/<uuid>.<ext>`）
+ *
+ * 服务端文件名一律由 `upload.service` 用 `crypto.randomUUID()` 生成，
+ * 因此这个正则既排除外部 URL，也排除 `..` / 绝对路径 / 任意 public 路径。
+ */
+const UPLOADED_IMAGE_RE =
+  /^\/posecraft\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpe?g|webp|gif)$/i;
 
 async function registerWorkRoutes(fastify) {
   registerGroupMetadata({
@@ -64,10 +74,19 @@ async function registerWorkRoutes(fastify) {
     alias: '获取推荐作品',
     method: 'GET',
     url: '/works/recommended',
+    // limit 必须约束：此前 parseInt(limit) 无上限，`limit=1e9` 会把整表拉出来
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+        }
+      }
+    },
     handler: async (request, reply) => {
-      const { limit = 20 } = request.query;
+      const { limit } = request.query;
 
-      const works = await workDao.findRecommended(parseInt(limit));
+      const works = await workDao.findRecommended(limit);
 
       return reply.result.success('获取成功', formatWorkList(works));
     }
@@ -156,11 +175,21 @@ async function registerWorkRoutes(fastify) {
         return reply.result.fail('作品不存在');
       }
 
-      // 增加浏览量
-      await workDao.incrementViews(id);
-
       // 判断是否为作者本人
       const isOwner = !!(user?.userId && work.user_id === user.userId);
+
+      // 🔴 可见性校验（2026-11-07 修复）：列表接口与 /works/:id/preview 都只看 status=1 的
+      // 公开作品，唯独详情接口漏了 —— 草稿(0)/待审核(2) 作品连同拍摄 GPS（formatWorkDetail
+      // 会输出 publication_lat/lng、work_lat/lng）可被任何人按 id 枚举读取。
+      // 与 preview 保持同一判据：公开 / 作者本人 / 管理员。
+      if (work.status !== 1 && !isOwner && !checkDataPermission({ user_id: -1 }, user)) {
+        return reply.result.forbidden('作品不存在或未公开');
+      }
+
+      // 增加浏览量（仅公开作品计入热度）
+      if (work.status === 1) {
+        await workDao.incrementViews(id);
+      }
 
       return reply.result.success('获取成功', formatWorkDetail(work, isOwner));
     }
@@ -220,8 +249,23 @@ async function registerWorkRoutes(fastify) {
       } = request.body;
       const user = request.state.user;
 
+      // 🔴 底图必须来自本站上传接口（2026-11-07 修复）：image_url 此前完全由客户端给，
+      // 随后被 generateImageThumbnail → publicUrlToPath 拿去读盘 —— 传 `//…`、`..`、
+      // 或别人的文件路径都能走进文件系统；也等于给了一个"站内文件存在性探针"。
+      if (image_url && !UPLOADED_IMAGE_RE.test(String(image_url))) {
+        return reply.result.fail('image_url 必须是本站上传接口返回的路径', null, 400);
+      }
+
       // 作品的 thumbnail_url = 底图原图压缩版（WebP 70%，尺寸不变，省带宽）
-      const thumbUrl = (image_url && (await generateImageThumbnail(image_url))) || image_url || '';
+      // 缩略图只是优化，失败不能让建作品整体 500（原实现一抛错就没有回退）
+      let thumbUrl = image_url || '';
+      if (image_url) {
+        try {
+          thumbUrl = (await generateImageThumbnail(image_url)) || image_url;
+        } catch (err) {
+          log.warn('[Work] 生成缩略图失败，回退原图', err, { image_url });
+        }
+      }
 
       const work = await workDao.create({
         title,
@@ -284,24 +328,38 @@ async function registerWorkRoutes(fastify) {
   });
 
   // 点赞作品（需要登录）
+  //
+  // 🔴 幂等（2026-11-07 修复）：此前直接 `incrementLikes(id)`，不写 user_likes、不去重、
+  // 不限频 —— 一个 for 循环就能把任意作品顶成热门（`sort=recommended` 的公式是
+  // 点赞×15 + 收藏×12 + 分享×8 + 浏览×1）。同一功能在 /interaction/like
+  // （interaction.dao.toggleLike）里本来就有唯一索引 + 原子增减的正确实现，此处复用它。
   registerSecureRoute(fastify, {
     name: 'likeWork',
     alias: '点赞作品',
     method: 'POST',
     url: '/works/:id/like',
     requireLogin: true,
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'integer', minimum: 1 } }
+      }
+    },
     handler: async (request, reply) => {
       const { id } = request.params;
+      const user = request.state.user;
 
       const work = await workDao.findById(id);
-
       if (!work) {
         return reply.result.fail('点赞失败，作品不存在');
       }
 
-      await workDao.incrementLikes(id);
-
-      return reply.result.success('点赞成功');
+      const result = await interactionDao.toggleLike(user.userId, { workId: id, like: true });
+      if (!result.success) {
+        return reply.result.fail(result.message);
+      }
+      return reply.result.success(result.message, { liked: result.liked, likes: work.likes_count });
     }
   });
   // 获取关注者的作品

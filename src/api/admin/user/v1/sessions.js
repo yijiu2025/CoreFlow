@@ -1,7 +1,7 @@
 /**
  * 用户会话管理接口（管理端）
  *
- * 落 /admin/user/v1/sessions/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['admin']。
+ * 落 /admin/user/v1/sessions/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['superadmin'/'admin_admin'/'admin_operator'(读接口另含 admin_viewer)]。
  *
  * GET  /admin/user/v1/sessions/list          — 某用户的所有设备会话（供"设备管理"页展示）
  * POST /admin/user/v1/sessions/kick-by-device — 按 device_id 精准踢单设备会话
@@ -29,7 +29,7 @@ async function registerSessionsRoutes(fastify) {
     prefix: '/user/v1',
     enabled: true,
     requireLogin: true,
-    allowRoles: ['admin']
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer']
   });
 
   /**
@@ -46,7 +46,7 @@ async function registerSessionsRoutes(fastify) {
     method: 'GET',
     url: '/sessions/list',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer'],
     handler: async (request, reply) => {
       const { userId, appId, revoked } = request.query;
       if (!userId) {
@@ -102,7 +102,7 @@ async function registerSessionsRoutes(fastify) {
     method: 'POST',
     url: '/sessions/kick-by-device',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
     handler: async (request, reply) => {
       const { userId, appId, deviceId } = request.body || {};
 

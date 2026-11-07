@@ -2,7 +2,7 @@
  * OAuth 2.1 客户端与权限管理（管理端）
  *
  * 落 /admin/oauth21/v1/*，继承 admin 域 system 级 requireLogin:true，
- * 并叠加 group/route 级 allowRoles:['admin']。
+ * 并叠加 group/route 级 allowRoles:['superadmin'/'admin_admin'/'admin_operator'(读接口另含 admin_viewer)]。
  *
  * POST /admin/oauth21/v1/permissions/sync — 子应用上报权限点
  * POST /admin/oauth21/v1/client              — 创建 OAuth 客户端
@@ -22,7 +22,7 @@ async function registerOauth21Routes(fastify) {
     prefix: '/oauth21/v1',
     enabled: true,
     requireLogin: true,
-    allowRoles: ['admin']
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator']
   });
 
   /**
@@ -35,7 +35,7 @@ async function registerOauth21Routes(fastify) {
     method: 'POST',
     url: '/permissions/sync',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
     handler: async (request, reply) => {
       const { appId, permissions } = request.body;
 
@@ -57,7 +57,7 @@ async function registerOauth21Routes(fastify) {
     method: 'POST',
     url: '/client',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
     handler: async (request, reply) => {
       // 只允许指定字段，防止注入
       const {

@@ -17,6 +17,19 @@ import { createNonceStore } from '../../redis/nonce-store.js';
 const h5NonceStore = createNonceStore('h5_nonce', 180);
 
 /**
+ * nonce 合法形态
+ *
+ * nonce 会被拼进 Redis 键（`h5_nonce:<nonce>`）。此前没有任何约束，而**验签之前**就
+ * 写入了存储 —— 匿名请求随便编个 1MB 的 nonce 就能造一个 1MB 的键（TTL 180s），
+ * 属于零成本写放大。
+ *
+ * 判据刻意只做两件事：**长度上限 128** + **排除空白/控制字符**。
+ * 不设最小长度、也不锁定字母表 —— 各端现存的 nonce 形态（uuid / hex / base64 / `n1`）
+ * 都合法；加密强度由签名与服务端 token 保证，nonce 这里只需保证"键有界"。
+ */
+const NONCE_RE = /^[A-Za-z0-9._~+/=:-]{1,128}$/;
+
+/**
  * 引导下发 token（首次访问 / token 失效后的重新引导）。
  *
  * 🔴 引导放行仅限 GET/HEAD（浏览器首访兼容）；写方法（POST/PUT/DELETE/PATCH）
@@ -84,6 +97,16 @@ async function verifySignature(request, reply) {
     });
   }
 
+  // 3.1 nonce 形态校验（进 Redis 键之前）：长度 ≤128 且有界字符集，
+  //     否则匿名请求可造超长键（见 NONCE_RE 注释）
+  if (typeof nonce !== 'string' || !NONCE_RE.test(nonce)) {
+    return reply.code(403).send({
+      code: 403,
+      error: 'invalid_nonce',
+      message: '安全检测失败：nonce 格式非法'
+    });
+  }
+
   // 4. 获取 H5 临时 Token（双通道，见步骤 2）
   const m5H5Tk = clientToken;
 
@@ -117,16 +140,6 @@ async function verifySignature(request, reply) {
     });
   }
 
-  // 5.1 nonce 防重放：同一 nonce 在时间窗内只允许使用一次（原子 check-and-mark）
-  const replayed = await h5NonceStore.checkAndMark(nonce);
-  if (replayed) {
-    return reply.code(403).send({
-      code: 403,
-      error: 'replay_detected',
-      message: '安全检测失败：请求重复提交'
-    });
-  }
-
   // 6. 重算签名：h5TokenMd5（会话密钥）+ SIGN_APP_KEY（前后端共享常量）双因子
   // 与前端 utils/sign.ts generateSignWithKey 保持一致
   // ⚠️ Fastify 5 已移除 request.routerPath（v4 弃用、v5 删除，恒为 undefined）。
@@ -153,6 +166,21 @@ async function verifySignature(request, reply) {
       code: 403,
       error: 'signature_mismatch',
       message: '安全检测失败：接口签名不匹配，禁止访问'
+    });
+  }
+
+  // 7. nonce 防重放：同一 nonce 在时间窗内只允许使用一次（原子 check-and-mark）
+  //
+  // 🔴 必须放在**验签之后**（2026-11-07 调整）：此前放在验签之前，任何人都能用
+  // 任意 nonce 触发一次 Redis 写入 —— 零成本写放大，且可以先烧掉别人要用的 nonce。
+  // 放到验签之后，只有持有合法 token + 正确签名的请求才会留下痕迹；
+  // 语义不变（同一签名重放仍然命中）。
+  const replayed = await h5NonceStore.checkAndMark(nonce);
+  if (replayed) {
+    return reply.code(403).send({
+      code: 403,
+      error: 'replay_detected',
+      message: '安全检测失败：请求重复提交'
     });
   }
 }

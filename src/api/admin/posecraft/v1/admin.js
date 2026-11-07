@@ -10,6 +10,7 @@ import templateDao from '../../../../app/posecraft/dao/template.dao.js';
 import workDao from '../../../../app/posecraft/dao/work.dao.js';
 import bannerConfigDao from '../../../../app/posecraft/dao/bannerConfig.dao.js';
 import channelDao from '../../../../app/posecraft/dao/channel.dao.js';
+import { POSECRAFT_PERMISSIONS } from '../../../../app/posecraft/permission/index.js';
 
 async function registerAdminRoutes(fastify) {
   registerGroupMetadata({
@@ -233,7 +234,7 @@ async function registerAdminRoutes(fastify) {
     method: 'GET',
     url: '/channels',
     requireLogin: true,
-    permission: 'posecraft:channel:manage',
+    permission: POSECRAFT_PERMISSIONS.CHANNEL.MANAGE,
     handler: async (request, reply) => {
       const page = parseInt(request.query.page) || 1;
       const pageSize = parseInt(request.query.pageSize) || 20;
@@ -250,7 +251,7 @@ async function registerAdminRoutes(fastify) {
     method: 'POST',
     url: '/channels',
     requireLogin: true,
-    permission: 'posecraft:channel:manage',
+    permission: POSECRAFT_PERMISSIONS.CHANNEL.MANAGE,
     handler: async (request, reply) => {
       const { value, label, icon, type, url, route, category, has_banner, sort_order, enabled, start_at, end_at } =
         request.body;
@@ -290,7 +291,7 @@ async function registerAdminRoutes(fastify) {
     method: 'PUT',
     url: '/channels/:id',
     requireLogin: true,
-    permission: 'posecraft:channel:manage',
+    permission: POSECRAFT_PERMISSIONS.CHANNEL.MANAGE,
     handler: async (request, reply) => {
       const id = Number(request.params.id);
       // 🔴 字段白名单：此前整个 request.body 透传 update，可改写 id/delete_version 等非预期列
@@ -329,7 +330,7 @@ async function registerAdminRoutes(fastify) {
     method: 'DELETE',
     url: '/channels/:id',
     requireLogin: true,
-    permission: 'posecraft:channel:manage',
+    permission: POSECRAFT_PERMISSIONS.CHANNEL.MANAGE,
     handler: async (request, reply) => {
       const id = Number(request.params.id);
       const success = await channelDao.delete(id);

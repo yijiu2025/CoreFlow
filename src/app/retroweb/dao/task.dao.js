@@ -79,6 +79,33 @@ class TaskDao {
     return await this.getModel().count({ where: { user_id: userId }, paranoid: false });
   }
 
+  /**
+   * 给定一批 client_id，统计其中**本用户还没有对应行**的数量
+   *
+   * 用途：导入（`POST /tasks/import`）前的配额预检 —— import 是 upsert 语义
+   * （已存在则更新，不新增行），所以只有"新建"的那部分才吃配额。
+   * 一次 IN 查询代替逐条 exists（最多 500 条）。
+   *
+   * ⚠️ `paranoid: false`：软删任务仍占配额（见 quota.service.js 头注），
+   * 因此软删行的 client_id 也必须算作"已存在"，否则"删了再导入"就绕过了上限。
+   *
+   * @param {number} userId 用户 ID
+   * @param {string[]} clientIds 待导入的 client_id 列表（可为空）
+   * @returns {Promise<number>} 会新建的行数
+   */
+  async countMissingClientIds(userId, clientIds) {
+    const ids = [...new Set((clientIds || []).filter(Boolean))];
+    if (ids.length === 0) return 0;
+    const rows = await this.getModel().findAll({
+      where: { user_id: userId, client_id: ids },
+      attributes: ['client_id'],
+      raw: true,
+      paranoid: false
+    });
+    const existing = new Set(rows.map(r => r.client_id));
+    return ids.filter(id => !existing.has(id)).length;
+  }
+
   /** 单条：元数据 + 解压后的快照 */
   async findById(id, userId) {
     const row = await this.getModel().findOne({ where: { id, user_id: userId } });

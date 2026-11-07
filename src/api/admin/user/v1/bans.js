@@ -1,7 +1,7 @@
 /**
  * 账号封禁管理接口（管理端）
  *
- * 落 /admin/user/v1/bans/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['admin']。
+ * 落 /admin/user/v1/bans/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['superadmin'/'admin_admin'/'admin_operator'(读接口另含 admin_viewer)]。
  *
  * POST /admin/user/v1/bans/disable — 封禁（service 维度 + 时限/永久 + 可选阶梯等级）
  * POST /admin/user/v1/bans/untie   — 解封（可一次解多个 service）
@@ -45,7 +45,7 @@ async function registerBanRoutes(fastify) {
     prefix: '/user/v1',
     enabled: true,
     requireLogin: true,
-    allowRoles: ['admin']
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator']
   });
 
   /**
@@ -59,7 +59,7 @@ async function registerBanRoutes(fastify) {
     method: 'POST',
     url: '/bans/disable',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
     handler: async (request, reply) => {
       const { userId, service, time, reason = '', level = 0, disableLevelFlag = false } = request.body || {};
       if (!userId || !service) {
@@ -90,7 +90,7 @@ async function registerBanRoutes(fastify) {
     method: 'POST',
     url: '/bans/untie',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
     handler: async (request, reply) => {
       const { userId, services } = request.body || {};
       if (!userId || !Array.isArray(services) || services.length === 0) {
@@ -116,7 +116,7 @@ async function registerBanRoutes(fastify) {
     method: 'GET',
     url: '/bans/status',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer'],
     handler: async (request, reply) => {
       const { userId, service } = request.query || {};
       if (!userId || !service) {

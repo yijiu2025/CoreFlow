@@ -1,7 +1,7 @@
 /**
  * User 管理接口（管理端）
  *
- * 落 /admin/user/v1/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['admin']。
+ * 落 /admin/user/v1/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['superadmin'/'admin_admin'/'admin_operator'(读接口另含 admin_viewer)]。
  *
  * GET /admin/user/v1/list — 用户列表（分页，admin only）
  *
@@ -21,7 +21,7 @@ async function registerAdminRoutes(fastify) {
     prefix: '/user/v1',
     enabled: true,
     requireLogin: true,
-    allowRoles: ['admin']
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer']
   });
 
   /**
@@ -36,10 +36,21 @@ async function registerAdminRoutes(fastify) {
     method: 'GET',
     url: '/list',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer'],
+    // 分页必须走 schema：没有 schema 时 `limit=abc` → Number() → NaN → Sequelize 抛错变 500，
+    // 且 offset 无上限。AJV 会做类型强制与范围校验，非法入参稳定得到 400。
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+          offset: { type: 'integer', minimum: 0, default: 0 }
+        }
+      }
+    },
     handler: async (request, reply) => {
-      const { limit = 50, offset = 0 } = request.query;
-      const users = await UserDao.listUsers({ limit: Number(limit), offset: Number(offset) });
+      const { limit, offset } = request.query;
+      const users = await UserDao.listUsers({ limit, offset });
       return reply.result.success('获取成功', users);
     }
   });

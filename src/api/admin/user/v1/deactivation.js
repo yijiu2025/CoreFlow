@@ -1,7 +1,7 @@
 /**
  * 用户注销管理接口（管理端）
  *
- * 落 /admin/user/v1/deactivation/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['admin']。
+ * 落 /admin/user/v1/deactivation/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['superadmin'/'admin_admin'/'admin_operator'(读接口另含 admin_viewer)]。
  *
  * GET  /admin/user/v1/deactivation/list          — 注销申请列表（分页，可按 status/scope/userId 筛选）
  * POST /admin/user/v1/deactivation/execute/:id   — 正式执行注销（到期或 force 强制）
@@ -26,7 +26,7 @@ async function registerDeactivationRoutes(fastify) {
     prefix: '/user/v1',
     enabled: true,
     requireLogin: true,
-    allowRoles: ['admin']
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer']
   });
 
   /**
@@ -40,7 +40,7 @@ async function registerDeactivationRoutes(fastify) {
     method: 'GET',
     url: '/deactivation/list',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer'],
     handler: async (request, reply) => {
       const { status, scope, userId, page = 1, pageSize = 20 } = request.query;
       const result = await deactivationService.listForAdmin({
@@ -65,7 +65,7 @@ async function registerDeactivationRoutes(fastify) {
     method: 'POST',
     url: '/deactivation/execute/:id',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
     config: {
       rateLimit: { max: 10, timeWindow: '1 minute' }
     },
@@ -97,7 +97,7 @@ async function registerDeactivationRoutes(fastify) {
     method: 'POST',
     url: '/deactivation/cancel/:id',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
     handler: async (request, reply) => {
       const { id } = request.params;
       const adminUser = request.state?.user;
@@ -129,7 +129,7 @@ async function registerDeactivationRoutes(fastify) {
     method: 'GET',
     url: '/deactivation/executable',
     requireLogin: true,
-    allowRoles: ['admin'],
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer'],
     handler: async (request, reply) => {
       const { limit = 100 } = request.query;
       const { default: deactivationDao } = await import('../../../../app/user/dao/deactivation.js');

@@ -103,8 +103,12 @@ describe('限流插件注册决策', () => {
     expect(typeof app.opts.keyGenerator).toBe('function');
     expect(typeof app.opts.errorResponseBuilder).toBe('function');
 
-    // keyGenerator：已登录按 user.id，未登录按 IP（groupId 会在此基础上追加后缀）
-    expect(app.opts.keyGenerator({ state: { user: { id: 42 } }, ip: '1.2.3.4' })).toBe('rate:user:42');
+    // keyGenerator：已登录按 **userId**（装配侧字段名见 plugin.js / bearer-auth.js），
+    // 未登录按 IP。groupId 会在此基础上追加后缀。
+    // 🔴 这里曾经写 `state.user.id` —— 该字段从来不存在，于是恒走 IP 分支，
+    // "已登录按用户限流"从未生效（同 NAT 用户共用一个桶）。第三条断言把这个坑钉住。
+    expect(app.opts.keyGenerator({ state: { user: { userId: 42 } }, ip: '1.2.3.4' })).toBe('rate:user:42');
+    expect(app.opts.keyGenerator({ state: { user: { id: 42 } }, ip: '1.2.3.4' })).toBe('rate:ip:1.2.3.4');
     expect(app.opts.keyGenerator({ ip: '1.2.3.4' })).toBe('rate:ip:1.2.3.4');
   });
 });

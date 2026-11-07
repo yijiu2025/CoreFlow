@@ -8,6 +8,7 @@ import IamDao from '../../../../app/admin/dao/iam.dao.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { actionMetaRegistry } from '../../../../utils/PbacRegistry.js';
 import { logAuditEvent } from '../../../../framework/auth/index.js';
+import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 
 async function registerIamRoutes(fastify) {
   registerGroupMetadata({
@@ -17,7 +18,7 @@ async function registerIamRoutes(fastify) {
     prefix: '/iam/v1',
     enabled: true,
     requireLogin: true,
-    allowRoles: ['admin']
+    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer']
   });
   /**
    * GET /admin/iam/v1/roles
@@ -93,7 +94,9 @@ async function registerIamRoutes(fastify) {
     url: '/roles/assign',
     group: 'iam',
     requireLogin: true,
-    requirePermission: 'iam:role:assign',
+    // 🔴 用注册表常量：原先写死 `iam:role:assign`，而全仓定义的是 `admin:role:assign`
+    // （app/admin/permission/index.js）→ 除持 `*` 的 superadmin 外，任何管理角色都授不了权。
+    requirePermission: ADMIN_PERMISSIONS.ROLE.ASSIGN,
     // 不可逆 / 高影响：权限授予立即生效，故强制回源校验
     freshPermission: true,
     handler: async (request, reply) => {
@@ -139,7 +142,8 @@ async function registerIamRoutes(fastify) {
     url: '/policies',
     group: 'iam',
     requireLogin: true,
-    requirePermission: 'iam:policy:update',
+    // 同上：`iam:policy:update` 未定义，真实码是 `admin:policy:update`
+    requirePermission: ADMIN_PERMISSIONS.POLICY.UPDATE,
     freshPermission: true,
     handler: async (request, reply) => {
       const adminUid = request.state.user.uid; // 🔴 本仓身份装配在 request.state.user（plugin.js），request.user 从未装饰过

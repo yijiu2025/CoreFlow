@@ -6,6 +6,7 @@
  */
 import { getModel } from '../../../framework/db/index.js';
 import Logger from '../../../framework/log/index.js';
+import { encryptSecret, decryptSecret, isMasked } from '../../../framework/crypto/symmetric.js';
 
 /** 默认通道配置 */
 const DEFAULT_CHANNELS = [
@@ -52,7 +53,12 @@ const DEFAULT_TEMPLATES = {
 
 class NoticeDao {
   /**
-   * 获取通知配置
+   * 获取通知配置（凭据字段为**明文**，仅供本进程发信/校验使用）
+   *
+   * 🔴 任何 HTTP 出参都必须先掩码 —— 路由层已把 `pass` 替换为 `SMTP_PASS_MASK`
+   * （见 `api/notice/v1/config.js`）。本函数不自己做掩码，是因为保存端要靠
+   * "前端回传的就是那个固定掩码"来判断"用户没改密码"，两处必须同一口径。
+   *
    * @param {string} type 'email' | 'dingtalk' | 'wechat' | 'sms'
    * @returns {Promise<object>}
    */
@@ -61,11 +67,14 @@ class NoticeDao {
     if (!NoticeConfig) return {};
 
     if (type === 'email') {
+      // 密文入库、明文入内存：decryptSecret 对历史明文/解密失败原样返回，平滑兼容存量数据
+      const rawPass = await NoticeConfig.getVal('smtp_password', '');
+      const pass = rawPass ? decryptSecret(rawPass) : '';
       return {
         host: await NoticeConfig.getVal('smtp_server', 'smtp.163.com'),
         port: parseInt(await NoticeConfig.getVal('smtp_port', '465')),
         user: await NoticeConfig.getVal('smtp_user', ''),
-        pass: await NoticeConfig.getVal('smtp_password', ''),
+        pass,
         from: await NoticeConfig.getVal('smtp_from', ''),
         secure: (await NoticeConfig.getVal('smtp_use_ssl', 'true')) === 'true'
       };
@@ -97,7 +106,21 @@ class NoticeDao {
 
       for (const [prop, key] of Object.entries(mappings)) {
         if (config[prop] !== undefined) {
-          await NoticeConfig.setVal(key, config[prop].toString(), '', 'email');
+          // 掩码回传（含 `*`）= "沿用库里旧值"：绝不能把掩码本身写进库
+          //（否则真凭据被自己的掩码覆盖，永久不可恢复，且发信会 535 认证失败）
+          if (prop === 'pass' && isMasked(config[prop])) continue;
+
+          let value = config[prop].toString();
+          // 🔴 SMTP 密码不明文落库：加密失败就**拒绝保存**并显式报错，
+          // 不做"静默存明文"的降级（那正是本次要修的问题）。
+          if (prop === 'pass' && value) {
+            try {
+              value = encryptSecret(value);
+            } catch (err) {
+              throw new Error(`NOTICE_CONFIG_FAILED:${err.message}`, { cause: err });
+            }
+          }
+          await NoticeConfig.setVal(key, value, '', 'email');
         }
       }
     }

@@ -127,9 +127,13 @@ const UserDao = {
    */
   async listUsers({ limit = 50, offset = 0 } = {}) {
     const User = getModel('User');
+    // 纵深防御：路由层已有 schema，但 DAO 也是公开 API（脚本/内部调用方可能绕过）
+    // —— `limit=abc` 会得到 NaN，直接进 SQL 会抛错变 500，故在此归一。
+    const lim = Number(limit);
+    const off = Number(offset);
     return User.findAll({
-      limit: Math.min(Number(limit), 200),
-      offset: Number(offset),
+      limit: Number.isInteger(lim) && lim > 0 ? Math.min(lim, 200) : 50,
+      offset: Number.isInteger(off) && off > 0 ? off : 0,
       attributes: { exclude: ['id', 'phone'] },
       order: [['created_at', 'DESC']]
     });
