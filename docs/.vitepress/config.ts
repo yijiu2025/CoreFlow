@@ -35,7 +35,14 @@ if (!/^\/[\w./-]*$/.test(BASE) || BASE.includes(':')) {
  * 允许 0–3 层 `../`：`archive/legacy-frontend/` 下的归档文档比主目录深两层，
  * 指向仓库根的写法是 `../../../packages/...`。
  */
-const IGNORE_DEAD_LINKS = [/^\.\/?\.\.?\/(\.\.\/){0,3}(AGENTS|oauth21|posecraft|packages)(\/|$)/];
+const IGNORE_DEAD_LINKS = [
+  /^\.\/?\.\.?\/(\.\.\/){0,3}(AGENTS|oauth21|posecraft|packages)(\/|$)/,
+  // `docs/firewall-flowchart.html` 是**单文件静态页**（README 里写明"不进 VitePress 站点"，
+  // 故不是 .md、没有对应路由）。vitepress 把 .html 当站内路由去校验，必然报死链
+  // ⇒ 只精确放行这一条，站内真死链照旧拦住 build。
+  // 注意：报错文本是 `./firewall-flowchart`（.html 已被规范化掉），所以两种形态都要放行。
+  /^\.\/firewall-flowchart(\.html)?$/
+];
 
 const SOCIAL_LINKS = [{ icon: 'github', link: 'https://github.com/yijiu2025/CoreFlow' }];
 

@@ -67,6 +67,9 @@ try {
 // 连接工具提到顶层：前置检查、PTTL 断言、退出清理三处都要用。
 // 放在块级作用域里会被挡住（`const` 不外泄），表现为后面"未定义"而非"连不上"。
 const { connectStandalone, disconnectStandalone, getStore } = await import('../../src/framework/redis/index.js');
+// 锁名必须用**调度器自己的**派生函数：各写一份公式的代价是"锁改个名，关卡静默变红"
+// （2026-11-08：加了 `:p<周期>` 后本关卡还在查旧键，PTTL 返回 -2）
+const { periodLockKey } = await import('../../src/framework/scheduler/index.js');
 
 // ── 前置检查：环境不可用要和断言失败分开，否则关卡会因环境问题长期变红 ──
 {
@@ -145,8 +148,16 @@ function runChild(at, label, opts = {}) {
     p.stderr.on('data', d => (out += d));
     p.on('error', e => finish({ label, ok: null, raw: `spawn 失败：${e.message}` }));
     p.on('close', () => {
-      const m = /RESULT (\S+) (true|false)\s+起跑偏差(\d+)ms/.exec(out);
-      if (m) return finish({ label: m[1], ok: m[2] === 'true', drift: Number(m[3]) });
+      // `at=<epoch>` 是子进程抢锁时用的时间点，父进程据此复现同一把周期锁的键名
+      const m = /RESULT (\S+) (true|false)\s+起跑偏差(\d+)ms(?:\s+判定耗时\d+ms)?(?:\s+at=(\d+))?/.exec(out);
+      if (m) {
+        return finish({
+          label: m[1],
+          ok: m[2] === 'true',
+          drift: Number(m[3]),
+          at: m[4] ? Number(m[4]) : null
+        });
+      }
       const tail = out.trim().split('\n').filter(Boolean).slice(-2).join(' | ') || '无输出';
       finish({ label, ok: null, raw: tail });
     });
@@ -154,7 +165,7 @@ function runChild(at, label, opts = {}) {
 }
 
 console.log('═══ E1 跨进程互斥复验 ═══');
-console.log(`锁 key : lock:scheduler:${TASK_KEY}`);
+console.log(`锁 key : lock:scheduler:<task>:p<周期序号>（task=${TASK_KEY}）`);
 console.log(`周期   : ${TTL_MS}ms（调度器派生锁 TTL ≥ 2 倍周期；原始锁 TTL 见第 3/4 轮）`);
 console.log(`Redis  : ${process.env.REDIS_HOST || '(未配置)'}:${process.env.REDIS_PORT || 6379} (db${PROBE_REDIS_DB})`);
 console.log(`竞争者 : ${N} 个独立进程\n`);
@@ -184,9 +195,11 @@ if (maxDrift !== null && maxDrift > DRIFT_WARN_MS) {
 // 回归守卫：调度器曾把锁 TTL 取成"等于任务周期"，任务跑超周期时锁就过期，
 // 其他实例并发执行同一任务（重复执行）。现在派生规则是 max(2×周期, 周期+60s)。
 // 这条断言同时也是本关卡第 3 轮的前置：不先证明"TTL 被放大"，第 3 轮等 TTL_MS 就等不到。
-// 真实键名 = `lock:`（lock-store.js 的 LOCK_PREFIX）+ 传入的 name。
-// 少写这一层前缀时 PTTL 返回 -2（键不存在），看起来像"锁没建起来"。
-const lockKey = `lock:scheduler:${TASK_KEY}`;
+// 真实键名 = `lock:`（lock-store.js 的 LOCK_PREFIX）+ 调度器派生名。
+// 派生名必须由 periodLockKey() 算，且用**子进程抢锁时的那个时间点**（at）——
+// 否则跨过周期边界时会去查一个不存在的键，PTTL 返回 -2，看起来像"锁没建起来"。
+const winnerAt = winners1.map(r => r.at).find(v => Number.isFinite(v));
+const lockKey = `lock:${periodLockKey(TASK_KEY, TTL_MS, winnerAt ?? startAt)}`;
 // 🔴 `store.call()` 的签名是 (fn, timeout)，不是 (command, ...args)：
 //    fn 会收到**裸客户端**，命令由调用方自己发。写成 `call('PTTL', key)` 会得到
 //    `TypeError: fn is not a function` —— 而 MapStore 版恰好对任何入参都抛

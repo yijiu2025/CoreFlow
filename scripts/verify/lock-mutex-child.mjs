@@ -61,10 +61,13 @@ const t0 = Date.now();
 const acquired =
   MODE === 'lock'
     ? await createLock(`scheduler:${TASK_KEY}`, { ttl: TTL_MS }).tryAcquire()
-    : await acquirePeriodLock(TASK_KEY, TTL_MS);
+    : // 把 t0 显式传进去：父进程要按**同一个周期序号**去读 PTTL，
+      // 让两边用同一时间点算锁名，避免跨周期边界时读到不存在的键（PTTL = -2）
+      await acquirePeriodLock(TASK_KEY, TTL_MS, t0);
 const drift = Math.max(0, t0 - AT_EPOCH);
 
-console.log(`RESULT ${LABEL} ${acquired} 起跑偏差${drift}ms 判定耗时${Date.now() - t0}ms`);
+// 末尾的 at= 供父进程复现周期锁名（periodLockKey(taskKey, ttl, at)），不要删
+console.log(`RESULT ${LABEL} ${acquired} 起跑偏差${drift}ms 判定耗时${Date.now() - t0}ms at=${t0}`);
 
 await disconnectStandalone();
 process.exit(0);

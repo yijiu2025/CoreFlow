@@ -80,13 +80,34 @@ function loadConfig() {
 }
 
 /**
+ * 派生"本周期锁"的键名（**唯一来源**）
+ *
+ * 为什么单独抽成函数：`scripts/verify/lock-mutex.mjs` 的关卡要按同一个名字去读 PTTL，
+ * 两边各写一份公式的后果是"锁改个名，关卡静默变红"（2026-11-08 真实发生：
+ * 加 `:p<周期>` 后关卡还在查旧键，PTTL 返回 -2，看起来像"锁没建起来"）。
+ *
+ * `at` 可显式传入：验证脚本用它复现**子进程当时**算出的周期序号，
+ * 避免父进程读 PTTL 时已经跨过周期边界（周期 3s 时跨界的概率约 1/3000，但足以偶发变红）。
+ *
+ * @param {string} taskKey - 任务名
+ * @param {number} intervalMs - 任务周期（毫秒）；0 表示无周期
+ * @param {number} [at=Date.now()] - 计算周期序号所用的时间点（epoch ms）
+ * @returns {string} 锁名（不含 lock-store 的 `lock:` 前缀）
+ */
+function periodLockKey(taskKey, intervalMs, at = Date.now()) {
+  const period = intervalMs > 0 ? Math.floor(at / intervalMs) : 0;
+  return `scheduler:${taskKey}:p${period}`;
+}
+
+/**
  * 抢本轮的周期锁
  *
  * @param {string} taskKey - 任务名（锁粒度）
  * @param {number} intervalMs - 任务周期（毫秒），同时作为锁的 TTL
+ * @param {number} [at=Date.now()] - 周期序号的计算时间点（验证脚本用于复现同一把锁）
  * @returns {Promise<boolean>} true = 本实例获得本周期执行权
  */
-async function acquirePeriodLock(taskKey, intervalMs) {
+async function acquirePeriodLock(taskKey, intervalMs, at = Date.now()) {
   if (!isRedisConfigured()) return true; // 单实例部署：不引入锁语义
 
   try {
@@ -100,8 +121,7 @@ async function acquirePeriodLock(taskKey, intervalMs) {
     // （intervalHours:24 实际 48 小时一次），单实例部署看不出来。
     // 每个周期一把独立锁后：同一周期内全集群只有一个实例执行，下一个周期自动换新键，
     // 不需要提前释放（释放反而会让错峰的实例在同一周期内重复执行）。
-    const period = intervalMs > 0 ? Math.floor(Date.now() / intervalMs) : 0;
-    const lock = createLock(`scheduler:${taskKey}:p${period}`, { ttl: lockTtl });
+    const lock = createLock(periodLockKey(taskKey, intervalMs, at), { ttl: lockTtl });
     return await lock.tryAcquire();
   } catch (err) {
     // 已配置但不可达 → 跳过，不回退。回退执行在多实例下会重复跑任务。
@@ -200,4 +220,5 @@ async function startScheduler(app) {
 // acquirePeriodLock / executeTask 一并导出：它们是"多实例下是否重复执行"的**全部决策逻辑**，
 // 必须能被独立测试。若只导出 startScheduler，验证这一点就得去驱动真实定时器 + 真实 Redis，
 // 那类测试要么被跳过、要么慢到没人跑，最终等于没有覆盖。
-export { startScheduler, acquirePeriodLock, executeTask };
+// periodLockKey 同样导出：验证脚本要按**同一个名字**读锁（见该函数注释里的踩坑记录）。
+export { startScheduler, acquirePeriodLock, executeTask, periodLockKey };

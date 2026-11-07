@@ -119,6 +119,20 @@ export default [
     }
   },
 
+  // 5.3 vendored 镜像文件：`scripts/jest/shims/*.cjs` 是上游包的 CJS 逐字镜像
+  //     （由 scripts/jest/shims/build-cookie-shim.mjs 生成，文件头明确"请勿手改"），
+  //     不该按本仓风格改写 —— 改它就等于让镜像与真包行为不一致。
+  //     这里只关掉与"生成代码"冲突的三条规则，其余检查照常。
+  //     （2026-11-08：这三条让 CI 的 Lint 关卡长期变红，而本地 `eslint <file>` 才会暴露）
+  {
+    files: ['scripts/jest/shims/**/*.cjs'],
+    rules: {
+      'no-case-declarations': 'off',
+      'no-useless-escape': 'off',
+      'no-unused-vars': ['warn', { vars: 'all', args: 'none', ignoreRestSiblings: true }]
+    }
+  },
+
   // 6. 浏览器环境共享包：packages 下实现为纯 JS（供 Jest 直接测试），
   //    运行在浏览器（window/document/localStorage/crypto 等），声明 browser globals
   {
