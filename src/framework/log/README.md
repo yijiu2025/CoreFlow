@@ -38,8 +38,8 @@ log.info('直接打印');   // 未注册全局时 = tag 'app' 的默认实例
 
 ## 三条硬约定（务必遵守）
 
-1. **`configureLog` 全项目只在 `src/app.js` 调用一次**，文件通道默认**关闭**，要写文件就在那里给 `file: {…}`
-2. **入口注册全局 log**：`src/app.js` 里 `createLogger('app', true)`，其他文件 `import { log } from '.../framework/log/index.js'` 直接可用，不必再 `createLogger`
+1. **`configureLog` 全项目只在 `src/framework/startup/logging.js` 的 `bootstrapLogging()` 里调用一次**（`src/app.js` 在模块加载时调它），文件通道默认**关闭**，要写文件就在那里给 `file: {…}`
+2. **入口注册全局 log**：同上，`bootstrapLogging()` 里 `createLogger('app', true)`，其他文件 `import { log } from '.../framework/log/index.js'` 直接可用，不必再 `createLogger`
 3. **`createLogger` 只有两个参数**：`tag` + 是否注册为全局。其余一切配置走 `log.config({...})`
 
 > 三条都源自包的设计原则，完整表述见
@@ -109,7 +109,7 @@ log.config({ level: 'warn' });   // 运行时热更新，返回自身可链式
 **本项目最常用的一种组合**（日期做一级、模块做二级）：
 
 ```js
-// 全局（app.js 的 configureLog 里）
+// 全局（framework/startup/logging.js 的 configureLog 里）
 configureLog({ file: { dateDir: true, subdir: 'auto' } });
 // 或按模块热改
 createLogger('firewall.engine').config({ file: { subdir: 'auto' } });
@@ -120,7 +120,7 @@ createLogger('firewall.engine').config({ file: { subdir: 'auto' } });
 > **实例 `file` 是替换不是叠加**（全局开了、模块又给了 → 只写模块那份，一次输出最多一个文件）；
 > **写了 `file.level` 就优先于全局 `level`**（连 `debug`/`trace` 也落盘，不必再配 `LOG_DEBUG`）。
 
-### ⑤ 全局编程配置（`src/app.js` 用一次）
+### ⑤ 全局编程配置（`src/framework/startup/logging.js` 用一次）
 
 ```js
 import { configureLog, createLogger, initLogErrorTraps } from './framework/log/index.js';
@@ -171,7 +171,7 @@ LOG_FILE_NAME=server         # 主日志文件名前缀
 ## 全局异常钩子（服务器专属）
 
 `traps.js` 不在 npm 包里 —— 它依赖 `process` / `fs` 等 Node API，属宿主职责。
-`app.js` 已调用 `initLogErrorTraps()`：
+`bootstrapLogging()`（`framework/startup/logging.js`，由 `src/app.js` 引导）已调用 `initLogErrorTraps()`：
 
 | 事件 | 行为 |
 | --- | --- |

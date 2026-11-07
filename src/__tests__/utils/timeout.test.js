@@ -52,9 +52,22 @@ describe('resolveTimeoutMs', () => {
     expect(resolveTimeoutMs('300000', 0)).toBe(300_000);
   });
 
-  it('app.js 不再保留同名本地实现（否则会遮蔽 util，两处判据各自漂移）', () => {
-    const appSource = fs.readFileSync(path.join(ROOT, 'src/app.js'), 'utf8');
-    expect(appSource).not.toMatch(/function\s+resolveTimeoutMs\s*\(/);
-    expect(appSource).toMatch(/from '\.\/utils\/timeout\.js'/);
+  it('使用方不再保留同名本地实现（否则会遮蔽 util，两处判据各自漂移）', () => {
+    // 2026-11-07 拆分后，超时解析的下游从 app.js 移到了 framework/http/*。
+    // 判据保持不变：任何消费方都不得自带一份 resolveTimeoutMs（复制即漂移）。
+    const consumers = ['src/app.js', 'src/framework/http/server-options.js', 'src/framework/http/plugins.js'];
+    for (const rel of consumers) {
+      const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+      expect(src).not.toMatch(/function\s+resolveTimeoutMs\s*\(/);
+    }
+
+    // HTTP 超时与 WS 宽限期都必须从 util 取，而不是各写一套数字
+    for (const rel of ['src/framework/http/server-options.js', 'src/framework/http/plugins.js']) {
+      const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+      expect(src).toMatch(/from '\.\.\/\.\.\/utils\/timeout\.js'/);
+    }
+
+    // app.js 只把 isProduction / trustProxy 交给 server-options，自己不再碰超时
+    expect(fs.readFileSync(path.join(ROOT, 'src/app.js'), 'utf8')).not.toMatch(/resolveTimeoutMs/);
   });
 });

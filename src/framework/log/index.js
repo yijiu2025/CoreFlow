@@ -23,7 +23,8 @@
  *
  *  ════════ 三个核心约定（本项目） ════════
  *
- *  ① 全局配置只在 app.js 调一次 configureLog()：
+ *  ① 全局配置只在启动引导里调一次 configureLog()（src/framework/startup/logging.js
+ *     的 bootstrapLogging()，由 src/app.js 在模块加载时调用一次）：
  *     configureLog({
  *       level: 'info',
  *       console: true,
@@ -34,7 +35,7 @@
  *       }
  *     });
  *
- *  ② 注册全局 log（入口文件头部执行一次）：
+ *  ② 注册全局 log（入口引导里执行一次）：
  *     createLogger('app', true);         // 第二个参数 true = 注册为全局
  *     然后其他文件直接：import { log } from '.../framework/log/index.js';
  *     ※ createLogger 只有两个参数；所有配置一律走 config()

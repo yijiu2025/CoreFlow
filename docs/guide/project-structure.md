@@ -14,7 +14,7 @@ nodeServers/
 ├── .env                        # 环境变量（模板见 .env.example / .env.docker.example）
 │
 ├── src/
-│   ├── app.js                  # Fastify 应用创建 + 生命周期编排
+│   ├── app.js                  # 启动编排门面（建实例 / 注册基础插件 / 挂错误处理器 / 起引擎）
 │   │
 │   ├── framework/              # 基础设施层（不写业务）
 │   │   ├── auth/               # 认证：session / cookie / signature / 密码 / 设备
@@ -23,6 +23,7 @@ nodeServers/
 │   │   ├── loader/             # 加载器引擎 + registry/ 顺序表
 │   │   ├── db/                 # Sequelize 连接 + 迁移入口
 │   │   ├── redis/              # Redis 连接 / getStore / 锁 / 队列 / PubSub
+│   │   ├── http/               # Fastify 构造参数 / 基础插件 / 安全头 / 全局错误处理器
 │   │   ├── log/  notice/  verify/  startup/  scheduler/  websocket/  cli/  config/
 │   │   └── ...
 │   │
@@ -117,7 +118,8 @@ src/
 ├── framework/notice/     # 通知
 ├── framework/verify/     # 验证码
 ├── framework/loader/     # 加载器引擎
-├── framework/startup/    # 启动期依赖等待 / 就绪判定
+├── framework/http/       # Fastify 构造参数 / 基础插件 / 安全头 / 全局错误处理器
+├── framework/startup/    # 启动期依赖等待 / 就绪判定 / 配置体检 / 日志引导
 ├── framework/scheduler/  # 定时任务
 ├── framework/websocket/  # WS 广播
 ├── models/session/       # 系统模型（会话 / 令牌 / 日志）

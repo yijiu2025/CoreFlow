@@ -1,449 +1,91 @@
 /**
- * 应用工厂：创建并配置 Fastify 实例
- * 注册基础插件（helmet / cors / multipart / static / websocket / cookie）、
- * 安全响应头、全局错误处理器，启动加载器引擎
+ * 应用工厂（入口门面）
+ *
+ * 只保留**启动编排**：校验配置 → 建实例 → 注册基础插件 → 挂错误处理器
+ * → 启动加载器引擎 / 调度器 / 守卫配置同步 → 注册优雅关闭。
+ *
+ * 其余能力已按职责下沉（2026-11-07 拆分，本文件只做串联与顺序保证）：
+ *   - 日志引导（唯一 configureLog 调用点）      → framework/startup/logging.js
+ *   - 环境变量 / 调优配置体检                   → framework/startup/config-check.js
+ *   - Fastify 构造参数（超时 / 日志 / reqId）    → framework/http/server-options.js
+ *   - 基础插件注册（helmet/cors/upload/static…） → framework/http/plugins.js
+ *   - 安全头与跨域策略                          → framework/http/security-options.js
+ *   - 全局错误处理器                            → framework/http/error-handler.js
+ *   - 代理可信网段解析与风险判定                 → utils/proxy-trust.js
+ *   - CORS 来源解析与放行判断                    → utils/cors.js
+ *
+ * 拆分原则：能脱离 Fastify 实例与进程环境独立驱动的判据，一律不进入口 ——
+ * 入口里的代码只能靠"起一个真服务"来验证，是最难测的位置。
  *
  * @author yijiu2025
  * @since 2026-07-22
+ * @since 2026-11-07 瘦身为纯编排门面，通用能力下沉 framework/ 与 utils/
  */
-
 import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import multipart from '@fastify/multipart';
-import staticPlugin from '@fastify/static';
-import websocket from '@fastify/websocket';
-import cookie from '@fastify/cookie';
-import crypto from 'node:crypto';
 
-import helmet from '@fastify/helmet';
 import { initLoader } from './framework/loader/index.js';
-import { flushGuardConfig, startGuardConfigSync, stopGuardConfigSync } from './api/guard-config.js';
 import { startScheduler } from './framework/scheduler/index.js';
-import { ApiException } from './shared/exceptions.js';
-import { configureLog, createLogger, initLogErrorTraps } from './framework/log/index.js';
-import { createWsPreClose, DEFAULT_WS_SHUTDOWN_GRACE_MS } from './framework/websocket/preclose.js';
-import { validateEnv } from './framework/config/env.js';
+import { startGuardConfigSync, stopGuardConfigSync, flushGuardConfig } from './api/guard-config.js';
 import { closePubSub } from './framework/redis/index.js';
-import { APP_CONFIG } from './framework/config/app-config.js';
-import { validateAppConfig } from './framework/config/app-config-schema.js';
-import { PUBLIC_ROOT } from './framework/storage/index.js';
-import { resolveTimeoutMs } from './utils/timeout.js';
+import { bootstrapLogging } from './framework/startup/logging.js';
+import { checkEnvironment, reportAppConfigWarnings } from './framework/startup/config-check.js';
+import { buildServerOptions } from './framework/http/server-options.js';
+import { registerBasePlugins } from './framework/http/plugins.js';
+import { createErrorHandler } from './framework/http/error-handler.js';
+import { parseOriginList } from './utils/cors.js';
+import { parseTrustProxy, describeProxyTrustRisk, formatProxyTrustRisks } from './utils/proxy-trust.js';
 
-// ════════════════════════════════════════════════════════════════════
-// 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
-// ════════════════════════════════════════════════════════════════════
-// 设计约定：
-//   ① 文件通道默认关闭 —— 不写 file 就只输出控制台，不会产生任何日志文件
-//   ② 要落盘时把下面 file 的注释打开（或直接设 LOG_FILE=true 用环境变量兜底）
-//   ③ 控制台与文件级别互相独立：控制台可以安静，文件照样记全量
-//   ④ 模块如需自己的文件，在模块内 log.config({ file: {...} }) 覆盖（不会重复写）
-//
-// 环境变量可覆盖此处任意项：LOG_LEVEL / LOG_DEBUG / LOG_CONSOLE_LEVEL / LOG_FILE ...
-configureLog({
-  level: 'info', // 全局总门槛：info 及以上（trace/debug 另由 LOG_DEBUG 控制）
-  console: true, // 控制台始终开启
-  consoleLevel: 'info', // 控制台通道级别：'info' 及以上；也可用数组 ['warn','error','fatal']
-  debugKeywords: process.env.LOG_DEBUG || ''
+// 日志必须最先引导：后续所有模块的 createLogger 都读它的全局配置，
+// 全局 log 与全局异常兜底也在这一步注册。
+const log = bootstrapLogging();
 
-  // ── 文件通道（默认关闭；需要落盘时取消注释）──────────────────────
-  // file: {
-  //   name: 'app',        // 文件名（默认 app）→ app-2026-09-14.log
-  //   dir: 'logs',        // 目录（默认 logs）
-  //   ext: '.log',        // 扩展名
-  //   suffix: '',         // 文件名后缀；'pid' = 进程号（多进程部署防行交错）
-  //   date: true,         // 按天滚动；false = 单文件
-  //   dateDir: false,     // 日期做子目录 logs/2026-09-14/app.log
-  //   subdir: 'auto',     // 模块子目录：'auto' 按 tag 首段分类
-  //   level: 'info',      // 文件通道级别：'info'（及以上）/ 'all'（全量）/ ['info','error']（白名单）
-  //   error: true,        // warn+ 另写一份 error 文件
-  //   keepDays: 30        // 保留天数，过期自动清理；0 = 永久
-  // }
-});
-
-// 注册全局 log：其他文件可直接 `import { log } from './framework/log/index.js'` 使用，
-// 无需再 createLogger。必须在应用入口最先执行（本文件顶部即满足）。
-const log = createLogger('app', true);
-
-// 全局异常兜底：uncaughtException / unhandledRejection 统一走日志系统
-initLogErrorTraps();
+// 运行调优配置校验（未知配置段/项、越界值只告警不阻断启动）。
+// 放在 log 之后、任何消费之前 —— 配置问题要在启动日志里一眼可见。
+reportAppConfigWarnings();
 
 // 应用层不信任任意代理 IP，仅允许本地回环。
-// 生产环境若有反向代理（Nginx / Cloudflare / ALB），通过 PROXY_TRUST_CIDR 环境变量指定信任网段
-const PROXY_TRUST_CIDR = process.env.PROXY_TRUST_CIDR?.trim();
-const trustProxy = PROXY_TRUST_CIDR ? PROXY_TRUST_CIDR.split(',').map(s => s.trim()) : ['127.0.0.1', '::1'];
+// 生产环境若有反向代理（Nginx / Cloudflare / ALB），通过 PROXY_TRUST_CIDR 指定**确切地址**。
+const trustProxy = parseTrustProxy(process.env.PROXY_TRUST_CIDR);
 
-/**
- * 判断一条信任网段是否「宽到把 IP 维度让给攻击者」
- *
- * 为什么必须管这件事：`trustProxy` 里的每一条网段，其来源都可以**自定义 `X-Forwarded-For`**，
- * 于是 `request.ip` 变成攻击者可填的字符串。而 `request.ip` 是下面三件事的唯一判据：
- *   1. `allowIps` 守卫白名单（`src/api/guard.js`）
- *   2. `@fastify/rate-limit` 的 `keyGenerator`（`rate:ip:*`）
- *   3. 防火墙按 IP 的封禁与挑战（`fw:blocked:ips`）
- * 网段写得越宽，等于越多来源能自证"我是任意 IP"。
- *
- * 判据（只报「明显过宽」，避免正常部署天天告警）：
- *   - `0.0.0.0/0` / `::/0`：信任全部来源 —— 等于关掉 IP 维度，必报；
- *   - IPv4 前缀 ≤ 12（如 `172.16.0.0/12` 覆盖 100 万地址）、IPv6 前缀 ≤ 32：必报；
- *   - 单个主机地址（无 `/`）：永远安全，不报。
- *
- * @param {string[]} entries - `trustProxy` 的取值
- * @returns {string[]} 每一条过宽网段的说明；空数组表示没有风险
- */
-function describeProxyTrustRisk(entries) {
-  const risks = [];
-  for (const raw of entries || []) {
-    const entry = String(raw).trim();
-    if (!entry) continue;
-
-    const slash = entry.lastIndexOf('/');
-    if (slash === -1) continue; // 单主机地址，不存在"整段可伪造"的问题
-
-    const addr = entry.slice(0, slash);
-    const prefix = Number(entry.slice(slash + 1));
-    if (!Number.isInteger(prefix) || prefix < 0) continue; // 非法写法交给 Fastify 报错
-
-    const isV6 = addr.includes(':');
-    const maxPrefix = isV6 ? 128 : 32;
-    if (prefix > maxPrefix) continue;
-
-    if (prefix === 0) {
-      risks.push(`"${entry}" 信任了全部来源（/${prefix}），等价于关闭 IP 维度防护`);
-      continue;
-    }
-    const tooWide = isV6 ? prefix <= 32 : prefix <= 12;
-    if (tooWide) {
-      risks.push(
-        `"${entry}" 覆盖约 ${isV6 ? '2^(128-' + prefix + ')' : '2^(32-' + prefix + ')'} 个地址，` +
-          `其中任何来源都能自定义 X-Forwarded-For 并冒充任意客户端 IP`
-      );
-    }
-  }
-  return risks;
-}
-
-{
-  const proxyRisks = describeProxyTrustRisk(trustProxy);
-  if (proxyRisks.length > 0) {
-    log.warn(
-      `⚠️ [Proxy] PROXY_TRUST_CIDR 过宽，IP 白名单 / 限流 / 封禁可被 X-Forwarded-For 绕过：\n` +
-        proxyRisks.map(r => `   - ${r}`).join('\n') +
-        `\n   修法：只填反向代理的**确切地址**（如 172.18.0.2/32），不要填整个网段。`
-    );
-  }
+// 过宽网段会让 IP 白名单 / 限流 / 封禁同时失效且无任何报错 —— 启动即告警
+const proxyRisks = describeProxyTrustRisk(trustProxy);
+if (proxyRisks.length > 0) {
+  log.warn(formatProxyTrustRisks(proxyRisks));
 }
 
 // 启动时解析 CORS 白名单，避免每次请求重复解析环境变量
-const CORS_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
-
-// ════════════════════════════════════════════════════════════════════
-// HTTP 连接层超时（运行调优项，主来源 = src/config/app_config.js）
-// ════════════════════════════════════════════════════════════════════
-// 这些值决定"坏连接能占住资源多久"与"停机能有多快"，因此显式声明而非依赖 Fastify 的
-// 隐式默认，并允许按反代 / 网关的 keepalive 设置对齐。
-//
-// 取值来自 src/config/app_config.js 的**可选覆盖**（缺失即用下方 core 保底值；env 通道已退役
-// —— 调优项不属于「必须设定的 env」）。三个值都是 Fastify 构造参数，只在本模块
-// 加载时读取一次，**不支持运行时热改**；需要热改的调优项走 firewall_config.json
-// deepMerge 那套。详细取舍注释见 app_config.js，此处不再重复。
-//
-// ⚠️ Fastify 的选项校验会**静默丢弃**不在其 schema 内的键 —— 实测传入 `headersTimeout`
-// 或 `timeout` 既不报错也不生效（`app.server.headersTimeout` 仍是 Node 默认 60000）。
-// 只有下面几个键是 Fastify 5 认识并真正透传到 http server 的（已实测确认）。
-// 慢 header 攻击由 Node 内建的 headersTimeout（60s）兜底，Fastify 未透出该选项。
-const HTTP_KEEP_ALIVE_TIMEOUT_MS = resolveTimeoutMs(APP_CONFIG.http?.keepAliveTimeoutMs, 72_000);
-const HTTP_REQUEST_TIMEOUT_MS = resolveTimeoutMs(APP_CONFIG.http?.requestTimeoutMs, 300_000);
-
-/** WebSocket 关闭宽限期（毫秒）：广播关闭帧后，等这么久再强制断开残留连接 */
-const WS_SHUTDOWN_GRACE_MS = resolveTimeoutMs(APP_CONFIG.websocket?.shutdownGraceMs, DEFAULT_WS_SHUTDOWN_GRACE_MS);
-
-// 运行调优配置校验：未知配置段/配置项（疑似拼写错误）与越界值一律告警。
-// 放在 log 创建之后、任何消费之前 —— 配置问题要在启动日志里一眼可见，
-// 但不阻断启动（调优文件不该有让服务起不来的能力）。
-for (const w of validateAppConfig()) {
-  log.warn(`⚠️ [AppConfig] ${w}`);
-}
-
-/**
- * 校验环境变量
- *
- * 判据已统一收敛到 `framework/config/env.js` 的 schema —— 包括密钥强度与
- * 已知弱值黑名单（原先的 validateSecrets 就是这里的一部分）。
- *
- * 分两级处置：
- *   · **错误**（配错、或生产环境缺必需项）→ 打印全部问题后终止进程。
- *     静默启动一个配置错误的服务，比启动失败更难排查。
- *   · **警告**（非生产环境缺必需项）→ 只提示，不拦启动。本地开发不该被拦住。
- *
- * ⚠️ 返回 false 表示已安排退出，调用方必须立刻停止后续初始化。
- *
- * @param {boolean} isProduction - 是否生产环境
- * @returns {boolean} true = 校验通过可以继续启动
- */
-function validateEnvironment(isProduction) {
-  const result = validateEnv(process.env, { isProduction });
-
-  for (const w of result.warnings) {
-    log.warn(`⚠️ [Config] ${w.key}: ${w.message}`);
-  }
-  for (const n of result.notes) {
-    log.info(`ℹ️ [Config] ${n}`);
-  }
-
-  if (result.ok) return true;
-
-  // 统一出口打印，避免问题多时被其他日志穿插
-  log.always.error(`❌ [Config] 环境变量校验失败（${result.errors.length} 项），拒绝启动：`);
-  for (const e of result.errors) {
-    log.always.error(`   • ${e.key}: ${e.message}`);
-  }
-  // 给 stderr 100ms 刷新时间，确保 CI/Docker 环境下错误消息完整输出
-  setTimeout(() => process.exit(1), 100);
-  return false;
-}
-
-/**
- * 创建全局错误处理器
- * 统一响应格式：ApiException 携带业务码、AJV 校验失败聚合为 400、
- * 通用错误保持原状。500+ 记录完整错误栈，生产环境隐藏堆栈信息。
- *
- * @param {boolean} isProduction - 是否生产环境（控制堆栈是否泄露）
- * @returns {import('fastify').ErrorHandler} Fastify 错误处理函数
- */
-function createErrorHandler(isProduction) {
-  return (error, request, reply) => {
-    let statusCode = error.statusCode ?? error.status ?? 500;
-    let bizCode = null;
-    let message = error.message || '服务器内部错误';
-    let data = null;
-
-    if (error instanceof ApiException) {
-      statusCode = error.statusCode;
-      bizCode = error.bizCode;
-      message = error.message;
-      data = error.data;
-    } else if (error.validation) {
-      // AJV 校验失败以 400 返回，拼接所有校验错误信息方便前端定位
-      statusCode = 400;
-      message = error.validation.map(v => v.message || v.instancePath).join('; ');
-    } else if (isProduction && statusCode >= 500) {
-      // 生产环境非预期 500 不回显内部错误原文（可能含 SQL/路径/内网地址）
-      message = '服务器内部错误，请稍后重试';
-    }
-
-    // 500+ 记录完整错误栈，400 仅记录摘要（统一日志出口，落 logs/*.log）
-    if (statusCode >= 500) {
-      log.error('服务器内部错误', error, { statusCode });
-    } else {
-      log.warn('请求异常', { statusCode, message });
-    }
-
-    reply.status(statusCode).send({
-      code: bizCode ?? statusCode,
-      message,
-      data: data ?? null,
-      timestamp: Date.now(),
-      requestId: request.id,
-      stack: !isProduction ? error.stack : undefined,
-      app: request.state?.appName || 'system'
-    });
-  };
-}
+const CORS_ORIGINS = parseOriginList(process.env.CORS_ORIGINS);
 
 /**
  * 创建并配置 Fastify 应用实例
- * 按顺序注册：Helmet → CORS → Multipart → Static → WebSocket → Cookie
- * → 安全响应头 → 全局错误处理器 → 加载器引擎
+ *
+ * 顺序即依赖：配置体检 → 建实例 → 基础插件 → 错误处理器 → 引擎 → 调度器
+ * → 守卫配置同步 → 关闭钩子。
  *
  * @returns {Promise<import('fastify').FastifyInstance>} 配置完成的 Fastify 实例
- * @throws {Error} 密钥校验失败时退出进程，插件注册失败时抛出
+ * @throws {Error} 环境变量校验失败时（进程已安排退出）抛出，立即中断启动
  */
 async function createApp() {
   const isProduction = process.env.NODE_ENV === 'production';
 
-  // 环境变量集中校验（含密钥强度与弱值黑名单）。
-  // 放在最前面：配置错误应当**在建立任何连接之前**就暴露，
-  // 而不是等到某个功能在运行期静默失效。
-  if (!validateEnvironment(isProduction)) {
+  // 配置错误必须在**建立任何连接之前**暴露，而不是等某个功能在运行期静默失效。
+  if (!checkEnvironment(isProduction)) {
     // 已安排 process.exit；抛出是为了立刻中断启动流程，
     // 避免在等待退出的 100ms 里又去连数据库、注册路由
     throw new Error('环境变量校验失败，启动已中止');
   }
 
-  // 生产环境未配置 CORS 白名单时记录警告，避免运维人员误以为跨域请求可以正常访问
+  // 生产环境未配置白名单时记录警告，避免运维人员误以为跨域请求可以正常访问
   if (isProduction && CORS_ORIGINS.length === 0) {
     log.warn('⚠️ [App] 生产环境未配置 CORS_ORIGINS，所有跨域请求将被拒绝。请在 .env 中设置允许的来源（逗号分隔）');
   }
 
-  // 创建 Fastify 实例，开发环境 pino-pretty 美化，生产环境 JSON 结构化供 ELK/Loki 解析
-  const app = Fastify({
-    bodyLimit: 5242880, // 5MB JSON 请求体限制
-    // 停机时不等长连接：普通 keep-alive 连接会被立即关闭（实测 close 由"等超时"变为 1ms）。
-    // ⚠️ 它对**已 upgrade 的 WebSocket 连接无效**，那部分由下面的 wsPreClose 负责。
-    forceCloseConnections: true,
-    keepAliveTimeout: HTTP_KEEP_ALIVE_TIMEOUT_MS,
-    requestTimeout: HTTP_REQUEST_TIMEOUT_MS,
-    logger: {
-      level: 'info',
-      ...(!isProduction
-        ? {
-            transport: {
-              target: 'pino-pretty',
-              options: {
-                colorize: true,
-                translateTime: 'SYS:HH:MM:ss',
-                ignore: 'pid,hostname'
-              }
-            }
-          }
-        : {
-            // 生产环境附带 request-id 方便全链路追踪
-            serializers: {
-              req(request) {
-                return {
-                  method: request.method,
-                  // 只记路径，剥离 query 中的 code/token/sign 等敏感参数
-                  url: request.url.split('?')[0],
-                  hostname: request.hostname,
-                  remoteAddress: request.ip,
-                  requestId: request.id
-                };
-              },
-              res(reply) {
-                return {
-                  statusCode: reply.statusCode
-                };
-              }
-            }
-          })
-    },
-    genReqId: req => {
-      const raw = req.headers['x-request-id'];
-      // 仅信任受限安全字符，防止日志注入/超长字符串
-      if (typeof raw === 'string' && raw.length >= 1 && raw.length <= 128 && /^[\w.-]+$/.test(raw)) {
-        return raw;
-      }
-      return crypto.randomUUID();
-    },
-    // 尾部斜杠由网关层（Nginx）统一处理，应用层不做模糊匹配以提升路由性能
-    trustProxy
-  });
+  const app = Fastify(buildServerOptions({ isProduction, trustProxy }));
 
-  // 静态根只从 framework/storage 取（PUBLIC_ROOT = <repo>/public）：这里再数一次 `../`
-  // 就等于第二份定义，和 storage 的 appDir/publicUrl 一旦不同步就是"写进去、读不到"。
-  const publicPath = PUBLIC_ROOT;
+  // 基础插件按依赖顺序注册（security → cors → file → ws → cookie）
+  await registerBasePlugins(app, { isProduction, corsOrigins: CORS_ORIGINS });
 
-  // 1. 注册 Fastify 生态插件（按依赖顺序：security → cors → file → ws → cookie）
-  // iframe 白名单 = CORS_ORIGINS（同一套受信应用域）：posecraft/firewall/admin 互相 iframe 嵌入 SSO
-  // frame-ancestors：允许本站被这些域 iframe 嵌入（oauth21 登录页被 posecraft 嵌入）
-  // frame-src：允许本站 iframe 嵌入这些域的页面（posecraft 嵌 oauth21 登录页）
-  const iframeWhitelist = CORS_ORIGINS.length ? CORS_ORIGINS : [];
-  await app.register(helmet, {
-    contentSecurityPolicy: !isProduction
-      ? false // 开发环境禁用 CSP 避免 HMR 资源加载因内联脚本被拦截
-      : {
-          directives: {
-            defaultSrc: ["'self'"],
-            // TODO: 迁移到 nonce 或 hash 模式，彻底关闭 unsafe-inline 以启用 XSS 防护
-            // 方案：使用 @fastify/helmet 的 nonce 功能，在 onRequest 钩子中生成 nonce，
-            // 注入到 reply 的 locals 中，前端模板通过 `__NONCE__` 占位符获取。
-            // 参考：https://github.com/helmetjs/helmet/tree/main#content-security-policy
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", 'data:', 'blob:'],
-            fontSrc: ["'self'", 'data:'],
-            connectSrc: ["'self'", ...iframeWhitelist],
-            // 允许 iframe 嵌入受信应用域（SSO 登录页 iframe 互嵌），白名单为空时禁用
-            frameSrc: iframeWhitelist.length ? ["'self'", ...iframeWhitelist] : ["'self'"],
-            frameAncestors: iframeWhitelist.length ? ["'self'", ...iframeWhitelist] : ["'none'"],
-            objectSrc: ["'none'"],
-            baseUri: ["'self'"],
-            formAction: ["'self'"]
-          }
-        },
-    // frameguard：用 CSP frame-ancestors 统一控制（更现代），关闭 helmet 的 frameguard 避免冲突
-    frameguard: false,
-    // Helmet 默认已包含 nosniff / frameguard / xssFilter / referrerPolicy
-    // 生产环境额外启用 HSTS（开发环境不需要，避免 localhost 被强制 HTTPS）
-    hsts: isProduction ? { maxAge: 31536000, includeSubDomains: true, preload: false } : false
-  });
-
-  await app.register(cors, {
-    origin: (origin, cb) => {
-      // 生产环境：仅允许 CORS_ORIGINS 白名单来源，防止 CSRF 和信息泄露
-      if (isProduction && origin) {
-        // 没有配置白名单或当前 origin 不在白名单内 → 拒绝
-        if (CORS_ORIGINS.length === 0 || !CORS_ORIGINS.includes(origin)) {
-          return cb(new Error('CORS origin not allowed'), false);
-        }
-      }
-      // origin 为 undefined 时是同源请求（无跨域），无需校验直接放行
-      cb(null, true);
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'Accept',
-      'token',
-      'X-Sign',
-      'X-Timestamp',
-      'X-Nonce',
-      'x-device-id',
-      'X-Device-Fp',
-      'x-verify-token'
-    ],
-    // 跨域部署时浏览器只把 exposedHeaders 里的头交给前端 JS：设备 ID 的两个响应头
-    // 是 device-sync 唯一的数据来源（cookie 是 httpOnly，JS 读不到），漏暴露等于跨域直连时
-    // 设备身份同步彻底失效（前端既发不出也存不下 ID）。
-    exposedHeaders: ['Content-Disposition', 'token', 'X-Request-Id', 'X-Device-Id', 'X-Device-Id-Updated'],
-    maxAge: 86400
-  });
-
-  await app.register(multipart, {
-    // 全局最大 200MB，单次请求最多 1 个文件 + 10 个字段
-    // 具体文件类型校验（MIME magic bytes）在路由层处理
-    limits: {
-      fileSize: 200 * 1024 * 1024,
-      files: 1,
-      fields: 10
-    }
-  });
-
-  // 静态资源：root=public，prefix=/ ⇒ public/<app>/xxx 直接可访问 /<app>/xxx
-  //
-  // 目录约定（详见 src/framework/storage/index.js）：
-  //   public/<app>/…    公开资源（作品图 / 头像 / logo / 字体）—— 任何人可访问
-  //   storage/<app>/…   **私有**资源，不在这里，只能经 /api/files/v1/:app/* 鉴权下发
-  //
-  // 缓存：文件名由服务端生成（UUID / 内容 hash），内容不会原地变 ⇒ 可以长缓存。
-  // 之前只设了 CORP、没设 maxAge，等于每个资源都带 ETag 回源 304，纯浪费。
-  // 生产若前面有 nginx/CDN，这一段可整段关掉交给它（Node 不该伺候静态文件）。
-  await app.register(staticPlugin, {
-    root: publicPath,
-    prefix: '/',
-    maxAge: '7d',
-    etag: true,
-    setHeaders: reply => {
-      // ⚠️ 回调的第一个参数是 **Fastify reply**，不是裸 http.ServerResponse：
-      // 之前写 `res.setHeader(...)` 会抛 `res.setHeader is not a function`，
-      // 而 public/ 里长期没有文件 → 这条路径从没跑过，直到真正放静态资源才暴露。
-      reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
-      // 上传目录里可能混入被伪造扩展名的内容，禁止浏览器嗅探 MIME
-      reply.header('X-Content-Type-Options', 'nosniff');
-    }
-  });
-
-  // 自定义 preClose：广播关闭帧 + 宽限期后强制断开，避免半开 WS 连接拖住 app.close()
-  await app.register(websocket, { preClose: createWsPreClose(WS_SHUTDOWN_GRACE_MS) });
-
-  await app.register(cookie);
-
-  // 2. 全局错误处理：统一响应格式，生产环境隐藏堆栈信息
+  // 全局错误处理：统一响应格式，生产环境隐藏堆栈与内部错误原文
   app.setErrorHandler(createErrorHandler(isProduction));
 
   // 启动加载器引擎，按顺序初始化 Redis → DB → Auth → Firewall → Models → API → Apps
@@ -459,25 +101,38 @@ async function createApp() {
   // 必须在 initLoader（内部已调用 loadGuardConfig 完成首次加载）之后启动。
   startGuardConfigSync();
 
-  // 注册优雅关闭钩子：确保防抖中的守卫配置在退出前写入数据库
+  registerShutdownHooks(app);
+
+  return app;
+}
+
+/**
+ * 注册优雅关闭钩子
+ *
+ * 两件事都必须显式做，否则进程无法自然退出或丢配置：
+ *   ① 防抖中的守卫配置要在退出前落库（Fastify onClose 不暴露异步错误，必须自捕获）
+ *   ② Redis Pub/Sub 派生的订阅连接要 quit（否则事件循环上永远有个活句柄）
+ *
+ * @param {import('fastify').FastifyInstance} app - Fastify 实例
+ * @returns {void}
+ */
+function registerShutdownHooks(app) {
   app.addHook('onClose', async () => {
     stopGuardConfigSync();
     try {
       await flushGuardConfig();
     } catch (err) {
-      // Fastify onClose 不暴露异步错误，必须在此捕获防止静默丢失
       log.error(`❌ [App] 优雅关闭时保存守卫配置失败`, err);
     }
 
-    // 关闭 Redis Pub/Sub 派生的订阅连接：不显式 quit 进程无法自然退出
     try {
       await closePubSub();
     } catch (err) {
       log.error(`❌ [App] 优雅关闭时关闭 Pub/Sub 失败`, err);
     }
   });
-
-  return app;
 }
 
-export { createApp, describeProxyTrustRisk, createErrorHandler };
+// createErrorHandler / describeProxyTrustRisk 一并再导出：既有测试与脚本按入口路径导入，
+// 保持门面契约不因拆分而断裂（实现本体已迁至 framework/http 与 utils/）。
+export { createApp, createErrorHandler, describeProxyTrustRisk, registerShutdownHooks };

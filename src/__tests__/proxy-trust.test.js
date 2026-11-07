@@ -9,13 +9,26 @@
  * 历史上 `.env.docker.example` 就给了 `172.16.0.0/12`（100 万个地址），
  * 等于把 IP 维度整体让出去。本文件把"什么算过宽"钉死。
  */
-import { describe, it, expect, jest } from '@jest/globals';
-// @fastify/static@10 依赖 **ESM-only** 的 content-disposition；Node 22.12+ 的 require(esm)
-// 能跑通，但 jest 的 CJS 运行时不行 —— 于是任何 import src/app.js 的套件都会在加载阶段炸。
-// 本文件只验证代理信任网段的过宽判定（describeProxyTrustRisk），与静态资源无关，所以用空插件替身；
-// 真实的静态服务链路由 CI 的 compose 冒烟（GET /v1/health/ready + 站点资源）覆盖。
-jest.unstable_mockModule('@fastify/static', () => ({ default: async () => {} }));
-const { describeProxyTrustRisk } = await import('../app.js');
+import { describe, it, expect } from '@jest/globals';
+// 2026-11-07 起判据本体住在 utils/proxy-trust.js（纯函数，零框架依赖），
+// 因此不再需要给 `@fastify/static` 打桩即可直接驱动真身。
+const { describeProxyTrustRisk, parseTrustProxy } = await import('../utils/proxy-trust.js');
+
+describe('parseTrustProxy', () => {
+  it('未配置 → 仅回环（应用层不信任任意代理）', () => {
+    expect(parseTrustProxy(undefined)).toEqual(['127.0.0.1', '::1']);
+    expect(parseTrustProxy('')).toEqual(['127.0.0.1', '::1']);
+    expect(parseTrustProxy('   ')).toEqual(['127.0.0.1', '::1']);
+  });
+
+  it('逗号分隔并去空白', () => {
+    expect(parseTrustProxy(' 172.18.0.2/32 , 10.1.1.1 ')).toEqual(['172.18.0.2/32', '10.1.1.1']);
+  });
+
+  it("只有空项时回退默认值（不把 ['',''] 交给 Fastify 换来一条难定位的启动错误）", () => {
+    expect(parseTrustProxy(' , ,')).toEqual(['127.0.0.1', '::1']);
+  });
+});
 
 describe('describeProxyTrustRisk', () => {
   it('默认值（仅回环）没有风险', () => {

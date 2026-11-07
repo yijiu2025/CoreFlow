@@ -13,7 +13,7 @@
  * @since 2026-08-17
  * @since 2026-10-31 错误处理器改为真身驱动（此前为内联副本）
  */
-import { describe, test, expect, beforeAll, afterAll, jest } from '@jest/globals';
+import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import Fastify from 'fastify';
 import {
   ApiException,
@@ -25,12 +25,10 @@ import {
   TooManyRequestsException,
   InternalServerException
 } from '../shared/exceptions.js';
-// @fastify/static@10 依赖 **ESM-only** 的 content-disposition；Node 22.12+ 的 require(esm)
-// 能跑通，但 jest 的 CJS 运行时不行 —— 于是任何 import src/app.js 的套件都会在加载阶段炸。
-// 本文件只验证错误处理器（createErrorHandler），与静态资源无关，所以用空插件替身；
-// 真实的静态服务链路由 CI 的 compose 冒烟（GET /v1/health/ready + 站点资源）覆盖。
-jest.unstable_mockModule('@fastify/static', () => ({ default: async () => {} }));
-const { createErrorHandler } = await import('../app.js');
+// 2026-11-07 起 createErrorHandler 住在 framework/http/error-handler.js：
+// 那个模块不碰任何 @fastify/* 插件，因此这里不再需要给 `@fastify/static` 打桩
+// （此前必须 mock，否则 jest 的 CJS 运行时会在加载 ESM-only 的 content-disposition 时炸）。
+const { createErrorHandler } = await import('../framework/http/error-handler.js');
 
 describe('统一 API 异常基类', () => {
   test('ApiException 实例化及属性', () => {
