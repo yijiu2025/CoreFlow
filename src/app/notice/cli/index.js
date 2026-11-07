@@ -9,7 +9,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { getModels } from '../../../framework/db/models.js';
+import { getModels } from '../../../framework/persistence/db/models.js';
 import {
   printTable,
   printSuccess,
@@ -19,8 +19,8 @@ import {
   createRl,
   ask,
   closeRl
-} from '../../../framework/cli/index.js';
-import { logStdout } from '../../../framework/log/index.js';
+} from '../../../framework/support/cli/index.js';
+import { logStdout } from '../../../framework/support/log/index.js';
 
 /**
  * 查看通知通道
@@ -107,12 +107,14 @@ async function testEmail() {
     printInfo('正在发送测试邮件...');
 
     try {
-      const { default: emailService } = await import('../../services/email.js');
-      const result = await emailService.send({
-        to: email,
-        subject: 'CoreFlow 测试邮件',
-        html: '<h1>测试成功</h1><p>这是一封来自 CoreFlow 的测试邮件。</p>'
-      });
+      // 发信能力在 framework（`support/notice/services/email.js`），不在 app 侧：
+      // app 只持有 SMTP 配置与模板的 DAO，实际发送由框架统一实现并复用连接池。
+      const { default: emailService } = await import('../../../framework/support/notice/services/email.js');
+      const result = await emailService.send(
+        email,
+        'CoreFlow 测试邮件',
+        '<h1>测试成功</h1><p>这是一封来自 CoreFlow 的测试邮件。</p>'
+      );
 
       if (result) {
         printSuccess(`测试邮件已发送至: ${email}`);
