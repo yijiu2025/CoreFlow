@@ -1,7 +1,7 @@
 # sa-token-node 与本仓 StpUtil 融合性分析
 
 > 分析对象：https://github.com/yijiu2025/sa-token-node（移植 Java Sa-Token 到 Node）
-> 对照对象：`src/framework/auth/stp-util.js`（本仓权限认证核心工具类）
+> 对照对象：`src/framework/security/auth/stp-util.js`（本仓权限认证核心工具类）
 > 日期：2026-11-01
 > **状态更新（2026-11-01 下午）：P1/P2/P3 已实现完毕，见文末「五、实现落地记录」。**
 
@@ -51,7 +51,7 @@
 | 优先级 | 能力 | 落点建议 | 理由 |
 | --- | --- | --- | --- |
 | P1 | 事件中心（登录/登出/踢人广播） | `session.js` 内加轻量 EventEmitter 或注册表，`04-auth.js` 挂监听 | 成本极低，直接补审计/告警能力 |
-| P1 | 账号封禁 + 阶梯等级 | 新增 `src/framework/auth/ban.js`，Redis key `ban:<uid>:<service>` + TTL；`StpUtil.check()` 前置校验 | 本仓 Redis 陷阱经验已齐（v5 scan 等），实现成本低；补齐账号级处罚闭环 |
+| P1 | 账号封禁 + 阶梯等级 | 新增 `src/framework/security/auth/ban.js`，Redis key `ban:<uid>:<service>` + TTL；`StpUtil.check()` 前置校验 | 本仓 Redis 陷阱经验已齐（v5 scan 等），实现成本低；补齐账号级处罚闭环 |
 | P2 | 二级认证 openSafe/checkSafe | 新增 `safe.js`，Redis 存 `safe:<uid>:<service>` + 时间窗 | 敏感操作（改密/解绑/支付）通用需求 |
 | P2 | 权限实时化（StpInterface 思想） | 可选：`hasPermission` 支持注入"实时 loader"，默认仍走 session 快照 | 解决"改权限需重新登录"痛点，但要权衡每次校验的 Redis 查询开销，建议做成可配置 |
 | P3 | 顶人下线（replaced 语义） | `createSession` 加 isConcurrent 选项，被顶 session 打 kicked-out 场景标记 | 前端可据此提示"您已在别处登录" |
@@ -95,9 +95,9 @@
 
 | 优先级 | 内容 | 落点 |
 | --- | --- | --- |
-| P1a | 认证事件总线（session:login/logout/kick + ban/safe 事件，零依赖，监听者抛错不阻断主流程） | `framework/auth/events.js` |
-| P1b | 账号封禁：service 维度 + 时限/永久 + 阶梯等级；封 'login' 拦新登录、封 'access' 请求级拦截（30s 负缓存）；Redis TTL 到期自动解封 | `framework/auth/ban.js` + StpUtil.disable/disableLevel/untieDisable/checkDisable 系列 |
-| P2a | 二级认证：openSafe/isSafe/checkSafe/closeSafe；`registerSecureRoute` 新增 `safe: 'service'` 声明字段（守卫后追加 checkSafe preHandler） | `framework/auth/safe.js` + guard.js |
+| P1a | 认证事件总线（session:login/logout/kick + ban/safe 事件，零依赖，监听者抛错不阻断主流程） | `framework/security/auth/events.js` |
+| P1b | 账号封禁：service 维度 + 时限/永久 + 阶梯等级；封 'login' 拦新登录、封 'access' 请求级拦截（30s 负缓存）；Redis TTL 到期自动解封 | `framework/security/auth/ban.js` + StpUtil.disable/disableLevel/untieDisable/checkDisable 系列 |
+| P2a | 二级认证：openSafe/isSafe/checkSafe/closeSafe；`registerSecureRoute` 新增 `safe: 'service'` 声明字段（守卫后追加 checkSafe preHandler） | `framework/security/auth/safe.js` + guard.js |
 | P3 | 顶人下线增强：①踢出墓碑（被顶 SESSION_REPLACED / 被踢 SESSION_KICKED，X-Session-Kick 响应头，24h TTL）②`SESSION_SINGLE_DEVICE_TYPES` env 按设备类型配互顶策略（默认全部类型=历史行为）③`offlineSessionIds` 登录参数（MAX_SESSIONS_EXCEEDED 前端勾选后重试，归属校验防越权踢人） | session-kick.js + session.js + session-store.js |
 | 管理端 API | POST /admin/user/v1/bans/disable · /bans/untie · GET /bans/status | `api/admin/user/v1/bans.js` |
 

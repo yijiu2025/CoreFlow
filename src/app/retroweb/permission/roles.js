@@ -58,7 +58,7 @@ defineRoles([
   // 3. RetroWeb 管理员
   //
   // 🔴 这个角色的 code **必须**是 `${appId}_admin`（即 `retroweb_admin`）——
-  //    `framework/auth/index.js` 对 GLOBAL `superadmin` 是这么做的：
+  //    `framework/security/auth/index.js` 对 GLOBAL `superadmin` 是这么做的：
   //    自动 `roles.push('${appId}_admin')` 并按**确切 code** 去 Role 表查它的 policy。
   //    code 写错（比如叫 `retroweb_super`）⇒ 超管在本应用上**一个额外权限都拿不到**，
   //    而且不报错、静默失效。

@@ -29,7 +29,7 @@
  *        未知配置项 "http.keepAliveTimeout"（合法：keepAliveTimeoutMs / requestTimeoutMs），已忽略 —— 疑似拼写错误
  *        "http.requestTimeoutMs" = -1 非法（需 0~3600000 的整数），已回退默认值
  *      校验器：`framework/config/app-config-schema.js`
- *      调用点：`framework/startup/config-check.js`（只告警，**不阻断启动**）
+ *      调用点：`framework/lifecycle/startup/config-check.js`（只告警，**不阻断启动**）
  *
  * ════════════════════════════════════════════════════════════════════
  * 三、可配置项总表（唯一清单，改动请同步此表）
@@ -41,31 +41,31 @@
  * │ 键                               │ 默认值   │ 合法范围        │ 含义 / 什么时候要改                         │ 默认值出处（谁读它）                      │
  * ├──────────────────────────────────┼──────────┼─────────────────┼────────────────────────────────────────────┼──────────────────────────────────────────┤
  * │ http.keepAliveTimeoutMs          │ 72_000   │ 0 ~ 3_600_000   │ keep-alive 空闲超时。**必须大于前置反代的    │ DEFAULT_HTTP_OPTIONS                      │
- * │                                  │          │                 │ keepalive**（Nginx 75s / ALB 60s），否则出现 │ framework/http/server-options.js          │
+ * │                                  │          │                 │ keepalive**（Nginx 75s / ALB 60s），否则出现 │ framework/ingress/http/server-options.js          │
  * │                                  │          │                 │ "反代刚复用、应用已关闭"的间歇 502            │                                          │
  * ├──────────────────────────────────┼──────────┼─────────────────┼────────────────────────────────────────────┼──────────────────────────────────────────┤
  * │ http.requestTimeoutMs            │ 300_000  │ 0 ~ 3_600_000   │ 单请求总时长上限（含请求体），封堵慢速发     │ DEFAULT_HTTP_OPTIONS                      │
- * │                                  │          │                 │ body（RUDY）。给 200MB 上传留余量            │ framework/http/server-options.js          │
+ * │                                  │          │                 │ body（RUDY）。给 200MB 上传留余量            │ framework/ingress/http/server-options.js          │
  * ├──────────────────────────────────┼──────────┼─────────────────┼────────────────────────────────────────────┼──────────────────────────────────────────┤
  * │ websocket.shutdownGraceMs        │ 1_000    │ 0 ~ 600_000     │ 停机宽限期：广播关闭帧后等这么久再强断残留   │ DEFAULT_WS_SHUTDOWN_GRACE_MS              │
- * │                                  │          │                 │ 连接。0 = 广播后立刻强断（不推荐）           │ framework/websocket/preclose.js           │
- * │                                  │          │                 │                                             │ 消费：framework/http/plugins.js           │
+ * │                                  │          │                 │ 连接。0 = 广播后立刻强断（不推荐）           │ framework/ingress/websocket/preclose.js           │
+ * │                                  │          │                 │                                             │ 消费：framework/ingress/http/plugins.js           │
  * ├──────────────────────────────────┼──────────┼─────────────────┼────────────────────────────────────────────┼──────────────────────────────────────────┤
  * │ websocket.closeCode              │ 1001     │ 1000 ~ 4999     │ 停机时广播的关闭帧状态码（1001 = going away）│ WS_CLOSE_GOING_AWAY                       │
- * │                                  │          │ 禁发 1005/1006/ │ 一般不用改；只有客户端按特定码做重连/提示时  │ framework/websocket/preclose.js           │
- * │                                  │          │ 1015            │ 才配。禁发码会被回退成 1001                  │ 消费：framework/http/plugins.js           │
+ * │                                  │          │ 禁发 1005/1006/ │ 一般不用改；只有客户端按特定码做重连/提示时  │ framework/ingress/websocket/preclose.js           │
+ * │                                  │          │ 1015            │ 才配。禁发码会被回退成 1001                  │ 消费：framework/ingress/http/plugins.js           │
  * ├──────────────────────────────────┼──────────┼─────────────────┼────────────────────────────────────────────┼──────────────────────────────────────────┤
  * │ guard.syncIntervalMs             │ 30_000   │ 0 ~ 3_600_000   │ 守卫配置跨实例同步轮询间隔。**单实例部署设 0  │ SYNC_INTERVAL_MS                          │
  * │                                  │          │                 │ 关闭**（否则每 30s 白查一次 DB）              │ api/guard-config.js                       │
  * ├──────────────────────────────────┼──────────┼─────────────────┼────────────────────────────────────────────┼──────────────────────────────────────────┤
  * │ monitor.slowRequestThresholdMs   │ 2_000    │ 0 ~ 3_600_000   │ 慢请求告警阈值（**只记日志**，硬断开由       │ SLOW_THRESHOLD                            │
- * │                                  │          │                 │ requestTimeoutMs 负责）                     │ framework/loader/registry/01-monitor.js   │
+ * │                                  │          │                 │ requestTimeoutMs 负责）                     │ framework/lifecycle/loader/registry/01-monitor.js   │
  * ├──────────────────────────────────┼──────────┼─────────────────┼────────────────────────────────────────────┼──────────────────────────────────────────┤
  * │ passwordHash.scryptMaxConcurrency│ 16       │ 1 ~ 1024        │ scrypt 并发上限。每次约 16MB 内存，16 ≈       │ scryptMaxConcurrency()                    │
- * │                                  │          │                 │ 峰值 256MB；超限抛 SCRYPT_BUSY 由上层 503    │ framework/auth/security/password-hash.js  │
+ * │                                  │          │                 │ 峰值 256MB；超限抛 SCRYPT_BUSY 由上层 503    │ framework/security/auth/security/password-hash.js  │
  * ├──────────────────────────────────┼──────────┼─────────────────┼────────────────────────────────────────────┼──────────────────────────────────────────┤
  * │ passwordHash.bcryptMaxConcurrency│ 4        │ 1 ~ 1024        │ 历史 bcrypt 校验并发（**阻塞主线程**约       │ bcryptMaxConcurrency()                    │
- * │                                  │          │                 │ 68ms/次）。存量账号多时可适当调，别调大      │ framework/auth/security/password-hash.js  │
+ * │                                  │          │                 │ 68ms/次）。存量账号多时可适当调，别调大      │ framework/security/auth/security/password-hash.js  │
  * └──────────────────────────────────┴──────────┴─────────────────┴────────────────────────────────────────────┴──────────────────────────────────────────┘
  *
  * ════════════════════════════════════════════════════════════════════

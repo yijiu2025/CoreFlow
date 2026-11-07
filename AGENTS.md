@@ -72,13 +72,13 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 
 | 目录 | 用途 | 谁写 |
 | --- | --- | --- |
-| `data/` | 运行期 JSON 状态：`*_config.json` 配置热改、`traffic_stats.json` 流量统计 | `framework/config/runtime.js`、`framework/firewall/config/persisted.js`、`app/firewall/data/store.js`、`framework/scheduler/index.js` |
+| `data/` | 运行期 JSON 状态：`*_config.json` 配置热改、`traffic_stats.json` 流量统计 | `framework/config/runtime.js`、`framework/ingress/firewall/config/persisted.js`、`app/firewall/data/store.js`、`framework/lifecycle/scheduler/index.js` |
 | `logs/` | 滚动日志 | 日志模块 |
 | `public/<app>/…` | 公开静态资源 | 业务上传（见下节） |
 | `storage/<app>/…` | 私有文件 | 业务上传（见下节） |
 
-- 路径的**唯一来源**：`src/framework/paths.js`（`REPO_ROOT` / `DATA_ROOT` / `dataFile()` / `ensureDataDir()`）
-  与 `src/framework/storage/index.js`（`PUBLIC_ROOT` / `PRIVATE_ROOT` / `appDir` / `resolveFile` / `publicUrl` / `publicUrlToPath` / `privateKey`）。
+- 路径的**唯一来源**：`src/framework/config/paths.js`（`REPO_ROOT` / `DATA_ROOT` / `dataFile()` / `ensureDataDir()`）
+  与 `src/framework/persistence/storage/index.js`（`PUBLIC_ROOT` / `PRIVATE_ROOT` / `appDir` / `resolveFile` / `publicUrl` / `publicUrlToPath` / `privateKey`）。
 - **禁止自己数 `../` 拼这些根**：数错一级就会静默写进 `src/<root>/` —— 文件照写不误，但读取方在另一个地方，
   表现为「功能不生效且无报错」（真实事故：`preview.js` 少写一层，预览图全写进 `src/public`，静态服务读根 `public/`，于是全 404）。
   `src/__tests__/storage-root.test.js` 会静态扫 `src/**/*.js` 拦这类写法，并断言 `src/{public,storage,data}` 下没有文件。
@@ -108,12 +108,12 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 ## 启动流程
 
 ```
-index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/framework/loader/engine.js)
+index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/framework/lifecycle/loader/engine.js)
 ```
 
-引擎扫描 `src/framework/loader/registry/` 目录，按文件名数字前缀顺序加载：
+引擎扫描 `src/framework/lifecycle/loader/registry/` 目录，按文件名数字前缀顺序加载：
 
-> 下表已于 2026-09-20 对 `src/framework/loader/registry/` 的实际文件名逐一核对。
+> 下表已于 2026-09-20 对 `src/framework/lifecycle/loader/registry/` 的实际文件名逐一核对。
 > 此前的版本遗漏了 `01-monitor`、`07-keys`，并把已合并的 `09-pbac` / `10-seed-clients` / `11-apps`
 > 当成三个独立步骤 —— 请勿再按旧表理解启动顺序。
 
@@ -123,9 +123,9 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/f
 | 01   | `01-monitor.js` | 请求耗时记录 + `X-Response-Time` 响应头 + 慢请求告警                    |
 | 02   | `02-redis.js`   | Redis 连接 + 健康监控，失败注入 `null`                                 |
 | 03   | `03-db.js`      | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出                  |
-| 04   | `04-auth.js`    | Session 验证 + ALS 初始化（`src/framework/auth/`）                     |
+| 04   | `04-auth.js`    | Session 验证 + ALS 初始化（`src/framework/security/auth/`）                     |
 | 05   | `05-firewall.js`| 五层拦截管道（限频/封禁/挑战/Bot/地理围栏）—— ⚠️ **序号是功能性的，不可挪** |
-| 06   | `06-models.js`  | 自动加载 `src/models/`，按命名空间注册到 `app.db`（实现住 `framework/db/models.js`） |
+| 06   | `06-models.js`  | 自动加载 `src/models/`，按命名空间注册到 `app.db`（实现住 `framework/persistence/db/models.js`） |
 | 07   | `07-keys.js`    | 密钥初始化（补齐默认密钥对，依赖模型已加载）                            |
 | 08   | `08-api.js`     | 自动加载 `src/api/` 路由（读 `system.json`）                           |
 | 09   | `09-notice.js`  | 通知配置种子数据（SMTP）                                               |
@@ -150,10 +150,10 @@ onSend        →  日志 + 连接释放
 onResponse    →  扫描陷阱（404/403 检测）
 ```
 
-## 认证系统 (`src/framework/auth/`)
+## 认证系统 (`src/framework/security/auth/`)
 
 ```
-src/framework/auth/
+src/framework/security/auth/
 ├── index.js              # 独立 auth 插件：Session 验证 + ALS + app.auth 装饰
 ├── cookie.js             # Cookie HMAC-SHA256 签名/验证
 ├── session.js            # Session 管理：创建/验证/销毁/续期/刷新/踢下线
@@ -285,30 +285,54 @@ registerSecureRoute(app, {
 
 ```
 src/
-│── 系统层（基础设施 + 通用工具）
-├── framework/         # 系统层基础设施
-│   ├── db/            #   数据库连接 + 迁移
-│   ├── redis/         #   缓存
-│   ├── log/           #   日志
-│   ├── auth/          #   认证框架（Session + Cookie + ALS）
-├── firewall/          # 防火墙
-│   ├── notice/        #   通知工具（邮件发送等通用服务）
-│   ├── verify/        #   验证码工具（通用服务）
-│   ├── scheduler/     #   定时任务调度器
-├── models/session/    # 系统模型（UserSession, SessionToken, SessionLog）
+├── framework/         # 系统层（架构层，零业务语义；按**六类**分组，详见下节）
+│   ├── config/        #   配置与路径   env 校验 / 覆盖层 / paths.js（仓库布局唯一来源）
+│   ├── persistence/   #   数据与状态   db / redis / storage
+│   ├── security/      #   身份与安全   auth / verify / jwt / keys / crypto
+│   ├── ingress/       #   接入与协议   http / websocket / firewall
+│   ├── lifecycle/     #   编排与生命周期 loader / startup / scheduler
+│   └── support/       #   支撑与旁路   log / cli / notice
 │
-│── 应用层
-├── app/
-│   ├── oauth21/       # OAuth 2.1 应用（config + permission/ + crypto + dao + services）
-│   ├── user/          # 用户应用（config + permission/ + dao）
-│   ├── admin/         # 管理应用（config + permission/ + dao）
-│   └── notice/        # 通知应用（config + permission/ + dao）
+├── app/               # 应用层（每个 app 可整目录删除而不影响启动）
+│   ├── oauth21/       #   OAuth 2.1 应用（config + permission/ + crypto + dao + services）
+│   ├── user/          #   用户应用（config + permission/ + dao）
+│   ├── admin/         #   管理应用（config + permission/ + dao）
+│   ├── guard/         #   权限守卫配置持久化（DB）
+│   ├── firewall/      #   防火墙的应用侧扩展（配置持久化 / 面板遥测 / 邮件通道）
+│   ├── notice/        #   通知应用（config + permission/ + dao）
+│   ├── posecraft/     #   姿态识别应用
+│   └── retroweb/      #   逆合成工作台后端能力
 │
 ├── api/               # 路由（按应用分文件夹，含 guard.js）
-├── models/            # 业务模型（user/, oauth21/, iam/, notice/）
-├── loader/            # 加载器
-└── data/              # 运行时数据
+├── models/            # 业务模型（user/, oauth21/, iam/, notice/, key/, guard/ …）
+├── shared/            # 前后端共享的纯逻辑（异常、常量）
+├── config/            # 静态覆盖层（可选，缺失即用 core 保底值）
+├── utils/             # 通用工具（timeout / cors / colors / proxy-trust …）
+└── __tests__/         # 测试（conventions/ 是架构守卫，必须与源码结构同步）
 ```
+
+### framework 的六类分组（2026-11-07 重整）
+
+分组只表达**职责归属**，不改变依赖方向：仍然是「上层 → 下层」单向，`log` / `config`
+是被依赖最多的两层（framework 内部跨模块 import 里 `log` 出现 26 次、`config` 12 次）。
+
+| 分组          | 成员                                | 归类判据                                                       |
+| ------------- | ----------------------------------- | -------------------------------------------------------------- |
+| `config/`     | config, `paths.js`                  | 只产出"值"，不持有连接、不参与请求                              |
+| `persistence/`| db, redis, storage                  | 持有外部连接或磁盘布局                                          |
+| `security/`   | auth, verify, jwt, keys, crypto     | 认证 / 授权 / 密钥 / 人机校验                                    |
+| `ingress/`    | http, websocket, firewall           | 决定"端口如何被访问"：插件装配、协议边界、请求前置管道            |
+| `lifecycle/`  | loader, startup, scheduler          | 只在启动期或后台跑，不参与单次请求                              |
+| `support/`    | log, cli, notice                    | 横切支撑（日志 / CLI / 出站邮件），可脱离 Fastify 独立驱动        |
+
+> `websocket/` 只有 `preclose.js` —— 它不实现 WS，只负责"半开连接不拖住 `app.close()`"；
+> 真正的 `@fastify/websocket` 注册在 `ingress/http/plugins.js` 里。
+>
+> ⚠️ **移动 framework 下任何文件前先看两件事**：（1）相对 import 的 `../` 层数；
+> （2）文件里是否用 `import.meta.url` 自己算仓库根（`config/paths.js`、`persistence/db/models.js`、
+> `persistence/db/migrate.js`、`lifecycle/loader/registry/0{8,9,10}-*.js`、
+> `support/notice/services/email.js`）—— 这类锚点不会报错，只会静默指向错误目录。
+
 
 每个应用目录结构：`config.js`（元数据）+ `permission/`（权限/角色定义）+ 业务代码
 
@@ -324,12 +348,12 @@ src/
 | `db.notice`  | EmailCode, NoticeConfig                                         | notice_email_codes, notice_configs                                            |
 | `db.session` | UserSession, SessionToken, SessionLog                           | session_user_session, session_tokens, session_logs                            |
 
-关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/framework/db/softDeleteHooks.js`），模型定义时 `paranoid` 必须设为 `false`（不使用 Sequelize 内置的 deletedAt 机制）。
+关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/framework/persistence/db/softDeleteHooks.js`），模型定义时 `paranoid` 必须设为 `false`（不使用 Sequelize 内置的 deletedAt 机制）。
 
-## 数据库 (`src/framework/db/`)
+## 数据库 (`src/framework/persistence/db/`)
 
 ```
-src/framework/db/
+src/framework/persistence/db/
 ├── index.js           # Sequelize 实例 + 环境变量校验 + 连接池配置
 ├── migrate.js         # Umzug 迁移运行器（--up / --down / --down-to / --status）
 ├── softDeleteHooks.js # 软删除 delete_version 钩子
@@ -340,9 +364,9 @@ src/framework/db/
 
 ```bash
 npm run migrate                                                # 执行所有待运行迁移
-node --env-file=.env src/framework/db/migrate.js --status      # 查看迁移状态
-node --env-file=.env src/framework/db/migrate.js --down        # 回滚最近一次
-node --env-file=.env src/framework/db/migrate.js --down-to <name>  # 回滚到指定版本
+node --env-file=.env src/framework/persistence/db/migrate.js --status      # 查看迁移状态
+node --env-file=.env src/framework/persistence/db/migrate.js --down        # 回滚最近一次
+node --env-file=.env src/framework/persistence/db/migrate.js --down-to <name>  # 回滚到指定版本
 ```
 
 **禁止在生产环境使用 `DB_SYNC=true`**，必须通过迁移文件管理表结构变更。
@@ -355,10 +379,10 @@ DAO/Service 层统一使用 `getModel` 获取模型，禁止动态 import 模型
 
 禁止直接写 SQL 语句，必须使用 Sequelize 模型方法（`findAll`/`findOne`/`findByPk`/`create`/`update` 等）。软删除模型禁止设置 `paranoid: true`，必须使用 `delete_version` 机制 + `registerDeleteVersionHooks` 钩子。
 
-## Redis 系统 (`src/framework/redis/`)
+## Redis 系统 (`src/framework/persistence/redis/`)
 
 ```
-src/framework/redis/
+src/framework/persistence/redis/
 ├── index.js              # 统一出口，所有 API 从这里导出
 ├── plugin.js             # 连接管理：创建、主备切换、优雅关闭
 ├── health.js             # 事件驱动健康监控 + SLOWLOG 采集
@@ -401,14 +425,14 @@ queue.push({ id: 1, text: 'hello' });
 const msg = queue.shift();
 ```
 
-完整教程见 [src/framework/redis/TUTORIAL.md](src/framework/redis/TUTORIAL.md)。
+完整教程见 [src/framework/persistence/redis/TUTORIAL.md](src/framework/persistence/redis/TUTORIAL.md)。
 
 环境变量：`REDIS_ENABLED`、`REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD`、`REDIS_TLS`、
 `REDIS_TLS_SKIP_VERIFY`、`REDIS_BACKUP_HOST`、`REDIS_CONNECT_TIMEOUT`、`REDIS_MAX_RETRIES`
 
 健康状态通过 `app.redisHealthy` 和 `app.onRedisHealthChange(cb)` 通知所有依赖模块。
 
-**铁律：所有 Redis 操作必须经过 `src/framework/redis/` 模块**，禁止直接操作 `request.server.redis`/`app.redis` 原始客户端。缺 Redis 命令时在 `RedisStore` 补充，不绕过模块。
+**铁律：所有 Redis 操作必须经过 `src/framework/persistence/redis/` 模块**，禁止直接操作 `request.server.redis`/`app.redis` 原始客户端。缺 Redis 命令时在 `RedisStore` 补充，不绕过模块。
 
 ## 防火墙系统 (`src/firewall/`)
 
@@ -483,7 +507,7 @@ npm test -- --coverage      # 运行并生成覆盖率报告
   「测试通过」不代表「真身正确」。已核对的 3 份副本全部与真身存在实质差异，
   详见 [docs/archive/test-inline-copy-drift-report.md](docs/archive/test-inline-copy-drift-report.md)
 - 在测试里模拟已登录态时，`reply.result` 请 `import` 真实装饰器
-  （`framework/loader/registry/00-globals.js`），不要手写副本
+  （`framework/lifecycle/loader/registry/00-globals.js`），不要手写副本
 - **一个测试文件只能注册一组路由**：`registerSecureRoute` 的 `_routeRegistry` 是模块级
   全局状态且无重置入口，重复注册同一 URL 会抛错。故注册集中在顶层 `beforeAll` 一次
 

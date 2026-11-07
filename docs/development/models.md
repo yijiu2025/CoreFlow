@@ -88,7 +88,7 @@ const article = await app.db.myapp.Article.findByPk(1);
 请求期手里通常只有 `request`，拿模型走 `getModel()`（按模型名注册，全局唯一）：
 
 ```js
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 
 const article = await getModel('Article').findByPk(1);
 const user = await getModel('User').findByPk(article.user_id);

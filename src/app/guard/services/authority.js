@@ -27,7 +27,7 @@ const SUPERADMIN_ROLE = 'superadmin';
 /**
  * 是否为超级管理员
  *
- * `permissions` 的形状是 `{allows, denies}`（见 framework/auth/permission/permission-loader.js），
+ * `permissions` 的形状是 `{allows, denies}`（见 framework/security/auth/permission/permission-loader.js），
  * 这里同时兼容旧数组形状，避免历史会话里的结构差异导致误判。
  *
  * @param {object} user request.state.user

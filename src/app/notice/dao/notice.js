@@ -4,9 +4,9 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { getModel } from '../../../framework/db/index.js';
-import Logger from '../../../framework/log/index.js';
-import { encryptSecret, decryptSecret, isMasked } from '../../../framework/crypto/symmetric.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
+import Logger from '../../../framework/support/log/index.js';
+import { encryptSecret, decryptSecret, isMasked } from '../../../framework/security/crypto/symmetric.js';
 
 /** 默认通道配置 */
 const DEFAULT_CHANNELS = [

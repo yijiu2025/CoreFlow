@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "chcp 65001 >nul 2>&1 && nodemon --env-file=.env index.js",
     "start": "node --env-file=.env.production index.js",
-    "migrate": "node --env-file=.env src/framework/db/migrate.js",
+    "migrate": "node --env-file=.env src/framework/persistence/db/migrate.js",
     "canvas:scan": "node scripts/canvas/scan.mjs",
     "setup:admin": "node --env-file=.env scripts/setup-superadmin.js",
     "revoke:admin": "node --env-file=.env scripts/revoke-superadmin.js",
@@ -57,7 +57,7 @@
     "@fastify/static": "^10.1.8",
     "@fastify/websocket": "^11.3.4",
     "bcryptjs": "^3.0.3",
-    "cookie": "^2.0.1",
+    "cookie": "2.0.1",
     "dotenv": "^18.0.9",
     "fastify": "5.12.7",
     "geoip-lite": "^2.0.3",

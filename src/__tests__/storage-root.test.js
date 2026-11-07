@@ -23,8 +23,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(__dirname, '..');
 const REPO = path.resolve(SRC, '..');
 
-const { PUBLIC_ROOT, PRIVATE_ROOT, REPO_ROOT } = await import('../framework/storage/index.js');
-const { DATA_ROOT, dataFile } = await import('../framework/paths.js');
+const { PUBLIC_ROOT, PRIVATE_ROOT, REPO_ROOT } = await import('../framework/persistence/storage/index.js');
+const { DATA_ROOT, dataFile } = await import('../framework/config/paths.js');
 
 /** 运行期根目录名（都在仓库根；放错到 src 下会静默失效） */
 const RUNTIME_ROOTS = ['public', 'storage', 'data'];

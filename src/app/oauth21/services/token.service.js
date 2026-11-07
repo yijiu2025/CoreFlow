@@ -13,7 +13,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import { verifyPassword } from '../../../framework/auth/index.js';
+import { verifyPassword } from '../../../framework/security/auth/index.js';
 import CodeDao from '../dao/code.dao.js';
 import TokenDao from '../dao/token.dao.js';
 import ClientDao from '../dao/client.dao.js';
@@ -21,10 +21,10 @@ import UserDao from '../dao/user.dao.js';
 import { verifyPKCE, isValidCodeVerifier } from '../crypto/pkce.js';
 import { generateToken } from '../crypto/tokens.js';
 import { issueAccessToken, issueIdToken } from '../crypto/jwt.js';
-import { COOKIE_POLICY } from '../../../framework/auth/index.js';
+import { COOKIE_POLICY } from '../../../framework/security/auth/index.js';
 import config from '../config/config.js';
 import { checkScopeSubset } from '../config/scope-registry.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.oauth21.services.token.service');
 

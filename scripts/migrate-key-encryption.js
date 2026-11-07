@@ -23,9 +23,9 @@
  */
 import 'dotenv/config';
 import { DataTypes } from 'sequelize';
-import sequelize from '../src/framework/db/index.js';
+import sequelize from '../src/framework/persistence/db/index.js';
 import defineKeyPair from '../src/models/key/KeyPair.js';
-import { createLogger, logStdout } from '../src/framework/log/index.js';
+import { createLogger, logStdout } from '../src/framework/support/log/index.js';
 
 const log = createLogger('scripts.migrate-key-encryption');
 
@@ -63,7 +63,7 @@ async function main() {
   }
 
   // 延迟导入：模块顶层 import envelope 会在 preflight 之前读取 env
-  const { seal, isSealed, open } = await import('../src/framework/keys/envelope.js');
+  const { seal, isSealed, open } = await import('../src/framework/security/keys/envelope.js');
 
   let plaintext = 0;
   let alreadySealed = 0;

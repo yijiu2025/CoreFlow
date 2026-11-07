@@ -14,7 +14,7 @@ key" into two problems: the attacker needs both the database and the deployed KE
 > ⚠️ This is **not** a KMS/HSM. The KEK still lives in the process environment, so anyone who can
 > read `/proc/<pid>/environ` or obtain the deployment secrets can decrypt. It addresses
 > database-side leakage, not full host compromise. If you need stronger semantics, replace
-> `seal()` / `open()` in `src/framework/keys/envelope.js` — the only entry point.
+> `seal()` / `open()` in `src/framework/security/keys/envelope.js` — the only entry point.
 
 ## Configuration
 

@@ -24,10 +24,10 @@ import {
   removeBlockDevice,
   setWhitelistDevice,
   removeWhitelistDevice
-} from '../../../framework/firewall/block-manager.js';
-import { removeKeys, rel } from '../../../framework/firewall/util/redis.js';
-import { publish, subscribe } from '../../../framework/redis/index.js';
-import { createLogger } from '../../../framework/log/index.js';
+} from '../../../framework/ingress/firewall/block-manager.js';
+import { removeKeys, rel } from '../../../framework/ingress/firewall/util/redis.js';
+import { publish, subscribe } from '../../../framework/persistence/redis/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.firewall.services.monitor.service');
 

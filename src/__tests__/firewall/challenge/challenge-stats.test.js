@@ -64,14 +64,14 @@ const fakeStore = {
   call: async fn => fn(fakeClient)
 };
 
-jest.unstable_mockModule('../../../framework/redis/index.js', () => ({
+jest.unstable_mockModule('../../../framework/persistence/redis/index.js', () => ({
   getStore: () => fakeStore,
   isRedisReady: () => true
 }));
 
 const { flushStatsDelta, readAggregatedStats, resetAggregatedStats } =
   await import('../../../app/firewall/data/stats-redis.js');
-const { full } = await import('../../../framework/firewall/util/redis.js');
+const { full } = await import('../../../framework/ingress/firewall/util/redis.js');
 
 /** 造一份空增量（把必填字段补齐） */
 function emptyDelta() {

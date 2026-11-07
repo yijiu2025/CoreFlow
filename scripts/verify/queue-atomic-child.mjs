@@ -28,7 +28,7 @@ import {
   disconnectStandalone,
   createQueue,
   createRingQueue
-} from '../../src/framework/redis/index.js';
+} from '../../src/framework/persistence/redis/index.js';
 
 const MODE = process.env.PROBE_MODE;
 const PREFIX = process.env.PROBE_PREFIX;

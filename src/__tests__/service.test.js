@@ -12,7 +12,7 @@
  *   - 明文传密码 → 拒绝（强制 RSA 加密传输，避免口令进日志/网关）
  *   - 解密失败/JSON 非法 → 400 而不是抛给 Fastify（否则变成 500 + 栈泄露）
  *
- * 依赖替换说明：只把 `framework/keys/encryption.js` 的 `decrypt` 换成可控替身，
+ * 依赖替换说明：只把 `framework/security/keys/encryption.js` 的 `decrypt` 换成可控替身，
  * `validateTimestamp` 用显式开关控制返回值（不复制它的时间窗逻辑 ——
  * 时间窗本身由 `keys-envelope.test.js` 对真身单独覆盖）。
  *
@@ -22,7 +22,7 @@
  */
 import { describe, it, expect, beforeEach, beforeAll, afterAll, jest } from '@jest/globals';
 import crypto from 'node:crypto';
-import { isRedisConfigured } from '../framework/redis/utils.js';
+import { isRedisConfigured } from '../framework/persistence/redis/utils.js';
 import { connectTestRedis, disconnectTestRedis } from './helpers/redis-connection.js';
 
 /** 由用例驱动的替身状态 */
@@ -31,7 +31,7 @@ const fake = {
   decryptImpl: async () => '{}'
 };
 
-jest.unstable_mockModule('../framework/keys/encryption.js', () => ({
+jest.unstable_mockModule('../framework/security/keys/encryption.js', () => ({
   validateTimestamp: () => fake.timestampOk,
   decrypt: (...args) => fake.decryptImpl(...args)
 }));

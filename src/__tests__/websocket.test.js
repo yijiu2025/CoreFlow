@@ -21,7 +21,7 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import WebSocket from 'ws';
 import net from 'node:net';
-import { createWsPreClose, WS_CLOSE_GOING_AWAY } from '../framework/websocket/preclose.js';
+import { createWsPreClose, WS_CLOSE_GOING_AWAY } from '../framework/ingress/websocket/preclose.js';
 import { registerSecureWebSocket } from '../api/guard.js';
 
 /** 宽限期：测试里取小值，既跑得快也顺带验证该参数真的被采纳 */

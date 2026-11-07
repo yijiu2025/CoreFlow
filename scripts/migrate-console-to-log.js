@@ -118,7 +118,7 @@ function computeTag(relPath) {
 }
 
 function computeImportPath(file) {
-  let rel = path.relative(path.dirname(file), path.join(ROOT, 'src', 'framework', 'log', 'index.js'));
+  let rel = path.relative(path.dirname(file), path.join(ROOT, 'src', 'framework', 'support', 'log', 'index.js'));
   rel = rel.split(path.sep).join('/');
   if (!rel.startsWith('.')) rel = './' + rel;
   return rel;

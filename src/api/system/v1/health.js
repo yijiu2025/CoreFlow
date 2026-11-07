@@ -15,7 +15,7 @@
  * 【就绪判据为何要区分 skipped】
  * 只有**已配置**的依赖才参与判定：`REDIS_ENABLED!=true` 时访问层会走进程内 MapStore
  * 降级（是合法模式而非故障），把这种情况判成 not ready 会让本来能服务的实例被摘流。
- * 生产环境 DB 变量缺失时 `framework/db/index.js` 会在启动阶段直接终止进程，
+ * 生产环境 DB 变量缺失时 `framework/persistence/db/index.js` 会在启动阶段直接终止进程，
  * 所以 DB 的 `skipped` 只可能出现在测试 / 本地环境。
  *
  * 【为什么不回显原始错误消息】
@@ -41,10 +41,10 @@
  * @since 2026-09-19 拆分 live / ready 两级探针，补依赖探测超时、错误脱敏与加载器明细
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { sequelize, getPoolStats } from '../../../framework/db/index.js';
-import { isRedisConfigured } from '../../../framework/redis/utils.js';
-import { getLoaderStatus } from '../../../framework/loader/engine.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { sequelize, getPoolStats } from '../../../framework/persistence/db/index.js';
+import { isRedisConfigured } from '../../../framework/persistence/redis/utils.js';
+import { getLoaderStatus } from '../../../framework/lifecycle/loader/engine.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('api.system.health');
 
@@ -104,7 +104,7 @@ function errorLabel(err) {
 }
 
 /**
- * 判断 DB 是否已配置（与 `framework/db/index.js` 的启动校验同一组键）
+ * 判断 DB 是否已配置（与 `framework/persistence/db/index.js` 的启动校验同一组键）
  *
  * @returns {boolean} true 表示三个必要变量齐全
  */

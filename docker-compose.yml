@@ -52,7 +52,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      # 运行期需要跨重启保留的状态（都与代码目录无关，见 src/framework/paths.js）
+      # 运行期需要跨重启保留的状态（都与代码目录无关，见 src/framework/config/paths.js）
       - app-logs:/app/logs          # 滚动日志
       - app-data:/app/data          # 配置热改 JSON / 流量统计
       - app-uploads:/app/public     # 公开资源（作品图 / 头像，@fastify/static 直出）
@@ -151,7 +151,7 @@ services:
       DB_PORT: "3306"
       REDIS_HOST: redis
       REDIS_PORT: "6379"
-    command: ["node", "src/framework/db/migrate.js"]
+    command: ["node", "src/framework/persistence/db/migrate.js"]
     depends_on:
       mysql:
         condition: service_healthy

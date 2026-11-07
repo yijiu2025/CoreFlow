@@ -80,11 +80,11 @@ describe('公开端点限流：真实注册路径下确实生效', () => {
 
   beforeAll(async () => {
     // 用 framework 的默认策略矩阵当配置源（enableRateLimit=false / enableEndpointRateLimit=true）
-    const { DEFAULT_SECURITY_SETTINGS } = await import('../framework/firewall/config/defaults.js');
-    const { registerSettingsReader } = await import('../framework/firewall/interface/config-access.js');
+    const { DEFAULT_SECURITY_SETTINGS } = await import('../framework/ingress/firewall/config/defaults.js');
+    const { registerSettingsReader } = await import('../framework/ingress/firewall/interface/config-access.js');
     registerSettingsReader(() => DEFAULT_SECURITY_SETTINGS);
 
-    const { registerRateLimit } = await import('../framework/firewall/engine/detectors/first-ratelimit.js');
+    const { registerRateLimit } = await import('../framework/ingress/firewall/engine/detectors/first-ratelimit.js');
 
     app = Fastify({ logger: false });
     await registerRateLimit(app);

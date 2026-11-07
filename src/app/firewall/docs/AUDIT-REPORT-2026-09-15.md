@@ -96,7 +96,7 @@ import scripts/：无（依赖方向干净）
 | `util/redis/counters.js` | `bumpCounter` / `readCounter` / `removeCounters` / `consumeRateWindow` / `setFlag` / `hasFlag` / `grantPass` / `hasPass` | ~180 | 计数与令牌语义 |
 | `util/redis/index.js` | barrel + `redisAvailable` / `store` / `scanKeys` / `getRaw` / `ttlOf` / `addBlockIndexEntry` / `hasIndexField` / `setIfAbsent` | ~120 | **保持现有导入路径不变** |
 
-要点：① 现有一切 `from '../util/redis.js'` 与 `from './redis.js'` **不必改动**（barrel re-export 同名）；② 拆分后必须复验"无环"与"`store()` 唯一实例"；③ 顺手把 `framework/redis/utils.js` 的深层导入收敛掉（🔵-15）。
+要点：① 现有一切 `from '../util/redis.js'` 与 `from './redis.js'` **不必改动**（barrel re-export 同名）；② 拆分后必须复验"无环"与"`store()` 唯一实例"；③ 顺手把 `framework/persistence/redis/utils.js` 的深层导入收敛掉（🔵-15）。
 
 ### 3.4 死代码清单（逐个 grep 全仓）
 
@@ -254,7 +254,7 @@ if (!webgl || webdriver || plugins === 0) return { ok:false, statusCode:403, rea
 
 ### 🟡-1 `initFirewall` 被注册两次 → 全链路执行两遍（统计 ×2、扫描陷阱阈值减半）
 
-**位置** `framework/loader/registry/05-firewall.js:10` + `framework/loader/registry/10-apps.js:113-116`（`appConfig.init`）+ `app/firewall/config.js:14`。`initFirewall` 被 `fastify-plugin` 包住，两次注册的钩子都落到根实例。
+**位置** `framework/lifecycle/loader/registry/05-firewall.js:10` + `framework/lifecycle/loader/registry/10-apps.js:113-116`（`appConfig.init`）+ `app/firewall/config.js:14`。`initFirewall` 被 `fastify-plugin` 包住，两次注册的钩子都落到根实例。
 
 **证据（实测，探针 11/12）**
 
@@ -418,7 +418,7 @@ C. 连续 404 观察（配置阈值 10）：
 | 🔵-12 | `services/challenge.service.js:41,46,56` | 签名用明文 `!==` 比较（非恒定时间）；时效只判"过期"不判"未来值/NaN"；`nonce` 无一次性消费 | 换 `timingSafeEqual` + 双向时间窗 + nonce 一次性 |
 | 🔵-13 | `engine/detectors/bot-detector.js:21-25` | `ensurePatternsCompiled()` **每请求**做 2 次 `JSON.stringify` 只为算 hash | 用配置版本号/`getConfig()` 快照引用比较 |
 | 🔵-14 | `util/shared.js:25`、`rate-limiter.js:28-43` | `ipRequestTimestamps` 在 60s 窗口内无界增长，且 `shift()` 在大数组下是 O(n)；`readAccessState` 前置查询让单次 404 多 1 次 RTT（被 🟡-1 放大为 2 次） | 改用固定长度环形缓冲；404 路径先计数再查状态 |
-| 🔵-15 | `util/redis.js:29` | 深层导入 `framework/redis/utils.js`（该包已有 `index.js` barrel） | 收敛到 barrel |
+| 🔵-15 | `util/redis.js:29` | 深层导入 `framework/persistence/redis/utils.js`（该包已有 `index.js` barrel） | 收敛到 barrel |
 | 🔵-16 | `engine/auto-responder.js` | 既零调用又不在 `engine/index.js` barrel 内（游离文件） | 删除或接线 |
 | 🔵-17 | `app/firewall/index.js:44-66` | 未登录的 401 请求也会走完整个深度检测管道（Bot/Geo/限频）才被守卫拒绝 | 无法提前（钩子顺序使然），但可在 `shouldSkipDeepCheck` 之外增加"已知会被守卫拒绝"的短路开关 |
 

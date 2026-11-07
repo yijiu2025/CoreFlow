@@ -10,12 +10,12 @@ import crypto from 'crypto';
 // 测试 cookie 签名/验证逻辑
 describe('session', () => {
   describe('cookie signing', () => {
-    // 改用 framework/auth/context/cookie.js 真身，不再内联副本
+    // 改用 framework/security/auth/context/cookie.js 真身，不再内联副本
     // （副本与真身已漂移，掩盖了 🔴-1 timingSafeEqual 崩溃，见 AUDIT-REPORT-2026-09-12.md）
     let signCookie, verifyCookie;
 
     beforeAll(async () => {
-      ({ signCookie, verifyCookie } = await import('../framework/auth/context/cookie.js'));
+      ({ signCookie, verifyCookie } = await import('../framework/security/auth/context/cookie.js'));
     });
 
     it('签名和验证正常工作', () => {
@@ -63,22 +63,22 @@ describe('session', () => {
 
   // 说明：这里曾有一个 `describe('session data structure')` 用例，通篇是
   // `const sessionData = {...}` + `expect(sessionData).toHaveProperty('userId')` ——
-  // 断言的是自己刚写的字面量，把 `framework/auth/session/session.js` 改坏也照样全绿，
+  // 断言的是自己刚写的字面量，把 `framework/security/auth/session/session.js` 改坏也照样全绿，
   // 于 2026-10-31 移除。会话数据结构真正的契约由 `session-flow.test.js`、
-  // `framework/auth/auth-contract.test.js`、`framework/auth/session-security.test.js`
+  // `framework/security/auth/auth-contract.test.js`、`framework/security/auth/session-security.test.js`
   // 驱动真身覆盖（创建 / 恢复 / 刷新 / 踢下线 全链路）。
 
   // accountKey 与凭证 cookie 名分离模型测试
   // accountKey = uid 明文（前端 localStorage key + 切账号发送值）
   // cookie 名 = accountKeyForUid(uid) = HMAC(uid, SECRET)（HttpOnly，后端派生）
   describe('accountKey 与凭证 cookie 名分离', () => {
-    // ⚠️ 这里必须用真身 `framework/auth/context/cookie.js` 的 accountKeyForUid。
+    // ⚠️ 这里必须用真身 `framework/security/auth/context/cookie.js` 的 accountKeyForUid。
     // 旧版本在测试里用 crypto.createHmac 重新实现了一遍，于是派生算法、前缀、
     // 截断长度、SECRET 来源任何一处漂移都不会被这条断言发现（副本自证）。
     let accountKeyForUid;
 
     beforeAll(async () => {
-      ({ accountKeyForUid } = await import('../framework/auth/context/cookie.js'));
+      ({ accountKeyForUid } = await import('../framework/security/auth/context/cookie.js'));
     });
 
     it('accountKey 即 uid，cookie 名 = HMAC(uid)，两者不同', () => {

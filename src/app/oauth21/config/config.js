@@ -17,7 +17,7 @@
 import 'dotenv/config';
 import { createRuntimeConfig } from '../../../framework/config/runtime.js';
 import { loadOverrides } from '../../../framework/config/overrides.js';
-import { AUTH_SESSION_DEFAULTS, authJwtEnabled } from '../../../framework/auth/session/session-config.js';
+import { AUTH_SESSION_DEFAULTS, authJwtEnabled } from '../../../framework/security/auth/session/session-config.js';
 
 /**
  * core 保底默认值（改内置默认才动这里；按部署微调写 src/config/oauth21_config.js，

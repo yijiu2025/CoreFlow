@@ -6,7 +6,7 @@
  * @since 2026-07-13
  */
 import net from 'net';
-import { createLogger } from '../framework/log/index.js';
+import { createLogger } from '../framework/support/log/index.js';
 
 const log = createLogger('utils.ip');
 

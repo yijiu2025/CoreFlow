@@ -28,7 +28,7 @@ import {
   setWhitelist,
   setWhitelistFp,
   setWhitelistDevice
-} from '../../../framework/firewall/block-manager.js';
+} from '../../../framework/ingress/firewall/block-manager.js';
 import { FIREWALL_PERMISSIONS } from '../../../app/firewall/permission/index.js';
 
 /** 导入数组上限（一次请求最多处理多少条） */

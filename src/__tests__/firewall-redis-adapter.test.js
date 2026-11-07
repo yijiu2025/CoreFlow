@@ -21,8 +21,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-import * as adapter from '../framework/firewall/util/redis.js';
-import * as blockManager from '../framework/firewall/block-manager.js';
+import * as adapter from '../framework/ingress/firewall/util/redis.js';
+import * as blockManager from '../framework/ingress/firewall/block-manager.js';
 
 // 2026-11-01 修复回归：memDeleteByRel 此前漏了 block:dev:/whitelist:dev: 两个前缀，
 // Redis 降级走内存时 removeKeys 会把设备维度条目错删进 IP 表（设备表残留）。
@@ -57,7 +57,7 @@ describe('isUserManuallyBlocked：manualBlacklistUsers 执行点（修复"只写
   });
 
   it('按 uid / 数字主键 / username / email 任一命中', async () => {
-    const { registerSettingsReader } = await import('../framework/firewall/interface/config-access.js');
+    const { registerSettingsReader } = await import('../framework/ingress/firewall/interface/config-access.js');
     registerSettingsReader(() => ({ defense: { manualBlacklistUsers: ['uid-abc', '42', 'bob', 'bob@x.com'] } }));
     expect(blockManager.isUserManuallyBlocked({ uid: 'uid-abc' })).toBe(true);
     expect(blockManager.isUserManuallyBlocked({ userId: 42 })).toBe(true);
@@ -67,7 +67,7 @@ describe('isUserManuallyBlocked：manualBlacklistUsers 执行点（修复"只写
   });
 
   it('名单为空 / 非数组 / user 缺失时恒 false（firewall 卸载语义）', async () => {
-    const { registerSettingsReader } = await import('../framework/firewall/interface/config-access.js');
+    const { registerSettingsReader } = await import('../framework/ingress/firewall/interface/config-access.js');
     registerSettingsReader(() => ({ defense: { manualBlacklistUsers: [] } }));
     expect(blockManager.isUserManuallyBlocked({ uid: 'uid-abc' })).toBe(false);
     registerSettingsReader(() => ({ defense: {} }));
@@ -82,7 +82,7 @@ const SRC = path.resolve(HERE, '..');
 // 访问层已上移 framework（2026-11-01 两层分离）：扫描范围加 framework/firewall，
 // app/firewall 保留面板/配置/遥测消费方，api/firewall 是路由层
 const FIREWALL_DIRS = [
-  path.join(SRC, 'framework', 'firewall'),
+  path.join(SRC, 'framework', 'ingress', 'firewall'),
   path.join(SRC, 'app', 'firewall'),
   path.join(SRC, 'api', 'firewall')
 ];
@@ -102,7 +102,7 @@ const IP = '203.0.113.10';
 const FP = 'abc123def456abcd';
 
 const FILES = FIREWALL_DIRS.flatMap(d => walkJs(d));
-const ADAPTER_PATH = path.join(SRC, 'framework', 'firewall', 'util', 'redis.js');
+const ADAPTER_PATH = path.join(SRC, 'framework', 'ingress', 'firewall', 'util', 'redis.js');
 
 /** 相对 src/ 的展示路径 */
 const relToSrc = f => path.relative(SRC, f).replace(/\\/g, '/');
@@ -527,7 +527,7 @@ describe('firewall Redis 访问层：源码级回潮守卫', () => {
     // 但 pipeline.js 里两个「Security Policy Blocked」回包点只有一个透传了
     // err.headers —— 全局封禁阶段那处漏了，导致首屏拦截场景下该响应头从未下发。
     // 这里锁住「两处对称」，防止再次只改一处。
-    const pipelinePath = path.join(SRC, 'framework', 'firewall', 'engine', 'pipeline.js');
+    const pipelinePath = path.join(SRC, 'framework', 'ingress', 'firewall', 'engine', 'pipeline.js');
     const lines = codeLines(fs.readFileSync(pipelinePath, 'utf8'));
 
     const replyIdx = lines.map((l, i) => (/Security Policy Blocked/.test(l.text) ? i : -1)).filter(i => i >= 0);

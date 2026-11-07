@@ -24,7 +24,7 @@
 import net from 'node:net';
 import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 
-const { connectStandalone, disconnectStandalone } = await import('../../framework/redis/plugin.js');
+const { connectStandalone, disconnectStandalone } = await import('../../framework/persistence/redis/plugin.js');
 
 /** 守卫：限定 promise 在 ms 内 settle，否则给出可读失败信息 */
 function bounded(promise, ms, label) {

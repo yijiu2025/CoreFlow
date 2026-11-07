@@ -30,7 +30,7 @@ const fakeUser = {
   status: 1
 };
 
-jest.unstable_mockModule('../framework/db/index.js', () => ({
+jest.unstable_mockModule('../framework/persistence/db/index.js', () => ({
   getModel: name => {
     if (name === 'User') {
       return {
@@ -50,7 +50,7 @@ jest.unstable_mockModule('../framework/db/index.js', () => ({
 }));
 
 // user.dao.js 顶部 import verifyPassword（框架门面），mock 掉避免拉起整条 auth 链
-jest.unstable_mockModule('../framework/auth/index.js', () => ({
+jest.unstable_mockModule('../framework/security/auth/index.js', () => ({
   verifyPassword: async () => true
 }));
 
@@ -118,7 +118,7 @@ describe('形状契约的源码级护栏', () => {
   });
 
   test('session-store 用户缓存形状与 DAO 契约一致（id 数字 / uid UUID）', () => {
-    const src = readFileSync(new URL('framework/auth/session/session-store.js', srcRoot), 'utf8');
+    const src = readFileSync(new URL('framework/security/auth/session/session-store.js', srcRoot), 'utf8');
     expect(src).toMatch(/^\s+id: user\.id,/m);
     expect(src).toMatch(/^\s+uid: user\.uid,/m);
     // 锚定行首，避免匹配到 "uid: user.uid" 的子串
@@ -126,7 +126,7 @@ describe('形状契约的源码级护栏', () => {
   });
 
   test('bearer-auth 装配：sub/uid 取 uid 字符串，userId 取数字主键', () => {
-    const src = readFileSync(new URL('framework/auth/bearer-auth.js', srcRoot), 'utf8');
+    const src = readFileSync(new URL('framework/security/auth/bearer-auth.js', srcRoot), 'utf8');
     expect(src).toMatch(/sub: userData\.uid/);
     expect(src).toMatch(/uid: userData\.uid/);
     expect(src).toMatch(/userId: userData\.id/);

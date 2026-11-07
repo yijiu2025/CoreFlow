@@ -20,16 +20,16 @@ const { DEFAULT_SECURITY_SETTINGS } = await import('../app/firewall/config/confi
 /** 可写副本：每个用例自行改开关，beforeEach 复位 */
 let settings;
 
-jest.unstable_mockModule('../framework/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../framework/ingress/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => settings,
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
 }));
 
 const { checkGlobalBlockPhase, runDetectionPipeline, isFirewallEnabled } =
-  await import('../framework/firewall/engine/pipeline.js');
-const { setBlock, removeBlock } = await import('../framework/firewall/block-manager.js');
-const { resetMemoryState } = await import('../framework/firewall/util/redis-memory.js');
+  await import('../framework/ingress/firewall/engine/pipeline.js');
+const { setBlock, removeBlock } = await import('../framework/ingress/firewall/block-manager.js');
+const { resetMemoryState } = await import('../framework/ingress/firewall/util/redis-memory.js');
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36';
 

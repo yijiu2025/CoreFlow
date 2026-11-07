@@ -16,10 +16,10 @@
 import 'dotenv/config';
 import crypto from 'crypto';
 import readline from 'readline';
-import sequelize from '../src/framework/db/index.js';
-import { hashPassword } from '../src/framework/auth/security/password-hash.js';
-import { validatePasswordStrength } from '../src/framework/auth/security/password-policy.js';
-import { createLogger, logStdout } from '../src/framework/log/index.js';
+import sequelize from '../src/framework/persistence/db/index.js';
+import { hashPassword } from '../src/framework/security/auth/security/password-hash.js';
+import { validatePasswordStrength } from '../src/framework/security/auth/security/password-policy.js';
+import { createLogger, logStdout } from '../src/framework/support/log/index.js';
 
 const log = createLogger('scripts.setup-superadmin');
 

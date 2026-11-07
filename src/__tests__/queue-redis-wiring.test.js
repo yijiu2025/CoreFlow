@@ -52,7 +52,7 @@ const fakeStore = {
   destroy: async () => {}
 };
 
-jest.unstable_mockModule('../framework/redis/get-store.js', () => ({
+jest.unstable_mockModule('../framework/persistence/redis/get-store.js', () => ({
   getStore: () => fakeStore
 }));
 
@@ -69,8 +69,8 @@ afterAll(() => {
   }
 });
 
-const { createQueue } = await import('../framework/redis/queue-store.js');
-const { createRingQueue } = await import('../framework/redis/ring-queue-store.js');
+const { createQueue } = await import('../framework/persistence/redis/queue-store.js');
+const { createRingQueue } = await import('../framework/persistence/redis/ring-queue-store.js');
 
 beforeEach(() => {
   rec.evals.length = 0;

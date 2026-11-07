@@ -11,8 +11,8 @@
  * @since 2026-08-17
  */
 import { Op } from 'sequelize';
-import sequelize from '../../../framework/db/index.js';
-import { globalRedis } from '../../../framework/redis/plugin.js';
+import sequelize from '../../../framework/persistence/db/index.js';
+import { globalRedis } from '../../../framework/persistence/redis/plugin.js';
 
 /** 获取当前可用的 Redis 客户端 */
 function getRedis() {

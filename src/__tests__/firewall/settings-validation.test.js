@@ -13,7 +13,7 @@
  * @since 2026-11-05
  */
 import { describe, it, expect } from '@jest/globals';
-import { DEFAULT_SECURITY_SETTINGS } from '../../framework/firewall/config/defaults.js';
+import { DEFAULT_SECURITY_SETTINGS } from '../../framework/ingress/firewall/config/defaults.js';
 import {
   DEFENSE_SPEC,
   PANEL_SPEC,
@@ -22,7 +22,7 @@ import {
   normalizeSettingsPatch,
   toSettingsJsonProperties,
   toDefenseJsonProperties
-} from '../../framework/firewall/config/schema.js';
+} from '../../framework/ingress/firewall/config/schema.js';
 
 const DEFENSE = DEFAULT_SECURITY_SETTINGS.defense;
 

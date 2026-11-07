@@ -33,7 +33,7 @@ $ cat .husky/pre-commit
 | 文档里的说法 | 实测情况 |
 | --- | --- |
 | 「编码乱码」列为 **P0**（[后端检查规划](../archive/backend-review-plan.md)） | 全量扫描 `src/` **已扫不到乱码**，该项已修复 |
-| 路径写作 `src/auth/`、`src/db/`、`src/redis/`、`src/loader/registry/` | 实际已是 `src/framework/auth/`、`src/framework/db/` 等，**文件系统层已重组** |
+| 路径写作 `src/auth/`、`src/db/`、`src/redis/`、`src/loader/registry/` | 实际已是 `src/framework/security/auth/`、`src/framework/persistence/db/` 等，**文件系统层已重组** |
 | `package.json` 的 `version` = 最新版本 | 停在 `2.6.0`，而最近 tag 是 `v2.9.0` |
 
 文档失真的代价很具体：**审查者拿旧地图挑错，作者拿旧地图辩解，最后谁都不信文档。**

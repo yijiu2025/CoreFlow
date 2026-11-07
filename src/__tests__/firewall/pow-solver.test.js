@@ -12,7 +12,8 @@
  */
 import { describe, test, expect } from '@jest/globals';
 
-const { sha256Hex, makePowSolver, verifyPow, SHA256_K } = await import('../../framework/verify/pow/service.js');
+const { sha256Hex, makePowSolver, verifyPow, SHA256_K } =
+  await import('../../framework/security/verify/pow/service.js');
 
 /** 参考实现：与挑战页/solvePow 原本用的判定方式完全一致 */
 function referenceMatches(prefix, difficulty, answer) {

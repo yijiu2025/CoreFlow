@@ -2,7 +2,7 @@
 
 # Firewall 模块架构（两层分离，2026-11-01）
 
-> **分层约定**：关键防护引擎上移 `src/framework/firewall/`（五道管卡、封禁语义、
+> **分层约定**：关键防护引擎上移 `src/framework/ingress/firewall/`（五道管卡、封禁语义、
 > 挑战 PoW），且**核心装配（bootstrap.js）由 `loader/registry/05-firewall.js` 直接启动**；
 > 本目录（app 层）保留**与前端互动的部分**：策略配置与持久化、面板遥测与 WebSocket
 > 广播、CLI、邮件告警通道注入。app → framework 单向依赖，framework 零依赖 app
@@ -18,7 +18,7 @@
 ## 目录结构
 
 ```
-src/framework/firewall/               # 【架构层】防护引擎（始终存在）
+src/framework/ingress/firewall/               # 【架构层】防护引擎（始终存在）
 ├── block-manager.js                  # 封禁/白名单**真身**：三维度 CRUD + checkGlobalBlock + isUserManuallyBlocked
 ├── bootstrap.js                      # 【核心装配插件】firewallCorePlugin：限流插件 + 五阶段管道 + 观测钩子（05-firewall 直接启动）
 ├── challenge/                        # 【人机挑战】出题 / 难度 / 观测（三件事各一个文件，公共出口是 index.js）
@@ -130,7 +130,7 @@ firewall onRequest（五层拦截管道） ← engine/pipeline.js
 └── checkRateLimit() ← engine/detectors/rate-limiter.js
 │
 ▼ (若触发挑战)
-buildChallengePage() ← framework/firewall/challenge/template.js
+buildChallengePage() ← framework/ingress/firewall/challenge/template.js
 │
 ▼ (正常放行)
 业务路由处理
@@ -217,7 +217,7 @@ firewall onResponse 钩子
 - 用 nonce 而不是 `'sha256-…'`：页面每次都不同（内嵌本次 challengeId / salt），哈希无法预置。
 - 脚本**不放** `'unsafe-inline'`：那会把全局 XSS 防护一起削掉。
 - 开发环境 `contentSecurityPolicy: false`，**这类问题本地看不见** —— 所以 `sendChallengePage` 无条件设置本页 CSP，让本地看到的就是线上行为；回归用例见 `__tests__/firewall/challenge-page-csp.test.js`（真 fastify + 真 helmet + 真 HTTP）。
-- **PoW 能力不在本目录**：哈希原语 / 出题 / 判题在 `framework/verify/pow/`（验证能力库，与 captcha / recaptcha 同构）。
+- **PoW 能力不在本目录**：哈希原语 / 出题 / 判题在 `framework/security/verify/pow/`（验证能力库，与 captcha / recaptcha 同构）。
   本目录只负责"怎么把题呈现给用户"——页面、CSP、302、Worker。载荷的存储通过
   `util/pow-store.js` 注入（`put` / `take`，**`take` 必须是原子取走**，否则"一次性"就没了）。
 - **后续加固计划**（递进难度 / provider / 边缘层 / WebAuthn）：`./docs/PLAN-2026-11-06-challenge-hardening.md`
@@ -318,7 +318,7 @@ HTTP 全是 200、`/summary` 看起来一切正常 —— 因为当时**没有�
 | `bySurface` | `inline`（内置页）/ `page`（302 前端页）/ `xhr`（428）—— 用来回答"内嵌页还有多少真实流量" |
 | `byDifficulty` / `byProvider` | 难度、验证方式分布 |
 
-- 计数在 `framework/firewall/challenge/metrics.js` 里**进程内累加**（热路径只做一次 Map 自增，不写 Redis），
+- 计数在 `framework/ingress/firewall/challenge/metrics.js` 里**进程内累加**（热路径只做一次 Map 自增，不写 Redis），
   由 `data/store.js` 的刷写周期取增量批量 `HINCRBY` 进 `stats:challenge`（与流量统计同一次 MULTI）。
 - `solveMs` 由客户端上报，**只进统计、不参与任何判定**（客户端可伪造）。
 - 告警建议：`successRate < 0.8` 或 `issued` 突增 → 链路大概率坏了，先按「页面能不能真的渲染」去查。
@@ -341,7 +341,7 @@ HTTP 全是 200、`/summary` 看起来一切正常 —— 因为当时**没有�
 
 ### services/challenge/ — 人机挑战
 
-框架层的三件事（难度 / 观测 / 内置页）在 `framework/firewall/challenge/`，
+框架层的三件事（难度 / 观测 / 内置页）在 `framework/ingress/firewall/challenge/`，
 这里只做**编排**：取上下文 → 选 provider → 记观测 → 判题 → 签 pass。
 
 | 文件 | 职责 | 关键导出 |
@@ -391,7 +391,7 @@ HTTP 全是 200、`/summary` 看起来一切正常 —— 因为当时**没有�
 
 ## 配置校验（三处入口，**一份规则**）
 
-配置有三条入口，规则只有一份：`framework/firewall/config/schema.js` 的 `DEFENSE_SPEC` /
+配置有三条入口，规则只有一份：`framework/ingress/firewall/config/schema.js` 的 `DEFENSE_SPEC` /
 `PANEL_SPEC`（工具在 `framework/config/field-spec.js`）。
 
 | 入口 | 校验执行点 | 非法值的结果 |

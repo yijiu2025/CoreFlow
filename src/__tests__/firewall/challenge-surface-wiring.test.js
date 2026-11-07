@@ -38,7 +38,7 @@ jest.unstable_mockModule('../../app/firewall/data/store.js', () => ({
   flushPersist: async () => {}
 }));
 
-const { isChallengeApiUrl, shouldSkipDeepCheck } = await import('../../framework/firewall/engine/pipeline.js');
+const { isChallengeApiUrl, shouldSkipDeepCheck } = await import('../../framework/ingress/firewall/engine/pipeline.js');
 const { default: registerChallengeRoutes } = await import('../../api/firewall/v1/challenge.js');
 
 /** 挑战路由模块（对账时按这个路径比对） */

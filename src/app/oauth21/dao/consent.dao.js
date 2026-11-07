@@ -7,7 +7,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import sequelize from '../../../framework/db/index.js';
+import sequelize from '../../../framework/persistence/db/index.js';
 
 /** 获取 OauthConsent 模型（延迟获取，确保模型已加载） */
 const getModel = () => sequelize.models.OauthConsent;

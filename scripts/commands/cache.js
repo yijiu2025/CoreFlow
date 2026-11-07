@@ -10,8 +10,8 @@ import {
   printInfo,
   printWarning,
   printLine
-} from '../../src/framework/cli/index.js';
-import { logStdout } from '../../src/framework/log/index.js';
+} from '../../src/framework/support/cli/index.js';
+import { logStdout } from '../../src/framework/support/log/index.js';
 
 /**
  * 查看 Redis 状态

@@ -28,7 +28,7 @@ import { ROOT, ALL_API_ROUTES as ALL_ROUTES } from '../helpers/route-declaration
 // ── 隔离：配置读取器 + 记账函数 ────────────────────────────────────────────────
 // 必须先 mock 再 import 任何**传递依赖**它们的模块，否则拿到的是真身。
 let settings = { defense: { enableBruteForce: true } };
-jest.unstable_mockModule('../../framework/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../../framework/ingress/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => settings,
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
@@ -36,14 +36,15 @@ jest.unstable_mockModule('../../framework/firewall/interface/config-access.js', 
 
 /** 记账调用（真身会写 Redis，这里只关心「有没有被调用、参数对不对」） */
 const bruteCalls = [];
-jest.unstable_mockModule('../../framework/firewall/engine/detectors/brute-force.js', () => ({
+jest.unstable_mockModule('../../framework/ingress/firewall/engine/detectors/brute-force.js', () => ({
   checkLoginBruteForce: (...args) => {
     bruteCalls.push(args);
   },
   isAccountLocked: async () => false
 }));
 
-const { observeLoginOutcome, CREDENTIAL_FAILURE_CODES } = await import('../../framework/firewall/engine/pipeline.js');
+const { observeLoginOutcome, CREDENTIAL_FAILURE_CODES } =
+  await import('../../framework/ingress/firewall/engine/pipeline.js');
 
 /** 「像登录」的路径（只用于**对账**，不参与运行时判断 —— 运行时只认路由声明） */
 const CREDENTIAL_URL = /\/(mini-login|login|verify-email)$/;

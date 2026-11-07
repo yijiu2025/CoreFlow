@@ -21,8 +21,8 @@
  * @since 2026-11-07 改为方向感知 + 二次认证 + 签名信封
  */
 import { getAllGuardConfigs, setGuardConfig } from '../../../api/guard-config.js';
-import { logAuditEvent } from '../../../framework/auth/index.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { logAuditEvent } from '../../../framework/security/auth/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 import { diffPatch } from './direction.js';
 import { signRelaxation } from './signing.js';
 import { consumeTicket, buildPath } from './stepup.service.js';

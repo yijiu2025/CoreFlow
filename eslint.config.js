@@ -83,7 +83,7 @@ export default [
 
   // 5.1 日志框架自身是 console 的唯一合法使用点（底层输出通道）
   {
-    files: ['src/framework/log/**/*.js'],
+    files: ['src/framework/support/log/**/*.js'],
     rules: {
       'no-console': 'off'
     }

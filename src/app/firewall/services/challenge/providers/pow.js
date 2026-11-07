@@ -2,7 +2,7 @@
  * 挑战 provider：PoW（自包含，默认）
  *
  * 这是"验证能力"在防火墙侧的**策略外壳**：题目怎么出（难度取多少）、绑定谁、
- * 失败算哪类原因，全部在这里；哈希与判题本身在 `framework/verify/pow`。
+ * 失败算哪类原因，全部在这里；哈希与判题本身在 `framework/security/verify/pow`。
  *
  * 之所以还留这一层（而不是让 service 直接调 powDao）：它和 turnstile / hcaptcha /
  * google 必须是**同一个形状**，service 才能只做"拿到 provider → 出题/判题 → 签令牌"，
@@ -12,9 +12,12 @@
  * @since 2026-11-06
  */
 import crypto from 'crypto';
-import { issueChallengePayload, noteChallengeProofFailed } from '../../../../../framework/firewall/challenge/index.js';
-import { powChallengeStore } from '../../../../../framework/firewall/util/pow-store.js';
-import { powDao } from '../../../../../framework/verify/pow/index.js';
+import {
+  issueChallengePayload,
+  noteChallengeProofFailed
+} from '../../../../../framework/ingress/firewall/challenge/index.js';
+import { powChallengeStore } from '../../../../../framework/ingress/firewall/util/pow-store.js';
+import { powDao } from '../../../../../framework/security/verify/pow/index.js';
 
 /** 题号格式（32 位十六进制）：格式不对就不必去打存储 */
 const CHALLENGE_ID_RE = /^[0-9a-f]{32}$/;

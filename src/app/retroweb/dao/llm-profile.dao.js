@@ -11,7 +11,7 @@
  *
  * @since 2026-10-09
  */
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 import { encryptSecret, decryptSecret } from '../utils/secret.js';
 
 /** 掩码：保尾部（与前端 mask_key 同口径），不暴露 key 数量 */

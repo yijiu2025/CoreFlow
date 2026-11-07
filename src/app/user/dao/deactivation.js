@@ -6,7 +6,7 @@
  * @author yijiu2025
  * @since 2026-08-23
  */
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 import { Op } from 'sequelize';
 
 /** 注销申请状态 */

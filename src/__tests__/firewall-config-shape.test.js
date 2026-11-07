@@ -6,7 +6,7 @@
  * 不留兼容分支，所以这里验证的是「通用规则」而不是某段历史。
  */
 import { describe, it, expect } from '@jest/globals';
-import { dropMisplacedDefenseKeys, DEFENSE_KEYS } from '../framework/firewall/config/validate.js';
+import { dropMisplacedDefenseKeys, DEFENSE_KEYS } from '../framework/ingress/firewall/config/validate.js';
 
 describe('防火墙配置形状：defense 键只能写在 defense 下', () => {
   it('顶层出现的 defense 键被剔除，并报出键名', () => {

@@ -21,10 +21,10 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
-import globalsLoader from '../../framework/loader/registry/00-globals.js';
+import globalsLoader from '../../framework/lifecycle/loader/registry/00-globals.js';
 import registerHealthRoutes from '../../api/system/v1/health.js';
-import { runEngine } from '../../framework/loader/engine.js';
-import { shouldSkipDeepCheck, PROBE_PATHS } from '../../framework/firewall/engine/pipeline.js';
+import { runEngine } from '../../framework/lifecycle/loader/engine.js';
+import { shouldSkipDeepCheck, PROBE_PATHS } from '../../framework/ingress/firewall/engine/pipeline.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

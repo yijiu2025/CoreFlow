@@ -1,7 +1,7 @@
 /**
  * 跨实例统计汇聚（E3b）—— data/store.js 层单测
  *
- * 打桩点选在语义化访问层（`framework/firewall/util/redis.js`），store.js 的
+ * 打桩点选在语义化访问层（`framework/ingress/firewall/util/redis.js`），store.js 的
  * 增量维护 / 合并 / 降级逻辑全部跑真身：
  *   - 增量刷写必须「批量一次」且失败时原样放回（不丢也不重复计）；
  *   - 聚合读取 = Redis 全量 + 本实例未刷写增量（键按 apiIdentifier 对齐）；

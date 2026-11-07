@@ -1,10 +1,10 @@
 /**
  * 系统管理命令模块
  */
-import { testConnection, getModels } from '../../src/framework/db/models.js';
+import { testConnection, getModels } from '../../src/framework/persistence/db/models.js';
 import { connectRedis, closeRedis } from '../lib/redis.js';
-import { printSuccess, printInfo, printWarning, printError, printLine } from '../../src/framework/cli/index.js';
-import { logStdout } from '../../src/framework/log/index.js';
+import { printSuccess, printInfo, printWarning, printError, printLine } from '../../src/framework/support/cli/index.js';
+import { logStdout } from '../../src/framework/support/log/index.js';
 
 /**
  * 系统健康检查

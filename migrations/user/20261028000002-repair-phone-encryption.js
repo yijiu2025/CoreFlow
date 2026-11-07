@@ -6,7 +6,7 @@
  *
  * 本迁移在加宽完成后执行：重新扫描仍为明文的手机号并加密，任何单行失败都使迁移失败。
  */
-import { createLogger, logStdout } from '../../src/framework/log/index.js';
+import { createLogger, logStdout } from '../../src/framework/support/log/index.js';
 
 const log = createLogger('migrations.user.20261028000002-repair-phone-encryption');
 

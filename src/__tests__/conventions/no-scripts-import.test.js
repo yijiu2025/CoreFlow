@@ -83,12 +83,12 @@ const FILES = walk(SRC);
 describe('依赖方向契约：src/ 不得 import scripts/', () => {
   it('扫描范围有效（防路径写错导致空扫描假通过）', () => {
     expect(FILES.length).toBeGreaterThan(200);
-    expect(FILES.map(rel)).toContain('src/framework/cli/index.js');
+    expect(FILES.map(rel)).toContain('src/framework/support/cli/index.js');
     expect(FILES.map(rel)).toContain('src/app/firewall/cli/blocks.js');
   });
 
   it('扫描器确实能识别出 import（防解析口径写错导致假通过）', () => {
-    const probe = FILES.find(f => rel(f) === 'src/framework/cli/index.js');
+    const probe = FILES.find(f => rel(f) === 'src/framework/support/cli/index.js');
     const specs = collectSpecifiers(
       espree.parse(fs.readFileSync(probe, 'utf8'), { ecmaVersion: 'latest', sourceType: 'module', loc: true })
     );
@@ -116,10 +116,10 @@ describe('依赖方向契约：src/ 不得 import scripts/', () => {
 
   it('CLI 工具库已迁到 src/framework，scripts/lib 不再持有副本', () => {
     for (const p of [
-      'src/framework/cli/table.js',
-      'src/framework/cli/input.js',
-      'src/framework/cli/index.js',
-      'src/framework/db/models.js'
+      'src/framework/support/cli/table.js',
+      'src/framework/support/cli/input.js',
+      'src/framework/support/cli/index.js',
+      'src/framework/persistence/db/models.js'
     ]) {
       expect(fs.existsSync(path.join(ROOT, p))).toBe(true);
     }
@@ -131,7 +131,7 @@ describe('依赖方向契约：src/ 不得 import scripts/', () => {
 });
 
 describe('模型加载契约：工厂函数必须被调用', () => {
-  const MODELS_PATH = path.join(ROOT, 'src/framework/db/models.js');
+  const MODELS_PATH = path.join(ROOT, 'src/framework/persistence/db/models.js');
 
   it('loadAllModels 必须真正调用模型工厂（历史缺陷：只 import 不调用 → 注册 0 个模型）', () => {
     const src = fs.readFileSync(MODELS_PATH, 'utf8');
@@ -152,8 +152,8 @@ describe('模型加载契约：工厂函数必须被调用', () => {
   });
 
   it('应用 loader 与 CLI 共用同一个扫描器（避免两份实现漂移）', () => {
-    const loader = fs.readFileSync(path.join(ROOT, 'src/framework/loader/registry/06-models.js'), 'utf8');
-    expect(loader).toMatch(/from '\.\.\/\.\.\/db\/models\.js'/);
+    const loader = fs.readFileSync(path.join(ROOT, 'src/framework/lifecycle/loader/registry/06-models.js'), 'utf8');
+    expect(loader).toMatch(/from '\.\.\/\.\.\/\.\.\/persistence\/db\/models\.js'/);
     expect(loader).toMatch(/scanModels\s*\(/);
   });
 });

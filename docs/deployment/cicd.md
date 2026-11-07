@@ -117,7 +117,7 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci
 
 因此 test 作业声明 `redis:7` service（`--health-cmd "redis-cli ping"`），
 并在 `env` 里写 `REDIS_DB: '15'`（与本地开发库隔离）+ `EXPECT_REDIS: 'true'`。
-`src/__tests__/framework/redis/redis-ci-guard.test.js` 会读这个变量：
+`src/__tests__/framework/persistence/redis/redis-ci-guard.test.js` 会读这个变量：
 **一旦有人把 service 或 env 删掉，它当场变红**，而不是静默退回跳过。
 
 > 这条守卫的存在理由值得记住：让测试"可选依赖真实服务"等于让它随时可以被无声降级。

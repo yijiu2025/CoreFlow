@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 
-const { resolveReconnectDelay, resolveCommandTimeout } = await import('../../framework/redis/plugin.js');
+const { resolveReconnectDelay, resolveCommandTimeout } = await import('../../framework/persistence/redis/plugin.js');
 
 describe('resolveReconnectDelay', () => {
   describe('退避序列（未超限）', () => {

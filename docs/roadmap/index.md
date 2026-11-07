@@ -11,18 +11,18 @@
 | --- | --- | --- |
 | 密码哈希 | ✅ | `crypto.scrypt`（libuv 线程池 + 并发背压），bcrypt 仅历史兼容校验 |
 | 环境变量校验 | ✅ | `src/framework/config/env.js`（`validateEnv` / 弱值拒绝 / 跨字段关系） |
-| CORS 白名单 | ✅ | `src/app.js` + `src/framework/auth/origin-guard.js`（生产 fail-closed） |
+| CORS 白名单 | ✅ | `src/app.js` + `src/framework/security/auth/origin-guard.js`（生产 fail-closed） |
 | 防火墙 API 鉴权 | ✅ | 走 `registerSecureRoute` + PBAC 权限码 |
 | 优雅关闭 | ✅ | `src/app.js` 的 `onClose`：守卫配置 flush + Redis Pub/Sub 关闭 |
 | 健康检查 | ✅ | `GET /v1/health/live`、`GET /v1/health/ready`（统一响应封装） |
-| Redis 重连与降级 | ✅ | `src/framework/redis/`：「未配置 → 进程内实现」「配置了但连不上 → 503」 |
+| Redis 重连与降级 | ✅ | `src/framework/persistence/redis/`：「未配置 → 进程内实现」「配置了但连不上 → 503」 |
 | Docker 制品 | ✅ | `Dockerfile`、`docker-compose.yml`、`.dockerignore`、`docker/verify-deps.mjs` |
 | CI / CD | ✅ | `.github/workflows/`：CI（Lint·Verify·Test）、Docs、Publish Image、CodeQL、依赖自证 |
 | Pre-commit | ✅ | Husky + lint-staged（ESLint + Prettier） |
-| 分布式锁 / 队列 / 环形队列 | ✅ | `src/framework/redis/{lock-store,queue-store,ring-queue-store}.js` + 跨进程关卡 |
-| 私钥信封加密 | ✅ | `src/framework/keys/`（AES-GCM + KEK + 迁移脚本 `scripts/migrate-key-encryption.js`） |
+| 分布式锁 / 队列 / 环形队列 | ✅ | `src/framework/persistence/redis/{lock-store,queue-store,ring-queue-store}.js` + 跨进程关卡 |
+| 私钥信封加密 | ✅ | `src/framework/security/keys/`（AES-GCM + KEK + 迁移脚本 `scripts/migrate-key-encryption.js`） |
 | 三级守卫 + PBAC | ✅ | `src/api/guard.js`（deny 优先 / 通配 / fail-closed） |
-| 权限缓存与指纹失效 | ✅ | `src/framework/auth/{perm-cache,session-perm}.js` + 主动失效 |
+| 权限缓存与指纹失效 | ✅ | `src/framework/security/auth/{perm-cache,session-perm}.js` + 主动失效 |
 
 ## 待办（按"能不能被打到"排序）
 
@@ -59,17 +59,17 @@
   - **同批主依赖跨大版本**：redis 5 → 6、dotenv 17 → 18、cookie 1 → 2、
     `@fastify/rate-limit` 10 → 11。node-redis v6 改了两个默认值（RESP3 协议、
     5s 命令超时），两者都不会报配置错误、只在运行期表现为"偶发超时 / 字段读不到"，
-    已在 `framework/redis/plugin.js` 的 createClient 处显式固化回 v5 语义。
+    已在 `framework/persistence/redis/plugin.js` 的 createClient 处显式固化回 v5 语义。
   - ⚠️ **Node 下限抬到 24**（`engines >=24` + 仓库根 `.nvmrc`）：`geoip-lite@2`（防火墙运行期
     依赖）声明 `engines >= 24`，而 CI 与镜像此前都跑 22 —— 只靠"没走到那条被版本门控的路径"
     在撑。CI / `Dockerfile` 一并升到 24，声明与实际运行对齐。
 
 ### P1 · 架构收敛
 
-- [ ] **反向依赖清理**：`src/framework/notice/services/email.js` → `src/app/notice/dao`（framework 依赖 app）、
+- [ ] **反向依赖清理**：`src/framework/support/notice/services/email.js` → `src/app/notice/dao`（framework 依赖 app）、
   `src/shared/user-dao.js` → `src/app/oauth21/dao`（shared 依赖 app）。
   现有守卫只覆盖 `app → app` 与 `src → scripts`，这两种方向无人拦
-- [ ] **未接线模块决策**：`framework/verify/slider`、`verify/sms`、`verify/voice`
+- [ ] **未接线模块决策**：`framework/security/verify/slider`、`verify/sms`、`verify/voice`
   要么接线（并补 TTL / 失败上限），要么删除 —— 它们在仓库里只增加"看起来支持"的错觉
 - [ ] **`package.json` workspaces 与已迁出目录**：`oauth21` / `posecraft` / `firewall` 仍列在
   `workspaces`，而目录已不在本仓。当前可用（npm 跳过缺失项），但语义上应收敛

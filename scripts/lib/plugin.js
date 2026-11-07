@@ -3,7 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { createLogger } from '../../src/framework/log/index.js';
+import { createLogger } from '../../src/framework/support/log/index.js';
 
 const log = createLogger('scripts.lib.plugin');
 

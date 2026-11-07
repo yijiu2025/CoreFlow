@@ -22,13 +22,13 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 /** 可切换的防御配置（替身 config-access 的返回值） */
 let settings = { defense: { enableRateLimit: false, enableEndpointRateLimit: true } };
 
-jest.unstable_mockModule('../../framework/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../../framework/ingress/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => settings,
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
 }));
 
-const { registerRateLimit } = await import('../../framework/firewall/engine/detectors/first-ratelimit.js');
+const { registerRateLimit } = await import('../../framework/ingress/firewall/engine/detectors/first-ratelimit.js');
 
 /** 假 Fastify 实例：记录 addHook 与 register 的入参 */
 function makeApp() {

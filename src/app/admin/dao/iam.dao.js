@@ -4,11 +4,11 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import sequelize from '../../../framework/db/index.js';
-import { getModel } from '../../../framework/db/index.js';
+import sequelize from '../../../framework/persistence/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 import { QueryTypes } from 'sequelize';
-import { invalidatePermCache } from '../../../framework/auth/index.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { invalidatePermCache } from '../../../framework/security/auth/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.admin.dao.iam');
 

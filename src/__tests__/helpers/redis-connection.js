@@ -29,8 +29,8 @@
  * @author yijiu2025
  * @since 2026-10-30
  */
-import { connectStandalone, disconnectStandalone } from '../../framework/redis/plugin.js';
-import { isRedisConfigured } from '../../framework/redis/utils.js';
+import { connectStandalone, disconnectStandalone } from '../../framework/persistence/redis/plugin.js';
+import { isRedisConfigured } from '../../framework/persistence/redis/utils.js';
 
 /** 默认连接预算与原关卡/CI 守卫保持一致 */
 const DEFAULT_TIMEOUT_MS = 8000;

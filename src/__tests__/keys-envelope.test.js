@@ -27,7 +27,8 @@ const hexKey = () => crypto.randomBytes(32).toString('hex');
 const b64Key = () => crypto.randomBytes(32).toString('base64');
 
 /** 解构出被测试模块（env 在调用时才读，模块顶层导入安全） */
-const { seal, open, isSealed, isEnabled, assertReady, SEALED_PREFIX } = await import('../framework/keys/envelope.js');
+const { seal, open, isSealed, isEnabled, assertReady, SEALED_PREFIX } =
+  await import('../framework/security/keys/envelope.js');
 
 /** 记录/还原与本模块相关的环境变量 */
 const ENV_KEYS = [
@@ -197,11 +198,11 @@ const InMemKeyPair = {
   }
 };
 
-jest.unstable_mockModule('../framework/db/index.js', () => ({
+jest.unstable_mockModule('../framework/persistence/db/index.js', () => ({
   getModel: name => (name === 'KeyPair' ? InMemKeyPair : null)
 }));
 
-const { insertKey, findByName, findAll } = await import('../framework/keys/repository.js');
+const { insertKey, findByName, findAll } = await import('../framework/security/keys/repository.js');
 
 describe('repository：私钥落库即密文', () => {
   beforeEach(() => {

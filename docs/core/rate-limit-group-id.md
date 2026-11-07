@@ -8,7 +8,7 @@
 
 ## 1. 问题背景：默认所有端点共享同一个计数桶
 
-本项目在防火墙第一层（`src/framework/firewall/engine/detectors/first-ratelimit.js`）注册了**全局** `@fastify/rate-limit` 插件，并使用**自定义 keyGenerator**：
+本项目在防火墙第一层（`src/framework/ingress/firewall/engine/detectors/first-ratelimit.js`）注册了**全局** `@fastify/rate-limit` 插件，并使用**自定义 keyGenerator**：
 
 ```js
 keyGenerator: req => {
@@ -119,7 +119,7 @@ registerSecureRoute(fastify, {
 窗口由 `ResilientStore.incr(key, cb, timeWindow)` 的第三个参数决定（插件把路由的
 `timeWindow` 传进来）。此前的实现**完全忽略该参数**、只用 `defense.rateLimitWindow`，
 所以路由上改 `timeWindow` 是无效的；同时它在 Redis 侧每个请求都 `PEXPIRE`，
-TTL 被不断续期 → 持续重试的客户端永远不会解封。两处都已修好（`framework/redis/resilient-store.js`）。
+TTL 被不断续期 → 持续重试的客户端永远不会解封。两处都已修好（`framework/persistence/redis/resilient-store.js`）。
 
 ## 4. 生效前提（重要：2026-11-02 起已修）
 
@@ -171,8 +171,8 @@ TTL 被不断续期 → 持续重试的客户端永远不会解封。两处都�
 
 | 文件                                                         | 职责                                                  |
 | ------------------------------------------------------------ | ----------------------------------------------------- |
-| `src/framework/firewall/engine/detectors/first-ratelimit.js` | 插件注册、全局 keyGenerator、阈值解析与旁路、429 响应 |
-| `src/framework/redis/resilient-store.js`                     | 计数存储（Redis 优先 / 内存降级）                     |
+| `src/framework/ingress/firewall/engine/detectors/first-ratelimit.js` | 插件注册、全局 keyGenerator、阈值解析与旁路、429 响应 |
+| `src/framework/persistence/redis/resilient-store.js`                     | 计数存储（Redis 优先 / 内存降级）                     |
 | `src/api/guard.js` → `registerSecureRoute`                   | 路由注册，透传 `config.rateLimit`                     |
 | `src/api/auth/v1/h5-token.js`                                | `groupId` 标准用例                                    |
 | `node_modules/@fastify/rate-limit/index.js`                  | `applyRateLimit` 中 key 拼接逻辑（行 248–256）        |

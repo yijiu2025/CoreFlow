@@ -64,7 +64,7 @@
 - `app/firewall/index.js`：`initFirewall` 内**第一步**调用 `initDao()`，必须先于
   `registerRateLimit` / `sync*`，否则它们读到的仍是默认值。
 - `engine/detectors/first-ratelimit.js` `errorResponseBuilder` 补 `statusCode: 429`（见 N-2）。
-- `src/framework/loader/registry/05-firewall.js` 恢复为**唯一注册点**（见 N-2）。
+- `src/framework/lifecycle/loader/registry/05-firewall.js` 恢复为**唯一注册点**（见 N-2）。
 - 存量脏数据收敛：新增 `scripts/sync-guard-config.js`，剥掉 `guard_configs` 表中
   覆盖代码声明的 4 个运行时字段（默认 dry-run，`--apply` 才写并 bump version）。
 
@@ -174,7 +174,7 @@
 | 🔵-12 挑战签名明文比较/无一次性 | 随 🔴-2 一并解决（`timingSafeEqual` + 原子单次消费 + 双向时间窗） |
 | 🔵-13 `bot-detector` 每请求 `JSON.stringify` | 改为配置引用比较（`botPatterns === lastBotPatternsRef`） |
 | 🔵-14 计时数组成员无界增长 | 随 Redis 化自然消除（限流窗口改由 `LUA_RATE_WINDOW` + TTL 承载） |
-| 🔵-15 深层导入 `framework/redis/utils.js` | `isRedisReady` 补进 barrel，调用方改走 `framework/redis/index.js` |
+| 🔵-15 深层导入 `framework/persistence/redis/utils.js` | `isRedisReady` 补进 barrel，调用方改走 `framework/persistence/redis/index.js` |
 | 🔵-16 `auto-responder.js` 游离文件 | 接线并纳入 `engine/index.js` barrel |
 | 🔵-17 未登录 401 也走完深度检测 | 第二轮：`willBeRejectedAsAnonymous` + `skipDeepCheckForAnonymous`（默认关闭），见 §6.2 |
 
@@ -214,7 +214,7 @@
 
 ### 6.3 设备维度封禁（唯一与 IP 无关的身份 / 跨 IP 有效）
 
-- `framework/auth/device.js` 新增 `getClientDeviceId()`：只取客户端**自报且校验通过**的
+- `framework/security/auth/device.js` 新增 `getClientDeviceId()`：只取客户端**自报且校验通过**的
   设备 ID，**不补发** —— 补发的 ID 每请求都可能不同，拿它当封禁维度等于永远封不住人。
 - 访问层新增 `block:dev:*` / `whitelist:dev:*` / `pass:dev:*` 与 `blocked:devices` 索引，
   读写统一走 `DIMS` 分派表（不再散落 `isFp ? A : B` 三元）。
@@ -233,7 +233,7 @@ IP 维度仍然保留，两者是叠加而非替代。
 | # | 缺陷 | 影响 | 修法 |
 | --- | --- | --- | --- |
 | N-4 | `engine/index.js` barrel **漏 re-export** `willBeRejectedAsAnonymous`，而 `firewall/index.js` 从它导入 | ESM 链接期直接抛 `does not provide an export named ...`；**`initFirewall` 整个模块无法加载**，防火墙在服务端根本注册不上（单测不经过该入口，因此 812 项全绿也发现不了） | 补进 pipeline 的 re-export 块 |
-| N-5 | `framework/db/index.js` 在 import 阶段发现缺 DB 环境变量就 `setTimeout(() => process.exit(1), 100)` | jest 加载整个模块图且按设计不带 DB 变量 → 每个 worker 跑一半被强杀。表现为「用例总数每次都不一样」（847/850/858/861/862）而汇总**仍是 0 失败**；`--runInBand` 时整个进程中途死掉、拿不到任何汇总 | 增加 `!isTestEnv` 门槛（`JEST_WORKER_ID` / `NODE_ENV=test`）；**生产 fail-fast 行为完全不变** |
+| N-5 | `framework/persistence/db/index.js` 在 import 阶段发现缺 DB 环境变量就 `setTimeout(() => process.exit(1), 100)` | jest 加载整个模块图且按设计不带 DB 变量 → 每个 worker 跑一半被强杀。表现为「用例总数每次都不一样」（847/850/858/861/862）而汇总**仍是 0 失败**；`--runInBand` 时整个进程中途死掉、拿不到任何汇总 | 增加 `!isTestEnv` 门槛（`JEST_WORKER_ID` / `NODE_ENV=test`）；**生产 fail-fast 行为完全不变** |
 | N-6 | `firewall_config.json` 缺失 `enableDeviceBlock` / `skipDeepCheckForAnonymous` | 新开关的默认值只能来自代码默认值，面板保存会把文件覆盖 | 由 `deepMerge` 的默认值兜底（已实测 `enableDeviceBlock` 生效）；面板 schema 已补两个字段 |
 
 **测试可信度对比（同一命令连续跑两次）**
@@ -261,10 +261,10 @@ IP 维度仍然保留，两者是叠加而非替代。
 | `src/api/guard-config.js` | **N-1**：`requirePermission` 不再被丢弃（三级注册） |
 | `src/app/guard/services/config.service.js` | **N-3**：热更新字段白名单 |
 | `src/app/firewall/engine/detectors/first-ratelimit.js` | **N-2**：`errorResponseBuilder` 补 `statusCode` |
-| `src/framework/loader/registry/05-firewall.js` | **N-2 + 🟡-1**：限流唯一且最早的注册点 |
+| `src/framework/lifecycle/loader/registry/05-firewall.js` | **N-2 + 🟡-1**：限流唯一且最早的注册点 |
 | `scripts/sync-guard-config.js` | 新增：收敛 `guard_configs` 中被 DB 覆盖的运行时字段 |
-| `src/framework/auth/device.js` | 第二轮：新增 `getClientDeviceId`（只取自报且校验通过的 ID，不补发） |
+| `src/framework/security/auth/device.js` | 第二轮：新增 `getClientDeviceId`（只取自报且校验通过的 ID，不补发） |
 | `src/app/firewall/engine/dao/block-manager.js` | 第二轮：设备维度 CRUD + `setBlockForSubject`（自动封禁同时写 IP 与设备） |
 | `src/app/firewall/engine/index.js` | 第二轮（N-4）：补 `willBeRejectedAsAnonymous` re-export |
-| `src/framework/db/index.js` | 第二轮（N-5）：缺 DB 配置时测试环境不再 `process.exit(1)` |
+| `src/framework/persistence/db/index.js` | 第二轮（N-5）：缺 DB 配置时测试环境不再 `process.exit(1)` |
 | `src/__tests__/firewall-device-api.test.js` | 第二轮：新增设备维度 API 契约测试 |

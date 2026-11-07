@@ -14,7 +14,7 @@ process.loadEnvFile(process.env.VERIFY_ENV_FILE || '.env');
 process.env.REDIS_DB = process.env.PROBE_REDIS_DB || '15';
 process.env.FW_TRAFFIC_STATS_FILE = process.env.PROBE_CHILD_STATS_FILE || '.tmp-probe/stats-child.json';
 
-const { connectStandalone, disconnectStandalone } = await import('../../src/framework/redis/index.js');
+const { connectStandalone, disconnectStandalone } = await import('../../src/framework/persistence/redis/index.js');
 
 const conn = await connectStandalone({ timeoutMs: 8000 });
 if (!conn.ready) {

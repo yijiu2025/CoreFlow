@@ -22,10 +22,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { createLogger } from '../log/index.js';
-import { DATA_ROOT } from '../paths.js';
+import { createLogger } from '../support/log/index.js';
+import { DATA_ROOT } from './paths.js';
 
-/** 运行时覆盖文件的默认目录（仓库根 data/，随 app-data 卷持久化；来源见 framework/paths.js） */
+/** 运行时覆盖文件的默认目录（仓库根 data/，随 app-data 卷持久化；来源见 framework/config/paths.js） */
 const DATA_DIR = DATA_ROOT;
 
 const log = createLogger('framework.config.runtime');

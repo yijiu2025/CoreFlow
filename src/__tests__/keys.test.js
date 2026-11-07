@@ -69,15 +69,16 @@ const InMemKeyPair = {
   }
 };
 
-jest.unstable_mockModule('../framework/db/index.js', () => ({
+jest.unstable_mockModule('../framework/persistence/db/index.js', () => ({
   getModel: () => InMemKeyPair
 }));
 
 const { createKey, rotateKey, pruneExpiredRetired, ensureCurrentKey, listKeys, deleteKey, refreshCache } =
-  await import('../framework/keys/manager.js');
-const { getPrivateKey, getPublicKey, getPublicKeyByKid, getJWKS } = await import('../framework/keys/accessor.js');
-const { clearCache, getCurrentKid } = await import('../framework/keys/cache.js');
-const { sign, verify } = await import('../framework/jwt/index.js');
+  await import('../framework/security/keys/manager.js');
+const { getPrivateKey, getPublicKey, getPublicKeyByKid, getJWKS } =
+  await import('../framework/security/keys/accessor.js');
+const { clearCache, getCurrentKid } = await import('../framework/security/keys/cache.js');
+const { sign, verify } = await import('../framework/security/jwt/index.js');
 
 function reset() {
   store.clear();

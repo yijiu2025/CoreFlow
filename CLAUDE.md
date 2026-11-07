@@ -81,7 +81,7 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/l
 | 00   | `00-globals.js`      | 装饰 `reply.result`（success/fail/unauth/forbidden）  |
 | 02   | `02-redis.js`        | Redis 连接 + 健康监控，失败注入 `null`                |
 | 03   | `03-db.js`           | Sequelize 连接 + `app.db` 装饰器 + `onClose` 优雅退出 |
-| 04   | `04-auth.js`         | Session 验证 + ALS 初始化（`src/framework/auth/`）              |
+| 04   | `04-auth.js`         | Session 验证 + ALS 初始化（`src/framework/security/auth/`）              |
 | 05   | `05-firewall.js`     | 五层拦截管道（限频/封禁/挑战/Bot/地理围栏）           |
 | 06   | `06-models.js`       | 自动加载 `src/models/`，按命名空间注册到 `app.db`     |
 | 07   | `07-api.js`          | 自动加载 `src/api/` 路由（读 `system.json`）          |
@@ -114,7 +114,7 @@ onSend        →  日志 + 连接释放 + info 级风险注入响应体 __risk_
 onResponse    →  扫描陷阱（404/403 检测，异步采集无 reply）
 ```
 
-**风险检测核心**（`src/framework/auth/anomaly-detector.js` + `src/framework/auth/index.js`）：
+**风险检测核心**（`src/framework/security/auth/anomaly-detector.js` + `src/framework/security/auth/index.js`）：
 - 基准来源：登录时 createSession 写入 Redis session 的 `deviceFingerprint` + `ip`（访问时 getSession 直接取，不查 DB）
 - 风险判定：指纹变 → warn（拦写操作）；IP 变指纹不变 → info（梯子，不拦）；基准缺失 → info（旧 session 降级）
 - 已验证标记：`POST /auth/v1/verify-challenge` 验证通过后写 Redis `verified:<userId>:<deviceId>`（30min 免验），并调 `updateSessionBaseline` 把新环境基准同步到 Redis + DB
@@ -122,10 +122,10 @@ onResponse    →  扫描陷阱（404/403 检测，异步采集无 reply）
 
 详见 [docs/development/注册登录全链路流程图.md](docs/development/注册登录全链路流程图.md) 第五~八章。
 
-## 认证系统 (`src/framework/auth/`)
+## 认证系统 (`src/framework/security/auth/`)
 
 ```
-src/framework/auth/
+src/framework/security/auth/
 ├── index.js              # 独立 auth 插件：Session 验证 + ALS + app.auth 装饰
 ├── cookie.js             # Cookie HMAC-SHA256 签名/验证
 ├── session.js            # Session 管理：创建/验证/销毁/续期/刷新/踢下线
@@ -257,29 +257,30 @@ registerSecureRoute(app, {
 
 ```
 src/
-│── 系统层（基础设施 + 通用工具）
-├── framework/         # 系统层基础设施
-│   ├── db/            #   数据库连接 + 迁移
-│   ├── redis/         #   缓存
-│   ├── log/           #   日志
-│   ├── auth/          #   认证框架（Session + Cookie + ALS）
-├── firewall/          # 防火墙
-│   ├── notice/        #   通知工具（邮件发送等通用服务）
-│   ├── verify/        #   验证码工具（通用服务）
-│   ├── scheduler/     #   定时任务调度器
-├── models/session/    # 系统模型（UserSession, SessionToken, SessionLog）
+├── framework/         # 系统层：按六类分组（config / persistence / security / ingress / lifecycle / support）
+│   ├── config/        #   配置与路径   env 校验 / 覆盖层 / paths.js（仓库布局唯一来源）
+│   ├── persistence/   #   数据与状态   db / redis / storage
+│   ├── security/      #   身份与安全   auth / verify / jwt / keys / crypto
+│   ├── ingress/       #   接入与协议   http / websocket / firewall
+│   ├── lifecycle/     #   编排与生命周期 loader / startup / scheduler
+│   └── support/       #   支撑与旁路   log / cli / notice
 │
-│── 应用层
-├── app/
-│   ├── oauth21/       # OAuth 2.1 应用（config + permission/ + crypto + dao + services）
-│   ├── user/          # 用户应用（config + permission/ + dao）
-│   ├── admin/         # 管理应用（config + permission/ + dao）
-│   └── notice/        # 通知应用（config + permission/ + dao）
+├── app/               # 应用层（每个 app 可整目录删除而不影响启动）
+│   ├── oauth21/       #   OAuth 2.1 应用（config + permission/ + crypto + dao + services）
+│   ├── user/          #   用户应用（config + permission/ + dao）
+│   ├── admin/         #   管理应用（config + permission/ + dao）
+│   ├── guard/         #   权限守卫配置持久化（DB）
+│   ├── firewall/      #   防火墙应用侧扩展（配置持久化 / 面板遥测 / 邮件通道）
+│   ├── notice/        #   通知应用（config + permission/ + dao）
+│   ├── posecraft/     #   姿态识别应用
+│   └── retroweb/      #   逆合成工作台后端能力
 │
 ├── api/               # 路由（按应用分文件夹，含 guard.js）
-├── models/            # 业务模型（user/, oauth21/, iam/, notice/）
-├── loader/            # 加载器
-└── data/              # 运行时数据
+├── models/            # 业务模型（user/, oauth21/, iam/, notice/, key/, guard/ …）
+├── shared/            # 前后端共享的纯逻辑（异常、常量）
+├── config/            # 静态覆盖层（可选，缺失即用 core 保底值）
+├── utils/             # 通用工具（timeout / cors / colors / proxy-trust …）
+└── __tests__/         # 测试（conventions/ 是架构守卫，须与源码结构同步）
 ```
 
 每个应用目录结构：`config.js`（元数据）+ `permission/`（权限/角色定义）+ 业务代码
@@ -296,12 +297,12 @@ src/
 | `db.notice`  | EmailCode, NoticeConfig                                         | notice_email_codes, notice_configs                                            |
 | `db.session` | UserSession, SessionToken, SessionLog                           | session_user_session, session_tokens, session_logs                            |
 
-关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/framework/db/softDeleteHooks.js`）。
+关联通过 `Model.associate = (models) => {}` 定义。软删除使用 `delete_version` 模式（`src/framework/persistence/db/softDeleteHooks.js`）。
 
-## 数据库 (`src/framework/db/`)
+## 数据库 (`src/framework/persistence/db/`)
 
 ```
-src/framework/db/
+src/framework/persistence/db/
 ├── index.js           # Sequelize 实例 + 环境变量校验 + 连接池配置
 ├── migrate.js         # Umzug 迁移运行器（--up / --down / --down-to / --status）
 ├── softDeleteHooks.js # 软删除 delete_version 钩子
@@ -312,9 +313,9 @@ src/framework/db/
 
 ```bash
 npm run migrate                                                # 执行所有待运行迁移
-node --env-file=.env src/framework/db/migrate.js --status      # 查看迁移状态
-node --env-file=.env src/framework/db/migrate.js --down        # 回滚最近一次
-node --env-file=.env src/framework/db/migrate.js --down-to <name>  # 回滚到指定版本
+node --env-file=.env src/framework/persistence/db/migrate.js --status      # 查看迁移状态
+node --env-file=.env src/framework/persistence/db/migrate.js --down        # 回滚最近一次
+node --env-file=.env src/framework/persistence/db/migrate.js --down-to <name>  # 回滚到指定版本
 ```
 
 **禁止在生产环境使用 `DB_SYNC=true`**，必须通过迁移文件管理表结构变更。
@@ -365,10 +366,10 @@ timestamps: true,
 paranoid: true,  // 错误！
 ```
 
-## Redis 系统 (`src/framework/redis/`)
+## Redis 系统 (`src/framework/persistence/redis/`)
 
 ```
-src/framework/redis/
+src/framework/persistence/redis/
 ├── index.js              # 统一出口，所有 API 从这里导出
 ├── plugin.js             # 连接管理：创建、主备切换、优雅关闭
 ├── health.js             # 事件驱动健康监控 + SLOWLOG 采集
@@ -420,7 +421,7 @@ const msg = queue.shift();
 
 **禁止直接操作 `request.server.redis` / `app.redis` 等原始客户端。**
 
-所有 Redis 操作必须通过 `src/framework/redis/` 模块 API 执行（`getStore` / `RedisStore` / `getStore().call()` 等）。若模块缺少某个 Redis 命令，**不得绕过模块直接调用**，应在 `RedisStore` 中补充相应方法（走统一超时保护和错误包装）。完整规范见 `.claude/skills/fullstack-rules/references/backend/redis.md`。
+所有 Redis 操作必须通过 `src/framework/persistence/redis/` 模块 API 执行（`getStore` / `RedisStore` / `getStore().call()` 等）。若模块缺少某个 Redis 命令，**不得绕过模块直接调用**，应在 `RedisStore` 中补充相应方法（走统一超时保护和错误包装）。完整规范见 `.claude/skills/fullstack-rules/references/backend/redis.md`。
 
 ## 防火墙系统 (`src/firewall/`)
 

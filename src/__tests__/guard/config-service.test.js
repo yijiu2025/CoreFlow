@@ -28,7 +28,7 @@ jest.unstable_mockModule('../../api/guard-config.js', () => ({
   }
 }));
 
-jest.unstable_mockModule('../../framework/auth/index.js', () => ({
+jest.unstable_mockModule('../../framework/security/auth/index.js', () => ({
   logAuditEvent: async () => {}
 }));
 

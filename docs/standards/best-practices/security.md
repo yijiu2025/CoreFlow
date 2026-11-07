@@ -2,7 +2,7 @@
 
 ## 密码安全
 
-- **新写入一律用 `crypto.scrypt`**（`src/framework/auth/password-hash.js`，走 libuv 线程池，
+- **新写入一律用 `crypto.scrypt`**（`src/framework/security/auth/password-hash.js`，走 libuv 线程池，
   带并发背压 `SCRYPT_MAX_CONCURRENCY`）
 - 历史 `bcrypt` 哈希**只做校验兼容**：校验失败/成功都不得再写入 bcrypt，登录成功后由
   `isLegacyHash()` 判定并就地升级为 scrypt
@@ -14,7 +14,7 @@
 
 ## 防重放攻击
 
-- 时间戳校验：**±2 分钟**（`src/framework/auth/signature.js`，`Math.abs(now - ts) > 120_000` 即拒）
+- 时间戳校验：**±2 分钟**（`src/framework/security/auth/signature.js`，`Math.abs(now - ts) > 120_000` 即拒）
 - Nonce 去重（Redis 原子 check-and-mark）：H5 请求签名（`_m_h5_tk`）与 RSA 登录请求都走这一套
 
 ## CSRF 保护
@@ -55,7 +55,7 @@ sid_r cookie: HttpOnly / SameSite=Strict / path 收窄到刷新端点
 ## CORS 配置
 
 生产环境只放行 `CORS_ORIGINS` 白名单；**白名单为空时对敏感端点是 fail-closed**
-（`src/framework/auth/origin-guard.js`：Origin → Referer → 非浏览器请求 三级判定，判不出来就拒绝）。
+（`src/framework/security/auth/origin-guard.js`：Origin → Referer → 非浏览器请求 三级判定，判不出来就拒绝）。
 不要在示例代码里直接 `process.env.CORS_ORIGINS.split(',')` —— 未配置时会抛 `TypeError`。
 
 ## 安全响应头

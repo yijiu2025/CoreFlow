@@ -1,4 +1,4 @@
-import { createLogger } from '../../../framework/log/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.oauth21.middleware.error.middleware');
 /**

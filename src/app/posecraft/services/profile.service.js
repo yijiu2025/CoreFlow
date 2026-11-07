@@ -8,7 +8,7 @@
  * @author yijiu
  * @since 2026-08-16
  */
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 import { Op } from 'sequelize';
 import followDao from '../dao/follow.dao.js';
 

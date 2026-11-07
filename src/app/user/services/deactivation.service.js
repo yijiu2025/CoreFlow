@@ -13,11 +13,11 @@
  * @author yijiu2025
  * @since 2026-08-23
  */
-import { getModel, sequelize } from '../../../framework/db/index.js';
+import { getModel, sequelize } from '../../../framework/persistence/db/index.js';
 import { Op } from 'sequelize';
 import deactivationDao from '../dao/deactivation.js';
 import { DEACTIVATION_SCOPE, DEACTIVATION_STATUS } from '../dao/deactivation.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.user.services.deactivation.service');
 
@@ -273,7 +273,7 @@ class DeactivationService {
 
     // Redis: 用 session.js 的 kickAllSessions 踢所有
     try {
-      const { kickAllSessions } = await import('../../../framework/auth/index.js');
+      const { kickAllSessions } = await import('../../../framework/security/auth/index.js');
       if (typeof kickAllSessions === 'function') {
         await kickAllSessions(userId);
       }
@@ -290,13 +290,13 @@ class DeactivationService {
    */
   async kickRedisSessionsByApp(userId, appId) {
     try {
-      const { getStore } = await import('../../../framework/redis/index.js');
+      const { getStore } = await import('../../../framework/persistence/redis/index.js');
       const sessionStore = getStore('session', { timeout: 3000 });
       // 命名空间必须与 session.js 的 userSessionsStore 逐字一致（'user_sessions'）。
       // 曾写成驼峰 'userSessions'，getStore 按 prefix 隔离命名空间 → 读到空 zset →
       // 下方 for 循环零次执行、注销清理静默失效（AUDIT-REPORT-2026-09-12.md 🔴-3）。
       const userSessionsStore = getStore('user_sessions', { timeout: 3000 });
-      const { deleteRefreshTokensForSession, sidHash } = await import('../../../framework/auth/index.js');
+      const { deleteRefreshTokensForSession, sidHash } = await import('../../../framework/security/auth/index.js');
       const SessionToken = getModel('session.SessionToken');
       const SessionLog = getModel('session.SessionLog');
 

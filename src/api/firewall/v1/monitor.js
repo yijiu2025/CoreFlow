@@ -31,7 +31,7 @@ import {
   updateSecuritySettings,
   getIpApis
 } from '../../../app/firewall/dao/dao.js';
-import { getActiveBlocks, getActiveWhitelist } from '../../../framework/firewall/block-manager.js';
+import { getActiveBlocks, getActiveWhitelist } from '../../../framework/ingress/firewall/block-manager.js';
 import {
   summarySchema,
   updateNodeSchema,

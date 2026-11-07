@@ -4,9 +4,9 @@
 
 ```bash
 npm run migrate                                                # 执行所有待运行迁移
-node --env-file=.env src/framework/db/migrate.js --status      # 查看迁移状态
-node --env-file=.env src/framework/db/migrate.js --down        # 回滚最近一次
-node --env-file=.env src/framework/db/migrate.js --down-to <name>  # 回滚到指定版本
+node --env-file=.env src/framework/persistence/db/migrate.js --status      # 查看迁移状态
+node --env-file=.env src/framework/persistence/db/migrate.js --down        # 回滚最近一次
+node --env-file=.env src/framework/persistence/db/migrate.js --down-to <name>  # 回滚到指定版本
 ```
 
 ::: warning 禁止在生产环境使用 `DB_SYNC=true`

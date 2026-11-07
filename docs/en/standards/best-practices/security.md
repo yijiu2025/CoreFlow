@@ -2,7 +2,7 @@
 
 ## Passwords
 
-- **All new hashes use `crypto.scrypt`** (`src/framework/auth/password-hash.js`, runs on the
+- **All new hashes use `crypto.scrypt`** (`src/framework/security/auth/password-hash.js`, runs on the
   libuv thread pool, with back-pressure via `SCRYPT_MAX_CONCURRENCY`)
 - Historical `bcrypt` hashes are **verification-only**: never write bcrypt again, on success or
   failure. On a successful login `isLegacyHash()` detects them and upgrades in place to scrypt
@@ -16,7 +16,7 @@
 
 ## Replay protection
 
-- Timestamp check: **±2 minutes** (`src/framework/auth/signature.js` —
+- Timestamp check: **±2 minutes** (`src/framework/security/auth/signature.js` —
   `Math.abs(now - ts) > 120_000` is rejected)
 - Nonce deduplication (Redis atomic check-and-mark): used by both H5 request signing
   (`_m_h5_tk`) and RSA-encrypted login requests
@@ -61,7 +61,7 @@ sid_r cookie: HttpOnly / SameSite=Strict / path narrowed to the refresh endpoint
 ## CORS
 
 Production only allows the `CORS_ORIGINS` allowlist; **an empty allowlist fails closed for
-sensitive endpoints** (`src/framework/auth/origin-guard.js`: Origin → Referer → non-browser
+sensitive endpoints** (`src/framework/security/auth/origin-guard.js`: Origin → Referer → non-browser
 request, three levels, reject when undecidable). Do not copy `process.env.CORS_ORIGINS.split(',')`
 into sample code — it throws `TypeError` when the variable is unset.
 

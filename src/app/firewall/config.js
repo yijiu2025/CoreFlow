@@ -5,7 +5,7 @@
  * 分工（2026-11-02 收口）：
  *   - **防护核心**（限流插件 + 五阶段管道）不在这里注册 —— 它必须早于 08-api
  *     （@fastify/rate-limit 的 onRoute 只对之后注册的路由生效），由
- *     `framework/loader/registry/05-firewall.js` 直接注册；
+ *     `framework/lifecycle/loader/registry/05-firewall.js` 直接注册；
  *   - **本应用的 `init`** 只做 app 侧的事（配置持久化 initDao、邮件通道、名单同步、
  *     遥测落盘），由 `10-apps` 按应用约定加载。
  * ⚠️ `init` 只能指向 `firewallAppInit`，**不得指向 `initFirewall`**：后者会把防护核心

@@ -10,12 +10,12 @@ import { describe, it, expect, beforeAll } from '@jest/globals';
 import crypto from 'crypto';
 
 describe('Session 完整流程', () => {
-  // cookie 签名/验证改用 framework/auth/context/cookie.js 真身，不再内联副本
+  // cookie 签名/验证改用 framework/security/auth/context/cookie.js 真身，不再内联副本
   // （副本与真身已漂移，掩盖了 🔴-1 timingSafeEqual 崩溃，见 AUDIT-REPORT-2026-09-12.md）
   let signCookie, verifyCookie;
 
   beforeAll(async () => {
-    ({ signCookie, verifyCookie } = await import('../framework/auth/context/cookie.js'));
+    ({ signCookie, verifyCookie } = await import('../framework/security/auth/context/cookie.js'));
   });
 
   describe('Session 创建', () => {

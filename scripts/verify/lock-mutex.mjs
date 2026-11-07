@@ -66,10 +66,10 @@ try {
 
 // 连接工具提到顶层：前置检查、PTTL 断言、退出清理三处都要用。
 // 放在块级作用域里会被挡住（`const` 不外泄），表现为后面"未定义"而非"连不上"。
-const { connectStandalone, disconnectStandalone, getStore } = await import('../../src/framework/redis/index.js');
+const { connectStandalone, disconnectStandalone, getStore } = await import('../../src/framework/persistence/redis/index.js');
 // 锁名必须用**调度器自己的**派生函数：各写一份公式的代价是"锁改个名，关卡静默变红"
 // （2026-11-08：加了 `:p<周期>` 后本关卡还在查旧键，PTTL 返回 -2）
-const { periodLockKey } = await import('../../src/framework/scheduler/index.js');
+const { periodLockKey } = await import('../../src/framework/lifecycle/scheduler/index.js');
 
 // ── 前置检查：环境不可用要和断言失败分开，否则关卡会因环境问题长期变红 ──
 {

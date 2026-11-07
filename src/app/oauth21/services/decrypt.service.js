@@ -11,9 +11,9 @@
  * @since 2026-08-17
  */
 
-import { decrypt, validateTimestamp } from '../../../framework/keys/encryption.js';
-import { emailDao } from '../../../framework/verify/email/index.js';
-import { getStore, createNonceStore } from '../../../framework/redis/index.js';
+import { decrypt, validateTimestamp } from '../../../framework/security/keys/encryption.js';
+import { emailDao } from '../../../framework/security/verify/email/index.js';
+import { getStore, createNonceStore } from '../../../framework/persistence/redis/index.js';
 
 // nonce 去重存储（延迟初始化，通过 app 引用自动感知 failover 切换）
 let nonceStore = null;
@@ -47,7 +47,7 @@ async function decryptLoginRequest(request) {
     // Nonce 防重放（使用原子 checkAndMark 消除并发窗口）
     //
     // 🔴 先卡形态再进存储：nonce 会成为 Redis 键，无长度约束时可被匿名请求用来
-    // 制造超长键（TTL 60s 的写放大）。口径与 framework/auth/security/signature.js 一致：
+    // 制造超长键（TTL 60s 的写放大）。口径与 framework/security/auth/security/signature.js 一致：
     // 只限长度上限与字符集，不设最小长度（各端现存的 uuid/hex/base64 形态都要能用）。
     if (typeof nonce !== 'string' || !/^[A-Za-z0-9._~+/=:-]{1,128}$/.test(nonce)) {
       return { success: false, error: 'nonce 格式非法', statusCode: 400 };

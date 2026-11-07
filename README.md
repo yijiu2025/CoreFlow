@@ -124,13 +124,13 @@ curl -i http://localhost:3000/v1/health/ready   # readiness (503 when a critical
 ```
 src/
 ├── app.js              # Fastify instance creation + lifecycle orchestration
-├── framework/          # Infrastructure (16 sub-domains, no business logic)
-│   ├── auth/  jwt/  keys/                 # Session / cookies / signatures / passwords / keys
-│   ├── db/  redis/                        # Sequelize connection / cache · locks · queues · pubsub
-│   ├── loader/  config/  log/  startup/   # Loader / env validation / logging / readiness probes
-│   ├── verify/  notice/  scheduler/       # Verification (captcha · recaptcha · email · sms) / mail / cron
-│   ├── firewall/  storage/  websocket/    # Five-stage interception pipeline / public+private file roots / WS
-│   └── cli/  paths.js                     # CLI helpers / REPO_ROOT · DATA_ROOT · dataFile()
+├── framework/          # Infrastructure, grouped in six families (no business logic)
+│   ├── config/         #   Config & paths: env validation / override layer / paths.js
+│   ├── persistence/    #   db / redis / storage
+│   ├── security/       #   auth / verify / jwt / keys / crypto
+│   ├── ingress/        #   http / websocket / firewall (five-stage pipeline)
+│   ├── lifecycle/      #   loader / startup / scheduler
+│   └── support/        #   log / cli / notice
 ├── app/                # Business apps (one directory = one app: oauth21 / user / admin /
 │                       #   firewall / guard / notice / posecraft / retroweb)
 ├── api/                # Route layer (domain/version); guard.js is the three-level guard engine
@@ -151,7 +151,7 @@ For the full tree (including loader order and fail-fast semantics) see
 ## What happens on boot
 
 `index.js → createApp() → initLoader()`, loading in filename-prefix order from
-`src/framework/loader/registry/`:
+`src/framework/lifecycle/loader/registry/`:
 
 ```
 00-globals   decorate reply.result       06-models   scan src/models/ and register every model
@@ -203,7 +203,7 @@ request → ① connection tracking (concurrency cap) → ② global blocking (I
         → ⑤ geo-fencing / endpoint rate limiting
 ```
 
-Detectors live in `src/framework/firewall/engine/detectors/`: `rate-limiter` (sliding window, one
+Detectors live in `src/framework/ingress/firewall/engine/detectors/`: `rate-limiter` (sliding window, one
 Redis Lua round-trip + in-memory fallback), `bot-detector`, `brute-force`, `scan-trap`
 (404/403 scan trap), `geo-filter`. Rules and thresholds come from
 `data/firewall_config.json` and can be hot-edited through the admin API

@@ -13,7 +13,7 @@ P0 四项、P2 七项、P3 中可安全修的六项均已改完，`jest` 全量 
 - `src/__tests__/app/oauth21/authorize-login-guard.test.js`（P0-2/3，4 例）
 - `src/__tests__/firewall.test.js`（P0-4 新增"已登录 403 不计入且不污染计数"）
 - `src/__tests__/dao.test.js`（P2-5 契约修正：`findRevoked` 必须带 `revoked:true`）
-- `src/__tests__/framework/scheduler/scheduler-lock.test.js`（P2-9 新增"跨周期可再次抢到"）
+- `src/__tests__/framework/lifecycle/scheduler/scheduler-lock.test.js`（P2-9 新增"跨周期可再次抢到"）
 - `src/__tests__/storage-path.test.js`（P2-8 夹具改为真实角色码，新增 `admin:*` 通配用例）
 
 ---
@@ -51,8 +51,8 @@ P0 四项、P2 七项、P3 中可安全修的六项均已改完，`jest` 全量 
 
 ### 4. 扫描陷阱把**业务 403** 计入扫描计数，可把正常用户封 1 小时
 
-- `framework/firewall/bootstrap.js:137-156` 的 `onResponse`：`if ([404, 403].includes(reply.statusCode)) checkNotFoundTrap(...)`。
-- `framework/firewall/engine/detectors/scan-trap.js:115` 同样把 403 计入，默认阈值 `maxNotFoundAttempts=10 / notFoundWindow=60s`（`config/defaults.js:112-116`）、`blacklistDuration=3600s`，且 `setBlockForSubject` 会**同时封 IP 与设备**（跨 IP 生效）。
+- `framework/ingress/firewall/bootstrap.js:137-156` 的 `onResponse`：`if ([404, 403].includes(reply.statusCode)) checkNotFoundTrap(...)`。
+- `framework/ingress/firewall/engine/detectors/scan-trap.js:115` 同样把 403 计入，默认阈值 `maxNotFoundAttempts=10 / notFoundWindow=60s`（`config/defaults.js:112-116`）、`blacklistDuration=3600s`，且 `setBlockForSubject` 会**同时封 IP 与设备**（跨 IP 生效）。
 - 全仓只有 2 条路由声明了 `config.firewall.skipScanTrap: true`（`api/files/v1/download.js:73`、`api/firewall/v1/challenge.js`），而 `src/api/**` 里有 25 处产出 403：`reply.result.forbidden`（权限不足）、`getWorkPreview` 的草稿/非公开 403、CSRF/来源校验 403 等。
 - 触发路径（真实会发生）：前端某个轮询循环打到一个无权限接口（3 个接口 × 4 次重试 = 12 次即越线），60 秒内即判定 SCANNER → 该用户**及其设备**被封 1 小时，且因为封禁是设备维度，换网络也解不开。全局限流默认关闭，没有任何其它层能拦住这个正反馈。
 - 修法：两种都行，建议组合——(a) 只把 **404/405** 计入扫描陷阱（403 是"有权限问题"不是"在猜路径"）；(b) 若要保留 403，则把 `reply.result.forbidden` 的产出点统一加 `skipScanTrap` 声明，并把默认阈值调高。
@@ -76,7 +76,7 @@ P0 四项、P2 七项、P3 中可安全修的六项均已改完，`jest` 全量 
 
 ### 7. `update-remember-me` 无上限累积 refresh token，且该路由无限流
 
-- `framework/auth/session/session.js:702-713`：每次 `rememberMe=true` 都新生成一个 refresh token 并 `zAdd` 进 `userRefreshStore` 与 `familyStore`，**没有任何裁剪**（对比 `createSession` 在 `:220-247` 有 `maxRefreshTokens` 裁剪逻辑）。
+- `framework/security/auth/session/session.js:702-713`：每次 `rememberMe=true` 都新生成一个 refresh token 并 `zAdd` 进 `userRefreshStore` 与 `familyStore`，**没有任何裁剪**（对比 `createSession` 在 `:220-247` 有 `maxRefreshTokens` 裁剪逻辑）。
 - 路由 `api/auth/v1/session.js:118-124`：`requireLogin: true`，**无 `config.rateLimit`**（同文件其它路由都有）。
 - 后果：任一登录用户循环调用即可在 Redis 里堆积任意数量的 refresh token（每个 30 天 TTL，值 64 hex），构成低成本写放大/内存占用；同时每个 token 都是一枚长期有效凭证，凭证面变大。
 - 修法：`updateRememberMe` 复用 `createSession` 的裁剪步骤；该路由补 `rateLimit`（例如 10/min）。
@@ -90,7 +90,7 @@ P0 四项、P2 七项、P3 中可安全修的六项均已改完，`jest` 全量 
 
 ### 9. 定时任务在多实例下**半频执行**
 
-- `framework/scheduler/index.js:89-105`：周期锁 `ttl = max(interval*2, interval+60s)`；`:118-126` `executeTask` 抢到锁后执行任务，**执行完不释放**（注释明确"故意不释放"）。
+- `framework/lifecycle/scheduler/index.js:89-105`：周期锁 `ttl = max(interval*2, interval+60s)`；`:118-126` `executeTask` 抢到锁后执行任务，**执行完不释放**（注释明确"故意不释放"）。
 - 后果：锁活 2 个周期 → 同一实例在下一个 tick（间隔 1 周期）抢锁必然失败并跳过 → 实际执行频率是配置值的一半（`intervalHours: 24` 变成 48 小时）。单实例（未配置 Redis）不受影响，所以本地/CI 全绿。
 - 修法：`ttl = interval + 一个安全余量（如 +30s）`，并在任务结束 `finally` 里不需要释放（让它在下一 tick 前自然过期即可）；更稳的做法是锁 TTL 用 interval，配合 `startRenew()` 在任务执行期间续期。
 
@@ -104,8 +104,8 @@ P0 四项、P2 七项、P3 中可安全修的六项均已改完，`jest` 全量 
 
 ### 11. 公开端点无端点限流 + 每请求 3 次 Redis 写入
 
-- 全局限流默认关闭：`framework/firewall/config/defaults.js:215` `enableRateLimit: false`；端点级只对**显式声明**的路由生效，`api/oauth21/v1/auth/qr.js` 的 `GET /qr/generate`、`POST /qr/scan`、`GET /qr/status` **都没有 `config.rateLimit`**。
-- `GET /qr/generate` 一次调用产生 3 次写：`issueH5Token`（`framework/auth/security/signature.js:191-217`，`h5_token` 1h TTL，浏览器无 token 时 `bootstrapToken` 自动下发）+ `qrStore.set(qrKey, …)` + `qrStore.set(ticket:…)`（各 120s）。
+- 全局限流默认关闭：`framework/ingress/firewall/config/defaults.js:215` `enableRateLimit: false`；端点级只对**显式声明**的路由生效，`api/oauth21/v1/auth/qr.js` 的 `GET /qr/generate`、`POST /qr/scan`、`GET /qr/status` **都没有 `config.rateLimit`**。
+- `GET /qr/generate` 一次调用产生 3 次写：`issueH5Token`（`framework/security/auth/security/signature.js:191-217`，`h5_token` 1h TTL，浏览器无 token 时 `bootstrapToken` 自动下发）+ `qrStore.set(qrKey, …)` + `qrStore.set(ticket:…)`（各 120s）。
 - 后果：匿名可把 Redis 当写放大用（受 Redis 内存与连接池限制，非无限，但零成本）。
 - 修法：给这三条（以及 `POST /qr/confirm`）加 `config.rateLimit`；`h5_token` 引导下发加"每 IP 每分钟一次"的桶。
 
@@ -115,17 +115,17 @@ P0 四项、P2 七项、P3 中可安全修的六项均已改完，`jest` 全量 
 
 | # | 位置 | 问题 | 影响 |
 |---|---|---|---|
-| 12 | `framework/verify/pow/service.js:328-329` | `if (depth <= 0) return true` | 难度为 0 时任意十进制答案都通过。当前 `clampDifficulty` 保证 ≥1，但这是判题函数的 fail-open 默认值，任何新调用方（或历史载荷）传 0 就等于关掉 PoW |
+| 12 | `framework/security/verify/pow/service.js:328-329` | `if (depth <= 0) return true` | 难度为 0 时任意十进制答案都通过。当前 `clampDifficulty` 保证 ≥1，但这是判题函数的 fail-open 默认值，任何新调用方（或历史载荷）传 0 就等于关掉 PoW |
 | 13 | `app/oauth21/crypto/tokens.js:25-33` | 设备码 `userCode` 用 `Math.random()` | V8 PRNG 状态可被少量输出还原 → 用户码可预测；`authorizeDevice`（`device.service.js:97-112`）也无尝试上限。影响有限（批准方向是"给他人设备签自己账号的令牌"），但令牌生成不该用非 CSPRNG。`crypto.randomInt` 一行可换 |
-| 14 | `framework/db/index.js:40` | DSN 只对 `DB_PASS` 做 `encodeURIComponent`，`DB_USER` / `DB_NAME` 未编码 | 用户名/库名含 `@ : / ?` 时连接串被解析错位（云托管账号常见 `user@host` 形态），报错指向"认证失败"，难排查 |
+| 14 | `framework/persistence/db/index.js:40` | DSN 只对 `DB_PASS` 做 `encodeURIComponent`，`DB_USER` / `DB_NAME` 未编码 | 用户名/库名含 `@ : / ?` 时连接串被解析错位（云托管账号常见 `user@host` 形态），报错指向"认证失败"，难排查 |
 | 15 | `app/posecraft/dao/interaction.dao.js:170-176` | 收藏用 check-then-`create`（点赞用的是 `findOrCreate`） | 并发双击同一作品 → `uk_user_collect_work` 唯一索引冲突 → 500 |
 | 16 | `api/posecraft/v1/work.js:352-368` | `likeWork` 返回的 `likes_count` 是**自增前**读到的快照 | 响应里的计数比实际少 1；前端乐观更新后会出现"跳一下" |
 | 17 | `app/posecraft/dao/work.dao.js:85,272` | 推荐公式用了 `collects_count * 12 + shares_count * 8`，但全仓**没有任何代码写这两个列** | 收藏/分享权重恒为 0，`sort=recommended` 实际只剩 `likes×15 + views + RAND()`；页面上的收藏/分享数也永远是 0 |
-| 18 | `framework/verify/sms/dao.js:47-54`、`voice/dao.js` 同构 | 先落码再发送；发送失败仍占用 `rateLimit` 窗口 | 服务商抖动时用户 60 秒内无法重试（当前 provider 是空实现，必抛错，这条会一直触发） |
+| 18 | `framework/security/verify/sms/dao.js:47-54`、`voice/dao.js` 同构 | 先落码再发送；发送失败仍占用 `rateLimit` 窗口 | 服务商抖动时用户 60 秒内无法重试（当前 provider 是空实现，必抛错，这条会一直触发） |
 | 19 | `framework/config/runtime.js:47-96` | `deepMerge` / `applyInPlace` 直接 `out[key] = …`，未拦 `__proto__` / `constructor` | `data/*_config.json` 里写 `{"__proto__":{…}}` 会给该配置对象换原型（污染范围限于该对象，不是全局 `Object.prototype`），属"配置面"加固项 |
 | 20 | `app/notice/dao/notice.js` 全量 | `sms` / `dingtalk` / `wechat` 通道 `saveConfig` 只处理 `email`，其余静默返回 | 面板保存成功但什么都没写，用户以为生效了 |
 
-另：`framework/verify/{qrcode,sms,voice}` 三个模块（含 DAO/Service 共约 700 行）**零引用**，是死代码；`sms`/`voice` 的 provider 实现直接抛"尚未接入"。不影响安全，但会让"短信验证码"看起来已具备而实际不可用。
+另：`framework/security/verify/{qrcode,sms,voice}` 三个模块（含 DAO/Service 共约 700 行）**零引用**，是死代码；`sms`/`voice` 的 provider 实现直接抛"尚未接入"。不影响安全，但会让"短信验证码"看起来已具备而实际不可用。
 
 ---
 
@@ -167,22 +167,22 @@ P0 四项、P2 七项、P3 中可安全修的六项均已改完，`jest` 全量 
 | P0-1 | `app/oauth21/services/token.service.js` | `handleAuthorizationCode` 在消费后显式判 `codeData.replay_detected` → `invalid_grant` 且不签发令牌 |
 | P0-2 | `api/oauth21/v1/auth/authorize.js`、`services/authorization.service.js` | 路由加 `rateLimit: 10/min`；service 在验密**前**判 `isAccountLocked`（423），验密后判 `Number(status)===0`（403） |
 | P0-3 | `dao/user.dao.js`、`services/login.service.js`、`services/token-issuer.service.js` | `findByUsername` 返回 `status`；`directLogin` 增加禁用判定（403 + 审计）；`status: user.status ?? 'active'` |
-| P0-4 | `framework/firewall/engine/detectors/scan-trap.js`、`bootstrap.js` | 新增 `authenticated` 参数：已登录的 403 不计入（匿名 403 仍计）；bootstrap 传 `Boolean(request.state?.user)` |
+| P0-4 | `framework/ingress/firewall/engine/detectors/scan-trap.js`、`bootstrap.js` | 新增 `authenticated` 参数：已登录的 403 不计入（匿名 403 仍计）；bootstrap 传 `Boolean(request.state?.user)` |
 | P2-5 | `app/oauth21/dao/token.dao.js` | `findRevoked` 增加 `revoked: true` 过滤（过期但未轮转不再被判盗用） |
 | P2-6 | `app/oauth21/services/token.service.js` | 刷新路径 `Number(user.status) === 0` |
-| P2-7 | `framework/auth/session/session.js`、`api/auth/v1/session.js` | `updateRememberMe` 先 `deleteRefreshTokensForSession` 再发新 token（替换而非累加）；路由加 `rateLimit: 10/min` |
+| P2-7 | `framework/security/auth/session/session.js`、`api/auth/v1/session.js` | `updateRememberMe` 先 `deleteRefreshTokensForSession` 再发新 token（替换而非累加）；路由加 `rateLimit: 10/min` |
 | P2-8 | `api/files/v1/download.js` | 管理员判定改为 `isSuperAdmin(user) \|\| hasAdminWildcard(user)`（`admin:*` / `*`） |
-| P2-9 | `framework/scheduler/index.js` | 锁名带周期序号 `scheduler:<task>:p<period>`（TTL 仍 2×周期），跨周期不再被自己的旧锁挡住 |
+| P2-9 | `framework/lifecycle/scheduler/index.js` | 锁名带周期序号 `scheduler:<task>:p<period>`（TTL 仍 2×周期），跨周期不再被自己的旧锁挡住 |
 | P2-10 | `api/guard-config.js`、`app/guard/dao/guard-config.dao.js` | 三处 `currentVersion = (await saveWithTimeout(...)).maxVersion`；写入后同步 `_snapshot[systemKey]` |
 | P2-11 | `api/oauth21/v1/auth/qr.js` | 四条扫码路由各加 `config.rateLimit`（generate 20 / scan 20 / confirm 20 / status 60 每分钟） |
 | P2-12 | `api/oauth21/v1/auth/login.js` | `/login`、`/mini-login` 各 20/min，`/login/verify-email` 10/min（groupId 隔离） |
-| P3-12 | `framework/verify/pow/service.js` | 难度 `< 1` 判**失败**（判题函数不再 fail-open） |
+| P3-12 | `framework/security/verify/pow/service.js` | 难度 `< 1` 判**失败**（判题函数不再 fail-open） |
 | P3-13 | `app/oauth21/crypto/tokens.js` | `generateUserCode` 改用 `crypto.randomInt` |
-| P3-14 | `framework/db/index.js` | DSN 对 `DB_USER` / `DB_NAME` 一并 `encodeURIComponent` |
+| P3-14 | `framework/persistence/db/index.js` | DSN 对 `DB_USER` / `DB_NAME` 一并 `encodeURIComponent` |
 | P3-15 | `app/posecraft/dao/interaction.dao.js` | 收藏改 `findOrCreate`（并发不再撞唯一索引） |
 | P3-16 | `app/posecraft/dao/interaction.dao.js`、`api/posecraft/v1/work.js` | 新增 `_readLikeCount`，点赞/取消后回读真实计数 |
 | P3-17 | `app/posecraft/dao/interaction.dao.js` | 收藏增删同步 `collects_count`（此前全仓无写入点） |
-| P3-18 | `framework/verify/sms/dao.js`、`voice/dao.js` | 发送失败撤销验证码记录（不再白占频率窗口） |
+| P3-18 | `framework/security/verify/sms/dao.js`、`voice/dao.js` | 发送失败撤销验证码记录（不再白占频率窗口） |
 | P3-19 | `framework/config/runtime.js` | `deepMerge` / `applyInPlace` 跳过 `__proto__` / `constructor` / `prototype` |
 
-未改的两项（记录在案，不属缺陷）：`shares_count` 仍无写入点 —— 仓内没有"分享"端点，等该功能落地时一并接上；`framework/verify/{qrcode,sms,voice}` 仍是死代码，删除属独立清理任务，不宜与本次安全修复混在一个提交里。
+未改的两项（记录在案，不属缺陷）：`shares_count` 仍无写入点 —— 仓内没有"分享"端点，等该功能落地时一并接上；`framework/security/verify/{qrcode,sms,voice}` 仍是死代码，删除属独立清理任务，不宜与本次安全修复混在一个提交里。

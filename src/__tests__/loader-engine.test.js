@@ -21,7 +21,7 @@ import { describe, it, expect, beforeEach } from '@jest/globals';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { runEngine, getLoaderStatus, isOptionalLoader } from '../framework/loader/engine.js';
+import { runEngine, getLoaderStatus, isOptionalLoader } from '../framework/lifecycle/loader/engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixture = name => path.resolve(__dirname, '__fixtures__', name);

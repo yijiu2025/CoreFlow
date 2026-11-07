@@ -5,7 +5,7 @@
 > **本页所述的「多服务器角色裁剪」方案在代码中仍零实现。**
 >
 > - 文中提及的 `SERVER_ROLE`、`MODULE_*` 等环境变量在全仓**没有任何引用**，`.env.example` 里也没有；
-> - 当前加载器（`src/framework/loader/registry/`）是**全量加载**，不存在按角色裁剪模块的能力。
+> - 当前加载器（`src/framework/lifecycle/loader/registry/`）是**全量加载**，不存在按角色裁剪模块的能力。
 >
 > **2026-09-20 更新两处已过时的事实：**
 >

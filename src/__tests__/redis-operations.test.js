@@ -22,7 +22,7 @@
  * @since 2026-09-15 重写为真身契约测试（🟡-7）
  */
 import { describe, it, expect, afterEach, beforeAll, afterAll, jest } from '@jest/globals';
-import { getStore, MapStore } from '../framework/redis/index.js';
+import { getStore, MapStore } from '../framework/persistence/redis/index.js';
 
 /** 用例用过的命名空间，逐个销毁，避免用例间通过共享静态存储互相污染 */
 const usedPrefixes = new Set();

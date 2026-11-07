@@ -6,7 +6,7 @@
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 import workDao from '../../../app/posecraft/dao/work.dao.js';
 import templateDao from '../../../app/posecraft/dao/template.dao.js';
 import interactionDao from '../../../app/posecraft/dao/interaction.dao.js';

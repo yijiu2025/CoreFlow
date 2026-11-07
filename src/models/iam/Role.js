@@ -4,7 +4,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { registerDeleteVersionHooks } from '../../framework/db/softDeleteHooks.js';
+import { registerDeleteVersionHooks } from '../../framework/persistence/db/softDeleteHooks.js';
 
 /**
  * 工业级角色定义表 (PBAC 架构)

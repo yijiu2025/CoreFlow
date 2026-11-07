@@ -1,7 +1,7 @@
 /**
  * 角色管理命令模块
  */
-import { getModels } from '../../src/framework/db/models.js';
+import { getModels } from '../../src/framework/persistence/db/models.js';
 import { connectRedis, closeRedis, clearUserSessions } from '../lib/redis.js';
 import {
   createRl,
@@ -15,8 +15,8 @@ import {
   printWarning,
   printError,
   printLine
-} from '../../src/framework/cli/index.js';
-import { logStdout } from '../../src/framework/log/index.js';
+} from '../../src/framework/support/cli/index.js';
+import { logStdout } from '../../src/framework/support/log/index.js';
 
 /**
  * 列出所有角色

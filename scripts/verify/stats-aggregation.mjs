@@ -59,7 +59,7 @@ const CLEANUP_FILES = [process.env.FW_TRAFFIC_STATS_FILE, process.env.PROBE_CHIL
 console.log('══ E3 遥测统计跨实例汇聚复验 ══');
 console.log('（两个真实进程 + 真实 Redis）\n');
 
-const { connectStandalone, disconnectStandalone } = await import('../../src/framework/redis/index.js');
+const { connectStandalone, disconnectStandalone } = await import('../../src/framework/persistence/redis/index.js');
 
 // 有界前置检查：timeoutMs 让「环境不可用」在数秒内以 ready:false 返回，
 // 而不是挂进客户端永不放弃的重连循环（见 plugin.js connectStandalone 注释）

@@ -109,13 +109,13 @@ curl -i http://localhost:3000/v1/health/ready   # 就绪（关键依赖不可用
 ```
 src/
 ├── app.js              # 创建 Fastify 实例 + 生命周期编排
-├── framework/          # 基础设施（16 个子域，不写业务）
-│   ├── auth/  jwt/  keys/                 # 会话 / Cookie / 签名 / 密码 / 密钥
-│   ├── db/  redis/                        # Sequelize 连接 / 缓存·锁·队列·PubSub
-│   ├── loader/  config/  log/  startup/   # 加载器 / 环境校验 / 日志 / 就绪探针
-│   ├── verify/  notice/  scheduler/       # 验证能力（图形·人机·邮件·短信）/ 邮件 / 定时任务
-│   ├── firewall/  storage/  websocket/    # 五层拦截管道 / 公开+私有文件根 / WebSocket
-│   └── cli/  paths.js                     # CLI 辅助 / REPO_ROOT·DATA_ROOT·dataFile()
+├── framework/          # 基础设施（六个分组，不写业务）
+│   ├── config/         #   配置与路径：环境校验 / 覆盖层 / paths.js
+│   ├── persistence/    #   数据与状态：db / redis / storage
+│   ├── security/       #   身份与安全：auth / verify / jwt / keys / crypto
+│   ├── ingress/        #   接入与协议：http / websocket / firewall（五层拦截管道）
+│   ├── lifecycle/      #   编排与生命周期：loader / startup / scheduler
+│   └── support/        #   支撑与旁路：log / cli / notice
 ├── app/                # 业务应用（一个目录 = 一个应用：oauth21 / user / admin /
 │                       #   firewall / guard / notice / posecraft / retroweb）
 ├── api/                # 路由层（域/版本），guard.js 是三级守卫引擎
@@ -134,7 +134,7 @@ src/
 
 ## 启动都发生了什么
 
-`index.js → createApp() → initLoader()`，按 `src/framework/loader/registry/` 的文件名前缀顺序加载：
+`index.js → createApp() → initLoader()`，按 `src/framework/lifecycle/loader/registry/` 的文件名前缀顺序加载：
 
 ```
 00-globals  装饰 reply.result       06-models  扫描 src/models/ 注册全部模型
@@ -184,7 +184,7 @@ requirePermission: { all: ['fw:config:read', 'fw:config:write'] }
      → ⑤ 地理围栏 / 端点限频
 ```
 
-检测器都在 `src/framework/firewall/engine/detectors/`：`rate-limiter`（滑窗，Redis Lua 单次往返 +
+检测器都在 `src/framework/ingress/firewall/engine/detectors/`：`rate-limiter`（滑窗，Redis Lua 单次往返 +
 内存降级）、`bot-detector`、`brute-force`、`scan-trap`（404/403 扫描陷阱）、`geo-filter`。
 限流规则与阈值从 `data/firewall_config.json` 读取，管理端可热改（`PATCH /api/firewall/v1/monitor/settings`）。
 

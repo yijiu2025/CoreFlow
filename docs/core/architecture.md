@@ -53,7 +53,7 @@ onResponse    →  扫描陷阱（404/403 检测）
 
 ## 模块加载机制
 
-引擎扫描 `src/framework/loader/registry/` 目录，按文件名数字前缀顺序加载：
+引擎扫描 `src/framework/lifecycle/loader/registry/` 目录，按文件名数字前缀顺序加载：
 
 ```
 00-globals.js     → 装饰 reply.result
@@ -70,7 +70,7 @@ onResponse    →  扫描陷阱（404/403 检测）
 ```
 
 **失败语义**：只有 `01-monitor` / `02-redis` / `09-notice` 在 `OPTIONAL_LOADERS` 名单里
-（`src/framework/loader/engine.js`），失败只降级一项附加能力；其余加载器失败即
+（`src/framework/lifecycle/loader/engine.js`），失败只降级一项附加能力；其余加载器失败即
 **fail-fast** —— 缺认证 / 防火墙 / 模型 / 路由 / 应用的进程能监听端口却处理不了正确请求，
 "启动成功"是最糟的失败形态。`03-db` 的判据是"**已配置但连不上**才失败"，
 未配置 DB 仍允许本地与测试无库启动。

@@ -50,7 +50,7 @@ function makeFakeModel() {
   };
 }
 
-jest.unstable_mockModule('../framework/db/index.js', () => {
+jest.unstable_mockModule('../framework/persistence/db/index.js', () => {
   const OauthToken = makeFakeModel();
   return {
     default: { models: { OauthToken } },

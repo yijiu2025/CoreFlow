@@ -25,10 +25,10 @@ import {
   TooManyRequestsException,
   InternalServerException
 } from '../shared/exceptions.js';
-// 2026-11-07 起 createErrorHandler 住在 framework/http/error-handler.js：
+// 2026-11-07 起 createErrorHandler 住在 framework/ingress/http/error-handler.js：
 // 那个模块不碰任何 @fastify/* 插件，因此这里不再需要给 `@fastify/static` 打桩
 // （此前必须 mock，否则 jest 的 CJS 运行时会在加载 ESM-only 的 content-disposition 时炸）。
-const { createErrorHandler } = await import('../framework/http/error-handler.js');
+const { createErrorHandler } = await import('../framework/ingress/http/error-handler.js');
 
 describe('统一 API 异常基类', () => {
   test('ApiException 实例化及属性', () => {

@@ -8,8 +8,8 @@
  * @since 2026-08-17
  */
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-import { createStream } from '../framework/redis/stream-store.js';
-import { isRedisConfigured } from '../framework/redis/utils.js';
+import { createStream } from '../framework/persistence/redis/stream-store.js';
+import { isRedisConfigured } from '../framework/persistence/redis/utils.js';
 import { connectTestRedis, disconnectTestRedis } from './helpers/redis-connection.js';
 
 const describeOrSkip = isRedisConfigured() ? describe : describe.skip;

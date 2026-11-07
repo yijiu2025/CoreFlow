@@ -15,8 +15,8 @@
  */
 import 'dotenv/config';
 import readline from 'readline';
-import sequelize from '../src/framework/db/index.js';
-import { createLogger, logStdout } from '../src/framework/log/index.js';
+import sequelize from '../src/framework/persistence/db/index.js';
+import { createLogger, logStdout } from '../src/framework/support/log/index.js';
 
 const log = createLogger('scripts.revoke-superadmin');
 

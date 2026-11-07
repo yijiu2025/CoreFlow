@@ -1,7 +1,7 @@
 /**
  * 防火墙遥测统计汇聚（Redis 跨实例聚合）
  *
- * 从 `framework/firewall/util/redis.js` 拆出（2026-11-01 两层分离）：
+ * 从 `framework/ingress/firewall/util/redis.js` 拆出（2026-11-01 两层分离）：
  * 访问控制语义（封禁/白名单/计数/挑战/通行证）留在 framework 引擎层；
  * 面板遥测的跨实例汇聚只被 `data/store.js`（app 层）消费，随消费者留在 app。
  * 本文件经 framework 访问层取 store（app → framework 方向，合法）。
@@ -27,9 +27,9 @@
  * @author yijiu2025
  * @since 2026-11-01（自 util/redis.js 迁出，逻辑保持逐字不变）
  */
-import { store, full, redisAvailable } from '../../../framework/firewall/util/redis.js';
-import { summarizeChallengeFields } from '../../../framework/firewall/challenge/index.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { store, full, redisAvailable } from '../../../framework/ingress/firewall/util/redis.js';
+import { summarizeChallengeFields } from '../../../framework/ingress/firewall/challenge/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.firewall.data.stats-redis');
 
@@ -45,7 +45,7 @@ const STATS_KEY = {
   ip: 'stats:ip',
   records: 'stats:records',
   /**
-   * 挑战链路计数器（field → count，见 framework/firewall/challenge/index.js）
+   * 挑战链路计数器（field → count，见 framework/ingress/firewall/challenge/index.js）
    *
    * 单独一个 hash 而不是塞进 `stats:totals`：挑战指标是**枚举维度**（provider / reason /
    * 耗时桶 / 难度 / 页面形态），塞进 totals 会让那个 hash 变成混合语义，面板读的时候
@@ -252,4 +252,4 @@ async function resetAggregatedStats() {
 export { flushStatsDelta, readAggregatedStats, resetAggregatedStats, STATS_KEY };
 // re-export：store.js 的「Redis 可用性」判断与本模块同源（单一 mock 点 —— 测试
 // 只需替换本模块即可同时控制刷写与降级判定，与拆分前 store.js 的 import 面一致）。
-export { redisAvailable } from '../../../framework/firewall/util/redis.js';
+export { redisAvailable } from '../../../framework/ingress/firewall/util/redis.js';

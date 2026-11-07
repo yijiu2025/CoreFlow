@@ -11,7 +11,7 @@
 
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { processAndUploadAvatar, AvatarError } from '../../../app/user/services/avatar.service.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 import { USER_PERMISSIONS } from '../../../app/user/permission/index.js';
 
 const log = createLogger('api.user.upload');

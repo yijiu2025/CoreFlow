@@ -21,18 +21,19 @@ let settings;
 // ⚠️ 必须先注册 mock 再 import 任何**传递依赖** config-access 的模块：
 //    challenge/template.js → util/shared.js 会提前把真实模块装进 registry，
 //    之后 pipeline.js 拿到的就还是真身（症状：'安全配置读取器尚未注册'）。
-jest.unstable_mockModule('../../../framework/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../../../framework/ingress/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => settings,
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
 }));
 
 const { DEFAULT_SECURITY_SETTINGS } = await import('../../../app/firewall/config/config.js');
-const { buildChallengeRedirect } = await import('../../../framework/firewall/challenge/index.js');
-const { checkGlobalBlockPhase } = await import('../../../framework/firewall/engine/pipeline.js');
-const { peekChallengeMetrics, resetChallengeMetrics } = await import('../../../framework/firewall/challenge/index.js');
-const { setBlock } = await import('../../../framework/firewall/block-manager.js');
-const { resetMemoryState } = await import('../../../framework/firewall/util/redis-memory.js');
+const { buildChallengeRedirect } = await import('../../../framework/ingress/firewall/challenge/index.js');
+const { checkGlobalBlockPhase } = await import('../../../framework/ingress/firewall/engine/pipeline.js');
+const { peekChallengeMetrics, resetChallengeMetrics } =
+  await import('../../../framework/ingress/firewall/challenge/index.js');
+const { setBlock } = await import('../../../framework/ingress/firewall/block-manager.js');
+const { resetMemoryState } = await import('../../../framework/ingress/firewall/util/redis-memory.js');
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36';
 

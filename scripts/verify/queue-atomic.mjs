@@ -78,7 +78,7 @@ try {
 }
 
 const { connectStandalone, disconnectStandalone, createQueue, createRingQueue } = await import(
-  '../../src/framework/redis/index.js'
+  '../../src/framework/persistence/redis/index.js'
 );
 
 {

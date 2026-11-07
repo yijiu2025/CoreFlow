@@ -15,7 +15,7 @@
 
 ## Password storage
 
-Passwords use Node's built-in `crypto.scrypt` (`src/framework/auth/password-hash.js`, async, runs
+Passwords use Node's built-in `crypto.scrypt` (`src/framework/security/auth/password-hash.js`, async, runs
 on the libuv thread pool). Historical bcrypt hashes (`$2a$` / `$2b$` / `$2y$`) remain
 **verification-only**, and are transparently rewritten to scrypt on a successful login.
 
@@ -42,7 +42,7 @@ requests queue rather than saturate the thread pool. Legacy bcrypt verification 
 - When `sid` expires the session is refreshed via `sid_r` with no user-visible interruption;
   refresh is an **atomic claim**, so the same refreshToken succeeds exactly once
 
-> All four constants live in `src/framework/auth/cookie.js`. If the session is evicted from
+> All four constants live in `src/framework/security/auth/cookie.js`. If the session is evicted from
 > Redis, `session_tokens` in the DB still holds `last_active`: within the short TTL the cache is
 > rebuilt, beyond the long TTL the session is revoked.
 
@@ -197,7 +197,7 @@ handler: async (request, reply) => {
 };
 
 // option 2: StpUtil (the recommended entry point for permission checks)
-import StpUtil from '../../framework/auth/stp-util.js';
+import StpUtil from '../../framework/security/auth/stp-util.js';
 
 StpUtil.getLoginId();               // current user id
 StpUtil.check();                    // hard login check (401 when anonymous)
@@ -208,7 +208,7 @@ StpUtil.hasPermission('user:read'); // permission test (fail-closed: missing →
 ## Kicking a user out
 
 ```js
-import { kickUser } from '../framework/auth/session-kick.js';
+import { kickUser } from '../framework/security/auth/session-kick.js';
 await kickUser(userId, appId); // appId = null kicks the user out of every app
 // deletes the Redis session (the whole family) + marks the DB row revoked → next request fails
 ```

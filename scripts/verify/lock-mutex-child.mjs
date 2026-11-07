@@ -8,7 +8,7 @@
  * 父进程之所以不自己抢，是因为「互斥」只有在**不同进程**之间才有意义。
  *
  * 隔离：切到 `REDIS_DB=15`（默认），不污染 db0 里的真实键。
- * 该变量由 `framework/redis/plugin.js:249` 读取并作为连接的 database 选项。
+ * 该变量由 `framework/persistence/redis/plugin.js:249` 读取并作为连接的 database 选项。
  *
  * 输出协议：`RESULT <label> <acquired> 起跑偏差Nms 判定耗时Nms`
  */
@@ -26,9 +26,9 @@ if (!TASK_KEY || !Number.isFinite(TTL_MS) || !Number.isFinite(AT_EPOCH)) {
   process.exit(2);
 }
 
-const { connectStandalone, disconnectStandalone } = await import('../../src/framework/redis/index.js');
-const { acquirePeriodLock } = await import('../../src/framework/scheduler/index.js');
-const { createLock } = await import('../../src/framework/redis/lock-store.js');
+const { connectStandalone, disconnectStandalone } = await import('../../src/framework/persistence/redis/index.js');
+const { acquirePeriodLock } = await import('../../src/framework/lifecycle/scheduler/index.js');
+const { createLock } = await import('../../src/framework/persistence/redis/lock-store.js');
 
 /**
  * 抢锁方式（`PROBE_MODE`）

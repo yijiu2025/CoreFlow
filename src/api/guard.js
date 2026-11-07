@@ -17,11 +17,11 @@ import {
   registerGroupMetadata as rawRegisterGroupMetadata
 } from './guard-config.js';
 import { isIpMatch } from '../utils/ip.js';
-import { getPermissions } from '../framework/auth/index.js';
-import { createSafePreHandler } from '../framework/auth/index.js';
-import { isWildcardMatch } from '../framework/auth/permission/wildcard-match.js';
-import { isUserManuallyBlocked } from '../framework/firewall/block-manager.js';
-import { createLogger } from '../framework/log/index.js';
+import { getPermissions } from '../framework/security/auth/index.js';
+import { createSafePreHandler } from '../framework/security/auth/index.js';
+import { isWildcardMatch } from '../framework/security/auth/permission/wildcard-match.js';
+import { isUserManuallyBlocked } from '../framework/ingress/firewall/block-manager.js';
+import { createLogger } from '../framework/support/log/index.js';
 
 const log = createLogger('api.guard');
 
@@ -65,7 +65,7 @@ function joinUrl(...parts) {
 /**
  * 权限通配符匹配
  *
- * 2026-11-01 收拢到 framework/auth/permission/wildcard-match.js（单一来源，与
+ * 2026-11-01 收拢到 framework/security/auth/permission/wildcard-match.js（单一来源，与
  * StpUtil._isMatch 共用）。原实现只支持尾部 `:*`（中段通配 `user:*:read` 不生效）；
  * 共享版按转义正则匹配，尾部/中段通配语义一致，其余字符严格按字面量。
  * @param {string} pattern - 权限模式，如 'user:page:read' 或 'user:page:*'

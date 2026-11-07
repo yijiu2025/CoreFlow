@@ -62,23 +62,23 @@ jest.unstable_mockModule('../app/firewall/data/store.js', () => ({
 
 // 两层分离：引擎经 framework 的 telemetry-sink 产生记录事件；store.js 被替身后，
 // 替身模块体（sink 注册）不会执行 —— 在此把 pushedRecords 桩显式注册进 sink。
-const { registerRecordSink } = await import('../framework/firewall/telemetry-sink.js');
+const { registerRecordSink } = await import('../framework/ingress/firewall/telemetry-sink.js');
 registerRecordSink(r => pushedRecords.push(r));
 
-const { buildChallengePage } = await import('../framework/firewall/challenge/index.js');
+const { buildChallengePage } = await import('../framework/ingress/firewall/challenge/index.js');
 const { issueChallenge, verifyChallenge } = await import('../app/firewall/services/challenge/index.js');
-const { sha256Hex } = await import('../framework/verify/pow/service.js');
-const { generateFingerprint } = await import('../framework/firewall/util/fingerprint.js');
-const { hasPass } = await import('../framework/firewall/util/redis.js');
-const { ipRequestTimestamps } = await import('../framework/firewall/util/shared.js');
+const { sha256Hex } = await import('../framework/security/verify/pow/service.js');
+const { generateFingerprint } = await import('../framework/ingress/firewall/util/fingerprint.js');
+const { hasPass } = await import('../framework/ingress/firewall/util/redis.js');
+const { ipRequestTimestamps } = await import('../framework/ingress/firewall/util/shared.js');
 const { setBlock, setBlockDevice, setWhitelistDevice, getActiveBlocks, getActiveWhitelist, checkGlobalBlock } =
-  await import('../framework/firewall/block-manager.js');
+  await import('../framework/ingress/firewall/block-manager.js');
 const { buildRequestContext, checkGlobalBlockPhase, willBeRejectedAsAnonymous, observeLoginOutcome } =
-  await import('../framework/firewall/engine/pipeline.js');
-const { isAccountLocked } = await import('../framework/firewall/engine/detectors/brute-force.js');
+  await import('../framework/ingress/firewall/engine/pipeline.js');
+const { isAccountLocked } = await import('../framework/ingress/firewall/engine/detectors/brute-force.js');
 const { checkNotFoundTrap, isSafePath, isLoopbackIp } =
-  await import('../framework/firewall/engine/detectors/scan-trap.js');
-const { generateServerSideDeviceId } = await import('../framework/auth/device/device-id-service.js');
+  await import('../framework/ingress/firewall/engine/detectors/scan-trap.js');
+const { generateServerSideDeviceId } = await import('../framework/security/auth/device/device-id-service.js');
 const { getSecuritySettings } = await import('../app/firewall/dao/dao.js');
 const { initFirewall } = await import('../app/firewall/index.js');
 
@@ -249,7 +249,7 @@ describe('封禁状态机：四种状态 × 请求入口行为', () => {
     await setBlock(ipWhitelisted, { status: 'SCANNER', source: 'auto', permanent: true });
     expect((await catchBlock(ipWhitelisted)).statusCode).toBe(403); // 先确认封禁确实生效
 
-    const { setWhitelist } = await import('../framework/firewall/block-manager.js');
+    const { setWhitelist } = await import('../framework/ingress/firewall/block-manager.js');
     await setWhitelist(ipWhitelisted, 60);
     expect(await catchBlock(ipWhitelisted)).toBeNull();
   });
@@ -589,7 +589,7 @@ describe('启动链路：initDao 真的被调用 / 安全管道只注册一次',
     // 与 app/firewall/index.js 的 initFirewall（测试用完整组合）。出现第三处 = 新的重复注册路径
     expect(findRegisterSites('firewallCorePlugin')).toEqual([
       'app/firewall/index.js',
-      'framework/loader/registry/05-firewall.js'
+      'framework/lifecycle/loader/registry/05-firewall.js'
     ]);
 
     // initFirewall 是测试专用组合；生产路径一律是：05-firewall.js 注册**核心**、

@@ -15,10 +15,10 @@ import { encodeTimestamp as feEncode } from '../../../packages/shared-device/src
 /** 内存模型注册表：每个用例自行填充 stub */
 const modelMocks = {};
 
-jest.unstable_mockModule('../../framework/db/index.js', async () => ({
+jest.unstable_mockModule('../../framework/persistence/db/index.js', async () => ({
   // 2026-11-01 auth 拆子目录后走 index.js 门面，模块图扩到 session-governance
   // （其 `import sequelize from '../../db/index.js'` 需要 default 导出），展开真身补齐
-  ...(await jest.requireActual('../../framework/db/index.js')),
+  ...(await jest.requireActual('../../framework/persistence/db/index.js')),
   getModel: jest.fn(name => modelMocks[name] || null)
 }));
 

@@ -30,7 +30,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
 // 两层分离（2026-11-01）：引擎上移 framework/firewall，app/firewall 留面板/配置/遥测。
 // 契约对**并集**扫描：相对 import 跨目录解析，框架与 app 侧的分层单向约束一并生效。
-const FIREWALL = path.join(ROOT, 'src/framework/firewall');
+const FIREWALL = path.join(ROOT, 'src/framework/ingress/firewall');
 const FIREWALL_APP = path.join(ROOT, 'src/app/firewall');
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist']);
 
@@ -163,9 +163,9 @@ d('依赖方向契约：firewall（framework 引擎层 + app 面板层）无循�
     const paths = FILES.map(rel);
     expect(paths).toContain('src/app/firewall/index.js');
     expect(paths).toContain('src/app/firewall/dao/dao.js');
-    expect(paths).toContain('src/framework/firewall/block-manager.js');
-    expect(paths).toContain('src/framework/firewall/interface/config-access.js');
-    expect(paths).toContain('src/framework/firewall/engine/pipeline.js');
+    expect(paths).toContain('src/framework/ingress/firewall/block-manager.js');
+    expect(paths).toContain('src/framework/ingress/firewall/interface/config-access.js');
+    expect(paths).toContain('src/framework/ingress/firewall/engine/pipeline.js');
   });
 
   it('依赖边非空（防解析口径写错导致所有文件都是零出边）', () => {

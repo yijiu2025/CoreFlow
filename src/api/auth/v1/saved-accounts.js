@@ -11,8 +11,8 @@
  * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { switchAccount, removeSavedAccount } from '../../../framework/auth/index.js';
-import { isAllowedOrigin } from '../../../framework/auth/index.js';
+import { switchAccount, removeSavedAccount } from '../../../framework/security/auth/index.js';
+import { isAllowedOrigin } from '../../../framework/security/auth/index.js';
 
 async function registerSavedAccountsRoutes(fastify) {
   registerGroupMetadata({

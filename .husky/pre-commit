@@ -1,1 +1,4 @@
-npx lint-staged
+# `--max-arg-length`：Windows 单个命令行上限约 8191 字符，lint-staged 默认不切分，
+# 一次大提交（几百个文件）会把全部文件名拼进一条 eslint 命令 → 直接报"命令行太长"，
+# 表现为 pre-commit 失败且 reverted，与代码质量无关。给定上限后 lint-staged 会分批 spawn。
+npx lint-staged --max-arg-length=4000

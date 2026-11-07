@@ -17,16 +17,16 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { createLogger } from '../../../framework/log/index.js';
-import { dataFile } from '../../../framework/paths.js';
+import { createLogger } from '../../../framework/support/log/index.js';
+import { dataFile } from '../../../framework/config/paths.js';
 import { flushStatsDelta, readAggregatedStats, resetAggregatedStats, redisAvailable } from './stats-redis.js';
-import { registerRecordSink } from '../../../framework/firewall/telemetry-sink.js';
+import { registerRecordSink } from '../../../framework/ingress/firewall/telemetry-sink.js';
 import {
   drainChallengeMetrics,
   mergeChallengeMetrics,
   peekChallengeMetrics,
   summarizeChallengeFields
-} from '../../../framework/firewall/challenge/index.js';
+} from '../../../framework/ingress/firewall/challenge/index.js';
 
 const log = createLogger('app.firewall.data.store');
 

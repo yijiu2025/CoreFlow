@@ -14,8 +14,8 @@
  * @author yijiu2025
  * @since 2026-09-05
  */
-import { getModel } from '../../../framework/db/index.js';
-import { parseDeviceId } from '../../../framework/auth/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
+import { parseDeviceId } from '../../../framework/security/auth/index.js';
 
 /** device_id 字段列宽（SessionToken.device_id STRING(100)），防御超长输入 */
 const MAX_DEVICE_ID_LENGTH = 100;

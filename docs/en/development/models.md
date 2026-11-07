@@ -89,7 +89,7 @@ At request time you usually only hold `request`; take models through `getModel()
 (model names are globally unique):
 
 ```js
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 
 const article = await getModel('Article').findByPk(1);
 const user = await getModel('User').findByPk(article.user_id);

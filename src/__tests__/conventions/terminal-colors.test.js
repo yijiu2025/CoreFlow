@@ -14,7 +14,7 @@
  * 现在统一由 `src/utils/colors.js` 按 TTY 决定 `C.xxx` 的取值，
  * 调用方**直接插值**即可，不得自行判断 isTTY、不得自建颜色表。
  *
- * ⚠️ 例外：`src/framework/cli/table.js` 自带一套更完整的调色板（含 bold / 背景色），
+ * ⚠️ 例外：`src/framework/support/cli/table.js` 自带一套更完整的调色板（含 bold / 背景色），
  * 供 CLI 表格渲染使用。CLI 本就运行在终端中，属独立关注点，暂不纳入。
  *
  * @author yijiu2025
@@ -33,7 +33,7 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '__tests__', 'docs'])
 const COLORS_MODULE = path.join(SRC, 'utils', 'colors.js');
 
 /** 允许自带调色板的例外文件（相对 ROOT 的 posix 路径） */
-const ALLOW_EXCEPTIONS = new Set(['src/framework/cli/table.js']);
+const ALLOW_EXCEPTIONS = new Set(['src/framework/support/cli/table.js']);
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

@@ -12,7 +12,7 @@
  *
  * @since 2026-10-09
  */
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 
 /** 官方模型 id 前缀（与 official-llm.service.js 的 `official-${i}` 对齐） */
 const OFFICIAL_SOURCE_ID = 'official';

@@ -1,7 +1,7 @@
 /**
  * 挑战 provider：第三方人机验证（Cloudflare Turnstile / hCaptcha / Google reCAPTCHA）
  *
- * 后端**不重复实现**这三个协议：`framework/verify/recaptcha` 早就做好了（含超时、
+ * 后端**不重复实现**这三个协议：`framework/security/verify/recaptcha` 早就做好了（含超时、
  * hostname/action 校验、未配置密钥时的 fail-closed），这里只是把它接成挑战 provider 的形状。
  *
  * ── 与其他 provider 的差别（这不是 bug，是协议决定的）──
@@ -24,8 +24,8 @@
  * @author yijiu2025
  * @since 2026-11-06
  */
-import { recaptchaService } from '../../../../../framework/verify/recaptcha/index.js';
-import { createLogger } from '../../../../../framework/log/index.js';
+import { recaptchaService } from '../../../../../framework/security/verify/recaptcha/index.js';
+import { createLogger } from '../../../../../framework/support/log/index.js';
 
 const log = createLogger('app.firewall.services.challenge.providers.recaptcha');
 

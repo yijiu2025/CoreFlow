@@ -2,8 +2,8 @@
  * firewall 应用装配（app 层 = 面板/配置/遥测扩展）
  *
  * 两层分离后的职责边界（2026-11-02）：
- *   - 防护核心（限流插件 + 五阶段管道 + 观测钩子）在 framework/firewall/bootstrap.js，
- *     由 framework/loader/registry/05-firewall.js 直接注册 —— 本文件不再装配任何防护钩子；
+ *   - 防护核心（限流插件 + 五阶段管道 + 观测钩子）在 framework/ingress/firewall/bootstrap.js，
+ *     由 framework/lifecycle/loader/registry/05-firewall.js 直接注册 —— 本文件不再装配任何防护钩子；
  *   - 本模块只提供 app 侧的三件事：
  *       ① prepareAppFirewall：配置持久化（initDao）+ 邮件告警通道注入
  *          （遥测 sink 在 data/store.js 模块体注册，import 本模块即生效）；
@@ -15,11 +15,11 @@
  *
  * @author yijiu2025
  * @since 2026-08-17
- * @since 2026-11-02 防护装配上移 framework/firewall/bootstrap.js，本文件只留扩展层
+ * @since 2026-11-02 防护装配上移 framework/ingress/firewall/bootstrap.js，本文件只留扩展层
  */
 import { initDao, syncManualBlacklistToRedis, syncManualWhitelistToRedis, cleanupSaveTimer } from './dao/dao.js';
-import { registerEmailAlertSender } from '../../framework/firewall/engine/auto-responder.js';
-import { firewallCorePlugin } from '../../framework/firewall/bootstrap.js';
+import { registerEmailAlertSender } from '../../framework/ingress/firewall/engine/auto-responder.js';
+import { firewallCorePlugin } from '../../framework/ingress/firewall/bootstrap.js';
 import { flushPersist } from './data/store.js';
 import fp from 'fastify-plugin';
 
@@ -39,7 +39,7 @@ function prepareAppFirewall() {
   initDao();
 
   registerEmailAlertSender(async (to, subject, html) => {
-    const emailService = await import('../../framework/notice/services/email.js');
+    const emailService = await import('../../framework/support/notice/services/email.js');
     await emailService.default.send(to, subject, html);
   });
 }
@@ -79,7 +79,7 @@ const initFirewall = fp(async function (app) {
  * app 层能力：① initDao（面板配置的来源）+ 邮件通道；② 名单同步 + onClose 落盘。
  *
  * 历史：这段曾经由 05-firewall.js 用「存在性守卫 + 动态 import」反向调用（framework → app），
- * 根源是配置读取住在了 app 层。配置读取已下沉 framework/firewall/config/persisted.js，
+ * 根源是配置读取住在了 app 层。配置读取已下沉 framework/ingress/firewall/config/persisted.js，
  * 依赖方向恢复单向：app → framework。
  *
  * @param {import('fastify').FastifyInstance} app Fastify 实例

@@ -19,8 +19,8 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { Op } from 'sequelize';
 
-import { requestContext } from '../framework/auth/context/request-context.js';
-import StpUtil from '../framework/auth/context/stp-util.js';
+import { requestContext } from '../framework/security/auth/context/request-context.js';
+import StpUtil from '../framework/security/auth/context/stp-util.js';
 
 /** 在"请求上下文"里跑断言：StpUtil 通过 ALS 取 request */
 const withUser = (user, fn) => requestContext.run({ state: { user } }, fn);
@@ -142,7 +142,7 @@ const iam = {
   userRoleQuery: null
 };
 
-jest.unstable_mockModule('../framework/db/index.js', () => ({
+jest.unstable_mockModule('../framework/persistence/db/index.js', () => ({
   default: { Sequelize: { Op }, query: async () => [] },
   getModel: name => {
     if (name === 'User') {
@@ -170,9 +170,9 @@ jest.unstable_mockModule('../framework/db/index.js', () => ({
   }
 }));
 
-jest.unstable_mockModule('../framework/auth/permission/perm-cache.js', async () => ({
+jest.unstable_mockModule('../framework/security/auth/permission/perm-cache.js', async () => ({
   // 2026-11-01 auth 拆子目录后走 index.js 门面，门面 re-export 需要完整导出面
-  ...(await jest.requireActual('../framework/auth/permission/perm-cache.js')),
+  ...(await jest.requireActual('../framework/security/auth/permission/perm-cache.js')),
   invalidatePermCache: async () => {}
 }));
 

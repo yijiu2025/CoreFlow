@@ -2,7 +2,7 @@
  * 邮件通知服务（真实服务模块驱动）
  *
  * 旧版本只断言自己手写的 `{ host, port, secure }` 常量有某字段，生产代码
- * （framework/notice/services/email.js）改坏也全绿。
+ * （framework/support/notice/services/email.js）改坏也全绿。
  *
  * 本版加载真实 EmailService，只把外部依赖（nodemailer / notice DAO）换成可控实现，
  * 断言真实行为：
@@ -55,7 +55,7 @@ jest.unstable_mockModule('nodemailer', () => ({
   }
 }));
 
-const { default: emailService } = await import('../framework/notice/services/email.js');
+const { default: emailService } = await import('../framework/support/notice/services/email.js');
 
 beforeEach(() => {
   state.sent.length = 0;

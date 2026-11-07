@@ -53,7 +53,7 @@ onResponse    →  scan trap (404/403 detection)
 
 ## Module loading
 
-The engine scans `src/framework/loader/registry/` and runs files in numeric-prefix order:
+The engine scans `src/framework/lifecycle/loader/registry/` and runs files in numeric-prefix order:
 
 ```
 00-globals.js     → decorate reply.result
@@ -70,7 +70,7 @@ The engine scans `src/framework/loader/registry/` and runs files in numeric-pref
 ```
 
 **Failure semantics**: only `01-monitor` / `02-redis` / `09-notice` are listed in
-`OPTIONAL_LOADERS` (`src/framework/loader/engine.js`) — their failure costs one auxiliary
+`OPTIONAL_LOADERS` (`src/framework/lifecycle/loader/engine.js`) — their failure costs one auxiliary
 capability. Every other loader is **fail-fast**: a process missing auth, firewall, models,
 routes or apps can bind a port but cannot serve correct requests, and "booted successfully" is
 the worst possible failure shape. `03-db` only fails when the database is **configured but

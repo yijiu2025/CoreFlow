@@ -15,14 +15,14 @@
 import Fastify from 'fastify';
 import helmet from '@fastify/helmet';
 
-import { registerSettingsReader } from '../../../framework/firewall/interface/config-access.js';
-import { DEFAULT_SECURITY_SETTINGS } from '../../../framework/firewall/config/defaults.js';
-import { verifyPow } from '../../../framework/verify/pow/service.js';
+import { registerSettingsReader } from '../../../framework/ingress/firewall/interface/config-access.js';
+import { DEFAULT_SECURITY_SETTINGS } from '../../../framework/ingress/firewall/config/defaults.js';
+import { verifyPow } from '../../../framework/security/verify/pow/service.js';
 import {
   buildChallengePage,
   challengePageCsp,
   buildSolverSource
-} from '../../../framework/firewall/challenge/index.js';
+} from '../../../framework/ingress/firewall/challenge/index.js';
 
 registerSettingsReader(() => DEFAULT_SECURITY_SETTINGS);
 

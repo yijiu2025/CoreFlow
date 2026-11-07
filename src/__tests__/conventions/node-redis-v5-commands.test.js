@@ -7,7 +7,7 @@
  * 调用即抛 `TypeError: xxx is not a function`。
  *
  * v6 另外把两个默认值改了（RESP3 协议、5s 命令超时），已在
- * `framework/redis/plugin.js` 的 createClient 处显式固化回 v5 语义，
+ * `framework/persistence/redis/plugin.js` 的 createClient 处显式固化回 v5 语义，
  * 本文件只负责命令名与参数类型这两类源码级约束。
  *
  * 这一类缺陷在本仓已出现过三次，每次都是「静默失效或运行期才炸」：
@@ -122,7 +122,7 @@ describe('node-redis v5 命令名契约：裸客户端必须用驼峰方法名',
   it('扫描范围有效（防路径写错导致空扫描假通过）', () => {
     expect(FILES.length).toBeGreaterThan(200);
     expect(FILES.map(rel)).toContain('scripts/lib/redis.js');
-    expect(FILES.map(rel)).toContain('src/framework/redis/redis-store.js');
+    expect(FILES.map(rel)).toContain('src/framework/persistence/redis/redis-store.js');
   });
 
   it('检测器有牙：能抓到历史上真实发生的三种违规写法', () => {

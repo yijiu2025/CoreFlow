@@ -7,8 +7,8 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { hashPassword } from '../../../framework/auth/index.js';
-import sequelize from '../../../framework/db/index.js';
+import { hashPassword } from '../../../framework/security/auth/index.js';
+import sequelize from '../../../framework/persistence/db/index.js';
 import { validateScopes } from '../config/scope-registry.js';
 
 /** 获取 OauthClient 模型（延迟获取，确保模型已加载） */

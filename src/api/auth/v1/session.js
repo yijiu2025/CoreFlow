@@ -7,20 +7,20 @@
  * POST /auth/v1/update-remember-me — 动态更新记住我状态
  * POST /auth/v1/refresh-session    — 用 sid_r 刷新 sid
  *
- * 业务逻辑见 framework/auth/index.js（复用 createSession/updateRememberMe/cookie 工具）。
+ * 业务逻辑见 framework/security/auth/index.js（复用 createSession/updateRememberMe/cookie 工具）。
  *
  * @author yijiu2025
  * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { refreshSession } from '../../../framework/auth/index.js';
+import { refreshSession } from '../../../framework/security/auth/index.js';
 import {
   bindTokenToCookie,
   bindSessionToCookie,
   clearAuthCookies,
   updateRememberMeCookies
-} from '../../../framework/auth/index.js';
-import { isAllowedOrigin } from '../../../framework/auth/index.js';
+} from '../../../framework/security/auth/index.js';
+import { isAllowedOrigin } from '../../../framework/security/auth/index.js';
 
 async function registerSessionRoutes(fastify) {
   registerGroupMetadata({

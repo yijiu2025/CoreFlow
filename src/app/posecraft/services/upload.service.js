@@ -10,7 +10,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { appDir, publicUrl, ensureDir } from '../../../framework/storage/index.js';
+import { appDir, publicUrl, ensureDir } from '../../../framework/persistence/storage/index.js';
 
 /** 公开上传目录：public/posecraft（按 app 分层，由静态资源服务暴露） */
 const UPLOAD_DIR = appDir('posecraft');

@@ -20,7 +20,7 @@ const {
   summarizeChallengeFields,
   solveMsBucketIndex,
   SOLVE_MS_BOUNDS
-} = await import('../../../framework/firewall/challenge/index.js');
+} = await import('../../../framework/ingress/firewall/challenge/index.js');
 
 beforeEach(() => {
   resetChallengeMetrics();

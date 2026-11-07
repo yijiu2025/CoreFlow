@@ -12,7 +12,7 @@ import {
   normalizeTs,
   buildPermKey,
   PERM_NAMESPACE
-} from '../../framework/auth/permission/perm-cache.js';
+} from '../../framework/security/auth/permission/perm-cache.js';
 
 describe('权限指纹（第 3 层）', () => {
   describe('normalizeTs', () => {

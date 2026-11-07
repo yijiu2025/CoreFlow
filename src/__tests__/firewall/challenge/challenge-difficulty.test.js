@@ -17,7 +17,7 @@ import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 // ⚠️ 先注册 mock 再 import 任何**传递依赖** config-access 的模块（顺序错了拿到的是真身，
 //    症状是「安全配置读取器尚未注册」）。与 challenge-redirect.test.js 同一套约定。
 let settings;
-jest.unstable_mockModule('../../../framework/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../../../framework/ingress/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => settings,
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
@@ -34,13 +34,13 @@ jest.unstable_mockModule('../../../app/firewall/data/store.js', () => ({
   flushPersist: async () => {}
 }));
 
-const { DEFAULT_SECURITY_SETTINGS } = await import('../../../framework/firewall/config/defaults.js');
-const { resolveChallengeDifficulty } = await import('../../../framework/firewall/challenge/index.js');
-const { bumpCounter, readCounter, rel } = await import('../../../framework/firewall/util/redis.js');
-const { resetMemoryState } = await import('../../../framework/firewall/util/redis-memory.js');
-const { issueChallengePayload } = await import('../../../framework/firewall/challenge/index.js');
+const { DEFAULT_SECURITY_SETTINGS } = await import('../../../framework/ingress/firewall/config/defaults.js');
+const { resolveChallengeDifficulty } = await import('../../../framework/ingress/firewall/challenge/index.js');
+const { bumpCounter, readCounter, rel } = await import('../../../framework/ingress/firewall/util/redis.js');
+const { resetMemoryState } = await import('../../../framework/ingress/firewall/util/redis-memory.js');
+const { issueChallengePayload } = await import('../../../framework/ingress/firewall/challenge/index.js');
 const { verifyChallenge } = await import('../../../app/firewall/services/challenge/index.js');
-const { makePowSolver } = await import('../../../framework/verify/pow/service.js');
+const { makePowSolver } = await import('../../../framework/security/verify/pow/service.js');
 
 const IP = '203.0.113.61';
 const WINDOW = 600;

@@ -23,8 +23,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateAuthorizationCode } from '../crypto/tokens.js';
 import config from '../config/config.js';
 import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
-import { isAccountLocked } from '../../../framework/firewall/engine/detectors/brute-force.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { isAccountLocked } from '../../../framework/ingress/firewall/engine/detectors/brute-force.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.oauth21.services.authorization');
 

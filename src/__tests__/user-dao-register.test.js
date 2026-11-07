@@ -11,7 +11,7 @@
  * 循环 create 后依然会绿。
  *
  * 【为什么 mock 必须镜像真身的全部导出】
- * ESM 是链接期解析：真身 `framework/db/index.js` 同时被 `import sequelize`
+ * ESM 是链接期解析：真身 `framework/persistence/db/index.js` 同时被 `import sequelize`
  * （default）与 `import { getModel }`（named）使用，替身两个都要给，
  * 否则整套件会以 "does not provide an export named" 直接 failed to run。
  *
@@ -35,13 +35,13 @@ const mockSequelize = {
   transaction: async callback => callback({ __mockTx: true })
 };
 
-jest.unstable_mockModule('../framework/db/index.js', () => ({
+jest.unstable_mockModule('../framework/persistence/db/index.js', () => ({
   default: mockSequelize,
   sequelize: mockSequelize,
   getModel: name => models[name]
 }));
 
-jest.unstable_mockModule('../framework/keys/encryption.js', () => ({
+jest.unstable_mockModule('../framework/security/keys/encryption.js', () => ({
   decrypt: async () => 'Passw0rdOk'
 }));
 

@@ -16,7 +16,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import bcrypt from 'bcryptjs';
-import { hashPassword, verifyPassword, isLegacyHash } from '../../framework/auth/security/password-hash.js';
+import { hashPassword, verifyPassword, isLegacyHash } from '../../framework/security/auth/security/password-hash.js';
 
 const PASSWORD = 'Correct#Horse2026';
 

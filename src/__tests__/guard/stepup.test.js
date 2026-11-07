@@ -15,6 +15,12 @@
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
+// 🔴 CI 的 Jest 作业**全局**设了 REDIS_ENABLED=true（lock-store / stream-store 套件需要真 Redis），
+// 于是 `getStore()` 会选 Redis 后端；而本套件从不建立**全局** Redis 客户端（那是应用加载器的职责），
+// 结果每个用例都撞 `RedisRequiredError: 主 Redis 不可用` —— 本地因为 jest 不加载 .env 而永远绿。
+// 本套件的主体是 step-up 逻辑，按文件头约定走 MapStore，所以在 import 被测模块**之前**显式关掉。
+process.env.REDIS_ENABLED = 'false';
+
 /** 当前用例的"数据库用户" */
 let fakeUser = { uid: 'u-default', email: 'ops@example.com', phone: '', credential: 'hash', status: 1 };
 
@@ -22,7 +28,7 @@ let fakeUser = { uid: 'u-default', email: 'ops@example.com', phone: '', credenti
 let sentCode = null;
 let sendShouldFail = false;
 
-jest.unstable_mockModule('../../framework/db/index.js', () => ({
+jest.unstable_mockModule('../../framework/persistence/db/index.js', () => ({
   getModel: () => ({
     async findOne() {
       return fakeUser;
@@ -30,7 +36,7 @@ jest.unstable_mockModule('../../framework/db/index.js', () => ({
   })
 }));
 
-jest.unstable_mockModule('../../framework/verify/email/service.js', () => ({
+jest.unstable_mockModule('../../framework/security/verify/email/service.js', () => ({
   default: {
     // emailDao.sendCode 会调用它生成 6 位码；用固定值便于断言"发的是哪个码"
     generateCode() {
@@ -44,7 +50,7 @@ jest.unstable_mockModule('../../framework/verify/email/service.js', () => ({
   }
 }));
 
-jest.unstable_mockModule('../../framework/auth/index.js', () => ({
+jest.unstable_mockModule('../../framework/security/auth/index.js', () => ({
   async verifyPassword(plain, stored) {
     return stored === 'hash' && plain === 'correct-password';
   }

@@ -35,7 +35,7 @@ CoreFlow 重视安全问题。如果你发现了安全漏洞或安全隐患，�
 
 **属于范围**：
 
-- 认证 / 会话 / OAuth 2.1 实现缺陷（`src/framework/auth/`、`src/oauth21/`）
+- 认证 / 会话 / OAuth 2.1 实现缺陷（`src/framework/security/auth/`、`src/oauth21/`）
 - 权限绕过（PBAC / `guard`）
 - 密码学误用、密钥管理缺陷
 - 注入类漏洞（SQL / 命令 / 模板等）

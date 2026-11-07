@@ -13,7 +13,7 @@
  */
 import { v4 as uuidv4 } from 'uuid';
 import config from '../config/config.js';
-import { sign, verify } from '../../../framework/jwt/index.js';
+import { sign, verify } from '../../../framework/security/jwt/index.js';
 
 /**
  * 签发 JWT 令牌

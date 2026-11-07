@@ -17,18 +17,18 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 /** 可切换的防御配置（替身 config-access 的返回值） */
 let defenseConfig = { enableConnLimit: true, maxConn: 3 };
 
-jest.unstable_mockModule('../../framework/firewall/interface/config-access.js', () => ({
+jest.unstable_mockModule('../../framework/ingress/firewall/interface/config-access.js', () => ({
   readSecuritySettings: () => ({ defense: defenseConfig }),
   registerSettingsReader: () => {},
   hasSettingsReader: () => true
 }));
 
 const { trackConnection, getConnectionStats, cleanupStaleConnections, startCleanupTask } =
-  await import('../../framework/firewall/util/connection-tracker.js');
+  await import('../../framework/ingress/firewall/util/connection-tracker.js');
 // 直接拿内部表做清理与断言，避免用例之间互相干扰
-const { activeConnections } = await import('../../framework/firewall/util/shared.js');
+const { activeConnections } = await import('../../framework/ingress/firewall/util/shared.js');
 // 阈值/周期只认一处定义：framework 默认值（代码里不再抄第二份，测试也跟着走）
-const { DEFAULT_SECURITY_SETTINGS } = await import('../../framework/firewall/config/defaults.js');
+const { DEFAULT_SECURITY_SETTINGS } = await import('../../framework/ingress/firewall/config/defaults.js');
 const STALE_AFTER_MS = DEFAULT_SECURITY_SETTINGS.defense.connStaleAfterMs;
 const CLEANUP_INTERVAL_MS = DEFAULT_SECURITY_SETTINGS.defense.connCleanupIntervalMs;
 

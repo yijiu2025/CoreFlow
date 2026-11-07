@@ -1,7 +1,7 @@
 /**
  * 防火墙默认策略的 schema 契约测试
  *
- * 被测对象是 **core 保底默认值**（framework/firewall/config/defaults.js）：
+ * 被测对象是 **core 保底默认值**（framework/ingress/firewall/config/defaults.js）：
  * src/config/firewall_config.js 只是可选覆盖，出厂为空。
  * 为什么需要：`securitySettings.defense.*` 的键名是**持久化契约** ——
  * data/firewall_config.json 按这些键 deepMerge，管理面板按这些键读写，
@@ -12,8 +12,8 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { DEFAULT_SECURITY_SETTINGS } from '../framework/firewall/config/defaults.js';
-import { DEFENSE_SPEC } from '../framework/firewall/config/schema.js';
+import { DEFAULT_SECURITY_SETTINGS } from '../framework/ingress/firewall/config/defaults.js';
+import { DEFENSE_SPEC } from '../framework/ingress/firewall/config/schema.js';
 import { DEFAULT_SECURITY_SETTINGS as APP_SECURITY_SETTINGS } from '../app/firewall/config/config.js';
 
 /** defense 下允许出现的键（= 持久化 schema，改这里等于改契约） */

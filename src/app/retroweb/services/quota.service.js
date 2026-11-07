@@ -14,7 +14,7 @@
  *
  * @since 2026-10-09
  */
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 import { RETROWEB_PERMISSIONS } from '../permission/index.js';
 
 /** 任务数上限：普通 2 / 会员 50 */
@@ -41,7 +41,7 @@ class QuotaExceededError extends Error {
  * 该用户的任务上限
  *
  * 🔴 `user.permissions` 的形状是 `{ allows: string[], denies: string[] }`
- * （见 framework/auth/permission/permission-loader.js），**不是数组**。
+ * （见 framework/security/auth/permission/permission-loader.js），**不是数组**。
  * 2026-11-07 前这里写的是 `Array.isArray(perms) && perms.includes(...)`，
  * 恒为 false → `limitFor` 永远返回 FREE=2，会员的 50 名额从未生效
  * （`retroweb_member` 角色确实带了 `retroweb:quota:member`，只是读不到）。

@@ -7,7 +7,7 @@
  * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { getEncryptionPublicKey } from '../../../framework/keys/encryption.js';
+import { getEncryptionPublicKey } from '../../../framework/security/keys/encryption.js';
 
 async function registerCryptoRoutes(fastify) {
   registerGroupMetadata({

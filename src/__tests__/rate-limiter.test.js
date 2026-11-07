@@ -1,5 +1,5 @@
 /**
- * 速率限制（测试 `framework/firewall/engine/detectors/rate-limiter.js` 真身）
+ * 速率限制（测试 `framework/ingress/firewall/engine/detectors/rate-limiter.js` 真身）
  *
  * 覆盖两部分：
  *   - `trackRequestCount()`：Bot 检测用的 60s 滑窗计数（内存、按 IP 隔离、封顶）；
@@ -25,18 +25,19 @@ const timestamps = new Map();
 const cfg = { defense: { enableEndpointRateLimit: true } };
 const calls = { setBlock: [] };
 
-jest.unstable_mockModule('../framework/firewall/util/shared.js', () => ({
+jest.unstable_mockModule('../framework/ingress/firewall/util/shared.js', () => ({
   getConfig: () => cfg,
   ipRequestTimestamps: timestamps
 }));
 
-jest.unstable_mockModule('../framework/firewall/block-manager.js', () => ({
+jest.unstable_mockModule('../framework/ingress/firewall/block-manager.js', () => ({
   setBlock: async (ip, meta) => {
     calls.setBlock.push({ ip, meta });
   }
 }));
 
-const { trackRequestCount, checkRateLimit } = await import('../framework/firewall/engine/detectors/rate-limiter.js');
+const { trackRequestCount, checkRateLimit } =
+  await import('../framework/ingress/firewall/engine/detectors/rate-limiter.js');
 
 beforeEach(() => {
   timestamps.clear();

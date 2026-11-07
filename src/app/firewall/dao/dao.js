@@ -22,12 +22,12 @@ import {
   addBlockIndexEntry,
   hasIndexField,
   removeBlockIndexEntry
-} from '../../../framework/firewall/util/redis.js';
-import { createLogger } from '../../../framework/log/index.js';
-import { registerSettingsReader } from '../../../framework/firewall/interface/config-access.js';
-import { dropMisplacedDefenseKeys } from '../../../framework/firewall/config/validate.js';
-import { sanitizeSecuritySettings, normalizeSettingsPatch } from '../../../framework/firewall/config/schema.js';
-import { ensureDataDir } from '../../../framework/paths.js';
+} from '../../../framework/ingress/firewall/util/redis.js';
+import { createLogger } from '../../../framework/support/log/index.js';
+import { registerSettingsReader } from '../../../framework/ingress/firewall/interface/config-access.js';
+import { dropMisplacedDefenseKeys } from '../../../framework/ingress/firewall/config/validate.js';
+import { sanitizeSecuritySettings, normalizeSettingsPatch } from '../../../framework/ingress/firewall/config/schema.js';
+import { ensureDataDir } from '../../../framework/config/paths.js';
 
 const log = createLogger('app.firewall.dao.dao');
 
@@ -64,7 +64,7 @@ function initDao() {
         // 形状与 framework 一致：顶层出现的 defense 键一律剔除（告警由 framework 的
         // persisted 层只打一次）；这里保证 app 侧内存里也没有残留的错误形状。
         const { settings: normalized } = dropMisplacedDefenseKeys(raw.securitySettings);
-        // 值级校验走**同一份** spec（framework/firewall/config/schema.js）：
+        // 值级校验走**同一份** spec（framework/ingress/firewall/config/schema.js）：
         // 非法值丢弃 → deepMerge 时由默认值补回，不留"内存里跑着一个坏值"的窗口。
         const sanitized = sanitizeSecuritySettings(deepMerge(securitySettings, normalized));
         if (sanitized.problems.length > 0) {
@@ -186,7 +186,7 @@ function updateSecuritySettings(patch) {
     );
   }
 
-  // ② 值级校验：同一份 spec（framework/firewall/config/schema.js）在写入期也执行一次。
+  // ② 值级校验：同一份 spec（framework/ingress/firewall/config/schema.js）在写入期也执行一次。
   //    接口 schema 只挡得住明显非法（类型/下界），内部调用方与后续代码路径仍可能塞坏值。
   const sanitized = sanitizeSecuritySettings(normalized);
   if (sanitized.problems.length > 0) {

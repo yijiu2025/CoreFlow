@@ -26,7 +26,7 @@ jest.unstable_mockModule('../app/oauth21/middleware/csrf.middleware.js', () => (
   createCsrfProtectionPlugin: () => async () => {}
 }));
 
-jest.unstable_mockModule('../framework/redis/index.js', () => ({
+jest.unstable_mockModule('../framework/persistence/redis/index.js', () => ({
   getStore: () => ({ get: async () => null, set: async () => {}, del: async () => 1 }),
   // 2026-11-01 auth 拆子目录后业务代码改走 auth/index.js 门面，模块图扩大到
   // audit-logger（其 import createRingQueue），mock 必须补齐该导出

@@ -25,9 +25,9 @@
  * @author yijiu2025
  * @since 2026-11-06
  */
-import { getConfig } from '../../../../../framework/firewall/util/shared.js';
-import { recaptchaService } from '../../../../../framework/verify/recaptcha/index.js';
-import { createLogger } from '../../../../../framework/log/index.js';
+import { getConfig } from '../../../../../framework/ingress/firewall/util/shared.js';
+import { recaptchaService } from '../../../../../framework/security/verify/recaptcha/index.js';
+import { createLogger } from '../../../../../framework/support/log/index.js';
 import { powProvider } from './pow.js';
 import { createRecaptchaProvider } from './recaptcha.js';
 
@@ -36,7 +36,7 @@ const log = createLogger('app.firewall.services.challenge.providers');
 /**
  * 支持的第三方服务商
  *
- * ⚠️ 这份清单必须与 `framework/firewall/config/schema.js` 的
+ * ⚠️ 这份清单必须与 `framework/ingress/firewall/config/schema.js` 的
  * `CHALLENGE_PROVIDERS`（spec enum 的来源）**完全一致** —— 有测试钉住。
  * 配置schema 在 framework 层，注册表在 app 层，后者不能反向被 import，
  * 所以两边各写一份 + 契约测试是这里唯一可行的做法。

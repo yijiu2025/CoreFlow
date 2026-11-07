@@ -51,7 +51,7 @@ src/__tests__/
 | P0 | 密码哈希与背压 | `auth/password-hash.test.js`、`performance.test.js` |
 | P0 | 防火墙拦截（封禁 / 挑战 / 限流） | `firewall.test.js`、`bot-detector.test.js` |
 | P1 | 路由注册完整性、限频规则表一致性 | `api-routes.test.js`、`security/rate-limit-rules.test.js` |
-| P1 | Redis 双后端语义一致性 | `framework/redis/*`、`ring-queue-redis.test.js` |
+| P1 | Redis 双后端语义一致性 | `framework/persistence/redis/*`、`ring-queue-redis.test.js` |
 
 ## 覆盖率目标
 
@@ -72,7 +72,7 @@ src/__tests__/
 
 ```js
 import Fastify from 'fastify';
-import globalsLoader from '../framework/loader/registry/00-globals.js'; // reply.result 装饰器
+import globalsLoader from '../framework/lifecycle/loader/registry/00-globals.js'; // reply.result 装饰器
 import registerXxxRoutes from '../api/xxx/v1/xxx.js';
 
 const app = Fastify({ logger: false });

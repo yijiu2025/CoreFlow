@@ -1,4 +1,4 @@
-import { logStdout } from '../../src/framework/log/index.js';
+import { logStdout } from '../../src/framework/support/log/index.js';
 
 /**
  * oauth_clients 表新增 skip_consent 列

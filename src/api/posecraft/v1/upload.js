@@ -11,7 +11,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { saveUploadFile, saveBase64Image, UploadError } from '../../../app/posecraft/services/upload.service.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('api.posecraft.upload');
 

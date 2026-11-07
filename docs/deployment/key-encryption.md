@@ -11,7 +11,7 @@ JWT 签名私钥不再以明文 PEM 存数据库。落库前用 AES-256-GCM 加�
 
 > ⚠️ 这**不是** KMS/HSM。KEK 仍在进程环境，能读 `/proc/<pid>/environ` 或拿到部署密钥的人
 > 可以解密。它解决的是数据库侧泄露，不解决主机被完全控制。需要更强语义时替换
-> `src/framework/keys/envelope.js` 的 `seal()`/`open()` 实现即可（唯一出入口）。
+> `src/framework/security/keys/envelope.js` 的 `seal()`/`open()` 实现即可（唯一出入口）。
 
 ## 配置
 

@@ -44,7 +44,7 @@ export default {
 
 ```js
 // src/app/myapp/cli/items.js
-import { getModels } from '../../../framework/db/models.js';
+import { getModels } from '../../../framework/persistence/db/models.js';
 import {
   printBold,
   printTable,
@@ -53,7 +53,7 @@ import {
   createRl,
   ask,
   closeRl
-} from '../../../framework/cli/index.js';
+} from '../../../framework/support/cli/index.js';
 
 /**
  * 列出数据
@@ -114,7 +114,7 @@ npm run cli -- myapp create
 ### 数据库工具
 
 ```js
-import { getModels, getSequelize } from '../../../framework/db/models.js';
+import { getModels, getSequelize } from '../../../framework/persistence/db/models.js';
 
 const { User, Role } = getModels();
 const sequelize = getSequelize();
@@ -128,8 +128,8 @@ CLI 进程会在启动时调用 `loadAllModels()`，递归扫描 `src/models/` �
 CLI 不启动 Fastify，Redis 插件不会注册，需要自行建立连接：
 
 ```js
-import { connectStandalone, disconnectStandalone, getStore } from '../../../framework/redis/index.js';
-import { printWarning } from '../../../framework/cli/index.js';
+import { connectStandalone, disconnectStandalone, getStore } from '../../../framework/persistence/redis/index.js';
+import { printWarning } from '../../../framework/support/cli/index.js';
 
 const { ready, reason } = await connectStandalone();
 if (!ready) {
@@ -153,7 +153,7 @@ Redis 不可用时请**明确报错**而不是静默退化到进程内内存 —
 ### 输入工具
 
 ```js
-import { createRl, ask, confirm, select, closeRl } from '../../../framework/cli/index.js';
+import { createRl, ask, confirm, select, closeRl } from '../../../framework/support/cli/index.js';
 
 const rl = createRl();
 try {
@@ -187,7 +187,7 @@ import {
   printError,
   printLine,
   printTitle
-} from '../../../framework/cli/index.js';
+} from '../../../framework/support/cli/index.js';
 
 printTitle('我的应用');
 printSuccess('操作成功');

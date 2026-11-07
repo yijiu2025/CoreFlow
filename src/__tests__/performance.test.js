@@ -23,8 +23,8 @@ import bcrypt from 'bcryptjs';
 const { APP_CONFIG } = await import('../framework/config/app-config.js');
 APP_CONFIG.passwordHash = { scryptMaxConcurrency: 1, bcryptMaxConcurrency: 1 };
 
-const { MapStore } = await import('../framework/redis/map-store.js');
-const { hashPassword, verifyPassword } = await import('../framework/auth/security/password-hash.js');
+const { MapStore } = await import('../framework/persistence/redis/map-store.js');
+const { hashPassword, verifyPassword } = await import('../framework/security/auth/security/password-hash.js');
 
 describe('scrypt 并发上限（背压而非排队）', () => {
   it('超过并发上限时立刻抛 SCRYPT_BUSY，不进入队列', async () => {

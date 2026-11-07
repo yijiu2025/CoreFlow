@@ -16,17 +16,17 @@ import { describe, test, expect, jest, beforeEach, afterEach } from '@jest/globa
 jest.unstable_mockModule('../../app/firewall/data/store.js', () => ({
   pushRecord: jest.fn()
 }));
-jest.unstable_mockModule('../../framework/redis/index.js', () => ({
+jest.unstable_mockModule('../../framework/persistence/redis/index.js', () => ({
   createBoundStore: jest.fn()
 }));
 jest.unstable_mockModule('../../app/firewall/dao/dao.js', () => ({
   getSecuritySettings: () => ({ defense: { enableRateLimit: true } })
 }));
-jest.unstable_mockModule('../../framework/firewall/engine/detectors/geo-filter.js', () => ({
+jest.unstable_mockModule('../../framework/ingress/firewall/engine/detectors/geo-filter.js', () => ({
   resolveGeoInfo: () => ({})
 }));
 
-const { resolveRateLimitMax } = await import('../../framework/firewall/engine/detectors/first-ratelimit.js');
+const { resolveRateLimitMax } = await import('../../framework/ingress/firewall/engine/detectors/first-ratelimit.js');
 
 const ENV_KEY = 'FW_RATE_LIMIT_OVERRIDE';
 const savedEnv = process.env[ENV_KEY];

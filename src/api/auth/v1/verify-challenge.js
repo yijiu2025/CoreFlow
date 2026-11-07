@@ -11,11 +11,11 @@
  * @since 2026-08-23
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { confirmVerifyToken } from '../../../framework/auth/index.js';
-import { updateSessionBaseline, getSessionTokenDevice } from '../../../framework/auth/index.js';
-import { getDeviceId, computeDeviceFingerprint } from '../../../framework/auth/index.js';
-import { registerRiskVerifyUrl } from '../../../framework/auth/index.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { confirmVerifyToken } from '../../../framework/security/auth/index.js';
+import { updateSessionBaseline, getSessionTokenDevice } from '../../../framework/security/auth/index.js';
+import { getDeviceId, computeDeviceFingerprint } from '../../../framework/security/auth/index.js';
+import { registerRiskVerifyUrl } from '../../../framework/security/auth/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('api.auth.v1.verify-challenge');
 

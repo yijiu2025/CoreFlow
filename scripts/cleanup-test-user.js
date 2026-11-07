@@ -17,9 +17,9 @@
  * @since 2026-08-23
  */
 import 'dotenv/config';
-import sequelize from '../src/framework/db/index.js';
+import sequelize from '../src/framework/persistence/db/index.js';
 import { createClient } from 'redis';
-import { createLogger, logStdout } from '../src/framework/log/index.js';
+import { createLogger, logStdout } from '../src/framework/support/log/index.js';
 
 const log = createLogger('scripts.cleanup-test-user');
 

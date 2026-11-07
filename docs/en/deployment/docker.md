@@ -62,7 +62,7 @@ and logs whether the connection actually succeeded.
 
 ### Dependency policy: DB hard-fails, Redis degrades and continues
 
-A deliberate **asymmetry**, implemented in `src/framework/startup/dependency-plan.js` (unit-tested):
+A deliberate **asymmetry**, implemented in `src/framework/lifecycle/startup/dependency-plan.js` (unit-tested):
 
 - **DB unavailable → exit**: an app without a pool can still listen but returns 500 for every
   request. Letting it "start successfully" is the worst failure mode — every monitor green,
@@ -96,8 +96,8 @@ is SIGKILLed before `onClose` hooks flush guard config and broadcast WS close fr
 | `app-storage` | `/app/storage` | private files (only via `GET /api/files/v1/:app/*`) |
 
 > All of these live at the **repo root**, not under `src/` (`src/` holds code only and can be
-> mounted read-only). Single source of truth: `src/framework/paths.js` (`REPO_ROOT` / `DATA_ROOT`)
-> and `src/framework/storage/index.js` (`PUBLIC_ROOT` / `PRIVATE_ROOT`).
+> mounted read-only). Single source of truth: `src/framework/config/paths.js` (`REPO_ROOT` / `DATA_ROOT`)
+> and `src/framework/persistence/storage/index.js` (`PUBLIC_ROOT` / `PRIVATE_ROOT`).
 
 ## Running migrations
 

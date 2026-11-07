@@ -14,7 +14,7 @@ process.loadEnvFile(process.env.VERIFY_ENV_FILE || '.env');
 // 隔离遥测落盘：默认路径 data/traffic_stats.json 是运行期数据（已不进 git），直写会留脏改动
 process.env.FW_TRAFFIC_STATS_FILE = process.env.FW_TRAFFIC_STATS_FILE || '.tmp-probe/ws-fanout-stats.json';
 
-const { connectStandalone, isPubSubReady } = await import('../../src/framework/redis/index.js');
+const { connectStandalone, isPubSubReady } = await import('../../src/framework/persistence/redis/index.js');
 
 const conn = await connectStandalone({ timeoutMs: 8000 });
 if (!conn.ready) {

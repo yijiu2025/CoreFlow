@@ -1,8 +1,8 @@
 /**
- * JWT 签发与验证（测试 `src/framework/jwt/index.js` 真身）
+ * JWT 签发与验证（测试 `src/framework/security/jwt/index.js` 真身）
  *
  * ⚠️ 为什么重写：本文件的前身**没有 import 任何项目代码**，只是在测试
- * `jsonwebtoken` 这个第三方库——把 `framework/jwt/index.js` 整个删掉它照样全绿。
+ * `jsonwebtoken` 这个第三方库——把 `framework/security/jwt/index.js` 整个删掉它照样全绿。
  * 那 6 个用例对生产行为的保证是零。
  *
  * 现在锁的是本模块**自己的**语义（jsonwebtoken 的正确性不是我们的责任）：
@@ -44,7 +44,7 @@ const state = {
   ensureCalls: 0
 };
 
-jest.unstable_mockModule('../framework/keys/index.js', () => ({
+jest.unstable_mockModule('../framework/security/keys/index.js', () => ({
   getCurrentKid: () => state.current,
   getPrivateKey: async kid => {
     const k = state.keys.get(kid);
@@ -64,7 +64,7 @@ jest.unstable_mockModule('../framework/keys/index.js', () => ({
   }
 }));
 
-const { sign, verify } = await import('../framework/jwt/index.js');
+const { sign, verify } = await import('../framework/security/jwt/index.js');
 
 beforeEach(() => {
   state.current = 'k1';

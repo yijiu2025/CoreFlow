@@ -64,7 +64,7 @@ depends_on:
 
 ### 依赖等待策略：DB 硬失败、Redis 降级继续
 
-这是刻意的**不对称**，策略在 `src/framework/startup/dependency-plan.js`（有测试）：
+这是刻意的**不对称**，策略在 `src/framework/lifecycle/startup/dependency-plan.js`（有测试）：
 
 - **DB 等不到 → 直接失败退出**：缺连接池的应用能监听端口却对每个请求返回 500。
   让它"启动成功"是最糟的失败形态 —— 监控全绿、用户全错。
@@ -94,8 +94,8 @@ stop_grace_period: 35s   # 应用自身兜底是 30s（index.js 的 SHUTDOWN_TIM
 | `app-storage` | `/app/storage` | 私有文件（只能经 `/api/files/v1/:app/*` 鉴权下发） |
 
 > 这些目录都在**仓库根**、不在 `src/` 下（`src/` 只放代码，进镜像后可只读）。
-> 路径的单一来源是 `src/framework/paths.js`（`REPO_ROOT` / `DATA_ROOT`）与
-> `src/framework/storage/index.js`（`PUBLIC_ROOT` / `PRIVATE_ROOT`）。
+> 路径的单一来源是 `src/framework/config/paths.js`（`REPO_ROOT` / `DATA_ROOT`）与
+> `src/framework/persistence/storage/index.js`（`PUBLIC_ROOT` / `PRIVATE_ROOT`）。
 
 **前端不进本镜像**：`firewall/`、`admin/`、`oauth21/` 各自 `vite build` 出 `dist/`，由 nginx/CDN
 按 `base` 挂载（`firewall` 的 `base` 是 `/firewall/`，即 `location /firewall/ { alias …/dist/; }`）。

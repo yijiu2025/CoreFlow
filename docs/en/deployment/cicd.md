@@ -107,7 +107,7 @@ node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci
 
 So the test job declares a `redis:7` service (with `--health-cmd "redis-cli ping"`) and sets
 `REDIS_DB: '15'` (isolated from local dev) plus `EXPECT_REDIS: 'true'`.
-`src/__tests__/framework/redis/redis-ci-guard.test.js` reads that variable: **delete the service or
+`src/__tests__/framework/persistence/redis/redis-ci-guard.test.js` reads that variable: **delete the service or
 the env and it turns red immediately** instead of silently skipping.
 
 > The reason that guard exists is worth remembering: making a test "optionally depend on a real

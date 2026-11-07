@@ -32,7 +32,7 @@ if (!SYSTEM || !GROUP || !API || !IP_MARKER) {
   process.exit(2);
 }
 
-const { loadAllModels, closeDb } = await import('../../src/framework/db/models.js');
+const { loadAllModels, closeDb } = await import('../../src/framework/persistence/db/models.js');
 
 await loadAllModels();
 

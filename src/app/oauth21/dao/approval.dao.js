@@ -4,8 +4,8 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import sequelize from '../../../framework/db/index.js';
-import { getModel } from '../../../framework/db/index.js';
+import sequelize from '../../../framework/persistence/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 
 /** 获取 OauthApproval 模型 (延迟加载) */
 const getOauthApproval = () => getModel('OauthApproval');

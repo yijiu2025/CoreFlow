@@ -188,7 +188,7 @@
 
 ## 7. 登出（`logout.js`）
 
-业务逻辑：`destroySession`（[`framework/auth/session.js`](../src/framework/auth/session.js)）。
+业务逻辑：`destroySession`（[`framework/security/auth/session.js`](../src/framework/security/auth/session.js)）。
 
 | 方法 | 路径 | 守卫 | 用途 |
 |---|---|---|---|

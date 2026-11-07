@@ -12,19 +12,19 @@
  *
  * 「怎么出题 / 怎么判题」交给 provider（`./providers/`）：
  * `pow` 自包含（服务端存载荷），`turnstile` / `hcaptcha` / `google` 走
- * `framework/verify/recaptcha`（token 交给上游）。加第四个 provider 时这一层不用动。
+ * `framework/security/verify/recaptcha`（token 交给上游）。加第四个 provider 时这一层不用动。
  *
  * @author yijiu
  * @since 2026-08-17
  * @since 2026-11-06 抽出 provider 层（pow / 第三方同一形状），本文件只剩编排
  */
 import crypto from 'crypto';
-import { generateFingerprint } from '../../../../framework/firewall/util/fingerprint.js';
-import { getConfig } from '../../../../framework/firewall/util/shared.js';
-import { grantPass, readAccessState } from '../../../../framework/firewall/util/redis.js';
-import { recordChallengeEvent, noteChallengePassed } from '../../../../framework/firewall/challenge/index.js';
-import { getClientDeviceId } from '../../../../framework/auth/index.js';
-import { createLogger } from '../../../../framework/log/index.js';
+import { generateFingerprint } from '../../../../framework/ingress/firewall/util/fingerprint.js';
+import { getConfig } from '../../../../framework/ingress/firewall/util/shared.js';
+import { grantPass, readAccessState } from '../../../../framework/ingress/firewall/util/redis.js';
+import { recordChallengeEvent, noteChallengePassed } from '../../../../framework/ingress/firewall/challenge/index.js';
+import { getClientDeviceId } from '../../../../framework/security/auth/index.js';
+import { createLogger } from '../../../../framework/support/log/index.js';
 import { resolveChallengeProvider, pickVerifyProvider } from './providers/index.js';
 
 const log = createLogger('app.firewall.services.challenge');

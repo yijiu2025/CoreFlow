@@ -12,7 +12,7 @@ import { describe, it, expect, afterEach } from '@jest/globals';
 import {
   resolveRateLimitMax,
   describeRateLimitRisk
-} from '../../framework/firewall/engine/detectors/first-ratelimit.js';
+} from '../../framework/ingress/firewall/engine/detectors/first-ratelimit.js';
 
 const ORIGINAL_OVERRIDE = process.env.FW_RATE_LIMIT_OVERRIDE;
 

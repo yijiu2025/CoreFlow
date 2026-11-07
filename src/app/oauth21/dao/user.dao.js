@@ -16,8 +16,8 @@
  * @since 2026-07-13
  * @since 2026-11-01 恢复 id 数字原义、移除旧数字别名（改名手术）
  */
-import { verifyPassword as verifyPasswordHash } from '../../../framework/auth/index.js';
-import { getModel } from '../../../framework/db/index.js';
+import { verifyPassword as verifyPasswordHash } from '../../../framework/security/auth/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 
 const UserDao = {
   /**

@@ -11,10 +11,10 @@
 import { jest } from '@jest/globals';
 
 const calls = [];
-jest.unstable_mockModule('../../framework/auth/permission/perm-cache.js', async () => ({
+jest.unstable_mockModule('../../framework/security/auth/permission/perm-cache.js', async () => ({
   // 2026-11-01 auth 拆子目录后走 index.js 门面，门面 re-export 需要完整导出面，
   // 展开真身只覆盖 getPermissions 意图桩
-  ...(await jest.requireActual('../../framework/auth/permission/perm-cache.js')),
+  ...(await jest.requireActual('../../framework/security/auth/permission/perm-cache.js')),
   getPermissions: jest.fn(async (userId, appId, opts) => {
     calls.push({ userId, appId, opts });
     if (appId === '__boom__') throw new Error('DB 不可达');

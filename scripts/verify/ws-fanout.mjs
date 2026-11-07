@@ -54,7 +54,7 @@ console.log('══ E3 跨实例 WS 广播复验 ══');
 console.log('（两个真实进程 + 真实 Redis）\n');
 
 const { connectStandalone, disconnectStandalone, isPubSubReady } = await import(
-  '../../src/framework/redis/index.js'
+  '../../src/framework/persistence/redis/index.js'
 );
 
 // 有界前置检查：见 stats-aggregation.mjs 同名注释

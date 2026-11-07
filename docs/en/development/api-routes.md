@@ -6,7 +6,7 @@ Routes go through `registerSecureRoute()`, which attaches the three-level guard 
 
 ```js
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 
 export default async function (fastify) {
   registerSecureRoute(fastify, {

@@ -12,7 +12,7 @@
 import net from 'node:net';
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 
-const { probeTcp } = await import('../../framework/redis/probe.js');
+const { probeTcp } = await import('../../framework/persistence/redis/probe.js');
 
 /** 起一个只监听、不做任何响应逻辑的 TCP server，返回 { server, port } */
 function startServer() {

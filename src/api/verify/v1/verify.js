@@ -5,10 +5,10 @@
  * @since 2026-08-17
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { captchaDao } from '../../../framework/verify/captcha/index.js';
-import { emailDao } from '../../../framework/verify/email/index.js';
-import { clientContext, sessionIdFromRequest } from '../../../framework/verify/context.js';
-import { getStore } from '../../../framework/redis/index.js';
+import { captchaDao } from '../../../framework/security/verify/captcha/index.js';
+import { emailDao } from '../../../framework/security/verify/email/index.js';
+import { clientContext, sessionIdFromRequest } from '../../../framework/security/verify/context.js';
+import { getStore } from '../../../framework/persistence/redis/index.js';
 import { generateCaptchaSchema, verifyCaptchaSchema } from './schemas/verify.js';
 
 async function registerVerifyRoutes(fastify, opts) {

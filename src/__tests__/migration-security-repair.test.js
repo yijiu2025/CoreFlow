@@ -172,7 +172,7 @@ describe('手机号迁移的顺序、失败传播与回滚安全', () => {
   });
 
   it('迁移运行器继续按 basename 判重，补偿策略不依赖重跑已执行迁移', () => {
-    const runner = readFileSync(path.join(ROOT, 'src/framework/db/migrate.js'), 'utf8');
+    const runner = readFileSync(path.join(ROOT, 'src/framework/persistence/db/migrate.js'), 'utf8');
     expect(runner).toContain("entry.name.replace('.js', '')");
     expect(runner).toContain('new SequelizeStorage');
   });

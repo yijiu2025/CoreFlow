@@ -3,7 +3,7 @@
  *
  * ⚠️ 本文件可以整个删掉，服务照常用 core 保底值启动。
  * 这里只写**你想改的键**，未写的键一律走 core 默认值：
- *   默认值 + 取值理由 → src/framework/firewall/config/defaults.js
+ *   默认值 + 取值理由 → src/framework/ingress/firewall/config/defaults.js
  *   运行期热改（面板/JSON）→ data/firewall_config.json
  *
  * 可用键（顶层）：**只有 defense**（防护策略，core 与 app 都按它执行）
@@ -36,13 +36,13 @@
  *   ⑪ 告警    alert { enabled, email, webhookUrl, cooldownMs }
  *
  * ⚠️ 数组是**整体替换**（不是追加）：写 botPatterns / safePaths 这类数组时要给全量。
- * ⚠️ 值会过校验：类型/上下界/枚举由 `framework/firewall/config/schema.js` 的 spec 定义。
+ * ⚠️ 值会过校验：类型/上下界/枚举由 `framework/ingress/firewall/config/schema.js` 的 spec 定义。
  *    写错的值**不会让服务起不来**，但会被丢弃并回落默认值，启动日志里有一条 warn 列出
  *    所有被丢弃的键 —— 看到那条 warn 就说明这里写错了。
  * ⚠️ 层级（securitySettings.defense）是持久化 schema 契约，别在这里改层级。
  * ⚠️ defense 的键**必须写在 defense 下**：写成顶层（例如 `enableRateLimit: false`）会被
  *    **忽略**并在启动时告警 —— 顶层没有任何读取点，留着只会让人以为它生效了。
- *    载入时会自动剔除这类错位键（`framework/firewall/config/validate.js`），不做迁移、
+ *    载入时会自动剔除这类错位键（`framework/ingress/firewall/config/validate.js`），不做迁移、
  *    不兼容旧形状：这套 schema 只有一个版本。
  *
  * 示例：

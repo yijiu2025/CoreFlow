@@ -9,7 +9,7 @@
  * 同时叶子化保证任何层（framework / api / app）都能安全引用配置而不引入耦合。
  *
  * 机制类代码不属于这里：deepMerge、持久化读写、reader 注册等
- * 留在各自的 framework 目录（如 framework/firewall/config/persisted.js）。
+ * 留在各自的 framework 目录（如 framework/ingress/firewall/config/persisted.js）。
  */
 
 import { describe, it, expect } from '@jest/globals';

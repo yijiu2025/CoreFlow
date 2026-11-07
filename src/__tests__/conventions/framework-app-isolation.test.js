@@ -72,9 +72,9 @@ const relToApp = f => path.relative(APP_DIR, f).replace(/\\/g, '/');
 /** 动态 app 依赖白名单（单向边；新增必须写业务理由） */
 const ALLOWED_DYNAMIC_EDGES = new Set([
   // （2026-11-02 起）05-firewall.js 不再依赖 app：配置读取已下沉
-  // framework/firewall/config/persisted.js，依赖方向恢复单向（app → framework）。
+  // framework/ingress/firewall/config/persisted.js，依赖方向恢复单向（app → framework）。
   // 邮件的 SMTP 配置/模板 CRUD 在 notice 应用；notice 未安装时发信报清晰错误（见 email.js 注释）
-  'notice/services/email.js -> notice/dao/notice.js'
+  'support/notice/services/email.js -> notice/dao/notice.js'
 ]);
 
 describe('架构层隔离守卫：framework 不得静态依赖 app', () => {
@@ -82,8 +82,8 @@ describe('架构层隔离守卫：framework 不得静态依赖 app', () => {
 
   it('扫描范围有效（防止路径写错导致守卫空转）', () => {
     expect(files.length).toBeGreaterThan(30);
-    expect(files.some(f => relFromFw(f) === 'loader/registry/05-firewall.js')).toBe(true);
-    expect(files.some(f => relFromFw(f) === 'notice/services/email.js')).toBe(true);
+    expect(files.some(f => relFromFw(f) === 'lifecycle/loader/registry/05-firewall.js')).toBe(true);
+    expect(files.some(f => relFromFw(f) === 'support/notice/services/email.js')).toBe(true);
   });
 
   it('framework/** 不得静态 import app/**（动态 import 必须在白名单中）', () => {
@@ -158,7 +158,7 @@ describe('防护执行点接线（引擎 framework 化的配套）', () => {
     const src = readSrc('app/oauth21/services/login.service.js');
     // 静态 import 引擎检测器（app → framework，合法方向）
     expect(src).toMatch(
-      /import\s*\{[^}]*isAccountLocked[^}]*\}\s*from\s*['"][^'"]*framework\/firewall\/engine\/detectors\/brute-force\.js['"]/
+      /import\s*\{[^}]*isAccountLocked[^}]*\}\s*from\s*['"][^'"]*framework\/ingress\/firewall\/engine\/detectors\/brute-force\.js['"]/
     );
     // 且在凭据校验前真实调用
     expect(src).toMatch(/await\s+isAccountLocked\s*\(/);
@@ -167,7 +167,7 @@ describe('防护执行点接线（引擎 framework 化的配套）', () => {
   it('用户黑名单执行点：guard 必须消费 isUserManuallyBlocked（否则面板拉零效果）', () => {
     const src = readSrc('api/guard.js');
     expect(src).toMatch(
-      /import\s*\{\s*isUserManuallyBlocked\s*\}\s*from\s*['"][^'"]*framework\/firewall\/block-manager\.js['"]/
+      /import\s*\{\s*isUserManuallyBlocked\s*\}\s*from\s*['"][^'"]*framework\/ingress\/firewall\/block-manager\.js['"]/
     );
     expect(src).toMatch(/isUserManuallyBlocked\s*\(/);
   });
@@ -175,7 +175,7 @@ describe('防护执行点接线（引擎 framework 化的配套）', () => {
   it('遥测 sink：app store 注册接收器、引擎经 sink 产生事件（两层解耦的桥必须双向在位）', () => {
     expect(readSrc('app/firewall/data/store.js')).toMatch(/registerRecordSink\s*\(\s*pushRecord\s*\)/);
     expect(readSrc('app/firewall/index.js')).toMatch(/registerEmailAlertSender\s*\(/);
-    const pipeline = readSrc('framework/firewall/engine/pipeline.js');
+    const pipeline = readSrc('framework/ingress/firewall/engine/pipeline.js');
     expect(pipeline).toMatch(/recordFirewallEvent\s*\(/);
     expect(pipeline).not.toMatch(/from\s+'[^']*app\/firewall/);
   });

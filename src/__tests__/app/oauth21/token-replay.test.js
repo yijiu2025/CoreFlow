@@ -19,12 +19,12 @@ let consumeResult = null;
 const savedTokens = [];
 let userById = { id: 1, uid: 'uid-1', status: 1 };
 
-jest.unstable_mockModule('../../../framework/auth/index.js', () => ({
+jest.unstable_mockModule('../../../framework/security/auth/index.js', () => ({
   verifyPassword: async () => true,
   COOKIE_POLICY: {}
 }));
 
-jest.unstable_mockModule('../../../framework/log/index.js', () => {
+jest.unstable_mockModule('../../../framework/support/log/index.js', () => {
   const noop = () => {};
   const logger = { info: noop, warn: noop, error: noop, debug: noop, always: { error: noop } };
   return { default: logger, log: logger, createLogger: () => logger };

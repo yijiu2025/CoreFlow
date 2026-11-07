@@ -14,7 +14,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createLogger, logStdout } from '../src/framework/log/index.js';
+import { createLogger, logStdout } from '../src/framework/support/log/index.js';
 import { assertNotHtmlPayload } from '../src/utils/payload-guard.js';
 
 const log = createLogger('scripts.download-models');

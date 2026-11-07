@@ -21,7 +21,7 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 
-import globalsLoader from '../framework/loader/registry/00-globals.js';
+import globalsLoader from '../framework/lifecycle/loader/registry/00-globals.js';
 
 import registerVerifyRoutes from '../api/verify/v1/verify.js';
 import registerUserRoutes from '../api/user/v1/user.js';
@@ -246,7 +246,7 @@ describe('风险豁免声明位（riskExempt）真实契约', () => {
   it('verify-challenge 注册时已把真实 URL 回填给风险模块（兜底地址与真实路由一致）', async () => {
     // 行为验证：detectSessionRisk 不传 verifyUrl 时，兜底 = verify-challenge 注册时
     // 经 registerRiskVerifyUrl 回填的 guard 解析结果（本测试环境无 system 前缀 → /v1/verify-challenge）
-    const { detectSessionRisk } = await import('../framework/auth/risk/anomaly-detector.js');
+    const { detectSessionRisk } = await import('../framework/security/auth/risk/anomaly-detector.js');
     const risk = await detectSessionRisk({
       userId: 1,
       deviceId: 'WEB-AbCdEfGhIjK-Ab3dE9',

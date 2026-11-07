@@ -9,7 +9,7 @@
  * @param {object} DataTypes - Sequelize 数据类型
  * @returns {Model} UserShare 模型
  */
-import { registerDeleteVersionHooks } from '../../framework/db/softDeleteHooks.js';
+import { registerDeleteVersionHooks } from '../../framework/persistence/db/softDeleteHooks.js';
 
 const defineUserShare = (sequelize, DataTypes) => {
   const UserShare = sequelize.define(

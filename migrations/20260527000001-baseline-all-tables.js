@@ -1,4 +1,4 @@
-import { logStdout } from '../src/framework/log/index.js';
+import { logStdout } from '../src/framework/support/log/index.js';
 
 /**
  * 基线迁移：记录当前所有表结构

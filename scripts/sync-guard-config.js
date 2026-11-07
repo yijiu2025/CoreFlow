@@ -33,9 +33,9 @@
  * @since 2026-09-15
  */
 import 'dotenv/config';
-import { loadAllModels, closeDb } from '../src/framework/db/models.js';
-import { getModel } from '../src/framework/db/index.js';
-import { createLogger, logStdout as stdout } from '../src/framework/log/index.js';
+import { loadAllModels, closeDb } from '../src/framework/persistence/db/models.js';
+import { getModel } from '../src/framework/persistence/db/index.js';
+import { createLogger, logStdout as stdout } from '../src/framework/support/log/index.js';
 
 const log = createLogger('scripts.sync-guard-config');
 

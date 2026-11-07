@@ -119,7 +119,7 @@ export default service;
 | 首次访问（无 `_m_h5_tk`） | 下发 `_m_h5_tk`，本次不判失败 |
 
 前端要做的就是：从 `_m_h5_tk` cookie 取 token，按后端约定的串拼接后放进请求头，
-并带上 `x-device-id`。签名算法见 `src/framework/auth/signature.js`。
+并带上 `x-device-id`。签名算法见 `src/framework/security/auth/signature.js`。
 
 ## CSRF（`/oauth2.1` 作用域，已启用）
 

@@ -97,11 +97,11 @@ loadUserPermissions(userId, appId)
 
 ## Matching engine
 
-Single source of truth: `src/framework/auth/permission/wildcard-match.js` (`isWildcardMatch`),
+Single source of truth: `src/framework/security/auth/permission/wildcard-match.js` (`isWildcardMatch`),
 shared by the `api/guard.js` route guard and `StpUtil._isMatch` (previously two drifting copies).
 
 ```js
-// src/framework/auth/permission/wildcard-match.js (actual source)
+// src/framework/security/auth/permission/wildcard-match.js (actual source)
 function isWildcardMatch(pattern, target) {
   if (typeof pattern !== 'string' || typeof target !== 'string') return false;
   if (pattern === '*') return true;
@@ -152,8 +152,8 @@ Even a token with the highest scope is blocked once an administrator issues a De
 
 ## StpUtil
 
-Source: `src/framework/auth/context/stp-util.js` (business code should import it through the
-`framework/auth/index.js` facade re-export, not the subpath directly). Modeled after Java
+Source: `src/framework/security/auth/context/stp-util.js` (business code should import it through the
+`framework/security/auth/index.js` facade re-export, not the subpath directly). Modeled after Java
 Sa-Token: all static methods, resolves the current request via AsyncLocalStorage —
 **must be called inside an HTTP request context** (throws outside ALS).
 
@@ -191,7 +191,7 @@ Incomplete shapes are treated as empty sets (fail-closed); auth failures never m
 | `checkPermissionOr(...perms)` | OR: any must pass | throws 403 when none pass; **zero args throws explicitly** |
 
 ```js
-import { StpUtil } from '../../src/framework/auth/index.js';
+import { StpUtil } from '../../src/framework/security/auth/index.js';
 
 StpUtil.hasPermission('user:admin:*');   // test: true / false
 StpUtil.checkPermission('user:write');   // enforce: throws 403
@@ -203,7 +203,7 @@ StpUtil.checkPermissionOr('a', 'b');     // OR: any must pass
 
 Stored in Redis keyed by numeric `userId:service`, auto-unbanned at TTL expiry;
 `service='login'` blocks new logins, `'access'` blocks requests, custom dimensions allowed.
-See the header of `src/framework/auth/security/ban.js`.
+See the header of `src/framework/security/auth/security/ban.js`.
 
 | Method | Purpose |
 | --- | --- |
@@ -219,7 +219,7 @@ See the header of `src/framework/auth/security/ban.js`.
 "Confirm again" mechanism for sensitive operations: after the business route verifies identity
 (re-enter password / OTP), `openSafe` opens a time window; `safe` routes pass inside the window,
 `checkSafe` throws 403 (code=`SECOND_AUTH_REQUIRED`) outside. Operates on the **current request
-user**; Redis failures fail closed (treated as not opened). See `src/framework/auth/security/safe.js`.
+user**; Redis failures fail closed (treated as not opened). See `src/framework/security/auth/security/safe.js`.
 
 | Method | Purpose |
 | --- | --- |

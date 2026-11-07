@@ -6,16 +6,16 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { createLogger } from '../../../framework/log/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.firewall.config.config');
 
 // 持久化路径的单一来源在 framework（防护核心启动期就要读它），这里只做 re-export。
-import { FIREWALL_FILE } from '../../../framework/firewall/config/persisted.js';
+import { FIREWALL_FILE } from '../../../framework/ingress/firewall/config/persisted.js';
 // 生效默认值 = **core 默认 ← 面板层默认**：core 只含防护策略（defense），
 // 面板展示偏好（activeIpApi / showTrajectory）定义在 ./panel.js。
 import { deepMerge } from '../../../framework/config/runtime.js';
-import { DEFAULT_SECURITY_SETTINGS as CORE_SECURITY_SETTINGS } from '../../../framework/firewall/config/defaults.js';
+import { DEFAULT_SECURITY_SETTINGS as CORE_SECURITY_SETTINGS } from '../../../framework/ingress/firewall/config/defaults.js';
 import { DEFAULT_PANEL_SETTINGS } from './panel.js';
 
 const CHALLENGE_SECRET = process.env.FIREWALL_SECRET;
@@ -190,6 +190,6 @@ export { FIREWALL_FILE, CHALLENGE_SECRET, DEFAULT_SERVER_NODE, DEFAULT_IP_APIS, 
 
 /**
  * 默认安全策略矩阵（含 app 层展示类默认值，定义见 ./defaults.js 与
- * framework/firewall/config/defaults.js）
+ * framework/ingress/firewall/config/defaults.js）
  */
 export { DEFAULT_SECURITY_SETTINGS };

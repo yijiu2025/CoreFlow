@@ -10,7 +10,7 @@
  *
  * @since 2026-10-09
  */
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 import { packSnapshot, unpackSnapshot, byteSizeOf } from '../utils/snapshot.js';
 import { deriveStats } from '../utils/stats.js';
 

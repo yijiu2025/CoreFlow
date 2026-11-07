@@ -16,7 +16,7 @@
  *
  * @since 2026-10-09
  */
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 import { forwardJson, UpstreamUnavailableError } from '../services/upstream.service.js';
 
 class JobDao {

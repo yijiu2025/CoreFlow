@@ -15,7 +15,7 @@
  *   · 不提供目录列表、不做路径猜测（`resolveFile` 会拒绝 `..` / 绝对路径）。
  *
  * ════════════════════════════════════════════════════════════════════
- * 目录约定（详见 src/framework/storage/index.js）
+ * 目录约定（详见 src/framework/persistence/storage/index.js）
  * ════════════════════════════════════════════════════════════════════
  *   storage/<app>/u/<ownerId>/<filename>   ← 本路由能读到的**唯一**形态
  *   public/<app>/<filename>                ← 公开资源，静态服务直出，不走这里
@@ -26,7 +26,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { PRIVATE_ROOT, resolveFile } from '../../../framework/storage/index.js';
+import { PRIVATE_ROOT, resolveFile } from '../../../framework/persistence/storage/index.js';
 import { isSuperAdmin } from '../../../app/guard/services/authority.js';
 
 /** 允许内联展示的扩展名（其余一律按附件下载，避免被浏览器当页面渲染） */

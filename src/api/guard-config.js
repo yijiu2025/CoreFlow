@@ -10,8 +10,8 @@
 
 import { C } from '../utils/colors.js';
 import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
-import { logAuditEvent } from '../framework/auth/index.js';
-import { createLogger } from '../framework/log/index.js';
+import { logAuditEvent } from '../framework/security/auth/index.js';
+import { createLogger } from '../framework/support/log/index.js';
 import { APP_CONFIG } from '../framework/config/app-config.js';
 import { RUNTIME_FIELDS, diffNode } from '../app/guard/services/direction.js';
 import { verifyRelaxation } from '../app/guard/services/signing.js';

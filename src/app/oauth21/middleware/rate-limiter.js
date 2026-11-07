@@ -28,7 +28,7 @@
  * @since 2026-10-30 根作用域 + 前缀闸门 + 精确路径匹配（U21）
  */
 import fp from 'fastify-plugin';
-import { globalRedis } from '../../../framework/redis/plugin.js';
+import { globalRedis } from '../../../framework/persistence/redis/plugin.js';
 
 /** 作用域前缀（`/oauth2.10` 不误命中） */
 const OAUTH21_SCOPE_PREFIX = '/oauth2.1';

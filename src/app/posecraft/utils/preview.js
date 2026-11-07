@@ -16,9 +16,9 @@ import sharp from 'sharp';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
-import { getModel } from '../../../framework/db/index.js';
-import { createLogger } from '../../../framework/log/index.js';
-import { appDir, publicUrl, publicUrlToPath } from '../../../framework/storage/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
+import { appDir, publicUrl, publicUrlToPath } from '../../../framework/persistence/storage/index.js';
 
 const log = createLogger('app.posecraft.utils.preview');
 

@@ -2,7 +2,7 @@
 
 > 用途：对 `src/app/firewall` 与其 HTTP 层 `src/api/firewall` 做一次结构化审查，
 > 覆盖**代码质量**、**安全防护有效性**与**文件组织合理性**三个维度。
-> 依据：`.workbuddy/memory/MEMORY.md`（项目约定）+ `framework/auth/docs/AUDIT-PROMPT.md`（同族模板）。
+> 依据：`.workbuddy/memory/MEMORY.md`（项目约定）+ `framework/security/auth/docs/AUDIT-PROMPT.md`（同族模板）。
 > 使用方式：把本文件全文作为提示词交给执行者（人或 AI），按其中流程产出报告。
 > 产出：`src/app/firewall/docs/AUDIT-REPORT-YYYY-MM-DD.md`。
 

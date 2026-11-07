@@ -6,7 +6,7 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import noticeDao from '../../../app/notice/dao/notice.js';
-import emailService from '../../../framework/notice/services/email.js';
+import emailService from '../../../framework/support/notice/services/email.js';
 
 /** SMTP 授权码在读接口里的掩码形态（保存时命中此值 = 未修改，跳过更新） */
 const SMTP_PASS_MASK = '******';

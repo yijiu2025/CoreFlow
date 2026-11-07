@@ -16,15 +16,13 @@ CoreFlow/
 ├── src/
 │   ├── app.js                  # Fastify instance + lifecycle orchestration
 │   │
-│   ├── framework/              # infrastructure layer (no business logic)
-│   │   ├── auth/               # session / cookie / signature / password / device
-│   │   ├── jwt/                # JWT signing and verification (keys from framework/keys)
-│   │   ├── keys/               # RSA key store (private keys envelope-encrypted at rest)
-│   │   ├── loader/             # loader engine + registry/ ordering table
-│   │   ├── db/                 # Sequelize connection + migration entry
-│   │   ├── redis/              # connection / getStore / locks / queues / pubsub
-│   │   ├── log/  notice/  verify/  startup/  scheduler/  websocket/  cli/  config/
-│   │   └── ...
+│   ├── framework/              # infrastructure layer (no business logic), grouped in six
+│   │   ├── config/             #   config & paths: env validation / overrides / paths.js
+│   │   ├── persistence/        #   data & state: db / redis / storage
+│   │   ├── security/           #   identity & security: auth / verify / jwt / keys / crypto
+│   │   ├── ingress/            #   ingress & protocol: http / websocket / firewall
+│   │   ├── lifecycle/          #   lifecycle: loader / startup / scheduler
+│   │   └── support/            #   support: log / cli / notice
 │   │
 │   ├── app/                    # application modules (one directory = one app)
 │   │   ├── oauth21/            # OAuth 2.1 app
@@ -80,10 +78,10 @@ CoreFlow/
 ## Boot sequence
 
 ```
-index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/framework/loader/engine.js)
+index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/framework/lifecycle/loader/engine.js)
 ```
 
-The engine scans `src/framework/loader/registry/` and runs files in numeric-prefix order:
+The engine scans `src/framework/lifecycle/loader/registry/` and runs files in numeric-prefix order:
 
 | # | File | Responsibility |
 | --- | --- | --- |
@@ -109,11 +107,11 @@ harder to diagnose than one that exits.
 ```
 src/
 │── infrastructure (`framework/`)
-├── framework/auth/  jwt/  keys/      # auth, JWT, key store
-├── framework/db/  redis/             # database, cache / locks / queues / pubsub
-├── framework/log/  notice/  verify/  # logging, notifications, CAPTCHA
-├── framework/loader/  startup/       # loader engine, dependency waiting / readiness
-├── framework/scheduler/  websocket/  # cron, WS fan-out
+├── framework/security/auth/  jwt/  keys/      # auth, JWT, key store
+├── framework/persistence/db/  redis/             # database, cache / locks / queues / pubsub
+├── framework/support/log/  notice/  verify/  # logging, notifications, CAPTCHA
+├── framework/lifecycle/loader/  startup/       # loader engine, dependency waiting / readiness
+├── framework/lifecycle/scheduler/  websocket/  # cron, WS fan-out
 ├── models/session/                   # system models (sessions / tokens / logs)
 │
 │── application layer

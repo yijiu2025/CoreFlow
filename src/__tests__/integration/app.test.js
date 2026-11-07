@@ -4,7 +4,7 @@
  * 旧版本在测试里手写了一个 `buildTestApp()`：自己 decorateReply、自己定义
  * `/api/public` 假路由、自己写 auth 钩子 —— 断言的是这份副本，生产插件删掉也全绿。
  *
- * 本版注册**真实** `framework/auth/index.js`，只把外部依赖（session/jwt/风险检测/
+ * 本版注册**真实** `framework/security/auth/index.js`，只把外部依赖（session/jwt/风险检测/
  * 用户查询/Redis）换成可控实现，用 inject 发真实请求，断言：
  * - 无 cookie 时 request.state.user 不被写入（不能凭空白放行身份）
  * - 有效 sid 时 state.user 的字段映射（sub=uid、appId、roles、sessionId）
@@ -31,7 +31,7 @@ const state = {
 // 2026-11-01 auth 拆子目录后业务代码走 index.js 门面，门面 re-export 各模块的
 // 完整导出面 ⇒ mock 必须提供每个被 re-export 的绑定（本套件不能 requireActual：
 // session.js 依赖图含异步 mock 的 perm-cache，require 链会炸），未用到的名字给空桩
-jest.unstable_mockModule('../../framework/auth/session/session.js', () => ({
+jest.unstable_mockModule('../../framework/security/auth/session/session.js', () => ({
   createSession: jest.fn(),
   getSession: async () => state.session,
   refreshSession: jest.fn(),
@@ -43,7 +43,7 @@ jest.unstable_mockModule('../../framework/auth/session/session.js', () => ({
   getSessionTokenDevice: async () => null
 }));
 
-jest.unstable_mockModule('../../framework/jwt/index.js', () => ({
+jest.unstable_mockModule('../../framework/security/jwt/index.js', () => ({
   sign: jest.fn(),
   verify: async () => null
 }));
@@ -52,7 +52,7 @@ jest.unstable_mockModule('../../shared/user-dao.js', () => ({
   findUserByUid: async () => null
 }));
 
-jest.unstable_mockModule('../../framework/auth/permission/perm-cache.js', () => ({
+jest.unstable_mockModule('../../framework/security/auth/permission/perm-cache.js', () => ({
   PERM_NAMESPACE: 'auth:perm',
   PERM_TTL: 30,
   buildPermKey: jest.fn(),
@@ -63,7 +63,7 @@ jest.unstable_mockModule('../../framework/auth/permission/perm-cache.js', () => 
   warmPermissions: jest.fn()
 }));
 
-jest.unstable_mockModule('../../framework/auth/device/device.js', () => ({
+jest.unstable_mockModule('../../framework/security/auth/device/device.js', () => ({
   DEVICE_TYPE: { STANDARD: 'standard' },
   detectDeviceType: jest.fn(),
   getDeviceId: async () => 'dev-from-server',
@@ -72,7 +72,7 @@ jest.unstable_mockModule('../../framework/auth/device/device.js', () => ({
   computeDeviceFingerprint: () => 'fingerprint-1'
 }));
 
-jest.unstable_mockModule('../../framework/auth/risk/anomaly-detector.js', () => ({
+jest.unstable_mockModule('../../framework/security/auth/risk/anomaly-detector.js', () => ({
   DETECT_RESULT: {},
   detectLoginAnomaly: jest.fn(),
   detectLoginEnvironmentAnomaly: jest.fn(),
@@ -89,12 +89,12 @@ jest.unstable_mockModule('../../framework/auth/risk/anomaly-detector.js', () => 
   clearIpLock: jest.fn()
 }));
 
-jest.unstable_mockModule('../../framework/redis/index.js', () => ({
+jest.unstable_mockModule('../../framework/persistence/redis/index.js', () => ({
   getStore: () => ({ get: async () => null, set: async () => {} }),
   createRingQueue: () => ({ push: async () => {}, shift: async () => null, size: 0 })
 }));
 
-const { default: authPlugin } = await import('../../framework/auth/index.js');
+const { default: authPlugin } = await import('../../framework/security/auth/index.js');
 
 let app;
 

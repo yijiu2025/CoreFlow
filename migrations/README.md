@@ -19,7 +19,7 @@ migrations/
 └── guard/      # guard_configs 守卫配置表
 ```
 
-运行器（`src/framework/db/migrate.js`）递归扫描顶层与所有子目录，按文件名时间戳前缀排序执行。`sequelize_meta` 表中的执行记录为纯 basename（无目录前缀），因此迁移文件在子目录间移动不会触发重复执行。
+运行器（`src/framework/persistence/db/migrate.js`）递归扫描顶层与所有子目录，按文件名时间戳前缀排序执行。`sequelize_meta` 表中的执行记录为纯 basename（无目录前缀），因此迁移文件在子目录间移动不会触发重复执行。
 
 ## 命名规范
 
@@ -140,9 +140,9 @@ await addIndexIfNotExists(queryInterface, 'table_name', ['code', 'delete_version
 
 ```bash
 npm run migrate                                                # 执行所有待运行迁移
-node --env-file=.env src/framework/db/migrate.js --status      # 查看迁移状态
-node --env-file=.env src/framework/db/migrate.js --down        # 回滚最近一次
-node --env-file=.env src/framework/db/migrate.js --down-to <name>  # 回滚到指定版本
+node --env-file=.env src/framework/persistence/db/migrate.js --status      # 查看迁移状态
+node --env-file=.env src/framework/persistence/db/migrate.js --down        # 回滚最近一次
+node --env-file=.env src/framework/persistence/db/migrate.js --down-to <name>  # 回滚到指定版本
 ```
 
 ## 注意事项

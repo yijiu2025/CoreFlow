@@ -13,7 +13,7 @@
  * @author Claude
  * @since 2026-07-13
  */
-import { registerDeleteVersionHooks } from '../../framework/db/softDeleteHooks.js';
+import { registerDeleteVersionHooks } from '../../framework/persistence/db/softDeleteHooks.js';
 
 /**
  * 工业级用户安全凭证模型 (多源认证中心)

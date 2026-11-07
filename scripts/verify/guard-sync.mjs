@@ -107,9 +107,9 @@ console.log('（会写库，但结束前无条件回滚）\n');
 }
 
 // 动态 import：必须晚于上面的 process.loadEnvFile()（见文件头的说明）
-const { loadAllModels, closeDb } = await import('../../src/framework/db/models.js');
+const { loadAllModels, closeDb } = await import('../../src/framework/persistence/db/models.js');
 await loadAllModels();
-const { getModel } = await import('../../src/framework/db/index.js');
+const { getModel } = await import('../../src/framework/persistence/db/index.js');
 const { default: Dao } = await import('../../src/app/guard/dao/guard-config.dao.js');
 const GuardConfig = getModel('GuardConfig');
 

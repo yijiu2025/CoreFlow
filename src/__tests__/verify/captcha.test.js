@@ -15,7 +15,7 @@
  * @since 2026-10-31
  */
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import captchaService from '../../framework/verify/captcha/service.js';
+import captchaService from '../../framework/security/verify/captcha/service.js';
 
 /** 记录型内存 store：额外记录每次 set 的 TTL，便于断言"没续命" */
 function makeStore() {

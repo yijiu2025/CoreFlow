@@ -34,7 +34,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 // 匹配语义直接用**运行时那份实现**（而不是在测试里抄一份）：
 // 既保证判据与 guard.js 一致，也让本文件满足"测试必须真实加载被测代码"的守卫。
-import { isWildcardMatch } from '../../framework/auth/permission/wildcard-match.js';
+import { isWildcardMatch } from '../../framework/security/auth/permission/wildcard-match.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
@@ -53,7 +53,7 @@ function walk(dir, out = []) {
 }
 
 /**
- * 通配匹配：直接用运行时实现（`framework/auth/permission/wildcard-match.js`）
+ * 通配匹配：直接用运行时实现（`framework/security/auth/permission/wildcard-match.js`）
  *
  * 不在测试里另抄一份的原因：本仓历史上正是"两份实现语义漂移"出过事
  * （stp-util 的正则不转义元字符、guard 的只支持尾部 `:*`）。测试若抄一份，

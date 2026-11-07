@@ -609,8 +609,8 @@ for (const call of allCalls) {
       if (targetFn) addEdge(owner, targetFn, 'import', call.line);
       else addEdge(owner, 'file:' + binding.target, 'import', call.line);
     } else if (info.loggers?.has(call.obj)) {
-      // 日志实例方法：log.warn/info/... → 日志模块（framework/log/index.js）。必须在 varsByName 之前：log 本身是变量节点
-      addEdge(owner ?? 'file:' + call.file, 'file:framework/log/index.js', 'log', call.line);
+      // 日志实例方法：log.warn/info/... → 日志模块（framework/support/log/index.js）。必须在 varsByName 之前：log 本身是变量节点
+      addEdge(owner ?? 'file:' + call.file, 'file:framework/support/log/index.js', 'log', call.line);
     } else if (info.varsByName?.has(call.obj)) {
       // 存储/变量读写：Cache.get(...) / store.set(...)
       addEdge(owner, info.varsByName.get(call.obj), 'var', call.line);

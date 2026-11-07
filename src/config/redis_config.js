@@ -2,7 +2,7 @@
  * Redis 调优配置 —— **可选的静态覆盖层**
  *
  * ⚠️ 本文件可以整个删掉，服务照常用 core 保底值启动。
- * 这里只写**你想改的键**，未写的键走 core 默认值（src/framework/redis/plugin.js）。
+ * 这里只写**你想改的键**，未写的键走 core 默认值（src/framework/persistence/redis/plugin.js）。
  *
  * 连接信息仍走 env（每部署必配）：
  *   REDIS_ENABLED / REDIS_HOST / REDIS_PORT / REDIS_DB / REDIS_USERNAME /

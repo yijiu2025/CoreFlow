@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import Fastify from 'fastify';
 
-import globalsLoader from '../framework/loader/registry/00-globals.js';
+import globalsLoader from '../framework/lifecycle/loader/registry/00-globals.js';
 
 let app;
 

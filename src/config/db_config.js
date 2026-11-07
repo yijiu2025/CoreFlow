@@ -2,7 +2,7 @@
  * 数据库连接池配置 —— **可选的静态覆盖层**
  *
  * ⚠️ 本文件可以整个删掉，服务照常用 core 保底值启动。
- * 这里只写**你想改的键**，未写的键走 core 默认值（src/framework/db/index.js）。
+ * 这里只写**你想改的键**，未写的键走 core 默认值（src/framework/persistence/db/index.js）。
  *
  * 连接信息（DB_HOST / DB_PORT / DB_NAME / DB_USER / DB_PASS）仍走 env ——
  * 那是每部署必配的凭据与拓扑，不属于调优项。

@@ -4,7 +4,7 @@
  */
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
-import { createLogger, logStdout as stdout } from '../framework/log/index.js';
+import { createLogger, logStdout as stdout } from '../framework/support/log/index.js';
 
 const log = createLogger('tests.test-db');
 

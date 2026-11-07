@@ -14,7 +14,8 @@
  */
 import { describe, test, expect } from '@jest/globals';
 
-const { powDao, makePowSolver, MAX_DIFFICULTY, DEFAULT_TTL_SEC } = await import('../../framework/verify/pow/index.js');
+const { powDao, makePowSolver, MAX_DIFFICULTY, DEFAULT_TTL_SEC } =
+  await import('../../framework/security/verify/pow/index.js');
 
 /**
  * 造一个"取走即消失"的存储（语义上等价于 Redis GETDEL）

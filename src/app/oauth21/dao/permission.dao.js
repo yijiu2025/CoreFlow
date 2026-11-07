@@ -5,7 +5,7 @@
  * @since 2026-08-17
  */
 import Permission from '../../../models/iam/Permission.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.oauth21.dao.permission.dao');
 

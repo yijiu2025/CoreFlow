@@ -7,10 +7,10 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { printWarning, printLine } from '../../../framework/cli/index.js';
-import { logStdout, createLogger } from '../../../framework/log/index.js';
-import { connectStandalone, disconnectStandalone } from '../../../framework/redis/index.js';
-import { getActiveBlocks, getActiveWhitelist } from '../../../framework/firewall/block-manager.js';
+import { printWarning, printLine } from '../../../framework/support/cli/index.js';
+import { logStdout, createLogger } from '../../../framework/support/log/index.js';
+import { connectStandalone, disconnectStandalone } from '../../../framework/persistence/redis/index.js';
+import { getActiveBlocks, getActiveWhitelist } from '../../../framework/ingress/firewall/block-manager.js';
 import { initDao, getSecuritySettings, getServerNode } from '../dao/dao.js';
 
 const log = createLogger('app.firewall.cli.status');

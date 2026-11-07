@@ -4,8 +4,8 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { getModel } from '../../../framework/db/index.js';
-import Logger from '../../../framework/log/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
+import Logger from '../../../framework/support/log/index.js';
 import { USER_PERMISSIONS } from './index.js';
 
 /**

@@ -95,11 +95,11 @@ loadUserPermissions(userId, appId)
 
 ## 权限匹配引擎
 
-匹配实现单一来源：`src/framework/auth/permission/wildcard-match.js`（`isWildcardMatch`），
+匹配实现单一来源：`src/framework/security/auth/permission/wildcard-match.js`（`isWildcardMatch`），
 `api/guard.js` 的路由守卫与 `StpUtil._isMatch` 共用同一实现（此前是两份漂移的副本）。
 
 ```js
-// src/framework/auth/permission/wildcard-match.js（真实源码）
+// src/framework/security/auth/permission/wildcard-match.js（真实源码）
 function isWildcardMatch(pattern, target) {
   if (typeof pattern !== 'string' || typeof target !== 'string') return false;
   if (pattern === '*') return true;
@@ -151,7 +151,7 @@ PBAC 的 allows/denies = 用户实际拥有什么权限
 
 ## StpUtil 静态鉴权
 
-源码：`src/framework/auth/context/stp-util.js`（业务代码统一经 `framework/auth/index.js` 门面
+源码：`src/framework/security/auth/context/stp-util.js`（业务代码统一经 `framework/security/auth/index.js` 门面
 re-export 引入，勿直接 import 子路径）。对标 Java Sa-Token，全部静态方法、依赖
 AsyncLocalStorage 取当前请求——**必须在 HTTP 请求上下文中调用**（ALS 外抛错）。
 
@@ -186,7 +186,7 @@ bearer-auth 经 perm-cache（数字主键 + 指纹校验）读实时快照——
 | `checkPermissionOr(...perms)` | OR：任一通过 | 全部不足抛 403；**零参显式报错** |
 
 ```js
-import { StpUtil } from '../../src/framework/auth/index.js';
+import { StpUtil } from '../../src/framework/security/auth/index.js';
 
 StpUtil.hasPermission('user:admin:*');   // 判断：返回 true/false
 StpUtil.checkPermission('user:write');   // 校验：不通过抛 403（statusCode=403）
@@ -197,7 +197,7 @@ StpUtil.checkPermissionOr('a', 'b');     // OR：任一通过
 ### 账号封禁（disable 系列，async）
 
 按 `userId:service` 数字键控存 Redis，TTL 到期自动解封；`service='login'` 拦新登录、
-`'access'` 拦请求，业务可自定义维度。详见 `src/framework/auth/security/ban.js` 头注。
+`'access'` 拦请求，业务可自定义维度。详见 `src/framework/security/auth/security/ban.js` 头注。
 
 | 方法 | 功能 |
 | --- | --- |
@@ -213,7 +213,7 @@ StpUtil.checkPermissionOr('a', 'b');     // OR：任一通过
 敏感操作"再次确认"机制：业务路由完成身份确认（重输密码/验证码）后 `openSafe` 开时间窗，
 窗口内 `safe` 路由放行，窗口外 `checkSafe` 抛 403（code=`SECOND_AUTH_REQUIRED`）。
 操作对象是**当前请求用户**；Redis 故障 fail-closed（视为未开启）。详见
-`src/framework/auth/security/safe.js`。
+`src/framework/security/auth/security/safe.js`。
 
 | 方法 | 功能 |
 | --- | --- |

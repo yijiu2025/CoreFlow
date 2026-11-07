@@ -98,7 +98,7 @@ const SCHEMA = [
   { key: 'PORT', group: 'runtime', fallback: '3000', desc: 'HTTP 监听端口', validate: validators.port },
 
   // ── 数据库 ──
-  // 这三项在 framework/db/index.js 里已是硬性要求（缺失即 process.exit），此处一并声明，
+  // 这三项在 framework/persistence/db/index.js 里已是硬性要求（缺失即 process.exit），此处一并声明，
   // 让"生产必须配什么"能在一处看全。
   { key: 'DB_HOST', group: 'database', required: true, desc: 'MySQL 主机' },
   { key: 'DB_NAME', group: 'database', required: true, desc: 'MySQL 库名' },
@@ -296,7 +296,7 @@ function describePoolCapacity(env) {
  * 严重性判定分两类：
  *   · **配错**（值存在但不合法）→ 始终是 error。值已经进了环境，下游会拿到 NaN / 越界值。
  *   · **缺失**（尤其是生产必需的密钥、DB 三件套）→ 生产环境是 error；本地/测试降级为
- *     warning，否则开发与单测会被自己的校验拦住（`framework/db/index.js` 也是这个口径）。
+ *     warning，否则开发与单测会被自己的校验拦住（`framework/persistence/db/index.js` 也是这个口径）。
  *
  * @param {object} [env=process.env] - 环境变量来源
  * @param {object} [options]

@@ -9,9 +9,9 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { getModels } from '../../../framework/db/models.js';
-import { printTable, printInfo, printLine } from '../../../framework/cli/index.js';
-import { logStdout } from '../../../framework/log/index.js';
+import { getModels } from '../../../framework/persistence/db/models.js';
+import { printTable, printInfo, printLine } from '../../../framework/support/cli/index.js';
+import { logStdout } from '../../../framework/support/log/index.js';
 
 /**
  * 统计信息

@@ -10,8 +10,8 @@
 
 import path from 'node:path';
 import fs from 'node:fs';
-import Logger from '../../../framework/log/index.js';
-import { appDir, publicUrl, ensureDir } from '../../../framework/storage/index.js';
+import Logger from '../../../framework/support/log/index.js';
+import { appDir, publicUrl, ensureDir } from '../../../framework/persistence/storage/index.js';
 
 /** 公开上传目录：public/user（按 app 分层；头像放其下 avatars/） */
 const LOCAL_UPLOAD_DIR = appDir('user');

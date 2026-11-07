@@ -1,4 +1,4 @@
-import { createLogger, logStdout } from '../../src/framework/log/index.js';
+import { createLogger, logStdout } from '../../src/framework/support/log/index.js';
 
 const log = createLogger('migrations.user.20260713000001-encrypt-phone');
 /**
@@ -18,7 +18,7 @@ export async function up({ queryInterface, Sequelize }) {
 
   // 动态加载模型和加密函数（需要 process.env.PHONE_ENCRYPT_KEY 已配置）
   // 🔴 路径修正：迁移文件位于 migrations/user/ 下，必须用 ../../src 才能指到仓库根的 src/；
-  // 此前 '../src/...' 会解析到不存在的 migrations/src/，且 src/db/index.js 也不存在（实为 src/framework/db/）。
+  // 此前 '../src/...' 会解析到不存在的 migrations/src/，且 src/db/index.js 也不存在（实为 src/framework/persistence/db/）。
   // sequelize 实例直接用迁移框架注入的 queryInterface.sequelize，无需再 import db。
   const { default: UserDefine } = await import('../../src/models/user/User.js');
   const User = UserDefine(queryInterface.sequelize, Sequelize);

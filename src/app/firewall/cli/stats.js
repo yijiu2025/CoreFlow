@@ -14,10 +14,10 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { printLine } from '../../../framework/cli/index.js';
-import { logStdout } from '../../../framework/log/index.js';
-import { getActiveBlocks, getActiveWhitelist } from '../../../framework/firewall/block-manager.js';
-import { scanKeys } from '../../../framework/firewall/util/redis.js';
+import { printLine } from '../../../framework/support/cli/index.js';
+import { logStdout } from '../../../framework/support/log/index.js';
+import { getActiveBlocks, getActiveWhitelist } from '../../../framework/ingress/firewall/block-manager.js';
+import { scanKeys } from '../../../framework/ingress/firewall/util/redis.js';
 import { withFirewallRedis } from './redis-boot.js';
 
 /**

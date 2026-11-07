@@ -170,7 +170,7 @@ export default async function (fastify) {
 
 ```js
 // src/app/myapp/dao/article.dao.js
-import { getModel } from '../../../framework/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
 
 class ArticleDao {
   getModel() {
@@ -200,7 +200,7 @@ export default new ArticleDao();
 ```js
 // src/app/myapp/services/article.service.js
 import articleDao from '../dao/article.dao.js';
-import Logger from '../../../framework/log/index.js';
+import Logger from '../../../framework/support/log/index.js';
 
 class ArticleService {
   async createArticle(userId, data) {

@@ -9,14 +9,14 @@
  * @author yijiu2025
  * @since 2026-07-13
  */
-import sequelize from '../../../framework/db/index.js';
-import { getModel } from '../../../framework/db/index.js';
-import { decrypt } from '../../../framework/keys/encryption.js';
-import { hashPassword } from '../../../framework/auth/index.js';
-import { log } from '../../../framework/log/index.js';
-import { validatePasswordStrength } from '../../../framework/auth/index.js';
+import sequelize from '../../../framework/persistence/db/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
+import { decrypt } from '../../../framework/security/keys/encryption.js';
+import { hashPassword } from '../../../framework/security/auth/index.js';
+import { log } from '../../../framework/support/log/index.js';
+import { validatePasswordStrength } from '../../../framework/security/auth/index.js';
 import { maskPhone } from '../../../utils/crypto.js';
-import { kickAllSessions } from '../../../framework/auth/index.js';
+import { kickAllSessions } from '../../../framework/security/auth/index.js';
 import TokenDao from '../../oauth21/dao/token.dao.js';
 
 class UserDao {

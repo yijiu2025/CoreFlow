@@ -1,0 +1,297 @@
+/**
+ * 防火墙安全策略的**配置规格**（唯一一份规则表）
+ *
+ * ════════════════════════════════════════════════════════════════════
+ * 这份表是"什么值算合法"的唯一事实源
+ * ════════════════════════════════════════════════════════════════════
+ * 同一份 spec 在三个边界执行（工具在 `framework/config/field-spec.js`）：
+ *   ① 加载期：`persisted.js`（framework 启动读一次）与 `dao.js`（app 加载磁盘）——
+ *      非法值丢弃 → 与默认值合并后自然回落，不会把机制弄坏；
+ *   ② 写入期：`dao.updateSecuritySettings()`（面板 PATCH 落盘前）—— 同样清洗 +
+ *      形状归位（`{maxConn: 100}` 这种"忘了套 defense"的载荷会被归位而不是写错层）；
+ *   ③ API 层：`api/firewall/v1/schemas/monitor.js` 的 properties **由本文件生成**，
+ *      面板提交明显非法的值直接 400。
+ *
+ * 为什么必须统一（而不是各文件自己 if）：配置有成串的入口（`src/config` 静态覆盖、
+ * `data/firewall_config.json` 手改、面板 PATCH），各写一套必然漂移。2026-11 实测过：
+ * 把 `connStaleAfterMs: 0` / `maxConn: "abc"` 写进 JSON 能**原样**载入内存，
+ * 全靠业务代码里 `Number.isFinite(x) && x > 0 ? x : 默认值` 兜着。
+ *
+ * 键集合的权威仍是 `defaults.js`（持久化 schema 契约）；本文件的覆盖度由
+ * `__tests__/firewall-config-schema.test.js` 双向钉死：defaults 有的 spec 必须有，
+ * spec 有的 defaults 必须存在。
+ *
+ * 排版约定（2026-11-05）：本文件的**分组与顺序**必须与 `defaults.js` 的功能块一一对应
+ * （① 开关 ② 名单 ③ 扫描与豁免 ④ 限频 ⑤ 暴破 ⑥ 连接 ⑦ 地理 ⑧ Bot 与挑战 ⑨ 设备
+ * ⑩ 匿名 ⑪ 告警），`src/config/firewall_config.js` 的可覆盖键清单也按同一套编号排。
+ * 三处同源的原因很实际：改配置的人要在 defaults 看取值理由、在这里看类型约束、
+ * 在 firewall_config.js 看能覆盖哪些键 —— 顺序不同就得来回翻三个文件。顺序由测试钉住。
+ *
+ * @author yijiu2025
+ * @since 2026-11-05
+ */
+import { sanitizeBySpec, isPlainObject, toJsonProperties } from '../../../config/field-spec.js';
+
+/**
+ * 支持的人机验证 provider（**配置契约**，`challengeProvider` 的 enum 来源）
+ *
+ * ⚠️ 各 provider 的**实现注册表**在 `src/app/firewall/services/challenge/providers/`（app 层），
+ * 而 framework 不能反向 import app —— 所以两边各有一份清单，用契约测试钉住"完全一致"。
+ * 新增 provider 时两处都要改；漏改 app 那份 → 配置能存进去但运行时回落 pow（有测试拦）。
+ *
+ * 取值语义：
+ *   · `pow`        自包含（服务端存载荷，零外部依赖）—— 默认，也是**内嵌页**唯一可用项
+ *   · `turnstile`  Cloudflare Turnstile（无感；国内可达性一般）
+ *   · `hcaptcha`   hCaptcha
+ *   · `google`     Google reCAPTCHA v2/v3
+ *
+ * @type {string[]}
+ */
+const CHALLENGE_PROVIDERS = ['pow', 'turnstile', 'hcaptcha', 'google'];
+
+/**
+ * `defense` 下每个键的类型与约束
+ *
+ * 约束取值的依据（都是"写错就会静默失效"的地方）：
+ *   · 计数/时长一律 ≥ 1：0 会让判定恒真（如 `now - lastAt > 0` 清空在飞连接）或恒假；
+ *   · 数组里的条目要求非空字符串：空前缀/空模式会变成"匹配一切"，
+ *     等于把该条规则整条关掉（`startsWith('')` 恒真、`includes('')` 恒真）；
+ *   · 枚举 / 上下界与**代码实际夹取值**保持一致（challengeDifficulty 代码夹在 1~5：
+ *     难度 6 = 期望 1670 万次哈希 ≈ 浏览器 6 秒以上，实测已不适合做默认上限）。
+ *
+ * @type {Object<string, object>}
+ */
+const DEFENSE_SPEC = {
+  // ── ① 总开关 + 五道闸门各自的开关 ──
+  // 关闸门 = 这道闸不再拦（其余照旧）；enableFirewall=false 是排障用的整机旁路
+  enableFirewall: { type: 'bool' },
+  enableGlobalBlock: { type: 'bool' },
+  enableChallenge: { type: 'bool' },
+
+  // ── ② 手动名单 ──
+  manualBlacklistIps: { type: 'stringArray' },
+  manualBlacklistUsers: { type: 'stringArray' },
+  manualWhitelistIps: { type: 'stringArray' },
+
+  // ── ③ 扫描与豁免（阈值 + 路径/地址清单）──
+  enableAutoBlacklist: { type: 'bool' },
+  maxNotFoundAttempts: { type: 'int', min: 1 },
+  notFoundWindow: { type: 'int', min: 1 },
+  blacklistDuration: { type: 'int', min: 1 },
+  safePaths: { type: 'stringArray' },
+  loopbackPrefixes: { type: 'stringArray' },
+  internalIpPrefixes: { type: 'stringArray' },
+  idcIpPrefixes: { type: 'stringArray' },
+
+  // ── ③b 探针路径（部署相关，与上面的豁免清单同属一类）──
+  probePaths: { type: 'stringArray' },
+
+  // ── ④ 全局限频 ──
+  enableRateLimit: { type: 'bool' },
+  rateLimitRequests: { type: 'int', min: 1 },
+  rateLimitWindow: { type: 'int', min: 1 },
+  enableEndpointRateLimit: { type: 'bool' },
+
+  // ── ⑤ 暴力破解 ──
+  enableBruteForce: { type: 'bool' },
+  bruteLimit: { type: 'int', min: 1 },
+  bruteWindow: { type: 'int', min: 1 },
+  accountLockTime: { type: 'int', min: 1 },
+  ipBlockTime: { type: 'int', min: 1 },
+  bruteIpLimit: { type: 'int', min: 1 },
+
+  // ── ⑥ 并发连接 ──
+  enableConnLimit: { type: 'bool' },
+  maxConn: { type: 'int', min: 1 },
+  connCleanupIntervalMs: { type: 'int', min: 1 },
+  connStaleAfterMs: { type: 'int', min: 1 },
+  connHighWater: { type: 'int', min: 1 },
+
+  // ── ⑦ 地理围栏 ──
+  enableGeoFilter: { type: 'bool' },
+  geoRules: {
+    type: 'object',
+    // 子键以 `geo-filter.js` 的真实读取点为准（`internalPrefixes` 存的是 **URL 路径**，
+    // 与 `internalIpPrefixes`（IP 网段）不是一回事 —— 历史命名，未做迁移）。
+    spec: {
+      sensitivePaths: { type: 'stringArray' },
+      internalPrefixes: { type: 'stringArray' },
+      overseasInternalLimit: { type: 'int', min: 1 },
+      overseasLimit: { type: 'int', min: 1 },
+      overseasWindow: { type: 'int', min: 1 },
+      overseasBlockTime: { type: 'int', min: 1 }
+    }
+  },
+
+  // ── ⑧ 人机挑战：Bot 开关 + UA 特征 + 三档阈值 ──
+  // 总开关：false = `checkBotChallenge()` 直接放行（不做 UA 匹配与频率判定）
+  enableBotChallenge: { type: 'bool' },
+  botPatterns: { type: 'stringArray' },
+  browserPatterns: { type: 'stringArray' },
+  botChallengeNoUaLimit: { type: 'int', min: 1 },
+  botChallengeBotLimit: { type: 'int', min: 1 },
+  botChallengeBrowserLimit: { type: 'int', min: 1 },
+
+  // ── ⑧b 挑战 provider、难度（基准 + 递进）与挑战页地址 ──
+  // 人机验证方式。后三者的密钥走环境变量（`TURNSTILE_SECRET_KEY` / `RECAPTCHA_SECRET_KEY`
+  // 与对应 `*_SITE_KEY`），**不进** `data/firewall_config.json`（那份文件会被面板整份写回）。
+  challengeProvider: { type: 'enum', values: CHALLENGE_PROVIDERS },
+  challengeDifficulty: { type: 'int', min: 1, max: 5 },
+  // 递进难度：开起来后难度按该 IP 近窗口的挑战结果浮动（详见 challenge/difficulty.js）。
+  // Min/Max 只做上下界，`challengeDifficulty` 仍是基准；三者都在 [1, 5] 内（代码侧 MAX_DIFFICULTY）。
+  challengeReputationEnabled: { type: 'bool' },
+  challengeDifficultyMin: { type: 'int', min: 1, max: 5 },
+  challengeDifficultyMax: { type: 'int', min: 1, max: 5 },
+  // 三个触发阈值（次数）。`min: 1` 是硬门槛：0 会让每台机器立刻顶到上限。
+  // `HardenStrong < Harden` 这种语义写反不在这里拦 —— spec 只能查单值上下界，
+  // 跨键关系交给读取点抬齐（challenge/difficulty.js 的 readThresholds），
+  // 这样面板改配置时不会出现"两个值互相校验、改一个必然报错"的死结。
+  challengeReputationHardenAfterFails: { type: 'int', min: 1 },
+  challengeReputationHardenStrongAfterFails: { type: 'int', min: 1 },
+  challengeReputationRelaxAfterPasses: { type: 'int', min: 1 },
+  // 计数窗口（秒）：太短则"偶发"和"反复"分不开，太长则一次误伤要背很久
+  challengeReputationWindowSec: { type: 'int', min: 30 },
+  // 独立前端挑战页地址：**空串合法**（= 用后端内置页）。非空要求站内相对路径，
+  // 但"是不是站内相对路径"由 `buildChallengeRedirect` 在运行时把关（spec 只查类型/长度）：
+  // 这里若用正则强约束，面板改配置时会给出一堆与"回落内置页"行为不一致的报错。
+  challengePageUrl: { type: 'string', minLength: 0 },
+
+  // ── ⑨ 设备维度 / ⑩ 匿名短路 ──
+  enableDeviceBlock: { type: 'bool' },
+  skipDeepCheckForAnonymous: { type: 'bool' },
+
+  // ── ⑪ 告警 ──
+  alert: {
+    type: 'object',
+    spec: {
+      enabled: { type: 'bool' },
+      email: { type: 'string', minLength: 0 }, // 空串 = 不发邮件，允许
+      webhookUrl: { type: 'string', minLength: 0 },
+      cooldownMs: { type: 'int', min: 0 } // 0 = 不限流（允许，用于只发一条的调试场景）
+    }
+  }
+};
+
+/**
+ * 面板层（`securitySettings` 顶层，不属于防护策略）的规格
+ *
+ * @type {Object<string, object>}
+ */
+const PANEL_SPEC = {
+  // 公网 IP 归属查询数据源（面板「当前节点 IP」展示用）
+  activeIpApi: { type: 'enum', values: ['sohu', 'ipinfo', 'ipapi', 'baidu'] },
+  // 面板是否展示访问轨迹（省份热力图）
+  showTrajectory: { type: 'bool' }
+};
+
+/** 清洗 `defense` 子对象 */
+function sanitizeDefense(defense) {
+  return sanitizeBySpec(DEFENSE_SPEC, defense, { label: 'defense' });
+}
+
+/**
+ * 清洗整个 `securitySettings`（defense + 面板层两个键）
+ *
+ * 未知顶层键一律丢弃（例如把 defense 键写到了顶层的错位配置）。
+ * 调用方拿到的 `value` 与默认值 deepMerge 后就是"能安全使用"的策略。
+ *
+ * @param {*} settings 磁盘/请求里的 securitySettings
+ * @returns {{value: object, problems: Array<{kind: string, key: string, message: string}>}} 清洗结果
+ */
+function sanitizeSecuritySettings(settings) {
+  if (settings === undefined || settings === null) return { value: {}, problems: [] };
+  if (!isPlainObject(settings)) {
+    return {
+      value: {},
+      problems: [{ kind: 'invalid', key: 'securitySettings', message: '必须是对象，已整体丢弃' }]
+    };
+  }
+
+  const problems = [];
+  const value = {};
+
+  if ('defense' in settings) {
+    const defense = sanitizeDefense(settings.defense);
+    problems.push(...defense.problems);
+    value.defense = defense.value;
+  }
+
+  const panel = sanitizeBySpec(PANEL_SPEC, omit(settings, ['defense']));
+  problems.push(...panel.problems);
+  Object.assign(value, panel.value);
+
+  return { value, problems };
+}
+
+/**
+ * 归位「忘记套 defense」的写入载荷
+ *
+ * 面板历史上有一处 `updateSecuritySettings(securitySettings.value.defense)` —— 直接
+ * 把 defense 摊在顶层提交。后端 `deepMerge` 会把它写成 `securitySettings.maxConn`，
+ * 下次启动被 `dropMisplacedDefenseKeys` 当错位键剔掉 → **保存看着成功、重启全丢**。
+ * 写入期把这类键收回 `defense` 下，比"静默丢弃"或"直接 400"都对用户更友好。
+ *
+ * @param {*} patch 请求体
+ * @returns {{value: object, misplaced: string[]}} 归位后的新对象 + 被归位的键名
+ */
+function normalizeSettingsPatch(patch) {
+  if (!isPlainObject(patch)) return { value: patch, misplaced: [] };
+
+  const defenseKeys = Object.keys(patch).filter(key => key in DEFENSE_SPEC);
+  if (defenseKeys.length === 0) return { value: patch, misplaced: [] };
+
+  const moved = {};
+  const rest = {};
+  for (const [key, val] of Object.entries(patch)) {
+    if (key in DEFENSE_SPEC) moved[key] = val;
+    else rest[key] = val;
+  }
+  rest.defense = { ...(isPlainObject(rest.defense) ? rest.defense : {}), ...moved };
+  return { value: rest, misplaced: defenseKeys };
+}
+
+/**
+ * 生成面板接口 schema 的 `defense` properties（与清洗规则同源）
+ *
+ * @returns {object} JSON-Schema properties
+ */
+function toDefenseJsonProperties() {
+  return toJsonProperties(DEFENSE_SPEC);
+}
+
+/**
+ * 生成面板接口 schema 的顶层 properties
+ *
+ * 面板只允许写 `defense` + 两个展示键；`defense` 内部用**同一份** spec 生成约束。
+ *
+ * @returns {object} JSON-Schema properties
+ */
+function toSettingsJsonProperties() {
+  return { defense: { type: 'object', properties: toDefenseJsonProperties() }, ...toJsonProperties(PANEL_SPEC) };
+}
+
+/**
+ * 取对象中除指定键之外的浅拷贝
+ *
+ * @param {object} object 源对象
+ * @param {string[]} keys 要剔除的键
+ * @returns {object} 新对象
+ */
+function omit(object, keys) {
+  const out = {};
+  for (const [key, val] of Object.entries(object)) {
+    if (!keys.includes(key)) out[key] = val;
+  }
+  return out;
+}
+
+export {
+  DEFENSE_SPEC,
+  PANEL_SPEC,
+  sanitizeDefense,
+  CHALLENGE_PROVIDERS,
+  sanitizeSecuritySettings,
+  normalizeSettingsPatch,
+  toDefenseJsonProperties,
+  toSettingsJsonProperties
+};

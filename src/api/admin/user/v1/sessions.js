@@ -18,8 +18,8 @@
  * @since 2026-09-03
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { getModel } from '../../../../framework/db/index.js';
-import { kickByDeviceId } from '../../../../framework/auth/index.js';
+import { getModel } from '../../../../framework/persistence/db/index.js';
+import { kickByDeviceId } from '../../../../framework/security/auth/index.js';
 
 async function registerSessionsRoutes(fastify) {
   registerGroupMetadata({

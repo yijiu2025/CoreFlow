@@ -25,7 +25,7 @@
  */
 import crypto from 'node:crypto';
 import fp from 'fastify-plugin';
-import { COOKIE_POLICY } from '../../../framework/auth/index.js';
+import { COOKIE_POLICY } from '../../../framework/security/auth/index.js';
 
 /** 作用域前缀（`/oauth2.10` 不误命中） */
 const OAUTH21_SCOPE_PREFIX = '/oauth2.1';

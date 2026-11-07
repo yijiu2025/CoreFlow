@@ -14,8 +14,8 @@
  * @since 2026-11-05
  */
 import { describe, it, expect } from '@jest/globals';
-import { registerSettingsReader } from '../framework/firewall/interface/config-access.js';
-import { DEFAULT_SECURITY_SETTINGS } from '../framework/firewall/config/defaults.js';
+import { registerSettingsReader } from '../framework/ingress/firewall/interface/config-access.js';
+import { DEFAULT_SECURITY_SETTINGS } from '../framework/ingress/firewall/config/defaults.js';
 
 // 检测器依赖配置读取器（生产由 05-firewall / dao 注册）。裸测试进程必须自己注册，
 // 否则 getConfig() 抛错 → 管道按「未知错误 = 硬封禁」处理，测出来全是 429。
@@ -24,8 +24,8 @@ registerSettingsReader(() => DEFAULT_SECURITY_SETTINGS);
 const UA_BROWSER =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-const { runDetectionPipeline } = await import('../framework/firewall/engine/pipeline.js');
-const { trackRequestCount } = await import('../framework/firewall/engine/detectors/rate-limiter.js');
+const { runDetectionPipeline } = await import('../framework/ingress/firewall/engine/pipeline.js');
+const { trackRequestCount } = await import('../framework/ingress/firewall/engine/detectors/rate-limiter.js');
 
 /** 最小 reply 替身（挑战路径只需 type / headers / code / send） */
 function makeReply(ip) {

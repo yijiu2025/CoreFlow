@@ -2,13 +2,13 @@
  * 防火墙模块 API Schema 定义
  * 使用 JSON Schema 约束请求参数与响应结构
  *
- * 设置类 schema 的字段约束**由 spec 生成**（framework/firewall/config/schema.js），
+ * 设置类 schema 的字段约束**由 spec 生成**（framework/ingress/firewall/config/schema.js），
  * 与加载期/写入期的清洗规则同源 —— 不要在这里手写 defense 字段。
  *
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { toSettingsJsonProperties } from '../../../../framework/firewall/config/schema.js';
+import { toSettingsJsonProperties } from '../../../../framework/ingress/firewall/config/schema.js';
 
 // 基础响应结构 (Standard Response Wrapper)
 // ⚠️ 必须与 globals 里 reply.result 的 build() 字段**一一对应**：schema 未声明的字段
@@ -111,7 +111,7 @@ const updateSettingsSchema = {
   body: {
     type: 'object',
     // ⚠️ properties **由 spec 生成**，不再手写（2026-11-05）：
-    //    spec 在 framework/firewall/config/schema.js，是"什么值算合法"的唯一事实源；
+    //    spec 在 framework/ingress/firewall/config/schema.js，是"什么值算合法"的唯一事实源；
     //    加载期清洗、写入期清洗、本 schema 三处共用同一份规则，改了 spec 一起变。
     //    手写清单一定会漂移 —— 历史上 `enableBotChallenge` 就是在这里存在、后端没有。
     properties: toSettingsJsonProperties()

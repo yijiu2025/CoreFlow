@@ -13,9 +13,9 @@
  * @author yijiu2025
  * @since 2026-09-15
  */
-import { connectStandalone, disconnectStandalone } from '../../../framework/redis/index.js';
-import { printWarning } from '../../../framework/cli/index.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { connectStandalone, disconnectStandalone } from '../../../framework/persistence/redis/index.js';
+import { printWarning } from '../../../framework/support/cli/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.firewall.cli.redis-boot');
 

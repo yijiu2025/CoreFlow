@@ -24,15 +24,15 @@ import {
   ask,
   confirm,
   closeRl
-} from '../../../framework/cli/index.js';
-import { logStdout } from '../../../framework/log/index.js';
+} from '../../../framework/support/cli/index.js';
+import { logStdout } from '../../../framework/support/log/index.js';
 import {
   getActiveBlocks,
   setBlock,
   removeBlock as removeBlockEntry
-} from '../../../framework/firewall/block-manager.js';
+} from '../../../framework/ingress/firewall/block-manager.js';
 import { addToBlacklist, removeFromBlacklist, initDao } from '../dao/dao.js';
-import { removeKeys, rel } from '../../../framework/firewall/util/redis.js';
+import { removeKeys, rel } from '../../../framework/ingress/firewall/util/redis.js';
 import { withFirewallRedis } from './redis-boot.js';
 
 /**

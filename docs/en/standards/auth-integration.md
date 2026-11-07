@@ -76,7 +76,7 @@ only when the route declares `config.requireSignature`:
 
 The client takes the token from the `_m_h5_tk` cookie, builds the string the backend expects,
 puts it in the request header and also sends `x-device-id`. The algorithm lives in
-`src/framework/auth/signature.js`.
+`src/framework/security/auth/signature.js`.
 
 ## CSRF (`/oauth2.1` scope, enabled)
 

@@ -19,7 +19,7 @@ import {
   resolveFile,
   publicUrl,
   privateKey
-} from '../framework/storage/index.js';
+} from '../framework/persistence/storage/index.js';
 
 describe('存储布局：app / key 的路径守卫', () => {
   it('app 名：只接受字母数字与 -_（挡掉 ..、分隔符、绝对路径）', () => {

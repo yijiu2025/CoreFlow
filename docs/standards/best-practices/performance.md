@@ -24,7 +24,7 @@ Bearer Token 路径每次请求都查库，已添加 Redis 缓存：
 ```js
 // 键必须是 sha256(userId \0 appId) 前 16 hex，**不能**用 `${userId}:${appId}` 明文：
 // 明文键可被 `SCAN auth:perm:*oauth21*` 直接枚举出某个应用的全体用户。
-// 实现见 framework/auth/perm-cache.js 的 buildPermKey()，直接用即可，不要自己拼。
+// 实现见 framework/security/auth/perm-cache.js 的 buildPermKey()，直接用即可，不要自己拼。
 const cacheKey = buildPermKey(userId, appId); // → 16 位 hex
 const cached = await redis.get(`${PERM_NAMESPACE}:${cacheKey}`);
 if (cached) {

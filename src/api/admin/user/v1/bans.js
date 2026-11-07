@@ -7,7 +7,7 @@
  * POST /admin/user/v1/bans/untie   — 解封（可一次解多个 service）
  * GET  /admin/user/v1/bans/status  — 查询某用户某 service 的封禁状态
  *
- * 语义（见 framework/auth/index.js）：
+ * 语义（见 framework/security/auth/index.js）：
  * - 封 'login' 只阻止新登录，既有会话不自动失效；需立即全端下线时配合
  *   POST /admin/user/v1/sessions/kick-by-device 或 kick-all 系列操作。
  * - 封 'access' 在请求认证阶段拦截并吊销会话（≤30s 负缓存延迟）。
@@ -24,7 +24,7 @@ import {
   isDisable,
   getDisableTime,
   getDisableLevel
-} from '../../../../framework/auth/index.js';
+} from '../../../../framework/security/auth/index.js';
 
 /**
  * userId 入参必须是数字主键（正整数）。

@@ -5,12 +5,12 @@
 > 相关：`AUDIT-REPORT-2026-09-15.md`（历史缺陷）、`FIX-REPORT-2026-09-15.md`（修复记录）
 >
 > ⚠️ **路径已归位（2026-11-06，晚于本计划定稿）**：挑战相关的三个文件已收进
-> `framework/firewall/challenge/`（`difficulty.js` / `metrics.js` / `template.js`，
+> `framework/ingress/firewall/challenge/`（`difficulty.js` / `metrics.js` / `template.js`，
 > 公共出口是 `index.js`），app 侧的 `services/challenge.service.js` + `challenge-providers/`
 > 收进 `services/challenge/`（`service.js` + `providers/`）。
 > 正文仍写作当时的路径 —— 保留原文是为了让"当时为什么这么改"可追溯；
 > 查**今天**的位置请看 `src/app/firewall/README.md` 与
-> `framework/firewall/challenge/index.js` 头注释。
+> `framework/ingress/firewall/challenge/index.js` 头注释。
 
 ---
 
@@ -22,7 +22,7 @@
 | 部署形态 | **形态 A**：前端与 API 同站反代（同一个 nginx server 块、不同 location），`fw_verified` 保持 `SameSite=Strict` |
 | 前端能不能挂到别的路径 / 别的域名？ | **能**。后端完全不认识前端路径（已用测试钉死）；前端有 **3 处硬编码**要先改成跟随 `import.meta.env.BASE_URL`，否则换路径会 404 |
 | PoW 怎么提速？ | **不用 `crypto.subtle`**（实测比现状还慢 1.3×），改用零分配实现（实测 **5.9×**） |
-| 验证码要不要自己写？ | **不用**：`framework/verify/recaptcha` 已支持 google / hcaptcha / turnstile；PoW 的"能力"也收进 `verify/pow/`（策略留在 firewall） |
+| 验证码要不要自己写？ | **不用**：`framework/security/verify/recaptcha` 已支持 google / hcaptcha / turnstile；PoW 的"能力"也收进 `verify/pow/`（策略留在 firewall） |
 | 顺序 | 护栏 → 提速 → 观测 → PoW 归 verify → 递进难度 → provider → 边缘层 →（可选）WebAuthn |
 | 工期 | **7.5 人日**到"四项落地"，WebAuthn 另计 3~4 人日 |
 
@@ -34,7 +34,7 @@
 
 | 链路 | 入口 | 实现 | 覆盖场景 |
 | --- | --- | --- | --- |
-| **内嵌页** | 后端文档请求 → 200 + 内联 HTML（`sendChallengePage`） | `src/framework/firewall/challenge-template.js`：单文件、零外链、专属 CSP（nonce + `default-src 'none'`）、Blob Worker 求解 | 直连 API 的浏览器、移动 WebView、非 SPA 客户端、前端产物不可用时 |
+| **内嵌页** | 后端文档请求 → 200 + 内联 HTML（`sendChallengePage`） | `src/framework/ingress/firewall/challenge-template.js`：单文件、零外链、专属 CSP（nonce + `default-src 'none'`）、Blob Worker 求解 | 直连 API 的浏览器、移动 WebView、非 SPA 客户端、前端产物不可用时 |
 | **独立前端页** | SPA 收到 428 / `X-Firewall-Challenge` → 整页跳转 | `firewall/challenge.html` → `firewall/src/challenge/ChallengePage.vue` → `packages/challenge-client`（纯源码共享，`admin/` 复用） | 防火墙 / 管理后台等自家 SPA |
 
 两条链路的判定、载荷、校验完全共用服务端同一份实现（`issueChallengePayload` / `verifyPow` / `takeChallenge`），**只有"谁来渲染页面"不同**。
@@ -43,10 +43,10 @@
 
 ```
 代码常量（最基础，可为空）
-  → framework 默认值  src/framework/firewall/config/defaults.js      ← 必有
+  → framework 默认值  src/framework/ingress/firewall/config/defaults.js      ← 必有
   → 静态覆盖（可选）  src/config/firewall_config.js
   → 持久化（磁盘）    data/firewall_config.json                      ← 面板写入
-  → 清洗 spec         src/framework/firewall/config/schema.js        ← 类型/上下界/枚举
+  → 清洗 spec         src/framework/ingress/firewall/config/schema.js        ← 类型/上下界/枚举
   → 面板 schema 生成  src/api/firewall/v1/schemas/monitor.js         ← 由 spec 自动生成
   → 前端键清单        firewall/src/stores/settings.ts  DEFENSE_KEYS  ← **最容易漏的一处**
 ```
@@ -137,7 +137,7 @@
 
 ### D8 复用 `framework/verify`，不要在防火墙里另造一套验证码
 
-`src/framework/verify/` 本来就是「系统级验证能力库」：`captcha`（图形）/ `slider`（滑块）/ **`recaptcha`（Google + hCaptcha + Turnstile）** / `email` / `sms` / `voice` / `qrcode`，统一 `service + dao + index`，存储走调用方注入的 store 适配器，无 API 路由、业务无关；已被 `api/verify/v1`、`api/user/v1/open`、`oauth21` 的登录/解密链路使用。
+`src/framework/security/verify/` 本来就是「系统级验证能力库」：`captcha`（图形）/ `slider`（滑块）/ **`recaptcha`（Google + hCaptcha + Turnstile）** / `email` / `sms` / `voice` / `qrcode`，统一 `service + dao + index`，存储走调用方注入的 store 适配器，无 API 路由、业务无关；已被 `api/verify/v1`、`api/user/v1/open`、`oauth21` 的登录/解密链路使用。
 
 三条结论：
 
@@ -250,7 +250,7 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
 
 落地形态：
 
-- `framework/firewall/challenge-metrics.js`：**进程内累加 + 增量汇出**
+- `framework/ingress/firewall/challenge-metrics.js`：**进程内累加 + 增量汇出**
   - 热路径只做一次 `Map.set` 自增；字段由枚举维度拼成（`issued:pow` / `failed:Expired` / `solveMs:b2` /
     `difficulty:3` / `surface:inline`），**字段数有界**，不会被攻击撑爆
   - 只收服务端能真观测到的五种事件：`issued` / `issueRejected` / `verified` / `failed` / `surface`
@@ -269,14 +269,14 @@ server { server_name fw.example.com; ... 同样的两个 location ... }
   读取汇总、清空覆盖）+ 跳转用例里补 `surface` 三态断言
 
 
-### 阶段 2b：把 PoW 的"能力"收进 `framework/verify/pow/`（1 人日｜**已完成 2026-11-06**）
+### 阶段 2b：把 PoW 的"能力"收进 `framework/security/verify/pow/`（1 人日｜**已完成 2026-11-06**）
 
 `framework/verify` 是「验证能力库」（`captcha` / `slider` / `recaptcha` / `email` / `sms` / `voice` / `qrcode`，统一 `service + dao + index`，存储走调用方注入的 store 适配器、无 API 路由、业务无关）。PoW 与它们是同一种东西，只是当年长在防火墙里。
 
 **实际落地**：
 
 ```
-framework/verify/pow/
+framework/security/verify/pow/
 ├── service.js   buildChallenge({ difficulty, ttlSec })   → { challengeId, salt, difficulty, maxAttempts, ttlSec }
 │                verifyAnswer({ challengeId, salt, answer, difficulty }) → { ok, reason }
 │                clampDifficulty / attemptsForDifficulty / MAX_DIFFICULTY / DEFAULT_TTL_SEC
@@ -301,7 +301,7 @@ framework/verify/pow/
 
 1. **store 适配器只认 `put` / `take`，不接受 `get + delete`**。`take` 的"取走即消失"是
    **安全性质**而非清理优化：两次非原子调用之间，同一题号可能被两个并发请求各读一次 →
-   同一份答案用两次。适配器落 `framework/firewall/util/pow-store.js`（3 行转发到
+   同一份答案用两次。适配器落 `framework/ingress/firewall/util/pow-store.js`（3 行转发到
    `writeChallenge` / `takeChallenge`，含内存降级与 Lua GETDEL）。
 2. **载荷里的绑定字段嵌套成 `binding`**：`{ salt, difficulty, binding: { ip, fingerprint, deviceId }, issuedAt }`。
    嵌套不是为了好看 —— 它让"verify 不认识 ip"从注释变成**结构约束**：`dao` 从头到尾
@@ -313,7 +313,7 @@ framework/verify/pow/
 
 ### 阶段 3：项② 递进难度（2 人日｜**已完成 2026-11-06**）
 
-- `resolveChallengeDifficulty({ ip, loggedIn }) → { difficulty, reason }`（`framework/firewall/challenge-difficulty.js`）
+- `resolveChallengeDifficulty({ ip, loggedIn }) → { difficulty, reason }`（`framework/ingress/firewall/challenge-difficulty.js`）
   - 信号（全部现成，不新建表）：`chal:fail:<ip>` / `chal:pass:<ip>` 两个窗口计数（`bumpCounter` / `readCounter`，TTL = 窗口）+ 是否登录
   - 输出：以 `challengeDifficulty` 为基准 ±1~2 档，夹在 `[Min, Max]`
   - 返回体加 `reason`（`baseline` / `hardened` / `relaxed`，**不暴露分数也不暴露计数**）
@@ -336,7 +336,7 @@ framework/verify/pow/
 
 ### 阶段 4：项④a 复用现成验证码能力（**已完成 2026-11-06**｜默认 `pow`）
 
-**修正**：`src/framework/verify/` 已经是一个「验证能力库」，里面 **`recaptcha/` 已支持 Google reCAPTCHA / hCaptcha / Cloudflare Turnstile**（2026-08-29 加），还自带两条这里本来要自己写的东西：
+**修正**：`src/framework/security/verify/` 已经是一个「验证能力库」，里面 **`recaptcha/` 已支持 Google reCAPTCHA / hCaptcha / Cloudflare Turnstile**（2026-08-29 加），还自带两条这里本来要自己写的东西：
 
 - `expectedHostname` / `expectedAction` 校验（防 token 跨域 / 跨用途挪用）
 - 未配置密钥时**生产 fail-closed**、非生产放行
@@ -345,14 +345,14 @@ framework/verify/pow/
 
 | provider | 实现位置 | 调用形态 |
 | --- | --- | --- |
-| `pow`（默认） | 阶段 2 抽出的 `framework/verify/pow/` | `verifyAnswer({ challengeId, answer })` |
-| `turnstile` / `hcaptcha` / `google` | `framework/verify/recaptcha/`（已在用） | `recaptchaDao.verify(token, ip)` → `{ success, score, error }` |
-| `slider` / `captcha` | `framework/verify/slider/`、`captcha/`（已在用） | 同上，各自 dao |
+| `pow`（默认） | 阶段 2 抽出的 `framework/security/verify/pow/` | `verifyAnswer({ challengeId, answer })` |
+| `turnstile` / `hcaptcha` / `google` | `framework/security/verify/recaptcha/`（已在用） | `recaptchaDao.verify(token, ip)` → `{ success, score, error }` |
+| `slider` / `captcha` | `framework/security/verify/slider/`、`captcha/`（已在用） | 同上，各自 dao |
 
 改动只有三处：
 
 - `challenge.service.verifyChallenge`：按 provider 分派（`pow` 走答案校验，其余走 dao），**`fw_verified` 的签发/TTL/绑定仍在这里**（访问控制语义不外移）
-- `defense.challengeProvider` 走 spec；密钥**走环境变量**（`RECAPTCHA_*` / `TURNSTILE_*` 已存在，见 `framework/verify/config.js`），**不进** `data/firewall_config.json`（那份文件会被面板整份写回）
+- `defense.challengeProvider` 走 spec；密钥**走环境变量**（`RECAPTCHA_*` / `TURNSTILE_*` 已存在，见 `framework/security/verify/config.js`），**不进** `data/firewall_config.json`（那份文件会被面板整份写回）
 - 前端：`ChallengeCard` 增加 captcha 插槽；**只在独立前端页**放行第三方域（内嵌页保持 `default-src 'none'`，`provider ≠ pow` 时降级 pow）
 
 **实际落地**（`src/app/firewall/services/challenge-providers/`）：

@@ -47,7 +47,7 @@
 #     让 14 个套件 failed to run。实测 2026-09-21。
 #
 #   装完还要构建一次 shared-device 的 dist：
-#     `dist/` 是构建产物、不入库，而 `src/framework/auth/device-id-service.js`
+#     `dist/` 是构建产物、不入库，而 `src/framework/security/auth/device-id-service.js`
 #     要 import `stable-deviceid/base62-timestamp`，包的 exports 指向
 #     `./dist/base62-timestamp.js`。只跑 build.mjs 即可（esbuild 由根依赖
 #     vitepress→vite 带进来，能从根 node_modules 解析到）；同一条命令里链的
@@ -195,6 +195,16 @@ jobs:
           npm install --workspace=packages/shared-device --include-workspace-root \
             --ignore-scripts --legacy-peer-deps --no-package-lock --no-audit --no-fund
           node packages/shared-device/scripts/build.mjs
+
+      # `data/` 不进 git（部署状态随卷持久化），于是 CI 里没有 data/firewall_config.json。
+      # firewall.test.js 的「initDao 真的被执行」用例靠**对象身份变化**判定：
+      # dao.js 只在文件存在时才重新赋值 securitySettings，缺文件 → 身份不变 → 假红。
+      # 这里种一份**语义为空**的配置：`securitySettings: {}` 会触发重新赋值，
+      # 但合并结果与默认值完全相同（不会给其它套件打开限流/黑名单）。
+      - name: 种入防火墙配置文件（data/ 不入库）
+        run: |
+          mkdir -p data
+          printf '{"securitySettings":{}}' > data/firewall_config.json
 
       # 必须带 --experimental-vm-modules：项目是 ESM 且测试大量使用
       # jest.unstable_mockModule，直接 npx jest 会丢掉这个标志而大面积失败。

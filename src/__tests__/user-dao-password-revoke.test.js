@@ -9,7 +9,7 @@
  * 2. Green: 修复后调用 kickAllSessions + TokenDao.revokeAllForUser → 测试通过
  *
  * @see src/app/user/dao/user.js updatePassword
- * @see src/framework/auth/session/session-kick.js kickAllSessions
+ * @see src/framework/security/auth/session/session-kick.js kickAllSessions
  * @see src/app/oauth21/dao/token.dao.js revokeAllForUser
  */
 import { describe, test, expect, jest, beforeEach } from '@jest/globals';
@@ -39,25 +39,25 @@ const models = {
   }
 };
 
-jest.unstable_mockModule('../framework/db/index.js', () => ({
+jest.unstable_mockModule('../framework/persistence/db/index.js', () => ({
   default: { transaction: async cb => cb({}) },
   sequelize: { transaction: async cb => cb({}) },
   getModel: name => models[name]
 }));
 
-jest.unstable_mockModule('../framework/keys/encryption.js', () => ({
+jest.unstable_mockModule('../framework/security/keys/encryption.js', () => ({
   decrypt: async () => 'NewPassw0rd!'
 }));
 
-jest.unstable_mockModule('../framework/auth/security/password-hash.js', () => ({
+jest.unstable_mockModule('../framework/security/auth/security/password-hash.js', () => ({
   hashPassword: async () => 'new-hash',
   verifyPassword: async () => true,
   isLegacyHash: () => false
 }));
 
-jest.unstable_mockModule('../framework/auth/security/password-policy.js', async () => ({
+jest.unstable_mockModule('../framework/security/auth/security/password-policy.js', async () => ({
   // 2026-11-01 auth 拆子目录后走 index.js 门面，门面 re-export 需要完整导出面
-  ...(await jest.requireActual('../framework/auth/security/password-policy.js')),
+  ...(await jest.requireActual('../framework/security/auth/security/password-policy.js')),
   validatePasswordStrength: () => ({ valid: true, errors: [] })
 }));
 
@@ -68,8 +68,8 @@ jest.unstable_mockModule('../app/admin/dao/iam.dao.js', () => ({
 // ── 凭证撤销函数 mock（关键：断言它们是否被调用）──
 // 2026-11-01 auth 拆子目录后 user.dao 走 index.js 门面，其 kickAllSessions 绑定
 // 来自 session/session-kick.js（权威源），mock 必须钉在权威源上
-jest.unstable_mockModule('../framework/auth/session/session-kick.js', async () => ({
-  ...(await jest.requireActual('../framework/auth/session/session-kick.js')),
+jest.unstable_mockModule('../framework/security/auth/session/session-kick.js', async () => ({
+  ...(await jest.requireActual('../framework/security/auth/session/session-kick.js')),
   kickAllSessions: jest.fn(async userId => {
     calls.kickAllSessions.push(userId);
   })
@@ -124,7 +124,7 @@ describe('updatePassword 凭证撤销（安全要求）', () => {
   });
 
   test('凭证撤销失败不得报告完整成功，但仍执行其余撤销', async () => {
-    const { kickAllSessions } = await import('../framework/auth/session/session.js');
+    const { kickAllSessions } = await import('../framework/security/auth/session/session.js');
     kickAllSessions.mockRejectedValueOnce(new Error('Redis connection failed'));
 
     await expect(userDao.updatePassword('test@example.com', 'encrypted', 'kid-1')).rejects.toThrow(

@@ -29,7 +29,7 @@ import { describe, test, expect } from '@jest/globals';
 import { ALL_API_ROUTES as ALL_ROUTES } from '../helpers/route-declarations.js';
 
 const { isProbeUrl, shouldSkipDeepCheck, isUnconditionallyReachable, PROBE_PATHS } =
-  await import('../../framework/firewall/engine/pipeline.js');
+  await import('../../framework/ingress/firewall/engine/pipeline.js');
 
 /** health 路由模块（对账时按这个路径比对） */
 const HEALTH_SRC = 'src/api/system/v1/health.js';

@@ -16,16 +16,13 @@ nodeServers/
 ├── src/
 │   ├── app.js                  # 启动编排门面（建实例 / 注册基础插件 / 挂错误处理器 / 起引擎）
 │   │
-│   ├── framework/              # 基础设施层（不写业务）
-│   │   ├── auth/               # 认证：session / cookie / signature / 密码 / 设备
-│   │   ├── jwt/                # JWT 签发与验证（密钥取自 framework/keys）
-│   │   ├── keys/               # RSA 密钥仓库（私钥信封加密落库）
-│   │   ├── loader/             # 加载器引擎 + registry/ 顺序表
-│   │   ├── db/                 # Sequelize 连接 + 迁移入口
-│   │   ├── redis/              # Redis 连接 / getStore / 锁 / 队列 / PubSub
-│   │   ├── http/               # Fastify 构造参数 / 基础插件 / 安全头 / 全局错误处理器
-│   │   ├── log/  notice/  verify/  startup/  scheduler/  websocket/  cli/  config/
-│   │   └── ...
+│   ├── framework/              # 基础设施层（不写业务）——按六类分组
+│   │   ├── config/             #   配置与路径：env 校验 / 覆盖层 / paths.js
+│   │   ├── persistence/        #   数据与状态：db / redis / storage
+│   │   ├── security/           #   身份与安全：auth / verify / jwt / keys / crypto
+│   │   ├── ingress/            #   接入与协议：http / websocket / firewall
+│   │   ├── lifecycle/          #   编排与生命周期：loader / startup / scheduler
+│   │   └── support/            #   支撑与旁路：log / cli / notice
 │   │
 │   ├── app/                    # 应用模块（每个目录 = 一个应用）
 │   │   ├── oauth21/            # OAuth 2.1 应用（config/ services/ + 路由）
@@ -80,10 +77,10 @@ nodeServers/
 ## 启动流程
 
 ```
-index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/framework/loader/engine.js)
+index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/framework/lifecycle/loader/engine.js)
 ```
 
-引擎扫描 `src/framework/loader/registry/` 目录，按文件名数字前缀顺序加载：
+引擎扫描 `src/framework/lifecycle/loader/registry/` 目录，按文件名数字前缀顺序加载：
 
 | 顺序 | 文件             | 职责                                                          |
 | ---- | ---------------- | ------------------------------------------------------------- |
@@ -109,19 +106,19 @@ index.js → createApp() (src/app.js) → initLoader(app) → runEngine() (src/f
 ```
 src/
 │── 系统层（基础设施，`framework/`）
-├── framework/auth/       # 认证：session / cookie / signature / 密码 / 设备
-├── framework/jwt/        # JWT 签发验证
-├── framework/keys/       # 密钥仓库（私钥信封加密）
-├── framework/db/         # 数据库连接 + 迁移入口
-├── framework/redis/      # 缓存 / 锁 / 队列 / PubSub
-├── framework/log/        # 日志
-├── framework/notice/     # 通知
-├── framework/verify/     # 验证码
-├── framework/loader/     # 加载器引擎
-├── framework/http/       # Fastify 构造参数 / 基础插件 / 安全头 / 全局错误处理器
-├── framework/startup/    # 启动期依赖等待 / 就绪判定 / 配置体检 / 日志引导
-├── framework/scheduler/  # 定时任务
-├── framework/websocket/  # WS 广播
+├── framework/security/auth/       # 认证：session / cookie / signature / 密码 / 设备
+├── framework/security/jwt/        # JWT 签发验证
+├── framework/security/keys/       # 密钥仓库（私钥信封加密）
+├── framework/persistence/db/         # 数据库连接 + 迁移入口
+├── framework/persistence/redis/      # 缓存 / 锁 / 队列 / PubSub
+├── framework/support/log/        # 日志
+├── framework/support/notice/     # 通知
+├── framework/security/verify/     # 验证码
+├── framework/lifecycle/loader/     # 加载器引擎
+├── framework/ingress/http/       # Fastify 构造参数 / 基础插件 / 安全头 / 全局错误处理器
+├── framework/lifecycle/startup/    # 启动期依赖等待 / 就绪判定 / 配置体检 / 日志引导
+├── framework/lifecycle/scheduler/  # 定时任务
+├── framework/ingress/websocket/  # WS 广播
 ├── models/session/       # 系统模型（会话 / 令牌 / 日志）
 │
 │── 应用层

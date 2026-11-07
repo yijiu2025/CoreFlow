@@ -12,16 +12,16 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import crypto from 'crypto';
 import userDao from '../../../app/user/dao/user.js';
-import { emailDao } from '../../../framework/verify/email/index.js';
-import { clientContext, sessionIdFromRequest } from '../../../framework/verify/context.js';
-import { recaptchaDao } from '../../../framework/verify/recaptcha/index.js';
-import verifyConfig from '../../../framework/verify/config.js';
-import { getStore } from '../../../framework/redis/index.js';
-import emailNoticeService from '../../../framework/notice/services/email.js';
+import { emailDao } from '../../../framework/security/verify/email/index.js';
+import { clientContext, sessionIdFromRequest } from '../../../framework/security/verify/context.js';
+import { recaptchaDao } from '../../../framework/security/verify/recaptcha/index.js';
+import verifyConfig from '../../../framework/security/verify/config.js';
+import { getStore } from '../../../framework/persistence/redis/index.js';
+import emailNoticeService from '../../../framework/support/notice/services/email.js';
 import { v4 as uuidv4 } from 'uuid';
-import { logRegister, logAuditEvent } from '../../../framework/auth/index.js';
+import { logRegister, logAuditEvent } from '../../../framework/security/auth/index.js';
 import '../../../app/user/permission/roles.js'; // 导入即可触发底层的 defineRoles() 注册机制
-import { createLogger } from '../../../framework/log/index.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('api.user.v1.open');
 

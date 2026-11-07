@@ -18,12 +18,12 @@
  * 拿到之后可以做任意次变更 —— 本文件刻意不采用。
  *
  * ── 凭据 ──
- * - email：**复用 framework/verify/email/dao.js**（后端既有逻辑）——
+ * - email：**复用 framework/security/verify/email/dao.js**（后端既有逻辑）——
  *   6 位码、600s 有效期、60s 重发冷却、5 次失败作废、发码/用码绑定同一
  *   `sessionId`（此处为 challengeId）与客户端指纹（IP+UA）。与登录验证码共用实现，
  *   避免两套规则各写一份、各自漂移。
  * - password：校验本地密码哈希（OAuth-only 账号无密码，走验证码）
- * - sms：短信服务商接口目前是空实现（framework/verify/sms/service.js 会抛
+ * - sms：短信服务商接口目前是空实现（framework/security/verify/sms/service.js 会抛
  *   "尚未接入"），因此**明确拒绝**而不是静默降级成邮箱 ——
  *   "以为发了短信、其实没发"是最糟的失败方式。
  *
@@ -31,11 +31,11 @@
  * @since 2026-11-07
  */
 import crypto from 'node:crypto';
-import { getStore } from '../../../framework/redis/index.js';
-import { getModel } from '../../../framework/db/index.js';
-import { verifyPassword } from '../../../framework/auth/index.js';
-import emailDao from '../../../framework/verify/email/dao.js';
-import { createLogger } from '../../../framework/log/index.js';
+import { getStore } from '../../../framework/persistence/redis/index.js';
+import { getModel } from '../../../framework/persistence/db/index.js';
+import { verifyPassword } from '../../../framework/security/auth/index.js';
+import emailDao from '../../../framework/security/verify/email/dao.js';
+import { createLogger } from '../../../framework/support/log/index.js';
 import { canonicalJson, pickRuntimeFields } from './direction.js';
 import { isSuperAdmin, assertChangeAuthority } from './authority.js';
 
@@ -44,7 +44,7 @@ const log = createLogger('app.guard.stepup');
 /**
  * 挑战有效期
  *
- * 必须 ≥ 验证码本身的有效期（`framework/verify/config.js` 的 `common.codeTtl`，默认 600s），
+ * 必须 ≥ 验证码本身的有效期（`framework/security/verify/config.js` 的 `common.codeTtl`，默认 600s），
  * 否则会出现"码还没过期、挑战先过期"的错位，用户只能重来。
  */
 const CHALLENGE_TTL = 600;

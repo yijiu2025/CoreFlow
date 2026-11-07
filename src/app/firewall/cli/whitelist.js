@@ -21,9 +21,9 @@ import {
   ask,
   confirm,
   closeRl
-} from '../../../framework/cli/index.js';
-import { logStdout } from '../../../framework/log/index.js';
-import { getActiveWhitelist } from '../../../framework/firewall/block-manager.js';
+} from '../../../framework/support/cli/index.js';
+import { logStdout } from '../../../framework/support/log/index.js';
+import { getActiveWhitelist } from '../../../framework/ingress/firewall/block-manager.js';
 import { addToWhitelist, removeFromWhitelist, initDao } from '../dao/dao.js';
 import { withFirewallRedis } from './redis-boot.js';
 

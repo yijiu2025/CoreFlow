@@ -6,7 +6,7 @@
 >
 > - `SERVER_ROLE`, `MODULE_*` and friends have **zero references** in the repository and are absent
 >   from `.env.example`;
-> - the current loader (`src/framework/loader/registry/`) loads **everything**; there is no
+> - the current loader (`src/framework/lifecycle/loader/registry/`) loads **everything**; there is no
 >   role-based trimming.
 >
 > **Two facts that have moved since this page was written:**

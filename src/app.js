@@ -5,12 +5,12 @@
  * → 启动加载器引擎 / 调度器 / 守卫配置同步 → 注册优雅关闭。
  *
  * 其余能力已按职责下沉（2026-11-07 拆分，本文件只做串联与顺序保证）：
- *   - 日志引导（唯一 configureLog 调用点）      → framework/startup/logging.js
- *   - 环境变量 / 调优配置体检                   → framework/startup/config-check.js
- *   - Fastify 构造参数（超时 / 日志 / reqId）    → framework/http/server-options.js
- *   - 基础插件注册（helmet/cors/upload/static…） → framework/http/plugins.js
- *   - 安全头与跨域策略                          → framework/http/security-options.js
- *   - 全局错误处理器                            → framework/http/error-handler.js
+ *   - 日志引导（唯一 configureLog 调用点）      → framework/lifecycle/startup/logging.js
+ *   - 环境变量 / 调优配置体检                   → framework/lifecycle/startup/config-check.js
+ *   - Fastify 构造参数（超时 / 日志 / reqId）    → framework/ingress/http/server-options.js
+ *   - 基础插件注册（helmet/cors/upload/static…） → framework/ingress/http/plugins.js
+ *   - 安全头与跨域策略                          → framework/ingress/http/security-options.js
+ *   - 全局错误处理器                            → framework/ingress/http/error-handler.js
  *   - 代理可信网段解析与风险判定                 → utils/proxy-trust.js
  *   - CORS 来源解析与放行判断                    → utils/cors.js
  *
@@ -23,15 +23,15 @@
  */
 import Fastify from 'fastify';
 
-import { initLoader } from './framework/loader/index.js';
-import { startScheduler } from './framework/scheduler/index.js';
+import { initLoader } from './framework/lifecycle/loader/index.js';
+import { startScheduler } from './framework/lifecycle/scheduler/index.js';
 import { startGuardConfigSync, stopGuardConfigSync, flushGuardConfig } from './api/guard-config.js';
-import { closePubSub } from './framework/redis/index.js';
-import { bootstrapLogging } from './framework/startup/logging.js';
-import { checkEnvironment, reportAppConfigWarnings } from './framework/startup/config-check.js';
-import { buildServerOptions } from './framework/http/server-options.js';
-import { registerBasePlugins } from './framework/http/plugins.js';
-import { createErrorHandler } from './framework/http/error-handler.js';
+import { closePubSub } from './framework/persistence/redis/index.js';
+import { bootstrapLogging } from './framework/lifecycle/startup/logging.js';
+import { checkEnvironment, reportAppConfigWarnings } from './framework/lifecycle/startup/config-check.js';
+import { buildServerOptions } from './framework/ingress/http/server-options.js';
+import { registerBasePlugins } from './framework/ingress/http/plugins.js';
+import { createErrorHandler } from './framework/ingress/http/error-handler.js';
 import { parseOriginList } from './utils/cors.js';
 import { parseTrustProxy, describeProxyTrustRisk, formatProxyTrustRisks } from './utils/proxy-trust.js';
 

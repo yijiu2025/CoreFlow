@@ -40,7 +40,7 @@ const fakeStore = {
   call: async fn => fn(fakeClient)
 };
 
-jest.unstable_mockModule('../../framework/redis/index.js', () => ({
+jest.unstable_mockModule('../../framework/persistence/redis/index.js', () => ({
   getStore: () => fakeStore,
   isRedisReady: () => true
 }));

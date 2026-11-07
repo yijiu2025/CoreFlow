@@ -2,9 +2,9 @@
 // - 内置命令：用户、角色、数据库、Redis、管理员、系统
 // - 应用插件：自动加载 src/app/<app>/cli/index.js
 import 'dotenv/config';
-import { loadAllModels, closeDb } from '../src/framework/db/models.js';
+import { loadAllModels, closeDb } from '../src/framework/persistence/db/models.js';
 import { loadAppCommands, mergeCommands } from './lib/plugin.js';
-import { printError, printInfo, createRl, ask, closeRl } from '../src/framework/cli/index.js';
+import { printError, printInfo, createRl, ask, closeRl } from '../src/framework/support/cli/index.js';
 
 // 导入内置命令模块
 import {
@@ -26,7 +26,7 @@ import { redisStatus, clearAllSessions, clearCacheByPattern, listRedisKeys } fro
 import { healthCheck, systemInfo, cleanupExpiredData } from './commands/system.js';
 
 import { listSuperadmins, setupSuperadmin, revokeSuperadmin } from './commands/admin.js';
-import { createLogger, logStdout } from '../src/framework/log/index.js';
+import { createLogger, logStdout } from '../src/framework/support/log/index.js';
 
 const log = createLogger('scripts.cli');
 
