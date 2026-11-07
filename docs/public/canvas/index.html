@@ -156,6 +156,8 @@
     min-width: 20px; text-align: right; flex: 0 0 auto; }
   #tourPanel .tp-row .f { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #tourPanel .tp-row .d { color: #c9a68c; font-size: 9.5px; flex: 0 0 auto; }
+  #tourPanel .tp-row.pending { opacity: .34; }
+  #tourPanel .tp-row.done .n { color: #c9a68c; }
   #tourPanel .tp-row.cur { background: #fdf0e6; border-left-color: #dd7533; }
   #tourPanel .tp-row.cur .f { color: #b8561c; font-weight: 600; }
   #tourPanel .tp-row.cur .n { color: #dd7533; }
@@ -1959,31 +1961,59 @@
     tourPanel.querySelector('[data-act="speed"]').style.visibility = boot.done ? 'hidden' : '';
   }
 
-  function tourRow(n, id, depth, isCur, step) {
-    const list = tourPanel.querySelector('.tp-list');
-    if (isCur) {
-      const prev = list.querySelector('.tp-row.cur');
-      if (prev) prev.classList.remove('cur');
-    }
+  function tourRow(n, id, depth, step) {
     const row = document.createElement('div');
-    row.className = 'tp-row' + (isCur ? ' cur' : '');
+    row.className = 'tp-row pending';
     row.dataset.fn = id;
     row.dataset.step = String(step);
     row.innerHTML = `<span class="n">${n}</span><span class="f" title="${escapeHtml(id)}">${escapeHtml(labelOfNode(id))}</span>` +
       `<span class="d">${depth ? 'L' + depth : ''}</span>`;
-    list.appendChild(row);
-    if (isCur) list.scrollTop = list.scrollHeight;
+    tourPanel.querySelector('.tp-list').appendChild(row);
+    return row;
   }
 
-  function rebuildRows() {
+  // 一开始就把整条流程铺满（不再「跑一个出一个」）：用户能先看到全貌，再照着跑
+  function renderAllRows() {
     const list = tourPanel.querySelector('.tp-list');
     list.innerHTML = '';
-    tourRow('起', boot.start, 0, boot.i === 0, 0);
-    for (let k = 0; k < boot.i; k++) {
+    boot.rows = [tourRow('起', boot.start, 0, 0)];
+    for (let k = 0; k < boot.steps.length; k++) {
       const st = boot.steps[k];
-      tourRow(k + 1, st.to, st.depth, k === boot.i - 1, k + 1);
+      boot.rows.push(tourRow(k + 1, st.to, st.depth, k + 1));
     }
-    list.scrollTop = list.scrollHeight;
+  }
+
+  // n = 当前走到第几步（0 表示还没开始）；已完成正常、未到达淡化、当前行高亮并滚到偏下位置
+  function markRows(n) {
+    if (!boot) return;
+    const rows = boot.rows;
+    if (!rows || !rows.length) return;
+    const upto = Math.max(0, Math.min(n, rows.length - 1));
+    const prev = boot.rowAt ?? 0;
+    if (Math.abs(upto - prev) <= 2) {
+      // 正常前进/后退一两步：只改涉及的那几行（149 行全量改样式每步都会触发重算）
+      for (let k = Math.min(prev, upto); k <= Math.max(prev, upto); k++) {
+        const r = rows[k];
+        r.classList.toggle('cur', k === upto);
+        r.classList.toggle('done', k < upto);
+        r.classList.toggle('pending', k > upto);
+      }
+    } else {
+      for (let k = 0; k < rows.length; k++) {
+        const r = rows[k];
+        r.classList.toggle('cur', k === upto);
+        r.classList.toggle('done', k < upto);
+        r.classList.toggle('pending', k > upto);
+      }
+    }
+    boot.rowAt = upto;
+    const row = rows[upto];
+    const list = tourPanel.querySelector('.tp-list');
+    if (row && list) {
+      const top = row.offsetTop - list.clientHeight * 0.62;
+      list.scrollTop = Math.max(0, Math.min(top, list.scrollHeight - list.clientHeight));
+    }
+    boot.i = n;
   }
 
   // 目标跑出视口才平移相机（避免每步都动、观感抖）。
@@ -2057,7 +2087,7 @@
     boot.phase = performance.now();
     tourFollow(st.to);
     drawEdges();
-    tourRow(boot.i, st.to, st.depth, true, boot.i);
+    markRows(boot.i);
     tourHead();
     return true;
   }
@@ -2076,7 +2106,11 @@
     boot.cur = last ? { from: last.from, to: last.to, ei: last.ei } : null;
     boot.phase = performance.now();
     markWalking(last?.to ?? null);
-    rebuildRows();
+    markRows(n);
+    // 从"已走完"回退时，副标题要恢复成链路说明
+    boot.subText = n >= boot.steps.length
+      ? `✅ 走完 ${boot.steps.length} 步 · 点任意一行可跳回那一步`
+      : boot.conf.subtitle(labelOfNode(boot.start));
     tourHead();
     drawEdges();
     if (last) tourFollow(last.to);
@@ -2095,14 +2129,8 @@
     clearTimeout(boot.timer);
     boot.paused = true; boot.done = true; boot.cur = null;
     markWalking(null);
-    const list = tourPanel.querySelector('.tp-list');
-    if (!list.querySelector('.tp-done')) {
-      const tip = document.createElement('div');
-      tip.className = 'tp-done';
-      tip.textContent = `✅ 走完 ${boot.steps.length} 步 · 点任意一行可跳回那一步`;
-      list.appendChild(tip);
-    }
-    list.scrollTop = list.scrollHeight;
+    markRows(boot.steps.length);
+    boot.subText = `✅ 走完 ${boot.steps.length} 步 · 点任意一行可跳回那一步`;
     tourHead();
     btnBoot.textContent = '▶ 启动';
     btnRequest.textContent = '▶ 请求';
@@ -2123,11 +2151,15 @@
     tourHead();
   }
 
+  // 点列表某一行：定位到那一步，并保持原来的播放/暂停状态
+  // （正在跑就接着往下跑；停着就停在那一行，方便细看）
   function tourGoTo(n) {
     if (!boot) return;
-    boot.paused = true;
+    const wasPlaying = !boot.paused && !boot.done;
     clearTimeout(boot.timer);
     tourRenderTo(n);
+    if (wasPlaying && !boot.done) { boot.paused = false; tourStep(); }
+    tourHead();
   }
 
   function showPicker() {
@@ -2183,9 +2215,9 @@
     };
     tourPanel.classList.add('on');
     tourPanel.classList.remove('picking');
-    tourPanel.querySelector('.tp-list').innerHTML = '';
     tourPanel.querySelector('[data-act="speed"]').textContent = SPEED_NAME[1];
-    tourRow('起', start, 0, true, 0);
+    renderAllRows();
+    markRows(0);
     btnBoot.textContent = '▶ 启动';
     btnRequest.textContent = '▶ 请求';
     const active = mode === 'boot' ? btnBoot : btnRequest;
