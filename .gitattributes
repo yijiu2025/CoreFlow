@@ -1,0 +1,45 @@
+# 行尾策略：仓库内容与检出结果**统一为 LF**
+#
+# 为什么是 LF（2026-11-07 定）：
+#   ① 部署目标是 Linux 容器 —— CRLF 的 .sh / Dockerfile 进容器会报
+#      `bad interpreter: /bin/sh^M`，这类故障在本地永远复现不出来；
+#   ② 仓库索引本来就是 LF（592 个文件里只有 5 个是 CRLF），LF 已是事实标准；
+#   ③ 工具链默认 LF：prettier 默认 endOfLine=lf，eslint 生态、Node 脚本都按 LF；
+#   ④ Windows 上的 CRLF 只是 `core.autocrlf=true` 的**检出转换**，不是仓库内容，
+#      它会让 `git diff` 反复输出 "LF will be replaced by CRLF" 噪音，
+#      并制造「工作区看着干净、字节却不同」的错觉。
+#
+# 判据：文本文件一律 LF；只有 Windows 专用脚本（cmd/bat）保留 CRLF。
+# 配置单一来源：本文件（git 层） + .editorconfig（编辑器层） + .prettierrc.json（格式化层）。
+* text=auto eol=lf
+
+# cmd.exe 对 LF 结尾的批处理会出错（尤其是 goto/label），必须 CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 二进制：不参与行尾转换、不做文本 diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.bmp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.7z binary
+*.xlsx binary
+*.xls binary
+*.docx binary
+*.pptx binary
+*.mp3 binary
+*.mp4 binary
+*.wav binary
+*.webm binary

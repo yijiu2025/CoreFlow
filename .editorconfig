@@ -1,0 +1,27 @@
+# 编辑器层行尾策略（与 .gitattributes / .prettierrc.json 保持一致）
+#
+# 单一来源说明：
+#   .gitattributes   → git 存什么、检出成什么（仓库层，权威）
+#   .editorconfig    → 编辑器新建/保存时写什么（IDE 层）
+#   .prettierrc.json → prettier 格式化后写什么（工具层）
+# 三者都指向 LF；改其中一个必须同步另外两个，否则会出现「编辑器写 CRLF、
+# prettier 又改回 LF」的来回抖动。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Markdown 的行尾双空格是硬换行语法，不能裁
+[*.md]
+trim_trailing_whitespace = false
+
+# Windows 专用脚本：cmd.exe 对 LF 批处理会出错
+[*.{cmd,bat}]
+end_of_line = crlf
+
+# PowerShell 允许 LF，但 Windows 工具链对它更宽容 CRLF；统一跟随仓库规则用 LF
