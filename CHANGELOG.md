@@ -7,6 +7,8 @@
 
 ## 未发布（Unreleased）
 
+## 2.34.0 — 2026-11-07
+
 ### 变更（v2.34.0 候选）
 
 - **feat(websocket)**：关闭宽限期与关闭码改为可配（`app_config.websocket.shutdownGraceMs` /
@@ -56,6 +58,7 @@
   `app.js` 只声明"关什么、按什么顺序"。
 - **docs(config)**：`app-config.js` 补全调优项使用指导（可配置项总表 / 合法范围 / 默认值出处 /
   失败行为 / 新增步骤）。
+
 
 ## 2.33.0 — 2026-11-07
 
