@@ -329,8 +329,8 @@ HTTP 全是 200、`/summary` 看起来一切正常 —— 因为当时**没有�
 
 | 文件         | 职责                                              | 关键导出                                                                            |
 | ------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| config.js    | 生效默认值（core 打底 + app 补自己的键）、IP 解析源、常量路径 | `DEFAULT_SECURITY_SETTINGS`, `DEFAULT_IP_APIS`, `CHALLENGE_SECRET`, `FIREWALL_FILE` |
-| panel.js     | **面板层**配置：展示偏好 / 节点定位（`showTrajectory`、`activeIpApi`） | `DEFAULT_PANEL_SETTINGS`（core 不含这两个键）                                        |
+| config.js    | 生效默认值（core 打底 + 面板层默认，`src/config` 显式写了的键优先）、IP 解析源、常量路径 | `DEFAULT_SECURITY_SETTINGS`, `DEFAULT_IP_APIS`, `CHALLENGE_SECRET`, `FIREWALL_FILE` |
+| panel.js     | **面板层内置默认**：展示偏好 / 节点定位（`showTrajectory`、`activeIpApi`），可被 `src/config/firewall_config.js` 覆盖 | `DEFAULT_PANEL_SETTINGS`（core 不含这两个键）                                        |
 
 ### data/ — 运行中数据
 

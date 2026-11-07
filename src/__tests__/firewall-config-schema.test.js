@@ -15,6 +15,7 @@ import { describe, it, expect } from '@jest/globals';
 import { DEFAULT_SECURITY_SETTINGS } from '../framework/ingress/firewall/config/defaults.js';
 import { DEFENSE_SPEC } from '../framework/ingress/firewall/config/schema.js';
 import { DEFAULT_SECURITY_SETTINGS as APP_SECURITY_SETTINGS } from '../app/firewall/config/config.js';
+import { applyPanelOverrides } from '../app/firewall/config/config.js';
 
 /** defense 下允许出现的键（= 持久化 schema，改这里等于改契约） */
 const DEFENSE_KEYS = [
@@ -95,7 +96,7 @@ describe('防火墙默认策略 · schema 契约', () => {
   it('app 层把展示类默认值补回来，合并结果仍是完整的三段形状', () => {
     // dao.js 从这里取初值 → 面板 GET /settings 的形状不能变（持久化 schema 冻结）
     expect(Object.keys(APP_SECURITY_SETTINGS).sort()).toEqual(['activeIpApi', 'defense', 'showTrajectory']);
-    expect(APP_SECURITY_SETTINGS.activeIpApi).toBe('sohu');
+    expect(APP_SECURITY_SETTINGS.activeIpApi).toBe('ipinfo');
     expect(APP_SECURITY_SETTINGS.showTrajectory).toBe(true);
     // defense 必须来自 core（同一份对象内容），不能在 app 层复制一份策略默认值
     expect(APP_SECURITY_SETTINGS.defense).toEqual(DEFAULT_SECURITY_SETTINGS.defense);
@@ -179,5 +180,47 @@ describe('路径级跳过规则的默认值', () => {
     // 前端产物路径：后端起的是 API，前端由 nginx/CDN 部署，core 不该知道这些路径
     expect('challengePagePaths' in d).toBe(false);
     expect('challengeAssetPrefixes' in d).toBe(false);
+  });
+});
+
+describe('面板层键的静态覆盖优先级', () => {
+  // 契约：**用户显式写的优先，非法才回落默认**
+  // 这里测的是纯函数（applyPanelOverrides），不依赖 src/config 里的实际内容 ——
+  // 否则用例会随用户本地配置变化而红/绿（那正是假绿的来源）。
+  const PANEL_DEFAULTS = { activeIpApi: 'ipapi', showTrajectory: true };
+
+  it('静态覆盖里没写面板键时，用面板层内置默认', () => {
+    const { settings, overridden } = applyPanelOverrides({ defense: {} }, PANEL_DEFAULTS);
+    expect(settings).toEqual(PANEL_DEFAULTS);
+    expect(overridden).toEqual([]);
+  });
+
+  it('静态覆盖写了就生效（不能是"写了却不生效"的静默）', () => {
+    const { settings, overridden } = applyPanelOverrides(
+      { defense: {}, activeIpApi: 'baidu', showTrajectory: false },
+      PANEL_DEFAULTS
+    );
+    expect(settings.activeIpApi).toBe('baidu');
+    expect(settings.showTrajectory).toBe(false);
+    expect(overridden.sort()).toEqual(['activeIpApi', 'showTrajectory']);
+  });
+
+  it('只写其中一个键时，另一个仍走内置默认（不做整体替换）', () => {
+    const { settings } = applyPanelOverrides({ defense: {}, showTrajectory: false }, PANEL_DEFAULTS);
+    expect(settings).toEqual({ activeIpApi: 'ipapi', showTrajectory: false });
+  });
+
+  it('不认识的顶层键不会被搬进面板层', () => {
+    const { settings, overridden } = applyPanelOverrides(
+      { defense: {}, rateLimitRequests: 1, activeIpApi: 'sohu' },
+      PANEL_DEFAULTS
+    );
+    expect(Object.keys(settings).sort()).toEqual(['activeIpApi', 'showTrajectory']);
+    expect(overridden).toEqual(['activeIpApi']);
+  });
+
+  it('不污染 defense（面板键只在顶层）', () => {
+    const { settings } = applyPanelOverrides({ defense: { maxConn: 7 }, activeIpApi: 'sohu' }, PANEL_DEFAULTS);
+    expect(settings.defense).toBeUndefined();
   });
 });

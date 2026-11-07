@@ -10,8 +10,9 @@
  *   ① 本文件                          core 保底值（改内置默认才动这里）
  *   ② src/config/firewall_config.js   服务器后端层的静态覆盖（只写要改的键，可缺失）
  *   ③ data/firewall_config.json   运行时覆盖（面板热改，数组整体替换）
- *   ④ src/app/firewall/config/panel.js 面板层默认值（展示偏好）：由 app 层合并进来，
+ *   ④ src/app/firewall/config/panel.js 面板层内置默认值（展示偏好）：由 app 层合并进来，
  *      **不属于 core 链** —— core 不认识也不读它，只在磁盘文件里遇到时原样透传。
+ *      但②里显式写了这些键时以②为准（用户写的优先，值不合法才回落④）。
  *
  * **只收防护策略**：一个键若没有任何 core 代码读取（例如面板开关
  * `showTrajectory`、节点定位数据源 `activeIpApi`），它就不属于这里 ——

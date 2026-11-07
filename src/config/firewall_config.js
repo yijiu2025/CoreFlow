@@ -6,11 +6,18 @@
  *   默认值 + 取值理由 → src/framework/ingress/firewall/config/defaults.js
  *   运行期热改（面板/JSON）→ data/firewall_config.json
  *
- * 可用键（顶层）：**只有 defense**（防护策略，core 与 app 都按它执行）
- *   ⚠️ `activeIpApi` / `showTrajectory` 属于 **firewall 应用**（控制台展示 + 节点定位），
- *      不在本文件：默认值在 src/app/firewall/config/panel.js（面板层），热改走面板
- *      （落到 data/firewall_config.json）。写在这里**会被 app 默认值覆盖**并打一条
- *      warn —— 见 src/app/firewall/config/config.js 的 strayPanelKeys 检查。
+ * 可用键（顶层）：**defense** + **activeIpApi / showTrajectory**
+ *   `defense`           防护策略（51 个键），core 与 app 都按它执行。
+ *   `activeIpApi`       面板「当前节点 IP」用哪个公网归属 API：
+ *                       sohu | ipinfo | ipapi | baidu（默认 ipinfo，见 src/app/firewall/config/panel.js）
+ *   `showTrajectory`    面板是否展示访问轨迹（默认 true）
+ *
+ *   ⚠️ 这两个面板层键**写在这里就生效**，优先级高于 panel.js 的内置默认值
+ *      （规则：用户显式写的一律优先，值不合法才回落默认并打 warn）。
+ *      运行期面板改过的值存在 data/firewall_config.json，**那一层优先级更高**
+ *      （热改 > 静态配置 > 内置默认）——想让本文件的设置说了算，先删掉
+ *      data/firewall_config.json 里对应的键。
+ *
  * defense 下的键（51 个）—— 分组与顺序和 `defaults.js`、`config/schema.js` 完全一致：
  *   ① 开关    enableFirewall（总开关）/ enableGlobalBlock / enableChallenge
  *   ② 名单    manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps
@@ -47,7 +54,8 @@
  *
  * 示例：
  *   const DEFAULT_SECURITY_SETTINGS = {
- *     defense: { rateLimitRequests: 1200, enableGeoFilter: true }
+ *     activeIpApi: 'ipinfo',                                       // 面板层键，写这里即生效
+ *     defense: { rateLimitRequests: 1200, enableGeoFilter: true }  // 防护策略
  *   };
  */
 const DEFAULT_SECURITY_SETTINGS = {};

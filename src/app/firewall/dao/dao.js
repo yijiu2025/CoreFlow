@@ -83,6 +83,15 @@ function initDao() {
       }
       log.info(`💾 [Firewall DAO] ${C.dim}已从文件恢复安全策略与节点数据${C.reset}`);
     } else {
+      // 文件缺失在**首次启动**是正常状态；但对已经跑过一段时间的部署，它意味着
+      // data/ 卷丢了或换了机器 —— 此时策略静默回到内置默认，而
+      // enableRateLimit / enableGeoFilter 在内置默认里是**关**的。
+      // 不阻断启动，但必须留痕：否则事后没人能解释「防护为什么变弱了」。
+      // 想要"卷丢了也不变弱"：把部署级必须开的策略写进 src/config/firewall_config.js（进 git）。
+      log.warn(
+        `⚠️ [Firewall DAO] ${C.yellow}未找到持久化配置 ${FIREWALL_FILE}${C.reset}，按内置默认策略运行` +
+          `（enableRateLimit / enableGeoFilter 默认关闭）。首次启动属正常；已有部署请检查 data/ 卷是否丢失`
+      );
       refreshServerNodeAuto().catch(err => {
         log.error(`❌ [Firewall DAO] ${C.red}节点初始化异常${C.reset}`, err);
       });
@@ -463,7 +472,9 @@ async function syncManualWhitelistToRedis() {
  * （ipapi.co），擅自切换等于把服务器 IP 发给用户没选的第三方。
  */
 async function refreshServerNodeAuto() {
-  const activeApiId = securitySettings.activeIpApi || 'sohu';
+  // 兜底不用字面量：跟随生效默认值（可能是 src/config/firewall_config.js 覆盖过的源），
+  // 否则用户把默认源换成 baidu 后，字段一旦缺失又会跳回旧源。
+  const activeApiId = securitySettings.activeIpApi || DEFAULT_SECURITY_SETTINGS.activeIpApi;
   const apiConfig = DEFAULT_IP_APIS.find(a => a.id === activeApiId) || DEFAULT_IP_APIS[0];
 
   const controller = new AbortController();

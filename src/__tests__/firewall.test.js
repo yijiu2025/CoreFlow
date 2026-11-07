@@ -25,7 +25,10 @@
  * @since 2026-08-17
  * @since 2026-09-15 重写为真身契约测试（🟡-7）
  */
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, afterAll } from '@jest/globals';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import Fastify from 'fastify';
 
 // ── 隔离副作用 ────────────────────────────────────────────────────────────────
@@ -59,6 +62,24 @@ jest.unstable_mockModule('../app/firewall/data/store.js', () => ({
   stopPersistTimer: () => {},
   flushPersist: async () => {}
 }));
+
+// ── 持久化文件改指临时目录 ────────────────────────────────────────────────────
+// `data/firewall_config.json` 是**运行期文件**（不进 git）：新克隆的仓库里它不存在，
+// 于是 dao.initDao 走 else 分支、不重新赋值 securitySettings —— 下面那条「initDao 被真正
+// 调用」的用例就会假红。把路径钉到临时目录后：① 用例自带 fixture，与机器状态无关；
+// ② 测试期间的防抖落盘也不会再写进仓库的 data/。
+const TMP_DIR = mkdtempSync(path.join(tmpdir(), 'fw-persist-'));
+const TMP_FIREWALL_FILE = path.join(TMP_DIR, 'firewall_config.json');
+
+jest.unstable_mockModule('../framework/ingress/firewall/config/persisted.js', () => ({
+  FIREWALL_FILE: TMP_FIREWALL_FILE,
+  // 真身这个导出给 05-firewall 启动期用；本套件不走生产编排，给个空实现即可
+  loadPersistedSettings: () => ({})
+}));
+
+afterAll(() => {
+  rmSync(TMP_DIR, { recursive: true, force: true });
+});
 
 // 两层分离：引擎经 framework 的 telemetry-sink 产生记录事件；store.js 被替身后，
 // 替身模块体（sink 注册）不会执行 —— 在此把 pushedRecords 桩显式注册进 sink。
@@ -514,6 +535,9 @@ describe('启动链路：initDao 真的被调用 / 安全管道只注册一次',
   // 从而改掉后续用例读到的 defense 值。
 
   it('注册 initFirewall 会真正加载磁盘配置（initDao 不再被漏掉）', async () => {
+    // fixture：文件存在（内容用空对象，只验证"读了并重新赋值"，不污染后续用例的策略值）
+    writeFileSync(TMP_FIREWALL_FILE, JSON.stringify({ securitySettings: {} }));
+
     const before = getSecuritySettings();
     const app = Fastify({ logger: false });
     try {

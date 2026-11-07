@@ -12,8 +12,9 @@ const log = createLogger('app.firewall.config.config');
 
 // 持久化路径的单一来源在 framework（防护核心启动期就要读它），这里只做 re-export。
 import { FIREWALL_FILE } from '../../../framework/ingress/firewall/config/persisted.js';
-// 生效默认值 = **core 默认 ← 面板层默认**：core 只含防护策略（defense），
-// 面板展示偏好（activeIpApi / showTrajectory）定义在 ./panel.js。
+// 生效默认值 = **core 保底 ← 面板层内置默认 ← src/config 静态覆盖**：
+// core 只含防护策略（defense）；面板展示偏好（activeIpApi / showTrajectory）的
+// 内置默认在 ./panel.js，但用户在 src/config/firewall_config.js 里写了就以那份为准。
 import { deepMerge } from '../../../framework/config/runtime.js';
 import { DEFAULT_SECURITY_SETTINGS as CORE_SECURITY_SETTINGS } from '../../../framework/ingress/firewall/config/defaults.js';
 import { DEFAULT_PANEL_SETTINGS } from './panel.js';
@@ -172,38 +173,65 @@ const DEFAULT_IP_APIS = [
   }
 ];
 
-const DEFAULT_IP_API = DEFAULT_IP_APIS.find(api => api.id === 'sohu');
+/** 面板层专有的顶层键（core 内置默认值里没有它们，见 framework/.../config/defaults.js） */
+const PANEL_OWNED_KEYS = ['activeIpApi', 'showTrajectory'];
+
+/**
+ * 叠加「静态覆盖里显式写的面板层键」
+ *
+ * 优先级（**用户写的一律优先，非法才回落默认**）：
+ *   面板层内置默认（./panel.js） ← `src/config/firewall_config.js` 里显式写的键
+ *
+ * 为什么可以这样判断来源：core 内置默认值（`FIREWALL_DEFAULTS`）只有 `defense.*`，
+ * 面板层键**只可能**来自静态覆盖，因此「core 侧存在该键」= 用户显式写了它。
+ * 非法值（枚举外的 activeIpApi、非布尔的 showTrajectory）在
+ * `framework/ingress/firewall/config/defaults.js` 的 `sanitizeSecuritySettings`
+ * 阶段就被丢弃并告警，所以走到这里的值一定是校验过的 —— 天然满足「不能用时才回默认」。
+ *
+ * @param {object} coreSettings - core 默认值（已含静态覆盖、已过校验）
+ * @param {object} panelDefaults - 面板层内置默认值
+ * @returns {{settings: object, overridden: string[]}} 叠加后的面板层值 + 被覆盖的键名
+ */
+function applyPanelOverrides(coreSettings, panelDefaults) {
+  const overridden = {};
+  for (const key of PANEL_OWNED_KEYS) {
+    if (Object.hasOwn(coreSettings, key)) overridden[key] = coreSettings[key];
+  }
+  return { settings: { ...panelDefaults, ...overridden }, overridden: Object.keys(overridden) };
+}
+
+const PANEL_MERGE = applyPanelOverrides(CORE_SECURITY_SETTINGS, DEFAULT_PANEL_SETTINGS);
+if (PANEL_MERGE.overridden.length > 0) {
+  const detail = PANEL_MERGE.overridden.map(k => `${k}=${JSON.stringify(PANEL_MERGE.settings[k])}`).join(', ');
+  log.info(`[Firewall] 面板层键已按 src/config/firewall_config.js 覆盖: ${detail}`);
+}
 
 /**
  * 默认安全策略矩阵（**本 app 的生效默认值**）
  *
- * `deepMerge(core 默认, 面板层默认)` —— 方向是「core 打底、面板层补自己的键」：
+ * `deepMerge(core 默认, 面板层值)` —— 方向是「core 打底、面板层补自己的键」：
  *   - `defense` 只有 core 有（51 个防护参数），面板层不复制一份；
- *   - `activeIpApi` / `showTrajectory` 只有面板层有（./panel.js），因此一定落到生效值里。
- * 面板层的键**以面板层为准**：core 侧即便出现同名键（例如有人误写进
- * `src/config/firewall_config.js`），也不会覆盖面板值，且下面会告警留痕 ——
- * 不允许「写了却不生效」的静默。
+ *   - `activeIpApi` / `showTrajectory` 由 `applyPanelOverrides` 决定：
+ *     内置面板默认，除非 `src/config/firewall_config.js` 显式写了（写了的优先）。
  *
- * 消费方：`dao.js` 以它为初值，再叠磁盘 JSON；因此面板 GET /settings 拿到的
- * 仍是 `{ activeIpApi, showTrajectory, defense }` 这一完整形状（持久化 schema 未变）。
+ * 消费方：`dao.js` 以它为初值，再叠磁盘 JSON（运行期热改 > 静态配置 > 内置默认）；
+ * 因此面板 GET /settings 拿到的仍是 `{ activeIpApi, showTrajectory, defense }`
+ * 这一完整形状（持久化 schema 未变）。
  */
-const DEFAULT_SECURITY_SETTINGS = deepMerge(CORE_SECURITY_SETTINGS, DEFAULT_PANEL_SETTINGS);
+const DEFAULT_SECURITY_SETTINGS = deepMerge(CORE_SECURITY_SETTINGS, PANEL_MERGE.settings);
 
-/** 面板层专有的顶层键（core 不该有） */
-const PANEL_OWNED_KEYS = ['activeIpApi', 'showTrajectory'];
-
-// core 侧出现面板层键 = 有人把展示配置当成了防护策略。值会被面板层默认值覆盖，
-// 所以必须喊一声：否则「我在 src/config/firewall_config.js 里改了它」会变成静默失效。
-const strayPanelKeys = PANEL_OWNED_KEYS.filter(key => key in CORE_SECURITY_SETTINGS);
-if (strayPanelKeys.length) {
-  log.warn(
-    `⚠️ [Firewall] ${strayPanelKeys.join(' / ')} 属于面板层（控制台展示），` +
-      `core 侧写的值已忽略；请改 src/app/firewall/config/panel.js 或走面板热改`
-  );
-}
+/**
+ * 生效默认 IP 数据源的对象（`activeIpApi` 对应的那一项）
+ *
+ * 必须跟着 `DEFAULT_SECURITY_SETTINGS.activeIpApi` 走，不能写死 id：
+ * 否则静态覆盖把源换成 ipinfo/baidu 时，这里仍指向旧源，两处默认值漂移。
+ */
+const DEFAULT_IP_API =
+  DEFAULT_IP_APIS.find(api => api.id === DEFAULT_SECURITY_SETTINGS.activeIpApi) || DEFAULT_IP_APIS[0];
 
 export { FIREWALL_FILE, CHALLENGE_SECRET, DEFAULT_SERVER_NODE, DEFAULT_IP_APIS, DEFAULT_IP_API };
 export { sourceUnavailable };
+export { applyPanelOverrides };
 
 /**
  * 默认安全策略矩阵（含 app 层展示类默认值，定义见 ./defaults.js 与
