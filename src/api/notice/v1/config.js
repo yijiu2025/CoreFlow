@@ -8,6 +8,9 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import noticeDao from '../../../app/notice/dao/notice.js';
 import emailService from '../../../framework/notice/services/email.js';
 
+/** SMTP 授权码在读接口里的掩码形态（保存时命中此值 = 未修改，跳过更新） */
+const SMTP_PASS_MASK = '******';
+
 async function registerConfigRoutes(fastify, opts) {
   registerGroupMetadata({
     name: 'config',
@@ -34,6 +37,10 @@ async function registerConfigRoutes(fastify, opts) {
 
   /**
    * GET /config/:type — 获取特定通道的配置
+   *
+   * 🔴 SMTP 授权码**不回显**：读接口把 pass 替换为掩码（与 password 字段的
+   * 常规处理一致）。真实值只在服务端发信时由 emailService 从 DAO 读取，
+   * 前端永远不需要拿到明文 —— 否则管理面板的 XSS / 会话被盗会直接泄露邮箱凭据。
    */
   registerSecureRoute(fastify, {
     name: 'getConfig',
@@ -43,12 +50,18 @@ async function registerConfigRoutes(fastify, opts) {
     handler: async (request, reply) => {
       const { type } = request.params;
       const config = await noticeDao.getConfig(type);
+      if (type === 'email' && config && typeof config.pass === 'string' && config.pass.length > 0) {
+        return reply.result.success('获取成功', { ...config, pass: SMTP_PASS_MASK });
+      }
       return reply.result.success('获取成功', config);
     }
   });
 
   /**
    * POST /config/:type — 保存特定通道的配置
+   *
+   * 掩码回写保护：前端把读到的表单原样提交时，pass 是掩码而不是新密码 ——
+   * 此时不更新密码（保持库里真实值），只有用户显式输入了新值才落库。
    */
   registerSecureRoute(fastify, {
     name: 'saveConfig',
@@ -57,7 +70,10 @@ async function registerConfigRoutes(fastify, opts) {
     url: '/config/:type',
     handler: async (request, reply) => {
       const { type } = request.params;
-      const config = request.body;
+      const config = { ...(request.body || {}) };
+      if (type === 'email' && config.pass === SMTP_PASS_MASK) {
+        delete config.pass;
+      }
       await noticeDao.saveConfig(type, config);
       return reply.result.success('配置已保存');
     }

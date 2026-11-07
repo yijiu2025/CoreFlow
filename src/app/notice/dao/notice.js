@@ -43,20 +43,11 @@ const DEFAULT_TEMPLATES = {
     <p style="color:#666;">您的账号已成功注册，开始使用吧。</p>
   </div>
 </div>`
-  },
-  password_reset: {
-    name: '密码重置',
-    subject: '密码重置请求',
-    content: `<div style="padding:20px;font-family:sans-serif;">
-  <div style="background:#fff;padding:40px;border-radius:12px;max-width:500px;margin:0 auto;">
-    <h2 style="color:#E74C3C;">密码重置</h2>
-    <p style="color:#666;">您请求了密码重置，新密码为：</p>
-    <div style="background:#FFF3F3;padding:15px;text-align:center;font-size:24px;font-weight:bold;color:#E74C3C;border-radius:8px;">
-      {newPassword}
-    </div>
-  </div>
-</div>`
   }
+  // 🔴 已移除 password_reset（"新密码为：{newPassword}"）默认模板：
+  // 本仓的重置流程是验证码/链接模式（前端带 RSA 密文调 reset 接口），
+  // **从不**通过邮件下发明文新密码 —— 留着这个模板就是给未来调用方
+  // 埋"把明文密码发进邮箱"的坑。真要实现类似能力，应发重置链接而非密码本体。
 };
 
 class NoticeDao {
