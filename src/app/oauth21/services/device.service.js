@@ -181,11 +181,19 @@ class DeviceService {
   /**
    * 渲染设备验证页面 HTML
    *
-   * 读取 device.html 模板，转义 user_code 后替换占位符（防 XSS）。
+   * 读取 device.html 模板，替换三类占位符：
+   * - `{{USER_CODE}}`      query 里的 user_code（HTML 转义，防 XSS）
+   * - `{{AUTHORIZE_URL}}`  授权端点真实路径（JSON.stringify 成合法 JS 字符串字面量，
+   *                        并转义 `<` 防 `</script>` 逃逸；来自路由自身 URL，
+   *                        随部署前缀走 —— 页面内不再硬编码 `/device/authorize`）
+   * - `{{NONCE}}`          本次响应的 CSP nonce（与响应头 `devicePageCsp(nonce)` 配对）
    * @param {string} userCode - 原始 user_code（来自 query）
+   * @param {object} [options]
+   * @param {string} [options.authorizeUrl] - POST 授权端点的完整路径；缺省按 issuer 推导
+   * @param {string} [options.nonce] - CSP nonce（响应头与脚本标签必须同值）
    * @returns {Promise<string>} HTML 字符串
    */
-  async renderDevicePage(userCode) {
+  async renderDevicePage(userCode, { authorizeUrl, nonce } = {}) {
     // 转义 HTML 特殊字符，防止 XSS
     const safe = (userCode ?? '').replace(
       /[&<>"']/g,
@@ -199,9 +207,41 @@ class DeviceService {
         })[c]
     );
 
+    // 授权端点注入 JS 字符串字面量位置：JSON.stringify 保证引号/反斜杠安全，
+    // 再把 `<` 转成 \u003c，杜绝 `</script>` 提前闭合内联脚本
+    const safeUrl = JSON.stringify(String(authorizeUrl || `${config.server.issuer}/device/authorize`)).replace(
+      /</g,
+      '\\u003c'
+    );
+
     const html = await loadDeviceTemplate();
-    return html.replace('{{USER_CODE}}', safe);
+    return html
+      .replace('{{USER_CODE}}', safe)
+      .replace('{{AUTHORIZE_URL}}', safeUrl)
+      .replace('{{NONCE}}', nonce || '');
   }
 }
 
-export { DeviceService };
+/**
+ * 设备授权页的**专属 CSP**（每次响应一个 nonce，只放行本页那一支脚本）
+ *
+ * 为什么必须单独给：全局 helmet 策略是 `script-src 'self'`（生产环境），而本页的
+ * 提交脚本是**内联**的 —— 不放行就整段脚本被拦，"Authorize Device" 按钮点了没有任何
+ * 反应（表单退化为原生 GET 提交回本页）。开发环境 helmet 关 CSP，这个坑本地看不见。
+ *
+ * @param {string} nonce 本次响应的一次性 nonce
+ * @returns {string} Content-Security-Policy 头的值
+ */
+function devicePageCsp(nonce) {
+  return [
+    "default-src 'none'",
+    `script-src 'nonce-${nonce}'`,
+    "style-src 'unsafe-inline'",
+    "connect-src 'self'",
+    "form-action 'self'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'"
+  ].join('; ');
+}
+
+export { DeviceService, devicePageCsp };

@@ -120,13 +120,13 @@
       </form>
       <div id="msg"></div>
     </div>
-    <script>
+    <script nonce="{{NONCE}}">
       document.getElementById('f').addEventListener('submit', async e => {
         e.preventDefault();
         const code = document.getElementById('uc').value;
         const m = document.getElementById('msg');
         try {
-          const r = await fetch('/device/authorize', {
+          const r = await fetch({{AUTHORIZE_URL}}, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_code: code })

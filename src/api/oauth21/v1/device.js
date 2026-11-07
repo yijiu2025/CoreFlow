@@ -12,8 +12,9 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
+import crypto from 'node:crypto';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
-import { DeviceService } from '../../../app/oauth21/services/device.service.js';
+import { DeviceService, devicePageCsp } from '../../../app/oauth21/services/device.service.js';
 
 const deviceService = new DeviceService();
 
@@ -103,6 +104,10 @@ async function registerDeviceRoutes(fastify) {
    * GET /device — 用户验证页面
    *
    * 用户在浏览器中打开此页面，输入 user_code 完成设备授权。
+   *
+   * 专属 CSP 必须在响应头里配对下发：本页提交脚本是内联的，生产全局 helmet 策略
+   * `script-src 'self'` 会拦掉它（与防火墙挑战页 2026-11-05 那次同类事故）。
+   * 授权端点路径取**本页真实 URL** + `/authorize`（同组 POST 路由），随部署前缀走。
    */
   registerSecureRoute(fastify, {
     name: 'devicePage',
@@ -114,7 +119,11 @@ async function registerDeviceRoutes(fastify) {
       rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'oauth-device' }
     },
     handler: async (request, reply) => {
-      const html = await deviceService.renderDevicePage(request.query.user_code);
+      const nonce = crypto.randomBytes(16).toString('hex');
+      const authorizeUrl = `${request.url.split('?')[0]}/authorize`;
+      const html = await deviceService.renderDevicePage(request.query.user_code, { authorizeUrl, nonce });
+      reply.header('Content-Security-Policy', devicePageCsp(nonce));
+      reply.header('Cache-Control', 'no-store');
       reply.type('text/html');
       return html;
     }
