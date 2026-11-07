@@ -123,20 +123,43 @@
     box-shadow: 0 4px 18px rgba(25,40,70,.14); padding: 7px 16px; font-size: 12px; color: var(--text);
     white-space: nowrap; pointer-events: none; }
   #chainChip b { color: var(--accent); }
-  #bootBar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: none; z-index: 24;
-    align-items: center; gap: 10px; max-width: min(760px, 92%);
-    background: rgba(255,255,255,.97); border: 1px solid #edd9c8; border-radius: 22px;
-    box-shadow: 0 6px 24px rgba(25,40,70,.16); padding: 8px 10px 8px 16px; font-size: 12px; color: var(--text); }
-  #bootBar.on { display: flex; }
-  #bootBar .bb-ico { color: #dd7533; font-size: 13px; }
-  #bootBar .bb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #bootBar .bb-text b { color: #b8561c; }
-  #bootBar .bb-text .bb-n { color: var(--text2); font-variant-numeric: tabular-nums; margin-left: 6px; }
-  #bootBar .bb-prog { position: relative; width: 72px; height: 4px; border-radius: 2px; background: #f1e4d9; overflow: hidden; flex: 0 0 auto; }
-  #bootBar .bb-prog i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #dd7533; border-radius: 2px; transition: width .18s linear; }
-  #bootBar button { border: 1px solid var(--line); background: #fff; color: var(--text2); border-radius: 12px;
-    padding: 3px 10px; font: inherit; font-size: 11.5px; cursor: pointer; flex: 0 0 auto; }
-  #bootBar button:hover { color: #c05e1f; border-color: #dd7533; }
+  /* 演示运行列表：右侧半透明悬浮窗 */
+  #tourPanel { position: absolute; right: 14px; top: 62px; width: 286px; z-index: 24; display: none;
+    max-height: calc(100% - 84px); flex-direction: column;
+    background: rgba(255,255,255,.86); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+    border: 1px solid #edd9c8; border-radius: 14px; box-shadow: 0 10px 30px rgba(25,40,70,.16);
+    font-size: 12px; color: var(--text); overflow: hidden; }
+  #tourPanel.on { display: flex; }
+  #tourPanel .tp-head { display: flex; align-items: center; gap: 7px; padding: 10px 12px 6px; }
+  #tourPanel .tp-ico { font-size: 13px; }
+  #tourPanel .tp-title { font-weight: 600; color: #b8561c; }
+  #tourPanel .tp-count { margin-left: auto; color: var(--text2); font-size: 11px; font-variant-numeric: tabular-nums; }
+  #tourPanel .tp-sub { padding: 0 12px 7px; color: var(--text2); font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #tourPanel .tp-bar { position: relative; height: 3px; margin: 0 12px; border-radius: 2px; background: #f1e4d9; overflow: hidden; }
+  #tourPanel .tp-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #dd7533; transition: width .2s linear; }
+  #tourPanel .tp-acts { display: flex; gap: 5px; padding: 9px 12px 8px; border-bottom: 1px solid rgba(237,217,200,.7); }
+  #tourPanel .tp-acts button { flex: 1; border: 1px solid var(--line); background: #fff; color: var(--text2);
+    border-radius: 8px; padding: 3px 0; font: inherit; font-size: 11px; cursor: pointer; }
+  #tourPanel .tp-acts button:hover { color: #c05e1f; border-color: #dd7533; }
+  #tourPanel .tp-list { overflow-y: auto; padding: 4px 0 6px; scrollbar-width: thin; }
+  #tourPanel .tp-pick { display: none; overflow-y: auto; padding: 4px 0 6px; scrollbar-width: thin; }
+  #tourPanel.picking .tp-list { display: none; }
+  #tourPanel.picking .tp-pick { display: block; }
+  #tourPanel .tp-pick .pk-head { padding: 2px 12px 6px; color: var(--text2); font-size: 10.5px; }
+  #tourPanel .tp-row.pick .f { color: #3d4859; }
+  #tourPanel .tp-row.pick:hover .f { color: #b8561c; }
+  #tourPanel .tp-row { display: flex; align-items: baseline; gap: 6px; padding: 3px 12px 3px 10px;
+    cursor: pointer; border-left: 2px solid transparent; }
+  #tourPanel .tp-row:hover { background: rgba(253,240,230,.9); }
+  #tourPanel .tp-row .n { color: #b3bcc9; font-size: 10px; font-variant-numeric: tabular-nums;
+    min-width: 20px; text-align: right; flex: 0 0 auto; }
+  #tourPanel .tp-row .f { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #tourPanel .tp-row .d { color: #c9a68c; font-size: 9.5px; flex: 0 0 auto; }
+  #tourPanel .tp-row.cur { background: #fdf0e6; border-left-color: #dd7533; }
+  #tourPanel .tp-row.cur .f { color: #b8561c; font-weight: 600; }
+  #tourPanel .tp-row.cur .n { color: #dd7533; }
+  #tourPanel .tp-done { padding: 7px 12px; color: #b8561c; font-size: 11px; }
   /* 当前正在执行的函数：脉动一次 */
   .fn-node.walking { box-shadow: 0 0 0 2px #dd7533, 0 0 16px rgba(221,117,51,.5) !important; z-index: 6; }
   .fn-node.walking .nn { color: #b8561c; }
@@ -402,9 +425,10 @@
     <button data-k="log" class="on" title="调用日志实例 log.info / log.warn 等">日志</button>
     <button data-k="boot" class="on" title="后端启动时按顺序加载的 loader 链（runEngine → registry/00…10）">启动链</button>
   </div>
-  <button class="btn boot-btn" id="btnBoot" title="沿调用链演示后端启动过程（Esc 停止）">▶ 启动演示</button>
-  <button class="btn" id="btnFit">适应视图 (F)</button>
-  <button class="btn" id="btnReset">重置布局</button>
+  <button class="btn boot-btn" id="btnBoot" title="演示后端启动过程：createApp → 11 个 loader → 各自依赖（Esc 停止）">▶ 启动</button>
+  <button class="btn boot-btn" id="btnRequest" title="演示一次请求的处理链路：登录 handler → 校验 → 会话 → 审计 → 存储（Esc 停止）">▶ 请求</button>
+  <button class="btn" id="btnFit" title="适应视图 (F)">⤢ 适应</button>
+  <button class="btn" id="btnReset" title="清空拖动偏移，恢复自动排版">↺ 重置</button>
   <span id="stats"></span>
 </header>
 <div id="main">
@@ -424,15 +448,28 @@
     <canvas id="edges"></canvas>
     <canvas id="trace"></canvas>
     <div id="chainChip"></div>
-    <div id="bootBar">
-      <span class="bb-ico">▶</span>
-      <span class="bb-text"></span>
-      <span class="bb-prog"><i></i></span>
-      <button data-act="pause">暂停</button>
-      <button data-act="speed">慢速</button>
-      <button data-act="follow" title="把视图移回当前步骤">⌖ 居中</button>
-      <button data-act="stop">停止</button>
-    </div>
+    <aside id="tourPanel">
+      <div class="tp-head">
+        <span class="tp-ico">🚀</span>
+        <span class="tp-title">启动流程</span>
+        <span class="tp-count">0/0</span>
+      </div>
+      <div class="tp-sub"></div>
+      <div class="tp-bar"><i></i></div>
+      <div class="tp-acts">
+        <button data-act="prev" title="上一步（←）">◀ 上一步</button>
+        <button data-act="next" title="下一步（→）">下一步 ▶</button>
+      </div>
+      <div class="tp-acts">
+        <button data-act="pause">暂停</button>
+        <button data-act="speed" title="切换速度">正常</button>
+        <button data-act="follow" title="把视图移回当前步骤">⌖</button>
+        <button data-act="pick" title="换一条链路">⇄</button>
+        <button data-act="stop" title="停止">■</button>
+      </div>
+      <div class="tp-list"></div>
+      <div class="tp-pick"></div>
+    </aside>
     <div id="detail"><button id="detailClose" title="关闭 (Esc)">×</button><div id="detailBody"></div></div>
     <div id="fmodal"><div class="fcard" id="fcard"></div></div>
     <div id="hint">单双击=高亮/详情 · 拖标题栏或框边=移动整块（自动保存）· 空格/中键拖动=平移画布 · 拖节点=微调位置</div>
@@ -620,6 +657,9 @@
 
   function build() {
     // 可重入：模块折叠/展开后清空状态整体重排
+    // 演示进行中：先把"已点亮"的边记成 f>t 的 key，重建后还原 —— edges 是新建对象，lit 会丢
+    const litKeys = new Set();
+    for (const e of edges) if (e.lit) litKeys.add(e.f + '>' + e.t);
     edges.length = 0; outL.clear(); inL.clear();
     fnPos.clear(); boxPos.clear(); moduleBounds.clear(); folderBounds.clear();
     world.classList.remove('dim'); chainChip.style.display = 'none'; detail.style.display = 'none';
@@ -882,6 +922,7 @@
     applySavedOffsets();   // 恢复上次拖动保存的位置
     syncContainers();      // 文件夹包围盒按最终位置重算（单独拖过文件框时会跟着长大）
     refreshApiBox();       // 外框按最终模块位置包住
+    if (litKeys.size) for (const e of edges) { if (litKeys.has(e.f + '>' + e.t)) e.lit = true; }
     bootRepaintLit();      // 演示进行中被折叠/展开时，补回已点亮的节点
     drawEdges();
   }
@@ -1686,7 +1727,7 @@
   }
   const chainChip = $('#chainChip');
   function select(id, withDetail = false) {
-    if (boot) bootStop(true);   // 点节点看详情时终止演示，两套高亮别互相覆盖
+    if (boot) tourStop();   // 点节点看详情时结束演示，两套高亮别互相覆盖
     clearSel();
     world.classList.add('dim');
     const idxs = nodeEdges.get(id) ?? [];
@@ -1765,16 +1806,46 @@
     drawEdges();
   }
   // ==========================================================
-  // 启动演示（跑马灯）：从 createApp 出发，沿真实调用边深度优先走一遍，
-  // 电流一样一步步点亮「后端启动时路过的函数」，边亮 + 节点脉动 + 相机跟随。
+  // 演示（跑马灯）：沿真实调用边一步步点亮「路上经过的函数」，
+  // 右侧半透明面板同步列出运行列表；支持选链路、上一步/下一步、点行跳到某一步。
+  //   boot    后端启动：createApp → 11 个 loader → 各自依赖
+  //   request 一次请求：任一 api handler → 校验 → 会话 → 审计 → 存储
   // ==========================================================
   const traceCanvas = $('#trace');
   const tctx = traceCanvas.getContext('2d');
-  const bootBar = $('#bootBar');
+  const tourPanel = $('#tourPanel');
   const btnBoot = $('#btnBoot');
-  const BOOT_SPEEDS = [520, 260, 120];              // 慢 / 正常 / 快（毫秒/步）
-  const BOOT_SPEED_NAME = ['慢速', '正常', '快速'];
-  let boot = null;
+  const btnRequest = $('#btnRequest');
+  const SPEEDS = [1000, 600, 320];                  // 慢 / 正常 / 快（毫秒/步）
+  const SPEED_NAME = ['慢速', '正常', '快速'];
+  const KIND_ORDER = { boot: 0, import: 1, local: 2, ref: 3, guess: 4 };
+  let boot = null;              // 当前演示会话
+  let lastReqStart = null;      // 上次选过的请求链路起点
+
+  function findFn(name, fileRe) {
+    const all = [...fnById.values()];
+    return (all.find((f) => f.name === name && (!fileRe || fileRe.test(f.file))) ?? all.find((f) => f.name === name))?.id ?? null;
+  }
+
+  const TOUR_MODES = {
+    boot: {
+      icon: '🚀', title: '启动流程',
+      start: () => findFn('createApp', /^app\.js$/),
+      subtitle: () => 'createApp 装配 → registry 11 个 loader → 各自依赖',
+      limit: 260, maxDepth: 0,
+      kinds: ['boot', 'import', 'local', 'ref', 'guess'],
+      zoom: 0.45,
+    },
+    request: {
+      icon: '🌐', title: '请求链路',
+      start: () => lastReqStart ?? findFn('login', /oauth21\/v1\/auth\/login\.js$/),
+      subtitle: (n) => `一次请求进入 ${n} 之后依次调用的函数 · 层序展开（最多 5 层）`,
+      // 只走"真实调用"三类，跳过 guess（跨文件同名推断噪音大，会把链路带偏）
+      limit: 70, maxDepth: 5,
+      kinds: ['import', 'local', 'ref'],
+      zoom: 0.55,
+    },
+  };
 
   function sizeTrace() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1784,46 +1855,66 @@
     tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  // 起点：app.js 的 createApp（根 index.js 不在 src/ 扫描范围内，createApp 才是装配枢纽）
-  function bootStartNode() {
-    const all = [...fnById.values()];
-    return (all.find((f) => f.name === 'createApp' && f.file === 'app.js') ?? all.find((f) => f.name === 'createApp'))?.id ?? null;
-  }
-
-  // 走线优先级：启动链 > 跨文件 import > 同文件 > 引用 > 推断；同级按文件+行号，读起来像执行顺序
-  const BOOT_KIND_ORDER = { boot: 0, import: 1, local: 2, ref: 3, guess: 4 };
-  function bootChildren(id) {
+  // 子节点：先按边类型（真实调用 > 推断），同级按文件+行号，读起来像执行顺序
+  function tourChildren(id, kinds) {
+    const allow = new Set(kinds);
     const list = [];
     for (const i of nodeEdges.get(id) ?? []) {
       const e = edges[i];
-      if (e.f !== id) continue;
-      if (!(e.k in BOOT_KIND_ORDER)) continue;   // 跳过 var / env / log：它们不是"路过的函数"
+      if (e.f !== id || !allow.has(e.k)) continue;
       const tgt = fnById.get(e.t);
-      if (!tgt) continue;                        // file: / var: 目标不参与
-      list.push({ i, tgt, order: BOOT_KIND_ORDER[e.k] });
+      if (!tgt) continue;                     // file: / var: 目标不参与
+      list.push({ i, tgt, o: KIND_ORDER[e.k] });
     }
-    list.sort((a, b) => a.order - b.order
+    list.sort((a, b) => a.o - b.o
       || `${a.tgt.file}#${String(a.tgt.line).padStart(6, '0')}`.localeCompare(`${b.tgt.file}#${String(b.tgt.line).padStart(6, '0')}`));
     return list;
   }
 
-  function buildBootSteps(limit = 260) {
-    const start = bootStartNode();
-    if (!start) return { start: null, steps: [] };
+  // 层序展开（BFS）：启动是"一层层装配"，请求是"一层层下沉"，都比 DFS 更像真实时序
+  function buildTourSteps(mode, startId) {
+    const conf = TOUR_MODES[mode];
+    const start = startId ?? conf.start();
+    if (!start) return { conf, start: null, steps: [] };
     const seen = new Set([start]);
     const steps = [];
     const queue = [{ id: start, depth: 0 }];
-    while (queue.length && steps.length < limit) {
+    while (queue.length && steps.length < conf.limit) {
       const { id, depth } = queue.shift();
-      for (const c of bootChildren(id)) {
-        if (steps.length >= limit) break;
-        if (seen.has(c.tgt.id)) continue;   // 已点过的不再重复跑，画面是一棵"生长"的树
+      if (conf.maxDepth && depth >= conf.maxDepth) continue;
+      for (const c of tourChildren(id, conf.kinds)) {
+        if (steps.length >= conf.limit) break;
+        if (seen.has(c.tgt.id)) continue;     // 已点过的不重复跑，画面是一棵"生长"的树
         seen.add(c.tgt.id);
         steps.push({ from: id, to: c.tgt.id, ei: c.i, depth: depth + 1 });
         queue.push({ id: c.tgt.id, depth: depth + 1 });
       }
     }
-    return { start, steps };
+    return { conf, start, steps };
+  }
+
+  // 请求链路的候选：api 域里出边 >=2 的处理函数，按 BFS 规模排序（链路最长的排前面）
+  let reqCandCache = null;
+  function requestCandidates() {
+    if (reqCandCache) return reqCandCache;
+    // 候选 = api 域里每个文件出边最多的函数（排除 register*/配置同步这类非请求入口）。
+    // 不能按"出边多"预筛再算：像 login 这种只调一个下游、但链路很深的会被漏掉，
+    // 所以直接对所有文件代表算一次 BFS 规模（结果缓存，只在首次打开面板时算）。
+    const pool = [...fnById.values()].filter((f) =>
+      f.file.startsWith('api/') && !/^register/i.test(f.name) && f.kind !== 'class'
+      && !/^(load|sync|merge|start|stop)[A-Z]/.test(f.name));
+    const byFile = new Map();
+    for (const f of pool) {
+      const deg = (nodeEdges.get(f.id) ?? []).filter((i) => edges[i].f === f.id).length;
+      const prev = byFile.get(f.file);
+      if (!prev || deg > prev.deg) byFile.set(f.file, { f, deg });
+    }
+    reqCandCache = [...byFile.values()]
+      .map((x) => ({ ...x, size: buildTourSteps('request', x.f.id).steps.length }))
+      .filter((x) => x.size >= 6)                    // 太短的链路没有演示价值
+      .sort((a, b) => b.size - a.size || a.f.name.localeCompare(b.f.name))
+      .slice(0, 10);
+    return reqCandCache;
   }
 
   // 贝塞尔 / 折线上的取点（k ∈ [0,1] 按弧长）
@@ -1853,19 +1944,51 @@
     return { x: pts[pts.length - 1][0], y: pts[pts.length - 1][1] };
   }
 
-  function bootUpdateBar() {
+  // ---------- 右侧面板 ----------
+  function tourHead() {
     if (!boot) return;
     const i = Math.min(boot.i, boot.steps.length);
-    const st = boot.steps[Math.max(0, i - 1)];
-    const txt = st ? `${labelOfNode(st.from)} → ${labelOfNode(st.to)}` : '准备中';
-    bootBar.querySelector('.bb-text').innerHTML =
-      `🚀 启动演示 · <b>${escapeHtml(txt)}</b><span class="bb-n">${i}/${boot.steps.length} · 第 ${st?.depth ?? 1} 层</span>`;
-    bootBar.querySelector('.bb-prog i').style.width = Math.round((i / Math.max(1, boot.steps.length)) * 100) + '%';
-    bootBar.querySelector('[data-act="pause"]').textContent = boot.paused ? '继续' : '暂停';
+    tourPanel.querySelector('.tp-ico').textContent = boot.conf.icon;
+    tourPanel.querySelector('.tp-title').textContent = boot.conf.title;
+    tourPanel.querySelector('.tp-count').textContent = `${i}/${boot.steps.length}`;
+    tourPanel.querySelector('.tp-sub').textContent = boot.subText;
+    tourPanel.querySelector('.tp-bar i').style.width = Math.round((i / Math.max(1, boot.steps.length)) * 100) + '%';
+    const pb = tourPanel.querySelector('[data-act="pause"]');
+    pb.textContent = boot.paused ? '继续' : '暂停';
+    pb.style.visibility = boot.done ? 'hidden' : '';
+    tourPanel.querySelector('[data-act="speed"]').style.visibility = boot.done ? 'hidden' : '';
   }
 
-  // 目标跑出视口才平移相机（避免每步都动、观感抖）
-  function bootFollow(id) {
+  function tourRow(n, id, depth, isCur, step) {
+    const list = tourPanel.querySelector('.tp-list');
+    if (isCur) {
+      const prev = list.querySelector('.tp-row.cur');
+      if (prev) prev.classList.remove('cur');
+    }
+    const row = document.createElement('div');
+    row.className = 'tp-row' + (isCur ? ' cur' : '');
+    row.dataset.fn = id;
+    row.dataset.step = String(step);
+    row.innerHTML = `<span class="n">${n}</span><span class="f" title="${escapeHtml(id)}">${escapeHtml(labelOfNode(id))}</span>` +
+      `<span class="d">${depth ? 'L' + depth : ''}</span>`;
+    list.appendChild(row);
+    if (isCur) list.scrollTop = list.scrollHeight;
+  }
+
+  function rebuildRows() {
+    const list = tourPanel.querySelector('.tp-list');
+    list.innerHTML = '';
+    tourRow('起', boot.start, 0, boot.i === 0, 0);
+    for (let k = 0; k < boot.i; k++) {
+      const st = boot.steps[k];
+      tourRow(k + 1, st.to, st.depth, k === boot.i - 1, k + 1);
+    }
+    list.scrollTop = list.scrollHeight;
+  }
+
+  // 目标跑出视口才平移相机（避免每步都动、观感抖）。
+  // 这里不走 applyView：它内部做同步全量裁剪（2393 节点），每步一次太贵；改用去抖裁剪。
+  function tourFollow(id) {
     const p = fnPos.get(id);
     if (!p) return;
     const cx = (p.x + p.w / 2) * vs + vx, cy = (p.y + p.h / 2) * vs + vy;
@@ -1873,11 +1996,15 @@
     if (cx > 90 && cx < W - 90 && cy > 90 && cy < H - 90) return;
     vx = W / 2 - (p.x + p.w / 2) * vs;
     vy = H / 2 - (p.y + p.h / 2) * vs;
-    applyView();
+    edgeTf = null;
+    if (canvas.style.transform) canvas.style.transform = '';
+    world.style.transform = `translate(${vx}px,${vy}px) scale(${vs})`;
+    drawEdges();
+    scheduleCull();
   }
 
-  // 光点动画：每帧只画一个光点 + 6 个拖尾点，不动主画布（4642 条边重绘太贵）
-  function bootFrame() {
+  // 光点动画：每帧只画一个光点 + 6 个拖尾，不动主画布（4652 条边重绘约 24ms/次，当每帧开销不可用）
+  function tourFrame() {
     if (!boot) return;
     tctx.clearRect(0, 0, viewport.clientWidth, viewport.clientHeight);
     const cur = boot.cur;
@@ -1895,52 +2022,196 @@
           tctx.fill();
         }
         const head = pathPoint(g, k);
-        const grd = tctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 13);
-        grd.addColorStop(0, 'rgba(255,196,132,.95)');
-        grd.addColorStop(0.45, 'rgba(221,117,51,.5)');
-        grd.addColorStop(1, 'rgba(221,117,51,0)');
         tctx.beginPath(); tctx.arc(head.x, head.y, 6.2, 0, Math.PI * 2);
         tctx.fillStyle = `rgba(221,117,51,${(0.28 + k * 0.5).toFixed(3)})`; tctx.fill();
         tctx.beginPath(); tctx.arc(head.x, head.y, 3, 0, Math.PI * 2);
         tctx.fillStyle = '#fff8f0'; tctx.fill();
       }
     }
-    boot.raf = requestAnimationFrame(bootFrame);
+    boot.raf = requestAnimationFrame(tourFrame);
   }
 
-  function bootStep() {
-    if (!boot) return;
-    if (boot.paused) return;
-    if (boot.i >= boot.steps.length) { bootFinish(); return; }
-    const st = boot.steps[boot.i++];
-    document.querySelectorAll('.fn-node.walking').forEach((el) => el.classList.remove('walking'));
+  function lightStep(st) {
     edges[st.ei].lit = true;
     const p = fnPos.get(st.to);
     if (p) {
-      p.el.classList.add('lit', 'walking');
+      p.el.classList.add('lit');
       const b = boxPos.get(p.home);
       if (b) b.el.classList.add('lit');
     }
-    boot.cur = { from: st.from, to: st.to, ei: st.ei };
-    boot.phase = performance.now();
-    bootFollow(st.to);
-    drawEdges();
-    bootUpdateBar();
-    boot.timer = setTimeout(bootStep, boot.speed);
   }
 
-  function bootFinish() {
+  function markWalking(id) {
+    document.querySelectorAll('.fn-node.walking').forEach((el) => el.classList.remove('walking'));
+    const p = id ? fnPos.get(id) : null;
+    if (p) p.el.classList.add('walking');
+  }
+
+  // 增量前进一步（自动播放与「下一步」都用它）
+  function tourAdvance() {
+    if (!boot || boot.i >= boot.steps.length) return false;
+    const st = boot.steps[boot.i++];
+    lightStep(st);
+    markWalking(st.to);
+    boot.cur = { from: st.from, to: st.to, ei: st.ei };
+    boot.phase = performance.now();
+    tourFollow(st.to);
+    drawEdges();
+    tourRow(boot.i, st.to, st.depth, true, boot.i);
+    tourHead();
+    return true;
+  }
+
+  // 重算到第 n 步（上一步 / 跳到某一步）：清空点亮后按 steps[0..n-1] 重放，再重建列表
+  function tourRenderTo(n) {
+    if (!boot) return;
+    n = Math.max(0, Math.min(n, boot.steps.length));
+    boot.i = n;
+    document.querySelectorAll('.lit').forEach((el) => el.classList.remove('lit'));
+    for (const e of edges) e.lit = false;
+    const sp = fnPos.get(boot.start);
+    if (sp) { sp.el.classList.add('lit'); boxPos.get(sp.home)?.el.classList.add('lit'); }
+    for (let k = 0; k < n; k++) lightStep(boot.steps[k]);
+    const last = n > 0 ? boot.steps[n - 1] : null;
+    boot.cur = last ? { from: last.from, to: last.to, ei: last.ei } : null;
+    boot.phase = performance.now();
+    markWalking(last?.to ?? null);
+    rebuildRows();
+    tourHead();
+    drawEdges();
+    if (last) tourFollow(last.to);
+    if (n >= boot.steps.length) tourFinish();
+    else if (boot.done) { boot.done = false; boot.paused = true; }
+  }
+
+  function tourStep() {
+    if (!boot || boot.paused || boot.done) return;
+    if (!tourAdvance()) { tourFinish(); return; }
+    boot.timer = setTimeout(tourStep, boot.speed);
+  }
+
+  function tourFinish() {
+    if (!boot || boot.done) return;
+    clearTimeout(boot.timer);
+    boot.paused = true; boot.done = true; boot.cur = null;
+    markWalking(null);
+    const list = tourPanel.querySelector('.tp-list');
+    if (!list.querySelector('.tp-done')) {
+      const tip = document.createElement('div');
+      tip.className = 'tp-done';
+      tip.textContent = `✅ 走完 ${boot.steps.length} 步 · 点任意一行可跳回那一步`;
+      list.appendChild(tip);
+    }
+    list.scrollTop = list.scrollHeight;
+    tourHead();
+    btnBoot.textContent = '▶ 启动';
+    btnRequest.textContent = '▶ 请求';
+    btnBoot.classList.remove('playing');
+    btnRequest.classList.remove('playing');
+    drawEdges();
+  }
+
+  // 手动步进：先暂停自动播放，再按方向走
+  function tourManual(dir) {
+    if (!boot || tourPanel.classList.contains('picking')) return;
+    boot.paused = true;
+    clearTimeout(boot.timer);
+    if (boot.done && dir > 0) return;
+    if (dir > 0) { if (tourAdvance()) { /* 已在末尾则不动 */ } }
+    else tourRenderTo(boot.i - 1);
+    if (boot.done && boot.i < boot.steps.length) boot.done = false;
+    tourHead();
+  }
+
+  function tourGoTo(n) {
+    if (!boot) return;
+    boot.paused = true;
+    clearTimeout(boot.timer);
+    tourRenderTo(n);
+  }
+
+  function showPicker() {
+    if (boot) tourStop();
+    tourPanel.classList.add('on', 'picking');
+    tourPanel.querySelector('.tp-ico').textContent = '🌐';
+    tourPanel.querySelector('.tp-title').textContent = '选择请求链路';
+    tourPanel.querySelector('.tp-count').textContent = '';
+    tourPanel.querySelector('.tp-sub').textContent = '点一条开始演示 · 按链路规模排序';
+    tourPanel.querySelector('.tp-bar i').style.width = '0%';
+    const box = tourPanel.querySelector('.tp-pick');
+    box.innerHTML = '<div class="pk-head">候选处理函数（数字为预计步数）</div>';
+    for (const [k, c] of requestCandidates().entries()) {
+      const row = document.createElement('div');
+      row.className = 'tp-row pick';
+      row.dataset.start = c.f.id;
+      row.innerHTML = `<span class="n">${k + 1}</span>` +
+        `<span class="f" title="${escapeHtml(c.f.file + ' · L' + c.f.line)}">${escapeHtml(c.f.name)}</span>` +
+        `<span class="d">${c.size}步</span>`;
+      box.appendChild(row);
+    }
+    if (!box.querySelector('.tp-row')) box.innerHTML += '<div class="pk-head">没找到候选（api 域没有可展开的调用链）</div>';
+  }
+
+  function tourStart(mode, startId) {
+    const sameBtn = !!boot && boot.mode === mode && !startId;
+    if (boot) tourStop();
+    if (sameBtn) return;                       // 同一按钮再点 = 停止
+    const { conf, start, steps } = buildTourSteps(mode, startId);
+    if (!start || !steps.length) return;
+    if (mode === 'boot' && !filters.boot) {
+      filters.boot = true;
+      document.querySelector('#filterSeg button[data-k="boot"]')?.classList.add('on');
+    }
+    clearSel();
+    clearTimeout(settleTimer); edgeTf = null; canvas.style.transform = '';
+    // 全览（7%~13%）下光点只有两三个像素，看不出跑马灯；至少放大到该模式的起始缩放并居中起点
+    if (vs < conf.zoom) {
+      vs = conf.zoom;
+      const p0 = fnPos.get(start);
+      vx = viewport.clientWidth / 2 - ((p0?.x ?? 0) + (p0?.w ?? 0) / 2) * vs;
+      vy = viewport.clientHeight / 2 - ((p0?.y ?? 0) + (p0?.h ?? 0) / 2) * vs;
+    }
+    world.classList.add('dim');   // 未点亮的一律压暗：只有电流经过的地方亮
+    applyView();
+    const sp = fnPos.get(start);
+    if (sp) { sp.el.classList.add('lit'); const b = boxPos.get(sp.home); if (b) b.el.classList.add('lit'); }
+
+    boot = {
+      mode, conf, start, steps, i: 0, speed: SPEEDS[1], speedIdx: 1,
+      paused: false, done: false, cur: null, timer: 0, raf: 0, phase: 0,
+      subText: conf.subtitle(labelOfNode(start)),
+    };
+    tourPanel.classList.add('on');
+    tourPanel.classList.remove('picking');
+    tourPanel.querySelector('.tp-list').innerHTML = '';
+    tourPanel.querySelector('[data-act="speed"]').textContent = SPEED_NAME[1];
+    tourRow('起', start, 0, true, 0);
+    btnBoot.textContent = '▶ 启动';
+    btnRequest.textContent = '▶ 请求';
+    const active = mode === 'boot' ? btnBoot : btnRequest;
+    active.classList.add('playing');
+    active.textContent = '■ 停止';
+    tourHead();
+    sizeTrace();
+    tourFrame();
+    tourStep();
+  }
+
+  function tourStop() {
     if (!boot) return;
     clearTimeout(boot.timer);
-    boot.paused = true;
-    boot.cur = null;
+    cancelAnimationFrame(boot.raf);
+    boot = null;
+    tctx.clearRect(0, 0, viewport.clientWidth, viewport.clientHeight);
+    tourPanel.classList.remove('on', 'picking');
+    btnBoot.classList.remove('playing');
+    btnRequest.classList.remove('playing');
+    btnBoot.textContent = '▶ 启动';
+    btnRequest.textContent = '▶ 请求';
     document.querySelectorAll('.fn-node.walking').forEach((el) => el.classList.remove('walking'));
-    bootBar.querySelector('.bb-text').innerHTML =
-      `✅ 启动流程走完 · 共 <b>${boot.steps.length}</b> 步 <span class="bb-n">Esc 清除</span>`;
-    bootBar.querySelector('.bb-prog i').style.width = '100%';
-    bootBar.querySelector('[data-act="pause"]').style.display = 'none';
-    bootBar.querySelector('[data-act="speed"]').style.display = 'none';
-    btnBoot.textContent = '✓ 已走完（点击清除）';
+    world.classList.remove('dim');
+    document.querySelectorAll('.lit').forEach((el) => el.classList.remove('lit'));
+    for (const e of edges) e.lit = false;
     drawEdges();
   }
 
@@ -1957,89 +2228,80 @@
     }
   }
 
-  function bootStartDemo() {
-    if (boot) { bootStop(); return; }
-    const { start, steps } = buildBootSteps();
-    if (!start || !steps.length) return;
-    // 启动链边必须可见，否则演示会缺线
-    if (!filters.boot) {
-      filters.boot = true;
-      document.querySelector('#filterSeg button[data-k="boot"]')?.classList.add('on');
-    }
-    clearSel();
-    clearTimeout(settleTimer); edgeTf = null; canvas.style.transform = '';
-    // 全览（7%~13%）下光点只有两三个像素，看不出跑马灯；演示至少放大到 45% 并从 createApp 起跑。
-    // 用户已经放大时保持其视野（不强抢）。
-    const AUTO_ZOOM = 0.45;
-    if (vs < AUTO_ZOOM) {
-      vs = AUTO_ZOOM;
-      const p0 = fnPos.get(start);
-      vx = viewport.clientWidth / 2 - ((p0?.x ?? 0) + (p0?.w ?? 0) / 2) * vs;
-      vy = viewport.clientHeight / 2 - ((p0?.y ?? 0) + (p0?.h ?? 0) / 2) * vs;
-    }
-    world.classList.add('dim');   // 未点亮的一律压暗：只有电流经过的地方亮
-    applyView();                  // 应用缩放并重绘（也让光点层与节点对齐）
-    const sp = fnPos.get(start);
-    if (sp) { sp.el.classList.add('lit'); const b = boxPos.get(sp.home); if (b) b.el.classList.add('lit'); }
-    boot = { steps, i: 0, speed: BOOT_SPEEDS[1], speedIdx: 1, paused: false, cur: null, timer: 0, raf: 0, phase: 0 };
-    bootBar.classList.add('on');
-    bootBar.querySelector('[data-act="pause"]').style.display = '';
-    bootBar.querySelector('[data-act="speed"]').style.display = '';
-    bootBar.querySelector('[data-act="speed"]').textContent = BOOT_SPEED_NAME[1];
-    btnBoot.classList.add('playing');
-    btnBoot.textContent = '■ 停止演示';
-    sizeTrace();
-    bootFrame();
-    bootStep();
-  }
-
-  function bootStop(quiet) {
-    if (!boot) return;
-    clearTimeout(boot.timer);
-    cancelAnimationFrame(boot.raf);
-    boot = null;
-    tctx.clearRect(0, 0, viewport.clientWidth, viewport.clientHeight);
-    bootBar.classList.remove('on');
-    btnBoot.classList.remove('playing');
-    btnBoot.textContent = '▶ 启动演示';
-    document.querySelectorAll('.fn-node.walking').forEach((el) => el.classList.remove('walking'));
-    if (quiet) return;
-    world.classList.remove('dim');
-    document.querySelectorAll('.lit').forEach((el) => el.classList.remove('lit'));
-    for (const e of edges) e.lit = false;
-    drawEdges();
-  }
-
-  btnBoot.addEventListener('click', (ev) => { ev.stopPropagation(); bootStartDemo(); });
-  bootBar.addEventListener('click', (ev) => {
-    const b = ev.target.closest('button[data-act]');
-    if (!b || !boot) return;
+  btnBoot.addEventListener('click', (ev) => { ev.stopPropagation(); tourStart('boot'); });
+  btnRequest.addEventListener('click', (ev) => {
     ev.stopPropagation();
-    const act = b.dataset.act;
-    if (act === 'stop') { bootStop(); return; }
-    if (act === 'pause') {
-      boot.paused = !boot.paused;
-      clearTimeout(boot.timer);
-      if (!boot.paused && boot.i < boot.steps.length) bootStep();
-      bootUpdateBar();
-      return;
-    }
-    if (act === 'follow') {
-      const p = boot.cur ? fnPos.get(boot.cur.to) : null;
-      if (p) {
-        vx = viewport.clientWidth / 2 - (p.x + p.w / 2) * vs;
-        vy = viewport.clientHeight / 2 - (p.y + p.h / 2) * vs;
-        applyView();
+    // 没选过链路 → 先给候选列表；选过则直接播上次那条（面板里 ⇄ 可换）
+    if (!boot && !lastReqStart) { showPicker(); return; }
+    tourStart('request');
+  });
+
+  tourPanel.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-act]');
+    if (b) {
+      ev.stopPropagation();
+      const act = b.dataset.act;
+      if (act === 'stop') { tourStop(); return; }
+      if (!boot) return;
+      if (act === 'prev') { tourManual(-1); return; }
+      if (act === 'next') { tourManual(1); return; }
+      if (act === 'pause') {
+        if (boot.done) return;
+        boot.paused = !boot.paused;
+        clearTimeout(boot.timer);
+        if (!boot.paused) tourStep();
+        tourHead();
+        return;
       }
+      if (act === 'speed') {
+        boot.speedIdx = (boot.speedIdx + 1) % SPEEDS.length;
+        boot.speed = SPEEDS[boot.speedIdx];
+        b.textContent = SPEED_NAME[boot.speedIdx];
+        clearTimeout(boot.timer);
+        if (!boot.paused && !boot.done) tourStep();
+        return;
+      }
+      if (act === 'follow') {
+        const p = boot.cur ? fnPos.get(boot.cur.to) : null;
+        if (p) {
+          vx = viewport.clientWidth / 2 - (p.x + p.w / 2) * vs;
+          vy = viewport.clientHeight / 2 - (p.y + p.h / 2) * vs;
+          applyView();
+        }
+        return;
+      }
+      if (act === 'pick') { showPicker(); return; }
       return;
     }
-    if (act === 'speed') {
-      boot.speedIdx = (boot.speedIdx + 1) % BOOT_SPEEDS.length;
-      boot.speed = BOOT_SPEEDS[boot.speedIdx];
-      b.textContent = BOOT_SPEED_NAME[boot.speedIdx];
-      clearTimeout(boot.timer);
-      if (!boot.paused && boot.i < boot.steps.length) bootStep();
+    // 候选列表：选一条链路开始
+    const pk = ev.target.closest('.tp-row.pick');
+    if (pk?.dataset.start) {
+      lastReqStart = pk.dataset.start;
+      tourStart('request', pk.dataset.start);
+      return;
     }
+    // 运行列表：单击跳到该步，双击再看该函数详情
+    const row = ev.target.closest('.tp-row');
+    if (row?.dataset.fn && boot) {
+      const step = Number(row.dataset.step);
+      const id = row.dataset.fn;
+      if (ev.detail >= 2) { tourStop(); jumpTo(id); select(id, true); return; }
+      tourGoTo(step);
+    }
+  });
+
+  // 面板是 #viewport 的子元素：滚轮要用来滚列表、拖拽要能选文字，都不能漏给画布
+  tourPanel.addEventListener('wheel', (ev) => ev.stopPropagation(), { passive: true });
+  tourPanel.addEventListener('mousedown', (ev) => ev.stopPropagation());
+  tourPanel.addEventListener('dblclick', (ev) => ev.stopPropagation());
+
+  // 键盘：← 上一步 / → 下一步（输入框内不抢）
+  window.addEventListener('keydown', (ev) => {
+    if (!boot || tourPanel.classList.contains('picking')) return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (ev.key === 'ArrowRight') { ev.preventDefault(); tourManual(1); }
+    else if (ev.key === 'ArrowLeft') { ev.preventDefault(); tourManual(-1); }
   });
 
   // 入口/出口名单（可点击跳转）
@@ -2107,7 +2369,7 @@
   }
   window.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') {
-      if (boot) bootStop();
+      if (boot) tourStop();
       else if (fmodal.classList.contains('on')) closeModal();
       else clearSel();
     }
