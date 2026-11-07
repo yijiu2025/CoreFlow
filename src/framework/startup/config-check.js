@@ -11,6 +11,7 @@
  * @since 2026-11-07
  */
 import { validateEnv } from '../config/env.js';
+import { APP_CONFIG } from '../config/app-config.js';
 import { validateAppConfig } from '../config/app-config-schema.js';
 import { createLogger } from '../log/index.js';
 
@@ -22,10 +23,16 @@ const log = createLogger('app.startup');
  * 只告警不阻断：调优文件不该有让服务起不来的能力。但必须在任何消费之前打印 ——
  * 配置问题要能在启动日志里一眼看见。
  *
+ * ⚠️ 必须把 APP_CONFIG 传进去。`validateAppConfig()` 的形参默认值是 `{}`，
+ * 无参调用等于"校验一个空对象" ⇒ 永远返回空数组、一条日志都不打，
+ * 而 src/config/app_config.js 里写的错别字/越界值会静默生效为默认值（真实踩过：
+ * 入口里写 `validateAppConfig()` 看起来像在体检，实际整条判据是死的）。
+ * 回归用例见 src/__tests__/framework/startup/config-check.test.js。
+ *
  * @returns {number} 问题条数（便于调用方/测试断言）
  */
 function reportAppConfigWarnings() {
-  const warnings = validateAppConfig();
+  const warnings = validateAppConfig(APP_CONFIG);
   for (const w of warnings) {
     log.warn(`⚠️ [AppConfig] ${w}`);
   }
