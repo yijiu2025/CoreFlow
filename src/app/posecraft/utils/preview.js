@@ -38,49 +38,119 @@ const getPreviewUrlPrefix = type => publicUrl('posecraft', `previews/${type === 
 /** 预览图最大宽度（缩略图），像素 */
 const THUMB_MAX_WIDTH = 600;
 
+// ============== SVG 属性消毒（fabricData 是用户提交数据，一律不信任） ==============
+//
+// 🔴 为什么必须消毒：下面的字段全部**插值进 SVG 标记**，再交给 sharp(libvips) 渲染。
+// 不加约束时，`stroke='"><image href="http://内网/"/>'` 这类值可以闭合属性、
+// 注入任意 SVG 元素（属性逃逸 = 潜伏的 SSRF / 渲染异常面，不能只依赖渲染器兜底）。
+// 约束方式按字段类型分两类：
+//   - 数值：Number 化 + 有限性 + 夹取（数字不可能携带引号/尖括号，插值天然安全）
+//   - 颜色：只放行 `#RGB/#RRGGBB/#RRGGBBAA`（hex 字符集内无任何标记语法）
+//   - path d：只保留 SVG 路径语法的合法字符（命令字母 + 数字 + 分隔符），并限长
+
+/** 画布边长的安全上限：10^4 之内（decode 像素总量远低于 sharp 默认 268Mpx 限制） */
+const SVG_DIM_MAX = 10000;
+/** 坐标/半径类数值的绝对值上限（远超正常画布，只为拦掉 Infinity 级脏数据） */
+const SVG_COORD_MAX = 1000000;
+/** path d 的最大长度（pose 骨架路径远小于此；只防"超大字符串进渲染器"） */
+const PATH_DATA_MAX_LENGTH = 100000;
+/** 颜色白名单：#RGB / #RGBA / #RRGGBB / #RRGGBBAA */
+const SVG_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+/** path d 白名单字符集：路径命令字母 + 数字 + e/E（科学计数）+ +-., 与空白 */
+const SVG_PATH_DATA_RE = /[^MmLlHhVvCcSsQqTtAaZz0-9eE+.,\s-]/g;
+
+/**
+ * 消毒数值属性：Number 化 + 有限性校验 + 夹取。非法值回退 fallback。
+ * 返回的是 JS number，插值进属性后不可能携带引号/尖括号等标记语法。
+ * @param {unknown} value 原始值
+ * @param {number} fallback 非法/缺失时的兜底
+ * @param {number} [min] 下限（含）
+ * @param {number} [max] 上限（含）
+ * @returns {number}
+ */
+function safeSvgNumber(value, fallback, min = -SVG_COORD_MAX, max = SVG_COORD_MAX) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * 消毒颜色属性：只放行 #hex 形态，其余回退 fallback（不猜、不转义后放行）
+ * @param {unknown} value 原始值
+ * @param {string} fallback 非法/缺失时的兜底
+ * @returns {string}
+ */
+function safeSvgColor(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return SVG_COLOR_RE.test(trimmed) ? trimmed : fallback;
+}
+
+/**
+ * 消毒 path 的 d 属性：剔除白名单外字符（任何标记语法都进不来），并限长。
+ * 剩余字符集内没有引号/尖括号/&，插值进属性是安全的。
+ * @param {unknown} value 原始 path 数据（字符串或 fabric 的命令数组）
+ * @returns {string} 消毒后的 d 值；空串表示跳过该元素
+ */
+function safeSvgPathData(value) {
+  let raw;
+  if (Array.isArray(value)) {
+    raw = value.map(cmd => (Array.isArray(cmd) ? cmd.join(' ') : String(cmd))).join(' ');
+  } else if (typeof value === 'string') {
+    raw = value;
+  } else {
+    return '';
+  }
+  if (raw.length > PATH_DATA_MAX_LENGTH) raw = raw.slice(0, PATH_DATA_MAX_LENGTH);
+  return raw.replace(SVG_PATH_DATA_RE, '').trim();
+}
+
 /**
  * 根据 fabricData 骨骼数据生成 SVG buffer（透明背景，仅骨架线条）
+ *
+ * ⚠️ fabricData 来自用户提交的 pose_data，**所有**插值字段都经过上方消毒器 ——
+ * 本函数曾直接插值用户字段（stroke/fill/path/坐标），是属性逃逸型 SVG 注入点。
  * @param {object} fabricData - pose_data.fabricData
  * @returns {Buffer} SVG buffer
  */
 function generateSvgFromFabric(fabricData) {
-  const width = fabricData.width || 800;
-  const height = fabricData.height || 600;
+  const width = safeSvgNumber(fabricData.width, 800, 1, SVG_DIM_MAX);
+  const height = safeSvgNumber(fabricData.height, 600, 1, SVG_DIM_MAX);
   let svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
 
-  const objects = fabricData.objects || [];
+  const objects = Array.isArray(fabricData.objects) ? fabricData.objects : [];
   for (const obj of objects) {
+    if (!obj || typeof obj !== 'object') continue;
     if (obj.type === 'line') {
-      const x1 = obj.x1;
-      const y1 = obj.y1;
-      const x2 = obj.x2;
-      const y2 = obj.y2;
-      const stroke = obj.stroke || '#6366f1';
-      const strokeWidth = obj.strokeWidth || 3;
-      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
+      const x1 = safeSvgNumber(obj.x1, 0);
+      const y1 = safeSvgNumber(obj.y1, 0);
+      const x2 = safeSvgNumber(obj.x2, 0);
+      const y2 = safeSvgNumber(obj.y2, 0);
+      const stroke = safeSvgColor(obj.stroke, '#6366f1');
+      const strokeWidth = safeSvgNumber(obj.strokeWidth, 3, 0, 1000);
+      const opacity = safeSvgNumber(obj.opacity, 1, 0, 1);
       svgContent += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" />`;
     } else if (obj.type === 'circle') {
-      const radius = obj.radius || 8;
-      const originX = obj.originX || 'left';
-      const originY = obj.originY || 'top';
-      const cx = originX === 'center' ? obj.left : obj.left + radius;
-      const cy = originY === 'center' ? obj.top : obj.top + radius;
-      const fill = obj.fill || '#ffffff';
-      const stroke = obj.stroke || '#6366f1';
-      const strokeWidth = obj.strokeWidth || 3;
-      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
+      const radius = safeSvgNumber(obj.radius, 8, 0, SVG_COORD_MAX);
+      const originX = obj.originX === 'center' ? 'center' : 'left';
+      const originY = obj.originY === 'center' ? 'center' : 'top';
+      const left = safeSvgNumber(obj.left, 0);
+      const top = safeSvgNumber(obj.top, 0);
+      const cx = originX === 'center' ? left : left + radius;
+      const cy = originY === 'center' ? top : top + radius;
+      const fill = safeSvgColor(obj.fill, '#ffffff');
+      const stroke = safeSvgColor(obj.stroke, '#6366f1');
+      const strokeWidth = safeSvgNumber(obj.strokeWidth, 3, 0, 1000);
+      const opacity = safeSvgNumber(obj.opacity, 1, 0, 1);
       svgContent += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`;
     } else if (obj.type === 'path') {
-      const stroke = obj.stroke || '#6366f1';
-      const strokeWidth = obj.strokeWidth || 3;
-      const fill = obj.fill || 'none';
-      const opacity = obj.opacity !== undefined ? obj.opacity : 1;
-      let pathD = '';
-      if (Array.isArray(obj.path)) {
-        pathD = obj.path.map(cmd => cmd.join(' ')).join(' ');
-      } else if (typeof obj.path === 'string') {
-        pathD = obj.path;
-      }
+      const stroke = safeSvgColor(obj.stroke, '#6366f1');
+      const strokeWidth = safeSvgNumber(obj.strokeWidth, 3, 0, 1000);
+      // path 的 fill 额外允许 'none'（无填充语义）；其余只认 #hex，非法一律回退 none
+      const fillRaw = typeof obj.fill === 'string' ? obj.fill.trim() : '';
+      const fill = fillRaw === 'none' || SVG_COLOR_RE.test(fillRaw) ? fillRaw : 'none';
+      const opacity = safeSvgNumber(obj.opacity, 1, 0, 1);
+      const pathD = safeSvgPathData(obj.path);
       if (pathD) {
         svgContent += `<path d="${pathD}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-linecap="round" stroke-linejoin="round" />`;
       }

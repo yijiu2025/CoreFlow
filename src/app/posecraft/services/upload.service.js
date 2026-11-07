@@ -63,6 +63,24 @@ function isMagicMatch(buffer, mime) {
 ensureDir(UPLOAD_DIR);
 
 /**
+ * 越界自检（纵深防御）：拼出的绝对路径必须仍在上传根内。
+ *
+ * 调用方传入的 filename 由服务端生成（UUID + MIME 白名单扩展名），本不含用户输入；
+ * 这道校验保证即便未来有人把用户可控字符串接进 filename，也会在这里被拦下而不是
+ * 写到上传根之外的任意位置（规则同 framework/storage 的 resolveFile 双保险）。
+ * @param {string} filepath path.join(UPLOAD_DIR, filename) 的结果
+ * @returns {string} 原路径（合法时）
+ * @throws {Error} 越出上传根时
+ */
+function assertInsideUploadDir(filepath) {
+  const resolved = path.resolve(filepath);
+  if (resolved !== UPLOAD_DIR && !resolved.startsWith(UPLOAD_DIR + path.sep)) {
+    throw new Error('非法的文件路径：越出上传根');
+  }
+  return resolved;
+}
+
+/**
  * 保存 multipart 上传的文件到磁盘
  * @param {object} file - fastify multipart file 对象（含 mimetype/filename/toBuffer）
  * @returns {Promise<{url: string, filename: string, size: number}>}
@@ -73,12 +91,21 @@ async function saveUploadFile(file) {
     throw new UploadError('不支持的文件类型');
   }
 
-  const buffer = await file.toBuffer();
-
-  // 大小上限：先拒超限文件，避免全量读入内存被滥用
-  if (buffer.length > MAX_UPLOAD_SIZE) {
-    throw new UploadError('文件大小超过限制 (10MB)');
+  // 🔴 流式读取并限额：**边收边拒**，超限立即中止。
+  // 不能用 file.toBuffer() —— 它会把全局 multipart 上限（200MB）以内的内容先完整
+  // 缓冲进内存，然后才轮到这里的 10MB 校验拒绝；并发下等于把内存峰值放大 20 倍。
+  // （与 api/user/v1/upload.js 头像路由的流式计数同一写法。）
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of file.file) {
+    total += chunk.length;
+    if (total > MAX_UPLOAD_SIZE) {
+      throw new UploadError('文件大小超过限制 (10MB)');
+    }
+    chunks.push(chunk);
   }
+  const buffer = Buffer.concat(chunks);
+
   // 魔数校验：拒绝「声明 image/png 实为 .html/.svg/.js」的伪造类型（防存储型 XSS）
   if (!isMagicMatch(buffer, file.mimetype)) {
     throw new UploadError('文件内容与类型不符');
@@ -87,7 +114,7 @@ async function saveUploadFile(file) {
   // 文件名完全服务端生成：扩展名只从 MIME 白名单映射，绝不用用户文件名（防路径穿越）
   const ext = EXT_BY_MIME[file.mimetype] || '.png';
   const filename = `${crypto.randomUUID()}${ext}`;
-  const filepath = path.join(UPLOAD_DIR, filename);
+  const filepath = assertInsideUploadDir(path.join(UPLOAD_DIR, filename));
 
   fs.writeFileSync(filepath, buffer);
 
@@ -130,7 +157,7 @@ async function saveBase64Image(dataUri, filename) {
 
   // 🔴 文件名完全服务端生成：用户传入的 filename（如 ../../x.js）不再参与路径拼接（防路径穿越）
   const finalFilename = `${crypto.randomUUID()}${ext}`;
-  const filepath = path.join(UPLOAD_DIR, finalFilename);
+  const filepath = assertInsideUploadDir(path.join(UPLOAD_DIR, finalFilename));
   fs.writeFileSync(filepath, buffer);
 
   return {
