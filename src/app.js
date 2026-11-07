@@ -27,6 +27,7 @@ import { closePubSub } from './framework/redis/index.js';
 import { APP_CONFIG } from './framework/config/app-config.js';
 import { validateAppConfig } from './framework/config/app-config-schema.js';
 import { PUBLIC_ROOT } from './framework/storage/index.js';
+import { resolveTimeoutMs } from './utils/timeout.js';
 
 // ════════════════════════════════════════════════════════════════════
 // 日志：全局配置（全项目仅此一处 configureLog，热生效、只调一次）
@@ -137,20 +138,6 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
-
-/**
- * 解析毫秒级超时配置
- * 非数字 / 负数一律回退默认值 —— 静默退化成 0 会**关掉保护**，比配错更危险
- *
- * @param {string|undefined} raw - 环境变量原始值
- * @param {number} fallback - 默认值（毫秒）
- * @returns {number} 有效毫秒数（0 表示交给 Fastify 内置默认值）
- */
-function resolveTimeoutMs(raw, fallback) {
-  if (raw === undefined || raw === '') return fallback;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
-}
 
 // ════════════════════════════════════════════════════════════════════
 // HTTP 连接层超时（运行调优项，主来源 = src/config/app_config.js）
