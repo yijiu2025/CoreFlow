@@ -47,8 +47,6 @@ function walk(dir, out = []) {
 const ALLOWED_EDGES = new Set([
   // oauth21 登录要通知 user 域撤销该用户的全部会话（注销中登录的特殊分支）
   'oauth21/services/login.service.js -> user/services/deactivation.service.js',
-  // user DAO 需要复用 admin 的 IAM 数据访问（角色/权限同源，避免复制查询逻辑）
-  'user/dao/user.js -> admin/dao/iam.dao.js',
   // 密码变更必须同步撤销 OAuth 凭证，用户域单向调用 OAuth 数据访问层
   'user/dao/user.js -> oauth21/dao/token.dao.js'
 ]);

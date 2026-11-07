@@ -9,13 +9,11 @@
  * @author yijiu2025
  * @since 2026-07-13
  */
-import jwt from 'jsonwebtoken';
 import sequelize from '../../../framework/db/index.js';
 import { getModel } from '../../../framework/db/index.js';
 import { decrypt } from '../../../framework/keys/encryption.js';
-import { hashPassword, verifyPassword, isLegacyHash } from '../../../framework/auth/index.js';
+import { hashPassword } from '../../../framework/auth/index.js';
 import { log } from '../../../framework/log/index.js';
-import IamDao from '../../admin/dao/iam.dao.js';
 import { validatePasswordStrength } from '../../../framework/auth/index.js';
 import { maskPhone } from '../../../utils/crypto.js';
 import { kickAllSessions } from '../../../framework/auth/index.js';
@@ -68,78 +66,10 @@ class UserDao {
     return await this.registerUser(publicRequest);
   }
 
-  /**
-   * 用户登录认证并签发 Token
-   *
-   * 流程：
-   * 1. 解密前端 RSA 加密的密码
-   * 2. 通过 UserIdentity 查找凭证并校验密码（scrypt，兼容历史 bcrypt）
-   * 3. PBAC 计算当前应用下的有效策略
-   * 4. 更新全局会话和身份表的登录时间
-   * 5. 签发 Access Token（嵌入权限策略）和 Refresh Token
-   *
-   * @param {import('fastify').FastifyRequest} request - Fastify 请求对象（需包含 body.username, body.password, body.appId）
-   * @returns {Promise<{accessToken: string, refreshToken: string}>} Token 对
-   * @throws {Error} 用户名/密码为空或验证失败时抛出 AUTH_FAILED
-   */
-  async getTokens(request) {
-    const { username, appId, password: encryptedPassword, kid } = request.body;
-    const password = await decrypt(encryptedPassword, kid);
-
-    if (!username || !password) {
-      throw new Error('AUTH_FAILED:邮箱或密码不能为空');
-    }
-
-    const identity = await getModel('UserIdentity').findOne({
-      where: { identifier: username, identity_type: 'password' },
-      include: [{ model: getModel('User'), as: 'user' }]
-    });
-
-    if (!identity || !(await verifyPassword(password, identity.credential))) {
-      throw new Error('AUTH_FAILED:邮箱或密码错误');
-    }
-
-    const user = identity.user;
-
-    // 历史 bcrypt 哈希透明升级为 scrypt。
-    // 复用本函数后面已有的 identity.save()，因此**不产生额外写库**；
-    // 升级失败不影响本次登录（旧哈希依然可校验），失败的原因只记日志，下一次登录会自动重试。
-    if (isLegacyHash(identity.credential)) {
-      try {
-        identity.credential = await hashPassword(password);
-      } catch (err) {
-        log.warn(`⚠️ [UserDao] 密码哈希升级失败（不影响本次登录，下次登录重试）: ${err.message}`);
-      }
-    }
-
-    // [PBAC 核心]：计算当前应用下的有效策略
-    const { allows, denies } = await IamDao.buildUserEffectivePolicy(user.uid, appId || 'GLOBAL');
-
-    if (getModel('UserSession')) {
-      await getModel('UserSession').upsert({
-        user_id: user.id,
-        last_login_at: new Date(),
-        last_login_ip: request.ip || request.state?.clientInfo?.ip,
-        last_login_app: appId || 'DIRECT_LOGIN',
-        last_active_at: new Date()
-      });
-    }
-
-    // 更新身份表的最后登录时间
-    identity.last_login_at = new Date();
-    await identity.save();
-
-    const accessToken = global.xToken.login(user.uid, {
-      appId,
-      permissions: { allows, denies } // 将策略压入 Token
-    });
-
-    const refreshToken = jwt.sign({ uid: user.uid, appId, type: 'refresh' }, process.env.JWT_SECRET, {
-      expiresIn: '30d'
-    });
-
-    return { accessToken, refreshToken };
-  }
+  // 🔴 已删除 getTokens()（2026-11-07 全量审查）：全仓零调用的死代码，且内部引用了
+  // 从未定义的 `global.xToken` 与无人配置的 `JWT_SECRET` —— 谁哪天调用它会直接崩，
+  // 或签出绕过现行 RS256 密钥体系（framework/keys）的 HS256 token。真实的登录
+  // 签发链路在 app/oauth21/services/{login.service,token-issuer.service}.js。
 
   /**
    * 根据 UID 获取用户详细信息（含关联角色）
@@ -438,6 +368,18 @@ class UserDao {
     const User = getModel('User');
     const user = await User.findOne({ where: { id: userId } });
     if (!user) return null;
+
+    // username 是展示昵称（user_user.username 非唯一列），但 OAuth 登录支持按
+    // username 查找 —— 只做类型与长度约束（对齐 DB 列 STRING(50)），不放开任意长度。
+    if (data.username !== undefined) {
+      const username = String(data.username ?? '').trim();
+      if (!username || username.length > 50) {
+        const err = new Error('用户名需为 1-50 个字符');
+        err.statusCode = 400;
+        throw err;
+      }
+      data = { ...data, username };
+    }
 
     const allowedFields = ['username', 'avatar', 'gender', 'age', 'city', 'bio', 'personal_id'];
     const updateData = {};
