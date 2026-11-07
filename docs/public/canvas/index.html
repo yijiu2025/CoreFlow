@@ -54,6 +54,10 @@
   .seg button.on[data-k="var"] { color: #7a5cc4; }
   .seg button.on[data-k="env"] { color: #2380b8; }
   .seg button.on[data-k="log"] { color: #b05690; }
+  .seg button.on[data-k="boot"] { color: #c05e1f; }
+  .btn.boot-btn { color: #b8561c; border-color: #f0d3bb; background: #fdf5ec; }
+  .btn.boot-btn:hover { border-color: #dd7533; background: #fcecdd; }
+  .btn.boot-btn.playing { background: #dd7533; border-color: #dd7533; color: #fff; }
   .seg button { padding: 4px 8px; }
   #toolbar .btn { padding: 6px 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
     cursor: pointer; font: inherit; font-size: 12.5px; white-space: nowrap; transition: all .15s; }
@@ -109,6 +113,8 @@
   #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; width: 0; height: 0; }
   #edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3;
     transform-origin: 0 0; }
+  /* 启动演示的跑马灯层：只画流动光点与拖尾，每帧重绘成本极低（不碰主画布） */
+  #trace { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
   #world { z-index: 1; }
   #zoombar, #hint { z-index: 20; }
   #detail { z-index: 21; }
@@ -117,6 +123,23 @@
     box-shadow: 0 4px 18px rgba(25,40,70,.14); padding: 7px 16px; font-size: 12px; color: var(--text);
     white-space: nowrap; pointer-events: none; }
   #chainChip b { color: var(--accent); }
+  #bootBar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: none; z-index: 24;
+    align-items: center; gap: 10px; max-width: min(760px, 92%);
+    background: rgba(255,255,255,.97); border: 1px solid #edd9c8; border-radius: 22px;
+    box-shadow: 0 6px 24px rgba(25,40,70,.16); padding: 8px 10px 8px 16px; font-size: 12px; color: var(--text); }
+  #bootBar.on { display: flex; }
+  #bootBar .bb-ico { color: #dd7533; font-size: 13px; }
+  #bootBar .bb-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #bootBar .bb-text b { color: #b8561c; }
+  #bootBar .bb-text .bb-n { color: var(--text2); font-variant-numeric: tabular-nums; margin-left: 6px; }
+  #bootBar .bb-prog { position: relative; width: 72px; height: 4px; border-radius: 2px; background: #f1e4d9; overflow: hidden; flex: 0 0 auto; }
+  #bootBar .bb-prog i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #dd7533; border-radius: 2px; transition: width .18s linear; }
+  #bootBar button { border: 1px solid var(--line); background: #fff; color: var(--text2); border-radius: 12px;
+    padding: 3px 10px; font: inherit; font-size: 11.5px; cursor: pointer; flex: 0 0 auto; }
+  #bootBar button:hover { color: #c05e1f; border-color: #dd7533; }
+  /* 当前正在执行的函数：脉动一次 */
+  .fn-node.walking { box-shadow: 0 0 0 2px #dd7533, 0 0 16px rgba(221,117,51,.5) !important; z-index: 6; }
+  .fn-node.walking .nn { color: #b8561c; }
   #chainChip .cx { color: #a8b1bd; font-size: 10.5px; }
   #edges path { fill: none; stroke: #b6c0cf; stroke-width: 1.2; }
   #edges path.k-import { stroke: #e0912f; stroke-opacity: .32; }
@@ -334,6 +357,7 @@
   .fcard .erow .tag.t-var { color: #7a5cc4; background: #f0eafc; }
   .fcard .erow .tag.t-env { color: #2380b8; background: #e6f3fb; }
   .fcard .erow .tag.t-log { color: #b05690; background: #faeaf4; }
+  .fcard .erow .tag.t-boot { color: #c05e1f; background: #fdf0e6; }
   .fcard .frow { border: 1px solid var(--line); border-radius: 9px; padding: 7px 12px; margin-bottom: 6px;
     cursor: pointer; transition: border-color .12s, box-shadow .12s; }
   .fcard .frow:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(30,50,90,.1); }
@@ -376,7 +400,9 @@
     <button data-k="var" class="on" title="函数读写模块级变量 / Map 等存储">变量边</button>
     <button data-k="env" class="on" title="读取 process.env 环境变量">环境变量</button>
     <button data-k="log" class="on" title="调用日志实例 log.info / log.warn 等">日志</button>
+    <button data-k="boot" class="on" title="后端启动时按顺序加载的 loader 链（runEngine → registry/00…10）">启动链</button>
   </div>
+  <button class="btn boot-btn" id="btnBoot" title="沿调用链演示后端启动过程（Esc 停止）">▶ 启动演示</button>
   <button class="btn" id="btnFit">适应视图 (F)</button>
   <button class="btn" id="btnReset">重置布局</button>
   <span id="stats"></span>
@@ -396,7 +422,17 @@
       <button id="btnFit2" title="适应视图">⤢</button>
     </div>
     <canvas id="edges"></canvas>
+    <canvas id="trace"></canvas>
     <div id="chainChip"></div>
+    <div id="bootBar">
+      <span class="bb-ico">▶</span>
+      <span class="bb-text"></span>
+      <span class="bb-prog"><i></i></span>
+      <button data-act="pause">暂停</button>
+      <button data-act="speed">慢速</button>
+      <button data-act="follow" title="把视图移回当前步骤">⌖ 居中</button>
+      <button data-act="stop">停止</button>
+    </div>
     <div id="detail"><button id="detailClose" title="关闭 (Esc)">×</button><div id="detailBody"></div></div>
     <div id="fmodal"><div class="fcard" id="fcard"></div></div>
     <div id="hint">单双击=高亮/详情 · 拖标题栏或框边=移动整块（自动保存）· 空格/中键拖动=平移画布 · 拖节点=微调位置</div>
@@ -447,7 +483,7 @@
   const fnPos = new Map();   // fnId -> {x,y,w,h,el,home,shown}
   const boxPos = new Map();  // fileId -> {x,y,w,h,el,headEl,collapsed,fnIds,group,shown}
   const edges = [];          // {f,t,k,gf,gt,el,bbox,shown}
-  const filters = { import: true, local: true, guess: true, ref: true, var: true, env: true, log: true };
+  const filters = { import: true, local: true, guess: true, ref: true, var: true, env: true, log: true, boot: true };
 
   // ComfyUI 节点尺寸：标题 18 + 端口行 14×行数
   const NODE_HEAD = 17, PORT_H = 13, MAXP = 4, VAR_H = 19, NODE_GAP = 3;
@@ -846,6 +882,7 @@
     applySavedOffsets();   // 恢复上次拖动保存的位置
     syncContainers();      // 文件夹包围盒按最终位置重算（单独拖过文件框时会跟着长大）
     refreshApiBox();       // 外框按最终模块位置包住
+    bootRepaintLit();      // 演示进行中被折叠/展开时，补回已点亮的节点
     drawEdges();
   }
 
@@ -944,6 +981,7 @@
     var: { color: '#8b6fd4', alpha: 0.38, dash: [4, 3], w: 1.1 },
     env: { color: '#2f8fd0', alpha: 0.46, dash: [1.5, 3], w: 1.1 },
     log: { color: '#bb5c9e', alpha: 0.44, dash: [6, 3], w: 1.1 },
+    boot: { color: '#dd7533', alpha: 0.62, dash: [9, 4], w: 1.5 },
   };
   function sizeCanvas() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1050,6 +1088,50 @@
     if (b && b.collapsed) return { x: side === 'out' ? b.x : b.x + b.w, y: b.y + HEAD_H / 2 };
     return { x: side === 'out' ? p.x : p.x + p.w, y: p.y + (relY ?? p.h / 2) };
   }
+  // 一条边的屏幕走线。paintEdges 与「启动演示」的光点动画共用同一份几何，
+  // 避免两处各算一遍导致光点跑在线的旁边。
+  function edgePath(e) {
+    const toX = (x) => x * vs + vx, toY = (y) => y * vs + vy;
+    // 出口（我调用的）永远锚在节点左边缘；入口（调用我的）永远锚在右边缘，任何情况都不互换
+    const targetFileOf = e.t.startsWith('file:')
+      ? e.t.slice(5)
+      : (fnById.get(e.t)?.file ?? varById.get(e.t)?.file ?? null);
+    const moduleSelf = e.f.startsWith('file:') && targetFileOf === e.f.slice(5);
+    const aOut = moduleSelf
+      ? headerAnchor(e.f.slice(5))
+      : (e.f.startsWith('file:') ? anchorOf(e.f, 'out') : nodeAnchor(e.f, e.pfRel, 'out'));
+    const bIn = e.t.startsWith('file:') ? anchorOf(e.t, 'in') : nodeAnchor(e.t, e.ptRel, 'in');
+    if (!aOut || !bIn) return null;
+    // 两端都在同一个已折叠的文件框内：折叠后没有可落的端口
+    const fbEnd = fileOfEnd(e.f), tbEnd = fileOfEnd(e.t);
+    if (fbEnd && fbEnd === tbEnd && boxPos.get(fbEnd)?.collapsed) return null;
+    const sx1 = toX(aOut.x), sy1 = toY(aOut.y), sx2 = toX(bIn.x), sy2 = toY(bIn.y);
+
+    // 目标整体在左侧 → 顺向左向短弧（一条贝塞尔）
+    // 否则（同列上下 / 目标在右）→ 左出 → 绕到目标右侧 → 从右入口进（直角绕行，端口方向保持不变）
+    const forward = bIn.x <= aOut.x - 6;
+    const precise = vs >= LOD;   // 远景只看走势，不做绕行（否则满屏直角长线）
+    let pts, bez = null;
+    if (moduleSelf) {
+      // 同文件的模块顶层调用：从标题栏右侧垂到函数右端口，短弧即可
+      pts = [[sx1, sy1], [sx2, sy2]];
+      bez = { c1x: sx1 + 10, c2x: sx2 + 26 };
+    } else if (forward || !precise) {
+      const k = Math.min(Math.max(Math.abs(sx2 - sx1) / 2, 30), 160);
+      const dx = forward ? -k : k;
+      bez = { c1x: sx1 + dx, c2x: sx2 - dx };
+      pts = [[sx1, sy1], [sx2, sy2]];
+    } else {
+      const th = e.t.startsWith('file:')
+        ? (boxPos.get(e.t.slice(5))?.h ?? 40)
+        : (fnPos.get(e.t)?.h ?? 30);
+      const laneWorldY = bIn.y >= aOut.y ? bIn.y + th + 16 : bIn.y - 16;
+      const ly = toY(laneWorldY);
+      const off = 14;
+      pts = [[sx1, sy1], [sx1 - off, sy1], [sx1 - off, ly], [sx2 + off, ly], [sx2 + off, sy2], [sx2, sy2]];
+    }
+    return { sx1, sy1, sx2, sy2, pts, bez };
+  }
   let drawPending = false;
   function drawEdges() {
     if (drawPending) return;
@@ -1072,44 +1154,9 @@
       const fVis = fileOfEnd(e.f), tVis = fileOfEnd(e.t);
       if ((fVis && hiddenFiles.has(fVis)) || (tVis && hiddenFiles.has(tVis))) continue;
       if (dim && !e.lit) continue;
-      // 出口（我调用的）永远锚在节点左边缘；入口（调用我的）永远锚在右边缘，任何情况都不互换
-      const targetFileOf = e.t.startsWith('file:')
-        ? e.t.slice(5)
-        : (fnById.get(e.t)?.file ?? varById.get(e.t)?.file ?? null);
-      const moduleSelf = e.f.startsWith('file:') && targetFileOf === e.f.slice(5);
-      const aOut = moduleSelf
-        ? headerAnchor(e.f.slice(5))
-        : (e.f.startsWith('file:') ? anchorOf(e.f, 'out') : nodeAnchor(e.f, e.pfRel, 'out'));
-      const bIn = e.t.startsWith('file:') ? anchorOf(e.t, 'in') : nodeAnchor(e.t, e.ptRel, 'in');
-      if (!aOut || !bIn) continue;
-      // 两端都在同一个已折叠的文件框内：折叠后没有可落的端口，跳过
-      const fbEnd = fileOfEnd(e.f), tbEnd = fileOfEnd(e.t);
-      if (fbEnd && fbEnd === tbEnd && boxPos.get(fbEnd)?.collapsed) continue;
-      const sx1 = toX(aOut.x), sy1 = toY(aOut.y), sx2 = toX(bIn.x), sy2 = toY(bIn.y);
-
-      // 目标整体在左侧 → 顺向左向短弧（一条贝塞尔）
-      // 否则（同列上下 / 目标在右）→ 左出 → 绕到目标右侧 → 从右入口进（直角绕行，端口方向保持不变）
-      const forward = bIn.x <= aOut.x - 6;
-      const precise = vs >= LOD;   // 远景只看走势，不做绕行（否则满屏直角长线）
-      let pts, bez = null;
-      if (moduleSelf) {
-        // 同文件的模块顶层调用：从标题栏右侧垂到函数右端口，短弧即可
-        pts = [[sx1, sy1], [sx2, sy2]];
-        bez = { c1x: sx1 + 10, c2x: sx2 + 26 };
-      } else if (forward || !precise) {
-        const k = Math.min(Math.max(Math.abs(sx2 - sx1) / 2, 30), 160);
-        const dx = forward ? -k : k;
-        bez = { c1x: sx1 + dx, c2x: sx2 - dx };
-        pts = [[sx1, sy1], [sx2, sy2]];
-      } else {
-        const th = e.t.startsWith('file:')
-          ? (boxPos.get(e.t.slice(5))?.h ?? 40)
-          : (fnPos.get(e.t)?.h ?? 30);
-        const laneWorldY = bIn.y >= aOut.y ? bIn.y + th + 16 : bIn.y - 16;
-        const ly = toY(laneWorldY);
-        const off = 14;
-        pts = [[sx1, sy1], [sx1 - off, sy1], [sx1 - off, ly], [sx2 + off, ly], [sx2 + off, sy2], [sx2, sy2]];
-      }
+      const g = edgePath(e);
+      if (!g) continue;
+      const { sx1, sy1, sx2, sy2, pts, bez } = g;
 
       // 视口裁剪（用折点包围盒，贝塞尔多留一点余量）
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -1639,6 +1686,7 @@
   }
   const chainChip = $('#chainChip');
   function select(id, withDetail = false) {
+    if (boot) bootStop(true);   // 点节点看详情时终止演示，两套高亮别互相覆盖
     clearSel();
     world.classList.add('dim');
     const idxs = nodeEdges.get(id) ?? [];
@@ -1716,6 +1764,284 @@
     detail.style.display = 'none';
     drawEdges();
   }
+  // ==========================================================
+  // 启动演示（跑马灯）：从 createApp 出发，沿真实调用边深度优先走一遍，
+  // 电流一样一步步点亮「后端启动时路过的函数」，边亮 + 节点脉动 + 相机跟随。
+  // ==========================================================
+  const traceCanvas = $('#trace');
+  const tctx = traceCanvas.getContext('2d');
+  const bootBar = $('#bootBar');
+  const btnBoot = $('#btnBoot');
+  const BOOT_SPEEDS = [520, 260, 120];              // 慢 / 正常 / 快（毫秒/步）
+  const BOOT_SPEED_NAME = ['慢速', '正常', '快速'];
+  let boot = null;
+
+  function sizeTrace() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = viewport.clientWidth, h = viewport.clientHeight;
+    traceCanvas.width = Math.round(w * dpr); traceCanvas.height = Math.round(h * dpr);
+    traceCanvas.style.width = w + 'px'; traceCanvas.style.height = h + 'px';
+    tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // 起点：app.js 的 createApp（根 index.js 不在 src/ 扫描范围内，createApp 才是装配枢纽）
+  function bootStartNode() {
+    const all = [...fnById.values()];
+    return (all.find((f) => f.name === 'createApp' && f.file === 'app.js') ?? all.find((f) => f.name === 'createApp'))?.id ?? null;
+  }
+
+  // 走线优先级：启动链 > 跨文件 import > 同文件 > 引用 > 推断；同级按文件+行号，读起来像执行顺序
+  const BOOT_KIND_ORDER = { boot: 0, import: 1, local: 2, ref: 3, guess: 4 };
+  function bootChildren(id) {
+    const list = [];
+    for (const i of nodeEdges.get(id) ?? []) {
+      const e = edges[i];
+      if (e.f !== id) continue;
+      if (!(e.k in BOOT_KIND_ORDER)) continue;   // 跳过 var / env / log：它们不是"路过的函数"
+      const tgt = fnById.get(e.t);
+      if (!tgt) continue;                        // file: / var: 目标不参与
+      list.push({ i, tgt, order: BOOT_KIND_ORDER[e.k] });
+    }
+    list.sort((a, b) => a.order - b.order
+      || `${a.tgt.file}#${String(a.tgt.line).padStart(6, '0')}`.localeCompare(`${b.tgt.file}#${String(b.tgt.line).padStart(6, '0')}`));
+    return list;
+  }
+
+  function buildBootSteps(limit = 260) {
+    const start = bootStartNode();
+    if (!start) return { start: null, steps: [] };
+    const seen = new Set([start]);
+    const steps = [];
+    const queue = [{ id: start, depth: 0 }];
+    while (queue.length && steps.length < limit) {
+      const { id, depth } = queue.shift();
+      for (const c of bootChildren(id)) {
+        if (steps.length >= limit) break;
+        if (seen.has(c.tgt.id)) continue;   // 已点过的不再重复跑，画面是一棵"生长"的树
+        seen.add(c.tgt.id);
+        steps.push({ from: id, to: c.tgt.id, ei: c.i, depth: depth + 1 });
+        queue.push({ id: c.tgt.id, depth: depth + 1 });
+      }
+    }
+    return { start, steps };
+  }
+
+  // 贝塞尔 / 折线上的取点（k ∈ [0,1] 按弧长）
+  function pathPoint(g, k) {
+    if (g.bez) {
+      const u = 1 - k, p1x = g.bez.c1x, p2x = g.bez.c2x;
+      return {
+        x: u * u * u * g.sx1 + 3 * u * u * k * p1x + 3 * u * k * k * p2x + k * k * k * g.sx2,
+        y: u * u * u * g.sy1 + 3 * u * u * k * g.sy1 + 3 * u * k * k * g.sy2 + k * k * k * g.sy2,
+      };
+    }
+    const pts = g.pts, segs = [];
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      segs.push(d); total += d;
+    }
+    if (!total) return { x: pts[0][0], y: pts[0][1] };
+    let want = k * total;
+    for (let i = 0; i < segs.length; i++) {
+      if (want <= segs[i] || i === segs.length - 1) {
+        const t = segs[i] ? Math.min(1, want / segs[i]) : 0;
+        return { x: pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, y: pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t };
+      }
+      want -= segs[i];
+    }
+    return { x: pts[pts.length - 1][0], y: pts[pts.length - 1][1] };
+  }
+
+  function bootUpdateBar() {
+    if (!boot) return;
+    const i = Math.min(boot.i, boot.steps.length);
+    const st = boot.steps[Math.max(0, i - 1)];
+    const txt = st ? `${labelOfNode(st.from)} → ${labelOfNode(st.to)}` : '准备中';
+    bootBar.querySelector('.bb-text').innerHTML =
+      `🚀 启动演示 · <b>${escapeHtml(txt)}</b><span class="bb-n">${i}/${boot.steps.length} · 第 ${st?.depth ?? 1} 层</span>`;
+    bootBar.querySelector('.bb-prog i').style.width = Math.round((i / Math.max(1, boot.steps.length)) * 100) + '%';
+    bootBar.querySelector('[data-act="pause"]').textContent = boot.paused ? '继续' : '暂停';
+  }
+
+  // 目标跑出视口才平移相机（避免每步都动、观感抖）
+  function bootFollow(id) {
+    const p = fnPos.get(id);
+    if (!p) return;
+    const cx = (p.x + p.w / 2) * vs + vx, cy = (p.y + p.h / 2) * vs + vy;
+    const W = viewport.clientWidth, H = viewport.clientHeight;
+    if (cx > 90 && cx < W - 90 && cy > 90 && cy < H - 90) return;
+    vx = W / 2 - (p.x + p.w / 2) * vs;
+    vy = H / 2 - (p.y + p.h / 2) * vs;
+    applyView();
+  }
+
+  // 光点动画：每帧只画一个光点 + 6 个拖尾点，不动主画布（4642 条边重绘太贵）
+  function bootFrame() {
+    if (!boot) return;
+    tctx.clearRect(0, 0, viewport.clientWidth, viewport.clientHeight);
+    const cur = boot.cur;
+    if (cur && !boot.paused) {
+      const e = edges[cur.ei];
+      const g = e ? edgePath(e) : null;
+      if (g) {
+        const dur = Math.max(150, boot.speed * 0.8);
+        const k = Math.min(1, (performance.now() - boot.phase) / dur);
+        for (let n = 6; n >= 1; n--) {
+          const q = pathPoint(g, Math.max(0, k - n * 0.035));
+          tctx.beginPath();
+          tctx.arc(q.x, q.y, Math.max(0.8, 5.4 - n * 0.62), 0, Math.PI * 2);
+          tctx.fillStyle = `rgba(221,117,51,${(0.30 - n * 0.036).toFixed(3)})`;
+          tctx.fill();
+        }
+        const head = pathPoint(g, k);
+        const grd = tctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 13);
+        grd.addColorStop(0, 'rgba(255,196,132,.95)');
+        grd.addColorStop(0.45, 'rgba(221,117,51,.5)');
+        grd.addColorStop(1, 'rgba(221,117,51,0)');
+        tctx.beginPath(); tctx.arc(head.x, head.y, 6.2, 0, Math.PI * 2);
+        tctx.fillStyle = `rgba(221,117,51,${(0.28 + k * 0.5).toFixed(3)})`; tctx.fill();
+        tctx.beginPath(); tctx.arc(head.x, head.y, 3, 0, Math.PI * 2);
+        tctx.fillStyle = '#fff8f0'; tctx.fill();
+      }
+    }
+    boot.raf = requestAnimationFrame(bootFrame);
+  }
+
+  function bootStep() {
+    if (!boot) return;
+    if (boot.paused) return;
+    if (boot.i >= boot.steps.length) { bootFinish(); return; }
+    const st = boot.steps[boot.i++];
+    document.querySelectorAll('.fn-node.walking').forEach((el) => el.classList.remove('walking'));
+    edges[st.ei].lit = true;
+    const p = fnPos.get(st.to);
+    if (p) {
+      p.el.classList.add('lit', 'walking');
+      const b = boxPos.get(p.home);
+      if (b) b.el.classList.add('lit');
+    }
+    boot.cur = { from: st.from, to: st.to, ei: st.ei };
+    boot.phase = performance.now();
+    bootFollow(st.to);
+    drawEdges();
+    bootUpdateBar();
+    boot.timer = setTimeout(bootStep, boot.speed);
+  }
+
+  function bootFinish() {
+    if (!boot) return;
+    clearTimeout(boot.timer);
+    boot.paused = true;
+    boot.cur = null;
+    document.querySelectorAll('.fn-node.walking').forEach((el) => el.classList.remove('walking'));
+    bootBar.querySelector('.bb-text').innerHTML =
+      `✅ 启动流程走完 · 共 <b>${boot.steps.length}</b> 步 <span class="bb-n">Esc 清除</span>`;
+    bootBar.querySelector('.bb-prog i').style.width = '100%';
+    bootBar.querySelector('[data-act="pause"]').style.display = 'none';
+    bootBar.querySelector('[data-act="speed"]').style.display = 'none';
+    btnBoot.textContent = '✓ 已走完（点击清除）';
+    drawEdges();
+  }
+
+  // 模块折叠/展开会重建整层 DOM（class 全丢，但 edges[i].lit 还在）→ 重建后补回点亮态
+  function bootRepaintLit() {
+    if (!boot) return;
+    for (const e of edges) {
+      if (!e.lit) continue;
+      for (const id of [e.f, e.t]) {
+        if (id.startsWith('file:')) { boxPos.get(id.slice(5))?.el.classList.add('lit'); continue; }
+        const p = fnPos.get(id);
+        if (p) { p.el.classList.add('lit'); boxPos.get(p.home)?.el.classList.add('lit'); }
+      }
+    }
+  }
+
+  function bootStartDemo() {
+    if (boot) { bootStop(); return; }
+    const { start, steps } = buildBootSteps();
+    if (!start || !steps.length) return;
+    // 启动链边必须可见，否则演示会缺线
+    if (!filters.boot) {
+      filters.boot = true;
+      document.querySelector('#filterSeg button[data-k="boot"]')?.classList.add('on');
+    }
+    clearSel();
+    clearTimeout(settleTimer); edgeTf = null; canvas.style.transform = '';
+    // 全览（7%~13%）下光点只有两三个像素，看不出跑马灯；演示至少放大到 45% 并从 createApp 起跑。
+    // 用户已经放大时保持其视野（不强抢）。
+    const AUTO_ZOOM = 0.45;
+    if (vs < AUTO_ZOOM) {
+      vs = AUTO_ZOOM;
+      const p0 = fnPos.get(start);
+      vx = viewport.clientWidth / 2 - ((p0?.x ?? 0) + (p0?.w ?? 0) / 2) * vs;
+      vy = viewport.clientHeight / 2 - ((p0?.y ?? 0) + (p0?.h ?? 0) / 2) * vs;
+    }
+    world.classList.add('dim');   // 未点亮的一律压暗：只有电流经过的地方亮
+    applyView();                  // 应用缩放并重绘（也让光点层与节点对齐）
+    const sp = fnPos.get(start);
+    if (sp) { sp.el.classList.add('lit'); const b = boxPos.get(sp.home); if (b) b.el.classList.add('lit'); }
+    boot = { steps, i: 0, speed: BOOT_SPEEDS[1], speedIdx: 1, paused: false, cur: null, timer: 0, raf: 0, phase: 0 };
+    bootBar.classList.add('on');
+    bootBar.querySelector('[data-act="pause"]').style.display = '';
+    bootBar.querySelector('[data-act="speed"]').style.display = '';
+    bootBar.querySelector('[data-act="speed"]').textContent = BOOT_SPEED_NAME[1];
+    btnBoot.classList.add('playing');
+    btnBoot.textContent = '■ 停止演示';
+    sizeTrace();
+    bootFrame();
+    bootStep();
+  }
+
+  function bootStop(quiet) {
+    if (!boot) return;
+    clearTimeout(boot.timer);
+    cancelAnimationFrame(boot.raf);
+    boot = null;
+    tctx.clearRect(0, 0, viewport.clientWidth, viewport.clientHeight);
+    bootBar.classList.remove('on');
+    btnBoot.classList.remove('playing');
+    btnBoot.textContent = '▶ 启动演示';
+    document.querySelectorAll('.fn-node.walking').forEach((el) => el.classList.remove('walking'));
+    if (quiet) return;
+    world.classList.remove('dim');
+    document.querySelectorAll('.lit').forEach((el) => el.classList.remove('lit'));
+    for (const e of edges) e.lit = false;
+    drawEdges();
+  }
+
+  btnBoot.addEventListener('click', (ev) => { ev.stopPropagation(); bootStartDemo(); });
+  bootBar.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-act]');
+    if (!b || !boot) return;
+    ev.stopPropagation();
+    const act = b.dataset.act;
+    if (act === 'stop') { bootStop(); return; }
+    if (act === 'pause') {
+      boot.paused = !boot.paused;
+      clearTimeout(boot.timer);
+      if (!boot.paused && boot.i < boot.steps.length) bootStep();
+      bootUpdateBar();
+      return;
+    }
+    if (act === 'follow') {
+      const p = boot.cur ? fnPos.get(boot.cur.to) : null;
+      if (p) {
+        vx = viewport.clientWidth / 2 - (p.x + p.w / 2) * vs;
+        vy = viewport.clientHeight / 2 - (p.y + p.h / 2) * vs;
+        applyView();
+      }
+      return;
+    }
+    if (act === 'speed') {
+      boot.speedIdx = (boot.speedIdx + 1) % BOOT_SPEEDS.length;
+      boot.speed = BOOT_SPEEDS[boot.speedIdx];
+      b.textContent = BOOT_SPEED_NAME[boot.speedIdx];
+      clearTimeout(boot.timer);
+      if (!boot.paused && boot.i < boot.steps.length) bootStep();
+    }
+  });
+
   // 入口/出口名单（可点击跳转）
   function ioListHtml(list, dir, emptyText) {
     if (!list.length) return `<div class="ioempty">${emptyText || (dir === 'in' ? '无出口 — 被框架/路由直接调用，没有业务代码调用它' : '无入口 — 该函数不调用其他业务函数')}</div>`;
@@ -1781,14 +2107,15 @@
   }
   window.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') {
-      if (fmodal.classList.contains('on')) closeModal();
+      if (boot) bootStop();
+      else if (fmodal.classList.contains('on')) closeModal();
       else clearSel();
     }
   });
 
   // ---------- 文件详情卡 ----------
   const fmodal = $('#fmodal'), fcard = $('#fcard');
-  const KIND_TAG = { import: ['跨文件', 't-import'], local: ['同文件', 't-local'], ref: ['引用', 't-ref'], guess: ['推断', 't-guess'], var: ['变量', 't-var'], env: ['环境变量', 't-env'], log: ['日志', 't-log'] };
+  const KIND_TAG = { import: ['跨文件', 't-import'], local: ['同文件', 't-local'], ref: ['引用', 't-ref'], guess: ['推断', 't-guess'], var: ['变量', 't-var'], env: ['环境变量', 't-env'], log: ['日志', 't-log'], boot: ['启动链', 't-boot'] };
   const KIND_DOT = { arrow: 'k-arrow', method: 'k-method', class: 'k-class' };
   const KIND_NAME = { class: '类（整体一个框，含全部方法）', method: '方法', arrow: '箭头函数', function: '函数', 'async function': '异步函数', 'async arrow': '异步箭头函数', 'async method': '异步方法' };
   const kindDot = (kind) => KIND_DOT[kind] ?? (kind.startsWith('async') ? 'k-async' : 'k-function');
@@ -2046,6 +2373,7 @@
       <div class="li"><span class="sw dash" style="border-color:#3ba55d"></span>函数引用（handler: someFn 等）</div>
       <div class="li"><span class="sw dash" style="border-color:#c5ccd8"></span>同名函数推断</div>
       <div class="li"><span class="sw dash" style="border-color:#8b6fd4"></span>变量读写（存储）</div>
+      <div class="li"><span class="sw dash" style="border-color:#dd7533"></span>启动链（registry 加载顺序）</div>
       <div class="li">端口：左 <span class="sw dot" style="background:#e0a54f"></span>入口（调用）· 右 <span class="sw dot" style="background:#6f9de0"></span>出口（被调用）</div>
       <div class="li"><span class="sw" style="background:#e8f5f3;border-color:#2fa89a"></span>存储方框（Map/对象）&nbsp;<span class="sw" style="background:#fbfaff;border-color:#cdc7e4"></span>变量</div>
       <div class="li"><span class="sw dot" style="background:#2f9e63"></span>已导出函数</div>
@@ -2130,7 +2458,7 @@
   window.addEventListener('keydown', (ev) => {
     if ((ev.key === 'f' || ev.key === 'F') && document.activeElement !== searchInput) fitView();
   });
-  window.addEventListener('resize', () => { sizeCanvas(); drawEdges(); scheduleCull(); });
+  window.addEventListener('resize', () => { sizeCanvas(); sizeTrace(); drawEdges(); scheduleCull(); });
 
   // ---------- 启动 ----------
   setTimeout(() => {
@@ -2139,6 +2467,7 @@
     applyVisibility();
     fitView();
     sizeCanvas();
+    sizeTrace();
     drawEdges();
     warmPorts();
     renderStats();

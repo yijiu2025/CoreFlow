@@ -103,7 +103,7 @@ const fnRanges = new Map(); // rel -> [{id, start, end}]
 const varRanges = new Map(); // rel -> [{id, start, end}]（模块级变量的初始化表达式，用于把初始化里的调用归给变量方框）
 const envKeyCount = new Map(); // 环境变量 KEY -> 读取次数（含未归属到函数的顶层读取）
 const edgeMap = new Map(); // f>t -> 边（提前到扫描阶段：env 归属即建边）
-const RANK = { guess: 1, env: 2, var: 2, log: 3, ref: 3, import: 4, local: 5 };
+const RANK = { guess: 1, env: 2, var: 2, log: 3, boot: 3, ref: 3, import: 4, local: 5 };
 function addEdge(f, t, kind, line) {
   if (!f || !t || f === t) return;
   const key = f + '>' + t;
@@ -617,6 +617,26 @@ for (const call of allCalls) {
     } else if (!fileDefByName.get(call.file)?.has(call.obj) && !info.objects.has(call.obj) && !info.classes.has(call.obj)) {
       unresolved++;
     }
+  }
+}
+
+// ---------- 启动链（boot 边） ----------
+// engine.js 用 `fs.readdir(registryDir) → filter(.js) → sort()` 再逐个动态 import 执行，
+// 这条"按文件名顺序加载"的时序在静态调用图里完全不可见（runEngine 的出边到这就断了）。
+// 这里按引擎的真实顺序把 registry 下的 loader 串成一条链，供前端「启动演示」沿线播放。
+{
+  const regFiles = [...fileMap.values()]
+    .filter((f) => f.id.startsWith('framework/lifecycle/loader/registry/'))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const loaderFns = [];
+  for (const f of regFiles) {
+    const first = f.defaultFnId ?? (f.fns || [])[0] ?? null;
+    if (first) loaderFns.push(first);
+  }
+  const engineFn = allFns.find((f) => f.name === 'runEngine');
+  if (engineFn && loaderFns.length) {
+    addEdge(engineFn.id, loaderFns[0], 'boot');
+    for (let i = 1; i < loaderFns.length; i++) addEdge(loaderFns[i - 1], loaderFns[i], 'boot');
   }
 }
 
