@@ -58,13 +58,17 @@ function generateTOTP(secret, time = Date.now(), config = DEFAULT_CONFIG) {
   const hash = hmac.digest();
 
   // 动态截断
+  // 🔴 用合并后的 cfg.digits，不是入参 config.digits：调用方只传部分配置
+  // （如 { period: 60 }）时 config.digits 是 undefined，% Math.pow(10, undefined)
+  // = NaN，产出 "NaN" 验证码（恒错）。verifyTOTP 内部已先合并再传入，历史上
+  // 没炸只是因为唯一调用方恰好传了完整配置 —— 这类坑不该留给下一个调用方。
   const offset = hash[hash.length - 1] & 0x0f;
   const code =
     (((hash[offset] & 0x7f) << 24) |
       ((hash[offset + 1] & 0xff) << 16) |
       ((hash[offset + 2] & 0xff) << 8) |
       (hash[offset + 3] & 0xff)) %
-    Math.pow(10, config.digits);
+    Math.pow(10, cfg.digits);
 
   return code.toString().padStart(cfg.digits, '0');
 }
