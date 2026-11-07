@@ -121,6 +121,9 @@ async function registerSessionRoutes(fastify) {
     method: 'POST',
     url: '/update-remember-me',
     requireLogin: true,
+    // 每次调用都会（替换）签发一枚 30 天 refresh token + 写 cookie，属凭证操作端点：
+    // 必须自带限流，否则可被用来高频刷写 Redis 与反复轮换长期凭证。
+    config: { rateLimit: { max: 10, timeWindow: '1 minute', groupId: 'update-remember-me' } },
     handler: async (request, reply) => {
       if (!isAllowedOrigin(request)) {
         return reply.code(403).send({ code: 403, message: '来源不在允许列表', data: null });

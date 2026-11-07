@@ -359,7 +359,8 @@ async function registerWorkRoutes(fastify) {
       if (!result.success) {
         return reply.result.fail(result.message);
       }
-      return reply.result.success(result.message, { liked: result.liked, likes: work.likes_count });
+      // 计数用 DAO 回读的真实值；拿不到时退回请求前的快照（不要自己 +1/-1 猜）
+      return reply.result.success(result.message, { liked: result.liked, likes: result.likes ?? work.likes_count });
     }
   });
   // 获取关注者的作品

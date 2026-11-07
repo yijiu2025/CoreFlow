@@ -91,10 +91,11 @@ function isSafePath(url, configured = []) {
  * @param {number} statusCode 响应状态码
  * @param {string|null} [deviceId] 设备 ID（客户端未携带合法值时传 null）
  * @param {object|null} [routeConfig] Fastify `request.routeOptions.config`（无路由时为 null）
+ * @param {boolean} [authenticated=false] 本次请求是否已登录（决定 403 是否计入）
  * @returns {Promise<void>}
  * @throws {Error} 命中陷阱时抛出（statusCode 403，rule='scanner-trap'）
  */
-const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null, routeConfig = null) => {
+const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null, routeConfig = null, authenticated = false) => {
   const settings = getConfig().defense;
   if (!settings.enableAutoBlacklist) return;
 
@@ -113,6 +114,17 @@ const checkNotFoundTrap = async (ip, url, statusCode, deviceId = null, routeConf
   // ② 路径前缀豁免：只认 config 通道（defense.safePaths，无内置项）
   if (isSafePath(url, settings.safePaths)) return;
   if (![404, 403, 405].includes(statusCode)) return;
+
+  // 🔴 403 只计**匿名**请求（2026-11-08 修复）
+  //
+  // 403 在语义上有两种来源，混在一起会误伤真实用户：
+  //   · 匿名：在猜受保护路径 → 确实是扫描器行为，该计；
+  //   · 已登录：权限不足（`reply.result.forbidden`、草稿预览、来源/CSRF 校验失败）
+  //     → 是"这个人没这个权限"，不是"这个人在找不存在的路径"。
+  // 旧实现一律计入，默认 10 次/60s 就会给正常用户（前端重试循环 / 权限被回收）
+  // 打上 SCANNER，并且 `setBlockForSubject` 连设备一起封 1 小时 —— 换网络也解不开。
+  // 现在匿名 403 仍计入（扫描器通常无身份），已登录的 403 交给业务与权限层。
+  if (statusCode === 403 && authenticated) return;
 
   const subject = { ip, deviceId: settings.enableDeviceBlock === false ? null : deviceId };
 

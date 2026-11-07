@@ -150,7 +150,9 @@ const firewallCorePlugin = fp(async function (app) {
           request.url,
           reply.statusCode,
           request._deviceId || null,
-          request.routeOptions?.config || null
+          request.routeOptions?.config || null,
+          // 已登录的 403 是权限问题，不是"在猜路径"（见 scan-trap 的 403 分支注释）
+          Boolean(request.state?.user)
         );
       } catch (err) {
         log.warn(`[Firewall] Trap Triggered: ${request.ip} -> ${err.rule}`);

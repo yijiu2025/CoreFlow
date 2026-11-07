@@ -100,6 +100,10 @@ const UserDao = {
       email: identity.user.email,
       name: identity.user.username,
       avatar: identity.user.avatar,
+      // 🔴 必须带 status（2026-11-08 修复）：密码登录走的就是本方法，缺了这个字段，
+      // 调用方（login.service / authorization.service）无从判断账号是否被禁用 ——
+      // 而 findByEmail / findById 一直都带，唯独最热的那条没有，于是"禁用账号仍能登录"。
+      status: identity.user.status,
       credential: identity.credential // 密码 Hash
     };
   },

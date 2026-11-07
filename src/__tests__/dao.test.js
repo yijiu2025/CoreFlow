@@ -144,12 +144,17 @@ describe('TokenDao.revoke：逻辑吊销，不物理删除', () => {
     expect(modelCalls.some(c => c.op === 'destroy')).toBe(false);
   });
 
-  it('findRevoked 不带 revoked 过滤（否则"已吊销令牌再次出现"永远检测不到）', async () => {
+  it('findRevoked 只查已吊销行（过期但未轮转的令牌不得被判成盗用）', async () => {
     await TokenDao.findRevoked(PLAIN_RT);
 
     const { options } = modelCalls.find(c => c.op === 'findOne');
     expect(options.where.refresh_token).toBe(sha256(PLAIN_RT));
-    expect('revoked' in options.where).toBe(false);
+    // 🔴 必须带 revoked:true（2026-11-08）：`find()` 会过滤过期，
+    // 若这里连"过期但从未吊销"的行也返回，一次普通的过期刷新就会触发
+    // revokeAllForUser —— 把用户所有设备登出，且可被第三方主动触发。
+    expect(options.where.revoked).toBe(true);
+    // 但**不能**过滤 expires_at：已吊销的令牌即使过期也必须能被识别（盗用取证）
+    expect('expires_at' in options.where).toBe(false);
   });
 
   it('revokeAllForUser / revokeAllForClient 按对应维度批量吊销', async () => {

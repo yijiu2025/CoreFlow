@@ -48,8 +48,19 @@ class SmsDao {
     await store.set(phone, { code, sentAt: Date.now(), sessionId }, smsConfig.ttl);
 
     // 发送短信
-    const sent = await smsService.send(phone, code);
+    //
+    // 🔴 发送失败必须**撤销刚才那条记录**（2026-11-08）：记录里带着 `sentAt`，
+    // 而频率限制是按它算的 —— 不撤销就等于"短信没发出去，用户还要等 60 秒"。
+    // 服务商未接入/抖动时这条路径会一直命中，用户体验是"点了发送、没收到、还不让重发"。
+    let sent;
+    try {
+      sent = await smsService.send(phone, code);
+    } catch (err) {
+      await store.delete(phone);
+      throw err;
+    }
     if (!sent) {
+      await store.delete(phone);
       throw new Error('SEND_CODE_FAILED:短信发送失败，请联系管理员');
     }
 

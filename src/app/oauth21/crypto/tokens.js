@@ -26,9 +26,12 @@ function generateUserCode() {
   const chars = 'BCDFGHJKLMNPQRSTVWXYZ';
   const digits = '0123456789';
   let code = '';
-  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  // 🔴 用 CSPRNG（crypto.randomInt）而不是 Math.random（2026-11-08）：
+  // 用户码是设备授权流程里"把设备请求绑定到某个账号"的凭据，V8 的 PRNG
+  // 状态可由少量输出还原 → 攻击者可预测即将签发的用户码。
+  for (let i = 0; i < 4; i++) code += chars[crypto.randomInt(chars.length)];
   code += '-';
-  for (let i = 0; i < 4; i++) code += digits[Math.floor(Math.random() * digits.length)];
+  for (let i = 0; i < 4; i++) code += digits[crypto.randomInt(digits.length)];
   return code;
 }
 

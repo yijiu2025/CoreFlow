@@ -48,8 +48,18 @@ class VoiceDao {
     await store.set(phone, { code, sentAt: Date.now(), sessionId, type: 'voice' }, smsConfig.ttl);
 
     // 发送语音
-    const sent = await voiceService.send(phone, code);
+    //
+    // 🔴 发送失败必须撤销记录（2026-11-08）：`sentAt` 同时是频率限制的计时起点，
+    // 不撤销会让"没收到语音"的用户还要等满一个窗口才能重试。
+    let sent;
+    try {
+      sent = await voiceService.send(phone, code);
+    } catch (err) {
+      await store.delete(phone);
+      throw err;
+    }
     if (!sent) {
+      await store.delete(phone);
       throw new Error('SEND_CODE_FAILED:语音发送失败，请联系管理员');
     }
 

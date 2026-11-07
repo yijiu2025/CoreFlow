@@ -110,9 +110,16 @@ class GuardConfigDao {
           await Model.update({ config: serialized, version: newVersion }, { where: { system_key: systemKey } });
           updated.push(systemKey);
           versions[systemKey] = newVersion;
+          // 🔴 写完必须同步快照（2026-11-08 修复）：`_snapshot` 是"上次已落库的值"，
+          // 不刷新会让它永远滞后一代。典型症状：把开关改走再改回原值（A→B→A）时，
+          // 第二次 `isChanged` 拿 A 和**旧快照 A** 比 → 判为未变更 → **A 不落库**，
+          // DB 里留着 B；重启或别的实例同步后又变回 B，运维看到"我改回来了它自己又变回去"。
+          this._snapshot[systemKey] = compareKey;
         } else {
           // 无变更，保持原版本号
           versions[systemKey] = dbVersion;
+          // 保持不变量：快照 == DB 当前值（此处两者本就相等，赋值是幂等的防御）
+          this._snapshot[systemKey] = compareKey;
         }
       } else {
         // 新创建的行

@@ -702,6 +702,13 @@ async function updateRememberMe(userId, sessionId, rememberMe) {
   if (rememberMe) {
     // 缓存转长期
     await sessionStore.set(sessionId, sessionData, LONG_SESSION_TTL);
+    // 🔴 先清掉本会话已有的长期 refresh token，再发新的（2026-11-08 修复）
+    //
+    // 旧实现只做"新增"：每调用一次 `/auth/v1/update-remember-me`（可无限次、该路由原本也没有限流）
+    // 就多一枚 30 天有效期的 refresh token，`userRefreshStore` 与 `familyStore` 里无限累积。
+    // 同一 sessionId 只需要**一枚**长期凭证，替换而不是叠加 —— 既限制凭证面，
+    // 也避免"任一登录用户循环调用即可放大 Redis 键"。
+    await deleteRefreshTokensForSession(userId, sessionId, familyId);
     // 新增长期 refresh token（入 family）
     const refreshToken = crypto.randomBytes(32).toString('hex');
     await refreshStore.set(refreshToken, sessionId, USER_COOKIE_TTL);

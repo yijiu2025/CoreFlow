@@ -27,9 +27,25 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { PRIVATE_ROOT, resolveFile } from '../../../framework/storage/index.js';
+import { isSuperAdmin } from '../../../app/guard/services/authority.js';
 
 /** 允许内联展示的扩展名（其余一律按附件下载，避免被浏览器当页面渲染） */
 const INLINE_EXT = /\.(png|jpe?g|webp|gif|pdf|txt)$/i;
+
+/**
+ * 是否持有管理后台通配权限（`admin:*` / `*`）
+ *
+ * `permissions` 的形状是 `{allows, denies}`（见 permission-loader.js），这里兼容数组形态。
+ * 只认通配 —— 精确的 `admin:user:read` 之类的权限不该顺带获得"读别人私有文件"的能力。
+ *
+ * @param {object} user request.state.user
+ * @returns {boolean}
+ */
+function hasAdminWildcard(user) {
+  const perms = user?.permissions;
+  const allows = Array.isArray(perms) ? perms : Array.isArray(perms?.allows) ? perms.allows : [];
+  return allows.includes('*') || allows.includes('admin:*');
+}
 
 /**
  * 解析出「归属用户 id」——私有文件的 key 必须带 `u/<ownerId>/` 前缀
@@ -104,7 +120,12 @@ async function registerFileRoutes(fastify) {
       }
       const user = request.state?.user || {};
       const currentUserId = String(user.id ?? user.userId ?? '');
-      const isAdmin = Array.isArray(user.roles) && user.roles.includes('admin');
+      // 🔴 管理员判定不能写死角色字面量（2026-11-08 修复）：
+      // 旧实现是 `roles.includes('admin')`，而本仓**不存在** `admin` 这个角色码 ——
+      // 真实角色是 `superadmin`（GLOBAL）与各应用的 `<app>_admin`（如 `admin_admin`），
+      // 所以这个分支恒为 false，管理员永远拿不到他人的私有文件（审计/取证走不通）。
+      // 判据统一走已有的 isSuperAdmin + 管理后台通配权限，不再自己猜角色名。
+      const isAdmin = isSuperAdmin(user) || hasAdminWildcard(user);
       if (!isAdmin && currentUserId !== ownerId) {
         return reply.result.forbidden('无权访问该文件');
       }

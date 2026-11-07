@@ -37,7 +37,9 @@ function registerLoginRoutes(fastify) {
     method: 'POST',
     url: '/login',
     schema: loginSchema,
-    config: { firewall: { credentialRoute: true } },
+    // 🔴 端点级限流是唯一生效的那层：全局限流默认关闭（defense.enableRateLimit=false），
+    // 本端点此前完全没有 `config.rateLimit`，只剩"图形验证码 + 账号锁"两道应用层判定。
+    config: { firewall: { credentialRoute: true }, rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'login' } },
     handler: (request, reply) => directLogin(request, reply, fastify)
   });
 
@@ -48,7 +50,11 @@ function registerLoginRoutes(fastify) {
     method: 'POST',
     url: '/mini-login',
     schema: loginSchema,
-    config: { firewall: { credentialRoute: true } },
+    // iframe 快捷登录与 /login 共用同一套凭证校验，同样需要自己的桶（groupId 隔离）
+    config: {
+      firewall: { credentialRoute: true },
+      rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'mini-login' }
+    },
     handler: (request, reply) => directLogin(request, reply, fastify)
   });
 
@@ -69,7 +75,12 @@ function registerLoginRoutes(fastify) {
     method: 'POST',
     url: '/login/verify-email',
     schema: verifyEmailLoginSchema,
-    config: { firewall: { credentialRoute: true } },
+    // 邮箱二次验证同样吃凭证（verifyToken + 6 位码），必须独立限流：
+    // 没有它，6 位码在 TTL 内可被高速撞库（服务端虽有尝试上限，但那是应用层最后一道）
+    config: {
+      firewall: { credentialRoute: true },
+      rateLimit: { max: 10, timeWindow: '1 minute', groupId: 'login-verify-email' }
+    },
     handler: (request, reply) => verifyEmailLogin(request, reply, fastify)
   });
 }

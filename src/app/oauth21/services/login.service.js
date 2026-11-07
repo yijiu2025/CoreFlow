@@ -218,6 +218,29 @@ async function directLogin(request, reply, fastify) {
     }
   }
 
+  // 2.2 账号禁用判定（2026-11-08 修复）
+  //
+  // 此前两条登录路径都不看 `status`：`findByUsername` 甚至不返回这个字段，
+  // 于是 status=0（管理员禁用 / 注销）的账号仍能走完登录、拿到 session_token，
+  // 真正拦住它的是**下一个请求**的 `isSessionUserActive` —— 表现为"登录成功但立刻被登出"，
+  // 期间还照常写 LOGIN_SUCCESS 审计、发 session_token、跑一遍设备环境检测。
+  // 这里提前拒绝，语义与 session 层一致（`Number(...)` 归一：DB 驱动可能返回字符串 '0'）。
+  if (Number(user.status) === 0) {
+    await logLogin({
+      userId: user.id || null,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] || '',
+      appId: 'oauth21',
+      success: false,
+      reason: '账号已禁用'
+    });
+    return reply.code(403).send({
+      code: 403,
+      message: '该账号已被禁用，请联系管理员',
+      data: null
+    });
+  }
+
   // 2.5 密码登录环境异常检测（密码验证通过后、签发令牌前）
   // 比对本次 device_id/IP/UA 与用户最近 session_token 基准：
   // - warn（指纹变，换设备/UA）→ 返回 needs_email_verify，前端弹邮箱码二次验证

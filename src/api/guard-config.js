@@ -385,7 +385,11 @@ function triggerSave(systemKey) {
     const keys = _dirtySystems.size > 0 ? [..._dirtySystems] : null;
     _dirtySystems.clear();
     try {
-      currentVersion = await saveWithTimeout(keys);
+      // 🔴 取 `.maxVersion`（2026-11-08）：`saveWithTimeout` 返回的是
+      // `{maxVersion, updated, versions}`，直接赋值会让 currentVersion 变成对象 ——
+      // 之后 `Math.max(currentVersion, …)` 得到 NaN、日志打印 `[object Object]`、
+      // 回滚快照里存的也是对象。
+      currentVersion = (await saveWithTimeout(keys)).maxVersion;
     } catch (err) {
       // 写入失败时回滚内存状态到写入前的快照
       if (_previousSnapshot) {
@@ -567,7 +571,8 @@ async function flushGuardConfig() {
   const keys = _dirtySystems.size > 0 ? [..._dirtySystems] : [];
   _dirtySystems.clear();
   try {
-    currentVersion = await saveWithTimeout(keys);
+    // 同上：`saveWithTimeout` 返回对象，版本号在 `maxVersion` 上
+    currentVersion = (await saveWithTimeout(keys)).maxVersion;
     log.info(`✅ [Guard Config] ${C.green}配置已安全写入数据库${C.reset}`);
   } catch (err) {
     log.error(`❌ [Guard Config] ${C.red}优雅关闭保存失败${C.reset}`, err);
@@ -596,7 +601,8 @@ async function saveGuardConfig() {
   }
 
   try {
-    currentVersion = await saveWithTimeout();
+    // 同上：`saveWithTimeout` 返回对象，版本号在 `maxVersion` 上
+    currentVersion = (await saveWithTimeout()).maxVersion;
     log.info(`✅ [Guard Config] ${C.green}数据库已同步 (version=${currentVersion})${C.reset}`);
   } catch (err) {
     log.error(`❌ [Guard Config] ${C.red}同步失败${C.reset}`, err);

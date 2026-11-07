@@ -161,7 +161,9 @@ async function issueDirectTokens(user, client, scope, oidcNonce, request, reply,
           username: user.username,
           email: user.email,
           avatar: user.avatar,
-          status: user.status || 'active',
+          // 🔴 `??` 而不是 `||`（2026-11-08）：status=0 是"已禁用"，用 `||` 会把它
+          // 折叠成 'active' 写进 session 载荷 —— 恰好把最需要保留下来的那个值抹掉。
+          status: user.status ?? 'active',
           appId: sessionAppId,
           ip: request.ip,
           deviceId: deviceId, // 使用已验证的设备 ID

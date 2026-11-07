@@ -28,6 +28,9 @@ function registerQrRoutes(fastify, qrStore) {
     method: 'GET',
     url: '/qr/generate',
     requireSignature: true,
+    // 每次调用写 3 个 Redis 键（h5_token 引导 + qrKey + ticket），且全局限流默认关闭：
+    // 端点自己的桶是唯一能挡住"匿名刷写"的一层（2026-11-08）
+    config: { rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'qr-generate' } },
     handler: async request => {
       const { client_id, nonce } = request.query;
       if (!client_id) {
@@ -54,6 +57,8 @@ function registerQrRoutes(fastify, qrStore) {
     alias: '扫描登录二维码',
     method: 'POST',
     url: '/qr/scan',
+    // 公开端点且会改写二维码状态：独立成桶，防被刷成"别人的二维码一直 SCANNED"
+    config: { rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'qr-scan' } },
     handler: async (request, reply) => {
       const { qrKey } = request.body;
       const success = await scanQrCode(qrStore, qrKey, request);
@@ -75,6 +80,8 @@ function registerQrRoutes(fastify, qrStore) {
     method: 'POST',
     url: '/qr/confirm',
     requireLogin: true,
+    // 确认即签发登录态，按用户维度单独成桶
+    config: { rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'qr-confirm' } },
     handler: async (request, reply) => {
       const { qrKey } = request.body;
       const user = request.state?.user;
@@ -106,6 +113,8 @@ function registerQrRoutes(fastify, qrStore) {
     alias: '检测二维码状态',
     method: 'GET',
     url: '/qr/status',
+    // PC 端 2s 轮询 ≈ 30 次/分，留一倍余量；无上限时是公开可打的免费查询
+    config: { rateLimit: { max: 60, timeWindow: '1 minute', groupId: 'qr-status' } },
     handler: (request, reply) => {
       const { qrKey } = request.query;
       return getQrStatus(qrStore, { qrKey }, request, reply, fastify);

@@ -36,6 +36,18 @@ function clone(value) {
 }
 
 /**
+ * 合并时禁止写入的键
+ *
+ * 覆盖文件是 JSON，`{"__proto__": {...}}` 会被 `JSON.parse` 解析成**自有属性**，
+ * 随后的 `out[key] = …` 触发的是 `Object.prototype.__proto__` 的 setter ——
+ * 等于给这个配置对象换掉原型（`constructor` / `prototype` 同理可用于构造原型链）。
+ * 污染范围限于该配置对象本身（不是全局 `Object.prototype`），但这属于配置面的
+ * 提权入口：原型上的键会被 `config.x` 读到，绕过 schema 校验。
+ * 配置里没有任何合法场景需要这三个键。
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
  * 深合并：对象递归合并，**数组整体替换**
  *
  * 数组不拼接是刻意的：名单类配置若拼接，删掉的条目会在下次启动时"复活"。
@@ -48,6 +60,7 @@ function deepMerge(target, source) {
   const out = clone(target);
   if (!source || typeof source !== 'object' || Array.isArray(source)) return out;
   for (const [key, val] of Object.entries(source)) {
+    if (UNSAFE_KEYS.has(key)) continue;
     const base = out[key];
     if (
       val &&
@@ -79,6 +92,7 @@ function applyInPlace(target, next) {
     if (!(key in next)) delete target[key]; // JSON 里显式删除的键要跟着消失
   }
   for (const [key, val] of Object.entries(next)) {
+    if (UNSAFE_KEYS.has(key)) continue;
     const cur = target[key];
     if (
       val &&

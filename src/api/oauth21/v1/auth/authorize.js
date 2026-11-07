@@ -41,7 +41,13 @@ function registerAuthorizeRoutes(fastify, sessionStore) {
     method: 'POST',
     url: '/authorize/login',
     schema: authorizeLoginSchema,
-    config: { firewall: { credentialRoute: true } },
+    // 🔴 `rateLimit` 不能省（2026-11-08）：本端点**不要求图形验证码**，
+    // 而全局限流默认关闭（defense.enableRateLimit=false），端点级声明是唯一的计数入口。
+    // 没有它 + 不查账号锁定 = 一条不限速的密码爆破通道（见 service 侧的 isAccountLocked）。
+    config: {
+      firewall: { credentialRoute: true },
+      rateLimit: { max: 10, timeWindow: '1 minute', groupId: 'authorize-login' }
+    },
     handler: (request, reply) => authService.handleAuthorizeLogin(request, reply, sessionStore)
   });
 

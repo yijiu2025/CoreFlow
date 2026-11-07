@@ -1126,6 +1126,26 @@ describe('扫描陷阱：端点自证（路由声明）与无路由路径（safe
     expect(err.rule).toBe('scanner-trap');
   });
 
+  it('已登录用户的 403 不计入（权限不足 ≠ 在猜路径），且不污染匿名计数', async () => {
+    const ip = '203.0.113.304';
+    // 连刷 12 次「已登录」的 403：一次都不该计数
+    for (let i = 0; i < 12; i++) {
+      await expect(checkNotFoundTrap(ip, '/api/some/protected', 403, null, {}, true)).resolves.toBeUndefined();
+    }
+    // 计数器应仍是 0：匿名请求到第 10 次才命中，说明前面 12 次确实没写进去
+    let anonymousErr = null;
+    for (let i = 0; i < 12; i++) {
+      try {
+        await checkNotFoundTrap(ip, '/api/some/protected', 403, null, {});
+      } catch (err) {
+        anonymousErr = err;
+        break;
+      }
+    }
+    expect(anonymousErr).not.toBeNull();
+    expect(anonymousErr.rule).toBe('scanner-trap');
+  });
+
   it('没有路由的路径（favicon 404）由 safePaths 前缀兜底', async () => {
     const ip = '203.0.113.303';
     // 无路由 ⇒ routeConfig 是 null；这类请求只能靠配置里的前缀豁免

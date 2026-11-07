@@ -23,6 +23,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateAuthorizationCode } from '../crypto/tokens.js';
 import config from '../config/config.js';
 import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
+import { isAccountLocked } from '../../../framework/firewall/engine/detectors/brute-force.js';
+import { createLogger } from '../../../framework/log/index.js';
+
+const log = createLogger('app.oauth21.services.authorization');
 
 /**
  * OAuth 授权错误（RFC 6749 标准错误格式）
@@ -284,6 +288,19 @@ class AuthorizationService {
       });
     }
 
+    // 🔴 账号锁定判定（2026-11-08 修复）：本端点与 `/login` 消费同一套凭证，
+    // 失败也会被防火墙的 `observeLoginOutcome` 计入 `brute:user:*` 并在 5 次后写 `lock:*`，
+    // 但**这里从不读那个标记** —— 于是攻击者只要改打 `/authorize/login`，
+    // 账号维度锁定就完全失效（这是最省事的爆破入口：不需要图形验证码）。
+    if (username && (await isAccountLocked(username))) {
+      log.warn(`🚫 [Authorize] 账号锁定中，拒绝登录: user=${username}`);
+      return reply.code(423).send({
+        code: 423,
+        message: '该账号因多次登录失败已被临时锁定，请稍后再试',
+        data: null
+      });
+    }
+
     const user = await this.authenticateUser(username, password);
     if (!user) {
       return reply.code(401).send({
@@ -295,6 +312,16 @@ class AuthorizationService {
           client_name: session.client.client_name,
           scope: session.scope
         }
+      });
+    }
+
+    // 🔴 禁用账号不得登录（与 login.service 的判定保持一致；`Number()` 归一 '0' 字符串）
+    if (Number(user.status) === 0) {
+      log.warn(`🚫 [Authorize] 账号已禁用，拒绝登录: uid=${user.uid}`);
+      return reply.code(403).send({
+        code: 403,
+        message: '该账号已被禁用，请联系管理员',
+        data: null
       });
     }
 

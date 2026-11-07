@@ -87,13 +87,28 @@ describe('调度器 · 配置了 Redis（多实例部署）', () => {
     const interval = 24 * HOUR;
     await acquirePeriodLock('session-cleanup', interval);
     expect(createLockCalls).toHaveLength(1);
-    expect(createLockCalls[0].name).toBe('scheduler:session-cleanup');
+    // 锁名带周期序号（每个周期一把独立锁，否则下一周期会被自己的旧锁挡住）
+    expect(createLockCalls[0].name).toMatch(/^scheduler:session-cleanup:p\d+$/);
     expect(createLockCalls[0].options.ttl).toBe(interval * 2);
   });
 
-  it('第一个实例抢到锁，第二个实例抢不到', async () => {
+  it('同一周期内只有一个实例能抢到', async () => {
     expect(await acquirePeriodLock('session-cleanup', 24 * HOUR)).toBe(true);
     expect(await acquirePeriodLock('session-cleanup', 24 * HOUR)).toBe(false);
+  });
+
+  it('跨周期可以再次抢到（否则任务会变成半频执行）', async () => {
+    // 用 5ms 作为"周期"，跨过一个周期边界后应换用新锁键并成功获取
+    const tiny = 5;
+    expect(await acquirePeriodLock('session-cleanup', tiny)).toBe(true);
+    const first = createLockCalls[0].name;
+    // 等到进入下一个周期桶（最多等 3 个周期，避免边界抖动导致偶发失败）
+    for (let i = 0; i < 3 && createLockCalls.length < 2; i++) {
+      await new Promise(r => setTimeout(r, tiny + 2));
+      await acquirePeriodLock('session-cleanup', tiny);
+    }
+    expect(createLockCalls.length).toBeGreaterThanOrEqual(2);
+    expect(createLockCalls[1].name).not.toBe(first);
   });
 
   it('Redis 不可达时跳过本轮，**不回退到本地执行**', async () => {
@@ -130,8 +145,9 @@ describe('调度器 · 两实例并发只执行一次（核心不变量）', () 
 
   it('未拿到锁的实例完全不触碰任务体', async () => {
     redisConfigured = true;
-    // createLock 内部会补 `lock:` 前缀，这里必须与之一致
-    heldLocks.add('scheduler:session-cleanup'); // 事先被别的实例占住
+    // createLock 内部会补 `lock:` 前缀，锁名带周期序号（与实现保持一致）
+    const period = Math.floor(Date.now() / (24 * HOUR));
+    heldLocks.add(`scheduler:session-cleanup:p${period}`); // 事先被别的实例占住
     const { calls, factory } = makeTaskFactory();
 
     await executeTask({

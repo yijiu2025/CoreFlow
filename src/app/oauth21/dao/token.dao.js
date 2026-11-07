@@ -80,13 +80,21 @@ const TokenDao = {
   },
 
   /**
-   * 判断明文 refresh_token 是否已吊销（用于盗用检测：已吊销再用=盗用）
+   * 判断明文 refresh_token 是否**已吊销**（用于盗用检测：已轮转的旧令牌被再次使用 = 盗用）
+   *
+   * 🔴 必须同时过滤 `revoked: true`（2026-11-08 修复）：
+   * 旧实现只按哈希查，把"**过期**但从未轮转"的令牌也返回了 ——
+   * 而 `find()` 是过滤过期的（查不到 → 走盗用分支）→ 于是一次普通的
+   * "用过期 refresh_token 刷新"会被判成盗用，触发 `revokeAllForUser`，
+   * 把该用户**所有设备**的 refresh token 全吊销。反过来，任何持有该用户
+   * 历史令牌值的人也能主动触发这次全量吊销（拒绝服务）。
+   *
    * @param {string} refreshToken 明文刷新令牌值
-   * @returns {Promise<object|null>} 令牌记录（含 sub/client_id）或 null
+   * @returns {Promise<object|null>} 已吊销的令牌记录（含 sub/client_id）或 null
    */
   async findRevoked(refreshToken) {
     const model = getModel();
-    const token = await model.findOne({ where: { refresh_token: rtHash(refreshToken) } });
+    const token = await model.findOne({ where: { refresh_token: rtHash(refreshToken), revoked: true } });
     return token ? token.toJSON() : null;
   },
 

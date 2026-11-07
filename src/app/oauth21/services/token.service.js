@@ -107,6 +107,18 @@ class TokenService {
       throw new TokenError('invalid_grant', 'Invalid or expired authorization code');
     }
 
+    // 1.5 重放必须**在这里拒绝**（2026-11-08 修复）
+    //
+    // `CodeDao.consume` 在 DB 分支发现 code 已消费时返回的是数据 + `replay_detected: true`
+    // （而不是 null，因为它同时承担"盗用取证"的职责）。旧实现只看 `!codeData`，
+    // 于是这条标记**从未被任何调用方读取** —— Redis 关闭/不可用（走 DB 兜底）时，
+    // 同一个 authorization_code 可以反复兑换出新的 access_token + refresh_token。
+    // RFC 6749 §4.1.2 要求：code 只能使用一次，重复使用必须拒绝。
+    if (codeData.replay_detected) {
+      log.warn(`🚨 [OAuth] authorization_code 重放被拒绝: client=${client?.client_id}`);
+      throw new TokenError('invalid_grant', 'Authorization code already used');
+    }
+
     // 2. client_id 匹配
     if (codeData.client_id !== client.client_id) {
       throw new TokenError('invalid_grant', 'client_id mismatch');
@@ -246,7 +258,9 @@ class TokenService {
     if (!user) {
       throw new TokenError('invalid_grant', 'User not found');
     }
-    if (user.status === 0) {
+    // 🔴 `Number()` 归一，不用严格相等：DB 驱动可能把 TINYINT 以字符串 '0' 返回，
+    // 此时 `'0' === 0` 为 false → 禁用用户照样能续期。与上面授权码分支（Number(user.status)）保持一致。
+    if (Number(user.status) === 0) {
       await TokenDao.revokeAllForUser(tokenData.sub);
       throw new TokenError('invalid_grant', 'Account disabled');
     }

@@ -93,6 +93,26 @@ class InteractionDao {
   }
 
   /**
+   * 读取作品/模板当前的点赞数（点赞/取消后回读真实值）
+   *
+   * 失败不影响主流程：读不到就返回 undefined，调用方回退到自己手里的快照。
+   *
+   * @param {{workId?: number, templateId?: number}} target 目标
+   * @returns {Promise<number|undefined>}
+   */
+  async _readLikeCount({ workId, templateId }) {
+    try {
+      const Model = workId ? this.getWorkModel() : templateId ? this.getTemplateModel() : null;
+      const id = workId || templateId;
+      if (!Model || !id) return undefined;
+      const row = await Model.findByPk(id, { attributes: ['likes_count'] });
+      return row ? Number(row.likes_count) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * 切换点赞状态（点赞/取消点赞），联动更新 like 计数
    * @param {number} userId - 用户 ID
    * @param {object} payload - { workId?, templateId?, like: boolean }
@@ -138,7 +158,14 @@ class InteractionDao {
       } else if (templateId) {
         await Template.increment('likes_count', { by: 1, where: { id: templateId } });
       }
-      return { success: true, liked: true, message: '点赞成功' };
+      // 🔴 回读一次真实计数（2026-11-08）：调用方此前返回的是**自增前**读到的快照，
+      // 响应里的数字永远比实际少 1（前端乐观更新后会看到"跳一下"）。
+      return {
+        success: true,
+        liked: true,
+        message: '点赞成功',
+        likes: await this._readLikeCount({ workId, templateId })
+      };
     } else {
       if (!existing) {
         return { success: true, liked: false, message: '未点赞' };
@@ -162,7 +189,12 @@ class InteractionDao {
       } else if (templateId) {
         await Template.increment('likes_count', { by: -1, where: { id: templateId } });
       }
-      return { success: true, liked: false, message: '取消点赞成功' };
+      return {
+        success: true,
+        liked: false,
+        message: '取消点赞成功',
+        likes: await this._readLikeCount({ workId, templateId })
+      };
     }
   }
 
@@ -174,6 +206,8 @@ class InteractionDao {
    */
   async toggleCollect(userId, { workId, templateId, collect }) {
     const Collect = this.getCollectModel();
+    const Work = this.getWorkModel();
+    const Template = this.getTemplateModel();
 
     const where = { user_id: userId, delete_version: 0 };
     if (workId) {
@@ -184,27 +218,46 @@ class InteractionDao {
       return { success: false, message: '无效的参数' };
     }
 
-    const existing = await Collect.findOne({ where });
-
     if (collect) {
-      if (existing) {
+      // 🔴 findOrCreate 而不是"先查后 create"（2026-11-08）：并发双击同一作品时，
+      // 两次请求都可能读到"未收藏"→ 同时 create → 撞 `uk_user_collect_work` 唯一索引 → 500。
+      const [, created] = await Collect.findOrCreate({
+        where,
+        defaults: {
+          user_id: userId,
+          work_id: workId || null,
+          template_id: templateId || null,
+          delete_version: 0
+        }
+      });
+      if (!created) {
         return { success: true, collected: true, message: '已收藏' };
       }
-      await Collect.create({
-        user_id: userId,
-        work_id: workId || null,
-        template_id: templateId || null,
-        delete_version: 0
-      });
-      return { success: true, collected: true, message: '收藏成功' };
-    } else {
-      if (!existing) {
-        return { success: true, collected: false, message: '未收藏' };
+      // 🔴 收藏计数此前**全仓没有任何写入点**（2026-11-08）：推荐排序公式里
+      // `collects_count * 12` 因此恒为 0，页面上的收藏数也永远是 0。
+      if (workId) {
+        await Work.increment('collects_count', { by: 1, where: { id: workId } });
+      } else if (templateId) {
+        await Template.increment('collects_count', { by: 1, where: { id: templateId } });
       }
-      await existing.update({ delete_version: existing.id });
-      await existing.destroy();
-      return { success: true, collected: false, message: '取消收藏成功' };
+      return { success: true, collected: true, message: '收藏成功' };
     }
+
+    // 取消：用一条条件 UPDATE 同时"释放唯一索引槽位（delete_version=id）+ 软删除"，
+    // 并发取消只有一行受影响，计数也只减一次（与 toggleLike 同一手法）
+    const [affected] = await Collect.update(
+      { delete_version: sequelize.literal('id'), deletedAt: new Date() },
+      { where: { ...where, deletedAt: null } }
+    );
+    if (affected === 0) {
+      return { success: true, collected: false, message: '未收藏' };
+    }
+    if (workId) {
+      await Work.increment('collects_count', { by: -1, where: { id: workId } });
+    } else if (templateId) {
+      await Template.increment('collects_count', { by: -1, where: { id: templateId } });
+    }
+    return { success: true, collected: false, message: '取消收藏成功' };
   }
 
   /**

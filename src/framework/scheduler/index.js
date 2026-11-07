@@ -90,10 +90,18 @@ async function acquirePeriodLock(taskKey, intervalMs) {
   if (!isRedisConfigured()) return true; // 单实例部署：不引入锁语义
 
   try {
-    // 🔴 锁 TTL 必须显著大于任务周期：此前 TTL=周期，任务一旦跑超周期锁就过期，
+    // 🔴 锁 TTL 必须显著大于任务周期：任务一旦跑超周期锁就过期，
     // 其他实例可并发执行同一任务（重复执行）。取 2 倍周期作为安全余量。
     const lockTtl = Math.max(intervalMs * 2, intervalMs + 60_000);
-    const lock = createLock(`scheduler:${taskKey}`, { ttl: lockTtl });
+    // 🔴 锁名必须带**周期序号**（2026-11-08 修复）
+    //
+    // 旧实现用固定名 `scheduler:<task>` + TTL=2×周期 + 从不释放 ⇒ 同一实例在下一个 tick
+    // （间隔 1 个周期）抢锁必然失败并被跳过，实际执行频率变成配置值的一半
+    // （intervalHours:24 实际 48 小时一次），单实例部署看不出来。
+    // 每个周期一把独立锁后：同一周期内全集群只有一个实例执行，下一个周期自动换新键，
+    // 不需要提前释放（释放反而会让错峰的实例在同一周期内重复执行）。
+    const period = intervalMs > 0 ? Math.floor(Date.now() / intervalMs) : 0;
+    const lock = createLock(`scheduler:${taskKey}:p${period}`, { ttl: lockTtl });
     return await lock.tryAcquire();
   } catch (err) {
     // 已配置但不可达 → 跳过，不回退。回退执行在多实例下会重复跑任务。

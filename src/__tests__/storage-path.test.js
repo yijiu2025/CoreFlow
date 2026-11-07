@@ -175,9 +175,21 @@ describe('私有文件下载路由', () => {
     expect(reply.sentFile).toBeNull();
   });
 
-  it('管理员可下载他人文件', async () => {
+  it('超级管理员可下载他人文件', async () => {
     const reply = makeReply();
-    await handler(makeReq({ id: '1', roles: ['admin'] }), reply);
+    // 🔴 用**真实存在**的角色码：仓内没有 `admin` 这个角色（见 app/*/permission/roles.js），
+    // 旧夹具 `roles: ['admin']` 会让这条用例在"管理员分支永远不成立"的实现下依然变绿 ——
+    // 它测的是夹具而不是代码（2026-11-08 修正）。
+    await handler(makeReq({ id: '1', roles: ['superadmin'] }), reply);
+    expect(reply.sentFile.file).toBe(path.join(APP, KEY));
+  });
+
+  it('持有 admin:* 通配权限的管理员也可下载他人文件', async () => {
+    const reply = makeReply();
+    await handler(
+      makeReq({ id: '1', roles: ['admin_admin'], permissions: { allows: ['admin:*'], denies: [] } }),
+      reply
+    );
     expect(reply.sentFile.file).toBe(path.join(APP, KEY));
   });
 

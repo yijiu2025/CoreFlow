@@ -37,7 +37,10 @@ if (missing.length > 0 && !isTestEnv) {
   log.warn(`⚠️ [DB] 测试环境缺少 DB 配置（${missing.map(([k]) => k).join(', ')}），不退出进程`);
 }
 
-const dsn = `${DB_TYPE || 'mysql'}://${DB_USER}:${encodeURIComponent(DB_PASS || '')}@${DB_HOST}:${DB_PORT || 3306}/${DB_NAME}`;
+// 🔴 三个变量都要编码（2026-11-08）：只编码密码时，用户名/库名里出现 `@ : / ? #`
+// 会让连接串被解析错位（云托管账号常见 `user@host` 形态），报错却指向"认证失败"，
+// 排查方向完全被带偏。`encodeURIComponent` 对普通标识符是幂等的，不需要额外判断。
+const dsn = `${DB_TYPE || 'mysql'}://${encodeURIComponent(DB_USER || '')}:${encodeURIComponent(DB_PASS || '')}@${DB_HOST}:${DB_PORT || 3306}/${encodeURIComponent(DB_NAME || '')}`;
 
 // 连接池调优覆盖（可选；src/config 目录缺失也能跑，用下面 core 保底值）
 const DB_OVERRIDES = loadOverrides('db_config.js', 'DB_CONFIG');

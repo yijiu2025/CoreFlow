@@ -326,7 +326,11 @@ function verifyPow(challengeId, salt, answer, difficulty) {
   // 答案必须是纯十进制数字串，杜绝把超长/特殊字符塞进哈希输入
   if (!/^\d{1,10}$/.test(text)) return false;
   const depth = Number(difficulty) || 0;
-  if (depth <= 0) return true;
+  // 🔴 难度非法时**判失败**，不是判通过（2026-11-08）：判题函数里的 fail-open
+  // 是这类机制最危险的一处默认值 —— 任何把 difficulty 写成 0 的调用方/历史载荷
+  // 都会让"任意数字答案"直接通过。合法难度恒 >= 1（`clampDifficulty` 保证），
+  // 所以这里拒绝不会误伤任何正常链路。
+  if (depth < 1) return false;
   const digest = sha256Hex(`${challengeId}:${salt}:${text}`);
   return digest.startsWith('0'.repeat(depth));
 }
