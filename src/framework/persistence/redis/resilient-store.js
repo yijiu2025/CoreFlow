@@ -11,6 +11,8 @@ const log = createLogger('framework.redis.resilient-store');
  * - 不再缓存本地 healthy 状态，每次读取 app.redisHealthy，杜绝瞬时命令错误后永久卡死在内存模式
  * - 单次失败后短冷却（5s），避免 Redis 抖动时雪崩打爆
  * - child() 保存健康回调 unsubscribe 函数，onClose 时解绑，避免全局回调 Set 无限增长
+ *   （2026-11-07 起**只有父实例订阅**：路由桶都是 child，逐个订阅会让一次 Redis
+ *   主备切换打出 N 行相同日志）
  * - 移除多余 ttl() 往返，直接返回窗口长度作为 ttl
  *
  * @author yijiu2025
@@ -61,6 +63,51 @@ let _instanceCount = 0;
 const _allInstances = new Set();
 /** 已注册 onClose 的 app 实例集合，避免重复注册 */
 const _onCloseRegistered = new WeakSet();
+/** 已挂过启动汇总钩子的 app（每个 app 只挂一次，不是每个实例） */
+const _summaryBoundApps = new WeakSet();
+
+/**
+ * 实例数超过这个值才告警
+ *
+ * 正常值由**路由表规模**决定：每条带 `config.rateLimit` 的路由各占一个 child
+ * （Fastify 给每个 GET 自动生成的 HEAD 也算一条），同 groupId 的端点共享桶但仍是
+ * 独立实例。实测本仓库 52 个逻辑桶 → 83 个 child + 1 个父实例 = 84，
+ * 所以 50 这个量级是常态而非异常。真正的异常是"运行期被反复注册"，
+ * 那种情况会跑到数百上千。
+ */
+const INSTANCE_WARN_THRESHOLD = 500;
+
+/**
+ * 在启动结束时打一条汇总（每个 app 只挂一次 onReady）
+ *
+ * 为什么不在构造时打：child() 是在路由注册过程中密集调用的，构造期只能看到
+ * 一个不断增长的中途值 —— 原先按「>50 且 10 的倍数」打点，一次启动会连打
+ * 60/70/80 三条，且文案暗示"动态创建了过多路由"，与事实不符（见上）。
+ *
+ * @param {object} app Fastify 实例
+ * @returns {void}
+ */
+function _scheduleBootSummary(app) {
+  if (!app?.addHook || _summaryBoundApps.has(app)) return;
+  _summaryBoundApps.add(app);
+
+  const emit = () => {
+    const total = _instanceCount;
+    if (total === 0) return;
+    if (total > INSTANCE_WARN_THRESHOLD) {
+      log.warn(`[Redis] 限流存储实例 ${total} 个，异常增长；请检查是否有路由在运行期被反复注册`);
+      return;
+    }
+    log.info(`[Redis] 限流存储就绪：${total} 个实例（父 1 + 路由桶 ${total - 1}）`);
+  };
+
+  try {
+    app.addHook('onReady', emit);
+  } catch {
+    // ready 之后再 addHook 可能不被允许（测试里常见）：退回同步摘要，不影响功能
+    emit();
+  }
+}
 
 /**
  * 启动共享清理定时器（懒初始化）
@@ -108,6 +155,7 @@ class ResilientStore {
    * @param {import('fastify').FastifyInstance} app Fastify 实例
    * @param {object} [options]
    * @param {() => number} [options.getWindowMs] 返回当前限流窗口（毫秒）的回调，默认 60000
+   * @param {boolean} [options.isChild] 是否由 `child()` 派生（子实例不订阅健康变化）
    */
   constructor(app, options = {}) {
     /** @type {import('fastify').FastifyInstance} */
@@ -126,17 +174,19 @@ class ResilientStore {
     this._cooldownUntil = 0;
 
     _instanceCount++;
-    // 当限流路由较多时，记录实例数以辅助排查内存占用
-    if (_instanceCount > 50 && _instanceCount % 10 === 0) {
-      log.warn(`[Redis] ResilientStore 实例数已达 ${_instanceCount}，请检查是否动态创建了过多路由`);
-    }
+    // 汇总日志在启动结束时打一条（不是每个实例都打，见 _scheduleBootSummary）
+    _scheduleBootSummary(app);
     _ensureCleanupTimer();
     _registeredMaps.add(this.memoryFallback);
 
     // 监听全局健康状态变化（保存 unsubscribe 以便 onClose 解绑）
+    //
+    // ⚠️ **只有父实例订阅**：每个路由桶都是一个 child，若逐个订阅，一次 Redis 主备切换
+    // 会打出 N 行完全相同的日志（本仓库实测 83 行），把真正的故障信息淹掉。
+    // 桶本身不需要知道健康状态 —— 它每次命令都读 app.redisHealthy。
     /** @type {(() => void)|null} */
     this._unsubHealth = null;
-    if (app.onRedisHealthChange) {
+    if (!options.isChild && app.onRedisHealthChange) {
       this._unsubHealth = app.onRedisHealthChange(state => {
         if (state) {
           this.log.info?.('[Redis] 限流器切回分布式模式');
@@ -268,9 +318,12 @@ class ResilientStore {
     // 共享 memoryFallback：Redis 模式下所有子实例本来就写同一批 key，
     // 若降级时每个子实例各建一张表，就会出现「Redis 模式共享、降级模式隔离」
     // 的语义分裂（同 groupId 的端点不共享桶、全局桶被按路由放大数倍）。
+    //
+    // isChild: 子实例不订阅健康变化（父实例统一转告），否则一次切换打 N 行相同日志。
     return new ResilientStore(this.app, {
       getWindowMs: this.getWindowMs,
-      memoryFallback: this.memoryFallback
+      memoryFallback: this.memoryFallback,
+      isChild: true
     });
   }
 
