@@ -7,6 +7,56 @@
 
 ## 未发布（Unreleased）
 
+### 变更（v2.34.0 候选）
+
+- **feat(websocket)**：关闭宽限期与关闭码改为可配（`app_config.websocket.shutdownGraceMs` /
+  `closeCode`）。关闭码过区间（1000~4999）与协议禁发码（1005 / 1006 / 1015）校验，非法值回退
+  1001 —— 非法码绝不发出去；老签名 `createWsPreClose(150)` 保持可用。
+- **fix(firewall)**：配置链优先级收口。`activeIpApi` / `showTrajectory` 原先被面板层默认值
+  覆盖，写进 `src/config/firewall_config.js` 也不生效（只留一条 warn）；现统一为
+  **运行期 `data/*.json` > `src/config/*.js` > 内置默认**，且「用户显式写的优先，值不合法才
+  回落默认」。同时修 `DEFAULT_IP_API` 写死 id 造成的两处默认值漂移。
+- **fix(firewall)**：`data/firewall_config.json` 缺失时原先**零日志**，卷丢失或换机器后策略
+  静默回到内置默认（`enableRateLimit` / `enableGeoFilter` 默认关闭）——现补一条 warn，
+  带文件路径与这两个开关名，并区分「首次启动属正常」与「已有部署请查卷」。
+- **fix(firewall)**：默认 IP 归属源 `ipapi` → `ipinfo`。实测（2026-11-07）：`sohu` 恒返回
+  `{"cip":"127.0.0.1","cid":"00"}`（同一时刻纯 HTTP 的 ip-api.com 能正确返回真实出口 IP，
+  故为搜狐服务端判定失败，非请求或解析问题）、`ipapi.co` 被 Cloudflare 的 JS 挑战挡下恒 403、
+  `baidu` 端点已 404。定位失败也不再刷 WARN + stack，降级为单行 INFO。
+- **fix(guard)**：守卫配置写库路径收口。单系统写入不再把 `_dbVersions` 抹成子集（否则 30s 后
+  误报"已同步其他实例的变更"）；`flushGuardConfig` 无脏系统时不再空写并谎报"已安全写入"；
+  启动改为**只补录 DB 里缺失的系统**，不再全量回写运行时字段（多实例启动不再互相覆盖）；
+  读取/写入不再交出内部节点引用；写入前补值级校验（类型不符整次拒绝，不静默丢弃）。
+- **fix(guard)**：迁移修正 `guard_configs` 中历史遗留的 `admin` 行（`BINARY` 精确匹配，
+  两行并存时不动）。ci collation 让 `admin` 与代码注册的 `Admin` 互相遮蔽，导致 Admin 的
+  守卫配置**重启即失效**、乐观锁被永久钉在 1。
+- **fix(backend)**：后端全量检查发现的认证链路与健壮性问题 —— 授权码重放显式判
+  `replay_detected`、`/oauth2.1/authorize/login` 补限流与账号锁定/禁用判定、已登录用户的 403
+  不再计入扫描陷阱、吊销查询补 `revoked:true` 过滤、`updateRememberMe` 改为替换而非累加
+  refresh token。
+- **fix(config)**：调优配置体检 `validateAppConfig()` 一直**无参**调用，形参默认 `{}` 使其恒
+  返回空数组 —— `src/config/app_config.js` 的错别字与越界值静默回退默认值，而启动日志看起来
+  "体检过了"。
+- **fix(notice)**：`notice` CLI 测试邮件的动态导入路径与调用签名双错（指向不存在的
+  `app/services/`，且 `send({ to, subject, html })` 与 `send(email, subject, content)` 不符），
+  连模块都没加载成功就被 catch 吞成"发送失败"。
+- **fix(ci)**：修复 Verify / Lint / Docs 三个关卡 —— 调度器锁名改为唯一来源
+  `periodLockKey()`，子进程把抢锁时刻写进 RESULT 以复现同一把锁（原先跨周期边界约 1/3000
+  概率偶发变红）；`scripts/jest/shims/*.cjs`（上游包的逐字镜像）豁免三条与生成代码天然冲突的
+  规则，其余检查保留。
+- **refactor(backend)**：`src/framework/` 按六类分组 —— `config` / `persistence` / `security` /
+  `ingress` / `lifecycle` / `support`，18 个模块目录全部归位，`__tests__/framework/` 同构镜像；
+  全仓 319 处说明符、注释与文档路径一次性同步。移动文件时必须同步三类锚点：相对 `../` 层数、
+  `import.meta.url` 自锚根、`path.join(..., 'framework', ...)` 分段拼装。
+- **refactor(app)**：`app.js` 483 → 138 行，只保留顺序编排；HTTP 形态（server-options /
+  security-options / plugins / error-handler）、启动期策略（logging / config-check）、通用判据
+  （proxy-trust / cors）分别下沉 `framework/` 与 `utils/`。
+- **refactor(backend)**：优雅关闭编排下沉 `framework/lifecycle/shutdown.js` —— 关闭任务改为
+  声明式注册（`{ name, run }`），单条失败不影响后续，`onClose` 回调始终 resolve；
+  `app.js` 只声明"关什么、按什么顺序"。
+- **docs(config)**：`app-config.js` 补全调优项使用指导（可配置项总表 / 合法范围 / 默认值出处 /
+  失败行为 / 新增步骤）。
+
 ## 2.33.0 — 2026-11-07
 
 ### 变更（v2.33.0 候选）
