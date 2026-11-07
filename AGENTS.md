@@ -58,6 +58,32 @@ node scripts/release.mjs --apply --allow-dirty  # 工作区有并行任务的改
 - **Release 说明对公网可见**：脚本会列出标题含敏感表述（漏洞 / 密钥 / token 等）的提交，发之前先确认是否适合原文外发。
 - `packages/log/` 是独立嵌套仓库（`yijiu2025/log.git`），它的改动要去那个仓库提交。
 
+## 行尾与编码（强制）
+
+**一律 LF**，包括源码、文档、脚本、Dockerfile。只有 Windows 专用批处理（`*.cmd` / `*.bat`）保留 CRLF。
+
+为什么不是 CRLF：部署目标是 Linux 容器，CRLF 的 `.sh` / Dockerfile 进容器会报
+`bad interpreter: /bin/sh^M` —— 本地永远复现不出来；且 prettier / Node / eslint 生态默认 LF。
+
+规则落在**三层配置**，改一处必须同步另外两处，否则会出现「编辑器写 CRLF、prettier 改回 LF」的来回抖动：
+
+| 层 | 文件 | 作用 |
+| --- | --- | --- |
+| 仓库（权威） | `.gitattributes` | `* text=auto eol=lf`；cmd/bat 例外；二进制不转换 |
+| 编辑器 | `.editorconfig` | 新建/保存时写 LF；`*.md` 保留行尾双空格（硬换行语法） |
+| 格式化 | `.prettierrc.json` | `"endOfLine": "lf"`（**不能写 `auto`**，`auto` 等于不设防） |
+
+排查命令（判据是**索引**，不是工作区表象）：
+
+```bash
+git ls-files --eol | grep -v 'i/lf'      # 期望只剩 i/-text（二进制）与 i/none（空文件）
+git add --renormalize .                  # 按新属性重写索引
+git config core.autocrlf false           # 本仓：检出时不再转 CRLF
+```
+
+`core.autocrlf=true` 只会让 `git diff` 反复输出 "LF will be replaced by CRLF" 噪音，并制造
+「工作区看着干净、字节却不同」的错觉 —— 换机器/新克隆时先跑一次上面的 `git config`。
+
 ## 技术栈
 
 - **运行时**: Node.js ESM (`"type": "module"`)
