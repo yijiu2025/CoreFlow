@@ -7,6 +7,29 @@
 
 ## 未发布（Unreleased）
 
+### 变更（v2.33.0 候选）
+
+- **feat(guard)**：运行时守卫配置的**放宽**改为必须二次认证 + 签名信封，改动主体
+  收紧到超管（`GUARD_SUPERADMIN_EMAILS` 白名单，比对库里现读邮箱而非会话快照）。
+  新增 `direction.js`（判据收紧/放宽，`RUNTIME_FIELDS` 唯一来源）、`signing.js`
+  （HMAC 覆盖路径 + 全部运行时字段值，改值即失配）、`stepup.service.js`（挑战 +
+  一次性票据，复用既有邮箱验证码）。同时堵住绕过 API 直接写库的路径：启动合并时
+  先 diff 再验签，不合规的放宽整节点跳过。
+- **升级注意**：存量 DB 里相对代码基线为"放宽"的配置，升级后会被判未授权而忽略
+  （启动日志逐条 warn），需在面板重新提交一次（走 step-up）。
+- **fix(security)**：守卫接线错误集中修复 —— 28 处 `allowRoles: ['admin']` 引用全仓
+  不存在的角色码（`/admin/**`、`/notice/**` 对所有人 403，含 superadmin）、4 个
+  未定义权限码；`conventions/guard-wiring.test.js` 断言 `allowRoles` ⊆ 已定义角色码。
+- **fix(security)**：越权与防护失效 —— 扫码登录 ticket / qrKey 分离（防扫码劫持）、
+  `GET /works/:id` 补可见性校验（草稿含拍摄 GPS 曾公开可读）、点赞幂等化、
+  RetroWeb 配额按 `{allows,denies}` 读取并给批量导入补预检、`state.user.id` →
+  `userId`（用户维度限流与登录态降档从未生效）、H5 签名 nonce 改在验签后标记。
+- **fix(notice)**：SMTP 密码改 AES-256-GCM 加密存储（`framework/crypto/symmetric.js`，
+  APP_SECRET 派生），`retroweb/utils/secret.js` 收为薄壳指针，消除两份对称加密实现。
+- **fix(http)**：`resolveTimeoutMs` 从 `src/app.js` 迁到 `src/utils/timeout.js`，并修掉
+  两个"假 0"——`Number(null)` 与 `Number('   ')` 均为 0，配置写成 `null` / 空白串时
+  超时保护会静默消失而非回退默认值；合法的 `0` 仍原样保留。
+
 ## 2.32.0 — 2026-11-07
 
 ### 变更（v2.32.0 候选）
