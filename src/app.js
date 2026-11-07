@@ -11,6 +11,7 @@
  *   - 基础插件注册（helmet/cors/upload/static…） → framework/ingress/http/plugins.js
  *   - 安全头与跨域策略                          → framework/ingress/http/security-options.js
  *   - 全局错误处理器                            → framework/ingress/http/error-handler.js
+ *   - 优雅关闭编排（顺序 + 错误隔离）             → framework/lifecycle/shutdown.js
  *   - 代理可信网段解析与风险判定                 → utils/proxy-trust.js
  *   - CORS 来源解析与放行判断                    → utils/cors.js
  *
@@ -32,6 +33,7 @@ import { checkEnvironment, reportAppConfigWarnings } from './framework/lifecycle
 import { buildServerOptions } from './framework/ingress/http/server-options.js';
 import { registerBasePlugins } from './framework/ingress/http/plugins.js';
 import { createErrorHandler } from './framework/ingress/http/error-handler.js';
+import { registerShutdownHooks } from './framework/lifecycle/shutdown.js';
 import { parseOriginList } from './utils/cors.js';
 import { parseTrustProxy, describeProxyTrustRisk, formatProxyTrustRisks } from './utils/proxy-trust.js';
 
@@ -101,38 +103,23 @@ async function createApp() {
   // 必须在 initLoader（内部已调用 loadGuardConfig 完成首次加载）之后启动。
   startGuardConfigSync();
 
-  registerShutdownHooks(app);
+  // 关闭顺序 = 数组顺序，每一项独立捕获错误（实现见 framework/lifecycle/shutdown.js）。
+  // 守卫配置必须**先停轮询再落盘**：轮询与落盘会并发写同一个系统，
+  // 顺序颠倒会让刚写进去的值被轮询的旧快照覆盖。
+  registerShutdownHooks(app, [
+    {
+      name: '守卫配置落库',
+      run: async () => {
+        stopGuardConfigSync();
+        await flushGuardConfig();
+      }
+    },
+    { name: 'Redis Pub/Sub 连接', run: closePubSub }
+  ]);
 
   return app;
 }
 
-/**
- * 注册优雅关闭钩子
- *
- * 两件事都必须显式做，否则进程无法自然退出或丢配置：
- *   ① 防抖中的守卫配置要在退出前落库（Fastify onClose 不暴露异步错误，必须自捕获）
- *   ② Redis Pub/Sub 派生的订阅连接要 quit（否则事件循环上永远有个活句柄）
- *
- * @param {import('fastify').FastifyInstance} app - Fastify 实例
- * @returns {void}
- */
-function registerShutdownHooks(app) {
-  app.addHook('onClose', async () => {
-    stopGuardConfigSync();
-    try {
-      await flushGuardConfig();
-    } catch (err) {
-      log.error(`❌ [App] 优雅关闭时保存守卫配置失败`, err);
-    }
-
-    try {
-      await closePubSub();
-    } catch (err) {
-      log.error(`❌ [App] 优雅关闭时关闭 Pub/Sub 失败`, err);
-    }
-  });
-}
-
 // createErrorHandler / describeProxyTrustRisk 一并再导出：既有测试与脚本按入口路径导入，
 // 保持门面契约不因拆分而断裂（实现本体已迁至 framework/http 与 utils/）。
-export { createApp, createErrorHandler, describeProxyTrustRisk, registerShutdownHooks };
+export { createApp, createErrorHandler, describeProxyTrustRisk };
