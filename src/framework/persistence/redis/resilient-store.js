@@ -49,6 +49,25 @@ const PURGE_MIN_INTERVAL_MS = 1_000;
 /** 拒绝新键的告警节流（同一条故障不要每请求刷一行） */
 const CAP_WARN_INTERVAL_MS = 60_000;
 
+/**
+ * 为什么上面这两条**刻意不做成配置**（与 `defense.fallbackMaxKeys` 的区别）
+ *
+ * 判据只有一句：**改动它会改变"谁被拒绝"吗？**
+ *   · 会 → 策略，进配置。`fallbackMaxKeys` 决定哪类来源在降级期被 429，属于业务取舍，
+ *     运维/面板必须能改（还能按机器内存调）。
+ *   · 不会，只影响 CPU / 日志噪音 → 实现代价，留常量。
+ *
+ * 具体到这两条：
+ *   · `PURGE_MIN_INTERVAL_MS` 暴露出去，迟早有人为了"更及时清理"填 0 —— 那就把
+ *     O(n) 全表扫描重新放回每个新键上，正是这条节流要防的 CPU DoS 自我复位；
+ *   · `CAP_WARN_INTERVAL_MS` 只是日志频率，要更细的控制应该调 `LOG_LEVEL` / 采样，
+ *     而不是往"防火墙策略"里塞一个和访问控制无关的旋钮。
+ *
+ * 每多一个配置键，就多一条"写错就静默回落默认值"的路径（schema + 校验 + 面板 + 测试），
+ * 也让人分不清哪些旋钮动了会改变安全行为。本文件同类的还有 CLEANUP_INTERVAL /
+ * FAILURE_COOLDOWN / REDIS_TIMEOUT —— 一并保持常量。
+ */
+
 /** 上一次清理过期条目 / 上一次告警的时间戳（跨实例共享，child 不重复扫） */
 let _lastPurgeAt = 0;
 let _lastCapWarnAt = 0;
