@@ -1,0 +1,93 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /monitor/oper-log (操作日志) extends Main {
+  @icon ScrollText
+  @meta title="操作日志"
+
+  @header 页头 {
+    @text 标题 (bind: '操作日志')
+    @button 导出 { @navigate click -> @action exportLogs }
+    @permission admin:log:remove
+    @button 清空 { @navigate click -> @modal 清空确认 }
+  }
+
+  @detail 概览读数 {
+    @stat 总次数 (bind: operStats.total)
+    @stat 成功率 (bind: operStats.successRate)
+    @stat 平均耗时 (bind: operStats.avgCost)
+    @stat 活跃账号 (bind: operStats.activeUsers)
+  }
+
+  @tab 呈现 {
+    @menu 趋势 { @navigate click -> @state mode = 'trend' }
+    @menu 泳道 { @navigate click -> @state mode = 'lane' }
+  }
+
+  @detail 趋势图 {
+    @render when: mode === 'trend'
+    @detail 折线 {
+      @prop series: StatsBucket[]
+      @prop height: number
+    }
+  }
+
+  @detail 泳道 {
+    @render when: mode === 'lane'
+    @detail 当日泳道 {
+      @prop lanes: object[]
+      @prop nowSec: number
+    }
+  }
+
+  @detail 明细 {
+    @input 关键词 (bind: query.keyword)
+    @input 状态 (bind: query.status)
+    @input 时间范围 (bind: query.range)
+    @list 日志列表 {
+      @empty { @text 该条件下没有操作记录 }
+      @card 日志行 (v-for: row in operLogPage.rows) {
+        @text 时间 (bind: row.createdAt)
+        @text 账号 (bind: row.username)
+        @text 模块 (bind: row.module)
+        @text 动作 (bind: row.action)
+        @badge 结果 (bind: row.status)
+        @stat 耗时 (bind: row.costMs)
+        @button 详情 { @navigate click -> @modal 日志详情 }
+      }
+    }
+  }
+
+  @modal 日志详情 {
+    @detail 详情内容 {
+      @text 请求路径 (bind: detail.path)
+      @text 来源 IP (bind: detail.ip)
+      @text 客户端 (bind: detail.userAgent)
+      @text 参数 (bind: detail.detail)
+    }
+  }
+
+  @modal 清空确认 {
+    @text 提示 (bind: '清空将删除全部操作日志，不可恢复')
+    @button 确认清空 { @navigate click -> @action clearLogs }
+  }
+
+  @state mode: string = 'trend'
+  @state range: string = '24h'
+  @state query: object = {}
+  @state operStats: object = {}
+  @state timeline: object = {}
+  @state operLogPage: object = {}
+  @state detail: object = {}
+
+  @api GET /admin/console/v1/oper-logs (query: pageNum, pageSize, keyword, status, startTime, endTime) -> operLogPage
+  @api GET /admin/console/v1/oper-logs/stats (query: range) -> operStats
+  @api GET /admin/console/v1/oper-logs/timeline (query: date) -> timeline
+  @api DELETE /admin/console/v1/oper-logs/:id (bind: id)
+  @api DELETE /admin/console/v1/oper-logs
+
+  @note 整宽横带分层：概览 → 趋势或泳道 → 明细，区块标题只用中文
+  @note 点泳道时间块把模块名写入关键词并滚到明细，不做二次请求
+  @note 失败行必须有文字或图标标识，不能只靠颜色
+}

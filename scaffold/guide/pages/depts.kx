@@ -1,0 +1,81 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /system/dept (部门管理) extends Main {
+  @icon Network
+  @meta title="部门管理"
+
+  @header 页头 {
+    @text 标题 (bind: '部门管理')
+    @permission admin:dept:create
+    @button 新增部门 { @navigate click -> @modal 部门表单 }
+  }
+
+  @tab 视图 {
+    @menu 表格 { @navigate click -> @state altView = 'table' }
+    @menu 组织画布 { @navigate click -> @state altView = 'canvas' }
+  }
+
+  @detail 部门表 {
+    @list 部门树 {
+      @empty { @text 暂无部门 }
+      @card 部门节点 (v-for: node in deptTree) {
+        @text 名称 (bind: node.name)
+        @text 负责人 (bind: node.leader)
+        @stat 成员数 (bind: node.userCount)
+        @badge 状态 (bind: node.status)
+        @button 编辑 { @navigate click -> @modal 部门表单 }
+        @button 删除 { @navigate click -> @action removeDept }
+      }
+    }
+  }
+
+  @detail 组织画布 {
+    @render when: altView === 'canvas'
+    @detail 画布 {
+      @prop nodes: object[]
+      @prop links: object[]
+    }
+    @card 概要面板 { @stat 部门数 (bind: deptCount) }
+    @card 成员面板 {
+      @list 成员 {
+        @card 成员项 (v-for: item in selectedMembers) {
+          @avatar 头像 (bind: item.avatar)
+          @text 账号 (bind: item.username)
+        }
+      }
+    }
+  }
+
+  @modal 部门表单 {
+    @form 部门表单 {
+      @input 上级 (bind: form.parentId)
+      @input 名称 (bind: form.name)
+      @input 负责人 (bind: form.leader)
+      @input 电话 (bind: form.phone)
+      @input 邮箱 (bind: form.email)
+      @input 排序 (bind: form.sort)
+      @switch 启用 (bind: form.status)
+    }
+    @button 保存 { @navigate click -> @action saveDept }
+  }
+
+  @state altView: string = 'table'
+  @state deptTree: object[] = []
+  @state selectedId: number = 0
+  @state selectedMembers: object[] = []
+  @state form: object = {}
+
+  @api GET /admin/console/v1/depts/tree -> deptTree
+  @api POST /admin/console/v1/depts (body: { parentId, name, leader, phone, email, sort, status })
+  @api PUT /admin/console/v1/depts/:id (bind: id, body: { parentId, name, leader, phone, email, sort, status })
+  @api DELETE /admin/console/v1/depts/:id (bind: id)
+  @api GET /admin/console/v1/users (query: pageNum, pageSize, deptId) -> deptUsers
+
+  @sync deptCount = deptTree.length
+
+  @note 上级链 ancestors 由服务端维护（0,1,3），前端只传 parentId，不自行拼接
+  @note 删除部门前必须确认无下级部门且无成员，否则拒绝
+  @note 画布可平移缩放，方向键可移动选中节点；窄屏降级为表格
+}

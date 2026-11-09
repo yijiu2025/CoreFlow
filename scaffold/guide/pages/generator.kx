@@ -1,0 +1,98 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /tool/generator (代码生成) extends Main {
+  @icon Wand2
+  @meta title="代码生成"
+
+  @header 页头 {
+    @text 标题 (bind: '代码生成')
+    @button 导入表 { @navigate click -> @modal 导入表 }
+  }
+
+  @detail 已导入表 {
+    @list 生成配置 {
+      @empty { @text 还没有导入任何表 }
+      @card 表行 (v-for: row in genTables) {
+        @text 表名 (bind: row.tableName)
+        @text 说明 (bind: row.tableComment)
+        @badge 状态 (bind: row.synced)
+        @button 配置 { @navigate click -> @action openPipeline }
+      }
+    }
+  }
+
+  @detail 流水线 {
+    @tab 步骤 {
+      @menu 表信息 { @navigate click -> @state step = 1 }
+      @menu 字段映射 { @navigate click -> @state step = 2 }
+      @menu 代码预览 { @navigate click -> @state step = 3 }
+    }
+
+    @detail 表信息 {
+      @render when: step === 1
+      @input 业务名 (bind: form.businessName)
+      @input 模块名 (bind: form.moduleName)
+      @input 作者 (bind: form.author)
+      @input 备注 (bind: form.remark)
+    }
+
+    @detail 字段映射 {
+      @render when: step === 2
+      @list 字段列表 {
+        @card 字段行 (v-for: col in columns) {
+          @text 列名 (bind: col.columnName)
+          @input 属性名 (bind: col.javaField)
+          @input 类型 (bind: col.javaType)
+          @switch 列表显示 (bind: col.isList)
+          @switch 查询条件 (bind: col.isQuery)
+          @switch 必填 (bind: col.isRequired)
+        }
+      }
+    }
+
+    @detail 代码预览 {
+      @render when: step === 3
+      @list 生成文件 {
+        @card 文件项 (v-for: file in previewFiles) {
+          @text 路径 (bind: file.path)
+          @text 代码 (bind: file.code)
+        }
+      }
+      @button 下载 ZIP { @navigate click -> @action downloadZip }
+    }
+  }
+
+  @modal 导入表 {
+    @list 可导入表 {
+      @empty { @text 没有可导入的表 }
+      @card 表项 (v-for: t in importableTables) {
+        @text 表名 (bind: t.tableName)
+        @text 说明 (bind: t.tableComment)
+        @switch 选中 (bind: t.checked)
+      }
+    }
+    @button 确认导入 { @navigate click -> @action importTables }
+  }
+
+  @state step: number = 1
+  @state genTables: object[] = []
+  @state importableTables: object[] = []
+  @state columns: object[] = []
+  @state previewFiles: object[] = []
+  @state form: object = {}
+
+  @api GET /admin/console/v1/gen/tables -> genTables
+  @api GET /admin/console/v1/gen/tables/importable -> importableTables
+  @api POST /admin/console/v1/gen/tables/import (body: { tableNames })
+  @api PUT /admin/console/v1/gen/tables/:id (bind: id, body: { businessName, moduleName, author, remark })
+  @api GET /admin/console/v1/gen/tables/:id/columns (bind: id) -> columns
+  @api GET /admin/console/v1/gen/tables/:id/preview (bind: id) -> previewFiles
+  @api POST /admin/console/v1/gen/tables/:id/generate (bind: id)
+
+  @note 二期功能：首期只交付其余模块，本页先占位并在菜单中标记为未启用
+  @note 生成模板必须是本仓形态：Sequelize 模型 + 迁移 + DAO + Service + registerSecureRoute + Vue 页面
+  @note 生成物不得跨 src/app/<A> 引用，export 收拢文件末尾，行尾 LF
+  @note 生成只是骨架，业务 CRUD 与权限码仍需开发者接入并单独验证
+}

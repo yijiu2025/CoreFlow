@@ -1,0 +1,80 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /system/post (岗位管理) extends Main {
+  @icon Briefcase
+  @meta title="岗位管理"
+
+  @header 页头 {
+    @text 标题 (bind: '岗位管理')
+    @permission admin:post:create
+    @button 新增岗位 { @navigate click -> @modal 岗位表单 }
+  }
+
+  @tab 视图 {
+    @menu 列表 { @navigate click -> @state altView = 'table' }
+    @menu 阶梯 { @navigate click -> @state altView = 'ladder' }
+  }
+
+  @detail 岗位表 {
+    @list 岗位列表 {
+      @empty { @text 暂无岗位 }
+      @card 岗位行 (v-for: row in postPage.rows) {
+        @text 名称 (bind: row.postName)
+        @text 编码 (bind: row.postCode)
+        @stat 在岗 (bind: row.userCount)
+        @badge 状态 (bind: row.status)
+        @button 编辑 { @navigate click -> @modal 岗位表单 }
+        @button 删除 { @navigate click -> @action removePost }
+      }
+    }
+  }
+
+  @detail 阶梯舞台 {
+    @render when: altView === 'ladder'
+    @list 台阶 {
+      @card 台阶 (v-for: post in sortedPosts) {
+        @text 名称 (bind: post.postName)
+        @stat 在岗人数 (bind: post.userCount)
+      }
+    }
+    @card 成员面板 {
+      @list 在岗成员 {
+        @card 成员 (v-for: item in postUsers) {
+          @avatar 头像 (bind: item.avatar)
+          @text 账号 (bind: item.username)
+        }
+      }
+    }
+  }
+
+  @modal 岗位表单 {
+    @form 岗位表单 {
+      @input 名称 (bind: form.postName)
+      @input 编码 (bind: form.postCode)
+      @input 排序 (bind: form.sort)
+      @input 备注 (bind: form.remark)
+      @switch 启用 (bind: form.status)
+    }
+    @button 保存 { @navigate click -> @action savePost }
+  }
+
+  @state altView: string = 'table'
+  @state postPage: object = {}
+  @state postUsers: object[] = []
+  @state selectedPostId: number = 0
+  @state form: object = {}
+
+  @api GET /admin/console/v1/posts (query: pageNum, pageSize, keyword, status) -> postPage
+  @api POST /admin/console/v1/posts (body: { postCode, postName, sort, status, remark })
+  @api PUT /admin/console/v1/posts/:id (bind: id, body: { postCode, postName, sort, status, remark })
+  @api DELETE /admin/console/v1/posts/:id (bind: id)
+  @api GET /admin/console/v1/posts/:id/users (bind: id) -> postUsers
+
+  @sync sortedPosts = postPage.rows.sort((a, b) => a.sort - b.sort)
+
+  @note 岗位编码唯一，创建后不可改（改编码会影响历史审计记录的可读性）
+  @note 删除岗位前先解除 sys_user_post 关联，有在岗成员则拒绝
+  @note 阶梯版式按 sort 沿对角线铺开，窄屏横向滚动
+}

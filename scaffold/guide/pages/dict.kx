@@ -1,0 +1,104 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /system/dict (字典管理) extends Main {
+  @icon BookMarked
+  @meta title="字典管理"
+
+  @header 页头 {
+    @text 标题 (bind: '字典管理')
+    @permission admin:dict:create
+    @button 新增类型 { @navigate click -> @modal 类型表单 }
+  }
+
+  @tab 视图 {
+    @menu 表格 { @navigate click -> @state altView = 'table' }
+    @menu 样本册 { @navigate click -> @state altView = 'swatch' }
+  }
+
+  @detail 类型表 {
+    @list 字典类型 {
+      @empty { @text 暂无字典类型 }
+      @card 类型行 (v-for: row in dictTypePage.rows) {
+        @text 名称 (bind: row.dictName)
+        @text 标识 (bind: row.dictType)
+        @stat 项数 (bind: row.itemCount)
+        @badge 状态 (bind: row.status)
+        @button 编辑 { @navigate click -> @modal 类型表单 }
+        @button 管理项 { @navigate click -> @action selectType }
+        @button 删除 { @navigate click -> @action removeType }
+      }
+    }
+  }
+
+  @detail 样本册 {
+    @render when: altView === 'swatch'
+    @list 类型卡片 {
+      @card 类型卡 (v-for: t in dictTypePage.rows) {
+        @text 名称 (bind: t.dictName)
+        @list 样本 {
+          @badge 字典标签 (v-for: d in dictData) {
+            @text 文本 (bind: d.label)
+          }
+        }
+      }
+    }
+  }
+
+  @detail 数据抽屉 {
+    @list 字典项 {
+      @empty { @text 该类型下暂无字典项 }
+      @card 项行 (v-for: d in dictData) {
+        @text 标签 (bind: d.label)
+        @text 值 (bind: d.value)
+        @badge 色调 (bind: d.tone)
+        @switch 默认项 (bind: d.isDefault)
+        @button 编辑 { @navigate click -> @modal 数据表单 }
+        @button 删除 { @navigate click -> @action removeData }
+      }
+    }
+  }
+
+  @modal 类型表单 {
+    @form 类型表单 {
+      @input 名称 (bind: typeForm.dictName)
+      @input 标识 (bind: typeForm.dictType)
+      @input 备注 (bind: typeForm.remark)
+      @switch 启用 (bind: typeForm.status)
+    }
+    @button 保存 { @navigate click -> @action saveType }
+  }
+
+  @modal 数据表单 {
+    @form 数据表单 {
+      @input 标签 (bind: dataForm.label)
+      @input 值 (bind: dataForm.value)
+      @input 排序 (bind: dataForm.sort)
+      @input 色调 (bind: dataForm.tone)
+      @switch 默认项 (bind: dataForm.isDefault)
+      @switch 启用 (bind: dataForm.status)
+    }
+    @button 保存 { @navigate click -> @action saveData }
+  }
+
+  @state altView: string = 'table'
+  @state dictTypePage: object = {}
+  @state dictData: object[] = []
+  @state activeType: string = ''
+  @state typeForm: object = {}
+  @state dataForm: object = {}
+
+  @api GET /admin/console/v1/dict/types (query: pageNum, pageSize, keyword) -> dictTypePage
+  @api POST /admin/console/v1/dict/types (body: { dictName, dictType, status, remark })
+  @api PUT /admin/console/v1/dict/types/:id (bind: id, body: { dictName, dictType, status, remark })
+  @api DELETE /admin/console/v1/dict/types/:id (bind: id)
+  @api GET /admin/console/v1/dict/data/:type (bind: type) -> dictData
+  @api POST /admin/console/v1/dict/data (body: { dictType, label, value, sort, status, tone, isDefault })
+  @api PUT /admin/console/v1/dict/data/:id (bind: id, body: { label, value, sort, status, tone, isDefault })
+  @api DELETE /admin/console/v1/dict/data/:id (bind: id)
+
+  @note 字典标识唯一且创建后不可改；业务代码按标识取值
+  @note 同一类型下只允许一个默认项，设新默认会自动取消旧默认
+  @note 业务下拉只走 /dict/options/:type（仅启用项），不请求管理接口
+}

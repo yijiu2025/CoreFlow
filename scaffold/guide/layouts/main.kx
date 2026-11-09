@@ -1,0 +1,50 @@
+@layout Main {
+  @sidebar 导航轨 (role: aside) {
+    @logo 品牌 (bind: appName)
+    @menu 主导航 {
+      @menu 工作台 {
+        @navigate click -> /dashboard
+      }
+      @menu 系统管理 {
+        @navigate click -> /system/user
+      }
+      @menu 日志审计 {
+        @navigate click -> /monitor/oper-log
+      }
+      @menu 开发工具 {
+        @navigate click -> /tool/generator
+      }
+    }
+    @button 收起侧栏 {
+      @navigate click -> @state railCollapsed = !railCollapsed
+    }
+  }
+
+  @header 顶栏 (role: header) {
+    @text 面包屑 (bind: breadcrumbText)
+    @input 搜索 (bind: commandQuery)
+    @button 命令面板 {
+      @navigate click -> @modal 命令面板
+    }
+    @avatar 当前用户 (bind: me.avatar)
+    @button 外观 {
+      @navigate click -> @modal 外观设置
+    }
+  }
+
+  @slot main (role: main) {
+    @skeleton 页面骨架 (count: 6)
+  }
+
+  @state railCollapsed: boolean = false
+  @state commandQuery: string = ''
+  @state appearance: string = 'system'
+  @state density: string = 'standard'
+  @state me: object = {}
+
+  @sync breadcrumbText = me.username
+
+  @note 外壳只负责导航与全局状态；页面数据各自取，不在此预取
+  @note 820px 以下侧栏改抽屉式，点遮罩或选中菜单即收起
+  @note 主题与密度写入根元素 data-theme / data-density，偏好按账号隔离
+}

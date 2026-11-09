@@ -1,0 +1,81 @@
+// 公共组件接口（跨页面复用，页面不重复实现同类 UI）
+
+@detail ListPage {
+  @prop columns: object[]
+  @prop queryFields: object[]
+  @prop rows: object[]
+  @prop total: number = 0
+  @prop loading: boolean = false
+  @prop altView: string = 'table'
+  @note 统一承担查询 / 重置 / 分页 / 导出 / 勾选 / 底部批量浮条
+  @note altView 切换表格与画布 / 看板 / 矩阵 / 样本册等版式，#alt 插槽承载另类视图
+  @note 操作列 className 固定 col-actions，横向滚动时吸附右侧
+}
+
+@detail FormDialog {
+  @prop modelValue: boolean = false
+  @prop title: string
+  @prop width: number = 560
+  @prop submitting: boolean = false
+  @note 提交显示真实等待态；校验错误留在对应字段或统一提示，不用假进度
+  @note Escape 先关当前浮层，不连带关闭下层表单
+}
+
+@detail PermissionButton {
+  @prop permission: string
+  @prop disabled: boolean = false
+  @note 只做「看不见」，不是安全边界；后端 allowPermissions 才是真校验
+}
+
+@detail Metric {
+  @prop label: string
+  @prop value: number
+  @prop unit: string = ''
+  @prop delta: number = 0
+  @note 显示级读数配标单位；同一页面读数不超过 4 个，其余降为小块
+}
+
+@detail Odometer {
+  @prop value: number
+  @prop digits: number = 0
+  @note 逐位滚动落定；后台标签页用定时器兜底，不留半截数字
+}
+
+@detail TrendChart {
+  @prop series: StatsBucket[]
+  @prop height: number = 180
+  @note 自绘 SVG，不引图表库；稀疏数据自动改画茎叶点并直接标数值
+}
+
+@detail Swimlane {
+  @prop lanes: object[]
+  @prop nowSec: number
+  @note 泳道 = 模块；默认聚焦「首条 −1h ～ 现在 +1h」（至少 6 小时）
+  @note 失败块红描边，慢操作斜线填充；「现在」线每分钟推进
+}
+
+@detail HeatGrid {
+  @prop cells: object[]
+  @prop threshold: number = 5
+  @note 7×24 星期 × 小时网格，悬停十字高亮；失败占比高者斜线填充
+}
+
+@detail RelationGraph {
+  @prop nodes: object[]
+  @prop links: object[]
+  @prop variant: string = 'plain'
+  @note variant=stage 为图谱舞台（珍珠球 + 玻璃刻度表盘），用于权限溯源与导航星系
+  @note 性能红线：DPR ≤ 2、离屏或隐藏暂停、每帧 try/catch、每条线脉冲 ≤ 2
+}
+
+@detail CommandPalette {
+  @prop open: boolean = false
+  @prop query: string = ''
+  @note 支持最近访问 / 页面 / 用户 / 动作四类结果，按权限过滤
+  @note 输入 ? 进入本地规则问答（无网络依赖）
+}
+
+@detail AskDock {
+  @prop context: object
+  @note 本地规则问答：各模块注册 intent{patterns, run}，按权限过滤不可用意图
+}

@@ -1,0 +1,140 @@
+// 数据模型：字段与后端表一一对应（iam_* / sys_* / audit_logs / session_logs）
+
+@model User {
+  @field id: number
+  @field uid: string
+  @field username: string
+  @field email: string
+  @field phone: string
+  @field avatar: string
+  @field deptId: number
+  @field deptName: string
+  @field postNames: string
+  @field roleNames: string
+  @field status: number
+  @field lastLoginAt: string
+  @field createdAt: string
+}
+
+@model Role {
+  @field id: number
+  @field appId: string
+  @field code: string
+  @field name: string
+  @field rankLevel: number
+  @field description: string
+  @field menuIds: number[]
+  @field userCount: number
+  @field builtin: boolean
+  @field status: number
+}
+
+@model Menu {
+  @field id: number
+  @field parentId: number
+  @field name: string
+  @field type: string
+  @field icon: string
+  @field path: string
+  @field component: string
+  @field permission: string
+  @field sort: number
+  @field visible: number
+  @field status: number
+  @field children: Menu[]
+}
+
+@model Dept {
+  @field id: number
+  @field parentId: number
+  @field ancestors: string
+  @field name: string
+  @field leader: string
+  @field phone: string
+  @field email: string
+  @field sort: number
+  @field status: number
+  @field userCount: number
+  @field children: Dept[]
+}
+
+@model Post {
+  @field id: number
+  @field postCode: string
+  @field postName: string
+  @field sort: number
+  @field status: number
+  @field remark: string
+  @field userCount: number
+}
+
+@model DictType {
+  @field id: number
+  @field dictName: string
+  @field dictType: string
+  @field status: number
+  @field remark: string
+  @field itemCount: number
+}
+
+@model DictData {
+  @field id: number
+  @field dictType: string
+  @field label: string
+  @field value: string
+  @field sort: number
+  @field status: number
+  @field tone: string
+  @field isDefault: number
+  @field remark: string
+}
+
+@model Config {
+  @field id: number
+  @field configKey: string
+  @field configValue: string
+  @field type: string
+  @field builtin: boolean
+  @field remark: string
+}
+
+@model OperLog {
+  @field id: number
+  @field userId: number
+  @field username: string
+  @field module: string
+  @field action: string
+  @field method: string
+  @field path: string
+  @field status: number
+  @field costMs: number
+  @field ip: string
+  @field userAgent: string
+  @field detail: string
+  @field createdAt: string
+}
+
+@model LoginLog {
+  @field id: number
+  @field userId: number
+  @field username: string
+  @field event: string
+  @field appId: string
+  @field ip: string
+  @field location: string
+  @field userAgent: string
+  @field createdAt: string
+}
+
+@model StatsBucket {
+  @field bucket: string
+  @field total: number
+  @field failed: number
+}
+
+@model PageResult {
+  @field rows: object[]
+  @field total: number
+  @field pageNum: number
+  @field pageSize: number
+}

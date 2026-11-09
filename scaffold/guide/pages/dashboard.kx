@@ -1,0 +1,74 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /dashboard (工作台) extends Main {
+  @icon LayoutDashboard
+  @meta title="工作台"
+
+  @header 页头 {
+    @text 标题 (bind: '工作台')
+    @button 刷新 { @navigate click -> @action loadSummary }
+  }
+
+  @detail 主卡 {
+    @stat 用户总数 (bind: summary.users)
+    @stat 角色数 (bind: summary.roles)
+    @stat 今日登录 (bind: summary.todayLogins)
+    @stat 今日操作 (bind: summary.todayOps)
+    @text 成功率 (bind: summary.successRate)
+  }
+
+  @detail 侧块 {
+    @stat 失败登录 (bind: summary.failedLogins)
+    @stat 活跃账号 (bind: summary.activeUsers)
+    @list 最近登录 {
+      @card 登录项 (v-for: item in recentLogins) {
+        @avatar 头像 (bind: item.avatar)
+        @text 账号 (bind: item.username)
+        @text 时间 (bind: item.createdAt)
+      }
+      @empty { @text 暂无登录记录 }
+    }
+  }
+
+  @detail 趋势区 {
+    @tab 区间 {
+      @menu 24 小时 { @navigate click -> @state range = '24h' }
+      @menu 7 天 { @navigate click -> @state range = '7d' }
+      @menu 30 天 { @navigate click -> @state range = '30d' }
+    }
+    @detail 趋势图 {
+      @prop series: StatsBucket[]
+    }
+  }
+
+  @detail 泳道区 {
+    @detail 当日操作泳道 {
+      @prop lanes: object[]
+      @prop nowSec: number
+    }
+  }
+
+  @detail 常用入口 {
+    @button 用户管理 { @navigate click -> /system/user }
+    @button 角色权限 { @navigate click -> /system/role }
+    @button 操作日志 { @navigate click -> /monitor/oper-log }
+  }
+
+  @state range: string = '24h'
+  @state summary: object = {}
+  @state recentLogins: object[] = []
+  @state timeline: object = {}
+
+  @api GET /admin/console/v1/dashboard/summary -> summary
+  @api GET /admin/console/v1/login-logs (query: pageNum=1, pageSize=5) -> recentLogins
+  @api GET /admin/console/v1/oper-logs/timeline -> timeline
+
+  @render when: loading
+  @skeleton 工作台骨架 (count: 8)
+
+  @note 主卡只放 4 个读数，其余降为侧块小块；一页只有一个视觉主角
+  @note 数据权限用页内占比条表达，不做环形图
+  @note 无日志权限的账号不加载泳道，也不显示空泳道占位
+}

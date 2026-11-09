@@ -1,0 +1,76 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /system/config (参数管理) extends Main {
+  @icon SlidersHorizontal
+  @meta title="参数管理"
+
+  @header 页头 {
+    @text 标题 (bind: '参数管理')
+    @permission admin:config:create
+    @button 新增参数 { @navigate click -> @modal 参数表单 }
+  }
+
+  @tab 视图 {
+    @menu 面板 { @navigate click -> @state altView = 'panel' }
+    @menu 表格 { @navigate click -> @state altView = 'table' }
+  }
+
+  @detail 面板 {
+    @render when: altView === 'panel'
+    @list 参数分组 {
+      @card 分组 (v-for: group in groups) {
+        @text 分组名 (bind: group.name)
+        @list 参数行 {
+          @card 参数项 (v-for: item in group.items) {
+            @text 键 (bind: item.configKey)
+            @input 值 (bind: item.configValue)
+            @badge 内置 (bind: item.builtin)
+          }
+        }
+      }
+    }
+    @button 保存变更 { @navigate click -> @action saveDirty }
+  }
+
+  @detail 参数表 {
+    @list 参数列表 {
+      @empty { @text 暂无参数 }
+      @card 参数行 (v-for: row in configPage.rows) {
+        @text 键 (bind: row.configKey)
+        @text 值 (bind: row.configValue)
+        @badge 类型 (bind: row.type)
+        @text 备注 (bind: row.remark)
+        @button 编辑 { @navigate click -> @modal 参数表单 }
+        @render when: !row.builtin
+        @button 删除 { @navigate click -> @action removeConfig }
+      }
+    }
+  }
+
+  @modal 参数表单 {
+    @form 参数表单 {
+      @input 键 (bind: form.configKey)
+      @input 值 (bind: form.configValue)
+      @input 备注 (bind: form.remark)
+    }
+    @button 保存 { @navigate click -> @action saveConfig }
+  }
+
+  @state altView: string = 'panel'
+  @state configPage: object = {}
+  @state form: object = {}
+  @state dirtyKeys: string[] = []
+
+  @api GET /admin/console/v1/configs (query: pageNum, pageSize, keyword, type) -> configPage
+  @api POST /admin/console/v1/configs (body: { configKey, configValue, type, remark })
+  @api PUT /admin/console/v1/configs/:id (bind: id, body: { configValue, remark })
+  @api DELETE /admin/console/v1/configs/:id (bind: id)
+
+  @sync groups = groupByPrefix(configPage.rows)
+
+  @note 面板按 key 前缀分组（如 app.* / mail.*），按值推断开关 / 数字 / 文本控件
+  @note 内置参数（builtin=true）不可删除，值可改但会记审计
+  @note 运行期配置（data/*.json）不在此维护，避免与配置优先级规则冲突
+}

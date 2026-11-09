@@ -1,0 +1,102 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /system/role (角色管理) extends Main {
+  @icon ShieldCheck
+  @meta title="角色管理"
+
+  @header 页头 {
+    @text 标题 (bind: '角色管理')
+    @permission admin:role:create
+    @button 新增角色 { @navigate click -> @modal 角色表单 }
+  }
+
+  @tab 视图 {
+    @menu 列表 { @navigate click -> @state altView = 'table' }
+    @menu 权限矩阵 { @navigate click -> @state altView = 'matrix' }
+    @menu 溯源 { @navigate click -> @state altView = 'trace' }
+  }
+
+  @detail 列表 {
+    @list 角色表 {
+      @empty { @text 暂无角色 }
+      @card 角色行 (v-for: row in rolePage.rows) {
+        @text 名称 (bind: row.name)
+        @text 编码 (bind: row.code)
+        @badge 应用 (bind: row.appId)
+        @stat 职级 (bind: row.rankLevel)
+        @stat 用户数 (bind: row.userCount)
+        @button 授权菜单 { @navigate click -> @modal 菜单授权 }
+        @render when: !row.builtin
+        @button 删除 { @navigate click -> @action removeRole }
+      }
+    }
+  }
+
+  @detail 权限矩阵 {
+    @render when: altView === 'matrix'
+    @list 菜单 × 角色 {
+      @card 矩阵格 (v-for: cell in matrixCells) {
+        @text 菜单 (bind: cell.menuName)
+        @switch 授权 (bind: cell.granted)
+      }
+    }
+    @button 保存变更 { @navigate click -> @action saveMatrix }
+  }
+
+  @detail 溯源舞台 {
+    @render when: altView === 'trace'
+    @detail 关系图 {
+      @prop nodes: object[]
+      @prop links: object[]
+      @prop variant: string
+    }
+    @text 当前层 (bind: traceLevel)
+    @button 返回上一层 { @navigate click -> @action traceUp }
+  }
+
+  @modal 角色表单 {
+    @form 角色表单 {
+      @input 名称 (bind: form.name)
+      @input 编码 (bind: form.code)
+      @input 应用 (bind: form.appId)
+      @input 职级 (bind: form.rankLevel)
+      @input 描述 (bind: form.description)
+    }
+    @button 保存 { @navigate click -> @action saveRole }
+  }
+
+  @modal 菜单授权 {
+    @list 菜单树 {
+      @empty { @text 菜单树为空，请先创建菜单 }
+      @card 菜单节点 (v-for: node in menuTree) {
+        @switch 勾选 (bind: node.checked)
+      }
+    }
+    @button 保存授权 { @navigate click -> @action saveRoleMenus }
+  }
+
+  @state altView: string = 'table'
+  @state rolePage: object = {}
+  @state menuTree: object[] = []
+  @state graph: object = {}
+  @state traceLevel: string = 'overview'
+  @state pendingMenuIds: number[] = []
+
+  @api GET /admin/console/v1/roles (query: pageNum, pageSize, keyword, appId) -> rolePage
+  @api POST /admin/console/v1/roles (body: { code, name, appId, rankLevel, description, menuIds })
+  @api PUT /admin/console/v1/roles/:id (bind: id, body: { name, rankLevel, description, menuIds })
+  @api DELETE /admin/console/v1/roles/:id (bind: id)
+  @api GET /admin/console/v1/roles/:id/menus (bind: id) -> roleMenus
+  @api PUT /admin/console/v1/roles/:id/menus (bind: id, body: { menuIds })
+  @api GET /admin/console/v1/permissions/graph -> graph
+  @api GET /admin/console/v1/menus/tree -> menuTree
+
+  @sync matrixCells = buildMatrix(rolePage.rows, menuTree)
+
+  @note 角色是 PBAC 语义：编码 + 应用 + 职级 + 策略；菜单授权只决定侧栏可见性
+  @note 内置角色只读，矩阵中不可勾选，接口侧也会拒绝
+  @note 矩阵改动本地累计，底部浮条显示「N 项待保存」后一次提交
+  @note 职级不得高于当前操作者，否则后端拒绝（防越权提权）
+}

@@ -1,0 +1,93 @@
+// 接口清单：全部挂 /admin/console/v1（登录与绑定会话走既有 /auth/v1）
+// 列表统一返回 { rows, total, pageNum, pageSize }；写接口落 audit_logs
+
+@model API {
+  // 会话与路由
+  @api GET /admin/console/v1/session/me -> me
+  @api GET /admin/console/v1/session/routes -> menuTree
+  @api PUT /admin/console/v1/session/password (body: { oldPassword, newPassword })
+  @api POST /admin/console/v1/session/logout
+
+  // 工作台
+  @api GET /admin/console/v1/dashboard/summary -> summary
+
+  // 用户
+  @api GET /admin/console/v1/users (query: pageNum, pageSize, keyword, deptId, status) -> userPage
+  @api GET /admin/console/v1/users/options -> userOptions
+  @api POST /admin/console/v1/users (body: { username, email, password, deptId, status, roleIds, postIds })
+  @api PUT /admin/console/v1/users/:id (bind: id, body: { username, email, deptId, status, roleIds, postIds })
+  @api DELETE /admin/console/v1/users/:id (bind: id)
+  @api PUT /admin/console/v1/users/:id/status (bind: id, body: { status })
+  @api PUT /admin/console/v1/users/:id/password (bind: id, body: { password })
+
+  // 角色与权限
+  @api GET /admin/console/v1/roles (query: pageNum, pageSize, keyword, appId) -> rolePage
+  @api POST /admin/console/v1/roles (body: { code, name, appId, rankLevel, description, menuIds })
+  @api PUT /admin/console/v1/roles/:id (bind: id, body: { name, rankLevel, description, menuIds })
+  @api DELETE /admin/console/v1/roles/:id (bind: id)
+  @api GET /admin/console/v1/roles/:id/menus (bind: id) -> roleMenus
+  @api PUT /admin/console/v1/roles/:id/menus (bind: id, body: { menuIds })
+  @api GET /admin/console/v1/permissions/graph -> permissionGraph
+
+  // 菜单
+  @api GET /admin/console/v1/menus/tree -> menuTree
+  @api POST /admin/console/v1/menus (body: { parentId, name, type, icon, path, component, permission, sort, visible, status })
+  @api PUT /admin/console/v1/menus/:id (bind: id, body: { parentId, name, type, icon, path, component, permission, sort, visible, status })
+  @api DELETE /admin/console/v1/menus/:id (bind: id)
+
+  // 部门
+  @api GET /admin/console/v1/depts/tree -> deptTree
+  @api GET /admin/console/v1/depts/options -> deptOptions
+  @api POST /admin/console/v1/depts (body: { parentId, name, leader, phone, email, sort, status })
+  @api PUT /admin/console/v1/depts/:id (bind: id, body: { parentId, name, leader, phone, email, sort, status })
+  @api DELETE /admin/console/v1/depts/:id (bind: id)
+
+  // 岗位
+  @api GET /admin/console/v1/posts (query: pageNum, pageSize, keyword, status) -> postPage
+  @api POST /admin/console/v1/posts (body: { postCode, postName, sort, status, remark })
+  @api PUT /admin/console/v1/posts/:id (bind: id, body: { postCode, postName, sort, status, remark })
+  @api DELETE /admin/console/v1/posts/:id (bind: id)
+  @api GET /admin/console/v1/posts/:id/users (bind: id) -> postUsers
+
+  // 字典
+  @api GET /admin/console/v1/dict/types (query: pageNum, pageSize, keyword) -> dictTypePage
+  @api POST /admin/console/v1/dict/types (body: { dictName, dictType, status, remark })
+  @api PUT /admin/console/v1/dict/types/:id (bind: id, body: { dictName, dictType, status, remark })
+  @api DELETE /admin/console/v1/dict/types/:id (bind: id)
+  @api GET /admin/console/v1/dict/data/:type (bind: type) -> dictData
+  @api POST /admin/console/v1/dict/data (body: { dictType, label, value, sort, status, tone, isDefault })
+  @api PUT /admin/console/v1/dict/data/:id (bind: id, body: { label, value, sort, status, tone, isDefault })
+  @api DELETE /admin/console/v1/dict/data/:id (bind: id)
+  @api GET /admin/console/v1/dict/options/:type (bind: type) -> dictOptions
+
+  // 参数
+  @api GET /admin/console/v1/configs (query: pageNum, pageSize, keyword, type) -> configPage
+  @api POST /admin/console/v1/configs (body: { configKey, configValue, type, remark })
+  @api PUT /admin/console/v1/configs/:id (bind: id, body: { configValue, remark })
+  @api DELETE /admin/console/v1/configs/:id (bind: id)
+
+  // 操作日志
+  @api GET /admin/console/v1/oper-logs (query: pageNum, pageSize, keyword, status, startTime, endTime) -> operLogPage
+  @api GET /admin/console/v1/oper-logs/stats (query: range) -> operStats
+  @api GET /admin/console/v1/oper-logs/timeline (query: date) -> operTimeline
+  @api GET /admin/console/v1/oper-logs/export (query: keyword, status, startTime, endTime)
+  @api DELETE /admin/console/v1/oper-logs/:id (bind: id)
+  @api DELETE /admin/console/v1/oper-logs
+
+  // 登录日志
+  @api GET /admin/console/v1/login-logs (query: pageNum, pageSize, keyword, event, startTime, endTime) -> loginLogPage
+  @api GET /admin/console/v1/login-logs/stats (query: range) -> loginStats
+  @api GET /admin/console/v1/login-logs/heatmap (query: days) -> loginHeatmap
+  @api GET /admin/console/v1/login-logs/export (query: keyword, event, startTime, endTime)
+  @api DELETE /admin/console/v1/login-logs/:id (bind: id)
+  @api DELETE /admin/console/v1/login-logs
+
+  // 防火墙只读
+  @api GET /admin/console/v1/firewall/summary -> firewallSummary
+  @api GET /admin/console/v1/firewall/blocks (query: pageNum, pageSize) -> firewallBlocks
+  @api GET /admin/console/v1/firewall/whitelist -> firewallWhitelist
+
+  // 登录链路（既有接口，不新增）
+  @api POST /auth/v1/bind-session (body: { sessionToken })
+  @api POST /auth/v1/clear-cookie
+}

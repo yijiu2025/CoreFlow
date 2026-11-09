@@ -90,6 +90,17 @@ const defineUser = (sequelize, DataTypes) => {
         comment: '1:正常, 0:封禁/冻结, -1:已注销'
       },
       /**
+       * 所属部门（sys_dept.id，0/NULL 表示未分配）
+       *
+       * 由 Console 管理后台维护；只加可空列、不加外键约束（沿用本仓「不加 FK、
+       * 由服务层保证」的口径），删除部门前由服务层校验是否仍有成员。
+       */
+      dept_id: {
+        type: DataTypes.BIGINT,
+        allowNull: true,
+        comment: '所属部门 ID（sys_dept.id）'
+      },
+      /**
        * 软删除版本标志 (解决 MySQL 唯一约束与 NULL 值的冲突漏洞)
        * 0: 表示活跃记录 (正常状态)
        * 非0 (自增 ID): 表示已软删除的记录，保证正常状态下的唯一约束不会被 NULL 值穿透

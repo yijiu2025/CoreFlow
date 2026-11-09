@@ -1,0 +1,42 @@
+// Console 管理后台 —— 架构入口
+//
+// 定位：把 nodeServers 后端包装成通用后台脚手架。前端独立目录 scaffold/（端口 5175，可配置），
+// 后端新增 console 域（src/app/console + /admin/console/v1），登录走 oauth21 iframe SSO。
+//
+// 技术栈（前端）
+//   Vue 3.5 + TypeScript + Vite 8 + Pinia + vue-router 4
+//   skinsuite（主题机制：包 × 设备 × 页面 × 配色）
+//   stable-deviceid（设备身份，x-device-id）
+//   gsap（动效）+ lucide-vue-next（图标）+ 自绘 SVG 图表（不引图表库）
+//
+// 技术栈（后端）
+//   Fastify 5 + Sequelize 6 + MySQL + Redis；权限 PBAC（app_id + rank_level + policy）
+//   日志 audit_logs（操作）/ session_logs（登录）
+//
+// 目录约定
+//   scaffold/src/main.ts        门牌（样式 + 转交 bootstrap）
+//   scaffold/src/bootstrap.ts   启动编排（设备同步 → createApp → pinia → router → 主题 → mount）
+//   scaffold/src/theme/         主题包 pearl（standard / mobile × light / dark）
+//   scaffold/src/view/          设备事实与页面容器（devices.ts 为宿主单一来源）
+//   scaffold/src/api/           http / session / system / monitor / portal
+//   scaffold/src/components/    ui（基础件）/ business（业务件）/ charts（自绘 SVG）/ layout（外壳）
+//
+// 视觉基线：珍珠玻璃（参考 scaffold-master/DESIGN.md）
+//   七层样式：tokens → base → materials → components → instruments → layout → pages
+//   仪器化语汇：读数 / 铭牌 / 环比胶囊 / 刻度尺 / 斜线填充；每页只有一个视觉主角
+//   主题包自身 SCSS 定义 token；对外可注入的 token 统一 --mauth- 前缀
+//
+// 登录链路
+//   /login 页嵌 oauth21 /mini-login iframe
+//   → 校验 origin + event.source → 收 SSO_READY 关 loading
+//   → 收 LOGIN_SUCCESS → adoptDeviceId(deviceId) → POST /auth/v1/bind-session
+//   → 拿 sid/sid_r HttpOnly Cookie → GET /admin/console/v1/session/me
+//
+// 权限模型（两套语义不混用）
+//   菜单侧：sys_role_menu 只决定侧栏看得见什么
+//   接口侧：PBAC policy + rank_level 决定放行与否（后端 allowPermissions 真校验）
+//   前端 PermissionButton / v-permission 只做隐藏，不作为安全边界
+//
+// 数据流
+//   页面 @api 取数 → api 层 axios（withCredentials + x-device-id）→ /admin/console/v1/*
+//   → app/console 的 DAO/Service → Sequelize 模型 → MySQL

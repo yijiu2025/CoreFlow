@@ -1,0 +1,50 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+
+@page /login (登录) {
+  @icon LogIn
+  @meta title="登录管理后台" description="oauth21 统一身份认证"
+
+  @detail 登录画布 {
+    @media 神经网络背景 {
+      @note Canvas 节点 = 能力模块，连线脉冲往返；登录成功中心迸发并收束对勾
+    }
+
+    @card 说明面板 {
+      @text 产品名 (bind: appName)
+      @text 说明 (bind: loginCopy)
+      @stat 服务状态 (bind: health.status)
+      @text 实时时钟 (bind: clockText)
+    }
+
+    @card 登录卡 {
+      @render when: !loggedIn
+      @button 前往登录 {
+        @navigate click -> @modal 登录弹窗
+      }
+      @render when: loggedIn
+      @text 已登录 (bind: me.username)
+    }
+  }
+
+  @modal 登录弹窗 {
+    @detail iframe 容器 {
+      @note src = SSO_URL + /mini-login，宽 856，高 484
+      @note 只接受 SSO 域 origin 且 event.source === iframe.contentWindow 的消息
+      @note SSO_READY 关闭加载态；@load 后 3s 未握手则兜底关闭
+    }
+  }
+
+  @state loggedIn: boolean = false
+  @state me: object = {}
+  @state health: object = {}
+  @state clockText: string = ''
+
+  @api POST /auth/v1/bind-session (body: { sessionToken })
+  @api GET /admin/console/v1/session/me -> me
+
+  @navigate success -> /dashboard
+
+  @note 顺序不可颠倒：先 adoptDeviceId(deviceId) 再 bind-session，否则登录基准指纹不一致会触发风控
+  @note 未登录访问任意页面统一重定向到 /login，登录后回跳原地址
+}

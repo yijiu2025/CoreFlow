@@ -1,0 +1,85 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /system/menu (菜单管理) extends Main {
+  @icon ListTree
+  @meta title="菜单管理"
+
+  @header 页头 {
+    @text 标题 (bind: '菜单管理')
+    @permission admin:menu:create
+    @button 新增菜单 { @navigate click -> @modal 菜单表单 }
+  }
+
+  @tab 视图 {
+    @menu 表格 { @navigate click -> @state altView = 'table' }
+    @menu 导航星系 { @navigate click -> @state altView = 'starmap' }
+  }
+
+  @detail 菜单表 {
+    @list 菜单树 {
+      @empty { @text 暂无菜单，先创建一级目录 }
+      @card 菜单节点 (v-for: node in menuTree) {
+        @icon 图标 (bind: node.icon)
+        @text 名称 (bind: node.name)
+        @badge 类型 (bind: node.type)
+        @text 权限码 (bind: node.permission)
+        @stat 排序 (bind: node.sort)
+        @button 编辑 { @navigate click -> @modal 菜单表单 }
+        @button 删除 { @navigate click -> @action removeMenu }
+      }
+    }
+  }
+
+  @detail 星图舞台 {
+    @render when: altView === 'starmap'
+    @detail 关系图 {
+      @prop nodes: object[]
+      @prop links: object[]
+      @prop variant: string
+    }
+    @switch 标记孤立页面 (bind: showOrphans)
+  }
+
+  @detail 侧栏预览 {
+    @list 预览导航 {
+      @card 预览项 (v-for: item in visibleMenus) {
+        @icon 图标 (bind: item.icon)
+        @text 名称 (bind: item.name)
+      }
+    }
+  }
+
+  @modal 菜单表单 {
+    @form 菜单表单 {
+      @input 上级 (bind: form.parentId)
+      @input 名称 (bind: form.name)
+      @input 类型 (bind: form.type)
+      @input 图标 (bind: form.icon)
+      @input 路由 (bind: form.path)
+      @input 视图键 (bind: form.component)
+      @input 权限码 (bind: form.permission)
+      @input 排序 (bind: form.sort)
+      @switch 可见 (bind: form.visible)
+      @switch 启用 (bind: form.status)
+    }
+    @button 保存 { @navigate click -> @action saveMenu }
+  }
+
+  @state altView: string = 'table'
+  @state menuTree: object[] = []
+  @state form: object = {}
+  @state showOrphans: boolean = false
+
+  @api GET /admin/console/v1/menus/tree -> menuTree
+  @api POST /admin/console/v1/menus (body: { parentId, name, type, icon, path, component, permission, sort, visible, status })
+  @api PUT /admin/console/v1/menus/:id (bind: id, body: { parentId, name, type, icon, path, component, permission, sort, visible, status })
+  @api DELETE /admin/console/v1/menus/:id (bind: id)
+
+  @sync visibleMenus = menuTree.filter(m => m.visible === 1 && m.status === 1)
+
+  @note 按钮类型必须填权限码，否则前端 PermissionButton 与后端 allowPermissions 都无从判定
+  @note 视图键对应前端页面注册表，改键名必须同步 scaffold/src/router 的页面映射
+  @note 删除前先校验是否有角色引用，有引用则拒绝并提示先解除授权
+}

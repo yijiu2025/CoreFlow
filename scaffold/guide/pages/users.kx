@@ -1,0 +1,108 @@
+@ref ../models/api.kx
+@ref ../models/system.kx
+@ref ../components/shared.kx
+
+@page /system/user (用户管理) extends Main {
+  @icon Users
+  @meta title="用户管理"
+
+  @header 页头 {
+    @text 标题 (bind: '用户管理')
+    @permission admin:user:create
+    @button 新增用户 { @navigate click -> @modal 用户表单 }
+  }
+
+  @detail 查询区 {
+    @input 关键词 (bind: query.keyword)
+    @input 部门 (bind: query.deptId)
+    @input 状态 (bind: query.status)
+    @button 查询 { @navigate click -> @action loadUsers }
+    @button 重置 { @navigate click -> @action resetQuery }
+  }
+
+  @tab 视图 {
+    @menu 列表 { @navigate click -> @state altView = 'table' }
+    @menu 看板 { @navigate click -> @state altView = 'board' }
+  }
+
+  @detail 列表页 {
+    @prop columns: object[]
+    @prop rows: object[]
+    @prop total: number
+    @prop loading: boolean
+    @prop altView: string
+
+    @list 用户表 {
+      @empty { @text 没有符合条件的用户 }
+      @card 用户行 (v-for: row in userPage.rows) {
+        @avatar 头像 (bind: row.avatar)
+        @text 账号 (bind: row.username)
+        @text 部门 (bind: row.deptName)
+        @text 角色 (bind: row.roleNames)
+        @badge 状态 (bind: row.status)
+        @button 编辑 { @navigate click -> @modal 用户表单 }
+        @permission admin:user:update
+        @button 重置密码 { @navigate click -> @modal 重置密码 }
+        @permission admin:user:delete
+        @button 删除 { @navigate click -> @modal 删除确认 }
+      }
+    }
+  }
+
+  @detail 看板 {
+    @render when: altView === 'board'
+    @list 按状态分列 {
+      @card 状态列 (v-for: col in boardColumns) {
+        @text 列名 (bind: col.name)
+        @stat 数量 (bind: col.count)
+        @card 用户卡 (v-for: item in col.items) {
+          @avatar 头像 (bind: item.avatar)
+          @text 账号 (bind: item.username)
+        }
+      }
+    }
+  }
+
+  @modal 用户表单 {
+    @form 用户表单 {
+      @input 账号 (bind: form.username)
+      @input 邮箱 (bind: form.email)
+      @input 部门 (bind: form.deptId)
+      @input 角色 (bind: form.roleIds)
+      @input 岗位 (bind: form.postIds)
+      @switch 启用 (bind: form.status)
+    }
+    @button 保存 { @navigate click -> @action saveUser }
+  }
+
+  @modal 重置密码 {
+    @input 新密码 (bind: resetPassword)
+    @button 确认重置 { @navigate click -> @action resetPwd }
+  }
+
+  @modal 删除确认 {
+    @text 提示 (bind: '删除后该账号将无法登录，操作会记入审计日志')
+    @button 确认删除 { @navigate click -> @action removeUser }
+  }
+
+  @state altView: string = 'table'
+  @state query: object = {}
+  @state form: object = {}
+  @state userPage: object = {}
+  @state userOptions: object = {}
+  @state selectedIds: number[] = []
+
+  @api GET /admin/console/v1/users (query: pageNum, pageSize, keyword, deptId, status) -> userPage
+  @api GET /admin/console/v1/users/options -> userOptions
+  @api POST /admin/console/v1/users (body: { username, email, password, deptId, status, roleIds, postIds })
+  @api PUT /admin/console/v1/users/:id (bind: id, body: { username, email, deptId, status, roleIds, postIds })
+  @api PUT /admin/console/v1/users/:id/status (bind: id, body: { status })
+  @api PUT /admin/console/v1/users/:id/password (bind: id, body: { password })
+  @api DELETE /admin/console/v1/users/:id (bind: id)
+
+  @sync boardColumns = groupByStatus(userPage.rows)
+
+  @note 邮箱与手机号展示需脱敏，手机号为密文存储，列表不返回明文
+  @note 只有按状态看板可拖拽（单字段接口）；移动到其他状态走键盘可达的「移动到…」菜单
+  @note 勾选后的批量操作走底部深色浮条，一次提交
+}
