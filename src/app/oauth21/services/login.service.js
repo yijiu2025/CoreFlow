@@ -441,10 +441,15 @@ async function directLogin(request, reply, fastify) {
           client_name: client.client_name,
           scope: scopeString,
           scopeDetails,
+          // 与签发成功时的 user 同源：`id` 必须下发 —— 前端 `loginUserSchema`
+          // 以它为用户标识（缺了会让 consent 响应被判成"格式异常"，
+          // 授权确认面板根本弹不出来）。avatar 一并给，展示层不必二次请求。
           user: {
+            id: user.id,
             username: user.username,
             name: user.name || user.username,
-            email: user.email
+            email: user.email,
+            avatar: user.avatar || null
           }
         }
       });
