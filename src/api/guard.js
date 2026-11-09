@@ -394,7 +394,9 @@ function registerGroupMetadata(metadata) {
     _groupRateLimits.delete(groupKey);
   }
 
-  // 如果 metadata 显式指定了 system，则覆盖自动推导的值
+  // 系统归属**只**由 loader 推导（setRegistrationContext 按文件夹设置）：
+  // 不读 metadata.system —— 开第二个来源会让"配置落到哪个系统"取决于两处，
+  // 写错时既不报错也无日志，只表现为守卫配置莫名不生效。
   const systemKey = currentSystem;
 
   rawRegisterGroupMetadata(systemKey, groupKey, metadata);

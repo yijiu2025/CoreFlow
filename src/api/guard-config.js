@@ -396,17 +396,6 @@ function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
 }
 
 /**
- * 获取指定系统的 URL 前缀
- * 用于 cookie 路径隔离，使不同 app 的 sid cookie 仅在其对应的 URL 路径下生效
- * @param {string} systemKey - 系统标识
- * @returns {string} URL 前缀（如 /posecraft），未注册时返回 /${systemKey}
- */
-function getSystemPrefix(systemKey) {
-  const system = configs[systemKey];
-  return system?.prefix || `/${systemKey}`;
-}
-
-/**
  * 热更新配置 (支持 3 层更新)
  *
  * @param {string} systemKey - 系统标识
@@ -527,15 +516,24 @@ async function saveWithTimeout(systemKeys = null) {
  * 异步保存配置到数据库 (防抖处理)
  * 只保存标记为脏的系统，避免全量写入
  *
- * @param {string} [systemKey] - 被修改的系统标识，用于标记脏系统
+ * @param {string} systemKey - 被修改的系统标识（**必传**；缺失时跳过并告警，绝不退化成全量写）
  */
 let saveTimer = null;
 function triggerSave(systemKey) {
-  if (systemKey) _dirtySystems.add(systemKey);
+  // 🔴 缺 systemKey 时**不能**退化成"全量写"：旧实现是 `size > 0 ? [...set] : null`，
+  // 而 `saveWithTimeout(null)` 会把整棵树覆盖回 DB —— 那正是启动路径被移除的行为
+  // （见 loadGuardConfig 里"只补录 DB 缺失系统"的注释）。将来有人忘传参数时，
+  // 结果会是"改了一个系统、顺手把其他系统的运维配置一起冲掉"，且不报错。
+  if (!systemKey) {
+    log.warn(`⚠️ [Guard Config] ${C.yellow}triggerSave 缺少 systemKey，已跳过（避免全量覆盖 DB）${C.reset}`);
+    return;
+  }
+  _dirtySystems.add(systemKey);
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    const keys = _dirtySystems.size > 0 ? [..._dirtySystems] : null;
+    const keys = [..._dirtySystems];
     _dirtySystems.clear();
+    if (keys.length === 0) return;
     try {
       // 🔴 取 `.maxVersion`（2026-11-08）：`saveWithTimeout` 返回的是
       // `{maxVersion, updated, versions}`，直接赋值会让 currentVersion 变成对象 ——
@@ -852,7 +850,6 @@ function stopGuardConfigSync() {
 export {
   loadGuardConfig,
   getGuardConfig,
-  getSystemPrefix,
   setGuardConfig,
   registerSystemMetadata,
   registerGroupMetadata,
@@ -861,5 +858,8 @@ export {
   getAllGuardConfigs,
   syncGuardConfigFromDb,
   startGuardConfigSync,
-  stopGuardConfigSync
+  stopGuardConfigSync,
+  // 仅供测试驱动"脏系统落盘"的边界（缺 systemKey 必须跳过而非全量写）。
+  // 前缀 `__test__` 明示非公开 API —— 生产路径一律经 setGuardConfig。
+  triggerSave as __test__triggerSave
 };
