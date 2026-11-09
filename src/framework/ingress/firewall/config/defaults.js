@@ -224,7 +224,16 @@ const GLOBAL_RATE_LIMIT = {
   // 2026-11-02 起**不再有** defense.endpointRateLimits（防火墙管道内自研路径规则）——
   // 那套规则既匹配不到现存路由（path 写的是 /api/sms 等不存在的接口），封禁又写到了
   // 非 IP 的键上，整套空转；端点级限流统一由 @fastify/rate-limit 的路由声明承担。
-  enableEndpointRateLimit: true
+  enableEndpointRateLimit: true,
+
+  // 降级表容量（键数）。Redis 不可用时计数落在内存 Map 上，键是 `rate:user:<id>` /
+  // `rate:ip:<ip>`；IPv6 一个 /64 就有 2^64 个地址，轮换地址可以让这张表无上限增长
+  // （≈200B/键，100 万键 ≈ 200MB）。10 万键 ≈ 20MB，正常业务很难碰到。
+  //
+  // 满了之后的行为是**拒绝新键**（新来源直接 429），不是淘汰旧键 ——
+  // 淘汰等于把某个客户端的计数清零，攻击者打满表就能让所有人的窗口反复重置。
+  // 详见 `framework/persistence/redis/resilient-store.js` 的 `_rejectNewFallbackKey`。
+  fallbackMaxKeys: 100_000
 };
 
 // ════════════════════════════════════════════════════════════════════

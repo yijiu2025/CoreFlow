@@ -43,6 +43,14 @@
 > key, i.e. that layer did not exist). The startup log prints the effective value and warns above
 > 1000.
 
+> ⚠️ When Redis is unavailable, counters degrade to an in-process Map keyed by
+> `rate:user:*` / `rate:ip:*`. That map grows with the number of distinct sources (an IPv6 /64
+> alone holds 2^64 addresses), so it is capped by `defense.fallbackMaxKeys` (default 100k keys
+> ≈ 20MB). **Once full, new keys are rejected** (new sources get 429) while existing counters
+> stay untouched — evicting old keys would reset someone's rate-limit window, which is worse
+> than rejecting newcomers. If you see a burst of 429s from new IPs during degradation, check
+> Redis health first instead of raising the limit.
+
 ## Login lockout
 
 - Same account: 5 failures within 15 minutes → locked for 30 minutes

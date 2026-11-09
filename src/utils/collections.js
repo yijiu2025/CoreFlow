@@ -18,6 +18,11 @@
  *
  * 注意：仅用于内存降级兜底场景，若用于非降级场景请改用 LRU（淘汰需按访问顺序而非插入顺序）。
  *
+ * 🔴 **不要用在限流降级表上**（`framework/persistence/redis/resilient-store.js` 的
+ * `memoryFallback`）：那里的条目是"某个 IP / 用户的窗口计数"，淘汰一条 = 该客户端
+ * 下一请求从 0 开始数 —— 攻击者打满表就能让所有人的限流窗口反复重置。
+ * 限流表满时必须 fail-closed（拒绝新键、保留已有计数），见 `_rejectNewFallbackKey`。
+ *
  * @param {Map<any, any>} map - 目标 Map（原地修改）
  * @param {number} maxEntries - 上限条目数；0 表示清空
  * @returns {number} 实际淘汰的条目数（便于调用方按需记日志）

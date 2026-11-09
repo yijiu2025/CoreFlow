@@ -210,7 +210,7 @@ if (PANEL_MERGE.overridden.length > 0) {
  * 默认安全策略矩阵（**本 app 的生效默认值**）
  *
  * `deepMerge(core 默认, 面板层值)` —— 方向是「core 打底、面板层补自己的键」：
- *   - `defense` 只有 core 有（51 个防护参数），面板层不复制一份；
+ *   - `defense` 只有 core 有（52 个防护参数），面板层不复制一份；
  *   - `activeIpApi` / `showTrajectory` 由 `applyPanelOverrides` 决定：
  *     内置面板默认，除非 `src/config/firewall_config.js` 显式写了（写了的优先）。
  *

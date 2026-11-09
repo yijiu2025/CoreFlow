@@ -163,7 +163,10 @@ async function registerRateLimit(app) {
       // 只决定「没有 config.rateLimit 的路由是否也限」；端点声明不受此开关影响
       global: globalEnabled,
       store: createBoundStore(app, {
-        getWindowMs: () => (readSecuritySettings().defense.rateLimitWindow || 60) * 1000
+        getWindowMs: () => (readSecuritySettings().defense.rateLimitWindow || 60) * 1000,
+        // 降级表容量：按需读（面板改完立即生效）。缺省由 store 兜底为 10 万键，
+        // 这里仍显式传 —— 让"限流降级的内存上限"在配置面板上看得见、改得动。
+        getMaxKeys: () => readSecuritySettings().defense.fallbackMaxKeys
       }),
       continueExceeding: false,
       skipOnError: false,

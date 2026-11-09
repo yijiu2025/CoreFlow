@@ -91,6 +91,9 @@ const DEFENSE_SPEC = {
   rateLimitRequests: { type: 'int', min: 1 },
   rateLimitWindow: { type: 'int', min: 1 },
   enableEndpointRateLimit: { type: 'bool' },
+  // 降级表容量（键数）：下限 100（再小会把正常流量当成攻击），上限 500 万（≈1GB，
+  // 防止把 1e9 这种手误写成"给内存分配一个 T 的配额"）。
+  fallbackMaxKeys: { type: 'int', min: 100, max: 5_000_000 },
 
   // ── ⑤ 暴力破解 ──
   enableBruteForce: { type: 'bool' },

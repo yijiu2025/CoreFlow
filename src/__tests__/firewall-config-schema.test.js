@@ -41,6 +41,8 @@ const DEFENSE_KEYS = [
   'rateLimitRequests',
   'rateLimitWindow',
   'enableEndpointRateLimit',
+  // 降级表容量（Redis 不可用时限流内存 Map 的键数上限）
+  'fallbackMaxKeys',
   // 暴力破解
   'enableBruteForce',
   'bruteLimit',
@@ -124,6 +126,8 @@ describe('防火墙默认策略 · schema 契约', () => {
     expect(d.blacklistDuration).toBeGreaterThan(0);
     expect(d.rateLimitRequests).toBeGreaterThan(0);
     expect(d.rateLimitWindow).toBeGreaterThan(0);
+    // 降级表容量：0/负数会让"容量守卫"直接拒绝所有新键（把降级变成全站 429）
+    expect(d.fallbackMaxKeys).toBeGreaterThanOrEqual(100);
     expect(d.bruteLimit).toBeGreaterThan(0);
     expect(d.maxConn).toBeGreaterThan(0);
     expect(d.challengeDifficulty).toBeGreaterThanOrEqual(1);

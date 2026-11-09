@@ -7,7 +7,7 @@
  *   运行期热改（面板/JSON）→ data/firewall_config.json
  *
  * 可用键（顶层）：**defense** + **activeIpApi / showTrajectory**
- *   `defense`           防护策略（51 个键），core 与 app 都按它执行。
+ *   `defense`           防护策略（52 个键），core 与 app 都按它执行。
  *   `activeIpApi`       面板「当前节点 IP」用哪个公网归属 API：
  *                       sohu | ipinfo | ipapi | baidu（默认 ipinfo，见 src/app/firewall/config/panel.js）
  *   `showTrajectory`    面板是否展示访问轨迹（默认 true）
@@ -18,14 +18,15 @@
  *      （热改 > 静态配置 > 内置默认）——想让本文件的设置说了算，先删掉
  *      data/firewall_config.json 里对应的键。
  *
- * defense 下的键（51 个）—— 分组与顺序和 `defaults.js`、`config/schema.js` 完全一致：
+ * defense 下的键（52 个）—— 分组与顺序和 `defaults.js`、`config/schema.js` 完全一致：
  *   ① 开关    enableFirewall（总开关）/ enableGlobalBlock / enableChallenge
  *   ② 名单    manualBlacklistIps / manualBlacklistUsers / manualWhitelistIps
  *   ③ 扫描    enableAutoBlacklist / maxNotFoundAttempts / notFoundWindow /
  *             blacklistDuration / safePaths / loopbackPrefixes /
  *             internalIpPrefixes / idcIpPrefixes
  *   ③b 探针   probePaths（部署相关，代码里另有兜底常量）
- *   ④ 限频    enableRateLimit / rateLimitRequests / rateLimitWindow / enableEndpointRateLimit
+ *   ④ 限频    enableRateLimit / rateLimitRequests / rateLimitWindow / enableEndpointRateLimit /
+ *             fallbackMaxKeys（Redis 降级时内存表容量，默认 10 万键；满了拒绝新键）
  *   ⑤ 暴破    enableBruteForce / bruteLimit / bruteWindow / accountLockTime /
  *             ipBlockTime / bruteIpLimit
  *   ⑥ 连接    enableConnLimit / maxConn / connCleanupIntervalMs / connStaleAfterMs / connHighWater

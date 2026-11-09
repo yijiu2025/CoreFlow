@@ -14,6 +14,8 @@ const log = createLogger('framework.redis.resilient-store');
  *   （2026-11-07 起**只有父实例订阅**：路由桶都是 child，逐个订阅会让一次 Redis
  *   主备切换打出 N 行相同日志）
  * - 移除多余 ttl() 往返，直接返回窗口长度作为 ttl
+ * - 降级表封顶（2026-11-09）：键是 `rate:ip:*` / `rate:user:*`，IPv6 轮换地址可无上限增长；
+ *   满后先清过期、仍满则**拒绝新键**（fail-closed），绝不淘汰活条目（那等于清零限流计数）
  *
  * @author yijiu2025
  * @since 2026-07-24
@@ -27,6 +29,29 @@ const FAILURE_COOLDOWN = 5_000;
 
 /** Redis 操作超时（毫秒） */
 const REDIS_TIMEOUT = 3000;
+
+/**
+ * 降级表默认上限（键数）
+ *
+ * 每个键 ≈ 200 字节（key 串 + `{count,expires}` + Map 槽位）⇒ 10 万键 ≈ 20MB。
+ * 可由 `defense.fallbackMaxKeys`（防火墙配置）覆盖。
+ */
+const DEFAULT_FALLBACK_MAX_KEYS = 100_000;
+
+/**
+ * 超限后清理过期条目的最小间隔
+ *
+ * 为什么必须节流：攻击场景下「新键持续到来」会让我们每来一个键就全表扫一遍，
+ * 把内存风险换成 CPU 风险（O(n) × n）。1 秒最多扫一次，其余时间直接走"拒绝"分支（O(1)）。
+ */
+const PURGE_MIN_INTERVAL_MS = 1_000;
+
+/** 拒绝新键的告警节流（同一条故障不要每请求刷一行） */
+const CAP_WARN_INTERVAL_MS = 60_000;
+
+/** 上一次清理过期条目 / 上一次告警的时间戳（跨实例共享，child 不重复扫） */
+let _lastPurgeAt = 0;
+let _lastCapWarnAt = 0;
 
 /**
  * 限流计数（单次往返、原子）：INCR 后**仅当窗口首次创建时**设置过期。
@@ -155,6 +180,7 @@ class ResilientStore {
    * @param {import('fastify').FastifyInstance} app Fastify 实例
    * @param {object} [options]
    * @param {() => number} [options.getWindowMs] 返回当前限流窗口（毫秒）的回调，默认 60000
+   * @param {() => number} [options.getMaxKeys] 返回降级表容量上限（键数）的回调，默认 10 万
    * @param {boolean} [options.isChild] 是否由 `child()` 派生（子实例不订阅健康变化）
    */
   constructor(app, options = {}) {
@@ -162,6 +188,8 @@ class ResilientStore {
     this.app = app;
     /** @type {() => number} */
     this.getWindowMs = options.getWindowMs || (() => 60000);
+    /** @type {() => number} 容量按需读取（面板改阈值后无需重启，与 getWindowMs 同思路） */
+    this.getMaxKeys = options.getMaxKeys || (() => DEFAULT_FALLBACK_MAX_KEYS);
     /**
      * @type {Map<string, { count: number, expires: number }>}
      * 子实例共享父实例这张表：库的计数语义是「按 key」，同一个 key 必须命中同一份计数，
@@ -229,12 +257,78 @@ class ResilientStore {
   }
 
   /**
+   * 当前降级表容量上限（键数）
+   * 配置缺失 / 非法时回退默认值 —— 容量判据绝不能因为配错而变成 0 或 Infinity。
+   * @returns {number}
+   */
+  _fallbackCapacity() {
+    const value = Number(this.getMaxKeys?.());
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : DEFAULT_FALLBACK_MAX_KEYS;
+  }
+
+  /**
+   * 清掉降级表里**已经过期**的条目
+   *
+   * 只删过期项：过期条目在语义上已经"不存在"，删掉不影响任何计数 —— 这与"淘汰活条目"
+   * 有本质区别（后者等于把限流计数清零）。写时清理 + 定时清理双管，前者只在超限时触发。
+   *
+   * @param {number} now 当前时间戳
+   * @returns {void}
+   */
+  _purgeExpiredFallback(now) {
+    for (const [key, record] of this.memoryFallback) {
+      if (!record || record.expires < now) this.memoryFallback.delete(key);
+    }
+  }
+
+  /**
+   * 降级表已满：拒绝**新键**（fail-closed），已有键的计数一概不动
+   *
+   * 为什么是拒绝而不是淘汰最旧：淘汰会清掉某个键的计数，那个客户端下一请求就从 0 开始数
+   * —— 攻击者只要把表打满，就能让所有人的限流窗口反复重置（比"新用户 429"糟得多）。
+   * 返回 `max + 1` 让 `@fastify/rate-limit` 判定 exceeds（`isExceeded = current > max`）。
+   *
+   * @param {number|undefined} max 该路由的窗口上限（插件第 4 个参数）
+   * @param {number} windowMs 窗口毫秒
+   * @param {string} key 被拒的键（只用于日志，需掩码）
+   * @returns {{current: number, ttl: number}}
+   */
+  _rejectNewFallbackKey(max, windowMs, key) {
+    const limit = Number(max);
+    const current = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) + 1 : Number.MAX_SAFE_INTEGER;
+
+    const now = Date.now();
+    if (now - _lastCapWarnAt >= CAP_WARN_INTERVAL_MS) {
+      _lastCapWarnAt = now;
+      const cap = this._fallbackCapacity();
+      // 键里只有 userId / IP，日志里给个可定位的片段即可
+      const sample = String(key).replace(/\d{1,4}$/, '***');
+      this.log.warn?.(
+        `[Redis] 限流降级表已达上限 ${cap} 键，拒绝新键（fail-closed）：${sample}；` +
+          `已有键计数不受影响，Redis 恢复后自动回到分布式模式`
+      );
+    }
+
+    return { current, ttl: windowMs };
+  }
+
+  /**
    * 获取内存降级层的容量使用情况
-   * 注意：内存降级层无固定容量上限，capacity 为 null
-   * @returns {{ capacity: null, used: number, free: null, percent: null }}
+   *
+   * `capacity` 是**软上限**：超过它之后新键被拒（见 `_rejectNewFallbackKey`），
+   * 已有键继续计数，所以 `percent` 理论上不会超过 100（并发写入下可能瞬时略高）。
+   *
+   * @returns {{ capacity: number, used: number, free: number, percent: number|null }}
    */
   usage() {
-    return { capacity: null, used: this.memoryFallback?.size ?? 0, free: null, percent: null };
+    const capacity = this._fallbackCapacity();
+    const used = this.memoryFallback?.size ?? 0;
+    return {
+      capacity,
+      used,
+      free: Math.max(0, capacity - used),
+      percent: capacity > 0 ? Math.round((used / capacity) * 1000) / 10 : null
+    };
   }
 
   /**
@@ -255,10 +349,10 @@ class ResilientStore {
    * @param {string} key 存储键名
    * @param {Function} cb 回调函数 (err, result)
    * @param {number} [timeWindow] 窗口毫秒（由插件按路由配置传入）
-   * @param {number} [max] 窗口内上限（本实现不需要，按签名保留）
+   * @param {number} [max] 窗口内上限（降级表满时用来构造"已超限"的返回值）
    * @returns {Promise<void>}
    */
-  async incr(key, cb, timeWindow) {
+  async incr(key, cb, timeWindow, max) {
     const requested = Number(timeWindow);
     const windowMs = Number.isFinite(requested) && requested > 0 ? requested : this.getWindowMs();
 
@@ -293,8 +387,23 @@ class ResilientStore {
     }
     const now = Date.now();
     let record = this.memoryFallback.get(key);
+    const isNewWindow = !record || record.expires < now;
 
-    if (!record || record.expires < now) {
+    // 容量守卫（2026-11-09）：降级表按请求键（`rate:ip:*` / `rate:user:*`）增长，
+    // IPv6 一个 /64 就有 2^64 个地址，轮换地址能把这张表撑到 OOM。
+    // 策略是**只拦新键**：满了先清过期（纯收益），仍满则新键直接判超限，
+    // 已有键的计数一概不动 —— 淘汰活条目等于把限流计数清零，比误伤新用户糟得多。
+    if (isNewWindow && this.memoryFallback.size >= this._fallbackCapacity()) {
+      if (now - _lastPurgeAt >= PURGE_MIN_INTERVAL_MS) {
+        _lastPurgeAt = now;
+        this._purgeExpiredFallback(now);
+      }
+      if (this.memoryFallback.size >= this._fallbackCapacity()) {
+        return cb(null, this._rejectNewFallbackKey(max, windowMs, key));
+      }
+    }
+
+    if (isNewWindow) {
       record = { count: 1, expires: now + windowMs };
       this.log.debug?.({ key, mode: 'memory' }, '[Redis] 限流降级到内存');
     } else {
@@ -322,6 +431,7 @@ class ResilientStore {
     // isChild: 子实例不订阅健康变化（父实例统一转告），否则一次切换打 N 行相同日志。
     return new ResilientStore(this.app, {
       getWindowMs: this.getWindowMs,
+      getMaxKeys: this.getMaxKeys,
       memoryFallback: this.memoryFallback,
       isChild: true
     });
