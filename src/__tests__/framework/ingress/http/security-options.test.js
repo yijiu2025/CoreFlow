@@ -13,7 +13,8 @@ import {
   buildHelmetOptions,
   buildCorsOptions,
   CORS_ALLOWED_HEADERS,
-  CORS_EXPOSED_HEADERS
+  CORS_EXPOSED_HEADERS,
+  parseExtraHeaders
 } from '../../../../framework/ingress/http/security-options.js';
 
 describe('buildHelmetOptions', () => {
@@ -81,6 +82,32 @@ describe('buildCorsOptions', () => {
 
   it('credentials 必须为 true（cookie 会话跨域直连依赖它）', () => {
     expect(buildCorsOptions({}).credentials).toBe(true);
+  });
+
+  describe('CORS_EXTRA_HEADERS 扩展位（只增不减）', () => {
+    it('不配置时 allowedHeaders 与硬编码清单完全一致（安全默认不变）', () => {
+      expect(buildCorsOptions({}).allowedHeaders).toEqual(CORS_ALLOWED_HEADERS);
+      expect(buildCorsOptions({ extraHeaders: '' }).allowedHeaders).toEqual(CORS_ALLOWED_HEADERS);
+      expect(buildCorsOptions({ extraHeaders: '   ' }).allowedHeaders).toEqual(CORS_ALLOWED_HEADERS);
+    });
+
+    it('配置后追加在清单末尾，顺序稳定', () => {
+      const headers = buildCorsOptions({ extraHeaders: 'x-trace-id, x-tenant' }).allowedHeaders;
+      expect(headers.slice(0, CORS_ALLOWED_HEADERS.length)).toEqual(CORS_ALLOWED_HEADERS);
+      expect(headers.slice(CORS_ALLOWED_HEADERS.length)).toEqual(['x-trace-id', 'x-tenant']);
+    });
+
+    it('与基础清单重复的头（大小写不敏感）不会重复出现', () => {
+      const extra = parseExtraHeaders('Content-Type, X-CSRF-TOKEN, x-csrf-token');
+      expect(extra).toEqual([]);
+      const headers = buildCorsOptions({ extraHeaders: 'content-type' }).allowedHeaders;
+      expect(headers.filter(h => h.toLowerCase() === 'content-type')).toHaveLength(1);
+    });
+
+    it('重复项与非法头名被丢弃（防把带标点的示例粘进环境变量）', () => {
+      expect(parseExtraHeaders('x-a, X-A, x-a')).toEqual(['x-a']);
+      expect(parseExtraHeaders('x_underscore, x-b;garbage, ,x-c')).toEqual(['x-c']);
+    });
   });
 
   it('🔴 设备身份响应头必须暴露（cookie 是 httpOnly，JS 只能从这里拿到 ID）', () => {

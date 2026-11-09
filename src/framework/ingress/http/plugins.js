@@ -53,7 +53,9 @@ async function registerBasePlugins(app, { isProduction = false, corsOrigins = []
   // 1. security —— iframe 白名单 = CORS 白名单（同一套受信应用域）
   await app.register(helmet, buildHelmetOptions(isProduction, origins));
 
-  await app.register(cors, buildCorsOptions({ origins, isProduction }));
+  // `CORS_EXTRA_HEADERS`：额外允许头（逗号分隔），只增不减，缺省不放开任何头。
+  // 存在的理由：硬编码清单漏一个头 = 整条链路在跨域直连时预检失败且前端只报 Network Error。
+  await app.register(cors, buildCorsOptions({ origins, isProduction, extraHeaders: process.env.CORS_EXTRA_HEADERS }));
 
   await app.register(multipart, {
     // 全局最大 200MB，单次请求最多 1 个文件 + 10 个字段

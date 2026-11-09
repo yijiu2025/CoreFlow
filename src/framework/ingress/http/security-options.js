@@ -91,14 +91,46 @@ function buildHelmetOptions(isProduction, trustedOrigins = []) {
 }
 
 /**
+ * 解析额外允许头（环境变量 `CORS_EXTRA_HEADERS`，逗号分隔）
+ *
+ * 为什么需要这个口子：`CORS_ALLOWED_HEADERS` 是硬编码清单，**任何前端新增一个自定义头
+ * 都会重演「整条链路无声全灭」**（预检直接拒绝，前端只看到 Network Error，
+ * 2026-11-09 的 `x-csrf-token` 事故即此）。给它一个**只增不减**的扩展位，
+ * 部署方补头不必改代码、也不必等发版。
+ *
+ * 安全默认不变：不配置时返回值与硬编码清单**完全一致**（不放开任何头）。
+ * 与基础清单重复的头（大小写不敏感）会被跳过，避免 `allow-headers` 出现重复项。
+ *
+ * @param {string} [raw=''] 逗号分隔的头名
+ * @returns {string[]} 需要追加的头名（去重后）
+ */
+function parseExtraHeaders(raw = '') {
+  const base = CORS_ALLOWED_HEADERS.map(h => h.toLowerCase());
+  const out = [];
+  for (const part of String(raw || '').split(',')) {
+    const name = part.trim();
+    if (!name) continue;
+    const lower = name.toLowerCase();
+    // 头名只允许 token 字符：README 里写的示例被人连同标点一起粘进环境变量时不该生效
+    if (!/^[a-z0-9-]+$/.test(lower)) continue;
+    if (base.includes(lower)) continue;
+    if (out.some(h => h.toLowerCase() === lower)) continue;
+    out.push(name);
+  }
+  return out;
+}
+
+/**
  * 构造 CORS 选项
  *
  * @param {object} params
  * @param {string[]} params.origins - 白名单来源（生产环境必须非空，否则全部跨域被拒）
  * @param {boolean} params.isProduction - 是否生产环境
+ * @param {string} [params.extraHeaders=''] - 额外允许头（来自 `CORS_EXTRA_HEADERS`，逗号分隔）
  * @returns {Record<string, unknown>} `@fastify/cors` 选项
  */
-function buildCorsOptions({ origins = [], isProduction = false } = {}) {
+function buildCorsOptions({ origins = [], isProduction = false, extraHeaders = '' } = {}) {
+  const allowedHeaders = [...CORS_ALLOWED_HEADERS, ...parseExtraHeaders(extraHeaders)];
   return {
     origin: (origin, cb) => {
       // origin 为 undefined 时是同源请求（无跨域），无需校验直接放行
@@ -107,10 +139,17 @@ function buildCorsOptions({ origins = [], isProduction = false } = {}) {
     },
     credentials: true,
     methods: CORS_ALLOWED_METHODS,
-    allowedHeaders: CORS_ALLOWED_HEADERS,
+    allowedHeaders,
     exposedHeaders: CORS_EXPOSED_HEADERS,
     maxAge: 86400
   };
 }
 
-export { CORS_ALLOWED_HEADERS, CORS_ALLOWED_METHODS, CORS_EXPOSED_HEADERS, buildHelmetOptions, buildCorsOptions };
+export {
+  CORS_ALLOWED_HEADERS,
+  CORS_ALLOWED_METHODS,
+  CORS_EXPOSED_HEADERS,
+  parseExtraHeaders,
+  buildHelmetOptions,
+  buildCorsOptions
+};
