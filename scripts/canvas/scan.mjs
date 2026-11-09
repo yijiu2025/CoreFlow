@@ -124,7 +124,8 @@ for (const abs of files) {
   const dirs = seg.slice(0, -1);
   const group = dirs.length === 0 ? '（根目录）'
     : dirs[0] === 'api' && dirs.length > 1 ? 'api/' + dirs[1]
-    : dirs[0] === 'framework' && dirs[1] === 'log' ? 'log' // 日志模块独立展示
+    // 日志模块独立展示：当前在 framework/support/log，历史上在 framework/log，两处都认
+    : dirs[0] === 'framework' && (dirs[1] === 'log' || (dirs[1] === 'support' && dirs[2] === 'log')) ? 'log'
     : dirs[0];
   const info = { id: rel, group, name: seg[seg.length - 1], path: 'src/' + rel, fns: [], vars: [], imports: [], reexports: [], localExports: [], defaultFnId: null, lineCount: 0, loggers: new Set(), superOf: new Map() };
   info.folder = dirname(rel).replaceAll('\\', '/');
@@ -664,14 +665,18 @@ const folderMap = new Map();
 for (const f of fileMap.values()) {
   const key = f.folder || f.group; // 模块根目录下的文件归到同名文件夹
   if (!folderMap.has(key)) {
-    folderMap.set(key, { id: key, name: f.folder ? basename(f.folder) : f.group.split('/').pop(), group: f.group, path: f.folder || '', files: [] });
+    // 名字用「相对模块的路径」而不是最后一段目录名：basename 会让 api/admin 下的
+    // iam/v1、oauth21/v1、user/v1 全显示成 "v1"，目录树上四行一模一样分不清。
+    const inside = f.folder && f.folder.startsWith(f.group + '/');
+    const rel = inside ? f.folder.slice(f.group.length + 1) : '';
+    folderMap.set(key, { id: key, name: rel || '（模块根目录）', group: f.group, path: f.folder || '', files: [] });
   }
   folderMap.get(key).files.push(f.id);
 }
 
 // ---------- 输出 ----------
 // 层序（前端从左到右分列、列内从上到下）：公共层(env/log/utils/shared) → framework → models → api 域 → app 入口最末（独占列且底对齐 = 最下面）
-const GROUP_RANK = ['env', 'log', 'utils', 'shared', 'framework', 'models', 'api/auth', 'api/firewall', 'api/oauth21', 'api/user', 'api/posecraft', 'api/retroweb', 'api/admin', 'api/system', 'api/verify', 'api/notice', 'api', 'app', '（根目录）'];
+const GROUP_RANK = ['env', 'config', 'log', 'utils', 'shared', 'framework', 'models', 'api/auth', 'api/firewall', 'api/files', 'api/oauth21', 'api/user', 'api/posecraft', 'api/retroweb', 'api/admin', 'api/system', 'api/verify', 'api/notice', 'api', 'app', '（根目录）'];
 const GROUP_NAME = { env: '环境变量', log: '日志' };
 const data = {
   generatedAt: new Date().toISOString(),
@@ -725,6 +730,7 @@ try {
   prevData = JSON.parse(txt.slice(txt.indexOf('=') + 1).trim().replace(/;\s*$/, ''));
 } catch { /* 首次生成或文件损坏，直接写 */ }
 if (prevData && stable(prevData) === stable(data)) {
+  syncDataVersion(prevData.generatedAt);
   console.log(`✔ 数据无变化，保留原快照（generatedAt=${prevData.generatedAt}）`);
   console.log(`  文件: ${data.stats.files}  函数: ${data.stats.functions}  调用边: ${data.stats.calls}`);
   process.exit(0);
@@ -734,6 +740,22 @@ const js =
   '// 由 scripts/canvas/scan.mjs 自动生成，请勿手改。重新生成: npm run canvas:scan\n' +
   'window.CANVAS_DATA = ' + JSON.stringify(data) + ';\n';
 writeFileSync(OUT, js, 'utf8');
+syncDataVersion(data.generatedAt);
+
+// 给页面里的 data.js 引用打上版本号（缓存击穿）：
+// GitHub Pages 对静态资源有分钟级缓存，数据更新后用户刷新仍可能拿到旧快照，
+// 表现为"目录/名字没变"。版本号随 generatedAt 变化，数据一变缓存自然失效。
+function syncDataVersion(iso) {
+  try {
+    const HTML = join(ROOT, 'docs', 'public', 'canvas', 'index.html');
+    const html = readFileSync(HTML, 'utf8');
+    const stamp = String(iso).replace(/[-:TZ.]/g, '').slice(0, 14);
+    const next = html.replace(/(<script src="data\.js)(\?v=[^"]*)?("><\/script>)/, `$1?v=${stamp}$3`);
+    if (next !== html) writeFileSync(HTML, next, 'utf8');
+  } catch (e) {
+    console.warn('⚠ 未能更新 index.html 的 data.js 版本号:', e.message);
+  }
+}
 
 console.log(`✔ 已生成 docs/public/canvas/data.js`);
 console.log(`  文件: ${data.stats.files}  函数: ${data.stats.functions}  调用边: ${data.stats.calls}  未解析调用点: ${data.stats.unresolved}`);
