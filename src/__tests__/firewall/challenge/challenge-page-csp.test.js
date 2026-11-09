@@ -115,10 +115,22 @@ describe('buildChallengePage：nonce 与响应头同源', () => {
     const maxAttempts = Number(html.match(/const MAX_ATTEMPTS = (\d+)/)[1]);
     const src = JSON.parse(html.match(/const SOLVER_SRC = ("(?:[^"\\]|\\.)*");/)[1]);
 
+    // 🔴 只有 `--coverage` 跑测试时才需要这一步：istanbul 会把计数器注入函数体，
+    // 而内联用的是 `makePowSolver.toString()` —— 计数器引用的 `cov_xxx` 定义在模块作用域，
+    // Worker 里不存在，直接 `new Function` 就会 `ReferenceError: cov_xxx is not defined`。
+    // 生产构建没有插桩，`toString()` 拿到的就是干净源码；这里按 istanbul 的两种注入形态
+    // （独立语句 / `(cov_x().s[77]++, expr)` 序列表达式）还原成生产内联的那段代码。
+    const cleanSrc = src
+      .replace(/\bcov_[A-Za-z0-9_]+\(\)\.(?:s|f)\[\d+\]\+\+,\s*/g, '')
+      .replace(/\bcov_[A-Za-z0-9_]+\(\)\.b\[\d+\]\[\d+\]\+\+,\s*/g, '')
+      .replace(/\bcov_[A-Za-z0-9_]+\(\)\.(?:s|f)\[\d+\]\+\+;/g, '')
+      .replace(/\bcov_[A-Za-z0-9_]+\(\)\.b\[\d+\]\[\d+\]\+\+;/g, '')
+      .replace(/\/\*\s*istanbul[^*]*\*\//g, '');
+
     // 桩 `self`：Worker 里唯一的全局沟通渠道就是它
     const posted = [];
     const self = { postMessage: m => posted.push(m) };
-    new Function('self', src)(self);
+    new Function('self', cleanSrc)(self);
     self.onmessage({ data: { prefix: `${challengeId}:${salt}:`, difficulty, maxAttempts } });
 
     const answer = posted.find(m => m.answer !== undefined)?.answer;

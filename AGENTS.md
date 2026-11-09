@@ -11,6 +11,7 @@ npm run migrate      # 执行 Umzug 数据库迁移
 npm run lint         # ESLint 自动修复
 npm run format       # Prettier 格式化
 npm test             # Jest 测试 (ESM 模式)
+npm run test:coverage # 测试 + 覆盖率门禁（与 CI 同款；阈值是棘轮，见 jest.config.js）
 npm run canvas:scan  # 重扫 src/ 生成函数调用图数据 → docs/public/canvas/data.js（发布文档站时 CI 会自动重扫，无需提交）
 ```
 
@@ -514,9 +515,13 @@ src/firewall/
 ## 测试
 
 ```bash
-npm test                    # 运行所有测试
-npm test -- --coverage      # 运行并生成覆盖率报告
+npm test                    # 运行所有测试（不含覆盖率）
+npm run test:coverage       # 运行 + 覆盖率门禁（CI 同款；阈值 44/42/44/45，只升不降）
 ```
+
+覆盖率阈值是**棘轮**不是目标：2026-11-09 首次接进 CI 时的基线是
+语句 46.42% / 分支 44.28% / 函数 46.31% / 行 47.00%。覆盖到新模块后往上提，
+不要因为一次没过就往下调（此前阈值写了却从没跑过 `--coverage`，等于没有门禁）。
 
 测试文件在 `src/__tests__/` 下，使用 Fastify inject 进行集成测试。完整测试规范见 [.claude/skills/fullstack-rules/references/testing.md](.claude/skills/fullstack-rules/references/testing.md)。
 

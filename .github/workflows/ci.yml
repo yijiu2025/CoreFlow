@@ -208,8 +208,13 @@ jobs:
 
       # 必须带 --experimental-vm-modules：项目是 ESM 且测试大量使用
       # jest.unstable_mockModule，直接 npx jest 会丢掉这个标志而大面积失败。
-      - name: 运行测试
-        run: node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci
+      #
+      # 带 --coverage 是**门禁**不是报表：jest.config.js 的 coverageThreshold 是棘轮
+      # （2026-11-09 基线 46/44/46/47，阈值压到 44/42/44/45），大批未配套测试的改动会红。
+      # 在此之前阈值写了却从没跑过 --coverage —— 等于没有门禁（详见 jest.config.js 注释）。
+      # 插桩成本约 15s → 45s，20 分钟的 timeout 有充足余量。
+      - name: 运行测试（含覆盖率门禁）
+        run: node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci --coverage
 
   # --------------------------------------------------------------------------
   # 3. 跨进程不变量（E1 分布式锁 / E3 遥测聚合 / E3 WS 扇出）

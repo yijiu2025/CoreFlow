@@ -20,6 +20,7 @@
     "lint": "eslint . --fix",
     "format": "prettier --write .",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
+    "test:coverage": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --coverage",
     "check:baseline": "node scripts/check-browser-baseline.mjs",
     "verify:all": "node scripts/verify/run-all.mjs",
     "verify:lock": "node scripts/verify/lock-mutex.mjs",

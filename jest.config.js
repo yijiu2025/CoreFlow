@@ -45,12 +45,27 @@ export default {
     '!src/**/__tests__/**',
     '!src/**/*.test.js'
   ],
+  // 只产出摘要 + 机器可读汇总：html/lcov 报告在 CI 里没人看，却要额外几秒和一堆文件。
+  // 需要在浏览器里点着看时手动加：`--coverageReporters=html`（输出到 coverage/lcov-report）。
+  coverageReporters: ['text-summary', 'json-summary'],
+  /**
+   * 覆盖率**棘轮**（不是目标值）
+   *
+   * 2026-11-09 首次真正接进 CI 时的基线：语句 46.42% / 分支 44.28% / 函数 46.31% / 行 47.00%。
+   * 阈值统一压到基线下方约 2 个点，目的只有两个：
+   *   1. 大批代码被删掉/新增而未配套测试时，能立刻红（挡住"覆盖率断崖"）；
+   *   2. 日常小改动不至于因为 0.1 个点抖动而误报。
+   *
+   * 🔴 **只升不降**：覆盖到新模块后把这里的数字往上提，不要因为这次没过就往下调 ——
+   * 往下调一次，这套门禁就退化成"装饰"了（此前它正是这样：阈值写了三年，没有任何一条
+   * 命令跑过 `--coverage`，所以从没生效过）。
+   */
   coverageThreshold: {
     global: {
-      branches: 30,
-      functions: 40,
-      lines: 40,
-      statements: 40
+      branches: 42,
+      functions: 44,
+      lines: 45,
+      statements: 44
     }
   }
 };
