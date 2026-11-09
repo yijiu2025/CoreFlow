@@ -2,7 +2,7 @@
  * PoseCraft 频道配置模型
  * 存储首页频道 Tab 的可配置内容（名称/图标/类型/目标路由/分类/排序/定时展示）
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-16
  */
 const defineChannel = (sequelize, DataTypes) => {

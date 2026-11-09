@@ -2,7 +2,7 @@
  * PoseCraft 模板数据访问层
  * 负责模板的 CRUD、权限过滤查询、以及与底图作品的双向同步
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import sequelize from '../../../framework/persistence/db/index.js';

@@ -4,7 +4,7 @@
  * 供 loader 扫描时读取，定义应用的基础元数据。
  * app_id 用于 PBAC 权限系统中的应用隔离和资源归属标识。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 const userConfig = {

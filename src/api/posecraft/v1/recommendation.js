@@ -2,7 +2,7 @@
  * PoseCraft 推荐 API
  * 推荐/取消推荐/我的推荐列表/推荐状态检查
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';

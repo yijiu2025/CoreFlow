@@ -2,7 +2,7 @@
  * PoseCraft 用户互动数据访问层 (点赞、收藏、历史记录)
  * 负责用户对作品/模板的点赞、收藏、浏览历史记录及相关列表查询
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { getModel, sequelize } from '../../../framework/persistence/db/index.js';

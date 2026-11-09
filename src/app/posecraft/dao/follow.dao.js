@@ -2,7 +2,7 @@
  * PoseCraft 关注系统数据访问层
  * 负责用户之间的关注、取消关注、互关判断及粉丝/关注统计
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 

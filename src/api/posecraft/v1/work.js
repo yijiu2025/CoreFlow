@@ -2,7 +2,7 @@
  * PoseCraft 作品 API
  * 负责作品的查询、创建、删除及互动。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';

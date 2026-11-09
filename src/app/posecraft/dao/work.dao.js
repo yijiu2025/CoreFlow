@@ -8,7 +8,7 @@
  * PoseCraft 作品数据访问层
  * 负责作品的 CRUD、推荐查询、关注用户作品查询及 liked/collected 状态标记
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { getModel, sequelize } from '../../../framework/persistence/db/index.js';

@@ -2,7 +2,7 @@
  * PoseCraft 分析记录模型
  * 存储 AI 分析历史
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 /**

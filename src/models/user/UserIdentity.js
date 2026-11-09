@@ -10,7 +10,7 @@
  * - identity_type + identifier 唯一索引防止重复注册
  * - delete_version 联合唯一索引解决软删除唯一性失效问题
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { registerDeleteVersionHooks } from '../../framework/persistence/db/softDeleteHooks.js';

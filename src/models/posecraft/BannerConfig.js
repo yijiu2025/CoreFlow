@@ -2,7 +2,7 @@
  * PoseCraft Banner 配置模型
  * 存储首页推荐大图 Banner 的可配置内容（标题/描述/背景图/开关/定时展示）
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 /**

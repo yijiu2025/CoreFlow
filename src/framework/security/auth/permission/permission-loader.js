@@ -10,7 +10,7 @@
  * 3. 查询内联策略（用户级自定义权限）
  * 4. 合并所有策略 → { roles, permissions: { allows, denies } }
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { Op } from 'sequelize';

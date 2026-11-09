@@ -2,7 +2,7 @@
  * PoseCraft 频道配置 API
  * 从数据库读取频道分类列表（推荐、姿势、创意等），公开无需登录。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';

@@ -2,7 +2,7 @@
  * PoseCraft 模板模型
  * 存储姿势模板
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 /**

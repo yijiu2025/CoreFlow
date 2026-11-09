@@ -12,7 +12,7 @@
  * 5. 检查用户授权同意
  * 6. 发放一次性授权码
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import CodeDao from '../dao/code.dao.js';

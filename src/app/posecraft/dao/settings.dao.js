@@ -2,7 +2,7 @@
  * PoseCraft 用户个性设置 DAO
  * 只负责 settings 字段的读写与合并，不解析字段语义
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { getModel } from '../../../framework/persistence/db/index.js';

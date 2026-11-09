@@ -2,7 +2,7 @@
  * PoseCraft 关注/统计 API
  * 负责用户关注/取消关注、关注状态查询、粉丝关注统计以及个人主页完整统计聚合。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';

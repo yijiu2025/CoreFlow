@@ -2,7 +2,7 @@
  * PoseCraft 模板 API
  * 负责模板的查询、创建、更新、删除及管理员审核流程。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';

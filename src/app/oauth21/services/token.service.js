@@ -10,7 +10,7 @@
  * - 刷新令牌轮换（每次刷新生成新 refresh_token，吊销旧的）
  * - 授权码一次性消费（防重放攻击）
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { verifyPassword } from '../../../framework/security/auth/index.js';

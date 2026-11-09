@@ -1,7 +1,7 @@
 /**
  * PoseCraft 用户点赞模型
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 /**

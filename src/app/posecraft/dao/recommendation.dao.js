@@ -2,7 +2,7 @@
  * PoseCraft 推荐数据访问层
  * 负责用户推荐作品/模板给朋友看的创建、取消、查询及统计
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { getModel } from '../../../framework/persistence/db/index.js';

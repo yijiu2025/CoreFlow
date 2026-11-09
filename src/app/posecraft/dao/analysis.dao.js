@@ -2,7 +2,7 @@
  * PoseCraft 分析数据访问层
  * 负责 AI 分析记录（姿态/人脸/手部/分割）的创建、查询与统计
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import sequelize from '../../../framework/persistence/db/index.js';

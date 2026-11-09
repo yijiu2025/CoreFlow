@@ -2,7 +2,7 @@
  * PoseCraft 作品模型
  * 存储用户创作的作品
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 /**

@@ -7,7 +7,7 @@
  * kid 回传链路：getEncryptionPublicKey 返回当前密钥的 kid → 前端缓存并随请求回传 →
  * decrypt(encrypted, kid) 用该 kid 查私钥解密。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import crypto from 'node:crypto';

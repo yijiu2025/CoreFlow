@@ -2,7 +2,7 @@
  * PoseCraft 频道配置数据访问层
  * 负责首页频道 Tab 的增删改查，支持按展示窗口过滤
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-16
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
