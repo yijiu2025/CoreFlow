@@ -40,7 +40,7 @@
   @state health: object = {}
   @state clockText: string = ''
 
-  @api POST /auth/v1/bind-session (body: { sessionToken })
+  @api POST /auth/v1/bind-session (body: { session_token })
   @api GET /admin/console/v1/session/me -> me
 
   @navigate success -> /dashboard

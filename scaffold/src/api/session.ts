@@ -38,6 +38,12 @@ export function logout(): Promise<null> {
 /**
  * 用临时 session_token 换取 sid/sid_r Cookie
  *
+ * 🔴 请求体字段是 **snake_case 的 `session_token`**，不是 `sessionToken`：
+ *    后端 `api/auth/v1/session.js` 里直接 `const { session_token } = request.body`，
+ *    传 camelCase 会得到 400「缺少 session_token」——而此时网络面板里
+ *    oauth21 明明已经下发了 session_token，很容易误判成"凭证没拿到"。
+ *    firewall 的 `bindSession` 也是 snake_case，两边必须一致。
+ *
  * 🔴 调用前必须先 `adoptDeviceId(deviceId)`：绑定请求即携带统一设备 ID，
  *    登录基准指纹与后续请求一致，否则会触发「设备环境变更」风控。
  *
@@ -49,5 +55,5 @@ export function bindSession(sessionToken: string): Promise<{
   rememberMe?: boolean;
   user?: Partial<CurrentUser>;
 }> {
-  return post('/auth/v1/bind-session', { sessionToken });
+  return post('/auth/v1/bind-session', { session_token: sessionToken });
 }

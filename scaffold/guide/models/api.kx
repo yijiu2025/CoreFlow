@@ -88,6 +88,6 @@
   @api GET /admin/console/v1/firewall/whitelist -> firewallWhitelist
 
   // 登录链路（既有接口，不新增）
-  @api POST /auth/v1/bind-session (body: { sessionToken })
+  @api POST /auth/v1/bind-session (body: { session_token })
   @api POST /auth/v1/clear-cookie
 }
