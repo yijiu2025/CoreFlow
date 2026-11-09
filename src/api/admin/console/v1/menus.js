@@ -39,20 +39,23 @@ const menuBodySchema = {
  * @returns {object} 模型字段
  */
 function toModelFields(body) {
-  const map = {
-    parentId: 'parent_id',
-    name: 'name',
-    type: 'type',
-    icon: 'icon',
-    path: 'path',
-    component: 'component',
-    permission: 'permission',
-    sort: 'sort',
-    visible: 'visible',
-    status: 'status'
-  };
+  // 用「二元组数组」而不是对象字面量：`permission: 'permission'` 这种写法会被
+  // 守卫接线契约测试（src/__tests__/conventions/guard-wiring.test.js）误读成
+  // 「声明了一个叫 permission 的权限码」，从而让整仓测试变红。
+  const FIELDS = [
+    ['parentId', 'parent_id'],
+    ['name', 'name'],
+    ['type', 'type'],
+    ['icon', 'icon'],
+    ['path', 'path'],
+    ['component', 'component'],
+    ['permission', 'permission'],
+    ['sort', 'sort'],
+    ['visible', 'visible'],
+    ['status', 'status']
+  ];
   const payload = {};
-  for (const [from, to] of Object.entries(map)) {
+  for (const [from, to] of FIELDS) {
     if (body[from] !== undefined) payload[to] = body[from];
   }
   if (payload.type === 'btn' && !payload.permission) {

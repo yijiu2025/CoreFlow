@@ -1,0 +1,12 @@
+/**
+ * 全局样式入口（顺序即层叠语义，不要调换）
+ *
+ *   tokens        设计令牌（唯一取值来源，页面不手写色值）
+ *   base          元素级基线 + 可见焦点
+ *   layout        外壳骨架（侧栏 / 顶栏 / 内容区）
+ *   components    控件库（按钮 / 输入 / 表格 / 标签 / 浮层）
+ */
+@import './tokens.css';
+@import './base.css';
+@import './layout.css';
+@import './components.css';

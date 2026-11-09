@@ -1,0 +1,350 @@
+/**
+ * 控件库：按钮 / 输入 / 面板 / 表格 / 标签 / 浮层 / 读数
+ *
+ * 页面只拼这些类，不再各自写一套按钮或表格样式。
+ */
+
+/* ── 按钮 ─────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.1s ease;
+}
+
+.btn:hover {
+  background: var(--hover-bg);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--blue);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn--primary:hover {
+  background: var(--blue-hover);
+}
+
+.btn--danger {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  background: transparent;
+}
+
+.btn--danger:hover {
+  background: var(--red-soft);
+}
+
+.btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-muted);
+}
+
+.btn--ghost:hover {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.btn--sm {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* ── 输入 ─────────────────────────────────────────────────── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field__label {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.input,
+.select {
+  height: var(--control-h);
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  transition: border-color 0.16s ease;
+}
+
+.input:focus,
+.select:focus {
+  border-color: var(--blue);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+/* ── 面板 / 卡片 ──────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--e1);
+}
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.panel__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.panel__body {
+  padding: 16px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.toolbar__spacer {
+  flex: 1 1 auto;
+}
+
+/* ── 读数（仪器化） ───────────────────────────────────────── */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.stat {
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--e1);
+}
+
+.stat__label {
+  font-size: 12px;
+  letter-spacing: var(--track-eyebrow);
+  color: var(--ink-faint);
+}
+
+.stat__value {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-display-m);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.stat__hint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* ── 表格 ─────────────────────────────────────────────────── */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--r-md);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  padding: 0 var(--cell-px);
+  height: var(--row-h);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+
+.table th {
+  color: var(--ink-soft);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: var(--track-eyebrow);
+  background: var(--surface-soft);
+}
+
+.table tbody tr:hover {
+  background: var(--hover-bg);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.col-actions {
+  position: sticky;
+  right: 0;
+  background: var(--surface);
+  text-align: right;
+}
+
+/* ── 标签 ─────────────────────────────────────────────────── */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--hover-bg);
+  color: var(--ink-muted);
+}
+
+.tag--ok {
+  background: var(--leaf-soft);
+  color: var(--leaf);
+}
+
+.tag--off {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.tag--info {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+/* ── 浮层（弹窗 / 抽屉） ──────────────────────────────────── */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--overlay);
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  width: min(560px, 100%);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--e3);
+  overflow: hidden;
+}
+
+.modal__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal__title {
+  font-weight: 600;
+}
+
+.modal__body {
+  padding: 18px;
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+}
+
+/* ── 空状态 / 加载 ────────────────────────────────────────── */
+.empty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 40px 16px;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.skeleton-row {
+  height: 14px;
+  margin: 12px 16px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--hover-bg), var(--press-bg), var(--hover-bg));
+  background-size: 200% 100%;
+  animation: skeleton 1.2s ease infinite;
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ── 提示条 ───────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 80;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--plate-bg);
+  color: var(--plate-ink);
+  font-size: 13px;
+  box-shadow: var(--e3);
+}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>管理后台</title>
+    <!--
+      暗色首帧预置：在样式加载前就把 .dark 类挂到 <html>，
+      避免「先白后黑」的闪屏。取值键与 stores/theme.ts 的持久化键保持一致。
+    -->
+    <script>
+      (function () {
+        try {
+          // 键名与 skinsuite 默认持久化键一致（mode 单键存字符串，非 JSON）
+          var mode = localStorage.getItem('mauth:mode') || 'system';
+          var dark =
+            mode === 'dark' ||
+            (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        } catch (e) {
+          /* 隐私模式下 localStorage 不可用，退回浅色 */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

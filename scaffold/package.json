@@ -1,0 +1,31 @@
+{
+  "name": "console-scaffold",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "通用后台脚手架（Vue 3 + Vite + skinsuite 主题 + 珍珠玻璃视觉）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "console-scaffold": "file:",
+    "gsap": "^3.12.5",
+    "lucide-vue-next": "^0.468.0",
+    "pinia": "^3.0.1",
+    "stable-deviceid": "*",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "sass": "^1.83.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.7",
+    "vue-tsc": "^2.2.0"
+  },
+  "license": "GPL-3.0-only"
+}
