@@ -59,14 +59,30 @@ src/
   theme/devices.ts   设备词汇（宿主事实）
 ```
 
-## 主题
+## 主题（与 oauth21 同构）
 
-用 `skinsuite` 的 `createThemeState`（明暗三态 / 系统偏好 / 持久化 / URL 参数）
-＋ `<ThemeRoot>`（`.dark` 类与底色）。**本前端不建 `themes/` 目录**：
-只有一套设计（珍珠玻璃），配色直接落 `assets/styles/tokens.css`（`:root` / `.dark`）。
+```
+src/theme/
+  theme.config.ts                        主题域清单（调试面板档位 ?debug=theme）
+  palette.ts                             色值单一来源（8 个壳文件只声明 meta/tone 并展开它）
+  themes/default/                        主题包（目录名 default = 库内置兜底包名）
+    index.ts                             包定义（设计名放 meta.name：珍珠玻璃）
+    <设备>/<页面>/colors/<配色>/index.ts  设备 standard|mobile × 页面 console|login × 配色 white|black
+  views/console.ts · views/login.ts      页面域声明（defineThemePage）
+src/view/devices.ts                      设备词汇（宿主事实，不 import 主题库）
+src/view/useRenderDevice.ts              设备判定（?device= 优先，否则视口 ≤ 820px）
+```
 
-将来要加第二套设计：建 `src/theme/themes/<包>/…`、vite 挂 `themeAssets()`、
-页面容器改 `<ThemeView>` —— 不要在 CSS 里手写 `[data-skin]` 分支（那会成为第二套真相）。
+- 明暗 = 配色系别：`white`（浅）/ `black`（深）；`mode` 仍是用户偏好（system/light/dark），
+  由 `createThemeState` 维护、持久化在 `mauth:mode` / `mauth:theme`。
+- 壳层用 `<ThemeScope page="console" :device>`：**token-only**，只锚定「包 × 设备 × 页面」，
+  不渲染版式组件 —— console 只有一套设计，页面之间换的是业务内容而不是 DOM。
+- 颜色变量一律 `--mauth-*`（skinsuite 注入白名单要求）；阴影 / 字体栈 / 结构尺寸
+  是复合值或布局骨架，留在 `src/assets/styles/tokens.css`，不进主题 token。
+- 要「同一壳换一套 DOM」：新建主题包（`themes/<包>/`）并在包定义声明 `views.console`，
+  **不要**在 AppShell 里写 `if (pkg === …)`。
+
+调试：`?debug=theme` 打开面板；`?th_color=black` 强制深色；`?device=mobile` 锁定手机版。
 
 ## 与后端的分工
 

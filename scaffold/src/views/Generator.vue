@@ -44,19 +44,19 @@ import { FileCode2 } from 'lucide-vue-next';
   gap: 10px;
   justify-items: start;
   padding: 24px 4px;
-  color: var(--ink-muted);
+  color: var(--mauth-text-mid);
   font-size: 13px;
   line-height: 1.7;
 }
 
 .placeholder strong {
-  color: var(--ink);
+  color: var(--mauth-text);
   font-size: 15px;
 }
 
 code {
   padding: 1px 5px;
   border-radius: 6px;
-  background: var(--hover-bg);
+  background: var(--mauth-hover);
 }
 </style>

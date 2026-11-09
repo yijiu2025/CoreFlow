@@ -442,8 +442,8 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid var(--line);
-  color: var(--ink-soft);
+  border-top: 1px solid var(--mauth-border);
+  color: var(--mauth-text-soft);
   font-size: 12px;
 }
 
@@ -458,7 +458,7 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--mauth-border-strong);
   border-radius: 999px;
   font-size: 12px;
   cursor: pointer;

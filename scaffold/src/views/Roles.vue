@@ -219,9 +219,9 @@ onMounted(load);
   display: grid;
   gap: 4px;
   padding: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--mauth-border);
   border-radius: var(--r-sm);
-  background: var(--surface-soft);
+  background: var(--mauth-surface-2);
 }
 
 .menu-item {
@@ -235,6 +235,6 @@ onMounted(load);
 }
 
 .menu-item:hover {
-  background: var(--hover-bg);
+  background: var(--mauth-hover);
 }
 </style>

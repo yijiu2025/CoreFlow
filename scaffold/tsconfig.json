@@ -4,7 +4,11 @@
     "useDefineForClassFields": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -12,15 +16,34 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "esModuleInterop": true,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "stable-deviceid": ["../packages/shared-device/src/index.ts"],
-      "skinsuite": ["../packages/theme-core/src/index.ts"],
-      "skinsuite/vue": ["../packages/theme-core/src/vue/index.ts"],
-      "skinsuite/vite": ["../packages/theme-core/src/vite/index.ts"]
-    }
+      "@/*": [
+        "src/*"
+      ],
+      "stable-deviceid": [
+        "../packages/shared-device/src/index.ts"
+      ],
+      "skinsuite": [
+        "../packages/theme-core/src/index.ts"
+      ],
+      "skinsuite/vue": [
+        "../packages/theme-core/src/vue/index.ts"
+      ],
+      "skinsuite/vite": [
+        "../packages/theme-core/src/vite/index.ts"
+      ]
+    },
+    "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "vite.config.ts", "env.d.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.vue",
+    "vite.config.ts",
+    "env.d.ts"
+  ]
 }

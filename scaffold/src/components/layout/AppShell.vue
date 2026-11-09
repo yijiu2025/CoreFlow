@@ -11,7 +11,9 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-vue-next';
+import { ThemeScope } from 'skinsuite/vue';
 import AppIcon from '@/components/ui/AppIcon.vue';
+import { useRenderDevice } from '@/view/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 import type { MenuNode } from '@/api/types';
@@ -20,6 +22,11 @@ const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const themeStore = useThemeStore();
+/**
+ * 设备判定（宿主职责）：`?device=mobile|std` 优先，否则按视口宽度。
+ * 主题库只接收设备名、不做判定 —— 这里的结果同时决定 token 作用域与布局断点。
+ */
+const device = useRenderDevice();
 
 const collapsed = ref(false);
 const drawerOpen = ref(false);
@@ -91,11 +98,17 @@ watch(
 </script>
 
 <template>
-  <div class="shell">
-    <aside class="rail" :data-collapsed="collapsed" :data-open="drawerOpen">
-      <div class="rail__brand">
-        <span class="rail__mark">C</span>
-        <span v-show="!collapsed">管理后台</span>
+  <!--
+    ThemeScope：只锚定「包 × 设备 × 页面」的 token 作用域，不渲染版式组件。
+    console 只有一套设计（pearl），页面之间换的是业务内容而不是 DOM 结构，
+    因此不用 <ThemeView>；要换版式请新建主题包（见 stores/theme.ts 文件头）。
+  -->
+  <ThemeScope page="console" :device="device">
+    <div class="shell">
+      <aside class="rail" :data-collapsed="collapsed" :data-open="drawerOpen">
+        <div class="rail__brand">
+          <span class="rail__mark">C</span>
+          <span v-show="!collapsed">管理后台</span>
       </div>
 
       <nav class="rail__nav" aria-label="主导航">
@@ -152,6 +165,7 @@ watch(
       <main class="page">
         <router-view />
       </main>
+      </div>
     </div>
-  </div>
+  </ThemeScope>
 </template>

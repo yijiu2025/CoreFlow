@@ -250,13 +250,13 @@ onMounted(load);
 
 .heat__label {
   font-size: 11px;
-  color: var(--ink-faint);
+  color: var(--mauth-text-faint);
 }
 
 .heat__cell {
   height: 14px;
   border-radius: 3px;
-  background: var(--blue);
+  background: var(--mauth-primary);
 }
 
 .pager {
@@ -265,8 +265,8 @@ onMounted(load);
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid var(--line);
-  color: var(--ink-soft);
+  border-top: 1px solid var(--mauth-border);
+  color: var(--mauth-text-soft);
   font-size: 12px;
 }
 </style>

@@ -10,12 +10,16 @@
  */
 import { useRoute, useRouter } from 'vue-router';
 import { ShieldCheck, Loader2 } from 'lucide-vue-next';
+import { ThemeScope } from 'skinsuite/vue';
 import { useAuthStore } from '@/stores/auth';
+import { useRenderDevice } from '@/view/useRenderDevice';
 import { useSsoLogin } from '@/composables/useSsoLogin';
 
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
+/** 登录页独立页面域（page=login）：配色与后台壳分开，见 theme/views/login.ts */
+const device = useRenderDevice();
 
 const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSsoLogin(async () => {
   const ok = await auth.load(true);
@@ -26,7 +30,8 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
 </script>
 
 <template>
-  <div class="login">
+  <ThemeScope page="login" :device="device">
+    <div class="login">
     <section class="login__brand">
       <div class="login__mark">C</div>
       <h1 class="login__title">管理后台</h1>
@@ -65,7 +70,8 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
 
       <p v-if="errorMessage" class="login__error">{{ errorMessage }}</p>
     </section>
-  </div>
+    </div>
+  </ThemeScope>
 </template>
 
 <style scoped>
@@ -77,8 +83,8 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
   gap: 48px;
   padding: 48px clamp(24px, 6vw, 96px);
   background:
-    radial-gradient(1000px 520px at 12% -10%, var(--blue-soft), transparent 60%),
-    radial-gradient(700px 420px at 92% 108%, var(--leaf-soft), transparent 62%), var(--canvas);
+    radial-gradient(1000px 520px at 12% -10%, var(--mauth-primary-soft), transparent 60%),
+    radial-gradient(700px 420px at 92% 108%, var(--leaf-soft), transparent 62%), var(--mauth-bg);
 }
 
 .login__brand {
@@ -91,7 +97,7 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: linear-gradient(145deg, var(--blue), #164fb8);
+  background: linear-gradient(145deg, var(--mauth-primary), #164fb8);
   color: #fff;
   font-weight: 700;
   margin-bottom: 18px;
@@ -104,7 +110,7 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
 }
 
 .login__desc {
-  color: var(--ink-muted);
+  color: var(--mauth-text-mid);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -115,7 +121,7 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
   list-style: none;
   display: grid;
   gap: 10px;
-  color: var(--ink-muted);
+  color: var(--mauth-text-mid);
   font-size: 13px;
 }
 
@@ -127,8 +133,8 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
 
 .login__card {
   width: min(880px, 92vw);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--mauth-surface);
+  border: 1px solid var(--mauth-border);
   border-radius: var(--r-lg);
   box-shadow: var(--e3);
   overflow: hidden;
@@ -140,20 +146,20 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
   justify-content: space-between;
   gap: 12px;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--mauth-border);
   font-weight: 600;
 }
 
 .login__hint {
   font-size: 12px;
   font-weight: 400;
-  color: var(--ink-faint);
+  color: var(--mauth-text-faint);
 }
 
 .login__frame {
   position: relative;
   height: 520px;
-  background: var(--surface-soft);
+  background: var(--mauth-surface-2);
 }
 
 .login__iframe {
@@ -169,16 +175,16 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
   place-items: center;
   gap: 10px;
   align-content: center;
-  background: color-mix(in srgb, var(--surface) 86%, transparent);
-  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--mauth-surface) 86%, transparent);
+  color: var(--mauth-text-mid);
   font-size: 13px;
   backdrop-filter: blur(3px);
 }
 
 .login__error {
   padding: 12px 20px;
-  border-top: 1px solid var(--line);
-  color: var(--red);
+  border-top: 1px solid var(--mauth-border);
+  color: var(--mauth-danger);
   font-size: 13px;
 }
 

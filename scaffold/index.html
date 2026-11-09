@@ -16,8 +16,9 @@
           var dark =
             mode === 'dark' ||
             (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          // 只挂 .dark 类：色值由主题包（skinsuite 注入的 --mauth-*）决定，
+          // 不再自造 data-theme 属性 —— 那会成为与主题机制并行的第二套真相。
           if (dark) document.documentElement.classList.add('dark');
-          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
         } catch (e) {
           /* 隐私模式下 localStorage 不可用，退回浅色 */
         }

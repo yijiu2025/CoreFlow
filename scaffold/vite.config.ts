@@ -7,9 +7,14 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type PluginOption } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
+// 🔴 这里必须走**相对源码路径**，不能写 `skinsuite/vite`：
+//    vite 配置在加载时由 esbuild 单独打包，**不走 resolve.alias**（alias 只作用于
+//    应用代码），而 packages/theme-core 的 exports 指向未构建的 dist。
+//    写包名会在 `vite` / `vite build` 启动阶段直接报 "Cannot find package 'skinsuite'"。
+import { themeAssets } from '../packages/theme-core/src/vite/index.ts';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -17,10 +22,12 @@ export default defineConfig(({ mode }) => {
   const apiTarget = env.VITE_API_TARGET || 'http://127.0.0.1:3000';
 
   return {
-    // 注意：**不挂 themeAssets()** —— console 只交付一套设计（珍珠玻璃），
-    // 没有 themes/<包>/<设备>/<页面>/colors/ 目录可扫。配色在 assets/styles/tokens.css。
-    // 需要多套设计时再建主题包目录并挂插件（见 stores/theme.ts 文件头）。
-    plugins: [vue()],
+    // 主题域扫描：扫 src/theme（VITE_THEME_DIR，缺省 src/theme）→ 虚拟模块 virtual:theme。
+    // 零参调用：目录由插件用 Vite 自己加载的 env 解析，无 mode 传递与 cwd 陷阱。
+    // 类型桥接：packages/theme-core 自带一份 vite（版本与宿主不同），其 Plugin 类型
+    // 与宿主 vite 的 PluginOption 不同源。运行期是同一套钩子协议，这里只做类型对齐。
+    // TODO: 宿主 vite 升到 8 与 oauth21 对齐后，这个断言可以去掉。
+    plugins: [themeAssets() as unknown as PluginOption, vue()],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

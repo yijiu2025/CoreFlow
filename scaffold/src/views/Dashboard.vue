@@ -159,13 +159,13 @@ onMounted(load);
   width: 100%;
   max-width: 44px;
   border-radius: 8px 8px 4px 4px;
-  background: linear-gradient(180deg, var(--blue), color-mix(in srgb, var(--blue) 55%, transparent));
+  background: linear-gradient(180deg, var(--mauth-primary), color-mix(in srgb, var(--mauth-primary) 55%, transparent));
   transition: height 0.3s ease;
 }
 
 .trend__label {
   font-size: 11px;
-  color: var(--ink-faint);
+  color: var(--mauth-text-faint);
 }
 
 .recent {
@@ -182,7 +182,7 @@ onMounted(load);
   gap: 2px 10px;
   padding: 8px 10px;
   border-radius: var(--r-sm);
-  background: var(--surface-soft);
+  background: var(--mauth-surface-2);
 }
 
 .recent__user {
@@ -192,14 +192,14 @@ onMounted(load);
 
 .recent__meta {
   font-size: 12px;
-  color: var(--ink-soft);
+  color: var(--mauth-text-soft);
   justify-self: end;
 }
 
 .recent__time {
   grid-column: 1 / -1;
   font-size: 11px;
-  color: var(--ink-faint);
+  color: var(--mauth-text-faint);
 }
 
 @media (max-width: 980px) {

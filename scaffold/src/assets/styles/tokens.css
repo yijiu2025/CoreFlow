@@ -1,12 +1,17 @@
 /**
- * 珍珠玻璃设计令牌（Pearl Glass）
+ * 应用级几何与排版（**颜色不在这里**）
  *
- * 来源：参考实现 scaffold-vue 的 tokens.css，按本仓口径调整：
- *   • 变量前缀去掉 `--mauth-`（那是 skin suite 对外注入白名单的命名空间，
- *     主题包自身的 SCSS 不受限；这里统一用短名，便于页面书写）；
- *   • 深色不再是"另一套 token 文件"，而是 `.dark` 作用域下的**同语义**取值。
+ * 颜色 / 圆角 / 阅读面等设计 token 由主题包提供：
+ *   `src/theme/themes/pearl/<设备>/<页面>/colors/<配色>/index.ts`
+ *   → 运行时注入为 `--mauth-*` 变量（ThemeRoot / ThemeScope）。
  *
- * 🔴 页面只引用令牌，不手写色值 / 圆角 / 阴影。
+ * 本文件只留三类**主题不接管**的值：
+ *   1. 结构尺寸（侧栏宽度、顶栏高度、控件高度、行高）—— 改主题不该改布局骨架；
+ *   2. 阴影与字体栈 —— 复合值，无法通过 skinsuite 的 token 白名单校验；
+ *   3. 字体族与等宽栈。
+ *
+ * @author yijiu2025
+ * @since 2026-11-09
  */
 
 :root {
@@ -16,57 +21,10 @@
   font-synthesis: none;
   color-scheme: light;
 
-  /* ── 字色四档 ─────────────────────────────────────────────── */
-  --ink: #101418;
-  --ink-muted: #596368;
-  --ink-soft: #7e888c;
-  --ink-faint: #99a2a5;
-
-  /* ── 语义色：蓝 = 选择/主操作，青柠 = 正常，红 = 警示 ──────── */
-  --blue: #236de9;
-  --blue-hover: #1d61d5;
-  --blue-soft: rgba(35, 109, 233, 0.1);
-  --leaf: #58a021;
-  --leaf-soft: rgba(88, 160, 33, 0.12);
-  --red: #e0443b;
-  --red-soft: rgba(224, 68, 59, 0.11);
-  --focus: rgba(35, 109, 233, 0.8);
-
-  /* ── 圆角与描边 ───────────────────────────────────────────── */
-  --r-xs: 8px;
-  --r-sm: 12px;
-  --r-md: 16px;
-  --r-lg: 20px;
-  --r-xl: 24px;
-  --shade: 46, 58, 62;
-  --line: rgba(var(--shade), 0.09);
-  --line-strong: rgba(var(--shade), 0.13);
-
-  /* ── 阴影：接触阴影 + 环境阴影 ────────────────────────────── */
-  --e1: 0 1px 2px rgba(var(--shade), 0.05), 0 5px 14px rgba(var(--shade), 0.04);
-  --e2: 0 1px 3px rgba(var(--shade), 0.06), 0 12px 30px rgba(var(--shade), 0.055);
-  --e3: 0 2px 6px rgba(var(--shade), 0.07), 0 22px 50px rgba(var(--shade), 0.08);
-  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.92);
-
-  /* ── 场景面 / 材质 ────────────────────────────────────────── */
-  --canvas: #f6f8f7;
-  --surface: #ffffff;
-  --surface-soft: #fbfcfc;
-  --rail-bg: rgba(250, 251, 250, 0.94);
-  --hover-bg: rgba(var(--shade), 0.045);
-  --press-bg: rgba(var(--shade), 0.075);
-  --overlay: rgba(16, 20, 24, 0.28);
-  --plate-bg: rgba(21, 24, 26, 0.9);
-  --plate-ink: #f2f5f4;
-
-  /* ── 排版：等宽读数 / 显示级数字 ───────────────────────────── */
+  /* 等宽栈（读数 / 编码 / 时间） */
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
-  --fs-display-xl: 48px;
-  --fs-display-l: 34px;
-  --fs-display-m: 24px;
-  --track-eyebrow: 0.14em;
 
-  /* ── 结构尺寸 ─────────────────────────────────────────────── */
+  /* 结构尺寸 */
   --rail-w: 232px;
   --rail-w-collapsed: 64px;
   --topbar-h: 64px;
@@ -74,68 +32,17 @@
   --row-h: 48px;
   --cell-px: 16px;
 
-  /* ── 分类色：只区分类别，不表示状态 ───────────────────────── */
-  --cat-1-bg: #f6e7c4;
-  --cat-1-ink: #7a5a16;
-  --cat-2-bg: #d7e7fb;
-  --cat-2-ink: #275a96;
-  --cat-3-bg: #e4dcf7;
-  --cat-3-ink: #5b4597;
-  --cat-4-bg: #f7dce1;
-  --cat-4-ink: #94384c;
-  --cat-5-bg: #d8f0dc;
-  --cat-5-ink: #2d7140;
-
-  /* ── 主题库外壳依赖的两个 token（ThemeRoot 用它刷底色）─────── */
-  --mauth-bg: var(--canvas);
-  --mauth-text: var(--ink);
+  /* 阴影：接触阴影 + 环境阴影（浅色） */
+  --e1: 0 1px 2px rgba(46, 58, 62, 0.05), 0 5px 14px rgba(46, 58, 62, 0.04);
+  --e2: 0 1px 3px rgba(46, 58, 62, 0.06), 0 12px 30px rgba(46, 58, 62, 0.055);
+  --e3: 0 2px 6px rgba(46, 58, 62, 0.07), 0 22px 50px rgba(46, 58, 62, 0.08);
 }
 
 .dark {
   color-scheme: dark;
 
-  --ink: #eef2f1;
-  --ink-muted: #a8b3b1;
-  --ink-soft: #8b9795;
-  --ink-faint: #6f7b79;
-
-  --blue: #6ea8ff;
-  --blue-hover: #8bbaff;
-  --blue-soft: rgba(110, 168, 255, 0.16);
-  --leaf: #8fd45a;
-  --leaf-soft: rgba(143, 212, 90, 0.16);
-  --red: #ff7a70;
-  --red-soft: rgba(255, 122, 112, 0.16);
-  --focus: rgba(110, 168, 255, 0.85);
-
-  --shade: 255, 255, 255;
-  --line: rgba(var(--shade), 0.1);
-  --line-strong: rgba(var(--shade), 0.16);
-
+  /* 深色下阴影需要更重，否则浮层与底面无层次 */
   --e1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 5px 14px rgba(0, 0, 0, 0.28);
   --e2: 0 1px 3px rgba(0, 0, 0, 0.45), 0 12px 30px rgba(0, 0, 0, 0.32);
   --e3: 0 2px 6px rgba(0, 0, 0, 0.5), 0 22px 50px rgba(0, 0, 0, 0.4);
-  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-
-  --canvas: #0f1214;
-  --surface: #161a1d;
-  --surface-soft: #1b2024;
-  --rail-bg: rgba(20, 24, 27, 0.94);
-  --hover-bg: rgba(var(--shade), 0.06);
-  --press-bg: rgba(var(--shade), 0.1);
-  --overlay: rgba(0, 0, 0, 0.6);
-
-  --cat-1-bg: rgba(246, 231, 196, 0.16);
-  --cat-1-ink: #e6cf94;
-  --cat-2-bg: rgba(215, 231, 251, 0.16);
-  --cat-2-ink: #a8caf5;
-  --cat-3-bg: rgba(228, 220, 247, 0.16);
-  --cat-3-ink: #c6b6ee;
-  --cat-4-bg: rgba(247, 220, 225, 0.16);
-  --cat-4-ink: #efb3bf;
-  --cat-5-bg: rgba(216, 240, 220, 0.16);
-  --cat-5-ink: #a9ddb6;
-
-  --mauth-bg: var(--canvas);
-  --mauth-text: var(--ink);
 }

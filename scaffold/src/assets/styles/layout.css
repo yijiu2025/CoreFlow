@@ -8,7 +8,7 @@
 .shell {
   display: flex;
   min-height: 100vh;
-  background: var(--canvas);
+  background: var(--mauth-bg);
 }
 
 /* ── 侧栏 ─────────────────────────────────────────────────── */
@@ -22,7 +22,7 @@
   height: 100vh;
   padding: 18px 12px 12px;
   background: var(--rail-bg);
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--mauth-border);
   backdrop-filter: blur(12px);
   transition: width 0.22s ease;
 }
@@ -50,7 +50,7 @@
   width: 28px;
   height: 28px;
   border-radius: 9px;
-  background: linear-gradient(145deg, var(--blue), #164fb8);
+  background: linear-gradient(145deg, var(--mauth-primary), #164fb8);
   color: #fff;
   font-size: 13px;
   font-weight: 700;
@@ -67,8 +67,8 @@
 .rail__group {
   margin: 12px 8px 4px;
   font-size: 11px;
-  letter-spacing: var(--track-eyebrow);
-  color: var(--ink-faint);
+  letter-spacing: var(--mauth-track-eyebrow);
+  color: var(--mauth-text-faint);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -80,7 +80,7 @@
   height: 38px;
   padding: 0 10px;
   border-radius: var(--r-sm);
-  color: var(--ink-muted);
+  color: var(--mauth-text-mid);
   white-space: nowrap;
   overflow: hidden;
   transition:
@@ -89,13 +89,13 @@
 }
 
 .rail__link:hover {
-  background: var(--hover-bg);
-  color: var(--ink);
+  background: var(--mauth-hover);
+  color: var(--mauth-text);
 }
 
 .rail__link[aria-current='page'] {
-  background: var(--blue-soft);
-  color: var(--blue);
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
   font-weight: 600;
 }
 
@@ -106,7 +106,7 @@
 .rail__foot {
   margin-top: auto;
   padding-top: 10px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--mauth-border);
   display: flex;
   gap: 6px;
 }
@@ -128,8 +128,8 @@
   gap: 12px;
   height: var(--topbar-h);
   padding: 0 20px;
-  background: color-mix(in srgb, var(--canvas) 88%, transparent);
-  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--mauth-bg) 88%, transparent);
+  border-bottom: 1px solid var(--mauth-border);
   backdrop-filter: blur(14px);
 }
 
@@ -158,7 +158,7 @@
 }
 
 .page__sub {
-  color: var(--ink-soft);
+  color: var(--mauth-text-soft);
   font-size: 13px;
 }
 
@@ -185,7 +185,7 @@
     position: fixed;
     inset: 0;
     z-index: 30;
-    background: var(--overlay);
+    background: var(--mauth-overlay);
   }
 
   .page {

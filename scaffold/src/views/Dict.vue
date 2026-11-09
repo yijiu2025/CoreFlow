@@ -230,7 +230,7 @@ onMounted(loadTypes);
               <tr
                 v-for="row in types"
                 :key="row.id"
-                :style="activeType?.id === row.id ? { background: 'var(--blue-soft)' } : undefined"
+                :style="activeType?.id === row.id ? { background: 'var(--mauth-primary-soft)' } : undefined"
                 @click="selectType(row)"
               >
                 <td>{{ row.dict_name }}</td>

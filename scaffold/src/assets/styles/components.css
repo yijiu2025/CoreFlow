@@ -12,10 +12,10 @@
   gap: 6px;
   height: var(--control-h);
   padding: 0 14px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--mauth-border-strong);
   border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--mauth-surface);
+  color: var(--mauth-text);
   font-size: 13px;
   cursor: pointer;
   transition:
@@ -25,7 +25,7 @@
 }
 
 .btn:hover {
-  background: var(--hover-bg);
+  background: var(--mauth-hover);
 }
 
 .btn:active {
@@ -38,35 +38,35 @@
 }
 
 .btn--primary {
-  background: var(--blue);
+  background: var(--mauth-primary);
   border-color: transparent;
   color: #fff;
   font-weight: 600;
 }
 
 .btn--primary:hover {
-  background: var(--blue-hover);
+  background: var(--mauth-primary-hover);
 }
 
 .btn--danger {
-  color: var(--red);
-  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  color: var(--mauth-danger);
+  border-color: color-mix(in srgb, var(--mauth-danger) 40%, transparent);
   background: transparent;
 }
 
 .btn--danger:hover {
-  background: var(--red-soft);
+  background: var(--mauth-danger-soft);
 }
 
 .btn--ghost {
   border-color: transparent;
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--mauth-text-mid);
 }
 
 .btn--ghost:hover {
-  background: var(--hover-bg);
-  color: var(--ink);
+  background: var(--mauth-hover);
+  color: var(--mauth-text);
 }
 
 .btn--sm {
@@ -85,7 +85,7 @@
 
 .field__label {
   font-size: 12px;
-  color: var(--ink-soft);
+  color: var(--mauth-text-soft);
 }
 
 .input,
@@ -93,25 +93,25 @@
   height: var(--control-h);
   width: 100%;
   padding: 0 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--mauth-border-strong);
   border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--mauth-surface);
+  color: var(--mauth-text);
   font: inherit;
   transition: border-color 0.16s ease;
 }
 
 .input:focus,
 .select:focus {
-  border-color: var(--blue);
+  border-color: var(--mauth-primary);
   outline: none;
-  box-shadow: 0 0 0 3px var(--blue-soft);
+  box-shadow: 0 0 0 3px var(--mauth-primary-soft);
 }
 
 /* ── 面板 / 卡片 ──────────────────────────────────────────── */
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--mauth-surface);
+  border: 1px solid var(--mauth-border);
   border-radius: var(--r-md);
   box-shadow: var(--e1);
 }
@@ -121,7 +121,7 @@
   align-items: center;
   gap: 10px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--mauth-border);
 }
 
 .panel__title {
@@ -155,22 +155,22 @@
 .stat {
   padding: 14px 16px;
   border-radius: var(--r-md);
-  border: 1px solid var(--line);
-  background: var(--surface);
+  border: 1px solid var(--mauth-border);
+  background: var(--mauth-surface);
   box-shadow: var(--e1);
 }
 
 .stat__label {
   font-size: 12px;
-  letter-spacing: var(--track-eyebrow);
-  color: var(--ink-faint);
+  letter-spacing: var(--mauth-track-eyebrow);
+  color: var(--mauth-text-faint);
 }
 
 .stat__value {
   margin-top: 6px;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: var(--fs-display-m);
+  font-size: var(--mauth-fs-display-m);
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -178,7 +178,7 @@
 .stat__hint {
   margin-top: 2px;
   font-size: 12px;
-  color: var(--ink-soft);
+  color: var(--mauth-text-soft);
 }
 
 /* ── 表格 ─────────────────────────────────────────────────── */
@@ -199,19 +199,19 @@
   height: var(--row-h);
   text-align: left;
   white-space: nowrap;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--mauth-border);
 }
 
 .table th {
-  color: var(--ink-soft);
+  color: var(--mauth-text-soft);
   font-weight: 500;
   font-size: 12px;
-  letter-spacing: var(--track-eyebrow);
-  background: var(--surface-soft);
+  letter-spacing: var(--mauth-track-eyebrow);
+  background: var(--mauth-surface-2);
 }
 
 .table tbody tr:hover {
-  background: var(--hover-bg);
+  background: var(--mauth-hover);
 }
 
 .table tbody tr:last-child td {
@@ -221,7 +221,7 @@
 .col-actions {
   position: sticky;
   right: 0;
-  background: var(--surface);
+  background: var(--mauth-surface);
   text-align: right;
 }
 
@@ -234,23 +234,23 @@
   padding: 0 8px;
   border-radius: 999px;
   font-size: 12px;
-  background: var(--hover-bg);
-  color: var(--ink-muted);
+  background: var(--mauth-hover);
+  color: var(--mauth-text-mid);
 }
 
 .tag--ok {
   background: var(--leaf-soft);
-  color: var(--leaf);
+  color: var(--mauth-success);
 }
 
 .tag--off {
-  background: var(--red-soft);
-  color: var(--red);
+  background: var(--mauth-danger-soft);
+  color: var(--mauth-danger);
 }
 
 .tag--info {
-  background: var(--blue-soft);
-  color: var(--blue);
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
 }
 
 /* ── 浮层（弹窗 / 抽屉） ──────────────────────────────────── */
@@ -261,7 +261,7 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: var(--overlay);
+  background: var(--mauth-overlay);
   backdrop-filter: blur(2px);
 }
 
@@ -270,7 +270,7 @@
   max-height: 86vh;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
+  background: var(--mauth-surface);
   border-radius: var(--r-lg);
   box-shadow: var(--e3);
   overflow: hidden;
@@ -281,7 +281,7 @@
   align-items: center;
   gap: 10px;
   padding: 16px 18px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--mauth-border);
 }
 
 .modal__title {
@@ -300,7 +300,7 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 14px 18px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--mauth-border);
 }
 
 /* ── 空状态 / 加载 ────────────────────────────────────────── */
@@ -309,7 +309,7 @@
   place-items: center;
   gap: 6px;
   padding: 40px 16px;
-  color: var(--ink-faint);
+  color: var(--mauth-text-faint);
   font-size: 13px;
 }
 
@@ -317,7 +317,7 @@
   height: 14px;
   margin: 12px 16px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--hover-bg), var(--press-bg), var(--hover-bg));
+  background: linear-gradient(90deg, var(--mauth-hover), var(--mauth-press), var(--mauth-hover));
   background-size: 200% 100%;
   animation: skeleton 1.2s ease infinite;
 }
@@ -343,8 +343,8 @@
   gap: 8px;
   padding: 10px 16px;
   border-radius: 999px;
-  background: var(--plate-bg);
-  color: var(--plate-ink);
+  background: var(--mauth-plate-bg);
+  color: var(--mauth-plate-ink);
   font-size: 13px;
   box-shadow: var(--e3);
 }
