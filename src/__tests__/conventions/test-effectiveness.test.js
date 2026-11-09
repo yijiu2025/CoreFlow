@@ -205,8 +205,8 @@ describe('测试有效性守卫', () => {
 
   it('检测器不误伤：真实 import 仓库内模块（含动态 import）应判为有效', () => {
     const fakeFile = path.join(TESTS, '__selfcheck3__.test.js');
-    expect(inspectTestFile(fakeFile, "import { isIpMatch } from '../utils/ip.js';\n").ok).toBe(true);
-    expect(inspectTestFile(fakeFile, "const m = await import('../utils/ip.js');\n").ok).toBe(true);
+    expect(inspectTestFile(fakeFile, "import { isIpMatch } from '../framework/ingress/net/ip.js';\n").ok).toBe(true);
+    expect(inspectTestFile(fakeFile, "const m = await import('../framework/ingress/net/ip.js');\n").ok).toBe(true);
   });
 
   it('检测器不误伤：只 import 测试目录内的 helper 不算加载被测代码', () => {

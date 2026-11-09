@@ -16,7 +16,7 @@
  * @since 2026-10-31 权限判定改为真身驱动（此前为内联副本）
  */
 import { describe, test, expect } from '@jest/globals';
-import { isIpMatch } from '../utils/ip.js';
+import { isIpMatch } from '../framework/ingress/net/ip.js';
 import { __test__applyGuardLogic as applyGuardLogic } from '../api/guard.js';
 
 /** 记录型 reply：只关心"守卫最终调了哪个 result 方法" */

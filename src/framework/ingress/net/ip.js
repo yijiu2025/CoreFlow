@@ -1,14 +1,22 @@
 /**
- * IP 工具集
- * 提供 IP 规范化、CIDR/通配符/IPV6 等多种规则的高性能匹配。
+ * IP 地址判据（规范化 + CIDR / 通配符 / IPv6 匹配）
+ *
+ * 为什么住在 `framework/ingress/net/`（2026-11-09 从 `utils/` 迁入）：
+ * 它的两个消费方（`api/guard.js` 的 allowIps、防火墙的封禁/挑战）都在**接入边界**上，
+ * 而且它是全仓唯一会写诊断日志的"工具"——`utils/` 是零依赖叶子层，不能反向依赖
+ * `framework/support/log`。放到 ingress 下，`utils` 的门面才能保持纯净（可被任何层 import），
+ * 这条不变量由 `__tests__/conventions/utils-entry.test.js` 守着。
+ *
+ * 它判的是一条只能由服务端决定的边界：`request.ip` 已经被 `trustProxy` 影响过
+ * （见 `utils/proxy-trust.js`），这里再把它与白名单/CIDR 规则比对。
  *
  * @author yijiu2025
  * @since 2026-07-13
  */
-import net from 'net';
-import { createLogger } from '../framework/support/log/index.js';
+import net from 'node:net';
+import { createLogger } from '../../support/log/index.js';
 
-const log = createLogger('utils.ip');
+const log = createLogger('framework.ingress.net.ip');
 
 /**
  * 非法规则只在**第一次**出现时记一条日志

@@ -314,7 +314,7 @@ src/
 │   ├── config/        #   配置与路径   env 校验 / 覆盖层 / paths.js（仓库布局唯一来源）
 │   ├── persistence/   #   数据与状态   db / redis / storage
 │   ├── security/      #   身份与安全   auth / verify / jwt / keys / crypto / pbac
-│   ├── ingress/       #   接入与协议   http / websocket / firewall
+│   ├── ingress/       #   接入与协议   http / websocket / firewall / net
 │   ├── lifecycle/     #   编排与生命周期 loader / startup / scheduler
 │   └── support/       #   支撑与旁路   log / cli / notice
 │
@@ -346,7 +346,7 @@ src/
 | `config/`      | config, `paths.js`              | 只产出"值"，不持有连接、不参与请求                         |
 | `persistence/` | db, redis, storage              | 持有外部连接或磁盘布局                                     |
 | `security/`    | auth, verify, jwt, keys, crypto, pbac | 认证 / 授权 / 密钥 / 人机校验 / 角色注册     |
-| `ingress/`     | http, websocket, firewall       | 决定"端口如何被访问"：插件装配、协议边界、请求前置管道     |
+| `ingress/`     | http, websocket, firewall, net  | 决定"端口如何被访问"：插件装配、协议边界、请求前置管道     |
 | `lifecycle/`   | loader, startup, scheduler      | 只在启动期或后台跑，不参与单次请求                         |
 | `support/`     | log, cli, notice                | 横切支撑（日志 / CLI / 出站邮件），可脱离 Fastify 独立驱动 |
 

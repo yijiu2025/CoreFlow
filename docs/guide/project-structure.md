@@ -20,7 +20,7 @@ nodeServers/
 │   │   ├── config/             #   配置与路径：env 校验 / 覆盖层 / paths.js
 │   │   ├── persistence/        #   数据与状态：db / redis / storage
 │   │   ├── security/           #   身份与安全：auth / verify / jwt / keys / crypto
-│   │   ├── ingress/            #   接入与协议：http / websocket / firewall
+│   │   ├── ingress/            #   接入与协议：http / websocket / firewall / net（IP 判据）
 │   │   ├── lifecycle/          #   编排与生命周期：loader / startup / scheduler
 │   │   └── support/            #   支撑与旁路：log / cli / notice
 │   │

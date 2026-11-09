@@ -64,7 +64,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 
 守卫 / IP 匹配 / 限流是**每个请求都走**的路径，这里的一次额外分配会乘以全站 QPS：
 
-- `net.BlockList` 按规则缓存，不要逐请求 `new`（见 `src/utils/ip.js` 的 `getBlockList`）
+- `net.BlockList` 按规则缓存，不要逐请求 `new`（见 `src/framework/ingress/net/ip.js` 的 `getBlockList`）
 - 正则、`Set`、序列化结果提到模块级，别在函数体里现编
 - `createIpRateLimiter` 的 Redis 路径目前是 5 次往返（`zRemRangeByScore / zCard / zRange / zAdd / expire`），
   被刷时这 5 次往返本身就是放大倍数 —— 可 pipeline 压到 1–2 次（待办，见 `src/app/oauth21/middleware/rate-limiter.js`）

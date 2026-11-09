@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import crypto from 'crypto';
-import { isIpMatch } from '../utils/ip.js';
+import { isIpMatch } from '../framework/ingress/net/ip.js';
 
 describe('核心逻辑', () => {
   describe('权限匹配引擎', () => {

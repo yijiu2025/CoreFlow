@@ -20,7 +20,7 @@ CoreFlow/
 │   │   ├── config/             #   config & paths: env validation / overrides / paths.js
 │   │   ├── persistence/        #   data & state: db / redis / storage
 │   │   ├── security/           #   identity & security: auth / verify / jwt / keys / crypto
-│   │   ├── ingress/            #   ingress & protocol: http / websocket / firewall
+│   │   ├── ingress/            #   ingress & protocol: http / websocket / firewall / net (IP rules)
 │   │   ├── lifecycle/          #   lifecycle: loader / startup / scheduler
 │   │   └── support/            #   support: log / cli / notice
 │   │

@@ -9,9 +9,13 @@
  *   ② `utils/cors.js` 反过来 import `./index.js` → 门面 ↔ 成员成环，拿到未初始化的绑定；
  *   ③ 新增一个 util 忘了挂到门面 → 调用方拿不到，只能又走回具体文件（规则①复发）。
  *
- * 另有一条依赖方向：`utils/` 是叶子层，成员不得 import `framework/**`。
- * 目前唯一例外是 `ip.js → framework/support/log`（非法 CIDR 规则要留诊断），
- * 而这条例外会让 `utils/index → ip → log` 成立，所以 **log 及其依赖不得 import 门面**。
+ * 另有一条依赖方向：`utils/` 是**零依赖叶子层**，成员不得 import `framework/**`。
+ * 曾经唯一的越层者是 `ip.js`（要写非法 CIDR 的诊断日志），2026-11-09 已迁到
+ * `framework/ingress/net/ip.js` —— 迁走后门面才真正"可被任何层 import"，
+ * 这条不变量由本文件的第三条判据守着（不再有任何例外）。
+ *
+ * 配套的一条：`framework/support/log` 必须保持零 src 依赖（不得 import 门面）。
+ * 它是全仓最底层，一旦反向依赖 utils，任何 import utils 的模块都会与 log 互锁。
  *
  * @author yijiu2025
  */
@@ -105,7 +109,7 @@ describe('utils 门面：唯一入口', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('🔴 utils 是叶子层：成员不得 import framework/**（唯一例外 ip.js → support/log）', () => {
+  it('🔴 utils 是零依赖叶子层：成员不得 import framework/**（无例外）', () => {
     const FRAMEWORK = path.join(SRC, 'framework');
     const offenders = [];
     for (const file of walk(UTILS)) {
@@ -113,14 +117,13 @@ describe('utils 门面：唯一入口', () => {
       for (const { spec, line } of importSpecs(file)) {
         const resolved = resolveSpec(file, spec);
         if (!resolved || !isUnder(resolved, FRAMEWORK)) continue;
-        const allowed = path.basename(file) === 'ip.js' && isUnder(resolved, LOG_DIR);
-        if (!allowed) offenders.push(`${rel(file)}:${line} → ${spec}`);
+        offenders.push(`${rel(file)}:${line} → ${spec}`);
       }
     }
     expect(offenders).toEqual([]);
   });
 
-  it('🔴 framework/support/log 及其依赖不得 import utils 门面（会与 ip.js 形成环）', () => {
+  it('🔴 framework/support/log 保持零 src 依赖：不得 import utils 门面', () => {
     const FACADE = path.join(UTILS, 'index.js');
     const offenders = [];
     for (const file of walk(LOG_DIR)) {

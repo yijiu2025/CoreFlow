@@ -16,7 +16,7 @@ import {
   registerSystemMetadata,
   registerGroupMetadata as rawRegisterGroupMetadata
 } from './guard-config.js';
-import { isIpMatch } from '../utils/index.js';
+import { isIpMatch } from '../framework/ingress/net/ip.js';
 import { getPermissions } from '../framework/security/auth/index.js';
 import { createSafePreHandler } from '../framework/security/auth/index.js';
 import { isWildcardMatch } from '../framework/security/auth/permission/wildcard-match.js';
