@@ -87,6 +87,10 @@ describe('buildCorsOptions', () => {
     expect(CORS_EXPOSED_HEADERS).toContain('X-Device-Id');
     expect(CORS_EXPOSED_HEADERS).toContain('X-Device-Id-Updated');
     // H5 签名 / 设备指纹相关的请求头也一个不能少
-    expect(CORS_ALLOWED_HEADERS).toEqual(expect.arrayContaining(['token', 'X-Sign', 'X-Timestamp', 'X-Nonce']));
+    // 自定义头漏一个 = 该链路在跨域直连时预检失败（整条请求发不出去），
+    // 所以这里按"业务实际发送的头"逐项断言，而不是只断言数组非空。
+    expect(CORS_ALLOWED_HEADERS).toEqual(
+      expect.arrayContaining(['token', 'X-Sign', 'X-Timestamp', 'X-Nonce', 'x-device-id', 'x-csrf-token'])
+    );
   });
 });

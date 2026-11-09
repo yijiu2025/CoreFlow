@@ -27,7 +27,12 @@ const CORS_ALLOWED_HEADERS = [
   'X-Nonce',
   'x-device-id',
   'X-Device-Fp',
-  'x-verify-token'
+  'x-verify-token',
+  // CSRF 双提交令牌：oauth21 前端每个写请求都会带它（`request.ts` 的拦截器）。
+  // 漏了这一项不是"少一个头"，而是**整个登录链路在跨域直连时全灭**：
+  // 浏览器预检直接拒绝（Request header field x-csrf-token is not allowed），
+  // 请求根本发不出去，前端只看到 Network Error。
+  'x-csrf-token'
 ];
 
 /** 允许方法 */
