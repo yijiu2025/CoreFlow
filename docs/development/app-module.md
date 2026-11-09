@@ -57,7 +57,7 @@ export default {
 ```js
 import { createPermissionRegistry } from '../../../framework/security/pbac/index.js';
 
-export const MYAPP_PERMISSIONS = createPermissionRegistry('myapp', '我的应用', {
+const MYAPP_PERMISSIONS = createPermissionRegistry('myapp', '我的应用', {
   ARTICLE: {
     READ: { code: 'myapp:article:read', label: '查看文章', type: 'read' },
     WRITE: { code: 'myapp:article:write', label: '编辑文章', type: 'write' },
@@ -67,6 +67,8 @@ export const MYAPP_PERMISSIONS = createPermissionRegistry('myapp', '我的应用
     ALL: { code: 'myapp:admin:*', label: '管理员全量通配符', type: 'wildcard' }
   }
 });
+
+export { MYAPP_PERMISSIONS }; // 🔴 定义处不写 export（eslint 强制收拢到末尾）
 ```
 
 ## 3. permission/roles.js — 角色定义
@@ -130,7 +132,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import articleDao from '../../../app/myapp/dao/article.dao.js';
 import articleService from '../../../app/myapp/services/article.service.js';
 
-export default async function (fastify) {
+async function registerMyAppRoutes(fastify) {
   registerGroupMetadata({
     name: 'article',
     description: '文章管理',
@@ -164,6 +166,8 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerMyAppRoutes; // 🔴 export 一律收拢到文件末尾（eslint 强制）
 ```
 
 ## 6. DAO 层
@@ -229,4 +233,5 @@ export default new ArticleService();
 - [ ] 模型文件导出工厂函数 `(sequelize, DataTypes) => Model`
 - [ ] 路由文件使用 `registerSecureRoute()` 注册
 - [ ] 响应使用 `reply.result.success/fail`
-- [ ] 运行 `npm run migrate` 创建新表（如有新模型）
+- [ ] **先写迁移文件**再跑 `npm run migrate` —— 它只执行 `migrations/` 下已存在的文件，
+      不会因为新增模型自动建表（`DB_SYNC=true` 才会 sync，仅限开发环境）

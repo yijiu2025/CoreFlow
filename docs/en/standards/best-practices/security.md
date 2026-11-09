@@ -2,7 +2,7 @@
 
 ## Passwords
 
-- **All new hashes use `crypto.scrypt`** (`src/framework/security/auth/password-hash.js`, runs on the
+- **All new hashes use `crypto.scrypt`** (`src/framework/security/auth/security/password-hash.js`, runs on the
   libuv thread pool, with back-pressure via `SCRYPT_MAX_CONCURRENCY`)
 - Historical `bcrypt` hashes are **verification-only**: never write bcrypt again, on success or
   failure. On a successful login `isLegacyHash()` detects them and upgrades in place to scrypt
@@ -16,7 +16,7 @@
 
 ## Replay protection
 
-- Timestamp check: **±2 minutes** (`src/framework/security/auth/signature.js` —
+- Timestamp check: **±2 minutes** (`src/framework/security/auth/security/signature.js` —
   `Math.abs(now - ts) > 120_000` is rejected)
 - Nonce deduplication (Redis atomic check-and-mark): used by both H5 request signing
   (`_m_h5_tk`) and RSA-encrypted login requests
@@ -30,18 +30,17 @@
 
 ## Rate limits
 
-| Endpoint | Limit | Implementation |
-| --- | --- | --- |
-| Login / quick login | 5 per minute per IP | `app/oauth21/middleware/rate-limiter.js` |
-| Email second factor | 5 per minute per IP | same |
-| QR confirmation | 10 per minute per IP | same |
-| Registration | 5 per minute per IP (endpoint `config.rateLimit`) + email code + image CAPTCHA |
-| Global | 600 per 60s per key (user / IP) | `@fastify/rate-limit`, threshold from `defense.rateLimitRequests` |
+| Endpoint            | Limit                                                                          | Implementation                                                    |
+| ------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Login / quick login | 5 per minute per IP                                                            | `app/oauth21/middleware/rate-limiter.js`                          |
+| Email second factor | 5 per minute per IP                                                            | same                                                              |
+| QR confirmation     | 10 per minute per IP                                                           | same                                                              |
+| Registration        | 5 per minute per IP (endpoint `config.rateLimit`) + email code + image CAPTCHA |
+| Global              | 600 per 60s per key (user / IP)                                                | `@fastify/rate-limit`, threshold from `defense.rateLimitRequests` |
 
 > ⚠️ The global threshold lives at `defense.rateLimitRequests` in
 > `data/firewall_config.json`. It has been configured as 10000/60s in the past (≈167 rps per
-> key, i.e. that layer did not exist). The startup log prints the effective value and warns above
-> 1000.
+> key, i.e. that layer did not exist). The startup log prints the effective value and warns above 1000.
 
 > ⚠️ When Redis is unavailable, counters degrade to an in-process Map keyed by
 > `rate:user:*` / `rate:ip:*`. That map grows with the number of distinct sources (an IPv6 /64
@@ -69,7 +68,7 @@ sid_r cookie: HttpOnly / SameSite=Strict / path narrowed to the refresh endpoint
 ## CORS
 
 Production only allows the `CORS_ORIGINS` allowlist; **an empty allowlist fails closed for
-sensitive endpoints** (`src/framework/security/auth/origin-guard.js`: Origin → Referer → non-browser
+sensitive endpoints** (`src/framework/security/auth/security/origin-guard.js`: Origin → Referer → non-browser
 request, three levels, reject when undecidable). Do not copy `process.env.CORS_ORIGINS.split(',')`
 into sample code — it throws `TypeError` when the variable is unset.
 
@@ -77,7 +76,7 @@ into sample code — it throws `TypeError` when the variable is unset.
 
 ```js
 reply.header('X-Content-Type-Options', 'nosniff');
-reply.header('X-Frame-Options', 'SAMEORIGIN');          // pages needing iframes: issue CSP frame-ancestors from an allowlist
+reply.header('X-Frame-Options', 'SAMEORIGIN'); // pages needing iframes: issue CSP frame-ancestors from an allowlist
 reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
 reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 ```

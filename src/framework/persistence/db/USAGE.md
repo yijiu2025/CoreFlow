@@ -80,7 +80,7 @@ const role = await app.db.iam.Role.findOne({ where: { code: 'admin' } });
 ### 1.2 连接池配置
 
 ```js
-// src/db/index.js 默认配置
+// src/framework/persistence/db/index.js 默认配置
 pool: {
   max: 10,    // 最大连接数，根据 QPS 调整
   min: 2,     // 最小连接数，保持常驻

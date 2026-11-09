@@ -97,12 +97,13 @@ curl -i http://localhost:3000/v1/health/ready   # 就绪（关键依赖不可用
 > Redis 可选（多实例必须）。
 >
 > 为什么是 24：
+>
 > - `@fastify/static@10` 依赖 ESM-only 的 `content-disposition@3`，需要 `require(esm)`
 >   能力（Node ≥ 20.19 / 22.12）—— 这是当初排除 Node 18 的原因；
 > - `geoip-lite@2` 声明 `engines: >= 24`，而它是防火墙的运行期依赖。在 22 上跑只是
 >   因为还没走到那条被版本门控的路径 —— 声明 20/22 却发 24 的镜像，等于把这个惊喜
 >   推给部署方。
-> 完整步骤与排错见 [快速上手](https://yijiu2025.github.io/CoreFlow/guide/quick-start)。
+>   完整步骤与排错见 [快速上手](https://yijiu2025.github.io/CoreFlow/guide/quick-start)。
 
 ## 目录结构
 
@@ -150,14 +151,14 @@ src/
 
 ## 权限：三级守卫
 
-| 级别 | 来源 | 可配置项 |
-| --- | --- | --- |
-| **System** | `src/api/<域>/system.json` | `enabled` / `allowIps` / `requireLogin` |
-| **Group** | `registerGroupMetadata()` | `enabled` / `allowIps` / `allowRoles` |
-| **API** | `registerSecureRoute()` | `requireLogin` / `requirePermission` / `requireSignature` / `config.rateLimit` |
+| 级别       | 来源                       | 可配置项                                                                       |
+| ---------- | -------------------------- | ------------------------------------------------------------------------------ |
+| **System** | `src/api/<域>/system.json` | `enabled` / `allowIps` / `requireLogin`                                        |
+| **Group**  | `registerGroupMetadata()`  | `enabled` / `allowIps` / `allowRoles`                                          |
+| **API**    | `registerSecureRoute()`    | `requireLogin` / `requirePermission` / `requireSignature` / `config.rateLimit` |
 
 ```js
-// 单个权限（deny 优先于 allows，通配符仅支持尾部 `:*`）
+// 单个权限（deny 优先于 allows；通配符支持尾部与中段：`user:*` / `user:*:read`）
 registerSecureRoute(fastify, {
   name: 'readConfig',
   method: 'GET',
@@ -167,13 +168,17 @@ registerSecureRoute(fastify, {
 });
 
 // 任一满足（OR）
-requirePermission: { any: ['fw:block:write', 'fw:admin:*'] }
+requirePermission: {
+  any: ['fw:block:write', 'fw:admin:*'];
+}
 
 // 全部满足（AND）
-requirePermission: { all: ['fw:config:read', 'fw:config:write'] }
+requirePermission: {
+  all: ['fw:config:read', 'fw:config:write'];
+}
 ```
 
-判定顺序：`enabled → IP/角色 → 登录 → 权限（deny 命中即拒）`；
+判定顺序：`账号级封禁 → enabled → IP → 登录/角色/权限（deny 命中即拒）`；
 未登录返回 **401**、权限不足返回 **403**，非法权限格式 **fail-closed**（也是 403）。
 
 ## 防火墙：五层管道
@@ -190,17 +195,17 @@ requirePermission: { all: ['fw:config:read', 'fw:config:write'] }
 
 ## API 域
 
-| 域 | 前缀 | 能力 |
-| --- | --- | --- |
-| `oauth21` | `/oauth2.1` | 授权码+PKCE / 登录 / Token / 撤销 / 设备码 / OIDC |
-| `user` | `/user/v1` | 用户信息、权限、会话、设备、注册、重置密码 |
-| `auth` | `/auth/v1` | 会话绑定 / 切换账号 / H5 签名令牌 / 验证码校验 |
-| `admin` | `/admin/v1` | IAM 角色、策略、客户端管理 |
-| `notice` | `/notice/v1` | 通知渠道与模板 |
-| `verify` | `/verify/v1` | 图形验证码、邮箱验证码 |
-| `firewall` | `/api/firewall/v1` | 监控、封禁、白名单、配置、WebSocket |
-| `system` | `/v1` | 健康探针、系统信息 |
-| `posecraft` / `retroweb` | `/posecraft` · `/retroweb` | 内置业务应用（可裁剪） |
+| 域                       | 前缀                       | 能力                                              |
+| ------------------------ | -------------------------- | ------------------------------------------------- |
+| `oauth21`                | `/oauth2.1`                | 授权码+PKCE / 登录 / Token / 撤销 / 设备码 / OIDC |
+| `user`                   | `/user/v1`                 | 用户信息、权限、会话、设备、注册、重置密码        |
+| `auth`                   | `/auth/v1`                 | 会话绑定 / 切换账号 / H5 签名令牌 / 验证码校验    |
+| `admin`                  | `/admin/v1`                | IAM 角色、策略、客户端管理                        |
+| `notice`                 | `/notice/v1`               | 通知渠道与模板                                    |
+| `verify`                 | `/verify/v1`               | 图形验证码、邮箱验证码                            |
+| `firewall`               | `/api/firewall/v1`         | 监控、封禁、白名单、配置、WebSocket               |
+| `system`                 | `/v1`                      | 健康探针、系统信息                                |
+| `posecraft` / `retroweb` | `/posecraft` · `/retroweb` | 内置业务应用（可裁剪）                            |
 
 端点细节见 [OAuth 2.1 API 报告](https://yijiu2025.github.io/CoreFlow/oauth21-api-report) 与
 [API 路由规范](https://yijiu2025.github.io/CoreFlow/development/api-routes)。
@@ -238,7 +243,8 @@ npm run migrate        # 数据库迁移
 npm run setup:admin    # 创建 / 授予超级管理员
 npm run revoke:admin   # 撤销超级管理员（最后一名会被拦住）
 npm run cli            # 交互式管理终端
-npm test               # Jest（105 套件 / 1250 用例）
+npm test               # Jest（全量套件；数量随用例增长，以实际输出为准）
+npm run test:coverage  # 同上 + 覆盖率门禁（棘轮阈值，见 jest.config.js）
 npm run lint           # ESLint（自动修复）
 npm run verify:all     # 跨进程关卡（锁 / 队列 / 守卫同步 / 统计 / WS 扇出）
 npm run docs:dev       # 本地起文档站
@@ -246,13 +252,13 @@ npm run docs:dev       # 本地起文档站
 
 ## 文档
 
-| 入口 | 内容 |
-| --- | --- |
-| [在线文档](https://yijiu2025.github.io/CoreFlow/) | 完整站（VitePress） |
-| [docs/README.md](./docs/README.md) | 文档地图（先读这个再找文档） |
-| [架构总览](https://yijiu2025.github.io/CoreFlow/core/architecture) | 分层与依赖方向 |
-| [请求处理流水线](https://yijiu2025.github.io/CoreFlow/core/request-pipeline) | 一个请求的完整路径 |
-| [认证集成](https://yijiu2025.github.io/CoreFlow/standards/auth-integration) | 前后端线协议（Cookie / 签名 / CSRF） |
+| 入口                                                                         | 内容                                 |
+| ---------------------------------------------------------------------------- | ------------------------------------ |
+| [在线文档](https://yijiu2025.github.io/CoreFlow/)                            | 完整站（VitePress）                  |
+| [docs/README.md](./docs/README.md)                                           | 文档地图（先读这个再找文档）         |
+| [架构总览](https://yijiu2025.github.io/CoreFlow/core/architecture)           | 分层与依赖方向                       |
+| [请求处理流水线](https://yijiu2025.github.io/CoreFlow/core/request-pipeline) | 一个请求的完整路径                   |
+| [认证集成](https://yijiu2025.github.io/CoreFlow/standards/auth-integration)  | 前后端线协议（Cookie / 签名 / CSRF） |
 
 ## 贡献
 

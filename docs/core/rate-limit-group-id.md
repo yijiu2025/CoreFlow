@@ -12,8 +12,8 @@
 
 ```js
 keyGenerator: req => {
-  if (req.state?.user?.id) {
-    return `rate:user:${req.state.user.id}`;
+  if (req.state?.user?.userId) {
+    return `rate:user:${req.state.user.userId}`;
   }
   return `rate:ip:${req.ip}`;
 };
@@ -125,7 +125,7 @@ TTL 被不断续期 → 持续重试的客户端永远不会解封。两处都�
 
 `config.rateLimit` 是由 `@fastify/rate-limit` 的 **onRoute 钩子**消费的——**插件不注册，这些声明就全部失效**，而 Fastify 对未知的 route config **不校验、不警告**。
 
-历史缺陷（已修）：插件注册原先完全由 `defense.enableRateLimit` 控制，而它默认 `false`，于是全仓 14 处端点级 `config.rateLimit`（含本节示例的 `h5-token`）**从未生效过**。
+历史缺陷（已修）：插件注册原先完全由 `defense.enableRateLimit` 控制，而它默认 `false`，于是当时全仓 14 处端点级 `config.rateLimit`（含本节示例的 `h5-token`）**从未生效过**（现已有 38 处）。
 
 现在的语义（`first-ratelimit.js`）：
 
@@ -152,6 +152,11 @@ TTL 被不断续期 → 持续重试的客户端永远不会解封。两处都�
 | 普通登录态业务端点，阈值 = 全局值 | 可不写，跟随全局桶即可                                   |
 | 写了 `groupId` 但没写路由级 `max` | 合法，key 隔离但阈值沿用全局——通常不是你想要的，检查一下 |
 
+> 📌 **组级默认限频会自动生成 groupId**：用 `registerGroupMetadata({ rateLimit: { max, timeWindow } })`
+> 声明后，`registerSecureRoute` 会给组内**没自带 `config.rateLimit`** 的路由自动补
+> `{ ...组级声明, groupId: \`${group}-\${apiKey}\` }`（`src/api/guard.js`）。
+> 也就是说"漏写"不等于"必然共享桶"——同组内仍是一路由一桶。
+
 ### `groupId` 命名约定
 
 - 用**稳定的语义短横线小写串**：`h5-token`、`sms-send`、`qr-login`；
@@ -169,22 +174,24 @@ TTL 被不断续期 → 持续重试的客户端永远不会解封。两处都�
 
 ## 7. 相关文件
 
-| 文件                                                         | 职责                                                  |
-| ------------------------------------------------------------ | ----------------------------------------------------- |
+| 文件                                                                 | 职责                                                  |
+| -------------------------------------------------------------------- | ----------------------------------------------------- |
 | `src/framework/ingress/firewall/engine/detectors/first-ratelimit.js` | 插件注册、全局 keyGenerator、阈值解析与旁路、429 响应 |
-| `src/framework/persistence/redis/resilient-store.js`                     | 计数存储（Redis 优先 / 内存降级）                     |
-| `src/api/guard.js` → `registerSecureRoute`                   | 路由注册，透传 `config.rateLimit`                     |
-| `src/api/auth/v1/h5-token.js`                                | `groupId` 标准用例                                    |
-| `node_modules/@fastify/rate-limit/index.js`                  | `applyRateLimit` 中 key 拼接逻辑（行 248–256）        |
+| `src/framework/persistence/redis/resilient-store.js`                 | 计数存储（Redis 优先 / 内存降级）                     |
+| `src/api/guard.js` → `registerSecureRoute`                           | 路由注册，透传 `config.rateLimit`                     |
+| `src/api/auth/v1/h5-token.js`                                        | `groupId` 标准用例                                    |
+| `node_modules/@fastify/rate-limit/index.js`                          | `applyRateLimit` 中 key 拼接逻辑（行 248–256）        |
 
-### 当前声明清单（2026-11-02）
+### 声明清单（示例，非全集）
 
-公开端点（`requireLogin: false`）默认最容易被刷，全部已带独立 `groupId`：
+下面是 2026-11-02 整理时的代表性命中项，**不是全量清单**：现已累计 38 处
+`config.rateLimit` 声明（qr / login / user/open / verify / apiConfig / deactivation 等
+都还有），以各路由文件为准。公开端点（`requireLogin: false`）默认最容易被刷，优先核这些：
 
 | 端点                                                                                            | 阈值   | groupId            | 说明                          |
 | ----------------------------------------------------------------------------------------------- | ------ | ------------------ | ----------------------------- |
 | `GET /auth/v1/h5-token`                                                                         | 30/min | `h5-token`         | 预发 H5 签名 cookie           |
-| `POST /auth/v1/verify-challenge`                                                                | 10/min | —                  | 人机验证回执                  |
+| `POST /auth/v1/verify-challenge`（**已登录**，非公开）                                          | 10/min | —                  | 人机验证回执                  |
 | `POST /auth/v1/bind-token`                                                                      | 30/min | `bind-token`       | Bearer → Cookie               |
 | `POST /auth/v1/bind-session`                                                                    | 30/min | `bind-session`     | 一次性 session_token → Cookie |
 | `POST /oauth2.1/token`、`/revoke`                                                               | 60/min | `oauth-token`      | 同一令牌流程共用桶            |

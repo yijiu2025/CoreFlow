@@ -25,7 +25,7 @@ CoreFlow 采用**分层架构**设计，从底层基础设施到顶层业务应�
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    框架层 src/framework/                    │
-│    auth │ db │ redis │ loader │ log │ verify │ websocket    │
+│  config │ persistence │ security │ ingress │ lifecycle │ support  │
 └─────────────────────────┬───────────────────────────────────┘
                           │
                           ▼
@@ -41,9 +41,9 @@ CoreFlow 采用**分层架构**设计，从底层基础设施到顶层业务应�
 
 ```
 onRequest[0]  →  @fastify/cookie     解析 cookies
-onRequest[1]  →  auth                Session 验证（sid cookie → Redis → request.state.user）
-onRequest[2]  →  @fastify/rateLimit  全局限频
-onRequest[3]  →  firewall            五层拦截管道
+onRequest[1]  →  monitor             请求耗时 / 慢请求告警（01-monitor，先于 auth 注册）
+onRequest[2]  →  auth                Session 验证（sid cookie → Redis → request.state.user）
+onRequest[3]  →  firewall            五层拦截管道 + 限流插件（@fastify/rate-limit 由它在内部注册）
 preHandler    →  guard               三级权限守卫
 preHandler    →  verifySignature     H5 签名验证（仅 OAuth21 路由）
 handler       →  业务路由
@@ -84,7 +84,10 @@ onResponse    →  扫描陷阱（404/403 检测）
   计数/限流/会话各算一套而静默失控。需要容灾的短时效数据用 `getStore(prefix, { backup: true })`
   接备用 Redis，两个都不通仍是 503。
 
-每个 Loader 导出默认函数接收 `app` 实例，错误被捕获并记录，不阻塞其他模块。
+每个 Loader 导出默认函数接收 `app` 实例。失败按 `OPTIONAL_LOADERS` 分级：
+`01-monitor` / `02-redis` / `09-notice` 失败只记警告并计入 `getLoaderStatus()`；
+其余（鉴权 / 防火墙 / 模型 / 密钥 / 路由 / 应用）**fail-fast** 终止启动 ——
+能监听端口却处理不了正确请求的进程比直接退出更难排查。
 
 ## 模型命名空间
 
@@ -96,7 +99,7 @@ onResponse    →  扫描陷阱（404/403 检测）
 | `db.iam`     | Role, UserRole, InlinePolicy, Permission                        | iam_role, iam_user_role, iam_inline_policy, permissions                       |
 | `db.oauth21` | OauthClient, OauthCode, OauthToken, OauthApproval, OauthConsent | oauth_clients, oauth_codes, oauth_tokens, oauth_user_approval, oauth_consents |
 | `db.notice`  | EmailCode, NoticeConfig                                         | notice_email_codes, notice_configs                                            |
-| `db.session` | UserSession, SessionToken, SessionLog, AuditLog                 | session_user_session, session_tokens, session_logs, session_audit_logs        |
+| `db.session` | UserSession, SessionToken, SessionLog, AuditLog                 | session_user_session, session_tokens, session_logs, audit_logs                |
 
 ## 目录约定
 

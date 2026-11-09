@@ -1,5 +1,7 @@
 # 审查报告：framework/auth
 
+> 📌 **历史快照**：本文写于当时，认证模块已按 `context/ session/ permission/ device/ risk/ security/ audit/` 分子目录（`index.js` 是纯门面），文中旧路径可能与当前结构不一致。要确认现状请看 `src/framework/security/auth/README.md`。
+
 > 依据 `.claude/skills/fullstack-rules`（v2.5.0）+ `.workbuddy/memory/MEMORY.md`
 > 执行方式：按 `src/framework/security/auth/docs/AUDIT-PROMPT.md` 流程；**只审查不修改代码**
 > 审查范围：`src/framework/security/auth/`（14 个文件 / 4240 行）+ 2 层调用方

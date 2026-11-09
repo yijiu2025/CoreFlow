@@ -1,5 +1,7 @@
 # 修复报告：app/firewall（+ api/firewall）
 
+> 📌 **历史快照**：本文写于当时，防火墙已在 2026-09 拆成 `framework/ingress/firewall/`（防护核心）+ `app/firewall/`（面板 / DAO / 统计），文中旧路径可能与当前结构不一致。要确认现状请看 `src/app/firewall/README.md`。
+
 > 对应审查报告：`AUDIT-REPORT-2026-09-15.md`（4🔴 / 15🟡 / 17🔵）
 > 本文件只记录**已落地的改动 + 实测证据**，并如实列出未修项。
 > 日期：2026-09-15

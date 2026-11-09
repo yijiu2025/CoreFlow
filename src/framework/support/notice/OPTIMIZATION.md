@@ -1,5 +1,10 @@
 # Notice 模块优化清单
 
+> 📌 **本文是 2026-08 的改造提案，不是现状说明。** 其中钉钉 / 微信 / 短信三个通道
+> **从未落地**，目前只有邮件（`services/email.js`）。文件里出现的 `src/notice/…`
+> 路径已统一改为拆分后的 `src/framework/support/notice/…`，但描述仍然按"当时的设计意图"读，
+> 需要确认现状请看 [README.md](./README.md)。
+
 ## 1. 钉钉机器人通道
 
 **当前状态：** `getAvailableChannels()` 中 `dingtalk: enabled: false`
@@ -7,7 +12,7 @@
 **实现方案：**
 
 ```js
-// src/notice/services/dingtalk.js
+// src/framework/support/notice/services/dingtalk.js
 class DingtalkService {
   async send(webhookUrl, content) {
     await fetch(webhookUrl, {
@@ -35,7 +40,7 @@ DINGTALK_SECRET=xxx
 **实现方案：**
 
 ```js
-// src/notice/services/wechat.js
+// src/framework/support/notice/services/wechat.js
 class WechatService {
   async send(openid, templateId, data) {
     // 调用微信公众号模板消息 API
@@ -64,7 +69,7 @@ WECHAT_APP_SECRET=xxx
 **实现方案：**
 
 ```js
-// src/notice/services/sms.js
+// src/framework/support/notice/services/sms.js
 class SmsService {
   async send(phone, content) {
     // 复用 verify/sms 的发送逻辑

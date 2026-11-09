@@ -2,9 +2,9 @@
 
 ## 认证模式
 
-| 模式            | 启用方式            | Token 存储                                              | 验证方式        |
-| --------------- | ------------------- | ------------------------------------------------------- | --------------- |
-| Session（默认） | `JWT_ENABLED=false` | Redis (sid/sid_r Cookie，HttpOnly)                      | Cookie 自动携带 |
+| 模式            | 启用方式            | Token 存储                                               | 验证方式        |
+| --------------- | ------------------- | -------------------------------------------------------- | --------------- |
+| Session（默认） | `JWT_ENABLED=false` | Redis (sid/sid_r Cookie，HttpOnly)                       | Cookie 自动携带 |
 | JWT             | `JWT_ENABLED=true`  | **HttpOnly Cookie 优先**；跨域/CLI 才用 Bearer（内存态） | JWT 签名验证    |
 
 > 🔴 **不要把长期 token 放 `localStorage`**：同源任何 XSS 都能读走并长期重放。
@@ -13,7 +13,7 @@
 
 ## 密码存储
 
-密码用 Node 内置 `crypto.scrypt`（`src/framework/security/auth/password-hash.js`，异步、跑在 libuv 线程池），
+密码用 Node 内置 `crypto.scrypt`（`src/framework/security/auth/security/password-hash.js`，异步、跑在 libuv 线程池），
 并对历史 bcrypt 哈希（`$2a$` / `$2b$` / `$2y$`）保留**只校验**能力，登录成功后按需重写为 scrypt。
 **新代码不得再引入 `bcrypt` / `bcryptjs`**：同步版本会冻结事件循环，异步版本同样是纯 JS 计算，
 实测 10 次 `bcrypt.hash` 会让事件循环最长冻结 649ms，而 scrypt 为 22ms。
@@ -34,7 +34,7 @@ scrypt 并发有全局上限（`SCRYPT_MAX_CONCURRENCY`，默认 16），超限�
 - Redis 里 `sid_r` → sessionId 的映射 TTL 为 **180 天**（`USER_COOKIE_TTL`，随每次活跃续期）
 - sid 过期时自动用 sid_r 刷新，用户无感知；刷新是**原子领取**，同一 refreshToken 只成功一次
 
-> 以上四个常量都在 `src/framework/security/auth/cookie.js`。会话在 Redis 被驱逐后，DB 里
+> 以上四个常量都在 `src/framework/security/auth/context/cookie.js`。会话在 Redis 被驱逐后，DB 里
 > `session_tokens` 仍留有 `last_active`：短期 TTL 内重建缓存，超过长期 TTL 直接吊销。
 
 ### Cookie 签名格式

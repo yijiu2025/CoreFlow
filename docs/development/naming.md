@@ -1,18 +1,27 @@
 # 命名规范 {#naming}
 
-## 核心铁律
+## 模型属性命名：存量并存，新代码走方案 A
 
-> **"JS 内存世界属于 camelCase，SQL 物理磁盘世界属于 snake_case。"**
+> 先纠正一条容易误读的旧说法：本仓**不是**"内存一律 camelCase"。`sequelize.define` 已全局
+> 开 `underscored: true`（`src/framework/persistence/db/index.js`），所以属性名写
+> `clientId` 或 `client_id` **都能对上** `client_id` 列 —— 存量因此分成两派：
 
-- **JavaScript 内存中**：一律使用 `camelCase`。例如：`clientId`, `clientName`, `lastAuthAt`
-- **数据库物理列中**：一律使用 `snake_case`。例如：`client_id`, `client_name`, `last_auth_at`
+| 风格                    | 属性名                        | 是否写 `field`                | 典型位置                                                         |
+| ----------------------- | ----------------------------- | ----------------------------- | ---------------------------------------------------------------- |
+| **A（新代码按这个写）** | `camelCase`，如 `appId`       | 写 `field: 'app_id'` 显式声明 | `src/models/iam/`、`src/models/posecraft/`                       |
+| **B（存量）**           | `snake_case`，如 `config_key` | 不写，靠全局 `underscored`    | `src/models/console/`、`src/models/user/`、`src/models/oauth21/` |
+
+- **新增模型一律按 A**：属性名 camelCase + `field` 显式写列名，读代码时不用去猜映射
+- **不要为了"统一"批量重命名存量模型**：属性名是业务代码的调用面（DAO / service / 测试都在用），
+  改名要全仓同步，风险和收益不成比例
+- 数据库物理列名**始终** snake_case —— 这一条没有例外
 
 ## 映射方式
 
-### 方案 A：显式 `field` 映射（推荐）
+### 方案 A：显式 `field` 映射（新代码用这个）
 
 ```js
-export default (sequelize, DataTypes) => {
+const defineOauthApproval = (sequelize, DataTypes) => {
   const OauthApproval = sequelize.define(
     'OauthApproval',
     {
@@ -29,15 +38,17 @@ export default (sequelize, DataTypes) => {
       }
     },
     {
-      tableName: 'user-approval',
+      tableName: 'oauth_user_approval',
       timestamps: true
     }
   );
   return OauthApproval;
 };
+
+export default defineOauthApproval; // 🔴 export 收拢到文件末尾（eslint 强制）
 ```
 
-### 方案 B：全局 `underscored: true`
+### 方案 B：全局 `underscored: true`（存量写法）
 
 ```js
 const UserRole = sequelize.define(
@@ -99,7 +110,8 @@ const OauthClient = sequelize.define(
 
 ## Review 规范清单
 
-- [ ] 属性定义中是否包含 `field: 'xxx'` 映射
-- [ ] `createdAt` 和 `updatedAt` 是否配置了 `createdAt: 'created_at'`
-- [ ] 外部 API 返回的 payload 是否遵循驼峰规范
-- [ ] 表名是否遵循 `{app}_{功能}` 格式
+- [ ] 新增模型是否走方案 A（camelCase 属性名 + `field` 显式写列名）
+- [ ] 表名是否遵循 `{app}_{功能}` 格式（存量例外：`oauth_clients` / `session_tokens` /
+      `audit_logs` / `sys_config` / `iam_user_role`，不要为了对齐去改存量表名）
+- [ ] 外部 API 返回的 payload 是否遵循驼峰规范（响应体对外统一 camelCase）
+- [ ] `createdAt` / `updatedAt` **不需要**逐模型配置映射：全局 `underscored: true` 已处理

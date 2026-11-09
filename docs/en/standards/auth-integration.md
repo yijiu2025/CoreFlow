@@ -17,7 +17,7 @@ in is answered by an API call, not by the presence of a local token:
 
 ```typescript
 // call from a route guard; 401 means "not signed in" → redirect to login
-const user = await getUserInfo();        // GET /user/v1/userinfo
+const user = await getUserInfo(); // GET /user/v1/userinfo
 const permissions = await getPermissions(); // GET /user/v1/permissions
 ```
 
@@ -67,27 +67,27 @@ export default service;
 The middleware only applies to the **`/oauth2.1` prefix** (`/oauth2.10` is not matched) and
 only when the route declares `config.requireSignature`:
 
-| Case | Result |
-| --- | --- |
-| Route does not declare `requireSignature` | pass through (public routes unaffected) |
-| Missing signature / missing timestamp / mismatched signature | **403** |
-| Timestamp outside the allowed window | **403** |
-| First visit (no `_m_h5_tk`) | issue `_m_h5_tk`; this request is not failed |
+| Case                                                         | Result                                       |
+| ------------------------------------------------------------ | -------------------------------------------- |
+| Route does not declare `requireSignature`                    | pass through (public routes unaffected)      |
+| Missing signature / missing timestamp / mismatched signature | **403**                                      |
+| Timestamp outside the allowed window                         | **403**                                      |
+| First visit (no `_m_h5_tk`)                                  | issue `_m_h5_tk`; this request is not failed |
 
 The client takes the token from the `_m_h5_tk` cookie, builds the string the backend expects,
 puts it in the request header and also sends `x-device-id`. The algorithm lives in
-`src/framework/security/auth/signature.js`.
+`src/framework/security/auth/security/signature.js`.
 
 ## CSRF (`/oauth2.1` scope, enabled)
 
 Double-submit cookie, scoped to `/oauth2.1`:
 
-| Stage | Behaviour |
-| --- | --- |
-| Safe methods (GET/HEAD/OPTIONS) | issue a `_csrf` cookie if absent (not HttpOnly, readable by JS) |
-| Bootstrap endpoint `GET /oauth2.1/csrf` | returns `{ token }` and sets the cookie, for clients that need it before the first POST |
-| Unsafe methods | `x-csrf-token` must equal the `_csrf` cookie exactly; missing or different → **403** |
-| Excluded endpoints | `/oauth2.1/token`, `/revoke`, `/crypto`, `/device_authorization`, `/device/token` — they rely on client credentials or one-time tokens, not browser cookies |
+| Stage                                   | Behaviour                                                                                                                                                   |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Safe methods (GET/HEAD/OPTIONS)         | issue a `_csrf` cookie if absent (not HttpOnly, readable by JS)                                                                                             |
+| Bootstrap endpoint `GET /oauth2.1/csrf` | returns `{ token }` and sets the cookie, for clients that need it before the first POST                                                                     |
+| Unsafe methods                          | `x-csrf-token` must equal the `_csrf` cookie exactly; missing or different → **403**                                                                        |
+| Excluded endpoints                      | `/oauth2.1/token`, `/revoke`, `/crypto`, `/device_authorization`, `/device/token` — they rely on client credentials or one-time tokens, not browser cookies |
 
 🔴 **Login is protected too** (login CSRF logs the victim into the attacker's account, so
 everything they do afterwards lands in the attacker's account). A client that opens a login page
@@ -125,18 +125,18 @@ async function ensureCsrfToken(): Promise<string> {
 Prefixes come from `src/api/<domain>/<domain>.json` (`oauth21` is `/oauth2.1` with **no** `v1`
 segment; the user domain is `/user` plus `/v1` in the route):
 
-| Endpoint | Method | Purpose |
-| --- | --- | --- |
-| `/oauth2.1/login` | POST | standard login (RSA-encrypted password) |
-| `/oauth2.1/mini-login` | POST | quick login (iframe-friendly) |
-| `/oauth2.1/login/consent/confirm` | POST | confirm consent for quick login |
-| `/oauth2.1/login/verify-email` | POST | email second factor after an anomalous environment |
-| `/oauth2.1/logout` | POST | sign out |
-| `/user/v1/register` | POST | registration |
-| `/user/v1/userinfo` | GET | current user |
-| `/user/v1/permissions` | GET | current user's permissions |
-| `/auth/v1/verify-challenge` | POST | verify an image CAPTCHA |
-| `/verify/v1/send-login-verify-code` | POST | send a login verification code |
+| Endpoint                            | Method | Purpose                                            |
+| ----------------------------------- | ------ | -------------------------------------------------- |
+| `/oauth2.1/login`                   | POST   | standard login (RSA-encrypted password)            |
+| `/oauth2.1/mini-login`              | POST   | quick login (iframe-friendly)                      |
+| `/oauth2.1/login/consent/confirm`   | POST   | confirm consent for quick login                    |
+| `/oauth2.1/login/verify-email`      | POST   | email second factor after an anomalous environment |
+| `/oauth2.1/logout`                  | POST   | sign out                                           |
+| `/user/v1/register`                 | POST   | registration                                       |
+| `/user/v1/userinfo`                 | GET    | current user                                       |
+| `/user/v1/permissions`              | GET    | current user's permissions                         |
+| `/auth/v1/verify-challenge`         | POST   | verify an image CAPTCHA                            |
+| `/verify/v1/send-login-verify-code` | POST   | send a login verification code                     |
 
 ## Client-side permission helpers
 

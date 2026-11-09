@@ -90,7 +90,7 @@ loadUserPermissions(userId, appId)
   → superadmin 自动注入 {appId}_admin 角色
   → 查 InlinePolicy（当前应用 + GLOBAL）
   → 合并 allows/denies
-  → Redis 缓存 5 分钟
+  → 由 perm-cache 以 60s TTL 缓存（`auth:perm` 命名空间）
 ```
 
 ## 权限匹配引擎
@@ -108,7 +108,12 @@ function isWildcardMatch(pattern, target) {
   // 先转义全部正则元字符，再以 * 为界拼回 .*——防止 pattern 里的
   // '.'、'('、'[' 等被当正则语法解释
   const regex = new RegExp(
-    '^' + pattern.split('*').map(seg => seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$'
+    '^' +
+      pattern
+        .split('*')
+        .map(seg => seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('.*') +
+      '$'
   );
   return regex.test(target);
 }
@@ -122,12 +127,12 @@ function matchSingle(perm, allows, denies) {
 
 语义要点：
 
-| 模式 | 语义 |
-| --- | --- |
-| `*` | 匹配一切 |
-| `user:*` | `user:` 开头的一切（`*` 可跨 `:` 段） |
-| `user:*:read` | 中段通配同样支持 |
-| 其他 | 字面量匹配——**元字符不解释**，`user:read` 不会误匹配 `userXread`（2026-11-01 修复：旧实现未转义正则元字符） |
+| 模式          | 语义                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------- |
+| `*`           | 匹配一切                                                                                                    |
+| `user:*`      | `user:` 开头的一切（`*` 可跨 `:` 段）                                                                       |
+| `user:*:read` | 中段通配同样支持                                                                                            |
+| 其他          | 字面量匹配——**元字符不解释**，`user:read` 不会误匹配 `userXread`（2026-11-01 修复：旧实现未转义正则元字符） |
 
 ## 分级委派管理
 
@@ -156,20 +161,21 @@ re-export 引入，勿直接 import 子路径）。对标 Java Sa-Token，全部
 AsyncLocalStorage 取当前请求——**必须在 HTTP 请求上下文中调用**（ALS 外抛错）。
 
 ::: warning loginId 的两种语义，传错不报错但必然失效
+
 - **权限/角色系列**：操作"当前请求用户"，无此问题；
 - **封禁系列（disable/untieDisable/isDisable/checkDisable/getDisableTime）**：`loginId`
   必须是**数字主键**（ban store 按 `userId:service` 数字键控）——传 `getLoginId()`
   返回的 uid 字符串不报错但**永远封不中**；管理端按 uid 查出 `user.id` 再传入；
 - **二级认证系列（openSafe 等）**：内部已取 `state.user.userId`（数字主键），直接传 `service` 即可。
-:::
+  :::
 
 ### 认证与身份
 
-| 方法 | 功能 | 失败行为 |
-| --- | --- | --- |
-| `getLoginId()` | 当前用户标识（**uid UUID**；client_token 上下文返回客户端名） | — |
-| `check()` | 强制登录检查 | 未登录抛 401 |
-| `checkRole(role)` | 角色校验（**精确匹配**，不支持通配；角色无 deny 维度） | 不匹配抛 403 |
+| 方法              | 功能                                                          | 失败行为     |
+| ----------------- | ------------------------------------------------------------- | ------------ |
+| `getLoginId()`    | 当前用户标识（**uid UUID**；client_token 上下文返回客户端名） | —            |
+| `check()`         | 强制登录检查                                                  | 未登录抛 401 |
+| `checkRole(role)` | 角色校验（**精确匹配**，不支持通配；角色无 deny 维度）        | 不匹配抛 403 |
 
 ### 权限校验（Deny 优先 + 通配符）
 
@@ -177,21 +183,21 @@ AsyncLocalStorage 取当前请求——**必须在 HTTP 请求上下文中调用
 bearer-auth 经 perm-cache（数字主键 + 指纹校验）读实时快照——**JWT 不嵌入权限**，
 权限变更即时生效。形状不完整按空集处理（fail-closed），鉴权失败不会伪装成 500。
 
-| 方法 | 功能 | 失败行为 |
-| --- | --- | --- |
-| `getPermissionList()` | 取 `{ allows, denies }`（**只读引用**，勿修改） | — |
-| `hasPermission(perm)` | 判断，返回 `true/false` | — |
-| `checkPermission(perm)` | 校验单个 | 抛 `NotPermissionException`（403） |
-| `checkPermissionAnd(...perms)` | AND：全部通过 | 任一不足抛 403；**零参显式报错**（空真 = 无守卫，疑似笔误） |
-| `checkPermissionOr(...perms)` | OR：任一通过 | 全部不足抛 403；**零参显式报错** |
+| 方法                           | 功能                                            | 失败行为                                                    |
+| ------------------------------ | ----------------------------------------------- | ----------------------------------------------------------- |
+| `getPermissionList()`          | 取 `{ allows, denies }`（**只读引用**，勿修改） | —                                                           |
+| `hasPermission(perm)`          | 判断，返回 `true/false`                         | —                                                           |
+| `checkPermission(perm)`        | 校验单个                                        | 抛 `NotPermissionException`（403）                          |
+| `checkPermissionAnd(...perms)` | AND：全部通过                                   | 任一不足抛 403；**零参显式报错**（空真 = 无守卫，疑似笔误） |
+| `checkPermissionOr(...perms)`  | OR：任一通过                                    | 全部不足抛 403；**零参显式报错**                            |
 
 ```js
 import { StpUtil } from '../../src/framework/security/auth/index.js';
 
-StpUtil.hasPermission('user:admin:*');   // 判断：返回 true/false
-StpUtil.checkPermission('user:write');   // 校验：不通过抛 403（statusCode=403）
-StpUtil.checkPermissionAnd('a', 'b');    // AND：全部通过
-StpUtil.checkPermissionOr('a', 'b');     // OR：任一通过
+StpUtil.hasPermission('user:admin:*'); // 判断：返回 true/false
+StpUtil.checkPermission('user:write'); // 校验：不通过抛 403（statusCode=403）
+StpUtil.checkPermissionAnd('a', 'b'); // AND：全部通过
+StpUtil.checkPermissionOr('a', 'b'); // OR：任一通过
 ```
 
 ### 账号封禁（disable 系列，async）
@@ -199,14 +205,14 @@ StpUtil.checkPermissionOr('a', 'b');     // OR：任一通过
 按 `userId:service` 数字键控存 Redis，TTL 到期自动解封；`service='login'` 拦新登录、
 `'access'` 拦请求，业务可自定义维度。详见 `src/framework/security/auth/security/ban.js` 头注。
 
-| 方法 | 功能 |
-| --- | --- |
-| `disable(loginId, service, time, opts?)` | 封禁（秒；`-1`=永久），opts 支持 `{ reason, level, operator }` |
-| `disableLevel(loginId, service, level, time, opts?)` | 阶梯封禁：按等级处罚（level≥1，语义业务自定义） |
-| `untieDisable(loginId, ...services)` | 解封，返回实际解封的服务数 |
-| `isDisable(loginId, service)` | 是否被封禁（不区分等级） |
-| `checkDisable(loginId, ...services)` | 校验未封禁，被封禁抛 403（code=`ACCOUNT_BANNED`） |
-| `getDisableTime(loginId, service)` | 剩余封禁秒数：`-2`=未封禁，`-1`=永久 |
+| 方法                                                 | 功能                                                           |
+| ---------------------------------------------------- | -------------------------------------------------------------- |
+| `disable(loginId, service, time, opts?)`             | 封禁（秒；`-1`=永久），opts 支持 `{ reason, level, operator }` |
+| `disableLevel(loginId, service, level, time, opts?)` | 阶梯封禁：按等级处罚（level≥1，语义业务自定义）                |
+| `untieDisable(loginId, ...services)`                 | 解封，返回实际解封的服务数                                     |
+| `isDisable(loginId, service)`                        | 是否被封禁（不区分等级）                                       |
+| `checkDisable(loginId, ...services)`                 | 校验未封禁，被封禁抛 403（code=`ACCOUNT_BANNED`）              |
+| `getDisableTime(loginId, service)`                   | 剩余封禁秒数：`-2`=未封禁，`-1`=永久                           |
 
 ### 二级认证（openSafe 系列，async）
 
@@ -215,13 +221,13 @@ StpUtil.checkPermissionOr('a', 'b');     // OR：任一通过
 操作对象是**当前请求用户**；Redis 故障 fail-closed（视为未开启）。详见
 `src/framework/security/auth/security/safe.js`。
 
-| 方法 | 功能 |
-| --- | --- |
-| `openSafe(service, safeTime?)` | 开启时间窗（默认 1800s），返回 `{ openedAt, expireAt }` |
-| `isSafe(service)` | 是否在时间窗内 |
-| `checkSafe(service)` | 校验，未开启/已过期抛 403（`details.service` 供前端定位） |
-| `closeSafe(service)` | 主动关闭（敏感操作完成后调用，缩短暴露窗） |
-| `getSafeTime(service)` | 剩余秒数：`-1`=未开启 |
+| 方法                           | 功能                                                      |
+| ------------------------------ | --------------------------------------------------------- |
+| `openSafe(service, safeTime?)` | 开启时间窗（默认 1800s），返回 `{ openedAt, expireAt }`   |
+| `isSafe(service)`              | 是否在时间窗内                                            |
+| `checkSafe(service)`           | 校验，未开启/已过期抛 403（`details.service` 供前端定位） |
+| `closeSafe(service)`           | 主动关闭（敏感操作完成后调用，缩短暴露窗）                |
+| `getSafeTime(service)`         | 剩余秒数：`-1`=未开启                                     |
 
 ::: tip 为什么没有 `StpUtil.login()`
 登录入口是 oauth21 的 `login.service`（密码校验 + createSession + Cookie 下发的完整编排）。

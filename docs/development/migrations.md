@@ -20,7 +20,7 @@ node --env-file=.env src/framework/persistence/db/migrate.js --down-to <name>  #
 ```
 migrations/
 ├── 20260527000001-baseline-all-tables.js   # 全局基线标记（留顶层）
-├── user/  iam/  oauth21/  key/  notice/  session/  posecraft/  guard/
+├── user/  iam/  oauth21/  key/  notice/  session/  posecraft/  guard/  retroweb/  console/
 ```
 
 运行器递归扫描顶层与所有子目录，按文件名时间戳前缀排序执行。`sequelize_meta` 记录为纯 basename，迁移文件在子目录间移动不会触发重复执行。

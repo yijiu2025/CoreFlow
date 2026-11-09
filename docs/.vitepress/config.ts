@@ -95,7 +95,8 @@ const ZH_THEME = {
         { text: '请求处理流水线', link: '/core/request-pipeline' },
         { text: '认证系统', link: '/core/auth' },
         { text: '权限系统 (PBAC)', link: '/core/permission' },
-        { text: '三级守卫', link: '/core/guard' }
+        { text: '三级守卫', link: '/core/guard' },
+        { text: '端点限频 groupId', link: '/core/rate-limit-group-id' }
       ]
     },
     {

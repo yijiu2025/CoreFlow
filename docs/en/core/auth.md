@@ -2,10 +2,10 @@
 
 ## Modes
 
-| Mode | Enabled by | Token storage | Verification |
-| --- | --- | --- | --- |
-| Session (default) | `JWT_ENABLED=false` | Redis (`sid`/`sid_r` cookies, HttpOnly) | cookies sent automatically |
-| JWT | `JWT_ENABLED=true` | **HttpOnly cookie first**; Bearer (in memory) only for cross-origin / CLI | JWT signature validation |
+| Mode              | Enabled by          | Token storage                                                             | Verification               |
+| ----------------- | ------------------- | ------------------------------------------------------------------------- | -------------------------- |
+| Session (default) | `JWT_ENABLED=false` | Redis (`sid`/`sid_r` cookies, HttpOnly)                                   | cookies sent automatically |
+| JWT               | `JWT_ENABLED=true`  | **HttpOnly cookie first**; Bearer (in memory) only for cross-origin / CLI | JWT signature validation   |
 
 > 🔴 **Never put long-lived tokens in `localStorage`**: any same-origin XSS can read them and
 > replay them indefinitely. In browsers prefer an `HttpOnly` cookie (the reference frontend does
@@ -15,7 +15,7 @@
 
 ## Password storage
 
-Passwords use Node's built-in `crypto.scrypt` (`src/framework/security/auth/password-hash.js`, async, runs
+Passwords use Node's built-in `crypto.scrypt` (`src/framework/security/auth/security/password-hash.js`, async, runs
 on the libuv thread pool). Historical bcrypt hashes (`$2a$` / `$2b$` / `$2y$`) remain
 **verification-only**, and are transparently rewritten to scrypt on a successful login.
 
@@ -42,7 +42,7 @@ requests queue rather than saturate the thread pool. Legacy bcrypt verification 
 - When `sid` expires the session is refreshed via `sid_r` with no user-visible interruption;
   refresh is an **atomic claim**, so the same refreshToken succeeds exactly once
 
-> All four constants live in `src/framework/security/auth/cookie.js`. If the session is evicted from
+> All four constants live in `src/framework/security/auth/context/cookie.js`. If the session is evicted from
 > Redis, `session_tokens` in the DB still holds `last_active`: within the short TTL the cache is
 > rebuilt, beyond the long TTL the session is revoked.
 
@@ -133,12 +133,12 @@ user visits a third-party app
 
 ## Login methods
 
-| Method | Flow | Typical client |
-| --- | --- | --- |
-| Email code | email → image CAPTCHA → email code → login | web |
-| Password | credentials → RSA encryption → login | web |
-| QR code | generate QR → scan on phone → confirm | desktop + mobile |
-| Device code | generate device code → enter on another device → authorize | IoT / TV / CLI |
+| Method      | Flow                                                       | Typical client   |
+| ----------- | ---------------------------------------------------------- | ---------------- |
+| Email code  | email → image CAPTCHA → email code → login                 | web              |
+| Password    | credentials → RSA encryption → login                       | web              |
+| QR code     | generate QR → scan on phone → confirm                      | desktop + mobile |
+| Device code | generate device code → enter on another device → authorize | IoT / TV / CLI   |
 
 ## iframe quick login
 
@@ -189,19 +189,19 @@ The complete handshake (parent ↔ login page messages, timeout fallback) is des
 // option 1: read it off request.state
 handler: async (request, reply) => {
   const user = request.state.user;
-  user.uid;          // UUID
-  user.userId;       // internal id
+  user.uid; // UUID
+  user.userId; // internal id
   user.username;
-  user.roles;        // ['admin', 'user']
-  user.permissions;  // { allows: [...], denies: [...] }
+  user.roles; // ['admin', 'user']
+  user.permissions; // { allows: [...], denies: [...] }
 };
 
 // option 2: StpUtil (the recommended entry point for permission checks)
 import StpUtil from '../../framework/security/auth/stp-util.js';
 
-StpUtil.getLoginId();               // current user id
-StpUtil.check();                    // hard login check (401 when anonymous)
-StpUtil.checkRole('admin');         // role check
+StpUtil.getLoginId(); // current user id
+StpUtil.check(); // hard login check (401 when anonymous)
+StpUtil.checkRole('admin'); // role check
 StpUtil.hasPermission('user:read'); // permission test (fail-closed: missing → false)
 ```
 

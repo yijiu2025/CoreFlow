@@ -89,6 +89,7 @@ npm run cli -- firewall status
 | `firewall ban`       | 添加封禁 IP    |
 | `firewall unban`     | 解除封禁 IP    |
 | `firewall allow`     | 添加白名单 IP  |
+| `firewall unallow`   | 移除白名单 IP  |
 | `firewall stats`     | 流量统计       |
 
 ## 使用示例
@@ -186,7 +187,7 @@ npm run migrate
 npm run setup:admin
 
 # 4. 健康检查
-npm run cli -- health
+npm run cli -- system health
 
 # 5. 启动服务
 npm run dev

@@ -7,35 +7,35 @@
 
 ## 已完成（原 Phase 0–1 的落地结果）
 
-| 能力 | 状态 | 落点 |
-| --- | --- | --- |
-| 密码哈希 | ✅ | `crypto.scrypt`（libuv 线程池 + 并发背压），bcrypt 仅历史兼容校验 |
-| 环境变量校验 | ✅ | `src/framework/config/env.js`（`validateEnv` / 弱值拒绝 / 跨字段关系） |
-| CORS 白名单 | ✅ | `src/app.js` + `src/framework/security/auth/origin-guard.js`（生产 fail-closed） |
-| 防火墙 API 鉴权 | ✅ | 走 `registerSecureRoute` + PBAC 权限码 |
-| 优雅关闭 | ✅ | `src/app.js` 的 `onClose`：守卫配置 flush + Redis Pub/Sub 关闭 |
-| 健康检查 | ✅ | `GET /v1/health/live`、`GET /v1/health/ready`（统一响应封装） |
-| Redis 重连与降级 | ✅ | `src/framework/persistence/redis/`：「未配置 → 进程内实现」「配置了但连不上 → 503」 |
-| Docker 制品 | ✅ | `Dockerfile`、`docker-compose.yml`、`.dockerignore`、`docker/verify-deps.mjs` |
-| CI / CD | ✅ | `.github/workflows/`：CI（Lint·Verify·Test）、Docs、Publish Image、CodeQL、依赖自证 |
-| Pre-commit | ✅ | Husky + lint-staged（ESLint + Prettier） |
-| 分布式锁 / 队列 / 环形队列 | ✅ | `src/framework/persistence/redis/{lock-store,queue-store,ring-queue-store}.js` + 跨进程关卡 |
-| 私钥信封加密 | ✅ | `src/framework/security/keys/`（AES-GCM + KEK + 迁移脚本 `scripts/migrate-key-encryption.js`） |
-| 三级守卫 + PBAC | ✅ | `src/api/guard.js`（deny 优先 / 通配 / fail-closed） |
-| 权限缓存与指纹失效 | ✅ | `src/framework/security/auth/{perm-cache,session-perm}.js` + 主动失效 |
+| 能力                       | 状态 | 落点                                                                                           |
+| -------------------------- | ---- | ---------------------------------------------------------------------------------------------- |
+| 密码哈希                   | ✅   | `crypto.scrypt`（libuv 线程池 + 并发背压），bcrypt 仅历史兼容校验                              |
+| 环境变量校验               | ✅   | `src/framework/config/env.js`（`validateEnv` / 弱值拒绝 / 跨字段关系）                         |
+| CORS 白名单                | ✅   | `src/app.js` + `src/framework/security/auth/security/origin-guard.js`（生产 fail-closed）      |
+| 防火墙 API 鉴权            | ✅   | 走 `registerSecureRoute` + PBAC 权限码                                                         |
+| 优雅关闭                   | ✅   | `src/app.js` 的 `onClose`：守卫配置 flush + Redis Pub/Sub 关闭                                 |
+| 健康检查                   | ✅   | `GET /v1/health/live`、`GET /v1/health/ready`（统一响应封装）                                  |
+| Redis 重连与降级           | ✅   | `src/framework/persistence/redis/`：「未配置 → 进程内实现」「配置了但连不上 → 503」            |
+| Docker 制品                | ✅   | `Dockerfile`、`docker-compose.yml`、`.dockerignore`、`docker/verify-deps.mjs`                  |
+| CI / CD                    | ✅   | `.github/workflows/`：CI（Lint·Verify·Test）、Docs、Publish Image、CodeQL、依赖自证            |
+| Pre-commit                 | ✅   | Husky + lint-staged（ESLint + Prettier）                                                       |
+| 分布式锁 / 队列 / 环形队列 | ✅   | `src/framework/persistence/redis/{lock-store,queue-store,ring-queue-store}.js` + 跨进程关卡    |
+| 私钥信封加密               | ✅   | `src/framework/security/keys/`（AES-GCM + KEK + 迁移脚本 `scripts/migrate-key-encryption.js`） |
+| 三级守卫 + PBAC            | ✅   | `src/api/guard.js`（deny 优先 / 通配 / fail-closed）                                           |
+| 权限缓存与指纹失效         | ✅   | `src/framework/security/auth/{perm-cache,session-perm}.js` + 主动失效                          |
 
 ## 待办（按"能不能被打到"排序）
 
 ### P0 · 安全与可用性
 
 - [ ] **图形验证码的失败尝试上限已加，但 `/auth/v1/verify-challenge` 不在任何限频作用域内** ——
-  应纳入限频（当前只有 `/oauth2.1/*` 的敏感端点有 IP 限频）
+      应纳入限频（当前只有 `/oauth2.1/*` 的敏感端点有 IP 限频）
 - [ ] **限流器 Redis 路径 5 次往返**（`zRemRangeByScore / zCard / zRange / zAdd / expire`）→ pipeline 压到 1–2 次，
-  被刷时这 5 倍往返本身就是放大面
+      被刷时这 5 倍往返本身就是放大面
 - [x] **`public/<前端名>/` 下 190 个历史前端构建产物已清理**（2026-10-31）：
-  `posecraft/` 107、`models/` 37、`firewall/` 24、`poseadmin/` 22，约 152MB。
-  `public/` 只留 `uploads/.gitkeep` 占位 —— `@fastify/static` 的 root 与 `Dockerfile` 的
-  `COPY public ./public` 都要求该目录存在，否则干净检出时镜像构建直接失败。
+      `posecraft/` 107、`models/` 37、`firewall/` 24、`poseadmin/` 22，约 152MB。
+      `public/` 只留 `uploads/.gitkeep` 占位 —— `@fastify/static` 的 root 与 `Dockerfile` 的
+      `COPY public ./public` 都要求该目录存在，否则干净检出时镜像构建直接失败。
 - [x] **依赖告警 296 条 → 已治理**（2026-10-31）：
   - **根因**：`workspaces` 里仍挂着三个已迁出的前端目录（`oauth21`/`posecraft`/`firewall`），
     npm 把整个前端依赖树（vue/vite/tensorflow/echarts…）都算进 lock 与审计 → 告警的主体在这里。
@@ -67,21 +67,21 @@
 ### P1 · 架构收敛
 
 - [ ] **反向依赖清理**：`src/framework/support/notice/services/email.js` → `src/app/notice/dao`（framework 依赖 app）、
-  `src/shared/user-dao.js` → `src/app/oauth21/dao`（shared 依赖 app）。
-  现有守卫只覆盖 `app → app` 与 `src → scripts`，这两种方向无人拦
+      `src/shared/user-dao.js` → `src/app/oauth21/dao`（shared 依赖 app）。
+      现有守卫只覆盖 `app → app` 与 `src → scripts`，这两种方向无人拦
 - [ ] **未接线模块决策**：`framework/security/verify/slider`、`verify/sms`、`verify/voice`
-  要么接线（并补 TTL / 失败上限），要么删除 —— 它们在仓库里只增加"看起来支持"的错觉
+      要么接线（并补 TTL / 失败上限），要么删除 —— 它们在仓库里只增加"看起来支持"的错觉
 - [ ] **`package.json` workspaces 与已迁出目录**：`oauth21` / `posecraft` / `firewall` 仍列在
-  `workspaces`，而目录已不在本仓。当前可用（npm 跳过缺失项），但语义上应收敛
+      `workspaces`，而目录已不在本仓。当前可用（npm 跳过缺失项），但语义上应收敛
 
 ### P2 · 工程质量
 
 - [ ] **覆盖率阈值偏低**：`jest.config.js` 现为 branches 30 / functions 40 / lines 40 / statements 40，
-  且 `collectCoverageFrom` 只覆盖 `src/api`、`src/app`（局部）。建议按模块分级提高，并扩大采集范围
+      且 `collectCoverageFrom` 只覆盖 `src/api`、`src/app`（局部）。建议按模块分级提高，并扩大采集范围
 - [ ] **Swagger / OpenAPI 文档**：目前 `oauth21-api-report.md` 是手写报告；路由已有 `schema`
-  （Fastify 侧），可据此生成 OpenAPI，避免文档与实现再次漂移
+      （Fastify 侧），可据此生成 OpenAPI，避免文档与实现再次漂移
 - [ ] **测试有效性守卫的覆盖面**：`conventions/test-effectiveness` 已改为 AST 判据，
-  但"一个文件里有真 import + 大段自证常量"仍拦不住（只能靠 review）
+      但"一个文件里有真 import + 大段自证常量"仍拦不住（只能靠 review）
 
 ## 已作废
 
@@ -94,11 +94,11 @@
 
 ## 成功指标（仅后端）
 
-| 指标 | 目标值 | 当前 |
-| --- | --- | --- |
-| Critical 安全漏洞 | 0 | 本轮审查已修 4 个 🔴（队列丢消息 / 限流死规则 / 代理信任过宽 / 阈值形同虚设） |
-| 测试 | 全绿且"毒丸可变红" | 105 套件 / 1250 用例通过，4 套件按 Redis 条件跳过 |
-| Redis 双后端语义一致 | Map 与 Redis 同形 | 环形队列已补同形对比测试 |
-| 容器化 | Docker + Compose | ✅ |
-| 部署 | CI/CD 自动 | ✅（CI / Docs / Publish Image） |
-| API 文档 | 自动生成 | ❌ 未做（手写报告会漂移） |
+| 指标                 | 目标值             | 当前                                                                          |
+| -------------------- | ------------------ | ----------------------------------------------------------------------------- |
+| Critical 安全漏洞    | 0                  | 本轮审查已修 4 个 🔴（队列丢消息 / 限流死规则 / 代理信任过宽 / 阈值形同虚设） |
+| 测试                 | 全绿且"毒丸可变红" | 105 套件 / 1250 用例通过，4 套件按 Redis 条件跳过                             |
+| Redis 双后端语义一致 | Map 与 Redis 同形  | 环形队列已补同形对比测试                                                      |
+| 容器化               | Docker + Compose   | ✅                                                                            |
+| 部署                 | CI/CD 自动         | ✅（CI / Docs / Publish Image）                                               |
+| API 文档             | 自动生成           | ❌ 未做（手写报告会漂移）                                                     |

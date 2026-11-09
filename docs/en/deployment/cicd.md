@@ -2,11 +2,11 @@
 
 > ## ✅ Status: implemented
 >
-> | File | Trigger | What it does |
-> | --- | --- | --- |
-> | `.github/workflows/ci.yml` | push to main, every PR | lint gate / full Jest suite / **cross-process gates** (real Redis) |
-> | `.github/workflows/release-docker.yml` | push to main, `v*` tags, manual | build and push the image to GHCR + **full-stack compose smoke test** (shown as `Publish Image`) |
-> | `.github/workflows/docs.yml` | push to main (`docs/**` changes), manual | build the documentation site and deploy to <https://yijiu2025.github.io/CoreFlow/> |
+> | File                                   | Trigger                                  | What it does                                                                                    |
+> | -------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
+> | `.github/workflows/ci.yml`             | push to main, every PR                   | lint gate / full Jest suite / **cross-process gates** (real Redis)                              |
+> | `.github/workflows/release-docker.yml` | push to main, `v*` tags, manual          | build and push the image to GHCR + **full-stack compose smoke test** (shown as `Publish Image`) |
+> | `.github/workflows/docs.yml`           | push to main (`docs/**` changes), manual | build the documentation site and deploy to <https://yijiu2025.github.io/CoreFlow/>              |
 
 ---
 
@@ -21,9 +21,9 @@ A typical CI does three things: static checks (lint / types), automated tests (u
 contract), and a build that proves the code produces an artefact — not merely that `npm run dev`
 works locally.
 
-| Abbreviation | Meaning | Key difference |
-| --- | --- | --- |
-| **Continuous Delivery** | the pipeline always keeps a releasable artefact | shipping stays a human decision |
+| Abbreviation              | Meaning                                              | Key difference                       |
+| ------------------------- | ---------------------------------------------------- | ------------------------------------ |
+| **Continuous Delivery**   | the pipeline always keeps a releasable artefact      | shipping stays a human decision      |
 | **Continuous Deployment** | every passing build goes to production automatically | the decision moves into the pipeline |
 
 Most teams need **Delivery**. Both share the same pipeline; the difference is whether the last
@@ -48,13 +48,13 @@ trust.
 
 ## This project's pipelines
 
-| Workflow | Job | What it blocks |
-| --- | --- | --- |
-| `ci.yml` | lint | style/convention drift, dead documentation links, a documentation site that will not build |
-| `ci.yml` | test | unit / contract / structural-guard regressions |
-| `ci.yml` | verify | concurrency defects that only appear across processes |
-| `docs.yml` | build → deploy | publishing the documentation site to GitHub Pages |
-| `release-docker.yml` | publish | image artefacts and boot smoke test |
+| Workflow             | Job            | What it blocks                                                                             |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| `ci.yml`             | lint           | style/convention drift, dead documentation links, a documentation site that will not build |
+| `ci.yml`             | test           | unit / contract / structural-guard regressions                                             |
+| `ci.yml`             | verify         | concurrency defects that only appear across processes                                      |
+| `docs.yml`           | build → deploy | publishing the documentation site to GitHub Pages                                          |
+| `release-docker.yml` | publish        | image artefacts and boot smoke test                                                        |
 
 `ci.yml` is the **only gate entry point** (branch protection requires its three job names);
 `docs.yml` publishes and does not take part in PR checks — publishing needs `pages: write`,
@@ -71,7 +71,7 @@ DOCS_BASE=/CoreFlow/ npx vitepress build docs      # the docs site must build
 These are this repository's own rules, several of which cannot be copied from elsewhere:
 
 - **export placement**: every `export` must sit at the end of the file (`no-restricted-syntax`);
-- **no `console.*`**: backend code logs through `src/framework/log`;
+- **no `console.*`**: backend code logs through `src/framework/support/log`;
 - **test-effectiveness** and friends are covered by the structural guards in
   `src/__tests__/conventions/` (they run in the test job).
 
@@ -129,12 +129,12 @@ them — which meant nobody did. Only after moving into CI did the gate actually
 
 Exit codes are deliberately graded, and CI gives a different hint per level:
 
-| Code | Meaning | CI reaction |
-| --- | --- | --- |
-| 0 | pass | continue |
-| 1 | assertion failed (real regression) | fail, inspect the code |
-| 2 | rollback incomplete | fail, and **inspect the data manually** |
-| 3 | environment unavailable | also fail — the service is declared by us; if it cannot be reached, the pipeline is broken |
+| Code | Meaning                            | CI reaction                                                                                |
+| ---- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| 0    | pass                               | continue                                                                                   |
+| 1    | assertion failed (real regression) | fail, inspect the code                                                                     |
+| 2    | rollback incomplete                | fail, and **inspect the data manually**                                                    |
+| 3    | environment unavailable            | also fail — the service is declared by us; if it cannot be reached, the pipeline is broken |
 
 ### 4. `docs.yml` — documentation publishing (GitHub Pages)
 
@@ -212,7 +212,7 @@ deploy:
   needs: [smoke]
   if: github.ref == 'refs/heads/main'
   runs-on: ubuntu-latest
-  environment: production        # GitHub Environments can require approval → back to Delivery
+  environment: production # GitHub Environments can require approval → back to Delivery
   steps:
     - uses: appleboy/ssh-action@v1
       with:

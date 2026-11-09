@@ -32,7 +32,7 @@ CoreFlow 是一个基于 **Fastify v5 + Sequelize v6** 的后端框架，提供�
 五层安全拦截管道：
 
 ```
-连接追踪 → 全局封禁 → 人机挑战 → Bot 检测 → 地理围栏/端点限频
+连接追踪 → 全局封禁 → 人机挑战 → Bot 检测 → 地理围栏（端点限频由路由 `config.rateLimit` 承担，不在此管道）
 ```
 
 ### OAuth 2.1
@@ -46,15 +46,15 @@ CoreFlow 是一个基于 **Fastify v5 + Sequelize v6** 的后端框架，提供�
 
 ## 技术栈
 
-| 层级   | 技术                      | 版本            |
-| ------ | ------------------------- | --------------- |
-| 运行时 | Node.js                   | ≥24（ESM，LTS） |
-| 框架   | Fastify                   | v5              |
-| ORM    | Sequelize                 | v6              |
-| 数据库 | MySQL                     | 8.0+            |
-| 缓存   | Redis（可选）             | v5 客户端 / 6.0+ 服务端 |
-| 认证   | Session + JWT             | -               |
-| 迁移   | Umzug                     | v3              |
+| 层级   | 技术          | 版本                    |
+| ------ | ------------- | ----------------------- |
+| 运行时 | Node.js       | ≥24（ESM，LTS）         |
+| 框架   | Fastify       | v5                      |
+| ORM    | Sequelize     | v6                      |
+| 数据库 | MySQL         | 8.0+                    |
+| 缓存   | Redis（可选） | v6 客户端 / 6.0+ 服务端 |
+| 认证   | Session + JWT | -                       |
+| 迁移   | Umzug         | v3                      |
 
 ## 设计理念
 

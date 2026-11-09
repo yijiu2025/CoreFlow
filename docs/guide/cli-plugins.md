@@ -236,15 +236,15 @@ npm run cli -- firewall stats      # 流量统计
 
 ## 插件规范
 
-| 规则       | 说明                                                          |
-| ---------- | ------------------------------------------------------------- |
-| 入口文件   | `cli/index.js` 必须存在                                       |
-| 导出格式   | `export default { command, description, subcommands }`        |
-| 命令名     | 全局唯一，不能与内置命令冲突                                  |
-| handler    | 必须是 async 函数                                             |
-| 工具导入   | 从 `src/framework/` 导入，禁止在 `src/` 内 import `scripts/`   |
-| 导出位置   | 定义处不写 `export`，统一在文件末尾 `export { ... };`         |
-| 输出通道   | 面向人用 `src/framework/cli` 的 `print*`，禁止 `console.*`     |
+| 规则     | 说明                                                               |
+| -------- | ------------------------------------------------------------------ |
+| 入口文件 | `cli/index.js` 必须存在                                            |
+| 导出格式 | `export default { command, description, subcommands }`             |
+| 命令名   | 全局唯一，不能与内置命令冲突                                       |
+| handler  | 必须是 async 函数                                                  |
+| 工具导入 | 从 `src/framework/` 导入，禁止在 `src/` 内 import `scripts/`       |
+| 导出位置 | 定义处不写 `export`，统一在文件末尾 `export { ... };`              |
+| 输出通道 | 面向人用 `src/framework/support/cli` 的 `print*`，禁止 `console.*` |
 
 ## 内置命令列表
 

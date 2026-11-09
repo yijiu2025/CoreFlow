@@ -47,31 +47,36 @@ nodeServers/
 │   ├── models/                 # 数据模型（按领域分目录）
 │   │   ├── user/  iam/  oauth21/  session/  key/  notice/  guard/  posecraft/  retroweb/
 │   │
-│   ├── data/                   # 运行时数据（默认配置 JSON：firewall_config / scheduler_config / traffic_stats）
-│   ├── shared/                 # 跨层共享工具
-│   └── public/                 # 运行时上传目录（uploads/）
+│   ├── utils/                  # 零依赖工具层（颜色 / 集合 / 字符串 / 超时 / CORS / 加密 / 载荷 / 代理信任）
+│   └── shared/                 # 跨层共享（异常、DAO 基类等）
 │
-├── public/                     # 静态资源根（后端以 @fastify/static 挂载，prefix `/`）
-│   └── uploads/                # 上传文件（gitignore，只保留 .gitkeep 占位）
+├── data/                       # 运行期 JSON 状态（gitignore，随卷持久化）
+├── logs/                       # 滚动日志（gitignore）
+├── public/<app>/               # 公开上传（@fastify/static prefix `/` 直出）
+├── storage/<app>/u/<ownerId>/  # 私有文件（只经 /api/files/v1/* 鉴权下发）
 │
 ├── migrations/                 # 数据库迁移文件（按域分目录）
 ├── packages/                   # npm workspace 包
-│   ├── log/                    # wb-logkit（嵌套仓，**本地 gitignore**；CI/镜像从 registry 取 ^0.5.0）
+│   ├── log/                    # wb-logkit（嵌套仓，**本地 gitignore**；CI/镜像从 registry 取 ^1.0.0）
 │   ├── theme-core/             # skinsuite（git submodule）
-│   └── shared-device/          # stable-deviceid
+│   ├── shared-device/          # stable-deviceid
+│   └── challenge-client/       # 挑战求解客户端
 │
-├── scripts/                    # 运维脚本（release / 迁移 / verify 关卡）
-├── docker/                     # 镜像与依赖自证
+├── scripts/                    # 运维脚本（release / 迁移 / verify 关卡），见 scripts/README.md
+├── docker/                     # 镜像入口与依赖自证
 ├── reports/                    # 一次性评审报告（**已 gitignore，不入库**）
 └── docs/                       # 项目文档
 ```
 
+> ⚠️ **运行期目录都在仓库根，不在 `src/` 下**：`data/` `logs/` `public/` `storage/`。
+> 往 `src/{data,public,storage}` 里写文件会被 `src/__tests__/storage-root.test.js` 判红 ——
+> 数错一层 `../` 会让文件照写不误、但读取方在另一个地方，表现为"功能不生效且无报错"。
+
 > `packages/theme-core` 是 **git submodule**，克隆时要 `--recurse-submodules`。
 >
-> **`public/` 现在只剩 `uploads/`**：此前这里住着 190 个历史前端构建产物
-> （`posecraft/` 107、`models/` 37、`firewall/` 24、`poseadmin/` 22，约 152MB），
-> 已于 2026-10-31 清理 —— 它们各自属于对应前端仓，不该随后端发布。
-> 目录里只留 `uploads/.gitkeep`：`@fastify/static` 的 `root` 必须存在，`Dockerfile` 也有
+> **`public/` 只放业务上传**（`public/<app>/…`，如 `posecraft/` `user/`）：历史前端构建产物
+> （约 152MB）已于 2026-10-31 清理，它们属于对应前端仓、不该随后端发布。
+> 目录里保留 `.gitkeep`：`@fastify/static` 的 `root` 必须存在，`Dockerfile` 也有
 > `COPY public ./public`，没有占位文件时干净检出里没有这个目录，镜像构建会直接失败。
 
 ## 启动流程
@@ -126,7 +131,8 @@ src/
 │   ├── oauth21/          # OAuth 2.1（登录 / SSO / 授权）
 │   ├── user/             # 用户
 │   ├── admin/            # 管理
-│   ├── firewall/         # 防火墙（引擎在 engine/detectors/，五层管道都在这里）
+│   ├── firewall/         # 防火墙**应用层**（面板 API / DAO / 流量统计 / CLI）
+│   │                     #   防护核心在 framework/ingress/firewall/（engine + detectors 都在那边）
 │   ├── guard/            # 三级守卫
 │   ├── notice/           # 通知
 │   ├── posecraft/        # posecraft 后端
@@ -134,7 +140,7 @@ src/
 │
 ├── api/                  # 路由（域/版本目录）
 ├── models/               # 业务模型
-└── data/                 # 运行时数据
+└── utils/                # 零依赖工具层
 ```
 
 **系统层**提供基础设施能力，不包含业务逻辑；应用模块之间**禁止互相 import**

@@ -2,11 +2,11 @@
 
 > ## ✅ 实现状态：已落地（2026-09-20）
 >
-> | 文件 | 触发 | 做什么 |
-> | --- | --- | --- |
-> | `.github/workflows/ci.yml` | push 到 main、所有 PR | lint 门禁 / Jest 全量 / **跨进程关卡**（真 Redis） |
-> | `.github/workflows/release-docker.yml` | push 到 main、打 `v*` tag、手动 | 构建镜像推 GHCR + **compose 全栈端到端冒烟**（workflow name 显示为 `Publish Image`） |
-> | `.github/workflows/docs.yml` | push 到 main（`docs/**` 变化）、手动 | 构建文档站并发布到 <https://yijiu2025.github.io/CoreFlow/> |
+> | 文件                                   | 触发                                 | 做什么                                                                               |
+> | -------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
+> | `.github/workflows/ci.yml`             | push 到 main、所有 PR                | lint 门禁 / Jest 全量 / **跨进程关卡**（真 Redis）                                   |
+> | `.github/workflows/release-docker.yml` | push 到 main、打 `v*` tag、手动      | 构建镜像推 GHCR + **compose 全栈端到端冒烟**（workflow name 显示为 `Publish Image`） |
+> | `.github/workflows/docs.yml`           | push 到 main（`docs/**` 变化）、手动 | 构建文档站并发布到 <https://yijiu2025.github.io/CoreFlow/>                           |
 >
 > 本页此前是**未落地的示例**（2026-09-19 核实：仓库内没有 `.github/`）。
 > 当时的真实自动化只有 `.husky/pre-commit` + lint-staged（提交时对 `src/**`
@@ -33,10 +33,10 @@ CI 的价值就是把这件事变成**不可协商**的：门禁不通过，代�
 
 ### CD：两个常被混在一起的缩写
 
-| 缩写 | 全称 | 含义 | 关键区别 |
-| --- | --- | --- | --- |
-| **Continuous Delivery** | 持续**交付** | 流水线始终把产物准备好，**发布动作由人按一下** | 上线与否是决策，不是自动的 |
-| **Continuous Deployment** | 持续**部署** | 通过所有关卡后**自动**上生产 | 决策也交给流水线 |
+| 缩写                      | 全称         | 含义                                           | 关键区别                   |
+| ------------------------- | ------------ | ---------------------------------------------- | -------------------------- |
+| **Continuous Delivery**   | 持续**交付** | 流水线始终把产物准备好，**发布动作由人按一下** | 上线与否是决策，不是自动的 |
+| **Continuous Deployment** | 持续**部署** | 通过所有关卡后**自动**上生产                   | 决策也交给流水线           |
 
 多数团队实际需要的是 **Delivery**（产物随时可发，但发布时机由人决定）。
 两者共用同一套流水线，差别只在最后一步是否有人工卡点。
@@ -61,13 +61,13 @@ CI 的价值就是把这件事变成**不可协商**的：门禁不通过，代�
 
 ## 本项目的流水线
 
-| 工作流 | 作业 | 拦什么 |
-| --- | --- | --- |
-| `ci.yml` | lint | 风格/约定漂移、文档死链、文档站构建不出来 |
-| `ci.yml` | test | 单元 / 契约 / 结构守卫回归 |
-| `ci.yml` | verify | 只在多进程下才暴露的并发缺陷 |
-| `docs.yml` | build → deploy | 文档站发布到 GitHub Pages |
-| `release-docker.yml` | publish | 镜像产物与启动冒烟 |
+| 工作流               | 作业           | 拦什么                                    |
+| -------------------- | -------------- | ----------------------------------------- |
+| `ci.yml`             | lint           | 风格/约定漂移、文档死链、文档站构建不出来 |
+| `ci.yml`             | test           | 单元 / 契约 / 结构守卫回归                |
+| `ci.yml`             | verify         | 只在多进程下才暴露的并发缺陷              |
+| `docs.yml`           | build → deploy | 文档站发布到 GitHub Pages                 |
+| `release-docker.yml` | publish        | 镜像产物与启动冒烟                        |
 
 `ci.yml` 是**唯一门禁入口**（分支保护只认它的三个作业名）；`docs.yml` 负责发布，
 不参与 PR 判定 —— 发布需要 `pages: write`，而 fork 来的 PR 拿不到这个权限。
@@ -83,7 +83,7 @@ DOCS_BASE=/CoreFlow/ npx vitepress build docs      # 文档站必须能构建
 跑的是项目自己的规则，其中有几条是**这个仓库特有的**，从别处抄不来：
 
 - **导出位置**：所有 `export` 必须收拢到文件末尾（`no-restricted-syntax`）；
-- **禁 `console.*`**：后端代码统一走 `src/framework/log`；
+- **禁 `console.*`**：后端代码统一走 `src/framework/support/log`；
 - **测试有效性约定**等由 `src/__tests__/conventions/` 里的结构守卫覆盖（跑在 test 作业里）。
 
 为什么只扫这几个目录：仓库里还住着 `phonecopy/`（8 万文件的第三方快照）
@@ -138,12 +138,12 @@ node scripts/verify/queue-atomic.mjs      # U12：队列指针 Lua 原子性（�
 
 退出码语义刻意分级，CI 里对每一级给出不同的排障提示：
 
-| 码 | 含义 | CI 怎么看 |
-| --- | --- | --- |
-| 0 | 通过 | 继续 |
-| 1 | 断言失败（真回归） | 失败，查代码 |
-| 2 | 回滚不完整 | 失败，且**需要人工检查数据** |
-| 3 | 环境不可用 | CI 里也失败 —— service 是我们自己声明的，取不到只可能是流水线坏了 |
+| 码  | 含义               | CI 怎么看                                                         |
+| --- | ------------------ | ----------------------------------------------------------------- |
+| 0   | 通过               | 继续                                                              |
+| 1   | 断言失败（真回归） | 失败，查代码                                                      |
+| 2   | 回滚不完整         | 失败，且**需要人工检查数据**                                      |
+| 3   | 环境不可用         | CI 里也失败 —— service 是我们自己声明的，取不到只可能是流水线坏了 |
 
 ### 4. `docs.yml` —— 文档站发布（GitHub Pages）
 
@@ -217,7 +217,7 @@ deploy:
   needs: [smoke]
   if: github.ref == 'refs/heads/main'
   runs-on: ubuntu-latest
-  environment: production        # GitHub Environments 可加人工审批 = 回到 Delivery
+  environment: production # GitHub Environments 可加人工审批 = 回到 Delivery
   steps:
     - uses: appleboy/ssh-action@v1
       with:

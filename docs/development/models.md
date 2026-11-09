@@ -6,7 +6,7 @@
 /**
  * 文章模型
  */
-export default (sequelize, DataTypes) => {
+const defineArticle = (sequelize, DataTypes) => {
   const Article = sequelize.define(
     'Article',
     {
@@ -62,6 +62,8 @@ export default (sequelize, DataTypes) => {
 
   return Article;
 };
+
+export default defineArticle; // 🔴 export 收拢到文件末尾（eslint 强制）
 ```
 
 ## 文件规范
@@ -99,13 +101,17 @@ const user = await getModel('User').findByPk(article.user_id);
 
 ## DDD 分域
 
-| 域       | 目录              | 模型                                   | 核心问题           |
-| -------- | ----------------- | -------------------------------------- | ------------------ |
-| 身份核心 | `models/user/`    | User, UserIdentity                     | "你是谁？"         |
-| 访问控制 | `models/iam/`     | Role, UserRole, InlinePolicy           | "你能干什么？"     |
-| 委派授权 | `models/oauth21/` | OauthClient, OauthToken, OauthApproval | "第三方能干什么？" |
-| 会话管理 | `models/session/` | UserSession, SessionToken, SessionLog  | "你在哪登录？"     |
-| 系统设施 | `models/notice/`  | EmailCode, NoticeConfig                | 系统配置           |
+| 域       | 目录                                    | 模型                                   | 核心问题           |
+| -------- | --------------------------------------- | -------------------------------------- | ------------------ |
+| 身份核心 | `models/user/`                          | User, UserIdentity                     | "你是谁？"         |
+| 访问控制 | `models/iam/`                           | Role, UserRole, InlinePolicy           | "你能干什么？"     |
+| 委派授权 | `models/oauth21/`                       | OauthClient, OauthToken, OauthApproval | "第三方能干什么？" |
+| 会话管理 | `models/session/`                       | UserSession, SessionToken, SessionLog  | "你在哪登录？"     |
+| 系统设施 | `models/notice/`                        | EmailCode, NoticeConfig                | 系统配置           |
+| 密钥仓库 | `models/key/`                           | KeyPair 等                             | 私钥信封加密       |
+| 三级守卫 | `models/guard/`                         | GuardConfig                            | 运行时守卫配置     |
+| 业务应用 | `models/posecraft/`、`models/retroweb/` | 各应用自有模型                         | 内置业务           |
+| 控制台   | `models/console/`                       | Sys* 系列（配置 / 字典 / 菜单 / 日志） | 管理端基础设施     |
 
 ## Sequelize 查询
 

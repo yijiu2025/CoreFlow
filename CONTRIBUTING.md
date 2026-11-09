@@ -7,26 +7,25 @@
 
 ## 项目一览
 
-CoreFlow 是一个企业级全栈安全平台：Fastify 后端（`src/`）加若干 Web 前端应用。
+CoreFlow 是一个企业级**后端**安全平台：Fastify v5 + Sequelize v6。
+自 2026-10-31 起本仓**只含后端**，前端应用已全部迁出、各自独立维护（见下表）。
 
-| 部分               | 位置                | 说明                                          |
-| ------------------ | ------------------- | --------------------------------------------- |
-| 后端服务           | `src/`              | Fastify v5 + Sequelize v6 + MySQL 8 + Redis 5 |
-| OAuth 2.1 授权中心 | `src/oauth21/`      | 授权码 + PKCE、JWT、OIDC                      |
-| 防火墙引擎         | `src/app/firewall/` | 五层拦截管道                                  |
-| 防火墙前端         | `firewall/`         | Vue 3                                         |
-| 管理后台前端       | `admin/`            | Vue 3                                         |
-| 数据库迁移         | `migrations/`       | Umzug                                         |
-| 文档站             | `docs/`             | VitePress                                     |
+| 部分               | 位置                                                                         | 说明                                          |
+| ------------------ | ---------------------------------------------------------------------------- | --------------------------------------------- |
+| 后端服务           | `src/`                                                                       | Fastify v5 + Sequelize v6 + MySQL 8 + Redis 5 |
+| OAuth 2.1 授权中心 | `src/api/oauth21/` + `src/app/oauth21/`                                      | 授权码 + PKCE、JWT、OIDC                      |
+| 防火墙             | `src/framework/ingress/firewall/`（核心）+ `src/app/firewall/`（面板与 DAO） | 五层拦截管道                                  |
+| 数据库迁移         | `migrations/`                                                                | Umzug                                         |
+| 文档站             | `docs/`                                                                      | VitePress                                     |
 
 **相关独立仓库**（不在本仓库提交，改动请去对应仓库）：
 
-| 仓库                                                          | 内容                                           |
-| ------------------------------------------------------------- | ---------------------------------------------- |
-| [yijiu2025/oauth-web](https://github.com/yijiu2025/oauth-web) | SSO 登录前端（原 `oauth21/`，2026-10-14 拆分） |
-| [yijiu2025/log](https://github.com/yijiu2025/log)             | `packages/log/` 日志包（嵌套独立仓库）         |
-| [yijiu2025/theme](https://github.com/yijiu2025/theme)         | `packages/theme-core/`（git submodule）        |
-| [yijiu2025/phonecopy](https://github.com/yijiu2025/phonecopy) | `phonecopy/`（git submodule）                  |
+| 仓库                                                                       | 内容                                                                           |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [yijiu2025/oauth-web](https://github.com/yijiu2025/oauth-web)              | SSO 登录前端（原 `oauth21/`，2026-10-14 拆分）                                 |
+| [yijiu2025/log](https://github.com/yijiu2025/log)                          | `packages/log/` 日志包（嵌套独立仓库）                                         |
+| [yijiu2025/theme](https://github.com/yijiu2025/theme)                      | `packages/theme-core/`（**git submodule**，克隆必须带 `--recurse-submodules`） |
+| 其余前端（`posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy`） | 各自独立维护，均不在本仓跟踪                                                   |
 
 ## 本地开发
 
@@ -76,12 +75,16 @@ node --experimental-vm-modules npx jest --testPathPattern <pattern>
 
 完整标准（**必读**，与仓库的静态关卡一一对应）：
 
-- `docs/standards/coding-standard.md` — 编码标准
+- `AGENTS.md` — 项目总纲：命令 / 发版 / 行尾 / 技术栈 / 启动流程 / 认证 / 守卫 / 测试 / 代码审查
+- `src/utils/README.md` — 工具函数用法（改后端代码前先看有没有现成的，别重复实现）
 - `docs/development/development-standards.md` — 开发标准
 - `docs/development/api-routes.md` — API 路由规范
 - `docs/development/migrations.md` — 迁移规范
 - `docs/development/code-review.md` — 代码审查标准
-- `docs/standards/frontend-standards.md` — 前端标准（改前端时）
+- `docs/standards/best-practices/` — 安全 / 性能 / 测试三篇最佳实践
+
+> 前端标准已随前端工程迁出本仓（归档在 `docs/archive/legacy-frontend/`），
+> 改前端请去对应仓库。
 
 最容易踩的几条（违反会被 CI 或审查打回）：
 

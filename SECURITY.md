@@ -35,7 +35,7 @@ CoreFlow 重视安全问题。如果你发现了安全漏洞或安全隐患，�
 
 **属于范围**：
 
-- 认证 / 会话 / OAuth 2.1 实现缺陷（`src/framework/security/auth/`、`src/oauth21/`）
+- 认证 / 会话 / OAuth 2.1 实现缺陷（`src/framework/security/auth/`、`src/api/oauth21/`、`src/app/oauth21/`）
 - 权限绕过（PBAC / `guard`）
 - 密码学误用、密钥管理缺陷
 - 注入类漏洞（SQL / 命令 / 模板等）
@@ -60,9 +60,12 @@ CoreFlow 重视安全问题。如果你发现了安全漏洞或安全隐患，�
 
 部署与加固自查可参考：
 
-- `docs/standards/frontend-security.md` — 前端安全标准
-- `docs/standards/auth-integration.md` — 认证接入标准
-- README「防火墙系统」「认证架构」章节 — H5 签名验证、五层拦截管道等设计
+- `docs/standards/best-practices/security.md` — 后端安全最佳实践（密码哈希 / 防重放 / CSRF / 限频 / 失败锁定 / Cookie / 安全响应头 / 代理信任）
+- `docs/standards/auth-integration.md` — 认证接入标准（前后端线协议）
+- `docs/standards/best-practices/performance.md` — 性能相关（含权限缓存键的正确形态、连接池、优雅关闭）
+- README「防火墙：五层管道」「权限：三级守卫」章节 — 五层拦截与三级守卫的设计
+
+> 前端安全标准已随前端工程迁出本仓（归档在 `docs/archive/legacy-frontend/frontend-security.md`）。
 
 ## 禁止事项
 

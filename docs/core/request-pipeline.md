@@ -11,12 +11,12 @@
 Fastify 核心层 ── TLS 终止 / HTTP 解析 / genReqId / bodyLimit
   │
   ▼
-插件层 ── helmet / cors / cookie / rateLimit
+插件层 ── helmet / cors / multipart / static / cookie（rateLimit 由 firewall 内部注册）
   │
   ▼
 onRequest[0] ── @fastify/cookie → 解析 cookies
-onRequest[1] ── auth/index.js   → Session 验证 + ALS 初始化
-onRequest[2] ── 01-monitor.js   → 记录 request.startTime
+onRequest[1] ── 01-monitor.js   → 记录 request.startTime（loader 01 先注册，故先执行）
+onRequest[2] ── auth/index.js   → Session 验证 + ALS 初始化
 onRequest[3] ── firewall        → 五层安全管道
   │
   ▼
@@ -51,7 +51,7 @@ onResponse ── 登录结果观测 + 扫描陷阱
 ```js
 request.id = crypto.randomUUID()    // genReqId 生成
 request.ip = "192.168.1.100"        // trustProxy 读取
-request.body = { ... }              // bodyLimit 校验 (1MB JSON)
+request.body = { ... }              // bodyLimit 校验 (5MB JSON)
 ```
 
 ### 阶段 2：插件处理
@@ -59,7 +59,7 @@ request.body = { ... }              // bodyLimit 校验 (1MB JSON)
 - **helmet** → 设置安全响应头 (CSP, X-Frame-Options)
 - **cors** → 跨域检查
 - **cookie** → 解析 Cookie 头 → `request.cookies`
-- **rateLimit** → 全局限流
+- **rateLimit** → **不在这里**：由 `05-firewall` 内部的 `first-ratelimit.js` 注册（全局桶默认关闭，端点级 `config.rateLimit` 默认生效）
 
 ### 阶段 3：Session 验证 (auth)
 
@@ -78,7 +78,7 @@ buildRequestContext(request)
   → runDetectionPipeline
       ├─ checkBotChallenge (UA 检测)
       ├─ checkGeoReputation (地理围栏)
-      └─ checkRateLimit (端点限频)
+      └─（端点限频不在本管道：2026-11-02 起由路由 `config.rateLimit` + 限流插件承担）
 ```
 
 ### 阶段 5：三级守卫
@@ -104,14 +104,14 @@ handler: async (request, reply) => {
 
 ## 变量预估值
 
-| 变量                      | 典型值                             | 说明          |
-| ------------------------- | ---------------------------------- | ------------- |
-| `request.id`              | UUID v4                            | 请求唯一标识  |
-| `request.ip`              | `"192.168.1.100"`                  | 客户端 IP     |
-| `request.cookies.sid`     | `"a1b2c3.d4e5f6.g7h8i9"`           | 三段式 cookie |
-| `sessionData.roles`       | `["user_normal"]`                  | 角色数组      |
-| `sessionData.permissions` | `{ allows: [...], denies: [...] }` | PBAC 权限     |
-| `fingerprint`             | `"sha256:a1b2c3d4..."`             | 设备指纹哈希  |
+| 变量                      | 典型值                             | 说明                                        |
+| ------------------------- | ---------------------------------- | ------------------------------------------- |
+| `request.id`              | UUID v4                            | 请求唯一标识                                |
+| `request.ip`              | `"192.168.1.100"`                  | 客户端 IP                                   |
+| `request.cookies.sid`     | `"<base64url 载荷>.<hmac 签名>"`   | 两段式：`payload.signature`（`signCookie`） |
+| `sessionData.roles`       | `["user_normal"]`                  | 角色数组                                    |
+| `sessionData.permissions` | `{ allows: [...], denies: [...] }` | PBAC 权限                                   |
+| `fingerprint`             | `"sha256:a1b2c3d4..."`             | 设备指纹哈希                                |
 
 ## 异常路径
 
@@ -137,8 +137,9 @@ onRequest[1] → auth
 
 ```
 onRequest[3] → firewall
-  → checkGlobalBlock → redis.hget("fw:blocked:ips", ip) → 命中
-  → reply.code(403).send({ blocked: true })
+  → checkGlobalBlock → readAccessState() 一次 Lua 读 fw:block:<ip> / fw:block:fp:<fp> / fw:block:dev:<dev> → 命中
+  → 403 { error: 'Security Policy Blocked', message: '...' }
+  （fw:blocked:ips 只是面板列举用的索引 Hash，不参与判定）
 ```
 
 ### 角色权限不足

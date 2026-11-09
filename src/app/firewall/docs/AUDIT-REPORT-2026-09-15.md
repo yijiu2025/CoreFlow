@@ -1,5 +1,7 @@
 # 审查报告：app/firewall（+ api/firewall）
 
+> 📌 **历史快照**：本文写于当时，防火墙已在 2026-09 拆成 `framework/ingress/firewall/`（防护核心）+ `app/firewall/`（面板 / DAO / 统计），文中旧路径可能与当前结构不一致。要确认现状请看 `src/app/firewall/README.md`。
+
 - 审查日期：2026-09-15
 - 审查范围：`src/app/firewall/**`（33 文件 / 约 4874 行）+ `src/api/firewall/**`（6 文件 / 约 804 行）
 - 审查方式：全量源码阅读 + `app.inject()` 实测 + Redis `INFO commandstats` 量化 + 依赖图脚本 + `createGuard` 直接调用

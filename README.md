@@ -111,13 +111,14 @@ curl -i http://localhost:3000/v1/health/ready   # readiness (503 when a critical
 > MySQL ≥ 8.0; Redis optional (mandatory for multi-instance).
 >
 > Why 24:
+>
 > - `@fastify/static@10` pulls the ESM-only `content-disposition@3`, which needs
 >   `require(esm)` (Node ≥ 20.19 / 22.12) — this is what ruled out Node 18;
 > - `geoip-lite@2` declares `engines: >= 24`, and it is a runtime dependency of the
 >   firewall. Running 22 works today only because we never hit the version-gated path —
 >   declaring 20/22 while shipping 24 would just move that surprise to someone's deploy.
-> Full walkthrough and troubleshooting:
-> [Quick start](https://yijiu2025.github.io/CoreFlow/guide/quick-start).
+>   Full walkthrough and troubleshooting:
+>   [Quick start](https://yijiu2025.github.io/CoreFlow/guide/quick-start).
 
 ## Project layout
 
@@ -168,14 +169,15 @@ harder to diagnose than one that exits.
 
 ## Permissions: three guard levels
 
-| Level | Declared in | Options |
-| --- | --- | --- |
-| **System** | `src/api/<domain>/system.json` | `enabled` / `allowIps` / `requireLogin` |
-| **Group** | `registerGroupMetadata()` | `enabled` / `allowIps` / `allowRoles` |
-| **API** | `registerSecureRoute()` | `requireLogin` / `requirePermission` / `requireSignature` / `config.rateLimit` |
+| Level      | Declared in                    | Options                                                                        |
+| ---------- | ------------------------------ | ------------------------------------------------------------------------------ |
+| **System** | `src/api/<domain>/system.json` | `enabled` / `allowIps` / `requireLogin`                                        |
+| **Group**  | `registerGroupMetadata()`      | `enabled` / `allowIps` / `allowRoles`                                          |
+| **API**    | `registerSecureRoute()`        | `requireLogin` / `requirePermission` / `requireSignature` / `config.rateLimit` |
 
 ```js
-// Single permission (deny beats allow; wildcards are suffix-only `:*`)
+// Single permission (deny beats allow; wildcards work at the tail *and* mid-segment:
+// `user:*` / `user:*:read`)
 registerSecureRoute(fastify, {
   name: 'readConfig',
   method: 'GET',
@@ -185,10 +187,14 @@ registerSecureRoute(fastify, {
 });
 
 // Any of (OR)
-requirePermission: { any: ['fw:block:write', 'fw:admin:*'] }
+requirePermission: {
+  any: ['fw:block:write', 'fw:admin:*'];
+}
 
 // All of (AND)
-requirePermission: { all: ['fw:config:read', 'fw:config:write'] }
+requirePermission: {
+  all: ['fw:config:read', 'fw:config:write'];
+}
 ```
 
 Evaluation order: `enabled → IP/roles → login → permissions (a deny short-circuits)`.
@@ -211,17 +217,17 @@ Redis Lua round-trip + in-memory fallback), `bot-detector`, `brute-force`, `scan
 
 ## API domains
 
-| Domain | Prefix | Capabilities |
-| --- | --- | --- |
-| `oauth21` | `/oauth2.1` | Authorization code + PKCE / login / token / revocation / device code / OIDC |
-| `user` | `/user/v1` | Profile, permissions, sessions, devices, registration, password reset |
-| `auth` | `/auth/v1` | Session binding / account switching / H5 signed tokens / challenge verification |
-| `admin` | `/admin/v1` | IAM roles, policies, client management |
-| `notice` | `/notice/v1` | Notification channels and templates |
-| `verify` | `/verify/v1` | Image CAPTCHA, email verification codes |
-| `firewall` | `/api/firewall/v1` | Monitoring, blocks, allowlists, config, WebSocket |
-| `system` | `/v1` | Health probes, system info |
-| `posecraft` / `retroweb` | `/posecraft` · `/retroweb` | Bundled business apps (removable) |
+| Domain                   | Prefix                     | Capabilities                                                                    |
+| ------------------------ | -------------------------- | ------------------------------------------------------------------------------- |
+| `oauth21`                | `/oauth2.1`                | Authorization code + PKCE / login / token / revocation / device code / OIDC     |
+| `user`                   | `/user/v1`                 | Profile, permissions, sessions, devices, registration, password reset           |
+| `auth`                   | `/auth/v1`                 | Session binding / account switching / H5 signed tokens / challenge verification |
+| `admin`                  | `/admin/v1`                | IAM roles, policies, client management                                          |
+| `notice`                 | `/notice/v1`               | Notification channels and templates                                             |
+| `verify`                 | `/verify/v1`               | Image CAPTCHA, email verification codes                                         |
+| `firewall`               | `/api/firewall/v1`         | Monitoring, blocks, allowlists, config, WebSocket                               |
+| `system`                 | `/v1`                      | Health probes, system info                                                      |
+| `posecraft` / `retroweb` | `/posecraft` · `/retroweb` | Bundled business apps (removable)                                               |
 
 Endpoint details: [OAuth 2.1 API report](https://yijiu2025.github.io/CoreFlow/oauth21-api-report)
 and [API route conventions](https://yijiu2025.github.io/CoreFlow/development/api-routes).
@@ -262,7 +268,8 @@ npm run migrate        # run database migrations
 npm run setup:admin    # create / grant a super admin
 npm run revoke:admin   # revoke a super admin (the last one is refused)
 npm run cli            # interactive admin terminal
-npm test               # Jest (105 suites / 1250 tests)
+npm test               # Jest (full suite; counts grow — trust the output, not this line)
+npm run test:coverage  # same + coverage ratchet (thresholds live in jest.config.js)
 npm run lint           # ESLint (auto-fix)
 npm run verify:all     # cross-process gates (locks / queues / guard sync / metrics / WS fan-out)
 npm run docs:dev       # serve the documentation site locally
@@ -270,12 +277,12 @@ npm run docs:dev       # serve the documentation site locally
 
 ## Documentation
 
-| Entry | What it covers |
-| --- | --- |
-| [docs/README.md](./docs/README.md) | Documentation map — read this before searching |
-| [Online docs](https://yijiu2025.github.io/CoreFlow/) | Full VitePress site (Chinese) |
-| [Architecture](https://yijiu2025.github.io/CoreFlow/core/architecture) | Layering and dependency direction |
-| [Request pipeline](https://yijiu2025.github.io/CoreFlow/core/request-pipeline) | The full path of one request |
+| Entry                                                                               | What it covers                                               |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [docs/README.md](./docs/README.md)                                                  | Documentation map — read this before searching               |
+| [Online docs](https://yijiu2025.github.io/CoreFlow/)                                | Full VitePress site (Chinese)                                |
+| [Architecture](https://yijiu2025.github.io/CoreFlow/core/architecture)              | Layering and dependency direction                            |
+| [Request pipeline](https://yijiu2025.github.io/CoreFlow/core/request-pipeline)      | The full path of one request                                 |
 | [Auth integration](https://yijiu2025.github.io/CoreFlow/standards/auth-integration) | Frontend/backend wire protocol (cookies / signatures / CSRF) |
 
 ## Contributing

@@ -8,7 +8,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { getModel } from '../../../framework/persistence/db/index.js';
 
-export default async function (fastify) {
+async function registerUserRoutes(fastify) {
   registerSecureRoute(fastify, {
     name: 'getUsers',
     alias: '获取用户列表',
@@ -27,6 +27,8 @@ export default async function (fastify) {
     }
   });
 }
+
+export default registerUserRoutes; // 🔴 export 一律收拢到文件末尾（eslint 强制）
 ```
 
 ## 配置项
@@ -65,7 +67,9 @@ permission: {
 
 ```js
 reply.result.success(message, data); // 200 成功
-reply.result.fail(message, data, code); // 400 业务失败
+reply.result.fail(message, data, httpCode, bizCode);
+// 签名：fail(message='操作失败', data=null, httpCode=400, bizCode=null)
+// 第三参是 **HTTP 状态码**，业务码是第四参（响应里的 code = bizCode ?? httpCode）
 reply.result.unauth(message); // 401 未登录
 reply.result.forbidden(message); // 403 权限不足
 ```
@@ -77,7 +81,7 @@ reply.result.forbidden(message); // 403 权限不足
   "code": 200,
   "message": "操作成功",
   "data": { ... },
-  "timestamp": 1717000000,
+  "timestamp": 1762740000000,
   "requestId": "uuid-xxx"
 }
 ```
@@ -115,7 +119,7 @@ registerGroupMetadata({
 });
 ```
 
-Group 级配置对组内所有路由生效，API 级配置可覆盖。
+Group 级配置对组内所有路由**强制生效**，API 级只能在此基础上叠加更严的条件（三级各自独立执行、AND 叠加，`requireLogin`/`allowRoles`/`allowIps` 无法被 API 级关闭）。
 
 ## WebSocket 路由
 
