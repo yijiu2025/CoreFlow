@@ -252,6 +252,34 @@ function applyRuntimeFields(target, source, path, baselineNode) {
 let _previousSnapshot = null;
 
 /**
+ * 写入串行化队列
+ *
+ * `_previousSnapshot` 是**单槽**：两个保存并发时后一个会覆盖前一个的回滚快照，
+ * 前一个失败时就会回滚到"别人的"状态 —— 表现为"改 A 失败，B 的改动被冲掉"。
+ *
+ * 当前三条调用路径（防抖 triggerSave / 关停 flushGuardConfig / 启动补录）事实上
+ * 是串行的，但 `syncGuardConfigFromDb` 与面板写入理论上可并发，所以用 promise 链
+ * 把写入排成队列。代价只有一次 await，换来的是快照永远对得上。
+ */
+let _saveQueue = Promise.resolve();
+
+/**
+ * 把一次写入排进队列
+ *
+ * @param {() => Promise<any>} task 写入任务
+ * @returns {Promise<any>} 任务本身的返回值/异常（队列不会被失败污染）
+ */
+function withSaveLock(task) {
+  const run = _saveQueue.then(task, task);
+  // 队列自身必须吞掉失败，否则一次写入失败会让后续所有写入直接被拒
+  _saveQueue = run.then(
+    () => {},
+    () => {}
+  );
+  return run;
+}
+
+/**
  * 把内存状态还原到上一次写入前的快照
  *
  * 写入失败必须回滚：不回滚的话内存是新值、DB 是旧值，本实例会按"运维已改"的语义
@@ -384,12 +412,16 @@ function getGuardConfig(systemKey, groupKey = null, apiKey = null) {
   const system = configs[systemKey];
   if (!system) return null;
 
-  if (!groupKey) return toReadonlyNode(system);
+  // 判据必须是 `== null` 而不是 `!groupKey`：空字符串是**合法的组名**
+  // （`registerApiMetadata` 在 group 为空时会建出 `groups['']`）。
+  // 用 `!groupKey` 会让它静默退化成"读系统节点"——于是该 API 自己声明的
+  // requireLogin / requirePermission 全部失效，而日志上看不出任何异常。
+  if (groupKey == null) return toReadonlyNode(system);
 
   const group = system.groups ? system.groups[groupKey] : null;
   if (!group) return null;
 
-  if (!apiKey) return toReadonlyNode(group);
+  if (apiKey == null) return toReadonlyNode(group);
 
   const api = group.apis ? group.apis[apiKey] : null;
   return api ? toReadonlyNode(api) : null;
@@ -475,6 +507,18 @@ function setGuardConfig(systemKey, patch, groupKey = null, apiKey = null, operat
  * @throws {Error} 写入超时或配置校验失败时抛出
  */
 async function saveWithTimeout(systemKeys = null) {
+  // 排进写入队列：保证 `_previousSnapshot` 单槽不被并发覆盖（见 withSaveLock）
+  return withSaveLock(() => performSave(systemKeys));
+}
+
+/**
+ * 真正的写入实现 —— 只在 `withSaveLock` 队列里执行
+ *
+ * @param {string[]|null} [systemKeys] - 要写入的系统列表，null 表示全部写入
+ * @returns {Promise<{maxVersion: number, updated: string[], versions: object}>}
+ * @throws {Error} 写入超时或配置校验失败时抛出
+ */
+async function performSave(systemKeys = null) {
   // 只写入指定系统，或全部写入
   const toSave = systemKeys ? Object.fromEntries(systemKeys.map(k => [k, configs[k]]).filter(([, v]) => v)) : configs;
 

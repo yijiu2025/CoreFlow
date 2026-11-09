@@ -119,42 +119,84 @@ function checkPermission(required, user) {
 }
 
 /**
- * 基础守卫规则检查（纯函数，不依赖 reply 对象）
- * 用于 WebSocket 等非 HTTP 场景，与 applyGuardLogic 共享同一套规则
+ * 节点级「开关 + IP 白名单」校验（与登录态无关）
  *
- * @param {object} opts - 守卫配置（enabled, allowIps, allowRoles, requireLogin）
+ * 为什么拆成两个谓词而不是一个"一次判完"的函数：`applyGuardLogic` 必须在登录校验
+ * **之前**插入两件事 —— 账号级封禁（与层级无关）和 freshPermission（它会替换 user）。
+ * 拆成 access / identity 两段，规则只有一份实现，HTTP 的既有顺序也不变。
+ *
+ * @param {object} opts - 节点配置（enabled / allowIps）
+ * @param {string} clientIp - 客户端 IP
+ * @returns {{ passed: boolean, status?: number, message?: string }}
+ */
+function checkNodeAccess(opts, clientIp) {
+  const { enabled = true, allowIps = [] } = opts || {};
+
+  if (!enabled) {
+    return { passed: false, status: 4003, message: '该安全节点当前已禁用' };
+  }
+
+  if (allowIps.length > 0 && !allowIps.some(rule => isIpMatch(clientIp, rule))) {
+    return { passed: false, status: 4003, message: `IP [${clientIp}] 无权访问此受保护区域` };
+  }
+
+  return { passed: true };
+}
+
+/**
+ * 节点级「登录 + 角色 + 权限」校验（依赖 user）
+ *
+ * status 语义：4001 = 未登录（HTTP 译作 401），4003 = 已登录但无权（403）。
+ * `requirePermission` 也隐含要求登录 —— 与旧实现等价（旧实现缺 user 时同样返回
+ * "身份验证失败，请先登录"），这里把这条隐含前提写出来，避免以后有人只改一半。
+ *
+ * @param {object} opts - 节点配置（requireLogin / allowRoles / requirePermission）
+ * @param {object|null} user - 用户对象
+ * @returns {{ passed: boolean, status?: number, message?: string }}
+ */
+function checkNodeIdentity(opts, user) {
+  const { allowRoles = [], requireLogin = false, requirePermission = null } = opts || {};
+
+  if (requireLogin || allowRoles.length > 0 || requirePermission) {
+    if (!user?.sub) {
+      return { passed: false, status: 4001, message: '身份验证失败，请先登录' };
+    }
+    if (allowRoles.length > 0) {
+      const userRoles = user.roles || [];
+      if (!allowRoles.some(r => userRoles.includes(r))) {
+        return { passed: false, status: 4003, message: `权限不足：需要 [${allowRoles.join('/')}] 角色` };
+      }
+    }
+  }
+
+  if (requirePermission && !checkPermission(requirePermission, user)) {
+    const label =
+      typeof requirePermission === 'string'
+        ? requirePermission
+        : (requirePermission.any || requirePermission.all || []).join(', ');
+    return { passed: false, status: 4003, message: `权限不足：需要 [${label}] 权限` };
+  }
+
+  return { passed: true };
+}
+
+/**
+ * 基础守卫规则检查（纯函数，不依赖 reply 对象）
+ *
+ * **唯一实现**：`applyGuardLogic`（HTTP）与 `registerSecureWebSocket`（WS）都走这里，
+ * 区别只在于把结果翻译成 `reply` 还是 `client.close()`。
+ * 历史教训：这三处曾各写一份，登录判据一度是 `!user` / `!user?.sub` 混用，
+ * 且 WS 那份漏了 `requirePermission` —— 改一处忘两处不会有任何报错。
+ *
+ * @param {object} opts - 守卫配置（enabled / allowIps / allowRoles / requireLogin / requirePermission）
  * @param {object|null} user - 用户对象
  * @param {string} clientIp - 客户端 IP
  * @returns {{ passed: boolean, status?: number, message?: string }}
  */
 function checkGuardBase(opts, user, clientIp) {
-  const { enabled = true, allowIps = [], allowRoles = [], requireLogin = false } = opts;
-
-  if (!enabled) {
-    return { passed: false, status: 4003, message: '该安全节点已禁用' };
-  }
-
-  if (allowIps.length > 0) {
-    const isAllowed = allowIps.some(rule => isIpMatch(clientIp, rule));
-    if (!isAllowed) {
-      return { passed: false, status: 4003, message: `IP [${clientIp}] 无权访问` };
-    }
-  }
-
-  // 登录与角色校验：设置了 requireLogin 或 allowRoles 时，必须登录
-  if (requireLogin || allowRoles.length > 0) {
-    if (!user?.sub) {
-      return { passed: false, status: 4001, message: '未登录' };
-    }
-    if (allowRoles.length > 0) {
-      const userRoles = user.roles || [];
-      if (!allowRoles.some(r => userRoles.includes(r))) {
-        return { passed: false, status: 4003, message: '权限不足' };
-      }
-    }
-  }
-
-  return { passed: true };
+  const access = checkNodeAccess(opts, clientIp);
+  if (!access.passed) return access;
+  return checkNodeIdentity(opts, user);
 }
 
 // =============================================================================
@@ -162,42 +204,23 @@ function checkGuardBase(opts, user, clientIp) {
 // =============================================================================
 
 /**
- * 核心校验逻辑：执行 IP、登录态及角色检查
+ * 核心校验逻辑：执行 IP、登录态、角色与权限检查
+ *
+ * 规则本体在 `checkNodeAccess` / `checkNodeIdentity`（与 WebSocket 共用同一份实现），
+ * 这里只负责**顺序**与**把结果翻译成 reply**：
+ *   ① 开关 + IP → ② freshPermission 回源（会替换 user，必须早于身份校验）
+ *   → ③ 登录 + 角色 + 权限
+ *
+ * 账号级封禁（firewall 的 manualBlacklistUsers）不在这里：它不属于任何一级，
+ * 由 `createGuard` 每请求判一次（原先写在这里，而本函数被三级各调一次 = 重复判 3 次）。
  */
 async function applyGuardLogic(opts = {}, request, reply) {
-  const {
-    enabled = true,
-    allowIps = [],
-    allowRoles = [],
-    requireLogin = false,
-    requirePermission = null,
-    freshPermission = false
-  } = opts;
+  const { freshPermission = false } = opts;
 
-  // 1. 开关检查
-  if (!enabled) {
-    return reply.result.forbidden('该安全节点当前已禁用');
-  }
-
-  // 2. IP 白名单校验
-  if (allowIps.length > 0) {
-    const clientIp = request.ip;
-    const isAllowed = allowIps.some(rule => isIpMatch(clientIp, rule));
-    if (!isAllowed) {
-      return reply.result.forbidden(`IP [${clientIp}] 无权访问此受保护区域`);
-    }
-  }
-
-  // 2.6 防火墙手动用户黑名单（manualBlacklistUsers 的执行点）
-  //
-  // 历史缺口：面板拉黑用户只写配置、从未被执行（ip 维度在 onRequest 认证前生效，
-  // 用户身份此时不存在）。认证完成后在此拦截；firewall 引擎已上移 framework，
-  // 判定函数读的是内存配置单例（无 I/O）。firewall 应用卸载时配置为空数组，
-  // 本检查恒 false，不构成硬依赖。
-  const fwUser = request.state?.user;
-  if (fwUser && isUserManuallyBlocked(fwUser)) {
-    log.warn(`🚫 [Guard] 命中防火墙手动用户黑名单: uid=${fwUser.uid}`);
-    return reply.result.forbidden('该账号已被安全策略限制访问');
+  // 1. 开关 + IP 白名单
+  const access = checkNodeAccess(opts, request.ip);
+  if (!access.passed) {
+    return reply.result.forbidden(access.message);
   }
 
   // 2.5 敏感操作回源校验（第 4 层：freshPermission）
@@ -238,49 +261,32 @@ async function applyGuardLogic(opts = {}, request, reply) {
     request.state.user = { ...user, roles: fresh.roles, permissions: fresh.permissions };
   }
 
-  // 3. 身份与角色校验
-  if (requireLogin || allowRoles.length > 0) {
-    const user = request.state?.user;
-    if (!user) {
-      const authError = request.state?.authError;
-      if (authError) {
-        if (authError.name === 'TokenExpiredError') {
-          // 不要再写 `reply.sent = true`：Fastify 5 的 reply.sent 是**只读 getter**，
-          // ESM 严格模式下赋值会抛 TypeError（被上层当成 500 记录），而 send() 本身
-          // 已经把 sent 置为 true —— createGuard 里的 reply.sent 判断照常成立。
-          reply.code(401).send({ error: 'invalid_token', error_description: 'Token expired' });
-          return;
-        }
-        reply.code(401).send({
-          error: 'invalid_token',
-          error_description: authError.name === 'NotBeforeError' ? 'Token not yet valid' : 'Invalid token'
-        });
+  // 3. 登录 + 角色 + 权限（规则本体在 checkNodeIdentity，与 WS 共用同一份）
+  const identity = checkNodeIdentity(opts, request.state?.user);
+  if (identity.passed) return;
+
+  // 4001 = 未登录。JWT 失效要给 OAuth 语义的 invalid_token，普通会话走 unauth。
+  if (identity.status === 4001) {
+    const authError = request.state?.authError;
+    if (authError) {
+      if (authError.name === 'TokenExpiredError') {
+        // 不要再写 `reply.sent = true`：Fastify 5 的 reply.sent 是**只读 getter**，
+        // ESM 严格模式下赋值会抛 TypeError（被上层当成 500 记录），而 send() 本身
+        // 已经把 sent 置为 true —— createGuard 里的 reply.sent 判断照常成立。
+        reply.code(401).send({ error: 'invalid_token', error_description: 'Token expired' });
         return;
       }
-      return reply.result.unauth('身份验证失败，请先登录');
+      reply.code(401).send({
+        error: 'invalid_token',
+        error_description: authError.name === 'NotBeforeError' ? 'Token not yet valid' : 'Invalid token'
+      });
+      return;
     }
-    if (allowRoles.length > 0) {
-      const userRoles = user.roles || [];
-      if (!allowRoles.some(r => userRoles.includes(r))) {
-        return reply.result.forbidden(`权限不足：需要 [${allowRoles.join('/')}] 角色`);
-      }
-    }
+    return reply.result.unauth(identity.message);
   }
 
-  // 4. 权限校验
-  if (requirePermission) {
-    const user = request.state?.user;
-    if (!user) {
-      return reply.result.unauth('身份验证失败，请先登录');
-    }
-    if (!checkPermission(requirePermission, user)) {
-      const label =
-        typeof requirePermission === 'string'
-          ? requirePermission
-          : (requirePermission.any || requirePermission.all || []).join(', ');
-      return reply.result.forbidden(`权限不足：需要 [${label}] 权限`);
-    }
-  }
+  // 4003 = 已登录但角色/权限不足
+  return reply.result.forbidden(identity.message);
 }
 
 /**
@@ -299,6 +305,19 @@ function createGuard(systemKey, groupKey, apiKey = null) {
     // 会话归属校验已移除：靠子域名 cookie 隔离 + PBAC 权限校验保障安全。
     // 登录应用（session.appId）与路由系统（systemKey）分属不同命名空间，
     // 共享系统（User/Auth/OAuth2.1/Verify/Notice）任何登录会话都应可访问。
+
+    // 0 级：账号级封禁（firewall 的 manualBlacklistUsers 执行点）
+    //
+    // 不属于任何一级 —— 原先写在 applyGuardLogic 里，而它被三级各调一次，
+    // 同一个请求会重复判定 3 次（判定本身无 I/O，但语义上它就该只判一次）。
+    // 历史缺口：面板拉黑用户曾只写配置、从未被执行（ip 维度在认证前生效，
+    // 用户身份此时还不存在）；认证完成后在这里拦。firewall 应用卸载时
+    // 配置为空数组，本检查恒 false，不构成硬依赖。
+    const fwUser = request.state.user;
+    if (fwUser && isUserManuallyBlocked(fwUser)) {
+      log.warn(`🚫 [Guard] 命中防火墙手动用户黑名单: uid=${fwUser.uid}`);
+      return reply.result.forbidden('该账号已被安全策略限制访问');
+    }
 
     // 1级：系统级校验
     const sys = getGuardConfig(systemKey);
@@ -608,10 +627,31 @@ function registerSecureWebSocket(fastify, options) {
     requirePermission
   });
 
+  // ⚡ 与 HTTP 同款重复检测：Fastify 对重复的 `get(url)` 会自己抛，但那时已经
+  // 写进配置树了（registerApiMetadata 在前），报错信息也看不出是谁重复注册。
+  const routeKey = `WS:${url}`;
+  if (_routeRegistry.has(routeKey)) {
+    const dup = _routeRegistry.get(routeKey);
+    const err = new Error(
+      `WebSocket 路由重复注册: ${url}\n  → 首次注册: [${dup.group}] ${dup.name}\n  → 重复注册: [${targetGroup}] ${options.name || apiKey}`
+    );
+    err.code = 'DUPLICATE_ROUTE';
+    throw err;
+  }
+  _routeRegistry.set(routeKey, { group: targetGroup, name: options.name || apiKey, fullUrl: url, method: 'WS' });
+
   fastify.get(url, { websocket: true }, async (connection, req) => {
     const client = connection.socket || connection;
     const user = req.state?.user;
     const clientIp = req.ip;
+
+    // 1~3. 三级级联校验（规则本体与 HTTP 共用 checkGuardBase）
+    //
+    // ⚠️ 这里**只按配置树判**，不再额外跑一遍路由选项（旧实现有 4~7 段重复校验）。
+    // 理由：`registerApiMetadata` 已把 requireLogin / allowRoles / allowIps /
+    // requirePermission 原样写进 API 级节点，再按路由选项判一次等于"同一套值判两遍"；
+    // 更麻烦的是两边语义会分叉 —— 配置树允许运维按签名放宽，而路由选项是代码硬值，
+    // 于是"DB 放宽了 requireLogin"对 HTTP 生效、对 WS 不生效。
 
     // 1. 系统级校验
     const sys = getGuardConfig(targetSystem);
@@ -639,38 +679,6 @@ function registerSecureWebSocket(fastify, options) {
       const result = checkGuardBase(api, user, clientIp);
       if (!result.passed) {
         if (client?.close) client.close(result.status, result.message);
-        return;
-      }
-    }
-
-    // 4. 当前路由选项级的 IP 白名单校验（高于配置的层级）
-    if (allowIps.length > 0) {
-      const isAllowed = allowIps.some(rule => isIpMatch(clientIp, rule));
-      if (!isAllowed) {
-        if (client?.close) client.close(4003, `IP [${clientIp}] 无权访问`);
-        return;
-      }
-    }
-
-    // 5. 登录校验（设置了 requireLogin 或 allowRoles 或 requirePermission 时，必须登录）
-    if ((requireLogin || allowRoles.length > 0 || requirePermission) && !user?.sub) {
-      if (client?.close) client.close(4001, '未登录');
-      return;
-    }
-
-    // 6. 当前路由选项级的角色校验
-    if (allowRoles.length > 0 && user) {
-      const userRoles = user.roles || [];
-      if (!allowRoles.some(r => userRoles.includes(r))) {
-        if (client?.close) client.close(4003, '权限不足');
-        return;
-      }
-    }
-
-    // 7. 当前路由选项级的权限校验
-    if (requirePermission) {
-      if (!checkPermission(requirePermission, user)) {
-        if (client?.close) client.close(4003, '权限不足');
         return;
       }
     }
@@ -715,5 +723,7 @@ export {
   registerSystemMetadata,
   // 仅供测试直接驱动守卫核心逻辑。前缀 `__test__` 明示"非公开 API"，
   // 生产代码不应调用 —— 正常路径是经 createGuard 生成的 preHandler。
-  applyGuardLogic as __test__applyGuardLogic
+  applyGuardLogic as __test__applyGuardLogic,
+  // HTTP 与 WS 必须走同一份规则实现（历史教训：曾各写一份，判据一度分叉）
+  checkGuardBase as __test__checkGuardBase
 };
