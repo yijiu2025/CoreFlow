@@ -55,7 +55,7 @@ What the loader does with it:
 ## 2. permission/index.js — permission constants
 
 ```js
-import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
+import { createPermissionRegistry } from '../../../framework/security/pbac/index.js';
 
 export const MYAPP_PERMISSIONS = createPermissionRegistry('myapp', 'My app', {
   ARTICLE: {
@@ -72,7 +72,7 @@ export const MYAPP_PERMISSIONS = createPermissionRegistry('myapp', 'My app', {
 ## 3. permission/roles.js — role definitions
 
 ```js
-import { defineRoles } from '../../../utils/PbacRegistry.js';
+import { defineRoles } from '../../../framework/security/pbac/index.js';
 import { MYAPP_PERMISSIONS } from './index.js';
 
 defineRoles([

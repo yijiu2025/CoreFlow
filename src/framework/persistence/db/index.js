@@ -9,7 +9,7 @@
 import { Sequelize } from 'sequelize';
 import { createLogger } from '../../support/log/index.js';
 import { loadOverrides } from '../../config/overrides.js';
-import { C } from '../../../utils/colors.js';
+import { C } from '../../../utils/index.js';
 
 const log = createLogger('framework.db.index');
 

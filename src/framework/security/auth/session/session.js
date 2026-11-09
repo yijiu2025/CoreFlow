@@ -30,6 +30,7 @@ import { resolveSessionPermissions } from './session-perm.js';
 // 设备类型常量与判定统一由 device.js 提供，此处导入为本地绑定并在文件末尾 re-export
 import { DEVICE_TYPE, detectDeviceType, computeDeviceFingerprint } from '../device/device.js';
 import { createLogger } from '../../../support/log/index.js';
+import { parseCsvList } from '../../../../utils/index.js';
 // 共享底座（Redis 实例 / 常量 / sidHash / 吊销原语）
 import {
   sessionStore,
@@ -72,7 +73,8 @@ function getSingleDeviceTypes() {
   // 来源：src/config/auth_config.js 的 session.singleDeviceTypes（可被
   // data/auth_config.json 热改覆盖）。**每次调用都取最新值**，不要缓存。
   const configured = authSessionConfig().singleDeviceTypes;
-  const list = (Array.isArray(configured) ? configured : String(configured || '').split(','))
+  // 配置可能是数组（JSON 直写）或字符串（面板里填的逗号列表），两种都要收
+  const list = (Array.isArray(configured) ? configured : parseCsvList(configured))
     .map(s => String(s).trim())
     .filter(Boolean);
   // 空名单回退「全部类型互顶」（历史行为）：误配成空不该等于关闭单登录策略

@@ -103,9 +103,11 @@ describe('终端颜色契约', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('使用 C.xxx 的文件都必须从 utils/colors.js 导入 C', () => {
+  it('使用 C.xxx 的文件都必须从 utils 入口导入 C', () => {
     const USES_C = /\bC\.(reset|red|green|yellow|cyan|dim|bold)\b/;
-    const IMPORTS_C = /import\s*\{[^}]*\bC\b[^}]*\}\s*from\s*['"][^'"]*utils\/colors\.js['"]/;
+    // 2026-11-09 起 utils 统一走门面（utils/index.js 再导出 colors）；直接 import colors.js
+    // 也接受 —— 判据是"颜色只有一个出处"，不是"必须走门面"（门面测试另有 utils-entry.test.js）。
+    const IMPORTS_C = /import\s*\{[^}]*\bC\b[^}]*\}\s*from\s*['"][^'"]*utils\/(?:index|colors)\.js['"]/;
 
     const offenders = TARGETS.filter(t => USES_C.test(t.src) && !IMPORTS_C.test(t.src)).map(t => t.rel);
 
@@ -136,8 +138,12 @@ describe('终端颜色契约', () => {
     // 必须存在 TTY 判断
     expect(src).toMatch(/isTTY/);
 
-    // 必须存在"TTY 取原码 / 否则空串"的降级包装
-    expect(src).toMatch(/IS_TTY\s*\?\s*s\s*:\s*''/);
+    // 必须存在"允许上色取原码 / 否则空串"的降级包装（2026-11-09 起开关收口为 COLOR_ENABLED）
+    expect(src).toMatch(/\?\s*s\s*:\s*''/);
+
+    // 必须响应用户偏好：NO_COLOR 关色 + FORCE_COLOR 强开（两个事实标准）
+    expect(src).toMatch(/NO_COLOR/);
+    expect(src).toMatch(/FORCE_COLOR/);
 
     // 所有颜色键都必须经 code(...) 包装（裸字面量会给非 TTY 泄漏转义序列）
     const keys = ['reset', 'green', 'yellow', 'red', 'cyan', 'dim'];

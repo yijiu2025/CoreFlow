@@ -6,7 +6,7 @@
  *
  * @since 2026-10-09
  */
-import { defineRoles } from '../../../utils/PbacRegistry.js';
+import { defineRoles } from '../../../framework/security/pbac/index.js';
 import { RETROWEB_PERMISSIONS } from './index.js';
 
 /** 两种角色共有的功能权限 */

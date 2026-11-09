@@ -6,7 +6,7 @@
  */
 import IamDao from '../../../../app/admin/dao/iam.dao.js';
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { actionMetaRegistry } from '../../../../utils/PbacRegistry.js';
+import { actionMetaRegistry } from '../../../../framework/security/pbac/index.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 

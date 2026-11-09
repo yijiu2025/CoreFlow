@@ -2,13 +2,33 @@
  * IP 工具集
  * 提供 IP 规范化、CIDR/通配符/IPV6 等多种规则的高性能匹配。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import net from 'net';
 import { createLogger } from '../framework/support/log/index.js';
 
 const log = createLogger('utils.ip');
+
+/**
+ * 非法规则只在**第一次**出现时记一条日志
+ *
+ * 为什么需要：`isIpMatch` 在守卫与防火墙的逐请求热路径上，配置里写错一条 CIDR
+ * （如 `192.168.1.0/99`）会让每个请求都打一条 error —— 5 分钟内就能把日志刷满，
+ * 真正的问题反而被淹掉。用例集合本身就是有限配置，记一次足够定位。
+ */
+const BAD_RULE_WARN_LIMIT = 64;
+const warnedBadRules = new Set();
+
+/**
+ * @param {string} rule 原始规则串
+ * @param {Error} [err] addSubnet 抛出的原始错误
+ */
+function warnBadRule(rule, err) {
+  if (warnedBadRules.has(rule) || warnedBadRules.size >= BAD_RULE_WARN_LIMIT) return;
+  warnedBadRules.add(rule);
+  log.error(`[IP] 非法 CIDR 规则，已按「恒不匹配」处理: "${rule}"${err ? `（${err.message}）` : ''}`);
+}
 
 /**
  * 规范化 IP 地址，主要是处理并消除 IPv4-mapped IPv6 前缀 (例如 "::ffff:192.168.1.1" -> "192.168.1.1")
@@ -120,22 +140,33 @@ function isIpMatch(clientIp, rule) {
 
   // 4. CIDR 规则匹配
   if (cleanRule.includes('/')) {
+    const slash = cleanRule.lastIndexOf('/');
+    const cleanRange = normalizeIp(cleanRule.slice(0, slash));
+    const bitsStr = cleanRule.slice(slash + 1);
+
+    const type = net.isIPv6(cleanRange) ? 'ipv6' : 'ipv4';
+    const clientType = net.isIPv6(cleanIp) ? 'ipv6' : 'ipv4';
+
+    if (type !== clientType) {
+      return false;
+    }
+
+    // 前缀长度必须**整串都是数字**且在协议族范围内。
+    // 旧实现用 `parseInt('24abc', 10) === 24`，会把写错的规则静默当成合法规则用（比报错更危险）；
+    // `/99` 这类越界值则在 addSubnet 里抛错，一个请求刷一条日志。
+    const maxBits = type === 'ipv6' ? 128 : 32;
+    const bits = /^\d{1,3}$/.test(bitsStr) ? Number(bitsStr) : NaN;
+    if (!Number.isInteger(bits) || bits > maxBits) {
+      warnBadRule(cleanRule);
+      return false;
+    }
+
+    // 按规则缓存 BlockList（见 getBlockList 注释：这是逐请求分配的热路径）
     try {
-      const [range, bitsStr] = cleanRule.split('/');
-      const bits = parseInt(bitsStr, 10);
-      const cleanRange = normalizeIp(range);
-
-      const type = net.isIPv6(cleanRange) ? 'ipv6' : 'ipv4';
-      const clientType = net.isIPv6(cleanIp) ? 'ipv6' : 'ipv4';
-
-      if (type !== clientType) {
-        return false;
-      }
-
-      // 按规则缓存 BlockList（见 getBlockList 注释：这是逐请求分配的热路径）
       return getBlockList(cleanRange, bits, type).check(cleanIp, type);
     } catch (err) {
-      log.error('IP CIDR 匹配规则错误:', err);
+      // 网段地址本身非法（如 `abc/24`）：交给 warnBadRule 记一次，之后静默按不匹配处理
+      warnBadRule(cleanRule, err);
       return false;
     }
   }

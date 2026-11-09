@@ -12,7 +12,7 @@
  * @since 2026-09-03
  */
 import { pruneStaleSessionTokens } from '../../../security/auth/session/session.js';
-import { C } from '../../../../utils/colors.js';
+import { C } from '../../../../utils/index.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.scheduler.tasks.session-cleanup');

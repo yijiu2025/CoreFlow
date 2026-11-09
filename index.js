@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { createApp } from './src/app.js';
 import { createLogger } from './src/framework/support/log/index.js';
-import { C, IS_TTY } from './src/utils/colors.js';
+import { C, IS_TTY } from './src/utils/index.js';
 
 const log = createLogger('server');
 

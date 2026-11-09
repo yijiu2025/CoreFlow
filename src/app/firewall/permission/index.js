@@ -4,7 +4,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
+import { createPermissionRegistry } from '../../../framework/security/pbac/index.js';
 
 /**
  * 防火墙应用域 (Firewall Domain) 权限字典常量

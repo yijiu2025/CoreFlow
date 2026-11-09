@@ -8,7 +8,7 @@
  */
 
 import { sequelize } from '../../../persistence/db/index.js';
-import { C } from '../../../../utils/colors.js';
+import { C } from '../../../../utils/index.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.loader.registry.03-db');

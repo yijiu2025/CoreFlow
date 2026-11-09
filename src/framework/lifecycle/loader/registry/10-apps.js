@@ -16,8 +16,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { getModel } from '../../../persistence/db/index.js';
-import { C } from '../../../../utils/colors.js';
-import { roleRegistry } from '../../../../utils/PbacRegistry.js';
+import { C } from '../../../../utils/index.js';
+import { roleRegistry } from '../../../security/pbac/index.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.loader.registry.10-apps');

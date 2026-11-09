@@ -20,6 +20,7 @@
  * @author yijiu2025
  * @since 2026-11-07
  */
+import { parseCsvList } from '../../../utils/index.js';
 
 /** 超级管理员角色码（定义见各 app 的 permission/roles.js 与 scripts/setup-superadmin.js） */
 const SUPERADMIN_ROLE = 'superadmin';
@@ -50,10 +51,8 @@ function isSuperAdmin(user) {
  * @returns {string[]} 小写化的邮箱列表；未配置时为空数组
  */
 function allowedSuperAdminEmails() {
-  return String(process.env.GUARD_SUPERADMIN_EMAILS || '')
-    .split(',')
-    .map(s => s.trim().toLowerCase())
-    .filter(Boolean);
+  // 邮箱域大小写不敏感 → 统一小写后再比对（见 assertChangeAuthority）
+  return parseCsvList(process.env.GUARD_SUPERADMIN_EMAILS).map(email => email.toLowerCase());
 }
 
 /**

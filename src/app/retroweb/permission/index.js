@@ -8,7 +8,7 @@
  *
  * @since 2026-10-09
  */
-import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
+import { createPermissionRegistry } from '../../../framework/security/pbac/index.js';
 
 const RETROWEB_PERMISSIONS = createPermissionRegistry('retroweb', 'RetroWeb 逆合成工作台', {
   // A. 任务

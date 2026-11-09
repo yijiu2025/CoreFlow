@@ -20,7 +20,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { C } from '../../../utils/colors.js';
+import { C } from '../../../utils/index.js';
 import { createLogger } from '../../support/log/index.js';
 
 const log = createLogger('framework.loader.engine');

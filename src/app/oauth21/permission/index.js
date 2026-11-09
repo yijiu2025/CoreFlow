@@ -5,7 +5,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
+import { createPermissionRegistry } from '../../../framework/security/pbac/index.js';
 
 /**
  * OAuth 2.1 权限定义

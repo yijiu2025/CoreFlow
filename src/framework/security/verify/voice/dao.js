@@ -6,23 +6,13 @@
  * @since 2026-08-17
  */
 import Logger from '../../../support/log/index.js';
+import { maskPhone } from '../../../../utils/index.js';
 import voiceService from './service.js';
 import config from '../config.js';
 
 const smsConfig = config.sms;
 
 class VoiceDao {
-  /**
-   * 手机号脱敏：138****1234
-   * @param {string} phone 完整手机号
-   * @returns {string} 掩码后的手机号
-   */
-  maskPhone(phone) {
-    const p = String(phone || '');
-    if (p.length <= 7) return `${p.slice(0, 1)}****`;
-    return `${p.slice(0, 3)}****${p.slice(-4)}`;
-  }
-
   /**
    * 发送语音验证码
    * @param {string} phone 手机号
@@ -33,7 +23,7 @@ class VoiceDao {
   async sendCode(phone, sessionId, store) {
     const code = voiceService.generateCode();
     // 🔴 PII 脱敏：不落完整手机号
-    Logger.info(`[Verify] 发送语音验证码: ${this.maskPhone(phone)}`);
+    Logger.info(`[Verify] 发送语音验证码: ${maskPhone(phone)}`);
 
     // 频率限制检查
     const current = await store.get(phone);

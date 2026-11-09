@@ -14,7 +14,7 @@
  * @author yijiu2025
  * @since 2026-11-07
  */
-import { isOriginAllowed } from '../../../utils/cors.js';
+import { isOriginAllowed } from '../../../utils/index.js';
 
 /** 允许的请求头：H5 签名 / 设备指纹 / 验证令牌都靠自定义头传，漏一个就是整条链路 401 */
 const CORS_ALLOWED_HEADERS = [

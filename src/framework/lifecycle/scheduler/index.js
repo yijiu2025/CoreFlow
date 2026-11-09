@@ -29,7 +29,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { C } from '../../../utils/colors.js';
+import { C } from '../../../utils/index.js';
 import { createLogger } from '../../support/log/index.js';
 import { createLock } from '../../persistence/redis/lock-store.js';
 import { isRedisConfigured } from '../../persistence/redis/utils.js';

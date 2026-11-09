@@ -15,6 +15,7 @@
  * @author yijiu2025
  * @since 2026-11-07
  */
+import { parseCsvList } from './strings.js';
 
 /** 未配置 `PROXY_TRUST_CIDR` 时的默认信任范围：仅本机回环 */
 const DEFAULT_TRUST_PROXY = ['127.0.0.1', '::1'];
@@ -30,15 +31,10 @@ const DEFAULT_TRUST_PROXY = ['127.0.0.1', '::1'];
  * @returns {string[]} 可直接交给 Fastify `trustProxy` 的地址/网段列表
  */
 function parseTrustProxy(raw) {
-  const text = typeof raw === 'string' ? raw.trim() : '';
-  if (!text) return [...DEFAULT_TRUST_PROXY];
-
-  const entries = text
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  return entries.length > 0 ? entries : [...DEFAULT_TRUST_PROXY];
+  // 解析规则与 CORS 白名单同一份（utils/strings.js）：去空白、丢空项、空配置回退默认值。
+  // 回退值是「仅回环」而不是「信任全部」—— 宁可代理不生效（日志里 502 立刻暴露），
+  // 也不能默认把 IP 维度让给攻击者。
+  return parseCsvList(raw, { fallback: DEFAULT_TRUST_PROXY });
 }
 
 /**
@@ -76,7 +72,7 @@ function describeProxyTrustRisk(entries) {
     const tooWide = isV6 ? prefix <= 32 : prefix <= 12;
     if (tooWide) {
       risks.push(
-        `"${entry}" 覆盖约 ${isV6 ? '2^(128-' + prefix + ')' : '2^(32-' + prefix + ')'} 个地址，` +
+        `"${entry}" 覆盖约 2^${maxPrefix - prefix} 个地址，` +
           `其中任何来源都能自定义 X-Forwarded-For 并冒充任意客户端 IP`
       );
     }
@@ -98,7 +94,7 @@ function formatProxyTrustRisks(risks) {
   return (
     `⚠️ [Proxy] PROXY_TRUST_CIDR 过宽，IP 白名单 / 限流 / 封禁可被 X-Forwarded-For 绕过：\n` +
     risks.map(r => `   - ${r}`).join('\n') +
-    `\n   修法：只填反向代理的**确切地址**（如 172.18.0.2/32），不要填整个网段。`
+    `\n   修法：只填反向代理的确切地址（如 172.18.0.2/32），不要填整个网段。`
   );
 }
 

@@ -8,7 +8,7 @@
  */
 
 import initAuth from '../../../security/auth/index.js';
-import { C } from '../../../../utils/colors.js';
+import { C } from '../../../../utils/index.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.loader.registry.04-auth');

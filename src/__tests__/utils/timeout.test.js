@@ -23,9 +23,25 @@ describe('resolveTimeoutMs', () => {
 
   it('非数字回退到 fallback（不能静默变成 0）', () => {
     expect(resolveTimeoutMs('abc', 72_000)).toBe(72_000);
-    expect(resolveTimeoutMs('300ms', 72_000)).toBe(72_000);
+    expect(resolveTimeoutMs('30days', 72_000)).toBe(72_000);
+    expect(resolveTimeoutMs('1e3', 72_000)).toBe(72_000);
     expect(resolveTimeoutMs(NaN, 72_000)).toBe(72_000);
     expect(resolveTimeoutMs(Infinity, 72_000)).toBe(72_000);
+  });
+
+  it('支持 ms / s / m / h 单位后缀（2026-11-09 起；旧实现会把 30s 当非法静默回退）', () => {
+    expect(resolveTimeoutMs('300ms', 72_000)).toBe(300);
+    expect(resolveTimeoutMs('30s', 72_000)).toBe(30_000);
+    expect(resolveTimeoutMs('30 s', 72_000)).toBe(30_000);
+    expect(resolveTimeoutMs('5m', 72_000)).toBe(300_000);
+    expect(resolveTimeoutMs('1.5h', 72_000)).toBe(5_400_000);
+    expect(resolveTimeoutMs('30S', 72_000)).toBe(30_000);
+  });
+
+  it('🔴 超过 Node 定时器上限要钳住（否则会被压成 1ms，"不过期"变成"立刻超时"）', () => {
+    expect(resolveTimeoutMs('9999h', 72_000)).toBe(2_147_483_647);
+    expect(resolveTimeoutMs(1e12, 72_000)).toBe(2_147_483_647);
+    expect(resolveTimeoutMs(2_147_483_647, 0)).toBe(2_147_483_647);
   });
 
   it('"假 0"必须回退：null / 空白串 / 布尔被 Number() 强转会算成 0', () => {
@@ -68,7 +84,7 @@ describe('resolveTimeoutMs', () => {
     // HTTP 超时与 WS 宽限期都必须从 util 取，而不是各写一套数字
     for (const rel of ['src/framework/ingress/http/server-options.js', 'src/framework/ingress/http/plugins.js']) {
       const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
-      expect(src).toMatch(/from '\.\.\/\.\.\/\.\.\/utils\/timeout\.js'/);
+      expect(src).toMatch(/from '\.\.\/\.\.\/\.\.\/utils\/(?:index|timeout)\.js'/);
     }
 
     // app.js 只把 isProduction / trustProxy 交给 server-options，自己不再碰超时

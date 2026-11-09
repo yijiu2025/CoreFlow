@@ -27,7 +27,7 @@ import { describe, it, expect, beforeAll } from '@jest/globals';
 import { DataTypes } from 'sequelize';
 
 import defineRole from '../../models/iam/Role.js';
-import { roleRegistry } from '../../utils/PbacRegistry.js';
+import { roleRegistry } from '../../framework/security/pbac/index.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');

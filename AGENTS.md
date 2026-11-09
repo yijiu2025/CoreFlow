@@ -244,18 +244,15 @@ import { requestContext, getCtx, getDb, getServerResource } from './auth/index.j
 // getServerResource(name): 获取 Fastify 插件实例
 ```
 
-## OAuth 2.1 系统 (`src/oauth21/`)
+## OAuth 2.1 系统 (`src/api/oauth21/` + `src/app/oauth21/`)
 
 ```
-src/oauth21/
-├── config/           # OAuth 配置
-├── crypto/           # RSA 密钥管理 + JWT 签发/验证
-├── dao/              # 数据访问层（client, code, token, approval, consent, permission）
-├── middleware/        # H5 签名验证 + scope 校验
-├── services/         # 业务逻辑层
-├── utils/              # PbacRegistry（权限注册中心，系统层共享工具）
-└── view/             # 登录页面模板
+src/app/oauth21/       # 业务侧：config / crypto（RSA + JWT）/ dao / middleware（H5 签名 + scope）/ permission / services / templates / view
+src/api/oauth21/v1/    # 路由侧：authorize / login / qr / register（含 iframe 受信父域的 CSP 白名单）
 ```
+
+> 角色 / 权限注册中心（`createPermissionRegistry` / `defineRoles`）属系统层能力，
+> 位于 `src/framework/security/pbac/`；`src/utils/` 只放纯函数（见下节）。
 
 ### 授权流程
 
@@ -316,7 +313,7 @@ src/
 ├── framework/         # 系统层（架构层，零业务语义；按**六类**分组，详见下节）
 │   ├── config/        #   配置与路径   env 校验 / 覆盖层 / paths.js（仓库布局唯一来源）
 │   ├── persistence/   #   数据与状态   db / redis / storage
-│   ├── security/      #   身份与安全   auth / verify / jwt / keys / crypto
+│   ├── security/      #   身份与安全   auth / verify / jwt / keys / crypto / pbac
 │   ├── ingress/       #   接入与协议   http / websocket / firewall
 │   ├── lifecycle/     #   编排与生命周期 loader / startup / scheduler
 │   └── support/       #   支撑与旁路   log / cli / notice
@@ -335,7 +332,7 @@ src/
 ├── models/            # 业务模型（user/, oauth21/, iam/, notice/, key/, guard/ …）
 ├── shared/            # 前后端共享的纯逻辑（异常、常量）
 ├── config/            # 静态覆盖层（可选，缺失即用 core 保底值）
-├── utils/             # 通用工具（timeout / cors / colors / proxy-trust …）
+├── utils/             # 通用工具（timeout / cors / strings / colors / proxy-trust …）
 └── __tests__/         # 测试（conventions/ 是架构守卫，必须与源码结构同步）
 ```
 
@@ -348,7 +345,7 @@ src/
 | -------------- | ------------------------------- | ---------------------------------------------------------- |
 | `config/`      | config, `paths.js`              | 只产出"值"，不持有连接、不参与请求                         |
 | `persistence/` | db, redis, storage              | 持有外部连接或磁盘布局                                     |
-| `security/`    | auth, verify, jwt, keys, crypto | 认证 / 授权 / 密钥 / 人机校验                              |
+| `security/`    | auth, verify, jwt, keys, crypto, pbac | 认证 / 授权 / 密钥 / 人机校验 / 角色注册     |
 | `ingress/`     | http, websocket, firewall       | 决定"端口如何被访问"：插件装配、协议边界、请求前置管道     |
 | `lifecycle/`   | loader, startup, scheduler      | 只在启动期或后台跑，不参与单次请求                         |
 | `support/`     | log, cli, notice                | 横切支撑（日志 / CLI / 出站邮件），可脱离 Fastify 独立驱动 |

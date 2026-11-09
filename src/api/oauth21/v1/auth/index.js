@@ -13,6 +13,7 @@
 
 import { registerGroupMetadata } from '../../../guard.js';
 import { getStore } from '../../../../framework/persistence/redis/index.js';
+import { parseOriginList } from '../../../../utils/index.js';
 import registerAuthorizeRoutes from './authorize.js';
 import registerLoginRoutes from './login.js';
 import registerQrRoutes from './qr.js';
@@ -24,10 +25,8 @@ async function registerAuthRoutes(fastify) {
 
   // 🔴 受信父域白名单：与 app.js 的 CORS_ORIGINS 同一套（iframe 嵌入 SSO 的宿主应用）。
   // 此前写死 frame-ancestors 'self' *（任意站点可 iframe 嵌入登录/注册页 = 点击劫持/钓鱼）。
-  const CORS_ORIGINS = (process.env.CORS_ORIGINS?.trim() || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
+  // 解析走 utils/cors.js：归一化尾斜杠与大小写，否则 `https://A.com/` 会被原样写进 CSP 而不匹配。
+  const CORS_ORIGINS = parseOriginList(process.env.CORS_ORIGINS);
 
   // 安全头处理：允许特定页面被**受信白名单** iframe 嵌入
   fastify.addHook('onSend', (request, reply, payload, done) => {

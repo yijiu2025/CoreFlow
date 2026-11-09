@@ -4,7 +4,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { defineRoles } from '../../../utils/PbacRegistry.js';
+import { defineRoles } from '../../../framework/security/pbac/index.js';
 import { FIREWALL_PERMISSIONS } from './index.js';
 
 /**

@@ -55,7 +55,7 @@ export default {
 ## 2. permission/index.js — 权限常量
 
 ```js
-import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
+import { createPermissionRegistry } from '../../../framework/security/pbac/index.js';
 
 export const MYAPP_PERMISSIONS = createPermissionRegistry('myapp', '我的应用', {
   ARTICLE: {
@@ -72,7 +72,7 @@ export const MYAPP_PERMISSIONS = createPermissionRegistry('myapp', '我的应用
 ## 3. permission/roles.js — 角色定义
 
 ```js
-import { defineRoles } from '../../../utils/PbacRegistry.js';
+import { defineRoles } from '../../../framework/security/pbac/index.js';
 import { MYAPP_PERMISSIONS } from './index.js';
 
 defineRoles([

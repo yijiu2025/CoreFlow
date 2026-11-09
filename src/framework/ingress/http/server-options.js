@@ -22,7 +22,7 @@
  */
 import crypto from 'node:crypto';
 import { APP_CONFIG } from '../../config/app-config.js';
-import { resolveTimeoutMs } from '../../../utils/timeout.js';
+import { resolveTimeoutMs } from '../../../utils/index.js';
 
 /** 保底值：配置缺失时使用，保证"坏连接占用上限"永远有明确数字 */
 const DEFAULT_HTTP_OPTIONS = Object.freeze({

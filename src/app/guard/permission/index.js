@@ -4,7 +4,7 @@
  * @author yijiu2025
  * @since 2026-07-22
  */
-import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
+import { createPermissionRegistry } from '../../../framework/security/pbac/index.js';
 
 const GUARD_PERMISSIONS = createPermissionRegistry('guard', '守卫配置', {
   CONFIG: {

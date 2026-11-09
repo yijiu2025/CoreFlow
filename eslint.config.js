@@ -48,7 +48,9 @@ export default [
           semi: true,
           singleQuote: true,
           arrowParens: 'avoid',
-          endOfLine: 'auto',
+          // 必须与 .prettierrc.json / .gitattributes 同为 lf：
+          // 写成 'auto' 时 `eslint --fix` 会保留 CRLF，与仓库「只允许 LF」的判据打架。
+          endOfLine: 'lf',
           trailingComma: 'none'
         }
       ],

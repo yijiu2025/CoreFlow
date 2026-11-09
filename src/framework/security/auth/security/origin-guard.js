@@ -1,4 +1,7 @@
 import { createLogger } from '../../../support/log/index.js';
+// 归一化口径与 `@fastify/cors` 共用同一份（utils/cors.js），见该文件头注释：
+// 两边各写一份的后果是「跨域被拒、敏感端点放行」这种自相矛盾的行为。
+import { parseOriginList, normalizeOrigin } from '../../../../utils/index.js';
 
 const log = createLogger('framework.auth.origin-guard');
 /**
@@ -37,10 +40,8 @@ function allowedOrigins() {
   const raw = process.env.CORS_ORIGINS?.trim() || '';
   if (raw !== _cachedRaw) {
     _cachedRaw = raw;
-    _cachedOrigins = raw
-      .split(',')
-      .map(s => s.trim().replace(/\/+$/, '').toLowerCase())
-      .filter(Boolean);
+    // 解析 + 归一化 + 去重都在 utils/cors.js（与跨域白名单同一口径）
+    _cachedOrigins = parseOriginList(raw);
     _warnedEmpty = false;
   }
   if (process.env.NODE_ENV === 'production' && _cachedOrigins.length === 0 && !_warnedEmpty) {
@@ -52,11 +53,6 @@ function allowedOrigins() {
 
 function isProduction() {
   return process.env.NODE_ENV === 'production';
-}
-
-/** 与白名单同口径归一化（Origin 头 / Referer origin 都走这里） */
-function normalizeOrigin(raw) {
-  return String(raw).trim().replace(/\/+$/, '').toLowerCase();
 }
 
 /**

@@ -8,7 +8,7 @@
  * @since 2026-07-22
  */
 
-import { C } from '../utils/colors.js';
+import { C } from '../utils/index.js';
 import GuardConfigDao from '../app/guard/dao/guard-config.dao.js';
 import { logAuditEvent } from '../framework/security/auth/index.js';
 import { createLogger } from '../framework/support/log/index.js';

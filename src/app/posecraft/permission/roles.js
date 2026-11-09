@@ -2,10 +2,10 @@
  * PoseCraft 角色定义
  * 用于对接 PBAC 系统，将不同的具体权限点（Action）合理地分配到各个不同的角色身份中。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
-import { defineRoles } from '../../../utils/PbacRegistry.js';
+import { defineRoles } from '../../../framework/security/pbac/index.js';
 import { POSECRAFT_PERMISSIONS } from './index.js';
 
 defineRoles([

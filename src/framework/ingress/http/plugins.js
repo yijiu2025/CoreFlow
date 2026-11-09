@@ -25,7 +25,7 @@ import cookie from '@fastify/cookie';
 import { APP_CONFIG } from '../../config/app-config.js';
 import { PUBLIC_ROOT } from '../../persistence/storage/index.js';
 import { createWsPreClose, resolveWsCloseCode, DEFAULT_WS_SHUTDOWN_GRACE_MS } from '../websocket/preclose.js';
-import { resolveTimeoutMs } from '../../../utils/timeout.js';
+import { resolveTimeoutMs } from '../../../utils/index.js';
 import { buildHelmetOptions, buildCorsOptions } from './security-options.js';
 
 /**

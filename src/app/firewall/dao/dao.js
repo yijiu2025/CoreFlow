@@ -8,7 +8,7 @@
  * @since 2026-08-17
  */
 import fs from 'fs';
-import { C } from '../../../utils/colors.js';
+import { C } from '../../../utils/index.js';
 import {
   FIREWALL_FILE,
   DEFAULT_SERVER_NODE,

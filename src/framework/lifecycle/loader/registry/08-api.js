@@ -16,7 +16,7 @@ import {
   getRegistrationContext,
   restoreRegistrationContext
 } from '../../../../api/guard.js';
-import { C } from '../../../../utils/colors.js';
+import { C } from '../../../../utils/index.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.loader.registry.08-api');

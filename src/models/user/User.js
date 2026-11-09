@@ -8,11 +8,11 @@
  * - 手机号 AES-256-CBC 加密存储（beforeValidate 自动加密，afterFind 自动解密）
  * - phone/email 唯一索引结合 delete_version 实现软删除安全的唯一约束
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
 import { registerDeleteVersionHooks } from '../../framework/persistence/db/softDeleteHooks.js';
-import { encryptPhone, decryptPhone, isEncrypted } from '../../utils/crypto.js';
+import { encryptPhone, decryptPhone, isEncrypted } from '../../utils/index.js';
 
 /**
  * 工业级用户基础信息模型 (User Profile)

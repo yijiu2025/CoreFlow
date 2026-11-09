@@ -14,7 +14,7 @@
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 import { ALGORITHMS, MODULUS_LENGTH_2048, withinGrace } from './config.js';
-import { C } from '../../../utils/colors.js';
+import { C } from '../../../utils/index.js';
 import { setCachedKey, deleteCachedKey, setCurrentKid, getCurrentKid, clearCache } from './cache.js';
 import { findNewestActive, findAll, insertKey, removeByName, setActive, existsByName } from './repository.js';
 import { createLogger } from '../../support/log/index.js';

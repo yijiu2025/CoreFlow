@@ -12,8 +12,7 @@
  *   - 安全头与跨域策略                          → framework/ingress/http/security-options.js
  *   - 全局错误处理器                            → framework/ingress/http/error-handler.js
  *   - 优雅关闭编排（顺序 + 错误隔离）             → framework/lifecycle/shutdown.js
- *   - 代理可信网段解析与风险判定                 → utils/proxy-trust.js
- *   - CORS 来源解析与放行判断                    → utils/cors.js
+ *   - 代理可信网段 / CORS 来源判据              → utils/index.js（proxy-trust / cors 成员）
  *
  * 拆分原则：能脱离 Fastify 实例与进程环境独立驱动的判据，一律不进入口 ——
  * 入口里的代码只能靠"起一个真服务"来验证，是最难测的位置。
@@ -34,8 +33,7 @@ import { buildServerOptions } from './framework/ingress/http/server-options.js';
 import { registerBasePlugins } from './framework/ingress/http/plugins.js';
 import { createErrorHandler } from './framework/ingress/http/error-handler.js';
 import { registerShutdownHooks } from './framework/lifecycle/shutdown.js';
-import { parseOriginList } from './utils/cors.js';
-import { parseTrustProxy, describeProxyTrustRisk, formatProxyTrustRisks } from './utils/proxy-trust.js';
+import { parseOriginList, parseTrustProxy, describeProxyTrustRisk, formatProxyTrustRisks } from './utils/index.js';
 
 // 日志必须最先引导：后续所有模块的 createLogger 都读它的全局配置，
 // 全局 log 与全局异常兜底也在这一步注册。

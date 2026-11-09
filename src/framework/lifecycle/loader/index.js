@@ -9,7 +9,7 @@
 
 import { runEngine } from './engine.js';
 import { loadGuardConfig } from '../../../api/guard-config.js';
-import { C } from '../../../utils/colors.js';
+import { C } from '../../../utils/index.js';
 import { createLogger } from '../../support/log/index.js';
 
 const log = createLogger('framework.loader.index');

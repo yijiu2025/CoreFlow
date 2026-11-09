@@ -15,7 +15,7 @@ import { decrypt } from '../../../framework/security/keys/encryption.js';
 import { hashPassword } from '../../../framework/security/auth/index.js';
 import { log } from '../../../framework/support/log/index.js';
 import { validatePasswordStrength } from '../../../framework/security/auth/index.js';
-import { maskPhone } from '../../../utils/crypto.js';
+import { maskPhone } from '../../../utils/index.js';
 import { kickAllSessions } from '../../../framework/security/auth/index.js';
 import TokenDao from '../../oauth21/dao/token.dao.js';
 

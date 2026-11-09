@@ -2,10 +2,10 @@
  * PoseCraft 权限常量定义
  * 提供细粒度 PBAC 权限注册，支持商业化 VIP 模式、创作者收益以及精细化管理员管控。
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
-import { createPermissionRegistry } from '../../../utils/PbacRegistry.js';
+import { createPermissionRegistry } from '../../../framework/security/pbac/index.js';
 
 const POSECRAFT_PERMISSIONS = createPermissionRegistry('posecraft', 'PoseCraft', {
   // A. 基础作品与模板权限

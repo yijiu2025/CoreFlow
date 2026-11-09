@@ -9,10 +9,10 @@
  * - user_normal: 10（普通用户）
  * - user_vip: 50（高级用户）
  *
- * @author Claude
+ * @author yijiu2025
  * @since 2026-07-13
  */
-import { defineRoles } from '../../../utils/PbacRegistry.js';
+import { defineRoles } from '../../../framework/security/pbac/index.js';
 import { USER_PERMISSIONS } from './index.js';
 
 /**

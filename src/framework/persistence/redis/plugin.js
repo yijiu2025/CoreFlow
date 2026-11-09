@@ -40,7 +40,7 @@ import fp from 'fastify-plugin';
 import { setupRedisHealthMonitor } from './health.js';
 import { setLogger, getCacheStats } from './redis-store.js';
 import { probeTcp, DEFAULT_PROBE_TIMEOUT } from './probe.js';
-import { C } from '../../../utils/colors.js';
+import { C } from '../../../utils/index.js';
 import { createLogger } from '../../support/log/index.js';
 import { loadOverrides } from '../../config/overrides.js';
 

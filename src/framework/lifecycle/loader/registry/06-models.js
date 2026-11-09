@@ -10,7 +10,7 @@
  */
 import { sequelize, getModel } from '../../../persistence/db/index.js';
 import { scanModels, associateModels, MODELS_DIR } from '../../../persistence/db/models.js';
-import { C } from '../../../../utils/colors.js';
+import { C } from '../../../../utils/index.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.loader.registry.06-models');
