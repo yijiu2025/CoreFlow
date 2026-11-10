@@ -13,6 +13,38 @@ const consoleConfig = {
   description: '通用后台脚手架：用户 / 角色 / 菜单 / 部门 / 岗位 / 字典 / 参数 / 日志 / 代码生成',
 
   /**
+   * 权限命名空间（`iam_role.app_id` 的取值）
+   *
+   * 本应用的 OAuth 客户端 id 是 `console`（登录会话里 `appId = 'console'`），但
+   * 角色与权限码都住在历史命名空间 `admin` 下（`admin_viewer` / `admin_operator` /
+   * `admin_admin`，权限码 `admin:*`）—— 那时后台 API 的前缀就叫 `/admin`。
+   *
+   * 🔴 不声明这一行的后果是**静默失效**：`loadUserPermissions(userId, 'console')`
+   *    按 `app_id IN ('console','GLOBAL')` 过滤，`admin_*` 角色一条也取不到 ⇒ 除了
+   *    GLOBAL 的 superadmin（自动获得 `console_admin`）之外，**所有管理角色都等于没授**：
+   *    后台里授了角色、库里也确实存了，但该账号登录后每个接口 403。
+   *    实测：`admin_viewer` 用户在 console 会话下的权限集是 `[]`。
+   */
+  permission_app_id: 'admin',
+
+  /**
+   * 登录准入（`bind-session` 之前判定，见 `framework/security/auth/permission/app-access.js`）
+   *
+   * 统一认证面向所有注册用户，管理后台只应对**被授予管理能力**的账号开放。
+   * 命中任一条即放行；两条都为空则不限制（其它应用不受影响）。
+   *
+   * ⚠️ 这是"能不能进后台"的闸门，不是接口鉴权 —— 接口放行仍由各路由的
+   *    `requirePermission` 逐条判定，两者不互相替代。
+   */
+  access: {
+    /** 任一权限码命中即可（支持 `*` 通配；`admin:*` 表示"有任何管理能力"） */
+    anyPermission: ['admin:*'],
+    /** 或任一角色命中即可（历史账号兜底：策略未配但角色在） */
+    anyRole: ['superadmin'],
+    denyMessage: '该账号没有管理后台的访问权限，请联系管理员分配角色后再试'
+  },
+
+  /**
    * OAuth 2.1 客户端声明 —— **本文件是唯一来源**
    *
    * 启动期由 `10-apps` 同步到 `oauth_clients` 表：查不到就 create，查到就 update

@@ -32,6 +32,7 @@
  */
 
 import { getPermissions, computePermFingerprint } from '../permission/perm-cache.js';
+import { resolvePermissionAppId } from '../../../config/app-registry.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.auth.session');
@@ -46,37 +47,44 @@ const log = createLogger('framework.auth.session');
  * @returns {Promise<{roles: string[], permissions: object, permFingerprint: string}>} 本次会话应采用的权限
  */
 async function resolveSessionPermissions(userId, appId, session = {}) {
+  // 🔴 登录应用 ≠ 权限命名空间：console 的角色住在历史 namespace `admin` 下
+  //    （`iam_role.app_id = 'admin'`），直接按登录 appId 查会得到空权限集 ——
+  //    表现是"角色授了、也落库了，但该账号进后台什么都点不动"，极难归因。
+  //    映射是声明式的（`src/app/<app>/config.js` 的 `permission_app_id`），没声明即同名。
+  //    ⚠️ 指纹与缓存 key 都必须用映射后的命名空间，否则与 perm-cache 的写入端不一致，
+  //    每次请求都判"指纹变化"而反复回源。
+  const permAppId = resolvePermissionAppId(appId);
   const cachedRoles = session?.roles;
   const cachedPerms = session?.permissions;
   const cachedFp = session?.permFingerprint;
 
   // 会话没存指纹（老会话 / 字段被裁）→ 无法判断新鲜度，直接回源
   if (!cachedFp || !cachedRoles || !cachedPerms) {
-    const { roles, permissions } = await getPermissions(userId, appId);
-    const permFingerprint = await computePermFingerprint(userId, appId);
+    const { roles, permissions } = await getPermissions(userId, permAppId);
+    const permFingerprint = await computePermFingerprint(userId, permAppId);
     return { roles, permissions, permFingerprint };
   }
 
   try {
-    const current = await computePermFingerprint(userId, appId);
+    const current = await computePermFingerprint(userId, permAppId);
     if (current === cachedFp) {
       return { roles: cachedRoles, permissions: cachedPerms, permFingerprint: cachedFp };
     }
     log.info(
-      '♻️ [Session] 权限已变更（指纹 %s → %s），会话权限作废重载: userId=%s, appId=%s',
+      '♻️ [Session] 权限已变更（指纹 %s → %s），会话权限作废重载: userId=%s, permAppId=%s',
       cachedFp,
       current,
       userId,
-      appId
+      permAppId
     );
   } catch (err) {
-    log.warn('[Session] 权限指纹计算失败，保守回源: userId=%s, appId=%s', userId, appId, err);
+    log.warn('[Session] 权限指纹计算失败，保守回源: userId=%s, permAppId=%s', userId, permAppId, err);
   }
 
-  const { roles, permissions } = await getPermissions(userId, appId);
+  const { roles, permissions } = await getPermissions(userId, permAppId);
   let permFingerprint = cachedFp;
   try {
-    permFingerprint = await computePermFingerprint(userId, appId);
+    permFingerprint = await computePermFingerprint(userId, permAppId);
   } catch {
     // 取不到新指纹就保留旧值：下次恢复仍会判定不一致而回源（保守方向）
   }

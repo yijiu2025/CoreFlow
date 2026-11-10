@@ -27,6 +27,7 @@ import {
 import { getPermissions, computePermFingerprint } from '../permission/perm-cache.js';
 // 会话恢复时的权限解析（第 3 层指纹在会话路径的落地点），已拆为独立子模块
 import { resolveSessionPermissions } from './session-perm.js';
+import { resolvePermissionAppId } from '../../../config/app-registry.js';
 // 设备类型常量与判定统一由 device.js 提供，此处导入为本地绑定并在文件末尾 re-export
 import { DEVICE_TYPE, detectDeviceType, computeDeviceFingerprint } from '../device/device.js';
 import { createLogger } from '../../../support/log/index.js';
@@ -150,8 +151,11 @@ async function createSession(params) {
   //    同时取回 permFingerprint 随会话一起落库（Redis session / DB）。
   //    会话恢复（Redis 驱逐重建 / sid_r 刷新）时用它做**增量回源判断**：
   //    指纹未变则沿用会话里的权限，避免每次恢复都打 3 张权限表。
-  const { roles, permissions } = await getPermissions(userId, appId);
-  const permFingerprint = await computePermFingerprint(userId, appId);
+  //    🔴 命名空间映射：登录 appId（console）与角色所在 namespace（admin）可能不同，
+  //    按登录 appId 直查会得到空权限集（详见 `config/app-registry.js`）。
+  const permAppId = resolvePermissionAppId(appId);
+  const { roles, permissions } = await getPermissions(userId, permAppId);
+  const permFingerprint = await computePermFingerprint(userId, permAppId);
 
   // 2. 生成 sessionId、refreshToken、familyId
   // familyId 标识同一登录链，供 sid_r 轮转盗用检测后只吊销同 family（不影响该用户其他设备）

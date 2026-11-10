@@ -18,6 +18,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { getModel } from '../../../persistence/db/index.js';
 import { C } from '../../../../utils/index.js';
 import { roleRegistry } from '../../../security/pbac/index.js';
+import { registerAppConfig } from '../../../config/app-registry.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.loader.registry.10-apps');
@@ -49,6 +50,8 @@ const appsLoader = async app => {
         const fileUrl = pathToFileURL(configPath).href;
         const mod = await import(fileUrl);
         appConfig = mod.default || mod;
+        // 登记到运行时注册表：请求期（登录闸门 / 权限命名空间映射）按 app_id 反查
+        registerAppConfig(appConfig);
         log.dev(`📦 [Apps] ${C.cyan}加载应用: ${appConfig.name || dir.name}${C.reset}`);
       } catch (err) {
         log.error(`❌ [Apps] ${C.red}加载配置失败 [${dir.name}]${C.reset}`, err);

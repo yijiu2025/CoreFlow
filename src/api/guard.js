@@ -22,6 +22,7 @@ import { createSafePreHandler } from '../framework/security/auth/index.js';
 import { isWildcardMatch } from '../framework/security/auth/permission/wildcard-match.js';
 import { isUserManuallyBlocked } from '../framework/ingress/firewall/block-manager.js';
 import { createLogger } from '../framework/support/log/index.js';
+import { resolvePermissionAppId } from '../framework/config/app-registry.js';
 
 const log = createLogger('api.guard');
 
@@ -246,11 +247,14 @@ async function applyGuardLogic(opts = {}, request, reply) {
     if (user.userId == null) {
       return reply.result.forbidden('当前凭证无用户级权限语义，禁止执行敏感操作');
     }
-    // appId 取认证时写入的登录应用；缺省 'GLOBAL' 与 perm-cache 的全局语义一致
+    // appId 取认证时写入的登录应用；缺省 'GLOBAL' 与 perm-cache 的全局语义一致。
+    // 再经 `resolvePermissionAppId` 映射到**权限命名空间**：console 的角色住在
+    // `admin` 下，直接按登录 appId 回源会拿到空权限集，敏感操作全部误拒。
     const appId = user.appId || request.state?.session?.appId || 'GLOBAL';
+    const permAppId = resolvePermissionAppId(appId);
     let fresh;
     try {
-      fresh = await getPermissions(user.userId, appId, { fresh: true });
+      fresh = await getPermissions(user.userId, permAppId, { fresh: true });
     } catch (err) {
       // 回源失败 → **拒绝**（fail-closed）。这与"权限读取失败降级放行"不同：
       // 敏感操作的默认答案必须是"不执行"。

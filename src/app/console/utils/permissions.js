@@ -40,4 +40,21 @@ function hasPermissionLike(permissions, code) {
   });
 }
 
-export { toPermissionList, hasPermissionLike };
+/**
+ * 是否拥有某个**命名空间**下的任一权限
+ *
+ * 与 `hasPermissionLike` 的区别：那个问"能不能干这一件事"（授予的通配要能覆盖所需
+ * 的具体码），本函数问"是不是这一族里的"（任一条 `admin:xxx` 都算）。
+ * 登录准入用它 —— 只关心有没有管理能力，不关心具体是哪一条。
+ *
+ * @param {unknown} permissions PBAC 权限集对象 / 数组
+ * @param {string} namespace 命名空间（如 `admin`）
+ * @returns {boolean} 是否命中
+ */
+function hasAnyPermissionIn(permissions, namespace) {
+  const list = toPermissionList(permissions);
+  const prefix = `${namespace}:`;
+  return list.some(code => code === '*' || code === prefix + '*' || code.startsWith(prefix));
+}
+
+export { toPermissionList, hasPermissionLike, hasAnyPermissionIn };

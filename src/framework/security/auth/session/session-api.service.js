@@ -13,6 +13,7 @@ import { createSession, updateRememberMe, switchSessionByRefreshToken, revokeRem
 import { getModel } from '../../../persistence/db/index.js';
 import { getStore } from '../../../persistence/redis/index.js';
 import { userRefreshStore } from './session-store.js';
+import { checkAppAccess } from '../permission/app-access.js';
 import { log } from '../../../support/log/index.js';
 import {
   signCookie,
@@ -93,6 +94,27 @@ async function bindSessionToCookie(sessionToken, request, reply) {
   const sessionData = await sessionStore.getDel(sessionToken);
   if (!sessionData) {
     return { ok: false, statusCode: 401, body: { code: 401, message: 'session_token 无效或已过期', data: null } };
+  }
+
+  // 🔴 准入闸门：**在开会话之前**判定（策略见 src/app/<app>/config.js 的 `access`）
+  //
+  // 为什么必须在这里而不是各应用的 /session/me：这里是会话诞生的唯一入口。放行之后
+  // 才拦，等于先发了一张"进得来但什么都点不动"的票 —— 用户看到空壳，排查时又以为
+  // 是权限没配置好。拒绝时不写任何 cookie，前端拿到的是明确的 403 + 文案。
+  const access = await checkAppAccess(sessionData.appId, sessionData.userId);
+  if (!access.allowed) {
+    log.warn(
+      `🚫 [Session] 应用准入被拒: appId=${sessionData.appId}, userId=${sessionData.userId}, reason=${access.reason}`
+    );
+    return {
+      ok: false,
+      statusCode: 403,
+      body: {
+        code: 403,
+        message: access.message,
+        data: { reason: 'APP_ACCESS_DENIED', appId: sessionData.appId }
+      }
+    };
   }
 
   // 创建正式 Session，refreshToken 写入 HttpOnly 凭证 cookie（JS 读不到，防 XSS）

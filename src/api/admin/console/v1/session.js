@@ -22,7 +22,7 @@ import {
 } from '../../../../framework/security/auth/index.js';
 import menuDao from '../../../../app/console/dao/menu.dao.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
-import { toPermissionList, hasPermissionLike } from '../../../../app/console/utils/permissions.js';
+import { toPermissionList, hasPermissionLike, hasAnyPermissionIn } from '../../../../app/console/utils/permissions.js';
 
 /**
  * 当前用户是否拥有管理后台全量通配
@@ -58,6 +58,14 @@ async function registerSessionRoutes(fastify) {
     requireLogin: true,
     handler: withFail(async (request, reply) => {
       const user = request.state.user || {};
+
+      // 🔴 兜底闸门：登录时已由 `bind-session` 判过准入（`app/console/config.js` 的
+      //    `access`），但会话建立之后角色仍可能被撤销 —— 权限每请求实时解析，
+      //    这里再判一次，撤销后下一次刷新就进不来，而不是看到一片 403 的空壳。
+      if (!hasAnyPermissionIn(user.permissions, 'admin') && !isSuperViewer(user)) {
+        return reply.result.forbidden('该账号没有管理后台的访问权限，请联系管理员分配角色后再试');
+      }
+
       const row = await getModel('User').findOne({
         where: { uid: user.uid },
         attributes: ['id', 'uid', 'username', 'email', 'avatar', 'status', 'dept_id']

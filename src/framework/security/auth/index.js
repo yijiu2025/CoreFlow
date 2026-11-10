@@ -95,6 +95,8 @@ export {
   warmPermissions
 } from './permission/perm-cache.js';
 export { loadUserPermissions } from './permission/permission-loader.js';
+// 应用准入闸门（登录时判定"这个账号能不能进这个应用"；策略声明在 src/app/<app>/config.js）
+export { checkAppAccess } from './permission/app-access.js';
 
 // 5. 设备——设备 ID/类型/指纹 与 设备 ID 服务端签发/校验
 export {
