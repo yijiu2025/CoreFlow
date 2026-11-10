@@ -68,6 +68,7 @@
       @input 账号 (bind: form.username)
       @input 邮箱 (bind: form.email)
       @input 部门 (bind: form.deptId)
+      // 回填依据是列表返回的 role_ids（ID 逗号串），不是 roleNames —— 名字会重名 / 可改名，反查必错
       @input 角色 (bind: form.roleIds)
       @input 岗位 (bind: form.postIds)
       @switch 启用 (bind: form.status)

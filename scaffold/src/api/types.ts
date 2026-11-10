@@ -58,6 +58,10 @@ export interface UserRow {
   dept_name: string | null;
   role_names: string | null;
   post_names: string | null;
+  /** 角色 ID 逗号串（GROUP_CONCAT）：表单回填的唯一依据，**不要**用 role_names 反查 */
+  role_ids: string | null;
+  /** 岗位 ID 逗号串（同上） */
+  post_ids: string | null;
   created_at: string;
 }
 

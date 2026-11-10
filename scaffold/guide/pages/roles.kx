@@ -83,14 +83,16 @@
   @state graph: object = {}
   @state traceLevel: string = 'overview'
   @state pendingMenuIds: number[] = []
+  @state permCatalog: object[] = []
 
   @api GET /admin/console/v1/roles (query: pageNum, pageSize, keyword, appId) -> rolePage
-  @api POST /admin/console/v1/roles (body: { code, name, appId, rankLevel, description, menuIds })
-  @api PUT /admin/console/v1/roles/:id (bind: id, body: { name, rankLevel, description, menuIds })
+  @api POST /admin/console/v1/roles (body: { code, name, appId, rankLevel, description, permissions, menuIds })
+  @api PUT /admin/console/v1/roles/:id (bind: id, body: { name, rankLevel, description, permissions, menuIds })
   @api DELETE /admin/console/v1/roles/:id (bind: id)
   @api GET /admin/console/v1/roles/:id/menus (bind: id) -> roleMenus
   @api PUT /admin/console/v1/roles/:id/menus (bind: id, body: { menuIds })
   @api GET /admin/console/v1/permissions/graph -> graph
+  @api GET /admin/console/v1/permissions/catalog -> permCatalog
   @api GET /admin/console/v1/menus/tree -> menuTree
 
   @sync matrixCells = buildMatrix(rolePage.rows, menuTree)
