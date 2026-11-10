@@ -15,10 +15,19 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
 import { ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
 import { createDept, deptTree, removeDept, updateDept } from '@/api/system';
-import type { DeptNode } from '@/api/types';
+import type { DeptNode, UserRow } from '@/api/types';
+import { listUsers } from '@/api/system';
+
+/**
+ * 组织架构画布：异步加载
+ *
+ * 连带 Canvas 舞台与 gsap（约 70KB），部门页首屏是表格 —— 不该为「可能不点的一档
+ * 视图」付这个体积。
+ */
+const OrgCanvas = defineAsyncComponent(() => import('@/components/business/OrgCanvas.vue'));
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -30,6 +39,12 @@ const toast = ref('');
 
 /** 折叠状态：存「已收起」的 id，默认全展开（新部门自动展开） */
 const collapsed = ref<Set<number>>(new Set());
+
+/** 视图档位：列表 / 组织架构 */
+const altView = ref<'table' | 'canvas'>('table');
+
+/** 画布选中部门（null = 未选） */
+const selectedId = ref<number | null>(null);
 
 const query = reactive({ keyword: '', status: '' as '' | 0 | 1 });
 
@@ -188,6 +203,66 @@ function collapseAll(): void {
   walk(trees.value);
   collapsed.value = next;
 }
+
+/* ── 画布：选中路径与成员 ── */
+
+/**
+ * 在树里找从根到目标节点的路径
+ *
+ * @param nodes 树
+ * @param id 部门 ID
+ * @param trail 递归累积的路径
+ * @returns 路径（未找到为 null）
+ */
+function findPath(nodes: DeptNode[], id: number, trail: DeptNode[] = []): DeptNode[] | null {
+  for (const node of nodes) {
+    const next = [...trail, node];
+    if (node.id === id) return next;
+    const hit = findPath(node.children ?? [], id, next);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+const selectedPath = computed(() => (selectedId.value === null ? null : findPath(trees.value, selectedId.value)));
+const selected = computed(() => selectedPath.value?.[selectedPath.value.length - 1] ?? null);
+
+// 默认选中第一个根部门；树刷新后选中项不存在则回退（避免面板指向已删除的部门）
+watch(
+  trees,
+  nodes => {
+    if (!nodes.length) {
+      selectedId.value = null;
+      return;
+    }
+    if (selectedId.value === null || !findPath(nodes, selectedId.value)) selectedId.value = nodes[0].id;
+  },
+  { immediate: true }
+);
+
+const members = ref<UserRow[]>([]);
+const membersTotal = ref(0);
+const membersLoading = ref(false);
+/** 成员请求序号：快速切换部门时丢弃过期响应 */
+let memberRequest = 0;
+
+watch(selectedId, async id => {
+  members.value = [];
+  membersTotal.value = 0;
+  if (id === null) return;
+  const current = ++memberRequest;
+  membersLoading.value = true;
+  try {
+    const page = await listUsers({ deptId: id, pageNum: 1, pageSize: 6 });
+    if (current !== memberRequest) return;
+    members.value = page.rows;
+    membersTotal.value = page.total;
+  } catch {
+    /* 成员只是画布上的辅助信息，拉取失败不打断主流程 */
+  } finally {
+    if (current === memberRequest) membersLoading.value = false;
+  }
+});
 
 /* ── 表单 ── */
 
@@ -355,7 +430,12 @@ onMounted(load);
       <span class="page__sub">共 {{ summary.count }} 个部门 · {{ summary.members }} 人 · 层级决定「本部门及以下」的数据权限范围</span>
     </div>
 
-    <div class="toolbar">
+    <div class="tabbar" role="tablist" aria-label="视图">
+      <button type="button" role="tab" :aria-selected="altView === 'table'" :class="['tab', { 'is-on': altView === 'table' }]" @click="altView = 'table'">列表</button>
+      <button type="button" role="tab" :aria-selected="altView === 'canvas'" :class="['tab', { 'is-on': altView === 'canvas' }]" @click="altView = 'canvas'">组织架构</button>
+    </div>
+
+    <div v-show="altView === 'table'" class="toolbar">
       <input
         v-model="query.keyword"
         class="input"
@@ -381,7 +461,7 @@ onMounted(load);
 
     <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
-    <section class="panel">
+    <section v-if="altView === 'table'" class="panel">
       <div class="table-wrap">
         <table class="table">
           <thead>
@@ -459,6 +539,92 @@ onMounted(load);
       </div>
     </section>
 
+    <!-- 组织架构画布：拖拽平移 / Ctrl 滚轮缩放，四角浮动面板 -->
+    <section v-if="altView === 'canvas'">
+      <OrgCanvas :tree="trees" :selected-id="selectedId" @select="selectedId = $event.id">
+        <template #tl>
+          <section v-if="selected" class="org-card m-float">
+            <span class="dept-eyebrow">{{ selectedPath?.slice(0, -1).map(d => d.name).join(' / ') || '根部门' }}</span>
+            <h2 class="org-card-title">{{ selected.name }}</h2>
+            <dl class="org-card-rows">
+              <dt>负责人</dt>
+              <dd>{{ selected.leader || '—' }}</dd>
+              <dt>电话</dt>
+              <dd class="tnum">{{ selected.phone || '—' }}</dd>
+              <dt>邮箱</dt>
+              <dd>{{ selected.email || '—' }}</dd>
+              <dt>状态</dt>
+              <dd>
+                <span class="tag" :class="selected.status === 1 ? 'tag--ok' : 'tag--off'">
+                  {{ selected.status === 1 ? '启用' : '停用' }}
+                </span>
+              </dd>
+            </dl>
+          </section>
+        </template>
+
+        <template #tr>
+          <section v-if="selected" class="org-card m-float">
+            <span class="dept-eyebrow">部门读数</span>
+            <dl class="org-card-rows">
+              <dt>本部门</dt>
+              <dd class="tnum">{{ selected.user_count }} 人</dd>
+              <dt>含下级</dt>
+              <dd class="tnum">{{ membersOf(selected) }} 人</dd>
+              <dt>下级部门</dt>
+              <dd class="tnum">{{ descendantsOf(selected) }} 个</dd>
+              <dt>层级</dt>
+              <dd class="tnum">第 {{ selectedPath?.length ?? 1 }} 层</dd>
+            </dl>
+          </section>
+        </template>
+
+        <template #bl>
+          <section v-if="selected" class="org-card m-float">
+            <span class="dept-eyebrow">成员 · 共 {{ membersTotal }} 人</span>
+            <ul class="dept-members">
+              <li v-for="u in members" :key="u.id">
+                <span class="dept-members__name">{{ u.username }}</span>
+                <span class="dept-members__meta">{{ u.email || '—' }}</span>
+              </li>
+              <li v-if="!members.length" class="dept-members__empty">
+                {{ membersLoading ? '加载中…' : '暂无直属成员' }}
+              </li>
+            </ul>
+          </section>
+        </template>
+
+        <template #br>
+          <section v-if="selected" class="org-card org-actions m-float">
+            <button
+              v-if="auth.hasPermission('admin:dept:create')"
+              class="btn btn--primary btn--sm"
+              type="button"
+              @click="openCreate(selected)"
+            >
+              <Plus :size="14" /> 新增下级
+            </button>
+            <button
+              v-if="auth.hasPermission('admin:dept:update')"
+              class="btn btn--ghost btn--sm"
+              type="button"
+              @click="openEdit(selected)"
+            >
+              <Pencil :size="14" /> 编辑
+            </button>
+            <button
+              v-if="auth.hasPermission('admin:dept:delete')"
+              class="btn btn--danger btn--sm"
+              type="button"
+              @click="remove(selected)"
+            >
+              <Trash2 :size="14" /> 删除
+            </button>
+          </section>
+        </template>
+      </OrgCanvas>
+    </section>
+
     <div v-if="dialogOpen" class="modal-mask" @click.self="dialogOpen = false">
       <div class="modal">
         <header class="modal__head">
@@ -520,6 +686,47 @@ onMounted(load);
 </template>
 
 <style scoped>
+.dept-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--mauth-text-faint);
+}
+
+.dept-members {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dept-members li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.dept-members__name {
+  font-weight: 500;
+}
+
+.dept-members__meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--mauth-text-faint);
+}
+
+.dept-members__empty {
+  font-size: 12.5px;
+  color: var(--mauth-text-faint);
+}
+
 .dept-name {
   display: inline-flex;
   align-items: center;

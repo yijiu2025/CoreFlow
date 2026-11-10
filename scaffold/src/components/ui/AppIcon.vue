@@ -27,6 +27,8 @@ import {
   LayoutDashboard,
   ListTree,
   LogIn,
+  Maximize,
+  Minus,
   Network,
   Pause,
   Pencil,
@@ -74,6 +76,8 @@ const ICONS: Record<string, unknown> = {
   ChevronRight,
   Circle,
   Eye,
+  Maximize,
+  Minus,
   Layers,
   Plus,
   Pencil
@@ -96,6 +100,8 @@ const ALIAS: Record<string, string> = {
   layers: 'Layers',
   eye: 'Eye',
   plus: 'Plus',
+  minus: 'Minus',
+  fit: 'Maximize',
   edit: 'Pencil'
 };
 

@@ -29,6 +29,7 @@
   --input-bg: #ffffff;
   /* 接触阴影：与 tokens.css 的 --e1 同量级，但只做贴边一层 */
   --edge: 0 1px 2px rgba(46, 58, 62, 0.06);
+  --edge-strong: 0 2px 6px rgba(46, 58, 62, 0.09), 0 16px 36px rgba(46, 58, 62, 0.08);
   /* 质感曲线：折叠箭头、勾选缩放 */
   --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
 
@@ -47,6 +48,7 @@
   --leaf-text: #a8e06a;
   --input-bg: #1b2024;
   --edge: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --edge-strong: 0 2px 8px rgba(0, 0, 0, 0.5), 0 18px 40px rgba(0, 0, 0, 0.4);
 }
 
 /* ── 通用小件（矩阵与浮条共用）──────────────────────────────── */
@@ -1001,5 +1003,326 @@ button.trace-crumb:hover { color: var(--mauth-primary); }
 @media (max-width: 899px) {
   .ladder-card {
     display: none;
+  }
+}
+
+/* ── 组织架构画布（部门页第二档）──────────────────────────────────
+   整齐树布局 + 拖拽平移 / Ctrl 滚轮缩放；四角是页面放的浮动面板。
+   从参考项目 instruments.css 的「组织架构画布」段提取，只做变量名映射。 */
+.org-canvas {
+  position: relative;
+  height: max(560px, calc(100dvh - 252px));
+  overflow: hidden;
+  border-radius: var(--mauth-radius-xl);
+  border: 1px solid var(--mauth-border-strong);
+  background:
+    radial-gradient(60% 50% at 18% 12%, var(--ambient-a), transparent 70%),
+    radial-gradient(50% 45% at 85% 90%, var(--ambient-b), transparent 70%),
+    var(--surface-solid);
+  box-shadow: var(--edge), var(--e1);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.org-canvas.is-panning {
+  cursor: grabbing;
+}
+
+.org-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(var(--shade), 0.14) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(80% 80% at 50% 50%, #000 40%, transparent 100%);
+}
+
+.dark .org-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1.2px);
+}
+
+.org-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.org-links {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.org-link {
+  fill: none;
+  stroke: color-mix(in srgb, var(--cat-ink) 45%, transparent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.org-link.is-active {
+  stroke: color-mix(in srgb, var(--cat-ink, var(--mauth-primary)) 85%, transparent);
+  stroke-width: 2;
+}
+
+.org-pulse {
+  fill: var(--cat-ink, var(--mauth-primary));
+  opacity: 0;
+  stroke: var(--pulse-halo);
+  stroke-width: 6;
+  paint-order: stroke;
+  pointer-events: none;
+}
+
+.org-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px 0 20px;
+  border-radius: var(--mauth-radius-md);
+  border: 1px solid var(--mauth-border-strong);
+  background: var(--mauth-surface);
+  box-shadow: var(--edge), var(--e1);
+  cursor: pointer;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, translate 0.34s var(--ease-premium);
+}
+
+.org-node:hover {
+  box-shadow: var(--edge), var(--e2);
+  translate: 0 -2px;
+}
+
+.org-node:focus-visible {
+  outline: 2px solid var(--mauth-focus);
+  outline-offset: 3px;
+}
+
+.org-node.is-selected {
+  border-color: color-mix(in srgb, var(--mauth-primary) 55%, transparent);
+  box-shadow: var(--edge-strong), var(--e3), 0 0 0 4px var(--mauth-primary-soft);
+  translate: 0 -3px;
+}
+
+.org-node.is-root {
+  background: var(--plate-bg);
+  border-color: var(--plate-line);
+  color: var(--plate-ink);
+}
+
+.org-node.is-root .org-meta {
+  color: var(--plate-soft);
+}
+
+.org-node.is-off {
+  opacity: 0.55;
+}
+
+.org-strip {
+  position: absolute;
+  left: 8px;
+  top: 14px;
+  bottom: 14px;
+  width: 4px;
+  border-radius: 4px;
+  background: var(--cat-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat-ink) 30%, transparent);
+}
+
+.org-node.is-root .org-strip {
+  background: var(--lime);
+  box-shadow: 0 0 10px rgba(130, 221, 45, 0.5);
+}
+
+.org-name {
+  font-size: 14px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.org-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--mauth-text-soft);
+}
+
+.org-leader {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.org-count {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cat-ink);
+  background: var(--cat-bg);
+}
+
+.org-toggle {
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  translate: -50% 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mauth-text-mid);
+  border: 1px solid var(--mauth-border-strong);
+  background: var(--surface-solid);
+  box-shadow: var(--e1);
+  cursor: pointer;
+}
+
+.org-toggle:hover {
+  color: var(--mauth-primary);
+  border-color: var(--mauth-primary);
+}
+
+.org-panel {
+  position: absolute;
+  z-index: 4;
+  max-width: min(320px, calc(50% - 32px));
+  cursor: default;
+}
+
+.org-panel:empty {
+  display: none;
+}
+
+.org-panel.is-tl { left: 16px; top: 16px; }
+.org-panel.is-tr { right: 16px; top: 16px; }
+.org-panel.is-bl { left: 16px; bottom: 16px; }
+.org-panel.is-br { right: 16px; bottom: 16px; }
+
+.org-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  max-width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--mauth-radius-lg);
+}
+
+.org-card-title {
+  font-size: 18px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.org-card-rows {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 6px 0 0;
+  font-size: 12.5px;
+}
+
+.org-card-rows dt {
+  color: var(--mauth-text-faint);
+}
+
+.org-card-rows dd {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.org-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: auto;
+  gap: 8px;
+}
+
+.org-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 4;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  translate: -50% 0;
+  cursor: default;
+}
+
+/* 画布右下角的缩放控件（本仓用普通 button + AppIcon，参考项目是 IconButton） */
+.org-ctl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--mauth-text-mid);
+  cursor: pointer;
+}
+
+.org-ctl:hover {
+  background: var(--mauth-hover);
+  color: var(--mauth-text);
+}
+
+@media (max-width: 1080px) {
+  .org-panel.is-bl {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .org-canvas {
+    height: 520px;
+  }
+
+  .org-panel.is-tr {
+    display: none;
+  }
+
+  .org-panel {
+    max-width: calc(100% - 32px);
+  }
+
+  .org-controls {
+    left: auto;
+    right: 16px;
+    bottom: auto;
+    top: 16px;
+    translate: 0 0;
+  }
+
+  .org-panel.is-tl {
+    right: 76px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .org-layer {
+    will-change: auto;
   }
 }
