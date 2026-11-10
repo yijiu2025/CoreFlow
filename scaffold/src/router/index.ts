@@ -16,7 +16,7 @@ import { setUnauthorizedHandler } from '@/api/http';
 import { useAuthStore } from '@/stores/auth';
 
 /** 公开路由（不需要登录） */
-const PUBLIC_PATHS = ['/login'];
+const PUBLIC_PATHS = ['/login', '/access-denied'];
 
 const routes: RouteRecordRaw[] = [
   {
@@ -111,6 +111,14 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
+    // 「已认证但无后台权限」独立成页（不在 AppShell 内）：此时 `/session/me` 已被
+    // 403 拒绝，没有用户信息与菜单，壳子渲染出来只是一副空架子
+    path: '/access-denied',
+    name: 'access-denied',
+    component: () => import('@/views/AccessDenied.vue'),
+    meta: { plain: true, title: '无访问权限' }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/views/NotFound.vue'),
@@ -147,6 +155,9 @@ router.beforeEach(async to => {
     // 已停止跳转（验证反复不生效）：放行让页面渲染，由页面把提示显示出来，
     // 否则初始加载会被中止成一张白屏，用户连"该刷新"都看不到
     if (auth.challengeCapped) return true;
+    // 身份有效但没后台权限：送独立说明页，**不要**回登录页 —— 再登一次结果相同，
+    // 用户只会以为是自己密码错了（见 views/AccessDenied.vue 文件头）
+    if (auth.denied) return { path: '/access-denied' };
     return { path: '/login', query: { redirect: to.fullPath } };
   }
 

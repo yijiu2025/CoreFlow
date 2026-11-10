@@ -51,6 +51,17 @@ export const useAuthStore = defineStore('auth', () => {
    * 让页面渲染出来并把「请刷新重试」显示给用户，而不是留一张白屏。
    */
   const challengeCapped = ref(false);
+  /**
+   * 是否「已认证但没有本应用权限」
+   *
+   * 与「未登录」的区别：SSO 身份是有效的，只是这个账号没被授予后台角色
+   * （后端在 `/session/me` 前置了准入判定）。此时**不能**把用户当未登录踢回
+   * 登录页 —— 他再登一次还是同样结果，会形成"登录 → 空白 → 再登录"的死循环。
+   * 守卫据此改送 `/no-access`，由那一页说明原因并提供退出。
+   */
+  const denied = ref(false);
+  /** 无权限时的服务端文案（展示给用户，含"请联系管理员"） */
+  const deniedMessage = ref('');
   const loaded = ref(false);
   const loading = ref(false);
 
@@ -70,6 +81,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true;
     challengeBlocked.value = false;
     challengeCapped.value = false;
+    denied.value = false;
     try {
       const [user, routes] = await Promise.all([fetchMe(), fetchRoutes()]);
       me.value = user;
@@ -83,6 +95,14 @@ export const useAuthStore = defineStore('auth', () => {
       if (err instanceof ApiError && err.challenge) {
         challengeBlocked.value = !err.challengeCapped;
         challengeCapped.value = err.challengeCapped;
+        return false;
+      }
+      // 403 = 身份有效但无后台权限（登录闸门 / me 的兜底判定）。保留服务端文案，
+      // 让 `/no-access` 能说清"不是密码错、也不是掉线"，并给出下一步。
+      if (err instanceof ApiError && err.status === 403) {
+        denied.value = true;
+        deniedMessage.value = err.message;
+        loaded.value = false;
         return false;
       }
       reset();
@@ -107,6 +127,8 @@ export const useAuthStore = defineStore('auth', () => {
     me.value = null;
     menus.value = [];
     loaded.value = false;
+    denied.value = false;
+    deniedMessage.value = '';
   }
 
   /** 退出登录：先清 Cookie，再清本地状态 */
@@ -118,5 +140,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { me, menus, loaded, loading, challengeBlocked, challengeCapped, isAuthenticated, load, hasPermission, reset, logout };
+  return {
+    me,
+    menus,
+    loaded,
+    loading,
+    challengeBlocked,
+    challengeCapped,
+    denied,
+    deniedMessage,
+    isAuthenticated,
+    load,
+    hasPermission,
+    reset,
+    logout
+  };
 });

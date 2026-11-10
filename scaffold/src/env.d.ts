@@ -17,6 +17,10 @@ interface ImportMetaEnv {
   readonly VITE_PORT?: string;
   readonly VITE_API_TARGET?: string;
   readonly VITE_SSO_URL?: string;
+  /** 登录页版式（≡ oauth21 主题包名），透传为 iframe 的 `?th=` */
+  readonly VITE_SSO_THEME_VIEW?: string;
+  /** 登录页配色 id，透传为 iframe 的 `?th_color=` */
+  readonly VITE_SSO_THEME_COLOR?: string;
 }
 
 interface ImportMeta {
