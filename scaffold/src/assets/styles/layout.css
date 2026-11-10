@@ -192,3 +192,27 @@
     padding: 16px 14px 32px;
   }
 }
+
+/* ── 顶栏在窄屏的取舍 ───────────────────────────────────────
+   640px 以下先收起用户名（它只是「当前是谁」的提示，抽屉里有），
+   460px 以下再收起「退出」文案，只留图标（aria-label 仍在）。 */
+@media (max-width: 640px) {
+  .topbar {
+    gap: 6px;
+    padding: 0 10px;
+  }
+
+  .topbar__user {
+    display: none;
+  }
+
+  .page__title {
+    font-size: 19px;
+  }
+}
+
+@media (max-width: 460px) {
+  .topbar__label {
+    display: none;
+  }
+}

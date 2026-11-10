@@ -8,13 +8,14 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-vue-next';
 import { ThemeScope } from 'skinsuite/vue';
 import AppIcon from '@/components/ui/AppIcon.vue';
 import { useRenderDevice } from '@/view/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
+import { useResponsiveTables } from '@/composables/useResponsiveTables';
 import { useThemeStore } from '@/stores/theme';
 import type { MenuNode } from '@/api/types';
 
@@ -24,7 +25,11 @@ const auth = useAuthStore();
 const themeStore = useThemeStore();
 /**
  * 设备判定（宿主职责）：`?device=mobile|std` 优先，否则按视口宽度。
- * 主题库只接收设备名、不做判定 —— 这里的结果同时决定 token 作用域与布局断点。
+ * 主题库只接收设备名、不做判定 —— 这里的结果决定 **token 作用域**。
+ *
+ * 布局断点用同一个 820px 阈值写在 CSS 媒体查询里（`layout.css` 的侧栏抽屉、
+ * `components.css` 的表格卡片化与弹窗抽屉）：CSS 读不到 JS 状态，两处必须同步改，
+ * 阈值常量见 `view/useRenderDevice.ts` 的 `MOBILE_MAX_WIDTH`。
  */
 const device = useRenderDevice();
 
@@ -87,6 +92,18 @@ async function signOut(): Promise<void> {
   await auth.logout();
   router.replace('/login');
 }
+
+/**
+ * 窄屏表格卡片化
+ *
+ * 全站只需在这里装一次：它把 `<thead>` 的列名抄到单元格 `data-label` 上，
+ * 由 CSS 在 ≤720px 时渲染成卡片（详见 composable 文件头）。
+ */
+let uninstallTables: (() => void) | null = null;
+onMounted(() => {
+  uninstallTables = useResponsiveTables();
+});
+onBeforeUnmount(() => uninstallTables?.());
 
 // 路由变化时收起抽屉（键盘导航 / 后退按钮同样生效）
 watch(
@@ -154,11 +171,11 @@ watch(
           <Moon v-else :size="17" />
         </button>
 
-        <span class="tag tag--info">{{ auth.me?.username || '未登录' }}</span>
+        <span class="tag tag--info topbar__user">{{ auth.me?.username || '未登录' }}</span>
 
-        <button class="btn btn--ghost btn--sm" type="button" @click="signOut">
+        <button class="btn btn--ghost btn--sm" type="button" aria-label="退出登录" @click="signOut">
           <LogOut :size="16" />
-          退出
+          <span class="topbar__label">退出</span>
         </button>
       </header>
 

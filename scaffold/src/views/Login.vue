@@ -213,4 +213,62 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
     height: 460px;
   }
 }
+
+/*
+ * 手机（≤720px）：登录框必须落在首屏内。
+ *
+ * 品牌区在桌面上是「说清楚这是什么系统」，在手机上它只会把登录框挤到折线以下，
+ * 所以压缩成一行标记 + 标题，说明文字与三条卖点整块隐藏（不是藏内容，是让位）。
+ * 卡片高度改用 dvh：移动端浏览器地址栏伸缩会让 100vh 与可视高度不一致。
+ */
+@media (max-width: 720px) {
+  .login {
+    align-content: start;
+    gap: 16px;
+    min-height: 100dvh;
+    padding: 20px 14px 28px;
+  }
+
+  .login__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .login__mark {
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  .login__title {
+    margin: 0;
+    font-size: 19px;
+  }
+
+  .login__desc,
+  .login__points {
+    display: none;
+  }
+
+  .login__card {
+    width: 100%;
+  }
+
+  .login__card-head {
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+
+  /* 「如未显示，请检查 SSO 服务」是排障提示，手机上会把标题挤掉 */
+  .login__hint {
+    display: none;
+  }
+
+  .login__frame {
+    height: min(64dvh, 520px);
+  }
+}
 </style>

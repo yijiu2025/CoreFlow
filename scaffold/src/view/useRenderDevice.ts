@@ -3,9 +3,15 @@
  *
  * skinsuite 只接收设备名、不做判定；判定口径属于宿主：
  *   1. `?device=mobile|std` 显式锁定（便于真机排障与视觉走查）；
- *   2. 否则按视口宽度：<= 820px 视为手机端（与 layout.css 的断点同一阈值）。
+ *   2. 否则按视口宽度：<= 820px 视为手机端。
  *
- * 返回的是 `ref`，视口变化时自动更新 —— 侧栏抽屉、表格密度都依赖同一个口径。
+ * 🔴 这个阈值有三处消费方，改一处必须同步：
+ *    · 本文件 `MOBILE_MAX_WIDTH`（设备判定 → token 作用域）
+ *    · `assets/styles/layout.css` 的 `@media (max-width: 820px)`（侧栏改抽屉）
+ *    · `assets/styles/components.css` 的同值断点（表格 → 卡片、弹窗 → 底部抽屉）
+ *    CSS 侧读不到 JS 状态，所以是「一个约定值」而不是「一处定义」。
+ *
+ * 返回的是 `ref`，视口变化时自动更新。
  *
  * @author yijiu2025
  * @since 2026-11-09

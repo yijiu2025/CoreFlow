@@ -379,3 +379,139 @@
   color: var(--mauth-text);
   box-shadow: var(--e1);
 }
+
+/* ── 窄屏：表格 → 卡片 ──────────────────────────────────────────────
+   标签来自 `useResponsiveTables()` 抄进单元格的 `data-label`（源头仍是 thead），
+   所以这里不需要知道任何一列叫什么。桌面端完全不受影响。
+   断点取 820px，与外壳「侧栏改抽屉」同一个值 —— 平板竖屏同样是窄屏语义。 */
+@media (max-width: 820px) {
+  .table-wrap {
+    overflow-x: visible;
+    border-radius: 0;
+  }
+
+  .table {
+    display: block;
+    font-size: 13px;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tbody {
+    display: block;
+  }
+
+  .table tbody tr {
+    display: block;
+    margin-bottom: 10px;
+    padding: 4px 2px;
+    border: 1px solid var(--mauth-border);
+    border-radius: var(--mauth-radius-md);
+    background: var(--mauth-surface);
+  }
+
+  .table tbody tr:hover {
+    background: var(--mauth-surface);
+  }
+
+  .table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .table tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    height: auto;
+    min-height: 34px;
+    padding: 6px 12px;
+    white-space: normal;
+    text-align: right;
+    border-bottom: 0;
+  }
+
+  /* 首列当卡片标题：不重复列名，字号加重 */
+  .table tbody td:first-child {
+    padding-top: 10px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .table tbody td:first-child::before {
+    content: none;
+  }
+
+  .table tbody td::before {
+    content: attr(data-label);
+    flex: none;
+    max-width: 45%;
+    color: var(--mauth-text-soft);
+    font-size: 12px;
+    font-weight: 400;
+    text-align: left;
+  }
+
+  /* 空状态行：横跨整行，居中即可 */
+  .table tbody td[colspan] {
+    justify-content: center;
+    padding: 18px 12px;
+  }
+
+  .table tbody td[colspan]::before {
+    content: none;
+  }
+
+  /* 操作列：不再吸右，改成卡片底部一排按钮 */
+  .col-actions {
+    position: static;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px 10px;
+    border-top: 1px solid var(--mauth-border);
+    background: none;
+  }
+
+  .col-actions::before {
+    content: none;
+  }
+
+  /* 单元格里的长文本（邮箱、路由、权限码）允许换行断词 */
+  .table tbody td .mono,
+  .table tbody td.mono {
+    text-align: right;
+    word-break: break-all;
+  }
+}
+
+/* ── 弹窗在窄屏改「底部抽屉」──────────────────────────────────────
+   手机上居中弹窗的按钮常在拇指够不到的上半屏，且 86vh 会随地址栏伸缩跳动。
+   这里贴底、限高用 dvh，视觉上仍是一张卡（圆角与阴影不变）。 */
+@media (max-width: 820px) {
+  .modal-mask {
+    place-items: end center;
+    padding: 12px;
+  }
+
+  .modal {
+    max-height: 86dvh;
+    width: 100%;
+  }
+
+  .modal__body {
+    padding: 14px;
+  }
+
+  .modal__foot {
+    padding: 12px 14px;
+  }
+
+  /* 手机上主按钮放右、占更大点击面积 */
+  .modal__foot .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
