@@ -16,7 +16,7 @@
  * @since 2026-11-09
  */
 import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
-import { ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
+import { ChevronRight, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next';
 import { createDept, deptTree, removeDept, updateDept } from '@/api/system';
 import type { DeptNode, UserRow } from '@/api/types';
 import { listUsers } from '@/api/system';
@@ -436,24 +436,36 @@ onMounted(load);
     </div>
 
     <div v-show="altView === 'table'" class="toolbar">
-      <input
-        v-model="query.keyword"
-        class="input"
-        style="width: 200px"
-        placeholder="部门名称 / 负责人 / 电话"
-      />
-      <select v-model="query.status" class="select" style="width: 120px">
+      <span class="input-wrap">
+        <Search :size="14" class="input-wrap__icon" />
+        <input
+          v-model="query.keyword"
+          class="input"
+          style="width: 220px"
+          placeholder="部门名称 / 负责人 / 电话"
+        />
+      </span>
+      <select v-model="query.status" class="select" style="width: 118px">
         <option value="">全部状态</option>
         <option :value="1">启用</option>
         <option :value="0">停用</option>
       </select>
-      <button v-if="query.keyword || query.status !== ''" class="btn btn--ghost btn--sm" type="button" @click="query.keyword = ''; query.status = ''">
+      <button
+        v-if="query.keyword || query.status !== ''"
+        class="btn btn--ghost btn--sm"
+        type="button"
+        @click="query.keyword = ''; query.status = ''"
+      >
         清空
       </button>
-      <button class="btn btn--ghost btn--sm" type="button" @click="expandAll">展开全部</button>
-      <button class="btn btn--ghost btn--sm" type="button" @click="collapseAll">收起全部</button>
       <span class="toolbar__spacer"></span>
-      <button class="btn btn--sm" type="button" :disabled="loading" @click="load"><RefreshCw :size="15" /> 刷新</button>
+      <span class="toolbar__group">
+        <button class="btn btn--ghost btn--sm" type="button" @click="expandAll">展开</button>
+        <button class="btn btn--ghost btn--sm" type="button" @click="collapseAll">收起</button>
+      </span>
+      <button class="btn btn--sm btn--icon" type="button" :disabled="loading" aria-label="刷新" title="刷新" @click="load">
+        <RefreshCw :size="15" />
+      </button>
       <button v-if="auth.hasPermission('admin:dept:create')" class="btn btn--primary btn--sm" type="button" @click="openCreate()">
         <Plus :size="15" /> 新建部门
       </button>
@@ -478,8 +490,9 @@ onMounted(load);
           </thead>
           <tbody>
             <tr v-for="item in rows" :key="item.node.id">
-              <td :style="{ paddingLeft: `${12 + item.depth * 20}px` }">
+              <td>
                 <span class="dept-name">
+                  <span v-for="d in item.depth" :key="d" class="dept-guide" aria-hidden="true"></span>
                   <button
                     v-if="item.hasChildren"
                     class="dept-toggle"
@@ -495,15 +508,16 @@ onMounted(load);
                   </button>
                   <span v-else class="dept-toggle is-empty"></span>
                   <span class="dept-name__text">{{ item.node.name }}</span>
-                  <span v-if="item.hasChildren" class="tag tag--info">{{ item.node.children.length }} 个下级</span>
+                  <span v-if="item.hasChildren" class="dept-badge">{{ item.node.children.length }}</span>
                 </span>
               </td>
               <td>{{ item.node.leader || '—' }}</td>
               <td class="mono">{{ item.node.phone || '—' }}</td>
               <td class="mono">{{ item.node.email || '—' }}</td>
-              <td class="mono">
-                <span :title="`直属 ${item.node.user_count} 人`">{{ membersOf(item.node) }}</span>
-                <small v-if="item.hasChildren" class="dept-sub">含下级</small>
+              <td>
+                <span class="dept-count tnum" :title="`直属 ${item.node.user_count} 人${item.hasChildren ? '，含下级合计' : ''}`">
+                  {{ membersOf(item.node) }}
+                </span>
               </td>
               <td class="mono">{{ item.node.sort }}</td>
               <td>
@@ -514,18 +528,33 @@ onMounted(load);
               <td class="col-actions">
                 <button
                   v-if="auth.hasPermission('admin:dept:create')"
-                  class="btn btn--ghost btn--sm"
+                  class="btn btn--ghost btn--sm btn--icon"
                   type="button"
                   title="新增下级部门"
+                  aria-label="新增下级部门"
                   @click="openCreate(item.node)"
                 >
                   <Plus :size="14" />
                 </button>
-                <button v-if="auth.hasPermission('admin:dept:update')" class="btn btn--ghost btn--sm" type="button" @click="openEdit(item.node)">
-                  <Pencil :size="14" /> 编辑
+                <button
+                  v-if="auth.hasPermission('admin:dept:update')"
+                  class="btn btn--ghost btn--sm btn--icon"
+                  type="button"
+                  title="编辑"
+                  aria-label="编辑"
+                  @click="openEdit(item.node)"
+                >
+                  <Pencil :size="14" />
                 </button>
-                <button v-if="auth.hasPermission('admin:dept:delete')" class="btn btn--danger btn--sm" type="button" @click="remove(item.node)">
-                  <Trash2 :size="14" /> 删除
+                <button
+                  v-if="auth.hasPermission('admin:dept:delete')"
+                  class="btn btn--danger btn--sm btn--icon"
+                  type="button"
+                  title="删除"
+                  aria-label="删除"
+                  @click="remove(item.node)"
+                >
+                  <Trash2 :size="14" />
                 </button>
               </td>
             </tr>
@@ -686,6 +715,90 @@ onMounted(load);
 </template>
 
 <style scoped>
+/* 名称列：引导线 + 折叠箭头 + 名称 + 下级数徽标，一行 flex 排开 */
+.dept-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--row-h);
+}
+
+.dept-name__text {
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+
+/* 层级引导线：每深一层多一条竖虚线，比纯缩进更容易看清从属关系 */
+.dept-guide {
+  align-self: stretch;
+  width: 16px;
+  margin-right: 2px;
+  border-left: 1px dashed var(--mauth-border-strong);
+}
+
+/* 下级数量徽标（只在有子部门时出现） */
+.dept-badge {
+  flex: none;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 17px;
+}
+
+/* 人数胶囊 */
+.dept-count {
+  display: inline-block;
+  min-width: 34px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-mid);
+  font-size: 12px;
+  text-align: center;
+}
+
+.dept-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--mauth-text-mid);
+  cursor: pointer;
+}
+
+.dept-toggle:hover {
+  background: var(--mauth-hover);
+  color: var(--mauth-text);
+}
+
+.dept-toggle.is-empty {
+  cursor: default;
+}
+
+.dept-toggle svg {
+  transition: transform 0.16s ease;
+}
+
+.dept-toggle svg.is-open {
+  transform: rotate(90deg);
+}
+
+/* 工具条右侧的成组按钮：组内紧凑，与其他组之间留白 */
+.toolbar__group {
+  display: inline-flex;
+  gap: 4px;
+}
+
 .dept-eyebrow {
   font-size: 11px;
   letter-spacing: 0.06em;
@@ -724,53 +837,6 @@ onMounted(load);
 
 .dept-members__empty {
   font-size: 12.5px;
-  color: var(--mauth-text-faint);
-}
-
-.dept-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.dept-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  background: none;
-  color: var(--mauth-text-mid);
-  cursor: pointer;
-}
-
-.dept-toggle:hover {
-  background: var(--mauth-hover);
-  color: var(--mauth-text);
-}
-
-.dept-toggle.is-empty {
-  cursor: default;
-}
-
-.dept-toggle svg {
-  transition: transform 0.16s ease;
-}
-
-.dept-toggle svg.is-open {
-  transform: rotate(90deg);
-}
-
-.dept-name__text {
-  font-weight: 500;
-}
-
-.dept-sub {
-  margin-left: 4px;
-  font-size: 11px;
   color: var(--mauth-text-faint);
 }
 </style>

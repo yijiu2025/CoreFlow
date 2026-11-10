@@ -75,6 +75,18 @@
   font-size: 12px;
 }
 
+/* 图标按钮：只放一个图标时省掉左右内边距，做成正方形（行操作列用） */
+.btn--icon {
+  width: 30px;
+  padding: 0;
+  flex: none;
+}
+
+.btn--icon.btn--sm {
+  width: 28px;
+  height: 28px;
+}
+
 /* ── 输入 ─────────────────────────────────────────────────── */
 .field {
   display: flex;
@@ -159,6 +171,24 @@
 
 .toolbar__spacer {
   flex: 1 1 auto;
+}
+
+/* 带图标的输入框：图标绝对定位，输入框左侧留出内边距 */
+.input-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.input-wrap__icon {
+  position: absolute;
+  left: 10px;
+  color: var(--mauth-text-faint);
+  pointer-events: none;
+}
+
+.input-wrap .input {
+  padding-left: 30px;
 }
 
 /* ── 读数（仪器化） ───────────────────────────────────────── */
