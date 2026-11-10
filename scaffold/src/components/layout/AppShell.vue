@@ -13,7 +13,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-vue-next';
 import { ThemeScope } from 'skinsuite/vue';
 import AppIcon from '@/components/ui/AppIcon.vue';
-import { useRenderDevice } from '@/view/useRenderDevice';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 import { useResponsiveTables } from '@/composables/useResponsiveTables';
 import { useThemeStore } from '@/stores/theme';
@@ -29,7 +29,7 @@ const themeStore = useThemeStore();
  *
  * 布局断点用同一个 820px 阈值写在 CSS 媒体查询里（`layout.css` 的侧栏抽屉、
  * `components.css` 的表格卡片化与弹窗抽屉）：CSS 读不到 JS 状态，两处必须同步改，
- * 阈值常量见 `view/useRenderDevice.ts` 的 `MOBILE_MAX_WIDTH`。
+ * 阈值常量见 `views/device/useRenderDevice.ts` 的 `MOBILE_MAX_WIDTH`。
  */
 const device = useRenderDevice();
 

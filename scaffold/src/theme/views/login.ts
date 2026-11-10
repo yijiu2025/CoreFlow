@@ -3,7 +3,7 @@
  *
  * === 职责划分（改版式前必读）===
  * ```
- * views/Login.vue                 业务容器：SSO 握手 / 绑定会话 / 路由跳转 / 错误分类
+ * views/auth/Login.vue            业务容器：SSO 握手 / 绑定会话 / 路由跳转 / 错误分类
  *        │ 传 ctx（= 本文件定义的 LoginViewContext）
  *        ▼
  * theme/themes/<包>/<设备>/login/index.vue

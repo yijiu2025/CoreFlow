@@ -17,7 +17,9 @@
 //   scaffold/src/main.ts        门牌（样式 + 转交 bootstrap）
 //   scaffold/src/bootstrap.ts   启动编排（设备同步 → createApp → pinia → router → 主题 → mount）
 //   scaffold/src/theme/         主题包 pearl（standard / mobile × light / dark）
-//   scaffold/src/view/          设备事实与页面容器（devices.ts 为宿主单一来源）
+//   scaffold/src/views/         页面（按业务域分目录）与非页面的视图层基础设施
+//     auth/ dashboard/ system/ monitor/ tool/ error/   路由页面，目录 ≡ 侧栏分组
+//     device/                   设备词汇 + 视口判定（原 src/view/，2026-11-10 并入）
 //   scaffold/src/api/           http / session / system / monitor / portal
 //   scaffold/src/components/    ui（基础件）/ business（业务件）/ charts（自绘 SVG）/ layout（外壳）
 //

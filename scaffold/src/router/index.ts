@@ -22,7 +22,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'login',
-    component: () => import('@/views/Login.vue'),
+    component: () => import('@/views/auth/Login.vue'),
     meta: { plain: true, title: '登录' }
   },
   {
@@ -33,79 +33,79 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'dashboard',
         name: 'dashboard',
-        component: () => import('@/views/Dashboard.vue'),
+        component: () => import('@/views/dashboard/Dashboard.vue'),
         meta: { title: '工作台', permission: 'admin:dashboard:read' }
       },
       {
         path: 'system/user',
         name: 'system-user',
-        component: () => import('@/views/Users.vue'),
+        component: () => import('@/views/system/Users.vue'),
         meta: { title: '用户管理', permission: 'admin:user:read' }
       },
       {
         path: 'system/role',
         name: 'system-role',
-        component: () => import('@/views/Roles.vue'),
+        component: () => import('@/views/system/Roles.vue'),
         meta: { title: '角色管理', permission: 'admin:role:read' }
       },
       {
         path: 'system/menu',
         name: 'system-menu',
-        component: () => import('@/views/Menus.vue'),
+        component: () => import('@/views/system/Menus.vue'),
         meta: { title: '菜单管理', permission: 'admin:menu:read' }
       },
       {
         path: 'system/dept',
         name: 'system-dept',
-        component: () => import('@/views/Depts.vue'),
+        component: () => import('@/views/system/Depts.vue'),
         meta: { title: '部门管理', permission: 'admin:dept:read' }
       },
       {
         path: 'system/post',
         name: 'system-post',
-        component: () => import('@/views/Posts.vue'),
+        component: () => import('@/views/system/Posts.vue'),
         meta: { title: '岗位管理', permission: 'admin:post:read' }
       },
       {
         path: 'system/dict',
         name: 'system-dict',
-        component: () => import('@/views/Dict.vue'),
+        component: () => import('@/views/system/Dict.vue'),
         meta: { title: '字典管理', permission: 'admin:dict:read' }
       },
       {
         path: 'system/config',
         name: 'system-config',
-        component: () => import('@/views/Configs.vue'),
+        component: () => import('@/views/system/Configs.vue'),
         meta: { title: '参数管理', permission: 'admin:config:read' }
       },
       {
         path: 'monitor/oper-log',
         name: 'monitor-oper-log',
-        component: () => import('@/views/OperLog.vue'),
+        component: () => import('@/views/monitor/OperLog.vue'),
         meta: { title: '操作日志', permission: 'admin:log:read' }
       },
       {
         path: 'monitor/login-log',
         name: 'monitor-login-log',
-        component: () => import('@/views/LoginLog.vue'),
+        component: () => import('@/views/monitor/LoginLog.vue'),
         meta: { title: '登录日志', permission: 'admin:log:read' }
       },
       {
         path: 'monitor/firewall',
         name: 'monitor-firewall',
-        component: () => import('@/views/Firewall.vue'),
+        component: () => import('@/views/monitor/Firewall.vue'),
         meta: { title: '防火墙监控', permission: 'admin:firewall:read' }
       },
       {
         path: 'tool/generator',
         name: 'tool-generator',
-        component: () => import('@/views/Generator.vue'),
+        component: () => import('@/views/tool/Generator.vue'),
         meta: { title: '代码生成', permission: 'admin:gen:read' }
       },
       {
         path: 'no-access',
         name: 'no-access',
-        component: () => import('@/views/NoAccess.vue'),
+        component: () => import('@/views/error/NoAccess.vue'),
         meta: { title: '无访问权限' }
       }
     ]
@@ -115,13 +115,13 @@ const routes: RouteRecordRaw[] = [
     // 403 拒绝，没有用户信息与菜单，壳子渲染出来只是一副空架子
     path: '/access-denied',
     name: 'access-denied',
-    component: () => import('@/views/AccessDenied.vue'),
+    component: () => import('@/views/error/AccessDenied.vue'),
     meta: { plain: true, title: '无访问权限' }
   },
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
-    component: () => import('@/views/NotFound.vue'),
+    component: () => import('@/views/error/NotFound.vue'),
     meta: { plain: true, title: '页面不存在' }
   }
 ];
@@ -156,7 +156,7 @@ router.beforeEach(async to => {
     // 否则初始加载会被中止成一张白屏，用户连"该刷新"都看不到
     if (auth.challengeCapped) return true;
     // 身份有效但没后台权限：送独立说明页，**不要**回登录页 —— 再登一次结果相同，
-    // 用户只会以为是自己密码错了（见 views/AccessDenied.vue 文件头）
+    // 用户只会以为是自己密码错了（见 views/error/AccessDenied.vue 文件头）
     if (auth.denied) return { path: '/access-denied' };
     return { path: '/login', query: { redirect: to.fullPath } };
   }

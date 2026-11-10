@@ -19,7 +19,7 @@ import { reactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ThemeView } from 'skinsuite/vue';
 import { useAuthStore } from '@/stores/auth';
-import { useRenderDevice } from '@/view/useRenderDevice';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useSsoLogin } from '@/composables/useSsoLogin';
 import type { LoginViewContext } from '@/theme/views/login';
 

@@ -17,7 +17,7 @@ import { useRouter } from 'vue-router';
 import { LogOut, ShieldOff, UserRoundPlus } from 'lucide-vue-next';
 import { useAuthStore } from '@/stores/auth';
 import { ThemeScope } from 'skinsuite/vue';
-import { useRenderDevice } from '@/view/useRenderDevice';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 
 const router = useRouter();
 const auth = useAuthStore();

@@ -6,7 +6,7 @@
  *
  * 本文件只回答一件事：调试面板什么时候出现（`?debug=theme` 才挂载）。
  * 其余全部由机制推导：
- *   · 有哪些设备 → `src/view/devices.ts`（宿主事实，注入 store）
+ *   · 有哪些设备 → `src/views/device/devices.ts`（宿主事实，注入 store）
  *   · 有哪些页面 → `src/theme/views/<page>.ts`（`defineThemePage` 声明即注册）
  *   · 有哪些配色 → `themes/<包>/<设备>/<页面>/colors/` 目录结构（扫出来的）
  *
