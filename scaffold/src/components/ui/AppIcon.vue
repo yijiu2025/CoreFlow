@@ -18,8 +18,10 @@ import {
   BookMarked,
   Briefcase,
   Check,
+  ChevronLeft,
   ChevronRight,
   Circle,
+  KeyRound,
   LayoutDashboard,
   ListTree,
   LogIn,
@@ -64,6 +66,7 @@ const ICONS: Record<string, unknown> = {
   Play,
   Pause,
   Check,
+  ChevronLeft,
   ChevronRight,
   Circle
 };
@@ -76,6 +79,11 @@ const ALIAS: Record<string, string> = {
   pause: 'Pause',
   check: 'Check',
   chevronright: 'ChevronRight',
+  chevronleft: 'ChevronLeft',
+  key: 'KeyRound',
+  users: 'Users',
+  role: 'ShieldCheck',
+  menu: 'ListTree',
   chevron: 'ChevronRight'
 };
 

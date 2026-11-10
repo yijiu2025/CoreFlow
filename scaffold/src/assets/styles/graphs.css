@@ -390,3 +390,401 @@
     display: none;
   }
 }
+
+/* ── 图谱材质变量（关系图舞台用；浅 / 深两套）────────────────────── */
+:root {
+  /* 舞台背景的两团环境光：青柠在左下，主色在上方 */
+  --ambient-a: rgba(130, 221, 45, 0.07);
+  --ambient-b: rgba(35, 109, 233, 0.055);
+  /* 连线：常态淡墨，激活时主色 */
+  --thread: rgba(var(--shade), 0.2);
+  --thread-active: rgba(35, 109, 233, 0.62);
+  /* 脉冲外圈光晕 */
+  --pulse-halo: rgba(35, 109, 233, 0.18);
+  /* 玻璃饰边与节点底 */
+  --glass-line: rgba(255, 255, 255, 0.88);
+  --node-bg: rgba(255, 255, 255, 0.94);
+  /* 胶囊（节点标签）底与内阴影 */
+  --pill-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.93), rgba(246, 251, 249, 0.62));
+  --pill-inset: inset 0 -1px 0 rgba(105, 122, 128, 0.08);
+  /* 悬浮信息卡 */
+  --float-bg: rgba(246, 248, 247, 0.86);
+  --float-inset:
+    inset 0 0 0 1px rgba(120, 132, 135, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --red-text: #e0443b;
+}
+
+.dark {
+  --ambient-a: rgba(130, 221, 45, 0.05);
+  --ambient-b: rgba(76, 141, 255, 0.07);
+  --thread: rgba(255, 255, 255, 0.16);
+  --thread-active: rgba(110, 160, 255, 0.72);
+  --pulse-halo: rgba(76, 141, 255, 0.28);
+  --glass-line: rgba(255, 255, 255, 0.1);
+  --node-bg: rgba(32, 37, 40, 0.94);
+  --pill-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
+  --pill-inset: inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  --float-bg: rgba(30, 34, 37, 0.9);
+  --float-inset:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --red-text: #ff7a71;
+}
+
+/* 分类色：`cat-N` 把主题的分类色转成「当前分类的底 / 墨」两个局部变量 */
+.cat-1 { --cat-bg: var(--mauth-cat-1-bg); --cat-ink: var(--mauth-cat-1-ink); }
+.cat-2 { --cat-bg: var(--mauth-cat-2-bg); --cat-ink: var(--mauth-cat-2-ink); }
+.cat-3 { --cat-bg: var(--mauth-cat-3-bg); --cat-ink: var(--mauth-cat-3-ink); }
+.cat-4 { --cat-bg: var(--mauth-cat-4-bg); --cat-ink: var(--mauth-cat-4-ink); }
+.cat-5 { --cat-bg: var(--mauth-cat-5-bg); --cat-ink: var(--mauth-cat-5-ink); }
+
+/* ── 关系图（rg-*）：从参考项目按选择器提取，仅做变量名映射 ──────────
+   .rg 主块、节点/连线/脉冲、舞台（is-stage）标签布局、溯源面包屑都已在内。
+   未使用的 alert-* / ask-* 规则没有带进来（它们与 rg 混在同一段里）。 */
+
+/* ============================================================
+   关系图 RelationGraph：节点是零尺寸锚点（transform 归帧循环），
+   可见主体 .rg-body 按 align 相对锚点偏移；连线与脉冲在同一 SVG 层。
+   ============================================================ */
+.rg {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--mauth-radius-xl);
+  border: 1px solid var(--mauth-border-strong);
+  background:
+    radial-gradient(55% 50% at 50% 46%, var(--ambient-b), transparent 72%),
+    radial-gradient(40% 40% at 12% 90%, var(--ambient-a), transparent 70%),
+    var(--surface-solid);
+  box-shadow: var(--edge), var(--e1);
+  outline: none;
+}
+
+.rg.is-pannable { cursor: grab; touch-action: none; }
+
+.rg-stage-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+.rg-layer { position: absolute; inset: 0; transform-origin: 0 0; }
+
+.rg-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+
+.rg-link { color: var(--thread-active); }
+
+.rg-link.cat-1, .rg-link.cat-2, .rg-link.cat-3, .rg-link.cat-4, .rg-link.cat-5 { color: color-mix(in srgb, var(--cat-ink) 75%, transparent); }
+
+.rg-link.is-danger { color: var(--red-text); }
+
+.rg-link.is-lime { color: var(--leaf-text); }
+
+.rg-path { fill: none; stroke: var(--thread); stroke-width: 1.2; stroke-linecap: round; transition: stroke .3s, stroke-width .3s; }
+
+.rg-link.is-dashed .rg-path { stroke-dasharray: 3 4; }
+
+.rg-link.is-lit .rg-path, .rg-link.is-active .rg-path { stroke: currentColor; stroke-width: 1.6; }
+
+.rg-link.is-danger .rg-path { stroke: color-mix(in srgb, var(--red-text) 55%, transparent); }
+
+.rg-link.is-dim .rg-path { stroke-opacity: .35; }
+
+.rg-pulse { fill: currentColor; opacity: 0; stroke: var(--pulse-halo); stroke-width: 6; paint-order: stroke; }
+
+.rg-pulse.is-back { fill: var(--leaf-text); stroke: rgba(130, 221, 45, .2); }
+
+.rg-node {
+  position: absolute; left: 0; top: 0; width: 0; height: 0;
+  padding: 0; border: 0; background: none; color: var(--mauth-text);
+  font: inherit; text-align: left; cursor: pointer;
+  will-change: transform, opacity; opacity: 0;
+  z-index: 1;
+}
+
+.rg-node.is-static { cursor: default; }
+
+.rg-node.is-active, .rg-node:hover, .rg-node:focus-visible { z-index: 3; }
+
+.rg-node:focus-visible { outline: none; }
+
+.rg-node:focus-visible .rg-body { outline: 2px solid var(--mauth-focus); outline-offset: 3px; }
+
+.rg-body {
+  position: absolute; left: 0; top: 0;
+  display: inline-flex; align-items: center; gap: 8px;
+  white-space: nowrap;
+  translate: -50% -50%;
+  transition: opacity .3s, box-shadow .3s, border-color .3s, background .3s, translate .3s;
+}
+
+.rg-node.align-left .rg-body { translate: -7px -50%; }
+
+.rg-node.align-right .rg-body { translate: calc(-100% + 7px) -50%; flex-direction: row-reverse; text-align: right; }
+
+.rg-node.is-dim .rg-body { opacity: .26; }
+
+.rg-dot {
+  flex: none; display: grid; place-items: center;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--node-bg);
+  border: 1.5px solid var(--cat-ink, var(--mauth-primary));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cat-ink, var(--mauth-primary)) 12%, transparent);
+  color: var(--cat-ink, var(--mauth-primary));
+}
+
+.rg-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+
+.rg-label { font-size: 12.5px; font-weight: 620; letter-spacing: -.005em; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
+.rg-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--mauth-text-faint); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
+.rg-badge { font-family: var(--font-mono); font-size: 10.5px; padding: 1px 7px; border-radius: 999px; color: var(--cat-ink, var(--mauth-text-soft)); background: var(--cat-bg, var(--mauth-hover)); }
+
+/* item：胶囊 */
+.rg-node.is-item .rg-body {
+  padding: 5px 11px 5px 6px; border-radius: 999px;
+  background: var(--node-bg); border: 1px solid var(--mauth-border-strong);
+  box-shadow: var(--edge), var(--e1);
+}
+
+.rg-node.is-item:hover .rg-body, .rg-node.is-item.is-active .rg-body { border-color: color-mix(in srgb, var(--cat-ink, var(--mauth-primary)) 55%, transparent); box-shadow: var(--edge), var(--e2); }
+
+.rg-node.is-item.is-active .rg-dot { background: var(--cat-ink, var(--mauth-primary)); }
+
+/* dot：只有圆点，标签悬停 / 激活时出现 */
+.rg-node.is-dot .rg-dot { width: 10px; height: 10px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat-ink, var(--mauth-primary)) 12%, transparent); }
+
+.rg-node.is-dot .rg-body { gap: 6px; }
+
+.rg-node.is-dot .rg-text { position: absolute; left: 16px; top: 50%; translate: 0 -50%; padding: 3px 8px; border-radius: var(--mauth-radius-xs); background: var(--float-bg); box-shadow: var(--float-inset), var(--e2); opacity: 0; pointer-events: none; transition: opacity .2s; backdrop-filter: blur(12px); }
+
+.rg-node.is-dot:hover .rg-text, .rg-node.is-dot:focus-visible .rg-text, .rg-node.is-dot.is-active .rg-text { opacity: 1; }
+
+.rg-node.is-dot.is-active .rg-dot { background: var(--cat-ink, var(--mauth-primary)); }
+
+/* hub：能力岛卡 */
+.rg-node.is-hub .rg-body {
+  display: grid; grid-template-columns: auto 1fr; grid-template-areas: "dot count" "text text";
+  column-gap: 10px; row-gap: 4px; min-width: 150px; padding: 12px 16px 13px;
+  border-radius: var(--mauth-radius-lg); background: var(--pill-bg); border: 1px solid var(--glass-line);
+  box-shadow: var(--pill-inset), var(--edge), var(--e2); backdrop-filter: blur(16px) saturate(1.2);
+}
+
+.rg-node.is-hub .rg-dot { grid-area: dot; width: 26px; height: 26px; border-radius: var(--mauth-radius-xs); background: var(--cat-bg, var(--mauth-primary-soft)); border: 0; box-shadow: none; }
+
+.rg-node.is-hub .rg-count { grid-area: count; justify-self: end; font-family: var(--font-mono); font-size: 22px; font-weight: 600; letter-spacing: -.03em; color: var(--mauth-text); }
+
+.rg-node.is-hub .rg-text { grid-area: text; }
+
+.rg-node.is-hub .rg-label { font-size: 13.5px; font-weight: 700; }
+
+.rg-node.is-hub:hover .rg-body, .rg-node.is-hub.is-active .rg-body { box-shadow: var(--pill-inset), var(--edge), var(--e3); border-color: color-mix(in srgb, var(--cat-ink, var(--mauth-primary)) 40%, var(--glass-line)); }
+
+/* core：深色中心盘 + 呼吸光环 */
+.rg-node.is-core .rg-body {
+  flex-direction: column; justify-content: center; gap: 6px;
+  width: 112px; height: 112px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #2a3136, var(--plate-bg) 70%);
+  color: var(--plate-ink); text-align: center;
+  box-shadow: 0 0 0 1px var(--plate-line), 0 18px 40px rgba(var(--shade), .22);
+}
+
+.rg-node.is-core .rg-body::before {
+  content: ""; position: absolute; inset: -18px; border-radius: 50%; z-index: -1;
+  background: radial-gradient(circle closest-side, var(--pulse-halo), transparent);
+  animation: rg-breathe 5.5s ease-in-out infinite;
+}
+
+.rg-node.is-core .rg-dot { width: auto; height: auto; border: 0; box-shadow: none; background: none; color: var(--lime); }
+
+.rg-node.is-core .rg-text { align-items: center; }
+
+.rg-node.is-core .rg-label { font-size: 13px; font-weight: 700; }
+
+.rg-node.is-core .rg-sub { color: var(--plate-soft); }
+
+.rg-node.tone-danger { --cat-ink: var(--red-text); --cat-bg: var(--mauth-danger-soft); }
+
+.rg-node.tone-lime { --cat-ink: var(--leaf-text); --cat-bg: var(--lime-soft); }
+
+.rg-node.tone-accent { --cat-ink: var(--mauth-primary); --cat-bg: var(--mauth-primary-soft); }
+
+.rg-node.tone-off .rg-body { opacity: .5; }
+
+.rg-node.tone-off .rg-label { text-decoration: line-through; text-decoration-color: var(--mauth-text-faint); }
+
+.rg-corner { position: absolute; z-index: 5; max-width: min(340px, calc(50% - 32px)); cursor: default; }
+
+.rg-corner:empty { display: none; }
+
+.rg-corner.is-tl { left: 16px; top: 16px; }
+
+.rg-corner.is-tr { right: 16px; top: 16px; }
+
+.rg-corner.is-bl { left: 16px; bottom: 16px; }
+
+.rg-corner.is-br { right: 16px; bottom: 16px; }
+
+/* ── 图谱舞台 variant="stage"（珍珠玻璃）：珍珠球 / 刻度表盘 / 圆点 / 光柱画在 Canvas，DOM 只留标签与命中区 ── */
+.rg.is-stage {
+  background:
+    radial-gradient(circle, rgba(var(--shade), .07) 1px, transparent 1.2px) 0 0 / 22px 22px,
+    radial-gradient(55% 50% at 50% 46%, var(--ambient-b), transparent 72%),
+    radial-gradient(40% 40% at 10% 92%, var(--ambient-a), transparent 70%),
+    var(--surface-solid);
+}
+
+.dark .rg.is-stage {
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, .06) 1px, transparent 1.2px) 0 0 / 22px 22px,
+    radial-gradient(55% 50% at 50% 46%, var(--ambient-b), transparent 72%),
+    var(--surface-solid);
+}
+
+/* core：珍珠球画在 Canvas，名称落在球下 */
+.rg.is-stage .rg-node.is-core::before,
+.rg.is-stage .rg-node.is-hub::before {
+  content: ""; position: absolute; border-radius: 50%;
+  width: var(--size, 96px); height: var(--size, 96px);
+  left: calc(var(--size, 96px) / -2); top: calc(var(--size, 96px) / -2);
+}
+
+.rg.is-stage .rg-node.is-core .rg-body {
+  width: auto; height: auto; padding: 0; gap: 1px; background: none; box-shadow: none; border-radius: 0; color: var(--mauth-text);
+  translate: -50% calc(var(--size, 96px) / 2 + 26px);
+}
+
+.rg.is-stage .rg-node.is-core .rg-body::before { display: none; }
+
+.rg.is-stage .rg-node.is-core .rg-dot { display: none; }
+
+.rg.is-stage .rg-node.is-core .rg-label { font-size: 14px; font-weight: 700; }
+
+.rg.is-stage .rg-node.is-core .rg-sub { color: var(--mauth-text-faint); }
+
+/* hub：玻璃刻度表盘画在 Canvas；图标与读数居中，名称与说明落在表盘下 */
+.rg.is-stage .rg-node.is-hub .rg-body {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  width: var(--size, 104px); height: var(--size, 104px); min-width: 0; padding: 0;
+  translate: -50% -50%; border: 0; border-radius: 50%; background: none; box-shadow: none; backdrop-filter: none;
+}
+
+.rg.is-stage .rg-node.is-hub .rg-dot { width: auto; height: auto; background: none; color: var(--cat-ink, var(--mauth-primary)); }
+
+.rg.is-stage .rg-node.is-hub .rg-count { font-size: calc(var(--size, 104px) * .2); line-height: 1; color: var(--mauth-text); }
+
+.rg.is-stage .rg-node.is-hub .rg-text {
+  position: absolute; top: calc(100% + 10px); left: 50%; translate: -50% 0; align-items: center; text-align: center;
+  padding: 2px 8px; border-radius: var(--mauth-radius-xs); background: color-mix(in srgb, var(--surface-solid) 86%, transparent);
+}
+
+.rg.is-stage .rg-node.is-hub .rg-label { font-size: 13.5px; font-weight: 700; }
+
+.rg.is-stage .rg-node.is-hub .rg-sub { font-family: inherit; font-size: 11.5px; max-width: 180px; }
+
+.rg.is-stage .rg-node.is-hub:hover .rg-body,
+.rg.is-stage .rg-node.is-hub.is-active .rg-body { box-shadow: none; border-color: transparent; }
+
+.rg.is-stage .rg-node.is-hub:hover .rg-label,
+.rg.is-stage .rg-node.is-hub.is-active .rg-label { color: var(--cat-ink, var(--mauth-primary)); }
+
+.rg.is-stage .rg-node.is-hub:focus-visible .rg-body { outline-offset: 6px; border-radius: 50%; }
+
+/* dot：Canvas 画圆点，DOM 只留 18px 命中区与悬停标签 */
+.rg.is-stage .rg-node.is-dot .rg-dot { width: 18px; height: 18px; background: none; border: 0; box-shadow: none; }
+
+/* slab：岗位台阶，浅色玻璃台面 + 上沿分类色细带 */
+.rg.is-stage .rg-node.is-slab .rg-body {
+  flex-direction: column; gap: 2px; width: var(--size, 140px); padding: 12px 10px;
+  border-radius: var(--mauth-radius-md); text-align: center; white-space: normal;
+  background: var(--pill-bg); border: 1px solid var(--glass-line);
+  box-shadow: var(--pill-inset), var(--edge), var(--e2);
+  backdrop-filter: blur(14px) saturate(1.15);
+}
+
+.rg.is-stage .rg-node.is-slab .rg-body::before {
+  content: ""; position: absolute; left: 16px; right: 16px; top: -1px; height: 3px; border-radius: 0 0 3px 3px;
+  background: var(--cat-ink);
+}
+
+.rg.is-stage .rg-node.is-slab .rg-dot { display: none; }
+
+.rg.is-stage .rg-node.is-slab .rg-text { align-items: center; }
+
+.rg-rank { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; color: var(--cat-ink, var(--mauth-text-faint)); }
+
+.rg.is-stage .rg-node.is-slab .rg-count { font-family: var(--font-mono); font-size: 26px; font-weight: 600; letter-spacing: -.03em; line-height: 1.1; }
+
+.rg.is-stage .rg-node.is-slab .rg-count::after { content: " 人"; font-size: 11px; font-weight: 500; color: var(--mauth-text-faint); letter-spacing: 0; }
+
+.rg.is-stage .rg-node.is-slab .rg-label { font-size: 13.5px; font-weight: 680; max-width: 100%; }
+
+.rg.is-stage .rg-node.is-slab .rg-sub { max-width: 100%; }
+
+.rg.is-stage .rg-node.is-slab:hover .rg-body,
+.rg.is-stage .rg-node.is-slab.is-active .rg-body { border-color: color-mix(in srgb, var(--cat-ink) 40%, var(--glass-line)); box-shadow: var(--pill-inset), var(--edge), 0 0 0 4px color-mix(in srgb, var(--cat-ink) 10%, transparent), var(--e3); }
+
+.rg.is-stage .rg-node.is-slab.is-dim .rg-body { opacity: .6; }
+
+.rg.is-stage .rg-node.is-slab.tone-off .rg-label { text-decoration: line-through; }
+
+.rg-corner.is-tr { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+
+.rg-tools { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--float-bg); box-shadow: var(--float-inset), var(--e1); backdrop-filter: blur(16px); }
+
+.rg-tools button { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border: 0; border-radius: 999px; background: none; color: var(--mauth-text-soft); font: inherit; font-size: 11.5px; cursor: pointer; transition: color .2s, background .2s; }
+
+.rg-tools button:hover { color: var(--mauth-text); background: var(--mauth-hover); }
+
+.rg-tools button[aria-pressed="true"] { color: var(--mauth-text); background: var(--mauth-press); }
+
+.rg-tools button:focus-visible { outline: 2px solid var(--mauth-focus); outline-offset: 1px; }
+
+/* ── 权限溯源 ── */
+.trace-graph { height: max(600px, calc(100dvh - 236px)); }
+
+.trace-crumbs { display: flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px; border-radius: 999px; font-size: 12.5px; }
+
+.trace-crumbs:not(:has(.icon-btn)) { padding-left: 6px; }
+
+.trace-crumb { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 0; border-radius: 999px; background: none; color: var(--mauth-text-mid); font: inherit; cursor: pointer; }
+
+button.trace-crumb:hover { color: var(--mauth-primary); }
+
+.trace-crumb.is-current { color: var(--mauth-text); font-weight: 650; cursor: default; }
+
+.trace-sep { color: var(--mauth-text-faint); }
+
+.trace-legend { margin: 0; display: grid; grid-template-columns: repeat(3, auto); gap: 8px 18px; padding: 12px 16px; border-radius: var(--mauth-radius-lg); font-size: 12px; }
+
+.trace-legend dt { display: flex; align-items: center; gap: 6px; color: var(--mauth-text-soft); font-size: 11px; }
+
+.trace-legend dt i { width: 8px; height: 8px; border-radius: 50%; background: var(--cat-ink); }
+
+.trace-legend dd { margin: 2px 0 0; font-family: var(--font-mono); font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+
+.trace-legend .is-warn dd { color: #c98a16; }
+
+.trace-panel { position: absolute; z-index: 6; right: 16px; top: 16px; bottom: 16px; display: flex; width: 360px; max-width: calc(100% - 32px); pointer-events: none; }
+
+.trace-panel > * { pointer-events: auto; }
+
+.trace-dock { position: absolute; z-index: 5; bottom: 16px; }
+
+.trace-dock.is-center { left: 50%; translate: -50% 0; }
+
+.trace-dock.is-side { left: 16px; }
+
+.trace-hint { position: absolute; left: 50%; top: 22px; translate: -50% 0; margin: 0; font-size: 12px; pointer-events: none; white-space: nowrap; }
+
+.rg.is-stage .trace-hint { color: var(--mauth-text-soft); }
+
+.rg.is-stage .trace-crumb.cat-2, .rg.is-stage .trace-crumb.cat-3, .rg.is-stage .trace-crumb.cat-5 { color: var(--cat-ink); }
+
+.rg-node.is-item .rg-dot:has(svg) { width: 22px; height: 22px; }
+
+/* ── 磨砂浮层：舞台上的面包屑与图例（rg 段内复用）───────────────── */
+.m-float {
+  border: 1px solid var(--glass-line);
+  background: var(--float-bg);
+  box-shadow: var(--e3), var(--float-inset);
+  backdrop-filter: blur(28px) saturate(1.08);
+  -webkit-backdrop-filter: blur(28px) saturate(1.08);
+}

@@ -7,7 +7,7 @@
  * @since 2026-11-09
  */
 import { del, download, get, post, put } from './http';
-import type { MenuNode, PageResult, RoleRow, UserOptions, UserRow } from './types';
+import type { MenuNode, PageResult, PermissionGraph, RoleRow, UserOptions, UserRow } from './types';
 
 const BASE = '/admin/console/v1';
 
@@ -211,6 +211,11 @@ export function updateDictData(id: number, body: Record<string, unknown>): Promi
 /** 删除字典项 */
 export function removeDictData(id: number): Promise<null> {
   return del(`${BASE}/dict/data/${id}`);
+}
+
+/** 权限关系整图（溯源 / 星图共用） */
+export function permissionGraph(): Promise<PermissionGraph> {
+  return get(`${BASE}/permissions/graph`);
 }
 
 /* ── 参数 ─────────────────────────────────────────────────── */

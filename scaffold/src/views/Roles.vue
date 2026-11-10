@@ -39,6 +39,11 @@ import type { MatrixRole } from '@/components/business/PermissionMatrix.vue';
  * 类型仍从原文件 import（`import type` 不产生运行时代码）。
  */
 const PermissionMatrix = defineAsyncComponent(() => import('@/components/business/PermissionMatrix.vue'));
+
+/**
+ * 溯源视图同样异步：它连带 Canvas 舞台与 gsap，只在切到该档时下载。
+ */
+const PermissionTrace = defineAsyncComponent(() => import('@/components/business/PermissionTrace.vue'));
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -57,7 +62,7 @@ interface PermItem {
  * 矩阵读的是**同一份 rows**（列表接口已返回 menu_ids），所以切档不额外请求角色，
  * 只在首次进入矩阵时补一次菜单树。
  */
-const altView = ref<'table' | 'matrix'>('table');
+const altView = ref<'table' | 'matrix' | 'trace'>('table');
 const matrixSaving = ref(false);
 
 const rows = ref<RoleRow[]>([]);
@@ -393,6 +398,7 @@ onMounted(load);
     <div class="tabbar" role="tablist" aria-label="视图">
       <button type="button" role="tab" :aria-selected="altView === 'table'" :class="['tab', { 'is-on': altView === 'table' }]" @click="altView = 'table'">列表</button>
       <button type="button" role="tab" :aria-selected="altView === 'matrix'" :class="['tab', { 'is-on': altView === 'matrix' }]" @click="altView = 'matrix'">权限矩阵</button>
+      <button type="button" role="tab" :aria-selected="altView === 'trace'" :class="['tab', { 'is-on': altView === 'trace' }]" @click="altView = 'trace'">授权溯源</button>
     </div>
 
     <div v-show="altView === 'table'" class="toolbar">
@@ -470,6 +476,11 @@ onMounted(load);
         :saving="matrixSaving"
         @save="saveMatrix"
       />
+    </section>
+
+    <!-- 授权溯源：用户 → 角色 → 菜单 三层下钻（图谱舞台） -->
+    <section v-if="altView === 'trace'">
+      <PermissionTrace />
     </section>
 
     <!-- 角色表单（新建 / 编辑，含权限码） -->

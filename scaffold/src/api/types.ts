@@ -141,3 +141,49 @@ export interface LogStats {
   users?: number;
   ips?: number;
 }
+
+/* ── 权限关系图（GET /permissions/graph）───────────────────────── */
+
+/** 图里的用户节点（后端只返回脱敏字段） */
+export interface GraphUser {
+  id: number;
+  username: string;
+  email: string | null;
+  status: number;
+  dept_name: string | null;
+}
+
+/** 图里的角色节点（menuIds 是已授权的菜单 ID） */
+export interface GraphRole {
+  id: number;
+  name: string;
+  code: string;
+  app_id: string;
+  rank_level: number;
+  /** PBAC 权限码（policy 解出的 Allow Action） */
+  permissions: string[];
+  menuIds: number[];
+}
+
+/** 图里的菜单节点（后端是 snake_case） */
+export interface GraphMenu {
+  id: number;
+  parent_id: number | null;
+  name: string;
+  type: string;
+  icon: string | null;
+  path: string | null;
+  permission: string | null;
+  sort: number;
+  visible: number;
+  status: number;
+}
+
+/** 权限关系整图：users / roles / menus + [userId, roleId] 边集 */
+export interface PermissionGraph {
+  users: GraphUser[];
+  roles: GraphRole[];
+  menus: GraphMenu[];
+  userRoles: Array<[number, number]>;
+  usersVisible: boolean;
+}
