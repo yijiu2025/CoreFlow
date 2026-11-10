@@ -10,7 +10,7 @@
  */
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { Download, Pencil, Plus, RotateCcw, Search, Trash2, UserCheck, UserX } from 'lucide-vue-next';
+import { Download, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-vue-next';
 import {
   createUser,
   exportUsers,
@@ -22,6 +22,8 @@ import {
   userOptions
 } from '@/api/system';
 import type { UserOptions, UserRow } from '@/api/types';
+import GrantHistoryDialog from '@/components/business/GrantHistoryDialog.vue';
+import BatchGrantDialog from '@/components/business/BatchGrantDialog.vue';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -35,6 +37,15 @@ const toast = ref('');
 
 const query = reactive({ pageNum: 1, pageSize: 20, keyword: '', deptId: null as number | null, status: null as number | null });
 const options = ref<UserOptions>({ depts: [], roles: [], posts: [] });
+
+/** 勾选的用户 ID（批量授权用；切页时清空，避免"跨页选了但看不见"） */
+const selected = ref<Set<number>>(new Set());
+
+/** 授权记录弹窗的目标用户 */
+const grantTarget = ref<{ id: number; username: string } | null>(null);
+
+/** 批量授权弹窗开关 */
+const batchOpen = ref(false);
 
 const dialogOpen = ref(false);
 const submitting = ref(false);
@@ -72,6 +83,8 @@ function notify(message: string): void {
  * @returns 无
  */
 async function load(): Promise<void> {
+  // 换页 / 刷新后清空勾选：否则「已选 N 人」与眼前的行对不上
+  selected.value = new Set();
   loading.value = true;
   errorMessage.value = '';
   try {
@@ -116,6 +129,52 @@ function turnPage(delta: number): void {
   if (next < 1 || next > pageCount.value) return;
   query.pageNum = next;
   load();
+}
+
+/* ── 勾选与授权 ── */
+
+/** 全选状态：本页是否全被选中 */
+const allSelected = computed(() => rows.value.length > 0 && rows.value.every(r => selected.value.has(r.id)));
+
+/** 半选：选了一部分 */
+const someSelected = computed(() => !allSelected.value && rows.value.some(r => selected.value.has(r.id)));
+
+/** 已选用户（给批量授权弹窗） */
+const selectedUsers = computed(() => rows.value.filter(r => selected.value.has(r.id)).map(r => ({ id: r.id, username: r.username })));
+
+/**
+ * 勾选 / 取消单个
+ *
+ * @param id 用户 ID
+ */
+function toggleSelect(id: number): void {
+  const next = new Set(selected.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selected.value = next;
+}
+
+/** 全选 / 取消全选本页 */
+function toggleSelectAll(): void {
+  selected.value = allSelected.value ? new Set() : new Set(rows.value.map(r => r.id));
+}
+
+/**
+ * 打开某用户的授权记录
+ *
+ * @param row 用户行
+ */
+function openGrants(row: UserRow): void {
+  grantTarget.value = { id: row.id, username: row.username };
+}
+
+/** 批量授权完成 */
+function onBatchDone(): void {
+  batchOpen.value = false;
+  const count = selected.value.size;
+  selected.value = new Set();
+  notify(`已更新 ${count} 个用户的角色`);
+  void load();
 }
 
 /** 打开「新建」表单 */
@@ -301,6 +360,14 @@ onMounted(async () => {
 
       <span class="toolbar__spacer"></span>
 
+      <button
+        v-if="auth.hasPermission('admin:user:update') && selected.size > 0"
+        class="btn btn--primary btn--sm"
+        type="button"
+        @click="batchOpen = true"
+      >
+        <ShieldCheck :size="15" /> 批量授权（{{ selected.size }}）
+      </button>
       <button class="btn btn--sm" type="button" @click="exportCsv"><Download :size="15" /> 导出</button>
       <button v-if="auth.hasPermission('admin:user:create')" class="btn btn--primary btn--sm" type="button" @click="openCreate">
         <Plus :size="15" /> 新建用户
@@ -314,6 +381,15 @@ onMounted(async () => {
         <table class="table">
           <thead>
             <tr>
+              <th class="col-check">
+                <input
+                  type="checkbox"
+                  :checked="allSelected"
+                  :indeterminate.prop="someSelected"
+                  aria-label="全选本页"
+                  @change="toggleSelectAll"
+                />
+              </th>
               <th>账号</th>
               <th>邮箱</th>
               <th>部门</th>
@@ -324,7 +400,15 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in rows" :key="row.id">
+            <tr v-for="row in rows" :key="row.id" :class="{ 'is-picked': selected.has(row.id) }">
+              <td class="col-check">
+                <input
+                  type="checkbox"
+                  :checked="selected.has(row.id)"
+                  :aria-label="`选择 ${row.username}`"
+                  @change="toggleSelect(row.id)"
+                />
+              </td>
               <td>{{ row.username }}</td>
               <td>{{ row.email || '—' }}</td>
               <td>{{ row.dept_name || '—' }}</td>
@@ -336,34 +420,52 @@ onMounted(async () => {
                 </span>
               </td>
               <td class="col-actions">
-                <button v-if="auth.hasPermission('admin:user:update')" class="btn btn--ghost btn--sm" type="button" @click="openEdit(row)">
-                  <Pencil :size="14" /> 编辑
+                <button class="btn btn--ghost btn--sm btn--icon" type="button" title="授权记录" aria-label="授权记录" @click="openGrants(row)">
+                  <ShieldCheck :size="14" />
                 </button>
-                <button v-if="auth.hasPermission('admin:user:update')" class="btn btn--ghost btn--sm" type="button" @click="toggleStatus(row)">
-                  <UserX v-if="row.status === 1" :size="14" />
-                  <UserCheck v-else :size="14" />
-                  {{ row.status === 1 ? '冻结' : '启用' }}
+                <button v-if="auth.hasPermission('admin:user:update')" class="btn btn--ghost btn--sm btn--icon" type="button" title="编辑" aria-label="编辑" @click="openEdit(row)">
+                  <Pencil :size="14" />
                 </button>
                 <button
                   v-if="auth.hasPermission('admin:user:update')"
-                  class="btn btn--ghost btn--sm"
+                  class="btn btn--ghost btn--sm btn--icon"
                   type="button"
+                  :title="row.status === 1 ? '冻结' : '启用'"
+                  :aria-label="row.status === 1 ? '冻结' : '启用'"
+                  @click="toggleStatus(row)"
+                >
+                  <UserX v-if="row.status === 1" :size="14" />
+                  <UserCheck v-else :size="14" />
+                </button>
+                <button
+                  v-if="auth.hasPermission('admin:user:update')"
+                  class="btn btn--ghost btn--sm btn--icon"
+                  type="button"
+                  title="重置密码"
+                  aria-label="重置密码"
                   @click="openReset(row)"
                 >
-                  重置密码
+                  <RotateCcw :size="14" />
                 </button>
-                <button v-if="auth.hasPermission('admin:user:delete')" class="btn btn--danger btn--sm" type="button" @click="remove(row)">
-                  <Trash2 :size="14" /> 删除
+                <button
+                  v-if="auth.hasPermission('admin:user:delete')"
+                  class="btn btn--danger btn--sm btn--icon"
+                  type="button"
+                  title="删除"
+                  aria-label="删除"
+                  @click="remove(row)"
+                >
+                  <Trash2 :size="14" />
                 </button>
               </td>
             </tr>
             <tr v-if="!loading && rows.length === 0">
-              <td colspan="7">
+              <td colspan="8">
                 <div class="empty">没有符合条件的用户</div>
               </td>
             </tr>
             <tr v-if="loading">
-              <td colspan="7"><div class="empty">加载中…</div></td>
+              <td colspan="8"><div class="empty">加载中…</div></td>
             </tr>
           </tbody>
         </table>
@@ -457,11 +559,43 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- 授权记录：单个用户的时间线 -->
+    <GrantHistoryDialog
+      :user-id="grantTarget?.id ?? null"
+      :username="grantTarget?.username ?? ''"
+      @close="grantTarget = null"
+    />
+
+    <!-- 批量授权：追加 / 移除同一组角色 -->
+    <BatchGrantDialog
+      v-if="batchOpen"
+      :users="selectedUsers"
+      :roles="options.roles"
+      @close="batchOpen = false"
+      @done="onBatchDone"
+    />
+
     <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 
 <style scoped>
+/* 勾选列：只放下复选框，宽度收到最小 */
+.col-check {
+  width: 36px;
+  padding-right: 0;
+}
+
+.col-check input {
+  accent-color: var(--mauth-primary);
+  cursor: pointer;
+}
+
+/* 选中行：左侧一条主色提示，便于在长列表里找回自己勾了哪几行 */
+.table tbody tr.is-picked {
+  background: var(--mauth-primary-soft);
+}
+
 .pager {
   display: flex;
   align-items: center;

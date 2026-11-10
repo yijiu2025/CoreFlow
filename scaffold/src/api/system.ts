@@ -7,7 +7,17 @@
  * @since 2026-11-09
  */
 import { del, download, get, post, put } from './http';
-import type { DeptNode, MenuNode, PageResult, PermissionGraph, PostMember, RoleRow, UserOptions, UserRow } from './types';
+import type {
+  DeptNode,
+  GrantLogRow,
+  MenuNode,
+  PageResult,
+  PermissionGraph,
+  PostMember,
+  RoleRow,
+  UserOptions,
+  UserRow
+} from './types';
 
 const BASE = '/admin/console/v1';
 
@@ -30,6 +40,25 @@ export function listUsers(query: UserQuery): Promise<PageResult<UserRow>> {
 /** 用户表单引用选项（部门 / 角色 / 岗位） */
 export function userOptions(): Promise<UserOptions> {
   return get(`${BASE}/users/options`);
+}
+
+/** 某用户的授权历史（授权 / 取消流水） */
+export function userGrants(id: number, query: Record<string, unknown> = {}): Promise<PageResult<GrantLogRow>> {
+  return get(`${BASE}/users/${id}/grants`, query);
+}
+
+/**
+ * 批量授权：对多个用户追加 / 移除同一组角色
+ *
+ * 刻意只有 add / remove，没有 replace —— 覆盖式批量的破坏力太大
+ * （一次误操作会把一批人原有角色全冲掉，流水只能事后解释、无法恢复）。
+ */
+export function batchGrantRoles(body: {
+  userIds: number[];
+  roleIds: number[];
+  mode: 'add' | 'remove';
+}): Promise<{ count: number }> {
+  return post(`${BASE}/users/roles/batch`, body);
 }
 
 /** 新建用户 */

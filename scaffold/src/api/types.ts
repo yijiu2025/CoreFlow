@@ -214,3 +214,18 @@ export interface DeptNode {
   user_count: number;
   children: DeptNode[];
 }
+
+/** 角色授权流水（GET /users/:id/grants） */
+export interface GrantLogRow {
+  id: number;
+  action: 'grant' | 'revoke';
+  role_id: number;
+  role_code: string;
+  role_name: string;
+  operator_id: number | null;
+  /** 操作人账号快照（用户改名/删除后仍可读） */
+  operator_name: string;
+  app_id: string;
+  remark: string | null;
+  created_at: string;
+}
