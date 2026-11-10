@@ -7,7 +7,6 @@
  * @since 2026-11-09
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
-import { QueryTypes } from 'sequelize';
 
 class PostDao {
   /**
@@ -40,8 +39,12 @@ class PostDao {
       raw: true
     });
 
-    const counts = await SysPost.sequelize.query('SELECT post_id, COUNT(*) AS c FROM sys_user_post GROUP BY post_id', {
-      type: QueryTypes.SELECT
+    // 各岗位成员数：按 post_id 分组（sys_user_post 无软删除，直接统计）
+    const SysUserPost = getModel('console.SysUserPost');
+    const counts = await SysUserPost.findAll({
+      attributes: ['post_id', [SysUserPost.sequelize.fn('COUNT', SysUserPost.sequelize.col('post_id')), 'c']],
+      group: ['post_id'],
+      raw: true
     });
     const countMap = new Map(counts.map(r => [Number(r.post_id), Number(r.c)]));
 
@@ -142,14 +145,20 @@ class PostDao {
    * @returns {Promise<Array<object>>} 用户列表
    */
   async users(id) {
-    return getModel('console.SysUserPost').sequelize.query(
-      `SELECT u.id, u.uid, u.username, u.email, u.avatar, u.status
-         FROM sys_user_post up
-         JOIN user_user u ON u.id = up.user_id
-        WHERE up.post_id = :id AND u.deleted_at IS NULL
-        ORDER BY u.id DESC`,
-      { type: QueryTypes.SELECT, replacements: { id } }
-    );
+    const links = await getModel('console.SysUserPost').findAll({
+      where: { post_id: id },
+      attributes: ['user_id'],
+      raw: true
+    });
+    if (links.length === 0) return [];
+    const ids = links.map(l => Number(l.user_id));
+    // User 是 paranoid 模型，已删除的用户自动排除（等价于原 SQL 的 u.deleted_at IS NULL）
+    return getModel('User').findAll({
+      where: { id: ids },
+      attributes: ['id', 'uid', 'username', 'email', 'avatar', 'status'],
+      order: [['id', 'DESC']],
+      raw: true
+    });
   }
 }
 

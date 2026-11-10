@@ -23,7 +23,6 @@ import { getModel } from '../../../../framework/persistence/db/index.js';
 import { roleRegistry } from '../../../../framework/security/pbac/index.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 import { hasPermissionLike } from '../../../../app/console/utils/permissions.js';
-import { QueryTypes } from 'sequelize';
 
 /**
  * 内置角色编码（不可删除、不可改菜单授权）
@@ -42,14 +41,18 @@ const BUILTIN_CODES = new Set([...roleRegistry.map(r => r.code), 'superadmin']);
  */
 async function maxRankOf(userId) {
   if (!userId) return 0;
-  const { sequelize } = getModel('Role');
-  const rows = await sequelize.query(
-    `SELECT MAX(r.rank_level) AS lv FROM iam_user_role ur
-       JOIN iam_role r ON r.id = ur.role_id
-      WHERE ur.user_id = :userId AND ur.delete_version = 0 AND r.deleted_at IS NULL`,
-    { type: QueryTypes.SELECT, replacements: { userId } }
-  );
-  return Number(rows[0]?.lv || 0);
+  // 两步模型查询（关联表 → 角色），不 JOIN：模型层已经处理好软删除与字段映射，
+  // 而且 iam_user_role / iam_role 之间没有挂 association（跨域不做耦合）
+  const links = await getModel('UserRole').findAll({
+    where: { user_id: userId, delete_version: 0 },
+    attributes: ['role_id'],
+    raw: true
+  });
+  if (links.length === 0) return 0;
+  const roleIds = Array.from(new Set(links.map(l => Number(l.role_id))));
+  // Role 是 paranoid 模型，已删除的角色自动排除（等价于原 SQL 的 deleted_at IS NULL）
+  const max = await getModel('Role').max('rank_level', { where: { id: roleIds } });
+  return Number(max || 0);
 }
 
 async function registerRoleRoutes(fastify) {

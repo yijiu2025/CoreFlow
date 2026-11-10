@@ -13,6 +13,19 @@
  *   method  ← details.method
  *   costMs  ← details.costMs
  *
+ * 🔴 **本文件是「允许裸 SQL」的边界，其余 DAO 一律走模型查询**（2026-11-10 收口）。
+ *    保留 `sequelize.query` 的三类理由，缺一就不该用：
+ *    1. **JSON 列提取**：method / path / costMs / status 都在 `details` JSON 里，
+ *       要 `JSON_UNQUOTE(JSON_EXTRACT(...))` + `CAST(... AS UNSIGNED)`；
+ *       用 ORM 得写成 `fn('JSON_UNQUOTE', fn('JSON_EXTRACT', col('details'), '$.method'))`
+ *       的嵌套串，比 SQL 更难读、更易改错。
+ *    2. **派生列**：`OPER_FAILED_SQL` / `LOGIN_FAILED_SQL` 是多条件 OR 表达式，
+ *       列表与统计共用同一份口径（改成 ORM 会分裂成两处判断，正是要避免的事）。
+ *    3. **时间分桶 / 比率聚合**：`GROUP BY DATE_FORMAT(...)` / `HOUR(...)` 与
+ *       「活跃用户数 / 失败率」这类派生指标，属纯 SQL 聚合。
+ *
+ *    ⇒ 新增查询若**不涉及**上面三类，必须用模型（示例：`recentLogins`）。
+ *
  * @author yijiu2025
  * @since 2026-11-09
  */
@@ -357,14 +370,41 @@ class LogDao {
    * @returns {Promise<Array<object>>} 登录记录
    */
   async recentLogins(limit = 5) {
-    const { sequelize } = getModel('SessionLog');
-    return sequelize.query(
-      `SELECT l.id, l.event, l.ip, l.location, l.created_at, u.username, u.avatar
-         FROM session_logs l LEFT JOIN user_user u ON u.id = l.user_id
-        WHERE l.event = 'LOGIN' OR l.event = 'LOGIN_SUCCESS'
-        ORDER BY l.created_at DESC LIMIT :limit`,
-      { type: QueryTypes.SELECT, replacements: { limit: Number(limit) } }
-    );
+    // 无 JSON 提取、无派生聚合 ⇒ 按文件头约定必须走模型（不写裸 SQL）
+    const SessionLog = getModel('SessionLog');
+    const { Op } = SessionLog.sequelize.Sequelize;
+    const logs = await SessionLog.findAll({
+      where: { event: { [Op.in]: ['LOGIN', 'LOGIN_SUCCESS'] } },
+      attributes: ['id', 'event', 'ip', 'location', 'created_at', 'user_id'],
+      order: [['created_at', 'DESC']],
+      limit: Number(limit),
+      raw: true
+    });
+    if (logs.length === 0) return [];
+
+    const userIds = Array.from(new Set(logs.map(l => Number(l.user_id)).filter(n => n > 0)));
+    const users =
+      userIds.length > 0
+        ? await getModel('User').findAll({
+            where: { id: userIds },
+            attributes: ['id', 'username', 'avatar'],
+            raw: true
+          })
+        : [];
+    const userOf = new Map(users.map(u => [Number(u.id), u]));
+
+    return logs.map(l => {
+      const user = userOf.get(Number(l.user_id));
+      return {
+        id: l.id,
+        event: l.event,
+        ip: l.ip,
+        location: l.location,
+        created_at: l.created_at,
+        username: user ? user.username : null,
+        avatar: user ? user.avatar : null
+      };
+    });
   }
 
   /**

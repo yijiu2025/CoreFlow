@@ -11,7 +11,6 @@
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
 import { hashPassword, validatePasswordStrength } from '../../../framework/security/auth/index.js';
-import { QueryTypes } from 'sequelize';
 
 class ConsoleUserDao {
   /**
@@ -26,60 +25,151 @@ class ConsoleUserDao {
    * @returns {Promise<{rows: Array<object>, total: number}>} 分页结果
    */
   async page({ pageNum = 1, pageSize = 20, keyword = '', deptId = null, status = null }) {
-    const { sequelize } = getModel('User');
-    const conditions = ['u.deleted_at IS NULL'];
-    const replacements = {};
+    const User = getModel('User');
+    const { Op } = User.sequelize.Sequelize;
 
+    const where = {};
     if (keyword) {
-      conditions.push('(u.username LIKE :keyword OR u.email LIKE :keyword)');
-      replacements.keyword = `%${keyword}%`;
+      where[Op.or] = [{ username: { [Op.like]: `%${keyword}%` } }, { email: { [Op.like]: `%${keyword}%` } }];
     }
-    if (deptId !== null && deptId !== undefined && deptId !== '') {
-      conditions.push('u.dept_id = :deptId');
-      replacements.deptId = Number(deptId);
-    }
-    if (status !== null && status !== undefined && status !== '') {
-      conditions.push('u.status = :status');
-      replacements.status = Number(status);
-    }
-    const whereSql = `WHERE ${conditions.join(' AND ')}`;
+    if (deptId !== null && deptId !== undefined && deptId !== '') where.dept_id = Number(deptId);
+    if (status !== null && status !== undefined && status !== '') where.status = Number(status);
 
-    const total = await sequelize.query(`SELECT COUNT(*) AS c FROM user_user u ${whereSql}`, {
-      type: QueryTypes.SELECT,
-      replacements
+    const offset = (Number(pageNum) - 1) * Number(pageSize);
+    const { rows: users, count } = await User.findAndCountAll({
+      where,
+      attributes: ['id', 'uid', 'username', 'email', 'avatar', 'status', 'dept_id', 'created_at'],
+      order: [['id', 'DESC']],
+      offset,
+      limit: Number(pageSize)
     });
 
-    replacements.limit = Number(pageSize);
-    replacements.offset = (Number(pageNum) - 1) * Number(pageSize);
+    const list = users.map(u => u.get({ plain: true }));
+    const userIds = list.map(u => Number(u.id));
 
-    const rows = await sequelize.query(
-      `SELECT u.id, u.uid, u.username, u.email, u.avatar, u.status, u.dept_id, u.created_at,
-              d.name AS dept_name,
-              (SELECT GROUP_CONCAT(r.name ORDER BY r.id SEPARATOR ',')
-                 FROM iam_user_role ur JOIN iam_role r ON r.id = ur.role_id
-                WHERE ur.user_id = u.id AND ur.delete_version = 0) AS role_names,
-              (SELECT GROUP_CONCAT(p.post_name ORDER BY p.id SEPARATOR ',')
-                 FROM sys_user_post up JOIN sys_post p ON p.id = up.post_id
-                WHERE up.user_id = u.id) AS post_names,
-              -- 🔴 表单回填必须用 **ID** 而不是名字：名字会重名（不同 app 可能有同名角色）、
-              --    可改名、还可能含逗号（GROUP_CONCAT 分隔符）—— 任何一条都会让
-              --    「按名字反查」静默选错角色。这两个字段是编辑弹窗的唯一数据源。
-              --    返回的是逗号串（GROUP_CONCAT 结果），前端 split 后转 number。
-              (SELECT GROUP_CONCAT(ur.role_id ORDER BY ur.role_id)
-                 FROM iam_user_role ur
-                WHERE ur.user_id = u.id AND ur.delete_version = 0) AS role_ids,
-              (SELECT GROUP_CONCAT(up.post_id ORDER BY up.post_id)
-                 FROM sys_user_post up
-                WHERE up.user_id = u.id) AS post_ids
-         FROM user_user u
-         LEFT JOIN sys_dept d ON d.id = u.dept_id
-         ${whereSql}
-         ORDER BY u.id DESC
-         LIMIT :limit OFFSET :offset`,
-      { type: QueryTypes.SELECT, replacements }
-    );
+    // 部门 / 角色 / 岗位各自批量取，**不用 JOIN 也不挂跨域关联**：
+    // `console.*` 模型不属于 user 域，给它挂 association 会让两个 app 的模型互相耦合。
+    // 三次 IN 查询（每页 ≤200 行）比一条带四个子查询的 SQL 更好维护，也没有 N+1。
+    const [deptNames, roleInfo, postInfo] = await Promise.all([
+      this._deptNameMap(list.map(u => u.dept_id)),
+      this._roleInfoMap(userIds),
+      this._postInfoMap(userIds)
+    ]);
 
-    return { rows, total: Number(total[0]?.c || 0) };
+    const rows = list.map(u => {
+      const roles = roleInfo.get(Number(u.id)) || { ids: [], names: [] };
+      const posts = postInfo.get(Number(u.id)) || { ids: [], names: [] };
+      return {
+        ...u,
+        dept_name: u.dept_id ? deptNames.get(Number(u.dept_id)) || null : null,
+        role_names: roles.names.length > 0 ? roles.names.join(',') : null,
+        post_names: posts.names.length > 0 ? posts.names.join(',') : null,
+        // 表单回填用 ID：名字会重名 / 可改名 / 可能含逗号，反查必错
+        role_ids: roles.ids.length > 0 ? roles.ids.join(',') : null,
+        post_ids: posts.ids.length > 0 ? posts.ids.join(',') : null
+      };
+    });
+
+    return { rows, total: Number(count || 0) };
+  }
+
+  /**
+   * 部门 id → 名称
+   *
+   * @param {Array<number|null>} deptIds 部门 ID 列表（可含 null）
+   * @returns {Promise<Map<number, string>>} id → name
+   */
+  async _deptNameMap(deptIds) {
+    const ids = Array.from(new Set((deptIds || []).filter(v => v !== null && v !== undefined && v !== '').map(Number)));
+    if (ids.length === 0) return new Map();
+    const depts = await getModel('console.SysDept').findAll({
+      where: { id: ids },
+      attributes: ['id', 'name'],
+      raw: true
+    });
+    return new Map(depts.map(d => [Number(d.id), d.name]));
+  }
+
+  /**
+   * 用户 → 角色（id 与名称，按 role_id 升序，与原 GROUP_CONCAT 顺序一致）
+   *
+   * @param {number[]} userIds 用户 ID 列表
+   * @returns {Promise<Map<number, {ids: number[], names: string[]}>>} 用户 ID → 角色信息
+   */
+  async _roleInfoMap(userIds) {
+    const map = new Map();
+    if (!userIds || userIds.length === 0) return map;
+
+    const links = await getModel('UserRole').findAll({
+      where: { user_id: userIds, delete_version: 0 },
+      attributes: ['user_id', 'role_id'],
+      raw: true
+    });
+    if (links.length === 0) return map;
+
+    const roleIds = Array.from(new Set(links.map(l => Number(l.role_id))));
+    const roles = await getModel('Role').findAll({
+      where: { id: roleIds },
+      attributes: ['id', 'name'],
+      raw: true
+    });
+    const nameOf = new Map(roles.map(r => [Number(r.id), r.name]));
+
+    const byUser = new Map();
+    for (const link of links) {
+      const uid = Number(link.user_id);
+      if (!byUser.has(uid)) byUser.set(uid, []);
+      byUser.get(uid).push(Number(link.role_id));
+    }
+    for (const [uid, ids] of byUser) {
+      const sorted = ids.slice().sort((a, b) => a - b);
+      map.set(uid, {
+        ids: sorted,
+        names: sorted.map(id => nameOf.get(id)).filter(Boolean)
+      });
+    }
+    return map;
+  }
+
+  /**
+   * 用户 → 岗位（id 与名称，按 post_id 升序）
+   *
+   * @param {number[]} userIds 用户 ID 列表
+   * @returns {Promise<Map<number, {ids: number[], names: string[]}>>} 用户 ID → 岗位信息
+   */
+  async _postInfoMap(userIds) {
+    const map = new Map();
+    if (!userIds || userIds.length === 0) return map;
+
+    const links = await getModel('console.SysUserPost').findAll({
+      where: { user_id: userIds },
+      attributes: ['user_id', 'post_id'],
+      raw: true
+    });
+    if (links.length === 0) return map;
+
+    const postIds = Array.from(new Set(links.map(l => Number(l.post_id))));
+    const posts = await getModel('console.SysPost').findAll({
+      where: { id: postIds },
+      attributes: ['id', 'post_name'],
+      raw: true
+    });
+    const nameOf = new Map(posts.map(p => [Number(p.id), p.post_name]));
+
+    const byUser = new Map();
+    for (const link of links) {
+      const uid = Number(link.user_id);
+      if (!byUser.has(uid)) byUser.set(uid, []);
+      byUser.get(uid).push(Number(link.post_id));
+    }
+    for (const [uid, ids] of byUser) {
+      const sorted = ids.slice().sort((a, b) => a - b);
+      map.set(uid, {
+        ids: sorted,
+        names: sorted.map(id => nameOf.get(id)).filter(Boolean)
+      });
+    }
+    return map;
   }
 
   /**
@@ -88,19 +178,35 @@ class ConsoleUserDao {
    * @returns {Promise<{depts: Array<object>, roles: Array<object>, posts: Array<object>}>} 选项集合
    */
   async options() {
-    const { sequelize } = getModel('User');
-    const depts = await sequelize.query(
-      'SELECT id, parent_id, name FROM sys_dept WHERE status = 1 ORDER BY sort ASC, id ASC',
-      { type: QueryTypes.SELECT }
-    );
-    const roles = await sequelize.query(
-      'SELECT id, code, name, app_id, rank_level FROM iam_role WHERE deleted_at IS NULL ORDER BY rank_level DESC, id ASC',
-      { type: QueryTypes.SELECT }
-    );
-    const posts = await sequelize.query(
-      'SELECT id, post_code, post_name FROM sys_post WHERE status = 1 ORDER BY sort ASC, id ASC',
-      { type: QueryTypes.SELECT }
-    );
+    const [depts, roles, posts] = await Promise.all([
+      getModel('console.SysDept').findAll({
+        where: { status: 1 },
+        attributes: ['id', 'parent_id', 'name'],
+        order: [
+          ['sort', 'ASC'],
+          ['id', 'ASC']
+        ],
+        raw: true
+      }),
+      // Role 是 paranoid 模型，已删除的对自动排除（不用手写 deleted_at IS NULL）
+      getModel('Role').findAll({
+        attributes: ['id', 'code', 'name', 'app_id', 'rank_level'],
+        order: [
+          ['rank_level', 'DESC'],
+          ['id', 'ASC']
+        ],
+        raw: true
+      }),
+      getModel('console.SysPost').findAll({
+        where: { status: 1 },
+        attributes: ['id', 'post_code', 'post_name'],
+        order: [
+          ['sort', 'ASC'],
+          ['id', 'ASC']
+        ],
+        raw: true
+      })
+    ]);
     return { depts, roles, posts };
   }
 

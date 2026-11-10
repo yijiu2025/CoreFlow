@@ -9,7 +9,7 @@
  * @since 2026-11-09
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
-import { QueryTypes, Op } from 'sequelize';
+import { Op } from 'sequelize';
 
 /**
  * 把扁平部门列表拼成树
@@ -48,10 +48,15 @@ class DeptDao {
       ],
       raw: true
     });
-    const counts = await getModel('User').sequelize.query(
-      'SELECT dept_id, COUNT(*) AS c FROM user_user WHERE dept_id IS NOT NULL AND deleted_at IS NULL GROUP BY dept_id',
-      { type: QueryTypes.SELECT }
-    );
+    // 各部门成员数：按 dept_id 分组；User 是 paranoid 模型，已删除的用户自动排除
+    const User = getModel('User');
+    const { Op } = User.sequelize.Sequelize;
+    const counts = await User.findAll({
+      attributes: ['dept_id', [User.sequelize.fn('COUNT', User.sequelize.col('id')), 'c']],
+      where: { dept_id: { [Op.ne]: null } },
+      group: ['dept_id'],
+      raw: true
+    });
     const countMap = new Map(counts.map(r => [Number(r.dept_id), Number(r.c)]));
     return rows.map(r => ({ ...r, user_count: countMap.get(Number(r.id)) || 0 }));
   }

@@ -13,7 +13,6 @@
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
 import { roleRegistry, actionMetaRegistry } from '../../../framework/security/pbac/index.js';
-import { QueryTypes } from 'sequelize';
 
 /**
  * 由权限码数组构造 PBAC 策略文档
@@ -81,40 +80,49 @@ class RoleDao {
    * @returns {Promise<{rows: Array<object>, total: number}>} 分页结果
    */
   async page({ pageNum = 1, pageSize = 20, keyword = '', appId = '' }) {
-    const { sequelize } = getModel('Role');
-    const conditions = ['r.deleted_at IS NULL'];
-    const replacements = {};
-    if (keyword) {
-      conditions.push('(r.name LIKE :keyword OR r.code LIKE :keyword)');
-      replacements.keyword = `%${keyword}%`;
-    }
-    if (appId) {
-      conditions.push('r.app_id = :appId');
-      replacements.appId = appId;
-    }
-    const whereSql = `WHERE ${conditions.join(' AND ')}`;
+    const Role = getModel('Role');
+    const { Op } = Role.sequelize.Sequelize;
 
-    const total = await sequelize.query(`SELECT COUNT(*) AS c FROM iam_role r ${whereSql}`, {
-      type: QueryTypes.SELECT,
-      replacements
+    const where = {};
+    if (keyword) {
+      where[Op.or] = [{ name: { [Op.like]: `%${keyword}%` } }, { code: { [Op.like]: `%${keyword}%` } }];
+    }
+    if (appId) where.app_id = appId;
+
+    const offset = (Number(pageNum) - 1) * Number(pageSize);
+    const { rows: roles, count } = await Role.findAndCountAll({
+      where,
+      attributes: ['id', 'app_id', 'code', 'name', 'rank_level', 'description', 'policy', 'created_at'],
+      // rank_level 是「职级越高数字越大」，降序 = 高权限在前
+      order: [
+        ['rank_level', 'DESC'],
+        ['id', 'ASC']
+      ],
+      offset,
+      limit: Number(pageSize)
     });
 
-    replacements.limit = Number(pageSize);
-    replacements.offset = (Number(pageNum) - 1) * Number(pageSize);
+    const list = roles.map(r => r.get({ plain: true }));
+    const roleIds = list.map(r => Number(r.id));
 
-    const rows = await sequelize.query(
-      `SELECT r.id, r.app_id, r.code, r.name, r.rank_level, r.description, r.policy, r.created_at,
-              (SELECT COUNT(DISTINCT ur.user_id) FROM iam_user_role ur
-                WHERE ur.role_id = r.id AND ur.delete_version = 0) AS user_count
-         FROM iam_role r
-         ${whereSql}
-         ORDER BY r.rank_level DESC, r.id ASC
-         LIMIT :limit OFFSET :offset`,
-      { type: QueryTypes.SELECT, replacements }
-    );
+    // 成员数：按 role_id 分组统计（不 JOIN 角色表，避免行放大）
+    const [memberRows, menuRows] = await Promise.all([
+      roleIds.length > 0
+        ? getModel('UserRole').findAll({
+            where: { role_id: roleIds, delete_version: 0 },
+            attributes: [
+              'role_id',
+              [Role.sequelize.fn('COUNT', Role.sequelize.fn('DISTINCT', Role.sequelize.col('user_id'))), 'c']
+            ],
+            group: ['role_id'],
+            raw: true
+          })
+        : [],
+      getModel('console.SysRoleMenu').findAll({ attributes: ['role_id', 'menu_id'], raw: true })
+    ]);
 
+    const memberMap = new Map(memberRows.map(r => [Number(r.role_id), Number(r.c || 0)]));
     const builtinCodes = new Set(roleRegistry.map(r => r.code));
-    const menuRows = await sequelize.query('SELECT role_id, menu_id FROM sys_role_menu', { type: QueryTypes.SELECT });
     const menuMap = new Map();
     for (const row of menuRows) {
       const key = Number(row.role_id);
@@ -123,16 +131,16 @@ class RoleDao {
     }
 
     return {
-      rows: rows.map(r => ({
+      rows: list.map(r => ({
         ...r,
         rank_level: Number(r.rank_level),
-        user_count: Number(r.user_count || 0),
+        user_count: memberMap.get(Number(r.id)) || 0,
         builtin: builtinCodes.has(r.code),
         permissions: extractPermissions(r.policy),
         menu_ids: menuMap.get(Number(r.id)) || [],
         policy: undefined
       })),
-      total: Number(total[0]?.c || 0)
+      total: Number(count || 0)
     };
   }
 
@@ -164,13 +172,10 @@ class RoleDao {
   async hasAdminCapability(roleIds) {
     const ids = Array.from(new Set((roleIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0)));
     if (ids.length === 0) return false;
-    const { sequelize } = getModel('Role');
-    const rows = await sequelize.query('SELECT policy FROM iam_role WHERE id IN (:ids) AND deleted_at IS NULL', {
-      type: QueryTypes.SELECT,
-      replacements: { ids }
-    });
-    // 注意 policy 在原始查询里是 JSON 字符串，必须经 extractPermissions 归一化
-    return rows.some(row => extractPermissions(row.policy).some(code => code === '*' || code.startsWith('admin:')));
+    // Role 是 paranoid 模型，已删除的自动排除；policy 走 JSON 字段，extractPermissions
+    // 同时兼容对象与字符串（raw 查询历史返回的是字符串）
+    const roles = await getModel('Role').findAll({ where: { id: ids }, attributes: ['policy'], raw: true });
+    return roles.some(row => extractPermissions(row.policy).some(code => code === '*' || code.startsWith('admin:')));
   }
 
   /**
@@ -257,17 +262,25 @@ class RoleDao {
    * @returns {Promise<object>} 图数据
    */
   async graph(includeUsers = true) {
-    const { sequelize } = getModel('Role');
-    const roles = await sequelize.query(
-      `SELECT r.id, r.name, r.code, r.app_id, r.rank_level, r.policy
-         FROM iam_role r WHERE r.deleted_at IS NULL ORDER BY r.rank_level DESC, r.id ASC`,
-      { type: QueryTypes.SELECT }
-    );
-    const menus = await sequelize.query(
-      'SELECT id, parent_id, name, type, icon, path, permission, sort, visible, status FROM sys_menu ORDER BY sort ASC, id ASC',
-      { type: QueryTypes.SELECT }
-    );
-    const roleMenus = await sequelize.query('SELECT role_id, menu_id FROM sys_role_menu', { type: QueryTypes.SELECT });
+    const [roles, menus, roleMenus] = await Promise.all([
+      getModel('Role').findAll({
+        attributes: ['id', 'name', 'code', 'app_id', 'rank_level', 'policy'],
+        order: [
+          ['rank_level', 'DESC'],
+          ['id', 'ASC']
+        ],
+        raw: true
+      }),
+      getModel('console.SysMenu').findAll({
+        attributes: ['id', 'parent_id', 'name', 'type', 'icon', 'path', 'permission', 'sort', 'visible', 'status'],
+        order: [
+          ['sort', 'ASC'],
+          ['id', 'ASC']
+        ],
+        raw: true
+      }),
+      getModel('console.SysRoleMenu').findAll({ attributes: ['role_id', 'menu_id'], raw: true })
+    ]);
 
     const menuMap = new Map();
     for (const row of roleMenus) {
@@ -279,15 +292,40 @@ class RoleDao {
     let users = [];
     let userRoles = [];
     if (includeUsers) {
-      users = await sequelize.query(
-        `SELECT u.id, u.username, u.email, u.status, d.name AS dept_name
-           FROM user_user u LEFT JOIN sys_dept d ON d.id = u.dept_id
-          WHERE u.deleted_at IS NULL ORDER BY u.id DESC LIMIT 200`,
-        { type: QueryTypes.SELECT }
-      );
-      userRoles = await sequelize.query('SELECT user_id, role_id FROM iam_user_role WHERE delete_version = 0', {
-        type: QueryTypes.SELECT
+      const userRows = await getModel('User').findAll({
+        attributes: ['id', 'username', 'email', 'status', 'dept_id'],
+        order: [['id', 'DESC']],
+        limit: 200,
+        raw: true
       });
+      // 部门名单独批量取（不 JOIN：console.* 模型不给 user 域挂关联）
+      const deptIds = Array.from(
+        new Set(
+          userRows
+            .map(u => u.dept_id)
+            .filter(v => v !== null && v !== undefined)
+            .map(Number)
+        )
+      );
+      const depts =
+        deptIds.length > 0
+          ? await getModel('console.SysDept').findAll({ where: { id: deptIds }, attributes: ['id', 'name'], raw: true })
+          : [];
+      const deptNameOf = new Map(depts.map(d => [Number(d.id), d.name]));
+      users = userRows.map(u => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        status: u.status,
+        dept_name: u.dept_id ? deptNameOf.get(Number(u.dept_id)) || null : null
+      }));
+
+      const links = await getModel('UserRole').findAll({
+        where: { delete_version: 0 },
+        attributes: ['user_id', 'role_id'],
+        raw: true
+      });
+      userRoles = links;
     }
 
     return {
