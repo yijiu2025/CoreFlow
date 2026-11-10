@@ -17,7 +17,7 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
 import { KeyRound, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
 import {
   createRole,
@@ -30,6 +30,15 @@ import {
   updateRole
 } from '@/api/system';
 import type { MenuNode, RoleRow } from '@/api/types';
+import type { MatrixRole } from '@/components/business/PermissionMatrix.vue';
+
+/**
+ * 矩阵组件异步加载
+ *
+ * 它连带 gsap（约 70KB）——角色页首屏是列表，不该为「可能不点的一档视图」付这个体积。
+ * 类型仍从原文件 import（`import type` 不产生运行时代码）。
+ */
+const PermissionMatrix = defineAsyncComponent(() => import('@/components/business/PermissionMatrix.vue'));
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -41,6 +50,15 @@ interface PermItem {
   code: string;
   label: string;
 }
+
+/**
+ * 视图档位：列表 / 权限矩阵
+ *
+ * 矩阵读的是**同一份 rows**（列表接口已返回 menu_ids），所以切档不额外请求角色，
+ * 只在首次进入矩阵时补一次菜单树。
+ */
+const altView = ref<'table' | 'matrix'>('table');
+const matrixSaving = ref(false);
 
 const rows = ref<RoleRow[]>([]);
 const total = ref(0);
@@ -140,6 +158,45 @@ async function load(): Promise<void> {
   }
 }
 
+/** 矩阵列：角色（内置标记决定该列只读） */
+const matrixRoles = computed<MatrixRole[]>(() =>
+  rows.value.map(r => ({ id: r.id, name: r.name, builtin: r.builtin, status: 1 }))
+);
+
+/** 矩阵授权：roleId → menuIds，直接取列表接口返回的 menu_ids */
+const matrixGrants = computed<Record<number, number[]>>(() => {
+  const out: Record<number, number[]> = {};
+  for (const r of rows.value) out[r.id] = r.menu_ids ?? [];
+  return out;
+});
+
+/**
+ * 提交矩阵改动
+ *
+ * 后端只有单角色授权接口，所以按角色并发提交；任一失败即整体报错
+ * （已成功的不会回滚，但下次打开矩阵会读到真实状态，不会出现假成功）。
+ *
+ * @param changes 需要保存的角色与菜单集合
+ */
+async function saveMatrix(changes: Array<{ roleId: number; menuIds: number[] }>): Promise<void> {
+  if (changes.length === 0) return;
+  matrixSaving.value = true;
+  try {
+    await Promise.all(changes.map(c => saveRoleMenus(c.roleId, c.menuIds)));
+    notify(`已保存 ${changes.length} 个角色的菜单授权`);
+    await load();
+  } catch (err) {
+    notify(err instanceof Error ? err.message : '保存失败');
+  } finally {
+    matrixSaving.value = false;
+  }
+}
+
+/** 进入矩阵前确保菜单树已加载 */
+watch(altView, v => {
+  if (v === 'matrix') void ensureTrees();
+});
+
 /** 懒加载权限码目录（首次打开表单才拉，135 条不算大但没必要每页都取） */
 async function ensureCatalog(): Promise<void> {
   if (catalog.value.length > 0) return;
@@ -150,6 +207,20 @@ async function ensureCatalog(): Promise<void> {
     formError.value = err instanceof Error ? err.message : '权限码目录加载失败';
   } finally {
     catalogLoading.value = false;
+  }
+}
+
+/**
+ * 确保菜单树已加载（矩阵与授权弹窗共用）
+ *
+ * @returns 加载完成
+ */
+async function ensureTrees(): Promise<void> {
+  if (trees.value.length > 0) return;
+  try {
+    trees.value = await menuTree();
+  } catch (err) {
+    notify(err instanceof Error ? err.message : '菜单树加载失败');
   }
 }
 
@@ -319,7 +390,12 @@ onMounted(load);
       <span class="page__sub">共 {{ total }} 个角色 · 权限码决定接口放行，菜单只决定侧栏可见</span>
     </div>
 
-    <div class="toolbar">
+    <div class="tabbar" role="tablist" aria-label="视图">
+      <button type="button" role="tab" :aria-selected="altView === 'table'" :class="['tab', { 'is-on': altView === 'table' }]" @click="altView = 'table'">列表</button>
+      <button type="button" role="tab" :aria-selected="altView === 'matrix'" :class="['tab', { 'is-on': altView === 'matrix' }]" @click="altView = 'matrix'">权限矩阵</button>
+    </div>
+
+    <div v-show="altView === 'table'" class="toolbar">
       <input v-model="keyword" class="input" style="width: 220px" placeholder="名称 / 编码" @keyup.enter="load" />
       <button class="btn btn--sm" type="button" :disabled="loading" @click="load"><RefreshCw :size="15" /> 刷新</button>
       <button v-if="auth.hasPermission('admin:role:create')" class="btn btn--primary btn--sm" type="button" @click="openCreate">
@@ -329,7 +405,7 @@ onMounted(load);
 
     <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
-    <section class="panel">
+    <section v-if="altView === 'table'" class="panel">
       <div class="table-wrap">
         <table class="table">
           <thead>
@@ -382,6 +458,18 @@ onMounted(load);
           </tbody>
         </table>
       </div>
+    </section>
+
+    <!-- 权限矩阵：菜单 × 角色，勾选即菜单可见性（接口权限看权限码） -->
+    <section v-if="altView === 'matrix'">
+      <PermissionMatrix
+        :menus="trees"
+        :roles="matrixRoles"
+        :grants="matrixGrants"
+        :editable="auth.hasPermission('admin:role:update')"
+        :saving="matrixSaving"
+        @save="saveMatrix"
+      />
     </section>
 
     <!-- 角色表单（新建 / 编辑，含权限码） -->
@@ -496,6 +584,31 @@ onMounted(load);
 </template>
 
 <style scoped>
+.tabbar {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface-2);
+}
+
+.tab {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--mauth-radius-xs);
+  background: none;
+  color: var(--mauth-text-mid);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tab.is-on {
+  background: var(--mauth-surface);
+  color: var(--mauth-text);
+  box-shadow: var(--e1);
+}
+
 .menu-list {
   max-height: 320px;
   overflow-y: auto;
@@ -503,7 +616,7 @@ onMounted(load);
   gap: 4px;
   padding: 8px;
   border: 1px solid var(--mauth-border);
-  border-radius: var(--r-sm);
+  border-radius: var(--mauth-radius-sm);
   background: var(--mauth-surface-2);
 }
 
@@ -512,7 +625,7 @@ onMounted(load);
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: var(--r-xs);
+  border-radius: var(--mauth-radius-xs);
   font-size: 13px;
   cursor: pointer;
 }
@@ -539,7 +652,7 @@ onMounted(load);
   gap: 10px;
   padding: 10px;
   border: 1px solid var(--mauth-border);
-  border-radius: var(--r-sm);
+  border-radius: var(--mauth-radius-sm);
   background: var(--mauth-surface-2);
 }
 
@@ -573,7 +686,7 @@ onMounted(load);
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
-  border-radius: var(--r-xs);
+  border-radius: var(--mauth-radius-xs);
   font-size: 12px;
   cursor: pointer;
   border: 1px solid transparent;

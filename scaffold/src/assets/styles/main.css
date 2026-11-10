@@ -5,8 +5,10 @@
  *   base          元素级基线 + 可见焦点
  *   layout        外壳骨架（侧栏 / 顶栏 / 内容区）
  *   components    控件库（按钮 / 输入 / 表格 / 标签 / 浮层）
+ *   graphs        图谱与仪器化（权限矩阵 / 关系图 / 底部浮条）
  */
 @import './tokens.css';
 @import './base.css';
 @import './layout.css';
 @import './components.css';
+@import './graphs.css';
