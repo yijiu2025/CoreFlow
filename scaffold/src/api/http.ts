@@ -41,12 +41,21 @@ export class ApiError extends Error {
    */
   challenge: boolean;
 
+  /**
+   * 是否「验证反复不生效」而被停止跳转
+   *
+   * 与 `challenge` 的区别：那个是"已跳去挑战页"，这个是"跳太多次了，停在原地"。
+   * 调用方据此决定是静默（页面即将卸载）还是把提示显示出来。
+   */
+  challengeCapped: boolean;
+
   constructor(
     message: string,
     code: number,
     status: number,
     risk?: Envelope<unknown>['__risk__'],
-    challenge = false
+    challenge = false,
+    challengeCapped = false
   ) {
     super(message);
     this.name = 'ApiError';
@@ -54,6 +63,7 @@ export class ApiError extends Error {
     this.status = status;
     this.risk = risk;
     this.challenge = challenge;
+    this.challengeCapped = challengeCapped;
   }
 }
 
@@ -73,6 +83,49 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 const CHALLENGE_PAGE = 'challenge.html';
 
 /**
+ * 连续跳转计数（防「挑战页 ⇄ 业务页」乒乓）
+ *
+ * 正常情况下验证通过会写 `fw_verified`，回来就不会再被拦。但若这个凭证没生效
+ * （cookie 路径/端口不对、服务端未下发、时钟漂移…），两边就会无限互踢 ——
+ * 页面每秒刷新一次，用户什么也做不了，比直接报错更糟。
+ *
+ * 🔴 计数必须放 **sessionStorage**：每次跳转都是一次完整的文档加载，模块级变量
+ *    会随之清零，那样等于没有上限（实测就是无限乒乓）。
+ */
+const HOP_KEY = 'fw_challenge_hops';
+const MAX_CHALLENGE_HOPS = 3;
+const HOP_WINDOW_MS = 8000;
+
+/**
+ * 读跳转计数
+ *
+ * @returns 窗口内的连跳次数与上次时间
+ */
+function readHops(): { count: number; at: number } {
+  try {
+    const raw = sessionStorage.getItem(HOP_KEY);
+    const parsed = raw ? (JSON.parse(raw) as { count?: number; at?: number }) : null;
+    return { count: Number(parsed?.count) || 0, at: Number(parsed?.at) || 0 };
+  } catch {
+    return { count: 0, at: 0 };
+  }
+}
+
+/**
+ * 写跳转计数（存储不可用时静默：隐私模式下最多退化成"没有上限"）
+ *
+ * @param count 次数
+ * @param at 时间戳
+ */
+function writeHops(count: number, at: number): void {
+  try {
+    sessionStorage.setItem(HOP_KEY, JSON.stringify({ count, at }));
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/**
  * 被人机验证拦下时整页跳转到挑战页
  *
  * 为什么是**整页跳转**而不是路由跳转：挑战页是独立构建入口，不挂 router / pinia ——
@@ -84,18 +137,30 @@ const CHALLENGE_PAGE = 'challenge.html';
  *
  * @param status HTTP 状态
  * @param headers 响应头
- * @returns 是否已处理（调用方应直接抛错，不再走业务分支）
+ * @returns `none` 不是挑战 / `redirected` 已跳转 / `capped` 跳太多次已停止跳转
  */
-function handleChallengeRedirect(status: number, headers?: Record<string, unknown>): boolean {
+function handleChallengeRedirect(
+  status: number,
+  headers?: Record<string, unknown>
+): 'none' | 'redirected' | 'capped' {
   const hint = headers?.['x-firewall-challenge'];
-  if (status !== 428 && !hint) return false;
-  if (window.location.pathname.endsWith(`/${CHALLENGE_PAGE}`)) return true;
+  if (status !== 428 && !hint) return 'none';
+  if (window.location.pathname.endsWith(`/${CHALLENGE_PAGE}`)) return 'redirected';
+
+  const now = Date.now();
+  const prev = readHops();
+  const hops = now - prev.at < HOP_WINDOW_MS ? prev.count + 1 : 1;
+  writeHops(hops, now);
+  if (hops > MAX_CHALLENGE_HOPS) {
+    // 停在原地报错，交给页面提示刷新 —— 继续跳只会让用户看着页面不停闪
+    return 'capped';
+  }
 
   const target = new URL(`${import.meta.env.BASE_URL}${CHALLENGE_PAGE}`, window.location.origin);
   // 只带路径 + 查询 + hash：挑战页回来时用 `window.location.replace`，不能是外站地址
   target.searchParams.set('return', window.location.pathname + window.location.search + window.location.hash);
   window.location.replace(target.toString());
-  return true;
+  return 'redirected';
 }
 
 const http: AxiosInstance = axios.create({
@@ -109,14 +174,32 @@ const http: AxiosInstance = axios.create({
 setupDeviceSync(http);
 
 http.interceptors.response.use(
-  response => response,
+  response => {
+    // 回到正常业务流即视为跳转链结束（下次再被拦重新计数）
+    try {
+      sessionStorage.removeItem(HOP_KEY);
+    } catch {
+      /* 忽略 */
+    }
+    return response;
+  },
   (error: AxiosError<Envelope<unknown>>) => {
     const status = error.response?.status ?? 0;
     const body = error.response?.data;
 
     // 人机验证拦截：整页跳挑战页，按"已处理"抛出（调用方据此静默）
-    if (handleChallengeRedirect(status, error.response?.headers as Record<string, unknown> | undefined)) {
-      throw new ApiError('需要完成人机验证，正在跳转验证页…', 428, 428, undefined, true);
+    const challenge = handleChallengeRedirect(status, error.response?.headers as Record<string, unknown> | undefined);
+    if (challenge !== 'none') {
+      // 两种情况都标 challenge=true：会话没坏，调用方不该弹业务错、守卫也不该踢去登录
+      const capped = challenge === 'capped';
+      throw new ApiError(
+        capped ? '人机验证未生效，请刷新页面重试' : '需要完成人机验证，正在跳转验证页…',
+        428,
+        428,
+        undefined,
+        true,
+        capped
+      );
     }
 
     if (status === 401) unauthorizedHandler?.();

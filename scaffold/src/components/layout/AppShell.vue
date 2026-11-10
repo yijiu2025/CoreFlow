@@ -171,7 +171,8 @@ watch(
           <Moon v-else :size="17" />
         </button>
 
-        <span class="tag tag--info topbar__user">{{ auth.me?.username || '未登录' }}</span>
+        <!-- 只有拿到用户信息才显示：被边界防护拦下时 me 为空，但那不等于"未登录" -->
+        <span v-if="auth.me" class="tag tag--info topbar__user">{{ auth.me.username }}</span>
 
         <button class="btn btn--ghost btn--sm" type="button" aria-label="退出登录" @click="signOut">
           <LogOut :size="16" />

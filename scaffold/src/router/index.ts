@@ -140,6 +140,13 @@ router.beforeEach(async to => {
   const auth = useAuthStore();
   const ok = await auth.load();
   if (!ok) {
+    // 🔴 被人机验证拦下 ≠ 未登录：会话仍然有效，只是这次请求被边界防护挡住。
+    //    此时整页跳转已由 http 拦截器发出（→ challenge.html），守卫必须**中止导航**
+    //    而不是跳登录页 —— 否则用户会在验证前就被"登出"，验证完还得重新登录。
+    if (auth.challengeBlocked) return false;
+    // 已停止跳转（验证反复不生效）：放行让页面渲染，由页面把提示显示出来，
+    // 否则初始加载会被中止成一张白屏，用户连"该刷新"都看不到
+    if (auth.challengeCapped) return true;
     return { path: '/login', query: { redirect: to.fullPath } };
   }
 
