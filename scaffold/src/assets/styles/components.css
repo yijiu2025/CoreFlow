@@ -348,3 +348,34 @@
   font-size: 13px;
   box-shadow: var(--e3);
 }
+
+/* ── 分段控件（页面内切档：列表 / 矩阵 / 星图）────────────────────── */
+.tabbar {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface-2);
+}
+
+.tab {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--mauth-radius-xs);
+  background: none;
+  color: var(--mauth-text-mid);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--mauth-text);
+}
+
+.tab.is-on {
+  background: var(--mauth-surface);
+  color: var(--mauth-text);
+  box-shadow: var(--e1);
+}

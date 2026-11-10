@@ -21,13 +21,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  Eye,
   KeyRound,
+  Layers,
   LayoutDashboard,
   ListTree,
   LogIn,
   Network,
   Pause,
+  Pencil,
   Play,
+  Plus,
   RefreshCw,
   ScrollText,
   Settings,
@@ -68,7 +72,11 @@ const ICONS: Record<string, unknown> = {
   Check,
   ChevronLeft,
   ChevronRight,
-  Circle
+  Circle,
+  Eye,
+  Layers,
+  Plus,
+  Pencil
 };
 
 /** 小写短名 → PascalCase（图谱工具栏与矩阵折叠按钮用） */
@@ -84,7 +92,11 @@ const ALIAS: Record<string, string> = {
   users: 'Users',
   role: 'ShieldCheck',
   menu: 'ListTree',
-  chevron: 'ChevronRight'
+  chevron: 'ChevronRight',
+  layers: 'Layers',
+  eye: 'Eye',
+  plus: 'Plus',
+  edit: 'Pencil'
 };
 
 /**

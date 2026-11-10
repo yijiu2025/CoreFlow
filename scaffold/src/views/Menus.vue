@@ -8,13 +8,25 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue';
 import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
 import { createMenu, menuTree, removeMenu, updateMenu } from '@/api/system';
 import type { MenuNode } from '@/api/types';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
+
+/**
+ * 导航星系：异步加载
+ *
+ * 它连带 Canvas 舞台与 gsap（约 70KB），而菜单页首屏是表格 —— 不该为
+ * 「可能不点的一档视图」付这个体积。
+ */
+const MenuStarMap = defineAsyncComponent(() => import('@/components/business/MenuStarMap.vue'));
+
+/** 视图档位：表格 / 导航星系 */
+const altView = ref<'table' | 'star'>('table');
+
 const trees = ref<MenuNode[]>([]);
 const loading = ref(false);
 const errorMessage = ref('');
@@ -71,11 +83,15 @@ async function load(): Promise<void> {
   }
 }
 
-/** 打开新建表单 */
-function openCreate(): void {
+/**
+ * 打开新建表单
+ *
+ * @param parent 上级菜单（从星图进入时带上，未传则为根）
+ */
+function openCreate(parent?: MenuNode): void {
   editingId.value = null;
   Object.assign(form, {
-    parentId: 0,
+    parentId: parent?.id ?? 0,
     name: '',
     type: 'menu',
     icon: 'Circle',
@@ -159,17 +175,22 @@ onMounted(load);
       <span class="page__sub">共 {{ flat.length }} 项 · 决定侧栏可见性</span>
     </div>
 
-    <div class="toolbar">
+    <div class="tabbar" role="tablist" aria-label="视图">
+      <button type="button" role="tab" :aria-selected="altView === 'table'" :class="['tab', { 'is-on': altView === 'table' }]" @click="altView = 'table'">列表</button>
+      <button type="button" role="tab" :aria-selected="altView === 'star'" :class="['tab', { 'is-on': altView === 'star' }]" @click="altView = 'star'">导航星系</button>
+    </div>
+
+    <div v-show="altView === 'table'" class="toolbar">
       <button class="btn btn--sm" type="button" :disabled="loading" @click="load"><RefreshCw :size="15" /> 刷新</button>
       <span class="toolbar__spacer"></span>
-      <button v-if="auth.hasPermission('admin:menu:create')" class="btn btn--primary btn--sm" type="button" @click="openCreate">
+      <button v-if="auth.hasPermission('admin:menu:create')" class="btn btn--primary btn--sm" type="button" @click="openCreate()">
         <Plus :size="15" /> 新建菜单
       </button>
     </div>
 
     <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
-    <section class="panel">
+    <section v-if="altView === 'table'" class="panel">
       <div class="table-wrap">
         <table class="table">
           <thead>
@@ -210,6 +231,11 @@ onMounted(load);
           </tbody>
         </table>
       </div>
+    </section>
+
+    <!-- 导航星系：目录 / 页面 / 按钮的三层星图（复用同一份菜单树） -->
+    <section v-if="altView === 'star'">
+      <MenuStarMap :tree="trees" @edit="openEdit" @create="openCreate" />
     </section>
 
     <div v-if="dialogOpen" class="modal-mask" @click.self="dialogOpen = false">

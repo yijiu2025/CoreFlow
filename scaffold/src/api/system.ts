@@ -7,7 +7,7 @@
  * @since 2026-11-09
  */
 import { del, download, get, post, put } from './http';
-import type { MenuNode, PageResult, PermissionGraph, RoleRow, UserOptions, UserRow } from './types';
+import type { MenuNode, PageResult, PermissionGraph, PostMember, RoleRow, UserOptions, UserRow } from './types';
 
 const BASE = '/admin/console/v1';
 
@@ -158,6 +158,11 @@ export function createPost(body: Record<string, unknown>): Promise<{ id: number 
 /** 编辑岗位 */
 export function updatePost(id: number, body: Record<string, unknown>): Promise<null> {
   return put(`${BASE}/posts/${id}`, body);
+}
+
+/** 岗位在岗成员 */
+export function postUsers(id: number): Promise<PostMember[]> {
+  return get(`${BASE}/posts/${id}/users`);
 }
 
 /** 删除岗位 */

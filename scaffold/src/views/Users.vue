@@ -9,6 +9,7 @@
  * @since 2026-11-09
  */
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import { Download, Pencil, Plus, RotateCcw, Search, Trash2, UserCheck, UserX } from 'lucide-vue-next';
 import {
   createUser,
@@ -24,6 +25,7 @@ import type { UserOptions, UserRow } from '@/api/types';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
+const route = useRoute();
 
 const rows = ref<UserRow[]>([]);
 const total = ref(0);
@@ -267,6 +269,9 @@ async function exportCsv(): Promise<void> {
 }
 
 onMounted(async () => {
+  // 从岗位阶梯 / 其他页跳过来时带 `?keyword=`：预填并只查一次
+  const incoming = route.query.keyword;
+  if (typeof incoming === 'string' && incoming) query.keyword = incoming;
   await load();
   try {
     options.value = await userOptions();

@@ -187,3 +187,13 @@ export interface PermissionGraph {
   userRoles: Array<[number, number]>;
   usersVisible: boolean;
 }
+
+/** 岗位在岗成员（GET /posts/:id/users，只返回脱敏字段） */
+export interface PostMember {
+  id: number;
+  uid: string;
+  username: string;
+  email: string | null;
+  avatar: string | null;
+  status: number;
+}

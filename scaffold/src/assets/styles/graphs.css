@@ -788,3 +788,218 @@ button.trace-crumb:hover { color: var(--mauth-primary); }
   backdrop-filter: blur(28px) saturate(1.08);
   -webkit-backdrop-filter: blur(28px) saturate(1.08);
 }
+
+/* ── 导航星系（星图页专用）───────────────────────────────────────── */
+.starmap {
+  height: max(620px, calc(100dvh - 236px));
+}
+
+.starmap .nav-preview {
+  position: absolute;
+  z-index: 5;
+  left: 16px;
+  top: 68px;
+  max-height: calc(100% - 84px);
+  width: 210px;
+  overflow-y: auto;
+  padding: 10px 8px;
+  border-radius: var(--mauth-radius-lg);
+}
+
+.nav-preview-title {
+  display: block;
+  padding: 0 8px 8px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--mauth-text-soft);
+}
+
+.nav-preview ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-preview ul ul {
+  margin: 1px 0 4px 16px;
+  padding-left: 8px;
+  border-left: 1px solid var(--mauth-border);
+}
+
+.nav-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--mauth-radius-xs);
+  background: none;
+  color: var(--mauth-text-mid);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-preview-item.is-sub {
+  padding: 4px 8px;
+  font-size: 11.5px;
+}
+
+.nav-preview-item:hover {
+  background: var(--mauth-hover);
+  color: var(--mauth-text);
+}
+
+.nav-preview-item.is-on {
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+  font-weight: 600;
+}
+
+.nav-preview-flag {
+  margin-left: auto;
+  color: var(--mauth-text-faint);
+}
+
+.nav-preview li.is-hidden > .nav-preview-item {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.nav-preview li.is-off > .nav-preview-item {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+@media (max-width: 1099px) {
+  .starmap .nav-preview {
+    display: none;
+  }
+}
+
+/* 舞台右上角的胶囊开关（如「导航预览」） */
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-line);
+  background: var(--float-bg);
+  box-shadow: var(--float-inset), var(--e1);
+  color: var(--mauth-text-soft);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+}
+
+.stage-chip:hover,
+.stage-chip[aria-pressed='true'] {
+  color: var(--mauth-text);
+}
+
+.stage-chip[aria-pressed='true'] {
+  color: var(--mauth-primary);
+}
+
+.stage-chip:focus-visible {
+  outline: 2px solid var(--mauth-focus);
+  outline-offset: 2px;
+}
+
+/* ── 岗位阶梯（台阶 + 右上信息卡）────────────────────────────────── */
+.ladder {
+  position: relative;
+  overflow-x: auto;
+  border-radius: var(--mauth-radius-xl);
+}
+
+.ladder-stage {
+  height: max(560px, calc(100dvh - 236px));
+}
+
+.ladder-card {
+  width: 240px;
+  padding: 14px 16px;
+  border-radius: var(--mauth-radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.ladder-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.ladder-card-rank {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--cat-ink, var(--mauth-text-soft));
+}
+
+.ladder-card h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.ladder-card dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  margin: 2px 0 0;
+}
+
+.ladder-card dl div {
+  padding: 8px 10px;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-hover);
+}
+
+.ladder-card dt {
+  font-size: 11px;
+  color: var(--mauth-text-faint);
+}
+
+.ladder-card dd {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.ladder-card dd small {
+  margin-left: 3px;
+  font-size: 10.5px;
+  color: var(--mauth-text-faint);
+}
+
+.ladder-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.ladder-empty {
+  position: absolute;
+  inset: 0;
+}
+
+@media (max-width: 899px) {
+  .ladder-card {
+    display: none;
+  }
+}

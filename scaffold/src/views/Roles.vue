@@ -18,6 +18,7 @@
  * @since 2026-11-09
  */
 import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { KeyRound, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
 import {
   createRole,
@@ -31,6 +32,8 @@ import {
 } from '@/api/system';
 import type { MenuNode, RoleRow } from '@/api/types';
 import type { MatrixRole } from '@/components/business/PermissionMatrix.vue';
+
+const route = useRoute();
 
 /**
  * 矩阵组件异步加载
@@ -63,6 +66,14 @@ interface PermItem {
  * 只在首次进入矩阵时补一次菜单树。
  */
 const altView = ref<'table' | 'matrix' | 'trace'>('table');
+
+/**
+ * 溯源视图的聚焦实体（`role:7` 这类）
+ *
+ * 星图 / 其他页跳过来时带 `?trace=role:<id>`，这里接住直接落到实体层，
+ * 省掉用户自己再点两层的功夫。
+ */
+const traceFocus = ref<string | null>(null);
 const matrixSaving = ref(false);
 
 const rows = ref<RoleRow[]>([]);
@@ -385,7 +396,14 @@ async function remove(row: RoleRow): Promise<void> {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  const incoming = route.query.trace;
+  if (typeof incoming === 'string' && /^(user|role|menu):\d+$/.test(incoming)) {
+    altView.value = 'trace';
+    traceFocus.value = incoming;
+  }
+  void load();
+});
 </script>
 
 <template>
@@ -480,7 +498,7 @@ onMounted(load);
 
     <!-- 授权溯源：用户 → 角色 → 菜单 三层下钻（图谱舞台） -->
     <section v-if="altView === 'trace'">
-      <PermissionTrace />
+      <PermissionTrace v-model:focus="traceFocus" />
     </section>
 
     <!-- 角色表单（新建 / 编辑，含权限码） -->
@@ -595,31 +613,6 @@ onMounted(load);
 </template>
 
 <style scoped>
-.tabbar {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  margin-bottom: 12px;
-  border-radius: var(--mauth-radius-sm);
-  background: var(--mauth-surface-2);
-}
-
-.tab {
-  padding: 6px 14px;
-  border: 0;
-  border-radius: var(--mauth-radius-xs);
-  background: none;
-  color: var(--mauth-text-mid);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.tab.is-on {
-  background: var(--mauth-surface);
-  color: var(--mauth-text);
-  box-shadow: var(--e1);
-}
-
 .menu-list {
   max-height: 320px;
   overflow-y: auto;

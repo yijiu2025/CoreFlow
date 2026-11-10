@@ -8,7 +8,7 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { onMounted, reactive, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue';
 import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
 import { createPost, listPosts, removePost, updatePost } from '@/api/system';
 import { useListPage } from '@/composables/useListPage';
@@ -27,6 +27,29 @@ interface PostRow {
 }
 
 const list = useListPage<PostRow>(query => listPosts<PostRow>(query), { keyword: '' });
+
+/**
+ * 岗位阶梯：异步加载
+ *
+ * 连带 Canvas 舞台与 gsap（约 70KB），岗位页首屏是表格 —— 不该为
+ * 「可能不点的一档视图」付这个体积。
+ */
+const PostLadder = defineAsyncComponent(() => import('@/components/business/PostLadder.vue'));
+
+/** 视图档位：表格 / 阶梯 */
+const altView = ref<'table' | 'ladder'>('table');
+
+/** 阶梯输入：行 → 阶梯需要的字段名 */
+const ladderPosts = computed(() =>
+  list.rows.value.map(row => ({
+    id: row.id,
+    postName: row.post_name,
+    postCode: row.post_code,
+    sort: row.sort,
+    status: row.status,
+    userCount: row.user_count
+  }))
+);
 
 const dialogOpen = ref(false);
 const editingId = ref<number | null>(null);
@@ -48,6 +71,16 @@ function openCreate(): void {
   editingId.value = null;
   Object.assign(form, { postCode: '', postName: '', sort: 0, status: 1, remark: '' });
   dialogOpen.value = true;
+}
+
+/**
+ * 打开编辑（阶梯回调：用 id 找回原始行）
+ *
+ * @param post 阶梯节点数据
+ */
+function editFromLadder(post: { id: number }): void {
+  const row = list.rows.value.find(r => r.id === post.id);
+  if (row) openEdit(row);
 }
 
 /**
@@ -114,7 +147,12 @@ onMounted(list.load);
       <span class="page__sub">共 {{ list.total.value }} 个岗位</span>
     </div>
 
-    <div class="toolbar">
+    <div class="tabbar" role="tablist" aria-label="视图">
+      <button type="button" role="tab" :aria-selected="altView === 'table'" :class="['tab', { 'is-on': altView === 'table' }]" @click="altView = 'table'">列表</button>
+      <button type="button" role="tab" :aria-selected="altView === 'ladder'" :class="['tab', { 'is-on': altView === 'ladder' }]" @click="altView = 'ladder'">岗位阶梯</button>
+    </div>
+
+    <div v-show="altView === 'table'" class="toolbar">
       <input v-model="list.query.keyword" class="input" style="width: 200px" placeholder="编码 / 名称" @keyup.enter="list.search" />
       <button class="btn btn--sm" type="button" @click="list.search">查询</button>
       <button class="btn btn--ghost btn--sm" type="button" :disabled="list.loading.value" @click="list.load">
@@ -128,7 +166,7 @@ onMounted(list.load);
 
     <p v-if="list.errorMessage.value" class="tag tag--off">{{ list.errorMessage.value }}</p>
 
-    <section class="panel">
+    <section v-if="altView === 'table'" class="panel">
       <div class="table-wrap">
         <table class="table">
           <thead>
@@ -175,6 +213,11 @@ onMounted(list.load);
           下一页
         </button>
       </div>
+    </section>
+
+    <!-- 岗位阶梯：按 sort 自左下向右上铺开的台阶 + 在岗成员 -->
+    <section v-if="altView === 'ladder'">
+      <PostLadder :posts="ladderPosts" :loading="list.loading.value" @edit="editFromLadder" />
     </section>
 
     <div v-if="dialogOpen" class="modal-mask" @click.self="dialogOpen = false">
