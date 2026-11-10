@@ -70,7 +70,15 @@ export function buildSsoLoginUrl(nonce: string = Math.random().toString()): stri
   });
 
   const view = import.meta.env.VITE_SSO_THEME_VIEW;
-  const color = import.meta.env.VITE_SSO_THEME_COLOR;
+  // 配色优先级：显式配置 > **跟随宿主当前配色**
+  //
+  // 后半句是两个前端"联调"的关键：宿主切到深色（`?th_color=black` 或用户偏好），
+  // iframe 里如果还是白底，就是一个深色页面中间嵌一块白卡 —— 再好看也像没做完。
+  // 宿主的生效配色 id 由主题运行期写在 `data-mauth-theme` 上，白/黑两侧同名，
+  // 所以这里可以原样透传；其它值（自定义配色）不猜，交给 oauth21 的兜底链。
+  const hostColor = document.documentElement.getAttribute('data-mauth-theme');
+  const color =
+    import.meta.env.VITE_SSO_THEME_COLOR || (hostColor === 'white' || hostColor === 'black' ? hostColor : '');
   if (view) params.set('th', view);
   if (color) params.set('th_color', color);
 
@@ -106,8 +114,14 @@ export function useSsoLogin(onSuccess: () => Promise<void> | void) {
    *
    * 做成 ref 而不是常量：重载要换一个 `rnd`，否则浏览器可能直接复用旧页面
    * （oauth21 那边还带着上一次的错误提示，用户会以为"点了没反应"）。
+   *
+   * 🔴 初值 `about:blank`、真正地址在 `onMounted` 里算：`buildSsoLoginUrl` 要读
+   *    宿主当前配色（`data-mauth-theme`），而该属性由主题运行期在挂载时才写上 ——
+   *    setup 阶段读只会拿到 null，"跟随宿主配色"就静默失效（实测 iframe URL 里
+   *    没有 `th_color`）。`about:blank` 不产生网络请求，也不会让 iframe 缺位
+   *    （`bindIframe` 需要元素先存在）。
    */
-  const loginUrl = ref(buildSsoLoginUrl());
+  const loginUrl = ref('about:blank');
   let readyTimeout: number | null = null;
 
   /** iframe HTML 加载完成：启动兜底超时（等 SSO_READY） */
@@ -182,7 +196,11 @@ export function useSsoLogin(onSuccess: () => Promise<void> | void) {
     }
   }
 
-  onMounted(() => window.addEventListener('message', handleMessage));
+  onMounted(() => {
+    window.addEventListener('message', handleMessage);
+    // 主题属性已就位，此时算出的地址才带得上宿主的配色
+    loginUrl.value = buildSsoLoginUrl();
+  });
   onUnmounted(() => {
     window.removeEventListener('message', handleMessage);
     if (readyTimeout) window.clearTimeout(readyTimeout);

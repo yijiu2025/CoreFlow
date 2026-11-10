@@ -15,7 +15,7 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ThemeView } from 'skinsuite/vue';
 import { useAuthStore } from '@/stores/auth';
@@ -26,8 +26,20 @@ import type { LoginViewContext } from '@/theme/views/login';
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
-/** 设备身份（版式目录按它查找：themes/<包>/<设备>/login/index.vue） */
-const device = useRenderDevice();
+/**
+ * 设备身份：**挂载时定格**，不跟视口变化
+ *
+ * 版式目录按它查找（`themes/<包>/<设备>/login/index.vue`），而 `<ThemeView>` 在
+ * device 变化时会换版式组件 —— 组件换 = 重挂载 = **iframe 被重建**：
+ * SSO 要重新握手，用户已经输入的账号/验证码、扫码状态、授权确认页全丢。
+ * 实测：把窗口从 1440 拖到 800（跨 820px 断点）会多出一次 `/mini-login` 请求，
+ * 拖回来再多一次 —— 拖几下就重载几次。
+ *
+ * 登录页的版式本身是响应式的（宽度断点自己处理布局），device 只影响「加载哪个版式
+ * 文件」与「用哪套配色」；本仓两套设备的配色是同一份色值（都展开 `theme/palette.ts`），
+ * 所以定格没有视觉代价。需要真机版时用 `?device=mobile` 锁定（本来就是常量）。
+ */
+const device = ref(useRenderDevice().value);
 
 const { iframeRef, loading, errorMessage, busy, denied, loginUrl, reload, onIframeLoad } = useSsoLogin(async () => {
   const ok = await auth.load(true);
