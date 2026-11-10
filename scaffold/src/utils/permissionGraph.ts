@@ -52,9 +52,17 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
 export function indexPermissionGraph(graph: PermissionGraph): PermissionIndex {
   const rolesOfUser = new Map<number, number[]>();
   const usersOfRole = new Map<number, number[]>();
+  // 边集去重：唯一索引保证真实数据不重复，但接口层将来若改成多源合并，
+  // 重复边会让「N 人持有」翻倍，这里按 (user, role) 先做一次幂等。
+  const seenEdges = new Set<string>();
   for (const [userId, roleId] of graph.userRoles) {
-    push(rolesOfUser, Number(userId), Number(roleId));
-    push(usersOfRole, Number(roleId), Number(userId));
+    const u = Number(userId);
+    const r = Number(roleId);
+    const key = `${u}:${r}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    push(rolesOfUser, u, r);
+    push(usersOfRole, r, u);
   }
 
   const rolesOfMenu = new Map<number, number[]>();
@@ -186,7 +194,10 @@ export function permissionFindings(index: PermissionIndex): PermissionFindings {
   return {
     unusedRoles: index.graph.roles.filter(r => !(index.usersOfRole.get(Number(r.id))?.length ?? 0)),
     usersWithoutRole: index.graph.users.filter(u => !(index.rolesOfUser.get(Number(u.id))?.length ?? 0)),
-    orphanMenus: index.graph.menus.filter(m => m.status === 1 && !granted.has(m.id)),
+    // 🔴 只统计**页面**（type=menu）：目录本身不需要被直接授权——
+    //    只要子项被授予，目录在侧栏就会出现。把目录算进"孤立"会让计数虚高，
+    //    运维会以为配置漏了（真实数据里角色往往只勾子项）。
+    orphanMenus: index.graph.menus.filter(m => m.status === 1 && m.type === 'menu' && !granted.has(m.id)),
     buttonsWithoutCode: index.graph.menus.filter(m => m.type === 'btn' && !m.permission),
     overlapUsers: index.graph.users
       .map(user => ({
