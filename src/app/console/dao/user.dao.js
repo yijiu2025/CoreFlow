@@ -10,6 +10,7 @@
  * @since 2026-11-09
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
+import grantDao from './grant.dao.js';
 import { hashPassword, validatePasswordStrength } from '../../../framework/security/auth/index.js';
 
 class ConsoleUserDao {
@@ -249,7 +250,7 @@ class ConsoleUserDao {
    * @returns {Promise<object>} 新建的用户实例
    * @throws {Error} 参数非法 / 邮箱重复 / 密码强度不足时抛出
    */
-  async create({ username, email, password, deptId = null, status = 1, roleIds = [], postIds = [] }) {
+  async create({ username, email, password, deptId = null, status = 1, roleIds = [], postIds = [] }, actor = null) {
     if (!username || !String(username).trim()) throw new Error('INVALID_PARAM:账号不能为空');
     if (!password) throw new Error('INVALID_PARAM:密码不能为空');
 
@@ -277,7 +278,11 @@ class ConsoleUserDao {
         { transaction: t }
       );
 
-      await this.replaceRoles(user.id, roleIds, t);
+      await this.replaceRoles(user.id, roleIds, t, {
+        username: user.username,
+        operator: actor,
+        remark: actor?.remark || '新建用户时指定'
+      });
       await this.replacePosts(user.id, postIds, t);
 
       return user;
@@ -292,7 +297,7 @@ class ConsoleUserDao {
    * @returns {Promise<boolean>} 是否命中记录
    * @throws {Error} 邮箱重复时抛出
    */
-  async update(id, { username, email, deptId, status, roleIds, postIds }) {
+  async update(id, { username, email, deptId, status, roleIds, postIds }, actor = null) {
     const User = getModel('User');
     const user = await User.findByPk(id);
     if (!user) return false;
@@ -306,7 +311,13 @@ class ConsoleUserDao {
       if (status !== undefined) patch.status = Number(status);
       if (Object.keys(patch).length > 0) await User.update(patch, { where: { id }, transaction: t });
 
-      if (Array.isArray(roleIds)) await this.replaceRoles(id, roleIds, t);
+      if (Array.isArray(roleIds)) {
+        await this.replaceRoles(id, roleIds, t, {
+          username: patch.username ?? user.username,
+          operator: actor,
+          remark: actor?.remark || '编辑用户'
+        });
+      }
       if (Array.isArray(postIds)) await this.replacePosts(id, postIds, t);
       return true;
     });
@@ -332,13 +343,20 @@ class ConsoleUserDao {
    * @param {object} transaction 事务对象
    * @returns {Promise<void>}
    */
-  async replaceRoles(userId, roleIds, transaction) {
+  async replaceRoles(userId, roleIds, transaction, context = {}) {
     const UserRole = getModel('UserRole');
     const ids = Array.from(new Set((roleIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0)));
     const keep = new Set(ids);
 
     // paranoid: false —— 软删的行也必须拿到，否则「重新勾选同一角色」会走 create 撞唯一索引
     const existing = await UserRole.findAll({ where: { user_id: userId }, paranoid: false, transaction });
+
+    // 🔴 旧集合必须在**改动之前**快照：下面的 destroy/restore 会就地修改这些实例，
+    //    等到循环之后再读 `delete_version` 就已经是新值了 —— 那样 revoke 永远记不上
+    //    （实测：撤销角色成功、库里也确实软删了，但流水里一条 revoke 都没有）。
+    const before = new Set(
+      existing.filter(r => Number(r.delete_version) === 0 && r.deletedAt === null).map(r => Number(r.role_id))
+    );
 
     for (const row of existing) {
       const rid = Number(row.role_id);
@@ -366,6 +384,58 @@ class ConsoleUserDao {
       if (known.has(rid)) continue;
       await UserRole.create({ user_id: userId, role_id: rid, app_id: 'GLOBAL' }, { transaction });
     }
+
+    // 授权流水：只记**本次真正变化**的那些角色（before 是改动前的快照，见上方）
+    const added = ids.filter(rid => !before.has(rid));
+    const removed = [...before].filter(rid => !keep.has(rid));
+    if (added.length === 0 && removed.length === 0) return;
+
+    const roles = await getModel('Role').findAll({
+      where: { id: [...added, ...removed] },
+      attributes: ['id', 'code', 'name', 'app_id'],
+      paranoid: false,
+      raw: true,
+      transaction
+    });
+    const meta = new Map(roles.map(r => [Number(r.id), r]));
+    const changes = [
+      ...added.map(rid => ({
+        roleId: rid,
+        roleCode: meta.get(rid)?.code ?? '',
+        roleName: meta.get(rid)?.name ?? `#${rid}`,
+        appId: meta.get(rid)?.app_id ?? 'GLOBAL',
+        action: 'grant'
+      })),
+      ...removed.map(rid => ({
+        roleId: rid,
+        roleCode: meta.get(rid)?.code ?? '',
+        roleName: meta.get(rid)?.name ?? `#${rid}`,
+        appId: meta.get(rid)?.app_id ?? 'GLOBAL',
+        action: 'revoke'
+      }))
+    ];
+    await grantDao.record({
+      userId,
+      username: context.username ?? '',
+      changes,
+      operator: context.operator ?? null,
+      remark: context.remark,
+      transaction
+    });
+  }
+
+  /**
+   * 某用户当前生效的角色 ID
+   *
+   * 批量授权要基于"现状"算并集或差集，所以需要这个读口；口径与 replaceRoles
+   * 的 `before` 完全一致（delete_version === 0 且未被物理删除）。
+   *
+   * @param {number} userId 用户 ID
+   * @returns {Promise<number[]>} 角色 ID 数组
+   */
+  async activeRoleIds(userId) {
+    const rows = await getModel('UserRole').findAll({ where: { user_id: userId }, paranoid: false });
+    return rows.filter(r => Number(r.delete_version) === 0 && r.deletedAt === null).map(r => Number(r.role_id));
   }
 
   /**

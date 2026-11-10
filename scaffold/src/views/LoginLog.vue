@@ -56,6 +56,48 @@ function notify(message: string): void {
   window.setTimeout(() => (toast.value = ''), 2600);
 }
 
+/**
+ * 事件中文名（日志里存的是英文事件码，运维看的是"发生了什么"）
+ *
+ * @param event 事件码
+ * @returns 中文名
+ */
+function eventLabel(event: string): string {
+  const map: Record<string, string> = {
+    LOGIN: '登录',
+    LOGIN_SUCCESS: '登录成功',
+    LOGIN_FAILED: '登录失败',
+    LOGOUT: '退出登录',
+    KICK: '会话被踢出'
+  };
+  return map[event] || event;
+}
+
+/**
+ * 一句话说明这条日志意味着什么
+ *
+ * 重点是 **KICK**：它每次登录后都会紧跟着出现一条，看着像异常，其实是
+ * 「单设备单登录」把上一次的旧会话顶掉 —— 新登录踢旧的，属正常行为。
+ *
+ * @param row 日志行
+ * @returns 说明文案
+ */
+function describe(row: { event: string; details?: Record<string, unknown> }): string {
+  const reason = String(row.details?.reason || '');
+  if (row.event === 'LOGIN' || row.event === 'LOGIN_SUCCESS') return '登录成功，已创建新会话';
+  if (row.event === 'LOGOUT') return '主动退出，会话已注销';
+  if (row.event === 'KICK') {
+    const reasons: Record<string, string> = {
+      single_device_login: '同应用同设备类型的新登录，把上一次的旧会话顶下线（单设备单登录）',
+      kick_by_device_id: '管理员按设备远程下线',
+      user_kicked: '管理员主动下线该会话',
+      kick_all: '该用户全部会话被清空（改密 / 注销 / 管理员操作）'
+    };
+    return reasons[reason] || `会话被踢出（${reason || '原因未记录'}）`;
+  }
+  return '—';
+}
+
 /** 加载全部数据 */
 async function load(): Promise<void> {
   loading.value = true;
@@ -202,22 +244,27 @@ onMounted(load);
               <th>IP</th>
               <th>归属地</th>
               <th>结果</th>
+              <th>说明</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="row in rows" :key="`${row.id}-${row.created_at}`">
               <td class="mono">{{ new Date(row.created_at).toLocaleString('zh-CN') }}</td>
               <td>{{ row.username || '—' }}</td>
-              <td class="mono">{{ row.event }}</td>
+              <td>
+                {{ eventLabel(row.event) }}
+                <span class="mono log-code">{{ row.event }}</span>
+              </td>
               <td>{{ row.app_id || '—' }}</td>
               <td class="mono">{{ row.ip || '—' }}</td>
               <td>{{ row.location || '—' }}</td>
               <td>
                 <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">{{ row.status === 1 ? '成功' : '失败' }}</span>
               </td>
+              <td class="log-desc">{{ describe(row) }}</td>
             </tr>
             <tr v-if="!loading && rows.length === 0">
-              <td colspan="7"><div class="empty">该条件下没有登录记录</div></td>
+              <td colspan="8"><div class="empty">该条件下没有登录记录</div></td>
             </tr>
           </tbody>
         </table>
@@ -235,6 +282,20 @@ onMounted(load);
 </template>
 
 <style scoped>
+.log-code {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--mauth-text-faint);
+}
+
+.log-desc {
+  max-width: 340px;
+  white-space: normal;
+  font-size: 12.5px;
+  color: var(--mauth-text-soft);
+  line-height: 1.5;
+}
+
 .heat {
   display: grid;
   gap: 3px;

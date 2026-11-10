@@ -40,6 +40,23 @@ const OPER_FAILED_SQL = `(a.event LIKE '%FAIL%' OR a.event LIKE '%DENIED%' OR a.
 const LOGIN_FAILED_SQL = `(l.event LIKE '%FAIL%' OR l.event LIKE '%FORBIDDEN%')`;
 
 /**
+ * 归一化 details（raw 查询的 JSON 列是字符串）
+ *
+ * @param {unknown} value 原始值
+ * @returns {object} 解析后的对象（失败返回空对象，不让一条脏数据打断整页）
+ */
+function parseDetails(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
  * 按时间档返回桶表达式与回溯区间
  *
  * @param {string} range 时间档（24h / 7d / 30d）
@@ -247,6 +264,9 @@ class LogDao {
     return {
       rows: rows.map(r => ({
         ...r,
+        // 🔴 raw 查询里 JSON 列回来是**字符串**（模型查询才自动 parse）。
+        //    前端要读 details.reason 解释「为什么被踢」，这里必须归一化。
+        details: parseDetails(r.details),
         failed: Number(r.failed || 0),
         status: Number(r.failed || 0) === 1 ? 0 : 1
       })),
