@@ -197,3 +197,20 @@ export interface PostMember {
   avatar: string | null;
   status: number;
 }
+
+/** 部门节点（GET /depts/tree，含成员数与上级链） */
+export interface DeptNode {
+  id: number;
+  parent_id: number;
+  /** 祖先链，形如 `0,1,3`（根为 0）；由后端维护，前端不自行拼接 */
+  ancestors: string;
+  name: string;
+  leader: string | null;
+  phone: string | null;
+  email: string | null;
+  sort: number;
+  status: number;
+  /** 本部门直属成员数（不含下级） */
+  user_count: number;
+  children: DeptNode[];
+}

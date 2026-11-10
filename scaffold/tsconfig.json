@@ -24,8 +24,14 @@
       "@/*": [
         "src/*"
       ],
+      "vue": [
+        "node_modules/vue"
+      ],
       "stable-deviceid": [
         "../packages/shared-device/src/index.ts"
+      ],
+      "challenge-client": [
+        "../packages/challenge-client/src/index.ts"
       ],
       "skinsuite": [
         "../packages/theme-core/src/index.ts"
@@ -44,6 +50,8 @@
     "src/**/*.d.ts",
     "src/**/*.vue",
     "vite.config.ts",
-    "env.d.ts"
+    "env.d.ts",
+    "../packages/challenge-client/src/**/*.ts",
+    "../packages/challenge-client/src/**/*.vue"
   ]
 }

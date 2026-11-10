@@ -1,53 +1,51 @@
 <script setup lang="ts">
 /**
- * 部门管理
+ * 部门管理（组织架构）
  *
- * 上级链 ancestors 由后端维护，前端只传 parentId（不自行拼接）。
- * 有下级部门或仍有成员时，删除会被后端拒绝。
+ * 部门层级同时决定「本部门及以下」数据权限的范围，所以这里以**树**为主视图：
+ * 折叠、缩进、每行都能直接「新增下级」—— 而不是让用户去猜一个数字 ID。
+ *
+ * 上级链 `ancestors` 由后端维护（新增/改父级时自动重写整棵子树），前端只传
+ * `parentId`，不自行拼接：拼接规则一旦有两份实现，早晚会出现半截链路。
+ *
+ * 搜索是**客户端过滤**：`GET /depts/tree` 没有 keyword/status 参数，而部门量级
+ * 是几十到几百，本地过滤比给后端加参数更快（也避免"命中项要不要带出父链"的语义
+ * 分歧——这里的选择是：命中节点保留整棵子树，未命中的祖先只为带出命中项而保留）。
  *
  * @author yijiu2025
  * @since 2026-11-09
  */
 import { computed, onMounted, reactive, ref } from 'vue';
-import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
+import { ChevronRight, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
 import { createDept, deptTree, removeDept, updateDept } from '@/api/system';
+import type { DeptNode } from '@/api/types';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
-
-interface DeptNode {
-  id: number;
-  parent_id: number;
-  ancestors: string;
-  name: string;
-  leader: string | null;
-  phone: string | null;
-  email: string | null;
-  sort: number;
-  status: number;
-  user_count: number;
-  children: DeptNode[];
-}
 
 const trees = ref<DeptNode[]>([]);
 const loading = ref(false);
 const errorMessage = ref('');
 const toast = ref('');
-const dialogOpen = ref(false);
-const editingId = ref<number | null>(null);
-const form = reactive({ parentId: 0, name: '', leader: '', phone: '', email: '', sort: 0, status: 1 });
 
-const flat = computed(() => {
-  const out: Array<{ node: DeptNode; depth: number }> = [];
-  const walk = (nodes: DeptNode[], depth: number): void => {
-    for (const node of nodes) {
-      out.push({ node, depth });
-      if (node.children?.length) walk(node.children, depth + 1);
-    }
-  };
-  walk(trees.value, 0);
-  return out;
+/** 折叠状态：存「已收起」的 id，默认全展开（新部门自动展开） */
+const collapsed = ref<Set<number>>(new Set());
+
+const query = reactive({ keyword: '', status: '' as '' | 0 | 1 });
+
+const dialogOpen = ref(false);
+const submitting = ref(false);
+const editingId = ref<number | null>(null);
+const form = reactive({
+  parentId: 0,
+  name: '',
+  leader: '',
+  phone: '',
+  email: '',
+  sort: 10,
+  status: 1
 });
+const errors = reactive<Record<string, string>>({});
 
 /**
  * 提示条
@@ -59,12 +57,13 @@ function notify(message: string): void {
   window.setTimeout(() => (toast.value = ''), 2600);
 }
 
-/** 加载 */
+/** 加载部门树 */
 async function load(): Promise<void> {
   loading.value = true;
   errorMessage.value = '';
   try {
-    trees.value = (await deptTree()) as unknown as DeptNode[];
+    trees.value = await deptTree();
+    // 首次加载全展开：折叠状态只记用户主动收起的，刷新后仍保留（id 不存在时自然失效）
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : '加载失败';
   } finally {
@@ -72,59 +71,270 @@ async function load(): Promise<void> {
   }
 }
 
-/** 打开新建 */
-function openCreate(): void {
+/* ── 过滤与展开 ── */
+
+/**
+ * 按关键词 / 状态过滤树
+ *
+ * 命中节点保留整棵子树（用户想看的是「这个部门下面有什么」），未命中的祖先
+ * 只为带出命中项而保留（否则树会断层）。
+ *
+ * @returns 过滤后的树
+ */
+const filtered = computed<DeptNode[]>(() => {
+  const kw = query.keyword.trim().toLowerCase();
+  const st = query.status;
+  if (!kw && st === '') return trees.value;
+
+  const walk = (nodes: DeptNode[]): DeptNode[] => {
+    const out: DeptNode[] = [];
+    for (const node of nodes) {
+      const hit =
+        (!kw ||
+          node.name.toLowerCase().includes(kw) ||
+          (node.leader ?? '').toLowerCase().includes(kw) ||
+          (node.phone ?? '').includes(kw)) &&
+        (st === '' || node.status === st);
+      if (hit) {
+        out.push(node);
+        continue;
+      }
+      const kids = walk(node.children ?? []);
+      if (kids.length) out.push({ ...node, children: kids });
+    }
+    return out;
+  };
+  return walk(trees.value);
+});
+
+/** 过滤生效时忽略折叠（否则用户会以为"搜不到"） */
+const filtering = computed(() => Boolean(query.keyword.trim()) || query.status !== '');
+
+/** 可见行（含缩进层级） */
+const rows = computed(() => {
+  const out: Array<{ node: DeptNode; depth: number; hasChildren: boolean }> = [];
+  const walk = (nodes: DeptNode[], depth: number): void => {
+    for (const node of nodes) {
+      const hasChildren = Boolean(node.children?.length);
+      out.push({ node, depth, hasChildren });
+      if (hasChildren && (filtering.value || !collapsed.value.has(node.id))) walk(node.children, depth + 1);
+    }
+  };
+  walk(filtered.value, 0);
+  return out;
+});
+
+/** 读数：部门数 + 总人数（含下级按树累加，避免重复计算直属口径） */
+const summary = computed(() => {
+  let count = 0;
+  let members = 0;
+  const walk = (nodes: DeptNode[]): void => {
+    for (const node of nodes) {
+      count += 1;
+      members += Number(node.user_count) || 0;
+      walk(node.children ?? []);
+    }
+  };
+  walk(trees.value);
+  return { count, members };
+});
+
+/**
+ * 本部门及下级的成员总数
+ *
+ * @param node 部门
+ * @returns 人数
+ */
+function membersOf(node: DeptNode): number {
+  return (Number(node.user_count) || 0) + (node.children ?? []).reduce((sum, c) => sum + membersOf(c), 0);
+}
+
+/**
+ * 下级部门数量（不含自身）
+ *
+ * @param node 部门
+ * @returns 数量
+ */
+function descendantsOf(node: DeptNode): number {
+  return (node.children ?? []).reduce((sum, c) => sum + 1 + descendantsOf(c), 0);
+}
+
+/**
+ * 切换折叠
+ *
+ * @param id 部门 ID
+ */
+function toggle(id: number): void {
+  const next = new Set(collapsed.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  collapsed.value = next;
+}
+
+/** 全部展开 / 收起 */
+function expandAll(): void {
+  collapsed.value = new Set();
+}
+function collapseAll(): void {
+  const next = new Set<number>();
+  const walk = (nodes: DeptNode[]): void => {
+    for (const node of nodes) {
+      if (node.children?.length) {
+        next.add(node.id);
+        walk(node.children);
+      }
+    }
+  };
+  walk(trees.value);
+  collapsed.value = next;
+}
+
+/* ── 表单 ── */
+
+/**
+ * 收集某节点及其全部下级 ID（选上级时排除，避免把部门挂到自己下面）
+ *
+ * @param node 部门
+ * @returns ID 列表
+ */
+function collectIds(node: DeptNode): number[] {
+  return [node.id, ...(node.children ?? []).flatMap(collectIds)];
+}
+
+/** 上级部门选项（树形缩进；编辑时排除自身与后代） */
+const parentOptions = computed(() => {
+  const exclude = new Set<number>(editingId.value === null ? [] : collectIds(findNode(trees.value, editingId.value) ?? ({} as DeptNode)));
+  const out: Array<{ id: number; label: string; depth: number }> = [];
+  const walk = (nodes: DeptNode[], depth: number): void => {
+    for (const node of nodes) {
+      if (!exclude.has(node.id)) out.push({ id: node.id, label: node.name, depth });
+      walk(node.children ?? [], depth + 1);
+    }
+  };
+  walk(trees.value, 0);
+  return out;
+});
+
+/**
+ * 在树里找节点
+ *
+ * @param nodes 树
+ * @param id 部门 ID
+ * @returns 节点或 null
+ */
+function findNode(nodes: DeptNode[], id: number): DeptNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const hit = findNode(node.children ?? [], id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * 清空校验错误
+ */
+function clearErrors(): void {
+  for (const key of Object.keys(errors)) delete errors[key];
+}
+
+/**
+ * 打开新建表单
+ *
+ * @param parent 上级部门（不传则为顶级）
+ */
+function openCreate(parent?: DeptNode): void {
   editingId.value = null;
-  Object.assign(form, { parentId: 0, name: '', leader: '', phone: '', email: '', sort: 0, status: 1 });
+  clearErrors();
+  Object.assign(form, {
+    parentId: parent?.id ?? 0,
+    name: '',
+    leader: '',
+    phone: '',
+    email: '',
+    sort: 10,
+    status: 1
+  });
   dialogOpen.value = true;
 }
 
 /**
- * 打开编辑
+ * 打开编辑表单
  *
- * @param node 部门节点
+ * @param node 部门
  */
 function openEdit(node: DeptNode): void {
   editingId.value = node.id;
+  clearErrors();
   Object.assign(form, {
     parentId: node.parent_id,
     name: node.name,
-    leader: node.leader || '',
-    phone: node.phone || '',
-    email: node.email || '',
+    leader: node.leader ?? '',
+    phone: node.phone ?? '',
+    email: node.email ?? '',
     sort: node.sort,
     status: node.status
   });
   dialogOpen.value = true;
 }
 
+/** 校验（只挡明显错误，真正的约束仍在后端 schema） */
+function validate(): boolean {
+  clearErrors();
+  if (!form.name.trim()) errors.name = '请填写部门名称';
+  if (form.name.trim().length > 50) errors.name = '部门名称不超过 50 字';
+  // 手机号或固话（带区号）；留空表示不填
+  if (form.phone && !/^(1[3-9]\d{9}|0\d{2,3}-?\d{7,8})$/.test(form.phone.trim())) {
+    errors.phone = '手机号或固话格式不正确';
+  }
+  if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    errors.email = '邮箱格式不正确';
+  }
+  return Object.keys(errors).length === 0;
+}
+
 /** 保存 */
 async function submit(): Promise<void> {
-  if (!form.name.trim()) {
-    notify('请填写部门名称');
-    return;
-  }
+  if (!validate()) return;
+  submitting.value = true;
   try {
+    const payload = {
+      parentId: Number(form.parentId) || 0,
+      name: form.name.trim(),
+      leader: form.leader.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim(),
+      sort: Number(form.sort) || 0,
+      status: Number(form.status)
+    };
     if (editingId.value) {
-      await updateDept(editingId.value, form);
+      await updateDept(editingId.value, payload);
       notify('已保存');
     } else {
-      await createDept(form);
+      await createDept(payload);
       notify('已创建');
     }
     dialogOpen.value = false;
     await load();
   } catch (err) {
     notify(err instanceof Error ? err.message : '保存失败');
+  } finally {
+    submitting.value = false;
   }
 }
 
 /**
- * 删除
+ * 删除部门
  *
- * @param node 部门节点
+ * 有下级时前端先拦（后端也会拒），避免用户点了删除才看到 400。
+ *
+ * @param node 部门
  */
 async function remove(node: DeptNode): Promise<void> {
+  if (node.children?.length) {
+    notify(`「${node.name}」下还有 ${node.children.length} 个下级部门，请先调整或删除下级`);
+    return;
+  }
   if (!window.confirm(`确认删除部门「${node.name}」？`)) return;
   try {
     await removeDept(node.id);
@@ -142,13 +352,29 @@ onMounted(load);
   <div>
     <div class="page__head">
       <h2 class="page__title">部门管理</h2>
-      <span class="page__sub">共 {{ flat.length }} 个部门</span>
+      <span class="page__sub">共 {{ summary.count }} 个部门 · {{ summary.members }} 人 · 层级决定「本部门及以下」的数据权限范围</span>
     </div>
 
     <div class="toolbar">
-      <button class="btn btn--sm" type="button" :disabled="loading" @click="load"><RefreshCw :size="15" /> 刷新</button>
+      <input
+        v-model="query.keyword"
+        class="input"
+        style="width: 200px"
+        placeholder="部门名称 / 负责人 / 电话"
+      />
+      <select v-model="query.status" class="select" style="width: 120px">
+        <option value="">全部状态</option>
+        <option :value="1">启用</option>
+        <option :value="0">停用</option>
+      </select>
+      <button v-if="query.keyword || query.status !== ''" class="btn btn--ghost btn--sm" type="button" @click="query.keyword = ''; query.status = ''">
+        清空
+      </button>
+      <button class="btn btn--ghost btn--sm" type="button" @click="expandAll">展开全部</button>
+      <button class="btn btn--ghost btn--sm" type="button" @click="collapseAll">收起全部</button>
       <span class="toolbar__spacer"></span>
-      <button v-if="auth.hasPermission('admin:dept:create')" class="btn btn--primary btn--sm" type="button" @click="openCreate">
+      <button class="btn btn--sm" type="button" :disabled="loading" @click="load"><RefreshCw :size="15" /> 刷新</button>
+      <button v-if="auth.hasPermission('admin:dept:create')" class="btn btn--primary btn--sm" type="button" @click="openCreate()">
         <Plus :size="15" /> 新建部门
       </button>
     </div>
@@ -160,26 +386,61 @@ onMounted(load);
         <table class="table">
           <thead>
             <tr>
-              <th>名称</th>
+              <th>部门名称</th>
               <th>负责人</th>
-              <th>电话</th>
-              <th>成员</th>
+              <th>联系电话</th>
+              <th>邮箱</th>
+              <th>人数</th>
+              <th>排序</th>
               <th>状态</th>
               <th class="col-actions">操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in flat" :key="item.node.id">
-              <td :style="{ paddingLeft: `${16 + item.depth * 18}px` }">{{ item.node.name }}</td>
+            <tr v-for="item in rows" :key="item.node.id">
+              <td :style="{ paddingLeft: `${12 + item.depth * 20}px` }">
+                <span class="dept-name">
+                  <button
+                    v-if="item.hasChildren"
+                    class="dept-toggle"
+                    type="button"
+                    :aria-expanded="filtering || !collapsed.has(item.node.id)"
+                    :aria-label="`展开或收起 ${item.node.name}`"
+                    @click="toggle(item.node.id)"
+                  >
+                    <ChevronRight
+                      :size="14"
+                      :class="{ 'is-open': filtering || !collapsed.has(item.node.id) }"
+                    />
+                  </button>
+                  <span v-else class="dept-toggle is-empty"></span>
+                  <span class="dept-name__text">{{ item.node.name }}</span>
+                  <span v-if="item.hasChildren" class="tag tag--info">{{ item.node.children.length }} 个下级</span>
+                </span>
+              </td>
               <td>{{ item.node.leader || '—' }}</td>
               <td class="mono">{{ item.node.phone || '—' }}</td>
-              <td class="mono">{{ item.node.user_count }}</td>
+              <td class="mono">{{ item.node.email || '—' }}</td>
+              <td class="mono">
+                <span :title="`直属 ${item.node.user_count} 人`">{{ membersOf(item.node) }}</span>
+                <small v-if="item.hasChildren" class="dept-sub">含下级</small>
+              </td>
+              <td class="mono">{{ item.node.sort }}</td>
               <td>
                 <span class="tag" :class="item.node.status === 1 ? 'tag--ok' : 'tag--off'">
                   {{ item.node.status === 1 ? '启用' : '停用' }}
                 </span>
               </td>
               <td class="col-actions">
+                <button
+                  v-if="auth.hasPermission('admin:dept:create')"
+                  class="btn btn--ghost btn--sm"
+                  type="button"
+                  title="新增下级部门"
+                  @click="openCreate(item.node)"
+                >
+                  <Plus :size="14" />
+                </button>
                 <button v-if="auth.hasPermission('admin:dept:update')" class="btn btn--ghost btn--sm" type="button" @click="openEdit(item.node)">
                   <Pencil :size="14" /> 编辑
                 </button>
@@ -188,8 +449,10 @@ onMounted(load);
                 </button>
               </td>
             </tr>
-            <tr v-if="!loading && flat.length === 0">
-              <td colspan="6"><div class="empty">暂无部门</div></td>
+            <tr v-if="!loading && rows.length === 0">
+              <td colspan="8">
+                <div class="empty">{{ filtering ? '没有匹配的部门' : '暂无部门' }}</div>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -198,31 +461,42 @@ onMounted(load);
 
     <div v-if="dialogOpen" class="modal-mask" @click.self="dialogOpen = false">
       <div class="modal">
-        <header class="modal__head"><span class="modal__title">{{ editingId ? '编辑部门' : '新建部门' }}</span></header>
+        <header class="modal__head">
+          <span class="modal__title">{{ editingId ? '编辑部门' : '新建部门' }}</span>
+        </header>
         <div class="modal__body">
           <label class="field">
-            <span class="field__label">上级部门 ID（0 为根）</span>
-            <input v-model.number="form.parentId" class="input" type="number" min="0" />
+            <span class="field__label">上级部门</span>
+            <select v-model.number="form.parentId" class="select">
+              <option :value="0">无（顶级部门）</option>
+              <option v-for="opt in parentOptions" :key="opt.id" :value="opt.id">
+                {{ '　'.repeat(opt.depth) }}{{ opt.label }}
+              </option>
+            </select>
+            <span v-if="editingId" class="field__hint">不能选自己或自己的下级（会造成循环）</span>
           </label>
           <label class="field">
-            <span class="field__label">名称</span>
-            <input v-model="form.name" class="input" maxlength="50" />
+            <span class="field__label">部门名称 *</span>
+            <input v-model="form.name" class="input" maxlength="50" placeholder="如：研发中心" />
+            <span v-if="errors.name" class="field__error">{{ errors.name }}</span>
           </label>
           <label class="field">
             <span class="field__label">负责人</span>
-            <input v-model="form.leader" class="input" maxlength="50" />
+            <input v-model="form.leader" class="input" maxlength="50" placeholder="选填" />
           </label>
           <label class="field">
-            <span class="field__label">电话</span>
-            <input v-model="form.phone" class="input" maxlength="20" />
+            <span class="field__label">联系电话</span>
+            <input v-model="form.phone" class="input" maxlength="20" placeholder="选填" />
+            <span v-if="errors.phone" class="field__error">{{ errors.phone }}</span>
           </label>
           <label class="field">
             <span class="field__label">邮箱</span>
-            <input v-model="form.email" class="input" maxlength="100" />
+            <input v-model="form.email" class="input" type="email" maxlength="100" placeholder="选填" />
+            <span v-if="errors.email" class="field__error">{{ errors.email }}</span>
           </label>
           <label class="field">
-            <span class="field__label">排序</span>
-            <input v-model.number="form.sort" class="input" type="number" min="0" />
+            <span class="field__label">显示排序</span>
+            <input v-model.number="form.sort" class="input" type="number" min="0" max="9999" />
           </label>
           <label class="field">
             <span class="field__label">状态</span>
@@ -234,7 +508,9 @@ onMounted(load);
         </div>
         <footer class="modal__foot">
           <button class="btn btn--ghost" type="button" @click="dialogOpen = false">取消</button>
-          <button class="btn btn--primary" type="button" @click="submit">保存</button>
+          <button class="btn btn--primary" type="button" :disabled="submitting" @click="submit">
+            {{ submitting ? '保存中…' : '保存' }}
+          </button>
         </footer>
       </div>
     </div>
@@ -242,3 +518,52 @@ onMounted(load);
     <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
+
+<style scoped>
+.dept-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dept-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--mauth-text-mid);
+  cursor: pointer;
+}
+
+.dept-toggle:hover {
+  background: var(--mauth-hover);
+  color: var(--mauth-text);
+}
+
+.dept-toggle.is-empty {
+  cursor: default;
+}
+
+.dept-toggle svg {
+  transition: transform 0.16s ease;
+}
+
+.dept-toggle svg.is-open {
+  transform: rotate(90deg);
+}
+
+.dept-name__text {
+  font-weight: 500;
+}
+
+.dept-sub {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--mauth-text-faint);
+}
+</style>

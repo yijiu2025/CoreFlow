@@ -88,6 +88,22 @@
   color: var(--mauth-text-soft);
 }
 
+/* 字段级校验：错误提示与说明文字（表单里成对出现，放全局避免每页各写一份） */
+.field__error {
+  font-size: 12px;
+  color: var(--mauth-danger);
+}
+
+.field__hint {
+  font-size: 12px;
+  color: var(--mauth-text-faint);
+}
+
+.field__required {
+  margin-left: 2px;
+  color: var(--mauth-danger);
+}
+
 .input,
 .select {
   height: var(--control-h);

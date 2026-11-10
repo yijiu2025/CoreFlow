@@ -155,10 +155,13 @@ export function useChallenge(options: UseChallengeOptions = {}) {
       }
 
       // ── pow：本地求解 ──
+      // challengeId 在类型上是可选的（第三方 provider 不下发），但走到这里必然是 pow；
+      // 取一次本地常量，求解与校验用同一个值 —— 各自 `?? ''` 会让两边有可能不一致。
+      const challengeId = issued.challengeId ?? '';
       // 只测**求解本身**的耗时（不含签发/校验的网络时间）—— 这才是"用户卡了多久"的分子
       const solveStartedAt = Date.now();
       const solved = await solvePow({
-        challengeId: issued.challengeId ?? '',
+        challengeId,
         salt: issued.salt ?? '',
         difficulty: issued.difficulty ?? 0,
         maxAttempts: issued.maxAttempts,
@@ -180,7 +183,7 @@ export function useChallenge(options: UseChallengeOptions = {}) {
       progress.value = 0.95;
 
       // solveMs 只进服务端统计（成功率之外的第二块拼图），不参与判定
-      const verified = await verifyChallenge(issued.challengeId, solved.answer, options, solveMs);
+      const verified = await verifyChallenge(challengeId, solved.answer, options, solveMs);
       if (round.signal.aborted || disposed) return false;
 
       if (!verified.ok) {

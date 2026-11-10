@@ -33,6 +33,8 @@ export default defineConfig(({ mode }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
         // 共享库源码直供（本仓约定：packages/* 在→源码，发布后走包）
         'stable-deviceid': fileURLToPath(new URL('../packages/shared-device/src/index.ts', import.meta.url)),
+        // 人机挑战页共享库（纯源码，不经 npm 安装；见 packages/challenge-client/src/index.ts 注释）
+        'challenge-client': fileURLToPath(new URL('../packages/challenge-client/src/index.ts', import.meta.url)),
         // 🔴 子路径必须排在裸包名之前：alias 是**前缀替换**，`skinsuite` 在前会把
         //    `skinsuite/vue` 改写成 `<…>/src/index.ts/vue`（实际踩过）。
         'skinsuite/vue': fileURLToPath(new URL('../packages/theme-core/src/vue/index.ts', import.meta.url)),
@@ -48,12 +50,24 @@ export default defineConfig(({ mode }) => {
         // 后端同源代理：Cookie（sid/sid_r）随请求直达，不需要跨域配置
         '/admin': { target: apiTarget, changeOrigin: true },
         '/auth': { target: apiTarget, changeOrigin: true },
-        '/user': { target: apiTarget, changeOrigin: true }
+        '/user': { target: apiTarget, changeOrigin: true },
+        // 人机挑战接口（/api/firewall/v1/challenge/*）：挑战页是独立入口，
+        // 必须能直接打到它；被防火墙挡住时唯一的自救通道就是这里。
+        '/api/firewall': { target: apiTarget, changeOrigin: true }
       }
     },
     build: {
       target: 'es2020',
-      chunkSizeWarningLimit: 900
+      chunkSizeWarningLimit: 900,
+      rollupOptions: {
+        // 双入口：主应用 + 独立人机挑战页。
+        // 挑战页必须是独立产物：主应用启动即请求 session/me，而该请求此刻正被 428
+        // 挡着，把它做成主应用的一个路由会"一进页面就自我打死"。
+        input: {
+          main: fileURLToPath(new URL('./index.html', import.meta.url)),
+          challenge: fileURLToPath(new URL('./challenge.html', import.meta.url))
+        }
+      }
     }
   };
 });

@@ -7,7 +7,7 @@
  * @since 2026-11-09
  */
 import { del, download, get, post, put } from './http';
-import type { MenuNode, PageResult, PermissionGraph, PostMember, RoleRow, UserOptions, UserRow } from './types';
+import type { DeptNode, MenuNode, PageResult, PermissionGraph, PostMember, RoleRow, UserOptions, UserRow } from './types';
 
 const BASE = '/admin/console/v1';
 
@@ -123,8 +123,8 @@ export function removeMenu(id: number): Promise<null> {
 
 /* ── 部门 ─────────────────────────────────────────────────── */
 
-/** 部门树 */
-export function deptTree(): Promise<Array<Record<string, unknown>>> {
+/** 部门树（含成员数与上级链） */
+export function deptTree(): Promise<DeptNode[]> {
   return get(`${BASE}/depts/tree`);
 }
 

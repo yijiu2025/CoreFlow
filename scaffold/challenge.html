@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>安全验证 · 管理后台</title>
+  </head>
+  <body>
+    <!--
+      独立入口：只挂人机挑战卡片，不加载 router / pinia / 主布局 / 主题状态机。
+
+      为什么必须是独立入口而不是主应用的一个路由：被边界防护判为 CHALLENGE 时，
+      **所有业务接口**都在 428，而主应用一启动就请求 session/me —— 把挑战页做成
+      路由等于"一进页面就把自己打死"。这个页面只调 `/api/firewall/v1/challenge/*`
+      （免登录、被防火墙显式豁免），所以能独立可用。
+
+      构建入口见 vite.config.ts 的 build.rollupOptions.input。
+    -->
+    <div id="challenge-app"></div>
+    <script type="module" src="/src/challenge/main.ts"></script>
+  </body>
+</html>
