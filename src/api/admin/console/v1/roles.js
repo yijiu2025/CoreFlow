@@ -146,6 +146,18 @@ async function registerRoleRoutes(fastify) {
       const role = await roleDao.findById(request.params.id);
       if (!role) throw new Error('NOT_FOUND:角色不存在');
 
+      /**
+       * 内置角色的 **权限码不可改**（编码不可改由 schema 保证：body 里没有 code）。
+       *
+       * 为什么不只是「提示一下」：内置角色的 policy 是代码里 `defineRoles` 声明的，
+       * 运行时改库会与代码漂移（下次启动也不会回滚）；更要紧的是把 superadmin 的
+       * `admin:*` 删掉，保存瞬间自己就失去全部权限，**没有任何其他账号能救**，
+       * 只能直连数据库改 policy。name / description / rankLevel 仍可改。
+       */
+      if (BUILTIN_CODES.has(role.code) && request.body.permissions !== undefined) {
+        throw new Error('BUILTIN_PROTECTED:内置角色的权限码不可修改');
+      }
+
       const myRank = await maxRankOf(request.state.user?.userId);
       if (Number(role.rank_level) > myRank) throw new Error('FORBIDDEN:不能编辑职级高于自己的角色');
       if (request.body.rankLevel !== undefined && Number(request.body.rankLevel) > myRank) {

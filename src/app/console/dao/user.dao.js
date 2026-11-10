@@ -60,7 +60,17 @@ class ConsoleUserDao {
                 WHERE ur.user_id = u.id AND ur.delete_version = 0) AS role_names,
               (SELECT GROUP_CONCAT(p.post_name ORDER BY p.id SEPARATOR ',')
                  FROM sys_user_post up JOIN sys_post p ON p.id = up.post_id
-                WHERE up.user_id = u.id) AS post_names
+                WHERE up.user_id = u.id) AS post_names,
+              -- 🔴 表单回填必须用 **ID** 而不是名字：名字会重名（不同 app 可能有同名角色）、
+              --    可改名、还可能含逗号（GROUP_CONCAT 分隔符）—— 任何一条都会让
+              --    「按名字反查」静默选错角色。这两个字段是编辑弹窗的唯一数据源。
+              --    返回的是逗号串（GROUP_CONCAT 结果），前端 split 后转 number。
+              (SELECT GROUP_CONCAT(ur.role_id ORDER BY ur.role_id)
+                 FROM iam_user_role ur
+                WHERE ur.user_id = u.id AND ur.delete_version = 0) AS role_ids,
+              (SELECT GROUP_CONCAT(up.post_id ORDER BY up.post_id)
+                 FROM sys_user_post up
+                WHERE up.user_id = u.id) AS post_ids
          FROM user_user u
          LEFT JOIN sys_dept d ON d.id = u.dept_id
          ${whereSql}
@@ -197,7 +207,19 @@ class ConsoleUserDao {
   }
 
   /**
-   * 覆盖式写入用户角色（软删除语义：旧的置 delete_version 后重建）
+   * 覆盖式写入用户角色
+   *
+   * 🔴 三条约束叠在一起，决定了这里**只能用 destroy/restore，不能自己 UPDATE**：
+   *    1. `iam_user_role` 有表级唯一索引 `(user_id, role_id)`（**不含 delete_version**）
+   *       ⇒ 同一对用户角色全表只能有一行，**「先软删再 bulkCreate」必然撞唯一约束**
+   *       （曾经就是这么写的：接口 500 Validation error，用户只是点了下保存）；
+   *    2. `softDeleteHooks` 的 `beforeUpdate` 禁止手改 `delete_version`
+   *       （只允许 0 或 === id），手写 `update({delete_version})` 直接被拒；
+   *    3. 正确通道是 `destroy()` → 钩子置 `delete_version = id`、`restore()` → 置回 0。
+   *
+   * 于是语义变成「恢复式写入」：每对 (user, role) 永远只有一行，
+   * 取消勾选走软删、重新勾选走恢复，没有才新建。与读取口径
+   * （`delete_version = 0` 才算有效）完全一致。
    *
    * @param {number} userId 用户 ID
    * @param {number[]} roleIds 角色 ID 数组
@@ -207,12 +229,37 @@ class ConsoleUserDao {
   async replaceRoles(userId, roleIds, transaction) {
     const UserRole = getModel('UserRole');
     const ids = Array.from(new Set((roleIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0)));
-    await UserRole.update({ delete_version: Date.now() }, { where: { user_id: userId }, transaction });
-    if (ids.length === 0) return;
-    await UserRole.bulkCreate(
-      ids.map(roleId => ({ user_id: userId, role_id: roleId, app_id: 'GLOBAL' })),
-      { transaction }
-    );
+    const keep = new Set(ids);
+
+    // paranoid: false —— 软删的行也必须拿到，否则「重新勾选同一角色」会走 create 撞唯一索引
+    const existing = await UserRole.findAll({ where: { user_id: userId }, paranoid: false, transaction });
+
+    for (const row of existing) {
+      const rid = Number(row.role_id);
+      const logicalActive = Number(row.delete_version) === 0;
+      const physicallyDeleted = row.deletedAt !== null && row.deletedAt !== undefined;
+
+      if (!keep.has(rid)) {
+        if (logicalActive && !physicallyDeleted) await row.destroy({ transaction });
+        continue;
+      }
+
+      // 需要在本次结果里的
+      if (physicallyDeleted) {
+        // 走 paranoid 的恢复：清 deleted_at 并把 delete_version 置 0
+        await row.restore({ transaction });
+      } else if (!logicalActive) {
+        // 极少数脏数据：deleted_at 为空但 delete_version 非 0。
+        // 归 0 是钩子允许的终态（beforeUpdate 只在「非 0 且非 id」时拒绝）。
+        await row.update({ delete_version: 0 }, { transaction });
+      }
+    }
+
+    const known = new Set(existing.map(r => Number(r.role_id)));
+    for (const rid of ids) {
+      if (known.has(rid)) continue;
+      await UserRole.create({ user_id: userId, role_id: rid, app_id: 'GLOBAL' }, { transaction });
+    }
   }
 
   /**

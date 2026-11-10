@@ -18,6 +18,7 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import userDao from '../../../../app/console/dao/user.dao.js';
+import roleDao from '../../../../app/console/dao/role.dao.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 
 /** 列表查询参数 schema（没有 schema 时 limit=abc 会变成 NaN 触发 500） */
@@ -132,6 +133,22 @@ async function registerUserRoutes(fastify) {
       }
     },
     handler: withFail(async (request, reply) => {
+      /**
+       * 防自锁：不允许把「自己」的管理权限摘干净。
+       *
+       * 权限是**每次请求实时判定**的，所以把当前账号的最后一个管理角色去掉后，
+       * 下一次请求立刻 403 —— 而你已经没有权限再改回来，只能直连数据库改 policy
+       * 或找另一个管理员。这不是理论风险：实测清空自己的角色后当场失去后台入口。
+       *
+       * 只拦「保存后自己不再有任何 admin 能力」这一种情形：
+       * 换成另一个仍有 `admin:*` 的角色是允许的（那是正常调整）。
+       */
+      if (Array.isArray(request.body.roleIds) && Number(request.params.id) === Number(request.state.user?.userId)) {
+        const stillAdmin = await roleDao.hasAdminCapability(request.body.roleIds);
+        if (!stillAdmin) {
+          throw new Error('FORBIDDEN:不能移除自己的全部管理权限，否则会立刻锁死后台');
+        }
+      }
       const ok = await userDao.update(request.params.id, request.body);
       if (!ok) throw new Error('NOT_FOUND:用户不存在');
       return reply.result.success('保存成功', null);

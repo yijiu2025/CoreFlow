@@ -30,13 +30,37 @@ function buildPolicy(permissions) {
 }
 
 /**
+ * 归一化策略文档
+ *
+ * 🔴 `QueryTypes.SELECT` 走的是**原始查询**，MySQL 的 JSON 列回来是**字符串**
+ *    （模型查询才会自动 parse）。不先解析就 `Array.isArray(policy.Statement)`
+ *    永远是 false —— 表现是「角色列表里权限码一列全是 0」，新建/编辑时填的
+ *    权限码看起来"没保存"，其实库里存得好好的。
+ *
+ * 解析失败返回 null 而不是抛：一条脏数据不该让整个角色列表 500。
+ *
+ * @param {object|string|null} policy 策略文档（对象或 JSON 字符串）
+ * @returns {object|null} 策略对象
+ */
+function normalizePolicy(policy) {
+  if (policy === null || policy === undefined) return null;
+  if (typeof policy !== 'string') return policy;
+  try {
+    return JSON.parse(policy);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 从策略文档提取权限码
  *
- * @param {object} policy 策略文档
+ * @param {object|string|null} policy 策略文档（接受字符串，见 normalizePolicy）
  * @returns {string[]} 权限码数组
  */
 function extractPermissions(policy) {
-  const statements = Array.isArray(policy?.Statement) ? policy.Statement : [];
+  const doc = normalizePolicy(policy);
+  const statements = Array.isArray(doc?.Statement) ? doc.Statement : [];
   const codes = [];
   for (const st of statements) {
     if (st?.Effect !== 'Allow') continue;
@@ -125,6 +149,28 @@ class RoleDao {
       }
     }
     return list;
+  }
+
+  /**
+   * 给定角色集合里，是否仍有任何一个具备「管理后台」能力
+   *
+   * 判据：policy 的 Allow Action 中出现 `*` 或以 `admin:` 开头的码。
+   * 用途：防**自锁** —— 管理员把自己最后一个管理角色摘掉后，下一次请求就会 403，
+   * 而他自己已经没有权限再改回来（只能直连数据库或找另一个管理员）。
+   *
+   * @param {number[]} roleIds 待保存的角色 ID 数组
+   * @returns {Promise<boolean>} 是否仍具备管理能力
+   */
+  async hasAdminCapability(roleIds) {
+    const ids = Array.from(new Set((roleIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0)));
+    if (ids.length === 0) return false;
+    const { sequelize } = getModel('Role');
+    const rows = await sequelize.query('SELECT policy FROM iam_role WHERE id IN (:ids) AND deleted_at IS NULL', {
+      type: QueryTypes.SELECT,
+      replacements: { ids }
+    });
+    // 注意 policy 在原始查询里是 JSON 字符串，必须经 extractPermissions 归一化
+    return rows.some(row => extractPermissions(row.policy).some(code => code === '*' || code.startsWith('admin:')));
   }
 
   /**

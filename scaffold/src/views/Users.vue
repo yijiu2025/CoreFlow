@@ -124,7 +124,28 @@ function openCreate(): void {
 }
 
 /**
+ * 解析 GROUP_CONCAT 出来的 ID 串
+ *
+ * 后端列表返回 `role_ids` / `post_ids`（逗号分隔），编辑弹窗据此回填。
+ * 空串 / null（用户没有任何角色）返回空数组，不要产生 `[0]` 这类脏值。
+ *
+ * @param raw 逗号串
+ * @returns ID 数组（number）
+ */
+function parseIds(raw: string | null | undefined): number[] {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map(v => Number(v.trim()))
+    .filter(n => Number.isInteger(n) && n > 0);
+}
+
+/**
  * 打开「编辑」表单
+ *
+ * 🔴 回填用 `role_ids` / `post_ids`，**不能用名字反查**：角色可能重名（不同 app
+ *    有同名角色）、可改名、名字里还可能有逗号（GROUP_CONCAT 的分隔符）——
+ *    任何一条都会静默选错角色，且保存后把用户的真实角色覆盖掉。
  *
  * @param row 用户行
  */
@@ -136,8 +157,8 @@ function openEdit(row: UserRow): void {
     password: '',
     deptId: row.dept_id,
     status: row.status,
-    roleIds: options.value.roles.filter(r => (row.role_names || '').split(',').includes(r.name)).map(r => r.id),
-    postIds: options.value.posts.filter(p => (row.post_names || '').split(',').includes(p.post_name)).map(p => p.id)
+    roleIds: parseIds(row.role_ids),
+    postIds: parseIds(row.post_ids)
   });
   dialogOpen.value = true;
 }
