@@ -79,7 +79,7 @@
   gap: 10px;
   height: 38px;
   padding: 0 10px;
-  border-radius: var(--r-sm);
+  border-radius: var(--mauth-radius-sm);
   color: var(--mauth-text-mid);
   white-space: nowrap;
   overflow: hidden;

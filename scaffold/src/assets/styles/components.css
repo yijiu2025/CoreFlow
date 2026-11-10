@@ -13,7 +13,7 @@
   height: var(--control-h);
   padding: 0 14px;
   border: 1px solid var(--mauth-border-strong);
-  border-radius: var(--r-sm);
+  border-radius: var(--mauth-radius-sm);
   background: var(--mauth-surface);
   color: var(--mauth-text);
   font-size: 13px;
@@ -94,7 +94,7 @@
   width: 100%;
   padding: 0 10px;
   border: 1px solid var(--mauth-border-strong);
-  border-radius: var(--r-sm);
+  border-radius: var(--mauth-radius-sm);
   background: var(--mauth-surface);
   color: var(--mauth-text);
   font: inherit;
@@ -112,7 +112,7 @@
 .panel {
   background: var(--mauth-surface);
   border: 1px solid var(--mauth-border);
-  border-radius: var(--r-md);
+  border-radius: var(--mauth-radius-md);
   box-shadow: var(--e1);
 }
 
@@ -154,7 +154,7 @@
 
 .stat {
   padding: 14px 16px;
-  border-radius: var(--r-md);
+  border-radius: var(--mauth-radius-md);
   border: 1px solid var(--mauth-border);
   background: var(--mauth-surface);
   box-shadow: var(--e1);
@@ -184,7 +184,7 @@
 /* ── 表格 ─────────────────────────────────────────────────── */
 .table-wrap {
   overflow-x: auto;
-  border-radius: var(--r-md);
+  border-radius: var(--mauth-radius-md);
 }
 
 .table {
@@ -271,7 +271,7 @@
   display: flex;
   flex-direction: column;
   background: var(--mauth-surface);
-  border-radius: var(--r-lg);
+  border-radius: var(--mauth-radius-lg);
   box-shadow: var(--e3);
   overflow: hidden;
 }

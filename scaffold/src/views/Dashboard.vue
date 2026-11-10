@@ -181,7 +181,7 @@ onMounted(load);
   grid-template-columns: 1fr auto;
   gap: 2px 10px;
   padding: 8px 10px;
-  border-radius: var(--r-sm);
+  border-radius: var(--mauth-radius-sm);
   background: var(--mauth-surface-2);
 }
 

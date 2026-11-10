@@ -135,7 +135,7 @@ const { iframeRef, loading, errorMessage, busy, loginUrl, onIframeLoad } = useSs
   width: min(880px, 92vw);
   background: var(--mauth-surface);
   border: 1px solid var(--mauth-border);
-  border-radius: var(--r-lg);
+  border-radius: var(--mauth-radius-lg);
   box-shadow: var(--e3);
   overflow: hidden;
 }

@@ -55,7 +55,7 @@ button {
 :focus-visible {
   outline: 2px solid var(--mauth-focus);
   outline-offset: 2px;
-  border-radius: var(--r-xs);
+  border-radius: var(--mauth-radius-xs);
 }
 
 /* 等宽数字：读数、编号、时间 */
