@@ -25,7 +25,7 @@ class ConsoleUserDao {
    * @param {number|null} [params.status=null] 状态过滤
    * @returns {Promise<{rows: Array<object>, total: number}>} 分页结果
    */
-  async page({ pageNum = 1, pageSize = 20, keyword = '', deptId = null, status = null }) {
+  async page({ pageNum = 1, pageSize = 20, keyword = '', deptId = null, status = null, scopeAppIds = null }) {
     const User = getModel('User');
     const { Op } = User.sequelize.Sequelize;
 
@@ -35,6 +35,37 @@ class ConsoleUserDao {
     }
     if (deptId !== null && deptId !== undefined && deptId !== '') where.dept_id = Number(deptId);
     if (status !== null && status !== undefined && status !== '') where.status = Number(status);
+
+    /*
+     * 应用域过滤（"只能管理注册了本应用的用户"）。
+     *
+     * 必须在**分页之前**落到 where 上：先取一页再在内存里筛，页大小与总数都会失真
+     * （用户看到"第 1/3 页"但每页只剩两条）。`scopeAppIds = null` = 不限（超管 /
+     * 跨应用管理员），空数组 = 一个也没有。
+     *
+     * 两步主键查询（角色 → 关联）而不是 JOIN：`User` 属 user 域、`Role` 属 iam 域，
+     * 跨域挂 association 会耦合两个 app 的模型（同本文件其余聚合列的口径）。
+     */
+    if (Array.isArray(scopeAppIds)) {
+      const scopedRoleIds = (
+        await getModel('Role').findAll({ where: { app_id: scopeAppIds }, attributes: ['id'], raw: true })
+      ).map(r => Number(r.id));
+      if (scopedRoleIds.length === 0) return { rows: [], total: 0 };
+
+      const scopedUserIds = [
+        ...new Set(
+          (
+            await getModel('UserRole').findAll({
+              where: { role_id: scopedRoleIds, delete_version: 0 },
+              attributes: ['user_id'],
+              raw: true
+            })
+          ).map(l => Number(l.user_id))
+        )
+      ];
+      if (scopedUserIds.length === 0) return { rows: [], total: 0 };
+      where.id = { [Op.in]: scopedUserIds };
+    }
 
     const offset = (Number(pageNum) - 1) * Number(pageSize);
     const { rows: users, count } = await User.findAndCountAll({
@@ -467,45 +498,6 @@ class ConsoleUserDao {
   async updateStatus(id, status) {
     const [affected] = await getModel('User').update({ status: Number(status) }, { where: { id } });
     return affected > 0;
-  }
-
-  /**
-   * 重置用户密码
-   *
-   * @param {number} id 用户 ID
-   * @param {string} password 新明文密码
-   * @returns {Promise<boolean>} 是否命中记录
-   * @throws {Error} 密码强度不足 / 用户无密码凭证时抛出
-   */
-  async resetPassword(id, password) {
-    const validation = validatePasswordStrength(password);
-    if (!validation.valid) throw new Error(`INVALID_PARAM:${validation.errors[0]}`);
-
-    const UserIdentity = getModel('UserIdentity');
-    const identity = await UserIdentity.findOne({ where: { user_id: id, identity_type: 'password' } });
-    if (!identity) throw new Error('NOT_FOUND:该用户没有密码凭证');
-
-    const hashedPassword = await hashPassword(password);
-    await UserIdentity.update({ credential: hashedPassword }, { where: { id: identity.id } });
-    return true;
-  }
-
-  /**
-   * 删除用户（软删除 + 清理关联）
-   *
-   * @param {number} id 用户 ID
-   * @returns {Promise<boolean>} 是否命中记录
-   */
-  async remove(id) {
-    const User = getModel('User');
-    const user = await User.findByPk(id);
-    if (!user) return false;
-    await User.sequelize.transaction(async t => {
-      await getModel('UserRole').update({ delete_version: Date.now() }, { where: { user_id: id }, transaction: t });
-      await getModel('console.SysUserPost').destroy({ where: { user_id: id }, transaction: t });
-      await User.destroy({ where: { id }, transaction: t });
-    });
-    return true;
   }
 }
 

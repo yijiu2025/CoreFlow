@@ -179,6 +179,37 @@ class RoleDao {
   }
 
   /**
+   * 角色 id → 权限码列表
+   *
+   * 「当前生效的权限」要把角色翻译成权限码展示，而 policy 的解析口径只能有一份
+   * （`extractPermissions` 处理 JSON 字符串与对象两种形态）。这里把它暴露出来，
+   * 避免调用方各写一遍解析。
+   *
+   * @param {number[]} roleIds 角色 ID
+   * @returns {Promise<Map<number, {code: string, name: string, appId: string, rank: number, permissions: string[]}>>}
+   */
+  async detailMap(roleIds) {
+    const ids = Array.from(new Set((roleIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0)));
+    const map = new Map();
+    if (ids.length === 0) return map;
+    const rows = await getModel('Role').findAll({
+      where: { id: ids },
+      attributes: ['id', 'code', 'name', 'app_id', 'rank_level', 'policy'],
+      raw: true
+    });
+    for (const row of rows) {
+      map.set(Number(row.id), {
+        code: row.code,
+        name: row.name,
+        appId: row.app_id,
+        rank: Number(row.rank_level) || 0,
+        permissions: extractPermissions(row.policy)
+      });
+    }
+    return map;
+  }
+
+  /**
    * 按 ID 查角色
    *
    * @param {number} id 角色 ID

@@ -12,6 +12,15 @@ import { getModel } from '../../../framework/persistence/db/index.js';
 import { Op } from 'sequelize';
 
 /**
+ * 部门类审计事件（单一清单）
+ *
+ * 写接口用 `DEPT_AUDIT_TYPES.*` 取事件名、这里用 `DEPT_EVENTS` 查 —— 一处改动
+ * 两头同步，避免"写的叫 DEPT_EDIT、查的是 DEPT_UPDATE"这种查不到还不报错的错。
+ */
+const DEPT_AUDIT_TYPES = { CREATE: 'DEPT_CREATE', UPDATE: 'DEPT_UPDATE', DELETE: 'DEPT_DELETE' };
+const DEPT_EVENTS = Object.values(DEPT_AUDIT_TYPES);
+
+/**
  * 把扁平部门列表拼成树
  *
  * @param {Array<object>} rows 扁平部门列表
@@ -208,8 +217,90 @@ class DeptDao {
   async remove(id) {
     await getModel('console.SysDept').destroy({ where: { id } });
   }
+
+  /**
+   * 部门变更历史（读审计表）
+   *
+   * 审计表是一张通用表，没有 `dept_id` 列 —— 部门 id 存在 `details` JSON 里。这里
+   * 先用 `event IN (DEPT_*)` 收窄（走 event 索引），再在内存里按 `details.deptId`
+   * 过滤：部门变更是"天"级的低频操作，全表扫一遍 DEPT_ 事件也就几百条，比在 JSON
+   * 列上拼 `JSON_EXTRACT`（方言/版本差异 + 用不上索引）稳得多。
+   *
+   * `SCAN_LIMIT` 是护栏而非业务语义：它限制的是**所有部门**的最近事件条数，
+   * 不是某一个部门的。真到了这个量级，应该给审计表加 `target_id` 列并建索引。
+   *
+   * @param {number} deptId 部门 ID
+   * @param {object} [options] 选项
+   * @param {number} [options.limit=100] 返回条数
+   * @returns {Promise<Array<object>>} 变更历史（倒序，含操作人）
+   */
+  async history(deptId, { limit = 100 } = {}) {
+    const AuditLog = getModel('AuditLog');
+    const SCAN_LIMIT = 1000;
+
+    const rows = await AuditLog.findAll({
+      where: { event: DEPT_EVENTS },
+      order: [['id', 'DESC']],
+      limit: SCAN_LIMIT,
+      raw: true
+    });
+
+    /**
+     * `details` 是 JSON 列：`raw: true` 时**可能返回字符串**，不 parse 就永远匹配不上
+     * （表现是"历史永远是空的"，且不报错）。同一坑见 role.dao 的 normalizePolicy。
+     */
+    const detailsOf = row => {
+      const raw = row.details;
+      if (!raw) return null;
+      if (typeof raw !== 'string') return raw;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    };
+
+    const mine = rows
+      .map(row => ({ row, details: detailsOf(row) }))
+      .filter(({ details }) => String(details?.deptId ?? '') === String(deptId))
+      .slice(0, Number(limit) || 100);
+    if (mine.length === 0) return [];
+
+    // 操作人详情批量补（同授权流水口径：账号被删也要标出来，不能凭空消失）
+    const operatorIds = Array.from(
+      new Set(mine.map(({ row }) => Number(row.user_id)).filter(id => Number.isInteger(id) && id > 0))
+    );
+    const users =
+      operatorIds.length === 0
+        ? []
+        : await getModel('User').findAll({
+            where: { id: operatorIds },
+            attributes: ['id', 'username', 'email', 'delete_version'],
+            paranoid: false,
+            raw: true
+          });
+    const operatorById = new Map(users.map(user => [Number(user.id), user]));
+
+    return mine.map(({ row, details }) => {
+      const operator = row.user_id === null ? null : operatorById.get(Number(row.user_id)) || null;
+      return {
+        id: Number(row.id),
+        event: row.event,
+        created_at: row.createdAt,
+        operator_id: row.user_id === null ? null : Number(row.user_id),
+        operator_name: operator?.username ?? null,
+        operator_email: operator?.email ?? null,
+        operator_deleted: operator ? Number(operator.delete_version) !== 0 : false,
+        // 摘要里的 name 是"当时的名字"：部门改名后历史仍然读得懂
+        dept_name: details?.name ?? null,
+        changes: Array.isArray(details?.changes) ? details.changes : [],
+        ip: row.ip || null
+      };
+    });
+  }
 }
 
 const deptDao = new DeptDao();
 
+export { DEPT_AUDIT_TYPES, DEPT_EVENTS };
 export default deptDao;

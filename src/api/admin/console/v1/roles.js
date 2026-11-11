@@ -23,6 +23,7 @@ import { getModel } from '../../../../framework/persistence/db/index.js';
 import { roleRegistry } from '../../../../framework/security/pbac/index.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 import { hasPermissionLike } from '../../../../app/console/utils/permissions.js';
+import { appLabel, canWriteApp, getActorScope } from '../../../../app/console/services/access-scope.service.js';
 
 /**
  * 内置角色编码（不可删除、不可改菜单授权）
@@ -86,7 +87,17 @@ async function registerRoleRoutes(fastify) {
     handler: withFail(async (request, reply) => {
       const { pageNum = 1, pageSize = 20, keyword = '', appId = '' } = request.query;
       const { rows, total } = await roleDao.page({ pageNum, pageSize, keyword, appId });
-      return reply.result.success('获取成功', { rows, total, pageNum, pageSize });
+      /*
+       * 逐行标 `manageable`：前端据此把编辑/删除按钮置灰，而不是让人填完表单再吃 403。
+       * 判据与写接口完全一致（同一份 `canWriteApp` + 职级闸），不另写一套。
+       */
+      const actor = await getActorScope(request.state.user?.userId);
+      const marked = rows.map(role => ({
+        ...role,
+        app_label: appLabel(role.app_id),
+        manageable: canWriteApp(actor, role.app_id) && (actor.isSuper || Number(role.rank_level) < actor.maxRank)
+      }));
+      return reply.result.success('获取成功', { rows: marked, total, pageNum, pageSize });
     })
   });
 
@@ -116,6 +127,11 @@ async function registerRoleRoutes(fastify) {
       const { menuIds = [], ...payload } = request.body;
       const myRank = await maxRankOf(request.state.user?.userId);
       if (Number(payload.rankLevel || 1) > myRank) throw new Error('FORBIDDEN:不能创建高于自己职级的角色');
+      // 只能在自己管辖的应用下建角色：否则防火墙管理员可以造一个 admin 角色的同名副本
+      const actor = await getActorScope(request.state.user?.userId);
+      if (!canWriteApp(actor, payload.appId || 'GLOBAL')) {
+        throw new Error(`FORBIDDEN:不能创建${appLabel(payload.appId)}应用的角色`);
+      }
       if (await roleDao.isCodeTaken(payload.code, payload.appId || 'GLOBAL')) {
         throw new Error('DUPLICATE:角色编码已存在');
       }
@@ -163,6 +179,11 @@ async function registerRoleRoutes(fastify) {
 
       const myRank = await maxRankOf(request.state.user?.userId);
       if (Number(role.rank_level) > myRank) throw new Error('FORBIDDEN:不能编辑职级高于自己的角色');
+      // 应用域：非跨应用管理员只能维护自己应用的角色（改别人的角色 = 改别人的授权效果）
+      const actor = await getActorScope(request.state.user?.userId);
+      if (!canWriteApp(actor, role.app_id)) {
+        throw new Error(`FORBIDDEN:不能编辑${appLabel(role.app_id)}应用的角色`);
+      }
       if (request.body.rankLevel !== undefined && Number(request.body.rankLevel) > myRank) {
         throw new Error('FORBIDDEN:不能把角色提升到高于自己的职级');
       }
@@ -191,6 +212,10 @@ async function registerRoleRoutes(fastify) {
 
       const myRank = await maxRankOf(request.state.user?.userId);
       if (Number(role.rank_level) > myRank) throw new Error('FORBIDDEN:不能删除职级高于自己的角色');
+      const actor = await getActorScope(request.state.user?.userId);
+      if (!canWriteApp(actor, role.app_id)) {
+        throw new Error(`FORBIDDEN:不能删除${appLabel(role.app_id)}应用的角色`);
+      }
 
       await roleDao.remove(role.id);
       return reply.result.success('删除成功', null);
@@ -232,6 +257,11 @@ async function registerRoleRoutes(fastify) {
       const role = await roleDao.findById(request.params.id);
       if (!role) throw new Error('NOT_FOUND:角色不存在');
       if (BUILTIN_CODES.has(role.code)) throw new Error('BUILTIN_PROTECTED:内置角色的菜单授权不可修改');
+      // 菜单授权同样是"改这个角色"：跨应用改别人的侧栏等于改别人看到的后台
+      const actor = await getActorScope(request.state.user?.userId);
+      if (!canWriteApp(actor, role.app_id)) {
+        throw new Error(`FORBIDDEN:不能修改${appLabel(role.app_id)}应用角色的菜单授权`);
+      }
       const count = await menuDao.setRoleMenus(role.id, request.body.menuIds);
       return reply.result.success('授权已保存', { count });
     })

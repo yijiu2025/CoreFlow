@@ -80,26 +80,8 @@ const MENUS = [
     sort: 25,
     parent: '系统管理'
   },
-  {
-    name: '字典管理',
-    type: 'menu',
-    icon: 'BookMarked',
-    path: '/system/dict',
-    component: 'dict',
-    permission: 'admin:dict:read',
-    sort: 26,
-    parent: '系统管理'
-  },
-  {
-    name: '参数管理',
-    type: 'menu',
-    icon: 'SlidersHorizontal',
-    path: '/system/config',
-    component: 'configs',
-    permission: 'admin:config:read',
-    sort: 27,
-    parent: '系统管理'
-  },
+  // 「字典管理」「参数管理」已下线（2026-11-10）：没有任何消费方，留着只会让人以为
+  // 配了有用。老库由后面的 `20261110000002-remove-dict-config-menus` 迁移清理。
   {
     name: '日志审计',
     type: 'dir',
