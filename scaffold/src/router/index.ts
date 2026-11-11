@@ -85,12 +85,6 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '防火墙监控', permission: 'admin:firewall:read' }
       },
       {
-        path: 'tool/generator',
-        name: 'tool-generator',
-        component: () => import('@/views/tool/Generator.vue'),
-        meta: { title: '代码生成', permission: 'admin:gen:read' }
-      },
-      {
         path: 'no-access',
         name: 'no-access',
         component: () => import('@/views/error/NoAccess.vue'),

@@ -16,6 +16,9 @@ import type {
   PermissionGraph,
   PostMember,
   RoleRow,
+  TempPasswordRow,
+  UserAppRow,
+  UserDeletionRequest,
   UserOptions,
   UserRow
 } from './types';
@@ -75,6 +78,57 @@ export function updateUser(id: number, body: Record<string, unknown>): Promise<n
 /** 启用 / 冻结用户 */
 export function updateUserStatus(id: number, status: number): Promise<null> {
   return put(`${BASE}/users/${id}/status`, { status });
+}
+
+/* ── 账号高危操作（都要求操作者密码） ──────────────────────── */
+
+/** 待执行的注销申请 */
+export function userDeletion(id: number): Promise<{ requests: UserDeletionRequest[] }> {
+  return get(`${BASE}/users/${id}/deletion`);
+}
+
+/**
+ * 发起删除（缓冲期，到期才清数据）
+ *
+ * `confirmUsername` 需要前端让操作者手打目标账号名 —— 服务端会比对，防手滑。
+ */
+export function requestUserDeletion(
+  id: number,
+  body: { password: string; confirmUsername: string; reason?: string }
+): Promise<{ id: number; scheduledAt: string; graceDays: number }> {
+  return post(`${BASE}/users/${id}/deletion`, body);
+}
+
+/** 撤销注销申请 */
+export function cancelUserDeletion(id: number, requestId: number): Promise<{ id: number; status: number }> {
+  return post(`${BASE}/users/${id}/deletion/${requestId}/cancel`);
+}
+
+/** 该用户在各应用的账号状态 */
+export function userApps(id: number): Promise<{ rows: UserAppRow[]; total: number }> {
+  return get(`${BASE}/users/${id}/apps`);
+}
+
+/** 注销该用户在某应用的账号（不动主账号） */
+export function deactivateUserApp(
+  id: number,
+  appId: string,
+  body: { password: string; reason?: string }
+): Promise<{ id: number; appId: string; scheduledAt: string; graceDays: number }> {
+  return post(`${BASE}/users/${id}/apps/${encodeURIComponent(appId)}/deactivation`, body);
+}
+
+/** 当前有效的临时密码（不含明文） */
+export function userTempPasswords(id: number): Promise<{ rows: TempPasswordRow[]; total: number }> {
+  return get(`${BASE}/users/${id}/temp-password`);
+}
+
+/** 签发临时密码（明文只返回一次） */
+export function issueUserTempPassword(
+  id: number,
+  body: { password: string; ttlMinutes?: number; maxUses?: number; reason?: string }
+): Promise<{ id: number; password: string; expiresAt: string; maxUses: number }> {
+  return post(`${BASE}/users/${id}/temp-password`, body);
 }
 
 /** 导出用户 CSV */

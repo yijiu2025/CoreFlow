@@ -47,6 +47,51 @@ export interface MenuNode {
 }
 
 /** 用户行 */
+/** 注销申请摘要（列表行 / 详情共用） */
+export interface UserDeletionBrief {
+  id: number;
+  /** all = 删除整个账号；app = 只注销某个应用 */
+  scope: 'all' | 'app';
+  app_id: string | null;
+  /** 到期执行时间（ISO） */
+  scheduled_at: string;
+  /** 发起人账号快照（用户自助时为空） */
+  requested_by_name: string | null;
+}
+
+/** 待执行注销的完整信息（GET /users/:id/deletion） */
+export interface UserDeletionRequest extends UserDeletionBrief {
+  reason: string | null;
+  requested_at: string;
+  requested_by: number | null;
+}
+
+/** 用户在某应用里的账号状态（GET /users/:id/apps） */
+export interface UserAppRow {
+  app_id: string;
+  app_label: string;
+  /** 有 OAuth 授权 */
+  authorized: boolean;
+  /** 有未撤销的令牌 */
+  has_token: boolean;
+  /** 有活跃会话 */
+  has_session: boolean;
+  last_active_at: string | null;
+  /** 该应用待执行的注销申请 */
+  pending: UserDeletionBrief | null;
+}
+
+/** 有效的临时密码（不含明文） */
+export interface TempPasswordRow {
+  id: number;
+  expires_at: string;
+  max_uses: number;
+  used_count: number;
+  created_by_name: string | null;
+  reason: string | null;
+  created_at: string;
+}
+
 export interface UserRow {
   id: number;
   uid: string;
@@ -63,6 +108,8 @@ export interface UserRow {
   /** 岗位 ID 逗号串（同上） */
   post_ids: string | null;
   created_at: string;
+  /** 待执行的注销申请（null = 没有）；列表里据此显示"还有几天到期" */
+  deletion?: UserDeletionBrief | null;
 }
 
 /** 角色选项（用户表单 / 批量授权共用） */

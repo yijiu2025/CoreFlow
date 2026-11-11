@@ -13,11 +13,12 @@
  */
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { Download, Pencil, Plus, RotateCcw, Search, ShieldCheck, UserCheck, UserX } from 'lucide-vue-next';
+import { Download, Pencil, Plus, RotateCcw, Search, ShieldAlert, ShieldCheck, UserCheck, UserX } from 'lucide-vue-next';
 import { createUser, exportUsers, listUsers, updateUser, updateUserStatus, userOptions } from '@/api/system';
 import type { UserOptions, UserRow } from '@/api/types';
 import GrantHistoryDialog from '@/components/business/GrantHistoryDialog.vue';
 import BatchGrantDialog from '@/components/business/BatchGrantDialog.vue';
+import UserDangerDialog from '@/components/business/UserDangerDialog.vue';
 import RolePicker from '@/components/ui/RolePicker.vue';
 import PostPicker from '@/components/ui/PostPicker.vue';
 import { canManageUser, indexRoles } from '@/utils/scope';
@@ -85,6 +86,30 @@ const grantTarget = ref<{ id: number; username: string } | null>(null);
 
 /** 批量授权弹窗开关 */
 const batchOpen = ref(false);
+
+/** 高危操作弹窗目标（null = 关闭） */
+const dangerTarget = ref<{ id: number; username: string } | null>(null);
+
+/**
+ * 「删除账号」与「临时密码」只对超管开放
+ *
+ * 为什么按 isSuper 而不是只看权限码：本仓角色通配是 `admin:*`，`admin_admin` 持的正是它 ——
+ * 想靠权限码表达"特别高"就得另造一个不在 `admin:*` 之下的命名空间，反而更难理解。
+ * 服务端 `user-danger.service` 用的是同一条判据（assertSuper），前端只做隐藏。
+ */
+const isSuperOperator = computed(() => options.value.scope?.isSuper === true);
+
+/** 能否删除账号（超管 + 高权限码） */
+const canDeleteUser = computed(() => isSuperOperator.value && auth.hasPermission('admin:user:purge'));
+
+/** 能否签发临时密码（超管 + 高权限码） */
+const canTempPassword = computed(() => isSuperOperator.value && auth.hasPermission('admin:user:temp-password'));
+
+/** 能否注销某用户的应用账号（应用域管理员即可） */
+const canDeactivateApp = computed(() => auth.hasPermission('admin:user:deactivate'));
+
+/** 是否显示「高危操作」入口（三种能力任一可用） */
+const canOpenDanger = computed(() => canDeleteUser.value || canTempPassword.value || canDeactivateApp.value);
 
 const dialogOpen = ref(false);
 const submitting = ref(false);
@@ -221,6 +246,38 @@ function toggleSelectAll(): void {
  */
 function openGrants(row: UserRow): void {
   grantTarget.value = { id: row.id, username: row.username };
+}
+
+/**
+ * 打开高危操作弹窗
+ *
+ * @param row 用户行
+ */
+function openDanger(row: UserRow): void {
+  dangerTarget.value = { id: row.id, username: row.username };
+}
+
+/**
+ * 高危操作完成后的刷新
+ *
+ * 只刷列表：弹窗自己会重拉它那三个区块，一起刷会把弹窗内容闪一下。
+ */
+async function refreshAfterDanger(): Promise<void> {
+  await load();
+}
+
+/**
+ * 待执行删除的剩余时间文案
+ *
+ * @param iso 到期时间
+ * @returns 形如「还剩 6 天」
+ */
+function deletionHint(iso: string): string {
+  const diff = new Date(iso).getTime() - Date.now();
+  if (Number.isNaN(diff)) return '待注销';
+  if (diff <= 0) return '待执行';
+  const days = Math.ceil(diff / 86400000);
+  return days >= 1 ? `还剩 ${days} 天` : '今天执行';
 }
 
 /**
@@ -452,13 +509,46 @@ onMounted(async () => {
               <td>{{ row.role_names || '—' }}</td>
               <td>{{ row.post_names || '—' }}</td>
               <td>
-                <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">
+                <!-- 待执行删除：必须在列表里看得见，否则管理员会以为没删成功又点一次 -->
+                <span
+                  v-if="row.deletion"
+                  class="tag tag--warn"
+                  :title="`${row.deletion.scope === 'all' ? '账号删除' : row.deletion.app_id + ' 注销'} · 到期 ${row.deletion.scheduled_at}`"
+                >
+                  待注销 · {{ deletionHint(row.deletion.scheduled_at) }}
+                </span>
+                <span v-else class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">
                   {{ row.status === 1 ? '正常' : row.status === 0 ? '冻结' : '注销' }}
                 </span>
               </td>
               <td class="col-actions">
                 <button class="btn btn--ghost btn--sm btn--icon" type="button" title="授权记录" aria-label="授权记录" @click="openGrants(row)">
                   <ShieldCheck :size="14" />
+                </button>
+                <!--
+                  高危入口：删除账号 / 注销应用账号 / 临时密码。
+                  按 isSuper + 权限码隐藏（普通管理员不显示），服务端才是闸门。
+                -->
+                <button
+                  v-if="canOpenDanger && !row.deletion"
+                  class="btn btn--ghost btn--sm btn--icon danger-trigger"
+                  type="button"
+                  :disabled="!verdictOf(row).ok"
+                  :title="verdictOf(row).ok ? '账号高危操作（删除 / 应用注销 / 临时密码）' : hintOf(row, '高危操作')"
+                  aria-label="高危操作"
+                  @click="openDanger(row)"
+                >
+                  <ShieldAlert :size="14" />
+                </button>
+                <button
+                  v-else-if="canOpenDanger && row.deletion"
+                  class="btn btn--ghost btn--sm btn--icon danger-trigger"
+                  type="button"
+                  title="查看/撤销待执行的注销"
+                  aria-label="查看待执行注销"
+                  @click="openDanger(row)"
+                >
+                  <ShieldAlert :size="14" />
                 </button>
                 <button
                   v-if="auth.hasPermission('admin:user:update')"
@@ -564,6 +654,17 @@ onMounted(async () => {
       @adjust="adjustFromGrants"
     />
 
+    <!-- 账号高危操作：删除（缓冲期）/ 应用注销 / 临时密码 -->
+    <UserDangerDialog
+      :user-id="dangerTarget?.id ?? null"
+      :username="dangerTarget?.username ?? ''"
+      :can-delete="canDeleteUser"
+      :can-deactivate-app="canDeactivateApp"
+      :can-temp="canTempPassword"
+      @close="dangerTarget = null"
+      @changed="refreshAfterDanger"
+    />
+
     <!-- 批量授权：追加 / 移除同一组角色 -->
     <BatchGrantDialog
       v-if="batchOpen"
@@ -603,5 +704,11 @@ onMounted(async () => {
   border-top: 1px solid var(--mauth-border);
   color: var(--mauth-text-soft);
   font-size: 12px;
+}
+
+/* 高危入口：常态低调，只在悬停时泛红 —— 常红会让人对红色麻木 */
+.danger-trigger:hover:not(:disabled) {
+  color: #b91c1c;
+  border-color: color-mix(in srgb, #ef4444 45%, var(--mauth-border-strong));
 }
 </style>
