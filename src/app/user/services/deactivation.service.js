@@ -21,6 +21,37 @@ import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.user.services.deactivation.service');
 
+/**
+ * 应用私有"账号数据"模型（按 user_id 持有）
+ *
+ * 注销时这些必须清：它们是账号在该应用里的注册产物（偏好、API Key），
+ * 留着等于"账号注销了，但它的密钥还在库里"。
+ *
+ * 业务内容（作品 / 任务 / 收藏）**不在这里** —— 见 `APP_CONTENT_MODELS`。
+ */
+const APP_SETTINGS_MODELS = {
+  retroweb: ['retroweb.UserSettings', 'retroweb.LlmProfile'],
+  posecraft: ['posecraft.UserSettings']
+};
+
+/**
+ * 业务内容模型（注销时**不清**，仅在结果里回报）
+ *
+ * 判断依据：这些是用户产出的内容，不是"账号凭证"。清掉不可逆，而它们通常还被
+ * 别人引用（分享 / 协作 / 复现），删除账号不该连带毁掉别人的引用。
+ * 需要连内容一起清时，由对应应用自己提供清理钩子，而不是在通用注销流程里硬删。
+ */
+const APP_CONTENT_MODELS = [
+  'posecraft.Work',
+  'posecraft.Template',
+  'posecraft.UserCollect',
+  'posecraft.UserLike',
+  'posecraft.UserHistory',
+  'retroweb.Task',
+  'retroweb.Scheme',
+  'retroweb.Job'
+];
+
 class DeactivationService {
   /**
    * 提交注销申请
@@ -45,6 +76,85 @@ class DeactivationService {
       app_id: scope === DEACTIVATION_SCOPE.APP ? app_id : null,
       reason
     });
+  }
+
+  /**
+   * 管理员发起的注销（后台"删除用户" / "注销某应用"）
+   *
+   * 与用户自助的区别只有三点，但都很重要：
+   * - 记发起人（`requested_by` + 账号快照）—— 本仓最高危的写操作，审计必须能回答"谁点的"；
+   * - 撤销期天数由调用方（后台配置）决定，而不是写死 7 天；
+   * - 不校验"是不是本人"，改由调用方做职级/范围判定（见 `console/services/user-danger.service.js`）。
+   *
+   * @param {object} params 参数
+   * @param {object} params.target 目标用户（{ id, uid, username }）
+   * @param {'all'|'app'} params.scope 注销范围
+   * @param {string} [params.appId] scope=app 时必填
+   * @param {object} params.actor 发起人（{ id, username }）
+   * @param {number} [params.graceDays] 撤销期天数
+   * @param {string} [params.reason] 原因
+   * @returns {Promise<object>} 创建的申请
+   */
+  async createAdminRequest({ target, scope, appId, actor, graceDays, reason }) {
+    if (![DEACTIVATION_SCOPE.APP, DEACTIVATION_SCOPE.ALL].includes(scope)) {
+      throw new Error('DEACTIVATION_FAILED:scope 必须为 app 或 all');
+    }
+    if (scope === DEACTIVATION_SCOPE.APP) {
+      const valid = await this.validateAppId(appId);
+      if (!valid) throw new Error(`DEACTIVATION_FAILED:应用 ${appId} 不存在或未注册`);
+    }
+    return deactivationDao.createRequest({
+      user_id: Number(target.id),
+      uid: target.uid,
+      scope,
+      app_id: scope === DEACTIVATION_SCOPE.APP ? appId : null,
+      reason,
+      requestedBy: actor?.id ?? null,
+      requestedByName: actor?.username ?? null,
+      graceDays
+    });
+  }
+
+  /**
+   * 撤销某条注销申请（管理员）
+   *
+   * 只允许撤销 PENDING：已执行的申请撤销没有意义（数据已经清了）。
+   *
+   * @param {number} userId 目标用户（用于校验归属）
+   * @param {number} requestId 申请 ID
+   * @param {object} actor 操作人（{ id }）
+   * @returns {Promise<object>} 结果
+   */
+  async cancelRequest(userId, requestId, actor) {
+    const req = await deactivationDao.findById(requestId);
+    if (!req) throw new Error('NOT_FOUND:注销申请不存在');
+    if (Number(req.user_id) !== Number(userId)) throw new Error('INVALID_PARAM:该申请不属于此用户');
+    if (Number(req.status) !== DEACTIVATION_STATUS.PENDING) {
+      throw new Error('CONFLICT:该申请已撤销或已执行，无法再撤销');
+    }
+    const affected = await deactivationDao.revoke(requestId, actor?.id ?? null);
+    if (!affected) throw new Error('CONFLICT:撤销失败，申请状态已变更');
+    return { id: Number(requestId), status: DEACTIVATION_STATUS.REVOKED };
+  }
+
+  /**
+   * 某用户的活跃注销申请（含发起人）
+   *
+   * @param {number} userId 用户 ID
+   * @returns {Promise<Array<object>>} 申请列表
+   */
+  async listPending(userId) {
+    const rows = await deactivationDao.findPendingByUser(userId);
+    return rows.map(row => ({
+      id: Number(row.id),
+      scope: row.scope,
+      app_id: row.app_id,
+      reason: row.reason,
+      requested_at: row.requested_at,
+      scheduled_at: row.scheduled_at,
+      requested_by: row.requested_by === null ? null : Number(row.requested_by),
+      requested_by_name: row.requested_by_name
+    }));
   }
 
   /**
@@ -154,7 +264,7 @@ class DeactivationService {
    * 执行单个应用注销：清该 app 的 OAuth 授权 + 吊销 session
    */
   async executeAppDeactivation(userId, uid, appId) {
-    const result = { oauth_approval: 0, oauth_consents: 0, oauth_tokens: 0, session_tokens: 0 };
+    const result = { oauth_approval: 0, oauth_consents: 0, oauth_tokens: 0, session_tokens: 0, app_settings: 0 };
 
     // 1. 删 OAuth 授权关系（oauth_user_approval：sub=uid AND app_id=appId）
     const OauthApproval = getModel('oauth21.OauthApproval');
@@ -180,6 +290,9 @@ class DeactivationService {
     // 4. 吊销该 app 的 session_tokens + 踢 Redis 该 app 的活跃 session
     result.session_tokens = await this.revokeSessionsByApp(userId, appId);
 
+    // 5. 清该应用的账号数据（偏好设置 / API Key）。业务内容不清，见 APP_CONTENT_MODELS
+    result.app_settings = await this.purgeAppSettings(userId, [appId]);
+
     return result;
   }
 
@@ -187,7 +300,16 @@ class DeactivationService {
    * 执行全部数据注销：清所有 app + 软删 user_user + 踢所有 session
    */
   async executeAllDeactivation(userId, uid) {
-    const result = { oauth_approval: 0, oauth_consents: 0, oauth_tokens: 0, session_tokens: 0, user_deleted: false };
+    const result = {
+      oauth_approval: 0,
+      oauth_consents: 0,
+      oauth_tokens: 0,
+      session_tokens: 0,
+      user_deleted: false,
+      account: { user_roles: 0, inline_policies: 0, user_posts: 0, temp_passwords: 0, app_settings: 0 },
+      /** 未清理的业务内容（回报给调用方，界面要如实告知） */
+      retained: APP_CONTENT_MODELS.slice()
+    };
 
     // 🔴 破坏性多表写入必须在一个事务内：此前无事务，中途失败会留下「半注销」状态
     //（OAuth 已清、identity 已删、user 未软删 → 用户还能登录部分应用但数据不完整）。
@@ -219,18 +341,46 @@ class DeactivationService {
         // uk_identity_type_identifier=(identity_type,identifier,delete_version)
         // 占着 (password,email,0) 坑 → 邮箱无法重新注册（ER_DUP_ENTRY 被翻译成"邮箱已存在"）。
         // 逐条 instance.destroy 触发 beforeDestroy 钩子写 delete_version=id，释放唯一索引。
+        //
+        // 🔴 2026-11-11 起**先抹掉 PII 再软删**：
+        // 框架的软删除钩子禁止硬删 paranoid 模型（softDeleteHooks 会抛错），而软删本身
+        // 会把「identifier（邮箱 / 账号名）+ credential（密码哈希）」原样留在行里 ——
+        // 账号都注销了，这两列没有任何保留价值，留着就是泄露面。
+        // 所以：identifier 改成不可反解的占位串、credential 置空，再软删释放唯一索引。
+        // （要彻底删行只能绕过钩子写裸 SQL —— 那等于和框架约定对着干，不值得。）
         const UserIdentity = getModel('UserIdentity');
         if (UserIdentity) {
           const identities = await UserIdentity.findAll({ where: { user_id: userId }, transaction });
           for (const id of identities) {
+            id.identifier = `purged:${id.id}`;
+            id.credential = null;
+            id.failed_attempts = 0;
+            id.locked_until = null;
+            await id.save({ transaction });
             await id.destroy({ transaction });
           }
         }
 
+        // 3. 清账号与授权类数据（角色 / 内联策略 / 岗位 / 临时密码 / 应用偏好）
+        result.account = await this.purgeAccountScoped(userId, transaction);
+
         const user = await User.findByPk(userId, { transaction });
         if (user) {
+          /*
+           * 主表**不硬删**，但要抹掉个人身份信息：
+           *
+           * 硬删会让审计（audit_logs.user_id）、授权流水、注销申请里的引用变成悬空 ——
+           * 排查"这个账号当年被谁删的"就断了。所以保留行本身，把 PII 清成不可识别的值：
+           * username（NOT NULL）改成带 id 的占位名，邮箱 / 手机号 / 头像清空。
+           * 唯一索引按 (username, delete_version) 建，软删后 delete_version=id，
+           * 不影响同名重新注册。
+           */
           user.status = -1; // 标记已注销
-          await user.save({ transaction }); // 先保存 status
+          user.username = `已注销用户#${userId}`;
+          user.email = null;
+          user.phone = null;
+          user.avatar = null;
+          await user.save({ transaction });
           await user.destroy({ transaction }); // 软删除（paranoid + delete_version 钩子）
           result.user_deleted = true;
         }
@@ -328,6 +478,90 @@ class DeactivationService {
       // error：同上，注销后对应 app 的会话仍在，有安全后果
       log.error(`⚠️ [Deactivation] 踢 app=${appId} 的 Redis session 失败`, e);
     }
+  }
+
+  /**
+   * 清账号与授权类数据（全部注销）
+   *
+   * 为什么必须补这一段：原实现只清了 OAuth + 凭证 + 会话 + 用户主表。于是注销后
+   * 库里还留着这个人的**角色关联、内联策略、岗位、临时密码、各应用偏好与 API Key** ——
+   * 它们都带 user_id，账号一旦重建（同一个邮箱重新注册会拿到新 id，但"注销"这件事
+   * 在审计上必须是干净的），这些悬空数据就成了无法解释的残留。
+   *
+   * 🔴 必须在事务内：与 OAuth / 用户软删同成败，不能出现"角色清了但账号还在"。
+   *
+   * @param {number} userId 用户 ID
+   * @param {object} transaction 事务
+   * @returns {Promise<object>} 各类清理条数
+   */
+  async purgeAccountScoped(userId, transaction) {
+    const result = { user_roles: 0, inline_policies: 0, user_posts: 0, temp_passwords: 0, app_settings: 0 };
+
+    // iam_user_role：paranoid 模型不能硬删（softDeleteHooks 会抛错），逐条 destroy
+    // 才能让钩子把 delete_version 置为 id、释放 (user_id, role_id, app_id) 唯一索引
+    const UserRole = getModel('iam.UserRole');
+    if (UserRole) {
+      const rows = await UserRole.findAll({ where: { user_id: userId }, transaction });
+      for (const row of rows) {
+        await row.destroy({ transaction });
+        result.user_roles += 1;
+      }
+    }
+
+    // iam_inline_policy：同上
+    const InlinePolicy = getModel('iam.InlinePolicy');
+    if (InlinePolicy) {
+      const rows = await InlinePolicy.findAll({ where: { user_id: userId }, transaction });
+      for (const row of rows) {
+        await row.destroy({ transaction });
+        result.inline_policies += 1;
+      }
+    }
+
+    // sys_user_post：联合主键、无 paranoid，直接删
+    const SysUserPost = getModel('console.SysUserPost');
+    if (SysUserPost) {
+      result.user_posts = await SysUserPost.destroy({ where: { user_id: userId }, transaction });
+    }
+
+    // 临时密码：注销后还能用它登录就太荒唐了
+    const UserTempPassword = getModel('user.UserTempPassword');
+    if (UserTempPassword) {
+      // 连"已作废但未过期"的一起清：它们仍是这个人的凭据残留，没有保留必要
+      result.temp_passwords = await UserTempPassword.destroy({
+        where: { user_id: userId },
+        transaction,
+        force: true
+      });
+    }
+
+    // 各应用的账号数据（偏好 / API Key）
+    result.app_settings = await this.purgeAppSettings(userId, Object.keys(APP_SETTINGS_MODELS), transaction);
+
+    return result;
+  }
+
+  /**
+   * 清指定应用的账号数据
+   *
+   * @param {number} userId 用户 ID
+   * @param {string[]} appIds 应用标识
+   * @param {object} [transaction] 事务
+   * @returns {Promise<number>} 清理条数
+   */
+  async purgeAppSettings(userId, appIds, transaction) {
+    let total = 0;
+    for (const appId of appIds) {
+      const modelNames = APP_SETTINGS_MODELS[appId] || [];
+      for (const modelName of modelNames) {
+        const model = getModel(modelName);
+        if (!model) continue;
+        // 硬删：偏好与 API Key 属"账号数据"，没有保留审计的价值，留着反而是泄露面
+        const deleted = await model.destroy({ where: { user_id: userId }, transaction, force: true });
+        total += Number(deleted) || 0;
+      }
+    }
+    return total;
   }
 }
 

@@ -45,7 +45,9 @@ const CONFIG_PATH = dataFile('scheduler_config.json');
 const DEFAULT_CONFIG = {
   enabled: true,
   tasks: {
-    'session-cleanup': { enabled: true, intervalHours: 24, retentionDays: 90 }
+    'session-cleanup': { enabled: true, intervalHours: 24, retentionDays: 90 },
+    // 到期注销：把缓冲期已满的申请正式执行（清理该用户在各应用的数据）
+    'deactivation-execute': { enabled: true, intervalHours: 1, retentionDays: 7 }
   }
 };
 
@@ -170,24 +172,28 @@ async function startScheduler(app) {
   }
 
   const timers = [];
-  const entries = fs.readdirSync(tasksDir, { withFileTypes: true }).filter(e => e.name.endsWith('.js'));
 
-  for (const entry of entries) {
-    const taskKey = entry.name.replace(/\.js$/, '');
+  /**
+   * 启动一个任务（内置任务与应用级任务共用）
+   *
+   * @param {string} taskKey 任务名（同时是 tasks/ 下的文件名、配置键与锁粒度）
+   * @param {string} fileUrl 模块地址
+   * @returns {Promise<void>}
+   */
+  const launch = async (taskKey, fileUrl) => {
     const taskConfig = config.tasks[taskKey];
 
     // 配置里没这个任务或 disabled → 跳过
     if (!taskConfig || taskConfig.enabled === false) {
       log.info(`ℹ️ [Scheduler] ${C.cyan}任务 [${taskKey}] 已禁用，跳过${C.reset}`);
-      continue;
+      return;
     }
 
     try {
-      const fileUrl = pathToFileURL(path.join(tasksDir, entry.name)).href;
       const { default: taskFactory } = await import(fileUrl);
       if (!taskFactory || typeof taskFactory.run !== 'function') {
         log.warn(`⚠️ [Scheduler] ${C.yellow}任务 [${taskKey}] 未导出 run 函数，跳过${C.reset}`);
-        continue;
+        return;
       }
 
       const intervalMs = (taskConfig.intervalHours || 24) * 60 * 60 * 1000;
@@ -206,6 +212,34 @@ async function startScheduler(app) {
       log.info(`✅ [Scheduler] ${C.green}任务 [${taskKey}] 已启动，间隔 ${taskConfig.intervalHours}h${C.reset}`);
     } catch (err) {
       log.error(`❌ [Scheduler] ${C.red}任务 [${taskKey}] 加载失败${C.reset}`, err);
+    }
+  };
+
+  for (const entry of fs.readdirSync(tasksDir, { withFileTypes: true })) {
+    if (!entry.name.endsWith('.js')) continue;
+    await launch(entry.name.replace(/\.js$/, ''), pathToFileURL(path.join(tasksDir, entry.name)).href);
+  }
+
+  /*
+   * 应用级任务：`src/app/<app>/scheduler/*.js`
+   *
+   * 为什么在这里而不是 tasks/：任务体要用应用自己的 DAO / service（如注销清理），
+   * 而 framework 不许反向依赖 src/app（本项目至今零反向引用）。让框架按约定"发现"
+   * 应用提供的任务文件，逻辑留在应用里，依赖方向不变。
+   *
+   * 任务名 = 文件名（与内置任务同一套配置键、同一把周期锁），文件里导出
+   * `{ run(app, taskConfig) }` 即可。
+   */
+  const appsDir = path.resolve(__dirname, '../../../app');
+  if (fs.existsSync(appsDir)) {
+    for (const appEntry of fs.readdirSync(appsDir, { withFileTypes: true })) {
+      if (!appEntry.isDirectory()) continue;
+      const appTaskDir = path.join(appsDir, appEntry.name, 'scheduler');
+      if (!fs.existsSync(appTaskDir)) continue;
+      for (const entry of fs.readdirSync(appTaskDir, { withFileTypes: true })) {
+        if (!entry.name.endsWith('.js')) continue;
+        await launch(entry.name.replace(/\.js$/, ''), pathToFileURL(path.join(appTaskDir, entry.name)).href);
+      }
     }
   }
 

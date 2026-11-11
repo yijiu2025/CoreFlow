@@ -18,6 +18,13 @@ const ADMIN_PERMISSIONS = createPermissionRegistry('admin', '管理后台', {
     CREATE: { code: 'admin:user:create', label: '创建用户', type: 'write' },
     UPDATE: { code: 'admin:user:update', label: '编辑用户', type: 'write' },
     DELETE: { code: 'admin:user:delete', label: '删除用户', type: 'high_risk' },
+    // 删除账号走缓冲期（发起注销申请），到期才清数据 —— 与单纯的 DELETE 区分开：
+    // 前者可撤销、可审计，后者在本仓不存在（立刻抹数据只留运维口子）
+    PURGE: { code: 'admin:user:purge', label: '删除账号（缓冲期）', type: 'high_risk' },
+    /** 注销某用户在某应用里的账号（不动主账号）；比全量删除轻，但仍需二次验证 */
+    DEACTIVATE: { code: 'admin:user:deactivate', label: '注销应用账号', type: 'high_risk' },
+    /** 签发临时密码：等于把别人账号的临时钥匙交出去 */
+    TEMP_PASSWORD: { code: 'admin:user:temp-password', label: '签发临时密码', type: 'high_risk' },
     ALL: { code: 'admin:user:*', label: '用户管理通配', type: 'wildcard' }
   },
 
@@ -109,12 +116,8 @@ const ADMIN_PERMISSIONS = createPermissionRegistry('admin', '管理后台', {
     READ: { code: 'admin:firewall:read', label: '查看防火墙', type: 'read' }
   },
 
-  // 代码生成（二期）
-  GEN: {
-    READ: { code: 'admin:gen:read', label: '查看生成器', type: 'read' },
-    EXECUTE: { code: 'admin:gen:execute', label: '执行代码生成', type: 'high_risk' },
-    ALL: { code: 'admin:gen:*', label: '代码生成通配', type: 'wildcard' }
-  },
+  // 「代码生成」权限码已下线（2026-11-11）：对应页面与菜单都删了，没有接口可保护。
+  // 已授权过的老库角色仍会带着 admin:gen:* 字符串，它匹配不到任何路由，属无害残留。
 
   // 管理员通配符
   ADMIN: {

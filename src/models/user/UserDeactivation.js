@@ -29,6 +29,22 @@ const defineUserDeactivation = (sequelize, DataTypes) => {
         allowNull: false,
         comment: '关联 user_user.uid，便于跨表查询 OAuth 数据'
       },
+      /**
+       * 发起人（管理员从后台发起时填；用户自助时为空）
+       *
+       * 后台"删除用户"是本仓最高危的写操作，审计必须能回答"这条删除是谁点的"。
+       * 名字用快照列而不是 JOIN：发起人账号后来被删了，历史仍要读得懂。
+       */
+      requested_by: {
+        type: DataTypes.BIGINT,
+        allowNull: true,
+        comment: '发起人 user_id（管理员发起时填，用户自助时为空）'
+      },
+      requested_by_name: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+        comment: '发起人账号快照（账号被删后历史仍可读）'
+      },
       scope: {
         type: DataTypes.ENUM('app', 'all'),
         allowNull: false,

@@ -122,26 +122,9 @@ const MENUS = [
     sort: 33,
     parent: '日志审计'
   },
-  {
-    name: '开发工具',
-    type: 'dir',
-    icon: 'Wrench',
-    path: null,
-    component: null,
-    permission: null,
-    sort: 40,
-    parent: null
-  },
-  {
-    name: '代码生成',
-    type: 'menu',
-    icon: 'Wand2',
-    path: '/tool/generator',
-    component: 'generator',
-    permission: 'admin:gen:read',
-    sort: 41,
-    parent: '开发工具'
-  }
+  // 「开发工具 / 代码生成」已下线（2026-11-11）：它只是一个 62 行的占位页，没有后端接口，
+  // 点进去除了表单什么都生成不了 —— 留着只会让人以为这个脚手架支持代码生成。
+  // 老库由 `20261111000001-remove-generator-menus` 迁移清理（含空壳目录「开发工具」）。
 ];
 
 /**

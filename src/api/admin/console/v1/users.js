@@ -10,13 +10,23 @@
  * GET    /admin/console/v1/users/:id/grants      —— 授权历史（授予 / 取消流水）
  * POST   /admin/console/v1/users/roles/batch     —— 批量授权（追加 / 移除）
  *
- * 🔴 **没有「删除用户」和「重置密码」**，这是刻意的产品决策：
- *    · 删除是软删除，会留下凭证、会话、授权流水与审计里的悬空引用 —— 审计价值
- *      远高于"清掉一条记录"的便利；真要停用，用 `PUT :id/status` 冻结（可逆、
- *      有痕迹、会话立即失效）。
- *    · 管理员代改密码等于绕过"本人知情"：谁都能悄悄接管任意下级账号，于是前面
- *      所有"不能编辑更高级管理员"的限制都失去意义。密码只能本人改。
- *    需要恢复时不要偷偷加回接口 —— 先想清楚这两条风险怎么兜。
+ * 账号高危操作（都要二次验证 = 操作者现敲自己的登录密码）：
+ * GET    /admin/console/v1/users/:id/deletion              —— 待执行的注销申请
+ * POST   /admin/console/v1/users/:id/deletion              —— 发起删除（缓冲期，到期才清数据）
+ * POST   /admin/console/v1/users/:id/deletion/:rid/cancel   —— 撤销注销
+ * GET    /admin/console/v1/users/:id/apps                  —— 该用户在各应用的账号状态
+ * POST   /admin/console/v1/users/:id/apps/:appId/deactivation —— 只注销该应用的账号
+ * GET    /admin/console/v1/users/:id/temp-password         —— 当前有效的临时密码（无明文）
+ * POST   /admin/console/v1/users/:id/temp-password         —— 签发临时密码（明文只返回一次）
+ *
+ * 🔴 **仍然没有「重置密码」**，这是刻意的：管理员代改密码等于绕过"本人知情"，
+ *    谁都能悄悄接管任意下级账号，前面所有职级限制都会失效。密码只能本人改 ——
+ *    需要临时进入别人账号时，用**临时密码**（短时、一次性、全程留痕、可作废），
+ *    而不是改掉他的密码。
+ *
+ * 🔴 **「删除」不是立刻抹数据**：先立注销申请（立即拒登录），到期由定时任务正式清理
+ *    （见 `app/user/services/deactivation.service.js`），期间可撤销。误删不可逆，
+ *    而交接期间账号往往还被别处引用着。
  *
  * 手机号为密文存储，列表与导出均不返回（脱敏口径与 `app/user` 一致）。
  *
@@ -39,6 +49,7 @@ import {
   planRoleChange
 } from '../../../../app/console/services/access-scope.service.js';
 import { describeCurrentAccess } from '../../../../app/console/services/user-access.service.js';
+import userDangerService from '../../../../app/console/services/user-danger.service.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 
 /**
@@ -143,7 +154,14 @@ async function registerUserRoutes(fastify) {
         status,
         scopeAppIds: await scopeAppIdsOf(request)
       });
-      return reply.result.success('获取成功', { rows, total, pageNum, pageSize });
+      /*
+       * 附上「待执行的注销申请」：删除是缓冲期语义，列表里必须能看出
+       * "这个人已经被发起删除、还有几天到期" —— 否则管理员会以为没删成功又点一次。
+       * 一次 IN 查询，不做 N+1（见 pendingByUsers）。
+       */
+      const pending = await userDangerService.pendingByUsers(rows.map(row => row.id));
+      const withDeletion = rows.map(row => ({ ...row, deletion: pending.get(Number(row.id)) || null }));
+      return reply.result.success('获取成功', { rows: withDeletion, total, pageNum, pageSize });
     })
   });
 
@@ -452,6 +470,191 @@ async function registerUserRoutes(fastify) {
       }
 
       return reply.result.success(`已更新 ${plans.length} 个用户的角色`, { count: plans.length });
+    })
+  });
+
+  /* ── 账号高危操作 ─────────────────────────────────────────────
+   * 这五条都要求请求体里带 `password`（操作者自己的登录密码），由 service 校验。
+   * 把二次验证放在 service 而不是路由：路由只负责声明形状，判定只有一处。
+   */
+
+  registerSecureRoute(fastify, {
+    name: 'consoleUserDeletion',
+    alias: '查询待执行注销',
+    method: 'GET',
+    url: '/users/:id/deletion',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.READ,
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } }
+    },
+    handler: withFail(async (request, reply) => {
+      const data = await userDangerService.listDeletion(Number(request.params.id));
+      return reply.result.success('获取成功', data);
+    })
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleUserDelete',
+    alias: '删除账号（缓冲期）',
+    method: 'POST',
+    url: '/users/:id/deletion',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.PURGE,
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } },
+      body: {
+        type: 'object',
+        required: ['password', 'confirmUsername'],
+        properties: {
+          password: { type: 'string', minLength: 1, maxLength: 128 },
+          confirmUsername: { type: 'string', minLength: 1, maxLength: 64 },
+          reason: { type: 'string', maxLength: 255 }
+        }
+      }
+    },
+    handler: withFail(async (request, reply) => {
+      const data = await userDangerService.requestDeletion({
+        request,
+        actor: actorOf(request),
+        targetId: Number(request.params.id),
+        password: request.body.password,
+        confirmUsername: request.body.confirmUsername,
+        reason: request.body.reason
+      });
+      return reply.result.success(`已发起删除，${data.graceDays} 天后正式清理，可随时撤销`, data);
+    })
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleUserDeleteCancel',
+    alias: '撤销注销申请',
+    method: 'POST',
+    url: '/users/:id/deletion/:requestId/cancel',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.PURGE,
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id', 'requestId'],
+        properties: { id: { type: 'integer', minimum: 1 }, requestId: { type: 'integer', minimum: 1 } }
+      }
+    },
+    handler: withFail(async (request, reply) => {
+      const data = await userDangerService.cancelDeletion({
+        request,
+        actor: actorOf(request),
+        targetId: Number(request.params.id),
+        requestId: Number(request.params.requestId)
+      });
+      return reply.result.success('已撤销，账号恢复正常', data);
+    })
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleUserApps',
+    alias: '用户应用账号',
+    method: 'GET',
+    url: '/users/:id/apps',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.READ,
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } }
+    },
+    handler: withFail(async (request, reply) => {
+      const rows = await userDangerService.listApps(Number(request.params.id));
+      return reply.result.success('获取成功', { rows, total: rows.length });
+    })
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleUserAppDeactivate',
+    alias: '注销应用账号',
+    method: 'POST',
+    url: '/users/:id/apps/:appId/deactivation',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.DEACTIVATE,
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id', 'appId'],
+        properties: {
+          id: { type: 'integer', minimum: 1 },
+          appId: { type: 'string', minLength: 1, maxLength: 64 }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['password'],
+        properties: {
+          password: { type: 'string', minLength: 1, maxLength: 128 },
+          reason: { type: 'string', maxLength: 255 }
+        }
+      }
+    },
+    handler: withFail(async (request, reply) => {
+      const data = await userDangerService.deactivateApp({
+        request,
+        actor: actorOf(request),
+        targetId: Number(request.params.id),
+        appId: request.params.appId,
+        password: request.body.password,
+        reason: request.body.reason
+      });
+      return reply.result.success(`已发起注销，${data.graceDays} 天后清理该应用数据`, data);
+    })
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleUserTempPasswordList',
+    alias: '有效临时密码',
+    method: 'GET',
+    url: '/users/:id/temp-password',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.READ,
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } }
+    },
+    handler: withFail(async (request, reply) => {
+      const rows = await userDangerService.listTempPasswords(Number(request.params.id));
+      return reply.result.success('获取成功', { rows, total: rows.length });
+    })
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleUserTempPassword',
+    alias: '签发临时密码',
+    method: 'POST',
+    url: '/users/:id/temp-password',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.TEMP_PASSWORD,
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } },
+      body: {
+        type: 'object',
+        required: ['password'],
+        properties: {
+          password: { type: 'string', minLength: 1, maxLength: 128 },
+          ttlMinutes: { type: 'integer', minimum: 5, maximum: 1440, default: 30 },
+          maxUses: { type: 'integer', minimum: 1, maximum: 10, default: 1 },
+          reason: { type: 'string', maxLength: 255 }
+        }
+      }
+    },
+    handler: withFail(async (request, reply) => {
+      const data = await userDangerService.issueTempPassword({
+        request,
+        actor: actorOf(request),
+        targetId: Number(request.params.id),
+        password: request.body.password,
+        ttlMinutes: request.body.ttlMinutes,
+        maxUses: request.body.maxUses,
+        reason: request.body.reason
+      });
+      return reply.result.success('已生成临时密码，仅显示这一次', data);
     })
   });
 }

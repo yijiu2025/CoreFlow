@@ -28,11 +28,15 @@ const REVOKE_PERIOD_DAYS = 7;
 class UserDeactivationDao {
   /**
    * 创建注销申请
-   * @param {object} params - { user_id, uid, scope, app_id?, reason? }
+   *
+   * @param {object} params - { user_id, uid, scope, app_id?, reason?, requestedBy?, requestedByName?, graceDays? }
+   *   `requestedBy` / `requestedByName`：管理员从后台发起时填（本仓最高危的写操作，
+   *   审计里必须能回答"这条删除是谁点的"）；用户自助时留空。
+   *   `graceDays`：撤销期天数，缺省 7；管理员侧按配置传入。
    * @returns {Promise<object>} 创建的申请记录
    * @throws {Error} 已存在活跃申请时抛 DEACTIVATION_FAILED
    */
-  async createRequest({ user_id, uid, scope, app_id, reason }) {
+  async createRequest({ user_id, uid, scope, app_id, reason, requestedBy, requestedByName, graceDays }) {
     const UserDeactivation = getModel('user.UserDeactivation');
     if (scope === DEACTIVATION_SCOPE.APP && !app_id) {
       throw new Error('DEACTIVATION_FAILED:scope=app 时必须指定 app_id');
@@ -54,7 +58,8 @@ class UserDeactivationDao {
     }
 
     const now = new Date();
-    const scheduled_at = new Date(now.getTime() + REVOKE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+    const days = normalizeGraceDays(graceDays);
+    const scheduled_at = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
     return UserDeactivation.create({
       user_id,
@@ -64,7 +69,9 @@ class UserDeactivationDao {
       status: DEACTIVATION_STATUS.PENDING,
       reason: reason || null,
       requested_at: now,
-      scheduled_at
+      scheduled_at,
+      requested_by: requestedBy ?? null,
+      requested_by_name: requestedByName ?? null
     });
   }
 
@@ -181,7 +188,22 @@ class UserDeactivationDao {
   }
 }
 
+/**
+ * 归一化撤销期天数
+ *
+ * 上限 30 天：缓冲期是"给用户留反悔的时间"，不是"长期挂着不处理"；
+ * 下限 1 天：0 天等于立即删除，那就不是本功能要的语义了（真要立即删走 force 执行）。
+ *
+ * @param {*} value 入参
+ * @returns {number} 天数（1 ~ 30）
+ */
+function normalizeGraceDays(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return REVOKE_PERIOD_DAYS;
+  return Math.min(Math.max(Math.floor(n), 1), 30);
+}
+
 const userDeactivationDao = new UserDeactivationDao();
 
-export { DEACTIVATION_STATUS, DEACTIVATION_SCOPE };
+export { DEACTIVATION_STATUS, DEACTIVATION_SCOPE, REVOKE_PERIOD_DAYS, normalizeGraceDays };
 export default userDeactivationDao;

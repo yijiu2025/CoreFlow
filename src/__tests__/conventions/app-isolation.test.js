@@ -47,8 +47,16 @@ function walk(dir, out = []) {
 const ALLOWED_EDGES = new Set([
   // oauth21 登录要通知 user 域撤销该用户的全部会话（注销中登录的特殊分支）
   'oauth21/services/login.service.js -> user/services/deactivation.service.js',
+  // 临时密码由用户域持有（生成 / 消费 / 作废都在那边），登录时真实密码不匹配才回退校验它；
+  // 凭据生命周期属于用户域，oauth21 只做"认证时问一句"
+  'oauth21/services/login.service.js -> user/services/temp-password.service.js',
   // 密码变更必须同步撤销 OAuth 凭证，用户域单向调用 OAuth 数据访问层
-  'user/dao/user.js -> oauth21/dao/token.dao.js'
+  'user/dao/user.js -> oauth21/dao/token.dao.js',
+  // 后台「删除账号 / 注销应用账号 / 临时密码」只是权限与二次验证的编排，
+  // 真正的注销与凭据生命周期由用户域负责（缓冲期、清理范围都在那边）；
+  // 反向依赖（user → console）会让人域为了后台的管理规则而绑死后台，故只保留这一条单向边。
+  'console/services/user-danger.service.js -> user/services/deactivation.service.js',
+  'console/services/user-danger.service.js -> user/services/temp-password.service.js'
 ]);
 
 /** 提取源码里全部 import/export-from 的模块说明符 */

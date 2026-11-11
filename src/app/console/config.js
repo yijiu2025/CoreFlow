@@ -10,7 +10,7 @@
 const consoleConfig = {
   app_id: 'console',
   name: '管理后台',
-  description: '通用后台脚手架：用户 / 角色 / 菜单 / 部门 / 岗位 / 字典 / 参数 / 日志 / 代码生成',
+  description: '通用后台脚手架：用户 / 角色 / 菜单 / 部门 / 岗位 / 日志 / 授权与注销',
 
   /**
    * 权限命名空间（`iam_role.app_id` 的取值）
@@ -42,6 +42,20 @@ const consoleConfig = {
     /** 或任一角色命中即可（历史账号兜底：策略未配但角色在） */
     anyRole: ['superadmin'],
     denyMessage: '该账号没有管理后台的访问权限，请联系管理员分配角色后再试'
+  },
+
+  /**
+   * 账号注销（删除用户）的缓冲期
+   *
+   * 「删除」不是立刻抹掉，而是先立一条注销申请并**立即拒登录**，到期后由定时任务
+   * 正式清理（见 `app/user/services/deactivation.service.js`）。理由：误删是不可逆的，
+   * 而一个人离职 / 交接时，账号往往还被别处引用着。
+   *
+   * 期间任何管理员都能撤销（`POST /users/:id/deletion/:requestId/cancel`）。
+   * 下限 1 天、上限 30 天，由 DAO 归一化；改这里只影响**新发起**的申请。
+   */
+  user_deletion: {
+    grace_days: 7
   },
 
   /**

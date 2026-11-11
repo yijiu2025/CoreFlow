@@ -22,12 +22,14 @@ import ClientDao from '../dao/client.dao.js';
 import { logLogin } from '../../../framework/security/auth/index.js';
 import { detectLoginAnomaly, DETECT_RESULT } from '../../../framework/security/auth/index.js';
 import { logLoginFailure } from '../../../framework/security/auth/index.js';
+import { logAuditEvent } from '../../../framework/security/auth/index.js';
 import { getStore } from '../../../framework/persistence/redis/index.js';
 import captchaService from '../../../framework/security/verify/captcha/service.js';
 import { clientContext } from '../../../framework/security/verify/context.js';
 import { emailDao } from '../../../framework/security/verify/email/index.js';
 import { AuthorizationService } from './authorization.service.js';
 import deactivationService from '../../user/services/deactivation.service.js';
+import tempPasswordService from '../../user/services/temp-password.service.js';
 import { checkScopeSubset, resolveScopeDetails } from '../config/scope-registry.js';
 import { detectLoginEnvironmentAnomaly } from '../../../framework/security/auth/index.js';
 import { computeDeviceFingerprint, getDeviceIdAndWrapResponse } from '../../../framework/security/auth/index.js';
@@ -37,6 +39,47 @@ import { createLogger } from '../../../framework/support/log/index.js';
 const log = createLogger('app.oauth21.services.login.service');
 
 const authService = new AuthorizationService();
+
+/**
+ * 用临时密码登录（真实密码不匹配时的唯一后备）
+ *
+ * 成功时：消费一次额度、写登录成功日志与审计，返回适配后的用户对象。
+ * 失败时：返回 null，**不消费**额度（否则别人拿错密码试三次就把凭据废了）。
+ *
+ * @param {string} username 登录标识（账号名 / 邮箱）
+ * @param {string} password 明文
+ * @param {import('fastify').FastifyRequest} request 请求（取 ip / ua）
+ * @returns {Promise<object|null>} 用户或 null
+ */
+async function tryTempPasswordLogin(username, password, request) {
+  const user = await UserDao.findByUsername(username);
+  if (!user) return null;
+
+  const hit = await tempPasswordService.verify(user.id, password);
+  if (!hit.ok) return null;
+
+  log.info('[directLogin] 临时密码登录命中: userId=%s, tempId=%s (%s/%s)', user.id, hit.id, hit.usedCount, hit.maxUses);
+
+  await logLogin({
+    userId: user.id,
+    ip: request.ip,
+    userAgent: request.headers['user-agent'] || '',
+    appId: 'oauth21',
+    success: true,
+    reason: '临时密码登录'
+  });
+
+  await logAuditEvent({
+    type: 'USER_TEMP_PASSWORD_USED',
+    userId: user.id,
+    ip: request.ip,
+    userAgent: request.headers['user-agent'] || '',
+    appId: 'oauth21',
+    details: { tempPasswordId: hit.id, usedCount: hit.usedCount, maxUses: hit.maxUses }
+  });
+
+  return user;
+}
 
 /**
  * 客户端指纹（IP + UA hash，启用设备指纹时合并 canvas/WebGL）
@@ -202,6 +245,17 @@ async function directLogin(request, reply, fastify) {
     }
 
     user = await authService.authenticateUser(username, password);
+    /*
+     * 临时密码回退：管理员为排障 / 交接签发的**短时一次性**凭据。
+     *
+     * 只在真实密码**不匹配**时才走这条路 —— 用户自己的密码永远优先：如果他的密码
+     * 恰好等于某个临时密码（极不可能，长度与字符集都不同），也不该走临时通道。
+     * 命中后立刻消费一次（次数满即失效），并写审计与登录日志，避免"谁用过"无从追查。
+     */
+    if (!user) {
+      const viaTemp = await tryTempPasswordLogin(username, password, request);
+      if (viaTemp) user = viaTemp;
+    }
     if (!user) {
       await logLoginFailure({
         email: username,

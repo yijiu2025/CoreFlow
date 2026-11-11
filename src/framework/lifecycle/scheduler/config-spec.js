@@ -25,7 +25,9 @@ const TASK_SPEC = {
   // 小时；必须 > 0，否则 intervalMs = 0 → 定时器空转
   intervalHours: { type: 'number', min: 1 },
   // 保留天数；0 = 不保留（删得更狠），是合法取值
-  retentionDays: { type: 'int', min: 0 }
+  retentionDays: { type: 'int', min: 0 },
+  // 单轮处理条数（批处理类任务用）；必须 >= 1，否则等于"每轮什么都不做"
+  batchSize: { type: 'int', min: 1 }
 };
 
 /**
