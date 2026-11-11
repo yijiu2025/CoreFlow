@@ -31,14 +31,18 @@ import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 
 import { verifySignature } from '../../framework/security/auth/security/signature.js';
+import { getStore } from '../../framework/persistence/redis/index.js';
 import { isRedisConfigured } from '../../framework/persistence/redis/utils.js';
 import { connectTestRedis, disconnectTestRedis } from '../helpers/redis-connection.js';
 
 const APP_KEY = 'test-sign-app-key';
 /** 复原环境，避免污染同进程其他测试 */
 const originalAppKey = process.env.SIGN_APP_KEY;
+const originalIssueMax = process.env.H5_ISSUE_MAX;
 
 let app;
+/** 未登录实例（无认证桩）：断言「未登录不签发、不落库」 */
+let anonApp;
 
 /** 按真身的拼接顺序算签名：md5 & appKey & timestamp & nonce & url & params & body */
 function signFor({ md5, timestamp, nonce, url, params = '', body = '' }) {
@@ -64,9 +68,21 @@ beforeAll(async () => {
   if (isRedisConfigured()) await connectTestRedis();
 
   process.env.SIGN_APP_KEY = APP_KEY;
+  // 本文件会在同一进程里连发十几个"新设备"，默认上限（20 次/分/IP）会把它判成刷子。
+  // 限频本身由下面「签发限频」用例单独验证（它会把上限临时压到 1）。
+  process.env.H5_ISSUE_MAX = '10000';
 
   app = Fastify({ logger: false });
   await app.register(cookie);
+
+  // 已登录桩：真实链路由认证插件在 onRequest 写 `request.state.user`
+  // （framework/security/auth/plugin.js:59/73），verifySignature 跑在 preHandler 读它。
+  // 2026-11-10 起「未登录不签发」，因此签发类用例必须挂在已登录环境下 ——
+  // 未登录行为由本文末尾的 anonApp 单独断言。
+  app.addHook('onRequest', async request => {
+    const uid = request.headers['x-test-uid'] || 'test-uid';
+    request.state = { ...(request.state || {}), user: { uid, userId: 1 } };
+  });
 
   // 真身中间件直接挂 preHandler —— 与 registerSecureRoute 写入 requireSignature 后的效果一致
   app.get('/secure', { preHandler: verifySignature, config: { requireSignature: true } }, async (_req, reply) =>
@@ -82,13 +98,29 @@ beforeAll(async () => {
   app.get('/open', { preHandler: verifySignature }, async (_req, reply) => reply.code(200).send({ ok: true }));
 
   await app.ready();
+
+  // 未登录实例：不装认证桩，用于断言「未登录不签发、不落库」
+  anonApp = Fastify({ logger: false });
+  await anonApp.register(cookie);
+  anonApp.get('/secure', { preHandler: verifySignature, config: { requireSignature: true } }, async (_req, reply) =>
+    reply.code(200).send({ ok: true })
+  );
+  anonApp.post(
+    '/secure-post',
+    { preHandler: verifySignature, config: { requireSignature: true } },
+    async (_req, reply) => reply.code(200).send({ ok: true, posted: true })
+  );
+  await anonApp.ready();
 });
 
 afterAll(async () => {
   await app?.close();
+  await anonApp?.close();
   if (isRedisConfigured()) await disconnectTestRedis();
   if (originalAppKey === undefined) delete process.env.SIGN_APP_KEY;
   else process.env.SIGN_APP_KEY = originalAppKey;
+  if (originalIssueMax === undefined) delete process.env.H5_ISSUE_MAX;
+  else process.env.H5_ISSUE_MAX = originalIssueMax;
 });
 
 describe('首次访问：引导下发 _m_h5_tk', () => {
@@ -419,5 +451,150 @@ describe('引导放行仅限 GET/HEAD（写方法防"永不上交 token"绕过�
 
     expect(res.statusCode).toBe(200);
     expect(h5CookieOf(res)).toBeDefined();
+  });
+});
+
+describe('未登录：不签发、不落库（2026-11-10）', () => {
+  it('GET 无 token → 200 放行，但不下发 cookie / 响应头', async () => {
+    const res = await anonApp.inject({ method: 'GET', url: '/secure' });
+
+    expect(res.statusCode).toBe(200);
+    expect(h5CookieOf(res)).toBeUndefined();
+    expect(res.headers['x-h5-tk']).toBeUndefined();
+  });
+
+  it('未登录请求不产生 h5_token 键（命名空间条目数不变）', async () => {
+    // 这条是本次改造的核心断言：修复前每次匿名引导都会写一个 1h TTL 的键
+    const store = getStore('h5_token');
+    const before = await store.size();
+
+    for (let i = 0; i < 5; i++) {
+      await anonApp.inject({ method: 'GET', url: '/secure' });
+    }
+
+    expect(await store.size()).toBe(before);
+  });
+
+  it('写方法无 token → 403 login_required（不是 token_required，避免"拿 token 重试"死循环）', async () => {
+    const res = await anonApp.inject({ method: 'POST', url: '/secure-post' });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('login_required');
+    expect(h5CookieOf(res)).toBeUndefined();
+    expect(res.headers['x-h5-tk']).toBeUndefined();
+  });
+
+  it('未登录带假签名头 → 403 login_required，handler 不执行', async () => {
+    const res = await anonApp.inject({
+      method: 'POST',
+      url: '/secure-post',
+      headers: {
+        'x-sign': 'a'.repeat(64),
+        'x-timestamp': String(Date.now()),
+        'x-nonce': `anon-${crypto.randomUUID()}`
+      }
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('login_required');
+    expect(res.json()).not.toEqual({ ok: true, posted: true });
+  });
+});
+
+describe('设备维度幂等（键数 = 客户端数，不是签发次数）', () => {
+  it('同一 x-device-id 两次引导 → 复用同一个 token，且不新增键', async () => {
+    const store = getStore('h5_token');
+    const deviceId = `dev-${crypto.randomUUID()}`;
+
+    const first = await app.inject({ method: 'GET', url: '/secure', headers: { 'x-device-id': deviceId } });
+    const md5a = h5CookieOf(first).value.split('_')[0];
+
+    const before = await store.size();
+    const second = await app.inject({ method: 'GET', url: '/secure', headers: { 'x-device-id': deviceId } });
+    const md5b = h5CookieOf(second).value.split('_')[0];
+
+    expect(md5b).toBe(md5a);
+    expect(await store.size()).toBe(before);
+  });
+
+  it('不同 x-device-id → 不同 token', async () => {
+    const a = await app.inject({
+      method: 'GET',
+      url: '/secure',
+      headers: { 'x-device-id': `dev-a-${crypto.randomUUID()}` }
+    });
+    const b = await app.inject({
+      method: 'GET',
+      url: '/secure',
+      headers: { 'x-device-id': `dev-b-${crypto.randomUUID()}` }
+    });
+
+    expect(h5CookieOf(a).value.split('_')[0]).not.toBe(h5CookieOf(b).value.split('_')[0]);
+  });
+
+  it('值不再是裸 rawToken，而是带归属的元数据对象', async () => {
+    const deviceId = `dev-${crypto.randomUUID()}`;
+    const res = await app.inject({ method: 'GET', url: '/secure', headers: { 'x-device-id': deviceId } });
+    const md5 = h5CookieOf(res).value.split('_')[0];
+
+    const value = await getStore('h5_token').get(md5);
+
+    expect(typeof value).toBe('object');
+    expect(value).toMatchObject({ v: 1, u: 'test-uid' });
+    // 旧实现存的是 48 字符 hex（rawToken），验签根本不用它
+    expect(value).not.toBeInstanceOf(String);
+  });
+
+  it('同一设备换账号 → 换新 token（归属字段不能指向上一个用户）', async () => {
+    const deviceId = `dev-${crypto.randomUUID()}`;
+
+    const first = await app.inject({
+      method: 'GET',
+      url: '/secure',
+      headers: { 'x-device-id': deviceId, 'x-test-uid': 'user-a' }
+    });
+    const md5a = h5CookieOf(first).value.split('_')[0];
+
+    const second = await app.inject({
+      method: 'GET',
+      url: '/secure',
+      headers: { 'x-device-id': deviceId, 'x-test-uid': 'user-b' }
+    });
+    const md5b = h5CookieOf(second).value.split('_')[0];
+
+    expect(md5b).not.toBe(md5a);
+    expect(await getStore('h5_token').get(md5a)).toBeNull();
+    expect(await getStore('h5_token').get(md5b)).toMatchObject({ u: 'user-b' });
+  });
+});
+
+describe('签发限频（每 IP 每分钟上限）', () => {
+  it('超过 H5_ISSUE_MAX 后不再签发：GET 仍放行，但不再下发 token', async () => {
+    const prev = process.env.H5_ISSUE_MAX;
+    process.env.H5_ISSUE_MAX = '1';
+    try {
+      // 清掉本文件前面累加的计数，让这条用例与执行顺序无关
+      await getStore('h5_issue').clear();
+
+      const first = await app.inject({
+        method: 'GET',
+        url: '/secure',
+        headers: { 'x-device-id': `rl-a-${crypto.randomUUID()}` }
+      });
+      expect(h5CookieOf(first)).toBeDefined();
+
+      const second = await app.inject({
+        method: 'GET',
+        url: '/secure',
+        headers: { 'x-device-id': `rl-b-${crypto.randomUUID()}` }
+      });
+      expect(second.statusCode).toBe(200);
+      expect(h5CookieOf(second)).toBeUndefined();
+      expect(second.headers['x-h5-tk']).toBeUndefined();
+    } finally {
+      if (prev === undefined) delete process.env.H5_ISSUE_MAX;
+      else process.env.H5_ISSUE_MAX = prev;
+      await getStore('h5_issue').clear();
+    }
   });
 });

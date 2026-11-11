@@ -3,13 +3,16 @@
  *
  * GET /auth/v1/h5-token — 预发 _m_h5_tk cookie，供前端请求拦截器计算 H5 签名
  *
- * 用途：未登录场景（如 QR 生成）也需要签名防爬，但前端无 _m_h5_tk cookie
- * 无法算签名。页面加载时先调此端点拿 cookie，后续请求即可签名。
+ * 🔴 2026-11-10 起**仅已登录才签发**：匿名调用返回 `issued:false` 且不写任何键。
+ *    原因：本端点曾是页面加载必经之路（`oauth21/src/bootstrap.ts`），未登录也签发，
+ *    于是每次刷新都多一个 `h5_token:*` 键（1h TTL），一个用户一小时几十个 —— 而这些键
+ *    不承载任何身份，纯属写放大。未登录请求的访问控制由登录守卫（401）+ 端点限频承担。
  *
- * 安全：端点公开（不 requireLogin），但配合限频防滥用。
+ * 安全：端点公开（不 requireLogin），但匿名不再产生副作用；限频继续保留。
  *
  * @author yijiu2025
  * @since 2026-08-27
+ * @since 2026-11-10 未登录不签发（只回 issued:false）
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
 import { issueH5Token } from '../../../framework/security/auth/index.js';
@@ -41,6 +44,10 @@ async function registerH5TokenRoutes(fastify) {
       }
     },
     handler: async (request, reply) => {
+      // 未登录：不签发、不落库（见文件头）
+      if (!request.state?.user) {
+        return { code: 200, message: 'anonymous', data: { issued: false } };
+      }
       await issueH5Token(fastify, reply);
       return { code: 200, message: 'ok', data: { issued: true } };
     }

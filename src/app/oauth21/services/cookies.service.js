@@ -60,8 +60,11 @@ async function setAuthCookies(reply, { accessToken, refreshToken, user }, fastif
   });
 
   // H5 签名 Token
+  // 🔴 显式传 uid：本函数在**登录成功之后**被调用，此时 request.state.user 还是空的
+  //    （认证插件跑在登录之前），不传就会签出 `u: null` 的 token，登录后第一次引导
+  //    又会因"归属不一致"换一次 token（白多一个键）。
   if (fastify) {
-    await issueH5Token(fastify, reply);
+    await issueH5Token(fastify, reply, { uid: user?.uid ?? user?.id ?? null });
   }
 }
 

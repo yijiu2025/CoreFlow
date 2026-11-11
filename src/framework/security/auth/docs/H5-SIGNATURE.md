@@ -22,13 +22,17 @@
 issueH5Token：
   rawToken = randomBytes(24).hex                  （24 字节随机）
   h5TokenMd5 = sha256(rawToken).hex               （名字沿用历史，实为 sha256）
-  Redis  h5_token:{h5TokenMd5} → rawToken         TTL 3600s
+  Redis  h5_token:{h5TokenMd5} → {v,d,u,ts}       TTL 3600s   （2026-11-10 不再存 rawToken）
+  Redis  h5_dev:{sha256(x-device-id|ip)} → {md5,exp} TTL 3600s（设备指针，幂等用）
   下发：cookie _m_h5_tk = "{md5}_{expireAt}"      （httpOnly:false，前端 JS 需读取参与签名）
         响应头 x-h5-tk = "{md5}_{expireAt}"       （非 cookie 客户端通道，见第二节）
 ```
 
-客户端签名所用的"会话密钥"就是 **h5TokenMd5**（cookie/头的 `_` 前段）；Redis 里的 rawToken
-仅作存储，不参与验签拼接。
+**值不再是 rawToken**：验签拼的是 md5，rawToken 从不参与任何计算，存它等于白占 48 字节。
+现在存 `{ v: 版本, d: 设备指针, u: 归属 uid, ts: 签发时间 }` —— 体积减半，且第一次有了
+"这个键属于谁"，可以按 uid 清理、按设备统计。
+
+客户端签名所用的"会话密钥"就是 **h5TokenMd5**（cookie/头的 `_` 前段）。
 
 ### 校验流程（verifySignature 六步）
 
@@ -48,23 +52,46 @@ issueH5Token：
    `paramsStr` = query 剔除 `x-sign/x-timestamp/x-nonce/x-device-id` 后按 key 字典序
    `encodeURIComponent(k)=encodeURIComponent(v)` 以 `&` 连接（与前端 serializeParamsForSign 逐字对齐）。
 
-### 引导规则（2026-11-01 收口：仅 GET/HEAD 放行）
+### 引导规则（2026-11-10 修订：未登录不签发）
 
 | 场景 | GET/HEAD | 写方法（POST/PUT/DELETE/PATCH） |
 |------|----------|--------------------------------|
-| 无 token（无论带不带签名参数） | 下发 token（cookie + `x-h5-tk` 头）并**放行一次** | 下发 token + **403 `token_required`，handler 不执行** |
-| 有 token 但不签名 | — | — 403 `signature_required`（各方法一致） |
+| **未登录** | 放行，**不签发** | 403 `login_required`，**不签发** |
+| 已登录、无 token | 签发/复用 + 放行一次 | 签发/复用 + 403 `token_required`，handler 不执行 |
+| 已登录、超签发限频（20 次/分/IP） | 放行 | 429 `too_many_requests` |
 
-- 写方法的引导-重试闭环：客户端从 403 响应拿到 token（cookie 或 `x-h5-tk` 响应头）→
-  存储 → **同请求签名重试** → 200。无需额外的 GET 引导调用。
+- 🔴 **未登录不再签发 token、不写任何键**。未登录的 `h5_token:*` 不承载身份，1h 后自然消失，
+  却随请求量线性堆积（2026-11-10 实测：oauth21 每次页面加载都预取 `h5-token`，一个用户
+  一小时几十个键）。未登录的访问控制本来就由登录守卫（401）+ 端点限频承担。
+- 未登录写方法返回 **`login_required`** 而不是 `token_required`：后者会引导客户端"拿 token
+  重试"，而匿名请求根本拿不到 token —— 那是死循环。
+- **登录接口不受影响**：`/oauth2.1/login`、`/mini-login` 没有 `requireSignature`，
+  `verifySignature` 第一步就返回了。用户的限制只落在"需要签名的路由"上。
+- 已登录的写方法引导-重试闭环不变：从 403 响应拿到 token（cookie 或 `x-h5-tk` 响应头）→
+  存储 → **同请求签名重试** → 200。
 - 设计动机：引导放行若不限方法，攻击者"每次请求都不回传 token"（curl 天然如此）即可
   永久免签名打**写接口**（2026-11-01 深度检查确认，已修复）。
-- 残留暴露（有意保留）：GET/HEAD 路由的首次请求仍引导放行 —— 这是浏览器首访兼容
-  （页面的第一个签名 API 通常是 GET，如 `/qr/generate`、`/check-email`）。GET 端点
-  本身只读 + 配限频，风险可接受；若要彻底封死需改为"引导不执行 handler + 前端统一
-  重试"契约，属破坏性变更，暂不做。
 - 前端注意：若某页面的**第一个**签名 API 是 POST（且无先行 GET），会收到一次
   `token_required` —— 拦截器识别该错误码，存 token 后重试一次即可。
+
+### 键的治理（键数 = 在线客户端数，不是签发次数）
+
+四条一起才成立，缺一条都会回到"按请求量线性增长"：
+
+| 措施 | 作用 |
+|------|------|
+| 未登录不签发 | 匿名流量零键 |
+| **设备维度幂等**（`h5_dev` 指针） | 同一 `x-device-id`（退化到 IP）重复引导复用同一 token，不新增键 |
+| **活跃续期**（剩余有效期过半时 `EXPIRE` + 重发 cookie） | 活跃设备永不重新引导；续期必须同时改 cookie `maxAge`，否则出现"cookie 还活着但 exp 已过"的 403 死循环 |
+| 签发限频（20 次/分/IP） | 兜住匿名/已登录两条路径的写放大；存储故障时放行，不因限频器把业务打挂 |
+
+排查命令：
+
+```bash
+redis-cli --scan --pattern 'h5_token:*' | wc -l   # 期望 ≈ 在线客户端数
+redis-cli --scan --pattern 'h5_dev:*'   | wc -l   # 应与之同量级
+redis-cli --scan --pattern 'h5_nonce:*' | wc -l   # 每成功请求一个、TTL 180s，量大属正常
+```
 
 ### 防重放三要素
 
@@ -100,6 +127,8 @@ token 读取顺序：**cookie 优先 → `x-h5-tk` 请求头兜底**；引导（
 1. 调用任意 requireSignature 路由（推荐首个业务调用前先发一次 GET 引导，
    如 GET /qr/generate；或直接发业务请求）
    → GET：200 + 响应头 x-h5-tk；POST：403 token_required + 响应头 x-h5-tk
+   ⚠️ 2026-11-10 起**必须已登录**才会拿到 token；未登录 GET 仍 200 但没有 `x-h5-tk`，
+      POST 返回 403 `login_required`（先完成登录再走签名，登录接口本身不要求签名）
 2. 从响应头取 token 值（md5_expireAt），存入 wx.setStorageSync
 3. 后续请求带四个头：
    x-h5-tk:     存储的完整值
@@ -132,6 +161,33 @@ token 读取顺序：**cookie 优先 → `x-h5-tk` 请求头兜底**；引导（
 
 ## 三、已知问题与决策项（2026-11-01 深度检查）
 
+### 🔴 执行者与作用域（2026-11-10 校正）
+
+`requireSignature: true` **只有写在 `/oauth2.1` 作用域内才会被校验**。原因：
+
+- 生产只有一个执行入口：oauth21 的全局 `preHandler`（`initOAuthMiddleware`，经 `rootPlugins`
+  挂根作用域），它自带前缀闸门；
+- 每个路由的 `preHandler` 是 `createGuard`，**不调用** `verifySignature`；
+- 因此写在别的域里既不会生效、也不会报错 —— 是"看起来有防护"的死配置。
+
+**已清理**：`src/api/user/v1/open.js` 的 5 处（注册 / 校验邮箱 / 两种重置密码 / 发重置链接）。
+它们都是**未登录**端点，而 H5 token 现在只在登录后签发 —— 这两件事放在一起本来就不自洽，
+接上执行者只会把注册打死。这些端点的实际防护是：人机验证（可配）+ 邮箱验证码 +
+端点级 IP 限频（5/10/3/5 次/分）。
+
+**为什么不让 guard 全局接上**：`requireLogin` 会自动把 `requireSignature` 置 true，
+而实现签名拦截器的前端目前只有 oauth21 自己 —— 全局接线会让 firewall / posecraft /
+retroweb / admin 的登录态请求全部 403（见 `app/oauth21/middleware/auth.middleware.js` 头注释）。
+
+**防复发**：
+- 运行时：`registerSecureRoute` 对"显式声明 requireSignature 但落在 `/oauth2.1` 之外"
+  在启动时打 warn（`api.guard`，同 URL 只报一次，不阻断启动）；
+- 测试：`src/__tests__/conventions/require-signature-executor.test.js` 用 AST 扫
+  `src/api/**`，非 oauth21 目录里出现该声明即红（注释里提到不算）。
+
+**若将来要恢复公开端点的签名**：不能直接接执行者，得先做"匿名签名"（无 h5 token 时用
+`SIGN_APP_KEY` 单因子 + nonce），且前端 oauth21 必须在同一批次发布 —— 属破坏性变更。
+
 ### ✅ 引导绕过（已修复：引导放行收口为 GET/HEAD）
 
 原问题：无 token 的请求一律"引导 + 放行"，攻击者永不上交 token 即可免签名打**写接口**。
@@ -142,6 +198,25 @@ handler 不执行，客户端签名后重试（见第一节"引导规则"）。�
 
 - 残留（有意保留）：GET/HEAD 路由首次请求仍引导放行（浏览器首访兼容，只读 + 限频）。
 - 缓解史：requireSignature 路由（/register 等公开端点）均配端点级限频。
+
+### ✅ 键数按请求量膨胀（2026-11-10 已修复）
+
+现象：Redis 里 `h5_token:*` 一个人一小时几十个，值恒为 48 字符 hex。
+
+成因（两条叠加，都不是"写错了"，而是缺了幂等）：
+
+1. `issueH5Token` 每次都 `randomBytes` → 新键，没有任何复用；键数 ≈ 签发次数 × 3600s；
+2. 前端 `bootstrap.ts` **每次页面加载**无条件预取 `/auth/v1/h5-token`（哪怕 cookie 已存在），
+   未登录也照发。
+
+修复：未登录不签发 + 设备指针幂等 + 活跃续期 + 签发限频（见第一节"键的治理"），
+前端改为"只在缺 `_m_h5_tk` cookie 时预取"。
+
+**安全权衡（显式记录）**：未登录请求不再有签名校验，等价于把"匿名写放大"换成"匿名可读 +
+IP 限频"。这是有意的 —— H5 签名的定位是提高爬取成本，而给每个匿名请求发一份凭证恰好
+达不到这个目的；未登录的写操作仍由登录守卫（401）拦截，公开端点仍由各自的
+`config.rateLimit` 兜住。若将来要恢复"匿名也签名"，必须先解决幂等，否则键数立刻回到
+按请求量增长。
 
 ### 其他次要项
 
@@ -163,3 +238,7 @@ handler 不执行，客户端签名后重试（见第一节"引导规则"）。�
 9. **非 cookie 双通道**：`x-h5-tk` 响应头下发 → 请求头回传签名 200；带头不签名 403；伪造 403；
 10. **引导收口**：POST 无 token → 403 `token_required` + 下发 token、handler 不执行；
     假签名头换不来执行权；凭下发 token 签名重试 → 200；GET 带签名无 token 仍引导放行。
+11. **未登录不签发**（2026-11-10）：GET 无 token → 200 且无 cookie/无 `x-h5-tk`；
+    连打 5 次后 `h5_token` 命名空间条目数不变；POST 无 token → 403 `login_required`。
+12. **设备维度幂等**：同一 `x-device-id` 两次引导 → 同一 md5 且不新增键；
+    不同 device id → 不同 token；存储值是 `{ v, d, u, ts }` 而不是裸 rawToken。

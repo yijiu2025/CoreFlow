@@ -60,17 +60,19 @@ async function registerOpenRoutes(fastify) {
   /**
    * POST /user/register — 注册新用户
    *
-   * 安全：requireSignature=true（与登录接口安全级别一致，防绕过前端直接调用）
-   *      邮箱验证码 + 邮箱唯一约束兜底，H5 签名防自动化灌水
+   * 安全（2026-11-10 校正）：人机验证（可选）+ 邮箱验证码 + 邮箱唯一约束 + 端点限频。
+   * 曾有 `requireSignature: true`，属**死配置**，已删除（原因见下方 route config 注释）。
    */
   registerSecureRoute(fastify, {
     name: 'userRegister',
     alias: '注册新用户',
     method: 'POST',
     url: '/register',
-    // requireSignature 放 config 内（routeConfig = {...config} 展开，verifySignature 读 routeConfig.requireSignature）
+    // 🔴 这里原本写 `requireSignature: true`，但从来没有执行者（2026-11-10 清理）：
+    //    verifySignature 只在 `/oauth2.1` 作用域由全局 preHandler 挂载，user 域没有任何代码
+    //    读这个字段；而 H5 token 现在只在登录后签发，未登录的注册请求**不可能**带签名。
+    //    写成 true 只会让后来的人以为这层防护存在。实际防护 = 人机验证 + 邮箱验证码 + 限频。
     config: {
-      requireSignature: true,
       // 端点级限频：单 IP 5 次/分钟，防注册接口被高频刷
       rateLimit: { max: 5, timeWindow: '1 minute' }
     },
@@ -128,7 +130,8 @@ async function registerOpenRoutes(fastify) {
   /**
    * GET /check-email — 校验邮箱是否重复
    *
-   * 安全：requireSignature=true + 限频，防账号枚举（避免攻击者无限探测邮箱存在性）
+   * 安全（2026-11-10 校正）：仅端点级限频，防账号枚举。
+   * 原本声明 `requireSignature: true`，但 user 域没有签名执行者 —— 是死配置，已删除。
    */
   registerSecureRoute(fastify, {
     name: 'checkEmail',
@@ -136,7 +139,6 @@ async function registerOpenRoutes(fastify) {
     method: 'GET',
     url: '/check-email',
     config: {
-      requireSignature: true,
       // 端点级限频：单 IP 10 次/分钟，抑制自动化枚举
       rateLimit: { max: 10, timeWindow: '1 minute' }
     },
@@ -159,7 +161,6 @@ async function registerOpenRoutes(fastify) {
     method: 'POST',
     url: '/reset-password',
     config: {
-      requireSignature: true,
       rateLimit: { max: 5, timeWindow: '1 minute' }
     },
     handler: async (request, reply) => {
@@ -209,7 +210,6 @@ async function registerOpenRoutes(fastify) {
     method: 'POST',
     url: '/send-reset-link',
     config: {
-      requireSignature: true,
       rateLimit: { max: 3, timeWindow: '1 minute' }
     },
     handler: async (request, reply) => {
@@ -282,7 +282,6 @@ async function registerOpenRoutes(fastify) {
     method: 'POST',
     url: '/reset-password-by-link',
     config: {
-      requireSignature: true,
       rateLimit: { max: 5, timeWindow: '1 minute' }
     },
     handler: async (request, reply) => {

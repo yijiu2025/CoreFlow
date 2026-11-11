@@ -39,6 +39,40 @@ let currentPrefix = '';
 const _routeRegistry = new Map();
 
 /**
+ * 签名校验的执行者作用域
+ *
+ * `verifySignature` 目前只有**一个**生产执行入口：oauth21 的全局 `preHandler`
+ * （`initOAuthMiddleware`，经 `rootPlugins` 挂在根作用域），而它自带前缀闸门，
+ * 只处理 `/oauth2.1` 及其子路径。`createGuard` 不调用 `verifySignature`。
+ *
+ * 🔴 所以 `requireSignature: true` 写在别的域里**不会生效、不会报错、也不会有任何提示**
+ *    —— 它是一个"看起来有防护"的死配置。2026-11-10 在 `src/api/user/v1/open.js`
+ *    发现 5 处（注册 / 校验邮箱 / 两种重置密码 / 发重置链接），已清理。
+ *
+ * 为什么不能干脆让 guard 全局接上：`requireLogin` 会自动把 `requireSignature` 置 true，
+ * 而实现签名拦截器的前端目前只有 oauth21 自己 —— 全局接线会让 firewall / posecraft /
+ * retroweb / admin 的登录态请求全部 403（见 `app/oauth21/middleware/auth.middleware.js` 头注释）。
+ */
+const SIGNATURE_EXECUTOR_PREFIX = '/oauth2.1';
+
+/** 已告警过的路由（避免同一进程内重复刷日志） */
+const _warnedSignatureDeclarations = new Set();
+
+/**
+ * 该 URL 是否落在签名校验的执行者作用域内
+ *
+ * 纯函数（导出给约定测试），判据只有一条：是否在 `/oauth2.1` 前缀内。
+ * `/oauth2.10/...` 不算 —— 与 `auth.middleware.js` 的 `isOAuth21Request` 保持同一口径。
+ *
+ * @param {string} fullUrl - 含 system/group 前缀的完整路径
+ * @returns {boolean}
+ */
+function hasSignatureExecutor(fullUrl) {
+  if (typeof fullUrl !== 'string' || !fullUrl) return false;
+  return fullUrl === SIGNATURE_EXECUTOR_PREFIX || fullUrl.startsWith(`${SIGNATURE_EXECUTOR_PREFIX}/`);
+}
+
+/**
  * 组级默认端点限频表：group → { max, timeWindow, ... }
  *
  * 由 `registerGroupMetadata({ rateLimit })` 声明，`registerSecureRoute` 在路由**没有**
@@ -525,6 +559,10 @@ function registerSecureRoute(fastify, options) {
   });
 
   // 需要登录的路由自动标记需要签名验证；requireSignature 可单独开启（公开端点防爬）
+  //
+  // 🔴 这个标记只是**元数据**：真正执行签名校验的只有 oauth21 的全局钩子（/oauth2.1 作用域）。
+  //    在别的域里 `requireLogin` 带来的这个 true 同样没有执行者 —— 那是历史行为，
+  //    不要指望它提供防护（目前其他前端也没有签名拦截器）。
   const routeConfig = { ...config };
 
   // 组级默认端点限频：路由自己声明了 config.rateLimit 就用路由的（更具体者优先），
@@ -535,6 +573,17 @@ function registerSecureRoute(fastify, options) {
   }
   if (requireLogin || requireSignature) {
     routeConfig.requireSignature = true;
+  }
+
+  // 死配置自检：**显式**声明 requireSignature（requireLogin 隐式推导的不算，那是历史噪音），
+  // 却落在执行者作用域之外 → 配置永远不会生效，启动时告警一次。
+  // 不阻断启动：这是"声明写错了"，不是"服务起不来"。
+  if (requireSignature && !hasSignatureExecutor(fullUrl) && !_warnedSignatureDeclarations.has(fullUrl)) {
+    _warnedSignatureDeclarations.add(fullUrl);
+    log.warn(
+      `⚠️ [Guard] ${methodUpper} ${fullUrl} 显式声明了 requireSignature，但签名校验只在 ` +
+        `${SIGNATURE_EXECUTOR_PREFIX} 作用域内有执行者 —— 该声明不会生效（应删除或改由端点限频/防火墙保护）`
+    );
   }
   // 把 requireLogin 也放进路由 config：Fastify 的 onRequest 在**路由匹配之后**执行，
   // 因此下游（如防火墙的 onRequest 钩子）能读到 `request.routeOptions.config`，
@@ -725,6 +774,8 @@ export {
   registerSecureWebSocket,
   getFullUrl,
   registerSystemMetadata,
+  // 签名声明自检（约定测试用）：requireSignature 只在 /oauth2.1 内有执行者
+  hasSignatureExecutor,
   // 仅供测试直接驱动守卫核心逻辑。前缀 `__test__` 明示"非公开 API"，
   // 生产代码不应调用 —— 正常路径是经 createGuard 生成的 preHandler。
   applyGuardLogic as __test__applyGuardLogic,

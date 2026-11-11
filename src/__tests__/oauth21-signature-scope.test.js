@@ -47,6 +47,14 @@ beforeAll(async () => {
   // （限频与 CSRF 在本文件里换成桩，只验证签名接线）。
   for (const plugin of oauth21Config.rootPlugins) await app.register(plugin);
 
+  // 登录态桩：真实链路由认证插件在 onRequest 写 request.state.user。
+  // 2026-11-10 起「未登录不签发 h5 token」，签发类断言需要已登录环境。
+  app.addHook('onRequest', async request => {
+    if (request.headers['x-test-auth'] === '1') {
+      request.state = { ...(request.state || {}), user: { uid: 'test-uid', userId: 1 } };
+    }
+  });
+
   app.get('/oauth2.1/protected', { config: { requireSignature: true } }, async () => ({ ok: true }));
   app.get('/oauth2.1/public', async () => ({ ok: true }));
   app.get('/user/protected', { config: { requireSignature: true } }, async () => ({ ok: true }));
@@ -96,8 +104,20 @@ describe('作用域内：requireSignature 真正生效', () => {
     expect(res.json()).toMatchObject({ error: 'request_expired' });
   });
 
-  it('首次访问（无 cookie）引导下发 h5 token 并放行', async () => {
+  it('未登录首次访问（无 cookie）→ 200 放行，但不下发 h5 token（不落库）', async () => {
     const res = await app.inject({ method: 'GET', url: '/oauth2.1/protected' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.cookies.some(c => c.name === '_m_h5_tk')).toBe(false);
+    expect(res.headers['x-h5-tk']).toBeUndefined();
+  });
+
+  it('已登录首次访问（无 cookie）→ 引导下发 h5 token 并放行', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/oauth2.1/protected',
+      headers: { 'x-test-auth': '1', 'x-device-id': 'scope-device-1' }
+    });
 
     expect(res.statusCode).toBe(200);
     expect(res.cookies.some(c => c.name === '_m_h5_tk')).toBe(true);
