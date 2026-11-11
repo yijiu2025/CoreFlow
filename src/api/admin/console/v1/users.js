@@ -521,8 +521,22 @@ async function registerUserRoutes(fastify) {
     method: 'GET',
     url: '/stepup/factors',
     requireLogin: true,
+    /*
+     * 返回的只是"自己邮箱的脱敏前缀 + 有没有密码"，信息价值很低，但**仍然挂权限码**：
+     * 否则任何登录用户（含不该进后台的业务账号）都能打这个接口。
+     *
+     * 用 `any` 而不是只要求 READ：自定义角色可能只给了某一个高危码而没有
+     * `admin:user:read`，要求 READ 会让他们明明有权操作、却打不开验证区。
+     */
+    requirePermission: {
+      any: [
+        ADMIN_PERMISSIONS.USER.READ,
+        ADMIN_PERMISSIONS.USER.PURGE,
+        ADMIN_PERMISSIONS.USER.DEACTIVATE,
+        ADMIN_PERMISSIONS.USER.TEMP_PASSWORD
+      ]
+    },
     handler: withFail(async (request, reply) => {
-      // 不需要任何权限码：它只回脱敏邮箱与布尔值，任何登录用户都可以查自己的
       const data = await userDangerService.stepUpFactors(actorOf(request));
       return reply.result.success('获取成功', data);
     })

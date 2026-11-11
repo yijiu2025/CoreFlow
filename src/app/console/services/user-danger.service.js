@@ -180,14 +180,37 @@ class UserDangerService {
    * @returns {Promise<object>} { challengeId, method, expiresIn, maskedTarget }
    */
   async createStepUpChallenge({ request, actor, action, targetId, method }) {
-    await assertActionAuthority(actor, action, targetId);
-    return stepUpService.createChallenge({
+    const target = await assertActionAuthority(actor, action, targetId);
+    const created = await stepUpService.createChallenge({
       userId: actor.id,
       request,
       action,
       targetId: Number(targetId),
       method
     });
+
+    /*
+     * 发码也留痕。
+     *
+     * 成功执行时有 `USER_DELETE_REQUEST` 之类的审计，但"领了码却没执行"（放弃、超时、
+     * 输错到作废）不会留下任何痕迹 —— 而这恰恰是内部人员试探、或账号被盗后短暂活动的
+     * 信号。频次很低（每人每小时 ≤5 封），不会把审计刷成噪音。
+     */
+    await logAuditEvent({
+      type: 'STEPUP_CHALLENGE',
+      userId: Number(actor.id) || null,
+      ip: request?.ip,
+      userAgent: request?.headers?.['user-agent'] || '',
+      appId: 'console',
+      details: {
+        action,
+        targetId: Number(target.id),
+        targetUsername: target.username,
+        method: created.method
+      }
+    });
+
+    return created;
   }
 
   /**
