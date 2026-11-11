@@ -66,6 +66,17 @@ export interface UserDeletionRequest extends UserDeletionBrief {
   requested_by: number | null;
 }
 
+/** 「会话未踢干净」记录（注销时 Redis 不可用） */
+export interface PendingKick {
+  id: number;
+  scope: 'all' | 'app';
+  app_id: string | null;
+  /** 已重试次数 */
+  attempts: number;
+  last_error: string | null;
+  updated_at: string | null;
+}
+
 /** 用户在某应用里的账号状态（GET /users/:id/apps） */
 export interface UserAppRow {
   app_id: string;

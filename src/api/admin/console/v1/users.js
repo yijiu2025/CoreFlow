@@ -489,8 +489,13 @@ async function registerUserRoutes(fastify) {
       params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } }
     },
     handler: withFail(async (request, reply) => {
-      const data = await userDangerService.listDeletion(Number(request.params.id));
-      return reply.result.success('获取成功', data);
+      const targetId = Number(request.params.id);
+      // 一并给出"会话还没踢干净"的记录：执行完注销不等于清理完，残留会话是可见状态
+      const [data, pendingKicks] = await Promise.all([
+        userDangerService.listDeletion(targetId),
+        userDangerService.listPendingKicks(targetId)
+      ]);
+      return reply.result.success('获取成功', { ...data, pendingKicks });
     })
   });
 

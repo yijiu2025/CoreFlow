@@ -243,9 +243,9 @@ class DeactivationService {
 
     let result;
     if (req.scope === DEACTIVATION_SCOPE.APP) {
-      result = await this.executeAppDeactivation(req.user_id, req.uid, req.app_id);
+      result = await this.executeAppDeactivation(req.user_id, req.uid, req.app_id, id);
     } else {
-      result = await this.executeAllDeactivation(req.user_id, req.uid);
+      result = await this.executeAllDeactivation(req.user_id, req.uid, id);
     }
 
     // 标记申请已执行
@@ -263,7 +263,7 @@ class DeactivationService {
   /**
    * 执行单个应用注销：清该 app 的 OAuth 授权 + 吊销 session
    */
-  async executeAppDeactivation(userId, uid, appId) {
+  async executeAppDeactivation(userId, uid, appId, requestId = null) {
     const result = { oauth_approval: 0, oauth_consents: 0, oauth_tokens: 0, session_tokens: 0, app_settings: 0 };
 
     // 1. 删 OAuth 授权关系（oauth_user_approval：sub=uid AND app_id=appId）
@@ -288,7 +288,12 @@ class DeactivationService {
     }
 
     // 4. 吊销该 app 的 session_tokens + 踢 Redis 该 app 的活跃 session
-    result.session_tokens = await this.revokeSessionsByApp(userId, appId);
+    const kick = await this.revokeSessionsByApp(userId, appId);
+    result.session_tokens = kick.revoked;
+    result.session_kick = { ok: kick.ok, error: kick.error };
+    // 🔴 踢失败必须落库：scope=app 时**用户本身仍是正常的**，残留会话在那个应用里
+    // 依然有效（直到 TTL）—— 只能等下次登录补踢，而登录时得知道"有这回事"
+    if (!kick.ok && requestId) await this.markKickPending(requestId, kick.error);
 
     // 5. 清该应用的账号数据（偏好设置 / API Key）。业务内容不清，见 APP_CONTENT_MODELS
     result.app_settings = await this.purgeAppSettings(userId, [appId]);
@@ -299,7 +304,7 @@ class DeactivationService {
   /**
    * 执行全部数据注销：清所有 app + 软删 user_user + 踢所有 session
    */
-  async executeAllDeactivation(userId, uid) {
+  async executeAllDeactivation(userId, uid, requestId = null) {
     const result = {
       oauth_approval: 0,
       oauth_consents: 0,
@@ -388,19 +393,25 @@ class DeactivationService {
     });
 
     // 3. 事务提交成功后再吊销所有 session（DB revoke + Redis 踢下线）。
-    // Redis 无法回滚，故放在事务外；revoke 幂等，失败只记日志不阻断注销。
-    result.session_tokens = await this.revokeAllSessions(userId);
+    // Redis 无法回滚，故放在事务外；revoke 幂等，失败不阻断注销但**必须留下痕迹**。
+    const kick = await this.revokeAllSessions(userId);
+    result.session_tokens = kick.revoked;
+    result.session_kick = { ok: kick.ok, error: kick.error };
+    if (!kick.ok && requestId) await this.markKickPending(requestId, kick.error);
 
     return result;
   }
 
   /**
    * 吊销某用户某 app 的所有 session（DB revoke + Redis 踢下线）
-   * @returns {Promise<number>} 吊销的 token 数
+   *
+   * @param {number} userId 用户 ID
+   * @param {string} appId 应用标识
+   * @returns {Promise<{revoked: number, ok: boolean, error: string|null}>} 吊销条数与踢会话结果
    */
   async revokeSessionsByApp(userId, appId) {
     const SessionToken = getModel('session.SessionToken');
-    if (!SessionToken) return 0;
+    if (!SessionToken) return { revoked: 0, ok: true, error: null };
 
     // DB: 标记该 app 的 session_tokens 为 revoked
     const [affected] = await SessionToken.update(
@@ -409,19 +420,24 @@ class DeactivationService {
     );
 
     // Redis: 踢该用户该 app 的活跃 session（逆索引遍历 + 按 appId 过滤）
-    await this.kickRedisSessionsByApp(userId, appId);
-    return affected || 0;
+    const kick = await this.kickRedisSessionsByApp(userId, appId);
+    return { revoked: affected || 0, ok: kick.ok, error: kick.error };
   }
 
   /**
    * 吊销某用户所有 app 的 session（DB + Redis）
+   *
+   * @param {number} userId 用户 ID
+   * @returns {Promise<{revoked: number, ok: boolean, error: string|null}>} 吊销条数与踢会话结果
    */
   async revokeAllSessions(userId) {
     const SessionToken = getModel('session.SessionToken');
-    if (!SessionToken) return 0;
+    if (!SessionToken) return { revoked: 0, ok: true, error: null };
     const [affected] = await SessionToken.update({ revoked: true }, { where: { user_id: userId, revoked: false } });
 
     // Redis: 用 session.js 的 kickAllSessions 踢所有
+    let ok = true;
+    let error = null;
     try {
       const { kickAllSessions } = await import('../../../framework/security/auth/index.js');
       if (typeof kickAllSessions === 'function') {
@@ -429,9 +445,11 @@ class DeactivationService {
       }
     } catch (e) {
       // error：踢下线失败意味着注销后用户仍持有有效会话，有安全后果
-      log.error('⚠️ [Deactivation] Redis 踢所有 session 失败', e);
+      ok = false;
+      error = e?.message || String(e);
+      log.error('⚠️ [Deactivation] Redis 踢所有 session 失败（已落库，登录时补踢）', e);
     }
-    return affected || 0;
+    return { revoked: affected || 0, ok, error };
   }
 
   /**
@@ -474,9 +492,11 @@ class DeactivationService {
           details: { reason: 'deactivation_app', count: hashes.length }
         });
       }
+      return { ok: true, error: null };
     } catch (e) {
-      // error：同上，注销后对应 app 的会话仍在，有安全后果
-      log.error(`⚠️ [Deactivation] 踢 app=${appId} 的 Redis session 失败`, e);
+      // error：注销后对应 app 的会话仍在，有安全后果 —— 由调用方落库，登录时补踢
+      log.error(`⚠️ [Deactivation] 踢 app=${appId} 的 Redis session 失败（已落库，登录时补踢）`, e);
+      return { ok: false, error: e?.message || String(e) };
     }
   }
 
@@ -562,6 +582,120 @@ class DeactivationService {
       }
     }
     return total;
+  }
+
+  /**
+   * 标记「会话未踢干净」
+   *
+   * @param {number} requestId 注销申请 ID
+   * @param {string|null} error 失败原因
+   * @returns {Promise<void>}
+   */
+  async markKickPending(requestId, error) {
+    try {
+      await deactivationDao.markKickPending(requestId, error || 'unknown');
+    } catch (e) {
+      // 连标记都写不进去只能记日志：这已经是"数据库也不可用"的级别了
+      log.error(`⚠️ [Deactivation] 标记会话待补踢失败（申请 #${requestId}）`, e);
+    }
+  }
+
+  /**
+   * 补踢：把之前没踢掉的会话再踢一次
+   *
+   * 调用时机是**登录成功之后、签发令牌之前** —— 先把旧的残留会话清掉，再放行新会话，
+   * 顺序反了会把刚拿到的新会话也踢掉。
+   *
+   * 幂等：成功即清标记；失败则累加 `kick_attempts` 并更新最后错误，等下次登录再试。
+   * 不抛异常（登录不能因为清理失败而失败），失败只记日志。
+   *
+   * @param {number} userId 用户 ID
+   * @returns {Promise<{retried: number, cleared: number, failed: number}>} 补踢统计
+   */
+  async retryPendingKicks(userId) {
+    const summary = { retried: 0, cleared: 0, failed: 0 };
+    let rows;
+    try {
+      rows = await deactivationDao.findKickPendingByUser(userId);
+    } catch (e) {
+      log.warn('[Deactivation] 查询待补踢会话失败', e);
+      return summary;
+    }
+    return this.applyKickRetries(rows, summary);
+  }
+
+  /**
+   * 补踢**全库**待清理的会话（定时任务用）
+   *
+   * 为什么不能只靠登录触发：用户可能再也不登录了（离职 / 交接），而他的残留会话
+   * 在 Redis 里还活着 —— 只等登录等于永远不清。定时任务兜住这一类。
+   *
+   * @param {number} [limit=100] 单轮最多处理多少条
+   * @returns {Promise<{retried: number, cleared: number, failed: number}>} 统计
+   */
+  async retryAllPendingKicks(limit = 100) {
+    const summary = { retried: 0, cleared: 0, failed: 0 };
+    let rows;
+    try {
+      rows = await deactivationDao.findKickPending(limit);
+    } catch (e) {
+      log.warn('[Deactivation] 查询全库待补踢会话失败', e);
+      return summary;
+    }
+    return this.applyKickRetries(rows, summary);
+  }
+
+  /**
+   * 逐条补踢（两个入口共用）
+   *
+   * @param {object[]} rows 待补踢的申请
+   * @param {{retried: number, cleared: number, failed: number}} summary 累加器
+   * @returns {Promise<{retried: number, cleared: number, failed: number}>} 统计
+   */
+  async applyKickRetries(rows, summary) {
+    for (const row of rows) {
+      summary.retried += 1;
+      try {
+        const kick =
+          row.scope === DEACTIVATION_SCOPE.APP
+            ? await this.revokeSessionsByApp(Number(row.user_id), row.app_id)
+            : await this.revokeAllSessions(Number(row.user_id));
+        if (kick.ok) {
+          await deactivationDao.clearKickPending(Number(row.id));
+          summary.cleared += 1;
+          log.info(`🧹 [Deactivation] 申请 #${row.id} 的残留会话已补踢成功`);
+        } else {
+          await deactivationDao.markKickPending(Number(row.id), kick.error);
+          summary.failed += 1;
+        }
+      } catch (e) {
+        summary.failed += 1;
+        log.warn(`[Deactivation] 补踢申请 #${row.id} 异常`, e);
+      }
+    }
+
+    if (summary.cleared > 0) {
+      log.info(`✅ [Deactivation] 补踢完成：成功 ${summary.cleared} / 待重试 ${summary.failed}`);
+    }
+    return summary;
+  }
+
+  /**
+   * 某用户「会话未踢干净」的记录（管理端展示用）
+   *
+   * @param {number} userId 用户 ID
+   * @returns {Promise<Array<object>>} 记录
+   */
+  async listPendingKicks(userId) {
+    const rows = await deactivationDao.findKickPendingByUser(userId);
+    return rows.map(row => ({
+      id: Number(row.id),
+      scope: row.scope,
+      app_id: row.app_id,
+      attempts: Number(row.kick_attempts),
+      last_error: row.kick_last_error,
+      updated_at: row.kick_updated_at
+    }));
   }
 }
 

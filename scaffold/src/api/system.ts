@@ -14,6 +14,7 @@ import type {
   MenuNode,
   PageResult,
   PermissionGraph,
+  PendingKick,
   PostMember,
   RoleRow,
   TempPasswordRow,
@@ -82,8 +83,8 @@ export function updateUserStatus(id: number, status: number): Promise<null> {
 
 /* ── 账号高危操作（都要求操作者密码） ──────────────────────── */
 
-/** 待执行的注销申请 */
-export function userDeletion(id: number): Promise<{ requests: UserDeletionRequest[] }> {
+/** 待执行的注销申请 + 会话未踢干净的记录 */
+export function userDeletion(id: number): Promise<{ requests: UserDeletionRequest[]; pendingKicks: PendingKick[] }> {
   return get(`${BASE}/users/${id}/deletion`);
 }
 
@@ -169,7 +170,9 @@ export function saveRoleMenus(id: number, menuIds: number[]): Promise<{ count: n
 }
 
 /** 权限码目录（角色表单勾选） */
-export function permissionCatalog(): Promise<Array<{ domain: string; domainName: string; code: string; label: string }>> {
+export function permissionCatalog(): Promise<
+  Array<{ domain: string; domainName: string; code: string; label: string }>
+> {
   return get(`${BASE}/permissions/catalog`);
 }
 

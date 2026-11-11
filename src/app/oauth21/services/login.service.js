@@ -295,6 +295,22 @@ async function directLogin(request, reply, fastify) {
     });
   }
 
+  /*
+   * 2.4 补踢上一次注销没清掉的残留会话
+   *
+   * 注销时 DB 的 session_tokens 一定被 revoke，但 Redis 里的活跃会话要靠一次网络调用
+   * 删掉；Redis 不可用时那一步只会落一条 `kick_pending` 标记（见 deactivation.service）。
+   * `scope=app` 的情况尤其要紧：用户本身还是正常的，残留会话在那个应用里仍然有效。
+   *
+   * 🔴 必须在**签发令牌之前**：先清旧的再发新的。顺序反了会把刚拿到的新会话一起踢掉。
+   * 🔴 失败不能影响登录（内部只记日志 + 累加尝试次数），否则 Redis 抖动就等于全员登不进来。
+   */
+  try {
+    await deactivationService.retryPendingKicks(user.id);
+  } catch (err) {
+    log.warn('[directLogin] 补踢残留会话失败（不影响登录）: %s', err?.message || err);
+  }
+
   // 2.5 密码登录环境异常检测（密码验证通过后、签发令牌前）
   // 比对本次 device_id/IP/UA 与用户最近 session_token 基准：
   // - warn（指纹变，换设备/UA）→ 返回 needs_email_verify，前端弹邮箱码二次验证

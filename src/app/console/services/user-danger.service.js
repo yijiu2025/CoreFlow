@@ -257,6 +257,18 @@ class UserDangerService {
   }
 
   /**
+   * 该用户「会话未踢干净」的记录（Redis 不可用时的残留）
+   *
+   * 管理端展示用：让管理员知道"注销执行了，但还有会话没清掉"，而不是以为一切干净。
+   *
+   * @param {number} targetId 用户 ID
+   * @returns {Promise<Array<object>>} 记录
+   */
+  async listPendingKicks(targetId) {
+    return deactivationService.listPendingKicks(Number(targetId));
+  }
+
+  /**
    * 该用户在各应用里的账号状态
    *
    * 数据来源三处（都不跨域 JOIN，各查一次再合并）：OAuth 授权、OAuth 令牌、会话。

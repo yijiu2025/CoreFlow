@@ -157,6 +157,80 @@ class UserDeactivationDao {
   }
 
   /**
+   * 查某用户「会话还没踢干净」的申请
+   *
+   * 登录时调用：Redis 不可用时注销只 revoke 了 DB，活跃会话可能还活着；
+   * `scope=app` 尤其危险 —— 用户本身仍正常，残留会话在那个应用里依然有效。
+   *
+   * @param {number} userId 用户 ID
+   * @returns {Promise<object[]>} 待补踢的申请
+   */
+  async findKickPendingByUser(userId) {
+    const UserDeactivation = getModel('user.UserDeactivation');
+    return UserDeactivation.findAll({
+      where: { user_id: Number(userId), kick_pending: 1 },
+      order: [['id', 'ASC']]
+    });
+  }
+
+  /**
+   * 全库查「会话未踢干净」的申请（定时补踢用）
+   *
+   * 按 `kick_updated_at` 升序：越久没试过的先试，避免个别反复失败的条目霸占配额。
+   *
+   * @param {number} [limit=100] 单轮上限
+   * @returns {Promise<object[]>} 待补踢的申请
+   */
+  async findKickPending(limit = 100) {
+    const UserDeactivation = getModel('user.UserDeactivation');
+    return UserDeactivation.findAll({
+      where: { kick_pending: 1 },
+      order: [
+        ['kick_updated_at', 'ASC'],
+        ['id', 'ASC']
+      ],
+      limit: Math.max(Number(limit) || 100, 1)
+    });
+  }
+
+  /**
+   * 标记「会话未踢干净」
+   *
+   * 失败原因截断到 255（列宽）：Redis 的错误常常带一大段连接细节，整段塞进去会被截断报错。
+   *
+   * @param {number} id 申请 ID
+   * @param {string} message 失败原因
+   * @returns {Promise<void>}
+   */
+  async markKickPending(id, message) {
+    const UserDeactivation = getModel('user.UserDeactivation');
+    const error = String(message || 'unknown').slice(0, 255);
+    await UserDeactivation.update(
+      {
+        kick_pending: 1,
+        kick_last_error: error,
+        kick_updated_at: new Date(),
+        kick_attempts: sequelizeLiteral('kick_attempts + 1')
+      },
+      { where: { id } }
+    );
+  }
+
+  /**
+   * 清除「会话未踢干净」标记（补踢成功）
+   *
+   * @param {number} id 申请 ID
+   * @returns {Promise<void>}
+   */
+  async clearKickPending(id) {
+    const UserDeactivation = getModel('user.UserDeactivation');
+    await UserDeactivation.update(
+      { kick_pending: 0, kick_last_error: null, kick_updated_at: new Date() },
+      { where: { id } }
+    );
+  }
+
+  /**
    * 撤销申请（用户自助或管理员撤销）
    * @param {number} id - 申请 id
    * @param {number} revokedBy - 撤销操作者 user_id
@@ -201,6 +275,17 @@ function normalizeGraceDays(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return REVOKE_PERIOD_DAYS;
   return Math.min(Math.max(Math.floor(n), 1), 30);
+}
+
+/**
+ * SQL 片段（`kick_attempts + 1` 这类自增不能走对象字面量）
+ *
+ * @param {string} expr SQL 片段（仅内部常量，不接受外部输入）
+ * @returns {object} Sequelize literal
+ */
+function sequelizeLiteral(expr) {
+  const { literal } = getModel('user.UserDeactivation').sequelize.Sequelize;
+  return literal(expr);
 }
 
 const userDeactivationDao = new UserDeactivationDao();

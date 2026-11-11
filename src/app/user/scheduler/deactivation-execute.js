@@ -54,12 +54,20 @@ const deactivationExecuteTask = {
       }
     }
 
+    /*
+     * 补踢残留会话：注销时如果 Redis 不可用，活跃会话只 revoke 了 DB、留在 Redis 里。
+     * 只在登录时补踢不够 —— 离职 / 交接的账号可能再也不登录了，而他的会话还活着。
+     */
+    const kicked = await deactivationService.retryAllPendingKicks(batch);
+
     const pruned = await tempPasswordService.prune(retentionDays);
 
-    if (executed > 0 || failed > 0 || pruned > 0) {
+    if (executed > 0 || failed > 0 || kicked.cleared > 0 || kicked.failed > 0 || pruned > 0) {
       log.info(
         `🧹 [Scheduler:deactivation] ${C.cyan}到期注销 ${executed} 条` +
-          `${failed > 0 ? `（失败 ${failed} 条）` : ''}，清理过期临时密码 ${pruned} 条${C.reset}`
+          `${failed > 0 ? `（失败 ${failed} 条）` : ''}` +
+          `，补踢会话 ${kicked.cleared} 条${kicked.failed > 0 ? `（仍失败 ${kicked.failed} 条）` : ''}` +
+          `，清理过期临时密码 ${pruned} 条${C.reset}`
       );
     }
   }

@@ -61,6 +61,35 @@ const defineUserDeactivation = (sequelize, DataTypes) => {
         defaultValue: 1,
         comment: '1=注销中(待撤销) 2=已撤销 3=已执行(正式注销完成)'
       },
+      /**
+       * 会话是否还有残留（Redis 踢失败）
+       *
+       * 注销执行时 DB 里的 session_tokens 一定被 revoke，但 Redis 里的活跃会话要靠
+       * 一次网络调用删掉。Redis 不可用那步只能记日志 —— 于是"账号已注销、会话还活着"。
+       * 这个标记让失败**落库**，下次登录时补踢（见 deactivation.service.retryPendingKicks）。
+       */
+      kick_pending: {
+        type: DataTypes.TINYINT,
+        allowNull: false,
+        defaultValue: 0,
+        comment: '1=还有 Redis 会话没踢掉，登录时重试'
+      },
+      kick_attempts: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+        comment: '重试踢会话次数'
+      },
+      kick_last_error: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        comment: '最后一次踢失败的原因（截断）'
+      },
+      kick_updated_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: '最后一次尝试踢会话的时间'
+      },
       reason: {
         type: DataTypes.STRING(255),
         allowNull: true,

@@ -24,7 +24,7 @@ import {
   userDeletion,
   userTempPasswords
 } from '@/api/system';
-import type { TempPasswordRow, UserAppRow, UserDeletionRequest } from '@/api/types';
+import type { PendingKick, TempPasswordRow, UserAppRow, UserDeletionRequest } from '@/api/types';
 
 const props = defineProps<{
   /** 目标用户（null = 关闭） */
@@ -64,6 +64,9 @@ const reason = ref('');
 
 /** 删除页签：当前待执行的申请（scope=all 的那条） */
 const pendingAll = ref<UserDeletionRequest | null>(null);
+
+/** 「会话未踢干净」的记录（注销时 Redis 不可用） */
+const pendingKicks = ref<PendingKick[]>([]);
 
 /** 应用页签 */
 const appRows = ref<UserAppRow[]>([]);
@@ -134,6 +137,7 @@ async function reload(): Promise<void> {
       props.canTemp ? userTempPasswords(props.userId) : Promise.resolve({ rows: [], total: 0 })
     ]);
     pendingAll.value = deletion.requests.find(item => item.scope === 'all') ?? null;
+    pendingKicks.value = deletion.pendingKicks ?? [];
     appRows.value = apps.rows;
     tempRows.value = temps.rows;
   } catch (err) {
@@ -337,6 +341,23 @@ async function copyIssued(): Promise<void> {
         <p v-if="notice" class="danger-notice">{{ notice }}</p>
         <p v-if="errorMessage" class="danger-error" role="alert">{{ errorMessage }}</p>
 
+        <!--
+          会话没踢干净：注销执行了 ≠ 清理完了。Redis 不可用时只剩 DB revoke，
+          残留会话要等下次登录或定时任务补踢 —— 这状态必须让人看见。
+        -->
+        <div v-if="pendingKicks.length" class="danger-kick">
+          <p class="danger-kick__title">还有 {{ pendingKicks.length }} 个会话未清理（Redis 不可用时的残留）</p>
+          <p v-for="kick in pendingKicks" :key="kick.id" class="danger-kick__row">
+            <span class="mono">
+              {{ kick.scope === 'all' ? '全部应用' : kick.app_id }}
+            </span>
+            <span class="danger-kick__meta">
+              已重试 {{ kick.attempts }} 次<template v-if="kick.last_error"> · {{ kick.last_error }}</template>
+            </span>
+          </p>
+          <p class="danger-kick__hint">该用户下次登录时、以及每小时定时任务都会自动重试；成功后自动消失。</p>
+        </div>
+
         <!-- ── 删除账号 ──────────────────────────────────────── -->
         <template v-if="tab === 'delete'">
           <div v-if="loading" class="danger-loading"><Loader2 class="spin" :size="14" /> 加载中…</div>
@@ -390,7 +411,13 @@ async function copyIssued(): Promise<void> {
 
             <label class="field">
               <span class="field__label">你自己的登录密码（二次验证）</span>
-              <input v-model="password" class="input" type="password" autocomplete="current-password" placeholder="仅用于本次校验" />
+              <input
+                v-model="password"
+                class="input"
+                type="password"
+                autocomplete="current-password"
+                placeholder="仅用于本次校验"
+              />
             </label>
           </template>
         </template>
@@ -507,7 +534,13 @@ async function copyIssued(): Promise<void> {
 
           <label class="field">
             <span class="field__label">你自己的登录密码（二次验证）</span>
-            <input v-model="password" class="input" type="password" autocomplete="current-password" placeholder="仅用于本次校验" />
+            <input
+              v-model="password"
+              class="input"
+              type="password"
+              autocomplete="current-password"
+              placeholder="仅用于本次校验"
+            />
           </label>
 
           <div v-if="tempRows.length" class="danger-temps">
@@ -654,6 +687,43 @@ async function copyIssued(): Promise<void> {
 .danger-strong {
   color: #b91c1c;
   font-weight: 600;
+}
+
+.danger-kick {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--mauth-border));
+  border-radius: var(--mauth-radius-sm);
+  background: color-mix(in srgb, #f59e0b 7%, transparent);
+}
+
+.danger-kick__title {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 620;
+  color: #92400e;
+}
+
+.danger-kick__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 0;
+  font-size: 11.5px;
+  color: var(--mauth-text-mid);
+}
+
+.danger-kick__meta {
+  color: var(--mauth-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.danger-kick__hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--mauth-text-faint);
 }
 
 .danger-pending {
