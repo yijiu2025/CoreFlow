@@ -29,14 +29,14 @@ class UserDeactivationDao {
   /**
    * 创建注销申请
    *
-   * @param {object} params - { user_id, uid, scope, app_id?, reason?, requestedBy?, requestedByName?, graceDays? }
+   * @param {object} params - { user_id, uid, scope, app_id?, reason?, requestedBy?, requestedByName?, graceDays?, prevStatus? }
    *   `requestedBy` / `requestedByName`：管理员从后台发起时填（本仓最高危的写操作，
    *   审计里必须能回答"这条删除是谁点的"）；用户自助时留空。
    *   `graceDays`：撤销期天数，缺省 7；管理员侧按配置传入。
    * @returns {Promise<object>} 创建的申请记录
    * @throws {Error} 已存在活跃申请时抛 DEACTIVATION_FAILED
    */
-  async createRequest({ user_id, uid, scope, app_id, reason, requestedBy, requestedByName, graceDays }) {
+  async createRequest({ user_id, uid, scope, app_id, reason, requestedBy, requestedByName, graceDays, prevStatus }) {
     const UserDeactivation = getModel('user.UserDeactivation');
     if (scope === DEACTIVATION_SCOPE.APP && !app_id) {
       throw new Error('DEACTIVATION_FAILED:scope=app 时必须指定 app_id');
@@ -71,7 +71,8 @@ class UserDeactivationDao {
       requested_at: now,
       scheduled_at,
       requested_by: requestedBy ?? null,
-      requested_by_name: requestedByName ?? null
+      requested_by_name: requestedByName ?? null,
+      prev_status: prevStatus ?? null
     });
   }
 

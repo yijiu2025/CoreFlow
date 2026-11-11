@@ -33,7 +33,13 @@ const loading = ref(false);
 const errorMessage = ref('');
 const toast = ref('');
 
-const query = reactive({ pageNum: 1, pageSize: 20, keyword: '', deptId: null as number | null, status: null as number | null });
+const query = reactive({
+  pageNum: 1,
+  pageSize: 20,
+  keyword: '',
+  deptId: null as number | null,
+  status: null as number | null
+});
 const options = ref<UserOptions>({ depts: [], roles: [], posts: [] });
 
 /** 角色 ID → 选项（判定"能不能改这一行"要按职级/应用看角色，不能看名字） */
@@ -143,7 +149,6 @@ const submittableRoleIds = computed(() => {
   });
 });
 
-
 /** 总页数 */
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)));
 
@@ -220,7 +225,9 @@ const allSelected = computed(() => rows.value.length > 0 && rows.value.every(r =
 const someSelected = computed(() => !allSelected.value && rows.value.some(r => selected.value.has(r.id)));
 
 /** 已选用户（给批量授权弹窗） */
-const selectedUsers = computed(() => rows.value.filter(r => selected.value.has(r.id)).map(r => ({ id: r.id, username: r.username })));
+const selectedUsers = computed(() =>
+  rows.value.filter(r => selected.value.has(r.id)).map(r => ({ id: r.id, username: r.username }))
+);
 
 /**
  * 勾选 / 取消单个
@@ -402,6 +409,11 @@ async function submit(): Promise<void> {
  * @param row 用户行
  */
 async function toggleStatus(row: UserRow): Promise<void> {
+  // 待注销是系统状态，不该用"冻结/启用"去改它（要走撤销注销）
+  if (row.status === -2) {
+    notify('该账号处于待注销状态，请先在「高危操作」里撤销注销');
+    return;
+  }
   const next = row.status === 1 ? 0 : 1;
   try {
     await updateUserStatus(row.id, next);
@@ -415,7 +427,11 @@ async function toggleStatus(row: UserRow): Promise<void> {
 /** 导出当前筛选结果 */
 async function exportCsv(): Promise<void> {
   try {
-    await exportUsers({ keyword: query.keyword || undefined, deptId: query.deptId ?? undefined, status: query.status ?? undefined });
+    await exportUsers({
+      keyword: query.keyword || undefined,
+      deptId: query.deptId ?? undefined,
+      status: query.status ?? undefined
+    });
   } catch (err) {
     notify(err instanceof Error ? err.message : '导出失败');
   }
@@ -442,11 +458,18 @@ onMounted(async () => {
     </div>
 
     <div class="toolbar">
-      <input v-model="query.keyword" class="input" style="width: 220px" placeholder="账号 / 邮箱" @keyup.enter="search" />
+      <input
+        v-model="query.keyword"
+        class="input"
+        style="width: 220px"
+        placeholder="账号 / 邮箱"
+        @keyup.enter="search"
+      />
       <select v-model.number="query.status" class="select" style="width: 130px">
         <option :value="null">全部状态</option>
         <option :value="1">正常</option>
         <option :value="0">冻结</option>
+        <option :value="-2">待注销</option>
         <option :value="-1">注销</option>
       </select>
       <button class="btn btn--sm" type="button" @click="search"><Search :size="15" /> 查询</button>
@@ -463,7 +486,12 @@ onMounted(async () => {
         <ShieldCheck :size="15" /> 批量授权（{{ selected.size }}）
       </button>
       <button class="btn btn--sm" type="button" @click="exportCsv"><Download :size="15" /> 导出</button>
-      <button v-if="auth.hasPermission('admin:user:create')" class="btn btn--primary btn--sm" type="button" @click="openCreate">
+      <button
+        v-if="auth.hasPermission('admin:user:create')"
+        class="btn btn--primary btn--sm"
+        type="button"
+        @click="openCreate"
+      >
         <Plus :size="15" /> 新建用户
       </button>
     </div>
@@ -517,12 +545,19 @@ onMounted(async () => {
                 >
                   待注销 · {{ deletionHint(row.deletion.scheduled_at) }}
                 </span>
+                <span v-else-if="row.status === -2" class="tag tag--warn">待注销</span>
                 <span v-else class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">
                   {{ row.status === 1 ? '正常' : row.status === 0 ? '冻结' : '注销' }}
                 </span>
               </td>
               <td class="col-actions">
-                <button class="btn btn--ghost btn--sm btn--icon" type="button" title="授权记录" aria-label="授权记录" @click="openGrants(row)">
+                <button
+                  class="btn btn--ghost btn--sm btn--icon"
+                  type="button"
+                  title="授权记录"
+                  aria-label="授权记录"
+                  @click="openGrants(row)"
+                >
                   <ShieldCheck :size="14" />
                 </button>
                 <!--
@@ -590,7 +625,9 @@ onMounted(async () => {
       <div class="pager">
         <span class="mono">第 {{ query.pageNum }} / {{ pageCount }} 页</span>
         <button class="btn btn--sm" type="button" :disabled="query.pageNum <= 1" @click="turnPage(-1)">上一页</button>
-        <button class="btn btn--sm" type="button" :disabled="query.pageNum >= pageCount" @click="turnPage(1)">下一页</button>
+        <button class="btn btn--sm" type="button" :disabled="query.pageNum >= pageCount" @click="turnPage(1)">
+          下一页
+        </button>
       </div>
     </section>
 

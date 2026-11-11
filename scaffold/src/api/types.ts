@@ -64,6 +64,8 @@ export interface UserDeletionRequest extends UserDeletionBrief {
   reason: string | null;
   requested_at: string;
   requested_by: number | null;
+  /** 发起前的账号状态（撤销时据此恢复；null = 历史数据） */
+  prev_status?: number | null;
 }
 
 /** 「会话未踢干净」记录（注销时 Redis 不可用） */

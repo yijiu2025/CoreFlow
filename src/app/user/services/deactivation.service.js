@@ -17,6 +17,11 @@ import { getModel, sequelize } from '../../../framework/persistence/db/index.js'
 import { Op } from 'sequelize';
 import deactivationDao from '../dao/deactivation.js';
 import { DEACTIVATION_SCOPE, DEACTIVATION_STATUS } from '../dao/deactivation.js';
+import {
+  markAppAccessRevoked,
+  clearAppAccessRevoked,
+  invalidateSessionUserCache
+} from '../../../framework/security/auth/index.js';
 import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.user.services.deactivation.service');
@@ -69,6 +74,15 @@ class DeactivationService {
       if (!valid) throw new Error(`DEACTIVATION_FAILED:应用 ${app_id} 不存在`);
     }
 
+    /*
+     * 自助申请只对 scope=app 立即生效（写标记），**不动 scope=all 的账号状态**：
+     * 全量注销的撤销入口在登录流程里（登录时提示"是否撤销"），把状态改成待注销
+     * 会让他连登录页都进不去，等于堵死自己的撤销路径。
+     */
+    if (scope === DEACTIVATION_SCOPE.APP) {
+      await markAppAccessRevoked(Number(user.id), app_id);
+    }
+
     return deactivationDao.createRequest({
       user_id: user.id,
       uid: user.uid,
@@ -103,7 +117,26 @@ class DeactivationService {
       const valid = await this.validateAppId(appId);
       if (!valid) throw new Error(`DEACTIVATION_FAILED:应用 ${appId} 不存在或未注册`);
     }
-    return deactivationDao.createRequest({
+    /*
+     * 先改状态 / 写标记，再落申请：
+     *
+     * - scope=all → 账号状态改成 `-2`（待注销）。`isSessionUserActive` 只认 status===1，
+     *   所以这一步让**已存在的会话在下一个请求就失效**，而不是等 7 天后执行时才断。
+     *   同时清一次用户状态缓存（30 秒 TTL），否则会有半分钟的"已注销但还能用"。
+     * - scope=app → 不动主账号（用户本身仍正常），改用一个带 TTL 的 Redis 标记堵住
+     *   该应用里的残留会话（见 session-access-guard.js）。
+     *
+     * 任一副作用失败都不阻断申请：申请本身才是主闸门（登录时 checkLoginBlocked），
+     * 这里只是把窗口缩短。
+     */
+    let prevStatus = null;
+    if (scope === DEACTIVATION_SCOPE.ALL) {
+      prevStatus = await this.markPendingDeletion(target.id);
+    } else {
+      await markAppAccessRevoked(Number(target.id), appId);
+    }
+
+    const created = await deactivationDao.createRequest({
       user_id: Number(target.id),
       uid: target.uid,
       scope,
@@ -111,8 +144,62 @@ class DeactivationService {
       reason,
       requestedBy: actor?.id ?? null,
       requestedByName: actor?.username ?? null,
-      graceDays
+      graceDays,
+      prevStatus
     });
+
+    // 申请落库后再补一次标记：万一上面标记成功但落库失败，撤销流程不会留下悬空标记
+    if (scope === DEACTIVATION_SCOPE.APP) await markAppAccessRevoked(Number(target.id), appId);
+    return created;
+  }
+
+  /**
+   * 把账号标成「待注销」（status = -2）并记录原状态
+   *
+   * 为什么不直接复用 updateStatus：这里要读旧值、写新值、清缓存三件事一次做完，
+   * 且调用方需要拿到旧值写进申请（撤销时恢复）。
+   *
+   * @param {number} userId 用户 ID
+   * @returns {Promise<number|null>} 原 status（读不到时 null）
+   */
+  async markPendingDeletion(userId) {
+    const User = getModel('User');
+    if (!User) return null;
+    try {
+      const user = await User.findByPk(Number(userId));
+      if (!user) return null;
+      const prev = Number(user.status);
+      if (prev === -2) return prev; // 已经是待注销，别把 -2 记成"原状态"
+      user.status = -2;
+      await user.save();
+      await invalidateSessionUserCache(user.uid || userId);
+      return prev;
+    } catch (err) {
+      log.error('⚠️ [Deactivation] 标记待注销状态失败', err);
+      return null;
+    }
+  }
+
+  /**
+   * 撤销「待注销」状态（恢复发起前的 status）
+   *
+   * @param {number} userId 用户 ID
+   * @param {number|null} prevStatus 发起前状态
+   * @returns {Promise<void>}
+   */
+  async restorePendingStatus(userId, prevStatus) {
+    const User = getModel('User');
+    if (!User) return;
+    try {
+      const user = await User.findByPk(Number(userId));
+      if (!user || Number(user.status) !== -2) return;
+      // 没有旧值（历史数据）就恢复成正常：待注销是本功能引入的，旧申请不存在
+      user.status = prevStatus === null || prevStatus === undefined ? 1 : Number(prevStatus);
+      await user.save();
+      await invalidateSessionUserCache(user.uid || userId);
+    } catch (err) {
+      log.error('⚠️ [Deactivation] 恢复账号状态失败', err);
+    }
   }
 
   /**
@@ -134,6 +221,17 @@ class DeactivationService {
     }
     const affected = await deactivationDao.revoke(requestId, actor?.id ?? null);
     if (!affected) throw new Error('CONFLICT:撤销失败，申请状态已变更');
+
+    /*
+     * 撤销要**把副作用一起撤掉**，否则会出现"申请已撤销、但账号还是待注销/某应用仍被拦"：
+     * - scope=all → 恢复发起前的 status（-2 → 原值）；
+     * - scope=app → 删掉该应用的撤销标记。
+     */
+    if (req.scope === DEACTIVATION_SCOPE.APP) {
+      await clearAppAccessRevoked(Number(req.user_id), req.app_id);
+    } else {
+      await this.restorePendingStatus(req.user_id, req.prev_status);
+    }
     return { id: Number(requestId), status: DEACTIVATION_STATUS.REVOKED };
   }
 
@@ -153,7 +251,8 @@ class DeactivationService {
       requested_at: row.requested_at,
       scheduled_at: row.scheduled_at,
       requested_by: row.requested_by === null ? null : Number(row.requested_by),
-      requested_by_name: row.requested_by_name
+      requested_by_name: row.requested_by_name,
+      prev_status: row.prev_status === null || row.prev_status === undefined ? null : Number(row.prev_status)
     }));
   }
 
@@ -297,6 +396,15 @@ class DeactivationService {
 
     // 5. 清该应用的账号数据（偏好设置 / API Key）。业务内容不清，见 APP_CONTENT_MODELS
     result.app_settings = await this.purgeAppSettings(userId, [appId]);
+
+    /*
+     * 6. 刷新「该用户在此应用的访问已撤销」标记（TTL 与长期会话对齐）
+     *
+     * 这一步是给"踢会话失败"兜底的：DB 已 revoke、Redis 里的会话可能还在，
+     * 标记命中会让它在下一个请求就失效，而不是活到自己的 TTL。
+     * 成功路径上也要写 —— 只靠失败标记不够，因为踢成功也可能有并发新建的会话。
+     */
+    await markAppAccessRevoked(Number(userId), appId);
 
     return result;
   }

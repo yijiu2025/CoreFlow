@@ -279,6 +279,26 @@ async function directLogin(request, reply, fastify) {
   // 真正拦住它的是**下一个请求**的 `isSessionUserActive` —— 表现为"登录成功但立刻被登出"，
   // 期间还照常写 LOGIN_SUCCESS 审计、发 session_token、跑一遍设备环境检测。
   // 这里提前拒绝，语义与 session 层一致（`Number(...)` 归一：DB 驱动可能返回字符串 '0'）。
+  /*
+   * 待注销（status = -2）：申请删除的当下账号就被置成这个状态。
+   * 单独给出提示，别落进下面的"已被禁用"——两者处理方式不同（这个可以撤销）。
+   */
+  if (Number(user.status) === -2) {
+    await logLogin({
+      userId: user.id || null,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'] || '',
+      appId: 'oauth21',
+      success: false,
+      reason: '账号待注销'
+    });
+    return reply.code(403).send({
+      code: 403,
+      message: '该账号已提交注销申请，正在等待处理；如需恢复请联系管理员撤销',
+      data: null
+    });
+  }
+
   if (Number(user.status) === 0) {
     await logLogin({
       userId: user.id || null,

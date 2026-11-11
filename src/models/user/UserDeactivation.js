@@ -90,6 +90,17 @@ const defineUserDeactivation = (sequelize, DataTypes) => {
         allowNull: true,
         comment: '最后一次尝试踢会话的时间'
       },
+      /**
+       * 发起注销前的账号 status
+       *
+       * 「待注销」现在是真实状态（-2），发起时就改掉，撤销时要恢复原样 ——
+       * 直接恢复成 1 会把原本被冻结（0）的账号顺手解冻。
+       */
+      prev_status: {
+        type: DataTypes.TINYINT,
+        allowNull: true,
+        comment: '发起注销前的账号 status（撤销时据此恢复）'
+      },
       reason: {
         type: DataTypes.STRING(255),
         allowNull: true,

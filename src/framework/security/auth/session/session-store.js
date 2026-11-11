@@ -73,6 +73,24 @@ const userStore = getStore('user', { timeout: 3000 });
 const USER_STATUS_TTL = 30;
 
 /**
+ * 使会话用户状态缓存失效
+ *
+ * 注销发起时账号状态会变成 `-2`（待注销），若不清缓存，最多 30 秒内旧状态还在用 ——
+ * 用户会看到"已经待注销了，但这边还能继续操作"。注销是低频动作，清一次很便宜。
+ *
+ * @param {string|number} uidOrUserId 用户 uid（缓存键优先用 uid）或数字 id
+ * @returns {Promise<void>}
+ */
+async function invalidateSessionUserCache(uidOrUserId) {
+  if (uidOrUserId === undefined || uidOrUserId === null) return;
+  try {
+    await userStore.del(String(uidOrUserId));
+  } catch (err) {
+    log.warn('[Session] 用户状态缓存清理失败（最多 30 秒后自然过期）:', err);
+  }
+}
+
+/**
  * 读取 Session 对应的当前用户状态；缓存未命中才回源 User 表。
  * 返回结构与 JWT 用户缓存兼容，避免两个认证入口互相写入不完整数据。
  */
@@ -211,5 +229,6 @@ export {
   revokeFamily,
   getSessionUser,
   isSessionUserActive,
-  revokeDisabledSession
+  revokeDisabledSession,
+  invalidateSessionUserCache
 };

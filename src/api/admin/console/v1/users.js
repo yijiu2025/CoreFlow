@@ -95,7 +95,8 @@ const listQuerySchema = {
     pageSize: { type: 'integer', minimum: 1, maximum: 200, default: 20 },
     keyword: { type: 'string', maxLength: 100 },
     deptId: { type: 'integer', minimum: 0 },
-    status: { type: 'integer', enum: [-1, 0, 1] }
+    // -2 = 待注销（发起删除、缓冲期内）：要能作为筛选条件
+    status: { type: 'integer', enum: [-2, -1, 0, 1] }
   }
 };
 
@@ -308,8 +309,18 @@ async function registerUserRoutes(fastify) {
       }
     },
     handler: withFail(async (request, reply) => {
-      await scopeOf(request, Number(request.params.id), '冻结或启用');
-      const ok = await userDao.updateStatus(request.params.id, request.body.status);
+      const targetId = Number(request.params.id);
+      await scopeOf(request, targetId, '冻结或启用');
+      /*
+       * 待注销（-2）是注销流程管理的状态，不能被"启用"顺手绕过：
+       * 否则会出现"申请还在、账号已恢复正常"的分裂状态（登录仍被拦，但状态看起来正常）。
+       * 前端也挡了一次；这里挡住的是直接调接口的路径。
+       */
+      const { requests } = await userDangerService.listDeletion(targetId);
+      if (requests.length > 0) {
+        throw new Error('CONFLICT:该账号有待执行的注销申请，请先在「高危操作」里撤销注销，再改状态');
+      }
+      const ok = await userDao.updateStatus(targetId, request.body.status);
       if (!ok) throw new Error('NOT_FOUND:用户不存在');
       return reply.result.success('状态已更新', null);
     })

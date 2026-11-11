@@ -216,7 +216,7 @@ async function submitDelete(): Promise<void> {
       confirmUsername: confirmUsername.value.trim(),
       reason: reason.value || undefined
     });
-    notice.value = `已发起删除：${res.graceDays} 天后（${when(res.scheduledAt)}）正式清理，期间可撤销。该账号现在起无法登录。`;
+    notice.value = `已发起删除：${res.graceDays} 天后（${when(res.scheduledAt)}）正式清理，期间可撤销。账号状态已置为「待注销」——现在起无法登录，现有会话会在下一个请求失效。`;
     password.value = '';
     confirmUsername.value = '';
     reason.value = '';
@@ -257,7 +257,7 @@ async function submitAppDeactivate(): Promise<void> {
   errorMessage.value = '';
   try {
     const res = await deactivateUserApp(props.userId, appTarget.value, { password: appPassword.value });
-    notice.value = `已发起注销：${when(res.scheduledAt)} 清理该应用数据，期间可撤销。`;
+    notice.value = `已发起注销：${when(res.scheduledAt)} 清理该应用数据，期间可撤销。该应用内的现有会话会在下一个请求失效，主账号与其它应用不受影响。`;
     appTarget.value = '';
     appPassword.value = '';
     await reload();
@@ -390,7 +390,9 @@ async function copyIssued(): Promise<void> {
                 <template v-if="pendingAll.requested_by_name"> · 由 {{ pendingAll.requested_by_name }} 发起</template>
                 <template v-if="pendingAll.reason"> · 原因：{{ pendingAll.reason }}</template>
               </p>
-              <p class="danger-pending__sub">该账号现在已无法登录；到期前随时可以撤销。</p>
+              <p class="danger-pending__sub">
+                账号状态已置为「待注销」：无法登录，现有会话在下一个请求即失效；到期前随时可以撤销。
+              </p>
               <button class="btn btn--sm" type="button" :disabled="busy" @click="undoDelete">
                 <Undo2 :size="14" /> 撤销删除
               </button>

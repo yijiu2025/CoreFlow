@@ -50,8 +50,10 @@ export {
   revokeFamily,
   getSessionUser,
   isSessionUserActive,
-  revokeDisabledSession
+  revokeDisabledSession,
+  invalidateSessionUserCache
 } from './session/session-store.js';
+export { markAppAccessRevoked, clearAppAccessRevoked, isAppAccessRevoked } from './session/session-access-guard.js';
 export { runSessionSaga, withSessionTransaction } from './session/session-saga.js';
 
 // 3. 会话治理 / 踢出 / Cookie 绑定与切号 / 会话内权限解析

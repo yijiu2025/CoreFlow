@@ -47,6 +47,7 @@ import {
   isSessionUserActive,
   revokeDisabledSession
 } from './session-store.js';
+import { isAppAccessRevoked } from './session-access-guard.js';
 // 兄弟子模块：createSession 需查配额并踢旧会话
 import { checkMaxSessions, pruneActiveDevices } from './session-governance.js';
 import { authSessionConfig } from './session-config.js';
@@ -413,6 +414,26 @@ async function getSession(params) {
     }
     if (!isSessionUserActive(currentUser)) {
       log.warn('[Session] 用户已禁用或注销，吊销会话: userId=%s', raw.userId);
+      await revokeDisabledSession(sessionId, raw);
+      if (reply) {
+        reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+        reply.clearCookie(COOKIE_SID_R, { ...COOKIE_OPTIONS.SID_R });
+      }
+      return null;
+    }
+
+    /*
+     * 应用维度的访问撤销（`scope=app` 的注销）
+     *
+     * 与上面的用户状态判定是两件事：注销单个应用时**用户本身仍正常**（status 还是 1），
+     * `isSessionUserActive` 拦不住它。真正的清理靠踢 Redis 会话，而那次调用可能失败
+     * （Redis 不可用），失败时这个会话会活到自己的 TTL（记住我最长 30 天）。
+     *
+     * 这里读的是注销生效时写下的**带 TTL 的标记**：命中即吊销，窗口从"直到 TTL"
+     * 缩到"下一个请求"。多一次 Redis 读；读失败按放行处理（补漏层不承担主闸门职责）。
+     */
+    if (raw.appId && (await isAppAccessRevoked(raw.userId, raw.appId))) {
+      log.warn('[Session] 该用户在此应用的访问已被撤销，吊销会话: userId=%s appId=%s', raw.userId, raw.appId);
       await revokeDisabledSession(sessionId, raw);
       if (reply) {
         reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
