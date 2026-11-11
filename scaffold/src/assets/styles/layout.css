@@ -93,6 +93,23 @@
   color: var(--mauth-text);
 }
 
+.rail__link {
+  position: relative;
+}
+
+/* 选中项左侧竖条：比整块底色更"轻"，也更像编辑器/后台的导航语言 */
+.rail__link[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--mauth-primary);
+}
+
 .rail__link[aria-current='page'] {
   background: var(--mauth-primary-soft);
   color: var(--mauth-primary);
@@ -148,13 +165,13 @@
   align-items: flex-end;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .page__title {
   font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-weight: 660;
+  letter-spacing: -0.022em;
 }
 
 .page__sub {

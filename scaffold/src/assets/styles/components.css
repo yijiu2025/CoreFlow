@@ -19,33 +19,68 @@
   font-size: 13px;
   cursor: pointer;
   transition:
-    background 0.16s ease,
-    border-color 0.16s ease,
-    transform 0.1s ease;
+    background 0.16s var(--ease),
+    border-color 0.16s var(--ease),
+    box-shadow 0.18s var(--ease),
+    transform 0.1s var(--ease);
 }
 
 .btn:hover {
   background: var(--mauth-hover);
+  border-color: color-mix(in srgb, var(--mauth-border-strong) 55%, var(--mauth-text-faint));
 }
 
 .btn:active {
   transform: translateY(1px);
 }
 
+/* 键盘焦点用柔光环，不用方块 outline：圆角按钮上的 outline 是方的，很丑 */
+.btn:focus-visible {
+  outline: none;
+  border-color: var(--mauth-primary);
+  box-shadow: 0 0 0 3px var(--mauth-primary-soft);
+}
+
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
+/*
+ * 主按钮：顶面高光 + 同色投影。
+ * 纯色块在浅色背景上会"陷进去"，加一条内高光与一层主色阴影才立得住 ——
+ * 这是与普通描边按钮区分层级的最低成本方式（不引渐变图片）。
+ */
 .btn--primary {
-  background: var(--mauth-primary);
-  border-color: transparent;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #fff 14%, var(--mauth-primary)),
+    var(--mauth-primary)
+  );
+  border-color: color-mix(in srgb, var(--mauth-primary) 78%, #0b1b33);
   color: #fff;
   font-weight: 600;
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--mauth-primary) 34%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
 }
 
 .btn--primary:hover {
-  background: var(--mauth-primary-hover);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #fff 18%, var(--mauth-primary-hover)),
+    var(--mauth-primary-hover)
+  );
+  box-shadow:
+    0 3px 10px color-mix(in srgb, var(--mauth-primary) 34%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 26%, transparent);
+}
+
+.btn--primary:active {
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--mauth-primary) 30%, transparent),
+    inset 0 1px 2px color-mix(in srgb, #0b1b33 18%, transparent);
 }
 
 .btn--danger {
@@ -129,11 +164,38 @@
   transition: border-color 0.16s ease;
 }
 
+/* 悬停只改描边：输入框不应跳动尺寸，也不该像按钮那样"浮起来" */
+.input:hover,
+.select:hover {
+  border-color: color-mix(in srgb, var(--mauth-border-strong) 45%, var(--mauth-text-faint));
+}
+
 .input:focus,
 .select:focus {
   border-color: var(--mauth-primary);
   outline: none;
   box-shadow: 0 0 0 3px var(--mauth-primary-soft);
+}
+
+.input::placeholder {
+  color: var(--mauth-text-faint);
+  opacity: 1; /* Firefox 默认给 .54，会跟 Safari 不一致 */
+}
+
+/* 下拉箭头：用背景画一个小三角，避免原生箭头在不同系统里粗细不一 */
+.select {
+  appearance: none;
+  padding-right: 28px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) calc(50% + 1px),
+    calc(100% - 10px) calc(50% + 1px);
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  color: var(--mauth-text);
 }
 
 /* ── 面板 / 卡片 ──────────────────────────────────────────── */
@@ -142,19 +204,28 @@
   border: 1px solid var(--mauth-border);
   border-radius: var(--mauth-radius-md);
   box-shadow: var(--e1);
+  /* 裁切：让表头背景与表格行不会顶出圆角（否则四个角各露出一小块方角） */
+  overflow: hidden;
 }
 
 .panel__head {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 16px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--mauth-border);
+  /* 极淡的顶面渐变：有光源方向，卡片就不像一张纯色纸 */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mauth-surface-2) 55%, var(--mauth-surface)),
+    var(--mauth-surface)
+  );
 }
 
 .panel__title {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 620;
+  letter-spacing: -0.01em;
 }
 
 .panel__body {
@@ -245,15 +316,26 @@
   height: var(--row-h);
   text-align: left;
   white-space: nowrap;
-  border-bottom: 1px solid var(--mauth-border);
+  /* 分隔线用带透明度的描边色：纯色实线在浅背景上会把表格"切碎" */
+  border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 78%, transparent);
+}
+
+/* 数字列对齐：不开启 tabular-nums 时，读数在行间会左右微跳 */
+.table td {
+  font-variant-numeric: tabular-nums;
 }
 
 .table th {
   color: var(--mauth-text-soft);
-  font-weight: 500;
-  font-size: 12px;
-  letter-spacing: var(--mauth-track-eyebrow);
+  font-weight: 550;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
   background: var(--mauth-surface-2);
+  border-bottom: 1px solid var(--mauth-border);
+}
+
+.table tbody tr {
+  transition: background 0.14s var(--ease);
 }
 
 .table tbody tr:hover {
@@ -264,11 +346,20 @@
   border-bottom: none;
 }
 
+/*
+ * 操作列吸右时是**独立一层背景**：行悬停若不带上它，右侧会显出一条色差竖带
+ * （旧实现就是这样，滚动时尤其明显）。所以悬停状态必须同时改这一格。
+ */
 .col-actions {
   position: sticky;
   right: 0;
   background: var(--mauth-surface);
   text-align: right;
+  box-shadow: -10px 0 12px -12px color-mix(in srgb, var(--mauth-text) 26%, transparent);
+}
+
+.table tbody tr:hover .col-actions {
+  background: var(--mauth-hover);
 }
 
 /* ── 标签 ─────────────────────────────────────────────────── */
@@ -282,6 +373,8 @@
   font-size: 12px;
   background: var(--mauth-hover);
   color: var(--mauth-text-mid);
+  /* 内描边取自身前景色的淡化版：任何配色下都能描出边界，不用为每种 tag 写一遍 */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent);
 }
 
 .tag--ok {
@@ -308,7 +401,8 @@
   place-items: center;
   padding: 20px;
   background: var(--mauth-overlay);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px) saturate(120%);
+  animation: mask-in 0.16s var(--ease-out) both;
 }
 
 .modal {
@@ -320,6 +414,21 @@
   border-radius: var(--mauth-radius-lg);
   box-shadow: var(--e3);
   overflow: hidden;
+  /* 从下方 8px 淡入：比"凭空出现"少了半拍突兀，也比缩放动画更不晕 */
+  animation: modal-in 0.2s var(--ease-out) both;
+}
+
+@keyframes mask-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.992);
+  }
 }
 
 .modal__head {
@@ -347,6 +456,7 @@
   gap: 8px;
   padding: 14px 18px;
   border-top: 1px solid var(--mauth-border);
+  background: color-mix(in srgb, var(--mauth-surface-2) 45%, var(--mauth-surface));
 }
 
 /* ── 空状态 / 加载 ────────────────────────────────────────── */
@@ -393,6 +503,14 @@
   color: var(--mauth-plate-ink);
   font-size: 13px;
   box-shadow: var(--e3);
+  animation: toast-in 0.22s var(--ease-out) both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
 }
 
 /* ── 分段控件（页面内切档：列表 / 矩阵 / 星图）────────────────────── */
@@ -423,7 +541,10 @@
 .tab.is-on {
   background: var(--mauth-surface);
   color: var(--mauth-text);
-  box-shadow: var(--e1);
+  font-weight: 600;
+  box-shadow:
+    var(--e1),
+    inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent);
 }
 
 /* ── 窄屏：表格 → 卡片 ──────────────────────────────────────────────

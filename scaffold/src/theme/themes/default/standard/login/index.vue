@@ -10,6 +10,7 @@
  * @author yijiu2025
  * @since 2026-11-10
  */
+import { AlertCircle, ArrowRight, Loader2, RotateCw, ShieldOff } from 'lucide-vue-next';
 import type { LoginViewProps } from '@/theme/views/login';
 
 defineProps<LoginViewProps>();

@@ -6,9 +6,10 @@
   "description": "通用后台脚手架（Vue 3 + Vite + skinsuite 主题 + 珍珠玻璃视觉）",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vue-tsc --noEmit && npm run check:sfc && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit && npm run check:sfc",
+    "check:sfc": "node scripts/check-sfc-components.mjs src"
   },
   "dependencies": {
     "axios": "^1.7.9",
