@@ -111,6 +111,17 @@ function switchTab(next: Tab): void {
   appPassword.value = '';
 }
 
+/**
+ * 点遮罩关闭
+ *
+ * 提交中不关：请求已经发出，弹窗一关用户会以为没生效，然后再点一次 →
+ * 第二次会撞上"已存在注销申请"的 409。
+ */
+function onMaskClick(): void {
+  if (busy.value) return;
+  emit('close');
+}
+
 /** 清空表单（关闭 / 换人时） */
 function resetForms(): void {
   password.value = '';
@@ -315,7 +326,14 @@ async function copyIssued(): Promise<void> {
 </script>
 
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-labelledby="danger-title">
+  <div
+    v-if="userId !== null"
+    class="modal-mask"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="danger-title"
+    @click.self="onMaskClick"
+  >
     <div class="modal danger-modal">
       <div class="modal__head">
         <span class="danger-icon" aria-hidden="true"><ShieldAlert :size="16" /></span>

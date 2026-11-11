@@ -56,6 +56,11 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
     '扫描 framework/** 的 import 语句校验 framework→app 方向（结构守卫）'
   ],
   ['conventions/no-scripts-import.test.js', 'AST 扫描 src/ 是否 import scripts/，断言对象是说明符'],
+  [
+    'conventions/dialog-mount-guard.test.js',
+    '读 scaffold 的 SFC 源码文本，断言"弹窗必须有打开条件"（组件根 v-if / 挂载处 v-if / 显式动态挂载），' +
+      '断言对象是模板结构与挂载点，不 import 组件'
+  ],
   ['conventions/terminal-colors.test.js', '读 colors.js 源码文本，校验输出用 IS_TTY 判断而非直读 stdout'],
   ['conventions/test-effectiveness.test.js', '本文件：扫描全部测试文件的 import 图，天然不 import 被测模块'],
   ['config-leaf.test.js', '扫描 src/config/*.js 的源码文本，断言配置值模块零 import（分层结构守卫）'],
