@@ -9,6 +9,11 @@
  *      否则登录基准指纹与后续请求不一致，会触发「设备环境变更」风控）；
  *   4. 绑定成功后再 `auth.load(true)` 拉取用户与菜单。
  *
+ * === 人机验证（第 5 条协议：`CHALLENGE_REQUIRED`）===
+ * iframe 内的 428 只能由宿主处理：它没有验证页，后端给的 `challengeUrl` 也只是被拦
+ * 请求自己的路径。宿主收到消息后走与自身 428 相同的 `gotoChallengePage()`，
+ * 验证通过回到本页，iframe 重新加载。
+ *
  * === 准入被拒（403）是一等公民 ===
  * 统一认证面向所有注册用户，而后台只对**被授予管理权限**的账号开放（判定发生在
  * `bind-session` 之前，见后端 `app/console/config.js` 的 `access`）。被拒时后端
@@ -32,7 +37,7 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from 'vue';
 import { adoptDeviceId } from 'stable-deviceid';
 import { bindSession } from '@/api/session';
-import { ApiError } from '@/api/http';
+import { ApiError, gotoChallengePage } from '@/api/http';
 
 /** SSO 服务地址（必须浏览器可直达；vite 代理只代理 API，iframe 是整页导航） */
 export const SSO_URL = import.meta.env.VITE_SSO_URL || 'http://localhost:5174';
@@ -168,6 +173,29 @@ export function useSsoLogin(onSuccess: () => Promise<void> | void) {
 
     if (data.type === 'MAX_SESSIONS') {
       errorMessage.value = '登录设备数已达上限，请先在其它设备退出。';
+      return;
+    }
+
+    /*
+     * iframe 被防火墙拦下（428）→ 由**宿主**去做人机验证。
+     *
+     * 为什么不是 iframe 自己搞定：它没有验证页（`challenge.html` 是宿主的独立构建
+     * 入口），后端给的 `challengeUrl` 也只是"被拦那条请求的路径"，拿它去跳只会再撞
+     * 一次 428。验证还必须由宿主的挑战页发起（凭证落在后端 origin 的 cookie 上）。
+     *
+     * 走的是与宿主自身 428 完全相同的跳转函数，因此连跳上限也是同一份：
+     * 验证不生效时会停在原地提示，不会"宿主 ⇄ 挑战页"无限乒乓。
+     */
+    if (data.type === 'CHALLENGE_REQUIRED') {
+      // 跳转前先把遮罩接上：挑战页是一次完整文档加载，中间这段是白屏
+      loading.value = true;
+      const result = gotoChallengePage();
+      if (result === 'capped') {
+        loading.value = false;
+        errorMessage.value = '人机验证未生效，请刷新页面重试。';
+        return;
+      }
+      console.warn('[SSO] iframe 被防火墙拦截，已跳转人机验证页');
       return;
     }
 
