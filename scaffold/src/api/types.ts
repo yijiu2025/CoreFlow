@@ -65,11 +65,50 @@ export interface UserRow {
   created_at: string;
 }
 
+/** 角色选项（用户表单 / 批量授权共用） */
+export interface RoleOption {
+  id: number;
+  code: string;
+  name: string;
+  /** 角色所属应用（`GLOBAL` = 公共角色） */
+  app_id: string;
+  /** 应用显示名（后端解析，前端不维护第二份映射） */
+  app_label?: string;
+  /** 职级权重：数字越大越高，用于职级压制 */
+  rank_level: number;
+  /**
+   * 当前操作者能否改动这个角色
+   *
+   * `false` = 不在他的应用域内，或职级不低于他。前端据此置灰并**不提交**该 id
+   * （后端同样会拒），判据只此一份，不要在前端另写规则。
+   */
+  manageable?: boolean;
+}
+
+/** 岗位选项 */
+export interface PostOption {
+  id: number;
+  post_code: string;
+  post_name: string;
+}
+
+/** 当前操作者的授权范围（由后端下发，用于前端展示层判断） */
+export interface ActorScope {
+  appIds: string[];
+  /** 是否跨应用管理员（持有管理后台角色） */
+  crossApp: boolean;
+  /** 自己拥有的最高职级 */
+  maxRank: number;
+  isSuper: boolean;
+}
+
 /** 用户引用选项 */
 export interface UserOptions {
   depts: Array<{ id: number; parent_id: number; name: string }>;
-  roles: Array<{ id: number; code: string; name: string; app_id: string; rank_level: number }>;
-  posts: Array<{ id: number; post_code: string; post_name: string }>;
+  roles: RoleOption[];
+  posts: PostOption[];
+  apps?: Array<{ id: string; label: string }>;
+  scope?: ActorScope;
 }
 
 /** 角色行 */
@@ -84,6 +123,10 @@ export interface RoleRow {
   builtin: boolean;
   permissions: string[];
   menu_ids: number[];
+  /** 应用显示名（后端解析） */
+  app_label?: string;
+  /** 当前操作者能否编辑 / 删除这个角色（后端与写接口同一份判据） */
+  manageable?: boolean;
 }
 
 /** 工作台概览 */
@@ -198,6 +241,31 @@ export interface PostMember {
   status: number;
 }
 
+/** 部门变更项（from → to 已由后端翻译成可读文本） */
+export interface DeptChange {
+  field: string;
+  /** 字段中文名，如「上级部门」 */
+  label: string;
+  from: string;
+  to: string;
+}
+
+/** 部门变更历史行（GET /depts/:id/history） */
+export interface DeptHistoryRow {
+  id: number;
+  event: 'DEPT_CREATE' | 'DEPT_UPDATE' | 'DEPT_DELETE';
+  created_at: string;
+  operator_id: number | null;
+  /** 操作人账号（账号被删时仍保留名字，`operator_deleted` 标明） */
+  operator_name: string | null;
+  operator_email: string | null;
+  operator_deleted: boolean;
+  /** 事件发生时的部门名（改名后历史仍读得懂） */
+  dept_name: string | null;
+  changes: DeptChange[];
+  ip: string | null;
+}
+
 /** 部门节点（GET /depts/tree，含成员数与上级链） */
 export interface DeptNode {
   id: number;
@@ -225,7 +293,88 @@ export interface GrantLogRow {
   operator_id: number | null;
   /** 操作人账号快照（用户改名/删除后仍可读） */
   operator_name: string;
+  /**
+   * 操作人详情（后端按 `operator_id` 现查，非快照）
+   *
+   * 不存在或已删除时这些字段为 null，`operator_deleted` 说明原因 —— 审计里
+   * 「授权人已被删除」本身是一条信息，不能让他从列表里消失。
+   */
+  operator_uid: string | null;
+  operator_email: string | null;
+  /** 所属部门名称（未分配部门为 null） */
+  operator_dept: string | null;
+  /** 账号状态：1 正常 / 0 冻结 / -1 已注销 */
+  operator_status: number | null;
+  operator_deleted: boolean;
   app_id: string;
   remark: string | null;
   created_at: string;
 }
+
+/** 当前生效的角色（含它带来的权限码与授予来源） */
+export interface CurrentAccessRole {
+  role_id: number;
+  role_code: string;
+  role_name: string;
+  app_id: string;
+  app_label: string;
+  rank_level: number;
+  /** 该角色的权限码（PBAC Allow 列表，可能含 `*`） */
+  permissions: string[];
+  /** 当前这次生效是从什么时候开始的（最近一次 grant） */
+  granted_at: string | null;
+  /** 最近一次 grant 的操作人账号快照 */
+  granted_by: string | null;
+}
+
+/**
+ * 当前生效的访问权
+ *
+ * 由服务端**不分页**算出：流水是一页一页翻的，用已加载那几页倒推"谁还在生效"
+ * 会把第二页之后的授予误判成已撤销。前端只负责展示。
+ */
+export interface CurrentAccess {
+  roles: CurrentAccessRole[];
+  /** 去重后的权限码；含 `*` 时看 `wildcard`，别再数个数 */
+  permissionCodes: string[];
+  /** 权限码按模块折叠（中文名来自后端元数据；缺失时前端不要再猜一遍） */
+  permissionGroups: PermissionGroup[];
+  apps: Array<{ id: string; label: string }>;
+  /** 是否包含全权通配 `*` */
+  wildcard: boolean;
+}
+
+/** 权限码模块分组（按码前缀折叠，中文名来自后端权限元数据） */
+export interface PermissionGroup {
+  /** 模块键，如 `admin:user`；`*` 表示全部权限 */
+  key: string;
+  /** 模块显示名，如「用户管理」 */
+  label: string;
+  domain: string;
+  domainName: string;
+  codes: Array<{ code: string; label: string }>;
+}
+
+/** 一个角色的生效区间片段（`to` 为 null = 至今仍开着） */
+export interface TimelineSegment {
+  from: string;
+  to: string | null;
+}
+
+/** 按角色聚合的生效区间（服务端折好，前端只画） */
+export interface RoleTimelineEntry {
+  role_id: number;
+  role_code: string;
+  role_name: string;
+  app_id: string;
+  segments: TimelineSegment[];
+  /** 当前是否仍在生效（最后一段没有 revoke） */
+  active: boolean;
+  first_at: string;
+}
+
+/** 授权记录 + 当前生效状态 + 角色时间线（GET /users/:id/grants） */
+export type GrantHistoryPage = PageResult<GrantLogRow> & {
+  current: CurrentAccess;
+  timeline: RoleTimelineEntry[];
+};

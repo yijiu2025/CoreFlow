@@ -2,28 +2,25 @@
 /**
  * 用户管理
  *
- * 覆盖：查询 / 重置 / 分页 / 新建 / 编辑（含部门·角色·岗位）/ 启用冻结 / 重置密码 /
- * 删除 / 导出 CSV。所有写操作按权限码隐藏按钮，但真正的拦截在后端。
+ * 覆盖：查询 / 重置 / 分页 / 新建 / 编辑（含部门·角色·岗位）/ 启用冻结 / 授权记录 /
+ * 批量授权 / 导出 CSV。所有写操作按权限码隐藏按钮，但真正的拦截在后端。
+ *
+ * 🔴 **没有「删除用户」和「重置密码」**：停用走冻结（可逆、留痕、会话立即失效），
+ *    密码只能本人改。理由与风险见后端 `api/admin/console/v1/users.js` 文件头。
  *
  * @author yijiu2025
  * @since 2026-11-09
  */
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { Download, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-vue-next';
-import {
-  createUser,
-  exportUsers,
-  listUsers,
-  removeUser,
-  resetUserPassword,
-  updateUser,
-  updateUserStatus,
-  userOptions
-} from '@/api/system';
+import { Download, Pencil, Plus, RotateCcw, Search, ShieldCheck, UserCheck, UserX } from 'lucide-vue-next';
+import { createUser, exportUsers, listUsers, updateUser, updateUserStatus, userOptions } from '@/api/system';
 import type { UserOptions, UserRow } from '@/api/types';
 import GrantHistoryDialog from '@/components/business/GrantHistoryDialog.vue';
 import BatchGrantDialog from '@/components/business/BatchGrantDialog.vue';
+import RolePicker from '@/components/ui/RolePicker.vue';
+import PostPicker from '@/components/ui/PostPicker.vue';
+import { canManageUser, indexRoles } from '@/utils/scope';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -37,6 +34,48 @@ const toast = ref('');
 
 const query = reactive({ pageNum: 1, pageSize: 20, keyword: '', deptId: null as number | null, status: null as number | null });
 const options = ref<UserOptions>({ depts: [], roles: [], posts: [] });
+
+/** 角色 ID → 选项（判定"能不能改这一行"要按职级/应用看角色，不能看名字） */
+const roleById = computed(() => indexRoles(options.value.roles));
+
+/** 操作者自己的用户 ID（"改自己"与"改别人"是两套约束） */
+const operatorId = computed(() => auth.me?.id);
+
+/**
+ * 行级可管理性（整页算一次，按钮共用）
+ *
+ * 只用于置灰按钮，服务端才是闸门：这里多灰一个按钮最坏是"多问一句管理员"，
+ * 而亮着却点不动才是 bug。
+ */
+const verdicts = computed(() => {
+  const map = new Map<number, { ok: boolean; reason: string }>();
+  for (const row of rows.value) {
+    map.set(row.id, canManageUser(options.value.scope, row, roleById.value, operatorId.value, '操作'));
+  }
+  return map;
+});
+
+/**
+ * 取某一行的判定结果
+ *
+ * @param row 用户行
+ * @returns 判定结果（缺省视为可管理，交给后端裁决）
+ */
+function verdictOf(row: UserRow): { ok: boolean; reason: string } {
+  return verdicts.value.get(row.id) ?? { ok: true, reason: '' };
+}
+
+/**
+ * 按钮提示语：可操作时用动作名，不可操作时用原因
+ *
+ * @param row 用户行
+ * @param verb 动作名
+ * @returns 提示文案
+ */
+function hintOf(row: UserRow, verb: string): string {
+  const verdict = verdictOf(row);
+  return verdict.ok ? verb : verdict.reason;
+}
 
 /** 勾选的用户 ID（批量授权用；切页时清空，避免"跨页选了但看不见"） */
 const selected = ref<Set<number>>(new Set());
@@ -60,9 +99,25 @@ const form = reactive({
   postIds: [] as number[]
 });
 
-const pwdDialogOpen = ref(false);
-const pwdTarget = ref<UserRow | null>(null);
-const newPassword = ref('');
+/**
+ * 可提交的角色 ID
+ *
+ * 只提交自己**能管**的角色：越权的 id 后端会整单拒绝（而不是静默忽略），
+ * 表单里那些置灰勾选表示"他本来就有这个角色"，不该由这次保存去动它 ——
+ * 后端也会把这些角色原样保留，两端口径一致。
+ *
+ * 🔴 选项没加载出来（`roles` 为空）时**原样提交**：否则一次拉取失败就会把用户的
+ *    角色全清空，而清空是可写进授权流水的"真实操作"，事后只能靠流水解释。
+ */
+const submittableRoleIds = computed(() => {
+  if (options.value.roles.length === 0) return form.roleIds;
+  return form.roleIds.filter(id => {
+    const role = roleById.value.get(id);
+    if (!role) return false;
+    return role.manageable !== false;
+  });
+});
+
 
 /** 总页数 */
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)));
@@ -168,6 +223,27 @@ function openGrants(row: UserRow): void {
   grantTarget.value = { id: row.id, username: row.username };
 }
 
+/**
+ * 授权记录里是否有「去调整」入口
+ *
+ * 与行内编辑按钮同一判据：改不了的人，别在弹窗里给一个点了必然 403 的入口。
+ */
+const grantAdjustable = computed(() => {
+  const row = rows.value.find(item => item.id === grantTarget.value?.id);
+  return row ? verdictOf(row).ok : false;
+});
+
+/**
+ * 从授权记录跳到用户编辑
+ *
+ * 先关掉授权记录再开编辑：两个 modal 同时挂载会叠在一起，遮罩层也会互相压住。
+ */
+function adjustFromGrants(): void {
+  const row = rows.value.find(item => item.id === grantTarget.value?.id);
+  grantTarget.value = null;
+  if (row) openEdit(row);
+}
+
 /** 批量授权完成 */
 function onBatchDone(): void {
   batchOpen.value = false;
@@ -238,7 +314,7 @@ async function submit(): Promise<void> {
         email: form.email,
         deptId: form.deptId,
         status: form.status,
-        roleIds: form.roleIds,
+        roleIds: submittableRoleIds.value,
         postIds: form.postIds
       });
       notify('已保存');
@@ -249,7 +325,7 @@ async function submit(): Promise<void> {
         password: form.password,
         deptId: form.deptId,
         status: form.status,
-        roleIds: form.roleIds,
+        roleIds: submittableRoleIds.value,
         postIds: form.postIds
       });
       notify('已创建');
@@ -276,45 +352,6 @@ async function toggleStatus(row: UserRow): Promise<void> {
     notify(next === 1 ? '已启用' : '已冻结');
   } catch (err) {
     notify(err instanceof Error ? err.message : '操作失败');
-  }
-}
-
-/**
- * 打开重置密码弹窗
- *
- * @param row 用户行
- */
-function openReset(row: UserRow): void {
-  pwdTarget.value = row;
-  newPassword.value = '';
-  pwdDialogOpen.value = true;
-}
-
-/** 提交重置密码 */
-async function submitReset(): Promise<void> {
-  if (!pwdTarget.value) return;
-  try {
-    await resetUserPassword(pwdTarget.value.id, newPassword.value);
-    pwdDialogOpen.value = false;
-    notify('密码已重置');
-  } catch (err) {
-    notify(err instanceof Error ? err.message : '重置失败');
-  }
-}
-
-/**
- * 删除用户
- *
- * @param row 用户行
- */
-async function remove(row: UserRow): Promise<void> {
-  if (!window.confirm(`确认删除用户「${row.username}」？该操作会记入审计日志。`)) return;
-  try {
-    await removeUser(row.id);
-    notify('已删除');
-    await load();
-  } catch (err) {
-    notify(err instanceof Error ? err.message : '删除失败');
   }
 }
 
@@ -423,39 +460,28 @@ onMounted(async () => {
                 <button class="btn btn--ghost btn--sm btn--icon" type="button" title="授权记录" aria-label="授权记录" @click="openGrants(row)">
                   <ShieldCheck :size="14" />
                 </button>
-                <button v-if="auth.hasPermission('admin:user:update')" class="btn btn--ghost btn--sm btn--icon" type="button" title="编辑" aria-label="编辑" @click="openEdit(row)">
+                <button
+                  v-if="auth.hasPermission('admin:user:update')"
+                  class="btn btn--ghost btn--sm btn--icon"
+                  type="button"
+                  :disabled="!verdictOf(row).ok"
+                  :title="hintOf(row, '编辑')"
+                  aria-label="编辑"
+                  @click="openEdit(row)"
+                >
                   <Pencil :size="14" />
                 </button>
                 <button
                   v-if="auth.hasPermission('admin:user:update')"
                   class="btn btn--ghost btn--sm btn--icon"
                   type="button"
-                  :title="row.status === 1 ? '冻结' : '启用'"
+                  :disabled="!verdictOf(row).ok"
+                  :title="hintOf(row, row.status === 1 ? '冻结' : '启用')"
                   :aria-label="row.status === 1 ? '冻结' : '启用'"
                   @click="toggleStatus(row)"
                 >
                   <UserX v-if="row.status === 1" :size="14" />
                   <UserCheck v-else :size="14" />
-                </button>
-                <button
-                  v-if="auth.hasPermission('admin:user:update')"
-                  class="btn btn--ghost btn--sm btn--icon"
-                  type="button"
-                  title="重置密码"
-                  aria-label="重置密码"
-                  @click="openReset(row)"
-                >
-                  <RotateCcw :size="14" />
-                </button>
-                <button
-                  v-if="auth.hasPermission('admin:user:delete')"
-                  class="btn btn--danger btn--sm btn--icon"
-                  type="button"
-                  title="删除"
-                  aria-label="删除"
-                  @click="remove(row)"
-                >
-                  <Trash2 :size="14" />
                 </button>
               </td>
             </tr>
@@ -513,23 +539,11 @@ onMounted(async () => {
           </label>
           <div class="field">
             <span class="field__label">角色</span>
-            <div class="chips">
-              <label v-for="role in options.roles" :key="role.id" class="chip">
-                <input v-model="form.roleIds" type="checkbox" :value="role.id" />
-                {{ role.name }}
-              </label>
-              <span v-if="options.roles.length === 0" class="field__label">暂无可分配角色</span>
-            </div>
+            <RolePicker v-model="form.roleIds" :roles="options.roles" />
           </div>
           <div class="field">
             <span class="field__label">岗位</span>
-            <div class="chips">
-              <label v-for="post in options.posts" :key="post.id" class="chip">
-                <input v-model="form.postIds" type="checkbox" :value="post.id" />
-                {{ post.post_name }}
-              </label>
-              <span v-if="options.posts.length === 0" class="field__label">暂无岗位（先在岗位管理里创建）</span>
-            </div>
+            <PostPicker v-model="form.postIds" :posts="options.posts" />
           </div>
         </div>
         <footer class="modal__foot">
@@ -541,29 +555,13 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- 重置密码 -->
-    <div v-if="pwdDialogOpen" class="modal-mask" @click.self="pwdDialogOpen = false">
-      <div class="modal" style="width: min(420px, 100%)">
-        <header class="modal__head"><span class="modal__title">重置密码</span></header>
-        <div class="modal__body">
-          <p class="field__label">账号：{{ pwdTarget?.username }}</p>
-          <label class="field">
-            <span class="field__label">新密码（至少 8 位）</span>
-            <input v-model="newPassword" class="input" type="password" maxlength="128" />
-          </label>
-        </div>
-        <footer class="modal__foot">
-          <button class="btn btn--ghost" type="button" @click="pwdDialogOpen = false">取消</button>
-          <button class="btn btn--primary" type="button" @click="submitReset">确认重置</button>
-        </footer>
-      </div>
-    </div>
-
     <!-- 授权记录：单个用户的时间线 -->
     <GrantHistoryDialog
       :user-id="grantTarget?.id ?? null"
       :username="grantTarget?.username ?? ''"
+      :adjustable="grantAdjustable"
       @close="grantTarget = null"
+      @adjust="adjustFromGrants"
     />
 
     <!-- 批量授权：追加 / 移除同一组角色 -->
@@ -605,22 +603,5 @@ onMounted(async () => {
   border-top: 1px solid var(--mauth-border);
   color: var(--mauth-text-soft);
   font-size: 12px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--mauth-border-strong);
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
 }
 </style>

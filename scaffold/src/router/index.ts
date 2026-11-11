@@ -67,18 +67,6 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '岗位管理', permission: 'admin:post:read' }
       },
       {
-        path: 'system/dict',
-        name: 'system-dict',
-        component: () => import('@/views/system/Dict.vue'),
-        meta: { title: '字典管理', permission: 'admin:dict:read' }
-      },
-      {
-        path: 'system/config',
-        name: 'system-config',
-        component: () => import('@/views/system/Configs.vue'),
-        meta: { title: '参数管理', permission: 'admin:config:read' }
-      },
-      {
         path: 'monitor/oper-log',
         name: 'monitor-oper-log',
         component: () => import('@/views/monitor/OperLog.vue'),

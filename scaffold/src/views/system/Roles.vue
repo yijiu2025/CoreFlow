@@ -51,6 +51,52 @@ import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
 
+/** 应用筛选：'' = 全部；否则是 app_id（`GLOBAL` 也是一档） */
+const appFilter = ref('');
+
+/** 应用显示名（后端下发 app_label，缺失时退回 GLOBAL → 全局） */
+function appLabelOf(row: RoleRow): string {
+  const key = row.app_id || 'GLOBAL';
+  return row.app_label || (key === 'GLOBAL' ? '全局' : key);
+}
+
+/**
+ * 应用筛选项（含各自角色数）
+ *
+ * 角色天生是"按应用分家"的（同一个 app 内编码唯一），平铺在一张表里时 `admin_*`
+ * 和 `fw_*` 交错，找"防火墙有几个角色"要一行行数。所以先按应用分档。
+ */
+const appTabs = computed(() => {
+  const counts = new Map<string, { label: string; count: number }>();
+  for (const row of rows.value) {
+    const key = row.app_id || 'GLOBAL';
+    const hit = counts.get(key);
+    if (hit) hit.count += 1;
+    else counts.set(key, { label: appLabelOf(row), count: 1 });
+  }
+  return [...counts.entries()]
+    .map(([id, item]) => ({ id, ...item }))
+    .sort((a, b) => (a.id === 'GLOBAL' ? -1 : b.id === 'GLOBAL' ? 1 : a.label.localeCompare(b.label, 'zh-CN')));
+});
+
+/**
+ * 按应用分组的可见角色
+ *
+ * 组内维持后端给的顺序（职级降序）—— 高权限角色始终在上面，不会因为分组被打乱。
+ */
+const roleGroups = computed(() => {
+  const source = appFilter.value ? rows.value.filter(row => (row.app_id || 'GLOBAL') === appFilter.value) : rows.value;
+  const buckets = new Map<string, { appId: string; label: string; rows: RoleRow[] }>();
+  for (const row of source) {
+    const key = row.app_id || 'GLOBAL';
+    if (!buckets.has(key)) buckets.set(key, { appId: key, label: appLabelOf(row), rows: [] });
+    buckets.get(key)!.rows.push(row);
+  }
+  return [...buckets.values()].sort((a, b) =>
+    a.appId === 'GLOBAL' ? -1 : b.appId === 'GLOBAL' ? 1 : a.label.localeCompare(b.label, 'zh-CN')
+  );
+});
+
 /** 权限码目录项（`GET /permissions/catalog` 的返回形状） */
 interface PermItem {
   domain: string;
@@ -176,7 +222,11 @@ async function load(): Promise<void> {
 
 /** 矩阵列：角色（内置标记决定该列只读） */
 const matrixRoles = computed<MatrixRole[]>(() =>
-  rows.value.map(r => ({ id: r.id, name: r.name, builtin: r.builtin, status: 1 }))
+  // 只把「能改的」角色放进矩阵：矩阵是一键保存，把别家应用的角色也列进去只会
+  // 让整次保存被后端拒绝（而用户以为自己只是改了自己应用的那几个）
+  rows.value
+    .filter(r => r.manageable !== false)
+    .map(r => ({ id: r.id, name: r.name, builtin: r.builtin, status: 1 }))
 );
 
 /** 矩阵授权：roleId → menuIds，直接取列表接口返回的 menu_ids */
@@ -427,6 +477,30 @@ onMounted(() => {
       </button>
     </div>
 
+    <!-- 应用分档：角色是"按应用分家"的，先分档再找比逐行扫快得多 -->
+    <div v-show="altView === 'table'" class="role-tabs" role="group" aria-label="按应用筛选">
+      <button
+        type="button"
+        :class="['role-tab', { 'is-on': appFilter === '' }]"
+        :aria-pressed="appFilter === ''"
+        @click="appFilter = ''"
+      >
+        全部
+        <span class="role-tab__count mono">{{ rows.length }}</span>
+      </button>
+      <button
+        v-for="tab in appTabs"
+        :key="tab.id"
+        type="button"
+        :class="['role-tab', { 'is-on': appFilter === tab.id }]"
+        :aria-pressed="appFilter === tab.id"
+        @click="appFilter = tab.id"
+      >
+        {{ tab.label }}
+        <span class="role-tab__count mono">{{ tab.count }}</span>
+      </button>
+    </div>
+
     <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
     <section v-if="altView === 'table'" class="panel">
@@ -445,37 +519,59 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in rows" :key="row.id">
-              <td>
-                {{ row.name }}
-                <span v-if="row.builtin" class="tag tag--info" style="margin-left: 6px">内置</span>
-              </td>
-              <td class="mono">{{ row.code }}</td>
-              <td>{{ row.app_id }}</td>
-              <td class="mono">{{ row.rank_level }}</td>
-              <td class="mono">{{ row.user_count }}</td>
-              <td class="mono">{{ row.permissions.length }}</td>
-              <td class="mono">{{ row.menu_ids.length }}</td>
-              <td class="col-actions">
-                <button
-                  v-if="auth.hasPermission('admin:role:update')"
-                  class="btn btn--ghost btn--sm"
-                  type="button"
-                  @click="openFormEdit(row)"
-                >
-                  <Pencil :size="14" /> 编辑
-                </button>
-                <button class="btn btn--ghost btn--sm" type="button" @click="openMenus(row)"><KeyRound :size="14" /> 授权</button>
-                <button
-                  v-if="!row.builtin && auth.hasPermission('admin:role:delete')"
-                  class="btn btn--danger btn--sm"
-                  type="button"
-                  @click="remove(row)"
-                >
-                  <Trash2 :size="14" /> 删除
-                </button>
-              </td>
-            </tr>
+            <template v-for="group in roleGroups" :key="group.appId">
+              <!-- 分组标题行：应用名 + 角色数，扫视时先定位"哪个应用" -->
+              <tr class="role-group-row">
+                <td colspan="8">
+                  <span class="role-group-row__label">{{ group.label }}</span>
+                  <span class="role-group-row__count mono">{{ group.rows.length }}</span>
+                  <span class="role-group-row__hint">{{ group.appId }}</span>
+                </td>
+              </tr>
+              <tr v-for="row in group.rows" :key="row.id">
+                <td>
+                  {{ row.name }}
+                  <span v-if="row.builtin" class="tag tag--info" style="margin-left: 6px">内置</span>
+                </td>
+                <td class="mono">{{ row.code }}</td>
+                <td>{{ row.app_label || row.app_id }}</td>
+                <td class="mono">{{ row.rank_level }}</td>
+                <td class="mono">{{ row.user_count }}</td>
+                <td class="mono">{{ row.permissions.length }}</td>
+                <td class="mono">{{ row.menu_ids.length }}</td>
+                <td class="col-actions">
+                  <button
+                    v-if="auth.hasPermission('admin:role:update')"
+                    class="btn btn--ghost btn--sm"
+                    type="button"
+                    :disabled="row.manageable === false"
+                    :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '编辑角色'"
+                    @click="openFormEdit(row)"
+                  >
+                    <Pencil :size="14" /> 编辑
+                  </button>
+                  <button
+                    class="btn btn--ghost btn--sm"
+                    type="button"
+                    :disabled="row.manageable === false"
+                    :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '菜单授权'"
+                    @click="openMenus(row)"
+                  >
+                    <KeyRound :size="14" /> 授权
+                  </button>
+                  <button
+                    v-if="!row.builtin && auth.hasPermission('admin:role:delete')"
+                    class="btn btn--danger btn--sm"
+                    type="button"
+                    :disabled="row.manageable === false"
+                    :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '删除角色'"
+                    @click="remove(row)"
+                  >
+                    <Trash2 :size="14" /> 删除
+                  </button>
+                </td>
+              </tr>
+            </template>
             <tr v-if="!loading && rows.length === 0">
               <td colspan="8"><div class="empty">暂无角色</div></td>
             </tr>
@@ -723,5 +819,79 @@ onMounted(() => {
   font-size: 11px;
   opacity: 0.6;
   flex-shrink: 0;
+}
+
+/* ── 应用分档 ─────────────────────────────────────────────── */
+.role-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.role-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--mauth-border-strong);
+  border-radius: 999px;
+  background: var(--mauth-surface);
+  color: var(--mauth-text-mid);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.role-tab:hover {
+  color: var(--mauth-primary);
+  border-color: var(--mauth-primary);
+}
+
+/* 选中态用主色描边而不是实心：分档是筛选器，不该抢表格的视觉重量 */
+.role-tab.is-on {
+  border-color: var(--mauth-primary);
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+}
+
+.role-tab__count {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--mauth-hover);
+  font-size: 11px;
+  color: var(--mauth-text-faint);
+}
+
+.role-tab.is-on .role-tab__count {
+  background: color-mix(in srgb, var(--mauth-primary) 14%, transparent);
+  color: var(--mauth-primary);
+}
+
+/* 分组标题行：贴着表格走，比单独一张卡片更紧凑 */
+.role-group-row td {
+  padding: 6px 12px;
+  background: var(--mauth-surface-2);
+  border-bottom: 1px solid var(--mauth-border);
+}
+
+.role-group-row__label {
+  font-size: 12px;
+  font-weight: 620;
+  color: var(--mauth-text);
+}
+
+.role-group-row__count {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--mauth-text-faint);
+}
+
+.role-group-row__hint {
+  margin-left: 8px;
+  font-size: 10.5px;
+  color: var(--mauth-text-faint);
+  opacity: 0.8;
 }
 </style>

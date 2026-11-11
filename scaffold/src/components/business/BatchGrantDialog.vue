@@ -7,6 +7,9 @@
  * 🔴 刻意只提供「追加 / 移除」，不提供「覆盖」：覆盖式批量一次误操作就能把
  *    一批人原有角色全冲掉，而授权流水只能事后解释、无法恢复。需要覆盖时逐个编辑。
  *
+ * 角色列表走 `<RolePicker>`：与用户编辑同一个组件、同一套分组与越权置灰规则 ——
+ * 批量入口最容易变成"绕过限制"的后门，两处必须长得一样、选得一样。
+ *
  * 后端会先整体预检（例如批量移除会摘掉操作人自己的全部管理权限 → 直接中止，
  * 一个用户都不改），所以这里的失败提示是"什么都没做"而非"部分成功"。
  *
@@ -15,48 +18,29 @@
  */
 import { computed, ref } from 'vue';
 import { batchGrantRoles } from '@/api/system';
+import RolePicker from '@/components/ui/RolePicker.vue';
+import type { RoleOption } from '@/api/types';
 
 const props = defineProps<{
   /** 选中的用户（只用 id + username） */
   users: Array<{ id: number; username: string }>;
-  /** 可选角色 */
-  roles: Array<{ id: number; code: string; name: string; app_id: string; rank_level: number }>;
+  /** 可选角色（含 app_label / manageable） */
+  roles: RoleOption[];
 }>();
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'done'): void }>();
 
 const mode = ref<'add' | 'remove'>('add');
-const picked = ref<Set<number>>(new Set());
-const keyword = ref('');
+const picked = ref<number[]>([]);
 const submitting = ref(false);
 const errorMessage = ref('');
 
-/** 按关键词过滤角色（名称 / 编码 / 应用） */
-const visibleRoles = computed(() => {
-  const kw = keyword.value.trim().toLowerCase();
-  const list = [...props.roles].sort((a, b) => b.rank_level - a.rank_level || a.id - b.id);
-  if (!kw) return list;
-  return list.filter(r => r.name.toLowerCase().includes(kw) || r.code.toLowerCase().includes(kw) || r.app_id.toLowerCase().includes(kw));
-});
-
 /** 已选角色数 */
-const pickedCount = computed(() => picked.value.size);
-
-/**
- * 勾选 / 取消
- *
- * @param id 角色 ID
- */
-function toggle(id: number): void {
-  const next = new Set(picked.value);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  picked.value = next;
-}
+const pickedCount = computed(() => picked.value.length);
 
 /** 提交 */
 async function submit(): Promise<void> {
-  if (picked.value.size === 0) {
+  if (picked.value.length === 0) {
     errorMessage.value = '请至少选择一个角色';
     return;
   }
@@ -65,7 +49,7 @@ async function submit(): Promise<void> {
   try {
     await batchGrantRoles({
       userIds: props.users.map(u => u.id),
-      roleIds: [...picked.value],
+      roleIds: picked.value,
       mode: mode.value
     });
     emit('done');
@@ -95,19 +79,8 @@ async function submit(): Promise<void> {
           <button type="button" role="tab" :aria-selected="mode === 'remove'" :class="['tab', { 'is-on': mode === 'remove' }]" @click="mode = 'remove'">移除角色</button>
         </div>
 
-        <label class="field">
-          <span class="field__label">筛选角色</span>
-          <input v-model="keyword" class="input" placeholder="角色名 / 编码 / 应用" />
-        </label>
-
-        <div class="batch-roles">
-          <label v-for="role in visibleRoles" :key="role.id" :class="['batch-role', { 'is-picked': picked.has(role.id) }]">
-            <input type="checkbox" :checked="picked.has(role.id)" @change="toggle(role.id)" />
-            <span class="batch-role__name">{{ role.name }}</span>
-            <span class="batch-role__code mono">{{ role.code }}</span>
-            <span v-if="role.app_id !== 'GLOBAL'" class="tag tag--info">{{ role.app_id }}</span>
-          </label>
-          <p v-if="visibleRoles.length === 0" class="batch-empty">没有匹配的角色</p>
+        <div class="batch-scroll">
+          <RolePicker v-model="picked" :roles="roles" />
         </div>
 
         <p v-if="errorMessage" class="field__error">{{ errorMessage }}</p>
@@ -126,7 +99,7 @@ async function submit(): Promise<void> {
 
 <style scoped>
 .batch-modal {
-  width: min(640px, 100%);
+  width: min(680px, 100%);
 }
 
 .batch-note {
@@ -135,58 +108,11 @@ async function submit(): Promise<void> {
   color: var(--mauth-text-soft);
 }
 
-.batch-roles {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 280px;
+/* 角色多时只让这一块滚动，弹窗本身不跟着长 */
+.batch-scroll {
+  max-height: 320px;
   overflow-y: auto;
-  padding: 4px;
-  border: 1px solid var(--mauth-border);
-  border-radius: var(--mauth-radius-sm);
-}
-
-.batch-role {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: var(--mauth-radius-xs);
-  cursor: pointer;
-}
-
-.batch-role:hover {
-  background: var(--mauth-hover);
-}
-
-.batch-role.is-picked {
-  background: var(--mauth-primary-soft);
-}
-
-.batch-role input {
-  flex: none;
-  accent-color: var(--mauth-primary);
-}
-
-.batch-role__name {
-  font-size: 13px;
-}
-
-.batch-role__code {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11.5px;
-  color: var(--mauth-text-faint);
-}
-
-.batch-empty {
-  margin: 0;
-  padding: 16px;
-  text-align: center;
-  font-size: 12.5px;
-  color: var(--mauth-text-faint);
+  padding-right: 2px;
 }
 
 .batch-summary {

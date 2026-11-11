@@ -16,7 +16,7 @@
  * @since 2026-11-09
  */
 import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
-import { ChevronRight, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next';
+import { ChevronRight, History, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next';
 import { createDept, deptTree, removeDept, updateDept } from '@/api/system';
 import type { DeptNode, UserRow } from '@/api/types';
 import { listUsers } from '@/api/system';
@@ -28,6 +28,7 @@ import { listUsers } from '@/api/system';
  * 视图」付这个体积。
  */
 const OrgCanvas = defineAsyncComponent(() => import('@/components/business/OrgCanvas.vue'));
+import DeptHistoryDialog from '@/components/business/DeptHistoryDialog.vue';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -50,6 +51,8 @@ const query = reactive({ keyword: '', status: '' as '' | 0 | 1 });
 
 const dialogOpen = ref(false);
 const submitting = ref(false);
+/** 溯源弹窗目标（null = 关闭） */
+const historyTarget = ref<DeptNode | null>(null);
 const editingId = ref<number | null>(null);
 const form = reactive({
   parentId: 0,
@@ -143,16 +146,35 @@ const rows = computed(() => {
 const summary = computed(() => {
   let count = 0;
   let members = 0;
-  const walk = (nodes: DeptNode[]): void => {
+  let disabled = 0;
+  let depth = 0;
+  const walk = (nodes: DeptNode[], level: number): void => {
     for (const node of nodes) {
       count += 1;
       members += Number(node.user_count) || 0;
-      walk(node.children ?? []);
+      if (Number(node.status) !== 1) disabled += 1;
+      depth = Math.max(depth, level);
+      walk(node.children ?? [], level + 1);
     }
   };
-  walk(trees.value);
-  return { count, members };
+  walk(trees.value, 1);
+  return { count, members, disabled, depth: count === 0 ? 0 : depth, roots: trees.value.length };
 });
+
+/** 成员条的比例基准：取可见行里的最大值，避免小部门全是"满格" */
+const maxMembers = computed(() => rows.value.reduce((max, item) => Math.max(max, membersOf(item.node)), 0));
+
+/**
+ * 成员条宽度
+ *
+ * @param node 部门
+ * @returns 形如 `62%`
+ */
+function barWidth(node: DeptNode): string {
+  const max = maxMembers.value;
+  if (max <= 0) return '0%';
+  return `${Math.max((membersOf(node) / max) * 100, 3)}%`;
+}
 
 /**
  * 本部门及下级的成员总数
@@ -427,7 +449,31 @@ onMounted(load);
   <div>
     <div class="page__head">
       <h2 class="page__title">部门管理</h2>
-      <span class="page__sub">共 {{ summary.count }} 个部门 · {{ summary.members }} 人 · 层级决定「本部门及以下」的数据权限范围</span>
+      <span class="page__sub">组织层级决定「本部门及以下」的数据权限范围，改动会被审计</span>
+    </div>
+
+    <!-- 读数：先给整棵树的概况，再让人往下看细节 -->
+    <div class="stats dept-stats">
+      <div class="stat">
+        <div class="stat__label">部门总数</div>
+        <div class="stat__value">{{ summary.count }}</div>
+        <div class="stat__hint">{{ summary.roots }} 个顶级</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">成员合计</div>
+        <div class="stat__value">{{ summary.members }}</div>
+        <div class="stat__hint">按直属人数累加</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">最大层级</div>
+        <div class="stat__value">{{ summary.depth }}</div>
+        <div class="stat__hint">层数越深，数据权限越窄</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">停用部门</div>
+        <div class="stat__value">{{ summary.disabled }}</div>
+        <div class="stat__hint">停用后不出现在可选项里</div>
+      </div>
     </div>
 
     <div class="tabbar" role="tablist" aria-label="视图">
@@ -475,23 +521,20 @@ onMounted(load);
 
     <section v-if="altView === 'table'" class="panel">
       <div class="table-wrap">
-        <table class="table">
+        <table class="table dept-table">
           <thead>
             <tr>
-              <th>部门名称</th>
-              <th>负责人</th>
-              <th>联系电话</th>
-              <th>邮箱</th>
-              <th>人数</th>
-              <th>排序</th>
-              <th>状态</th>
+              <th>部门</th>
+              <th class="dept-col-members">成员</th>
+              <th class="dept-col-status">状态</th>
               <th class="col-actions">操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in rows" :key="item.node.id">
+            <tr v-for="item in rows" :key="item.node.id" class="dept-row">
               <td>
-                <span class="dept-name">
+                <div class="dept-cell">
+                  <!-- 层级引导线：每深一层一条竖线，比纯缩进更容易看清从属 -->
                   <span v-for="d in item.depth" :key="d" class="dept-guide" aria-hidden="true"></span>
                   <button
                     v-if="item.hasChildren"
@@ -501,26 +544,34 @@ onMounted(load);
                     :aria-label="`展开或收起 ${item.node.name}`"
                     @click="toggle(item.node.id)"
                   >
-                    <ChevronRight
-                      :size="14"
-                      :class="{ 'is-open': filtering || !collapsed.has(item.node.id) }"
-                    />
+                    <ChevronRight :size="14" :class="{ 'is-open': filtering || !collapsed.has(item.node.id) }" />
                   </button>
                   <span v-else class="dept-toggle is-empty"></span>
-                  <span class="dept-name__text">{{ item.node.name }}</span>
-                  <span v-if="item.hasChildren" class="dept-badge">{{ item.node.children.length }}</span>
-                </span>
+
+                  <span class="dept-cell__body">
+                    <span class="dept-cell__title">
+                      {{ item.node.name }}
+                      <span v-if="item.hasChildren" class="dept-badge">{{ item.node.children.length }}</span>
+                    </span>
+                    <!-- 次要信息压到第二行：列少一半，扫视成本低一半 -->
+                    <span class="dept-cell__sub">
+                      {{ item.node.leader || '未指定负责人' }}
+                      <template v-if="item.node.phone"> · {{ item.node.phone }}</template>
+                      <template v-if="item.node.email"> · {{ item.node.email }}</template>
+                    </span>
+                  </span>
+                </div>
               </td>
-              <td>{{ item.node.leader || '—' }}</td>
-              <td class="mono">{{ item.node.phone || '—' }}</td>
-              <td class="mono">{{ item.node.email || '—' }}</td>
-              <td>
-                <span class="dept-count tnum" :title="`直属 ${item.node.user_count} 人${item.hasChildren ? '，含下级合计' : ''}`">
-                  {{ membersOf(item.node) }}
-                </span>
+              <td class="dept-col-members">
+                <div class="dept-members">
+                  <span class="dept-members__num tnum">{{ membersOf(item.node) }}</span>
+                  <span class="dept-members__hint">直属 {{ item.node.user_count }}</span>
+                  <span class="dept-members__bar" aria-hidden="true">
+                    <i :style="{ width: barWidth(item.node) }"></i>
+                  </span>
+                </div>
               </td>
-              <td class="mono">{{ item.node.sort }}</td>
-              <td>
+              <td class="dept-col-status">
                 <span class="tag" :class="item.node.status === 1 ? 'tag--ok' : 'tag--off'">
                   {{ item.node.status === 1 ? '启用' : '停用' }}
                 </span>
@@ -547,6 +598,15 @@ onMounted(load);
                   <Pencil :size="14" />
                 </button>
                 <button
+                  class="btn btn--ghost btn--sm btn--icon"
+                  type="button"
+                  title="变更历史（谁在什么时候改了什么）"
+                  aria-label="变更历史"
+                  @click="historyTarget = item.node"
+                >
+                  <History :size="14" />
+                </button>
+                <button
                   v-if="auth.hasPermission('admin:dept:delete')"
                   class="btn btn--danger btn--sm btn--icon"
                   type="button"
@@ -559,7 +619,7 @@ onMounted(load);
               </td>
             </tr>
             <tr v-if="!loading && rows.length === 0">
-              <td colspan="8">
+              <td colspan="4">
                 <div class="empty">{{ filtering ? '没有匹配的部门' : '暂无部门' }}</div>
               </td>
             </tr>
@@ -710,22 +770,97 @@ onMounted(load);
       </div>
     </div>
 
+    <!-- 变更历史：谁在什么时候把这棵树改成了什么样 -->
+    <DeptHistoryDialog
+      :dept-id="historyTarget?.id ?? null"
+      :dept-name="historyTarget?.name ?? ''"
+      @close="historyTarget = null"
+    />
+
     <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 
 <style scoped>
-/* 名称列：引导线 + 折叠箭头 + 名称 + 下级数徽标，一行 flex 排开 */
-.dept-name {
+/* 部门列：引导线 + 折叠箭头 + 两行正文（名称 / 负责人·电话·邮箱） */
+.dept-cell {
   display: flex;
   align-items: center;
   gap: 6px;
   min-height: var(--row-h);
 }
 
-.dept-name__text {
+.dept-cell__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dept-cell__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 550;
   letter-spacing: -0.01em;
+}
+
+/* 次要信息压到第二行：比多两列更容易扫，也扛得住窄屏 */
+.dept-cell__sub {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--mauth-text-faint);
+}
+
+.dept-stats {
+  margin-bottom: 2px;
+}
+
+.dept-col-members {
+  width: 172px;
+}
+
+.dept-col-status {
+  width: 86px;
+}
+
+.dept-members {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dept-members__num {
+  min-width: 24px;
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.dept-members__hint {
+  font-size: 11px;
+  color: var(--mauth-text-faint);
+  white-space: nowrap;
+}
+
+/* 迷你占比条：同一棵树内横向可比，比一串数字更快看出"哪里人多" */
+.dept-members__bar {
+  flex: 1;
+  min-width: 30px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--mauth-hover);
+  overflow: hidden;
+}
+
+.dept-members__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--mauth-primary);
+  opacity: 0.72;
 }
 
 /* 层级引导线：每深一层多一条竖虚线，比纯缩进更容易看清从属关系 */
@@ -748,18 +883,6 @@ onMounted(load);
   font-variant-numeric: tabular-nums;
   text-align: center;
   line-height: 17px;
-}
-
-/* 人数胶囊 */
-.dept-count {
-  display: inline-block;
-  min-width: 34px;
-  padding: 1px 9px;
-  border-radius: 999px;
-  background: var(--mauth-surface-2);
-  color: var(--mauth-text-mid);
-  font-size: 12px;
-  text-align: center;
 }
 
 .dept-toggle {

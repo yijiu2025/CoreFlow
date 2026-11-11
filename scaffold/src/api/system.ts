@@ -8,8 +8,9 @@
  */
 import { del, download, get, post, put } from './http';
 import type {
+  DeptHistoryRow,
   DeptNode,
-  GrantLogRow,
+  GrantHistoryPage,
   MenuNode,
   PageResult,
   PermissionGraph,
@@ -43,7 +44,7 @@ export function userOptions(): Promise<UserOptions> {
 }
 
 /** 某用户的授权历史（授权 / 取消流水） */
-export function userGrants(id: number, query: Record<string, unknown> = {}): Promise<PageResult<GrantLogRow>> {
+export function userGrants(id: number, query: Record<string, unknown> = {}): Promise<GrantHistoryPage> {
   return get(`${BASE}/users/${id}/grants`, query);
 }
 
@@ -74,16 +75,6 @@ export function updateUser(id: number, body: Record<string, unknown>): Promise<n
 /** 启用 / 冻结用户 */
 export function updateUserStatus(id: number, status: number): Promise<null> {
   return put(`${BASE}/users/${id}/status`, { status });
-}
-
-/** 重置密码 */
-export function resetUserPassword(id: number, password: string): Promise<null> {
-  return put(`${BASE}/users/${id}/password`, { password });
-}
-
-/** 删除用户 */
-export function removeUser(id: number): Promise<null> {
-  return del(`${BASE}/users/${id}`);
 }
 
 /** 导出用户 CSV */
@@ -157,6 +148,13 @@ export function deptTree(): Promise<DeptNode[]> {
   return get(`${BASE}/depts/tree`);
 }
 
+/**
+ * 部门变更历史（读审计：谁在什么时候改了什么）
+ */
+export function deptHistory(id: number, limit = 50): Promise<{ rows: DeptHistoryRow[]; total: number }> {
+  return get(`${BASE}/depts/${id}/history`, { limit });
+}
+
 /** 新建部门 */
 export function createDept(body: Record<string, unknown>): Promise<{ id: number }> {
   return post(`${BASE}/depts`, body);
@@ -199,77 +197,7 @@ export function removePost(id: number): Promise<null> {
   return del(`${BASE}/posts/${id}`);
 }
 
-/* ── 字典 ─────────────────────────────────────────────────── */
-
-/** 字典类型分页 */
-export function listDictTypes<T = Record<string, unknown>>(query: Record<string, unknown>): Promise<PageResult<T>> {
-  return get(`${BASE}/dict/types`, query);
-}
-
-/** 某类型下字典项 */
-export function listDictData(dictType: string): Promise<Array<Record<string, unknown>>> {
-  return get(`${BASE}/dict/data/${encodeURIComponent(dictType)}`);
-}
-
-/** 业务下拉（仅启用项） */
-export function dictOptions(dictType: string): Promise<Array<Record<string, unknown>>> {
-  return get(`${BASE}/dict/options/${encodeURIComponent(dictType)}`);
-}
-
-
-/** 新建字典类型 */
-export function createDictType(body: Record<string, unknown>): Promise<{ id: number }> {
-  return post(`${BASE}/dict/types`, body);
-}
-
-/** 编辑字典类型（标识不可改） */
-export function updateDictType(id: number, body: Record<string, unknown>): Promise<null> {
-  return put(`${BASE}/dict/types/${id}`, body);
-}
-
-/** 删除字典类型（连同字典项） */
-export function removeDictType(id: number): Promise<null> {
-  return del(`${BASE}/dict/types/${id}`);
-}
-
-/** 新建字典项 */
-export function createDictData(body: Record<string, unknown>): Promise<{ id: number }> {
-  return post(`${BASE}/dict/data`, body);
-}
-
-/** 编辑字典项 */
-export function updateDictData(id: number, body: Record<string, unknown>): Promise<null> {
-  return put(`${BASE}/dict/data/${id}`, body);
-}
-
-/** 删除字典项 */
-export function removeDictData(id: number): Promise<null> {
-  return del(`${BASE}/dict/data/${id}`);
-}
-
 /** 权限关系整图（溯源 / 星图共用） */
 export function permissionGraph(): Promise<PermissionGraph> {
   return get(`${BASE}/permissions/graph`);
-}
-
-/* ── 参数 ─────────────────────────────────────────────────── */
-
-/** 参数分页 */
-export function listConfigs<T = Record<string, unknown>>(query: Record<string, unknown>): Promise<PageResult<T>> {
-  return get(`${BASE}/configs`, query);
-}
-
-/** 新建参数 */
-export function createConfig(body: Record<string, unknown>): Promise<{ id: number }> {
-  return post(`${BASE}/configs`, body);
-}
-
-/** 编辑参数 */
-export function updateConfig(id: number, body: Record<string, unknown>): Promise<null> {
-  return put(`${BASE}/configs/${id}`, body);
-}
-
-/** 删除参数 */
-export function removeConfig(id: number): Promise<null> {
-  return del(`${BASE}/configs/${id}`);
 }
