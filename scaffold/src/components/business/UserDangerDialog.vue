@@ -5,7 +5,8 @@
  * 三件事都能"让别人的数据消失"或"以别人的身份进入系统"，所以统一放在一个入口里，
  * 并按同一套规矩呈现：
  * - 先说清**会发生什么**（清哪些数据、保留什么、什么时候生效、能不能撤销）；
- * - 每个动作都要**操作者自己的登录密码**（会话可能落在一台没锁屏的机器上）；
+ * - 每个动作都要一次**独立完成的二次验证**（默认邮箱验证码，密码仅作后备）——
+ *   会话可能落在一台没锁屏的机器上，而本仓多数账号从没设过密码，密码框对它们是死路；
  * - 删除要**手打目标账号名**确认 —— 这一条专门防"点错行"。
  *
  * 为什么删完不立刻生效：误删不可逆，而交接期账号常被别处引用着；缓冲期内随时可撤销。
@@ -24,7 +25,8 @@ import {
   userDeletion,
   userTempPasswords
 } from '@/api/system';
-import type { PendingKick, TempPasswordRow, UserAppRow, UserDeletionRequest } from '@/api/types';
+import type { PendingKick, StepUpPayload, TempPasswordRow, UserAppRow, UserDeletionRequest } from '@/api/types';
+import StepUpField from '@/components/business/StepUpField.vue';
 
 const props = defineProps<{
   /** 目标用户（null = 关闭） */
@@ -57,10 +59,24 @@ const busy = ref(false);
 const errorMessage = ref('');
 const notice = ref('');
 
-/** 删除页签：操作者密码 + 手打的目标账号名 + 原因 */
-const password = ref('');
+/** 删除页签：手打的目标账号名 + 原因 */
 const confirmUsername = ref('');
 const reason = ref('');
+
+/**
+ * 二次验证输入区
+ *
+ * 三个页签共用同一个实例：验证方式与操作者本人相关（有没有绑邮箱 / 有没有密码），
+ * 与"要执行哪个动作"无关；动作只影响凭据绑定，由 `stepUpAction` 跟着页签变。
+ */
+const stepUpRef = ref<InstanceType<typeof StepUpField> | null>(null);
+
+/** 当前页签对应的动作键（必须与后端 ACTIONS 一致） */
+const stepUpAction = computed<'user.delete' | 'user.app-deactivate' | 'user.temp-password'>(() => {
+  if (tab.value === 'delete') return 'user.delete';
+  if (tab.value === 'apps') return 'user.app-deactivate';
+  return 'user.temp-password';
+});
 
 /** 删除页签：当前待执行的申请（scope=all 的那条） */
 const pendingAll = ref<UserDeletionRequest | null>(null);
@@ -72,7 +88,6 @@ const pendingKicks = ref<PendingKick[]>([]);
 const appRows = ref<UserAppRow[]>([]);
 /** 正在注销哪个应用（'' = 没有） */
 const appTarget = ref('');
-const appPassword = ref('');
 
 /** 临时密码页签 */
 const tempRows = ref<TempPasswordRow[]>([]);
@@ -106,9 +121,9 @@ function switchTab(next: Tab): void {
   tab.value = next;
   errorMessage.value = '';
   notice.value = '';
-  password.value = '';
   appTarget.value = '';
-  appPassword.value = '';
+  // 凭据绑定"动作 + 目标"，换页签就是换动作 —— 旧码一律作废
+  stepUpRef.value?.reset();
 }
 
 /**
@@ -124,16 +139,15 @@ function onMaskClick(): void {
 
 /** 清空表单（关闭 / 换人时） */
 function resetForms(): void {
-  password.value = '';
   confirmUsername.value = '';
   reason.value = '';
   appTarget.value = '';
-  appPassword.value = '';
   tempReason.value = '';
   issued.value = null;
   copied.value = false;
   errorMessage.value = '';
   notice.value = '';
+  stepUpRef.value?.reset();
 }
 
 /** 加载当前页签需要的数据 */
@@ -200,24 +214,29 @@ function appStateText(row: UserAppRow): string {
  */
 async function submitDelete(): Promise<void> {
   if (props.userId === null || busy.value) return;
-  if (!password.value) {
-    errorMessage.value = '请输入你自己的登录密码';
-    return;
-  }
+  /*
+   * 先校验手打的账号名，再看二次验证 —— 与后端同序。
+   * 反过来的话，名字打错也会把验证码用掉，得重新等一封邮件。
+   */
   if (confirmUsername.value.trim() !== props.username) {
     errorMessage.value = '请输入该用户的登录名以确认删除';
+    return;
+  }
+  const stepUp = stepUpRef.value?.buildPayload();
+  if (!stepUp) {
+    errorMessage.value = stepUpRef.value?.hint() ?? '请完成二次验证';
     return;
   }
   busy.value = true;
   errorMessage.value = '';
   try {
     const res = await requestUserDeletion(props.userId, {
-      password: password.value,
+      stepUp,
       confirmUsername: confirmUsername.value.trim(),
       reason: reason.value || undefined
     });
     notice.value = `已发起删除：${res.graceDays} 天后（${when(res.scheduledAt)}）正式清理，期间可撤销。账号状态已置为「待注销」——现在起无法登录，现有会话会在下一个请求失效。`;
-    password.value = '';
+    stepUpRef.value?.reset();
     confirmUsername.value = '';
     reason.value = '';
     await reload();
@@ -249,17 +268,18 @@ async function undoDelete(): Promise<void> {
 /** 注销某应用账号 */
 async function submitAppDeactivate(): Promise<void> {
   if (props.userId === null || !appTarget.value || busy.value) return;
-  if (!appPassword.value) {
-    errorMessage.value = '请输入你自己的登录密码';
+  const stepUp = stepUpRef.value?.buildPayload();
+  if (!stepUp) {
+    errorMessage.value = stepUpRef.value?.hint() ?? '请完成二次验证';
     return;
   }
   busy.value = true;
   errorMessage.value = '';
   try {
-    const res = await deactivateUserApp(props.userId, appTarget.value, { password: appPassword.value });
+    const res = await deactivateUserApp(props.userId, appTarget.value, { stepUp });
     notice.value = `已发起注销：${when(res.scheduledAt)} 清理该应用数据，期间可撤销。该应用内的现有会话会在下一个请求失效，主账号与其它应用不受影响。`;
     appTarget.value = '';
-    appPassword.value = '';
+    stepUpRef.value?.reset();
     await reload();
     emit('changed');
   } catch (err) {
@@ -288,21 +308,22 @@ async function undoAppDeactivate(row: UserAppRow): Promise<void> {
 /** 签发临时密码 */
 async function submitTempPassword(): Promise<void> {
   if (props.userId === null || busy.value) return;
-  if (!password.value) {
-    errorMessage.value = '请输入你自己的登录密码';
+  const stepUp = stepUpRef.value?.buildPayload();
+  if (!stepUp) {
+    errorMessage.value = stepUpRef.value?.hint() ?? '请完成二次验证';
     return;
   }
   busy.value = true;
   errorMessage.value = '';
   try {
     const res = await issueUserTempPassword(props.userId, {
-      password: password.value,
+      stepUp,
       ttlMinutes: tempTtl.value,
       maxUses: tempUses.value,
       reason: tempReason.value || undefined
     });
     issued.value = { password: res.password, expiresAt: res.expiresAt };
-    password.value = '';
+    stepUpRef.value?.reset();
     await reload();
     emit('changed');
   } catch (err) {
@@ -428,17 +449,6 @@ async function copyIssued(): Promise<void> {
               </span>
               <input v-model="confirmUsername" class="input" type="text" autocomplete="off" placeholder="手打账号名" />
             </label>
-
-            <label class="field">
-              <span class="field__label">你自己的登录密码（二次验证）</span>
-              <input
-                v-model="password"
-                class="input"
-                type="password"
-                autocomplete="current-password"
-                placeholder="仅用于本次校验"
-              />
-            </label>
           </template>
         </template>
 
@@ -498,16 +508,6 @@ async function copyIssued(): Promise<void> {
               <p class="danger-confirm__title">
                 注销「{{ appRows.find(r => r.app_id === appTarget)?.app_label }}」的账号
               </p>
-              <label class="field">
-                <span class="field__label">你自己的登录密码（二次验证）</span>
-                <input
-                  v-model="appPassword"
-                  class="input"
-                  type="password"
-                  autocomplete="current-password"
-                  placeholder="仅用于本次校验"
-                />
-              </label>
               <button class="btn btn--danger btn--sm" type="button" :disabled="busy" @click="submitAppDeactivate">
                 <Loader2 v-if="busy" class="spin" :size="13" />
                 确认注销该应用
@@ -552,17 +552,6 @@ async function copyIssued(): Promise<void> {
             <input v-model="tempReason" class="input" type="text" maxlength="255" placeholder="如：排障、交接" />
           </label>
 
-          <label class="field">
-            <span class="field__label">你自己的登录密码（二次验证）</span>
-            <input
-              v-model="password"
-              class="input"
-              type="password"
-              autocomplete="current-password"
-              placeholder="仅用于本次校验"
-            />
-          </label>
-
           <div v-if="tempRows.length" class="danger-temps">
             <p class="danger-temps__title">当前有效的临时密码（{{ tempRows.length }}）</p>
             <p v-for="row in tempRows" :key="row.id" class="danger-temps__row">
@@ -575,6 +564,18 @@ async function copyIssued(): Promise<void> {
             <p class="danger-temps__hint">再次生成会自动作废上面这些 —— 同时存在多把钥匙没有意义。</p>
           </div>
         </template>
+
+        <!--
+          二次验证固定在内容末尾：三个页签共用一处，视线不用在页签之间来回找。
+          待执行删除时（已经删过了）与未选中应用时不显示 —— 那时没有动作可确认。
+        -->
+        <StepUpField
+          v-if="(tab === 'delete' && !pendingAll && !loading) || (tab === 'apps' && appTarget) || tab === 'temp'"
+          ref="stepUpRef"
+          :action="stepUpAction"
+          :target-id="userId"
+          :disabled="busy"
+        />
       </div>
 
       <div class="modal__foot">

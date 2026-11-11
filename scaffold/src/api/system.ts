@@ -17,6 +17,9 @@ import type {
   PendingKick,
   PostMember,
   RoleRow,
+  StepUpChallenge,
+  StepUpFactors,
+  StepUpPayload,
   TempPasswordRow,
   UserAppRow,
   UserDeletionRequest,
@@ -81,7 +84,27 @@ export function updateUserStatus(id: number, status: number): Promise<null> {
   return put(`${BASE}/users/${id}/status`, { status });
 }
 
-/* ── 账号高危操作（都要求操作者密码） ──────────────────────── */
+/* ── 二次验证（高危写操作的前置） ─────────────────────────── */
+
+/** 我可用哪些验证方式（只回脱敏邮箱与布尔值） */
+export function stepUpFactors(): Promise<StepUpFactors> {
+  return get(`${BASE}/stepup/factors`);
+}
+
+/**
+ * 为「某动作 + 某目标」签发一次性凭据
+ *
+ * 凭据绑定动作与目标：为了看 A 而通过的验证，不能拿去删 B。
+ */
+export function requestStepUpChallenge(body: {
+  action: 'user.delete' | 'user.app-deactivate' | 'user.temp-password';
+  targetId: number;
+  method?: 'email' | 'password';
+}): Promise<StepUpChallenge> {
+  return post(`${BASE}/stepup/challenge`, body);
+}
+
+/* ── 账号高危操作（都要 stepUp 一次性凭据） ────────────────── */
 
 /** 待执行的注销申请 + 会话未踢干净的记录 */
 export function userDeletion(id: number): Promise<{ requests: UserDeletionRequest[]; pendingKicks: PendingKick[] }> {
@@ -95,7 +118,7 @@ export function userDeletion(id: number): Promise<{ requests: UserDeletionReques
  */
 export function requestUserDeletion(
   id: number,
-  body: { password: string; confirmUsername: string; reason?: string }
+  body: { stepUp: StepUpPayload; confirmUsername: string; reason?: string }
 ): Promise<{ id: number; scheduledAt: string; graceDays: number }> {
   return post(`${BASE}/users/${id}/deletion`, body);
 }
@@ -114,7 +137,7 @@ export function userApps(id: number): Promise<{ rows: UserAppRow[]; total: numbe
 export function deactivateUserApp(
   id: number,
   appId: string,
-  body: { password: string; reason?: string }
+  body: { stepUp: StepUpPayload; reason?: string }
 ): Promise<{ id: number; appId: string; scheduledAt: string; graceDays: number }> {
   return post(`${BASE}/users/${id}/apps/${encodeURIComponent(appId)}/deactivation`, body);
 }
@@ -127,7 +150,7 @@ export function userTempPasswords(id: number): Promise<{ rows: TempPasswordRow[]
 /** 签发临时密码（明文只返回一次） */
 export function issueUserTempPassword(
   id: number,
-  body: { password: string; ttlMinutes?: number; maxUses?: number; reason?: string }
+  body: { stepUp: StepUpPayload; ttlMinutes?: number; maxUses?: number; reason?: string }
 ): Promise<{ id: number; password: string; expiresAt: string; maxUses: number }> {
   return post(`${BASE}/users/${id}/temp-password`, body);
 }

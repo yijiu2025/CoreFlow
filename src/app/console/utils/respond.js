@@ -22,7 +22,18 @@ const STATUS_MAP = {
   HAS_MEMBERS: 409,
   ROLE_REFERENCED: 409,
   // 注销流程的业务拒绝（重复申请 / 未到期 / 已处理）
-  DEACTIVATION_FAILED: 409
+  DEACTIVATION_FAILED: 409,
+  /*
+   * 二次验证（高危操作）。
+   *
+   * REQUIRED 用 428：前端据此知道"该先发验证码"，而不是把它当成普通的参数错误
+   * —— 428 Precondition Required 正是"请求缺少必要前置条件"的标准语义，
+   * 与防火墙挑战（也是 428）不会混：那条走 X-Firewall-Challenge 头与整页跳转。
+   */
+  STEPUP_REQUIRED: 428,
+  STEPUP_FAILED: 400,
+  STEPUP_RATE_LIMITED: 429,
+  STEPUP_UNAVAILABLE: 503
 };
 
 /**

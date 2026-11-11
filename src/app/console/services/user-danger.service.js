@@ -4,8 +4,9 @@
  * 这三个动作都能"以别人的身份进入系统"或"让别人的数据消失"，所以它们不放普通权限，
  * 而是集中在同一处编排，统一满足四条硬要求：
  *
- * 1. **二次验证**：必须输入操作者**自己的登录密码**。只靠会话不够 —— 会话可能落在
- *    一台没锁屏的机器上；而密码这件事，操作者本人必须现敲一次。
+ * 1. **二次验证**：一次性凭据（默认邮箱验证码，密码仅作后备）。只靠会话不够 ——
+ *    会话可能落在一台没锁屏的机器上。**不是密码**：本仓大量账号是邮箱验证码登录、
+ *    从没设过密码，对它们密码框是死路（见 `services/stepup.service.js` 文件头）。
  * 2. **职级与范围**：复用 `access-scope.service` 的判定（不能动超管、不能动同级或更高、
  *    非跨应用管理员只能动本应用的用户），与本仓其它改账号的动作同一口径。
  * 3. **全流程留痕**：发起 / 撤销 / 使用临时密码都写审计，且带上发起人账号快照。
@@ -17,7 +18,8 @@
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
 import { Op } from 'sequelize';
-import { verifyPassword, logAuditEvent } from '../../../framework/security/auth/index.js';
+import { logAuditEvent } from '../../../framework/security/auth/index.js';
+import stepUpService from './stepup.service.js';
 import deactivationService from '../../user/services/deactivation.service.js';
 import tempPasswordService from '../../user/services/temp-password.service.js';
 import { getActorScope, getTargetScope, assertCanManageUser, appLabel } from './access-scope.service.js';
@@ -41,29 +43,36 @@ function graceDays() {
 }
 
 /**
- * 二次验证：校验操作者自己的登录密码
+ * 判定「谁能对谁做这个动作」
  *
- * 走 `user_identity`（identity_type=password）而不是 console 的 DAO：密码校验只有
- * 一个真源，任何"另存一份密码"的做法都会在改密后失配。
+ * 抽出来的理由：**发码与执行必须是同一套判定**。如果只在执行时判，没权限的人也能
+ * 收到验证码、填完才被拒 —— 既浪费一次邮箱发送，也让人以为自己有权。
+ * 这也与防火墙侧 stepup「身份门槛放在最前面」的教训一致。
  *
  * @param {object} actor 操作者（{ id, username }）
- * @param {string} password 明文密码
- * @throws {Error} `FORBIDDEN:xxx`
+ * @param {string} action 动作键（见 stepup.service 的 ACTIONS）
+ * @param {number} targetId 目标用户
+ * @returns {Promise<object>} 目标 User 实例
+ * @throws {Error} `FORBIDDEN:` / `NOT_FOUND:` / `INVALID_PARAM:`
  */
-async function assertStepUp(actor, password) {
-  if (!actor?.id) throw new Error('FORBIDDEN:无法确认操作者身份，请重新登录');
-  if (typeof password !== 'string' || password.length === 0) {
-    throw new Error('FORBIDDEN:该操作需要输入你自己的登录密码');
+async function assertActionAuthority(actor, action, targetId) {
+  const target = await loadTarget(targetId);
+  switch (action) {
+    case 'user.delete':
+      await assertSuper(actor, '删除账号');
+      await assertCanAct(actor, target, '删除');
+      break;
+    case 'user.temp-password':
+      await assertSuper(actor, '签发临时密码');
+      await assertCanAct(actor, target, '为账号签发临时密码');
+      break;
+    case 'user.app-deactivate':
+      await assertCanAct(actor, target, '注销该用户的应用账号');
+      break;
+    default:
+      throw new Error('INVALID_PARAM:不支持的操作类型');
   }
-  const UserIdentity = getModel('UserIdentity');
-  const identity = await UserIdentity.findOne({
-    where: { user_id: Number(actor.id), identity_type: 'password' }
-  });
-  if (!identity?.credential) {
-    throw new Error('FORBIDDEN:你的账号未设置密码，无法完成二次验证');
-  }
-  const ok = await verifyPassword(password, identity.credential);
-  if (!ok) throw new Error('FORBIDDEN:密码不正确，操作已取消');
+  return target;
 }
 
 /**
@@ -144,26 +153,76 @@ async function audit(request, type, actor, details) {
 
 class UserDangerService {
   /**
+   * 我有哪些可用的二次验证方式
+   *
+   * 前端据此决定展示「发送验证码」还是密码框。这个查询本身不需要验证——
+   * 它只回**脱敏后的**邮箱与布尔值，不泄露任何可用于登录的信息。
+   *
+   * @param {object} actor 操作者
+   * @returns {Promise<object>} { email, hasPassword, recommended }
+   */
+  async stepUpFactors(actor) {
+    return stepUpService.describeFactors(actor?.id);
+  }
+
+  /**
+   * 创建二次验证挑战（发码 / 标记密码方式）
+   *
+   * 先做与执行**完全相同**的权限判定：没权限的人不该收到验证码 ——
+   * 那既浪费一次邮件发送，也让人误以为自己有权做这个操作。
+   *
+   * @param {object} params 参数
+   * @param {import('fastify').FastifyRequest} params.request 请求
+   * @param {object} params.actor 操作者
+   * @param {string} params.action 动作键（user.delete / user.app-deactivate / user.temp-password）
+   * @param {number} params.targetId 目标用户
+   * @param {'email'|'password'} [params.method] 验证方式
+   * @returns {Promise<object>} { challengeId, method, expiresIn, maskedTarget }
+   */
+  async createStepUpChallenge({ request, actor, action, targetId, method }) {
+    await assertActionAuthority(actor, action, targetId);
+    return stepUpService.createChallenge({
+      userId: actor.id,
+      request,
+      action,
+      targetId: Number(targetId),
+      method
+    });
+  }
+
+  /**
    * 发起「删除用户」（进入缓冲期，不立刻清数据）
    *
    * @param {object} params 参数
    * @param {import('fastify').FastifyRequest} params.request 请求
    * @param {object} params.actor 操作者（{ id, username }）
    * @param {number} params.targetId 目标用户
-   * @param {string} params.password 操作者密码（二次验证）
+   * @param {{challengeId?: string, code?: string, password?: string}} params.stepUp 二次验证凭据
    * @param {string} params.confirmUsername 手打的目标账号名（防误点）
    * @param {string} [params.reason] 原因
    * @returns {Promise<object>} { id, scheduledAt, graceDays }
    */
-  async requestDeletion({ request, actor, targetId, password, confirmUsername, reason }) {
-    await assertStepUp(actor, password);
-    await assertSuper(actor, '删除账号');
-    const target = await loadTarget(targetId);
-    await assertCanAct(actor, target, '删除');
+  async requestDeletion({ request, actor, targetId, stepUp, confirmUsername, reason }) {
+    const target = await assertActionAuthority(actor, 'user.delete', targetId);
 
+    /*
+     * 顺序很关键：**先校验手打的账号名，再消费验证码**。
+     * 反过来的话，名字打错也会把码用掉，用户得重新等一封邮件 —— 而这个校验本来就
+     * 只是防手滑，先做零成本。
+     */
     if (String(confirmUsername || '').trim() !== String(target.username)) {
       throw new Error('INVALID_PARAM:请输入该用户的登录名以确认删除');
     }
+
+    await stepUpService.consumeChallenge({
+      userId: actor.id,
+      request,
+      action: 'user.delete',
+      targetId: Number(target.id),
+      challengeId: stepUp?.challengeId,
+      code: stepUp?.code,
+      password: stepUp?.password
+    });
 
     const request_ = await deactivationService.createAdminRequest({
       target: { id: target.id, uid: target.uid, username: target.username },
@@ -339,14 +398,21 @@ class UserDangerService {
    * @param {object} params.actor 操作者
    * @param {number} params.targetId 目标用户
    * @param {string} params.appId 应用标识
-   * @param {string} params.password 操作者密码
+   * @param {{challengeId?: string, code?: string, password?: string}} params.stepUp 二次验证凭据
    * @param {string} [params.reason] 原因
    * @returns {Promise<object>} 结果
    */
-  async deactivateApp({ request, actor, targetId, appId, password, reason }) {
-    await assertStepUp(actor, password);
-    const target = await loadTarget(targetId);
-    await assertCanAct(actor, target, '注销该用户的应用账号');
+  async deactivateApp({ request, actor, targetId, appId, stepUp, reason }) {
+    const target = await assertActionAuthority(actor, 'user.app-deactivate', targetId);
+    await stepUpService.consumeChallenge({
+      userId: actor.id,
+      request,
+      action: 'user.app-deactivate',
+      targetId: Number(target.id),
+      challengeId: stepUp?.challengeId,
+      code: stepUp?.code,
+      password: stepUp?.password
+    });
 
     const created = await deactivationService.createAdminRequest({
       target: { id: target.id, uid: target.uid, username: target.username },
@@ -377,17 +443,23 @@ class UserDangerService {
    * @param {import('fastify').FastifyRequest} params.request 请求
    * @param {object} params.actor 操作者
    * @param {number} params.targetId 目标用户
-   * @param {string} params.password 操作者密码（二次验证）
+   * @param {{challengeId?: string, code?: string, password?: string}} params.stepUp 二次验证凭据
    * @param {number} [params.ttlMinutes] 有效期（分钟）
    * @param {number} [params.maxUses] 可用次数
    * @param {string} [params.reason] 原因
    * @returns {Promise<object>} { password, expiresAt, maxUses }
    */
-  async issueTempPassword({ request, actor, targetId, password, ttlMinutes, maxUses, reason }) {
-    await assertStepUp(actor, password);
-    await assertSuper(actor, '签发临时密码');
-    const target = await loadTarget(targetId);
-    await assertCanAct(actor, target, '为账号签发临时密码');
+  async issueTempPassword({ request, actor, targetId, stepUp, ttlMinutes, maxUses, reason }) {
+    const target = await assertActionAuthority(actor, 'user.temp-password', targetId);
+    await stepUpService.consumeChallenge({
+      userId: actor.id,
+      request,
+      action: 'user.temp-password',
+      targetId: Number(target.id),
+      challengeId: stepUp?.challengeId,
+      code: stepUp?.code,
+      password: stepUp?.password
+    });
 
     const issued = await tempPasswordService.issue({
       userId: Number(target.id),

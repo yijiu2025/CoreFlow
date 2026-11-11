@@ -10,7 +10,11 @@
  * GET    /admin/console/v1/users/:id/grants      —— 授权历史（授予 / 取消流水）
  * POST   /admin/console/v1/users/roles/batch     —— 批量授权（追加 / 移除）
  *
- * 账号高危操作（都要二次验证 = 操作者现敲自己的登录密码）：
+ * 二次验证（高危写操作的前置条件）：
+ * GET    /admin/console/v1/stepup/factors                  —— 我可用哪些验证方式（脱敏邮箱 / 有无密码）
+ * POST   /admin/console/v1/stepup/challenge                —— 为「某动作 + 某目标」签发一次性凭据
+ *
+ * 账号高危操作（请求体带 `stepUp: { challengeId, code | password }`）：
  * GET    /admin/console/v1/users/:id/deletion              —— 待执行的注销申请
  * POST   /admin/console/v1/users/:id/deletion              —— 发起删除（缓冲期，到期才清数据）
  * POST   /admin/console/v1/users/:id/deletion/:rid/cancel   —— 撤销注销
@@ -18,6 +22,10 @@
  * POST   /admin/console/v1/users/:id/apps/:appId/deactivation —— 只注销该应用的账号
  * GET    /admin/console/v1/users/:id/temp-password         —— 当前有效的临时密码（无明文）
  * POST   /admin/console/v1/users/:id/temp-password         —— 签发临时密码（明文只返回一次）
+ *
+ * 🔴 **二次验证默认是邮箱验证码，不是密码**：本仓大量账号用邮箱验证码登录、从没设过
+ *    密码，对它们密码框是死路。密码只在"绑了密码但没绑邮箱"时作为后备
+ *    （`app/console/services/stepup.service.js`）。
  *
  * 🔴 **仍然没有「重置密码」**，这是刻意的：管理员代改密码等于绕过"本人知情"，
  *    谁都能悄悄接管任意下级账号，前面所有职级限制都会失效。密码只能本人改 ——
@@ -51,6 +59,23 @@ import {
 import { describeCurrentAccess } from '../../../../app/console/services/user-access.service.js';
 import userDangerService from '../../../../app/console/services/user-danger.service.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
+
+/**
+ * 二次验证凭据（三个高危写接口共用）
+ *
+ * `challengeId` 必须来自 `POST /stepup/challenge`：那是"为某动作某目标签发的一次性
+ * 凭据"。`code` 与 `password` 二选一（由挑战记录里的 method 决定，服务端判定），
+ * 但**都允许缺省**——缺了会得到 428「该操作需要二次验证」，前端据此引导用户先发码。
+ */
+const STEP_UP_SCHEMA = {
+  type: 'object',
+  required: ['challengeId'],
+  properties: {
+    challengeId: { type: 'string', minLength: 1, maxLength: 64 },
+    code: { type: 'string', maxLength: 12 },
+    password: { type: 'string', maxLength: 128 }
+  }
+};
 
 /**
  * 当前操作人（写授权流水用）
@@ -484,9 +509,63 @@ async function registerUserRoutes(fastify) {
     })
   });
 
+  /* ── 二次验证（高危操作的前置）─────────────────────────────────
+   * 两步：先换一张绑定「动作 + 目标」的一次性凭据，再拿它执行。
+   * 之所以不签长期票据：一次验证只能用于它被批准的那一次操作 —— 否则"为了看 A 而
+   * 通过的验证"可以被拿去删 B（同一教训见防火墙侧 `app/guard/services/stepup.service.js`）。
+   */
+
+  registerSecureRoute(fastify, {
+    name: 'consoleStepUpFactors',
+    alias: '二次验证方式',
+    method: 'GET',
+    url: '/stepup/factors',
+    requireLogin: true,
+    handler: withFail(async (request, reply) => {
+      // 不需要任何权限码：它只回脱敏邮箱与布尔值，任何登录用户都可以查自己的
+      const data = await userDangerService.stepUpFactors(actorOf(request));
+      return reply.result.success('获取成功', data);
+    })
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleStepUpChallenge',
+    alias: '获取二次验证码',
+    method: 'POST',
+    url: '/stepup/challenge',
+    requireLogin: true,
+    /*
+     * 限频：这里会真的发邮件，不限就变成"拿后台当邮件轰炸器"。
+     * 与 service 内的小时配额（5 次/小时/人）是两层 —— 这一层挡同一客户端高频重发。
+     */
+    config: { rateLimit: { max: 8, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['action', 'targetId'],
+        properties: {
+          action: { type: 'string', enum: ['user.delete', 'user.app-deactivate', 'user.temp-password'] },
+          targetId: { type: 'integer', minimum: 1 },
+          method: { type: 'string', enum: ['email', 'password'] }
+        }
+      }
+    },
+    handler: withFail(async (request, reply) => {
+      const data = await userDangerService.createStepUpChallenge({
+        request,
+        actor: actorOf(request),
+        action: request.body.action,
+        targetId: Number(request.body.targetId),
+        method: request.body.method
+      });
+      const message = data.method === 'email' ? `验证码已发送至 ${data.maskedTarget}` : '请输入你的登录密码完成验证';
+      return reply.result.success(message, data);
+    })
+  });
+
   /* ── 账号高危操作 ─────────────────────────────────────────────
-   * 这五条都要求请求体里带 `password`（操作者自己的登录密码），由 service 校验。
-   * 把二次验证放在 service 而不是路由：路由只负责声明形状，判定只有一处。
+   * 这三条写接口要求 `stepUp: { challengeId, code|password }`，校验与一次性消费
+   * 都在 `services/user-danger.service.js` 里（路由只声明形状，判定只有一处）。
    */
 
   registerSecureRoute(fastify, {
@@ -522,9 +601,9 @@ async function registerUserRoutes(fastify) {
       params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } },
       body: {
         type: 'object',
-        required: ['password', 'confirmUsername'],
+        required: ['stepUp', 'confirmUsername'],
         properties: {
-          password: { type: 'string', minLength: 1, maxLength: 128 },
+          stepUp: STEP_UP_SCHEMA,
           confirmUsername: { type: 'string', minLength: 1, maxLength: 64 },
           reason: { type: 'string', maxLength: 255 }
         }
@@ -535,7 +614,7 @@ async function registerUserRoutes(fastify) {
         request,
         actor: actorOf(request),
         targetId: Number(request.params.id),
-        password: request.body.password,
+        stepUp: request.body.stepUp,
         confirmUsername: request.body.confirmUsername,
         reason: request.body.reason
       });
@@ -603,9 +682,9 @@ async function registerUserRoutes(fastify) {
       },
       body: {
         type: 'object',
-        required: ['password'],
+        required: ['stepUp'],
         properties: {
-          password: { type: 'string', minLength: 1, maxLength: 128 },
+          stepUp: STEP_UP_SCHEMA,
           reason: { type: 'string', maxLength: 255 }
         }
       }
@@ -616,7 +695,7 @@ async function registerUserRoutes(fastify) {
         actor: actorOf(request),
         targetId: Number(request.params.id),
         appId: request.params.appId,
-        password: request.body.password,
+        stepUp: request.body.stepUp,
         reason: request.body.reason
       });
       return reply.result.success(`已发起注销，${data.graceDays} 天后清理该应用数据`, data);
@@ -651,9 +730,9 @@ async function registerUserRoutes(fastify) {
       params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } },
       body: {
         type: 'object',
-        required: ['password'],
+        required: ['stepUp'],
         properties: {
-          password: { type: 'string', minLength: 1, maxLength: 128 },
+          stepUp: STEP_UP_SCHEMA,
           ttlMinutes: { type: 'integer', minimum: 5, maximum: 1440, default: 30 },
           maxUses: { type: 'integer', minimum: 1, maximum: 10, default: 1 },
           reason: { type: 'string', maxLength: 255 }
@@ -665,7 +744,7 @@ async function registerUserRoutes(fastify) {
         request,
         actor: actorOf(request),
         targetId: Number(request.params.id),
-        password: request.body.password,
+        stepUp: request.body.stepUp,
         ttlMinutes: request.body.ttlMinutes,
         maxUses: request.body.maxUses,
         reason: request.body.reason

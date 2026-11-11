@@ -47,6 +47,33 @@ export interface MenuNode {
 }
 
 /** 用户行 */
+/** 二次验证方式（GET /stepup/factors）：决定展示「发送验证码」还是密码框 */
+export interface StepUpFactors {
+  /** 脱敏后的操作者邮箱，如 `ad***@qq.com`；未绑定为空串 */
+  email: string;
+  /** 是否设置过密码（真源：user_identity 的 password 行） */
+  hasPassword: boolean;
+  /** 后端建议的方式：优先邮箱，其次密码，都没有为 null */
+  recommended: 'email' | 'password' | null;
+}
+
+/** 一次性二次验证凭据（POST /stepup/challenge） */
+export interface StepUpChallenge {
+  challengeId: string;
+  method: 'email' | 'password';
+  /** 有效期（秒） */
+  expiresIn: number;
+  /** 邮箱方式时为脱敏收件地址 */
+  maskedTarget: string | null;
+}
+
+/** 高危写接口共用的二次验证载荷 */
+export interface StepUpPayload {
+  challengeId: string;
+  code?: string;
+  password?: string;
+}
+
 /** 注销申请摘要（列表行 / 详情共用） */
 export interface UserDeletionBrief {
   id: number;

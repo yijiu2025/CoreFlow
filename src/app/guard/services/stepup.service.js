@@ -139,19 +139,30 @@ function clientCtx(request, sessionId) {
  */
 async function loadAuthFactors(uid) {
   const User = getModel('User');
+  const UserIdentity = getModel('UserIdentity');
   if (!User) return null;
 
+  /*
+   * 🔴 `User` 表**没有 `credential` 列**（密码存在 `user_identity` 的 password 行里）。
+   * 之前这里把 `credential` 写进 attributes，SQL 直接 `SELECT credential ...` 报
+   * Unknown column —— 结果是整个 step-up 接口 500，密码方式从来没能用上。
+   * 真源只有一处，不要另建第二份。
+   */
   const user = await User.findOne({
     where: { uid },
-    attributes: ['uid', 'email', 'phone', 'credential', 'status']
+    attributes: ['id', 'uid', 'email', 'phone', 'status']
   });
   if (!user) return null;
+
+  const identity = UserIdentity
+    ? await UserIdentity.findOne({ where: { user_id: user.id, identity_type: 'password' } })
+    : null;
 
   return {
     uid: user.uid,
     email: user.email || '',
     phone: user.phone || '',
-    credential: user.credential || '',
+    credential: identity?.credential || '',
     status: user.status
   };
 }
