@@ -7,6 +7,24 @@
 
 ## 未发布（Unreleased）
 
+### 重构（管理后台前端分层）
+
+- **页面 DOM 全部下沉主题包**：`scaffold/src/views/` 的 15 个页面只留业务（取数 / 分页 /
+  校验 / 权限判定 / ctx 组装），模板各 4 行 `<ThemeView page=… :device :ctx>`；
+  行数 10306 → 4861，模板 3400 → 60 行，scoped CSS 2700 → 0。
+- 新增 12 份页面域契约 `theme/views/<page>.ts`（纯类型 ctx + `defineThemePage`），
+  真实版式落在 `themes/default/standard/<page>/`，`mobile` / spotlight / wechat 转发；
+  `components/layout/ConsoleChrome.vue` 归位成 `themes/default/standard/console/`。
+- 首屏不为内容页付体积：`themeAssets({ eagerPages: ['login','console'] })`（skinsuite 1.1.0），
+  内容页版式随各自路由 chunk 加载；入口 172.49 → 193.11 kB（页面 DOM 零进入首屏）。
+
+### 修复
+
+- **全站 `--mauth-*` 未定义**：内容页升格成页面域后 `activePage` 被写成页名，而主题包
+  只给 `console` / `login` 声明过配色 ⇒ `getThemeRecord` 返回空记录 ⇒ token 层被清空，
+  页面全部失去样式。内容页改用 `<ThemeView scope="inherit">`（skinsuite 1.2.0），
+  沿用外壳配色；store 播种 `defaultPage: 'console'`。
+
 ## 2.35.0 — 2026-11-15
 
 ### 新增（管理后台 console）
