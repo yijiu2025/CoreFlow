@@ -63,9 +63,7 @@ function parse(raw: string | undefined): Record<string, unknown> {
   if (!raw) return {};
   try {
     const parsed: unknown = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
     return {};
   }
@@ -223,9 +221,21 @@ export function summarizeOperEvent(row: OperSummaryInput): string {
 
     /* ── 角色分配 ── */
     case 'ROLE_ASSIGNED': {
-      const uid = pick(details, ['targetUid']);
+      const who = pick(details, ['targetUsername']) || pick(details, ['targetUid']) || '该用户';
+      /*
+       * 一次改多个角色时后端给的是差集（added / removed），单角色老写法只有 roleId。
+       * 摘要要能一眼看出"加粗了哪个、收走了哪个"，否则"改了角色"等于没信息。
+       */
+      const added = Array.isArray(details.addedNames) ? details.addedNames.map(String) : [];
+      const removed = Array.isArray(details.removedNames) ? details.removedNames.map(String) : [];
+      if (added.length > 0 || removed.length > 0) {
+        const bits: string[] = [];
+        if (added.length > 0) bits.push(`+${added.join('、')}`);
+        if (removed.length > 0) bits.push(`−${removed.join('、')}`);
+        return `调整「${who}」的角色：${bits.join('，')}`;
+      }
       const roleId = pick(details, ['roleId']);
-      return `为用户（${uid || '未知 uid'}）分配角色${roleId ? ` #${roleId}` : ''}`;
+      return `为用户（${who}）分配角色${roleId ? ` #${roleId}` : ''}`;
     }
 
     /* ── 踢设备下线：谁把谁的哪台设备踢了 ── */
@@ -237,9 +247,7 @@ export function summarizeOperEvent(row: OperSummaryInput): string {
       // 完整设备码 20 字符上下，摘要里缩成「前 12…后 4」，完整值在详情里
       const short = device.length > 18 ? `${device.slice(0, 12)}…${device.slice(-4)}` : device;
       if (details.self === true) return `下线了自己的设备「${short || '无设备码'}」`;
-      const head = who
-        ? `将「${who}」的设备「${short || '无设备码'}」下线`
-        : `下线设备「${short || '无设备码'}」`;
+      const head = who ? `将「${who}」的设备「${short || '无设备码'}」下线` : `下线设备「${short || '无设备码'}」`;
       return `${head}${app ? `（${appText(app)}）` : ''}${kicked ? `，踢出 ${kicked} 个会话` : ''}`;
     }
 
@@ -274,7 +282,8 @@ export function summarizeOperEvent(row: OperSummaryInput): string {
     case 'LOG_PURGE': {
       const scope = pick(details, ['scope']) === 'login' ? '登录日志' : '操作日志';
       const removed = pick(details, ['removed']) || '0';
-      const filters = details.filters && typeof details.filters === 'object' ? (details.filters as Record<string, unknown>) : {};
+      const filters =
+        details.filters && typeof details.filters === 'object' ? (details.filters as Record<string, unknown>) : {};
       const condition = filterText(filters);
       return `清除了 ${removed} 条${scope}${condition ? `，条件：${condition}` : ''}`;
     }

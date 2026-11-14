@@ -64,9 +64,15 @@ const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', '
  *
  * 排除的是**会话生命周期**：登录、登出、会话刷新、被踢。它们的共同点是"谁在什么
  * 时候进来了/出去了"，与"谁改了什么"是两类问题，分开看才有意义。
+ *
+ * 🔴 但**管理员踢别人的设备**（`SESSION_KICK_DEVICE`）不是会话生命周期，是"动了别人的账号"
+ *    —— 它和改角色同一类。早先这里写的是 `a.event LIKE 'SESSION%'`，把这条例也扫掉了：
+ *    事件写进了 audit_logs，两个页面却都看不到（操作日志排除了它，登录日志读的是
+ *    session_logs）。实测「踢下线后查不到任何记录」就是这么来的。
+ *    所以只排除**精确的**会话事件，不按前缀扫。
  */
 const OPER_ONLY_SQL = `NOT (a.event LIKE 'LOGIN%' OR a.event LIKE 'LOGOUT%'
-  OR a.event LIKE 'SESSION%' OR a.event = 'KICK')`;
+  OR a.event IN ('KICK', 'SESSION_KICK', 'SESSION_REFRESH'))`;
 
 /**
  * 归一化 details（raw 查询的 JSON 列是字符串）

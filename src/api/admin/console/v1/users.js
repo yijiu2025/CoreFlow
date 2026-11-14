@@ -7,7 +7,8 @@
  * PUT    /admin/console/v1/users/:id             —— 编辑
  * PUT    /admin/console/v1/users/:id/status      —— 启用 / 冻结
  * GET    /admin/console/v1/users/export          —— 导出 CSV（按列表当前的筛选条件）
- * POST   /admin/console/v1/users/import          —— 批量导入（CSV 在前端解析成行）
+ * POST   /admin/console/v1/users/import/challenge —— 批量导入·二次验证（绑定本批内容指纹）
+ * POST   /admin/console/v1/users/import          —— 批量导入（需 stepUp；CSV 在前端解析成行）
  * GET    /admin/console/v1/users/:id/grants      —— 授权历史（授予 / 取消流水）
  * POST   /admin/console/v1/users/roles/batch     —— 批量授权（追加 / 移除）
  *
@@ -59,8 +60,14 @@ import {
 } from '../../../../app/console/services/access-scope.service.js';
 import { describeCurrentAccess } from '../../../../app/console/services/user-access.service.js';
 import userProfileService from '../../../../app/console/services/user-profile.service.js';
-import { resolveDataScope } from '../../../../app/console/services/data-scope.service.js';
+import { resolveDataScope, assertDeptWritable } from '../../../../app/console/services/data-scope.service.js';
+import {
+  buildRoleLookup,
+  resolveImportRoles,
+  importFingerprint
+} from '../../../../app/console/services/import-roles.service.js';
 import userDangerService from '../../../../app/console/services/user-danger.service.js';
+import stepUpService from '../../../../app/console/services/stepup.service.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 import { getModel } from '../../../../framework/persistence/db/index.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
@@ -79,6 +86,31 @@ const STEP_UP_SCHEMA = {
     challengeId: { type: 'string', minLength: 1, maxLength: 64 },
     code: { type: 'string', maxLength: 12 },
     password: { type: 'string', maxLength: 128 }
+  }
+};
+
+/**
+ * 批量导入的行定义
+ *
+ * 两个接口共用（签发凭据 `/users/import/challenge` 与真正导入 `/users/import`）：
+ * 形状必须完全一致，否则会出现"按 A 形状验证、按 B 形状执行"的错位。
+ */
+const IMPORT_ROWS_SCHEMA = {
+  type: 'array',
+  minItems: 1,
+  maxItems: 500,
+  items: {
+    type: 'object',
+    required: ['username', 'password'],
+    properties: {
+      username: { type: 'string', minLength: 1, maxLength: 50 },
+      email: { type: 'string', maxLength: 100 },
+      password: { type: 'string', minLength: 8, maxLength: 128 },
+      /** 部门名（按名称匹配，找不到即该行失败） */
+      dept: { type: 'string', maxLength: 50 },
+      /** 角色（编码或名称均可，多个用 | 分隔，由前端拆成数组） */
+      roles: { type: 'array', items: { type: 'string', maxLength: 50 }, default: [] }
+    }
   }
 };
 
@@ -303,6 +335,8 @@ async function registerUserRoutes(fastify) {
        *   · 越权应用、超越职级的授予在规划阶段就 403。
        */
       const body = { ...request.body };
+      // 变更前的角色集合：审计要的是"从什么改成什么"，update 之后就取不到了
+      const beforeRoleIds = Array.isArray(target?.roleIds) ? target.roleIds.map(Number) : [];
       if (Array.isArray(body.roleIds)) {
         const plan = await planRoleChange({ actor, target, submittedRoleIds: body.roleIds });
         body.roleIds = plan.finalRoleIds;
@@ -326,6 +360,46 @@ async function registerUserRoutes(fastify) {
       }
       const ok = await userDao.update(targetId, body, actorOf(request));
       if (!ok) throw new Error('NOT_FOUND:用户不存在');
+
+      /*
+       * 角色变更留痕
+       *
+       * 「给某个用户加/收一个角色」是后台最敏感的动作之一（等于给了/收了一批能力），
+       * 这里原先**一条都不记** —— 事后只能看到这个人某天登录过，查不出是谁给他提的权。
+       * 用 `ROLE_ASSIGNED`（前端摘要已有该事件，避免再造一个事件码）：
+       *   · `roleId` 保留单值（兼容既有摘要与 iam.js 的老写法）；
+       *   · `added` / `removed` 给全量差集，一次改多个角色也能说清。
+       */
+      if (Array.isArray(body.roleIds)) {
+        const afterRoleIds = body.roleIds.map(Number);
+        const added = afterRoleIds.filter(id => !beforeRoleIds.includes(id));
+        const removed = beforeRoleIds.filter(id => !afterRoleIds.includes(id));
+        if (added.length > 0 || removed.length > 0) {
+          const changed = [...added, ...removed];
+          const [rows, targetUser] = await Promise.all([
+            getModel('Role').findAll({ where: { id: changed }, attributes: ['id', 'name'], raw: true }),
+            getModel('User').findByPk(targetId, { attributes: ['id', 'uid', 'username'] })
+          ]);
+          const nameOf = new Map(rows.map(row => [Number(row.id), row.name]));
+          await logAuditEvent({
+            type: 'ROLE_ASSIGNED',
+            userId: operatorId || null,
+            ip: request.ip,
+            userAgent: request.headers['user-agent'] || '',
+            appId: 'console',
+            details: {
+              targetId,
+              targetUid: targetUser?.uid || null,
+              targetUsername: targetUser?.username || '',
+              roleId: added[0] ?? removed[0] ?? null,
+              added,
+              removed,
+              addedNames: added.map(id => nameOf.get(id) || `#${id}`),
+              removedNames: removed.map(id => nameOf.get(id) || `#${id}`)
+            }
+          });
+        }
+      }
       return reply.result.success('保存成功', null);
     })
   });
@@ -413,6 +487,49 @@ async function registerUserRoutes(fastify) {
    * 返回的是**流水**而不是当前快照 —— 用户改名、角色改名都不会影响历史可读性
    * （写库时已快照 username / role_name / operator_name）。
    */
+  /**
+   * 批量导入的第一步：签发一次性二次验证凭据
+   *
+   * 与 `POST /users/import` 分成两步，和清除日志一致：先验证、再执行，执行时用的
+   * 是同一份内容指纹（`importFingerprint`）。一次导入能建 500 个可登录账号，
+   * 破坏半径比删单个账号更大，所以不该只要一个权限码就放行。
+   */
+  registerSecureRoute(fastify, {
+    name: 'consoleUserImportChallenge',
+    alias: '批量导入-二次验证',
+    method: 'POST',
+    url: '/users/import/challenge',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.IMPORT,
+    // 这个接口会真的发邮件：不限频等于把后台当邮件轰炸器
+    config: { rateLimit: { max: 8, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['rows'],
+        properties: {
+          rows: IMPORT_ROWS_SCHEMA,
+          /** 验证方式；缺省按账号可用因素推荐（有邮箱走验证码） */
+          method: { type: 'string', enum: ['email', 'password'] }
+        }
+      }
+    },
+    handler: withFail(async (request, reply) => {
+      const rows = request.body.rows;
+      const challenge = await stepUpService.createChallenge({
+        userId: request.state.user?.userId,
+        request,
+        action: 'user.import',
+        targetId: null,
+        targetKey: importFingerprint(rows),
+        method: request.body.method
+      });
+      const message =
+        challenge.method === 'email' ? `验证码已发送至 ${challenge.maskedTarget}` : '请输入你的登录密码完成验证';
+      return reply.result.success(message, { ...challenge, matched: rows.length });
+    })
+  });
+
   registerSecureRoute(fastify, {
     name: 'consoleUserImport',
     alias: '批量导入用户',
@@ -420,36 +537,47 @@ async function registerUserRoutes(fastify) {
     url: '/users/import',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.USER.IMPORT,
+    /*
+     * 频控：一次导入最多 500 行，每行一次 scrypt 哈希（CPU 密集）。
+     * 没有上限时，一个持有 import 权限的账号可以连续打满整机 CPU —— 这是
+     * 权限内的"自伤"，但也把同机其它请求拖慢，所以按分钟限次而不是只信任角色。
+     */
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     schema: {
       body: {
         type: 'object',
-        required: ['rows'],
+        required: ['rows', 'stepUp'],
         properties: {
-          rows: {
-            type: 'array',
-            minItems: 1,
-            maxItems: 500,
-            items: {
-              type: 'object',
-              required: ['username', 'password'],
-              properties: {
-                username: { type: 'string', minLength: 1, maxLength: 50 },
-                email: { type: 'string', maxLength: 100 },
-                password: { type: 'string', minLength: 8, maxLength: 128 },
-                /** 部门名（按名称匹配，找不到即该行失败） */
-                dept: { type: 'string', maxLength: 50 },
-                /** 角色（编码或名称均可，多个用 | 分隔，由前端拆成数组） */
-                roles: { type: 'array', items: { type: 'string', maxLength: 50 }, default: [] }
-              }
-            }
-          }
+          rows: IMPORT_ROWS_SCHEMA,
+          stepUp: STEP_UP_SCHEMA
         }
       }
     },
     handler: withFail(async (request, reply) => {
+      /*
+       * 二次验证先过：拿"验证了 1 行"的凭据来导 500 行会被这里拒掉 ——
+       * 指纹由服务端从本次 rows 派生，与签发时比对。
+       */
+      const { method: stepUpMethod } = await stepUpService.consumeChallenge({
+        userId: request.state.user?.userId,
+        request,
+        action: 'user.import',
+        targetId: null,
+        targetKey: importFingerprint(request.body.rows),
+        challengeId: request.body.stepUp.challengeId,
+        code: request.body.stepUp.code,
+        password: request.body.stepUp.password
+      });
       const actor = await getActorScope(request.state.user?.userId);
       const operator = actorOf(request);
       const rows = request.body.rows;
+
+      /*
+       * 数据范围（部门维度）在**循环外**算一次：它要查角色 + 部门子树，逐行算等于
+       * 500 次同样的查询。写操作的部门范围必须与列表过滤同源，否则会出现
+       * "看不见的部门里凭空多出账号"。
+       */
+      const dataScope = await resolveDataScope(request.state.user?.userId);
 
       /*
        * 参照表一次性读出来：逐行查库会把 500 行变成上千次查询。
@@ -461,43 +589,27 @@ async function registerUserRoutes(fastify) {
         getModel('Role').findAll({ attributes: ['id', 'code', 'name'], raw: true })
       ]);
       const deptMap = new Map(depts.map(d => [String(d.name).trim(), Number(d.id)]));
-      const roleMap = new Map();
-      for (const role of roles) {
-        roleMap.set(
-          String(role.code || '')
-            .trim()
-            .toLowerCase(),
-          Number(role.id)
-        );
-        roleMap.set(
-          String(role.name || '')
-            .trim()
-            .toLowerCase(),
-          Number(role.id)
-        );
-      }
+      // 重名（三个应用的"普通用户"）会让按名称匹配变得不确定，交给 lookup 报出来
+      const roleLookup = buildRoleLookup(roles);
 
       const created = [];
       const failed = [];
       for (const [index, row] of rows.entries()) {
         const line = index + 1;
         try {
-          const roleIds = [];
-          const unknownRoles = [];
-          for (const raw of row.roles || []) {
-            const key = String(raw || '')
-              .trim()
-              .toLowerCase();
-            if (!key) continue;
-            const hit = roleMap.get(key);
-            if (hit) roleIds.push(hit);
-            else unknownRoles.push(String(raw).trim());
+          const { roleIds, unknown: unknownRoles, ambiguous } = resolveImportRoles(roleLookup, row.roles);
+          if (ambiguous.length > 0) {
+            throw new Error(
+              `角色名有歧义：${ambiguous.join('、')}（多个应用下同名，请改用角色编码，如 posecraft_user）`
+            );
           }
           if (unknownRoles.length > 0) throw new Error(`角色不存在：${unknownRoles.join('、')}`);
 
           const deptName = String(row.dept || '').trim();
           const deptId = deptName ? (deptMap.get(deptName) ?? null) : null;
           if (deptName && deptId === null) throw new Error(`部门不存在「${deptName}」`);
+          // 部门维度越权：只能把账号写进自己数据范围里的部门
+          assertDeptWritable(dataScope, deptId, { action: '导入' });
 
           // 导入同样受职级约束：否则"批量导入 + 超管角色"就是绕过提权闸的后门
           await assertGrantable(actor, roleIds);
@@ -530,7 +642,7 @@ async function registerUserRoutes(fastify) {
         ip: request.ip,
         userAgent: request.headers?.['user-agent'] || '',
         appId: 'console',
-        details: { total: rows.length, created: created.length, failed: failed.length }
+        details: { total: rows.length, created: created.length, failed: failed.length, stepUp: stepUpMethod }
       });
 
       return reply.result.success(`导入完成：成功 ${created.length} 条，失败 ${failed.length} 条`, {
