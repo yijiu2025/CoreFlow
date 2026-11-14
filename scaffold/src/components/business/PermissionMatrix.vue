@@ -5,10 +5,18 @@
  * 交互约定（与参考项目一致）：
  * - 悬停格子时十字高亮整行整列；点格子切换授权
  * - 勾选子项会连带勾上祖先（菜单可见需要父级）；点目录/菜单行整枝开关
- * - 内置角色列只读；有改动时底部升起「未保存 N 项」浮条，一次提交
+ * - `menuLocked` 的角色（只有超级管理员）列恒为全选且不可点：它本来就该全有；
+ *   `builtin` 只表示"由代码声明"，不再限制勾选 —— 菜单可见性是运行期数据
+ * - 有改动时底部升起「未保存 N 项」浮条，一次提交
+ * - 「菜单授权」与「角色权限码」对不上时（勾着却缺码 / 有码却没勾）**只用 hover 提示**
+ *   说明这一格是空转的，不做红框、不做顶部横幅 —— 见 `mismatchOf` 的注释
  *
  * 🔴 这里管的是 **菜单可见性**（sys_role_menu），不是接口权限码（PBAC policy）。
- *    两套语义在界面上必须分开展示，否则运维会以为勾了菜单就放开了接口。
+ *    两套语义要分开摆，否则运维会以为勾了菜单就放开了接口。
+ *
+ *    "分开"不等于"无关"：按钮码要**两者都有**才成立 —— 前端 `hasPermission` 二级判定，
+ *    后端 `checkPermission` 也会查这条菜单授权（见 `framework/.../button-grant.js`）。
+ *    对不上时格子是"空转"的（勾了/没勾都不产生效果），信息放在 title 里，不喧哗。
  *
  * @author yijiu2025
  * @since 2026-11-10
@@ -16,13 +24,25 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import AppIcon from '@/components/ui/AppIcon.vue';
 import { floatBarEnter, floatBarLeave, revealRows } from '@/composables/motion';
+import { matchPermission } from '@/utils/permission';
 import type { MenuNode } from '@/api/types';
 
 /** 矩阵列（角色）需要的字段 */
 export interface MatrixRole {
   id: number;
   name: string;
+  /** 由代码声明（只影响列表里的"内置"标记，不再锁矩阵） */
   builtin?: boolean;
+  /** 菜单授权锁定（超级管理员）：该列恒为全选、不可点 */
+  menuLocked?: boolean;
+  /**
+   * 该角色 policy 里的权限码（`RoleRow.permissions`）
+   *
+   * 用来核对"这一格勾的菜单"与"角色到底有没有这个能力"是否一致：
+   * 矩阵管的是**菜单可见性**（sys_role_menu），按钮能不能出现还要过 policy 那道闸，
+   * 两处不齐时这一格是空转的 —— 悬停时说明原因（见 `mismatchOf`）。
+   */
+  codes?: string[];
   status?: number;
 }
 
@@ -35,7 +55,11 @@ const props = defineProps<{
   saving?: boolean;
 }>();
 
-const emit = defineEmits<{ (e: 'save', changes: Array<{ roleId: number; menuIds: number[] }>): void }>();
+const emit = defineEmits<{
+  (e: 'save', changes: Array<{ roleId: number; menuIds: number[] }>): void;
+  /** 点了"角色没有这个码"的格子：把原因抛给宿主去提示（矩阵自己不弹 toast） */
+  (e: 'blocked', message: string): void;
+}>();
 
 const draft = ref<Record<number, Set<number>>>({});
 const collapsed = ref<Set<number>>(new Set());
@@ -81,33 +105,131 @@ const index = computed(() => {
 
 const visibleRows = computed(() => index.value.filter(r => !r.parents.some(id => collapsed.value.has(id))));
 
+/** 锁定的角色（超管）：恒显示为全选，且不接受点击 */
+const lockedIds = computed(() => new Set(props.roles.filter(r => r.menuLocked).map(r => r.id)));
+
+/**
+ * 角色 policy 里是否有这个权限码
+ *
+ * 走共享的 `matchPermission`（`utils/permission.ts`）—— 判据必须与运行期放行、
+ * 与 `stores/auth.ts` 同一套，否则"矩阵允许勾选"和"按钮真的出现"会各说各的。
+ *
+ * @param role 角色
+ * @param code 权限码（菜单节点上的 `permission`）
+ * @returns 是否命中
+ */
+function policyHas(role: MatrixRole, code: string): boolean {
+  return matchPermission(role.codes ?? [], code);
+}
+
+/** 是否具备核对条件（角色数据没带 policy 时说不了对错，就不拦） */
+const canCheckPolicy = computed(() => props.roles.every(role => Array.isArray(role.codes)));
+
+/** menuId → 该行的权限码（无码的行如目录不在表里） */
+const codeByMenuId = computed(() => {
+  const map = new Map<number, string>();
+  for (const row of index.value) {
+    if (row.menu.permission) map.set(row.menu.id, row.menu.permission);
+  }
+  return map;
+});
+
+/** roleId → 角色（`state` 要按角色判"有没有这个码"，只拿 id 不够） */
+const roleById = computed(() => new Map(props.roles.map(role => [role.id, role])));
+
+/**
+ * 这一行对这个角色是否**没有能力**（有码但角色不带）
+ *
+ * 语义：菜单授权是开关，policy 是能力上限。关掉一个有的能力 → 立刻失效（这是开关）；
+ * 打开一个没有的能力 → 什么都不会发生。后者不该被静默允许 —— 那个勾看着像"给了权限"，
+ * 实际两边都没变，是矩阵里最容易骗人的格子。
+ *
+ * @param role 角色
+ * @param menuId 菜单行 ID
+ * @returns 缺的权限码；`''` 表示这一格可用
+ */
+function blockedCode(role: MatrixRole, menuId: number): string {
+  const code = codeByMenuId.value.get(menuId);
+  if (!code || !canCheckPolicy.value) return '';
+  return policyHas(role, code) ? '' : code;
+}
+
+/**
+ * 缺码时的完整提示
+ *
+ * 修法分两种，必须说清 —— 内置角色的码由代码声明，在角色编辑里根本改不了：
+ * 自定义角色去「角色编辑 → 权限码」补；内置角色要去 app 的 roles.js 改并重启。
+ *
+ * @param role 角色
+ * @param code 缺的权限码
+ * @returns 提示文案
+ */
+function blockedMessage(role: MatrixRole, code: string): string {
+  if (role.builtin) {
+    return `「${role.name}」没有权限码 ${code}：内置角色的码由代码声明（src/app/*/permission/roles.js），改完重启后端，这个勾才会生效`;
+  }
+  return `「${role.name}」没有权限码 ${code}：先去「角色编辑 → 权限码」补上，这个勾才会生效`;
+}
+
+/**
+ * 单元格提示文本（缺码时）
+ *
+ * @param role 角色
+ * @param row 菜单行
+ * @returns 提示；可用时不设，交给浏览器默认
+ */
+function blockedHint(role: MatrixRole, row: Row): string | undefined {
+  const code = blockedCode(role, row.menu.id);
+  return code ? blockedMessage(role, code) : undefined;
+}
+
 /**
  * 单元格状态
+ *
+ * 🔴 只反映**生效状态**：角色没有这个码的行，即使库里还存着旧授权，也一律显示未勾 ——
+ *    那 21 个"勾着却没码"的格子就是这么消失的（数据留着，但不再骗人；等角色补上码，
+ *    它才会真的亮起来）。
  *
  * @param roleId 角色 ID
  * @param row 菜单行
  * @returns on 全选 / partial 部分 / off 未选
  */
 function state(roleId: number, row: Row): 'on' | 'off' | 'partial' {
+  // 超管默认全有：它的权限是 `admin:*`，菜单不该（也不需要）靠勾选获得
+  if (lockedIds.value.has(roleId)) return 'on';
+  const role = roleById.value.get(roleId);
+  if (!role) return 'off';
+  // 自己没有这个码：勾了也不生效，显示为未勾且不接受勾选（点击给提示）
+  if (blockedCode(role, row.menu.id)) return 'off';
   const set = draft.value[roleId];
   if (!set) return 'off';
-  if (!row.descendants.length) return set.has(row.menu.id) ? 'on' : 'off';
-  const onCount = row.descendants.filter(id => set.has(id)).length;
-  if (set.has(row.menu.id) && onCount === row.descendants.length) return 'on';
+  const kids = row.descendants.filter(id => !blockedCode(role, id));
+  if (!kids.length) return set.has(row.menu.id) ? 'on' : 'off';
+  const onCount = kids.filter(id => set.has(id)).length;
+  if (set.has(row.menu.id) && onCount === kids.length) return 'on';
   return set.has(row.menu.id) || onCount ? 'partial' : 'off';
 }
 
 /**
  * 切换一格（含级联：选中带祖先，取消带整枝）
  *
+ * 没能力的格子不参与：点它只弹提示（去哪补码），不写授权 —— 否则又会造出
+ * "勾了但什么都没发生"的格子。
+ *
  * @param role 角色
  * @param row 菜单行
  */
 function toggle(role: MatrixRole, row: Row): void {
-  if (!props.editable || role.builtin) return;
+  if (!props.editable || role.menuLocked) return;
+  const blocked = blockedCode(role, row.menu.id);
+  if (blocked) {
+    emit('blocked', blockedMessage(role, blocked));
+    return;
+  }
   const set = new Set(draft.value[role.id] ?? []);
   const current = state(role.id, row);
-  const ids = [row.menu.id, ...row.descendants];
+  // 级联时跳过角色没有码的子孙：勾了也不生效，顺手别写进授权表
+  const ids = [row.menu.id, ...row.descendants].filter(id => !blockedCode(role, id));
   if (current === 'on') {
     ids.forEach(id => set.delete(id));
   } else {
@@ -129,10 +251,10 @@ function toggleCollapse(id: number): void {
   collapsed.value = next;
 }
 
-/** 改动：按角色与原始授权做差集 */
+/** 改动：按角色与原始授权做差集（锁定列不参与，避免"改了超管却保存不上去"） */
 const changes = computed(() =>
   props.roles
-    .filter(r => !r.builtin)
+    .filter(r => !r.menuLocked)
     .map(r => {
       const before = new Set(props.grants[r.id] ?? []);
       const after = draft.value[r.id] ?? new Set<number>();
@@ -170,12 +292,24 @@ function save(): void {
 const TYPE_LABEL: Record<string, string> = { dir: '目录', menu: '菜单', btn: '按钮' };
 
 /**
- * 某角色已勾选数量
+ * 某角色**生效中**的授权数量
+ *
+ * 只数"这个角色有码"的节点：库里可能还留着没有码的旧授权（渲染时按未勾处理），
+ * 把它们算进来会让列头写着「22 项」而图上一个勾都看不见。
  *
  * @param roleId 角色 ID
  * @returns 数量
  */
-const grantCount = (roleId: number): number => draft.value[roleId]?.size ?? 0;
+const grantCount = (roleId: number): number => {
+  const role = roleById.value.get(roleId);
+  const set = draft.value[roleId];
+  if (!role || !set) return 0;
+  let count = 0;
+  set.forEach(id => {
+    if (!blockedCode(role, id)) count += 1;
+  });
+  return count;
+};
 
 watch(
   () => props.menus.length,
@@ -202,10 +336,18 @@ defineExpose({ dirty: computed(() => changeCount.value > 0), reset });
             v-for="r in roles"
             :key="r.id"
             role="columnheader"
-            :class="['mx-role', { 'is-hover': hoverCol === r.id, 'is-locked': r.builtin, 'is-off': r.status === 0 }]"
+            :class="['mx-role', { 'is-hover': hoverCol === r.id, 'is-locked': r.menuLocked, 'is-off': r.status === 0 }]"
           >
             <span class="mx-role-name">{{ r.name }}</span>
-            <span class="mx-role-meta tnum">{{ r.builtin ? '内置 · 只读' : `${grantCount(r.id)} 项` }}</span>
+            <span class="mx-role-meta tnum">{{
+              r.menuLocked
+                ? '全部 · 不可改'
+                : r.builtin
+                  ? editable
+                    ? '内置 · 菜单可调'
+                    : '内置'
+                  : `${grantCount(r.id)} 项`
+            }}</span>
           </div>
         </div>
         <div ref="body" class="mx-body">
@@ -226,7 +368,12 @@ defineExpose({ dirty: computed(() => changeCount.value > 0), reset });
                 <AppIcon name="chevronRight" :size="14" />
               </button>
               <span v-else class="tree-toggle is-leaf" />
-              <AppIcon v-if="row.menu.icon && row.menu.type !== 'btn'" :name="row.menu.icon" :size="15" class="mx-ico" />
+              <AppIcon
+                v-if="row.menu.icon && row.menu.type !== 'btn'"
+                :name="row.menu.icon"
+                :size="15"
+                class="mx-ico"
+              />
               <span class="mx-name ellipsis">{{ row.menu.name }}</span>
               <span class="mx-type">{{ TYPE_LABEL[row.menu.type] }}</span>
             </div>
@@ -235,10 +382,20 @@ defineExpose({ dirty: computed(() => changeCount.value > 0), reset });
               :key="r.id"
               type="button"
               role="gridcell"
-              :class="['mx-cell', `is-${state(r.id, row)}`, { 'is-col-hover': hoverCol === r.id, 'is-locked': !editable || r.builtin }]"
+              :class="[
+                'mx-cell',
+                `is-${state(r.id, row)}`,
+                {
+                  'is-col-hover': hoverCol === r.id,
+                  'is-locked': r.menuLocked,
+                  'is-readonly': !editable
+                }
+              ]"
               :aria-pressed="state(r.id, row) === 'on' ? 'true' : state(r.id, row) === 'partial' ? 'mixed' : 'false'"
               :aria-label="`${r.name} · ${row.menu.name}`"
-              :disabled="!editable || r.builtin"
+              :title="blockedHint(r, row)"
+              :aria-disabled="blockedCode(r, row.menu.id) ? 'true' : undefined"
+              :disabled="!editable || r.menuLocked"
               @pointerenter="
                 hoverRow = row.menu.id;
                 hoverCol = r.id;
@@ -249,7 +406,9 @@ defineExpose({ dirty: computed(() => changeCount.value > 0), reset });
               "
               @click="toggle(r, row)"
             >
-              <span class="mx-mark" aria-hidden="true"><AppIcon v-if="state(r.id, row) === 'on'" name="check" :size="12" /></span>
+              <span class="mx-mark" aria-hidden="true"
+                ><AppIcon v-if="state(r.id, row) === 'on'" name="check" :size="12"
+              /></span>
             </button>
           </div>
         </div>
@@ -259,9 +418,13 @@ defineExpose({ dirty: computed(() => changeCount.value > 0), reset });
     <Teleport to="body">
       <Transition :css="false" @enter="floatBarEnter" @leave="floatBarLeave">
         <div v-if="changeCount" class="float-bar" role="region" aria-label="未保存的权限变更">
-          <span class="float-bar-count">未保存 <b class="tnum">{{ changeCount }}</b> 项 · {{ changes.length }} 个角色</span>
+          <span class="float-bar-count"
+            >未保存 <b class="tnum">{{ changeCount }}</b> 项 · {{ changes.length }} 个角色</span
+          >
           <span class="float-bar-sep" aria-hidden="true" />
-          <button class="btn btn--ghost btn--sm float-bar-clear" type="button" :disabled="saving" @click="reset">撤销</button>
+          <button class="btn btn--ghost btn--sm float-bar-clear" type="button" :disabled="saving" @click="reset">
+            撤销
+          </button>
           <button class="btn btn--primary btn--sm" type="button" :disabled="saving" @click="save">
             {{ saving ? '保存中…' : '保存变更' }}
           </button>
@@ -270,3 +433,21 @@ defineExpose({ dirty: computed(() => changeCount.value > 0), reset });
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/*
+ * 锁定列（超管）恒为"全选且不可点"：勾标不能被 `.is-locked` 的 0.55 淡成"没有"，
+ * 那会让人以为超管没权限。保持可读的 0.85，同时用 not-allowed 光标表达不可点。
+ */
+.mx-cell.is-locked.is-on .mx-mark {
+  opacity: 0.85;
+}
+
+/*
+ * 只读视角（观察者）：整张图只是给人看的，勾选状态必须原样可读。
+ * 不做淡出 —— 淡成半透明读起来像"这些权限没有生效"，而它们确实生效着。
+ */
+.mx-cell.is-readonly .mx-mark {
+  opacity: 1;
+}
+</style>

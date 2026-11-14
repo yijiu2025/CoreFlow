@@ -11,6 +11,18 @@ const posecraftConfig = {
   description: 'AI 姿势分析 + 图片编辑平台',
 
   /**
+   * 授权即送的默认角色（**主口径**）
+   *
+   * 用户首次授权本应用时自动授予这个角色（见 `app/oauth21/dao/approval.dao.js`）。
+   * 优先级：本字段 > `roles.js` 里该角色的 `is_default: true` > 取最低职级（<= 20）。
+   * 写 `null` 表示"有意不自动授予"。
+   *
+   * 🔴 必须是一个 `rank_level <= 20` 的普通档角色 —— 写管理员角色等于给每个
+   *    授权的人发管理员，启动期审计会直接报 error。
+   */
+  default_role: 'posecraft_user',
+
+  /**
    * OAuth 2.1 客户端配置
    * loader 扫描时自动同步到 oauth_clients 表
    */

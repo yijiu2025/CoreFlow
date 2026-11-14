@@ -189,7 +189,6 @@ describe('API 路由（真实驱动）', () => {
         'sessions',
         'devices',
         'kick',
-        '-all',
         'bind-token',
         'clear-cookie',
         'refresh-session',
@@ -200,6 +199,18 @@ describe('API 路由（真实驱动）', () => {
       ]) {
         expect(flat()).toContain(segment);
       }
+    });
+
+    /*
+     * `kick-all` / `kick-device` 用 hasRoute 按 method+url 精确判定，**不能**继续靠
+     * printRoutes 的渲染形态：两者共享 `kick-` 前缀时，find-my-way 会插入一个中间节点
+     * `-`，渲染成 `kick(POST) → - → all/device`，扁平化后根本不存在 "-all" 这个子串。
+     * 2026-11-14 新增 kick-device 后旧判据（`toContain('-all')`）就是这么红的 ——
+     * 路由在、判据错，而它本来要防的是"路由被误删"。
+     */
+    it('kick-all / kick-device 真实注册（按 method+url 精确判定）', () => {
+      expect(app.hasRoute({ method: 'POST', url: '/user/v1/sessions/kick-all' })).toBe(true);
+      expect(app.hasRoute({ method: 'POST', url: '/user/v1/sessions/kick-device' })).toBe(true);
     });
 
     it('受保护路由的 HTTP 方法正确（防止被改成公开）', () => {

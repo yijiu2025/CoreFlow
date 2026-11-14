@@ -15,21 +15,15 @@ import { defineStore } from 'pinia';
 import { fetchMe, fetchRoutes, logout as apiLogout } from '@/api/session';
 import { ApiError } from '@/api/http';
 import type { CurrentUser, MenuNode } from '@/api/types';
+import { useAccentStore } from '@/stores/accent';
+import { matchPermission } from '@/utils/permission';
 
 /**
  * 权限码匹配（支持 `*` 与 `admin:*` 通配）
  *
- * @param patterns 当前用户权限码
- * @param code 待判定权限码
- * @returns 是否命中
+ * 实现收拢在 `utils/permission.ts`：角色授权弹窗与权限矩阵判"这个角色有没有这个码"，
+ * 这里判"当前用户有没有"—— 语义必须是同一份，否则前端两处会给出不同答案。
  */
-function matchPermission(patterns: string[], code: string): boolean {
-  return patterns.some(pattern => {
-    if (pattern === '*' || pattern === code) return true;
-    if (pattern.endsWith('*')) return code.startsWith(pattern.slice(0, -1));
-    return false;
-  });
-}
 
 export const useAuthStore = defineStore('auth', () => {
   const me = ref<CurrentUser | null>(null);
@@ -86,6 +80,8 @@ export const useAuthStore = defineStore('auth', () => {
       const [user, routes] = await Promise.all([fetchMe(), fetchRoutes()]);
       me.value = user;
       menus.value = routes;
+      // 登录/刷新后把服务端偏好同步到界面（主题色跟账号走，不跟浏览器走）
+      useAccentStore().hydrate(user.preferences?.accent);
       loaded.value = true;
       return true;
     } catch (err) {
@@ -114,6 +110,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 判断是否拥有某权限码
+   *
+   * 🔴 **只认一份清单**：`/session/me` 下发的 `permissions` 已经是"最终生效"的码 ——
+   *    后端在下发前就把"角色有码、但菜单授权没勾（或按钮停用/下架）"的按钮码摘掉了。
+   *    所以这里只做一次匹配，不再区分"按钮码 / 页面码"，也不持有第二套判据。
+   *
+   *    这正是两边不会分叉的原因：前端猜错的空间没有了。守卫用的是同一份口径
+   *    （`button-grant.service.js`），所以"按钮看不见"与"接口 403"永远同时成立。
    *
    * @param code 权限码，如 `admin:user:create`
    * @returns 是否拥有

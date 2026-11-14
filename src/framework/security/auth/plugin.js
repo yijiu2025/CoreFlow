@@ -81,7 +81,11 @@ const authPlugin = fp(async app => {
         appId: sessionData.appId,
         roles: sessionData.roles,
         permissions: sessionData.permissions,
-        sessionId: sessionData.sessionId
+        sessionId: sessionData.sessionId,
+        // 设备标识随会话带出：审计（audit_logs.device_id）与风险检测共用同一份，
+        // 不再让每个调用点自己去读 header/cookie —— 那样一旦客户端只带了 cookie
+        // 或 header 被中间层改写，同一台机器会记成两个身份。
+        deviceId: sessionData.deviceId || null
       };
 
       // 访问时风险检测（基准从 Redis sessionData 取，不查 DB）

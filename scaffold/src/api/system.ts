@@ -8,6 +8,7 @@
  */
 import { del, download, get, post, put } from './http';
 import type {
+  DangerConfirm,
   DeptHistoryRow,
   DeptNode,
   GrantHistoryPage,
@@ -23,8 +24,10 @@ import type {
   TempPasswordRow,
   UserAppRow,
   UserDeletionRequest,
+  UserProfile,
   UserOptions,
-  UserRow
+  UserRow,
+  UserSessionRow
 } from './types';
 
 const BASE = '/admin/console/v1';
@@ -37,6 +40,8 @@ export interface UserQuery {
   pageSize?: number;
   keyword?: string;
   deptId?: number | null;
+  /** 子应用过滤：只留在该应用里有角色的人（空 = 全部应用） */
+  appId?: string | null;
   status?: number | null;
 }
 
@@ -107,18 +112,42 @@ export function requestStepUpChallenge(body: {
 /* ── 账号高危操作（都要 stepUp 一次性凭据） ────────────────── */
 
 /** 待执行的注销申请 + 会话未踢干净的记录 */
-export function userDeletion(id: number): Promise<{ requests: UserDeletionRequest[]; pendingKicks: PendingKick[] }> {
+/**
+ * 用户详情（概览 / 应用 / 角色权限 / 最近记录）
+ *
+ * 后端一个接口给全，职级可见性也在后端判（同级能看、下级看不了上级）。
+ */
+export function userProfile(id: number): Promise<UserProfile> {
+  return get(`${BASE}/users/${id}/profile`);
+}
+
+/**
+ * 调整某一条权限：allow / deny / inherit
+ *
+ * 落 PBAC 个人策略（`iam_inline_policy`），Deny 优先于角色授予。
+ */
+export function setUserPermission(
+  id: number,
+  body: { appId: string; code: string; effect: 'allow' | 'deny' | 'inherit' }
+): Promise<{ appId: string; appLabel: string; allow: string[]; deny: string[] }> {
+  return put(`${BASE}/users/${id}/permissions`, body);
+}
+
+export function userDeletion(
+  id: number
+): Promise<{ requests: UserDeletionRequest[]; pendingKicks: PendingKick[]; confirm: DangerConfirm }> {
   return get(`${BASE}/users/${id}/deletion`);
 }
 
 /**
  * 发起删除（缓冲期，到期才清数据）
  *
- * `confirmUsername` 需要前端让操作者手打目标账号名 —— 服务端会比对，防手滑。
+ * `confirm` 需要前端让操作者手打 GET 详情里返回的 `confirm.value`（邮箱 / 手机号 /
+ * 用户 ID，由后端挑一个最好打的），服务端会按同一套规则比对，防手滑。
  */
 export function requestUserDeletion(
   id: number,
-  body: { stepUp: StepUpPayload; confirmUsername: string; reason?: string }
+  body: { stepUp: StepUpPayload; confirm: string; reason?: string }
 ): Promise<{ id: number; scheduledAt: string; graceDays: number }> {
   return post(`${BASE}/users/${id}/deletion`, body);
 }
@@ -160,6 +189,31 @@ export function exportUsers(query: UserQuery): Promise<void> {
   return download(`${BASE}/users/export`, 'users.csv', query as Record<string, unknown>);
 }
 
+/** 导入行（CSV 已在浏览器解析成结构化数据；部门/角色写名称，后端负责映射成 id） */
+export interface UserImportRow {
+  username: string;
+  email?: string;
+  password: string;
+  dept?: string;
+  roles?: string[];
+}
+
+/** 批量导入结果（逐行成败，单行失败不影响其他行） */
+export interface UserImportResult {
+  created: number;
+  failed: Array<{ line: number; username: string; reason: string }>;
+}
+
+/**
+ * 批量导入用户
+ *
+ * @param rows 解析后的行（最多 500）
+ * @returns 成功条数与失败明细
+ */
+export function importUsers(rows: UserImportRow[]): Promise<UserImportResult> {
+  return post(`${BASE}/users/import`, { rows });
+}
+
 /* ── 角色 ─────────────────────────────────────────────────── */
 
 /** 角色分页 */
@@ -199,11 +253,54 @@ export function permissionCatalog(): Promise<
   return get(`${BASE}/permissions/catalog`);
 }
 
+/* ── 设备会话（注意前缀不同） ─────────────────────────────── */
+
+/**
+ * 某用户的所有设备会话
+ *
+ * 🔴 路径**不走** `BASE`：会话管理挂在 user 域（`/admin/user/v1/sessions/*`），
+ *    与 console 的 `/admin/console/v1` 是两个前缀。拼错会 404，而 404 在这里
+ *    很容易被当成"这个人没有设备"。
+ *
+ * @param query userId 为数字主键（后端明确拒绝 uid/UUID）
+ * @returns 设备会话列表
+ */
+export function listUserSessions(query: { userId: number; appId?: string }): Promise<UserSessionRow[]> {
+  return get('/admin/user/v1/sessions/list', query);
+}
+
+/**
+ * 按设备码踢下线（只影响这一台设备）
+ *
+ * `kicked = 0` 是正常结果：该设备当前没有活跃会话（可能已过期或已被踢）。
+ *
+ * @param body 目标与设备码
+ * @returns 实际踢出的会话数
+ */
+export function kickUserSession(body: {
+  userId: number;
+  appId: string;
+  deviceId: string;
+}): Promise<{ kicked: number; revoked: number; clearedRefresh: number }> {
+  return post('/admin/user/v1/sessions/kick-by-device', body);
+}
+
 /* ── 菜单 ─────────────────────────────────────────────────── */
 
 /** 菜单树 */
 export function menuTree(): Promise<MenuNode[]> {
   return get(`${BASE}/menus/tree`);
+}
+
+/**
+ * 本应用可用的权限码
+ *
+ * 🔴 只有本应用的码（`admin:` 开头）。**不要**改用 `/permissions/catalog` ——
+ *    那是 8 个应用合并后的全量目录，拿它做菜单候选等于把"能用别的应用的码"
+ *    摆到界面上；后端也会拒写非本应用的码。
+ */
+export function menuPermissionOptions(): Promise<{ options: Array<{ code: string; label: string; type: string }> }> {
+  return get(`${BASE}/menus/permission-options`);
 }
 
 /** 新建菜单 */

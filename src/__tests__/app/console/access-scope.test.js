@@ -16,7 +16,8 @@ import {
   assertCanManageRole,
   planRoleChangeWithRoles,
   assertGrantableRoles,
-  canWriteApp
+  canWriteApp,
+  assertCanGrantCodes
 } from '../../../app/console/services/access-scope.service.js';
 
 /**
@@ -178,6 +179,56 @@ describe('assertGrantableRoles —— 新建用户 / 批量追加时能授予什
 
   test('超管可授予任意角色', () => {
     expect(() => assertGrantableRoles(persona([superRole]), new Map([[adminAdmin.id, adminAdmin]]))).not.toThrow();
+  });
+});
+
+describe('assertCanGrantCodes —— 授予上限（不能授自己没有的码）', () => {
+  /** 造一个 request.state.user 形状的操作者（只用到 roles + permissions） */
+  const actor = (allows, extra = {}) => ({ roles: [], permissions: { allows, denies: [] }, ...extra });
+
+  // admin_operator 的真实策略：user:* + role:* + policy:read
+  const operator = actor(['admin:user:*', 'admin:role:*', 'admin:policy:read']);
+
+  test('通配覆盖：持有 admin:user:* 就能授 admin:user:create', () => {
+    expect(() => assertCanGrantCodes(operator, ['admin:user:create'])).not.toThrow();
+  });
+
+  test('不能借"更宽的通配"提权：admin:user:* 授不出 admin:*', () => {
+    expect(() => assertCanGrantCodes(operator, ['admin:*'])).toThrow(/admin:\*/);
+  });
+
+  test('不能授自己完全没持有的码', () => {
+    expect(() => assertCanGrantCodes(operator, ['admin:log:read'])).toThrow(/admin:log:read/);
+  });
+
+  test('denies 优先：被自己策略压住的码不算持有', () => {
+    const limited = actor(['admin:user:*'], {
+      permissions: { allows: ['admin:user:*'], denies: ['admin:user:delete'] }
+    });
+    expect(() => assertCanGrantCodes(limited, ['admin:user:delete'])).toThrow(/admin:user:delete/);
+    expect(() => assertCanGrantCodes(limited, ['admin:user:update'])).not.toThrow();
+  });
+
+  test('精确码可授（同一命名空间不等于可覆盖）', () => {
+    const log = actor(['admin:log:read']);
+    expect(() => assertCanGrantCodes(log, ['admin:log:read'])).not.toThrow();
+    expect(() => assertCanGrantCodes(log, ['admin:log:remove'])).toThrow(/admin:log:remove/);
+  });
+
+  test('超管与 admin:* 持有者免检（否则维护其它应用的业务角色会被误拦）', () => {
+    expect(() => assertCanGrantCodes(actor([], { roles: ['superadmin'] }), ['posecraft:work:read'])).not.toThrow();
+    expect(() => assertCanGrantCodes(actor(['admin:*']), ['posecraft:work:read'])).not.toThrow();
+  });
+
+  test('空清单直接放行（保存时不提交 permissions 也会走到这里）', () => {
+    expect(() => assertCanGrantCodes(operator, [])).not.toThrow();
+    expect(() => assertCanGrantCodes(operator, undefined)).not.toThrow();
+  });
+
+  test('多个越界码要能报出来（否则运维不知道该删哪几个）', () => {
+    expect(() => assertCanGrantCodes(operator, ['admin:log:read', 'admin:menu:create'])).toThrow(
+      /admin:log:read、admin:menu:create/
+    );
   });
 });
 

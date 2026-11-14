@@ -27,7 +27,14 @@ import { describe, it, expect, beforeAll } from '@jest/globals';
 import { DataTypes } from 'sequelize';
 
 import defineRole from '../../models/iam/Role.js';
-import { roleRegistry } from '../../framework/security/pbac/index.js';
+import {
+  roleRegistry,
+  auditDefaultRoles,
+  RANK_LEVEL_MIN,
+  RANK_LEVEL_MAX,
+  NORMAL_RANK_MAX
+} from '../../framework/security/pbac/index.js';
+import { registerAppConfig, listAppConfigs } from '../../framework/config/app-registry.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
@@ -62,6 +69,14 @@ function appNamesWithRoles() {
     .filter(name => fs.existsSync(path.join(APP_DIR, name, 'permission', 'roles.js')));
 }
 
+/** 所有 `src/app/*` 目录名（config.js 可能在、也可能不在） */
+function appNames() {
+  return fs
+    .readdirSync(APP_DIR, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => entry.name);
+}
+
 /** 越界角色的可读描述；空数组表示全部合法 */
 function outOfRange(roles, bounds) {
   return roles
@@ -93,6 +108,17 @@ beforeAll(async () => {
   for (const name of appNamesWithRoles()) {
     const file = path.join(APP_DIR, name, 'permission', 'roles.js');
     await import(pathToFileURL(file).href);
+  }
+
+  /*
+   * 顺带把每份 `config.js` 登记进运行时注册表 —— `auditDefaultRoles` 要靠它拿
+   * `default_role`。这一步等价于 loader 的阶段 1，只是不碰数据库。
+   */
+  for (const name of appNames()) {
+    const file = path.join(APP_DIR, name, 'config.js');
+    if (!fs.existsSync(file)) continue;
+    const mod = await import(pathToFileURL(file).href);
+    registerAppConfig(mod.default || mod);
   }
 });
 
@@ -127,5 +153,45 @@ describe('角色定义守卫：rank_level 必须落在 Role 模型的校验区�
         { app_id: 'a', code: 'x' }
       ])
     ).toHaveLength(1);
+  });
+});
+
+describe('默认角色守卫：每个应用都要有可解析的"授权即送"角色', () => {
+  it('PBAC 里的职级区间与 Role 模型同源（两处都写 0~99，必须一起改）', () => {
+    const bounds = readRankLevelBounds();
+    expect(bounds).toEqual(expect.objectContaining({ min: RANK_LEVEL_MIN, max: RANK_LEVEL_MAX }));
+  });
+
+  it('每个应用至多一个 is_default（多个会让授予结果取决于代码顺序）', () => {
+    const byApp = new Map();
+    const dupes = [];
+
+    for (const role of roleRegistry.filter(item => item.is_default === true)) {
+      if (byApp.has(role.app_id)) dupes.push(`${role.app_id}: ${byApp.get(role.app_id)} / ${role.code}`);
+      byApp.set(role.app_id, role.code);
+    }
+
+    expect(dupes.join('\n')).toBe('');
+  });
+
+  it('默认角色必须落在普通档（rank <= NORMAL_RANK_MAX）', () => {
+    const bad = roleRegistry
+      .filter(role => role.is_default === true && Number(role.rank_level) > NORMAL_RANK_MAX)
+      .map(role => `${role.app_id}/${role.code} = ${role.rank_level}（普通档上限 ${NORMAL_RANK_MAX}）`);
+
+    expect(bad.join('\n')).toBe('');
+  });
+
+  /*
+   * 这条是"写 roles.js 时必须顺手写好默认角色"的机器判据：
+   * 漏了会在启动期刷 warn（回落最低职级），配错会在启动期报 error。
+   * 测试直接卡死，比等下一个新环境部署时才发现便宜得多。
+   */
+  it('真实 config + 真实 roles.js 过审计：没有 error 也没有"未声明默认角色"的 warn', () => {
+    const issues = auditDefaultRoles({ configs: listAppConfigs(), roleDefs: roleRegistry });
+
+    expect(roleRegistry.length).toBeGreaterThanOrEqual(15); // 防止注册表空转
+    expect(listAppConfigs().length).toBeGreaterThanOrEqual(5); // 防止 config 没加载导致"无声明"被静默放过
+    expect(issues.map(issue => `[${issue.level}] ${issue.message}`).join('\n')).toBe('');
   });
 });

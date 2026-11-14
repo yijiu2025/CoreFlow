@@ -27,7 +27,17 @@ export interface CurrentUser {
   deptId: number | null;
   deptName: string;
   roles: string[];
+  /**
+   * 生效权限码（**后端已算好**：角色 policy ∩ 菜单按钮授权）
+   *
+   * 前端不再自己拼"按钮码还要被菜单授权命中"——那是一套会分叉的第二实现。
+   * 支持 `admin:*` 这类通配；只有真的摘掉某个按钮时后端才会展开成具体码。
+   */
   permissions: string[];
+  /** 个人偏好（界面设置）：登录后据此恢复主题色等 */
+  preferences?: { accent?: string };
+  /** 后台内的展示身份（昵称/头像为空时后端已回落到全局值） */
+  profile?: { nickname: string; avatar: string };
 }
 
 /** 菜单节点 */
@@ -67,6 +77,32 @@ export interface StepUpChallenge {
   maskedTarget: string | null;
 }
 
+/**
+ * 日志筛选条件（列表 / 导出 / 清除共用）
+ *
+ * 🔴 这些是**独立维度**，不是一个大 keyword：`keyword` 是 OR 模糊匹配，
+ *    用它做"按 IP 清除"会把别处出现的同类文本一起删掉。
+ *
+ * 清除时同一份对象会同时用于：算命中条数、算二次验证的范围指纹、写进审计留痕。
+ * 三个地方必须完全一致，否则出现"预览 3 条、实删 30 条"。
+ */
+export interface LogFilters {
+  keyword?: string;
+  status?: 0 | 1;
+  /** 起始时间（含） */
+  startTime?: string;
+  /** 结束时间（含） */
+  endTime?: string;
+  /** 账号（模糊；登录日志同时匹配注销前用户名） */
+  username?: string;
+  /** 来源 IP（前缀匹配） */
+  ip?: string;
+  /** 事件码（登录日志） */
+  event?: string;
+  /** 事件码（操作日志） */
+  action?: string;
+}
+
 /** 高危写接口共用的二次验证载荷 */
 export interface StepUpPayload {
   challengeId: string;
@@ -104,6 +140,127 @@ export interface PendingKick {
   attempts: number;
   last_error: string | null;
   updated_at: string | null;
+}
+
+/**
+ * 高危操作「手打确认」用哪个字段
+ *
+ * 由后端决定（邮箱 → 手机号 → 用户 ID），前端只负责显示与比对：
+ * 登录名可能是带符号/中文/长工号的串，手打容易错，错一次就把验证码吃掉。
+ */
+export interface DangerConfirm {
+  field: 'email' | 'phone' | 'id';
+  /** 字段中文名（邮箱 / 手机号 / 用户 ID），直接拼进提示语 */
+  label: string;
+  /** 需要用户手打的值 */
+  value: string;
+}
+
+/** 用户详情（GET /users/:id/profile） */
+export interface UserProfile {
+  user: {
+    id: number;
+    uid: string;
+    username: string;
+    email: string;
+    avatar: string;
+    status: number;
+    deptId: number | null;
+    deptName: string;
+    postNames: string[];
+    createdAt: string | null;
+    deleteVersion: number;
+  };
+  access: {
+    roles: Array<{
+      role_id: number;
+      role_code: string;
+      role_name: string;
+      app_id: string;
+      app_label: string;
+      rank_level: number;
+      permissions: string[];
+      granted_at: string | null;
+      granted_by: number | null;
+    }>;
+    permissionCodes: string[];
+    permissionGroups: Array<{
+      key: string;
+      label: string;
+      domain: string;
+      domainName: string;
+      codes?: string[];
+      list?: string[];
+    }>;
+    apps: Array<{ id: string; label: string }>;
+    wildcard: boolean;
+  };
+  apps: UserAppRow[];
+  /** 个人策略（按应用）：单独允许 / 拒绝的权限码 */
+  inline: Array<{ appId: string; appLabel: string; allow: string[]; deny: string[] }>;
+  recentOps: Array<{ event: string; appId: string; ip: string; costMs: number | null; createdAt: string }>;
+  recentLogins: Array<{
+    event: string;
+    appId: string;
+    ip: string;
+    location: string;
+    userAgent: string;
+    failed: boolean;
+    createdAt: string;
+  }>;
+  /** 当前操作者能否编辑这个人的权限（后端按职级判） */
+  canEdit: boolean;
+}
+
+/**
+ * 用户的设备会话（GET /admin/user/v1/sessions/list）
+ *
+ * 一行 = 一台设备在某应用下的一条会话记录。后端按 `user_id + device_id + app_id`
+ * 做 upsert，所以同一台设备在同一应用里只有一行，`last_active` 是它最后说话的时​间。
+ *
+ * 🔴 `device_id` 是**设备码**（如 `WEB-KICKPROBEBBBB`），不是数据库主键 ——
+ *    踢下线要传它，传 `id` 会踢不掉。
+ */
+export interface UserSessionRow {
+  id: number;
+  user_id: number;
+  app_id: string;
+  /** 设备码（踢下线按它匹配） */
+  device_id: string;
+  device_fingerprint: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  last_active: string | null;
+  /** 只读：当前会话是否已失效（踢过 / 过期 / 登出） */
+  revoked: boolean | number;
+  /** 是否是发起本次请求的这台设备（管理员查看自己时用来避免误踢） */
+  is_current?: boolean;
+  /** 未撤销但最后活跃时间已超过最长会话 TTL：会话大概率已过期，仅剩历史记录 */
+  stale?: boolean;
+  updated_at: string;
+}
+
+/**
+ * 我的登录设备（用户自助视角，GET /user/v1/sessions/devices）
+ *
+ * 与 `UserSessionRow` 的区别：这是**本人**的设备视图，设备码已打码
+ * （`maskDeviceId`），且多一个 `isCurrent`。踢下线按 `id` 走，不按设备码 ——
+ * 打码值拿去匹配永远不相等。
+ */
+export interface MyDeviceRow {
+  id: number;
+  appId: string;
+  /** 打码后的设备码（便于辨认，不暴露完整指纹） */
+  deviceId: string;
+  ip: string | null;
+  userAgent: string | null;
+  lastActive: string | null;
+  /** 只读：是否已失效（踢过 / 过期 / 登出） */
+  revoked: boolean | number;
+  /** 未撤销但最后活跃时间超过最长会话 TTL：会话大概率已过期，仅剩历史记录 */
+  stale?: boolean;
+  /** 是否是发起本次请求的这台设备 */
+  isCurrent: boolean;
 }
 
 /** 用户在某应用里的账号状态（GET /users/:id/apps） */
@@ -207,8 +364,15 @@ export interface RoleRow {
   rank_level: number;
   description: string | null;
   user_count: number;
+  /** 由代码 `defineRoles` 声明：不可删除、不可改 code / 权限码 */
   builtin: boolean;
+  /** 菜单授权锁定：只有超级管理员（它的 policy 是 `admin:*` 全量） */
+  menuLocked: boolean;
   permissions: string[];
+  /** 数据范围：1 全部 / 2 自定义 / 3 本部门 / 4 本部门及以下 / 5 仅本人 */
+  data_scope?: number;
+  /** 自定义数据范围时勾选的部门（其它档位为空数组） */
+  dept_ids?: number[];
   menu_ids: number[];
   /** 应用显示名（后端解析） */
   app_label?: string;
@@ -226,7 +390,10 @@ export interface DashboardSummary {
   failedLogins: number;
   todayOps: number;
   successRate: number;
+  /** 近 24 小时**成功登录**过的账号数（不含被踢/刷新/失败） */
   activeUsers: number;
+  /** 当前在线：有有效会话的账号数；Redis 不可用时为 null */
+  onlineUsers?: number | null;
   trend: Array<{ bucket: string; total: number; failed: number }>;
   recentLogins: Array<{ id: number; username: string | null; ip: string; location: string | null; created_at: string }>;
 }
@@ -235,26 +402,57 @@ export interface DashboardSummary {
 export interface OperLogRow {
   id: number;
   username: string;
+  /** 用户业务唯一键（账号改名/注销后仍可对应到具体账户） */
+  uid?: string;
+  /** 邮箱（人工核对用；已注销用户可能为空） */
+  email?: string;
+  user_id?: number | null;
   module: string;
   action: string;
   method: string;
   path: string;
   cost_ms: number;
   ip: string;
+  /** 操作时客户端携带的设备标识（历史记录为空串：当时未采集） */
+  device_id: string;
   user_agent: string;
   detail: string;
   status: number;
   created_at: string;
 }
 
-/** 登录日志行 */
+/**
+ * 登录日志行
+ *
+ * 后端 `loginPage` 已经把 `details` 解析成对象（raw 查询里 JSON 列回的是字符串，
+ * DAO 里 parseDetails 归一化了）。这里如实声明，别让消费方以为只有列表那几列 ——
+ * 排查登录问题要看的就是 `details` 里的 reason / deviceId。
+ */
 export interface LoginLogRow {
   id: number;
+  user_id?: number | null;
   username: string;
   event: string;
   app_id: string;
   ip: string;
   location: string | null;
+  user_agent?: string;
+  /** 事件载荷（后端已 parse；解析失败是 null） */
+  details?: Record<string, unknown> | null;
+  /** 后端按事件名判定的失败标记（1 = 失败） */
+  failed?: number;
+  /**
+   * 账号状态（来自 user_user.status，-1 = 已注销）
+   *
+   * 🔴 不要和上面的 `status` 混用：`status` 是"这条登录成功/失败"，
+   *    `user_status` 是"这个账号现在是否还在"。注销后 username 会被换成
+   *    `已注销用户#N`，只能靠它判断。
+   */
+  user_status?: number | null;
+  /** 注销前的用户名（注销申请表留存的快照；该功能上线前注销的为空） */
+  prev_username?: string;
+  /** 注销前的邮箱（同上） */
+  prev_email?: string;
   status: number;
   created_at: string;
 }
@@ -265,7 +463,23 @@ export interface LogStats {
   total: number;
   failed: number;
   successRate: number;
-  series: Array<{ bucket: string; total: number; failed: number }>;
+  /**
+   * 上一等长周期的总量（环比分母）
+   *
+   * `0` 表示上期没有数据 —— 此时环比百分比在数学上不存在，前端应显示"新增"
+   * 而不是 `+100%`。两者语义不同，不要用 `||` 兜成同一个值。
+   */
+  prevTotal?: number;
+  /** 上一等长周期的失败量 */
+  prevFailed?: number;
+  /**
+   * 时间序列
+   *
+   * 🔴 **已补零、已按时间升序**，长度恒等于档位的桶数（24 / 7 / 30）。
+   *    前端不要再排序、也不要再按"有几天有记录"推算缺口 —— 排序会破坏顺序
+   *    （24h 桶名带日期才有序），补零会算错均值（分母应是全档位数）。
+   */
+  series: Array<{ bucket: string; total: number; failed: number; date: string }>;
   avgCost?: number;
   activeUsers?: number;
   users?: number;

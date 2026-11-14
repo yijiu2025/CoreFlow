@@ -9,12 +9,13 @@ import { defineRoles } from '../../../framework/security/pbac/index.js';
 import { POSECRAFT_PERMISSIONS } from './index.js';
 
 defineRoles([
-  // 1. 普通注册用户 (posecraft_user)
+  // 1. 普通注册用户 (posecraft_user) ★ 授权即送的默认角色
   {
     code: 'posecraft_user',
     app_id: 'posecraft',
     name: '普通用户',
     rank_level: 10,
+    is_default: true,
     description: '可使用基础 AI 分析、上传并管理个人作品，购买付费模板',
     policy: {
       Version: '2026-06-06',

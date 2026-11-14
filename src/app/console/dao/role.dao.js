@@ -15,6 +15,63 @@ import { getModel } from '../../../framework/persistence/db/index.js';
 import { roleRegistry, actionMetaRegistry } from '../../../framework/security/pbac/index.js';
 
 /**
+ * 菜单授权唯一被锁的角色
+ *
+ * 与「内置（builtin）」是两件事，别混：
+ * - `builtin` = 由代码 `defineRoles` 声明 ⇒ 不可删除、不可改 code、不可改权限码；
+ *   本仓几乎所有角色都满足（每个 app 都声明了自己的角色）。
+ * - **菜单可见性**是纯运行期数据（`sys_role_menu`），除超管外都该允许管理员调整 ——
+ *   否则矩阵里一列都点不动，运维只能去改代码。
+ *
+ * 超管必须锁：它的 policy 是 `admin:*` 全量，勾掉菜单会让它自己看不到后台入口，
+ * 而没有任何其他账号能改回来。
+ */
+const MENU_LOCKED_CODE = 'superadmin';
+
+/**
+ * 数据范围归一化
+ *
+ * 只认 1..5，其它一律回落 1（全部）。方向要清楚：写脏值时宁可"少限制"也不能
+ * "意外限制住自己人" —— 后者会让管理员突然看不到数据，且很难定位原因。
+ *
+ * @param {unknown} value 原始值
+ * @returns {number} 1..5
+ */
+function normalizeScope(value) {
+  const n = Number(value);
+  return n >= 1 && n <= 5 ? n : 1;
+}
+
+/**
+ * 受保护角色编码集合（不可删除 / 不可改 code / 不可改权限码）
+ *
+ * = 由代码 `defineRoles` 声明的角色 ∪ 超管。
+ *
+ * 🔴 **超管必须显式补进来**：它由 `scripts/setup-superadmin.js` 直接落库，
+ *    *不在* `roleRegistry` 里。曾经只有路由层（`api/admin/console/v1/roles.js`
+ *    的 `BUILTIN_CODES`）补了这一点，而列表返回给前端的 `builtin` 却按 registry 算 ——
+ *    同一个概念两套判据，结果前端把超管当普通角色：显示「删除」按钮、
+ *    允许进编辑弹窗改权限码，点了才被后端以 `BUILTIN_PROTECTED` 拒掉。
+ *    现在两边都走这里，只有一个真相。
+ *
+ * @returns {Set<string>} 受保护编码
+ */
+function protectedRoleCodes() {
+  return new Set([...roleRegistry.map(r => r.code), MENU_LOCKED_CODE]);
+}
+
+/**
+ * 单个编码是否受保护
+ *
+ * @param {string} code 角色编码
+ * @returns {boolean} 是否受保护
+ */
+function isProtectedRoleCode(code) {
+  const value = String(code || '');
+  return value === MENU_LOCKED_CODE || roleRegistry.some(r => r.code === value);
+}
+
+/**
  * 由权限码数组构造 PBAC 策略文档
  *
  * @param {string[]} permissions 权限码数组（支持 `admin:*` 通配）
@@ -56,6 +113,15 @@ function normalizePolicy(policy) {
  *
  * @param {object|string|null} policy 策略文档（接受字符串，见 normalizePolicy）
  * @returns {string[]} 权限码数组
+ */
+/**
+ * 从 policy 文档里取出**生效的允许码**
+ *
+ * 只收 `Effect: 'Allow'` 的 Action；`Deny` 不进这个集合（它是"减项"，不是能力）。
+ * 当前角色策略只写 Allow，但个人内联策略支持 Deny —— 读侧别假设一定没有。
+ *
+ * @param {object|string|null} policy 策略文档（库里的 JSON 列可能是字符串）
+ * @returns {string[]} 权限码（去重）
  */
 function extractPermissions(policy) {
   const doc = normalizePolicy(policy);
@@ -122,7 +188,17 @@ class RoleDao {
     ]);
 
     const memberMap = new Map(memberRows.map(r => [Number(r.role_id), Number(r.c || 0)]));
-    const builtinCodes = new Set(roleRegistry.map(r => r.code));
+    // 超管也算内置（见 protectedRoleCodes 的说明）
+    const builtinCodes = protectedRoleCodes();
+
+    // 自定义数据范围的部门集合：一次查完再分组，不做 N+1
+    const deptRows = await getModel('RoleDept').findAll({ attributes: ['role_id', 'dept_id'], raw: true });
+    const deptMap = new Map();
+    for (const row of deptRows) {
+      const key = Number(row.role_id);
+      if (!deptMap.has(key)) deptMap.set(key, []);
+      deptMap.get(key).push(Number(row.dept_id));
+    }
     const menuMap = new Map();
     for (const row of menuRows) {
       const key = Number(row.role_id);
@@ -136,7 +212,12 @@ class RoleDao {
         rank_level: Number(r.rank_level),
         user_count: memberMap.get(Number(r.id)) || 0,
         builtin: builtinCodes.has(r.code),
+        // 菜单授权锁：只有超管（见文件头 MENU_LOCKED_CODE 的说明）
+        menuLocked: r.code === MENU_LOCKED_CODE,
         permissions: extractPermissions(r.policy),
+        data_scope: Number(r.data_scope || 1),
+        // 只有「自定义」档才有意义，其它档一律给空数组，前端不用自己判
+        dept_ids: Number(r.data_scope) === 2 ? deptMap.get(Number(r.id)) || [] : [],
         menu_ids: menuMap.get(Number(r.id)) || [],
         policy: undefined
       })),
@@ -240,15 +321,27 @@ class RoleDao {
    * @param {object} payload 角色字段
    * @returns {Promise<object>} 新建的角色实例
    */
-  async create({ code, name, appId = 'GLOBAL', rankLevel = 1, description = '', permissions = [] }) {
-    return getModel('Role').create({
+  async create({
+    code,
+    name,
+    appId = 'GLOBAL',
+    rankLevel = 1,
+    description = '',
+    permissions = [],
+    dataScope = 1,
+    deptIds = []
+  }) {
+    const role = await getModel('Role').create({
       code,
       name,
       app_id: appId || 'GLOBAL',
       rank_level: Number(rankLevel) || 1,
       description,
+      data_scope: normalizeScope(dataScope),
       policy: buildPolicy(permissions)
     });
+    await this.setRoleDepts(role.id, dataScope, deptIds);
+    return role;
   }
 
   /**
@@ -258,15 +351,46 @@ class RoleDao {
    * @param {object} payload 待更新字段
    * @returns {Promise<boolean>} 是否命中记录
    */
-  async update(id, { name, rankLevel, description, permissions }) {
+  async update(id, { name, rankLevel, description, permissions, dataScope, deptIds }) {
     const patch = {};
     if (name !== undefined) patch.name = name;
     if (rankLevel !== undefined) patch.rank_level = Number(rankLevel);
     if (description !== undefined) patch.description = description;
     if (Array.isArray(permissions)) patch.policy = buildPolicy(permissions);
-    if (Object.keys(patch).length === 0) return true;
-    const [affected] = await getModel('Role').update(patch, { where: { id } });
-    return affected > 0;
+    if (dataScope !== undefined) patch.data_scope = normalizeScope(dataScope);
+    if (Object.keys(patch).length > 0) {
+      await getModel('Role').update(patch, { where: { id } });
+    }
+    // 数据范围改成非「自定义」时，关联表必须清空 —— 留着旧部门会在下次切回自定义时诈尸
+    if (dataScope !== undefined || Array.isArray(deptIds)) {
+      await this.setRoleDepts(id, dataScope ?? patch.data_scope ?? 1, deptIds);
+    }
+    return true;
+  }
+
+  /**
+   * 覆盖式保存「自定义数据范围」的部门集合
+   *
+   * @param {number} roleId 角色 ID
+   * @param {number} dataScope 数据范围
+   * @param {number[]} deptIds 部门 ID 列表
+   * @returns {Promise<number>} 写入条数
+   */
+  async setRoleDepts(roleId, dataScope, deptIds = []) {
+    const RoleDept = getModel('RoleDept');
+    const { sequelize } = RoleDept;
+    return sequelize.transaction(async t => {
+      await RoleDept.destroy({ where: { role_id: Number(roleId) }, transaction: t });
+      // 只有"自定义"才有关联部门；其余档位留空表，避免旧数据在切回自定义时复活
+      if (normalizeScope(dataScope) !== 2) return 0;
+      const ids = Array.from(new Set((deptIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0)));
+      if (ids.length === 0) return 0;
+      await RoleDept.bulkCreate(
+        ids.map(deptId => ({ role_id: Number(roleId), dept_id: deptId })),
+        { transaction: t }
+      );
+      return ids.length;
+    });
   }
 
   /**
@@ -377,4 +501,5 @@ class RoleDao {
 
 const roleDao = new RoleDao();
 
+export { MENU_LOCKED_CODE, isProtectedRoleCode, protectedRoleCodes, extractPermissions };
 export default roleDao;

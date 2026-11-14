@@ -26,6 +26,7 @@
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
 import { listAppConfigs } from '../../../framework/config/app-registry.js';
+import { isWildcardMatch } from '../../../framework/security/auth/permission/wildcard-match.js';
 
 /** 公共角色所属的伪应用标识 */
 const GLOBAL_APP = 'GLOBAL';
@@ -327,6 +328,80 @@ function assertCanManageRole(actor, role, action = '编辑') {
   }
 }
 
+/**
+ * 操作者是否**覆盖**某个权限码（自己持有，且没被自己的 deny 压住）
+ *
+ * 与接口鉴权同一套判据（`allows` 命中 + `denies` 优先），并复用共享的通配匹配
+ * （`wildcard-match.js` 是单一来源）—— 这里再写一份前缀比较就会出现
+ * "授权时算有、调接口时算没有"的错位。
+ *
+ * @param {{allows?: string[], denies?: string[]}} permissions PBAC 权限集
+ * @param {string} code 待判定权限码
+ * @returns {boolean} 是否覆盖
+ */
+function coversPermissionCode(permissions, code) {
+  const allows = Array.isArray(permissions?.allows) ? permissions.allows : [];
+  const denies = Array.isArray(permissions?.denies) ? permissions.denies : [];
+  // deny 优先：被自己策略压过的码不算"持有"，否则等于允许他把受限能力转授出去
+  if (denies.some(pattern => isWildcardMatch(pattern, code))) return false;
+  return allows.some(pattern => isWildcardMatch(pattern, code));
+}
+
+/**
+ * 操作者是否不受「授予上限」约束
+ *
+ * 超管与 `admin:*` / `*` 持有者是后台的最高授权方：他们本来就能改任意应用的角色，
+ * 若也要求"只能授自己有的码"，admin_admin 会因为不持有 `posecraft:*` 而无法维护
+ * 其它应用的业务角色 —— 那是把现有能力收紧成故障，不是安全加固。
+ * 真正要挡的是 `admin_operator` 这类"能改角色、但只持有部分码"的账号：他们今天
+ * 可以建一个 rank 更低的角色、往里写 `admin:*`，再授给自己。
+ *
+ * @param {object} user request.state.user
+ * @returns {boolean} 是否免检
+ */
+function isUnrestrictedGranter(user) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  if (roles.includes(SUPER_ROLE_CODE)) return true;
+  const allows = Array.isArray(user?.permissions?.allows) ? user.permissions.allows : [];
+  return allows.includes('*') || allows.includes(`${ADMIN_APP}:*`);
+}
+
+/**
+ * 这批权限码里，哪些是操作者自己没有的
+ *
+ * @param {object} user request.state.user
+ * @param {string[]} codes 待写入的权限码
+ * @returns {string[]} 越界的码（空数组 = 全部在范围内）
+ */
+function codesBeyondActor(user, codes) {
+  const list = Array.from(
+    new Set((Array.isArray(codes) ? codes : []).filter(code => typeof code === 'string' && code.trim()))
+  );
+  if (isUnrestrictedGranter(user)) return [];
+  return list.filter(code => !coversPermissionCode(user?.permissions, code));
+}
+
+/**
+ * 授予上限：非超管只能写自己持有的码（含通配覆盖），否则 403
+ *
+ * 🔴 只约束**新增**的码。修改角色时表单会连原有码一起提交，若对整份清单判，
+ *    "改个名字"也会因为角色里本来就有自己没持有的码而 403 —— 那是把护栏做成了路障。
+ *    调用方负责先算 `新增 = 提交 − 原有`，再把差额交给这里。
+ *
+ * @param {object} user request.state.user（含 permissions.allows/denies 与 roles）
+ * @param {string[]} codes 本次**新增**的权限码
+ * @param {object} [options] 选项
+ * @param {string} [options.action='授予'] 动作名，用于错误文案（"授予" / "创建"）
+ * @throws {Error} `FORBIDDEN:xxx`（由 withFail 翻译成 403）
+ */
+function assertCanGrantCodes(user, codes, { action = '授予' } = {}) {
+  const beyond = codesBeyondActor(user, codes);
+  if (beyond.length === 0) return;
+  const shown = beyond.slice(0, 5).join('、');
+  const more = beyond.length > 5 ? ` 等 ${beyond.length} 个` : '';
+  throw new Error(`FORBIDDEN:不能${action}自己没有的权限码（${shown}${more}）`);
+}
+
 export {
   GLOBAL_APP,
   SUPER_ROLE_CODE,
@@ -341,5 +416,6 @@ export {
   planRoleChangeWithRoles,
   assertGrantable,
   assertGrantableRoles,
-  assertCanManageRole
+  assertCanManageRole,
+  assertCanGrantCodes
 };

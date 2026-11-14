@@ -21,6 +21,15 @@ const retrowebConfig = {
   name: 'RetroWeb',
   description: '逆合成工作台：任务云端存储（绑定用户）+ 算法服务中转',
 
+  /**
+   * 授权即送的默认角色（主口径）
+   *
+   * 与 `permission/roles.js` 里 `retroweb_user` 的 `is_default: true` 保持一致；
+   * 两处都写是为了"改配置能覆盖代码、看代码能知道意图"。解析优先级与审计规则
+   * 见 `framework/security/pbac/default-role.js`。
+   */
+  default_role: 'retroweb_user',
+
   /** OAuth 2.1 客户端声明（启动期由 10-apps upsert 到 oauth_clients） */
   oauth_client: {
     client_id: 'retroweb',

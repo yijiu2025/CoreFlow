@@ -29,12 +29,13 @@ const BASE_ACTIONS = [
 ];
 
 defineRoles([
-  // 1. 普通用户：任务上限 2 个
+  // 1. 普通用户：任务上限 2 个（★ 授权即送的默认角色）
   {
     code: 'retroweb_user',
     app_id: 'retroweb',
     name: '普通用户',
     rank_level: 10,
+    is_default: true,
     description: '可使用全部逆合成功能，任务上限 2 个',
     policy: {
       Version: '2026-06-06',

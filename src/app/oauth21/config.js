@@ -33,6 +33,14 @@ const oauth21Config = {
   description: 'OAuth 2.1 / OIDC 授权服务器，负责客户端管理、授权码流程、令牌签发与撤销',
 
   /**
+   * 授权即送的默认角色（主口径）
+   *
+   * 与 `roles.js` 里 `oauth_viewer` 的 `is_default: true` 对应。
+   * 解析优先级：本字段 > is_default > 最低职级（<= 20）。
+   */
+  default_role: 'oauth_viewer',
+
+  /**
    * 需要注册在**根作用域**的插件。
    *
    * 🔴 为什么不能放进 `init`：`init` 被 loader 以 `app.register(init)` 调用，运行在独立封装

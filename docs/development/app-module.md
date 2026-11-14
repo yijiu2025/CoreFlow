@@ -30,6 +30,16 @@ export default {
   app_id: 'myapp',
   name: '我的应用',
   description: '这是一个示例应用',
+
+  /**
+   * 授权即送的默认角色（必填，普通档 rank <= 20）
+   *
+   * 用户在 OAuth 授权页同意授权时自动授予这个角色。写 `null` = 有意不自动授予。
+   * 与 `permission/roles.js` 里该角色的 `is_default: true` 配套：config 为主口径，
+   * 代码标记为辅；两处不一致或漏写都会在启动期审计里报出来。
+   */
+  default_role: 'myapp_user',
+
   init: initMyApp, // 可选：Fastify 插件初始化
   oauth_client: {
     // 可选：OAuth 2.1 客户端配置
@@ -51,6 +61,7 @@ export default {
 - 读取 `config.name` → 打印日志
 - 读取 `config.init` → 调用 `app.register(init)`
 - 读取 `config.oauth_client` → 同步到 `oauth_clients` 表
+- 读取 `config.default_role` → 授权时授予默认角色（启动期审计一致性）
 
 ## 2. permission/index.js — 权限常量
 
@@ -83,6 +94,14 @@ defineRoles([
     app_id: 'myapp',
     name: '普通用户',
     rank_level: 10,
+    /**
+     * 🔴 授权即送的默认角色，必须写
+     *
+     * 一个应用最多一个 `is_default`，且 rank 必须 <= 20（普通档）。
+     * 漏了 → 启动期 warn「将回落最低职级」；写两个/写管理档 → import 期直接抛错。
+     * 与 `config.js` 的 `default_role` 保持同一个 code。
+     */
+    is_default: true,
     policy: {
       Version: '2026-05-18',
       Statement: [
@@ -110,6 +129,12 @@ defineRoles([
   }
 ]);
 ```
+
+::: tip `defineRoles` 的注册期校验
+`code` / `app_id` / `name` / `rank_level`（0~99 整数）/ `policy.Statement` 都必填，
+`code` 全局唯一。这些字段缺失不会在运行期报错（模型有默认值，会把角色悄悄写进
+`GLOBAL` 域或当成最低职级），所以一律在 import 期抛错 —— 宁可启动失败，也不要静默跑偏。
+:::
 
 ## 4. system.json — 路由域配置
 

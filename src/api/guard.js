@@ -20,6 +20,7 @@ import { isIpMatch } from '../framework/ingress/net/ip.js';
 import { getPermissions } from '../framework/security/auth/index.js';
 import { createSafePreHandler } from '../framework/security/auth/index.js';
 import { isWildcardMatch } from '../framework/security/auth/permission/wildcard-match.js';
+import { hasButtonGrantProvider, resolveButtonGrants } from '../framework/security/auth/permission/button-grant.js';
 import { isUserManuallyBlocked } from '../framework/ingress/firewall/block-manager.js';
 import { createLogger } from '../framework/support/log/index.js';
 import { resolvePermissionAppId } from '../framework/config/app-registry.js';
@@ -112,11 +113,45 @@ function isPermissionMatch(pattern, target) {
 }
 
 /**
- * 检查用户是否匹配单个权限
+ * 从 user 上取「按钮授权」数据
+ *
+ * 数据由 `attachButtonGrants` 在判定前挂上去（见该函数），来源是 console 应用的
+ * 菜单授权表。没挂上（未注册提供方 / 非控制台请求）时返回 null = 不设这道闸。
+ *
+ * @param {object} user request.state.user
+ * @returns {{codes: Set<string>, granted: Set<string>}|null} 按钮码全集与会话已授权集合
  */
-function matchSingle(perm, allows, denies) {
+function buttonGrantsOf(user) {
+  if (!Array.isArray(user?.buttonCodes) || !Array.isArray(user?.menuPerms)) return null;
+  return { codes: new Set(user.buttonCodes), granted: new Set(user.menuPerms) };
+}
+
+/**
+ * 按钮授权闸
+ *
+ * 🔴 这是「菜单授权」对接口生效的唯一落点：按钮节点被取消勾选（或停用/下架）后，
+ *    菜单授权的产物里就没有这个码 → 即使 policy 还留着他也被拒。
+ *    只对**按钮码**生效：页面级 / 纯接口级码不走这层，行为与以前完全一致。
+ *
+ * @param {string} perm 待判定权限码
+ * @param {{codes: Set<string>, granted: Set<string>}|null} grants 按钮授权数据
+ * @returns {boolean} 是否放行
+ */
+function passesButtonGrant(perm, grants) {
+  if (!grants) return true;
+  if (!grants.codes.has(perm)) return true;
+  return grants.granted.has(perm);
+}
+
+/**
+ * 检查用户是否匹配单个权限
+ *
+ * 三层：`denies` 压过一切 → `allows`（含通配）→ 按钮码还要被菜单授权覆盖。
+ */
+function matchSingle(perm, allows, denies, grants) {
   if (denies.some(d => isPermissionMatch(d, perm))) return false;
-  return allows.some(a => isPermissionMatch(a, perm));
+  if (!allows.some(a => isPermissionMatch(a, perm))) return false;
+  return passesButtonGrant(perm, grants);
 }
 
 /**
@@ -132,20 +167,21 @@ function matchSingle(perm, allows, denies) {
 function checkPermission(required, user) {
   if (!user) return false;
   const { allows = [], denies = [] } = user.permissions || {};
+  const grants = buttonGrantsOf(user);
 
   // 单个权限字符串
   if (typeof required === 'string') {
-    return matchSingle(required, allows, denies);
+    return matchSingle(required, allows, denies, grants);
   }
 
   // { any: [...] } — 任一满足
   if (required.any) {
-    return required.any.some(p => matchSingle(p, allows, denies));
+    return required.any.some(p => matchSingle(p, allows, denies, grants));
   }
 
   // { all: [...] } — 全部满足
   if (required.all) {
-    return required.all.every(p => matchSingle(p, allows, denies));
+    return required.all.every(p => matchSingle(p, allows, denies, grants));
   }
 
   // 非预期的权限格式（如 {}、{ invalid: [...] }），记录日志便于排查错误配置
@@ -239,6 +275,33 @@ function checkGuardBase(opts, user, clientIp) {
 // =============================================================================
 
 /**
+ * 把「按钮授权」挂到 request.state.user 上（供 `checkPermission` 的第二道闸使用）
+ *
+ * 必须在 `checkNodeIdentity` **之前**执行：权限判定是同步函数，数据要先就位。
+ * 每次都问一次提供方 —— 它自带缓存（命中时是纯内存），而 `freshPermission` 路由
+ * 刚用新权限覆盖过 user，不能沿用上一轮的按钮授权。
+ *
+ * 拿不到数据（未注册提供方 / 解析失败 / 非控制台用户）就**不挂**：此时闸不生效，
+ * 退化成"只看 policy"的旧行为。方向性理由见 `button-grant.js` 的文件头。
+ *
+ * @param {object} request Fastify 请求
+ * @returns {Promise<void>}
+ */
+async function attachButtonGrants(request) {
+  if (!hasButtonGrantProvider()) return;
+  const user = request.state?.user;
+  // 未登录、或客户端凭证（M2M 没有用户主键）都没有按钮授权语义
+  if (!user?.sub || user.userId == null) return;
+  const grants = await resolveButtonGrants(user);
+  if (!grants) return;
+  request.state.user = {
+    ...user,
+    buttonCodes: Array.isArray(grants.buttonCodes) ? grants.buttonCodes : [],
+    menuPerms: Array.isArray(grants.menuPerms) ? grants.menuPerms : []
+  };
+}
+
+/**
  * 核心校验逻辑：执行 IP、登录态、角色与权限检查
  *
  * 规则本体在 `checkNodeAccess` / `checkNodeIdentity`（与 WebSocket 共用同一份实现），
@@ -297,6 +360,8 @@ async function applyGuardLogic(opts = {}, request, reply) {
     }
     // 用回源结果覆盖 request.state.user 的权限，后续 handler 内 allOf/anyOf 读到的也是最新值
     request.state.user = { ...user, roles: fresh.roles, permissions: fresh.permissions };
+    // 权限刚被回源换过，按钮授权也重取一次（它同样按角色算，可能是上一轮的快照）
+    await attachButtonGrants(request);
   }
 
   // 3. 登录 + 角色 + 权限（规则本体在 checkNodeIdentity，与 WS 共用同一份）
@@ -356,6 +421,15 @@ function createGuard(systemKey, groupKey, apiKey = null) {
       log.warn(`🚫 [Guard] 命中防火墙手动用户黑名单: uid=${fwUser.uid}`);
       return reply.result.forbidden('该账号已被安全策略限制访问');
     }
+
+    /*
+     * 0.5 级：按钮授权闸的数据准备
+     *
+     * 放在这里而不是 `applyGuardLogic` 里：那个函数被三级各调一次，挂三次只会白白
+     * 重复解析；而权限判定（API 级）一定在这之后。`freshPermission` 会替换 user，
+     * 那条分支里会再挂一次。
+     */
+    await attachButtonGrants(request);
 
     // 1级：系统级校验
     const sys = getGuardConfig(systemKey);
@@ -695,8 +769,14 @@ function registerSecureWebSocket(fastify, options) {
 
   fastify.get(url, { websocket: true }, async (connection, req) => {
     const client = connection.socket || connection;
-    const user = req.state?.user;
     const clientIp = req.ip;
+
+    /*
+     * 按钮授权闸：WS 上同样有声明了 `requirePermission` 的路由，判据必须与 HTTP 一致
+     * （否则"取消勾选"在 WS 通道上不生效）。挂完再取 user —— attach 会替换它。
+     */
+    await attachButtonGrants(req);
+    const user = req.state?.user;
 
     // 1~3. 三级级联校验（规则本体与 HTTP 共用 checkGuardBase）
     //

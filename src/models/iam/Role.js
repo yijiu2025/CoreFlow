@@ -46,6 +46,18 @@ const defineRole = (sequelize, DataTypes) => {
         allowNull: false,
         comment: '角色的标准策略文档 (PBAC 核心)'
       },
+      /**
+       * 数据范围（行级数据权限）
+       *
+       * 1 全部 / 2 自定义（配合 `iam_role_dept`）/ 3 本部门 / 4 本部门及以下 / 5 仅本人。
+       * 这是**行级**过滤，与 policy 的"能不能调接口"是两件事，不要混。
+       */
+      data_scope: {
+        type: DataTypes.TINYINT,
+        allowNull: false,
+        defaultValue: 1,
+        comment: '数据范围：1 全部 / 2 自定义 / 3 本部门 / 4 本部门及以下 / 5 仅本人'
+      },
       description: {
         type: DataTypes.STRING(255),
         comment: '角色描述'

@@ -25,6 +25,14 @@ defineRoles([
     app_id: 'GLOBAL',
     name: '普通用户',
     rank_level: 10,
+    /**
+     * 授权即送的默认角色
+     *
+     * 🔴 GLOBAL 域里 `user_banned` 的 rank 是 1（比它还低），旧逻辑"取最低职级"
+     *    会把小黑屋角色当成默认角色发出去。标上这个标记，解析链就有确定答案，
+     *    不再依赖"谁恰好 rank 最低"。
+     */
+    is_default: true,
     description: '系统默认的已登录基础用户角色',
     policy: {
       Version: '2026-05-18',

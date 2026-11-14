@@ -68,6 +68,7 @@ export {
 export {
   kickByDeviceType,
   kickByDeviceId,
+  kickDeviceEverywhere,
   kickSession,
   kickAllSessions,
   kickUser,
@@ -97,6 +98,13 @@ export {
   warmPermissions
 } from './permission/perm-cache.js';
 export { loadUserPermissions } from './permission/permission-loader.js';
+// 按钮授权闸的提供方（console 应用注册；未注册时行为与以前一致，见文件头）
+export {
+  registerButtonGrantProvider,
+  hasButtonGrantProvider,
+  resolveButtonGrants,
+  resetButtonGrantProviderForTesting
+} from './permission/button-grant.js';
 // 应用准入闸门（登录时判定"这个账号能不能进这个应用"；策略声明在 src/app/<app>/config.js）
 export { checkAppAccess } from './permission/app-access.js';
 

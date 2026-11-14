@@ -17,6 +17,8 @@ defineRoles([
     app_id: 'firewall',
     name: '防火墙观察者',
     rank_level: 1,
+    /** 授权即送的默认角色：只能看，改配置需要管理员另授 */
+    is_default: true,
     description: '只能查看监控数据和日志，不能修改配置',
     policy: {
       Version: '2026-06-06',

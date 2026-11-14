@@ -28,7 +28,14 @@ const defineSysMenu = (sequelize, DataTypes) => {
       component: { type: DataTypes.STRING(200), allowNull: true, comment: '视图键' },
       permission: { type: DataTypes.STRING(100), allowNull: true, comment: '权限码' },
       sort: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, comment: '排序' },
-      visible: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 1, comment: '侧栏是否可见' },
+      visible: {
+        type: DataTypes.TINYINT,
+        allowNull: false,
+        defaultValue: 1,
+        comment:
+          '历史字段（当前恒为 1）：侧栏从未按它过滤，"谁能看见"由 sys_role_menu 决定；' +
+          '写入接口已不再接收 visible，保留列只为兼容旧数据与导出'
+      },
       status: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 1, comment: '1 启用 / 0 停用' }
     },
     {

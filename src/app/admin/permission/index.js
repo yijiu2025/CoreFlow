@@ -5,7 +5,7 @@
  * @author yijiu2025
  * @since 2026-08-17
  */
-import { createPermissionRegistry } from '../../../framework/security/pbac/index.js';
+import { actionMetaRegistry, createPermissionRegistry } from '../../../framework/security/pbac/index.js';
 
 /**
  * 管理后台权限定义
@@ -25,6 +25,16 @@ const ADMIN_PERMISSIONS = createPermissionRegistry('admin', '管理后台', {
     DEACTIVATE: { code: 'admin:user:deactivate', label: '注销应用账号', type: 'high_risk' },
     /** 签发临时密码：等于把别人账号的临时钥匙交出去 */
     TEMP_PASSWORD: { code: 'admin:user:temp-password', label: '签发临时密码', type: 'high_risk' },
+    /*
+     * 导出与"看授权记录"都**不能**只靠 read：
+     * - 导出会把整份用户名单（含邮箱、部门、角色）带走，是数据外带；
+     * - 授权记录回答"谁给谁授了什么"，是越权排查的入口。
+     * 两者原先都只挂在 `admin:user:read` 上，任何能进列表页的人都能做。
+     */
+    EXPORT: { code: 'admin:user:export', label: '导出用户数据', type: 'read' },
+    GRANTS: { code: 'admin:user:grants', label: '查看授权记录', type: 'read' },
+    /** 批量导入 = 一次性造出一批账号，比单条创建的影响面大得多 */
+    IMPORT: { code: 'admin:user:import', label: '批量导入用户', type: 'write' },
     ALL: { code: 'admin:user:*', label: '用户管理通配', type: 'wildcard' }
   },
 
@@ -125,5 +135,37 @@ const ADMIN_PERMISSIONS = createPermissionRegistry('admin', '管理后台', {
   }
 });
 
-export { ADMIN_PERMISSIONS };
+/**
+ * 本应用（admin）全部权限码
+ *
+ * 用来回答一个具体问题：**这个码是不是本应用的**。
+ *
+ * 🔴 为什么需要：`sys_menu` 是本应用自己的菜单树，但它的 `permission` 只是自由文本。
+ *    写进别的应用的码（如 `posecraft:work:read`）以后：
+ *      • 这条菜单/按钮永远匹配不到任何一个 `requirePermission` —— 看起来配了权限，
+ *        实际谁都点不开；
+ *      • 角色授权页会把它算成"该角色拥有别的应用的能力"，审计上完全误导；
+ *      • 排障时会去查那个应用的路由，而问题根本不在那里。
+ *    所以写入即拒，见 `api/admin/console/v1/menus.js` 的 `assertOwnPermission`。
+ */
+const ADMIN_PERMISSION_CODES = new Set(Object.values(ADMIN_PERMISSIONS).flatMap(group => Object.values(group)));
+
+/**
+ * 本应用权限码目录（给菜单编辑下拉用）
+ *
+ * 取 `actionMetaRegistry` 里 `domain === 'admin'` 的条目，而不是合并后的全量目录 ——
+ * `/permissions/catalog` 返回的是 8 个应用的总和，直接拿去当菜单的候选，
+ * 等于把"能用别的应用的码"这件事摆到界面上。
+ *
+ * @returns {Array<{code: string, label: string, type: string}>} 权限码选项
+ */
+function adminPermissionOptions() {
+  return actionMetaRegistry
+    .filter(meta => meta.domain === 'admin')
+    .flatMap(meta =>
+      (meta.actions || []).map(action => ({ code: action.code, label: action.label, type: action.type }))
+    );
+}
+
+export { ADMIN_PERMISSIONS, ADMIN_PERMISSION_CODES, adminPermissionOptions };
 export default ADMIN_PERMISSIONS;

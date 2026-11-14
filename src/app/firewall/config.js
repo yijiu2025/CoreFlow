@@ -24,6 +24,14 @@ const firewallConfig = {
   init: firewallAppInit,
   description: '五层拦截管道：连接追踪→封禁→挑战→Bot→地理围栏',
 
+  /**
+   * 授权即送的默认角色（主口径）
+   *
+   * 与 `roles.js` 里 `fw_viewer` 的 `is_default: true` 对应。
+   * 防火墙权限敏感：默认只给只读，配置修改必须管理员另授。
+   */
+  default_role: 'fw_viewer',
+
   // OAuth 2.1 客户端配置（用于自动注册到 oauth_clients 表）
   oauth_client: {
     client_id: 'firewall',

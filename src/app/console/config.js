@@ -7,10 +7,23 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
+import { consoleAppInit } from './init.js';
+
 const consoleConfig = {
   app_id: 'console',
   name: '管理后台',
   description: '通用后台脚手架：用户 / 角色 / 菜单 / 部门 / 岗位 / 日志 / 授权与注销',
+
+  /**
+   * 应用启动钩子
+   *
+   * 目前只做一件事：把「按钮授权」解析器注册给守卫（`api/guard.js`）。守卫是框架层、
+   * 被所有应用共用，不能反过来认识 `sys_menu` / `sys_role_menu`，所以走注册位
+   * （见 `framework/security/auth/permission/button-grant.js`）。
+   * ⚠️ 这里**不要** addHook —— init 跑在独立封装作用域里，钩子对 08-api 已注册的业务
+   * 路由不生效（loader 里写明了这条），需要全局钩子请用 `rootPlugins`。
+   */
+  init: consoleAppInit,
 
   /**
    * 权限命名空间（`iam_role.app_id` 的取值）
@@ -26,6 +39,18 @@ const consoleConfig = {
    *    实测：`admin_viewer` 用户在 console 会话下的权限集是 `[]`。
    */
   permission_app_id: 'admin',
+
+  /**
+   * 授权即送的默认角色（主口径）
+   *
+   * 🔴 这个 code 住在命名空间 `admin` 下（上一行的 `permission_app_id`），
+   *    不是 `console`。`resolveDefaultRole` 会用命名空间去查 `iam_role.app_id`，
+   *    所以这里写 `admin_viewer` 能被查到；写成不存在的 `console_*` 会在启动期
+   *    审计里报 error，并在授权时静默回落到最低职级。
+   *
+   * 权限：只读观察者。新授权的账号能进后台看，改数据要管理员另授。
+   */
+  default_role: 'admin_viewer',
 
   /**
    * 登录准入（`bind-session` 之前判定，见 `framework/security/auth/permission/app-access.js`）

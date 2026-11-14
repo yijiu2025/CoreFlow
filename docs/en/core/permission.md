@@ -51,6 +51,7 @@ defineRoles([
     app_id: 'firewall',
     name: 'Firewall viewer',
     rank_level: 1,
+    is_default: true, // granted automatically on authorization (see below)
     policy: {
       Version: '2026-06-06',
       Statement: [{ Effect: 'Allow', Action: [FIREWALL_PERMISSIONS.MONITOR.READ] }]
@@ -58,6 +59,39 @@ defineRoles([
   }
 ]);
 ```
+
+### Default role (granted on authorization)
+
+When a user authorizes an application for the first time, one "normal tier" role is granted
+automatically. It is declared in **two places**, resolved **config first, code second**:
+
+1. `default_role` in `src/app/<app>/config.js` — the primary source; editing config overrides code;
+2. `is_default: true` on the role in `roles.js` — the secondary source, written next to the definition
+   so it is hard to forget.
+
+```js
+// src/app/firewall/config.js
+default_role: 'fw_viewer',
+```
+
+Resolution order (`src/app/oauth21/dao/approval.dao.js`):
+`config.default_role` → `is_default` → the **lowest-ranked** role in that permission namespace
+(must be `rank_level <= 20`). `default_role: null` means "intentionally grant nothing" (e.g. `notice`,
+which only has an admin role).
+
+::: warning Declaring roles means declaring the default role too
+- **Throws at registration** (import time = boot failure): missing `app_id` / `rank_level` /
+  `policy.Statement`, two `is_default` roles for one app, or a default role above the normal tier (20).
+- **Logged at boot** (`auditDefaultRoles`): a typo in `config.default_role`, a mismatch between the
+  two declarations, or no declaration at all (falls back to lowest rank). The first two are errors,
+  the last one is a warning.
+- `src/__tests__/permission/role-rank-levels.test.js` runs the audit against the real config and the
+  real `roles.js`, so a mistake fails the test suite instead of a deployment.
+
+Namespace note: the console login app is `console`, but its roles live in `admin`
+(`config.permission_app_id`). `default_role` must use a code from the `admin` namespace
+(e.g. `admin_viewer`); lookup uses the namespace, not the client id.
+:::
 
 ::: warning `rank_level` has a hard ceiling
 The range comes from `src/models/iam/Role.js` (`validate: { min: 0, max: 99 }`) — **99 is the

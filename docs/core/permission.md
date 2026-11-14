@@ -50,6 +50,7 @@ defineRoles([
     app_id: 'firewall',
     name: '防火墙观察者',
     rank_level: 1,
+    is_default: true, // 授权即送的默认角色（见下一节）
     policy: {
       Version: '2026-06-06',
       Statement: [{ Effect: 'Allow', Action: [FIREWALL_PERMISSIONS.MONITOR.READ] }]
@@ -57,6 +58,35 @@ defineRoles([
   }
 ]);
 ```
+
+### 默认角色（授权即送）
+
+用户首次授权某应用时，系统会自动授予一个"普通档"角色。它在**两处**声明，
+解析时 **config 为主、代码为辅**：
+
+1. `src/app/<app>/config.js` 的 `default_role` —— 主口径，改配置即可覆盖代码；
+2. `roles.js` 里该角色的 `is_default: true` —— 辅口径，贴着定义写，不容易漏。
+
+```js
+// src/app/firewall/config.js
+default_role: 'fw_viewer',
+```
+
+解析顺序（`src/app/oauth21/dao/approval.dao.js`）：
+`config.default_role` → `is_default` → 该权限命名空间**职级最低**的角色（要求 `rank_level <= 20`）。
+写 `default_role: null` 表示"有意不自动授予"（例如只有一个管理员角色的 `notice`）。
+
+::: warning 写角色定义时必须一起把默认角色写对
+- **注册期直接抛错**（import 期 = 启动失败）：缺 `app_id` / `rank_level` / `policy.Statement`，
+  同一应用声明两个 `is_default`，或默认角色的 `rank_level` 超过普通档上限（20）。
+- **启动期日志提示**（`auditDefaultRoles`）：`config.default_role` 拼错、两处声明不一致、
+  什么都没声明（会回落最低职级）。前两种是 error，最后一种是 warn。
+- 判据被 `src/__tests__/permission/role-rank-levels.test.js` 卡死：
+  真实 config + 真实 `roles.js` 跑一遍审计，有问题测试就红，不用等部署。
+
+命名空间注意：console 的登录应用是 `console`，角色住在 `admin`（`config.permission_app_id`）。
+`default_role` 要写 `admin` 命名空间下的 code（如 `admin_viewer`），解析时会按命名空间查库。
+:::
 
 ::: warning `rank_level` 有硬上限
 职级区间由 `src/models/iam/Role.js` 的 `validate: { min: 0, max: 99 }` 决定，**99 是最大值**。

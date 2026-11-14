@@ -17,7 +17,10 @@ import {
   defineRoles,
   definePermissionMeta,
   createPermissionRegistry,
-  resetPbacRegistryForTesting
+  resetPbacRegistryForTesting,
+  NORMAL_RANK_MAX,
+  getDeclaredDefaultRole,
+  listDeclaredDefaultRoles
 } from '../../../../framework/security/pbac/index.js';
 
 beforeEach(() => {
@@ -82,23 +85,110 @@ describe('createPermissionRegistry', () => {
 });
 
 describe('defineRoles', () => {
+  /** 合法角色的基线：只覆盖被测字段，其余给能过校验的最小值 */
+  const role = overrides => ({
+    app_id: 'demo',
+    name: '角色',
+    rank_level: 10,
+    policy: { Version: 'test', Statement: [] },
+    ...overrides
+  });
+  const define = list => defineRoles((Array.isArray(list) ? list : [list]).map(item => role(item)));
+
   it('接受单个角色或数组', () => {
-    defineRoles({ code: 'demo_user' });
-    defineRoles([{ code: 'demo_admin' }, { code: 'demo_vip' }]);
+    define({ code: 'demo_user' });
+    define([{ code: 'demo_admin' }, { code: 'demo_vip' }]);
 
     expect(roleRegistry.map(r => r.code)).toEqual(['demo_user', 'demo_admin', 'demo_vip']);
   });
 
   it('🔴 角色 code 重复 → 抛错（loader 以 code upsert，重复会互相覆盖 policy）', () => {
-    defineRoles({ code: 'demo_admin', policy: { v: 1 } });
+    define({ code: 'demo_admin', policy: { Version: 'v1', Statement: [] } });
 
-    expect(() => defineRoles({ code: 'demo_admin', policy: { v: 2 } })).toThrow(/角色 code 重复注册/);
+    expect(() => define({ code: 'demo_admin', policy: { Version: 'v2', Statement: [] } })).toThrow(
+      /角色 code 重复注册/
+    );
     expect(roleRegistry).toHaveLength(1);
   });
 
   it('缺少 code → 抛错，且整批都不注册', () => {
-    expect(() => defineRoles([{ code: 'ok_role' }, { name: '没有 code' }])).toThrow(/缺少非空的 code/);
+    expect(() => defineRoles([role({ code: 'ok_role' }), role({ name: '没有 code' })])).toThrow(/缺少非空的 code/);
     expect(roleRegistry).toHaveLength(0);
+  });
+
+  /*
+   * 下面几条针对的是"漏字段不会报错、只会静默跑偏"的历史事故：
+   *   · 漏 app_id → 模型默认 'GLOBAL'，业务角色被当成所有应用通用的角色；
+   *   · 漏 rank_level → 模型默认 1，等于小黑屋档，被旧逻辑当成默认角色发出去；
+   *   · 漏 policy.Statement → 角色授了但一条权限都没有，界面正常、接口全 403。
+   */
+  it('🔴 缺 app_id → 抛错（缺省会被模型写成 GLOBAL，权限范围凭空放大）', () => {
+    expect(() => defineRoles({ code: 'demo_user', rank_level: 10, policy: { Statement: [] } })).toThrow(
+      /缺少非空的 app_id/
+    );
+  });
+
+  it('🔴 缺 name → 抛错（NOT NULL 列，空库首插会失败）', () => {
+    expect(() => defineRoles({ code: 'demo_user', app_id: 'demo', rank_level: 10, policy: { Statement: [] } })).toThrow(
+      /缺少非空的 name/
+    );
+  });
+
+  it('🔴 rank_level 必填且必须是 0~99 的整数', () => {
+    expect(() => define({ code: 'no_rank', rank_level: undefined })).toThrow(/rank_level 必须是整数/);
+    expect(() => define({ code: 'float_rank', rank_level: 10.5 })).toThrow(/rank_level 必须是整数/);
+    expect(() => define({ code: 'too_high', rank_level: 100 })).toThrow(/越界/);
+    expect(() => define({ code: 'negative', rank_level: -1 })).toThrow(/越界/);
+  });
+
+  it('🔴 policy 缺失或 Statement 不是数组 → 抛错（授了角色但零权限是静默失效）', () => {
+    expect(() => defineRoles({ code: 'no_policy', app_id: 'demo', rank_level: 10 })).toThrow(/缺少 policy 对象/);
+    expect(() => define({ code: 'bad_stmt', policy: { Version: 'x' } })).toThrow(/Statement 必须是数组/);
+  });
+
+  it('is_default 必须是布尔值', () => {
+    expect(() => define({ code: 'demo_x', is_default: 'yes' })).toThrow(/is_default 必须是布尔值/);
+  });
+
+  describe('默认角色标记（is_default）', () => {
+    it('注册后可被解析链读到；reset 会一起清空', () => {
+      define({ code: 'demo_user', is_default: true });
+
+      expect(getDeclaredDefaultRole('demo')).toBe('demo_user');
+      expect(listDeclaredDefaultRoles()).toEqual([{ appId: 'demo', code: 'demo_user' }]);
+
+      resetPbacRegistryForTesting();
+      expect(getDeclaredDefaultRole('demo')).toBeNull();
+    });
+
+    it('🔴 同一应用两个 is_default → 抛错（同批与跨批都要拦，否则授谁取决于代码顺序）', () => {
+      expect(() =>
+        define([
+          { code: 'a', is_default: true },
+          { code: 'b', is_default: true }
+        ])
+      ).toThrow(/声明了多个默认角色/);
+      expect(roleRegistry).toHaveLength(0);
+
+      define({ code: 'a', is_default: true });
+      expect(() => define({ code: 'b', is_default: true })).toThrow(/声明了多个默认角色/);
+    });
+
+    it('🔴 默认角色的职级不能超过普通档（否则等于给每个授权者发管理员）', () => {
+      expect(() => define({ code: 'demo_admin', rank_level: NORMAL_RANK_MAX + 1, is_default: true })).toThrow(
+        /超过普通档上限/
+      );
+      // 边界值本身合法
+      expect(() => define({ code: 'demo_ok', rank_level: NORMAL_RANK_MAX, is_default: true })).not.toThrow();
+    });
+
+    it('不同应用各有一个默认角色是合法的', () => {
+      define({ code: 'a_user', app_id: 'a', is_default: true });
+      define({ code: 'b_user', app_id: 'b', is_default: true });
+
+      expect(getDeclaredDefaultRole('a')).toBe('a_user');
+      expect(getDeclaredDefaultRole('b')).toBe('b_user');
+    });
   });
 });
 
@@ -110,15 +200,17 @@ describe('definePermissionMeta', () => {
 });
 
 describe('resetPbacRegistryForTesting', () => {
+  const minimal = { code: 'demo_admin', app_id: 'demo', rank_level: 10, policy: { Statement: [] } };
+
   it('清空后可以重新注册同一批 code（测试隔离的前提）', () => {
-    defineRoles({ code: 'demo_admin' });
+    defineRoles(minimal);
     createPermissionRegistry('demo', '演示', { A: { X: { code: 'demo:a:x', label: 'x' } } });
 
     resetPbacRegistryForTesting();
     expect(roleRegistry).toHaveLength(0);
     expect(actionMetaRegistry).toHaveLength(0);
 
-    expect(() => defineRoles({ code: 'demo_admin' })).not.toThrow();
+    expect(() => defineRoles(minimal)).not.toThrow();
     expect(() =>
       createPermissionRegistry('demo', '演示', { A: { X: { code: 'demo:a:x', label: 'x' } } })
     ).not.toThrow();

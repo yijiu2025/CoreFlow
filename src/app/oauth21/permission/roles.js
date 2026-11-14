@@ -14,6 +14,8 @@ defineRoles([
     app_id: 'oauth21',
     name: 'OAuth 观察者',
     rank_level: 10,
+    /** 授权即送的默认角色：新授权用户先能看，写权限由管理员另行分配 */
+    is_default: true,
     description: '只读权限，可查看客户端和 Token',
     policy: {
       Version: '2026-06-06',
