@@ -39,6 +39,20 @@ const emit = defineEmits<{ (e: 'close'): void }>();
  * 已注销（名字来自快照）/ 本人（正常记录）/ 未识别（尝试登录但账号没对上，
  * 失败日志常见）。三种都会出现，合并成一种写法会丢信息。
  */
+/**
+ * 归属地展示值
+ *
+ * 本机（127.0.0.1 / ::1）没有地理归属：显示「本地」比「未解析」准确 ——
+ * 「未解析」像是在说"解析失败了"，而本机请求本来就不该有归属地。
+ */
+const locationText = computed(() => {
+  const raw = props.row?.location;
+  if (raw) return raw;
+  const ip = String(props.row?.ip || '').trim();
+  if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return '本地';
+  return '未解析';
+});
+
 /** 操作者（谁发起了这条事件）：会话流水里另存的字段，缺省说明没有第二方 */
 const operator = computed(() => {
   const details = (props.row?.details ?? {}) as Record<string, unknown>;
@@ -179,7 +193,7 @@ watch(
               <dd class="mono">{{ when(row.created_at) }}</dd>
             </div>
             <div>
-              <dt>登录账号（{{ accountTag }}）</dt>
+              <dt>账号（{{ accountTag }}）</dt>
               <dd>
                 <template v-if="row.user_status === -1 && row.prev_username"> 注销-{{ row.prev_username }} </template>
                 <template v-else>{{ row.username || '—' }}</template>
@@ -245,7 +259,7 @@ watch(
               <dt>归属地</dt>
               <!-- location 是写入方留的空列（实测 96 条全空）：显示"未解析"而不是"—"，
                    否则看不出是"没解析"还是"这条恰好在内网" -->
-              <dd>{{ row.location || '未解析' }}</dd>
+              <dd>{{ locationText }}</dd>
             </div>
           </dl>
           <p class="sess-ua" :title="row.user_agent">

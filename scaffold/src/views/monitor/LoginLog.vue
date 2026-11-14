@@ -126,6 +126,22 @@ function notify(message: string): void {
  */
 const activeRow = ref<LoginLogRow | null>(null);
 
+/**
+ * 归属地的展示值
+ *
+ * 本机发起的请求（127.0.0.1 / ::1）没有地理归属，显示「本地」比「—」有用得多 ——
+ * 管理员在自己机器上操作时，一列「—」会让人以为是数据缺失。其余情况没解析就留「—」。
+ *
+ * @param row 登录日志行
+ * @returns 展示文本
+ */
+function locationText(row: LoginLogRow): string {
+  if (row.location) return row.location;
+  const ip = String(row.ip || '').trim();
+  if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return '本地';
+  return '—';
+}
+
 /** 加载全部数据 */
 async function load(): Promise<void> {
   loading.value = true;
@@ -331,7 +347,7 @@ onMounted(load);
         <div class="stat__value">{{ stats?.successRate ?? 100 }}<small>%</small></div>
       </div>
       <div class="stat">
-        <div class="stat__label">登录账号</div>
+        <div class="stat__label">账号数</div>
         <div class="stat__value">{{ stats?.users ?? 0 }}</div>
       </div>
       <div class="stat">
@@ -461,7 +477,7 @@ onMounted(load);
         v-model="query.keyword"
         class="input"
         style="width: 190px"
-        placeholder="登录账号 / IP / 归属地"
+        placeholder="账号 / IP / 归属地"
         @keyup.enter="search"
       />
       <!-- 选项 = `models/session/SessionLog.js` 里 event 字段注释列出的全集。
@@ -528,7 +544,7 @@ onMounted(load);
         v-model="query.username"
         class="input"
         style="width: 180px"
-        placeholder="登录账号（含注销前用户名）"
+        placeholder="账号（含注销前用户名）"
         @keyup.enter="search"
       />
       <input
@@ -555,7 +571,11 @@ onMounted(load);
               <th>时间</th>
               <!-- 登录日志只有当事人一方：这列就是"谁在登录"，不是"谁被操作"。
                    操作日志里才存在"操作者 / 被操作账号"两个角色（见那边的详情弹窗） -->
-              <th title="本条登录记录所属的账号 —— 登录者本人">登录账号</th>
+              <th
+                title="本条记录所属的账号（当事人）。管理员发起的事件（如踢下线）里，操作者不是这个人，操作者见「说明」与详情的「操作者」一行"
+              >
+                账号
+              </th>
               <th>事件</th>
               <th>应用</th>
               <th>IP</th>
@@ -590,7 +610,7 @@ onMounted(load);
               </td>
               <td>{{ row.app_id || '—' }}</td>
               <td class="mono">{{ row.ip || '—' }}</td>
-              <td>{{ row.location || '—' }}</td>
+              <td>{{ locationText(row) }}</td>
               <td>
                 <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">{{
                   row.status === 1 ? '成功' : '失败'
