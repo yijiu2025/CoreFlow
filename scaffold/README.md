@@ -85,6 +85,11 @@ themes/<包>/<设备>/users/index.vue    版式（只渲染 ctx、只调 ctx 上
         │ <ThemeView page="users" :device :ctx>（views/system/Users.vue 的模板就这一行）
 ```
 
+🔴 内容页一律 `scope="inherit"`：配色记录是「包 × 设备 × **壳页**」声明的，内容页若按
+默认的 `scope="page"` 锚定，`getThemeRecord` 查不到记录 ⇒ **token 层被清空**，
+页面上所有 `--mauth-*` 变成「未定义」（表现是"样式突然全没了"，控制台只有一条
+`[theme] … 没有任何配色记录` 的 warn）。独立页面（登录 / 授权 / 外壳 / 404）才用 `page`。
+
 **版式里禁止**：`@/api/*` 请求、pinia 读写、权限判定、分页/校验逻辑。
 权限已由容器算成 `can*` 布尔，分页已由 `useListPage` 算成 `list`，版式只显示结论。
 换一套 UI = 在包里加个 `<设备>/<页面>/` 目录，容器零改动。

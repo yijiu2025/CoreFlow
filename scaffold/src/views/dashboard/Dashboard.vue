@@ -231,5 +231,5 @@ const ctx: DashboardViewContext = {
 
 <template>
   <!-- 页面长什么样在主题包里（`themes/<包>/<设备>/dashboard/`），容器只准备 ctx -->
-  <ThemeView page="dashboard" :device="device" :ctx="ctx" />
+  <ThemeView page="dashboard" :device="device" :ctx="ctx" scope="inherit" />
 </template>

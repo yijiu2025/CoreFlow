@@ -24,4 +24,11 @@ import { DEVICES } from '@/views/device/devices';
 //    （页面能渲染、只是没有任何配色），dev 下会有一条 console.warn 提示。
 import 'virtual:theme';
 
-export const useThemeStore = defineStore('theme', () => createThemeState({ devices: DEVICES }));
+export const useThemeStore = defineStore('theme', () =>
+  /*
+   * `defaultPage` 播种「还没人调 setActivePageView 时按哪一页取配色」：
+   * 直接深链到 404、或页面在壳渲染前先出 token 的那一瞬间，activePage 是空串 ⇒ 空记录
+   * ⇒ 一个 `--mauth-*` 都不注入。播种成壳页（console）后，任何首屏都有底色。
+   */
+  createThemeState({ devices: DEVICES, defaultPage: 'console' })
+);

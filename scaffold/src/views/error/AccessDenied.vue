@@ -55,5 +55,5 @@ const ctx: AccessDeniedViewContext = {
 
 <template>
   <!-- 页面长什么样在主题包里（`themes/<包>/<设备>/access-denied/`），容器只准备 ctx -->
-  <ThemeView page="access-denied" :device="device" :ctx="ctx" />
+  <ThemeView page="access-denied" :device="device" :ctx="ctx" scope="inherit" />
 </template>

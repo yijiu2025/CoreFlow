@@ -74,5 +74,5 @@ const ctx: FirewallViewContext = {
 
 <template>
   <!-- 页面长什么样在主题包里（`themes/<包>/<设备>/firewall/`），容器只准备 ctx -->
-  <ThemeView page="firewall" :device="device" :ctx="ctx" />
+  <ThemeView page="firewall" :device="device" :ctx="ctx" scope="inherit" />
 </template>

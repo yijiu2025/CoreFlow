@@ -596,5 +596,5 @@ const ctx: MenusViewContext = {
 
 <template>
   <!-- 页面长什么样在主题包里（`themes/<包>/<设备>/menus/`），容器只准备 ctx -->
-  <ThemeView page="menus" :device="device" :ctx="ctx" />
+  <ThemeView page="menus" :device="device" :ctx="ctx" scope="inherit" />
 </template>

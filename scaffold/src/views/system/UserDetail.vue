@@ -49,5 +49,5 @@ const ctx: UserDetailViewContext = {
 
 <template>
   <!-- 页面长什么样在主题包里（`themes/<包>/<设备>/user-detail/`），容器只准备 ctx -->
-  <ThemeView page="user-detail" :device="device" :ctx="ctx" />
+  <ThemeView page="user-detail" :device="device" :ctx="ctx" scope="inherit" />
 </template>
