@@ -7,6 +7,8 @@
 
 ## 未发布（Unreleased）
 
+## 2.35.0 — 2026-11-15
+
 ### 新增（管理后台 console）
 
 - **前后端整套后台**：`src/app/console` + `src/api/admin/console/v1` 与 `scaffold/` 前端。
@@ -48,6 +50,7 @@
 - `console` DAO 去掉裸 SQL 改模型查询（仅日志聚合保留并说明理由）。
 - 客户端注册改为 `config.js` 声明式，删掉 console 注册迁移。
 - 覆盖率门禁真正生效（此前阈值从没被跑过）；行尾统一 LF 并落到三层配置。
+
 
 ## 2.34.0 — 2026-11-07
 
