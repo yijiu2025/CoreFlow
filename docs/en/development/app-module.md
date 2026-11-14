@@ -30,6 +30,15 @@ export default {
   app_id: 'myapp',
   name: 'My app',
   description: 'An example application',
+
+  /**
+   * Default role granted on authorization (required, normal tier rank <= 20).
+   * Written as `null` when nothing should be granted automatically.
+   * Pairs with `is_default: true` on the same role in `permission/roles.js`;
+   * config wins, and any mismatch or omission is reported by the boot-time audit.
+   */
+  default_role: 'myapp_user',
+
   init: initMyApp, // optional: a Fastify plugin initialiser
   oauth_client: {
     // optional: OAuth 2.1 client config
@@ -81,6 +90,13 @@ defineRoles([
     app_id: 'myapp',
     name: 'Regular user',
     rank_level: 10,
+    /*
+     * 🔴 Required: the role granted on authorization.
+     * At most one `is_default` per app, and its rank must be <= 20 (normal tier).
+     * Missing → boot-time warning (falls back to the lowest rank);
+     * two of them / an admin-tier one → throws at import time.
+     */
+    is_default: true,
     policy: {
       Version: '2026-05-18',
       Statement: [

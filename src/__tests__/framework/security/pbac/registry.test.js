@@ -142,7 +142,9 @@ describe('defineRoles', () => {
   });
 
   it('🔴 policy 缺失或 Statement 不是数组 → 抛错（授了角色但零权限是静默失效）', () => {
-    expect(() => defineRoles({ code: 'no_policy', app_id: 'demo', rank_level: 10 })).toThrow(/缺少 policy 对象/);
+    expect(() => defineRoles({ code: 'no_policy', app_id: 'demo', name: '无策略', rank_level: 10 })).toThrow(
+      /缺少 policy 对象/
+    );
     expect(() => define({ code: 'bad_stmt', policy: { Version: 'x' } })).toThrow(/Statement 必须是数组/);
   });
 
@@ -200,7 +202,7 @@ describe('definePermissionMeta', () => {
 });
 
 describe('resetPbacRegistryForTesting', () => {
-  const minimal = { code: 'demo_admin', app_id: 'demo', rank_level: 10, policy: { Statement: [] } };
+  const minimal = { code: 'demo_admin', app_id: 'demo', name: '演示管理员', rank_level: 10, policy: { Statement: [] } };
 
   it('清空后可以重新注册同一批 code（测试隔离的前提）', () => {
     defineRoles(minimal);

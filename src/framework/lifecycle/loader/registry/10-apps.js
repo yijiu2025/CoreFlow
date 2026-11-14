@@ -17,8 +17,8 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { getModel } from '../../../persistence/db/index.js';
 import { C } from '../../../../utils/index.js';
-import { roleRegistry } from '../../../security/pbac/index.js';
-import { registerAppConfig } from '../../../config/app-registry.js';
+import { roleRegistry, auditDefaultRoles } from '../../../security/pbac/index.js';
+import { registerAppConfig, listAppConfigs } from '../../../config/app-registry.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.loader.registry.10-apps');
@@ -157,9 +157,15 @@ const appsLoader = async app => {
     try {
       let successCount = 0;
       for (const roleDef of roleRegistry) {
+        /*
+         * `is_default` 是**内存标记**（`iam_role` 没有这一列），只给
+         * `resolveDefaultRole` 当 config 未声明时的次选。不能原样塞给 Sequelize：
+         * 未知字段今天会被忽略，但哪天模型加了同名列就会把它当业务数据写进去。
+         */
+        const { is_default: _isDefault, ...rolePayload } = roleDef;
         const [role, created] = await Role.findOrCreate({
           where: { code: roleDef.code, app_id: roleDef.app_id },
-          defaults: roleDef
+          defaults: rolePayload
         });
 
         if (!created) {
@@ -175,6 +181,32 @@ const appsLoader = async app => {
     }
   } else {
     log.dev(`ℹ️ [PBAC] ${C.cyan}暂无通过 defineRoles 注册的基础角色${C.reset}`);
+  }
+
+  /*
+   * ============== 阶段 2.5：默认角色总账校验 ==============
+   *
+   * "授权即送"的角色有三种静默失效：config 的 code 拼错（回落最低职级）、
+   * 什么都没声明（谁也不知道兜到了哪个角色）、同一应用标了两个 is_default
+   * （取决于代码顺序，这条已在 defineRoles 里抛错）。
+   *
+   * 这里只**报告**不抛错：notice 这种"只有管理员角色、有意不自动授予"的应用
+   * 会产生一条 error 级提示，但它不该阻塞启动 —— 修复方式是去 config 写
+   * `default_role: null` 或给角色加 `is_default: true`，都属于配置层的事。
+   */
+  const defaultRoleIssues = auditDefaultRoles({
+    configs: listAppConfigs(),
+    roleDefs: roleRegistry
+  });
+  for (const issue of defaultRoleIssues) {
+    if (issue.level === 'error') {
+      log.error(`❌ [PBAC] ${C.red}默认角色配置有问题（${issue.appId}）${C.reset}：${issue.message}`);
+    } else {
+      log.warn(`⚠️ [PBAC] ${C.yellow}默认角色建议补充（${issue.appId}）${C.reset}：${issue.message}`);
+    }
+  }
+  if (defaultRoleIssues.length === 0 && roleRegistry.length > 0) {
+    log.always(`✅ [PBAC] ${C.green}所有应用都已声明默认角色${C.reset}`);
   }
 
   log.always(`✅ [Apps] ${C.green}所有应用加载完毕 (${loadedCount} 个)${C.reset}`);
