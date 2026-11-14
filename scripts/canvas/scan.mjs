@@ -4,7 +4,7 @@
 // 页面: docs/public/canvas/index.html —— 文档站发布后即 https://yijiu2025.github.io/CoreFlow/canvas/
 // 数据由 .github/workflows/docs.yml 在每次发布文档站时重扫生成（构建期产出，不入库、不提交）
 import { readdirSync, statSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative, dirname, basename } from 'node:path';
+import { join, relative, dirname } from 'node:path';
 import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as acorn from 'acorn';
