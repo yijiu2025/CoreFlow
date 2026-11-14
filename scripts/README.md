@@ -31,6 +31,7 @@
 | `cli.js`                     | CoreFlow CLI v2.0：交互式管理用户 / 角色 / 管理员 / 数据库 / 缓存 / 系统，并自动加载各应用的 `cli/index.js` 插件命令 | `npm run cli`                                           |
 | `setup-superadmin.js`        | 初始化超管：确保迁移 → 建 superadmin 角色 → 找/建用户 → 授权 → 清 Redis session                                      | `npm run setup:admin`                                   |
 | `revoke-superadmin.js`       | 撤销超管：列出全部超管、**拒绝撤销最后一个**、默认二次确认、撤销后清 session                                         | `npm run revoke:admin`                                  |
+| `seed-console-buttons.js`    | 补齐管理后台的按钮菜单（`sys_menu.type=btn`）：幂等，新建后继承父页面授权 + 给持权角色补授权                          | `npm run seed:buttons`（`--dry` 只预览）                |
 | `release.mjs`                | 按提交类型发版（本仓）：git tag + GitHub Release + `packages/log` npm，**默认只预览**                                | `node scripts/release.mjs [--apply]`                    |
 | `release-web.mjs`            | 同一套判据的**通用版**，供各前端独立仓使用；`--npm` 才发 npm                                                         | `node scripts/release-web.mjs [--apply] [--npm]`        |
 | `check-browser-baseline.mjs` | 跨内核渲染基线静态检查（硬性项 FAIL / 提醒项 WARN），规则见 `docs/standards/browser-baseline.md`                     | `npm run check:baseline`                                |

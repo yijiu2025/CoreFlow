@@ -17,6 +17,7 @@ import type { Plugin } from 'vue';
 import { theme } from 'skinsuite/vue';
 import App from './App.vue';
 import router from './router';
+import { maskClose } from './utils/maskClose';
 
 // 0. 设备 ID 全局同步（跨标签页 storage 监听 + 变更回调注册）
 initDeviceSync();
@@ -32,6 +33,8 @@ app.config.errorHandler = (err, _instance, info) => {
 // 2. 插件注册（顺序：pinia → router → theme）
 app.use(pinia);
 app.use(router);
+// 遮罩关闭指令：只在"按下与松开都在遮罩上"时关闭 —— 防止拖选文字误关弹窗
+app.directive('mask-close', maskClose);
 // 主题域：只传 router（版式意图从 query 读）；明暗 / 配色状态机在 skinsuite 内核
 // ⚠️ 必须在 `app.use(pinia)` 之后：主题 store 实例化依赖 activePinia
 // 类型桥接：库的插件声明带可选 options 泛型，与 Vue 的 Plugin 重载不完全同形

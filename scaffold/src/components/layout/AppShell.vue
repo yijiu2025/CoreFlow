@@ -10,7 +10,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-vue-next';
+import { LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Sun, UserRound } from 'lucide-vue-next';
 import { ThemeScope } from 'skinsuite/vue';
 import AppIcon from '@/components/ui/AppIcon.vue';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
@@ -23,6 +23,20 @@ const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const themeStore = useThemeStore();
+
+/**
+ * 顶栏头像加载失败标记
+ *
+ * 文件可能已被换头像时的清理逻辑删掉、或静态目录没被代理到 —— 那时 `<img>` 会
+ * 显示成裂图。置位后回落到图标，并且在地址变化时复位（否则换了新头像也显示不出来）。
+ */
+const avatarBroken = ref(false);
+watch(
+  () => auth.me?.profile?.avatar,
+  () => {
+    avatarBroken.value = false;
+  }
+);
 /**
  * 设备判定（宿主职责）：`?device=mobile|std` 优先，否则按视口宽度。
  * 主题库只接收设备名、不做判定 —— 这里的结果决定 **token 作用域**。
@@ -43,6 +57,28 @@ const pageTitle = computed(() => (route.meta?.title as string) || '管理后台'
 const isDark = computed(() => themeStore.isDark);
 
 /**
+ * 这条菜单对应的页面，当前账号进不进得去
+ *
+ * 🔴 判据取**路由 meta.permission** —— 那是守卫真正比对的那一份。不拿菜单自己的
+ *    `permission` 字段判：它是库里可改的自由文本，改了菜单而路由没改时，侧栏会
+ *    藏掉一个其实进得去的页面；反过来则是露出一条点进去被踢到 `/no-access` 的死链
+ *    （观察者就踩过这个：菜单全量授权、policy 只有几个 read 码）。
+ *    路由没声明权限（如个人设置）或路径没注册 → 一律放行，不替守卫做决定。
+ *
+ * @param node 菜单节点
+ * @returns 是否可进入
+ */
+function canEnter(node: MenuNode): boolean {
+  if (!node.path) return true;
+  const resolved = router.resolve(node.path);
+  // 菜单指向一个没注册的页面：点进去只有 404。路由表是静态声明、菜单是库里数据，
+  // 两者漂移时宁可让这条入口消失 —— 要修的是菜单管理里的那条数据，不是导航。
+  if (resolved.name === 'not-found') return false;
+  const code = (resolved.meta?.permission as string | undefined) ?? '';
+  return !code || auth.hasPermission(code);
+}
+
+/**
  * 侧栏结构：顶层 `dir` 作为分组标题，`menu` 作为链接
  *
  * @returns 分组列表（无目录归属的菜单放在「导航」组）
@@ -50,7 +86,22 @@ const isDark = computed(() => themeStore.isDark);
 const groups = computed(() => {
   const out: Array<{ key: string; title: string; items: MenuNode[] }> = [];
   const loose: MenuNode[] = [];
-  for (const node of auth.menus) {
+  /*
+   * 已下架（visible=0）的节点不进导航。
+   *
+   * 后端 `/session/routes` 已经滤过一遍，这里再滤一次：这个字段是"强制下架"，
+   * 宁可重复也不要因为某条老数据漏滤而在侧栏里露出来。
+   *
+   * 第二刀按**权限码**：菜单只决定"想不想给人看"，能不能进由守卫决定 ——
+   * 把进不去的入口留在侧栏，就是让每一次点击都换一个 `/no-access`。
+   * 目录在子项被筛空后整组消失：只剩标题的空分组比死链更让人摸不着头脑。
+   */
+  const shown = (nodes: MenuNode[]): MenuNode[] =>
+    nodes
+      .filter(node => node.visible !== 0)
+      .map(node => ({ ...node, children: shown(node.children || []) }))
+      .filter(node => (node.type === 'dir' ? (node.children || []).length > 0 : canEnter(node)));
+  for (const node of shown(auth.menus)) {
     if (node.type === 'dir') {
       out.push({ key: `dir-${node.id}`, title: node.name, items: node.children || [] });
     } else if (node.type === 'menu') {
@@ -126,64 +177,92 @@ watch(
         <div class="rail__brand">
           <span class="rail__mark">C</span>
           <span v-show="!collapsed">管理后台</span>
-      </div>
+        </div>
 
-      <nav class="rail__nav" aria-label="主导航">
-        <template v-for="group in groups" :key="group.key">
-          <div v-if="!collapsed && group.title !== '导航'" class="rail__group">{{ group.title }}</div>
-          <a
-            v-for="node in group.items"
-            :key="node.id"
-            class="rail__link"
-            href="javascript:void(0)"
-            :aria-current="isActive(node) ? 'page' : undefined"
-            :title="collapsed ? node.name : undefined"
-            @click="go(node)"
+        <nav class="rail__nav" aria-label="主导航">
+          <template v-for="group in groups" :key="group.key">
+            <div v-if="!collapsed && group.title !== '导航'" class="rail__group">{{ group.title }}</div>
+            <a
+              v-for="node in group.items"
+              :key="node.id"
+              class="rail__link"
+              href="javascript:void(0)"
+              :aria-current="isActive(node) ? 'page' : undefined"
+              :title="collapsed ? node.name : undefined"
+              @click="go(node)"
+            >
+              <AppIcon :name="node.icon" />
+              <span v-show="!collapsed">{{ node.name }}</span>
+            </a>
+          </template>
+        </nav>
+
+        <div class="rail__foot">
+          <button class="btn btn--ghost btn--sm" type="button" @click="collapsed = !collapsed">
+            <PanelLeftOpen v-if="collapsed" :size="16" />
+            <PanelLeftClose v-else :size="16" />
+            <span v-show="!collapsed">收起</span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="rail-mask" :data-open="drawerOpen" @click="drawerOpen = false"></div>
+
+      <div class="main">
+        <header class="topbar">
+          <button class="btn btn--ghost btn--sm" type="button" aria-label="打开导航" @click="drawerOpen = true">
+            <Menu :size="18" />
+          </button>
+
+          <strong>{{ pageTitle }}</strong>
+          <span class="topbar__spacer"></span>
+
+          <button
+            class="btn btn--ghost btn--sm"
+            type="button"
+            :aria-label="isDark ? '切换到浅色' : '切换到深色'"
+            @click="toggleMode"
           >
-            <AppIcon :name="node.icon" />
-            <span v-show="!collapsed">{{ node.name }}</span>
-          </a>
-        </template>
-      </nav>
+            <Sun v-if="isDark" :size="17" />
+            <Moon v-else :size="17" />
+          </button>
 
-      <div class="rail__foot">
-        <button class="btn btn--ghost btn--sm" type="button" @click="collapsed = !collapsed">
-          <PanelLeftOpen v-if="collapsed" :size="16" />
-          <PanelLeftClose v-else :size="16" />
-          <span v-show="!collapsed">收起</span>
-        </button>
-      </div>
-    </aside>
+          <!-- 只有拿到用户信息才显示：被边界防护拦下时 me 为空，但那不等于"未登录" -->
+          <!-- 个人设置入口：主题色已收进设置页，这里只留一个入口 -->
+          <RouterLink v-if="auth.me" class="btn btn--ghost btn--sm" to="/settings/profile">
+            <img
+              v-if="auth.me.profile?.avatar && !avatarBroken"
+              class="topbar__avatar"
+              :src="auth.me.profile.avatar"
+              alt=""
+              @error="avatarBroken = true"
+            />
+            <UserRound v-else :size="16" />
+            <!-- 昵称是 console 内的展示身份，用户没设时后端已回落到 username -->
+            <span class="topbar__label">{{ auth.me.profile?.nickname || auth.me.username }}</span>
+          </RouterLink>
 
-    <div class="rail-mask" :data-open="drawerOpen" @click="drawerOpen = false"></div>
+          <button class="btn btn--ghost btn--sm" type="button" aria-label="退出登录" @click="signOut">
+            <LogOut :size="16" />
+            <span class="topbar__label">退出</span>
+          </button>
+        </header>
 
-    <div class="main">
-      <header class="topbar">
-        <button class="btn btn--ghost btn--sm" type="button" aria-label="打开导航" @click="drawerOpen = true">
-          <Menu :size="18" />
-        </button>
-
-        <strong>{{ pageTitle }}</strong>
-        <span class="topbar__spacer"></span>
-
-        <button class="btn btn--ghost btn--sm" type="button" :aria-label="isDark ? '切换到浅色' : '切换到深色'" @click="toggleMode">
-          <Sun v-if="isDark" :size="17" />
-          <Moon v-else :size="17" />
-        </button>
-
-        <!-- 只有拿到用户信息才显示：被边界防护拦下时 me 为空，但那不等于"未登录" -->
-        <span v-if="auth.me" class="tag tag--info topbar__user">{{ auth.me.username }}</span>
-
-        <button class="btn btn--ghost btn--sm" type="button" aria-label="退出登录" @click="signOut">
-          <LogOut :size="16" />
-          <span class="topbar__label">退出</span>
-        </button>
-      </header>
-
-      <main class="page">
-        <router-view />
-      </main>
+        <main class="page">
+          <router-view />
+        </main>
       </div>
     </div>
   </ThemeScope>
 </template>
+
+<style scoped>
+/* 顶栏头像：与图标同尺寸，圆形裁切，避免撑高按钮 */
+.topbar__avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+</style>

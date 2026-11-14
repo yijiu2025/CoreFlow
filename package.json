@@ -15,6 +15,7 @@
     "canvas:scan": "node scripts/canvas/scan.mjs",
     "setup:admin": "node --env-file=.env scripts/setup-superadmin.js",
     "revoke:admin": "node --env-file=.env scripts/revoke-superadmin.js",
+    "seed:buttons": "node --env-file=.env scripts/seed-console-buttons.js",
     "cli": "node --env-file=.env scripts/cli.js",
     "download:models": "node scripts/download-models.js",
     "lint": "eslint . --fix",

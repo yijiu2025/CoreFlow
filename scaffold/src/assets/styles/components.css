@@ -53,11 +53,7 @@
  * 这是与普通描边按钮区分层级的最低成本方式（不引渐变图片）。
  */
 .btn--primary {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, #fff 14%, var(--mauth-primary)),
-    var(--mauth-primary)
-  );
+  background: linear-gradient(180deg, color-mix(in srgb, #fff 14%, var(--mauth-primary)), var(--mauth-primary));
   border-color: color-mix(in srgb, var(--mauth-primary) 78%, #0b1b33);
   color: #fff;
   font-weight: 600;
@@ -186,7 +182,8 @@
 .select {
   appearance: none;
   padding-right: 28px;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
     linear-gradient(135deg, currentColor 50%, transparent 50%);
   background-position:
     calc(100% - 15px) calc(50% + 1px),
@@ -242,6 +239,20 @@
 
 .toolbar__spacer {
   flex: 1 1 auto;
+}
+
+/*
+ * 工具栏右侧动作组（导出 / 删除这类）
+ *
+ * 单独一个按钮被挤到下一行、孤零零占左边，比换行本身更难看。把右侧动作包成
+ * 一个不换行、可整体换行的组：要么整组还在第一行，要么整组一起下移。
+ */
+.toolbar__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
 }
 
 /* 带图标的输入框：图标绝对定位，输入框左侧留出内边距 */
@@ -540,7 +551,8 @@
 
 .tab.is-on {
   background: var(--mauth-surface);
-  color: var(--mauth-text);
+  /* 选中的 tab 跟随主题主色：换配色时所有页面的分段控件一起变，不留一处"中性白" */
+  color: var(--mauth-primary);
   font-weight: 600;
   box-shadow:
     var(--e1),

@@ -53,7 +53,16 @@ export default defineConfig(({ mode }) => {
         '/user': { target: apiTarget, changeOrigin: true },
         // 人机挑战接口（/api/firewall/v1/challenge/*）：挑战页是独立入口，
         // 必须能直接打到它；被防火墙挡住时唯一的自救通道就是这里。
-        '/api/firewall': { target: apiTarget, changeOrigin: true }
+        '/api/firewall': { target: apiTarget, changeOrigin: true },
+        /*
+         * 后端 `public/` 由 @fastify/static 以 `/` 为 prefix 直出，上传的头像
+         * （`/console/u/<id>/avatar-xxx.png`）走的就是这条链路 —— 它**不带 /admin 前缀**，
+         * 所以上面几条代理都盖不到它。
+         *
+         * 🔴 漏了这条的后果不是 404：Vite 的 SPA fallback 会用 index.html 回 200，
+         *    浏览器拿 HTML 当图片解码失败 ⇒ 头像位置显示成裂图，控制台还看不到报错。
+         */
+        '/console': { target: apiTarget, changeOrigin: true }
       }
     },
     build: {

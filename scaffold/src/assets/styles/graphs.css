@@ -336,7 +336,8 @@
   width: 20px;
   height: 20px;
   border-radius: 7px;
-  color: #1c2a0c;
+  /* 勾选标跟随主色底，所以文字与 .btn--primary 一致用白（原先配青柠底用的是深绿） */
+  color: #fff;
   border: 1.5px solid rgba(var(--shade), 0.2);
   background: var(--input-bg);
   transition:
@@ -356,20 +357,21 @@
   border-radius: 6px;
 }
 
+/* 选中/半选/悬停全部跟随主题主色：换配色时矩阵不该还是一片青柠绿 */
 .mx-cell.is-on .mx-mark {
   border-color: transparent;
-  background: var(--lime);
-  box-shadow: 0 2px 8px rgba(130, 221, 45, 0.35);
+  background: var(--mauth-primary);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mauth-primary) 35%, transparent);
 }
 
 .mx-cell.is-partial .mx-mark {
-  border-color: color-mix(in srgb, var(--lime) 70%, transparent);
-  background: linear-gradient(135deg, var(--lime) 0 50%, transparent 50%);
+  border-color: color-mix(in srgb, var(--mauth-primary) 70%, transparent);
+  background: linear-gradient(135deg, var(--mauth-primary) 0 50%, transparent 50%);
 }
 
 .mx-cell:not(:disabled):hover .mx-mark {
   transform: scale(1.12);
-  border-color: var(--lime);
+  border-color: var(--mauth-primary);
 }
 
 .mx-cell.is-locked .mx-mark {

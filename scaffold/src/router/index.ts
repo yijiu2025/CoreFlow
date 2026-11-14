@@ -85,6 +85,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '防火墙监控', permission: 'admin:firewall:read' }
       },
       {
+        // 个人设置：只改自己的界面偏好，不挂权限码 —— 任何登录用户都该能改自己的主题色
+        path: 'settings/profile',
+        name: 'settings-profile',
+        component: () => import('@/views/settings/Profile.vue'),
+        meta: { title: '个人设置' }
+      },
+      {
         path: 'no-access',
         name: 'no-access',
         component: () => import('@/views/error/NoAccess.vue'),
