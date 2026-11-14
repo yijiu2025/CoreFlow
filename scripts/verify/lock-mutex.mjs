@@ -108,6 +108,7 @@ const { periodLockKey } = await import('../../src/framework/lifecycle/scheduler/
  * @param {object} [opts]
  * @param {'period'|'lock'} [opts.mode='period'] 抢锁方式（见 lock-mutex-child.mjs 的说明）
  * @param {string} [opts.taskKey=TASK_KEY] 锁名（第 3/4 轮用独立的 key，避免复用 63s 的周期锁）
+ * @param {number} [opts.keyAt] 周期序号的计算时间点（默认 = 子进程真实抢锁时刻）
  */
 function runChild(at, label, opts = {}) {
   const mode = opts.mode || 'period';
@@ -122,6 +123,7 @@ function runChild(at, label, opts = {}) {
         PROBE_MODE: mode,
         PROBE_TTL_MS: String(TTL_MS),
         PROBE_AT: String(at),
+        ...(Number.isFinite(opts.keyAt) ? { PROBE_KEY_AT: String(opts.keyAt) } : {}),
         PROBE_LABEL: label,
         PROBE_REDIS_DB
       }
@@ -212,8 +214,13 @@ console.log(
 );
 
 // ── 第 2 轮：TTL 未过，单进程再抢（应当失败）──
+//
+// 🔴 必须**钉住第 1 轮的周期序号**（keyAt = winnerAt）。锁名是
+//    `lock:scheduler:<task>:p<周期序号>`，周期只有 3s；这一轮的 node 冷启动就要 2s 上下，
+//    落在下一个周期就变成"另一把锁"——抢到完全正常，却会被判成"锁被提前释放"。
+//    2026-11-14 CI 就这么红过一次（同代码上一次跑是绿的，纯时序抖动）。
 await sleep(300);
-const r2 = await runChild(Date.now() + 400, 'r2-solo');
+const r2 = await runChild(Date.now() + 400, 'r2-solo', { keyAt: winnerAt ?? startAt });
 const pass2 = r2.ok === false;
 
 // ── 第 3/4 轮：原始锁的过期语义（独立 key，TTL 精确 = TTL_MS）──

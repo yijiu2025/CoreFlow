@@ -58,16 +58,27 @@ while (Date.now() < AT_EPOCH) {
 }
 
 const t0 = Date.now();
+/*
+ * 周期序号取哪个时间点
+ *
+ * 默认用真实抢锁时刻（t0）。第 2 轮"TTL 内再抢应当失败"必须落回**第 1 轮那把锁**，
+ * 而它可能在 3s 周期边界之后才跑到 —— 此时按 t0 算会得到**下一周期的另一把锁**，
+ * 抢到是正常的，却会被判成"锁被提前释放"（2026-11-14 实际红过一次）。
+ * 所以父进程可以显式指定 keyAt，复现同一把锁。
+ */
+const KEY_AT = Number.isFinite(Number(process.env.PROBE_KEY_AT)) && Number(process.env.PROBE_KEY_AT) > 0
+  ? Number(process.env.PROBE_KEY_AT)
+  : t0;
 const acquired =
   MODE === 'lock'
     ? await createLock(`scheduler:${TASK_KEY}`, { ttl: TTL_MS }).tryAcquire()
-    : // 把 t0 显式传进去：父进程要按**同一个周期序号**去读 PTTL，
+    : // 把 KEY_AT 显式传进去：父进程要按**同一个周期序号**去读 PTTL / 判互斥，
       // 让两边用同一时间点算锁名，避免跨周期边界时读到不存在的键（PTTL = -2）
-      await acquirePeriodLock(TASK_KEY, TTL_MS, t0);
+      await acquirePeriodLock(TASK_KEY, TTL_MS, KEY_AT);
 const drift = Math.max(0, t0 - AT_EPOCH);
 
 // 末尾的 at= 供父进程复现周期锁名（periodLockKey(taskKey, ttl, at)），不要删
-console.log(`RESULT ${LABEL} ${acquired} 起跑偏差${drift}ms 判定耗时${Date.now() - t0}ms at=${t0}`);
+console.log(`RESULT ${LABEL} ${acquired} 起跑偏差${drift}ms 判定耗时${Date.now() - t0}ms at=${KEY_AT}`);
 
 await disconnectStandalone();
 process.exit(0);
