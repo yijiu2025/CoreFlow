@@ -24,6 +24,9 @@ public/posecraft/*
 !public/posecraft/.gitkeep
 public/user/*
 !public/user/.gitkeep
+# console 的头像等用户上传：同样是运行期数据，绝不入库（曾混进过 avatar-*.jpg）
+public/console/*
+!public/console/.gitkeep
 # 历史：firewall 前端曾把构建产物写到这里（outDir 已改为本工程 dist/，由 nginx/CDN 部署）。
 # 保留忽略只为挡住旧分支/旧缓存误建出来的产物。
 public/firewall/
@@ -109,3 +112,5 @@ lefthook.yml
 generated-images/
 articles/
 reports/
+# 截图/视觉回归工具的浏览器持久化 profile（本地生成，14MB 级别，勿入库）
+scaffold/.shots-profile/
