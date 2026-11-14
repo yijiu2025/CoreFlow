@@ -13,12 +13,6 @@ const defineSysPost = (sequelize, DataTypes) => {
       id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
       post_code: { type: DataTypes.STRING(50), allowNull: false, comment: '岗位编码' },
       post_name: { type: DataTypes.STRING(50), allowNull: false, comment: '岗位名称' },
-      rank: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        defaultValue: 0,
-        comment: '职级：同职级的岗位在阶梯上并排（0 = 未设置）；与 sort（列表排序）解耦'
-      },
       sort: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, comment: '排序' },
       status: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 1, comment: '1 启用 / 0 停用' },
       remark: { type: DataTypes.STRING(255), allowNull: true, comment: '备注' }
