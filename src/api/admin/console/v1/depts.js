@@ -16,6 +16,7 @@ import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import deptDao, { DEPT_AUDIT_TYPES } from '../../../../app/console/dao/dept.dao.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
+import { resolveDataScope, filterDeptTree } from '../../../../app/console/services/data-scope.service.js';
 
 /** 参与 diff 的字段与中文名（历史里"改了什么"必须能读懂，不能是一串列名） */
 const TRACKED_FIELDS = [
@@ -153,7 +154,13 @@ async function registerDeptRoutes(fastify) {
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.DEPT.READ,
     handler: withFail(async (request, reply) => {
-      return reply.result.success('获取成功', await deptDao.tree());
+      const tree = await deptDao.tree();
+      /*
+       * 部门树同样受行级数据范围约束：能看到哪些部门，只能在自己的数据范围内挑。
+       * 否则"用户只能看本部门"，但部门树仍然把全公司列出来 —— 树本身就是一次越权读。
+       */
+      const scope = await resolveDataScope(request.state.user?.userId);
+      return reply.result.success('获取成功', filterDeptTree(tree, scope, scope.actorDeptId));
     })
   });
 

@@ -31,6 +31,8 @@ describe('auth 公共契约（🔴-2 回归）', () => {
       'kickAllSessions',
       // api/admin/user/v1/sessions.js 使用
       'kickByDeviceId',
+      // api/{admin,}user/v1/sessions.js 使用：踢设备时连带撤销 DB 令牌 + 清孤儿 refresh token
+      'kickDeviceEverywhere',
       // api/auth/v1/session.js 使用
       'refreshSession',
       // api/auth/v1/verify-challenge.js 使用
@@ -88,8 +90,13 @@ describe('auth 公共契约（🔴-2 回归）', () => {
         '_revokeOneSession'
       ];
       expect(INTERNAL.filter(name => mod[name] !== undefined)).toEqual([]);
-      // 公开面恰好 24 项（与拆分前逐字一致）
-      expect(Object.keys(mod).length).toBe(24);
+      /*
+       * 公开面计数是棘轮：只允许因**新增对外能力**而增加，且必须同步更新上面
+       * REQUIRED_EXPORTS 的清单（否则就是悄悄外泄内部符号）。
+       * 25 = 拆分时的 24 + `kickDeviceEverywhere`（设备下线需要撤销 DB 令牌，
+       * 只删 Redis 会话会让设备列表永远停在"活跃"）。
+       */
+      expect(Object.keys(mod).length).toBe(25);
     });
   });
 

@@ -251,7 +251,35 @@ class UserDeactivationDao {
   }
 
   /**
-   * 标记已执行（正式注销完成后）
+   * 保存注销前的身份快照
+   *
+   * 🔴 必须在 PII 擦除**之前**调用：`executeAllDeactivation` 会把 username 改成
+   *    `已注销用户#N`、email 置空，抹完就再也拿不到原名。快照只落本表（管理侧可见），
+   *    不写回 `user_user` —— 主表要保持"已注销即不可识别"。
+   *
+   * 允许传 transaction：擦除与留档必须在同一事务里，否则出现"快照写了但擦除失败"
+   * 或"擦除成功但快照丢了"两种半成品。
+   *
+   * @param {number} id - 注销申请 id
+   * @param {string|null} username - 注销前的用户名
+   * @param {string|null} email - 注销前的邮箱
+   * @param {import('sequelize').Transaction|null} [transaction] - 事务
+   * @returns {Promise<number>} 影响行数
+   */
+  async saveIdentitySnapshot(id, username, email, transaction = null) {
+    const UserDeactivation = getModel('user.UserDeactivation');
+    const [affected] = await UserDeactivation.update(
+      { username_snapshot: username || null, email_snapshot: email || null },
+      { where: { id }, transaction }
+    );
+    return affected;
+  }
+
+  /**
+   * 标记申请已执行
+   *
+   * @param {number} id - 注销申请 id
+   * @returns {Promise<number>} 影响行数
    */
   async markExecuted(id) {
     const UserDeactivation = getModel('user.UserDeactivation');

@@ -480,6 +480,18 @@ class DeactivationService {
         const user = await User.findByPk(userId, { transaction });
         if (user) {
           /*
+           * 快照必须在下面三行**之前**写：一旦 username 被改成占位名、email 置空，
+           * 就再也拿不到原值了。留档只进注销申请表（管理侧日志追溯用），不回写主表 ——
+           * 主表要保持"已注销即不可识别"，否则任何按 id 查用户的地方都会重新拿到 PII。
+           *
+           * requestId 为空说明不是从申请单触发的（直接调用），此时没有可写的行，
+           * 宁可没有快照也不要凭空造一条申请记录。
+           */
+          if (requestId) {
+            await deactivationDao.saveIdentitySnapshot(requestId, user.username, user.email, transaction);
+          }
+
+          /*
            * 主表**不硬删**，但要抹掉个人身份信息：
            *
            * 硬删会让审计（audit_logs.user_id）、授权流水、注销申请里的引用变成悬空 ——

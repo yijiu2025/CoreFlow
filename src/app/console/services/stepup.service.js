@@ -60,7 +60,9 @@ const STORE_NAMESPACE = 'console_stepup';
 const ACTIONS = {
   'user.delete': '删除账号',
   'user.app-deactivate': '注销应用账号',
-  'user.temp-password': '签发临时密码'
+  'user.temp-password': '签发临时密码',
+  // 清除日志：目标不是"某个用户"，而是"一组筛选条件"，所以走 targetKey 绑定（见下）
+  'log.purge': '清除日志'
 };
 
 /** 进程内单例（懒加载：导入模块不碰 Redis，无 Redis 的部署与单测都能 import） */
@@ -171,12 +173,13 @@ async function consumeSendQuota(kv, userId) {
  * @param {object} params.request Fastify request（取 ip / ua）
  * @param {string} params.action 动作键（见 ACTIONS）
  * @param {number|null} params.targetId 目标用户（部分动作没有目标）
+ * @param {string|null} [params.targetKey] 目标指纹（无用户目标时替代 targetId 绑定范围）
  * @param {'email'|'password'} [params.method] 验证方式（缺省按可用性选）
  * @param {object} [params.store] 注入的存储（测试用，缺省用命名空间 store）
  * @returns {Promise<object>} { challengeId, method, expiresIn, maskedTarget }
  * @throws {Error} `STEPUP_*` / `INVALID_PARAM:`
  */
-async function createChallenge({ userId, request, action, targetId, method, store }) {
+async function createChallenge({ userId, request, action, targetId, targetKey, method, store }) {
   if (!ACTIONS[action]) throw new Error('INVALID_PARAM:不支持的操作类型');
 
   const factors = await loadFactors(userId);
@@ -229,6 +232,12 @@ async function createChallenge({ userId, request, action, targetId, method, stor
       userId: Number(userId),
       action,
       targetId: targetId === null || targetId === undefined ? null : Number(targetId),
+      /*
+       * 目标指纹：有些动作没有"某个用户"这个目标，而是一组筛选条件（例如清除日志）。
+       * 这时把条件规范化后算出的指纹存进来，消费时比对 —— 否则"为了清 A 范围而通过的
+       * 验证"可以被拿去清 B 范围，把 targetId 绑定的意义整个绕过去。
+       */
+      targetKey: targetKey === null || targetKey === undefined ? null : String(targetKey),
       method: chosen,
       createdAt: Date.now(),
       attempts: 0
@@ -271,6 +280,7 @@ function mapEmailError(err) {
  * @param {object} params.request Fastify request
  * @param {string} params.action 动作键
  * @param {number|null} params.targetId 目标用户
+ * @param {string|null} [params.targetKey] 目标指纹（与签发时比对）
  * @param {string} [params.challengeId] 挑战 ID
  * @param {string} [params.code] 邮箱验证码
  * @param {string} [params.password] 登录密码（密码方式）
@@ -278,7 +288,7 @@ function mapEmailError(err) {
  * @returns {Promise<{method: string}>} 通过的方式
  * @throws {Error} `STEPUP_REQUIRED:` / `STEPUP_FAILED:` / `STEPUP_RATE_LIMITED:`
  */
-async function consumeChallenge({ userId, request, action, targetId, challengeId, code, password, store }) {
+async function consumeChallenge({ userId, request, action, targetId, targetKey, challengeId, code, password, store }) {
   if (!challengeId) {
     // 428 让前端知道"该先发码"，而不是当成普通参数错误
     throw new Error('STEPUP_REQUIRED:该操作需要二次验证，请先获取验证码');
@@ -299,6 +309,14 @@ async function consumeChallenge({ userId, request, action, targetId, challengeId
   const expectTarget = targetId === null || targetId === undefined ? null : Number(targetId);
   if (record.targetId !== expectTarget) {
     throw new Error('FORBIDDEN:该验证不是为该账号签发的，请重新获取验证码');
+  }
+  /*
+   * 目标指纹同样要比对。老记录没有这个字段（`undefined`），新调用方不传也是
+   * `undefined`/`null` —— 两侧都归一成 null 再比较，历史挑战不受影响。
+   */
+  const expectKey = targetKey === null || targetKey === undefined ? null : String(targetKey);
+  if ((record.targetKey ?? null) !== expectKey) {
+    throw new Error('FORBIDDEN:该验证不是为当前筛选范围签发的，请重新获取验证码');
   }
 
   if (record.method === 'password') {

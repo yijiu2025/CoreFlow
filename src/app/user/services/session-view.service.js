@@ -8,8 +8,25 @@
  * @since 2026-08-16
  */
 
+import { LONG_SESSION_TTL } from '../../../framework/security/auth/index.js';
+
 /**
- * 格式化会话列表为前端视图
+ * 会话是否已"过期"（记录还在，但 Redis 侧会话大概率已消失）
+ *
+ * 表里只存 sha256(sid)，反查不到 `session:<rawSid>`，所以按最后活跃时间 + **最长**
+ * 会话 TTL 推断：宁可漏判（把已过期的显示成活跃）也不误判（把记住我的活会话标成过期）。
+ *
+ * @param {{revoked: boolean|number, last_active?: string|Date|null}} row 设备行
+ * @returns {boolean} 是否过期
+ */
+function isStaleSession(row) {
+  if (row.revoked) return false;
+  const ts = row.last_active ? new Date(row.last_active).getTime() : 0;
+  if (!ts) return false;
+  return Date.now() - ts > LONG_SESSION_TTL * 1000;
+}
+
+/** 格式化会话列表为前端视图
  * @param {Array} sessions - checkMaxSessions 返回的原始会话列表
  * @param {string} [currentSid] - 当前请求的 sid cookie（用于标记 isCurrent）
  * @returns {{sessions: Array, total: number}}
@@ -70,6 +87,7 @@ function formatDeviceList(rows, currentTokenHash) {
       userAgent: r.user_agent,
       lastActive: r.last_active,
       revoked: r.revoked,
+      stale: isStaleSession(r),
       isCurrent: currentTokenHash ? r.token === currentTokenHash : false
     })),
     total: rows.length

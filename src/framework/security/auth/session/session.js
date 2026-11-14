@@ -958,4 +958,4 @@ export {
 } from './session-governance.js';
 
 // 踢出/吊销（./session-kick.js）
-export { kickSession, kickAllSessions, kickByDeviceId, kickUser } from './session-kick.js';
+export { kickSession, kickAllSessions, kickByDeviceId, kickDeviceEverywhere, kickUser } from './session-kick.js';

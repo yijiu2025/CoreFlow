@@ -27,15 +27,31 @@ import { requestStepUpChallenge, stepUpFactors } from '@/api/system';
 import type { StepUpChallenge, StepUpFactors, StepUpPayload } from '@/api/types';
 
 /** 与后端 `stepup.service` 的 ACTIONS 一一对应 */
-type Action = 'user.delete' | 'user.app-deactivate' | 'user.temp-password';
+type Action = 'user.delete' | 'user.app-deactivate' | 'user.temp-password' | 'log.purge';
 
 const props = withDefaults(
   defineProps<{
     action: Action;
     targetId: number | null;
+    /**
+     * 范围指纹（仅用于感知"目标变了"）
+     *
+     * 像"清除日志"这种动作，目标不是某个用户而是一组筛选条件。条件改过之后
+     * 旧凭据必须作废 —— 否则用户改了条件再输码，会被后端以"范围不符"拒绝，
+     * 而他并不知道自己需要重新发码。**不需要**与后端指纹算法一致，它只做变更检测。
+     */
+    targetKey?: string;
+    /**
+     * 自定义领取凭据
+     *
+     * 默认走 `/stepup/challenge`（要求 targetId 是用户 id）。清除日志的凭据由
+     * `/oper-logs/purge/challenge` 签发（它要接收筛选条件、并在服务端绑指纹），
+     * 所以这里允许把这一步注入进来 —— 组件只负责交互与倒计时，不替业务决定端点。
+     */
+    issue?: (method: 'email' | 'password') => Promise<StepUpChallenge>;
     disabled?: boolean;
   }>(),
-  { disabled: false }
+  { disabled: false, targetKey: undefined, issue: undefined }
 );
 
 /** 重发冷却（秒）：与 emailDao 的 rateLimit 对齐 */
@@ -81,15 +97,18 @@ function startCountdown(seconds: number): void {
  * @returns 是否成功
  */
 async function issueChallenge(forMethod: 'email' | 'password'): Promise<boolean> {
-  if (props.targetId === null) return false;
+  // 没有用户目标时必须注入了自定义端点，否则发不出凭据（也没地方发）
+  if (props.targetId === null && !props.issue) return false;
   sending.value = true;
   errorMessage.value = '';
   try {
-    const res = await requestStepUpChallenge({
-      action: props.action,
-      targetId: props.targetId,
-      method: forMethod
-    });
+    const res = props.issue
+      ? await props.issue(forMethod)
+      : await requestStepUpChallenge({
+          action: props.action as 'user.delete' | 'user.app-deactivate' | 'user.temp-password',
+          targetId: Number(props.targetId),
+          method: forMethod
+        });
     challenge.value = res;
     method.value = res.method;
     if (res.method === 'email') {
@@ -193,11 +212,11 @@ async function loadFactors(): Promise<void> {
 }
 
 watch(
-  () => [props.action, props.targetId] as const,
-  async ([action, targetId], previous) => {
-    // 动作或目标变了，旧凭据一律作废（服务端也会拒，但前端没必要留着）
+  () => [props.action, props.targetId, props.targetKey] as const,
+  async ([action, targetId, targetKey], previous) => {
+    // 动作 / 目标 / 范围变了，旧凭据一律作废（服务端也会拒，但前端没必要留着）
     reset();
-    if (targetId === null) return;
+    if (targetId === null && !targetKey) return;
     if (!previous || previous[0] !== action) await loadFactors();
   },
   { immediate: true }

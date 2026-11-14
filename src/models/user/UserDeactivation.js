@@ -127,6 +127,27 @@ const defineUserDeactivation = (sequelize, DataTypes) => {
         allowNull: true,
         comment: '正式执行时间'
       },
+      /**
+       * 注销前的用户名快照
+       *
+       * 执行注销会把 `user_user.username` 改成 `已注销用户#N`（PII 擦除），
+       * 之后登录日志只剩 `user_id`，界面上无法辨识"这条会话是谁的"。
+       * 所以在擦除**之前**在这里留一份，供管理侧日志追溯。
+       *
+       * 🔴 只存在本表，**不回写 user_user**：主表要保持"已注销即不可识别"，
+       *    否则任何按 id 查用户的地方都会重新拿到 PII，等于注销没做。
+       */
+      username_snapshot: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+        comment: '注销前的用户名（擦除前留档，供日志追溯）'
+      },
+      /** 注销前的邮箱快照（同上，擦除前留档） */
+      email_snapshot: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        comment: '注销前的邮箱（擦除前留档，供日志追溯）'
+      },
       revoked_by: {
         type: DataTypes.BIGINT,
         allowNull: true,

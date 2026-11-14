@@ -62,7 +62,7 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <div class="modal-mask" @click.self="emit('close')">
+  <div class="modal-mask" v-mask-close="() => emit('close')">
     <div class="modal batch-modal">
       <header class="modal__head">
         <span class="modal__title">批量授权 · 已选 {{ users.length }} 人</span>

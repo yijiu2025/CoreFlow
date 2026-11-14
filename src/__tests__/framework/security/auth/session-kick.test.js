@@ -268,7 +268,37 @@ describe('kickAllSessions：全端下线，批量 revoke', () => {
     expect(hashes.sort()).toEqual([sidHash('sid-1'), sidHash('sid-2')].sort());
     // DB 兜底：按 user_id 全量 revoke
     expect(dbCalls.tokenUpdate[1].opts.where).toEqual({ user_id: UID, revoked: false });
-    expect(dbCalls.logCreate[0].details).toEqual({ reason: 'kick_all', count: 2 });
+    expect(dbCalls.logCreate[0].details).toEqual({ reason: 'kick_all', count: 2, keptCurrent: false });
+  });
+
+  /**
+   * 「退出其他设备」的正确性前提
+   *
+   * 旧实现会把自己也踢掉（接口注释却写着"保留当前会话"）：用户点一次就被登出。
+   * 这里同时验证 Redis 侧、DB 兜底 where 与日志 count 三处都排除了保留会话。
+   */
+  test('保留当前会话：keepSessionId 不踢，DB 兜底排除其 token', async () => {
+    await seedSession('sid-keep', { appId: 'app1', familyId: 'f-k' });
+    await seedSession('sid-drop', { appId: 'app1', familyId: 'f-d' });
+    await seedRefreshToken('rt-keep', 'sid-keep', 'f-k');
+    await seedRefreshToken('rt-drop', 'sid-drop', 'f-d');
+
+    const kicked = await kickAllSessions(UID, 'sid-keep');
+
+    expect(kicked).toBe(1);
+    expect(await sessionStore.get('sid-keep')).not.toBeNull();
+    expect(await sessionStore.get('sid-drop')).toBeNull();
+    // 保留会话的 sid_r 也要留着，否则下次刷新仍会被踢
+    expect(await refreshStore.get('rt-keep')).not.toBeNull();
+    expect(await refreshStore.get('rt-drop')).toBeNull();
+    expect(await userSessionsStore.zRangeByScore(String(UID))).toEqual(['sid-keep']);
+    expect(dbCalls.tokenUpdate[0].opts.where.token[Op.in]).toEqual([sidHash('sid-drop')]);
+    expect(dbCalls.tokenUpdate[1].opts.where).toEqual({
+      user_id: UID,
+      revoked: false,
+      token: { [Op.ne]: sidHash('sid-keep') }
+    });
+    expect(dbCalls.logCreate[0].details).toEqual({ reason: 'kick_all', count: 1, keptCurrent: true });
   });
 
   test('Redis 逆索引丢失时 DB 兜底仍能 revoke', async () => {

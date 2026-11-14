@@ -163,6 +163,8 @@ jest.unstable_mockModule('../../../../framework/security/auth/session/session-ki
   kickSession: async () => {},
   kickAllSessions: async () => {},
   kickByDeviceId: async () => 0,
+  // 2026-11-14 新增：踢设备时连带撤销 DB 令牌（session.js 门面 re-export，桩里必须给全）
+  kickDeviceEverywhere: async () => ({ kicked: 0, revoked: 0, clearedRefresh: 0 }),
   kickUser: async () => {},
   // 2026-11-01 session.js 新增消费的两个导出（踢出墓碑 + 登录时选择下线指定会话），
   // 缺失会在 ESM 链接期抛 "does not provide an export"

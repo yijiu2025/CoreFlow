@@ -314,7 +314,7 @@ watch(
 </script>
 
 <template>
-  <div v-if="userId !== null" class="modal-mask" @click.self="emit('close')">
+  <div v-if="userId !== null" class="modal-mask" v-mask-close="() => emit('close')">
     <div class="modal grant-modal">
       <header class="modal__head">
         <span class="modal__title">授权记录 · {{ username }}</span>

@@ -11,6 +11,7 @@
 import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue';
 import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-vue-next';
 import { createPost, listPosts, removePost, updatePost } from '@/api/system';
+import ReadOnlyTag from '@/components/ui/ReadOnlyTag.vue';
 import { useListPage } from '@/composables/useListPage';
 import { useAuthStore } from '@/stores/auth';
 
@@ -145,6 +146,7 @@ onMounted(list.load);
     <div class="page__head">
       <h2 class="page__title">岗位管理</h2>
       <span class="page__sub">共 {{ list.total.value }} 个岗位</span>
+      <ReadOnlyTag code="admin:post:update" scope="岗位" />
     </div>
 
     <div class="tabbar" role="tablist" aria-label="视图">
@@ -220,7 +222,7 @@ onMounted(list.load);
       <PostLadder :posts="ladderPosts" :loading="list.loading.value" @edit="editFromLadder" />
     </section>
 
-    <div v-if="dialogOpen" class="modal-mask" @click.self="dialogOpen = false">
+    <div v-if="dialogOpen" class="modal-mask" v-mask-close="() => (dialogOpen = false)">
       <div class="modal">
         <header class="modal__head"><span class="modal__title">{{ editingId ? '编辑岗位' : '新建岗位' }}</span></header>
         <div class="modal__body">

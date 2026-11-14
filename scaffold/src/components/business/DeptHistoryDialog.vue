@@ -75,7 +75,7 @@ watch(
 </script>
 
 <template>
-  <div v-if="deptId !== null" class="modal-mask" @click.self="emit('close')">
+  <div v-if="deptId !== null" class="modal-mask" v-mask-close="() => emit('close')">
     <div class="modal dept-history">
       <header class="modal__head">
         <span class="modal__title">变更历史 · {{ deptName }}</span>

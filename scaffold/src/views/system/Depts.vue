@@ -29,6 +29,7 @@ import { listUsers } from '@/api/system';
  */
 const OrgCanvas = defineAsyncComponent(() => import('@/components/business/OrgCanvas.vue'));
 import DeptHistoryDialog from '@/components/business/DeptHistoryDialog.vue';
+import ReadOnlyTag from '@/components/ui/ReadOnlyTag.vue';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -450,6 +451,7 @@ onMounted(load);
     <div class="page__head">
       <h2 class="page__title">部门管理</h2>
       <span class="page__sub">组织层级决定「本部门及以下」的数据权限范围，改动会被审计</span>
+      <ReadOnlyTag code="admin:dept:update" scope="部门" />
     </div>
 
     <!-- 读数：先给整棵树的概况，再让人往下看细节 -->
@@ -714,7 +716,7 @@ onMounted(load);
       </OrgCanvas>
     </section>
 
-    <div v-if="dialogOpen" class="modal-mask" @click.self="dialogOpen = false">
+    <div v-if="dialogOpen" class="modal-mask" v-mask-close="() => (dialogOpen = false)">
       <div class="modal">
         <header class="modal__head">
           <span class="modal__title">{{ editingId ? '编辑部门' : '新建部门' }}</span>

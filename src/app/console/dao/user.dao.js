@@ -13,6 +13,16 @@ import { getModel } from '../../../framework/persistence/db/index.js';
 import grantDao from './grant.dao.js';
 import { hashPassword, validatePasswordStrength } from '../../../framework/security/auth/index.js';
 
+/**
+ * 超管角色编码
+ *
+ * 🔴 与 `role.dao.js` 的 `MENU_LOCKED_CODE`、`access-scope.service.js` 的
+ *    `SUPER_ROLE_CODE` 同值（三处都表达"这个角色普通管理员动不了"），改动必须同步。
+ *    这里单独用它做**筛选补集**：超管是 GLOBAL 角色、不归属任何应用，
+ *    但它在每个应用里都有全部权限（policy 为 `*`）。
+ */
+const SUPER_ROLE_CODE = 'superadmin';
+
 class ConsoleUserDao {
   /**
    * 用户分页（含部门 / 角色 / 岗位）
@@ -23,9 +33,19 @@ class ConsoleUserDao {
    * @param {string} [params.keyword=''] 账号 / 邮箱模糊搜索
    * @param {number|null} [params.deptId=null] 部门过滤
    * @param {number|null} [params.status=null] 状态过滤
+   * @param {string|null} [params.appId=null] 子应用过滤（该应用里有角色的人 + 超管）
    * @returns {Promise<{rows: Array<object>, total: number}>} 分页结果
    */
-  async page({ pageNum = 1, pageSize = 20, keyword = '', deptId = null, status = null, scopeAppIds = null }) {
+  async page({
+    pageNum = 1,
+    pageSize = 20,
+    keyword = '',
+    deptId = null,
+    status = null,
+    appId = null,
+    scopeAppIds = null,
+    dataScope = null
+  }) {
     const User = getModel('User');
     const { Op } = User.sequelize.Sequelize;
 
@@ -34,7 +54,67 @@ class ConsoleUserDao {
       where[Op.or] = [{ username: { [Op.like]: `%${keyword}%` } }, { email: { [Op.like]: `%${keyword}%` } }];
     }
     if (deptId !== null && deptId !== undefined && deptId !== '') where.dept_id = Number(deptId);
-    if (status !== null && status !== undefined && status !== '') where.status = Number(status);
+
+    /*
+     * 行级数据范围（数据权限）
+     *
+     * 与上面的 `deptId` 是两件事：`deptId` 是**用户主动筛**，`dataScope` 是**角色强制的可见边界**。
+     * 两者都落到 where 上，天然取交集：即使前端传了一个越权的 deptId，也只能在
+     * 自己范围内再筛一次，不会突破边界。
+     */
+    if (dataScope && dataScope.mode !== 'all') {
+      if (dataScope.mode === 'self') {
+        where.id = Number(dataScope.actorId);
+      } else {
+        const ids = (dataScope.deptIds ?? []).filter(n => Number.isInteger(n) && n > 0);
+        where.dept_id = ids.length > 0 ? { [Op.in]: ids } : { [Op.in]: [-1] };
+      }
+    }
+
+    /**
+     * 叠加一层「可见用户 ID」限制
+     *
+     * 数据范围 self、待注销、应用域、子应用筛选都可能落到 `where.id`：直接赋值会让
+     * 后一个覆盖前一个（曾经"待注销 + 应用域"就只剩后者生效）。这里统一取交集；
+     * 交集为空写成 `IN (-1)`（恒不命中），比提前 return 少一条分支、也不会漏改。
+     *
+     * @param {number[]} ids 目标用户 ID
+     * @returns {void}
+     */
+    const restrictToUserIds = ids => {
+      const next = [...new Set(ids.map(Number).filter(n => Number.isInteger(n) && n > 0))];
+      const existing = where.id?.[Op.in];
+      let merged = next;
+      if (Array.isArray(existing)) merged = next.filter(id => existing.includes(id));
+      else if (typeof existing === 'number') merged = next.filter(id => id === existing);
+      where.id = { [Op.in]: merged.length > 0 ? merged : [-1] };
+    };
+
+    /*
+     * 状态过滤
+     *
+     * 🔴 `-2`（待注销）**不是 `User.status` 的取值**。`status` 只有 1 正常 / 0 冻结 /
+     *    -1 已注销；"待注销"是注销申请单（`user_deactivation.status = 1` 注销中）的
+     *    派生状态。以前直接把 -2 丢进 `where.status`，SQL 条件恒不成立，于是选「待注销」
+     *    永远返回空 —— 看起来像筛选坏了，其实是拿错了字段。
+     *
+     * 申请单与用户是两道事实，必须单独查一次再取交集；和下面的应用域过滤一样，
+     * 交集要在**分页之前**落到 where 上，否则总数与页大小都会失真。
+     */
+    const PENDING_DELETION = -2;
+    const wantedStatus = status !== null && status !== undefined && status !== '' ? Number(status) : null;
+    if (wantedStatus !== null && wantedStatus !== PENDING_DELETION) where.status = wantedStatus;
+
+    if (wantedStatus === PENDING_DELETION) {
+      const rows = await getModel('user.UserDeactivation').findAll({
+        where: { status: 1 },
+        attributes: ['user_id'],
+        raw: true
+      });
+      const pendingIds = [...new Set(rows.map(r => Number(r.user_id)))];
+      if (pendingIds.length === 0) return { rows: [], total: 0 };
+      restrictToUserIds(pendingIds);
+    }
 
     /*
      * 应用域过滤（"只能管理注册了本应用的用户"）。
@@ -64,7 +144,49 @@ class ConsoleUserDao {
         )
       ];
       if (scopedUserIds.length === 0) return { rows: [], total: 0 };
-      where.id = { [Op.in]: scopedUserIds };
+      restrictToUserIds(scopedUserIds);
+    }
+
+    /*
+     * 子应用筛选：只看「在这个应用里有角色」的用户。
+     *
+     * 与应用域是两件事：应用域是**权限边界**（不可越过），这里是管理员主动收窄的
+     * **查询条件**（"看看 posecraft 的人"）。两者都落到 where.id 上取交集 ——
+     * 越权传别家 appId 时交集自然为空，不需要再加一层判权。
+     *
+     * `GLOBAL` 角色不归属任何应用，因此不参与：选具体应用时不该把"只有全局角色"
+     * 的人混进来（想看他们就不选应用）。
+     */
+    if (appId) {
+      /*
+       * 该应用的角色 + **超管**。
+       *
+       * 🔴 只补超管、不补全部 GLOBAL 角色：超管是 GLOBAL 角色、不归属任何应用，
+       *    但它在每个应用里都有全部权限 —— 只按 `app_id` 取角色的话，管理员筛
+       *    「管理后台」会看不见自己（他只有 GLOBAL 的 superadmin），看起来像数据丢了。
+       *    而 GLOBAL 的会员等级类角色（普通用户/VIP）不该被任何应用筛选带出来，
+       *    否则"按应用查"等于全表。
+       */
+      const [appRoleRows, superRoleRows] = await Promise.all([
+        getModel('Role').findAll({ where: { app_id: appId }, attributes: ['id'], raw: true }),
+        getModel('Role').findAll({ where: { code: SUPER_ROLE_CODE }, attributes: ['id'], raw: true })
+      ]);
+      const roleIds = [...new Set([...appRoleRows, ...superRoleRows].map(r => Number(r.id)))];
+      if (roleIds.length === 0) return { rows: [], total: 0 };
+
+      const appUserIds = [
+        ...new Set(
+          (
+            await getModel('UserRole').findAll({
+              where: { role_id: roleIds, delete_version: 0 },
+              attributes: ['user_id'],
+              raw: true
+            })
+          ).map(l => Number(l.user_id))
+        )
+      ];
+      if (appUserIds.length === 0) return { rows: [], total: 0 };
+      restrictToUserIds(appUserIds);
     }
 
     const offset = (Number(pageNum) - 1) * Number(pageSize);
